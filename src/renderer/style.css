@@ -238,12 +238,18 @@ body.web #btn-logout { margin-right: auto; align-self: center; }
 
   /* The explanations panel becomes a sheet over the lower part of the page. */
   #panel {
-    position: absolute; left: 0; right: 0; bottom: 0; top: 60%; width: auto; z-index: 8;
+    position: absolute; left: 0; right: 0; bottom: 0; top: var(--panel-top, 60%); width: auto; z-index: 8;
     border-left: none; border-top: 1px solid var(--line); border-radius: 14px 14px 0 0;
     box-shadow: 0 -8px 30px rgba(0, 0, 0, 0.18); transition: none;
   }
   body.panel-hidden #panel { display: none; }
   body.library-open #panel { display: none; }
+  /* Drag the header up or down to resize the sheet. */
+  .panel-head { position: relative; padding-top: 16px; touch-action: none; user-select: none; -webkit-user-select: none; }
+  .panel-head .grabber {
+    position: absolute; top: 6px; left: 50%; transform: translateX(-50%);
+    width: 40px; height: 5px; border-radius: 3px; background: var(--line); padding: 0;
+  }
   #cards { padding: 10px; padding-bottom: calc(10px + env(safe-area-inset-bottom)); }
   .panel-empty { margin-top: 20%; }
   .followup input { font-size: 16px; } /* keeps iOS from zooming the page on focus */

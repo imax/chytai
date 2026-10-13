@@ -546,6 +546,8 @@ function startExplanation(selection, { deep, askOnly = false }) {
     <form class="followup"><input type="text" placeholder="Уточнити питання…" /></form>`;
   card.querySelector(".quote").textContent = quote.length > 280 ? quote.slice(0, 280) + "…" : quote;
   $("#cards").prepend(card);
+  // The new card is at the top; bring it into view even if the list was scrolled down.
+  $("#cards").scrollTop = 0;
 
   const conv = { id, card, deep, cfiRange: selection.cfiRange, context: selection.context, messages: null, busy: false };
   conversations.set(id, conv);
@@ -653,6 +655,35 @@ function flash(card) {
   void card.offsetWidth;
   card.classList.add("flash");
 }
+
+// Phone: the explanations sheet is resized by dragging its header; the height is remembered on this device.
+(() => {
+  const head = $("#panel .panel-head");
+  const MIN = 0.15, MAX = 0.85;
+  const setTop = (f) => document.body.style.setProperty("--panel-top", `${(Math.min(MAX, Math.max(MIN, f)) * 100).toFixed(1)}%`);
+  try {
+    const saved = Number(localStorage.getItem("panelTop"));
+    if (saved) setTop(saved);
+  } catch {}
+  let drag = null;
+  head.addEventListener("pointerdown", (e) => {
+    if (!PHONE.matches || e.target.closest("button")) return;
+    const box = $("#layout").getBoundingClientRect();
+    drag = { box, id: e.pointerId };
+    head.setPointerCapture(e.pointerId);
+  });
+  head.addEventListener("pointermove", (e) => {
+    if (!drag || e.pointerId !== drag.id) return;
+    drag.f = (e.clientY - drag.box.top) / drag.box.height;
+    setTop(drag.f);
+  });
+  const end = () => {
+    if (drag?.f) try { localStorage.setItem("panelTop", String(Math.min(MAX, Math.max(MIN, drag.f)))); } catch {}
+    drag = null;
+  };
+  head.addEventListener("pointerup", end);
+  head.addEventListener("pointercancel", end);
+})();
 
 function showPanel(show) {
   document.body.classList.toggle("panel-hidden", !show);
