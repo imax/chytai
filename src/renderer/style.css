@@ -226,7 +226,11 @@ body.web #btn-logout { margin-right: auto; align-self: center; }
   }
   body.reading:not(.chrome-shown) #toolbar { display: none; }
   body.reading #toc { top: 44px; }
-  #viewer { inset: 28px 16px 24px 16px; }
+  /* Keep the text above the page number / percent line, which sits over the iPhone home indicator. */
+  #viewer { inset: 28px 16px calc(24px + env(safe-area-inset-bottom)) 16px; }
+  /* Continuous scrolling: no scroll bar over the text. */
+  #viewer .epub-container { scrollbar-width: none; }
+  #viewer .epub-container::-webkit-scrollbar { display: none; }
   body[data-margins="narrow"] #viewer { left: 8px; right: 8px; }
   body[data-margins="wide"] #viewer { left: 30px; right: 30px; }
   #btn-back { bottom: calc(30px + env(safe-area-inset-bottom)); font-size: 15px; padding: 8px 16px; }
