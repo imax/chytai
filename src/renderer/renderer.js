@@ -51,12 +51,11 @@ function openSettings() {
       ? "Ключ збережено. Залиште поле порожнім, щоб не змінювати."
       : "Створіть ключ на platform.claude.com → API Keys.";
   $("#set-model").value = settings.model;
-  $("#set-line-height").value = settings.lineHeight || "auto";
   $("#set-margins").value = settings.margins || "normal";
   $("#set-language").value = settings.language;
   $("#set-auto").checked = settings.autoExplain;
   $("#set-font").value = settings.font;
-  $("#set-theme").value = settings.theme;
+  $("#set-page-taps").checked = !!settings.pageTaps;
   $("#settings").showModal();
 }
 
@@ -67,25 +66,37 @@ $("#settings").addEventListener("close", async () => {
     language: $("#set-language").value.trim() || "українська",
     autoExplain: $("#set-auto").checked,
     font: $("#set-font").value,
-    lineHeight: $("#set-line-height").value,
     margins: $("#set-margins").value,
+    pageTaps: $("#set-page-taps").checked,
   };
   const key = $("#set-key").value.trim();
   if (key) patch.apiKey = key;
-  const fontChanged = patch.font !== settings.font || patch.lineHeight !== (settings.lineHeight || "auto");
+  const fontChanged = patch.font !== settings.font;
   const marginsChanged = patch.margins !== (settings.margins || "normal");
+  const wasScrolled = scrolled();
   settings = await window.reader.setSettings(patch);
+  if (wasScrolled !== scrolled()) return reopenBook();
   document.body.dataset.margins = settings.margins || "normal";
   if (marginsChanged) (pdfView || rendition)?.resize();
   if (fontChanged) applyTypography(true);
-  if ($("#set-theme").value !== settings.theme) setTheme($("#set-theme").value);
 });
 $("#btn-logout").onclick = () => window.reader.logout?.();
 
-// "auto" is a little tighter on a phone, where every line counts.
+// On a phone the book scrolls as one continuous column unless page turns were chosen in settings.
+function scrolled() {
+  return PHONE.matches && !settings.pageTaps;
+}
+
+// Opens the current book again at the place we are reading, e.g. after switching scroll/pages.
+async function reopenBook() {
+  if (!current?.source || current.pdf) return;
+  const latest = await window.reader.getSettings();
+  openBook({ ...current.source, position: latest.positions[current.posKey] || null, reflowPosition: latest.positions[current.posKey] || null });
+}
+
+// A little tighter on a phone, where every line counts.
 function lineHeight() {
-  const v = Number(settings.lineHeight);
-  return v >= 1 && v <= 3 ? v : PHONE.matches ? 1.6 : 1.7;
+  return PHONE.matches ? 1.6 : 1.7;
 }
 
 // Kindle-like typography: book font replaced, justified text with hyphenation, calm line spacing.
@@ -100,7 +111,8 @@ function typographyCss() {
     p, li, blockquote { line-height: inherit !important; }
     p { text-align: justify; hyphens: auto; -webkit-hyphens: auto; widows: 2; orphans: 2; }
     h1, h2, h3 { line-height: 1.3 !important; hyphens: manual; }
-    pre, code, kbd, samp { font-family: ui-monospace, Menlo, monospace !important; }`;
+    pre, code, kbd, samp { font-family: ui-monospace, Menlo, monospace !important; }
+    ${scrolled() ? "body { padding-left: 0 !important; padding-right: 0 !important; }" : ""}`;
 }
 
 function styleContents(contents) {
@@ -183,9 +195,7 @@ async function openEpub(payload, { posKey, source }) {
   rendition = book.renderTo("viewer", {
     width: "100%",
     height: "100%",
-    flow: "paginated",
-    spread: "auto",
-    minSpreadWidth: 960,
+    ...(scrolled() ? { flow: "scrolled", manager: "continuous" } : { flow: "paginated", spread: "auto", minSpreadWidth: 960 }),
     // WebKit (iOS Safari) does not run our touch/selection listeners inside an iframe sandboxed
     // without allow-scripts, so allow scripts and strip the book's own ones in stripScripts.
     allowScriptedContent: true,
@@ -197,7 +207,7 @@ async function openEpub(payload, { posKey, source }) {
   rendition.hooks.content.register(styleContents);
   rendition.hooks.content.register((contents) => contents.on("linkClicked", rememberReturn));
   rendition.themes.select(settings.theme);
-  rendition.themes.fontSize(`${settings.fontSize * BASE_SCALE}%`);
+  rendition.themes.fontSize(`${bookFontSize() * BASE_SCALE}%`);
 
   rendition.on("selected", onSelected);
   rendition.on("relocated", onRelocated);
@@ -309,7 +319,7 @@ async function openPdf(payload) {
       hideSelToolbar();
     },
   });
-  pdfView.setZoom(settings.fontSize);
+  pdfView.setZoom(bookFontSize());
   syncReading();
   const meta = await pdfView.metadata();
   current.title = meta.title || current.title;
@@ -378,7 +388,8 @@ function chapterTitle(href) {
 function onRelocated(location) {
   if (current) window.reader.savePosition(current.posKey, location.start.cfi);
   updateProgress(location);
-  hideSelToolbar();
+  // While scrolling, a selection may move off screen and back; its toolbar is pinned at the bottom anyway.
+  if (!scrolled()) hideSelToolbar();
   toggleChrome(false);
 }
 
@@ -402,6 +413,7 @@ function stripScripts(doc) {
 }
 
 // Touch screens: swipe left/right to turn pages; a tap near the edge does the same.
+// In scroll mode the finger scrolls the page, and any tap just shows or hides the toolbar.
 function onTouchEnd(e) {
   if (!touchStart) return;
   const t = e.changedTouches[0];
@@ -411,7 +423,7 @@ function onTouchEnd(e) {
   touchStart = null;
   const sel = rendition?.getContents()[0]?.window.getSelection();
   if (sel && !sel.isCollapsed) return;
-  if (ms < 600 && Math.abs(dx) >= 40 && Math.abs(dx) > Math.abs(dy)) {
+  if (!scrolled() && ms < 600 && Math.abs(dx) >= 40 && Math.abs(dx) > Math.abs(dy)) {
     dx < 0 ? rendition?.next() : rendition?.prev();
   } else if (ms < 400 && Math.abs(dx) < 12 && Math.abs(dy) < 12 && !e.target?.closest?.("a")) {
     tapToPage(t, e.view);
@@ -424,7 +436,8 @@ function tapToPage(t, win) {
   const frame = win?.frameElement?.getBoundingClientRect();
   const box = $("#viewer").getBoundingClientRect();
   const x = t.clientX + (frame ? frame.left : 0) - box.left;
-  if (x < box.width * 0.3) rendition?.prev();
+  if (scrolled()) toggleChrome();
+  else if (x < box.width * 0.3) rendition?.prev();
   else if (x > box.width * 0.7) rendition?.next();
   else toggleChrome();
 }
@@ -759,11 +772,18 @@ $("#btn-settings").onclick = openSettings;
 $("#prev").onclick = () => (pdfView || rendition)?.prev();
 $("#next").onclick = () => (pdfView || rendition)?.next();
 
+// Font size belongs to the book: changed in one book, it stays there; any other book opens at 100%.
+function bookFontSize() {
+  return settings.fontSizes?.[current?.path] || 100;
+}
+
 async function setFont(delta) {
-  settings.fontSize = Math.min(200, Math.max(70, settings.fontSize + delta));
-  rendition?.themes.fontSize(`${settings.fontSize * BASE_SCALE}%`);
-  pdfView?.setZoom(settings.fontSize);
-  settings = await window.reader.setSettings({ fontSize: settings.fontSize });
+  if (!current) return;
+  const size = Math.min(200, Math.max(70, bookFontSize() + delta));
+  settings.fontSizes = { ...settings.fontSizes, [current.path]: size };
+  rendition?.themes.fontSize(`${size * BASE_SCALE}%`);
+  pdfView?.setZoom(size);
+  settings = await window.reader.setSettings({ fontSizes: settings.fontSizes });
 }
 $("#btn-font-down").onclick = () => setFont(-10);
 $("#btn-font-up").onclick = () => setFont(10);
@@ -775,6 +795,9 @@ async function setTheme(theme) {
   settings = await window.reader.setSettings({ theme });
 }
 $("#theme-select").onchange = (e) => setTheme(e.target.value);
+// Phones have no room for the select, so a toolbar button cycles light → sepia → dark.
+const THEME_ORDER = ["light", "sepia", "dark"];
+$("#btn-theme").onclick = () => setTheme(THEME_ORDER[(THEME_ORDER.indexOf(settings.theme) + 1) % THEME_ORDER.length]);
 
 document.addEventListener("keyup", onKey);
 window.addEventListener("resize", () => hideSelToolbar());

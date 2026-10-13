@@ -30,6 +30,7 @@
         <option value="sepia">Сепія</option>
         <option value="dark">Темна</option>
       </select>
+      <button id="btn-theme" class="mobile-only" title="Тема: світла, сепія, темна">◐</button>
       <button id="btn-panel" title="Панель пояснень (⌘E)">Пояснення</button>
       <button id="btn-settings" title="Налаштування (⌘,)">⚙</button>
     </div>
@@ -106,17 +107,10 @@
 
   <dialog id="settings">
     <form method="dialog" id="settings-form">
-      <h2>Налаштування</h2>
+      <h2 tabindex="-1" autofocus>Налаштування</h2>
       <label class="desktop-only">Ключ Claude API
         <input type="password" id="set-key" placeholder="sk-ant-…" autocomplete="off" />
         <small id="key-hint"></small>
-      </label>
-      <label class="mobile-only">Тема
-        <select id="set-theme">
-          <option value="light">Світла</option>
-          <option value="sepia">Сепія</option>
-          <option value="dark">Темна</option>
-        </select>
       </label>
       <label>Модель для пояснень
         <select id="set-model">
@@ -135,17 +129,6 @@
           <option value="publisher">Шрифт видавця</option>
         </select>
       </label>
-      <label>Міжрядковий інтервал
-        <select id="set-line-height">
-          <option value="auto">Автоматично (1.6 на телефоні, 1.7 на компʼютері)</option>
-          <option value="1.4">Щільний · 1.4</option>
-          <option value="1.5">1.5</option>
-          <option value="1.6">1.6</option>
-          <option value="1.7">1.7</option>
-          <option value="1.8">Просторий · 1.8</option>
-          <option value="2">Дуже просторий · 2.0</option>
-        </select>
-      </label>
       <label>Поля сторінки
         <select id="set-margins">
           <option value="narrow">Вузькі</option>
@@ -153,6 +136,7 @@
           <option value="wide">Широкі</option>
         </select>
       </label>
+      <label class="check mobile-only"><input type="checkbox" id="set-page-taps" /> Гортати сторінки тапами по краях замість прокрутки</label>
       <label class="check desktop-only"><input type="checkbox" id="set-auto" /> Пояснювати одразу після виділення</label>
       <menu>
         <button type="button" id="btn-logout" class="link web-only" title="Вийти з облікового запису на цьому пристрої">Вийти</button>
