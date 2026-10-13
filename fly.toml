@@ -1,0 +1,27 @@
+# Chytai web: the phone version. Secrets (ANTHROPIC_API_KEY, READER_PASSWORD, READER_SECRET)
+# are set with `fly secrets set`, not here.
+app = "chytai"
+primary_region = "fra"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  DATA_DIR = "/data"
+  TZ = "Europe/Kyiv"
+
+[[mounts]]
+  source = "reader_data"
+  destination = "/data"
+  initial_size = "3gb"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = "stop"    # nothing runs while nobody reads; the first request wakes it in a few seconds
+  auto_start_machines = true
+  min_machines_running = 0
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"

@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="uk">
+<head>
+  <meta charset="utf-8" />
+  <title>Chytai</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="Chytai" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="apple-touch-icon" href="icon.png" />
+  <link rel="icon" href="icon.png" />
+  <link rel="stylesheet" href="../../node_modules/pdfjs-dist/web/pdf_viewer.css" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body data-theme="light">
+  <header id="toolbar">
+    <div class="group">
+      <button id="btn-library" title="Бібліотека (⌘L)">Бібліотека</button>
+      <button id="btn-open" title="Відкрити книжку (⌘O)">Відкрити</button>
+      <button id="btn-toc" title="Зміст" disabled>Зміст</button>
+      <button id="btn-pdf-mode" class="hidden" title="Перемкнути між текстом із типографікою читалки та оригінальною версткою PDF">Оригінал PDF</button>
+    </div>
+    <div id="book-title" class="title">Chytai</div>
+    <div class="group">
+      <button id="btn-font-down" title="Менший шрифт">A−</button>
+      <button id="btn-font-up" title="Більший шрифт">A+</button>
+      <select id="theme-select" title="Тема">
+        <option value="light">Світла</option>
+        <option value="sepia">Сепія</option>
+        <option value="dark">Темна</option>
+      </select>
+      <button id="btn-panel" title="Панель пояснень (⌘E)">Пояснення</button>
+      <button id="btn-settings" title="Налаштування (⌘,)">⚙</button>
+    </div>
+  </header>
+
+  <main id="layout">
+    <nav id="toc" class="hidden"><ul id="toc-list"></ul></nav>
+
+    <section id="reader">
+      <div id="empty" class="empty">
+        <div class="empty-box">
+          <h1>Перетягніть сюди книжку</h1>
+          <p>EPUB, PDF, а також MOBI, AZW3 та інші формати через Calibre. Або натисніть <b>Відкрити</b>. Виділіть слово, фразу чи абзац, і пояснення з'явиться праворуч.</p>
+          <button id="btn-open-empty" class="primary">Відкрити книжку</button>
+        </div>
+      </div>
+      <div id="library" class="hidden">
+        <div class="lib-head">
+          <input id="lib-search" type="search" placeholder="Пошук за назвою чи автором" />
+          <select id="lib-lang" title="Мова">
+            <option value="">Усі мови</option>
+          </select>
+          <button id="lib-refresh" title="Пересканувати папки">Оновити</button>
+          <button id="lib-add" title="Додати папку з книжками">Додати папку…</button>
+          <button id="lib-close" class="link" title="Повернутися до книжки (Esc)">Закрити</button>
+        </div>
+        <div id="lib-folders"></div>
+        <div id="lib-body"></div>
+      </div>
+      <div id="running-head"></div>
+      <div id="search" class="hidden">
+        <div class="search-bar">
+          <input id="search-input" type="search" placeholder="Пошук у книжці" autocomplete="off" />
+          <span id="search-count"></span>
+          <button id="search-prev" title="Попередній (⇧⌘G)">‹</button>
+          <button id="search-next" title="Наступний (⌘G)">›</button>
+          <button id="search-close" title="Закрити (Esc)">✕</button>
+        </div>
+        <ol id="search-results"></ol>
+      </div>
+      <button id="prev" class="pager" title="Попередня сторінка (←)">‹</button>
+      <div id="viewer"></div>
+      <div id="pdf-container" class="hidden"><div class="pdfViewer"></div></div>
+      <button id="next" class="pager" title="Наступна сторінка (→)">›</button>
+      <button id="btn-back" class="hidden" title="Повернутися туди, де читали до переходу за посиланням">← Назад</button>
+      <footer id="status"><span id="chapter-label"></span><span id="progress-label"></span></footer>
+    </section>
+
+    <aside id="panel">
+      <div class="panel-head">
+        <span>Пояснення</span>
+        <span class="panel-actions">
+          <button id="btn-clear" class="link" title="Очистити">Очистити</button>
+          <button id="btn-panel-close" class="link mobile-only" title="Сховати панель">Сховати</button>
+        </span>
+      </div>
+      <div id="cards">
+        <div id="panel-empty" class="panel-empty">Виділіть текст у книжці, щоб отримати пояснення в контексті.</div>
+      </div>
+    </aside>
+  </main>
+
+  <div id="notice" class="hidden">
+    <span class="spinner"></span>
+    <span class="notice-text"></span>
+    <button class="link" onclick="this.parentElement.classList.add('hidden')">Закрити</button>
+  </div>
+
+  <div id="sel-toolbar" class="hidden">
+    <button data-action="explain">Пояснити</button>
+    <button data-action="ask">Спитати…</button>
+  </div>
+
+  <dialog id="settings">
+    <form method="dialog" id="settings-form">
+      <h2>Налаштування</h2>
+      <label class="desktop-only">Ключ Claude API
+        <input type="password" id="set-key" placeholder="sk-ant-…" autocomplete="off" />
+        <small id="key-hint"></small>
+      </label>
+      <label class="mobile-only">Тема
+        <select id="set-theme">
+          <option value="light">Світла</option>
+          <option value="sepia">Сепія</option>
+          <option value="dark">Темна</option>
+        </select>
+      </label>
+      <label>Модель для пояснень
+        <select id="set-model">
+          <option value="claude-opus-5-5">Claude Opus 5.5 (рекомендовано)</option>
+          <option value="claude-sonnet-5-5">Claude Sonnet 5.5</option>
+          <option value="claude-haiku-5-5">Claude Haiku 5.5 (найдешевша)</option>
+        </select>
+      </label>
+      <label>Мова пояснень
+        <input type="text" id="set-language" placeholder="українська" />
+      </label>
+      <label>Шрифт книжки
+        <select id="set-font">
+          <option value="literata">Literata (як у Kindle)</option>
+          <option value="georgia">Georgia</option>
+          <option value="publisher">Шрифт видавця</option>
+        </select>
+      </label>
+      <label>Міжрядковий інтервал
+        <select id="set-line-height">
+          <option value="auto">Автоматично (1.6 на телефоні, 1.7 на компʼютері)</option>
+          <option value="1.4">Щільний · 1.4</option>
+          <option value="1.5">1.5</option>
+          <option value="1.6">1.6</option>
+          <option value="1.7">1.7</option>
+          <option value="1.8">Просторий · 1.8</option>
+          <option value="2">Дуже просторий · 2.0</option>
+        </select>
+      </label>
+      <label>Поля сторінки
+        <select id="set-margins">
+          <option value="narrow">Вузькі</option>
+          <option value="normal">Звичайні</option>
+          <option value="wide">Широкі</option>
+        </select>
+      </label>
+      <label class="check desktop-only"><input type="checkbox" id="set-auto" /> Пояснювати одразу після виділення</label>
+      <menu>
+        <button type="button" id="btn-logout" class="link web-only" title="Вийти з облікового запису на цьому пристрої">Вийти</button>
+        <button value="cancel" formnovalidate>Скасувати</button>
+        <button value="save" class="primary" id="settings-save">Зберегти</button>
+      </menu>
+    </form>
+  </dialog>
+
+  <script src="../../node_modules/jszip/dist/jszip.min.js"></script>
+  <script src="../../node_modules/epubjs/dist/epub.min.js"></script>
+  <script src="../../node_modules/marked/lib/marked.umd.js"></script>
+  <script src="../../node_modules/dompurify/dist/purify.min.js"></script>
+  <script src="web-bridge.js"></script>
+  <script src="context.js"></script>
+  <script src="renderer.js"></script>
+  <script src="search.js"></script>
+  <script src="library-view.js"></script>
+  <script type="module" src="pdf-view.js"></script>
+</body>
+</html>

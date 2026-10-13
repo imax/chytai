@@ -1,0 +1,25 @@
+const { contextBridge, ipcRenderer, webUtils } = require("electron");
+
+contextBridge.exposeInMainWorld("reader", {
+  chooseBook: () => ipcRenderer.invoke("book:choose"),
+  openPath: (filePath) => ipcRenderer.invoke("book:open-path", filePath),
+  pathForFile: (file) => webUtils.getPathForFile(file),
+  savePosition: (bookPath, cfi) => ipcRenderer.invoke("book:save-position", bookPath, cfi),
+  reflowGet: (bookPath, version) => ipcRenderer.invoke("reflow:get", bookPath, version),
+  reflowPut: (bookPath, version, data) => ipcRenderer.invoke("reflow:put", bookPath, version, data),
+  libraryList: () => ipcRenderer.invoke("library:list"),
+  libraryAddFolder: () => ipcRenderer.invoke("library:add-folder"),
+  libraryRemoveFolder: (folder) => ipcRenderer.invoke("library:remove-folder", folder),
+  getSettings: () => ipcRenderer.invoke("settings:get"),
+  setSettings: (patch) => ipcRenderer.invoke("settings:set", patch),
+  explain: (id, request) => ipcRenderer.invoke("ai:explain", id, request),
+  abort: (id) => ipcRenderer.invoke("ai:abort", id),
+  onBookOpen: (cb) => ipcRenderer.on("book:open", (_e, book) => cb(book)),
+  onBookConverting: (cb) => ipcRenderer.on("book:converting", (_e, name) => cb(name)),
+  onBookError: (cb) => ipcRenderer.on("book:error", (_e, message) => cb(message)),
+  onAiEvent: (cb) => ipcRenderer.on("ai:event", (_e, id, payload) => cb(id, payload)),
+  onShowSettings: (cb) => ipcRenderer.on("ui:settings", () => cb()),
+  onShowLibrary: (cb) => ipcRenderer.on("ui:library", () => cb()),
+  onFind: (cb) => ipcRenderer.on("ui:find", (_e, action) => cb(action)),
+  onTogglePanel: (cb) => ipcRenderer.on("ui:toggle-panel", () => cb()),
+});

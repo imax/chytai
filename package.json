@@ -1,0 +1,56 @@
+{
+  "name": "ai-reader",
+  "productName": "Chytai",
+  "version": "0.1.0",
+  "description": "EPUB reader for macOS with inline AI explanations powered by Claude",
+  "main": "src/main.js",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --mac",
+    "web": "node server/index.js"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.93.0",
+    "@fontsource-variable/literata": "^5.3.0",
+    "dompurify": "^3.4.17",
+    "epubjs": "^0.3.93",
+    "express": "^5.1.0",
+    "jszip": "^3.10.1",
+    "marked": "^18.1.1",
+    "pdfjs-dist": "^6.4.299"
+  },
+  "devDependencies": {
+    "electron": "^44.7.0",
+    "electron-builder": "^26.0.0"
+  },
+  "build": {
+    "appId": "com.example.aireader",
+    "productName": "Chytai",
+    "mac": {
+      "category": "public.app-category.books",
+      "target": "dmg"
+    },
+    "fileAssociations": [
+      {
+        "ext": "epub",
+        "name": "EPUB Book",
+        "role": "Viewer"
+      },
+      {
+        "ext": [
+          "mobi",
+          "azw",
+          "azw3"
+        ],
+        "name": "Kindle Book",
+        "role": "Viewer"
+      },
+      {
+        "ext": "pdf",
+        "name": "PDF Document",
+        "role": "Viewer"
+      }
+    ]
+  }
+}
