@@ -45,7 +45,7 @@ function loadDotEnv(file) {
 // ---------- State: shared model settings, per-person look and positions ----------
 
 const SHARED_DEFAULTS = { model: "claude-opus-5-5", deepModel: "claude-fable-5-1", language: "українська" };
-const USER_DEFAULTS = { autoExplain: true, font: "literata", lineHeight: "auto", margins: "normal", pdfMode: "reflow", fontSize: 100, theme: "light", lastBook: null, positions: {} };
+const USER_DEFAULTS = { autoExplain: true, pageTaps: false, font: "literata", margins: "normal", pdfMode: "reflow", fontSizes: {}, theme: "light", lastBook: null, positions: {} };
 const SHARED_KEYS = new Set(Object.keys(SHARED_DEFAULTS));
 const USER_KEYS = new Set(Object.keys(USER_DEFAULTS));
 

@@ -26,11 +26,11 @@ const DEFAULT_SETTINGS = {
   deepModel: "claude-fable-5-1",
   language: "українська",
   autoExplain: true,
+  pageTaps: false, // phone only: page turns instead of continuous scrolling
   font: "literata",
-  lineHeight: "auto", // or a number such as "1.6"
   margins: "normal", // narrow | normal | wide
   pdfMode: "reflow", // "reflow" (як книжка) or "original"
-  fontSize: 100,
+  fontSizes: {}, // book path -> font size in %, only for books where it was changed
   theme: "light",
   lastBook: null,
   libraryFolders: null, // null = default folders (iCloud Backups/Downloads)
