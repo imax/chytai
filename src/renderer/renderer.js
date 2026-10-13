@@ -55,7 +55,7 @@ function openSettings() {
   $("#set-language").value = settings.language;
   $("#set-auto").checked = settings.autoExplain;
   $("#set-font").value = settings.font;
-  $("#set-page-taps").checked = !!settings.pageTaps;
+  $("#set-page-taps").value = settings.pageTaps ? "taps" : "scroll";
   $("#settings").showModal();
 }
 
@@ -67,7 +67,7 @@ $("#settings").addEventListener("close", async () => {
     autoExplain: $("#set-auto").checked,
     font: $("#set-font").value,
     margins: $("#set-margins").value,
-    pageTaps: $("#set-page-taps").checked,
+    pageTaps: $("#set-page-taps").value === "taps",
   };
   const key = $("#set-key").value.trim();
   if (key) patch.apiKey = key;
@@ -112,7 +112,8 @@ function typographyCss() {
     p { text-align: justify; hyphens: auto; -webkit-hyphens: auto; widows: 2; orphans: 2; }
     h1, h2, h3 { line-height: 1.3 !important; hyphens: manual; }
     pre, code, kbd, samp { font-family: ui-monospace, Menlo, monospace !important; }
-    ${scrolled() ? "body { padding-left: 0 !important; padding-right: 0 !important; }" : ""}`;
+    /* epub.js pads a scrolled page by 1/12 of its width; use the same side space as page mode instead. */
+    ${scrolled() ? "body { padding-left: 14px !important; padding-right: 14px !important; }" : ""}`;
 }
 
 function styleContents(contents) {

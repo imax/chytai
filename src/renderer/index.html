@@ -31,7 +31,7 @@
         <option value="dark">Темна</option>
       </select>
       <button id="btn-theme" class="mobile-only" title="Тема: світла, сепія, темна">◐</button>
-      <button id="btn-panel" title="Панель пояснень (⌘E)">Пояснення</button>
+      <button id="btn-panel" class="desktop-only" title="Панель пояснень (⌘E)">Пояснення</button>
       <button id="btn-settings" title="Налаштування (⌘,)">⚙</button>
     </div>
   </header>
@@ -136,7 +136,12 @@
           <option value="wide">Широкі</option>
         </select>
       </label>
-      <label class="check mobile-only"><input type="checkbox" id="set-page-taps" /> Гортати сторінки тапами по краях замість прокрутки</label>
+      <label class="mobile-only">Читання на телефоні
+        <select id="set-page-taps">
+          <option value="scroll">Прокрутка</option>
+          <option value="taps">Сторінки (тап по краю або свайп)</option>
+        </select>
+      </label>
       <label class="check desktop-only"><input type="checkbox" id="set-auto" /> Пояснювати одразу після виділення</label>
       <menu>
         <button type="button" id="btn-logout" class="link web-only" title="Вийти з облікового запису на цьому пристрої">Вийти</button>
