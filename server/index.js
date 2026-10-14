@@ -11,6 +11,7 @@ const fs = require("fs");
 const path = require("path");
 const { explain } = require("../src/ai");
 const library = require("../src/library");
+const { adminPage, cost } = require("./admin");
 
 const ROOT = path.join(__dirname, "..");
 loadDotEnv(path.join(ROOT, ".env"));
@@ -36,6 +37,9 @@ const GUEST_MAX_TURNS = 8;
 const DEMO_DIRS = [path.join(DATA_DIR, "demo"), path.join(ROOT, "demo")];
 const BOOK_EXT = /\.(epub|pdf)$/i;
 const MAX_UPLOAD = "300mb";
+// Days in the usage stats (/admin) are counted in this time zone, and kept for this long.
+const STATS_TZ = process.env.STATS_TZ || "Europe/Kyiv";
+const STATS_KEEP_DAYS = 400;
 
 if (!PASSWORD || !SECRET) {
   console.error("READER_PASSWORD and READER_SECRET must be set (see .env.example)");
@@ -159,6 +163,86 @@ function trimGuestRequest(request) {
     request.messages = [request.messages[0], ...request.messages.slice(-(GUEST_MAX_TURNS - 1))];
   }
   return request;
+}
+
+// ---------- Usage stats: explanations per day, per reader and per model, for /admin ----------
+
+const statsDay = (ts = Date.now()) => new Date(ts).toLocaleDateString("sv-SE", { timeZone: STATS_TZ }); // YYYY-MM-DD
+
+function recordExplain(req, { model, usage }) {
+  const day = statsDay();
+  const stats = (state.stats ??= { since: day, days: {} });
+  const d = (stats.days[day] ??= { explains: 0, users: {}, guests: 0, models: {} });
+  d.explains++;
+  if (req.guest) d.guests++;
+  else d.users[req.user] = (d.users[req.user] || 0) + 1;
+  const m = (d.models[model || "?"] ??= { requests: 0, input: 0, output: 0, cacheRead: 0, cacheWrite: 0 });
+  m.requests++;
+  m.input += usage?.input_tokens || 0;
+  m.output += usage?.output_tokens || 0;
+  m.cacheRead += usage?.cache_read_input_tokens || 0;
+  m.cacheWrite += usage?.cache_creation_input_tokens || 0;
+  const cutoff = statsDay(Date.now() - STATS_KEEP_DAYS * 86400000);
+  for (const old of Object.keys(stats.days)) if (old < cutoff) delete stats.days[old];
+  saveState();
+}
+
+async function collectStats() {
+  const stats = state.stats || { since: null, days: {} };
+  const today = statsDay();
+  const weekAgo = statsDay(Date.now() - 7 * 86400000);
+  const dayKeys = Object.keys(stats.days).sort().reverse();
+  const sumUser = (name, from) => dayKeys.filter((k) => !from || k >= from).reduce((a, k) => a + (stats.days[k].users[name] || 0), 0);
+  const sumAll = (from) => dayKeys.filter((k) => !from || k >= from).reduce((a, k) => a + stats.days[k].explains, 0);
+
+  const users = Object.entries(state.users)
+    .map(([name, u]) => {
+      const lastSeen = Math.max(0, ...Object.values(u.opened || {}));
+      const started = new Set(Object.keys(u.positions || {}).map((p) => p.replace(/#reflow$/, ""))).size;
+      return { name, today: sumUser(name, today), week: sumUser(name, weekAgo), total: sumUser(name), started, lastSeen, lastBook: u.lastBook, activeWeek: lastSeen > Date.now() - 7 * 86400000 };
+    })
+    .sort((a, b) => b.lastSeen - a.lastSeen);
+
+  const books = (await library.scan([BOOKS_DIR], path.join(DATA_DIR, "library-cache.json")))
+    .map((b) => {
+      const name = path.relative(BOOKS_DIR, b.path);
+      const readers = Object.values(state.users).filter((u) => u.positions?.[name] || u.positions?.[`${name}#reflow`]).length;
+      return { name, title: b.title || name, authors: (b.authors || []).join(", "), size: b.size, readers };
+    })
+    .sort((a, b) => b.readers - a.readers || a.title.localeCompare(b.title, "uk"));
+
+  const modelTotals = {};
+  const days = dayKeys.map((day) => {
+    const d = stats.days[day];
+    const t = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 };
+    let dayCost = 0;
+    for (const [model, m] of Object.entries(d.models)) {
+      for (const k of Object.keys(t)) t[k] += m[k] || 0;
+      const c = cost(model, m);
+      dayCost = dayCost == null || c == null ? null : dayCost + c;
+      const mt = (modelTotals[model] ??= { model, requests: 0, input: 0, output: 0, cacheRead: 0, cacheWrite: 0 });
+      mt.requests += m.requests;
+      for (const k of Object.keys(t)) mt[k] += m[k] || 0;
+    }
+    return { day, explains: d.explains, family: d.explains - d.guests, guests: d.guests, ...t, cost: dayCost };
+  });
+  const models = Object.values(modelTotals)
+    .map((m) => ({ ...m, cost: cost(m.model, m) }))
+    .sort((a, b) => b.requests - a.requests);
+
+  const gu = guestUsage();
+  return {
+    timeZone: STATS_TZ,
+    since: stats.since,
+    totals: { today: sumAll(today), week: sumAll(weekAgo), all: sumAll() },
+    users,
+    books,
+    days,
+    models,
+    guestsToday: Object.keys(gu.guests).length,
+    guestExplainsToday: gu.total,
+    guestTotalLimit: GUEST_TOTAL_LIMIT,
+  };
 }
 
 // [{ dir, name }] of the books a guest may open. builtInOnly skips the library choice.
@@ -321,6 +405,16 @@ app.use((req, res, next) => {
 
 const guestsCannot = (message) => (req, res, next) => (req.guest ? res.status(403).json({ error: message }) : next());
 
+// The dashboard is for the family: a guest who finds the link is sent to the login page.
+app.get("/admin", async (req, res, next) => {
+  if (req.guest) return res.redirect("/login");
+  try {
+    res.type("html").send(adminPage(await collectStats()));
+  } catch (err) {
+    next(err);
+  }
+});
+
 // Static renderer: index.html at /, its scripts next to it, node_modules at /node_modules
 // (so the renderer's ../../node_modules/… paths resolve, as they do under file:// in Electron).
 app.get("/", (_req, res) => res.sendFile(path.join(ROOT, "src", "renderer", "index.html")));
@@ -333,6 +427,14 @@ const api = express.Router();
 api.use(express.json({ limit: "20mb" }));
 
 api.get("/settings", (req, res) => res.json(settingsFor(req)));
+
+api.get("/admin", guestsCannot("Статистика доступна лише родині."), async (req, res, next) => {
+  try {
+    res.json(await collectStats());
+  } catch (err) {
+    next(err);
+  }
+});
 
 api.patch("/settings", (req, res) => {
   const u = req.guest ? guestState(req.guest) : userState(req.user);
@@ -486,7 +588,9 @@ api.post("/explain", async (req, res) => {
       signal: controller.signal,
       onText: (text) => send({ type: "text", text }),
     });
-    send({ type: "done", ...result });
+    const { usage, ...done } = result;
+    recordExplain(req, { model: done.model, usage });
+    send({ type: "done", ...done });
   } catch (err) {
     if (controller.signal.aborted) send({ type: "aborted" });
     else send({ type: "error", message: describeError(err) });

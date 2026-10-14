@@ -83,6 +83,7 @@ $("#settings").addEventListener("close", async () => {
   if (fontChanged) applyTypography(true);
 });
 $("#btn-logout").onclick = () => window.reader.logout?.();
+$("#btn-admin").onclick = () => (location.href = "/admin");
 
 // Family members choose which library book guests see in the demo (web only).
 async function fillDemoBooks() {

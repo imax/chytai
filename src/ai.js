@@ -83,6 +83,8 @@ async function explain({ apiKey, model, language, request, signal, onText }) {
     messages: [...messages, { role: "assistant", content: message.content }],
     model: message.model,
     truncated: message.stop_reason === "max_tokens",
+    // Token counts for the server's usage stats (never shown to the reader).
+    usage: message.usage,
   };
 }
 
