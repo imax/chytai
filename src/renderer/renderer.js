@@ -886,8 +886,10 @@ function drawBars(mark) {
   // The same note always wobbles the same way, so a relayout doesn't redraw it differently.
   let seed = [...String(mark.data?.note || "")].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7);
   const rand = () => ((seed = (seed * 1103515245 + 12345) >>> 0) / 2 ** 32) - 0.5;
-  // Part of a paragraph is underlined by hand under the exact words; whole paragraphs get the bars.
-  if (!coversWholeParagraphs(mark.range)) {
+  // A short part of a paragraph (up to three lines) is underlined by hand under the exact words;
+  // whole paragraphs and longer passages get the bars, which read more calmly than many lines of ink.
+  const lines = new Set(rects.map((r) => Math.round(r.y))).size;
+  if (lines <= 3 && !coversWholeParagraphs(mark.range)) {
     for (const r of rects) {
       const y = r.y + r.h - 1;
       add("path", { class: "bar under", d: `M${r.x + rand()},${y + rand() * 1.5}` + wobbleAcross(r.x, r.x + r.w, y, rand) });
