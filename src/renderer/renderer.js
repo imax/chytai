@@ -886,6 +886,14 @@ function drawBars(mark) {
   // The same note always wobbles the same way, so a relayout doesn't redraw it differently.
   let seed = [...String(mark.data?.note || "")].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7);
   const rand = () => ((seed = (seed * 1103515245 + 12345) >>> 0) / 2 ** 32) - 0.5;
+  // Part of a paragraph is underlined by hand under the exact words; whole paragraphs get the bars.
+  if (!coversWholeParagraphs(mark.range)) {
+    for (const r of rects) {
+      const y = r.y + r.h - 1;
+      add("path", { class: "bar under", d: `M${r.x + rand()},${y + rand() * 1.5}` + wobbleAcross(r.x, r.x + r.w, y, rand) });
+    }
+    return;
+  }
   for (const col of cols) {
     const top = Math.min(...col.map((r) => r.y)) + 1;
     const bottom = Math.max(...col.map((r) => r.y + r.h)) - 1;
@@ -895,6 +903,38 @@ function drawBars(mark) {
     add("path", { class: "bar", d: `M${left + 7},${top - 2 + rand() * 2} Q${left + 1},${top - 1} ${left},${top + 6}` + wobble(left, top + 6, bottom, rand) });
     add("path", { class: "bar", d: `M${right + rand() * 2},${top}` + wobble(right, top, bottom - 6, rand) + ` Q${right + 1},${bottom + 1} ${right - 7},${bottom + 2 + rand() * 2}` });
   }
+}
+
+// A horizontal pencil stroke from x1 to x2 near y.
+function wobbleAcross(x1, x2, y, rand) {
+  const steps = Math.max(1, Math.round((x2 - x1) / 40));
+  let d = "";
+  for (let i = 1; i <= steps; i++) {
+    const x = x1 + ((x2 - x1) * i) / steps;
+    d += ` Q${x - (x2 - x1) / steps / 2},${y + rand() * 2.2} ${x},${y + rand() * 1.2}`;
+  }
+  return d;
+}
+
+// True when the range starts at the beginning of a paragraph and ends at the end of one.
+function coversWholeParagraphs(range) {
+  if (!range) return true;
+  const block = (node) => (node.nodeType === 1 ? node : node.parentElement)?.closest("p, li, blockquote, h1, h2, h3, h4, h5, h6, div, dd, dt, td");
+  const doc = range.startContainer.ownerDocument;
+  const gap = (from, to) => {
+    if (!from || !to) return "";
+    const r = doc.createRange();
+    r.setStart(...from);
+    r.setEnd(...to);
+    return r.toString().trim();
+  };
+  const first = block(range.startContainer);
+  const last = block(range.endContainer);
+  if (!first || !last) return true;
+  const end = [range.endContainer, range.endOffset];
+  // iOS often ends a paragraph selection at the very start of the next one.
+  const endsWhole = !gap(end, [last, last.childNodes.length]) || (last !== first && !gap([last, 0], end));
+  return !gap([first, 0], [range.startContainer, range.startOffset]) && endsWhole;
 }
 
 // A vertical pencil stroke from y1 to y2 near x: it drifts a little side to side.
