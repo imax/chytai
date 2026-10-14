@@ -1,0 +1,37 @@
+# The iPhone app's own code (app/) ships over the air: every merge to main that touches it is
+# published with EAS Update to the "production" channel, and installed copies pick it up on the
+# next launch. No App Store review, no TestFlight upload. Only a change to the native side
+# (new Expo modules, app.json permissions, an SDK upgrade) needs a new build: see app-build.yml.
+#
+# Needs the repo secret EXPO_TOKEN: a robot/personal access token from https://expo.dev/settings/access-tokens.
+name: App update (over the air)
+
+on:
+  push:
+    branches: [main]
+    paths: ["app/**", "!app/README.md"]
+  workflow_dispatch:
+
+concurrency: app-update
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+      - uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+      - run: npm ci --no-audit --no-fund
+      - run: eas update --branch production --platform ios --non-interactive --message "$(printf '%s' "$MESSAGE" | head -1 | cut -c1-200)"
+        env:
+          MESSAGE: ${{ github.event.head_commit.message || 'manual run' }}
