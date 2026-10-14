@@ -771,7 +771,7 @@ $("#btn-clear").onclick = () => {
   $("#cards").innerHTML = `<div id="panel-empty" class="panel-empty">Виділіть текст у книжці, щоб отримати пояснення в контексті.</div>`;
 };
 
-// ---------- Notes: passages saved with "В нотатки", per reader and per book ----------
+// ---------- Notes: passages saved with "Зберегти", per reader and per book ----------
 
 // The web bridge keeps notes on the server; the Mac app keeps them in this window's storage.
 const notesStore = window.reader.notesList
@@ -910,7 +910,7 @@ function renderNotes() {
     return;
   }
   if (!notes.length) {
-    box.innerHTML = `<div class="panel-empty">Нотаток ще немає. Виділіть текст і натисніть «В нотатки».</div>`;
+    box.innerHTML = `<div class="panel-empty">Нотаток ще немає. Виділіть текст і натисніть «Зберегти».</div>`;
     return;
   }
   // Newest on top, like the explanations.
