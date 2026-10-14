@@ -266,6 +266,7 @@ async function openEpub(payload, { posKey, source }) {
   // hiding on a phone); a re-measure now re-renders only if the size actually changed.
   requestAnimationFrame(resizeView);
   loadNotes();
+  watchFirstPage();
 
   const meta = await book.loaded.metadata;
   current.title = meta.title || current.title;
@@ -339,6 +340,14 @@ function toggleChrome(show = !document.body.classList.contains("chrome-shown")) 
   document.body.classList.toggle("chrome-shown", show);
   if (!show) $("#toc").classList.add("hidden");
 }
+
+// Escape hatch: when a chapter never renders (a broken book, a WebKit quirk), taps inside the page
+// never reach us and the toolbar could not be brought back. The running head at the top and the
+// bare page area outside the chapter frames still get taps, so a tap there shows the toolbar.
+$("#running-head").addEventListener("click", () => toggleChrome(true));
+$("#viewer").addEventListener("click", (e) => {
+  if (e.target.tagName !== "IFRAME") toggleChrome();
+});
 
 // Original-layout PDFs scroll instead of paging, so any tap in the middle band toggles the toolbar.
 $("#pdf-container").addEventListener("click", (e) => {
@@ -548,6 +557,19 @@ function showSelToolbar(range, frame) {
   const top = Math.max(48, above < 48 ? frame.top + rect.bottom + 8 : above);
   bar.style.top = `${top}px`;
   bar.style.left = `${Math.min(Math.max(8, left), window.innerWidth - bar.offsetWidth - 8)}px`;
+}
+
+// A chapter that epub.js reports as displayed can still come up blank (seen in the iPhone app).
+// Say so after a moment, with the way out, instead of a silent white screen.
+function watchFirstPage() {
+  const mine = rendition;
+  setTimeout(() => {
+    if (!rendition || rendition !== mine) return;
+    const doc = rendition.getContents()[0]?.document;
+    const shown = doc?.body && (doc.body.scrollHeight > 0 || doc.body.textContent.trim());
+    if (shown) return;
+    showNotice("Сторінка не відобразилась. Тапніть назву книжки вгорі, щоб повернутись у бібліотеку.", false);
+  }, 4000);
 }
 
 function hideSelToolbar() {
@@ -1276,7 +1298,15 @@ document.addEventListener("drop", (e) => {
   if (file) window.reader.openPath(window.reader.pathForFile(file));
 });
 
-window.reader.onBookOpen((payload) => openBook(payload).catch((err) => alert(`Не вдалося відкрити книжку: ${err.message}`)));
+window.reader.onBookOpen((payload) =>
+  openBook(payload).catch((err) => {
+    // Never leave a half-opened book on screen with no way out: back to the library, with the reason.
+    console.error(err);
+    closeBook();
+    showNotice(`Не вдалося відкрити книжку: ${err.message}`, false);
+    if ($("#library").classList.contains("hidden")) $("#btn-library").click();
+  }),
+);
 window.reader.onShowSettings(openSettings);
 window.reader.onBookConverting((name) => showNotice(`Конвертую «${name}» через Calibre…`, true));
 window.reader.onBookError((message) => showNotice(message, false));

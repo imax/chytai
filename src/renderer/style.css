@@ -53,6 +53,7 @@ button, select, input { font: inherit; color: inherit; }
   position: absolute; top: 14px; left: 72px; right: 72px; text-align: center;
   font: 12px/1 -apple-system, "Helvetica Neue", sans-serif; letter-spacing: 0.08em; text-transform: uppercase;
   color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  cursor: pointer; /* a tap on it brings the toolbar back, see toggleChrome */
 }
 .pager {
   position: absolute; top: 0; bottom: 30px; width: 64px; z-index: 2;
