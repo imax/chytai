@@ -136,7 +136,7 @@ g.note-ul rect { stroke: none; } /* the group's stroke would otherwise frame eve
 g.note-ul line { stroke: none; }
 g.note-ul path.bar { fill: none; stroke: #e07a2e; stroke-width: 2.6px; stroke-linecap: round; stroke-linejoin: round; stroke-opacity: 0.95; }
 body[data-theme="dark"] g.note-ul path.bar { stroke: #f0a050; }
-g.note-ul .comment-mark { fill: #e07a2e; fill-opacity: 0.18; stroke: #e07a2e; stroke-opacity: 1; stroke-width: 1.6px; stroke-linejoin: round; }
+g.note-ul .comment-mark { fill: #e07a2e; fill-opacity: 1; stroke: none; font: bold 17px Georgia, serif; }
 #toast {
   position: fixed; z-index: 30; left: 50%; bottom: calc(48px + env(safe-area-inset-bottom)); transform: translate(-50%, 8px);
   background: #2c2c2e; color: #fff; padding: 8px 14px; border-radius: 10px; font-size: 14px;
