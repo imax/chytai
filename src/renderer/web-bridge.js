@@ -65,6 +65,12 @@
   window.addEventListener("pagehide", () => flushPositions(true));
   document.addEventListener("visibilitychange", () => document.visibilityState === "hidden" && flushPositions(true));
 
+  function afterLoad(fn) {
+    const go = () => requestAnimationFrame(() => setTimeout(fn, 0));
+    if (document.readyState === "complete") go();
+    else window.addEventListener("load", go, { once: true });
+  }
+
   async function openServerBook(name) {
     try {
       const res = await api("GET", `/api/book?path=${encodeURIComponent(name)}`);
@@ -167,7 +173,10 @@
       if (!firstLoadDone) {
         firstLoadDone = true;
         if (settings.guest) enterGuestMode(settings);
-        if (settings.lastBook) setTimeout(() => openServerBook(settings.lastBook), 0);
+        // Only once the page is fully laid out: opened during the initial load, epub.js measured
+        // the reading area before it had a size and rendered a 0x0 chapter (white screen in the
+        // iPhone app, where the first load is slower than in Safari).
+        if (settings.lastBook) afterLoad(() => openServerBook(settings.lastBook));
       }
       return settings;
     },

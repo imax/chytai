@@ -55,24 +55,35 @@ const DIAGNOSTICS = `
     var send = function (text) {
       try { window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'diag', text: text })); } catch (e) {}
     };
-    var vis = function (sel) { var el = document.querySelector(sel); return el ? (el.classList.contains('hidden') ? 'hidden' : 'shown') + ' ' + el.offsetWidth + 'x' + el.offsetHeight : 'none'; };
-    var n = 0;
+    var vis = function (sel) { var el = document.querySelector(sel); if (!el) return 'none'; var cs = getComputedStyle(el); return (el.classList.contains('hidden') ? 'hidden' : 'shown') + ' ' + el.offsetWidth + 'x' + el.offsetHeight + ' ' + cs.display; };
+    var last = '', n = 0, opened = 'n/a', seenBook = null;
     var tick = function () {
       n++;
-      var parts = ['#' + n, location.pathname, 'body=' + (document.body.className || '-'), 'title=' + document.title];
-      parts.push('empty=' + vis('#empty'), 'library=' + vis('#library'), 'viewer=' + vis('#viewer'), 'toolbar=' + vis('#toolbar'));
+      var parts = [location.pathname, 'body=' + (document.body.className || '-'), 'ready=' + document.readyState];
+      parts.push('viewer=' + vis('#viewer'), 'reader=' + vis('#reader'), 'layout=' + vis('#layout'));
+      try {
+        var b = typeof book !== 'undefined' ? book : null, r = typeof rendition !== 'undefined' ? rendition : null;
+        if (b && b !== seenBook) { seenBook = b; opened = 'pending'; b.opened.then(function () { opened = 'ok'; }, function (e) { opened = 'fail:' + (e && e.message); }); }
+        parts.push('book=' + (b ? 'yes isOpen=' + b.isOpen + ' opened=' + opened : 'no'));
+        if (r) {
+          var m = r.manager;
+          parts.push('rendition: manager=' + (m ? 'yes' : 'no') + (m ? ' stage=' + (m.stage ? 'yes' : 'no') + ' stageSize=' + JSON.stringify(m._stageSize || null) + ' layout=' + (m.layout ? m.layout.width + 'x' + m.layout.height + ' ' + m.layout.name + '/' + m.layout.flow : 'none') + ' views=' + (m.views ? m.views.length : '?') : ''));
+        }
+      } catch (e) { parts.push('diagerr=' + e.message); }
       var frames = document.querySelectorAll('iframe');
       parts.push('iframes=' + frames.length);
       Array.prototype.forEach.call(frames, function (f, i) {
-        var d = null, len = 'n/a';
-        try { d = f.contentDocument; len = d && d.body ? d.body.innerText.length : 'nobody'; } catch (e) { len = 'x:' + e.message; }
-        parts.push('f' + i + '=' + (f.getAttribute('src') || f.getAttribute('srcdoc') ? 'srcdoc' : 'nosrc').slice(0, 24) + ' ' + f.offsetWidth + 'x' + f.offsetHeight + ' text=' + len + ' sandbox=' + (f.getAttribute('sandbox') || '-'));
+        var d = null, inner = 'n/a';
+        try { d = f.contentDocument; inner = d ? d.readyState + ' nodes=' + (d.body ? d.body.childNodes.length : 'nobody') + ' text=' + (d.body ? d.body.innerText.length : 0) : 'nodoc'; } catch (e) { inner = 'x:' + e.message; }
+        var cs = getComputedStyle(f);
+        parts.push('f' + i + '=' + (f.getAttribute('src') ? f.getAttribute('src').slice(0, 30) : f.hasAttribute('srcdoc') ? 'srcdoc(' + f.getAttribute('srcdoc').length + ')' : 'nosrc') + ' ' + f.offsetWidth + 'x' + f.offsetHeight + ' css=' + cs.width + '/' + cs.height + '/' + cs.display + '/' + cs.visibility + ' sandbox=' + (f.getAttribute('sandbox') || '-') + ' inner=' + inner);
       });
       if (logs.length) parts.push('logs=' + logs.slice(-4).join(' | '));
-      send(parts.join(' · '));
-      if (n < 6) setTimeout(tick, 3000);
+      var text = parts.join(' · ');
+      if (text !== last) { last = text; send('#' + n + ' ' + text); }
+      setTimeout(tick, 2000);
     };
-    setTimeout(tick, 2000);
+    setTimeout(tick, 1500);
   })();
   true;
 `;
@@ -163,7 +174,7 @@ export default function App() {
           try {
             const msg = JSON.parse(e.nativeEvent.data);
             if (msg.type === 'error') setPageError((prev) => `${prev ? prev + '\n' : ''}${String(msg.text).slice(0, 400)}`);
-            if (msg.type === 'diag') setPageError(String(msg.text).slice(0, 900));
+            if (msg.type === 'diag') setPageError(String(msg.text).slice(0, 1400));
           } catch { /* not ours */ }
         }}
         onLoadStart={() => setProgress(0.05)}
