@@ -846,7 +846,7 @@ function markNote(note) {
 }
 
 // epub.js draws a note as an underline mark (an SVG group over the page, with a rect per line);
-// we draw pencil brackets in the margins around those lines instead, plus the note's emoji.
+// we draw a bar in each margin alongside those lines instead (the emoji stays in the notes list).
 // The mark redraws itself on every relayout, so its render is wrapped once per mark.
 function decorateNoteMarks() {
   const views = rendition?.views();
@@ -856,7 +856,7 @@ function decorateNoteMarks() {
       const render = mark.render;
       mark.render = function () {
         render.call(this);
-        drawBrackets(this);
+        drawBars(this);
       };
       mark.bracketed = true;
       mark.render();
@@ -864,18 +864,8 @@ function decorateNoteMarks() {
   }
 }
 
-// Redraw one note's marks after its emoji changed.
-function redrawNote(note) {
-  const views = rendition?.views();
-  for (const view of views?.all ? views.all() : views || []) view.underlines?.[note.cfi]?.mark.render();
-}
-
 const SVG_NS = "http://www.w3.org/2000/svg";
-// How a saved passage is marked in the text: "brackets" (pencil brackets in both margins),
-// "bar" (one line in the left margin), "margin" (faint tint plus a dot or the emoji in the
-// margin) or "pencil" (a wavy pencil underline).
-let noteMarkStyle = "brackets";
-function drawBrackets(mark) {
+function drawBars(mark) {
   const g = mark.element;
   const rects = [...g.querySelectorAll("rect")]
     .map((r) => ({ x: +r.getAttribute("x"), y: +r.getAttribute("y"), w: +r.getAttribute("width"), h: +r.getAttribute("height") }))
@@ -887,44 +877,19 @@ function drawBrackets(mark) {
     if (col && r.y >= col.at(-1).y - 2) col.push(r);
     else cols.push([r]);
   }
-  const note = notes.find((n) => n.id === mark.data?.note);
   const add = (tag, attrs) => {
     const el = document.createElementNS(SVG_NS, tag);
     for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, v);
     g.appendChild(el);
     return el;
   };
-  cols.forEach((col, i) => {
-    const top = Math.min(...col.map((r) => r.y)) - 1;
-    const bottom = Math.max(...col.map((r) => r.y + r.h)) + 1;
+  for (const col of cols) {
+    const top = Math.min(...col.map((r) => r.y)) + 2;
+    const bottom = Math.max(...col.map((r) => r.y + r.h)) - 2;
     const left = Math.min(...col.map((r) => r.x)) - 8;
     const right = Math.max(...col.map((r) => r.x + r.w)) + 8;
-    const mid = (top + bottom) / 2;
-    let emojiAt = [right, top];
-    if (noteMarkStyle === "brackets") {
-      const t = 9; // length of the bracket's ends; the spine bows out a little, like a pencil stroke
-      add("path", { class: "bracket", d: `M${left + t},${top} Q${left},${top} ${left},${top + 5} Q${left - 1.5},${mid} ${left},${bottom - 5} Q${left},${bottom} ${left + t},${bottom}` });
-      add("path", { class: "bracket", d: `M${right - t},${top} Q${right},${top} ${right},${top + 5} Q${right + 1.5},${mid} ${right},${bottom - 5} Q${right},${bottom} ${right - t},${bottom}` });
-    } else if (noteMarkStyle === "bar") {
-      add("path", { class: "bar", d: `M${left},${top + 3} Q${left - 1},${mid} ${left},${bottom - 3}` });
-      emojiAt = [left, top - 2];
-    } else if (noteMarkStyle === "margin") {
-      for (const r of col) add("rect", { class: "tint", x: r.x - 2, y: r.y, width: r.w + 4, height: r.h, rx: 3 });
-      if (i === 0 && !note?.emoji) add("circle", { class: "dot", cx: right + 1, cy: col[0].y + col[0].h / 2, r: 3 });
-      emojiAt = [right + 1, col[0].y + col[0].h / 2];
-    } else if (noteMarkStyle === "pencil") {
-      for (const r of col) {
-        const y = r.y + r.h + 1;
-        let d = `M${r.x},${y}`;
-        for (let x = r.x; x < r.x + r.w; x += 8) d += ` q2,-2 4,0 t4,0`;
-        add("path", { class: "pencil", d });
-      }
-    }
-    if (i === 0 && note?.emoji) {
-      const emoji = add("text", { class: "note-emoji", x: emojiAt[0], y: emojiAt[1], "text-anchor": "middle", "dominant-baseline": "central" });
-      emoji.textContent = note.emoji;
-    }
-  });
+    for (const x of [left, right]) add("line", { class: "bar", x1: x, y1: top, x2: x, y2: bottom });
+  }
 }
 
 function unmarkNote(note) {
@@ -1091,13 +1056,11 @@ async function setEmoji(note, emoji) {
   const before = note.emoji || "";
   note.emoji = emoji;
   renderNotes();
-  redrawNote(note);
   try {
     await notesStore.notesUpdate(current.path, note.id, { emoji });
   } catch (err) {
     note.emoji = before;
     renderNotes();
-    redrawNote(note);
     if (err.message !== "login") showNotice(`Не вдалося зберегти емодзі: ${err.message}`, false);
   }
 }
