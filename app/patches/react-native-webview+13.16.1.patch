@@ -1,0 +1,27 @@
+diff --git a/node_modules/react-native-webview/apple/RNCWebViewImpl.m b/node_modules/react-native-webview/apple/RNCWebViewImpl.m
+index 7f5c24d..bf4f068 100644
+--- a/node_modules/react-native-webview/apple/RNCWebViewImpl.m
++++ b/node_modules/react-native-webview/apple/RNCWebViewImpl.m
+@@ -94,12 +94,21 @@ NSString *const CUSTOM_SELECTOR = @"_CUSTOM_SELECTOR_";
+   return NO;
+ }
+ - (void)buildMenuWithBuilder:(id<UIMenuBuilder>)builder API_AVAILABLE(ios(13.0))  {
++    // WKWebView adds its own items in super, so remove after it, not before; with menuItems set
++    // every system group goes, so an empty menuItems array shows no edit menu at all.
++    [super buildMenuWithBuilder:builder];
+     if (@available(iOS 16.0, *)) {
+       if(self.menuItems){
++        [builder removeMenuForIdentifier:UIMenuStandardEdit];
+         [builder removeMenuForIdentifier:UIMenuLookup];
++        [builder removeMenuForIdentifier:UIMenuShare];
++        [builder removeMenuForIdentifier:UIMenuReplace];
++        [builder removeMenuForIdentifier:UIMenuTextStyle];
++        [builder removeMenuForIdentifier:UIMenuSpeech];
++        [builder removeMenuForIdentifier:UIMenuLearn];
++        [builder removeMenuForIdentifier:UIMenuFormat];
+       }
+     }
+-    [super buildMenuWithBuilder:builder];
+ }
+ #else // TARGET_OS_OSX
+ - (void)scrollWheel:(NSEvent *)theEvent {
