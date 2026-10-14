@@ -131,6 +131,7 @@ body.panel-hidden #panel { width: 0; border-left: none; overflow: hidden; }
 .note .meta .where { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .note .go:disabled { color: var(--muted); cursor: default; }
 /* Saved passages are underlined in the book (epub.js draws the marks in an SVG over the page). */
+g.note-ul rect { stroke: none; } /* the group's stroke would otherwise frame every line */
 g.note-ul line { stroke: #e07a2e; stroke-width: 2px; stroke-opacity: 0.85; }
 #toast {
   position: fixed; z-index: 30; left: 50%; bottom: calc(48px + env(safe-area-inset-bottom)); transform: translate(-50%, 8px);
