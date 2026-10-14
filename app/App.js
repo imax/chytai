@@ -107,6 +107,8 @@ export default function App() {
         // The page extends under the status bar and the home indicator; the reader's CSS already
         // uses env(safe-area-inset-*) for its toolbar and margins, exactly as in Safari.
         contentInsetAdjustmentBehavior="never"
+        // Lets the reader tell the app from Safari (renderer.js checks for ChytaiApp).
+        applicationNameForUserAgent="ChytaiApp"
         allowsBackForwardNavigationGestures
         allowsInlineMediaPlayback
         // No sharedCookiesEnabled: with it, the login cookie set on the POST /login redirect reaches

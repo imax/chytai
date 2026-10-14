@@ -23,6 +23,9 @@ const HIGHLIGHT_STYLE = { fill: "#ffd54a", "fill-opacity": "0.35", "mix-blend-mo
 if (matchMedia("(max-width: 760px)").matches) document.body.classList.add("panel-hidden");
 let touchStart = null;
 const PHONE = matchMedia("(max-width: 760px)");
+// Inside the iPhone app (app/App.js adds ChytaiApp to the user agent) rather than Safari.
+const IN_APP = /ChytaiApp/.test(navigator.userAgent);
+document.documentElement.classList.toggle("in-app", IN_APP);
 let settings = {};
 let settingsReady = null; // set at the bottom once the wiring is done
 let book = null;
@@ -525,12 +528,20 @@ function showSelToolbar(range, frame) {
   const rect = range.getBoundingClientRect();
   const bar = $("#sel-toolbar");
   bar.classList.remove("hidden");
-  // Above the selection, or below it when there is no room; on a phone the iPhone app hides the
-  // system Copy / Look Up menu, so the bar takes its place (in Safari the two may overlap).
-  const minTop = PHONE.matches ? 8 : 48;
-  const top = frame.top + rect.top - bar.offsetHeight - 8;
+  // Desktop: above the selection, or below it when there is no room. Phone: below the selection,
+  // clear of the end handle, because iOS puts its own Copy / Look Up menu above the selection and
+  // the two must not cover each other (the app hides that menu, but not reliably); above only
+  // when the selection runs to the bottom of the screen.
+  const above = frame.top + rect.top - bar.offsetHeight - 8;
   const left = frame.left + rect.left + rect.width / 2 - bar.offsetWidth / 2;
-  bar.style.top = `${Math.max(minTop, top < minTop ? frame.top + rect.bottom + 8 : top)}px`;
+  let top;
+  if (PHONE.matches) {
+    const below = frame.top + rect.bottom + 28;
+    top = below + bar.offsetHeight <= window.innerHeight - 8 ? below : Math.max(8, above);
+  } else {
+    top = Math.max(48, above < 48 ? frame.top + rect.bottom + 8 : above);
+  }
+  bar.style.top = `${top}px`;
   bar.style.left = `${Math.min(Math.max(8, left), window.innerWidth - bar.offsetWidth - 8)}px`;
 }
 
