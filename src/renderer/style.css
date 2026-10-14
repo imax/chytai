@@ -129,10 +129,22 @@ body.panel-hidden #panel { width: 0; border-left: none; overflow: hidden; }
 }
 .note-comment:hover, .note-comment:focus { border-color: var(--line); background: var(--bg); outline: none; }
 .note .meta .where { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.note .emoji-btn { font-size: 13px; color: var(--muted); }
+.note .emoji-btn.set { font-size: 17px; line-height: 1; }
+.emoji-picker { display: flex; flex-wrap: wrap; align-items: center; gap: 2px; margin-top: 8px; }
+.emoji-picker button:not(.link) { background: none; border: none; font-size: 22px; padding: 2px 4px; border-radius: 6px; cursor: pointer; }
+.emoji-picker button:not(.link):hover { background: var(--accent-soft); }
+.emoji-picker input { width: 64px; padding: 4px 6px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--fg); font-size: 16px; }
+.emoji-picker .link { margin-left: 6px; }
 .note .go:disabled { color: var(--muted); cursor: default; }
 /* Saved passages are underlined in the book (epub.js draws the marks in an SVG over the page). */
 g.note-ul rect { stroke: none; } /* the group's stroke would otherwise frame every line */
-g.note-ul line { stroke: #e07a2e; stroke-width: 2.5px; stroke-dasharray: 1 5; stroke-linecap: round; stroke-opacity: 0.9; }
+/* Saved passages get pencil brackets in the margins (drawn in renderer.js), no underline. */
+g.note-ul line { stroke: none; }
+g.note-ul .bracket { fill: none; stroke: #6b6b70; stroke-width: 1.4px; stroke-linecap: round; stroke-linejoin: round; stroke-opacity: 0.85; }
+body[data-theme="dark"] g.note-ul .bracket { stroke: #b5b5ba; }
+body[data-theme="sepia"] g.note-ul .bracket { stroke: #7d6b52; }
+g.note-ul .note-emoji { font-size: 15px; stroke: none; fill: currentColor; fill-opacity: 1; }
 #toast {
   position: fixed; z-index: 30; left: 50%; bottom: calc(48px + env(safe-area-inset-bottom)); transform: translate(-50%, 8px);
   background: #2c2c2e; color: #fff; padding: 8px 14px; border-radius: 10px; font-size: 14px;

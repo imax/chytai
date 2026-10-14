@@ -238,6 +238,7 @@ async function openEpub(payload, { posKey, source }) {
 
   rendition.on("selected", onSelected);
   rendition.on("relocated", onRelocated);
+  rendition.on("rendered", () => decorateNoteMarks());
   rendition.on("keyup", onKey);
   rendition.on("click", (e) => {
     // A plain click inside the page clears the selection. Touch taps are handled in onTouchEnd:
@@ -838,9 +839,70 @@ function markNote(note) {
   if (!rendition || !noteReachable(note)) return;
   try {
     rendition.annotations.underline(note.cfi, { note: note.id }, () => openNote(note.id), "note-ul");
+    decorateNoteMarks();
   } catch {
-    /* underlining is cosmetic */
+    /* marking is cosmetic */
   }
+}
+
+// epub.js draws a note as an underline mark (an SVG group over the page, with a rect per line);
+// we draw pencil brackets in the margins around those lines instead, plus the note's emoji.
+// The mark redraws itself on every relayout, so its render is wrapped once per mark.
+function decorateNoteMarks() {
+  const views = rendition?.views();
+  for (const view of views?.all ? views.all() : views || []) {
+    for (const { mark } of Object.values(view.underlines || {})) {
+      if (mark.className !== "note-ul" || mark.bracketed) continue;
+      const render = mark.render;
+      mark.render = function () {
+        render.call(this);
+        drawBrackets(this);
+      };
+      mark.bracketed = true;
+      mark.render();
+    }
+  }
+}
+
+// Redraw one note's marks after its emoji changed.
+function redrawNote(note) {
+  const views = rendition?.views();
+  for (const view of views?.all ? views.all() : views || []) view.underlines?.[note.cfi]?.mark.render();
+}
+
+const SVG_NS = "http://www.w3.org/2000/svg";
+function drawBrackets(mark) {
+  const g = mark.element;
+  const rects = [...g.querySelectorAll("rect")]
+    .map((r) => ({ x: +r.getAttribute("x"), y: +r.getAttribute("y"), w: +r.getAttribute("width"), h: +r.getAttribute("height") }))
+    .filter((r) => r.w > 0 && r.h > 0);
+  // A passage that runs onto the next page continues in the next column: the text jumps back up.
+  const cols = [];
+  for (const r of rects) {
+    const col = cols.at(-1);
+    if (col && r.y >= col.at(-1).y - 2) col.push(r);
+    else cols.push([r]);
+  }
+  const note = notes.find((n) => n.id === mark.data?.note);
+  const add = (tag, attrs) => {
+    const el = document.createElementNS(SVG_NS, tag);
+    for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, v);
+    g.appendChild(el);
+    return el;
+  };
+  cols.forEach((col, i) => {
+    const top = Math.min(...col.map((r) => r.y)) - 1;
+    const bottom = Math.max(...col.map((r) => r.y + r.h)) + 1;
+    const left = Math.min(...col.map((r) => r.x)) - 6;
+    const right = Math.max(...col.map((r) => r.x + r.w)) + 6;
+    const t = 7; // length of the bracket's ends
+    add("path", { class: "bracket", d: `M${left + t},${top} Q${left},${top} ${left},${top + 4} L${left},${bottom - 4} Q${left},${bottom} ${left + t},${bottom}` });
+    add("path", { class: "bracket", d: `M${right - t},${top} Q${right},${top} ${right},${top + 4} L${right},${bottom - 4} Q${right},${bottom} ${right - t},${bottom}` });
+    if (i === 0 && note?.emoji) {
+      const emoji = add("text", { class: "note-emoji", x: right, y: top, "text-anchor": "middle", "dominant-baseline": "central" });
+      emoji.textContent = note.emoji;
+    }
+  });
 }
 
 function unmarkNote(note) {
@@ -921,8 +983,10 @@ function renderNotes() {
     card.innerHTML = `
       <blockquote class="quote"></blockquote>
       <textarea class="note-comment" rows="1" placeholder="Додати думку…"></textarea>
+      <div class="emoji-picker hidden"></div>
       <div class="meta"><span class="where"></span>
         <span class="actions">
+          <button class="link emoji-btn" title="Поставити емодзі"></button>
           <button class="link go">Перейти</button>
           <button class="link delete">Видалити</button>
         </span>
@@ -943,6 +1007,7 @@ function renderNotes() {
       unmarkNote(note);
       renderNotes();
     };
+    wireEmoji(card, note);
     const comment = card.querySelector(".note-comment");
     comment.value = note.comment || "";
     comment.oninput = () => fitComment(comment);
@@ -964,6 +1029,55 @@ function fitComment(el) {
   if (!el.offsetParent) return;
   el.style.height = "auto";
   el.style.height = `${el.scrollHeight}px`;
+}
+
+const EMOJIS = ["❤️", "👏", "🚬", "😂", "🤔", "🔥", "😢", "‼️"];
+
+// The emoji button opens a row of common ones plus a field for any other (the phone's emoji keyboard).
+function wireEmoji(card, note) {
+  const btn = card.querySelector(".emoji-btn");
+  const picker = card.querySelector(".emoji-picker");
+  btn.textContent = note.emoji || "☺︎ +";
+  btn.classList.toggle("set", !!note.emoji);
+  btn.onclick = () => {
+    if (!picker.classList.toggle("hidden") && !picker.childElementCount) {
+      for (const e of EMOJIS) {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.textContent = e;
+        b.onclick = () => setEmoji(note, note.emoji === e ? "" : e);
+        picker.appendChild(b);
+      }
+      const other = document.createElement("input");
+      other.placeholder = "інший";
+      other.maxLength = 16;
+      other.onchange = () => other.value.trim() && setEmoji(note, other.value.trim());
+      picker.appendChild(other);
+      if (note.emoji) {
+        const off = document.createElement("button");
+        off.type = "button";
+        off.className = "link";
+        off.textContent = "Прибрати";
+        off.onclick = () => setEmoji(note, "");
+        picker.appendChild(off);
+      }
+    }
+  };
+}
+
+async function setEmoji(note, emoji) {
+  const before = note.emoji || "";
+  note.emoji = emoji;
+  renderNotes();
+  redrawNote(note);
+  try {
+    await notesStore.notesUpdate(current.path, note.id, { emoji });
+  } catch (err) {
+    note.emoji = before;
+    renderNotes();
+    redrawNote(note);
+    if (err.message !== "login") showNotice(`Не вдалося зберегти емодзі: ${err.message}`, false);
+  }
 }
 
 let toastTimer = null;
