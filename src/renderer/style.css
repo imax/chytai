@@ -144,6 +144,11 @@ g.note-ul line { stroke: none; }
 g.note-ul .bracket { fill: none; stroke: #6b6b70; stroke-width: 1.4px; stroke-linecap: round; stroke-linejoin: round; stroke-opacity: 0.85; }
 body[data-theme="dark"] g.note-ul .bracket { stroke: #b5b5ba; }
 body[data-theme="sepia"] g.note-ul .bracket { stroke: #7d6b52; }
+g.note-ul .bar { fill: none; stroke: #e07a2e; stroke-width: 2.5px; stroke-linecap: round; stroke-opacity: 0.8; }
+g.note-ul .tint { fill: #f2a65a; fill-opacity: 0.16; stroke: none; }
+g.note-ul .dot { fill: #e07a2e; stroke: none; fill-opacity: 0.85; }
+g.note-ul .pencil { fill: none; stroke: #6b6b70; stroke-width: 1.2px; stroke-linecap: round; stroke-opacity: 0.8; }
+body[data-theme="dark"] g.note-ul .pencil { stroke: #b5b5ba; }
 g.note-ul .note-emoji { font-size: 15px; stroke: none; fill: currentColor; fill-opacity: 1; }
 #toast {
   position: fixed; z-index: 30; left: 50%; bottom: calc(48px + env(safe-area-inset-bottom)); transform: translate(-50%, 8px);
