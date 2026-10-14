@@ -247,6 +247,14 @@ async function openEpub(payload, { posKey, source }) {
   });
   syncReading();
 
+  // epub.js drops its views on a resize and shows the page again only once a location is known.
+  // A resize while the first page is still loading (the library closing, the phone toolbar
+  // hiding) therefore left a blank book; show the opening position again in that case.
+  const mine = rendition;
+  rendition.on("resized", () => {
+    if (rendition === mine && !mine.location?.start) mine.display(payload.position || undefined);
+  });
+
   await rendition.display(payload.position || undefined);
   // The reading area may have been measured before the layout settled (first load, toolbar
   // hiding on a phone); a re-measure now re-renders only if the size actually changed.
