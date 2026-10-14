@@ -88,7 +88,7 @@ function userState(name) {
 }
 
 function settingsFor(req) {
-  const u = req.guest ? guestState(req.guest) : userState(req.user);
+  const { notes, ...u } = req.guest ? guestState(req.guest) : userState(req.user);
   const demo = req.guest ? demoBooks() : null;
   return {
     ...SHARED_DEFAULTS,
@@ -461,6 +461,62 @@ api.put("/position", (req, res) => {
   res.json({ ok: true });
 });
 
+// ---------- Notes: passages a reader saved with "В нотатки", per person and per book ----------
+
+const NOTE_TEXT_MAX = 4000;
+
+function notesOf(req, bookPath) {
+  const u = req.guest ? guestState(req.guest) : userState(req.user);
+  u.notes ??= {};
+  return { u, list: (u.notes[bookPath] ??= []) };
+}
+
+api.get("/notes", (req, res) => {
+  const bookPath = String(req.query.path || "");
+  const u = req.guest ? guestState(req.guest) : userState(req.user);
+  res.json({ notes: u.notes?.[bookPath] || [] });
+});
+
+api.post("/notes", (req, res) => {
+  const { path: bookPath, cfi, posKey, text, chapter } = req.body || {};
+  if (typeof bookPath !== "string" || typeof cfi !== "string" || typeof text !== "string" || !text.trim()) {
+    return res.status(400).json({ error: "bad request" });
+  }
+  const { list } = notesOf(req, bookPath);
+  const existing = list.find((n) => n.cfi === cfi);
+  if (existing) return res.json({ note: existing });
+  const note = {
+    id: crypto.randomBytes(6).toString("hex"),
+    cfi,
+    posKey: typeof posKey === "string" ? posKey : bookPath,
+    text: text.trim().slice(0, NOTE_TEXT_MAX),
+    chapter: typeof chapter === "string" ? chapter.slice(0, 200) : "",
+    comment: "",
+    createdAt: Date.now(),
+  };
+  list.push(note);
+  if (!req.guest) saveState();
+  res.json({ note });
+});
+
+api.patch("/notes/:id", (req, res) => {
+  const { list } = notesOf(req, String(req.query.path || ""));
+  const note = list.find((n) => n.id === req.params.id);
+  if (!note) return res.status(404).json({ error: "Нотатки немає." });
+  if (typeof req.body?.comment === "string") note.comment = req.body.comment.slice(0, NOTE_TEXT_MAX);
+  if (!req.guest) saveState();
+  res.json({ note });
+});
+
+api.delete("/notes/:id", (req, res) => {
+  const bookPath = String(req.query.path || "");
+  const { u, list } = notesOf(req, bookPath);
+  u.notes[bookPath] = list.filter((n) => n.id !== req.params.id);
+  if (!u.notes[bookPath].length) delete u.notes[bookPath];
+  if (!req.guest) saveState();
+  res.json({ ok: true });
+});
+
 // Book names are the file names inside BOOKS_DIR; a name is never allowed to escape it.
 function safeBookName(name) {
   const base = path.basename(String(name || "")).normalize("NFC");
@@ -487,6 +543,7 @@ function forgetBook(name) {
     delete u.positions?.[name];
     delete u.positions?.[`${name}#reflow`];
     delete u.opened?.[name];
+    delete u.notes?.[name];
   }
   if (state.shared.demoBook === name) state.shared.demoBook = "";
   delete state.shared.bookMeta?.[name];

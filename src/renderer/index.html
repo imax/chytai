@@ -32,6 +32,7 @@
       </select>
       <button id="btn-theme" class="mobile-only" title="Тема: світла, сепія, темна">◐</button>
       <button id="btn-panel" class="desktop-only" title="Панель пояснень (⌘E)">Пояснення</button>
+      <button id="btn-notes" title="Нотатки до цієї книжки">Нотатки</button>
       <button id="btn-settings" title="Налаштування (⌘,)">⚙</button>
     </div>
   </header>
@@ -83,7 +84,10 @@
     <aside id="panel">
       <div class="panel-head">
         <span class="grabber mobile-only" aria-hidden="true"></span>
-        <span>Пояснення</span>
+        <span class="panel-tabs" role="tablist">
+          <button class="tab active" data-tab="cards" role="tab">Пояснення</button>
+          <button class="tab" data-tab="notes" role="tab">Нотатки</button>
+        </span>
         <span class="panel-actions">
           <button id="btn-clear" class="link" title="Очистити">Очистити</button>
           <button id="btn-panel-close" class="link mobile-only" title="Сховати панель">Сховати</button>
@@ -92,6 +96,7 @@
       <div id="cards">
         <div id="panel-empty" class="panel-empty">Виділіть текст у книжці, щоб отримати пояснення в контексті.</div>
       </div>
+      <div id="notes" class="hidden"></div>
     </aside>
   </main>
 
@@ -103,9 +108,11 @@
 
   <div id="sel-toolbar" class="hidden">
     <button data-action="explain">Пояснити</button>
-    <button data-action="ask">Спитати…</button>
+    <button data-action="note">В нотатки</button>
     <button data-action="copy">Копіювати</button>
   </div>
+
+  <div id="toast" role="status"></div>
 
   <dialog id="settings">
     <form method="dialog" id="settings-form">

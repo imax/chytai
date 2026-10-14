@@ -181,6 +181,10 @@
       return settings;
     },
     setSettings: (patch) => api("PATCH", "/api/settings", patch).then((r) => r.json()),
+    notesList: (bookPath) => api("GET", `/api/notes?path=${encodeURIComponent(bookPath)}`).then(async (r) => (await r.json()).notes),
+    notesAdd: (bookPath, note) => api("POST", "/api/notes", { ...note, path: bookPath }).then(async (r) => (await r.json()).note),
+    notesUpdate: (bookPath, id, patch) => api("PATCH", `/api/notes/${encodeURIComponent(id)}?path=${encodeURIComponent(bookPath)}`, patch),
+    notesDelete: (bookPath, id) => api("DELETE", `/api/notes/${encodeURIComponent(id)}?path=${encodeURIComponent(bookPath)}`),
     explain: async (id, request) => {
       const controller = new AbortController();
       streams.set(id, controller);

@@ -252,6 +252,7 @@ async function openEpub(payload, { posKey, source }) {
   // The reading area may have been measured before the layout settled (first load, toolbar
   // hiding on a phone); a re-measure now re-renders only if the size actually changed.
   requestAnimationFrame(resizeView);
+  loadNotes();
 
   const meta = await book.loaded.metadata;
   current.title = meta.title || current.title;
@@ -365,6 +366,7 @@ async function openPdf(payload) {
   const toc = await pdfView.toc();
   renderToc(toc);
   $("#btn-toc").disabled = !toc.length;
+  loadNotes();
 }
 
 async function onPdfMouseUp() {
@@ -544,9 +546,8 @@ $("#sel-toolbar").addEventListener("click", (e) => {
   const snapshot = pendingSelection;
   if (action === "copy") {
     navigator.clipboard?.writeText(snapshot.text).catch(() => {});
-  } else if (action === "ask") {
-    const card = startExplanation(snapshot, { deep: false, askOnly: true });
-    card?.querySelector(".followup input")?.focus();
+  } else if (action === "note") {
+    addNote(snapshot);
   } else {
     startExplanation(snapshot, { deep: false });
   }
@@ -567,13 +568,13 @@ function modelLabel(model) {
     .replace(/^./, (c) => c.toUpperCase());
 }
 
-function startExplanation(selection, { deep, askOnly = false }) {
-  showPanel(true);
+function startExplanation(selection, { deep }) {
+  showPanel(true, "cards");
   $("#panel-empty")?.remove();
 
   // Same selection already explained the same way: just bring that card into view.
   for (const conv of conversations.values()) {
-    if ((conv.cfiRange === selection.cfiRange || conv.context.selection === selection.context.selection) && conv.deep === deep && !askOnly) {
+    if ((conv.cfiRange === selection.cfiRange || conv.context.selection === selection.context.selection) && conv.deep === deep) {
       conv.card.scrollIntoView({ behavior: "smooth", block: "nearest" });
       flash(conv.card);
       return conv.card;
@@ -607,7 +608,7 @@ function startExplanation(selection, { deep, askOnly = false }) {
   try {
     rendition.annotations.remove(selection.cfiRange, "highlight");
     rendition.annotations.highlight(selection.cfiRange, { id }, () => {
-      showPanel(true);
+      showPanel(true, "cards");
       card.scrollIntoView({ behavior: "smooth", block: "nearest" });
       flash(card);
     }, "ai-hl", HIGHLIGHT_STYLE);
@@ -637,7 +638,7 @@ function startExplanation(selection, { deep, askOnly = false }) {
     runTurn(conv, q);
   };
 
-  if (!askOnly) runTurn(conv, null);
+  runTurn(conv, null);
   return card;
 }
 
@@ -745,8 +746,9 @@ function flash(card) {
   head.addEventListener("pointercancel", end);
 })();
 
-function showPanel(show) {
+function showPanel(show, tab) {
   document.body.classList.toggle("panel-hidden", !show);
+  if (tab) showTab(tab);
   // epub.js needs a resize to reflow pages after the layout changes width.
   setTimeout(resizeView, 220);
 }
@@ -763,6 +765,212 @@ $("#btn-clear").onclick = () => {
   conversations.clear();
   $("#cards").innerHTML = `<div id="panel-empty" class="panel-empty">Виділіть текст у книжці, щоб отримати пояснення в контексті.</div>`;
 };
+
+// ---------- Notes: passages saved with "В нотатки", per reader and per book ----------
+
+// The web bridge keeps notes on the server; the Mac app keeps them in this window's storage.
+const notesStore = window.reader.notesList
+  ? window.reader
+  : (() => {
+      const key = (bookPath) => `notes:${bookPath}`;
+      const read = (bookPath) => {
+        try {
+          return JSON.parse(localStorage.getItem(key(bookPath))) || [];
+        } catch {
+          return [];
+        }
+      };
+      const write = (bookPath, list) => localStorage.setItem(key(bookPath), JSON.stringify(list));
+      return {
+        notesList: async (bookPath) => read(bookPath),
+        notesAdd: async (bookPath, note) => {
+          const list = read(bookPath);
+          const saved = list.find((n) => n.cfi === note.cfi) || { ...note, id: `n${Date.now()}`, comment: "", createdAt: Date.now() };
+          if (!list.includes(saved)) write(bookPath, [...list, saved]);
+          return saved;
+        },
+        notesUpdate: async (bookPath, id, patch) => write(bookPath, read(bookPath).map((n) => (n.id === id ? { ...n, ...patch } : n))),
+        notesDelete: async (bookPath, id) => write(bookPath, read(bookPath).filter((n) => n.id !== id)),
+      };
+    })();
+
+let notes = []; // notes of the open book, oldest first
+
+function showTab(tab) {
+  for (const b of document.querySelectorAll("#panel .tab")) b.classList.toggle("active", b.dataset.tab === tab);
+  $("#cards").classList.toggle("hidden", tab !== "cards");
+  $("#notes").classList.toggle("hidden", tab !== "notes");
+  $("#btn-clear").classList.toggle("hidden", tab !== "cards");
+  if (tab === "notes") requestAnimationFrame(() => document.querySelectorAll(".note-comment").forEach(fitComment));
+}
+for (const b of document.querySelectorAll("#panel .tab")) b.onclick = () => showTab(b.dataset.tab);
+
+const notesTabShown = () => !document.body.classList.contains("panel-hidden") && !$("#notes").classList.contains("hidden");
+
+async function loadNotes() {
+  const path = current?.path;
+  notes = [];
+  renderNotes();
+  if (!path) return;
+  try {
+    const list = await notesStore.notesList(path);
+    if (current?.path !== path) return;
+    notes = list;
+  } catch (err) {
+    console.warn("could not load notes", err);
+  }
+  renderNotes();
+  notes.forEach(markNote);
+}
+
+// Notes taken in one view of a PDF (as a book, or the original pages) only point into that view.
+function noteReachable(note) {
+  if (note.cfi.startsWith("pdf:")) return !!pdfView;
+  return !!rendition && (note.posKey || current.path) === current.posKey;
+}
+
+function markNote(note) {
+  if (!rendition || !noteReachable(note)) return;
+  try {
+    rendition.annotations.underline(note.cfi, { note: note.id }, () => openNote(note.id), "note-ul");
+  } catch {
+    /* underlining is cosmetic */
+  }
+}
+
+function unmarkNote(note) {
+  try {
+    rendition?.annotations.remove(note.cfi, "underline");
+  } catch {
+    /* ignore */
+  }
+}
+
+async function addNote(selection) {
+  if (!current) return;
+  const note = {
+    cfi: selection.cfiRange,
+    posKey: current.posKey,
+    text: selection.text || selection.context.selection,
+    chapter: selection.context.chapter || "",
+  };
+  // The selection is done with once it is saved; clear it so the next tap turns the page.
+  try {
+    rendition?.getContents()[0]?.window.getSelection().removeAllRanges();
+    if (pdfView) window.getSelection().removeAllRanges();
+  } catch {
+    /* ignore */
+  }
+  try {
+    const saved = await notesStore.notesAdd(current.path, note);
+    if (!notes.some((n) => n.id === saved.id)) {
+      notes.push(saved);
+      markNote(saved);
+    }
+    renderNotes();
+    toast("Додано в нотатки");
+    if (notesTabShown()) openNote(saved.id);
+  } catch (err) {
+    if (err.message !== "login") showNotice(`Не вдалося зберегти нотатку: ${err.message}`, false);
+  }
+}
+
+function openNote(id) {
+  showPanel(true, "notes");
+  const el = $(`#notes [data-id="${id}"]`);
+  if (!el) return;
+  el.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  flash(el);
+}
+
+function goToNote(note) {
+  if (note.cfi.startsWith("pdf:")) {
+    const page = Number(note.cfi.split(":")[1]);
+    if (pdfView && page) pdfView.viewer.currentPageNumber = page;
+  } else {
+    rendition?.display(note.cfi);
+  }
+  if (PHONE.matches) showPanel(false);
+}
+
+function noteDate(ms) {
+  return new Date(ms).toLocaleDateString("uk-UA", { day: "numeric", month: "short" });
+}
+
+function renderNotes() {
+  const box = $("#notes");
+  box.innerHTML = "";
+  if (!current) {
+    box.innerHTML = `<div class="panel-empty">Відкрийте книжку, щоб побачити її нотатки.</div>`;
+    return;
+  }
+  if (!notes.length) {
+    box.innerHTML = `<div class="panel-empty">Нотаток ще немає. Виділіть текст і натисніть «В нотатки».</div>`;
+    return;
+  }
+  // Newest on top, like the explanations.
+  for (const note of [...notes].reverse()) {
+    const card = document.createElement("article");
+    card.className = "card note";
+    card.dataset.id = note.id;
+    card.innerHTML = `
+      <blockquote class="quote"></blockquote>
+      <textarea class="note-comment" rows="1" placeholder="Додати думку…"></textarea>
+      <div class="meta"><span class="where"></span>
+        <span class="actions">
+          <button class="link go">Перейти</button>
+          <button class="link delete">Видалити</button>
+        </span>
+      </div>`;
+    card.querySelector(".quote").textContent = note.text;
+    card.querySelector(".where").textContent = [note.chapter, noteDate(note.createdAt)].filter(Boolean).join(" · ");
+    const go = card.querySelector(".go");
+    if (noteReachable(note)) go.onclick = () => goToNote(note);
+    else (go.disabled = true), (go.title = "Ця нотатка з іншого вигляду PDF");
+    card.querySelector(".delete").onclick = async () => {
+      try {
+        await notesStore.notesDelete(current.path, note.id);
+      } catch (err) {
+        if (err.message !== "login") showNotice(`Не вдалося видалити нотатку: ${err.message}`, false);
+        return;
+      }
+      notes = notes.filter((n) => n.id !== note.id);
+      unmarkNote(note);
+      renderNotes();
+    };
+    const comment = card.querySelector(".note-comment");
+    comment.value = note.comment || "";
+    comment.oninput = () => fitComment(comment);
+    comment.onchange = async () => {
+      note.comment = comment.value.trim();
+      try {
+        await notesStore.notesUpdate(current.path, note.id, { comment: note.comment });
+      } catch (err) {
+        if (err.message !== "login") showNotice(`Не вдалося зберегти думку: ${err.message}`, false);
+      }
+    };
+    box.appendChild(card);
+  }
+  requestAnimationFrame(() => box.querySelectorAll(".note-comment").forEach(fitComment));
+}
+
+// Grow the comment field with its text; a hidden panel measures 0, so it is fitted again when shown.
+function fitComment(el) {
+  if (!el.offsetParent) return;
+  el.style.height = "auto";
+  el.style.height = `${el.scrollHeight}px`;
+}
+
+let toastTimer = null;
+function toast(text) {
+  const el = $("#toast");
+  el.textContent = text;
+  el.classList.add("shown");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove("shown"), 1600);
+}
+
+$("#btn-notes").onclick = () => (notesTabShown() ? showPanel(false) : showPanel(true, "notes"));
 
 // ---------- Toolbar and window wiring ----------
 
@@ -813,7 +1021,7 @@ async function reflowHrefForPage(epub, page) {
   }
 }
 $("#btn-toc").onclick = () => $("#toc").classList.toggle("hidden");
-$("#btn-panel").onclick = () => showPanel(document.body.classList.contains("panel-hidden"));
+$("#btn-panel").onclick = () => showPanel(document.body.classList.contains("panel-hidden") || notesTabShown(), "cards");
 $("#btn-panel-close").onclick = () => showPanel(false);
 $("#btn-settings").onclick = openSettings;
 $("#prev").onclick = () => (pdfView || rendition)?.prev();
