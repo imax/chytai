@@ -39,54 +39,6 @@ const ERROR_REPORTER = `
   true;
 `;
 
-// Temporary diagnostics for the white screen: a snapshot of the page every few seconds (which
-// view is shown, the chapter iframes and what is inside them, console errors), shown in the
-// banner, since the reader cannot be inspected on the phone itself.
-const DIAGNOSTICS = `
-  (function () {
-    var logs = [];
-    ['error', 'warn'].forEach(function (level) {
-      var orig = console[level];
-      console[level] = function () {
-        try { logs.push(level + ': ' + Array.prototype.map.call(arguments, function (a) { return a && a.message ? a.message : String(a); }).join(' ').slice(0, 120)); } catch (e) {}
-        return orig.apply(console, arguments);
-      };
-    });
-    var send = function (text) {
-      try { window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'diag', text: text })); } catch (e) {}
-    };
-    var vis = function (sel) { var el = document.querySelector(sel); if (!el) return 'none'; var cs = getComputedStyle(el); return (el.classList.contains('hidden') ? 'hidden' : 'shown') + ' ' + el.offsetWidth + 'x' + el.offsetHeight + ' ' + cs.display; };
-    var last = '', n = 0, opened = 'n/a', seenBook = null;
-    var tick = function () {
-      n++;
-      var parts = [location.pathname, 'body=' + (document.body.className || '-'), 'ready=' + document.readyState];
-      parts.push('viewer=' + vis('#viewer'), 'reader=' + vis('#reader'), 'layout=' + vis('#layout'));
-      try {
-        var b = typeof book !== 'undefined' ? book : null, r = typeof rendition !== 'undefined' ? rendition : null;
-        if (b && b !== seenBook) { seenBook = b; opened = 'pending'; b.opened.then(function () { opened = 'ok'; }, function (e) { opened = 'fail:' + (e && e.message); }); }
-        parts.push('book=' + (b ? 'yes isOpen=' + b.isOpen + ' opened=' + opened : 'no'));
-        if (r) {
-          var m = r.manager;
-          parts.push('rendition: manager=' + (m ? 'yes' : 'no') + (m ? ' stage=' + (m.stage ? 'yes' : 'no') + ' stageSize=' + JSON.stringify(m._stageSize || null) + ' layout=' + (m.layout ? m.layout.width + 'x' + m.layout.height + ' ' + m.layout.name + '/' + m.layout.flow : 'none') + ' views=' + (m.views ? m.views.length : '?') : ''));
-        }
-      } catch (e) { parts.push('diagerr=' + e.message); }
-      var frames = document.querySelectorAll('iframe');
-      parts.push('iframes=' + frames.length);
-      Array.prototype.forEach.call(frames, function (f, i) {
-        var d = null, inner = 'n/a';
-        try { d = f.contentDocument; inner = d ? d.readyState + ' nodes=' + (d.body ? d.body.childNodes.length : 'nobody') + ' text=' + (d.body ? d.body.innerText.length : 0) : 'nodoc'; } catch (e) { inner = 'x:' + e.message; }
-        var cs = getComputedStyle(f);
-        parts.push('f' + i + '=' + (f.getAttribute('src') ? f.getAttribute('src').slice(0, 30) : f.hasAttribute('srcdoc') ? 'srcdoc(' + f.getAttribute('srcdoc').length + ')' : 'nosrc') + ' ' + f.offsetWidth + 'x' + f.offsetHeight + ' css=' + cs.width + '/' + cs.height + '/' + cs.display + '/' + cs.visibility + ' sandbox=' + (f.getAttribute('sandbox') || '-') + ' inner=' + inner);
-      });
-      if (logs.length) parts.push('logs=' + logs.slice(-4).join(' | '));
-      var text = parts.join(' · ');
-      if (text !== last) { last = text; send('#' + n + ' ' + text); }
-      setTimeout(tick, 2000);
-    };
-    setTimeout(tick, 1500);
-  })();
-  true;
-`;
 
 export default function App() {
   const webview = useRef(null);
@@ -167,14 +119,18 @@ export default function App() {
         pullToRefreshEnabled={false}
         bounces={false}
         textInteractionEnabled
+        // The default whitelist (http, https, about:blank) silently cancels every other navigation
+        // before onShouldStartLoadWithRequest runs. epub.js loads each chapter into an iframe via
+        // srcdoc (about:srcdoc), so with the default the chapter frame stayed an empty about:blank
+        // and the app showed a white page for every book. Everything is allowed here and the
+        // handler below decides.
+        originWhitelist={['*']}
         onShouldStartLoadWithRequest={onShouldStartLoadWithRequest}
         injectedJavaScriptBeforeContentLoaded={ERROR_REPORTER}
-        injectedJavaScript={DIAGNOSTICS}
         onMessage={(e) => {
           try {
             const msg = JSON.parse(e.nativeEvent.data);
-            if (msg.type === 'error') setPageError((prev) => `${prev ? prev + '\n' : ''}${String(msg.text).slice(0, 400)}`);
-            if (msg.type === 'diag') setPageError(String(msg.text).slice(0, 1400));
+            if (msg.type === 'error') setPageError(String(msg.text).slice(0, 400));
           } catch { /* not ours */ }
         }}
         onLoadStart={() => setProgress(0.05)}
