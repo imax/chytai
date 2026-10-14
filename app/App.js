@@ -119,6 +119,10 @@ export default function App() {
         pullToRefreshEnabled={false}
         bounces={false}
         textInteractionEnabled
+        // No system Copy / Look Up / Translate callout over a selection: the reader shows its
+        // own toolbar (explain, copy) there, exactly as in Safari. An empty list keeps text
+        // selectable but makes the shell answer "no" to every system menu action.
+        menuItems={[]}
         // The default whitelist (http, https, about:blank) silently cancels every other navigation
         // before onShouldStartLoadWithRequest runs. epub.js loads each chapter into an iframe via
         // srcdoc (about:srcdoc), so with the default the chapter frame stayed an empty about:blank
