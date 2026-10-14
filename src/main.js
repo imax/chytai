@@ -32,6 +32,8 @@ const DEFAULT_SETTINGS = {
   pdfMode: "reflow", // "reflow" (як книжка) or "original"
   fontSizes: {}, // book path -> font size in %, only for books where it was changed
   theme: "light",
+  explainStyle: "default", // default | adhd | brief | simple | custom
+  customStyle: "", // the reader's own instructions for "custom"
   lastBook: null,
   libraryFolders: null, // null = default folders (iCloud Backups/Downloads)
   positions: {}, // book path -> CFI
@@ -313,6 +315,8 @@ ipcMain.handle("ai:explain", async (event, id, request) => {
       apiKey,
       model: request.deep ? settings.deepModel : settings.model,
       language: settings.language,
+      style: settings.explainStyle,
+      customStyle: settings.customStyle,
       request,
       signal: controller.signal,
       onText: (text) => send({ type: "text", text }),

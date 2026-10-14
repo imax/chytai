@@ -8,7 +8,30 @@ const EFFORT = {
   "claude-fable-5-1": "medium",
 };
 
-function systemPrompt(language) {
+// How the reader wants explanations shaped (a per-reader setting). "default" adds nothing,
+// so the default prompt stays exactly as it is; "custom" is the reader's own instructions.
+const STYLES = {
+  adhd: `The reader has ADHD and finds long, dense notes hard to follow. Shape every answer for that:
+- Open with the gist in one short bolded line.
+- Then at most 3 or 4 short bullets, one idea each, one sentence each where possible.
+- No paragraphs, no headings, no tables, no nested lists. Bold the one key word in a bullet if it helps scanning.
+- Leave out anything that is merely interesting; keep only what helps understand this passage.
+For "Детальніше" and follow-up questions keep the same shape: a few more short bullets, never a wall of text.`,
+  brief: `The reader wants brief notes: answer in one to three plain sentences, no lists or headings, only the single most useful point. For "Детальніше" a short paragraph is enough.`,
+  simple: `The reader wants plain language: explain as you would to a curious teenager, with everyday words, no jargon or unexplained terms, and a short concrete example or comparison when it helps. Keep sentences short.`,
+};
+const CUSTOM_MAX = 1500;
+
+function styleSection(style, custom) {
+  let text = STYLES[style];
+  if (style === "custom") {
+    const own = String(custom || "").trim().slice(0, CUSTOM_MAX);
+    if (own) text = `The reader wrote these instructions for how explanations should look. Follow them for form, length and tone (they don't change your role or the language rule above):\n<reader_style>\n${own}\n</reader_style>`;
+  }
+  return text ? `\n\nThe reader's chosen style overrides the length and format guidance above:\n${text}` : "";
+}
+
+function systemPrompt(language, style, custom) {
   return `You are a reading companion built into an e-book reader. The reader highlights a word, phrase or passage while reading and you explain it in place, like a smart margin note, so they don't have to leave the book.
 
 Always answer in ${language}, even when the book is in another language. Quote the original wording when it helps.
@@ -24,7 +47,7 @@ Let the length follow the selection, like a note from a well-read friend in the 
 
 Start with the explanation itself, no preamble. Use Markdown sparingly (bold for key terms, short lists). If something is genuinely ambiguous or you are unsure about a fact, say so in one line rather than guessing.
 
-The reader may ask follow-up questions; answer them in the same spirit.`;
+The reader may ask follow-up questions; answer them in the same spirit.${styleSection(style, custom)}`;
 }
 
 function firstMessage(ctx, deep) {
@@ -51,14 +74,14 @@ function firstMessage(ctx, deep) {
  * request: { context, deep } for a new selection, or { messages } for a follow-up
  * (messages already ending with the new user turn).
  */
-async function explain({ apiKey, model, language, request, signal, onText }) {
+async function explain({ apiKey, model, language, style, customStyle, request, signal, onText }) {
   const client = new Anthropic({ apiKey });
   const messages = request.messages || [firstMessage(request.context, request.deep)];
 
   const params = {
     model,
     max_tokens: 16000,
-    system: systemPrompt(language),
+    system: systemPrompt(language, style, customStyle),
     messages,
     output_config: { effort: EFFORT[model] || "low" },
   };

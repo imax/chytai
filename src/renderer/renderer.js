@@ -57,6 +57,9 @@ function openSettings() {
   $("#set-model").value = settings.model;
   $("#set-margins").value = settings.margins || "normal";
   $("#set-language").value = settings.language;
+  $("#set-style").value = settings.explainStyle || "default";
+  $("#set-custom-style").value = settings.customStyle || "";
+  $("#custom-style-row").hidden = $("#set-style").value !== "custom";
   $("#set-auto").checked = settings.autoExplain;
   $("#set-font").value = settings.font;
   $("#set-page-taps").value = settings.pageTaps ? "taps" : "scroll";
@@ -68,6 +71,8 @@ $("#settings").addEventListener("close", async () => {
   const patch = {
     model: $("#set-model").value,
     language: $("#set-language").value.trim() || "українська",
+    explainStyle: $("#set-style").value,
+    customStyle: $("#set-custom-style").value.trim(),
     autoExplain: $("#set-auto").checked,
     font: $("#set-font").value,
     margins: $("#set-margins").value,
@@ -85,6 +90,10 @@ $("#settings").addEventListener("close", async () => {
   if (marginsChanged) resizeView();
   if (fontChanged) applyTypography(true);
 });
+$("#set-style").onchange = () => {
+  $("#custom-style-row").hidden = $("#set-style").value !== "custom";
+  if (!$("#custom-style-row").hidden) $("#set-custom-style").focus();
+};
 $("#btn-logout").onclick = () => window.reader.logout?.();
 $("#btn-admin").onclick = () => (location.href = "/admin");
 

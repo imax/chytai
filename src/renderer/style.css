@@ -156,10 +156,12 @@ dialog { border: 1px solid var(--line); border-radius: 12px; background: var(--c
 dialog::backdrop { background: rgba(0, 0, 0, 0.3); }
 dialog h2 { margin: 0 0 14px; font-size: 17px; }
 dialog label { display: block; margin-bottom: 14px; font-weight: 500; }
-dialog label input[type="text"], dialog label input[type="password"], dialog label select {
+dialog label input[type="text"], dialog label input[type="password"], dialog label select, dialog label textarea {
   display: block; width: 100%; margin-top: 5px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); font-weight: 400;
 }
+dialog label textarea { resize: vertical; font: inherit; font-weight: 400; color: inherit; }
 dialog label.check { font-weight: 400; }
+dialog label[hidden] { display: none; }
 dialog small { display: block; margin-top: 4px; color: var(--muted); font-weight: 400; }
 dialog menu { display: flex; justify-content: flex-end; gap: 8px; padding: 0; margin: 18px 0 0; }
 dialog menu button { border: 1px solid var(--line); border-radius: 8px; padding: 6px 14px; background: transparent; cursor: pointer; }
@@ -308,7 +310,7 @@ body.guest #empty p { display: none; }
   }
   #sel-toolbar button { padding: 10px 14px; font-size: 16px; }
   dialog { width: min(440px, 92vw); max-height: 90dvh; overflow-y: auto; }
-  dialog label input, dialog label select, #lib-search, #search-input { font-size: 16px; }
+  dialog label input, dialog label select, dialog label textarea, #lib-search, #search-input { font-size: 16px; }
 
   .lib-head { flex-wrap: wrap; padding: 10px 14px 6px; }
   .lib-head input[type="search"] { flex-basis: 100%; }

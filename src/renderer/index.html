@@ -131,6 +131,19 @@
       <label class="shared-setting">Мова пояснень
         <input type="text" id="set-language" placeholder="українська" />
       </label>
+      <label>Стиль пояснень
+        <select id="set-style">
+          <option value="default">Звичайний</option>
+          <option value="adhd">Для СДУГ: суть і кілька коротких пунктів</option>
+          <option value="brief">Коротко: 1–3 речення</option>
+          <option value="simple">Простими словами</option>
+          <option value="custom">Свій стиль…</option>
+        </select>
+        <small>Лише для вас, інших читачів не змінює.</small>
+      </label>
+      <label id="custom-style-row" hidden>Як пояснювати
+        <textarea id="set-custom-style" rows="4" maxlength="1500" placeholder="Наприклад: спершу одне речення суті, далі 2–3 пункти; без вступів; приклади з життя."></textarea>
+      </label>
       <label class="demo-setting">Книжка для демо-режиму
         <select id="set-demo-book"></select>
         <small>Гості за посиланням /demo бачать лише цю книжку, без завантажень і з денним лімітом пояснень.</small>

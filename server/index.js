@@ -61,7 +61,7 @@ function loadDotEnv(file) {
 // ---------- State: shared model settings, per-person look and positions ----------
 
 const SHARED_DEFAULTS = { model: "claude-opus-5-5", deepModel: "claude-fable-5-1", language: "українська" };
-const USER_DEFAULTS = { autoExplain: true, pageTaps: false, font: "literata", margins: "normal", pdfMode: "reflow", fontSizes: {}, theme: "light", lastBook: null, positions: {} };
+const USER_DEFAULTS = { autoExplain: true, pageTaps: false, font: "literata", margins: "normal", pdfMode: "reflow", fontSizes: {}, theme: "light", explainStyle: "default", customStyle: "", lastBook: null, positions: {} };
 const SHARED_KEYS = new Set(Object.keys(SHARED_DEFAULTS));
 const USER_KEYS = new Set(Object.keys(USER_DEFAULTS));
 
@@ -444,7 +444,8 @@ api.patch("/settings", (req, res) => {
       if (!req.guest) state.shared.demoBook = safeBookName(v) || "";
     } else if (SHARED_KEYS.has(k)) {
       if (!req.guest) state.shared[k] = v;
-    } else if (USER_KEYS.has(k) && k !== "positions") u[k] = v;
+    } else if (k === "customStyle") u[k] = String(v ?? "").slice(0, 1500);
+    else if (USER_KEYS.has(k) && k !== "positions") u[k] = v;
   }
   if (!req.guest) saveState();
   res.json(settingsFor(req));
@@ -679,11 +680,14 @@ api.post("/explain", async (req, res) => {
   // The request's own "close" fires once its body is read; the response closes when the phone goes away.
   res.on("close", () => !res.writableEnded && controller.abort());
   const shared = { ...SHARED_DEFAULTS, ...state.shared };
+  const me = { ...USER_DEFAULTS, ...(req.guest ? guestState(req.guest) : userState(req.user)) };
   try {
     const result = await explain({
       apiKey,
       model: request.deep ? shared.deepModel : shared.model,
       language: shared.language,
+      style: me.explainStyle,
+      customStyle: me.customStyle,
       request,
       signal: controller.signal,
       onText: (text) => send({ type: "text", text }),
