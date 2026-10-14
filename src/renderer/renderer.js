@@ -44,6 +44,7 @@ async function loadSettings() {
 }
 
 function openSettings() {
+  if (settings.web && !settings.guest) fillDemoBooks();
   $("#set-key").value = "";
   $("#key-hint").textContent = settings.apiKeyFromEnv
     ? "Використовується ключ зі змінної середовища ANTHROPIC_API_KEY."
@@ -71,6 +72,7 @@ $("#settings").addEventListener("close", async () => {
   };
   const key = $("#set-key").value.trim();
   if (key) patch.apiKey = key;
+  if (settings.web && !settings.guest && $("#set-demo-book").options.length) patch.demoBook = $("#set-demo-book").value;
   const fontChanged = patch.font !== settings.font;
   const marginsChanged = patch.margins !== (settings.margins || "normal");
   const wasScrolled = scrolled();
@@ -81,6 +83,26 @@ $("#settings").addEventListener("close", async () => {
   if (fontChanged) applyTypography(true);
 });
 $("#btn-logout").onclick = () => window.reader.logout?.();
+
+// Family members choose which library book guests see in the demo (web only).
+async function fillDemoBooks() {
+  const select = $("#set-demo-book");
+  const builtIn = settings.demoDefault ? `Вбудована (${settings.demoDefault.replace(/\.(epub|pdf)$/i, "")})` : "Немає вбудованої";
+  select.innerHTML = `<option value="">${builtIn}</option>`;
+  try {
+    const { books } = await window.reader.libraryList();
+    for (const b of [...books].sort((x, y) => x.title.localeCompare(y.title, "uk"))) {
+      const opt = document.createElement("option");
+      opt.value = b.path;
+      opt.textContent = `${b.title}${b.authors[0] ? ` — ${b.authors[0]}` : ""}`;
+      select.append(opt);
+    }
+  } catch {
+    /* the library is optional here */
+  }
+  select.value = settings.demoBook || "";
+  if (select.value !== (settings.demoBook || "")) select.value = "";
+}
 
 // On a phone the book scrolls as one continuous column unless page turns were chosen in settings.
 function scrolled() {
