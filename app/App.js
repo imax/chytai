@@ -39,6 +39,44 @@ const ERROR_REPORTER = `
   true;
 `;
 
+// Temporary diagnostics for the white screen: a snapshot of the page every few seconds (which
+// view is shown, the chapter iframes and what is inside them, console errors), shown in the
+// banner, since the reader cannot be inspected on the phone itself.
+const DIAGNOSTICS = `
+  (function () {
+    var logs = [];
+    ['error', 'warn'].forEach(function (level) {
+      var orig = console[level];
+      console[level] = function () {
+        try { logs.push(level + ': ' + Array.prototype.map.call(arguments, function (a) { return a && a.message ? a.message : String(a); }).join(' ').slice(0, 120)); } catch (e) {}
+        return orig.apply(console, arguments);
+      };
+    });
+    var send = function (text) {
+      try { window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'diag', text: text })); } catch (e) {}
+    };
+    var vis = function (sel) { var el = document.querySelector(sel); return el ? (el.classList.contains('hidden') ? 'hidden' : 'shown') + ' ' + el.offsetWidth + 'x' + el.offsetHeight : 'none'; };
+    var n = 0;
+    var tick = function () {
+      n++;
+      var parts = ['#' + n, location.pathname, 'body=' + (document.body.className || '-'), 'title=' + document.title];
+      parts.push('empty=' + vis('#empty'), 'library=' + vis('#library'), 'viewer=' + vis('#viewer'), 'toolbar=' + vis('#toolbar'));
+      var frames = document.querySelectorAll('iframe');
+      parts.push('iframes=' + frames.length);
+      Array.prototype.forEach.call(frames, function (f, i) {
+        var d = null, len = 'n/a';
+        try { d = f.contentDocument; len = d && d.body ? d.body.innerText.length : 'nobody'; } catch (e) { len = 'x:' + e.message; }
+        parts.push('f' + i + '=' + (f.getAttribute('src') || f.getAttribute('srcdoc') ? 'srcdoc' : 'nosrc').slice(0, 24) + ' ' + f.offsetWidth + 'x' + f.offsetHeight + ' text=' + len + ' sandbox=' + (f.getAttribute('sandbox') || '-'));
+      });
+      if (logs.length) parts.push('logs=' + logs.slice(-4).join(' | '));
+      send(parts.join(' · '));
+      if (n < 6) setTimeout(tick, 3000);
+    };
+    setTimeout(tick, 2000);
+  })();
+  true;
+`;
+
 export default function App() {
   const webview = useRef(null);
   const [failed, setFailed] = useState(null);
@@ -120,10 +158,12 @@ export default function App() {
         textInteractionEnabled
         onShouldStartLoadWithRequest={onShouldStartLoadWithRequest}
         injectedJavaScriptBeforeContentLoaded={ERROR_REPORTER}
+        injectedJavaScript={DIAGNOSTICS}
         onMessage={(e) => {
           try {
             const msg = JSON.parse(e.nativeEvent.data);
-            if (msg.type === 'error') setPageError(String(msg.text).slice(0, 400));
+            if (msg.type === 'error') setPageError((prev) => `${prev ? prev + '\n' : ''}${String(msg.text).slice(0, 400)}`);
+            if (msg.type === 'diag') setPageError(String(msg.text).slice(0, 900));
           } catch { /* not ours */ }
         }}
         onLoadStart={() => setProgress(0.05)}
@@ -160,7 +200,7 @@ export default function App() {
       ) : null}
       {pageError ? (
         <Pressable onPress={() => setPageError(null)} style={styles.banner}>
-          <Text style={styles.bannerText}>Помилка сторінки: {pageError}</Text>
+          <Text style={styles.bannerText} selectable>{pageError}</Text>
         </Pressable>
       ) : null}
     </View>
