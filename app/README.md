@@ -12,13 +12,21 @@
 
 Білд у TestFlight живе 90 днів, потім запускається `app-build.yml` ще раз.
 
-## Перший запуск (разово, на Mac Макса)
+## Як це налаштовано (зроблено 2026-10-14)
 
-1. `npm i -g eas-cli`, `cd app`, `eas login` (акаунт Expo, безкоштовний).
-2. `eas init` записує `extra.eas.projectId` в `app.json`; `eas update:configure` додає `updates.url`. Закомітити.
-3. `eas build --platform ios --profile production` — EAS сам створює App ID і сертифікати після входу в Apple Developer (ischenko@gmail.com). Після цього білд і сабміт з CI працюють без інтерактиву.
-4. У App Store Connect створити застосунок Chytai (один раз), потім `eas submit --platform ios --latest` або `--auto-submit` під час білду. Внутрішнім тестерам (до 100 людей з акаунта) білд видно в TestFlight без ревʼю.
-5. Токен для CI: https://expo.dev/settings/access-tokens → секрет репозиторію `EXPO_TOKEN`.
+- Проєкт Expo `@maxua/chytai` (projectId в `app.json`), Apple Team `QFMJ75865U` (акаунт компанії, enrolled as Organization), застосунок в App Store Connect з Apple ID `6822684944`.
+- Логін в Apple ID паролем через EAS не працював, тому все йде через ключ App Store Connect API (Key ID і Issuer ID у `eas.json`, сам файл `AuthKey_*.p8` лежить у `app/` на Mac і в `.gitignore`). Для `eas build` з Mac його передають змінні `EXPO_ASC_API_KEY_PATH`, `EXPO_ASC_KEY_ID`, `EXPO_ASC_ISSUER_ID`; для `eas submit` шлях уже вписаний у `eas.json`.
+- Сертифікат і provisioning profile створені EAS і зберігаються на Expo.
+- Секрети репозиторію для CI: `EXPO_TOKEN` (https://expo.dev/settings/access-tokens) і `ASC_API_KEY_P8` (вміст файлу .p8).
+
+Ручний білд з Mac:
+
+```
+cd app
+export EXPO_ASC_API_KEY_PATH=./AuthKey_8JWQG97Z96.p8 EXPO_ASC_KEY_ID=8JWQG97Z96 EXPO_ASC_ISSUER_ID=d9a2c344-6f99-434e-bc3e-ac56381bd61d
+eas build --platform ios --profile production
+eas submit --platform ios --latest
+```
 
 ## Локально
 

@@ -31,7 +31,8 @@
     "updates": {
       "enabled": true,
       "checkAutomatically": "ON_LOAD",
-      "fallbackToCacheTimeout": 0
+      "fallbackToCacheTimeout": 0,
+      "url": "https://u.expo.dev/4a63eb8e-0eb6-423e-9caa-7a4be24777c4"
     },
     "plugins": [
       [
@@ -47,6 +48,12 @@
         }
       ],
       "expo-updates"
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "4a63eb8e-0eb6-423e-9caa-7a4be24777c4"
+      }
+    },
+    "owner": "maxua"
   }
 }

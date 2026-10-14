@@ -3,9 +3,9 @@
 # TestFlight build is about to expire (they live 90 days). Day-to-day changes to app/ do not need
 # this: app-update.yml ships them over the air.
 #
-# Needs the repo secret EXPO_TOKEN. Apple signing and the App Store Connect key are stored on
-# EAS after the first interactive `eas build` / `eas submit` from Max's Mac, so CI runs
-# non-interactively from then on.
+# Needs two repo secrets: EXPO_TOKEN (Expo access token) and ASC_API_KEY_P8 (the contents of the
+# App Store Connect API key file named in app/eas.json). Apple signing certificates live on EAS
+# since the first build from Max's Mac, so CI runs non-interactively.
 name: App build (TestFlight)
 
 on:
@@ -31,4 +31,8 @@ jobs:
           eas-version: latest
           token: ${{ secrets.EXPO_TOKEN }}
       - run: npm ci --no-audit --no-fund
+      # eas.json points the submit step at this key file; CI recreates it from the secret.
+      - run: printf '%s' "$ASC_API_KEY_P8" > AuthKey_8JWQG97Z96.p8
+        env:
+          ASC_API_KEY_P8: ${{ secrets.ASC_API_KEY_P8 }}
       - run: eas build --platform ios --profile production --auto-submit --non-interactive --no-wait
