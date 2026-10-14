@@ -79,7 +79,7 @@ $("#settings").addEventListener("close", async () => {
   settings = await window.reader.setSettings(patch);
   if (wasScrolled !== scrolled()) return reopenBook();
   document.body.dataset.margins = settings.margins || "normal";
-  if (marginsChanged) (pdfView || rendition)?.resize();
+  if (marginsChanged) resizeView();
   if (fontChanged) applyTypography(true);
 });
 $("#btn-logout").onclick = () => window.reader.logout?.();
@@ -249,6 +249,9 @@ async function openEpub(payload, { posKey, source }) {
   syncReading();
 
   await rendition.display(payload.position || undefined);
+  // The reading area may have been measured before the layout settled (first load, toolbar
+  // hiding on a phone); a re-measure now re-renders only if the size actually changed.
+  requestAnimationFrame(resizeView);
 
   const meta = await book.loaded.metadata;
   current.title = meta.title || current.title;
@@ -263,6 +266,13 @@ async function openEpub(payload, { posKey, source }) {
 
   // Page-accurate progress needs the locations index; build it in the background.
   book.locations.generate(1600).then(() => updateProgress(rendition.currentLocation()));
+}
+
+// epub.js throws from resize() until its stage exists (the book is still being parsed), and a
+// resize with unchanged bounds is a no-op, so this is safe to call at any time.
+function resizeView() {
+  if (pdfView) pdfView.resize();
+  else if (rendition?.manager?.stage) rendition.resize();
 }
 
 function closeBook() {
@@ -307,7 +317,7 @@ function syncReading() {
   document.body.classList.toggle("reading", reading);
   document.body.classList.remove("chrome-shown");
   // The page area just changed height, so epub.js has to re-paginate.
-  setTimeout(() => (pdfView || rendition)?.resize(), 50);
+  setTimeout(resizeView, 50);
 }
 
 function toggleChrome(show = !document.body.classList.contains("chrome-shown")) {
@@ -734,7 +744,7 @@ function flash(card) {
 function showPanel(show) {
   document.body.classList.toggle("panel-hidden", !show);
   // epub.js needs a resize to reflow pages after the layout changes width.
-  setTimeout(() => (pdfView || rendition)?.resize(), 220);
+  setTimeout(resizeView, 220);
 }
 
 $("#btn-clear").onclick = () => {
