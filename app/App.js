@@ -52,6 +52,9 @@ export default function App() {
   // Links that leave the reader (a publisher's site in a footnote, a mailto) open in Safari;
   // everything on chytai.fly.dev stays inside the app.
   const onShouldStartLoadWithRequest = useCallback((request) => {
+    // Only top-level navigations are ours to judge. epub.js renders every chapter in an iframe
+    // whose src is a blob: URL, and a blocked iframe is a white page with no error anywhere.
+    if (request.isTopFrame === false) return true;
     let host = '';
     try { host = new URL(request.url).host; } catch { return true; }
     if (host === READER_HOST || request.url.startsWith('about:') || request.url.startsWith('blob:')) return true;
@@ -99,6 +102,9 @@ export default function App() {
         onLoadProgress={(e) => setProgress(e.nativeEvent.progress)}
         onLoadEnd={() => { setReady(true); setProgress(1); }}
         onError={(e) => setFailed(e.nativeEvent.description || 'Не вдалося завантажити')}
+        // iOS kills the page's process when it runs out of memory and leaves a white screen
+        // behind; a reload is the only way back, and the banner says what happened.
+        onContentProcessDidTerminate={() => { setPageError('сторінку вивантажено (памʼять), перезавантажую'); webview.current?.reload(); }}
         onHttpError={(e) => { if (e.nativeEvent.statusCode >= 500) setFailed(`Сервер відповів ${e.nativeEvent.statusCode}`); }}
       />
       {failed ? (
