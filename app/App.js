@@ -10,6 +10,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Linking, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
+import * as Updates from 'expo-updates';
 import { WebView } from 'react-native-webview';
 
 export const READER_URL = 'https://chytai.fly.dev';
@@ -44,6 +45,33 @@ export default function App() {
   const [ready, setReady] = useState(false);
   const [pageError, setPageError] = useState(null);
   const [progress, setProgress] = useState(1); // 0..1 while a page loads, 1 when done
+  const [shellNote, setShellNote] = useState(null);
+
+  // Which shell is running, and a foreground check for a newer one. expo-updates already checks
+  // in the background and applies on the next launch; doing it here as well applies a fresh
+  // update right away and shows what happened, since nothing else on a phone says whether an
+  // over-the-air update arrived.
+  useEffect(() => {
+    const id = Updates.updateId ? Updates.updateId.slice(0, 8) : null;
+    let note = Updates.isEmbeddedLaunch || !id ? 'оболонка: вбудована версія' : `оболонка: оновлення ${id}`;
+    if (Updates.isEmergencyLaunch) note += ` (аварійний запуск: ${Updates.emergencyLaunchReason || '?'})`;
+    setShellNote(note);
+    const timer = setTimeout(() => setShellNote(null), 10000);
+    if (Updates.isEnabled && !__DEV__) {
+      (async () => {
+        try {
+          const check = await Updates.checkForUpdateAsync();
+          if (!check.isAvailable) return;
+          setShellNote('оболонка: завантажую оновлення…');
+          await Updates.fetchUpdateAsync();
+          await Updates.reloadAsync();
+        } catch (err) {
+          setShellNote(`оболонка: оновлення не вдалося: ${err.message}`);
+        }
+      })();
+    }
+    return () => clearTimeout(timer);
+  }, []);
 
   useEffect(() => {
     if (ready || failed) SplashScreen.hideAsync().catch(() => {});
@@ -125,6 +153,11 @@ export default function App() {
           <View style={[styles.progressBar, { width: `${Math.max(5, Math.round(progress * 100))}%` }]} />
         </View>
       ) : null}
+      {shellNote ? (
+        <Pressable onPress={() => setShellNote(null)} style={styles.note}>
+          <Text style={styles.noteText}>{shellNote}</Text>
+        </Pressable>
+      ) : null}
       {pageError ? (
         <Pressable onPress={() => setPageError(null)} style={styles.banner}>
           <Text style={styles.bannerText}>Помилка сторінки: {pageError}</Text>
@@ -157,4 +190,9 @@ const styles = StyleSheet.create({
     padding: 12, borderRadius: 10, backgroundColor: '#b3261e',
   },
   bannerText: { color: '#fff', fontSize: 13 },
+  note: {
+    position: 'absolute', alignSelf: 'center', bottom: 100,
+    paddingVertical: 6, paddingHorizontal: 12, borderRadius: 14, backgroundColor: 'rgba(60,60,67,0.85)',
+  },
+  noteText: { color: '#fff', fontSize: 12 },
 });
