@@ -204,6 +204,11 @@ body.library-open #panel { width: 0; border-left: none; overflow: hidden; }
 body.web .web-only { display: inline-block !important; }
 body.web #toolbar { padding-left: 12px; -webkit-app-region: no-drag; }
 body.web #btn-logout { margin-right: auto; align-self: center; }
+/* Guests (demo) read one book: no uploads, no shared settings. */
+.demo-setting { display: none; }
+body.web:not(.guest) .demo-setting { display: block; }
+body.guest #btn-open, body.guest #btn-open-empty, body.guest #lib-add, body.guest #lib-refresh, body.guest .shared-setting { display: none !important; }
+body.guest #empty p { display: none; }
 .panel-actions { display: flex; gap: 12px; }
 
 @media (max-width: 760px) {

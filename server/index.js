@@ -3,6 +3,8 @@
 //
 // Env: ANTHROPIC_API_KEY, READER_PASSWORD (one family password), READER_SECRET (signs the login
 // cookie), DATA_DIR (default ./data; /data on Fly), PORT (default 8080).
+// Guest (demo) mode: GUEST_MODE=off disables /demo; GUEST_EXPLAIN_LIMIT (per guest per day, default 15)
+// and GUEST_EXPLAIN_TOTAL (all guests per day, default 150) cap what the demo can spend on Claude.
 const express = require("express");
 const crypto = require("crypto");
 const fs = require("fs");
@@ -22,6 +24,16 @@ const PASSWORD = process.env.READER_PASSWORD || "";
 const SECRET = process.env.READER_SECRET || "";
 const COOKIE = "reader";
 const COOKIE_DAYS = 365;
+// Guests get their own cookie, so the family cookie format (and everyone's login) stays as it is.
+const GUEST_COOKIE = "reader_guest";
+const GUEST_ENABLED = process.env.GUEST_MODE !== "off";
+const GUEST_LIMIT = Number(process.env.GUEST_EXPLAIN_LIMIT) || 15;
+const GUEST_TOTAL_LIMIT = Number(process.env.GUEST_EXPLAIN_TOTAL) || 150;
+const GUEST_MAX_CHARS = 1500; // selection and each side of context, so one demo request stays small
+const GUEST_MAX_TURNS = 8;
+// The demo book: a library book chosen in settings (state.shared.demoBook), else the first EPUB/PDF in
+// DATA_DIR/demo (on the Fly volume), else the one shipped in the repo under demo/.
+const DEMO_DIRS = [path.join(DATA_DIR, "demo"), path.join(ROOT, "demo")];
 const BOOK_EXT = /\.(epub|pdf)$/i;
 const MAX_UPLOAD = "300mb";
 
@@ -49,9 +61,9 @@ const USER_DEFAULTS = { autoExplain: true, pageTaps: false, font: "literata", ma
 const SHARED_KEYS = new Set(Object.keys(SHARED_DEFAULTS));
 const USER_KEYS = new Set(Object.keys(USER_DEFAULTS));
 
-let state = { shared: {}, users: {} };
+let state = { shared: {}, users: {}, guestUsage: {} };
 try {
-  state = { shared: {}, users: {}, ...JSON.parse(fs.readFileSync(STATE_FILE, "utf8")) };
+  state = { shared: {}, users: {}, guestUsage: {}, ...JSON.parse(fs.readFileSync(STATE_FILE, "utf8")) };
 } catch {
   /* first start */
 }
@@ -71,19 +83,97 @@ function userState(name) {
   return state.users[name];
 }
 
-function settingsFor(name) {
-  const u = userState(name);
+function settingsFor(req) {
+  const u = req.guest ? guestState(req.guest) : userState(req.user);
+  const demo = req.guest ? demoBooks() : null;
   return {
     ...SHARED_DEFAULTS,
     ...state.shared,
     ...USER_DEFAULTS,
     ...u,
     positions: u.positions || {},
-    user: name,
+    user: req.user,
     hasApiKey: !!process.env.ANTHROPIC_API_KEY,
     apiKeyFromEnv: true,
     web: true,
+    guest: !!req.guest,
+    demoBook: state.shared.demoBook || "",
+    demoDefault: demoBooks(true)[0]?.name || "",
+    ...(req.guest
+      ? { lastBook: u.lastBook || demo[0]?.name || null, guestLimit: { used: guestUsage().guests[req.guest] || 0, limit: GUEST_LIMIT } }
+      : {}),
   };
+}
+
+// ---------- Guests: a demo session that lives in memory and sees only the demo book ----------
+
+const guests = new Map(); // guest id -> { positions, lastBook, ...settings }
+const GUEST_MAX = 5000;
+
+function guestState(id) {
+  let g = guests.get(id);
+  if (!g) {
+    if (guests.size >= GUEST_MAX) guests.delete(guests.keys().next().value); // oldest first
+    g = { positions: {} };
+    guests.set(id, g);
+  } else {
+    guests.delete(id); // re-insert so the map stays ordered by last use
+    guests.set(id, g);
+  }
+  return g;
+}
+
+// Daily counters survive restarts (state.json) so a redeploy doesn't reset the demo budget.
+function guestUsage() {
+  const day = new Date().toISOString().slice(0, 10);
+  if (state.guestUsage?.day !== day) state.guestUsage = { day, total: 0, guests: {}, ips: {} };
+  return state.guestUsage;
+}
+
+function guestExplainAllowed(req) {
+  const usage = guestUsage();
+  const ip = req.ip || "";
+  if (usage.total >= GUEST_TOTAL_LIMIT) return "Демо на сьогодні вичерпало свій ліміт пояснень. Спробуйте завтра або увійдіть зі своїм паролем.";
+  if ((usage.guests[req.guest] || 0) >= GUEST_LIMIT || (usage.ips[ip] || 0) >= GUEST_LIMIT * 3) {
+    return `У демо-режимі доступно до ${GUEST_LIMIT} пояснень на день, і вони вже використані. Увійдіть, щоб читати без обмежень.`;
+  }
+  usage.total++;
+  usage.guests[req.guest] = (usage.guests[req.guest] || 0) + 1;
+  usage.ips[ip] = (usage.ips[ip] || 0) + 1;
+  saveState();
+  return null;
+}
+
+// Keeps a guest request small: trimmed context and a bounded conversation.
+function trimGuestRequest(request) {
+  const cut = (t, fromEnd) => {
+    const str = String(t || "");
+    if (str.length <= GUEST_MAX_CHARS) return str;
+    return fromEnd ? str.slice(-GUEST_MAX_CHARS) : str.slice(0, GUEST_MAX_CHARS);
+  };
+  if (request.context) {
+    const c = request.context;
+    request.context = { ...c, before: cut(c.before, true), selection: cut(c.selection), after: cut(c.after), question: c.question && cut(c.question) };
+  }
+  if (Array.isArray(request.messages) && request.messages.length > GUEST_MAX_TURNS) {
+    request.messages = [request.messages[0], ...request.messages.slice(-(GUEST_MAX_TURNS - 1))];
+  }
+  return request;
+}
+
+// [{ dir, name }] of the books a guest may open. builtInOnly skips the library choice.
+function demoBooks(builtInOnly) {
+  const chosen = state.shared.demoBook;
+  if (!builtInOnly && chosen && fs.existsSync(bookFile(chosen))) return [{ dir: BOOKS_DIR, name: chosen }];
+  for (const dir of DEMO_DIRS) {
+    try {
+      const names = fs.readdirSync(dir).filter((n) => !n.startsWith(".") && BOOK_EXT.test(n)).sort();
+      if (names.length) return names.map((name) => ({ dir, name }));
+    } catch {
+      /* no such folder */
+    }
+  }
+  return [];
 }
 
 // ---------- Auth: one family password, the name goes into a signed cookie ----------
@@ -111,13 +201,31 @@ function currentUser(req) {
   return name;
 }
 
-function setLoginCookie(req, res, name) {
-  const value = `${name}.${sign(name)}`;
+function cookieHeader(req, cookie, value, days) {
   const secure = req.secure || req.headers["x-forwarded-proto"] === "https";
-  res.setHeader(
-    "Set-Cookie",
-    `${COOKIE}=${encodeURIComponent(value)}; Path=/; Max-Age=${COOKIE_DAYS * 86400}; HttpOnly; SameSite=Lax${secure ? "; Secure" : ""}`
-  );
+  return `${cookie}=${encodeURIComponent(value)}; Path=/; Max-Age=${days * 86400}; HttpOnly; SameSite=Lax${secure ? "; Secure" : ""}`;
+}
+
+function setLoginCookie(req, res, name) {
+  // Logging in as family ends any guest session on this device.
+  res.setHeader("Set-Cookie", [cookieHeader(req, COOKIE, `${name}.${sign(name)}`, COOKIE_DAYS), cookieHeader(req, GUEST_COOKIE, "", 0)]);
+}
+
+function currentGuest(req) {
+  if (!GUEST_ENABLED) return null;
+  const raw = parseCookies(req)[GUEST_COOKIE];
+  const i = raw ? raw.lastIndexOf(".") : -1;
+  if (i < 0) return null;
+  const id = raw.slice(0, i);
+  const sig = raw.slice(i + 1);
+  const expected = sign(`guest:${id}`);
+  if (!/^[a-f0-9]{24}$/.test(id) || sig.length !== expected.length || !crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected))) return null;
+  return id;
+}
+
+function startGuest(req, res) {
+  const id = crypto.randomBytes(12).toString("hex");
+  res.setHeader("Set-Cookie", cookieHeader(req, GUEST_COOKIE, `${id}.${sign(`guest:${id}`)}`, 30));
 }
 
 function passwordOk(given) {
@@ -144,6 +252,8 @@ function loginPage(error) {
   input { display: block; width: 100%; box-sizing: border-box; margin-top: 5px; padding: 10px 12px; font: inherit; border: 1px solid rgba(0,0,0,0.2); border-radius: 8px; }
   button { width: 100%; padding: 11px; font: inherit; font-weight: 600; color: #fff; background: #b7791f; border: none; border-radius: 8px; }
   .err { color: #c0392b; margin-bottom: 12px; }
+  .demo { margin: 18px 0 0; text-align: center; font-size: 14px; }
+  .demo a { color: #b7791f; font-weight: 600; }
 </style></head>
 <body><form method="post" action="/login">
   <h1>Chytai</h1><p>Читалка з поясненнями від Claude</p>
@@ -151,6 +261,7 @@ function loginPage(error) {
   <label>Ім'я <input name="name" required autocomplete="username" autocapitalize="words" placeholder="Макс"></label>
   <label>Пароль <input name="password" type="password" required autocomplete="current-password"></label>
   <button>Увійти</button>
+  ${GUEST_ENABLED && demoBooks().length ? `<p class="demo">Немає пароля? <a href="/demo">Подивитися демо</a> з однією книжкою.</p>` : ""}
 </form></body></html>`;
 }
 
@@ -184,19 +295,31 @@ app.post("/login", express.urlencoded({ extended: false }), (req, res) => {
   res.redirect("/");
 });
 app.post("/logout", (_req, res) => {
-  res.setHeader("Set-Cookie", `${COOKIE}=; Path=/; Max-Age=0`);
+  res.setHeader("Set-Cookie", [`${COOKIE}=; Path=/; Max-Age=0`, `${GUEST_COOKIE}=; Path=/; Max-Age=0`]);
   res.redirect("/login");
+});
+
+// /demo opens the reader as a guest: one demo book, no uploads, a daily cap on explanations.
+app.get("/demo", (req, res) => {
+  if (currentUser(req)) return res.redirect("/");
+  if (!GUEST_ENABLED || !demoBooks().length) return res.redirect("/login");
+  if (!currentGuest(req)) startGuest(req, res);
+  res.redirect("/");
 });
 
 app.use((req, res, next) => {
   const user = currentUser(req);
-  if (!user) {
+  const guest = user ? null : currentGuest(req);
+  if (!user && !guest) {
     if (req.path.startsWith("/api/")) return res.status(401).json({ error: "login" });
     return res.redirect("/login");
   }
-  req.user = user;
+  req.user = user || "Гість";
+  req.guest = guest;
   next();
 });
+
+const guestsCannot = (message) => (req, res, next) => (req.guest ? res.status(403).json({ error: message }) : next());
 
 // Static renderer: index.html at /, its scripts next to it, node_modules at /node_modules
 // (so the renderer's ../../node_modules/… paths resolve, as they do under file:// in Electron).
@@ -209,26 +332,30 @@ app.use(express.static(path.join(ROOT, "src", "renderer"), { index: false }));
 const api = express.Router();
 api.use(express.json({ limit: "20mb" }));
 
-api.get("/settings", (req, res) => res.json(settingsFor(req.user)));
+api.get("/settings", (req, res) => res.json(settingsFor(req)));
 
 api.patch("/settings", (req, res) => {
-  const u = userState(req.user);
+  const u = req.guest ? guestState(req.guest) : userState(req.user);
   for (const [k, v] of Object.entries(req.body || {})) {
-    if (SHARED_KEYS.has(k)) state.shared[k] = v;
-    else if (USER_KEYS.has(k) && k !== "positions") u[k] = v;
+    if (k === "demoBook") {
+      // Family members pick which library book the demo shows; "" goes back to the built-in one.
+      if (!req.guest) state.shared.demoBook = safeBookName(v) || "";
+    } else if (SHARED_KEYS.has(k)) {
+      if (!req.guest) state.shared[k] = v;
+    } else if (USER_KEYS.has(k) && k !== "positions") u[k] = v;
   }
-  saveState();
-  res.json(settingsFor(req.user));
+  if (!req.guest) saveState();
+  res.json(settingsFor(req));
 });
 
 api.put("/position", (req, res) => {
   const { path: bookPath, cfi } = req.body || {};
   if (typeof bookPath !== "string" || typeof cfi !== "string") return res.status(400).json({ error: "bad request" });
-  const u = userState(req.user);
+  const u = req.guest ? guestState(req.guest) : userState(req.user);
   u.positions ??= {};
   u.positions[bookPath] = cfi;
   (u.opened ??= {})[bookPath.replace(/#reflow$/, "")] = Date.now();
-  saveState();
+  if (!req.guest) saveState();
   res.json({ ok: true });
 });
 
@@ -241,27 +368,44 @@ function safeBookName(name) {
 const bookFile = (name) => path.join(BOOKS_DIR, name);
 
 api.get("/library", async (req, res) => {
-  const books = await library.scan([BOOKS_DIR], path.join(DATA_DIR, "library-cache.json"));
-  const positions = userState(req.user).positions || {};
+  const u = req.guest ? guestState(req.guest) : userState(req.user);
+  let books;
+  if (req.guest) {
+    const demo = demoBooks();
+    const allowed = new Set(demo.map((d) => path.join(d.dir, d.name)));
+    const scanned = await library.scan([...new Set(demo.map((d) => d.dir))], path.join(DATA_DIR, "demo-cache.json"));
+    books = scanned.filter((b) => allowed.has(b.path)).map((b) => ({ ...b, dir: path.dirname(b.path) }));
+  } else {
+    books = (await library.scan([BOOKS_DIR], path.join(DATA_DIR, "library-cache.json"))).map((b) => ({ ...b, dir: BOOKS_DIR }));
+  }
+  const positions = u.positions || {};
   const list = books.map((b) => {
-    const name = path.relative(BOOKS_DIR, b.path);
-    const openedAt = userState(req.user).opened?.[name] || 0;
-    return { ...b, path: name, cloud: false, openedAt, started: !!(positions[name] || positions[`${name}#reflow`]) };
+    const name = path.relative(b.dir, b.path);
+    const openedAt = u.opened?.[name] || 0;
+    return { ...b, dir: undefined, path: name, cloud: false, openedAt, started: !!(positions[name] || positions[`${name}#reflow`]) };
   });
-  res.json({ folders: [], books: list, lastBook: userState(req.user).lastBook || null });
+  res.json({ folders: [], books: list, lastBook: u.lastBook || (req.guest ? demoBooks()[0]?.name : null) || null });
 });
 
 api.get("/book", (req, res) => {
   const name = safeBookName(req.query.path);
-  if (!name || !fs.existsSync(bookFile(name))) return res.status(404).json({ error: "Книжки немає на сервері." });
-  const u = userState(req.user);
+  const demo = req.guest ? demoBooks().find((d) => d.name === name) : null;
+  const file = req.guest ? demo && path.join(demo.dir, demo.name) : name && bookFile(name);
+  if (!file || !fs.existsSync(file)) return res.status(404).json({ error: "Книжки немає на сервері." });
+  const u = req.guest ? guestState(req.guest) : userState(req.user);
   u.lastBook = name;
   (u.opened ??= {})[name] = Date.now();
-  saveState();
+  if (!req.guest) saveState();
   res.setHeader("X-Book-Position", encodeURIComponent(u.positions?.[name] || ""));
   res.setHeader("X-Book-Reflow-Position", encodeURIComponent(u.positions?.[`${name}#reflow`] || ""));
-  res.sendFile(bookFile(name));
+  res.sendFile(file);
 });
+
+// Guests read the demo book and nothing else: no uploads, no deletions, no shared caches.
+api.put("/books/:name", guestsCannot("У демо-режимі не можна додавати книжки. Увійдіть, щоб завантажити свою."));
+api.delete("/books/:name", guestsCannot("У демо-режимі не можна видаляти книжки."));
+api.put("/reflow", guestsCannot("У демо-режимі конвертація PDF не зберігається."));
+api.get("/reflow", (req, res, next) => (req.guest ? res.status(204).end() : next()));
 
 // Upload: PUT /api/books/<file name> with the raw file as the body.
 api.put("/books/:name", express.raw({ type: () => true, limit: MAX_UPLOAD }), (req, res) => {
@@ -320,6 +464,14 @@ api.post("/explain", async (req, res) => {
   if (!apiKey) {
     send({ type: "error", message: "На сервері не налаштовано ключ Claude API." });
     return res.end();
+  }
+  if (req.guest) {
+    const denied = guestExplainAllowed(req);
+    if (denied) {
+      send({ type: "error", message: denied });
+      return res.end();
+    }
+    trimGuestRequest(request);
   }
   const controller = new AbortController();
   // The request's own "close" fires once its body is read; the response closes when the phone goes away.

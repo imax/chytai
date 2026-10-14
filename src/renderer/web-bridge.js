@@ -126,6 +126,7 @@
       // Electron reopens the last book after the window loads; here the bridge does it.
       if (!firstLoadDone) {
         firstLoadDone = true;
+        if (settings.guest) enterGuestMode(settings);
         if (settings.lastBook) setTimeout(() => openServerBook(settings.lastBook), 0);
       }
       return settings;
@@ -188,6 +189,24 @@
     else if (k === "f") (e.preventDefault(), emit("ui:find", "open"));
     else if (k === "g") (e.preventDefault(), emit("ui:find", e.shiftKey ? "prev" : "next"));
   });
+
+  // Demo: one book, no uploads, a daily cap on explanations; "Вийти" leads back to the login page.
+  function enterGuestMode(settings) {
+    document.body.classList.add("guest");
+    const logout = document.getElementById("btn-logout");
+    if (logout) (logout.textContent = "Вийти з демо"), (logout.title = "Повернутися на сторінку входу");
+    const { limit = 0, used = 0 } = settings.guestLimit || {};
+    const left = Math.max(0, limit - used);
+    setTimeout(() => {
+      if (typeof showNotice !== "function") return;
+      showNotice(
+        left
+          ? `Демо-режим: одна книжка і до ${limit} пояснень на день (залишилось ${left}). Виділіть слово чи речення, щоб побачити, як це працює.`
+          : "Демо-режим: денний ліміт пояснень уже використано. Книжку можна читати далі, а повний доступ дає вхід з паролем.",
+        false,
+      );
+    }, 1200);
+  }
 
   // Web-only labels.
   const libAdd = document.getElementById("lib-add");
