@@ -42,10 +42,12 @@ const conversations = new Map(); // request id -> conversation state
 async function loadSettings() {
   settings = await window.reader.getSettings();
   document.body.dataset.theme = settings.theme;
+  document.body.dataset.margins = settings.margins || "normal";
   $("#theme-select").value = settings.theme;
 }
 
 function openSettings() {
+  if (settings.web && !settings.guest) fillDemoBooks();
   $("#set-key").value = "";
   $("#key-hint").textContent = settings.apiKeyFromEnv
     ? "Використовується ключ зі змінної середовища ANTHROPIC_API_KEY."
@@ -53,10 +55,13 @@ function openSettings() {
       ? "Ключ збережено. Залиште поле порожнім, щоб не змінювати."
       : "Створіть ключ на platform.claude.com → API Keys.";
   $("#set-model").value = settings.model;
+  $("#set-margins").value = settings.margins || "normal";
+  $("#set-language").value = settings.language;
   $("#set-style").value = settings.explainStyle || "default";
   $("#set-custom-style").value = settings.customStyle || "";
   $("#custom-style-row").hidden = $("#set-style").value !== "custom";
   $("#set-auto").checked = settings.autoExplain;
+  $("#set-font").value = settings.font;
   $("#set-page-taps").value = settings.pageTaps ? "taps" : "scroll";
   $("#settings").showModal();
 }
@@ -65,16 +70,25 @@ $("#settings").addEventListener("close", async () => {
   if ($("#settings").returnValue !== "save") return;
   const patch = {
     model: $("#set-model").value,
+    language: $("#set-language").value.trim() || "українська",
     explainStyle: $("#set-style").value,
     customStyle: $("#set-custom-style").value.trim(),
     autoExplain: $("#set-auto").checked,
+    font: $("#set-font").value,
+    margins: $("#set-margins").value,
     pageTaps: $("#set-page-taps").value === "taps",
   };
   const key = $("#set-key").value.trim();
   if (key) patch.apiKey = key;
+  if (settings.web && !settings.guest && $("#set-demo-book").options.length) patch.demoBook = $("#set-demo-book").value;
+  const fontChanged = patch.font !== settings.font;
+  const marginsChanged = patch.margins !== (settings.margins || "normal");
   const wasScrolled = scrolled();
   settings = await window.reader.setSettings(patch);
   if (wasScrolled !== scrolled()) return reopenBook();
+  document.body.dataset.margins = settings.margins || "normal";
+  if (marginsChanged) resizeView();
+  if (fontChanged) applyTypography(true);
 });
 $("#set-style").onchange = () => {
   $("#custom-style-row").hidden = $("#set-style").value !== "custom";
@@ -82,6 +96,26 @@ $("#set-style").onchange = () => {
 };
 $("#btn-logout").onclick = () => window.reader.logout?.();
 $("#btn-admin").onclick = () => (location.href = "/admin");
+
+// Family members choose which library book guests see in the demo (web only).
+async function fillDemoBooks() {
+  const select = $("#set-demo-book");
+  const builtIn = settings.demoDefault ? `Вбудована (${settings.demoDefault.replace(/\.(epub|pdf)$/i, "")})` : "Немає вбудованої";
+  select.innerHTML = `<option value="">${builtIn}</option>`;
+  try {
+    const { books } = await window.reader.libraryList();
+    for (const b of [...books].sort((x, y) => x.title.localeCompare(y.title, "uk"))) {
+      const opt = document.createElement("option");
+      opt.value = b.path;
+      opt.textContent = `${b.title}${b.authors[0] ? ` — ${b.authors[0]}` : ""}`;
+      select.append(opt);
+    }
+  } catch {
+    /* the library is optional here */
+  }
+  select.value = settings.demoBook || "";
+  if (select.value !== (settings.demoBook || "")) select.value = "";
+}
 
 // On a phone the book scrolls as one continuous column unless page turns were chosen in settings.
 function scrolled() {
@@ -102,7 +136,7 @@ function lineHeight() {
 
 // Kindle-like typography: book font replaced, justified text with hyphenation, calm line spacing.
 function typographyCss() {
-  const family = FONTS.literata; // one book font for everyone (the choice left settings)
+  const family = FONTS[settings.font];
   const font = family
     ? `body, p, div, span, li, blockquote, a, em, i, b, strong, h1, h2, h3, h4, h5, h6 { font-family: ${family} !important; }`
     : "";
