@@ -528,10 +528,11 @@ function showSelToolbar(range, frame) {
   const rect = range.getBoundingClientRect();
   const bar = $("#sel-toolbar");
   bar.classList.remove("hidden");
-  // Desktop: above the selection, or below it when there is no room. Phone: below the selection,
-  // clear of the end handle, because iOS puts its own Copy / Look Up menu above the selection and
-  // the two must not cover each other (the app hides that menu, but not reliably); above only
-  // when the selection runs to the bottom of the screen.
+  // Safari on a phone: the bar sits at the bottom of the screen (CSS), clear of the system
+  // Copy / Look Up menu, which cannot be hidden there. The iPhone app hides that menu, so the
+  // bar goes next to the selection instead: below it, clear of the end handle, or above when
+  // the selection runs to the bottom of the screen. Desktop: above, or below when no room.
+  if (PHONE.matches && !IN_APP) return bar.removeAttribute("style");
   const above = frame.top + rect.top - bar.offsetHeight - 8;
   const left = frame.left + rect.left + rect.width / 2 - bar.offsetWidth / 2;
   let top;

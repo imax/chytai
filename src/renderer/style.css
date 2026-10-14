@@ -297,6 +297,10 @@ body.guest #empty p { display: none; }
   .followup input, .note-comment { font-size: 16px; } /* keeps iOS from zooming the page on focus */
 
   #sel-toolbar { padding: 4px; border-radius: 12px; }
+  html:not(.in-app) #sel-toolbar {
+    top: auto; left: 50%; transform: translateX(-50%);
+    bottom: calc(40px + env(safe-area-inset-bottom));
+  }
   #sel-toolbar button { padding: 10px 14px; font-size: 16px; }
   dialog { width: min(440px, 92vw); max-height: 90dvh; overflow-y: auto; }
   dialog label input, dialog label select, #lib-search, #search-input { font-size: 16px; }
