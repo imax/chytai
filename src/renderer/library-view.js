@@ -5,6 +5,8 @@
   const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ESC[c]);
   let data = null; // { folders, books, lastBook }
   let loading = null;
+  let manage = false; // web only: the family fixes titles and deletes books right in the library
+  const canManage = () => typeof window.reader.libraryDelete === "function";
 
   // Sort authors by surname (last word); Cyrillic first, then Latin, unknown last.
   function authorKey(name) {
@@ -33,7 +35,8 @@
       (b) => (!lang || b.lang === lang) && (!q || `${b.title} ${b.authors.join(" ")}`.toLowerCase().includes(q)),
     );
     if (!data.books.length) {
-      $("#lib-body").innerHTML = `<div class="lib-empty">${data.folders.length ? "У цих папках книжок не знайшлося." : "Додайте папку з книжками, і вони з'являться тут."}</div>`;
+      const hint = document.body.classList.contains("web") ? "Бібліотека порожня. Натисніть «Додати книжки…», щоб завантажити EPUB чи PDF." : "Додайте папку з книжками, і вони з'являться тут.";
+      $("#lib-body").innerHTML = `<div class="lib-empty">${data.folders.length ? "У цих папках книжок не знайшлося." : hint}</div>`;
       return;
     }
     const groups = new Map();
@@ -69,11 +72,15 @@
           b.cloud && "☁︎ в iCloud",
         ].filter(Boolean);
         const badge = b.path === data.lastBook ? "читаю зараз" : b.started ? "розпочата" : "";
-        html += `<button class="lib-book" data-path="${esc(b.path)}" title="${esc(b.path)}">
-          <span class="t">${esc(b.title)}</span>
+        const body = `<span class="t">${esc(b.title)}</span>
           ${coauthors ? `<span class="m">${esc(coauthors)}</span>` : ""}
-          <span class="m">${meta.map(esc).join(" · ")}${badge ? ` <span class="badge">${badge}</span>` : ""}</span>
-        </button>`;
+          <span class="m">${meta.map(esc).join(" · ")}${badge ? ` <span class="badge">${badge}</span>` : ""}</span>`;
+        html += manage
+          ? `<div class="lib-book manage" data-path="${esc(b.path)}">${body}
+          <span class="m"><span class="file">${esc(b.path)}</span>${b.edited ? ` <span class="badge" title="Назву або автора виправлено вручну">виправлено</span>` : ""}</span>
+          <span class="lib-actions"><button data-edit="${esc(b.path)}">Назва й автор…</button><button data-delete="${esc(b.path)}" class="danger">Видалити</button></span>
+        </div>`
+          : `<button class="lib-book" data-path="${esc(b.path)}" title="${esc(b.path)}">${body}</button>`;
       }
       html += `</section>`;
     }
@@ -91,12 +98,90 @@
   }
 
   $("#lib-body").addEventListener("click", (e) => {
-    const el = e.target.closest(".lib-book");
+    const action = e.target.closest("[data-edit], [data-delete]");
+    if (action) return action.dataset.edit != null ? editBook(action.dataset.edit) : deleteBook(action.dataset.delete);
+    const el = e.target.closest("button.lib-book");
     if (!el) return;
     const book = data.books.find((b) => b.path === el.dataset.path);
     if (book?.cloud) showNotice(`Завантажую «${book.title}» з iCloud…`, true);
     window.reader.openPath(el.dataset.path);
   });
+
+  // ---------- Managing the shared library (web, family) ----------
+
+  function setManage(on) {
+    manage = on && canManage();
+    $("#lib-manage").textContent = manage ? "Готово" : "Керувати";
+    $("#lib-manage").classList.toggle("on", manage);
+    if (data) render();
+  }
+
+  const label = (b) => `«${b.title}»${b.authors[0] ? ` (${b.authors[0]})` : ""}`;
+
+  async function deleteBook(name) {
+    const book = data.books.find((b) => b.path === name);
+    if (!book) return;
+    const readers = book.path === data.lastBook || book.started ? "\nЗакладки й позиції читання в ній теж зникнуть." : "";
+    if (!confirm(`Видалити ${label(book)} з бібліотеки для всіх?${readers}`)) return;
+    try {
+      await window.reader.libraryDelete(name);
+    } catch (err) {
+      return showNotice(`Не вдалося видалити книжку: ${err.message}`, false);
+    }
+    data.books = data.books.filter((b) => b.path !== name);
+    if (data.lastBook === name) data.lastBook = null;
+    if (current?.path === name) {
+      // The book being read is gone: close it and stay in the library.
+      closeBook();
+      current = null;
+      $("#book-title").textContent = "Chytai";
+      $("#running-head").textContent = "";
+      document.title = "Chytai";
+      $("#lib-close").classList.add("hidden");
+    }
+    showNotice(`Видалено ${label(book)}.`, false);
+    render();
+  }
+
+  let editing = null;
+  function editBook(name) {
+    editing = data.books.find((b) => b.path === name);
+    if (!editing) return;
+    $("#edit-title").value = editing.title;
+    $("#edit-authors").value = editing.authors.join(", ");
+    $("#edit-file").textContent = `Файл: ${name}`;
+    $("#book-edit").returnValue = "";
+    $("#book-edit").showModal();
+  }
+
+  $("#book-edit").addEventListener("close", async () => {
+    const dialog = $("#book-edit");
+    const book = editing;
+    editing = null;
+    if (!book || !["save", "reset"].includes(dialog.returnValue)) return;
+    const patch = dialog.returnValue === "reset" ? { title: "", authors: "" } : { title: $("#edit-title").value, authors: $("#edit-authors").value };
+    try {
+      await window.reader.libraryUpdateBook(book.path, patch);
+    } catch (err) {
+      return showNotice(`Не вдалося зберегти: ${err.message}`, false);
+    }
+    // The server keeps only the correction; "as in the file" needs a rescan to show the file's own metadata.
+    if (dialog.returnValue === "reset") return load(true);
+    const authors = patch.authors.split(/[,;]/).map((a) => a.trim()).filter(Boolean);
+    Object.assign(book, { title: patch.title.trim() || book.title, authors: authors.length ? authors : book.authors, edited: true });
+    if (current?.path === book.path) {
+      current.title = book.title;
+      current.author = book.authors[0] || "";
+      $("#book-title").textContent = current.author ? `${current.title} · ${current.author}` : current.title;
+      $("#running-head").textContent = current.title;
+    }
+    render();
+  });
+  $("#edit-reset").onclick = () => {
+    $("#book-edit").returnValue = "reset";
+    $("#book-edit").close("reset");
+  };
+  $("#lib-manage").onclick = () => setManage(!manage);
   $("#lib-folders").addEventListener("click", async (e) => {
     const folder = e.target.dataset?.remove;
     if (!folder) return;

@@ -99,6 +99,43 @@
     input.click();
   }
 
+  // The library's "Додати книжку…": several files at once, uploaded one after another, no opening.
+  function pickFiles() {
+    return new Promise((resolve) => {
+      const input = document.createElement("input");
+      input.type = "file";
+      input.multiple = true;
+      input.accept = ".epub,.pdf,application/epub+zip,application/pdf";
+      input.onchange = () => resolve([...input.files]);
+      input.oncancel = () => resolve([]);
+      input.click();
+    });
+  }
+
+  async function uploadAll(files) {
+    const notice = (text, busy) => typeof showNotice === "function" && showNotice(text, busy);
+    const skipped = files.filter((f) => !/\.(epub|pdf)$/i.test(f.name)).map((f) => f.name);
+    const books = files.filter((f) => /\.(epub|pdf)$/i.test(f.name));
+    const failed = [];
+    for (const [i, file] of books.entries()) {
+      notice(`Завантажую «${file.name}»${books.length > 1 ? ` (${i + 1} з ${books.length})` : ""}…`, true);
+      try {
+        await api("PUT", `/api/books/${encodeURIComponent(file.name)}`, file);
+      } catch (err) {
+        if (err.message === "login") return false;
+        failed.push(`${file.name}: ${err.message}`);
+      }
+    }
+    const added = books.length - failed.length;
+    const parts = [
+      added ? `Додано ${added === 1 ? "книжку" : `книжок: ${added}`}.` : "",
+      failed.length ? `Не вдалося: ${failed.join("; ")}.` : "",
+      skipped.length ? `Пропущено (підтримуються лише EPUB і PDF): ${skipped.join(", ")}.` : "",
+    ].filter(Boolean);
+    if (parts.length) notice(parts.join(" "), false);
+    return added > 0;
+  }
+
   window.reader = {
     chooseBook: () => pickFile(),
     // Drag & drop and the file picker hand over a File; library entries hand over a name.
@@ -117,10 +154,13 @@
       api("PUT", `/api/reflow?path=${encodeURIComponent(bookPath)}&version=${encodeURIComponent(version)}`, new Blob([data])).catch(() => {}),
     libraryList: () => api("GET", "/api/library").then((r) => r.json()),
     libraryAddFolder: async () => {
-      pickFile();
-      return false;
+      const files = await pickFiles();
+      return files.length ? uploadAll(files) : false;
     },
     libraryRemoveFolder: async () => {},
+    // Managing the shared library (family only; the server refuses guests).
+    libraryDelete: (name) => api("DELETE", `/api/books/${encodeURIComponent(name)}`).then((r) => r.json()),
+    libraryUpdateBook: (name, patch) => api("PATCH", `/api/books/${encodeURIComponent(name)}`, patch).then((r) => r.json()),
     getSettings: async () => {
       const settings = await (await api("GET", "/api/settings")).json();
       // Electron reopens the last book after the window loads; here the bridge does it.
@@ -211,7 +251,7 @@
   // Web-only labels.
   const libAdd = document.getElementById("lib-add");
   if (libAdd) {
-    libAdd.textContent = "Додати книжку…";
-    libAdd.title = "Завантажити EPUB або PDF у спільну бібліотеку";
+    libAdd.textContent = "Додати книжки…";
+    libAdd.title = "Завантажити EPUB або PDF у спільну бібліотеку (можна кілька за раз)";
   }
 })();

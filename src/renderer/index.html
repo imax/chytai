@@ -55,6 +55,7 @@
           </select>
           <button id="lib-refresh" title="Пересканувати папки">Оновити</button>
           <button id="lib-add" title="Додати папку з книжками">Додати папку…</button>
+          <button id="lib-manage" class="web-only family-only" title="Виправити назву чи автора, видалити книжку">Керувати</button>
           <button id="lib-close" class="link" title="Повернутися до книжки (Esc)">Закрити</button>
         </div>
         <div id="lib-folders"></div>
@@ -152,6 +153,24 @@
         <button type="button" id="btn-logout" class="link web-only" title="Вийти з облікового запису на цьому пристрої">Вийти</button>
         <button value="cancel" formnovalidate>Скасувати</button>
         <button value="save" class="primary" id="settings-save">Зберегти</button>
+      </menu>
+    </form>
+  </dialog>
+
+  <dialog id="book-edit">
+    <form method="dialog" id="book-edit-form">
+      <h2 tabindex="-1" autofocus>Книжка</h2>
+      <label>Назва
+        <input type="text" id="edit-title" autocomplete="off" />
+      </label>
+      <label>Автор
+        <input type="text" id="edit-authors" autocomplete="off" placeholder="Кілька авторів через кому" />
+        <small id="edit-file"></small>
+      </label>
+      <menu>
+        <button type="button" id="edit-reset" class="link" title="Повернути назву й автора з файлу">Як у файлі</button>
+        <button value="cancel" formnovalidate>Скасувати</button>
+        <button value="save" class="primary">Зберегти</button>
       </menu>
     </form>
   </dialog>

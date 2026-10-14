@@ -203,7 +203,7 @@ async function collectStats() {
     })
     .sort((a, b) => b.lastSeen - a.lastSeen);
 
-  const books = (await library.scan([BOOKS_DIR], path.join(DATA_DIR, "library-cache.json")))
+  const books = (await scanLibrary())
     .map((b) => {
       const name = path.relative(BOOKS_DIR, b.path);
       const readers = Object.values(state.users).filter((u) => u.positions?.[name] || u.positions?.[`${name}#reflow`]).length;
@@ -469,6 +469,30 @@ function safeBookName(name) {
 }
 const bookFile = (name) => path.join(BOOKS_DIR, name);
 
+// The family can correct a book's title and author in the library; the file and its metadata stay as
+// they are, the correction lives in state.shared.bookMeta[name] = { title, authors }.
+async function scanLibrary() {
+  const books = await library.scan([BOOKS_DIR], path.join(DATA_DIR, "library-cache.json"));
+  const meta = state.shared.bookMeta || {};
+  return books.map((b) => {
+    const m = meta[path.relative(BOOKS_DIR, b.path)];
+    return m ? { ...b, title: m.title || b.title, authors: m.authors?.length ? m.authors : b.authors, edited: true } : b;
+  });
+}
+
+// Forgets everything that pointed at a deleted book: positions, "last book", the demo choice, corrections.
+function forgetBook(name) {
+  for (const u of Object.values(state.users)) {
+    if (u.lastBook === name) u.lastBook = null;
+    delete u.positions?.[name];
+    delete u.positions?.[`${name}#reflow`];
+    delete u.opened?.[name];
+  }
+  if (state.shared.demoBook === name) state.shared.demoBook = "";
+  delete state.shared.bookMeta?.[name];
+  saveState();
+}
+
 api.get("/library", async (req, res) => {
   const u = req.guest ? guestState(req.guest) : userState(req.user);
   let books;
@@ -478,7 +502,7 @@ api.get("/library", async (req, res) => {
     const scanned = await library.scan([...new Set(demo.map((d) => d.dir))], path.join(DATA_DIR, "demo-cache.json"));
     books = scanned.filter((b) => allowed.has(b.path)).map((b) => ({ ...b, dir: path.dirname(b.path) }));
   } else {
-    books = (await library.scan([BOOKS_DIR], path.join(DATA_DIR, "library-cache.json"))).map((b) => ({ ...b, dir: BOOKS_DIR }));
+    books = (await scanLibrary()).map((b) => ({ ...b, dir: BOOKS_DIR }));
   }
   const positions = u.positions || {};
   const list = books.map((b) => {
@@ -506,6 +530,7 @@ api.get("/book", (req, res) => {
 // Guests read the demo book and nothing else: no uploads, no deletions, no shared caches.
 api.put("/books/:name", guestsCannot("У демо-режимі не можна додавати книжки. Увійдіть, щоб завантажити свою."));
 api.delete("/books/:name", guestsCannot("У демо-режимі не можна видаляти книжки."));
+api.patch("/books/:name", guestsCannot("У демо-режимі не можна редагувати книжки."));
 api.put("/reflow", guestsCannot("У демо-режимі конвертація PDF не зберігається."));
 api.get("/reflow", (req, res, next) => (req.guest ? res.status(204).end() : next()));
 
@@ -520,8 +545,26 @@ api.put("/books/:name", express.raw({ type: () => true, limit: MAX_UPLOAD }), (r
 
 api.delete("/books/:name", (req, res) => {
   const name = safeBookName(req.params.name);
-  if (name) fs.rmSync(bookFile(name), { force: true });
+  if (!name) return res.status(400).json({ error: "Немає такої книжки." });
+  fs.rmSync(bookFile(name), { force: true });
+  forgetBook(name);
   res.json({ ok: true });
+});
+
+// Title and author as the library should show them: PATCH /api/books/<name> { title, authors }.
+// Empty values go back to what the file itself says.
+api.patch("/books/:name", (req, res) => {
+  const name = safeBookName(req.params.name);
+  if (!name || !fs.existsSync(bookFile(name))) return res.status(404).json({ error: "Книжки немає на сервері." });
+  const clean = (v) => String(v ?? "").replace(/\s+/g, " ").trim().slice(0, 300);
+  const title = clean(req.body?.title);
+  const raw = req.body?.authors;
+  const authors = (Array.isArray(raw) ? raw : String(raw ?? "").split(/[,;]/)).map(clean).filter(Boolean).slice(0, 10);
+  const meta = (state.shared.bookMeta ??= {});
+  if (title || authors.length) meta[name] = { title, authors };
+  else delete meta[name];
+  saveState();
+  res.json({ path: name, title, authors, edited: !!meta[name] });
 });
 
 // Cache for PDFs converted to EPUB in the browser ("як книжка" mode), shared by everyone.
