@@ -4,7 +4,7 @@
 // Env: ANTHROPIC_API_KEY, READER_PASSWORD (one family password), READER_SECRET (signs the login
 // cookie), DATA_DIR (default ./data; /data on Fly), PORT (default 8080).
 // Guest (demo) mode: GUEST_MODE=off disables /demo; GUEST_EXPLAIN_LIMIT (per guest per day, default 15)
-// and GUEST_EXPLAIN_TOTAL (all guests per day, default 150) cap what the demo can spend on Claude.
+// and GUEST_EXPLAIN_TOTAL (all guests per day, default 300) cap what the demo can spend on Claude.
 const express = require("express");
 const crypto = require("crypto");
 const fs = require("fs");
@@ -29,7 +29,7 @@ const COOKIE_DAYS = 365;
 const GUEST_COOKIE = "reader_guest";
 const GUEST_ENABLED = process.env.GUEST_MODE !== "off";
 const GUEST_LIMIT = Number(process.env.GUEST_EXPLAIN_LIMIT) || 15;
-const GUEST_TOTAL_LIMIT = Number(process.env.GUEST_EXPLAIN_TOTAL) || 150;
+const GUEST_TOTAL_LIMIT = Number(process.env.GUEST_EXPLAIN_TOTAL) || 300;
 const GUEST_MAX_CHARS = 1500; // selection and each side of context, so one demo request stays small
 const GUEST_MAX_TURNS = 8;
 // The demo book: a library book chosen in settings (state.shared.demoBook), else the first EPUB/PDF in
