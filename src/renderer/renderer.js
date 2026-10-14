@@ -148,13 +148,7 @@ function typographyCss() {
     h1, h2, h3 { line-height: 1.3 !important; hyphens: manual; }
     pre, code, kbd, samp { font-family: ui-monospace, Menlo, monospace !important; }
     /* epub.js pads a scrolled page by 1/12 of its width; use the same side space as page mode instead. */
-    ${scrolled() ? "body { padding-left: 14px !important; padding-right: 14px !important; }" : ""}
-    /* A note's comment, written under the passage (placeComments). */
-    .${INLINE_CLASS} { display: block; }
-    .${INLINE_CLASS}::after {
-      content: attr(data-comment); display: block; margin: 0.3em 0 0.5em; text-indent: 0; text-align: left; hyphens: manual;
-      font: italic 0.85em/1.4 Georgia, serif !important; color: #c8641f; white-space: pre-wrap;
-    }`;
+    ${scrolled() ? "body { padding-left: 14px !important; padding-right: 14px !important; }" : ""}`;
 }
 
 function styleContents(contents) {
@@ -241,15 +235,12 @@ async function openEpub(payload, { posKey, source }) {
     // WebKit (iOS Safari) does not run our touch/selection listeners inside an iframe sandboxed
     // without allow-scripts, so allow scripts and strip the book's own ones in stripScripts.
     allowScriptedContent: true,
-    ignoreClass: INLINE_CLASS,
   });
   Object.entries(THEMES).forEach(([name, rules]) => rendition.themes.register(name, rules));
   rendition.themes.default({
     "::selection": { background: "rgba(255, 200, 0, 0.45)" },
   });
-  rendition.hooks.content.register(ignoreInlineComments);
   rendition.hooks.content.register(styleContents);
-  rendition.hooks.content.register((contents) => placeComments([contents]));
   rendition.hooks.content.register((contents) => contents.on("linkClicked", rememberReturn));
   rendition.themes.select(settings.theme);
   rendition.themes.fontSize(`${bookFontSize() * BASE_SCALE}%`);
@@ -547,8 +538,7 @@ function onSelected(cfiRange, contents) {
 
   const ctx = extractContext(contents.document, range);
   const chapter = chapterTitle(contents.section?.href || rendition.currentLocation()?.start?.href);
-  // epub.js builds the selection's CFI without ignoreClass; rebuild it so inline comments don't count.
-  handleSelection(range, contents.cfiFromRange(range), { ...ctx, chapter }, contents.document.defaultView.frameElement.getBoundingClientRect());
+  handleSelection(range, cfiRange, { ...ctx, chapter }, contents.document.defaultView.frameElement.getBoundingClientRect());
 }
 
 // Shared by EPUB and PDF: remember the selection, show the toolbar, maybe auto-explain.
@@ -910,7 +900,6 @@ async function loadNotes() {
     console.warn("could not load notes", err);
   }
   renderNotes();
-  placeComments();
   notes.forEach(markNote);
 }
 
@@ -994,75 +983,10 @@ function drawBars(mark) {
   }
 }
 
-// A note with a comment gets a small asterisk after its last word; the comment itself is written
-// right below the passage (see placeComments).
+// A note with a comment gets a small asterisk after its last word; tapping the passage shows it.
 function drawCommentMark(add, last, commented) {
   if (!commented) return;
   add("text", { class: "comment-mark", x: last.x + last.w + 1, y: last.y + 2, "dominant-baseline": "hanging" }).textContent = "*";
-}
-
-// ---------- Comments written into the page, under the passage ----------
-// The comment goes into the chapter's DOM as a block <span class="chytai-inline"> at the end of the
-// noted passage. epub.js locates text by CFI, which counts DOM nodes, so every CFI lookup in the
-// page ignores that class (ignoreClass, see ignoreInlineComments); otherwise the notes and the
-// reading position after it in the paragraph would point to the wrong place.
-const INLINE_CLASS = "chytai-inline";
-
-function ignoreInlineComments(contents) {
-  const { cfiFromRange, cfiFromNode, range, locationOf } = contents;
-  contents.cfiFromRange = (r, ignore) => cfiFromRange.call(contents, r, ignore || INLINE_CLASS);
-  contents.cfiFromNode = (n, ignore) => cfiFromNode.call(contents, n, ignore || INLINE_CLASS);
-  contents.range = (cfi, ignore) => range.call(contents, cfi, ignore || INLINE_CLASS);
-  contents.locationOf = (t, ignore) => locationOf.call(contents, t, ignore || INLINE_CLASS);
-}
-
-// Puts each commented note's text under its passage in the given pages (all open ones by default).
-function placeComments(list = rendition?.getContents() || []) {
-  for (const contents of list) {
-    const doc = contents.document;
-    if (!doc) continue;
-    const wanted = new Map();
-    for (const note of notes) {
-      if (!note.comment || !noteReachable(note)) continue;
-      wanted.set(note.id, note);
-    }
-    for (const el of [...doc.querySelectorAll(`.${INLINE_CLASS}`)]) {
-      const note = wanted.get(el.dataset.note);
-      if (note && el.dataset.comment === note.comment) {
-        wanted.delete(el.dataset.note);
-        continue;
-      }
-      const parent = el.parentNode;
-      el.remove();
-      parent?.normalize(); // join the text the span had split, so the CFIs read as before
-    }
-    for (const note of wanted.values()) {
-      let range;
-      try {
-        range = contents.range(note.cfi);
-      } catch {
-        continue; // the note is in another chapter
-      }
-      if (!range || range.endContainer.ownerDocument !== doc) continue;
-      const span = doc.createElement("span");
-      span.className = INLINE_CLASS;
-      span.dataset.note = note.id;
-      // The text lives in an attribute shown by ::after: epub.js counts the text inside ignored
-      // elements as the book's own, so a text node here would shift every offset after it.
-      span.dataset.comment = note.comment;
-      const end = range.cloneRange();
-      end.collapse(false);
-      // Not in the middle of a word or before its comma: move on to the next space.
-      const node = end.endContainer;
-      if (node.nodeType === Node.TEXT_NODE) {
-        let at = end.endOffset;
-        while (at < node.length && !/\s/.test(node.data[at])) at++;
-        end.setStart(node, at);
-        end.collapse(true);
-      }
-      end.insertNode(span);
-    }
-  }
 }
 
 // Redraw a note's marks after its comment appeared or went away.
@@ -1215,7 +1139,6 @@ function renderNotes() {
         return;
       }
       notes = notes.filter((n) => n.id !== note.id);
-      placeComments();
       unmarkNote(note);
       renderNotes();
     };
@@ -1224,8 +1147,7 @@ function renderNotes() {
     comment.oninput = () => fitComment(comment);
     comment.onchange = async () => {
       note.comment = comment.value.trim();
-      placeComments();
-      notes.forEach(redrawNote); // the comment moved the text below it
+      redrawNote(note);
       try {
         await notesStore.notesUpdate(current.path, note.id, { comment: note.comment });
       } catch (err) {
