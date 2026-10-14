@@ -139,7 +139,12 @@ function typographyCss() {
     h1, h2, h3 { line-height: 1.3 !important; hyphens: manual; }
     pre, code, kbd, samp { font-family: ui-monospace, Menlo, monospace !important; }
     /* epub.js pads a scrolled page by 1/12 of its width; use the same side space as page mode instead. */
-    ${scrolled() ? "body { padding-left: 14px !important; padding-right: 14px !important; }" : ""}`;
+    ${scrolled() ? "body { padding-left: 14px !important; padding-right: 14px !important; }" : ""}
+    /* The start of a note's comment, shown under the paragraph it ends in (set in drawBars). */
+    [data-chytai-comment]::after {
+      content: attr(data-chytai-comment); display: block; margin: 0.35em 0 0.6em; text-indent: 0; text-align: left;
+      font: italic 0.82em/1.4 Georgia, serif !important; color: #c8641f; hyphens: manual;
+    }`;
 }
 
 function styleContents(contents) {
@@ -889,14 +894,13 @@ function drawBars(mark) {
   // A short part of a paragraph (up to three lines) is underlined by hand under the exact words;
   // whole paragraphs and longer passages get the bars, which read more calmly than many lines of ink.
   const lines = new Set(rects.map((r) => Math.round(r.y))).size;
-  const commented = !!notes.find((n) => n.id === mark.data?.note)?.comment;
-  const doubled = commented && commentMark === "double";
-  if (rects.length) drawCommentMark(add, rects.at(-1), commented);
+  const comment = notes.find((n) => n.id === mark.data?.note)?.comment || "";
+  if (rects.length) drawCommentMark(add, rects.at(-1), !!comment);
+  showCommentPreview(mark.range, comment);
   if (lines <= 3 && !coversWholeParagraphs(mark.range)) {
     for (const r of rects) {
       const y = r.y + r.h - 1;
       add("path", { class: "bar under", d: `M${r.x + rand()},${y + rand() * 1.5}` + wobbleAcross(r.x, r.x + r.w, y, rand) });
-      if (doubled) add("path", { class: "bar under thin", d: `M${r.x + rand()},${y + 4 + rand()}` + wobbleAcross(r.x, r.x + r.w, y + 4, rand) });
     }
     return;
   }
@@ -907,24 +911,30 @@ function drawBars(mark) {
     const right = Math.max(...col.map((r) => r.x + r.w)) + 8;
     // Left: hooks in at the top, then runs down; right: runs down and hooks in at the bottom.
     add("path", { class: "bar", d: `M${left + 7},${top - 2 + rand() * 2} Q${left + 1},${top - 1} ${left},${top + 6}` + wobble(left, top + 6, bottom, rand) });
-    if (doubled) add("path", { class: "bar thin", d: `M${left - 5},${top + 8}` + wobble(left - 5, top + 8, bottom - 2, rand) });
     add("path", { class: "bar", d: `M${right + rand() * 2},${top}` + wobble(right, top, bottom - 6, rand) + ` Q${right + 1},${bottom + 1} ${right - 7},${bottom + 2 + rand() * 2}` });
   }
 }
 
-// How a note with a comment is told apart in the text: "bubble" (a small speech bubble after the
-// last word), "dot" (a footnote-like dot there) or "double" (a second, thinner line).
-let commentMark = "bubble";
-
+// A note with a comment gets a small speech bubble after its last word, and the comment's start
+// is shown under the paragraph (an attribute plus ::after, so the book's DOM and CFIs stay as they are).
 function drawCommentMark(add, last, commented) {
   if (!commented) return;
   const x = last.x + last.w + 3;
   const y = last.y + 2;
-  if (commentMark === "bubble") {
-    add("path", { class: "comment-mark", d: `M${x + 3},${y - 2} h10 a3,3 0 0 1 3,3 v6 a3,3 0 0 1 -3,3 h-6 l-4,4 v-4 a3,3 0 0 1 -3,-3 v-6 a3,3 0 0 1 3,-3 z` });
-  } else if (commentMark === "dot") {
-    add("circle", { class: "comment-dot", cx: x + 3, cy: y + 3, r: 3.2 });
-  }
+  add("path", { class: "comment-mark", d: `M${x + 3},${y - 2} h10 a3,3 0 0 1 3,3 v6 a3,3 0 0 1 -3,3 h-6 l-4,4 v-4 a3,3 0 0 1 -3,-3 v-6 a3,3 0 0 1 3,-3 z` });
+}
+
+const COMMENT_PREVIEW = 110;
+function showCommentPreview(range, comment) {
+  const block = blockOf(range?.endContainer);
+  if (!block) return;
+  if (!comment) return block.removeAttribute("data-chytai-comment");
+  const text = comment.length > COMMENT_PREVIEW ? `${comment.slice(0, COMMENT_PREVIEW).trimEnd()}…` : comment;
+  if (block.getAttribute("data-chytai-comment") !== text) block.setAttribute("data-chytai-comment", text);
+}
+
+function blockOf(node) {
+  return (node?.nodeType === 1 ? node : node?.parentElement)?.closest("p, li, blockquote, h1, h2, h3, h4, h5, h6, div, dd, dt, td");
 }
 
 // Redraw a note's marks after its comment appeared or went away.
@@ -947,7 +957,6 @@ function wobbleAcross(x1, x2, y, rand) {
 // True when the range starts at the beginning of a paragraph and ends at the end of one.
 function coversWholeParagraphs(range) {
   if (!range) return true;
-  const block = (node) => (node.nodeType === 1 ? node : node.parentElement)?.closest("p, li, blockquote, h1, h2, h3, h4, h5, h6, div, dd, dt, td");
   const doc = range.startContainer.ownerDocument;
   const gap = (from, to) => {
     if (!from || !to) return "";
@@ -956,8 +965,8 @@ function coversWholeParagraphs(range) {
     r.setEnd(...to);
     return r.toString().trim();
   };
-  const first = block(range.startContainer);
-  const last = block(range.endContainer);
+  const first = blockOf(range.startContainer);
+  const last = blockOf(range.endContainer);
   if (!first || !last) return true;
   const end = [range.endContainer, range.endOffset];
   // iOS often ends a paragraph selection at the very start of the next one.
@@ -978,6 +987,8 @@ function wobble(x, y1, y2, rand) {
 }
 
 function unmarkNote(note) {
+  const views = rendition?.views();
+  for (const view of views?.all ? views.all() : views || []) showCommentPreview(view.underlines?.[note.cfi]?.mark.range, "");
   try {
     rendition?.annotations.remove(note.cfi, "underline");
   } catch {
@@ -1081,9 +1092,8 @@ function renderNotes() {
     comment.value = note.comment || "";
     comment.oninput = () => fitComment(comment);
     comment.onchange = async () => {
-      const had = !!note.comment;
       note.comment = comment.value.trim();
-      if (had !== !!note.comment) redrawNote(note);
+      redrawNote(note);
       try {
         await notesStore.notesUpdate(current.path, note.id, { comment: note.comment });
       } catch (err) {
