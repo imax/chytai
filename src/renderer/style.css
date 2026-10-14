@@ -8,6 +8,9 @@
   --accent: #b7791f;
   --accent-soft: rgba(255, 196, 0, 0.18);
   --panel-w: 400px;
+  /* Motion: things arrive with a soft deceleration and leave a little faster. */
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in: cubic-bezier(0.55, 0, 0.75, 0.2);
   font: 14px/1.45 -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif;
 }
 body[data-theme="sepia"] {
@@ -43,6 +46,9 @@ button, select, input { font: inherit; color: inherit; }
   position: absolute; z-index: 5; top: 0; left: 0; bottom: 0; width: 300px; overflow-y: auto;
   background: var(--chrome); border-right: 1px solid var(--line); box-shadow: 4px 0 18px rgba(0, 0, 0, 0.08);
 }
+/* The contents slide in from the left edge instead of popping in. */
+#toc { transition: transform 0.24s var(--ease-out), visibility 0s; }
+#toc.hidden { display: block !important; visibility: hidden; transform: translateX(-105%); transition: transform 0.18s var(--ease-in), visibility 0s linear 0.18s; }
 #toc ul { list-style: none; margin: 0; padding: 8px 0; }
 #toc a { display: block; padding: 6px 12px; cursor: pointer; border-radius: 4px; }
 #toc a:hover { background: var(--accent-soft); }
@@ -148,12 +154,25 @@ g.note-ul .comment-mark { fill: #e07a2e; fill-opacity: 1; stroke: none; font: bo
 #sel-toolbar {
   position: fixed; z-index: 20; display: flex; background: #2c2c2e; border-radius: 8px; padding: 3px;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+  --shift: 0px; transform: translate(var(--shift), 0); transition: opacity 0.16s ease, transform 0.18s var(--ease-out);
 }
+/* Hidden stays in the layout (invisible) so it fades out and its size is known before it shows. */
+#sel-toolbar.hidden { display: flex !important; visibility: hidden; opacity: 0; pointer-events: none; transform: translate(var(--shift), 6px) scale(0.97); transition: opacity 0.12s ease, transform 0.12s ease, visibility 0s linear 0.12s; }
 #sel-toolbar button { background: none; border: none; color: #fff; padding: 5px 10px; border-radius: 6px; cursor: pointer; font-size: 13px; }
 #sel-toolbar button:hover { background: rgba(255, 255, 255, 0.15); }
+#sel-toolbar button:active { background: rgba(255, 255, 255, 0.22); }
 
 dialog { border: 1px solid var(--line); border-radius: 12px; background: var(--card); color: var(--fg); width: 440px; padding: 20px 22px; }
 dialog::backdrop { background: rgba(0, 0, 0, 0.3); }
+/* Open and close are animated (see dialogs in renderer.js, which waits for .closing to finish). */
+dialog[open] { animation: dialog-in 0.22s var(--ease-out); }
+dialog[open]::backdrop { animation: fade-in 0.22s ease; }
+dialog.closing { animation: dialog-out 0.16s var(--ease-in) forwards; }
+dialog.closing::backdrop { animation: fade-out 0.16s ease forwards; }
+@keyframes dialog-in { from { opacity: 0; transform: translateY(10px) scale(0.98); } }
+@keyframes dialog-out { to { opacity: 0; transform: translateY(6px) scale(0.98); } }
+@keyframes fade-in { from { opacity: 0; } }
+@keyframes fade-out { to { opacity: 0; } }
 dialog h2 { margin: 0 0 14px; font-size: 17px; }
 dialog label { display: block; margin-bottom: 14px; font-weight: 500; }
 dialog label input[type="text"], dialog label input[type="password"], dialog label select, dialog label textarea {
@@ -173,6 +192,8 @@ dialog menu button.primary { border: none; }
   background: var(--card); border: 1px solid var(--line); border-radius: 10px;
   box-shadow: 0 6px 24px rgba(0, 0, 0, 0.18); white-space: pre-wrap;
 }
+#notice:not(.hidden) { animation: notice-in 0.22s var(--ease-out); }
+@keyframes notice-in { from { opacity: 0; transform: translate(-50%, 8px); } }
 #notice .notice-text { flex: 1; }
 #notice .spinner { display: none; width: 14px; height: 14px; margin-top: 2px; border: 2px solid var(--line); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; }
 #notice.busy .spinner { display: inline-block; }
@@ -268,7 +289,11 @@ body.guest #empty p { display: none; }
   body.reading #toolbar {
     position: absolute; top: 0; left: 0; right: 0; z-index: 9; box-shadow: 0 2px 12px rgba(0, 0, 0, 0.12);
   }
-  body.reading:not(.chrome-shown) #toolbar { display: none; }
+  body.reading #toolbar { transition: transform 0.22s var(--ease-out), visibility 0s; }
+  body.reading:not(.chrome-shown) #toolbar {
+    visibility: hidden; transform: translateY(-100%); box-shadow: none;
+    transition: transform 0.18s var(--ease-in), box-shadow 0.18s, visibility 0s linear 0.18s;
+  }
   body.reading #toc { top: 44px; }
   /* Keep the text above the page number / percent line, which sits over the iPhone home indicator. */
   #viewer { inset: 28px 16px calc(24px + env(safe-area-inset-bottom)) 16px; }
@@ -289,9 +314,17 @@ body.guest #empty p { display: none; }
   #panel {
     position: absolute; left: 0; right: 0; bottom: 0; top: var(--panel-top, 60%); width: auto; z-index: 8;
     border-left: none; border-top: 1px solid var(--line); border-radius: 14px 14px 0 0;
-    box-shadow: 0 -8px 30px rgba(0, 0, 0, 0.18); transition: none;
+    box-shadow: 0 -8px 30px rgba(0, 0, 0, 0.18);
+    transition: transform 0.28s var(--ease-out), visibility 0s;
   }
-  body.panel-hidden #panel { display: none; }
+  /* The sheet slides down off the screen instead of vanishing, and slides back up when it opens. */
+  body.panel-hidden #panel {
+    width: auto; border-top: 1px solid var(--line); overflow: visible;
+    visibility: hidden; transform: translateY(100%); box-shadow: none;
+    transition: transform 0.22s var(--ease-in), box-shadow 0.22s, visibility 0s linear 0.22s;
+  }
+  /* While a finger drags the sheet it follows the finger with no lag. */
+  #panel.dragging { transition: none; }
   body.library-open #panel { display: none; }
   /* Drag the header up or down to resize the sheet. */
   .panel-head { position: relative; padding-top: 16px; touch-action: none; user-select: none; -webkit-user-select: none; }
@@ -305,11 +338,24 @@ body.guest #empty p { display: none; }
 
   #sel-toolbar { padding: 4px; border-radius: 12px; }
   #sel-toolbar {
-    top: auto; left: 50%; transform: translateX(-50%);
+    top: auto; left: 50%; --shift: -50%;
     bottom: calc(40px + env(safe-area-inset-bottom));
   }
   #sel-toolbar button { padding: 10px 14px; font-size: 16px; }
-  dialog { width: min(440px, 92vw); max-height: 90dvh; overflow-y: auto; }
+  /* Dialogs are sheets that rise from the bottom edge, where the thumb already is. */
+  dialog {
+    width: 100%; max-width: 100%; max-height: 88dvh; overflow-y: auto; overscroll-behavior: contain;
+    margin: auto 0 0; border: none; border-radius: 16px 16px 0 0;
+    padding: 18px 18px calc(16px + env(safe-area-inset-bottom));
+    box-shadow: 0 -8px 30px rgba(0, 0, 0, 0.18);
+  }
+  dialog label.mobile-only { display: block !important; } /* full width like the other fields */
+  dialog[open] { animation: sheet-in 0.3s var(--ease-out); }
+  dialog.closing { animation: sheet-out 0.2s var(--ease-in) forwards; }
+  dialog menu { position: sticky; bottom: calc(-16px - env(safe-area-inset-bottom)); margin: 18px -18px calc(-16px - env(safe-area-inset-bottom)); padding: 12px 18px calc(12px + env(safe-area-inset-bottom)); background: var(--card); border-top: 1px solid var(--line); }
+  dialog menu button { padding: 9px 16px; font-size: 16px; }
+  @keyframes sheet-in { from { transform: translateY(100%); } }
+  @keyframes sheet-out { to { transform: translateY(100%); } }
   dialog label input, dialog label select, dialog label textarea, #lib-search, #search-input { font-size: 16px; }
 
   .lib-head { flex-wrap: wrap; padding: 10px 14px 6px; }
@@ -320,4 +366,18 @@ body.guest #empty p { display: none; }
   .lib-book { margin-left: 0; }
   #search { right: 8px; left: 8px; width: auto; max-width: none; }
   .empty-box { padding: 24px; margin: 16px; }
+}
+
+/* Quick tooltips for mouse users (tooltips.js), in place of the slow system ones. */
+#tip {
+  position: fixed; z-index: 50; max-width: 280px; padding: 5px 9px; border-radius: 6px;
+  background: #2c2c2e; color: #fff; font-size: 12px; line-height: 1.35; pointer-events: none;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.2); opacity: 0; transform: translateY(-2px);
+  transition: opacity 0.12s ease, transform 0.12s ease;
+}
+#tip.shown { opacity: 1; transform: none; }
+body[data-theme="dark"] #tip { background: #48484a; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after, ::backdrop { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
 }

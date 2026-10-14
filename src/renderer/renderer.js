@@ -268,6 +268,17 @@ async function openEpub(payload, { posKey, source }) {
   });
   rendition.on("touchstart", (e) => (touchStart = { x: e.changedTouches[0].screenX, y: e.changedTouches[0].screenY, t: Date.now() }));
   rendition.on("touchend", onTouchEnd);
+  // Touch taps that clear a selection send no click, so watch the selection itself: once it is gone,
+  // its toolbar fades out instead of lingering over the page.
+  rendition.hooks.content.register((contents) => {
+    contents.document.addEventListener("selectionchange", () => {
+      clearTimeout(selGoneTimer);
+      selGoneTimer = setTimeout(() => {
+        const sel = contents.window.getSelection();
+        if (!sel || sel.isCollapsed) hideSelToolbar();
+      }, 150);
+    });
+  });
   syncReading();
 
   await rendition.display(payload.position || undefined);
@@ -581,6 +592,7 @@ function watchFirstPage() {
   }, 4000);
 }
 
+let selGoneTimer = 0;
 function hideSelToolbar() {
   $("#sel-toolbar").classList.add("hidden");
 }
@@ -765,29 +777,52 @@ function flash(card) {
 }
 
 // Phone: the explanations sheet is resized by dragging its header; the height is remembered on this device.
+// Dragging it down past the lowest height, or flicking it down, puts it away like an iOS sheet.
 (() => {
   const head = $("#panel .panel-head");
+  const panel = $("#panel");
   const MIN = 0.15, MAX = 0.85;
-  const setTop = (f) => document.body.style.setProperty("--panel-top", `${(Math.min(MAX, Math.max(MIN, f)) * 100).toFixed(1)}%`);
+  const clamp = (f) => Math.min(MAX, Math.max(MIN, f));
+  const setTop = (f) => document.body.style.setProperty("--panel-top", `${(f * 100).toFixed(1)}%`);
+  let rest = 0.6; // the height the sheet comes back at
   try {
     const saved = Number(localStorage.getItem("panelTop"));
-    if (saved) setTop(saved);
+    if (saved) rest = clamp(saved);
   } catch {}
+  setTop(rest);
   let drag = null;
   head.addEventListener("pointerdown", (e) => {
     if (!PHONE.matches || e.target.closest("button")) return;
     const box = $("#layout").getBoundingClientRect();
-    drag = { box, id: e.pointerId };
+    drag = { box, id: e.pointerId, y: e.clientY, t: e.timeStamp, v: 0 };
+    panel.classList.add("dragging");
     head.setPointerCapture(e.pointerId);
   });
   head.addEventListener("pointermove", (e) => {
     if (!drag || e.pointerId !== drag.id) return;
+    const dt = e.timeStamp - drag.t;
+    if (dt > 0) drag.v = (e.clientY - drag.y) / dt; // px per ms, positive is down
+    drag.y = e.clientY;
+    drag.t = e.timeStamp;
     drag.f = (e.clientY - drag.box.top) / drag.box.height;
-    setTop(drag.f);
+    // Below the lowest height the sheet follows the finger off the screen; above the top it stops.
+    setTop(drag.f > MAX ? drag.f : clamp(drag.f));
   });
-  const end = () => {
-    if (drag?.f) try { localStorage.setItem("panelTop", String(Math.min(MAX, Math.max(MIN, drag.f)))); } catch {}
+  const end = (e) => {
+    if (!drag) return;
+    panel.classList.remove("dragging");
+    const { f, v } = drag;
     drag = null;
+    if (!f) return;
+    if (e.type === "pointerup" && (f > MAX + 0.04 || (v > 0.8 && f > rest))) {
+      // Put away: it slides down from where the finger left it, and opens next time at its old height.
+      showPanel(false);
+      setTimeout(() => setTop(rest), 260);
+      return;
+    }
+    rest = clamp(f);
+    setTop(rest);
+    try { localStorage.setItem("panelTop", String(rest)); } catch {}
   };
   head.addEventListener("pointerup", end);
   head.addEventListener("pointercancel", end);
@@ -1261,6 +1296,10 @@ async function reflowHrefForPage(epub, page) {
   }
 }
 $("#btn-toc").onclick = () => $("#toc").classList.toggle("hidden");
+// A click anywhere else puts the contents away (taps inside the page close it through toggleChrome).
+document.addEventListener("click", (e) => {
+  if (!e.target.closest("#toc, #btn-toc")) $("#toc").classList.add("hidden");
+});
 $("#btn-panel").onclick = () => showPanel(document.body.classList.contains("panel-hidden") || notesTabShown(), "cards");
 $("#btn-panel-close").onclick = () => showPanel(false);
 $("#btn-settings").onclick = openSettings;
