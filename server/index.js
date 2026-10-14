@@ -11,6 +11,7 @@ const fs = require("fs");
 const path = require("path");
 const { explain } = require("../src/ai");
 const library = require("../src/library");
+const { isRussian } = require("./language");
 const { adminPage, cost } = require("./admin");
 
 const ROOT = path.join(__dirname, "..");
@@ -593,10 +594,12 @@ api.put("/reflow", guestsCannot("У демо-режимі конвертація
 api.get("/reflow", (req, res, next) => (req.guest ? res.status(204).end() : next()));
 
 // Upload: PUT /api/books/<file name> with the raw file as the body.
-api.put("/books/:name", express.raw({ type: () => true, limit: MAX_UPLOAD }), (req, res) => {
+api.put("/books/:name", express.raw({ type: () => true, limit: MAX_UPLOAD }), async (req, res) => {
   const name = safeBookName(req.params.name);
   if (!name) return res.status(400).json({ error: "Підтримуються лише EPUB і PDF." });
   if (!req.body?.length) return res.status(400).json({ error: "Порожній файл." });
+  // Chytai does not take books in Russian: the file is refused, not kept.
+  if (await isRussian(name, req.body)) return res.status(400).json({ error: "Книжки російською мовою в Chytai не завантажуються." });
   fs.writeFileSync(bookFile(name), req.body);
   res.json({ path: name });
 });
