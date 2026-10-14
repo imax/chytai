@@ -883,13 +883,30 @@ function drawBars(mark) {
     g.appendChild(el);
     return el;
   };
+  // The same note always wobbles the same way, so a relayout doesn't redraw it differently.
+  let seed = [...String(mark.data?.note || "")].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7);
+  const rand = () => ((seed = (seed * 1103515245 + 12345) >>> 0) / 2 ** 32) - 0.5;
   for (const col of cols) {
-    const top = Math.min(...col.map((r) => r.y)) + 2;
-    const bottom = Math.max(...col.map((r) => r.y + r.h)) - 2;
+    const top = Math.min(...col.map((r) => r.y)) + 1;
+    const bottom = Math.max(...col.map((r) => r.y + r.h)) - 1;
     const left = Math.min(...col.map((r) => r.x)) - 8;
     const right = Math.max(...col.map((r) => r.x + r.w)) + 8;
-    for (const x of [left, right]) add("line", { class: "bar", x1: x, y1: top, x2: x, y2: bottom });
+    // Left: hooks in at the top, then runs down; right: runs down and hooks in at the bottom.
+    add("path", { class: "bar", d: `M${left + 7},${top - 2 + rand() * 2} Q${left + 1},${top - 1} ${left},${top + 6}` + wobble(left, top + 6, bottom, rand) });
+    add("path", { class: "bar", d: `M${right + rand() * 2},${top}` + wobble(right, top, bottom - 6, rand) + ` Q${right + 1},${bottom + 1} ${right - 7},${bottom + 2 + rand() * 2}` });
   }
+}
+
+// A vertical pencil stroke from y1 to y2 near x: it drifts a little side to side.
+function wobble(x, y1, y2, rand) {
+  const steps = Math.max(1, Math.round((y2 - y1) / 28));
+  let d = "";
+  for (let i = 1; i <= steps; i++) {
+    const y = y1 + ((y2 - y1) * i) / steps;
+    const cy = y - (y2 - y1) / steps / 2;
+    d += ` Q${x + rand() * 3},${cy} ${x + (i === steps ? 0 : rand() * 1.6)},${y}`;
+  }
+  return d;
 }
 
 function unmarkNote(note) {

@@ -141,8 +141,8 @@ body.panel-hidden #panel { width: 0; border-left: none; overflow: hidden; }
 g.note-ul rect { stroke: none; } /* the group's stroke would otherwise frame every line */
 /* Saved passages get a bar in each margin (drawn in renderer.js); the underline itself is hidden. */
 g.note-ul line { stroke: none; }
-g.note-ul line.bar { stroke: #e07a2e; stroke-width: 3px; stroke-linecap: round; stroke-opacity: 1; }
-body[data-theme="dark"] g.note-ul line.bar { stroke: #f0a050; }
+g.note-ul path.bar { fill: none; stroke: #e07a2e; stroke-width: 2.6px; stroke-linecap: round; stroke-linejoin: round; stroke-opacity: 0.95; }
+body[data-theme="dark"] g.note-ul path.bar { stroke: #f0a050; }
 #toast {
   position: fixed; z-index: 30; left: 50%; bottom: calc(48px + env(safe-area-inset-bottom)); transform: translate(-50%, 8px);
   background: #2c2c2e; color: #fff; padding: 8px 14px; border-radius: 10px; font-size: 14px;
