@@ -503,6 +503,7 @@ function onSelected(cfiRange, contents) {
 function handleSelection(range, cfiRange, ctx, frame) {
   pendingSelection = {
     cfiRange,
+    text: range.toString().trim(),
     context: { ...ctx, bookTitle: current.title, author: current.author },
   };
   showSelToolbar(range, frame);
@@ -522,11 +523,12 @@ function showSelToolbar(range, frame) {
   const rect = range.getBoundingClientRect();
   const bar = $("#sel-toolbar");
   bar.classList.remove("hidden");
-  // Phones: the bar sits at the bottom of the screen (CSS), clear of the system Copy / Look Up menu.
-  if (PHONE.matches) return bar.removeAttribute("style");
+  // Above the selection, or below it when there is no room; on a phone the iPhone app hides the
+  // system Copy / Look Up menu, so the bar takes its place (in Safari the two may overlap).
+  const minTop = PHONE.matches ? 8 : 48;
   const top = frame.top + rect.top - bar.offsetHeight - 8;
   const left = frame.left + rect.left + rect.width / 2 - bar.offsetWidth / 2;
-  bar.style.top = `${Math.max(48, top < 48 ? frame.top + rect.bottom + 8 : top)}px`;
+  bar.style.top = `${Math.max(minTop, top < minTop ? frame.top + rect.bottom + 8 : top)}px`;
   bar.style.left = `${Math.min(Math.max(8, left), window.innerWidth - bar.offsetWidth - 8)}px`;
 }
 
@@ -540,7 +542,9 @@ $("#sel-toolbar").addEventListener("click", (e) => {
   if (!action || !pendingSelection) return;
   clearTimeout(autoTimer);
   const snapshot = pendingSelection;
-  if (action === "ask") {
+  if (action === "copy") {
+    navigator.clipboard?.writeText(snapshot.text).catch(() => {});
+  } else if (action === "ask") {
     const card = startExplanation(snapshot, { deep: false, askOnly: true });
     card?.querySelector(".followup input")?.focus();
   } else {
