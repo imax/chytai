@@ -504,8 +504,6 @@ api.patch("/notes/:id", (req, res) => {
   const note = list.find((n) => n.id === req.params.id);
   if (!note) return res.status(404).json({ error: "Нотатки немає." });
   if (typeof req.body?.comment === "string") note.comment = req.body.comment.slice(0, NOTE_TEXT_MAX);
-  // One emoji (or a short run of them) shown by the passage in the margin; "" takes it off.
-  if (typeof req.body?.emoji === "string") note.emoji = [...req.body.emoji.trim()].slice(0, 8).join("");
   if (!req.guest) saveState();
   res.json({ note });
 });

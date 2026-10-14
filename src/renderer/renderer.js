@@ -846,7 +846,7 @@ function markNote(note) {
 }
 
 // epub.js draws a note as an underline mark (an SVG group over the page, with a rect per line);
-// we draw a bar in each margin alongside those lines instead (the emoji stays in the notes list).
+// we draw a bar in each margin alongside those lines instead.
 // The mark redraws itself on every relayout, so its render is wrapped once per mark.
 function decorateNoteMarks() {
   const views = rendition?.views();
@@ -889,10 +889,14 @@ function drawBars(mark) {
   // A short part of a paragraph (up to three lines) is underlined by hand under the exact words;
   // whole paragraphs and longer passages get the bars, which read more calmly than many lines of ink.
   const lines = new Set(rects.map((r) => Math.round(r.y))).size;
+  const commented = !!notes.find((n) => n.id === mark.data?.note)?.comment;
+  const doubled = commented && commentMark === "double";
+  if (rects.length) drawCommentMark(add, rects.at(-1), commented);
   if (lines <= 3 && !coversWholeParagraphs(mark.range)) {
     for (const r of rects) {
       const y = r.y + r.h - 1;
       add("path", { class: "bar under", d: `M${r.x + rand()},${y + rand() * 1.5}` + wobbleAcross(r.x, r.x + r.w, y, rand) });
+      if (doubled) add("path", { class: "bar under thin", d: `M${r.x + rand()},${y + 4 + rand()}` + wobbleAcross(r.x, r.x + r.w, y + 4, rand) });
     }
     return;
   }
@@ -903,8 +907,30 @@ function drawBars(mark) {
     const right = Math.max(...col.map((r) => r.x + r.w)) + 8;
     // Left: hooks in at the top, then runs down; right: runs down and hooks in at the bottom.
     add("path", { class: "bar", d: `M${left + 7},${top - 2 + rand() * 2} Q${left + 1},${top - 1} ${left},${top + 6}` + wobble(left, top + 6, bottom, rand) });
+    if (doubled) add("path", { class: "bar thin", d: `M${left - 5},${top + 8}` + wobble(left - 5, top + 8, bottom - 2, rand) });
     add("path", { class: "bar", d: `M${right + rand() * 2},${top}` + wobble(right, top, bottom - 6, rand) + ` Q${right + 1},${bottom + 1} ${right - 7},${bottom + 2 + rand() * 2}` });
   }
+}
+
+// How a note with a comment is told apart in the text: "bubble" (a small speech bubble after the
+// last word), "dot" (a footnote-like dot there) or "double" (a second, thinner line).
+let commentMark = "bubble";
+
+function drawCommentMark(add, last, commented) {
+  if (!commented) return;
+  const x = last.x + last.w + 3;
+  const y = last.y + 2;
+  if (commentMark === "bubble") {
+    add("path", { class: "comment-mark", d: `M${x + 3},${y - 2} h10 a3,3 0 0 1 3,3 v6 a3,3 0 0 1 -3,3 h-6 l-4,4 v-4 a3,3 0 0 1 -3,-3 v-6 a3,3 0 0 1 3,-3 z` });
+  } else if (commentMark === "dot") {
+    add("circle", { class: "comment-dot", cx: x + 3, cy: y + 3, r: 3.2 });
+  }
+}
+
+// Redraw a note's marks after its comment appeared or went away.
+function redrawNote(note) {
+  const views = rendition?.views();
+  for (const view of views?.all ? views.all() : views || []) view.underlines?.[note.cfi]?.mark.render();
 }
 
 // A horizontal pencil stroke from x1 to x2 near y.
@@ -1029,10 +1055,8 @@ function renderNotes() {
     card.innerHTML = `
       <blockquote class="quote"></blockquote>
       <textarea class="note-comment" rows="1" placeholder="Додати думку…"></textarea>
-      <div class="emoji-picker hidden"></div>
       <div class="meta"><span class="where"></span>
         <span class="actions">
-          <button class="link emoji-btn" title="Поставити емодзі"></button>
           <button class="link go">Перейти</button>
           <button class="link delete">Видалити</button>
         </span>
@@ -1053,12 +1077,13 @@ function renderNotes() {
       unmarkNote(note);
       renderNotes();
     };
-    wireEmoji(card, note);
     const comment = card.querySelector(".note-comment");
     comment.value = note.comment || "";
     comment.oninput = () => fitComment(comment);
     comment.onchange = async () => {
+      const had = !!note.comment;
       note.comment = comment.value.trim();
+      if (had !== !!note.comment) redrawNote(note);
       try {
         await notesStore.notesUpdate(current.path, note.id, { comment: note.comment });
       } catch (err) {
@@ -1075,53 +1100,6 @@ function fitComment(el) {
   if (!el.offsetParent) return;
   el.style.height = "auto";
   el.style.height = `${el.scrollHeight}px`;
-}
-
-const EMOJIS = ["❤️", "👏", "🚬", "😂", "🤔", "🔥", "😢", "‼️"];
-
-// The emoji button opens a row of common ones plus a field for any other (the phone's emoji keyboard).
-function wireEmoji(card, note) {
-  const btn = card.querySelector(".emoji-btn");
-  const picker = card.querySelector(".emoji-picker");
-  btn.textContent = note.emoji || "☺︎ +";
-  btn.classList.toggle("set", !!note.emoji);
-  btn.onclick = () => {
-    if (!picker.classList.toggle("hidden") && !picker.childElementCount) {
-      for (const e of EMOJIS) {
-        const b = document.createElement("button");
-        b.type = "button";
-        b.textContent = e;
-        b.onclick = () => setEmoji(note, note.emoji === e ? "" : e);
-        picker.appendChild(b);
-      }
-      const other = document.createElement("input");
-      other.placeholder = "інший";
-      other.maxLength = 16;
-      other.onchange = () => other.value.trim() && setEmoji(note, other.value.trim());
-      picker.appendChild(other);
-      if (note.emoji) {
-        const off = document.createElement("button");
-        off.type = "button";
-        off.className = "link";
-        off.textContent = "Прибрати";
-        off.onclick = () => setEmoji(note, "");
-        picker.appendChild(off);
-      }
-    }
-  };
-}
-
-async function setEmoji(note, emoji) {
-  const before = note.emoji || "";
-  note.emoji = emoji;
-  renderNotes();
-  try {
-    await notesStore.notesUpdate(current.path, note.id, { emoji });
-  } catch (err) {
-    note.emoji = before;
-    renderNotes();
-    if (err.message !== "login") showNotice(`Не вдалося зберегти емодзі: ${err.message}`, false);
-  }
 }
 
 let toastTimer = null;
