@@ -57,7 +57,7 @@ export default function App() {
     let note = Updates.isEmbeddedLaunch || !id ? 'оболонка: вбудована версія' : `оболонка: оновлення ${id}`;
     if (Updates.isEmergencyLaunch) note += ` (аварійний запуск: ${Updates.emergencyLaunchReason || '?'})`;
     setShellNote(note);
-    const timer = setTimeout(() => setShellNote(null), 10000);
+    const timer = setTimeout(() => setShellNote(null), 4000);
     if (Updates.isEnabled && !__DEV__) {
       (async () => {
         try {
@@ -198,8 +198,8 @@ const styles = StyleSheet.create({
   },
   bannerText: { color: '#fff', fontSize: 13 },
   note: {
-    position: 'absolute', alignSelf: 'center', bottom: 100,
-    paddingVertical: 6, paddingHorizontal: 12, borderRadius: 14, backgroundColor: 'rgba(60,60,67,0.85)',
+    position: 'absolute', alignSelf: 'center', bottom: 48,
+    paddingVertical: 3, paddingHorizontal: 9, borderRadius: 10, backgroundColor: 'rgba(60,60,67,0.45)',
   },
-  noteText: { color: '#fff', fontSize: 12 },
+  noteText: { color: 'rgba(255,255,255,0.9)', fontSize: 10 },
 });
