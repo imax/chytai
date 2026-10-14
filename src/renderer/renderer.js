@@ -553,6 +553,7 @@ function startExplanation(selection, { deep, askOnly = false }) {
     <div class="thread"></div>
     <div class="meta"><span class="model"></span>
       <span class="actions">
+        <button class="link more hidden" title="Пояснити детальніше">Детальніше</button>
         <button class="link stop hidden">Зупинити</button>
         <button class="link retry hidden">Ще раз</button>
       </span>
@@ -578,6 +579,11 @@ function startExplanation(selection, { deep, askOnly = false }) {
   }
 
   card.querySelector(".stop").onclick = () => window.reader.abort(conv.reqId);
+  card.querySelector(".more").onclick = () => {
+    if (conv.busy || !conv.messages) return;
+    card.querySelector(".more").classList.add("hidden");
+    runTurn(conv, "Детальніше");
+  };
   card.querySelector(".retry").onclick = () => {
     // The failed turn never reached conv.messages, so only its DOM needs undoing.
     const thread = conv.card.querySelector(".thread");
@@ -631,6 +637,7 @@ function runTurn(conv, question) {
 function setBusy(conv, busy) {
   conv.card.querySelector(".stop").classList.toggle("hidden", !busy);
   conv.card.querySelector(".retry").classList.add("hidden");
+  if (busy) conv.card.querySelector(".more").classList.add("hidden");
   conv.card.querySelector(".followup input").disabled = busy;
 }
 
@@ -648,6 +655,8 @@ window.reader.onAiEvent((reqId, ev) => {
   el.classList.remove("streaming");
   if (ev.type === "done") {
     conv.messages = ev.messages;
+    // One "more detail" per card: after it, the follow-up field is the way to ask further.
+    if (conv.lastQuestion !== "Детальніше") conv.card.querySelector(".more").classList.remove("hidden");
     conv.card.querySelector(".model").textContent = modelLabel(ev.model) + (ev.truncated ? " · обрізано" : "");
     if (!conv.text) el.innerHTML = `<em>Порожня відповідь.</em>`;
   } else if (ev.type === "aborted") {
