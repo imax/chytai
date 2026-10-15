@@ -121,6 +121,10 @@
     </span>`;
   }
 
+  // «Прибрати з читання» (web, family): on hover, or after a long press on a phone.
+  const canAside = () => typeof window.reader.librarySetAside === "function" && !settings.guest;
+  const asideButton = (b) => (canAside() ? `<span class="aside-x" role="button" data-aside="${esc(b.path)}" title="Прибрати з читання" aria-label="Прибрати з читання">×</span>` : "");
+
   const bar = (pct, cls = "") => `<span class="progress ${cls}"><span style="width:${Math.max(0, Math.min(100, pct || 0))}%"></span></span>`;
 
   // ---------- Головна ----------
@@ -146,6 +150,7 @@
     $("#side-reading").innerHTML = inProgress.map((b) => `<button class="side-book" data-open="${esc(b.path)}">
         <span class="t ellipsis">${esc(b.title)}</span>
         ${b.pct != null ? `<span class="side-progress">${bar(b.pct, "thin")}<span class="m">${b.pct}%</span></span>` : ""}
+        ${asideButton(b)}
       </button>`).join("");
     $(".side-head").classList.toggle("hidden", !inProgress.length);
   }
@@ -173,6 +178,7 @@
     if (cur) {
       parts.cont = `<section class="home-sec sec-cont"><div class="sec-head"><span>Продовжити</span></div>
         <button class="hero" data-open="${esc(cur.path)}">
+          ${asideButton(cur)}
           ${cover(cur, "big")}
           <span class="hero-text">
             <span class="kicker">читаю зараз</span>
@@ -188,6 +194,7 @@
         ${others.map((b) => `<button class="row-book" data-open="${esc(b.path)}">
             <span class="row-text"><span class="t">${esc(b.title)}</span><span class="m">${esc(author(b))}</span></span>
             ${b.pct != null ? `${bar(b.pct, "small")}<span class="m pct">${b.pct}%</span>` : ""}
+            ${asideButton(b)}
           </button>`).join("")}
       </section>`;
     }
@@ -329,8 +336,9 @@
   }
 
   $("#shell").addEventListener("click", async (e) => {
-    const el = e.target.closest("[data-open], [data-tab], [data-act], [data-note], [data-unwish]");
+    const el = e.target.closest("[data-aside], [data-open], [data-tab], [data-act], [data-note], [data-unwish]");
     if (!el) return;
+    if (el.dataset.aside) return setAside(el.dataset.aside);
     if (el.dataset.open != null) return openBook(el.dataset.open);
     if (el.dataset.tab) return show(el.dataset.tab);
     if (el.dataset.note != null) {
@@ -350,6 +358,41 @@
     if (el.dataset.act === "add") return $("#lib-add").click();
     if (el.dataset.act === "seen") markSeen();
   });
+
+  // The book stops counting as one you read (for you only; notes and the place in it stay) until you open it again.
+  async function setAside(path) {
+    try {
+      await window.reader.librarySetAside(path);
+    } catch (err) {
+      return showNotice(err instanceof TypeError ? "Немає з'єднання: прибрати з читання можна лише онлайн." : err.message, false);
+    }
+    const b = lib?.books.find((x) => x.path === path);
+    if (b) Object.assign(b, { aside: true, started: false, pct: null, chapter: "", openedAt: 0 });
+    if (lib?.lastBook === path) lib.lastBook = null;
+    render();
+    window.Library.render?.();
+  }
+
+  // A long press on a phone shows the ×; the tap that ends the press does not open the book.
+  let pressTimer = null;
+  let pressed = false;
+  $("#shell").addEventListener("touchstart", (e) => {
+    const row = e.target.closest(".hero, .row-book, .side-book");
+    if (!row || !canAside()) return;
+    pressed = false;
+    pressTimer = setTimeout(() => {
+      pressed = true;
+      document.querySelectorAll("#shell .show-aside").forEach((r) => r.classList.remove("show-aside"));
+      row.classList.add("show-aside");
+    }, 500);
+  }, { passive: true });
+  for (const type of ["touchend", "touchmove", "touchcancel"]) $("#shell").addEventListener(type, () => clearTimeout(pressTimer), { passive: true });
+  $("#shell").addEventListener("contextmenu", (e) => e.target.closest(".hero, .row-book, .side-book") && e.preventDefault());
+  $("#shell").addEventListener("click", (e) => {
+    if (!pressed) return;
+    pressed = false;
+    if (!e.target.closest("[data-aside]")) e.stopImmediatePropagation();
+  }, true);
 
   $("#home-settings").onclick = () => openSettings();
   $("#side-settings").onclick = () => openSettings();
@@ -428,7 +471,7 @@
     render();
   }
 
-  window.Shell = { show, hide, isNew, arrivals, markSeen, refresh, key, cover, when };
+  window.Shell = { show, hide, isNew, arrivals, markSeen, refresh, key, cover, when, setAside };
 
   // The family starts here; a guest has one book, which the bridge opens straight away.
   settingsReady

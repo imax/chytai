@@ -380,7 +380,7 @@
         return {
           ...lib,
           lastBook: s.lastBook || lib.lastBook,
-          books: lib.books.map((b) => ({ ...b, onDevice: onDevice.has(b.path), unavailable: !onDevice.has(b.path), started: b.started || !!s.positions?.[b.path] || !!s.positions?.[`${b.path}#reflow`] })),
+          books: lib.books.map((b) => ({ ...b, onDevice: onDevice.has(b.path), unavailable: !onDevice.has(b.path), started: b.started || (!b.aside && (!!s.positions?.[b.path] || !!s.positions?.[`${b.path}#reflow`])) })),
         };
       }
     },
@@ -505,6 +505,11 @@
         }
         return books;
       }
+    },
+    librarySetAside: async (name) => {
+      await api("POST", "/api/library/aside", { path: name });
+      const s = (await localSettings()) || {};
+      if (s.lastBook === name) patchLocalSettings({ lastBook: null });
     },
     librarySeen: (paths) => api("POST", "/api/library/seen", { paths }).catch(() => {}),
     wishList: async () => {

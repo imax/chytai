@@ -536,6 +536,7 @@ api.put("/position", (req, res) => {
   u.positions ??= {};
   u.positions[bookPath] = cfi;
   (u.opened ??= {})[name] = Date.now();
+  if (u.setAside) delete u.setAside[name];
   // How far in and which chapter, for the home screen: the position itself is a CFI it cannot read.
   if (Number.isFinite(pct)) {
     (u.progress ??= {})[name] = { pct: Math.max(0, Math.min(100, Math.round(pct))), chapter: typeof chapter === "string" ? chapter.slice(0, 200) : "" };
@@ -640,17 +641,19 @@ api.get("/library", async (req, res) => {
   const added = state.shared.added || {};
   const list = books.map((b) => {
     const name = path.relative(b.dir, b.path);
-    const openedAt = u.opened?.[name] || 0;
-    const progress = u.progress?.[name];
+    // «Прибрати з читання» hides the book from what you are reading until you open it again; the place is kept.
+    const aside = !!u.setAside?.[name];
+    const openedAt = aside ? 0 : u.opened?.[name] || 0;
+    const progress = aside ? null : u.progress?.[name];
     return {
-      ...b, dir: undefined, path: name, cloud: false, openedAt,
-      started: !!(positions[name] || positions[`${name}#reflow`]),
+      ...b, dir: undefined, path: name, cloud: false, openedAt, aside,
+      started: !aside && !!(positions[name] || positions[`${name}#reflow`]),
       pct: progress ? progress.pct : null,
       chapter: progress?.chapter || "",
       // Who put the book in the library and when; books from before this was recorded have only the file's date.
       addedAt: added[name]?.at || b.mtime || 0,
       addedBy: added[name]?.by || "",
-      seen: !!(openedAt || u.seen?.[name]) || (!!req.user && added[name]?.by === req.user),
+      seen: !!(openedAt || aside || u.seen?.[name]) || (!!req.user && added[name]?.by === req.user),
     };
   });
   res.json({ folders: [], books: list, lastBook: u.lastBook || (req.guest ? demoBooks()[0]?.name : null) || null });
@@ -664,6 +667,7 @@ api.get("/book", (req, res) => {
   const u = req.guest ? guestState(req.guest) : userState(req.user);
   u.lastBook = name;
   (u.opened ??= {})[name] = Date.now();
+  if (u.setAside) delete u.setAside[name];
   if (!req.guest) saveState();
   res.setHeader("X-Book-Position", encodeURIComponent(u.positions?.[name] || ""));
   res.setHeader("X-Book-Reflow-Position", encodeURIComponent(u.positions?.[`${name}#reflow`] || ""));
@@ -747,6 +751,17 @@ api.post("/library/seen", (req, res) => {
     const name = safeBookName(p);
     if (name) (u.seen ??= {})[name] = Date.now();
   }
+  if (!req.guest) saveState();
+  res.json({ ok: true });
+});
+
+// «Прибрати з читання»: a book opened only to try it stops counting as one you read, for you alone.
+api.post("/library/aside", (req, res) => {
+  const u = req.guest ? guestState(req.guest) : userState(req.user);
+  const name = safeBookName(req.body?.path);
+  if (!name) return res.status(400).json({ error: "bad request" });
+  (u.setAside ??= {})[name] = Date.now();
+  if (u.lastBook === name) u.lastBook = null;
   if (!req.guest) saveState();
   res.json({ ok: true });
 });
