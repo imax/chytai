@@ -13,6 +13,7 @@ const { explain } = require("../src/ai");
 const JSZip = require("jszip");
 const library = require("../src/library");
 const { isRussian } = require("./language");
+const { checkUpload } = require("./content");
 const { adminPage, cost } = require("./admin");
 
 const ROOT = path.join(__dirname, "..");
@@ -782,6 +783,12 @@ api.put("/books/:name", express.raw({ type: () => true, limit: MAX_UPLOAD }), as
   if (!req.body?.length) return res.status(400).json({ error: "Порожній файл." });
   // Chytai does not take books in Russian: the file is refused, not kept.
   if (await isRussian(name, req.body)) return res.status(400).json({ error: "Книжки російською мовою в Chytai не завантажуються." });
+  // Nor pornography: the family library is shared with a child and with friends.
+  const check = await checkUpload(name, req.body);
+  if (check.blocked) {
+    console.log("upload refused", name, req.user, check.reason);
+    return res.status(400).json({ error: "Схоже, це порнографія чи еротика, тому Chytai не додав книжку до бібліотеки. Якщо це помилка, напишіть Максові." });
+  }
   fs.writeFileSync(bookFile(name), req.body);
   (state.shared.added ??= {})[name] = { by: req.user, at: Date.now() };
   saveState();
