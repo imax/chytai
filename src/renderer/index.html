@@ -112,15 +112,21 @@
           </div>
         </section>
         <div id="library" class="view hidden">
-          <h1 class="view-title">Бібліотека</h1>
-          <div class="lib-head">
-            <input id="lib-search" type="search" placeholder="Пошук за назвою чи автором" />
-            <select id="lib-lang" title="Мова">
-              <option value="">Усі мови</option>
-            </select>
-            <button id="lib-refresh" title="Пересканувати папки">Оновити</button>
-            <button id="lib-add" title="Додати папку з книжками">Додати папку…</button>
-            <button id="lib-manage" class="web-only family-only" title="Виправити назву чи автора, видалити книжку">Керувати</button>
+          <div class="lib-top">
+            <div>
+              <h1 class="view-title">Бібліотека</h1>
+              <div id="lib-stats" class="lib-stats"></div>
+            </div>
+            <div class="lib-head">
+              <button id="lib-refresh" title="Пересканувати папки">Оновити</button>
+              <button id="lib-add" title="Додати папку з книжками">Додати папку…</button>
+              <button id="lib-manage" class="web-only family-only" title="Виправити назву чи автора, видалити книжку">Керувати</button>
+            </div>
+          </div>
+          <input id="lib-search" type="search" placeholder="Пошук за назвою чи автором" />
+          <div class="lib-filters">
+            <div id="lib-chips" class="lib-chips"></div>
+            <div id="lib-langs" class="seg"></div>
           </div>
           <div id="lib-folders"></div>
           <div id="lib-body"></div>
@@ -229,6 +235,12 @@
         <select id="set-page-taps">
           <option value="scroll">Прокрутка</option>
           <option value="taps">Сторінки (тап по краю або свайп)</option>
+        </select>
+      </label>
+      <label class="desktop-only">Читання на комп'ютері
+        <select id="set-desk-scroll">
+          <option value="pages">Сторінки</option>
+          <option value="scroll">Безперервна прокрутка</option>
         </select>
       </label>
       <label class="check desktop-only"><input type="checkbox" id="set-auto" /> Пояснювати одразу після виділення</label>

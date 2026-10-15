@@ -425,7 +425,7 @@
     render();
   }
 
-  window.Shell = { show, hide, isNew, refresh, key };
+  window.Shell = { show, hide, isNew, refresh, key, cover, when };
 
   // The family starts here; a guest has one book, which the bridge opens straight away.
   settingsReady

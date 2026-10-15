@@ -63,6 +63,7 @@ function openSettings() {
   $("#set-auto").checked = settings.autoExplain;
   $("#set-font").value = settings.font;
   $("#set-page-taps").value = settings.pageTaps ? "taps" : "scroll";
+  $("#set-desk-scroll").value = settings.deskScroll ? "scroll" : "pages";
   $("#settings").showModal();
 }
 
@@ -77,6 +78,7 @@ $("#settings").addEventListener("close", async () => {
     font: $("#set-font").value,
     margins: $("#set-margins").value,
     pageTaps: $("#set-page-taps").value === "taps",
+    deskScroll: $("#set-desk-scroll").value === "scroll",
   };
   const key = $("#set-key").value.trim();
   if (key) patch.apiKey = key;
@@ -117,9 +119,10 @@ async function fillDemoBooks() {
   if (select.value !== (settings.demoBook || "")) select.value = "";
 }
 
-// On a phone the book scrolls as one continuous column unless page turns were chosen in settings.
+// On a phone the book scrolls as one continuous column unless page turns were chosen in settings;
+// on a computer it turns pages unless continuous scrolling was chosen.
 function scrolled() {
-  return PHONE.matches && !settings.pageTaps;
+  return PHONE.matches ? !settings.pageTaps : !!settings.deskScroll;
 }
 
 // Opens the current book again at the place we are reading, e.g. after switching scroll/pages.
@@ -148,7 +151,8 @@ function typographyCss() {
     h1, h2, h3 { line-height: 1.3 !important; hyphens: manual; }
     pre, code, kbd, samp { font-family: ui-monospace, Menlo, monospace !important; }
     /* epub.js pads a scrolled page by 1/12 of its width; use the same side space as page mode instead. */
-    ${scrolled() ? "body { padding-left: 14px !important; padding-right: 14px !important; }" : ""}`;
+    ${scrolled() ? "body { padding-left: 14px !important; padding-right: 14px !important; }" : ""}
+    ${scrolled() && !PHONE.matches ? "body { max-width: 680px !important; margin-left: auto !important; margin-right: auto !important; }" : ""}`;
 }
 
 function styleContents(contents) {

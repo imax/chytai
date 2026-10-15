@@ -224,26 +224,60 @@ body[data-theme="dark"] { color-scheme: dark; }
 #lib-folders span { white-space: nowrap; }
 #lib-folders button { margin-left: 4px; }
 #lib-body { flex: 1; overflow-y: auto; padding: 4px 24px 32px; }
-.lib-stats { color: var(--muted); margin: 4px 0 12px; }
-.lib-groups { columns: 320px; column-gap: 28px; }
-.lib-group { break-inside: avoid; margin-bottom: 18px; }
-.lib-author { margin: 0 0 6px; font-size: 13px; font-weight: 600; letter-spacing: 0.02em; color: var(--muted); border-bottom: 1px solid var(--line); padding-bottom: 4px; }
-.lib-book {
-  width: 100%; text-align: left; display: flex; flex-direction: column; gap: 2px; padding: 6px 10px; margin: 0 0 2px -10px; cursor: pointer;
-  background: transparent; border: 1px solid transparent; border-radius: 8px; color: inherit;
+.lib-stats { color: var(--muted); }
+.lib-top { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; padding: 0 24px 12px; }
+.lib-top .view-title { margin: 0 0 2px; }
+#shell #library .lib-top .view-title { padding: 0; }
+.lib-top .lib-head { padding: 0; }
+#lib-search { margin: 0 24px 10px; padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); }
+.lib-filters { display: flex; justify-content: space-between; align-items: center; gap: 12px 16px; flex-wrap: wrap; padding: 0 24px 12px; }
+.lib-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.lib-chip { display: flex; gap: 6px; align-items: baseline; padding: 4px 12px; border-radius: 14px; border: 1px solid var(--line); background: var(--card); font-size: 13px; cursor: pointer; }
+.lib-chip .n { color: var(--muted); font-size: 12px; }
+.lib-chip.on { background: var(--accent-soft); border-color: var(--accent); font-weight: 600; }
+.seg { display: flex; padding: 2px; border-radius: 8px; background: var(--chrome); border: 1px solid var(--line); }
+.seg:empty { display: none; }
+.seg button { border: none; border-radius: 6px; padding: 4px 12px; font-size: 13px; background: transparent; cursor: pointer; }
+.seg button.on { background: var(--card); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12); font-weight: 600; }
+
+/* Wide: the catalogue table. */
+.lib-table { display: flex; flex-direction: column; }
+.lib-row {
+  display: grid; grid-template-columns: minmax(0, 2.1fr) minmax(0, 1.6fr) 150px 64px 150px 48px; gap: 16px; align-items: center;
+  width: 100%; padding: 9px 10px; border: none; border-bottom: 1px solid var(--line); background: transparent; color: inherit; font-size: 13px; text-align: left;
 }
-.lib-book:hover { border-color: var(--accent); background: var(--accent-soft); }
-.lib-book .t { font-family: Georgia, serif; font-size: 15px; line-height: 1.3; }
-.lib-book .m { color: var(--muted); font-size: 12px; display: flex; gap: 8px; flex-wrap: wrap; }
-.lib-book .badge { color: var(--accent); }
-.lib-book.unavailable { opacity: 0.45; } /* offline, and not kept on this device */
-/* Manage mode: the card is a plain block with its own buttons instead of one big button. */
-.lib-book.manage { cursor: default; }
-.lib-book.manage:hover { border-color: var(--line); background: transparent; }
-.lib-actions { display: flex; gap: 14px; margin-top: 4px; }
+button.lib-row { cursor: pointer; }
+button.lib-row:hover { background: var(--accent-soft); }
+.lib-row.unavailable { opacity: 0.45; } /* offline, and not kept on this device */
+.lib-th { position: sticky; top: 0; z-index: 1; background: var(--bg); padding-top: 0; padding-bottom: 6px; }
+.lib-th button { background: none; border: none; padding: 0; font-size: 12px; font-weight: 600; color: var(--muted); cursor: pointer; text-align: left; white-space: nowrap; }
+.lib-th button.on { color: var(--fg); }
+.lib-th button:last-child, .lib-row .num { text-align: right; }
+.lib-title { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.lib-title .t { font-size: 15px; }
+.new-badge { flex: none; background: var(--accent); color: #fff; font-size: 10px; font-weight: 600; padding: 1px 6px; border-radius: 8px; }
+.lib-prog { display: flex; align-items: center; gap: 8px; }
+.lib-prog .progress { flex: 1; height: 3px; }
+.lib-row.manage { grid-template-rows: auto auto; row-gap: 2px; }
+.lib-manage-row { grid-column: 1 / -1; display: flex; align-items: baseline; gap: 16px; }
+
+/* Phone: a list by author, letters on the right. */
+.lib-list { padding-right: 22px; }
+.lib-letter-head { position: sticky; top: 0; z-index: 1; padding: 4px 14px; background: var(--chrome); font-size: 13px; font-weight: 600; color: var(--muted); }
+.lib-li { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 64px; padding: 8px 4px 8px 14px; border: none; border-bottom: 1px solid var(--line); background: transparent; color: inherit; text-align: left; }
+.lib-li:active { background: var(--accent-soft); }
+.lib-li.unavailable { opacity: 0.45; }
+.lib-li-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+#shell .lib-li .t { font-size: 16px; }
+.lib-tag { flex: none; font-size: 12px; color: var(--muted); }
+.lib-tag.accent { color: var(--accent); }
+.lib-tag.strong { font-weight: 600; }
+.lib-index { position: absolute; right: 2px; top: 50%; transform: translateY(-50%); z-index: 3; display: flex; flex-direction: column; align-items: center; }
+#shell .lib-index button { width: 20px; height: 20px; border: none; background: none; padding: 0; color: var(--accent); font-size: 11px; font-weight: 600; text-align: center; }
+.lib-actions { display: flex; gap: 14px; }
 .lib-actions button { background: none; border: none; padding: 4px 0; font-size: 13px; color: var(--accent); cursor: pointer; }
 .lib-actions button.danger { color: #c0392b; }
-.lib-book .m .file { opacity: 0.8; }
+.lib-file { opacity: 0.8; }
 #lib-manage.on { background: var(--accent-soft); border-color: var(--accent); }
 #book-edit menu #edit-reset { margin-right: auto; align-self: center; }
 .lib-empty { color: var(--muted); text-align: center; margin-top: 15%; }
@@ -370,8 +404,6 @@ body.guest #empty p { display: none; }
   .lib-head input[type="search"] { flex-basis: 100%; }
   #lib-folders { padding: 0 14px 6px; }
   #lib-body { padding: 4px 14px 32px; }
-  .lib-groups { columns: auto; }
-  .lib-book { margin-left: 0; }
   #search { right: 8px; left: 8px; width: auto; max-width: none; }
   .empty-box { padding: 24px; margin: 16px; }
 }
@@ -627,4 +659,20 @@ body[data-theme="dark"] .cover { background: hsl(var(--hue) 18% 30%); color: hsl
   #all-notes-body { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 12px; align-items: start; }
   #all-notes-body > :not(.note-card) { grid-column: 1 / -1; }
   #all-notes-body .note-card { margin: 0; }
+}
+
+/* Library on a phone: the filters become one segmented switch, the list runs edge to edge. */
+@media (max-width: 760px) {
+  .lib-top { padding: 0 14px 10px; flex-wrap: wrap; }
+  .lib-top .lib-head { width: 100%; }
+  .lib-top .lib-head button:not(.link) { padding: 4px 10px; font-size: 13px; }
+  #lib-refresh { display: none; } /* the tab asks the server again every time it opens */
+  #lib-search { margin: 0 14px 10px; background: var(--chrome); }
+  .lib-filters { padding: 0 14px 10px; }
+  .lib-chips { flex: 1; flex-wrap: nowrap; gap: 0; padding: 2px; border-radius: 9px; background: var(--chrome); border: 1px solid var(--line); }
+  .lib-chip { flex: 1; justify-content: center; min-height: 32px; align-items: center; border: none; border-radius: 7px; background: transparent; font-size: 13px; }
+  .lib-chip .n { display: none; }
+  .lib-chip.on { background: var(--card); border: none; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12); }
+  #lib-langs { display: none; }
+  #shell #lib-body { padding: 0 0 24px; }
 }
