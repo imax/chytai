@@ -79,6 +79,14 @@ function adminPage(s) {
     "Пояснень ще не було."
   );
 
+  const w = s.wishes || { rows: [], total: 0, lists: 0 };
+  const wishes = table(
+    ["Книжка", "Автор", "Хто хоче", "Скільки", "Додано", "У бібліотеці"],
+    w.rows.map((r) => [esc(r.title), esc(r.author || "—"), esc(r.who.join(", ")), n(r.who.length), esc(ago(r.addedAt)), r.inLibrary ? "є" : "немає"]),
+    "Ще ніхто нічого не записав у «Хочу прочитати»."
+  );
+  const missing = w.rows.filter((r) => !r.inLibrary).length;
+
   return `<!doctype html>
 <html lang="uk"><head><meta charset="utf-8"><title>Chytai · адмін</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -113,11 +121,15 @@ function adminPage(s) {
     ${tile("За 7 днів", n(totals.week))}
     ${tile("Усього", n(totals.all), `з ${esc(s.since || "сьогодні")}`)}
     ${tile("≈ Вартість за 30 днів", usd(cost30), costTotal != null ? `усього ${usd(costTotal)}` : "")}
+    ${tile("Хочуть прочитати", n(w.rows.length), w.rows.length ? `${n(missing)} ще немає в бібліотеці` : "")}
   </div>
   <p class="note">Пояснення рахуються з ${esc(s.since || "сьогодні")}: кожен запит до Claude (пояснення, «Детальніше», уточнення) — один. Вартість приблизна, за тарифами API без знижок; вхідні токени включають кеш.</p>
 
   <h2>Читачі</h2><div class="wrap">${users}</div>
   <h2>Книжки</h2><div class="wrap">${books}</div>
+  <h2>Хочу прочитати</h2>
+  ${w.total ? `<p class="note">${n(w.total)} записів у ${n(w.lists)} читачів. Зверху те, що хоче більше людей і чого ще немає в бібліотеці.</p>` : ""}
+  <div class="wrap">${wishes}</div>
   <h2>По днях</h2><div class="wrap">${days}</div>
   <h2>Моделі</h2><div class="wrap">${models}</div>
 </main></body></html>`;

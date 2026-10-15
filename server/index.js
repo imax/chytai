@@ -206,7 +206,8 @@ async function collectStats() {
     })
     .sort((a, b) => b.lastSeen - a.lastSeen);
 
-  const books = (await scanLibrary())
+  const library = await scanLibrary();
+  const books = library
     .map((b) => {
       const name = path.relative(BOOKS_DIR, b.path);
       const readers = Object.values(state.users).filter((u) => u.positions?.[name] || u.positions?.[`${name}#reflow`]).length;
@@ -245,7 +246,36 @@ async function collectStats() {
     guestsToday: Object.keys(gu.guests).length,
     guestExplainsToday: gu.total,
     guestTotalLimit: GUEST_TOTAL_LIMIT,
+    wishes: wishStats(library),
   };
+}
+
+// «Хочу прочитати» across the family: one row per wanted title, who wants it and whether it is in the library yet.
+// Titles match loosely, the same way the home screen decides «Уже є» (home.js).
+const normTitle = (s) => String(s || "").toLowerCase().replace(/[«»"'’ʼ.,:;!?()—–-]/g, " ").replace(/\s+/g, " ").trim();
+const sameTitle = (a, b) => {
+  const x = normTitle(a);
+  const y = normTitle(b);
+  return x.length > 2 && y.length > 2 && (x === y || x.includes(y) || y.includes(x));
+};
+
+function wishStats(library) {
+  const rows = [];
+  for (const [name, u] of Object.entries(state.users)) {
+    for (const w of u.wish || []) {
+      let row = rows.find((r) => sameTitle(r.title, w.title));
+      if (!row) {
+        const book = library.find((b) => sameTitle(b.title, w.title));
+        rows.push((row = { title: w.title, author: w.author, who: [], addedAt: 0, inLibrary: !!book }));
+      }
+      if (!row.author && w.author) row.author = w.author;
+      if (!row.who.includes(name)) row.who.push(name);
+      row.addedAt = Math.max(row.addedAt, w.addedAt || 0);
+    }
+  }
+  rows.sort((a, b) => b.who.length - a.who.length || a.inLibrary - b.inLibrary || b.addedAt - a.addedAt);
+  const lists = Object.values(state.users).filter((u) => u.wish?.length).length;
+  return { rows, total: Object.values(state.users).reduce((n, u) => n + (u.wish?.length || 0), 0), lists };
 }
 
 // [{ dir, name }] of the books a guest may open. builtInOnly skips the library choice.
