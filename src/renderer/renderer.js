@@ -183,6 +183,8 @@ function applyTypography(reflow) {
 async function openBook(payload) {
   await settingsReady;
   $("#notice").classList.add("hidden");
+  // Explanations belong to the book they were asked in; reopening the same book (PDF view switch) keeps them.
+  if (payload.path !== current?.path) clearExplanations();
   closeBook();
   hideSelToolbar();
   $("#empty").classList.add("hidden");
@@ -834,7 +836,7 @@ function showPanel(show, tab) {
   setTimeout(resizeView, 220);
 }
 
-$("#btn-clear").onclick = () => {
+function clearExplanations() {
   for (const conv of conversations.values()) {
     if (conv.busy) window.reader.abort(conv.reqId);
     try {
@@ -845,7 +847,9 @@ $("#btn-clear").onclick = () => {
   }
   conversations.clear();
   $("#cards").innerHTML = `<div id="panel-empty" class="panel-empty">Виділіть текст у книжці, щоб отримати пояснення в контексті.</div>`;
-};
+}
+
+$("#btn-clear").onclick = clearExplanations;
 
 // ---------- Notes: passages saved with "Зберегти", per reader and per book ----------
 
