@@ -1,7 +1,7 @@
 // Library tab of the home screen (home.js): books from the library folders, grouped by author, with search
 // and a language filter. It also loads the library list the home screen is drawn from (window.Library).
 (() => {
-  const LANGS = { uk: "українська", ru: "російська", en: "англійська" };
+  const LANGS = { uk: "українська", ru: "російська", en: "англійська", be: "білоруська", pl: "польська", de: "німецька", fr: "французька", es: "іспанська", it: "італійська", la: "латина", el: "грецька", ar: "арабська", he: "іврит", ja: "японська", zh: "китайська" };
   const ESC = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" };
   const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ESC[c]);
   let data = null; // { folders, books, lastBook }

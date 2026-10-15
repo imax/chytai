@@ -3,9 +3,11 @@ const fs = require("fs");
 const os = require("os");
 const path = require("path");
 const JSZip = require("jszip");
+const { langFromText, epubSample } = require("../server/language");
 
 const BOOK_EXTS = ["epub", "pdf", "fb2", "mobi", "azw", "azw3", "azw4", "prc", "kfx", "lit", "pdb"];
 const MAX_DEPTH = 4;
+const META_VERSION = 2; // bump to re-read every book's metadata (2: language from the text)
 
 const ICLOUD = path.join(os.homedir(), "Library/Mobile Documents/com~apple~CloudDocs");
 
@@ -77,10 +79,17 @@ async function epubMeta(file) {
   const opf = opfPath && (await zip.file(opfPath)?.async("string"));
   if (!opf) return {};
   const year = tagValues(opf, "date").map((d) => d.match(/\d{4}/)?.[0]).find(Boolean);
+  const metaLang = (tagValues(opf, "language")[0] || "").toLowerCase().split("-")[0];
+  let lang = metaLang;
+  try {
+    lang = langFromText((await epubSample(zip)).text, metaLang) || metaLang;
+  } catch {
+    /* text unreadable: keep the metadata */
+  }
   return {
     title: tagValues(opf, "title")[0],
     authors: [...new Set(tagValues(opf, "creator"))],
-    lang: tagValues(opf, "language")[0],
+    lang,
     year,
   };
 }
@@ -145,7 +154,7 @@ async function scan(folders, cacheFile) {
       continue;
     }
     const cloud = isCloudOnly(st);
-    const key = `${st.size}:${Math.round(st.mtimeMs)}:${cloud ? "c" : "l"}`;
+    const key = `${META_VERSION}:${st.size}:${Math.round(st.mtimeMs)}:${cloud ? "c" : "l"}`;
     const meta = cache[file]?.key === key ? cache[file].meta : await readMeta(file, st);
     nextCache[file] = { key, meta };
     books.push({ path: file, ext: path.extname(file).slice(1).toLowerCase(), size: st.size, mtime: Math.round(st.mtimeMs), cloud, ...meta });

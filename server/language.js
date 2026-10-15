@@ -19,6 +19,17 @@ function verdictFromText(text, metaLang) {
   return ru > 10 && ru > uk * 3;
 }
 
+// Cyrillic text says which language it is better than a book's metadata, which is sometimes plain
+// wrong (a Ukrainian book tagged "ar"). Returns "uk" or "ru" for clearly Cyrillic text, else "".
+const LATIN = /[a-z]/gi;
+const OTHER_CYRILLIC = ["be", "bg", "sr", "mk", "kk", "ky", "tg", "mn", "ba", "tt", "cv", "os"];
+function langFromText(text, metaLang = "") {
+  const cyr = (text.match(CYRILLIC) || []).length;
+  if (cyr < MIN_LETTERS || cyr < (text.match(LATIN) || []).length * 2) return "";
+  if (OTHER_CYRILLIC.includes(metaLang)) return metaLang;
+  return verdictFromText(text, metaLang) ? "ru" : "uk";
+}
+
 const stripTags = (html) =>
   html
     .replace(/<(script|style)[\s\S]*?<\/\1>/gi, " ")
@@ -26,7 +37,7 @@ const stripTags = (html) =>
     .replace(/&[a-z#0-9]+;/gi, " ");
 
 async function epubSample(buffer) {
-  const zip = await JSZip.loadAsync(buffer);
+  const zip = buffer instanceof JSZip ? buffer : await JSZip.loadAsync(buffer);
   const container = await zip.file("META-INF/container.xml")?.async("string");
   const opfPath = container?.match(/full-path="([^"]+)"/)?.[1];
   const opf = opfPath ? await zip.file(opfPath)?.async("string") : "";
@@ -70,4 +81,4 @@ async function isRussian(name, buffer) {
   }
 }
 
-module.exports = { isRussian, verdictFromText };
+module.exports = { isRussian, verdictFromText, langFromText, epubSample };
