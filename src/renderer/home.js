@@ -19,6 +19,7 @@
   const isOpen = () => !$("#shell").classList.contains("hidden");
 
   function show(next = tab) {
+    if (next !== "library") beforeSearch = null;
     tab = next;
     $("#shell").classList.remove("hidden");
     // Keys go to the home screen now, not to the page of the book left focused underneath.
@@ -351,10 +352,17 @@
   $("#side-settings").onclick = () => openSettings();
   $("#top-add").onclick = () => $("#lib-add").click();
   // The search on top of a wide screen searches the library, so typing there opens it.
-  $("#top-search").addEventListener("focus", () => tab !== "library" && show("library"));
+  // Search opens the library; Esc in the field clears it and goes back to where the search started.
+  let beforeSearch = null;
+  function searchLibrary() {
+    if (tab === "library") return;
+    beforeSearch = tab;
+    show("library");
+  }
+  $("#top-search").addEventListener("focus", searchLibrary);
   $("#top-search").addEventListener("input", () => {
     $("#lib-search").value = $("#top-search").value;
-    if (tab !== "library") show("library");
+    searchLibrary();
     $("#lib-search").dispatchEvent(new Event("input"));
   });
   $("#btn-library").onclick = () => (isOpen() && current ? hide() : show("home"));
@@ -378,7 +386,7 @@
         ? () => window.BookSearch?.open()
         : () => {
             const field = getComputedStyle($("#shell-top")).display !== "none" ? $("#top-search") : $("#lib-search");
-            if (tab !== "library") show("library");
+            searchLibrary();
             field.focus();
             field.select();
           };
@@ -391,6 +399,16 @@
     act();
   }
   document.addEventListener("keydown", key);
+  for (const field of [$("#top-search"), $("#lib-search")]) {
+    field.addEventListener("keydown", (e) => {
+      if (e.key !== "Escape") return;
+      e.preventDefault();
+      $("#top-search").value = $("#lib-search").value = "";
+      $("#lib-search").dispatchEvent(new Event("input"));
+      field.blur();
+      if (beforeSearch) show(beforeSearch);
+    });
+  }
   $("#btn-keys").onclick = () => {
     $("#settings").close();
     $("#keys").showModal();
