@@ -1,6 +1,7 @@
 // Home screen (designed in Claude Design, 2026-10-15): what you are reading, your shelf, your notes, the
-// books the family added lately and your wish list, with a tab bar for Головна / Бібліотека / Нотатки.
-// It covers the reader while it is open; a book opening puts it away, the toolbar's «Головна» brings it back.
+// books the family added lately and your wish list, with a tab bar for Головна / Бібліотека / Нотатки
+// (on a wider screen a sidebar instead, from the desktop mock-up). It covers the reader while it is open;
+// a book opening puts it away, the toolbar's «Головна» brings it back.
 (() => {
   const ESC = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" };
   const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ESC[c]);
@@ -124,6 +125,18 @@
     const n = lib ? lib.books.filter(isNew).length : 0;
     $("#tab-badge").textContent = n;
     $("#tab-badge").classList.toggle("hidden", !n);
+    const notesCount = Object.values(notes || {}).reduce((sum, list) => sum + list.length, 0);
+    $("#tab-notes-count").textContent = notesCount || "";
+    // Sidebar «Читаю» (wide screens): the books in progress, the one read last first.
+    const inProgress = (lib?.books || [])
+      .filter((b) => b.openedAt && (b.pct == null ? b.started : reading(b)))
+      .sort((x, y) => y.openedAt - x.openedAt)
+      .slice(0, 6);
+    $("#side-reading").innerHTML = inProgress.map((b) => `<button class="side-book" data-open="${esc(b.path)}">
+        <span class="t ellipsis">${esc(b.title)}</span>
+        ${b.pct != null ? `<span class="side-progress">${bar(b.pct, "thin")}<span class="m">${b.pct}%</span></span>` : ""}
+      </button>`).join("");
+    $(".side-head").classList.toggle("hidden", !inProgress.length);
   }
 
   function renderHome() {
@@ -131,6 +144,7 @@
     const books = lib.books;
     const byPath = new Map(books.map((b) => [b.path, b]));
     let html = "";
+    const parts = {};
 
     if (!books.length) {
       html += `<div class="home-empty">
@@ -146,7 +160,7 @@
       .sort((x, y) => y.openedAt - x.openedAt)
       .slice(0, 2);
     if (cur) {
-      html += `<section class="home-sec"><div class="sec-head"><span>Продовжити</span></div>
+      parts.cont = `<section class="home-sec sec-cont"><div class="sec-head"><span>Продовжити</span></div>
         <button class="hero" data-open="${esc(cur.path)}">
           ${cover(cur, "big")}
           <span class="hero-text">
@@ -170,7 +184,7 @@
     // Моя полиця: everything, the books opened lately first, then the newest.
     if (books.length) {
       const shelf = [...books].sort((x, y) => (y.openedAt || 0) - (x.openedAt || 0) || (y.addedAt || 0) - (x.addedAt || 0)).slice(0, 24);
-      html += `<section class="home-sec"><div class="sec-head"><span>Моя полиця · ${books.length}</span><button class="link" data-tab="library">Уся бібліотека</button></div>
+      parts.shelf = `<section class="home-sec sec-shelf"><div class="sec-head"><span>Моя полиця · ${books.length}</span><button class="link" data-tab="library">Уся бібліотека</button></div>
         <div class="shelf">${shelf.map((b) => `<button class="shelf-book" data-open="${esc(b.path)}">
             ${cover(b, "mid")}<span class="t">${esc(b.title)}</span><span class="m ellipsis">${esc(b.authors[0] || "")}</span>
           </button>`).join("")}</div>
@@ -181,10 +195,17 @@
     const noteBooks = Object.entries(notes || {}).filter(([, list]) => list.length).sort((a, b) => b[1].length - a[1].length);
     const noteCount = noteBooks.reduce((n, [, list]) => n + list.length, 0);
     if (noteCount) {
-      html += `<section class="home-sec"><button class="notes-card" data-tab="notes">
-          <span class="sec-head plain"><span>Нотатки</span><span class="link">Усі нотатки ›</span></span>
+      const noteTitle = (p) => byPath.get(p.replace(/#reflow$/, ""))?.title || p.replace(/\.[^.]+$/, "");
+      const latest = noteBooks.flatMap(([, list]) => list).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))[0];
+      // A phone shows chips per book; a wide screen a list per book and the latest passage.
+      parts.notes = `<section class="home-sec sec-notes">
+        <div class="sec-head wide-only"><span>Нотатки</span><button class="link" data-tab="notes">Усі нотатки</button></div>
+        <button class="notes-card" data-tab="notes">
+          <span class="sec-head plain narrow-only"><span>Нотатки</span><span class="link">Усі нотатки ›</span></span>
           <span class="notes-count"><b>${noteCount}</b><span class="m">${plural(noteCount, "нотатка", "нотатки", "нотаток")} у ${noteBooks.length} ${noteBooks.length === 1 ? "книжці" : "книжках"}</span></span>
-          <span class="chips">${noteBooks.slice(0, 4).map(([p, list]) => `<span class="chip">${esc(byPath.get(p.replace(/#reflow$/, ""))?.title || p.replace(/\.[^.]+$/, ""))} <span class="m">${list.length}</span></span>`).join("")}</span>
+          <span class="chips narrow-only">${noteBooks.slice(0, 4).map(([p, list]) => `<span class="chip">${esc(noteTitle(p))} <span class="m">${list.length}</span></span>`).join("")}</span>
+          <span class="note-books wide-only">${noteBooks.slice(0, 5).map(([p, list]) => `<span class="note-book"><span class="t">${esc(noteTitle(p))}</span><span class="m">${list.length}</span></span>`).join("")}</span>
+          ${latest ? `<span class="note-quote latest wide-only">${esc(latest.text.length > 220 ? `${latest.text.slice(0, 220)}…` : latest.text)}</span>` : ""}
         </button></section>`;
     }
 
@@ -192,7 +213,7 @@
     const fresh = arrivals();
     if (fresh.length) {
       const unseen = fresh.some((b) => !b.seen);
-      html += `<section class="home-sec"><div class="sec-head"><span>Нові надходження</span>${unseen ? `<button class="link" data-act="seen">Позначити переглянутими</button>` : ""}</div>
+      parts.arr = `<section class="home-sec sec-arr"><div class="sec-head"><span>Нові надходження</span>${unseen ? `<button class="link" data-act="seen">Позначити переглянутими</button>` : ""}</div>
         ${fresh.map((b) => `<button class="arrival" data-open="${esc(b.path)}">
             ${cover(b, "small")}
             <span class="row-text"><span class="t">${esc(b.title)}</span><span class="m">${esc(author(b))}</span>
@@ -203,17 +224,26 @@
     }
 
     // Хочу прочитати: the top of the list, with «Уже є» once someone added the book.
+    // On a wide screen the whole list is here, with its own field to add to it.
     if (window.reader.wishList && !settings.guest) {
       const list = wish || [];
-      html += `<section class="home-sec"><div class="sec-head"><span>Хочу прочитати${list.length ? ` · ${list.length}` : ""}</span><button class="link" data-tab="wish">${list.length ? "Увесь список" : "Додати"}</button></div>
-        ${list.length ? list.slice(0, 3).map((w) => {
+      parts.wish = `<section class="home-sec sec-wish"><div class="sec-head"><span>Хочу прочитати${list.length ? ` · ${list.length}` : ""}</span><button class="link narrow-only" data-tab="wish">${list.length ? "Увесь список" : "Додати"}</button></div>
+        <div class="narrow-only">${list.length ? list.slice(0, 3).map((w) => {
           const b = bookFor(w);
           return `<div class="wish-row"><span class="row-text"><span class="t">${esc(w.title)}</span><span class="m">${esc(w.author)}</span></span>
             ${b ? `<button class="pill small" data-open="${esc(b.path)}">Уже є</button>` : ""}</div>`;
-        }).join("") : `<p class="m">Запишіть книжку, яку хочете прочитати: коли хтось із родини її додасть, вона з'явиться тут.</p>`}
+        }).join("") : `<p class="m">Запишіть книжку, яку хочете прочитати: коли хтось із родини її додасть, вона з'явиться тут.</p>`}</div>
+        <div class="wide-only">
+          <form class="wish-form"><input placeholder="Назва та автор" autocomplete="off" /><button type="submit" class="pill">Додати</button></form>
+          ${wishRows(list)}
+        </div>
       </section>`;
     }
 
+    // Rows for a wide screen (Продовжити | Нотатки, the shelf, Нові надходження | Хочу прочитати); on a phone the
+    // rows dissolve and the sections stack in the order of the mock-up (style.css).
+    const row = (cls, ...xs) => (xs.some(Boolean) ? `<div class="home-row ${cls}">${xs.filter(Boolean).join("")}</div>` : "");
+    html += row("top", parts.cont, parts.notes) + (parts.shelf || "") + row("bottom", parts.arr, parts.wish);
     $("#home-body").innerHTML = html;
   }
 
@@ -243,28 +273,32 @@
 
   // ---------- Хочу прочитати ----------
 
-  function renderWish() {
-    const box = $("#wish-body");
-    const list = wish || [];
-    box.innerHTML = list.length
-      ? list.map((w) => {
-          const b = bookFor(w);
-          return `<div class="wish-row line"><span class="row-text"><span class="t">${esc(w.title)}</span>
-              <span class="m">${esc([w.author, b && `уже в бібліотеці${b.addedBy ? `, додав ${b.addedBy}` : ""}`].filter(Boolean).join(" · "))}</span></span>
-            ${b ? `<button class="pill small" data-open="${esc(b.path)}">Читати</button>` : ""}
-            <button class="icon-btn" data-unwish="${esc(w.id)}" title="Прибрати">✕</button></div>`;
-        }).join("")
-      : `<div class="lib-empty">Список порожній.</div>`;
+  function wishRows(list) {
+    return list.map((w) => {
+      const b = bookFor(w);
+      return `<div class="wish-row line"><span class="row-text"><span class="t">${esc(w.title)}</span>
+          <span class="m">${esc([w.author, b && `уже в бібліотеці${b.addedBy ? `, додав ${b.addedBy}` : ""}`].filter(Boolean).join(" · "))}</span></span>
+        ${b ? `<button class="pill small" data-open="${esc(b.path)}">Читати</button>` : ""}
+        <button class="icon-btn" data-unwish="${esc(w.id)}" title="Прибрати">✕</button></div>`;
+    }).join("");
   }
 
-  $("#wish-form").addEventListener("submit", async (e) => {
+  function renderWish() {
+    const list = wish || [];
+    $("#wish-body").innerHTML = list.length ? wishRows(list) : `<div class="lib-empty">Список порожній.</div>`;
+  }
+
+  // Both the «Хочу прочитати» view and the wide home screen have a field for it.
+  $("#shell").addEventListener("submit", async (e) => {
+    if (!e.target.matches(".wish-form")) return;
     e.preventDefault();
-    const value = $("#wish-input").value.trim();
+    const input = e.target.querySelector("input");
+    const value = input.value.trim();
     if (!value) return;
     const [title, ...rest] = value.split(/\s+[—–-]\s+|,\s*/);
     try {
       wish = await window.reader.wishAdd({ title, author: rest.join(", ") });
-      $("#wish-input").value = "";
+      input.value = "";
       toast("Додано до бажаного");
       render();
     } catch (err) {
@@ -312,6 +346,15 @@
   });
 
   $("#home-settings").onclick = () => openSettings();
+  $("#side-settings").onclick = () => openSettings();
+  $("#top-add").onclick = () => $("#lib-add").click();
+  // The search on top of a wide screen searches the library, so typing there opens it.
+  $("#top-search").addEventListener("focus", () => tab !== "library" && show("library"));
+  $("#top-search").addEventListener("input", () => {
+    $("#lib-search").value = $("#top-search").value;
+    if (tab !== "library") show("library");
+    $("#lib-search").dispatchEvent(new Event("input"));
+  });
   $("#btn-library").onclick = () => (isOpen() && current ? hide() : show("home"));
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape" && current && isOpen() && !document.querySelector("dialog[open]")) hide();
