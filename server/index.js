@@ -714,21 +714,38 @@ async function epubCover(file) {
   return data && COVER_TYPES[ext] ? { data, ext } : null;
 }
 
+// The cached cover's file name in COVER_DIR ("<key>.none" when the book has no cover), extracting it once.
+async function coverFile(file) {
+  const st = fs.statSync(file);
+  const key = crypto.createHash("sha1").update(`${file}:${st.size}:${st.mtimeMs}`).digest("hex").slice(0, 16);
+  fs.mkdirSync(COVER_DIR, { recursive: true });
+  let cached = fs.readdirSync(COVER_DIR).find((f) => f.startsWith(`${key}.`));
+  if (!cached) {
+    const cover = await epubCover(file);
+    cached = `${key}.${cover ? cover.ext : "none"}`;
+    fs.writeFileSync(path.join(COVER_DIR, cached), cover ? cover.data : "");
+  }
+  return cached;
+}
+
+// Covers are taken out of the books ahead of time (at start and on upload), so nobody waits for the first one.
+async function warmCovers(names) {
+  for (const name of names) {
+    try {
+      if (/\.epub$/i.test(name)) await coverFile(bookFile(name));
+    } catch (err) {
+      console.warn("cover", name, err.message);
+    }
+  }
+}
+
 api.get("/cover", async (req, res) => {
   const name = safeBookName(req.query.path);
   const demo = req.guest ? demoBooks().find((d) => d.name === name) : null;
   const file = req.guest ? demo && path.join(demo.dir, demo.name) : name && bookFile(name);
   if (!file || !/\.epub$/i.test(file) || !fs.existsSync(file)) return res.status(404).end();
   try {
-    const st = fs.statSync(file);
-    const key = crypto.createHash("sha1").update(`${file}:${st.size}:${st.mtimeMs}`).digest("hex").slice(0, 16);
-    fs.mkdirSync(COVER_DIR, { recursive: true });
-    let cached = fs.readdirSync(COVER_DIR).find((f) => f.startsWith(`${key}.`));
-    if (!cached) {
-      const cover = await epubCover(file);
-      cached = `${key}.${cover ? cover.ext : "none"}`;
-      fs.writeFileSync(path.join(COVER_DIR, cached), cover ? cover.data : "");
-    }
+    const cached = await coverFile(file);
     const ext = path.extname(cached).slice(1);
     if (ext === "none") return res.status(404).end();
     // The URL carries the file's date, so a replaced book gets a new address.
@@ -786,6 +803,7 @@ api.put("/books/:name", express.raw({ type: () => true, limit: MAX_UPLOAD }), as
   fs.writeFileSync(bookFile(name), req.body);
   (state.shared.added ??= {})[name] = { by: req.user, at: Date.now() };
   saveState();
+  warmCovers([name]);
   res.json({ path: name });
 });
 
@@ -906,4 +924,7 @@ app.use((err, _req, res, _next) => {
   res.status(err.status || 500).json({ error: err.message || "server error" });
 });
 
-app.listen(PORT, "0.0.0.0", () => console.log(`Chytai web on http://0.0.0.0:${PORT}, books in ${BOOKS_DIR}`));
+app.listen(PORT, "0.0.0.0", () => {
+  console.log(`Chytai web on http://0.0.0.0:${PORT}, books in ${BOOKS_DIR}`);
+  warmCovers(fs.readdirSync(BOOKS_DIR));
+});
