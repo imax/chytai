@@ -20,3 +20,17 @@ jobs:
       - run: flyctl deploy --remote-only -a chytai
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+      # The public domain (see landing/ and LANDING_HOSTS in server/index.js): make sure the app has a
+      # certificate for each host, then print the IPs and the DNS records the registrar needs. Adding an
+      # existing certificate is harmless, so this runs on every deploy.
+      - name: Custom domains
+        run: |
+          for host in chytai.org.ua www.chytai.org.ua app.chytai.org.ua; do
+            flyctl certs add "$host" -a chytai || true
+          done
+          flyctl ips list -a chytai
+          for host in chytai.org.ua www.chytai.org.ua app.chytai.org.ua; do
+            flyctl certs show "$host" -a chytai || true
+          done
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}

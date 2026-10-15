@@ -12,6 +12,7 @@ COPY src ./src
 COPY server ./server
 COPY build/icon.png ./build/icon.png
 COPY demo ./demo
+COPY landing ./landing
 
 ENV PORT=8080 DATA_DIR=/data
 EXPOSE 8080

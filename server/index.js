@@ -389,6 +389,21 @@ const app = express();
 app.set("trust proxy", true);
 app.disable("x-powered-by");
 
+// The public site: requests for chytai.org.ua (LANDING_HOSTS, comma-separated) get the static
+// landing page from landing/ instead of the reader. www. redirects to the bare domain. Any other
+// host (chytai.fly.dev, app.chytai.org.ua, localhost) is the reader as before.
+const LANDING_HOSTS = (process.env.LANDING_HOSTS || "chytai.org.ua,www.chytai.org.ua").split(",").map((h) => h.trim()).filter(Boolean);
+const LANDING_DIR = path.join(ROOT, "landing");
+if (LANDING_HOSTS.length && fs.existsSync(LANDING_DIR)) {
+  const landing = express.static(LANDING_DIR, { extensions: ["html"] });
+  app.use((req, res, next) => {
+    const host = String(req.hostname || "").toLowerCase();
+    if (!LANDING_HOSTS.includes(host)) return next();
+    if (host.startsWith("www.")) return res.redirect(301, `https://${host.slice(4)}${req.originalUrl}`);
+    landing(req, res, () => res.status(404).type("text").send("Not found"));
+  });
+}
+
 // Public: icon and manifest, so the phone can show them before login.
 app.get("/icon.png", (_req, res) => res.sendFile(path.join(ROOT, "build", "icon.png")));
 app.get("/manifest.webmanifest", (_req, res) => {

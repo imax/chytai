@@ -3,244 +3,27 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Chytai — читалка, яка пояснює книжку</title>
-<meta name="description" content="Chytai — безкоштовна читалка для українських читачів. Виділи слово чи абзац і отримай пояснення в контексті книжки. EPUB і PDF, iPhone, iPad, Mac і браузер.">
-<meta property="og:title" content="Chytai — читалка, яка пояснює книжку">
-<meta property="og:description" content="Читай і розумій. Безкоштовна читалка з поясненнями, перекладом і нотатками, зроблена для українських читачів.">
-<meta property="og:image" content="https://chytai.org.ua/img/og.png">
+<title>Chytai</title>
 <link rel="icon" href="/img/icon.png">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Literata:ital,opsz,wght@0,7..72,400;0,7..72,500;0,7..72,600;1,7..72,400&display=swap" rel="stylesheet">
 <style>
-  :root {
-    --bg: #ffffff; --fg: #1d1d1f; --muted: #6e6e73; --line: #e5e5ea; --chrome: #f5f5f7;
-    --accent: #b7791f; --accent-soft: rgba(255, 196, 0, 0.18);
-    --sepia: #f6efe0; --sepia-fg: #3b2f1e;
-    --serif: "Literata", Georgia, "Times New Roman", serif;
-    --sans: -apple-system, BlinkMacSystemFont, "Inter", "Helvetica Neue", sans-serif;
-  }
-  @media (prefers-color-scheme: dark) {
-    :root { --bg: #1e1e20; --fg: #e6e6e6; --muted: #9a9aa0; --line: #333336; --chrome: #252527; --accent: #f0b429; --accent-soft: rgba(240,180,41,.15); --sepia: #2a2621; --sepia-fg: #e9dcc3; }
-  }
-  * { box-sizing: border-box; }
-  html { scroll-behavior: smooth; }
-  body { margin: 0; background: var(--bg); color: var(--fg); font: 17px/1.55 var(--sans); -webkit-font-smoothing: antialiased; }
-  a { color: var(--accent); text-decoration: none; }
-  .wrap { max-width: 1040px; margin: 0 auto; padding: 0 20px; }
-  h1, h2, h3 { font-family: var(--serif); font-weight: 500; letter-spacing: -0.01em; margin: 0; }
-  h1 { font-size: clamp(34px, 6vw, 58px); line-height: 1.1; }
-  h2 { font-size: clamp(26px, 4vw, 38px); line-height: 1.2; }
-  h3 { font-size: 20px; line-height: 1.3; font-weight: 600; }
-  p { margin: 0; }
-  .lead { font-size: clamp(18px, 2.2vw, 22px); color: var(--muted); line-height: 1.5; }
-  .btn { display: inline-flex; align-items: center; gap: 8px; padding: 13px 22px; border-radius: 999px; font-weight: 600; font-size: 17px; border: 1px solid var(--line); color: var(--fg); background: var(--chrome); transition: transform .15s; }
-  .btn:hover { transform: translateY(-1px); }
-  .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
-  .btn.primary:hover { filter: brightness(1.05); }
-
-  header { position: sticky; top: 0; z-index: 10; background: color-mix(in srgb, var(--bg) 85%, transparent); backdrop-filter: blur(12px); border-bottom: 1px solid var(--line); }
-  header .wrap { display: flex; align-items: center; justify-content: space-between; height: 60px; }
-  .brand { display: flex; align-items: center; gap: 10px; font-weight: 600; font-size: 22px; color: var(--fg); letter-spacing: -0.02em; }
-  .brand img { width: 30px; height: 30px; border-radius: 7px; }
-  nav { display: flex; gap: 22px; align-items: center; font-size: 15px; }
-  nav a { color: var(--muted); }
-  nav a.cta { color: var(--fg); font-weight: 600; }
-  @media (max-width: 640px) { nav a:not(.cta) { display: none; } }
-
-  .hero { padding: 72px 0 40px; display: grid; grid-template-columns: 1.1fr .9fr; gap: 48px; align-items: center; }
-  .hero .text { display: grid; gap: 22px; }
-  .hero .actions { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 6px; }
-  .hero .note { font-size: 14px; color: var(--muted); }
-  .phone { justify-self: center; width: min(320px, 80vw); border-radius: 36px; border: 1px solid var(--line); box-shadow: 0 30px 60px rgba(0,0,0,.14), 0 0 0 8px #111; overflow: hidden; background: #fff; }
-  .phone img { display: block; width: 100%; }
-  @media (max-width: 820px) { .hero { grid-template-columns: 1fr; padding-top: 44px; gap: 36px; } .phone { width: min(280px, 78vw); } }
-
-  .quote { margin: 56px 0 0; background: var(--sepia); color: var(--sepia-fg); border-radius: 20px; padding: 36px 32px; font-family: var(--serif); font-size: clamp(19px, 2.4vw, 24px); line-height: 1.5; }
-  .quote mark { background: var(--accent-soft); color: inherit; padding: 0 2px; border-radius: 3px; }
-  .quote .expl { margin-top: 18px; padding-left: 16px; border-left: 3px solid var(--accent); font-family: var(--sans); font-size: 16px; line-height: 1.5; }
-  .quote .expl small { display: block; color: var(--muted); font-size: 13px; margin-top: 6px; }
-
-  section { padding: 72px 0; }
-  section + section { border-top: 1px solid var(--line); }
-  .section-head { max-width: 640px; display: grid; gap: 14px; margin-bottom: 40px; }
-  .features { display: grid; grid-template-columns: repeat(3, 1fr); gap: 28px 32px; }
-  .feature { display: grid; gap: 8px; }
-  .feature .ic { width: 40px; height: 40px; border-radius: 10px; background: var(--accent-soft); display: grid; place-items: center; color: var(--accent); margin-bottom: 6px; }
-  .feature p { color: var(--muted); font-size: 16px; }
-  @media (max-width: 820px) { .features { grid-template-columns: 1fr 1fr; } }
-  @media (max-width: 540px) { .features { grid-template-columns: 1fr; } }
-
-  .shots { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; align-items: start; }
-  .shot { display: grid; gap: 14px; }
-  .shot img { width: 100%; border-radius: 16px; border: 1px solid var(--line); box-shadow: 0 12px 32px rgba(0,0,0,.08); }
-  .shot p { color: var(--muted); font-size: 16px; }
-  @media (max-width: 640px) { .shots { grid-template-columns: 1fr; } }
-
-  .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 28px; counter-reset: step; }
-  .step { position: relative; padding-top: 52px; display: grid; gap: 8px; }
-  .step::before { counter-increment: step; content: counter(step); position: absolute; top: 0; left: 0; width: 36px; height: 36px; border-radius: 50%; background: var(--fg); color: var(--bg); font: 600 17px var(--sans); display: grid; place-items: center; }
-  .step p { color: var(--muted); font-size: 16px; }
-  @media (max-width: 640px) { .steps { grid-template-columns: 1fr; } }
-
-  .devices { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 18px; }
-  .devices span { padding: 6px 14px; border-radius: 999px; background: var(--chrome); border: 1px solid var(--line); font-size: 15px; }
-
-  .about { display: grid; grid-template-columns: 1fr 1fr; gap: 48px; align-items: start; }
-  .about .text { display: grid; gap: 16px; }
-  .about .text p { color: var(--muted); }
-  .about .text p strong { color: var(--fg); font-weight: 600; }
-  @media (max-width: 820px) { .about { grid-template-columns: 1fr; } }
-
-  .final { text-align: center; display: grid; gap: 22px; justify-items: center; padding: 80px 0; }
-  .final .actions { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; }
-
-  footer { border-top: 1px solid var(--line); padding: 28px 0 40px; color: var(--muted); font-size: 14px; }
-  footer .wrap { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px 24px; }
-  footer a { color: var(--muted); }
-  footer a:hover { color: var(--fg); }
+  :root { --bg: #fff; --fg: #1d1d1f; --muted: #6e6e73; --accent: #b7791f; }
+  @media (prefers-color-scheme: dark) { :root { --bg: #1e1e20; --fg: #e6e6e6; --muted: #9a9aa0; --accent: #f0b429; } }
+  body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: var(--bg); color: var(--fg);
+         font: 17px/1.5 -apple-system, BlinkMacSystemFont, "Inter", "Helvetica Neue", sans-serif; }
+  main { display: grid; gap: 18px; justify-items: center; padding: 24px; text-align: center; }
+  .brand { display: flex; align-items: center; gap: 12px; font-size: 32px; font-weight: 600; letter-spacing: -0.02em; }
+  .brand img { width: 44px; height: 44px; border-radius: 10px; }
+  nav { display: flex; gap: 24px; }
+  a { color: var(--accent); text-decoration: none; font-weight: 600; }
 </style>
 </head>
 <body>
-
-<header>
-  <div class="wrap">
-    <a class="brand" href="/"><img src="/img/icon.png" alt=""> Chytai</a>
-    <nav>
-      <a href="#features">Можливості</a>
-      <a href="#how">Як це працює</a>
-      <a href="#about">Про проєкт</a>
-      <a class="cta" href="https://chytai.fly.dev/login">Увійти</a>
-    </nav>
-  </div>
-</header>
-
-<main class="wrap">
-  <div class="hero">
-    <div class="text">
-      <h1>Читай і розумій.</h1>
-      <p class="lead">Chytai — читалка, яка пояснює книжку, поки ти її читаєш. Виділи слово, фразу чи абзац, і пояснення з'явиться просто під текстом, у контексті саме цієї книжки.</p>
-      <div class="actions">
-        <a class="btn primary" href="https://chytai.fly.dev/demo">Спробувати демо</a>
-        <a class="btn" href="#features">Що вміє</a>
-      </div>
-      <p class="note">Безкоштовно. Без реклами. Зроблено для українських читачів.</p>
-    </div>
-    <div class="phone"><img src="/img/translation.png" alt="Chytai на iPhone: сторінка роману й картка з перекладом абзацу"></div>
-  </div>
-
-  <div class="quote">
-    <p>«Жив у Нью-Йорку, в кварталі, де <mark>дрібні рантьє</mark> сусідять із артистами, що їм не пощастило…»</p>
-    <div class="expl">
-      <p><strong>Рантьє</strong> — людина, яка живе не з праці, а з доходу від капіталу: оренди, відсотків, цінних паперів. «Дрібні» тут означає: грошей вистачає, щоб не працювати, але не настільки, щоб жити розкішно. Для оповідача це натяк на середовище, де всі трохи вдають, що багатші, ніж є.</p>
-      <small>Пояснення · Chytai</small>
-    </div>
-  </div>
-
-  <section id="features">
-    <div class="section-head">
-      <h2>Усе, щоб дочитати книжку</h2>
-      <p class="lead">Жодних стрічок, лайків і нагадувань. Лише текст і те, що допомагає його зрозуміти.</p>
-    </div>
-    <div class="features">
-      <div class="feature">
-        <div class="ic">✦</div>
-        <h3>Пояснення в контексті</h3>
-        <p>Chytai бачить виділений фрагмент, кілька абзаців довкола, назву книжки й розділу. Тому пояснює не слово зі словника, а те, що воно означає саме тут. Можна поставити своє питання.</p>
-      </div>
-      <div class="feature">
-        <div class="ic">Aa</div>
-        <h3>Переклад абзацу</h3>
-        <p>Читаєш англійською чи польською і спіткнувся на реченні? Один дотик, і поруч є переклад українською. Оригінал залишається на місці.</p>
-      </div>
-      <div class="feature">
-        <div class="ic">✎</div>
-        <h3>Нотатки на полях</h3>
-        <p>Підкреслення, дужки й свої коментарі просто в тексті, як олівцем у паперовій книжці. Усі нотатки зібрані окремо, щоб повернутися до них після прочитання.</p>
-      </div>
-      <div class="feature">
-        <div class="ic">¶</div>
-        <h3>Типографіка як у Kindle</h3>
-        <p>Шрифт Literata, вирівнювання по ширині, переноси, три теми: світла, сепія, темна. Гортання сторінками або безперервна прокрутка, як зручніше.</p>
-      </div>
-      <div class="feature">
-        <div class="ic">▤</div>
-        <h3>Своя бібліотека</h3>
-        <p>Завантажуй EPUB і PDF, які вже маєш. PDF читається «як книжка»: без колонтитулів і номерів сторінок, тим самим шрифтом. Позиція в кожній книжці запам'ятовується.</p>
-      </div>
-      <div class="feature">
-        <div class="ic">◐</div>
-        <h3>Скрізь, де читаєш</h3>
-        <p>iPhone, iPad, Mac і будь-який браузер. Книжки відкриваються й без інтернету, а пояснення та позиції синхронізуються, коли зв'язок повернеться.</p>
-      </div>
-    </div>
-  </section>
-
-  <section>
-    <div class="shots">
-      <div class="shot">
-        <img src="/img/home.png" alt="Головний екран Chytai: книжка, яку читаєш зараз, полиця та нотатки">
-        <p>Головний екран: що читаєш зараз, скільки лишилося, і полиця з книжками. Нічого зайвого.</p>
-      </div>
-      <div class="shot">
-        <img src="/img/notes.png" alt="Сторінка книжки з підкресленнями та коментарями на полях">
-        <p>Нотатки живуть просто в тексті: підкреслив, узяв у дужки, дописав думку.</p>
-      </div>
-    </div>
-  </section>
-
-  <section id="how">
-    <div class="section-head">
-      <h2>Як це працює</h2>
-    </div>
-    <div class="steps">
-      <div class="step">
-        <h3>Додай книжку</h3>
-        <p>Відкрий Chytai на телефоні чи комп'ютері та завантаж EPUB або PDF. Книжка з'явиться на всіх твоїх пристроях.</p>
-      </div>
-      <div class="step">
-        <h3>Читай, як звик</h3>
-        <p>Під час читання на екрані лише текст. Панель з'являється від дотику й ховається, щойно гортаєш далі.</p>
-      </div>
-      <div class="step">
-        <h3>Виділи й натисни «Пояснити»</h3>
-        <p>Незнайоме слово, історична деталь, заплутана фраза. Пояснення коротке, а «Детальніше» розгортає його, якщо хочеться глибше.</p>
-      </div>
-    </div>
-    <div class="devices">
-      <span>iPhone</span><span>iPad</span><span>Mac</span><span>Браузер</span><span>EPUB</span><span>PDF</span>
-    </div>
-  </section>
-
-  <section id="about">
-    <div class="about">
-      <div class="section-head" style="margin-bottom:0">
-        <h2>Навіщо це</h2>
-      </div>
-      <div class="text">
-        <p>Книжки тренують те, що важко натренувати інакше: <strong>втримати думку довше, ніж на кілька секунд</strong>, пройти за автором довгий шлях і дійти до кінця. Зараз в Україні читати важче, ніж будь-коли, а потрібно більше, ніж будь-коли.</p>
-        <p>Chytai зроблено так, щоб книжку хотілося дочитати. Коли щось незрозуміле, не треба йти в пошук і губитися: відповідь поруч, і за секунду ти знову в тексті.</p>
-        <p>Це <strong>некомерційний проєкт</strong>: без реклами, без підписок і без продажу даних. Код відкритий на <a href="https://github.com/imax/chytai">GitHub</a>. Chytai робить одна родина з Києва для себе і для всіх, хто читає українською.</p>
-      </div>
-    </div>
-  </section>
-
-  <div class="final">
-    <h2>Спробуй на одній книжці</h2>
-    <p class="lead">Демо відкриває Остапа Вишню без реєстрації. Виділи будь-яке слово й подивися, як воно працює.</p>
-    <div class="actions">
-      <a class="btn primary" href="https://chytai.fly.dev/demo">Відкрити демо</a>
-      <a class="btn" href="mailto:hello@chytai.org.ua">Хочу свою бібліотеку</a>
-    </div>
-    <p class="note" style="color:var(--muted);font-size:14px">Повний доступ зі своїми книжками поки що за запрошенням. Реєстрація скоро.</p>
-  </div>
+<main>
+  <div class="brand"><img src="/img/icon.png" alt="">Chytai</div>
+  <nav>
+    <a href="https://chytai.fly.dev/demo">Демо</a>
+    <a href="https://chytai.fly.dev/login">Увійти</a>
+  </nav>
 </main>
-
-<footer>
-  <div class="wrap">
-    <span>© 2026 Chytai · chytai.org.ua</span>
-    <span><a href="https://github.com/imax/chytai">GitHub</a> · <a href="https://chytai.fly.dev/login">Увійти</a> · <a href="mailto:hello@chytai.org.ua">Написати</a></span>
-  </div>
-</footer>
-
 </body>
 </html>
