@@ -679,3 +679,7 @@ body[data-theme="dark"] .cover { background: hsl(var(--hue) 18% 30%); color: hsl
   #lib-langs { display: none; }
   #shell #lib-body { padding: 0 0 24px; }
 }
+
+/* epub.js shifts the scroll itself when a chapter above grows; Chrome's
+   scroll anchoring would shift it a second time and throw the reader off. */
+#viewer .epub-container { overflow-anchor: none; }
