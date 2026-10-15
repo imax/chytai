@@ -624,23 +624,6 @@ async function scanLibrary() {
   });
 }
 
-// Forgets everything that pointed at a deleted book: positions, "last book", the demo choice, corrections.
-function forgetBook(name) {
-  for (const u of Object.values(state.users)) {
-    if (u.lastBook === name) u.lastBook = null;
-    delete u.positions?.[name];
-    delete u.positions?.[`${name}#reflow`];
-    delete u.opened?.[name];
-    delete u.notes?.[name];
-    delete u.progress?.[name];
-    delete u.seen?.[name];
-  }
-  delete state.shared.added?.[name];
-  if (state.shared.demoBook === name) state.shared.demoBook = "";
-  delete state.shared.bookMeta?.[name];
-  saveState();
-}
-
 api.get("/library", async (req, res) => {
   const u = req.guest ? guestState(req.guest) : userState(req.user);
   let books;
@@ -786,9 +769,8 @@ api.delete("/wish/:id", guestsCannot("У демо-режимі список ба
   res.json({ wish: u.wish });
 });
 
-// Guests read the demo book and nothing else: no uploads, no deletions, no shared caches.
+// Guests read the demo book and nothing else: no uploads, no edits, no shared caches.
 api.put("/books/:name", guestsCannot("У демо-режимі не можна додавати книжки. Увійдіть, щоб завантажити свою."));
-api.delete("/books/:name", guestsCannot("У демо-режимі не можна видаляти книжки."));
 api.patch("/books/:name", guestsCannot("У демо-режимі не можна редагувати книжки."));
 api.put("/reflow", guestsCannot("У демо-режимі конвертація PDF не зберігається."));
 api.get("/reflow", (req, res, next) => (req.guest ? res.status(204).end() : next()));
@@ -805,14 +787,6 @@ api.put("/books/:name", express.raw({ type: () => true, limit: MAX_UPLOAD }), as
   saveState();
   warmCovers([name]);
   res.json({ path: name });
-});
-
-api.delete("/books/:name", (req, res) => {
-  const name = safeBookName(req.params.name);
-  if (!name) return res.status(400).json({ error: "Немає такої книжки." });
-  fs.rmSync(bookFile(name), { force: true });
-  forgetBook(name);
-  res.json({ ok: true });
 });
 
 // Title and author as the library should show them: PATCH /api/books/<name> { title, authors }.

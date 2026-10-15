@@ -12,8 +12,9 @@
   const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ESC[c]);
   let data = null; // { folders, books, lastBook }
   let loading = null;
-  let manage = false; // web only: the family fixes titles and deletes books right in the library
-  const canManage = () => typeof window.reader.libraryDelete === "function";
+  // Web, family only: a pencil on a book (on hover, or after a long press on a phone) fixes its title and author.
+  const canEdit = () => typeof window.reader.libraryUpdateBook === "function" && !settings.guest;
+  const PENCIL = `<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.17 6.81a2.83 2.83 0 0 0-4-4L3.84 16.17a2 2 0 0 0-.5.83l-1.32 4.35a.5.5 0 0 0 .62.62l4.35-1.32a2 2 0 0 0 .83-.5z"/></svg>`;
   // What the reader picked last time on this device: filter and language.
   const view = { f: "all", lang: "" };
   try {
@@ -78,10 +79,8 @@
     return "";
   }
 
-  function manageBlock(b) {
-    return `<span class="lib-file m">${esc(b.path)}${b.edited ? ` <span class="badge" title="Назву або автора виправлено вручну">виправлено</span>` : ""}</span>
-      <span class="lib-actions"><button data-edit="${esc(b.path)}">Назва й автор…</button><button data-delete="${esc(b.path)}" class="danger">Видалити</button></span>`;
-  }
+  const editButton = (b) => (canEdit() ? `<span class="lib-edit" role="button" data-edit="${esc(b.path)}" title="Назва й автор${b.edited ? " (виправлено вручну)" : ""}">${PENCIL}</span>` : "");
+
 
   function render() {
     $("#lib-folders").innerHTML = data.folders.length
@@ -130,10 +129,8 @@
       for (const b of list2) {
         const body = `${window.Shell.cover(b, "small")}
           <span class="lib-li-text"><span class="t ellipsis">${esc(b.title)}</span><span class="m ellipsis">${esc([mainAuthor(b), b.year].filter(Boolean).join(" · "))}</span>
-          ${manage ? manageBlock(b) : ""}</span>${manage ? "" : tag(b)}`;
-        list += manage
-          ? `<div class="lib-li manage">${body}</div>`
-          : `<button class="lib-li${b.unavailable ? " unavailable" : ""}" data-path="${esc(b.path)}">${body}</button>`;
+          </span>${tag(b)}${editButton(b)}`;
+        list += `<button class="lib-li${b.unavailable ? " unavailable" : ""}" data-path="${esc(b.path)}">${body}</button>`;
       }
       list += `</section>`;
     }
@@ -171,10 +168,8 @@
         ${list.map((b) => {
           const body = `${window.Shell.cover(b, "small")}
             <span class="lib-li-text"><span class="t ellipsis">${esc(b.title)}</span><span class="m ellipsis">${esc([b.year, addedLabel(b)].filter(Boolean).join(" · "))}${b.ext !== "epub" ? ` · ${esc(b.ext.toUpperCase())}` : ""}${b.cloud ? " · ☁︎" : ""}</span>
-            ${manage ? manageBlock(b) : ""}</span>${manage ? "" : tag(b)}`;
-          return manage
-            ? `<div class="lib-book manage">${body}</div>`
-            : `<button class="lib-book${b.unavailable ? " unavailable" : ""}" data-path="${esc(b.path)}" title="${b.unavailable ? "Немає з'єднання, а ця книжка ще не збережена на пристрої" : ""}">${body}</button>`;
+            </span>${tag(b)}${editButton(b)}`;
+          return `<button class="lib-book${b.unavailable ? " unavailable" : ""}" data-path="${esc(b.path)}" title="${b.unavailable ? "Немає з'єднання, а ця книжка ще не збережена на пристрої" : ""}">${body}</button>`;
         }).join("")}</section>`;
     }
     const jump = (l) => `<button data-jump="${esc(l)}">${esc(l)}</button>`;
@@ -194,8 +189,8 @@
   };
 
   $("#lib-body").addEventListener("click", (e) => {
-    const action = e.target.closest("[data-edit], [data-delete]");
-    if (action) return action.dataset.edit != null ? editBook(action.dataset.edit) : deleteBook(action.dataset.delete);
+    const pencil = e.target.closest("[data-edit]");
+    if (pencil) return editBook(pencil.dataset.edit);
     if (e.target.closest("[data-act=seen]")) {
       window.Shell.markSeen();
       return render();
@@ -219,41 +214,28 @@
     if (jump) jumpTo(jump.dataset.jump);
   });
 
-  // ---------- Managing the shared library (web, family) ----------
+  // ---------- Fixing a title or author (web, family) ----------
 
-  function setManage(on) {
-    manage = on && canManage();
-    $("#lib-manage").textContent = manage ? "Готово" : "Керувати";
-    $("#lib-manage").classList.toggle("on", manage);
-    if (data) render();
-  }
-
-  const label = (b) => `«${b.title}»${b.authors[0] ? ` (${b.authors[0]})` : ""}`;
-
-  async function deleteBook(name) {
-    const book = data.books.find((b) => b.path === name);
-    if (!book) return;
-    const readers = book.path === data.lastBook || book.started ? "\nЗакладки й позиції читання в ній теж зникнуть." : "";
-    if (!confirm(`Видалити ${label(book)} з бібліотеки для всіх?${readers}`)) return;
-    try {
-      await window.reader.libraryDelete(name);
-    } catch (err) {
-      return showNotice(`Не вдалося видалити книжку: ${err.message}`, false);
-    }
-    data.books = data.books.filter((b) => b.path !== name);
-    if (data.lastBook === name) data.lastBook = null;
-    window.Shell?.refresh();
-    if (current?.path === name) {
-      // The book being read is gone: close it and stay in the library.
-      closeBook();
-      current = null;
-      $("#book-title").textContent = "Chytai";
-      $("#running-head").textContent = "";
-      document.title = "Chytai";
-    }
-    showNotice(`Видалено ${label(book)}.`, false);
-    render();
-  }
+  // A long press on a phone row shows its pencil; the tap that ends the press does not open the book.
+  let pressTimer = null;
+  let pressed = false;
+  $("#lib-body").addEventListener("touchstart", (e) => {
+    const row = e.target.closest(".lib-li");
+    if (!row || !canEdit()) return;
+    pressed = false;
+    pressTimer = setTimeout(() => {
+      pressed = true;
+      document.querySelectorAll("#lib-body .show-edit").forEach((r) => r.classList.remove("show-edit"));
+      row.classList.add("show-edit");
+    }, 500);
+  }, { passive: true });
+  for (const type of ["touchend", "touchmove", "touchcancel"]) $("#lib-body").addEventListener(type, () => clearTimeout(pressTimer), { passive: true });
+  $("#lib-body").addEventListener("contextmenu", (e) => e.target.closest(".lib-li") && e.preventDefault());
+  $("#lib-body").addEventListener("click", (e) => {
+    if (!pressed) return;
+    pressed = false;
+    if (!e.target.closest("[data-edit]")) e.stopImmediatePropagation();
+  }, true);
 
   let editing = null;
   function editBook(name) {
@@ -294,7 +276,6 @@
     $("#book-edit").returnValue = "reset";
     $("#book-edit").close("reset");
   };
-  $("#lib-manage").onclick = () => setManage(!manage);
   $("#lib-folders").addEventListener("click", async (e) => {
     const folder = e.target.dataset?.remove;
     if (!folder) return;

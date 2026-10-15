@@ -390,7 +390,6 @@
     },
     libraryRemoveFolder: async () => {},
     // Managing the shared library (family only; the server refuses guests).
-    libraryDelete: (name) => api("DELETE", `/api/books/${encodeURIComponent(name)}`).then((r) => r.json()),
     libraryUpdateBook: (name, patch) => api("PATCH", `/api/books/${encodeURIComponent(name)}`, patch).then((r) => r.json()),
     getSettings: async () => {
       let settings;
