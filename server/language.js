@@ -81,4 +81,4 @@ async function isRussian(name, buffer) {
   }
 }
 
-module.exports = { isRussian, verdictFromText, langFromText, epubSample };
+module.exports = { isRussian, verdictFromText, langFromText, epubSample, stripTags };
