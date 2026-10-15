@@ -161,6 +161,8 @@ g.note-ul .comment-mark { fill: #e07a2e; fill-opacity: 1; stroke: none; font: bo
 #sel-toolbar button { background: none; border: none; color: #fff; padding: 5px 10px; border-radius: 6px; cursor: pointer; font-size: 13px; }
 #sel-toolbar button:hover { background: rgba(255, 255, 255, 0.15); }
 #sel-toolbar button:active { background: rgba(255, 255, 255, 0.22); }
+/* Without a network only "Зберегти" works; explanations and translations need Claude. */
+body.offline #sel-toolbar [data-action="explain"], body.offline #sel-toolbar [data-action="translate"] { opacity: 0.4; }
 
 dialog { border: 1px solid var(--line); border-radius: 12px; background: var(--card); color: var(--fg); width: 440px; padding: 20px 22px; }
 dialog::backdrop { background: rgba(0, 0, 0, 0.3); }
@@ -230,6 +232,7 @@ body[data-theme="dark"] { color-scheme: dark; }
 .lib-book .t { font-family: Georgia, serif; font-size: 15px; line-height: 1.3; }
 .lib-book .m { color: var(--muted); font-size: 12px; display: flex; gap: 8px; flex-wrap: wrap; }
 .lib-book .badge { color: var(--accent); }
+.lib-book.unavailable { opacity: 0.45; } /* offline, and not kept on this device */
 /* Manage mode: the card is a plain block with its own buttons instead of one big button. */
 .lib-book.manage { cursor: default; }
 .lib-book.manage:hover { border-color: var(--line); background: transparent; }
@@ -383,3 +386,4 @@ body[data-theme="dark"] #tip { background: #48484a; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after, ::backdrop { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
 }
+

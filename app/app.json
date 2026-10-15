@@ -2,7 +2,7 @@
   "expo": {
     "name": "Chytai",
     "slug": "chytai",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "scheme": "chytai",
@@ -15,7 +15,8 @@
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "CFBundleAllowMixedLocalizations": true,
-        "CFBundleDevelopmentRegion": "uk"
+        "CFBundleDevelopmentRegion": "uk",
+        "WKAppBoundDomains": ["chytai.fly.dev", "chytai.org.ua"]
       }
     },
     "android": {

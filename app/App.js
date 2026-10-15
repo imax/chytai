@@ -132,6 +132,10 @@ export default function App() {
         // handler below decides.
         originWhitelist={['*']}
         onShouldStartLoadWithRequest={onShouldStartLoadWithRequest}
+        // Offline reading: WKWebView runs a service worker (the reader's sw.js keeps the page, scripts and
+        // fonts on the phone) only for the "app-bound" domains listed in app.json (WKAppBoundDomains) and
+        // only with this set. Books and notes are kept in IndexedDB by the page itself. Needs a new build.
+        limitsNavigationsToAppBoundDomains
         injectedJavaScriptBeforeContentLoaded={ERROR_REPORTER}
         onMessage={(e) => {
           try {

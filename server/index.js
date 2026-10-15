@@ -371,6 +371,49 @@ app.get("/manifest.webmanifest", (_req, res) => {
   });
 });
 
+// The service worker keeps the reader on the device (src/renderer/sw.js). Its version is a hash of the
+// reader's files and package-lock, so a deploy that changes any of them installs a fresh copy; the list
+// of files to keep is everything in src/renderer plus the libraries the page loads from node_modules.
+const serviceWorker = (() => {
+  const rendererDir = path.join(ROOT, "src", "renderer");
+  const rendererFiles = fs.readdirSync(rendererDir).filter((f) => /\.(js|css|html)$/.test(f));
+  const hash = crypto.createHash("sha1");
+  for (const f of [...rendererFiles.map((f) => path.join(rendererDir, f)), path.join(ROOT, "package-lock.json")]) hash.update(fs.readFileSync(f));
+  const fontDir = "@fontsource-variable/literata";
+  const fontCss = ["wght.css", "wght-italic.css"];
+  const fontFiles = fontCss.flatMap((f) =>
+    [...fs.readFileSync(path.join(ROOT, "node_modules", fontDir, f), "utf8").matchAll(/url\(\.\/([^)]+)\)/g)].map((m) => `${fontDir}/${m[1]}`),
+  );
+  const libs = [
+    "jszip/dist/jszip.min.js",
+    "epubjs/dist/epub.min.js",
+    "marked/lib/marked.umd.js",
+    "dompurify/dist/purify.min.js",
+    "pdfjs-dist/build/pdf.mjs",
+    "pdfjs-dist/build/pdf.worker.mjs",
+    "pdfjs-dist/web/pdf_viewer.mjs",
+    "pdfjs-dist/web/pdf_viewer.css",
+    ...fontCss.map((f) => `${fontDir}/${f}`),
+    ...fontFiles,
+  ];
+  const assets = [
+    "/",
+    "/icon.png",
+    "/manifest.webmanifest",
+    ...rendererFiles.filter((f) => f !== "index.html" && f !== "sw.js").map((f) => `/${f}`),
+    ...libs.map((l) => `/node_modules/${l}`),
+  ];
+  const source = fs
+    .readFileSync(path.join(rendererDir, "sw.js"), "utf8")
+    .replace("__VERSION__", hash.digest("hex").slice(0, 12))
+    .replace("__ASSETS__", JSON.stringify(assets));
+  return source;
+})();
+app.get("/sw.js", (_req, res) => {
+  res.setHeader("Cache-Control", "no-cache");
+  res.type("application/javascript").send(serviceWorker);
+});
+
 app.get("/login", (req, res) => (currentUser(req) ? res.redirect("/") : res.type("html").send(loginPage())));
 app.post("/login", express.urlencoded({ extended: false }), (req, res) => {
   const name = String(req.body.name || "").trim().slice(0, 40);

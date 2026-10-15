@@ -70,6 +70,7 @@
           b.ext !== "epub" && b.ext.toUpperCase(),
           `${(b.size / 1e6).toFixed(1)} МБ`,
           b.cloud && "☁︎ в iCloud",
+          b.onDevice && "на пристрої",
         ].filter(Boolean);
         const badge = b.path === data.lastBook ? "читаю зараз" : b.started ? "розпочата" : "";
         const body = `<span class="t">${esc(b.title)}</span>
@@ -80,7 +81,7 @@
           <span class="m"><span class="file">${esc(b.path)}</span>${b.edited ? ` <span class="badge" title="Назву або автора виправлено вручну">виправлено</span>` : ""}</span>
           <span class="lib-actions"><button data-edit="${esc(b.path)}">Назва й автор…</button><button data-delete="${esc(b.path)}" class="danger">Видалити</button></span>
         </div>`
-          : `<button class="lib-book" data-path="${esc(b.path)}" title="${esc(b.path)}">${body}</button>`;
+          : `<button class="lib-book${b.unavailable ? " unavailable" : ""}" data-path="${esc(b.path)}" title="${b.unavailable ? "Немає з'єднання, а ця книжка ще не збережена на пристрої" : esc(b.path)}">${body}</button>`;
       }
       html += `</section>`;
     }
