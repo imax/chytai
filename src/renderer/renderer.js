@@ -312,6 +312,7 @@ async function openEpub(payload, { posKey, source }) {
     const location = rendition?.currentLocation();
     updateProgress(location);
     if (current && location?.start) window.reader.savePosition(current.posKey, location.start.cfi, readingProgress(location));
+    addTocPages(book);
   });
 }
 
@@ -445,6 +446,7 @@ function renderToc(items) {
       const li = document.createElement("li");
       const a = document.createElement("a");
       a.textContent = item.label.trim();
+      a.dataset.href = item.href;
       a.style.paddingLeft = `${12 + depth * 14}px`;
       a.onclick = () => {
         if (pdfView) pdfView.goTo(item.href);
@@ -458,6 +460,34 @@ function renderToc(items) {
     });
   };
   add(items, 0);
+}
+
+// Page numbers are the ~1600-character chunks of the locations index, not screen pages,
+// so they stay the same across font sizes, devices and scroll mode.
+async function addTocPages(forBook) {
+  const links = [...$("#toc-list").querySelectorAll("a[data-href]")];
+  for (const a of links) {
+    const [path, fragment] = a.dataset.href.split("#");
+    const section = forBook.spine.get(path);
+    if (!section) continue;
+    let cfi;
+    try {
+      const doc = await section.load(forBook.load.bind(forBook));
+      const el = (fragment && doc.getElementById(decodeURIComponent(fragment))) || doc.body || doc.documentElement;
+      cfi = section.cfiFromElement(el);
+    } catch {
+      continue;
+    }
+    if (book !== forBook) return;
+    const span = document.createElement("span");
+    span.className = "toc-page";
+    span.textContent = forBook.locations.locationFromCfi(cfi) + 1;
+    a.appendChild(span);
+  }
+}
+
+function pageLabel(cfi) {
+  return `с. ${book.locations.locationFromCfi(cfi) + 1} з ${book.locations.length()}`;
 }
 
 function chapterTitle(href) {
@@ -494,8 +524,7 @@ function updateProgress(location) {
   if (!location?.start) return;
   $("#chapter-label").textContent = chapterTitle(location.start.href);
   if (book.locations.length()) {
-    const pct = Math.round(book.locations.percentageFromCfi(location.start.cfi) * 100);
-    $("#progress-label").textContent = `${pct}%`;
+    $("#progress-label").textContent = pageLabel(location.start.cfi);
   }
 }
 

@@ -52,6 +52,8 @@ button, select, input { font: inherit; color: inherit; }
 #toc ul { list-style: none; margin: 0; padding: 8px 0; }
 #toc a { display: block; padding: 6px 12px; cursor: pointer; border-radius: 4px; }
 #toc a:hover { background: var(--accent-soft); }
+#toc a { display: flex; gap: 12px; align-items: baseline; }
+.toc-page { margin-left: auto; color: var(--muted); font-size: 0.85em; font-variant-numeric: tabular-nums; }
 
 #reader { flex: 1; position: relative; min-width: 0; }
 #viewer { position: absolute; inset: 44px 72px 40px 72px; }
