@@ -244,7 +244,7 @@ body[data-theme="dark"] { color-scheme: dark; }
 .lib-table { display: flex; flex-direction: column; }
 .lib-row {
   display: grid; grid-template-columns: minmax(0, 2.1fr) minmax(0, 1.6fr) 150px 64px 150px 48px; gap: 16px; align-items: center;
-  width: 100%; padding: 9px 10px; border: none; border-bottom: 1px solid var(--line); background: transparent; color: inherit; font-size: 13px; text-align: left;
+  width: 100%; padding: 7px 10px; border: none; border-bottom: 1px solid var(--line); background: transparent; color: inherit; font-size: 13px; text-align: left;
 }
 button.lib-row { cursor: pointer; }
 button.lib-row:hover { background: var(--accent-soft); }
@@ -254,6 +254,9 @@ button.lib-row:hover { background: var(--accent-soft); }
 .lib-th button.on { color: var(--fg); }
 .lib-th button:last-child, .lib-row .num { text-align: right; }
 .lib-title { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.lib-title { gap: 12px; }
+.lib-title .cover.small { flex: none; width: 30px; height: 45px; }
+.lib-title .new-badge { margin-left: -4px; }
 .lib-title .t { font-size: 15px; }
 .new-badge { flex: none; background: var(--accent); color: #fff; font-size: 10px; font-weight: 600; padding: 1px 6px; border-radius: 8px; }
 .lib-prog { display: flex; align-items: center; gap: 8px; }

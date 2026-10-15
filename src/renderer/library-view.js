@@ -140,7 +140,7 @@
     const rows = sorted
       .map((b) => {
         const author = b.authors.length > 3 ? `${b.authors.slice(0, 2).join(", ")}…` : b.authors.join(", ");
-        const cells = `<span class="lib-title"><span class="t ellipsis">${esc(b.title)}</span>${isNew(b) ? `<span class="new-badge">нова</span>` : ""}${b.ext !== "epub" ? `<span class="m">${esc(b.ext.toUpperCase())}</span>` : ""}${b.cloud ? `<span class="m" title="В iCloud, ще не завантажена">☁︎</span>` : ""}</span>
+        const cells = `<span class="lib-title">${window.Shell.cover(b, "small")}<span class="t ellipsis">${esc(b.title)}</span>${isNew(b) ? `<span class="new-badge">нова</span>` : ""}${b.ext !== "epub" ? `<span class="m">${esc(b.ext.toUpperCase())}</span>` : ""}${b.cloud ? `<span class="m" title="В iCloud, ще не завантажена">☁︎</span>` : ""}</span>
           <span class="ellipsis">${esc(author)}</span>
           <span class="lib-prog">${progressCell(b)}</span>
           <span class="m">${esc(b.year || "")}</span>
