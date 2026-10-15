@@ -4,7 +4,7 @@
 // join lines into paragraphs, mark larger text as headings, split chapters by the outline.
 // Pages of verse keep their line breaks: a poem reflowed into prose is unreadable.
 
-export const REFLOW_VERSION = 3;
+export const REFLOW_VERSION = 4;
 const PAGES_PER_SECTION = 20;
 
 const esc = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
@@ -99,6 +99,9 @@ function markVerse(lines, bodySize, lineGap) {
   const right = Math.max(...body.map((l) => l.xEnd));
   const width = right - left || 1;
   const short = (l) => l.xEnd < right - width * 0.12;
+  // At the paragraph indent, a run of short lines is usually one-line paragraphs (dialogue in prose),
+  // so there only lines that break off mid-sentence count towards verse.
+  const midSentence = (l) => short(l) && !TERMINAL.test(l.text);
   const runs = [];
   let run = null;
   lines.forEach((l, i) => {
@@ -110,15 +113,16 @@ function markVerse(lines, bodySize, lineGap) {
   });
   const verseX = [];
   for (const r of runs) {
-    const soft = r.slice(0, -1).filter(short).length;
+    const indented = r[0].x > left + bodySize * 0.8;
+    const soft = r.slice(0, -1).filter(indented ? midSentence : short).length;
     if (r.length >= 3 && soft >= Math.max(2, (r.length - 1) * 0.3)) {
       r.forEach((l) => (l.verse = true));
       verseX.push(r[0].x);
     }
   }
-  // Short stanzas and single speech lines between verse runs.
+  // Short stanzas, half-lines and end-stopped stanzas on a page that has verse (at or right of its edge).
   for (const r of runs) {
-    if (r.length < 3 && r.every((l) => l.xEnd < right - width * 0.05) && verseX.some((x) => Math.abs(x - r[0].x) < bodySize * 0.5)) {
+    if (!r[0].verse && r.every((l) => l.xEnd < right - width * 0.05) && verseX.some((x) => r[0].x > x - bodySize * 0.5)) {
       r.forEach((l) => (l.verse = true));
     }
   }
@@ -135,6 +139,13 @@ function toBlocks(pages) {
   for (const p of pages) for (let i = 1; i < p.lines.length; i++) gaps.push(p.lines[i - 1].y - p.lines[i].y);
   const lineGap = median(gaps.filter((g) => g > 0)) || bodySize * 1.2;
   for (const p of pages) markVerse(p.lines, bodySize, lineGap);
+  // Each page's own text edges: where one-line paragraphs are common the median x is the indent
+  // itself, and in a book of verse the median line end is far from the margin of its prose pages.
+  const edges = new Map();
+  for (const p of pages) {
+    const body = p.lines.filter((l) => l.size <= bodySize * 1.2);
+    edges.set(p.n, body.length ? [Math.min(...body.map((l) => l.x)), Math.max(...body.map((l) => l.xEnd))] : [left, right]);
+  }
   all = pages.flatMap((p) => p.lines.map((l) => ({ ...l, page: p.n })));
 
   const blocks = [];
@@ -146,8 +157,14 @@ function toBlocks(pages) {
     const heading = l.size > bodySize * 1.2 && l.text.length < 120;
     const samePage = prev && prev.page === l.page;
     const bigGap = samePage && prev.y - l.y > lineGap * 1.45;
-    const indented = l.x > left + bodySize * 0.8 && l.x < left + width * 0.3;
-    const prevShort = prev && prev.xEnd < right - width * 0.12 && TERMINAL.test(prev.text);
+    const [pageL, pageR] = edges.get(l.page);
+    const edge = Math.min(left, pageL);
+    const lineR = samePage ? Math.max(right, pageR) : right;
+    const lineW = lineR - edge || 1;
+    // (A full line that breaks off mid-sentence continues the paragraph: hanging indents in a glossary.)
+    const runsOn = samePage && prev.xEnd > lineR - lineW * 0.05 && !TERMINAL.test(prev.text);
+    const indented = l.x > edge + bodySize * 0.8 && l.x < edge + width * 0.3 && !runsOn;
+    const prevShort = prev && prev.xEnd < lineR - lineW * 0.12 && TERMINAL.test(prev.text);
     const prevEnded = prev && TERMINAL.test(prev.text);
 
     if (heading) {
@@ -158,14 +175,14 @@ function toBlocks(pages) {
         cur = { type: "h", text: l.text, page: l.page };
       }
     } else if (l.verse) {
-      const wrapped = cur?.type === "v" && samePage && !bigGap && indented && prev.xEnd > right - width * 0.05;
+      const wrapped = cur?.type === "v" && samePage && !bigGap && l.x > cur.x + bodySize * 0.8 && prev.xEnd > lineR - lineW * 0.05;
       if (wrapped) {
         cur.lines[cur.lines.length - 1] += " " + l.text; // a long verse line the PDF wrapped
       } else if (cur?.type === "v" && !bigGap) {
         cur.lines.push(l.text);
       } else {
         flush();
-        cur = { type: "v", lines: [l.text], page: l.page };
+        cur = { type: "v", lines: [l.text], page: l.page, x: l.x };
       }
     } else if (!cur || cur.type !== "p" || bigGap || indented || prevShort || (!samePage && prevEnded && prev.xEnd < right - width * 0.05)) {
       flush();
