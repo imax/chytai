@@ -251,6 +251,8 @@ async function openEpub(payload, { posKey, source }) {
   rendition.on("relocated", onRelocated);
   rendition.on("rendered", () => decorateNoteMarks());
   rendition.on("keyup", onKey);
+  // Keys pressed while the page has focus reach only the book's frame; pass them on.
+  rendition.on("keydown", (e) => window.Shell?.key(e));
   rendition.on("click", (e) => {
     // A plain click inside the page clears the selection. Touch taps are handled in onTouchEnd:
     // iOS Safari does not deliver clicks on plain text to the iframe's document listener.
@@ -535,6 +537,7 @@ function tapToPage(t, win) {
 
 function onKey(e) {
   if (e.target?.closest?.("input, textarea, select, dialog")) return;
+  if (document.body.classList.contains("library-open")) return; // the home screen covers the book
   const view = pdfView || rendition;
   if (!view) return;
   if (e.key === "ArrowLeft" || e.key === "PageUp") view.prev();

@@ -176,6 +176,10 @@ dialog.closing::backdrop { animation: fade-out 0.16s ease forwards; }
 @keyframes fade-in { from { opacity: 0; } }
 @keyframes fade-out { to { opacity: 0; } }
 dialog h2 { margin: 0 0 14px; font-size: 17px; }
+dl.keys { display: grid; grid-template-columns: auto 1fr; gap: 10px 16px; margin: 0 0 18px; align-items: baseline; }
+dl.keys dt { white-space: nowrap; }
+dl.keys dd { margin: 0; color: var(--muted); }
+kbd { display: inline-block; min-width: 22px; padding: 2px 6px; border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 6px; font: 12px/1.4 -apple-system, system-ui, sans-serif; text-align: center; background: var(--bg); color: var(--fg); }
 dialog h2:focus { outline: none; } /* focused on open only so no field grabs the keyboard */
 body.web .app-only { display: none !important; } /* the web always uses the server's key */
 dialog label { display: block; margin-bottom: 14px; font-weight: 500; }
@@ -242,7 +246,6 @@ body[data-theme="dark"] { color-scheme: dark; }
 .lib-book .m .file { opacity: 0.8; }
 #lib-manage.on { background: var(--accent-soft); border-color: var(--accent); }
 #book-edit menu #edit-reset { margin-right: auto; align-self: center; }
-body.library-open #panel { width: 0; border-left: none; overflow: hidden; }
 .lib-empty { color: var(--muted); text-align: center; margin-top: 15%; }
 
 /* ---------- Search (⌘F) ---------- */

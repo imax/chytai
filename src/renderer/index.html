@@ -18,13 +18,13 @@
     <div class="group">
       <button id="btn-library" title="Головна: книжки, нотатки, бажане (⌘L)">Головна</button>
       <button id="btn-open" title="Відкрити книжку (⌘O)">Відкрити</button>
-      <button id="btn-toc" title="Зміст" disabled>Зміст</button>
+      <button id="btn-toc" title="Зміст (T)" disabled>Зміст</button>
       <button id="btn-pdf-mode" class="hidden" title="Перемкнути між текстом із типографікою читалки та оригінальною версткою PDF">Оригінал PDF</button>
     </div>
     <div id="book-title" class="title">Chytai</div>
     <div class="group">
-      <button id="btn-font-down" title="Менший шрифт">A−</button>
-      <button id="btn-font-up" title="Більший шрифт">A+</button>
+      <button id="btn-font-down" title="Менший шрифт (−)">A−</button>
+      <button id="btn-font-up" title="Більший шрифт (+)">A+</button>
       <select id="theme-select" title="Тема">
         <option value="light">Світла</option>
         <option value="sepia">Сепія</option>
@@ -234,6 +234,7 @@
       <label class="check desktop-only"><input type="checkbox" id="set-auto" /> Пояснювати одразу після виділення</label>
       <menu>
         <button type="button" id="btn-admin" class="link web-only family-only" title="Хто читає, скільки книжок і пояснень">Статистика</button>
+        <button type="button" id="btn-keys" class="link desktop-only" title="Клавіатурні скорочення (?)">Клавіші</button>
         <button type="button" id="btn-logout" class="link web-only" title="Вийти з облікового запису на цьому пристрої">Вийти</button>
         <button value="cancel" formnovalidate>Скасувати</button>
         <button value="save" class="primary" id="settings-save">Зберегти</button>
@@ -256,6 +257,25 @@
         <button value="cancel" formnovalidate>Скасувати</button>
         <button value="save" class="primary">Зберегти</button>
       </menu>
+    </form>
+  </dialog>
+
+  <dialog id="keys">
+    <form method="dialog">
+      <h2 tabindex="-1" autofocus>Клавіші</h2>
+      <dl class="keys">
+        <dt><kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd></dt><dd>Головна, Бібліотека, Нотатки</dd>
+        <dt><kbd>/</kbd></dt><dd>Пошук: у книжці, а на головній — у бібліотеці</dd>
+        <dt><kbd>Esc</kbd></dt><dd>Повернутися до книжки</dd>
+        <dt><kbd>←</kbd> <kbd>→</kbd> <kbd>Пробіл</kbd></dt><dd>Гортати сторінки</dd>
+        <dt><kbd>T</kbd></dt><dd>Зміст</dd>
+        <dt><kbd>−</kbd> <kbd>+</kbd></dt><dd>Менший і більший шрифт</dd>
+        <dt><kbd>⌘E</kbd></dt><dd>Панель пояснень</dd>
+        <dt><kbd>⌘O</kbd></dt><dd>Відкрити книжку з диска</dd>
+        <dt><kbd>⌘,</kbd></dt><dd>Налаштування</dd>
+        <dt><kbd>?</kbd></dt><dd>Ця підказка</dd>
+      </dl>
+      <menu><button value="close" class="primary">Зрозуміло</button></menu>
     </form>
   </dialog>
 

@@ -21,6 +21,8 @@
   function show(next = tab) {
     tab = next;
     $("#shell").classList.remove("hidden");
+    // Keys go to the home screen now, not to the page of the book left focused underneath.
+    if (document.activeElement?.tagName === "IFRAME") document.activeElement.blur();
     document.body.classList.add("library-open");
     for (const [name, sel] of Object.entries(TABS)) $(sel).classList.toggle("hidden", name !== tab);
     for (const b of document.querySelectorAll("#tabbar button")) b.classList.toggle("active", b.dataset.tab === tab);
@@ -356,9 +358,43 @@
     $("#lib-search").dispatchEvent(new Event("input"));
   });
   $("#btn-library").onclick = () => (isOpen() && current ? hide() : show("home"));
-  document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape" && current && isOpen() && !document.querySelector("dialog[open]")) hide();
-  });
+
+  // Single keys on a keyboard: Esc back to the book, 1 2 3 for the tabs, / to search, T for the contents, − + for the
+  // font, ? for the list. Never while typing or with a dialog open; guests have no home screen.
+  // Matched by the physical key, so they work the same with the Ukrainian layout on.
+  const TAB_KEYS = { Digit1: "home", Digit2: "library", Digit3: "notes" };
+  function key(e) {
+    if (e.metaKey || e.ctrlKey || e.altKey || e.repeat) return;
+    if (e.target?.closest?.("input, textarea, select, [contenteditable]")) return;
+    if (document.querySelector("dialog[open]")) return;
+    const guest = document.body.classList.contains("guest");
+    const reading = !isOpen() && current;
+    let act = null;
+    const code = e.code;
+    if (e.key === "Escape" && current && isOpen()) act = hide;
+    else if (TAB_KEYS[code] && !e.shiftKey && !guest) act = () => show(TAB_KEYS[code]);
+    else if (code === "Slash" && !e.shiftKey) {
+      act = reading
+        ? () => window.BookSearch?.open()
+        : () => {
+            const field = getComputedStyle($("#shell-top")).display !== "none" ? $("#top-search") : $("#lib-search");
+            if (tab !== "library") show("library");
+            field.focus();
+            field.select();
+          };
+    } else if (code === "Slash" && e.shiftKey) act = () => $("#keys").showModal();
+    else if (reading && code === "KeyT" && !$("#btn-toc").disabled) act = () => $("#btn-toc").click();
+    else if (reading && (code === "Minus" || code === "NumpadSubtract")) act = () => $("#btn-font-down").click();
+    else if (reading && (code === "Equal" || code === "NumpadAdd")) act = () => $("#btn-font-up").click();
+    if (!act) return;
+    e.preventDefault();
+    act();
+  }
+  document.addEventListener("keydown", key);
+  $("#btn-keys").onclick = () => {
+    $("#settings").close();
+    $("#keys").showModal();
+  };
   window.reader.onShowLibrary(() => (isOpen() && current ? hide() : show("library")));
   window.reader.onBookOpen(() => hide());
   // A note saved or removed in the book shows up here next time.
@@ -371,7 +407,7 @@
     render();
   }
 
-  window.Shell = { show, hide, isNew, refresh };
+  window.Shell = { show, hide, isNew, refresh, key };
 
   // The family starts here; a guest has one book, which the bridge opens straight away.
   settingsReady

@@ -155,6 +155,7 @@
     count.textContent = "";
   }).observe($("#book-title"), { childList: true, characterData: true, subtree: true });
 
+  window.BookSearch = { open };
   window.reader.onFind((action) => {
     if (action === "open") open();
     else if (box.classList.contains("hidden")) open();
