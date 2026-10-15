@@ -1114,7 +1114,7 @@ function renderNotes() {
     return;
   }
   if (!notes.length) {
-    box.innerHTML = `<div class="panel-empty">Нотаток ще немає. Виділіть текст і натисніть «В нотатки».</div>`;
+    box.innerHTML = `<div class="panel-empty">Нотаток ще немає. Виділіть текст і натисніть «Зберегти».</div>`;
     return;
   }
   // Newest on top, like the explanations.
