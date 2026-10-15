@@ -2,8 +2,9 @@
 // Turns a text PDF into a reflowable EPUB so it gets the same typography as real e-books.
 // Heuristic: rebuild lines from positioned text, drop running headers/page numbers,
 // join lines into paragraphs, mark larger text as headings, split chapters by the outline.
+// Pages of verse keep their line breaks: a poem reflowed into prose is unreadable.
 
-export const REFLOW_VERSION = 2;
+export const REFLOW_VERSION = 3;
 const PAGES_PER_SECTION = 20;
 
 const esc = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
@@ -50,13 +51,20 @@ function toLines(items) {
 const furnitureKey = (t) => t.toLowerCase().replace(/\d+/g, "#").replace(/\s+/g, " ").trim();
 const isPageNumber = (t) => /^[\divxlcdm\s.\-–—]+$/i.test(t) && t.length <= 12;
 
+// Small bare numbers next to body text are line numbers of a poem or footnote marks.
+function dropMarginNumbers(items) {
+  const sizes = items.filter((it) => it.str?.trim()).map((it) => Math.hypot(it.transform[1], it.transform[3]));
+  const body = median(sizes);
+  return items.filter((it) => !(/^\s*\d+\s*$/.test(it.str || "") && Math.hypot(it.transform[1], it.transform[3]) < body * 0.7));
+}
+
 async function readPages(doc, onProgress) {
   const pages = [];
   for (let n = 1; n <= doc.numPages; n++) {
     const page = await doc.getPage(n);
     const { height } = page.getViewport({ scale: 1 });
     const content = await page.getTextContent();
-    pages.push({ n, height, lines: toLines(content.items) });
+    pages.push({ n, height, lines: toLines(dropMarginNumbers(content.items)) });
     page.cleanup();
     if (n % 10 === 0) onProgress?.(n, doc.numPages);
   }
@@ -81,9 +89,44 @@ function dropFurniture(pages) {
   }
 }
 
-// Lines across all pages -> blocks { type: "p"|"h", text, page }.
+// Verse: a run of lines that share a left edge where many stop well short of the margin
+// (in prose only the last line of a paragraph is short, and the next one is indented).
+// Marks such lines with `verse`, so a poem quoted inside prose is caught too.
+function markVerse(lines, bodySize, lineGap) {
+  const body = lines.filter((l) => l.size <= bodySize * 1.2);
+  if (body.length < 3) return;
+  const left = Math.min(...body.map((l) => l.x));
+  const right = Math.max(...body.map((l) => l.xEnd));
+  const width = right - left || 1;
+  const short = (l) => l.xEnd < right - width * 0.12;
+  const runs = [];
+  let run = null;
+  lines.forEach((l, i) => {
+    if (l.size > bodySize * 1.2) return void (run = null); // headings end a run
+    const prev = lines[i - 1];
+    const joins = run && prev.y - l.y <= lineGap * 1.45 && Math.abs(l.x - prev.x) < bodySize * 0.5;
+    if (!joins) runs.push((run = []));
+    run.push(l);
+  });
+  const verseX = [];
+  for (const r of runs) {
+    const soft = r.slice(0, -1).filter(short).length;
+    if (r.length >= 3 && soft >= Math.max(2, (r.length - 1) * 0.3)) {
+      r.forEach((l) => (l.verse = true));
+      verseX.push(r[0].x);
+    }
+  }
+  // Short stanzas and single speech lines between verse runs.
+  for (const r of runs) {
+    if (r.length < 3 && r.every((l) => l.xEnd < right - width * 0.05) && verseX.some((x) => Math.abs(x - r[0].x) < bodySize * 0.5)) {
+      r.forEach((l) => (l.verse = true));
+    }
+  }
+}
+
+// Lines across all pages -> blocks { type: "p"|"h", text, page } or { type: "v", lines, page }.
 function toBlocks(pages) {
-  const all = pages.flatMap((p) => p.lines.map((l) => ({ ...l, page: p.n })));
+  let all = pages.flatMap((p) => p.lines.map((l) => ({ ...l, page: p.n })));
   const bodySize = median(all.map((l) => l.size));
   const left = median(all.map((l) => l.x));
   const right = median(all.map((l) => l.xEnd));
@@ -91,6 +134,8 @@ function toBlocks(pages) {
   const gaps = [];
   for (const p of pages) for (let i = 1; i < p.lines.length; i++) gaps.push(p.lines[i - 1].y - p.lines[i].y);
   const lineGap = median(gaps.filter((g) => g > 0)) || bodySize * 1.2;
+  for (const p of pages) markVerse(p.lines, bodySize, lineGap);
+  all = pages.flatMap((p) => p.lines.map((l) => ({ ...l, page: p.n })));
 
   const blocks = [];
   let cur = null;
@@ -112,7 +157,17 @@ function toBlocks(pages) {
         flush();
         cur = { type: "h", text: l.text, page: l.page };
       }
-    } else if (!cur || cur.type === "h" || bigGap || indented || prevShort || (!samePage && prevEnded && prev.xEnd < right - width * 0.05)) {
+    } else if (l.verse) {
+      const wrapped = cur?.type === "v" && samePage && !bigGap && indented && prev.xEnd > right - width * 0.05;
+      if (wrapped) {
+        cur.lines[cur.lines.length - 1] += " " + l.text; // a long verse line the PDF wrapped
+      } else if (cur?.type === "v" && !bigGap) {
+        cur.lines.push(l.text);
+      } else {
+        flush();
+        cur = { type: "v", lines: [l.text], page: l.page };
+      }
+    } else if (!cur || cur.type !== "p" || bigGap || indented || prevShort || (!samePage && prevEnded && prev.xEnd < right - width * 0.05)) {
       flush();
       cur = { type: "p", text: l.text, page: l.page };
     } else if (/[A-Za-zА-Яа-яЁёЇїІіЄєҐґ]-$/.test(cur.text) && /^[a-zа-яёїієґ]/.test(l.text)) {
@@ -149,7 +204,7 @@ export async function pdfToEpub(doc, { title, author, language }, onProgress) {
   const pages = await readPages(doc, onProgress);
   dropFurniture(pages);
   const blocks = toBlocks(pages);
-  if (blocks.reduce((n, b) => n + b.text.length, 0) < 200) {
+  if (blocks.reduce((n, b) => n + (b.text ?? b.lines.join("")).length, 0) < 200) {
     throw new Error("NO_TEXT");
   }
 
@@ -173,7 +228,8 @@ export async function pdfToEpub(doc, { title, author, language }, onProgress) {
     const sec = sections[sectionOfPage(b.page)];
     const anchor = seenPage.has(b.page) ? "" : ` id="page-${b.page}"`;
     seenPage.add(b.page);
-    sec.push(b.type === "h" ? `<h2${anchor}>${esc(b.text)}</h2>` : `<p${anchor}>${esc(b.text)}</p>`);
+    if (b.type === "v") sec.push(`<div class="v"${anchor}>${b.lines.map((t) => `<p>${esc(t)}</p>`).join("")}</div>`);
+    else sec.push(b.type === "h" ? `<h2${anchor}>${esc(b.text)}</h2>` : `<p${anchor}>${esc(b.text)}</p>`);
   }
 
   const lang = language || "en";
@@ -183,7 +239,7 @@ export async function pdfToEpub(doc, { title, author, language }, onProgress) {
     "META-INF/container.xml",
     `<?xml version="1.0"?><container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container"><rootfiles><rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/></rootfiles></container>`
   );
-  const css = "p{margin:0;text-indent:1.4em}h2{margin:1.5em 0 .8em;text-indent:0}h2+p{text-indent:0}";
+  const css = "p{margin:0;text-indent:1.4em}h2{margin:1.5em 0 .8em;text-indent:0}h2+p{text-indent:0}.v{margin:0 0 1em}.v p{text-align:left;hyphens:manual;-webkit-hyphens:manual;padding-left:1.5em;text-indent:-1.5em}";
   zip.file("OEBPS/style.css", css);
   // PDF page -> location in the EPUB, so switching views keeps the reader's place.
   const pageMap = {};
