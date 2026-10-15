@@ -4,8 +4,6 @@
 // the home screen is drawn from (window.Library).
 (() => {
   const LANGS = { uk: "українська", ru: "російська", en: "англійська", be: "білоруська", pl: "польська", de: "німецька", fr: "французька", es: "іспанська", it: "італійська", la: "латина", el: "грецька", ar: "арабська", he: "іврит", ja: "японська", zh: "китайська" };
-  // "Українські" for the language switch.
-  const LANG_PLURAL = { uk: "Українські", ru: "Російські", en: "Англійські", be: "Білоруські", pl: "Польські", de: "Німецькі", fr: "Французькі", es: "Іспанські", it: "Італійські" };
   const MONTHS_IN = ["січні", "лютому", "березні", "квітні", "травні", "червні", "липні", "серпні", "вересні", "жовтні", "листопаді", "грудні"];
   const FILTERS = [["all", "Усі"], ["reading", "Читаю"], ["unread", "Не почато"], ["done", "Прочитано"], ["new", "Нові"]];
   const PHONE_FILTERS = ["all", "reading", "new"];
@@ -127,7 +125,7 @@
     ).join("");
     $("#lib-langs").innerHTML =
       langs.length > 1
-        ? [["", "Усі мови"], ...langs.map((l) => [l, LANG_PLURAL[l] || LANGS[l] || l])]
+        ? [["", "Усі мови"], ...langs.map((l) => [l, (LANGS[l] || l).replace(/^./, (c) => c.toUpperCase())])]
             .map(([id, label]) => `<button class="${view.lang === id ? "on" : ""}" data-lang="${esc(id)}">${esc(label)}</button>`)
             .join("")
         : "";
