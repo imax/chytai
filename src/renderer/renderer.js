@@ -23,6 +23,13 @@ const HIGHLIGHT_STYLE = { fill: "#ffd54a", "fill-opacity": "0.35", "mix-blend-mo
 if (matchMedia("(max-width: 760px)").matches) document.body.classList.add("panel-hidden");
 let touchStart = null;
 const PHONE = matchMedia("(max-width: 760px)");
+// Touch screens wider than a phone (iPad): desktop layout, but finger-sized controls and the
+// selection bar at the bottom, clear of the system Copy / Translate menu.
+const TOUCH = matchMedia("(pointer: coarse)");
+document.documentElement.classList.toggle("touch", TOUCH.matches);
+TOUCH.addEventListener("change", () => document.documentElement.classList.toggle("touch", TOUCH.matches));
+// iPad held upright: the panel would squeeze the book into a narrow column, so it waits for the first explanation.
+if (TOUCH.matches && matchMedia("(orientation: portrait)").matches) document.body.classList.add("panel-hidden");
 // Inside the iPhone app (app/App.js adds ChytaiApp to the user agent) rather than Safari.
 const IN_APP = /ChytaiApp/.test(navigator.userAgent);
 document.documentElement.classList.toggle("in-app", IN_APP);
@@ -602,8 +609,8 @@ function handleSelection(range, cfiRange, ctx, frame) {
   showSelToolbar(range, frame);
 
   clearTimeout(autoTimer);
-  // On a phone the selection grows by dragging handles, so it would fire on the first word: explain only on a tap.
-  if (settings.autoExplain && !PHONE.matches) {
+  // On a touch screen the selection grows by dragging handles, so it would fire on the first word: explain only on a tap.
+  if (settings.autoExplain && !PHONE.matches && !TOUCH.matches) {
     // Short pause so a still-adjusting selection doesn't fire several requests.
     const snapshot = pendingSelection;
     autoTimer = setTimeout(() => {
@@ -620,6 +627,13 @@ function showSelToolbar(range, frame) {
   // the system Copy / Translate menu, which the app cannot reliably hide either.
   // Desktop: above the selection, or below when there is no room.
   if (PHONE.matches) return bar.removeAttribute("style");
+  if (TOUCH.matches) {
+    // iPad: bottom of the page column (CSS), centred under the book rather than the whole window.
+    const r = $("#reader").getBoundingClientRect();
+    bar.removeAttribute("style");
+    bar.style.left = `${r.left + r.width / 2}px`;
+    return;
+  }
   const above = frame.top + rect.top - bar.offsetHeight - 8;
   const left = frame.left + rect.left + rect.width / 2 - bar.offsetWidth / 2;
   const top = Math.max(48, above < 48 ? frame.top + rect.bottom + 8 : above);

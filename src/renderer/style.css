@@ -307,6 +307,17 @@ button.lib-book:hover .lib-edit, .lib-li.show-edit .lib-edit { display: flex; }
 .mobile-only, .web-only { display: none !important; }
 body.web .web-only { display: inline-block !important; }
 body.guest .family-only { display: none !important; }
+/* iPad and other touch screens wider than a phone: finger-sized toolbar, selection bar at the bottom. */
+@media (min-width: 761px) {
+  html.touch #toolbar { height: 52px; }
+  html.touch #layout { height: calc(100% - 52px); }
+  html.touch #toolbar button, html.touch #toolbar select { min-height: 38px; padding: 6px 14px; font-size: 15px; border-radius: 8px; }
+  html.touch #sel-toolbar { top: auto; --shift: -50%; bottom: calc(40px + env(safe-area-inset-bottom)); padding: 4px; border-radius: 12px; }
+  html.touch #sel-toolbar button { padding: 10px 16px; font-size: 16px; }
+}
+@media (min-width: 761px) and (orientation: portrait) {
+  html.touch { --panel-w: 340px; }
+}
 body.web #toolbar { padding-left: 12px; -webkit-app-region: no-drag; }
 body.web #btn-logout { margin-right: auto; align-self: center; }
 /* Guests (demo) read one book: no uploads, no shared settings. */
