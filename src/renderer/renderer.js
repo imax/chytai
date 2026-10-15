@@ -288,6 +288,7 @@ async function openEpub(payload, { posKey, source }) {
   requestAnimationFrame(resizeView);
   loadNotes();
   watchFirstPage();
+  jumpIfPending();
 
   const meta = await book.loaded.metadata;
   current.title = meta.title || current.title;
@@ -301,7 +302,11 @@ async function openEpub(payload, { posKey, source }) {
   $("#btn-toc").disabled = false;
 
   // Page-accurate progress needs the locations index; build it in the background.
-  book.locations.generate(1600).then(() => updateProgress(rendition.currentLocation()));
+  book.locations.generate(1600).then(() => {
+    const location = rendition?.currentLocation();
+    updateProgress(location);
+    if (current && location?.start) window.reader.savePosition(current.posKey, location.start.cfi, readingProgress(location));
+  });
 }
 
 // epub.js throws from resize() until its stage exists (the book is still being parsed), and a
@@ -392,7 +397,7 @@ async function openPdf(payload) {
   pdfView = await PdfView.open($("#pdf-container"), payload.data, {
     position: payload.position,
     onPageChange: (page, total) => {
-      window.reader.savePosition(current.posKey, `pdf:${page}`);
+      window.reader.savePosition(current.posKey, `pdf:${page}`, { pct: Math.round((page / total) * 100), chapter: "" });
       $("#progress-label").textContent = `${page} / ${total}`;
       hideSelToolbar();
     },
@@ -410,6 +415,7 @@ async function openPdf(payload) {
   renderToc(toc);
   $("#btn-toc").disabled = !toc.length;
   loadNotes();
+  jumpIfPending();
 }
 
 async function onPdfMouseUp() {
@@ -465,11 +471,17 @@ function chapterTitle(href) {
 }
 
 function onRelocated(location) {
-  if (current) window.reader.savePosition(current.posKey, location.start.cfi);
+  if (current) window.reader.savePosition(current.posKey, location.start.cfi, readingProgress(location));
   updateProgress(location);
   // While scrolling, a selection may move off screen and back; its toolbar is pinned at the bottom anyway.
   if (!scrolled()) hideSelToolbar();
   toggleChrome(false);
+}
+
+// How far into the book and which chapter, for the home screen; nothing until the locations index exists.
+function readingProgress(location) {
+  if (!book?.locations.length() || !location?.start) return undefined;
+  return { pct: Math.round(book.locations.percentageFromCfi(location.start.cfi) * 100), chapter: chapterTitle(location.start.href) };
 }
 
 function updateProgress(location) {
@@ -1092,6 +1104,20 @@ function openNote(id) {
   flash(el);
 }
 
+// A note picked on the home screen: open its book (unless it is the one on screen) and go to the passage.
+let pendingJump = null; // { path, note }
+function openNoteInBook(path, note) {
+  if (current?.path === path && (rendition || pdfView)) return goToNote(note);
+  pendingJump = { path, note };
+  window.reader.openPath(path);
+}
+function jumpIfPending() {
+  if (!pendingJump || pendingJump.path !== current?.path) return;
+  const { note } = pendingJump;
+  pendingJump = null;
+  if (note.cfi.startsWith("pdf:") ? pdfView : rendition && (note.posKey || current.path) === current.posKey) goToNote(note);
+}
+
 function goToNote(note) {
   if (note.cfi.startsWith("pdf:")) {
     const page = Number(note.cfi.split(":")[1]);
@@ -1287,7 +1313,7 @@ window.reader.onBookOpen((payload) =>
     console.error(err);
     closeBook();
     showNotice(`Не вдалося відкрити книжку: ${err.message}`, false);
-    if ($("#library").classList.contains("hidden")) $("#btn-library").click();
+    window.Shell?.show("home");
   }),
 );
 window.reader.onShowSettings(openSettings);

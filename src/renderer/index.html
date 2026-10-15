@@ -16,7 +16,7 @@
 <body data-theme="light">
   <header id="toolbar">
     <div class="group">
-      <button id="btn-library" title="Бібліотека (⌘L)">Бібліотека</button>
+      <button id="btn-library" title="Головна: книжки, нотатки, бажане (⌘L)">Головна</button>
       <button id="btn-open" title="Відкрити книжку (⌘O)">Відкрити</button>
       <button id="btn-toc" title="Зміст" disabled>Зміст</button>
       <button id="btn-pdf-mode" class="hidden" title="Перемкнути між текстом із типографікою читалки та оригінальною версткою PDF">Оригінал PDF</button>
@@ -47,20 +47,6 @@
           <p>EPUB, PDF, а також MOBI, AZW3 та інші формати через Calibre. Або натисніть <b>Відкрити</b>. Виділіть слово, фразу чи абзац, і пояснення з'явиться праворуч.</p>
           <button id="btn-open-empty" class="primary">Відкрити книжку</button>
         </div>
-      </div>
-      <div id="library" class="hidden">
-        <div class="lib-head">
-          <input id="lib-search" type="search" placeholder="Пошук за назвою чи автором" />
-          <select id="lib-lang" title="Мова">
-            <option value="">Усі мови</option>
-          </select>
-          <button id="lib-refresh" title="Пересканувати папки">Оновити</button>
-          <button id="lib-add" title="Додати папку з книжками">Додати папку…</button>
-          <button id="lib-manage" class="web-only family-only" title="Виправити назву чи автора, видалити книжку">Керувати</button>
-          <button id="lib-close" class="link" title="Повернутися до книжки (Esc)">Закрити</button>
-        </div>
-        <div id="lib-folders"></div>
-        <div id="lib-body"></div>
       </div>
       <div id="running-head"></div>
       <div id="search" class="hidden">
@@ -99,6 +85,69 @@
       <div id="notes" class="hidden"></div>
     </aside>
   </main>
+
+  <!-- Home screen (home.js): Головна, Бібліотека, Нотатки and the wish list, with a tab bar.
+       It is on screen from the start, so the app opens on its skeleton rather than an empty reader. -->
+  <div id="shell">
+    <div id="shell-views">
+      <section id="home" class="view">
+        <header class="home-head">
+          <div class="brand"><img src="icon.png" alt="" /><span>Chytai</span></div>
+          <button id="home-settings" class="round" title="Налаштування">⚙</button>
+        </header>
+        <div id="home-body">
+          <div class="skeleton" aria-hidden="true">
+            <div class="sk-line"></div>
+            <div class="sk-card"><div class="sk-cover"></div><div class="sk-lines"><div></div><div></div><div class="sk-grow"></div><div class="sk-bar"></div></div></div>
+            <div class="sk-line"></div>
+            <div class="sk-shelf"><div></div><div></div><div></div><div></div></div>
+          </div>
+          <p id="home-wait" class="home-wait hidden"><span class="spinner"></span>Бібліотека прокидається, ще кілька секунд…</p>
+        </div>
+      </section>
+      <div id="library" class="view hidden">
+        <h1 class="view-title">Бібліотека</h1>
+        <div class="lib-head">
+          <input id="lib-search" type="search" placeholder="Пошук за назвою чи автором" />
+          <select id="lib-lang" title="Мова">
+            <option value="">Усі мови</option>
+          </select>
+          <button id="lib-refresh" title="Пересканувати папки">Оновити</button>
+          <button id="lib-add" title="Додати папку з книжками">Додати папку…</button>
+          <button id="lib-manage" class="web-only family-only" title="Виправити назву чи автора, видалити книжку">Керувати</button>
+        </div>
+        <div id="lib-folders"></div>
+        <div id="lib-body"></div>
+      </div>
+      <section id="all-notes" class="view hidden">
+        <h1 class="view-title">Нотатки</h1>
+        <div id="all-notes-body"></div>
+      </section>
+      <section id="wish" class="view hidden">
+        <h1 class="view-title">Хочу прочитати</h1>
+        <p class="view-hint">Коли хтось із родини додасть книжку зі списку, вона з'явиться в «Нових надходженнях».</p>
+        <form id="wish-form" class="wish-form">
+          <input id="wish-input" placeholder="Назва та автор" autocomplete="off" />
+          <button type="submit" class="pill">Додати</button>
+        </form>
+        <div id="wish-body"></div>
+      </section>
+    </div>
+    <nav id="tabbar">
+      <button data-tab="home">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"/><path d="M3 10a2 2 0 0 1 .709-1.528l7-5.999a2 2 0 0 1 2.582 0l7 5.999A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+        <span>Головна</span>
+      </button>
+      <button data-tab="library">
+        <span class="icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m16 6 4 14"/><path d="M12 6v14"/><path d="M8 8v12"/><path d="M4 4v16"/></svg><span id="tab-badge" class="badge hidden"></span></span>
+        <span>Бібліотека</span>
+      </button>
+      <button data-tab="notes">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V8Z"/><path d="M15 3v4a2 2 0 0 0 2 2h4"/></svg>
+        <span>Нотатки</span>
+      </button>
+    </nav>
+  </div>
 
   <div id="notice" class="hidden">
     <span class="spinner"></span>
@@ -206,6 +255,7 @@
   <script src="renderer.js"></script>
   <script src="search.js"></script>
   <script src="library-view.js"></script>
+  <script src="home.js"></script>
   <script type="module" src="pdf-view.js"></script>
 </body>
 </html>

@@ -148,7 +148,7 @@ async function scan(folders, cacheFile) {
     const key = `${st.size}:${Math.round(st.mtimeMs)}:${cloud ? "c" : "l"}`;
     const meta = cache[file]?.key === key ? cache[file].meta : await readMeta(file, st);
     nextCache[file] = { key, meta };
-    books.push({ path: file, ext: path.extname(file).slice(1).toLowerCase(), size: st.size, cloud, ...meta });
+    books.push({ path: file, ext: path.extname(file).slice(1).toLowerCase(), size: st.size, mtime: Math.round(st.mtimeMs), cloud, ...meta });
   }
   fs.mkdirSync(path.dirname(cacheFile), { recursive: true });
   fs.writeFileSync(cacheFile, JSON.stringify(nextCache));

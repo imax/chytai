@@ -10,6 +10,7 @@ const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
 const { explain } = require("../src/ai");
+const JSZip = require("jszip");
 const library = require("../src/library");
 const { isRussian } = require("./language");
 const { adminPage, cost } = require("./admin");
@@ -497,12 +498,17 @@ api.patch("/settings", (req, res) => {
 });
 
 api.put("/position", (req, res) => {
-  const { path: bookPath, cfi } = req.body || {};
+  const { path: bookPath, cfi, pct, chapter } = req.body || {};
   if (typeof bookPath !== "string" || typeof cfi !== "string") return res.status(400).json({ error: "bad request" });
   const u = req.guest ? guestState(req.guest) : userState(req.user);
+  const name = bookPath.replace(/#reflow$/, "");
   u.positions ??= {};
   u.positions[bookPath] = cfi;
-  (u.opened ??= {})[bookPath.replace(/#reflow$/, "")] = Date.now();
+  (u.opened ??= {})[name] = Date.now();
+  // How far in and which chapter, for the home screen: the position itself is a CFI it cannot read.
+  if (Number.isFinite(pct)) {
+    (u.progress ??= {})[name] = { pct: Math.max(0, Math.min(100, Math.round(pct))), chapter: typeof chapter === "string" ? chapter.slice(0, 200) : "" };
+  }
   if (!req.guest) saveState();
   res.json({ ok: true });
 });
@@ -521,6 +527,12 @@ api.get("/notes", (req, res) => {
   const bookPath = String(req.query.path || "");
   const u = req.guest ? guestState(req.guest) : userState(req.user);
   res.json({ notes: u.notes?.[bookPath] || [] });
+});
+
+// Every note of this reader, for the home screen's Нотатки: { "<book>": [note, …] }.
+api.get("/notes/all", (req, res) => {
+  const u = req.guest ? guestState(req.guest) : userState(req.user);
+  res.json({ books: u.notes || {} });
 });
 
 api.post("/notes", (req, res) => {
@@ -590,7 +602,10 @@ function forgetBook(name) {
     delete u.positions?.[`${name}#reflow`];
     delete u.opened?.[name];
     delete u.notes?.[name];
+    delete u.progress?.[name];
+    delete u.seen?.[name];
   }
+  delete state.shared.added?.[name];
   if (state.shared.demoBook === name) state.shared.demoBook = "";
   delete state.shared.bookMeta?.[name];
   saveState();
@@ -608,10 +623,21 @@ api.get("/library", async (req, res) => {
     books = (await scanLibrary()).map((b) => ({ ...b, dir: BOOKS_DIR }));
   }
   const positions = u.positions || {};
+  const added = state.shared.added || {};
   const list = books.map((b) => {
     const name = path.relative(b.dir, b.path);
     const openedAt = u.opened?.[name] || 0;
-    return { ...b, dir: undefined, path: name, cloud: false, openedAt, started: !!(positions[name] || positions[`${name}#reflow`]) };
+    const progress = u.progress?.[name];
+    return {
+      ...b, dir: undefined, path: name, cloud: false, openedAt,
+      started: !!(positions[name] || positions[`${name}#reflow`]),
+      pct: progress ? progress.pct : null,
+      chapter: progress?.chapter || "",
+      // Who put the book in the library and when; books from before this was recorded have only the file's date.
+      addedAt: added[name]?.at || b.mtime || 0,
+      addedBy: added[name]?.by || "",
+      seen: !!(openedAt || u.seen?.[name]) || (!!req.user && added[name]?.by === req.user),
+    };
   });
   res.json({ folders: [], books: list, lastBook: u.lastBook || (req.guest ? demoBooks()[0]?.name : null) || null });
 });
@@ -630,6 +656,89 @@ api.get("/book", (req, res) => {
   res.sendFile(file);
 });
 
+// ---------- Home screen: covers, "new arrivals" seen, the wish list ----------
+
+// The cover image inside an EPUB, cached on the volume by file name, size and date; PDFs have none.
+const COVER_DIR = path.join(DATA_DIR, "covers");
+const COVER_TYPES = { jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png", gif: "image/gif", webp: "image/webp" };
+
+async function epubCover(file) {
+  const zip = await JSZip.loadAsync(fs.readFileSync(file));
+  const container = await zip.file("META-INF/container.xml")?.async("string");
+  const opfPath = container?.match(/full-path="([^"]+)"/)?.[1];
+  const opf = opfPath && (await zip.file(opfPath)?.async("string"));
+  if (!opf) return null;
+  const items = [...opf.matchAll(/<(?:opf:)?item\b[^>]*>/g)].map((m) => {
+    const attr = (name) => m[0].match(new RegExp(`\\b${name}="([^"]*)"`))?.[1] || "";
+    return { id: attr("id"), href: attr("href"), type: attr("media-type"), props: attr("properties") };
+  });
+  const coverId = opf.match(/<meta\b[^>]*name="cover"[^>]*content="([^"]+)"/)?.[1] || opf.match(/<meta\b[^>]*content="([^"]+)"[^>]*name="cover"/)?.[1];
+  const item =
+    items.find((i) => i.props.split(/\s+/).includes("cover-image")) ||
+    items.find((i) => i.id === coverId && i.type.startsWith("image/")) ||
+    items.find((i) => /cover/i.test(i.id + i.href) && i.type.startsWith("image/"));
+  if (!item) return null;
+  const href = decodeURIComponent(path.posix.join(path.posix.dirname(opfPath), item.href));
+  const data = await zip.file(href)?.async("nodebuffer");
+  const ext = path.extname(href).slice(1).toLowerCase();
+  return data && COVER_TYPES[ext] ? { data, ext } : null;
+}
+
+api.get("/cover", async (req, res) => {
+  const name = safeBookName(req.query.path);
+  const demo = req.guest ? demoBooks().find((d) => d.name === name) : null;
+  const file = req.guest ? demo && path.join(demo.dir, demo.name) : name && bookFile(name);
+  if (!file || !/\.epub$/i.test(file) || !fs.existsSync(file)) return res.status(404).end();
+  try {
+    const st = fs.statSync(file);
+    const key = crypto.createHash("sha1").update(`${file}:${st.size}:${st.mtimeMs}`).digest("hex").slice(0, 16);
+    fs.mkdirSync(COVER_DIR, { recursive: true });
+    let cached = fs.readdirSync(COVER_DIR).find((f) => f.startsWith(`${key}.`));
+    if (!cached) {
+      const cover = await epubCover(file);
+      cached = `${key}.${cover ? cover.ext : "none"}`;
+      fs.writeFileSync(path.join(COVER_DIR, cached), cover ? cover.data : "");
+    }
+    const ext = path.extname(cached).slice(1);
+    if (ext === "none") return res.status(404).end();
+    // The URL carries the file's date, so a replaced book gets a new address.
+    res.setHeader("Cache-Control", "private, max-age=2592000, immutable");
+    res.type(COVER_TYPES[ext]).sendFile(path.join(COVER_DIR, cached));
+  } catch {
+    res.status(404).end();
+  }
+});
+
+// "Позначити переглянутими" on the new arrivals.
+api.post("/library/seen", (req, res) => {
+  const u = req.guest ? guestState(req.guest) : userState(req.user);
+  for (const p of Array.isArray(req.body?.paths) ? req.body.paths : []) {
+    const name = safeBookName(p);
+    if (name) (u.seen ??= {})[name] = Date.now();
+  }
+  if (!req.guest) saveState();
+  res.json({ ok: true });
+});
+
+// "Хочу прочитати": each reader's own list of books to get; the home screen shows when one arrives.
+const clean = (v, max) => String(v ?? "").replace(/\s+/g, " ").trim().slice(0, max);
+api.get("/wish", (req, res) => res.json({ wish: req.guest ? [] : userState(req.user).wish || [] }));
+api.post("/wish", guestsCannot("У демо-режимі список бажаного недоступний."), (req, res) => {
+  const title = clean(req.body?.title, 300);
+  if (!title) return res.status(400).json({ error: "Вкажіть назву." });
+  const u = userState(req.user);
+  const item = { id: crypto.randomBytes(6).toString("hex"), title, author: clean(req.body?.author, 300), addedAt: Date.now() };
+  u.wish = [item, ...(u.wish || [])].slice(0, 500);
+  saveState();
+  res.json({ item, wish: u.wish });
+});
+api.delete("/wish/:id", guestsCannot("У демо-режимі список бажаного недоступний."), (req, res) => {
+  const u = userState(req.user);
+  u.wish = (u.wish || []).filter((w) => w.id !== req.params.id);
+  saveState();
+  res.json({ wish: u.wish });
+});
+
 // Guests read the demo book and nothing else: no uploads, no deletions, no shared caches.
 api.put("/books/:name", guestsCannot("У демо-режимі не можна додавати книжки. Увійдіть, щоб завантажити свою."));
 api.delete("/books/:name", guestsCannot("У демо-режимі не можна видаляти книжки."));
@@ -645,6 +754,8 @@ api.put("/books/:name", express.raw({ type: () => true, limit: MAX_UPLOAD }), as
   // Chytai does not take books in Russian: the file is refused, not kept.
   if (await isRussian(name, req.body)) return res.status(400).json({ error: "Книжки російською мовою в Chytai не завантажуються." });
   fs.writeFileSync(bookFile(name), req.body);
+  (state.shared.added ??= {})[name] = { by: req.user, at: Date.now() };
+  saveState();
   res.json({ path: name });
 });
 

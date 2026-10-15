@@ -1,4 +1,5 @@
-// Library screen: books from the library folders, grouped by author, with search and a language filter.
+// Library tab of the home screen (home.js): books from the library folders, grouped by author, with search
+// and a language filter. It also loads the library list the home screen is drawn from (window.Library).
 (() => {
   const LANGS = { uk: "українська", ru: "російська", en: "англійська" };
   const ESC = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" };
@@ -15,14 +16,27 @@
     return (/[Ѐ-ӿ]/.test(last) ? "0" : "1") + last;
   }
 
-  async function load(force) {
-    if (data && !force) return render();
-    $("#lib-body").innerHTML = `<div class="lib-empty">Скануємо папки з книжками…</div>`;
+  // The list from the server (or the device, offline); force asks again even when one is at hand.
+  async function fetchData(force) {
+    if (data && !force) return data;
     loading ??= window.reader.libraryList().finally(() => (loading = null));
     data = await loading;
+    const lang = $("#lib-lang").value;
     const langs = [...new Set(data.books.map((b) => b.lang).filter(Boolean))].sort();
     $("#lib-lang").innerHTML = `<option value="">Усі мови</option>` + langs.map((l) => `<option value="${esc(l)}">${esc(LANGS[l] || l)}</option>`).join("");
+    $("#lib-lang").value = lang;
+    return data;
+  }
+
+  async function load(force) {
+    if (!data) $("#lib-body").innerHTML = `<div class="lib-empty">Скануємо папки з книжками…</div>`;
+    try {
+      await fetchData(force);
+    } catch (err) {
+      if (!data) return ($("#lib-body").innerHTML = `<div class="lib-empty">${esc(err.message)}</div>`);
+    }
     render();
+    window.Shell?.refresh();
   }
 
   function render() {
@@ -47,23 +61,13 @@
     }
     const authors = [...groups.keys()].sort((a, b) => authorKey(a).localeCompare(authorKey(b), "uk"));
     const authorCount = authors.filter((a) => a && a !== "Збірники").length;
-    let html = `<div class="lib-stats">${books.length} з ${data.books.length} книжок · авторів: ${authorCount}</div>`;
-    // Like Kindle: the books opened most recently come first, then everything by author.
-    const openedAt = (b) => (b.path === data.lastBook ? Infinity : b.openedAt || 0);
-    const recent = books.filter((b) => b.openedAt || b.started || b.path === data.lastBook)
-      .sort((x, y) => openedAt(y) - openedAt(x)).slice(0, 12);
-    let groupsOpen = false;
-    const sections = [
-      ...(recent.length ? [["Нещодавні", recent, true]] : []),
-      ...authors.map((a) => [a || "Автор невідомий", groups.get(a).sort((x, y) => x.title.localeCompare(y.title, "uk")), false, a]),
-    ];
-    for (const [heading, list, isRecent, a] of sections) {
-      if (!isRecent && !groupsOpen) (html += `<div class="lib-groups">`), (groupsOpen = true); // recent spans the full width
-      html += `<section class="lib-group${isRecent ? " lib-recent" : ""}"><div class="lib-author">${esc(heading)}</div>`;
+    // The books being read are on the home screen; here everything is by author.
+    let html = `<div class="lib-stats">${books.length} з ${data.books.length} книжок · авторів: ${authorCount}</div><div class="lib-groups">`;
+    for (const a of authors) {
+      const list = groups.get(a).sort((x, y) => x.title.localeCompare(y.title, "uk"));
+      html += `<section class="lib-group"><div class="lib-author">${esc(a || "Автор невідомий")}</div>`;
       for (const b of list) {
-        const coauthors = isRecent
-          ? b.authors.slice(0, 3).join(", ") + (b.authors.length > 3 ? "…" : "")
-          : b.authors.length > 1 ? b.authors.slice(a === "Збірники" ? 0 : 1, 4).join(", ") + (b.authors.length > 4 ? "…" : "") : "";
+        const coauthors = b.authors.length > 1 ? b.authors.slice(a === "Збірники" ? 0 : 1, 4).join(", ") + (b.authors.length > 4 ? "…" : "") : "";
         const meta = [
           b.lang && (LANGS[b.lang] || b.lang),
           b.year,
@@ -72,7 +76,7 @@
           b.cloud && "☁︎ в iCloud",
           b.onDevice && "на пристрої",
         ].filter(Boolean);
-        const badge = b.path === data.lastBook ? "читаю зараз" : b.started ? "розпочата" : "";
+        const badge = b.path === data.lastBook ? "читаю зараз" : b.pct >= 99 ? "прочитано" : b.started ? "розпочата" : window.Shell?.isNew(b) ? "нова" : "";
         const body = `<span class="t">${esc(b.title)}</span>
           ${coauthors ? `<span class="m">${esc(coauthors)}</span>` : ""}
           <span class="m">${meta.map(esc).join(" · ")}${badge ? ` <span class="badge">${badge}</span>` : ""}</span>`;
@@ -88,15 +92,14 @@
     $("#lib-body").innerHTML = books.length ? html + `</div>` : `<div class="lib-empty">Нічого не знайшлося.</div>`;
   }
 
-  function show(visible) {
-    $("#library").classList.toggle("hidden", !visible);
-    document.body.classList.toggle("library-open", visible);
-    $("#lib-close").classList.toggle("hidden", !current);
-    if (visible) {
-      load(false);
-      $("#lib-search").focus();
-    }
-  }
+  window.Library = {
+    data: fetchData,
+    // The tab was opened: draw what is known at once, then ask the server for the latest.
+    shown: () => {
+      if (data) render();
+      load(true);
+    },
+  };
 
   $("#lib-body").addEventListener("click", (e) => {
     const action = e.target.closest("[data-edit], [data-delete]");
@@ -131,6 +134,7 @@
     }
     data.books = data.books.filter((b) => b.path !== name);
     if (data.lastBook === name) data.lastBook = null;
+    window.Shell?.refresh();
     if (current?.path === name) {
       // The book being read is gone: close it and stay in the library.
       closeBook();
@@ -138,7 +142,6 @@
       $("#book-title").textContent = "Chytai";
       $("#running-head").textContent = "";
       document.title = "Chytai";
-      $("#lib-close").classList.add("hidden");
     }
     showNotice(`Видалено ${label(book)}.`, false);
     render();
@@ -177,6 +180,7 @@
       $("#running-head").textContent = current.title;
     }
     render();
+    window.Shell?.refresh();
   });
   $("#edit-reset").onclick = () => {
     $("#book-edit").returnValue = "reset";
@@ -193,23 +197,11 @@
   $("#lib-lang").addEventListener("change", () => data && render());
   $("#lib-refresh").onclick = () => load(true);
   $("#lib-add").onclick = async () => (await window.reader.libraryAddFolder()) && load(true);
-  $("#lib-close").onclick = () => show(false);
-  $("#btn-library").onclick = () => show($("#library").classList.contains("hidden"));
-  document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape" && current && !$("#library").classList.contains("hidden")) show(false);
-  });
-  window.reader.onShowLibrary(() => show(true));
   window.reader.onBookOpen((payload) => {
-    show(false);
     if (!data) return;
     data.lastBook = payload.path;
     const book = data.books.find((b) => b.path === payload.path);
-    if (book) Object.assign(book, { started: true, cloud: false, openedAt: Date.now() });
+    if (book) Object.assign(book, { started: true, cloud: false, seen: true, openedAt: Date.now() });
     render();
-  });
-
-  // With no book to reopen, start on the library instead of the empty screen.
-  settingsReady.then(() => {
-    if (!settings.lastBook) show(true);
   });
 })();

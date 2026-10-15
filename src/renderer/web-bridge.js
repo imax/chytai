@@ -97,8 +97,8 @@
     return (syncing ??= (async () => {
       try {
         const positions = (await kvGet("positions")) || {};
-        for (const [path, cfi] of Object.entries(positions)) {
-          await api("PUT", "/api/position", { path, cfi });
+        for (const [path, pos] of Object.entries(positions)) {
+          await api("PUT", "/api/position", typeof pos === "string" ? { path, cfi: pos } : { path, ...pos });
           delete positions[path];
           await kvSet("positions", positions);
         }
@@ -212,12 +212,12 @@
   let positionTimer = null;
   function flushPositions(keepalive) {
     clearTimeout(positionTimer);
-    for (const [path, cfi] of pendingPositions) {
-      rememberPosition(path, cfi);
+    for (const [path, pos] of pendingPositions) {
+      rememberPosition(path, pos.cfi);
       fetch("/api/position", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ path, cfi }),
+        body: JSON.stringify({ path, ...pos }),
         credentials: "same-origin",
         keepalive,
       })
@@ -225,7 +225,7 @@
         .catch(async () => {
           // No network: the position waits in IndexedDB (one per book, the latest wins) for the next sync.
           setOffline(true);
-          await kvSet("positions", { ...((await kvGet("positions")) || {}), [path]: cfi });
+          await kvSet("positions", { ...((await kvGet("positions")) || {}), [path]: pos });
         });
     }
     pendingPositions.clear();
@@ -326,8 +326,9 @@
     // Drag & drop and the file picker hand over a File; library entries hand over a name.
     pathForFile: (file) => file,
     openPath: (target) => (target instanceof File ? uploadAndOpen(target) : openServerBook(target)),
-    savePosition: (bookPath, cfi) => {
-      pendingPositions.set(bookPath, cfi);
+    // progress: { pct, chapter } when the reader knows them, for the home screen.
+    savePosition: (bookPath, cfi, progress) => {
+      pendingPositions.set(bookPath, { cfi, ...progress });
       clearTimeout(positionTimer);
       positionTimer = setTimeout(() => flushPositions(false), 600);
     },
@@ -395,7 +396,8 @@
         // Only once the page is fully laid out: opened during the initial load, epub.js measured
         // the reading area before it had a size and rendered a 0x0 chapter (white screen in the
         // iPhone app, where the first load is slower than in Safari).
-        if (settings.lastBook) afterLoad(() => openServerBook(settings.lastBook));
+        // The family starts on the home screen (home.js); a guest has one book and goes straight to it.
+        if (settings.guest && settings.lastBook) afterLoad(() => openServerBook(settings.lastBook));
       }
       return settings;
     },
@@ -469,6 +471,47 @@
         if (!isNetworkError(err)) throw err;
         return enqueue({ type: "noteDelete", path: bookPath, id });
       }
+    },
+    // ---------- Home screen ----------
+    coverUrl: (b) => (b.ext === "epub" ? `/api/cover?path=${encodeURIComponent(b.path)}&v=${b.mtime || 0}` : null),
+    notesAll: async () => {
+      try {
+        await sync();
+        const { books } = await (await api("GET", "/api/notes/all")).json();
+        for (const [path, list] of Object.entries(books)) kvSet(`notes:${path}`, list);
+        return books;
+      } catch (err) {
+        if (!isNetworkError(err)) throw err;
+        // Offline: the notes of every book kept on this device.
+        const keys = (await idb("kv", "readonly", (s) => s.getAllKeys()).catch(() => [])) || [];
+        const books = {};
+        for (const key of keys.filter((k) => String(k).startsWith("notes:"))) {
+          const list = await kvGet(key);
+          if (list?.length) books[key.slice(6)] = list;
+        }
+        return books;
+      }
+    },
+    librarySeen: (paths) => api("POST", "/api/library/seen", { paths }).catch(() => {}),
+    wishList: async () => {
+      try {
+        const { wish } = await (await api("GET", "/api/wish")).json();
+        kvSet("wish", wish);
+        return wish;
+      } catch (err) {
+        if (!isNetworkError(err)) throw err;
+        return (await kvGet("wish")) || [];
+      }
+    },
+    wishAdd: async (item) => {
+      const { wish } = await (await api("POST", "/api/wish", item)).json();
+      kvSet("wish", wish);
+      return wish;
+    },
+    wishRemove: async (id) => {
+      const { wish } = await (await api("DELETE", `/api/wish/${encodeURIComponent(id)}`)).json();
+      kvSet("wish", wish);
+      return wish;
     },
     explain: async (id, request) => {
       const controller = new AbortController();
