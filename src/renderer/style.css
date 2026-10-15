@@ -240,29 +240,29 @@ body[data-theme="dark"] { color-scheme: dark; }
 .seg button { border: none; border-radius: 6px; padding: 4px 12px; font-size: 13px; background: transparent; cursor: pointer; }
 .seg button.on { background: var(--card); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12); font-weight: 600; }
 
-/* Wide: the catalogue table. */
-.lib-table { display: flex; flex-direction: column; }
-.lib-row {
-  display: grid; grid-template-columns: minmax(0, 2.1fr) minmax(0, 1.6fr) 150px 64px 150px 48px; gap: 16px; align-items: center;
-  width: 100%; padding: 7px 10px; border: none; border-bottom: 1px solid var(--line); background: transparent; color: inherit; font-size: 13px; text-align: left;
-}
-button.lib-row { cursor: pointer; }
-button.lib-row:hover { background: var(--accent-soft); }
-.lib-row.unavailable { opacity: 0.45; } /* offline, and not kept on this device */
-.lib-th { position: sticky; top: 0; z-index: 1; background: var(--bg); padding-top: 0; padding-bottom: 6px; }
-.lib-th button { background: none; border: none; padding: 0; font-size: 12px; font-weight: 600; color: var(--muted); cursor: pointer; text-align: left; white-space: nowrap; }
-.lib-th button.on { color: var(--fg); }
-.lib-th button:last-child, .lib-row .num { text-align: right; }
-.lib-title { display: flex; align-items: center; gap: 8px; min-width: 0; }
-.lib-title { gap: 12px; }
-.lib-title .cover.small { flex: none; width: 30px; height: 45px; }
-.lib-title .new-badge { margin-left: -4px; }
-.lib-title .t { font-size: 15px; }
-.new-badge { flex: none; background: var(--accent); color: #fff; font-size: 10px; font-weight: 600; padding: 1px 6px; border-radius: 8px; }
-.lib-prog { display: flex; align-items: center; gap: 8px; }
-.lib-prog .progress { flex: 1; height: 3px; }
-.lib-row.manage { grid-template-rows: auto auto; row-gap: 2px; }
-.lib-manage-row { grid-column: 1 / -1; display: flex; align-items: baseline; gap: 16px; }
+/* Wide: new arrivals, then authors in columns (Cyrillic, then Latin), with a letter index by the filters. */
+.lib-abc { display: flex; align-items: center; gap: 2px; margin-left: auto; }
+#shell .lib-abc button { width: 22px; height: 24px; border: none; border-radius: 6px; background: none; padding: 0; color: var(--accent); font-size: 12px; font-weight: 600; text-align: center; }
+#shell .lib-abc button:hover { background: var(--accent-soft); }
+.lib-abc i { width: 1px; height: 14px; margin: 0 8px; background: var(--line); }
+.lib-cat { padding-top: 16px; }
+.lib-arr { margin-bottom: 24px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--chrome); }
+.lib-arr-head { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; font-size: 13px; font-weight: 600; color: var(--muted); }
+.lib-arr-head .link { margin-left: auto; }
+.lib-count { min-width: 18px; padding: 0 6px; border-radius: 9px; background: var(--accent); color: #fff; font-size: 11px; line-height: 18px; text-align: center; }
+.lib-arr-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 4px 28px; }
+.lib-cols { columns: 250px; column-gap: 28px; }
+.lib-author { break-inside: avoid; margin-bottom: 18px; }
+.lib-author-head { display: flex; align-items: baseline; gap: 10px; padding-bottom: 4px; margin-bottom: 4px; border-bottom: 1px solid var(--line); font-size: 13px; font-weight: 600; color: var(--muted); }
+.lib-author-head b { color: var(--accent); font-size: 15px; }
+.lib-book { display: flex; align-items: center; gap: 12px; width: calc(100% + 12px); padding: 5px 6px; margin: 0 -6px; border: 1px solid transparent; border-radius: 8px; background: none; color: inherit; text-align: left; box-sizing: border-box; }
+button.lib-book:hover { border-color: var(--accent); background: rgba(255, 196, 0, 0.12); }
+.lib-book.unavailable { opacity: 0.45; } /* offline, and not kept on this device */
+.lib-book .cover.small { flex: none; width: 26px; height: 39px; }
+.lib-book.manage { align-items: flex-start; }
+.lib-book.manage .lib-li-text { gap: 3px; }
+.lib-sep { display: flex; align-items: center; gap: 12px; margin: 6px 0 16px; font-size: 12px; color: var(--muted); }
+.lib-sep i { flex: 1; height: 1px; background: var(--line); }
 
 /* Phone: a list by author, letters on the right. */
 .lib-list { padding-right: 22px; }
@@ -622,6 +622,8 @@ body[data-theme="dark"] .cover { background: hsl(var(--hue) 18% 30%); color: hsl
   #shell #library .view-title { padding: 0 24px; }
   .view-title { font-size: 24px; margin-bottom: 8px; }
   #library #lib-search, #library #lib-add { display: none; } /* the bar on top has both */
+  .lib-top > div:first-child { display: flex; align-items: baseline; gap: 10px; }
+  .lib-filters { border-bottom: 1px solid var(--line); }
 
   #home-body { gap: 36px; }
   .home-row { display: grid; gap: 28px; }

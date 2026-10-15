@@ -1,21 +1,21 @@
-// Library tab of the home screen (home.js): a catalogue of the books in the library folders. On a wide screen
-// a table sorted by any column; on a phone a list by author's surname with a letter index. Both filter by
-// reading status, search by title or author; the wide one also by language. It also loads the library list
+// Library tab of the home screen (home.js): a catalogue of the books in the library folders, by author's surname.
+// On a wide screen authors stand in columns, Cyrillic ones first and then Latin, under new arrivals; on a phone
+// it is a list with a letter index. Both filter by reading status, search by title or author; the wide one also
+// by language. It also loads the library list
 // the home screen is drawn from (window.Library).
 (() => {
   const LANGS = { uk: "українська", ru: "російська", en: "англійська", be: "білоруська", pl: "польська", de: "німецька", fr: "французька", es: "іспанська", it: "італійська", la: "латина", el: "грецька", ar: "арабська", he: "іврит", ja: "японська", zh: "китайська" };
   const MONTHS_IN = ["січні", "лютому", "березні", "квітні", "травні", "червні", "липні", "серпні", "вересні", "жовтні", "листопаді", "грудні"];
   const FILTERS = [["all", "Усі"], ["reading", "Читаю"], ["unread", "Не почато"], ["done", "Прочитано"], ["new", "Нові"]];
   const PHONE_FILTERS = ["all", "reading", "new"];
-  const COLUMNS = [["title", "Назва"], ["author", "Автор"], ["pct", "Прогрес"], ["year", "Рік"], ["added", "Додано"], ["size", "МБ"]];
   const ESC = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" };
   const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ESC[c]);
   let data = null; // { folders, books, lastBook }
   let loading = null;
   let manage = false; // web only: the family fixes titles and deletes books right in the library
   const canManage = () => typeof window.reader.libraryDelete === "function";
-  // What the reader picked last time on this device: filter, language and sort column.
-  const view = { f: "all", lang: "", k: "author", dir: 1 };
+  // What the reader picked last time on this device: filter and language.
+  const view = { f: "all", lang: "" };
   try {
     Object.assign(view, JSON.parse(localStorage.getItem("libraryView") || "{}"));
   } catch {}
@@ -25,9 +25,9 @@
     } catch {}
   };
 
-  // Sort authors by surname (last word); Cyrillic first, then Latin, unknown last.
+  // Sort authors by surname (last word); Cyrillic first, then Latin, collections and unknown last.
   function authorKey(name) {
-    if (!name) return "2";
+    if (!name || name === "Збірник") return "2";
     const last = name.split(" ").pop().toLowerCase();
     return (/[Ѐ-ӿ]/.test(last) ? "0" : "1") + last;
   }
@@ -37,14 +37,6 @@
   const matches = (b, f) => f === "all" || (f === "new" ? isNew(b) : status(b) === f);
   const byTitle = (x, y) => x.title.localeCompare(y.title, "uk");
   const byAuthor = (x, y) => authorKey(mainAuthor(x)).localeCompare(authorKey(mainAuthor(y)), "uk") || byTitle(x, y);
-  const SORTS = {
-    title: byTitle,
-    author: byAuthor,
-    pct: (x, y) => (x.pct || (status(x) === "reading" ? 0.5 : 0)) - (y.pct || (status(y) === "reading" ? 0.5 : 0)),
-    year: (x, y) => (x.year || 0) - (y.year || 0),
-    added: (x, y) => (x.addedAt || 0) - (y.addedAt || 0),
-    size: (x, y) => x.size - y.size,
-  };
 
   // The list from the server (or the device, offline); force asks again even when one is at hand.
   async function fetchData(force) {
@@ -77,15 +69,7 @@
     return who ? `${who}, ${when}` : when;
   }
 
-  function progressCell(b) {
-    const st = status(b);
-    if (st === "done") return `<span class="m">✓ прочитано</span>`;
-    if (st === "unread") return `<span class="m">—</span>`;
-    if (!b.pct) return `<span class="m">розпочата</span>`;
-    return `<span class="progress"><span style="width:${Math.min(100, b.pct)}%"></span></span><span class="m">${Math.round(b.pct)}%</span>`;
-  }
-
-  // The short mark at the end of a phone row.
+  // The short mark at the end of a row.
   function tag(b) {
     if (isNew(b)) return `<span class="lib-tag accent strong">нова</span>`;
     const st = status(b);
@@ -130,27 +114,8 @@
             .join("")
         : "";
 
+    $("#lib-abc").innerHTML = "";
     if (!books.length) return ($("#lib-body").innerHTML = `<div class="lib-empty">Нічого не знайшлося. Спробуйте інший фільтр або запит.</div>`);
-
-    // Wide: a table sorted by the chosen column.
-    const sorted = [...books].sort((x, y) => SORTS[view.k](x, y) * view.dir || byAuthor(x, y));
-    const head = COLUMNS.map(([k, label]) => `<button class="${view.k === k ? "on" : ""}" data-sort="${k}">${label} ${view.k === k ? (view.dir > 0 ? "↑" : "↓") : ""}</button>`).join("");
-    const rows = sorted
-      .map((b) => {
-        const author = b.authors.length > 3 ? `${b.authors.slice(0, 2).join(", ")}…` : b.authors.join(", ");
-        const cells = `<span class="lib-title">${window.Shell.cover(b, "small")}<span class="t ellipsis">${esc(b.title)}</span>${isNew(b) ? `<span class="new-badge">нова</span>` : ""}${b.ext !== "epub" ? `<span class="m">${esc(b.ext.toUpperCase())}</span>` : ""}${b.cloud ? `<span class="m" title="В iCloud, ще не завантажена">☁︎</span>` : ""}</span>
-          <span class="ellipsis">${esc(author)}</span>
-          <span class="lib-prog">${progressCell(b)}</span>
-          <span class="m">${esc(b.year || "")}</span>
-          <span class="m ellipsis">${esc(addedLabel(b))}</span>
-          <span class="m num">${(b.size / 1e6).toFixed(1)}</span>`;
-        return manage
-          ? `<div class="lib-row manage" data-path="${esc(b.path)}">${cells}<span class="lib-manage-row">${manageBlock(b)}</span></div>`
-          : `<button class="lib-row${b.unavailable ? " unavailable" : ""}" data-path="${esc(b.path)}" title="${b.unavailable ? "Немає з'єднання, а ця книжка ще не збережена на пристрої" : ""}">${cells}</button>`;
-      })
-      .join("");
-    const table = `<div class="lib-table wide-only"><div class="lib-row lib-th">${head}</div>${rows}</div>`;
-
     // Phone: by the first letter of the author's surname, with an index to jump between letters.
     const groups = new Map();
     for (const b of [...books].sort(byAuthor)) {
@@ -174,7 +139,49 @@
     }
     list += `</div>`;
     const index = groups.size > 4 ? `<nav class="lib-index narrow-only">${[...groups.keys()].map((l) => `<button data-jump="${esc(l)}">${esc(l)}</button>`).join("")}</nav>` : "";
-    $("#lib-body").innerHTML = table + list + index;
+    $("#lib-body").innerHTML = catalogue(books, q) + list + index;
+  }
+
+  // Wide: new arrivals on top, then authors in columns, Cyrillic before Latin, each letter once.
+  function catalogue(books, q) {
+    const fresh = q || view.f !== "all" ? [] : window.Shell.arrivals();
+    const unseen = fresh.filter((b) => !b.seen).length;
+    const arrivals = fresh.length
+      ? `<section class="lib-arr"><div class="lib-arr-head"><span>Нові надходження</span>${unseen ? `<span class="lib-count">${unseen}</span><button class="link" data-act="seen">Позначити переглянутими</button>` : ""}</div>
+          <div class="lib-arr-grid">${fresh.map((b) => `<button class="lib-book" data-path="${esc(b.path)}">${window.Shell.cover(b, "small")}
+            <span class="lib-li-text"><span class="t ellipsis">${esc(b.title)}</span><span class="m ellipsis">${esc([mainAuthor(b), b.addedBy, window.Shell.when(b.addedAt)].filter(Boolean).join(" · "))}</span></span>
+            <span class="dot${b.seen ? " off" : ""}"></span></button>`).join("")}</div></section>`
+      : "";
+
+    const authors = new Map();
+    for (const b of [...books].sort(byAuthor)) {
+      const a = mainAuthor(b);
+      if (!authors.has(a)) authors.set(a, []);
+      authors.get(a).push(b);
+    }
+    const blocks = { 0: "", 1: "", 2: "" };
+    const letters = { 0: [], 1: [] };
+    for (const [a, list] of authors) {
+      const k = authorKey(a)[0];
+      const letter = k === "2" ? "" : a.split(" ").pop()[0].toUpperCase();
+      const first = letter && !letters[k].includes(letter);
+      if (first) letters[k].push(letter);
+      blocks[k] += `<section class="lib-author"${first ? ` data-letter="${esc(letter)}"` : ""}>
+        <div class="lib-author-head">${first ? `<b>${esc(letter)}</b>` : ""}<span class="ellipsis">${esc(a || "Автор невідомий")}</span></div>
+        ${list.map((b) => {
+          const body = `${window.Shell.cover(b, "small")}
+            <span class="lib-li-text"><span class="t ellipsis">${esc(b.title)}</span><span class="m ellipsis">${esc([b.year, addedLabel(b)].filter(Boolean).join(" · "))}${b.ext !== "epub" ? ` · ${esc(b.ext.toUpperCase())}` : ""}${b.cloud ? " · ☁︎" : ""}</span>
+            ${manage ? manageBlock(b) : ""}</span>${manage ? "" : tag(b)}`;
+          return manage
+            ? `<div class="lib-book manage">${body}</div>`
+            : `<button class="lib-book${b.unavailable ? " unavailable" : ""}" data-path="${esc(b.path)}" title="${b.unavailable ? "Немає з'єднання, а ця книжка ще не збережена на пристрої" : ""}">${body}</button>`;
+        }).join("")}</section>`;
+    }
+    const jump = (l) => `<button data-jump="${esc(l)}">${esc(l)}</button>`;
+    $("#lib-abc").innerHTML = letters[0].map(jump).join("") + (letters[0].length && letters[1].length ? `<i></i>` : "") + letters[1].map(jump).join("");
+    const latin = blocks[1] ? `${blocks[0] ? `<div class="lib-sep"><b>A–Z</b><i></i><span>автори латиницею</span></div>` : ""}<div class="lib-cols">${blocks[1]}</div>` : "";
+    const other = blocks[2] ? `${blocks[0] || blocks[1] ? `<div class="lib-sep"><i></i></div>` : ""}<div class="lib-cols">${blocks[2]}</div>` : "";
+    return `<div class="lib-cat wide-only">${arrivals}${blocks[0] ? `<div class="lib-cols">${blocks[0]}</div>` : ""}${latin}${other}</div>`;
   }
 
   window.Library = {
@@ -189,25 +196,27 @@
   $("#lib-body").addEventListener("click", (e) => {
     const action = e.target.closest("[data-edit], [data-delete]");
     if (action) return action.dataset.edit != null ? editBook(action.dataset.edit) : deleteBook(action.dataset.delete);
-    const sort = e.target.closest("[data-sort]");
-    if (sort) {
-      const k = sort.dataset.sort;
-      // Again on the same column turns the order around; a new column starts with the most useful end.
-      if (view.k === k) view.dir = -view.dir;
-      else Object.assign(view, { k, dir: ["pct", "added"].includes(k) ? -1 : 1 });
-      remember();
+    if (e.target.closest("[data-act=seen]")) {
+      window.Shell.markSeen();
       return render();
     }
     const jump = e.target.closest("[data-jump]");
-    if (jump) {
-      const section = [...document.querySelectorAll("#lib-body .lib-letter")].find((s) => s.dataset.letter === jump.dataset.jump);
-      return section?.scrollIntoView({ block: "start" });
-    }
-    const el = e.target.closest("button.lib-row, button.lib-li");
+    if (jump) return jumpTo(jump.dataset.jump);
+    const el = e.target.closest("button.lib-book, button.lib-li");
     if (!el) return;
     const book = data.books.find((b) => b.path === el.dataset.path);
     if (book?.cloud) showNotice(`Завантажую «${book.title}» з iCloud…`, true);
     window.reader.openPath(el.dataset.path);
+  });
+
+  // The letter index: the phone's runs down the list, the wide one sits by the filters.
+  function jumpTo(letter) {
+    const section = [...document.querySelectorAll("#lib-body [data-letter]")].find((s) => s.dataset.letter === letter && s.offsetParent);
+    section?.scrollIntoView({ block: "start", behavior: "smooth" });
+  }
+  $("#lib-abc").addEventListener("click", (e) => {
+    const jump = e.target.closest("[data-jump]");
+    if (jump) jumpTo(jump.dataset.jump);
   });
 
   // ---------- Managing the shared library (web, family) ----------

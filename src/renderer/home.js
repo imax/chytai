@@ -88,6 +88,14 @@
       .slice(0, 5);
   }
 
+  // «Позначити переглянутими»: the dots and badges of new arrivals go away.
+  function markSeen() {
+    const paths = arrivals().filter((b) => !b.seen).map((b) => b.path);
+    paths.forEach((p) => (lib.books.find((b) => b.path === p).seen = true));
+    window.reader.librarySeen?.(paths);
+    render();
+  }
+
   function when(ms) {
     const days = Math.floor((new Date().setHours(24, 0, 0, 0) - ms) / DAY);
     if (days <= 0) return "сьогодні";
@@ -340,12 +348,7 @@
       return;
     }
     if (el.dataset.act === "add") return $("#lib-add").click();
-    if (el.dataset.act === "seen") {
-      const paths = arrivals().filter((b) => !b.seen).map((b) => b.path);
-      paths.forEach((p) => (lib.books.find((b) => b.path === p).seen = true));
-      window.reader.librarySeen?.(paths);
-      render();
-    }
+    if (el.dataset.act === "seen") markSeen();
   });
 
   $("#home-settings").onclick = () => openSettings();
@@ -425,7 +428,7 @@
     render();
   }
 
-  window.Shell = { show, hide, isNew, refresh, key, cover, when };
+  window.Shell = { show, hide, isNew, arrivals, markSeen, refresh, key, cover, when };
 
   // The family starts here; a guest has one book, which the bridge opens straight away.
   settingsReady
