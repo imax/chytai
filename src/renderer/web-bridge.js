@@ -16,6 +16,21 @@
       return this.get(key);
     };
   }
+  // pdf.js reads page text with `for await (… of readableStream)`; the iPhone app's WebView can't iterate streams.
+  if (window.ReadableStream && !ReadableStream.prototype[Symbol.asyncIterator]) {
+    ReadableStream.prototype[Symbol.asyncIterator] = async function* () {
+      const reader = this.getReader();
+      try {
+        for (;;) {
+          const { done, value } = await reader.read();
+          if (done) return;
+          yield value;
+        }
+      } finally {
+        reader.releaseLock();
+      }
+    };
+  }
 
   const listeners = {};
   const on = (name) => (cb) => (listeners[name] ??= []).push(cb);
