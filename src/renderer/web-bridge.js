@@ -161,7 +161,12 @@
         const swap = () => reg.waiting?.postMessage("skipWaiting");
         const whenIdle = () => (document.hidden || typeof current === "undefined" || !current) && swap();
         reg.addEventListener("updatefound", () => reg.installing?.addEventListener("statechange", whenIdle));
-        document.addEventListener("visibilitychange", whenIdle);
+        // The browser looks for a new sw.js only on a navigation, and the app never navigates: the
+        // page lives for days. So the check is made whenever the app goes to the background or comes
+        // back, and when the network returns; a version found in the background takes over there.
+        const check = () => reg.update().catch(() => {});
+        document.addEventListener("visibilitychange", () => (check(), whenIdle()));
+        window.addEventListener("online", check);
         whenIdle();
       })
       .catch((err) => console.warn("service worker", err));
