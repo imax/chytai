@@ -601,8 +601,8 @@ $("#sel-toolbar").addEventListener("click", (e) => {
   if (!action || !pendingSelection) return;
   clearTimeout(autoTimer);
   const snapshot = pendingSelection;
-  if (action === "copy") {
-    navigator.clipboard?.writeText(snapshot.text).catch(() => {});
+  if (action === "translate") {
+    startExplanation(snapshot, { deep: false, mode: "translate" });
   } else if (action === "note") {
     addNote(snapshot);
   } else {
@@ -625,13 +625,13 @@ function modelLabel(model) {
     .replace(/^./, (c) => c.toUpperCase());
 }
 
-function startExplanation(selection, { deep }) {
+function startExplanation(selection, { deep, mode = "explain" }) {
   showPanel(true, "cards");
   $("#panel-empty")?.remove();
 
   // Same selection already explained the same way: just bring that card into view.
   for (const conv of conversations.values()) {
-    if ((conv.cfiRange === selection.cfiRange || conv.context.selection === selection.context.selection) && conv.deep === deep) {
+    if ((conv.cfiRange === selection.cfiRange || conv.context.selection === selection.context.selection) && conv.deep === deep && conv.mode === mode) {
       conv.card.scrollIntoView({ behavior: "smooth", block: "nearest" });
       flash(conv.card);
       return conv.card;
@@ -640,7 +640,7 @@ function startExplanation(selection, { deep }) {
 
   const id = `r${++reqCounter}`;
   const card = document.createElement("article");
-  card.className = "card";
+  card.className = mode === "translate" ? "card translation" : "card";
   card.dataset.id = id;
   const quote = selection.context.selection;
   card.innerHTML = `
@@ -659,7 +659,8 @@ function startExplanation(selection, { deep }) {
   // The new card is at the top; bring it into view even if the list was scrolled down.
   $("#cards").scrollTop = 0;
 
-  const conv = { id, card, deep, cfiRange: selection.cfiRange, context: selection.context, messages: null, busy: false };
+  if (mode === "translate") card.querySelector(".followup input").placeholder = "Запитати про переклад…";
+  const conv = { id, card, deep, mode, cfiRange: selection.cfiRange, context: selection.context, messages: null, busy: false };
   conversations.set(id, conv);
 
   try {
@@ -715,9 +716,9 @@ function runTurn(conv, question) {
 
   let request;
   if (!conv.messages) {
-    request = { context: { ...conv.context, question: question || undefined }, deep: conv.deep };
+    request = { context: { ...conv.context, question: question || undefined }, deep: conv.deep, mode: conv.mode };
   } else {
-    request = { messages: [...conv.messages, { role: "user", content: question }], deep: conv.deep };
+    request = { messages: [...conv.messages, { role: "user", content: question }], deep: conv.deep, mode: conv.mode };
   }
 
   const reqId = `${conv.id}-${Date.now()}`;
@@ -751,8 +752,8 @@ window.reader.onAiEvent((reqId, ev) => {
   if (ev.type === "done") {
     conv.messages = ev.messages;
     // One "more detail" per card: after it, the follow-up field is the way to ask further.
-    if (conv.lastQuestion !== "Детальніше") conv.card.querySelector(".more").classList.remove("hidden");
-    conv.card.querySelector(".model").textContent = modelLabel(ev.model) + (ev.truncated ? " · обрізано" : "");
+    if (conv.lastQuestion !== "Детальніше" && conv.mode !== "translate") conv.card.querySelector(".more").classList.remove("hidden");
+    conv.card.querySelector(".model").textContent = (conv.mode === "translate" ? "Переклад · " : "") + modelLabel(ev.model) + (ev.truncated ? " · обрізано" : "");
     if (!conv.text) el.innerHTML = `<em>Порожня відповідь.</em>`;
   } else if (ev.type === "aborted") {
     if (!conv.text) el.innerHTML = `<em>Зупинено.</em>`;

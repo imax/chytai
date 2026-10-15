@@ -50,14 +50,29 @@ Start with the explanation itself, no preamble. Use Markdown sparingly (bold for
 The reader may ask follow-up questions; answer them in the same spirit.${styleSection(style, custom)}`;
 }
 
-function firstMessage(ctx, deep) {
+// Translation: a plain, faithful translation of the selection (Mykola's idea), on a cheaper model.
+function translatePrompt(language) {
+  return `You are a translator built into an e-book reader. The reader highlights a word, phrase or passage and you translate it in place.
+
+Translate the selection into ${language}. If the selection is already in ${language}, translate it into English instead.
+
+Give the translation itself first, with no preamble and no quotes around it. Keep the meaning, tone and register of the original, and render idioms by sense rather than word for word. Use the surrounding text and the book/chapter only to resolve ambiguity (who "he" or "it" is, which sense of a word is meant); translate only the selection. Keep names as they are usually written in ${language}.
+
+For a single word or a short term, add one short line with the other likely meanings only if the context leaves real doubt. For a longer passage, add nothing after the translation unless a pun, wordplay or cultural reference is lost; then add one short line in ${language} saying what is lost.
+
+The reader may ask follow-up questions about the translation; answer them briefly in ${language}.`;
+}
+
+function firstMessage(ctx, deep, mode) {
   const parts = [];
   if (ctx.bookTitle) parts.push(`<book>${ctx.bookTitle}${ctx.author ? ` by ${ctx.author}` : ""}</book>`);
   if (ctx.chapter) parts.push(`<chapter>${ctx.chapter}</chapter>`);
   parts.push(`<context_before>\n${ctx.before || ""}\n</context_before>`);
   parts.push(`<selection>\n${ctx.selection}\n</selection>`);
   parts.push(`<context_after>\n${ctx.after || ""}\n</context_after>`);
-  if (ctx.question) {
+  if (mode === "translate") {
+    parts.push("Translate the selection.");
+  } else if (ctx.question) {
     parts.push(`The reader's question about the selection: ${ctx.question}`);
   } else if (deep) {
     parts.push(
@@ -72,16 +87,16 @@ function firstMessage(ctx, deep) {
 /**
  * Streams an explanation.
  * request: { context, deep } for a new selection, or { messages } for a follow-up
- * (messages already ending with the new user turn).
+ * (messages already ending with the new user turn). mode "translate" translates instead of explaining.
  */
 async function explain({ apiKey, model, language, style, customStyle, request, signal, onText }) {
   const client = new Anthropic({ apiKey });
-  const messages = request.messages || [firstMessage(request.context, request.deep)];
+  const messages = request.messages || [firstMessage(request.context, request.deep, request.mode)];
 
   const params = {
     model,
     max_tokens: 16000,
-    system: systemPrompt(language, style, customStyle),
+    system: request.mode === "translate" ? translatePrompt(language) : systemPrompt(language, style, customStyle),
     messages,
     output_config: { effort: EFFORT[model] || "low" },
   };

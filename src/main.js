@@ -32,6 +32,7 @@ const DEFAULT_SETTINGS = {
   pdfMode: "reflow", // "reflow" (як книжка) or "original"
   fontSizes: {}, // book path -> font size in %, only for books where it was changed
   theme: "light",
+  translateModel: "claude-sonnet-5-5", // cheaper than explanations
   explainStyle: "default", // default | adhd | brief | simple | custom
   customStyle: "", // the reader's own instructions for "custom"
   lastBook: null,
@@ -313,7 +314,7 @@ ipcMain.handle("ai:explain", async (event, id, request) => {
   try {
     const result = await explain({
       apiKey,
-      model: request.deep ? settings.deepModel : settings.model,
+      model: request.mode === "translate" ? settings.translateModel : request.deep ? settings.deepModel : settings.model,
       language: settings.language,
       style: settings.explainStyle,
       customStyle: settings.customStyle,
