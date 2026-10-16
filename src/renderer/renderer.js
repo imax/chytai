@@ -19,7 +19,6 @@ const themeCss = (name) =>
 
 function applyTheme() {
   document.body.dataset.theme = resolvedTheme();
-  $("#theme-select").value = settings.theme || "auto";
   rendition?.getContents().forEach(styleContents);
 }
 const FONTS = {
@@ -75,6 +74,7 @@ function openSettings() {
     : settings.hasApiKey
       ? "Ключ збережено. Залиште поле порожнім, щоб не змінювати."
       : "Створіть ключ на platform.claude.com → API Keys.";
+  $("#set-theme").value = settings.theme || "auto";
   $("#set-model").value = settings.model;
   $("#set-margins").value = settings.margins || "normal";
   $("#set-language").value = settings.language;
@@ -91,6 +91,7 @@ function openSettings() {
 $("#settings").addEventListener("close", async () => {
   if ($("#settings").returnValue !== "save") return;
   const patch = {
+    theme: $("#set-theme").value,
     model: $("#set-model").value,
     language: $("#set-language").value.trim() || "українська",
     explainStyle: $("#set-style").value,
@@ -110,6 +111,7 @@ $("#settings").addEventListener("close", async () => {
   settings = await window.reader.setSettings(patch);
   if (wasScrolled !== scrolled()) return reopenBook();
   document.body.dataset.margins = settings.margins || "normal";
+  applyTheme();
   if (marginsChanged) resizeView();
   if (fontChanged) applyTypography(true);
 });
@@ -1355,19 +1357,6 @@ async function setFont(delta) {
 $("#btn-font-down").onclick = () => setFont(-10);
 $("#btn-font-up").onclick = () => setFont(10);
 
-async function setTheme(theme) {
-  settings.theme = theme;
-  applyTheme();
-  settings = await window.reader.setSettings({ theme });
-}
-$("#theme-select").onchange = (e) => setTheme(e.target.value);
-// Phones have no room for the select, so a toolbar button cycles auto → light → sepia → dark.
-const THEME_ORDER = ["auto", "light", "sepia", "dark"];
-const THEME_NAMES = { auto: "як у системі", light: "світла", sepia: "сепія", dark: "темна" };
-$("#btn-theme").onclick = async () => {
-  await setTheme(THEME_ORDER[(THEME_ORDER.indexOf(settings.theme) + 1) % THEME_ORDER.length]);
-  toast(`Тема: ${THEME_NAMES[settings.theme]}`);
-};
 // "Як у системі" follows the phone's or Mac's light/dark switch, also while a book is open.
 DARK_QUERY.addEventListener("change", () => settings?.theme === "auto" && applyTheme());
 
