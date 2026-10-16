@@ -194,6 +194,10 @@ function createWindow() {
       sandbox: true,
     },
   });
+  // The page asks for icon.png next to index.html (the server serves it from build/); here it lives in build/ too.
+  mainWindow.webContents.session.webRequest.onBeforeRequest({ urls: ["file://*/*/renderer/icon.png"] }, (_d, cb) =>
+    cb({ redirectURL: `file://${ICON}` }),
+  );
   mainWindow.loadFile(path.join(__dirname, "renderer", "index.html"));
   // Links inside books or explanations open in the default browser.
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
