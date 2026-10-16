@@ -31,7 +31,7 @@ const DEFAULT_SETTINGS = {
   margins: "normal", // narrow | normal | wide
   pdfMode: "reflow", // "reflow" (як книжка) or "original"
   fontSizes: {}, // book path -> font size in %, only for books where it was changed
-  theme: "light",
+  theme: "auto",
   translateModel: "claude-sonnet-5-5", // cheaper than explanations
   explainStyle: "default", // default | adhd | brief | simple | custom
   customStyle: "", // the reader's own instructions for "custom"

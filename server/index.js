@@ -65,7 +65,7 @@ function loadDotEnv(file) {
 
 // Translation runs on a cheaper model than explanations (Max, 2026-10-15).
 const SHARED_DEFAULTS = { model: "claude-opus-5-5", deepModel: "claude-fable-5-1", translateModel: "claude-sonnet-5-5", language: "українська" };
-const USER_DEFAULTS = { autoExplain: true, pageTaps: false, deskScroll: false, font: "literata", margins: "normal", pdfMode: "reflow", fontSizes: {}, theme: "light", explainStyle: "default", customStyle: "", lastBook: null, positions: {} };
+const USER_DEFAULTS = { autoExplain: true, pageTaps: false, deskScroll: false, font: "literata", margins: "normal", pdfMode: "reflow", fontSizes: {}, theme: "auto", explainStyle: "default", customStyle: "", lastBook: null, positions: {} };
 const SHARED_KEYS = new Set(Object.keys(SHARED_DEFAULTS));
 const USER_KEYS = new Set(Object.keys(USER_DEFAULTS));
 
@@ -74,6 +74,13 @@ try {
   state = { shared: {}, users: {}, guestUsage: {}, ...JSON.parse(fs.readFileSync(STATE_FILE, "utf8")) };
 } catch {
   /* first start */
+}
+
+// 2026-10-16: the theme now follows the phone's light/dark setting by default. Everyone who had
+// picked light or dark (the only ways to get dark before) moves to it once; sepia stays.
+if (!state.themeAuto) {
+  for (const u of Object.values(state.users)) if (u.theme === "light" || u.theme === "dark") u.theme = "auto";
+  state.themeAuto = true;
 }
 
 let saveTimer = null;

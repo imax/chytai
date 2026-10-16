@@ -7,6 +7,21 @@ const THEMES = {
   sepia: { body: { background: "#f6efe0", color: "#3b2f1e" } },
   dark: { body: { background: "#1e1e20", color: "#dcdcdc" }, a: { color: "#8ab4f8" } },
 };
+const DARK_QUERY = window.matchMedia("(prefers-color-scheme: dark)");
+const resolvedTheme = () => {
+  const theme = settings?.theme || "auto";
+  return theme === "auto" ? (DARK_QUERY.matches ? "dark" : "light") : THEMES[theme] ? theme : "light";
+};
+const themeCss = (name) =>
+  Object.entries(THEMES[name])
+    .map(([sel, rules]) => `${sel}{${Object.entries(rules).map(([k, v]) => `${k}:${v}`).join(";")}}`)
+    .join("\n");
+
+function applyTheme() {
+  document.body.dataset.theme = resolvedTheme();
+  $("#theme-select").value = settings.theme || "auto";
+  rendition?.getContents().forEach(styleContents);
+}
 const FONTS = {
   literata: "'Literata Variable', Literata, Georgia, serif",
   georgia: "Georgia, 'Iowan Old Style', serif",
@@ -48,9 +63,8 @@ const conversations = new Map(); // request id -> conversation state
 
 async function loadSettings() {
   settings = await window.reader.getSettings();
-  document.body.dataset.theme = settings.theme;
   document.body.dataset.margins = settings.margins || "normal";
-  $("#theme-select").value = settings.theme;
+  applyTheme();
 }
 
 function openSettings() {
@@ -179,6 +193,16 @@ function styleContents(contents) {
     doc.head.appendChild(style);
   }
   style.textContent = typographyCss();
+  // The book's colours live in one element whose text is replaced on every switch. epub.js themes
+  // kept a stylesheet per theme in the frame and re-filled the older one, so after light → dark →
+  // light the dark sheet still came later and won: the page stayed black until the next chapter.
+  let colors = doc.getElementById("chytai-theme");
+  if (!colors) {
+    colors = doc.createElement("style");
+    colors.id = "chytai-theme";
+    doc.head.appendChild(colors);
+  }
+  colors.textContent = themeCss(resolvedTheme());
   if (!doc.documentElement.lang) doc.documentElement.lang = book?.packaging?.metadata?.language || "en";
 }
 
@@ -249,13 +273,11 @@ async function openEpub(payload, { posKey, source }) {
     // without allow-scripts, so allow scripts and strip the book's own ones in stripScripts.
     allowScriptedContent: true,
   });
-  Object.entries(THEMES).forEach(([name, rules]) => rendition.themes.register(name, rules));
   rendition.themes.default({
     "::selection": { background: "rgba(255, 200, 0, 0.45)" },
   });
   rendition.hooks.content.register(styleContents);
   rendition.hooks.content.register((contents) => contents.on("linkClicked", rememberReturn));
-  rendition.themes.select(settings.theme);
   rendition.themes.fontSize(`${bookFontSize() * BASE_SCALE}%`);
 
   rendition.on("selected", onSelected);
@@ -1334,15 +1356,20 @@ $("#btn-font-down").onclick = () => setFont(-10);
 $("#btn-font-up").onclick = () => setFont(10);
 
 async function setTheme(theme) {
-  document.body.dataset.theme = theme;
-  $("#theme-select").value = theme;
-  rendition?.themes.select(theme);
+  settings.theme = theme;
+  applyTheme();
   settings = await window.reader.setSettings({ theme });
 }
 $("#theme-select").onchange = (e) => setTheme(e.target.value);
-// Phones have no room for the select, so a toolbar button cycles light → sepia → dark.
-const THEME_ORDER = ["light", "sepia", "dark"];
-$("#btn-theme").onclick = () => setTheme(THEME_ORDER[(THEME_ORDER.indexOf(settings.theme) + 1) % THEME_ORDER.length]);
+// Phones have no room for the select, so a toolbar button cycles auto → light → sepia → dark.
+const THEME_ORDER = ["auto", "light", "sepia", "dark"];
+const THEME_NAMES = { auto: "як у системі", light: "світла", sepia: "сепія", dark: "темна" };
+$("#btn-theme").onclick = async () => {
+  await setTheme(THEME_ORDER[(THEME_ORDER.indexOf(settings.theme) + 1) % THEME_ORDER.length]);
+  toast(`Тема: ${THEME_NAMES[settings.theme]}`);
+};
+// "Як у системі" follows the phone's or Mac's light/dark switch, also while a book is open.
+DARK_QUERY.addEventListener("change", () => settings?.theme === "auto" && applyTheme());
 
 document.addEventListener("keyup", onKey);
 window.addEventListener("resize", () => hideSelToolbar());
