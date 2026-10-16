@@ -487,7 +487,7 @@
       }
     },
     // ---------- Home screen ----------
-    coverUrl: (b) => (b.ext === "epub" ? `/api/cover?path=${encodeURIComponent(b.path)}&v=${b.mtime || 0}` : null),
+    coverUrl: (b) => (b.ext === "epub" || b.coverAt ? `/api/cover?path=${encodeURIComponent(b.path)}&v=${b.mtime || 0}-${b.coverAt || 0}` : null),
     notesAll: async () => {
       try {
         await sync();

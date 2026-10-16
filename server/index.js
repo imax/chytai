@@ -646,12 +646,14 @@ api.get("/library", async (req, res) => {
   }
   const positions = u.positions || {};
   const added = state.shared.added || {};
+  const customs = new Map(!req.guest && fs.existsSync(CUSTOM_COVER_DIR) ? fs.readdirSync(CUSTOM_COVER_DIR).map((f) => [f.split(".")[0], f]) : []);
   const list = books.map((b) => {
     const name = path.relative(b.dir, b.path);
     // «Прибрати з читання» hides the book from what you are reading until you open it again; the place is kept.
     const aside = !!u.setAside?.[name];
     const openedAt = aside ? 0 : u.opened?.[name] || 0;
     const progress = aside ? null : u.progress?.[name];
+    const custom = customs.get(customCoverKey(name));
     return {
       ...b, dir: undefined, path: name, cloud: false, openedAt, aside,
       started: !aside && !!(positions[name] || positions[`${name}#reflow`]),
@@ -660,6 +662,8 @@ api.get("/library", async (req, res) => {
       // Who put the book in the library and when; books from before this was recorded have only the file's date.
       addedAt: added[name]?.at || b.mtime || 0,
       addedBy: added[name]?.by || "",
+      // When a cover was set by hand, so the cover's address changes with it.
+      coverAt: custom ? Math.round(fs.statSync(path.join(CUSTOM_COVER_DIR, custom)).mtimeMs) : 0,
       seen: !!(openedAt || aside || u.seen?.[name]) || (!!req.user && added[name]?.by === req.user),
     };
   });
@@ -734,11 +738,27 @@ async function warmCovers(names) {
   }
 }
 
+// A cover set by hand for a book in the family library (PDFs have none of their own), kept by the book's name.
+const CUSTOM_COVER_DIR = path.join(COVER_DIR, "custom");
+const customCoverKey = (name) => crypto.createHash("sha1").update(name).digest("hex").slice(0, 16);
+function customCover(name) {
+  if (!name || !fs.existsSync(CUSTOM_COVER_DIR)) return null;
+  const key = customCoverKey(name);
+  const file = fs.readdirSync(CUSTOM_COVER_DIR).find((f) => f.startsWith(`${key}.`));
+  return file ? path.join(CUSTOM_COVER_DIR, file) : null;
+}
+
 api.get("/cover", async (req, res) => {
   const name = safeBookName(req.query.path);
   const demo = req.guest ? demoBooks().find((d) => d.name === name) : null;
   const file = req.guest ? demo && path.join(demo.dir, demo.name) : name && bookFile(name);
-  if (!file || !/\.epub$/i.test(file) || !fs.existsSync(file)) return res.status(404).end();
+  if (!file || !fs.existsSync(file)) return res.status(404).end();
+  const custom = !req.guest && customCover(name);
+  if (custom) {
+    res.setHeader("Cache-Control", "private, max-age=2592000, immutable");
+    return res.type(COVER_TYPES[path.extname(custom).slice(1)]).sendFile(custom);
+  }
+  if (!/\.epub$/i.test(file)) return res.status(404).end();
   try {
     const cached = await coverFile(file);
     const ext = path.extname(cached).slice(1);
@@ -749,6 +769,22 @@ api.get("/cover", async (req, res) => {
   } catch {
     res.status(404).end();
   }
+});
+
+// Set a book's cover by hand: PUT /api/cover?path=<book> with a JPEG, PNG or WebP image as the body.
+api.put("/cover", guestsCannot("У демо-режимі не можна змінювати обкладинки."), express.raw({ type: () => true, limit: "5mb" }), (req, res) => {
+  const name = safeBookName(req.query.path);
+  if (!name || !fs.existsSync(bookFile(name))) return res.status(404).json({ error: "Книжки немає на сервері." });
+  const b = req.body;
+  const ext = b?.length > 3 && b[0] === 0xff && b[1] === 0xd8 ? "jpg"
+    : b?.length > 8 && b.subarray(1, 4).toString() === "PNG" ? "png"
+    : b?.length > 12 && b.subarray(8, 12).toString() === "WEBP" ? "webp" : null;
+  if (!ext) return res.status(400).json({ error: "Обкладинка має бути JPEG, PNG або WebP." });
+  const key = customCoverKey(name);
+  fs.mkdirSync(CUSTOM_COVER_DIR, { recursive: true });
+  for (const f of fs.readdirSync(CUSTOM_COVER_DIR)) if (f.startsWith(`${key}.`)) fs.unlinkSync(path.join(CUSTOM_COVER_DIR, f));
+  fs.writeFileSync(path.join(CUSTOM_COVER_DIR, `${key}.${ext}`), b);
+  res.json({ path: name, coverAt: Date.now() });
 });
 
 // "Позначити переглянутими" on the new arrivals.
