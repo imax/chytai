@@ -49,7 +49,7 @@ function layout({ title, body, user, path = "/", wide = false }) {
 <main class="${wide ? "wide" : ""}">
 ${body}
 </main>
-<footer class="foot"><span>Chytai: книжки, щоб читати більше.</span> <a href="https://chytai.fly.dev">Читалка</a></footer>
+<footer class="foot"><span>Chytai: читай більше.</span> <a href="https://chytai.fly.dev">Читалка</a></footer>
 <script src="/app.js"></script>
 </body>
 </html>`;
