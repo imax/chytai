@@ -41,7 +41,7 @@ const shelves = [];
     status: !p.inStock ? "немає" : p.tags.includes("Передзамовлення") || p.categories.includes("Передзамовлення") ? "передзамовлення" : "є",
     isNew: p.tags.includes("Новинки"),
     genres: p.categories.filter((c) => c !== "Lobster"),
-    blurb: p.blurb,
+    blurb: ent(p.blurb),
     pages: p.pages,
     year: p.year,
     language: "українська",
@@ -90,7 +90,7 @@ const shelves = [];
       isNew: pre,
       note,
       genres: p.categories.filter((c) => !["Передзамовлення", "Розпродаж"].includes(c)),
-      blurb: p.blurb || p.desc,
+      blurb: ent(p.blurb || p.desc),
       pages: p.attrs["Кількість сторінок"] || "",
       language: "українська",
     };
