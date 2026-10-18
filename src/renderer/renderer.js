@@ -363,6 +363,7 @@ function followFontLoad(r) {
   r.display = async (target) => {
     const mine = ++seq;
     await display(target);
+    if (target && scrolled()) holdPlace(r, target, () => mine === seq);
     const fonts = r.getContents().map((c) => c.document.fonts);
     if (!target || fonts.every((f) => f.status === "loaded")) return;
     await Promise.all(fonts.map((f) => f.ready));
@@ -372,6 +373,43 @@ function followFontLoad(r) {
     const go = r[turn].bind(r);
     r[turn] = () => (seq++, go());
   }
+}
+
+// Scroll mode: after a jump epub.js puts the previous chapter above the target and keeps the
+// place by scrolling down as much as that chapter grows while it lays out. In WebKit (the iPhone
+// app) that did not hold: Chapter 7 from the contents ended up in the second half of Chapter 6.
+// So after a jump keep the target at the top ourselves until the chapters around it have settled
+// (no correction needed for a second and a half) or the reader scrolls.
+function holdPlace(r, target, current) {
+  const container = r.manager?.container;
+  const section = book?.spine.get(target);
+  if (!container || !section) return;
+  let stopped = false;
+  const stop = () => (stopped = true);
+  const events = ["wheel", "touchstart", "mousedown", "keydown"];
+  events.forEach((e) => container.addEventListener(e, stop, { passive: true }));
+  ["touchstart", "keydown"].forEach((e) => r.on(e, stop));
+  const start = Date.now();
+  let moved = start;
+  const tick = () => {
+    const now = Date.now();
+    if (stopped || !current() || rendition !== r || now - moved > 1500 || now - start > 10000) {
+      events.forEach((e) => container.removeEventListener(e, stop));
+      ["touchstart", "keydown"].forEach((e) => r.off(e, stop));
+      return;
+    }
+    const view = r.manager.views.find(section);
+    if (view?.contents) {
+      const inside = target.includes("#") || target.startsWith("epubcfi(") ? view.locationOf(target).top : 0;
+      const top = Math.round(view.offset().top + inside);
+      if (Math.abs(container.scrollTop - top) > 1) {
+        container.scrollTop = top;
+        moved = now;
+      }
+    }
+    requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick);
 }
 
 // epub.js throws from resize() until its stage exists (the book is still being parsed), and a
