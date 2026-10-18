@@ -544,10 +544,6 @@ async function addTocPages(forBook) {
   }
 }
 
-function pageLabel(cfi) {
-  return `с. ${book.locations.locationFromCfi(cfi) + 1} з ${book.locations.length()}`;
-}
-
 function chapterTitle(href) {
   if (!book?.navigation || !href) return "";
   const base = href.split("#")[0];
@@ -582,7 +578,7 @@ function updateProgress(location) {
   if (!location?.start) return;
   $("#chapter-label").textContent = chapterTitle(location.start.href);
   if (book.locations.length()) {
-    $("#progress-label").textContent = pageLabel(location.start.cfi);
+    $("#progress-label").textContent = `${Math.round(book.locations.percentageFromCfi(location.start.cfi) * 100)}%`;
   }
 }
 
