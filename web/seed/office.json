@@ -1,0 +1,428 @@
+[
+ {
+  "n": 1,
+  "photo": "1",
+  "title": "Сторітелінг. Для очей, вух і серця",
+  "author": "Марк Лівін"
+ },
+ {
+  "n": 2,
+  "photo": "1",
+  "title": "Простими словами",
+  "author": "Марк Лівін, Ілля Полудьонний"
+ },
+ {
+  "n": 3,
+  "photo": "1",
+  "title": "Сомнение",
+  "author": "Слава Баранский"
+ },
+ {
+  "n": 4,
+  "photo": "1",
+  "title": "The Second Machine Age",
+  "author": "Erik Brynjolfsson, Andrew McAfee"
+ },
+ {
+  "n": 5,
+  "photo": "1",
+  "title": "Built to Sell",
+  "author": "John Warrillow"
+ },
+ {
+  "n": 6,
+  "photo": "1",
+  "title": "The Bastiat Collection",
+  "author": "Frédéric Bastiat"
+ },
+ {
+  "n": 7,
+  "photo": "1",
+  "title": "Гемінґвей нічого не знає",
+  "author": "Артур Дронь"
+ },
+ {
+  "n": 8,
+  "photo": "1",
+  "title": "Chickenhawk",
+  "author": "Robert Mason"
+ },
+ {
+  "n": 9,
+  "photo": "1",
+  "title": "The Greatest Minds and Ideas of All Time",
+  "author": "Will Durant"
+ },
+ {
+  "n": 10,
+  "photo": "1",
+  "title": "Dear Leader",
+  "author": "Jang Jin-sung"
+ },
+ {
+  "n": 11,
+  "photo": "1",
+  "title": "Swimming Across",
+  "author": "Andrew S. Grove"
+ },
+ {
+  "n": 12,
+  "photo": "1",
+  "title": "Beyond Entrepreneurship",
+  "author": "James C. Collins, William C. Lazier"
+ },
+ {
+  "n": 13,
+  "photo": "1",
+  "title": "Unlimited Wealth",
+  "author": "Paul Zane Pilzer"
+ },
+ {
+  "n": 14,
+  "photo": "1",
+  "title": "Kitchen Confidential. Adventures in the Culinary Underbelly",
+  "author": "Anthony Bourdain"
+ },
+ {
+  "n": 15,
+  "photo": "1",
+  "title": "Economics in One Lesson",
+  "author": "Henry Hazlitt"
+ },
+ {
+  "n": 16,
+  "photo": "1",
+  "title": "Різдвяна класика",
+  "author": "Різні автори; упорядниця Ярина Цимбал"
+ },
+ {
+  "n": 17,
+  "photo": "1",
+  "title": "Seeking Wisdom: From Darwin to Munger",
+  "author": "Peter Bevelin"
+ },
+ {
+  "n": 18,
+  "photo": "1",
+  "title": "Мені здалося — я живу завжди. Вибрані твори",
+  "author": "Василь Стус"
+ },
+ {
+  "n": 19,
+  "photo": "2",
+  "title": "Одіссея",
+  "author": "Гомер"
+ },
+ {
+  "n": 20,
+  "photo": "2",
+  "title": "Ман чжу. Китай для допитливих",
+  "author": "Ізабелла Калюта"
+ },
+ {
+  "n": 21,
+  "photo": "2",
+  "title": "Текст-пекс-шмекс",
+  "author": "Вільям Зінссер"
+ },
+ {
+  "n": 22,
+  "photo": "2",
+  "title": "The Difference Between God and Larry Ellison. Inside Oracle Corporation",
+  "author": "Mike Wilson"
+ },
+ {
+  "n": 23,
+  "photo": "2",
+  "title": "Me, Fakegrimlock: The Book of Awesome",
+  "author": "FAKEGRIMLOCK"
+ },
+ {
+  "n": 24,
+  "photo": "2",
+  "title": "Друзі, коханки і велика халепа",
+  "author": "Метью Перрі"
+ },
+ {
+  "n": 25,
+  "photo": "2",
+  "title": "Adventures of a Bystander",
+  "author": "Peter F. Drucker"
+ },
+ {
+  "n": 26,
+  "photo": "2",
+  "title": "Графиня Олександра Василівна Браницька",
+  "author": "Володимир Перерва"
+ },
+ {
+  "n": 27,
+  "photo": "2",
+  "title": "Про рекламу",
+  "author": "Девід Оґілві"
+ },
+ {
+  "n": 28,
+  "photo": "2",
+  "title": "How to Play the Piano",
+  "author": "James Rhodes"
+ },
+ {
+  "n": 29,
+  "photo": "3",
+  "title": "Software Development From A to Z",
+  "author": "Olga Filipova, Rui Vilão"
+ },
+ {
+  "n": 30,
+  "photo": "3",
+  "title": "The Effective Executive",
+  "author": "Peter F. Drucker"
+ },
+ {
+  "n": 31,
+  "photo": "3",
+  "title": "Andy Grove: The Life and Times of an American Business Icon",
+  "author": "Richard S. Tedlow"
+ },
+ {
+  "n": 32,
+  "photo": "3",
+  "title": "The Story of Earth",
+  "author": "Robert M. Hazen"
+ },
+ {
+  "n": 33,
+  "photo": "3",
+  "title": "Теория игр",
+  "author": "Авинаш Диксит, Барри Нейлбафф"
+ },
+ {
+  "n": 34,
+  "photo": "3",
+  "title": "Управление жизненным циклом корпорации",
+  "author": "Ицхак Калдерон Адизес"
+ },
+ {
+  "n": 35,
+  "photo": "3",
+  "title": "Не турбувати!",
+  "author": "Кел Ньюпорт"
+ },
+ {
+  "n": 36,
+  "photo": "3",
+  "title": "Ґудбай, імперіє. Розмови з Кахою Бендукідзе",
+  "author": "Володимир Федорін"
+ },
+ {
+  "n": 37,
+  "photo": "3",
+  "title": "The PayPal Wars",
+  "author": "Eric M. Jackson"
+ },
+ {
+  "n": 38,
+  "photo": "3",
+  "title": "Not Fade Away: A Short Life Well Lived",
+  "author": "Laurence Shames, Peter Barton"
+ },
+ {
+  "n": 39,
+  "photo": "3",
+  "title": "What Do You Care What Other People Think?",
+  "author": "Richard P. Feynman"
+ },
+ {
+  "n": 40,
+  "photo": "3",
+  "title": "Higher Love",
+  "author": "Kit DesLauriers"
+ },
+ {
+  "n": 41,
+  "photo": "3",
+  "title": "The Timeless Way of Building",
+  "author": "Christopher Alexander"
+ },
+ {
+  "n": 42,
+  "photo": "3",
+  "title": "И ботаники делают бизнес 1+2",
+  "author": "Максим Котин"
+ },
+ {
+  "n": 43,
+  "photo": "3",
+  "title": "The Great CEO Within: The Tactical Guide to Company Building",
+  "author": "Matt Mochary; за участі Alex MacCaw і Misha Talavera"
+ },
+ {
+  "n": 44,
+  "photo": "3",
+  "title": "The Subtle Art of Not Giving a F*ck",
+  "author": "Mark Manson"
+ },
+ {
+  "n": 45,
+  "photo": "3",
+  "title": "The Hard Thing About Hard Things. Безжальна правда про нещадний бізнес",
+  "author": "Бен Горовіц"
+ },
+ {
+  "n": 46,
+  "photo": "3",
+  "title": "One on One with Andy Grove",
+  "author": "Andrew S. Grove"
+ },
+ {
+  "n": 47,
+  "photo": "3",
+  "title": "The Design of Business",
+  "author": "Roger L. Martin"
+ },
+ {
+  "n": 48,
+  "photo": "3",
+  "title": "The Robber Barons",
+  "author": "Matthew Josephson"
+ },
+ {
+  "n": 49,
+  "photo": "3",
+  "title": "First, Break All the Rules",
+  "author": "Gallup (на корінці)"
+ },
+ {
+  "n": 50,
+  "photo": "3",
+  "title": "Между надо и хочу",
+  "author": "Эль Луна"
+ },
+ {
+  "n": 51,
+  "photo": "3",
+  "title": "The Happy Body",
+  "author": "Aniela Gregorek, Jerzy Gregorek"
+ },
+ {
+  "n": 52,
+  "photo": "4",
+  "title": "Гемінґвей",
+  "author": "Мері Дірборн"
+ },
+ {
+  "n": 53,
+  "photo": "4",
+  "title": "Шерлок Голмс. Том 2",
+  "author": "Артур Конан Дойл"
+ },
+ {
+  "n": 54,
+  "photo": "4",
+  "title": "Лабиринты Ехо",
+  "author": "Макс Фрай"
+ },
+ {
+  "n": 55,
+  "photo": "4",
+  "title": "Африка, сни",
+  "author": "Лесь Подерв’янський"
+ },
+ {
+  "n": 56,
+  "photo": "4",
+  "title": "12 стульев",
+  "author": "И. Ильф, Е. Петров"
+ },
+ {
+  "n": 57,
+  "photo": "4",
+  "title": "Рождественская елка",
+  "author": "Чарлз Диккенс"
+ },
+ {
+  "n": 58,
+  "photo": "4",
+  "title": "Історія науки",
+  "author": "Анна Клейборн (ймовірно)"
+ },
+ {
+  "n": 59,
+  "photo": "4",
+  "title": "Єнот Ракета. Переслідування. Том 1",
+  "author": "Янґ, Паркер, Больє"
+ },
+ {
+  "n": 60,
+  "photo": "4",
+  "title": "Ілон Маск",
+  "author": "Маша Сердюк"
+ },
+ {
+  "n": 61,
+  "photo": "4",
+  "title": "Тесла та машина на космічній енергії",
+  "author": "Лука Новеллі"
+ },
+ {
+  "n": 62,
+  "photo": "4",
+  "title": "Воєнні спогади",
+  "author": "Кароліна Лянцкоронська"
+ },
+ {
+  "n": 63,
+  "photo": "4",
+  "title": "Потяг прибуває за розкладом",
+  "author": "Марічка Паплаускайте"
+ },
+ {
+  "n": 64,
+  "photo": "4",
+  "title": "Банзай. Японія для допитливих",
+  "author": "Зофія Фаб’яновська-Міцик"
+ },
+ {
+  "n": 65,
+  "photo": "4",
+  "title": "Як читати класиків",
+  "author": "Ростислав Семків"
+ },
+ {
+  "n": 66,
+  "photo": "4",
+  "title": "Дари волхвів. Останній листок",
+  "author": "О. Генрі"
+ },
+ {
+  "n": 67,
+  "photo": "4",
+  "title": "З Ейнштейном у рюкзаку",
+  "author": "Андрій Бачинський"
+ },
+ {
+  "n": 68,
+  "photo": "4",
+  "title": "Як запам’ятовувати майже все і завжди",
+  "author": "Роб Іставей"
+ },
+ {
+  "n": 69,
+  "photo": "4",
+  "title": "Як Україна втрачала Донбас",
+  "author": "Денис Казанський, Марина Воротинцева"
+ },
+ {
+  "n": 70,
+  "photo": "4",
+  "title": "Путешествие Алисы",
+  "author": "Кир Булычев"
+ },
+ {
+  "n": 71,
+  "photo": "4",
+  "title": "Марсианин",
+  "author": "Энди Вейер"
+ }
+]

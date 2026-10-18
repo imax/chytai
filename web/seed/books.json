@@ -1,0 +1,7479 @@
+[
+ {
+  "id": "цирцея",
+  "title": "Цирцея",
+  "series": 0,
+  "altTitle": "Circe",
+  "author": "Madeline Miller",
+  "cover": "https://maxua.com/images/covers/цирцея.jpg",
+  "tags": [
+   "художня",
+   "українською"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/0316556343"
+   },
+   {
+    "label": "Vivat",
+    "url": "https://vivat.com.ua/product/tsyrtseia/"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "the-road",
+  "title": "The Road",
+  "series": 0,
+  "altTitle": "",
+  "author": "Cormac McCarthy",
+  "cover": "https://maxua.com/images/covers/the-road.jpg",
+  "tags": [
+   "художня"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/0307387895"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "east-of-eden",
+  "title": "East of Eden",
+  "series": 0,
+  "altTitle": "",
+  "author": "John Steinbeck",
+  "cover": "https://maxua.com/images/covers/east-of-eden.jpg",
+  "tags": [
+   "художня"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/B0GLLQ4F76"
+   },
+   {
+    "label": "MEGOGO Books",
+    "url": "https://mbooks.com.ua/book/797102-na-skhid-vid-edemu/"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "from-strength-to-strength",
+  "title": "From Strength to Strength",
+  "series": 0,
+  "altTitle": "",
+  "author": "Arthur C. Brooks",
+  "cover": "https://maxua.com/images/covers/from-strength-to-strength.jpg",
+  "tags": [
+   "саморозвиток"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/059319148X"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "song-of-achilles",
+  "title": "Song of Achilles",
+  "series": 0,
+  "altTitle": "",
+  "author": "Madeline Miller",
+  "cover": "https://maxua.com/images/covers/song-of-achilles.jpg",
+  "tags": [
+   "художня"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/B006IE2IO8"
+   },
+   {
+    "label": "Vivat",
+    "url": "https://vivat.com.ua/product/pisnia-akhilla/"
+   },
+   {
+    "label": "Readeat",
+    "url": "https://readeat.com/product/601707-pisnia-akhilla"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "dungeon-crawler-carl-vol-1-8",
+  "title": "Dungeon Crawler Carl",
+  "series": 8,
+  "altTitle": "",
+  "author": "Matt Dinniman",
+  "cover": "https://maxua.com/images/covers/dungeon-crawler-carl.jpg",
+  "tags": [
+   "художня",
+   "фантастика"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/B08BKGYQXW"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "free",
+  "title": "Free",
+  "series": 0,
+  "altTitle": "",
+  "author": "Lea Ypi",
+  "cover": "https://maxua.com/images/covers/free.jpg",
+  "tags": [
+   "біографії"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/B098TY6B2Y"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "how-to-hide-an-empire",
+  "title": "How to hide an empire",
+  "series": 0,
+  "altTitle": "",
+  "author": "Daniel Immerwahr",
+  "cover": "https://maxua.com/images/covers/how-to-hide-an-empire.jpg",
+  "tags": [
+   "суспільство"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/B07D6MGV9Y"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "hyperion-vol-1-4",
+  "title": "Hyperion",
+  "series": 4,
+  "altTitle": "",
+  "author": "Dan Simmons",
+  "cover": "https://maxua.com/images/covers/hyperion.jpg",
+  "tags": [
+   "художня",
+   "фантастика"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/B004G60EHS"
+   },
+   {
+    "label": "Богдан",
+    "url": "https://bohdan-books.com/catalog/book/121958/"
+   },
+   {
+    "label": "Readeat",
+    "url": "https://readeat.com/product/108542-giperion"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "the-price-of-peace",
+  "title": "The Price of Peace",
+  "series": 0,
+  "altTitle": "",
+  "author": "Zachary D. Carter",
+  "cover": "https://maxua.com/images/covers/the-price-of-peace.jpg",
+  "tags": [
+   "біографії"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/B07WPQD8ZX"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "щоденник-астрід-лінгрен",
+  "title": "Щоденник Астрід Лінгрен",
+  "series": 0,
+  "altTitle": "A World Gone Mad: The Diaries of Astrid Lindgren",
+  "author": "Астрід Ліндґрен",
+  "cover": "https://maxua.com/images/covers/щоденник-астрід-лінгрен.jpg",
+  "tags": [
+   "війна",
+   "українською"
+  ],
+  "links": [
+   {
+    "label": "Видавництво РМ",
+    "url": "https://ridna-mova.com/schodenniki-voennogo-chasu.html"
+   },
+   {
+    "label": "Vivat",
+    "url": "https://vivat.com.ua/product/astrid-lindgren-shchodennyky-voyennoho-chasu-1939-1945/"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "гемінгвей-нічого-не-знає",
+  "title": "Гемінгвей нічого не знає",
+  "series": 0,
+  "altTitle": "",
+  "author": "Артур Дронь",
+  "cover": "https://maxua.com/images/covers/гемінгвей-нічого-не-знає.jpg",
+  "tags": [
+   "художня",
+   "українською"
+  ],
+  "links": [
+   {
+    "label": "ВСЛ",
+    "url": "https://starylev.com.ua/knyga-gemingvey-nicogo-ne-znaye"
+   },
+   {
+    "label": "Readeat",
+    "url": "https://readeat.com/product/601699-hemingvei-nichoho-ne-znaye"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "ворошиловград",
+  "title": "Ворошиловград",
+  "series": 0,
+  "altTitle": "",
+  "author": "Сергій Жадан",
+  "cover": "https://maxua.com/images/covers/ворошиловград.jpg",
+  "tags": [
+   "художня",
+   "українською"
+  ],
+  "links": [
+   {
+    "label": "Readeat",
+    "url": "https://readeat.com/product/105987-vorosilovgrad"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "fear-and-loathing-in-las-vegas",
+  "title": "Fear and loathing in Las Vegas",
+  "series": 0,
+  "altTitle": "",
+  "author": "Hunter S. Thompson and Ralph Steadman",
+  "cover": "https://maxua.com/images/covers/fear-and-loathing-in-las-vegas.jpg",
+  "tags": [
+   "художня"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/B003WUYQG4"
+   },
+   {
+    "label": "КСД",
+    "url": "https://ksd.ua/product/strakh-i-vidraza-u-las-vehasi-dyka-podoroz-do-sertsia-amerykanskoyi-mriyi"
+   },
+   {
+    "label": "Readeat",
+    "url": "https://readeat.com/product/619981-strakh-i-vidraza-u-las-vehasi-dyka-podorozh-do-sertsia-amerykanskoi-mrii"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "reading-like-a-writer",
+  "title": "Reading like a writer",
+  "series": 0,
+  "altTitle": "",
+  "author": "Francine Prose",
+  "cover": "https://maxua.com/images/covers/reading-like-a-writer.jpg",
+  "tags": [
+   "саморозвиток"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/0060777052"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "what-to-make-of-a-life",
+  "title": "What to make of a life",
+  "series": 0,
+  "altTitle": "",
+  "author": "Jim Collins",
+  "cover": "https://maxua.com/images/covers/what-to-make-of-a-life.jpg",
+  "tags": [
+   "саморозвиток"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/B0FGY8RKCK"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "quartered-safe-out-here",
+  "title": "Quartered Safe Out Here",
+  "series": 0,
+  "altTitle": "",
+  "author": "George MacDonald Fraser",
+  "cover": "https://maxua.com/images/covers/quartered-safe-out-here.jpg",
+  "tags": [
+   "війна"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/B004TC14HI"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "the-talented-mr-ripley",
+  "title": "The Talented Mr. Ripley",
+  "series": 0,
+  "altTitle": "",
+  "author": "Patricia Highsmith",
+  "cover": "https://maxua.com/images/covers/the-talented-mr-ripley.jpg",
+  "tags": [
+   "художня",
+   "трилери"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/B007Q6XJGS"
+   },
+   {
+    "label": "Readeat",
+    "url": "https://readeat.com/product/205291-talanovytyi-mister-ripli"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "let-him-go",
+  "title": "Let Him Go",
+  "series": 0,
+  "altTitle": "",
+  "author": "Larry Watson",
+  "cover": "https://maxua.com/images/covers/let-him-go.jpg",
+  "tags": [
+   "художня",
+   "трилери"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/B00C4GUX96"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "gone-baby-gone",
+  "title": "Gone, Baby, Gone",
+  "series": 0,
+  "altTitle": "",
+  "author": "Dennis Lehane",
+  "cover": "https://maxua.com/images/covers/gone-baby-gone.jpg",
+  "tags": [
+   "художня",
+   "детективи"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/0380730359"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "how-big-things-get-done",
+  "title": "How Big Things Get Done",
+  "series": 0,
+  "altTitle": "",
+  "author": "Bent Flyvbjerg and Dan Gardner",
+  "cover": "https://maxua.com/images/covers/how-big-things-get-done.jpg",
+  "tags": [
+   "бізнес",
+   "менеджмент"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/B0B3HS4C98"
+   },
+   {
+    "label": "Vivat",
+    "url": "https://vivat.com.ua/product/yak-robyty-velyki-spravy/"
+   },
+   {
+    "label": "Readeat",
+    "url": "https://readeat.com/product/114271-iak-robiti-veliki-spravi-nespodivani-faktori-v-doli-projektiv-vid-pobutovogo-do-kosmi-cnogo-masstabu"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "with-the-old-breed",
+  "title": "With the Old Breed",
+  "series": 0,
+  "altTitle": "",
+  "author": "E.B. Sledge",
+  "cover": "https://maxua.com/images/covers/with-the-old-breed.jpg",
+  "tags": [
+   "війна"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/B000VMFDW2"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "the-storm-of-war",
+  "title": "The Storm of War",
+  "series": 0,
+  "altTitle": "",
+  "author": "Andrew Roberts",
+  "cover": "https://maxua.com/images/covers/the-storm-of-war.jpg",
+  "tags": [
+   "війна"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/B004FEF6J2"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "thinking-small",
+  "title": "Thinking Small",
+  "series": 0,
+  "altTitle": "",
+  "author": "Andrea Hiott",
+  "cover": "https://maxua.com/images/covers/thinking-small.jpg",
+  "tags": [
+   "бізнес",
+   "компанії"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/B004W3FJ3O"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "double-indemnity",
+  "title": "Double Indemnity",
+  "series": 0,
+  "altTitle": "",
+  "author": "James M. Cain",
+  "cover": "https://maxua.com/images/covers/double-indemnity.jpg",
+  "tags": [
+   "художня",
+   "детективи"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/B004G606NA"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "a-different-kind-of-power",
+  "title": "A Different Kind of Power",
+  "series": 0,
+  "altTitle": "",
+  "author": "Jacinda Ardern",
+  "cover": "https://maxua.com/images/covers/a-different-kind-of-power.jpg",
+  "tags": [
+   "біографії"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/B0DQ9MMDSH"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "жадан-арабески",
+  "title": "Жадан Арабески",
+  "series": 0,
+  "altTitle": "",
+  "author": "Сергій Жадан",
+  "cover": "https://maxua.com/images/covers/жадан-арабески.jpg",
+  "tags": [
+   "художня",
+   "українською"
+  ],
+  "links": [
+   {
+    "label": "Meridian Czernowitz",
+    "url": "https://www.meridiancz.com/blog/cerhiy-zhadan-arabesky/"
+   },
+   {
+    "label": "Readeat",
+    "url": "https://readeat.com/product/117796-arabesky"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "no-country-for-old-men",
+  "title": "No Country For Old Men",
+  "series": 0,
+  "altTitle": "",
+  "author": "Cormac McCarthy",
+  "cover": "https://maxua.com/images/covers/no-country-for-old-men.jpg",
+  "tags": [
+   "художня",
+   "трилери"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/B000WJSB4Q"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "why-the-west-rules",
+  "title": "Why The West Rules",
+  "series": 0,
+  "altTitle": "",
+  "author": "Ian Morris",
+  "cover": "https://maxua.com/images/covers/why-the-west-rules.jpg",
+  "tags": [
+   "суспільство"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/B003VTZSFY"
+   },
+   {
+    "label": "Книгарня «Є»",
+    "url": "https://book-ye.com.ua/nehudozhnja-literatura/istorija/istoriya-zarubizhnykh-krayin/chomu-zakhid-panuye-nateper-opovidi-z-istoriyi-ta-shcho-z-nykh-vyplyvaye-shchodo-majbutnoho/"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "три-мушкетери",
+  "title": "Три Мушкетери",
+  "series": 0,
+  "altTitle": "The Three Musketeers",
+  "author": "Alexandre Dumas",
+  "cover": "https://maxua.com/images/covers/the-three-musketeers.jpg",
+  "tags": [
+   "художня"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/0143105000"
+   },
+   {
+    "label": "Фоліо",
+    "url": "https://folio.com.ua/books/tri-mushketeri-"
+   },
+   {
+    "label": "Readeat",
+    "url": "https://readeat.com/product/109972-tri-musketeri"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "service-model",
+  "title": "Service Model",
+  "series": 0,
+  "altTitle": "",
+  "author": "Adrian Tchaikovsky",
+  "cover": "https://maxua.com/images/covers/service-model.jpg",
+  "tags": [
+   "художня",
+   "фантастика"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/B0CGRXGB4Q"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "2001-a-space-odyssey",
+  "title": "2001: A Space Odyssey",
+  "series": 0,
+  "altTitle": "",
+  "author": "Arthur C. Clarke",
+  "cover": "https://maxua.com/images/covers/2001-a-space-odyssey.jpg",
+  "tags": [
+   "художня",
+   "фантастика"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/B01A6E8EQ6"
+   },
+   {
+    "label": "Vivat",
+    "url": "https://vivat.com.ua/product/2001-kosmichna-odisseia/"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "eat-run",
+  "title": "Eat & Run",
+  "series": 0,
+  "altTitle": "",
+  "author": "Scott Jurek and Steve Friedman",
+  "cover": "https://maxua.com/images/covers/eat-run.jpg",
+  "tags": [
+   "біографії"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/B005OCHOZS"
+   },
+   {
+    "label": "Наш Формат",
+    "url": "https://nashformat.ua/products/izh-i-bizhy.-nejmovirna-istoriya-vegana-ultramarafontsya-709417"
+   },
+   {
+    "label": "Readeat",
+    "url": "https://readeat.com/product/104346-yiz-i-bizi-neimovirna-istoriia-vegana-ultramarafoncia"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "the-master",
+  "title": "The Master",
+  "series": 0,
+  "altTitle": "",
+  "author": "Christopher Clarey",
+  "cover": "https://maxua.com/images/covers/the-master.jpg",
+  "tags": [
+   "біографії"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/B08T5CVTV9"
+   },
+   {
+    "label": "Readeat",
+    "url": "https://readeat.com/product/104307-maestro-rodzer-federer-velike-zittia-u-velikomu-tenisi"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "paper-belt-on-fire",
+  "title": "Paper Belt On Fire",
+  "series": 0,
+  "altTitle": "",
+  "author": "Michael Gibson",
+  "cover": "https://maxua.com/images/covers/paper-belt-on-fire.jpg",
+  "tags": [
+   "бізнес",
+   "компанії"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/B099FZR4C3"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "the-norman-conquest",
+  "title": "The Norman Conquest",
+  "series": 0,
+  "altTitle": "",
+  "author": "Marc Morris",
+  "cover": "https://maxua.com/images/covers/the-norman-conquest.jpg",
+  "tags": [
+   "історія"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/B0BCM3WV4N"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "apple-in-china",
+  "title": "Apple In China",
+  "series": 0,
+  "altTitle": "",
+  "author": "Patrick McGee",
+  "cover": "https://maxua.com/images/covers/apple-in-china.jpg",
+  "tags": [
+   "бізнес",
+   "компанії"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/B0DJK2D88B"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "the-coaching-habit",
+  "title": "The Coaching Habit",
+  "series": 0,
+  "altTitle": "",
+  "author": "Michael Bungay Stanier",
+  "cover": "https://maxua.com/images/covers/the-coaching-habit.jpg",
+  "tags": [
+   "бізнес",
+   "менеджмент"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/B01BUIBBZI"
+   },
+   {
+    "label": "Моноліт-Bizz",
+    "url": "https://bizz.monolith.in.ua/uk/books/navychky-kouchynhu"
+   },
+   {
+    "label": "Readeat",
+    "url": "https://readeat.com/product/614465-navychky-kouchynhu-hovorit-menshe-pytaite-bilshe-y-nazavzhdy-zminit-sposib-svoho-liderstva"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "there-is-no-antimemetics-division",
+  "title": "There Is No Antimemetics Division",
+  "series": 0,
+  "altTitle": "",
+  "author": "qntm",
+  "cover": "https://maxua.com/images/covers/there-is-no-antimemetics-division.jpg",
+  "tags": [
+   "художня",
+   "фантастика"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/B0915M7T61"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "я-кров-твою-змішаю-з-вугіллям",
+  "title": "Я кров твою змішаю з вугіллям",
+  "series": 0,
+  "altTitle": "",
+  "author": "Олександр Михед",
+  "cover": "https://maxua.com/images/covers/я-кров-твою-змішаю-з-вугіллям.jpg",
+  "tags": [
+   "війна",
+   "українською"
+  ],
+  "links": [
+   {
+    "label": "ВСЛ",
+    "url": "https://starylev.com.ua/knyzka-ya-zmisayu-tvoyu-krov-iz-vugillyam-zrozumity-ukrayinskyy-sxid"
+   },
+   {
+    "label": "Readeat",
+    "url": "https://readeat.com/product/109124-ia-zmisaiu-tvoiu-krov-iz-vugilliam-zrozumiti-ukrayinskii-sxid"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "free-will-sam-harris",
+  "title": "Free Will, Sam Harris",
+  "series": 0,
+  "altTitle": "",
+  "author": "Sam Harris",
+  "cover": "https://maxua.com/images/covers/free-will-sam-harris.jpg",
+  "tags": [
+   "наука"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/B006IDG2T6"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "the-demon-of-unrest",
+  "title": "The Demon of Unrest",
+  "series": 0,
+  "altTitle": "",
+  "author": "Erik Larson",
+  "cover": "https://maxua.com/images/covers/the-demon-of-unrest.jpg",
+  "tags": [
+   "війна"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/B0CDKLBD2W"
+   },
+   {
+    "label": "Наш Формат",
+    "url": "https://nashformat.ua/products/demon-smuty.-saga-pro-gordynyu-rozpach-i-geroizm-naperedodni-gromadyanskoi-vijny-u-ssha-709759"
+   },
+   {
+    "label": "Readeat",
+    "url": "https://readeat.com/product/616215-demon-smuty-saha-pro-hordyniu-rozpach-i-heroizm-naperedodni-hromadianskoi-viiny-u-ssha"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "uncle-tom-s-cabin",
+  "title": "Uncle Tom's Cabin",
+  "series": 0,
+  "altTitle": "",
+  "author": "Harriet Beecher Stowe",
+  "cover": "https://maxua.com/images/covers/uncle-tom-s-cabin.jpg",
+  "tags": [
+   "художня"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/B073W9N1W8"
+   },
+   {
+    "label": "Readeat",
+    "url": "https://readeat.com/product/102034-xatina-diadka-toma"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "the-culture-code",
+  "title": "The Culture Code",
+  "series": 0,
+  "altTitle": "",
+  "author": "Daniel Coyle",
+  "cover": "https://maxua.com/images/covers/the-culture-code.jpg",
+  "tags": [
+   "бізнес",
+   "менеджмент"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/B01MSY1Y6Z"
+   },
+   {
+    "label": "Наш Формат",
+    "url": "https://nashformat.ua/products/kulturnyj-kod.-sekrety-uspishnoi-vzaemodii-v-komandi-709554"
+   },
+   {
+    "label": "Readeat",
+    "url": "https://readeat.com/product/104403-kulturnii-kod-sekreti-uspisnoyi-vzajemodiyi-v-komandi"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "rocket-boys",
+  "title": "Rocket Boys",
+  "series": 0,
+  "altTitle": "",
+  "author": "Homer Hickam",
+  "cover": "https://maxua.com/images/covers/rocket-boys.jpg",
+  "tags": [
+   "біографії"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/B000Q67J3O"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "careless-people",
+  "title": "Careless people",
+  "series": 0,
+  "altTitle": "",
+  "author": "Sarah Wynn-Williams",
+  "cover": "https://maxua.com/images/covers/careless-people.jpg",
+  "tags": [
+   "бізнес",
+   "компанії"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/B0DY9TZD8Z"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "the-guns-of-august",
+  "title": "The Guns of August",
+  "series": 0,
+  "altTitle": "",
+  "author": "Barbara W. Tuchman and Robert K. Massie",
+  "cover": "https://maxua.com/images/covers/the-guns-of-august.jpg",
+  "tags": [
+   "війна"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/B002TXZS8A"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "нескінчені-розмови",
+  "title": "Нескінчені розмови",
+  "series": 0,
+  "altTitle": "",
+  "author": "Євгенія Кононенко",
+  "cover": "https://maxua.com/images/covers/нескінчені-розмови.jpg",
+  "tags": [
+   "художня",
+   "українською"
+  ],
+  "links": [
+   {
+    "label": "Видавництво Анетти Антоненко",
+    "url": "https://anetta-publishers.com/books/253"
+   },
+   {
+    "label": "Readeat",
+    "url": "https://readeat.com/product/203121-neskincheni-rozmovy"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "the-spy-who-came-in-from-the-cold",
+  "title": "The Spy Who Came In From The Cold",
+  "series": 0,
+  "altTitle": "",
+  "author": "John le Carré",
+  "cover": "https://maxua.com/images/covers/the-spy-who-came-in-from-the-cold.jpg",
+  "tags": [
+   "художня",
+   "трилери"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/B006CUDDUG"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "the-social-animal",
+  "title": "The Social Animal",
+  "series": 0,
+  "altTitle": "",
+  "author": "David Brooks",
+  "cover": "https://maxua.com/images/covers/the-social-animal.jpg",
+  "tags": [
+   "наука"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/B004IK8PFK"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "spotify-play",
+  "title": "Spotify Play",
+  "series": 0,
+  "altTitle": "",
+  "author": "Sven Carlsson and Jonas Leijonhufvud",
+  "cover": "https://maxua.com/images/covers/spotify-play.jpg",
+  "tags": [
+   "бізнес",
+   "компанії"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/B08MQNGZ6V"
+   },
+   {
+    "label": "Yakaboo",
+    "url": "https://www.yakaboo.ua/ua/spotify-navivorit-jak-shveds-kij-startap-zdijsniv-muzichnu-revoljuciju.html"
+   },
+   {
+    "label": "Readeat",
+    "url": "https://readeat.com/product/110334-spotify-navivorit-iak-svedskii-startap-zdiisniv-muzicnu-revoliuciiu"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "the-bell-jar",
+  "title": "The Bell Jar",
+  "series": 0,
+  "altTitle": "",
+  "author": "Sylvia Plath",
+  "cover": "https://maxua.com/images/covers/the-bell-jar.jpg",
+  "tags": [
+   "художня"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/0060837020"
+   },
+   {
+    "label": "ВСЛ",
+    "url": "https://starylev.com.ua/pid-sklyanym-kovpakom"
+   },
+   {
+    "label": "Readeat",
+    "url": "https://readeat.com/product/110666-pid-sklianim-kovpakom"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "dead-poets-society",
+  "title": "Dead Poets Society",
+  "series": 0,
+  "altTitle": "",
+  "author": "N. H. Kleinbaum",
+  "cover": "https://maxua.com/images/covers/dead-poets-society.jpg",
+  "tags": [
+   "художня"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/1401308775"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "forever-war",
+  "title": "Forever War",
+  "series": 0,
+  "altTitle": "",
+  "author": "Joe Haldeman",
+  "cover": "https://maxua.com/images/covers/forever-war.jpg",
+  "tags": [
+   "художня",
+   "фантастика"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/0312536631"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "the-system-a-deep-state-novel",
+  "title": "The System: a deep state novel",
+  "series": 0,
+  "altTitle": "",
+  "author": "Barry Eisler",
+  "cover": "https://maxua.com/images/covers/the-system-a-deep-state-novel.jpg",
+  "tags": [
+   "художня",
+   "трилери"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/B0F9PP98VT"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "peace-war",
+  "title": "Peace War",
+  "series": 0,
+  "altTitle": "",
+  "author": "Vernor Vinge",
+  "cover": "https://maxua.com/images/covers/peace-war.jpg",
+  "tags": [
+   "художня",
+   "фантастика"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/B003E74BSS"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "blindsight",
+  "title": "Blindsight",
+  "series": 0,
+  "altTitle": "",
+  "author": "Peter Watts",
+  "cover": "https://maxua.com/images/covers/blindsight.jpg",
+  "tags": [
+   "художня",
+   "фантастика"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/B003K15EKM"
+   },
+   {
+    "label": "Видавництво Жупанського",
+    "url": "https://publisher.in.ua/product/slipobachennya/"
+   },
+   {
+    "label": "Readeat",
+    "url": "https://readeat.com/product/110672-slipobacennia"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "the-quiet-american",
+  "title": "The Quiet American",
+  "series": 0,
+  "altTitle": "",
+  "author": "Graham Greene",
+  "cover": "https://maxua.com/images/covers/the-quiet-american.jpg",
+  "tags": [
+   "художня"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/B07CMCJ4ZP"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "the-writing-life",
+  "title": "The Writing Life",
+  "series": 0,
+  "altTitle": "",
+  "author": "Annie Dillard",
+  "cover": "https://maxua.com/images/covers/the-writing-life.jpg",
+  "tags": [
+   "саморозвиток"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/B000W93CNG"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "co-intelligence",
+  "title": "Co-Intelligence",
+  "series": 0,
+  "altTitle": "",
+  "author": "Ethan Mollick",
+  "cover": "https://maxua.com/images/covers/co-intelligence.jpg",
+  "tags": [
+   "бізнес",
+   "продукт"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/B0CM8TRWK3"
+   },
+   {
+    "label": "Vivat",
+    "url": "https://vivat.com.ua/product/spivintelekt/"
+   },
+   {
+    "label": "Readeat",
+    "url": "https://readeat.com/product/616685-spivintelekt-zhyty-ta-pratsiuvaty-z-shi"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "contagious",
+  "title": "Contagious",
+  "series": 0,
+  "altTitle": "",
+  "author": "Jonah Berger",
+  "cover": "https://maxua.com/images/covers/contagious.jpg",
+  "tags": [
+   "бізнес",
+   "продукт"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/B008J4GQKW"
+   },
+   {
+    "label": "Наш Формат",
+    "url": "https://nashformat.ua/products/zarazlyvyj.-psyhologiya-virusnogo-marketyngu-onovl.-vyd.-709636"
+   },
+   {
+    "label": "Readeat",
+    "url": "https://readeat.com/product/109118-zarazlivii-psixologiia-virusnogo-marketingu-onovl-vid"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "мовчазна-пацієнтка",
+  "title": "Мовчазна пацієнтка",
+  "series": 0,
+  "altTitle": "The Silent Patient",
+  "author": "Алекс Майклідіс",
+  "cover": "https://maxua.com/images/covers/мовчазна-пацієнтка.jpg",
+  "tags": [
+   "художня",
+   "детективи",
+   "українською"
+  ],
+  "links": [
+   {
+    "label": "Vivat",
+    "url": "https://vivat.com.ua/product/movchazna-patsiyentka/"
+   },
+   {
+    "label": "Readeat",
+    "url": "https://readeat.com/product/106590-movcazna-pacijentka"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "without-a-doubt",
+  "title": "Without a doubt",
+  "series": 0,
+  "altTitle": "",
+  "author": "Surbhi Sarna",
+  "cover": "https://maxua.com/images/covers/without-a-doubt.jpg",
+  "tags": [
+   "бізнес",
+   "компанії"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/B0B3Y9Q3Q2"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "character-limit",
+  "title": "Character limit",
+  "series": 0,
+  "altTitle": "",
+  "author": "Kate Conger and Ryan Mac",
+  "cover": "https://maxua.com/images/covers/character-limit.jpg",
+  "tags": [
+   "бізнес",
+   "компанії"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/B0CW1GBZ6Z"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "finding-the-right-message",
+  "title": "Finding the right message",
+  "series": 0,
+  "altTitle": "",
+  "author": "Jennifer Havice",
+  "cover": "https://maxua.com/images/covers/finding-the-right-message.jpg",
+  "tags": [
+   "бізнес",
+   "продукт"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/0578648725"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "wool-silo",
+  "title": "Wool (Silo)",
+  "series": 0,
+  "altTitle": "",
+  "author": "Hugh Howey",
+  "cover": "https://maxua.com/images/covers/wool-silo.jpg",
+  "tags": [
+   "художня",
+   "фантастика"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/B088SY4GSD"
+   },
+   {
+    "label": "Yakaboo",
+    "url": "https://www.yakaboo.ua/ua/author/view/H_ju_Haui"
+   },
+   {
+    "label": "Readeat",
+    "url": "https://readeat.com/product/614996-bunker-vovna-knyha-1"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "thru-hiking-will-break-your-heart",
+  "title": "Thru-Hiking Will Break Your Heart",
+  "series": 0,
+  "altTitle": "",
+  "author": "Carrot Quinn",
+  "cover": "https://maxua.com/images/covers/thru-hiking-will-break-your-heart.jpg",
+  "tags": [
+   "біографії"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/B00W4RICAM"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "a-walk-in-the-woods",
+  "title": "A walk in the woods",
+  "series": 0,
+  "altTitle": "",
+  "author": "Bill Bryson",
+  "cover": "https://maxua.com/images/covers/a-walk-in-the-woods.jpg",
+  "tags": [
+   "біографії"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/B000S1LSAM"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "we-are-legion-bobiverse",
+  "title": "We are Legion (Bobiverse)",
+  "series": 0,
+  "altTitle": "",
+  "author": "Dennis Taylor",
+  "cover": "https://maxua.com/images/covers/we-are-legion-bobiverse.jpg",
+  "tags": [
+   "художня",
+   "фантастика"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/B01LWAESYQ"
+   },
+   {
+    "label": "Lobster",
+    "url": "https://www.lobster.net.ua/product/my-legion-my-bob/"
+   },
+   {
+    "label": "Readeat",
+    "url": "https://readeat.com/product/605497-my-legion-my-bob-kn-1"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "22-immutable-laws-of-marketing",
+  "title": "22 Immutable Laws of Marketing",
+  "series": 0,
+  "altTitle": "",
+  "author": "Al Ries and Jack Trout",
+  "cover": "https://maxua.com/images/covers/22-immutable-laws-of-marketing.jpg",
+  "tags": [
+   "бізнес",
+   "продукт"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/B000FC10HA"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "tomorrow-and-tomorrow-and-tomorrow",
+  "title": "Tomorrow and tomorrow and tomorrow",
+  "series": 0,
+  "altTitle": "",
+  "author": "Gabrielle Zevin",
+  "cover": "https://maxua.com/images/covers/tomorrow-and-tomorrow-and-tomorrow.jpg",
+  "tags": [
+   "художня"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/B09JBCGQB8"
+   },
+   {
+    "label": "Vivat",
+    "url": "https://vivat.com.ua/product/zavtra-zavtra-zavtra/"
+   },
+   {
+    "label": "Readeat",
+    "url": "https://readeat.com/product/106475-zavtra-zavtra-zavtra"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "ai-supermacy",
+  "title": "AI Supermacy",
+  "series": 0,
+  "altTitle": "",
+  "author": "Parmy Olson",
+  "cover": "https://maxua.com/images/covers/ai-supermacy.jpg",
+  "tags": [
+   "бізнес",
+   "компанії"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/1250337747"
+   },
+   {
+    "label": "Vivat",
+    "url": "https://vivat.com.ua/product/hehemoniia/"
+   },
+   {
+    "label": "Readeat",
+    "url": "https://readeat.com/product/624650-hehemoniia-shi-chatgpt-ta-perehony-yaki-zminiat-svit"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "моя-війна-залужний",
+  "title": "Моя війна Залужний",
+  "series": 0,
+  "altTitle": "",
+  "author": "Валерій Залужний",
+  "cover": "https://maxua.com/images/covers/моя-війна-залужний.jpg",
+  "tags": [
+   "війна",
+   "українською"
+  ],
+  "links": [
+   {
+    "label": "Вавилонська бібліотека",
+    "url": "https://babylonlib.com/books/moya-vijna"
+   },
+   {
+    "label": "Readeat",
+    "url": "https://readeat.com/product/205179-moya-viyna"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "аєропорт-артур-гейлі",
+  "title": "Аєропорт Артур Гейлі",
+  "series": 0,
+  "altTitle": "Airport",
+  "author": "Arthur Hailey",
+  "cover": "https://maxua.com/images/covers/аєропорт-артур-гейлі.jpg",
+  "tags": [
+   "художня"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/038504139X"
+   },
+   {
+    "label": "КСД",
+    "url": "https://ksd.ua/product/aeroport-6"
+   },
+   {
+    "label": "Readeat",
+    "url": "https://readeat.com/product/107443-aeroport"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "a-deepness-in-the-sky",
+  "title": "A Deepness in the Sky",
+  "series": 0,
+  "altTitle": "",
+  "author": "Vernor Vinge",
+  "cover": "https://maxua.com/images/covers/a-deepness-in-the-sky.jpg",
+  "tags": [
+   "художня",
+   "фантастика"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/B002H8ORKM"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "the-fall-and-rise-of-reginald-perrin",
+  "title": "The Fall and Rise of Reginald Perrin",
+  "series": 0,
+  "altTitle": "",
+  "author": "David Nobbs",
+  "cover": "https://maxua.com/images/covers/the-fall-and-rise-of-reginald-perrin.jpg",
+  "tags": [
+   "художня"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/B00PI0P1A6"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "one-second-after-one-year-after",
+  "title": "One Second After & One Year After",
+  "series": 0,
+  "altTitle": "",
+  "author": "William R. Forstchen, Newt Gingrich, and William D. Sanders",
+  "cover": "https://maxua.com/images/covers/one-second-after-one-year-after.jpg",
+  "tags": [
+   "художня",
+   "фантастика"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/B002LATV16"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "devil-s-cup",
+  "title": "Devil’s Cup",
+  "series": 0,
+  "altTitle": "",
+  "author": "Stewart Lee Allen",
+  "cover": "https://maxua.com/images/covers/devil-s-cup.jpg",
+  "tags": [
+   "історія"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/B001PIIIUA"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "how-to-make-a-few-billion-dollars",
+  "title": "How to Make a Few Billion Dollars",
+  "series": 0,
+  "altTitle": "",
+  "author": "Brad Jacobs",
+  "cover": "https://maxua.com/images/covers/how-to-make-a-few-billion-dollars.jpg",
+  "tags": [
+   "бізнес",
+   "компанії"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/B0CPMQPZCZ"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "a-beginner-s-guide-to-america",
+  "title": "A Beginner’s Guide to America",
+  "series": 0,
+  "altTitle": "",
+  "author": "Ruʼyā.  Ḥakkākiyān",
+  "cover": "https://maxua.com/images/covers/a-beginner-s-guide-to-america.jpg",
+  "tags": [
+   "суспільство"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/B087B9KGD3"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "harry-potter-vol-1-7",
+  "title": "Harry Potter",
+  "series": 7,
+  "altTitle": "",
+  "author": "J.K. Rowling",
+  "cover": "https://maxua.com/images/covers/harry-potter-vol-1-7.jpg",
+  "tags": [
+   "художня"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/B0192CTMWS"
+   },
+   {
+    "label": "Readeat",
+    "url": "https://readeat.com/product/102728-garri-potter-i-filosofskii-kamin"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "пасажир-потяга-6-20",
+  "title": "Пасажир потяга 6:20",
+  "series": 0,
+  "altTitle": "The 6:20 Man",
+  "author": "Девід Балдаччі",
+  "cover": "https://maxua.com/images/covers/пасажир-потяга-6-20.jpg",
+  "tags": [
+   "художня",
+   "трилери",
+   "українською"
+  ],
+  "links": [
+   {
+    "label": "Vivat",
+    "url": "https://vivat.com.ua/product/pasazhyr-potiaha-o-6-20/"
+   },
+   {
+    "label": "Лабораторія",
+    "url": "https://laboratory.ua/products/pasazhyr-potyaga-o-620"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "воєнні-спогади-кароліна-лянцкоронська",
+  "title": "Воєнні спогади, Кароліна Лянцкоронська",
+  "series": 0,
+  "altTitle": "Michelangelo in Ravensbrück",
+  "author": "Кароліна Лянцкоронська",
+  "cover": "https://maxua.com/images/covers/воєнні-спогади-кароліна-лянцкоронська.jpg",
+  "tags": [
+   "війна",
+   "українською"
+  ],
+  "links": [
+   {
+    "label": "Видавництво 21",
+    "url": "https://books-xxi.com.ua/products/voenni-spogadi"
+   },
+   {
+    "label": "Yakaboo",
+    "url": "https://www.yakaboo.ua/ua/knigavoenni-spogadi-22-veresnja-1939-5-kvitnja-1945-k-ljanckorons-ka.html"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "endless-highway",
+  "title": "Endless Highway",
+  "series": 0,
+  "altTitle": "",
+  "author": "David Carradine",
+  "cover": "https://maxua.com/images/covers/endless-highway.jpg",
+  "tags": [
+   "біографії"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/B01N7TA6CP"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "ender-s-game-vol-1-6",
+  "title": "Ender’s Game",
+  "series": 6,
+  "altTitle": "",
+  "author": "Orson Scott Card",
+  "cover": "https://maxua.com/images/covers/ender-s-game-vol-1-6.jpg",
+  "tags": [
+   "художня",
+   "фантастика"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/B003G4W49C"
+   },
+   {
+    "label": "Readeat",
+    "url": "https://readeat.com/product/605141-gra-endera"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "stranger-in-a-stranger-land-starship-troopers",
+  "title": "Stranger in a Stranger Land & Starship Troopers",
+  "series": 0,
+  "altTitle": "",
+  "author": "Robert A. Heinlein",
+  "cover": "https://maxua.com/images/covers/stranger-in-a-stranger-land-starship-troopers.jpg",
+  "tags": [
+   "художня",
+   "фантастика"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/B000TO0TDK"
+   },
+   {
+    "label": "КСД",
+    "url": "https://ksd.ua/product/zorianyy-desant"
+   },
+   {
+    "label": "Readeat",
+    "url": "https://readeat.com/product/603451-zorianyi-desant"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "andy-grove-one-on-ones",
+  "title": "Andy Grove One on Ones",
+  "series": 0,
+  "altTitle": "",
+  "author": "Andrew S. Grove",
+  "cover": "https://maxua.com/images/covers/andy-grove-one-on-ones.jpg",
+  "tags": [
+   "бізнес",
+   "менеджмент"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/0399132503"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "the-mercy-of-gods",
+  "title": "The Mercy of Gods",
+  "series": 0,
+  "altTitle": "",
+  "author": "James S. A. Corey",
+  "cover": "https://maxua.com/images/covers/the-mercy-of-gods.jpg",
+  "tags": [
+   "художня",
+   "фантастика"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/B0CN6NCV7P"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "hangry",
+  "title": "Hangry",
+  "series": 0,
+  "altTitle": "",
+  "author": "Mike Evans",
+  "cover": "https://maxua.com/images/covers/hangry.jpg",
+  "tags": [
+   "бізнес",
+   "компанії"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/B09Y5GDMMR"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "hunt-for-the-red-october",
+  "title": "Hunt for the Red October",
+  "series": 0,
+  "altTitle": "",
+  "author": "Tom Clancy",
+  "cover": "https://maxua.com/images/covers/hunt-for-the-red-october.jpg",
+  "tags": [
+   "художня",
+   "трилери"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/B001PSEPLG"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "1946-the-making-of-modern-world",
+  "title": "1946: The making of modern world",
+  "series": 0,
+  "altTitle": "",
+  "author": "Victor Sebestyen",
+  "cover": "https://maxua.com/images/covers/1946-the-making-of-modern-world.jpg",
+  "tags": [
+   "війна"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/B00TNDOYI4"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "what-management-is",
+  "title": "What Management Is",
+  "series": 0,
+  "altTitle": "",
+  "author": "Joan Magretta",
+  "cover": "https://maxua.com/images/covers/what-management-is.jpg",
+  "tags": [
+   "бізнес",
+   "менеджмент"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/B00850RFNW"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "adrenaline-junkies-and-template-zombies",
+  "title": "Adrenaline Junkies and Template Zombies",
+  "series": 0,
+  "altTitle": "",
+  "author": "Tom DeMarco, Peter Hruschka, Tim Lister, Steve McMenamin, James Robertson, and Suzanne Robertson",
+  "cover": "https://maxua.com/images/covers/adrenaline-junkies-and-template-zombies.jpg",
+  "tags": [
+   "бізнес",
+   "менеджмент"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/B00DY3KQHM"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "my-name-is-barbra",
+  "title": "My Name Is Barbra",
+  "series": 0,
+  "altTitle": "",
+  "author": "Barbra Streisand",
+  "cover": "https://maxua.com/images/covers/my-name-is-barbra.jpg",
+  "tags": [
+   "біографії"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/B0BTGVDVPP"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "amp-it-up",
+  "title": "Amp It Up",
+  "series": 0,
+  "altTitle": "",
+  "author": "Frank Slootman",
+  "cover": "https://maxua.com/images/covers/amp-it-up.jpg",
+  "tags": [
+   "бізнес",
+   "менеджмент"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/B09QHBZDDZ"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "delete-the-adjective",
+  "title": "Delete the Adjective",
+  "series": 0,
+  "altTitle": "",
+  "author": "Lisa Jaster",
+  "cover": "https://maxua.com/images/covers/delete-the-adjective.jpg",
+  "tags": [
+   "біографії"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/B0BRQXJRY4"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "wartime-software",
+  "title": "Wartime Software",
+  "series": 0,
+  "altTitle": "",
+  "author": "David B. Black",
+  "cover": "https://maxua.com/images/covers/wartime-software.jpg",
+  "tags": [
+   "бізнес",
+   "менеджмент"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/B00CUGHDT8"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "the-end-of-everything",
+  "title": "The End of Everything",
+  "series": 0,
+  "altTitle": "",
+  "author": "Katie Mack",
+  "cover": "https://maxua.com/images/covers/the-end-of-everything.jpg",
+  "tags": [
+   "наука"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/B07Z41TTNK"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "the-legend-of-bagger-vance",
+  "title": "The Legend of Bagger Vance",
+  "series": 0,
+  "altTitle": "",
+  "author": "Steven Pressfield",
+  "cover": "https://maxua.com/images/covers/the-legend-of-bagger-vance.jpg",
+  "tags": [
+   "художня"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/B002MZUPYW"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "a-fire-upon-the-deep",
+  "title": "A fire upon the deep",
+  "series": 0,
+  "altTitle": "",
+  "author": "Vernor Vinge",
+  "cover": "https://maxua.com/images/covers/a-fire-upon-the-deep.jpg",
+  "tags": [
+   "художня",
+   "фантастика"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/B000FBJAGO"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "a-piece-of-the-action",
+  "title": "A piece of the action",
+  "series": 0,
+  "altTitle": "",
+  "author": "Joseph  Nocera",
+  "cover": "https://maxua.com/images/covers/a-piece-of-the-action.jpg",
+  "tags": [
+   "історія"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/B00AYIDT74"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "children-of-time",
+  "title": "Children of time",
+  "series": 0,
+  "altTitle": "",
+  "author": "Adrian Tchaikovsky",
+  "cover": "https://maxua.com/images/covers/children-of-time.jpg",
+  "tags": [
+   "художня",
+   "фантастика"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/B07DN8BQMD"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "who-not-how",
+  "title": "Who Not How",
+  "series": 0,
+  "altTitle": "",
+  "author": "Dan Sullivan and Benjamin Hardy",
+  "cover": "https://maxua.com/images/covers/who-not-how.jpg",
+  "tags": [
+   "бізнес",
+   "менеджмент"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/B0867ZJ151"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "storyworthy",
+  "title": "Storyworthy",
+  "series": 0,
+  "altTitle": "",
+  "author": "Matthew Dicks and Dan Kennedy",
+  "cover": "https://maxua.com/images/covers/storyworthy.jpg",
+  "tags": [
+   "бізнес",
+   "продукт"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/B07CV2PFYJ"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "mickey7",
+  "title": "Mickey7",
+  "series": 0,
+  "altTitle": "",
+  "author": "Edward Ashton",
+  "cover": "https://maxua.com/images/covers/mickey7.jpg",
+  "tags": [
+   "художня",
+   "фантастика"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/B092T7R689"
+   },
+   {
+    "label": "Lobster",
+    "url": "https://www.lobster.net.ua/product/mikki-7/"
+   },
+   {
+    "label": "Readeat",
+    "url": "https://readeat.com/product/616276-mikki-7"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "evidence-guided-gist",
+  "title": "Evidence-guided (GIST)",
+  "series": 0,
+  "altTitle": "",
+  "author": "Itamar Gilad",
+  "cover": "https://maxua.com/images/covers/evidence-guided-gist.jpg",
+  "tags": [
+   "бізнес",
+   "продукт"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/B0CJCDP1H7"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "the-phoenix-project",
+  "title": "The Phoenix project",
+  "series": 0,
+  "altTitle": "",
+  "author": "Gene Kim, Kevin  Behr, and George Spafford",
+  "cover": "https://maxua.com/images/covers/the-phoenix-project.jpg",
+  "tags": [
+   "бізнес",
+   "менеджмент"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/B00AZRBLHO"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "decisive-how-to-make-better-choices-in-life",
+  "title": "Decisive: how to make better choices in life",
+  "series": 0,
+  "altTitle": "",
+  "author": "Chip Heath and Dan Heath",
+  "cover": "https://maxua.com/images/covers/decisive-how-to-make-better-choices-in-life.jpg",
+  "tags": [
+   "саморозвиток"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/B009JU6UPG"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "none-of-this-is-true",
+  "title": "None of this is true",
+  "series": 0,
+  "altTitle": "",
+  "author": "Lisa Jewell",
+  "cover": "https://maxua.com/images/covers/none-of-this-is-true.jpg",
+  "tags": [
+   "художня",
+   "трилери"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/1982179007"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "born-a-crime",
+  "title": "Born a crime",
+  "series": 0,
+  "altTitle": "",
+  "author": "Trevor Noah",
+  "cover": "https://maxua.com/images/covers/born-a-crime.jpg",
+  "tags": [
+   "біографії"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/B01DHWACVY"
+   },
+   {
+    "label": "Readeat",
+    "url": "https://readeat.com/product/616566-zlochynno-narodzhenyi"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "kill-it-with-fire",
+  "title": "Kill it with fire",
+  "series": 0,
+  "altTitle": "",
+  "author": "Marianne Bellotti",
+  "cover": "https://maxua.com/images/covers/kill-it-with-fire.jpg",
+  "tags": [
+   "бізнес",
+   "менеджмент"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/B08CTFY4JP"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "the-difference-between-god-and-larry-ellison",
+  "title": "The Difference Between God and Larry Ellison",
+  "series": 0,
+  "altTitle": "",
+  "author": "Mike Wilson",
+  "cover": "https://maxua.com/images/covers/the-difference-between-god-and-larry-ellison.jpg",
+  "tags": [
+   "біографії"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/0060008768"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "mysterious-stranger-david-blaine",
+  "title": "Mysterious Stranger (David Blaine)",
+  "series": 0,
+  "altTitle": "",
+  "author": "David Blaine",
+  "cover": "https://maxua.com/images/covers/mysterious-stranger-david-blaine.jpg",
+  "tags": [
+   "біографії"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/B009MMF98A"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "мова-меч",
+  "title": "Мова-меч",
+  "series": 0,
+  "altTitle": "",
+  "author": "Євгенія Кузнєцова",
+  "cover": "https://maxua.com/images/covers/мова-меч.jpg",
+  "tags": [
+   "суспільство",
+   "українською"
+  ],
+  "links": [
+   {
+    "label": "Твоя Підпільна Гуманітарка",
+    "url": "https://humanitarka.com/product/mova-mech/"
+   },
+   {
+    "label": "Readeat",
+    "url": "https://readeat.com/product/110643-jevgeniia-kuznjecova-mova-mec-iak-govorila-radianska-imperiia"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "daemon",
+  "title": "Daemon",
+  "series": 0,
+  "altTitle": "",
+  "author": "Daniel Suarez",
+  "cover": "https://maxua.com/images/covers/daemon.jpg",
+  "tags": [
+   "художня",
+   "фантастика"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/B003QP4NPE"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "disrupted-hubspot-story",
+  "title": "Disrupted (Hubspot story)",
+  "series": 0,
+  "altTitle": "",
+  "author": "Dan Lyons",
+  "cover": "https://maxua.com/images/covers/disrupted-hubspot-story.jpg",
+  "tags": [
+   "бізнес",
+   "компанії"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/B013CATZIC"
+   },
+   {
+    "label": "Наш Формат",
+    "url": "https://nashformat.ua/products/krah.-moya-nevdacha-v-startap-bulbashtsi-709115"
+   },
+   {
+    "label": "Readeat",
+    "url": "https://readeat.com/product/104414-krax-moia-nevdaca-v-startap-bulbasci"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "the-crux",
+  "title": "The Crux",
+  "series": 0,
+  "altTitle": "",
+  "author": "Richard P. Rumelt",
+  "cover": "https://maxua.com/images/covers/the-crux.jpg",
+  "tags": [
+   "бізнес",
+   "продукт"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/B09G2QXXWX"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "the-science-of-storytelling",
+  "title": "The Science of Storytelling",
+  "series": 0,
+  "altTitle": "",
+  "author": "Will Storr",
+  "cover": "https://maxua.com/images/covers/the-science-of-storytelling.jpg",
+  "tags": [
+   "наука"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/B07WXJTR9Q"
+   },
+   {
+    "label": "Наш Формат",
+    "url": "https://nashformat.ua/products/nauka-storitelingu.-chomu-istorii-vplyvayut-na-nas-i-yak-nymy-vplyvaty-na-inshyh-709467"
+   },
+   {
+    "label": "Readeat",
+    "url": "https://readeat.com/product/104368-nauka-storitelingu-comu-istoriyi-vplivaiut-na-nas-i-iak-nimi-vplivati-na-insix"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "desert-storm-air-war",
+  "title": "Desert storm air war",
+  "series": 0,
+  "altTitle": "",
+  "author": "Robert F. Dorr",
+  "cover": "https://maxua.com/images/covers/desert-storm-air-war.jpg",
+  "tags": [
+   "війна"
+  ],
+  "links": [
+   {
+    "label": "AbeBooks",
+    "url": "https://www.abebooks.com/9780879385606/Desert-Storm-Air-Power-Series-087938560X/plp"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "i-moved-your-cheese",
+  "title": "I moved your cheese",
+  "series": 0,
+  "altTitle": "",
+  "author": "Deepak Malhotra",
+  "cover": "https://maxua.com/images/covers/i-moved-your-cheese.jpg",
+  "tags": [
+   "саморозвиток"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/B00F9FN0NK"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "make-something-wonderful",
+  "title": "Make something wonderful",
+  "series": 0,
+  "altTitle": "",
+  "author": "Steve Jobs",
+  "cover": "https://maxua.com/images/covers/make-something-wonderful.jpg",
+  "tags": [
+   "біографії"
+  ],
+  "links": [
+   {
+    "label": "Steve Jobs Archive",
+    "url": "https://book.stevejobsarchive.com/"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "old-men-s-war",
+  "title": "Old men’s war",
+  "series": 0,
+  "altTitle": "",
+  "author": "John Scalzi",
+  "cover": "https://maxua.com/images/covers/old-men-s-war.jpg",
+  "tags": [
+   "художня",
+   "фантастика"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/B000SEIK2S"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "running-kite",
+  "title": "Running kite",
+  "series": 0,
+  "altTitle": "",
+  "author": "Khaled Hosseini",
+  "cover": "https://maxua.com/images/covers/running-kite.jpg",
+  "tags": [
+   "художня"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/1594480001"
+   },
+   {
+    "label": "Readeat",
+    "url": "https://readeat.com/product/107033-lovec-povitrianix-zmiyiv"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "dogs-of-war",
+  "title": "Dogs of war",
+  "series": 0,
+  "altTitle": "",
+  "author": "Adrian Tchaikovsky",
+  "cover": "https://maxua.com/images/covers/dogs-of-war.jpg",
+  "tags": [
+   "художня",
+   "фантастика"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/B06XXJ4P9H"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "the-bomber-mafia",
+  "title": "The bomber mafia",
+  "series": 0,
+  "altTitle": "",
+  "author": "Malcolm Gladwell",
+  "cover": "https://maxua.com/images/covers/the-bomber-mafia.jpg",
+  "tags": [
+   "війна"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/B08TWKL363"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "upgrade",
+  "title": "Upgrade",
+  "series": 0,
+  "altTitle": "",
+  "author": "Blake Crouch",
+  "cover": "https://maxua.com/images/covers/upgrade.jpg",
+  "tags": [
+   "художня",
+   "фантастика"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/0593157532"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "rolls-royce-the-magic-of-the-name",
+  "title": "Rolls-Royce: the magic of the name",
+  "series": 0,
+  "altTitle": "",
+  "author": "Peter Pugh",
+  "cover": "https://maxua.com/images/covers/rolls-royce-the-magic-of-the-name.jpg",
+  "tags": [
+   "історія"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/B010ANX1Q6"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "how-to-build-a-car",
+  "title": "How to Build a Car",
+  "series": 0,
+  "altTitle": "",
+  "author": "Adrian Newey",
+  "cover": "https://maxua.com/images/covers/how-to-build-a-car.jpg",
+  "tags": [
+   "біографії"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/B073TS2ZWN"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "the-effective-hiring-manager",
+  "title": "The Effective Hiring Manager",
+  "series": 0,
+  "altTitle": "",
+  "author": "Mark Horstman",
+  "cover": "https://maxua.com/images/covers/the-effective-hiring-manager.jpg",
+  "tags": [
+   "бізнес",
+   "менеджмент"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/B07WPFLQ4S"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "misbehaving",
+  "title": "Misbehaving",
+  "series": 0,
+  "altTitle": "",
+  "author": "Richard H. Thaler",
+  "cover": "https://maxua.com/images/covers/misbehaving.jpg",
+  "tags": [
+   "наука"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/B00NUB4GFQ"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "am-i-being-too-subtle",
+  "title": "Am I being too subtle?",
+  "series": 0,
+  "altTitle": "",
+  "author": "Sam Zell",
+  "cover": "https://maxua.com/images/covers/am-i-being-too-subtle.jpg",
+  "tags": [
+   "бізнес",
+   "компанії"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/B01K1ATZU4"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "танці-з-кістками",
+  "title": "Танці з кістками",
+  "series": 0,
+  "altTitle": "",
+  "author": "Андрій Сем’янків",
+  "cover": "https://maxua.com/images/covers/танці-з-кістками.jpg",
+  "tags": [
+   "біографії",
+   "українською"
+  ],
+  "links": [
+   {
+    "label": "Vivat",
+    "url": "https://vivat.com.ua/product/tantsi-z-kistkamy/"
+   },
+   {
+    "label": "Readeat",
+    "url": "https://readeat.com/product/105109-tanci-z-kistkami-semiankiv-andrii"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "finding-ultra",
+  "title": "Finding Ultra",
+  "series": 0,
+  "altTitle": "",
+  "author": "Rich Roll",
+  "cover": "https://maxua.com/images/covers/finding-ultra.jpg",
+  "tags": [
+   "біографії"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/B006LSZ82U"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "continuous-discovery-habits",
+  "title": "Continuous Discovery Habits",
+  "series": 0,
+  "altTitle": "",
+  "author": "Teresa Torres",
+  "cover": "https://maxua.com/images/covers/continuous-discovery-habits.jpg",
+  "tags": [
+   "бізнес",
+   "продукт"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/B094PVB97X"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "where-is-my-flying-car",
+  "title": "Where is my flying car",
+  "series": 0,
+  "altTitle": "",
+  "author": "J. Storrs Hall",
+  "cover": "https://maxua.com/images/covers/where-is-my-flying-car.jpg",
+  "tags": [
+   "наука"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/B09H478XG4"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "7-powers",
+  "title": "7 Powers",
+  "series": 0,
+  "altTitle": "",
+  "author": "Hamilton Helmer",
+  "cover": "https://maxua.com/images/covers/7-powers.jpg",
+  "tags": [
+   "бізнес",
+   "продукт"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/B01MRLFFQ7"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "the-everything-store",
+  "title": "The Everything Store",
+  "series": 0,
+  "altTitle": "",
+  "author": "Brad Stone",
+  "cover": "https://maxua.com/images/covers/the-everything-store.jpg",
+  "tags": [
+   "бізнес",
+   "компанії"
+  ],
+  "links": [
+   {
+    "label": "Наш Формат",
+    "url": "https://nashformat.ua/products/prodaetsya-vse.-dzheff-bezos-ta-era-amazon-onovl.-vyd.-709631"
+   },
+   {
+    "label": "Readeat",
+    "url": "https://readeat.com/product/104314-prodajetsia-vse-dzeff-bezos-ta-era-amazon"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "the-psychology-of-money",
+  "title": "The Psychology of Money",
+  "series": 0,
+  "altTitle": "",
+  "author": "Morgan Housel",
+  "cover": "https://maxua.com/images/covers/the-psychology-of-money.jpg",
+  "tags": [
+   "бізнес",
+   "гроші"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/B084HJSJJ2"
+   },
+   {
+    "label": "Readeat",
+    "url": "https://readeat.com/product/204919-psykholohiya-hroshey"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "сірі-бджоли",
+  "title": "Сірі бджоли",
+  "series": 0,
+  "altTitle": "",
+  "author": "Андрій Курков",
+  "cover": "https://maxua.com/images/covers/сірі-бджоли.jpg",
+  "tags": [
+   "художня",
+   "українською"
+  ],
+  "links": [
+   {
+    "label": "Фоліо",
+    "url": "https://folio.com.ua/books/-siri-bdzholi-"
+   },
+   {
+    "label": "Readeat",
+    "url": "https://readeat.com/product/104698-siri-bdzoli"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "working-backwards",
+  "title": "Working backwards",
+  "series": 0,
+  "altTitle": "",
+  "author": "Colin Bryar and Bill Carr",
+  "cover": "https://maxua.com/images/covers/working-backwards.jpg",
+  "tags": [
+   "бізнес",
+   "компанії"
+  ],
+  "links": [
+   {
+    "label": "Readeat",
+    "url": "https://readeat.com/product/102137-praciuiuci-navpaki-insaiti-ta-sekreti-vid-top-menedzeriv-amazon"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "murderbot",
+  "title": "Murderbot",
+  "series": 0,
+  "altTitle": "",
+  "author": "Martha Wells",
+  "cover": "https://maxua.com/images/covers/murderbot.jpg",
+  "tags": [
+   "художня",
+   "фантастика"
+  ],
+  "links": [
+   {
+    "label": "Martha Wells",
+    "url": "https://www.marthawells.com/murderbot.htm"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "chickenhawk",
+  "title": "Chickenhawk",
+  "series": 0,
+  "altTitle": "",
+  "author": "Robert Mason",
+  "cover": "https://maxua.com/images/covers/chickenhawk.jpg",
+  "tags": [
+   "війна"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/B0031Y9DCS"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "the-expanse",
+  "title": "The Expanse",
+  "series": 0,
+  "altTitle": "",
+  "author": "James S. A. Corey",
+  "cover": "https://maxua.com/images/covers/the-expanse.jpg",
+  "tags": [
+   "художня",
+   "фантастика"
+  ],
+  "links": [
+   {
+    "label": "James S. A. Corey",
+    "url": "https://www.jamessacorey.com/books/"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "sweating-bullets",
+  "title": "Sweating bullets",
+  "series": 0,
+  "altTitle": "",
+  "author": "Robert Gaskins",
+  "cover": "https://maxua.com/images/covers/sweating-bullets.jpg",
+  "tags": [
+   "бізнес",
+   "компанії"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/B009VNGD9E"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "the-double-helix",
+  "title": "The double helix",
+  "series": 0,
+  "altTitle": "",
+  "author": "James D. Watson",
+  "cover": "https://maxua.com/images/covers/the-double-helix.jpg",
+  "tags": [
+   "наука"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/074321630X"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "ready-player-one",
+  "title": "Ready player one",
+  "series": 0,
+  "altTitle": "",
+  "author": "Ernest Cline",
+  "cover": "https://maxua.com/images/covers/ready-player-one.jpg",
+  "tags": [
+   "художня",
+   "фантастика"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/0307887448"
+   },
+   {
+    "label": "Readeat",
+    "url": "https://readeat.com/product/112632-pershomu-hravtsevi-pryhotuvatysia"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "the-big-score",
+  "title": "The Big Score",
+  "series": 0,
+  "altTitle": "",
+  "author": "Jacquie McNish",
+  "cover": "https://maxua.com/images/covers/the-big-score.jpg",
+  "tags": [
+   "бізнес",
+   "компанії"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/0385257589"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "друге-життя-уве",
+  "title": "Друге життя Уве",
+  "series": 0,
+  "altTitle": "A Man Called Ove",
+  "author": "Фредрік Бакман",
+  "cover": "https://maxua.com/images/covers/друге-життя-уве.jpg",
+  "tags": [
+   "художня",
+   "українською"
+  ],
+  "links": [
+   {
+    "label": "Книголав",
+    "url": "https://knigolove.ua/book/cholovik-na-im-ja-uve"
+   },
+   {
+    "label": "Readeat",
+    "url": "https://readeat.com/product/100076-colovik-na-imia-uve"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "the-billionaire-who-wasn-t",
+  "title": "The billionaire who wasn’t",
+  "series": 0,
+  "altTitle": "",
+  "author": "Conor O'Clery",
+  "cover": "https://maxua.com/images/covers/the-billionaire-who-wasn-t.jpg",
+  "tags": [
+   "біографії"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/1610393341"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "hail-mary",
+  "title": "Hail Mary",
+  "series": 0,
+  "altTitle": "",
+  "author": "Andy Weir",
+  "cover": "https://maxua.com/images/covers/hail-mary.jpg",
+  "tags": [
+   "художня",
+   "фантастика"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/0593135202"
+   },
+   {
+    "label": "Yakaboo",
+    "url": "https://www.yakaboo.ua/ua/proekt-ave-marija.html"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "the-last-human",
+  "title": "The last human",
+  "series": 0,
+  "altTitle": "",
+  "author": "Zack Jordan",
+  "cover": "https://maxua.com/images/covers/the-last-human.jpg",
+  "tags": [
+   "художня",
+   "фантастика"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/0451499816"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "manager-s-path",
+  "title": "Manager’s Path",
+  "series": 0,
+  "altTitle": "",
+  "author": "Camille Fournier",
+  "cover": "https://maxua.com/images/covers/manager-s-path.jpg",
+  "tags": [
+   "бізнес",
+   "менеджмент"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/B06XP3GJ7F"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "tiny-mba",
+  "title": "Tiny MBA",
+  "series": 0,
+  "altTitle": "",
+  "author": "Alex Hillman",
+  "cover": "https://maxua.com/images/covers/tiny-mba.jpg",
+  "tags": [
+   "бізнес",
+   "продукт"
+  ],
+  "links": [
+   {
+    "label": "Stacking the Bricks",
+    "url": "https://stackingthebricks.com/tinymba/"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "the-biggest-bluff",
+  "title": "The biggest bluff",
+  "series": 0,
+  "altTitle": "",
+  "author": "Maria Konnikova",
+  "cover": "https://maxua.com/images/covers/the-biggest-bluff.jpg",
+  "tags": [
+   "біографії"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/052552262X"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "liftoff",
+  "title": "Liftoff",
+  "series": 0,
+  "altTitle": "",
+  "author": "Eric Berger",
+  "cover": "https://maxua.com/images/covers/liftoff.jpg",
+  "tags": [
+   "бізнес",
+   "компанії"
+  ],
+  "links": [
+   {
+    "label": "HarperCollins",
+    "url": "https://www.harpercollins.com/products/liftoff-eric-berger"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "paypal-wars",
+  "title": "PayPal wars",
+  "series": 0,
+  "altTitle": "",
+  "author": "Eric M. Jackson",
+  "cover": "https://maxua.com/images/covers/paypal-wars.jpg",
+  "tags": [
+   "бізнес",
+   "компанії"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/0974670103"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "the-team-that-managed-itself",
+  "title": "The team that managed itself",
+  "series": 0,
+  "altTitle": "",
+  "author": "Christina Wodtke",
+  "cover": "https://maxua.com/images/covers/the-team-that-managed-itself.jpg",
+  "tags": [
+   "бізнес",
+   "менеджмент"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/0996006079"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "an-elegant-puzzle",
+  "title": "An Elegant Puzzle",
+  "series": 0,
+  "altTitle": "",
+  "author": "Will Larson",
+  "cover": "https://maxua.com/images/covers/an-elegant-puzzle.jpg",
+  "tags": [
+   "бізнес",
+   "менеджмент"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/B07QYCHJ7V"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "accelerate",
+  "title": "Accelerate",
+  "series": 0,
+  "altTitle": "",
+  "author": "Nicole Forsgren, Jez Humble, Gene Kim",
+  "cover": "https://maxua.com/images/covers/accelerate.jpg",
+  "tags": [
+   "бізнес",
+   "менеджмент"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/B07B9F83WM"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "genome-matt-ridley",
+  "title": "Genome, Matt Ridley",
+  "series": 0,
+  "altTitle": "",
+  "author": "Matt Ridley",
+  "cover": "https://maxua.com/images/covers/genome-matt-ridley.jpg",
+  "tags": [
+   "наука"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/0060894083"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "the-push-tommy-caldwell",
+  "title": "The Push (Tommy Caldwell)",
+  "series": 0,
+  "altTitle": "",
+  "author": "Tommy Caldwell",
+  "cover": "https://maxua.com/images/covers/the-push-tommy-caldwell.jpg",
+  "tags": [
+   "біографії"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/0399562702"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "radical-focus",
+  "title": "Radical focus",
+  "series": 0,
+  "altTitle": "",
+  "author": "Christina Wodtke",
+  "cover": "https://maxua.com/images/covers/radical-focus.jpg",
+  "tags": [
+   "бізнес",
+   "менеджмент"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/0996006028"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "ai-superpowers-china-and-silicon-valley",
+  "title": "AI Superpowers: China and Silicon Valley",
+  "series": 0,
+  "altTitle": "",
+  "author": "Kai-Fu Lee",
+  "cover": "https://maxua.com/images/covers/ai-superpowers-china-and-silicon-valley.jpg",
+  "tags": [
+   "бізнес",
+   "компанії"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/132854639X"
+   },
+   {
+    "label": "Readeat",
+    "url": "https://readeat.com/product/102105-ai-nadderzavi-stucnogo-intelektu-kitai-kremnijeva-dolina-i-novii-svitovii-lad"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "messy-marketplace",
+  "title": "Messy marketplace",
+  "series": 0,
+  "altTitle": "",
+  "author": "Brent Beshore",
+  "cover": "https://maxua.com/images/covers/messy-marketplace.jpg",
+  "tags": [
+   "бізнес",
+   "продукт"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/B07KXYT8V4"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "the-most-important-thing",
+  "title": "The most important thing",
+  "series": 0,
+  "altTitle": "",
+  "author": "Howard Marks",
+  "cover": "https://maxua.com/images/covers/the-most-important-thing-howard-marks.jpg",
+  "tags": [
+   "бізнес",
+   "гроші"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/0231153686"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "masters-of-doom",
+  "title": "Masters of Doom",
+  "series": 0,
+  "altTitle": "",
+  "author": "David Kushner",
+  "cover": "https://maxua.com/images/covers/masters-of-doom.jpg",
+  "tags": [
+   "бізнес",
+   "компанії"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/B000FBFNL0"
+   },
+   {
+    "label": "Readeat",
+    "url": "https://readeat.com/product/208946-volodari-doom"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "the-making-of-prince-of-persia",
+  "title": "The making of Prince of Persia",
+  "series": 0,
+  "altTitle": "",
+  "author": "Jordan Mechner",
+  "cover": "https://maxua.com/images/covers/the-making-of-prince-of-persia.jpg",
+  "tags": [
+   "біографії"
+  ],
+  "links": [
+   {
+    "label": "Jordan Mechner",
+    "url": "https://www.jordanmechner.com/en/books/journals/"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "a-year-without-pants",
+  "title": "A year without pants",
+  "series": 0,
+  "altTitle": "",
+  "author": "Scott Berkun",
+  "cover": "https://maxua.com/images/covers/a-year-without-pants.jpg",
+  "tags": [
+   "бізнес",
+   "компанії"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/1118660633"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "how-to-get-rich",
+  "title": "How to get rich",
+  "series": 0,
+  "altTitle": "",
+  "author": "Felix Dennis",
+  "cover": "https://maxua.com/images/covers/how-to-get-rich-felix-dennis.jpg",
+  "tags": [
+   "бізнес",
+   "гроші"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/1591842719"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "conspiracy-gawker-story",
+  "title": "Conspiracy (Gawker story)",
+  "series": 0,
+  "altTitle": "",
+  "author": "Ryan Holiday",
+  "cover": "https://maxua.com/images/covers/conspiracy-gawker-story.jpg",
+  "tags": [
+   "бізнес",
+   "компанії"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/0735217653"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "eboys-benchmark-story",
+  "title": "eBoys: Benchmark story",
+  "series": 0,
+  "altTitle": "",
+  "author": "Randall E. Stross",
+  "cover": "https://maxua.com/images/covers/eboys-benchmark-story.jpg",
+  "tags": [
+   "бізнес",
+   "компанії"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/0812930959"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "cable-cowboys",
+  "title": "Cable cowboys",
+  "series": 0,
+  "altTitle": "",
+  "author": "Mark Robichaux",
+  "cover": "https://maxua.com/images/covers/cable-cowboys.jpg",
+  "tags": [
+   "бізнес",
+   "компанії"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/047170637X"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "an-anonymous-girl",
+  "title": "An anonymous girl",
+  "series": 0,
+  "altTitle": "",
+  "author": "Greer Hendricks and Sarah Pekkanen",
+  "cover": "https://maxua.com/images/covers/an-anonymous-girl.jpg",
+  "tags": [
+   "художня",
+   "трилери"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/1250133734"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "the-end-of-october",
+  "title": "The end of October",
+  "series": 0,
+  "altTitle": "",
+  "author": "Lawrence Wright",
+  "cover": "https://maxua.com/images/covers/the-end-of-october.jpg",
+  "tags": [
+   "художня",
+   "трилери"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/0525658653"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "chaos-monkeys",
+  "title": "Chaos monkeys",
+  "series": 0,
+  "altTitle": "",
+  "author": "Antonio Garcia Martinez",
+  "cover": "https://maxua.com/images/covers/chaos-monkeys.jpg",
+  "tags": [
+   "бізнес",
+   "компанії"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/0062458191"
+   },
+   {
+    "label": "Наш Формат",
+    "url": "https://nashformat.ua/products/ebook-haos-u-kremnievij-dolyni.-startapy-scho-zlamaly-systemu-620642"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "demand-side-sales-101",
+  "title": "Demand-Side Sales 101",
+  "series": 0,
+  "altTitle": "",
+  "author": "Bob Moesta",
+  "cover": "https://maxua.com/images/covers/demand-side-sales-101.jpg",
+  "tags": [
+   "бізнес",
+   "продукт"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/B08FRRF68Q"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "to-pixar-and-beyond",
+  "title": "To Pixar and beyond",
+  "series": 0,
+  "altTitle": "",
+  "author": "Lawrence B. Levy",
+  "cover": "https://maxua.com/images/covers/to-pixar-and-beyond.jpg",
+  "tags": [
+   "бізнес",
+   "компанії"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/0544734149"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "no-rules-rules-netflix",
+  "title": "No rules rules: Netflix",
+  "series": 0,
+  "altTitle": "",
+  "author": "Reed Hastings and Erin Meyer",
+  "cover": "https://maxua.com/images/covers/no-rules-rules-netflix.jpg",
+  "tags": [
+   "бізнес",
+   "компанії"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/1984877860"
+   },
+   {
+    "label": "Vivat",
+    "url": "https://vivat.com.ua/product/netflix-i-kultura-innovatsii/"
+   },
+   {
+    "label": "Readeat",
+    "url": "https://readeat.com/product/106631-netflix-i-kultura-innovacii"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "the-paper-menagerie-and-other-stories",
+  "title": "The paper menagerie and other stories",
+  "series": 0,
+  "altTitle": "",
+  "author": "Ken Liu",
+  "cover": "https://maxua.com/images/covers/the-paper-menagerie-and-other-stories.jpg",
+  "tags": [
+   "художня",
+   "фантастика"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/148142436X"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "the-girl-who-lived",
+  "title": "The girl who lived",
+  "series": 0,
+  "altTitle": "",
+  "author": "Christopher Greyson",
+  "cover": "https://maxua.com/images/covers/the-girl-who-lived.jpg",
+  "tags": [
+   "художня",
+   "трилери"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/1683993039"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "void-moon",
+  "title": "Void moon",
+  "series": 0,
+  "altTitle": "",
+  "author": "Michael Connelly",
+  "cover": "https://maxua.com/images/covers/void-moon.jpg",
+  "tags": [
+   "художня",
+   "трилери"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/0446609145"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "chasing-the-dime",
+  "title": "Chasing the dime",
+  "series": 0,
+  "altTitle": "",
+  "author": "Michael Connelly",
+  "cover": "https://maxua.com/images/covers/chasing-the-dime.jpg",
+  "tags": [
+   "художня",
+   "трилери"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/044661162X"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "the-goal",
+  "title": "The Goal",
+  "series": 0,
+  "altTitle": "",
+  "author": "Eliyahu M. Goldratt and Jeff Cox",
+  "cover": "https://maxua.com/images/covers/the-goal.jpg",
+  "tags": [
+   "бізнес",
+   "менеджмент"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/B002LHRM2O"
+   },
+   {
+    "label": "Наш Формат",
+    "url": "https://nashformat.ua/products/meta.-protses-bezperervnogo-vdoskonalennya-yuvilejne-vydannya-709656"
+   },
+   {
+    "label": "Readeat",
+    "url": "https://readeat.com/product/110955-meta-proces-bezperervnogo-vdoskonalennia-nova-obkl-eliiagu-goldratt-dzeff-koks"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "life-and-other-near-death-experiences",
+  "title": "Life and other near-death experiences",
+  "series": 0,
+  "altTitle": "",
+  "author": "Camille Pagán",
+  "cover": "https://maxua.com/images/covers/life-and-other-near-death-experiences.jpg",
+  "tags": [
+   "художня"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/B00U6IQFFU"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "little-book-of-common-sense-investing",
+  "title": "Little book of common sense investing",
+  "series": 0,
+  "altTitle": "",
+  "author": "John C. Bogle",
+  "cover": "https://maxua.com/images/covers/little-book-of-common-sense-investing.jpg",
+  "tags": [
+   "бізнес",
+   "гроші"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/1119404509"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "war-of-art",
+  "title": "War of Art",
+  "series": 0,
+  "altTitle": "",
+  "author": "Steven Pressfield",
+  "cover": "https://maxua.com/images/covers/war-of-art.jpg",
+  "tags": [
+   "саморозвиток"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/B007A4SDCG"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "the-circadian-code",
+  "title": "The circadian code",
+  "series": 0,
+  "altTitle": "",
+  "author": "Satchin Panda",
+  "cover": "https://maxua.com/images/covers/the-circadian-code.jpg",
+  "tags": [
+   "наука"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/163565243X"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "positioning",
+  "title": "Positioning",
+  "series": 0,
+  "altTitle": "",
+  "author": "Al Ries, Jack Trout, and Philip Kotler",
+  "cover": "https://maxua.com/images/covers/positioning.jpg",
+  "tags": [
+   "бізнес",
+   "продукт"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/B006B7LQ90"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "company-of-one",
+  "title": "Company of one",
+  "series": 0,
+  "altTitle": "",
+  "author": "Paul Jarvis",
+  "cover": "https://maxua.com/images/covers/company-of-one.jpg",
+  "tags": [
+   "бізнес",
+   "продукт"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/1328972356"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "the-bonfire-of-the-vanities",
+  "title": "The Bonfire of the Vanities",
+  "series": 0,
+  "altTitle": "",
+  "author": "Tom Wolfe",
+  "cover": "https://maxua.com/images/covers/the-bonfire-of-the-vanities.jpg",
+  "tags": [
+   "художня"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/0553275976"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "a-man-in-full-tom-wolfe",
+  "title": "A Man in Full (Tom Wolfe)",
+  "series": 0,
+  "altTitle": "",
+  "author": "Tom Wolfe",
+  "cover": "https://maxua.com/images/covers/a-man-in-full-tom-wolfe.jpg",
+  "tags": [
+   "художня"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/0553381334"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "fish-that-ate-the-whale",
+  "title": "Fish That Ate the Whale",
+  "series": 0,
+  "altTitle": "",
+  "author": "Rich Cohen",
+  "cover": "https://maxua.com/images/covers/fish-that-ate-the-whale.jpg",
+  "tags": [
+   "біографії"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/1250033314"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "escaping-the-build-trap",
+  "title": "Escaping the Build Trap",
+  "series": 0,
+  "altTitle": "",
+  "author": "Melissa Perri",
+  "cover": "https://maxua.com/images/covers/escaping-the-build-trap.jpg",
+  "tags": [
+   "бізнес",
+   "продукт"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/B07K3QBWG1"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "little-brother",
+  "title": "Little Brother",
+  "series": 0,
+  "altTitle": "",
+  "author": "Cory Doctorow",
+  "cover": "https://maxua.com/images/covers/little-brother.jpg",
+  "tags": [
+   "художня",
+   "фантастика"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/0765319853"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "can-t-hurt-me",
+  "title": "Can’t hurt me",
+  "series": 0,
+  "altTitle": "",
+  "author": "David Goggins",
+  "cover": "https://maxua.com/images/covers/can-t-hurt-me.jpg",
+  "tags": [
+   "біографії"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/B07H453KGH"
+   },
+   {
+    "label": "Наш Формат",
+    "url": "https://nashformat.ua/products/mene-ne-zlamaty.-gartuj-duh-i-kydaj-sobi-vyklyky-709775"
+   },
+   {
+    "label": "Readeat",
+    "url": "https://readeat.com/product/219966-mene-ne-zlamati-gartui-dux-i-kidai-sobi-vikliki-devid-goggins"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "everything-is-f-cked",
+  "title": "Everything is f*cked",
+  "series": 0,
+  "altTitle": "",
+  "author": "Mark Manson",
+  "cover": "https://maxua.com/images/covers/everything-is-f-cked.jpg",
+  "tags": [
+   "саморозвиток"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/0062888439"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "the-millionaire-next-door",
+  "title": "The millionaire next door",
+  "series": 0,
+  "altTitle": "",
+  "author": "Thomas J. Stanley and William D. Danko",
+  "cover": "https://maxua.com/images/covers/the-millionaire-next-door.jpg",
+  "tags": [
+   "бізнес",
+   "гроші"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/1589795474"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "barbarian-days-a-surfing-life",
+  "title": "Barbarian Days: A surfing life",
+  "series": 0,
+  "altTitle": "",
+  "author": "William Finnegan",
+  "cover": "https://maxua.com/images/covers/a-surfing-life.jpg",
+  "tags": [
+   "біографії"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/1594203474"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "getting-things-done",
+  "title": "Getting things done",
+  "series": 0,
+  "altTitle": "",
+  "author": "David Allen",
+  "cover": "https://maxua.com/images/covers/getting-things-done.jpg",
+  "tags": [
+   "саморозвиток"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/0143126563"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "this-will-never-work",
+  "title": "This will never work",
+  "series": 0,
+  "altTitle": "",
+  "author": "Marc Randolph",
+  "cover": "https://maxua.com/images/covers/this-will-never-work-netflix-story.jpg",
+  "tags": [
+   "бізнес",
+   "компанії"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/0316530204"
+   },
+   {
+    "label": "Readeat",
+    "url": "https://readeat.com/product/101933-cia-ideia-nikoli-ne-spraciuje-neimovirna-istoriia-zasnuvannia-netflix"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "the-kid-stays-in-the-picture",
+  "title": "The kid stays in the picture",
+  "series": 0,
+  "altTitle": "",
+  "author": "Robert Evans",
+  "cover": "https://maxua.com/images/covers/the-kid-stays-in-the-picture.jpg",
+  "tags": [
+   "біографії"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/0062228323"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "what-you-do-is-who-you-are",
+  "title": "What you do is who you are",
+  "series": 0,
+  "altTitle": "",
+  "author": "Ben Horowitz",
+  "cover": "https://maxua.com/images/covers/what-you-do-is-who-you-are.jpg",
+  "tags": [
+   "бізнес",
+   "менеджмент"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/0062871331"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "the-great-ceo-within",
+  "title": "The great CEO within",
+  "series": 0,
+  "altTitle": "",
+  "author": "Matt Mochary",
+  "cover": "https://maxua.com/images/covers/the-great-ceo-within.jpg",
+  "tags": [
+   "бізнес",
+   "менеджмент"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/0578599287"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "flow-csikszentmihalyi",
+  "title": "Flow (Csikszentmihalyi)",
+  "series": 0,
+  "altTitle": "",
+  "author": "Mihaly Csikszentmihalyi",
+  "cover": "https://maxua.com/images/covers/flow-csikszentmihalyi.jpg",
+  "tags": [
+   "саморозвиток"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/B000W94FE6"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "angel-jason-calacanis",
+  "title": "Angel (Jason Calacanis)",
+  "series": 0,
+  "altTitle": "",
+  "author": "Jason Calacanis",
+  "cover": "https://maxua.com/images/covers/angel-jason-calacanis.jpg",
+  "tags": [
+   "бізнес",
+   "продукт"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/0062560700"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "swimming-across",
+  "title": "Swimming across",
+  "series": 0,
+  "altTitle": "",
+  "author": "Andrew S. Grove",
+  "cover": "https://maxua.com/images/covers/swimming-across.jpg",
+  "tags": [
+   "біографії"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/0446528595"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "money-the-unauthorized-biography",
+  "title": "Money the unauthorized biography",
+  "series": 0,
+  "altTitle": "",
+  "author": "Felix Martin",
+  "cover": "https://maxua.com/images/covers/money-the-unauthorized-biography.jpg",
+  "tags": [
+   "бізнес",
+   "гроші"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/0307962431"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "case-against-education",
+  "title": "Case Against Education",
+  "series": 0,
+  "altTitle": "",
+  "author": "Bryan Caplan",
+  "cover": "https://maxua.com/images/covers/case-against-education.jpg",
+  "tags": [
+   "суспільство"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/0691174652"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "why-don-t-we-learn-from-history",
+  "title": "Why don’t we learn from history",
+  "series": 0,
+  "altTitle": "",
+  "author": "B. H. Liddell Hart",
+  "cover": "https://maxua.com/images/covers/why-don-t-we-learn-from-history.jpg",
+  "tags": [
+   "історія"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/004900025X"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "letters-from-the-merchant-to-his-son",
+  "title": "Letters from the merchant to his son",
+  "series": 0,
+  "altTitle": "",
+  "author": "George Horace Lorimer",
+  "cover": "https://maxua.com/images/covers/letters-from-the-merchant-to-his-son.jpg",
+  "tags": [
+   "бізнес",
+   "гроші"
+  ],
+  "links": [
+   {
+    "label": "Project Gutenberg",
+    "url": "https://www.gutenberg.org/ebooks/21959"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "wizard-of-menlo-park",
+  "title": "Wizard of Menlo Park",
+  "series": 0,
+  "altTitle": "",
+  "author": "Randall E. Stross",
+  "cover": "https://maxua.com/images/covers/wizard-of-menlo-park.jpg",
+  "tags": [
+   "біографії"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/1400047633"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "selfish-reasons-to-have-more-kids",
+  "title": "Selfish reasons to have more kids",
+  "series": 0,
+  "altTitle": "",
+  "author": "Bryan Caplan",
+  "cover": "https://maxua.com/images/covers/selfish-reasons-to-have-more-kids.jpg",
+  "tags": [
+   "суспільство"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/046501867X"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "the-underachiever-s-manifesto",
+  "title": "The Underachiever’s manifesto",
+  "series": 0,
+  "altTitle": "",
+  "author": "Ray Bennett",
+  "cover": "https://maxua.com/images/covers/the-underachiever-s-manifesto.jpg",
+  "tags": [
+   "саморозвиток"
+  ],
+  "links": [
+   {
+    "label": "Hardie Grant",
+    "url": "https://publishing.hardiegrant.com/en-gb/books/the-underachiever_s-manifesto-by-ray-bennett/9781452184630"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "zero-to-one",
+  "title": "Zero to one",
+  "series": 0,
+  "altTitle": "",
+  "author": "Peter Thiel and Blake Masters",
+  "cover": "https://maxua.com/images/covers/zero-to-one.jpg",
+  "tags": [
+   "бізнес",
+   "продукт"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/0804139296"
+   },
+   {
+    "label": "Наш Формат",
+    "url": "https://nashformat.ua/products/vid-nulya-do-odynytsi-notatky-pro-startapy-abo-yak-stvoryty-majbutne-708488"
+   },
+   {
+    "label": "Readeat",
+    "url": "https://readeat.com/product/109111-vid-nulia-do-odinici-notatki-pro-startapi-abo-iak-stvoriti-maibutnje"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "12-rules-for-life",
+  "title": "12 rules for life",
+  "series": 0,
+  "altTitle": "",
+  "author": "Jordan B. Peterson",
+  "cover": "https://maxua.com/images/covers/12-rules-for-life.jpg",
+  "tags": [
+   "саморозвиток"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/0345816021"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "a-man-for-all-markets",
+  "title": "A man for all markets",
+  "series": 0,
+  "altTitle": "",
+  "author": "Edward O. Thorp",
+  "cover": "https://maxua.com/images/covers/a-man-for-all-markets.jpg",
+  "tags": [
+   "бізнес",
+   "гроші"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/1400067960"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "infamous-scribblers",
+  "title": "Infamous scribblers",
+  "series": 0,
+  "altTitle": "",
+  "author": "Eric Burns",
+  "cover": "https://maxua.com/images/covers/infamous-scribblers.jpg",
+  "tags": [
+   "суспільство"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/1586484281"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "ali-a-life",
+  "title": "Ali: a life",
+  "series": 0,
+  "altTitle": "",
+  "author": "Jonathan Eig",
+  "cover": "https://maxua.com/images/covers/ali-a-life.jpg",
+  "tags": [
+   "біографії"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/0544435249"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "scrum-sutherland",
+  "title": "Scrum (Sutherland)",
+  "series": 0,
+  "altTitle": "",
+  "author": "Jeff Sutherland and J. J. Sutherland",
+  "cover": "https://maxua.com/images/covers/scrum-sutherland.jpg",
+  "tags": [
+   "бізнес",
+   "менеджмент"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/038534645X"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "millionaire-fast-lane",
+  "title": "Millionaire fast lane",
+  "series": 0,
+  "altTitle": "",
+  "author": "MJ DeMarco",
+  "cover": "https://maxua.com/images/covers/millionaire-fast-lane.jpg",
+  "tags": [
+   "бізнес",
+   "гроші"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/0984358102"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "sapiens",
+  "title": "Sapiens",
+  "series": 0,
+  "altTitle": "",
+  "author": "Yuval Noah Harari",
+  "cover": "https://maxua.com/images/covers/sapiens.jpg",
+  "tags": [
+   "історія"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/0062316095"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "how-money-got-free",
+  "title": "How money got free",
+  "series": 0,
+  "altTitle": "",
+  "author": "Brian Patrick Eha",
+  "cover": "https://maxua.com/images/covers/how-money-got-free.jpg",
+  "tags": [
+   "бізнес",
+   "гроші"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/178074658X"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "before-the-exit",
+  "title": "Before the exit",
+  "series": 0,
+  "altTitle": "",
+  "author": "Dan Andrews and Ian Schoen",
+  "cover": "https://maxua.com/images/covers/before-the-exit.jpg",
+  "tags": [
+   "бізнес",
+   "продукт"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/B07BN2KD1J"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "lost-and-founder",
+  "title": "Lost and founder",
+  "series": 0,
+  "altTitle": "",
+  "author": "Rand Fishkin",
+  "cover": "https://maxua.com/images/covers/lost-and-founder.jpg",
+  "tags": [
+   "бізнес",
+   "компанії"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/0735213321"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "measure-what-matters",
+  "title": "Measure what matters",
+  "series": 0,
+  "altTitle": "",
+  "author": "John Doerr",
+  "cover": "https://maxua.com/images/covers/measure-what-matters.jpg",
+  "tags": [
+   "бізнес",
+   "менеджмент"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/0525536221"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "future-of-humanity",
+  "title": "Future of humanity",
+  "series": 0,
+  "altTitle": "",
+  "author": "Michio Kaku",
+  "cover": "https://maxua.com/images/covers/future-of-humanity.jpg",
+  "tags": [
+   "наука"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/0385542763"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "elvis-cole-joe-pike-vol-1-21",
+  "title": "Elvis Cole & Joe Pike",
+  "series": 21,
+  "altTitle": "",
+  "author": "Robert Crais",
+  "cover": "https://maxua.com/images/covers/elvis-cole-joe-pike-robert-crais.jpg",
+  "tags": [
+   "художня",
+   "детективи"
+  ],
+  "links": [
+   {
+    "label": "Robert Crais",
+    "url": "https://www.robertcrais.com/"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "high-growth-handbook",
+  "title": "High growth handbook",
+  "series": 0,
+  "altTitle": "",
+  "author": "Elad Gil",
+  "cover": "https://maxua.com/images/covers/high-growth-handbook.jpg",
+  "tags": [
+   "бізнес",
+   "менеджмент"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/1732265100"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "the-elephant-in-the-brain",
+  "title": "The Elephant in the brain",
+  "series": 0,
+  "altTitle": "",
+  "author": "Kevin Simler and Robin Hanson",
+  "cover": "https://maxua.com/images/covers/the-elephant-in-the-brain.jpg",
+  "tags": [
+   "наука"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/0190495995"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "why-we-sleep",
+  "title": "Why we sleep",
+  "series": 0,
+  "altTitle": "",
+  "author": "Matthew P. Walker",
+  "cover": "https://maxua.com/images/covers/why-we-sleep.jpg",
+  "tags": [
+   "наука"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/1501144316"
+   },
+   {
+    "label": "Readeat",
+    "url": "https://readeat.com/product/106957-comu-mi-spimo-koristajemo-z-usix-mozlivostei-snu-ta-snovidin"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "the-perfect-store-inside-ebay",
+  "title": "The Perfect Store: Inside eBay",
+  "series": 0,
+  "altTitle": "",
+  "author": "Adam Cohen",
+  "cover": "https://maxua.com/images/covers/the-perfect-store-inside-ebay.jpg",
+  "tags": [
+   "бізнес",
+   "компанії"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/0316150487"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "skyscraper-curse",
+  "title": "Skyscraper curse",
+  "series": 0,
+  "altTitle": "",
+  "author": "Mark Thornton",
+  "cover": "https://maxua.com/images/covers/skyscraper-curse.jpg",
+  "tags": [
+   "бізнес",
+   "компанії"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/1610166841"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "bitter-end-nero-wolfe",
+  "title": "Bitter End (Nero Wolfe)",
+  "series": 0,
+  "altTitle": "",
+  "author": "Rex Stout",
+  "cover": "https://maxua.com/images/covers/bitter-end-nero-wolfe.jpg",
+  "tags": [
+   "художня",
+   "детективи"
+  ],
+  "links": [
+   {
+    "label": "Wikipedia: бібліографія новели",
+    "url": "https://en.wikipedia.org/wiki/Bitter_End_(novella)"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "kitchen-confidential",
+  "title": "Kitchen Confidential",
+  "series": 0,
+  "altTitle": "",
+  "author": "Anthony Bourdain",
+  "cover": "https://maxua.com/images/covers/kitchen-confidential.jpg",
+  "tags": [
+   "біографії"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/B002UM5BXW"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "the-martian",
+  "title": "The Martian",
+  "series": 0,
+  "altTitle": "",
+  "author": "Andy Weir",
+  "cover": "https://maxua.com/images/covers/the-martian.jpg",
+  "tags": [
+   "художня",
+   "фантастика"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/B00EMXBDMA"
+   },
+   {
+    "label": "Readeat",
+    "url": "https://readeat.com/product/621655-marsiianyn"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "how-the-internet-happened",
+  "title": "How the Internet happened",
+  "series": 0,
+  "altTitle": "",
+  "author": "Brian McCullough",
+  "cover": "https://maxua.com/images/covers/how-the-internet-happened.jpg",
+  "tags": [
+   "бізнес",
+   "компанії"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/1631493078"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "asimov-foundation",
+  "title": "Asimov, Foundation",
+  "series": 0,
+  "altTitle": "",
+  "author": "Isaac Asimov",
+  "cover": "https://maxua.com/images/covers/asimov-foundation.jpg",
+  "tags": [
+   "художня",
+   "фантастика"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/0553293354"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "it-doesn-t-have-to-be-crazy-at-work",
+  "title": "It doesn’t have to be crazy at work",
+  "series": 0,
+  "altTitle": "",
+  "author": "Jason Fried and David Heinemeier Hansson",
+  "cover": "https://maxua.com/images/covers/it-doesn-t-have-to-be-crazy-at-work.jpg",
+  "tags": [
+   "бізнес",
+   "менеджмент"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/0062874780"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "fer-de-lance-nero-wolfe",
+  "title": "Fer-de-Lance (Nero Wolfe)",
+  "series": 0,
+  "altTitle": "",
+  "author": "Rex Stout",
+  "cover": "https://maxua.com/images/covers/nero-wolfe-book-1.jpg",
+  "tags": [
+   "художня",
+   "детективи"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/0553278193"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "the-happiness-hypothesis",
+  "title": "The happiness hypothesis",
+  "series": 0,
+  "altTitle": "",
+  "author": "Jonathan Haidt",
+  "cover": "https://maxua.com/images/covers/the-happiness-hypothesis.jpg",
+  "tags": [
+   "саморозвиток"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/0465028020"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "influence",
+  "title": "Influence",
+  "series": 0,
+  "altTitle": "",
+  "author": "Robert B. Cialdini",
+  "cover": "https://maxua.com/images/covers/influence.jpg",
+  "tags": [
+   "бізнес",
+   "продукт"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/006124189X"
+   },
+   {
+    "label": "КСД",
+    "url": "https://ksd.ua/product/psihologiya-vplivu-onovleno-ta-dopovneno"
+   },
+   {
+    "label": "Readeat",
+    "url": "https://readeat.com/product/107603-psixologiia-vplivu-onovlene-ta-rozsirene-vidannia"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "this-is-how",
+  "title": "This is how",
+  "series": 0,
+  "altTitle": "",
+  "author": "Augusten Burroughs",
+  "cover": "https://maxua.com/images/covers/this-is-how.jpg",
+  "tags": [
+   "саморозвиток"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/0312563558"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "endurance",
+  "title": "Endurance",
+  "series": 0,
+  "altTitle": "",
+  "author": "Alfred Lansing",
+  "cover": "https://maxua.com/images/covers/endurance.jpg",
+  "tags": [
+   "історія"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/B00IC8VF10"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "the-e-myth-revisited",
+  "title": "The E-myth revisited",
+  "series": 0,
+  "altTitle": "",
+  "author": "Michael E. Gerber",
+  "cover": "https://maxua.com/images/covers/the-e-myth-revisited.jpg",
+  "tags": [
+   "бізнес",
+   "продукт"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/0887307280"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "the-machinery-of-freedom",
+  "title": "The machinery of freedom",
+  "series": 0,
+  "altTitle": "",
+  "author": "David D. Friedman",
+  "cover": "https://maxua.com/images/covers/the-machinery-of-freedom.jpg",
+  "tags": [
+   "суспільство"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/1507785607"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "rational-optimist",
+  "title": "Rational optimist",
+  "series": 0,
+  "altTitle": "",
+  "author": "Matt Ridley",
+  "cover": "https://maxua.com/images/covers/rational-optimist.jpg",
+  "tags": [
+   "наука"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/0061452068"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "peter-s-principle",
+  "title": "Peter’s Principle",
+  "series": 0,
+  "altTitle": "",
+  "author": "Laurence J. Peter and Raymond Hull",
+  "cover": "https://maxua.com/images/covers/peter-s-principle.jpg",
+  "tags": [
+   "бізнес",
+   "менеджмент"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/0061699063"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "food-rules",
+  "title": "Food rules",
+  "series": 0,
+  "altTitle": "",
+  "author": "Michael Pollan",
+  "cover": "https://maxua.com/images/covers/food-rules.jpg",
+  "tags": [
+   "саморозвиток"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/014311638X"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "hp-way",
+  "title": "HP Way",
+  "series": 0,
+  "altTitle": "",
+  "author": "David Packard",
+  "cover": "https://maxua.com/images/covers/hp-way.jpg",
+  "tags": [
+   "бізнес",
+   "компанії"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/0887307477"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "bastiat-essays",
+  "title": "Bastiat essays",
+  "series": 0,
+  "altTitle": "",
+  "author": "Frédéric Bastiat",
+  "cover": "https://maxua.com/images/covers/bastiat-essays.jpg",
+  "tags": [
+   "суспільство"
+  ],
+  "links": [
+   {
+    "label": "Online Library of Liberty: твори автора",
+    "url": "https://oll.libertyfund.org/people/frederic-bastiat"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "tiny-beautiful-things",
+  "title": "Tiny Beautiful Things",
+  "series": 0,
+  "altTitle": "",
+  "author": "Cheryl Strayed",
+  "cover": "https://maxua.com/images/covers/tiny-beautiful-things.jpg",
+  "tags": [
+   "саморозвиток"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/0307949338"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "burn-rate",
+  "title": "Burn rate",
+  "series": 0,
+  "altTitle": "",
+  "author": "Michael Wolff",
+  "cover": "https://maxua.com/images/covers/burn-rate.jpg",
+  "tags": [
+   "бізнес",
+   "компанії"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/0684856212"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "superforecasters",
+  "title": "Superforecasters",
+  "series": 0,
+  "altTitle": "",
+  "author": "Philip E. Tetlock and Dan Gardner",
+  "cover": "https://maxua.com/images/covers/superforecasters.jpg",
+  "tags": [
+   "наука"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/0804136696"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "stumbling-on-happiness",
+  "title": "Stumbling on happiness",
+  "series": 0,
+  "altTitle": "",
+  "author": "Daniel T. Gilbert",
+  "cover": "https://maxua.com/images/covers/stumbling-on-happiness.jpg",
+  "tags": [
+   "саморозвиток"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/1400077427"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "maverick",
+  "title": "Maverick",
+  "series": 0,
+  "altTitle": "",
+  "author": "Ricardo Semler",
+  "cover": "https://maxua.com/images/covers/maverick.jpg",
+  "tags": [
+   "бізнес",
+   "компанії"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/0446670553"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "swiss-watching",
+  "title": "Swiss watching",
+  "series": 0,
+  "altTitle": "",
+  "author": "Diccon Bewes",
+  "cover": "https://maxua.com/images/covers/swiss-watching.jpg",
+  "tags": [
+   "суспільство"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/1857885481"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "seeking-wisdom",
+  "title": "Seeking wisdom",
+  "series": 0,
+  "altTitle": "",
+  "author": "Peter Bevelin",
+  "cover": "https://maxua.com/images/covers/seeking-wisdom.jpg",
+  "tags": [
+   "саморозвиток"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/1578644283"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "sovereign-individual",
+  "title": "Sovereign Individual",
+  "series": 0,
+  "altTitle": "",
+  "author": "James Dale Davidson and William Rees-Mogg",
+  "cover": "https://maxua.com/images/covers/sovereign-individual.jpg",
+  "tags": [
+   "суспільство"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/0684832720"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "the-halo-effect",
+  "title": "The Halo Effect",
+  "series": 0,
+  "altTitle": "",
+  "author": "Phil Rosenzweig",
+  "cover": "https://maxua.com/images/covers/the-halo-effect.jpg",
+  "tags": [
+   "бізнес",
+   "менеджмент"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/0743291263"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "deep-work",
+  "title": "Deep work",
+  "series": 0,
+  "altTitle": "",
+  "author": "Cal Newport",
+  "cover": "https://maxua.com/images/covers/deep-work.jpg",
+  "tags": [
+   "саморозвиток"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/1455586692"
+   },
+   {
+    "label": "Наш Формат",
+    "url": "https://nashformat.ua/products/zoseredzhena-robota.-pravyla-kontsentratsii-v-shalenomu-sviti-709730"
+   },
+   {
+    "label": "Readeat",
+    "url": "https://readeat.com/product/117374-zoseredzhena-robota"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "good-strategy-bad-strategy",
+  "title": "Good strategy, bad strategy",
+  "series": 0,
+  "altTitle": "",
+  "author": "Richard Rumelt",
+  "cover": "https://maxua.com/images/covers/good-strategy-bad-strategy.jpg",
+  "tags": [
+   "бізнес",
+   "продукт"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/B004J4WKEC"
+   },
+   {
+    "label": "Readeat",
+    "url": "https://readeat.com/product/103445-garna-strategiia-pogana-strategiia"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "american-kingpin",
+  "title": "American Kingpin",
+  "series": 0,
+  "altTitle": "",
+  "author": "Nick Bilton",
+  "cover": "https://maxua.com/images/covers/american-kingpin.jpg",
+  "tags": [
+   "бізнес",
+   "компанії"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/1591848148"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "digital-gold",
+  "title": "Digital gold",
+  "series": 0,
+  "altTitle": "",
+  "author": "Nathaniel Popper",
+  "cover": "https://maxua.com/images/covers/digital-gold.jpg",
+  "tags": [
+   "бізнес",
+   "гроші"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/006236250X"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "internet-of-money",
+  "title": "Internet of money",
+  "series": 0,
+  "altTitle": "",
+  "author": "Andreas M. Antonopoulos",
+  "cover": "https://maxua.com/images/covers/internet-of-money.jpg",
+  "tags": [
+   "бізнес",
+   "гроші"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/1537000454"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "how-will-you-measure-your-life",
+  "title": "How will you measure your life",
+  "series": 0,
+  "altTitle": "",
+  "author": "Clayton M. Christensen, James Allworth and Karen Dillon",
+  "cover": "https://maxua.com/images/covers/how-will-you-measure-your-life.jpg",
+  "tags": [
+   "саморозвиток"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/0062102419"
+   },
+   {
+    "label": "Readeat",
+    "url": "https://readeat.com/product/113658-iak-vi-zbudujete-svoje-zittia"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "principles",
+  "title": "Principles",
+  "series": 0,
+  "altTitle": "",
+  "author": "Ray Dalio",
+  "cover": "https://maxua.com/images/covers/principles.jpg",
+  "tags": [
+   "бізнес",
+   "менеджмент"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/1501124021"
+   },
+   {
+    "label": "Readeat",
+    "url": "https://readeat.com/product/219687-pryntsypy"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "the-end-of-average",
+  "title": "The End of Average",
+  "series": 0,
+  "altTitle": "",
+  "author": "Todd Rose",
+  "cover": "https://maxua.com/images/covers/the-end-of-average.jpg",
+  "tags": [
+   "суспільство"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/0062358367"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "beyond-entrepreneurship",
+  "title": "Beyond Entrepreneurship",
+  "series": 0,
+  "altTitle": "",
+  "author": "Jim Collins and William C. Lazier",
+  "cover": "https://maxua.com/images/covers/beyond-entrepreneurship.jpg",
+  "tags": [
+   "бізнес",
+   "менеджмент"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/0133815269"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "total-recall",
+  "title": "Total recall",
+  "series": 0,
+  "altTitle": "",
+  "author": "Arnold Schwarzenegger",
+  "cover": "https://maxua.com/images/covers/total-recall.jpg",
+  "tags": [
+   "біографії"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/1451662440"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "inside-the-tornado",
+  "title": "Inside the tornado",
+  "series": 0,
+  "altTitle": "",
+  "author": "Geoffrey A. Moore",
+  "cover": "https://maxua.com/images/covers/inside-the-tornado.jpg",
+  "tags": [
+   "бізнес",
+   "продукт"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/0060745819"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "the-end-of-jobs",
+  "title": "The end of jobs",
+  "series": 0,
+  "altTitle": "",
+  "author": "Taylor Pearson",
+  "cover": "https://maxua.com/images/covers/the-end-of-jobs.jpg",
+  "tags": [
+   "бізнес",
+   "продукт"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/1619613352"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "the-antidote",
+  "title": "The Antidote",
+  "series": 0,
+  "altTitle": "",
+  "author": "Oliver Burkeman",
+  "cover": "https://maxua.com/images/covers/the-antidote.jpg",
+  "tags": [
+   "саморозвиток"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/0865479410"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "чорнобильська-молитва",
+  "title": "Чорнобильська молитва",
+  "series": 0,
+  "altTitle": "",
+  "author": "Світлана Алексієвич",
+  "cover": "https://maxua.com/images/covers/чорнобильська-молитва.jpg",
+  "tags": [
+   "історія",
+   "українською"
+  ],
+  "links": [
+   {
+    "label": "Readeat",
+    "url": "https://readeat.com/product/104832-cornobilska-molitva-xronika-maibutnyogo"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "deadline",
+  "title": "Deadline",
+  "series": 0,
+  "altTitle": "",
+  "author": "Tom DeMarco",
+  "cover": "https://maxua.com/images/covers/deadline.jpg",
+  "tags": [
+   "бізнес",
+   "менеджмент"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/0932633390"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "reconnaissance-man",
+  "title": "Reconnaissance Man",
+  "series": 0,
+  "altTitle": "",
+  "author": "Aaron Clarey",
+  "cover": "https://maxua.com/images/covers/reconnaissance-man.jpg",
+  "tags": [
+   "саморозвиток"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/1532780117"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "what-i-learned-losing-a-million-dollars",
+  "title": "What I learned losing a million dollars",
+  "series": 0,
+  "altTitle": "",
+  "author": "Jim Paul and Brendan Moynihan",
+  "cover": "https://maxua.com/images/covers/what-i-learned-losing-a-million-dollars.jpg",
+  "tags": [
+   "бізнес",
+   "гроші"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/0231164688"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "rothbard-essays-case-for-gold",
+  "title": "Rothbard essays, case for gold",
+  "series": 0,
+  "altTitle": "",
+  "author": "Murray N. Rothbard",
+  "cover": "",
+  "tags": [
+   "суспільство"
+  ],
+  "links": [],
+  "source": "books.md"
+ },
+ {
+  "id": "troublemakers",
+  "title": "Troublemakers",
+  "series": 0,
+  "altTitle": "",
+  "author": "Leslie Berlin",
+  "cover": "https://maxua.com/images/covers/troublemakers.jpg",
+  "tags": [
+   "бізнес",
+   "компанії"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/1451651503"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "build-to-sell",
+  "title": "Build to sell",
+  "series": 0,
+  "altTitle": "",
+  "author": "John Warrillow",
+  "cover": "https://maxua.com/images/covers/build-to-sell.jpg",
+  "tags": [
+   "бізнес",
+   "продукт"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/1591845823"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "four-thousand-days",
+  "title": "Four thousand days",
+  "series": 0,
+  "altTitle": "",
+  "author": "Duane Jackson",
+  "cover": "https://maxua.com/images/covers/four-thousand-days.jpg",
+  "tags": [
+   "бізнес",
+   "компанії"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/151143192X"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "80-20-sales-and-marketing",
+  "title": "80/20 Sales and Marketing",
+  "series": 0,
+  "altTitle": "",
+  "author": "Perry Marshall",
+  "cover": "https://maxua.com/images/covers/80-20-sales-and-marketing.jpg",
+  "tags": [
+   "бізнес",
+   "продукт"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/B00CGNRVHE"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "website-that-sells",
+  "title": "Website That Sells",
+  "series": 0,
+  "altTitle": "",
+  "author": "",
+  "cover": "",
+  "tags": [
+   "бізнес",
+   "продукт"
+  ],
+  "links": [],
+  "source": "books.md"
+ },
+ {
+  "id": "how-to-read-a-book",
+  "title": "How to Read a Book",
+  "series": 0,
+  "altTitle": "",
+  "author": "Mortimer J. Adler, Charles Van Doren",
+  "cover": "https://maxua.com/images/covers/how-to-read-a-book.jpg",
+  "tags": [
+   "саморозвиток"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/B004PYDAPE"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "the-hard-thing-about-hard-things",
+  "title": "The Hard Thing About Hard Things",
+  "series": 0,
+  "altTitle": "",
+  "author": "Ben Horowitz",
+  "cover": "https://maxua.com/images/covers/the-hard-thing-about-hard-things.jpg",
+  "tags": [
+   "бізнес",
+   "менеджмент"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/B00DQ845EA"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "startup-ceo",
+  "title": "Startup CEO",
+  "series": 0,
+  "altTitle": "",
+  "author": "Matt Blumberg",
+  "cover": "https://maxua.com/images/covers/startup-ceo.jpg",
+  "tags": [
+   "бізнес",
+   "менеджмент"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/B00DL0QFGE"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "superbosses",
+  "title": "Superbosses",
+  "series": 0,
+  "altTitle": "",
+  "author": "Sydney Finkelstein",
+  "cover": "https://maxua.com/images/covers/superbosses.jpg",
+  "tags": [
+   "бізнес",
+   "менеджмент"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/B00XIYGHYI"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "first-time-manager",
+  "title": "First Time Manager",
+  "series": 0,
+  "altTitle": "",
+  "author": "Loren B. Belker, Jim McCormick, Gary S. Topchik",
+  "cover": "https://maxua.com/images/covers/first-time-manager.jpg",
+  "tags": [
+   "бізнес",
+   "менеджмент"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/B006WYSBIG"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "managing-the-unmanageable",
+  "title": "Managing the Unmanageable",
+  "series": 0,
+  "altTitle": "",
+  "author": "Mickey W. Mantle, Ron Lichty",
+  "cover": "https://maxua.com/images/covers/managing-the-unmanageable.jpg",
+  "tags": [
+   "бізнес",
+   "менеджмент"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/B009CFV8BY"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "managing-for-results",
+  "title": "Managing for Results",
+  "series": 0,
+  "altTitle": "",
+  "author": "Peter F. Drucker",
+  "cover": "https://maxua.com/images/covers/managing-for-results.jpg",
+  "tags": [
+   "бізнес",
+   "менеджмент"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/B000FC12Q4"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "hire-with-your-head",
+  "title": "Hire With Your Head",
+  "series": 0,
+  "altTitle": "",
+  "author": "Lou Adler",
+  "cover": "https://maxua.com/images/covers/hire-with-your-head.jpg",
+  "tags": [
+   "бізнес",
+   "менеджмент"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/B09GLK78X5"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "outsiders-ceo",
+  "title": "Outsiders CEO",
+  "series": 0,
+  "altTitle": "",
+  "author": "William N. Thorndike Jr.",
+  "cover": "https://maxua.com/images/covers/outsiders-ceo.jpg",
+  "tags": [
+   "бізнес",
+   "менеджмент"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/1422162672"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "how-to-castrate-a-bull",
+  "title": "How to castrate a bull",
+  "series": 0,
+  "altTitle": "",
+  "author": "Dave Hitz",
+  "cover": "https://maxua.com/images/covers/how-to-castrate-a-bull.jpg",
+  "tags": [
+   "бізнес",
+   "компанії"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/0470345233"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "countdown-to-zero",
+  "title": "Countdown to zero",
+  "series": 0,
+  "altTitle": "",
+  "author": "Kim Zetter",
+  "cover": "https://maxua.com/images/covers/countdown-to-zero.jpg",
+  "tags": [
+   "суспільство"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/077043617X"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "internet-is-my-religion",
+  "title": "Internet is my religion",
+  "series": 0,
+  "altTitle": "",
+  "author": "Jim Gilliam and Lea Endres",
+  "cover": "https://maxua.com/images/covers/internet-is-my-religion.jpg",
+  "tags": [
+   "біографії"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/0996110402"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "subtle-art-of-not-giving-a-fuck",
+  "title": "Subtle Art of Not Giving a Fuck",
+  "series": 0,
+  "altTitle": "",
+  "author": "Mark Manson",
+  "cover": "https://maxua.com/images/covers/subtle-art-of-not-giving-a-fuck.jpg",
+  "tags": [
+   "саморозвиток"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/0062457713"
+   },
+   {
+    "label": "Наш Формат",
+    "url": "https://nashformat.ua/products/vytonchene-mystetstvo-zabyvaty-na-vse.-nestandartnyj-pidhid-do-problem-nova-obkl.-709626"
+   },
+   {
+    "label": "Readeat",
+    "url": "https://readeat.com/product/104421-vitoncene-mistectvo-zabivati-na-vse"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "open-andre-agassi",
+  "title": "Open, Andre Agassi",
+  "series": 0,
+  "altTitle": "",
+  "author": "Andre Agassi",
+  "cover": "https://maxua.com/images/covers/open-andre-agassi.jpg",
+  "tags": [
+   "біографії"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/0307388409"
+   },
+   {
+    "label": "Наш Формат",
+    "url": "https://nashformat.ua/products/vidkrytyj.-avtobiografiya-709217"
+   },
+   {
+    "label": "Readeat",
+    "url": "https://readeat.com/product/104463-vidkritii-avtobiografiia"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "why-nations-fail",
+  "title": "Why nations fail",
+  "series": 0,
+  "altTitle": "",
+  "author": "Daron Acemoglu and James A. Robinson",
+  "cover": "https://maxua.com/images/covers/why-nations-fail.jpg",
+  "tags": [
+   "суспільство"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/0307719219"
+   },
+   {
+    "label": "Наш Формат",
+    "url": "https://nashformat.ua/products/chomu-natsii-zanepadayut.-pohodzhennya-vlady-bagatstva-i-bidnosti-nova-obkl.-709520"
+   },
+   {
+    "label": "Readeat",
+    "url": "https://readeat.com/product/104462-comu-naciyi-zanepadaiut-poxodzennia-vladi-bagatstva-i-bidnosti-nova-obkl"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "lessons-of-history",
+  "title": "Lessons of History",
+  "series": 0,
+  "altTitle": "",
+  "author": "Will Durant and Ariel Durant",
+  "cover": "https://maxua.com/images/covers/lessons-of-history.jpg",
+  "tags": [
+   "історія"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/143914995X"
+   },
+   {
+    "label": "Vivat",
+    "url": "https://vivat.com.ua/product/uroky-istorii-ohliad-istorii-liudstva-iak-produktu-liudskoho-dosvidu/"
+   },
+   {
+    "label": "Readeat",
+    "url": "https://readeat.com/product/106670-uroki-istoriyi-ogliad-istoriyi-liudstva-iak-produktu-liudskogo-dosvidu"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "the-selfish-gene",
+  "title": "The Selfish Gene",
+  "series": 0,
+  "altTitle": "",
+  "author": "Richard Dawkins",
+  "cover": "https://maxua.com/images/covers/the-selfish-gene.jpg",
+  "tags": [
+   "наука"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/B01GI5F2FS"
+   },
+   {
+    "label": "Yakaboo",
+    "url": "https://www.yakaboo.ua/ua/egoistichnij-gen.html"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "shoe-dog",
+  "title": "Shoe dog",
+  "series": 0,
+  "altTitle": "",
+  "author": "Phil Knight",
+  "cover": "https://maxua.com/images/covers/shoe-dog.jpg",
+  "tags": [
+   "бізнес",
+   "компанії"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/1501135910"
+   },
+   {
+    "label": "Наш Формат",
+    "url": "https://nashformat.ua/products/vzuttya-buttya.-istoriya-nike-vid-zasnovnyka-kompanii-onovl.-vyd.-709531"
+   },
+   {
+    "label": "Readeat",
+    "url": "https://readeat.com/product/104398-vzuttia-buttia-istoriia-nike-vid-zasnovnika-kompaniyi-onovl-vid"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "the-effective-executive",
+  "title": "The Effective Executive",
+  "series": 0,
+  "altTitle": "",
+  "author": "Peter F. Drucker",
+  "cover": "https://maxua.com/images/covers/the-effective-executive.jpg",
+  "tags": [
+   "бізнес",
+   "менеджмент"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/0060833459"
+   },
+   {
+    "label": "Yakaboo",
+    "url": "https://www.yakaboo.ua/ua/efektivnij-kerivnik-2106764.html"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "luck-factor",
+  "title": "Luck factor",
+  "series": 0,
+  "altTitle": "",
+  "author": "Richard Wiseman",
+  "cover": "https://maxua.com/images/covers/luck-factor.jpg",
+  "tags": [
+   "саморозвиток"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/1401359418"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "how-to-fail-at-almost-everything-and-still-win-big",
+  "title": "How to Fail at Almost Everything and Still Win Big",
+  "series": 0,
+  "altTitle": "",
+  "author": "Scott Adams",
+  "cover": "https://maxua.com/images/covers/how-to-fail-at-almost-everything-and-still-win-big.jpg",
+  "tags": [
+   "саморозвиток"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/B00COOFBA4"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "badass",
+  "title": "Badass",
+  "series": 0,
+  "altTitle": "",
+  "author": "Kathy Sierra",
+  "cover": "https://maxua.com/images/covers/badass.jpg",
+  "tags": [
+   "бізнес",
+   "розробка"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/1491919019"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "creativity-inc",
+  "title": "Creativity, Inc.",
+  "series": 0,
+  "altTitle": "",
+  "author": "Ed Catmull, Amy Wallace",
+  "cover": "https://maxua.com/images/covers/creativity-inc.jpg",
+  "tags": [
+   "бізнес",
+   "компанії"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/B00FUZQYBO"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "the-essential-guide-for-hiring",
+  "title": "The Essential Guide for Hiring",
+  "series": 0,
+  "altTitle": "",
+  "author": "Lou Adler",
+  "cover": "https://maxua.com/images/covers/the-essential-guide-for-hiring.jpg",
+  "tags": [
+   "бізнес",
+   "менеджмент"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/B00B9JZMKE"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "илон-маск-ashley-vence",
+  "title": "Илон Маск (Ashley Vence)",
+  "series": 0,
+  "altTitle": "Elon Musk",
+  "author": "Ashlee Vance",
+  "cover": "https://maxua.com/images/covers/илон-маск-ashley-vence.jpg",
+  "tags": [
+   "біографії"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/B00KVI76ZS"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "the-five-dysfunctions-of-a-team",
+  "title": "The Five Dysfunctions of a Team",
+  "series": 0,
+  "altTitle": "",
+  "author": "Patrick M. Lencioni",
+  "cover": "https://maxua.com/images/covers/the-five-dysfunctions-of-a-team.jpg",
+  "tags": [
+   "бізнес",
+   "менеджмент"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/B006960LQW"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "microserfs",
+  "title": "Microserfs",
+  "series": 0,
+  "altTitle": "",
+  "author": "Douglas Coupland",
+  "cover": "https://maxua.com/images/covers/microserfs.jpg",
+  "tags": [
+   "художня"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/B004W2YZ0I"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "born-standing-up",
+  "title": "Born Standing Up",
+  "series": 0,
+  "altTitle": "",
+  "author": "Steve Martin",
+  "cover": "",
+  "tags": [
+   "біографії"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/B000UZNSN6"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "high-output-management",
+  "title": "High Output Management",
+  "series": 0,
+  "altTitle": "",
+  "author": "Andrew S. Grove",
+  "cover": "https://maxua.com/images/covers/high-output-management.jpg",
+  "tags": [
+   "бізнес",
+   "менеджмент"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/0679762884"
+   },
+   {
+    "label": "Лабораторія",
+    "url": "https://laboratory.ua/products/rezultatyvnyj-menedzhment"
+   },
+   {
+    "label": "Readeat",
+    "url": "https://readeat.com/product/629103-rezultatyvnyi-menedzhment"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "design-for-hackers",
+  "title": "Design for Hackers",
+  "series": 0,
+  "altTitle": "",
+  "author": "David Kadavy",
+  "cover": "https://maxua.com/images/covers/design-for-hackers.jpg",
+  "tags": [
+   "бізнес",
+   "розробка"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/1119998956"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "the-mom-test",
+  "title": "The Mom Test",
+  "series": 0,
+  "altTitle": "",
+  "author": "Rob Fitzpatrick",
+  "cover": "https://maxua.com/images/covers/the-mom-test.jpg",
+  "tags": [
+   "бізнес",
+   "продукт"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/1492180742"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "on-writing-well",
+  "title": "On Writing Well",
+  "series": 0,
+  "altTitle": "",
+  "author": "William Zinsser",
+  "cover": "https://maxua.com/images/covers/on-writing-well.jpg",
+  "tags": [
+   "саморозвиток"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/B0090RVGW0"
+   },
+   {
+    "label": "Наш Формат",
+    "url": "https://nashformat.ua/products/yak-pysaty-dobre.-klasychnyj-posibnyk-zi-stvorennya-nehudozhnih-tekstiv-onovl.-vyd.-709510"
+   },
+   {
+    "label": "Readeat",
+    "url": "https://readeat.com/product/105271-iak-pisati-dobre-klasicnii-posibnik-zi-stvorennia-nexudoznix-tekstiv"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "high-performance-mysql",
+  "title": "High Performance MySQL",
+  "series": 0,
+  "altTitle": "",
+  "author": "Baron Schwartz",
+  "cover": "https://maxua.com/images/covers/high-performance-mysql.jpg",
+  "tags": [
+   "бізнес",
+   "розробка"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/0596101716"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "r-cookbook",
+  "title": "R Cookbook",
+  "series": 0,
+  "altTitle": "",
+  "author": "Paul Teetor",
+  "cover": "https://maxua.com/images/covers/r-cookbook.jpg",
+  "tags": [
+   "бізнес",
+   "розробка"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/B004VB3UYW"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "using-r-for-introductory-statistics",
+  "title": "Using R for Introductory Statistics",
+  "series": 0,
+  "altTitle": "",
+  "author": "John Verzani",
+  "cover": "https://maxua.com/images/covers/using-r-for-introductory-statistics.jpg",
+  "tags": [
+   "бізнес",
+   "розробка"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/1584884509"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "innovator-s-dilemma",
+  "title": "Innovator's Dilemma",
+  "series": 0,
+  "altTitle": "",
+  "author": "Clayton M. Christensen",
+  "cover": "https://maxua.com/images/covers/innovator-s-dilemma.jpg",
+  "tags": [
+   "бізнес",
+   "продукт"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/B004OC07GM"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "always-be-testing",
+  "title": "Always Be Testing",
+  "series": 0,
+  "altTitle": "",
+  "author": "Bryan Eisenberg",
+  "cover": "https://maxua.com/images/covers/always-be-testing.jpg",
+  "tags": [
+   "бізнес",
+   "продукт"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/0470290633"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "web-analytics-2-0",
+  "title": "Web Analytics 2.0",
+  "series": 0,
+  "altTitle": "",
+  "author": "Avinash Kaushik",
+  "cover": "https://maxua.com/images/covers/web-analytics-2-0.jpg",
+  "tags": [
+   "бізнес",
+   "продукт"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/0470529393"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "viral-loop",
+  "title": "Viral Loop",
+  "series": 0,
+  "altTitle": "",
+  "author": "Adam L. Penenberg",
+  "cover": "",
+  "tags": [
+   "бізнес",
+   "продукт"
+  ],
+  "links": [],
+  "source": "books.md"
+ },
+ {
+  "id": "inspired",
+  "title": "Inspired",
+  "series": 0,
+  "altTitle": "",
+  "author": "Marty Cagan",
+  "cover": "https://maxua.com/images/covers/inspired.jpg",
+  "tags": [
+   "бізнес",
+   "продукт"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/0981690408"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "the-visual-display-of-quantitative-information",
+  "title": "The Visual Display of Quantitative Information",
+  "series": 0,
+  "altTitle": "",
+  "author": "Edward R. Tufte",
+  "cover": "https://maxua.com/images/covers/the-visual-display-of-quantitative-information.jpg",
+  "tags": [
+   "бізнес",
+   "розробка"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/096139210X"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "my-life-and-work",
+  "title": "My Life and Work",
+  "series": 0,
+  "altTitle": "",
+  "author": "Henry Ford",
+  "cover": "https://maxua.com/images/covers/my-life-and-work.jpg",
+  "tags": [
+   "біографії"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/B0D738X73R"
+   },
+   {
+    "label": "Наш Формат",
+    "url": "https://nashformat.ua/products/moe-zhyttya-i-robota-onovl.-vyd.-709805"
+   },
+   {
+    "label": "Readeat",
+    "url": "https://readeat.com/product/605745-moie-zhyttia-i-robota"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "the-intelligent-investor",
+  "title": "The Intelligent Investor",
+  "series": 0,
+  "altTitle": "",
+  "author": "Benjamin Graham",
+  "cover": "https://maxua.com/images/covers/the-intelligent-investor.jpg",
+  "tags": [
+   "бізнес",
+   "гроші"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/0060555661"
+   },
+   {
+    "label": "Наш Формат",
+    "url": "https://nashformat.ua/products/rozumnyj-investor.-strategiya-vartisnogo-investuvannya-709239"
+   },
+   {
+    "label": "Readeat",
+    "url": "https://readeat.com/product/110142-rozumnii-investor-strategiia-vartisnogo-investuvannia"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "designing-the-obvious",
+  "title": "Designing the Obvious",
+  "series": 0,
+  "altTitle": "",
+  "author": "Robert Hoekman Jr.",
+  "cover": "https://maxua.com/images/covers/designing-the-obvious.jpg",
+  "tags": [
+   "бізнес",
+   "розробка"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/032145345X"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "reinventing-the-bazaar",
+  "title": "Reinventing the Bazaar",
+  "series": 0,
+  "altTitle": "",
+  "author": "John McMillan",
+  "cover": "https://maxua.com/images/covers/reinventing-the-bazaar.jpg",
+  "tags": [
+   "суспільство"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/0393323714"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "high-performance-web-sites",
+  "title": "High Performance Web Sites",
+  "series": 0,
+  "altTitle": "",
+  "author": "Steve Souders",
+  "cover": "https://maxua.com/images/covers/high-performance-web-sites.jpg",
+  "tags": [
+   "бізнес",
+   "розробка"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/0596529309"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "programming-collective-intelligence",
+  "title": "Programming Collective Intelligence",
+  "series": 0,
+  "altTitle": "",
+  "author": "Toby Segaran",
+  "cover": "https://maxua.com/images/covers/programming-collective-intelligence.jpg",
+  "tags": [
+   "бізнес",
+   "розробка"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/0596529325"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "selling-the-wheel",
+  "title": "Selling The Wheel",
+  "series": 0,
+  "altTitle": "",
+  "author": "Jeff Cox",
+  "cover": "https://maxua.com/images/covers/selling-the-wheel.jpg",
+  "tags": [
+   "бізнес",
+   "продукт"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/0684856018"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "behind-closed-doors",
+  "title": "Behind Closed Doors",
+  "series": 0,
+  "altTitle": "",
+  "author": "Johanna Rothman",
+  "cover": "https://maxua.com/images/covers/behind-closed-doors.jpg",
+  "tags": [
+   "бізнес",
+   "менеджмент"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/0976694026"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "release-it",
+  "title": "Release It!",
+  "series": 0,
+  "altTitle": "",
+  "author": "Michael T. Nygard",
+  "cover": "https://maxua.com/images/covers/release-it.jpg",
+  "tags": [
+   "бізнес",
+   "розробка"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/0978739213"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "managing-humans",
+  "title": "Managing Humans",
+  "series": 0,
+  "altTitle": "",
+  "author": "Michael Lopp",
+  "cover": "https://maxua.com/images/covers/managing-humans.jpg",
+  "tags": [
+   "бізнес",
+   "менеджмент"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/B01J53IE1O"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "the-worldly-philosophers",
+  "title": "The Worldly Philosophers",
+  "series": 0,
+  "altTitle": "",
+  "author": "Robert L. Heilbroner",
+  "cover": "https://maxua.com/images/covers/the-worldly-philosophers.jpg",
+  "tags": [
+   "суспільство"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/068486214X"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "the-4-hour-workweek",
+  "title": "The 4-Hour Workweek",
+  "series": 0,
+  "altTitle": "",
+  "author": "Timothy Ferriss",
+  "cover": "https://maxua.com/images/covers/the-4-hour-workweek.jpg",
+  "tags": [
+   "саморозвиток"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/0307353133"
+   },
+   {
+    "label": "Yakaboo",
+    "url": "https://www.yakaboo.ua/ua/pracjuj-chotiri-godini-na-tizhden-nova-psihologija-uspihu.html"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "the-myths-of-innovation",
+  "title": "The Myths of Innovation",
+  "series": 0,
+  "altTitle": "",
+  "author": "Scott Berkun",
+  "cover": "https://maxua.com/images/covers/the-myths-of-innovation.jpg",
+  "tags": [
+   "бізнес",
+   "продукт"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/0596527055"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "economic-facts-and-fallacies",
+  "title": "Economic Facts and Fallacies",
+  "series": 0,
+  "altTitle": "",
+  "author": "Thomas Sowell",
+  "cover": "https://maxua.com/images/covers/economic-facts-and-fallacies.jpg",
+  "tags": [
+   "суспільство"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/0465003494"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "how-to-talk-to-anyone-anytime-anywhere",
+  "title": "How to Talk to Anyone, Anytime, Anywhere",
+  "series": 0,
+  "altTitle": "",
+  "author": "Larry King",
+  "cover": "https://maxua.com/images/covers/how-to-talk-to-anyone-anytime-anywhere.jpg",
+  "tags": [
+   "саморозвиток"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/0517223317"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "joel-on-software",
+  "title": "Joel on Software",
+  "series": 0,
+  "altTitle": "",
+  "author": "Joel Spolsky",
+  "cover": "https://maxua.com/images/covers/joel-on-software.jpg",
+  "tags": [
+   "бізнес",
+   "розробка"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/1590593898"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "founders-at-work",
+  "title": "Founders at Work",
+  "series": 0,
+  "altTitle": "",
+  "author": "Jessica Livingston",
+  "cover": "https://maxua.com/images/covers/founders-at-work.jpg",
+  "tags": [
+   "бізнес",
+   "компанії"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/B001C30BH6"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "engineering-your-start-up",
+  "title": "Engineering Your Start-Up",
+  "series": 0,
+  "altTitle": "",
+  "author": "James A. Swanson",
+  "cover": "https://maxua.com/images/covers/engineering-your-start-up.jpg",
+  "tags": [
+   "бізнес",
+   "продукт"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/1888577916"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "programming-firefox",
+  "title": "Programming Firefox",
+  "series": 0,
+  "altTitle": "",
+  "author": "Kenneth C. Feldt",
+  "cover": "https://maxua.com/images/covers/programming-firefox.jpg",
+  "tags": [
+   "бізнес",
+   "розробка"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/0596102437"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "restful-web-services",
+  "title": "RESTful Web Services",
+  "series": 0,
+  "altTitle": "",
+  "author": "Leonard Richardson, Sam Ruby",
+  "cover": "https://maxua.com/images/covers/restful-web-services.jpg",
+  "tags": [
+   "бізнес",
+   "розробка"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/0596529260"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "programming-language-pragmatics",
+  "title": "Programming Language Pragmatics",
+  "series": 0,
+  "altTitle": "",
+  "author": "Michael L. Scott",
+  "cover": "https://maxua.com/images/covers/programming-language-pragmatics.jpg",
+  "tags": [
+   "бізнес",
+   "розробка"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/1558604421"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "macroeconomics",
+  "title": "Macroeconomics",
+  "series": 0,
+  "altTitle": "",
+  "author": "Olivier Blanchard",
+  "cover": "https://maxua.com/images/covers/macroeconomics.jpg",
+  "tags": [
+   "суспільство"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/0131860267"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "high-tech-start-up",
+  "title": "High Tech Start Up",
+  "series": 0,
+  "altTitle": "",
+  "author": "John L. Nesheim",
+  "cover": "https://maxua.com/images/covers/high-tech-start-up-revised-and-updated.jpg",
+  "tags": [
+   "бізнес",
+   "продукт"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/068487170X"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "dreaming-in-code",
+  "title": "Dreaming in Code",
+  "series": 0,
+  "altTitle": "",
+  "author": "Scott Rosenberg",
+  "cover": "https://maxua.com/images/covers/dreaming-in-code.jpg",
+  "tags": [
+   "бізнес",
+   "компанії"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/1400082463"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "the-design-of-everyday-things",
+  "title": "The Design of Everyday Things",
+  "series": 0,
+  "altTitle": "",
+  "author": "Donald A. Norman",
+  "cover": "https://maxua.com/images/covers/the-design-of-everyday-things.jpg",
+  "tags": [
+   "бізнес",
+   "розробка"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/0465067107"
+   },
+   {
+    "label": "КСД",
+    "url": "https://ksd.ua/product/dizayn-zvichnih-rechey-1"
+   },
+   {
+    "label": "Readeat",
+    "url": "https://readeat.com/product/107530-dyzain-zvychnykh-rechei"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "crossing-the-chasm",
+  "title": "Crossing the Chasm",
+  "series": 0,
+  "altTitle": "",
+  "author": "Geoffrey A. Moore",
+  "cover": "https://maxua.com/images/covers/crossing-the-chasm.jpg",
+  "tags": [
+   "бізнес",
+   "продукт"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/B00DB3D81G"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "don-t-make-me-think",
+  "title": "Don't Make Me Think",
+  "series": 0,
+  "altTitle": "",
+  "author": "Steve Krug",
+  "cover": "https://maxua.com/images/covers/don-t-make-me-think.jpg",
+  "tags": [
+   "бізнес",
+   "розробка"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/0321344758"
+   },
+   {
+    "label": "Readeat",
+    "url": "https://readeat.com/product/117702-ne-zmushuyte-mene-dumaty"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "what-the-dormouse-said",
+  "title": "What the Dormouse Said",
+  "series": 0,
+  "altTitle": "",
+  "author": "John Markoff",
+  "cover": "https://maxua.com/images/covers/what-the-dormouse-said.jpg",
+  "tags": [
+   "історія"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/0670033820"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "crimes-against-logic",
+  "title": "Crimes Against Logic",
+  "series": 0,
+  "altTitle": "",
+  "author": "Jamie Whyte",
+  "cover": "https://maxua.com/images/covers/crimes-against-logic.jpg",
+  "tags": [
+   "суспільство"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/0071446435"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "head-first-design-patterns",
+  "title": "Head First Design Patterns",
+  "series": 0,
+  "altTitle": "",
+  "author": "Eric Freeman, Elisabeth Robson",
+  "cover": "https://maxua.com/images/covers/head-first-design-patterns.jpg",
+  "tags": [
+   "бізнес",
+   "розробка"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/0596007124"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "professional-javascript-for-web-developers",
+  "title": "Professional JavaScript for Web Developers",
+  "series": 0,
+  "altTitle": "",
+  "author": "Nicholas C. Zakas",
+  "cover": "https://maxua.com/images/covers/professional-javascript-for-web-developers.jpg",
+  "tags": [
+   "бізнес",
+   "розробка"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/0764579088"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "building-scalable-web-sites",
+  "title": "Building Scalable Web Sites",
+  "series": 0,
+  "altTitle": "",
+  "author": "Cal Henderson",
+  "cover": "https://maxua.com/images/covers/building-scalable-web-sites.jpg",
+  "tags": [
+   "бізнес",
+   "розробка"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/0596102356"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "micro-isv-from-vision-to-reality",
+  "title": "Micro-ISV: From Vision to Reality",
+  "series": 0,
+  "altTitle": "",
+  "author": "Bob Walsh",
+  "cover": "https://maxua.com/images/covers/micro-isv-from-vision-to-reality.jpg",
+  "tags": [
+   "бізнес",
+   "розробка"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/1590596013"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "beginning-databases-with-postgresql",
+  "title": "Beginning Databases with PostgreSQL",
+  "series": 0,
+  "altTitle": "",
+  "author": "Richard Stones",
+  "cover": "https://maxua.com/images/covers/beginning-databases-with-postgresql.jpg",
+  "tags": [
+   "бізнес",
+   "розробка"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/1590594789"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "in-search-of-stupidity",
+  "title": "In Search of Stupidity",
+  "series": 0,
+  "altTitle": "",
+  "author": "Rick Chapman",
+  "cover": "https://maxua.com/images/covers/in-search-of-stupidity.jpg",
+  "tags": [
+   "бізнес",
+   "компанії"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/1590591046"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "the-art-of-the-start",
+  "title": "The Art of the Start",
+  "series": 0,
+  "altTitle": "",
+  "author": "Guy Kawasaki",
+  "cover": "https://maxua.com/images/covers/the-art-of-the-start.jpg",
+  "tags": [
+   "бізнес",
+   "продукт"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/1591840562"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "skunk-works",
+  "title": "Skunk works",
+  "series": 0,
+  "altTitle": "",
+  "author": "Ben R. Rich, Leo Janos",
+  "cover": "https://maxua.com/images/covers/skunk-works.jpg",
+  "tags": [
+   "бізнес",
+   "компанії"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/0316743003"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "квіти-для-елджернона",
+  "title": "Квіти для Елджернона",
+  "series": 0,
+  "altTitle": "Flowers for Algernon",
+  "author": "Daniel Keyes",
+  "cover": "https://maxua.com/images/covers/квіти-для-елджернона.jpg",
+  "tags": [
+   "художня",
+   "фантастика"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/B003WJQ74E"
+   },
+   {
+    "label": "КСД",
+    "url": "https://ksd.ua/product/kviti-dlya-eldjernona"
+   },
+   {
+    "label": "Readeat",
+    "url": "https://readeat.com/product/107555-kviti-dlia-eldzernona"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "на-західному-фронті-без-змін",
+  "title": "На Західному фронті без змін",
+  "series": 0,
+  "altTitle": "All Quiet on the Western Front",
+  "author": "Erich Maria Remarque",
+  "cover": "https://maxua.com/images/covers/на-західному-фронті-без-змін.jpg",
+  "tags": [
+   "художня",
+   "війна"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/B09WYQZ26P"
+   },
+   {
+    "label": "КСД",
+    "url": "https://ksd.ua/product/na-zahidnomu-fronti-bez-zmin"
+   },
+   {
+    "label": "Readeat",
+    "url": "https://readeat.com/product/606156-na-zakhidnomu-fronti-bez-zmin"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "1984",
+  "title": "1984",
+  "series": 0,
+  "altTitle": "",
+  "author": "George Orwell",
+  "cover": "https://maxua.com/images/covers/1984-оруєлл.jpg",
+  "tags": [
+   "художня",
+   "фантастика"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/B07MW9B6YS"
+   },
+   {
+    "label": "КСД",
+    "url": "https://ksd.ua/product/1984-kolgosp-tvarin-1"
+   },
+   {
+    "label": "Readeat",
+    "url": "https://readeat.com/product/111728-1984-kolgosp-tvarin-ekskliuzivne-vidannia"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "made-in-japan",
+  "title": "Made in Japan",
+  "series": 0,
+  "altTitle": "",
+  "author": "Akio Morita",
+  "cover": "https://maxua.com/images/covers/made-in-japan.jpg",
+  "tags": [
+   "бізнес",
+   "компанії"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/0451151712"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "surely-you-re-joking-mr-feynman",
+  "title": "Surely You’re Joking, Mr. Feynman!",
+  "series": 0,
+  "altTitle": "",
+  "author": "Richard P. Feynman",
+  "cover": "https://maxua.com/images/covers/surely-you-re-joking-mr-feynman.jpg",
+  "tags": [
+   "біографії"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/0393316041"
+   },
+   {
+    "label": "Наш Формат",
+    "url": "https://nashformat.ua/products/ta-vy-zhartuete-mistere-fejnman-prygody-dopytlyvogo-dyvaka-709108"
+   },
+   {
+    "label": "Readeat",
+    "url": "https://readeat.com/product/109852-ta-vi-zartujete-mistere-feinman-prigodi-dopitlivogo-divaka"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "автостопом-по-галактиці",
+  "title": "Автостопом по Галактиці",
+  "series": 0,
+  "altTitle": "The Hitchhiker’s Guide to the Galaxy",
+  "author": "Douglas Adams",
+  "cover": "https://maxua.com/images/covers/автостопом-по-галактиці.jpg",
+  "tags": [
+   "художня",
+   "фантастика"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/0345391802"
+   },
+   {
+    "label": "Readeat",
+    "url": "https://readeat.com/product/609785-putivnyk-po-halaktytsi-dlya-kosmoturystiv"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "solaris-соларіс",
+  "title": "Solaris (Соларіс)",
+  "series": 0,
+  "altTitle": "",
+  "author": "Stanisław Lem",
+  "cover": "https://maxua.com/images/covers/соляріс.jpg",
+  "tags": [
+   "художня",
+   "фантастика"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/0156027607"
+   },
+   {
+    "label": "Readeat",
+    "url": "https://readeat.com/product/108836-soliaris"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "хроніки-амбера",
+  "title": "Хроніки Амбера",
+  "series": 0,
+  "altTitle": "The Chronicles of Amber",
+  "author": "Roger Zelazny",
+  "cover": "https://maxua.com/images/covers/хроніки-амбера.jpg",
+  "tags": [
+   "художня",
+   "фантастика"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/0380809060"
+   },
+   {
+    "label": "Readeat",
+    "url": "https://readeat.com/product/108883-xroniki-ambera-kniga-1-deviat-princiv-ambera"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "godfather",
+  "title": "Godfather",
+  "series": 0,
+  "altTitle": "",
+  "author": "Mario Puzo",
+  "cover": "https://maxua.com/images/covers/godfather.jpg",
+  "tags": [
+   "художня"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/B0022Q8CSC"
+   },
+   {
+    "label": "Лабораторія",
+    "url": "https://laboratory.ua/products/hreschenyj-batko"
+   },
+   {
+    "label": "Readeat",
+    "url": "https://readeat.com/product/115577-khreshchenyi-batko"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "місто-кліффорд-саймак",
+  "title": "Місто Кліффорд Саймак",
+  "series": 0,
+  "altTitle": "City",
+  "author": "Clifford D. Simak",
+  "cover": "https://maxua.com/images/covers/місто-кліффорд-саймак.jpg",
+  "tags": [
+   "художня",
+   "фантастика"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/0575105232"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "the-mythical-man-month",
+  "title": "The Mythical Man-Month",
+  "series": 0,
+  "altTitle": "",
+  "author": "Frederick P. Brooks Jr.",
+  "cover": "https://maxua.com/images/covers/the-mythical-man-month.jpg",
+  "tags": [
+   "бізнес",
+   "розробка"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/0201835959"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "понеділок-починається-в-суботу",
+  "title": "Понеділок починається в суботу",
+  "series": 0,
+  "altTitle": "",
+  "author": "Аркадій і Борис Стругацькі",
+  "cover": "",
+  "tags": [
+   "художня",
+   "фантастика"
+  ],
+  "links": [],
+  "source": "books.md"
+ },
+ {
+  "id": "чайка-на-ім-я-джонатан-лівінгстон",
+  "title": "Чайка на ім'я Джонатан Лівінгстон",
+  "series": 0,
+  "altTitle": "Jonathan Livingston Seagull",
+  "author": "Richard Bach",
+  "cover": "https://maxua.com/images/covers/jonathan-livingston-seagull.jpg",
+  "tags": [
+   "художня"
+  ],
+  "links": [
+   {
+    "label": "Amazon",
+    "url": "https://www.amazon.com/dp/0743278909"
+   }
+  ],
+  "source": "books.md"
+ },
+ {
+  "id": "драйзер-фінансист-титан-стоїк",
+  "title": "Драйзер (Фінансист, Титан, Стоїк)",
+  "series": 0,
+  "altTitle": "The Financier, The Titan, The Stoic",
+  "author": "Theodore Dreiser",
+  "cover": "https://maxua.com/images/covers/драйзер-фінансист-титан-стоїк.jpg",
+  "tags": [
+   "художня"
+  ],
+  "links": [
+   {
+    "label": "Readeat",
+    "url": "https://readeat.com/product/203567-finansyst-tytan-stoyik-trylohiya-bazhannya"
+   }
+  ],
+  "source": "books.md"
+ }
+]

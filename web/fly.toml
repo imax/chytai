@@ -1,0 +1,30 @@
+# Chytai web platform (library, Discovery, recommendations): a separate Fly app from the reader,
+# so the mobile WebView and the reader stay as they are. Deploy from the repo root:
+#   flyctl deploy --remote-only -a chytai-web -c web/fly.toml
+# Secrets: WEB_LOGIN_TOKEN (the magic link), ANTHROPIC_API_KEY (for «Що почитати»).
+app = "chytai-web"
+primary_region = "fra"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  DATA_DIR = "/data"
+  TZ = "Europe/Kyiv"
+  PORT = "8080"
+
+[[mounts]]
+  source = "web_data"
+  destination = "/data"
+  initial_size = "1gb"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "256mb"

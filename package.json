@@ -8,7 +8,9 @@
   "scripts": {
     "start": "electron .",
     "dist": "electron-builder --mac",
-    "web": "node server/index.js"
+    "web": "node server/index.js",
+    "platform": "node web/server.js",
+    "platform:import": "node web/scripts/import-books.mjs ../maxua-v3 && node web/scripts/build-shelves.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.93.0",
