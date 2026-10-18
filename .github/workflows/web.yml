@@ -1,7 +1,7 @@
 # The web platform (web/) deploys to https://chytai-web.fly.dev on every push to main that touches it.
 # Needs the repo secret FLY_API_TOKEN_WEB: a deploy token for the app chytai-web
 #   fly tokens create deploy -a chytai-web
-# Disabled until the first deploy is approved: remove `if: false` to turn it on.
+# First deploy done by hand from Max's Mac on 2026-10-18; this keeps it in sync with main.
 name: Deploy web
 
 on:
@@ -14,11 +14,10 @@ concurrency: deploy-web
 
 jobs:
   deploy:
-    if: false
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: superfly/flyctl-actions/setup-flyctl@master
-      - run: flyctl deploy --remote-only -a chytai-web -c web/fly.toml
+      - run: flyctl deploy . --remote-only -a chytai-web -c web/fly.toml --dockerfile web/Dockerfile
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN_WEB }}
