@@ -20,6 +20,7 @@ const shelves = [];
     author: p.author,
     altTitle: p.originalTitle,
     translator: p.translator,
+    isbn: p.isbn || "",
     cover: p.image,
     url: p.url,
     price: uah(p.price),
@@ -56,10 +57,14 @@ const shelves = [];
       title = (m[2] + rest).replace(/\s+,/g, ",").replace(/[,\s]+$/, "").trim();
     }
     const pre = p.categories.includes("Передзамовлення") || /передзамовлення|відправка/i.test(note);
+    // The note mixes the edition («англійська мова», «лімітоване видання») with shipping dates; keep the edition part.
+    const edition = note.split(/,\s*/).filter((t) => t && !/передзамовлення|відправка|\d{4}/i.test(t)).join(", ");
     return {
       id: `vydavnytstvo-${p.id}`,
       title,
       author,
+      isbn: p.attrs.ISBN || "",
+      edition,
       cover: p.image,
       url: p.url,
       price: uah(p.price),

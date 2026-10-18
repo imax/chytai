@@ -11,6 +11,7 @@ const readJson = (f) => JSON.parse(fs.readFileSync(f, "utf8"));
 // Office books that match a library book under a different spelling (title-matching misses them).
 const OFFICE_MATCHES = { 6: "bastiat-essays", 7: "гемінгвей-нічого-не-знає", 35: "deep-work", 44: "subtle-art-of-not-giving-a-fuck", 46: "andy-grove-one-on-ones" };
 const RU = /[ыэъё]/i; // Russian-only letters: these office books stay out of the profile until Max says otherwise
+const PICK = { "": 0, "є": 1, передзамовлення: 2, немає: 3 }; // which edition stands for the work on a shelf
 
 const slugify = (s) =>
   s
@@ -20,6 +21,14 @@ const slugify = (s) =>
     .replace(/^-|-$/g, "")
     .slice(0, 60) || "book";
 const norm = (s) => String(s || "").toLowerCase().replace(/^(the|a)\s+/, "").replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+const isbnKey = (s) => String(s || "").replace(/[^0-9X]/gi, "");
+
+// Two entries for one work (one saved under an edition id): keep the fuller of each field.
+const RANK = { read: 3, reading: 2, want: 1, "": 0 };
+function mergeEntries(a, b) {
+  const pick = (x, y) => (x !== "" && x != null ? x : y);
+  return { ...b, ...a, status: (RANK[a.status] ?? 0) >= (RANK[b.status] ?? 0) ? a.status : b.status, rating: Math.max(a.rating ?? -1, b.rating ?? -1) < 0 ? null : Math.max(a.rating ?? 0, b.rating ?? 0), year: pick(a.year, b.year), note: (a.note || "").length >= (b.note || "").length ? a.note || "" : b.note, copy: pick(a.copy, b.copy), order: Math.min(a.order ?? 1e9, b.order ?? 1e9) };
+}
 
 class Store {
   constructor(dataDir) {
@@ -31,7 +40,88 @@ class Store {
     this.shelvesFetched = shelvesFile.fetched;
     this.shelfItems = new Map(); // item id -> { shelf, item }
     for (const s of this.shelves) for (const it of s.items) this.shelfItems.set(it.id, { shelf: s, item: it });
+    this.linkEditions();
     this.load();
+  }
+
+  // ---- works and editions ----
+  // One book can sit on a shelf several times (paper and limited edition, three languages) and in the
+  // library under its own id. Those are editions of one work: every edition id is aliased to one
+  // canonical id (the library book when there is one, else one shelf item), the library keys its
+  // entries by the canonical id, and book pages list all editions with their buy links.
+  linkEditions() {
+    this.aliases = new Map(); // edition id -> canonical id
+    this.editions = new Map(); // canonical id -> [{ shelf, item }]
+    this.hidden = new Set(); // shelf items that are a second edition of another item on the same shelf
+    let matches = { same: {}, different: [] };
+    try {
+      matches = readJson(path.join(SEED, "matches.json"));
+    } catch {
+      /* no hand-confirmed matches */
+    }
+    const no = new Set(matches.different.map((p) => p.join("|")));
+
+    // 1. Shelf items that share an ISBN or an author+title are one work.
+    const groups = new Map(); // key -> group (array of {shelf,item})
+    const groupOf = new Map(); // item id -> group
+    const join = (key, si) => {
+      const g = groupOf.get(si.item.id);
+      const other = groups.get(key);
+      if (other && g && other !== g) {
+        for (const m of g) (other.push(m), groupOf.set(m.item.id, other));
+      } else if (other && !g) (other.push(si), groupOf.set(si.item.id, other));
+      else if (!other && g) groups.set(key, g);
+      else {
+        const ng = [si];
+        groups.set(key, ng);
+        groupOf.set(si.item.id, ng);
+      }
+    };
+    // A shared ISBN counts only with the same author or title: publishers' sites reuse ISBNs by mistake.
+    const alike = (a, b) => (norm(a.author) && norm(a.author) === norm(b.author)) || norm(a.title).startsWith(norm(b.title)) || norm(b.title).startsWith(norm(a.title));
+    for (const si of this.shelfItems.values()) {
+      const it = si.item;
+      const ik = `isbn:${isbnKey(it.isbn)}`;
+      if (isbnKey(it.isbn).length >= 10 && (!groups.has(ik) || alike(groups.get(ik)[0].item, it))) join(ik, si);
+      if (norm(it.title) && norm(it.author)) join(`at:${norm(it.author)}|${norm(it.title)}`, si);
+      if (!groupOf.has(it.id)) groupOf.set(it.id, [si]);
+    }
+
+    // 2. A shelf item whose title (or original title) is exactly a library book's title is that book.
+    const byTitle = new Map();
+    for (const b of this.seedBooks) for (const t of [b.title, b.altTitle]) if (norm(t).length >= 6) byTitle.set(norm(t), b.id);
+    const bookOf = (it) => {
+      if (matches.same[it.id]) return matches.same[it.id];
+      for (const t of [it.title, it.altTitle]) {
+        const id = byTitle.get(norm(t));
+        if (id && !no.has(`${it.id}|${id}`)) return id;
+      }
+      return null;
+    };
+
+    const seen = new Set();
+    for (const g of new Set(groupOf.values())) {
+      const sorted = [...g].sort((a, b) => (a.item.edition ? 1 : 0) - (b.item.edition ? 1 : 0) || (PICK[a.item.status] ?? 9) - (PICK[b.item.status] ?? 9) || a.item.id.localeCompare(b.item.id, "en", { numeric: true }));
+      const canonical = g.map((si) => bookOf(si.item)).find(Boolean) || sorted[0].item.id;
+      this.editions.set(canonical, sorted);
+      const perShelf = new Set();
+      for (const si of sorted) {
+        if (si.item.id !== canonical) this.aliases.set(si.item.id, canonical);
+        if (perShelf.has(si.shelf.id)) this.hidden.add(si.item.id);
+        perShelf.add(si.shelf.id);
+        si.item.editions = g.length; // for the cards
+      }
+      seen.add(canonical);
+    }
+  }
+
+  canonical(id) {
+    return this.aliases.get(id) || id;
+  }
+
+  // Shelf items worth a card: one per work per shelf.
+  visible(shelf) {
+    return shelf.items.filter((it) => !this.hidden.has(it.id));
   }
 
   load() {
@@ -44,6 +134,17 @@ class Store {
     this.lib.books ??= {};
     this.lib.entries ??= {};
     this.lib.subscriptions ??= [];
+    // Entries saved under an edition id (before editions were linked, or by a shelf that changed) move to the work.
+    let moved = false;
+    for (const [id, e] of Object.entries(this.lib.entries)) {
+      const c = this.canonical(id);
+      if (c === id) continue;
+      const cur = this.lib.entries[c];
+      this.lib.entries[c] = cur ? mergeEntries(cur, e) : e;
+      delete this.lib.entries[id];
+      moved = true;
+    }
+    if (moved) this.save();
   }
 
   seed() {
@@ -93,17 +194,18 @@ class Store {
   // ---- books ----
 
   book(id) {
+    id = this.canonical(id);
     const own = this.lib.books[id];
-    if (own) return own;
-    const seed = this.seedBooks.find((b) => b.id === id);
-    if (seed) return seed;
-    const si = this.shelfItems.get(id);
-    if (si) return this.fromShelfItem(si.shelf, si.item);
-    return null;
+    const seed = own || this.seedBooks.find((b) => b.id === id);
+    const si = seed ? null : this.shelfItems.get(id);
+    const b = seed || (si && this.fromShelfItem(si.shelf, si.item));
+    if (!b) return null;
+    const eds = this.editions.get(id);
+    return eds ? { ...b, editions: eds.map(({ shelf, item }) => ({ ...this.fromShelfItem(shelf, item), shelf })) } : b;
   }
 
   fromShelfItem(shelf, it) {
-    return { id: it.id, title: it.title, author: it.author, altTitle: it.altTitle || "", cover: it.cover, tags: it.genres || [], links: [{ label: shelf.name, url: it.url }], source: shelf.id, shelf: shelf.id, blurb: it.blurb || "", price: it.price, status: it.status, language: it.language };
+    return { id: it.id, title: it.title, author: it.author, altTitle: it.altTitle || "", cover: it.cover, tags: it.genres || [], links: [{ label: shelf.name, url: it.url }], source: shelf.id, shelf: shelf.id, blurb: it.blurb || "", price: it.price, status: it.status, language: it.language, edition: it.edition || "", isbn: it.isbn || "" };
   }
 
   addBook({ title, author, cover, links }) {
@@ -126,10 +228,18 @@ class Store {
   // ---- library entries ----
 
   entry(id) {
-    return this.lib.entries[id] || null;
+    return this.lib.entries[this.canonical(id)] || null;
+  }
+
+  // Library membership by any id, edition ids included (for the shelf cards).
+  inLibrary() {
+    const m = new Map(Object.entries(this.lib.entries));
+    for (const [alias, c] of this.aliases) if (m.has(c)) m.set(alias, m.get(c));
+    return m;
   }
 
   setEntry(id, patch) {
+    id = this.canonical(id);
     if (!this.book(id)) return null;
     const cur = this.lib.entries[id] || { status: "", year: null, rating: null, note: "", copy: "", order: Object.keys(this.lib.entries).length, added: new Date().toISOString().slice(0, 10) };
     const next = { ...cur, ...patch };
@@ -141,6 +251,7 @@ class Store {
   }
 
   removeEntry(id) {
+    id = this.canonical(id);
     delete this.lib.entries[id];
     if (this.lib.books[id]?.source === "manual") delete this.lib.books[id];
     this.save();

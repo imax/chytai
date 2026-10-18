@@ -1,0 +1,8 @@
+{
+ "_": "Hand-confirmed links between catalog items and library books that title matching misses or gets wrong. same: item id -> book id. different: pairs the automatic matcher must not join.",
+ "same": {
+  "lobster-8110": "mickey7",
+  "lobster-8109": "we-are-legion-bobiverse"
+ },
+ "different": []
+}

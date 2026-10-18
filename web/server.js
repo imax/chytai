@@ -71,12 +71,11 @@ app.get("/logout", (req, res) => {
 
 // ---- pages ----
 
-function inLibraryMap() {
-  return new Map(Object.entries(store.lib.entries));
-}
+const inLibraryMap = () => store.inLibrary();
+const visible = (s) => store.visible(s);
 
 app.get("/", (req, res) => {
-  res.send(pages.discoveryPage({ shelves: store.shelves, subscriptions: store.lib.subscriptions, user: req.user, owner: OWNER, libraryCount: store.library().length, inLibrary: inLibraryMap(), fetched: store.shelvesFetched, ownerStrip: store.library().filter((r) => r.rating >= 5 && r.book.cover).slice(0, 5).map((r) => r.book) }));
+  res.send(pages.discoveryPage({ shelves: store.shelves, subscriptions: store.lib.subscriptions, user: req.user, owner: OWNER, libraryCount: store.library().length, inLibrary: inLibraryMap(), visible, fetched: store.shelvesFetched, ownerStrip: store.library().filter((r) => r.rating >= 5 && r.book.cover).slice(0, 5).map((r) => r.book) }));
 });
 
 app.get("/me", (req, res) => {
@@ -92,10 +91,12 @@ app.get("/me", (req, res) => {
 app.get("/shelf/:id", (req, res) => {
   const shelf = store.shelf(req.params.id);
   if (!shelf) return res.status(404).send(pages.messagePage({ title: "Немає такої полиці", text: "", user: req.user }));
-  res.send(pages.shelfPage({ shelf, subscribed: store.subscribed(shelf.id), user: req.user, inLibrary: inLibraryMap() }));
+  res.send(pages.shelfPage({ shelf, subscribed: store.subscribed(shelf.id), user: req.user, inLibrary: inLibraryMap(), visible }));
 });
 
 app.get("/book/:id", (req, res) => {
+  // An edition's id opens the work's page.
+  if (store.canonical(req.params.id) !== req.params.id) return res.redirect(`/book/${encodeURIComponent(store.canonical(req.params.id))}`);
   const book = store.book(req.params.id);
   if (!book) return res.status(404).send(pages.messagePage({ title: "Немає такої книжки", text: "", user: req.user }));
   res.send(pages.bookPage({ book, entry: store.entry(book.id), user: req.user, shelf: book.shelf ? store.shelf(book.shelf) : null }));

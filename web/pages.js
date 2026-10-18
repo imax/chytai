@@ -137,7 +137,8 @@ function addDialog() {
 // ---- book (/book/:id) ----
 
 function bookPage({ book, entry, user, shelf }) {
-  const links = book.links || [];
+  const edUrls = new Set((book.editions || []).map((e) => e.links[0].url));
+  const links = (book.links || []).filter((l) => !edUrls.has(l.url));
   const body = `
 <article class="book">
   <div class="book-cover">${cover(book, "big")}</div>
@@ -154,20 +155,28 @@ function bookPage({ book, entry, user, shelf }) {
     </p>
     ${entry?.note ? `<div class="prose">${marked.parse(entry.note).replace(/<a href="http/g, '<a target="_blank" rel="noopener" href="http')}</div>` : ""}
     ${!entry?.note && book.blurb ? `<div class="prose blurb"><p>${esc(book.blurb)}</p><p class="muted small">Опис з сайту ${esc(shelf ? shelf.name : book.source)}</p></div>` : ""}
-    ${shelf && book.links?.[0] ? buyButton(shelf, book) : ""}
-    ${links.filter((l) => !(shelf && l.url === book.links?.[0]?.url)).length ? `<p class="links">${links.filter((l) => !(shelf && l.url === book.links?.[0]?.url)).map((l) => `<a href="${attr(l.url)}" target="_blank" rel="noopener">${esc(l.label)}</a>`).join('<span class="sep">·</span>')}</p>` : ""}
+    ${editions(book)}
+    ${links.length ? `<p class="links">${links.map((l) => `<a href="${attr(l.url)}" target="_blank" rel="noopener">${esc(l.label)}</a>`).join('<span class="sep">·</span>')}</p>` : ""}
     ${user ? entryForm(book, entry) : !entry ? "" : ""}
   </div>
 </article>`;
   return layout({ title: book.title, body, user, path: "/book" });
 }
 
-// A catalog book links back to where it came from: the publisher's page, with the price and availability.
-function buyButton(shelf, book) {
+// Every edition of the book on the shelves links back to where it came from: the publisher's page,
+// with the edition, price and availability. One edition gets a button; several get a short list.
+function editions(book) {
+  const eds = book.editions || [];
+  if (!eds.length) return "";
+  if (eds.length === 1) return buyButton(eds[0].shelf, eds[0]);
+  return `<div class="editions"><p class="muted small">${count(eds.length, "видання", "видання", "видань")}</p>${eds.map((e) => buyButton(e.shelf, e, true)).join("")}</div>`;
+}
+
+function buyButton(shelf, book, compact = false) {
   const host = shelf.url.replace(/^https?:\/\/(www\.)?/, "").replace(/\/$/, "");
   const verb = book.price === "безкоштовно" ? "Завантажити" : book.status === "передзамовлення" ? "Замовити" : book.status === "немає" ? "Подивитися" : "Купити";
-  const tail = [book.price, book.status && book.status !== "є" ? book.status : ""].filter(Boolean).join(" · ");
-  return `<p class="buy"><a class="btn primary" href="${attr(book.links[0].url)}" target="_blank" rel="noopener">${verb} на ${esc(host)} ↗</a>${tail ? `<span class="muted">${esc(tail)}</span>` : ""}</p>`;
+  const tail = [compact ? book.edition || "звичайне видання" : "", book.price, book.status && book.status !== "є" ? book.status : "", compact ? host : ""].filter(Boolean).join(" · ");
+  return `<p class="buy"><a class="btn primary${compact ? " small" : ""}" href="${attr(book.links[0].url)}" target="_blank" rel="noopener">${verb}${compact ? "" : ` на ${esc(host)}`} ↗</a>${tail ? `<span class="muted">${esc(tail)}</span>` : ""}</p>`;
 }
 
 function entryForm(book, entry) {
@@ -207,9 +216,9 @@ function entryForm(book, entry) {
 
 // ---- discovery (/) ----
 
-function discoveryPage({ shelves, subscriptions, user, owner, libraryCount, inLibrary, fetched, ownerStrip = [] }) {
+function discoveryPage({ shelves, subscriptions, user, owner, libraryCount, inLibrary, fetched, ownerStrip = [], visible = (s) => s.items }) {
   const subs = shelves.filter((s) => subscriptions.includes(s.id));
-  const fresh = subs.flatMap((s) => s.items.filter((it) => it.isNew).map((it) => ({ ...it, shelfName: s.name, shelfId: s.id })));
+  const fresh = subs.flatMap((s) => visible(s).filter((it) => it.isNew).map((it) => ({ ...it, shelfName: s.name, shelfId: s.id })));
   const body = `
 <section class="head">
   <div>
@@ -232,7 +241,7 @@ ${subs.length ? `
       <p class="muted">Прочитане з оцінками й нотатками, паперова полиця в офісі</p>
       <p class="shelf-n">${count(libraryCount, "книжка", "книжки", "книжок")}</p>
     </a>
-    ${shelves.map((s) => shelfCard(s, subscriptions.includes(s.id), user)).join("")}
+    ${shelves.map((s) => shelfCard({ ...s, items: visible(s) }, subscriptions.includes(s.id), user)).join("")}
   </div>
   <p class="muted small">Каталоги оновлено ${esc(fetched)}.</p>
 </section>`;
@@ -260,7 +269,8 @@ function subscribeButton(id, on) {
 
 // ---- shelf (/shelf/:id) ----
 
-function shelfPage({ shelf, subscribed, user, inLibrary }) {
+function shelfPage({ shelf, subscribed, user, inLibrary, visible = (s) => s.items }) {
+  shelf = { ...shelf, items: visible(shelf) };
   const genres = [...shelf.items.flatMap((it) => it.genres || []).reduce((m, g) => m.set(g, (m.get(g) || 0) + 1), new Map())].sort((a, b) => b[1] - a[1]).slice(0, 10);
   const statuses = [...new Set(shelf.items.map((it) => it.status))];
   const body = `
@@ -291,7 +301,7 @@ function itemCard(it, inLibrary, user, shelfName) {
   <a class="cover-link" href="/book/${encodeURIComponent(it.id)}">${cover(it, "card")}</a>
   <h3><a href="/book/${encodeURIComponent(it.id)}">${esc(it.title)}</a></h3>
   <p class="by">${esc(it.author || "")}</p>
-  <p class="meta small">${shelfName ? `<span class="muted">${esc(shelfName)} · </span>` : ""}${esc(it.price || "")}${it.status && it.status !== "є" ? ` · ${esc(it.status)}` : ""}${it.isNew && !shelfName ? ` <span class="tag new">нове</span>` : ""}</p>
+  <p class="meta small">${shelfName ? `<span class="muted">${esc(shelfName)} · </span>` : ""}${esc(it.price || "")}${it.status && it.status !== "є" ? ` · ${esc(it.status)}` : ""}${it.editions > 1 ? ` · ${count(it.editions, "видання", "видання", "видань")}` : ""}${it.isNew && !shelfName ? ` <span class="tag new">нове</span>` : ""}</p>
   ${has ? `<p class="small have">${has.status ? STATUS[has.status] : "У бібліотеці"}</p>` : user ? `<form method="post" action="/api/entry/${encodeURIComponent(it.id)}" class="inline"><input type="hidden" name="status" value="want"><input type="hidden" name="back" value="1"><button class="btn small">Хочу прочитати</button></form>` : ""}
 </article>`;
 }
