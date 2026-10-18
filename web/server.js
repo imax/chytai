@@ -18,7 +18,7 @@ loadDotEnv(path.join(ROOT, ".env"));
 const PORT = Number(process.env.PORT) || 8090;
 const DATA_DIR = path.join(process.env.DATA_DIR || path.join(ROOT, "data"), "web");
 const TOKEN = process.env.WEB_LOGIN_TOKEN || "";
-const OWNER = process.env.WEB_OWNER || "Макс Іщенко";
+const OWNER = process.env.WEB_OWNER || "Макс І";
 const COOKIE = "chytai_web";
 const COOKIE_DAYS = 365;
 
