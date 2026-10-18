@@ -265,6 +265,11 @@ async function openEpub(payload, { posKey, source }) {
 
   book = ePub(payload.data);
   book.spine.hooks.content.register(stripScripts);
+  // Our typography goes into the chapter before epub.js lays it out and finds the target page.
+  // The rendition's content hook runs only after that, so a jump into the middle of a chapter (a
+  // contents entry, a saved position) was measured in the book's own styles and landed elsewhere
+  // once line height and font changed.
+  book.spine.hooks.content.register((doc) => styleContents({ document: doc }));
   current = { path: payload.path, posKey, source, title: payload.name.replace(/\.[^.]+$/, ""), author: "" };
 
   rendition = book.renderTo("viewer", {
@@ -275,6 +280,7 @@ async function openEpub(payload, { posKey, source }) {
     // without allow-scripts, so allow scripts and strip the book's own ones in stripScripts.
     allowScriptedContent: true,
   });
+  followFontLoad(rendition);
   rendition.themes.default({
     "::selection": { background: "rgba(255, 200, 0, 0.45)" },
   });
@@ -345,6 +351,27 @@ async function openEpub(payload, { posKey, source }) {
     if (current && location?.start) window.reader.savePosition(current.posKey, location.start.cfi, readingProgress(location));
     addTocPages(book);
   });
+}
+
+// Literata may still be loading when a chapter appears: the target page is then found in a
+// fallback font and drifts away once the real one arrives (first open, a slow phone connection).
+// So every jump looks for its target again after the fonts are in, unless the reader has turned
+// the page since. Wrapping display() also covers epub.js's own re-display after a resize.
+function followFontLoad(r) {
+  let seq = 0;
+  const display = r.display.bind(r);
+  r.display = async (target) => {
+    const mine = ++seq;
+    await display(target);
+    const fonts = r.getContents().map((c) => c.document.fonts);
+    if (!target || fonts.every((f) => f.status === "loaded")) return;
+    await Promise.all(fonts.map((f) => f.ready));
+    if (mine === seq && rendition === r) await display(target);
+  };
+  for (const turn of ["next", "prev"]) {
+    const go = r[turn].bind(r);
+    r[turn] = () => (seq++, go());
+  }
 }
 
 // epub.js throws from resize() until its stage exists (the book is still being parsed), and a
