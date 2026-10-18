@@ -73,7 +73,7 @@ function libraryPage({ rows, user, owner, subscriptions }) {
 <section class="head">
   <div>
     <h1>${esc(owner)}</h1>
-    <p class="muted">${count(rows.length, "книжка", "книжки", "книжок")} у бібліотеці, ${count(read, "прочитана", "прочитані", "прочитаних")}${years.length ? `, з ${years[years.length - 1]} року` : ""}</p>
+    <p class="muted">${count(rows.length, "книжка", "книжки", "книжок")} у бібліотеці, ${count(read, "прочитана", "прочитані", "прочитаних")}</p>
   </div>
   ${user ? `<button class="btn primary" data-open="add">+ Додати книжку</button>` : ""}
 </section>
