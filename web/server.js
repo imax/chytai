@@ -99,7 +99,7 @@ app.get("/book/:id", (req, res) => {
   if (store.canonical(req.params.id) !== req.params.id) return res.redirect(`/book/${encodeURIComponent(store.canonical(req.params.id))}`);
   const book = store.book(req.params.id);
   if (!book) return res.status(404).send(pages.messagePage({ title: "Немає такої книжки", text: "", user: req.user }));
-  res.send(pages.bookPage({ book, entry: store.entry(book.id), user: req.user, shelf: book.shelf ? store.shelf(book.shelf) : null }));
+  res.send(pages.bookPage({ book, entry: store.entry(book.id), user: req.user, shelf: book.shelf ? store.shelf(book.shelf) : null, inLibrary: inLibraryMap() }));
 });
 
 app.get("/recommend", owner, async (req, res) => {

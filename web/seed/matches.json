@@ -1,8 +1,13 @@
 {
- "_": "Hand-confirmed links between catalog items and library books that title matching misses or gets wrong. same: item id -> book id. different: pairs the automatic matcher must not join.",
+ "_": "Hand-confirmed links that the automatic matching misses or gets wrong. same: catalog item id -> library book id. different: pairs the matcher must not join. volumes: item id -> volume number, for series whose titles carry no numbering.",
  "same": {
   "lobster-8110": "mickey7",
   "lobster-8109": "we-are-legion-bobiverse"
  },
- "different": []
+ "different": [],
+ "volumes": {
+  "lobster-8109": 1,
+  "lobster-8107": 2,
+  "lobster-8882": 3
+ }
 }

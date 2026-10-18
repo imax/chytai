@@ -134,6 +134,12 @@ form.inline { display: inline; }
 .editions { margin: 14px 0 10px; }
 .editions > p { margin: 0 0 2px; }
 .editions .buy { margin: 6px 0; }
+.series { margin: 14px 0 10px; }
+.series > p { margin: 0 0 4px; }
+.series ul { list-style: none; margin: 0; padding: 0; }
+.series li { display: flex; gap: 10px; align-items: center; padding: 6px 0; border-top: 1px solid var(--line); flex-wrap: wrap; }
+.series li.this > a:first-child { font-weight: 600; }
+.series li .btn { margin-left: auto; }
 .links { font-size: 14px; }
 .links a { text-decoration: underline; text-decoration-color: var(--line); }
 .links .sep { margin: 0 8px; color: var(--muted); }

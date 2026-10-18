@@ -136,7 +136,7 @@ function addDialog() {
 
 // ---- book (/book/:id) ----
 
-function bookPage({ book, entry, user, shelf }) {
+function bookPage({ book, entry, user, shelf, inLibrary = new Map() }) {
   const edUrls = new Set((book.editions || []).map((e) => e.links[0].url));
   const links = (book.links || []).filter((l) => !edUrls.has(l.url));
   const body = `
@@ -156,6 +156,7 @@ function bookPage({ book, entry, user, shelf }) {
     ${entry?.note ? `<div class="prose">${marked.parse(entry.note).replace(/<a href="http/g, '<a target="_blank" rel="noopener" href="http')}</div>` : ""}
     ${!entry?.note && book.blurb ? `<div class="prose blurb"><p>${esc(book.blurb)}</p><p class="muted small">Опис з сайту ${esc(shelf ? shelf.name : book.source)}</p></div>` : ""}
     ${editions(book)}
+    ${series(book, inLibrary)}
     ${links.length ? `<p class="links">${links.map((l) => `<a href="${attr(l.url)}" target="_blank" rel="noopener">${esc(l.label)}</a>`).join('<span class="sep">·</span>')}</p>` : ""}
     ${user ? entryForm(book, entry) : !entry ? "" : ""}
   </div>
@@ -170,6 +171,20 @@ function editions(book) {
   if (!eds.length) return "";
   if (eds.length === 1) return buyButton(eds[0].shelf, eds[0]);
   return `<div class="editions"><p class="muted small">${count(eds.length, "видання", "видання", "видань")}</p>${eds.map((e) => buyButton(e.shelf, e, true)).join("")}</div>`;
+}
+
+// The volumes of the series this book belongs to, each with its own page and buy link.
+function series(book, inLibrary) {
+  const ser = book.series;
+  if (!ser) return "";
+  const label = (v) => (v.bundle ? `Комплект із ${count(ser.volumes, "тому", "томів", "томів")}` : cap(v.title.replace(ser.name, "").replace(/^[\s,.:]+/, "")) || `Том ${v.volume}`);
+  return `<div class="series"><p class="muted small">Серія «${esc(ser.name)}», ${count(ser.volumes, "том", "томи", "томів")}</p><ul>${ser.items
+    .map((v) => {
+      const has = inLibrary.get(v.work);
+      const tail = [v.price, v.status && v.status !== "є" ? v.status : ""].filter(Boolean).join(" · ");
+      return `<li class="${v.work === book.id ? "this" : ""}"><a href="/book/${encodeURIComponent(v.work)}">${esc(label(v))}</a>${has?.status ? ` <span class="tag status-${has.status}">${STATUS[has.status]}</span>` : ""}<span class="muted small">${esc(tail)}</span><a class="btn small" href="${attr(v.links[0].url)}" target="_blank" rel="noopener">${v.status === "передзамовлення" ? "Замовити" : v.status === "немає" ? "Подивитися" : "Купити"} ↗</a></li>`;
+    })
+    .join("")}</ul></div>`;
 }
 
 function buyButton(shelf, book, compact = false) {
@@ -301,7 +316,7 @@ function itemCard(it, inLibrary, user, shelfName) {
   <a class="cover-link" href="/book/${encodeURIComponent(it.id)}">${cover(it, "card")}</a>
   <h3><a href="/book/${encodeURIComponent(it.id)}">${esc(it.title)}</a></h3>
   <p class="by">${esc(it.author || "")}</p>
-  <p class="meta small">${shelfName ? `<span class="muted">${esc(shelfName)} · </span>` : ""}${esc(it.price || "")}${it.status && it.status !== "є" ? ` · ${esc(it.status)}` : ""}${it.editions > 1 ? ` · ${count(it.editions, "видання", "видання", "видань")}` : ""}${it.isNew && !shelfName ? ` <span class="tag new">нове</span>` : ""}</p>
+  <p class="meta small">${shelfName ? `<span class="muted">${esc(shelfName)} · </span>` : ""}${esc(it.price || "")}${it.status && it.status !== "є" ? ` · ${esc(it.status)}` : ""}${it.volumes > 1 ? ` · ${count(it.volumes, "том", "томи", "томів")}` : it.editions > 1 ? ` · ${count(it.editions, "видання", "видання", "видань")}` : ""}${it.isNew && !shelfName ? ` <span class="tag new">нове</span>` : ""}</p>
   ${has ? `<p class="small have">${has.status ? STATUS[has.status] : "У бібліотеці"}</p>` : user ? `<form method="post" action="/api/entry/${encodeURIComponent(it.id)}" class="inline"><input type="hidden" name="status" value="want"><input type="hidden" name="back" value="1"><button class="btn small">Хочу прочитати</button></form>` : ""}
 </article>`;
 }

@@ -113,6 +113,36 @@ class Store {
       }
       seen.add(canonical);
     }
+    this.linkSeries(matches.volumes || {});
+  }
+
+  // ---- series ----
+  // Numbered volumes of one series on a shelf («Коли завмирає серце, том перший» … шостий, plus the
+  // bundle) fold into one card: the bundle when the shelf sells one, else volume one. Each volume keeps
+  // its own page; every page of the series lists all volumes. Volume numbers come from the titles,
+  // or from matches.json when the titles carry none (Lobster's «Бобів усесвіт»).
+  linkSeries(volumes = {}) {
+    this.series = new Map(); // item id -> { name, items: [{ shelf, item }] }
+    const groups = new Map();
+    for (const si of this.shelfItems.values()) {
+      const it = si.item;
+      if (!it.series) continue;
+      if (volumes[it.id]) it.volume = volumes[it.id];
+      const key = `${si.shelf.id}|${norm(it.series)}`;
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(si);
+    }
+    for (const g of groups.values()) {
+      if (g.length < 2 || !g.some((si) => si.item.volume || si.item.bundle)) continue; // a label like «Шеклі» is not a series
+      const sorted = [...g].sort((a, b) => (a.item.bundle ? 1 : 0) - (b.item.bundle ? 1 : 0) || (a.item.volume || 99) - (b.item.volume || 99) || a.item.id.localeCompare(b.item.id, "en", { numeric: true }));
+      const head = g.find((si) => si.item.bundle) || sorted[0];
+      const ser = { name: head.item.series, head: head.item.id, items: sorted, volumes: sorted.filter((si) => !si.item.bundle).length };
+      for (const si of sorted) {
+        this.series.set(si.item.id, ser);
+        si.item.volumes = ser.volumes;
+        if (si !== head) this.hidden.add(si.item.id);
+      }
+    }
   }
 
   canonical(id) {
@@ -201,11 +231,14 @@ class Store {
     const b = seed || (si && this.fromShelfItem(si.shelf, si.item));
     if (!b) return null;
     const eds = this.editions.get(id);
-    return eds ? { ...b, editions: eds.map(({ shelf, item }) => ({ ...this.fromShelfItem(shelf, item), shelf })) } : b;
+    const ser = [id, ...(eds || []).map((e) => e.item.id)].map((i) => this.series.get(i)).find(Boolean);
+    const out = eds ? { ...b, editions: eds.map(({ shelf, item }) => ({ ...this.fromShelfItem(shelf, item), shelf })) } : { ...b };
+    if (ser) out.series = { name: ser.name, head: ser.head, volumes: ser.volumes, items: ser.items.map(({ shelf, item }) => ({ ...this.fromShelfItem(shelf, item), shelf, work: this.canonical(item.id) })) };
+    return out;
   }
 
   fromShelfItem(shelf, it) {
-    return { id: it.id, title: it.title, author: it.author, altTitle: it.altTitle || "", cover: it.cover, tags: it.genres || [], links: [{ label: shelf.name, url: it.url }], source: shelf.id, shelf: shelf.id, blurb: it.blurb || "", price: it.price, status: it.status, language: it.language, edition: it.edition || "", isbn: it.isbn || "" };
+    return { id: it.id, title: it.title, author: it.author, altTitle: it.altTitle || "", cover: it.cover, tags: it.genres || [], links: [{ label: shelf.name, url: it.url }], source: shelf.id, shelf: shelf.id, blurb: it.blurb || "", price: it.price, status: it.status, language: it.language, edition: it.edition || "", isbn: it.isbn || "", volume: it.volume || 0, bundle: !!it.bundle };
   }
 
   addBook({ title, author, cover, links }) {

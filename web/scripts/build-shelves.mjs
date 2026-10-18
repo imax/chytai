@@ -9,6 +9,18 @@ const CATALOGS = path.resolve("web/catalogs");
 const OUT = path.resolve("web/seed/shelves.json");
 const read = (f) => JSON.parse(fs.readFileSync(path.join(CATALOGS, f), "utf8"));
 const uah = (n) => (n ? `${Math.round(n)} ₴` : "");
+// WooCommerce leaves HTML entities in names («Ми &#8211; Легіон»).
+const ent = (s) => String(s || "").replace(/&#(\d+);/g, (_, n) => String.fromCodePoint(n)).replace(/&amp;/g, "&").replace(/&quot;/g, '"').replace(/&#039;|&apos;/g, "'");
+
+// «Коли завмирає серце, том шостий», «Серпанка. Том 2. Ліс зниклих духів», «Світ Едени, книга перша»:
+// the series name and the volume number, so a shelf can fold the volumes into one card.
+const ORD = { перший: 1, перша: 1, другий: 2, друга: 2, третій: 3, третя: 3, четвертий: 4, четверта: 4, "п’ятий": 5, "п'ятий": 5, "п’ята": 5, шостий: 6, шоста: 6, сьомий: 7, сьома: 7, восьмий: 8, восьма: 8, "дев’ятий": 9, десятий: 10 };
+function volumeOf(title) {
+  const m = title.match(/^(.+?)[,.]?\s+(?:том|книга|частина)\s+(\d+|[\p{L}’']+)(?=[.:\s]|$)[.:]?\s*(.*)$/iu);
+  if (!m) return null;
+  const n = /^\d+$/.test(m[2]) ? Number(m[2]) : ORD[m[2].toLowerCase()];
+  return n ? { series: m[1].trim(), volume: n, subtitle: m[3].trim() } : null;
+}
 
 const shelves = [];
 
@@ -16,11 +28,13 @@ const shelves = [];
 {
   const items = read("lobster.json").map((p) => ({
     id: `lobster-${p.id}`,
-    title: p.title,
-    author: p.author,
-    altTitle: p.originalTitle,
+    title: ent(p.title),
+    author: ent(p.author),
+    altTitle: ent(p.originalTitle),
     translator: p.translator,
     isbn: p.isbn || "",
+    series: p.series || "",
+    bundle: /комплект/i.test(p.title),
     cover: p.image,
     url: p.url,
     price: uah(p.price),
@@ -47,8 +61,9 @@ const shelves = [];
 {
   const raw = read("vydavnytstvo.json").filter((p) => !p.categories.includes("Сувеніри") && !p.categories.includes("Повернення з крамниць") && !p.categories.includes("Гаражний розпродаж"));
   const items = raw.map((p) => {
-    let author = "", title = p.name, note = "";
-    const m = p.name.match(/^(.*?)«(.+?)»(.*)$/);
+    let author = "", title = ent(p.name), note = "";
+    const m = title.match(/^(.*?)«(.+?)»(.*)$/);
+    const bundle = /(^|[\s,])(сексталогія|трилогія|комплект)(?=[\s,]|$)/i.test(m ? m[1] : "");
     if (m) {
       author = m[1].replace(/(^|[\s,])(сексталогія|трилогія|комплект)(?=[\s,]|$)/i, "$1").replace(/[,\s]+$/, "").trim();
       let rest = m[3];
@@ -65,6 +80,9 @@ const shelves = [];
       author,
       isbn: p.attrs.ISBN || "",
       edition,
+      series: bundle ? title : volumeOf(title)?.series || "",
+      volume: volumeOf(title)?.volume || 0,
+      bundle,
       cover: p.image,
       url: p.url,
       price: uah(p.price),
