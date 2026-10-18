@@ -154,12 +154,20 @@ function bookPage({ book, entry, user, shelf }) {
     </p>
     ${entry?.note ? `<div class="prose">${marked.parse(entry.note).replace(/<a href="http/g, '<a target="_blank" rel="noopener" href="http')}</div>` : ""}
     ${!entry?.note && book.blurb ? `<div class="prose blurb"><p>${esc(book.blurb)}</p><p class="muted small">Опис з сайту ${esc(shelf ? shelf.name : book.source)}</p></div>` : ""}
-    ${book.price ? `<p class="price">${esc(book.price)}${book.status && book.status !== "є" ? ` · ${esc(book.status)}` : ""}</p>` : ""}
-    ${links.length ? `<p class="links">${links.map((l) => `<a href="${attr(l.url)}" target="_blank" rel="noopener">${esc(l.label)}</a>`).join('<span class="sep">·</span>')}</p>` : ""}
+    ${shelf && book.links?.[0] ? buyButton(shelf, book) : ""}
+    ${links.filter((l) => !(shelf && l.url === book.links?.[0]?.url)).length ? `<p class="links">${links.filter((l) => !(shelf && l.url === book.links?.[0]?.url)).map((l) => `<a href="${attr(l.url)}" target="_blank" rel="noopener">${esc(l.label)}</a>`).join('<span class="sep">·</span>')}</p>` : ""}
     ${user ? entryForm(book, entry) : !entry ? "" : ""}
   </div>
 </article>`;
   return layout({ title: book.title, body, user, path: "/book" });
+}
+
+// A catalog book links back to where it came from: the publisher's page, with the price and availability.
+function buyButton(shelf, book) {
+  const host = shelf.url.replace(/^https?:\/\/(www\.)?/, "").replace(/\/$/, "");
+  const verb = book.price === "безкоштовно" ? "Завантажити" : book.status === "передзамовлення" ? "Замовити" : book.status === "немає" ? "Подивитися" : "Купити";
+  const tail = [book.price, book.status && book.status !== "є" ? book.status : ""].filter(Boolean).join(" · ");
+  return `<p class="buy"><a class="btn primary" href="${attr(book.links[0].url)}" target="_blank" rel="noopener">${verb} на ${esc(host)} ↗</a>${tail ? `<span class="muted">${esc(tail)}</span>` : ""}</p>`;
 }
 
 function entryForm(book, entry) {

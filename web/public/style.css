@@ -129,6 +129,8 @@ form.inline { display: inline; }
 .prose a { text-decoration: underline; text-decoration-color: var(--line); }
 .blurb { color: var(--muted); }
 .price { font-weight: 600; margin: 6px 0; }
+.buy { display: flex; gap: 12px; align-items: center; margin: 14px 0 10px; flex-wrap: wrap; }
+.buy .btn { font-weight: 600; }
 .links { font-size: 14px; }
 .links a { text-decoration: underline; text-decoration-color: var(--line); }
 .links .sep { margin: 0 8px; color: var(--muted); }
