@@ -106,7 +106,7 @@ function libraryRow(r, i, own = false) {
   <a class="cover-link" href="${attr(b.href)}">${cover(b)}</a>
   <div class="row-body">
     <h3><a href="${attr(b.href)}">${esc(b.title)}</a>${b.series ? `<span class="badge">серія · ${count(b.series, "книжка", "книжки", "книжок")}</span>` : ""}</h3>
-    <p class="by">${b.author ? esc(b.author) : ""}${b.altTitle ? `<span class="alt">${esc(b.altTitle)}</span>` : ""}</p>
+    <p class="by">${b.author ? esc(byline(b.author)) : ""}${b.altTitle ? `<span class="alt">${esc(b.altTitle)}</span>` : ""}</p>
     <p class="meta">${r.rating != null ? stars(r.rating) : ""}${r.status && r.status !== "read" ? `<span class="tag status-${r.status}">${STATUS[r.status]}</span>` : ""}${r.copy ? `<span class="tag copy-${r.copy}">${COPY[r.copy]}</span>` : ""}</p>
     ${r.note ? `<p class="note">${inline(r.note)}</p>` : ""}
   </div>
@@ -166,6 +166,12 @@ function bookPage({ book, entry, user, shelf, inLibrary = new Map(), readers = [
 </article>`;
   const description = [book.author, book.blurb || stripMd(readers.find((r) => r.entry.note)?.entry.note || "")].filter(Boolean).join(". ");
   return layout({ title: book.title, body, user, path: "/book", description });
+}
+
+// An anthology's long list of authors on a card: the first two and how many more.
+function byline(author) {
+  const names = String(author || "").split(/,\s*/).filter(Boolean);
+  return names.length > 3 ? `${names.slice(0, 2).join(", ")} та ще ${names.length - 2}` : String(author || "");
 }
 
 // The signed-in reader's own line: where the book is in their library, or one tap to want it.
@@ -359,7 +365,7 @@ function itemCard(it, inLibrary, user, shelfName) {
   return `<article class="card" data-genre="${attr((it.genres || []).join("|"))}" data-avail="${attr(it.status || "")}" data-search="${attr(search)}">
   <a class="cover-link" href="${attr(it.href)}">${cover(it, "card")}</a>
   <h3><a href="${attr(it.href)}">${esc(it.title)}</a></h3>
-  <p class="by">${esc(it.author || "")}</p>
+  <p class="by">${esc(byline(it.author))}</p>
   <p class="meta small">${shelfName ? `<span class="muted">${esc(shelfName)} · </span>` : ""}${esc(it.price || "")}${it.status && it.status !== "є" ? ` · ${esc(it.status)}` : ""}${it.volumes > 1 ? ` · ${count(it.volumes, "том", "томи", "томів")}` : it.editions > 1 ? ` · ${count(it.editions, "видання", "видання", "видань")}` : ""}${it.isNew && !shelfName ? ` <span class="tag new">нове</span>` : ""}</p>
   ${has ? `<p class="small have">${has.status ? STATUS[has.status] : "У бібліотеці"}</p>` : user ? `<form method="post" action="/api/entry/${encodeURIComponent(it.id)}" class="inline"><input type="hidden" name="status" value="want"><input type="hidden" name="back" value="1"><button class="btn small">Хочу прочитати</button></form>` : ""}
 </article>`;
@@ -391,7 +397,7 @@ function searchRow({ book, entry }, inLibrary, user, owner, readerHref) {
   <div class="row-main">
     <h3><a href="${attr(book.href)}">${esc(book.title)}</a>${book.series ? ` <span class="badge">серія · ${count(book.series.volumes, "том", "томи", "томів")}</span>` : ""}</h3>
     ${book.altTitle ? `<p class="alt-title small">${esc(book.altTitle)}</p>` : ""}
-    <p class="by">${esc(book.author || "")}</p>
+    <p class="by">${esc(byline(book.author))}</p>
     ${where.length ? `<ul class="where small">${where.join("")}</ul>` : `<p class="muted small">Ніде поки немає.</p>`}
     ${user && !entry ? `<form method="post" action="/api/entry/${encodeURIComponent(book.id)}" class="inline"><input type="hidden" name="status" value="want"><input type="hidden" name="back" value="1"><button class="btn small">Хочу прочитати</button></form>` : ""}
   </div>

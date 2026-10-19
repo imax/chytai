@@ -186,8 +186,9 @@ dialog .form { margin: 0; background: var(--card); }
 
 /* ---- shelf grid ---- */
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 22px 18px; }
+.grid > * { min-width: 0; }
 .card h3 { margin: 8px 0 0; font-size: 14px; font-weight: 600; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
-.card .by { font-size: 13px; margin: 2px 0 2px; }
+.card .by { font-size: 13px; margin: 2px 0 2px; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .card .meta { font-size: 12.5px; margin: 0 0 6px; }
 .have { color: var(--green); margin: 0; }
 
