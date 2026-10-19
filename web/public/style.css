@@ -136,6 +136,11 @@ form.inline { display: inline; }
 .mine { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin: 10px 0 4px; font-size: 14px; }
 .mine a { text-decoration: underline; text-decoration-color: var(--line); }
 .readers { margin-top: 28px; }
+.libs { margin-top: 28px; }
+.lib { padding: 12px 0; border-top: 1px solid var(--line); }
+.lib > p { margin: 0; display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
+.lib ul { margin: 6px 0 0; padding-left: 18px; font-size: 15px; }
+.lib .ok { color: var(--green); }
 .reader { padding: 12px 0; border-top: 1px solid var(--line); }
 .reader > p { margin: 0; display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
 .reader .prose { margin: 8px 0 0; font-size: 15px; }

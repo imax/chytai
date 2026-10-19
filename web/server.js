@@ -11,6 +11,7 @@ const path = require("path");
 const { Store } = require("./store");
 const pages = require("./pages");
 const catalogs = require("./catalogs");
+const libraries = require("./libraries");
 
 const ROOT = path.join(__dirname, "..");
 loadDotEnv(path.join(ROOT, ".env"));
@@ -172,6 +173,15 @@ app.get("/book/:id", (req, res) => {
   const book = bookFor(req, store.book(id), !!store.entry(id));
   if (!book) return res.status(404).send(pages.messagePage({ title: "Немає такої книжки", text: "", user: req.user }));
   res.send(pages.bookPage({ book, entry: store.entry(book.id), user: req.user, shelf: book.shelf && (req.user || !isDraft(book.shelf)) ? store.shelf(book.shelf) : null, inLibrary: inLibraryMap(req), readers: readersOf(book.id) }));
+});
+
+// Where the book can be borrowed: libraries with open catalogs (libraries.js), asked when the page loads.
+// While the libraries are a draft only the signed-in owner sees them.
+app.get("/api/libraries/:id", async (req, res) => {
+  const id = store.resolve(req.params.id);
+  const book = id && bookFor(req, store.book(id), !!store.entry(id));
+  if (!book) return res.status(404).json([]);
+  res.json(await libraries.holdings(store.db, book, { includeDraft: !!req.user, log: console.log }));
 });
 
 // ---- writes (owner only) ----
