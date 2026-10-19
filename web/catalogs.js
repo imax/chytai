@@ -90,7 +90,7 @@ async function listingProducts(src, opts) {
     });
     if (res.status === 404 && n > 1) break;
     if (!res.ok) throw new Error(`${src.id}: HTTP ${res.status} on catalog page ${n}`);
-    const links = new Set([...(await res.text()).matchAll(/href="\s*((?:https?:\/\/[^/"]+)?\/?products\/[^"\s]+)\s*"/g)].map((m) => new URL(m[1], src.url).href));
+    const links = new Set([...(await res.text()).matchAll(/href="\s*((?:https?:\/\/[^/"]+)?\/?products\/[^"\s]+)\s*"/g)].map((m) => new URL(m[1], src.listing(n)).href)); // relative to the shop, not the publisher
     const before = found.size;
     for (const u of links) found.set(u, (found.get(u) || 0) + 1);
     pages++;
