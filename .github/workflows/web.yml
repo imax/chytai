@@ -25,6 +25,10 @@ jobs:
           deploy || { echo "retrying deploy"; sleep 15; deploy; }
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN_WEB }}
+      # The first visit after a deploy starts the daily catalog refresh; show whether it worked.
+      - run: |
+          stamp() { curl -s https://chytai-web.fly.dev/ | grep -o 'Каталоги оновлено [0-9-]*' || echo "no stamp"; }
+          echo "before: $(stamp)"; sleep 45; echo "after: $(stamp)"
       # The domain (Max, 2026-10-19: the web lives at chytai.org.ua). Certificates are idempotent to add;
       # the DNS records Max must set at the registrar are printed here: A/AAAA for the apex from `ips list`,
       # CNAME www -> chytai-web.fly.dev. A deploy token may lack the rights for this, so it never fails the run.

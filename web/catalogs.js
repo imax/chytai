@@ -122,7 +122,9 @@ const SOURCES = [
 async function fetchSource(src, { fetchImpl = fetch, log = () => {} } = {}) {
   const out = [];
   for (let page = 1; page <= 20; page++) {
-    const res = await fetchImpl(`${src.api}?per_page=100&page=${page}`, { headers: { "User-Agent": "Mozilla/5.0 (Chytai catalog refresh; chytai.org.ua)", Accept: "application/json" }, signal: AbortSignal.timeout(60000) });
+    const res = await fetchImpl(`${src.api}?per_page=100&page=${page}`, { headers: { "User-Agent": "Mozilla/5.0 (Chytai catalog refresh; chytai.org.ua)", Accept: "application/json" }, signal: AbortSignal.timeout(60000) }).catch((e) => {
+      throw new Error(`${src.id}: ${e.cause?.code || e.message}`);
+    });
     if (!res.ok) throw new Error(`${src.id}: HTTP ${res.status} on page ${page}`);
     const list = await res.json();
     if (!Array.isArray(list)) throw new Error(`${src.id}: unexpected response on page ${page}`);
