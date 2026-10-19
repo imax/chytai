@@ -55,10 +55,12 @@ function refreshShelves(force = false) {
   if (!force && Date.now() - lastRefresh < REFRESH_MS) return null;
   lastRefresh = Date.now(); // even on failure: one attempt a day, not one per request
   const started = new Date().toISOString();
+  const lines = []; // the refresh's own log, kept for /refresh-status
+  const log = (m) => (console.log(m), lines.push(String(m).slice(0, 300)));
   refreshing = catalogs
-    .refresh({ store })
+    .refresh({ store, log })
     .catch((e) => (console.error("refresh failed:", e), { ok: false, errors: [e.message] }))
-    .then((r) => (lastResult = { started, finished: new Date().toISOString(), ...r }))
+    .then((r) => (lastResult = { started, finished: new Date().toISOString(), ...r, log: lines.slice(-30) }))
     .finally(() => (refreshing = null));
   return refreshing;
 }

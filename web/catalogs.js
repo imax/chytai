@@ -75,15 +75,19 @@ async function sitemapProducts(src, { fetchImpl = fetch, log = () => {}, previou
   const due = urls.filter((u) => !previous.has(u) || bucket(u) === today);
   const out = urls.filter((u) => !due.includes(u)).map((u) => previous.get(u)).filter(Boolean);
   let failed = 0;
+  let skipped = 0;
   for (let i = 0; i < due.length; i += 4) {
     await Promise.all(
       due.slice(i, i + 4).map(async (url) => {
         try {
           const r = await fetchImpl(url, { headers: HEADERS, signal: AbortSignal.timeout(30000) });
           if (!r.ok) throw new Error(`HTTP ${r.status}`);
-          const item = src.parsePage(await r.text(), url);
+          const html = await r.text();
+          const item = src.parsePage(html, url);
           if (item) out.push(item);
-        } catch {
+          else if (!skipped++) log(`${src.id}: not a book page: ${url} ${html.replace(/\s+/g, " ").slice(0, 160)}`);
+        } catch (e) {
+          if (!failed) log(`${src.id}: ${url}: ${e.cause?.code || e.message}`);
           failed++;
           if (previous.has(url)) out.push(previous.get(url));
         }
