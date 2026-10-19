@@ -185,8 +185,9 @@ async function refresh({ dataDir, store, log = console.log, fetchImpl }) {
   const built = buildShelves(raw, { seen, baseline: store.baseline });
   if (errors.length === SOURCES.length) return { ok: false, errors }; // nothing fetched: leave the shelves as they were
   fs.writeFileSync(seenFile, JSON.stringify(seen));
-  fs.writeFileSync(path.join(dataDir, "shelves.json"), JSON.stringify({ ...built, baseline: store.baseline }));
-  store.setShelves({ ...built, baseline: store.baseline });
+  const file = { ...built, baseline: store.baseline, refreshedAt: new Date().toISOString() };
+  fs.writeFileSync(path.join(dataDir, "shelves.json"), JSON.stringify(file));
+  store.setShelves(file);
   log(`refresh: shelves rebuilt, ${built.shelves.map((s) => `${s.id} ${s.items.length}`).join(", ")}${errors.length ? `; failed: ${errors.join("; ")}` : ""}`);
   return { ok: true, errors, counts: built.shelves.map((s) => [s.id, s.items.length]) };
 }

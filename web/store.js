@@ -53,6 +53,7 @@ class Store {
   setShelves(shelvesFile) {
     this.shelves = shelvesFile.shelves;
     this.shelvesFetched = shelvesFile.fetched;
+    this.shelvesRefreshedAt = shelvesFile.refreshedAt || "";
     this.shelfItems = new Map(); // item id -> { shelf, item }
     for (const s of this.shelves) for (const it of s.items) this.shelfItems.set(it.id, { shelf: s, item: it });
     this.linkEditions();

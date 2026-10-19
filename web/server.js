@@ -104,7 +104,7 @@ const inLibraryMap = () => store.inLibrary();
 const visible = (s) => store.visible(s);
 
 app.get("/", (req, res) => {
-  res.send(pages.discoveryPage({ shelves: store.shelves, subscriptions: store.lib.subscriptions, user: req.user, owner: OWNER, libraryCount: store.library().length, inLibrary: inLibraryMap(), visible, fetched: store.shelvesFetched, ownerStrip: store.library().filter((r) => r.rating >= 5 && r.book.cover).slice(0, 5).map((r) => r.book) }));
+  res.send(pages.discoveryPage({ shelves: store.shelves, subscriptions: store.lib.subscriptions, user: req.user, owner: OWNER, libraryCount: store.library().length, inLibrary: inLibraryMap(), visible, fetched: store.shelvesRefreshedAt ? new Date(store.shelvesRefreshedAt).toLocaleString("uk-UA", { timeZone: "Europe/Kyiv", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" }) : store.shelvesFetched, ownerStrip: store.library().filter((r) => r.rating >= 5 && r.book.cover).slice(0, 5).map((r) => r.book) }));
 });
 
 app.get("/me", (req, res) => {
