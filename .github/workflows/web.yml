@@ -36,6 +36,6 @@ jobs:
           for d in chytai.org.ua www.chytai.org.ua; do flyctl certs add "$d" -a chytai-web || true; done
           flyctl ips list -a chytai-web || true
           flyctl certs list -a chytai-web || true
-          flyctl certs show chytai.org.ua -a chytai-web || true
+          for d in chytai.org.ua www.chytai.org.ua; do flyctl certs check "$d" -a chytai-web || true; done
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN_WEB }}
