@@ -378,7 +378,11 @@ function subscribeButton(id, on) {
 
 function shelfPage({ shelf, subscribed, user, inLibrary, visible = (s) => s.items }) {
   shelf = { ...shelf, items: visible(shelf) };
-  const genres = [...shelf.items.flatMap((it) => it.genres || []).reduce((m, g) => m.set(g, (m.get(g) || 0) + 1), new Map())].sort((a, b) => b[1] - a[1]).slice(0, 10);
+  // Filter chips from the publisher's own categories: only those with a few books that don't cover the
+  // whole shelf, and only when there are at least two («Повне зібрання творів Лесі Українки 1» is a series,
+  // not a genre; Комора's one real category alone filters nothing useful).
+  let genres = [...shelf.items.flatMap((it) => it.genres || []).reduce((m, g) => m.set(g, (m.get(g) || 0) + 1), new Map())].filter(([, n]) => n >= 3 && n < shelf.items.length).sort((a, b) => b[1] - a[1]).slice(0, 10);
+  if (genres.length < 2) genres = [];
   const statuses = [...new Set(shelf.items.map((it) => it.status))];
   const body = `
 <section class="head">
@@ -391,7 +395,7 @@ function shelfPage({ shelf, subscribed, user, inLibrary, visible = (s) => s.item
 </section>
 <section class="toolbar">
   <input type="search" id="q" placeholder="Назва або автор" autocomplete="off">
-  <div class="chips" data-filter="genre"><button class="chip on" data-v="">Усі <b>${shelf.items.length}</b></button>${genres.map(([g, n]) => `<button class="chip" data-v="${attr(g)}">${esc(g)} <b>${n}</b></button>`).join("")}</div>
+  ${genres.length ? `<div class="chips" data-filter="genre"><button class="chip on" data-v="">Усі <b>${shelf.items.length}</b></button>${genres.map(([g, n]) => `<button class="chip" data-v="${attr(g)}">${esc(g)} <b>${n}</b></button>`).join("")}</div>` : ""}
   ${statuses.length > 1 ? `<div class="chips" data-filter="avail"><button class="chip on" data-v="">Будь-які</button>${statuses.map((s) => `<button class="chip" data-v="${attr(s)}">${esc(cap(s))}</button>`).join("")}</div>` : ""}
 </section>
 <section class="grid" id="rows">
