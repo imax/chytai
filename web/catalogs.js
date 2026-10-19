@@ -120,7 +120,9 @@ async function pageProducts(src, urls, { fetchImpl = fetch, log = () => {}, prev
           const r = await fetchImpl(url, { headers: HEADERS, signal: AbortSignal.timeout(30000) });
           if (!r.ok) throw new Error(`HTTP ${r.status}`);
           const html = await r.text();
-          const item = src.parsePage(html, url);
+          // A copy: V8 keeps a whole page alive for any substring cut from it, and a few hundred
+          // MEGOGO Books pages filled the 256 MB machine (2026-10-19).
+          const item = JSON.parse(JSON.stringify(src.parsePage(html, url)));
           if (item) out.push(item), skip.delete(url);
           else if ((skip.add(url), !skipped++)) log(`${src.id}: not a book page: ${url} ${html.replace(/\s+/g, " ").slice(0, 160)}`);
         } catch (e) {
