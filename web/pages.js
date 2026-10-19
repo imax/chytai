@@ -161,7 +161,7 @@ function bookPage({ book, entry, user, shelf, inLibrary = new Map(), readers = [
     ${series(book, inLibrary)}
     ${links.length ? `<p class="links">${links.map((l) => `<a href="${attr(l.url)}" target="_blank" rel="noopener">${esc(l.label)}</a>`).join('<span class="sep">·</span>')}</p>` : ""}
     ${readersBlock(readers)}
-    ${user ? `<section class="libs hidden" data-src="/api/libraries/${attr(encodeURIComponent(book.id))}"><h2 class="sec">У бібліотеках</h2><div class="libs-list"></div></section>` : ""}
+    <section class="libs hidden" data-src="/api/libraries/${attr(encodeURIComponent(book.id))}"><h2 class="sec">У бібліотеках</h2><div class="libs-list"></div></section>
   </div>
 </article>`;
   const description = [book.author, book.blurb || stripMd(readers.find((r) => r.entry.note)?.entry.note || "")].filter(Boolean).join(". ");

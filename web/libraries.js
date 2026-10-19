@@ -7,8 +7,8 @@
 // it has none, and the answer is kept for a day.
 
 const LIBRARIES = [
-  { id: "cherkasy", name: "Черкаські міські бібліотеки", city: "Черкаси", base: "https://opac.lib.cherkasy.ua", draft: true },
-  { id: "uzhhorod", name: "Ужгородська публічна бібліотека", city: "Ужгород", base: "https://lib.itc.gov.ua", draft: true },
+  { id: "cherkasy", name: "Черкаські міські бібліотеки", city: "Черкаси", base: "https://opac.lib.cherkasy.ua" },
+  { id: "uzhhorod", name: "Ужгородська публічна бібліотека", city: "Ужгород", base: "https://lib.itc.gov.ua" },
 ];
 
 const HEADERS = { "User-Agent": "Mozilla/5.0 (Chytai library lookup; chytai.org.ua)" };

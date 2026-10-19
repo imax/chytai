@@ -176,7 +176,7 @@ app.get("/book/:id", (req, res) => {
 });
 
 // Where the book can be borrowed: libraries with open catalogs (libraries.js), asked when the page loads.
-// While the libraries are a draft only the signed-in owner sees them.
+// A library marked draft in libraries.js is seen only by the signed-in owner.
 app.get("/api/libraries/:id", async (req, res) => {
   const id = store.resolve(req.params.id);
   const book = id && bookFor(req, store.book(id), !!store.entry(id));
