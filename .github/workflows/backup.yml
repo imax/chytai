@@ -1,0 +1,94 @@
+# Nightly backup of both apps' Fly volumes (Max, 2026-10-19): the web database (chytai-web, /data/web/chytai.db)
+# and the reader's state (chytai, /data: positions, notes, uploaded books). Each copy is taken on the machine by
+# scripts/backup-snapshot.js, checked here (SQLite integrity, JSON parses), encrypted with age to the public key
+# below and kept as a workflow artifact for 90 days, off Fly. Fly's own daily volume snapshots are the second copy.
+# The private key is NOT in the repo: it is on Max's Mac (~/Projects/chytai/.backup-key) and in the project files.
+# Restore: see "Backups" in README.md.
+name: Backup
+
+on:
+  schedule:
+    - cron: "30 0 * * *" # 03:30 Kyiv
+  workflow_dispatch:
+
+env:
+  AGE_RECIPIENT: age1hv4fyt42a9wjuhh4dtkrdjle8xz6tlk3t0duf2c5a2lqszwmtd6q9q0pfw
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - app: chytai-web
+            token: FLY_API_TOKEN_WEB
+            exclude: ""
+          - app: chytai
+            token: FLY_API_TOKEN
+            exclude: "reflow" # rebuilt from the books on demand
+    env:
+      APP: ${{ matrix.app }}
+      FLY_API_TOKEN: ${{ secrets[matrix.token] }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+      - run: sudo apt-get install -y age >/dev/null
+      # The machines sleep when nobody uses them; wake the one that has the volume.
+      - name: Start the machine
+        run: |
+          id=$(flyctl machine list -a "$APP" --json | jq -r '[.[] | select(.config.mounts | length > 0)][0].id')
+          echo "MACHINE=$id" >> "$GITHUB_ENV"
+          flyctl machine start "$id" -a "$APP" || true
+          flyctl machine wait "$id" -a "$APP" --state started --wait-timeout 60s || true
+      - name: Snapshot on the machine
+        run: |
+          script=$(base64 -w0 scripts/backup-snapshot.js)
+          for i in 1 2 3; do
+            flyctl ssh console -a "$APP" --machine "$MACHINE" \
+              -C "sh -c 'echo $script | base64 -d > /tmp/backup-snapshot.js && rm -f /tmp/backup.tar.gz && node /tmp/backup-snapshot.js /data /tmp/backup.tar.gz ${{ matrix.exclude }}'" && break
+            echo "retrying"; sleep 10
+          done
+          rm -f backup.tar.gz
+          flyctl ssh sftp get /tmp/backup.tar.gz backup.tar.gz -a "$APP" --machine "$MACHINE"
+          flyctl ssh console -a "$APP" --machine "$MACHINE" -C "rm -f /tmp/backup.tar.gz /tmp/backup-snapshot.js" || true
+      - name: Check the copy
+        run: |
+          mkdir check && tar xzf backup.tar.gz -C check
+          du -sh check; find check -type f | sed 's|^check/||' | sort | head -50
+          python3 - <<'PY'
+          import json, pathlib, sqlite3, sys
+          ok = True
+          for p in pathlib.Path("check").rglob("*"):
+              if p.suffix == ".db":
+                  db = sqlite3.connect(p)
+                  r = db.execute("PRAGMA integrity_check").fetchone()[0]
+                  tables = [t for (t,) in db.execute("select name from sqlite_master where type='table' and name not like 'search%'")]
+                  print(p, r, {t: db.execute(f'select count(*) from "{t}"').fetchone()[0] for t in tables})
+                  ok &= r == "ok"
+              elif p.suffix == ".json":
+                  try: json.loads(p.read_text())
+                  except Exception as e: print(p, "BAD JSON", e); ok = False
+          sys.exit(0 if ok else 1)
+          PY
+      - name: Encrypt
+        run: |
+          name="$APP-$(date -u +%Y-%m-%d)"
+          age -r "$AGE_RECIPIENT" -o "$name.tar.gz.age" backup.tar.gz
+          ls -l "$name.tar.gz.age"
+          echo "NAME=$name" >> "$GITHUB_ENV"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.NAME }}
+          path: ${{ env.NAME }}.tar.gz.age
+          retention-days: 90
+          compression-level: 0
+      # Fly's own snapshots: show what exists and keep them 30 days (the default is 5).
+      - name: Fly volume snapshots
+        if: always()
+        run: |
+          for vol in $(flyctl volumes list -a "$APP" --json | jq -r '.[].id'); do
+            flyctl volumes update "$vol" -a "$APP" --snapshot-retention 30 >/dev/null || echo "could not set retention on $vol"
+            flyctl volumes show "$vol" -a "$APP" || true
+            flyctl volumes snapshots list "$vol" -a "$APP" || true
+          done
