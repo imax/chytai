@@ -1,6 +1,13 @@
 // HTML for the web platform: plain template strings, no framework. Every page goes through
 // layout(); the pieces below render the library, a shelf, a book and Discovery.
 const { marked } = require("marked");
+const fs = require("fs");
+const path = require("path");
+const crypto = require("crypto");
+// Static files are cached for an hour; their address carries a hash of the content so a deploy reaches
+// browsers at once.
+const asset = (name) => `/${name}?v=${crypto.createHash("sha1").update(fs.readFileSync(path.join(__dirname, "public", name))).digest("hex").slice(0, 8)}`;
+const ASSETS = { css: asset("style.css"), js: asset("app.js") };
 
 const esc = (s) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 const attr = esc;
@@ -35,7 +42,7 @@ function layout({ title, body, user, path = "/", wide = false, description = "",
 <title>${esc(title ? `${title} · Chytai` : "Chytai")}</title>
 ${description ? `<meta name="description" content="${attr(description.slice(0, 200))}">` : ""}
 <link rel="icon" href="/icon.png">
-<link rel="stylesheet" href="/style.css">
+<link rel="stylesheet" href="${ASSETS.css}">
 </head>
 <body data-user="${user ? "1" : ""}">
 <header class="top">
@@ -51,7 +58,7 @@ ${description ? `<meta name="description" content="${attr(description.slice(0, 2
 ${body}
 </main>
 <footer class="foot"><span>Chytai.org.ua: читай більше.</span> <a href="https://chytai.fly.dev">Читалка</a></footer>
-<script src="/app.js"></script>
+<script src="${ASSETS.js}"></script>
 </body>
 </html>`;
 }
