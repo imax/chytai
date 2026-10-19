@@ -51,7 +51,9 @@ class Store {
 
   // Swap in a fresh set of shelves (at start and after every refresh) and rebuild everything derived.
   setShelves(shelvesFile) {
-    this.shelves = shelvesFile.shelves;
+    // A draft shelf is draft while its source says so (catalogs.js), whatever the saved file remembers.
+    const draft = new Set(require("./catalogs").SOURCES.filter((s) => s.draft).map((s) => s.id));
+    this.shelves = shelvesFile.shelves.map((s) => ({ ...s, draft: draft.has(s.id) }));
     this.shelvesFetched = shelvesFile.fetched;
     this.shelvesRefreshedAt = shelvesFile.refreshedAt || "";
     this.shelfItems = new Map(); // item id -> { shelf, item }

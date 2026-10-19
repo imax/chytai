@@ -88,7 +88,6 @@ const SOURCES = [
   {
     id: "starylev",
     kind: "publisher",
-    draft: true, // seen only by the signed-in owner until Max has looked at it
     name: "Старий Лев",
     tagline: "Львівське видавництво і його книгарня: свої книжки, e-book і книжки партнерів",
     url: "https://starylev.com.ua/",
