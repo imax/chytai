@@ -216,3 +216,8 @@ dialog .form { margin: 0; background: var(--card); }
   .grid { grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 16px 12px; }
 }
 .head .muted a { text-decoration: underline; text-decoration-color: var(--line); }
+
+/* ---- search box (homepage and /search) ---- */
+.search-box { margin: 4px 0 22px; }
+.search-box input { width: 100%; padding: 14px 18px; font-size: 18px; border: 1px solid var(--line); border-radius: 12px; background: var(--bg); outline: none; }
+.search-box input:focus { border-color: var(--accent); }

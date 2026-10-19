@@ -51,7 +51,7 @@ ${description ? `<meta name="description" content="${attr(description.slice(0, 2
     <a href="/" class="${path === "/" || path.startsWith("/shelf") ? "on" : ""}">Discovery</a>
     ${user ? `<a href="/me" class="${path.startsWith("/me") ? "on" : ""}">Мої книжки</a>` : ""}
   </nav>
-  ${path === "/search" ? "" : `<form class="find" action="/search" role="search"><input type="search" name="q" value="${attr(q)}" placeholder="Знайти книжку" autocomplete="off" aria-label="Пошук"></form>`}
+  ${path === "/search" || path === "/" ? "" : `<form class="find" action="/search" role="search"><input type="search" name="q" value="${attr(q)}" placeholder="Знайти книжку" autocomplete="off" aria-label="Пошук"></form>`}
   <div class="who">${user ? `<span>${esc(user)}</span> <a href="/logout" class="muted">вийти</a>` : `<span class="muted">гість</span>`}</div>
 </header>
 <main class="${wide ? "wide" : ""}">
@@ -307,6 +307,9 @@ function discoveryPage({ shelves, subscriptions, user, owner, readerHref, librar
   const subs = user ? shelves.filter((s) => subscriptions.includes(s.id)) : [];
   const fresh = subs.flatMap((s) => visible(s).filter((it) => it.isNew).map((it) => ({ ...it, shelfName: s.name, shelfId: s.id })));
   const body = `
+${searchBox("", false)}
+<div id="live"></div>
+<div id="browse">
 <section class="head">
   <div>
     <h1>Discovery</h1>
@@ -347,7 +350,8 @@ ${libraries.length ? `
       <p class="muted">На сторінці книжки видно, в якій філії вона є на полиці</p>
     </a>`).join("")}
   </div>
-</section>` : ""}`;
+</section>` : ""}
+</div>`;
   return layout({ title: "", body, user, path: "/" });
 }
 
@@ -419,9 +423,19 @@ function searchPage({ q, hits, user, inLibrary, owner, readerHref }) {
     <p class="muted">По каталогах видавництв і полицях читачів.</p>
   </div>
 </section>
-<form class="toolbar" action="/search" role="search"><input type="search" name="q" value="${attr(q)}" placeholder="Назва, автор або серія" autocomplete="off" autofocus></form>
-${!q.trim() ? "" : hits.length ? `<section class="rows" id="hits">${hits.map((h) => searchRow(h, inLibrary, user, owner, readerHref)).join("\n")}</section>` : `<p class="empty">Нічого не знайшлося за «${esc(q)}».</p>`}`;
+${searchBox(q, true)}
+<div id="live">${searchResults({ q, hits, inLibrary, user, owner, readerHref })}</div>`;
   return layout({ title: q ? `${q} · Пошук` : "Пошук", body, user, path: "/search", q });
+}
+
+// The search box; typing renders results into #live without reloading (app.js asks /api/search).
+function searchBox(q, autofocus) {
+  return `<form class="search-box" action="/search" role="search" data-live="/api/search"><input type="search" name="q" value="${attr(q)}" placeholder="Назва, автор або серія" aria-label="Пошук" autocomplete="off"${autofocus ? " autofocus" : ""}></form>`;
+}
+
+function searchResults({ q, hits, inLibrary, user, owner, readerHref }) {
+  if (!q.trim()) return "";
+  return hits.length ? `<section class="rows" id="hits">${hits.map((h) => searchRow(h, inLibrary, user, owner, readerHref)).join("\n")}</section>` : `<p class="empty">Нічого не знайшлося за «${esc(q)}».</p>`;
 }
 
 // Where the book is: the shelves that sell it (format, price, availability) and whose library has it.
@@ -449,4 +463,4 @@ function messagePage({ title, text, user }) {
 }
 
 module.exports = {
-  searchPage, layout, libraryPage, bookPage, editPage, discoveryPage, shelfPage, messagePage, esc, STATUS, COPY, setTitleLinks };
+  searchPage, searchResults, layout, libraryPage, bookPage, editPage, discoveryPage, shelfPage, messagePage, esc, STATUS, COPY, setTitleLinks };

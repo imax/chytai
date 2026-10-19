@@ -105,4 +105,41 @@
 
   for (const b of $$("[data-open]")) b.addEventListener("click", () => $("#" + b.dataset.open)?.showModal());
   for (const b of $$("[data-close]")) b.addEventListener("click", () => b.closest("dialog")?.close());
+
+  // Search as you type: results replace #live (and hide #browse on the homepage) after a short pause;
+  // the address keeps ?q= so going back returns to the same results.
+  const box = $("form.search-box");
+  const live = $("#live");
+  if (box && live) {
+    const input = $("input", box);
+    const browse = $("#browse");
+    let timer, ctrl, last = input.value.trim();
+    const show = (q) => {
+      if (browse) browse.hidden = !!q;
+      const url = new URL(location.href);
+      if (q) url.searchParams.set("q", q);
+      else url.searchParams.delete("q");
+      history.replaceState(null, "", url);
+    };
+    const run = async () => {
+      const q = input.value.trim();
+      if (q === last) return;
+      last = q;
+      ctrl?.abort();
+      if (!q) return (live.innerHTML = ""), show("");
+      ctrl = new AbortController();
+      try {
+        const r = await fetch(`${box.dataset.live}?${new URLSearchParams({ q })}`, { signal: ctrl.signal });
+        live.innerHTML = await r.text();
+        show(q);
+      } catch (e) {
+        if (e.name !== "AbortError") box.submit();
+      }
+    };
+    input.addEventListener("input", () => (clearTimeout(timer), (timer = setTimeout(run, 180))));
+    box.addEventListener("submit", (e) => (e.preventDefault(), clearTimeout(timer), (last = null), run()));
+    // Back to the homepage with ?q=: render those results again.
+    const q0 = new URLSearchParams(location.search).get("q");
+    if (q0 && !input.value) (input.value = q0), (last = null), run();
+  }
 })();

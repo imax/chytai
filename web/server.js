@@ -167,10 +167,15 @@ app.get("/shelf/:id", (req, res) => {
   res.send(pages.shelfPage({ shelf, subscribed: store.subscribed(shelf.id), user: req.user, inLibrary: inLibraryMap(req), visible }));
 });
 
+const searchHits = (req, q) => store.search(q).map((h) => ({ ...h, book: bookFor(req, h.book, !!h.entry) })).filter((h) => h.book);
 app.get("/search", (req, res) => {
   const q = String(req.query.q || "").trim().slice(0, 100);
-  const hits = store.search(q).map((h) => ({ ...h, book: bookFor(req, h.book, !!h.entry) })).filter((h) => h.book);
-  res.send(pages.searchPage({ q, hits, user: req.user, inLibrary: inLibraryMap(req), owner: OWNER, readerHref: READER }));
+  res.send(pages.searchPage({ q, hits: searchHits(req, q), user: req.user, inLibrary: inLibraryMap(req), owner: OWNER, readerHref: READER }));
+});
+// The same results as an HTML fragment, for search as you type.
+app.get("/api/search", (req, res) => {
+  const q = String(req.query.q || "").trim().slice(0, 100);
+  res.set("Cache-Control", "no-store").send(pages.searchResults({ q, hits: searchHits(req, q), user: req.user, inLibrary: inLibraryMap(req), owner: OWNER, readerHref: READER }));
 });
 
 app.get("/book/:id", (req, res) => {
