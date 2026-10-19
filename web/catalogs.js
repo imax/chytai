@@ -4,6 +4,10 @@
 //
 // Lobster and Видавництво run WooCommerce, whose Store API is public JSON:
 //   https://<site>/wp-json/wc/store/v1/products?per_page=100&page=N
+// Віхола has no API and challenges bots on its catalog pages, so it is read the way search engines
+// read it: the product URLs from its sitemap, then each book's page (Open Graph product tags, the
+// «Author «Title»» heading, the ISBN in the cover's alt text). A page is fetched when its URL is new and
+// otherwise once a week (a seventh of the catalog a day), so the daily refresh stays light.
 // Старий Лев's site reads its catalog from its own public JSON API (28 products a page, Laravel paging):
 //   https://api-k8s.starylev.com.ua/api/v1.1/products?page=N
 // The raw products are normalised to a small shape (kept in web/catalogs/*.json for the seed), then
@@ -40,10 +44,11 @@ const woo = (p) => ({
   blurb: text(p.short_description).slice(0, 600),
 });
 
-// Старий Лев: statuses come as labels; e-books are separate products with the same title (sometimes
-// without the subtitle or the authors), joined to the paper book in finish() so they become its editions.
+// Старий Лев: statuses come as labels. E-books (here and at Віхола) are separate products with the same
+// title, sometimes without the subtitle or the authors; joinEbooks() gives them the paper book's title
+// and author so they become its editions.
 const SL_STATUS = (labels) => (labels.includes("pre_sale") ? "передзамовлення" : labels.includes("available") ? "є" : labels.includes("expected") ? "очікується" : "немає");
-function starylevFinish(items) {
+function joinEbooks(items) {
   const paper = items.filter((it) => it.format === "папір");
   for (const e of items.filter((it) => it.format === "e-book")) {
     const t = e.title.toLowerCase();
@@ -51,6 +56,75 @@ function starylevFinish(items) {
     if (p) (e.title = p.title), (e.author ||= p.author), (e.altTitle ||= p.altTitle);
   }
   return items;
+}
+
+// ---- sitemap + product pages ----
+const HEADERS = { "User-Agent": "Mozilla/5.0 (Chytai catalog refresh; chytai.org.ua)" };
+const meta = (html, prop) => ent((html.match(new RegExp(`<meta[^>]+property=["']${prop.replace(/[.:]/g, "\\$&")}["'][^>]*content=["']([^"']*)`, "i")) || [])[1] || "");
+const h1 = (html) => text((html.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i) || [])[1] || "");
+const dayOfWeek = () => Math.floor(Date.now() / 86400000) % 7;
+const bucket = (s) => [...s].reduce((a, c) => (a * 31 + c.charCodeAt(0)) % 7919, 0) % 7;
+
+// Pages fetched a few at a time; `previous` (url -> item from the last refresh) is reused for the rest.
+async function sitemapProducts(src, { fetchImpl = fetch, log = () => {}, previous = new Map() }) {
+  const res = await fetchImpl(src.sitemap, { headers: HEADERS, signal: AbortSignal.timeout(60000) });
+  if (!res.ok) throw new Error(`${src.id}: HTTP ${res.status} on the sitemap`);
+  const urls = [...(await res.text()).matchAll(/<loc>\s*([^<\s]+)\s*<\/loc>/g)].map((m) => m[1].replace(/&amp;/g, "&")).filter(src.isProduct || (() => true));
+  if (!urls.length) throw new Error(`${src.id}: empty sitemap`);
+  const today = dayOfWeek();
+  const due = urls.filter((u) => !previous.has(u) || bucket(u) === today);
+  const out = urls.filter((u) => !due.includes(u)).map((u) => previous.get(u)).filter(Boolean);
+  let failed = 0;
+  for (let i = 0; i < due.length; i += 4) {
+    await Promise.all(
+      due.slice(i, i + 4).map(async (url) => {
+        try {
+          const r = await fetchImpl(url, { headers: HEADERS, signal: AbortSignal.timeout(30000) });
+          if (!r.ok) throw new Error(`HTTP ${r.status}`);
+          const item = src.parsePage(await r.text(), url);
+          if (item) out.push(item);
+        } catch {
+          failed++;
+          if (previous.has(url)) out.push(previous.get(url));
+        }
+      })
+    );
+  }
+  log(`${src.id}: ${urls.length} pages in the sitemap, ${due.length} fetched${failed ? `, ${failed} failed` : ""}, ${out.length} books`);
+  if (failed > due.length / 2 && failed > 10) throw new Error(`${src.id}: ${failed} of ${due.length} pages failed`);
+  return out;
+}
+
+// Віхола: «Author «Title»» headings, «… Е-книжка» for e-books, the ISBN in the cover's alt text.
+function vikholaPage(html, url) {
+  if (meta(html, "og:type") !== "product") return null;
+  let name = h1(html) || meta(html, "og:title");
+  if (/сертифікат/i.test(name)) return null;
+  const ebook = /\s+е-книжка$/i.test(name) || meta(html, "product:category") === "Електронні книжки";
+  name = name.replace(/\s+е-книжка$/i, "");
+  const m = name.match(/^(.*?)\s*«(.+)»\s*(.*)$/);
+  const author = m ? m[1].replace(/[,\s]+$/, "").trim() : "";
+  const title = m ? (m[2] + (m[3] ? ` ${m[3]}` : "")).trim() : name;
+  const avail = meta(html, "product:availability");
+  const isbn = (html.match(/alt=["'][^"']*?(97[89]\d{10})[^"']*["']/) || [])[1] || "";
+  return {
+    id: `vikhola-${(url.match(/\/(\d+)\/?$/) || [])[1] || url.replace(/^https?:\/\/[^/]+\//, "").replace(/\/$/, "")}`,
+    title,
+    author,
+    isbn,
+    format: ebook ? "e-book" : "папір",
+    series: volumeOf(title)?.series || "",
+    volume: volumeOf(title)?.volume || 0,
+    bundle: /^комплект/i.test(title),
+    cover: meta(html, "og:image"),
+    url,
+    price: uah(Number(meta(html, "product:price:amount"))),
+    status: /pre-?order/i.test(avail) ? "передзамовлення" : /in ?stock/i.test(avail) ? "є" : "немає",
+    isNew: false,
+    genres: [meta(html, "product:category")].filter((g) => g && g !== "Електронні книжки"),
+    blurb: text(meta(html, "og:description")).slice(0, 600),
+    language: "українська",
+  };
 }
 
 const SOURCES = [
@@ -83,6 +157,22 @@ const SOURCES = [
       year: p.year,
       language: "українська",
     }),
+  },
+  {
+    id: "vikhola",
+    kind: "publisher",
+    name: "Віхола",
+    tagline: "Київське видавництво: українська класика, нонфікшн і сучасна проза",
+    url: "https://vikhola.com/",
+    sitemap: "https://vikhola.com/content/export/vikhola.com/catalog-sitemap.xml",
+    isProduct: (u) => !/\/(katalog|blog|novyny|podii)\b/.test(u),
+    fetchAll: (src, opts) => sitemapProducts(src, opts),
+    parsePage: vikholaPage,
+    normalize: (p) => p,
+    keep: () => true,
+    toItem: (p) => p,
+    finish: (items) => joinEbooks(items),
+    draft: true, // seen only by the signed-in owner until Max has looked at it
   },
   {
     id: "starylev",
@@ -130,7 +220,7 @@ const SOURCES = [
       blurb: p.blurb,
       language: "українська",
     }),
-    finish: starylevFinish,
+    finish: joinEbooks,
   },
   {
     // Product names look like «Author, «Title» (note)»; merch and returns are left out.
@@ -217,6 +307,7 @@ function buildShelves(raw, { seen = {}, today = new Date().toISOString().slice(0
     // A source added today is not all «нове»: its first catalog counts as already seen.
     const firstTime = !items.some((it) => it.id in seen);
     for (const it of items) {
+      if (src.fetchAll) it.isNew = false; // items reused from the last refresh carry its flag
       seen[it.id] ??= firstTime ? baseline || today : today;
       if (baseline && seen[it.id] > baseline && seen[it.id] >= limit) it.isNew = true;
     }
@@ -232,7 +323,8 @@ async function refresh({ store, log = console.log, fetchImpl }) {
   const errors = [];
   for (const src of SOURCES) {
     try {
-      raw[src.id] = await fetchSource(src, { fetchImpl, log });
+      const previous = new Map((store.shelf(src.id)?.items || []).map((it) => [it.url, it]));
+      raw[src.id] = src.fetchAll ? await src.fetchAll(src, { fetchImpl, log, previous }) : await fetchSource(src, { fetchImpl, log });
     } catch (e) {
       errors.push(e.message);
       log(`refresh: ${e.message}; keeping the previous ${src.id} catalog`);
