@@ -377,7 +377,7 @@ const SOURCES = [
       const missing = [];
       for (const p of products) {
         const old = previous.get(`https://starylev.com.ua/${p.slug}`);
-        if (old?.blurb) p.blurb = old.blurb;
+        if (old?.blurb) p.blurb = ent(old.blurb); // older refreshes kept entities like &ndash;
         else if (p.type === "book" || p.type === "ebook") missing.push(p);
       }
       let got = 0;
