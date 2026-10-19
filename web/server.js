@@ -3,7 +3,7 @@
 //
 // Env: DATA_DIR (default ./data; the library lives in DATA_DIR/web/library.json), PORT (default 8090),
 // WEB_LOGIN_TOKEN (the magic link: opening /login/<token> once signs this browser in as the owner),
-// WEB_OWNER (the public name of the one profile).
+// WEB_OWNER (the public name of the one profile), WEB_DOMAIN (the public host; www and *.fly.dev redirect to it).
 const express = require("express");
 const crypto = require("crypto");
 const fs = require("fs");
@@ -18,6 +18,7 @@ const PORT = Number(process.env.PORT) || 8090;
 const DATA_DIR = path.join(process.env.DATA_DIR || path.join(ROOT, "data"), "web");
 const TOKEN = process.env.WEB_LOGIN_TOKEN || "";
 const OWNER = process.env.WEB_OWNER || "Макс І";
+const DOMAIN = process.env.WEB_DOMAIN || ""; // e.g. chytai.org.ua; set once DNS points here
 const COOKIE = "chytai_web";
 const COOKIE_DAYS = 365;
 
@@ -52,6 +53,9 @@ function cookies(req) {
   return Object.fromEntries((req.headers.cookie || "").split(";").map((c) => c.trim().split("=")).filter((p) => p[0]).map(([k, ...v]) => [k, decodeURIComponent(v.join("="))]));
 }
 app.use((req, res, next) => {
+  // One public host: www and the Fly hostname go to the domain once it is live.
+  const host = req.hostname || "";
+  if (DOMAIN && host !== DOMAIN && (host === `www.${DOMAIN}` || host === `${process.env.FLY_APP_NAME}.fly.dev`)) return res.redirect(301, `https://${DOMAIN}${req.originalUrl}`);
   req.user = cookies(req)[COOKIE] === session ? OWNER : null;
   next();
 });
