@@ -177,6 +177,33 @@ const SOURCES = [
       language: "українська",
     }),
     finish: joinEbooks,
+    // The list has no descriptions; each book's own record does (/products/<slug>). Descriptions are
+    // kept from the last refresh, and up to 1200 missing ones are fetched per refresh.
+    enrich: async (products, { previous, fetchImpl = fetch, log = () => {} }) => {
+      const missing = [];
+      for (const p of products) {
+        const old = previous.get(`https://starylev.com.ua/${p.slug}`);
+        if (old?.blurb) p.blurb = old.blurb;
+        else if (p.type === "book" || p.type === "ebook") missing.push(p);
+      }
+      let got = 0;
+      const todo = missing.slice(0, 1200);
+      for (let i = 0; i < todo.length; i += 4)
+        await Promise.all(
+          todo.slice(i, i + 4).map(async (p) => {
+            try {
+              const r = await fetchImpl(`https://api-k8s.starylev.com.ua/api/v1.1/products/${encodeURIComponent(p.slug)}`, { headers: HEADERS, signal: AbortSignal.timeout(30000) });
+              if (!r.ok) return;
+              const j = await r.json();
+              p.blurb = text((j.data || j).description).slice(0, 600);
+              if (p.blurb) got++;
+            } catch {
+              /* next refresh tries again */
+            }
+          })
+        );
+      log(`starylev: ${got} descriptions fetched, ${missing.length - got} still missing`);
+    },
   },
   {
     // Product names look like «Author, «Title» (note)»; merch and returns are left out.
@@ -281,6 +308,7 @@ async function refresh({ store, log = console.log, fetchImpl }) {
     try {
       const previous = new Map((store.shelf(src.id)?.items || []).map((it) => [it.url, it]));
       raw[src.id] = src.fetchAll ? await src.fetchAll(src, { fetchImpl, log, previous }) : await fetchSource(src, { fetchImpl, log });
+      if (src.enrich) await src.enrich(raw[src.id], { previous, fetchImpl, log });
     } catch (e) {
       errors.push(e.message);
       log(`refresh: ${e.message}; keeping the previous ${src.id} catalog`);
