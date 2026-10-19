@@ -229,3 +229,4 @@ dialog .form { margin: 0; background: var(--card); }
 .works .alt { color: var(--muted); font-size: 0.9em; margin-left: 4px; }
 .works li.none { color: var(--muted); }
 .by a { color: inherit; }
+.works a { font-weight: 600; text-decoration: underline; text-decoration-color: var(--line); text-underline-offset: 3px; }

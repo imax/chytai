@@ -90,7 +90,7 @@ async function listingProducts(src, opts) {
     });
     if (res.status === 404 && n > 1) break;
     if (!res.ok) throw new Error(`${src.id}: HTTP ${res.status} on catalog page ${n}`);
-    const links = new Set([...(await res.text()).matchAll(/href="\s*((?:https?:\/\/[^/"]+)?\/?products\/[^"\s]+)\s*"/g)].map((m) => new URL(m[1], src.listing(n)).href)); // relative to the shop, not the publisher
+    const links = new Set([...(await res.text()).matchAll(src.linkRe || /href="\s*((?:https?:\/\/[^/"]+)?\/?products\/[^"\s]+)\s*"/g)].map((m) => new URL(m[1], src.listing(n)).href)); // relative to the shop, not the publisher
     const before = found.size;
     for (const u of links) found.set(u, (found.get(u) || 0) + 1);
     pages++;
@@ -237,6 +237,60 @@ const wooBook = (src, p, extra = {}) => ({
   blurb: ent(p.blurb || p.desc),
   language: "українська",
   ...extra,
+});
+
+// MEGOGO Books (mbooks.com.ua) sells many publishers' books, each with a page per format: JSON-LD
+// Product (ISBN as gtin, price, availability, publisher as brand), the format at the start of <title>
+// («Книга», «Електронна книга», «Аудіокнига»), the authors linked to /authors/ above the <h1>, and the
+// original title in the line under it. Publishers whose own sites give no data come from here
+// (Max, 2026-10-19, starting with Stone Publishing).
+function mbooksPage(src, brand) {
+  return (html, url) => {
+    const prod = ldOf(html).find((x) => [].concat(x["@type"]).includes("Product"));
+    if (!prod || ent(prod.brand?.name || "").trim().toLowerCase() !== brand.toLowerCase()) return null;
+    const head = (html.match(/<title>([^<]*)/) || [])[1] || "";
+    const top = html.slice(0, html.indexOf('data-cy="book-title"'));
+    const authors = [...top.matchAll(/href="\/authors\/[^"]+"[^>]*>([^<]+)</g)].map((m) => ent(m[1]).trim());
+    const title = ent(prod.name || h1(html)).trim();
+    const orig = text((html.match(/data-cy="book-title"[^>]*>[\s\S]*?<\/h1>\s*<p[^>]*>([\s\S]*?)<\/p>/) || [])[1] || "");
+    const offers = prod.offers || {};
+    const avail = String(offers.availability || "");
+    return {
+      id: `${src.id}-${(url.match(/\/book\/(\d+)/) || [])[1] || url}`,
+      title,
+      author: [...new Set(authors)].join(", "),
+      altTitle: orig && orig !== title && !/^\d/.test(orig) ? orig : "",
+      isbn: String(prod.gtin || "").replace(/[^\dX]/gi, ""),
+      format: /^\s*Електронна/i.test(head) ? "e-book" : /^\s*Аудіо/i.test(head) ? "аудіо" : "папір",
+      series: volumeOf(title)?.series || "",
+      volume: volumeOf(title)?.volume || 0,
+      bundle: /^комплект/i.test(title),
+      cover: [].concat(prod.image || [])[0] || "",
+      url,
+      price: uah(Number(offers.price || offers.lowPrice)),
+      status: /PreOrder/i.test(avail) ? "передзамовлення" : /InStock/i.test(avail) ? "є" : "немає",
+      isNew: false,
+      genres: [],
+      blurb: text(prod.description).slice(0, 600),
+      language: "українська",
+    };
+  };
+}
+const mbooks = ({ id, slug, brand, name, tagline, url, draft = true }) => ({
+  id,
+  kind: "publisher",
+  name,
+  tagline: `${tagline}. Книжки з MEGOGO Books`,
+  url,
+  draft,
+  listing: (n) => `https://mbooks.com.ua/publishers/${slug}/${n > 1 ? `page-${n}/` : ""}`,
+  linkRe: /href="\s*((?:https:\/\/mbooks\.com\.ua)?\/book\/\d+[^"\s]*)\s*"/g,
+  fetchAll: (src, opts) => listingProducts(src, opts),
+  parsePage: (html, u) => mbooksPage(SOURCES.find((s) => s.id === id), brand)(html, u),
+  normalize: (p) => p,
+  keep: () => true,
+  toItem: (p) => p,
+  finish: joinEbooks,
 });
 
 const SOURCES = [
@@ -405,21 +459,8 @@ const SOURCES = [
     toItem: (p) => p,
     finish: joinEbooks,
   },
-  {
-    id: "nashformat",
-    kind: "publisher",
-    name: "Наш Формат",
-    tagline: "Видавництво нонфікшну: бізнес, саморозвиток, історія, наука",
-    url: "https://nashformat.ua/",
-    draft: true,
-    listing: (n) => `https://nashformat.ua/publishers/nash-format-books${n > 1 ? `/page-${n}` : ""}`,
-    fetchAll: (src, opts) => listingProducts(src, opts),
-    parsePage: (html, url) => ldBookPage(SOURCES.find((s) => s.id === "nashformat"), ["Наш Формат"])(html, url),
-    normalize: (p) => p,
-    keep: () => true,
-    toItem: (p) => p,
-    finish: joinEbooks,
-  },
+  // Наш Формат's own shop answers our server with 403 (2026-10-19), so its books come from MEGOGO Books.
+  mbooks({ id: "nashformat", slug: "nash-format", brand: "Наш Формат", name: "Наш Формат", tagline: "Видавництво нонфікшну: бізнес, саморозвиток, історія, наука", url: "https://nashformat.ua/" }),
   {
     id: "osnovy",
     kind: "publisher",
@@ -481,6 +522,12 @@ const SOURCES = [
     toItem: (p) => p,
     finish: joinEbooks,
   },
+  mbooks({ id: "stone", slug: "stone-publishing", brand: "Stone Publishing", name: "Stone Publishing", tagline: "Фантастика, детективи й сучасна проза в перекладі", url: "https://stonepublishing.com.ua/" }),
+  mbooks({ id: "vikhola", slug: "vikhola", brand: "Віхола", name: "Віхола", tagline: "Нонфікшн і сучасна проза", url: "https://vikhola.com/" }),
+  mbooks({ id: "artbooks", slug: "artbooks", brand: "ARTBOOKS", name: "ARTBOOKS", tagline: "Сучасна проза, фантастика й підліткова література", url: "https://artbooks.ua/" }),
+  mbooks({ id: "arthuss", slug: "arthuss", brand: "Видавництво ArtHuss", name: "ArtHuss", tagline: "Нонфікшн про мистецтво, науку й суспільство", url: "https://arthuss.com.ua/" }),
+  mbooks({ id: "zhupanskyi", slug: "vydavnytstvo-zhupanskoho", brand: "Видавництво Жупанського", name: "Видавництво Жупанського", tagline: "Класика й сучасна світова проза в нових перекладах", url: "https://zhupansky.com/" }),
+  mbooks({ id: "meridian", slug: "meridian-czernowitz", brand: "Meridian Czernowitz", name: "Meridian Czernowitz", tagline: "Сучасна українська та світова література", url: "https://meridiancz.com/" }),
 ];
 
 // All products of one source, normalised. Pages until a short page; a failed page fails the source.
