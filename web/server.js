@@ -53,13 +53,16 @@ try {
   /* never refreshed */
 }
 let refreshing = null;
+let lastResult = null; // { at, ok, errors, counts } of the last attempt, for /refresh-status
 function refreshShelves(force = false) {
   if (refreshing) return refreshing;
   if (!force && Date.now() - lastRefresh < REFRESH_MS) return null;
   lastRefresh = Date.now(); // even on failure: one attempt a day, not one per request
+  const started = new Date().toISOString();
   refreshing = catalogs
     .refresh({ dataDir: DATA_DIR, store })
     .catch((e) => (console.error("refresh failed:", e), { ok: false, errors: [e.message] }))
+    .then((r) => (lastResult = { started, finished: new Date().toISOString(), ...r }))
     .finally(() => (refreshing = null));
   return refreshing;
 }
@@ -86,6 +89,11 @@ app.use((req, res, next) => {
   next();
 });
 const owner = (req, res, next) => (req.user ? next() : res.status(403).send("Спочатку відкрийте своє посилання для входу."));
+
+// Public and harmless: when the shelves were last refreshed and whether the sources answered.
+app.get("/refresh-status", (req, res) => {
+  res.json({ running: !!refreshing, last: lastResult, shelvesFetched: store.shelvesFetched, refreshedAt: store.shelvesRefreshedAt, nextAfter: new Date(lastRefresh + REFRESH_MS).toISOString() });
+});
 
 app.get("/login/:token", (req, res) => {
   if (req.params.token !== TOKEN) return res.status(404).send(pages.messagePage({ title: "Посилання не підходить", text: "Перевірте посилання для входу." }));
