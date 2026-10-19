@@ -1,7 +1,7 @@
 // Chytai web: the platform part (library, Discovery, search), separate from the reader
 // in server/index.js. Plain Express, server-rendered HTML, JSON on disk.
 //
-// Env: DATA_DIR (default ./data; the library lives in DATA_DIR/web/library.json), PORT (default 8090),
+// Env: DATA_DIR (default ./data; the database is DATA_DIR/web/chytai.db, see db.js), PORT (default 8090),
 // WEB_LOGIN_TOKEN (the magic link: opening /login/<token> once signs this browser in as the owner),
 // WEB_OWNER (the public name of the one profile), WEB_OWNER_SLUG (its public shelf: /reader/<slug>), WEB_DOMAIN (the public host; www and *.fly.dev redirect to it).
 const express = require("express");
@@ -47,12 +47,7 @@ const store = new Store(DATA_DIR);
 // finds the shelves older than a day starts a refresh in the background (the page itself is served from
 // the current shelves), and the owner can force one with POST /api/refresh.
 const REFRESH_MS = 24 * 3600 * 1000;
-let lastRefresh = 0;
-try {
-  lastRefresh = fs.statSync(path.join(DATA_DIR, "shelves.json")).mtimeMs;
-} catch {
-  /* never refreshed */
-}
+let lastRefresh = Date.parse(store.shelvesRefreshedAt) || 0;
 let refreshing = null;
 let lastResult = null; // { at, ok, errors, counts } of the last attempt, for /refresh-status
 function refreshShelves(force = false) {
@@ -61,7 +56,7 @@ function refreshShelves(force = false) {
   lastRefresh = Date.now(); // even on failure: one attempt a day, not one per request
   const started = new Date().toISOString();
   refreshing = catalogs
-    .refresh({ dataDir: DATA_DIR, store })
+    .refresh({ store })
     .catch((e) => (console.error("refresh failed:", e), { ok: false, errors: [e.message] }))
     .then((r) => (lastResult = { started, finished: new Date().toISOString(), ...r }))
     .finally(() => (refreshing = null));

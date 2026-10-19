@@ -1,15 +1,14 @@
 // The public catalogs behind the Discovery shelves: how each source is fetched from its public API,
-// how its products become shelf items, and the daily refresh that keeps the shelves current.
+// how its products become shelf items, and the daily refresh that keeps the shelves (in the database,
+// see db.js) current.
 //
 // Lobster and Видавництво run WooCommerce, whose Store API is public JSON:
 //   https://<site>/wp-json/wc/store/v1/products?per_page=100&page=N
 // Старий Лев's site reads its catalog from its own public JSON API (28 products a page, Laravel paging):
 //   https://api-k8s.starylev.com.ua/api/v1.1/products?page=N
-// The raw products are normalised to a small shape (kept in web/catalogs/*.json for the seed and in
-// DATA_DIR/web/catalogs/ after a refresh), then turned into shelf items by toItem(). Max (2026-10-19):
+// The raw products are normalised to a small shape (kept in web/catalogs/*.json for the seed), then
+// turned into shelf items by toItem(). Max (2026-10-19):
 // use feeds where a source has them, scrape where it does not; the shelves must refresh daily.
-const fs = require("fs");
-const path = require("path");
 
 const uah = (n) => (n ? `${Math.round(n)} ₴` : "");
 // WooCommerce leaves HTML entities in names («Ми &#8211; Легіон»).
@@ -226,41 +225,27 @@ function buildShelves(raw, { seen = {}, today = new Date().toISOString().slice(0
   return { fetched: today, shelves };
 }
 
-// The daily refresh: fetch every source, rebuild the shelves, keep them under dataDir and hand them to
-// the store. A source that fails keeps its previous products, so one site being down loses nothing.
-async function refresh({ dataDir, store, log = console.log, fetchImpl }) {
-  const dir = path.join(dataDir, "catalogs");
-  fs.mkdirSync(dir, { recursive: true });
-  const readJson = (f, fallback) => {
-    try {
-      return JSON.parse(fs.readFileSync(f, "utf8"));
-    } catch {
-      return fallback;
-    }
-  };
-  const seenFile = path.join(dataDir, "catalog-seen.json");
-  const seen = readJson(seenFile, null) || Object.fromEntries(store.shelves.flatMap((s) => s.items.map((it) => [it.id, store.shelvesFetched])));
+// The daily refresh: fetch every source, rebuild its shelf and write it to the database. A source that
+// fails keeps its previous items, so one site being down loses nothing.
+async function refresh({ store, log = console.log, fetchImpl }) {
   const raw = {};
   const errors = [];
   for (const src of SOURCES) {
-    const file = path.join(dir, `${src.id}.json`);
     try {
       raw[src.id] = await fetchSource(src, { fetchImpl, log });
-      fs.writeFileSync(file, JSON.stringify(raw[src.id]));
     } catch (e) {
       errors.push(e.message);
       log(`refresh: ${e.message}; keeping the previous ${src.id} catalog`);
-      raw[src.id] = readJson(file, null) || readJson(path.join(__dirname, "catalogs", `${src.id}.json`), null);
     }
   }
-  const built = buildShelves(raw, { seen, baseline: store.baseline });
   if (errors.length === SOURCES.length) return { ok: false, errors }; // nothing fetched: leave the shelves as they were
-  fs.writeFileSync(seenFile, JSON.stringify(seen));
-  const file = { ...built, baseline: store.baseline, refreshedAt: new Date().toISOString() };
-  fs.writeFileSync(path.join(dataDir, "shelves.json"), JSON.stringify(file));
-  store.setShelves(file);
-  log(`refresh: shelves rebuilt, ${built.shelves.map((s) => `${s.id} ${s.items.length}`).join(", ")}${errors.length ? `; failed: ${errors.join("; ")}` : ""}`);
-  return { ok: true, errors, counts: built.shelves.map((s) => [s.id, s.items.length]) };
+  const seen = store.seen();
+  const built = buildShelves(raw, { seen, baseline: store.baseline });
+  store.saveShelves(built.shelves, { fetched: built.fetched, refreshedAt: new Date().toISOString(), seen });
+  store.loadShelves();
+  const counts = store.shelves.map((s) => [s.id, s.items.length]);
+  log(`refresh: shelves rebuilt, ${counts.map(([id, n]) => `${id} ${n}`).join(", ")}${errors.length ? `; failed: ${errors.join("; ")}` : ""}`);
+  return { ok: true, errors, counts };
 }
 
 module.exports = { SOURCES, fetchSource, buildShelves, refresh, volumeOf, ent };
