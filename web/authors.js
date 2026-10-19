@@ -20,7 +20,8 @@ const forms = (name) => {
 };
 
 async function sparql(query, fetchImpl) {
-  const r = await fetchImpl(`${ENDPOINT}?${new URLSearchParams({ query, format: "json" })}`, { headers: HEADERS, signal: AbortSignal.timeout(60000) });
+  // POST: thirty names make a URL too long for a GET.
+  const r = await fetchImpl(ENDPOINT, { method: "POST", headers: { ...HEADERS, "Content-Type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ query, format: "json" }), signal: AbortSignal.timeout(60000) });
   if (!r.ok) throw new Error(`HTTP ${r.status}`);
   return (await r.json()).results.bindings;
 }
@@ -28,11 +29,13 @@ async function sparql(query, fetchImpl) {
 // Every author name of every work we have -> its Wikidata person: { name: { qid, uk, en } }, weekly.
 // A person must have written something on Wikidata, and of namesakes the one with most works wins.
 async function refresh(store, { fetchImpl = fetch, log = () => {} } = {}) {
-  const at = Number(store.db.get("authors:at") || 0);
-  if (Date.now() - at < 7 * DAY) return false;
-  store.db.set("authors:at", String(Date.now()));
+  const at = Number(store.db.get("authors:checked") || 0);
+  if (Date.now() - at < 7 * DAY || refresh.running) return false;
+  refresh.running = true;
   const names = [...new Set(allWorks(store).flatMap((b) => splitAuthors(b.author)))];
   const found = {};
+  let errors = 0;
+  let lastError = "";
   for (let i = 0; i < names.length; i += 30) {
     const batch = names.slice(i, i + 30);
     const values = batch.flatMap(forms).map((f) => `${JSON.stringify(f)}@uk ${JSON.stringify(f)}@en`).join(" ");
@@ -43,10 +46,17 @@ async function refresh(store, { fetchImpl = fetch, log = () => {} } = {}) {
         if (best) found[name] = { qid: best.a.value.split("/").pop(), uk: best.uk?.value || "", en: best.en?.value || "" };
       }
     } catch (e) {
-      log(`authors: ${e.cause?.code || e.message}`);
+      errors++;
+      lastError = e.cause?.code || e.message;
     }
   }
-  log(`authors: ${Object.keys(found).length} of ${names.length} names found on Wikidata`);
+  const line = `${new Date().toISOString()}: ${Object.keys(found).length} of ${names.length} names found on Wikidata${errors ? `, ${errors} batches failed (${lastError})` : ""}`;
+  log(`authors: ${line}`);
+  store.db.set("authors:log", line);
+  refresh.running = false;
+  const batches = Math.ceil(names.length / 30);
+  if (errors > batches / 2) return false; // try again at the next round (every 6 hours) instead of in a week
+  store.db.set("authors:checked", String(Date.now()));
   store.db.set("authors:wd", JSON.stringify(found));
   store.linkTranslations(); // rebuilds the author index too
   return true;

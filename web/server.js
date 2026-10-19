@@ -103,7 +103,7 @@ const owner = (req, res, next) => (req.user ? next() : res.status(403).send("Ð¡Ð
 
 // Public and harmless: when the shelves were last refreshed and whether the sources answered.
 app.get("/refresh-status", (req, res) => {
-  res.json({ running: !!refreshing, ...(refreshing && { log: currentLog.slice(-30) }), last: lastResult, shelvesFetched: store.shelvesFetched, refreshedAt: store.shelvesRefreshedAt, nextAfter: new Date(lastRefresh + REFRESH_MS).toISOString() });
+  res.json({ running: !!refreshing, ...(refreshing && { log: currentLog.slice(-30) }), last: lastResult, shelvesFetched: store.shelvesFetched, refreshedAt: store.shelvesRefreshedAt, authors: store.db.get("authors:log"), nextAfter: new Date(lastRefresh + REFRESH_MS).toISOString() });
 });
 
 app.get("/login/:token", (req, res) => {

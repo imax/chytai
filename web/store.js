@@ -32,6 +32,7 @@ function translit(s) {
 }
 const slugify = (s) =>
   translit(String(s).toLowerCase())
+    .replace(/[łđøß]/g, (c) => ({ ł: "l", đ: "d", ø: "o", ß: "ss" })[c])
     .normalize("NFKD")
     .replace(/\p{M}/gu, "")
     .replace(/[’'"«»“”ʼ]/g, "")
