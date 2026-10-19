@@ -115,7 +115,7 @@ function libraryRow(r, i, own = false) {
     <h3><a href="${attr(b.href)}">${esc(b.title)}</a>${b.series ? `<span class="badge">серія · ${count(b.series, "книжка", "книжки", "книжок")}</span>` : ""}</h3>
     <p class="by">${b.author ? esc(byline(b.author)) : ""}${b.altTitle ? `<span class="alt">${esc(b.altTitle)}</span>` : ""}</p>
     <p class="meta">${r.rating != null ? stars(r.rating) : ""}${r.status && r.status !== "read" ? `<span class="tag status-${r.status}">${STATUS[r.status]}</span>` : ""}${r.copy ? `<span class="tag copy-${r.copy}">${COPY[r.copy]}</span>` : ""}</p>
-    ${r.note ? `<p class="note">${inline(r.note)}</p>` : ""}
+    ${r.note ? `<p class="note">${inline(titleLinks(r.note, r.id))}</p>` : ""}
   </div>
   ${own ? `<a class="btn small edit" href="${attr(b.href ? `/me${b.href}` : `/me/book/${encodeURIComponent(r.id)}`)}">Змінити</a>` : ""}
 </article>`;
@@ -124,6 +124,10 @@ function libraryRow(r, i, own = false) {
 function stripMd(s) {
   return s.replace(/\*\*/g, "").replace(/\[(.+?)\]\((.+?)\)/g, "$1");
 }
+// Set by the server: (markdown, own book id) -> markdown with mentioned titles linked (store.linkTitles).
+let titleLinks = (md) => md;
+const setTitleLinks = (fn) => (titleLinks = fn);
+
 function inline(md) {
   const first = md.split(/\n\s*\n/)[0];
   return marked.parseInline(first).replace(/<a href="http/g, '<a target="_blank" rel="noopener" href="http');
@@ -169,7 +173,7 @@ function bookPage({ book, entry, user, shelf, inLibrary = new Map(), readers = [
     ${editions(book)}
     ${series(book, inLibrary)}
     ${links.length ? `<p class="links">${links.map((l) => `<a href="${attr(l.url)}" target="_blank" rel="noopener">${esc(l.label)}</a>`).join('<span class="sep">·</span>')}</p>` : ""}
-    ${readersBlock(readers)}
+    ${readersBlock(readers, book.id)}
     <section class="libs hidden" data-src="/api/libraries/${attr(encodeURIComponent(book.id))}"><h2 class="sec">У бібліотеках</h2><div class="libs-list"></div></section>
   </div>
 </article>`;
@@ -194,12 +198,12 @@ function mine(book, entry) {
 }
 
 // Readers who have the book, each with their status, rating and note, linked to their shelf.
-function readersBlock(readers) {
+function readersBlock(readers, bookId) {
   if (!readers.length) return "";
   return `<section class="readers"><h2 class="sec">У читачів</h2>${readers
     .map(({ name, href, entry: e }) => {
       const what = [e.status ? STATUS[e.status].toLowerCase() + (e.status === "read" && e.year ? ` у ${e.year}` : "") : "", e.copy ? COPY[e.copy].toLowerCase() : "", e.via ? `як «${e.via.title}»` : ""].filter(Boolean).join(" · ");
-      return `<div class="reader"><p><a href="${attr(href)}"><b>${esc(name)}</b></a>${e.rating != null ? ` ${stars(e.rating)}` : ""}${what ? ` <span class="muted small">${esc(what)}</span>` : ""}</p>${e.note ? `<div class="prose">${marked.parse(e.note).replace(/<a href="http/g, '<a target="_blank" rel="noopener" href="http')}</div>` : ""}</div>`;
+      return `<div class="reader"><p><a href="${attr(href)}"><b>${esc(name)}</b></a>${e.rating != null ? ` ${stars(e.rating)}` : ""}${what ? ` <span class="muted small">${esc(what)}</span>` : ""}</p>${e.note ? `<div class="prose">${marked.parse(titleLinks(e.note, e.via ? e.via.id : bookId)).replace(/<a href="http/g, '<a target="_blank" rel="noopener" href="http')}</div>` : ""}</div>`;
     })
     .join("")}</section>`;
 }
@@ -445,4 +449,4 @@ function messagePage({ title, text, user }) {
 }
 
 module.exports = {
-  searchPage, layout, libraryPage, bookPage, editPage, discoveryPage, shelfPage, messagePage, esc, STATUS, COPY };
+  searchPage, layout, libraryPage, bookPage, editPage, discoveryPage, shelfPage, messagePage, esc, STATUS, COPY, setTitleLinks };

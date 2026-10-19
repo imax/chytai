@@ -72,6 +72,8 @@ const refreshUk = () => wikidata.refreshUk(store, { log: console.log }).catch((e
 setTimeout(refreshUk, 60000).unref();
 setInterval(refreshUk, 6 * 3600 * 1000).unref();
 
+pages.setTitleLinks((md, id) => store.linkTitles(md, id));
+
 const app = express();
 app.set("trust proxy", true);
 app.use(express.urlencoded({ extended: false, limit: "1mb" }));

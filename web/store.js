@@ -181,6 +181,7 @@ class Store {
   // one counts for the other (Max, 2026-10-19: «якщо читав одну то автоматично і другу теж»). Linked
   // when one's original title is the other's title, or by hand in matches.json «translations».
   linkTranslations() {
+    this._titles = null; // titleIndex() is rebuilt with the new shelves
     this.translations = new Map(); // work id -> Set of work ids
     const link = (a, b) => {
       a = a && this.canonical(a);
@@ -203,6 +204,45 @@ class Store {
       /* none */
     }
     for (const [a, b] of pairs) link(this.slugs.get(a) || a, this.slugs.get(b) || b);
+  }
+
+  // Titles of known books mentioned in a note become links (Max, 2026-10-19: «Див також Circe» ->
+  // /book/tsyrtseia, whose original title is Circe). Library books by title or original title; catalog
+  // books by original title, or by a title of two words or more and 12+ letters, so a common word
+  // («Дім», «Free») never links. Case-sensitive, whole words; the book's own title and text already
+  // inside a link are left alone.
+  titleIndex() {
+    if (this._titles) return this._titles;
+    const map = new Map(); // title -> id, the library first
+    const ok = (t, strict) => {
+      t = String(t || "").trim();
+      if (t.length < 4 || /^[\d\s.]+$/.test(t)) return false;
+      const words = t.split(/\s+/).length;
+      return strict ? words >= 2 && t.length >= 12 : words >= 2 || t.length >= 5;
+    };
+    const put = (t, id) => !map.has(t) && map.set(t, this.canonical(id));
+    for (const b of [...this.seedBooks, ...Object.values(this.lib.books)]) for (const t of [b.title, b.altTitle]) if (ok(t)) put(t.trim(), b.id);
+    for (const { shelf, item } of this.shelfItems.values()) {
+      if (shelf.draft || this.hidden.has(item.id)) continue;
+      if (ok(item.altTitle)) put(item.altTitle.trim(), item.id);
+      if (ok(item.title, true)) put(item.title.trim(), item.id);
+    }
+    const esc = (t) => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const titles = [...map.keys()].sort((a, b) => b.length - a.length);
+    const re = titles.length ? new RegExp(`(?<![\\p{L}\\p{N}])(${titles.map(esc).join("|")})(?![\\p{L}\\p{N}])`, "gu") : null;
+    return (this._titles = { map, re });
+  }
+
+  // Markdown with the titles it mentions linked to their pages.
+  linkTitles(md, selfId) {
+    const { map, re } = this.titleIndex();
+    if (!md || !re) return md || "";
+    const self = selfId && this.canonical(selfId);
+    // Leave existing links and bare URLs as they are.
+    return md
+      .split(/(\[[^\]]*\]\([^)]*\)|https?:\/\/\S+)/)
+      .map((part, i) => (i % 2 ? part : part.replace(re, (t) => (map.get(t) === self ? t : `[${t}](${this.href(map.get(t))})`))))
+      .join("");
   }
 
   // The other-language versions of a work: [{ id, title, href }].
