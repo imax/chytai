@@ -10,6 +10,10 @@ on:
   schedule:
     - cron: "30 0 * * *" # 03:30 Kyiv
   workflow_dispatch:
+  # A change to the backup itself runs it once, so it is tested right away.
+  push:
+    branches: [main]
+    paths: [".github/workflows/backup.yml", "scripts/backup-snapshot.js"]
 
 env:
   AGE_RECIPIENT: age1hv4fyt42a9wjuhh4dtkrdjle8xz6tlk3t0duf2c5a2lqszwmtd6q9q0pfw
