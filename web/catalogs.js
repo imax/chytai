@@ -4,10 +4,10 @@
 //
 // Lobster and Видавництво run WooCommerce, whose Store API is public JSON:
 //   https://<site>/wp-json/wc/store/v1/products?per_page=100&page=N
-// Віхола has no API and challenges bots on its catalog pages, so it is read the way search engines
-// read it: the product URLs from its sitemap, then each book's page (Open Graph product tags, the
-// «Author «Title»» heading, the ISBN in the cover's alt text). A page is fetched when its URL is new and
-// otherwise once a week (a seventh of the catalog a day), so the daily refresh stays light.
+// A site without an API can be read the way search engines read it (sitemapProducts below): the product
+// URLs from its sitemap, then each book's page, a new URL right away and the rest once a week. Only for
+// sites that allow it: Віхола (tried 2026-10-19) answers robots with a JavaScript challenge and HTTP 429,
+// so it is not a source; we do not get around bot checks.
 // Старий Лев's site reads its catalog from its own public JSON API (28 products a page, Laravel paging):
 //   https://api-k8s.starylev.com.ua/api/v1.1/products?page=N
 // The raw products are normalised to a small shape (kept in web/catalogs/*.json for the seed), then
@@ -44,7 +44,7 @@ const woo = (p) => ({
   blurb: text(p.short_description).slice(0, 600),
 });
 
-// Старий Лев: statuses come as labels. E-books (here and at Віхола) are separate products with the same
+// Старий Лев: statuses come as labels. E-books are separate products with the same
 // title, sometimes without the subtitle or the authors; joinEbooks() gives them the paper book's title
 // and author so they become its editions.
 const SL_STATUS = (labels) => (labels.includes("pre_sale") ? "передзамовлення" : labels.includes("available") ? "є" : labels.includes("expected") ? "очікується" : "немає");
@@ -95,40 +95,8 @@ async function sitemapProducts(src, { fetchImpl = fetch, log = () => {}, previou
     );
   }
   log(`${src.id}: ${urls.length} pages in the sitemap, ${due.length} fetched${failed ? `, ${failed} failed` : ""}, ${out.length} books`);
-  if (failed > due.length / 2 && failed > 10) throw new Error(`${src.id}: ${failed} of ${due.length} pages failed`);
+  if (!out.length || (failed > due.length / 3 && failed > 10)) throw new Error(`${src.id}: ${failed} of ${due.length} pages failed`);
   return out;
-}
-
-// Віхола: «Author «Title»» headings, «… Е-книжка» for e-books, the ISBN in the cover's alt text.
-function vikholaPage(html, url) {
-  if (meta(html, "og:type") !== "product") return null;
-  let name = h1(html) || meta(html, "og:title");
-  if (/сертифікат/i.test(name)) return null;
-  const ebook = /\s+е-книжка$/i.test(name) || meta(html, "product:category") === "Електронні книжки";
-  name = name.replace(/\s+е-книжка$/i, "");
-  const m = name.match(/^(.*?)\s*«(.+)»\s*(.*)$/);
-  const author = m ? m[1].replace(/[,\s]+$/, "").trim() : "";
-  const title = m ? (m[2] + (m[3] ? ` ${m[3]}` : "")).trim() : name;
-  const avail = meta(html, "product:availability");
-  const isbn = (html.match(/alt=["'][^"']*?(97[89]\d{10})[^"']*["']/) || [])[1] || "";
-  return {
-    id: `vikhola-${(url.match(/\/(\d+)\/?$/) || [])[1] || url.replace(/^https?:\/\/[^/]+\//, "").replace(/\/$/, "")}`,
-    title,
-    author,
-    isbn,
-    format: ebook ? "e-book" : "папір",
-    series: volumeOf(title)?.series || "",
-    volume: volumeOf(title)?.volume || 0,
-    bundle: /^комплект/i.test(title),
-    cover: meta(html, "og:image"),
-    url,
-    price: uah(Number(meta(html, "product:price:amount"))),
-    status: /pre-?order/i.test(avail) ? "передзамовлення" : /in ?stock/i.test(avail) ? "є" : "немає",
-    isNew: false,
-    genres: [meta(html, "product:category")].filter((g) => g && g !== "Електронні книжки"),
-    blurb: text(meta(html, "og:description")).slice(0, 600),
-    language: "українська",
-  };
 }
 
 const SOURCES = [
@@ -161,22 +129,6 @@ const SOURCES = [
       year: p.year,
       language: "українська",
     }),
-  },
-  {
-    id: "vikhola",
-    kind: "publisher",
-    name: "Віхола",
-    tagline: "Київське видавництво: українська класика, нонфікшн і сучасна проза",
-    url: "https://vikhola.com/",
-    sitemap: "https://vikhola.com/content/export/vikhola.com/catalog-sitemap.xml",
-    isProduct: (u) => !/\/(katalog|blog|novyny|podii)\b/.test(u),
-    fetchAll: (src, opts) => sitemapProducts(src, opts),
-    parsePage: vikholaPage,
-    normalize: (p) => p,
-    keep: () => true,
-    toItem: (p) => p,
-    finish: (items) => joinEbooks(items),
-    draft: true, // seen only by the signed-in owner until Max has looked at it
   },
   {
     id: "starylev",
