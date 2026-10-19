@@ -117,7 +117,7 @@ function libraryRow(r, i, own = false) {
     <p class="meta">${r.rating != null ? stars(r.rating) : ""}${r.status && r.status !== "read" ? `<span class="tag status-${r.status}">${STATUS[r.status]}</span>` : ""}${r.copy ? `<span class="tag copy-${r.copy}">${COPY[r.copy]}</span>` : ""}</p>
     ${r.note ? `<p class="note">${inline(r.note)}</p>` : ""}
   </div>
-  ${own ? `<a class="btn small edit" href="/me/book/${encodeURIComponent(r.id)}">Змінити</a>` : ""}
+  ${own ? `<a class="btn small edit" href="${attr(b.href ? `/me${b.href}` : `/me/book/${encodeURIComponent(r.id)}`)}">Змінити</a>` : ""}
 </article>`;
 }
 
@@ -165,6 +165,7 @@ function bookPage({ book, entry, user, shelf, inLibrary = new Map(), readers = [
     ${user ? mine(book, entry) : ""}
     ${book.blurb ? `<div class="prose blurb"><p>${esc(book.blurb)}</p><p class="muted small">Опис з сайту ${esc(shelf ? shelf.name : book.source)}</p></div>` : ""}
     ${(book.translations || []).length ? `<p class="translations muted">${book.translations.map((t) => `${/[а-яіїєґ]/i.test(book.title) && !/[а-яіїєґ]/i.test(t.title) ? "Оригінал" : "Переклад"}: <a href="${attr(t.href)}">${esc(t.title)}</a>`).join(" · ")}</p>` : ""}
+    ${book.ukTitle ? `<p class="translations muted">Українською: «${esc(book.ukTitle)}», у каталогах поки немає</p>` : ""}
     ${editions(book)}
     ${series(book, inLibrary)}
     ${links.length ? `<p class="links">${links.map((l) => `<a href="${attr(l.url)}" target="_blank" rel="noopener">${esc(l.label)}</a>`).join('<span class="sep">·</span>')}</p>` : ""}
@@ -185,7 +186,8 @@ function byline(author) {
 // The signed-in reader's own line: where the book is in their library, or one tap to want it.
 function mine(book, entry) {
   // Read in another language: the mark comes from that book, and so does the edit link.
-  const edit = `/me/book/${encodeURIComponent(entry?.via ? entry.via.id : book.id)}`;
+  const href = entry?.via ? entry.via.href : book.href;
+  const edit = href ? `/me${href}` : `/me/book/${encodeURIComponent(entry?.via ? entry.via.id : book.id)}`;
   if (!entry) return `<div class="mine"><form method="post" action="/api/entry/${encodeURIComponent(book.id)}" class="inline"><input type="hidden" name="status" value="want"><input type="hidden" name="back" value="1"><button class="btn small">Хочу прочитати</button></form><a class="muted small" href="${edit}">Додати до моїх книжок…</a></div>`;
   const what = [entry.status ? STATUS[entry.status] + (entry.status === "read" && entry.year ? ` ${entry.year}` : "") : "У моїх книжках", entry.rating != null ? `${uk(entry.rating)}/5` : "", entry.copy ? COPY[entry.copy] : ""].filter(Boolean).join(" · ");
   return `<div class="mine"><span class="have">✓ ${esc(what)}</span>${entry.via ? `<span class="muted small">як <a href="${attr(entry.via.href)}">${esc(entry.via.title)}</a></span>` : ""}<a class="muted small" href="${edit}">Змінити</a></div>`;

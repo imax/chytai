@@ -16,10 +16,25 @@ const OFFICE_MATCHES = { 6: "bastiat-essays", 7: "гемінгвей-нічог�
 const RU = /[ыэъё]/i; // Russian-only letters: these office books stay out of the profile until Max says otherwise
 const PICK = { "": 0, "є": 1, передзамовлення: 2, немає: 3 }; // which edition stands for the work on a shelf
 
+// Ukrainian national transliteration (КМУ 2010), so an address stays readable when copied: Cyrillic
+// in a link turns into %D1%8F… (Max, 2026-10-19). Є, Ї, Й, Ю, Я start a word as ye, yi, y, yu, ya.
+const LAT = { а: "a", б: "b", в: "v", г: "h", ґ: "g", д: "d", е: "e", є: "ie", ж: "zh", з: "z", и: "y", і: "i", ї: "i", й: "i", к: "k", л: "l", м: "m", н: "n", о: "o", п: "p", р: "r", с: "s", т: "t", у: "u", ф: "f", х: "kh", ц: "ts", ч: "ch", ш: "sh", щ: "shch", ь: "", ю: "iu", я: "ia", ы: "y", э: "e", ъ: "", ё: "io" };
+const FIRST = { є: "ye", ї: "yi", й: "y", ю: "yu", я: "ya" };
+function translit(s) {
+  let out = "";
+  for (let i = 0; i < s.length; i++) {
+    const c = s[i];
+    const start = !/[\p{L}’'ʼ]/u.test(s[i - 1] || "");
+    if (c === "з" && s[i + 1] === "г") (out += "zgh"), i++;
+    else out += (start && FIRST[c]) || (LAT[c] ?? c);
+  }
+  return out;
+}
 const slugify = (s) =>
-  s
-    .toLowerCase()
-    .replace(/[’'"«»“”]/g, "")
+  translit(String(s).toLowerCase())
+    .normalize("NFKD")
+    .replace(/\p{M}/gu, "")
+    .replace(/[’'"«»“”ʼ]/g, "")
     .replace(/[^\p{L}\p{N}]+/gu, "-")
     .replace(/^-|-$/g, "")
     .slice(0, 60) || "book";
@@ -177,6 +192,10 @@ class Store {
     const byTitle = new Map();
     for (const w of works) if (norm(w.title).length >= 4) (byTitle.get(norm(w.title)) || byTitle.set(norm(w.title), []).get(norm(w.title))).push(w);
     for (const w of works) for (const o of byTitle.get(norm(w.altTitle)) || []) link(w.id, o.id); // the same work already shares one id
+    // A foreign book's Ukrainian title from Wikidata (wikidata.js): a book of that title by the same author.
+    this.ukTitles = JSON.parse(this.db.get("wikidata:uk") || "{}");
+    const names = (a) => norm(a).split(" ").filter((w) => w.length >= 3);
+    for (const [id, { uk, ukAuthor }] of Object.entries(this.ukTitles)) for (const o of byTitle.get(norm(uk)) || []) if (names(o.author).some((n) => names(ukAuthor).includes(n))) link(id, o.id);
     let pairs = [];
     try {
       pairs = readJson(path.join(SEED, "matches.json")).translations || [];
@@ -209,14 +228,16 @@ class Store {
   indexSlugs() {
     this.slugs = new Map(); // slug -> id
     this.slugOf = new Map(); // id -> slug
+    // Cyrillic slugs given before 2026-10-19 stay as old addresses that redirect to the Latin one.
+    const latin = (slug) => /^[\x00-\x7f]*$/.test(slug);
     for (const r of this.db.prepare("SELECT slug, id FROM slugs").all()) {
       this.slugs.set(r.slug, r.id);
-      this.slugOf.set(r.id, r.slug);
+      if (!this.slugOf.has(r.id) || (latin(r.slug) && !latin(this.slugOf.get(r.id)))) this.slugOf.set(r.id, r.slug);
     }
     const add = this.db.prepare("INSERT OR IGNORE INTO slugs (slug, id) VALUES (?, ?)");
     this.db.exec("BEGIN");
     const take = (id, title, author) => {
-      if (this.slugOf.has(id)) return;
+      if (this.slugOf.has(id) && latin(this.slugOf.get(id))) return;
       let slug = slugify(title);
       const last = slugify((author || "").split(/[,\s]+/).filter(Boolean).pop() || "");
       if (this.slugs.has(slug) && this.slugs.get(slug) !== id && last) slug = `${slug}-${last}`;
@@ -258,9 +279,10 @@ class Store {
       for (const id of ids) {
         const b = this.book(id);
         if (!b) continue;
-        const extra = (b.editions || []).map((e) => [e.title, e.altTitle, e.author, e.isbn].filter(Boolean).join(" ")).join(" ");
+        const uk = this.ukTitles?.[id];
+        const extra = [...(b.editions || []).map((e) => [e.title, e.altTitle, e.author, e.isbn].filter(Boolean).join(" ")), uk ? `${uk.uk} ${uk.ukAuthor}` : ""].join(" ");
         add.run(id, b.title || "", b.altTitle || "", b.author || "", b.series?.name || "", extra);
-        tri.run(id, [b.title, b.altTitle, b.author, b.series?.name].filter(Boolean).join(" · "));
+        tri.run(id, [b.title, b.altTitle, b.author, b.series?.name, uk?.uk].filter(Boolean).join(" · "));
       }
     });
   }
@@ -344,13 +366,28 @@ class Store {
     }
 
     // 2. A shelf item whose title (or original title) is exactly a library book's title is that book.
+    // Failing that, the library book links to the item's own page, or has the same words in its main
+    // title, in any order, by the same author («Я кров твою змішаю з вугіллям» is Старий Лев's
+    // «Я змішаю твою кров із вугіллям: зрозуміти український Схід»).
     const byTitle = new Map();
-    for (const b of this.seedBooks) for (const t of [b.title, b.altTitle]) if (norm(t).length >= 6) byTitle.set(norm(t), b.id);
+    const byUrl = new Map();
+    const byWords = new Map();
+    const pageKey = (u) => String(u || "").replace(/^https?:\/\/(www\.)?/, "").replace(/[?#].*$/, "").replace(/\/+$/, "");
+    const words = (t) => norm(String(t || "").split(/[:.(]/)[0]).split(" ").filter((w) => w.length >= 3).sort().join(" ");
+    const names = (a) => norm(a).split(" ").filter((w) => w.length >= 3);
+    for (const b of this.seedBooks) {
+      for (const t of [b.title, b.altTitle]) if (norm(t).length >= 6) byTitle.set(norm(t), b.id);
+      for (const l of b.links || []) if (pageKey(l.url).includes("/")) byUrl.set(pageKey(l.url), b.id);
+      for (const t of [b.title, b.altTitle]) if (words(t).includes(" ")) (byWords.get(words(t)) || byWords.set(words(t), []).get(words(t))).push(b);
+    }
     const bookOf = (it) => {
       if (matches.same[it.id]) return matches.same[it.id];
+      const ok = (id) => id && !no.has(`${it.id}|${id}`);
+      for (const t of [it.title, it.altTitle]) if (ok(byTitle.get(norm(t)))) return byTitle.get(norm(t));
+      if (ok(byUrl.get(pageKey(it.url)))) return byUrl.get(pageKey(it.url));
       for (const t of [it.title, it.altTitle]) {
-        const id = byTitle.get(norm(t));
-        if (id && !no.has(`${it.id}|${id}`)) return id;
+        const b = (byWords.get(words(t)) || []).find((b) => names(b.author).some((n) => names(it.author).includes(n)));
+        if (b && ok(b.id)) return b.id;
       }
       return null;
     };
@@ -505,7 +542,8 @@ class Store {
   // book() plus its translations, for the book page (kept out of book() so the two don't recurse).
   bookPage(id) {
     const b = this.book(id);
-    return b && { ...b, translations: this.translationsOf(b.id) };
+    const translations = b && this.translationsOf(b.id);
+    return b && { ...b, translations, ukTitle: translations.length ? "" : this.ukTitles?.[b.id]?.uk || "" };
   }
 
   fromShelfItem(shelf, it) {

@@ -12,6 +12,7 @@ const { Store } = require("./store");
 const pages = require("./pages");
 const catalogs = require("./catalogs");
 const libraries = require("./libraries");
+const wikidata = require("./wikidata");
 
 const ROOT = path.join(__dirname, "..");
 loadDotEnv(path.join(ROOT, ".env"));
@@ -66,6 +67,10 @@ function refreshShelves(force = false) {
     .finally(() => (refreshing = null));
   return refreshing;
 }
+// Ukrainian titles of foreign books (wikidata.js), weekly; the first time a minute after start.
+const refreshUk = () => wikidata.refreshUk(store, { log: console.log }).catch((e) => console.error("wikidata failed:", e));
+setTimeout(refreshUk, 60000).unref();
+setInterval(refreshUk, 6 * 3600 * 1000).unref();
 
 const app = express();
 app.set("trust proxy", true);
