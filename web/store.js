@@ -585,7 +585,11 @@ class Store {
   bookPage(id) {
     const b = this.book(id);
     const translations = b && this.translationsOf(b.id);
-    return b && { ...b, translations, ukTitle: translations.length ? "" : this.ukTitles?.[b.id]?.uk || "" };
+    // The Ukrainian title from Wikidata is named only while no catalog has it: not as a translation, and
+    // not as an edition either (MEGOGO Books gives «Марсіанин» the original title, so it joins The Martian).
+    const uk = (b && this.ukTitles?.[b.id]?.uk) || "";
+    const inCatalog = translations?.length || (b?.editions || []).some((e) => norm(e.title) === norm(uk) || /[а-яіїєґ]/i.test(e.title));
+    return b && { ...b, translations, ukTitle: inCatalog ? "" : uk };
   }
 
   fromShelfItem(shelf, it) {
