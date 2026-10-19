@@ -30,14 +30,17 @@ jobs:
           curl -s -o /dev/null https://chytai-web.fly.dev/ || true
           for i in 1 2 3 4 5 6; do sleep 15; s=$(curl -s https://chytai-web.fly.dev/refresh-status); echo "$s"; echo "$s" | grep -q '"running":false' && break; done
       # The domain (Max, 2026-10-19: the web lives at chytai.org.ua). Certificates are idempotent to add;
-      # the DNS records Max must set at the registrar are printed here: A/AAAA for the apex from `ips list`,
-      # CNAME www -> chytai-web.fly.dev. A deploy token may lack the rights for this, so it never fails the run.
+      # DNS at nic.ua: A/AAAA for the apex and www (from `ips list`) and the _acme-challenge CNAMEs to flydns.net
+      # that `certs setup` prints. A deploy token may lack the rights for this, so it never fails the run.
       - run: |
           for d in chytai.org.ua www.chytai.org.ua; do flyctl certs add "$d" -a chytai-web || true; done
           flyctl ips list -a chytai-web || true
           flyctl certs list -a chytai-web || true
           for d in chytai.org.ua www.chytai.org.ua; do flyctl certs check "$d" -a chytai-web || true; done
-          flyctl certs setup chytai.org.ua -a chytai-web || true
+          for i in 1 2 3 4 5 6 7 8; do
+            curl -sS -o /dev/null https://chytai.org.ua/ && break
+            sleep 20; flyctl certs check chytai.org.ua -a chytai-web 2>&1 | grep -i status || true
+          done
           for d in chytai.org.ua www.chytai.org.ua; do curl -sS -o /dev/null -w "$d: %{http_code} %{redirect_url}\n" "https://$d/" || true; done
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN_WEB }}
