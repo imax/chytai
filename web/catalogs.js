@@ -246,9 +246,15 @@ const wooBook = (src, p, extra = {}) => ({
 // («Книга», «Електронна книга», «Аудіокнига»), the authors linked to /authors/ above the <h1>, and the
 // original title in the line under it. Publishers whose own sites give no data come from here
 // (Max, 2026-10-19, starting with Stone Publishing).
-function mbooksPage(src, brand) {
+// A book not on sale has no Product: then the publisher is the /publishers/ link on the page, the
+// ISBN is in the <title>, and the book counts as out of stock.
+function mbooksPage(src, brand, slug) {
   return (html, url) => {
-    const prod = ldOf(html).find((x) => [].concat(x["@type"]).includes("Product"));
+    let prod = ldOf(html).find((x) => [].concat(x["@type"]).includes("Product"));
+    if (!prod && html.includes(`href="/publishers/${slug}/"`)) {
+      const head = (html.match(/<title>([^<]*)/) || [])[1] || "";
+      prod = { name: h1(html), brand: { name: brand }, gtin: (head.match(/ISBN ([\d\-X]+)/) || [])[1] || "", image: meta(html, "og:image"), offers: {} };
+    }
     if (!prod || ent(prod.brand?.name || "").trim().toLowerCase() !== brand.toLowerCase()) return null;
     const head = (html.match(/<title>([^<]*)/) || [])[1] || "";
     const top = html.slice(0, html.indexOf('data-cy="book-title"'));
@@ -288,7 +294,7 @@ const mbooks = ({ id, slug, brand, name, tagline, url, draft = true }) => ({
   listing: (n) => `https://mbooks.com.ua/publishers/${slug}/${n > 1 ? `page-${n}/` : ""}`,
   linkRe: /href="\s*((?:https:\/\/mbooks\.com\.ua)?\/book\/\d+[^"\s]*)\s*"/g,
   fetchAll: (src, opts) => listingProducts(src, opts),
-  parsePage: (html, u) => mbooksPage(SOURCES.find((s) => s.id === id), brand)(html, u),
+  parsePage: (html, u) => mbooksPage(SOURCES.find((s) => s.id === id), brand, slug)(html, u),
   normalize: (p) => p,
   keep: () => true,
   toItem: (p) => p,
