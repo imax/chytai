@@ -45,7 +45,7 @@ for (const y of years) {
       author: m.author || "",
       cover: m.cover ? COVER_BASE + m.cover : "",
       tags: m.tags || [],
-      links,
+      links: links.filter((l) => !/readeat\.com/i.test(l.url)), // Max (2026-10-19): no Readeat links
       source: "books.md",
     });
     entries.push({

@@ -98,10 +98,6 @@
    {
     "label": "Vivat",
     "url": "https://vivat.com.ua/product/pisnia-akhilla/"
-   },
-   {
-    "label": "Readeat",
-    "url": "https://readeat.com/product/601707-pisnia-akhilla"
    }
   ],
   "source": "books.md"
@@ -180,10 +176,6 @@
    {
     "label": "Богдан",
     "url": "https://bohdan-books.com/catalog/book/121958/"
-   },
-   {
-    "label": "Readeat",
-    "url": "https://readeat.com/product/108542-giperion"
    }
   ],
   "source": "books.md"
@@ -244,10 +236,6 @@
    {
     "label": "ВСЛ",
     "url": "https://starylev.com.ua/knyga-gemingvey-nicogo-ne-znaye"
-   },
-   {
-    "label": "Readeat",
-    "url": "https://readeat.com/product/601699-hemingvei-nichoho-ne-znaye"
    }
   ],
   "source": "books.md"
@@ -263,12 +251,7 @@
    "художня",
    "українською"
   ],
-  "links": [
-   {
-    "label": "Readeat",
-    "url": "https://readeat.com/product/105987-vorosilovgrad"
-   }
-  ],
+  "links": [],
   "source": "books.md"
  },
  {
@@ -289,10 +272,6 @@
    {
     "label": "КСД",
     "url": "https://ksd.ua/product/strakh-i-vidraza-u-las-vehasi-dyka-podoroz-do-sertsia-amerykanskoyi-mriyi"
-   },
-   {
-    "label": "Readeat",
-    "url": "https://readeat.com/product/619981-strakh-i-vidraza-u-las-vehasi-dyka-podorozh-do-sertsia-amerykanskoi-mrii"
    }
   ],
   "source": "books.md"
@@ -366,10 +345,6 @@
    {
     "label": "Amazon",
     "url": "https://www.amazon.com/dp/B007Q6XJGS"
-   },
-   {
-    "label": "Readeat",
-    "url": "https://readeat.com/product/205291-talanovytyi-mister-ripli"
    }
   ],
   "source": "books.md"
@@ -431,10 +406,6 @@
    {
     "label": "Vivat",
     "url": "https://vivat.com.ua/product/yak-robyty-velyki-spravy/"
-   },
-   {
-    "label": "Readeat",
-    "url": "https://readeat.com/product/114271-iak-robiti-veliki-spravi-nespodivani-faktori-v-doli-projektiv-vid-pobutovogo-do-kosmi-cnogo-masstabu"
    }
   ],
   "source": "books.md"
@@ -546,10 +517,6 @@
    {
     "label": "Meridian Czernowitz",
     "url": "https://www.meridiancz.com/blog/cerhiy-zhadan-arabesky/"
-   },
-   {
-    "label": "Readeat",
-    "url": "https://readeat.com/product/117796-arabesky"
    }
   ],
   "source": "books.md"
@@ -613,10 +580,6 @@
    {
     "label": "Фоліо",
     "url": "https://folio.com.ua/books/tri-mushketeri-"
-   },
-   {
-    "label": "Readeat",
-    "url": "https://readeat.com/product/109972-tri-musketeri"
    }
   ],
   "source": "books.md"
@@ -681,10 +644,6 @@
    {
     "label": "Наш Формат",
     "url": "https://nashformat.ua/products/izh-i-bizhy.-nejmovirna-istoriya-vegana-ultramarafontsya-709417"
-   },
-   {
-    "label": "Readeat",
-    "url": "https://readeat.com/product/104346-yiz-i-bizi-neimovirna-istoriia-vegana-ultramarafoncia"
    }
   ],
   "source": "books.md"
@@ -703,10 +662,6 @@
    {
     "label": "Amazon",
     "url": "https://www.amazon.com/dp/B08T5CVTV9"
-   },
-   {
-    "label": "Readeat",
-    "url": "https://readeat.com/product/104307-maestro-rodzer-federer-velike-zittia-u-velikomu-tenisi"
    }
   ],
   "source": "books.md"
@@ -786,10 +741,6 @@
    {
     "label": "Моноліт-Bizz",
     "url": "https://bizz.monolith.in.ua/uk/books/navychky-kouchynhu"
-   },
-   {
-    "label": "Readeat",
-    "url": "https://readeat.com/product/614465-navychky-kouchynhu-hovorit-menshe-pytaite-bilshe-y-nazavzhdy-zminit-sposib-svoho-liderstva"
    }
   ],
   "source": "books.md"
@@ -828,10 +779,6 @@
    {
     "label": "ВСЛ",
     "url": "https://starylev.com.ua/knyzka-ya-zmisayu-tvoyu-krov-iz-vugillyam-zrozumity-ukrayinskyy-sxid"
-   },
-   {
-    "label": "Readeat",
-    "url": "https://readeat.com/product/109124-ia-zmisaiu-tvoiu-krov-iz-vugilliam-zrozumiti-ukrayinskii-sxid"
    }
   ],
   "source": "books.md"
@@ -872,10 +819,6 @@
    {
     "label": "Наш Формат",
     "url": "https://nashformat.ua/products/demon-smuty.-saga-pro-gordynyu-rozpach-i-geroizm-naperedodni-gromadyanskoi-vijny-u-ssha-709759"
-   },
-   {
-    "label": "Readeat",
-    "url": "https://readeat.com/product/616215-demon-smuty-saha-pro-hordyniu-rozpach-i-heroizm-naperedodni-hromadianskoi-viiny-u-ssha"
    }
   ],
   "source": "books.md"
@@ -894,10 +837,6 @@
    {
     "label": "Amazon",
     "url": "https://www.amazon.com/dp/B073W9N1W8"
-   },
-   {
-    "label": "Readeat",
-    "url": "https://readeat.com/product/102034-xatina-diadka-toma"
    }
   ],
   "source": "books.md"
@@ -921,10 +860,6 @@
    {
     "label": "Наш Формат",
     "url": "https://nashformat.ua/products/kulturnyj-kod.-sekrety-uspishnoi-vzaemodii-v-komandi-709554"
-   },
-   {
-    "label": "Readeat",
-    "url": "https://readeat.com/product/104403-kulturnii-kod-sekreti-uspisnoyi-vzajemodiyi-v-komandi"
    }
   ],
   "source": "books.md"
@@ -999,10 +934,6 @@
    {
     "label": "Видавництво Анетти Антоненко",
     "url": "https://anetta-publishers.com/books/253"
-   },
-   {
-    "label": "Readeat",
-    "url": "https://readeat.com/product/203121-neskincheni-rozmovy"
    }
   ],
   "source": "books.md"
@@ -1063,10 +994,6 @@
    {
     "label": "Yakaboo",
     "url": "https://www.yakaboo.ua/ua/spotify-navivorit-jak-shveds-kij-startap-zdijsniv-muzichnu-revoljuciju.html"
-   },
-   {
-    "label": "Readeat",
-    "url": "https://readeat.com/product/110334-spotify-navivorit-iak-svedskii-startap-zdiisniv-muzicnu-revoliuciiu"
    }
   ],
   "source": "books.md"
@@ -1089,10 +1016,6 @@
    {
     "label": "ВСЛ",
     "url": "https://starylev.com.ua/pid-sklyanym-kovpakom"
-   },
-   {
-    "label": "Readeat",
-    "url": "https://readeat.com/product/110666-pid-sklianim-kovpakom"
    }
   ],
   "source": "books.md"
@@ -1191,10 +1114,6 @@
    {
     "label": "Видавництво Жупанського",
     "url": "https://publisher.in.ua/product/slipobachennya/"
-   },
-   {
-    "label": "Readeat",
-    "url": "https://readeat.com/product/110672-slipobacennia"
    }
   ],
   "source": "books.md"
@@ -1254,10 +1173,6 @@
    {
     "label": "Vivat",
     "url": "https://vivat.com.ua/product/spivintelekt/"
-   },
-   {
-    "label": "Readeat",
-    "url": "https://readeat.com/product/616685-spivintelekt-zhyty-ta-pratsiuvaty-z-shi"
    }
   ],
   "source": "books.md"
@@ -1281,10 +1196,6 @@
    {
     "label": "Наш Формат",
     "url": "https://nashformat.ua/products/zarazlyvyj.-psyhologiya-virusnogo-marketyngu-onovl.-vyd.-709636"
-   },
-   {
-    "label": "Readeat",
-    "url": "https://readeat.com/product/109118-zarazlivii-psixologiia-virusnogo-marketingu-onovl-vid"
    }
   ],
   "source": "books.md"
@@ -1305,10 +1216,6 @@
    {
     "label": "Vivat",
     "url": "https://vivat.com.ua/product/movchazna-patsiyentka/"
-   },
-   {
-    "label": "Readeat",
-    "url": "https://readeat.com/product/106590-movcazna-pacijentka"
    }
   ],
   "source": "books.md"
@@ -1389,10 +1296,6 @@
    {
     "label": "Yakaboo",
     "url": "https://www.yakaboo.ua/ua/author/view/H_ju_Haui"
-   },
-   {
-    "label": "Readeat",
-    "url": "https://readeat.com/product/614996-bunker-vovna-knyha-1"
    }
   ],
   "source": "books.md"
@@ -1452,10 +1355,6 @@
    {
     "label": "Lobster",
     "url": "https://www.lobster.net.ua/product/my-legion-my-bob/"
-   },
-   {
-    "label": "Readeat",
-    "url": "https://readeat.com/product/605497-my-legion-my-bob-kn-1"
    }
   ],
   "source": "books.md"
@@ -1497,10 +1396,6 @@
    {
     "label": "Vivat",
     "url": "https://vivat.com.ua/product/zavtra-zavtra-zavtra/"
-   },
-   {
-    "label": "Readeat",
-    "url": "https://readeat.com/product/106475-zavtra-zavtra-zavtra"
    }
   ],
   "source": "books.md"
@@ -1524,10 +1419,6 @@
    {
     "label": "Vivat",
     "url": "https://vivat.com.ua/product/hehemoniia/"
-   },
-   {
-    "label": "Readeat",
-    "url": "https://readeat.com/product/624650-hehemoniia-shi-chatgpt-ta-perehony-yaki-zminiat-svit"
    }
   ],
   "source": "books.md"
@@ -1547,10 +1438,6 @@
    {
     "label": "Вавилонська бібліотека",
     "url": "https://babylonlib.com/books/moya-vijna"
-   },
-   {
-    "label": "Readeat",
-    "url": "https://readeat.com/product/205179-moya-viyna"
    }
   ],
   "source": "books.md"
@@ -1573,10 +1460,6 @@
    {
     "label": "КСД",
     "url": "https://ksd.ua/product/aeroport-6"
-   },
-   {
-    "label": "Readeat",
-    "url": "https://readeat.com/product/107443-aeroport"
    }
   ],
   "source": "books.md"
@@ -1706,10 +1589,6 @@
    {
     "label": "Amazon",
     "url": "https://www.amazon.com/dp/B0192CTMWS"
-   },
-   {
-    "label": "Readeat",
-    "url": "https://readeat.com/product/102728-garri-potter-i-filosofskii-kamin"
    }
   ],
   "source": "books.md"
@@ -1794,10 +1673,6 @@
    {
     "label": "Amazon",
     "url": "https://www.amazon.com/dp/B003G4W49C"
-   },
-   {
-    "label": "Readeat",
-    "url": "https://readeat.com/product/605141-gra-endera"
    }
   ],
   "source": "books.md"
@@ -1821,10 +1696,6 @@
    {
     "label": "КСД",
     "url": "https://ksd.ua/product/zorianyy-desant"
-   },
-   {
-    "label": "Readeat",
-    "url": "https://readeat.com/product/603451-zorianyi-desant"
    }
   ],
   "source": "books.md"
@@ -2184,10 +2055,6 @@
    {
     "label": "Lobster",
     "url": "https://www.lobster.net.ua/product/mikki-7/"
-   },
-   {
-    "label": "Readeat",
-    "url": "https://readeat.com/product/616276-mikki-7"
    }
   ],
   "source": "books.md"
@@ -2281,10 +2148,6 @@
    {
     "label": "Amazon",
     "url": "https://www.amazon.com/dp/B01DHWACVY"
-   },
-   {
-    "label": "Readeat",
-    "url": "https://readeat.com/product/616566-zlochynno-narodzhenyi"
    }
   ],
   "source": "books.md"
@@ -2359,10 +2222,6 @@
    {
     "label": "Твоя Підпільна Гуманітарка",
     "url": "https://humanitarka.com/product/mova-mech/"
-   },
-   {
-    "label": "Readeat",
-    "url": "https://readeat.com/product/110643-jevgeniia-kuznjecova-mova-mec-iak-govorila-radianska-imperiia"
    }
   ],
   "source": "books.md"
@@ -2405,10 +2264,6 @@
    {
     "label": "Наш Формат",
     "url": "https://nashformat.ua/products/krah.-moya-nevdacha-v-startap-bulbashtsi-709115"
-   },
-   {
-    "label": "Readeat",
-    "url": "https://readeat.com/product/104414-krax-moia-nevdaca-v-startap-bulbasci"
    }
   ],
   "source": "books.md"
@@ -2450,10 +2305,6 @@
    {
     "label": "Наш Формат",
     "url": "https://nashformat.ua/products/nauka-storitelingu.-chomu-istorii-vplyvayut-na-nas-i-yak-nymy-vplyvaty-na-inshyh-709467"
-   },
-   {
-    "label": "Readeat",
-    "url": "https://readeat.com/product/104368-nauka-storitelingu-comu-istoriyi-vplivaiut-na-nas-i-iak-nimi-vplivati-na-insix"
    }
   ],
   "source": "books.md"
@@ -2545,10 +2396,6 @@
    {
     "label": "Amazon",
     "url": "https://www.amazon.com/dp/1594480001"
-   },
-   {
-    "label": "Readeat",
-    "url": "https://readeat.com/product/107033-lovec-povitrianix-zmiyiv"
    }
   ],
   "source": "books.md"
@@ -2716,10 +2563,6 @@
    {
     "label": "Vivat",
     "url": "https://vivat.com.ua/product/tantsi-z-kistkamy/"
-   },
-   {
-    "label": "Readeat",
-    "url": "https://readeat.com/product/105109-tanci-z-kistkami-semiankiv-andrii"
    }
   ],
   "source": "books.md"
@@ -2813,10 +2656,6 @@
    {
     "label": "Наш Формат",
     "url": "https://nashformat.ua/products/prodaetsya-vse.-dzheff-bezos-ta-era-amazon-onovl.-vyd.-709631"
-   },
-   {
-    "label": "Readeat",
-    "url": "https://readeat.com/product/104314-prodajetsia-vse-dzeff-bezos-ta-era-amazon"
    }
   ],
   "source": "books.md"
@@ -2836,10 +2675,6 @@
    {
     "label": "Amazon",
     "url": "https://www.amazon.com/dp/B084HJSJJ2"
-   },
-   {
-    "label": "Readeat",
-    "url": "https://readeat.com/product/204919-psykholohiya-hroshey"
    }
   ],
   "source": "books.md"
@@ -2859,10 +2694,6 @@
    {
     "label": "Фоліо",
     "url": "https://folio.com.ua/books/-siri-bdzholi-"
-   },
-   {
-    "label": "Readeat",
-    "url": "https://readeat.com/product/104698-siri-bdzoli"
    }
   ],
   "source": "books.md"
@@ -2878,12 +2709,7 @@
    "бізнес",
    "компанії"
   ],
-  "links": [
-   {
-    "label": "Readeat",
-    "url": "https://readeat.com/product/102137-praciuiuci-navpaki-insaiti-ta-sekreti-vid-top-menedzeriv-amazon"
-   }
-  ],
+  "links": [],
   "source": "books.md"
  },
  {
@@ -2994,10 +2820,6 @@
    {
     "label": "Amazon",
     "url": "https://www.amazon.com/dp/0307887448"
-   },
-   {
-    "label": "Readeat",
-    "url": "https://readeat.com/product/112632-pershomu-hravtsevi-pryhotuvatysia"
    }
   ],
   "source": "books.md"
@@ -3036,10 +2858,6 @@
    {
     "label": "Книголав",
     "url": "https://knigolove.ua/book/cholovik-na-im-ja-uve"
-   },
-   {
-    "label": "Readeat",
-    "url": "https://readeat.com/product/100076-colovik-na-imia-uve"
    }
   ],
   "source": "books.md"
@@ -3325,10 +3143,6 @@
    {
     "label": "Amazon",
     "url": "https://www.amazon.com/dp/132854639X"
-   },
-   {
-    "label": "Readeat",
-    "url": "https://readeat.com/product/102105-ai-nadderzavi-stucnogo-intelektu-kitai-kremnijeva-dolina-i-novii-svitovii-lad"
    }
   ],
   "source": "books.md"
@@ -3386,10 +3200,6 @@
    {
     "label": "Amazon",
     "url": "https://www.amazon.com/dp/B000FBFNL0"
-   },
-   {
-    "label": "Readeat",
-    "url": "https://readeat.com/product/208946-volodari-doom"
    }
   ],
   "source": "books.md"
@@ -3625,10 +3435,6 @@
    {
     "label": "Vivat",
     "url": "https://vivat.com.ua/product/netflix-i-kultura-innovatsii/"
-   },
-   {
-    "label": "Readeat",
-    "url": "https://readeat.com/product/106631-netflix-i-kultura-innovacii"
    }
   ],
   "source": "books.md"
@@ -3728,10 +3534,6 @@
    {
     "label": "Наш Формат",
     "url": "https://nashformat.ua/products/meta.-protses-bezperervnogo-vdoskonalennya-yuvilejne-vydannya-709656"
-   },
-   {
-    "label": "Readeat",
-    "url": "https://readeat.com/product/110955-meta-proces-bezperervnogo-vdoskonalennia-nova-obkl-eliiagu-goldratt-dzeff-koks"
    }
   ],
   "source": "books.md"
@@ -3957,10 +3759,6 @@
    {
     "label": "Наш Формат",
     "url": "https://nashformat.ua/products/mene-ne-zlamaty.-gartuj-duh-i-kydaj-sobi-vyklyky-709775"
-   },
-   {
-    "label": "Readeat",
-    "url": "https://readeat.com/product/219966-mene-ne-zlamati-gartui-dux-i-kidai-sobi-vikliki-devid-goggins"
    }
   ],
   "source": "books.md"
@@ -4053,10 +3851,6 @@
    {
     "label": "Amazon",
     "url": "https://www.amazon.com/dp/0316530204"
-   },
-   {
-    "label": "Readeat",
-    "url": "https://readeat.com/product/101933-cia-ideia-nikoli-ne-spraciuje-neimovirna-istoriia-zasnuvannia-netflix"
    }
   ],
   "source": "books.md"
@@ -4319,10 +4113,6 @@
    {
     "label": "Наш Формат",
     "url": "https://nashformat.ua/products/vid-nulya-do-odynytsi-notatky-pro-startapy-abo-yak-stvoryty-majbutne-708488"
-   },
-   {
-    "label": "Readeat",
-    "url": "https://readeat.com/product/109111-vid-nulia-do-odinici-notatki-pro-startapi-abo-iak-stvoriti-maibutnje"
    }
   ],
   "source": "books.md"
@@ -4620,10 +4410,6 @@
    {
     "label": "Amazon",
     "url": "https://www.amazon.com/dp/1501144316"
-   },
-   {
-    "label": "Readeat",
-    "url": "https://readeat.com/product/106957-comu-mi-spimo-koristajemo-z-usix-mozlivostei-snu-ta-snovidin"
    }
   ],
   "source": "books.md"
@@ -4718,10 +4504,6 @@
    {
     "label": "Amazon",
     "url": "https://www.amazon.com/dp/B00EMXBDMA"
-   },
-   {
-    "label": "Readeat",
-    "url": "https://readeat.com/product/621655-marsiianyn"
    }
   ],
   "source": "books.md"
@@ -4839,10 +4621,6 @@
    {
     "label": "КСД",
     "url": "https://ksd.ua/product/psihologiya-vplivu-onovleno-ta-dopovneno"
-   },
-   {
-    "label": "Readeat",
-    "url": "https://readeat.com/product/107603-psixologiia-vplivu-onovlene-ta-rozsirene-vidannia"
    }
   ],
   "source": "books.md"
@@ -5195,10 +4973,6 @@
    {
     "label": "Наш Формат",
     "url": "https://nashformat.ua/products/zoseredzhena-robota.-pravyla-kontsentratsii-v-shalenomu-sviti-709730"
-   },
-   {
-    "label": "Readeat",
-    "url": "https://readeat.com/product/117374-zoseredzhena-robota"
    }
   ],
   "source": "books.md"
@@ -5218,10 +4992,6 @@
    {
     "label": "Amazon",
     "url": "https://www.amazon.com/dp/B004J4WKEC"
-   },
-   {
-    "label": "Readeat",
-    "url": "https://readeat.com/product/103445-garna-strategiia-pogana-strategiia"
    }
   ],
   "source": "books.md"
@@ -5297,10 +5067,6 @@
    {
     "label": "Amazon",
     "url": "https://www.amazon.com/dp/0062102419"
-   },
-   {
-    "label": "Readeat",
-    "url": "https://readeat.com/product/113658-iak-vi-zbudujete-svoje-zittia"
    }
   ],
   "source": "books.md"
@@ -5320,10 +5086,6 @@
    {
     "label": "Amazon",
     "url": "https://www.amazon.com/dp/1501124021"
-   },
-   {
-    "label": "Readeat",
-    "url": "https://readeat.com/product/219687-pryntsypy"
    }
   ],
   "source": "books.md"
@@ -5450,12 +5212,7 @@
    "історія",
    "українською"
   ],
-  "links": [
-   {
-    "label": "Readeat",
-    "url": "https://readeat.com/product/104832-cornobilska-molitva-xronika-maibutnyogo"
-   }
-  ],
+  "links": [],
   "source": "books.md"
  },
  {
@@ -5860,10 +5617,6 @@
    {
     "label": "Наш Формат",
     "url": "https://nashformat.ua/products/vytonchene-mystetstvo-zabyvaty-na-vse.-nestandartnyj-pidhid-do-problem-nova-obkl.-709626"
-   },
-   {
-    "label": "Readeat",
-    "url": "https://readeat.com/product/104421-vitoncene-mistectvo-zabivati-na-vse"
    }
   ],
   "source": "books.md"
@@ -5886,10 +5639,6 @@
    {
     "label": "Наш Формат",
     "url": "https://nashformat.ua/products/vidkrytyj.-avtobiografiya-709217"
-   },
-   {
-    "label": "Readeat",
-    "url": "https://readeat.com/product/104463-vidkritii-avtobiografiia"
    }
   ],
   "source": "books.md"
@@ -5912,10 +5661,6 @@
    {
     "label": "Наш Формат",
     "url": "https://nashformat.ua/products/chomu-natsii-zanepadayut.-pohodzhennya-vlady-bagatstva-i-bidnosti-nova-obkl.-709520"
-   },
-   {
-    "label": "Readeat",
-    "url": "https://readeat.com/product/104462-comu-naciyi-zanepadaiut-poxodzennia-vladi-bagatstva-i-bidnosti-nova-obkl"
    }
   ],
   "source": "books.md"
@@ -5938,10 +5683,6 @@
    {
     "label": "Vivat",
     "url": "https://vivat.com.ua/product/uroky-istorii-ohliad-istorii-liudstva-iak-produktu-liudskoho-dosvidu/"
-   },
-   {
-    "label": "Readeat",
-    "url": "https://readeat.com/product/106670-uroki-istoriyi-ogliad-istoriyi-liudstva-iak-produktu-liudskogo-dosvidu"
    }
   ],
   "source": "books.md"
@@ -5987,10 +5728,6 @@
    {
     "label": "Наш Формат",
     "url": "https://nashformat.ua/products/vzuttya-buttya.-istoriya-nike-vid-zasnovnyka-kompanii-onovl.-vyd.-709531"
-   },
-   {
-    "label": "Readeat",
-    "url": "https://readeat.com/product/104398-vzuttia-buttia-istoriia-nike-vid-zasnovnika-kompaniyi-onovl-vid"
    }
   ],
   "source": "books.md"
@@ -6203,10 +5940,6 @@
    {
     "label": "Лабораторія",
     "url": "https://laboratory.ua/products/rezultatyvnyj-menedzhment"
-   },
-   {
-    "label": "Readeat",
-    "url": "https://readeat.com/product/629103-rezultatyvnyi-menedzhment"
    }
   ],
   "source": "books.md"
@@ -6267,10 +6000,6 @@
    {
     "label": "Наш Формат",
     "url": "https://nashformat.ua/products/yak-pysaty-dobre.-klasychnyj-posibnyk-zi-stvorennya-nehudozhnih-tekstiv-onovl.-vyd.-709510"
-   },
-   {
-    "label": "Readeat",
-    "url": "https://readeat.com/product/105271-iak-pisati-dobre-klasicnii-posibnik-zi-stvorennia-nexudoznix-tekstiv"
    }
   ],
   "source": "books.md"
@@ -6459,10 +6188,6 @@
    {
     "label": "Наш Формат",
     "url": "https://nashformat.ua/products/moe-zhyttya-i-robota-onovl.-vyd.-709805"
-   },
-   {
-    "label": "Readeat",
-    "url": "https://readeat.com/product/605745-moie-zhyttia-i-robota"
    }
   ],
   "source": "books.md"
@@ -6486,10 +6211,6 @@
    {
     "label": "Наш Формат",
     "url": "https://nashformat.ua/products/rozumnyj-investor.-strategiya-vartisnogo-investuvannya-709239"
-   },
-   {
-    "label": "Readeat",
-    "url": "https://readeat.com/product/110142-rozumnii-investor-strategiia-vartisnogo-investuvannia"
    }
   ],
   "source": "books.md"
@@ -6929,10 +6650,6 @@
    {
     "label": "КСД",
     "url": "https://ksd.ua/product/dizayn-zvichnih-rechey-1"
-   },
-   {
-    "label": "Readeat",
-    "url": "https://readeat.com/product/107530-dyzain-zvychnykh-rechei"
    }
   ],
   "source": "books.md"
@@ -6971,10 +6688,6 @@
    {
     "label": "Amazon",
     "url": "https://www.amazon.com/dp/0321344758"
-   },
-   {
-    "label": "Readeat",
-    "url": "https://readeat.com/product/117702-ne-zmushuyte-mene-dumaty"
    }
   ],
   "source": "books.md"
@@ -7186,10 +6899,6 @@
    {
     "label": "КСД",
     "url": "https://ksd.ua/product/kviti-dlya-eldjernona"
-   },
-   {
-    "label": "Readeat",
-    "url": "https://readeat.com/product/107555-kviti-dlia-eldzernona"
    }
   ],
   "source": "books.md"
@@ -7213,10 +6922,6 @@
    {
     "label": "КСД",
     "url": "https://ksd.ua/product/na-zahidnomu-fronti-bez-zmin"
-   },
-   {
-    "label": "Readeat",
-    "url": "https://readeat.com/product/606156-na-zakhidnomu-fronti-bez-zmin"
    }
   ],
   "source": "books.md"
@@ -7240,10 +6945,6 @@
    {
     "label": "КСД",
     "url": "https://ksd.ua/product/1984-kolgosp-tvarin-1"
-   },
-   {
-    "label": "Readeat",
-    "url": "https://readeat.com/product/111728-1984-kolgosp-tvarin-ekskliuzivne-vidannia"
    }
   ],
   "source": "books.md"
@@ -7285,10 +6986,6 @@
    {
     "label": "Наш Формат",
     "url": "https://nashformat.ua/products/ta-vy-zhartuete-mistere-fejnman-prygody-dopytlyvogo-dyvaka-709108"
-   },
-   {
-    "label": "Readeat",
-    "url": "https://readeat.com/product/109852-ta-vi-zartujete-mistere-feinman-prigodi-dopitlivogo-divaka"
    }
   ],
   "source": "books.md"
@@ -7308,10 +7005,6 @@
    {
     "label": "Amazon",
     "url": "https://www.amazon.com/dp/0345391802"
-   },
-   {
-    "label": "Readeat",
-    "url": "https://readeat.com/product/609785-putivnyk-po-halaktytsi-dlya-kosmoturystiv"
    }
   ],
   "source": "books.md"
@@ -7331,10 +7024,6 @@
    {
     "label": "Amazon",
     "url": "https://www.amazon.com/dp/0156027607"
-   },
-   {
-    "label": "Readeat",
-    "url": "https://readeat.com/product/108836-soliaris"
    }
   ],
   "source": "books.md"
@@ -7354,10 +7043,6 @@
    {
     "label": "Amazon",
     "url": "https://www.amazon.com/dp/0380809060"
-   },
-   {
-    "label": "Readeat",
-    "url": "https://readeat.com/product/108883-xroniki-ambera-kniga-1-deviat-princiv-ambera"
    }
   ],
   "source": "books.md"
@@ -7380,10 +7065,6 @@
    {
     "label": "Лабораторія",
     "url": "https://laboratory.ua/products/hreschenyj-batko"
-   },
-   {
-    "label": "Readeat",
-    "url": "https://readeat.com/product/115577-khreshchenyi-batko"
    }
   ],
   "source": "books.md"
@@ -7468,12 +7149,7 @@
   "tags": [
    "художня"
   ],
-  "links": [
-   {
-    "label": "Readeat",
-    "url": "https://readeat.com/product/203567-finansyst-tytan-stoyik-trylohiya-bazhannya"
-   }
-  ],
+  "links": [],
   "source": "books.md"
  }
 ]

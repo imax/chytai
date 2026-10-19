@@ -16,7 +16,10 @@
 
 const uah = (n) => (n ? `${Math.round(n)} ₴` : "");
 // WooCommerce leaves HTML entities in names («Ми &#8211; Легіон»).
-const ent = (s) => String(s || "").replace(/&#(\d+);/g, (_, n) => String.fromCodePoint(n)).replace(/&amp;/g, "&").replace(/&quot;/g, '"').replace(/&#039;|&apos;/g, "'");
+// Pages built on the Лабораторія/Наш Формат engine encode them twice («&amp;laquo;»).
+const NAMED = { nbsp: " ", ndash: "–", mdash: "—", laquo: "«", raquo: "»", rsquo: "’", lsquo: "‘", ldquo: "“", rdquo: "”", hellip: "…", quot: '"', apos: "'", amp: "&" };
+const ent1 = (s) => s.replace(/&#(\d+);/g, (_, n) => String.fromCodePoint(n)).replace(/&([a-z]+);/g, (m, n) => NAMED[n] ?? m);
+const ent = (s) => ent1(ent1(String(s || "")));
 const text = (h) => ent(String(h || "").replace(/<[^>]+>/g, " ").replace(/&nbsp;/g, " ").replace(/&#8217;|&rsquo;/g, "’")).replace(/\s+/g, " ").trim();
 const attr = (p, n) => ((p.attributes || []).find((a) => a.name === n) || { terms: [] }).terms.map((t) => t.name).join(", ") || "";
 
@@ -65,13 +68,47 @@ const h1 = (html) => text((html.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i) || [])[1] ||
 const dayOfWeek = () => Math.floor(Date.now() / 86400000) % 7;
 const bucket = (s) => [...s].reduce((a, c) => (a * 31 + c.charCodeAt(0)) % 7919, 0) % 7;
 
-// Pages fetched a few at a time; `previous` (url -> item from the last refresh) is reused for the rest.
-async function sitemapProducts(src, { fetchImpl = fetch, log = () => {}, previous = new Map() }) {
+async function sitemapProducts(src, opts) {
+  const { fetchImpl = fetch } = opts;
   const res = await fetchImpl(src.sitemap, { headers: HEADERS, signal: AbortSignal.timeout(60000) });
   if (!res.ok) throw new Error(`${src.id}: HTTP ${res.status} on the sitemap`);
   const urls = [...(await res.text()).matchAll(/<loc>\s*([^<\s]+)\s*<\/loc>/g)].map((m) => m[1].replace(/&amp;/g, "&")).filter(src.isProduct || (() => true));
   if (!urls.length) throw new Error(`${src.id}: empty sitemap`);
+  return pageProducts(src, urls, opts);
+}
+
+// The product URLs of a publisher's catalog pages (`src.listing(n)`, until a page is missing or adds
+// nothing). Links found on most pages are the site's own banners, not the catalog, and are left out.
+async function listingProducts(src, opts) {
+  const { fetchImpl = fetch, log = () => {} } = opts;
+  const found = new Map(); // url -> pages it was on
+  let pages = 0;
+  let idle = 0; // pages in a row that added nothing
+  for (let n = 1; n <= (src.maxPages || 200); n++) {
+    const res = await fetchImpl(src.listing(n), { headers: HEADERS, signal: AbortSignal.timeout(60000) }).catch((e) => {
+      throw new Error(`${src.id}: ${e.cause?.code || e.message}`);
+    });
+    if (res.status === 404 && n > 1) break;
+    if (!res.ok) throw new Error(`${src.id}: HTTP ${res.status} on catalog page ${n}`);
+    const links = new Set([...(await res.text()).matchAll(/href="\s*((?:https?:\/\/[^/"]+)?\/?products\/[^"\s]+)\s*"/g)].map((m) => new URL(m[1], src.url).href));
+    const before = found.size;
+    for (const u of links) found.set(u, (found.get(u) || 0) + 1);
+    pages++;
+    if (found.size === before && ++idle >= 2) break;
+    if (found.size > before) idle = 0;
+  }
+  const urls = [...found].filter(([, k]) => pages < 4 || k < 3).map(([u]) => u);
+  log(`${src.id}: ${pages} catalog pages, ${urls.length} products`);
+  if (!urls.length) throw new Error(`${src.id}: empty catalog`);
+  return pageProducts(src, urls, opts);
+}
+
+// Product pages fetched a few at a time: a new URL right away, the rest once a week (a seventh of the
+// catalog a day); `previous` (url -> item from the last refresh) is reused for the rest. A page that is
+// not a book of this publisher (parsePage gives null) is remembered in `skip` so it is not fetched daily.
+async function pageProducts(src, urls, { fetchImpl = fetch, log = () => {}, previous = new Map(), skip = new Set() }) {
   const today = dayOfWeek();
+  urls = urls.filter((u) => !skip.has(u) || bucket(u) === today);
   const due = urls.filter((u) => !previous.has(u) || bucket(u) === today);
   const out = urls.filter((u) => !due.includes(u)).map((u) => previous.get(u)).filter(Boolean);
   let failed = 0;
@@ -84,8 +121,8 @@ async function sitemapProducts(src, { fetchImpl = fetch, log = () => {}, previou
           if (!r.ok) throw new Error(`HTTP ${r.status}`);
           const html = await r.text();
           const item = src.parsePage(html, url);
-          if (item) out.push(item);
-          else if (!skipped++) log(`${src.id}: not a book page: ${url} ${html.replace(/\s+/g, " ").slice(0, 160)}`);
+          if (item) out.push(item), skip.delete(url);
+          else if ((skip.add(url), !skipped++)) log(`${src.id}: not a book page: ${url} ${html.replace(/\s+/g, " ").slice(0, 160)}`);
         } catch (e) {
           if (!failed) log(`${src.id}: ${url}: ${e.cause?.code || e.message}`);
           failed++;
@@ -94,10 +131,113 @@ async function sitemapProducts(src, { fetchImpl = fetch, log = () => {}, previou
       })
     );
   }
-  log(`${src.id}: ${urls.length} pages in the sitemap, ${due.length} fetched${failed ? `, ${failed} failed` : ""}, ${out.length} books`);
+  log(`${src.id}: ${urls.length} product pages, ${due.length} fetched${failed ? `, ${failed} failed` : ""}${skipped ? `, ${skipped} not its books` : ""}, ${out.length} books`);
   if (!out.length || (failed > due.length / 3 && failed > 10)) throw new Error(`${src.id}: ${failed} of ${due.length} pages failed`);
   return out;
 }
+
+// Лабораторія and Наш Формат run the same shop engine: every book page carries JSON-LD (a Product with
+// the price and the publisher as `brand`, and a Book with authors, translators, ISBN, the original title).
+// `brands` keeps only that publisher's books (the shops sell others' too).
+const ldOf = (html) =>
+  [...html.matchAll(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g)].flatMap((m) => {
+    try {
+      return [].concat(JSON.parse(m[1].replace(/[\u0000-\u001f]+/g, " "))); // raw line breaks inside descriptions
+    } catch {
+      return [];
+    }
+  });
+// «Stolen Focus. Why You Can't Pay Attention by Johann Hari» -> the title only; none when it is the title.
+const alt = (a, title) => ((a = a.replace(/\s+by\s+(\p{Lu}[\p{L}.'’-]*\s*)+$/u, "").trim()) === title ? "" : a);
+const names = (v) => [].concat(v || []).map((x) => ent(x.name || x).trim()).filter(Boolean).join(", ");
+function ldBookPage(src, brands) {
+  return (html, url) => {
+    const ld = ldOf(html);
+    const book = ld.find((x) => [].concat(x["@type"]).includes("Book"));
+    const prod = ld.find((x) => [].concat(x["@type"]).includes("Product")) || {};
+    if (!book) return null;
+    const brand = ent(prod.brand?.name || book.brand?.name || book.publisher?.name || "").trim();
+    if (!brands.includes(brand)) return null;
+    const title = ent(book.name || prod.name).trim();
+    if (/сертифікат/i.test(title)) return null;
+    const offers = prod.offers || book.offers || {};
+    const avail = String(offers.availability || "");
+    const fmt = String(book.bookFormat || "");
+    return {
+      id: `${src.id}-${url.replace(/\/$/, "").split("/").pop()}`,
+      title,
+      author: names(book.author),
+      translator: names(book.translator),
+      altTitle: alt(ent(book.alternateName || ""), title),
+      isbn: String(book.isbn || prod.sku || "").replace(/[^\dX]/gi, ""),
+      format: /EBook/i.test(fmt) ? "e-book" : /Audio/i.test(fmt) ? "аудіо" : "папір",
+      series: volumeOf(title)?.series || "",
+      volume: volumeOf(title)?.volume || 0,
+      bundle: /^комплект/i.test(title),
+      cover: String(prod.image || book.image || ""), // the Product's is the small one
+      url,
+      price: uah(Number(offers.price || offers.lowPrice)),
+      status: /PreOrder/i.test(avail) ? "передзамовлення" : /InStock/i.test(avail) ? "є" : "немає",
+      isNew: false,
+      genres: String(ent(book.genre || "")).split(/,\s*/).filter(Boolean),
+      blurb: text(prod.description || book.description).slice(0, 600),
+      pages: String(book.numberOfPages || ""),
+      year: String(book.datePublished || "").slice(0, 4),
+      language: "українська",
+    };
+  };
+}
+
+// Основи and Комора run WooCommerce but keep the author and the ISBN only on the book's page: those are
+// read from the page when a book is new and once a week after that, and kept from the last refresh otherwise.
+function pageDetails(parse) {
+  return async (products, { previous, fetchImpl = fetch, log = () => {}, id, keep = () => true }) => {
+    const today = dayOfWeek();
+    const due = [];
+    for (const p of products.filter(keep)) {
+      const old = previous.get(p.url);
+      if (old && bucket(p.url) !== today) Object.assign(p, { author: old.author, isbn: old.isbn, translator: old.translator });
+      else due.push(p);
+    }
+    let got = 0;
+    for (let i = 0; i < due.length; i += 4)
+      await Promise.all(
+        due.slice(i, i + 4).map(async (p) => {
+          try {
+            const r = await fetchImpl(p.url, { headers: HEADERS, signal: AbortSignal.timeout(30000) });
+            if (!r.ok) return;
+            Object.assign(p, parse(await r.text()));
+            if (p.author) got++;
+          } catch {
+            /* next refresh tries again */
+          }
+        })
+      );
+    log(`${id}: ${due.length} book pages read, ${got} with an author`);
+  };
+}
+const isbnIn = (s) => ((s || "").match(/97[89][\d\s\-–]{10,16}/) || [""])[0].replace(/\D/g, "");
+// «ТІРЦА» -> «Тірца»: Комора writes titles in capitals.
+const unshout = (s) => (s === s.toUpperCase() && /\p{Lu}{3}/u.test(s) ? s.charAt(0) + s.slice(1).toLowerCase() : s);
+const wooBook = (src, p, extra = {}) => ({
+  id: `${src.id}-${p.id}`,
+  title: p.title,
+  author: p.author || "",
+  translator: p.translator || "",
+  isbn: p.isbn || "",
+  series: volumeOf(p.title)?.series || "",
+  volume: volumeOf(p.title)?.volume || 0,
+  bundle: /^комплект/i.test(p.title),
+  cover: p.image,
+  url: p.url,
+  price: uah(p.price),
+  status: !p.inStock ? "немає" : /передзамовлення/i.test(p.title + p.categories.join()) ? "передзамовлення" : "є",
+  isNew: false,
+  genres: p.categories.filter((c) => !/передзамовлення|розпродаж|акції|новинки|без категорії|комплекти|серії/i.test(c)),
+  blurb: ent(p.blurb || p.desc),
+  language: "українська",
+  ...extra,
+});
 
 const SOURCES = [
   {
@@ -251,6 +391,101 @@ const SOURCES = [
       };
     },
   },
+  {
+    id: "laboratoriya",
+    kind: "publisher",
+    name: "Лабораторія",
+    tagline: "Київське видавництво нонфікшну: історія, психологія, бізнес, наука",
+    url: "https://laboratory.ua/",
+    draft: true,
+    listing: (n) => `https://laboratory.ua/catalog/books/brand-laboratoriya${n > 1 ? `/page-${n}` : ""}`,
+    fetchAll: (src, opts) => listingProducts(src, opts),
+    parsePage: (html, url) => ldBookPage(SOURCES.find((s) => s.id === "laboratoriya"), ["Лабораторія"])(html, url),
+    normalize: (p) => p,
+    keep: () => true,
+    toItem: (p) => p,
+    finish: joinEbooks,
+  },
+  {
+    id: "nashformat",
+    kind: "publisher",
+    name: "Наш Формат",
+    tagline: "Видавництво нонфікшну: бізнес, саморозвиток, історія, наука",
+    url: "https://nashformat.ua/",
+    draft: true,
+    listing: (n) => `https://nashformat.ua/publishers/nash-format-books${n > 1 ? `/page-${n}` : ""}`,
+    fetchAll: (src, opts) => listingProducts(src, opts),
+    parsePage: (html, url) => ldBookPage(SOURCES.find((s) => s.id === "nashformat"), ["Наш Формат"])(html, url),
+    normalize: (p) => p,
+    keep: () => true,
+    toItem: (p) => p,
+    finish: joinEbooks,
+  },
+  {
+    id: "osnovy",
+    kind: "publisher",
+    name: "Основи",
+    tagline: "Київське видавництво: нонфікшн, есеїстика, художня література",
+    url: "https://osnovypublishing.com/",
+    draft: true,
+    api: "https://osnovypublishing.com/wp-json/wc/store/v1/products",
+    normalize: (p) => ({ ...woo(p), title: text(p.name), desc: text(p.description).slice(0, 600) }),
+    // Stickers, postcards and other merch have no category.
+    keep: (p) => p.categories.some((c) => c !== "Без категорії") && !/стікер|листівк|сертифікат/i.test(p.title),
+    toItem: (p) => wooBook({ id: "osnovy" }, p, { bundle: p.categories.includes("Комплекти") }),
+    // The author is a link to the author's page; the ISBN is in the book's details.
+    enrich: pageDetails((html) => ({
+      author: [...new Set([...html.matchAll(/href="https:\/\/osnovypublishing\.com\/authors\/[^"\/]+\/?"[^>]*>([^<]+)</g)].map((m) => ent(m[1]).trim()))].join(", "),
+      isbn: isbnIn(html.match(/ISBN[\s\S]{0,200}/)?.[0]),
+    })),
+  },
+  {
+    id: "komora",
+    kind: "publisher",
+    name: "Комора",
+    tagline: "Київське видавництво: перекладна й українська проза, есеї, спогади",
+    url: "https://komorabooks.com/",
+    draft: true,
+    api: "https://komorabooks.com/wp-json/wc/store/v1/products",
+    normalize: (p) => ({ ...woo(p), title: unshout(text(p.name).replace(/\s*\(розпродаж\)$/i, "")), desc: text(p.description).slice(0, 600) }),
+    keep: (p) => !/сертифікат|листівк|торб|стікер/i.test(p.title),
+    toItem: (p) => wooBook({ id: "komora" }, p),
+    // The book's details are «key: value» rows (Автор, Переклад, ISBN…).
+    enrich: pageDetails((html) => {
+      const rows = Object.fromEntries([...html.matchAll(/info-item-key">([\s\S]*?)<\/div>\s*<div class="single-page-info-item-value">([\s\S]*?)<\/div>/g)].map((m) => [text(m[1]).replace(/:$/, ""), text(m[2])]));
+      return { author: rows["Автор"] || rows["Авторка"] || "", translator: rows["Переклад"] || "", isbn: isbnIn(rows["ISBN"]) };
+    }),
+  },
+  {
+    id: "nebo",
+    kind: "publisher",
+    name: "Nebo Booklab Publishing",
+    tagline: "Харківське видавництво: фентезі, фантастика, класика. Книжки з книгарні Лабораторії",
+    url: "https://nebopublishing.com.ua/",
+    draft: true,
+    listing: (n) => `https://laboratory.ua/brands/nebobooklabpublishing${n > 1 ? `/page-${n}` : ""}`,
+    fetchAll: (src, opts) => listingProducts(src, opts),
+    parsePage: (html, url) => ldBookPage(SOURCES.find((s) => s.id === "nebo"), ["Nebo Booklab Publishing"])(html, url),
+    normalize: (p) => p,
+    keep: () => true,
+    toItem: (p) => p,
+    finish: joinEbooks,
+  },
+  {
+    id: "zhorzh",
+    kind: "publisher",
+    name: "Жорж",
+    tagline: "Видавництво: фентезі, фантастика, детективи. Книжки з книгарні Лабораторії",
+    url: "https://zhorzh.com.ua/",
+    draft: true,
+    listing: (n) => `https://laboratory.ua/brands/zhorzh${n > 1 ? `/page-${n}` : ""}`,
+    fetchAll: (src, opts) => listingProducts(src, opts),
+    parsePage: (html, url) => ldBookPage(SOURCES.find((s) => s.id === "zhorzh"), ["Жорж"])(html, url),
+    normalize: (p) => p,
+    keep: () => true,
+    toItem: (p) => p,
+    finish: joinEbooks,
+  },
 ];
 
 // All products of one source, normalised. Pages until a short page; a failed page fails the source.
@@ -307,8 +542,10 @@ async function refresh({ store, log = console.log, fetchImpl }) {
   for (const src of SOURCES) {
     try {
       const previous = new Map((store.shelf(src.id)?.items || []).map((it) => [it.url, it]));
-      raw[src.id] = src.fetchAll ? await src.fetchAll(src, { fetchImpl, log, previous }) : await fetchSource(src, { fetchImpl, log });
-      if (src.enrich) await src.enrich(raw[src.id], { previous, fetchImpl, log });
+      const skip = new Set(JSON.parse(store.db.get(`skip:${src.id}`) || "[]"));
+      raw[src.id] = src.fetchAll ? await src.fetchAll(src, { fetchImpl, log, previous, skip }) : await fetchSource(src, { fetchImpl, log });
+      if (src.fetchAll) store.db.set(`skip:${src.id}`, JSON.stringify([...skip]));
+      if (src.enrich) await src.enrich(raw[src.id], { previous, fetchImpl, log, id: src.id, keep: src.keep });
     } catch (e) {
       errors.push(e.message);
       log(`refresh: ${e.message}; keeping the previous ${src.id} catalog`);
@@ -324,4 +561,4 @@ async function refresh({ store, log = console.log, fetchImpl }) {
   return { ok: true, errors, counts };
 }
 
-module.exports = { SOURCES, fetchSource, buildShelves, refresh, volumeOf, ent };
+module.exports = { SOURCES, fetchSource, buildShelves, refresh, volumeOf, ent, pageProducts, ldBookPage };

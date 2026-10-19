@@ -372,6 +372,11 @@ class Store {
     const db = this.db;
     this.lib = { books: {}, entries: {}, subscriptions: [] };
     for (const r of db.prepare("SELECT id, data FROM books").all()) this.lib.books[r.id] = JSON.parse(r.data);
+    // Max (2026-10-19): «не дуже люблю Readeat», so its links (imported from Books.md) go.
+    for (const b of Object.values(this.lib.books)) {
+      const links = (b.links || []).filter((l) => !/readeat\.com/i.test(l.url));
+      if (links.length !== (b.links || []).length) (b.links = links), this.writeBook(b.id);
+    }
     for (const r of db.prepare("SELECT * FROM entries WHERE reader = ?").all(OWNER)) this.lib.entries[r.book] = { status: r.status, year: r.year, rating: r.rating, note: r.note, copy: r.copy, order: r.ord, ...(r.added ? { added: r.added } : {}) };
     this.lib.subscriptions = db.prepare("SELECT shelf FROM subscriptions WHERE reader = ?").all(OWNER).map((r) => r.shelf);
   }
