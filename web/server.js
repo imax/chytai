@@ -111,6 +111,16 @@ app.get("/logout", (req, res) => {
 
 // Library marks on cards («Хочу прочитати», «Прочитав») are the signed-in reader's own; guests see none.
 const inLibraryMap = (req) => (req.user ? store.inLibrary() : new Map());
+// Draft shelves (a new catalog Max has not looked at yet) are seen only by the signed-in owner.
+const isDraft = (shelfId) => !!store.shelf(shelfId)?.draft;
+const shelvesFor = (req) => (req.user ? store.shelves : store.shelves.filter((s) => !s.draft));
+function bookFor(req, book, hasEntry) {
+  if (req.user || !book) return book;
+  const editions = book.editions && book.editions.filter((e) => !e.shelf.draft);
+  const series = book.series && book.series.items.some((v) => v.shelf.draft) ? null : book.series;
+  if (book.shelf && isDraft(book.shelf) && !editions?.length && !hasEntry) return null;
+  return { ...book, editions, series };
+}
 const readersOf = (id) => {
   const e = store.entry(id);
   return e ? [{ name: OWNER, href: `${READER}#${store.canonical(id)}`, entry: e }] : [];
@@ -118,7 +128,7 @@ const readersOf = (id) => {
 const visible = (s) => store.visible(s);
 
 app.get("/", (req, res) => {
-  res.send(pages.discoveryPage({ shelves: store.shelves, subscriptions: store.lib.subscriptions, user: req.user, owner: OWNER, readerHref: READER, libraryCount: store.library().length, inLibrary: inLibraryMap(req), visible, fetched: store.shelvesRefreshedAt ? new Date(store.shelvesRefreshedAt).toLocaleString("uk-UA", { timeZone: "Europe/Kyiv", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" }) : store.shelvesFetched, ownerStrip: store.library().filter((r) => r.rating >= 5 && r.book.cover).slice(0, 5).map((r) => r.book) }));
+  res.send(pages.discoveryPage({ shelves: shelvesFor(req), subscriptions: store.lib.subscriptions, user: req.user, owner: OWNER, readerHref: READER, libraryCount: store.library().length, inLibrary: inLibraryMap(req), visible, fetched: store.shelvesRefreshedAt ? new Date(store.shelvesRefreshedAt).toLocaleString("uk-UA", { timeZone: "Europe/Kyiv", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" }) : store.shelvesFetched, ownerStrip: store.library().filter((r) => r.rating >= 5 && r.book.cover).slice(0, 5).map((r) => r.book) }));
 });
 
 function libraryRows() {
@@ -147,13 +157,14 @@ app.get("/me/book/:id", owner, (req, res) => {
 
 app.get("/shelf/:id", (req, res) => {
   const shelf = store.shelf(req.params.id);
-  if (!shelf) return res.status(404).send(pages.messagePage({ title: "Немає такої полиці", text: "", user: req.user }));
+  if (!shelf || (shelf.draft && !req.user)) return res.status(404).send(pages.messagePage({ title: "Немає такої полиці", text: "", user: req.user }));
   res.send(pages.shelfPage({ shelf, subscribed: store.subscribed(shelf.id), user: req.user, inLibrary: inLibraryMap(req), visible }));
 });
 
 app.get("/search", (req, res) => {
   const q = String(req.query.q || "").trim().slice(0, 100);
-  res.send(pages.searchPage({ q, hits: store.search(q), user: req.user, inLibrary: inLibraryMap(req), owner: OWNER, readerHref: READER }));
+  const hits = store.search(q).map((h) => ({ ...h, book: bookFor(req, h.book, !!h.entry) })).filter((h) => h.book);
+  res.send(pages.searchPage({ q, hits, user: req.user, inLibrary: inLibraryMap(req), owner: OWNER, readerHref: READER }));
 });
 
 app.get("/book/:id", (req, res) => {
@@ -161,8 +172,9 @@ app.get("/book/:id", (req, res) => {
   if (!id) return res.status(404).send(pages.messagePage({ title: "Немає такої книжки", text: "", user: req.user }));
   // One address per work: an id, an edition id or an old slug redirects to the canonical one.
   if (store.href(id) !== `/book/${encodeURIComponent(req.params.id)}`) return res.redirect(301, store.href(id));
-  const book = store.book(id);
-  res.send(pages.bookPage({ book, entry: store.entry(book.id), user: req.user, shelf: book.shelf ? store.shelf(book.shelf) : null, inLibrary: inLibraryMap(req), readers: readersOf(book.id) }));
+  const book = bookFor(req, store.book(id), !!store.entry(id));
+  if (!book) return res.status(404).send(pages.messagePage({ title: "Немає такої книжки", text: "", user: req.user }));
+  res.send(pages.bookPage({ book, entry: store.entry(book.id), user: req.user, shelf: book.shelf && (req.user || !isDraft(book.shelf)) ? store.shelf(book.shelf) : null, inLibrary: inLibraryMap(req), readers: readersOf(book.id) }));
 });
 
 // ---- writes (owner only) ----
