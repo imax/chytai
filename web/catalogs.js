@@ -468,7 +468,7 @@ const SOURCES = [
     finish: joinEbooks,
   },
   // Наш Формат's own shop answers our server with 403 (2026-10-19), so its books come from MEGOGO Books.
-  mbooks({ id: "nashformat", slug: "nash-format", brand: "Наш Формат", name: "Наш Формат", tagline: "Видавництво нонфікшну: бізнес, саморозвиток, історія, наука", url: "https://nashformat.ua/" }),
+  mbooks({ id: "nashformat", slug: "nash-format", brand: "Наш Формат", name: "Наш Формат", tagline: "Видавництво нонфікшну: бізнес, саморозвиток, історія, наука", url: "https://nashformat.ua/", draft: false }),
   {
     id: "osnovy",
     kind: "publisher",
@@ -530,12 +530,12 @@ const SOURCES = [
     toItem: (p) => p,
     finish: joinEbooks,
   },
-  mbooks({ id: "stone", slug: "stone-publishing", brand: "Stone Publishing", name: "Stone Publishing", tagline: "Фантастика, детективи й сучасна проза в перекладі", url: "https://stonepublishing.com.ua/" }),
-  mbooks({ id: "vikhola", slug: "vikhola", brand: "Віхола", name: "Віхола", tagline: "Нонфікшн і сучасна проза", url: "https://vikhola.com/" }),
-  mbooks({ id: "artbooks", slug: "artbooks", brand: "ARTBOOKS", name: "ARTBOOKS", tagline: "Сучасна проза, фантастика й підліткова література", url: "https://artbooks.ua/" }),
-  mbooks({ id: "arthuss", slug: "arthuss", brand: "Видавництво ArtHuss", name: "ArtHuss", tagline: "Нонфікшн про мистецтво, науку й суспільство", url: "https://arthuss.com.ua/" }),
-  mbooks({ id: "zhupanskyi", slug: "vydavnytstvo-zhupanskoho", brand: "Видавництво Жупанського", name: "Видавництво Жупанського", tagline: "Класика й сучасна світова проза в нових перекладах", url: "https://zhupansky.com/" }),
-  mbooks({ id: "meridian", slug: "meridian-czernowitz", brand: "Meridian Czernowitz", name: "Meridian Czernowitz", tagline: "Сучасна українська та світова література", url: "https://meridiancz.com/" }),
+  mbooks({ id: "stone", slug: "stone-publishing", brand: "Stone Publishing", name: "Stone Publishing", tagline: "Фантастика, детективи й сучасна проза в перекладі", url: "https://stonepublishing.com.ua/", draft: false }),
+  mbooks({ id: "vikhola", slug: "vikhola", brand: "Віхола", name: "Віхола", tagline: "Нонфікшн і сучасна проза", url: "https://vikhola.com/", draft: false }),
+  mbooks({ id: "artbooks", slug: "artbooks", brand: "ARTBOOKS", name: "ARTBOOKS", tagline: "Сучасна проза, фантастика й підліткова література", url: "https://artbooks.ua/", draft: false }),
+  mbooks({ id: "arthuss", slug: "arthuss", brand: "Видавництво ArtHuss", name: "ArtHuss", tagline: "Нонфікшн про мистецтво, науку й суспільство", url: "https://arthuss.com.ua/", draft: false }),
+  mbooks({ id: "zhupanskyi", slug: "vydavnytstvo-zhupanskoho", brand: "Видавництво Жупанського", name: "Видавництво Жупанського", tagline: "Класика й сучасна світова проза в нових перекладах", url: "https://zhupansky.com/", draft: false }),
+  mbooks({ id: "meridian", slug: "meridian-czernowitz", brand: "Meridian Czernowitz", name: "Meridian Czernowitz", tagline: "Сучасна українська та світова література", url: "https://meridiancz.com/", draft: false }),
 ];
 
 // All products of one source, normalised. Pages until a short page; a failed page fails the source.
