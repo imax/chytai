@@ -217,11 +217,17 @@ function editPage({ book, entry, user }) {
 
 // Every edition of the book on the shelves links back to where it came from: the publisher's page,
 // with the edition, price and availability. One edition gets a button; several get a short list.
+// The best edition gets the button; the others are quiet rows under it, one per shop page.
 function editions(book) {
-  const eds = book.editions || [];
+  const seen = new Set();
+  const eds = (book.editions || []).filter((e) => !seen.has(e.links[0].url) && seen.add(e.links[0].url));
   if (!eds.length) return "";
   if (eds.length === 1) return buyButton(eds[0].shelf, eds[0]);
-  return `<div class="editions"><p class="muted small">${count(eds.length, "видання", "видання", "видань")}</p>${eds.map((e) => buyButton(e.shelf, e, true)).join("")}</div>`;
+  const row = (e) => {
+    const tail = [e.format, e.edition, e.price, e.status && e.status !== "є" ? e.status : ""].filter(Boolean).join(" · ");
+    return `<li><a href="${attr(e.links[0].url)}" target="_blank" rel="noopener">${esc(e.shelf.name)} ↗</a> <span class="muted">${esc(tail)}</span></li>`;
+  };
+  return `${buyButton(eds[0].shelf, eds[0], false, true)}<div class="editions"><p class="muted small">Ще ${count(eds.length - 1, "видання", "видання", "видань")}</p><ul>${eds.slice(1).map(row).join("")}</ul></div>`;
 }
 
 // The volumes of the series this book belongs to, each with its own page and buy link.
@@ -238,10 +244,10 @@ function series(book, inLibrary) {
     .join("")}</ul></div>`;
 }
 
-function buyButton(shelf, book, compact = false) {
+function buyButton(shelf, book, compact = false, withFormat = false) {
   const host = shelf.url.replace(/^https?:\/\/(www\.)?/, "").replace(/\/$/, "");
   const verb = book.price === "безкоштовно" ? "Завантажити" : book.status === "передзамовлення" ? "Замовити" : book.status === "немає" ? "Подивитися" : "Купити";
-  const tail = [compact ? [book.format, book.edition].filter(Boolean).join(", ") : "", book.price, book.status && book.status !== "є" ? book.status : "", compact ? host : ""].filter(Boolean).join(" · ");
+  const tail = [compact || withFormat ? [book.format, book.edition].filter(Boolean).join(", ") : "", book.price, book.status && book.status !== "є" ? book.status : "", compact ? host : ""].filter(Boolean).join(" · ");
   return `<p class="buy"><a class="btn primary${compact ? " small" : ""}" href="${attr(book.links[0].url)}" target="_blank" rel="noopener">${verb}${compact ? "" : ` на ${esc(host)}`} ↗</a>${tail ? `<span class="muted">${esc(tail)}</span>` : ""}</p>`;
 }
 

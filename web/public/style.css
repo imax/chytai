@@ -150,9 +150,11 @@ form.inline { display: inline; }
 .price { font-weight: 600; margin: 6px 0; }
 .buy { display: flex; gap: 12px; align-items: center; margin: 14px 0 10px; flex-wrap: wrap; }
 .buy .btn { font-weight: 600; }
-.editions { margin: 14px 0 10px; }
+.editions { margin: 4px 0 10px; }
 .editions > p { margin: 0 0 2px; }
-.editions .buy { margin: 6px 0; }
+.editions ul { list-style: none; margin: 0; padding: 0; font-size: 15px; }
+.editions li { padding: 5px 0; border-top: 1px solid var(--line); }
+.editions li .muted { margin-left: 6px; }
 .series { margin: 14px 0 10px; }
 .series > p { margin: 0 0 4px; }
 .series ul { list-style: none; margin: 0; padding: 0; }

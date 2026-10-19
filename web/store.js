@@ -291,8 +291,9 @@ class Store {
         groupOf.set(si.item.id, ng);
       }
     };
-    // A shared ISBN counts only with the same author or title: publishers' sites reuse ISBNs by mistake.
-    const alike = (a, b) => (norm(a.author) && norm(a.author) === norm(b.author)) || norm(a.title).startsWith(norm(b.title)) || norm(b.title).startsWith(norm(a.title));
+    // A shared ISBN counts only with the same title: publishers' sites reuse ISBNs by mistake.
+    // (Основи gives a bundle the ISBN of one of its books, so a bundle never joins a single book this way.)
+    const alike = (a, b) => !a.bundle === !b.bundle && (norm(a.title).startsWith(norm(b.title)) || norm(b.title).startsWith(norm(a.title)));
     for (const si of this.shelfItems.values()) {
       const it = si.item;
       const ik = `isbn:${isbnKey(it.isbn)}`;
