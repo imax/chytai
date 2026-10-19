@@ -15,21 +15,26 @@ on:
     branches: [main]
     paths: [".github/workflows/backup.yml", "scripts/backup-snapshot.js"]
 
+concurrency: backup
+
 env:
   AGE_RECIPIENT: age1hv4fyt42a9wjuhh4dtkrdjle8xz6tlk3t0duf2c5a2lqszwmtd6q9q0pfw
 
 jobs:
   backup:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
         include:
           - app: chytai-web
             token: FLY_API_TOKEN_WEB
+            url: https://chytai.org.ua
             exclude: ""
           - app: chytai
             token: FLY_API_TOKEN
+            url: https://chytai.fly.dev
             exclude: "reflow" # rebuilt from the books on demand
     env:
       APP: ${{ matrix.app }}
@@ -38,24 +43,26 @@ jobs:
       - uses: actions/checkout@v4
       - uses: superfly/flyctl-actions/setup-flyctl@master
       - run: sudo apt-get install -y age >/dev/null
-      # The machines sleep when nobody uses them; wake the one that has the volume.
-      - name: Start the machine
-        run: |
-          id=$(flyctl machine list -a "$APP" --json | jq -r '[.[] | select(.config.mounts | length > 0)][0].id')
-          echo "MACHINE=$id" >> "$GITHUB_ENV"
-          flyctl machine start "$id" -a "$APP" || true
-          flyctl machine wait "$id" -a "$APP" --state started --wait-timeout 60s || true
+      # The machines sleep when nobody uses them (and /tmp goes with them), so ping the site while this runs
+      # and redo snapshot + download together if the machine stopped in between.
       - name: Snapshot on the machine
         run: |
+          ( while true; do curl -s -o /dev/null "${{ matrix.url }}/" || true; sleep 5; done ) &
+          id=$(flyctl machine list -a "$APP" --json | jq -r '[.[] | select(.config.mounts | length > 0)][0].id')
+          echo "MACHINE=$id" >> "$GITHUB_ENV"
           script=$(base64 -w0 scripts/backup-snapshot.js)
-          for i in 1 2 3; do
-            flyctl ssh console -a "$APP" --machine "$MACHINE" \
-              -C "sh -c 'echo $script | base64 -d > /tmp/backup-snapshot.js && rm -f /tmp/backup.tar.gz && node /tmp/backup-snapshot.js /data /tmp/backup.tar.gz ${{ matrix.exclude }}'" && break
-            echo "retrying"; sleep 10
-          done
           rm -f backup.tar.gz
-          flyctl ssh sftp get /tmp/backup.tar.gz backup.tar.gz -a "$APP" --machine "$MACHINE"
-          flyctl ssh console -a "$APP" --machine "$MACHINE" -C "rm -f /tmp/backup.tar.gz /tmp/backup-snapshot.js" || true
+          for i in 1 2 3; do
+            flyctl machine start "$id" -a "$APP" || true
+            flyctl machine wait "$id" -a "$APP" --state started --wait-timeout 60s || true
+            flyctl ssh console -a "$APP" --machine "$id" \
+              -C "sh -c 'echo $script | base64 -d > /tmp/backup-snapshot.js && rm -f /tmp/backup.tar.gz && node /tmp/backup-snapshot.js /data /tmp/backup.tar.gz ${{ matrix.exclude }}'" \
+              && flyctl ssh sftp get /tmp/backup.tar.gz backup.tar.gz -a "$APP" --machine "$id" \
+              && break
+            rm -f backup.tar.gz; echo "retrying"; sleep 10
+          done
+          test -s backup.tar.gz
+          flyctl ssh console -a "$APP" --machine "$id" -C "rm -f /tmp/backup.tar.gz /tmp/backup-snapshot.js" || true
       - name: Check the copy
         run: |
           mkdir check && tar xzf backup.tar.gz -C check
