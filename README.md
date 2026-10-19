@@ -66,6 +66,26 @@ node scripts/upload-books.mjs https://chytai.fly.dev "~/Library/Mobile Documents
 
 Машина засинає, коли нею ніхто не користується, і прокидається на перший запит за кілька секунд.
 
+### Бекапи
+
+Щоночі о 03:30 за Києвом `.github/workflows/backup.yml` знімає копію томів `/data` обох застосунків (`chytai-web`: база сайту; `chytai`: позиції, нотатки, книжки), перевіряє її, шифрує ключем [age](https://age-encryption.org) і зберігає як артефакт запуску на 90 днів. Друга копія: щоденні знімки томів у самому Fly (зберігаються 30 днів).
+
+Приватний ключ у репозиторій не потрапляє: він лежить у `~/Projects/chytai/.backup-key` на Маку Макса і в файлах проєкту (`chytai-backup/backup-key.txt`). Без нього копії не розшифрувати.
+
+Відновлення (наприклад, бази сайту):
+
+```bash
+# 1. завантажити артефакт chytai-web-РРРР-ММ-ДД з GitHub Actions → Backup і розпакувати zip
+age -d -i ~/Projects/chytai/.backup-key chytai-web-РРРР-ММ-ДД.tar.gz.age > backup.tar.gz
+mkdir restore && tar xzf backup.tar.gz -C restore          # restore/web/chytai.db
+# 2. залити на том (машина має працювати) і перезапустити
+fly ssh sftp shell -a chytai-web    # put restore/web/chytai.db /data/web/chytai.db.new
+fly ssh console -a chytai-web -C "sh -c 'cd /data/web && rm -f chytai.db-wal chytai.db-shm && mv chytai.db.new chytai.db'"
+fly machine restart -a chytai-web
+```
+
+Або зі знімка Fly: `fly volumes snapshots list <vol>` і `fly volumes create web_data --snapshot-id <id> -a chytai-web`.
+
 ## Десктопна версія (macOS)
 
 Потрібен Node.js 20 або новіший (`brew install node`, якщо його ще немає).
