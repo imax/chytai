@@ -15,7 +15,9 @@ on:
     branches: [main]
     paths: [".github/workflows/backup.yml", "scripts/backup-snapshot.js"]
 
-concurrency: backup
+concurrency:
+  group: backup
+  cancel-in-progress: true
 
 env:
   AGE_RECIPIENT: age1hv4fyt42a9wjuhh4dtkrdjle8xz6tlk3t0duf2c5a2lqszwmtd6q9q0pfw
@@ -55,14 +57,14 @@ jobs:
           for i in 1 2 3; do
             flyctl machine start "$id" -a "$APP" || true
             flyctl machine wait "$id" -a "$APP" --state started --wait-timeout 60s || true
-            flyctl ssh console -a "$APP" --machine "$id" \
+            timeout 300 flyctl ssh console -a "$APP" --machine "$id" \
               -C "sh -c 'echo $script | base64 -d > /tmp/backup-snapshot.js && rm -f /tmp/backup.tar.gz && node /tmp/backup-snapshot.js /data /tmp/backup.tar.gz ${{ matrix.exclude }}'" \
-              && flyctl ssh sftp get /tmp/backup.tar.gz backup.tar.gz -a "$APP" --machine "$id" \
+              && timeout 600 flyctl ssh sftp get /tmp/backup.tar.gz backup.tar.gz -a "$APP" --machine "$id" \
               && break
             rm -f backup.tar.gz; echo "retrying"; sleep 10
           done
           test -s backup.tar.gz
-          flyctl ssh console -a "$APP" --machine "$id" -C "rm -f /tmp/backup.tar.gz /tmp/backup-snapshot.js" || true
+          timeout 120 flyctl ssh console -a "$APP" --machine "$id" -C "rm -f /tmp/backup.tar.gz /tmp/backup-snapshot.js" || true
       - name: Check the copy
         run: |
           mkdir check && tar xzf backup.tar.gz -C check
