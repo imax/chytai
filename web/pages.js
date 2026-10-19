@@ -285,7 +285,14 @@ ${subs.length ? `
   ${fresh.length ? `<div class="grid">${fresh.slice(0, 24).map((it) => itemCard(it, inLibrary, user, it.shelfName)).join("")}</div>` : `<p class="muted">Поки нічого нового.</p>`}
 </section>` : ""}
 <section>
-  <h2 class="sec">Полиці</h2>
+  <h2 class="sec">Видавництва</h2>
+  <div class="shelves">
+    ${shelves.map((s) => shelfCard({ ...s, items: visible(s) }, subscriptions.includes(s.id), user)).join("")}
+  </div>
+  <p class="muted small">Каталоги оновлено ${esc(fetched)}.</p>
+</section>
+<section>
+  <h2 class="sec">Читачі</h2>
   <div class="shelves">
     <a class="shelf-card" href="${attr(readerHref)}">
       <span class="strip">${ownerStrip.map((b) => cover(b, "mini")).join("")}</span>
@@ -294,9 +301,7 @@ ${subs.length ? `
       <p class="muted">Прочитане з оцінками й нотатками</p>
       <p class="shelf-n">${count(libraryCount, "книжка", "книжки", "книжок")}</p>
     </a>
-    ${shelves.map((s) => shelfCard({ ...s, items: visible(s) }, subscriptions.includes(s.id), user)).join("")}
   </div>
-  <p class="muted small">Каталоги оновлено ${esc(fetched)}.</p>
 </section>`;
   return layout({ title: "", body, user, path: "/" });
 }
