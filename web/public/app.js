@@ -83,12 +83,19 @@
       .then((r) => r.json())
       .then((list) => {
         if (!list.length) return;
+        // One line per library: where a copy is on the shelf now, or that all are out.
         $(".libs-list", libs).innerHTML = list
           .map((l) => {
-            const rows = l.records.flatMap((r) => r.branches.map((b) => ({ ...b, url: r.url })));
-            return `<div class="lib"><p><b>${esc(l.name)}</b> <span class="muted small">${esc(l.city)}</span> <a class="small" href="${esc(l.records[0].url)}" target="_blank" rel="noopener">каталог ↗</a></p><ul>${rows
-              .map((b) => `<li>${esc(b.branch)} <span class="${b.onShelf ? "ok" : "muted"} small">${b.onShelf ? `є на полиці${b.total > 1 ? `, ${b.onShelf} з ${b.total}` : ""}` : b.total > 1 ? `усі ${b.total} видані` : "видана"}</span></li>`)
-              .join("")}</ul></div>`;
+            const by = new Map();
+            for (const b of l.records.flatMap((r) => r.branches)) {
+              const x = by.get(b.branch) || { total: 0, onShelf: 0 };
+              x.total += b.total;
+              x.onShelf += b.onShelf;
+              by.set(b.branch, x);
+            }
+            const on = [...by].filter(([, x]) => x.onShelf).map(([n]) => n);
+            const where = on.length ? `<span class="ok">є на полиці:</span> ${esc(on.join(", "))}` : `<span class="muted">усі примірники видані</span>`;
+            return `<p class="lib"><a href="${esc(l.records[0].url)}" target="_blank" rel="noopener"><b>${esc(l.name)}</b> ↗</a> <span class="muted small">${esc(l.city)}</span><br>${where}</p>`;
           })
           .join("");
         libs.classList.remove("hidden");

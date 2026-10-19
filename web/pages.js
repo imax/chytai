@@ -164,6 +164,7 @@ function bookPage({ book, entry, user, shelf, inLibrary = new Map(), readers = [
     ${(book.tags || []).length ? `<p class="meta">${book.tags.map((t) => `<span class="tag genre">${esc(t)}</span>`).join("")}</p>` : ""}
     ${user ? mine(book, entry) : ""}
     ${book.blurb ? `<div class="prose blurb"><p>${esc(book.blurb)}</p><p class="muted small">Опис з сайту ${esc(shelf ? shelf.name : book.source)}</p></div>` : ""}
+    ${(book.translations || []).length ? `<p class="translations muted">${book.translations.map((t) => `${/[а-яіїєґ]/i.test(book.title) && !/[а-яіїєґ]/i.test(t.title) ? "Оригінал" : "Переклад"}: <a href="${attr(t.href)}">${esc(t.title)}</a>`).join(" · ")}</p>` : ""}
     ${editions(book)}
     ${series(book, inLibrary)}
     ${links.length ? `<p class="links">${links.map((l) => `<a href="${attr(l.url)}" target="_blank" rel="noopener">${esc(l.label)}</a>`).join('<span class="sep">·</span>')}</p>` : ""}
@@ -183,10 +184,11 @@ function byline(author) {
 
 // The signed-in reader's own line: where the book is in their library, or one tap to want it.
 function mine(book, entry) {
-  const edit = `/me/book/${encodeURIComponent(book.id)}`;
+  // Read in another language: the mark comes from that book, and so does the edit link.
+  const edit = `/me/book/${encodeURIComponent(entry?.via ? entry.via.id : book.id)}`;
   if (!entry) return `<div class="mine"><form method="post" action="/api/entry/${encodeURIComponent(book.id)}" class="inline"><input type="hidden" name="status" value="want"><input type="hidden" name="back" value="1"><button class="btn small">Хочу прочитати</button></form><a class="muted small" href="${edit}">Додати до моїх книжок…</a></div>`;
   const what = [entry.status ? STATUS[entry.status] + (entry.status === "read" && entry.year ? ` ${entry.year}` : "") : "У моїх книжках", entry.rating != null ? `${uk(entry.rating)}/5` : "", entry.copy ? COPY[entry.copy] : ""].filter(Boolean).join(" · ");
-  return `<div class="mine"><span class="have">✓ ${esc(what)}</span><a class="muted small" href="${edit}">Змінити</a></div>`;
+  return `<div class="mine"><span class="have">✓ ${esc(what)}</span>${entry.via ? `<span class="muted small">як <a href="${attr(entry.via.href)}">${esc(entry.via.title)}</a></span>` : ""}<a class="muted small" href="${edit}">Змінити</a></div>`;
 }
 
 // Readers who have the book, each with their status, rating and note, linked to their shelf.
@@ -194,7 +196,7 @@ function readersBlock(readers) {
   if (!readers.length) return "";
   return `<section class="readers"><h2 class="sec">У читачів</h2>${readers
     .map(({ name, href, entry: e }) => {
-      const what = [e.status ? STATUS[e.status].toLowerCase() + (e.status === "read" && e.year ? ` у ${e.year}` : "") : "", e.copy ? COPY[e.copy].toLowerCase() : ""].filter(Boolean).join(" · ");
+      const what = [e.status ? STATUS[e.status].toLowerCase() + (e.status === "read" && e.year ? ` у ${e.year}` : "") : "", e.copy ? COPY[e.copy].toLowerCase() : "", e.via ? `як «${e.via.title}»` : ""].filter(Boolean).join(" · ");
       return `<div class="reader"><p><a href="${attr(href)}"><b>${esc(name)}</b></a>${e.rating != null ? ` ${stars(e.rating)}` : ""}${what ? ` <span class="muted small">${esc(what)}</span>` : ""}</p>${e.note ? `<div class="prose">${marked.parse(e.note).replace(/<a href="http/g, '<a target="_blank" rel="noopener" href="http')}</div>` : ""}</div>`;
     })
     .join("")}</section>`;
@@ -220,14 +222,20 @@ function editPage({ book, entry, user }) {
 // The best edition gets the button; the others are quiet rows under it, one per shop page.
 function editions(book) {
   const seen = new Set();
-  const eds = (book.editions || []).filter((e) => !seen.has(e.links[0].url) && seen.add(e.links[0].url));
+  // In stock first, then the publisher's own over a shop reselling it (Старий Лев sells partners' books).
+  const rank = (e) => (e.status === "є" ? 0 : e.status === "передзамовлення" ? 1 : 2) * 4 + (e.edition ? 2 : 0) + (e.format === "e-book" ? 1 : 0);
+  const eds = (book.editions || []).filter((e) => !seen.has(e.links[0].url) && seen.add(e.links[0].url)).sort((a, b) => rank(a) - rank(b));
   if (!eds.length) return "";
   if (eds.length === 1) return buyButton(eds[0].shelf, eds[0]);
   const row = (e) => {
     const tail = [e.format, e.edition, e.price, e.status && e.status !== "є" ? e.status : ""].filter(Boolean).join(" · ");
     return `<li><a href="${attr(e.links[0].url)}" target="_blank" rel="noopener">${esc(e.shelf.name)} ↗</a> <span class="muted">${esc(tail)}</span></li>`;
   };
-  return `${buyButton(eds[0].shelf, eds[0], false, true)}<div class="editions"><p class="muted small">Ще ${count(eds.length - 1, "видання", "видання", "видань")}</p><ul>${eds.slice(1).map(row).join("")}</ul></div>`;
+  const rest = eds.slice(1);
+  const have = rest.filter((e) => e.status === "є" || e.status === "передзамовлення");
+  const not = rest.filter((e) => !have.includes(e));
+  const list = (title, items) => (items.length ? `<p class="muted small">${title}</p><ul>${items.map(row).join("")}</ul>` : "");
+  return `${buyButton(eds[0].shelf, eds[0], false, true)}<div class="editions">${list("Також в наявності", have)}${list(have.length ? "Немає в наявності" : "Інші видання", not)}</div>`;
 }
 
 // The volumes of the series this book belongs to, each with its own page and buy link.

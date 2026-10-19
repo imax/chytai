@@ -158,7 +158,48 @@ class Store {
     this.linkEditions();
     this.migrateEntries();
     this.indexSlugs();
+    this.linkTranslations();
     this.indexSearch();
+  }
+
+  // A book and its translation are two works, linked: each page points at the other, and having read
+  // one counts for the other (Max, 2026-10-19: «якщо читав одну то автоматично і другу теж»). Linked
+  // when one's original title is the other's title, or by hand in matches.json «translations».
+  linkTranslations() {
+    this.translations = new Map(); // work id -> Set of work ids
+    const link = (a, b) => {
+      a = a && this.canonical(a);
+      b = b && this.canonical(b);
+      if (!a || !b || a === b) return;
+      for (const [x, y] of [[a, b], [b, a]]) (this.translations.get(x) || this.translations.set(x, new Set()).get(x)).add(y);
+    };
+    const works = [...this.seedBooks, ...Object.values(this.lib.books), ...[...this.shelfItems.values()].filter(({ item }) => this.canonical(item.id) === item.id && !this.hidden.has(item.id)).map(({ item }) => item)];
+    const byTitle = new Map();
+    for (const w of works) if (norm(w.title).length >= 4) (byTitle.get(norm(w.title)) || byTitle.set(norm(w.title), []).get(norm(w.title))).push(w);
+    for (const w of works) for (const o of byTitle.get(norm(w.altTitle)) || []) link(w.id, o.id); // the same work already shares one id
+    let pairs = [];
+    try {
+      pairs = readJson(path.join(SEED, "matches.json")).translations || [];
+    } catch {
+      /* none */
+    }
+    for (const [a, b] of pairs) link(this.slugs.get(a) || a, this.slugs.get(b) || b);
+  }
+
+  // The other-language versions of a work: [{ id, title, href }].
+  translationsOf(id) {
+    return [...(this.translations?.get(this.canonical(id)) || [])].map((t) => this.book(t)).filter(Boolean).map((b) => ({ id: b.id, title: b.title, author: b.author, href: this.href(b.id) }));
+  }
+
+  // The reader's entry for a work, or, failing that, for one of its translations ({ ...entry, via }).
+  sharedEntry(id) {
+    const own = this.entry(id);
+    if (own) return own;
+    for (const t of this.translations?.get(this.canonical(id)) || []) {
+      const e = this.lib.entries[t];
+      if (e) return { ...e, via: { id: t, title: this.book(t)?.title || t, href: this.href(t) } };
+    }
+    return null;
   }
 
   // ---- canonical URLs ----
@@ -461,6 +502,12 @@ class Store {
     return out;
   }
 
+  // book() plus its translations, for the book page (kept out of book() so the two don't recurse).
+  bookPage(id) {
+    const b = this.book(id);
+    return b && { ...b, translations: this.translationsOf(b.id) };
+  }
+
   fromShelfItem(shelf, it) {
     return { id: it.id, title: it.title, author: it.author, altTitle: it.altTitle || "", cover: it.cover, tags: it.genres || [], links: [{ label: shelf.name, url: it.url }], source: shelf.id, shelf: shelf.id, blurb: it.blurb || "", price: it.price, status: it.status, language: it.language, edition: it.edition || "", isbn: it.isbn || "", volume: it.volume || 0, bundle: !!it.bundle, format: it.format || (shelf.kind === "free" ? "e-book" : "папір") };
   }
@@ -493,6 +540,7 @@ class Store {
   // Library membership by any id, edition ids included (for the shelf cards).
   inLibrary() {
     const m = new Map(Object.entries(this.lib.entries));
+    for (const [w, ts] of this.translations || []) if (!m.has(w)) for (const t of ts) if (this.lib.entries[t]) m.set(w, this.lib.entries[t]);
     for (const [alias, c] of this.aliases) if (m.has(c)) m.set(alias, m.get(c));
     return m;
   }

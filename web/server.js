@@ -120,8 +120,8 @@ function bookFor(req, book, hasEntry) {
   return { ...book, editions, series };
 }
 const readersOf = (id) => {
-  const e = store.entry(id);
-  return e ? [{ name: OWNER, href: `${READER}#${store.canonical(id)}`, entry: e }] : [];
+  const e = store.sharedEntry(id);
+  return e ? [{ name: OWNER, href: `${READER}#${e.via ? e.via.id : store.canonical(id)}`, entry: e }] : [];
 };
 const visible = (s) => store.visible(s);
 
@@ -170,9 +170,9 @@ app.get("/book/:id", (req, res) => {
   if (!id) return res.status(404).send(pages.messagePage({ title: "Немає такої книжки", text: "", user: req.user }));
   // One address per work: an id, an edition id or an old slug redirects to the canonical one.
   if (store.href(id) !== `/book/${encodeURIComponent(req.params.id)}`) return res.redirect(301, store.href(id));
-  const book = bookFor(req, store.book(id), !!store.entry(id));
+  const book = bookFor(req, store.bookPage(id), !!store.entry(id));
   if (!book) return res.status(404).send(pages.messagePage({ title: "Немає такої книжки", text: "", user: req.user }));
-  res.send(pages.bookPage({ book, entry: store.entry(book.id), user: req.user, shelf: book.shelf && (req.user || !isDraft(book.shelf)) ? store.shelf(book.shelf) : null, inLibrary: inLibraryMap(req), readers: readersOf(book.id) }));
+  res.send(pages.bookPage({ book, entry: store.sharedEntry(book.id), user: req.user, shelf: book.shelf && (req.user || !isDraft(book.shelf)) ? store.shelf(book.shelf) : null, inLibrary: inLibraryMap(req), readers: readersOf(book.id) }));
 });
 
 // Where the book can be borrowed: libraries with open catalogs (libraries.js), asked when the page loads.
