@@ -51,12 +51,13 @@ const REFRESH_MS = 24 * 3600 * 1000;
 let lastRefresh = Date.parse(store.shelvesRefreshedAt) || 0;
 let refreshing = null;
 let lastResult = null; // { at, ok, errors, counts } of the last attempt, for /refresh-status
+let currentLog = []; // the running refresh's log so far
 function refreshShelves(force = false) {
   if (refreshing) return refreshing;
   if (!force && Date.now() - lastRefresh < REFRESH_MS) return null;
   lastRefresh = Date.now(); // even on failure: one attempt a day, not one per request
   const started = new Date().toISOString();
-  const lines = []; // the refresh's own log, kept for /refresh-status
+  const lines = (currentLog = []); // the refresh's own log, kept for /refresh-status
   const log = (m) => (console.log(m), lines.push(String(m).slice(0, 300)));
   refreshing = catalogs
     .refresh({ store, log })
@@ -91,7 +92,7 @@ const owner = (req, res, next) => (req.user ? next() : res.status(403).send("Ð¡Ð
 
 // Public and harmless: when the shelves were last refreshed and whether the sources answered.
 app.get("/refresh-status", (req, res) => {
-  res.json({ running: !!refreshing, last: lastResult, shelvesFetched: store.shelvesFetched, refreshedAt: store.shelvesRefreshedAt, nextAfter: new Date(lastRefresh + REFRESH_MS).toISOString() });
+  res.json({ running: !!refreshing, ...(refreshing && { log: currentLog.slice(-30) }), last: lastResult, shelvesFetched: store.shelvesFetched, refreshedAt: store.shelvesRefreshedAt, nextAfter: new Date(lastRefresh + REFRESH_MS).toISOString() });
 });
 
 app.get("/login/:token", (req, res) => {
@@ -126,7 +127,7 @@ const readersOf = (id) => {
 const visible = (s) => store.visible(s);
 
 app.get("/", (req, res) => {
-  res.send(pages.discoveryPage({ shelves: shelvesFor(req), subscriptions: store.lib.subscriptions, user: req.user, owner: OWNER, readerHref: READER, libraryCount: store.library().length, inLibrary: inLibraryMap(req), visible, fetched: store.shelvesRefreshedAt ? new Date(store.shelvesRefreshedAt).toLocaleString("uk-UA", { timeZone: "Europe/Kyiv", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" }) : store.shelvesFetched, ownerStrip: store.library().filter((r) => r.rating >= 5 && r.book.cover).slice(0, 5).map((r) => r.book) }));
+  res.send(pages.discoveryPage({ shelves: shelvesFor(req), subscriptions: store.lib.subscriptions, user: req.user, owner: OWNER, readerHref: READER, libraryCount: store.library().length, inLibrary: inLibraryMap(req), visible, fetched: store.shelvesRefreshedAt ? new Date(store.shelvesRefreshedAt).toLocaleString("uk-UA", { timeZone: "Europe/Kyiv", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" }) : store.shelvesFetched, ownerStrip: store.library().filter((r) => r.rating >= 5 && r.book.cover).slice(0, 5).map((r) => r.book), libraries: libraries.LIBRARIES.filter((l) => req.user || !l.draft) }));
 });
 
 function libraryRows() {

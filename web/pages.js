@@ -297,7 +297,7 @@ function entryForm(book, entry) {
 
 // ---- discovery (/) ----
 
-function discoveryPage({ shelves, subscriptions, user, owner, readerHref, libraryCount, inLibrary, fetched, ownerStrip = [], visible = (s) => s.items }) {
+function discoveryPage({ shelves, subscriptions, user, owner, readerHref, libraryCount, inLibrary, fetched, ownerStrip = [], libraries = [], visible = (s) => s.items }) {
   const subs = user ? shelves.filter((s) => subscriptions.includes(s.id)) : [];
   const fresh = subs.flatMap((s) => visible(s).filter((it) => it.isNew).map((it) => ({ ...it, shelfName: s.name, shelfId: s.id })));
   const body = `
@@ -330,7 +330,18 @@ ${subs.length ? `
       <p class="shelf-n">${count(libraryCount, "книжка", "книжки", "книжок")}</p>
     </a>
   </div>
-</section>`;
+</section>
+${libraries.length ? `
+<section>
+  <h2 class="sec">Бібліотеки</h2>
+  <div class="shelves">
+    ${libraries.map((l) => `<a class="shelf-card" href="${attr(l.base)}" target="_blank" rel="noopener">
+      <div class="shelf-kind">бібліотека · ${esc(l.city)}</div>
+      <h3>${esc(l.name)} ↗</h3>
+      <p class="muted">На сторінці книжки видно, в якій філії вона є на полиці</p>
+    </a>`).join("")}
+  </div>
+</section>` : ""}`;
   return layout({ title: "", body, user, path: "/" });
 }
 
