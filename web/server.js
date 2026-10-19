@@ -3,7 +3,7 @@
 //
 // Env: DATA_DIR (default ./data; the library lives in DATA_DIR/web/library.json), PORT (default 8090),
 // WEB_LOGIN_TOKEN (the magic link: opening /login/<token> once signs this browser in as the owner),
-// WEB_OWNER (the public name of the one profile), WEB_DOMAIN (the public host; www and *.fly.dev redirect to it).
+// WEB_OWNER (the public name of the one profile), WEB_OWNER_SLUG (its public shelf: /reader/<slug>), WEB_DOMAIN (the public host; www and *.fly.dev redirect to it).
 const express = require("express");
 const crypto = require("crypto");
 const fs = require("fs");
@@ -19,6 +19,7 @@ const PORT = Number(process.env.PORT) || 8090;
 const DATA_DIR = path.join(process.env.DATA_DIR || path.join(ROOT, "data"), "web");
 const TOKEN = process.env.WEB_LOGIN_TOKEN || "";
 const OWNER = process.env.WEB_OWNER || "Макс І";
+const READER = `/reader/${process.env.WEB_OWNER_SLUG || "max"}`; // the owner's public shelf: one reader among many
 const DOMAIN = process.env.WEB_DOMAIN || ""; // e.g. chytai.org.ua; set once DNS points here
 const COOKIE = "chytai_web";
 const COOKIE_DAYS = 365;
@@ -108,32 +109,51 @@ app.get("/logout", (req, res) => {
 
 // ---- pages ----
 
-const inLibraryMap = () => store.inLibrary();
+// Library marks on cards («Хочу прочитати», «Прочитав») are the signed-in reader's own; guests see none.
+const inLibraryMap = (req) => (req.user ? store.inLibrary() : new Map());
+const readersOf = (id) => {
+  const e = store.entry(id);
+  return e ? [{ name: OWNER, href: `${READER}#${store.canonical(id)}`, entry: e }] : [];
+};
 const visible = (s) => store.visible(s);
 
 app.get("/", (req, res) => {
-  res.send(pages.discoveryPage({ shelves: store.shelves, subscriptions: store.lib.subscriptions, user: req.user, owner: OWNER, libraryCount: store.library().length, inLibrary: inLibraryMap(), visible, fetched: store.shelvesRefreshedAt ? new Date(store.shelvesRefreshedAt).toLocaleString("uk-UA", { timeZone: "Europe/Kyiv", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" }) : store.shelvesFetched, ownerStrip: store.library().filter((r) => r.rating >= 5 && r.book.cover).slice(0, 5).map((r) => r.book) }));
+  res.send(pages.discoveryPage({ shelves: store.shelves, subscriptions: store.lib.subscriptions, user: req.user, owner: OWNER, readerHref: READER, libraryCount: store.library().length, inLibrary: inLibraryMap(req), visible, fetched: store.shelvesRefreshedAt ? new Date(store.shelvesRefreshedAt).toLocaleString("uk-UA", { timeZone: "Europe/Kyiv", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" }) : store.shelvesFetched, ownerStrip: store.library().filter((r) => r.rating >= 5 && r.book.cover).slice(0, 5).map((r) => r.book) }));
 });
 
-app.get("/me", (req, res) => {
+function libraryRows() {
   const rows = store.library();
   let prev;
   for (const r of rows) {
     r._prevYear = prev;
     prev = r.year ?? null;
   }
-  res.send(pages.libraryPage({ rows, user: req.user, owner: OWNER, subscriptions: store.lib.subscriptions }));
+  return rows;
+}
+// /me is your own library (guests have none: old links land on the owner's public shelf).
+app.get("/me", (req, res) => {
+  if (!req.user) return res.redirect(READER);
+  res.send(pages.libraryPage({ rows: libraryRows(), user: req.user, owner: OWNER, own: true, readerHref: READER }));
+});
+app.get(READER, (req, res) => {
+  res.send(pages.libraryPage({ rows: libraryRows(), user: req.user, owner: OWNER }));
+});
+app.get("/me/book/:id", owner, (req, res) => {
+  const id = store.resolve(req.params.id);
+  if (!id) return res.status(404).send(pages.messagePage({ title: "Немає такої книжки", text: "", user: req.user }));
+  const book = store.book(id);
+  res.send(pages.editPage({ book, entry: store.entry(book.id), user: req.user }));
 });
 
 app.get("/shelf/:id", (req, res) => {
   const shelf = store.shelf(req.params.id);
   if (!shelf) return res.status(404).send(pages.messagePage({ title: "Немає такої полиці", text: "", user: req.user }));
-  res.send(pages.shelfPage({ shelf, subscribed: store.subscribed(shelf.id), user: req.user, inLibrary: inLibraryMap(), visible }));
+  res.send(pages.shelfPage({ shelf, subscribed: store.subscribed(shelf.id), user: req.user, inLibrary: inLibraryMap(req), visible }));
 });
 
 app.get("/search", (req, res) => {
   const q = String(req.query.q || "").trim().slice(0, 100);
-  res.send(pages.searchPage({ q, hits: store.search(q), user: req.user, inLibrary: inLibraryMap(), owner: OWNER }));
+  res.send(pages.searchPage({ q, hits: store.search(q), user: req.user, inLibrary: inLibraryMap(req), owner: OWNER, readerHref: READER }));
 });
 
 app.get("/book/:id", (req, res) => {
@@ -142,12 +162,15 @@ app.get("/book/:id", (req, res) => {
   // One address per work: an id, an edition id or an old slug redirects to the canonical one.
   if (store.href(id) !== `/book/${encodeURIComponent(req.params.id)}`) return res.redirect(301, store.href(id));
   const book = store.book(id);
-  res.send(pages.bookPage({ book, entry: store.entry(book.id), user: req.user, shelf: book.shelf ? store.shelf(book.shelf) : null, inLibrary: inLibraryMap() }));
+  res.send(pages.bookPage({ book, entry: store.entry(book.id), user: req.user, shelf: book.shelf ? store.shelf(book.shelf) : null, inLibrary: inLibraryMap(req), readers: readersOf(book.id) }));
 });
 
 // ---- writes (owner only) ----
 
-const back = (req, res, fallback) => res.redirect(req.body.back ? req.get("referer") || fallback : fallback);
+const back = (req, res, fallback) => {
+  const next = String(req.body.next || "");
+  res.redirect(/^\/(?!\/)/.test(next) ? next : req.body.back ? req.get("referer") || fallback : fallback);
+};
 
 app.post("/api/entry/:id", owner, (req, res) => {
   const b = req.body;

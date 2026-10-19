@@ -42,7 +42,7 @@ ${description ? `<meta name="description" content="${attr(description.slice(0, 2
   <a class="brand" href="/">Chytai</a>
   <nav>
     <a href="/" class="${path === "/" || path.startsWith("/shelf") ? "on" : ""}">Discovery</a>
-    <a href="/me" class="${path.startsWith("/me") || path.startsWith("/book") ? "on" : ""}">Мої книжки</a>
+    ${user ? `<a href="/me" class="${path.startsWith("/me") ? "on" : ""}">Мої книжки</a>` : ""}
   </nav>
   ${path === "/search" ? "" : `<form class="find" action="/search" role="search"><input type="search" name="q" value="${attr(q)}" placeholder="Знайти книжку" autocomplete="off" aria-label="Пошук"></form>`}
   <div class="who">${user ? `<span>${esc(user)}</span> <a href="/logout" class="muted">вийти</a>` : `<span class="muted">гість</span>`}</div>
@@ -50,7 +50,7 @@ ${description ? `<meta name="description" content="${attr(description.slice(0, 2
 <main class="${wide ? "wide" : ""}">
 ${body}
 </main>
-<footer class="foot"><span>Chytai: читай більше.</span> <a href="https://chytai.fly.dev">Читалка</a></footer>
+<footer class="foot"><span>Chytai.org.ua: читай більше.</span> <a href="https://chytai.fly.dev">Читалка</a></footer>
 <script src="/app.js"></script>
 </body>
 </html>`;
@@ -58,7 +58,9 @@ ${body}
 
 // ---- library (/me) ----
 
-function libraryPage({ rows, user, owner, subscriptions }) {
+// The same list twice: /me is the signed-in reader's own library with «Змінити» on every row (the only
+// place where status, rating and notes are edited); /reader/<slug> is that reader's public shelf.
+function libraryPage({ rows, user, owner, own = false, readerHref = "" }) {
   const read = rows.filter((r) => r.status === "read").length;
   const years = [...new Set(rows.map((r) => r.year).filter(Boolean))].sort((a, b) => b - a);
   const genres = GENRES.filter((g) => rows.some((r) => (r.book.tags || []).includes(g)));
@@ -73,10 +75,11 @@ function libraryPage({ rows, user, owner, subscriptions }) {
   const body = `
 <section class="head">
   <div>
-    <h1>${esc(owner)}</h1>
-    <p class="muted">${count(rows.length, "книжка", "книжки", "книжок")} у бібліотеці, ${count(read, "прочитана", "прочитані", "прочитаних")}</p>
+    ${own ? "" : `<p class="crumbs">Читач</p>`}
+    <h1>${own ? "Мої книжки" : esc(owner)}</h1>
+    <p class="muted">${count(rows.length, "книжка", "книжки", "книжок")}, ${count(read, "прочитана", "прочитані", "прочитаних")}${own ? ` · <a href="${attr(readerHref)}">як бачать інші</a>` : ""}</p>
   </div>
-  ${user ? `<button class="btn primary" data-open="add">+ Додати книжку</button>` : ""}
+  ${own ? `<button class="btn primary" data-open="add">+ Додати книжку</button>` : ""}
 </section>
 <section class="toolbar" id="lib-tools">
   <input type="search" id="q" placeholder="Назва, автор, нотатка" autocomplete="off">
@@ -87,19 +90,19 @@ function libraryPage({ rows, user, owner, subscriptions }) {
   </div>
 </section>
 <section class="rows" id="rows">
-${rows.map((r, i) => libraryRow(r, i)).join("\n")}
+${rows.map((r, i) => libraryRow(r, i, own)).join("\n")}
 </section>
 <p class="empty hidden" id="empty">Нічого не знайшлося.</p>
-${user ? addDialog() : ""}`;
-  return layout({ title: "Мої книжки", body, user, path: "/me" });
+${own ? addDialog() : ""}`;
+  return layout({ title: own ? "Мої книжки" : owner, body, user, path: own ? "/me" : "/reader", description: own ? "" : `Книжки, які читає ${owner}: оцінки й нотатки.` });
 }
 
-function libraryRow(r, i) {
+function libraryRow(r, i, own = false) {
   const b = r.book;
   const prev = r._prevYear;
   const search = [b.title, b.altTitle, b.author, stripMd(r.note || "")].join(" ").toLowerCase();
   const yearHead = r.year && prev !== r.year ? `<h2 class="year" data-year="${r.year}">${r.year}</h2>` : !r.year && prev !== null && i > 0 && prev !== undefined ? `<h2 class="year" data-year="">Без дати</h2>` : "";
-  return `${yearHead}<article class="row" data-status="${r.status || ""}" data-copy="${r.copy || ""}" data-tags="${attr((b.tags || []).join(" "))}" data-rating="${r.rating ?? ""}" data-year="${r.year ?? ""}" data-title="${attr(b.title.toLowerCase())}" data-search="${attr(search)}" data-order="${i}">
+  return `${yearHead}<article class="row" id="${attr(r.id)}" data-status="${r.status || ""}" data-copy="${r.copy || ""}" data-tags="${attr((b.tags || []).join(" "))}" data-rating="${r.rating ?? ""}" data-year="${r.year ?? ""}" data-title="${attr(b.title.toLowerCase())}" data-search="${attr(search)}" data-order="${i}">
   <a class="cover-link" href="${attr(b.href)}">${cover(b)}</a>
   <div class="row-body">
     <h3><a href="${attr(b.href)}">${esc(b.title)}</a>${b.series ? `<span class="badge">серія · ${count(b.series, "книжка", "книжки", "книжок")}</span>` : ""}</h3>
@@ -107,6 +110,7 @@ function libraryRow(r, i) {
     <p class="meta">${r.rating != null ? stars(r.rating) : ""}${r.status && r.status !== "read" ? `<span class="tag status-${r.status}">${STATUS[r.status]}</span>` : ""}${r.copy ? `<span class="tag copy-${r.copy}">${COPY[r.copy]}</span>` : ""}</p>
     ${r.note ? `<p class="note">${inline(r.note)}</p>` : ""}
   </div>
+  ${own ? `<a class="btn small edit" href="/me/book/${encodeURIComponent(r.id)}">Змінити</a>` : ""}
 </article>`;
 }
 
@@ -137,33 +141,64 @@ function addDialog() {
 
 // ---- book (/book/:id) ----
 
-function bookPage({ book, entry, user, shelf, inLibrary = new Map() }) {
+// The book itself (description, editions, series), then the readers who have it. Nothing here edits a
+// rating or a note: the signed-in reader sees where the book is in their library and a link to «Змінити».
+function bookPage({ book, entry, user, shelf, inLibrary = new Map(), readers = [] }) {
   const edUrls = new Set((book.editions || []).map((e) => e.links[0].url));
   const links = (book.links || []).filter((l) => !edUrls.has(l.url));
   const body = `
 <article class="book">
   <div class="book-cover">${cover(book, "big")}</div>
   <div class="book-main">
-    <p class="crumbs"><a href="/me">Мої книжки</a>${shelf ? ` · <a href="/shelf/${attr(shelf.id)}">${esc(shelf.name)}</a>` : ""}</p>
+    ${shelf ? `<p class="crumbs"><a href="/shelf/${attr(shelf.id)}">${esc(shelf.name)}</a></p>` : ""}
     <h1>${esc(book.title)}</h1>
     ${book.altTitle ? `<p class="alt-title">${esc(book.altTitle)}</p>` : ""}
     ${book.author ? `<p class="by">${esc(book.author)}</p>` : ""}
-    <p class="meta">
-      ${entry?.rating != null ? stars(entry.rating) : ""}
-      ${entry?.status ? `<span class="tag status-${entry.status}">${STATUS[entry.status]}${entry.status === "read" && entry.year ? ` · ${entry.year}` : ""}</span>` : ""}
-      ${entry?.copy ? `<span class="tag copy-${entry.copy}">${COPY[entry.copy]}</span>` : ""}
-      ${(book.tags || []).map((t) => `<span class="tag genre">${esc(t)}</span>`).join("")}
-    </p>
-    ${entry?.note ? `<div class="prose">${marked.parse(entry.note).replace(/<a href="http/g, '<a target="_blank" rel="noopener" href="http')}</div>` : ""}
-    ${!entry?.note && book.blurb ? `<div class="prose blurb"><p>${esc(book.blurb)}</p><p class="muted small">Опис з сайту ${esc(shelf ? shelf.name : book.source)}</p></div>` : ""}
+    ${(book.tags || []).length ? `<p class="meta">${book.tags.map((t) => `<span class="tag genre">${esc(t)}</span>`).join("")}</p>` : ""}
+    ${user ? mine(book, entry) : ""}
+    ${book.blurb ? `<div class="prose blurb"><p>${esc(book.blurb)}</p><p class="muted small">Опис з сайту ${esc(shelf ? shelf.name : book.source)}</p></div>` : ""}
     ${editions(book)}
     ${series(book, inLibrary)}
     ${links.length ? `<p class="links">${links.map((l) => `<a href="${attr(l.url)}" target="_blank" rel="noopener">${esc(l.label)}</a>`).join('<span class="sep">·</span>')}</p>` : ""}
-    ${user ? entryForm(book, entry) : !entry ? "" : ""}
+    ${readersBlock(readers)}
   </div>
 </article>`;
-  const description = [book.author, stripMd(entry?.note || "") || book.blurb || ""].filter(Boolean).join(". ");
+  const description = [book.author, book.blurb || stripMd(readers.find((r) => r.entry.note)?.entry.note || "")].filter(Boolean).join(". ");
   return layout({ title: book.title, body, user, path: "/book", description });
+}
+
+// The signed-in reader's own line: where the book is in their library, or one tap to want it.
+function mine(book, entry) {
+  const edit = `/me/book/${encodeURIComponent(book.id)}`;
+  if (!entry) return `<div class="mine"><form method="post" action="/api/entry/${encodeURIComponent(book.id)}" class="inline"><input type="hidden" name="status" value="want"><input type="hidden" name="back" value="1"><button class="btn small">Хочу прочитати</button></form><a class="muted small" href="${edit}">Додати до моїх книжок…</a></div>`;
+  const what = [entry.status ? STATUS[entry.status] + (entry.status === "read" && entry.year ? ` ${entry.year}` : "") : "У моїх книжках", entry.rating != null ? `${uk(entry.rating)}/5` : "", entry.copy ? COPY[entry.copy] : ""].filter(Boolean).join(" · ");
+  return `<div class="mine"><span class="have">✓ ${esc(what)}</span><a class="muted small" href="${edit}">Змінити</a></div>`;
+}
+
+// Readers who have the book, each with their status, rating and note, linked to their shelf.
+function readersBlock(readers) {
+  if (!readers.length) return "";
+  return `<section class="readers"><h2 class="sec">У читачів</h2>${readers
+    .map(({ name, href, entry: e }) => {
+      const what = [e.status ? STATUS[e.status].toLowerCase() + (e.status === "read" && e.year ? ` у ${e.year}` : "") : "", e.copy ? COPY[e.copy].toLowerCase() : ""].filter(Boolean).join(" · ");
+      return `<div class="reader"><p><a href="${attr(href)}"><b>${esc(name)}</b></a>${e.rating != null ? ` ${stars(e.rating)}` : ""}${what ? ` <span class="muted small">${esc(what)}</span>` : ""}</p>${e.note ? `<div class="prose">${marked.parse(e.note).replace(/<a href="http/g, '<a target="_blank" rel="noopener" href="http')}</div>` : ""}</div>`;
+    })
+    .join("")}</section>`;
+}
+
+// /me/book/:id: the one place to edit a book in your library.
+function editPage({ book, entry, user }) {
+  const body = `
+<article class="book">
+  <div class="book-cover">${cover(book, "big")}</div>
+  <div class="book-main">
+    <p class="crumbs"><a href="/me">Мої книжки</a></p>
+    <h1><a href="${attr(book.href)}">${esc(book.title)}</a></h1>
+    ${book.author ? `<p class="by">${esc(book.author)}</p>` : ""}
+    ${entryForm(book, entry)}
+  </div>
+</article>`;
+  return layout({ title: book.title, body, user, path: "/me" });
 }
 
 // Every edition of the book on the shelves links back to where it came from: the publisher's page,
@@ -201,7 +236,8 @@ function entryForm(book, entry) {
   const ratings = [5, 4.5, 4, 3.5, 3, 2.5, 2, 1.5, 1];
   return `
 <form method="post" action="/api/entry/${encodeURIComponent(book.id)}" class="form entry-form">
-  <h2>${entry ? "У моїй бібліотеці" : "Додати до моїх книжок"}</h2>
+  <input type="hidden" name="next" value="/me#${attr(book.id)}">
+  <h2>${entry ? "У моїх книжках" : "Додати до моїх книжок"}</h2>
   <div class="three">
     <label>Статус <select name="status">
       <option value="" ${!e.status ? "selected" : ""}>без статусу</option>
@@ -233,14 +269,14 @@ function entryForm(book, entry) {
 
 // ---- discovery (/) ----
 
-function discoveryPage({ shelves, subscriptions, user, owner, libraryCount, inLibrary, fetched, ownerStrip = [], visible = (s) => s.items }) {
-  const subs = shelves.filter((s) => subscriptions.includes(s.id));
+function discoveryPage({ shelves, subscriptions, user, owner, readerHref, libraryCount, inLibrary, fetched, ownerStrip = [], visible = (s) => s.items }) {
+  const subs = user ? shelves.filter((s) => subscriptions.includes(s.id)) : [];
   const fresh = subs.flatMap((s) => visible(s).filter((it) => it.isNew).map((it) => ({ ...it, shelfName: s.name, shelfId: s.id })));
   const body = `
 <section class="head">
   <div>
     <h1>Discovery</h1>
-    <p class="muted">Публічні полиці видавництв, читачів і вільних бібліотек. Підпишися, і новинки з'являтимуться тут.</p>
+    <p class="muted">Публічні полиці видавництв і читачів. Підпишися, і новинки з'являтимуться тут.</p>
   </div>
 </section>
 ${subs.length ? `
@@ -251,11 +287,11 @@ ${subs.length ? `
 <section>
   <h2 class="sec">Полиці</h2>
   <div class="shelves">
-    <a class="shelf-card" href="/me">
+    <a class="shelf-card" href="${attr(readerHref)}">
       <span class="strip">${ownerStrip.map((b) => cover(b, "mini")).join("")}</span>
       <div class="shelf-kind">читач</div>
       <h3>${esc(owner)}</h3>
-      <p class="muted">Прочитане з оцінками й нотатками, паперова полиця в офісі</p>
+      <p class="muted">Прочитане з оцінками й нотатками</p>
       <p class="shelf-n">${count(libraryCount, "книжка", "книжки", "книжок")}</p>
     </a>
     ${shelves.map((s) => shelfCard({ ...s, items: visible(s) }, subscriptions.includes(s.id), user)).join("")}
@@ -325,25 +361,25 @@ function itemCard(it, inLibrary, user, shelfName) {
 
 // ---- search (/search) ----
 
-function searchPage({ q, hits, user, inLibrary, owner }) {
+function searchPage({ q, hits, user, inLibrary, owner, readerHref }) {
   const body = `
 <section class="head">
   <div>
     <h1>Пошук</h1>
-    <p class="muted">По бібліотеці ${esc(owner)} і всіх полицях Discovery.</p>
+    <p class="muted">По каталогах видавництв і полицях читачів.</p>
   </div>
 </section>
 <form class="toolbar" action="/search" role="search"><input type="search" name="q" value="${attr(q)}" placeholder="Назва, автор або серія" autocomplete="off" autofocus></form>
-${!q.trim() ? "" : hits.length ? `<section class="rows" id="hits">${hits.map((h) => searchRow(h, inLibrary, user, owner)).join("\n")}</section>` : `<p class="empty">Нічого не знайшлося за «${esc(q)}».</p>`}`;
+${!q.trim() ? "" : hits.length ? `<section class="rows" id="hits">${hits.map((h) => searchRow(h, inLibrary, user, owner, readerHref)).join("\n")}</section>` : `<p class="empty">Нічого не знайшлося за «${esc(q)}».</p>`}`;
   return layout({ title: q ? `${q} · Пошук` : "Пошук", body, user, path: "/search", q });
 }
 
 // Where the book is: the shelves that sell it (format, price, availability) and whose library has it.
-function searchRow({ book, entry }, inLibrary, user, owner) {
+function searchRow({ book, entry }, inLibrary, user, owner, readerHref) {
   const where = (book.editions || []).map((e) => `<li><a href="${attr(e.links[0].url)}" target="_blank" rel="noopener">${esc(e.shelf.name)}</a> · ${esc(e.format)}${e.edition ? ` · ${esc(e.edition)}` : ""}${e.price ? ` · ${esc(e.price)}` : ""}${e.status && e.status !== "є" ? ` · ${esc(e.status)}` : e.status ? " · є" : ""}</li>`);
   const edUrls = new Set((book.editions || []).map((e) => e.links[0].url));
   for (const l of (book.links || []).filter((l) => !edUrls.has(l.url))) where.push(`<li><a href="${attr(l.url)}" target="_blank" rel="noopener">${esc(l.label)}</a>${/amazon/i.test(l.url) ? " · Kindle" : ""}</li>`);
-  if (entry) where.push(`<li><a href="/me">${esc(owner)}</a> · ${entry.status ? STATUS[entry.status].toLowerCase() : "у бібліотеці"}${entry.rating != null ? ` · ${uk(entry.rating)}/5` : ""}${entry.copy ? ` · ${COPY[entry.copy].toLowerCase()}` : ""}</li>`);
+  if (entry) where.push(`<li><a href="${attr(readerHref)}#${attr(book.id)}">${esc(owner)}</a> · ${entry.status ? STATUS[entry.status].toLowerCase() : "у бібліотеці"}${entry.rating != null ? ` · ${uk(entry.rating)}/5` : ""}${entry.copy ? ` · ${COPY[entry.copy].toLowerCase()}` : ""}</li>`);
   return `<article class="row hit">
   <a class="cover-link" href="${attr(book.href)}">${cover(book)}</a>
   <div class="row-main">
@@ -363,4 +399,4 @@ function messagePage({ title, text, user }) {
 }
 
 module.exports = {
-  searchPage, layout, libraryPage, bookPage, discoveryPage, shelfPage, messagePage, esc, STATUS, COPY };
+  searchPage, layout, libraryPage, bookPage, editPage, discoveryPage, shelfPage, messagePage, esc, STATUS, COPY };

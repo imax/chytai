@@ -133,6 +133,14 @@ form.inline { display: inline; }
 .prose { font-size: 16px; line-height: 1.6; margin: 14px 0; }
 .prose p { margin: 0 0 12px; }
 .prose a { text-decoration: underline; text-decoration-color: var(--line); }
+.mine { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin: 10px 0 4px; font-size: 14px; }
+.mine a { text-decoration: underline; text-decoration-color: var(--line); }
+.readers { margin-top: 28px; }
+.reader { padding: 12px 0; border-top: 1px solid var(--line); }
+.reader > p { margin: 0; display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
+.reader .prose { margin: 8px 0 0; font-size: 15px; }
+.row .edit { align-self: flex-start; flex: none; }
+.row:target { background: var(--accent-soft); }
 .blurb { color: var(--muted); }
 .price { font-weight: 600; margin: 6px 0; }
 .buy { display: flex; gap: 12px; align-items: center; margin: 14px 0 10px; flex-wrap: wrap; }
@@ -200,3 +208,4 @@ dialog .form { margin: 0; background: var(--card); }
   .selects { margin-left: 0; }
   .grid { grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 16px 12px; }
 }
+.head .muted a { text-decoration: underline; text-decoration-color: var(--line); }

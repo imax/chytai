@@ -3,6 +3,9 @@
 Платформена частина Chytai, окремо від читалки (`server/`): сторінки «Мої книжки», Discovery з публічними
 полицями і пошук по всьому. Node + Express, HTML рендериться на сервері, дані в JSON.
 
+- Читачі: власник (WEB_OWNER) лише один із читачів. Його публічна полиця `/reader/<WEB_OWNER_SLUG>` (типово `max`),
+  на сторінці книжки блок «У читачів». `/me` бачить тільки залогінений; статус, оцінка й нотатка редагуються лише
+  там, на `/me/book/<id>`. Гості не бачать позначок власника на картках і його підписок.
 - `server.js` маршрути; `store.js` дані; `pages.js` HTML; `public/` CSS і JS.
 - `seed/books.json`, `seed/max.json`: одноразовий імпорт Books.md і books-meta.yml з maxua-v3
   (`node web/scripts/import-books.mjs ../maxua-v3`). Далі бібліотека живе у `DATA_DIR/web/library.json`.
