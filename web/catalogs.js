@@ -138,11 +138,13 @@ async function pageProducts(src, urls, { fetchImpl = fetch, log = () => {}, prev
 const ldOf = (html) =>
   [...html.matchAll(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g)].flatMap((m) => {
     try {
-      return [].concat(JSON.parse(m[1]));
+      return [].concat(JSON.parse(m[1].replace(/[\u0000-\u001f]+/g, " "))); // raw line breaks inside descriptions
     } catch {
       return [];
     }
   });
+// «Stolen Focus. Why You Can't Pay Attention by Johann Hari» -> the title only; none when it is the title.
+const alt = (a, title) => ((a = a.replace(/\s+by\s+(\p{Lu}[\p{L}.'’-]*\s*)+$/u, "").trim()) === title ? "" : a);
 const names = (v) => [].concat(v || []).map((x) => ent(x.name || x).trim()).filter(Boolean).join(", ");
 function ldBookPage(src, brands) {
   return (html, url) => {
@@ -162,7 +164,7 @@ function ldBookPage(src, brands) {
       title,
       author: names(book.author),
       translator: names(book.translator),
-      altTitle: ent(book.alternateName || "").replace(/\s+by\s+[^.]+$/i, "").trim(),
+      altTitle: alt(ent(book.alternateName || ""), title),
       isbn: String(book.isbn || prod.sku || "").replace(/[^\dX]/gi, ""),
       format: /EBook/i.test(fmt) ? "e-book" : /Audio/i.test(fmt) ? "аудіо" : "папір",
       series: volumeOf(title)?.series || "",
@@ -227,7 +229,7 @@ const wooBook = (src, p, extra = {}) => ({
   price: uah(p.price),
   status: !p.inStock ? "немає" : /передзамовлення/i.test(p.title + p.categories.join()) ? "передзамовлення" : "є",
   isNew: false,
-  genres: p.categories.filter((c) => !/передзамовлення|розпродаж|акції|новинки|без категорії/i.test(c)),
+  genres: p.categories.filter((c) => !/передзамовлення|розпродаж|акції|новинки|без категорії|комплекти|серії/i.test(c)),
   blurb: ent(p.blurb || p.desc),
   language: "українська",
   ...extra,
@@ -424,8 +426,9 @@ const SOURCES = [
     draft: true,
     api: "https://osnovypublishing.com/wp-json/wc/store/v1/products",
     normalize: (p) => ({ ...woo(p), title: text(p.name), desc: text(p.description).slice(0, 600) }),
-    keep: (p) => !p.categories.some((c) => /сертифікат|мерч|подарун/i.test(c)),
-    toItem: (p) => wooBook({ id: "osnovy" }, p),
+    // Stickers, postcards and other merch have no category.
+    keep: (p) => p.categories.some((c) => c !== "Без категорії") && !/стікер|листівк|сертифікат/i.test(p.title),
+    toItem: (p) => wooBook({ id: "osnovy" }, p, { bundle: p.categories.includes("Комплекти") }),
     // The author is a link to the author's page; the ISBN is in the book's details.
     enrich: pageDetails((html) => ({
       author: [...new Set([...html.matchAll(/href="https:\/\/osnovypublishing\.com\/authors\/[^"\/]+\/?"[^>]*>([^<]+)</g)].map((m) => ent(m[1]).trim()))].join(", "),
@@ -441,7 +444,7 @@ const SOURCES = [
     draft: true,
     api: "https://komorabooks.com/wp-json/wc/store/v1/products",
     normalize: (p) => ({ ...woo(p), title: unshout(text(p.name).replace(/\s*\(розпродаж\)$/i, "")), desc: text(p.description).slice(0, 600) }),
-    keep: (p) => !p.categories.some((c) => /сертифікат|мерч|подарун/i.test(c)),
+    keep: (p) => !/сертифікат|листівк|торб|стікер/i.test(p.title),
     toItem: (p) => wooBook({ id: "komora" }, p),
     // The book's details are «key: value» rows (Автор, Переклад, ISBN…).
     enrich: pageDetails((html) => {
@@ -554,4 +557,4 @@ async function refresh({ store, log = console.log, fetchImpl }) {
   return { ok: true, errors, counts };
 }
 
-module.exports = { SOURCES, fetchSource, buildShelves, refresh, volumeOf, ent };
+module.exports = { SOURCES, fetchSource, buildShelves, refresh, volumeOf, ent, pageProducts, ldBookPage };
