@@ -10,6 +10,7 @@ const fs = require("fs");
 const path = require("path");
 const { Store } = require("./store");
 const pages = require("./pages");
+const catalogs = require("./catalogs");
 
 const ROOT = path.join(__dirname, "..");
 loadDotEnv(path.join(ROOT, ".env"));
@@ -39,6 +40,30 @@ function loadDotEnv(file) {
 }
 
 const store = new Store(DATA_DIR);
+
+// ---- daily catalog refresh ----
+// The machine sleeps between visits, so a timer alone would not fire: the first request of a day that
+// finds the shelves older than a day starts a refresh in the background (the page itself is served from
+// the current shelves), and the owner can force one with POST /api/refresh.
+const REFRESH_MS = 24 * 3600 * 1000;
+let lastRefresh = 0;
+try {
+  lastRefresh = fs.statSync(path.join(DATA_DIR, "shelves.json")).mtimeMs;
+} catch {
+  /* never refreshed */
+}
+let refreshing = null;
+function refreshShelves(force = false) {
+  if (refreshing) return refreshing;
+  if (!force && Date.now() - lastRefresh < REFRESH_MS) return null;
+  lastRefresh = Date.now(); // even on failure: one attempt a day, not one per request
+  refreshing = catalogs
+    .refresh({ dataDir: DATA_DIR, store })
+    .catch((e) => (console.error("refresh failed:", e), { ok: false, errors: [e.message] }))
+    .finally(() => (refreshing = null));
+  return refreshing;
+}
+
 const app = express();
 app.set("trust proxy", true);
 app.use(express.urlencoded({ extended: false, limit: "1mb" }));
@@ -53,6 +78,7 @@ function cookies(req) {
   return Object.fromEntries((req.headers.cookie || "").split(";").map((c) => c.trim().split("=")).filter((p) => p[0]).map(([k, ...v]) => [k, decodeURIComponent(v.join("="))]));
 }
 app.use((req, res, next) => {
+  if (req.method === "GET") refreshShelves();
   // One public host: www and the Fly hostname go to the domain once it is live.
   const host = req.hostname || "";
   if (DOMAIN && host !== DOMAIN && (host === `www.${DOMAIN}` || host === `${process.env.FLY_APP_NAME}.fly.dev`)) return res.redirect(301, `https://${DOMAIN}${req.originalUrl}`);
@@ -139,6 +165,11 @@ app.post("/api/book", owner, (req, res) => {
   const b = store.addBook({ title, author, cover: /^https?:\/\//.test(cover || "") ? cover : "" });
   store.setEntry(b.id, { status: ["read", "reading", "want"].includes(status) ? status : "", copy: ["paper", "ebook", "seeking"].includes(copy) ? copy : "" });
   res.redirect(store.href(b.id));
+});
+
+app.post("/api/refresh", owner, async (req, res) => {
+  const r = await refreshShelves(true);
+  res.send(pages.messagePage({ title: r.ok ? "Каталоги оновлено" : "Не вдалося оновити", text: [...(r.counts || []).map(([id, n]) => `${id}: ${n}`), ...r.errors].join("; "), user: req.user }));
 });
 
 app.post("/api/subscribe/:id", owner, (req, res) => {

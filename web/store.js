@@ -35,13 +35,28 @@ class Store {
     this.file = path.join(dataDir, "library.json");
     fs.mkdirSync(dataDir, { recursive: true });
     this.seedBooks = readJson(path.join(SEED, "books.json"));
-    const shelvesFile = readJson(path.join(SEED, "shelves.json"));
+    // The shelves: the seed, or the newer copy the daily refresh wrote under dataDir.
+    const seedShelves = readJson(path.join(SEED, "shelves.json"));
+    let shelvesFile = seedShelves;
+    try {
+      const live = readJson(path.join(dataDir, "shelves.json"));
+      if (live.fetched >= seedShelves.fetched) shelvesFile = live;
+    } catch {
+      /* no refresh yet */
+    }
+    this.baseline = seedShelves.baseline || seedShelves.fetched;
+    this.load();
+    this.setShelves(shelvesFile);
+  }
+
+  // Swap in a fresh set of shelves (at start and after every refresh) and rebuild everything derived.
+  setShelves(shelvesFile) {
     this.shelves = shelvesFile.shelves;
     this.shelvesFetched = shelvesFile.fetched;
     this.shelfItems = new Map(); // item id -> { shelf, item }
     for (const s of this.shelves) for (const it of s.items) this.shelfItems.set(it.id, { shelf: s, item: it });
     this.linkEditions();
-    this.load();
+    this.migrateEntries();
     this.indexSlugs();
   }
 
@@ -234,7 +249,10 @@ class Store {
     this.lib.books ??= {};
     this.lib.entries ??= {};
     this.lib.subscriptions ??= [];
-    // Entries saved under an edition id (before editions were linked, or by a shelf that changed) move to the work.
+  }
+
+  // Entries saved under an edition id (before editions were linked, or by a shelf that changed) move to the work.
+  migrateEntries() {
     let moved = false;
     for (const [id, e] of Object.entries(this.lib.entries)) {
       const c = this.canonical(id);
