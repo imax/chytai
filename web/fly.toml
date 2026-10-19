@@ -12,6 +12,7 @@ primary_region = "fra"
   DATA_DIR = "/data"
   TZ = "Europe/Kyiv"
   PORT = "8080"
+  WEB_DOMAIN = "chytai.org.ua"
 
 [[mounts]]
   source = "web_data"
