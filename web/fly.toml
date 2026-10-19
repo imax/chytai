@@ -13,6 +13,8 @@ primary_region = "fra"
   TZ = "Europe/Kyiv"
   PORT = "8080"
   WEB_DOMAIN = "chytai.org.ua"
+  # Past this the process dies and Fly restarts it, instead of hanging in garbage collection (2026-10-19).
+  NODE_OPTIONS = "--max-old-space-size=200"
 
 [[mounts]]
   source = "web_data"

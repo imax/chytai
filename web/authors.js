@@ -62,16 +62,16 @@ async function refresh(store, { fetchImpl = fetch, log = () => {} } = {}) {
   return true;
 }
 
-// Works of every kind we know: the libraries and each shelf's works (editions fold into their work).
+// Works of every kind we know, as { id, author } only (the libraries and each shelf's works; editions
+// fold into their work). Kept light: this runs after every catalog refresh on a 256 MB machine.
 function allWorks(store) {
-  const seen = new Set();
-  const out = [];
-  const add = (b) => b && !seen.has(b.id) && (seen.add(b.id), out.push(b));
-  for (const b of store.seedBooks) add(store.book(b.id));
-  for (const id of Object.keys(store.lib.books)) add(store.book(id));
-  for (const [id, { shelf }] of store.shelfItems) if (store.canonical(id) === id && !store.hidden.has(id) && !shelf.draft) add(store.book(id));
-  return out;
+  const out = new Map();
+  for (const b of store.seedBooks) out.set(b.id, { id: b.id, author: b.author });
+  for (const b of Object.values(store.lib.books)) out.set(b.id, { id: b.id, author: b.author });
+  for (const [id, { shelf, item }] of store.shelfItems) if (!out.has(id) && store.canonical(id) === id && !store.hidden.has(id) && !shelf.draft) out.set(id, { id, author: item.author });
+  return [...out.values()];
 }
+const authorOf = (store, id) => store.lib.books[id]?.author ?? store.seedBooks.find((b) => b.id === id)?.author ?? store.shelfItems.get(id)?.item.author ?? "";
 
 // The author index: { list, bySlug, byName(name) -> author, ofWork(id) -> [author] }.
 function build(store) {
@@ -94,8 +94,8 @@ function build(store) {
   // one translates, when the book has a single author.
   for (const g of [...groups.values()].filter((g) => !g.qid)) {
     const qids = new Set();
-    for (const id of g.ids) for (const t of store.translations?.get(id) || []) for (const n of splitAuthors(store.book(t)?.author)) if (wd[n]) qids.add(`q:${wd[n].qid}`);
-    if (qids.size !== 1 || ![...g.ids].every((id) => splitAuthors(store.book(id)?.author).length === 1)) continue;
+    for (const id of g.ids) for (const t of store.translations?.get(id) || []) for (const n of splitAuthors(authorOf(store, t))) if (wd[n]) qids.add(`q:${wd[n].qid}`);
+    if (qids.size !== 1 || ![...g.ids].every((id) => splitAuthors(authorOf(store, id)).length === 1)) continue;
     const into = groups.get([...qids][0]);
     for (const [n, c] of g.names) into.names.set(n, (into.names.get(n) || 0) + c), keyOfName.set(n, into.key);
     for (const id of g.ids) into.ids.add(id);
