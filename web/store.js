@@ -204,6 +204,7 @@ class Store {
       /* none */
     }
     for (const [a, b] of pairs) link(this.slugs.get(a) || a, this.slugs.get(b) || b);
+    this.authors = require("./authors").build(this);
   }
 
   // Titles of known books mentioned in a note become links (Max, 2026-10-19: «Див також Circe» ->

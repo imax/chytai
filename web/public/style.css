@@ -221,3 +221,11 @@ dialog .form { margin: 0; background: var(--card); }
 .search-box { margin: 4px 0 22px; }
 .search-box input { width: 100%; padding: 14px 18px; font-size: 18px; border: 1px solid var(--line); border-radius: 12px; background: var(--bg); outline: none; }
 .search-box input:focus { border-color: var(--accent); }
+
+/* ---- author page ---- */
+.works { list-style: none; padding: 0; margin: 0 0 8px; }
+.works li { padding: 5px 0; border-bottom: 1px solid var(--line); line-height: 1.4; }
+.works .year { display: inline-block; width: 3.2em; color: var(--muted); font-variant-numeric: tabular-nums; }
+.works .alt { color: var(--muted); font-size: 0.9em; margin-left: 4px; }
+.works li.none { color: var(--muted); }
+.by a { color: inherit; }

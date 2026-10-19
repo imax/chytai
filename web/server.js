@@ -13,6 +13,7 @@ const pages = require("./pages");
 const catalogs = require("./catalogs");
 const libraries = require("./libraries");
 const wikidata = require("./wikidata");
+const authors = require("./authors");
 
 const ROOT = path.join(__dirname, "..");
 loadDotEnv(path.join(ROOT, ".env"));
@@ -69,10 +70,13 @@ function refreshShelves(force = false) {
 }
 // Ukrainian titles of foreign books (wikidata.js), weekly; the first time a minute after start.
 const refreshUk = () => wikidata.refreshUk(store, { log: console.log }).catch((e) => console.error("wikidata failed:", e));
-setTimeout(refreshUk, 60000).unref();
-setInterval(refreshUk, 6 * 3600 * 1000).unref();
+// Who is who among the authors (authors.js), weekly, after the Ukrainian titles.
+const refreshAuthors = () => authors.refresh(store, { log: console.log }).catch((e) => console.error("authors failed:", e));
+setTimeout(() => refreshUk().then(refreshAuthors), 60000).unref();
+setInterval(() => refreshUk().then(refreshAuthors), 6 * 3600 * 1000).unref();
 
 pages.setTitleLinks((md, id) => store.linkTitles(md, id));
+pages.setAuthorLinks((name) => store.authors?.byName(name)?.href || null);
 
 const app = express();
 app.set("trust proxy", true);
@@ -186,6 +190,19 @@ app.get("/book/:id", (req, res) => {
   const book = bookFor(req, store.bookPage(id), !!store.entry(id));
   if (!book) return res.status(404).send(pages.messagePage({ title: "Немає такої книжки", text: "", user: req.user }));
   res.send(pages.bookPage({ book, entry: store.sharedEntry(book.id), user: req.user, shelf: book.shelf && (req.user || !isDraft(book.shelf)) ? store.shelf(book.shelf) : null, inLibrary: inLibraryMap(req), readers: readersOf(book.id) }));
+});
+
+// An author: their works from Wikidata (linked to our books of them) and every book of theirs we have.
+app.get("/author/:slug", async (req, res) => {
+  const author = store.authors.bySlug.get(req.params.slug);
+  if (!author) return res.status(404).send(pages.messagePage({ title: "Немає такого автора", text: "", user: req.user }));
+  const works = author.qid ? authors.matchWorks(store, author, await authors.wikidataWorks(store, author.qid, { log: console.log })) : [];
+  const shown = new Set(works.flatMap((w) => w.books.map((b) => b.id)));
+  const hits = author.ids
+    .map((id) => ({ book: bookFor(req, store.book(id), !!store.entry(id)), entry: store.entry(id) }))
+    .filter((h) => h.book)
+    .sort((a, b) => !!b.entry - !!a.entry || shown.has(a.book.id) - shown.has(b.book.id) || a.book.title.localeCompare(b.book.title, "uk"));
+  res.send(pages.authorPage({ author, works, hits, user: req.user, inLibrary: inLibraryMap(req), owner: OWNER, readerHref: READER }));
 });
 
 // Where the book can be borrowed: libraries with open catalogs (libraries.js), asked when the page loads.

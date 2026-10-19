@@ -127,6 +127,18 @@ function stripMd(s) {
 // Set by the server: (markdown, own book id) -> markdown with mentioned titles linked (store.linkTitles).
 let titleLinks = (md) => md;
 const setTitleLinks = (fn) => (titleLinks = fn);
+// Set by the server too: author name -> their /author/ page, or null.
+let authorHref = () => null;
+const setAuthorLinks = (fn) => (authorHref = fn);
+
+// The author line with each name linked to its page (shortened like byline() past three names).
+function authorLinks(author) {
+  const { splitAuthors } = require("./authors");
+  const names = splitAuthors(author);
+  if (!names.length) return esc(author || "");
+  const link = (n) => (authorHref(n) ? `<a href="${attr(authorHref(n))}">${esc(n)}</a>` : esc(n));
+  return names.length > 3 ? `${names.slice(0, 2).map(link).join(", ")} та ще ${names.length - 2}` : names.map(link).join(", ");
+}
 
 function inline(md) {
   const first = md.split(/\n\s*\n/)[0];
@@ -164,7 +176,7 @@ function bookPage({ book, entry, user, shelf, inLibrary = new Map(), readers = [
     ${shelf ? `<p class="crumbs"><a href="/shelf/${attr(shelf.id)}">${esc(shelf.name)}</a></p>` : ""}
     <h1>${esc(book.title)}</h1>
     ${book.altTitle ? `<p class="alt-title">${esc(book.altTitle)}</p>` : ""}
-    ${book.author ? `<p class="by">${esc(book.author)}</p>` : ""}
+    ${book.author ? `<p class="by">${authorLinks(book.author)}</p>` : ""}
     ${(book.tags || []).length ? `<p class="meta">${book.tags.map((t) => `<span class="tag genre">${esc(t)}</span>`).join("")}</p>` : ""}
     ${user ? mine(book, entry) : ""}
     ${book.blurb ? `<div class="prose blurb"><p>${esc(book.blurb)}</p><p class="muted small">Опис з сайту ${esc(shelf ? shelf.name : book.source)}</p></div>` : ""}
@@ -453,11 +465,45 @@ function searchRow({ book, entry }, inLibrary, user, owner, readerHref) {
   <div class="row-main">
     <h3><a href="${attr(book.href)}">${esc(book.title)}</a>${book.series ? ` <span class="badge">серія · ${count(book.series.volumes, "том", "томи", "томів")}</span>` : ""}</h3>
     ${book.altTitle ? `<p class="alt-title small">${esc(book.altTitle)}</p>` : ""}
-    <p class="by">${esc(byline(book.author))}</p>
+    <p class="by">${authorLinks(book.author)}</p>
     ${where.length ? `<ul class="where small">${where.join("")}</ul>` : `<p class="muted small">Ніде поки немає.</p>`}
     ${user && !entry ? `<form method="post" action="/api/entry/${encodeURIComponent(book.id)}" class="inline"><input type="hidden" name="status" value="want"><input type="hidden" name="back" value="1"><button class="btn small">Хочу прочитати</button></form>` : ""}
   </div>
 </article>`;
+}
+
+// ---- /author/<slug> ----
+
+// Works first (from Wikidata, in order of writing), each linked to our book of it, then all their books.
+function authorPage({ author, works, hits, user, inLibrary, owner, readerHref }) {
+  const work = (w) => {
+    const title = w.uk || w.en || w.orig;
+    const orig = [w.orig, w.en].find((t) => t && t !== title) || "";
+    // Link the book that is on sale, if one is; «є» lists every shelf with any of its books.
+    const onSale = (x) => (x.editions || []).filter((e) => e.status !== "немає");
+    const b = [...w.books].sort((x, y) => !!onSale(y).length - !!onSale(x).length)[0];
+    const where = [...new Set(w.books.flatMap(onSale).map((e) => e.shelf.name))];
+    const note = b ? (where.length ? ` <span class="small muted">· є: ${esc(where.join(", "))}</span>` : "") : !w.uk ? ` <span class="small muted">· перекладу не знайшли</span>` : "";
+    return `<li${b ? "" : ' class="none"'}><span class="year">${w.year || ""}</span> ${b ? `<a href="${attr(b.href)}">${esc(title)}</a>` : esc(title)}${orig ? ` <span class="alt">${esc(orig)}</span>` : ""}${note}</li>`;
+  };
+  const body = `
+<section class="head">
+  <div>
+    <h1>${esc(author.name)}</h1>
+    ${author.other ? `<p class="alt-title">${esc(author.other)}</p>` : ""}
+    ${author.qid ? `<p class="muted small"><a href="https://www.wikidata.org/wiki/${attr(author.qid)}" target="_blank" rel="noopener">Wikidata ↗</a></p>` : ""}
+  </div>
+</section>
+${works.length ? `
+<section>
+  <h2 class="sec">Твори</h2>
+  <ul class="works">${works.map(work).join("")}</ul>
+</section>` : ""}
+<section>
+  <h2 class="sec">Книжки ${hits.length ? `<span class="muted small">${hits.length}</span>` : ""}</h2>
+  ${hits.length ? `<div class="rows">${hits.map((h) => searchRow(h, inLibrary, user, owner, readerHref)).join("\n")}</div>` : `<p class="muted">Поки ні в каталогах, ні в читачів.</p>`}
+</section>`;
+  return layout({ title: author.name, body, user });
 }
 
 // ---- login / misc ----
@@ -467,4 +513,4 @@ function messagePage({ title, text, user }) {
 }
 
 module.exports = {
-  searchPage, searchResults, layout, libraryPage, bookPage, editPage, discoveryPage, shelfPage, messagePage, esc, STATUS, COPY, setTitleLinks };
+  searchPage, searchResults, layout, libraryPage, bookPage, editPage, discoveryPage, shelfPage, messagePage, esc, STATUS, COPY, setTitleLinks, setAuthorLinks, authorPage };
