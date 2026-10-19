@@ -187,7 +187,7 @@ class Store {
 
     const seen = new Set();
     for (const g of new Set(groupOf.values())) {
-      const sorted = [...g].sort((a, b) => (a.item.edition ? 1 : 0) - (b.item.edition ? 1 : 0) || (PICK[a.item.status] ?? 9) - (PICK[b.item.status] ?? 9) || a.item.id.localeCompare(b.item.id, "en", { numeric: true }));
+      const sorted = [...g].sort((a, b) => (a.item.edition ? 1 : 0) - (b.item.edition ? 1 : 0) || (a.item.format === "e-book") - (b.item.format === "e-book") || (PICK[a.item.status] ?? 9) - (PICK[b.item.status] ?? 9) || a.item.id.localeCompare(b.item.id, "en", { numeric: true }));
       const canonical = g.map((si) => bookOf(si.item)).find(Boolean) || sorted[0].item.id;
       this.editions.set(canonical, sorted);
       const perShelf = new Set();

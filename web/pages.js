@@ -227,7 +227,7 @@ function series(book, inLibrary) {
 function buyButton(shelf, book, compact = false) {
   const host = shelf.url.replace(/^https?:\/\/(www\.)?/, "").replace(/\/$/, "");
   const verb = book.price === "безкоштовно" ? "Завантажити" : book.status === "передзамовлення" ? "Замовити" : book.status === "немає" ? "Подивитися" : "Купити";
-  const tail = [compact ? book.edition || "звичайне видання" : "", book.price, book.status && book.status !== "є" ? book.status : "", compact ? host : ""].filter(Boolean).join(" · ");
+  const tail = [compact ? [book.format, book.edition].filter(Boolean).join(", ") : "", book.price, book.status && book.status !== "є" ? book.status : "", compact ? host : ""].filter(Boolean).join(" · ");
   return `<p class="buy"><a class="btn primary${compact ? " small" : ""}" href="${attr(book.links[0].url)}" target="_blank" rel="noopener">${verb}${compact ? "" : ` на ${esc(host)}`} ↗</a>${tail ? `<span class="muted">${esc(tail)}</span>` : ""}</p>`;
 }
 

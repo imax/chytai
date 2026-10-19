@@ -118,7 +118,7 @@ const SOURCES = [
       author: p.authors.join(", "),
       translator: p.translators.join(", "),
       isbn: p.isbn,
-      edition: [p.type === "ebook" ? "електронна" : "", p.publisher && p.publisher !== "Видавництво Старого Лева" ? p.publisher : ""].filter(Boolean).join(", "),
+      edition: p.publisher && p.publisher !== "Видавництво Старого Лева" ? p.publisher : "", // the format is its own field
       format: p.type === "ebook" ? "e-book" : "папір",
       series: volumeOf(ent(p.name))?.series || "",
       volume: volumeOf(ent(p.name))?.volume || 0,
