@@ -57,7 +57,7 @@ jobs:
           for i in 1 2 3; do
             flyctl machine start "$id" -a "$APP" || true
             flyctl machine wait "$id" -a "$APP" --state started --wait-timeout 60s || true
-            timeout 300 flyctl ssh console -a "$APP" --machine "$id" \
+            timeout 120 flyctl ssh console -a "$APP" --machine "$id" \
               -C "sh -c 'echo $script | base64 -d > /tmp/backup-snapshot.js && rm -f /tmp/backup.tar.gz && node /tmp/backup-snapshot.js /data /tmp/backup.tar.gz ${{ matrix.exclude }}'" \
               && timeout 600 flyctl ssh sftp get /tmp/backup.tar.gz backup.tar.gz -a "$APP" --machine "$id" \
               && break
