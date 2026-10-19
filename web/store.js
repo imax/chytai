@@ -42,6 +42,76 @@ class Store {
     for (const s of this.shelves) for (const it of s.items) this.shelfItems.set(it.id, { shelf: s, item: it });
     this.linkEditions();
     this.load();
+    this.indexSlugs();
+  }
+
+  // ---- canonical URLs ----
+  // Every work has one address, /book/<slug>, built from its title (the Books.md ids already are
+  // such slugs); an edition id or an old address redirects there. Slugs are rebuilt on every start,
+  // so the library keeps its entries under the stable ids and only the links use slugs.
+  indexSlugs() {
+    this.slugs = new Map(); // slug -> id
+    this.slugOf = new Map(); // id -> slug
+    const take = (id, title, author) => {
+      if (this.slugOf.has(id)) return;
+      let slug = slugify(title);
+      const last = slugify((author || "").split(/[,\s]+/).filter(Boolean).pop() || "");
+      if (this.slugs.has(slug) && this.slugs.get(slug) !== id && last) slug = `${slug}-${last}`;
+      while (this.slugs.has(slug) && this.slugs.get(slug) !== id) slug += "-2";
+      this.slugs.set(slug, id);
+      this.slugOf.set(id, slug);
+    };
+    for (const b of this.seedBooks) take(b.id, b.id, "");
+    for (const b of Object.values(this.lib.books)) take(b.id, b.id, "");
+    for (const { item } of this.shelfItems.values()) if (this.canonical(item.id) === item.id) take(item.id, item.title, item.author);
+    for (const { item } of this.shelfItems.values()) item.href = this.href(item.id);
+  }
+
+  href(id) {
+    id = this.canonical(id);
+    return `/book/${encodeURIComponent(this.slugOf.get(id) || id)}`;
+  }
+
+  // The id behind an address: a slug, an id, or an edition id.
+  resolve(param) {
+    return this.slugs.get(param) || (this.book(param) ? this.canonical(param) : null);
+  }
+
+  // ---- search ----
+  // One list over everything: the library and every shelf, works only (editions and volumes fold in).
+  search(q, limit = 40) {
+    const terms = norm(q).split(" ").filter(Boolean);
+    if (!terms.length) return [];
+    const ids = new Set([...this.seedBooks.map((b) => b.id), ...Object.keys(this.lib.books), ...[...this.shelfItems.keys()].filter((id) => this.canonical(id) === id && !this.hidden.has(id))]);
+    const hits = [];
+    for (const id of ids) {
+      const b = this.book(id);
+      if (!b) continue;
+      const fields = [
+        [norm(b.title), 3],
+        [norm(b.altTitle), 3],
+        [norm(b.author), 2],
+        [norm(b.series?.name), 2],
+        [(b.editions || []).map((e) => `${norm(e.title)} ${norm(e.altTitle)} ${norm(e.author)}`).join(" "), 1],
+      ];
+      let score = 0;
+      for (const t of terms) {
+        let best = 0;
+        for (const [f, w] of fields) {
+          if (!f) continue;
+          if (f === t || f.startsWith(`${t} `)) best = Math.max(best, w * 3);
+          else if (f.split(" ").some((word) => word.startsWith(t))) best = Math.max(best, w * 2);
+          else if (f.includes(t)) best = Math.max(best, w);
+        }
+        if (!best) {
+          score = 0;
+          break;
+        }
+        score += best;
+      }
+      if (score) hits.push({ book: b, entry: this.entry(id), score });
+    }
+    return hits.sort((a, b) => b.score - a.score || a.book.title.localeCompare(b.book.title, "uk")).slice(0, limit);
   }
 
   // ---- works and editions ----
@@ -233,12 +303,13 @@ class Store {
     const eds = this.editions.get(id);
     const ser = [id, ...(eds || []).map((e) => e.item.id)].map((i) => this.series.get(i)).find(Boolean);
     const out = eds ? { ...b, editions: eds.map(({ shelf, item }) => ({ ...this.fromShelfItem(shelf, item), shelf })) } : { ...b };
-    if (ser) out.series = { name: ser.name, head: ser.head, volumes: ser.volumes, items: ser.items.map(({ shelf, item }) => ({ ...this.fromShelfItem(shelf, item), shelf, work: this.canonical(item.id) })) };
+    if (ser) out.series = { name: ser.name, head: ser.head, volumes: ser.volumes, items: ser.items.map(({ shelf, item }) => ({ ...this.fromShelfItem(shelf, item), shelf, work: this.canonical(item.id), href: this.href(item.id) })) };
+    out.href = this.slugs ? this.href(id) : `/book/${encodeURIComponent(id)}`;
     return out;
   }
 
   fromShelfItem(shelf, it) {
-    return { id: it.id, title: it.title, author: it.author, altTitle: it.altTitle || "", cover: it.cover, tags: it.genres || [], links: [{ label: shelf.name, url: it.url }], source: shelf.id, shelf: shelf.id, blurb: it.blurb || "", price: it.price, status: it.status, language: it.language, edition: it.edition || "", isbn: it.isbn || "", volume: it.volume || 0, bundle: !!it.bundle };
+    return { id: it.id, title: it.title, author: it.author, altTitle: it.altTitle || "", cover: it.cover, tags: it.genres || [], links: [{ label: shelf.name, url: it.url }], source: shelf.id, shelf: shelf.id, blurb: it.blurb || "", price: it.price, status: it.status, language: it.language, edition: it.edition || "", isbn: it.isbn || "", volume: it.volume || 0, bundle: !!it.bundle, format: shelf.kind === "free" ? "e-book" : "папір" };
   }
 
   addBook({ title, author, cover, links }) {
@@ -246,6 +317,7 @@ class Store {
     while (this.book(id)) id += "-2";
     this.lib.books[id] = { id, title: title.trim(), author: (author || "").trim(), cover: cover || "", tags: [], links: links || [], source: "manual" };
     this.save();
+    this.indexSlugs();
     return this.lib.books[id];
   }
 

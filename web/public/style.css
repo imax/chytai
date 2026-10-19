@@ -39,6 +39,12 @@ button, select, input, textarea { font: inherit; color: inherit; }
 .top nav a:hover { color: var(--fg); background: var(--accent-soft); }
 .top nav a.on { color: var(--fg); font-weight: 600; }
 .who { display: flex; gap: 8px; align-items: baseline; }
+.find input { width: 200px; padding: 6px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); outline: none; font-size: 14px; }
+.find input:focus { border-color: var(--accent); }
+.where { list-style: none; margin: 4px 0 6px; padding: 0; color: var(--muted); }
+.where li { padding: 1px 0; }
+.where a { color: var(--fg); text-decoration: underline; }
+.hit .inline { margin-top: 4px; }
 main { max-width: 900px; margin: 0 auto; padding: 24px 24px 60px; }
 main.wide { max-width: 1140px; }
 .foot { max-width: 900px; margin: 0 auto; padding: 16px 24px 40px; color: var(--muted); font-size: 13px; display: flex; gap: 16px; border-top: 1px solid var(--line); }
@@ -183,6 +189,7 @@ dialog .form { margin: 0; background: var(--card); }
 @media (max-width: 640px) {
   .top { padding: 0 16px; gap: 14px; }
   .top nav a { padding: 6px 8px; }
+  .find input { width: 120px; }
   .who span { display: none; }
   .top { gap: 10px; }
   .head { flex-direction: column; gap: 10px; }

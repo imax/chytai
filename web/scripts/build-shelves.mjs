@@ -105,34 +105,6 @@ const shelves = [];
   });
 }
 
-// Standard Ebooks: the public Atom feed of the 15 newest releases, standardebooks.org/feeds/atom/new-releases.
-// Free, public-domain English ebooks; the cover lives at <book url>/downloads/cover.jpg.
-{
-  const items = read("standardebooks.json").map((p) => ({
-    id: "se-" + p.url.replace("https://standardebooks.org/ebooks/", "").replace(/[^a-z0-9]+/gi, "-"),
-    title: p.title,
-    author: p.author,
-    cover: `${p.url}/downloads/cover.jpg`,
-    url: p.url,
-    epub: p.epub,
-    price: "безкоштовно",
-    status: "є",
-    isNew: true,
-    published: p.published.slice(0, 10),
-    blurb: p.summary,
-    description: p.desc,
-    language: "англійська",
-  }));
-  shelves.push({
-    id: "standard-ebooks",
-    kind: "free",
-    name: "Standard Ebooks",
-    tagline: "Вільні англійські e-book: нові випуски",
-    url: "https://standardebooks.org/",
-    items,
-  });
-}
-
 fs.writeFileSync(OUT, JSON.stringify({ fetched: new Date().toISOString().slice(0, 10), shelves }, null, 1) + "\n");
 for (const s of shelves) console.log(s.id, s.items.length);
 const v = shelves[1].items;

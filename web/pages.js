@@ -26,13 +26,14 @@ function cover(book, size = "") {
   return `<div class="cover ph ${size}" style="--h:${hue}"><span>${esc(book.title)}</span></div>`;
 }
 
-function layout({ title, body, user, path = "/", wide = false }) {
+function layout({ title, body, user, path = "/", wide = false, description = "", q = "" }) {
   return `<!doctype html>
 <html lang="uk">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${esc(title ? `${title} · Chytai` : "Chytai")}</title>
+${description ? `<meta name="description" content="${attr(description.slice(0, 200))}">` : ""}
 <link rel="icon" href="/icon.png">
 <link rel="stylesheet" href="/style.css">
 </head>
@@ -42,8 +43,8 @@ function layout({ title, body, user, path = "/", wide = false }) {
   <nav>
     <a href="/" class="${path === "/" || path.startsWith("/shelf") ? "on" : ""}">Discovery</a>
     <a href="/me" class="${path.startsWith("/me") || path.startsWith("/book") ? "on" : ""}">Мої книжки</a>
-    ${user ? `<a href="/recommend" class="${path.startsWith("/recommend") ? "on" : ""}">Що почитати</a>` : ""}
   </nav>
+  ${path === "/search" ? "" : `<form class="find" action="/search" role="search"><input type="search" name="q" value="${attr(q)}" placeholder="Знайти книжку" autocomplete="off" aria-label="Пошук"></form>`}
   <div class="who">${user ? `<span>${esc(user)}</span> <a href="/logout" class="muted">вийти</a>` : `<span class="muted">гість</span>`}</div>
 </header>
 <main class="${wide ? "wide" : ""}">
@@ -99,9 +100,9 @@ function libraryRow(r, i) {
   const search = [b.title, b.altTitle, b.author, stripMd(r.note || "")].join(" ").toLowerCase();
   const yearHead = r.year && prev !== r.year ? `<h2 class="year" data-year="${r.year}">${r.year}</h2>` : !r.year && prev !== null && i > 0 && prev !== undefined ? `<h2 class="year" data-year="">Без дати</h2>` : "";
   return `${yearHead}<article class="row" data-status="${r.status || ""}" data-copy="${r.copy || ""}" data-tags="${attr((b.tags || []).join(" "))}" data-rating="${r.rating ?? ""}" data-year="${r.year ?? ""}" data-title="${attr(b.title.toLowerCase())}" data-search="${attr(search)}" data-order="${i}">
-  <a class="cover-link" href="/book/${encodeURIComponent(b.id)}">${cover(b)}</a>
+  <a class="cover-link" href="${attr(b.href)}">${cover(b)}</a>
   <div class="row-body">
-    <h3><a href="/book/${encodeURIComponent(b.id)}">${esc(b.title)}</a>${b.series ? `<span class="badge">серія · ${count(b.series, "книжка", "книжки", "книжок")}</span>` : ""}</h3>
+    <h3><a href="${attr(b.href)}">${esc(b.title)}</a>${b.series ? `<span class="badge">серія · ${count(b.series, "книжка", "книжки", "книжок")}</span>` : ""}</h3>
     <p class="by">${b.author ? esc(b.author) : ""}${b.altTitle ? `<span class="alt">${esc(b.altTitle)}</span>` : ""}</p>
     <p class="meta">${r.rating != null ? stars(r.rating) : ""}${r.status && r.status !== "read" ? `<span class="tag status-${r.status}">${STATUS[r.status]}</span>` : ""}${r.copy ? `<span class="tag copy-${r.copy}">${COPY[r.copy]}</span>` : ""}</p>
     ${r.note ? `<p class="note">${inline(r.note)}</p>` : ""}
@@ -161,7 +162,8 @@ function bookPage({ book, entry, user, shelf, inLibrary = new Map() }) {
     ${user ? entryForm(book, entry) : !entry ? "" : ""}
   </div>
 </article>`;
-  return layout({ title: book.title, body, user, path: "/book" });
+  const description = [book.author, stripMd(entry?.note || "") || book.blurb || ""].filter(Boolean).join(". ");
+  return layout({ title: book.title, body, user, path: "/book", description });
 }
 
 // Every edition of the book on the shelves links back to where it came from: the publisher's page,
@@ -182,7 +184,7 @@ function series(book, inLibrary) {
     .map((v) => {
       const has = inLibrary.get(v.work);
       const tail = [v.price, v.status && v.status !== "є" ? v.status : ""].filter(Boolean).join(" · ");
-      return `<li class="${v.work === book.id ? "this" : ""}"><a href="/book/${encodeURIComponent(v.work)}">${esc(label(v))}</a>${has?.status ? ` <span class="tag status-${has.status}">${STATUS[has.status]}</span>` : ""}<span class="muted small">${esc(tail)}</span><a class="btn small" href="${attr(v.links[0].url)}" target="_blank" rel="noopener">${v.status === "передзамовлення" ? "Замовити" : v.status === "немає" ? "Подивитися" : "Купити"} ↗</a></li>`;
+      return `<li class="${v.work === book.id ? "this" : ""}"><a href="${attr(v.href)}">${esc(label(v))}</a>${has?.status ? ` <span class="tag status-${has.status}">${STATUS[has.status]}</span>` : ""}<span class="muted small">${esc(tail)}</span><a class="btn small" href="${attr(v.links[0].url)}" target="_blank" rel="noopener">${v.status === "передзамовлення" ? "Замовити" : v.status === "немає" ? "Подивитися" : "Купити"} ↗</a></li>`;
     })
     .join("")}</ul></div>`;
 }
@@ -313,11 +315,44 @@ function itemCard(it, inLibrary, user, shelfName) {
   const has = inLibrary.get(it.id);
   const search = [it.title, it.author, it.altTitle].join(" ").toLowerCase();
   return `<article class="card" data-genre="${attr((it.genres || []).join("|"))}" data-avail="${attr(it.status || "")}" data-search="${attr(search)}">
-  <a class="cover-link" href="/book/${encodeURIComponent(it.id)}">${cover(it, "card")}</a>
-  <h3><a href="/book/${encodeURIComponent(it.id)}">${esc(it.title)}</a></h3>
+  <a class="cover-link" href="${attr(it.href)}">${cover(it, "card")}</a>
+  <h3><a href="${attr(it.href)}">${esc(it.title)}</a></h3>
   <p class="by">${esc(it.author || "")}</p>
   <p class="meta small">${shelfName ? `<span class="muted">${esc(shelfName)} · </span>` : ""}${esc(it.price || "")}${it.status && it.status !== "є" ? ` · ${esc(it.status)}` : ""}${it.volumes > 1 ? ` · ${count(it.volumes, "том", "томи", "томів")}` : it.editions > 1 ? ` · ${count(it.editions, "видання", "видання", "видань")}` : ""}${it.isNew && !shelfName ? ` <span class="tag new">нове</span>` : ""}</p>
   ${has ? `<p class="small have">${has.status ? STATUS[has.status] : "У бібліотеці"}</p>` : user ? `<form method="post" action="/api/entry/${encodeURIComponent(it.id)}" class="inline"><input type="hidden" name="status" value="want"><input type="hidden" name="back" value="1"><button class="btn small">Хочу прочитати</button></form>` : ""}
+</article>`;
+}
+
+// ---- search (/search) ----
+
+function searchPage({ q, hits, user, inLibrary, owner }) {
+  const body = `
+<section class="head">
+  <div>
+    <h1>Пошук</h1>
+    <p class="muted">По бібліотеці ${esc(owner)} і всіх полицях Discovery.</p>
+  </div>
+</section>
+<form class="toolbar" action="/search" role="search"><input type="search" name="q" value="${attr(q)}" placeholder="Назва, автор або серія" autocomplete="off" autofocus></form>
+${!q.trim() ? "" : hits.length ? `<section class="rows" id="hits">${hits.map((h) => searchRow(h, inLibrary, user, owner)).join("\n")}</section>` : `<p class="empty">Нічого не знайшлося за «${esc(q)}».</p>`}`;
+  return layout({ title: q ? `${q} · Пошук` : "Пошук", body, user, path: "/search", q });
+}
+
+// Where the book is: the shelves that sell it (format, price, availability) and whose library has it.
+function searchRow({ book, entry }, inLibrary, user, owner) {
+  const where = (book.editions || []).map((e) => `<li><a href="${attr(e.links[0].url)}" target="_blank" rel="noopener">${esc(e.shelf.name)}</a> · ${esc(e.format)}${e.edition ? ` · ${esc(e.edition)}` : ""}${e.price ? ` · ${esc(e.price)}` : ""}${e.status && e.status !== "є" ? ` · ${esc(e.status)}` : e.status ? " · є" : ""}</li>`);
+  const edUrls = new Set((book.editions || []).map((e) => e.links[0].url));
+  for (const l of (book.links || []).filter((l) => !edUrls.has(l.url))) where.push(`<li><a href="${attr(l.url)}" target="_blank" rel="noopener">${esc(l.label)}</a>${/amazon/i.test(l.url) ? " · Kindle" : ""}</li>`);
+  if (entry) where.push(`<li><a href="/me">${esc(owner)}</a> · ${entry.status ? STATUS[entry.status].toLowerCase() : "у бібліотеці"}${entry.rating != null ? ` · ${uk(entry.rating)}/5` : ""}${entry.copy ? ` · ${COPY[entry.copy].toLowerCase()}` : ""}</li>`);
+  return `<article class="row hit">
+  <a class="cover-link" href="${attr(book.href)}">${cover(book)}</a>
+  <div class="row-main">
+    <h3><a href="${attr(book.href)}">${esc(book.title)}</a>${book.series ? ` <span class="badge">серія · ${count(book.series.volumes, "том", "томи", "томів")}</span>` : ""}</h3>
+    ${book.altTitle ? `<p class="alt-title small">${esc(book.altTitle)}</p>` : ""}
+    <p class="by">${esc(book.author || "")}</p>
+    ${where.length ? `<ul class="where small">${where.join("")}</ul>` : `<p class="muted small">Ніде поки немає.</p>`}
+    ${user && !entry ? `<form method="post" action="/api/entry/${encodeURIComponent(book.id)}" class="inline"><input type="hidden" name="status" value="want"><input type="hidden" name="back" value="1"><button class="btn small">Хочу прочитати</button></form>` : ""}
+  </div>
 </article>`;
 }
 
@@ -327,4 +362,5 @@ function messagePage({ title, text, user }) {
   return layout({ title, body: `<section class="head"><div><h1>${esc(title)}</h1><p class="muted">${esc(text)}</p></div></section>`, user });
 }
 
-module.exports = { layout, libraryPage, bookPage, discoveryPage, shelfPage, messagePage, esc, STATUS, COPY };
+module.exports = {
+  searchPage, layout, libraryPage, bookPage, discoveryPage, shelfPage, messagePage, esc, STATUS, COPY };

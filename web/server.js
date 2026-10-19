@@ -1,16 +1,15 @@
-// Chytai web: the platform part (library, Discovery, recommendations), separate from the reader
+// Chytai web: the platform part (library, Discovery, search), separate from the reader
 // in server/index.js. Plain Express, server-rendered HTML, JSON on disk.
 //
 // Env: DATA_DIR (default ./data; the library lives in DATA_DIR/web/library.json), PORT (default 8090),
 // WEB_LOGIN_TOKEN (the magic link: opening /login/<token> once signs this browser in as the owner),
-// ANTHROPIC_API_KEY (for «Що почитати», optional), RECOMMEND_MODEL (default claude-opus-5-5).
+// WEB_OWNER (the public name of the one profile).
 const express = require("express");
 const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
 const { Store } = require("./store");
 const pages = require("./pages");
-const { recommend } = require("./recommend");
 
 const ROOT = path.join(__dirname, "..");
 loadDotEnv(path.join(ROOT, ".env"));
@@ -94,21 +93,18 @@ app.get("/shelf/:id", (req, res) => {
   res.send(pages.shelfPage({ shelf, subscribed: store.subscribed(shelf.id), user: req.user, inLibrary: inLibraryMap(), visible }));
 });
 
-app.get("/book/:id", (req, res) => {
-  // An edition's id opens the work's page.
-  if (store.canonical(req.params.id) !== req.params.id) return res.redirect(`/book/${encodeURIComponent(store.canonical(req.params.id))}`);
-  const book = store.book(req.params.id);
-  if (!book) return res.status(404).send(pages.messagePage({ title: "Немає такої книжки", text: "", user: req.user }));
-  res.send(pages.bookPage({ book, entry: store.entry(book.id), user: req.user, shelf: book.shelf ? store.shelf(book.shelf) : null, inLibrary: inLibraryMap() }));
+app.get("/search", (req, res) => {
+  const q = String(req.query.q || "").trim().slice(0, 100);
+  res.send(pages.searchPage({ q, hits: store.search(q), user: req.user, inLibrary: inLibraryMap(), owner: OWNER }));
 });
 
-app.get("/recommend", owner, async (req, res) => {
-  try {
-    res.send(await recommend({ store, user: req.user, topic: String(req.query.topic || ""), refresh: "refresh" in req.query, pages }));
-  } catch (e) {
-    console.error(e);
-    res.status(500).send(pages.messagePage({ title: "Не вийшло", text: e.message, user: req.user }));
-  }
+app.get("/book/:id", (req, res) => {
+  const id = store.resolve(req.params.id);
+  if (!id) return res.status(404).send(pages.messagePage({ title: "Немає такої книжки", text: "", user: req.user }));
+  // One address per work: an id, an edition id or an old slug redirects to the canonical one.
+  if (store.href(id) !== `/book/${encodeURIComponent(req.params.id)}`) return res.redirect(301, store.href(id));
+  const book = store.book(id);
+  res.send(pages.bookPage({ book, entry: store.entry(book.id), user: req.user, shelf: book.shelf ? store.shelf(book.shelf) : null, inLibrary: inLibraryMap() }));
 });
 
 // ---- writes (owner only) ----
@@ -125,7 +121,7 @@ app.post("/api/entry/:id", owner, (req, res) => {
   if ("note" in b) patch.note = String(b.note).trim();
   const e = store.setEntry(req.params.id, patch);
   if (!e) return res.status(404).send("Немає такої книжки");
-  back(req, res, `/book/${encodeURIComponent(req.params.id)}`);
+  back(req, res, store.href(req.params.id));
 });
 
 app.post("/api/entry/:id/remove", owner, (req, res) => {
@@ -138,7 +134,7 @@ app.post("/api/book", owner, (req, res) => {
   if (!title || !title.trim()) return res.status(400).send("Потрібна назва");
   const b = store.addBook({ title, author, cover: /^https?:\/\//.test(cover || "") ? cover : "" });
   store.setEntry(b.id, { status: ["read", "reading", "want"].includes(status) ? status : "", copy: ["paper", "ebook", "seeking"].includes(copy) ? copy : "" });
-  res.redirect(`/book/${encodeURIComponent(b.id)}`);
+  res.redirect(store.href(b.id));
 });
 
 app.post("/api/subscribe/:id", owner, (req, res) => {
