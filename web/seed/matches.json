@@ -1,14 +1,22 @@
 {
- "_": "Hand-confirmed links that the automatic matching misses or gets wrong. same: catalog item id -> library book id. different: pairs the matcher must not join. volumes: item id -> volume number, for series whose titles carry no numbering. translations: pairs of works (ids or /book/ slugs) where one translates the other.",
+ "_": "Hand-confirmed links that the automatic matching misses or gets wrong. same: catalog item id -> library book id. different: pairs the matcher must not join. volumes: item id -> volume number, for series whose titles carry no numbering. translations: pairs of works (ids or /book/ slugs) where one translates the other. covers: work (id or /book/ slug) -> the cover to show, when the edition picked for the work has a worse one.",
  "same": {
   "lobster-8110": "mickey7",
   "lobster-8109": "we-are-legion-bobiverse"
  },
  "different": [],
- "translations": [["song-of-achilles", "пісня-ахілла"]],
+ "translations": [
+  [
+   "song-of-achilles",
+   "пісня-ахілла"
+  ]
+ ],
  "volumes": {
   "lobster-8109": 1,
   "lobster-8107": 2,
   "lobster-8882": 3
+ },
+ "covers": {
+  "tyhrolovy": "https://osnovypublishing.com/wp-content/uploads/2025/11/tyhrolovy-white-background.png"
  }
 }

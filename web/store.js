@@ -175,6 +175,7 @@ class Store {
     this.linkEditions();
     this.migrateEntries();
     this.indexSlugs();
+    this.pickCovers();
     this.linkTranslations();
     this.indexSearch();
   }
@@ -305,6 +306,17 @@ class Store {
     for (const { item } of this.shelfItems.values()) if (this.canonical(item.id) === item.id) take(item.id, item.title, item.author);
     this.db.exec("COMMIT");
     for (const { item } of this.shelfItems.values()) item.href = this.href(item.id);
+  }
+
+  // Covers picked by hand in matches.json «covers» (Max chose Основи's «Тигролови», 2026-10-20).
+  pickCovers() {
+    let covers = {};
+    try {
+      covers = readJson(path.join(SEED, "matches.json")).covers || {};
+    } catch {
+      /* none */
+    }
+    this.covers = new Map(Object.entries(covers).map(([k, url]) => [this.canonical(this.slugs.get(k) || k), url]));
   }
 
   href(id) {
@@ -641,6 +653,7 @@ class Store {
     const ser = [id, ...(eds || []).map((e) => e.item.id)].map((i) => this.series.get(i)).find(Boolean);
     const out = eds ? { ...b, editions: eds.map(({ shelf, item }) => ({ ...this.fromShelfItem(shelf, item), shelf })) } : { ...b };
     if (ser) out.series = { name: ser.name, head: ser.head, volumes: ser.volumes, items: ser.items.map(({ shelf, item }) => ({ ...this.fromShelfItem(shelf, item), shelf, work: this.canonical(item.id), href: this.href(item.id) })) };
+    if (this.covers?.has(id)) out.cover = this.covers.get(id);
     out.href = this.slugs ? this.href(id) : `/book/${encodeURIComponent(id)}`;
     return out;
   }
