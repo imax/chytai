@@ -113,7 +113,9 @@ function build(store) {
   const keyOfName = new Map();
   const works = allWorks(store);
   const keyOf = (name) => (wd[name] ? `q:${wd[name].qid}` : `n:${norm(forms(name).sort()[0])}`);
+  const { isRussian } = require("./store");
   for (const b of works) {
+    if (isRussian(store.book(b.id) || b)) continue; // not on author pages (Max, 2026-10-20)
     for (const name of splitAuthors(b.author)) {
       const key = keyOf(name);
       const g = groups.get(key) || groups.set(key, { key, qid: wd[name]?.qid || "", wd: wd[name] || null, names: new Map(), ids: new Set() }).get(key);

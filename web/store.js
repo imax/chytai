@@ -41,6 +41,18 @@ const slugify = (s) =>
     .replace(/^-|-$/g, "")
     .slice(0, 60) || "book";
 const OWNER = "owner"; // the reader id of the owner (Max): the only reader before accounts, so old rows are his
+// Books in Russian stay on the shelf of the reader who added them and nowhere else: not in search,
+// author pages, feeds, picks or recommendations (Max, 2026-10-20: «не показувати книжки рос в пошуку.
+// Навіть якщо хтось її додав. Тільки на сторінці цього читача»). The catalog's language word wins,
+// otherwise the Russian-only letters ы э ъ ё in the title or the author, or, with no Ukrainian-only
+// letter, a Russian ending: «Ненасильственное общение» has neither ы nor э.
+const RU_ENDING = /(ое|ая|ые|ие)(?![\p{L}])|(?<![\p{L}])(и|что|как|это|лет|или)(?![\p{L}])/iu;
+const isRussian = (b) => {
+  const lang = String(b?.language || "").toLowerCase();
+  if (lang) return /^(ru|рос)/.test(lang);
+  const text = `${b?.title || ""} ${b?.author || ""}`;
+  return RU.test(text) || (!/[іїєґ]/i.test(text) && RU_ENDING.test(b?.title || ""));
+};
 const norm = (s) => String(s || "").toLowerCase().replace(/^(the|a)\s+/, "").replace(/[^\p{L}\p{N}]+/gu, " ").trim();
 const isbnKey = (s) => String(s || "").replace(/[^0-9X]/gi, "");
 // The ISBNs a library book is known by: its own field, plus the Amazon /dp/<ISBN-10> links from Books.md.
@@ -388,7 +400,7 @@ class Store {
     const hits = [];
     for (const [i, { id }] of rows.entries()) {
       const b = this.book(id);
-      if (!b) continue;
+      if (!b || isRussian(b)) continue;
       // An exact title (or original title) goes first, then books where every typed word is a whole
       // word of the title or the author («Лем» is Станіслав Лем, not «Моцарт із Лемберга»); otherwise
       // the index's own order.
@@ -873,4 +885,4 @@ class Store {
   }
 }
 
-module.exports = { Store, slugify, OWNER };
+module.exports = { isRussian, Store, slugify, OWNER };

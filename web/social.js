@@ -1,10 +1,12 @@
 // What readers do with books, for the pages of the 2026-10-20 design: a book's rating across readers,
 // the activity feed («Зараз читають», «Стрічка»), «Книжка навмання» and «схожі» recommendations.
 // Everything is computed from the entries in memory (store.entries); there are few readers yet.
+// Books in Russian are left out of all of it (store.js isRussian).
 //
 // `who(readerId)` turns a reader id into the public reader ({ name, href, ... }) or null.
 
 // Tags that say nothing about what a book is like.
+const { isRussian } = require("./store");
 const PLAIN = new Set(["українською"]);
 const tagsOf = (b) => (b?.tags || []).filter((t) => !PLAIN.has(t));
 const shuffle = (a) => {
@@ -27,7 +29,7 @@ class Social {
     for (const [rid, entries] of this.store.entries) {
       const reader = this.who(rid);
       if (!reader) continue;
-      for (const [id, e] of Object.entries(entries)) if (e.status || e.rating != null) out.push({ reader, id, entry: e });
+      for (const [id, e] of Object.entries(entries)) if ((e.status || e.rating != null) && !isRussian(this.store.book(id))) out.push({ reader, id, entry: e });
     }
     return out;
   }
