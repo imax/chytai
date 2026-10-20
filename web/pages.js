@@ -308,7 +308,7 @@ function librariesBlock(libraries) {
   if (!libraries.length) return "";
   return `<section class="libraries">
   ${label("Бібліотеки", "на сторінці книжки видно, чи є вона на полиці")}
-  <div class="lib-list">${libraries.map((l) => `<a href="${attr(l.base)}" target="_blank" rel="noopener"><b>${esc(l.name)} ↗</b><span>${esc(l.city)}</span></a>`).join("")}</div>
+  <div class="lib-list">${libraries.map((l) => `<a href="${attr(l.home || l.base)}" target="_blank" rel="noopener"><b>${esc(l.name)} ↗</b><span>${esc(l.city)}</span></a>`).join("")}</div>
 </section>`;
 }
 

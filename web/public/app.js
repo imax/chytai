@@ -117,13 +117,20 @@
             .map((l) => {
               const by = new Map();
               for (const b of l.records.flatMap((r) => r.branches)) {
-                const x = by.get(b.branch) || { total: 0, onShelf: 0 };
+                const x = by.get(b.branch) || { total: 0, onShelf: 0, unknown: 0 };
                 x.total += b.total;
                 x.onShelf += b.onShelf;
+                x.unknown += b.unknown || 0;
                 by.set(b.branch, x);
               }
+              // A library whose branches do not record loans (Kyiv) only says which of them hold a copy.
+              const names = (list) => esc(list.length > 4 ? `${list.slice(0, 4).join(", ")} і ще ${list.length - 4}` : list.join(", "));
               const on = [...by].filter(([, x]) => x.onShelf).map(([n]) => n);
-              const state = on.length ? `<span class="ok">є на полиці</span> <span class="muted">${esc(on.join(", "))}</span>` : `<span class="muted">усі примірники видані</span>`;
+              const held = [...by].filter(([, x]) => !x.onShelf && x.unknown).map(([n]) => n);
+              const parts = [];
+              if (on.length) parts.push(`<span class="ok">є на полиці</span> <span class="muted">${names(on)}</span>`);
+              if (held.length) parts.push(`${on.length ? "також є" : "є"} <span class="muted">${names(held)}</span>`);
+              const state = parts.length ? parts.join(" · ") : `<span class="muted">усі примірники видані</span>`;
               return `<span class="where-item">${state} · <a href="${esc(l.records[0].url)}" target="_blank" rel="noopener">${esc(l.name)}</a><span class="muted">, ${esc(l.city)}</span></span>`;
             })
             .join("")
