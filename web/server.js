@@ -46,10 +46,13 @@ function loadDotEnv(file) {
 const store = new Store(DATA_DIR);
 
 // ---- daily catalog refresh ----
-// The machine sleeps between visits, so a timer alone would not fire: the first request of a day that
-// finds the shelves older than a day starts a refresh in the background (the page itself is served from
-// the current shelves), and the owner can force one with POST /api/refresh.
-const REFRESH_MS = 24 * 3600 * 1000;
+// The machine sleeps between visits, so a timer alone would not fire: the first request that finds the
+// shelves older than 20 hours starts a refresh in the background (the page itself is served from the
+// current shelves), and the owner can force one with POST /api/refresh. A refresh takes a while and the
+// machine stops when nobody asks it anything, so .github/workflows/catalogs.yml starts one every morning
+// and keeps asking /refresh-status until it ends. 20 hours, not 24: the shelves are dated when a refresh
+// ends, so a day after that would miss the next morning's run.
+const REFRESH_MS = 20 * 3600 * 1000;
 let lastRefresh = Date.parse(store.shelvesRefreshedAt) || 0;
 let refreshing = null;
 let lastResult = null; // { at, ok, errors, counts } of the last attempt, for /refresh-status

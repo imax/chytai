@@ -1,0 +1,27 @@
+# The daily catalog refresh of https://chytai.org.ua (web/server.js, «daily catalog refresh»). The site
+# starts one on the first visit when its shelves are older than 20 hours, but the Fly machine stops when
+# nobody asks it anything, which would kill a refresh half-way. So every morning this visits the site and
+# keeps asking /refresh-status until the refresh ends, then prints how it went.
+name: Refresh catalogs
+
+on:
+  schedule:
+    - cron: "0 3 * * *" # 06:00 in Kyiv (05:00 in winter)
+  workflow_dispatch:
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - run: |
+          curl -s -o /dev/null https://chytai.org.ua/ || true
+          sleep 10
+          while :; do
+            s=$(curl -s https://chytai.org.ua/refresh-status || echo '{}')
+            running=$(echo "$s" | jq -r '.running // false')
+            echo "$(date -u +%H:%M:%S) running=$running $(echo "$s" | jq -r '(.log // [])[-1] // ""' | cut -c1-120)"
+            [ "$running" = "true" ] || break
+            sleep 30
+          done
+          echo "$s" | jq '{refreshedAt, last: (.last // {} | {started, finished, ok, errors})}'
