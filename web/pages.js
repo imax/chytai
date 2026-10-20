@@ -464,7 +464,7 @@ function entryForm(book, entry) {
 // The same list twice: /me is the signed-in reader's own shelf with «змінити» on every row (the only
 // place where status, rating and notes are edited); /@<username> is that reader's public shelf, where a
 // signed-in visitor sees what they share and can want any book in one tap.
-function libraryPage({ rows, user, reader, own = false, mineIds = null, recs = [], following = false }) {
+function libraryPage({ rows, user, reader, own = false, mineIds = null, recs = [], following = false, follows = { followers: [], following: [] } }) {
   const year = new Date().getFullYear();
   const read = rows.filter((r) => r.status === "read").length;
   const thisYear = rows.filter((r) => r.status === "read" && r.year === year);
@@ -481,7 +481,10 @@ function libraryPage({ rows, user, reader, own = false, mineIds = null, recs = [
     ["seeking", "Шукаю", rows.filter((r) => r.copy === "seeking").length],
     ...(common.length ? [["common", "Спільні", common.length]] : []),
   ].filter(([k, , n]) => !k || n || (own && ["read", "reading", "want"].includes(k)));
-  const sub = [books(rows.length), count(read, "прочитана", "прочитані", "прочитаних"), thisYear.length ? `${thisYear.length} цього року` : "", common.length ? `<b>${common.length} ${plural(common.length, "спільна", "спільні", "спільних")} з тобою</b>` : "", own ? `<a href="${attr(reader.href)}?public">як бачать інші</a>` : `<span class="muted">@${esc(reader.username)}</span>`].filter(Boolean).join(" · ");
+  const sub = [books(rows.length), count(read, "прочитана", "прочитані", "прочитаних"), thisYear.length ? `${thisYear.length} цього року` : "", common.length ? `<b>${common.length} ${plural(common.length, "спільна", "спільні", "спільних")} з тобою</b>` : "", follows.followers.length ? `<a href="#follows">${count(follows.followers.length, "читач стежить", "читачі стежать", "читачів стежать")}</a>` : "", own ? `<a href="${attr(reader.href)}?public">як бачать інші</a>` : `<span class="muted">@${esc(reader.username)}</span>`].filter(Boolean).join(" · ");
+  // Who follows this reader and whom they follow, as rows of names (Max, 2026-10-20: lists and counts are fine).
+  const names = (list) => `<p class="small">${list.map((r) => `<a href="${attr(r.href)}">${esc(r.name)}</a>`).join(", ")}</p>`;
+  const followBlock = follows.followers.length || follows.following.length ? `<div id="follows">${follows.followers.length ? `${label(own ? "Стежать за тобою" : "Стежать", String(follows.followers.length))}${names(follows.followers)}` : ""}${follows.following.length ? `${label(own ? "Ти стежиш за" : "Стежить за", String(follows.following.length))}${names(follows.following)}` : ""}</div>` : "";
   const list = rows
     .map((r, i) => {
       const b = r.book;
@@ -521,6 +524,7 @@ ${list}
     ${common.length ? `${label("Спільне з тобою")}<p class="small muted">${books(common.length)}, які ви обоє маєте на полиці.</p><div class="grid four">${common.slice(0, 4).map((r) => `<a href="${attr(r.book.href)}">${cover(r.book, "card")}</a>`).join("")}</div>` : ""}
     ${wants.length ? `${label("Хоче прочитати")}${minis(wants.map((r) => r.book), "xs")}` : ""}
     ${recs.length ? `${label("Тобі може зайти")}<p class="small muted">За твоїми п’ятірками</p>${minis(recs)}` : ""}
+    ${followBlock}
   </aside>
 </div>
 ${own ? addDialog() : ""}`;

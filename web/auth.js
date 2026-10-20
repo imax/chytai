@@ -120,6 +120,10 @@ class Auth {
   following(readerId) {
     return readerId ? this.db.prepare("SELECT target FROM follows WHERE reader = ? ORDER BY created").all(readerId).map((r) => r.target) : [];
   }
+  // Ids of the readers who follow this one, newest first.
+  followers(readerId) {
+    return readerId ? this.db.prepare("SELECT reader FROM follows WHERE target = ? ORDER BY created DESC").all(readerId).map((r) => r.reader) : [];
+  }
   // Follow or unfollow; returns the new state, or null when there is no such reader (or it is oneself).
   toggleFollow(readerId, targetId) {
     if (!this.reader(targetId) || targetId === readerId) return null;

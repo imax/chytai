@@ -391,12 +391,13 @@ app.get("/@:username", (req, res) => {
   if (!reader) return res.status(404).send(pages.messagePage({ title: "Немає такого читача", text: "", user: req.user }));
   if (reader.username !== req.params.username) return res.redirect(301, reader.href);
   const rows = libraryRows(reader.id);
+  const follows = { followers: auth.followers(reader.id).map((id) => pub(auth.reader(id))).filter(Boolean), following: auth.following(reader.id).map((id) => pub(auth.reader(id))).filter(Boolean) };
   if (req.user?.id === reader.id && !("public" in req.query)) {
     const fives = rows.filter((r) => r.rating >= 5).slice(0, 5).map((r) => r.id);
     const recs = social.alsoLiked(fives, { limit: 4, skip: new Set(rows.map((r) => r.id)) });
-    return res.send(pages.libraryPage({ rows, user: req.user, reader: req.user, own: true, recs }));
+    return res.send(pages.libraryPage({ rows, user: req.user, reader: req.user, own: true, recs, follows }));
   }
-  res.send(pages.libraryPage({ rows, user: req.user, reader, mineIds: req.user && req.user.id !== reader.id ? new Set(Object.keys(store.entriesOf(req.user.id))) : null, following: auth.follows(req.user?.id, reader.id) }));
+  res.send(pages.libraryPage({ rows, user: req.user, reader, mineIds: req.user && req.user.id !== reader.id ? new Set(Object.keys(store.entriesOf(req.user.id))) : null, following: auth.follows(req.user?.id, reader.id), follows }));
 });
 // The owner's page before usernames (/reader/max) moved to /@maxua.
 app.get(OLD_READER, (req, res) => res.redirect(301, pub(auth.reader(OWNER_ID)).href));
