@@ -688,6 +688,8 @@ class Store {
     const out = eds ? { ...b, editions: eds.map(({ shelf, item }) => ({ ...this.fromShelfItem(shelf, item), shelf })) } : { ...b };
     if (ser) out.series = { name: ser.name, head: ser.head, volumes: ser.volumes, items: ser.items.map(({ shelf, item }) => ({ ...this.fromShelfItem(shelf, item), shelf, work: this.canonical(item.id), href: this.href(item.id) })) };
     if (this.covers?.has(id)) out.cover = this.covers.get(id);
+    // A book a reader added by hand or imported has no cover; its catalog editions do («Сила інтровертів»).
+    else if (!out.cover) out.cover = (out.editions || []).find((e) => e.cover)?.cover || "";
     out.href = this.slugs ? this.href(id) : `/book/${encodeURIComponent(id)}`;
     return out;
   }
