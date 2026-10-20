@@ -27,6 +27,23 @@ const VERB = { read: "прочитано", reading: "читає", want: "хоч�
 const GENRES = ["художня", "фантастика", "детективи", "трилери", "бізнес", "компанії", "менеджмент", "продукт", "гроші", "розробка", "історія", "війна", "біографії", "наука", "саморозвиток", "суспільство"];
 const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
 const CYR = /[а-яіїєґ]/i;
+// Is the book in Ukrainian? A reader's own books can be in any language («Ненасильственное общение»,
+// imported from Apple Books, was shown as «українською», 2026-10-20). The catalog's language word wins;
+// otherwise the letters: ы э ъ ё are Russian only, і ї є ґ Ukrainian only. Cyrillic with neither
+// («Солярис») is Ukrainian for a catalog or Books.md book (they all are) and unknown for a book a reader
+// typed in or imported, and an unknown language is not called Ukrainian.
+const RU_ONLY = /[ыэъё]/i;
+const UK_ONLY = /[іїєґ]/i;
+const OWN_SOURCES = new Set(["manual", "goodreads", "apple-books", "office"]);
+function isUk(book) {
+  const lang = String(book.language || "").toLowerCase();
+  if (lang) return /^(uk|укр)/.test(lang);
+  const text = `${book.title || ""} ${book.author || ""}`;
+  if (!CYR.test(text)) return false;
+  if (UK_ONLY.test(text)) return true;
+  if (RU_ONLY.test(text)) return false;
+  return !OWN_SOURCES.has(book.source);
+}
 const norm = (s) => String(s || "").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
 const host = (url) => String(url || "").replace(/^https?:\/\/(www\.)?/, "").replace(/\/.*$/, "");
 // Availability as shown: «є» goes without saying; an announced book says when it is expected.
@@ -298,7 +315,7 @@ function librariesBlock(libraries) {
 // The book, the reader's own buttons, where to get it, what readers said, what it is about.
 function bookPage({ book, entry, user, shelf, inLibrary = new Map(), readers = [], also = [] }) {
   const s = statsOf(book.id);
-  const kicker = [book.tags?.find((t) => t !== "українською"), CYR.test(book.title) ? "українською" : ""].filter(Boolean).map(cap).join(" · ");
+  const kicker = [book.tags?.find((t) => t !== "українською"), isUk(book) ? "українською" : ""].filter(Boolean).map(cap).join(" · ");
   const sub = [book.altTitle ? esc(book.altTitle) : "", book.author ? `<span class="authors">${authorLinks(book.author)}</span>` : ""].filter(Boolean).join(" · ");
   const score = s.avg != null || s.want ? `<p class="score">${s.avg != null ? `${stars(s.avg, { num: false })} <b>${uk(s.avg.toFixed(1))}</b> від ${count(s.rated, "читача", "читачів", "читачів")}` : ""}${s.want ? `${s.avg != null ? " · " : ""}${s.want} ${plural(s.want, "хоче", "хочуть", "хочуть")} прочитати` : ""}</p>` : "";
   const [first, ...rest] = readers;
@@ -326,7 +343,7 @@ function bookPage({ book, entry, user, shelf, inLibrary = new Map(), readers = [
     ${book.blurb || book.translations?.length || book.ukTitle ? `<section class="block">
       ${label("Про книжку")}
       ${book.blurb ? `<div class="about"><p>${esc(book.blurb)}</p></div>` : ""}
-      <p class="small muted">${[book.blurb ? `Опис з сайту ${esc(shelf ? shelf.name : book.source)}` : "", ...(book.translations || []).map((t) => `${CYR.test(book.title) && !CYR.test(t.title) ? "Оригінал" : "Переклад"}: <a href="${attr(t.href)}">${esc(t.title)}</a>`), book.ukTitle ? `Українською: «${esc(book.ukTitle)}», у каталогах поки немає` : ""].filter(Boolean).join(" · ")}</p>
+      <p class="small muted">${[book.blurb ? `Опис з сайту ${esc(shelf ? shelf.name : book.source)}` : "", ...(book.translations || []).map((t) => `${isUk(book) && !isUk(t) ? "Оригінал" : "Переклад"}: <a href="${attr(t.href)}">${esc(t.title)}</a>`), book.ukTitle ? `Українською: «${esc(book.ukTitle)}», у каталогах поки немає` : ""].filter(Boolean).join(" · ")}</p>
     </section>` : ""}
   </div>
   <aside>
@@ -498,7 +515,7 @@ ${list}
     ${thisYear.length ? `${label("Цього року")}<div class="numbers">
       <p><b>${thisYear.length}</b>прочитано</p>
       ${rated.length ? `<p><b>${uk(Math.round((rated.reduce((s, r) => s + r.rating, 0) / rated.length) * 10) / 10)}</b>середня оцінка</p>` : ""}
-      <p><b>${thisYear.filter((r) => CYR.test(r.book.title)).length}</b>українською</p>
+      <p><b>${thisYear.filter((r) => isUk(r.book)).length}</b>українською</p>
       <p><b>${thisYear.filter((r) => r.note).length}</b>з нотатками</p>
     </div>` : ""}
     ${common.length ? `${label("Спільне з тобою")}<p class="small muted">${books(common.length)}, які ви обоє маєте на полиці.</p><div class="grid four">${common.slice(0, 4).map((r) => `<a href="${attr(r.book.href)}">${cover(r.book, "card")}</a>`).join("")}</div>` : ""}
@@ -666,7 +683,7 @@ function searchResults({ q, user, hits = [], authors = [], readers = [], similar
 function authorPage({ author, works, hits, user, readers = [], also = [] }) {
   const ratings = hits.map((h) => statsOf(h.book.id)).filter((s) => s.avg != null);
   const avg = ratings.length ? Math.round((ratings.reduce((s, x) => s + x.avg, 0) / ratings.length) * 10) / 10 : null;
-  const inUk = hits.filter((h) => CYR.test(h.book.title)).length;
+  const inUk = hits.filter((h) => isUk(h.book)).length;
   const sub = [`${books(hits.length)} на Chytai`, readers.length ? count(readers.length, "читач", "читачі", "читачів") : "", avg != null ? `середня оцінка <b>${uk(avg.toFixed(1))}</b>` : "", inUk && inUk < hits.length ? `${inUk} українською` : ""].filter(Boolean).join(" · ");
   const work = (w) => {
     const title = w.uk || w.en || w.orig;
@@ -946,5 +963,5 @@ function messagePage({ title, text, user }) {
 module.exports = {
   layout, homePage, bookPage, editPage, libraryPage, readersPage, publishersPage, publisherPage, searchPage, searchResults, authorPage,
   loginPage, codePage, signupPage, settingsPage, privacyPage, messagePage, digestPage, importPage, importPreviewPage, importDonePage,
-  esc, STATUS, COPY, inline, setTitleLinks, setAuthorLinks, setStats, setReadersWithNote,
+  esc, STATUS, COPY, inline, isUk, setTitleLinks, setAuthorLinks, setStats, setReadersWithNote,
 };
