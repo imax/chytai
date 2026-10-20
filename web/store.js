@@ -860,12 +860,15 @@ class Store {
     }
   }
 
-  // Every library row of the reader with its book, in the reader's order (Books.md order for the import).
+  // Every library row of the reader with its book: newest year first, books without a year last, and
+  // within a year the reader's order (Books.md order for Max). The year comes first so that a shelf built
+  // in several steps (an import after books added by hand, two imports) never shows a year twice
+  // (Max, 2026-10-20: «каша з роками» on an imported shelf).
   library(reader) {
     return Object.entries(reader ? this.entriesOf(reader) : {})
       .map(([id, e]) => ({ id, ...e, book: this.book(id) }))
       .filter((r) => r.book)
-      .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+      .sort((a, b) => (b.year ?? -1) - (a.year ?? -1) || (a.order ?? 0) - (b.order ?? 0));
   }
 
   // ---- shelves and subscriptions ----
