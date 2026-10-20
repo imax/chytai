@@ -35,7 +35,7 @@ function cover(book, size = "") {
   return `<div class="cover ph ${size}" style="--h:${hue}"><span>${esc(book.title)}</span></div>`;
 }
 
-function layout({ title, body, user, path = "/", wide = false, description = "", q = "" }) {
+function layout({ title, body, user, path = "", wide = false, description = "", q = "" }) {
   return `<!doctype html>
 <html lang="uk">
 <head>
@@ -59,7 +59,7 @@ ${description ? `<meta name="description" content="${attr(description.slice(0, 2
 <main class="${wide ? "wide" : ""}">
 ${body}
 </main>
-<footer class="foot"><span>Chytai.org.ua: читай більше.</span> <a href="https://chytai.fly.dev">Читалка</a></footer>
+<footer class="foot"><span>Chytai.org.ua: читай більше.</span> <a href="https://chytai.fly.dev">Читалка</a> <a href="mailto:ischenko@gmail.com">ischenko@gmail.com</a></footer>
 <script src="${ASSETS.js}"></script>
 </body>
 </html>`;
@@ -517,7 +517,7 @@ ${works.length ? `
   <h2 class="sec">Книжки ${hits.length ? `<span class="muted small">${hits.length}</span>` : ""}</h2>
   ${hits.length ? `<div class="rows">${hits.map((h) => searchRow(h, inLibrary, user, owner, readerHref)).join("\n")}</div>` : `<p class="muted">Поки ні в каталогах, ні в читачів.</p>`}
 </section>`;
-  return layout({ title: author.name, body, user });
+  return layout({ title: author.name, body, user, path: "/author" });
 }
 
 // ---- login / misc ----

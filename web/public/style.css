@@ -47,7 +47,7 @@ button, select, input, textarea { font: inherit; color: inherit; }
 .hit .inline { margin-top: 4px; }
 main { max-width: 900px; margin: 0 auto; padding: 24px 24px 60px; }
 main.wide { max-width: 1140px; }
-.foot { max-width: 900px; margin: 0 auto; padding: 16px 24px 40px; color: var(--muted); font-size: 13px; display: flex; gap: 16px; border-top: 1px solid var(--line); }
+.foot { max-width: 900px; margin: 0 auto; padding: 16px 24px 40px; color: var(--muted); font-size: 13px; display: flex; flex-wrap: wrap; gap: 8px 16px; border-top: 1px solid var(--line); }
 .foot a { text-decoration: underline; }
 
 /* ---- headings ---- */

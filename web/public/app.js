@@ -107,15 +107,14 @@
   for (const b of $$("[data-close]")) b.addEventListener("click", () => b.closest("dialog")?.close());
 
   // Search as you type: results replace #live (and hide #browse on the homepage) after a short pause;
-  // the address keeps ?q= so going back returns to the same results.
-  const box = $("form.search-box");
-  const live = $("#live");
-  if (box && live) {
+  // the address keeps ?q= so going back returns to the same results. The header box on other pages does
+  // the same (Max, 2026-10-20): its results take the place of the page until the box is cleared.
+  const liveSearch = (box, live, browse, keepUrl) => {
     const input = $("input", box);
-    const browse = $("#browse");
-    let timer, ctrl, last = input.value.trim();
+    let timer, ctrl, last = keepUrl ? input.value.trim() : "";
     const show = (q) => {
-      if (browse) browse.hidden = !!q;
+      for (const el of browse) el.hidden = !!q;
+      if (!keepUrl) return;
       const url = new URL(location.href);
       if (q) url.searchParams.set("q", q);
       else url.searchParams.delete("q");
@@ -129,7 +128,7 @@
       if (!q) return (live.innerHTML = ""), show("");
       ctrl = new AbortController();
       try {
-        const r = await fetch(`${box.dataset.live}?${new URLSearchParams({ q })}`, { signal: ctrl.signal });
+        const r = await fetch(`/api/search?${new URLSearchParams({ q })}`, { signal: ctrl.signal });
         live.innerHTML = await r.text();
         show(q);
       } catch (e) {
@@ -138,8 +137,22 @@
     };
     input.addEventListener("input", () => (clearTimeout(timer), (timer = setTimeout(run, 180))));
     box.addEventListener("submit", (e) => (e.preventDefault(), clearTimeout(timer), (last = null), run()));
+    return { input, run: () => ((last = null), run()) };
+  };
+  const box = $("form.search-box");
+  const live = $("#live");
+  if (box && live) {
+    const s = liveSearch(box, live, $$("#browse"), true);
     // Back to the homepage with ?q=: render those results again.
     const q0 = new URLSearchParams(location.search).get("q");
-    if (q0 && !input.value) (input.value = q0), (last = null), run();
+    if (q0 && !s.input.value) (s.input.value = q0), s.run();
+  }
+  const find = $("header form.find");
+  const main = $("main");
+  if (find && main) {
+    const results = document.createElement("div");
+    results.className = "find-results";
+    main.prepend(results);
+    liveSearch(find, results, [...main.children].filter((el) => el !== results), false);
   }
 })();

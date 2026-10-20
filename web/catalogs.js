@@ -319,7 +319,7 @@ const SOURCES = [
         try {
           const r = await fetchImpl(p.url, { headers: HEADERS, signal: AbortSignal.timeout(30000) });
           const m = r.ok && (await r.text()).match(/lbc-announcement-date[^>]*>\s*(?:Орієнтовно:\s*)?([^<]+?)\s*</);
-          p.expected = m ? ent(m[1]) : previous.get(p.url)?.expected || "";
+          p.expected = m ? JSON.parse(JSON.stringify(ent(m[1]))) : previous.get(p.url)?.expected || ""; // a copy, not a slice that keeps the page alive
         } catch {
           p.expected = previous.get(p.url)?.expected || "";
         }
