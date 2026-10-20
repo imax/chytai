@@ -596,7 +596,7 @@ app.post("/api/digest", owner, async (req, res) => {
   res.send(pages.messagePage({ title: "Розсилку виконано", text: `надіслано ${r.sent}, пропущено ${r.skipped}${r.errors.length ? `; помилки: ${r.errors.join("; ")}` : ""}`, user: req.user }));
 });
 // The owner's statistics page: readers, retention by sign-up week, what people do on the site (admin.js).
-app.get("/admin", owner, (req, res) => res.send(adminPage({ user: req.user, stats: admin.stats(), layout: pages.layout })));
+app.get("/admin", owner, (req, res) => res.send(adminPage({ user: req.user, stats: admin.stats(), layout: pages.layout, withBooks: req.query.books === "1" })));
 app.get("/admin.json", owner, (req, res) => res.json(admin.stats()));
 app.get("/digest/status", owner, (req, res) => res.json({ to: digest.to, recipients: digest.recipients().map((r) => `@${r.username}`), lastRun: store.db.get("digest:lastRun"), last: JSON.parse(store.db.get("digest:last") || "null") }));
 

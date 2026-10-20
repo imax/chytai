@@ -211,7 +211,8 @@ const weekLabel = (w) => `${short(w)} – ${short(addDays(w, 6))}`;
 const tile = (value, label, sub = "") => `<div class="stat"><b>${value}</b><span>${label}</span>${sub ? `<small>${sub}</small>` : ""}</div>`;
 const pct = (c) => (c === null ? `<td class="na">·</td>` : `<td class="pct${c.partial ? " partial" : ""}${c.pct >= 50 ? " hi" : c.pct > 0 ? " mid" : ""}" title="${c.back} з когорти${c.partial ? ", тиждень ще триває" : ""}">${c.pct}%</td>`);
 
-function adminPage({ user, stats: s, layout }) {
+// `withBooks`: the readers table shows only readers with a book on the shelf (Max, 2026-10-20: «фільтр 1+ книжка»).
+function adminPage({ user, stats: s, layout, withBooks = false }) {
   const t = s.totals;
   const tiles = [
     tile(t.readers, "читачів", `+${t.signupsWeek} за тиждень, +${t.signupsMonth} за місяць`),
@@ -222,7 +223,7 @@ function adminPage({ user, stats: s, layout }) {
     tile(t.follows, "стежень", `${t.digestOn} підписані на лист, ${t.digestOff} відписались`),
   ].join("");
 
-  // Newest week on top (Max, 2026-10-20: «свіжі зверху»); the cohorts stay oldest first.
+  // Newest week on top in both tables (Max, 2026-10-20: «свіжі зверху», «починаємо з цього тижня»).
   const weekRows = [...s.weeks]
     .reverse()
     .map(
@@ -234,11 +235,13 @@ function adminPage({ user, stats: s, layout }) {
     )
     .join("");
 
-  const cohortRows = s.cohorts
+  const cohortRows = [...s.cohorts]
+    .reverse()
     .map((c) => `<tr><th>${weekLabel(c.week)}</th><td>${c.size}</td>${c.later.map(pct).join("")}</tr>`)
     .join("");
 
-  const readerRows = s.readers
+  const shown = withBooks ? s.readers.filter((r) => r.books) : s.readers;
+  const readerRows = shown
     .map(
       (r) => `<tr${r.owner ? ' class="owner"' : ""}>
   <th><a href="/@${esc(r.username)}">${esc(r.name)}</a> <span class="muted">@${esc(r.username)}</span></th>
@@ -270,6 +273,7 @@ ${s.cohorts.length ? `<div class="tbl"><table class="cohorts">
 
 <h2>Читачі</h2>
 <p class="muted small">За останньою активністю. «Днів» — скільки різних днів читач був на сайті. Стежить / стежать.</p>
+<p class="filter">${withBooks ? `<a href="/admin">Усі (${s.readers.length})</a> · <b>1+ книжка (${shown.length})</b>` : `<b>Усі (${s.readers.length})</b> · <a href="/admin?books=1">1+ книжка (${s.readers.filter((r) => r.books).length})</a>`}</p>
 <div class="tbl"><table class="readers">
 <thead><tr><th>Читач</th><th>З</th><th>Востаннє</th><th>Днів</th><th>Книжок</th><th>Оцінок</th><th>Нотаток</th><th>Стеж.</th><th>Лист</th></tr></thead>
 <tbody>${readerRows}</tbody></table></div>
