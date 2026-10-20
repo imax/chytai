@@ -398,3 +398,9 @@ dialog .form { margin-top: 18px; }
 }
 .more { margin-top: 24px; }
 .search-box.big input::-webkit-search-cancel-button { display: none; }
+.libraries { margin-top: 72px; }
+.lib-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 0 40px; }
+.lib-list a { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--rule); }
+.lib-list b { font: 600 17px var(--serif); }
+.lib-list span { font-size: 13px; color: var(--muted); }
+@media (max-width: 760px) { .libraries { margin-top: 48px; } }

@@ -49,8 +49,8 @@ function cover(book, size = "md") {
 // A section heading: a rule, a small green label and, on the right, a quiet aside (a link, a switch).
 const label = (text, aside = "") => `<div class="label"><h2>${text}</h2>${aside ? `<div class="aside">${aside}</div>` : ""}</div>`;
 
+// The logo is the way home (Max, 2026-10-20: «для чого Відкрити в навбар?»).
 const NAV = [
-  ["/", "Відкрити", (p) => p === "/"],
   ["/readers", "Читачі", (p) => p === "/readers" || p === "/@"],
   ["/publishers", "Видавництва", (p) => p.startsWith("/publishers")],
 ];
@@ -228,7 +228,7 @@ const pageHead = ({ crumbs = "", kicker = "", title, sub = "", action = "", lead
 // ---- home (/) ----
 
 // «Що почитати далі?»: the search, a random well rated book, the feed, recommendations, new books.
-function homePage({ user, picks, feed, recs, showcase, fetched }) {
+function homePage({ user, picks, feed, recs, showcase, fetched, libraries = [] }) {
   const pick = (p, i) => `<article class="pick${i ? " hidden" : ""}">
   <a class="cover-link" href="${attr(p.book.href)}">${cover(p.book, "xl")}</a>
   <div class="pick-body">
@@ -265,7 +265,9 @@ ${recs.length ? `<section class="recs">
 ${showcase.length ? `<section class="showcase">
   ${label("Вітрина · нове в українських видавництвах", fetched ? `оновлено ${esc(fetched)}` : "")}
   <div class="shop-cols">${showcase.map((s) => showcaseColumn(s, user)).join("")}</div>
+  <p class="end-note"><a class="text-link" href="/publishers">Усі видавництва →</a></p>
 </section>` : ""}
+${librariesBlock(libraries)}
 </div>`;
   return layout({ title: "", body, user, path: "/", home: true, description: "Що почитати далі: книжки з оцінками й нотатками читачів і новинки українських видавництв." });
 }
@@ -276,6 +278,15 @@ function showcaseColumn({ shelf, items, fresh, total, subscribed }, user) {
   <p class="sub">${esc(shelf.tagline)} · ${books(total)}${fresh ? ` · ${fresh} ${plural(fresh, "нова", "нові", "нових")}` : ""}</p>
   <div class="grid five">${items.map((it) => `<a class="tiny" href="${attr(it.href)}">${cover(it, "card")}<b>${esc(it.title)}</b><span class="t-by">${esc(byline(it.author))}</span></a>`).join("")}</div>
 </div>`;
+}
+
+// Libraries with open catalogs: each book page says whether a copy is on their shelves now.
+function librariesBlock(libraries) {
+  if (!libraries.length) return "";
+  return `<section class="libraries">
+  ${label("Бібліотеки", "на сторінці книжки видно, чи є вона на полиці")}
+  <div class="lib-list">${libraries.map((l) => `<a href="${attr(l.base)}" target="_blank" rel="noopener"><b>${esc(l.name)} ↗</b><span>${esc(l.city)}</span></a>`).join("")}</div>
+</section>`;
 }
 
 // ---- book (/book/:id) ----
@@ -550,7 +561,7 @@ function subscribeButton(id, on, user, primary = false) {
   return `<form method="post" action="/api/subscribe/${attr(id)}" class="inline"><button class="btn${primary && !on ? " primary" : ""}">${text}</button></form>`;
 }
 
-function publishersPage({ user, shelves }) {
+function publishersPage({ user, shelves, libraries = [] }) {
   const row = ({ shelf, items, total, fresh, subscribed }) => `<article class="pub" data-fresh="${fresh}" data-name="${attr(shelf.name.toLowerCase())}">
   <div>
     <h3><a href="/publishers/${attr(shelf.id)}">${esc(shelf.name)}</a></h3>
@@ -566,7 +577,8 @@ ${pageHead({ kicker: "Вітрина", title: "Українські видавн
   ${label(count(shelves.length, "видавництво", "видавництва", "видавництв"), `<span class="tabs" data-sort-pubs><button type="button" class="tab on" data-v="fresh">за новинками</button><button type="button" class="tab" data-v="name">за назвою</button></span>`)}
   <div class="pubs">${shelves.map(row).join("")}</div>
   <p class="muted end-note">Видавництво, якого тут немає? <a class="text-link" href="mailto:ischenko@gmail.com">Напиши нам</a>, під’єднаємо.</p>
-</section>`;
+</section>
+${librariesBlock(libraries)}`;
   return layout({ title: "Видавництва", body, user, path: "/publishers", description: "Новинки українських видавництв щодня." });
 }
 

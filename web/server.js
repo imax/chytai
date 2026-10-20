@@ -219,6 +219,7 @@ const readersOf = (id) =>
     .filter((r) => r.reader)
     .map(({ reader, entry }) => ({ name: reader.name, href: `${reader.href}#${entry.via ? entry.via.id : store.canonical(id)}`, entry }));
 const visible = (s) => store.visible(s);
+const librariesFor = (req) => libraries.LIBRARIES.filter((l) => req.owner || !l.draft);
 // What readers do with books (social.js): ratings, the feed, «книжка навмання», recommendations.
 const social = new Social(store, (id) => pub(auth.reader(id)));
 pages.setStats((id) => social.stats(id));
@@ -254,7 +255,7 @@ app.get("/", (req, res) => {
     .filter((s) => s.items.length)
     .sort((a, b) => b.subscribed - a.subscribed || b.fresh - a.fresh)
     .slice(0, 2);
-  res.send(pages.homePage({ user: req.user, picks: social.picks(), feed: social.feed({ limit: 6 }), recs, showcase, fetched: day(store.shelvesRefreshedAt) }));
+  res.send(pages.homePage({ user: req.user, picks: social.picks(), feed: social.feed({ limit: 6 }), recs, showcase, fetched: day(store.shelvesRefreshedAt), libraries: librariesFor(req) }));
 });
 
 app.get("/readers", (req, res) => {
@@ -296,7 +297,7 @@ app.get("/me/book/:id", signed, (req, res) => {
 });
 
 app.get("/publishers", (req, res) => {
-  res.send(pages.publishersPage({ user: req.user, shelves: shelvesFor(req).map((s) => shelfSummary(req, s, 4)).sort((a, b) => b.fresh - a.fresh) }));
+  res.send(pages.publishersPage({ user: req.user, shelves: shelvesFor(req).map((s) => shelfSummary(req, s, 4)).sort((a, b) => b.fresh - a.fresh), libraries: librariesFor(req) }));
 });
 app.get("/publishers/:id", (req, res) => {
   const shelf = store.shelf(req.params.id);
