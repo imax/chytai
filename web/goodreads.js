@@ -136,7 +136,7 @@ function plan(store, reader, books) {
   return { rows: out, counts };
 }
 
-// ---- multipart/form-data with one file, without a dependency (Express 5 has no parser for it) ----
+// ---- multipart/form-data without a dependency (Express 5 has no parser for it); several files under one name make an array ----
 function parseMultipart(buf, contentType) {
   const m = /boundary=(?:"([^"]+)"|([^;]+))/i.exec(contentType || "");
   if (!m) return null;
@@ -154,7 +154,10 @@ function parseMultipart(buf, contentType) {
     const body = buf.slice(headEnd + 4, next - 2); // before the \r\n that precedes the next boundary
     const name = /name="([^"]*)"/i.exec(head)?.[1];
     const filename = /filename="([^"]*)"/i.exec(head)?.[1];
-    if (name) parts[name] = filename != null ? { filename, body } : body.toString("utf8");
+    if (!name) (pos = next), 0;
+    else if (filename == null) parts[name] = body.toString("utf8");
+    else if (parts[name]) (Array.isArray(parts[name]) ? parts[name] : (parts[name] = [parts[name]])).push({ filename, body });
+    else parts[name] = { filename, body };
     pos = next;
   }
   return parts;

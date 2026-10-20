@@ -760,7 +760,7 @@ class Store {
       return mine.some((m) => theirs.some((t) => m === t || (m.length >= 4 && t.length >= 4 && editDistance(m, t, 2) <= 2)));
     };
     // The title as given, then without a subtitle after a colon («Sapiens: A Brief History of Humankind»).
-    const variants = [...new Set([norm(title), norm(String(title).split(/[:(]/)[0])].filter((t) => t.length >= 2))];
+    const variants = [...new Set([norm(title), norm(String(title).split(/[:(]/)[0]), norm(String(title).split(/\.\s/)[0])].filter((t) => t.length >= 2))];
     for (const t of variants) {
       const found = byTitle.get(t) || [];
       const byAuthor = found.filter((w) => sameAuthor(w.author));
@@ -784,14 +784,14 @@ class Store {
         if (!id) {
           id = slugify(r.title);
           while (this.book(id)) id += "-2";
-          this.lib.books[id] = { id, title: r.title.trim(), author: (r.author || "").trim(), cover: "", tags: [], links: [], source, ...(r.isbns?.length ? { isbns: r.isbns } : {}), ...(r.goodreadsId ? { goodreads: r.goodreadsId } : {}) };
+          this.lib.books[id] = { id, title: r.title.trim(), author: (r.author || "").trim(), cover: "", tags: [], links: [], source, ...(r.isbns?.length ? { isbns: r.isbns } : {}), ...(r.goodreadsId ? { goodreads: r.goodreadsId } : {}), ...(r.appleId ? { apple: r.appleId } : {}) };
           this.writeBook(id);
           result.created.push(this.lib.books[id]);
         }
         // An import is history, not news: the entry is dated when the book was read (or added) on Goodreads,
         // so a hundred old books don't fill the feed as «сьогодні» (Max, 2026-10-20). An entry the reader
         // already had keeps its own date.
-        const imported = { status: r.status || "", year: r.year ?? null, rating: r.rating ?? null, note: r.note || "", copy: r.copy || "", order: order++, added: r.added || now.slice(0, 10), updated: r.read || r.added || now };
+        const imported = { status: r.status || "", year: r.year ?? null, rating: r.rating ?? null, note: r.note || "", copy: r.copy || "", order: order++, added: r.added || now.slice(0, 10), updated: r.read || r.touched || r.added || now };
         const cur = entries[id];
         entries[id] = cur ? { ...mergeEntries(cur, imported), updated: cur.updated || cur.added || imported.updated } : imported;
         this.writeEntry(reader, id, entries[id]);

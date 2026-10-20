@@ -534,7 +534,7 @@ function addDialog() {
       <label>Статус <select name="status"><option value="">без статусу</option><option value="reading">Читаю</option><option value="read">Прочитано</option><option value="want" selected>Хочу прочитати</option></select></label>
       <label>Примірник <select name="copy"><option value="">не вказано</option><option value="paper">На папері</option><option value="ebook">E-book</option><option value="seeking">Шукаю на папері</option></select></label>
     </div>
-    <div class="actions"><a class="text-link small" href="/import/goodreads">Імпорт з Goodreads</a><span class="grow"></span><button type="button" class="btn" data-close>Скасувати</button><button class="btn primary">Додати</button></div>
+    <div class="actions"><a class="text-link small" href="/import/goodreads">Імпорт з Goodreads</a><a class="text-link small" href="/import/apple-books">з Apple Books</a><span class="grow"></span><button type="button" class="btn" data-close>Скасувати</button><button class="btn primary">Додати</button></div>
   </form>
 </dialog>`;
 }
@@ -776,8 +776,8 @@ function settingsPage({ user, values, error = "", suggested = "", saved = false 
 </form>
 <section class="form import-box">
   <h2>Перенести полицю</h2>
-  <p class="muted small">Читали на Goodreads? Завантажте експорт своєї бібліотеки, і книжки зі статусами, оцінками, датами й рецензіями з’являться тут.</p>
-  <div class="actions"><a class="btn" href="/import/goodreads">Імпорт з Goodreads</a></div>
+  <p class="muted small">Читали деінде? Перенесіть бібліотеку сюди: з Goodreads зі статусами, оцінками, датами й рецензіями; з Apple Books (на Mac) книжки й статуси.</p>
+  <div class="actions"><a class="btn" href="/import/goodreads">Імпорт з Goodreads</a><a class="btn" href="/import/apple-books">Імпорт з Apple Books</a></div>
 </section>
 ${user.owner ? "" : `<form method="post" action="/settings/delete" class="form danger-zone" onsubmit="return confirm('Видалити акаунт разом з усіма книжками, оцінками й нотатками?')">
   <h2>Видалити акаунт</h2>
@@ -803,6 +803,7 @@ function privacyPage({ user }) {
 <li><strong>Коли ви заходили востаннє</strong> — дату, без історії переглядів.</li>
 </ul>
 <p><strong>Якщо ви імпортували полицю з Goodreads:</strong> файл експорту ми читаємо один раз і не зберігаємо. З нього на полицю потрапляють лише назва, автор, ISBN, полиця (статус), оцінка, дата прочитання, дата додавання і ваша рецензія (My Review), а також номер книжки на Goodreads, щоб не імпортувати її двічі. Приватні нотатки (Private Notes), середні оцінки та решту колонок ми не читаємо. Перед імпортом ви бачите список і вибираєте, що саме переносити.</p>
+<p><strong>Якщо ви імпортували бібліотеку з Apple Books</strong> (файли BKLibrary з Mac): їх ми так само читаємо один раз і не зберігаємо. Беремо лише назву, автора, прогрес читання, дату завершення і дату покупки чи додавання, а також внутрішній номер книжки, щоб не імпортувати її двічі. Назви PDF-файлів, шляхи на диску, ідентифікатори Apple ID та решту ми не читаємо.</p>
 <p><strong>Щотижневий лист.</strong> У п'ятницю вранці ми надсилаємо один лист про ваші полиці: що зробили читачі, за якими ви стежите, які новинки з'явились у видавництв, на які ви підписані, і де з'явились книжки з вашого «Хочу прочитати». Для цього ми запам'ятовуємо, коли відправили попередній лист і де тоді були ваші книжки з «Хочу прочитати». Лист приходить лише коли є що розповісти, у ньому нема ні реклами, ні цін, і ми не стежимо, чи ви його відкрили. Вимкнути його можна одним кліком за посиланням у листі або в <a class="text-link" href="/settings">налаштуваннях</a>.</p>
 <p>Код для входу діє 10 хвилин і після використання зникає. Щоб ніхто не засипав чужу пошту кодами, ми годину рахуємо спроби з однієї адреси та IP і потім забуваємо.</p>
 <h2>Що бачать інші</h2>
@@ -831,32 +832,43 @@ function privacyPage({ user }) {
 </section>` });
 }
 
-// ---- import from Goodreads (/import/goodreads) ----
+// ---- import from elsewhere (/import/goodreads, /import/apple-books) ----
+
+const IMPORT_NAMES = { goodreads: "Goodreads", "apple-books": "Apple Books" };
 
 // Step one: where to get the file and where to drop it.
-function importPage({ user, error = "" }) {
-  return authLayout({
-    title: "Імпорт з Goodreads",
-    lead: "Перенесіть свою бібліотеку з Goodreads: прочитане, оцінки, дати, рецензії і список «хочу прочитати».",
-    user,
-    path: "/settings",
-    form: `<ol class="steps">
+function importPage({ user, source = "goodreads", error = "" }) {
+  const apple = source === "apple-books";
+  const steps = apple
+    ? `<p class="lead">Працює лише з Mac: на iPhone Apple Books свою бібліотеку не віддає. Переносяться книжки і статуси (прочитано, читаю, не почато); оцінок і рецензій в Apple Books немає.</p>
+<ol class="steps">
+  <li>У Finder натисніть <b>⇧⌘G</b> («Перейти до теки») і вставте: <code class="path">~/Library/Containers/com.apple.iBooksX/Data/Documents/BKLibrary</code></li>
+  <li>Відкриється тека з трьома файлами <code>BKLibrary-….sqlite</code>, <code>…sqlite-wal</code> і <code>…sqlite-shm</code>. Виділіть усі три (⌘A).</li>
+  <li>Перетягніть їх у поле нижче (або натисніть його і виберіть ті самі три файли). Ми покажемо, що потрапить на полицю, і спитаємо підтвердження.</li>
+</ol>`
+    : `<ol class="steps">
   <li>На Goodreads відкрийте <a class="text-link" href="https://www.goodreads.com/review/import" target="_blank" rel="noopener">My Books → Import and export</a> і натисніть <b>Export Library</b>.</li>
   <li>За хвилину-дві там з’явиться посилання на файл <code>goodreads_library_export.csv</code>. Завантажте його.</li>
   <li>Виберіть цей файл тут. Ми покажемо, що саме потрапить на полицю, і спитаємо підтвердження.</li>
-</ol>
-<form method="post" action="/import/goodreads" enctype="multipart/form-data" class="form">
+</ol>`;
+  return authLayout({
+    title: `Імпорт з ${IMPORT_NAMES[source]}`,
+    lead: apple ? "Перенесіть бібліотеку з Apple Books на Mac: що прочитали, що читаєте, що лежить непочате." : "Перенесіть свою бібліотеку з Goodreads: прочитане, оцінки, дати, рецензії і список «хочу прочитати».",
+    user,
+    path: "/settings",
+    form: `${steps}
+<form method="post" action="/import/${source}" enctype="multipart/form-data" class="form">
   ${errorLine(error)}
-  <label>Файл експорту<input type="file" name="file" accept=".csv,text/csv" required></label>
+  <label>${apple ? "Файли з теки BKLibrary" : "Файл експорту"}<input type="file" name="file" ${apple ? "multiple" : 'accept=".csv,text/csv"'} required></label>
   <div class="actions"><button class="btn primary">Переглянути</button><a class="text-link small" href="/settings">Назад</a></div>
 </form>
-<p class="muted small">Файл читається один раз і не зберігається; приватних нотаток Goodreads ми не читаємо. <a class="text-link" href="/privacy">Приватність</a>.</p>`,
+<p class="muted small">${apple ? "Файли читаються один раз і не зберігаються: з них ми беремо лише назви, авторів і прогрес читання." : "Файл читається один раз і не зберігається; приватних нотаток Goodreads ми не читаємо."} <a class="text-link" href="/privacy">Приватність</a>.</p>`,
   });
 }
 
 // Step two: every row of the file as it would land on the shelf, in three groups, each row with a tick.
-function importPreviewPage({ user, token, rows, counts, filename = "" }) {
-  const what = (r) => [r.status ? STATUS[r.status] : "", r.rating != null ? stars(r.rating) : "", r.year || "", r.copy ? COPY[r.copy].toLowerCase() : ""].filter(Boolean).join(" · ");
+function importPreviewPage({ user, source = "goodreads", token, rows, counts, filename = "" }) {
+  const what = (r) => [r.status ? STATUS[r.status] : "", r.rating != null ? stars(r.rating) : "", r.year || "", r.progress > 0 && r.progress < 98 && r.status === "reading" ? `${r.progress}%` : "", r.copy ? COPY[r.copy].toLowerCase() : ""].filter(Boolean).join(" · ");
   const line = (r, i) => `<label class="imp-row">
   <input type="checkbox" name="keep" value="${i}" checked>
   <span class="imp-body">
@@ -867,9 +879,10 @@ function importPreviewPage({ user, token, rows, counts, filename = "" }) {
 </label>`;
   const group = (title, lead, list) => (list.length ? `<section class="imp-group"><h2>${title} <span>${list.length}</span></h2><p class="muted small">${lead}</p>${list.map(([r, i]) => line(r, i)).join("")}</section>` : "");
   const indexed = rows.map((r, i) => [r, i]);
+  const skipped = counts.skipped ? ` · ${counts.skipped} PDF пропущено` : "";
   const body = `
-${pageHead({ crumbs: `<a href="/settings">Налаштування</a> / <a href="/import/goodreads">Імпорт з Goodreads</a>`, title: "Що потрапить на полицю", sub: [books(counts.all), counts.read ? `${counts.read} прочитано` : "", counts.want ? `${counts.want} хочу прочитати` : "", counts.reading ? `${counts.reading} читаю` : "", counts.rated ? `${counts.rated} з оцінками` : "", counts.notes ? `${counts.notes} з рецензіями` : ""].filter(Boolean).join(" · ") })}
-<form method="post" action="/import/goodreads/apply" class="import-preview">
+${pageHead({ crumbs: `<a href="/settings">Налаштування</a> / <a href="/import/${source}">Імпорт з ${IMPORT_NAMES[source]}</a>`, title: "Що потрапить на полицю", sub: [books(counts.all), counts.read ? `${counts.read} прочитано` : "", counts.want ? `${counts.want} ${source === "apple-books" ? "не почато" : "хочу прочитати"}` : "", counts.reading ? `${counts.reading} читаю` : "", counts.rated ? `${counts.rated} з оцінками` : "", counts.notes ? `${counts.notes} з рецензіями` : ""].filter(Boolean).join(" · ") + skipped })}
+<form method="post" action="/import/${source}/apply" class="import-preview">
   <input type="hidden" name="token" value="${attr(token)}">
   <div class="imp-bar">
     <span class="small muted">${filename ? `${esc(filename)} · ` : ""}зніміть галочку з того, що переносити не треба</span>
@@ -877,9 +890,9 @@ ${pageHead({ crumbs: `<a href="/settings">Налаштування</a> / <a href
     <button class="btn primary">Імпортувати <span id="imp-n">${counts.all}</span></button>
   </div>
   ${group("Є в каталозі", "Ці книжки ми знайшли за ISBN або назвою й автором; вони стануть на полицю як є, з обкладинкою і сторінкою.", indexed.filter(([r]) => r.match && !r.own))}
-  ${group("Вже на вашій полиці", "Ці книжки у вас уже є. Те, що на полиці вже записано, лишиться; з Goodreads візьмемо лише те, чого бракує (оцінку, рік, рецензію).", indexed.filter(([r]) => r.own))}
+  ${group("Вже на вашій полиці", "Ці книжки у вас уже є. Те, що на полиці вже записано, лишиться; візьмемо лише те, чого бракує (оцінку, рік, рецензію).", indexed.filter(([r]) => r.own))}
   ${group("Нові книжки", "Таких у каталозі поки немає: додамо як ваші книжки, за назвою й автором, без обкладинки. Коли вони з’являться в якомусь каталозі, самі з’єднаються.", indexed.filter(([r]) => !r.match))}
-  <div class="imp-bar bottom"><a class="text-link small" href="/import/goodreads">Інший файл</a><span class="grow"></span><button class="btn primary">Імпортувати <span>${counts.all}</span></button></div>
+  <div class="imp-bar bottom"><a class="text-link small" href="/import/${source}">Інший файл</a><span class="grow"></span><button class="btn primary">Імпортувати <span>${counts.all}</span></button></div>
 </form>
 <script>
 (() => {
@@ -888,18 +901,18 @@ ${pageHead({ crumbs: `<a href="/settings">Налаштування</a> / <a href
   form.addEventListener("change", () => { const n = form.querySelectorAll("input[name=keep]:checked").length; ns.forEach((s) => (s.textContent = n)); });
 })();
 </script>`;
-  return layout({ title: "Імпорт з Goodreads", body, user, path: "/settings" });
+  return layout({ title: `Імпорт з ${IMPORT_NAMES[source]}`, body, user, path: "/settings" });
 }
 
 // Step three: done.
-function importDonePage({ user, result, skipped = 0 }) {
+function importDonePage({ user, source = "goodreads", result, skipped = 0 }) {
   const bits = [result.added ? `${books(result.added)} додано` : "", result.updated ? `${result.updated} ${plural(result.updated, "доповнена", "доповнені", "доповнено")}` : "", result.created.length ? `${result.created.length} ${plural(result.created.length, "нова", "нові", "нових")} у каталозі` : "", skipped ? `${skipped} пропущено` : ""].filter(Boolean);
   return authLayout({
     title: "Готово",
     lead: bits.length ? `${cap(bits.join(", "))}.` : "Нічого не змінилося.",
     user,
     path: "/settings",
-    form: `<div class="form"><div class="actions"><a class="btn primary" href="${attr(user.href)}">Моя полиця</a><a class="text-link small" href="/import/goodreads">Імпортувати ще один файл</a></div></div>
+    form: `<div class="form"><div class="actions"><a class="btn primary" href="${attr(user.href)}">Моя полиця</a><a class="text-link small" href="/import/${source}">Імпортувати ще один файл</a></div></div>
 ${result.created.length ? `<p class="muted small" style="margin-top:24px">Нові книжки без обкладинок: якщо котрась із них насправді вже є в каталозі під іншою назвою, напишіть нам, з’єднаємо.</p>` : ""}`,
   });
 }

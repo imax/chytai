@@ -20,6 +20,7 @@ const authors = require("./authors");
 const { Social } = require("./social");
 const goodreads = require("./goodreads");
 const { Digest } = require("./digest");
+const applebooks = require("./applebooks");
 
 const ROOT = path.join(__dirname, "..");
 loadDotEnv(path.join(ROOT, ".env"));
@@ -202,38 +203,46 @@ app.post("/settings/delete", signed, (req, res) => {
   res.send(pages.messagePage({ title: "Акаунт видалено", text: "Книжки, оцінки й нотатки стерто. Дякуємо, що читали з нами." }));
 });
 
-// ---- import from Goodreads (goodreads.js): upload the export, look at what it becomes, confirm ----
-// A looked-at file waits in memory for half an hour under a token; nothing of it is written before the reader confirms.
-const pendingImports = new Map(); // token -> { reader, rows, filename, at }
+// ---- import a library from elsewhere: Goodreads (goodreads.js) or Apple Books (applebooks.js) ----
+// Upload, look at what each row becomes, confirm. A looked-at file waits in memory for half an hour under a
+// token; nothing of it is written before the reader confirms.
+const IMPORTS = {
+  goodreads: { name: "Goodreads", parse: (files) => goodreads.parseExport(files[0].body.toString("utf8")) },
+  "apple-books": { name: "Apple Books", parse: (files) => applebooks.parseLibrary(files) },
+};
+const pendingImports = new Map(); // token -> { reader, source, rows, filename, at }
 const IMPORT_TTL = 30 * 60 * 1000;
-app.get("/import/goodreads", signed, (req, res) => res.send(pages.importPage({ user: req.user })));
-app.post("/import/goodreads", signed, express.raw({ type: "multipart/form-data", limit: "25mb" }), (req, res) => {
-  const fail = (error) => res.status(400).send(pages.importPage({ user: req.user, error }));
+const importSource = (req, res, next) => (IMPORTS[req.params.source] ? ((req.source = req.params.source), next()) : res.status(404).send(pages.messagePage({ title: "Немає такого імпорту", text: "", user: req.user })));
+app.get("/import/:source", signed, importSource, (req, res) => res.send(pages.importPage({ user: req.user, source: req.source })));
+app.post("/import/:source", signed, importSource, express.raw({ type: "multipart/form-data", limit: "60mb" }), (req, res) => {
+  const fail = (error) => res.status(400).send(pages.importPage({ user: req.user, source: req.source, error }));
   const parts = Buffer.isBuffer(req.body) ? goodreads.parseMultipart(req.body, req.headers["content-type"]) : null;
-  const file = parts?.file;
-  if (!file || !file.body?.length) return fail("Виберіть файл експорту Goodreads (.csv).");
-  const { books, error } = goodreads.parseExport(file.body.toString("utf8"));
+  const files = [].concat(parts?.file || []).filter((f) => f && f.body?.length);
+  if (!files.length) return fail(req.source === "goodreads" ? "Виберіть файл експорту Goodreads (.csv)." : "Виберіть файли з теки BKLibrary.");
+  const { books, error, skipped = 0 } = IMPORTS[req.source].parse(files);
   if (error) return fail(error);
   const { rows, counts } = goodreads.plan(store, req.user.id, books);
   for (const [t, p] of pendingImports) if (Date.now() - p.at > IMPORT_TTL) pendingImports.delete(t);
   const token = require("crypto").randomBytes(12).toString("hex");
-  pendingImports.set(token, { reader: req.user.id, rows, filename: file.filename, at: Date.now() });
-  res.send(pages.importPreviewPage({ user: req.user, token, rows, counts, filename: file.filename }));
+  const filename = files.length > 1 ? `${files.length} файли` : files[0].filename;
+  pendingImports.set(token, { reader: req.user.id, source: req.source, rows, filename, at: Date.now() });
+  res.send(pages.importPreviewPage({ user: req.user, source: req.source, token, rows, counts: { ...counts, skipped }, filename }));
 });
-app.post("/import/goodreads/apply", signed, (req, res) => {
+app.post("/import/:source/apply", signed, importSource, (req, res) => {
   const p = pendingImports.get(String(req.body.token || ""));
-  if (!p || p.reader !== req.user.id || Date.now() - p.at > IMPORT_TTL) return res.status(400).send(pages.importPage({ user: req.user, error: "Час вийшов або файл уже імпортовано. Виберіть файл ще раз." }));
+  if (!p || p.reader !== req.user.id || p.source !== req.source || Date.now() - p.at > IMPORT_TTL) return res.status(400).send(pages.importPage({ user: req.user, source: req.source, error: "Час вийшов або файл уже імпортовано. Виберіть файл ще раз." }));
   pendingImports.delete(req.body.token);
   const keep = new Set([].concat(req.body.keep ?? []).map(Number));
   const chosen = p.rows.filter((r, i) => keep.has(i));
   // On the shelf they sit after what is already there: the read ones by date read, oldest first, then the rest by date added.
   const key = (r) => (r.read ? `0${r.read}` : `1${r.added || "9999"}`);
   chosen.sort((a, b) => key(a).localeCompare(key(b)));
-  const result = store.importEntries(req.user.id, chosen.map((r) => ({ id: r.match?.id || null, title: r.title, author: r.author, isbns: r.isbns, goodreadsId: r.goodreadsId, status: r.status, rating: r.rating, year: r.year, note: r.note, copy: r.copy, added: r.added, read: r.read })));
-  console.log(`goodreads import @${req.user.username}: ${result.added} added, ${result.updated} updated, ${result.created.length} new books`);
+  const result = store.importEntries(req.user.id, chosen.map((r) => ({ id: r.match?.id || null, title: r.title, author: r.author, isbns: r.isbns, goodreadsId: r.goodreadsId, appleId: r.appleId, status: r.status, rating: r.rating, year: r.year, note: r.note, copy: r.copy, added: r.added, read: r.read, touched: r.touched })), { source: req.source });
+  const name = IMPORTS[req.source].name;
+  console.log(`${name} import @${req.user.username}: ${result.added} added, ${result.updated} updated, ${result.created.length} new books`);
   // New books by hand are mailed to the owner one by one; an import sends one letter with the list.
-  if (!req.owner && result.created.length) notifyOwner(`Імпорт з Goodreads: ${result.created.length} нових книжок`, [`${req.user.name} (@${req.user.username}) імпортував(ла) полицю з Goodreads: ${result.added} додано, ${result.updated} доповнено.`, `Нові книжки, яких немає в каталозі (${result.created.length}):`, "", ...result.created.slice(0, 100).map((b) => `• ${b.title}${b.author ? ` — ${b.author}` : ""}  ${site(req)}${store.href(b.id)}`), result.created.length > 100 ? `… і ще ${result.created.length - 100}` : "", "", `Полиця читача: ${site(req)}${req.user.href}`].join("\n"));
-  res.send(pages.importDonePage({ user: req.user, result, skipped: p.rows.length - chosen.length }));
+  if (!req.owner && result.created.length) notifyOwner(`Імпорт з ${name}: ${result.created.length} нових книжок`, [`${req.user.name} (@${req.user.username}) імпортував(ла) полицю з ${name}: ${result.added} додано, ${result.updated} доповнено.`, `Нові книжки, яких немає в каталозі (${result.created.length}):`, "", ...result.created.slice(0, 100).map((b) => `• ${b.title}${b.author ? ` — ${b.author}` : ""}  ${site(req)}${store.href(b.id)}`), result.created.length > 100 ? `… і ще ${result.created.length - 100}` : "", "", `Полиця читача: ${site(req)}${req.user.href}`].join("\n"));
+  res.send(pages.importDonePage({ user: req.user, source: req.source, result, skipped: p.rows.length - chosen.length }));
 });
 
 // ---- pages ----

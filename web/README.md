@@ -24,6 +24,12 @@
   власними книжками читача (`source: "goodreads"`, з ISBN, щоб пізніше з'єднатися з каталогом). Книжка, яка вже є на полиці,
   лише доповнюється. Файл у пам'яті до пів години, не зберігається; Private Notes не читаються. Власнику йде один лист зі
   списком нових книжок.
+- Імпорт з Apple Books (`applebooks.js`, `/import/apple-books`): лише з Mac, бо експорту в Apple Books немає. Читач
+  перетягує три файли `BKLibrary-*.sqlite(-wal,-shm)` з `~/Library/Containers/com.apple.iBooksX/Data/Documents/BKLibrary`
+  (без -wal база може відставати на місяці); читаємо `ZBKLIBRARYASSET` через node:sqlite у тимчасовій теці. Дочитано або
+  прогрес ≥98% → Прочитано (рік з ZDATEFINISHED), ≥5% → Читаю, решта → Хочу прочитати; усе як e-book. PDF, семпли і
+  хмарні «класики» з серій Apple пропускаються. Оцінок і рецензій в Apple Books немає. Далі той самий потік (прев'ю, галочки,
+  `/import/apple-books/apply`), спільні маршрути `/import/:source` у server.js.
 - `server.js` маршрути; `store.js` дані; `db.js` база; `pages.js` HTML; `public/` CSS і JS.
 - База: SQLite (`node:sqlite`, нічого ставити не треба) у `DATA_DIR/web/chytai.db`: каталоги полиць з датою, коли
   кожну книжку побачили вперше, бібліотека (книжки, записи читача, підписки), адреси книжок (slug, раз виданий,

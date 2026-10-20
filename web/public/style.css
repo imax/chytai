@@ -442,3 +442,4 @@ dialog .form { margin-top: 18px; }
 .imp-by { font-size: 14px; color: var(--muted); }
 .imp-meta { font-size: 13px; color: var(--text); }
 .imp-row:has(input:not(:checked)) .imp-body { opacity: 0.4; }
+.steps code.path { font-size: 13px; word-break: break-all; }
