@@ -4,8 +4,8 @@
 // (/api/v1/public/biblios/<id>/items). Neither has a robots.txt that forbids this.
 // Survey of the others: /mnt/project-files/chytai-web/catalogs/libraries.md (most forbid robots).
 // Kyiv: the union catalog of the Лесі Українки public library (ALEPH 500, base LUL01), with the books of
-// all 90 public libraries for adults since 1992. Its robots.txt forbids robots, so it is draft (owner only)
-// while Max talks to the library (they allowed links to it on 2026-10-20). Its X-Server answers a search
+// all 90 public libraries for adults since 1992. Its robots.txt forbids robots; the library allowed
+// Chytai to link to it on 2026-10-20 and Max opened it to everyone the same day. Its X-Server answers a search
 // as XML (/X?op=find, op=present) and lists a record's copies (op=item-data): a branch («Branch39»,
 // collection 039) has no loans in the system, so only that it holds a copy is known; the central library
 // («Loan Dep.», «Stock usage Dep.») shows whether a copy is out. Branch names come from the copies page.
@@ -15,7 +15,7 @@
 const LIBRARIES = [
   { id: "cherkasy", name: "Черкаські міські бібліотеки", city: "Черкаси", base: "https://opac.lib.cherkasy.ua" },
   { id: "uzhhorod", name: "Ужгородська публічна бібліотека", city: "Ужгород", base: "https://lib.itc.gov.ua" },
-  { id: "kyiv", kind: "aleph", name: "Бібліотеки Києва", city: "Київ", base: "http://alpha.lukl.kyiv.ua", home: "http://alpha.lukl.kyiv.ua/F", draft: true, v: 2 },
+  { id: "kyiv", kind: "aleph", name: "Бібліотеки Києва", city: "Київ", base: "http://alpha.lukl.kyiv.ua", home: "http://alpha.lukl.kyiv.ua/F", v: 2 },
 ];
 
 const HEADERS = { "User-Agent": "Mozilla/5.0 (Chytai library lookup; chytai.org.ua)" };
