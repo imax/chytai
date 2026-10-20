@@ -21,6 +21,7 @@ const { Social } = require("./social");
 const goodreads = require("./goodreads");
 const { Digest } = require("./digest");
 const applebooks = require("./applebooks");
+const { Admin, adminPage } = require("./admin");
 
 const ROOT = path.join(__dirname, "..");
 loadDotEnv(path.join(ROOT, ".env"));
@@ -48,6 +49,7 @@ function loadDotEnv(file) {
 const store = new Store(DATA_DIR);
 const auth = new Auth(store.db, { ownerToken: TOKEN, resendKey: process.env.RESEND_API_KEY || "", from: process.env.WEB_MAIL_FROM || `Chytai <code@${DOMAIN || "chytai.org.ua"}>` });
 auth.ensureOwner({ id: OWNER_ID, name: OWNER, username: OWNER_USERNAME });
+const admin = new Admin(store.db, { ownerId: OWNER_ID }); // the owner's statistics (/admin): visits and page views
 if (!process.env.RESEND_API_KEY) console.log("RESEND_API_KEY is not set: sign-in codes are printed here instead of mailed");
 
 // ---- daily catalog refresh ----
@@ -111,6 +113,7 @@ app.use((req, res, next) => {
   req.user = pub(auth.readerOf(req.token, OWNER_ID));
   req.owner = !!req.user?.owner; // drafts, refresh: the owner's business
   res.locals.user = req.user;
+  admin.touch(req, req.user?.id);
   next();
 });
 const signed = (req, res, next) => (req.user ? next() : res.redirect(`/login?next=${encodeURIComponent(req.originalUrl)}`));
@@ -580,6 +583,9 @@ app.post("/api/digest", owner, async (req, res) => {
   const r = await digest.run();
   res.send(pages.messagePage({ title: "Розсилку виконано", text: `надіслано ${r.sent}, пропущено ${r.skipped}${r.errors.length ? `; помилки: ${r.errors.join("; ")}` : ""}`, user: req.user }));
 });
+// The owner's statistics page: readers, retention by sign-up week, what people do on the site (admin.js).
+app.get("/admin", owner, (req, res) => res.send(adminPage({ user: req.user, stats: admin.stats(), layout: pages.layout })));
+app.get("/admin.json", owner, (req, res) => res.json(admin.stats()));
 app.get("/digest/status", owner, (req, res) => res.json({ to: digest.to, recipients: digest.recipients().map((r) => `@${r.username}`), lastRun: store.db.get("digest:lastRun"), last: JSON.parse(store.db.get("digest:last") || "null") }));
 
 app.post("/api/subscribe/:id", signed, (req, res) => {

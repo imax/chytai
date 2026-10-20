@@ -451,3 +451,30 @@ dialog .form { margin-top: 18px; }
 @media (pointer: coarse), (max-width: 760px) {
   input, select, textarea { font-size: 16px !important; }
 }
+
+/* ---- the owner's statistics (/admin, admin.js) ---- */
+.admin h2 { font: 600 12px var(--sans); text-transform: uppercase; letter-spacing: 0.14em; color: var(--accent); margin-top: 48px; }
+.admin h2 + p { margin-top: 8px; max-width: 720px; }
+.admin .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; background: var(--rule); border: 1px solid var(--rule); }
+.admin .stat { background: var(--paper); padding: 18px 20px; }
+.admin .stat b { display: block; font: 400 40px/1 var(--serif); letter-spacing: -0.02em; }
+.admin .stat span { display: block; margin-top: 8px; font-size: 14px; }
+.admin .stat small { display: block; margin-top: 4px; font-size: 12px; color: var(--muted); }
+.admin .tbl { margin-top: 16px; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.admin table { border-collapse: collapse; width: 100%; font-size: 14px; font-variant-numeric: tabular-nums; }
+.admin th, .admin td { padding: 9px 12px 9px 0; border-bottom: 1px solid var(--rule); text-align: right; white-space: nowrap; vertical-align: baseline; }
+.admin th:first-child, .admin td:first-child { text-align: left; }
+.admin thead th { font: 600 12px var(--sans); color: var(--muted); letter-spacing: 0.04em; }
+.admin tbody th { font-weight: 400; }
+.admin tbody th a { text-decoration: underline; text-decoration-color: var(--under); text-underline-offset: 3px; }
+.admin tr.now th em { font-style: normal; font-size: 12px; color: var(--accent); margin-left: 6px; }
+.admin tr.owner th::after { content: "власник"; font-size: 11px; color: var(--muted); margin-left: 6px; }
+.admin .zero, .admin .na { color: var(--under); }
+.admin .pct.mid { color: var(--text); }
+.admin .pct.hi { color: var(--accent); font-weight: 500; }
+.admin .pct.partial { opacity: 0.5; }
+.admin .cohorts td.pct { min-width: 60px; }
+@media (max-width: 640px) {
+  .admin .stats { grid-template-columns: repeat(2, 1fr); }
+  .admin .stat b { font-size: 32px; }
+}
