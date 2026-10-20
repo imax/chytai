@@ -113,11 +113,19 @@ async function pageProducts(src, urls, { fetchImpl = fetch, log = () => {}, prev
   const out = urls.filter((u) => !due.includes(u)).map((u) => previous.get(u)).filter(Boolean);
   let failed = 0;
   let skipped = 0;
-  for (let i = 0; i < due.length; i += 4) {
+  // A shop that answers 429 (Абук did to four requests at once, 2026-10-20) is asked one page at a time
+  // with a pause (`src.pace`); if it still says 429, the rest wait for the next refresh and the books
+  // read so far are kept, so a first fill grows over a few days instead of failing.
+  const [batch, pause] = src.pace ? [1, src.pace] : [4, 0];
+  let throttled = 0;
+  for (let i = 0; i < due.length; i += batch) {
+    if (pause) await new Promise((r) => setTimeout(r, pause));
     await Promise.all(
-      due.slice(i, i + 4).map(async (url) => {
+      due.slice(i, i + batch).map(async (url) => {
         try {
+          if (throttled) throw Object.assign(new Error("HTTP 429"), { later: true });
           const r = await fetchImpl(src.fetchUrl ? src.fetchUrl(url) : url, { headers: HEADERS, signal: AbortSignal.timeout(30000) });
+          if (r.status === 429) throttled++;
           if (!r.ok) throw new Error(`HTTP ${r.status}`);
           const html = await r.text();
           // A copy: V8 keeps a whole page alive for any substring cut from it, and a few hundred
@@ -126,15 +134,15 @@ async function pageProducts(src, urls, { fetchImpl = fetch, log = () => {}, prev
           if (item) out.push(item), skip.delete(url);
           else if ((skip.add(url), !skipped++)) log(`${src.id}: not a book page: ${url} ${html.replace(/\s+/g, " ").slice(0, 160)}`);
         } catch (e) {
-          if (!failed) log(`${src.id}: ${url}: ${e.cause?.code || e.message}`);
+          if (!failed && !e.later) log(`${src.id}: ${url}: ${e.cause?.code || e.message}`);
           failed++;
           if (previous.has(url)) out.push(previous.get(url));
         }
       })
     );
   }
-  log(`${src.id}: ${urls.length} product pages, ${due.length} fetched${failed ? `, ${failed} failed` : ""}${skipped ? `, ${skipped} not its books` : ""}, ${out.length} books`);
-  if (!out.length || (failed > due.length / 3 && failed > 10)) throw new Error(`${src.id}: ${failed} of ${due.length} pages failed`);
+  log(`${src.id}: ${urls.length} product pages, ${due.length} due${failed ? `, ${failed} failed` : ""}${throttled ? " (the shop asked us to slow down; the rest next time)" : ""}${skipped ? `, ${skipped} not its books` : ""}, ${out.length} books`);
+  if (!out.length || (!throttled && failed > due.length / 3 && failed > 10)) throw new Error(`${src.id}: ${failed} of ${due.length} pages failed`);
   return out;
 }
 
@@ -598,6 +606,7 @@ const SOURCES = [
     sitemap: "https://abuk.com.ua/sitemap.xml",
     isProduct: (u) => /\/catalog\/books\/\d+$/.test(u),
     fetchUrl: (u) => `https://abuk.com.ua/api/web/books/${u.split("/").pop()}/`,
+    pace: 700, // one book at a time: four at once got HTTP 429
     fetchAll: (src, opts) => sitemapProducts(src, opts),
     parsePage: abukBook,
     normalize: (p) => p,
