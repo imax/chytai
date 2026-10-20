@@ -201,10 +201,10 @@ class Digest {
     const text = [`Chytai, ${when}`, "", lead, ""];
 
     if (d.feed.length) {
-      html.push(label("Читачі, за якими ви стежите", ["стрічка", `${site}/readers`]));
+      html.push(label("Читачі, за якими ви стежите", ["стрічка", `${site}/community`]));
       html.push(table(d.feed.map((x) => row(x.book, `<a href="${attr(url(x.reader.href))}" style="color:#1b1a17;text-decoration:none">${b(x.reader.name)}</a> ${did(x.entry.status)}${stars(x.entry.rating)}`, x.entry.note ? pages.inline(x.entry.note) : ""))));
-      if (d.feedMore > 0) html.push(muted(`і ще ${count(d.feedMore, "запис", "записи", "записів")} у <a href="${site}/readers" style="color:#6b675f">стрічці</a>`));
-      text.push("ЧИТАЧІ, ЗА ЯКИМИ ВИ СТЕЖИТЕ", ...d.feed.map((x) => `• ${x.book.title} — ${x.reader.name} ${did(x.entry.status)}${x.entry.rating != null ? ` ${uk(x.entry.rating)}/5` : ""}${x.entry.note ? `\n  ${x.entry.note.replace(/\s+/g, " ").slice(0, 300)}` : ""}\n  ${url(x.book.href)}`), ...(d.feedMore > 0 ? [`  …і ще ${d.feedMore}: ${site}/readers`] : []), "");
+      if (d.feedMore > 0) html.push(muted(`і ще ${count(d.feedMore, "запис", "записи", "записів")} у <a href="${site}/community" style="color:#6b675f">стрічці</a>`));
+      text.push("ЧИТАЧІ, ЗА ЯКИМИ ВИ СТЕЖИТЕ", ...d.feed.map((x) => `• ${x.book.title} — ${x.reader.name} ${did(x.entry.status)}${x.entry.rating != null ? ` ${uk(x.entry.rating)}/5` : ""}${x.entry.note ? `\n  ${x.entry.note.replace(/\s+/g, " ").slice(0, 300)}` : ""}\n  ${url(x.book.href)}`), ...(d.feedMore > 0 ? [`  …і ще ${d.feedMore}: ${site}/community`] : []), "");
     }
     if (d.news.length) {
       html.push(label("Нове у видавництв", ["усі полиці", `${site}/publishers`]));

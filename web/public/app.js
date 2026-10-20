@@ -1,5 +1,5 @@
 // Client side of the web platform: filtering and sorting of the shelves and catalogs, dialogs, the
-// menu on phones, the switches of the homepage, /readers and /publishers.
+// menu on phones, the switches of the homepage, /community and /publishers.
 // Everything else is plain forms handled by the server.
 (function () {
   const $ = (s, r = document) => r.querySelector(s);
@@ -173,7 +173,7 @@
       $$(".tab", group).forEach((t) => t.classList.toggle("on", t === tab));
       fn(tab.dataset.v);
     });
-  // /readers: the feed's filter (everything, the readers one follows, with notes, rated 4,5 and up).
+  // /community: the feed's filter (everything, the readers one follows, with notes, rated 4,5 and up).
   switches($("[data-feed-filter]"), (v) => {
     for (const row of $$(".feed-row")) row.classList.toggle("hidden", (v === "followed" && !row.classList.contains("followed")) || (v === "notes" && !row.classList.contains("noted")) || (v === "top" && !(Number(row.dataset.rating) >= 4.5)));
   });

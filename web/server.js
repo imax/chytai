@@ -331,7 +331,8 @@ function feedFor(req, limit) {
   return [...first, ...social.feed({ limit: limit + first.length }).filter((x) => !seen.has(`${x.reader.id}:${x.id}`))].slice(0, limit);
 }
 
-app.get("/readers", (req, res) => {
+app.get("/readers", (req, res) => res.redirect(301, "/community"));
+app.get("/community", (req, res) => {
   const readers = readerList();
   const all = social.all();
   res.send(pages.readersPage({ user: req.user, feed: social.feed({ limit: 40 }), readers, followed: followed(req), totals: { readers: readers.length, books: readers.reduce((s, r) => s + r.count, 0), notes: all.filter((x) => x.entry.note).length } }));

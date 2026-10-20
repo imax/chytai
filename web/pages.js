@@ -69,7 +69,7 @@ const label = (text, aside = "") => `<div class="label"><h2>${text}</h2>${aside 
 
 // The logo is the way home (Max, 2026-10-20: «для чого Відкрити в навбар?»).
 const NAV = [
-  ["/readers", "Читачі", (p) => p === "/readers" || p === "/@"],
+  ["/community", "Читачі", (p) => p === "/community" || p === "/@"],
   ["/publishers", "Видавництва", (p) => p.startsWith("/publishers")],
 ];
 
@@ -221,7 +221,7 @@ function when(e) {
 // What the reader did, for the feed: «оцінка ★★★★», «читає», «хоче прочитати».
 const did = (e) => (e.rating != null ? `оцінка ${stars(e.rating, { num: false })}` : esc(VERB[e.status] || ""));
 
-// One line of the activity feed. `wide` is the /readers layout (who first, then the book).
+// One line of the activity feed. `wide` is the /community layout (who first, then the book).
 function feedRow({ reader, book, entry: e }, { wide = false, followed = null } = {}) {
   const t = when(e);
   const who = `<span class="who"><a href="${attr(reader.href)}#${attr(book.id)}"><b>${esc(reader.name)}</b></a> ${did(e)}${t ? ` · ${esc(t)}` : ""}</span>`;
@@ -276,7 +276,7 @@ function homePage({ user, picks, feed, recs, showcase, fetched, libraries = [] }
     ${picks.map(pick).join("")}
   </section>` : "<div></div>"}
   <section>
-    ${label("Зараз читають", `<a href="/readers">усі читачі</a>`)}
+    ${label("Зараз читають", `<a href="/community">усі читачі</a>`)}
     ${feedList(feed)}
   </section>
 </div>
@@ -497,7 +497,7 @@ function libraryPage({ rows, user, reader, own = false, mineIds = null, recs = [
     .join("\n");
   const wants = own ? [] : rows.filter((r) => r.status === "want").slice(0, 3);
   const body = `
-${pageHead({ crumbs: own ? "" : `<a href="/readers">Читачі</a> / ${esc(reader.name)}`, kicker: own ? "Моя полиця" : "Полиця читача", title: esc(reader.name), sub, action: own ? `<button class="btn primary" data-open="add">+ Додати книжку</button>` : user?.id === reader.id ? "" : followButton(reader, following, user) })}
+${pageHead({ crumbs: own ? "" : `<a href="/community">Читачі</a> / ${esc(reader.name)}`, kicker: own ? "Моя полиця" : "Полиця читача", title: esc(reader.name), sub, action: own ? `<button class="btn primary" data-open="add">+ Додати книжку</button>` : user?.id === reader.id ? "" : followButton(reader, following, user) })}
 <div class="split">
   <div>
     <div class="tabs-bar">
@@ -560,7 +560,7 @@ function addDialog() {
 </dialog>`;
 }
 
-// ---- readers (/readers) ----
+// ---- readers (/community) ----
 
 function readersPage({ user, feed, readers, totals, followed = new Set() }) {
   // A reader who follows someone gets a fourth filter: only those readers.
@@ -580,7 +580,7 @@ ${pageHead({ kicker: "Спільнота", title: "Що читають інші"
     <p class="small muted">Полиці відкриті для всіх.</p>
   </aside>
 </div>`;
-  return layout({ title: "Читачі", body, user, path: "/readers", description: "Що читають інші: оцінки й нотатки читачів Chytai." });
+  return layout({ title: "Читачі", body, user, path: "/community", description: "Що читають інші: оцінки й нотатки читачів Chytai." });
 }
 
 // ---- publishers (/publishers, /publishers/:id) ----
