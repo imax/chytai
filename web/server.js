@@ -42,7 +42,7 @@ function loadDotEnv(file) {
 }
 
 const store = new Store(DATA_DIR);
-const auth = new Auth(store.db, { ownerToken: TOKEN, resendKey: process.env.RESEND_API_KEY || "", from: process.env.WEB_MAIL_FROM || `Chytai <code@mail.${DOMAIN || "chytai.org.ua"}>` });
+const auth = new Auth(store.db, { ownerToken: TOKEN, resendKey: process.env.RESEND_API_KEY || "", from: process.env.WEB_MAIL_FROM || `Chytai <code@${DOMAIN || "chytai.org.ua"}>` });
 auth.ensureOwner({ id: OWNER_ID, name: OWNER, username: OWNER_USERNAME });
 if (!process.env.RESEND_API_KEY) console.log("RESEND_API_KEY is not set: sign-in codes are printed here instead of mailed");
 
