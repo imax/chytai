@@ -225,7 +225,7 @@ app.post("/import/goodreads/apply", signed, (req, res) => {
   // On the shelf they sit after what is already there: the read ones by date read, oldest first, then the rest by date added.
   const key = (r) => (r.read ? `0${r.read}` : `1${r.added || "9999"}`);
   chosen.sort((a, b) => key(a).localeCompare(key(b)));
-  const result = store.importEntries(req.user.id, chosen.map((r) => ({ id: r.match?.id || null, title: r.title, author: r.author, isbns: r.isbns, goodreadsId: r.goodreadsId, status: r.status, rating: r.rating, year: r.year, note: r.note, copy: r.copy, added: r.added })));
+  const result = store.importEntries(req.user.id, chosen.map((r) => ({ id: r.match?.id || null, title: r.title, author: r.author, isbns: r.isbns, goodreadsId: r.goodreadsId, status: r.status, rating: r.rating, year: r.year, note: r.note, copy: r.copy, added: r.added, read: r.read })));
   console.log(`goodreads import @${req.user.username}: ${result.added} added, ${result.updated} updated, ${result.created.length} new books`);
   // New books by hand are mailed to the owner one by one; an import sends one letter with the list.
   if (!req.owner && result.created.length) notifyOwner(`Імпорт з Goodreads: ${result.created.length} нових книжок`, [`${req.user.name} (@${req.user.username}) імпортував(ла) полицю з Goodreads: ${result.added} додано, ${result.updated} доповнено.`, `Нові книжки, яких немає в каталозі (${result.created.length}):`, "", ...result.created.slice(0, 100).map((b) => `• ${b.title}${b.author ? ` — ${b.author}` : ""}  ${site(req)}${store.href(b.id)}`), result.created.length > 100 ? `… і ще ${result.created.length - 100}` : "", "", `Полиця читача: ${site(req)}${req.user.href}`].join("\n"));

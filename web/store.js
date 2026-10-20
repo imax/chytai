@@ -782,9 +782,12 @@ class Store {
           this.writeBook(id);
           result.created.push(this.lib.books[id]);
         }
-        const imported = { status: r.status || "", year: r.year ?? null, rating: r.rating ?? null, note: r.note || "", copy: r.copy || "", order: order++, added: r.added || now.slice(0, 10), updated: now };
+        // An import is history, not news: the entry is dated when the book was read (or added) on Goodreads,
+        // so a hundred old books don't fill the feed as «сьогодні» (Max, 2026-10-20). An entry the reader
+        // already had keeps its own date.
+        const imported = { status: r.status || "", year: r.year ?? null, rating: r.rating ?? null, note: r.note || "", copy: r.copy || "", order: order++, added: r.added || now.slice(0, 10), updated: r.read || r.added || now };
         const cur = entries[id];
-        entries[id] = cur ? { ...mergeEntries(cur, imported), updated: now } : imported;
+        entries[id] = cur ? { ...mergeEntries(cur, imported), updated: cur.updated || cur.added || imported.updated } : imported;
         this.writeEntry(reader, id, entries[id]);
         cur ? result.updated++ : result.added++;
       }
