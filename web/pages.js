@@ -142,8 +142,8 @@ function readerLines(id, { notes = false } = {}) {
   return readersOf(id)
     .map(({ name, href, entry: e }) => {
       const what = e.rating != null ? stars(e.rating) : e.status ? `<span class="muted">${esc(STATUS[e.status].toLowerCase())}</span>` : "";
-      const note = notes && e.note ? stripMd(e.note).replace(/\s+/g, " ").trim() : "";
-      return `<p class="reader-line small"><a href="${attr(href)}">${esc(name)}</a> ${what}</p>${note ? `<p class="note small">${esc(note.length > 180 ? note.slice(0, 180).replace(/\s+\S*$/, "") + "…" : note)}</p>` : ""}`;
+      // The note's first paragraph, two lines at most (.note clamps it), as on the reader's shelf.
+      return `<p class="reader-line small"><a href="${attr(href)}">${esc(name)}</a> ${what}</p>${notes && e.note ? `<p class="note small">${inline(titleLinks(e.note, id))}</p>` : ""}`;
     })
     .join("");
 }
