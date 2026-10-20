@@ -168,7 +168,13 @@ class Store {
       .filter((s) => order.includes(s.id)) // a source that was removed (Standard Ebooks) leaves its rows behind, unseen
       .sort((a, b) => order.indexOf(a.id) - order.indexOf(b.id));
     const byId = new Map(shelves.map((s) => [s.id, s]));
-    for (const r of this.db.prepare("SELECT shelf, data FROM items ORDER BY shelf, ord").all()) byId.get(r.shelf)?.items.push(JSON.parse(r.data));
+    // Names saved before a catalog's entities were decoded («Neurosurgeon&#x27;s Journey») are decoded here.
+    const { ent } = require("./catalogs");
+    for (const r of this.db.prepare("SELECT shelf, data FROM items ORDER BY shelf, ord").all()) {
+      const it = JSON.parse(r.data);
+      for (const k of ["title", "altTitle", "author", "series", "translator", "publisher"]) if (typeof it[k] === "string" && it[k].includes("&")) it[k] = ent(it[k]);
+      byId.get(r.shelf)?.items.push(it);
+    }
     this.shelves = shelves;
     this.shelvesFetched = this.db.get("fetched") || "";
     this.shelvesRefreshedAt = this.db.get("refreshed_at") || "";
