@@ -111,8 +111,7 @@ class Auth {
   }
 
   // ---- following (2026-10-20, from the design): «Стежити» on another reader's page ----
-  // Whom a reader follows is theirs alone: no follower counts, no lists on public pages; it only
-  // picks whose activity they see first.
+  // Whom a reader follows picks whose activity they see first; the followed reader gets one letter.
 
   follows(readerId, targetId) {
     return !!(readerId && targetId && this.db.prepare("SELECT 1 FROM follows WHERE reader = ? AND target = ?").get(readerId, targetId));
