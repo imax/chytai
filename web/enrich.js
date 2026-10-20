@@ -178,7 +178,8 @@ async function enrich(store, { ids, log = () => {}, fetchImpl = fetch, force = f
 // The weekly pass, like wikidata.refreshUk: at most one attempt a week, even when it fails.
 async function refresh(store, opts = {}) {
   const at = Number(store.db.get("enrich:at") || 0);
-  if (Date.now() - at < WEEK) return false;
+  // A pass that a restart cut short (a deploy) left no log line: it runs again.
+  if (Date.now() - at < WEEK && store.db.get("enrich:log")) return false;
   store.db.set("enrich:at", String(Date.now()));
   await enrich(store, opts);
   return true;
