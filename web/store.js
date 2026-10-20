@@ -43,6 +43,8 @@ const slugify = (s) =>
 const OWNER = "owner"; // the reader id of the owner (Max): the only reader before accounts, so old rows are his
 const norm = (s) => String(s || "").toLowerCase().replace(/^(the|a)\s+/, "").replace(/[^\p{L}\p{N}]+/gu, " ").trim();
 const isbnKey = (s) => String(s || "").replace(/[^0-9X]/gi, "");
+// The ISBNs a library book is known by: its own field, plus the Amazon /dp/<ISBN-10> links from Books.md.
+const isbnsOf = (b) => [...(b.isbns || []), b.isbn || "", ...(b.links || []).map((l) => /amazon\.[a-z.]+\/(?:[^/]+\/)?dp\/([0-9X]{10})/i.exec(l.url || "")?.[1] || "")].map(isbnKey).filter((i) => i.length >= 10);
 
 // Levenshtein distance, giving up once it is past max.
 function editDistance(a, b, max) {
@@ -184,7 +186,8 @@ class Store {
   // one counts for the other (Max, 2026-10-19: «якщо читав одну то автоматично і другу теж»). Linked
   // when one's original title is the other's title, or by hand in matches.json «translations».
   linkTranslations() {
-    this._titles = null; // titleIndex() is rebuilt with the new shelves
+    this._titles = null; // titleIndex() and workIndex() are rebuilt with the new shelves
+    this._works = null;
     this.translations = new Map(); // work id -> Set of work ids
     const link = (a, b) => {
       a = a && this.canonical(a);
@@ -346,7 +349,7 @@ class Store {
         const b = this.book(id);
         if (!b) continue;
         const uk = this.ukTitles?.[id];
-        const extra = [...(b.editions || []).map((e) => [e.title, e.altTitle, e.author, e.isbn].filter(Boolean).join(" ")), uk ? `${uk.uk} ${uk.ukAuthor}` : ""].join(" ");
+        const extra = [...(b.editions || []).map((e) => [e.title, e.altTitle, e.author, e.isbn].filter(Boolean).join(" ")), uk ? `${uk.uk} ${uk.ukAuthor}` : "", ...isbnsOf(b)].join(" ");
         add.run(id, b.title || "", b.altTitle || "", b.author || "", b.series?.name || "", extra);
         tri.run(id, [b.title, b.altTitle, b.author, b.series?.name, uk?.uk].filter(Boolean).join(" · "));
       }
@@ -473,6 +476,7 @@ class Store {
     const byTitle = new Map();
     const byUrl = new Map();
     const byWords = new Map();
+    const byIsbn = new Map(); // a library book's ISBN (a Goodreads import keeps it; Books.md links to Amazon by ISBN-10)
     const pageKey = (u) => String(u || "").replace(/^https?:\/\/(www\.)?/, "").replace(/[?#].*$/, "").replace(/\/+$/, "");
     const words = (t) => norm(String(t || "").split(/[:.(]/)[0]).split(" ").filter((w) => w.length >= 3).sort().join(" ");
     const names = (a) => norm(a).split(" ").filter((w) => w.length >= 3);
@@ -484,16 +488,18 @@ class Store {
       while (ws.length > 1 && a.has(ws[ws.length - 1])) ws.pop();
       return ws.join(" ");
     };
-    for (const b of this.seedBooks) {
+    for (const b of [...this.seedBooks, ...Object.values(this.lib.books).filter((b) => !this.seedBooks.some((s) => s.id === b.id))]) {
       const own = this.lib.books[b.id] || b; // an edited copy keeps its old title
       for (const t of [b.title, b.altTitle]) if (norm(t).length >= 6) byTitle.set(norm(t), b.id);
       for (const t of [own.title, b.title]) if (norm(bare(t, b.author)).length >= 6 && !byTitle.has(bare(t, b.author))) byTitle.set(bare(t, b.author), b.id);
       for (const l of b.links || []) if (pageKey(l.url).includes("/")) byUrl.set(pageKey(l.url), b.id);
+      for (const i of isbnsOf(own)) byIsbn.set(i, b.id);
       for (const t of [b.title, b.altTitle]) if (words(t).includes(" ")) (byWords.get(words(t)) || byWords.set(words(t), []).get(words(t))).push(b);
     }
     const bookOf = (it) => {
       if (matches.same[it.id]) return matches.same[it.id];
       const ok = (id) => id && !no.has(`${it.id}|${id}`);
+      if (isbnKey(it.isbn).length >= 10 && ok(byIsbn.get(isbnKey(it.isbn)))) return byIsbn.get(isbnKey(it.isbn));
       for (const t of [it.title, it.altTitle]) if (ok(byTitle.get(norm(t)))) return byTitle.get(norm(t));
       if (ok(byUrl.get(pageKey(it.url)))) return byUrl.get(pageKey(it.url));
       for (const t of [it.title, it.altTitle]) {
@@ -688,6 +694,7 @@ class Store {
     while (this.book(id)) id += "-2";
     this.lib.books[id] = { id, title: title.trim(), author: (author || "").trim(), cover: cover || "", tags: [], links: links || [], source: "manual" };
     this.writeBook(id);
+    this._works = null;
     this.indexSlugs();
     this.indexSearch();
     return this.lib.books[id];
@@ -700,6 +707,94 @@ class Store {
     this.lib.books[id] = copy; // seed and shelf books become own copies once edited
     this.writeBook(id);
     return copy;
+  }
+
+  // ---- finding a work from the outside (the Goodreads import) ----
+  // Every work by ISBN and by title: the library and the shelves, with original titles and the
+  // Ukrainian titles Wikidata knows for foreign books.
+  workIndex() {
+    if (this._works) return this._works;
+    const byIsbn = new Map();
+    const byTitle = new Map(); // norm(title) -> [{ id, author }]
+    const put = (t, id, author) => {
+      const k = norm(t);
+      if (k.length < 2) return;
+      const list = byTitle.get(k) || byTitle.set(k, []).get(k);
+      if (!list.some((w) => w.id === id)) list.push({ id, author: author || "" });
+    };
+    for (const b of [...this.seedBooks, ...Object.values(this.lib.books)]) {
+      const id = this.canonical(b.id);
+      const own = this.lib.books[b.id] || b;
+      for (const i of isbnsOf(own)) byIsbn.set(i, id);
+      for (const t of [own.title, own.altTitle, b.title, b.altTitle]) put(t, id, own.author || b.author);
+    }
+    for (const { item } of this.shelfItems.values()) {
+      const id = this.canonical(item.id);
+      if (isbnKey(item.isbn).length >= 10 && !byIsbn.has(isbnKey(item.isbn))) byIsbn.set(isbnKey(item.isbn), id);
+      for (const t of [item.title, item.altTitle]) put(t, id, item.author);
+    }
+    for (const [id, { uk, ukAuthor }] of Object.entries(this.ukTitles || {})) if (this.book(id)) put(uk, this.canonical(id), ukAuthor);
+    return (this._works = { byIsbn, byTitle });
+  }
+
+  // The work for a book named from outside ({ title, author, isbns }), or null. An ISBN is enough on
+  // its own; a title needs the same author (a surname in common, in either alphabet, a typo allowed),
+  // unless only one work has that title and the title is not a single short word.
+  findWork({ title, author = "", isbns = [] }) {
+    const { byIsbn, byTitle } = this.workIndex();
+    for (const i of isbns) if (byIsbn.has(isbnKey(i))) return byIsbn.get(isbnKey(i));
+    const names = (a) =>
+      norm(a)
+        .split(" ")
+        .filter((w) => w.length >= 3)
+        .map((w) => (/[а-яіїєґ]/.test(w) ? translit(w).replace(/[^a-z]/g, "") : w.normalize("NFKD").replace(/\p{M}/gu, "")));
+    const mine = names(author);
+    const sameAuthor = (a) => {
+      const theirs = names(a);
+      return mine.some((m) => theirs.some((t) => m === t || (m.length >= 4 && t.length >= 4 && editDistance(m, t, 2) <= 2)));
+    };
+    // The title as given, then without a subtitle after a colon («Sapiens: A Brief History of Humankind»).
+    const variants = [...new Set([norm(title), norm(String(title).split(/[:(]/)[0])].filter((t) => t.length >= 2))];
+    for (const t of variants) {
+      const found = byTitle.get(t) || [];
+      const byAuthor = found.filter((w) => sameAuthor(w.author));
+      if (byAuthor.length) return byAuthor[0].id;
+      if (found.length === 1 && t === norm(title) && (t.includes(" ") || t.length >= 8) && (!norm(author) || !names(found[0].author).length)) return found[0].id;
+    }
+    return null;
+  }
+
+  // Put rows of an import on a reader's shelf: each row is an entry with either the id of a work it
+  // matched or the book to make ({ title, author, isbns, goodreadsId }). A book the reader already has
+  // keeps what it had and takes only what was missing. Rows come in the order they should sit in.
+  importEntries(reader, rows, { source = "goodreads" } = {}) {
+    const entries = this.entriesOf(reader);
+    let order = Object.values(entries).reduce((m, e) => Math.max(m, e.order ?? -1), -1) + 1;
+    const now = new Date().toISOString();
+    const result = { added: 0, updated: 0, created: [] };
+    this.db.tx(() => {
+      for (const r of rows) {
+        let id = r.id && this.book(r.id) ? this.canonical(r.id) : null;
+        if (!id) {
+          id = slugify(r.title);
+          while (this.book(id)) id += "-2";
+          this.lib.books[id] = { id, title: r.title.trim(), author: (r.author || "").trim(), cover: "", tags: [], links: [], source, ...(r.isbns?.length ? { isbns: r.isbns } : {}), ...(r.goodreadsId ? { goodreads: r.goodreadsId } : {}) };
+          this.writeBook(id);
+          result.created.push(this.lib.books[id]);
+        }
+        const imported = { status: r.status || "", year: r.year ?? null, rating: r.rating ?? null, note: r.note || "", copy: r.copy || "", order: order++, added: r.added || now.slice(0, 10), updated: now };
+        const cur = entries[id];
+        entries[id] = cur ? { ...mergeEntries(cur, imported), updated: now } : imported;
+        this.writeEntry(reader, id, entries[id]);
+        cur ? result.updated++ : result.added++;
+      }
+    });
+    if (result.created.length) {
+      this._works = null;
+      this.indexSlugs();
+      this.indexSearch();
+    }
+    return result;
   }
 
   // ---- library entries ----

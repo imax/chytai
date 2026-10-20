@@ -417,3 +417,26 @@ dialog .form { margin-top: 18px; }
 .prose .text-link { font-size: inherit; }
 .btn.on { border-color: var(--under); color: var(--muted); }
 .btn.on:hover { background: transparent; border-color: var(--ink); color: var(--ink); }
+
+/* import from Goodreads */
+.steps { margin-top: 24px; padding-left: 22px; }
+.steps li { font-size: 16px; line-height: 1.55; margin-top: 10px; }
+.form input[type="file"] { padding: 8px; font-size: 14px; }
+.import-box { margin-top: 44px; }
+.import-preview { margin-top: 24px; }
+.imp-bar { display: flex; align-items: center; gap: 14px; padding: 12px 0; border-bottom: 1px solid var(--ink); position: sticky; top: 0; background: var(--paper); z-index: 2; }
+.imp-bar.bottom { border-bottom: 0; border-top: 1px solid var(--rule); position: static; margin-top: 20px; }
+.imp-bar .grow { flex: 1; }
+.imp-group { margin-top: 36px; }
+.imp-group h2 { font: 600 12px var(--sans); text-transform: uppercase; letter-spacing: 0.14em; color: var(--accent); }
+.imp-group h2 span { color: var(--muted); font-weight: 400; margin-left: 6px; }
+.imp-group > .small { margin: 6px 0 4px; max-width: 640px; }
+.imp-row { display: flex; gap: 14px; align-items: flex-start; padding: 12px 0; border-bottom: 1px solid var(--rule); cursor: pointer; }
+.imp-row input { margin-top: 5px; accent-color: var(--accent); width: 16px; height: 16px; flex: none; }
+.imp-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.imp-title { font: 600 17px/1.3 var(--serif); }
+.imp-title a { color: inherit; }
+.imp-title .muted { font-weight: 400; font-size: 14px; font-family: var(--sans); }
+.imp-by { font-size: 14px; color: var(--muted); }
+.imp-meta { font-size: 13px; color: var(--text); }
+.imp-row:has(input:not(:checked)) .imp-body { opacity: 0.4; }

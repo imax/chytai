@@ -18,6 +18,7 @@ const libraries = require("./libraries");
 const wikidata = require("./wikidata");
 const authors = require("./authors");
 const { Social } = require("./social");
+const goodreads = require("./goodreads");
 
 const ROOT = path.join(__dirname, "..");
 loadDotEnv(path.join(ROOT, ".env"));
@@ -195,6 +196,40 @@ app.post("/settings/delete", signed, (req, res) => {
   store.forgetReader(req.user.id);
   res.setHeader("Set-Cookie", auth.cookie("", { clear: true, secure: secure(req) }));
   res.send(pages.messagePage({ title: "Акаунт видалено", text: "Книжки, оцінки й нотатки стерто. Дякуємо, що читали з нами." }));
+});
+
+// ---- import from Goodreads (goodreads.js): upload the export, look at what it becomes, confirm ----
+// A looked-at file waits in memory for half an hour under a token; nothing of it is written before the reader confirms.
+const pendingImports = new Map(); // token -> { reader, rows, filename, at }
+const IMPORT_TTL = 30 * 60 * 1000;
+app.get("/import/goodreads", signed, (req, res) => res.send(pages.importPage({ user: req.user })));
+app.post("/import/goodreads", signed, express.raw({ type: "multipart/form-data", limit: "25mb" }), (req, res) => {
+  const fail = (error) => res.status(400).send(pages.importPage({ user: req.user, error }));
+  const parts = Buffer.isBuffer(req.body) ? goodreads.parseMultipart(req.body, req.headers["content-type"]) : null;
+  const file = parts?.file;
+  if (!file || !file.body?.length) return fail("Виберіть файл експорту Goodreads (.csv).");
+  const { books, error } = goodreads.parseExport(file.body.toString("utf8"));
+  if (error) return fail(error);
+  const { rows, counts } = goodreads.plan(store, req.user.id, books);
+  for (const [t, p] of pendingImports) if (Date.now() - p.at > IMPORT_TTL) pendingImports.delete(t);
+  const token = require("crypto").randomBytes(12).toString("hex");
+  pendingImports.set(token, { reader: req.user.id, rows, filename: file.filename, at: Date.now() });
+  res.send(pages.importPreviewPage({ user: req.user, token, rows, counts, filename: file.filename }));
+});
+app.post("/import/goodreads/apply", signed, (req, res) => {
+  const p = pendingImports.get(String(req.body.token || ""));
+  if (!p || p.reader !== req.user.id || Date.now() - p.at > IMPORT_TTL) return res.status(400).send(pages.importPage({ user: req.user, error: "Час вийшов або файл уже імпортовано. Виберіть файл ще раз." }));
+  pendingImports.delete(req.body.token);
+  const keep = new Set([].concat(req.body.keep ?? []).map(Number));
+  const chosen = p.rows.filter((r, i) => keep.has(i));
+  // On the shelf they sit after what is already there: the read ones by date read, oldest first, then the rest by date added.
+  const key = (r) => (r.read ? `0${r.read}` : `1${r.added || "9999"}`);
+  chosen.sort((a, b) => key(a).localeCompare(key(b)));
+  const result = store.importEntries(req.user.id, chosen.map((r) => ({ id: r.match?.id || null, title: r.title, author: r.author, isbns: r.isbns, goodreadsId: r.goodreadsId, status: r.status, rating: r.rating, year: r.year, note: r.note, copy: r.copy, added: r.added })));
+  console.log(`goodreads import @${req.user.username}: ${result.added} added, ${result.updated} updated, ${result.created.length} new books`);
+  // New books by hand are mailed to the owner one by one; an import sends one letter with the list.
+  if (!req.owner && result.created.length) notifyOwner(`Імпорт з Goodreads: ${result.created.length} нових книжок`, [`${req.user.name} (@${req.user.username}) імпортував(ла) полицю з Goodreads: ${result.added} додано, ${result.updated} доповнено.`, `Нові книжки, яких немає в каталозі (${result.created.length}):`, "", ...result.created.slice(0, 100).map((b) => `• ${b.title}${b.author ? ` — ${b.author}` : ""}  ${site(req)}${store.href(b.id)}`), result.created.length > 100 ? `… і ще ${result.created.length - 100}` : "", "", `Полиця читача: ${site(req)}${req.user.href}`].join("\n"));
+  res.send(pages.importDonePage({ user: req.user, result, skipped: p.rows.length - chosen.length }));
 });
 
 // ---- pages ----
