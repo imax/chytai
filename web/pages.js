@@ -236,7 +236,7 @@ function homePage({ user, picks, feed, recs, showcase, fetched }) {
     ${p.book.author ? `<p class="by">${authorLinks(p.book.author)}</p>` : ""}
     <p class="quote">${noteOf(p.entry, p.book.id)}</p>
     <p class="said">— <a href="${attr(p.reader.href)}#${attr(p.book.id)}"><b>${esc(p.reader.name)}</b></a>, ${stars(p.entry.rating)}${p.entry.year ? ` · ${p.entry.year}` : ""}</p>
-    <p class="acts">${wantButton(p.book, user, { size: "", primary: true })}${picks.length > 1 ? `<button type="button" class="text-link" data-next-pick>Ще одну →</button>` : ""}</p>
+    <div class="acts">${wantButton(p.book, user, { size: "", primary: true })}${picks.length > 1 ? `<button type="button" class="text-link" data-next-pick>Ще одну →</button>` : ""}</div>
   </div>
 </article>`;
   const seedTabs = recs.length > 1 ? `<span class="tabs">${recs.map((r, i) => `<button type="button" class="tab${i ? "" : " on"}" data-seed="${i}">${esc(r.seed.title)}</button>`).join("")}</span>` : "";
@@ -341,9 +341,9 @@ function mine(book, entry, user) {
   // Read in another language: the mark comes from that book, and so does the edit link.
   const href = entry?.via ? entry.via.href : book.href;
   const edit = href ? `/me${href}` : `/me/book/${encodeURIComponent(entry?.via ? entry.via.id : book.id)}`;
-  if (!entry) return `<p class="acts">${wantButton(book, user, { size: "", primary: true })}<a class="btn" href="${attr(user ? edit : `/login?next=${encodeURIComponent(edit)}`)}">Прочитав · оцінити</a></p>`;
+  if (!entry) return `<div class="acts">${wantButton(book, user, { size: "", primary: true })}<a class="btn" href="${attr(user ? edit : `/login?next=${encodeURIComponent(edit)}`)}">Прочитав · оцінити</a></div>`;
   const what = [entry.status ? STATUS[entry.status] + (entry.status === "read" && entry.year ? ` ${entry.year}` : "") : "У моїх книжках", entry.rating != null ? `${uk(entry.rating)} з 5` : "", entry.copy ? COPY[entry.copy] : ""].filter(Boolean).join(" · ");
-  return `<p class="acts"><span class="have">✓ ${esc(what)}${entry.via ? ` <span class="muted">як <a href="${attr(entry.via.href)}">${esc(entry.via.title)}</a></span>` : ""}</span><a class="btn small" href="${attr(edit)}">Змінити</a></p>`;
+  return `<div class="acts"><span class="have">✓ ${esc(what)}${entry.via ? ` <span class="muted">як <a href="${attr(entry.via.href)}">${esc(entry.via.title)}</a></span>` : ""}</span><a class="btn small" href="${attr(edit)}">Змінити</a></div>`;
 }
 
 // «Де взяти»: every edition's shop (with its format, price and stock, the one place prices are shown),
@@ -556,7 +556,7 @@ function publishersPage({ user, shelves }) {
     <h3><a href="/publishers/${attr(shelf.id)}">${esc(shelf.name)}</a></h3>
     <p class="tagline">${esc(shelf.tagline)}</p>
     <p class="sub">${books(total)}${fresh ? ` · ${fresh} ${plural(fresh, "нова", "нові", "нових")}` : ""}</p>
-    <p class="acts">${subscribeButton(shelf.id, subscribed, user)}<a class="text-link" href="/publishers/${attr(shelf.id)}">Усі книжки →</a></p>
+    <div class="acts">${subscribeButton(shelf.id, subscribed, user)}<a class="text-link" href="/publishers/${attr(shelf.id)}">Усі книжки →</a></div>
   </div>
   <div class="grid four">${items.map((it) => `<a class="tiny" href="${attr(it.href)}">${cover(it, "card")}<b>${esc(it.title)}</b></a>`).join("")}</div>
 </article>`;
@@ -659,7 +659,7 @@ function authorPage({ author, works, hits, user, readers = [], also = [] }) {
     ${book.altTitle ? `<p class="orig">${esc(book.altTitle)}</p>` : ""}
     ${s.avg != null ? `<p class="meta">${stars(s.avg)}<span> · ${count(s.rated, "оцінка", "оцінки", "оцінок")}</span></p>` : ""}
     ${top ? `<p class="note">${noteOf(top.entry, book.id)}</p><p class="said">— <a href="${attr(top.href)}"><b>${esc(top.name)}</b></a>${top.entry.year ? `, ${top.entry.year}` : ""}</p>` : ""}
-    <p class="acts">${entry ? `<span class="muted small">${esc(entry.status ? STATUS[entry.status].toLowerCase() : "на полиці")}</span>` : wantButton(book, user)}</p>
+    <div class="acts">${entry ? `<span class="muted small">${esc(entry.status ? STATUS[entry.status].toLowerCase() : "на полиці")}</span>` : wantButton(book, user)}</div>
   </div>
 </article>`;
   };
