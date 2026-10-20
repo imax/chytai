@@ -222,7 +222,9 @@ function adminPage({ user, stats: s, layout }) {
     tile(t.follows, "стежень", `${t.digestOn} підписані на лист, ${t.digestOff} відписались`),
   ].join("");
 
-  const weekRows = s.weeks
+  // Newest week on top (Max, 2026-10-20: «свіжі зверху»); the cohorts stay oldest first.
+  const weekRows = [...s.weeks]
+    .reverse()
     .map(
       (w) => `<tr${w.current ? ' class="now"' : ""}>
   <th>${weekLabel(w.week)}${w.current ? ' <em>зараз</em>' : ""}</th>
