@@ -117,7 +117,7 @@ async function pageProducts(src, urls, { fetchImpl = fetch, log = () => {}, prev
     await Promise.all(
       due.slice(i, i + 4).map(async (url) => {
         try {
-          const r = await fetchImpl(url, { headers: HEADERS, signal: AbortSignal.timeout(30000) });
+          const r = await fetchImpl(src.fetchUrl ? src.fetchUrl(url) : url, { headers: HEADERS, signal: AbortSignal.timeout(30000) });
           if (!r.ok) throw new Error(`HTTP ${r.status}`);
           const html = await r.text();
           // A copy: V8 keeps a whole page alive for any substring cut from it, and a few hundred
@@ -300,6 +300,43 @@ const mbooks = ({ id, slug, brand, name, tagline, url, draft = true }) => ({
   toItem: (p) => p,
   finish: joinEbooks,
 });
+
+// Абук (abuk.com.ua), the Ukrainian audiobook shop (Max, 2026-10-20: a shelf of its own and a line in
+// «Де взяти»). Its site reads each book from a public JSON API, /api/web/books/<id>/ (a few KB: authors,
+// narrators, duration in seconds, price, publisher); the book ids come from its sitemap. The whole catalog
+// is also one call (/api/web/books), but that is 20 MB, too much for our machine. Only the page link and
+// the description are kept: the API also names the audio files, which are not ours to touch.
+const abukDuration = (s) => {
+  const h = Math.floor(s / 3600), m = Math.round((s % 3600) / 60);
+  return s ? [h ? `${h} год` : "", m ? `${m} хв` : ""].filter(Boolean).join(" ") : "";
+};
+function abukBook(json, url) {
+  const b = JSON.parse(json).book;
+  if (!b || !b.published || !b.title) return null;
+  const title = String(b.title).trim();
+  return {
+    id: `abuk-${b.id}`,
+    title,
+    author: names(b.authors),
+    narrator: names(b.narrators),
+    duration: abukDuration(Number(b.duration) || 0),
+    subscription: b.subscription_type === "subscription_and_paid",
+    isbn: "",
+    format: "аудіо",
+    series: volumeOf(title)?.series || "",
+    volume: volumeOf(title)?.volume || 0,
+    bundle: false,
+    cover: b.picture_urls?.main || b.picture_urls?.small || "",
+    url,
+    price: Number(b.price_uah) ? uah(Number(b.price_uah)) : "безкоштовно",
+    status: "є",
+    isNew: false,
+    genres: (b.genre || []).map((g) => String(g.name || "").trim()).filter((g) => g && !/абук/i.test(g)),
+    blurb: text(b.description).slice(0, 600),
+    year: String(b.year || ""),
+    language: "українська",
+  };
+}
 
 const SOURCES = [
   {
@@ -552,6 +589,22 @@ const SOURCES = [
   mbooks({ id: "arthuss", slug: "arthuss", brand: "Видавництво ArtHuss", name: "ArtHuss", tagline: "Нонфікшн про мистецтво, науку й суспільство", url: "https://arthuss.com.ua/", draft: false }),
   mbooks({ id: "zhupanskyi", slug: "vydavnytstvo-zhupanskoho", brand: "Видавництво Жупанського", name: "Видавництво Жупанського", tagline: "Класика й сучасна світова проза в нових перекладах", url: "https://zhupansky.com/", draft: false }),
   mbooks({ id: "meridian", slug: "meridian-czernowitz", brand: "Meridian Czernowitz", name: "Meridian Czernowitz", tagline: "Сучасна українська та світова література", url: "https://meridiancz.com/", draft: false }),
+  {
+    id: "abuk",
+    kind: "audio",
+    name: "Абук",
+    tagline: "Українська аудіокнигарня: класика, сучасна проза, нонфікшн, для дітей",
+    url: "https://abuk.com.ua/",
+    draft: true,
+    sitemap: "https://abuk.com.ua/sitemap.xml",
+    isProduct: (u) => /\/catalog\/books\/\d+$/.test(u),
+    fetchUrl: (u) => `https://abuk.com.ua/api/web/books/${u.split("/").pop()}/`,
+    fetchAll: (src, opts) => sitemapProducts(src, opts),
+    parsePage: abukBook,
+    normalize: (p) => p,
+    keep: (p) => !p.genres.includes("Подкасти, лекції"), // podcasts are not books
+    toItem: (p) => p,
+  },
 ];
 
 // All products of one source, normalised. Pages until a short page; a failed page fails the source.
@@ -623,6 +676,8 @@ async function refresh({ store, log = console.log, fetchImpl }) {
   store.saveShelves(built.shelves, { fetched: built.fetched, refreshedAt: new Date().toISOString(), seen });
   store.loadShelves();
   const counts = store.shelves.map((s) => [s.id, s.items.length]);
+  // How many audiobooks found their print or e-book edition (Абук gives no ISBN, so it is by author and title).
+  for (const s of store.shelves.filter((s) => s.kind === "audio")) log(`${s.id}: ${s.items.filter((it) => (it.editions || 1) > 1 || store.aliases.has(it.id)).length} of ${s.items.length} joined with another edition`);
   log(`refresh: shelves rebuilt, ${counts.map(([id, n]) => `${id} ${n}`).join(", ")}${errors.length ? `; failed: ${errors.join("; ")}` : ""}`);
   return { ok: true, errors, counts };
 }

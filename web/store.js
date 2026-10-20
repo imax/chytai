@@ -14,6 +14,7 @@ const readJson = (f) => JSON.parse(fs.readFileSync(f, "utf8"));
 // Office books that match a library book under a different spelling (title-matching misses them).
 const OFFICE_MATCHES = { 6: "bastiat-essays", 7: "гемінгвей-нічого-не-знає", 35: "deep-work", 44: "subtle-art-of-not-giving-a-fuck", 46: "andy-grove-one-on-ones" };
 const RU = /[ыэъё]/i; // Russian-only letters: these office books stay out of the profile until Max says otherwise
+const FMT = (f) => (f === "аудіо" ? 2 : f === "e-book" ? 1 : 0); // print first, then e-book, then audio
 const PICK = { "": 0, "є": 1, передзамовлення: 2, анонс: 3, немає: 4 }; // which edition stands for the work on a shelf
 
 // Ukrainian national transliteration (КМУ 2010), so an address stays readable when copied: Cyrillic
@@ -437,6 +438,21 @@ class Store {
       if (norm(it.author) || t.length < 6 || titled.get(t)?.size !== 1) continue;
       join(`at:${[...titled.get(t)][0]}|${t}`, si);
     }
+    // An audiobook's title often keeps the subtitle the print edition drops, or the other way round
+    // («Атомні звички. Легкий і перевірений спосіб…»): with the same author, one title starting with the
+    // other joins them, when the shorter one has at least two words (one word, «Дюна», is too little).
+    const byAuthor = new Map(); // author -> print and e-book items
+    for (const si of this.shelfItems.values()) {
+      const a = norm(si.item.author);
+      if (a && si.item.format !== "аудіо" && !si.item.bundle) (byAuthor.get(a) || byAuthor.set(a, []).get(a)).push(si);
+    }
+    for (const si of this.shelfItems.values()) {
+      const it = si.item;
+      if (it.format !== "аудіо" || groupOf.get(it.id).length > 1) continue;
+      const short = (o) => (norm(o.title).length < norm(it.title).length ? norm(o.title) : norm(it.title));
+      const other = (byAuthor.get(norm(it.author)) || []).find((o) => (o.item.volume || 0) === (it.volume || 0) && alike(o.item, it) && short(o.item).includes(" "));
+      if (other) join(`at:${norm(other.item.author)}|${workTitle(other.item.title)}`, si);
+    }
 
     // 2. A shelf item whose title (or original title) is exactly a library book's title is that book.
     // Failing that, the library book links to the item's own page, or has the same words in its main
@@ -467,7 +483,7 @@ class Store {
 
     const seen = new Set();
     for (const g of new Set(groupOf.values())) {
-      const sorted = [...g].sort((a, b) => (a.item.edition ? 1 : 0) - (b.item.edition ? 1 : 0) || (a.item.format === "e-book") - (b.item.format === "e-book") || (PICK[a.item.status] ?? 9) - (PICK[b.item.status] ?? 9) || a.item.id.localeCompare(b.item.id, "en", { numeric: true }));
+      const sorted = [...g].sort((a, b) => (a.item.edition ? 1 : 0) - (b.item.edition ? 1 : 0) || FMT(a.item.format) - FMT(b.item.format) || (PICK[a.item.status] ?? 9) - (PICK[b.item.status] ?? 9) || a.item.id.localeCompare(b.item.id, "en", { numeric: true }));
       const canonical = g.map((si) => bookOf(si.item)).find(Boolean) || sorted[0].item.id;
       this.editions.set(canonical, sorted);
       const perShelf = new Set();
@@ -641,7 +657,7 @@ class Store {
   }
 
   fromShelfItem(shelf, it) {
-    return { id: it.id, title: it.title, author: it.author, altTitle: it.altTitle || "", cover: it.cover, tags: it.genres || [], links: [{ label: shelf.name, url: it.url }], source: shelf.id, shelf: shelf.id, blurb: require("./catalogs").ent(it.blurb || ""), price: it.price, status: it.status, expected: it.expected || "", language: it.language, edition: it.edition || "", isbn: it.isbn || "", volume: it.volume || 0, bundle: !!it.bundle, format: it.format || (shelf.kind === "free" ? "e-book" : "папір") };
+    return { id: it.id, title: it.title, author: it.author, altTitle: it.altTitle || "", cover: it.cover, tags: it.genres || [], links: [{ label: shelf.name, url: it.url }], source: shelf.id, shelf: shelf.id, blurb: require("./catalogs").ent(it.blurb || ""), price: it.price, status: it.status, expected: it.expected || "", language: it.language, edition: it.edition || "", isbn: it.isbn || "", volume: it.volume || 0, bundle: !!it.bundle, format: it.format || (shelf.kind === "free" ? "e-book" : shelf.kind === "audio" ? "аудіо" : "папір"), narrator: it.narrator || "", duration: it.duration || "", subscription: !!it.subscription };
   }
 
   addBook({ title, author, cover, links }) {

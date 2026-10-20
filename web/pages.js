@@ -365,11 +365,11 @@ function mine(book, entry, user) {
 function where(book) {
   const seen = new Set();
   // In stock first, then the publisher's own over a shop reselling it (Старий Лев sells partners' books).
-  const rank = (e) => (e.status === "є" ? 0 : e.status === "передзамовлення" ? 1 : 2) * 4 + (e.edition ? 2 : 0) + (e.format === "e-book" ? 1 : 0);
+  const rank = (e) => (e.status === "є" ? 0 : e.status === "передзамовлення" ? 1 : 2) * 4 + (e.edition ? 2 : 0) + (e.format === "e-book" ? 1 : 0) + (e.format === "аудіо" ? 1 : 0);
   const eds = (book.editions || []).filter((e) => !seen.has(e.links[0].url) && seen.add(e.links[0].url)).sort((a, b) => rank(a) - rank(b));
   const links = (book.links || []).filter((l) => !seen.has(l.url));
   const shop = (e) => {
-    const tail = [e.format, e.edition, e.price, avail(e)].filter(Boolean).join(", ");
+    const tail = [e.format, e.narrator ? `читає ${e.narrator}` : "", e.duration, e.edition, e.price, e.subscription ? "є в підписці" : "", avail(e)].filter(Boolean).join(", ");
     return `<a href="${attr(e.links[0].url)}" target="_blank" rel="noopener">${esc(e.shelf.name)}</a>${tail ? ` <span class="muted">${esc(tail)}</span>` : ""}`;
   };
   const items = [...eds.map(shop), ...links.map((l) => `<a href="${attr(l.url)}" target="_blank" rel="noopener">${esc(l.label)}</a>`)];
@@ -595,7 +595,7 @@ function publisherPage({ shelf, subscribed, user, fresh, feed, others, visible =
   const statuses = [...new Set(items.map((it) => it.status))];
   const newCount = items.filter((it) => it.isNew).length;
   const body = `
-${pageHead({ crumbs: `<a href="/publishers">Видавництва</a> / ${esc(shelf.name)}`, kicker: "Видавництво", title: esc(shelf.name), lead: esc(shelf.tagline), sub: [books(items.length), newCount ? `${newCount} ${plural(newCount, "нова", "нові", "нових")}` : "", `<a href="${attr(shelf.url)}" target="_blank" rel="noopener">${esc(host(shelf.url))} ↗</a>`].filter(Boolean).join(" · "), action: subscribeButton(shelf.id, subscribed, user, true) })}
+${pageHead({ crumbs: `<a href="/publishers">Видавництва</a> / ${esc(shelf.name)}`, kicker: shelf.kind === "audio" ? "Аудіокнигарня" : "Видавництво", title: esc(shelf.name), lead: esc(shelf.tagline), sub: [books(items.length), newCount ? `${newCount} ${plural(newCount, "нова", "нові", "нових")}` : "", `<a href="${attr(shelf.url)}" target="_blank" rel="noopener">${esc(host(shelf.url))} ↗</a>`].filter(Boolean).join(" · "), action: subscribeButton(shelf.id, subscribed, user, true) })}
 ${fresh.length ? `<section class="block">
   ${label("Нове")}
   <div class="grid six">${fresh.map((it) => card(it)).join("")}</div>
