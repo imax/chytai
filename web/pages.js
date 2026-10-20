@@ -798,22 +798,25 @@ function signupPage({ next = "", ticket, email, name = "", username = "", error 
   });
 }
 
-// /welcome: the first page after sign-up, what Chytai is and what one can do here (a new reader's feedback,
-// 2026-10-20: «для чого він мені і які тут є функції - ніде не сказано»).
-// The texts are Max's (2026-10-20).
+// /welcome: shown once, right after sign-up: what Chytai is and what one can do here (design 4a of
+// 2026-10-20, texts by Max). «Почати» goes to the homepage, or back to where sign-up started.
 function welcomePage({ user, next = "" }) {
-  const step = (title, text, href, link) => `<li><h3>${title}</h3><p>${text}</p><a class="text-link" href="${attr(href)}">${link} →</a></li>`;
+  const mark = `<b class="wordmark">Chytai</b>`;
+  const step = (n, title, text, href, link, ext = false) => `<li><span class="n">${n}</span><div><h3>${title}</h3><p>${text}</p></div><a class="text-link" href="${attr(href)}"${ext ? ' target="_blank" rel="noopener"' : ""}>${link} →</a></li>`;
   const body = `<section class="welcome">
-  <p class="kicker">Вітаємо, ${esc(user.name)}</p>
-  <h1>Що тут можна робити</h1>
-  <p class="lead">Chytai це проєкт для тих, хто любить книжки. Що тут можна зробити:</p>
+  <div class="welcome-intro">
+    <p class="kicker">Вітаємо</p>
+    <h1>Вітаємо в ${mark}!</h1>
+    <p class="lead">${mark} це проєкт для тих, хто любить книжки. Спільнота людей, каталоги українських видавництв, пошук і рекомендації.</p>
+    <div class="acts"><a class="btn primary" href="${attr(next || "/")}">Почати</a><a class="text-link" href="/import/goodreads">Імпорт з Goodreads</a></div>
+  </div>
   <ol class="welcome-steps">
-    ${step("Зберіть свою полицю", "Що прочитали, що читаєте, що хочете прочитати: з оцінками й нотатками. Можна перенести з Goodreads чи Apple Books.", user.href, "Моя полиця")}
-    ${step("Знайдіть, що почитати", "Пошук по каталогах українських видавництв, полицях читачів та офлайн бібліотеках.", "/", "Що почитати далі")}
-    ${step("Дивіться, що читають інші", "Знаходьте людей зі схожими смаками і додавайте їх книжки собі.", "/community", "Спільнота")}
-    ${step("Читайте у Читалці", "Читалка з AI-explainer для зручного читання. Веб версія і мобільний застосунок (поки в TestFlight).", "https://chytai.fly.dev", "Читалка")}
+    ${step("01", "Зберіть свою полицю", "Що прочитали, що читаєте, що хочете прочитати: з оцінками й нотатками. Є імпорт з Goodreads та Apple Books.", user.href, "Моя полиця")}
+    ${step("02", "Дивіться, що читають інші", "Знаходьте людей зі схожими смаками і додавайте їх книжки собі.", "/community", "Спільнота")}
+    ${step("03", "Пошук", "Пошук по каталогах українських видавництв, полицях читачів та офлайн бібліотеках.", "/", "Каталог")}
+    ${step("04", "Читайте у Читалці", "Читалка з AI-explainer для зручного читання. Веб версія і мобільний застосунок (поки в TestFlight).", "https://chytai.fly.dev/", "Читалка", true)}
   </ol>
-  <div class="acts"><a class="btn primary" href="${attr(next || user.href)}">Почати з полиці</a><a class="text-link" href="/import/goodreads">Перенести з Goodreads</a></div>
+  <div class="welcome-end"><a class="btn primary" href="${attr(next || "/")}">Почати</a><a class="text-link" href="/import/goodreads">Імпорт з Goodreads</a></div>
 </section>`;
   return layout({ title: "Вітаємо", body, user, path: "/welcome" });
 }
