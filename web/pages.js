@@ -319,15 +319,15 @@ function discoveryPage({ shelves, subscriptions, user, owner, readerHref, librar
   const subs = user ? shelves.filter((s) => subscriptions.includes(s.id)) : [];
   const fresh = subs.flatMap((s) => visible(s).filter((it) => it.isNew).map((it) => ({ ...it, shelfName: s.name, shelfId: s.id })));
   const body = `
-${searchBox("", false)}
-<div id="live"></div>
-<div id="browse">
 <section class="head">
   <div>
     <h1>Discovery</h1>
     <p class="muted">Публічні полиці видавництв і читачів. Підпишися, і новинки з'являтимуться тут.</p>
   </div>
 </section>
+${searchBox("", false)}
+<div id="live"></div>
+<div id="browse">
 ${subs.length ? `
 <section>
   <h2 class="sec">Нове з підписок <span class="muted small">${subs.map((s) => esc(s.name)).join(", ")}</span></h2>
