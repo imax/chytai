@@ -59,15 +59,15 @@ let lastRefresh = Date.parse(store.shelvesRefreshedAt) || 0;
 let refreshing = null;
 let lastResult = null; // { at, ok, errors, counts } of the last attempt, for /refresh-status
 let currentLog = []; // the running refresh's log so far
-function refreshShelves(force = false) {
+function refreshShelves(force = false, only = "") {
   if (refreshing) return refreshing;
   if (!force && Date.now() - lastRefresh < REFRESH_MS) return null;
-  lastRefresh = Date.now(); // even on failure: one attempt a day, not one per request
+  if (!only) lastRefresh = Date.now(); // even on failure: one attempt a day, not one per request
   const started = new Date().toISOString();
   const lines = (currentLog = []); // the refresh's own log, kept for /refresh-status
   const log = (m) => (console.log(m), lines.push(String(m).slice(0, 300)));
   refreshing = catalogs
-    .refresh({ store, log })
+    .refresh({ store, log, only })
     .catch((e) => (console.error("refresh failed:", e), { ok: false, errors: [e.message] }))
     .then((r) => (lastResult = { started, finished: new Date().toISOString(), ...r, log: lines.slice(-30) }))
     .finally(() => (refreshing = null));
@@ -455,7 +455,7 @@ app.post("/api/book", signed, (req, res) => {
 });
 
 app.post("/api/refresh", owner, async (req, res) => {
-  const r = await refreshShelves(true);
+  const r = await refreshShelves(true, String(req.query.only || ""));
   res.send(pages.messagePage({ title: r.ok ? "Каталоги оновлено" : "Не вдалося оновити", text: [...(r.counts || []).map(([id, n]) => `${id}: ${n}`), ...r.errors].join("; "), user: req.user }));
 });
 

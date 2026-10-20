@@ -652,27 +652,33 @@ function buildShelves(raw, { seen = {}, today = new Date().toISOString().slice(0
   return { fetched: today, shelves };
 }
 
-// The daily refresh: fetch every source, rebuild its shelf and write it to the database. A source that
-// fails keeps its previous items, so one site being down loses nothing.
-async function refresh({ store, log = console.log, fetchImpl }) {
-  const raw = {};
+// The daily refresh: fetch every source, rebuild its shelf and write it to the database. Each source is
+// saved as soon as it is fetched, so a deploy that restarts the server half-way keeps what was done
+// (other threads deploy often, 2026-10-20). A source that fails keeps its previous items, so one site
+// being down loses nothing. `only` refreshes one source (POST /api/refresh?only=<id>).
+async function refresh({ store, log = console.log, fetchImpl, only }) {
+  const sources = only ? SOURCES.filter((s) => s.id === only) : SOURCES;
+  if (!sources.length) return { ok: false, errors: [`no source ${only}`] };
   const errors = [];
-  for (const src of SOURCES) {
+  const seen = store.seen();
+  let done = 0;
+  for (const src of sources) {
     try {
       const previous = new Map((store.shelf(src.id)?.items || []).map((it) => [it.url, it]));
       const skip = new Set(JSON.parse(store.db.get(`skip:${src.id}`) || "[]"));
-      raw[src.id] = src.fetchAll ? await src.fetchAll(src, { fetchImpl, log, previous, skip }) : await fetchSource(src, { fetchImpl, log });
+      const products = src.fetchAll ? await src.fetchAll(src, { fetchImpl, log, previous, skip }) : await fetchSource(src, { fetchImpl, log });
       if (src.fetchAll) store.db.set(`skip:${src.id}`, JSON.stringify([...skip]));
-      if (src.enrich) await src.enrich(raw[src.id], { previous, fetchImpl, log, id: src.id, keep: src.keep });
+      if (src.enrich) await src.enrich(products, { previous, fetchImpl, log, id: src.id, keep: src.keep });
+      const built = buildShelves({ [src.id]: products }, { seen, baseline: store.baseline });
+      store.saveShelves(built.shelves, { fetched: built.fetched, seen });
+      done++;
     } catch (e) {
       errors.push(e.message);
       log(`refresh: ${e.message}; keeping the previous ${src.id} catalog`);
     }
   }
-  if (errors.length === SOURCES.length) return { ok: false, errors }; // nothing fetched: leave the shelves as they were
-  const seen = store.seen();
-  const built = buildShelves(raw, { seen, baseline: store.baseline });
-  store.saveShelves(built.shelves, { fetched: built.fetched, refreshedAt: new Date().toISOString(), seen });
+  if (!done) return { ok: false, errors }; // nothing fetched: the shelves stay as they were
+  if (!only) store.db.set("refreshed_at", new Date().toISOString());
   store.loadShelves();
   const counts = store.shelves.map((s) => [s.id, s.items.length]);
   // How many audiobooks found their print or e-book edition (Абук gives no ISBN, so it is by author and title).
