@@ -800,18 +800,18 @@ function signupPage({ next = "", ticket, email, name = "", username = "", error 
 
 // /welcome: the first page after sign-up, what Chytai is and what one can do here (a new reader's feedback,
 // 2026-10-20: «для чого він мені і які тут є функції - ніде не сказано»).
-// DRAFT COPY: Max writes the public texts himself; every sentence here is a placeholder for him.
+// The texts are Max's (2026-10-20).
 function welcomePage({ user, next = "" }) {
   const step = (title, text, href, link) => `<li><h3>${title}</h3><p>${text}</p><a class="text-link" href="${attr(href)}">${link} →</a></li>`;
   const body = `<section class="welcome">
   <p class="kicker">Вітаємо, ${esc(user.name)}</p>
   <h1>Що тут можна робити</h1>
-  <p class="lead">Chytai — некомерційний проєкт про книжки: щоб читати більше і знаходити, що почитати далі.</p>
+  <p class="lead">Chytai це проєкт для тих, хто любить книжки. Що тут можна зробити:</p>
   <ol class="welcome-steps">
     ${step("Зберіть свою полицю", "Що прочитали, що читаєте, що хочете прочитати: з оцінками й нотатками. Можна перенести з Goodreads чи Apple Books.", user.href, "Моя полиця")}
-    ${step("Знайдіть, що почитати", "Пошук по каталогах українських видавництв і полицях читачів. На сторінці книжки видно, де її взяти: магазин, бібліотека.", "/", "Що почитати далі")}
-    ${step("Дивіться, що читають інші", "Оцінки й нотатки інших читачів. За цікавими можна стежити, і їхні книжки будуть першими у стрічці.", "/community", "Спільнота")}
-    ${step("Читайте у Читалці", "Читалка з поясненням незнайомих слів і місць, перекладом і нотатками. Поки за запрошенням.", "https://chytai.fly.dev", "Читалка")}
+    ${step("Знайдіть, що почитати", "Пошук по каталогах українських видавництв, полицях читачів та офлайн бібліотеках.", "/", "Що почитати далі")}
+    ${step("Дивіться, що читають інші", "Знаходьте людей зі схожими смаками і додавайте їх книжки собі.", "/community", "Спільнота")}
+    ${step("Читайте у Читалці", "Читалка з AI-explainer для зручного читання. Веб версія і мобільний застосунок (поки в TestFlight).", "https://chytai.fly.dev", "Читалка")}
   </ol>
   <div class="acts"><a class="btn primary" href="${attr(next || user.href)}">Почати з полиці</a><a class="text-link" href="/import/goodreads">Перенести з Goodreads</a></div>
 </section>`;
