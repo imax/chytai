@@ -207,7 +207,7 @@ const shelvesFor = (req) => (req.owner ? store.shelves : store.shelves.filter((s
 function bookFor(req, book, hasEntry) {
   if (req.owner || !book) return book;
   const editions = book.editions && book.editions.filter((e) => !e.shelf.draft);
-  const series = book.series && book.series.items.some((v) => v.shelf.draft) ? null : book.series;
+  const series = book.series?.items?.some((v) => v.shelf?.draft) ? null : book.series;
   if (book.shelf && isDraft(book.shelf) && !editions?.length && !hasEntry) return null;
   return { ...book, editions, series };
 }

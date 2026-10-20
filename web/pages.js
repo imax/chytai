@@ -376,7 +376,7 @@ function where(book) {
 // The volumes of the series this book belongs to, each with its own page and where to get it.
 function series(book, inLibrary) {
   const ser = book.series;
-  if (!ser) return "";
+  if (!ser?.items) return "";
   const name = (v) => (v.bundle ? `Комплект із ${count(ser.volumes, "тому", "томів", "томів")}` : cap(v.title.replace(ser.name, "").replace(/^[\s,.:]+/, "")) || `Том ${v.volume}`);
   return `<section class="block series">${label(`Серія «${esc(ser.name)}», ${count(ser.volumes, "том", "томи", "томів")}`)}<ul>${ser.items
     .map((v) => {
