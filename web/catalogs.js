@@ -147,7 +147,7 @@ async function pageProducts(src, urls, { fetchImpl = fetch, log = () => {}, prev
   for (let i = 0; i < due.length; i += batch) {
     if (pause && !gaveUp) await new Promise((r) => setTimeout(r, pause));
     await Promise.all(due.slice(i, i + batch).map(one));
-    if (i % 100 < batch && i) checkpoint(got); // a restart half-way resumes from here
+    if (i % 100 < batch && i) checkpoint(got), log(`${src.id}: ${i} of ${due.length} pages read`); // a restart half-way resumes from here
   }
   log(`${src.id}: ${urls.length} product pages, ${due.length} due${failed ? `, ${failed} failed` : ""}${gaveUp ? " (the shop kept answering 429; the rest next time)" : ""}${skipped ? `, ${skipped} not its books` : ""}, ${out.length} books`);
   if (!out.length || (!gaveUp && failed > due.length / 3 && failed > 10)) throw new Error(`${src.id}: ${failed} of ${due.length} pages failed`);
