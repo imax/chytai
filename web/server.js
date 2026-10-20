@@ -21,6 +21,7 @@ const { Social } = require("./social");
 const goodreads = require("./goodreads");
 const { Digest } = require("./digest");
 const applebooks = require("./applebooks");
+const enrich = require("./enrich");
 const { Admin, adminPage } = require("./admin");
 
 const ROOT = path.join(__dirname, "..");
@@ -84,8 +85,10 @@ for (const src of catalogs.SOURCES) if (JSON.parse(store.db.get(`partial:${src.i
 const refreshUk = () => wikidata.refreshUk(store, { log: console.log }).catch((e) => console.error("wikidata failed:", e));
 // Who is who among the authors (authors.js), weekly, after the Ukrainian titles.
 const refreshAuthors = () => authors.refresh(store, { log: console.log }).catch((e) => console.error("authors failed:", e));
-setTimeout(() => refreshUk().then(refreshAuthors), 60000).unref();
-setInterval(() => refreshUk().then(refreshAuthors), 6 * 3600 * 1000).unref();
+// Details of the readers' own books from Open Library (enrich.js), weekly, after those.
+const refreshDetails = () => enrich.refresh(store, { log: console.log }).catch((e) => console.error("enrich failed:", e));
+setTimeout(() => refreshUk().then(refreshAuthors).then(refreshDetails), 60000).unref();
+setInterval(() => refreshUk().then(refreshAuthors).then(refreshDetails), 6 * 3600 * 1000).unref();
 
 pages.setTitleLinks((md, id) => store.linkTitles(md, id));
 pages.setAuthorLinks((name) => store.authors?.byName(name)?.href || null);
@@ -247,6 +250,8 @@ app.post("/import/:source/apply", signed, importSource, (req, res) => {
   console.log(`${name} import @${req.user.username}: ${result.added} added, ${result.updated} updated, ${result.created.length} new books`);
   // New books by hand are mailed to the owner one by one; an import sends one letter with the list.
   if (!req.owner && result.created.length) notifyOwner(`Імпорт з ${name}: ${result.created.length} нових книжок`, [`${req.user.name} (@${req.user.username}) імпортував(ла) полицю з ${name}: ${result.added} додано, ${result.updated} доповнено.`, `Нові книжки, яких немає в каталозі (${result.created.length}):`, "", ...result.created.slice(0, 100).map((b) => `• ${b.title}${b.author ? ` — ${b.author}` : ""}  ${site(req)}${store.href(b.id)}`), result.created.length > 100 ? `… і ще ${result.created.length - 100}` : "", "", `Полиця читача: ${site(req)}${req.user.href}`].join("\n"));
+  // The new books go to Open Library for covers and details in the background, while the reader looks at the shelf.
+  if (result.created.length) enrich.enrich(store, { ids: result.created.map((b) => b.id), log: console.log }).catch((e) => console.error("enrich failed:", e));
   res.send(pages.importDonePage({ user: req.user, source: req.source, result, skipped: p.rows.length - chosen.length }));
 });
 
@@ -548,6 +553,7 @@ app.post("/api/book", signed, (req, res) => {
   if (!title || !title.trim()) return res.status(400).send("Потрібна назва");
   const b = store.addBook({ title, author, cover: /^https?:\/\//.test(cover || "") ? cover : "" });
   store.setEntry(req.user.id, b.id, { status: ["read", "reading", "want"].includes(status) ? status : "", copy: ["paper", "ebook", "seeking"].includes(copy) ? copy : "" });
+  enrich.enrich(store, { ids: [b.id], log: console.log }).catch((e) => console.error("enrich failed:", e));
   // A book typed in by hand may duplicate a catalog's or be junk: the owner gets a letter and sorts it out
   // (Max, 2026-10-20: «треба … сповіщення мені на імейл. будемо поки вручну розбирати»).
   if (!req.owner) notifyOwner(`Нова книжка: ${b.title}`, [`${req.user.name} (@${req.user.username}) додав(ла) книжку вручну.`, "", `Назва: ${b.title}`, `Автор: ${b.author || "не вказано"}`, b.cover ? `Обкладинка: ${b.cover}` : "", "", `Книжка: ${site(req)}${store.href(b.id)}`, `Полиця читача: ${site(req)}${req.user.href}`].filter((l, i, a) => l || a[i - 1]).join("\n"));

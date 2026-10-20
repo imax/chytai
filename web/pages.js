@@ -45,6 +45,8 @@ function isUk(book) {
   return !OWN_SOURCES.has(book.source);
 }
 const norm = (s) => String(s || "").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+// The language word of a foreign book in the kicker («Англійською»), from the word Open Library gave it.
+const LANG_ADV = { англійська: "англійською", російська: "російською", польська: "польською", німецька: "німецькою", французька: "французькою", іспанська: "іспанською", італійська: "італійською" };
 const host = (url) => String(url || "").replace(/^https?:\/\/(www\.)?/, "").replace(/\/.*$/, "");
 // Availability as shown: «є» goes without saying; an announced book says when it is expected.
 const avail = (e) => (!e.status || e.status === "є" ? "" : e.status === "анонс" && e.expected ? `анонс, орієнтовно ${e.expected.toLowerCase()}` : e.status);
@@ -315,8 +317,8 @@ function librariesBlock(libraries) {
 // The book, the reader's own buttons, where to get it, what readers said, what it is about.
 function bookPage({ book, entry, user, shelf, inLibrary = new Map(), readers = [], also = [] }) {
   const s = statsOf(book.id);
-  const kicker = [book.tags?.find((t) => t !== "українською"), isUk(book) ? "українською" : ""].filter(Boolean).map(cap).join(" · ");
-  const sub = [book.altTitle ? esc(book.altTitle) : "", book.author ? `<span class="authors">${authorLinks(book.author)}</span>` : ""].filter(Boolean).join(" · ");
+  const kicker = [book.tags?.find((t) => t !== "українською"), isUk(book) ? "українською" : LANG_ADV[String(book.language || "").toLowerCase()] || ""].filter(Boolean).map(cap).join(" · ");
+  const sub = [book.altTitle ? esc(book.altTitle) : "", book.author ? `<span class="authors">${authorLinks(book.author)}</span>` : "", book.published ? String(book.published) : "", book.pages ? `${book.pages} с.` : ""].filter(Boolean).join(" · ");
   const score = s.avg != null || s.want ? `<p class="score">${s.avg != null ? `${stars(s.avg, { num: false })} <b>${uk(s.avg.toFixed(1))}</b> від ${count(s.rated, "читача", "читачів", "читачів")}` : ""}${s.want ? `${s.avg != null ? " · " : ""}${s.want} ${plural(s.want, "хоче", "хочуть", "хочуть")} прочитати` : ""}</p>` : "";
   const [first, ...rest] = readers;
   const body = `
@@ -343,7 +345,7 @@ function bookPage({ book, entry, user, shelf, inLibrary = new Map(), readers = [
     ${book.blurb || book.translations?.length || book.ukTitle ? `<section class="block">
       ${label("Про книжку")}
       ${book.blurb ? `<div class="about">${book.blurb.split(/\n\n+/).map((t) => `<p>${esc(t)}</p>`).join("")}</div>` : ""}
-      <p class="small muted">${[book.blurb ? `Опис з сайту ${esc(shelf ? shelf.name : book.source)}` : "", ...(book.translations || []).map((t) => `${isUk(book) && !isUk(t) ? "Оригінал" : "Переклад"}: <a href="${attr(t.href)}">${esc(t.title)}</a>`), book.ukTitle ? `Українською: «${esc(book.ukTitle)}», у каталогах поки немає` : ""].filter(Boolean).join(" · ")}</p>
+      <p class="small muted">${[book.blurb ? (book.blurbSource ? `Опис: ${esc(book.blurbSource)}` : `Опис з сайту ${esc(shelf ? shelf.name : book.source)}`) : "", ...(book.translations || []).map((t) => `${isUk(book) && !isUk(t) ? "Оригінал" : "Переклад"}: <a href="${attr(t.href)}">${esc(t.title)}</a>`), book.ukTitle ? `Українською: «${esc(book.ukTitle)}», у каталогах поки немає` : ""].filter(Boolean).join(" · ")}</p>
     </section>` : ""}
   </div>
   <aside>
@@ -870,6 +872,7 @@ function privacyPage({ user }) {
 <li><strong>Fly.io</strong> — сервери у Франкфурті (Німеччина), там лежить база сайту.</li>
 <li><strong>Resend</strong> — надсилає листи з кодом і щотижневий лист від code@chytai.org.ua. Бачить вашу пошту і сам лист.</li>
 <li><strong>Google Fonts</strong> — шрифти сайту. Ваш браузер завантажує їх з серверів Google, тож Google бачить вашу IP-адресу, як і на більшості сайтів.</li>
+<li><strong>Open Library</strong> (openlibrary.org, некомерційний проєкт Internet Archive) — для книжок, яких немає в каталогах, ми питаємо в нього обкладинку, ISBN, рік і опис. Туди йдуть лише назва й автор книжки, не ваше ім’я; обкладинки ваш браузер завантажує з covers.openlibrary.org, тож вони бачать вашу IP-адресу, як і магазини, чиї обкладинки ми показуємо.</li>
 <li><strong>GitHub</strong> — щоночі робимо зашифровану резервну копію бази і зберігаємо її там 90 днів. Без нашого ключа її не прочитати.</li>
 </ul>
 <p>Більше ніхто ваших даних не отримує. Ми нічого не продаємо і не передаємо рекламодавцям.</p>
