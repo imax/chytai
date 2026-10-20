@@ -417,6 +417,7 @@ ${shelf.items.map((it) => itemCard(it, inLibrary, user)).join("\n")}
   return layout({ title: shelf.name, body, user, path: "/shelf", wide: true });
 }
 
+// No prices or buttons on cards either (Max, 2026-10-20): the book page has them.
 function itemCard(it, inLibrary, user, shelfName) {
   const has = inLibrary.get(it.id);
   const search = [it.title, it.author, it.altTitle].join(" ").toLowerCase();
@@ -424,8 +425,8 @@ function itemCard(it, inLibrary, user, shelfName) {
   <a class="cover-link" href="${attr(it.href)}">${cover(it, "card")}</a>
   <h3><a href="${attr(it.href)}">${esc(it.title)}</a></h3>
   <p class="by">${esc(byline(it.author))}</p>
-  <p class="meta small">${shelfName ? `<span class="muted">${esc(shelfName)} · </span>` : ""}${esc(it.price || "")}${it.status && it.status !== "є" ? ` · ${esc(it.status)}` : ""}${it.volumes > 1 ? ` · ${count(it.volumes, "том", "томи", "томів")}` : it.editions > 1 ? ` · ${count(it.editions, "видання", "видання", "видань")}` : ""}${it.isNew && !shelfName ? ` <span class="tag new">нове</span>` : ""}</p>
-  ${has ? `<p class="small have">${has.status ? STATUS[has.status] : "У бібліотеці"}</p>` : user ? `<form method="post" action="/api/entry/${encodeURIComponent(it.id)}" class="inline"><input type="hidden" name="status" value="want"><input type="hidden" name="back" value="1"><button class="btn small">Хочу прочитати</button></form>` : ""}
+  <p class="meta small">${[shelfName ? `<span class="muted">${esc(shelfName)}</span>` : "", it.status && it.status !== "є" ? esc(it.status) : "", it.volumes > 1 ? count(it.volumes, "том", "томи", "томів") : it.editions > 1 ? count(it.editions, "видання", "видання", "видань") : ""].filter(Boolean).join(" · ")}${it.isNew && !shelfName ? ` <span class="tag new">нове</span>` : ""}</p>
+  ${has ? `<p class="small have">${has.status ? STATUS[has.status] : "У бібліотеці"}</p>` : ""}
 </article>`;
 }
 
