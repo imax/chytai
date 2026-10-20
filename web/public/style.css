@@ -478,3 +478,14 @@ dialog .form { margin-top: 18px; }
   .admin .stats { grid-template-columns: repeat(2, 1fr); }
   .admin .stat b { font-size: 32px; }
 }
+
+/* /welcome, after sign-up */
+.welcome { max-width: 720px; padding: 64px 0 96px; }
+.welcome h1 { font: 500 48px/1.1 var(--serif); margin: 10px 0 18px; }
+.welcome .lead { font: 20px/1.5 var(--serif); color: var(--muted); }
+.welcome-steps { list-style: none; padding: 0; margin: 44px 0; display: grid; grid-template-columns: 1fr 1fr; gap: 36px 40px; counter-reset: step; }
+.welcome-steps li { counter-increment: step; border-top: 1px solid var(--ink); padding-top: 16px; }
+.welcome-steps li::before { content: counter(step); font: 600 13px var(--sans); color: var(--accent); }
+.welcome-steps h3 { font: 600 22px/1.25 var(--serif); margin: 6px 0 8px; }
+.welcome-steps p { color: var(--muted); margin: 0 0 12px; }
+@media (max-width: 760px) { .welcome { padding: 36px 0 64px; } .welcome h1 { font-size: 36px; } .welcome-steps { grid-template-columns: 1fr; gap: 28px; } }

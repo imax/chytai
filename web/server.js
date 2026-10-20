@@ -161,8 +161,9 @@ app.post("/login/signup", (req, res) => {
   const reader = auth.createReader({ email, name: name.name, username: username.username });
   auth.useTicket(req.body.ticket);
   console.log(`new reader @${reader.username}`);
-  signIn(req, res, reader, next);
+  signIn(req, res, reader, `/welcome${next ? `?next=${encodeURIComponent(next)}` : ""}`);
 });
+app.get("/welcome", signed, (req, res) => res.send(pages.welcomePage({ user: req.user, next: safeNext(req.query.next) })));
 function signIn(req, res, reader, next) {
   res.setHeader("Set-Cookie", auth.cookie(auth.signIn(reader.id), { secure: secure(req) }));
   res.redirect(next || "/me");
