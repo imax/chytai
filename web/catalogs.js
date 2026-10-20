@@ -82,7 +82,7 @@ const attr = (p, n) => ((p.attributes || []).find((a) => a.name === n) || { term
 // the series name and the volume number, so a shelf can fold the volumes into one card.
 const ORD = { перший: 1, перша: 1, другий: 2, друга: 2, третій: 3, третя: 3, четвертий: 4, четверта: 4, "п’ятий": 5, "п'ятий": 5, "п’ята": 5, шостий: 6, шоста: 6, сьомий: 7, сьома: 7, восьмий: 8, восьма: 8, "дев’ятий": 9, десятий: 10 };
 function volumeOf(title) {
-  const m = title.match(/^(.+?)[,.]?\s+(?:том|книга|частина)\s+(\d+|[\p{L}’']+)(?=[.:\s]|$)[.:]?\s*(.*)$/iu);
+  const m = title.match(/^(.+?)[,.]?\s+(?:(?:том|книга|частина)\s+|кн\.\s*)(\d+|[\p{L}’']+)(?=[.:\s]|$)[.:]?\s*(.*)$/iu); // «Експансія. Кн.6. У попелі Вавилону»
   if (!m) return null;
   const n = /^\d+$/.test(m[2]) ? Number(m[2]) : ORD[m[2].toLowerCase()];
   return n ? { series: m[1].trim(), volume: n, subtitle: m[3].trim() } : null;
@@ -380,6 +380,7 @@ const mbooks = ({ id, slug, brand, name, tagline, url, draft = true }) => ({
 // characteristics, the authors (written «Желязни Роджер») from the author links.
 const BOHDAN_SECTIONS = ["ХУДОЖНЯ ЛІТЕРАТУРА", "ДИТЯЧА ЛІТЕРАТУРА", "НЕХУДОЖНЯ ЛІТЕРАТУРА"];
 const SCHOOLWORK = /клас|зошит|НУШ|ЗНО|НМТ|ДПА|підручник|посібник|хрестоматі|тренажер|атестаці|диктант|прописи|грамот|диплом|тест/i;
+const initial = (w) => /^\p{Lu}\.$/u.test(w);
 function bohdanPage(html, url) {
   const crumbs = [...((html.match(/table_breadcrumb[\s\S]*?<\/div>/) || [""])[0]).matchAll(/title="([^"]*)"/g)].map((m) => ent(m[1])).slice(2);
   const wrap = (html.match(/<div class="detail-page-wrap"[^>]*>/) || [""])[0]; // the page's book, not the ones in the sidebar
@@ -392,7 +393,7 @@ function bohdanPage(html, url) {
   const spec = (k) => text((html.match(new RegExp(`<b class="koala_title">${k}:?</b>([\\s\\S]*?)<br`)) || [])[1] || "");
   const author = [...html.matchAll(/product-author-link[^>]*>([\s\S]*?)<\/a>/g)]
     .map((m) => text(m[1]).split(" "))
-    .map((w) => (w.length > 1 ? [...w.slice(1), w[0]] : w).join(" "))
+    .map((w) => (w.length > 1 && !w.some(initial) ? [...w.slice(1), w[0]] : w).join(" ")) // «Джеймс С. А. Корі» stays
     .filter((a, i, all) => a && all.indexOf(a) === i)
     .join(", ");
   const isbn = spec("ISBN").replace(/[^\dX]/gi, "");
@@ -418,7 +419,18 @@ function bohdanPage(html, url) {
     pages: spec("Кількість сторінок"),
     year: "",
     language: "українська",
+    parser: 2,
   };
+}
+// Items read before 2026-10-20 evening turned «Джеймс С. А. Корі» into «С. А. Корі Джеймс»: put the name back.
+function bohdanFinish(items) {
+  for (const it of items)
+    if (it.parser !== 2) {
+      const w = it.author.split(" ");
+      if (w.some(initial) && !it.author.includes(",")) it.author = [w.at(-1), ...w.slice(0, -1)].join(" ");
+      it.parser = 2;
+    }
+  return joinEbooks(items);
 }
 
 // Абук (abuk.com.ua), the Ukrainian audiobook shop (Max, 2026-10-20: a shelf of its own and a line in
@@ -735,7 +747,7 @@ const SOURCES = [
     normalize: (p) => p,
     keep: () => true,
     toItem: (p) => p,
-    finish: joinEbooks,
+    finish: bohdanFinish,
   },
   {
     id: "abuk",
