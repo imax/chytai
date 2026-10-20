@@ -232,3 +232,22 @@ dialog .form { margin: 0; background: var(--card); }
 .works li.none { color: var(--muted); }
 .by a { color: inherit; }
 .works a { font-weight: 600; text-decoration: underline; text-decoration-color: var(--line); text-underline-offset: 3px; }
+
+/* ---- sign in, sign up, settings ---- */
+.auth { max-width: 460px; margin: 8px auto 40px; }
+.auth h1 { margin: 0 0 6px; font-size: 28px; letter-spacing: -0.02em; }
+.auth > .muted { margin: 0 0 8px; }
+.auth .form { margin-top: 16px; }
+.auth .form .actions { flex-wrap: wrap; }
+.form .error { margin: 0; padding: 8px 12px; border-radius: 8px; background: var(--accent-soft); color: var(--red); font-size: 14px; }
+.form .prefix { display: flex; align-items: center; gap: 4px; padding: 0 0 0 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); color: var(--muted); font-size: 15px; }
+.form .prefix input { border: 0; padding-left: 2px; flex: 1; min-width: 0; background: transparent; }
+.form .prefix input:focus { outline: none; }
+.form .prefix:focus-within { border-color: var(--accent); }
+.form .hint { font-size: 12px; color: var(--muted); }
+.form input.code { font-size: 24px; letter-spacing: 0.3em; font-variant-numeric: tabular-nums; max-width: 220px; }
+.form.danger-zone { margin-top: 32px; }
+.form.danger-zone h2 { color: var(--red); }
+.shelf-card.join { border-style: dashed; }
+.who a.on { color: var(--accent); }
+.form .saved { margin: 0; color: var(--green); font-size: 14px; }

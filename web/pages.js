@@ -54,7 +54,7 @@ ${description ? `<meta name="description" content="${attr(description.slice(0, 2
     ${user ? `<a href="/me" class="${path.startsWith("/me") ? "on" : ""}">Мої книжки</a>` : ""}
   </nav>
   ${path === "/search" || path === "/" ? "" : `<form class="find" action="/search" role="search"><input type="search" name="q" value="${attr(q)}" placeholder="Знайти книжку" autocomplete="off" aria-label="Пошук"></form>`}
-  <div class="who">${user ? `<span>${esc(user)}</span> <a href="/logout" class="muted">вийти</a>` : `<span class="muted">гість</span>`}</div>
+  <div class="who">${user ? `<a href="${attr(user.href)}"><span>${esc(user.name)}</span></a> <a href="/settings" class="muted" title="Налаштування">⚙</a> <a href="/logout" class="muted">вийти</a>` : `<a href="/login" class="${path === "/login" ? "on" : ""}">Увійти</a>`}</div>
 </header>
 <main class="${wide ? "wide" : ""}">
 ${body}
@@ -68,8 +68,8 @@ ${body}
 // ---- library (/me) ----
 
 // The same list twice: /me is the signed-in reader's own library with «Змінити» on every row (the only
-// place where status, rating and notes are edited); /reader/<slug> is that reader's public shelf.
-function libraryPage({ rows, user, owner, own = false, readerHref = "" }) {
+// place where status, rating and notes are edited); /@<username> is that reader's public page.
+function libraryPage({ rows, user, reader, own = false }) {
   const read = rows.filter((r) => r.status === "read").length;
   const years = [...new Set(rows.map((r) => r.year).filter(Boolean))].sort((a, b) => b - a);
   const genres = GENRES.filter((g) => rows.some((r) => (r.book.tags || []).includes(g)));
@@ -85,8 +85,8 @@ function libraryPage({ rows, user, owner, own = false, readerHref = "" }) {
 <section class="head">
   <div>
     ${own ? "" : `<p class="crumbs">Читач</p>`}
-    <h1>${own ? "Мої книжки" : esc(owner)}</h1>
-    <p class="muted">${count(rows.length, "книжка", "книжки", "книжок")}, ${count(read, "прочитана", "прочитані", "прочитаних")}${own ? ` · <a href="${attr(readerHref)}">як бачать інші</a>` : ""}</p>
+    <h1>${own ? "Мої книжки" : esc(reader.name)}</h1>
+    <p class="muted">${count(rows.length, "книжка", "книжки", "книжок")}, ${count(read, "прочитана", "прочитані", "прочитаних")}${own ? ` · <a href="${attr(reader.href)}">як бачать інші</a>` : ` · <span class="muted">@${esc(reader.username)}</span>`}</p>
   </div>
   ${own ? `<button class="btn primary" data-open="add">+ Додати книжку</button>` : ""}
 </section>
@@ -103,7 +103,7 @@ ${rows.map((r, i) => libraryRow(r, i, own)).join("\n")}
 </section>
 <p class="empty hidden" id="empty">Нічого не знайшлося.</p>
 ${own ? addDialog() : ""}`;
-  return layout({ title: own ? "Мої книжки" : owner, body, user, path: own ? "/me" : "/reader", description: own ? "" : `Книжки, які читає ${owner}: оцінки й нотатки.` });
+  return layout({ title: own ? "Мої книжки" : reader.name, body, user, path: own ? "/me" : "/@", description: own ? "" : `Книжки, які читає ${reader.name}: оцінки й нотатки.` });
 }
 
 function libraryRow(r, i, own = false) {
@@ -334,7 +334,7 @@ function entryForm(book, entry) {
 
 // ---- discovery (/) ----
 
-function discoveryPage({ shelves, subscriptions, user, owner, readerHref, libraryCount, inLibrary, fetched, ownerStrip = [], libraries = [], visible = (s) => s.items }) {
+function discoveryPage({ shelves, subscriptions, user, readers = [], inLibrary, fetched, libraries = [], visible = (s) => s.items }) {
   const subs = user ? shelves.filter((s) => subscriptions.includes(s.id)) : [];
   const fresh = subs.flatMap((s) => visible(s).filter((it) => it.isNew).map((it) => ({ ...it, shelfName: s.name, shelfId: s.id })));
   const body = `
@@ -362,13 +362,18 @@ ${subs.length ? `
 <section>
   <h2 class="sec">Читачі</h2>
   <div class="shelves">
-    <a class="shelf-card" href="${attr(readerHref)}">
-      <span class="strip">${ownerStrip.map((b) => cover(b, "mini")).join("")}</span>
+    ${readers.map(({ reader, count: n, strip }) => `<a class="shelf-card" href="${attr(reader.href)}">
+      <span class="strip">${strip.map((b) => cover(b, "mini")).join("")}</span>
       <div class="shelf-kind">читач</div>
-      <h3>${esc(owner)}</h3>
+      <h3>${esc(reader.name)}</h3>
       <p class="muted">Прочитане з оцінками й нотатками</p>
-      <p class="shelf-n">${count(libraryCount, "книжка", "книжки", "книжок")}</p>
-    </a>
+      <p class="shelf-n">${count(n, "книжка", "книжки", "книжок")}</p>
+    </a>`).join("")}
+    ${user ? "" : `<a class="shelf-card join" href="/login">
+      <div class="shelf-kind">ваша полиця</div>
+      <h3>Долучитися</h3>
+      <p class="muted">Вести свої книжки, оцінки й нотатки, підписатися на полиці</p>
+    </a>`}
   </div>
 </section>
 ${libraries.length ? `
@@ -450,7 +455,7 @@ function itemCard(it, inLibrary, user, shelfName) {
 
 // ---- search (/search) ----
 
-function searchPage({ q, hits, user, inLibrary, owner, readerHref }) {
+function searchPage({ q, hits, user, inLibrary }) {
   const body = `
 <section class="head">
   <div>
@@ -459,7 +464,7 @@ function searchPage({ q, hits, user, inLibrary, owner, readerHref }) {
   </div>
 </section>
 ${searchBox(q, true)}
-<div id="live">${searchResults({ q, hits, inLibrary, user, owner, readerHref })}</div>`;
+<div id="live">${searchResults({ q, hits, inLibrary, user })}</div>`;
   return layout({ title: q ? `${q} · Пошук` : "Пошук", body, user, path: "/search", q });
 }
 
@@ -468,9 +473,9 @@ function searchBox(q, autofocus) {
   return `<form class="search-box" action="/search" role="search" data-live="/api/search"><input type="search" name="q" value="${attr(q)}" placeholder="Назва, автор або серія" aria-label="Пошук" autocomplete="off"${autofocus ? " autofocus" : ""}></form>`;
 }
 
-function searchResults({ q, hits, inLibrary, user, owner, readerHref }) {
+function searchResults({ q, hits, inLibrary, user }) {
   if (!q.trim()) return "";
-  return hits.length ? `<section class="rows" id="hits">${hits.map((h) => searchRow(h, inLibrary, user, owner, readerHref)).join("\n")}</section>` : `<p class="empty">Нічого не знайшлося за «${esc(q)}».</p>`;
+  return hits.length ? `<section class="rows" id="hits">${hits.map((h) => searchRow(h, inLibrary, user)).join("\n")}</section>` : `<p class="empty">Нічого не знайшлося за «${esc(q)}».</p>`;
 }
 
 // A search hit: the book and what readers made of it; where to buy it is on the book page.
@@ -489,7 +494,7 @@ function searchRow({ book }) {
 // ---- /author/<slug> ----
 
 // Works first (from Wikidata, in order of writing), each linked to our book of it, then all their books.
-function authorPage({ author, works, hits, user, inLibrary, owner, readerHref }) {
+function authorPage({ author, works, hits, user, inLibrary }) {
   const work = (w) => {
     const title = w.uk || w.en || w.orig;
     const orig = [w.orig, w.en].find((t) => t && t !== title) || "";
@@ -515,16 +520,87 @@ ${works.length ? `
 </section>` : ""}
 <section>
   <h2 class="sec">Книжки ${hits.length ? `<span class="muted small">${hits.length}</span>` : ""}</h2>
-  ${hits.length ? `<div class="rows">${hits.map((h) => searchRow(h, inLibrary, user, owner, readerHref)).join("\n")}</div>` : `<p class="muted">Поки ні в каталогах, ні в читачів.</p>`}
+  ${hits.length ? `<div class="rows">${hits.map((h) => searchRow(h, inLibrary, user)).join("\n")}</div>` : `<p class="muted">Поки ні в каталогах, ні в читачів.</p>`}
 </section>`;
   return layout({ title: author.name, body, user, path: "/author" });
 }
 
-// ---- login / misc ----
+// ---- sign in / sign up / settings ----
+
+const hidden = (name, v) => (v ? `<input type="hidden" name="${name}" value="${attr(v)}">` : "");
+const errorLine = (error) => (error ? `<p class="error">${esc(error)}</p>` : "");
+function authLayout({ title, lead, form, user = null, path = "/login" }) {
+  return layout({ title, user, path, body: `<section class="auth"><h1>${esc(title)}</h1>${lead ? `<p class="muted">${lead}</p>` : ""}${form}</section>` });
+}
+
+// Step one: the e-mail. The same page signs in and signs up; nobody has to know which they are doing.
+function loginPage({ next = "", email = "", error = "" }) {
+  return authLayout({
+    title: "Увійти",
+    lead: "Вкажіть пошту, і ми надішлемо код. Без паролів. Якщо ви тут уперше, акаунт створиться сам.",
+    form: `<form method="post" action="/login" class="form">
+  ${hidden("next", next)}${errorLine(error)}
+  <label>Пошта<input type="email" name="email" value="${attr(email)}" required autofocus autocomplete="email" inputmode="email" placeholder="ви@пошта.ua"></label>
+  <div class="actions"><button class="btn primary">Надіслати код</button></div>
+</form>
+<p class="muted small">Пошту ми використовуємо лише для входу. <a href="/privacy">Приватність</a>.</p>`,
+  });
+}
+
+// Step two: the code from the letter.
+function codePage({ next = "", email, error = "" }) {
+  return authLayout({
+    title: "Код з листа",
+    lead: `Надіслали шість цифр на <b>${esc(email)}</b>. Код діє десять хвилин.`,
+    form: `<form method="post" action="/login/code" class="form">
+  ${hidden("next", next)}${hidden("email", email)}${errorLine(error)}
+  <label>Код<input type="text" name="code" required autofocus inputmode="numeric" autocomplete="one-time-code" pattern="[0-9 ]*" maxlength="7" placeholder="000000" class="code"></label>
+  <div class="actions"><button class="btn primary">Увійти</button><a class="muted small" href="/login${next ? `?next=${encodeURIComponent(next)}` : ""}">Інша пошта або новий код</a></div>
+</form>`,
+  });
+}
+
+// Step three, for a new address: who they are on the site.
+function signupPage({ next = "", ticket, email, name = "", username = "", error = "" }) {
+  return authLayout({
+    title: "Як вас записати",
+    lead: `Пошта <b>${esc(email)}</b> підтверджена. Лишилось ім'я і адреса вашої сторінки.`,
+    form: `<form method="post" action="/login/signup" class="form" data-username>
+  ${hidden("next", next)}${hidden("ticket", ticket)}${errorLine(error)}
+  <label>Ім'я, як показувати іншим<input type="text" name="name" value="${attr(name)}" required autofocus maxlength="60" autocomplete="name" placeholder="Марія Коваль"></label>
+  <label>Адреса сторінки<span class="prefix">chytai.org.ua/@<input type="text" name="username" value="${attr(username)}" maxlength="30" autocomplete="username" spellcheck="false" placeholder="maria.koval"></span><span class="hint">Латинські літери, цифри, крапка чи підкреслення. Порожнє поле: складемо з імені.</span></label>
+  <div class="actions"><button class="btn primary">Готово</button></div>
+</form>`,
+  });
+}
+
+function settingsPage({ user, values, error = "", suggested = "", saved = false }) {
+  const form = `<form method="post" action="/settings" class="form" data-username>
+  ${errorLine(error)}${saved ? `<p class="saved">Збережено.</p>` : ""}
+  <label>Ім'я<input type="text" name="name" value="${attr(values.name || "")}" required maxlength="60"></label>
+  <label>Адреса сторінки<span class="prefix">chytai.org.ua/@<input type="text" name="username" value="${attr(values.username || "")}" required maxlength="30" spellcheck="false" placeholder="${attr(suggested)}"></span><span class="hint">Якщо змінити, стара адреса перестане працювати.</span></label>
+  <label>Пошта для входу<input type="email" name="email" value="${attr(values.email || "")}" ${user.owner ? "" : "required"} autocomplete="email"></label>
+  <div class="actions"><button class="btn primary">Зберегти</button><a class="muted small" href="${attr(user.href)}">Моя сторінка</a></div>
+</form>
+${user.owner ? "" : `<form method="post" action="/settings/delete" class="form danger-zone" onsubmit="return confirm('Видалити акаунт разом з усіма книжками, оцінками й нотатками?')">
+  <h2>Видалити акаунт</h2>
+  <p class="muted small">Зітре всі ваші книжки, оцінки, нотатки й підписки. Назад не повернути.</p>
+  <label>Впишіть ${esc(user.username)}, щоб підтвердити<input type="text" name="confirm" autocomplete="off"></label>
+  <div class="actions"><button class="btn danger">Видалити назавжди</button></div>
+</form>`}`;
+  return authLayout({ title: "Налаштування", lead: "", form, user, path: "/settings" });
+}
+
+function privacyPage({ user }) {
+  return layout({ title: "Приватність", user, body: `<section class="auth prose"><h1>Приватність</h1><p class="muted">Текст буде тут.</p></section>` });
+}
+
+// ---- misc ----
 
 function messagePage({ title, text, user }) {
   return layout({ title, body: `<section class="head"><div><h1>${esc(title)}</h1><p class="muted">${esc(text)}</p></div></section>`, user });
 }
 
 module.exports = {
-  searchPage, searchResults, layout, libraryPage, bookPage, editPage, discoveryPage, shelfPage, messagePage, esc, STATUS, COPY, setTitleLinks, setAuthorLinks, setReaders, authorPage };
+  searchPage, searchResults, layout, libraryPage, bookPage, editPage, discoveryPage, shelfPage, messagePage, esc, STATUS, COPY, setTitleLinks, setAuthorLinks, setReaders, authorPage,
+  loginPage, codePage, signupPage, settingsPage, privacyPage };
