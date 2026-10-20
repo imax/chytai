@@ -595,7 +595,6 @@ const SOURCES = [
     name: "Абук",
     tagline: "Українська аудіокнигарня: класика, сучасна проза, нонфікшн, для дітей",
     url: "https://abuk.com.ua/",
-    draft: true,
     sitemap: "https://abuk.com.ua/sitemap.xml",
     isProduct: (u) => /\/catalog\/books\/\d+$/.test(u),
     fetchUrl: (u) => `https://abuk.com.ua/api/web/books/${u.split("/").pop()}/`,
