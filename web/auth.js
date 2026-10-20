@@ -100,13 +100,36 @@ class Auth {
     this.db.prepare("UPDATE readers SET email = ?, username = ?, name = ? WHERE id = ?").run(next.email, next.username, next.name, id);
     return this.reader(id);
   }
-  // Everything of theirs goes: entries, subscriptions, sessions, the row.
+  // Everything of theirs goes: entries, subscriptions, sessions, follows both ways, the row.
   deleteReader(id) {
     this.db.tx(() => {
-      for (const t of ["entries", "subscriptions", "sessions"]) this.db.prepare(`DELETE FROM ${t} WHERE reader = ?`).run(id);
+      for (const t of ["entries", "subscriptions", "sessions", "follows"]) this.db.prepare(`DELETE FROM ${t} WHERE reader = ?`).run(id);
+      this.db.prepare("DELETE FROM follows WHERE target = ?").run(id);
       this.db.prepare("DELETE FROM readers WHERE id = ?").run(id);
     });
     for (const [h, r] of this.cache) if (r === id) this.cache.delete(h);
+  }
+
+  // ---- following (2026-10-20, from the design): «Стежити» on another reader's page ----
+  // Whom a reader follows is theirs alone: no follower counts, no lists on public pages; it only
+  // picks whose activity they see first.
+
+  follows(readerId, targetId) {
+    return !!(readerId && targetId && this.db.prepare("SELECT 1 FROM follows WHERE reader = ? AND target = ?").get(readerId, targetId));
+  }
+  // Ids of the readers this one follows.
+  following(readerId) {
+    return readerId ? this.db.prepare("SELECT target FROM follows WHERE reader = ? ORDER BY created").all(readerId).map((r) => r.target) : [];
+  }
+  // Follow or unfollow; returns the new state, or null when there is no such reader (or it is oneself).
+  toggleFollow(readerId, targetId) {
+    if (!this.reader(targetId) || targetId === readerId) return null;
+    if (this.follows(readerId, targetId)) {
+      this.db.prepare("DELETE FROM follows WHERE reader = ? AND target = ?").run(readerId, targetId);
+      return false;
+    }
+    this.db.prepare("INSERT INTO follows (reader, target, created) VALUES (?, ?, ?)").run(readerId, targetId, now());
+    return true;
   }
 
   // ---- sessions ----

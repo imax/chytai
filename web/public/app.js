@@ -173,9 +173,9 @@
       $$(".tab", group).forEach((t) => t.classList.toggle("on", t === tab));
       fn(tab.dataset.v);
     });
-  // /readers: the feed's filter (everything, with notes, rated 4,5 and up).
+  // /readers: the feed's filter (everything, the readers one follows, with notes, rated 4,5 and up).
   switches($("[data-feed-filter]"), (v) => {
-    for (const row of $$(".feed-row")) row.classList.toggle("hidden", (v === "notes" && !row.classList.contains("noted")) || (v === "top" && !(Number(row.dataset.rating) >= 4.5)));
+    for (const row of $$(".feed-row")) row.classList.toggle("hidden", (v === "followed" && !row.classList.contains("followed")) || (v === "notes" && !row.classList.contains("noted")) || (v === "top" && !(Number(row.dataset.rating) >= 4.5)));
   });
   // /publishers: by new books or by name.
   const pubs = $(".pubs");

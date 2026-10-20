@@ -264,13 +264,30 @@ app.get("/", (req, res) => {
     .filter((s) => s.items.length)
     .sort((a, b) => b.subscribed - a.subscribed || b.fresh - a.fresh)
     .slice(0, 2);
-  res.send(pages.homePage({ user: req.user, picks: social.picks(), feed: social.feed({ limit: 6 }), recs, showcase, fetched: day(store.shelvesRefreshedAt), libraries: librariesFor(req) }));
+  res.send(pages.homePage({ user: req.user, picks: social.picks(), feed: feedFor(req, 6), recs, showcase, fetched: day(store.shelvesRefreshedAt), libraries: librariesFor(req) }));
 });
+
+// The feed as a signed-in reader sees it: what the readers they follow did comes first, then everyone else.
+const followed = (req) => new Set(auth.following(req.user?.id));
+function feedFor(req, limit) {
+  const mine = followed(req);
+  const first = mine.size ? social.feed({ limit, readers: mine }) : [];
+  if (first.length >= limit) return first;
+  const seen = new Set(first.map((x) => `${x.reader.id}:${x.id}`));
+  return [...first, ...social.feed({ limit: limit + first.length }).filter((x) => !seen.has(`${x.reader.id}:${x.id}`))].slice(0, limit);
+}
 
 app.get("/readers", (req, res) => {
   const readers = readerList();
   const all = social.all();
-  res.send(pages.readersPage({ user: req.user, feed: social.feed({ limit: 40 }), readers, totals: { readers: readers.length, books: readers.reduce((s, r) => s + r.count, 0), notes: all.filter((x) => x.entry.note).length } }));
+  res.send(pages.readersPage({ user: req.user, feed: social.feed({ limit: 40 }), readers, followed: followed(req), totals: { readers: readers.length, books: readers.reduce((s, r) => s + r.count, 0), notes: all.filter((x) => x.entry.note).length } }));
+});
+
+// «Стежити» / «Стежу» on a reader's page: follow or unfollow them, then back to where it was pressed.
+app.post("/api/follow/:username", signed, (req, res) => {
+  const target = auth.byUsername(req.params.username);
+  if (!target || auth.toggleFollow(req.user.id, target.id) === null) return res.status(404).send("Немає такого читача");
+  res.redirect(req.get("referer") || `/@${target.username}`);
 });
 
 function libraryRows(reader) {
@@ -296,7 +313,7 @@ app.get("/@:username", (req, res) => {
     const recs = social.alsoLiked(fives, { limit: 4, skip: new Set(rows.map((r) => r.id)) });
     return res.send(pages.libraryPage({ rows, user: req.user, reader: req.user, own: true, recs }));
   }
-  res.send(pages.libraryPage({ rows, user: req.user, reader, mineIds: req.user && req.user.id !== reader.id ? new Set(Object.keys(store.entriesOf(req.user.id))) : null }));
+  res.send(pages.libraryPage({ rows, user: req.user, reader, mineIds: req.user && req.user.id !== reader.id ? new Set(Object.keys(store.entriesOf(req.user.id))) : null, following: auth.follows(req.user?.id, reader.id) }));
 });
 // The owner's page before usernames (/reader/max) moved to /@maxua.
 app.get(OLD_READER, (req, res) => res.redirect(301, pub(auth.reader(OWNER_ID)).href));

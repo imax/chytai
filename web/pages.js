@@ -204,11 +204,11 @@ function when(e) {
 const did = (e) => (e.rating != null ? `оцінка ${stars(e.rating, { num: false })}` : esc(VERB[e.status] || ""));
 
 // One line of the activity feed. `wide` is the /readers layout (who first, then the book).
-function feedRow({ reader, book, entry: e }, { wide = false } = {}) {
+function feedRow({ reader, book, entry: e }, { wide = false, followed = null } = {}) {
   const t = when(e);
   const who = `<span class="who"><a href="${attr(reader.href)}#${attr(book.id)}"><b>${esc(reader.name)}</b></a> ${did(e)}${t ? ` · ${esc(t)}` : ""}</span>`;
   const title = `<a class="title" href="${attr(book.href)}">${esc(book.title)}</a>`;
-  return `<article class="feed-row${wide ? " wide" : ""}${e.note ? " noted" : ""}" data-rating="${e.rating ?? ""}">
+  return `<article class="feed-row${wide ? " wide" : ""}${e.note ? " noted" : ""}${followed?.has(reader.id) ? " followed" : ""}" data-rating="${e.rating ?? ""}">
   <a class="cover-link" href="${attr(book.href)}">${cover(book, wide ? "feed" : "xs")}</a>
   <div>${wide ? `${who}${title}${book.author ? `<span class="by">${esc(byline(book.author))}</span>` : ""}` : `${title}${who}`}${e.note ? `<p class="note">${noteOf(e, book.id)}</p>` : ""}</div>
 </article>`;
@@ -446,7 +446,7 @@ function entryForm(book, entry) {
 // The same list twice: /me is the signed-in reader's own shelf with «змінити» on every row (the only
 // place where status, rating and notes are edited); /@<username> is that reader's public shelf, where a
 // signed-in visitor sees what they share and can want any book in one tap.
-function libraryPage({ rows, user, reader, own = false, mineIds = null, recs = [] }) {
+function libraryPage({ rows, user, reader, own = false, mineIds = null, recs = [], following = false }) {
   const year = new Date().getFullYear();
   const read = rows.filter((r) => r.status === "read").length;
   const thisYear = rows.filter((r) => r.status === "read" && r.year === year);
@@ -476,7 +476,7 @@ function libraryPage({ rows, user, reader, own = false, mineIds = null, recs = [
     .join("\n");
   const wants = own ? [] : rows.filter((r) => r.status === "want").slice(0, 3);
   const body = `
-${pageHead({ crumbs: own ? "" : `<a href="/readers">Читачі</a> / ${esc(reader.name)}`, kicker: own ? "Моя полиця" : "Полиця читача", title: esc(reader.name), sub, action: own ? `<button class="btn primary" data-open="add">+ Додати книжку</button>` : "" })}
+${pageHead({ crumbs: own ? "" : `<a href="/readers">Читачі</a> / ${esc(reader.name)}`, kicker: own ? "Моя полиця" : "Полиця читача", title: esc(reader.name), sub, action: own ? `<button class="btn primary" data-open="add">+ Додати книжку</button>` : user?.id === reader.id ? "" : followButton(reader, following, user) })}
 <div class="split">
   <div>
     <div class="tabs-bar">
@@ -509,6 +509,13 @@ ${own ? addDialog() : ""}`;
   return layout({ title: own ? "Моя полиця" : reader.name, body, user, path: own ? "/me" : "/@", description: own ? "" : `Книжки, які читає ${reader.name}: оцінки й нотатки.` });
 }
 
+// «Стежити» on another reader's page (the design's secondary button); pressed, it reads «✓ Стежу».
+// Whom one follows is private: it only puts their activity first in the feed.
+function followButton(reader, on, user) {
+  if (!user) return `<a class="btn" href="/login?next=${attr(encodeURIComponent(reader.href))}">Стежити</a>`;
+  return `<form method="post" action="/api/follow/${attr(reader.username)}" class="inline"><button class="btn${on ? " on" : ""}" title="${on ? "Більше не стежити" : "Бачити книжки цього читача першими у стрічці"}">${on ? "✓ Стежу" : "Стежити"}</button></form>`;
+}
+
 function yearHead(year, rows) {
   const n = rows.filter((r) => (r.year ?? null) === (year ?? null)).length;
   return `<h2 class="year" data-year="${year ?? ""}">${year || "Без дати"} <span>${books(n)}</span></h2>`;
@@ -533,18 +540,20 @@ function addDialog() {
 
 // ---- readers (/readers) ----
 
-function readersPage({ user, feed, readers, totals }) {
+function readersPage({ user, feed, readers, totals, followed = new Set() }) {
+  // A reader who follows someone gets a fourth filter: only those readers.
+  const tabs = [["", "усе"], ...(followed.size ? [["followed", "за ким стежу"]] : []), ["notes", "з нотатками"], ["top", "оцінки 4,5+"]];
   const body = `
 ${pageHead({ kicker: "Спільнота", title: "Що читають інші", sub: `${count(totals.readers, "читач", "читачі", "читачів")} · ${books(totals.books)} на полицях · ${count(totals.notes, "нотатка", "нотатки", "нотаток")}`, action: user ? "" : `<a class="btn primary" href="/login">Завести полицю</a>` })}
 <div class="split wide-aside">
   <section>
-    ${label("Стрічка", `<span class="tabs" data-feed-filter><button type="button" class="tab on" data-v="">усе</button><button type="button" class="tab" data-v="notes">з нотатками</button><button type="button" class="tab" data-v="top">оцінки 4,5+</button></span>`)}
-    ${feedList(feed, { wide: true })}
+    ${label("Стрічка", `<span class="tabs" data-feed-filter>${tabs.map(([v, t]) => `<button type="button" class="tab${v ? "" : " on"}" data-v="${v}">${t}</button>`).join("")}</span>`)}
+    ${feedList(feed, { wide: true, followed })}
   </section>
   <aside>
     ${label("Читачі")}
     <div class="people">${readers
-      .map((r) => `<div class="person"><p class="person-head"><a href="${attr(r.reader.href)}">${esc(r.reader.name)}</a>${r.thisYear ? `<span>${r.thisYear} цього року</span>` : ""}</p><p class="sub">${books(r.count)}, ${count(r.read, "прочитана", "прочитані", "прочитаних")}</p>${r.note ? `<p class="note">${r.note}</p>` : ""}</div>`)
+      .map((r) => `<div class="person"><p class="person-head"><a href="${attr(r.reader.href)}">${esc(r.reader.name)}</a>${followed.has(r.reader.id) ? `<span>стежу</span>` : r.thisYear ? `<span>${r.thisYear} цього року</span>` : ""}</p><p class="sub">${books(r.count)}, ${count(r.read, "прочитана", "прочитані", "прочитаних")}</p>${r.note ? `<p class="note">${r.note}</p>` : ""}</div>`)
       .join("")}</div>
     <p class="small muted">Полиці відкриті для всіх.</p>
   </aside>
@@ -782,14 +791,14 @@ function privacyPage({ user }) {
 <ul>
 <li><strong>Пошту.</strong> Тільки щоб надіслати код для входу. Ми не робимо розсилок і нікому її не передаємо. Іншим читачам вашої пошти не видно.</li>
 <li><strong>Ім’я та нікнейм</strong>, які ви самі вказали. Нікнейм — це адреса вашої полиці: chytai.org.ua/@нікнейм.</li>
-<li><strong>Вашу полицю:</strong> книжки, статуси («Хочу прочитати», «Читаю», «Прочитано»), оцінки, рік прочитання, нотатки, у якому вигляді вона у вас є (папір, e-book), а також на які полиці ви підписані.</li>
+<li><strong>Вашу полицю:</strong> книжки, статуси («Хочу прочитати», «Читаю», «Прочитано»), оцінки, рік прочитання, нотатки, у якому вигляді вона у вас є (папір, e-book), а також на які полиці ви підписані і за якими читачами стежите.</li>
 <li><strong>Одну кукі для входу</strong> (<code>chytai_web</code>), щоб не просити код щоразу. Вона живе рік або до того, як ви вийдете. У ній лише випадковий ключ, сам ключ у нас не зберігається, тільки його відбиток.</li>
 <li><strong>Коли ви заходили востаннє</strong> — дату, без історії переглядів.</li>
 </ul>
 <p>Код для входу діє 10 хвилин і після використання зникає. Щоб ніхто не засипав чужу пошту кодами, ми годину рахуємо спроби з однієї адреси та IP і потім забуваємо.</p>
 <h2>Що бачать інші</h2>
 <p><strong>Ваша полиця публічна.</strong> Будь-хто може відкрити chytai.org.ua/@нікнейм і побачити ваше ім’я, книжки, оцінки й нотатки. Ваші оцінки й нотатки також з’являються на сторінках книжок і на сторінці «Що читають інші». Так задумано: Chytai — про те, щоб читачі радили книжки одне одному. Тож пишіть у нотатках лише те, чим готові поділитися.</p>
-<p>Пошта не показується нікому.</p>
+<p>Пошта не показується нікому. За ким ви стежите, бачите лише ви: на сторінці читача немає ні кількості, ні списку тих, хто за ним стежить.</p>
 <h2>Хто ще має доступ</h2>
 <p>Ми користуємося кількома сервісами, без яких сайт не працює:</p>
 <ul>
@@ -800,7 +809,7 @@ function privacyPage({ user }) {
 </ul>
 <p>Більше ніхто ваших даних не отримує. Ми нічого не продаємо і не передаємо рекламодавцям.</p>
 <h2>Як усе видалити</h2>
-<p>У <a class="text-link" href="/settings">налаштуваннях</a> є кнопка «Видалити акаунт». Вона одразу стирає вашу пошту, ім’я, полицю, оцінки, нотатки, підписки і виходить з усіх пристроїв. Відновити це вже не можна.</p>
+<p>У <a class="text-link" href="/settings">налаштуваннях</a> є кнопка «Видалити акаунт». Вона одразу стирає вашу пошту, ім’я, полицю, оцінки, нотатки, підписки, стеження і виходить з усіх пристроїв. Відновити це вже не можна.</p>
 <p>З резервних копій ваші дані зникнуть самі, коли старі копії видаляться (до 90 днів). Якщо хочете швидше — напишіть нам.</p>
 <p>Там само в налаштуваннях можна змінити ім’я, нікнейм чи пошту.</p>
 <h2>Ваші права</h2>

@@ -1,7 +1,7 @@
 // The web platform's database: one SQLite file on the Fly volume (DATA_DIR/web/chytai.db), through
 // Node's built-in node:sqlite, so there is nothing to install. It holds
 //   - catalog items of every shelf, with the day each was first seen (for «нове»),
-//   - the library: manual books, readers (accounts: e-mail, username, name), their sessions, entries and subscriptions,
+//   - the library: manual books, readers (accounts: e-mail, username, name), their sessions, entries, subscriptions and whom they follow,
 //   - book addresses: a slug, once given to a work, stays with it,
 //   - the search index (FTS5), rebuilt from the works whenever the shelves change.
 // Max (2026-10-19): «база нам знадобиться все одно. Навіть щоб пошук нормально доробити.»
@@ -29,6 +29,7 @@ CREATE TABLE IF NOT EXISTS entries (
   PRIMARY KEY (reader, book)
 );
 CREATE TABLE IF NOT EXISTS subscriptions (reader TEXT NOT NULL, shelf TEXT NOT NULL, PRIMARY KEY (reader, shelf));
+CREATE TABLE IF NOT EXISTS follows (reader TEXT NOT NULL, target TEXT NOT NULL, created TEXT NOT NULL, PRIMARY KEY (reader, target));
 CREATE TABLE IF NOT EXISTS slugs (slug TEXT PRIMARY KEY, id TEXT NOT NULL UNIQUE);
 CREATE TABLE IF NOT EXISTS readers (
   id TEXT PRIMARY KEY, email TEXT UNIQUE, username TEXT NOT NULL UNIQUE, name TEXT NOT NULL,

@@ -42,9 +42,9 @@ class Social {
 
   // The feed: the newest changes first (entries carry `updated` since 2026-10-20), then the imported
   // ones by year and the reader's own order. `books` limits it to a set of works, `notes` to entries with
-  // a note, `min` to ratings from that up.
-  feed({ limit = 6, books = null, notes = false, min = 0 } = {}) {
-    const items = this.all().filter(({ id, entry: e }) => (!books || books.has(id)) && (!notes || e.note) && (!min || (e.rating ?? 0) >= min));
+  // a note, `min` to ratings from that up, `readers` to a set of reader ids (whom one follows).
+  feed({ limit = 6, books = null, notes = false, min = 0, readers = null } = {}) {
+    const items = this.all().filter(({ reader, id, entry: e }) => (!readers || readers.has(reader.id)) && (!books || books.has(id)) && (!notes || e.note) && (!min || (e.rating ?? 0) >= min));
     const at = (e) => e.updated || e.added || "";
     items.sort((a, b) => (at(b.entry) > at(a.entry) ? 1 : at(b.entry) < at(a.entry) ? -1 : 0) || (b.entry.year ?? 0) - (a.entry.year ?? 0) || (a.entry.order ?? 0) - (b.entry.order ?? 0));
     const out = [];
