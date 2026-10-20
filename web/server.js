@@ -74,6 +74,8 @@ function refreshShelves(force = false, only = "") {
     .finally(() => (refreshing = null));
   return refreshing;
 }
+// A refresh that a restart (a deploy) cut short left its progress in partial:<id>: go on with that source.
+for (const src of catalogs.SOURCES) if (JSON.parse(store.db.get(`partial:${src.id}`) || "[]").length) setTimeout(() => refreshShelves(true, src.id), 30000).unref();
 // Ukrainian titles of foreign books (wikidata.js), weekly; the first time a minute after start.
 const refreshUk = () => wikidata.refreshUk(store, { log: console.log }).catch((e) => console.error("wikidata failed:", e));
 // Who is who among the authors (authors.js), weekly, after the Ukrainian titles.
