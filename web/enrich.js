@@ -181,7 +181,8 @@ async function refresh(store, opts = {}) {
   // A pass that a restart cut short (a deploy) left no log line: it runs again.
   if (Date.now() - at < WEEK && store.db.get("enrich:log")) return false;
   store.db.set("enrich:at", String(Date.now()));
-  await enrich(store, opts);
+  const r = await enrich(store, opts);
+  if (r.asked >= (opts.max || 300)) store.db.set("enrich:at", "0"); // more remain: the next six-hour tick goes on
   return true;
 }
 
