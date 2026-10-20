@@ -108,7 +108,7 @@ ${description ? `<meta name="description" content="${attr(description.slice(0, 2
 <main class="${home ? "home" : ""}">
 ${body}
 </main>
-<footer class="foot"><div class="bar"><span class="motto">Chytai.org.ua: читай більше.</span><a href="https://chytai.fly.dev">Читалка</a>${user ? "" : `<a href="/login">Завести полицю</a>`}<a href="/privacy">Приватність</a><a href="mailto:ischenko@gmail.com">Написати нам</a>${user?.owner ? `<a href="/admin">Адмінка</a>` : ""}</div></footer>
+<footer class="foot"><div class="bar"><span class="motto">Chytai.org.ua: читай більше.</span><a href="https://chytai.fly.dev">Читалка</a>${user ? "" : `<a href="/login">Завести полицю</a>`}<a href="/updates">Що нового</a><a href="/privacy">Приватність</a><a href="mailto:ischenko@gmail.com">Написати нам</a>${user?.owner ? `<a href="/admin">Адмінка</a>` : ""}</div></footer>
 <script src="${ASSETS.js}"></script>
 </body>
 </html>`;
@@ -890,6 +890,17 @@ function privacyPage({ user }) {
 </section>` });
 }
 
+// «Що нового»: Max edits web/updates.md (newest day on top); read again when the file changes.
+let updatesCache = { mtime: 0, html: "" };
+function updatesPage({ user }) {
+  const file = path.join(__dirname, "updates.md");
+  const mtime = fs.statSync(file).mtimeMs;
+  if (mtime !== updatesCache.mtime) updatesCache = { mtime, html: marked.parse(fs.readFileSync(file, "utf8").replace(/<!--[\s\S]*?-->/g, "")) };
+  return layout({ title: "Що нового", user, path: "/updates", description: "Що змінилось на Chytai.org.ua і куди він рухається.", body: `<section class="auth prose updates"><h1>Що нового</h1>
+${updatesCache.html}
+</section>` });
+}
+
 // ---- import from elsewhere (/import/goodreads, /import/apple-books) ----
 
 const IMPORT_NAMES = { goodreads: "Goodreads", "apple-books": "Apple Books" };
@@ -1011,6 +1022,6 @@ function messagePage({ title, text, user }) {
 module.exports = {
   welcomePage,
   layout, homePage, bookPage, editPage, libraryPage, readersPage, publishersPage, publisherPage, searchPage, searchResults, authorPage,
-  loginPage, codePage, signupPage, settingsPage, privacyPage, messagePage, digestPage, followMailPage, importPage, importPreviewPage, importDonePage,
+  loginPage, codePage, signupPage, settingsPage, privacyPage, updatesPage, messagePage, digestPage, followMailPage, importPage, importPreviewPage, importDonePage,
   esc, STATUS, COPY, inline, isUk, setTitleLinks, setAuthorLinks, setStats, setReadersWithNote,
 };

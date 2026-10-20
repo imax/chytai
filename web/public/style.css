@@ -507,3 +507,6 @@ dialog .form { margin-top: 18px; }
   .welcome-end .btn { width: 100%; text-align: center; }
 }
 @media (min-width: 761px) { .welcome-end { display: none; } }
+.updates > p:first-of-type { font: 19px/1.45 var(--serif); color: var(--text); margin-top: 16px; }
+.updates a { color: var(--ink); text-decoration: underline; text-decoration-color: var(--under); text-underline-offset: 4px; }
+.updates h2 { font-size: 22px; }

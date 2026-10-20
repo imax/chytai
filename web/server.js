@@ -183,6 +183,7 @@ app.get("/logout", (req, res) => {
 });
 
 app.get("/privacy", (req, res) => res.send(pages.privacyPage({ user: req.user })));
+app.get("/updates", (req, res) => res.send(pages.updatesPage({ user: req.user })));
 
 // ---- settings: name, username, e-mail, deleting the account ----
 
