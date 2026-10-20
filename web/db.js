@@ -46,6 +46,8 @@ function open(dataDir) {
   const db = new DatabaseSync(path.join(dataDir, "chytai.db"));
   db.exec("PRAGMA journal_mode = WAL; PRAGMA synchronous = NORMAL;");
   db.exec(SCHEMA);
+  // When an entry last changed, for the activity feed (added 2026-10-20; older rows have none).
+  if (!db.prepare("PRAGMA table_info(entries)").all().some((c) => c.name === "updated")) db.exec("ALTER TABLE entries ADD COLUMN updated TEXT");
   db.tx = (fn) => {
     db.exec("BEGIN");
     try {

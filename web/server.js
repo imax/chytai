@@ -17,6 +17,7 @@ const catalogs = require("./catalogs");
 const libraries = require("./libraries");
 const wikidata = require("./wikidata");
 const authors = require("./authors");
+const { Social } = require("./social");
 
 const ROOT = path.join(__dirname, "..");
 loadDotEnv(path.join(ROOT, ".env"));
@@ -217,20 +218,49 @@ const readersOf = (id) =>
     .map(({ reader, entry }) => ({ reader: pub(auth.reader(reader)), entry }))
     .filter((r) => r.reader)
     .map(({ reader, entry }) => ({ name: reader.name, href: `${reader.href}#${entry.via ? entry.via.id : store.canonical(id)}`, entry }));
-// Readers with public pages worth a card on the homepage: the fullest libraries first.
-const readerCards = () =>
-  auth
+const visible = (s) => store.visible(s);
+// What readers do with books (social.js): ratings, the feed, «книжка навмання», recommendations.
+const social = new Social(store, (id) => pub(auth.reader(id)));
+pages.setStats((id) => social.stats(id));
+pages.setReadersWithNote((id) => readersOf(id).find((r) => r.entry.note) || null);
+const day = (iso) => ((iso = iso || store.shelvesFetched) ? new Date(iso).toLocaleDateString("uk-UA", { timeZone: "Europe/Kyiv" }) : "");
+// A publisher in the lists: its newest books (the ones marked new first), how many there are and are new.
+function shelfSummary(req, shelf, n) {
+  const items = visible(shelf);
+  const fresh = items.filter((it) => it.isNew);
+  return { shelf, items: [...fresh, ...items.filter((it) => !it.isNew && it.cover)].slice(0, n), total: items.length, fresh: fresh.length, subscribed: store.subscribed(req.user?.id, shelf.id) };
+}
+// Each reader with their shelf in numbers, fullest first.
+function readerList() {
+  const year = new Date().getFullYear();
+  return auth
     .readers()
     .map((r) => ({ reader: pub(r), rows: store.library(r.id) }))
     .filter((c) => c.rows.length)
     .sort((a, b) => b.rows.length - a.rows.length)
-    .slice(0, 8)
-    .map((c) => ({ reader: c.reader, count: c.rows.length, strip: c.rows.filter((r) => r.rating >= 5 && r.book.cover).slice(0, 5).map((r) => r.book) }));
-const visible = (s) => store.visible(s);
-pages.setReaders(readersOf);
+    .map(({ reader, rows }) => {
+      const last = social.feed({ limit: 1, notes: true, books: new Set(rows.map((r) => r.id)) }).find((x) => x.reader.id === reader.id);
+      return { reader, count: rows.length, read: rows.filter((r) => r.status === "read").length, thisYear: rows.filter((r) => r.status === "read" && r.year === year).length, note: last ? pages.inline(last.entry.note) : "" };
+    });
+}
 
 app.get("/", (req, res) => {
-  res.send(pages.discoveryPage({ shelves: shelvesFor(req), subscriptions: store.subscriptions(req.user?.id), user: req.user, readers: readerCards(), inLibrary: inLibraryMap(req), visible, fetched: store.shelvesRefreshedAt ? new Date(store.shelvesRefreshedAt).toLocaleString("uk-UA", { timeZone: "Europe/Kyiv", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" }) : store.shelvesFetched, libraries: libraries.LIBRARIES.filter((l) => req.owner || !l.draft) }));
+  const seeds = social.seeds(req.user?.id);
+  const own = req.user ? new Set(Object.keys(store.entriesOf(req.user.id))) : new Set();
+  const recs = seeds.map((seed) => ({ seed, own: own.has(seed.id), books: social.similar([seed.id], { limit: 6, skip: own }) })).filter((r) => r.books.length);
+  // The two publishers with the most new books, subscriptions first.
+  const showcase = shelvesFor(req)
+    .map((s) => shelfSummary(req, s, 5))
+    .filter((s) => s.items.length)
+    .sort((a, b) => b.subscribed - a.subscribed || b.fresh - a.fresh)
+    .slice(0, 2);
+  res.send(pages.homePage({ user: req.user, picks: social.picks(), feed: social.feed({ limit: 6 }), recs, showcase, fetched: day(store.shelvesRefreshedAt) }));
+});
+
+app.get("/readers", (req, res) => {
+  const readers = readerList();
+  const all = social.all();
+  res.send(pages.readersPage({ user: req.user, feed: social.feed({ limit: 40 }), readers, totals: { readers: readers.length, books: readers.reduce((s, r) => s + r.count, 0), notes: all.filter((x) => x.entry.note).length } }));
 });
 
 function libraryRows(reader) {
@@ -244,13 +274,17 @@ function libraryRows(reader) {
 }
 // /me is your own library; a guest is sent to sign in. /@<username> is any reader's public page.
 app.get("/me", signed, (req, res) => {
-  res.send(pages.libraryPage({ rows: libraryRows(req.user.id), user: req.user, reader: req.user, own: true }));
+  const rows = libraryRows(req.user.id);
+  const fives = rows.filter((r) => r.rating >= 5).slice(0, 5).map((r) => r.id);
+  const recs = social.alsoLiked(fives, { limit: 4, skip: new Set(rows.map((r) => r.id)) });
+  res.send(pages.libraryPage({ rows, user: req.user, reader: req.user, own: true, recs }));
 });
 app.get("/@:username", (req, res) => {
   const reader = pub(auth.byUsername(req.params.username));
   if (!reader) return res.status(404).send(pages.messagePage({ title: "Немає такого читача", text: "", user: req.user }));
   if (reader.username !== req.params.username) return res.redirect(301, reader.href);
-  res.send(pages.libraryPage({ rows: libraryRows(reader.id), user: req.user, reader }));
+  if (req.user?.id === reader.id) return res.redirect("/me");
+  res.send(pages.libraryPage({ rows: libraryRows(reader.id), user: req.user, reader, mineIds: req.user ? new Set(Object.keys(store.entriesOf(req.user.id))) : null }));
 });
 // The owner's page before usernames (/reader/max) moved to /@maxua.
 app.get(OLD_READER, (req, res) => res.redirect(301, pub(auth.reader(OWNER_ID)).href));
@@ -261,21 +295,58 @@ app.get("/me/book/:id", signed, (req, res) => {
   res.send(pages.editPage({ book, entry: store.entry(req.user.id, book.id), user: req.user }));
 });
 
-app.get("/shelf/:id", (req, res) => {
-  const shelf = store.shelf(req.params.id);
-  if (!shelf || (shelf.draft && !req.owner)) return res.status(404).send(pages.messagePage({ title: "Немає такої полиці", text: "", user: req.user }));
-  res.send(pages.shelfPage({ shelf, subscribed: store.subscribed(req.user?.id, shelf.id), user: req.user, inLibrary: inLibraryMap(req), visible }));
+app.get("/publishers", (req, res) => {
+  res.send(pages.publishersPage({ user: req.user, shelves: shelvesFor(req).map((s) => shelfSummary(req, s, 4)).sort((a, b) => b.fresh - a.fresh) }));
 });
+app.get("/publishers/:id", (req, res) => {
+  const shelf = store.shelf(req.params.id);
+  if (!shelf || (shelf.draft && !req.owner)) return res.status(404).send(pages.messagePage({ title: "Немає такого видавництва", text: "", user: req.user }));
+  const items = visible(shelf);
+  const fresh = items.filter((it) => it.isNew).slice(0, 6);
+  const works = new Set(items.map((it) => store.canonical(it.id)));
+  const others = shelvesFor(req).filter((s) => s.id !== shelf.id).map((s) => ({ shelf: s, total: visible(s).length }));
+  res.send(pages.publisherPage({ shelf, subscribed: store.subscribed(req.user?.id, shelf.id), user: req.user, fresh, feed: social.feed({ limit: 6, books: works }), others, visible }));
+});
+// The shelves' address before the 2026-10-20 design.
+app.get("/shelf/:id", (req, res) => res.redirect(301, `/publishers/${encodeURIComponent(req.params.id)}`));
 
 const searchHits = (req, q) => store.search(q, { reader: req.user?.id }).map((h) => ({ ...h, book: bookFor(req, h.book, !!h.entry) })).filter((h) => h.book);
+const normQ = (s) => String(s || "").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+// Everything /search shows: books (a genre's name lists that genre's books by rating), authors, readers,
+// and books like the first hit on the side.
+function searchAll(req, q) {
+  if (!q) return {};
+  const nq = normQ(q);
+  const terms = nq.split(" ").filter(Boolean);
+  const tag = [...new Set(store.library(OWNER_ID).flatMap((r) => r.book.tags || []))].find((t) => t === nq) || "";
+  let hits = searchHits(req, q);
+  if (tag) {
+    const tagged = [...social.liked().values()].filter((x) => (x.book.tags || []).includes(tag)).sort((a, b) => b.avg - a.avg);
+    const seen = new Set(hits.map((h) => h.book.id));
+    hits = [...tagged.filter((x) => !seen.has(x.book.id)).map((x) => ({ book: x.book, entry: store.entry(req.user?.id, x.book.id) })), ...hits].slice(0, 40);
+  }
+  const has = (name) => terms.every((t) => normQ(name).split(" ").some((w) => w.startsWith(t)));
+  const authorsFound = (store.authors?.list || [])
+    .filter((a) => has(a.name) || (a.other && has(a.other)))
+    .slice(0, 6)
+    .map((a) => ({ ...a, books: a.ids.length, readers: new Set(a.ids.flatMap((id) => store.readersOf(id).map((r) => r.reader))).size }));
+  const readersFound = auth
+    .readers()
+    .filter((r) => has(r.name) || r.username.startsWith(nq))
+    .map((r) => ({ reader: pub(r), count: Object.keys(store.entriesOf(r.id)).length }))
+    .filter((r) => r.count)
+    .slice(0, 6);
+  const similar = hits.length ? social.alsoLiked([hits[0].book.id], { limit: 4, skip: new Set(hits.map((h) => h.book.id)) }) : [];
+  return { hits, authors: authorsFound, readers: readersFound, similar, tag };
+}
 app.get("/search", (req, res) => {
   const q = String(req.query.q || "").trim().slice(0, 100);
-  res.send(pages.searchPage({ q, hits: searchHits(req, q), user: req.user, inLibrary: inLibraryMap(req) }));
+  res.send(pages.searchPage({ q, user: req.user, results: searchAll(req, q) }));
 });
 // The same results as an HTML fragment, for search as you type.
 app.get("/api/search", (req, res) => {
   const q = String(req.query.q || "").trim().slice(0, 100);
-  res.set("Cache-Control", "no-store").send(pages.searchResults({ q, hits: searchHits(req, q), user: req.user, inLibrary: inLibraryMap(req) }));
+  res.set("Cache-Control", "no-store").send(pages.searchResults({ q, user: req.user, ...searchAll(req, q) }));
 });
 
 app.get("/book/:id", (req, res) => {
@@ -285,7 +356,7 @@ app.get("/book/:id", (req, res) => {
   if (store.href(id) !== `/book/${encodeURIComponent(req.params.id)}`) return res.redirect(301, store.href(id));
   const book = bookFor(req, store.bookPage(id), !!store.entry(req.user?.id, id));
   if (!book) return res.status(404).send(pages.messagePage({ title: "Немає такої книжки", text: "", user: req.user }));
-  res.send(pages.bookPage({ book, entry: store.sharedEntry(req.user?.id, book.id), user: req.user, shelf: book.shelf && (req.owner || !isDraft(book.shelf)) ? store.shelf(book.shelf) : null, inLibrary: inLibraryMap(req), readers: readersOf(book.id) }));
+  res.send(pages.bookPage({ book, entry: store.sharedEntry(req.user?.id, book.id), user: req.user, shelf: book.shelf && (req.owner || !isDraft(book.shelf)) ? store.shelf(book.shelf) : null, inLibrary: inLibraryMap(req), readers: readersOf(book.id), also: social.alsoLiked([book.id], { limit: 4 }) }));
 });
 
 // An author: their works from Wikidata (linked to our books of them) and every book of theirs we have.
@@ -297,8 +368,16 @@ app.get("/author/:slug", async (req, res) => {
   const hits = author.ids
     .map((id) => ({ book: bookFor(req, store.book(id), !!store.entry(req.user?.id, id)), entry: store.entry(req.user?.id, id) }))
     .filter((h) => h.book)
-    .sort((a, b) => !!b.entry - !!a.entry || shown.has(a.book.id) - shown.has(b.book.id) || a.book.title.localeCompare(b.book.title, "uk"));
-  res.send(pages.authorPage({ author, works, hits, user: req.user, inLibrary: inLibraryMap(req) }));
+    .map((h) => ({ ...h, avg: social.stats(h.book.id).avg }))
+    .sort((a, b) => (b.avg ?? -1) - (a.avg ?? -1) || !!b.entry - !!a.entry || shown.has(a.book.id) - shown.has(b.book.id) || a.book.title.localeCompare(b.book.title, "uk"));
+  // Who reads this author, and what else those readers rated highest.
+  const ids = new Set(hits.map((h) => h.book.id));
+  const who = [...new Set(hits.flatMap((h) => store.readersOf(h.book.id).map((r) => r.reader)))]
+    .map((id) => ({ reader: pub(auth.reader(id)), rows: store.library(id) }))
+    .filter((r) => r.reader)
+    .map(({ reader, rows }) => ({ reader, count: rows.length, read: rows.filter((r) => r.status === "read").length }));
+  const also = social.alsoLiked([...ids], { limit: 4, skip: ids }).filter((b) => !author.ids.includes(b.id));
+  res.send(pages.authorPage({ author, works, hits, user: req.user, readers: who, also }));
 });
 
 // Where the book can be borrowed: libraries with open catalogs (libraries.js), asked when the page loads.

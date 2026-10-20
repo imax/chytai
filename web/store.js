@@ -510,7 +510,7 @@ class Store {
       const links = (b.links || []).filter((l) => !/readeat\.com/i.test(l.url));
       if (links.length !== (b.links || []).length) (b.links = links), this.writeBook(b.id);
     }
-    for (const r of db.prepare("SELECT * FROM entries").all()) this.entriesOf(r.reader)[r.book] = { status: r.status, year: r.year, rating: r.rating, note: r.note, copy: r.copy, order: r.ord, ...(r.added ? { added: r.added } : {}) };
+    for (const r of db.prepare("SELECT * FROM entries").all()) this.entriesOf(r.reader)[r.book] = { status: r.status, year: r.year, rating: r.rating, note: r.note, copy: r.copy, order: r.ord, ...(r.added ? { added: r.added } : {}), ...(r.updated ? { updated: r.updated } : {}) };
     for (const r of db.prepare("SELECT reader, shelf FROM subscriptions").all()) this.subscriptions(r.reader).push(r.shelf);
   }
 
@@ -532,8 +532,8 @@ class Store {
   writeEntry(reader, id, e) {
     if (!e) return this.db.prepare("DELETE FROM entries WHERE reader = ? AND book = ?").run(reader, id);
     this.db
-      .prepare("INSERT INTO entries (reader, book, status, rating, year, note, copy, ord, added) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (reader, book) DO UPDATE SET status = excluded.status, rating = excluded.rating, year = excluded.year, note = excluded.note, copy = excluded.copy, ord = excluded.ord, added = excluded.added")
-      .run(reader, id, e.status || "", e.rating ?? null, e.year ?? null, e.note || "", e.copy || "", e.order ?? null, e.added || null);
+      .prepare("INSERT INTO entries (reader, book, status, rating, year, note, copy, ord, added, updated) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (reader, book) DO UPDATE SET status = excluded.status, rating = excluded.rating, year = excluded.year, note = excluded.note, copy = excluded.copy, ord = excluded.ord, added = excluded.added, updated = excluded.updated")
+      .run(reader, id, e.status || "", e.rating ?? null, e.year ?? null, e.note || "", e.copy || "", e.order ?? null, e.added || null, e.updated || null);
   }
 
   writeBook(id) {
@@ -663,7 +663,7 @@ class Store {
     if (!this.book(id)) return null;
     const entries = this.entriesOf(reader);
     const cur = entries[id] || { status: "", year: null, rating: null, note: "", copy: "", order: Object.keys(entries).length, added: new Date().toISOString().slice(0, 10) };
-    const next = { ...cur, ...patch };
+    const next = { ...cur, ...patch, updated: new Date().toISOString() };
     if (next.status === "read" && !next.year && cur.status !== "read") next.year = new Date().getFullYear();
     if (next.rating === "" || next.rating === undefined) next.rating = cur.rating ?? null;
     entries[id] = next;

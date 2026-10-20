@@ -1,4 +1,5 @@
-// Client side of the web platform: filtering and sorting of the library and shelf lists, dialogs.
+// Client side of the web platform: filtering and sorting of the shelves and catalogs, dialogs, the
+// menu on phones, the switches of the homepage, /readers and /publishers.
 // Everything else is plain forms handled by the server.
 (function () {
   const $ = (s, r = document) => r.querySelector(s);
@@ -14,9 +15,16 @@
     const filters = {}; // chip group -> value
     const years = $$("h2.year", rows);
 
+    // A long shelf shows its first rows and «Показати ще N →»; searching or filtering looks at all of them.
+    const FIRST = rows.classList.contains("grid") ? 24 : 60;
+    const more = $("#more");
+    let limited = !!more && items.length > FIRST + 10;
+    more?.addEventListener("click", () => ((limited = false), apply()));
+
     function apply() {
       const text = (q?.value || "").trim().toLowerCase();
       const g = genre?.value || "";
+      const cut = limited && !text && !g && !Object.values(filters).some(Boolean) && (!sort || sort.value === "order");
       let shown = 0;
       for (const it of items) {
         let ok = true;
@@ -24,13 +32,19 @@
         if (ok && filters.status) {
           const v = filters.status;
           if (v === "paper" || v === "seeking") ok = it.dataset.copy === v;
+          else if (v === "common") ok = it.dataset.common === "1";
           else ok = it.dataset.status === v;
         }
         if (ok && filters.genre) ok = it.dataset.genre.split("|").includes(filters.genre);
         if (ok && filters.avail) ok = it.dataset.avail === filters.avail;
         if (ok && g) ok = it.dataset.tags.split(" ").includes(g);
+        if (ok && cut && shown >= FIRST) ok = false;
         it.classList.toggle("hidden", !ok);
         if (ok) shown++;
+      }
+      if (more) {
+        more.parentElement.classList.toggle("hidden", !cut);
+        $("span", more).textContent = items.length - FIRST;
       }
       // Year headings only make sense in the import order; hide them when sorting or filtering.
       const byOrder = !sort || sort.value === "order";
@@ -63,48 +77,104 @@
     q?.addEventListener("input", apply);
     genre?.addEventListener("change", apply);
     sort?.addEventListener("change", resort);
-    for (const group of $$(".chips[data-filter]")) {
+    for (const group of $$(".tabs[data-filter]")) {
       group.addEventListener("click", (e) => {
-        const chip = e.target.closest(".chip");
-        if (!chip) return;
-        $$(".chip", group).forEach((c) => c.classList.toggle("on", c === chip));
-        filters[group.dataset.filter] = chip.dataset.v;
+        const tab = e.target.closest(".tab");
+        if (!tab) return;
+        $$(".tab", group).forEach((c) => c.classList.toggle("on", c === tab));
+        filters[group.dataset.filter] = tab.dataset.v;
         apply();
       });
     }
-    if (location.hash === "#want") $(".chip[data-v=want]")?.click();
+    if (location.hash === "#want") $(".tab[data-v=want]")?.click();
+    // A link to one row (/@maxua#book) must find it even past the first rows.
+    if (limited && location.hash && items.slice(FIRST).some((it) => it.id === decodeURIComponent(location.hash.slice(1)))) limited = false;
+    apply();
+    if (location.hash) document.getElementById(decodeURIComponent(location.hash.slice(1)))?.scrollIntoView();
   }
 
-  // Book page: which libraries hold the book (asked after the page loads; the lookup can take a few seconds).
-  const libs = $(".libs[data-src]");
-  if (libs) {
+  // Book page: which libraries hold the book, added to «Де взяти» (asked after the page loads; the lookup
+  // can take a few seconds).
+  const where = $(".where[data-src]");
+  if (where) {
     const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
-    fetch(libs.dataset.src)
+    fetch(where.dataset.src)
       .then((r) => r.json())
       .then((list) => {
         if (!list.length) return;
-        // One line per library: where a copy is on the shelf now, or that all are out.
-        $(".libs-list", libs).innerHTML = list
-          .map((l) => {
-            const by = new Map();
-            for (const b of l.records.flatMap((r) => r.branches)) {
-              const x = by.get(b.branch) || { total: 0, onShelf: 0 };
-              x.total += b.total;
-              x.onShelf += b.onShelf;
-              by.set(b.branch, x);
-            }
-            const on = [...by].filter(([, x]) => x.onShelf).map(([n]) => n);
-            const where = on.length ? `<span class="ok">є на полиці:</span> ${esc(on.join(", "))}` : `<span class="muted">усі примірники видані</span>`;
-            return `<p class="lib"><a href="${esc(l.records[0].url)}" target="_blank" rel="noopener"><b>${esc(l.name)}</b> ↗</a> <span class="muted small">${esc(l.city)}</span><br>${where}</p>`;
-          })
-          .join("");
-        libs.classList.remove("hidden");
+        // One item per library: where a copy is on the shelf now, or that all are out.
+        where.insertAdjacentHTML(
+          "beforeend",
+          list
+            .map((l) => {
+              const by = new Map();
+              for (const b of l.records.flatMap((r) => r.branches)) {
+                const x = by.get(b.branch) || { total: 0, onShelf: 0 };
+                x.total += b.total;
+                x.onShelf += b.onShelf;
+                by.set(b.branch, x);
+              }
+              const on = [...by].filter(([, x]) => x.onShelf).map(([n]) => n);
+              const state = on.length ? `<span class="ok">є на полиці</span> <span class="muted">${esc(on.join(", "))}</span>` : `<span class="muted">усі примірники видані</span>`;
+              return `<span class="where-item">${state} · <a href="${esc(l.records[0].url)}" target="_blank" rel="noopener">${esc(l.name)}</a><span class="muted">, ${esc(l.city)}</span></span>`;
+            })
+            .join("")
+        );
+        where.classList.remove("hidden");
       })
       .catch(() => {});
   }
 
-  for (const b of $$("[data-open]")) b.addEventListener("click", () => $("#" + b.dataset.open)?.showModal());
-  for (const b of $$("[data-close]")) b.addEventListener("click", () => b.closest("dialog")?.close());
+  // Dialogs: delegated, since search results (with «Додати книжку») arrive after the page loads.
+  document.addEventListener("click", (e) => {
+    const open = e.target.closest("[data-open]");
+    if (open) $("#" + open.dataset.open)?.showModal();
+    const close = e.target.closest("[data-close]");
+    if (close) close.closest("dialog")?.close();
+  });
+
+  // Phones: «Меню» opens the navigation and the search.
+  const top = $("header.top");
+  $(".menu", top)?.addEventListener("click", (e) => {
+    const open = top.classList.toggle("open");
+    e.currentTarget.setAttribute("aria-expanded", open);
+    if (open) $(".find input", top)?.focus();
+  });
+
+  // Homepage: «Ще одну →» shows the next random book, round and round.
+  const picks = $$(".pick");
+  document.addEventListener("click", (e) => {
+    if (!e.target.closest("[data-next-pick]")) return;
+    const i = picks.findIndex((p) => !p.classList.contains("hidden"));
+    picks[i].classList.add("hidden");
+    picks[(i + 1) % picks.length].classList.remove("hidden");
+  });
+  // Homepage: the seed switch above the recommendations (each seed has its own block).
+  const recs = $$(".rec[data-seed]");
+  for (const b of $$(".rec .tab[data-seed]"))
+    b.addEventListener("click", () => {
+      for (const r of recs) r.classList.toggle("hidden", r.dataset.seed !== b.dataset.seed);
+      for (const t of $$(".rec .tab[data-seed]")) t.classList.toggle("on", t.dataset.seed === b.dataset.seed);
+    });
+
+  // A text switch that marks itself on and calls back with its value.
+  const switches = (group, fn) =>
+    group?.addEventListener("click", (e) => {
+      const tab = e.target.closest(".tab");
+      if (!tab) return;
+      $$(".tab", group).forEach((t) => t.classList.toggle("on", t === tab));
+      fn(tab.dataset.v);
+    });
+  // /readers: the feed's filter (everything, with notes, rated 4,5 and up).
+  switches($("[data-feed-filter]"), (v) => {
+    for (const row of $$(".feed-row")) row.classList.toggle("hidden", (v === "notes" && !row.classList.contains("noted")) || (v === "top" && !(Number(row.dataset.rating) >= 4.5)));
+  });
+  // /publishers: by new books or by name.
+  const pubs = $(".pubs");
+  switches($("[data-sort-pubs]"), (v) => {
+    const rows = $$(".pub", pubs).sort((a, b) => (v === "name" ? a.dataset.name.localeCompare(b.dataset.name, "uk") : b.dataset.fresh - a.dataset.fresh));
+    for (const r of rows) pubs.appendChild(r);
+  });
 
   // Search as you type: results replace #live (and hide #browse on the homepage) after a short pause;
   // the address keeps ?q= so going back returns to the same results. The header box on other pages does
