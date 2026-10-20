@@ -324,14 +324,25 @@ app.get("/", (req, res) => {
   res.send(pages.homePage({ user: req.user, picks: social.picks(), feed: feedFor(req, 6), recs, showcase, fetched: day(store.shelvesRefreshedAt), libraries: librariesFor(req) }));
 });
 
-// The feed as a signed-in reader sees it: what the readers they follow did comes first, then everyone else.
+// «Зараз читають» on the homepage: the readers one follows first, then everyone else, at most two rows
+// a reader, so one person adding a dozen books doesn't fill it and the newest of others still shows
+// (Max, 2026-10-20: the homepage showed a run of one reader while the feed had someone newer). Those
+// followed take at most half of it.
 const followed = (req) => new Set(auth.following(req.user?.id));
 function feedFor(req, limit) {
   const mine = followed(req);
-  const first = mine.size ? social.feed({ limit, readers: mine }) : [];
-  if (first.length >= limit) return first;
+  const first = mine.size ? social.feed({ limit: Math.ceil(limit / 2), readers: mine, perReader: 2 }) : [];
+  const per = new Map();
+  for (const x of first) per.set(x.reader.id, (per.get(x.reader.id) || 0) + 1);
   const seen = new Set(first.map((x) => `${x.reader.id}:${x.id}`));
-  return [...first, ...social.feed({ limit: limit + first.length }).filter((x) => !seen.has(`${x.reader.id}:${x.id}`))].slice(0, limit);
+  const out = [...first];
+  for (const x of social.feed({ limit: limit * 4, perReader: 2 })) {
+    if (out.length >= limit) break;
+    if (seen.has(`${x.reader.id}:${x.id}`) || (per.get(x.reader.id) || 0) >= 2) continue;
+    out.push(x);
+    per.set(x.reader.id, (per.get(x.reader.id) || 0) + 1);
+  }
+  return out;
 }
 
 app.get("/readers", (req, res) => res.redirect(301, "/community"));
