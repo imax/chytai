@@ -476,8 +476,18 @@ class Store {
     const pageKey = (u) => String(u || "").replace(/^https?:\/\/(www\.)?/, "").replace(/[?#].*$/, "").replace(/\/+$/, "");
     const words = (t) => norm(String(t || "").split(/[:.(]/)[0]).split(" ").filter((w) => w.length >= 3).sort().join(" ");
     const names = (a) => norm(a).split(" ").filter((w) => w.length >= 3);
+    // Books.md often adds the author to the title («Моя війна Залужний», «Genome, Matt Ridley»): the
+    // title without the author's names at its end counts too.
+    const bare = (t, author) => {
+      const ws = norm(t).split(" ");
+      const a = new Set(norm(author).split(" ").filter((w) => w.length >= 3));
+      while (ws.length > 1 && a.has(ws[ws.length - 1])) ws.pop();
+      return ws.join(" ");
+    };
     for (const b of this.seedBooks) {
+      const own = this.lib.books[b.id] || b; // an edited copy keeps its old title
       for (const t of [b.title, b.altTitle]) if (norm(t).length >= 6) byTitle.set(norm(t), b.id);
+      for (const t of [own.title, b.title]) if (norm(bare(t, b.author)).length >= 6 && !byTitle.has(bare(t, b.author))) byTitle.set(bare(t, b.author), b.id);
       for (const l of b.links || []) if (pageKey(l.url).includes("/")) byUrl.set(pageKey(l.url), b.id);
       for (const t of [b.title, b.altTitle]) if (words(t).includes(" ")) (byWords.get(words(t)) || byWords.set(words(t), []).get(words(t))).push(b);
     }
