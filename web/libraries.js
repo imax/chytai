@@ -15,7 +15,7 @@
 const LIBRARIES = [
   { id: "cherkasy", name: "Черкаські міські бібліотеки", city: "Черкаси", base: "https://opac.lib.cherkasy.ua" },
   { id: "uzhhorod", name: "Ужгородська публічна бібліотека", city: "Ужгород", base: "https://lib.itc.gov.ua" },
-  { id: "kyiv", kind: "aleph", name: "Бібліотеки Києва", city: "Київ", base: "http://alpha.lukl.kyiv.ua", home: "http://alpha.lukl.kyiv.ua/F", v: 2 },
+  { id: "kyiv", kind: "aleph", name: "Бібліотека ім. Лесі Українки", city: "Київ", base: "http://alpha.lukl.kyiv.ua", home: "http://alpha.lukl.kyiv.ua/F", v: 3 },
 ];
 
 const HEADERS = { "User-Agent": "Mozilla/5.0 (Chytai library lookup; chytai.org.ua)" };
@@ -146,7 +146,7 @@ async function lookupAleph(lib, book, fetchImpl) {
     for (const it of items) {
       // The central library's lending desk and its stacks (a copy there is ordered to the desk).
       const central = it.sub === "Loan Dep." || it.sub === "Stock usage Dep.";
-      const branch = central ? "Бібліотека ім. Лесі Українки" : alephNames.get(it.code);
+      const branch = central ? "центральна (Кониського, 83/85)" : alephNames.get(it.code);
       if (!branch) continue; // «Moved collection» and the like
       const b = by.get(branch) || { branch, total: 0, onShelf: 0, unknown: 0 };
       b.total++;
