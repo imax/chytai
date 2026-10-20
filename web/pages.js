@@ -108,7 +108,7 @@ ${description ? `<meta name="description" content="${attr(description.slice(0, 2
 <main class="${home ? "home" : ""}">
 ${body}
 </main>
-<footer class="foot"><div class="bar"><span class="motto">Chytai.org.ua: читай більше.</span><a href="https://chytai.fly.dev">Читалка</a>${user ? "" : `<a href="/login">Завести полицю</a>`}<a href="/updates">Що нового</a><a href="/privacy">Приватність</a><a href="mailto:ischenko@gmail.com">Написати нам</a>${user?.owner ? `<a href="/admin">Адмінка</a>` : ""}</div></footer>
+<footer class="foot"><div class="bar"><span class="motto">Chytai.org.ua: читай більше.</span><a href="https://chytai.fly.dev">Читалка</a><a href="/updates">Що нового</a><a href="/privacy">Приватність</a><a href="mailto:ischenko@gmail.com">Написати нам</a>${user?.owner ? `<a href="/admin">Адмінка</a>` : ""}</div></footer>
 <script src="${ASSETS.js}"></script>
 </body>
 </html>`;
