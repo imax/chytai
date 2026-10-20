@@ -789,6 +789,7 @@ function settingsPage({ user, values, error = "", suggested = "", saved = false 
   <label>Адреса сторінки<span class="prefix">chytai.org.ua/@<input type="text" name="username" value="${attr(values.username || "")}" required maxlength="30" spellcheck="false" placeholder="${attr(suggested)}"></span><span class="hint">Якщо змінити, стара адреса перестане працювати.</span></label>
   <label>Пошта для входу<input type="email" name="email" value="${attr(values.email || "")}" ${user.owner ? "" : "required"} autocomplete="email"></label>
   <label class="check"><span><input type="checkbox" name="digest" value="1"${values.digest ? " checked" : ""}> Щотижневий лист</span><span class="hint">У п'ятницю вранці: що читають ті, за ким ви стежите, новинки видавництв, на які ви підписані, і де з'явились книжки з «Хочу прочитати». Приходить лише коли є що розповісти.</span></label>
+  <label class="check"><span><input type="checkbox" name="follow_mail" value="1"${values.followMail ? " checked" : ""}> Лист, коли хтось починає стежити за мною</span><span class="hint">Один короткий лист з іменем читача, перший раз.</span></label>
   <div class="actions"><button class="btn primary">Зберегти</button><a class="text-link small" href="${attr(user.href)}">Моя сторінка</a><span class="grow"></span><a class="text-link small" href="/logout">Вийти</a></div>
 </form>
 <section class="form import-box">
@@ -825,7 +826,7 @@ function privacyPage({ user }) {
 <p>Код для входу діє 10 хвилин і після використання зникає. Щоб ніхто не засипав чужу пошту кодами, ми годину рахуємо спроби з однієї адреси та IP і потім забуваємо.</p>
 <h2>Що бачать інші</h2>
 <p><strong>Ваша полиця публічна.</strong> Будь-хто може відкрити chytai.org.ua/@нікнейм і побачити ваше ім’я, книжки, оцінки й нотатки. Ваші оцінки й нотатки також з’являються на сторінках книжок і на сторінці «Що читають інші». Так задумано: Chytai — про те, щоб читачі радили книжки одне одному. Тож пишіть у нотатках лише те, чим готові поділитися.</p>
-<p>Пошта не показується нікому. За ким ви стежите, бачите лише ви: на сторінці читача немає ні кількості, ні списку тих, хто за ним стежить.</p>
+<p>Пошта не показується нікому. На сторінці читача немає ні кількості, ні списку тих, хто за ним стежить. Але коли ви починаєте стежити за кимось, цей читач отримує один лист з вашим ім’ям і посиланням на вашу полицю (якщо не вимкнув такі листи в налаштуваннях). Тож сам читач знає, що ви за ним стежите; більше ніхто.</p>
 <h2>Хто ще має доступ</h2>
 <p>Ми користуємося кількома сервісами, без яких сайт не працює:</p>
 <ul>
@@ -948,6 +949,13 @@ ${result.created.length ? `<p class="muted small" style="margin-top:24px">Нов
 // ---- misc ----
 
 // After «Відписатися» in the weekly letter: done, with a way back.
+function followMailPage({ on, action, user }) {
+  const title = on ? "Листи знову приходять" : "Листів більше не буде";
+  return layout({ title, user, body: `<section class="auth prose"><h1>${title}</h1>
+<p>${on ? "Коли хтось почне стежити за вашою полицею, ви знову отримаєте лист." : "Листів про нових читачів більше не буде. Стежити за вами, як і раніше, можна."}</p>
+<form method="post" action="${attr(action)}"><input type="hidden" name="page" value="1"><button class="btn">${on ? "Вимкнути" : "Увімкнути знову"}</button></form>
+</section>` });
+}
 function digestPage({ on, action, user }) {
   const title = on ? "Листи знову приходять" : "Листів більше не буде";
   return layout({ title, user, body: `<section class="auth prose"><h1>${title}</h1>
@@ -962,6 +970,6 @@ function messagePage({ title, text, user }) {
 
 module.exports = {
   layout, homePage, bookPage, editPage, libraryPage, readersPage, publishersPage, publisherPage, searchPage, searchResults, authorPage,
-  loginPage, codePage, signupPage, settingsPage, privacyPage, messagePage, digestPage, importPage, importPreviewPage, importDonePage,
+  loginPage, codePage, signupPage, settingsPage, privacyPage, messagePage, digestPage, followMailPage, importPage, importPreviewPage, importDonePage,
   esc, STATUS, COPY, inline, isUk, setTitleLinks, setAuthorLinks, setStats, setReadersWithNote,
 };

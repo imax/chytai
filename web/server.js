@@ -180,7 +180,7 @@ app.get("/privacy", (req, res) => res.send(pages.privacyPage({ user: req.user })
 // ---- settings: name, username, e-mail, deleting the account ----
 
 app.get("/settings", signed, (req, res) => {
-  res.send(pages.settingsPage({ user: req.user, values: { ...req.user, digest: digest.enabled(req.user.id) }, suggested: auth.suggestUsername(req.user.name, slugify), saved: !!req.query.saved }));
+  res.send(pages.settingsPage({ user: req.user, values: { ...req.user, digest: digest.enabled(req.user.id), followMail: auth.followMailEnabled(req.user.id) }, suggested: auth.suggestUsername(req.user.name, slugify), saved: !!req.query.saved }));
 });
 app.post("/settings", signed, (req, res) => {
   const name = auth.checkName(req.body.name);
@@ -188,10 +188,11 @@ app.post("/settings", signed, (req, res) => {
   const email = req.body.email ? auth.checkEmail(req.body.email) : { email: req.user.email };
   const taken = email.email && auth.byEmail(email.email) && auth.byEmail(email.email).id !== req.user.id;
   const error = name.error || username.error || email.error || (taken ? "Ця пошта вже зайнята іншим читачем." : "");
-  const values = { ...req.user, name: req.body.name, username: req.body.username, email: req.body.email, digest: !!req.body.digest };
+  const values = { ...req.user, name: req.body.name, username: req.body.username, email: req.body.email, digest: !!req.body.digest, followMail: !!req.body.follow_mail };
   if (error) return res.status(400).send(pages.settingsPage({ user: req.user, values, error }));
   auth.updateReader(req.user.id, { name: name.name, username: username.username, email: email.email || null });
   digest.setEnabled(req.user.id, !!req.body.digest);
+  auth.setFollowMail(req.user.id, !!req.body.follow_mail);
   res.redirect("/settings?saved=1");
 });
 app.post("/settings/delete", signed, (req, res) => {
@@ -339,9 +340,38 @@ app.get("/readers", (req, res) => {
 // «Стежити» / «Стежу» on a reader's page: follow or unfollow them, then back to where it was pressed.
 app.post("/api/follow/:username", signed, (req, res) => {
   const target = auth.byUsername(req.params.username);
-  if (!target || auth.toggleFollow(req.user.id, target.id) === null) return res.status(404).send("Немає такого читача");
+  const on = target && auth.toggleFollow(req.user.id, target.id);
+  if (on === null || !target) return res.status(404).send("Немає такого читача");
+  if (on && auth.followMailDue(req.user.id, target.id)) followMail(req.user, target).catch((e) => console.log(`follow mail to @${target.username} failed: ${e.message}`));
   res.redirect(req.get("referer") || `/@${target.username}`);
 });
+
+// «X тепер стежить за вашою полицею» (Max, 2026-10-20): a short plain letter the first time someone
+// follows a reader, with the follower's page and one click to stop such letters (the digest's signed link).
+async function followMail(follower, target) {
+  const off = `${SITE}/follow-mail/unsubscribe/${encodeURIComponent(target.id)}/${digest.token(target.id)}`;
+  const subject = `${follower.name} тепер стежить за вашою полицею`;
+  const text = [
+    `${follower.name} (chytai.org.ua/@${follower.username}) тепер стежить за вашою полицею на Chytai: ваші оцінки й нотатки будуть у них першими в стрічці.`,
+    ``,
+    `Подивитись, що читає ${follower.name}: ${SITE}${follower.href}`,
+    ``,
+    `Це єдиний лист про цього читача. Не хочете таких листів: ${off}`,
+    `Інші налаштування: ${SITE}/settings`,
+  ].join("\n");
+  await auth.send(target.email, subject, text, { headers: { "List-Unsubscribe": `<${off}>`, "List-Unsubscribe-Post": "List-Unsubscribe=One-Click" } });
+  console.log(`follow mail: @${follower.username} → @${target.username}`);
+}
+const followMailSwitch = (req, res, on) => {
+  const reader = auth.reader(req.params.id);
+  if (!reader || !digest.check(reader.id, req.params.token)) return res.status(404).send(pages.messagePage({ title: "Посилання не підходить", text: "Вимкнути листи можна в налаштуваннях.", user: req.user }));
+  auth.setFollowMail(reader.id, on);
+  if (req.method === "POST" && !req.body.page) return res.type("text").send("OK");
+  res.send(pages.followMailPage({ on, action: `/follow-mail/${on ? "unsubscribe" : "resubscribe"}/${encodeURIComponent(reader.id)}/${req.params.token}`, user: req.user }));
+};
+app.get("/follow-mail/unsubscribe/:id/:token", (req, res) => followMailSwitch(req, res, false));
+app.post("/follow-mail/unsubscribe/:id/:token", (req, res) => followMailSwitch(req, res, false));
+app.post("/follow-mail/resubscribe/:id/:token", (req, res) => followMailSwitch(req, res, true));
 
 function libraryRows(reader) {
   const rows = store.library(reader);

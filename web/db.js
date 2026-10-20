@@ -30,6 +30,7 @@ CREATE TABLE IF NOT EXISTS entries (
 );
 CREATE TABLE IF NOT EXISTS subscriptions (reader TEXT NOT NULL, shelf TEXT NOT NULL, PRIMARY KEY (reader, shelf));
 CREATE TABLE IF NOT EXISTS follows (reader TEXT NOT NULL, target TEXT NOT NULL, created TEXT NOT NULL, PRIMARY KEY (reader, target));
+CREATE TABLE IF NOT EXISTS follow_mails (reader TEXT NOT NULL, target TEXT NOT NULL, sent TEXT NOT NULL, PRIMARY KEY (reader, target));
 CREATE TABLE IF NOT EXISTS slugs (slug TEXT PRIMARY KEY, id TEXT NOT NULL UNIQUE);
 CREATE TABLE IF NOT EXISTS readers (
   id TEXT PRIMARY KEY, email TEXT UNIQUE, username TEXT NOT NULL UNIQUE, name TEXT NOT NULL,
@@ -49,6 +50,8 @@ function open(dataDir) {
   db.exec(SCHEMA);
   // When an entry last changed, for the activity feed (added 2026-10-20; older rows have none).
   if (!db.prepare("PRAGMA table_info(entries)").all().some((c) => c.name === "updated")) db.exec("ALTER TABLE entries ADD COLUMN updated TEXT");
+  // Whether a reader wants a letter when someone starts following them (Max, 2026-10-20); on by default.
+  if (!db.prepare("PRAGMA table_info(readers)").all().some((c) => c.name === "follow_mail")) db.exec("ALTER TABLE readers ADD COLUMN follow_mail INTEGER NOT NULL DEFAULT 1");
   db.tx = (fn) => {
     db.exec("BEGIN");
     try {

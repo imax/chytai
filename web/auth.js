@@ -103,8 +103,8 @@ class Auth {
   // Everything of theirs goes: entries, subscriptions, sessions, follows both ways, the row.
   deleteReader(id) {
     this.db.tx(() => {
-      for (const t of ["entries", "subscriptions", "sessions", "follows"]) this.db.prepare(`DELETE FROM ${t} WHERE reader = ?`).run(id);
-      this.db.prepare("DELETE FROM follows WHERE target = ?").run(id);
+      for (const t of ["entries", "subscriptions", "sessions", "follows", "follow_mails"]) this.db.prepare(`DELETE FROM ${t} WHERE reader = ?`).run(id);
+      for (const t of ["follows", "follow_mails"]) this.db.prepare(`DELETE FROM ${t} WHERE target = ?`).run(id);
       this.db.prepare("DELETE FROM readers WHERE id = ?").run(id);
     });
     for (const [h, r] of this.cache) if (r === id) this.cache.delete(h);
@@ -130,6 +130,23 @@ class Auth {
     }
     this.db.prepare("INSERT INTO follows (reader, target, created) VALUES (?, ?, ?)").run(readerId, targetId, now());
     return true;
+  }
+
+  // A letter «X тепер стежить за вашою полицею» goes once per pair, the first time, if the reader
+  // has not switched it off (readers.follow_mail). Returns true when this follow deserves one.
+  followMailDue(readerId, targetId) {
+    const t = this.reader(targetId);
+    if (!t?.email || t.follow_mail === 0) return false;
+    if (this.db.prepare("SELECT 1 FROM follow_mails WHERE reader = ? AND target = ?").get(readerId, targetId)) return false;
+    this.db.prepare("INSERT INTO follow_mails (reader, target, sent) VALUES (?, ?, ?)").run(readerId, targetId, now());
+    return true;
+  }
+  followMailEnabled(readerId) {
+    const r = this.reader(readerId);
+    return !!r && r.follow_mail !== 0;
+  }
+  setFollowMail(readerId, on) {
+    this.db.prepare("UPDATE readers SET follow_mail = ? WHERE id = ?").run(on ? 1 : 0, readerId);
   }
 
   // ---- sessions ----
