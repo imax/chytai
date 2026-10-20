@@ -20,10 +20,10 @@ const uk = (n) => String(n).replace(".", ",");
 const BOOKS = ["книжка", "книжки", "книжок"];
 const books = (n) => count(n, ...BOOKS);
 
-const STATUS = { read: "Прочитав", reading: "Читаю", want: "Хочу прочитати" };
+const STATUS = { read: "Прочитано", reading: "Читаю", want: "Хочу прочитати" };
 const COPY = { paper: "На папері", ebook: "E-book", seeking: "Шукаю на папері" };
 // What a reader did, as the feed says it: «Оля К. оцінка ★★★★», «Андрій читає».
-const VERB = { read: "прочитав", reading: "читає", want: "хоче прочитати" };
+const VERB = { read: "прочитано", reading: "читає", want: "хоче прочитати" };
 const GENRES = ["художня", "фантастика", "детективи", "трилери", "бізнес", "компанії", "менеджмент", "продукт", "гроші", "розробка", "історія", "війна", "біографії", "наука", "саморозвиток", "суспільство"];
 const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
 const CYR = /[а-яіїєґ]/i;
@@ -132,13 +132,16 @@ function inline(md) {
 const noteOf = (e, id) => (e.note ? inline(titleLinks(e.note, e.via ? e.via.id : id)) : "");
 
 // «Хочу прочитати» as one tap: a form for a signed-in reader, the sign-in page for a guest.
-function wantButton(book, user, { size = "small", label: text = "Хочу прочитати", primary = false } = {}) {
+function wantButton(book, user, { size = "small", label: text = "Хочу прочитати", primary = false, status = "want" } = {}) {
   const cls = `btn ${primary ? "primary" : ""} ${size}`;
   if (!user) return `<a class="${cls}" href="/login?next=${attr(encodeURIComponent(book.href || ""))}">${text}</a>`;
-  return `<form method="post" action="/api/entry/${attr(encodeURIComponent(book.id))}" class="inline"><input type="hidden" name="status" value="want"><input type="hidden" name="back" value="1"><button class="${cls}">${text}</button></form>`;
+  return `<form method="post" action="/api/entry/${attr(encodeURIComponent(book.id))}" class="inline"><input type="hidden" name="status" value="${status}"><input type="hidden" name="back" value="1"><button class="${cls}">${text}</button></form>`;
 }
+// «Хочу прочитати» and «Прочитано» side by side, for rows in search and on shelves: marking a book read
+// should not need its page (a reader's feedback, 2026-10-20).
+const markButtons = (book, user) => `<span class="marks">${wantButton(book, user)}${wantButton(book, user, { label: "Прочитано", status: "read" })}</span>`;
 
-// The status, rating and copy of an entry as one quiet line: «★★★★★ 5 · прочитав · на папері».
+// The status, rating and copy of an entry as one quiet line: «★★★★★ 5 · прочитано · на папері».
 function entryMeta(e) {
   const bits = [e.status ? VERB[e.status] : "", e.copy ? COPY[e.copy].toLowerCase() : ""].filter(Boolean);
   return `${stars(e.rating)}${bits.length ? `<span>${e.rating != null ? " · " : ""}${esc(bits.join(" · "))}</span>` : ""}`;
@@ -333,7 +336,7 @@ function bookPage({ book, entry, user, shelf, inLibrary = new Map(), readers = [
   return layout({ title: book.title, body, user, path: "/book", description });
 }
 
-// The first reader's note as the big quote: «— Макс І, прочитав у 2026, на папері».
+// The first reader's note as the big quote: «— Макс І, прочитано у 2026, на папері».
 function quote({ name, href, entry: e }, id) {
   const long = stripMd(e.note).length > 280;
   const what = [e.status ? VERB[e.status] + (e.status === "read" && e.year ? ` у ${e.year}` : "") : "", e.copy ? COPY[e.copy].toLowerCase() : "", e.via ? `як «${e.via.title}»` : ""].filter(Boolean).join(", ");
@@ -346,13 +349,13 @@ function readerLine({ name, href, entry: e }, id) {
   return `<div class="reader-line"><a href="${attr(href)}"><b>${esc(name)}</b></a><span>${e.rating != null ? `${stars(e.rating)} ` : ""}<span class="muted">${esc(what)}</span>${e.note ? `<span class="note">${noteOf(e, id)}</span>` : ""}</span></div>`;
 }
 
-// The signed-in reader's own buttons: «Хочу прочитати», «Прочитав · оцінити», or where the book is
+// The signed-in reader's own buttons: «Хочу прочитати», «Прочитано · оцінити», or where the book is
 // in their library and «Змінити».
 function mine(book, entry, user) {
   // Read in another language: the mark comes from that book, and so does the edit link.
   const href = entry?.via ? entry.via.href : book.href;
   const edit = href ? `/me${href}` : `/me/book/${encodeURIComponent(entry?.via ? entry.via.id : book.id)}`;
-  if (!entry) return `<div class="acts">${wantButton(book, user, { size: "", primary: true })}<a class="btn" href="${attr(user ? edit : `/login?next=${encodeURIComponent(edit)}`)}">Прочитав · оцінити</a></div>`;
+  if (!entry) return `<div class="acts">${wantButton(book, user, { size: "", primary: true })}<a class="btn" href="${attr(user ? edit : `/login?next=${encodeURIComponent(edit)}`)}">Прочитано · оцінити</a></div>`;
   const what = [entry.status ? STATUS[entry.status] + (entry.status === "read" && entry.year ? ` ${entry.year}` : "") : "У моїх книжках", entry.rating != null ? `${uk(entry.rating)} з 5` : "", entry.copy ? COPY[entry.copy] : ""].filter(Boolean).join(" · ");
   return `<div class="acts"><span class="have">✓ ${esc(what)}${entry.via ? ` <span class="muted">як <a href="${attr(entry.via.href)}">${esc(entry.via.title)}</a></span>` : ""}</span><a class="btn small" href="${attr(edit)}">Змінити</a></div>`;
 }
@@ -413,7 +416,7 @@ function entryForm(book, entry) {
     <label>Статус <select name="status">
       <option value="" ${!e.status ? "selected" : ""}>без статусу</option>
       <option value="reading" ${e.status === "reading" ? "selected" : ""}>Читаю</option>
-      <option value="read" ${e.status === "read" ? "selected" : ""}>Прочитав</option>
+      <option value="read" ${e.status === "read" ? "selected" : ""}>Прочитано</option>
       <option value="want" ${e.status === "want" ? "selected" : ""}>Хочу прочитати</option>
     </select></label>
     <label>Оцінка <select name="rating">
@@ -453,7 +456,7 @@ function libraryPage({ rows, user, reader, own = false, mineIds = null, recs = [
   // Another reader's tabs say what they did («Читає»), since we don't know how they'd say it themselves.
   const tabs = [
     ["", "Усі", rows.length],
-    ["read", own ? "Прочитав" : "Прочитане", read],
+    ["read", own ? "Прочитано" : "Прочитане", read],
     ["reading", own ? "Читаю" : "Читає", rows.filter((r) => r.status === "reading").length],
     ["want", own ? "Хочу прочитати" : "Хоче прочитати", rows.filter((r) => r.status === "want").length],
     ["paper", "На папері", rows.filter((r) => r.copy === "paper").length],
@@ -467,7 +470,7 @@ function libraryPage({ rows, user, reader, own = false, mineIds = null, recs = [
       const head = r.year !== r._prevYear || i === 0 ? yearHead(r.year, rows) : "";
       const search = [b.title, b.altTitle, b.author, stripMd(r.note || "")].join(" ").toLowerCase();
       const data = ` data-status="${r.status || ""}" data-copy="${r.copy || ""}" data-common="${common.includes(r) ? 1 : ""}" data-tags="${attr((b.tags || []).join(" "))}" data-rating="${r.rating ?? ""}" data-title="${attr(b.title.toLowerCase())}" data-search="${attr(search)}" data-order="${i}"`;
-      const action = own ? `<a class="text-link small" href="${attr(b.href ? `/me${b.href}` : `/me/book/${encodeURIComponent(r.id)}`)}">змінити</a>` : user && mineIds && !mineIds.has(r.id) ? wantButton(b, user) : "";
+      const action = own ? `<a class="text-link small" href="${attr(b.href ? `/me${b.href}` : `/me/book/${encodeURIComponent(r.id)}`)}">змінити</a>` : user && mineIds && !mineIds.has(r.id) ? markButtons(b, user) : "";
       return head + bookRow(b, { entry: r, action, id: r.id, data });
     })
     .join("\n");
@@ -520,7 +523,7 @@ function addDialog() {
     <label>Автор <input name="author"></label>
     <label>Обкладинка (URL) <input name="cover" type="url" placeholder="https://…"></label>
     <div class="two">
-      <label>Статус <select name="status"><option value="">без статусу</option><option value="reading">Читаю</option><option value="read">Прочитав</option><option value="want" selected>Хочу прочитати</option></select></label>
+      <label>Статус <select name="status"><option value="">без статусу</option><option value="reading">Читаю</option><option value="read">Прочитано</option><option value="want" selected>Хочу прочитати</option></select></label>
       <label>Примірник <select name="copy"><option value="">не вказано</option><option value="paper">На папері</option><option value="ebook">E-book</option><option value="seeking">Шукаю на папері</option></select></label>
     </div>
     <div class="actions"><button type="button" class="btn" data-close>Скасувати</button><button class="btn primary">Додати</button></div>
@@ -638,7 +641,7 @@ function searchResults({ q, user, hits = [], authors = [], readers = [], similar
   return `<p class="found">${count(n, "збіг", "збіги", "збігів")}${tag ? ` · жанр «${esc(tag)}»` : ""}</p>
 <div class="split">
   <div>
-    ${hits.length ? `<section class="block">${label(`Книжки · ${hits.length}`)}<div class="rows">${hits.map((h) => bookRow(h.book, { meta: readersMeta(h.book.id), action: h.entry ? `<span class="muted small">${esc(h.entry.status ? STATUS[h.entry.status].toLowerCase() : "на полиці")}</span>` : wantButton(h.book, user) })).join("")}</div></section>` : ""}
+    ${hits.length ? `<section class="block">${label(`Книжки · ${hits.length}`)}<div class="rows">${hits.map((h) => bookRow(h.book, { meta: readersMeta(h.book.id), action: h.entry ? `<span class="muted small">${esc(h.entry.status ? STATUS[h.entry.status].toLowerCase() : "на полиці")}</span>` : markButtons(h.book, user) })).join("")}</div></section>` : ""}
     ${authors.length ? `<section class="block">${label(`Автори · ${authors.length}`)}<div class="name-rows">${authors.map((a) => `<a class="name-row" href="${attr(a.href)}"><b>${esc(a.name)}</b><span>${[books(a.books), a.readers ? count(a.readers, "читач", "читачі", "читачів") : ""].filter(Boolean).join(" · ")}</span></a>`).join("")}</div></section>` : ""}
     ${readers.length ? `<section class="block">${label(`Читачі · ${readers.length}`)}<div class="name-rows">${readers.map((r) => `<a class="name-row" href="${attr(r.reader.href)}"><b>${esc(r.reader.name)}</b><span>${books(r.count)}</span></a>`).join("")}</div></section>` : ""}
     ${user ? `<p class="muted end-note">Не те? <button type="button" class="text-link" data-open="add">Додати книжку, якої ще немає на Chytai</button></p>${addDialog()}` : ""}
@@ -671,7 +674,7 @@ function authorPage({ author, works, hits, user, readers = [], also = [] }) {
     ${book.altTitle ? `<p class="orig">${esc(book.altTitle)}</p>` : ""}
     ${s.avg != null ? `<p class="meta">${stars(s.avg)}<span> · ${count(s.rated, "оцінка", "оцінки", "оцінок")}</span></p>` : ""}
     ${top ? `<p class="note">${noteOf(top.entry, book.id)}</p><p class="said">— <a href="${attr(top.href)}"><b>${esc(top.name)}</b></a>${top.entry.year ? `, ${top.entry.year}` : ""}</p>` : ""}
-    <div class="acts">${entry ? `<span class="muted small">${esc(entry.status ? STATUS[entry.status].toLowerCase() : "на полиці")}</span>` : wantButton(book, user)}</div>
+    <div class="acts">${entry ? `<span class="muted small">${esc(entry.status ? STATUS[entry.status].toLowerCase() : "на полиці")}</span>` : markButtons(book, user)}</div>
   </div>
 </article>`;
   };
@@ -779,7 +782,7 @@ function privacyPage({ user }) {
 <ul>
 <li><strong>Пошту.</strong> Тільки щоб надіслати код для входу. Ми не робимо розсилок і нікому її не передаємо. Іншим читачам вашої пошти не видно.</li>
 <li><strong>Ім’я та нікнейм</strong>, які ви самі вказали. Нікнейм — це адреса вашої полиці: chytai.org.ua/@нікнейм.</li>
-<li><strong>Вашу полицю:</strong> книжки, статуси («Хочу прочитати», «Читаю», «Прочитав»), оцінки, рік прочитання, нотатки, у якому вигляді вона у вас є (папір, e-book), а також на які полиці ви підписані.</li>
+<li><strong>Вашу полицю:</strong> книжки, статуси («Хочу прочитати», «Читаю», «Прочитано»), оцінки, рік прочитання, нотатки, у якому вигляді вона у вас є (папір, e-book), а також на які полиці ви підписані.</li>
 <li><strong>Одну кукі для входу</strong> (<code>chytai_web</code>), щоб не просити код щоразу. Вона живе рік або до того, як ви вийдете. У ній лише випадковий ключ, сам ключ у нас не зберігається, тільки його відбиток.</li>
 <li><strong>Коли ви заходили востаннє</strong> — дату, без історії переглядів.</li>
 </ul>

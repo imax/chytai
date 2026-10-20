@@ -199,7 +199,7 @@ app.post("/settings/delete", signed, (req, res) => {
 
 // ---- pages ----
 
-// Library marks on cards («Хочу прочитати», «Прочитав») are the signed-in reader's own; guests see none.
+// Library marks on cards («Хочу прочитати», «Прочитано») are the signed-in reader's own; guests see none.
 const inLibraryMap = (req) => store.inLibrary(req.user?.id);
 // Draft shelves (a new catalog Max has not looked at yet) are seen only by the signed-in owner.
 const isDraft = (shelfId) => !!store.shelf(shelfId)?.draft;
