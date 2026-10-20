@@ -132,7 +132,7 @@ async function pageProducts(src, urls, { fetchImpl = fetch, log = () => {}, prev
       if (r.status === 429) gaveUp = true;
       else throttled = 0;
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
-      const html = await r.text();
+      const html = src.charset ? new TextDecoder(src.charset).decode(await r.arrayBuffer()) : await r.text(); // Богдан is windows-1251
       // A copy: V8 keeps a whole page alive for any substring cut from it, and a few hundred
       // MEGOGO Books pages filled the 256 MB machine (2026-10-19).
       const item = JSON.parse(JSON.stringify(src.parsePage(html, url)));
@@ -316,6 +316,55 @@ const mbooks = ({ id, slug, brand, name, tagline, url, draft = true }) => ({
   toItem: (p) => p,
   finish: joinEbooks,
 });
+
+// Навчальна книга – Богдан (bohdan-books.com, Тернопіль; Max 2026-10-20, for «Експансія» and the rest of
+// its fantasy) runs Bitrix in windows-1251. Its sitemap lists all 6 thousand products, most of them school
+// workbooks: only the fiction, children's and non-fiction sections (the first breadcrumb) are kept, and a
+// page with no breadcrumb unless its title looks like schoolwork. The page's JSON-LD Product is often
+// empty, so the name and price come from the product block's data attributes (an e-book's name starts with «eBook»), the ISBN from its
+// characteristics, the authors (written «Желязни Роджер») from the author links.
+const BOHDAN_SECTIONS = ["ХУДОЖНЯ ЛІТЕРАТУРА", "ДИТЯЧА ЛІТЕРАТУРА", "НЕХУДОЖНЯ ЛІТЕРАТУРА"];
+const SCHOOLWORK = /клас|зошит|НУШ|ЗНО|НМТ|ДПА|підручник|посібник|хрестоматі|тренажер|атестаці|диктант|прописи|грамот|диплом|тест/i;
+function bohdanPage(html, url) {
+  const crumbs = [...((html.match(/table_breadcrumb[\s\S]*?<\/div>/) || [""])[0]).matchAll(/title="([^"]*)"/g)].map((m) => ent(m[1])).slice(2);
+  const wrap = (html.match(/<div class="detail-page-wrap"[^>]*>/) || [""])[0]; // the page's book, not the ones in the sidebar
+  const name = ent((wrap.match(/data-product-name="([^"]*)"/) || [])[1] || "").trim();
+  if (!name) return null;
+  if (crumbs.length ? !BOHDAN_SECTIONS.includes(crumbs[0]) : SCHOOLWORK.test(name)) return null;
+  const ebook = /^eBook\s+/i.test(name);
+  const title = name.replace(/^eBook\s+/i, "").replace(/\s+:\s+[\p{Ll}\s.,-]+$/u, "").trim(); // «Снотворець : роман»
+  const prod = ldOf(html).find((x) => [].concat(x["@type"]).includes("Product")) || {};
+  const spec = (k) => text((html.match(new RegExp(`<b class="koala_title">${k}:?</b>([\\s\\S]*?)<br`)) || [])[1] || "");
+  const author = [...html.matchAll(/product-author-link[^>]*>([\s\S]*?)<\/a>/g)]
+    .map((m) => text(m[1]).split(" "))
+    .map((w) => (w.length > 1 ? [...w.slice(1), w[0]] : w).join(" "))
+    .filter((a, i, all) => a && all.indexOf(a) === i)
+    .join(", ");
+  const isbn = spec("ISBN").replace(/[^\dX]/gi, "");
+  if (!/^97[89]/.test(isbn)) return null; // stationery and crafts kits have shop barcodes
+  const avail = String(prod.offers?.availability || "");
+  return {
+    id: `bohdan-${(url.match(/\/book\/(\d+)/) || [])[1]}`,
+    title,
+    author,
+    translator: "",
+    isbn,
+    format: ebook ? "e-book" : "папір",
+    series: volumeOf(title)?.series || "",
+    volume: volumeOf(title)?.volume || 0,
+    bundle: /^комплект/i.test(title),
+    cover: String(prod.image || meta(html, "og:image")),
+    url,
+    price: uah(Number((wrap.match(/data-price="([\d.]+)"/) || [])[1])),
+    status: /InStock/i.test(avail) ? "є" : /PreOrder/i.test(avail) ? "передзамовлення" : avail ? "немає" : /Немає в наявності/i.test(html) ? "немає" : "є",
+    isNew: false,
+    genres: crumbs.slice(1, 2),
+    blurb: text(prod.description || meta(html, "og:description")).slice(0, 600),
+    pages: spec("Кількість сторінок"),
+    year: "",
+    language: "українська",
+  };
+}
 
 // Абук (abuk.com.ua), the Ukrainian audiobook shop (Max, 2026-10-20: a shelf of its own and a line in
 // «Де взяти»). Its site reads each book from a public JSON API, /api/web/books/<id>/ (a few KB: authors,
@@ -605,6 +654,23 @@ const SOURCES = [
   mbooks({ id: "arthuss", slug: "arthuss", brand: "Видавництво ArtHuss", name: "ArtHuss", tagline: "Нонфікшн про мистецтво, науку й суспільство", url: "https://arthuss.com.ua/", draft: false }),
   mbooks({ id: "zhupanskyi", slug: "vydavnytstvo-zhupanskoho", brand: "Видавництво Жупанського", name: "Видавництво Жупанського", tagline: "Класика й сучасна світова проза в нових перекладах", url: "https://zhupansky.com/", draft: false }),
   mbooks({ id: "meridian", slug: "meridian-czernowitz", brand: "Meridian Czernowitz", name: "Meridian Czernowitz", tagline: "Сучасна українська та світова література", url: "https://meridiancz.com/", draft: false }),
+  {
+    id: "bohdan",
+    kind: "publisher",
+    name: "Навчальна книга – Богдан",
+    tagline: "Тернопільське видавництво: фантастика й світова класика в перекладах, дитячі книжки",
+    url: "https://bohdan-books.com/",
+    draft: true,
+    sitemap: "https://bohdan-books.com/sitemap-custom-products.xml",
+    isProduct: (u) => /\/catalog\/book\/\d+\/$/.test(u),
+    charset: "windows-1251",
+    fetchAll: (src, opts) => sitemapProducts(src, opts),
+    parsePage: bohdanPage,
+    normalize: (p) => p,
+    keep: () => true,
+    toItem: (p) => p,
+    finish: joinEbooks,
+  },
   {
     id: "abuk",
     kind: "audio",
