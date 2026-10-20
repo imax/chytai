@@ -219,6 +219,13 @@ const readersOf = (id) =>
     .filter((r) => r.reader)
     .map(({ reader, entry }) => ({ name: reader.name, href: `${reader.href}#${entry.via ? entry.via.id : store.canonical(id)}`, entry }));
 const visible = (s) => store.visible(s);
+// Letters to the owner (WEB_NOTIFY_EMAIL, else the e-mail he signs in with), sent in the background.
+const site = (req) => (DOMAIN ? `https://${DOMAIN}` : `${req.protocol}://${req.get("host")}`);
+function notifyOwner(subject, text) {
+  const to = process.env.WEB_NOTIFY_EMAIL || auth.reader(OWNER_ID)?.email;
+  if (!to) return console.log(`[notify] no owner e-mail: ${subject}`);
+  auth.send(to, subject, text).catch((e) => console.error(`[notify] ${subject}: ${e.message}`));
+}
 const librariesFor = (req) => libraries.LIBRARIES.filter((l) => req.owner || !l.draft);
 // What readers do with books (social.js): ratings, the feed, «книжка навмання», recommendations.
 const social = new Social(store, (id) => pub(auth.reader(id)));
@@ -420,6 +427,9 @@ app.post("/api/book", signed, (req, res) => {
   if (!title || !title.trim()) return res.status(400).send("Потрібна назва");
   const b = store.addBook({ title, author, cover: /^https?:\/\//.test(cover || "") ? cover : "" });
   store.setEntry(req.user.id, b.id, { status: ["read", "reading", "want"].includes(status) ? status : "", copy: ["paper", "ebook", "seeking"].includes(copy) ? copy : "" });
+  // A book typed in by hand may duplicate a catalog's or be junk: the owner gets a letter and sorts it out
+  // (Max, 2026-10-20: «треба … сповіщення мені на імейл. будемо поки вручну розбирати»).
+  if (!req.owner) notifyOwner(`Нова книжка: ${b.title}`, [`${req.user.name} (@${req.user.username}) додав(ла) книжку вручну.`, "", `Назва: ${b.title}`, `Автор: ${b.author || "не вказано"}`, b.cover ? `Обкладинка: ${b.cover}` : "", "", `Книжка: ${site(req)}${store.href(b.id)}`, `Полиця читача: ${site(req)}${req.user.href}`].filter((l, i, a) => l || a[i - 1]).join("\n"));
   res.redirect(store.href(b.id));
 });
 

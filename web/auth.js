@@ -202,14 +202,19 @@ class Auth {
   async mail(email, code) {
     const subject = `${code} — код для входу в Chytai`;
     const text = `Ваш код для входу на chytai.org.ua: ${code}\n\nВін діє 10 хвилин. Якщо ви не просили код, просто не зважайте на цей лист.`;
+    return this.send(email, subject, text);
+  }
+
+  // A plain-text letter through Resend; without the key it goes to the log instead.
+  async send(to, subject, text) {
     if (!this.resendKey) {
-      this.log(`[mail] no RESEND_API_KEY: code for ${email} is ${code}`);
+      this.log(`[mail] no RESEND_API_KEY: to ${to}: ${subject}\n${text}`);
       return;
     }
     const res = await fetch("https://api.resend.com/emails", {
       method: "POST",
       headers: { Authorization: `Bearer ${this.resendKey}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ from: this.from, to: [email], subject, text }),
+      body: JSON.stringify({ from: this.from, to: [to], subject, text }),
     });
     if (!res.ok) throw new Error(`Resend ${res.status}: ${(await res.text()).slice(0, 200)}`);
   }
