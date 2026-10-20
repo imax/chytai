@@ -455,8 +455,9 @@ function searchResults({ q, hits, inLibrary, user, owner, readerHref }) {
 }
 
 // Where the book is: the shelves that sell it (format, price, availability) and whose library has it.
+// Kept plain (Max, 2026-10-20: «приберемо поки ціни і кнопки… Cleaner»): where it is, no prices or buttons.
 function searchRow({ book, entry }, inLibrary, user, owner, readerHref) {
-  const where = (book.editions || []).map((e) => `<li><a href="${attr(e.links[0].url)}" target="_blank" rel="noopener">${esc(e.shelf.name)}</a> · ${esc(e.format)}${e.edition ? ` · ${esc(e.edition)}` : ""}${e.price ? ` · ${esc(e.price)}` : ""}${e.status && e.status !== "є" ? ` · ${esc(e.status)}` : e.status ? " · є" : ""}</li>`);
+  const where = (book.editions || []).map((e) => `<li><a href="${attr(e.links[0].url)}" target="_blank" rel="noopener">${esc(e.shelf.name)}</a> · ${esc(e.format)}${e.edition ? ` · ${esc(e.edition)}` : ""}${e.status && e.status !== "є" ? ` · ${esc(e.status)}` : ""}</li>`);
   const edUrls = new Set((book.editions || []).map((e) => e.links[0].url));
   for (const l of (book.links || []).filter((l) => !edUrls.has(l.url))) where.push(`<li><a href="${attr(l.url)}" target="_blank" rel="noopener">${esc(l.label)}</a>${/amazon/i.test(l.url) ? " · Kindle" : ""}</li>`);
   if (entry) where.push(`<li><a href="${attr(readerHref)}#${attr(book.id)}">${esc(owner)}</a> · ${entry.status ? STATUS[entry.status].toLowerCase() : "у бібліотеці"}${entry.rating != null ? ` · ${uk(entry.rating)}/5` : ""}${entry.copy ? ` · ${COPY[entry.copy].toLowerCase()}` : ""}</li>`);
@@ -467,7 +468,6 @@ function searchRow({ book, entry }, inLibrary, user, owner, readerHref) {
     ${book.altTitle ? `<p class="alt-title small">${esc(book.altTitle)}</p>` : ""}
     <p class="by">${authorLinks(book.author)}</p>
     ${where.length ? `<ul class="where small">${where.join("")}</ul>` : `<p class="muted small">Ніде поки немає.</p>`}
-    ${user && !entry ? `<form method="post" action="/api/entry/${encodeURIComponent(book.id)}" class="inline"><input type="hidden" name="status" value="want"><input type="hidden" name="back" value="1"><button class="btn small">Хочу прочитати</button></form>` : ""}
   </div>
 </article>`;
 }
