@@ -15,36 +15,42 @@
     const filters = {}; // chip group -> value
     const years = $$("h2.year", rows);
 
-    // A long shelf shows its first rows and «Показати ще N →»; searching or filtering looks at all of them.
-    const FIRST = rows.classList.contains("grid") ? 24 : 60;
+    // A long shelf (a catalog of 8000 books) shows its rows a portion at a time: «Показати ще 60 →» adds
+    // the next portion (Max, 2026-10-20). Searching or filtering starts again from the first portion.
+    const STEP = rows.classList.contains("grid") ? 24 : 60;
     const more = $("#more");
-    let limited = !!more && items.length > FIRST + 10;
-    more?.addEventListener("click", () => ((limited = false), apply()));
+    let limit = STEP;
+    let order = items; // the rows as sorted now
+    more?.addEventListener("click", () => ((limit += STEP), apply()));
+    const again = () => ((limit = STEP), apply());
+
+    function match(it, text, g) {
+      if (text && !(it.dataset.search || "").includes(text)) return false;
+      if (filters.status) {
+        const v = filters.status;
+        if (v === "paper" || v === "seeking") { if (it.dataset.copy !== v) return false; }
+        else if (v === "common") { if (it.dataset.common !== "1") return false; }
+        else if (it.dataset.status !== v) return false;
+      }
+      if (filters.genre && !(it.dataset.genre || "").split("|").includes(filters.genre)) return false;
+      if (filters.avail && it.dataset.avail !== filters.avail) return false;
+      if (g && !(it.dataset.tags || "").split(" ").includes(g)) return false;
+      return true;
+    }
 
     function apply() {
       const text = (q?.value || "").trim().toLowerCase();
       const g = genre?.value || "";
-      const cut = limited && !text && !g && !Object.values(filters).some(Boolean) && (!sort || sort.value === "order");
+      const matched = order.filter((it) => match(it, text, g));
+      const cut = !!more && matched.length > limit + 10;
       let shown = 0;
-      for (const it of items) {
-        let ok = true;
-        if (text && !it.dataset.search.includes(text)) ok = false;
-        if (ok && filters.status) {
-          const v = filters.status;
-          if (v === "paper" || v === "seeking") ok = it.dataset.copy === v;
-          else if (v === "common") ok = it.dataset.common === "1";
-          else ok = it.dataset.status === v;
-        }
-        if (ok && filters.genre) ok = it.dataset.genre.split("|").includes(filters.genre);
-        if (ok && filters.avail) ok = it.dataset.avail === filters.avail;
-        if (ok && g) ok = it.dataset.tags.split(" ").includes(g);
-        if (ok && cut && shown >= FIRST) ok = false;
-        it.classList.toggle("hidden", !ok);
-        if (ok) shown++;
-      }
+      const ok = new Set(cut ? matched.slice(0, limit) : matched);
+      for (const it of items) it.classList.toggle("hidden", !ok.has(it));
+      shown = ok.size;
       if (more) {
         more.parentElement.classList.toggle("hidden", !cut);
-        $("span", more).textContent = items.length - FIRST;
+        const left = matched.length - limit;
+        $("span", more).textContent = left > STEP ? `${STEP} з ${left}` : left;
       }
       // Year headings only make sense in the import order; hide them when sorting or filtering.
       const byOrder = !sort || sort.value === "order";
@@ -68,14 +74,15 @@
         const all = [...years, ...items].sort((a, b) => Number(a.dataset.pos) - Number(b.dataset.pos));
         for (const el of all) rows.appendChild(el);
       } else for (const el of sorted) rows.appendChild(el);
-      apply();
+      order = v === "order" ? items : sorted;
+      again();
     }
 
     // Remember the original positions so «за порядком» can restore the year headings.
     $$("h2.year, .row, .card", rows).forEach((el, i) => (el.dataset.pos = i));
 
-    q?.addEventListener("input", apply);
-    genre?.addEventListener("change", apply);
+    q?.addEventListener("input", again);
+    genre?.addEventListener("change", again);
     sort?.addEventListener("change", resort);
     for (const group of $$(".tabs[data-filter]")) {
       group.addEventListener("click", (e) => {
@@ -83,12 +90,13 @@
         if (!tab) return;
         $$(".tab", group).forEach((c) => c.classList.toggle("on", c === tab));
         filters[group.dataset.filter] = tab.dataset.v;
-        apply();
+        again();
       });
     }
     if (location.hash === "#want") $(".tab[data-v=want]")?.click();
     // A link to one row (/@maxua#book) must find it even past the first rows.
-    if (limited && location.hash && items.slice(FIRST).some((it) => it.id === decodeURIComponent(location.hash.slice(1)))) limited = false;
+    const at = location.hash ? order.findIndex((it) => it.id === decodeURIComponent(location.hash.slice(1))) : -1;
+    if (at >= limit) limit = at + STEP;
     apply();
     if (location.hash) document.getElementById(decodeURIComponent(location.hash.slice(1)))?.scrollIntoView();
   }
