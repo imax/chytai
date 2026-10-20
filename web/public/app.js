@@ -283,4 +283,13 @@
       if (on) button.classList.remove("primary");
     }
   });
+
+  // An empty «Рік» shows this year as a hint; its arrows would start from the minimum (1990), so the
+  // hint becomes the value first (a reader's feedback, 2026-10-20).
+  for (const year of $$("input[name=year]")) {
+    const fill = () => { if (!year.value && year.placeholder) year.value = year.placeholder; };
+    year.addEventListener("pointerdown", (e) => e.offsetX > year.clientWidth - 28 && fill()); // the arrows, not the text
+    year.addEventListener("keydown", (e) => (e.key === "ArrowUp" || e.key === "ArrowDown") && fill());
+    year.addEventListener("wheel", fill, { passive: true });
+  }
 })();

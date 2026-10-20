@@ -71,6 +71,8 @@ const label = (text, aside = "") => `<div class="label"><h2>${text}</h2>${aside 
 const NAV = [
   ["/community", "Читачі", (p) => p === "/community" || p === "/@"],
   ["/publishers", "Видавництва", (p) => p.startsWith("/publishers")],
+  // The reader lives on its own site; readers found it hard to spot in the footer (feedback, 2026-10-20).
+  ["https://chytai.fly.dev", "Читалка", () => false],
 ];
 
 function layout({ title, body, user, path = "", description = "", q = "", home = false }) {
@@ -497,7 +499,7 @@ function libraryPage({ rows, user, reader, own = false, mineIds = null, recs = [
     .join("\n");
   const wants = own ? [] : rows.filter((r) => r.status === "want").slice(0, 3);
   const body = `
-${pageHead({ crumbs: own ? "" : `<a href="/community">Читачі</a> / ${esc(reader.name)}`, kicker: own ? "Моя полиця" : "Полиця читача", title: esc(reader.name), sub, action: own ? `<button class="btn primary" data-open="add">+ Додати книжку</button>` : user?.id === reader.id ? "" : followButton(reader, following, user) })}
+${pageHead({ crumbs: own ? "" : `<a href="/community">Читачі</a> / ${esc(reader.name)}`, kicker: own ? "Моя полиця" : "Полиця читача", title: esc(reader.name), sub, action: own ? `<div class="acts"><button class="btn primary" data-open="add">+ Додати книжку</button><a class="text-link small" href="/import/goodreads">Перенести з Goodreads</a></div>` : user?.id === reader.id ? "" : followButton(reader, following, user) })}
 <div class="split">
   <div>
     <div class="tabs-bar">
@@ -869,7 +871,7 @@ function importPage({ user, source = "goodreads", error = "" }) {
   <li>Перетягніть їх у поле нижче (або натисніть його і виберіть ті самі три файли). Ми покажемо, що потрапить на полицю, і спитаємо підтвердження.</li>
 </ol>`
     : `<ol class="steps">
-  <li>На Goodreads відкрийте <a class="text-link" href="https://www.goodreads.com/review/import" target="_blank" rel="noopener">My Books → Import and export</a> і натисніть <b>Export Library</b>.</li>
+  <li>На Goodreads відкрийте <a class="text-link" href="https://www.goodreads.com/review/import" target="_blank" rel="noopener">My Books → Import and export</a> і натисніть <b>Export Library</b>. У застосунку Goodreads на телефоні експорту немає, лише на сайті: з телефона відкрийте посилання в браузері.</li>
   <li>За хвилину-дві там з’явиться посилання на файл <code>goodreads_library_export.csv</code>. Завантажте його.</li>
   <li>Виберіть цей файл тут. Ми покажемо, що саме потрапить на полицю, і спитаємо підтвердження.</li>
 </ol>`;
