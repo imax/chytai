@@ -280,19 +280,21 @@ function libraryRows(reader) {
   }
   return rows;
 }
-// /me is your own library; a guest is sent to sign in. /@<username> is any reader's public page.
-app.get("/me", signed, (req, res) => {
-  const rows = libraryRows(req.user.id);
-  const fives = rows.filter((r) => r.rating >= 5).slice(0, 5).map((r) => r.id);
-  const recs = social.alsoLiked(fives, { limit: 4, skip: new Set(rows.map((r) => r.id)) });
-  res.send(pages.libraryPage({ rows, user: req.user, reader: req.user, own: true, recs }));
-});
+// /@<username> is a reader's shelf: their own (with «змінити», recommendations, «+ Додати книжку») when
+// they open it, the public one for everyone else and with ?public. /me is a shortcut to your own
+// (Max, 2026-10-20: one address for a shelf, so the one in the address bar can be shared).
+app.get("/me", signed, (req, res) => res.redirect(req.user.href));
 app.get("/@:username", (req, res) => {
   const reader = pub(auth.byUsername(req.params.username));
   if (!reader) return res.status(404).send(pages.messagePage({ title: "Немає такого читача", text: "", user: req.user }));
   if (reader.username !== req.params.username) return res.redirect(301, reader.href);
-  if (req.user?.id === reader.id) return res.redirect("/me");
-  res.send(pages.libraryPage({ rows: libraryRows(reader.id), user: req.user, reader, mineIds: req.user ? new Set(Object.keys(store.entriesOf(req.user.id))) : null }));
+  const rows = libraryRows(reader.id);
+  if (req.user?.id === reader.id && !("public" in req.query)) {
+    const fives = rows.filter((r) => r.rating >= 5).slice(0, 5).map((r) => r.id);
+    const recs = social.alsoLiked(fives, { limit: 4, skip: new Set(rows.map((r) => r.id)) });
+    return res.send(pages.libraryPage({ rows, user: req.user, reader: req.user, own: true, recs }));
+  }
+  res.send(pages.libraryPage({ rows, user: req.user, reader, mineIds: req.user && req.user.id !== reader.id ? new Set(Object.keys(store.entriesOf(req.user.id))) : null }));
 });
 // The owner's page before usernames (/reader/max) moved to /@maxua.
 app.get(OLD_READER, (req, res) => res.redirect(301, pub(auth.reader(OWNER_ID)).href));
