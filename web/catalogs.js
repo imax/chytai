@@ -738,7 +738,6 @@ const SOURCES = [
     name: "Навчальна книга – Богдан",
     tagline: "Тернопільське видавництво: фантастика й світова класика в перекладах, дитячі книжки",
     url: "https://bohdan-books.com/",
-    draft: true,
     sitemap: "https://bohdan-books.com/sitemap-custom-products.xml",
     isProduct: (u) => /\/catalog\/book\/\d+\/$/.test(u),
     charset: "windows-1251",
