@@ -877,7 +877,9 @@ function importPreviewPage({ user, source = "goodreads", token, rows, counts, fi
     <span class="imp-meta">${what(r)}${r.note ? ` · <span class="muted">${esc(r.note.length > 90 ? `${r.note.slice(0, 90)}…` : r.note)}</span>` : ""}</span>
   </span>
 </label>`;
-  const group = (title, lead, list) => (list.length ? `<section class="imp-group"><h2>${title} <span>${list.length}</span></h2><p class="muted small">${lead}</p>${list.map(([r, i]) => line(r, i)).join("")}</section>` : "");
+  // Each group has its own «зняти всі / вибрати всі» (Max, 2026-10-20: «імпортувати лише обране»), the bar has them for the whole list.
+  const toggles = `<span class="imp-toggle"><button type="button" class="text-link small" data-all="1">вибрати всі</button> · <button type="button" class="text-link small" data-all="0">зняти всі</button></span>`;
+  const group = (title, lead, list) => (list.length ? `<section class="imp-group"><h2>${title} <span>${list.length}</span>${toggles}</h2><p class="muted small">${lead}</p>${list.map(([r, i]) => line(r, i)).join("")}</section>` : "");
   const indexed = rows.map((r, i) => [r, i]);
   const skipped = counts.skipped ? ` · ${counts.skipped} PDF пропущено` : "";
   const body = `
@@ -885,7 +887,8 @@ ${pageHead({ crumbs: `<a href="/settings">Налаштування</a> / <a href
 <form method="post" action="/import/${source}/apply" class="import-preview">
   <input type="hidden" name="token" value="${attr(token)}">
   <div class="imp-bar">
-    <span class="small muted">${filename ? `${esc(filename)} · ` : ""}зніміть галочку з того, що переносити не треба</span>
+    <span class="small muted">${filename ? `${esc(filename)} · ` : ""}зніміть галочку з того, що переносити не треба, або зніміть усі й виберіть лише обране</span>
+    ${toggles}
     <span class="grow"></span>
     <button class="btn primary">Імпортувати <span id="imp-n">${counts.all}</span></button>
   </div>
@@ -898,7 +901,15 @@ ${pageHead({ crumbs: `<a href="/settings">Налаштування</a> / <a href
 (() => {
   const form = document.querySelector(".import-preview");
   const ns = form.querySelectorAll(".btn span");
-  form.addEventListener("change", () => { const n = form.querySelectorAll("input[name=keep]:checked").length; ns.forEach((s) => (s.textContent = n)); });
+  const count = () => { const n = form.querySelectorAll("input[name=keep]:checked").length; ns.forEach((s) => (s.textContent = n)); form.querySelectorAll(".btn.primary").forEach((b) => (b.disabled = !n)); };
+  form.addEventListener("change", count);
+  form.addEventListener("click", (e) => {
+    const t = e.target.closest("[data-all]");
+    if (!t) return;
+    const scope = t.closest(".imp-group") || form;
+    scope.querySelectorAll("input[name=keep]").forEach((c) => (c.checked = t.dataset.all === "1"));
+    count();
+  });
 })();
 </script>`;
   return layout({ title: `Імпорт з ${IMPORT_NAMES[source]}`, body, user, path: "/settings" });
