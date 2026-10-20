@@ -253,6 +253,8 @@ function readerList() {
 }
 
 app.get("/", (req, res) => {
+  // Search results lived at /?q= before they got their own address.
+  if (req.query.q) return res.redirect(301, `/search?${new URLSearchParams({ q: String(req.query.q) })}`);
   const seeds = social.seeds(req.user?.id);
   const own = req.user ? new Set(Object.keys(store.entriesOf(req.user.id))) : new Set();
   const recs = seeds.map((seed) => ({ seed, own: own.has(seed.id), books: social.similar([seed.id], { limit: 6, skip: own }) })).filter((r) => r.books.length);

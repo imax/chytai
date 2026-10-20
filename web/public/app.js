@@ -184,19 +184,28 @@
     for (const r of rows) pubs.appendChild(r);
   });
 
-  // Search as you type: results replace #live (and hide #browse on the homepage) after a short pause;
-  // the address keeps ?q= so going back returns to the same results. The header box on other pages does
-  // the same (Max, 2026-10-20): its results take the place of the page until the box is cleared.
-  const liveSearch = (box, live, browse, keepUrl) => {
+  // Search as you type: results replace #live (and hide #browse on the homepage) after a short pause.
+  // The results have their own address, /search?q=… (Max, 2026-10-20), so they can be shared and
+  // survive a refresh: on /search itself the address follows the box; elsewhere (the homepage, the
+  // header box on other pages) the first word typed adds /search?q=… to the history, so «Назад»
+  // returns to the page the search started from, and clearing the box goes back there too.
+  const liveSearch = (box, live, browse) => {
     const input = $("input", box);
-    let timer, ctrl, last = keepUrl ? input.value.trim() : "";
+    const onSearch = location.pathname === "/search";
+    const home = { url: location.href, title: document.title };
+    let timer, ctrl, pushed = false, last = onSearch ? input.value.trim() : "";
     const show = (q) => {
       for (const el of browse) el.hidden = !!q;
-      if (!keepUrl) return;
-      const url = new URL(location.href);
-      if (q) url.searchParams.set("q", q);
-      else url.searchParams.delete("q");
-      history.replaceState(null, "", url);
+      if (!q) {
+        if (onSearch) history.replaceState(null, "", "/search");
+        else if (pushed) (pushed = false), history.back();
+        document.title = onSearch ? "Пошук · Chytai" : home.title;
+        return;
+      }
+      const url = `/search?${new URLSearchParams({ q })}`;
+      if (onSearch || pushed) history.replaceState({ q }, "", url);
+      else (pushed = true), history.pushState({ q }, "", url);
+      document.title = `${q} · Пошук · Chytai`;
     };
     const run = async () => {
       const q = input.value.trim();
@@ -213,24 +222,28 @@
         if (e.name !== "AbortError") box.submit();
       }
     };
+    // «Назад» from the results to the page they started on, or «Вперед» back to them.
+    if (!onSearch)
+      addEventListener("popstate", (e) => {
+        const q = location.pathname === "/search" ? new URLSearchParams(location.search).get("q") || "" : "";
+        pushed = !!q;
+        input.value = q;
+        last = null;
+        run();
+      });
     input.addEventListener("input", () => (clearTimeout(timer), (timer = setTimeout(run, 180))));
     box.addEventListener("submit", (e) => (e.preventDefault(), clearTimeout(timer), (last = null), run()));
     return { input, run: () => ((last = null), run()) };
   };
   const box = $("form.search-box");
   const live = $("#live");
-  if (box && live) {
-    const s = liveSearch(box, live, $$("#browse"), true);
-    // Back to the homepage with ?q=: render those results again.
-    const q0 = new URLSearchParams(location.search).get("q");
-    if (q0 && !s.input.value) (s.input.value = q0), s.run();
-  }
+  if (box && live) liveSearch(box, live, $$("#browse"));
   const find = $("header form.find");
   const main = $("main");
   if (find && main) {
     const results = document.createElement("div");
     results.className = "find-results";
     main.prepend(results);
-    liveSearch(find, results, [...main.children].filter((el) => el !== results), false);
+    liveSearch(find, results, [...main.children].filter((el) => el !== results));
   }
 })();

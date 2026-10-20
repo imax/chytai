@@ -291,7 +291,8 @@ class Store {
     const take = (id, title, author) => {
       if (this.slugOf.has(id) && latin(this.slugOf.get(id))) return;
       let slug = slugify(title);
-      const last = slugify((author || "").split(/[,\s]+/).filter(Boolean).pop() || "");
+      const surname = (author || "").split(/[,\s]+/).filter(Boolean).pop();
+      const last = surname ? slugify(surname) : ""; // slugify("") is "book": «tyhrolovy-book»
       if (this.slugs.has(slug) && this.slugs.get(slug) !== id && last) slug = `${slug}-${last}`;
       while (this.slugs.has(slug) && this.slugs.get(slug) !== id) slug += "-2";
       this.slugs.set(slug, id);
@@ -366,8 +367,12 @@ class Store {
     for (const [i, { id }] of rows.entries()) {
       const b = this.book(id);
       if (!b) continue;
-      // An exact title (or original title) goes first; otherwise the index's own order.
-      const score = (norm(b.title) === exact || norm(b.altTitle) === exact ? 1000 : 0) - i;
+      // An exact title (or original title) goes first, then books where every typed word is a whole
+      // word of the title or the author («Лем» is Станіслав Лем, not «Моцарт із Лемберга»); otherwise
+      // the index's own order.
+      const words = new Set(norm([b.title, b.altTitle, b.author].join(" ")).split(" "));
+      const whole = terms.every((t) => words.has(t));
+      const score = (norm(b.title) === exact || norm(b.altTitle) === exact ? 1000 : 0) + (whole ? 500 : 0) - i;
       hits.push({ book: b, entry: reader ? this.entry(reader, id) : null, score });
     }
     return hits.sort((a, b) => b.score - a.score).slice(0, limit);
@@ -409,12 +414,28 @@ class Store {
     // A shared ISBN counts only with the same title: publishers' sites reuse ISBNs by mistake.
     // (Основи gives a bundle the ISBN of one of its books, so a bundle never joins a single book this way.)
     const alike = (a, b) => !a.bundle === !b.bundle && (norm(a.title).startsWith(norm(b.title)) || norm(b.title).startsWith(norm(a.title)));
+    // The title for that compares without a note on the edition in brackets: Старий Лев sells
+    // «Тигролови (м'яка обкладинка)» and «Тигролови (в-во Віхола)» next to «Тигролови». A bracket with
+    // a number or a volume word («(том 2)», «(1984)») stays, so volumes never fold into one book.
+    const workTitle = (t) => norm(String(t || "").replace(/\s*\(([^()]*)\)/g, (m, inner) => (/\d|том|книга|частина|част\./i.test(inner) ? m : "")));
+    const titled = new Map(); // work title -> Set of authors, for the items that have none
     for (const si of this.shelfItems.values()) {
       const it = si.item;
       const ik = `isbn:${isbnKey(it.isbn)}`;
       if (isbnKey(it.isbn).length >= 10 && (!groups.has(ik) || alike(groups.get(ik)[0].item, it))) join(ik, si);
-      if (norm(it.title) && norm(it.author)) join(`at:${norm(it.author)}|${norm(it.title)}`, si);
+      if (workTitle(it.title) && norm(it.author)) {
+        join(`at:${norm(it.author)}|${workTitle(it.title)}`, si);
+        (titled.get(workTitle(it.title)) || titled.set(workTitle(it.title), new Set()).get(workTitle(it.title))).add(norm(it.author));
+      }
       if (!groupOf.has(it.id)) groupOf.set(it.id, [si]);
+    }
+    // A shop that gives no author (MEGOGO Books' Stone «Тигролови») joins the work of that title when
+    // only one author has a book called so. Short titles («Дім») are too common to trust.
+    for (const si of this.shelfItems.values()) {
+      const it = si.item;
+      const t = workTitle(it.title);
+      if (norm(it.author) || t.length < 6 || titled.get(t)?.size !== 1) continue;
+      join(`at:${[...titled.get(t)][0]}|${t}`, si);
     }
 
     // 2. A shelf item whose title (or original title) is exactly a library book's title is that book.
