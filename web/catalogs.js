@@ -106,11 +106,12 @@ async function listingProducts(src, opts) {
 // Product pages fetched a few at a time: a new URL right away, the rest once a week (a seventh of the
 // catalog a day); `previous` (url -> item from the last refresh) is reused for the rest. A page that is
 // not a book of this publisher (parsePage gives null) is remembered in `skip` so it is not fetched daily.
-async function pageProducts(src, urls, { fetchImpl = fetch, log = () => {}, previous = new Map(), skip = new Set() }) {
+async function pageProducts(src, urls, { fetchImpl = fetch, log = () => {}, previous = new Map(), skip = new Set(), checkpoint = () => {}, fresh = new Set() }) {
   const today = dayOfWeek();
   urls = urls.filter((u) => !skip.has(u) || bucket(u) === today);
-  const due = urls.filter((u) => !previous.has(u) || bucket(u) === today);
+  const due = urls.filter((u) => !previous.has(u) || (bucket(u) === today && !fresh.has(u)));
   const out = urls.filter((u) => !due.includes(u)).map((u) => previous.get(u)).filter(Boolean);
+  const got = urls.filter((u) => fresh.has(u)).map((u) => previous.get(u)); // read this run or the cut-short one
   let failed = 0;
   let skipped = 0;
   // A shop that answers 429 (Абук did, 2026-10-20) is asked one page at a time with a pause (`src.pace`);
@@ -135,7 +136,7 @@ async function pageProducts(src, urls, { fetchImpl = fetch, log = () => {}, prev
       // A copy: V8 keeps a whole page alive for any substring cut from it, and a few hundred
       // MEGOGO Books pages filled the 256 MB machine (2026-10-19).
       const item = JSON.parse(JSON.stringify(src.parsePage(html, url)));
-      if (item) out.push(item), skip.delete(url);
+      if (item) out.push(item), got.push(item), skip.delete(url);
       else if ((skip.add(url), !skipped++)) log(`${src.id}: not a book page: ${url} ${html.replace(/\s+/g, " ").slice(0, 160)}`);
     } catch (e) {
       if (!failed && !e.later) log(`${src.id}: ${url}: ${e.cause?.code || e.message}`);
@@ -146,6 +147,7 @@ async function pageProducts(src, urls, { fetchImpl = fetch, log = () => {}, prev
   for (let i = 0; i < due.length; i += batch) {
     if (pause && !gaveUp) await new Promise((r) => setTimeout(r, pause));
     await Promise.all(due.slice(i, i + batch).map(one));
+    if (i % 100 < batch && i) checkpoint(got); // a restart half-way resumes from here
   }
   log(`${src.id}: ${urls.length} product pages, ${due.length} due${failed ? `, ${failed} failed` : ""}${gaveUp ? " (the shop kept answering 429; the rest next time)" : ""}${skipped ? `, ${skipped} not its books` : ""}, ${out.length} books`);
   if (!out.length || (!gaveUp && failed > due.length / 3 && failed > 10)) throw new Error(`${src.id}: ${failed} of ${due.length} pages failed`);
@@ -679,13 +681,19 @@ async function refresh({ store, log = console.log, fetchImpl, only }) {
   let done = 0;
   for (const src of sources) {
     try {
-      const previous = new Map((store.shelf(src.id)?.items || []).map((it) => [it.url, it]));
+      // Books read by a refresh that a restart cut short (`partial:<id>`) count as read: a slow source
+      // (Абук, one book every 1.5 s) would otherwise never finish between two deploys.
+      const partial = JSON.parse(store.db.get(`partial:${src.id}`) || "[]");
+      const previous = new Map([...(store.shelf(src.id)?.items || []), ...partial].map((it) => [it.url, it]));
+      const fresh = new Set(partial.map((it) => it.url));
       const skip = new Set(JSON.parse(store.db.get(`skip:${src.id}`) || "[]"));
-      const products = src.fetchAll ? await src.fetchAll(src, { fetchImpl, log, previous, skip }) : await fetchSource(src, { fetchImpl, log });
+      const checkpoint = (items) => store.db.set(`partial:${src.id}`, JSON.stringify(items));
+      const products = src.fetchAll ? await src.fetchAll(src, { fetchImpl, log, previous, skip, checkpoint, fresh }) : await fetchSource(src, { fetchImpl, log });
       if (src.fetchAll) store.db.set(`skip:${src.id}`, JSON.stringify([...skip]));
       if (src.enrich) await src.enrich(products, { previous, fetchImpl, log, id: src.id, keep: src.keep });
       const built = buildShelves({ [src.id]: products }, { seen, baseline: store.baseline });
       store.saveShelves(built.shelves, { fetched: built.fetched, seen });
+      store.db.set(`partial:${src.id}`, "[]");
       done++;
     } catch (e) {
       errors.push(e.message);
