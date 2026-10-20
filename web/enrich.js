@@ -60,7 +60,7 @@ function descriptionText(d) {
 }
 
 async function getJson(url, fetchImpl) {
-  const r = await fetchImpl(url, { headers: HEADERS, signal: AbortSignal.timeout(20000) });
+  const r = await fetchImpl(url, { headers: HEADERS, signal: AbortSignal.timeout(12000) });
   if (r.status === 404) return null;
   if (!r.ok) throw new Error(`HTTP ${r.status}`);
   return r.json();
@@ -142,6 +142,8 @@ async function enrich(store, { ids, log = () => {}, fetchImpl = fetch, force = f
   const books = wanting(store, ids).filter((b) => force || Date.now() - Number(store.db.get(`enrich:${b.id}`) || 0) > MONTH).slice(0, max);
   let found = 0;
   let touched = false;
+  let failed = 0;
+  const errors = [];
   for (const b of books) {
     store.db.set(`enrich:${b.id}`, String(Date.now()));
     try {
@@ -155,8 +157,10 @@ async function enrich(store, { ids, log = () => {}, fetchImpl = fetch, force = f
         }
       }
     } catch (e) {
-      log(`enrich ${b.id}: ${e.cause?.code || e.message}`);
-      if (/HTTP 429|HTTP 5\d\d|ENOTFOUND|ECONNREFUSED/.test(e.message + (e.cause?.code || ""))) break; // the rest another time
+      const why = `${e.name === "TimeoutError" ? "timeout" : ""}${e.cause?.code || e.message}`;
+      log(`enrich ${b.id}: ${why}`);
+      errors.push(`${b.id}: ${why}`);
+      if (/timeout|HTTP 429|HTTP 5\d\d|ENOTFOUND|ECONNREFUSED|fetch failed/.test(why) && ++failed >= 3) break; // Open Library is away: the rest another time
     }
     if (pause) await new Promise((r) => setTimeout(r, pause));
   }
@@ -165,8 +169,10 @@ async function enrich(store, { ids, log = () => {}, fetchImpl = fetch, force = f
     store.linkEditions?.();
     store.indexSearch();
   }
-  log(`enrich: ${found} of ${books.length} books got details from Open Library`);
-  return { asked: books.length, found };
+  const line = `${new Date().toISOString()}: ${found} of ${books.length} books got details from Open Library${errors.length ? `; errors: ${errors.slice(0, 5).join(", ")}` : ""}`;
+  log(`enrich ${line}`);
+  store.db.set("enrich:log", line); // shown on /refresh-status
+  return { asked: books.length, found, errors };
 }
 
 // The weekly pass, like wikidata.refreshUk: at most one attempt a week, even when it fails.

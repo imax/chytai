@@ -126,7 +126,7 @@ const safeNext = (v) => (/^\/(?!\/)/.test(String(v || "")) ? String(v) : "");
 
 // Public and harmless: when the shelves were last refreshed and whether the sources answered.
 app.get("/refresh-status", (req, res) => {
-  res.json({ running: !!refreshing, ...(refreshing && { log: currentLog.slice(-30) }), last: lastResult, shelvesFetched: store.shelvesFetched, refreshedAt: store.shelvesRefreshedAt, authors: store.db.get("authors:log"), memoryMb: Object.fromEntries(Object.entries(process.memoryUsage()).map(([k, v]) => [k, Math.round(v / 1048576)])), nextAfter: new Date(lastRefresh + REFRESH_MS).toISOString() });
+  res.json({ running: !!refreshing, ...(refreshing && { log: currentLog.slice(-30) }), last: lastResult, shelvesFetched: store.shelvesFetched, refreshedAt: store.shelvesRefreshedAt, authors: store.db.get("authors:log"), enrich: store.db.get("enrich:log"), memoryMb: Object.fromEntries(Object.entries(process.memoryUsage()).map(([k, v]) => [k, Math.round(v / 1048576)])), nextAfter: new Date(lastRefresh + REFRESH_MS).toISOString() });
 });
 
 // Sign in or sign up, the same door: an e-mail, a code, and for a new address a name and a username.
