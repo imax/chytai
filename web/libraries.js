@@ -15,7 +15,7 @@
 const LIBRARIES = [
   { id: "cherkasy", name: "Черкаські міські бібліотеки", city: "Черкаси", base: "https://opac.lib.cherkasy.ua" },
   { id: "uzhhorod", name: "Ужгородська публічна бібліотека", city: "Ужгород", base: "https://lib.itc.gov.ua" },
-  { id: "kyiv", kind: "aleph", name: "Бібліотеки Києва", city: "Київ", base: "http://alpha.lukl.kyiv.ua", home: "http://alpha.lukl.kyiv.ua/F", draft: true },
+  { id: "kyiv", kind: "aleph", name: "Бібліотеки Києва", city: "Київ", base: "http://alpha.lukl.kyiv.ua", home: "http://alpha.lukl.kyiv.ua/F", draft: true, v: 2 },
 ];
 
 const HEADERS = { "User-Agent": "Mozilla/5.0 (Chytai library lookup; chytai.org.ua)" };
@@ -93,12 +93,15 @@ async function lookupOne(lib, book, fetchImpl) {
 
 // ---- ALEPH (Kyiv) ----
 
-// The catalog types some Cyrillic letters as their Latin twins («Kaтepини Бiлokyp»).
-const LATIN = { a: "а", c: "с", e: "е", i: "і", k: "к", o: "о", p: "р", x: "х", y: "у", A: "А", B: "В", C: "С", E: "Е", H: "Н", I: "І", K: "К", M: "М", O: "О", P: "Р", T: "Т", X: "Х" };
-const cyr = (s) => s.replace(/[\p{L}.]+/gu, (w) => (/[а-яіїєґ]/i.test(w) || /^[aceikopxyABCEHIKMOPTX]\.?$/.test(w) ? w.replace(/[aceikopxyABCEHIKMOPTX]/g, (c) => LATIN[c]) : w));
-// «ім. М.Бажана» -> «Бібліотека ім. М. Бажана», «№ 138» -> «Бібліотека № 138».
+// The catalog types some Cyrillic letters as their Latin twins («Kaтepини Бiлokyp», «Б-ka», «Слабошnuцького»):
+// in a name that has Cyrillic, every Latin letter that has a twin becomes it.
+const LATIN = { a: "а", c: "с", e: "е", i: "і", k: "к", n: "п", o: "о", p: "р", u: "и", x: "х", y: "у", A: "А", B: "В", C: "С", E: "Е", H: "Н", I: "І", K: "К", M: "М", O: "О", P: "Р", T: "Т", X: "Х" };
+const cyr = (s) => (/[а-яіїєґ]/i.test(s) ? s.replace(/[acekinopuxyABCEHIKMOPTX]/g, (c) => LATIN[c]) : s);
+// «ім. М.Бажана» -> «Бібліотека ім. М. Бажана», «Б-ка Всесвіт» -> «Бібліотека Всесвіт»; a name the catalog
+// keeps only in English («Dostoyevsky Library») is not one a Kyiv reader would look for, so it is left out.
 const alephBranch = (s) => {
-  const n = cyr(ent(s)).replace(/\.(?=\S)/g, ". ").replace(/\s+/g, " ").trim();
+  const n = cyr(ent(s)).replace(/\.(?=\S)/g, ". ").replace(/^Б-ка\s+/, "Бібліотека ").replace(/\s+/g, " ").trim();
+  if (!/[а-яіїєґ]/i.test(n)) return null;
   return /^(ім\.|№)/.test(n) ? `Бібліотека ${n}` : n;
 };
 const alephNames = new Map(); // collection code («039») -> branch name, gathered from the copies pages
@@ -137,12 +140,14 @@ async function lookupAleph(lib, book, fetchImpl) {
     if (items.some((it) => it.code && !alephNames.has(it.code))) {
       const html = await get(`${lib.base}/F/?func=item-global&doc_library=LUL01&doc_number=${h.doc}`, fetchImpl);
       for (const m of html.matchAll(/<option value=(\d{3})>([^<]+)</g)) alephNames.set(m[1], alephBranch(m[2]));
+      for (const it of items) if (it.code && !alephNames.has(it.code)) alephNames.set(it.code, null); // not asked again
     }
     const by = new Map();
     for (const it of items) {
       // The central library's lending desk and its stacks (a copy there is ordered to the desk).
       const central = it.sub === "Loan Dep." || it.sub === "Stock usage Dep.";
-      const branch = central ? "Бібліотека ім. Лесі Українки" : alephNames.get(it.code) || it.sub;
+      const branch = central ? "Бібліотека ім. Лесі Українки" : alephNames.get(it.code);
+      if (!branch) continue; // «Moved collection» and the like
       const b = by.get(branch) || { branch, total: 0, onShelf: 0, unknown: 0 };
       b.total++;
       if (!it.due) central ? b.onShelf++ : b.unknown++; // a branch's loans are not in the catalog
@@ -159,7 +164,7 @@ async function holdings(db, book, { fetchImpl = fetch, log = () => {}, includeDr
   const out = [];
   await Promise.all(
     LIBRARIES.filter((l) => includeDraft || !l.draft).map(async (lib) => {
-      const key = `${lib.id}:${book.id}`;
+      const key = `${lib.id}${lib.v ? `@${lib.v}` : ""}:${book.id}`; // v: bumped when a library's answers change shape
       const row = db.prepare("SELECT data, at FROM library_cache WHERE key = ?").get(key);
       if (row && Date.now() - row.at < DAY) return void (row.data !== "null" && out.push(JSON.parse(row.data)));
       try {
