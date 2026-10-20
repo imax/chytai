@@ -15,10 +15,10 @@
 // use feeds where a source has them, scrape where it does not; the shelves must refresh daily.
 
 const uah = (n) => (n ? `${Math.round(n)} ₴` : "");
-// WooCommerce leaves HTML entities in names («Ми &#8211; Легіон»).
+// WooCommerce leaves HTML entities in names («Ми &#8211; Легіон»), MEGOGO Books hex ones («П&#x27;ятий ризик»).
 // Pages built on the Лабораторія/Наш Формат engine encode them twice («&amp;laquo;»).
 const NAMED = { nbsp: " ", ndash: "–", mdash: "—", laquo: "«", raquo: "»", rsquo: "’", lsquo: "‘", ldquo: "“", rdquo: "”", hellip: "…", quot: '"', apos: "'", amp: "&" };
-const ent1 = (s) => s.replace(/&#(\d+);/g, (_, n) => String.fromCodePoint(n)).replace(/&([a-z]+);/g, (m, n) => NAMED[n] ?? m);
+const ent1 = (s) => s.replace(/&#(\d+);/g, (_, n) => String.fromCodePoint(n)).replace(/&#x([0-9a-f]+);/gi, (_, n) => String.fromCodePoint(parseInt(n, 16))).replace(/&([a-z]+);/g, (m, n) => NAMED[n] ?? m);
 const ent = (s) => ent1(ent1(String(s || "")));
 const text = (h) => ent(String(h || "").replace(/<[^>]+>/g, " ").replace(/&nbsp;/g, " ").replace(/&#8217;|&rsquo;/g, "’")).replace(/\s+/g, " ").trim();
 const attr = (p, n) => ((p.attributes || []).find((a) => a.name === n) || { terms: [] }).terms.map((t) => t.name).join(", ") || "";
