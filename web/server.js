@@ -279,8 +279,9 @@ const librariesFor = (req) => libraries.LIBRARIES.filter((l) => req.owner || !l.
 // What readers do with books (social.js): ratings, the feed, «книжка навмання», recommendations.
 const social = new Social(store, (id) => pub(auth.reader(id)));
 pages.setStats((id) => social.stats(id));
-// The weekly letter (digest.js): Friday 9:00 Kyiv, to the owner alone until WEB_DIGEST_TO=all.
-const digest = new Digest({ store, auth, social, libraries, site: SITE, ownerId: OWNER_ID, to: process.env.WEB_DIGEST_TO === "all" ? "all" : "owner" });
+// The weekly letter (digest.js): Friday 9:00 Kyiv, to every reader who has not switched it off (Max,
+// 2026-10-20: «Включаємо на всіх»); WEB_DIGEST_TO=owner limits it to the owner again.
+const digest = new Digest({ store, auth, social, libraries, site: SITE, ownerId: OWNER_ID, to: process.env.WEB_DIGEST_TO === "owner" ? "owner" : "all" });
 digest.schedule();
 pages.setReadersWithNote((id) => readersOf(id).find((r) => r.entry.note) || null);
 const day = (iso) => ((iso = iso || store.shelvesFetched) ? new Date(iso).toLocaleDateString("uk-UA", { timeZone: "Europe/Kyiv" }) : "");

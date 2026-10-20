@@ -6,8 +6,8 @@
 // don't have. A letter goes out only when the first three have something in them; nothing is sold and nothing
 // is tracked (no open or click tracking, plain links to the site). «Відписатися» is one click, without
 // signing in, and a switch in /settings; the mail client's own unsubscribe button works too
-// (List-Unsubscribe). For now only the owner gets it (WEB_DIGEST_TO=owner, the default); WEB_DIGEST_TO=all
-// sends to everyone who has not switched it off.
+// (List-Unsubscribe). Everyone who has not switched it off gets it (Max looked at his own first and said
+// «Включаємо на всіх», 2026-10-20); WEB_DIGEST_TO=owner sends it to the owner alone.
 const crypto = require("crypto");
 const pages = require("./pages");
 
