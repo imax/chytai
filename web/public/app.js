@@ -246,4 +246,41 @@
     main.prepend(results);
     liveSearch(find, results, [...main.children].filter((el) => el !== results));
   }
+
+  // «Хочу прочитати», «Прочитано», «Стежити», «Підписатися» in a list: sent in the background and changed
+  // in place, so the page doesn't jump to the top after the server's redirect (Max, 2026-10-20). Without
+  // JS (or when the request fails) the form posts as before. The book page's own buttons still reload it.
+  const LABEL = { want: "хочу прочитати", read: "прочитано", reading: "читаю" };
+  document.addEventListener("submit", async (e) => {
+    const form = e.target;
+    const action = form.getAttribute("action") || "";
+    if (form.method !== "post" || !/^\/api\/(entry|follow|subscribe)\//.test(action) || form.closest(".book-main")) return;
+    e.preventDefault();
+    const button = form.querySelector("button");
+    if (button) button.disabled = true;
+    try {
+      const r = await fetch(action, { method: "POST", body: new URLSearchParams(new FormData(form)), credentials: "same-origin" });
+      if (!r.ok) throw new Error(r.status);
+    } catch {
+      return form.submit();
+    }
+    if (button) button.disabled = false;
+    const status = form.querySelector("input[name=status]")?.value;
+    if (action.startsWith("/api/entry/") && status) {
+      const mark = document.createElement("span");
+      mark.className = "muted small";
+      mark.textContent = LABEL[status] || "на полиці";
+      (form.closest(".marks") || form).replaceWith(mark);
+      return;
+    }
+    if (!button) return;
+    const on = !button.classList.contains("on") && !/^✓/.test(button.textContent);
+    button.classList.toggle("on", on);
+    if (action.startsWith("/api/follow/")) button.textContent = on ? "✓ Стежу" : "Стежити";
+    else if (button.classList.contains("text-link")) button.textContent = on ? "✓ підписано" : "підписатися";
+    else {
+      button.textContent = on ? "✓ Підписано" : "Підписатися";
+      if (on) button.classList.remove("primary");
+    }
+  });
 })();
