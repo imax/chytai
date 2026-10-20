@@ -19,6 +19,7 @@ const wikidata = require("./wikidata");
 const authors = require("./authors");
 const { Social } = require("./social");
 const goodreads = require("./goodreads");
+const { Digest } = require("./digest");
 
 const ROOT = path.join(__dirname, "..");
 loadDotEnv(path.join(ROOT, ".env"));
@@ -178,7 +179,7 @@ app.get("/privacy", (req, res) => res.send(pages.privacyPage({ user: req.user })
 // ---- settings: name, username, e-mail, deleting the account ----
 
 app.get("/settings", signed, (req, res) => {
-  res.send(pages.settingsPage({ user: req.user, values: req.user, suggested: auth.suggestUsername(req.user.name, slugify), saved: !!req.query.saved }));
+  res.send(pages.settingsPage({ user: req.user, values: { ...req.user, digest: digest.enabled(req.user.id) }, suggested: auth.suggestUsername(req.user.name, slugify), saved: !!req.query.saved }));
 });
 app.post("/settings", signed, (req, res) => {
   const name = auth.checkName(req.body.name);
@@ -186,9 +187,10 @@ app.post("/settings", signed, (req, res) => {
   const email = req.body.email ? auth.checkEmail(req.body.email) : { email: req.user.email };
   const taken = email.email && auth.byEmail(email.email) && auth.byEmail(email.email).id !== req.user.id;
   const error = name.error || username.error || email.error || (taken ? "Ця пошта вже зайнята іншим читачем." : "");
-  const values = { ...req.user, name: req.body.name, username: req.body.username, email: req.body.email };
+  const values = { ...req.user, name: req.body.name, username: req.body.username, email: req.body.email, digest: !!req.body.digest };
   if (error) return res.status(400).send(pages.settingsPage({ user: req.user, values, error }));
   auth.updateReader(req.user.id, { name: name.name, username: username.username, email: email.email || null });
+  digest.setEnabled(req.user.id, !!req.body.digest);
   res.redirect("/settings?saved=1");
 });
 app.post("/settings/delete", signed, (req, res) => {
@@ -258,6 +260,7 @@ const readersOf = (id) =>
 const visible = (s) => store.visible(s);
 // Letters to the owner (WEB_NOTIFY_EMAIL, else the e-mail he signs in with), sent in the background.
 const site = (req) => (DOMAIN ? `https://${DOMAIN}` : `${req.protocol}://${req.get("host")}`);
+const SITE = DOMAIN ? `https://${DOMAIN}` : `http://localhost:${PORT}`;
 function notifyOwner(subject, text) {
   const to = process.env.WEB_NOTIFY_EMAIL || auth.reader(OWNER_ID)?.email;
   if (!to) return console.log(`[notify] no owner e-mail: ${subject}`);
@@ -267,6 +270,9 @@ const librariesFor = (req) => libraries.LIBRARIES.filter((l) => req.owner || !l.
 // What readers do with books (social.js): ratings, the feed, «книжка навмання», recommendations.
 const social = new Social(store, (id) => pub(auth.reader(id)));
 pages.setStats((id) => social.stats(id));
+// The weekly letter (digest.js): Friday 9:00 Kyiv, to the owner alone until WEB_DIGEST_TO=all.
+const digest = new Digest({ store, auth, social, libraries, site: SITE, ownerId: OWNER_ID, to: process.env.WEB_DIGEST_TO === "all" ? "all" : "owner" });
+digest.schedule();
 pages.setReadersWithNote((id) => readersOf(id).find((r) => r.entry.note) || null);
 const day = (iso) => ((iso = iso || store.shelvesFetched) ? new Date(iso).toLocaleDateString("uk-UA", { timeZone: "Europe/Kyiv" }) : "");
 // A publisher in the lists: its newest books (the ones marked new first), how many there are and are new.
@@ -495,6 +501,44 @@ app.post("/api/refresh", owner, async (req, res) => {
   const r = await refreshShelves(true, String(req.query.only || ""));
   res.send(pages.messagePage({ title: r.ok ? "Каталоги оновлено" : "Не вдалося оновити", text: [...(r.counts || []).map(([id, n]) => `${id}: ${n}`), ...r.errors].join("; "), user: req.user }));
 });
+
+// ---- the weekly letter (digest.js) ----
+
+// «Відписатися» in the letter: one click, no sign-in, a signed link per reader; the page offers to turn it
+// back on. The POST form of the same address is the mail client's own unsubscribe button (List-Unsubscribe).
+const unsubscribe = (req, res, on) => {
+  const reader = auth.reader(req.params.id);
+  if (!reader || !digest.check(reader.id, req.params.token)) return res.status(404).send(pages.messagePage({ title: "Посилання не підходить", text: "Вимкнути листи можна в налаштуваннях.", user: req.user }));
+  digest.setEnabled(reader.id, on);
+  if (req.method === "POST" && !req.body.page) return res.type("text").send("OK");
+  res.send(pages.digestPage({ on, action: `/digest/${on ? "unsubscribe" : "resubscribe"}/${encodeURIComponent(reader.id)}/${req.params.token}`, user: req.user }));
+};
+app.get("/digest/unsubscribe/:id/:token", (req, res) => unsubscribe(req, res, false));
+app.post("/digest/unsubscribe/:id/:token", (req, res) => unsubscribe(req, res, false));
+app.post("/digest/resubscribe/:id/:token", (req, res) => unsubscribe(req, res, true));
+// The owner looks at a letter as it would go out (their own, or ?reader=<username>'s), and sends the run.
+app.get("/digest/preview", owner, async (req, res) => {
+  const reader = req.query.reader ? auth.byUsername(req.query.reader) : auth.reader(req.user.id);
+  if (!reader) return res.status(404).send("Немає такого читача");
+  const d = await digest.build(reader.id);
+  if (d.empty) return res.type("text").send(`@${reader.username}: за цей період нічого нового, лист не пішов би.\n\n${JSON.stringify(d.state, null, 2)}`);
+  const letter = digest.render({ ...reader }, d);
+  if (req.query.text) return res.type("text").send(`Тема: ${letter.subject}\n\n${letter.text}`);
+  // On top of the letter, for the owner: the subject and a button that mails it to them.
+  const bar = `<div style="background:#1b1a17;color:#ece8df;font:14px -apple-system,sans-serif;padding:10px 20px;display:flex;gap:16px;align-items:center;flex-wrap:wrap"><span>Тема: <b>${pages.esc(letter.subject)}</b></span><span style="flex:1"></span><a href="?text=1" style="color:#a29d92">текстова версія</a>${reader.id === req.user.id ? `<form method="post" action="/api/digest?test=1" style="margin:0"><button style="border:1px solid #ece8df;background:none;color:#ece8df;border-radius:999px;padding:6px 14px;cursor:pointer">Надіслати собі</button></form>` : ""}</div>`;
+  res.send(letter.html.replace("<body", `${bar}<body`));
+});
+// POST /api/digest?test=1 mails the owner their own letter without recording it; without `test` it is the
+// weekly run itself (every recipient, recorded), for when the Friday timer has to be redone by hand.
+app.post("/api/digest", owner, async (req, res) => {
+  if (req.query.test) {
+    const r = await digest.sendTo(auth.reader(req.user.id), { dry: true, force: true });
+    return res.send(pages.messagePage({ title: r.sent ? "Лист надіслано" : "Листа не було б", text: r.sent ? `Тема: ${r.subject}` : r.reason, user: req.user }));
+  }
+  const r = await digest.run();
+  res.send(pages.messagePage({ title: "Розсилку виконано", text: `надіслано ${r.sent}, пропущено ${r.skipped}${r.errors.length ? `; помилки: ${r.errors.join("; ")}` : ""}`, user: req.user }));
+});
+app.get("/digest/status", owner, (req, res) => res.json({ to: digest.to, recipients: digest.recipients().map((r) => `@${r.username}`), lastRun: store.db.get("digest:lastRun"), last: JSON.parse(store.db.get("digest:last") || "null") }));
 
 app.post("/api/subscribe/:id", signed, (req, res) => {
   if (store.toggleSubscription(req.user.id, req.params.id) === null) return res.status(404).send("Немає такої полиці");

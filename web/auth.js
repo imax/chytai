@@ -228,8 +228,9 @@ class Auth {
     return this.send(email, subject, text);
   }
 
-  // A plain-text letter through Resend; without the key it goes to the log instead.
-  async send(to, subject, text) {
+  // A letter through Resend (plain text, with an HTML version and extra headers when given); without
+  // the key it goes to the log instead.
+  async send(to, subject, text, { html = "", headers = null } = {}) {
     if (!this.resendKey) {
       this.log(`[mail] no RESEND_API_KEY: to ${to}: ${subject}\n${text}`);
       return;
@@ -237,7 +238,7 @@ class Auth {
     const res = await fetch("https://api.resend.com/emails", {
       method: "POST",
       headers: { Authorization: `Bearer ${this.resendKey}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ from: this.from, to: [to], subject, text }),
+      body: JSON.stringify({ from: this.from, to: [to], subject, text, ...(html ? { html } : {}), ...(headers ? { headers } : {}) }),
     });
     if (!res.ok) throw new Error(`Resend ${res.status}: ${(await res.text()).slice(0, 200)}`);
   }

@@ -771,6 +771,7 @@ function settingsPage({ user, values, error = "", suggested = "", saved = false 
   <label>Ім'я<input type="text" name="name" value="${attr(values.name || "")}" required maxlength="60"></label>
   <label>Адреса сторінки<span class="prefix">chytai.org.ua/@<input type="text" name="username" value="${attr(values.username || "")}" required maxlength="30" spellcheck="false" placeholder="${attr(suggested)}"></span><span class="hint">Якщо змінити, стара адреса перестане працювати.</span></label>
   <label>Пошта для входу<input type="email" name="email" value="${attr(values.email || "")}" ${user.owner ? "" : "required"} autocomplete="email"></label>
+  <label class="check"><span><input type="checkbox" name="digest" value="1"${values.digest ? " checked" : ""}> Щотижневий лист</span><span class="hint">У п'ятницю вранці: що читають ті, за ким ви стежите, новинки видавництв, на які ви підписані, і де з'явились книжки з «Хочу прочитати». Приходить лише коли є що розповісти.</span></label>
   <div class="actions"><button class="btn primary">Зберегти</button><a class="text-link small" href="${attr(user.href)}">Моя сторінка</a><span class="grow"></span><a class="text-link small" href="/logout">Вийти</a></div>
 </form>
 <section class="form import-box">
@@ -795,13 +796,14 @@ function privacyPage({ user }) {
 <p><strong>Якщо ви просто дивитесь сайт</strong> — нічого про вас. Без акаунта ми не ставимо жодних кукі й не підключаємо лічильників відвідувань.</p>
 <p><strong>Якщо ви завели полицю:</strong></p>
 <ul>
-<li><strong>Пошту.</strong> Тільки щоб надіслати код для входу. Ми не робимо розсилок і нікому її не передаємо. Іншим читачам вашої пошти не видно.</li>
+<li><strong>Пошту.</strong> Щоб надіслати код для входу і, раз на тиждень, лист про ваші полиці (нижче). Нікому її не передаємо, іншим читачам вашої пошти не видно.</li>
 <li><strong>Ім’я та нікнейм</strong>, які ви самі вказали. Нікнейм — це адреса вашої полиці: chytai.org.ua/@нікнейм.</li>
 <li><strong>Вашу полицю:</strong> книжки, статуси («Хочу прочитати», «Читаю», «Прочитано»), оцінки, рік прочитання, нотатки, у якому вигляді вона у вас є (папір, e-book), а також на які полиці ви підписані і за якими читачами стежите.</li>
 <li><strong>Одну кукі для входу</strong> (<code>chytai_web</code>), щоб не просити код щоразу. Вона живе рік або до того, як ви вийдете. У ній лише випадковий ключ, сам ключ у нас не зберігається, тільки його відбиток.</li>
 <li><strong>Коли ви заходили востаннє</strong> — дату, без історії переглядів.</li>
 </ul>
 <p><strong>Якщо ви імпортували полицю з Goodreads:</strong> файл експорту ми читаємо один раз і не зберігаємо. З нього на полицю потрапляють лише назва, автор, ISBN, полиця (статус), оцінка, дата прочитання, дата додавання і ваша рецензія (My Review), а також номер книжки на Goodreads, щоб не імпортувати її двічі. Приватні нотатки (Private Notes), середні оцінки та решту колонок ми не читаємо. Перед імпортом ви бачите список і вибираєте, що саме переносити.</p>
+<p><strong>Щотижневий лист.</strong> У п'ятницю вранці ми надсилаємо один лист про ваші полиці: що зробили читачі, за якими ви стежите, які новинки з'явились у видавництв, на які ви підписані, і де з'явились книжки з вашого «Хочу прочитати». Для цього ми запам'ятовуємо, коли відправили попередній лист і де тоді були ваші книжки з «Хочу прочитати». Лист приходить лише коли є що розповісти, у ньому нема ні реклами, ні цін, і ми не стежимо, чи ви його відкрили. Вимкнути його можна одним кліком за посиланням у листі або в <a class="text-link" href="/settings">налаштуваннях</a>.</p>
 <p>Код для входу діє 10 хвилин і після використання зникає. Щоб ніхто не засипав чужу пошту кодами, ми годину рахуємо спроби з однієї адреси та IP і потім забуваємо.</p>
 <h2>Що бачать інші</h2>
 <p><strong>Ваша полиця публічна.</strong> Будь-хто може відкрити chytai.org.ua/@нікнейм і побачити ваше ім’я, книжки, оцінки й нотатки. Ваші оцінки й нотатки також з’являються на сторінках книжок і на сторінці «Що читають інші». Так задумано: Chytai — про те, щоб читачі радили книжки одне одному. Тож пишіть у нотатках лише те, чим готові поділитися.</p>
@@ -810,7 +812,7 @@ function privacyPage({ user }) {
 <p>Ми користуємося кількома сервісами, без яких сайт не працює:</p>
 <ul>
 <li><strong>Fly.io</strong> — сервери у Франкфурті (Німеччина), там лежить база сайту.</li>
-<li><strong>Resend</strong> — надсилає листи з кодом від code@chytai.org.ua. Бачить вашу пошту і сам лист.</li>
+<li><strong>Resend</strong> — надсилає листи з кодом і щотижневий лист від code@chytai.org.ua. Бачить вашу пошту і сам лист.</li>
 <li><strong>Google Fonts</strong> — шрифти сайту. Ваш браузер завантажує їх з серверів Google, тож Google бачить вашу IP-адресу, як і на більшості сайтів.</li>
 <li><strong>GitHub</strong> — щоночі робимо зашифровану резервну копію бази і зберігаємо її там 90 днів. Без нашого ключа її не прочитати.</li>
 </ul>
@@ -904,12 +906,21 @@ ${result.created.length ? `<p class="muted small" style="margin-top:24px">Нов
 
 // ---- misc ----
 
+// After «Відписатися» in the weekly letter: done, with a way back.
+function digestPage({ on, action, user }) {
+  const title = on ? "Листи знову приходять" : "Листів більше не буде";
+  return layout({ title, user, body: `<section class="auth prose"><h1>${title}</h1>
+<p>${on ? "Щотижневий лист знову приходитиме в п'ятницю вранці, коли буде що розповісти." : "Щотижневий лист вимкнено. Полиця, підписки й усе інше лишаються як були."}</p>
+<form method="post" action="${attr(action)}"><input type="hidden" name="page" value="1"><button class="btn">${on ? "Вимкнути" : "Увімкнути знову"}</button></form>
+</section>` });
+}
+
 function messagePage({ title, text, user }) {
   return layout({ title, body: pageHead({ title: esc(title), sub: esc(text) }), user });
 }
 
 module.exports = {
   layout, homePage, bookPage, editPage, libraryPage, readersPage, publishersPage, publisherPage, searchPage, searchResults, authorPage,
-  loginPage, codePage, signupPage, settingsPage, privacyPage, messagePage, importPage, importPreviewPage, importDonePage,
+  loginPage, codePage, signupPage, settingsPage, privacyPage, messagePage, digestPage, importPage, importPreviewPage, importDonePage,
   esc, STATUS, COPY, inline, setTitleLinks, setAuthorLinks, setStats, setReadersWithNote,
 };
