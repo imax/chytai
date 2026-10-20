@@ -21,6 +21,61 @@ const NAMED = { nbsp: " ", ndash: "–", mdash: "—", laquo: "«", raquo: "»",
 const ent1 = (s) => s.replace(/&#(\d+);/g, (_, n) => String.fromCodePoint(n)).replace(/&#x([0-9a-f]+);/gi, (_, n) => String.fromCodePoint(parseInt(n, 16))).replace(/&([a-z]+);/g, (m, n) => NAMED[n] ?? m);
 const ent = (s) => ent1(ent1(String(s || "")));
 const text = (h) => ent(String(h || "").replace(/<[^>]+>/g, " ").replace(/&nbsp;/g, " ").replace(/&#8217;|&rsquo;/g, "’")).replace(/\s+/g, " ").trim();
+// A book's description for its page (Max, 2026-10-20: «Про книжку» showed shop copy cut mid-word).
+// Shops wrap the publisher's annotation in their own copy: MEGOGO Books writes a promo paragraph,
+// «Купуй … на MEGOGO BOOKS», then «Про що книжка?», «Чому варто прочитати», «Для кого». So: when there
+// is a «Про що» heading only its section is kept; otherwise the text before the first heading. Lists and
+// buy calls go, paragraphs stay, and it ends on a whole sentence within `max` characters.
+// Takes the shop's HTML or a description kept by an older refresh (plain text, maybe cut at 600).
+const BUY = /(^|[\s«"(])(купу[йв]\p{L}*|купити|придба[йт]\p{L}*|замовля[йт]\p{L}*|замовте|обирай\p{L}*)(?=[\s,.!:]|$)|megogo|mbooks|у нашому (магазині|інтернет)|на нашому сайті/iu;
+const ABOUT_HEAD = /^про що (ця |цей |це )?(книжк|книг|роман|історі|збірк|видання|комікс|аудіокниг)/i;
+const sentences = (p) => p.split(/(?<=[.!?…»"])(?<!(?:^|\s)\p{Lu}\.)\s+(?=[«"„(—–\-\p{Lu}\d])/u);
+const whole = (s) => /[.!?…»")]$/.test(s);
+function about(h, max = 1000) {
+  const raw = String(h || "");
+  const lines = ent(
+    raw
+      .replace(/<h\d[^>]*>([\s\S]*?)<\/h\d>/gi, "\n\u0001$1\n")
+      .replace(/<li[^>]*>/gi, "\n\u0002")
+      .replace(/<\/(p|div|li|ul|ol|blockquote)>|<br\s*\/?>/gi, "\n")
+      .replace(/<[^>]+>/g, " ")
+  )
+    .split(/\n/)
+    .map((l) => l.replace(/[ \t \r]+/g, " ").trim())
+    .filter((l) => l && l !== "\u0001" && l !== "\u0002");
+  const head = lines.findIndex((l) => l[0] === "\u0001" && ABOUT_HEAD.test(l.slice(1).trim()) && lines[lines.indexOf(l) + 1]?.[0] !== "\u0001");
+  let body = head >= 0 ? lines.slice(head + 1) : lines;
+  const end = body.findIndex((l) => l[0] === "\u0001");
+  if (end >= 0 && (end > 0 || head >= 0)) body = body.slice(0, end);
+  else body = body.filter((l) => l[0] !== "\u0001");
+  const cutOff = !/<\/?[a-z]/i.test(raw) && raw.length >= 595 && !whole(raw.trim()); // an older refresh's text cut at 600
+  const paras = body
+    .filter((l) => l[0] !== "\u0002")
+    .map((l, i, all) => {
+      let s = sentences(l).filter((s) => !BUY.test(s) && !ABOUT_HEAD.test(s) && !/^(чому варто|для кого)(?=\s).*\?$/i.test(s));
+      if (cutOff && i === all.length - 1 && s.length > 1 && !whole(s[s.length - 1])) s = s.slice(0, -1);
+      return s;
+    })
+    .filter((s) => s.length);
+  const out = [];
+  let len = 0;
+  for (const p of paras) {
+    const keep = [];
+    for (const s of p) {
+      if (len + s.length + 1 > max) break;
+      keep.push(s), (len += s.length + 1);
+    }
+    if (keep.length) out.push(keep.join(" "));
+    if (keep.length < p.length) break;
+  }
+  if (!out.length && paras.length) {
+    const s = paras[0].join(" ");
+    return s.length <= max ? s : `${s.slice(0, s.lastIndexOf(" ", max - 1))}…`;
+  }
+  const res = out.join("\n\n");
+  return cutOff && !whole(res) ? `${res}…` : res;
+}
+
 const attr = (p, n) => ((p.attributes || []).find((a) => a.name === n) || { terms: [] }).terms.map((t) => t.name).join(", ") || "";
 
 // «Коли завмирає серце, том шостий», «Серпанка. Том 2. Ліс зниклих духів», «Світ Едени, книга перша»:
@@ -44,7 +99,7 @@ const woo = (p) => ({
   purchasable: !!p.is_purchasable,
   url: p.permalink,
   image: (p.images?.[0] || {}).src || "",
-  blurb: text(p.short_description).slice(0, 600),
+  blurb: about(p.short_description),
 });
 
 // Старий Лев: statuses come as labels. E-books are separate products with the same
@@ -198,7 +253,7 @@ function ldBookPage(src, brands) {
       status: /PreOrder/i.test(avail) ? "передзамовлення" : /InStock/i.test(avail) ? "є" : "немає",
       isNew: false,
       genres: String(ent(book.genre || "")).split(/,\s*/).filter(Boolean),
-      blurb: text(prod.description || book.description).slice(0, 600),
+      blurb: about(prod.description || book.description),
       pages: String(book.numberOfPages || ""),
       year: String(book.datePublished || "").slice(0, 4),
       language: "українська",
@@ -252,7 +307,7 @@ const wooBook = (src, p, extra = {}) => ({
   status: !p.inStock ? "немає" : /передзамовлення/i.test(p.title + p.categories.join()) ? "передзамовлення" : "є",
   isNew: false,
   genres: p.categories.filter((c) => !/передзамовлення|розпродаж|акції|новинки|без категорії|комплекти|серії/i.test(c)),
-  blurb: ent(p.blurb || p.desc),
+  blurb: about(p.blurb || p.desc),
   language: "українська",
   ...extra,
 });
@@ -295,7 +350,7 @@ function mbooksPage(src, brand, slug) {
       status: /PreOrder/i.test(avail) ? "передзамовлення" : /InStock/i.test(avail) ? "є" : "немає",
       isNew: false,
       genres: [],
-      blurb: text(prod.description).slice(0, 600),
+      blurb: about(prod.description),
       language: "українська",
     };
   };
@@ -359,7 +414,7 @@ function bohdanPage(html, url) {
     status: /InStock/i.test(avail) ? "є" : /PreOrder/i.test(avail) ? "передзамовлення" : avail ? "немає" : /Немає в наявності/i.test(html) ? "немає" : "є",
     isNew: false,
     genres: crumbs.slice(1, 2),
-    blurb: text(prod.description || meta(html, "og:description")).slice(0, 600),
+    blurb: about(prod.description || meta(html, "og:description")),
     pages: spec("Кількість сторінок"),
     year: "",
     language: "українська",
@@ -397,7 +452,7 @@ function abukBook(json, url) {
     status: "є",
     isNew: false,
     genres: (b.genre || []).map((g) => String(g.name || "").trim()).filter((g) => g && !/абук/i.test(g)),
-    blurb: text(b.description).slice(0, 600),
+    blurb: about(b.description),
     year: String(b.year || ""),
     language: "українська",
   };
@@ -473,7 +528,7 @@ const SOURCES = [
       statuses: (p.statuses || []).map((s) => s.label),
       image: p.image?.url || "",
       genres: (p.sub_categories || []).map((c) => c.name),
-      blurb: text(p.description).slice(0, 600),
+      blurb: about(p.description),
     }),
     keep: (p) => p.type === "book" || p.type === "ebook",
     toItem: (p) => ({
@@ -515,7 +570,7 @@ const SOURCES = [
               const r = await fetchImpl(`https://api-k8s.starylev.com.ua/api/v1.1/products/${encodeURIComponent(p.slug)}`, { headers: HEADERS, signal: AbortSignal.timeout(30000) });
               if (!r.ok) return;
               const j = await r.json();
-              p.blurb = text((j.data || j).description).slice(0, 600);
+              p.blurb = about((j.data || j).description);
               if (p.blurb) got++;
             } catch {
               /* next refresh tries again */
@@ -533,7 +588,7 @@ const SOURCES = [
     tagline: "Київське видавництво: комікси, фентезі, квірліт і нонфікшн",
     url: "https://vydavnytstvo.com/",
     api: "https://vydavnytstvo.com/wp-json/wc/store/v1/products",
-    normalize: (p) => ({ ...woo(p), name: text(p.name), attrs: Object.fromEntries((p.attributes || []).map((a) => [a.name, a.terms.map((t) => t.name).join(", ")])), desc: text(p.description).slice(0, 400), type: p.type }),
+    normalize: (p) => ({ ...woo(p), name: text(p.name), attrs: Object.fromEntries((p.attributes || []).map((a) => [a.name, a.terms.map((t) => t.name).join(", ")])), desc: about(p.description), type: p.type }),
     keep: (p) => !["Сувеніри", "Повернення з крамниць", "Гаражний розпродаж"].some((c) => p.categories.includes(c)),
     toItem: (p) => {
       let author = "", title = ent(p.name), note = "";
@@ -565,7 +620,7 @@ const SOURCES = [
         isNew: pre,
         note,
         genres: p.categories.filter((c) => !["Передзамовлення", "Розпродаж"].includes(c)),
-        blurb: ent(p.blurb || p.desc),
+        blurb: about(p.blurb || p.desc),
         pages: p.attrs?.["Кількість сторінок"] || "",
         language: "українська",
       };
@@ -594,7 +649,7 @@ const SOURCES = [
     tagline: "Київське видавництво: нонфікшн, есеїстика, художня література",
     url: "https://osnovypublishing.com/",
     api: "https://osnovypublishing.com/wp-json/wc/store/v1/products",
-    normalize: (p) => ({ ...woo(p), title: text(p.name), desc: text(p.description).slice(0, 600) }),
+    normalize: (p) => ({ ...woo(p), title: text(p.name), desc: about(p.description) }),
     // Stickers, postcards and other merch have no category.
     keep: (p) => p.categories.some((c) => c !== "Без категорії") && !/стікер|листівк|сертифікат/i.test(p.title),
     toItem: (p) => wooBook({ id: "osnovy" }, p, { bundle: p.categories.includes("Комплекти") }),
@@ -611,7 +666,7 @@ const SOURCES = [
     tagline: "Київське видавництво: перекладна й українська проза, есеї, спогади",
     url: "https://komorabooks.com/",
     api: "https://komorabooks.com/wp-json/wc/store/v1/products",
-    normalize: (p) => ({ ...woo(p), title: unshout(text(p.name).replace(/\s*\(розпродаж\)$/i, "")), desc: text(p.description).slice(0, 600) }),
+    normalize: (p) => ({ ...woo(p), title: unshout(text(p.name).replace(/\s*\(розпродаж\)$/i, "")), desc: about(p.description) }),
     keep: (p) => !/сертифікат|листівк|торб|стікер/i.test(p.title),
     toItem: (p) => wooBook({ id: "komora" }, p),
     // The book's details are «key: value» rows (Автор, Переклад, ISBN…).
@@ -776,4 +831,4 @@ async function refresh({ store, log = console.log, fetchImpl, only }) {
   return { ok: true, errors, counts };
 }
 
-module.exports = { SOURCES, fetchSource, buildShelves, refresh, volumeOf, ent, pageProducts, ldBookPage };
+module.exports = { SOURCES, fetchSource, buildShelves, refresh, volumeOf, ent, about, pageProducts, ldBookPage };

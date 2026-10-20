@@ -706,7 +706,7 @@ class Store {
   }
 
   fromShelfItem(shelf, it) {
-    return { id: it.id, title: it.title, author: it.author, altTitle: it.altTitle || "", cover: it.cover, tags: it.genres || [], links: [{ label: shelf.name, url: it.url }], source: shelf.id, shelf: shelf.id, blurb: require("./catalogs").ent(it.blurb || ""), price: it.price, status: it.status, expected: it.expected || "", language: it.language, edition: it.edition || "", isbn: it.isbn || "", volume: it.volume || 0, bundle: !!it.bundle, format: it.format || (shelf.kind === "free" ? "e-book" : shelf.kind === "audio" ? "аудіо" : "папір"), narrator: it.narrator || "", duration: it.duration || "", subscription: !!it.subscription };
+    return { id: it.id, title: it.title, author: it.author, altTitle: it.altTitle || "", cover: it.cover, tags: it.genres || [], links: [{ label: shelf.name, url: it.url }], source: shelf.id, shelf: shelf.id, blurb: require("./catalogs").about(it.blurb || ""), price: it.price, status: it.status, expected: it.expected || "", language: it.language, edition: it.edition || "", isbn: it.isbn || "", volume: it.volume || 0, bundle: !!it.bundle, format: it.format || (shelf.kind === "free" ? "e-book" : shelf.kind === "audio" ? "аудіо" : "папір"), narrator: it.narrator || "", duration: it.duration || "", subscription: !!it.subscription };
   }
 
   addBook({ title, author, cover, links }) {

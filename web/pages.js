@@ -342,7 +342,7 @@ function bookPage({ book, entry, user, shelf, inLibrary = new Map(), readers = [
     </section>` : ""}
     ${book.blurb || book.translations?.length || book.ukTitle ? `<section class="block">
       ${label("Про книжку")}
-      ${book.blurb ? `<div class="about"><p>${esc(book.blurb)}</p></div>` : ""}
+      ${book.blurb ? `<div class="about">${book.blurb.split(/\n\n+/).map((t) => `<p>${esc(t)}</p>`).join("")}</div>` : ""}
       <p class="small muted">${[book.blurb ? `Опис з сайту ${esc(shelf ? shelf.name : book.source)}` : "", ...(book.translations || []).map((t) => `${isUk(book) && !isUk(t) ? "Оригінал" : "Переклад"}: <a href="${attr(t.href)}">${esc(t.title)}</a>`), book.ukTitle ? `Українською: «${esc(book.ukTitle)}», у каталогах поки немає` : ""].filter(Boolean).join(" · ")}</p>
     </section>` : ""}
   </div>
@@ -350,7 +350,7 @@ function bookPage({ book, entry, user, shelf, inLibrary = new Map(), readers = [
     ${also.length ? `${label("Читали це, сподобалось і це")}${minis(also)}` : ""}
   </aside>
 </div>`;
-  const description = [book.author, book.blurb || stripMd(readers.find((r) => r.entry.note)?.entry.note || "")].filter(Boolean).join(". ");
+  const description = [book.author, book.blurb?.replace(/\s+/g, " ") || stripMd(readers.find((r) => r.entry.note)?.entry.note || "")].filter(Boolean).join(". ");
   return layout({ title: book.title, body, user, path: "/book", description });
 }
 
