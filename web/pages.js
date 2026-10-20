@@ -71,16 +71,14 @@ const label = (text, aside = "") => `<div class="label"><h2>${text}</h2>${aside 
 const NAV = [
   ["/community", "Читачі", (p) => p === "/community" || p === "/@"],
   ["/publishers", "Видавництва", (p) => p.startsWith("/publishers")],
-  // The reader lives on its own site; readers found it hard to spot in the footer (feedback, 2026-10-20).
-  ["https://chytai.fly.dev", "Читалка", () => false],
 ];
 
 function layout({ title, body, user, path = "", description = "", q = "", home = false }) {
   const on = (p) => (p ? ' class="on"' : "");
   const nav = [
     ...NAV.map(([href, name, is]) => `<a href="${href}"${on(is(path))}>${name}</a>`),
-    user ? `<a href="${attr(user.href || "/me")}"${on(path === "/me")}>Моє</a>` : "",
-    user ? `<a href="/settings"${on(path === "/settings")} title="Налаштування">${esc(user.name)}</a>` : `<a href="/login"${on(path === "/login")}>Увійти</a>`,
+    // Settings live on one's own shelf, not in the menu (Max, 2026-10-20).
+    user ? `<a href="${attr(user.href || "/me")}"${on(path === "/me" || path === "/settings")}>Моє</a>` : `<a href="/login"${on(path === "/login")}>Увійти</a>`,
   ].join("");
   const find = home || path === "/search" ? "" : `<form class="find" action="/search" role="search"><input type="search" name="q" value="${attr(q)}" placeholder="назва, автор або жанр" autocomplete="off" aria-label="Пошук"></form>`;
   return `<!doctype html>
@@ -493,7 +491,7 @@ function libraryPage({ rows, user, reader, own = false, mineIds = null, recs = [
     ["seeking", "Шукаю", rows.filter((r) => r.copy === "seeking").length],
     ...(common.length ? [["common", "Спільні", common.length]] : []),
   ].filter(([k, , n]) => !k || n || (own && ["read", "reading", "want"].includes(k)));
-  const sub = [books(rows.length), count(read, "прочитана", "прочитані", "прочитаних"), thisYear.length ? `${thisYear.length} цього року` : "", common.length ? `<b>${common.length} ${plural(common.length, "спільна", "спільні", "спільних")} з тобою</b>` : "", follows.followers.length ? `<a href="#follows">${count(follows.followers.length, "читач стежить", "читачі стежать", "читачів стежать")}</a>` : "", own ? `<a href="${attr(reader.href)}?public">як бачать інші</a>` : `<span class="muted">@${esc(reader.username)}</span>`].filter(Boolean).join(" · ");
+  const sub = [books(rows.length), count(read, "прочитана", "прочитані", "прочитаних"), thisYear.length ? `${thisYear.length} цього року` : "", common.length ? `<b>${common.length} ${plural(common.length, "спільна", "спільні", "спільних")} з тобою</b>` : "", follows.followers.length ? `<a href="#follows">${count(follows.followers.length, "читач стежить", "читачі стежать", "читачів стежать")}</a>` : "", own ? `<a href="${attr(reader.href)}?public">як бачать інші</a> · <a href="/settings">налаштування</a>` : `<span class="muted">@${esc(reader.username)}</span>`].filter(Boolean).join(" · ");
   // Who follows this reader and whom they follow, as rows of names (Max, 2026-10-20: lists and counts are fine).
   const names = (list) => `<p class="small">${list.map((r) => `<a href="${attr(r.href)}">${esc(r.name)}</a>`).join(", ")}</p>`;
   const followBlock = follows.followers.length || follows.following.length ? `<div id="follows">${follows.followers.length ? `${label(own ? "Стежать за тобою" : "Стежать", String(follows.followers.length))}${names(follows.followers)}` : ""}${follows.following.length ? `${label(own ? "Ти стежиш за" : "Стежить за", String(follows.following.length))}${names(follows.following)}` : ""}</div>` : "";
