@@ -311,6 +311,21 @@ const SOURCES = [
     api: "https://www.lobster.net.ua/wp-json/wc/store/v1/products",
     normalize: (p) => ({ ...woo(p), title: text(p.name), author: attr(p, "Автор"), originalTitle: attr(p, "Оригінальна назва"), translator: attr(p, "Перекладач"), series: attr(p, "Серія"), year: attr(p, "Рік видання"), pages: attr(p, "Кількість сторінок"), isbn: attr(p, "ISBN") }),
     keep: () => true,
+    // An announced book (tag «Анонси») says when to expect it only on its page: «Орієнтовно: Грудень 2026»
+    // (Max, 2026-10-20). There are few of them, so their pages are read on every refresh.
+    enrich: async (products, { previous, fetchImpl = fetch, log = () => {} }) => {
+      const due = products.filter((p) => p.tags.includes("Анонси") && !p.inStock);
+      for (const p of due) {
+        try {
+          const r = await fetchImpl(p.url, { headers: HEADERS, signal: AbortSignal.timeout(30000) });
+          const m = r.ok && (await r.text()).match(/lbc-announcement-date[^>]*>\s*(?:Орієнтовно:\s*)?([^<]+?)\s*</);
+          p.expected = m ? ent(m[1]) : previous.get(p.url)?.expected || "";
+        } catch {
+          p.expected = previous.get(p.url)?.expected || "";
+        }
+      }
+      log(`lobster: ${due.length} announced, ${due.filter((p) => p.expected).length} with a date`);
+    },
     toItem: (p) => ({
       id: `lobster-${p.id}`,
       title: ent(p.title),
@@ -323,7 +338,8 @@ const SOURCES = [
       cover: p.image,
       url: p.url,
       price: uah(p.price),
-      status: !p.inStock ? "немає" : p.tags.includes("Передзамовлення") || p.categories.includes("Передзамовлення") ? "передзамовлення" : "є",
+      status: p.tags.includes("Анонси") && !p.inStock ? "анонс" : !p.inStock ? "немає" : p.tags.includes("Передзамовлення") || p.categories.includes("Передзамовлення") ? "передзамовлення" : "є",
+      expected: p.expected || "",
       isNew: p.tags.includes("Новинки"),
       genres: p.categories.filter((c) => c !== "Lobster"),
       blurb: ent(p.blurb),

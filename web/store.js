@@ -14,7 +14,7 @@ const readJson = (f) => JSON.parse(fs.readFileSync(f, "utf8"));
 // Office books that match a library book under a different spelling (title-matching misses them).
 const OFFICE_MATCHES = { 6: "bastiat-essays", 7: "гемінгвей-нічого-не-знає", 35: "deep-work", 44: "subtle-art-of-not-giving-a-fuck", 46: "andy-grove-one-on-ones" };
 const RU = /[ыэъё]/i; // Russian-only letters: these office books stay out of the profile until Max says otherwise
-const PICK = { "": 0, "є": 1, передзамовлення: 2, немає: 3 }; // which edition stands for the work on a shelf
+const PICK = { "": 0, "є": 1, передзамовлення: 2, анонс: 3, немає: 4 }; // which edition stands for the work on a shelf
 
 // Ukrainian national transliteration (КМУ 2010), so an address stays readable when copied: Cyrillic
 // in a link turns into %D1%8F… (Max, 2026-10-19). Є, Ї, Й, Ю, Я start a word as ye, yi, y, yu, ya.
@@ -593,7 +593,7 @@ class Store {
   }
 
   fromShelfItem(shelf, it) {
-    return { id: it.id, title: it.title, author: it.author, altTitle: it.altTitle || "", cover: it.cover, tags: it.genres || [], links: [{ label: shelf.name, url: it.url }], source: shelf.id, shelf: shelf.id, blurb: require("./catalogs").ent(it.blurb || ""), price: it.price, status: it.status, language: it.language, edition: it.edition || "", isbn: it.isbn || "", volume: it.volume || 0, bundle: !!it.bundle, format: it.format || (shelf.kind === "free" ? "e-book" : "папір") };
+    return { id: it.id, title: it.title, author: it.author, altTitle: it.altTitle || "", cover: it.cover, tags: it.genres || [], links: [{ label: shelf.name, url: it.url }], source: shelf.id, shelf: shelf.id, blurb: require("./catalogs").ent(it.blurb || ""), price: it.price, status: it.status, expected: it.expected || "", language: it.language, edition: it.edition || "", isbn: it.isbn || "", volume: it.volume || 0, bundle: !!it.bundle, format: it.format || (shelf.kind === "free" ? "e-book" : "папір") };
   }
 
   addBook({ title, author, cover, links }) {

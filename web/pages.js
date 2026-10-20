@@ -19,6 +19,8 @@ const STATUS = { read: "Прочитав", reading: "Читаю", want: "Хоч�
 const COPY = { paper: "На папері", ebook: "E-book", seeking: "Шукаю на папері" };
 const GENRES = ["художня", "фантастика", "детективи", "трилери", "бізнес", "компанії", "менеджмент", "продукт", "гроші", "розробка", "історія", "війна", "біографії", "наука", "саморозвиток", "суспільство"];
 const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
+// Availability as shown: «є» goes without saying; an announced book says when it is expected.
+const avail = (e) => (!e.status || e.status === "є" ? "" : e.status === "анонс" && e.expected ? `анонс, орієнтовно ${e.expected.toLowerCase()}` : e.status);
 
 function stars(r) {
   if (r == null) return "";
@@ -263,7 +265,7 @@ function editions(book) {
   if (!eds.length) return "";
   if (eds.length === 1) return buyButton(eds[0].shelf, eds[0]);
   const row = (e) => {
-    const tail = [e.format, e.edition, e.price, e.status && e.status !== "є" ? e.status : ""].filter(Boolean).join(" · ");
+    const tail = [e.format, e.edition, e.price, avail(e)].filter(Boolean).join(" · ");
     return `<li><a href="${attr(e.links[0].url)}" target="_blank" rel="noopener">${esc(e.shelf.name)} ↗</a> <span class="muted">${esc(tail)}</span></li>`;
   };
   const rest = eds.slice(1);
@@ -281,16 +283,16 @@ function series(book, inLibrary) {
   return `<div class="series"><p class="muted small">Серія «${esc(ser.name)}», ${count(ser.volumes, "том", "томи", "томів")}</p><ul>${ser.items
     .map((v) => {
       const has = inLibrary.get(v.work);
-      const tail = [v.price, v.status && v.status !== "є" ? v.status : ""].filter(Boolean).join(" · ");
-      return `<li class="${v.work === book.id ? "this" : ""}"><a href="${attr(v.href)}">${esc(label(v))}</a>${has?.status ? ` <span class="tag status-${has.status}">${STATUS[has.status]}</span>` : ""}<span class="muted small">${esc(tail)}</span><a class="btn small" href="${attr(v.links[0].url)}" target="_blank" rel="noopener">${v.status === "передзамовлення" ? "Замовити" : v.status === "немає" ? "Подивитися" : "Купити"} ↗</a></li>`;
+      const tail = [v.price, avail(v)].filter(Boolean).join(" · ");
+      return `<li class="${v.work === book.id ? "this" : ""}"><a href="${attr(v.href)}">${esc(label(v))}</a>${has?.status ? ` <span class="tag status-${has.status}">${STATUS[has.status]}</span>` : ""}<span class="muted small">${esc(tail)}</span><a class="btn small" href="${attr(v.links[0].url)}" target="_blank" rel="noopener">${v.status === "передзамовлення" ? "Замовити" : v.status === "немає" || v.status === "анонс" ? "Подивитися" : "Купити"} ↗</a></li>`;
     })
     .join("")}</ul></div>`;
 }
 
 function buyButton(shelf, book, compact = false, withFormat = false) {
   const host = shelf.url.replace(/^https?:\/\/(www\.)?/, "").replace(/\/$/, "");
-  const verb = book.price === "безкоштовно" ? "Завантажити" : book.status === "передзамовлення" ? "Замовити" : book.status === "немає" ? "Подивитися" : "Купити";
-  const tail = [compact || withFormat ? [book.format, book.edition].filter(Boolean).join(", ") : "", book.price, book.status && book.status !== "є" ? book.status : "", compact ? host : ""].filter(Boolean).join(" · ");
+  const verb = book.price === "безкоштовно" ? "Завантажити" : book.status === "передзамовлення" ? "Замовити" : book.status === "немає" || book.status === "анонс" ? "Подивитися" : "Купити";
+  const tail = [compact || withFormat ? [book.format, book.edition].filter(Boolean).join(", ") : "", book.price, avail(book), compact ? host : ""].filter(Boolean).join(" · ");
   return `<p class="buy"><a class="btn primary${compact ? " small" : ""}" href="${attr(book.links[0].url)}" target="_blank" rel="noopener">${verb}${compact ? "" : ` на ${esc(host)}`} ↗</a>${tail ? `<span class="muted">${esc(tail)}</span>` : ""}</p>`;
 }
 
@@ -492,7 +494,7 @@ function authorPage({ author, works, hits, user, inLibrary, owner, readerHref })
     const title = w.uk || w.en || w.orig;
     const orig = [w.orig, w.en].find((t) => t && t !== title) || "";
     // Link the book that is on sale, if one is; «є» lists every shelf with any of its books.
-    const onSale = (x) => (x.editions || []).filter((e) => e.status !== "немає");
+    const onSale = (x) => (x.editions || []).filter((e) => e.status !== "немає" && e.status !== "анонс");
     const b = [...w.books].sort((x, y) => !!onSale(y).length - !!onSale(x).length)[0];
     const where = [...new Set(w.books.flatMap(onSale).map((e) => e.shelf.name))];
     const note = b ? (where.length ? ` <span class="small muted">· є: ${esc(where.join(", "))}</span>` : "") : !w.uk ? ` <span class="small muted">· перекладу не знайшли</span>` : "";
