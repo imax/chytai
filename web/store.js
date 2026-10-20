@@ -1,4 +1,4 @@
-// Data for the Chytai web platform: the library (one reader for now), the public shelves and the
+// Data for the Chytai web platform: the library (every reader's entries, by reader id), the public shelves and the
 // book registry, kept in SQLite (db.js, DATA_DIR/web/chytai.db) and cached in memory, where editions,
 // series and addresses are derived. The library was seeded once from web/seed/max.json (Books.md
 // import) and web/seed/office.json (the paper books in Max's office); Books.md is not read again
@@ -39,7 +39,7 @@ const slugify = (s) =>
     .replace(/[^\p{L}\p{N}]+/gu, "-")
     .replace(/^-|-$/g, "")
     .slice(0, 60) || "book";
-const OWNER = "owner"; // the one reader until there are accounts
+const OWNER = "owner"; // the reader id of the owner (Max): the only reader before accounts, so old rows are his
 const norm = (s) => String(s || "").toLowerCase().replace(/^(the|a)\s+/, "").replace(/[^\p{L}\p{N}]+/gu, " ").trim();
 const isbnKey = (s) => String(s || "").replace(/[^0-9X]/gi, "");
 
@@ -90,7 +90,7 @@ class Store {
       }
       db.tx(() => {
         for (const b of Object.values(lib.books || {})) db.prepare("INSERT OR REPLACE INTO books (id, data) VALUES (?, ?)").run(b.id, JSON.stringify(b));
-        for (const [id, e] of Object.entries(lib.entries || {})) this.writeEntry(id, e);
+        for (const [id, e] of Object.entries(lib.entries || {})) this.writeEntry(OWNER, id, e);
         for (const s of lib.subscriptions || []) db.prepare("INSERT OR IGNORE INTO subscriptions (reader, shelf) VALUES (?, ?)").run(OWNER, s);
         db.set("library_imported", new Date().toISOString());
       });
@@ -253,14 +253,24 @@ class Store {
   }
 
   // The reader's entry for a work, or, failing that, for one of its translations ({ ...entry, via }).
-  sharedEntry(id) {
-    const own = this.entry(id);
+  sharedEntry(reader, id) {
+    const own = this.entry(reader, id);
     if (own) return own;
     for (const t of this.translations?.get(this.canonical(id)) || []) {
-      const e = this.lib.entries[t];
+      const e = this.entriesOf(reader)[t];
       if (e) return { ...e, via: { id: t, title: this.book(t)?.title || t, href: this.href(t) } };
     }
     return null;
+  }
+
+  // Every reader who has the work (or a translation of it): [{ reader, entry }], fullest first.
+  readersOf(id) {
+    const out = [];
+    for (const reader of this.entries.keys()) {
+      const e = this.sharedEntry(reader, id);
+      if (e) out.push({ reader, entry: e });
+    }
+    return out.sort((a, b) => (b.entry.note?.length || 0) - (a.entry.note?.length || 0) || (b.entry.rating ?? -1) - (a.entry.rating ?? -1));
   }
 
   // ---- canonical URLs ----
@@ -343,7 +353,7 @@ class Store {
     return this.db.prepare("SELECT id FROM search WHERE search MATCH ? ORDER BY bm25(search, 0, 10, 10, 5, 4, 1) LIMIT ?").all(match, limit * 2);
   }
 
-  search(q, limit = 40) {
+  search(q, { reader = null, limit = 40 } = {}) {
     const terms = norm(q).split(" ").filter(Boolean);
     if (!terms.length) return [];
     let rows = this.db
@@ -358,7 +368,7 @@ class Store {
       if (!b) continue;
       // An exact title (or original title) goes first; otherwise the index's own order.
       const score = (norm(b.title) === exact || norm(b.altTitle) === exact ? 1000 : 0) - i;
-      hits.push({ book: b, entry: this.entry(id), score });
+      hits.push({ book: b, entry: reader ? this.entry(reader, id) : null, score });
     }
     return hits.sort((a, b) => b.score - a.score).slice(0, limit);
   }
@@ -491,22 +501,39 @@ class Store {
 
   load() {
     const db = this.db;
-    this.lib = { books: {}, entries: {}, subscriptions: [] };
+    this.lib = { books: {} };
+    this.entries = new Map(); // reader id -> { book id -> entry }
+    this.subs = new Map(); // reader id -> [shelf id]
     for (const r of db.prepare("SELECT id, data FROM books").all()) this.lib.books[r.id] = JSON.parse(r.data);
     // Max (2026-10-19): «не дуже люблю Readeat», so its links (imported from Books.md) go.
     for (const b of Object.values(this.lib.books)) {
       const links = (b.links || []).filter((l) => !/readeat\.com/i.test(l.url));
       if (links.length !== (b.links || []).length) (b.links = links), this.writeBook(b.id);
     }
-    for (const r of db.prepare("SELECT * FROM entries WHERE reader = ?").all(OWNER)) this.lib.entries[r.book] = { status: r.status, year: r.year, rating: r.rating, note: r.note, copy: r.copy, order: r.ord, ...(r.added ? { added: r.added } : {}) };
-    this.lib.subscriptions = db.prepare("SELECT shelf FROM subscriptions WHERE reader = ?").all(OWNER).map((r) => r.shelf);
+    for (const r of db.prepare("SELECT * FROM entries").all()) this.entriesOf(r.reader)[r.book] = { status: r.status, year: r.year, rating: r.rating, note: r.note, copy: r.copy, order: r.ord, ...(r.added ? { added: r.added } : {}) };
+    for (const r of db.prepare("SELECT reader, shelf FROM subscriptions").all()) this.subscriptions(r.reader).push(r.shelf);
   }
 
-  writeEntry(id, e) {
-    if (!e) return this.db.prepare("DELETE FROM entries WHERE reader = ? AND book = ?").run(OWNER, id);
+  // A reader's entries (made on first touch) and subscriptions.
+  entriesOf(reader) {
+    if (!this.entries.has(reader)) this.entries.set(reader, {});
+    return this.entries.get(reader);
+  }
+  subscriptions(reader) {
+    if (!this.subs.has(reader)) this.subs.set(reader, []);
+    return this.subs.get(reader);
+  }
+  // A reader who is gone (deleted account): their rows are already deleted by auth.js.
+  forgetReader(reader) {
+    this.entries.delete(reader);
+    this.subs.delete(reader);
+  }
+
+  writeEntry(reader, id, e) {
+    if (!e) return this.db.prepare("DELETE FROM entries WHERE reader = ? AND book = ?").run(reader, id);
     this.db
       .prepare("INSERT INTO entries (reader, book, status, rating, year, note, copy, ord, added) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (reader, book) DO UPDATE SET status = excluded.status, rating = excluded.rating, year = excluded.year, note = excluded.note, copy = excluded.copy, ord = excluded.ord, added = excluded.added")
-      .run(OWNER, id, e.status || "", e.rating ?? null, e.year ?? null, e.note || "", e.copy || "", e.order ?? null, e.added || null);
+      .run(reader, id, e.status || "", e.rating ?? null, e.year ?? null, e.note || "", e.copy || "", e.order ?? null, e.added || null);
   }
 
   writeBook(id) {
@@ -517,15 +544,15 @@ class Store {
 
   // Entries saved under an edition id (before editions were linked, or by a shelf that changed) move to the work.
   migrateEntries() {
-    let moved = false;
-    for (const [id, e] of Object.entries(this.lib.entries)) {
-      const c = this.canonical(id);
-      if (c === id) continue;
-      const cur = this.lib.entries[c];
-      this.lib.entries[c] = cur ? mergeEntries(cur, e) : e;
-      delete this.lib.entries[id];
-      moved = true;
-      this.db.tx(() => (this.writeEntry(c, this.lib.entries[c]), this.writeEntry(id, null)));
+    for (const [reader, entries] of this.entries) {
+      for (const [id, e] of Object.entries(entries)) {
+        const c = this.canonical(id);
+        if (c === id) continue;
+        const cur = entries[c];
+        entries[c] = cur ? mergeEntries(cur, e) : e;
+        delete entries[id];
+        this.db.tx(() => (this.writeEntry(reader, c, entries[c]), this.writeEntry(reader, id, null)));
+      }
     }
   }
 
@@ -617,43 +644,47 @@ class Store {
 
   // ---- library entries ----
 
-  entry(id) {
-    return this.lib.entries[this.canonical(id)] || null;
+  entry(reader, id) {
+    return (reader && this.entriesOf(reader)[this.canonical(id)]) || null;
   }
 
-  // Library membership by any id, edition ids included (for the shelf cards).
-  inLibrary() {
-    const m = new Map(Object.entries(this.lib.entries));
-    for (const [w, ts] of this.translations || []) if (!m.has(w)) for (const t of ts) if (this.lib.entries[t]) m.set(w, this.lib.entries[t]);
+  // The reader's library membership by any id, edition ids included (for the shelf cards).
+  inLibrary(reader) {
+    if (!reader) return new Map();
+    const entries = this.entriesOf(reader);
+    const m = new Map(Object.entries(entries));
+    for (const [w, ts] of this.translations || []) if (!m.has(w)) for (const t of ts) if (entries[t]) m.set(w, entries[t]);
     for (const [alias, c] of this.aliases) if (m.has(c)) m.set(alias, m.get(c));
     return m;
   }
 
-  setEntry(id, patch) {
+  setEntry(reader, id, patch) {
     id = this.canonical(id);
     if (!this.book(id)) return null;
-    const cur = this.lib.entries[id] || { status: "", year: null, rating: null, note: "", copy: "", order: Object.keys(this.lib.entries).length, added: new Date().toISOString().slice(0, 10) };
+    const entries = this.entriesOf(reader);
+    const cur = entries[id] || { status: "", year: null, rating: null, note: "", copy: "", order: Object.keys(entries).length, added: new Date().toISOString().slice(0, 10) };
     const next = { ...cur, ...patch };
     if (next.status === "read" && !next.year && cur.status !== "read") next.year = new Date().getFullYear();
     if (next.rating === "" || next.rating === undefined) next.rating = cur.rating ?? null;
-    this.lib.entries[id] = next;
-    this.writeEntry(id, next);
+    entries[id] = next;
+    this.writeEntry(reader, id, next);
     return next;
   }
 
-  removeEntry(id) {
+  removeEntry(reader, id) {
     id = this.canonical(id);
-    delete this.lib.entries[id];
-    this.writeEntry(id, null);
-    if (this.lib.books[id]?.source === "manual") {
+    delete this.entriesOf(reader)[id];
+    this.writeEntry(reader, id, null);
+    // A book someone typed in by hand goes with the last entry that had it.
+    if (this.lib.books[id]?.source === "manual" && ![...this.entries.values()].some((e) => e[id])) {
       delete this.lib.books[id];
       this.writeBook(id);
     }
   }
 
-  // Every library row with its book, newest first (Books.md order for the import).
-  library() {
-    return Object.entries(this.lib.entries)
+  // Every library row of the reader with its book, in the reader's order (Books.md order for the import).
+  library(reader) {
+    return Object.entries(reader ? this.entriesOf(reader) : {})
       .map(([id, e]) => ({ id, ...e, book: this.book(id) }))
       .filter((r) => r.book)
       .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
@@ -665,17 +696,17 @@ class Store {
     return this.shelves.find((s) => s.id === id) || null;
   }
 
-  subscribed(id) {
-    return this.lib.subscriptions.includes(id);
+  subscribed(reader, id) {
+    return !!reader && this.subscriptions(reader).includes(id);
   }
 
-  toggleSubscription(id) {
+  toggleSubscription(reader, id) {
     if (!this.shelf(id)) return null;
-    const on = !this.subscribed(id);
-    this.lib.subscriptions = on ? [...this.lib.subscriptions, id] : this.lib.subscriptions.filter((s) => s !== id);
-    this.db.prepare(on ? "INSERT OR IGNORE INTO subscriptions (reader, shelf) VALUES (?, ?)" : "DELETE FROM subscriptions WHERE reader = ? AND shelf = ?").run(OWNER, id);
+    const on = !this.subscribed(reader, id);
+    this.subs.set(reader, on ? [...this.subscriptions(reader), id] : this.subscriptions(reader).filter((s) => s !== id));
+    this.db.prepare(on ? "INSERT OR IGNORE INTO subscriptions (reader, shelf) VALUES (?, ?)" : "DELETE FROM subscriptions WHERE reader = ? AND shelf = ?").run(reader, id);
     return on;
   }
 }
 
-module.exports = { Store, slugify };
+module.exports = { Store, slugify, OWNER };

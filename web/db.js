@@ -1,7 +1,7 @@
 // The web platform's database: one SQLite file on the Fly volume (DATA_DIR/web/chytai.db), through
 // Node's built-in node:sqlite, so there is nothing to install. It holds
 //   - catalog items of every shelf, with the day each was first seen (for «нове»),
-//   - the library: manual books, readers' entries and subscriptions (one reader, "owner", for now),
+//   - the library: manual books, readers (accounts: e-mail, username, name), their sessions, entries and subscriptions,
 //   - book addresses: a slug, once given to a work, stays with it,
 //   - the search index (FTS5), rebuilt from the works whenever the shelves change.
 // Max (2026-10-19): «база нам знадобиться все одно. Навіть щоб пошук нормально доробити.»
@@ -30,6 +30,12 @@ CREATE TABLE IF NOT EXISTS entries (
 );
 CREATE TABLE IF NOT EXISTS subscriptions (reader TEXT NOT NULL, shelf TEXT NOT NULL, PRIMARY KEY (reader, shelf));
 CREATE TABLE IF NOT EXISTS slugs (slug TEXT PRIMARY KEY, id TEXT NOT NULL UNIQUE);
+CREATE TABLE IF NOT EXISTS readers (
+  id TEXT PRIMARY KEY, email TEXT UNIQUE, username TEXT NOT NULL UNIQUE, name TEXT NOT NULL,
+  created TEXT NOT NULL, seen TEXT
+);
+CREATE TABLE IF NOT EXISTS sessions (id TEXT PRIMARY KEY, reader TEXT NOT NULL, created TEXT NOT NULL, seen TEXT);
+CREATE INDEX IF NOT EXISTS sessions_reader ON sessions (reader);
 CREATE VIRTUAL TABLE IF NOT EXISTS search USING fts5 (id UNINDEXED, title, alt, author, series, extra, tokenize = 'unicode61 remove_diacritics 2');
 CREATE VIRTUAL TABLE IF NOT EXISTS search_vocab USING fts5vocab (search, 'row');
 CREATE VIRTUAL TABLE IF NOT EXISTS search_tri USING fts5 (id UNINDEXED, text, tokenize = 'trigram');
