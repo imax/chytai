@@ -62,7 +62,7 @@ function layout({ title, body, user, path = "", description = "", q = "", home =
     user ? `<a href="${attr(user.href || "/me")}"${on(path === "/me")}>Моє</a>` : "",
     user ? `<a href="/settings"${on(path === "/settings")} title="Налаштування">${esc(user.name)}</a>` : `<a href="/login"${on(path === "/login")}>Увійти</a>`,
   ].join("");
-  const find = home || path === "/search" ? "" : `<form class="find" action="/search" role="search"><input type="search" name="q" value="${attr(q)}" placeholder="назва, автор або «щось як…»" autocomplete="off" aria-label="Пошук"></form>`;
+  const find = home || path === "/search" ? "" : `<form class="find" action="/search" role="search"><input type="search" name="q" value="${attr(q)}" placeholder="назва, автор або жанр" autocomplete="off" aria-label="Пошук"></form>`;
   return `<!doctype html>
 <html lang="uk">
 <head>
