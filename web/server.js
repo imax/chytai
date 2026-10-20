@@ -136,6 +136,7 @@ const readersOf = (id) => {
   return e ? [{ name: OWNER, href: `${READER}#${e.via ? e.via.id : store.canonical(id)}`, entry: e }] : [];
 };
 const visible = (s) => store.visible(s);
+pages.setReaders(readersOf);
 
 app.get("/", (req, res) => {
   res.send(pages.discoveryPage({ shelves: shelvesFor(req), subscriptions: store.lib.subscriptions, user: req.user, owner: OWNER, readerHref: READER, libraryCount: store.library().length, inLibrary: inLibraryMap(req), visible, fetched: store.shelvesRefreshedAt ? new Date(store.shelvesRefreshedAt).toLocaleString("uk-UA", { timeZone: "Europe/Kyiv", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" }) : store.shelvesFetched, ownerStrip: store.library().filter((r) => r.rating >= 5 && r.book.cover).slice(0, 5).map((r) => r.book), libraries: libraries.LIBRARIES.filter((l) => req.user || !l.draft) }));

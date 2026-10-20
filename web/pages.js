@@ -130,6 +130,23 @@ const setTitleLinks = (fn) => (titleLinks = fn);
 // Set by the server too: author name -> their /author/ page, or null.
 let authorHref = () => null;
 const setAuthorLinks = (fn) => (authorHref = fn);
+// And: book id -> the readers who have it, [{ name, href, entry }] (the same list as the book page's «У читачів»).
+let readersOf = () => [];
+const setReaders = (fn) => (readersOf = fn);
+
+// What readers made of a book, for cards and search rows: the site is about readers, not shops (Max,
+// 2026-10-20: «фокус має бути на відгуках чи кількості збережених у favorites, а не перелік магазинів чи
+// формат. Це деталі для сторінки з книжкою»). Each reader's stars or status, and with `notes` the start of
+// their note.
+function readerLines(id, { notes = false } = {}) {
+  return readersOf(id)
+    .map(({ name, href, entry: e }) => {
+      const what = e.rating != null ? stars(e.rating) : e.status ? `<span class="muted">${esc(STATUS[e.status].toLowerCase())}</span>` : "";
+      const note = notes && e.note ? stripMd(e.note).replace(/\s+/g, " ").trim() : "";
+      return `<p class="reader-line small"><a href="${attr(href)}">${esc(name)}</a> ${what}</p>${note ? `<p class="note small">${esc(note.length > 180 ? note.slice(0, 180).replace(/\s+\S*$/, "") + "…" : note)}</p>` : ""}`;
+    })
+    .join("");
+}
 
 // The author line with each name linked to its page (shortened like byline() past three names).
 function authorLinks(author) {
@@ -417,16 +434,15 @@ ${shelf.items.map((it) => itemCard(it, inLibrary, user)).join("\n")}
   return layout({ title: shelf.name, body, user, path: "/shelf", wide: true });
 }
 
-// No prices or buttons on cards either (Max, 2026-10-20): the book page has them.
+// Cover, title, author and what readers think (readerLines); shops, prices and formats are on the book page.
 function itemCard(it, inLibrary, user, shelfName) {
-  const has = inLibrary.get(it.id);
   const search = [it.title, it.author, it.altTitle].join(" ").toLowerCase();
   return `<article class="card" data-genre="${attr((it.genres || []).join("|"))}" data-avail="${attr(it.status || "")}" data-search="${attr(search)}">
   <a class="cover-link" href="${attr(it.href)}">${cover(it, "card")}</a>
   <h3><a href="${attr(it.href)}">${esc(it.title)}</a></h3>
   <p class="by">${esc(byline(it.author))}</p>
-  <p class="meta small">${[shelfName ? `<span class="muted">${esc(shelfName)}</span>` : "", it.status && it.status !== "є" ? esc(it.status) : "", it.volumes > 1 ? count(it.volumes, "том", "томи", "томів") : it.editions > 1 ? count(it.editions, "видання", "видання", "видань") : ""].filter(Boolean).join(" · ")}${it.isNew && !shelfName ? ` <span class="tag new">нове</span>` : ""}</p>
-  ${has ? `<p class="small have">${has.status ? STATUS[has.status] : "У бібліотеці"}</p>` : ""}
+  ${shelfName || it.volumes > 1 || (it.isNew && !shelfName) ? `<p class="meta small">${[shelfName ? `<span class="muted">${esc(shelfName)}</span>` : "", it.volumes > 1 ? count(it.volumes, "том", "томи", "томів") : ""].filter(Boolean).join(" · ")}${it.isNew && !shelfName ? ` <span class="tag new">нове</span>` : ""}</p>` : ""}
+  ${readerLines(it.id)}
 </article>`;
 }
 
@@ -455,20 +471,15 @@ function searchResults({ q, hits, inLibrary, user, owner, readerHref }) {
   return hits.length ? `<section class="rows" id="hits">${hits.map((h) => searchRow(h, inLibrary, user, owner, readerHref)).join("\n")}</section>` : `<p class="empty">Нічого не знайшлося за «${esc(q)}».</p>`;
 }
 
-// Where the book is: the shelves that sell it (format, price, availability) and whose library has it.
-// Kept plain (Max, 2026-10-20: «приберемо поки ціни і кнопки… Cleaner»): where it is, no prices or buttons.
-function searchRow({ book, entry }, inLibrary, user, owner, readerHref) {
-  const where = (book.editions || []).map((e) => `<li><a href="${attr(e.links[0].url)}" target="_blank" rel="noopener">${esc(e.shelf.name)}</a> · ${esc(e.format)}${e.edition ? ` · ${esc(e.edition)}` : ""}${e.status && e.status !== "є" ? ` · ${esc(e.status)}` : ""}</li>`);
-  const edUrls = new Set((book.editions || []).map((e) => e.links[0].url));
-  for (const l of (book.links || []).filter((l) => !edUrls.has(l.url))) where.push(`<li><a href="${attr(l.url)}" target="_blank" rel="noopener">${esc(l.label)}</a>${/amazon/i.test(l.url) ? " · Kindle" : ""}</li>`);
-  if (entry) where.push(`<li><a href="${attr(readerHref)}#${attr(book.id)}">${esc(owner)}</a> · ${entry.status ? STATUS[entry.status].toLowerCase() : "у бібліотеці"}${entry.rating != null ? ` · ${uk(entry.rating)}/5` : ""}${entry.copy ? ` · ${COPY[entry.copy].toLowerCase()}` : ""}</li>`);
+// A search hit: the book and what readers made of it; where to buy it is on the book page.
+function searchRow({ book }) {
   return `<article class="row hit">
   <a class="cover-link" href="${attr(book.href)}">${cover(book)}</a>
   <div class="row-main">
     <h3><a href="${attr(book.href)}">${esc(book.title)}</a>${book.series ? ` <span class="badge">серія · ${count(book.series.volumes, "том", "томи", "томів")}</span>` : ""}</h3>
     ${book.altTitle ? `<p class="alt-title small">${esc(book.altTitle)}</p>` : ""}
     <p class="by">${authorLinks(book.author)}</p>
-    ${where.length ? `<ul class="where small">${where.join("")}</ul>` : `<p class="muted small">Ніде поки немає.</p>`}
+    ${readerLines(book.id, { notes: true })}
   </div>
 </article>`;
 }
@@ -514,4 +525,4 @@ function messagePage({ title, text, user }) {
 }
 
 module.exports = {
-  searchPage, searchResults, layout, libraryPage, bookPage, editPage, discoveryPage, shelfPage, messagePage, esc, STATUS, COPY, setTitleLinks, setAuthorLinks, authorPage };
+  searchPage, searchResults, layout, libraryPage, bookPage, editPage, discoveryPage, shelfPage, messagePage, esc, STATUS, COPY, setTitleLinks, setAuthorLinks, setReaders, authorPage };
