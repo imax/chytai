@@ -8,6 +8,8 @@
 const ENDPOINT = "https://query.wikidata.org/sparql";
 const HEADERS = { "User-Agent": "Chytai/1.0 (https://chytai.org.ua; author pages)", Accept: "application/sparql-results+json" };
 const DAY = 86400000;
+// Bumped when the lookup learns something new, so it runs again without waiting out the week.
+const VERSION = "2";
 
 const norm = (s) => String(s || "").toLowerCase().replace(/^(the|a)\s+/, "").replace(/[’'ʼ`]/g, "").replace(/[^\p{L}\p{N}]+/gu, " ").trim();
 const CYR = /[а-яіїєґ]/i;
@@ -30,9 +32,10 @@ async function sparql(query, fetchImpl) {
 // A person must have written something on Wikidata, and of namesakes the one with most works wins.
 async function refresh(store, { fetchImpl = fetch, log = () => {} } = {}) {
   const at = Number(store.db.get("authors:checked") || 0);
-  if (Date.now() - at < 7 * DAY || refresh.running) return false;
+  if ((Date.now() - at < 7 * DAY && store.db.get("authors:v") === VERSION) || refresh.running) return false;
   refresh.running = true;
-  const names = [...new Set(allWorks(store).flatMap((b) => splitAuthors(b.author)))];
+  const works = allWorks(store);
+  const names = [...new Set(works.flatMap((b) => splitAuthors(b.author)))];
   const found = {};
   let errors = 0;
   let lastError = "";
@@ -50,13 +53,41 @@ async function refresh(store, { fetchImpl = fetch, log = () => {} } = {}) {
       lastError = e.cause?.code || e.message;
     }
   }
+  // A spelling Wikidata doesn't know («Майкл Льюїс») is found by its book's original title instead:
+  // «The Fifth Risk» on Wikidata names its author (Max, 2026-10-20: the page showed one book).
+  const byTitle = new Map(); // original title -> names
+  for (const w of works) {
+    const orig = altOf(store, w.id);
+    if (!orig || CYR.test(orig)) continue;
+    const ns = splitAuthors(w.author);
+    if (ns.length !== 1 || found[ns[0]]) continue;
+    byTitle.set(orig, [...new Set([...(byTitle.get(orig) || []), ns[0]])]);
+  }
+  const titles = [...byTitle.keys()];
+  for (let i = 0; i < titles.length; i += 30) {
+    const batch = titles.slice(i, i + 30);
+    const values = batch.map((t) => `${JSON.stringify(t)}@en`).join(" ");
+    try {
+      const rows = await sparql(`SELECT ?t ?a (SAMPLE(?uk_) AS ?uk) (SAMPLE(?en_) AS ?en) WHERE { VALUES ?t { ${values} } ?w rdfs:label ?t; wdt:P50 ?a. ?a wdt:P31 wd:Q5. OPTIONAL { ?a rdfs:label ?uk_ FILTER(lang(?uk_) = "uk") } OPTIONAL { ?a rdfs:label ?en_ FILTER(lang(?en_) = "en") } } GROUP BY ?t ?a`, fetchImpl);
+      for (const t of batch) {
+        const people = rows.filter((r) => r.t.value === t);
+        if (people.length !== 1) continue; // two books of that title by different people: can't tell
+        const r = people[0];
+        for (const name of byTitle.get(t)) if (!found[name]) found[name] = { qid: r.a.value.split("/").pop(), uk: r.uk?.value || "", en: r.en?.value || "" };
+      }
+    } catch (e) {
+      errors++;
+      lastError = e.cause?.code || e.message;
+    }
+  }
   const line = `${new Date().toISOString()}: ${Object.keys(found).length} of ${names.length} names found on Wikidata${errors ? `, ${errors} batches failed (${lastError})` : ""}`;
   log(`authors: ${line}`);
   store.db.set("authors:log", line);
   refresh.running = false;
-  const batches = Math.ceil(names.length / 30);
+  const batches = Math.ceil(names.length / 30) + Math.ceil(titles.length / 30);
   if (errors > batches / 2) return false; // try again at the next round (every 6 hours) instead of in a week
   store.db.set("authors:checked", String(Date.now()));
+  store.db.set("authors:v", VERSION);
   store.db.set("authors:wd", JSON.stringify(found));
   store.linkTranslations(); // rebuilds the author index too
   return true;
@@ -71,6 +102,7 @@ function allWorks(store) {
   for (const [id, { shelf, item }] of store.shelfItems) if (!out.has(id) && store.canonical(id) === id && !store.hidden.has(id) && !shelf.draft) out.set(id, { id, author: item.author });
   return [...out.values()];
 }
+const altOf = (store, id) => store.lib.books[id]?.altTitle ?? store.seedBooks.find((b) => b.id === id)?.altTitle ?? store.shelfItems.get(id)?.item.altTitle ?? "";
 const authorOf = (store, id) => store.lib.books[id]?.author ?? store.seedBooks.find((b) => b.id === id)?.author ?? store.shelfItems.get(id)?.item.author ?? "";
 
 // The author index: { list, bySlug, byName(name) -> author, ofWork(id) -> [author] }.
