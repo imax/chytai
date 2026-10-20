@@ -392,7 +392,17 @@ function where(book) {
     const tail = [e.format, e.narrator ? `читає ${e.narrator}` : "", e.duration, e.edition, e.price, e.subscription ? "є в підписці" : "", avail(e)].filter(Boolean).join(", ");
     return `<a href="${attr(e.links[0].url)}" target="_blank" rel="noopener">${esc(e.shelf.name)}</a>${tail ? ` <span class="muted">${esc(tail)}</span>` : ""}`;
   };
-  const items = [...eds.map(shop), ...links.map((l) => `<a href="${attr(l.url)}" target="_blank" rel="noopener">${esc(l.label)}</a>`)];
+  // Only where it can be had (Max, 2026-10-20: «показувати там де є, а не там де немає»); the shops
+  // that are out of it fold into one quiet line, each named once.
+  const gone = (e) => e.status === "немає";
+  const shown = new Set(); // the same shop, format, edition and price twice is one row
+  const have = eds.filter((e) => !gone(e) && ((k) => !shown.has(k) && shown.add(k))([e.shelf.id, e.format, e.edition, e.price, e.narrator].join("|")));
+  const out = [...new Map(eds.filter(gone).map((e) => [e.shelf.id, e])).values()];
+  const items = [
+    ...have.map(shop),
+    ...links.map((l) => `<a href="${attr(l.url)}" target="_blank" rel="noopener">${esc(l.label)}</a>`),
+    ...(out.length ? [`<span class="muted">${have.length ? "немає:" : "зараз немає в наявності:"} </span>${out.map((e) => `<a class="muted" href="${attr(e.links[0].url)}" target="_blank" rel="noopener">${esc(e.shelf.name)}</a>`).join(", ")}`] : []),
+  ];
   return `<div class="where${items.length ? "" : " hidden"}" data-src="/api/libraries/${attr(encodeURIComponent(book.id))}"><span class="where-label">Де взяти</span>${items.map((x) => `<span class="where-item">${x}</span>`).join("")}</div>`;
 }
 
