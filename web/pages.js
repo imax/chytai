@@ -1082,7 +1082,7 @@ function exchangeSettingsPage({ user, values, saved = false }) {
   ${saved ? `<p class="saved">Збережено.</p>` : ""}
   <p class="muted small">Читачі віддають паперові книжки одне одному, без грошей. Увімкнете: у книжки на полиці з'явиться позначка «Віддам», її побачать ті, хто хоче її прочитати, і зможуть попросити листом через сайт. Адресу й телефон ніде не вказуйте, домовитесь у листуванні. <a class="text-link" href="/swap">Що віддають інші</a>.</p>
   <label class="check"><span><input type="checkbox" name="exchange" value="1"${values.exchange ? " checked" : ""}> Беру участь в обміні</span></label>
-  <label class="check"><span><input type="checkbox" name="swap_np" value="1"${values.ways?.includes("np") ? " checked" : ""}> Нова пошта</span><span class="hint">Відправлення оплачує той, хто отримує.</span></label>
+  <label class="check"><span><input type="checkbox" name="swap_np" value="1"${values.ways?.includes("np") ? " checked" : ""}> Нова пошта</span></label>
   <label class="check"><span><input type="checkbox" name="swap_meet" value="1"${values.ways?.includes("meet") ? " checked" : ""}> Особисто чи на точці обміну</span></label>
   <label>Місто<input type="text" name="city" value="${attr(values.city || "")}" maxlength="40" placeholder="Київ"><span class="hint">Його бачать усі поруч з вашими книжками «Віддам».</span></label>
   <div class="actions"><button class="btn primary">Зберегти</button>${values.exchange ? `<a class="text-link small" href="${attr(user.href)}?public#give">Мої «Віддам»</a>` : ""}<span class="grow"></span></div>
