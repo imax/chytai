@@ -614,6 +614,17 @@ app.post("/api/digest", owner, async (req, res) => {
 // The owner's statistics page: readers, retention by sign-up week, what people do on the site (admin.js).
 app.get("/admin", owner, (req, res) => res.send(adminPage({ user: req.user, stats: admin.stats(), layout: pages.layout, withBooks: req.query.books === "1" })));
 app.get("/admin.json", owner, (req, res) => res.json(admin.stats()));
+// One Google Books request with the server's key, for the owner to see what Google answers from here.
+app.get("/admin/google", owner, async (req, res) => {
+  const params = new URLSearchParams({ q: String(req.query.q || "Солярис Лем"), maxResults: "3", printType: "books", key: process.env.GOOGLE_BOOKS_KEY || "" });
+  for (const [k, v] of Object.entries(req.query)) if (k !== "q" && k !== "key") params.set(k, String(v));
+  try {
+    const r = await fetch(`https://www.googleapis.com/books/v1/volumes?${params}`, { headers: { "User-Agent": "Chytai/1.0 (https://chytai.org.ua)" }, signal: AbortSignal.timeout(15000) });
+    res.type("text").send(`${r.status}\n${(await r.text()).slice(0, 1500)}`);
+  } catch (e) {
+    res.type("text").send(`error ${e.message}`);
+  }
+});
 app.get("/admin/dupes", owner, (req, res) => res.send(pages.dupesPage({ user: req.user, groups: store.dupes(), all: req.query.all === "1" })));
 app.get("/digest/status", owner, (req, res) => res.json({ to: digest.to, recipients: digest.recipients().map((r) => `@${r.username}`), lastRun: store.db.get("digest:lastRun"), last: JSON.parse(store.db.get("digest:last") || "null") }));
 
