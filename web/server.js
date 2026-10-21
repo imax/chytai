@@ -471,7 +471,7 @@ function searchAll(req, q) {
   if (tag) {
     const tagged = [...social.liked().values()].filter((x) => (x.book.tags || []).includes(tag)).sort((a, b) => b.avg - a.avg);
     const seen = new Set(hits.map((h) => h.book.id));
-    hits = [...tagged.filter((x) => !seen.has(x.book.id)).map((x) => ({ book: x.book, entry: store.entry(req.user?.id, x.book.id) })), ...hits].slice(0, 40);
+    hits = [...tagged.filter((x) => !seen.has(x.book.id)).map((x) => ({ book: x.book, entry: store.sharedEntry(req.user?.id, x.book.id) })), ...hits].slice(0, 40);
   }
   const has = (name) => terms.every((t) => normQ(name).split(" ").some((w) => w.startsWith(t)));
   const authorsFound = (store.authors?.list || [])
@@ -495,7 +495,7 @@ function searchAll(req, q) {
     const seen = new Set(hits.map((h) => h.book.id));
     const own = [...new Set(visible(named.shelf).map((it) => store.canonical(it.id)))]
       .filter((id) => !seen.has(id))
-      .map((id) => ({ book: bookFor(req, store.book(id), !!store.entry(req.user?.id, id)), entry: store.entry(req.user?.id, id) }))
+      .map((id) => ({ book: bookFor(req, store.book(id), !!store.entry(req.user?.id, id)), entry: store.sharedEntry(req.user?.id, id) }))
       .filter((h) => h.book);
     hits = [...own, ...hits].slice(0, 40);
   }
@@ -529,7 +529,7 @@ app.get("/author/:slug", async (req, res) => {
   const works = author.qid ? authors.matchWorks(store, author, await authors.wikidataWorks(store, author.qid, { log: console.log })) : [];
   const shown = new Set(works.flatMap((w) => w.books.map((b) => b.id)));
   const hits = author.ids
-    .map((id) => ({ book: bookFor(req, store.book(id), !!store.entry(req.user?.id, id)), entry: store.entry(req.user?.id, id) }))
+    .map((id) => ({ book: bookFor(req, store.book(id), !!store.entry(req.user?.id, id)), entry: store.sharedEntry(req.user?.id, id) }))
     .filter((h) => h.book)
     .map((h) => ({ ...h, avg: social.stats(h.book.id).avg }))
     .sort((a, b) => (b.avg ?? -1) - (a.avg ?? -1) || !!b.entry - !!a.entry || shown.has(a.book.id) - shown.has(b.book.id) || a.book.title.localeCompare(b.book.title, "uk"))

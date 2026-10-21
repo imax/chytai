@@ -160,7 +160,7 @@ function wantButton(book, user, { size = "small", label: text = "Хочу про
 // «Хочу прочитати» and «Прочитано» side by side, for rows in search and on shelves: marking a book read
 // should not need its page (a reader's feedback, 2026-10-20).
 // A book the signed-in reader already has: their status, quietly, where the buttons would be (search, shelves).
-const myStatus = (e) => `<span class="muted small">${esc(e.status ? STATUS[e.status].toLowerCase() : "на полиці")}</span>`;
+const myStatus = (e) => `<span class="muted small">${esc(e.status ? STATUS[e.status].toLowerCase() : "на полиці")}${e.via ? `, як «${esc(e.via.title)}»` : ""}</span>`;
 const markButtons = (book, user) => `<span class="marks">${wantButton(book, user)}${wantButton(book, user, { label: "Прочитано", status: "read" })}</span>`;
 
 // The status, rating and copy of an entry as one quiet line: «★★★★★ 5 · прочитано · на папері».
