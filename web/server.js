@@ -79,8 +79,17 @@ function refreshShelves(force = false, only = "") {
     .finally(() => (refreshing = null));
   return refreshing;
 }
-// A refresh that a restart (a deploy) cut short left its progress in partial:<id>: go on with that source.
-for (const src of catalogs.SOURCES) if (JSON.parse(store.db.get(`partial:${src.id}`) || "[]").length) setTimeout(() => refreshShelves(true, src.id), 30000).unref();
+// After a start, go on with a source a restart (a deploy) cut short (its progress is in partial:<id>), and
+// read a source added since the last refresh (no shelf yet) instead of leaving it for the next morning;
+// one source at a time.
+const pendingSources = catalogs.SOURCES.filter((s) => !store.shelf(s.id) || JSON.parse(store.db.get(`partial:${s.id}`) || "[]").length).map((s) => s.id);
+if (pendingSources.length)
+  setTimeout(async () => {
+    for (const id of pendingSources) {
+      while (refreshing) await refreshing;
+      await refreshShelves(true, id);
+    }
+  }, 30000).unref();
 // Ukrainian titles of foreign books (wikidata.js), weekly; the first time a minute after start.
 const refreshUk = () => wikidata.refreshUk(store, { log: console.log }).catch((e) => console.error("wikidata failed:", e));
 // Who is who among the authors (authors.js), weekly, after the Ukrainian titles.
