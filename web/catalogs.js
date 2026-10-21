@@ -81,6 +81,9 @@ const attr = (p, n) => ((p.attributes || []).find((a) => a.name === n) || { term
 // «Коли завмирає серце, том шостий», «Серпанка. Том 2. Ліс зниклих духів», «Світ Едени, книга перша»:
 // the series name and the volume number, so a shelf can fold the volumes into one card.
 const ORD = { перший: 1, перша: 1, другий: 2, друга: 2, третій: 3, третя: 3, четвертий: 4, четверта: 4, "п’ятий": 5, "п'ятий": 5, "п’ята": 5, шостий: 6, шоста: 6, сьомий: 7, сьома: 7, восьмий: 8, восьма: 8, "дев’ятий": 9, десятий: 10 };
+// Старий Лев names some books «Книжка Хроніки Амбера…».
+const slTitle = (name) => ent(name).trim().replace(/^Книжка\s+/u, "");
+
 function volumeOf(title) {
   // «Хроніки Амбера : у 10 кн. Кн. 1 : Дев’ять принців Амбера»: the count of books goes first.
   const t = title.replace(/\s*:?\s*у\s+\d+(?:-?х)?\s+(?:кн|т)\.(?=\s)/iu, "");
@@ -418,7 +421,7 @@ function bohdanPage(html, url) {
     status: /InStock/i.test(avail) ? "є" : /PreOrder/i.test(avail) ? "передзамовлення" : avail ? "немає" : /Немає в наявності/i.test(html) ? "немає" : "є",
     isNew: false,
     genres: crumbs.slice(1, 2),
-    blurb: about(prod.description || meta(html, "og:description")),
+    blurb: about(prod.description || meta(html, "og:description").replace(SHOP_BLURB, "")),
     pages: spec("Кількість сторінок"),
     year: "",
     language: "українська",
@@ -426,7 +429,11 @@ function bohdanPage(html, url) {
   };
 }
 // Items read before 2026-10-20 evening turned «Джеймс С. А. Корі» into «С. А. Корі Джеймс»: put the name back.
+// Without a description of its own, a Богдан page's meta says «Актуальна ціна на … | Замовити в інтернет-магазині».
+const SHOP_BLURB = /^\s*Актуальна ціна на[\s\S]*$/u;
+
 function bohdanFinish(items) {
+  for (const it of items) if (SHOP_BLURB.test(it.blurb || "")) it.blurb = "";
   for (const it of items)
     if (it.parser !== 2) {
       const w = it.author.split(" ");
@@ -548,14 +555,14 @@ const SOURCES = [
     keep: (p) => p.type === "book" || p.type === "ebook",
     toItem: (p) => ({
       id: `starylev-${p.id}`,
-      title: ent(p.name).trim(),
+      title: slTitle(p.name),
       author: p.authors.join(", "),
       translator: p.translators.join(", "),
       isbn: p.isbn,
       edition: p.publisher && p.publisher !== "Видавництво Старого Лева" ? p.publisher : "", // the format is its own field
       format: p.type === "ebook" ? "e-book" : "папір",
-      series: volumeOf(ent(p.name))?.series || "",
-      volume: volumeOf(ent(p.name))?.volume || 0,
+      series: volumeOf(slTitle(p.name))?.series || "",
+      volume: volumeOf(slTitle(p.name))?.volume || 0,
       bundle: /^комплект/i.test(p.name),
       cover: p.image ? `https://img.imageboss.me/sl/width/400/format:webp/${p.image}` : "",
       url: `https://starylev.com.ua/${p.slug}`,

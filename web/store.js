@@ -738,6 +738,20 @@ class Store {
       if (!groups.has(key)) groups.set(key, []);
       groups.get(key).push(si);
     }
+    // «Хроніки Амбера. П’ятикнижжя Корвіна. Том 1» and «…Мерліна. Том 2» are one series on the shelf, «Хроніки Амбера».
+    for (const [key, g] of [...groups]) {
+      const series = g[0].item.series;
+      if (g.length > 1 || !series.includes(". ") || !groups.has(key)) continue;
+      const name = series.slice(0, series.lastIndexOf(". "));
+      const shelf = key.slice(0, key.indexOf("|"));
+      const parent = `${shelf}|${norm(name)}`;
+      const kin = [...groups].filter(([k, o]) => k === parent || (k.startsWith(shelf + "|") && o.length === 1 && norm(o[0].item.series.slice(0, o[0].item.series.lastIndexOf(". "))) === norm(name) && o[0].item.series.includes(". ")));
+      if (kin.length < 2) continue;
+      const all = kin.flatMap(([, o]) => o);
+      for (const [k] of kin) groups.delete(k);
+      for (const si of all) si.item.series = name;
+      groups.set(parent, all);
+    }
     for (const g of groups.values()) {
       if (g.length < 2 || !g.some((si) => si.item.volume || si.item.bundle)) continue; // a label like «Шеклі» is not a series
       const sorted = [...g].sort((a, b) => (a.item.bundle ? 1 : 0) - (b.item.bundle ? 1 : 0) || (a.item.volume || 99) - (b.item.volume || 99) || a.item.id.localeCompare(b.item.id, "en", { numeric: true }));
