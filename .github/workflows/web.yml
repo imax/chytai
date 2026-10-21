@@ -15,6 +15,7 @@ concurrency: deploy-web
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: superfly/flyctl-actions/setup-flyctl@master
@@ -23,10 +24,11 @@ jobs:
         run: echo "image=$(flyctl machine list -a chytai-web --json | jq -r '.[0].config.image // empty')" >> "$GITHUB_OUTPUT"
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN_WEB }}
-      # Fly's API sometimes drops the connection after the image is built ("unexpected EOF"); one retry
-      # redeploys the already-built image.
+      # Fly's API sometimes drops the connection after the image is built ("unexpected EOF") or hangs after
+      # pushing it (16 minutes on 2026-10-21, holding up every deploy queued behind it): each try gets 5
+      # minutes, and one retry redeploys the already-built image.
       - run: |
-          deploy() { flyctl deploy . --remote-only -a chytai-web -c web/fly.toml --dockerfile web/Dockerfile; }
+          deploy() { timeout 300 flyctl deploy . --remote-only -a chytai-web -c web/fly.toml --dockerfile web/Dockerfile; }
           deploy || { echo "retrying deploy"; sleep 15; deploy; }
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN_WEB }}
