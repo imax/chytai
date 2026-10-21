@@ -82,7 +82,7 @@ function layout({ title, body, user, path = "", description = "", q = "", home =
     // Settings live on one's own shelf, not in the menu (Max, 2026-10-20).
     user ? `<a href="${attr(user.href || "/me")}"${on(path === "/me" || path === "/settings")}>Моє</a>` : `<a href="/login"${on(path === "/login")}>Увійти</a>`,
   ].join("");
-  const find = home || path === "/search" ? "" : `<form class="find" action="/search" role="search"><input type="search" name="q" value="${attr(q)}" placeholder="назва, автор або жанр" autocomplete="off" aria-label="Пошук"></form>`;
+  const find = home || path === "/search" ? "" : `<form class="find" action="/search" role="search"><input type="search" name="q" value="${attr(q)}" placeholder="назва, автор, жанр або видавництво" autocomplete="off" aria-label="Пошук"></form>`;
   return `<!doctype html>
 <html lang="uk">
 <head>
@@ -271,7 +271,7 @@ function homePage({ user, picks, feed, recs, showcase, fetched, libraries = [] }
   const body = `
 <section class="hero">
   <h1>Що почитати далі?</h1>
-  <form class="search-box big" action="/search" role="search"><input type="search" name="q" placeholder="назва, автор або серія" aria-label="Пошук" autocomplete="off"><span class="enter">Enter ↵</span></form>
+  <form class="search-box big" action="/search" role="search"><input type="search" name="q" placeholder="назва, автор, жанр або видавництво" aria-label="Пошук" autocomplete="off"><span class="enter">Enter ↵</span></form>
   <p class="starts"><span>або почни з</span> ${["фантастика", "Madeline Miller", "війна", "біографії", "українською"].map((s) => `<a href="/search?q=${attr(encodeURIComponent(s))}">${esc(s)}</a>`).join(" ")}</p>
 </section>
 <div id="live"></div>
@@ -704,20 +704,21 @@ ${items.map((it) => card(it, { data: ` data-genre="${attr((it.genres || []).join
 
 function searchPage({ q, user, results }) {
   const body = `
-<form class="search-box big query" action="/search" role="search"><input type="search" name="q" value="${attr(q)}" placeholder="назва, автор або серія" aria-label="Пошук" autocomplete="off"${q ? "" : " autofocus"}><span class="enter">Enter ↵</span></form>
+<form class="search-box big query" action="/search" role="search"><input type="search" name="q" value="${attr(q)}" placeholder="назва, автор, жанр або видавництво" aria-label="Пошук" autocomplete="off"${q ? "" : " autofocus"}><span class="enter">Enter ↵</span></form>
 <div id="live">${searchResults({ q, user, ...results })}</div>`;
   return layout({ title: q ? `${q} · Пошук` : "Пошук", body, user, path: "/search", q });
 }
 
 // The results in groups (books, authors, readers) with «схоже» on the side; also served alone by
 // /api/search for search as you type.
-function searchResults({ q, user, hits = [], authors = [], readers = [], similar = [], tag = "" }) {
+function searchResults({ q, user, hits = [], authors = [], readers = [], shelves = [], similar = [], tag = "" }) {
   if (!q.trim()) return "";
-  const n = hits.length + authors.length + readers.length;
+  const n = hits.length + authors.length + readers.length + shelves.length;
   if (!n) return `<p class="found">Нічого не знайшлося за «${esc(q)}». ${user ? `<button type="button" class="text-link" data-open="add">Додати книжку, якої ще немає на Chytai</button>` : ""}</p>${user ? addDialog() : ""}`;
   return `<p class="found">${count(n, "збіг", "збіги", "збігів")}${tag ? ` · жанр «${esc(tag)}»` : ""}</p>
 <div class="split">
   <div>
+    ${shelves.length ? `<section class="block">${label(`Видавництва · ${shelves.length}`)}<div class="name-rows">${shelves.map((s) => `<a class="name-row" href="/publishers/${attr(s.shelf.id)}"><b>${esc(s.shelf.name)}</b><span>${[books(s.total), s.shelf.tagline ? esc(s.shelf.tagline) : ""].filter(Boolean).join(" · ")}</span></a>`).join("")}</div></section>` : ""}
     ${hits.length ? `<section class="block">${label(`Книжки · ${hits.length}`)}<div class="rows">${hits.map((h) => bookRow(h.book, { meta: readersMeta(h.book.id), action: h.entry ? `<span class="muted small">${esc(h.entry.status ? STATUS[h.entry.status].toLowerCase() : "на полиці")}</span>` : markButtons(h.book, user) })).join("")}</div></section>` : ""}
     ${authors.length ? `<section class="block">${label(`Автори · ${authors.length}`)}<div class="name-rows">${authors.map((a) => `<a class="name-row" href="${attr(a.href)}"><b>${esc(a.name)}</b><span>${[books(a.books), a.readers ? count(a.readers, "читач", "читачі", "читачів") : ""].filter(Boolean).join(" · ")}</span></a>`).join("")}</div></section>` : ""}
     ${readers.length ? `<section class="block">${label(`Читачі · ${readers.length}`)}<div class="name-rows">${readers.map((r) => `<a class="name-row" href="${attr(r.reader.href)}"><b>${esc(r.reader.name)}</b><span>${books(r.count)}</span></a>`).join("")}</div></section>` : ""}

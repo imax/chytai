@@ -480,8 +480,23 @@ function searchAll(req, q) {
     .map((r) => ({ reader: pub(r), count: Object.keys(store.entriesOf(r.id)).length }))
     .filter((r) => r.count)
     .slice(0, 6);
+  // Publishers (and the other shelves) by name; the one named exactly («Readberry») lists its books first.
+  const flat = (s) => normQ(s).replace(/ /g, "");
+  const shelvesFound = shelvesFor(req)
+    .filter((s) => has(s.name) || flat(s.name) === flat(q))
+    .slice(0, 6)
+    .map((s) => ({ shelf: s, total: visible(s).length }));
+  const named = shelvesFound.find((s) => flat(s.shelf.name) === flat(q));
+  if (named) {
+    const seen = new Set(hits.map((h) => h.book.id));
+    const own = [...new Set(visible(named.shelf).map((it) => store.canonical(it.id)))]
+      .filter((id) => !seen.has(id))
+      .map((id) => ({ book: bookFor(req, store.book(id), !!store.entry(req.user?.id, id)), entry: store.entry(req.user?.id, id) }))
+      .filter((h) => h.book);
+    hits = [...own, ...hits].slice(0, 40);
+  }
   const similar = hits.length ? social.alsoLiked([hits[0].book.id], { limit: 4, skip: new Set(hits.map((h) => h.book.id)) }) : [];
-  return { hits, authors: authorsFound, readers: readersFound, similar, tag };
+  return { hits, authors: authorsFound, readers: readersFound, shelves: shelvesFound, similar, tag };
 }
 app.get("/search", (req, res) => {
   const q = String(req.query.q || "").trim().slice(0, 100);
