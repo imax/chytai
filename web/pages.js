@@ -108,6 +108,7 @@ ${description ? `<meta property="og:description" content="${attr(description.sli
 <meta property="og:image" content="${attr(image || `${ORIGIN}/icon.png`)}">
 <meta name="twitter:card" content="summary">
 ${jsonld ? `<script type="application/ld+json">${JSON.stringify(jsonld).replace(/</g, "\\u003c")}</script>` : ""}
+${path === "/" ? `<meta name="google-site-verification" content="5cswdBTj0bCY9oY1I-PTqyMBiCpQJ1Xu6CzQLOEYwRI">` : ""}
 <link rel="icon" href="/icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
