@@ -257,7 +257,7 @@
   // «Хочу прочитати», «Прочитано», «Стежити», «Підписатися» in a list: sent in the background and changed
   // in place, so the page doesn't jump to the top after the server's redirect (Max, 2026-10-20). Without
   // JS (or when the request fails) the form posts as before. The book page's own buttons still reload it.
-  const LABEL = { want: "хочу прочитати", read: "прочитано", reading: "читаю", abandoned: "не дочитано" };
+  const LABEL = { want: "хочу прочитати", read: "прочитано", reading: "читаю", abandoned: "покинуто" };
   document.addEventListener("submit", async (e) => {
     const form = e.target;
     const action = form.getAttribute("action") || "";
@@ -291,7 +291,7 @@
     }
   });
 
-  // «Не дочитано» chosen: the note asks why, quietly (pages.js WHY).
+  // «Покинуто» chosen: the note asks why, quietly (pages.js WHY).
   for (const form of $$(".entry-form")) {
     const status = form.querySelector("select[name=status]");
     const note = form.querySelector("textarea[name=note]");

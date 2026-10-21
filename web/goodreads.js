@@ -8,7 +8,7 @@
 
 const CHYTAI_STATUS = { read: "read", "currently-reading": "reading", "to-read": "want" };
 // Goodreads has no «did not finish»; readers make a shelf of their own for it, exclusive or not, and name it
-// as they like: «dnf», «did-not-finish», «abandoned», «gave-up», «не-дочитано». Any of them is «Не дочитано»
+// as they like: «dnf», «did-not-finish», «abandoned», «gave-up», «не-дочитано». Any of them is «Покинуто»
 // (unless the book was read after all).
 const DNF = /(^|[-_\s])(dnf|did-?not-?finish|abandon|unfinish|not-?finish|gave-?up|give-?up|put-?down|кинув|кинула|кинуто|покину|не-?дочит|недочит)/i;
 const statusOf = (shelf, shelves) => CHYTAI_STATUS[shelf] === "read" ? "read" : DNF.test(shelf) || shelves.split(",").some((s) => DNF.test(s.trim())) ? "abandoned" : CHYTAI_STATUS[shelf] || "";

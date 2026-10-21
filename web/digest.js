@@ -221,8 +221,8 @@ class Digest {
     if (d.reading) {
       const r = d.reading;
       html.push(label("Ви зараз читаєте"));
-      html.push(`<p style="font-size:15px;line-height:1.5;color:#3d3a33;margin:12px 0 0">«<a href="${attr(url(r.book.href))}" style="color:#1b1a17">${esc(r.book.title)}</a>» уже ${count(r.weeks, "тиждень", "тижні", "тижнів")}. Коли дочитаєте, <a href="${attr(url(`/me/book/${encodeURIComponent(r.id)}`))}" style="color:#1b1a17">поставте оцінку</a> — це допоможе іншим читачам вибрати. А якщо не йде, її можна позначити «Не дочитано» і взятися за іншу.</p>`);
-      text.push("ВИ ЗАРАЗ ЧИТАЄТЕ", `«${r.book.title}» уже ${count(r.weeks, "тиждень", "тижні", "тижнів")}. Коли дочитаєте, поставте оцінку; якщо не йде, позначте «Не дочитано» і візьміться за іншу: ${url(`/me/book/${encodeURIComponent(r.id)}`)}`, "");
+      html.push(`<p style="font-size:15px;line-height:1.5;color:#3d3a33;margin:12px 0 0">«<a href="${attr(url(r.book.href))}" style="color:#1b1a17">${esc(r.book.title)}</a>» уже ${count(r.weeks, "тиждень", "тижні", "тижнів")}. Коли дочитаєте, <a href="${attr(url(`/me/book/${encodeURIComponent(r.id)}`))}" style="color:#1b1a17">поставте оцінку</a> — це допоможе іншим читачам вибрати. А якщо не йде, її можна позначити «Покинуто» і взятися за іншу.</p>`);
+      text.push("ВИ ЗАРАЗ ЧИТАЄТЕ", `«${r.book.title}» уже ${count(r.weeks, "тиждень", "тижні", "тижнів")}. Коли дочитаєте, поставте оцінку; якщо не йде, позначте «Покинуто» і візьміться за іншу: ${url(`/me/book/${encodeURIComponent(r.id)}`)}`, "");
     }
     if (d.pick) {
       const p = d.pick;

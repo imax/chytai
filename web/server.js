@@ -408,7 +408,7 @@ app.get("/follow-mail/unsubscribe/:id/:token", (req, res) => followMailSwitch(re
 app.post("/follow-mail/unsubscribe/:id/:token", (req, res) => followMailSwitch(req, res, false));
 app.post("/follow-mail/resubscribe/:id/:token", (req, res) => followMailSwitch(req, res, true));
 
-// «Не дочитано» is the reader's own: other readers don't see it on the shelf (pages.js STATUS).
+// «Покинуто» is the reader's own: other readers don't see it on the shelf (pages.js STATUS).
 const shown = (rows) => rows.filter((r) => r.status !== "abandoned");
 function libraryRows(reader, { own = false } = {}) {
   const rows = own ? store.library(reader) : shown(store.library(reader));

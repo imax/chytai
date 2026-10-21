@@ -302,7 +302,7 @@ class Store {
   }
 
   // Every reader who has the work (or a translation of it): [{ reader, entry }], fullest first.
-  // «Не дочитано» is left out: it is the reader's own, not a word about the book to others.
+  // «Покинуто» is left out: it is the reader's own, not a word about the book to others.
   readersOf(id) {
     const out = [];
     for (const reader of this.entries.keys()) {
