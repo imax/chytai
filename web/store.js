@@ -739,16 +739,19 @@ class Store {
       groups.get(key).push(si);
     }
     // «Хроніки Амбера. П’ятикнижжя Корвіна. Том 1» and «…Мерліна. Том 2» are one series on the shelf, «Хроніки Амбера».
-    for (const [key, g] of [...groups]) {
+    const kin = new Map(); // shelf|parent name -> keys of single-item groups whose series is «parent. …»
+    for (const [key, g] of groups) {
       const series = g[0].item.series;
-      if (g.length > 1 || !series.includes(". ") || !groups.has(key)) continue;
-      const name = series.slice(0, series.lastIndexOf(". "));
-      const shelf = key.slice(0, key.indexOf("|"));
-      const parent = `${shelf}|${norm(name)}`;
-      const kin = [...groups].filter(([k, o]) => k === parent || (k.startsWith(shelf + "|") && o.length === 1 && norm(o[0].item.series.slice(0, o[0].item.series.lastIndexOf(". "))) === norm(name) && o[0].item.series.includes(". ")));
-      if (kin.length < 2) continue;
-      const all = kin.flatMap(([, o]) => o);
-      for (const [k] of kin) groups.delete(k);
+      if (g.length > 1 || !series.includes(". ")) continue;
+      const parent = `${key.slice(0, key.indexOf("|"))}|${norm(series.slice(0, series.lastIndexOf(". ")))}`;
+      if (!kin.has(parent)) kin.set(parent, []);
+      kin.get(parent).push(key);
+    }
+    for (const [parent, keys] of kin) {
+      const all = [...(groups.get(parent) || []), ...keys.flatMap((k) => groups.get(k))];
+      if (all.length < 2) continue;
+      const name = groups.get(parent)?.[0].item.series || all.at(-1).item.series.slice(0, all.at(-1).item.series.lastIndexOf(". "));
+      for (const k of keys) groups.delete(k);
       for (const si of all) si.item.series = name;
       groups.set(parent, all);
     }
