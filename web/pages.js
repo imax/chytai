@@ -443,36 +443,8 @@ function decidedList(decisions, book) {
 ${n ? `<ul class="decided">${decisions.same.map(([k, d], i) => `<li>${name(d)} <span class="muted">→ видання</span> ${name(k)} ${undo("same", i)}</li>`).join("")}${decisions.translations.map(([a, b], i) => `<li>${name(a)} <span class="muted">— переклад</span> ${name(b)} ${undo("translations", i)}</li>`).join("")}${decisions.different.map(([a, b], i) => `<li>${name(a)} <span class="muted">і</span> ${name(b)} <span class="muted">— різні</span> ${undo("different", i)}</li>`).join("")}</ul>` : `<p class="muted">Поки жодного.</p>`}`;
 }
 
-function dupesPage({ user, groups, translations = [], decisions = { same: [], different: [], translations: [] }, book = () => null, all = false }) {
-  const shown = all ? groups : groups.filter((g) => g.some((b) => b.readers));
-  const meta = (b) => [b.author, b.source, b.readers ? count(b.readers, "читач", "читачі", "читачів") : "", b.editions > 1 ? count(b.editions, "видання", "видання", "видань") : ""].filter(Boolean).join(" · ");
-  const group = (g) => {
-    const ids = g.map((b) => b.id).join(",");
-    return `<div class="dupe">
-${g.map((b) => `<form method="post" action="/admin/dupes/decide" class="dupe-row"><input type="hidden" name="ids" value="${attr(ids)}"><input type="hidden" name="keep" value="${attr(b.id)}"><input type="hidden" name="all" value="${all ? "1" : ""}"><span><a href="${attr(b.href)}" target="_blank">${esc(b.title)}</a><span class="muted"> · ${esc(meta(b))}</span></span><button class="btn small" title="Решта стануть виданнями цієї книжки">Лишити цю</button></form>`).join("")}
-<form method="post" action="/admin/dupes/decide" class="dupe-foot"><input type="hidden" name="ids" value="${attr(ids)}"><input type="hidden" name="verdict" value="different"><input type="hidden" name="all" value="${all ? "1" : ""}"><button class="btn small ghost">Різні книжки</button></form>
-</div>`;
-  };
-  const body = `<div class="admin" id="top">
-<h1>Схожі на дублі <span class="muted" id="dupe-count">${shown.length}</span></h1>
-<p class="muted">Один автор, одна головна назва, але різні сторінки. ${all ? `<a class="text-link" href="/admin/dupes">Лише ті, що є в читачів</a>` : `Тут лише ті, що є на чиїйсь полиці; <a class="text-link" href="/admin/dupes?all=1">усі ${groups.length}</a>`}. «Лишити цю» робить решту виданнями цієї книжки: їхні сторінки ведуть на неї, оцінки читачів з’їжджаються. «Різні книжки» прибирає пару зі списку.</p>
-<div id="dupes">${shown.map(group).join("")}</div>
-<p class="muted" id="dupe-none"${shown.length ? ' hidden' : ""}>Нічого схожого не лишилось.</p>
-<h2 id="translations">Переклади? <span class="muted">${translations.reduce((n, t) => n + t.uk.length, 0)}</span></h2>
-<p class="muted">Автори, у яких є книжки і з іноземною, і з кириличною назвою, ще не з’єднані як переклад. Виберіть оригінал для перекладу: прочитане одне зарахується й за інше, а сторінка книжки покаже обидві.</p>
-${translations
-  .map(
-    (t) => `<div class="dupe"><p class="dupe-author"><a href="${attr(t.author.href)}" target="_blank">${esc(t.author.name)}</a></p>
-${t.uk
-  .map(
-    (b) => `<form method="post" action="/admin/dupes/translation" class="dupe-row tr-row"><input type="hidden" name="uk" value="${attr(b.id)}"><span><a href="${attr(b.href)}" target="_blank">${esc(b.title)}</a>${b.readers ? `<span class="muted"> · ${count(b.readers, "читач", "читачі", "читачів")}</span>` : ""}</span><span class="tr-pick"><select name="orig">${t.foreign.map((o) => `<option value="${attr(o.id)}">${esc(o.title)}</option>`).join("")}</select><button class="btn small">Переклад</button></span></form>`
-  )
-  .join("")}</div>`
-  )
-  .join("")}
-<div id="decided-box">${decidedList(decisions, book)}</div>
-</div>
-<script>
+// The script both admin pages share: a decision posts by fetch and its group leaves the page in place.
+const decideScript = `<script>
 (() => {
   const box = document.getElementById("decided-box");
   const count = document.getElementById("dupe-count");
@@ -498,7 +470,7 @@ ${t.uk
       } else if (f.matches(".dupe-row, .dupe-foot")) {
         f.closest(".dupe").remove();
         const n = document.querySelectorAll("#dupes .dupe").length;
-        count.textContent = n;
+        if (count) count.textContent = n;
         document.getElementById("dupe-none").hidden = n > 0;
       }
       box.innerHTML = d.decided;
@@ -511,7 +483,49 @@ ${t.uk
   });
 })();
 </script>`;
+
+function dupesPage({ user, groups, decisions = { same: [], different: [], translations: [] }, book = () => null, all = false }) {
+  const shown = all ? groups : groups.filter((g) => g.some((b) => b.readers));
+  const meta = (b) => [b.author, b.source, b.readers ? count(b.readers, "читач", "читачі", "читачів") : "", b.editions > 1 ? count(b.editions, "видання", "видання", "видань") : ""].filter(Boolean).join(" · ");
+  const group = (g) => {
+    const ids = g.map((b) => b.id).join(",");
+    return `<div class="dupe">
+${g.map((b) => `<form method="post" action="/admin/dupes/decide" class="dupe-row"><input type="hidden" name="ids" value="${attr(ids)}"><input type="hidden" name="keep" value="${attr(b.id)}"><input type="hidden" name="all" value="${all ? "1" : ""}"><span><a href="${attr(b.href)}" target="_blank">${esc(b.title)}</a><span class="muted"> · ${esc(meta(b))}</span></span><button class="btn small" title="Решта стануть виданнями цієї книжки">Лишити цю</button></form>`).join("")}
+<form method="post" action="/admin/dupes/decide" class="dupe-foot"><input type="hidden" name="ids" value="${attr(ids)}"><input type="hidden" name="verdict" value="different"><input type="hidden" name="all" value="${all ? "1" : ""}"><button class="btn small ghost">Різні книжки</button></form>
+</div>`;
+  };
+  const body = `<div class="admin" id="top">
+<h1>Схожі на дублі <span class="muted" id="dupe-count">${shown.length}</span></h1>
+<p class="muted">Один автор, одна головна назва, але різні сторінки. ${all ? `<a class="text-link" href="/admin/dupes">Лише ті, що є в читачів</a>` : `Тут лише ті, що є на чиїйсь полиці; <a class="text-link" href="/admin/dupes?all=1">усі ${groups.length}</a>`}. «Лишити цю» робить решту виданнями цієї книжки: їхні сторінки ведуть на неї, оцінки читачів з’їжджаються. «Різні книжки» прибирає пару зі списку. Переклади з’єднуються окремо: <a class="text-link" href="/admin/translations">/admin/translations</a>.</p>
+<div id="dupes">${shown.map(group).join("")}</div>
+<p class="muted" id="dupe-none"${shown.length ? " hidden" : ""}>Нічого схожого не лишилось.</p>
+<div id="decided-box">${decidedList(decisions, book)}</div>
+</div>
+${decideScript}`;
   return layout({ title: "Схожі на дублі", body, user, path: "/admin" });
+}
+
+// /admin/translations (its own page since 2026-10-21, Max: «переклади зламали сторінку, давай їх на окремий
+// урл»): authors with both a foreign-titled and a Cyrillic-titled book not yet linked; the owner picks the original.
+function translationsPage({ user, translations = [], decisions = { same: [], different: [], translations: [] }, book = () => null }) {
+  const body = `<div class="admin" id="top">
+<h1>Переклади? <span class="muted">${translations.reduce((n, t) => n + t.uk.length, 0)}</span></h1>
+<p class="muted">Автори, у яких є книжки і з іноземною, і з кириличною назвою, ще не з’єднані як переклад. Виберіть оригінал для перекладу: прочитане одне зарахується й за інше, а сторінка книжки покаже обидві. Дублі одного видання: <a class="text-link" href="/admin/dupes">/admin/dupes</a>.</p>
+<div id="dupes">${translations
+    .map(
+      (t) => `<div class="dupe"><p class="dupe-author"><a href="${attr(t.author.href)}" target="_blank">${esc(t.author.name)}</a></p>
+${t.uk
+  .map(
+    (b) => `<form method="post" action="/admin/dupes/translation" class="dupe-row tr-row"><input type="hidden" name="uk" value="${attr(b.id)}"><span><a href="${attr(b.href)}" target="_blank">${esc(b.title)}</a>${b.readers ? `<span class="muted"> · ${count(b.readers, "читач", "читачі", "читачів")}</span>` : ""}</span><span class="tr-pick"><select name="orig">${t.foreign.map((o) => `<option value="${attr(o.id)}">${esc(o.title)}</option>`).join("")}</select><button class="btn small">Переклад</button></span></form>`
+  )
+  .join("")}</div>`
+    )
+    .join("")}</div>
+<p class="muted" id="dupe-none"${translations.length ? " hidden" : ""}>Нічого не лишилось.</p>
+<div id="decided-box">${decidedList(decisions, book)}</div>
+</div>
+${decideScript}`;
+  return layout({ title: "Переклади", body, user, path: "/admin" });
 }
 
 // /me/book/:id: the one place to edit a book in your library.
@@ -1110,6 +1124,7 @@ function messagePage({ title, text, user }) {
 
 module.exports = {
   dupesPage,
+  translationsPage,
   decidedList,
   welcomePage,
   layout, homePage, bookPage, editPage, libraryPage, readersPage, publishersPage, publisherPage, searchPage, searchResults, authorPage,

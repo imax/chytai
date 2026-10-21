@@ -56,6 +56,19 @@ const isRussian = (b) => {
 const norm = (s) => String(s || "").toLowerCase().replace(/^(the|a)\s+/, "").replace(/[^\p{L}\p{N}]+/gu, " ").trim();
 const isbnKey = (s) => String(s || "").replace(/[^0-9X]/gi, "");
 const GENRE = /\s*[:.]\s*(казка|казки|роман|повість|повісті|оповідання|новели|п[’']єса|есеї|есей|поезії|вірші|збірка|нариси|спогади|мемуари|(осіннє|зимове|весняне|літнє|подарункове|ювілейне|ілюстроване|нове|повне|доповнене|колекційне)\s+видання)\s*$/iu;
+// A note on the edition at the end of a title, which names a printing, not a book: «Дракула (2-ге видання)»,
+// «Подолати минуле: глобальна історія України Подарункове видання», «Кобзар. Ювілейне видання».
+const EDITION = /[\s:.,]*[(\[]?\s*(\d+-?[а-яі]{1,3}\s+(видання|вид\.?)|(осіннє|зимове|весняне|літнє|подарункове|ювілейне|ілюстроване|нове|повне|доповнене|виправлене|оновлене|колекційне|святкове|лімітоване|спеціальне|перше|друге|третє)(\s+(та|і|й)\s+(доповнене|виправлене|оновлене|перероблене))?\s+видання)\s*[)\]]?\s*$/iu;
+// The name of the work a shop's title stands for: without a bracketed note («(м'яка обкладинка)»), a genre
+// word or an edition note at its end. A bracket with a number or a volume word stays («(том 2)», «(1984)»),
+// unless it is an edition («(2-ге видання)»); volumes never fold into one book.
+const workName = (t) =>
+  String(t || "")
+    .replace(/\s*\(([^()]*)\)/g, (m, inner) => (/\d|том|книга|частина|част\./i.test(inner) && !/видання|вид\./i.test(inner) ? m : ""))
+    .replace(GENRE, "")
+    .replace(EDITION, "")
+    .replace(GENRE, "")
+    .trim();
 // The ISBNs a library book is known by: its own field, plus the Amazon /dp/<ISBN-10> links from Books.md.
 const isbnsOf = (b) => [...(b.isbns || []), b.isbn || "", ...(b.links || []).map((l) => /amazon\.[a-z.]+\/(?:[^/]+\/)?dp\/([0-9X]{10})/i.exec(l.url || "")?.[1] || "")].map(isbnKey).filter((i) => i.length >= 10);
 
@@ -356,12 +369,16 @@ class Store {
     const latin = (slug) => /^[\x00-\x7f]*$/.test(slug);
     for (const r of this.db.prepare("SELECT slug, id FROM slugs").all()) {
       this.slugs.set(r.slug, r.id);
-      if (!this.slugOf.has(r.id) || (latin(r.slug) && !latin(this.slugOf.get(r.id)))) this.slugOf.set(r.id, r.slug);
+      if (!this.slugOf.has(r.id) || latin(r.slug)) this.slugOf.set(r.id, r.slug); // the newest Latin slug is the address
     }
     const add = this.db.prepare("INSERT OR IGNORE INTO slugs (slug, id) VALUES (?, ?)");
     this.db.exec("BEGIN");
-    const take = (id, title, author) => {
-      if (this.slugOf.has(id) && latin(this.slugOf.get(id))) return;
+    const take = (id, title, author, raw = title) => {
+      const had = this.slugOf.get(id);
+      // An address given from a title with an edition note («drakula-2-he-vydannia») moves to the work's
+      // name when that address is free; the old one stays in the table and redirects.
+      const stale = had && latin(had) && raw !== title && had.startsWith(slugify(raw)) && !this.slugs.has(slugify(title));
+      if (had && latin(had) && !stale) return;
       let slug = slugify(title);
       const surname = (author || "").split(/[,\s]+/).filter(Boolean).pop();
       const last = surname ? slugify(surname) : ""; // slugify("") is "book": «tyhrolovy-book»
@@ -373,7 +390,7 @@ class Store {
     };
     for (const b of this.seedBooks) take(b.id, b.id, "");
     for (const b of Object.values(this.lib.books)) take(b.id, b.id, "");
-    for (const { item } of this.shelfItems.values()) if (this.canonical(item.id) === item.id) take(item.id, item.title, item.author);
+    for (const { item } of this.shelfItems.values()) if (this.canonical(item.id) === item.id) take(item.id, workName(item.title) || item.title, item.author, item.title);
     this.db.exec("COMMIT");
     for (const { item } of this.shelfItems.values()) item.href = this.href(item.id);
   }
@@ -498,11 +515,9 @@ class Store {
     // A shared ISBN counts only with the same title: publishers' sites reuse ISBNs by mistake.
     // (Основи gives a bundle the ISBN of one of its books, so a bundle never joins a single book this way.)
     const alike = (a, b) => !a.bundle === !b.bundle && (norm(a.title).startsWith(norm(b.title)) || norm(b.title).startsWith(norm(a.title)));
-    // The title for that compares without a note on the edition in brackets: Старий Лев sells
-    // «Тигролови (м'яка обкладинка)» and «Тигролови (в-во Віхола)» next to «Тигролови». A bracket with
-    // a number or a volume word («(том 2)», «(1984)») stays, so volumes never fold into one book.
-    // A genre word after the title («Колгосп тварин: Казка», «Тигролови. Роман») is not part of it either.
-    const workTitle = (t) => norm(String(t || "").replace(/\s*\(([^()]*)\)/g, (m, inner) => (/\d|том|книга|частина|част\./i.test(inner) ? m : "")).replace(GENRE, ""));
+    // The title for that compares as the work's name (workName): Старий Лев sells «Тигролови (м'яка
+    // обкладинка)» and «Тигролови (в-во Віхола)» next to «Тигролови», and «Колгосп тварин: Казка» is «Колгосп тварин».
+    const workTitle = (t) => norm(workName(t));
     const titled = new Map(); // work title -> Set of authors, for the items that have none
     for (const si of this.shelfItems.values()) {
       const it = si.item;
@@ -832,6 +847,9 @@ class Store {
     const eds = this.editions.get(id);
     const ser = [id, ...(eds || []).map((e) => e.item.id)].map((i) => this.series.get(i)).find(Boolean);
     const out = eds ? { ...b, editions: eds.map(({ shelf, item }) => ({ ...this.fromShelfItem(shelf, item), shelf })) } : { ...b };
+    // A shop's edition note is not the book's name (Max, 2026-10-21: «як мені прибрати "Подарункове видання"»);
+    // the «Де взяти» rows keep it, so the reader can tell the editions apart.
+    if (si && workName(b.title)) out.title = workName(b.title);
     if (ser) out.series = { name: ser.name, head: ser.head, volumes: ser.volumes, items: ser.items.map(({ shelf, item }) => ({ ...this.fromShelfItem(shelf, item), shelf, work: this.canonical(item.id), href: this.href(item.id) })) };
     if (this.covers?.has(id)) out.cover = this.covers.get(id);
     // A book a reader added by hand or imported has no cover; its catalog editions do («Сила інтровертів»).
