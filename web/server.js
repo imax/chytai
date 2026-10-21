@@ -640,15 +640,22 @@ app.get("/welcome-mail/preview", owner, (req, res) => {
   if (req.query.text) return res.type("text").send(`Тема: ${letter.subject}\n\n${letter.text}`);
   const btn = (action, label) => `<form method="post" action="${action}" style="margin:0"><button style="border:1px solid #ece8df;background:none;color:#ece8df;border-radius:999px;padding:6px 14px;cursor:pointer">${label}</button></form>`;
   const on = welcomeMail.on;
-  const bar = `<div style="background:#1b1a17;color:#ece8df;font:14px -apple-system,sans-serif;padding:10px 20px;display:flex;gap:16px;align-items:center;flex-wrap:wrap"><span>Тема: <b>${pages.esc(letter.subject)}</b></span><span style="flex:1"></span><span style="color:${on ? "#8fd1a6" : "#e0a58f"}">${on ? "Надсилається новим читачам" : "Вимкнено"}</span><a href="?text=1" style="color:#a29d92">текстова версія</a>${btn("/api/welcome-mail?test=1", "Надіслати собі")}${btn(`/api/welcome-mail?on=${on ? 0 : 1}`, on ? "Вимкнути" : "Увімкнути")}</div>`;
+  const missed = welcomeMail.missed(WEEK);
+  const bar = `<div style="background:#1b1a17;color:#ece8df;font:14px -apple-system,sans-serif;padding:10px 20px;display:flex;gap:16px;align-items:center;flex-wrap:wrap"><span>Тема: <b>${pages.esc(letter.subject)}</b></span><span style="flex:1"></span><span style="color:${on ? "#8fd1a6" : "#e0a58f"}">${on ? "Надсилається новим читачам" : "Вимкнено"}</span><a href="?text=1" style="color:#a29d92">текстова версія</a>${btn("/api/welcome-mail?test=1", "Надіслати собі")}${btn(`/api/welcome-mail?on=${on ? 0 : 1}`, on ? "Вимкнути" : "Увімкнути")}${missed.length ? btn(`/api/welcome-mail/catch-up?since=${WEEK}`, `Надіслати ${missed.length} з цього тижня`) : ""}</div>`;
   res.send(letter.html.replace("<body", `${bar}<body`));
 });
+// Monday 19.10, 00:00 Kyiv: the week Max asked the catch-up for (2026-10-21).
+const WEEK = "2026-10-18T21:00:00Z";
 // A one-off catch-up for readers who signed up before it was on: GET lists them, POST sends.
 app.get("/welcome-mail/catch-up", owner, (req, res) => {
   const since = String(req.query.since || "");
   res.type("text").send(welcomeMail.missed(since).map((r) => `@${r.username}\t${r.created}`).join("\n") || "нікого");
 });
-app.post("/api/welcome-mail/catch-up", owner, async (req, res) => res.json(await welcomeMail.catchUp(String(req.query.since || "9999"))));
+app.post("/api/welcome-mail/catch-up", owner, async (req, res) => {
+  const r = await welcomeMail.catchUp(String(req.query.since || "9999"));
+  if (req.query.json) return res.json(r);
+  res.send(pages.messagePage({ title: `Надіслано: ${r.done.length}`, text: [r.done.map((u) => `@${u}`).join(", "), r.errors.join("; ")].filter(Boolean).join(". Помилки: ") || "Нікому не треба було.", user: req.user }));
+});
 app.post("/api/welcome-mail", owner, async (req, res) => {
   if (req.query.test) {
     const me = auth.reader(req.user.id);
