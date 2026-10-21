@@ -66,7 +66,7 @@ function descriptionText(d) {
 async function getJson(url, fetchImpl) {
   const r = await fetchImpl(url, { headers: HEADERS, signal: AbortSignal.timeout(12000) });
   if (r.status === 404) return null;
-  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  if (!r.ok) throw new Error(`HTTP ${r.status} ${(await r.text().catch(() => "")).replace(/\s+/g, " ").slice(0, 160)}`);
   return r.json();
 }
 

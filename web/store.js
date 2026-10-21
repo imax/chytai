@@ -306,7 +306,12 @@ class Store {
       different = readJson(path.join(SEED, "matches.json")).different || [];
     } catch {}
     const no = new Set(different.map((p) => p.join("|")));
-    const main = (t) => norm(String(t || "").replace(GENRE, "").replace(/\s*\([^()]*\)/g, "").split(/:|\.\s|\s[—–-]\s/)[0]);
+    // The main title is what stands before a colon or a sentence dot; a tail with a number (a volume,
+    // a part, «Vol. 2») is left alone, since volumes are different books.
+    const main = (t) => {
+      const [head, ...tail] = String(t || "").replace(GENRE, "").replace(/\s*\([^()]*\)/g, "").split(/:|\.\s/);
+      return /\d/.test(tail.join(" ")) ? "" : norm(head);
+    };
     const surname = (a) => {
       const ws = norm(a).split(/\s+and\s+|\s*[,&;]\s*| /).filter((w) => w.length >= 3);
       return ws.length ? ws[ws.length - 1] : "";

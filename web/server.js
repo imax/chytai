@@ -614,7 +614,7 @@ app.post("/api/digest", owner, async (req, res) => {
 // The owner's statistics page: readers, retention by sign-up week, what people do on the site (admin.js).
 app.get("/admin", owner, (req, res) => res.send(adminPage({ user: req.user, stats: admin.stats(), layout: pages.layout, withBooks: req.query.books === "1" })));
 app.get("/admin.json", owner, (req, res) => res.json(admin.stats()));
-app.get("/admin/dupes", owner, (req, res) => res.send(pages.dupesPage({ user: req.user, groups: store.dupes() })));
+app.get("/admin/dupes", owner, (req, res) => res.send(pages.dupesPage({ user: req.user, groups: store.dupes(), all: req.query.all === "1" })));
 app.get("/digest/status", owner, (req, res) => res.json({ to: digest.to, recipients: digest.recipients().map((r) => `@${r.username}`), lastRun: store.db.get("digest:lastRun"), last: JSON.parse(store.db.get("digest:last") || "null") }));
 
 app.post("/api/subscribe/:id", signed, (req, res) => {

@@ -421,11 +421,12 @@ function series(book, inLibrary) {
 }
 
 // /admin/dupes (owner): works that look like one book twice, for a human to judge.
-function dupesPage({ user, groups }) {
+function dupesPage({ user, groups, all = false }) {
+  const shown = all ? groups : groups.filter((g) => g.some((b) => b.readers));
   const row = (b) => `<li><a href="${attr(b.href)}">${esc(b.title)}</a> <span class="muted">${esc([b.author, b.source, b.readers ? count(b.readers, "читач", "читачі", "читачів") : "", b.editions > 1 ? count(b.editions, "видання", "видання", "видань") : ""].filter(Boolean).join(" · "))}</span></li>`;
-  const body = `<h1>Схожі на дублі <span class="muted">${groups.length}</span></h1>
-<p class="muted">Один автор, одна головна назва, але різні сторінки. Пари, які справді різні, записуються в web/seed/matches.json як different.</p>
-${groups.map((g) => `<ul class="dupes">${g.map(row).join("")}</ul>`).join("")}`;
+  const body = `<h1>Схожі на дублі <span class="muted">${shown.length}</span></h1>
+<p class="muted">Один автор, одна головна назва, але різні сторінки. ${all ? `<a class="text-link" href="/admin/dupes">Лише ті, що є в читачів</a>` : `Тут лише ті, що є на чиїйсь полиці; <a class="text-link" href="/admin/dupes?all=1">усі ${groups.length}</a>`}. Пари, які справді різні, записуються в web/seed/matches.json як different; однакові — як same.</p>
+${shown.map((g) => `<ul class="dupes">${g.map(row).join("")}</ul>`).join("")}`;
   return layout({ title: "Схожі на дублі", body, user, path: "/admin" });
 }
 
