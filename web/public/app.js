@@ -308,4 +308,16 @@
     year.addEventListener("keydown", (e) => (e.key === "ArrowUp" || e.key === "ArrowDown") && fill());
     year.addEventListener("wheel", fill, { passive: true });
   }
+  // The exchange picker (/settings/exchange/books): find a book by title or author, count the ticked ones.
+  const pick = document.querySelector(".pick-form");
+  if (pick) {
+    const find = pick.querySelector(".pick-find");
+    const items = [...pick.querySelectorAll(".pick")];
+    find?.addEventListener("input", () => {
+      const q = find.value.trim().toLowerCase();
+      for (const it of items) it.classList.toggle("hidden", !!q && !it.dataset.search.includes(q));
+    });
+    const n = pick.querySelector("[data-picked]");
+    pick.addEventListener("change", () => n && (n.textContent = pick.querySelectorAll(".pick input:checked").length));
+  }
 })();

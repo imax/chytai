@@ -217,6 +217,28 @@ app.post("/settings", signed, (req, res) => {
 });
 // The book exchange has its own tab (Max, 2026-10-21): the opt-in switch, the ways and the city.
 app.get("/settings/exchange", signed, (req, res) => res.send(pages.exchangeSettingsPage({ user: req.user, values: { exchange: req.user.exchange, ways: req.user.swap.split(" "), city: req.user.city }, saved: !!req.query.saved })));
+// Picking books for the exchange in one go (Max, 2026-10-21: «тільки ходити по кожній редагувати?»):
+// all of one's books with a checkbox each, paper ones first. A book unticked goes back to «На папері».
+app.get("/settings/exchange/books", signed, (req, res) => {
+  if (!req.user.exchange) return res.redirect("/settings/exchange");
+  const rank = (r) => (r.copy === "give" ? 0 : r.copy === "paper" ? 1 : r.copy === "ebook" ? 3 : 2);
+  const rows = store.library(req.user.id).sort((a, b) => rank(a) - rank(b) || a.book.title.localeCompare(b.book.title, "uk"));
+  res.send(pages.exchangeBooksPage({ user: req.user, rows, saved: Number(req.query.saved) || 0 }));
+});
+app.post("/settings/exchange/books", signed, (req, res) => {
+  if (!req.user.exchange) return res.redirect("/settings/exchange");
+  const picked = new Set([].concat(req.body.give || []).map(String));
+  let changed = 0;
+  store.db.tx(() => {
+    for (const r of store.library(req.user.id)) {
+      const on = picked.has(r.id);
+      if (on === (r.copy === "give")) continue;
+      store.setEntry(req.user.id, r.id, { copy: on ? "give" : "paper" }, { touch: false });
+      changed++;
+    }
+  });
+  res.redirect(`/settings/exchange/books?saved=${changed || "0"}`);
+});
 app.post("/settings/exchange", signed, (req, res) => {
   const ways = [req.body.swap_np ? "np" : "", req.body.swap_meet ? "meet" : ""].filter(Boolean);
   auth.setSwap(req.user.id, { on: !!req.body.exchange, ways, city: req.body.city });

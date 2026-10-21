@@ -1054,12 +1054,14 @@ class Store {
     return m;
   }
 
-  setEntry(reader, id, patch) {
+  // `touch: false` leaves the entry's date alone, so a quiet change (marking fifty books «На обмін» at
+  // once) doesn't bring them all to the top of the feed as news.
+  setEntry(reader, id, patch, { touch = true } = {}) {
     id = this.canonical(id);
     if (!this.book(id)) return null;
     const entries = this.entriesOf(reader);
     const cur = entries[id] || { status: "", year: null, rating: null, note: "", copy: "", order: Object.keys(entries).length, added: new Date().toISOString().slice(0, 10) };
-    const next = { ...cur, ...patch, updated: new Date().toISOString() };
+    const next = { ...cur, ...patch, ...(touch || !cur.updated ? { updated: new Date().toISOString() } : {}) };
     if (next.rating === "" || next.rating === undefined) next.rating = cur.rating ?? null;
     entries[id] = next;
     this.writeEntry(reader, id, next);

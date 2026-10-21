@@ -1085,9 +1085,23 @@ function exchangeSettingsPage({ user, values, saved = false }) {
   <label class="check"><span><input type="checkbox" name="swap_np" value="1"${values.ways?.includes("np") ? " checked" : ""}> Нова пошта</span></label>
   <label class="check"><span><input type="checkbox" name="swap_meet" value="1"${values.ways?.includes("meet") ? " checked" : ""}> Особисто чи на точці обміну</span></label>
   <label>Місто<input type="text" name="city" value="${attr(values.city || "")}" maxlength="40" placeholder="Київ"><span class="hint">Його бачать усі поруч з вашими книжками «На обмін».</span></label>
-  <div class="actions"><button class="btn primary">Зберегти</button>${values.exchange ? `<a class="text-link small" href="${attr(user.href)}?public#give">Мої «На обмін»</a>` : ""}<span class="grow"></span></div>
+  <div class="actions"><button class="btn primary">Зберегти</button>${values.exchange ? `<a class="btn" href="/settings/exchange/books">Вибрати книжки</a>` : ""}<span class="grow"></span></div>
 </form>`;
   return authLayout({ title: "Налаштування", lead: settingsTabs("exchange"), form, user, path: "/settings" });
+}
+
+// /settings/exchange/books: every book on one's shelf with a checkbox, «На обмін» ones ticked; one save.
+function exchangeBooksPage({ user, rows, saved = 0 }) {
+  const n = rows.filter((r) => r.copy === "give").length;
+  const item = (r) => `<label class="pick" data-search="${attr([r.book.title, r.book.author].join(" ").toLowerCase())}"><input type="checkbox" name="give" value="${attr(r.id)}"${r.copy === "give" ? " checked" : ""}>${cover(r.book, "sm")}<span class="pick-text"><b>${esc(r.book.title)}</b>${r.book.author ? `<span class="muted">${esc(byline(r.book.author))}</span>` : ""}</span>${r.copy === "paper" ? `<span class="muted small">на папері</span>` : ""}</label>`;
+  const form = `<form method="post" action="/settings/exchange/books" class="form pick-form">
+  ${saved ? `<p class="saved">Збережено.</p>` : ""}
+  <p class="muted small">Позначте книжки, які готові обміняти. Зараз на обмін: <b data-picked>${n}</b>. Спершу йдуть ті, що «На папері».</p>
+  <input type="search" class="pick-find" placeholder="шукати: назва чи автор" autocomplete="off">
+  <div class="pick-list">${rows.map(item).join("")}</div>
+  <div class="actions pick-save"><button class="btn primary">Зберегти</button><a class="text-link small" href="/settings/exchange">Назад</a><span class="grow"></span><a class="text-link small" href="${attr(user.href)}?public#give">Як бачать інші</a></div>
+</form>`;
+  return authLayout({ title: "Книжки на обмін", lead: settingsTabs("exchange"), form, user, path: "/settings" });
 }
 
 // Max (2026-10-20): any new outside service that sees readers' data (mail, hosting, fonts, analytics, AI) must be added here.
@@ -1295,7 +1309,7 @@ module.exports = {
   decidedList,
   welcomePage,
   layout, homePage, bookPage, editPage, libraryPage, readersPage, publishersPage, publisherPage, searchPage, searchResults, authorPage,
-  swapPage, exchangeSettingsPage,
+  swapPage, exchangeSettingsPage, exchangeBooksPage,
   loginPage, codePage, signupPage, settingsPage, privacyPage, updatesPage, messagePage, digestPage, followMailPage, importPage, importPreviewPage, importDonePage,
   esc, STATUS, COPY, inline, isUk, setTitleLinks, setAuthorLinks, setStats, setReadersWithNote,
 };
