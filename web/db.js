@@ -32,7 +32,7 @@ CREATE TABLE IF NOT EXISTS entries (
 CREATE TABLE IF NOT EXISTS subscriptions (reader TEXT NOT NULL, shelf TEXT NOT NULL, PRIMARY KEY (reader, shelf));
 CREATE TABLE IF NOT EXISTS follows (reader TEXT NOT NULL, target TEXT NOT NULL, created TEXT NOT NULL, PRIMARY KEY (reader, target));
 CREATE TABLE IF NOT EXISTS follow_mails (reader TEXT NOT NULL, target TEXT NOT NULL, sent TEXT NOT NULL, PRIMARY KEY (reader, target));
-CREATE TABLE IF NOT EXISTS slugs (slug TEXT PRIMARY KEY, id TEXT NOT NULL UNIQUE);
+CREATE TABLE IF NOT EXISTS slugs (slug TEXT PRIMARY KEY, id TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS readers (
   id TEXT PRIMARY KEY, email TEXT UNIQUE, username TEXT NOT NULL UNIQUE, name TEXT NOT NULL,
   created TEXT NOT NULL, seen TEXT
@@ -55,6 +55,12 @@ function open(dataDir) {
   if (!db.prepare("PRAGMA table_info(entries)").all().some((c) => c.name === "updated")) db.exec("ALTER TABLE entries ADD COLUMN updated TEXT");
   // Whether a reader wants a letter when someone starts following them (Max, 2026-10-20); on by default.
   if (!db.prepare("PRAGMA table_info(readers)").all().some((c) => c.name === "follow_mail")) db.exec("ALTER TABLE readers ADD COLUMN follow_mail INTEGER NOT NULL DEFAULT 1");
+  // A work may have several addresses (an old one redirects to the current): the table once made id
+  // UNIQUE, so a second slug for an id was silently dropped and lived only in memory (2026-10-21).
+  if (db.prepare("PRAGMA index_list(slugs)").all().some((i) => i.unique && i.origin === "u")) {
+    db.exec("CREATE TABLE slugs_new (slug TEXT PRIMARY KEY, id TEXT NOT NULL); INSERT INTO slugs_new (slug, id) SELECT slug, id FROM slugs ORDER BY rowid; DROP TABLE slugs; ALTER TABLE slugs_new RENAME TO slugs;");
+  }
+  db.exec("CREATE INDEX IF NOT EXISTS slugs_id ON slugs (id)");
   db.tx = (fn) => {
     db.exec("BEGIN");
     try {

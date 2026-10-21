@@ -391,6 +391,16 @@ class Store {
     for (const b of this.seedBooks) take(b.id, b.id, "");
     for (const b of Object.values(this.lib.books)) take(b.id, b.id, "");
     for (const { item } of this.shelfItems.values()) if (this.canonical(item.id) === item.id) take(item.id, workName(item.title) || item.title, item.author, item.title);
+    // Every edition's full title keeps an address that redirects to its work: it had that address while
+    // it was a work of its own, or before the work's name dropped its edition note («…-podarunkove-vydann»).
+    // Until 2026-10-21 the table allowed one slug per id, so such addresses lived only in memory.
+    for (const { item } of this.shelfItems.values()) {
+      const own = slugify(item.title);
+      if (!this.slugs.has(own)) {
+        this.slugs.set(own, item.id);
+        add.run(own, item.id);
+      }
+    }
     this.db.exec("COMMIT");
     for (const { item } of this.shelfItems.values()) item.href = this.href(item.id);
   }
