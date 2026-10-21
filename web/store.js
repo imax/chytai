@@ -670,6 +670,23 @@ class Store {
     }
     return out.sort((x, y) => y.uk.reduce((n, b) => n + b.readers, 0) + y.foreign.reduce((n, b) => n + b.readers, 0) - x.uk.reduce((n, b) => n + b.readers, 0) - x.foreign.reduce((n, b) => n + b.readers, 0));
   }
+  // For the owner on an author's page (Max, 2026-10-21: «кнопка "Позначити як переклад"»): the author's
+  // foreign-titled books to pick an original from, and for each work the original it is linked to,
+  // with the index of that decision when the owner made it (so it can be undone).
+  translationPairing(author) {
+    const latin = (t) => /[a-z]/i.test(t) && !/[а-яіїєґ]/i.test(t);
+    const books = author.ids.map((id) => this.book(id)).filter(Boolean);
+    const foreign = books.filter((b) => latin(b.title)).map((b) => ({ id: b.id, title: b.title }));
+    const decided = this.decisions().translations;
+    const linked = {};
+    for (const b of books) {
+      const o = foreign.find((f) => f.id !== b.id && this.translations.get(b.id)?.has(f.id));
+      if (!o) continue;
+      const i = decided.findIndex(([x, y]) => (x === b.id && y === o.id) || (x === o.id && y === b.id));
+      linked[b.id] = { ...o, index: i >= 0 ? i : null };
+    }
+    return { foreign, linked };
+  }
   // decide(ids, keep): every id in ids becomes an edition of keep; decide(ids, null): they are different books.
   // An id or a /book/<slug> address, as the owner may paste either.
   workId(x) {

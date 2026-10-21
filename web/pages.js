@@ -806,7 +806,16 @@ function searchResults({ q, user, hits = [], authors = [], readers = [], shelves
 // ---- /author/<slug> ----
 
 // The books we have, with what readers said; who reads them; then the works from Wikidata.
-function authorPage({ author, works, hits, user, readers = [], also = [] }) {
+function authorPage({ author, works, hits, user, readers = [], also = [], pairing = null }) {
+  // The owner pairs a translation with its original right here (Max, 2026-10-21); the same post as /admin/translations.
+  const pair = (book) => {
+    if (!pairing) return "";
+    const l = pairing.linked[book.id];
+    if (l) return `<div class="pair muted small">переклад: ${esc(l.title)}${l.index != null ? ` <form method="post" action="/admin/dupes/undo" class="inline"><input type="hidden" name="kind" value="translations"><input type="hidden" name="index" value="${l.index}"><button class="text-link small">скасувати</button></form>` : ""}</div>`;
+    const options = pairing.foreign.filter((f) => f.id !== book.id);
+    if (!options.length || !CYR.test(book.title)) return "";
+    return `<form method="post" action="/admin/dupes/translation" class="pair tr-row"><input type="hidden" name="uk" value="${attr(book.id)}"><span class="tr-pick"><select name="orig">${options.map((o) => `<option value="${attr(o.id)}">${esc(o.title)}</option>`).join("")}</select><button class="btn small">Це переклад</button></span></form>`;
+  };
   const ratings = hits.map((h) => statsOf(h.book.id)).filter((s) => s.avg != null);
   const avg = ratings.length ? Math.round((ratings.reduce((s, x) => s + x.avg, 0) / ratings.length) * 10) / 10 : null;
   const inUk = hits.filter((h) => isUk(h.book)).length;
@@ -828,9 +837,35 @@ function authorPage({ author, works, hits, user, readers = [], also = [] }) {
     ${s.avg != null ? `<p class="meta">${stars(s.avg)}<span> · ${count(s.rated, "оцінка", "оцінки", "оцінок")}</span></p>` : ""}
     ${top ? `<p class="note">${noteOf(top.entry, book.id)}</p><p class="said">— <a href="${attr(top.href)}"><b>${esc(top.name)}</b></a>${top.entry.year ? `, ${top.entry.year}` : ""}</p>` : ""}
     <div class="acts">${entry ? myStatus(entry) : markButtons(book, user)}</div>
+    ${pair(book)}
   </div>
 </article>`;
   };
+  const pairScript = pairing
+    ? `<script>
+document.addEventListener("submit", async (e) => {
+  const f = e.target;
+  if (!f.matches(".pair.tr-row, .pair form.inline")) return;
+  e.preventDefault();
+  const btn = f.querySelector("button");
+  const label = btn.textContent;
+  btn.textContent = f.matches(".tr-row") ? "Зберігаю…" : "скасовую…";
+  btn.disabled = true;
+  try {
+    const r = await fetch(f.action, { method: "POST", headers: { "X-Requested-With": "fetch" }, body: new URLSearchParams(new FormData(f)) });
+    if (!r.ok) throw new Error(r.status);
+    const p = document.createElement("div");
+    p.className = "pair muted small";
+    p.textContent = f.matches(".tr-row") ? "переклад: " + f.querySelector("select option:checked").textContent + " ✓" : "зв’язок знято";
+    f.closest(".pair").replaceWith(p);
+  } catch (err) {
+    btn.textContent = label;
+    btn.disabled = false;
+    alert("Не вдалося зберегти: " + err.message);
+  }
+});
+</script>`
+    : "";
   const body = `
 ${pageHead({ kicker: "Автор", title: esc(author.name), lead: author.other ? esc(author.other) : "", sub })}
 <div class="split">
@@ -848,7 +883,7 @@ ${pageHead({ kicker: "Автор", title: esc(author.name), lead: author.other ?
     ${readers.length ? `${label("Хто читає")}<div class="others-list">${readers.map((r) => `<a href="${attr(r.reader.href)}"><b>${esc(r.reader.name)}</b><span>${books(r.count)}, ${count(r.read, "прочитана", "прочитані", "прочитаних")}</span></a>`).join("")}</div>` : ""}
     ${also.length ? `${label(`Читачі ${esc(lastName(author.name))} також люблять`)}${minis(also)}` : ""}
   </aside>
-</div>`;
+</div>${pairScript}`;
   return layout({ title: author.name, body, user, path: "/author" });
 }
 const lastName = (name) => {

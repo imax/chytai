@@ -536,7 +536,8 @@ app.get("/author/:slug", async (req, res) => {
     .filter((r) => r.reader)
     .map(({ reader, rows }) => ({ reader, count: rows.length, read: rows.filter((r) => r.status === "read").length }));
   const also = social.alsoLiked([...ids], { limit: 4, skip: ids }).filter((b) => !author.ids.includes(b.id));
-  res.send(pages.authorPage({ author, works, hits, user: req.user, readers: who, also }));
+  const pairing = req.user?.owner ? store.translationPairing(author) : null;
+  res.send(pages.authorPage({ author, works, hits, user: req.user, readers: who, also, pairing }));
 });
 
 // Where the book can be borrowed: libraries with open catalogs (libraries.js), asked when the page loads.

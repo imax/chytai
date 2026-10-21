@@ -528,3 +528,5 @@ form.inline button:not(.btn) { background: none; border: 0; padding: 0; cursor: 
 .dupe-author { margin: 8px 0 2px; font-weight: 600; }
 .tr-pick { display: flex; gap: 8px; align-items: center; flex: none; }
 .tr-pick select { max-width: 260px; font: inherit; padding: 4px 6px; border: 1px solid var(--rule); background: var(--paper); color: inherit; }
+.row.big .pair { margin-top: 8px; }
+.row.big .pair .tr-pick { flex-wrap: wrap; }
