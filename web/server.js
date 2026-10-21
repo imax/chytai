@@ -586,7 +586,7 @@ app.get("/api/search", (req, res) => {
 
 // The sitemap: every public page, so search engines need not discover 16 thousand books by links.
 // Built at most once an hour and kept in memory (walking the catalog takes a moment; crawlers ask often).
-// Left out: books in Russian, draft sources, readers who switched search engines off in settings.
+// Left out: books in Russian, draft sources, readers' pages.
 let sitemap = { at: 0, xml: "" };
 app.get("/sitemap.xml", (req, res) => {
   if (Date.now() - sitemap.at > 3600 * 1000) {
@@ -599,7 +599,7 @@ app.get("/sitemap.xml", (req, res) => {
       if (b && !isRussian(b)) urls.push(b.href);
     }
     for (const a of store.authors?.list || []) urls.push(a.href);
-    for (const r of auth.readers()) if (!r.noindex) urls.push(`/@${r.username}`);
+    // Readers' pages are not listed: noindex (Max, 2026-10-21), their notes live on the book pages.
     sitemap = { at: Date.now(), xml: `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls.map((u) => `<url><loc>${pages.esc(origin + u)}</loc></url>`).join("\n")}\n</urlset>\n` };
     console.log(`sitemap: ${urls.length} addresses in ${Date.now() - t0} ms`);
   }
