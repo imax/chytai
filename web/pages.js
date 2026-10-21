@@ -170,10 +170,14 @@ function entryMeta(e) {
 // A book in a list (shelves, search): cover, title, author, stars and the note, an action on the right.
 function bookRow(book, { entry = null, meta = "", action = "", id = "", data = "" } = {}) {
   const alt = book.altTitle ? ` · ${esc(book.altTitle)}` : "";
+  // The card that stands for a whole series is called by the series («Експансія», not «Експансія. Кн. 1. …»).
+  const ser = book.series;
+  const head = ser?.volumes > 1 && ser.items.find((i) => i.id === ser.head);
+  const title = head && (head.id === book.id || head.work === book.id) ? ser.name : book.title;
   return `<article class="row"${id ? ` id="${attr(id)}"` : ""}${data}>
   <a class="cover-link" href="${attr(book.href)}">${cover(book, "md")}</a>
   <div class="row-body">
-    <h3><a href="${attr(book.href)}">${esc(book.title)}</a>${book.series?.volumes ? ` <span class="badge">серія · ${count(book.series.volumes, "том", "томи", "томів")}</span>` : ""}</h3>
+    <h3><a href="${attr(book.href)}">${esc(title)}</a>${book.series?.volumes ? ` <span class="badge">серія · ${count(book.series.volumes, "том", "томи", "томів")}</span>` : ""}</h3>
     <p class="by">${book.author ? authorLinks(book.author) : ""}${alt}</p>
     ${meta || entry ? `<p class="meta">${meta || entryMeta(entry)}</p>` : ""}
     ${entry?.note ? `<p class="note">${noteOf(entry, book.id)}</p>` : ""}
