@@ -1,6 +1,6 @@
 // The welcome letter (Max, 2026-10-21: «welcome email для нових реєстрацій, там буде про сайт і про групу в
 // тг для користувачів»): one plain letter to every new reader right after sign-up. Max writes the text in
-// web/welcome-mail.md: the first line is «Тема: …», then Markdown paragraphs; {name}, {username} and {site}
+// web/welcome-mail.md: the first line is «Тема: …», then Markdown paragraphs (a single line break stays one); {name}, {username} and {site}
 // are filled in. It goes out only while meta welcome:on is "1" (the owner switches it on
 // /welcome-mail/preview); readers who signed up before that get nothing. One letter, nothing to
 // unsubscribe from; nothing is tracked.
@@ -33,7 +33,7 @@ class WelcomeMail {
     const paras = rest.join("\n").trim().split(/\n\s*\n/);
     // Plain text: links as «text (url)», unless the text is the address itself.
     const text = paras.map((p) => fill(p, false).replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_, t, u) => (u.replace(/^https?:\/\//, "").startsWith(t) ? u : `${t} (${u})`))).join("\n\n");
-    const body = paras.map((p) => `<p style="font-size:16px;line-height:1.55;color:#3d3a33;margin:0 0 16px">${marked.parseInline(fill(p, true)).replace(/<a /g, '<a style="color:#1b1a17" ')}</p>`).join("\n  ");
+    const body = paras.map((p) => `<p style="font-size:16px;line-height:1.55;color:#3d3a33;margin:0 0 16px">${marked.parseInline(fill(p, true)).replace(/<a /g, '<a style="color:#1b1a17" ').replace(/\n/g, "<br>")}</p>`).join("\n  ");
     const html = `<!doctype html><html lang="uk"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="color-scheme" content="light"><title>${esc(subject)}</title></head>
 <body style="margin:0;background:#f7f4ee;color:#1b1a17;font-family:Onest,-apple-system,BlinkMacSystemFont,'Helvetica Neue',Arial,sans-serif;-webkit-font-smoothing:antialiased">
 <div style="max-width:560px;margin:0 auto;padding:32px 20px 40px">
