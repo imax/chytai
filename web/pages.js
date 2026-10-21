@@ -548,6 +548,11 @@ function entryForm(book, entry) {
 
 // ---- shelves (/me and /@<username>) ----
 
+// On another reader's shelf, a book the visitor already has: their own status instead of the buttons, so
+// a missing «Хочу прочитати» doesn't look like a bug (Max, 2026-10-21).
+const MY = { read: "прочитано", reading: "читаю", want: "хочу прочитати" };
+const myMark = (e, edit) => `<a class="my-mark" href="${attr(edit)}" title="Змінити у моїх книжках">✓ У мене: ${esc(e.status ? MY[e.status] : "на полиці")}</a>`;
+
 // The same list twice: /me is the signed-in reader's own shelf with «змінити» on every row (the only
 // place where status, rating and notes are edited); /@<username> is that reader's public shelf, where a
 // signed-in visitor sees what they share and can want any book in one tap.
@@ -578,7 +583,8 @@ function libraryPage({ rows, user, reader, own = false, mineIds = null, recs = [
       const head = r.year !== r._prevYear || i === 0 ? yearHead(r.year, rows) : "";
       const search = [b.title, b.altTitle, b.author, stripMd(r.note || "")].join(" ").toLowerCase();
       const data = ` data-status="${r.status || ""}" data-copy="${r.copy || ""}" data-common="${common.includes(r) ? 1 : ""}" data-tags="${attr((b.tags || []).join(" "))}" data-rating="${r.rating ?? ""}" data-title="${attr(b.title.toLowerCase())}" data-search="${attr(search)}" data-order="${i}"`;
-      const action = own ? `<a class="text-link small" href="${attr(b.href ? `/me${b.href}` : `/me/book/${encodeURIComponent(r.id)}`)}">змінити</a>` : user && mineIds && !mineIds.has(r.id) ? markButtons(b, user) : "";
+      const edit = b.href ? `/me${b.href}` : `/me/book/${encodeURIComponent(r.id)}`;
+      const action = own ? `<a class="text-link small" href="${attr(edit)}">змінити</a>` : user && mineIds ? (mineIds.has(r.id) ? myMark(mineIds.get(r.id), edit) : markButtons(b, user)) : "";
       return head + bookRow(b, { entry: r, action, id: r.id, data });
     })
     .join("\n");

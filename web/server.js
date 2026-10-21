@@ -329,7 +329,7 @@ app.get("/", (req, res) => {
   // Search results lived at /?q= before they got their own address.
   if (req.query.q) return res.redirect(301, `/search?${new URLSearchParams({ q: String(req.query.q) })}`);
   const seeds = social.seeds(req.user?.id);
-  const own = req.user ? new Set(Object.keys(store.entriesOf(req.user.id))) : new Set();
+  const own = req.user ? new Map(Object.entries(store.entriesOf(req.user.id))) : new Set();
   const recs = seeds.map((seed) => ({ seed, own: own.has(seed.id), books: social.similar([seed.id], { limit: 6, skip: own }) })).filter((r) => r.books.length);
   // The two publishers with the most new books, subscriptions first.
   const showcase = shelvesFor(req)
@@ -428,7 +428,7 @@ app.get("/@:username", (req, res) => {
     const recs = social.alsoLiked(fives, { limit: 4, skip: new Set(rows.map((r) => r.id)) });
     return res.send(pages.libraryPage({ rows, user: req.user, reader: req.user, own: true, recs, follows }));
   }
-  res.send(pages.libraryPage({ rows, user: req.user, reader, mineIds: req.user && req.user.id !== reader.id ? new Set(Object.keys(store.entriesOf(req.user.id))) : null, following: auth.follows(req.user?.id, reader.id), follows }));
+  res.send(pages.libraryPage({ rows, user: req.user, reader, mineIds: req.user && req.user.id !== reader.id ? new Map(Object.entries(store.entriesOf(req.user.id))) : null, following: auth.follows(req.user?.id, reader.id), follows }));
 });
 // The owner's page before usernames (/reader/max) moved to /@maxua.
 app.get(OLD_READER, (req, res) => res.redirect(301, pub(auth.reader(OWNER_ID)).href));
