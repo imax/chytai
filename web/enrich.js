@@ -6,7 +6,9 @@
 // only titles and authors, never who reads them; its covers are loaded by the reader's browser from
 // covers.openlibrary.org. Each book is asked about once a month at most (meta `enrich:<id>`), a run after
 // every import for the books it created and a weekly pass over everything, about one request a second.
-// Open Library knows little about books in Ukrainian or Russian, so only Latin-script titles are asked.
+// Open Library knows little about books in Ukrainian or Russian, so only Latin-script titles are asked
+// there; with a Google Books API key (GOOGLE_BOOKS_KEY, Max made one 2026-10-21) Google Books is asked
+// about every book Open Library did not cover, Cyrillic titles included, and fills what is still missing.
 
 const SEARCH = "https://openlibrary.org/search.json";
 const HEADERS = { "User-Agent": "Chytai/1.0 (https://chytai.org.ua; book details lookup)", Accept: "application/json" };
@@ -15,6 +17,8 @@ const MONTH = 30 * 86400000;
 const WEEK = 7 * 86400000;
 const OWN = new Set(["manual", "goodreads", "apple-books", "office"]);
 const LANG = { eng: "англійська", ukr: "українська", rus: "російська", pol: "польська", ger: "німецька", fre: "французька", spa: "іспанська", ita: "італійська" };
+const GLANG = { en: "англійська", uk: "українська", ru: "російська", pl: "польська", de: "німецька", fr: "французька", es: "іспанська", it: "італійська" };
+const GOOGLE = "https://www.googleapis.com/books/v1/volumes";
 
 const norm = (s) => String(s || "").toLowerCase().replace(/^(the|a|an)\s+/, "").replace(/[’'`]/g, "").replace(/[^\p{L}\p{N}]+/gu, " ").trim();
 const mainTitle = (t) => String(t || "").replace(/\s*\(.*?\)\s*/g, " ").split(/[:]/)[0].trim();
@@ -108,6 +112,38 @@ async function lookup(book, { fetchImpl = fetch } = {}) {
   return out;
 }
 
+// The same from Google Books: by ISBN, else by title and author, in any script. The thumbnail link is
+// turned into the larger cover image; the description comes as HTML.
+async function lookupGoogle(book, key, { fetchImpl = fetch } = {}) {
+  const isbns = cleanIsbns(book.isbns);
+  const author = firstAuthor(book.author);
+  const queries = [];
+  if (isbns.length) queries.push({ q: `isbn:${isbns[0]}`, byIsbn: true });
+  if (book.title && author) queries.push({ q: `intitle:"${mainTitle(book.title)}" inauthor:"${author}"` });
+  for (const q of queries) {
+    const params = new URLSearchParams({ q: q.q, maxResults: "5", printType: "books", key });
+    const data = await getJson(`${GOOGLE}?${params}`, fetchImpl);
+    const items = (data?.items || []).map((it) => it.volumeInfo || {}).filter((v) => v.title && same(book, { title: v.title, subtitle: v.subtitle, author_name: v.authors || [] }, q.byIsbn));
+    items.sort((a, b) => (b.imageLinks ? 1 : 0) - (a.imageLinks ? 1 : 0) || (b.description ? 1 : 0) - (a.description ? 1 : 0));
+    const v = items[0];
+    if (!v) continue;
+    const out = {};
+    const thumb = v.imageLinks?.thumbnail || v.imageLinks?.smallThumbnail;
+    if (thumb) out.cover = thumb.replace(/^http:/, "https:").replace(/&edge=curl/, "").replace(/zoom=1/, "zoom=2");
+    const found = cleanIsbns((v.industryIdentifiers || []).filter((i) => /^ISBN/.test(i.type)).map((i) => i.identifier));
+    if (found.length) out.isbns = found;
+    const year = Number(String(v.publishedDate || "").slice(0, 4));
+    if (year > 1400) out.published = year;
+    if (v.pageCount > 20) out.pages = v.pageCount;
+    if (GLANG[v.language]) out.language = GLANG[v.language];
+    const text = descriptionText(String(v.description || "").replace(/<br\s*\/?>/gi, "\n").replace(/<\/p>/gi, "\n\n").replace(/<[^>]+>/g, "").replace(/&(#\d+|#x[\da-f]+|quot|amp|nbsp|mdash|ndash|laquo|raquo|hellip|lt|gt|#39|apos);/gi, (m, e) => ({ quot: '"', amp: "&", nbsp: " ", mdash: "—", ndash: "–", laquo: "«", raquo: "»", hellip: "…", lt: "<", gt: ">", "#39": "'", apos: "'" })[e.toLowerCase()] ?? String.fromCodePoint(/^#x/i.test(e) ? parseInt(e.slice(2), 16) : Number(e.slice(1)))));
+    if (text.length >= 80) out.blurb = text;
+    if (v.canonicalVolumeLink || v.infoLink) out.google = (v.canonicalVolumeLink || v.infoLink).replace(/^http:/, "https:");
+    return out;
+  }
+  return null;
+}
+
 // The book as it should be after the lookup: nothing the reader or a catalog set is overwritten.
 function apply(book, info) {
   const patch = {};
@@ -117,7 +153,7 @@ function apply(book, info) {
   if (!book.published && info.published) patch.published = info.published;
   if (!book.pages && info.pages) patch.pages = info.pages;
   if (!book.language && info.language) patch.language = info.language;
-  if (!book.blurb && info.blurb) (patch.blurb = info.blurb), (patch.blurbSource = "Open Library");
+  if (!book.blurb && info.blurb) (patch.blurb = info.blurb), (patch.blurbSource = info.blurbSource || "Open Library");
   const links = [...(book.links || [])];
   const has = (re) => links.some((l) => re.test(l.url));
   // The ISBN-10 of a print edition is its ASIN, so this is the book's Amazon page; the oldest ISBN-10 Open
@@ -125,6 +161,7 @@ function apply(book, info) {
   const ten = isbns.find(isbn10);
   if (ten && !has(/amazon\./)) links.push({ label: "Amazon", url: `https://www.amazon.com/dp/${ten}` });
   if (info.ol && !has(/openlibrary\.org/)) links.push({ label: "Open Library", url: `https://openlibrary.org${info.ol}` });
+  if (info.google && !has(/books\.google\./)) links.push({ label: "Google Books", url: info.google });
   if (links.length > (book.links || []).length) patch.links = links;
   if (info.ol && book.ol !== info.ol) patch.ol = info.ol;
   return patch;
@@ -132,14 +169,14 @@ function apply(book, info) {
 
 // Which of the library's own books are worth asking about: no catalog behind them, a Latin title or an
 // ISBN to ask by, and something still missing.
-function wanting(store, ids) {
+function wanting(store, ids, { google = false } = {}) {
   const all = ids ? ids.map((id) => store.lib.books[id]).filter(Boolean) : Object.values(store.lib.books);
-  return all.filter((b) => OWN.has(b.source) && (cleanIsbns(b.isbns).length || (isLatin(b.title) && firstAuthor(b.author))) && !(b.cover && b.published && b.blurb && cleanIsbns(b.isbns).length));
+  return all.filter((b) => OWN.has(b.source) && (cleanIsbns(b.isbns).length || ((google || isLatin(b.title)) && firstAuthor(b.author))) && !(b.cover && b.published && b.blurb && cleanIsbns(b.isbns).length));
 }
 
 // enrich(store, { ids, log, fetchImpl, force }) -> { asked, found }: looks up the books not asked within a month.
-async function enrich(store, { ids, log = () => {}, fetchImpl = fetch, force = false, pause = 1000, max = 300 } = {}) {
-  const books = wanting(store, ids).filter((b) => force || Date.now() - Number(store.db.get(`enrich:${b.id}`) || 0) > MONTH).slice(0, max);
+async function enrich(store, { ids, log = () => {}, fetchImpl = fetch, force = false, pause = 1000, max = 300, googleKey = "" } = {}) {
+  const books = wanting(store, ids, { google: !!googleKey }).filter((b) => force || Date.now() - Number(store.db.get(`enrich:${b.id}`) || 0) > MONTH).slice(0, max);
   let found = 0;
   let touched = false;
   let failed = 0;
@@ -147,7 +184,12 @@ async function enrich(store, { ids, log = () => {}, fetchImpl = fetch, force = f
   for (const b of books) {
     store.db.set(`enrich:${b.id}`, String(Date.now()));
     try {
-      const info = await lookup(b, { fetchImpl });
+      let info = isLatin(b.title) || cleanIsbns(b.isbns).length ? await lookup(b, { fetchImpl }) : null;
+      // Google Books fills what Open Library left out, and is the only source for Cyrillic titles.
+      if (googleKey && !(info?.cover && info?.blurb && info?.published)) {
+        const g = await lookupGoogle(b, googleKey, { fetchImpl });
+        if (g) info = { ...g, ...Object.fromEntries(Object.entries(info || {}).filter(([, v]) => v != null)), blurbSource: info?.blurb ? "Open Library" : "Google Books", isbns: cleanIsbns([...(info?.isbns || []), ...(g.isbns || [])]) };
+      }
       if (info) {
         const patch = apply(b, info);
         if (Object.keys(patch).length) {
@@ -169,7 +211,7 @@ async function enrich(store, { ids, log = () => {}, fetchImpl = fetch, force = f
     store.linkEditions?.();
     store.indexSearch();
   }
-  const line = `${new Date().toISOString()}: ${found} of ${books.length} books got details from Open Library${errors.length ? `; errors: ${errors.slice(0, 5).join(", ")}` : ""}`;
+  const line = `${new Date().toISOString()}: ${found} of ${books.length} books got details from Open Library${googleKey ? " and Google Books" : ""}${errors.length ? `; errors: ${errors.slice(0, 5).join(", ")}` : ""}`;
   log(`enrich ${line}`);
   store.db.set("enrich:log", line); // shown on /refresh-status
   return { asked: books.length, found, errors };
@@ -180,11 +222,11 @@ async function refresh(store, opts = {}) {
   const at = Number(store.db.get("enrich:at") || 0);
   // Books never asked about (a pass that hit its 300 cap or was cut short by a deploy left them) go at
   // the next tick; otherwise everything is asked again once a week.
-  const fresh = wanting(store).some((b) => !store.db.get(`enrich:${b.id}`));
+  const fresh = wanting(store, null, { google: !!opts.googleKey }).some((b) => !store.db.get(`enrich:${b.id}`));
   if (!fresh && Date.now() - at < WEEK) return false;
   if (!fresh) store.db.set("enrich:at", String(Date.now()));
   await enrich(store, opts);
   return true;
 }
 
-module.exports = { enrich, refresh, lookup, apply, wanting, descriptionText, same };
+module.exports = { enrich, refresh, lookup, lookupGoogle, apply, wanting, descriptionText, same };

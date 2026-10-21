@@ -1,7 +1,7 @@
 // Chytai web: the platform part (library, Discovery, search), separate from the reader
 // in server/index.js. Plain Express, server-rendered HTML, JSON on disk.
 //
-// Env: DATA_DIR (default ./data; the database is DATA_DIR/web/chytai.db, see db.js), PORT (default 8090),
+// Env: DATA_DIR (default ./data; the database is DATA_DIR/web/chytai.db, see db.js), PORT (default 8090), GOOGLE_BOOKS_KEY (book details, enrich.js),
 // WEB_DOMAIN (the public host; www and *.fly.dev redirect to it).
 // Accounts (auth.js): readers sign up and in with a code mailed by Resend (RESEND_API_KEY, WEB_MAIL_FROM;
 // without the key the code goes to the log). The owner (Max) is the reader "owner": WEB_OWNER is his name,
@@ -95,7 +95,7 @@ const refreshUk = () => wikidata.refreshUk(store, { log: console.log }).catch((e
 // Who is who among the authors (authors.js), weekly, after the Ukrainian titles.
 const refreshAuthors = () => authors.refresh(store, { log: console.log }).catch((e) => console.error("authors failed:", e));
 // Details of the readers' own books from Open Library (enrich.js), weekly, after those.
-const refreshDetails = () => enrich.refresh(store, { log: console.log }).catch((e) => console.error("enrich failed:", e));
+const refreshDetails = () => enrich.refresh(store, { log: console.log, googleKey: process.env.GOOGLE_BOOKS_KEY || "" }).catch((e) => console.error("enrich failed:", e));
 setTimeout(() => refreshUk().then(refreshAuthors).then(refreshDetails), 60000).unref();
 setInterval(() => refreshUk().then(refreshAuthors).then(refreshDetails), 6 * 3600 * 1000).unref();
 
@@ -261,7 +261,7 @@ app.post("/import/:source/apply", signed, importSource, (req, res) => {
   // New books by hand are mailed to the owner one by one; an import sends one letter with the list.
   if (!req.owner && result.created.length) notifyOwner(`Імпорт з ${name}: ${result.created.length} нових книжок`, [`${req.user.name} (@${req.user.username}) імпортував(ла) полицю з ${name}: ${result.added} додано, ${result.updated} доповнено.`, `Нові книжки, яких немає в каталозі (${result.created.length}):`, "", ...result.created.slice(0, 100).map((b) => `• ${b.title}${b.author ? ` — ${b.author}` : ""}  ${site(req)}${store.href(b.id)}`), result.created.length > 100 ? `… і ще ${result.created.length - 100}` : "", "", `Полиця читача: ${site(req)}${req.user.href}`].join("\n"));
   // The new books go to Open Library for covers and details in the background, while the reader looks at the shelf.
-  if (result.created.length) enrich.enrich(store, { ids: result.created.map((b) => b.id), log: console.log }).catch((e) => console.error("enrich failed:", e));
+  if (result.created.length) enrich.enrich(store, { ids: result.created.map((b) => b.id), log: console.log, googleKey: process.env.GOOGLE_BOOKS_KEY || "" }).catch((e) => console.error("enrich failed:", e));
   res.send(pages.importDonePage({ user: req.user, source: req.source, result, skipped: p.rows.length - chosen.length }));
 });
 
@@ -563,7 +563,7 @@ app.post("/api/book", signed, (req, res) => {
   if (!title || !title.trim()) return res.status(400).send("Потрібна назва");
   const b = store.addBook({ title, author, cover: /^https?:\/\//.test(cover || "") ? cover : "" });
   store.setEntry(req.user.id, b.id, { status: ["read", "reading", "want"].includes(status) ? status : "", copy: ["paper", "ebook", "seeking"].includes(copy) ? copy : "" });
-  enrich.enrich(store, { ids: [b.id], log: console.log }).catch((e) => console.error("enrich failed:", e));
+  enrich.enrich(store, { ids: [b.id], log: console.log, googleKey: process.env.GOOGLE_BOOKS_KEY || "" }).catch((e) => console.error("enrich failed:", e));
   // A book typed in by hand may duplicate a catalog's or be junk: the owner gets a letter and sorts it out
   // (Max, 2026-10-20: «треба … сповіщення мені на імейл. будемо поки вручну розбирати»).
   if (!req.owner) notifyOwner(`Нова книжка: ${b.title}`, [`${req.user.name} (@${req.user.username}) додав(ла) книжку вручну.`, "", `Назва: ${b.title}`, `Автор: ${b.author || "не вказано"}`, b.cover ? `Обкладинка: ${b.cover}` : "", "", `Книжка: ${site(req)}${store.href(b.id)}`, `Полиця читача: ${site(req)}${req.user.href}`].filter((l, i, a) => l || a[i - 1]).join("\n"));
