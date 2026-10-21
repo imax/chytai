@@ -306,7 +306,7 @@ pages.setStats((id) => social.stats(id));
 const digest = new Digest({ store, auth, social, libraries, site: SITE, ownerId: OWNER_ID, to: process.env.WEB_DIGEST_TO === "owner" ? "owner" : "all" });
 digest.schedule();
 // The welcome letter right after sign-up (welcome-mail.js), while the owner has it switched on.
-const welcomeMail = new WelcomeMail({ store, auth, site: SITE });
+const welcomeMail = new WelcomeMail({ store, auth, site: SITE, ownerId: OWNER_ID });
 pages.setReadersWithNote((id) => readersOf(id).find((r) => r.entry.note) || null);
 const day = (iso) => ((iso = iso || store.shelvesFetched) ? new Date(iso).toLocaleDateString("uk-UA", { timeZone: "Europe/Kyiv" }) : "");
 // A publisher in the lists: its newest books (the ones marked new first), how many there are and are new.
@@ -643,6 +643,12 @@ app.get("/welcome-mail/preview", owner, (req, res) => {
   const bar = `<div style="background:#1b1a17;color:#ece8df;font:14px -apple-system,sans-serif;padding:10px 20px;display:flex;gap:16px;align-items:center;flex-wrap:wrap"><span>Тема: <b>${pages.esc(letter.subject)}</b></span><span style="flex:1"></span><span style="color:${on ? "#8fd1a6" : "#e0a58f"}">${on ? "Надсилається новим читачам" : "Вимкнено"}</span><a href="?text=1" style="color:#a29d92">текстова версія</a>${btn("/api/welcome-mail?test=1", "Надіслати собі")}${btn(`/api/welcome-mail?on=${on ? 0 : 1}`, on ? "Вимкнути" : "Увімкнути")}</div>`;
   res.send(letter.html.replace("<body", `${bar}<body`));
 });
+// A one-off catch-up for readers who signed up before it was on: GET lists them, POST sends.
+app.get("/welcome-mail/catch-up", owner, (req, res) => {
+  const since = String(req.query.since || "");
+  res.type("text").send(welcomeMail.missed(since).map((r) => `@${r.username}\t${r.created}`).join("\n") || "нікого");
+});
+app.post("/api/welcome-mail/catch-up", owner, async (req, res) => res.json(await welcomeMail.catchUp(String(req.query.since || "9999"))));
 app.post("/api/welcome-mail", owner, async (req, res) => {
   if (req.query.test) {
     const me = auth.reader(req.user.id);

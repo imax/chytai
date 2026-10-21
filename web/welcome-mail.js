@@ -13,8 +13,17 @@ const FILE = path.join(__dirname, "welcome-mail.md");
 const esc = pages.esc;
 
 class WelcomeMail {
-  constructor({ store, auth, site, log = console.log }) {
-    Object.assign(this, { store, auth, site, log });
+  constructor({ store, auth, site, ownerId = "owner", log = console.log }) {
+    Object.assign(this, { store, auth, site, ownerId, log });
+  }
+  // Who already got it (meta welcome:sent, a list of reader ids), so nobody gets it twice.
+  sent() {
+    return new Set(JSON.parse(this.store.db.get("welcome:sent") || "[]"));
+  }
+  markSent(id) {
+    const s = this.sent();
+    s.add(id);
+    this.store.db.set("welcome:sent", JSON.stringify([...s]));
   }
   get on() {
     return this.store.db.get("welcome:on") === "1";
@@ -46,15 +55,36 @@ class WelcomeMail {
     return { subject, text, html };
   }
 
-  async sendTo(reader) {
+  async sendTo(reader, { record = false } = {}) {
     const letter = this.render(reader);
     await this.auth.send(reader.email, letter.subject, letter.text, { html: letter.html });
+    if (record) this.markSent(reader.id);
     return letter;
+  }
+  // Readers who signed up since a date (ISO) and have not had it yet: for a one-off catch-up send (Max,
+  // 2026-10-21: «розішлемо всім хто реєструвався цього тижня»).
+  missed(since) {
+    const sent = this.sent();
+    return this.auth.readers().filter((r) => r.email && r.id !== this.ownerId && r.created >= since && !sent.has(r.id));
+  }
+  async catchUp(since) {
+    const done = [], errors = [];
+    for (const r of this.missed(since)) {
+      try {
+        await this.sendTo(r, { record: true });
+        done.push(r.username);
+      } catch (e) {
+        errors.push(`@${r.username}: ${e.message}`);
+      }
+      await new Promise((ok) => setTimeout(ok, 600)); // Resend allows 2 a second
+    }
+    this.log(`welcome mail catch-up since ${since}: ${done.length} sent, ${errors.length} failed`);
+    return { done, errors };
   }
   // Right after sign-up; never blocks or breaks it.
   newReader(reader) {
     if (!this.on || !reader.email) return;
-    this.sendTo(reader).then(
+    this.sendTo(reader, { record: true }).then(
       () => this.log(`welcome mail → @${reader.username}`),
       (e) => this.log(`welcome mail to @${reader.username} failed: ${e.message}`),
     );
