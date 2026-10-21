@@ -537,3 +537,11 @@ form.inline button:not(.btn) { background: none; border: 0; padding: 0; cursor: 
   .btn.pair-btn { background: oklch(32% 0.06 260); border-color: oklch(48% 0.08 260); color: oklch(88% 0.05 260); }
   .btn.pair-btn:hover { background: oklch(38% 0.07 260); color: oklch(94% 0.04 260); }
 }
+/* The other-language page of a book: the original under a Ukrainian edition and back (2026-10-21). */
+.twins { display: flex; flex-wrap: wrap; gap: 10px 22px; margin-top: 12px; }
+.twin { display: flex; gap: 10px; align-items: center; color: inherit; text-decoration: none; }
+.twin > span { display: flex; flex-direction: column; min-width: 0; }
+.twin .twin-label { font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--accent); }
+.twin b { font: 600 15px/1.3 var(--serif); }
+.twin:hover b { text-decoration: underline; text-decoration-color: var(--under); text-underline-offset: 3px; }
+.row.big .twins { margin-top: 10px; }

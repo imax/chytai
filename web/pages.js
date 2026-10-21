@@ -338,6 +338,7 @@ function bookPage({ book, entry, user, shelf, inLibrary = new Map(), readers = [
         <h1>${esc(book.title)}</h1>
         ${sub ? `<p class="book-by">${sub}</p>` : ""}
         ${score}
+        ${twins(book)}
         ${mine(book, entry, user)}
         ${where(book)}
       </div>
@@ -348,10 +349,10 @@ function bookPage({ book, entry, user, shelf, inLibrary = new Map(), readers = [
       ${first.entry.note ? quote(first, book.id) : ""}
       ${(first.entry.note ? rest : readers).length ? `<div class="others">${(first.entry.note ? rest : readers).map((r) => readerLine(r, book.id)).join("")}</div>` : ""}
     </section>` : ""}
-    ${book.blurb || book.translations?.length || book.ukTitle ? `<section class="block">
+    ${book.blurb || book.ukTitle ? `<section class="block">
       ${label("Про книжку")}
       ${book.blurb ? `<div class="about">${book.blurb.split(/\n\n+/).map((t) => `<p>${esc(t)}</p>`).join("")}</div>` : ""}
-      <p class="small muted">${[book.blurb ? (book.blurbSource ? `Опис: ${esc(book.blurbSource)}` : `Опис з сайту ${esc(shelf ? shelf.name : book.source)}`) : "", ...(book.translations || []).map((t) => `${CYR.test(book.title) && !CYR.test(t.title) ? "Оригінал" : "Переклад"}: <a href="${attr(t.href)}">${esc(t.title)}</a>`), book.ukTitle ? `Українською: «${esc(book.ukTitle)}», у каталогах поки немає` : ""].filter(Boolean).join(" · ")}</p>
+      <p class="small muted">${[book.blurb ? (book.blurbSource ? `Опис: ${esc(book.blurbSource)}` : `Опис з сайту ${esc(shelf ? shelf.name : book.source)}`) : "", book.ukTitle ? `Українською: «${esc(book.ukTitle)}», у каталогах поки немає` : ""].filter(Boolean).join(" · ")}</p>
     </section>` : ""}
   </div>
   <aside>
@@ -360,6 +361,13 @@ function bookPage({ book, entry, user, shelf, inLibrary = new Map(), readers = [
 </div>`;
   const description = [book.author, book.blurb?.replace(/\s+/g, " ") || stripMd(readers.find((r) => r.entry.note)?.entry.note || "")].filter(Boolean).join(". ");
   return layout({ title: book.title, body, user, path: "/book", description });
+}
+
+// A book's other-language pages (Max, 2026-10-21: «дві сторінки і спільні оцінки»): the original under a
+// Ukrainian edition, the Ukrainian edition under the original; the readers and ratings are shared.
+const twinLabel = (book, t) => (CYR.test(book.title) && !CYR.test(t.title) ? "Оригінал" : !CYR.test(book.title) && CYR.test(t.title) ? "Українською" : "Інше видання");
+function twins(book, list = book.translations || []) {
+  return list.length ? `<div class="twins">${list.map((t) => `<a class="twin" href="${attr(t.href)}">${cover(t, "xs")}<span><span class="twin-label">${twinLabel(book, t)}</span><b>${esc(t.title)}</b></span></a>`).join("")}</div>` : "";
 }
 
 // The first reader's note as the big quote: «— Макс І, прочитано у 2026, на папері».
@@ -811,7 +819,7 @@ function authorPage({ author, works, hits, user, readers = [], also = [], pairin
   const pair = (book) => {
     if (!pairing) return "";
     const l = pairing.linked[book.id];
-    if (l) return `<div class="pair muted small">переклад: ${esc(l.title)}${l.index != null ? ` <form method="post" action="/admin/dupes/undo" class="inline"><input type="hidden" name="kind" value="translations"><input type="hidden" name="index" value="${l.index}"><button class="text-link small">скасувати</button></form>` : ""}</div>`;
+    if (l) return l.index != null ? `<div class="pair muted small">пара з «${esc(l.title)}» · <form method="post" action="/admin/dupes/undo" class="inline"><input type="hidden" name="kind" value="translations"><input type="hidden" name="index" value="${l.index}"><button class="text-link small">скасувати</button></form></div>` : "";
     const options = pairing.foreign.filter((f) => f.id !== book.id);
     if (!options.length || !CYR.test(book.title)) return "";
     return `<form method="post" action="/admin/dupes/translation" class="pair tr-row"><input type="hidden" name="uk" value="${attr(book.id)}"><span class="tr-pick"><select name="orig">${options.map((o) => `<option value="${attr(o.id)}">${esc(o.title)}</option>`).join("")}</select><button class="btn small pair-btn">Позначити як переклад</button></span></form>`;
@@ -826,7 +834,8 @@ function authorPage({ author, works, hits, user, readers = [], also = [], pairin
     const b = w.books[0];
     return `<li${b ? "" : ' class="none"'}><span class="year">${w.year || ""}</span> ${b ? `<a href="${attr(b.href)}">${esc(title)}</a>` : esc(title)}${orig ? ` <span class="alt">${esc(orig)}</span>` : ""}${!b && !w.uk ? ` <span class="small muted">· перекладу не знайшли</span>` : ""}</li>`;
   };
-  const bigRow = ({ book, entry }) => {
+  const bigRow = (hit) => {
+    const { book, entry } = hit;
     const s = statsOf(book.id);
     const top = readersWithNote(book.id);
     return `<article class="row big">
@@ -837,6 +846,7 @@ function authorPage({ author, works, hits, user, readers = [], also = [], pairin
     ${s.avg != null ? `<p class="meta">${stars(s.avg)}<span> · ${count(s.rated, "оцінка", "оцінки", "оцінок")}</span></p>` : ""}
     ${top ? `<p class="note">${noteOf(top.entry, book.id)}</p><p class="said">— <a href="${attr(top.href)}"><b>${esc(top.name)}</b></a>${top.entry.year ? `, ${top.entry.year}` : ""}</p>` : ""}
     <div class="acts">${entry ? myStatus(entry) : markButtons(book, user)}</div>
+    ${twins(book, hit.twins || [])}
     ${pair(book)}
   </div>
 </article>`;

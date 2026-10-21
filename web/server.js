@@ -532,7 +532,15 @@ app.get("/author/:slug", async (req, res) => {
     .map((id) => ({ book: bookFor(req, store.book(id), !!store.entry(req.user?.id, id)), entry: store.entry(req.user?.id, id) }))
     .filter((h) => h.book)
     .map((h) => ({ ...h, avg: social.stats(h.book.id).avg }))
-    .sort((a, b) => (b.avg ?? -1) - (a.avg ?? -1) || !!b.entry - !!a.entry || shown.has(a.book.id) - shown.has(b.book.id) || a.book.title.localeCompare(b.book.title, "uk"));
+    .sort((a, b) => (b.avg ?? -1) - (a.avg ?? -1) || !!b.entry - !!a.entry || shown.has(a.book.id) - shown.has(b.book.id) || a.book.title.localeCompare(b.book.title, "uk"))
+    .map((h) => ({ ...h, twins: store.translationsOf(h.book.id) }));
+  // A translation sits right after its original (or the other way round), as one book in two editions.
+  for (let i = 0; i < hits.length; i++) {
+    for (const t of hits[i].twins) {
+      const j = hits.findIndex((h) => h.book.id === t.id);
+      if (j > i + 1) hits.splice(i + 1, 0, ...hits.splice(j, 1));
+    }
+  }
   // Who reads this author, and what else those readers rated highest.
   const ids = new Set(hits.map((h) => h.book.id));
   const who = [...new Set(hits.flatMap((h) => store.readersOf(h.book.id).map((r) => r.reader)))]

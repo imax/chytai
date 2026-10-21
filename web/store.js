@@ -287,7 +287,7 @@ class Store {
 
   // The other-language versions of a work: [{ id, title, href }].
   translationsOf(id) {
-    return [...(this.translations?.get(this.canonical(id)) || [])].map((t) => this.book(t)).filter(Boolean).map((b) => ({ id: b.id, title: b.title, author: b.author, href: this.href(b.id) }));
+    return [...(this.translations?.get(this.canonical(id)) || [])].map((t) => this.book(t)).filter(Boolean).map((b) => ({ id: b.id, title: b.title, author: b.author, href: this.href(b.id), cover: b.cover || "" }));
   }
 
   // The reader's entry for a work, or, failing that, for one of its translations ({ ...entry, via }).
