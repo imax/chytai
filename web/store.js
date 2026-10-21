@@ -629,8 +629,8 @@ class Store {
   // one counts for the other, as with the pairs in matches.json.
   decideTranslation(a, b) {
     const d = this.decisions();
-    a = this.canonical(a);
-    b = this.canonical(b);
+    a = this.workId(a);
+    b = this.workId(b);
     if (!a || !b || a === b || !this.isWork(a) || !this.isWork(b)) return false;
     if (!d.translations.some(([x, y]) => (x === a && y === b) || (x === b && y === a))) d.translations.push([a, b]);
     this.saveDecisions(d);
@@ -656,11 +656,16 @@ class Store {
     return out.sort((x, y) => y.uk.reduce((n, b) => n + b.readers, 0) + y.foreign.reduce((n, b) => n + b.readers, 0) - x.uk.reduce((n, b) => n + b.readers, 0) - x.foreign.reduce((n, b) => n + b.readers, 0));
   }
   // decide(ids, keep): every id in ids becomes an edition of keep; decide(ids, null): they are different books.
+  // An id or a /book/<slug> address, as the owner may paste either.
+  workId(x) {
+    x = String(x || "").trim().replace(/^.*\/book\//, "").replace(/[?#].*$/, "");
+    return this.canonical(this.slugs?.get(x) || x);
+  }
   decide(ids, keep) {
     const d = this.decisions();
-    ids = [...new Set(ids.map((id) => this.canonical(id)))];
+    ids = [...new Set(ids.map((id) => this.workId(id)))];
     if (keep) {
-      keep = this.canonical(keep);
+      keep = this.workId(keep);
       for (const id of ids) if (id !== keep && !d.same.some(([k, x]) => k === keep && x === id)) d.same.push([keep, id]);
     } else {
       for (let i = 0; i < ids.length; i++) for (let j = i + 1; j < ids.length; j++) if (!d.different.some(([a, b]) => (a === ids[i] && b === ids[j]) || (a === ids[j] && b === ids[i]))) d.different.push([ids[i], ids[j]]);
