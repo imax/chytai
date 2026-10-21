@@ -450,7 +450,7 @@ const offersFor = (skip = null) =>
     .filter((o) => o.book && o.giver?.exchange) // a reader who left the exchange keeps their marks, unseen
     .map((o) => ({ ...o, book: { ...o.book, href: store.href(o.book.id) } }));
 app.get("/swap", (req, res) => {
-  const offers = offersFor(req.user?.id); // one's own «На обмін» live on one's shelf, not here
+  const offers = offersFor(req.user?.id); // one's own books aren't offered to oneself
   res.send(pages.swapPage({ user: req.user, offers, mine: inLibraryMap(req), asked: auth.asked(req.user?.id), givers: new Set(offers.map((o) => o.giver.id)).size }));
 });
 
@@ -521,10 +521,7 @@ app.get("/@:username", (req, res) => {
   if (own) {
     const fives = rows.filter((r) => r.rating >= 5).slice(0, 5).map((r) => r.id);
     const recs = social.alsoLiked(fives, { limit: 4, skip: new Set(rows.map((r) => r.id)) });
-    // Books from their «Хочу прочитати» that someone gives away, for the aside.
-    const wants = new Set(rows.filter((r) => r.status === "want").map((r) => r.id));
-    const offers = offersFor(req.user.id).filter((o) => wants.has(o.book.id));
-    return res.send(pages.libraryPage({ rows, user: req.user, reader: req.user, own: true, recs, follows, offers }));
+    return res.send(pages.libraryPage({ rows, user: req.user, reader: req.user, own: true, recs, follows }));
   }
   res.send(pages.libraryPage({ rows, user: req.user, reader, mineIds: req.user && req.user.id !== reader.id ? store.inLibrary(req.user.id) : null, following: auth.follows(req.user?.id, reader.id), follows, asked: auth.asked(req.user?.id) }));
 });
@@ -635,8 +632,7 @@ app.get("/book/:id", (req, res) => {
   if (store.href(id) !== `/book/${encodeURIComponent(req.params.id)}`) return res.redirect(301, store.href(id));
   const book = bookFor(req, store.bookPage(id), !!store.entry(req.user?.id, id));
   if (!book) return res.status(404).send(pages.messagePage({ title: "Немає такої книжки", text: "", user: req.user }));
-  const givers = store.readersOf(book.id).filter((r) => r.entry.copy === "give" && !r.entry.via).map((r) => pub(auth.reader(r.reader))).filter((g) => g?.exchange);
-  res.send(pages.bookPage({ book, entry: store.sharedEntry(req.user?.id, book.id), user: req.user, shelf: book.shelf && (req.owner || !isDraft(book.shelf)) ? store.shelf(book.shelf) : null, inLibrary: inLibraryMap(req), readers: readersOf(book.id), also: social.alsoLiked([book.id], { limit: 4 }), givers, asked: auth.asked(req.user?.id) }));
+  res.send(pages.bookPage({ book, entry: store.sharedEntry(req.user?.id, book.id), user: req.user, shelf: book.shelf && (req.owner || !isDraft(book.shelf)) ? store.shelf(book.shelf) : null, inLibrary: inLibraryMap(req), readers: readersOf(book.id), also: social.alsoLiked([book.id], { limit: 4 }) }));
 });
 
 // An author: their works from Wikidata (linked to our books of them) and every book of theirs we have.

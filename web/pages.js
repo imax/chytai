@@ -30,7 +30,8 @@ const books = (n) => count(n, ...BOOKS);
 const STATUS = { read: "Прочитано", reading: "Читаю", want: "Хочу прочитати", abandoned: "Покинуто" };
 const COPY = { paper: "На папері", ebook: "E-book", seeking: "Шукаю на папері", give: "На обмін" };
 // The same, said of another reader (the same words since «Віддам» became «На обмін», Max 2026-10-21).
-const COPY_SAID = COPY;
+// What others see of it: the exchange mark only on /swap (Max, 2026-10-21: «показувати тільки на сторінці /swap»).
+const COPY_SAID = { ...COPY, give: COPY.paper };
 // How a reader hands books over (settings): «Київ · Нова пошта, особисто».
 const WAYS = { np: "Нова пошта", meet: "особисто чи на точці обміну" };
 const handover = (r) => [r.city, (r.swap || "").split(" ").filter((w) => WAYS[w]).map((w) => WAYS[w]).join(", ")].filter(Boolean).join(" · ");
@@ -659,7 +660,9 @@ function entryForm(book, entry, user) {
 // The same list twice: /me is the signed-in reader's own shelf with «змінити» on every row (the only
 // place where status, rating and notes are edited); /@<username> is that reader's public shelf, where a
 // signed-in visitor sees what they share and can want any book in one tap.
-function libraryPage({ rows, user, reader, own = false, mineIds = null, recs = [], following = false, follows = { followers: [], following: [] }, asked = new Set(), offers = [] }) {
+function libraryPage({ rows, user, reader, own = false, mineIds = null, recs = [], following = false, follows = { followers: [], following: [] } }) {
+  // Another reader's shelf doesn't say which books they'd give: that is on /swap only (Max, 2026-10-21).
+  if (!own) rows = rows.map((r) => (r.copy === "give" ? { ...r, copy: "paper" } : r));
   const year = new Date().getFullYear();
   const read = rows.filter((r) => r.status === "read").length;
   const thisYear = rows.filter((r) => r.status === "read" && r.year === year);
@@ -675,7 +678,7 @@ function libraryPage({ rows, user, reader, own = false, mineIds = null, recs = [
     ["abandoned", "Покинуто", rows.filter((r) => r.status === "abandoned").length],
     ["paper", "На папері", rows.filter((r) => r.copy === "paper").length],
     ["seeking", "Шукаю", rows.filter((r) => r.copy === "seeking").length],
-    ["give", "На обмін", rows.filter((r) => r.copy === "give").length],
+    ...(own ? [["give", "На обмін", rows.filter((r) => r.copy === "give").length]] : []),
     ...(common.length ? [["common", "Спільні", common.length]] : []),
   ].filter(([k, , n]) => !k || n || (own && ["read", "reading", "want"].includes(k)));
   const sub = [books(rows.length), count(read, "прочитана", "прочитані", "прочитаних"), thisYear.length ? `${thisYear.length} цього року` : "", common.length ? `<b>${common.length} ${plural(common.length, "спільна", "спільні", "спільних")} з тобою</b>` : "", follows.followers.length ? `<a href="#follows">${count(follows.followers.length, "читач стежить", "читачі стежать", "читачів стежать")}</a>` : "", own ? `<a href="${attr(reader.href)}?public">як бачать інші</a> · <a href="/settings">налаштування</a>` : `<span class="muted">@${esc(reader.username)}</span>`].filter(Boolean).join(" · ");
@@ -690,7 +693,7 @@ function libraryPage({ rows, user, reader, own = false, mineIds = null, recs = [
       const data = ` data-status="${r.status || ""}" data-copy="${r.copy || ""}" data-common="${common.includes(r) ? 1 : ""}" data-tags="${attr((b.tags || []).join(" "))}" data-rating="${r.rating ?? ""}" data-title="${attr(b.title.toLowerCase())}" data-search="${attr(search)}" data-order="${i}"`;
       const edit = b.href ? `/me${b.href}` : `/me/book/${encodeURIComponent(r.id)}`;
       // A book this reader gives away: «Попросити» for everyone else, even a guest (it leads to sign-in).
-      const action = own ? `<a class="text-link small" href="${attr(edit)}">змінити</a>` : r.copy === "give" ? `${user && mineIds?.has(r.id) ? myStatus(mineIds.get(r.id)) + " " : ""}${askButton(b, reader, user, asked)}` : user && mineIds ? (mineIds.has(r.id) ? myStatus(mineIds.get(r.id)) : markButtons(b, user)) : "";
+      const action = own ? `<a class="text-link small" href="${attr(edit)}">змінити</a>` : user && mineIds ? (mineIds.has(r.id) ? myStatus(mineIds.get(r.id)) : markButtons(b, user)) : "";
       return head + bookRow(b, { entry: r, meta: own ? "" : entryMeta(r, { said: true }), action, id: r.id, data });
     })
     .join("\n");
@@ -722,7 +725,6 @@ ${list}
     </div>` : ""}
     ${common.length ? `${label("Спільне з тобою")}<p class="small muted">${books(common.length)}, які ви обоє маєте на полиці.</p><div class="grid four">${common.slice(0, 4).map((r) => `<a href="${attr(r.book.href)}">${cover(r.book, "card")}</a>`).join("")}</div>` : ""}
     ${wants.length ? `${label("Хоче прочитати")}${minis(wants.map((r) => r.book), "xs")}` : ""}
-    ${offers.length ? `${label("На обмін", `<a href="/swap">усі</a>`)}<p class="small muted">${books(offers.length)} з твого «Хочу прочитати» є в когось на обмін.</p>${minis(offers.slice(0, 6).map((o) => o.book), "xs")}` : ""}
     ${recs.length ? `${label("Тобі може зайти")}<p class="small muted">За твоїми п’ятірками</p>${minis(recs)}` : ""}
     ${followBlock}
   </aside>
