@@ -181,6 +181,7 @@ async function enrich(store, { ids, log = () => {}, fetchImpl = fetch, force = f
   let found = 0;
   let touched = false;
   let failed = 0;
+  let googleFailed = 0;
   const errors = [];
   for (const b of books) {
     store.db.set(`enrich:${b.id}`, String(Date.now()));
@@ -188,7 +189,13 @@ async function enrich(store, { ids, log = () => {}, fetchImpl = fetch, force = f
       let info = isLatin(b.title) || cleanIsbns(b.isbns).length ? await lookup(b, { fetchImpl }) : null;
       // Google Books fills what Open Library left out, and is the only source for Cyrillic titles.
       if (googleKey && !(info?.cover && info?.blurb && info?.published)) {
-        const g = await lookupGoogle(b, googleKey, { fetchImpl });
+        // Google refusing (it answers Fly's servers 503 with a key, 2026-10-21) must not stop Open Library.
+        const g = await lookupGoogle(b, googleKey, { fetchImpl }).catch((e) => {
+          const why = `${e.name === "TimeoutError" ? "timeout" : ""}${e.cause?.code || e.message}`;
+          errors.push(`${b.id} (Google): ${why.slice(0, 80)}`);
+          if (++googleFailed >= 3) (log("enrich: Google Books is not answering, going on with Open Library alone"), (googleKey = ""));
+          return null;
+        });
         if (g) info = { ...g, ...Object.fromEntries(Object.entries(info || {}).filter(([, v]) => v != null)), blurbSource: info?.blurb ? "Open Library" : "Google Books", isbns: cleanIsbns([...(info?.isbns || []), ...(g.isbns || [])]) };
       }
       if (info) {
