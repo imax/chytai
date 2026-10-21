@@ -466,7 +466,12 @@ ${g.map((b) => `<form method="post" action="/admin/dupes/decide" class="dupe-row
     if (!f.matches(".dupe-row, .dupe-foot, form.inline")) return;
     e.preventDefault();
     const btn = f.querySelector("button");
-    btn.disabled = true;
+    const group = f.closest(".dupe");
+    const label = btn.textContent;
+    // Saving relinks every edition and rebuilds the search index, a few seconds: show it.
+    btn.textContent = group ? "Зберігаю…" : "скасовую…";
+    for (const b of (group || f).querySelectorAll("button")) b.disabled = true;
+    group?.classList.add("busy");
     try {
       const r = await fetch(f.action, { method: "POST", headers: { "X-Requested-With": "fetch" }, body: new URLSearchParams(new FormData(f)) });
       if (!r.ok) throw new Error(r.status);
@@ -479,7 +484,9 @@ ${g.map((b) => `<form method="post" action="/admin/dupes/decide" class="dupe-row
       }
       box.innerHTML = d.decided;
     } catch (err) {
-      btn.disabled = false;
+      btn.textContent = label;
+      for (const b of (group || f).querySelectorAll("button")) b.disabled = false;
+      group?.classList.remove("busy");
       alert("Не вдалося зберегти: " + err.message);
     }
   });
