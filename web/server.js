@@ -638,6 +638,20 @@ app.get("/admin/google", owner, async (req, res) => {
   if (req.query.ref) headers.Referer = "https://chytai.org.ua/";
   const host = req.query.host === "books" ? "books.googleapis.com" : "www.googleapis.com";
   try {
+    if (req.query.v6) {
+      // Over IPv6 (Fly machines have their own), in case Google refuses only Fly's shared IPv4 addresses.
+      const https = require("https");
+      const out = await new Promise((resolve, reject) => {
+        const rq = https.request({ host, family: 6, path: `/books/v1/volumes?${params}`, headers, timeout: 15000 }, (r) => {
+          let body = "";
+          r.on("data", (c) => (body += c));
+          r.on("end", () => resolve(`${r.statusCode} via ${rq.socket?.remoteAddress}\n${body.slice(0, 1500)}`));
+        });
+        rq.on("error", reject);
+        rq.end();
+      });
+      return res.type("text").send(out);
+    }
     const r = await fetch(`https://${host}/books/v1/volumes?${params}`, { headers, signal: AbortSignal.timeout(15000) });
     res.type("text").send(`${r.status}\n${(await r.text()).slice(0, 1500)}`);
   } catch (e) {
