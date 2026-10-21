@@ -88,7 +88,7 @@ function layout({ title, body, user, path = "", description = "", q = "", home =
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>${esc(title ? `${title} · Chytai` : "Chytai")}</title>
+<title>${esc(title ? `${title} · Chytai` : "Chytai · читай більше")}</title>
 ${description ? `<meta name="description" content="${attr(description.slice(0, 200))}">` : ""}
 <link rel="icon" href="/icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -254,7 +254,7 @@ const pageHead = ({ crumbs = "", kicker = "", title, sub = "", action = "", lead
 
 // ---- home (/) ----
 
-// «Що почитати далі?»: the search, a random well rated book, the feed, recommendations, new books.
+// «Що почитати?»: the search, a random well rated book, the feed, recommendations, new books.
 function homePage({ user, picks, feed, recs, showcase, fetched, libraries = [] }) {
   const pick = (p, i) => `<article class="pick${i ? " hidden" : ""}">
   <a class="cover-link" href="${attr(p.book.href)}">${cover(p.book, "xl")}</a>
@@ -270,7 +270,7 @@ function homePage({ user, picks, feed, recs, showcase, fetched, libraries = [] }
   const recTitle = (r) => (user && r.own ? "Схожі на те, що тобі сподобалось" : `Якщо сподобалась «${esc(r.seed.title)}»`);
   const body = `
 <section class="hero">
-  <h1>Що почитати далі?</h1>
+  <h1>Що почитати?</h1>
   <form class="search-box big" action="/search" role="search"><input type="search" name="q" placeholder="назва, автор, жанр або видавництво" aria-label="Пошук" autocomplete="off"><span class="enter">Enter ↵</span></form>
   <p class="starts"><span>або почни з</span> ${["фантастика", "Madeline Miller", "війна", "біографії", "українською"].map((s) => `<a href="/search?q=${attr(encodeURIComponent(s))}">${esc(s)}</a>`).join(" ")}</p>
 </section>
