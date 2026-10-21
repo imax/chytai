@@ -28,7 +28,7 @@
       if (text && !(it.dataset.search || "").includes(text)) return false;
       if (filters.status) {
         const v = filters.status;
-        if (v === "paper" || v === "seeking") { if (it.dataset.copy !== v) return false; }
+        if (v === "paper" || v === "seeking" || v === "give") { if (it.dataset.copy !== v) return false; }
         else if (v === "common") { if (it.dataset.common !== "1") return false; }
         else if (it.dataset.status !== v) return false;
       }
@@ -94,6 +94,7 @@
       });
     }
     if (location.hash === "#want") $(".tab[data-v=want]")?.click();
+    if (location.hash === "#give") $(".tab[data-v=give]")?.click();
     // A link to one row (/@maxua#book) must find it even past the first rows.
     const at = location.hash ? order.findIndex((it) => it.id === decodeURIComponent(location.hash.slice(1))) : -1;
     if (at >= limit) limit = at + STEP;

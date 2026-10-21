@@ -41,6 +41,7 @@ CREATE TABLE IF NOT EXISTS sessions (id TEXT PRIMARY KEY, reader TEXT NOT NULL, 
 CREATE INDEX IF NOT EXISTS sessions_reader ON sessions (reader);
 CREATE TABLE IF NOT EXISTS visits (day TEXT NOT NULL, reader TEXT NOT NULL, PRIMARY KEY (day, reader));
 CREATE TABLE IF NOT EXISTS views (day TEXT PRIMARY KEY, readers INTEGER NOT NULL DEFAULT 0, guests INTEGER NOT NULL DEFAULT 0);
+CREATE TABLE IF NOT EXISTS asks (asker TEXT NOT NULL, giver TEXT NOT NULL, book TEXT NOT NULL, sent TEXT NOT NULL, PRIMARY KEY (asker, giver, book));
 CREATE VIRTUAL TABLE IF NOT EXISTS search USING fts5 (id UNINDEXED, title, alt, author, series, extra, tokenize = 'unicode61 remove_diacritics 2');
 CREATE VIRTUAL TABLE IF NOT EXISTS search_vocab USING fts5vocab (search, 'row');
 CREATE VIRTUAL TABLE IF NOT EXISTS search_tri USING fts5 (id UNINDEXED, text, tokenize = 'trigram');
@@ -57,6 +58,11 @@ function open(dataDir) {
   if (!db.prepare("PRAGMA table_info(readers)").all().some((c) => c.name === "follow_mail")) db.exec("ALTER TABLE readers ADD COLUMN follow_mail INTEGER NOT NULL DEFAULT 1");
   // Whether search engines may list the reader's page (settings, 2026-10-21); yes by default.
   if (!db.prepare("PRAGMA table_info(readers)").all().some((c) => c.name === "noindex")) db.exec("ALTER TABLE readers ADD COLUMN noindex INTEGER NOT NULL DEFAULT 0");
+  // Book exchange (Max, 2026-10-21): how a reader hands over the paper books they give away («np» Нова
+  // пошта, «meet» in person or at an exchange point, both or none) and their city. No address, no phone.
+  if (!db.prepare("PRAGMA table_info(readers)").all().some((c) => c.name === "swap")) db.exec("ALTER TABLE readers ADD COLUMN swap TEXT NOT NULL DEFAULT ''; ALTER TABLE readers ADD COLUMN city TEXT NOT NULL DEFAULT ''");
+  // Opt-in (Max, 2026-10-21: «Обмін треба робити як opt-in»): until a reader turns it on, nothing of the exchange shows up for them.
+  if (!db.prepare("PRAGMA table_info(readers)").all().some((c) => c.name === "exchange")) db.exec("ALTER TABLE readers ADD COLUMN exchange INTEGER NOT NULL DEFAULT 0");
   // A work may have several addresses (an old one redirects to the current): the table once made id
   // UNIQUE, so a second slug for an id was silently dropped and lived only in memory (2026-10-21).
   if (db.prepare("PRAGMA index_list(slugs)").all().some((i) => i.unique && i.origin === "u")) {

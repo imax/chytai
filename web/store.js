@@ -1036,6 +1036,14 @@ class Store {
     return (reader && this.entriesOf(reader)[this.canonical(id)]) || null;
   }
 
+  // Every paper book readers give away (copy «give», Max 2026-10-21): [{ reader, id, entry }], the
+  // newest marks first. Russian-language books stay off, as everywhere public.
+  giving() {
+    const out = [];
+    for (const [reader, entries] of this.entries) for (const [id, e] of Object.entries(entries)) if (e.copy === "give" && this.book(id) && !isRussian(this.book(id))) out.push({ reader, id, entry: e });
+    return out.sort((a, b) => String(b.entry.updated || "").localeCompare(String(a.entry.updated || "")));
+  }
+
   // The reader's library membership by any id, edition ids included (for the shelf cards).
   inLibrary(reader) {
     if (!reader) return new Map();
