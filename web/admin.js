@@ -72,10 +72,13 @@ class Admin {
     const digestLog = db.prepare("SELECT reader, sent FROM digest_log").all();
 
     // Which days each reader was around: visits, plus everything else that leaves a date.
+    // A day before the reader signed up is not theirs: an import from Goodreads keeps the dates the
+    // books were added there (one reader showed «200 днів» on day two).
     const active = new Map(); // reader -> Set(day)
+    const signedUp = Object.fromEntries(readers.map((r) => [r.id, dayOf(r.created)]));
     const mark = (reader, iso) => {
       const day = iso && dayOf(iso);
-      if (!day || !reader) return;
+      if (!day || !reader || day < (signedUp[reader] || day)) return;
       if (!active.has(reader)) active.set(reader, new Set());
       active.get(reader).add(day);
     };
@@ -218,7 +221,7 @@ const pct = (c) => (c === null ? `<td class="na">·</td>` : `<td class="pct${c.p
 
 // `withBooks`: the readers table shows only readers with a book on the shelf (Max, 2026-10-20: «фільтр 1+ книжка»);
 // `sort`: last (activity, the default), books or created (Max, 2026-10-21: fewer columns, sortable).
-function adminPage({ user, stats: s, layout, withBooks = false, sort = "last" }) {
+function adminPage({ user, stats: s, layout, withBooks = false, sort = "created" }) {
   const t = s.totals;
   const tiles = [
     tile(t.readers, "читачів", `+${t.signupsWeek} за тиждень, +${t.signupsMonth} за місяць`),
@@ -247,14 +250,14 @@ function adminPage({ user, stats: s, layout, withBooks = false, sort = "last" })
     .join("");
 
   const SORTS = { last: (a, b) => (b.last || "").localeCompare(a.last || "") || a.created.localeCompare(b.created), books: (a, b) => b.books - a.books || a.created.localeCompare(b.created), created: (a, b) => b.created.localeCompare(a.created) };
-  if (!SORTS[sort]) sort = "last";
+  if (!SORTS[sort]) sort = "created"; // newest readers on top by default (Max, 2026-10-21: «неясно як знайти нових»)
   const shown = (withBooks ? s.readers.filter((r) => r.books) : s.readers).slice().sort(SORTS[sort]);
-  const url = ({ books = withBooks, by = sort } = {}) => `/admin${[books ? "books=1" : "", by !== "last" ? `sort=${by}` : ""].filter(Boolean).map((q, i) => (i ? "&" : "?") + q).join("")}`;
-  const col = (key, label) => (sort === key ? `<th class="sorted">${label}</th>` : `<th><a href="${url({ by: key })}">${label}</a></th>`);
+  const url = ({ books = withBooks, by = sort } = {}) => `/admin${[books ? "books=1" : "", by !== "created" ? `sort=${by}` : ""].filter(Boolean).map((q, i) => (i ? "&" : "?") + q).join("")}`;
+  const col = (key, label) => (sort === key ? `<th class="sorted">${label} ↓</th>` : `<th><a href="${url({ by: key })}" title="Відсортувати">${label}</a></th>`);
   const readerRows = shown
     .map(
       (r) => `<tr${r.owner ? ' class="owner"' : ""}>
-  <th><a href="/@${esc(r.username)}">${esc(r.name)}</a> <span class="muted">@${esc(r.username)}</span></th>
+  <th><a href="/@${esc(r.username)}">${esc(r.name)}</a> <span class="muted">@${esc(r.username)}</span>${!r.owner && r.created >= addDays(s.now, -6) ? ` <em class="new">новий</em>` : ""}</th>
   <td>${short(r.created)}</td><td>${short(r.last)}</td><td>${n(r.days)}</td><td>${n(r.books)}</td>
   <td>${r.digest ? "так" : r.email ? "ні" : `<span class="muted">без пошти</span>`}</td>
 </tr>`
@@ -281,7 +284,7 @@ ${s.cohorts.length ? `<div class="tbl"><table class="cohorts">
 <tbody>${cohortRows}</tbody></table></div>` : `<p class="muted">Поки нема жодної когорти.</p>`}
 
 <h2>Читачі</h2>
-<p class="muted small">«Днів» — скільки різних днів читач був на сайті. Клацніть на заголовок, щоб відсортувати.</p>
+<p class="muted small">Нові зверху; «новий» — зареєструвався за останні 7 днів. «Днів» — скільки різних днів читач був на сайті після реєстрації. Заголовки «Зареєструвався», «Востаннє» і «Книжок» сортують таблицю.</p>
 <p class="filter">${withBooks ? `<a href="${url({ books: false })}">Усі (${s.readers.length})</a> · <b>1+ книжка (${shown.length})</b>` : `<b>Усі (${s.readers.length})</b> · <a href="${url({ books: true })}">1+ книжка (${s.readers.filter((r) => r.books).length})</a>`}</p>
 <div class="tbl"><table class="readers">
 <thead><tr><th>Читач</th>${col("created", "Зареєструвався")}${col("last", "Востаннє")}<th>Днів</th>${col("books", "Книжок")}<th>Лист</th></tr></thead>
