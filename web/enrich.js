@@ -211,7 +211,8 @@ async function enrich(store, { ids, log = () => {}, fetchImpl = fetch, force = f
     store.linkEditions?.();
     store.indexSearch();
   }
-  const line = `${new Date().toISOString()}: ${found} of ${books.length} books got details from Open Library${googleKey ? " and Google Books" : ""}${errors.length ? `; errors: ${errors.slice(0, 5).join(", ")}` : ""}`;
+  const own = Object.values(store.lib.books).filter((b) => OWN.has(b.source));
+  const line = `${new Date().toISOString()}: ${found} of ${books.length} books got details from Open Library${googleKey ? " and Google Books" : ""}; own books ${own.length}, with cover ${own.filter((b) => b.cover).length}, never asked ${wanting(store, null, { google: !!googleKey }).filter((b) => !store.db.get(`enrich:${b.id}`)).length}${errors.length ? `; errors: ${errors.slice(0, 5).join(", ")}` : ""}`;
   log(`enrich ${line}`);
   store.db.set("enrich:log", line); // shown on /refresh-status
   return { asked: books.length, found, errors };
