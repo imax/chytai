@@ -19,21 +19,38 @@ pages=(
   /author/john-steinbeck
   /updates
 )
-slow=()
-for p in "${pages[@]}"; do
-  best=99
+# The fastest of three answers, in seconds (99 when none came).
+measure() {
+  local best=99 r code t
   for _ in 1 2 3; do
-    r=$(curl -s -o /dev/null -m 30 -w "%{http_code} %{time_total}" "$SITE$p" || echo "000 99")
+    r=$(curl -s -o /dev/null -m 30 -w "%{http_code} %{time_total}" "$SITE$1" || echo "000 99")
     code=${r%% *} t=${r##* }
     [ "$code" = 200 ] && awk "BEGIN{exit !($t < $best)}" && best=$t
   done
+  echo "$best"
+}
+slow=()
+for p in "${pages[@]}"; do
+  best=$(measure "$p")
   printf "%-32s %6.2f s\n" "$p" "$best"
-  awk "BEGIN{exit !($best > $LIMIT)}" && slow+=("$p (${best} s)")
+  awk "BEGIN{exit !($best > $LIMIT)}" && slow+=("$p")
 done
+# Right after a start the server warms up (a heavy shelf took 1.7 s once and 0.6 s a minute later,
+# 2026-10-21), so a slow page is asked again after half a minute before it counts.
 if [ ${#slow[@]} -gt 0 ]; then
-  msg="Slower than ${LIMIT} s or not answering: ${slow[*]}"
-  echo "$msg"
-  [ -n "${GITHUB_STEP_SUMMARY:-}" ] && echo "$msg" >> "$GITHUB_STEP_SUMMARY"
-  exit 1
+  echo "slow: ${slow[*]}; again in 30 s"
+  sleep 30
+  still=()
+  for p in "${slow[@]}"; do
+    best=$(measure "$p")
+    printf "%-32s %6.2f s (again)\n" "$p" "$best"
+    awk "BEGIN{exit !($best > $LIMIT)}" && still+=("$p (${best} s)")
+  done
+  if [ ${#still[@]} -gt 0 ]; then
+    msg="Slower than ${LIMIT} s or not answering: ${still[*]}"
+    echo "$msg"
+    [ -n "${GITHUB_STEP_SUMMARY:-}" ] && echo "$msg" >> "$GITHUB_STEP_SUMMARY"
+    exit 1
+  fi
 fi
 echo "All pages under ${LIMIT} s"
