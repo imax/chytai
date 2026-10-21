@@ -67,6 +67,10 @@
   не вимкнув (`WEB_DIGEST_TO=owner` — лише власнику) (`readers.digest`, перемикач у /settings, посилання «Відписатися» без входу, List-Unsubscribe).
   Власнику: `/digest/preview[?reader=<username>][&text=1]`, `POST /api/digest?test=1` (лист собі, нічого не
   записує), `POST /api/digest` (справжній запуск), `/digest/status`. Без стеження за відкриттями.
+- **Вітальний лист** (`web/welcome-mail.js`, текст у `web/welcome-mail.md`: перший рядок «Тема: …», далі абзаци
+  Markdown з `{name}`, `{username}`, `{site}`): один лист кожному новому читачеві одразу після реєстрації, поки
+  meta `welcome:on` = 1. Власнику: `/welcome-mail/preview[?reader=<username>][&text=1]` з кнопками «Надіслати собі»
+  та «Увімкнути»/«Вимкнути».
 
 Запуск: `npm run platform`, далі `/login` (код у логу) або, з `WEB_LOGIN_TOKEN=…`, відкрити `/login/<token>` раз як власник.
 Деплой: окремий Fly-застосунок `chytai-web` (`web/fly.toml`, `web/Dockerfile`, workflow `.github/workflows/web.yml`).

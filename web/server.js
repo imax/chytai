@@ -20,6 +20,7 @@ const authors = require("./authors");
 const { Social } = require("./social");
 const goodreads = require("./goodreads");
 const { Digest } = require("./digest");
+const { WelcomeMail } = require("./welcome-mail");
 const applebooks = require("./applebooks");
 const enrich = require("./enrich");
 const { Admin, adminPage } = require("./admin");
@@ -173,6 +174,7 @@ app.post("/login/signup", (req, res) => {
   const reader = auth.createReader({ email, name: name.name, username: username.username });
   auth.useTicket(req.body.ticket);
   console.log(`new reader @${reader.username}`);
+  welcomeMail.newReader(reader);
   signIn(req, res, reader, `/welcome${next ? `?next=${encodeURIComponent(next)}` : ""}`);
 });
 app.get("/welcome", signed, (req, res) => res.send(pages.welcomePage({ user: req.user, next: safeNext(req.query.next) })));
@@ -303,6 +305,8 @@ pages.setStats((id) => social.stats(id));
 // 2026-10-20: «Включаємо на всіх»); WEB_DIGEST_TO=owner limits it to the owner again.
 const digest = new Digest({ store, auth, social, libraries, site: SITE, ownerId: OWNER_ID, to: process.env.WEB_DIGEST_TO === "owner" ? "owner" : "all" });
 digest.schedule();
+// The welcome letter right after sign-up (welcome-mail.js), while the owner has it switched on.
+const welcomeMail = new WelcomeMail({ store, auth, site: SITE });
 pages.setReadersWithNote((id) => readersOf(id).find((r) => r.entry.note) || null);
 const day = (iso) => ((iso = iso || store.shelvesFetched) ? new Date(iso).toLocaleDateString("uk-UA", { timeZone: "Europe/Kyiv" }) : "");
 // A publisher in the lists: its newest books (the ones marked new first), how many there are and are new.
@@ -626,6 +630,31 @@ app.post("/api/digest", owner, async (req, res) => {
   }
   const r = await digest.run();
   res.send(pages.messagePage({ title: "Розсилку виконано", text: `надіслано ${r.sent}, пропущено ${r.skipped}${r.errors.length ? `; помилки: ${r.errors.join("; ")}` : ""}`, user: req.user }));
+});
+// The owner looks at the welcome letter (as their own, or ?reader=<username>'s), mails it to themselves and
+// switches it on or off for new readers.
+app.get("/welcome-mail/preview", owner, (req, res) => {
+  const reader = req.query.reader ? auth.byUsername(req.query.reader) : auth.reader(req.user.id);
+  if (!reader) return res.status(404).send("Немає такого читача");
+  const letter = welcomeMail.render(reader);
+  if (req.query.text) return res.type("text").send(`Тема: ${letter.subject}\n\n${letter.text}`);
+  const btn = (action, label) => `<form method="post" action="${action}" style="margin:0"><button style="border:1px solid #ece8df;background:none;color:#ece8df;border-radius:999px;padding:6px 14px;cursor:pointer">${label}</button></form>`;
+  const on = welcomeMail.on;
+  const bar = `<div style="background:#1b1a17;color:#ece8df;font:14px -apple-system,sans-serif;padding:10px 20px;display:flex;gap:16px;align-items:center;flex-wrap:wrap"><span>Тема: <b>${pages.esc(letter.subject)}</b></span><span style="flex:1"></span><span style="color:${on ? "#8fd1a6" : "#e0a58f"}">${on ? "Надсилається новим читачам" : "Вимкнено"}</span><a href="?text=1" style="color:#a29d92">текстова версія</a>${btn("/api/welcome-mail?test=1", "Надіслати собі")}${btn(`/api/welcome-mail?on=${on ? 0 : 1}`, on ? "Вимкнути" : "Увімкнути")}</div>`;
+  res.send(letter.html.replace("<body", `${bar}<body`));
+});
+app.post("/api/welcome-mail", owner, async (req, res) => {
+  if (req.query.test) {
+    const me = auth.reader(req.user.id);
+    try {
+      const letter = await welcomeMail.sendTo(me);
+      return res.send(pages.messagePage({ title: "Лист надіслано", text: `На ${me.email}. Тема: ${letter.subject}`, user: req.user }));
+    } catch (e) {
+      return res.status(500).send(pages.messagePage({ title: "Не вдалося надіслати", text: e.message, user: req.user }));
+    }
+  }
+  if (req.query.on !== undefined) welcomeMail.setOn(req.query.on === "1");
+  res.redirect("/welcome-mail/preview");
 });
 // The owner's statistics page: readers, retention by sign-up week, what people do on the site (admin.js).
 app.get("/admin", owner, (req, res) => res.send(adminPage({ user: req.user, stats: admin.stats(), layout: pages.layout, withBooks: req.query.books === "1", sort: String(req.query.sort || "created") })));
