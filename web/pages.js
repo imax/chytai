@@ -159,6 +159,8 @@ function wantButton(book, user, { size = "small", label: text = "Хочу про
 }
 // «Хочу прочитати» and «Прочитано» side by side, for rows in search and on shelves: marking a book read
 // should not need its page (a reader's feedback, 2026-10-20).
+// A book the signed-in reader already has: their status, quietly, where the buttons would be (search, shelves).
+const myStatus = (e) => `<span class="muted small">${esc(e.status ? STATUS[e.status].toLowerCase() : "на полиці")}</span>`;
 const markButtons = (book, user) => `<span class="marks">${wantButton(book, user)}${wantButton(book, user, { label: "Прочитано", status: "read" })}</span>`;
 
 // The status, rating and copy of an entry as one quiet line: «★★★★★ 5 · прочитано · на папері».
@@ -548,11 +550,6 @@ function entryForm(book, entry) {
 
 // ---- shelves (/me and /@<username>) ----
 
-// On another reader's shelf, a book the visitor already has: their own status instead of the buttons, so
-// a missing «Хочу прочитати» doesn't look like a bug (Max, 2026-10-21).
-const MY = { read: "прочитано", reading: "читаю", want: "хочу прочитати" };
-const myMark = (e, edit) => `<a class="my-mark" href="${attr(edit)}" title="Змінити у моїх книжках">✓ У мене: ${esc(e.status ? MY[e.status] : "на полиці")}</a>`;
-
 // The same list twice: /me is the signed-in reader's own shelf with «змінити» on every row (the only
 // place where status, rating and notes are edited); /@<username> is that reader's public shelf, where a
 // signed-in visitor sees what they share and can want any book in one tap.
@@ -584,7 +581,7 @@ function libraryPage({ rows, user, reader, own = false, mineIds = null, recs = [
       const search = [b.title, b.altTitle, b.author, stripMd(r.note || "")].join(" ").toLowerCase();
       const data = ` data-status="${r.status || ""}" data-copy="${r.copy || ""}" data-common="${common.includes(r) ? 1 : ""}" data-tags="${attr((b.tags || []).join(" "))}" data-rating="${r.rating ?? ""}" data-title="${attr(b.title.toLowerCase())}" data-search="${attr(search)}" data-order="${i}"`;
       const edit = b.href ? `/me${b.href}` : `/me/book/${encodeURIComponent(r.id)}`;
-      const action = own ? `<a class="text-link small" href="${attr(edit)}">змінити</a>` : user && mineIds ? (mineIds.has(r.id) ? myMark(mineIds.get(r.id), edit) : markButtons(b, user)) : "";
+      const action = own ? `<a class="text-link small" href="${attr(edit)}">змінити</a>` : user && mineIds ? (mineIds.has(r.id) ? myStatus(mineIds.get(r.id)) : markButtons(b, user)) : "";
       return head + bookRow(b, { entry: r, action, id: r.id, data });
     })
     .join("\n");
@@ -766,7 +763,7 @@ function searchResults({ q, user, hits = [], authors = [], readers = [], shelves
 <div class="split">
   <div>
     ${shelves.length ? `<section class="block">${label(`Видавництва · ${shelves.length}`)}<div class="name-rows">${shelves.map((s) => `<a class="name-row" href="/publishers/${attr(s.shelf.id)}"><b>${esc(s.shelf.name)}</b><span>${[books(s.total), s.shelf.tagline ? esc(s.shelf.tagline) : ""].filter(Boolean).join(" · ")}</span></a>`).join("")}</div></section>` : ""}
-    ${hits.length ? `<section class="block">${label(`Книжки · ${hits.length}`)}<div class="rows">${hits.map((h) => bookRow(h.book, { meta: readersMeta(h.book.id), action: h.entry ? `<span class="muted small">${esc(h.entry.status ? STATUS[h.entry.status].toLowerCase() : "на полиці")}</span>` : markButtons(h.book, user) })).join("")}</div></section>` : ""}
+    ${hits.length ? `<section class="block">${label(`Книжки · ${hits.length}`)}<div class="rows">${hits.map((h) => bookRow(h.book, { meta: readersMeta(h.book.id), action: h.entry ? myStatus(h.entry) : markButtons(h.book, user) })).join("")}</div></section>` : ""}
     ${authors.length ? `<section class="block">${label(`Автори · ${authors.length}`)}<div class="name-rows">${authors.map((a) => `<a class="name-row" href="${attr(a.href)}"><b>${esc(a.name)}</b><span>${[books(a.books), a.readers ? count(a.readers, "читач", "читачі", "читачів") : ""].filter(Boolean).join(" · ")}</span></a>`).join("")}</div></section>` : ""}
     ${readers.length ? `<section class="block">${label(`Читачі · ${readers.length}`)}<div class="name-rows">${readers.map((r) => `<a class="name-row" href="${attr(r.reader.href)}"><b>${esc(r.reader.name)}</b><span>${books(r.count)}</span></a>`).join("")}</div></section>` : ""}
     ${user ? `<p class="muted end-note">Не те? <button type="button" class="text-link" data-open="add">Додати книжку, якої ще немає на Chytai</button></p>${addDialog()}` : ""}
@@ -799,7 +796,7 @@ function authorPage({ author, works, hits, user, readers = [], also = [] }) {
     ${book.altTitle ? `<p class="orig">${esc(book.altTitle)}</p>` : ""}
     ${s.avg != null ? `<p class="meta">${stars(s.avg)}<span> · ${count(s.rated, "оцінка", "оцінки", "оцінок")}</span></p>` : ""}
     ${top ? `<p class="note">${noteOf(top.entry, book.id)}</p><p class="said">— <a href="${attr(top.href)}"><b>${esc(top.name)}</b></a>${top.entry.year ? `, ${top.entry.year}` : ""}</p>` : ""}
-    <div class="acts">${entry ? `<span class="muted small">${esc(entry.status ? STATUS[entry.status].toLowerCase() : "на полиці")}</span>` : markButtons(book, user)}</div>
+    <div class="acts">${entry ? myStatus(entry) : markButtons(book, user)}</div>
   </div>
 </article>`;
   };

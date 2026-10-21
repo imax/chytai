@@ -234,7 +234,6 @@ h2.year span { font: 13px var(--sans); color: var(--muted); }
 .score b { color: var(--ink); font-weight: 600; }
 .book-main .acts { margin-top: 22px; }
 .have { color: var(--accent); font-weight: 500; }
-.my-mark { display: inline-block; padding: 7px 14px; border-radius: 999px; background: color-mix(in oklch, var(--accent) 12%, transparent); color: var(--accent); font-size: 13px; font-weight: 500; white-space: nowrap; }
 .have .muted a { text-decoration: underline; text-decoration-color: var(--under); }
 .where { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: baseline; margin-top: 22px; font-size: 13px; line-height: 1.6; }
 .where-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.12em; color: var(--muted); margin-right: 4px; }
@@ -393,9 +392,9 @@ dialog .form { margin-top: 18px; }
   .row { gap: 16px; }
   .row h3 { font-size: 18px; }
   .row-act { align-self: flex-start; }
-  .row:has(.marks), .row:has(.my-mark) { flex-wrap: wrap; row-gap: 12px; }
-  .row-act:has(.marks), .row-act:has(.my-mark) { flex-basis: 100%; padding-left: 80px; }
-  .row-act .marks { justify-content: flex-start; }
+  .row:has(.marks) { flex-wrap: wrap; row-gap: 12px; }
+  .row:has(.marks), .row:has(.row-act > .muted) { flex-wrap: wrap; row-gap: 12px; }
+  .row-act:has(.marks), .row-act:has(> .muted) { flex-basis: 100%; padding-left: 80px; }
   .row.big { gap: 18px; }
   .row.big .cover.lg { width: 84px; }
   .row.big h3 { font-size: 22px; }
