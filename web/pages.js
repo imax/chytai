@@ -85,14 +85,13 @@ const label = (text, aside = "") => `<div class="label"><h2>${text}</h2>${aside 
 const NAV = [
   ["/community", "Читачі", (p) => p === "/community" || p === "/@"],
   ["/publishers", "Видавництва", (p) => p.startsWith("/publishers")],
-  ["/swap", "Обмін", (p) => p === "/swap"],
 ];
 
 function layout({ title, body, user, path = "", description = "", q = "", home = false, canonical = "", image = "", noindex = false, jsonld = null, type = "website" }) {
   const on = (p) => (p ? ' class="on"' : "");
   const nav = [
-    // «Обмін» is for readers who opted in (Max, 2026-10-21); the page itself is open to all.
-    ...NAV.filter(([href]) => href !== "/swap" || user?.exchange).map(([href, name, is]) => `<a href="${href}"${on(is(path))}>${name}</a>`),
+    // No «Обмін» here (Max, 2026-10-21): /swap is reached from the exchange settings and book pages.
+    ...NAV.map(([href, name, is]) => `<a href="${href}"${on(is(path))}>${name}</a>`),
     // Settings live on one's own shelf, not in the menu (Max, 2026-10-20).
     user ? `<a href="${attr(user.href || "/me")}"${on(path === "/me" || path === "/settings")}>Моє</a>` : `<a href="/login"${on(path === "/login")}>Увійти</a>`,
   ].join("");
