@@ -488,7 +488,7 @@ function entryForm(book, entry) {
       ${ratings.map((r) => `<option value="${r}" ${e.rating === r ? "selected" : ""}>${uk(r)}</option>`).join("")}
       ${e.rating != null && !ratings.includes(e.rating) ? `<option value="${e.rating}" selected>${uk(e.rating)}</option>` : ""}
     </select></label>
-    <label>Рік <input name="year" type="number" min="1990" max="2100" value="${attr(e.year || "")}" placeholder="без дати"></label>
+    <label>Рік <input name="year" type="number" min="1990" max="${new Date().getFullYear()}" value="${attr(e.year || "")}" placeholder="без дати"></label>
   </div>
   <label>Примірник <select name="copy">
     <option value="" ${!e.copy ? "selected" : ""}>не вказано</option>
