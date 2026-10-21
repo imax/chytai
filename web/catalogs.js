@@ -82,7 +82,9 @@ const attr = (p, n) => ((p.attributes || []).find((a) => a.name === n) || { term
 // the series name and the volume number, so a shelf can fold the volumes into one card.
 const ORD = { перший: 1, перша: 1, другий: 2, друга: 2, третій: 3, третя: 3, четвертий: 4, четверта: 4, "п’ятий": 5, "п'ятий": 5, "п’ята": 5, шостий: 6, шоста: 6, сьомий: 7, сьома: 7, восьмий: 8, восьма: 8, "дев’ятий": 9, десятий: 10 };
 function volumeOf(title) {
-  const m = title.match(/^(.+?)[,.]?\s+(?:(?:том|книга|частина)\s+|кн\.\s*)(\d+|[\p{L}’']+)(?=[.:\s]|$)[.:]?\s*(.*)$/iu); // «Експансія. Кн.6. У попелі Вавилону»
+  // «Хроніки Амбера : у 10 кн. Кн. 1 : Дев’ять принців Амбера»: the count of books goes first.
+  const t = title.replace(/\s*:?\s*у\s+\d+(?:-?х)?\s+(?:кн|т)\.(?=\s)/iu, "");
+  const m = t.match(/^(.+?)\s*[,.:]?\s+(?:(?:том|книга|частина)\s+|кн\.\s*)(\d+|[\p{L}’']+)(?=[.:\s]|$)\s*[.:]?\s*(.*)$/iu); // «Експансія. Кн.6. У попелі Вавилону»
   if (!m) return null;
   const n = /^\d+$/.test(m[2]) ? Number(m[2]) : ORD[m[2].toLowerCase()];
   return n ? { series: m[1].trim(), volume: n, subtitle: m[3].trim() } : null;
