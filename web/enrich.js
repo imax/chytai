@@ -122,7 +122,8 @@ async function lookup(book, { fetchImpl = fetch } = {}) {
   if (doc.first_publish_year) out.published = doc.first_publish_year;
   if (doc.number_of_pages_median) out.pages = doc.number_of_pages_median;
   const langs = (doc.language || []).filter((l) => LANG[l]);
-  if (langs.length === 1 && !book.language) out.language = LANG[langs[0]];
+  // Open Library knows the original, not the Ukrainian edition: a Cyrillic-titled book keeps its own language.
+  if (langs.length === 1 && !book.language && isLatin(book.title)) out.language = LANG[langs[0]];
   // The description lives on the work, one more request; a short one is worth nothing.
   try {
     const work = await getJson(`https://openlibrary.org${doc.key}.json`, fetchImpl);

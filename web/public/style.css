@@ -530,3 +530,10 @@ form.inline button:not(.btn) { background: none; border: 0; padding: 0; cursor: 
 .tr-pick select { max-width: 260px; font: inherit; padding: 4px 6px; border: 1px solid var(--rule); background: var(--paper); color: inherit; }
 .row.big .pair { margin-top: 8px; }
 .row.big .pair .tr-pick { flex-wrap: wrap; }
+/* The owner's «Позначити як переклад»: blue, so it is not taken for a reader's button (Max, 2026-10-21). */
+.btn.pair-btn { background: oklch(93% 0.04 260); border-color: oklch(78% 0.08 260); color: oklch(38% 0.12 260); }
+.btn.pair-btn:hover { background: oklch(88% 0.06 260); color: oklch(30% 0.12 260); }
+@media (prefers-color-scheme: dark) {
+  .btn.pair-btn { background: oklch(32% 0.06 260); border-color: oklch(48% 0.08 260); color: oklch(88% 0.05 260); }
+  .btn.pair-btn:hover { background: oklch(38% 0.07 260); color: oklch(94% 0.04 260); }
+}

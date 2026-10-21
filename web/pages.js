@@ -351,7 +351,7 @@ function bookPage({ book, entry, user, shelf, inLibrary = new Map(), readers = [
     ${book.blurb || book.translations?.length || book.ukTitle ? `<section class="block">
       ${label("Про книжку")}
       ${book.blurb ? `<div class="about">${book.blurb.split(/\n\n+/).map((t) => `<p>${esc(t)}</p>`).join("")}</div>` : ""}
-      <p class="small muted">${[book.blurb ? (book.blurbSource ? `Опис: ${esc(book.blurbSource)}` : `Опис з сайту ${esc(shelf ? shelf.name : book.source)}`) : "", ...(book.translations || []).map((t) => `${isUk(book) && !isUk(t) ? "Оригінал" : "Переклад"}: <a href="${attr(t.href)}">${esc(t.title)}</a>`), book.ukTitle ? `Українською: «${esc(book.ukTitle)}», у каталогах поки немає` : ""].filter(Boolean).join(" · ")}</p>
+      <p class="small muted">${[book.blurb ? (book.blurbSource ? `Опис: ${esc(book.blurbSource)}` : `Опис з сайту ${esc(shelf ? shelf.name : book.source)}`) : "", ...(book.translations || []).map((t) => `${CYR.test(book.title) && !CYR.test(t.title) ? "Оригінал" : "Переклад"}: <a href="${attr(t.href)}">${esc(t.title)}</a>`), book.ukTitle ? `Українською: «${esc(book.ukTitle)}», у каталогах поки немає` : ""].filter(Boolean).join(" · ")}</p>
     </section>` : ""}
   </div>
   <aside>
@@ -516,7 +516,7 @@ function translationsPage({ user, translations = [], decisions = { same: [], dif
       (t) => `<div class="dupe"><p class="dupe-author"><a href="${attr(t.author.href)}" target="_blank">${esc(t.author.name)}</a></p>
 ${t.uk
   .map(
-    (b) => `<form method="post" action="/admin/dupes/translation" class="dupe-row tr-row"><input type="hidden" name="uk" value="${attr(b.id)}"><span><a href="${attr(b.href)}" target="_blank">${esc(b.title)}</a>${b.readers ? `<span class="muted"> · ${count(b.readers, "читач", "читачі", "читачів")}</span>` : ""}</span><span class="tr-pick"><select name="orig">${t.foreign.map((o) => `<option value="${attr(o.id)}">${esc(o.title)}</option>`).join("")}</select><button class="btn small">Переклад</button></span></form>`
+    (b) => `<form method="post" action="/admin/dupes/translation" class="dupe-row tr-row"><input type="hidden" name="uk" value="${attr(b.id)}"><span><a href="${attr(b.href)}" target="_blank">${esc(b.title)}</a>${b.readers ? `<span class="muted"> · ${count(b.readers, "читач", "читачі", "читачів")}</span>` : ""}</span><span class="tr-pick"><select name="orig">${t.foreign.map((o) => `<option value="${attr(o.id)}">${esc(o.title)}</option>`).join("")}</select><button class="btn small pair-btn">Позначити як переклад</button></span></form>`
   )
   .join("")}</div>`
     )
@@ -814,7 +814,7 @@ function authorPage({ author, works, hits, user, readers = [], also = [], pairin
     if (l) return `<div class="pair muted small">переклад: ${esc(l.title)}${l.index != null ? ` <form method="post" action="/admin/dupes/undo" class="inline"><input type="hidden" name="kind" value="translations"><input type="hidden" name="index" value="${l.index}"><button class="text-link small">скасувати</button></form>` : ""}</div>`;
     const options = pairing.foreign.filter((f) => f.id !== book.id);
     if (!options.length || !CYR.test(book.title)) return "";
-    return `<form method="post" action="/admin/dupes/translation" class="pair tr-row"><input type="hidden" name="uk" value="${attr(book.id)}"><span class="tr-pick"><select name="orig">${options.map((o) => `<option value="${attr(o.id)}">${esc(o.title)}</option>`).join("")}</select><button class="btn small">Це переклад</button></span></form>`;
+    return `<form method="post" action="/admin/dupes/translation" class="pair tr-row"><input type="hidden" name="uk" value="${attr(book.id)}"><span class="tr-pick"><select name="orig">${options.map((o) => `<option value="${attr(o.id)}">${esc(o.title)}</option>`).join("")}</select><button class="btn small pair-btn">Позначити як переклад</button></span></form>`;
   };
   const ratings = hits.map((h) => statsOf(h.book.id)).filter((s) => s.avg != null);
   const avg = ratings.length ? Math.round((ratings.reduce((s, x) => s + x.avg, 0) / ratings.length) * 10) / 10 : null;
