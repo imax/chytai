@@ -97,8 +97,9 @@ async function refresh(store, { fetchImpl = fetch, log = () => {} } = {}) {
 // fold into their work). Kept light: this runs after every catalog refresh on a 256 MB machine.
 function allWorks(store) {
   const out = new Map();
-  for (const b of store.seedBooks) out.set(b.id, { id: b.id, author: b.author });
-  for (const b of Object.values(store.lib.books)) out.set(b.id, { id: b.id, author: b.author });
+  // A library book folded into another work on /admin/dupes is that work, not a second one.
+  for (const b of store.seedBooks) if (store.canonical(b.id) === b.id) out.set(b.id, { id: b.id, author: b.author });
+  for (const b of Object.values(store.lib.books)) if (store.canonical(b.id) === b.id) out.set(b.id, { id: b.id, author: b.author });
   for (const [id, { shelf, item }] of store.shelfItems) if (!out.has(id) && store.canonical(id) === id && !store.hidden.has(id) && !shelf.draft) out.set(id, { id, author: item.author });
   return [...out.values()];
 }
