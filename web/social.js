@@ -24,8 +24,12 @@ class Social {
   }
 
   // Every entry of every reader that has something to say (a status or a rating): [{ reader, id, entry }].
+  // Kept until the current request is done: a page asks for it many times (/community once per reader), and
+  // each time looks up every reader's every book (2.2 s for /community on 2026-10-21).
   all() {
-    const out = [];
+    if (this.cached) return this.cached;
+    const out = (this.cached = []);
+    setImmediate(() => (this.cached = null));
     for (const [rid, entries] of this.store.entries) {
       const reader = this.who(rid);
       if (!reader) continue;
