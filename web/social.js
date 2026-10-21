@@ -24,6 +24,7 @@ class Social {
   }
 
   // Every entry of every reader that has something to say (a status or a rating): [{ reader, id, entry }].
+  // «Не дочитано» never is: no feed line, no rating counted, nothing in the letters.
   // Kept until the current request is done: a page asks for it many times (/community once per reader), and
   // each time looks up every reader's every book (2.2 s for /community on 2026-10-21).
   all() {
@@ -33,7 +34,7 @@ class Social {
     for (const [rid, entries] of this.store.entries) {
       const reader = this.who(rid);
       if (!reader) continue;
-      for (const [id, e] of Object.entries(entries)) if ((e.status || e.rating != null) && !isRussian(this.store.book(id))) out.push({ reader, id, entry: e });
+      for (const [id, e] of Object.entries(entries)) if ((e.status || e.rating != null) && e.status !== "abandoned" && !isRussian(this.store.book(id))) out.push({ reader, id, entry: e });
     }
     return out;
   }

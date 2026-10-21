@@ -7,6 +7,11 @@
 // read once and thrown away; Private Notes and anything else in it are never kept.
 
 const CHYTAI_STATUS = { read: "read", "currently-reading": "reading", "to-read": "want" };
+// Goodreads has no «did not finish»; readers make a shelf of their own for it, exclusive or not, and name it
+// as they like: «dnf», «did-not-finish», «abandoned», «gave-up», «не-дочитано». Any of them is «Не дочитано»
+// (unless the book was read after all).
+const DNF = /(^|[-_\s])(dnf|did-?not-?finish|abandon|unfinish|not-?finish|gave-?up|give-?up|put-?down|кинув|кинула|кинуто|покину|не-?дочит|недочит)/i;
+const statusOf = (shelf, shelves) => CHYTAI_STATUS[shelf] === "read" ? "read" : DNF.test(shelf) || shelves.split(",").some((s) => DNF.test(s.trim())) ? "abandoned" : CHYTAI_STATUS[shelf] || "";
 
 // ---- the CSV (RFC 4180: quotes, doubled quotes, newlines inside quotes) ----
 function parseCsv(text) {
@@ -88,7 +93,7 @@ function parseExport(text) {
       fullTitle: get(r, "Title"),
       author: get(r, "Author").replace(/\s+/g, " "),
       isbns: [isbnOf(get(r, "ISBN13")), isbnOf(get(r, "ISBN"))].filter((x) => x.length >= 10),
-      status: CHYTAI_STATUS[shelf] || "",
+      status: statusOf(shelf, get(r, "Bookshelves")),
       rating: rating > 0 ? rating : null,
       year: read ? Number(read.slice(0, 4)) : null,
       note: reviewText(get(r, "My Review")),
@@ -130,6 +135,7 @@ function plan(store, reader, books) {
     read: out.filter((r) => r.status === "read").length,
     reading: out.filter((r) => r.status === "reading").length,
     want: out.filter((r) => r.status === "want").length,
+    abandoned: out.filter((r) => r.status === "abandoned").length,
     rated: out.filter((r) => r.rating != null).length,
     notes: out.filter((r) => r.note).length,
   };

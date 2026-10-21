@@ -320,7 +320,7 @@ function readerList() {
   const year = new Date().getFullYear();
   return auth
     .readers()
-    .map((r) => ({ reader: pub(r), rows: store.library(r.id) }))
+    .map((r) => ({ reader: pub(r), rows: shown(store.library(r.id)) }))
     .filter((c) => c.rows.length)
     .sort((a, b) => b.rows.length - a.rows.length)
     .map(({ reader, rows }) => {
@@ -408,8 +408,10 @@ app.get("/follow-mail/unsubscribe/:id/:token", (req, res) => followMailSwitch(re
 app.post("/follow-mail/unsubscribe/:id/:token", (req, res) => followMailSwitch(req, res, false));
 app.post("/follow-mail/resubscribe/:id/:token", (req, res) => followMailSwitch(req, res, true));
 
-function libraryRows(reader) {
-  const rows = store.library(reader);
+// «Не дочитано» is the reader's own: other readers don't see it on the shelf (pages.js STATUS).
+const shown = (rows) => rows.filter((r) => r.status !== "abandoned");
+function libraryRows(reader, { own = false } = {}) {
+  const rows = own ? store.library(reader) : shown(store.library(reader));
   let prev;
   for (const r of rows) {
     r._prevYear = prev;
@@ -425,9 +427,10 @@ app.get("/@:username", (req, res) => {
   const reader = pub(auth.byUsername(req.params.username));
   if (!reader) return res.status(404).send(pages.messagePage({ title: "Немає такого читача", text: "", user: req.user }));
   if (reader.username !== req.params.username) return res.redirect(301, reader.href);
-  const rows = libraryRows(reader.id);
+  const own = req.user?.id === reader.id && !("public" in req.query);
+  const rows = libraryRows(reader.id, { own });
   const follows = { followers: auth.followers(reader.id).map((id) => pub(auth.reader(id))).filter(Boolean), following: auth.following(reader.id).map((id) => pub(auth.reader(id))).filter(Boolean) };
-  if (req.user?.id === reader.id && !("public" in req.query)) {
+  if (own) {
     const fives = rows.filter((r) => r.rating >= 5).slice(0, 5).map((r) => r.id);
     const recs = social.alsoLiked(fives, { limit: 4, skip: new Set(rows.map((r) => r.id)) });
     return res.send(pages.libraryPage({ rows, user: req.user, reader: req.user, own: true, recs, follows }));
@@ -544,7 +547,7 @@ app.get("/author/:slug", async (req, res) => {
   // Who reads this author, and what else those readers rated highest.
   const ids = new Set(hits.map((h) => h.book.id));
   const who = [...new Set(hits.flatMap((h) => store.readersOf(h.book.id).map((r) => r.reader)))]
-    .map((id) => ({ reader: pub(auth.reader(id)), rows: store.library(id) }))
+    .map((id) => ({ reader: pub(auth.reader(id)), rows: shown(store.library(id)) }))
     .filter((r) => r.reader)
     .map(({ reader, rows }) => ({ reader, count: rows.length, read: rows.filter((r) => r.status === "read").length }));
   const also = social.alsoLiked([...ids], { limit: 4, skip: ids }).filter((b) => !author.ids.includes(b.id));
@@ -568,10 +571,11 @@ const back = (req, res, fallback) => {
   res.redirect(/^\/(?!\/)/.test(next) ? next : req.body.back ? req.get("referer") || fallback : fallback);
 };
 
+const STATUSES = ["read", "reading", "want", "abandoned"];
 app.post("/api/entry/:id", signed, (req, res) => {
   const b = req.body;
   const patch = {};
-  if ("status" in b) patch.status = ["read", "reading", "want"].includes(b.status) ? b.status : "";
+  if ("status" in b) patch.status = STATUSES.includes(b.status) ? b.status : "";
   if ("rating" in b) patch.rating = b.rating === "none" || b.rating === "" ? null : Math.max(0, Math.min(5, Number(b.rating)));
   if ("year" in b) patch.year = b.year ? Number(b.year) : null;
   if ("copy" in b) patch.copy = ["paper", "ebook", "seeking"].includes(b.copy) ? b.copy : "";
@@ -590,7 +594,7 @@ app.post("/api/book", signed, (req, res) => {
   const { title, author, cover, status, copy } = req.body;
   if (!title || !title.trim()) return res.status(400).send("Потрібна назва");
   const b = store.addBook({ title, author, cover: /^https?:\/\//.test(cover || "") ? cover : "" });
-  store.setEntry(req.user.id, b.id, { status: ["read", "reading", "want"].includes(status) ? status : "", copy: ["paper", "ebook", "seeking"].includes(copy) ? copy : "" });
+  store.setEntry(req.user.id, b.id, { status: STATUSES.includes(status) ? status : "", copy: ["paper", "ebook", "seeking"].includes(copy) ? copy : "" });
   enrich.enrich(store, { ids: [b.id], log: console.log, googleKey: process.env.GOOGLE_BOOKS_KEY || "" }).catch((e) => console.error("enrich failed:", e));
   // A book typed in by hand may duplicate a catalog's or be junk: the owner gets a letter and sorts it out
   // (Max, 2026-10-20: «треба … сповіщення мені на імейл. будемо поки вручну розбирати»).

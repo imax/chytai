@@ -89,7 +89,7 @@ function editDistance(a, b, max) {
 }
 
 // Two entries for one work (one saved under an edition id): keep the fuller of each field.
-const RANK = { read: 3, reading: 2, want: 1, "": 0 };
+const RANK = { read: 3, abandoned: 2.5, reading: 2, want: 1, "": 0 };
 function mergeEntries(a, b) {
   const pick = (x, y) => (x !== "" && x != null ? x : y);
   return { ...b, ...a, status: (RANK[a.status] ?? 0) >= (RANK[b.status] ?? 0) ? a.status : b.status, rating: Math.max(a.rating ?? -1, b.rating ?? -1) < 0 ? null : Math.max(a.rating ?? 0, b.rating ?? 0), year: pick(a.year, b.year), note: (a.note || "").length >= (b.note || "").length ? a.note || "" : b.note, copy: pick(a.copy, b.copy), order: Math.min(a.order ?? 1e9, b.order ?? 1e9) };
@@ -302,11 +302,12 @@ class Store {
   }
 
   // Every reader who has the work (or a translation of it): [{ reader, entry }], fullest first.
+  // «Не дочитано» is left out: it is the reader's own, not a word about the book to others.
   readersOf(id) {
     const out = [];
     for (const reader of this.entries.keys()) {
       const e = this.sharedEntry(reader, id);
-      if (e) out.push({ reader, entry: e });
+      if (e && e.status !== "abandoned") out.push({ reader, entry: e });
     }
     return out.sort((a, b) => (b.entry.note?.length || 0) - (a.entry.note?.length || 0) || (b.entry.rating ?? -1) - (a.entry.rating ?? -1));
   }

@@ -20,10 +20,12 @@ const uk = (n) => String(n).replace(".", ",");
 const BOOKS = ["книжка", "книжки", "книжок"];
 const books = (n) => count(n, ...BOOKS);
 
-const STATUS = { read: "Прочитано", reading: "Читаю", want: "Хочу прочитати" };
+// «Не дочитано» (a reader's idea, 2026-10-21): a book put down for good. Not read, and quiet: it stays on the
+// reader's shelf but never reaches the feed, the letters, a book's «У читачів» or its rating (social.js).
+const STATUS = { read: "Прочитано", reading: "Читаю", want: "Хочу прочитати", abandoned: "Не дочитано" };
 const COPY = { paper: "На папері", ebook: "E-book", seeking: "Шукаю на папері" };
 // What a reader did, as the feed says it: «Оля К. оцінка ★★★★», «Андрій читає».
-const VERB = { read: "прочитано", reading: "читає", want: "хоче прочитати" };
+const VERB = { read: "прочитано", reading: "читає", want: "хоче прочитати", abandoned: "не дочитано" };
 const GENRES = ["художня", "фантастика", "детективи", "трилери", "бізнес", "компанії", "менеджмент", "продукт", "гроші", "розробка", "історія", "війна", "біографії", "наука", "саморозвиток", "суспільство"];
 const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
 const CYR = /[а-яіїєґ]/i;
@@ -551,6 +553,7 @@ function editPage({ book, entry, user }) {
   return layout({ title: book.title, body, user, path: "/me" });
 }
 
+const WHY = "Чому не пішла, якщо хочеться (нотатку бачать лише на вашій полиці)";
 function entryForm(book, entry) {
   const e = entry || { status: "", rating: null, year: "", copy: "", note: "" };
   const ratings = [5, 4.5, 4, 3.5, 3, 2.5, 2, 1.5, 1];
@@ -564,6 +567,7 @@ function entryForm(book, entry) {
       <option value="reading" ${e.status === "reading" ? "selected" : ""}>Читаю</option>
       <option value="read" ${e.status === "read" ? "selected" : ""}>Прочитано</option>
       <option value="want" ${e.status === "want" ? "selected" : ""}>Хочу прочитати</option>
+      <option value="abandoned" ${e.status === "abandoned" ? "selected" : ""}>Не дочитано</option>
     </select></label>
     <label>Оцінка <select name="rating">
       <option value="none" ${e.rating == null ? "selected" : ""}>без оцінки</option>
@@ -578,7 +582,7 @@ function entryForm(book, entry) {
     <option value="ebook" ${e.copy === "ebook" ? "selected" : ""}>Є e-book</option>
     <option value="seeking" ${e.copy === "seeking" ? "selected" : ""}>Шукаю на папері</option>
   </select></label>
-  <label>Нотатка <textarea name="note" rows="5" placeholder="Кілька слів про книжку">${esc(e.note || "")}</textarea></label>
+  <label>Нотатка <textarea name="note" rows="5" placeholder="${e.status === "abandoned" ? WHY : "Кілька слів про книжку"}" data-why="${WHY}">${esc(e.note || "")}</textarea></label>
   <div class="actions">
     ${entry ? `<button type="submit" class="btn danger" formaction="/api/entry/${encodeURIComponent(book.id)}/remove" formnovalidate>Прибрати з полиці</button>` : ""}
     <span class="grow"></span>
@@ -605,6 +609,7 @@ function libraryPage({ rows, user, reader, own = false, mineIds = null, recs = [
     ["read", own ? "Прочитано" : "Прочитане", read],
     ["reading", own ? "Читаю" : "Читає", rows.filter((r) => r.status === "reading").length],
     ["want", own ? "Хочу прочитати" : "Хоче прочитати", rows.filter((r) => r.status === "want").length],
+    ["abandoned", "Не дочитано", rows.filter((r) => r.status === "abandoned").length],
     ["paper", "На папері", rows.filter((r) => r.copy === "paper").length],
     ["seeking", "Шукаю", rows.filter((r) => r.copy === "seeking").length],
     ...(common.length ? [["common", "Спільні", common.length]] : []),
@@ -1099,7 +1104,7 @@ function importPreviewPage({ user, source = "goodreads", token, rows, counts, fi
   const indexed = rows.map((r, i) => [r, i]);
   const skipped = counts.skipped ? ` · ${counts.skipped} PDF пропущено` : "";
   const body = `
-${pageHead({ crumbs: `<a href="/settings">Налаштування</a> / <a href="/import/${source}">Імпорт з ${IMPORT_NAMES[source]}</a>`, title: "Що потрапить на полицю", sub: [books(counts.all), counts.read ? `${counts.read} прочитано` : "", counts.want ? `${counts.want} ${source === "apple-books" ? "не почато" : "хочу прочитати"}` : "", counts.reading ? `${counts.reading} читаю` : "", counts.rated ? `${counts.rated} з оцінками` : "", counts.notes ? `${counts.notes} з рецензіями` : ""].filter(Boolean).join(" · ") + skipped })}
+${pageHead({ crumbs: `<a href="/settings">Налаштування</a> / <a href="/import/${source}">Імпорт з ${IMPORT_NAMES[source]}</a>`, title: "Що потрапить на полицю", sub: [books(counts.all), counts.read ? `${counts.read} прочитано` : "", counts.want ? `${counts.want} ${source === "apple-books" ? "не почато" : "хочу прочитати"}` : "", counts.reading ? `${counts.reading} читаю` : "", counts.abandoned ? `${counts.abandoned} не дочитано` : "", counts.rated ? `${counts.rated} з оцінками` : "", counts.notes ? `${counts.notes} з рецензіями` : ""].filter(Boolean).join(" · ") + skipped })}
 <form method="post" action="/import/${source}/apply" class="import-preview">
   <input type="hidden" name="token" value="${attr(token)}">
   <div class="imp-bar">

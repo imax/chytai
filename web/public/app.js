@@ -257,7 +257,7 @@
   // «Хочу прочитати», «Прочитано», «Стежити», «Підписатися» in a list: sent in the background and changed
   // in place, so the page doesn't jump to the top after the server's redirect (Max, 2026-10-20). Without
   // JS (or when the request fails) the form posts as before. The book page's own buttons still reload it.
-  const LABEL = { want: "хочу прочитати", read: "прочитано", reading: "читаю" };
+  const LABEL = { want: "хочу прочитати", read: "прочитано", reading: "читаю", abandoned: "не дочитано" };
   document.addEventListener("submit", async (e) => {
     const form = e.target;
     const action = form.getAttribute("action") || "";
@@ -290,6 +290,14 @@
       if (on) button.classList.remove("primary");
     }
   });
+
+  // «Не дочитано» chosen: the note asks why, quietly (pages.js WHY).
+  for (const form of $$(".entry-form")) {
+    const status = form.querySelector("select[name=status]");
+    const note = form.querySelector("textarea[name=note]");
+    const plain = "Кілька слів про книжку";
+    status.addEventListener("change", () => (note.placeholder = status.value === "abandoned" ? note.dataset.why : plain));
+  }
 
   // An empty «Рік» («без дати») would start its arrows from the minimum (1990), so this year becomes
   // the value first (a reader's feedback, 2026-10-20).
