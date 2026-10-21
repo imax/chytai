@@ -427,6 +427,19 @@ function series(book, inLibrary) {
 // /admin/dupes (owner): works that look like one book twice, for a human to judge (Max, 2026-10-21:
 // «потрібна нормальна адмінка, щоб я міг сказати що об'єднувати а що ні»). Each group has a button per
 // book, «лишити цю» (the rest become its editions), and one «різні книжки»; decisions can be undone.
+// The buttons post by fetch and the group leaves the page in place (Max: «щоб не перезавантажувала всю
+// довгу сторінку»); the server answers such a post with the decisions list re-rendered.
+function decidedList(decisions, book) {
+  const name = (id) => {
+    const b = book(id);
+    return b ? `<a href="${attr(b.href)}" target="_blank">${esc(b.title)}</a>` : esc(id);
+  };
+  const undo = (kind, i) => `<form method="post" action="/admin/dupes/undo" class="inline"><input type="hidden" name="kind" value="${kind}"><input type="hidden" name="index" value="${i}"><button class="text-link small">скасувати</button></form>`;
+  const n = decisions.same.length + decisions.different.length;
+  return `<h2 id="decided">Рішення <span class="muted">${n}</span></h2>
+${n ? `<ul class="decided">${decisions.same.map(([k, d], i) => `<li>${name(d)} <span class="muted">→ видання</span> ${name(k)} ${undo("same", i)}</li>`).join("")}${decisions.different.map(([a, b], i) => `<li>${name(a)} <span class="muted">і</span> ${name(b)} <span class="muted">— різні</span> ${undo("different", i)}</li>`).join("")}</ul>` : `<p class="muted">Поки жодного.</p>`}`;
+}
+
 function dupesPage({ user, groups, decisions = { same: [], different: [] }, book = () => null, all = false }) {
   const shown = all ? groups : groups.filter((g) => g.some((b) => b.readers));
   const meta = (b) => [b.author, b.source, b.readers ? count(b.readers, "читач", "читачі", "читачів") : "", b.editions > 1 ? count(b.editions, "видання", "видання", "видань") : ""].filter(Boolean).join(" · ");
@@ -437,20 +450,41 @@ ${g.map((b) => `<form method="post" action="/admin/dupes/decide" class="dupe-row
 <form method="post" action="/admin/dupes/decide" class="dupe-foot"><input type="hidden" name="ids" value="${attr(ids)}"><input type="hidden" name="verdict" value="different"><input type="hidden" name="all" value="${all ? "1" : ""}"><button class="btn small ghost">Різні книжки</button></form>
 </div>`;
   };
-  const name = (id) => {
-    const b = book(id);
-    return b ? `<a href="${attr(b.href)}" target="_blank">${esc(b.title)}</a>` : esc(id);
-  };
-  const undo = (kind, i) => `<form method="post" action="/admin/dupes/undo" class="inline"><input type="hidden" name="kind" value="${kind}"><input type="hidden" name="index" value="${i}"><button class="text-link small">скасувати</button></form>`;
-  const decided = decisions.same.length + decisions.different.length;
   const body = `<div class="admin" id="top">
-<h1>Схожі на дублі <span class="muted">${shown.length}</span></h1>
+<h1>Схожі на дублі <span class="muted" id="dupe-count">${shown.length}</span></h1>
 <p class="muted">Один автор, одна головна назва, але різні сторінки. ${all ? `<a class="text-link" href="/admin/dupes">Лише ті, що є в читачів</a>` : `Тут лише ті, що є на чиїйсь полиці; <a class="text-link" href="/admin/dupes?all=1">усі ${groups.length}</a>`}. «Лишити цю» робить решту виданнями цієї книжки: їхні сторінки ведуть на неї, оцінки читачів з’їжджаються. «Різні книжки» прибирає пару зі списку.</p>
-${shown.map(group).join("")}
-${shown.length ? "" : `<p class="muted">Нічого схожого не лишилось.</p>`}
-<h2 id="decided">Рішення <span class="muted">${decided}</span></h2>
-${decided ? `<ul class="decided">${decisions.same.map(([k, d], i) => `<li>${name(d)} <span class="muted">→ видання</span> ${name(k)} ${undo("same", i)}</li>`).join("")}${decisions.different.map(([a, b], i) => `<li>${name(a)} <span class="muted">і</span> ${name(b)} <span class="muted">— різні</span> ${undo("different", i)}</li>`).join("")}</ul>` : `<p class="muted">Поки жодного.</p>`}
-</div>`;
+<div id="dupes">${shown.map(group).join("")}</div>
+<p class="muted" id="dupe-none"${shown.length ? ' hidden' : ""}>Нічого схожого не лишилось.</p>
+<div id="decided-box">${decidedList(decisions, book)}</div>
+</div>
+<script>
+(() => {
+  const box = document.getElementById("decided-box");
+  const count = document.getElementById("dupe-count");
+  document.addEventListener("submit", async (e) => {
+    const f = e.target;
+    if (!f.matches(".dupe-row, .dupe-foot, form.inline")) return;
+    e.preventDefault();
+    const btn = f.querySelector("button");
+    btn.disabled = true;
+    try {
+      const r = await fetch(f.action, { method: "POST", headers: { "X-Requested-With": "fetch" }, body: new URLSearchParams(new FormData(f)) });
+      if (!r.ok) throw new Error(r.status);
+      const d = await r.json();
+      if (f.matches(".dupe-row, .dupe-foot")) {
+        f.closest(".dupe").remove();
+        const n = document.querySelectorAll(".dupe").length;
+        count.textContent = n;
+        document.getElementById("dupe-none").hidden = n > 0;
+      }
+      box.innerHTML = d.decided;
+    } catch (err) {
+      btn.disabled = false;
+      alert("Не вдалося зберегти: " + err.message);
+    }
+  });
+})();
+</script>`;
   return layout({ title: "Схожі на дублі", body, user, path: "/admin" });
 }
 
@@ -1049,6 +1083,7 @@ function messagePage({ title, text, user }) {
 
 module.exports = {
   dupesPage,
+  decidedList,
   welcomePage,
   layout, homePage, bookPage, editPage, libraryPage, readersPage, publishersPage, publisherPage, searchPage, searchResults, authorPage,
   loginPage, codePage, signupPage, settingsPage, privacyPage, updatesPage, messagePage, digestPage, followMailPage, importPage, importPreviewPage, importDonePage,
