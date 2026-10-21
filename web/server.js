@@ -432,7 +432,7 @@ app.get("/@:username", (req, res) => {
     const recs = social.alsoLiked(fives, { limit: 4, skip: new Set(rows.map((r) => r.id)) });
     return res.send(pages.libraryPage({ rows, user: req.user, reader: req.user, own: true, recs, follows }));
   }
-  res.send(pages.libraryPage({ rows, user: req.user, reader, mineIds: req.user && req.user.id !== reader.id ? new Map(Object.entries(store.entriesOf(req.user.id))) : null, following: auth.follows(req.user?.id, reader.id), follows }));
+  res.send(pages.libraryPage({ rows, user: req.user, reader, mineIds: req.user && req.user.id !== reader.id ? store.inLibrary(req.user.id) : null, following: auth.follows(req.user?.id, reader.id), follows }));
 });
 // The owner's page before usernames (/reader/max) moved to /@maxua.
 app.get(OLD_READER, (req, res) => res.redirect(301, pub(auth.reader(OWNER_ID)).href));

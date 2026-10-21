@@ -483,7 +483,7 @@ class Store {
       const words = new Set(norm([b.title, b.altTitle, b.author].join(" ")).split(" "));
       const whole = terms.every((t) => words.has(t));
       const score = (norm(b.title) === exact || norm(b.altTitle) === exact ? 1000 : 0) + (whole ? 500 : 0) - i;
-      hits.push({ book: b, entry: reader ? this.entry(reader, id) : null, score });
+      hits.push({ book: b, entry: reader ? this.sharedEntry(reader, id) : null, score });
     }
     return hits.sort((a, b) => b.score - a.score).slice(0, limit);
   }
