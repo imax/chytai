@@ -428,7 +428,7 @@ const offersFor = (skip = null) =>
     .filter((o) => o.book && o.giver?.exchange) // a reader who left the exchange keeps their marks, unseen
     .map((o) => ({ ...o, book: { ...o.book, href: store.href(o.book.id) } }));
 app.get("/swap", (req, res) => {
-  const offers = offersFor(req.user?.id); // one's own «Віддам» live on one's shelf, not here
+  const offers = offersFor(req.user?.id); // one's own «На обмін» live on one's shelf, not here
   res.send(pages.swapPage({ user: req.user, offers, mine: inLibraryMap(req), asked: auth.asked(req.user?.id), givers: new Set(offers.map((o) => o.giver.id)).size }));
 });
 
@@ -439,7 +439,7 @@ app.post("/api/ask/:id/:username", signed, async (req, res) => {
   const giver = auth.byUsername(req.params.username);
   const entry = id && giver && store.entry(giver.id, id);
   const back = (title, text) => res.send(pages.messagePage({ title, text, user: req.user }));
-  if (!entry || entry.copy !== "give" || !giver.exchange) return res.status(404).send(pages.messagePage({ title: "Цю книжку вже не віддають", text: "Можливо, її щойно забрали.", user: req.user }));
+  if (!entry || entry.copy !== "give" || !giver.exchange) return res.status(404).send(pages.messagePage({ title: "Цієї книжки вже немає на обмін", text: "Можливо, її щойно забрали.", user: req.user }));
   if (giver.id === req.user.id) return res.redirect(store.href(id));
   const to = giver.email || (giver.id === OWNER_ID ? process.env.WEB_NOTIFY_EMAIL : "");
   if (!to || !req.user.email) return back("Не вийшло надіслати", "У цього читача немає пошти для листів.");
@@ -448,18 +448,18 @@ app.post("/api/ask/:id/:username", signed, async (req, res) => {
   if (due === "limit") return back("Забагато прохань за день", "Не більше десяти на день, спробуйте завтра.");
   const book = store.book(id);
   const g = pub(giver);
-  // What the asker could give back: their «Віддам» that the giver wants, else any of their «Віддам».
+  // What the asker could give back: their «На обмін» that the giver wants, else any of theirs.
   const theirs = store.giving().filter((o) => o.reader === req.user.id).map((o) => store.book(o.id)).filter(Boolean);
   const wanted = theirs.filter((b) => store.entry(giver.id, b.id)?.status === "want");
   const list = (bs) => bs.slice(0, 5).map((b) => `«${b.title}»${b.author ? ` (${b.author})` : ""}  ${SITE}${store.href(b.id)}`);
   const ways = [g.swap.includes("np") ? "Нова пошта" : "", g.swap.includes("meet") ? "особисто чи на точці обміну" : ""].filter(Boolean).join(", ");
   const text = [
-    `${req.user.name} (${SITE}${req.user.href}) побачив(ла) на вашій полиці «${book.title}» з позначкою «Віддам» і просить її.`,
+    `${req.user.name} (${SITE}${req.user.href}) побачив(ла) на вашій полиці «${book.title}» з позначкою «На обмін» і просить її.`,
     ``,
     ways ? `Ви вказали, що передаєте книжки так: ${ways}${g.city ? ` (${g.city})` : ""}.` : `Ви ще не вказали, як передаєте книжки (Нова пошта чи особисто): ${SITE}/settings/exchange`,
-    ...(wanted.length ? [``, `Навзаєм: ${req.user.name} віддає книжки з вашого «Хочу прочитати»:`, ...list(wanted)] : theirs.length ? [``, `${req.user.name} теж віддає:`, ...list(theirs)] : []),
+    ...(wanted.length ? [``, `Навзаєм: у ${req.user.name} на обмін є книжки з вашого «Хочу прочитати»:`, ...list(wanted)] : theirs.length ? [``, `У ${req.user.name} на обмін:`, ...list(theirs)] : []),
     ``,
-    `Щоб відповісти, просто дайте відповідь на цей лист: він піде на ${req.user.email}. Домовтесь про відділення Нової пошти чи зустріч самі; Chytai у передачі не бере участі й грошей не бере. Не хочете віддавати: нічого не відповідайте або приберіть позначку «Віддам».`,
+    `Щоб відповісти, просто дайте відповідь на цей лист: він піде на ${req.user.email}. Домовтесь про відділення Нової пошти чи зустріч самі; Chytai у передачі не бере участі й грошей не бере. Не хочете: нічого не відповідайте або приберіть позначку «На обмін».`,
     ``,
     `Книжка: ${SITE}${store.href(id)}`,
     `Полиця ${req.user.name}: ${SITE}${req.user.href}`,
