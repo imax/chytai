@@ -521,4 +521,4 @@ dialog .form { margin-top: 18px; }
 .decided { padding-left: 18px; max-width: 760px; }
 .decided li { margin: 4px 0; }
 form.inline { display: inline; }
-form.inline button { background: none; border: 0; padding: 0; cursor: pointer; font: inherit; }
+form.inline button:not(.btn) { background: none; border: 0; padding: 0; cursor: pointer; font: inherit; }
