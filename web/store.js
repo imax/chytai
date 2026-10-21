@@ -55,6 +55,7 @@ const isRussian = (b) => {
 };
 const norm = (s) => String(s || "").toLowerCase().replace(/^(the|a)\s+/, "").replace(/[^\p{L}\p{N}]+/gu, " ").trim();
 const isbnKey = (s) => String(s || "").replace(/[^0-9X]/gi, "");
+const GENRE = /\s*[:.]\s*(казка|казки|роман|повість|повісті|оповідання|новели|п[’']єса|есеї|есей|поезії|вірші|збірка|нариси|спогади|мемуари|(осіннє|зимове|весняне|літнє|подарункове|ювілейне|ілюстроване|нове|повне|доповнене|колекційне)\s+видання)\s*$/iu;
 // The ISBNs a library book is known by: its own field, plus the Amazon /dp/<ISBN-10> links from Books.md.
 const isbnsOf = (b) => [...(b.isbns || []), b.isbn || "", ...(b.links || []).map((l) => /amazon\.[a-z.]+\/(?:[^/]+\/)?dp\/([0-9X]{10})/i.exec(l.url || "")?.[1] || "")].map(isbnKey).filter((i) => i.length >= 10);
 
@@ -296,6 +297,47 @@ class Store {
     return out.sort((a, b) => (b.entry.note?.length || 0) - (a.entry.note?.length || 0) || (b.entry.rating ?? -1) - (a.entry.rating ?? -1));
   }
 
+  // Works that look like one book twice (Max, 2026-10-21: «давай ще шукати дублі»): the same author's
+  // surname and the same main title (before a colon, a dot or a bracket), yet two pages. For the owner
+  // to look over on /admin/dupes; pairs listed in matches.json as different are left out.
+  dupes() {
+    let different = [];
+    try {
+      different = readJson(path.join(SEED, "matches.json")).different || [];
+    } catch {}
+    const no = new Set(different.map((p) => p.join("|")));
+    const main = (t) => norm(String(t || "").replace(GENRE, "").replace(/\s*\([^()]*\)/g, "").split(/:|\.\s|\s[—–-]\s/)[0]);
+    const surname = (a) => {
+      const ws = norm(a).split(/\s+and\s+|\s*[,&;]\s*| /).filter((w) => w.length >= 3);
+      return ws.length ? ws[ws.length - 1] : "";
+    };
+    const works = [...this.seedBooks, ...Object.values(this.lib.books).filter((b) => !this.seedBooks.some((s) => s.id === b.id)), ...[...this.shelfItems.values()].filter(({ item }) => this.canonical(item.id) === item.id && !this.hidden.has(item.id)).map(({ item }) => item)];
+    const groups = new Map();
+    for (const w of works) {
+      const t = main(w.title);
+      const a = surname(w.author);
+      if (!a || t.length < 4 || w.bundle) continue;
+      const key = `${a}|${t}`;
+      (groups.get(key) || groups.set(key, new Map()).get(key)).set(this.canonical(w.id), w);
+    }
+    const out = [];
+    for (const g of groups.values()) {
+      const ids = [...g.keys()];
+      if (ids.length < 2) continue;
+      // A translation pair (linked already) is one work in two languages, not a duplicate.
+      if (ids.length === 2 && this.translations?.get(ids[0])?.has(ids[1])) continue;
+      if (ids.length === 2 && (no.has(`${ids[0]}|${ids[1]}`) || no.has(`${ids[1]}|${ids[0]}`))) continue;
+      out.push(
+        ids.map((id) => {
+          const b = this.book(id);
+          const si = this.shelfItems.get(id);
+          return { id, title: b?.title || g.get(id).title, author: b?.author || "", href: this.href(id), source: this.lib.books[id]?.source || (si ? si.shelf.name : "books.md"), readers: this.readersOf(id).length, editions: (this.editions.get(id) || []).length };
+        })
+      );
+    }
+    return out.sort((a, b) => b.reduce((n, x) => n + x.readers, 0) - a.reduce((n, x) => n + x.readers, 0));
+  }
+
   // ---- canonical URLs ----
   // Every work has one address, /book/<slug>, built from its title (the Books.md ids already are
   // such slugs); an edition id or an old address redirects there. A slug, once given, is kept in the
@@ -451,7 +493,8 @@ class Store {
     // The title for that compares without a note on the edition in brackets: Старий Лев sells
     // «Тигролови (м'яка обкладинка)» and «Тигролови (в-во Віхола)» next to «Тигролови». A bracket with
     // a number or a volume word («(том 2)», «(1984)») stays, so volumes never fold into one book.
-    const workTitle = (t) => norm(String(t || "").replace(/\s*\(([^()]*)\)/g, (m, inner) => (/\d|том|книга|частина|част\./i.test(inner) ? m : "")));
+    // A genre word after the title («Колгосп тварин: Казка», «Тигролови. Роман») is not part of it either.
+    const workTitle = (t) => norm(String(t || "").replace(/\s*\(([^()]*)\)/g, (m, inner) => (/\d|том|книга|частина|част\./i.test(inner) ? m : "")).replace(GENRE, ""));
     const titled = new Map(); // work title -> Set of authors, for the items that have none
     for (const si of this.shelfItems.values()) {
       const it = si.item;

@@ -420,6 +420,15 @@ function series(book, inLibrary) {
     .join("")}</ul></section>`;
 }
 
+// /admin/dupes (owner): works that look like one book twice, for a human to judge.
+function dupesPage({ user, groups }) {
+  const row = (b) => `<li><a href="${attr(b.href)}">${esc(b.title)}</a> <span class="muted">${esc([b.author, b.source, b.readers ? count(b.readers, "читач", "читачі", "читачів") : "", b.editions > 1 ? count(b.editions, "видання", "видання", "видань") : ""].filter(Boolean).join(" · "))}</span></li>`;
+  const body = `<h1>Схожі на дублі <span class="muted">${groups.length}</span></h1>
+<p class="muted">Один автор, одна головна назва, але різні сторінки. Пари, які справді різні, записуються в web/seed/matches.json як different.</p>
+${groups.map((g) => `<ul class="dupes">${g.map(row).join("")}</ul>`).join("")}`;
+  return layout({ title: "Схожі на дублі", body, user, path: "/admin" });
+}
+
 // /me/book/:id: the one place to edit a book in your library.
 function editPage({ book, entry, user }) {
   const body = `
@@ -1021,6 +1030,7 @@ function messagePage({ title, text, user }) {
 }
 
 module.exports = {
+  dupesPage,
   welcomePage,
   layout, homePage, bookPage, editPage, libraryPage, readersPage, publishersPage, publisherPage, searchPage, searchResults, authorPage,
   loginPage, codePage, signupPage, settingsPage, privacyPage, updatesPage, messagePage, digestPage, followMailPage, importPage, importPreviewPage, importDonePage,
