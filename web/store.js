@@ -229,6 +229,7 @@ class Store {
       /* none */
     }
     for (const [a, b] of pairs) link(this.slugs.get(a) || a, this.slugs.get(b) || b);
+    for (const [a, b] of this.decisions().translations) link(a, b); // the owner's pairs from /admin/dupes
     this.authors = require("./authors").build(this);
   }
 
@@ -619,10 +620,40 @@ class Store {
   decisions() {
     try {
       const d = JSON.parse(this.db.get("merges") || "{}");
-      return { same: Array.isArray(d.same) ? d.same : [], different: Array.isArray(d.different) ? d.different : [] };
+      return { same: Array.isArray(d.same) ? d.same : [], different: Array.isArray(d.different) ? d.different : [], translations: Array.isArray(d.translations) ? d.translations : [] };
     } catch {
-      return { same: [], different: [] };
+      return { same: [], different: [], translations: [] };
     }
+  }
+  // A translation and its original (Max, 2026-10-21: «як доєднати укр переклад до оригіналу»): reading
+  // one counts for the other, as with the pairs in matches.json.
+  decideTranslation(a, b) {
+    const d = this.decisions();
+    a = this.canonical(a);
+    b = this.canonical(b);
+    if (!a || !b || a === b || !this.isWork(a) || !this.isWork(b)) return false;
+    if (!d.translations.some(([x, y]) => (x === a && y === b) || (x === b && y === a))) d.translations.push([a, b]);
+    this.saveDecisions(d);
+    return true;
+  }
+  // Authors with both foreign-titled and Cyrillic-titled books not yet linked as translations: the owner
+  // picks the original for each translation on /admin/dupes.
+  translationCandidates() {
+    const latin = (t) => /[a-z]/i.test(t) && !/[а-яіїєґ]/i.test(t);
+    const cyr = (t) => /[а-яіїєґ]/i.test(t);
+    const out = [];
+    for (const a of this.authors?.list || []) {
+      const books = a.ids.map((id) => this.book(id)).filter(Boolean);
+      const linked = (b, side) => side.some((o) => this.translations.get(b.id)?.has(o.id));
+      const foreign = books.filter((b) => latin(b.title));
+      const uk = books.filter((b) => cyr(b.title));
+      if (!foreign.length || !uk.length) continue;
+      const open = uk.filter((b) => !linked(b, foreign));
+      if (!open.length) continue;
+      const row = (b) => ({ id: b.id, title: b.title, href: b.href, readers: this.readersOf(b.id).length });
+      out.push({ author: { name: a.name, href: a.href }, foreign: foreign.map(row), uk: open.map(row) });
+    }
+    return out.sort((x, y) => y.uk.reduce((n, b) => n + b.readers, 0) + y.foreign.reduce((n, b) => n + b.readers, 0) - x.uk.reduce((n, b) => n + b.readers, 0) - x.foreign.reduce((n, b) => n + b.readers, 0));
   }
   // decide(ids, keep): every id in ids becomes an edition of keep; decide(ids, null): they are different books.
   decide(ids, keep) {

@@ -432,17 +432,18 @@ function series(book, inLibrary) {
 // The buttons post by fetch and the group leaves the page in place (Max: «щоб не перезавантажувала всю
 // довгу сторінку»); the server answers such a post with the decisions list re-rendered.
 function decidedList(decisions, book) {
+  decisions = { translations: [], ...decisions };
   const name = (id) => {
     const b = book(id);
     return b ? `<a href="${attr(b.href)}" target="_blank">${esc(b.title)}</a>` : esc(id);
   };
   const undo = (kind, i) => `<form method="post" action="/admin/dupes/undo" class="inline"><input type="hidden" name="kind" value="${kind}"><input type="hidden" name="index" value="${i}"><button class="text-link small">скасувати</button></form>`;
-  const n = decisions.same.length + decisions.different.length;
+  const n = decisions.same.length + decisions.different.length + decisions.translations.length;
   return `<h2 id="decided">Рішення <span class="muted">${n}</span></h2>
-${n ? `<ul class="decided">${decisions.same.map(([k, d], i) => `<li>${name(d)} <span class="muted">→ видання</span> ${name(k)} ${undo("same", i)}</li>`).join("")}${decisions.different.map(([a, b], i) => `<li>${name(a)} <span class="muted">і</span> ${name(b)} <span class="muted">— різні</span> ${undo("different", i)}</li>`).join("")}</ul>` : `<p class="muted">Поки жодного.</p>`}`;
+${n ? `<ul class="decided">${decisions.same.map(([k, d], i) => `<li>${name(d)} <span class="muted">→ видання</span> ${name(k)} ${undo("same", i)}</li>`).join("")}${decisions.translations.map(([a, b], i) => `<li>${name(a)} <span class="muted">— переклад</span> ${name(b)} ${undo("translations", i)}</li>`).join("")}${decisions.different.map(([a, b], i) => `<li>${name(a)} <span class="muted">і</span> ${name(b)} <span class="muted">— різні</span> ${undo("different", i)}</li>`).join("")}</ul>` : `<p class="muted">Поки жодного.</p>`}`;
 }
 
-function dupesPage({ user, groups, decisions = { same: [], different: [] }, book = () => null, all = false }) {
+function dupesPage({ user, groups, translations = [], decisions = { same: [], different: [], translations: [] }, book = () => null, all = false }) {
   const shown = all ? groups : groups.filter((g) => g.some((b) => b.readers));
   const meta = (b) => [b.author, b.source, b.readers ? count(b.readers, "читач", "читачі", "читачів") : "", b.editions > 1 ? count(b.editions, "видання", "видання", "видань") : ""].filter(Boolean).join(" · ");
   const group = (g) => {
@@ -457,6 +458,18 @@ ${g.map((b) => `<form method="post" action="/admin/dupes/decide" class="dupe-row
 <p class="muted">Один автор, одна головна назва, але різні сторінки. ${all ? `<a class="text-link" href="/admin/dupes">Лише ті, що є в читачів</a>` : `Тут лише ті, що є на чиїйсь полиці; <a class="text-link" href="/admin/dupes?all=1">усі ${groups.length}</a>`}. «Лишити цю» робить решту виданнями цієї книжки: їхні сторінки ведуть на неї, оцінки читачів з’їжджаються. «Різні книжки» прибирає пару зі списку.</p>
 <div id="dupes">${shown.map(group).join("")}</div>
 <p class="muted" id="dupe-none"${shown.length ? ' hidden' : ""}>Нічого схожого не лишилось.</p>
+<h2 id="translations">Переклади? <span class="muted">${translations.reduce((n, t) => n + t.uk.length, 0)}</span></h2>
+<p class="muted">Автори, у яких є книжки і з іноземною, і з кириличною назвою, ще не з’єднані як переклад. Виберіть оригінал для перекладу: прочитане одне зарахується й за інше, а сторінка книжки покаже обидві.</p>
+${translations
+  .map(
+    (t) => `<div class="dupe"><p class="dupe-author"><a href="${attr(t.author.href)}" target="_blank">${esc(t.author.name)}</a></p>
+${t.uk
+  .map(
+    (b) => `<form method="post" action="/admin/dupes/translation" class="dupe-row tr-row"><input type="hidden" name="uk" value="${attr(b.id)}"><span><a href="${attr(b.href)}" target="_blank">${esc(b.title)}</a>${b.readers ? `<span class="muted"> · ${count(b.readers, "читач", "читачі", "читачів")}</span>` : ""}</span><span class="tr-pick"><select name="orig">${t.foreign.map((o) => `<option value="${attr(o.id)}">${esc(o.title)}</option>`).join("")}</select><button class="btn small">Переклад</button></span></form>`
+  )
+  .join("")}</div>`
+  )
+  .join("")}
 <div id="decided-box">${decidedList(decisions, book)}</div>
 </div>
 <script>
@@ -465,7 +478,7 @@ ${g.map((b) => `<form method="post" action="/admin/dupes/decide" class="dupe-row
   const count = document.getElementById("dupe-count");
   document.addEventListener("submit", async (e) => {
     const f = e.target;
-    if (!f.matches(".dupe-row, .dupe-foot, form.inline")) return;
+    if (!f.matches(".dupe-row, .dupe-foot, .tr-row, form.inline")) return;
     e.preventDefault();
     const btn = f.querySelector("button");
     const group = f.closest(".dupe");
@@ -478,9 +491,13 @@ ${g.map((b) => `<form method="post" action="/admin/dupes/decide" class="dupe-row
       const r = await fetch(f.action, { method: "POST", headers: { "X-Requested-With": "fetch" }, body: new URLSearchParams(new FormData(f)) });
       if (!r.ok) throw new Error(r.status);
       const d = await r.json();
-      if (f.matches(".dupe-row, .dupe-foot")) {
+      if (f.matches(".tr-row")) {
+        const g = f.closest(".dupe");
+        f.remove();
+        if (!g.querySelector(".tr-row")) g.remove();
+      } else if (f.matches(".dupe-row, .dupe-foot")) {
         f.closest(".dupe").remove();
-        const n = document.querySelectorAll(".dupe").length;
+        const n = document.querySelectorAll("#dupes .dupe").length;
         count.textContent = n;
         document.getElementById("dupe-none").hidden = n > 0;
       }

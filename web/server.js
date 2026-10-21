@@ -667,7 +667,7 @@ app.get("/admin/ip", owner, async (req, res) => {
     res.type("text").send(`error ${e.message}`);
   }
 });
-app.get("/admin/dupes", owner, (req, res) => res.send(pages.dupesPage({ user: req.user, groups: store.dupes(), decisions: store.decisions(), book: (id) => store.book(id), all: req.query.all === "1" })));
+app.get("/admin/dupes", owner, (req, res) => res.send(pages.dupesPage({ user: req.user, groups: store.dupes(), translations: store.translationCandidates(), decisions: store.decisions(), book: (id) => store.book(id), all: req.query.all === "1" })));
 // The owner's verdict on a group of look-alikes: keep=<id> folds the rest into it, verdict=different keeps them apart.
 const decidedJson = (req, res, back) => (req.get("X-Requested-With") === "fetch" ? res.json({ ok: true, decided: pages.decidedList(store.decisions(), (id) => store.book(id)) }) : res.redirect(back));
 app.post("/admin/dupes/decide", owner, (req, res) => {
@@ -675,8 +675,12 @@ app.post("/admin/dupes/decide", owner, (req, res) => {
   if (ids.length >= 2) store.decide(ids, req.body.verdict === "different" ? null : String(req.body.keep || ""));
   decidedJson(req, res, `/admin/dupes${req.body.all === "1" ? "?all=1" : ""}#top`);
 });
+app.post("/admin/dupes/translation", owner, (req, res) => {
+  store.decideTranslation(String(req.body.uk || ""), String(req.body.orig || ""));
+  decidedJson(req, res, "/admin/dupes#translations");
+});
 app.post("/admin/dupes/undo", owner, (req, res) => {
-  store.undecide(req.body.kind === "different" ? "different" : "same", Number(req.body.index));
+  store.undecide(["different", "translations"].includes(req.body.kind) ? req.body.kind : "same", Number(req.body.index));
   decidedJson(req, res, "/admin/dupes#decided");
 });
 app.get("/digest/status", owner, (req, res) => res.json({ to: digest.to, recipients: digest.recipients().map((r) => `@${r.username}`), lastRun: store.db.get("digest:lastRun"), last: JSON.parse(store.db.get("digest:last") || "null") }));
