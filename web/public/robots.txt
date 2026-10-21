@@ -12,6 +12,5 @@ Disallow: /digest/
 Disallow: /follow-mail/
 Disallow: /refresh-status
 Disallow: /search
-Disallow: /@
 
 Sitemap: https://chytai.org.ua/sitemap.xml
