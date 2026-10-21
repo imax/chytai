@@ -1080,7 +1080,7 @@ const settingsTabs = (on) => `<div class="tabs settings-tabs">${[["account", "А
 function exchangeSettingsPage({ user, values, saved = false }) {
   const form = `<form method="post" action="/settings/exchange" class="form">
   ${saved ? `<p class="saved">Збережено.</p>` : ""}
-  <p class="muted small">Читачі віддають паперові книжки одне одному, без грошей. Увімкнете: у книжки на полиці з'явиться позначка «Віддам», її побачать ті, хто хоче її прочитати, і зможуть попросити листом через сайт. Адресу й телефон ніде не вказуйте, домовитесь у листуванні. <a class="text-link" href="/swap">Що віддають інші</a>.</p>
+  <p class="muted small">Обмін паперовими книжками для користувачів Chytai. <a class="text-link" href="/swap">Що віддають інші</a>.</p>
   <label class="check"><span><input type="checkbox" name="exchange" value="1"${values.exchange ? " checked" : ""}> Беру участь в обміні</span></label>
   <label class="check"><span><input type="checkbox" name="swap_np" value="1"${values.ways?.includes("np") ? " checked" : ""}> Нова пошта</span></label>
   <label class="check"><span><input type="checkbox" name="swap_meet" value="1"${values.ways?.includes("meet") ? " checked" : ""}> Особисто чи на точці обміну</span></label>
