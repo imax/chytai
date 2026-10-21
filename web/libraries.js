@@ -5,7 +5,7 @@
 // Survey of the others: /mnt/project-files/chytai-web/catalogs/libraries.md (most forbid robots).
 // Kyiv: the union catalog of the Лесі Українки public library (ALEPH 500, base LUL01), with the books of
 // all 90 public libraries for adults since 1992. Its robots.txt forbids robots; the library allowed
-// Chytai to link to it on 2026-10-20 and Max opened it to everyone the same day. Its X-Server answers a search
+// Chytai to link to it on 2026-10-20 and to query it «в тестовому режимі», gently, on 2026-10-21. Its X-Server answers a search
 // as XML (/X?op=find, op=present) and lists a record's copies (op=item-data): a branch («Branch39»,
 // collection 039) has no loans in the system, so only that it holds a copy is known; the central library
 // («Loan Dep.», «Stock usage Dep.») shows whether a copy is out. Branch names come from the copies page.
@@ -15,7 +15,7 @@
 const LIBRARIES = [
   { id: "cherkasy", name: "Черкаські міські бібліотеки", city: "Черкаси", base: "https://opac.lib.cherkasy.ua" },
   { id: "uzhhorod", name: "Ужгородська публічна бібліотека", city: "Ужгород", base: "https://lib.itc.gov.ua" },
-  { id: "kyiv", kind: "aleph", name: "Бібліотека ім. Лесі Українки", city: "Київ", base: "http://alpha.lukl.kyiv.ua", home: "http://alpha.lukl.kyiv.ua/F", v: 3 },
+  { id: "kyiv", kind: "aleph", name: "Бібліотека ім. Лесі Українки", city: "Київ", base: "http://alpha.lukl.kyiv.ua", home: "http://alpha.lukl.kyiv.ua/F", v: 3, ttl: 3 * 86400000, perHour: 120 },
 ];
 
 const HEADERS = { "User-Agent": "Mozilla/5.0 (Chytai library lookup; chytai.org.ua)" };
@@ -158,6 +158,27 @@ async function lookupAleph(lib, book, fetchImpl) {
   return records.length ? { id: lib.id, name: lib.name, city: lib.city, records } : null;
 }
 
+// A library that asked us to go easy on its server (Kyiv, 2026-10-21: «сподіваємось, що кількість запитів
+// не перенавантажить наш сервер») gets at most perHour lookups an hour, one at a time.
+const budget = new Map(); // library id -> { hour, used }
+function allowed(lib) {
+  if (!lib.perHour) return true;
+  const hour = Math.floor(Date.now() / 3600000);
+  const b = budget.get(lib.id) || { hour, used: 0 };
+  if (b.hour !== hour) Object.assign(b, { hour, used: 0 });
+  if (b.used >= lib.perHour) return false;
+  b.used++;
+  budget.set(lib.id, b);
+  return true;
+}
+const queues = new Map(); // library id -> the lookup running now
+function gate(lib, fn) {
+  if (!lib.perHour) return fn();
+  const run = (queues.get(lib.id) || Promise.resolve()).then(fn, fn);
+  queues.set(lib.id, run.catch(() => {}));
+  return run;
+}
+
 // Every library's holdings of a book, from the cache when it is less than a day old.
 async function holdings(db, book, { fetchImpl = fetch, log = () => {}, includeDraft = false } = {}) {
   db.exec("CREATE TABLE IF NOT EXISTS library_cache (key TEXT PRIMARY KEY, data TEXT NOT NULL, at INTEGER NOT NULL)");
@@ -166,9 +187,10 @@ async function holdings(db, book, { fetchImpl = fetch, log = () => {}, includeDr
     LIBRARIES.filter((l) => includeDraft || !l.draft).map(async (lib) => {
       const key = `${lib.id}${lib.v ? `@${lib.v}` : ""}:${book.id}`; // v: bumped when a library's answers change shape
       const row = db.prepare("SELECT data, at FROM library_cache WHERE key = ?").get(key);
-      if (row && Date.now() - row.at < DAY) return void (row.data !== "null" && out.push(JSON.parse(row.data)));
+      if (row && Date.now() - row.at < (lib.ttl || DAY)) return void (row.data !== "null" && out.push(JSON.parse(row.data)));
+      if (!allowed(lib)) return void (row && row.data !== "null" && out.push(JSON.parse(row.data))); // over budget: a stale answer or none
       try {
-        const r = await lookupOne(lib, book, fetchImpl);
+        const r = await gate(lib, () => lookupOne(lib, book, fetchImpl));
         db.prepare("INSERT OR REPLACE INTO library_cache (key, data, at) VALUES (?, ?, ?)").run(key, JSON.stringify(r), Date.now());
         if (r) out.push(r);
       } catch (e) {
