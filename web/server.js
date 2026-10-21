@@ -742,4 +742,24 @@ app.post("/api/subscribe/:id", signed, (req, res) => {
   res.redirect(req.get("referer") || "/");
 });
 
-app.listen(PORT, () => console.log(`Chytai web on http://localhost:${PORT}  (library: ${store.file})`));
+app.listen(PORT, () => {
+  console.log(`Chytai web on http://localhost:${PORT}  (library: ${store.file})`);
+  watchdog();
+});
+
+// A process stuck in a CPU loop answers nothing but stays up (2026-10-21: an hour down). A thread beside it
+// watches a heartbeat the main loop writes every 5 s and kills the process after 60 s of silence, so Fly
+// starts it again.
+function watchdog() {
+  const { Worker } = require("worker_threads");
+  const beat = new Int32Array(new SharedArrayBuffer(4));
+  const now = () => Math.floor(Date.now() / 1000);
+  Atomics.store(beat, 0, now());
+  setInterval(() => Atomics.store(beat, 0, now()), 5000).unref();
+  const code = `const { workerData: beat } = require("worker_threads");
+setInterval(() => {
+  const silent = Math.floor(Date.now() / 1000) - Atomics.load(beat, 0);
+  if (silent > 60) { require("fs").writeSync(2, "watchdog: the server has not answered for " + silent + " s, restarting\\n"); process.kill(process.pid, "SIGKILL"); }
+}, 10000);`;
+  new Worker(code, { eval: true, workerData: beat }).unref();
+}

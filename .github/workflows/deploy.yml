@@ -6,7 +6,7 @@ name: Deploy
 on:
   push:
     branches: [main]
-    paths-ignore: ["README.md", "scripts/**", "app/**", "web/**", ".github/workflows/app-*.yml", ".github/workflows/web.yml", ".github/workflows/backup.yml", ".github/workflows/uptime.yml"]
+    paths-ignore: ["README.md", "scripts/**", "app/**", "web/**", ".github/workflows/app-*.yml", ".github/workflows/web.yml", ".github/workflows/backup.yml"]
   workflow_dispatch:
 
 concurrency: deploy
