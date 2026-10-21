@@ -1,2 +1,16 @@
+# Chytai.org.ua. Everything public may be indexed, by search engines and AI crawlers alike.
 User-agent: *
 Disallow: /api/
+Disallow: /login
+Disallow: /logout
+Disallow: /settings
+Disallow: /welcome
+Disallow: /me
+Disallow: /admin
+Disallow: /import
+Disallow: /digest/
+Disallow: /follow-mail/
+Disallow: /refresh-status
+Disallow: /search
+
+Sitemap: https://chytai.org.ua/sitemap.xml

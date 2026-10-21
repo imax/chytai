@@ -55,6 +55,8 @@ function open(dataDir) {
   if (!db.prepare("PRAGMA table_info(entries)").all().some((c) => c.name === "updated")) db.exec("ALTER TABLE entries ADD COLUMN updated TEXT");
   // Whether a reader wants a letter when someone starts following them (Max, 2026-10-20); on by default.
   if (!db.prepare("PRAGMA table_info(readers)").all().some((c) => c.name === "follow_mail")) db.exec("ALTER TABLE readers ADD COLUMN follow_mail INTEGER NOT NULL DEFAULT 1");
+  // Whether search engines may list the reader's page (settings, 2026-10-21); yes by default.
+  if (!db.prepare("PRAGMA table_info(readers)").all().some((c) => c.name === "noindex")) db.exec("ALTER TABLE readers ADD COLUMN noindex INTEGER NOT NULL DEFAULT 0");
   // A work may have several addresses (an old one redirects to the current): the table once made id
   // UNIQUE, so a second slug for an id was silently dropped and lived only in memory (2026-10-21).
   if (db.prepare("PRAGMA index_list(slugs)").all().some((i) => i.unique && i.origin === "u")) {

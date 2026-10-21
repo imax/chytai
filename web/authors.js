@@ -202,4 +202,4 @@ function matchWorks(store, author, works) {
   });
 }
 
-module.exports = { refresh, build, wikidataWorks, matchWorks, splitAuthors };
+module.exports = { refresh, build, wikidataWorks, matchWorks, splitAuthors, allWorks };

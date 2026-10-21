@@ -148,6 +148,9 @@ class Auth {
     const r = this.reader(readerId);
     return !!r && r.follow_mail !== 0;
   }
+  setIndexed(readerId, on) {
+    this.db.prepare("UPDATE readers SET noindex = ? WHERE id = ?").run(on ? 0 : 1, readerId);
+  }
   setFollowMail(readerId, on) {
     this.db.prepare("UPDATE readers SET follow_mail = ? WHERE id = ?").run(on ? 1 : 0, readerId);
   }

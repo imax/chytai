@@ -10,6 +10,11 @@ const crypto = require("crypto");
 // browsers at once.
 const asset = (name) => `/${name}?v=${crypto.createHash("sha1").update(fs.readFileSync(path.join(__dirname, "public", name))).digest("hex").slice(0, 8)}`;
 const ASSETS = { css: asset("style.css"), js: asset("app.js") };
+// The public origin for canonical and Open Graph addresses (search engines want absolute ones).
+const ORIGIN = `https://${process.env.WEB_DOMAIN || "chytai.org.ua"}`;
+// Pages nobody should find through a search engine: one's own, the sign-in flow, the owner's tools and
+// search results (an endless set of addresses). Public pages name their canonical address instead.
+const NOINDEX = new Set(["/search", "/login", "/settings", "/welcome", "/me", "/admin", "/import"]);
 const FONTS = "https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=Onest:wght@400;500;600&display=swap";
 
 const esc = (s) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
@@ -77,7 +82,7 @@ const NAV = [
   ["/publishers", "Видавництва", (p) => p.startsWith("/publishers")],
 ];
 
-function layout({ title, body, user, path = "", description = "", q = "", home = false }) {
+function layout({ title, body, user, path = "", description = "", q = "", home = false, canonical = "", image = "", noindex = false, jsonld = null, type = "website" }) {
   const on = (p) => (p ? ' class="on"' : "");
   const nav = [
     ...NAV.map(([href, name, is]) => `<a href="${href}"${on(is(path))}>${name}</a>`),
@@ -92,6 +97,17 @@ function layout({ title, body, user, path = "", description = "", q = "", home =
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${esc(title ? `${title} · Chytai` : "Chytai · читай більше")}</title>
 ${description ? `<meta name="description" content="${attr(description.slice(0, 200))}">` : ""}
+${noindex || NOINDEX.has(path) ? `<meta name="robots" content="noindex">` : ""}
+${canonical ? `<link rel="canonical" href="${attr(ORIGIN + canonical)}">
+<meta property="og:url" content="${attr(ORIGIN + canonical)}">` : ""}
+<meta property="og:site_name" content="Chytai">
+<meta property="og:locale" content="uk_UA">
+<meta property="og:type" content="${attr(type)}">
+<meta property="og:title" content="${attr(title || "Chytai · читай більше")}">
+${description ? `<meta property="og:description" content="${attr(description.slice(0, 200))}">` : ""}
+<meta property="og:image" content="${attr(image || `${ORIGIN}/icon.png`)}">
+<meta name="twitter:card" content="summary">
+${jsonld ? `<script type="application/ld+json">${JSON.stringify(jsonld).replace(/</g, "\\u003c")}</script>` : ""}
 <link rel="icon" href="/icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -300,7 +316,7 @@ ${showcase.length ? `<section class="showcase">
 </section>` : ""}
 ${librariesBlock(libraries)}
 </div>`;
-  return layout({ title: "", body, user, path: "/", home: true, description: "Що почитати далі: книжки з оцінками й нотатками читачів і новинки українських видавництв." });
+  return layout({ title: "", body, user, path: "/", home: true, canonical: "/", description: "Що почитати далі: книжки з оцінками й нотатками читачів і новинки українських видавництв.", jsonld: { "@context": "https://schema.org", "@type": "WebSite", name: "Chytai", url: ORIGIN, inLanguage: "uk", potentialAction: { "@type": "SearchAction", target: { "@type": "EntryPoint", urlTemplate: `${ORIGIN}/search?q={q}` }, "query-input": "required name=q" } } });
 }
 
 function showcaseColumn({ shelf, items, fresh, total, subscribed }, user) {
@@ -321,6 +337,32 @@ function librariesBlock(libraries) {
 }
 
 // ---- book (/book/:id) ----
+
+// Schema.org for the book page: the work with its rating and readers' notes as reviews (they are public
+// on the page already; structured data lets Google show the stars and lets AI search quote them).
+function bookLd(book, shelf, s, readers) {
+  const { splitAuthors } = require("./authors");
+  const isbn = book.isbn || (book.editions || []).map((e) => e.isbn).find(Boolean) || "";
+  const ld = {
+    "@context": "https://schema.org",
+    "@type": "Book",
+    name: book.title,
+    url: ORIGIN + book.href,
+    ...(book.altTitle ? { alternateName: book.altTitle } : {}),
+    ...(book.author ? { author: splitAuthors(book.author).map((n) => ({ "@type": "Person", name: n, ...(authorHref(n) ? { url: ORIGIN + authorHref(n) } : {}) })) } : {}),
+    ...(isbn ? { isbn } : {}),
+    ...(isUk(book) ? { inLanguage: "uk" } : {}),
+    ...(book.cover ? { image: book.cover } : {}),
+    ...(book.published ? { datePublished: String(book.published) } : {}),
+    ...(book.pages ? { numberOfPages: book.pages } : {}),
+    ...(shelf ? { publisher: { "@type": "Organization", name: shelf.name } } : {}),
+    ...(book.blurb ? { description: book.blurb.replace(/\s+/g, " ").slice(0, 500) } : {}),
+  };
+  if (s.avg != null && s.rated) ld.aggregateRating = { "@type": "AggregateRating", ratingValue: s.avg, ratingCount: s.rated, bestRating: 5, worstRating: 1 };
+  const reviews = readers.filter((r) => r.entry.note).slice(0, 5).map((r) => ({ "@type": "Review", author: { "@type": "Person", name: r.name, url: ORIGIN + r.href.replace(/#.*$/, "") }, reviewBody: stripMd(r.entry.note).slice(0, 1000), ...(r.entry.rating != null ? { reviewRating: { "@type": "Rating", ratingValue: r.entry.rating, bestRating: 5, worstRating: 1 } } : {}) }));
+  if (reviews.length) ld.review = reviews;
+  return ld;
+}
 
 // The book, the reader's own buttons, where to get it, what readers said, what it is about.
 function bookPage({ book, entry, user, shelf, inLibrary = new Map(), readers = [], also = [] }) {
@@ -362,7 +404,7 @@ function bookPage({ book, entry, user, shelf, inLibrary = new Map(), readers = [
   </aside>
 </div>`;
   const description = [book.author, book.blurb?.replace(/\s+/g, " ") || stripMd(readers.find((r) => r.entry.note)?.entry.note || "")].filter(Boolean).join(". ");
-  return layout({ title: book.title, body, user, path: "/book", description });
+  return layout({ title: book.title, body, user, path: "/book", description, canonical: book.href, image: book.cover || "", type: "book", noindex: require("./store").isRussian(book), jsonld: bookLd(book, shelf, s, readers) });
 }
 
 // A book's other-language pages (Max, 2026-10-21: «дві сторінки і спільні оцінки»): the original under a
@@ -662,7 +704,7 @@ ${list}
   </aside>
 </div>
 ${own ? addDialog() : ""}`;
-  return layout({ title: own ? "Моя полиця" : reader.name, body, user, path: own ? "/me" : "/@", description: own ? "" : `Книжки, які читає ${reader.name}: оцінки й нотатки.` });
+  return layout({ title: own ? "Моя полиця" : reader.name, body, user, path: own ? "/me" : "/@", canonical: own ? "" : reader.href, noindex: !own && !!reader.noindex, description: own ? "" : `Книжки, які читає ${reader.name}: ${books(rows.length)}, оцінки й нотатки.`, jsonld: own ? null : { "@context": "https://schema.org", "@type": "ProfilePage", mainEntity: { "@type": "Person", name: reader.name, url: ORIGIN + reader.href } } });
 }
 
 // «Стежити» on another reader's page (the design's secondary button); pressed, it reads «✓ Стежу».
@@ -714,7 +756,7 @@ ${pageHead({ kicker: "Спільнота", title: "Що читають інші"
     <p class="small muted">Полиці відкриті для всіх.</p>
   </aside>
 </div>`;
-  return layout({ title: "Читачі", body, user, path: "/community", description: "Що читають інші: оцінки й нотатки читачів Chytai." });
+  return layout({ title: "Читачі", body, user, path: "/community", canonical: "/community", description: "Що читають інші: оцінки й нотатки читачів Chytai." });
 }
 
 // ---- publishers (/publishers, /publishers/:id) ----
@@ -747,7 +789,7 @@ ${pageHead({ kicker: "Вітрина", title: "Українські видавн
   <p class="muted end-note">Видавництво, якого тут немає? <a class="text-link" href="mailto:ischenko@gmail.com">Напиши нам</a>, під’єднаємо.</p>
 </section>
 ${librariesBlock(libraries)}`;
-  return layout({ title: "Видавництва", body, user, path: "/publishers", description: "Новинки українських видавництв щодня." });
+  return layout({ title: "Видавництва", body, user, path: "/publishers", canonical: "/publishers", description: "Новинки українських видавництв щодня." });
 }
 
 function publisherPage({ shelf, subscribed, user, fresh, feed, others, visible = (s) => s.items }) {
@@ -785,7 +827,7 @@ ${items.map((it) => card(it, { data: ` data-genre="${attr((it.genres || []).join
     ${others.length ? `${label("Інші видавництва")}<div class="others-list">${others.map((o) => `<a href="/publishers/${attr(o.shelf.id)}"><b>${esc(o.shelf.name)}</b><span>${books(o.total)}</span></a>`).join("")}</div>` : ""}
   </aside>
 </div>`;
-  return layout({ title: shelf.name, body, user, path: "/publishers" });
+  return layout({ title: shelf.name, body, user, path: "/publishers", canonical: `/publishers/${encodeURIComponent(shelf.id)}`, description: `${shelf.tagline}. ${books(items.length)} на Chytai: оцінки й нотатки читачів, де взяти.`, jsonld: { "@context": "https://schema.org", "@type": "Organization", name: shelf.name, url: shelf.url, ...(shelf.tagline ? { description: shelf.tagline } : {}) } });
 }
 
 // ---- search (/search) ----
@@ -898,7 +940,8 @@ ${pageHead({ kicker: "Автор", title: esc(author.name), lead: author.other ?
     ${also.length ? `${label(`Читачі ${esc(lastName(author.name))} також люблять`)}${minis(also)}` : ""}
   </aside>
 </div>${pairScript}`;
-  return layout({ title: author.name, body, user, path: "/author" });
+  const ld = { "@context": "https://schema.org", "@type": "Person", name: author.name, url: ORIGIN + author.href, ...(author.other ? { alternateName: author.other } : {}), ...(author.qid ? { sameAs: `https://www.wikidata.org/wiki/${author.qid}` } : {}) };
+  return layout({ title: author.name, body, user, path: "/author", canonical: author.href, description: `Книжки ${author.name} на Chytai: ${books(hits.length)}${inUk && inUk < hits.length ? `, ${inUk} українською` : ""}, оцінки й нотатки читачів, де взяти.`, jsonld: ld });
 }
 const lastName = (name) => {
   const w = String(name).split(" ");
@@ -988,6 +1031,7 @@ function settingsPage({ user, values, error = "", suggested = "", saved = false 
   <label>Пошта для входу<input type="email" name="email" value="${attr(values.email || "")}" ${user.owner ? "" : "required"} autocomplete="email"></label>
   <label class="check"><span><input type="checkbox" name="digest" value="1"${values.digest ? " checked" : ""}> Щотижневий лист</span><span class="hint">У п'ятницю вранці: що читають ті, за ким ви стежите, новинки видавництв, на які ви підписані, і де з'явились книжки з «Хочу прочитати». Приходить лише коли є що розповісти.</span></label>
   <label class="check"><span><input type="checkbox" name="follow_mail" value="1"${values.followMail ? " checked" : ""}> Лист, коли хтось починає стежити за мною</span><span class="hint">Один короткий лист з іменем читача, перший раз.</span></label>
+  <label class="check"><span><input type="checkbox" name="indexed" value="1"${values.indexed ? " checked" : ""}> Показувати мою полицю в пошуковиках</span><span class="hint">Якщо вимкнути, Google та інші не показуватимуть сторінку chytai.org.ua/@${esc(values.username || user.username)} у результатах. За посиланням вона відкривається як і раніше.</span></label>
   <div class="actions"><button class="btn primary">Зберегти</button><a class="text-link small" href="${attr(user.href)}">Моя сторінка</a>${user.owner ? `<a class="text-link small" href="/admin">Статистика</a>` : ""}<span class="grow"></span><a class="text-link small" href="/logout">Вийти</a></div>
 </form>
 <section class="form import-box">
@@ -1006,7 +1050,7 @@ ${user.owner ? "" : `<form method="post" action="/settings/delete" class="form d
 
 // Max (2026-10-20): any new outside service that sees readers' data (mail, hosting, fonts, analytics, AI) must be added here.
 function privacyPage({ user }) {
-  return layout({ title: "Приватність", user, path: "/privacy", description: "Що Chytai.org.ua зберігає про читачів, хто це бачить і як усе видалити.", body: `<section class="auth prose"><h1>Приватність</h1>
+  return layout({ title: "Приватність", user, path: "/privacy", canonical: "/privacy", description: "Що Chytai.org.ua зберігає про читачів, хто це бачить і як усе видалити.", body: `<section class="auth prose"><h1>Приватність</h1>
 <p>Chytai.org.ua це проєкт для тих, хто любить читати.</p>
 <h2>Що ми зберігаємо</h2>
 <p>Не зберігаємо нічого, якщо ви просто дивитесь сайт без реєстрації. Не ставимо кукіс і не підключаємо чужих лічильників, тільки загальна статистика відвідуваності.</p>
@@ -1048,7 +1092,7 @@ function updatesPage({ user }) {
   const file = path.join(__dirname, "updates.md");
   const mtime = fs.statSync(file).mtimeMs;
   if (mtime !== updatesCache.mtime) updatesCache = { mtime, html: marked.parse(fs.readFileSync(file, "utf8").replace(/<!--[\s\S]*?-->/g, "")) };
-  return layout({ title: "Що нового", user, path: "/updates", description: "Що змінилось на Chytai.org.ua і куди він рухається.", body: `<section class="auth prose updates"><h1>Що нового</h1>
+  return layout({ title: "Що нового", user, path: "/updates", canonical: "/updates", description: "Що змінилось на Chytai.org.ua і куди він рухається.", body: `<section class="auth prose updates"><h1>Що нового</h1>
 ${updatesCache.html}
 </section>` });
 }
@@ -1168,7 +1212,7 @@ function digestPage({ on, action, user }) {
 }
 
 function messagePage({ title, text, user }) {
-  return layout({ title, body: pageHead({ title: esc(title), sub: esc(text) }), user });
+  return layout({ title, body: pageHead({ title: esc(title), sub: esc(text) }), user, noindex: true });
 }
 
 module.exports = {

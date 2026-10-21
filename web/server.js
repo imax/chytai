@@ -10,7 +10,7 @@
 const express = require("express");
 const fs = require("fs");
 const path = require("path");
-const { Store, OWNER: OWNER_ID, slugify } = require("./store");
+const { Store, OWNER: OWNER_ID, slugify, isRussian } = require("./store");
 const { Auth } = require("./auth");
 const pages = require("./pages");
 const catalogs = require("./catalogs");
@@ -107,13 +107,15 @@ const app = express();
 app.set("trust proxy", true);
 app.use(express.urlencoded({ extended: false, limit: "1mb" }));
 app.use(express.json({ limit: "1mb" }));
-app.use(express.static(path.join(__dirname, "public"), { maxAge: "1h" }));
+app.use(require("compression")()); // pages are 50–150 KB of HTML; gzip cuts that about five times
+// Style and script addresses carry a content hash (pages.js asset()), so they can live in caches for a year.
+app.use(express.static(path.join(__dirname, "public"), { maxAge: "1y", immutable: true }));
 app.get("/icon.png", (req, res) => res.sendFile(path.join(ROOT, "build", "icon.png")));
 
 // ---- auth: readers signed in by a code sent to their e-mail (auth.js) ----
 
 // A reader as the pages see them: name, username and the address of their page.
-const pub = (r) => (r ? { id: r.id, name: r.name, username: r.username, href: `/@${r.username}`, owner: r.id === OWNER_ID, email: r.email } : null);
+const pub = (r) => (r ? { id: r.id, name: r.name, username: r.username, href: `/@${r.username}`, owner: r.id === OWNER_ID, email: r.email, noindex: !!r.noindex } : null);
 function cookies(req) {
   return Object.fromEntries((req.headers.cookie || "").split(";").map((c) => c.trim().split("=")).filter((p) => p[0]).map(([k, ...v]) => [k, decodeURIComponent(v.join("="))]));
 }
@@ -199,7 +201,7 @@ app.get("/updates", (req, res) => res.send(pages.updatesPage({ user: req.user })
 // ---- settings: name, username, e-mail, deleting the account ----
 
 app.get("/settings", signed, (req, res) => {
-  res.send(pages.settingsPage({ user: req.user, values: { ...req.user, digest: digest.enabled(req.user.id), followMail: auth.followMailEnabled(req.user.id) }, suggested: auth.suggestUsername(req.user.name, slugify), saved: !!req.query.saved }));
+  res.send(pages.settingsPage({ user: req.user, values: { ...req.user, digest: digest.enabled(req.user.id), followMail: auth.followMailEnabled(req.user.id), indexed: !req.user.noindex }, suggested: auth.suggestUsername(req.user.name, slugify), saved: !!req.query.saved }));
 });
 app.post("/settings", signed, (req, res) => {
   const name = auth.checkName(req.body.name);
@@ -207,11 +209,12 @@ app.post("/settings", signed, (req, res) => {
   const email = req.body.email ? auth.checkEmail(req.body.email) : { email: req.user.email };
   const taken = email.email && auth.byEmail(email.email) && auth.byEmail(email.email).id !== req.user.id;
   const error = name.error || username.error || email.error || (taken ? "Ця пошта вже зайнята іншим читачем." : "");
-  const values = { ...req.user, name: req.body.name, username: req.body.username, email: req.body.email, digest: !!req.body.digest, followMail: !!req.body.follow_mail };
+  const values = { ...req.user, name: req.body.name, username: req.body.username, email: req.body.email, digest: !!req.body.digest, followMail: !!req.body.follow_mail, indexed: !!req.body.indexed };
   if (error) return res.status(400).send(pages.settingsPage({ user: req.user, values, error }));
   auth.updateReader(req.user.id, { name: name.name, username: username.username, email: email.email || null });
   digest.setEnabled(req.user.id, !!req.body.digest);
   auth.setFollowMail(req.user.id, !!req.body.follow_mail);
+  auth.setIndexed(req.user.id, !!req.body.indexed);
   res.redirect("/settings?saved=1");
 });
 app.post("/settings/delete", signed, (req, res) => {
@@ -513,6 +516,28 @@ app.get("/search", (req, res) => {
 app.get("/api/search", (req, res) => {
   const q = String(req.query.q || "").trim().slice(0, 100);
   res.set("Cache-Control", "no-store").send(pages.searchResults({ q, user: req.user, ...searchAll(req, q) }));
+});
+
+// The sitemap: every public page, so search engines need not discover 16 thousand books by links.
+// Built at most once an hour and kept in memory (walking the catalog takes a moment; crawlers ask often).
+// Left out: books in Russian, draft sources, readers who switched search engines off in settings.
+let sitemap = { at: 0, xml: "" };
+app.get("/sitemap.xml", (req, res) => {
+  if (Date.now() - sitemap.at > 3600 * 1000) {
+    const t0 = Date.now();
+    const origin = `https://${DOMAIN || req.get("host")}`;
+    const urls = ["/", "/community", "/publishers", "/updates", "/privacy"];
+    for (const shelf of store.shelves) if (!shelf.draft) urls.push(`/publishers/${encodeURIComponent(shelf.id)}`);
+    for (const w of authors.allWorks(store)) {
+      const b = store.book(w.id);
+      if (b && !isRussian(b)) urls.push(b.href);
+    }
+    for (const a of store.authors?.list || []) urls.push(a.href);
+    for (const r of auth.readers()) if (!r.noindex) urls.push(`/@${r.username}`);
+    sitemap = { at: Date.now(), xml: `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls.map((u) => `<url><loc>${pages.esc(origin + u)}</loc></url>`).join("\n")}\n</urlset>\n` };
+    console.log(`sitemap: ${urls.length} addresses in ${Date.now() - t0} ms`);
+  }
+  res.type("application/xml").set("Cache-Control", "public, max-age=3600").send(sitemap.xml);
 });
 
 app.get("/book/:id", (req, res) => {
