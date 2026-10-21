@@ -644,6 +644,15 @@ app.get("/admin/google", owner, async (req, res) => {
     res.type("text").send(`error ${e.message}`);
   }
 });
+// The address Google and others see this server from (Fly's shared egress), for the owner.
+app.get("/admin/ip", owner, async (req, res) => {
+  try {
+    const r = await fetch("https://api.ipify.org?format=json", { signal: AbortSignal.timeout(10000) });
+    res.type("text").send(`ipv4 ${(await r.json()).ip}\n`);
+  } catch (e) {
+    res.type("text").send(`error ${e.message}`);
+  }
+});
 app.get("/admin/dupes", owner, (req, res) => res.send(pages.dupesPage({ user: req.user, groups: store.dupes(), decisions: store.decisions(), book: (id) => store.book(id), all: req.query.all === "1" })));
 // The owner's verdict on a group of look-alikes: keep=<id> folds the rest into it, verdict=different keeps them apart.
 app.post("/admin/dupes/decide", owner, (req, res) => {
