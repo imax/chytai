@@ -420,13 +420,33 @@ function series(book, inLibrary) {
     .join("")}</ul></section>`;
 }
 
-// /admin/dupes (owner): works that look like one book twice, for a human to judge.
-function dupesPage({ user, groups, all = false }) {
+// /admin/dupes (owner): works that look like one book twice, for a human to judge (Max, 2026-10-21:
+// «потрібна нормальна адмінка, щоб я міг сказати що об'єднувати а що ні»). Each group has a button per
+// book, «лишити цю» (the rest become its editions), and one «різні книжки»; decisions can be undone.
+function dupesPage({ user, groups, decisions = { same: [], different: [] }, book = () => null, all = false }) {
   const shown = all ? groups : groups.filter((g) => g.some((b) => b.readers));
-  const row = (b) => `<li><a href="${attr(b.href)}">${esc(b.title)}</a> <span class="muted">${esc([b.author, b.source, b.readers ? count(b.readers, "читач", "читачі", "читачів") : "", b.editions > 1 ? count(b.editions, "видання", "видання", "видань") : ""].filter(Boolean).join(" · "))}</span></li>`;
-  const body = `<h1>Схожі на дублі <span class="muted">${shown.length}</span></h1>
-<p class="muted">Один автор, одна головна назва, але різні сторінки. ${all ? `<a class="text-link" href="/admin/dupes">Лише ті, що є в читачів</a>` : `Тут лише ті, що є на чиїйсь полиці; <a class="text-link" href="/admin/dupes?all=1">усі ${groups.length}</a>`}. Пари, які справді різні, записуються в web/seed/matches.json як different; однакові — як same.</p>
-${shown.map((g) => `<ul class="dupes">${g.map(row).join("")}</ul>`).join("")}`;
+  const meta = (b) => [b.author, b.source, b.readers ? count(b.readers, "читач", "читачі", "читачів") : "", b.editions > 1 ? count(b.editions, "видання", "видання", "видань") : ""].filter(Boolean).join(" · ");
+  const group = (g) => {
+    const ids = g.map((b) => b.id).join(",");
+    return `<div class="dupe">
+${g.map((b) => `<form method="post" action="/admin/dupes/decide" class="dupe-row"><input type="hidden" name="ids" value="${attr(ids)}"><input type="hidden" name="keep" value="${attr(b.id)}"><input type="hidden" name="all" value="${all ? "1" : ""}"><span><a href="${attr(b.href)}" target="_blank">${esc(b.title)}</a><span class="muted"> · ${esc(meta(b))}</span></span><button class="btn small" title="Решта стануть виданнями цієї книжки">Лишити цю</button></form>`).join("")}
+<form method="post" action="/admin/dupes/decide" class="dupe-foot"><input type="hidden" name="ids" value="${attr(ids)}"><input type="hidden" name="verdict" value="different"><input type="hidden" name="all" value="${all ? "1" : ""}"><button class="btn small ghost">Різні книжки</button></form>
+</div>`;
+  };
+  const name = (id) => {
+    const b = book(id);
+    return b ? `<a href="${attr(b.href)}" target="_blank">${esc(b.title)}</a>` : esc(id);
+  };
+  const undo = (kind, i) => `<form method="post" action="/admin/dupes/undo" class="inline"><input type="hidden" name="kind" value="${kind}"><input type="hidden" name="index" value="${i}"><button class="text-link small">скасувати</button></form>`;
+  const decided = decisions.same.length + decisions.different.length;
+  const body = `<div class="admin" id="top">
+<h1>Схожі на дублі <span class="muted">${shown.length}</span></h1>
+<p class="muted">Один автор, одна головна назва, але різні сторінки. ${all ? `<a class="text-link" href="/admin/dupes">Лише ті, що є в читачів</a>` : `Тут лише ті, що є на чиїйсь полиці; <a class="text-link" href="/admin/dupes?all=1">усі ${groups.length}</a>`}. «Лишити цю» робить решту виданнями цієї книжки: їхні сторінки ведуть на неї, оцінки читачів з’їжджаються. «Різні книжки» прибирає пару зі списку.</p>
+${shown.map(group).join("")}
+${shown.length ? "" : `<p class="muted">Нічого схожого не лишилось.</p>`}
+<h2 id="decided">Рішення <span class="muted">${decided}</span></h2>
+${decided ? `<ul class="decided">${decisions.same.map(([k, d], i) => `<li>${name(d)} <span class="muted">→ видання</span> ${name(k)} ${undo("same", i)}</li>`).join("")}${decisions.different.map(([a, b], i) => `<li>${name(a)} <span class="muted">і</span> ${name(b)} <span class="muted">— різні</span> ${undo("different", i)}</li>`).join("")}</ul>` : `<p class="muted">Поки жодного.</p>`}
+</div>`;
   return layout({ title: "Схожі на дублі", body, user, path: "/admin" });
 }
 

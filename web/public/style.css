@@ -511,4 +511,12 @@ dialog .form { margin-top: 18px; }
 .updates a { color: var(--ink); text-decoration: underline; text-decoration-color: var(--under); text-underline-offset: 4px; }
 .updates h2 { font-size: 22px; }
 .updates li { margin-top: 6px; }
-.dupes{margin:0 0 18px;padding-left:18px}.dupes li{margin:2px 0}
+.dupe { border: 1px solid var(--rule); padding: 4px 14px 10px; margin: 0 0 12px; max-width: 760px; }
+.dupe-row { display: flex; gap: 12px; align-items: center; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid var(--rule); }
+.dupe-row .btn, .dupe-foot .btn { flex: none; }
+.dupe-foot { padding-top: 10px; }
+.btn.ghost { background: transparent; color: var(--muted); border-color: var(--rule); }
+.decided { padding-left: 18px; max-width: 760px; }
+.decided li { margin: 4px 0; }
+form.inline { display: inline; }
+form.inline button { background: none; border: 0; padding: 0; cursor: pointer; font: inherit; }

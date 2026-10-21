@@ -629,7 +629,17 @@ app.get("/admin/google", owner, async (req, res) => {
     res.type("text").send(`error ${e.message}`);
   }
 });
-app.get("/admin/dupes", owner, (req, res) => res.send(pages.dupesPage({ user: req.user, groups: store.dupes(), all: req.query.all === "1" })));
+app.get("/admin/dupes", owner, (req, res) => res.send(pages.dupesPage({ user: req.user, groups: store.dupes(), decisions: store.decisions(), book: (id) => store.book(id), all: req.query.all === "1" })));
+// The owner's verdict on a group of look-alikes: keep=<id> folds the rest into it, verdict=different keeps them apart.
+app.post("/admin/dupes/decide", owner, (req, res) => {
+  const ids = String(req.body.ids || "").split(",").filter(Boolean);
+  if (ids.length >= 2) store.decide(ids, req.body.verdict === "different" ? null : String(req.body.keep || ""));
+  res.redirect(`/admin/dupes${req.body.all === "1" ? "?all=1" : ""}#top`);
+});
+app.post("/admin/dupes/undo", owner, (req, res) => {
+  store.undecide(req.body.kind === "different" ? "different" : "same", Number(req.body.index));
+  res.redirect("/admin/dupes#decided");
+});
 app.get("/digest/status", owner, (req, res) => res.json({ to: digest.to, recipients: digest.recipients().map((r) => `@${r.username}`), lastRun: store.db.get("digest:lastRun"), last: JSON.parse(store.db.get("digest:last") || "null") }));
 
 app.post("/api/subscribe/:id", signed, (req, res) => {

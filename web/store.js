@@ -305,15 +305,16 @@ class Store {
     try {
       different = readJson(path.join(SEED, "matches.json")).different || [];
     } catch {}
-    const no = new Set(different.map((p) => p.join("|")));
+    const no = new Set([...different, ...this.decisions().different].map((p) => p.join("|")));
     // The main title is what stands before a colon or a sentence dot; a tail with a number (a volume,
     // a part, «Vol. 2») is left alone, since volumes are different books.
     const main = (t) => {
       const [head, ...tail] = String(t || "").replace(GENRE, "").replace(/\s*\([^()]*\)/g, "").split(/:|\.\s/);
       return /\d/.test(tail.join(" ")) ? "" : norm(head);
     };
+    // The first author's surname: «Erik Brynjolfsson, Andrew McAfee» and «Erik Brynjolfsson» are one.
     const surname = (a) => {
-      const ws = norm(a).split(/\s+and\s+|\s*[,&;]\s*| /).filter((w) => w.length >= 3);
+      const ws = norm(String(a || "").split(/\s+and\s+|\s*[,&;]\s*/)[0]).split(" ").filter((w) => w.length >= 3);
       return ws.length ? ws[ws.length - 1] : "";
     };
     const works = [...this.seedBooks, ...Object.values(this.lib.books).filter((b) => !this.seedBooks.some((s) => s.id === b.id)), ...[...this.shelfItems.values()].filter(({ item }) => this.canonical(item.id) === item.id && !this.hidden.has(item.id)).map(({ item }) => item)];
@@ -321,7 +322,7 @@ class Store {
     for (const w of works) {
       const t = main(w.title);
       const a = surname(w.author);
-      if (!a || t.length < 4 || w.bundle) continue;
+      if (!a || t.length < 4 || w.bundle || this.canonical(w.id) !== w.id) continue;
       const key = `${a}|${t}`;
       (groups.get(key) || groups.set(key, new Map()).get(key)).set(this.canonical(w.id), w);
     }
@@ -403,7 +404,7 @@ class Store {
   // in as extra text). FTS5 with prefix matching ranks title over author over series; when that finds
   // nothing, a trigram index catches a word typed from its middle («кирпат» in «Кирпатого»).
   indexSearch() {
-    const ids = new Set([...this.seedBooks.map((b) => b.id), ...Object.keys(this.lib.books), ...[...this.shelfItems.keys()].filter((id) => this.canonical(id) === id && !this.hidden.has(id))]);
+    const ids = new Set([...this.seedBooks.map((b) => b.id), ...Object.keys(this.lib.books), ...[...this.shelfItems.keys()].filter((id) => this.canonical(id) === id && !this.hidden.has(id))].filter((id) => this.canonical(id) === id));
     const db = this.db;
     db.tx(() => {
       db.exec("DELETE FROM search; DELETE FROM search_tri;");
@@ -474,7 +475,8 @@ class Store {
     } catch {
       /* no hand-confirmed matches */
     }
-    const no = new Set(matches.different.map((p) => p.join("|")));
+    const decided = this.decisions();
+    const no = new Set([...matches.different, ...decided.different].map((p) => p.join("|")));
 
     // 1. Shelf items that share an ISBN or an author+title are one work.
     const groups = new Map(); // key -> group (array of {shelf,item})
@@ -589,7 +591,63 @@ class Store {
       }
       seen.add(canonical);
     }
+    // 3. What the owner decided on /admin/dupes: [keep, dup] pairs; dup and everything folded into it
+    // become editions of keep, whichever kind of work each is (a shelf item or a library book).
+    for (const [keep, dup] of decided.same) {
+      const k = this.canonical(keep);
+      const d = this.canonical(dup);
+      if (k === d || !this.isWork(k) || !this.isWork(d)) continue;
+      for (const [alias, c] of this.aliases) if (c === d) this.aliases.set(alias, k);
+      this.aliases.set(d, k);
+      const eds = [...(this.editions.get(k) || []), ...(this.editions.get(d) || [])];
+      const dsi = this.shelfItems.get(d);
+      if (dsi && !eds.includes(dsi)) eds.push(dsi);
+      const ksi = this.shelfItems.get(k);
+      if (ksi && !eds.includes(ksi)) eds.unshift(ksi);
+      if (eds.length) this.editions.set(k, eds);
+      this.editions.delete(d);
+    }
     this.linkSeries(matches.volumes || {});
+  }
+
+  // Is this id a work we know: a library book or a shelf item?
+  isWork(id) {
+    return !!(this.lib.books[id] || this.seedBooks.some((b) => b.id === id) || this.shelfItems.has(id));
+  }
+
+  // ---- the owner's decisions on look-alikes (/admin/dupes), kept in meta `merges` ----
+  decisions() {
+    try {
+      const d = JSON.parse(this.db.get("merges") || "{}");
+      return { same: Array.isArray(d.same) ? d.same : [], different: Array.isArray(d.different) ? d.different : [] };
+    } catch {
+      return { same: [], different: [] };
+    }
+  }
+  // decide(ids, keep): every id in ids becomes an edition of keep; decide(ids, null): they are different books.
+  decide(ids, keep) {
+    const d = this.decisions();
+    ids = [...new Set(ids.map((id) => this.canonical(id)))];
+    if (keep) {
+      keep = this.canonical(keep);
+      for (const id of ids) if (id !== keep && !d.same.some(([k, x]) => k === keep && x === id)) d.same.push([keep, id]);
+    } else {
+      for (let i = 0; i < ids.length; i++) for (let j = i + 1; j < ids.length; j++) if (!d.different.some(([a, b]) => (a === ids[i] && b === ids[j]) || (a === ids[j] && b === ids[i]))) d.different.push([ids[i], ids[j]]);
+    }
+    this.saveDecisions(d);
+  }
+  undecide(kind, index) {
+    const d = this.decisions();
+    if (d[kind]) d[kind].splice(index, 1);
+    this.saveDecisions(d);
+  }
+  saveDecisions(d) {
+    this.db.set("merges", JSON.stringify(d));
+    this.linkEditions();
+    this.migrateEntries();
+    this.linkTranslations();
+    this._works = null;
+    this.indexSearch();
   }
 
   // ---- series ----
