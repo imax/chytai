@@ -216,8 +216,9 @@ const weekLabel = (w) => `${short(w)} – ${short(addDays(w, 6))}`;
 const tile = (value, label, sub = "") => `<div class="stat"><b>${value}</b><span>${label}</span>${sub ? `<small>${sub}</small>` : ""}</div>`;
 const pct = (c) => (c === null ? `<td class="na">·</td>` : `<td class="pct${c.partial ? " partial" : ""}${c.pct >= 50 ? " hi" : c.pct > 0 ? " mid" : ""}" title="${c.back} з когорти${c.partial ? ", тиждень ще триває" : ""}">${c.pct}%</td>`);
 
-// `withBooks`: the readers table shows only readers with a book on the shelf (Max, 2026-10-20: «фільтр 1+ книжка»).
-function adminPage({ user, stats: s, layout, withBooks = false }) {
+// `withBooks`: the readers table shows only readers with a book on the shelf (Max, 2026-10-20: «фільтр 1+ книжка»);
+// `sort`: last (activity, the default), books or created (Max, 2026-10-21: fewer columns, sortable).
+function adminPage({ user, stats: s, layout, withBooks = false, sort = "last" }) {
   const t = s.totals;
   const tiles = [
     tile(t.readers, "читачів", `+${t.signupsWeek} за тиждень, +${t.signupsMonth} за місяць`),
@@ -245,14 +246,17 @@ function adminPage({ user, stats: s, layout, withBooks = false }) {
     .map((c) => `<tr><th>${weekLabel(c.week)}</th><td>${c.size}</td>${c.later.map(pct).join("")}</tr>`)
     .join("");
 
-  const shown = withBooks ? s.readers.filter((r) => r.books) : s.readers;
+  const SORTS = { last: (a, b) => (b.last || "").localeCompare(a.last || "") || a.created.localeCompare(b.created), books: (a, b) => b.books - a.books || a.created.localeCompare(b.created), created: (a, b) => b.created.localeCompare(a.created) };
+  if (!SORTS[sort]) sort = "last";
+  const shown = (withBooks ? s.readers.filter((r) => r.books) : s.readers).slice().sort(SORTS[sort]);
+  const url = ({ books = withBooks, by = sort } = {}) => `/admin${[books ? "books=1" : "", by !== "last" ? `sort=${by}` : ""].filter(Boolean).map((q, i) => (i ? "&" : "?") + q).join("")}`;
+  const col = (key, label) => (sort === key ? `<th class="sorted">${label}</th>` : `<th><a href="${url({ by: key })}">${label}</a></th>`);
   const readerRows = shown
     .map(
       (r) => `<tr${r.owner ? ' class="owner"' : ""}>
   <th><a href="/@${esc(r.username)}">${esc(r.name)}</a> <span class="muted">@${esc(r.username)}</span></th>
-  <td>${short(r.created)}</td><td>${short(r.last)}</td><td>${n(r.days)}</td><td>${n(r.books)}</td><td>${n(r.ratings)}</td><td>${n(r.notes)}</td>
-  <td>${n(r.following)} <span class="muted">/ ${r.followers}</span></td>
-  <td>${r.digest ? `так${r.lastDigest ? ` <span class="muted">· ${short(r.lastDigest)}</span>` : ""}` : r.email ? "ні" : `<span class="muted">без пошти</span>`}</td>
+  <td>${short(r.created)}</td><td>${short(r.last)}</td><td>${n(r.days)}</td><td>${n(r.books)}</td>
+  <td>${r.digest ? "так" : r.email ? "ні" : `<span class="muted">без пошти</span>`}</td>
 </tr>`
     )
     .join("");
@@ -277,10 +281,10 @@ ${s.cohorts.length ? `<div class="tbl"><table class="cohorts">
 <tbody>${cohortRows}</tbody></table></div>` : `<p class="muted">Поки нема жодної когорти.</p>`}
 
 <h2>Читачі</h2>
-<p class="muted small">За останньою активністю. «Днів» — скільки різних днів читач був на сайті. Стежить / стежать.</p>
-<p class="filter">${withBooks ? `<a href="/admin">Усі (${s.readers.length})</a> · <b>1+ книжка (${shown.length})</b>` : `<b>Усі (${s.readers.length})</b> · <a href="/admin?books=1">1+ книжка (${s.readers.filter((r) => r.books).length})</a>`}</p>
+<p class="muted small">«Днів» — скільки різних днів читач був на сайті. Клацніть на заголовок, щоб відсортувати.</p>
+<p class="filter">${withBooks ? `<a href="${url({ books: false })}">Усі (${s.readers.length})</a> · <b>1+ книжка (${shown.length})</b>` : `<b>Усі (${s.readers.length})</b> · <a href="${url({ books: true })}">1+ книжка (${s.readers.filter((r) => r.books).length})</a>`}</p>
 <div class="tbl"><table class="readers">
-<thead><tr><th>Читач</th><th>З</th><th>Востаннє</th><th>Днів</th><th>Книжок</th><th>Оцінок</th><th>Нотаток</th><th>Стеж.</th><th>Лист</th></tr></thead>
+<thead><tr><th>Читач</th>${col("created", "Зареєструвався")}${col("last", "Востаннє")}<th>Днів</th>${col("books", "Книжок")}<th>Лист</th></tr></thead>
 <tbody>${readerRows}</tbody></table></div>
 
 <h2>Щотижневий лист</h2>
