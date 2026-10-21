@@ -617,10 +617,13 @@ app.get("/admin.json", owner, (req, res) => res.json(admin.stats()));
 // One Google Books request with the server's key, for the owner to see what Google answers from here.
 app.get("/admin/google", owner, async (req, res) => {
   const params = new URLSearchParams({ q: String(req.query.q || "Солярис Лем"), maxResults: "3", printType: "books", key: process.env.GOOGLE_BOOKS_KEY || "" });
-  for (const [k, v] of Object.entries(req.query)) if (k !== "q" && k !== "key" && k !== "nokey") params.set(k, String(v));
+  for (const [k, v] of Object.entries(req.query)) if (!["q", "key", "nokey", "ua", "host", "ref"].includes(k)) params.set(k, String(v));
   if (req.query.nokey) params.delete("key"); // does Google answer this server at all, key aside?
+  const headers = { "User-Agent": req.query.ua === "browser" ? "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36" : req.query.ua === "none" ? "" : "Chytai/1.0 (https://chytai.org.ua)", Accept: "application/json" };
+  if (req.query.ref) headers.Referer = "https://chytai.org.ua/";
+  const host = req.query.host === "books" ? "books.googleapis.com" : "www.googleapis.com";
   try {
-    const r = await fetch(`https://www.googleapis.com/books/v1/volumes?${params}`, { headers: { "User-Agent": "Chytai/1.0 (https://chytai.org.ua)" }, signal: AbortSignal.timeout(15000) });
+    const r = await fetch(`https://${host}/books/v1/volumes?${params}`, { headers, signal: AbortSignal.timeout(15000) });
     res.type("text").send(`${r.status}\n${(await r.text()).slice(0, 1500)}`);
   } catch (e) {
     res.type("text").send(`error ${e.message}`);
