@@ -600,8 +600,12 @@ class Store {
   linkSeries(volumes = {}) {
     this.series = new Map(); // item id -> { name, items: [{ shelf, item }] }
     const groups = new Map();
+    const { volumeOf } = require("./catalogs");
     for (const si of this.shelfItems.values()) {
       const it = si.item;
+      // An item read before the title pattern knew a numbering (Богдан's «Експансія. Кн. 3») gets it here.
+      const v = !it.series && !it.bundle && volumeOf(it.title);
+      if (v) (it.series = v.series), (it.volume = v.volume);
       if (!it.series) continue;
       if (volumes[it.id]) it.volume = volumes[it.id];
       const key = `${si.shelf.id}|${norm(it.series)}`;
