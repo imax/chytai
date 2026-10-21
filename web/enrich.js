@@ -139,15 +139,23 @@ async function lookupGoogle(book, key, { fetchImpl = fetchV6 } = {}) {
   const author = firstAuthor(book.author);
   const queries = [];
   if (isbns.length) queries.push({ q: `isbn:${isbns[0]}`, byIsbn: true });
-  if (book.title && author) queries.push({ q: `intitle:"${mainTitle(book.title)}" inauthor:"${author}"` });
+  // A plain «title author» first (the form that answers from the server), the field query as a second try.
+  if (book.title && author) queries.push({ q: `${mainTitle(book.title)} ${author}` }, { q: `intitle:"${mainTitle(book.title)}" inauthor:"${author}"` });
+  let lastError = null;
   for (const q of queries) {
-    // Without a country Google answers a server in a data centre with 503 «cannot determine user location».
-    const params = new URLSearchParams({ q: q.q, maxResults: "5", printType: "books", country: "UA", key });
-    const data = await getJson(`${GOOGLE}?${params}`, fetchImpl);
+    const params = new URLSearchParams({ q: q.q, maxResults: "5", printType: "books", key });
+    let data;
+    try {
+      data = await getJson(`${GOOGLE}?${params}`, fetchImpl);
+    } catch (e) {
+      lastError = e; // one form refused, the next may answer
+      continue;
+    }
     const items = (data?.items || []).map((it) => it.volumeInfo || {}).filter((v) => v.title && same(book, { title: v.title, subtitle: v.subtitle, author_name: v.authors || [] }, q.byIsbn));
     items.sort((a, b) => (b.imageLinks ? 1 : 0) - (a.imageLinks ? 1 : 0) || (b.description ? 1 : 0) - (a.description ? 1 : 0));
     const v = items[0];
     if (!v) continue;
+    lastError = null;
     const out = {};
     const thumb = v.imageLinks?.thumbnail || v.imageLinks?.smallThumbnail;
     if (thumb) out.cover = thumb.replace(/^http:/, "https:").replace(/&edge=curl/, "").replace(/zoom=1/, "zoom=2");
@@ -162,6 +170,7 @@ async function lookupGoogle(book, key, { fetchImpl = fetchV6 } = {}) {
     if (v.canonicalVolumeLink || v.infoLink) out.google = (v.canonicalVolumeLink || v.infoLink).replace(/^http:/, "https:");
     return out;
   }
+  if (lastError) throw lastError;
   return null;
 }
 
