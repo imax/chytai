@@ -952,7 +952,6 @@ class Store {
     const entries = this.entriesOf(reader);
     const cur = entries[id] || { status: "", year: null, rating: null, note: "", copy: "", order: Object.keys(entries).length, added: new Date().toISOString().slice(0, 10) };
     const next = { ...cur, ...patch, updated: new Date().toISOString() };
-    if (next.status === "read" && !next.year && cur.status !== "read") next.year = new Date().getFullYear();
     if (next.rating === "" || next.rating === undefined) next.rating = cur.rating ?? null;
     entries[id] = next;
     this.writeEntry(reader, id, next);
