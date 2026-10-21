@@ -201,7 +201,7 @@ app.get("/updates", (req, res) => res.send(pages.updatesPage({ user: req.user })
 // ---- settings: name, username, e-mail, deleting the account ----
 
 app.get("/settings", signed, (req, res) => {
-  res.send(pages.settingsPage({ user: req.user, values: { ...req.user, digest: digest.enabled(req.user.id), followMail: auth.followMailEnabled(req.user.id), indexed: !req.user.noindex }, suggested: auth.suggestUsername(req.user.name, slugify), saved: !!req.query.saved }));
+  res.send(pages.settingsPage({ user: req.user, values: { ...req.user, digest: digest.enabled(req.user.id), }, suggested: auth.suggestUsername(req.user.name, slugify), saved: !!req.query.saved }));
 });
 app.post("/settings", signed, (req, res) => {
   const name = auth.checkName(req.body.name);
@@ -209,12 +209,10 @@ app.post("/settings", signed, (req, res) => {
   const email = req.body.email ? auth.checkEmail(req.body.email) : { email: req.user.email };
   const taken = email.email && auth.byEmail(email.email) && auth.byEmail(email.email).id !== req.user.id;
   const error = name.error || username.error || email.error || (taken ? "Ця пошта вже зайнята іншим читачем." : "");
-  const values = { ...req.user, name: req.body.name, username: req.body.username, email: req.body.email, digest: !!req.body.digest, followMail: !!req.body.follow_mail, indexed: !!req.body.indexed };
+  const values = { ...req.user, name: req.body.name, username: req.body.username, email: req.body.email, digest: !!req.body.digest, };
   if (error) return res.status(400).send(pages.settingsPage({ user: req.user, values, error }));
   auth.updateReader(req.user.id, { name: name.name, username: username.username, email: email.email || null });
   digest.setEnabled(req.user.id, !!req.body.digest);
-  auth.setFollowMail(req.user.id, !!req.body.follow_mail);
-  auth.setIndexed(req.user.id, !!req.body.indexed);
   res.redirect("/settings?saved=1");
 });
 app.post("/settings/delete", signed, (req, res) => {
