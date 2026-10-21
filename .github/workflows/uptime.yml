@@ -1,7 +1,7 @@
 # Keeps https://chytai.org.ua up (Max, 2026-10-21: «давай далі тримати це на контролі»). Every 5 minutes
 # this asks the site for a light page; if it does not answer three times in a row (a hung process: a CPU
 # loop took the site down for 50 minutes that day), it restarts the Fly machine and fails, so GitHub mails
-# the failure. A page that answers but slowly is only printed.
+# the failure. Speed is checked after each release instead (web.yml, scripts/perf-check.sh).
 name: Uptime
 
 on:

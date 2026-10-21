@@ -18,6 +18,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: superfly/flyctl-actions/setup-flyctl@master
+      # The image running now, to go back to if the post-release check below fails.
+      - id: before
+        run: echo "image=$(flyctl machine list -a chytai-web --json | jq -r '.[0].config.image // empty')" >> "$GITHUB_OUTPUT"
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN_WEB }}
       # Fly's API sometimes drops the connection after the image is built ("unexpected EOF"); one retry
       # redeploys the already-built image.
       - run: |
@@ -29,6 +34,17 @@ jobs:
       - run: |
           curl -s -o /dev/null https://chytai.org.ua/ || true
           for i in 1 2 3 4 5 6; do sleep 15; s=$(curl -s https://chytai.org.ua/refresh-status); echo "$s"; echo "$s" | grep -q '"running":false' && break; done
+      # Post-release check (Max, 2026-10-21): the main pages must answer in 1.5 s. If not, the previous
+      # image goes back and the run fails, so GitHub mails it; the commit stays on main to be fixed.
+      - id: check
+        run: scripts/perf-check.sh 1.5
+      - if: failure() && steps.check.outcome == 'failure' && steps.before.outputs.image != ''
+        run: |
+          echo "rolling back to ${{ steps.before.outputs.image }}"
+          flyctl deploy -a chytai-web -c web/fly.toml --image "${{ steps.before.outputs.image }}"
+          scripts/perf-check.sh 1.5 || true
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN_WEB }}
       # The domain (Max, 2026-10-19): chytai.org.ua serves the site; www and chytai-web.fly.dev redirect to it.
       - run: |
           for u in https://chytai.org.ua/ https://www.chytai.org.ua/ https://chytai-web.fly.dev/; do curl -sS -o /dev/null -w "$u: %{http_code} %{redirect_url}\n" "$u" || true; done
