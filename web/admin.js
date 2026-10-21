@@ -95,9 +95,14 @@ class Admin {
     const activeSince = (fromDay, toDay = now) => [...active].filter(([, days]) => [...days].some((d) => d >= fromDay && d <= toDay)).map(([r]) => r);
     const created = Object.fromEntries(readers.map((r) => [r.id, dayOf(r.created)]));
 
-    // The weeks, oldest first, ending with the current one.
+    // The weeks, oldest first, ending with the current one: from the week the first reader signed up
+    // (Max, 2026-10-21: no empty weeks from before the launch), at most `weeks` of them.
+    const firstWeek = weekOf(readers.map((r) => dayOf(r.created)).filter(Boolean).sort()[0] || now);
     const weekList = [];
-    for (let i = weeks - 1; i >= 0; i--) weekList.push(addDays(thisWeek, -7 * i));
+    for (let i = weeks - 1; i >= 0; i--) {
+      const w = addDays(thisWeek, -7 * i);
+      if (w >= firstWeek) weekList.push(w);
+    }
     const inWeek = (iso, w) => {
       const d = iso && dayOf(iso);
       return d && d >= w && d < addDays(w, 7);
