@@ -19,6 +19,8 @@ const OWN = new Set(["manual", "goodreads", "apple-books", "office"]);
 const LANG = { eng: "англійська", ukr: "українська", rus: "російська", pol: "польська", ger: "німецька", fre: "французька", spa: "іспанська", ita: "італійська" };
 const GLANG = { en: "англійська", uk: "українська", ru: "російська", pl: "польська", de: "німецька", fr: "французька", es: "іспанська", it: "італійська" };
 const GOOGLE = "https://www.googleapis.com/books/v1/volumes";
+// Bumped when a source is added or fixed, so every book is asked again: the per-book memory is enrich:<GEN>:<id>.
+const GEN = 2;
 
 const norm = (s) => String(s || "").toLowerCase().replace(/^(the|a|an)\s+/, "").replace(/[’'`]/g, "").replace(/[^\p{L}\p{N}]+/gu, " ").trim();
 const mainTitle = (t) => String(t || "").replace(/\s*\(.*?\)\s*/g, " ").split(/[:]/)[0].trim();
@@ -61,6 +63,24 @@ function descriptionText(d) {
     s = end > 300 ? cut.slice(0, end + 1) : cut.replace(/\s+\S*$/, "") + "…";
   }
   return s;
+}
+
+// Google answers Fly's shared IPv4 addresses with 503 «backendFailed» whatever the key (2026-10-21), but
+// over IPv6 it works, so Google is reached by a plain https request pinned to IPv6.
+function fetchV6(url, { headers = {}, timeout = 12000 } = {}) {
+  const https = require("https");
+  const u = new URL(url);
+  return new Promise((resolve, reject) => {
+    const rq = https.request({ host: u.hostname, family: 6, path: u.pathname + u.search, headers, timeout }, (r) => {
+      let body = "";
+      r.setEncoding("utf8");
+      r.on("data", (c) => (body += c));
+      r.on("end", () => resolve({ ok: r.statusCode >= 200 && r.statusCode < 300, status: r.statusCode, text: async () => body, json: async () => JSON.parse(body) }));
+    });
+    rq.on("timeout", () => rq.destroy(Object.assign(new Error("timeout"), { name: "TimeoutError" })));
+    rq.on("error", reject);
+    rq.end();
+  });
 }
 
 async function getJson(url, fetchImpl) {
@@ -114,7 +134,7 @@ async function lookup(book, { fetchImpl = fetch } = {}) {
 
 // The same from Google Books: by ISBN, else by title and author, in any script. The thumbnail link is
 // turned into the larger cover image; the description comes as HTML.
-async function lookupGoogle(book, key, { fetchImpl = fetch } = {}) {
+async function lookupGoogle(book, key, { fetchImpl = fetchV6 } = {}) {
   const isbns = cleanIsbns(book.isbns);
   const author = firstAuthor(book.author);
   const queries = [];
@@ -177,20 +197,20 @@ function wanting(store, ids, { google = false } = {}) {
 
 // enrich(store, { ids, log, fetchImpl, force }) -> { asked, found }: looks up the books not asked within a month.
 async function enrich(store, { ids, log = () => {}, fetchImpl = fetch, force = false, pause = 1000, max = 300, googleKey = "" } = {}) {
-  const books = wanting(store, ids, { google: !!googleKey }).filter((b) => force || Date.now() - Number(store.db.get(`enrich:${b.id}`) || 0) > MONTH).slice(0, max);
+  const books = wanting(store, ids, { google: !!googleKey }).filter((b) => force || Date.now() - Number(store.db.get(`enrich:${GEN}:${b.id}`) || 0) > MONTH).slice(0, max);
   let found = 0;
   let touched = false;
   let failed = 0;
   let googleFailed = 0;
   const errors = [];
   for (const b of books) {
-    store.db.set(`enrich:${b.id}`, String(Date.now()));
+    store.db.set(`enrich:${GEN}:${b.id}`, String(Date.now()));
     try {
       let info = isLatin(b.title) || cleanIsbns(b.isbns).length ? await lookup(b, { fetchImpl }) : null;
       // Google Books fills what Open Library left out, and is the only source for Cyrillic titles.
       if (googleKey && !(info?.cover && info?.blurb && info?.published)) {
         // Google refusing (it answers Fly's servers 503 with a key, 2026-10-21) must not stop Open Library.
-        const g = await lookupGoogle(b, googleKey, { fetchImpl }).catch((e) => {
+        const g = await lookupGoogle(b, googleKey, fetchImpl === fetch ? {} : { fetchImpl }).catch((e) => {
           const why = `${e.name === "TimeoutError" ? "timeout" : ""}${e.cause?.code || e.message}`;
           errors.push(`${b.id} (Google): ${why.slice(0, 80)}`);
           if (++googleFailed >= 3) (log("enrich: Google Books is not answering, going on with Open Library alone"), (googleKey = ""));
@@ -220,7 +240,7 @@ async function enrich(store, { ids, log = () => {}, fetchImpl = fetch, force = f
     store.indexSearch();
   }
   const own = Object.values(store.lib.books).filter((b) => OWN.has(b.source));
-  const line = `${new Date().toISOString()}: ${found} of ${books.length} books got details from Open Library${googleKey ? " and Google Books" : ""}; own books ${own.length}, with cover ${own.filter((b) => b.cover).length}, never asked ${wanting(store, null, { google: !!googleKey }).filter((b) => !store.db.get(`enrich:${b.id}`)).length}${errors.length ? `; errors: ${errors.slice(0, 5).join(", ")}` : ""}`;
+  const line = `${new Date().toISOString()}: ${found} of ${books.length} books got details from Open Library${googleKey ? " and Google Books" : ""}; own books ${own.length}, with cover ${own.filter((b) => b.cover).length}, never asked ${wanting(store, null, { google: !!googleKey }).filter((b) => !store.db.get(`enrich:${GEN}:${b.id}`)).length}${errors.length ? `; errors: ${errors.slice(0, 5).join(", ")}` : ""}`;
   log(`enrich ${line}`);
   store.db.set("enrich:log", line); // shown on /refresh-status
   return { asked: books.length, found, errors };
@@ -231,7 +251,7 @@ async function refresh(store, opts = {}) {
   const at = Number(store.db.get("enrich:at") || 0);
   // Books never asked about (a pass that hit its 300 cap or was cut short by a deploy left them) go at
   // the next tick; otherwise everything is asked again once a week.
-  const fresh = wanting(store, null, { google: !!opts.googleKey }).some((b) => !store.db.get(`enrich:${b.id}`));
+  const fresh = wanting(store, null, { google: !!opts.googleKey }).some((b) => !store.db.get(`enrich:${GEN}:${b.id}`));
   if (!fresh && Date.now() - at < WEEK) return false;
   if (!fresh) store.db.set("enrich:at", String(Date.now()));
   await enrich(store, opts);
