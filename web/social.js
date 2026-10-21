@@ -39,12 +39,16 @@ class Social {
     return out;
   }
 
-  // A book across readers: the mean rating, how many rated it, want it and have it at all.
+  // A book across readers: the mean rating, how many rated it, want it and have it at all; how many
+  // finished it and how many gave up on it (Max, 2026-10-21: like YouTube's dislikes, the ratio says
+  // something about a book; only the numbers, never who).
   stats(id) {
-    const rs = this.store.readersOf(id).filter((r) => this.who(r.reader));
+    const all = this.store.readersOf(id, { all: true }).filter((r) => this.who(r.reader));
+    const rs = all.filter((r) => r.entry.status !== "abandoned");
     const rated = rs.filter((r) => r.entry.rating != null);
     const avg = rated.length ? Math.round((rated.reduce((s, r) => s + r.entry.rating, 0) / rated.length) * 10) / 10 : null;
-    return { avg, rated: rated.length, want: rs.filter((r) => r.entry.status === "want").length, readers: rs.length };
+    const dropped = all.length - rs.length;
+    return { avg, rated: rated.length, want: rs.filter((r) => r.entry.status === "want").length, readers: rs.length, finished: rs.filter((r) => r.entry.status === "read").length, dropped };
   }
 
   // The feed: the newest changes first (entries carry `updated` since 2026-10-20), then the imported

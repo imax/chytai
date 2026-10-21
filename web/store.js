@@ -303,11 +303,12 @@ class Store {
 
   // Every reader who has the work (or a translation of it): [{ reader, entry }], fullest first.
   // «Покинуто» is left out: it is the reader's own, not a word about the book to others.
-  readersOf(id) {
+  // With `all`, those too (counted, never named: social.js stats).
+  readersOf(id, { all = false } = {}) {
     const out = [];
     for (const reader of this.entries.keys()) {
       const e = this.sharedEntry(reader, id);
-      if (e && e.status !== "abandoned") out.push({ reader, entry: e });
+      if (e && (all || e.status !== "abandoned")) out.push({ reader, entry: e });
     }
     return out.sort((a, b) => (b.entry.note?.length || 0) - (a.entry.note?.length || 0) || (b.entry.rating ?? -1) - (a.entry.rating ?? -1));
   }

@@ -145,7 +145,7 @@ const setTitleLinks = (fn) => (titleLinks = fn);
 let authorHref = () => null;
 const setAuthorLinks = (fn) => (authorHref = fn);
 // And: book id -> { avg, rated, want, readers } across readers (social.js).
-let statsOf = () => ({ avg: null, rated: 0, want: 0, readers: 0 });
+let statsOf = () => ({ avg: null, rated: 0, want: 0, readers: 0, finished: 0, dropped: 0 });
 const setStats = (fn) => (statsOf = fn);
 
 // The author line with each name linked to its page (shortened like byline() past three names).
@@ -370,7 +370,9 @@ function bookPage({ book, entry, user, shelf, inLibrary = new Map(), readers = [
   const s = statsOf(book.id);
   const kicker = [book.tags?.find((t) => t !== "українською"), isUk(book) ? "українською" : LANG_ADV[String(book.language || "").toLowerCase()] || ""].filter(Boolean).map(cap).join(" · ");
   const sub = [book.altTitle ? esc(book.altTitle) : "", book.author ? `<span class="authors">${authorLinks(book.author)}</span>` : "", book.published ? String(book.published) : "", book.pages ? `${book.pages} с.` : ""].filter(Boolean).join(" · ");
-  const score = s.avg != null || s.want ? `<p class="score">${s.avg != null ? `${stars(s.avg, { num: false })} <b>${uk(s.avg.toFixed(1))}</b> від ${count(s.rated, "читача", "читачів", "читачів")}` : ""}${s.want ? `${s.avg != null ? " · " : ""}${s.want} ${plural(s.want, "хоче", "хочуть", "хочуть")} прочитати` : ""}</p>` : "";
+  // «Дочитали 12, покинули 3»: only once someone gave up, and only numbers.
+  const bits = [s.avg != null ? `${stars(s.avg, { num: false })} <b>${uk(s.avg.toFixed(1))}</b> від ${count(s.rated, "читача", "читачів", "читачів")}` : "", s.want ? `${s.want} ${plural(s.want, "хоче", "хочуть", "хочуть")} прочитати` : "", s.dropped ? `дочитали ${s.finished || 0}, покинули ${s.dropped}` : ""].filter(Boolean);
+  const score = bits.length ? `<p class="score">${bits.join(" · ")}</p>` : "";
   const [first, ...rest] = readers;
   const body = `
 <div class="split">
