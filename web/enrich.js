@@ -178,11 +178,12 @@ async function enrich(store, { ids, log = () => {}, fetchImpl = fetch, force = f
 // The weekly pass, like wikidata.refreshUk: at most one attempt a week, even when it fails.
 async function refresh(store, opts = {}) {
   const at = Number(store.db.get("enrich:at") || 0);
-  // A pass that a restart cut short (a deploy) left no log line: it runs again.
-  if (Date.now() - at < WEEK && store.db.get("enrich:log")) return false;
-  store.db.set("enrich:at", String(Date.now()));
-  const r = await enrich(store, opts);
-  if (r.asked >= (opts.max || 300)) store.db.set("enrich:at", "0"); // more remain: the next six-hour tick goes on
+  // Books never asked about (a pass that hit its 300 cap or was cut short by a deploy left them) go at
+  // the next tick; otherwise everything is asked again once a week.
+  const fresh = wanting(store).some((b) => !store.db.get(`enrich:${b.id}`));
+  if (!fresh && Date.now() - at < WEEK) return false;
+  if (!fresh) store.db.set("enrich:at", String(Date.now()));
+  await enrich(store, opts);
   return true;
 }
 
