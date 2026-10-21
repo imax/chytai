@@ -121,7 +121,8 @@ async function lookupGoogle(book, key, { fetchImpl = fetch } = {}) {
   if (isbns.length) queries.push({ q: `isbn:${isbns[0]}`, byIsbn: true });
   if (book.title && author) queries.push({ q: `intitle:"${mainTitle(book.title)}" inauthor:"${author}"` });
   for (const q of queries) {
-    const params = new URLSearchParams({ q: q.q, maxResults: "5", printType: "books", key });
+    // Without a country Google answers a server in a data centre with 503 «cannot determine user location».
+    const params = new URLSearchParams({ q: q.q, maxResults: "5", printType: "books", country: "UA", key });
     const data = await getJson(`${GOOGLE}?${params}`, fetchImpl);
     const items = (data?.items || []).map((it) => it.volumeInfo || {}).filter((v) => v.title && same(book, { title: v.title, subtitle: v.subtitle, author_name: v.authors || [] }, q.byIsbn));
     items.sort((a, b) => (b.imageLinks ? 1 : 0) - (a.imageLinks ? 1 : 0) || (b.description ? 1 : 0) - (a.description ? 1 : 0));
