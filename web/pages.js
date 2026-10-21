@@ -846,7 +846,6 @@ function authorPage({ author, works, hits, user, readers = [], also = [], pairin
     ${s.avg != null ? `<p class="meta">${stars(s.avg)}<span> · ${count(s.rated, "оцінка", "оцінки", "оцінок")}</span></p>` : ""}
     ${top ? `<p class="note">${noteOf(top.entry, book.id)}</p><p class="said">— <a href="${attr(top.href)}"><b>${esc(top.name)}</b></a>${top.entry.year ? `, ${top.entry.year}` : ""}</p>` : ""}
     <div class="acts">${entry ? myStatus(entry) : markButtons(book, user)}</div>
-    ${twins(book, hit.twins || [])}
     ${pair(book)}
   </div>
 </article>`;
