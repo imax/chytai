@@ -869,8 +869,17 @@ class Store {
     for (const g of groups.values()) {
       if (g.length < 2 || !g.some((si) => si.item.volume || si.item.bundle)) continue; // a label like «Шеклі» is not a series
       const sorted = [...g].sort((a, b) => (a.item.bundle ? 1 : 0) - (b.item.bundle ? 1 : 0) || (a.item.volume || 99) - (b.item.volume || 99) || a.item.id.localeCompare(b.item.id, "en", { numeric: true }));
-      const head = g.find((si) => si.item.bundle) || sorted[0];
-      const ser = { name: head.item.series, head: head.item.id, items: sorted, volumes: sorted.filter((si) => !si.item.bundle).length };
+      // Богдан sells each of «Хроніки Амбера : у 10 кн.» in three printings: the list shows one of each, in stock first.
+      const one = new Map();
+      for (const si of sorted) {
+        const k = norm(si.item.title);
+        if (!one.has(k) || (PICK[si.item.status] ?? 9) < (PICK[one.get(k).item.status] ?? 9)) one.set(k, si);
+      }
+      const items = sorted.filter((si) => one.get(norm(si.item.title)) === si);
+      const head = g.find((si) => si.item.bundle) || items[0];
+      const singles = items.filter((si) => !si.item.bundle);
+      const numbered = new Set(singles.map((si) => si.item.volume).filter(Boolean));
+      const ser = { name: head.item.series, head: head.item.id, items, volumes: numbered.size === singles.length || !numbered.size ? singles.length : Math.max(numbered.size, ...numbered) };
       for (const si of sorted) {
         this.series.set(si.item.id, ser);
         si.item.volumes = ser.volumes;

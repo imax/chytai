@@ -557,7 +557,9 @@ function where(book) {
 function series(book, inLibrary) {
   const ser = book.series;
   if (!ser?.items) return "";
-  const name = (v) => (v.bundle ? `Комплект із ${count(ser.volumes, "тому", "томів", "томів")}` : cap(v.title.replace(ser.name, "").replace(/^[\s,.:]+/, "")) || `Том ${v.volume}`);
+  // «Хроніки Амбера : у 10 кн. Кн. 2 : Рушниці Авалону» is «2. Рушниці Авалону».
+  const numbered = (v) => { const p = require("./catalogs").volumeOf(v.title); return p?.subtitle && p.volume === v.volume ? `${p.volume}. ${cap(p.subtitle)}` : ""; };
+  const name = (v) => (v.bundle ? `Комплект із ${count(ser.volumes, "тому", "томів", "томів")}` : numbered(v) || cap(v.title.replace(ser.name, "").replace(/^[\s,.:]+/, "")) || `Том ${v.volume}`);
   return `<section class="block series">${label(`Серія «${esc(ser.name)}», ${count(ser.volumes, "том", "томи", "томів")}`)}<ul>${ser.items
     .map((v) => {
       const has = inLibrary.get(v.work);

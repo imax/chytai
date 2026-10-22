@@ -460,7 +460,7 @@ dialog .form { margin-top: 18px; }
 .add .narrow-only { display: none; }
 .add-review .add-intro .btn { margin-bottom: 18px; }
 .add-status { display: flex; align-items: center; gap: 10px; margin: 0 0 14px; font-size: 14px; color: var(--muted); }
-.add-status select { font: inherit; color: var(--ink); padding: 6px 10px; border: 1px solid var(--under); border-radius: 4px; background: transparent; }
+.add-status select { border: 0; background: transparent; color: var(--ink); cursor: pointer; padding: 2px 0; }
 .add-review .add-intro p { margin: 0 0 14px; }
 .add-review .btn:disabled { opacity: 0.4; cursor: default; }
 .add-rows { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--ink); }
