@@ -941,6 +941,16 @@ class Store {
     // A shop's edition note is not the book's name (Max, 2026-10-21: «як мені прибрати "Подарункове видання"»);
     // the «Де взяти» rows keep it, so the reader can tell the editions apart.
     if (si && workName(b.title)) out.title = workName(b.title);
+    // A Books.md title that carries the author's name («Жадан Арабески», «Genome, Matt Ridley») takes the
+    // name a shop gives the same book, once an edition with that name is linked.
+    if (seed && eds) {
+      const a = new Set(norm(b.author).split(" ").filter((w) => w.length >= 3));
+      const ws = norm(b.title).split(" ").filter((w) => !a.has(w));
+      if (ws.length && ws.length < norm(b.title).split(" ").length) {
+        const e = eds.find(({ item }) => norm(item.title) === ws.join(" "));
+        if (e) out.title = e.item.title;
+      }
+    }
     if (ser) out.series = { name: ser.name, head: ser.head, volumes: ser.volumes, items: ser.items.map(({ shelf, item }) => ({ ...this.fromShelfItem(shelf, item), shelf, work: this.canonical(item.id), href: this.href(item.id) })) };
     if (this.covers?.has(id)) out.cover = this.covers.get(id);
     // A book a reader added by hand or imported has no cover; its catalog editions do («Сила інтровертів»).
