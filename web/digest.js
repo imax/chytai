@@ -10,6 +10,7 @@
 // «Включаємо на всіх», 2026-10-20); WEB_DIGEST_TO=owner sends it to the owner alone.
 const crypto = require("crypto");
 const pages = require("./pages");
+const { isRussian } = require("./store");
 
 const DAY = 86400000;
 const SEND_DAY = 5; // Friday
@@ -34,7 +35,8 @@ function period(from, to) {
   return a.getMonth() === b.getMonth() ? `${a.getDate()}–${b.getDate()} ${MONTHS[b.getMonth()]}` : `${a.getDate()} ${MONTHS[a.getMonth()]} – ${b.getDate()} ${MONTHS[b.getMonth()]}`;
 }
 // What a reader did, as the site's feed says it (no guessing the reader's gender from the name).
-const did = (status) => ({ read: "прочитано", reading: "читає", want: "хоче прочитати" }[status] || "оцінка");
+// «читає зараз», as the feed says it since 2026-10-22.
+const did = (status) => ({ read: "прочитано", reading: "читає зараз", want: "хоче прочитати" }[status] || "оцінка");
 
 class Digest {
   constructor({ store, auth, social, libraries, site, log = console.log, to = "owner", ownerId = "owner" }) {
@@ -95,6 +97,19 @@ class Digest {
     // 1. The readers they follow: entries changed since the last letter, newest first.
     const followed = new Set(this.auth.following(readerId));
     const feedAll = followed.size ? this.social.feed({ limit: 200, readers: followed }).filter((x) => (x.entry.updated || "") > sinceIso) : [];
+    // A book a followed reader put in «Читаю зараз» since the last letter: a line of its own, unless the feed
+    // already has that book from them (putting a book already in «Читаю» there changes no entry).
+    for (const fid of followed) {
+      const n = this.auth.nowOf(fid).books[0];
+      if (!n || !n.since || n.since < sinceDay) continue;
+      const id = store.canonical(n.id);
+      const book = store.book(id);
+      const entry = store.entry(fid, id);
+      const reader = this.social.who(fid);
+      if (!book || !entry || !reader || entry.status === "abandoned" || isRussian(book) || feedAll.some((x) => x.reader.id === fid && store.canonical(x.id) === id)) continue;
+      feedAll.push({ reader, id, book, entry: { ...entry, status: "reading", rating: null, note: "", updated: `${n.since}T12:00:00Z` } });
+    }
+    feedAll.sort((a, b) => ((b.entry.updated || "") > (a.entry.updated || "") ? 1 : -1));
     const feed = feedAll.slice(0, MAX_FEED);
 
     // 2. New books on the shelves they subscribe to, the ones not already on their shelf.
@@ -147,14 +162,12 @@ class Digest {
     }
     const want = found.slice(0, MAX_WANT);
 
-    // 4. A book in «Читаю» for weeks: one line, the longest-running one.
-    const limit = new Date(now - READING_WEEKS * 7 * DAY).toISOString();
-    const reading = Object.entries(entries)
-      .filter(([, e]) => e.status === "reading" && e.updated && e.updated < limit)
-      .map(([id, e]) => ({ id, entry: e, book: store.book(id) }))
-      .filter((x) => x.book)
-      .sort((a, b) => (a.entry.updated < b.entry.updated ? -1 : 1))[0] || null;
-    if (reading) reading.weeks = Math.floor((now - new Date(reading.entry.updated)) / (7 * DAY));
+    // 4. The book in the reader's «Читаю зараз» status for weeks: one line (Max, 2026-10-22: the status, not
+    // the longest of the shelf's «Читаю» books, which may be ten read side by side). No status, no line.
+    const n = this.auth.nowOf(readerId).books[0];
+    const nowId = n && store.canonical(n.id);
+    const weeks = n?.since ? Math.floor((now - new Date(`${n.since}T12:00:00Z`)) / (7 * DAY)) : 0;
+    const reading = n && weeks >= READING_WEEKS && entries[nowId] && store.book(nowId) ? { id: nowId, entry: entries[nowId], book: store.book(nowId), weeks } : null;
 
     // 5. One reader's note about a well rated book they don't have (the home page's «Книжка навмання»).
     const pick = this.social.picks(40).find((x) => x.reader.id !== readerId && !own.has(x.id)) || null;
