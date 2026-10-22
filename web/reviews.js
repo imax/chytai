@@ -243,9 +243,39 @@ class Reviews {
     }
     this.byWork = byWork;
   }
-  // What was written about a work (and its editions), for its page; drafts only for the owner.
+  // What was written about a work (and its editions), for its page; drafts only for the owner. The
+  // owner's picks for the work come first, marked `picked` (Max, 2026-10-22: «обрати 1, 2, 3, які
+  // показувати»); items he said are not about this book are gone.
   of(workId, { owner = false } = {}) {
-    return (this.byWork.get(this.store.canonical(workId)) || []).filter((it) => owner || !it.draft);
+    const id = this.store.canonical(workId);
+    const picks = this.picks()[id] || [];
+    const hidden = new Set(this.hidden()[id] || []);
+    const items = (this.byWork.get(id) || []).filter((it) => (owner || !it.draft) && !hidden.has(it.url)).map((it) => ({ ...it, picked: picks.includes(it.url) }));
+    return [...picks.map((u) => items.find((it) => it.url === u)).filter(Boolean), ...items.filter((it) => !it.picked)];
+  }
+  picks() {
+    return JSON.parse(this.db.get("reviews:picks") || "{}"); // work id -> [url], at most 3, in order picked
+  }
+  hidden() {
+    return JSON.parse(this.db.get("reviews:hidden") || "{}"); // work id -> [url]
+  }
+  // Show this item on the work's page or stop showing it; a fourth pick pushes out the first.
+  pick(workId, url) {
+    const id = this.store.canonical(workId);
+    const all = this.picks();
+    const list = all[id] || [];
+    all[id] = list.includes(url) ? list.filter((u) => u !== url) : [...list, url].slice(-3);
+    if (!all[id].length) delete all[id];
+    this.db.set("reviews:picks", JSON.stringify(all));
+  }
+  // «Не про цю книжку»: a wrong match, off this work's page for good (the item stays for other books).
+  hide(workId, url) {
+    const id = this.store.canonical(workId);
+    const all = this.hidden();
+    all[id] = [...new Set([...(all[id] || []), url])];
+    this.db.set("reviews:hidden", JSON.stringify(all));
+    const picks = this.picks();
+    if (picks[id]?.includes(url)) this.pick(id, url);
   }
 
   save(src, items, matcher) {

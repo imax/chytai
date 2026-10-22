@@ -421,9 +421,9 @@ function bookPage({ book, entry, now = false, user, shelf, inLibrary = new Map()
       ${first.entry.note ? quote(first, book.id) : ""}
       ${(first.entry.note ? rest : readers).length ? `<div class="others">${(first.entry.note ? rest : readers).map((r) => readerLine(r, book.id)).join("")}</div>` : ""}
     </section>` : ""}
-    ${writings.length ? `<section class="block">
+    ${writings.length ? `<section class="block" id="writings">
       ${label("Про цю книжку писали")}
-      <div class="others">${writings.slice(0, 5).map(writingLine).join("")}${writings.length > 5 ? `<details class="more-writings"><summary>Ще ${writings.length - 5}</summary>${writings.slice(5).map(writingLine).join("")}</details>` : ""}</div>
+      ${writingsList(writings, book, user)}
     </section>` : ""}
     ${book.blurb || book.ukTitle ? `<section class="block">
       ${label("Про книжку")}
@@ -442,11 +442,24 @@ function bookPage({ book, entry, now = false, user, shelf, inLibrary = new Map()
 // «Про цю книжку писали»: a review, an article or a video about the book, with where, when and its
 // first sentence; the rest is on the other site (reviews.js).
 const WRITING_KIND = { youtube: "відео", site: "", podcast: "подкаст" };
-function writingLine(w) {
+// The owner's picks if there are any, else the three newest; the rest under «Ще N».
+function writingsList(writings, book, user) {
+  const picked = writings.filter((w) => w.picked);
+  const shown = picked.length ? picked : writings.slice(0, 3);
+  const rest = writings.filter((w) => !shown.includes(w));
+  const line = (w) => writingLine(w, user?.owner ? book : null);
+  return `<div class="others">${shown.map(line).join("")}${rest.length ? `<details class="more-writings"><summary>Ще ${rest.length}</summary>${rest.map(line).join("")}</details>` : ""}</div>`;
+}
+// For the owner, each line also has «Показувати» (pick, up to three) and «Не про цю книжку».
+function writingTools(w, book) {
+  const form = (action, text) => `<form method="post" action="${action}"><input type="hidden" name="work" value="${attr(book.id)}"><input type="hidden" name="url" value="${attr(w.url)}"><button class="text-link">${text}</button></form>`;
+  return `<span class="writing-tools">${form("/api/reviews/pick", w.picked ? "★ Показую · прибрати" : "☆ Показувати")}${form("/api/reviews/hide", "Не про цю книжку")}</span>`;
+}
+function writingLine(w, book = null) {
   const d = w.date ? new Date(`${w.date}T12:00:00Z`) : null;
   const date = d ? `${d.getDate()} ${MONTHS[d.getMonth()]}${d.getFullYear() !== new Date().getFullYear() ? ` ${d.getFullYear()}` : ""}` : "";
   const where = [w.source, WRITING_KIND[w.kind], date, w.draft ? "чернетка" : ""].filter(Boolean).join(" · ");
-  return `<div class="writing"><a href="${attr(w.url)}" target="_blank" rel="noopener">${esc(w.title)}</a><span class="muted">${esc(where)}</span>${w.quote ? `<span class="writing-quote">${esc(w.quote)}</span>` : ""}</div>`;
+  return `<div class="writing"><a href="${attr(w.url)}" target="_blank" rel="noopener">${esc(w.title)}</a><span class="muted">${esc(where)}</span>${w.quote ? `<span class="writing-quote">${esc(w.quote)}</span>` : ""}${book ? writingTools(w, book) : ""}</div>`;
 }
 
 // What the owner checks before the sources go public (/admin/reviews): each source's state and the

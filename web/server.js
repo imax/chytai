@@ -847,6 +847,13 @@ app.post("/api/reviews/refresh", owner, (req, res) => {
   reviews.refresh({ force: true, only: String(req.query.only || "") });
   res.redirect(303, "/admin/reviews");
 });
+for (const what of ["pick", "hide"])
+  app.post(`/api/reviews/${what}`, owner, (req, res) => {
+    const id = store.resolve(String(req.body.work || ""));
+    if (!id || !req.body.url) return res.status(400).send("Немає такої книжки чи посилання.");
+    reviews[what](id, String(req.body.url));
+    res.redirect(303, `${store.href(id)}#writings`);
+  });
 app.get("/admin/dupes", owner, (req, res) => res.send(pages.dupesPage({ user: req.user, groups: store.dupes(), decisions: store.decisions(), book: (id) => store.book(id), all: req.query.all === "1" })));
 app.get("/admin/translations", owner, (req, res) => res.send(pages.translationsPage({ user: req.user, translations: store.translationCandidates(), decisions: store.decisions(), book: (id) => store.book(id) })));
 // The owner's verdict on a group of look-alikes: keep=<id> folds the rest into it, verdict=different keeps them apart.

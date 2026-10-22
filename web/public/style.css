@@ -253,6 +253,8 @@ h2.year span { font: 13px var(--sans); color: var(--muted); }
 .writing > a { font: 400 17px/1.35 var(--serif); text-decoration: underline; text-decoration-color: var(--under); text-underline-offset: 3px; }
 .writing > a:hover { text-decoration-color: currentColor; }
 .writing-quote { color: var(--text); font-size: 15px; }
+.writing-tools { display: flex; gap: 16px; font-size: 13px; }
+.writing-tools form { display: inline; }
 .more-writings summary { padding: 12px 0; font-size: 14px; color: var(--muted); cursor: pointer; }
 .reader-line .note { font-size: 16px; margin-top: 4px; -webkit-line-clamp: 4; }
 .about p { font-size: 16px; line-height: 1.65; color: var(--text); }
