@@ -248,7 +248,8 @@ function when(e) {
   return `${d.getDate()} ${MONTHS[d.getMonth()]}${d.getFullYear() !== new Date().getFullYear() ? ` ${d.getFullYear()}` : ""}`;
 }
 // What the reader did, for the feed: «оцінка ★★★★», «читає», «хоче прочитати».
-const did = (e) => (e.rating != null ? `оцінка ${stars(e.rating, { num: false })}` : esc(VERB[e.status] || ""));
+// «Читає» alone read like a habit; the feed says «читає зараз» (Max, 2026-10-22).
+const did = (e) => (e.rating != null ? `оцінка ${stars(e.rating, { num: false })}` : e.status === "reading" ? "читає зараз" : esc(VERB[e.status] || ""));
 
 // ---- «Читаю зараз» ----
 // A reader's status (Max, 2026-10-22): the book they have in hand, under their name. Set by hand, so it
