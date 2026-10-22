@@ -1091,7 +1091,7 @@ ${updatesCache.html}
 // what each line matched (addReviewPage); everything goes on the shelf as «прочитано».
 function addAside() {
   const row = (href, name, what) => `<a class="add-imp" href="${href}"><span>${name}</span><span class="muted">${what} →</span></a>`;
-  return `<div class="add-imports"><p class="add-k">Або імпортуйте</p>${row("/import/goodreads", "Goodreads", "CSV-експорт")}${row("/import/apple-books", "Apple Books", "Імпорт з Мака")}</div>`;
+  return `<div class="add-imports"><p class="add-k">Або імпортуйте</p>${row("/import/goodreads", "Goodreads", "Імпорт з CSV")}${row("/import/apple-books", "Apple Books", "Імпорт з Мака")}</div>`;
 }
 const addCrumbs = `<p class="add-k"><a href="/me">Моя полиця</a> · <b>Додати книжки</b></p>`;
 function addPage({ user, text = "", popular = [], error = "" }) {
