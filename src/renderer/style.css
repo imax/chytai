@@ -163,8 +163,8 @@ g.note-ul .comment-mark { fill: #e07a2e; fill-opacity: 1; stroke: none; font: bo
 #sel-toolbar button { background: none; border: none; color: #fff; padding: 5px 10px; border-radius: 6px; cursor: pointer; font-size: 13px; }
 #sel-toolbar button:hover { background: rgba(255, 255, 255, 0.15); }
 #sel-toolbar button:active { background: rgba(255, 255, 255, 0.22); }
-/* Without a network only "Зберегти" works; explanations and translations need Claude. */
-body.offline #sel-toolbar [data-action="explain"], body.offline #sel-toolbar [data-action="translate"] { opacity: 0.4; }
+/* Without a network only "Зберегти" works; explanations need Claude. */
+body.offline #sel-toolbar [data-action="explain"], body.offline #sel-toolbar [data-action="ask"] { opacity: 0.4; }
 
 dialog { border: 1px solid var(--line); border-radius: 12px; background: var(--card); color: var(--fg); width: 440px; padding: 20px 22px; }
 dialog::backdrop { background: rgba(0, 0, 0, 0.3); }

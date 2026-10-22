@@ -699,7 +699,7 @@ function handleSelection(range, cfiRange, ctx, frame) {
     // Short pause so a still-adjusting selection doesn't fire several requests.
     const snapshot = pendingSelection;
     autoTimer = setTimeout(() => {
-      if (pendingSelection === snapshot) startExplanation(snapshot, { deep: false });
+      if (pendingSelection === snapshot) startExplanation(snapshot);
     }, 450);
   }
 }
@@ -750,12 +750,10 @@ $("#sel-toolbar").addEventListener("click", (e) => {
   if (!action || !pendingSelection) return;
   clearTimeout(autoTimer);
   const snapshot = pendingSelection;
-  if (action === "translate") {
-    startExplanation(snapshot, { deep: false, mode: "translate" });
-  } else if (action === "note") {
+  if (action === "note") {
     addNote(snapshot);
   } else {
-    startExplanation(snapshot, { deep: false });
+    startExplanation(snapshot, { ask: action === "ask" });
   }
   hideSelToolbar();
 });
@@ -774,13 +772,14 @@ function modelLabel(model) {
     .replace(/^./, (c) => c.toUpperCase());
 }
 
-function startExplanation(selection, { deep, mode = "explain" }) {
+// «Пояснити» starts with a quick note at once; «Запитати» opens the card with the question field instead.
+function startExplanation(selection, { ask = false } = {}) {
   showPanel(true, "cards");
   $("#panel-empty")?.remove();
 
-  // Same selection already explained the same way: just bring that card into view.
-  for (const conv of conversations.values()) {
-    if ((conv.cfiRange === selection.cfiRange || conv.context.selection === selection.context.selection) && conv.deep === deep && conv.mode === mode) {
+  // Same selection already explained: just bring that card into view.
+  for (const conv of ask ? [] : conversations.values()) {
+    if ((conv.cfiRange === selection.cfiRange || conv.context.selection === selection.context.selection) && !conv.ask) {
       conv.card.scrollIntoView({ behavior: "smooth", block: "nearest" });
       flash(conv.card);
       return conv.card;
@@ -789,7 +788,7 @@ function startExplanation(selection, { deep, mode = "explain" }) {
 
   const id = `r${++reqCounter}`;
   const card = document.createElement("article");
-  card.className = mode === "translate" ? "card translation" : "card";
+  card.className = "card";
   card.dataset.id = id;
   const quote = selection.context.selection;
   card.innerHTML = `
@@ -808,8 +807,7 @@ function startExplanation(selection, { deep, mode = "explain" }) {
   // The new card is at the top; bring it into view even if the list was scrolled down.
   $("#cards").scrollTop = 0;
 
-  if (mode === "translate") card.querySelector(".followup input").placeholder = "Запитати про переклад…";
-  const conv = { id, card, deep, mode, cfiRange: selection.cfiRange, context: selection.context, messages: null, busy: false };
+  const conv = { id, card, ask, cfiRange: selection.cfiRange, context: selection.context, messages: null, busy: false };
   conversations.set(id, conv);
 
   try {
@@ -845,7 +843,13 @@ function startExplanation(selection, { deep, mode = "explain" }) {
     runTurn(conv, q);
   };
 
-  runTurn(conv, null);
+  if (ask) {
+    const input = card.querySelector(".followup input");
+    input.placeholder = "Ваше питання про цей фрагмент…";
+    input.focus();
+  } else {
+    runTurn(conv, null);
+  }
   return card;
 }
 
@@ -865,9 +869,9 @@ function runTurn(conv, question) {
 
   let request;
   if (!conv.messages) {
-    request = { context: { ...conv.context, question: question || undefined }, deep: conv.deep, mode: conv.mode };
+    request = { context: { ...conv.context, question: question || undefined }, quick: !question };
   } else {
-    request = { messages: [...conv.messages, { role: "user", content: question }], deep: conv.deep, mode: conv.mode };
+    request = { messages: [...conv.messages, { role: "user", content: question }] };
   }
 
   const reqId = `${conv.id}-${Date.now()}`;
@@ -901,8 +905,8 @@ window.reader.onAiEvent((reqId, ev) => {
   if (ev.type === "done") {
     conv.messages = ev.messages;
     // One "more detail" per card: after it, the follow-up field is the way to ask further.
-    if (conv.lastQuestion !== "Детальніше" && conv.mode !== "translate") conv.card.querySelector(".more").classList.remove("hidden");
-    conv.card.querySelector(".model").textContent = (conv.mode === "translate" ? "Переклад · " : "") + modelLabel(ev.model) + (ev.truncated ? " · обрізано" : "");
+    if (!conv.ask && conv.lastQuestion !== "Детальніше") conv.card.querySelector(".more").classList.remove("hidden");
+    conv.card.querySelector(".model").textContent = modelLabel(ev.model) + (ev.truncated ? " · обрізано" : "");
     if (!conv.text) el.innerHTML = `<em>Порожня відповідь.</em>`;
   } else if (ev.type === "aborted") {
     if (!conv.text) el.innerHTML = `<em>Зупинено.</em>`;

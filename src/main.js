@@ -23,7 +23,7 @@ const SETTINGS_FILE = () => path.join(app.getPath("userData"), "settings.json");
 
 const DEFAULT_SETTINGS = {
   model: "claude-opus-5-5",
-  deepModel: "claude-fable-5-1",
+  quickModel: "claude-sonnet-5-5", // the first short note; «Детальніше» and questions use `model`
   language: "українська",
   autoExplain: true,
   pageTaps: false, // phone only: page turns instead of continuous scrolling
@@ -32,7 +32,6 @@ const DEFAULT_SETTINGS = {
   pdfMode: "reflow", // "reflow" (як книжка) or "original"
   fontSizes: {}, // book path -> font size in %, only for books where it was changed
   theme: "auto",
-  translateModel: "claude-sonnet-5-5", // cheaper than explanations
   explainStyle: "default", // default | adhd | brief | simple | custom
   customStyle: "", // the reader's own instructions for "custom"
   lastBook: null,
@@ -318,7 +317,7 @@ ipcMain.handle("ai:explain", async (event, id, request) => {
   try {
     const result = await explain({
       apiKey,
-      model: request.mode === "translate" ? settings.translateModel : request.deep ? settings.deepModel : settings.model,
+      model: request.quick && !request.messages ? settings.quickModel : settings.model,
       language: settings.language,
       style: settings.explainStyle,
       customStyle: settings.customStyle,

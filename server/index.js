@@ -88,8 +88,8 @@ function loadDotEnv(file) {
 
 // ---------- State: shared model settings, per-person look and positions ----------
 
-// Translation runs on a cheaper model than explanations (Max, 2026-10-15).
-const SHARED_DEFAULTS = { model: "claude-opus-5-5", deepModel: "claude-fable-5-1", translateModel: "claude-sonnet-5-5", language: "українська" };
+// «Пояснити» starts with a quick note on the cheap model; «Детальніше» and questions go to `model` (Max, 2026-10-22).
+const SHARED_DEFAULTS = { model: "claude-opus-5-5", quickModel: "claude-sonnet-5-5", language: "українська" };
 const USER_DEFAULTS = { autoExplain: true, pageTaps: false, deskScroll: false, font: "literata", margins: "normal", pdfMode: "reflow", fontSizes: {}, theme: "auto", explainStyle: "default", customStyle: "", lastBook: null, positions: {} };
 const SHARED_KEYS = new Set(Object.keys(SHARED_DEFAULTS));
 const USER_KEYS = new Set(Object.keys(USER_DEFAULTS));
@@ -1312,7 +1312,7 @@ api.post("/explain", async (req, res) => {
   try {
     const result = await explain({
       apiKey,
-      model: request.mode === "translate" ? shared.translateModel : request.deep ? shared.deepModel : shared.model,
+      model: request.quick && !request.messages ? shared.quickModel : shared.model,
       language: shared.language,
       style: me.explainStyle,
       customStyle: me.customStyle,
