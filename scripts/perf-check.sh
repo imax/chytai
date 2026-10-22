@@ -19,13 +19,15 @@ pages=(
   /author/john-steinbeck
   /updates
 )
-# The fastest of three answers, in seconds (99 when none came).
+# The fastest of three answers, in seconds (99 when none came); a redirect is followed (a renamed slug is
+# not a breakage). A page that does not answer 200 has its status and the start of its body printed.
 measure() {
   local best=99 r code t
   for _ in 1 2 3; do
-    r=$(curl -s -o /dev/null -m 30 -w "%{http_code} %{time_total}" "$SITE$1" || echo "000 99")
+    r=$(curl -sL -o /tmp/perf-page -m 30 -w "%{http_code} %{time_total}" "$SITE$1" || echo "000 99")
     code=${r%% *} t=${r##* }
-    [ "$code" = 200 ] && awk "BEGIN{exit !($t < $best)}" && best=$t
+    if [ "$code" = 200 ]; then awk "BEGIN{exit !($t < $best)}" && best=$t
+    else echo "  $1: HTTP $code: $(head -c 300 /tmp/perf-page 2>/dev/null | tr '\n' ' ')" >&2; fi
   done
   echo "$best"
 }
