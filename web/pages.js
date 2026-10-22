@@ -1015,7 +1015,7 @@ function welcomePage({ user, next = "" }) {
     <p class="kicker">Вітаємо</p>
     <h1>Вітаємо в ${mark}!</h1>
     <p class="lead">${mark} це проєкт для тих, хто любить книжки. Спільнота людей, каталоги українських видавництв, пошук і рекомендації.</p>
-    <div class="acts"><a class="btn primary" href="/add">Додати свої книжки</a><a class="text-link" href="${attr(next || "/")}">Спочатку роздивитись</a></div>
+    <div class="acts"><a class="btn primary" href="/add">Додати книжки</a><a class="text-link" href="${attr(next || "/")}">Пізніше</a></div>
   </div>
   <ol class="welcome-steps">
     ${step("01", "Зберіть свою полицю", "Що прочитали, що читаєте, що хочете прочитати: з оцінками й нотатками. Вставте список текстом або перенесіть з Goodreads чи Apple Books.", "/add", "Додати книжки")}
@@ -1023,7 +1023,7 @@ function welcomePage({ user, next = "" }) {
     ${step("03", "Пошук", "Пошук по каталогах українських видавництв, полицях читачів та офлайн бібліотеках.", "/", "Каталог")}
     ${step("04", "Читайте у Читалці", "Читалка з AI-explainer для зручного читання. Веб версія і мобільний застосунок (поки в TestFlight).", "https://chytai.fly.dev/", "Читалка", true)}
   </ol>
-  <div class="welcome-end"><a class="btn primary" href="/add">Додати свої книжки</a><a class="text-link" href="${attr(next || "/")}">Спочатку роздивитись</a></div>
+  <div class="welcome-end"><a class="btn primary" href="/add">Додати книжки</a><a class="text-link" href="${attr(next || "/")}">Пізніше</a></div>
 </section>`;
   return layout({ title: "Вітаємо", body, user, path: "/welcome" });
 }
