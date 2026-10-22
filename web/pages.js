@@ -828,7 +828,7 @@ function popularPage({ user, pop }) {
     ["month", "Цього місяця", "додали, оцінили чи почали за 30 днів"],
   ].filter(([k]) => pop[k].length);
   const body = `
-${pageHead({ kicker: "Читачі Chytai", title: "Популярне", sub: "Що читають, хочуть прочитати й найвище оцінюють читачі Chytai. Оновлюється саме." })}
+${pageHead({ kicker: "Читачі Chytai", title: "Популярне", sub: "Що читають, хочуть прочитати й найвище оцінюють читачі Chytai." })}
 ${sections.map(([k, title, aside]) => `<section class="block pop">
   ${label(title, esc(aside))}
   <div class="grid six">${pop[k].map((x) => card(x.book, { avg: x.avg, extra: `<p class="meta pop-n">${n(k, x)}</p>` })).join("")}</div>
