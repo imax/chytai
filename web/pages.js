@@ -397,7 +397,7 @@ function bookLd(book, shelf, s, readers) {
 }
 
 // The book, the reader's own buttons, where to get it, what readers said, what it is about.
-function bookPage({ book, entry, now = false, user, shelf, inLibrary = new Map(), readers = [], also = [], writings = [] }) {
+function bookPage({ book, entry, now = false, user, shelf, inLibrary = new Map(), readers = [], also = [], writings = [], reviewError = "" }) {
   const s = statsOf(book.id);
   const kicker = [book.tags?.find((t) => t !== "українською"), isUk(book) ? "українською" : LANG_ADV[String(book.language || "").toLowerCase()] || ""].filter(Boolean).map(cap).join(" · ");
   const sub = [book.altTitle ? esc(book.altTitle) : "", book.author ? `<span class="authors">${authorLinks(book.author)}</span>` : "", book.published ? String(book.published) : "", book.pages ? `${book.pages} с.` : ""].filter(Boolean).join(" · ");
@@ -427,9 +427,10 @@ function bookPage({ book, entry, now = false, user, shelf, inLibrary = new Map()
       ${first.entry.note ? quote(first, book.id) : ""}
       ${(first.entry.note ? rest : readers).length ? `<div class="others">${(first.entry.note ? rest : readers).map((r) => readerLine(r, book.id)).join("")}</div>` : ""}
     </section>` : ""}
-    ${writings.shown.length || writings.suggestions.length ? `<section class="block" id="writings">
-      ${label("Про цю книжку писали")}
-      ${writingsList(writings, book, user)}
+    ${writings.length || user ? `<section class="block" id="writings">
+      ${label("Огляди")}
+      ${writings.length ? writingsList(writings, book, user) : ""}
+      ${user ? addWriting(book, reviewError) : ""}
     </section>` : ""}
     ${book.blurb || book.ukTitle ? `<section class="block">
       ${label("Про книжку")}
@@ -445,24 +446,25 @@ function bookPage({ book, entry, now = false, user, shelf, inLibrary = new Map()
   return layout({ title: book.title, body, user, path: "/book", description, canonical: book.href, image: book.cover || "", type: "book", noindex: require("./store").isRussian(book), jsonld: bookLd(book, shelf, s, readers) });
 }
 
-// What the owner added, three at a time, the rest under «Ще N». The owner also sees what the sources
-// found for this book and has not decided on, with «Додати» and «Не про цю книжку».
-function writingsList({ shown, suggestions }, book, user) {
-  const own = user?.owner;
-  const line = (w, tools = "") => writingLine(w, tools);
-  const rest = shown.slice(3);
-  return `<div class="others">${shown.slice(0, 3).map((w) => line(w, own ? writingTools(w, book, false) : "")).join("")}${rest.length ? `<details class="more-writings"><summary>Ще ${rest.length}</summary>${rest.map((w) => line(w, own ? writingTools(w, book, false) : "")).join("")}</details>` : ""}</div>${
-    suggestions.length ? `<details class="more-writings suggested"${shown.length ? "" : " open"}><summary>Знайдено, ще не додано: ${suggestions.length} <span class="muted">(бачиш лише ти)</span></summary>${suggestions.map((w) => line(w, writingTools(w, book, true))).join("")}</details>` : ""
-  }`;
+// «Огляди» (reviews.js): three links, the rest under «Ще N»; the owner, or the reader who added it, can take one off.
+function writingsList(writings, book, user) {
+  const line = (w) => writingLine(w, user && (user.owner || w.by === user.id) ? `<span class="writing-tools">${reviewForm("/api/reviews/remove", { work: book.id, url: w.url }, "Прибрати зі сторінки")}</span>` : "");
+  const rest = writings.slice(3);
+  return `<div class="others">${writings.slice(0, 3).map(line).join("")}${rest.length ? `<details class="more-writings"><summary>Ще ${rest.length}</summary>${rest.map(line).join("")}</details>` : ""}</div>`;
+}
+// «+ Додати огляд» under the links, for any signed-in reader (Max, 2026-10-22), like «Додати книжку».
+function addWriting(book, error) {
+  return `<details class="add-writing"${error ? " open" : ""}><summary class="text-link">+ Додати огляд чи відео</summary>
+<form class="form review-add" method="post" action="/api/reviews/add"><input type="hidden" name="book" value="${attr(book.id)}"><input type="hidden" name="back" value="book">
+  <label>Посилання на огляд чи відео про цю книжку<input name="url" type="url" required placeholder="https://…"></label>
+  <label>Коли вийшов огляд<input name="date" type="date"><span class="hint">Можна не заповнювати: тоді дата зі сторінки огляду, якщо вона там є.</span></label>
+  ${error ? `<p class="error">${esc(error)}</p>` : ""}
+  <button class="btn primary">Додати</button>
+</form></details>`;
 }
 const reviewForm = (action, fields, text, cls = "text-link") => `<form method="post" action="${action}">${Object.entries(fields).map(([k, v]) => `<input type="hidden" name="${k}" value="${attr(v)}">`).join("")}<button class="${cls}">${text}</button></form>`;
-function writingTools(w, book, suggested, back = "") {
-  const f = { work: book.id, url: w.url, ...(back ? { back } : {}) };
-  return `<span class="writing-tools">${suggested ? reviewForm("/api/reviews/pick", f, `＋ Додати до «${esc(book.title)}»`, "btn small primary") + reviewForm("/api/reviews/hide", f, "Не про цю книжку") : reviewForm("/api/reviews/unpick", f, "Прибрати зі сторінки")}</span>`;
-}
-// «Про цю книжку писали»: a review, an article or a video about the book, with where, when and its
-// first sentence; the rest is on the other site (reviews.js).
-const WRITING_KIND = { youtube: "відео", site: "", podcast: "подкаст" };
+// A review or a video about the book: its title, where, when and its first sentence.
+const WRITING_KIND = { youtube: "відео", site: "" };
 const writingDate = (date) => {
   const d = date ? new Date(`${date}T12:00:00Z`) : null;
   return d ? `${d.getDate()} ${MONTHS[d.getMonth()]}${d.getFullYear() !== new Date().getFullYear() ? ` ${d.getFullYear()}` : ""}` : "";
@@ -472,30 +474,21 @@ function writingLine(w, tools = "") {
   return `<div class="writing"><a href="${attr(w.url)}" target="_blank" rel="noopener">${esc(w.title)}</a><span class="muted">${esc(where)}</span>${w.quote ? `<span class="writing-quote">${esc(w.quote)}</span>` : ""}${tools}</div>`;
 }
 
-// The owner's desk for reviews (/admin/reviews): a form to add any link to a book, the queue of what
-// the sources found (one click puts it on the book's page), and the sources' state.
-function reviewsAdminPage({ user, report, error = "", done = null }) {
-  const { sources, queue, running } = report;
-  const when = (at) => (at ? new Date(at).toISOString().slice(0, 16).replace("T", " ") : "—");
-  const body = `<div class="admin reviews-admin"><h1>Огляди книжок</h1>
-<p class="muted">На сторінці книжки показується лише те, що ти додав.</p>
+// The owner's form for reviews (/admin/reviews): a link and its book, and every link added so far.
+function reviewsAdminPage({ user, list, error = "", done = null }) {
+  const body = `<div class="admin reviews-admin"><h1>Огляди</h1>
 ${done ? `<p class="flash">Додано до <a href="${attr(done.href)}">«${esc(done.title)}»</a>.</p>` : ""}
-<h2>Додати посилання</h2>
 <form class="form review-add" method="post" action="/api/reviews/add">
   <label>Посилання на огляд чи відео<input name="url" type="url" required placeholder="https://…"></label>
   <label>Книжка: назва або посилання на її сторінку<input name="book" required placeholder="Інтернат Жадан або https://chytai.org.ua/book/…"></label>
+  <label>Коли вийшов огляд<input name="date" type="date"><span class="hint">Можна не заповнювати: тоді дата зі сторінки огляду, якщо вона там є.</span></label>
   ${error ? `<p class="error">${esc(error)}</p>` : ""}
   <button class="btn primary">Додати</button>
 </form>
-<h2>Черга: знайдено ${queue.length}${queue.length >= 60 ? "+" : ""}</h2>
-<p>Огляди, у яких джерела знайшли книжку з каталогу. «Додати» ставить посилання на сторінку книжки.</p>
-<div class="others">${queue.map((it) => writingLine({ ...it, source: it.sourceName, kind: it.source.startsWith("yt-") ? "youtube" : "site" }, it.books.map((b) => `<span class="queue-book"><a href="${attr(b.href || "")}">${esc(b.title)}</a> <span class="muted">${esc(b.author || "")}</span>${writingTools(it, b, true, "admin")}</span>`).join(""))).join("") || '<p class="muted">Порожньо.</p>'}</div>
-<details class="more-writings"><summary>Джерела${running ? " · зараз оновлюються" : ""}</summary>
-<form method="post" action="/api/reviews/refresh"><button class="btn small">Оновити все зараз</button></form>
-<div class="tbl"><table><thead><tr><th>Джерело</th><th>Матеріалів</th><th>З книжками</th><th>Востаннє</th><th></th></tr></thead><tbody>
-${sources.map((s) => `<tr><td><a href="${attr(s.url)}" target="_blank" rel="noopener">${esc(s.name)}</a></td><td>${s.items}</td><td>${s.matched}</td><td>${when(s.at)}</td><td>${s.ok === false ? `<span style="color: var(--danger); white-space: normal">${esc(s.error)}</span>` : s.at ? `+${s.added || 0}` : ""}</td></tr>`).join("")}
-</tbody></table></div></details></div>`;
-  return layout({ title: "Огляди книжок", user, path: "/admin", body, noindex: true });
+${list.length ? `<h2>Додано: ${list.length}</h2>
+<div class="others">${list.map((w) => writingLine(w, `<span class="queue-book"><a href="${attr(w.book.href || "")}">${esc(w.book.title)}</a> <span class="muted">${esc(w.book.author || "")}</span>${w.adder && !w.adder.owner ? ` <span class="muted">· додав(ла) <a href="${attr(w.adder.href)}">${esc(w.adder.name)}</a></span>` : ""}</span><span class="writing-tools"><form method="post" action="/api/reviews/date" class="review-date"><input type="hidden" name="url" value="${attr(w.url)}"><input type="date" name="date" value="${attr(w.date || "")}"><button class="text-link">Зберегти дату</button></form>${reviewForm("/api/reviews/remove", { work: w.book.id, url: w.url, back: "admin" }, "Прибрати")}</span>`)).join("")}</div>` : ""}
+</div>`;
+  return layout({ title: "Огляди", user, path: "/admin", body, noindex: true });
 }
 
 // A book's other-language pages (Max, 2026-10-21: «дві сторінки і спільні оцінки»): the original under a

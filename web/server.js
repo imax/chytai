@@ -102,9 +102,8 @@ const refreshDetails = () => enrich.refresh(store, { log: console.log, googleKey
 setTimeout(() => refreshUk().then(refreshAuthors).then(refreshDetails), 60000).unref();
 setInterval(() => refreshUk().then(refreshAuthors).then(refreshDetails), 6 * 3600 * 1000).unref();
 
-// «Про цю книжку писали» (reviews.js): sites and BookTube channels, every 6 hours; the first pass 2 minutes after start.
+// «Огляди» on book pages (reviews.js): links the owner adds on /admin/reviews.
 const reviews = new Reviews(store, { log: console.log });
-reviews.start();
 
 pages.setTitleLinks((md, id) => store.linkTitles(md, id));
 pages.setAuthorLinks((name) => store.authors?.byName(name)?.href || null);
@@ -609,7 +608,7 @@ app.get("/book/:id", (req, res) => {
   if (store.href(id) !== `/book/${encodeURIComponent(req.params.id)}`) return res.redirect(301, store.href(id));
   const book = bookFor(req, store.bookPage(id), !!store.entry(req.user?.id, id));
   if (!book) return res.status(404).send(pages.messagePage({ title: "Немає такої книжки", text: "", user: req.user }));
-  res.send(pages.bookPage({ book, entry: store.sharedEntry(req.user?.id, book.id), now: !!req.user && nowIds(req.user.id).has(store.canonical(book.id)), user: req.user, shelf: book.shelf && (req.owner || !isDraft(book.shelf)) ? store.shelf(book.shelf) : null, inLibrary: inLibraryMap(req), readers: readersOf(book.id), also: social.alsoLiked([book.id], { limit: 4 }), writings: reviews.of(book.id, { owner: req.owner }) }));
+  res.send(pages.bookPage({ book, entry: store.sharedEntry(req.user?.id, book.id), now: !!req.user && nowIds(req.user.id).has(store.canonical(book.id)), user: req.user, shelf: book.shelf && (req.owner || !isDraft(book.shelf)) ? store.shelf(book.shelf) : null, inLibrary: inLibraryMap(req), readers: readersOf(book.id), also: social.alsoLiked([book.id], { limit: 4 }), writings: reviews.of(book.id), reviewError: String(req.query.review_error || "").slice(0, 300) }));
 });
 
 // An author: their works from Wikidata (linked to our books of them) and every book of theirs we have.
@@ -861,34 +860,39 @@ app.get("/admin/ip", owner, async (req, res) => {
 });
 app.get("/admin/reviews", owner, (req, res) => {
   const done = req.query.added ? store.book(store.resolve(String(req.query.added))) : null;
-  res.send(pages.reviewsAdminPage({ user: req.user, report: reviews.report(), error: String(req.query.error || ""), done: done && { title: done.title, href: store.href(done.id) } }));
+  const list = reviews.all().map((w) => ({ ...w, adder: w.by ? pub(auth.reader(w.by)) : null }));
+  res.send(pages.reviewsAdminPage({ user: req.user, list, error: String(req.query.error || ""), done: done && { title: done.title, href: store.href(done.id) } }));
 });
-app.post("/api/reviews/refresh", owner, (req, res) => {
-  reviews.refresh({ force: true, only: String(req.query.only || "") });
-  res.redirect(303, "/admin/reviews");
-});
-// A link added by hand: the book is a link to its page, an address or a title (the first search hit).
-app.post("/api/reviews/add", owner, async (req, res) => {
+// A link added by hand: any reader from a book's page (book=<id>, back=book), the owner also on
+// /admin/reviews, where the book is a link to its page, an address or a title (the first search hit).
+app.post("/api/reviews/add", signed, async (req, res) => {
   const q = String(req.body.book || "").trim();
   const slug = (q.match(/\/book\/([^/?#\s]+)/) || [])[1];
-  const id = (slug && store.resolve(decodeURIComponent(slug))) || store.resolve(q) || store.search(q, { limit: 1 })[0]?.book.id;
-  const back = (error) => res.redirect(303, `/admin/reviews?error=${encodeURIComponent(error)}`);
+  const id = (slug && store.resolve(decodeURIComponent(slug))) || store.resolve(q) || (req.owner ? store.search(q, { limit: 1 })[0]?.book.id : null);
+  const fromBook = req.body.back === "book" || !req.owner;
+  const back = (error) => res.redirect(303, fromBook && id ? `${store.href(id)}?review_error=${encodeURIComponent(error)}#writings` : `/admin/reviews?error=${encodeURIComponent(error)}`);
   if (!id) return back(`Не знайшов книжку «${q}». Встав посилання на її сторінку.`);
+  if (!req.owner && auth.tooMany(`review:${req.user.id}`, 20)) return back("Забагато оглядів за годину. Спробуйте трохи згодом.");
   try {
-    await reviews.add(String(req.body.url || ""), id);
+    await reviews.add(String(req.body.url || ""), id, { date: String(req.body.date || ""), by: req.user.id, owner: req.owner });
   } catch (e) {
     return back(e.message);
   }
-  res.redirect(303, `/admin/reviews?added=${encodeURIComponent(id)}`);
+  res.redirect(303, fromBook ? `${store.href(id)}#writings` : `/admin/reviews?added=${encodeURIComponent(id)}`);
 });
-for (const what of ["pick", "unpick", "hide"])
-  app.post(`/api/reviews/${what}`, owner, (req, res) => {
-    const id = store.resolve(String(req.body.work || ""));
-    if (!id || !req.body.url) return res.status(400).send("Немає такої книжки чи посилання.");
-    if (what === "hide") reviews.hide(id, String(req.body.url));
-    else reviews.pick(id, String(req.body.url), what === "pick");
-    res.redirect(303, req.body.back === "admin" ? "/admin/reviews" : `${store.href(id)}#writings`);
-  });
+app.post("/api/reviews/date", owner, (req, res) => {
+  reviews.setDate(String(req.body.url || ""), String(req.body.date || ""));
+  res.redirect(303, "/admin/reviews");
+});
+// The owner takes any link off; a reader, the ones they added.
+app.post("/api/reviews/remove", signed, (req, res) => {
+  const id = store.resolve(String(req.body.work || ""));
+  if (!id || !req.body.url) return res.status(400).send("Немає такої книжки чи посилання.");
+  if (!req.owner && reviews.row(String(req.body.url))?.by !== req.user.id) return res.status(403).send("Прибрати можна лише свій огляд.");
+  reviews.remove(id, String(req.body.url));
+  res.redirect(303, req.body.back === "admin" ? "/admin/reviews" : `${store.href(id)}#writings`);
+});
+
 app.get("/admin/dupes", owner, (req, res) => res.send(pages.dupesPage({ user: req.user, groups: store.dupes(), decisions: store.decisions(), book: (id) => store.book(id), all: req.query.all === "1" })));
 app.get("/admin/translations", owner, (req, res) => res.send(pages.translationsPage({ user: req.user, translations: store.translationCandidates(), decisions: store.decisions(), book: (id) => store.book(id) })));
 // The owner's verdict on a group of look-alikes: keep=<id> folds the rest into it, verdict=different keeps them apart.
