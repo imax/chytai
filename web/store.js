@@ -672,7 +672,7 @@ class Store {
       const own = this.lib.books[b.id] || b; // an edited copy keeps its old title
       const addTitle = (t, exact) => {
         const l = byTitle.get(t) || byTitle.set(t, []).get(t);
-        if (!l.some((x) => x.id === b.id)) l.push({ id: b.id, author: b.author || "", exact });
+        if (!l.some((x) => x.id === b.id)) l.push({ id: b.id, author: b.author || "", title: b.title, exact });
       };
       for (const t of [b.title, b.altTitle]) if (norm(t).length >= 6) addTitle(norm(t), true);
       for (const t of [own.title, b.title]) if (norm(bare(t, b.author)).length >= 6) addTitle(bare(t, b.author), false);
@@ -686,8 +686,13 @@ class Store {
       if (isbnKey(it.isbn).length >= 10 && ok(byIsbn.get(isbnKey(it.isbn)))) return byIsbn.get(isbnKey(it.isbn));
       // The same title by a different author is a different book: Жадан's «Арабески» is not Хвильовий's
       // (2026-10-22). An exact title wins over one with the author's name trimmed off («Жадан Арабески»).
+      // A match through an original title («Марсіанин» / The Martian, «Чотири тисячі тижнів» / Four
+      // Thousand Weeks) is a translation, not an edition: the two stay separate pages with shared readers
+      // (Max, 2026-10-21/22), and linkTranslations pairs them. So two books merge only when their own
+      // titles are written in the same script.
+      const script = (t) => (/[а-яіїєґ]/i.test(t) ? "cyr" : "lat");
       for (const t of [it.title, it.altTitle]) {
-        const found = (byTitle.get(norm(t)) || []).filter((x) => ok(x.id) && sameAuthor(x.author, it.author));
+        const found = (byTitle.get(norm(t)) || []).filter((x) => ok(x.id) && sameAuthor(x.author, it.author) && script(x.title) === script(it.title));
         const b = found.find((x) => x.exact) || found[0];
         if (b) return b.id;
       }
