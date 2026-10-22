@@ -455,7 +455,6 @@ function loginPage(req, error) {
   h1 { margin: 0 0 4px; font-size: 22px; } p { margin: 0 0 18px; opacity: 0.7; }
   label { display: block; margin-bottom: 14px; font-weight: 500; }
   .btn { display: block; box-sizing: border-box; width: 100%; padding: 11px; font: inherit; font-weight: 600; text-align: center; text-decoration: none; color: #fff; background: #b7791f; border: none; border-radius: 8px; }
-  .note { margin: 14px 0 0; font-size: 14px; }
   .err { color: #c0392b; margin-bottom: 12px; }
   .demo { margin: 18px 0 0; text-align: center; font-size: 14px; }
   .demo a { color: #b7791f; font-weight: 600; }
@@ -464,7 +463,6 @@ function loginPage(req, error) {
   <h1>Chytai</h1><p>Читалка з поясненнями від Claude</p>
   ${error ? `<div class="err">${esc(error)}</div>` : ""}
   <a class="btn" href="${esc(signIn)}">Увійти</a>
-  <p class="note">З тим самим акаунтом, що й на chytai.org.ua: код приходить на пошту, пароля немає. Немає акаунта? Він з'явиться за хвилину.</p>
   ${GUEST_ENABLED && demoBooks().length ? `<p class="demo">Або <a href="/demo">подивитися демо</a> з однією книжкою.</p>` : ""}
 </form></body></html>`;
 }
