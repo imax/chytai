@@ -1209,11 +1209,14 @@ class Store {
   // within a year the reader's order (Books.md order for Max). The year comes first so that a shelf built
   // in several steps (an import after books added by hand, two imports) never shows a year twice
   // (Max, 2026-10-20: «каша з роками» on an imported shelf).
+  // Within a year (and under «Без дати»), books added here come first, the last added on top (Max,
+  // 2026-10-22); Books.md rows have no `added` and keep their own order below them.
   library(reader) {
+    const rank = (r) => (r.added ? -(r.order ?? 0) : 1e9 + (r.order ?? 0));
     return Object.entries(reader ? this.entriesOf(reader) : {})
       .map(([id, e]) => ({ id, ...e, book: this.book(id) }))
       .filter((r) => r.book)
-      .sort((a, b) => (b.year ?? -1) - (a.year ?? -1) || (a.order ?? 0) - (b.order ?? 0));
+      .sort((a, b) => (b.year ?? -1) - (a.year ?? -1) || rank(a) - rank(b));
   }
 
   // ---- shelves and subscriptions ----
