@@ -1189,7 +1189,7 @@ ${updatesCache.html}
 // ---- /add «Додати книжки» (design 4b of 2026-10-22, Max: «окрему сторінку для додавання, а не як зараз
 // захована в профіль»). Reachable any time: the menu, the shelf, /welcome, the welcome letter. Left: what
 // this is and the imports; right: a list to paste, one book per line, any shape. «Знайти книжки» shows
-// what each line matched (addReviewPage); everything goes on the shelf as «прочитано».
+// what each line matched (addReviewPage), with one status for the whole list («Прочитано» by default).
 function addAside() {
   const row = (href, name, what) => `<a class="add-imp" href="${href}"><span>${name}</span><span class="muted">${what} →</span></a>`;
   return `<div class="add-imports"><p class="add-k">Або імпортуйте</p>${row("/import/goodreads", "Goodreads", "Імпорт з CSV")}${row("/import/apple-books", "Apple Books", "Імпорт з Мака")}</div>`;
@@ -1225,6 +1225,9 @@ function addPage({ user, text = "", popular = [], error = "" }) {
 
 // Step two of /add: every line with what it matched. A found book is ticked; «Інша книжка» looks for the right
 // one (addFindResults); a line with no match can be looked for or added as the reader's own book, without a cover.
+// One status for the whole list, picked right before «Додати» (Max: «один для всіх, не кожній окремо»):
+// a pasted list can be books read, a pile of «Хочу прочитати» or the reader's paper shelf.
+const ADD_STATUS = [["read", "Прочитано"], ["reading", "Читаю"], ["want", "Хочу прочитати"], ["abandoned", "Покинуто"], ["paper", "На папері"]];
 function addReviewPage({ user, token, rows, text }) {
   const found = rows.filter((r) => r.match).length;
   // Found books first, then the ones already on the shelf, then what we could not find (Max: «щоб довго не гортати»).
@@ -1252,6 +1255,7 @@ function addReviewPage({ user, token, rows, text }) {
     ${addCrumbs}
     <h1>Знайшли ${found} з ${rows.length}</h1>
     <p class="lead">Перевірте :) «Інша книжка», якщо знайшли неправильно. «Шукати» знайде книжку в нашому каталозі або в Open Library, з обкладинкою.</p>
+    <label class="add-status">Статус <select name="status">${ADD_STATUS.map(([v, l]) => `<option value="${v}">${l}</option>`).join("")}</select></label>
     <button class="btn primary" data-cta>Додати <span data-n></span> на полицю</button>
   </div>
   <ol class="add-rows">${order.map((i) => line(rows[i], i)).join("")}</ol>

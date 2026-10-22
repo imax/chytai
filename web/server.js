@@ -311,7 +311,10 @@ app.post("/import/:source/apply", signed, importSource, (req, res) => {
     if (m) return { ...r, match: { id: m.id, title: m.title, author: m.author, href: m.href } };
     return { ...r, ...book, match: null, cover: /^https:\/\/covers\.openlibrary\.org\//.test(ol.cover || "") ? ol.cover : "", ol: /^\/works\/OL\w+$/.test(ol.ol || "") ? ol.ol : "", published: Number(ol.published) || null };
   };
-  const chosen = p.rows.map(swapped).filter((r, i) => keep.has(i) && !(p.source === "list" && r.match && store.entry(req.user.id, r.match.id)));
+  // The status picked on /add for the whole list; «На папері» is no status but where the copy is.
+  const as = p.source === "list" ? String(req.body.status || "read") : null;
+  const batch = (r) => (as === "paper" ? { ...r, status: "", year: null, copy: "paper" } : as && ["read", "reading", "want", "abandoned"].includes(as) ? { ...r, status: as, year: as === "read" ? r.year : null, rating: ["want", "reading"].includes(as) ? null : r.rating } : r);
+  const chosen = p.rows.map(swapped).map(batch).filter((r, i) => keep.has(i) && !(p.source === "list" && r.match && store.entry(req.user.id, r.match.id)));
   // On the shelf they sit after what is already there: the read ones by date read, oldest first, then the rest by date added.
   const key = (r) => (r.read ? `0${r.read}` : `1${r.added || "9999"}`);
   chosen.sort((a, b) => key(a).localeCompare(key(b)));
