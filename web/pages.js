@@ -250,6 +250,28 @@ function when(e) {
 // What the reader did, for the feed: «оцінка ★★★★», «читає», «хоче прочитати».
 const did = (e) => (e.rating != null ? `оцінка ${stars(e.rating, { num: false })}` : esc(VERB[e.status] || ""));
 
+// ---- «Читаю зараз» ----
+// A reader's status (Max, 2026-10-22): the book they have in hand, under their name. Set by hand, so it
+// says how long it has been up: «з 12 жовтня». No comment line (Max: «спростимо, без коментарів»).
+function since(day) {
+  if (!day) return "";
+  const d = new Date(`${day}T12:00:00Z`);
+  const days = Math.floor((Date.now() - d) / 86400000);
+  if (days < 1) return "з сьогодні";
+  if (days < 2) return "з учора";
+  return `з ${d.getDate()} ${MONTHS[d.getMonth()]}${d.getFullYear() !== new Date().getFullYear() ? ` ${d.getFullYear()}` : ""}`;
+}
+function nowBlock(now, { own = false } = {}) {
+  if (!now || !now.books.length) return own ? `<p class="now-empty"><a class="text-link" href="/me/now">Що читаєш зараз?</a> <span class="muted">Постав статус, його побачать на твоїй сторінці.</span></p>` : "";
+  const books = now.books.map(({ book, since: day, entry: e }) => `<a class="now-book" href="${attr(book.href)}">${cover(book, "xs")}<span><b>${esc(book.title)}</b>${book.author ? `<span class="by">${esc(byline(book.author))}</span>` : ""}<span class="meta">${[e.status === "read" ? "перечитує" : "", since(day), e.progress > 0 && e.progress < 98 ? `${e.progress}%` : ""].filter(Boolean).join(" · ")}</span></span></a>`).join("");
+  return `<div class="now">
+  <p class="now-head"><span class="kicker">${own ? "Читаю зараз" : "Зараз читає"}</span>${own ? `<a class="text-link small" href="/me/now">змінити</a>` : ""}</p>
+  <div class="now-books">${books}</div>
+</div>`;
+}
+// One short line for lists of readers (/community): «зараз читає Цирцея, The Road».
+const nowLine = (now) => (now?.books.length ? `<p class="now-line"><span class="muted">зараз читає</span> ${now.books.map(({ book }) => `<a href="${attr(book.href)}">${esc(book.title)}</a>`).join(", ")}</p>` : "");
+
 // One line of the activity feed. `wide` is the /community layout (who first, then the book).
 function feedRow({ reader, book, entry: e }, { wide = false, followed = null } = {}) {
   const t = when(e);
@@ -263,7 +285,7 @@ function feedRow({ reader, book, entry: e }, { wide = false, followed = null } =
 const feedList = (items, opts) => (items.length ? `<div class="feed">${items.map((it) => feedRow(it, opts)).join("")}</div>` : `<p class="muted">Поки тихо.</p>`);
 
 // Page head: a green label, the title, a line under it; an action on the right.
-const pageHead = ({ crumbs = "", kicker = "", title, sub = "", action = "", lead = "" }) => `
+const pageHead = ({ crumbs = "", kicker = "", title, sub = "", action = "", lead = "", extra = "" }) => `
 <section class="page-head">
   <div>
     ${crumbs ? `<p class="crumbs">${crumbs}</p>` : ""}
@@ -271,6 +293,7 @@ const pageHead = ({ crumbs = "", kicker = "", title, sub = "", action = "", lead
     <h1>${title}</h1>
     ${lead ? `<p class="lead">${lead}</p>` : ""}
     ${sub ? `<p class="sub">${sub}</p>` : ""}
+    ${extra}
   </div>
   ${action ? `<div class="head-act">${action}</div>` : ""}
 </section>`;
@@ -368,7 +391,7 @@ function bookLd(book, shelf, s, readers) {
 }
 
 // The book, the reader's own buttons, where to get it, what readers said, what it is about.
-function bookPage({ book, entry, user, shelf, inLibrary = new Map(), readers = [], also = [], writings = [] }) {
+function bookPage({ book, entry, now = false, user, shelf, inLibrary = new Map(), readers = [], also = [], writings = [] }) {
   const s = statsOf(book.id);
   const kicker = [book.tags?.find((t) => t !== "українською"), isUk(book) ? "українською" : LANG_ADV[String(book.language || "").toLowerCase()] || ""].filter(Boolean).map(cap).join(" · ");
   const sub = [book.altTitle ? esc(book.altTitle) : "", book.author ? `<span class="authors">${authorLinks(book.author)}</span>` : "", book.published ? String(book.published) : "", book.pages ? `${book.pages} с.` : ""].filter(Boolean).join(" · ");
@@ -388,7 +411,7 @@ function bookPage({ book, entry, user, shelf, inLibrary = new Map(), readers = [
         ${sub ? `<p class="book-by">${sub}</p>` : ""}
         ${score}
         ${twins(book)}
-        ${mine(book, entry, user)}
+        ${mine(book, entry, user, now)}
         ${where(book)}
       </div>
     </article>
@@ -452,27 +475,31 @@ function twins(book, list = book.translations || []) {
 }
 
 // The first reader's note as the big quote: «— Макс І, прочитано у 2026, на папері».
-function quote({ name, href, entry: e }, id) {
+function quote({ name, href, entry: e, now }, id) {
   const long = stripMd(e.note).length > 280;
-  const what = [e.status ? VERB[e.status] + (e.status === "read" && e.year ? ` у ${e.year}` : "") : "", e.copy ? COPY[e.copy].toLowerCase() : "", e.via ? `як «${e.via.title}»` : ""].filter(Boolean).join(", ");
+  const what = [now ? "читає зараз" : "", e.status && !now ? VERB[e.status] + (e.status === "read" && e.year ? ` у ${e.year}` : "") : "", e.copy ? COPY[e.copy].toLowerCase() : "", e.via ? `як «${e.via.title}»` : ""].filter(Boolean).join(", ");
   return `<blockquote class="big-quote${long ? " long" : ""}">${marked.parse(titleLinks(e.note, e.via ? e.via.id : id)).replace(/<a href="http/g, '<a target="_blank" rel="noopener" href="http')}</blockquote>
 <p class="said">— <a href="${attr(href)}"><b>${esc(name)}</b></a>${e.rating != null ? ` ${stars(e.rating)}` : ""}${what ? `, ${esc(what)}` : ""}</p>`;
 }
 // Every other reader: name, what they did, their note if any.
-function readerLine({ name, href, entry: e }, id) {
-  const what = [e.status ? VERB[e.status] + (e.status === "read" && e.year ? ` у ${e.year}` : "") : "", e.copy ? COPY[e.copy].toLowerCase() : "", e.via ? `як «${e.via.title}»` : ""].filter(Boolean).join(" · ");
+function readerLine({ name, href, entry: e, now }, id) {
+  const what = [now ? "читає зараз" : "", e.status && !now ? VERB[e.status] + (e.status === "read" && e.year ? ` у ${e.year}` : "") : "", e.copy ? COPY[e.copy].toLowerCase() : "", e.via ? `як «${e.via.title}»` : ""].filter(Boolean).join(" · ");
   return `<div class="reader-line"><a href="${attr(href)}"><b>${esc(name)}</b></a><span>${e.rating != null ? `${stars(e.rating)} ` : ""}<span class="muted">${esc(what)}</span>${e.note ? `<span class="note">${noteOf(e, id)}</span>` : ""}</span></div>`;
 }
 
 // The signed-in reader's own buttons: «Хочу прочитати», «Прочитано · оцінити», or where the book is
 // in their library and «Змінити».
-function mine(book, entry, user) {
+const nowButton = (book, on, user) =>
+  user
+    ? `<form method="post" action="/api/now/${attr(encodeURIComponent(book.id))}" class="inline"><input type="hidden" name="back" value="1"><button class="btn${on ? " on" : ""}" title="${on ? "Прибрати з «Читаю зараз»" : "Показати на своїй сторінці, що читаєш її зараз"}">${on ? "✓ Читаю зараз" : "Читаю зараз"}</button></form>`
+    : `<a class="btn" href="/login?next=${attr(encodeURIComponent(book.href || ""))}">Читаю зараз</a>`;
+function mine(book, entry, user, now = false) {
   // Read in another language: the mark comes from that book, and so does the edit link.
   const href = entry?.via ? entry.via.href : book.href;
   const edit = href ? `/me${href}` : `/me/book/${encodeURIComponent(entry?.via ? entry.via.id : book.id)}`;
-  if (!entry) return `<div class="acts">${wantButton(book, user, { size: "", primary: true })}<a class="btn" href="${attr(user ? edit : `/login?next=${encodeURIComponent(edit)}`)}">Прочитано · оцінити</a></div>`;
+  if (!entry) return `<div class="acts">${wantButton(book, user, { size: "", primary: true })}${nowButton(book, false, user)}<a class="btn" href="${attr(user ? edit : `/login?next=${encodeURIComponent(edit)}`)}">Прочитано · оцінити</a></div>`;
   const what = [entry.status ? STATUS[entry.status] + (entry.status === "read" && entry.year ? ` ${entry.year}` : "") : "У моїх книжках", entry.rating != null ? `${uk(entry.rating)} з 5` : "", entry.copy ? COPY[entry.copy] : ""].filter(Boolean).join(" · ");
-  return `<div class="acts"><span class="have">✓ ${esc(what)}${entry.via ? ` <span class="muted">як <a href="${attr(entry.via.href)}">${esc(entry.via.title)}</a></span>` : ""}</span><a class="btn small" href="${attr(edit)}">Змінити</a></div>`;
+  return `<div class="acts"><span class="have">✓ ${esc(what)}${entry.via ? ` <span class="muted">як <a href="${attr(entry.via.href)}">${esc(entry.via.title)}</a></span>` : ""}</span>${entry.via ? "" : nowButton(book, now, user).replace('class="btn', 'class="btn small')}<a class="btn small" href="${attr(edit)}">Змінити</a></div>`;
 }
 
 // «Де взяти»: every edition's shop (with its format, price and stock, the one place prices are shown),
@@ -675,7 +702,7 @@ function entryForm(book, entry) {
 // The same list twice: /me is the signed-in reader's own shelf with «змінити» on every row (the only
 // place where status, rating and notes are edited); /@<username> is that reader's public shelf, where a
 // signed-in visitor sees what they share and can want any book in one tap.
-function libraryPage({ rows, user, reader, own = false, mineIds = null, recs = [], following = false, follows = { followers: [], following: [] } }) {
+function libraryPage({ rows, user, reader, own = false, mineIds = null, recs = [], following = false, follows = { followers: [], following: [] }, now = null }) {
   const year = new Date().getFullYear();
   const read = rows.filter((r) => r.status === "read").length;
   const thisYear = rows.filter((r) => r.status === "read" && r.year === year);
@@ -710,7 +737,7 @@ function libraryPage({ rows, user, reader, own = false, mineIds = null, recs = [
     .join("\n");
   const wants = own ? [] : rows.filter((r) => r.status === "want").slice(0, 3);
   const body = `
-${pageHead({ crumbs: own ? "" : `<a href="/community">Читачі</a> / ${esc(reader.name)}`, kicker: own ? "Моя полиця" : "Полиця читача", title: esc(reader.name), sub, action: own ? `<div class="acts"><a class="btn primary" href="/add">+ Додати книжки</a></div>` : user?.id === reader.id ? "" : followButton(reader, following, user) })}
+${pageHead({ crumbs: own ? "" : `<a href="/community">Читачі</a> / ${esc(reader.name)}`, kicker: own ? "Моя полиця" : "Полиця читача", title: esc(reader.name), sub, extra: nowBlock(now, { own }), action: own ? `<div class="acts"><a class="btn primary" href="/add">+ Додати книжки</a></div>` : user?.id === reader.id ? "" : followButton(reader, following, user) })}
 <div class="split">
   <div>
     <div class="tabs-bar">
@@ -771,7 +798,7 @@ ${pageHead({ kicker: "Спільнота", title: "Що читають інші"
   <aside>
     ${label("Читачі")}
     <div class="people">${readers
-      .map((r) => `<div class="person"><p class="person-head"><a href="${attr(r.reader.href)}">${esc(r.reader.name)}</a>${followed.has(r.reader.id) ? `<span>стежу</span>` : r.thisYear ? `<span>${r.thisYear} цього року</span>` : ""}</p><p class="sub">${books(r.count)}, ${count(r.read, "прочитана", "прочитані", "прочитаних")}</p>${r.note ? `<p class="note">${r.note}</p>` : ""}</div>`)
+      .map((r) => `<div class="person"><p class="person-head"><a href="${attr(r.reader.href)}">${esc(r.reader.name)}</a>${followed.has(r.reader.id) ? `<span>стежу</span>` : r.thisYear ? `<span>${r.thisYear} цього року</span>` : ""}</p><p class="sub">${books(r.count)}, ${count(r.read, "прочитана", "прочитані", "прочитаних")}</p>${nowLine(r.now)}${r.note ? `<p class="note">${r.note}</p>` : ""}</div>`)
       .join("")}</div>
     <p class="small muted">Полиці відкриті для всіх.</p>
   </aside>
@@ -1042,6 +1069,24 @@ function welcomePage({ user, next = "" }) {
   <div class="welcome-end"><a class="btn primary" href="/add">Додати книжки</a><a class="text-link" href="${attr(next || "/")}">Пізніше</a></div>
 </section>`;
   return layout({ title: "Вітаємо", body, user, path: "/welcome" });
+}
+
+// /me/now: the status itself. The book in it, the shelf's other «Читаю» books, or none.
+function nowPage({ user, now, candidates }) {
+  const row = (book, on, meta = "") => `<label class="now-pick">${cover(book, "xs")}<span><b>${esc(book.title)}</b>${book.author ? `<span class="by">${esc(byline(book.author))}</span>` : ""}${meta ? `<span class="meta">${meta}</span>` : ""}</span><input type="radio" name="book" value="${attr(book.id)}"${on ? " checked" : ""}></label>`;
+  const body = `
+${pageHead({ crumbs: `<a href="${attr(user.href)}">Моя полиця</a>`, kicker: "Статус", title: "Читаю зараз", lead: "Що у тебе в руках зараз. Видно під твоїм ім’ям на сторінці й у списку читачів." })}
+<form method="post" action="/me/now" class="form now-form">
+  <h2>Книжка</h2>
+  <div class="now-picks">
+    ${now.books.map((n) => row(n.book, true, since(n.since))).join("")}
+    ${candidates.map((r) => row(r.book, false, "на полиці «Читаю»")).join("")}
+    ${now.books.length || candidates.length ? `<label class="now-pick"><span>Нічого зараз не читаю</span><input type="radio" name="book" value=""${now.books.length ? "" : " checked"}></label>` : ""}
+  </div>
+  ${!now.books.length && !candidates.length ? `<p class="muted small">На полиці немає книжок зі статусом «Читаю». Відкрий сторінку книжки і натисни «Читаю зараз».</p>` : `<p class="muted small">Іншої книжки тут немає? Відкрий її сторінку і натисни «Читаю зараз». Прочитана чи покинута книжка зникає зі статусу сама.</p>`}
+  <div class="actions"><span class="grow"></span><button class="btn primary">Зберегти</button></div>
+</form>`;
+  return layout({ title: "Читаю зараз", body, user, path: "/me" });
 }
 
 function settingsPage({ user, values, error = "", suggested = "", saved = false }) {
@@ -1349,6 +1394,7 @@ function messagePage({ title, text, user }) {
 }
 
 module.exports = {
+  nowPage,
   dupesPage,
   reviewsAdminPage,
   translationsPage,

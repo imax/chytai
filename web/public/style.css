@@ -611,3 +611,24 @@ form.inline button:not(.btn) { background: none; border: 0; padding: 0; cursor: 
 .twin b { font: 600 15px/1.3 var(--serif); }
 .twin:hover b { text-decoration: underline; text-decoration-color: var(--under); text-underline-offset: 3px; }
 .row.big .twins { margin-top: 10px; }
+
+/* «Читаю зараз»: the reader's status under their name, (2026-10-22). */
+.now { margin-top: 22px; padding: 14px 18px 16px; border-left: 2px solid var(--accent); background: color-mix(in oklab, var(--accent) 6%, transparent); border-radius: 0 6px 6px 0; max-width: 720px; }
+.now-head { display: flex; align-items: baseline; gap: 14px; }
+.now-head .kicker { margin: 0; }
+.now-books { display: flex; flex-wrap: wrap; gap: 14px 28px; margin-top: 12px; }
+.now-book { display: flex; gap: 12px; align-items: flex-start; max-width: 300px; }
+.now-book > span:last-child { min-width: 0; padding-top: 2px; }
+.now-book b { display: block; font: 600 15px/1.25 var(--serif); }
+.now-book .by { display: block; font-size: 13px; margin-top: 0; }
+.now-book .meta { display: block; font-size: 12px; margin-top: 4px; }
+.now-empty { margin-top: 18px; font-size: 14px; }
+.now-line { font-size: 13px; margin-top: 6px; }
+.now-line a { color: var(--ink); text-decoration: underline; text-decoration-color: var(--under); text-underline-offset: 3px; }
+.now-form { max-width: 640px; }
+.now-picks { display: flex; flex-direction: column; }
+.form label.now-pick { flex-direction: row; align-items: center; gap: 14px; padding: 10px 0; border-bottom: 1px solid var(--rule); color: var(--ink); cursor: pointer; }
+.now-pick > span:not(.cover) { flex: 1; min-width: 0; }
+.now-pick b { display: block; font: 600 15px/1.25 var(--serif); }
+.now-pick .by, .now-pick .meta { display: block; font-size: 12px; color: var(--muted); }
+.form .now-pick input[type="radio"] { width: 20px; height: 20px; padding: 0; accent-color: var(--accent); }

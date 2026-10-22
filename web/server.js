@@ -328,7 +328,7 @@ const readersOf = (id) =>
     .readersOf(id)
     .map(({ reader, entry }) => ({ reader: pub(auth.reader(reader)), entry }))
     .filter((r) => r.reader)
-    .map(({ reader, entry }) => ({ name: reader.name, href: `${reader.href}#${entry.via ? entry.via.id : store.canonical(id)}`, entry }));
+    .map(({ reader, entry }) => ({ name: reader.name, href: `${reader.href}#${entry.via ? entry.via.id : store.canonical(id)}`, entry, now: nowIds(reader.id).has(entry.via ? store.canonical(entry.via.id) : store.canonical(id)) }));
 const visible = (s) => store.visible(s);
 // Letters to the owner (WEB_NOTIFY_EMAIL, else the e-mail he signs in with), sent in the background.
 const site = (req) => (DOMAIN ? `https://${DOMAIN}` : `${req.protocol}://${req.get("host")}`);
@@ -366,7 +366,7 @@ function readerList() {
     .sort((a, b) => b.rows.length - a.rows.length)
     .map(({ reader, rows }) => {
       const last = social.feed({ limit: 1, notes: true, books: new Set(rows.map((r) => r.id)) }).find((x) => x.reader.id === reader.id);
-      return { reader, count: rows.length, read: rows.filter((r) => r.status === "read").length, thisYear: rows.filter((r) => r.status === "read" && r.year === year).length, note: last ? pages.inline(last.entry.note) : "" };
+      return { reader, now: nowFor(reader.id), count: rows.length, read: rows.filter((r) => r.status === "read").length, thisYear: rows.filter((r) => r.status === "read" && r.year === year).length, note: last ? pages.inline(last.entry.note) : "" };
     });
 }
 
@@ -474,9 +474,9 @@ app.get("/@:username", (req, res) => {
   if (own) {
     const fives = rows.filter((r) => r.rating >= 5).slice(0, 5).map((r) => r.id);
     const recs = social.alsoLiked(fives, { limit: 4, skip: new Set(rows.map((r) => r.id)) });
-    return res.send(pages.libraryPage({ rows, user: req.user, reader: req.user, own: true, recs, follows }));
+    return res.send(pages.libraryPage({ rows, user: req.user, reader: req.user, own: true, recs, follows, now: nowFor(reader.id, { own: true }) }));
   }
-  res.send(pages.libraryPage({ rows, user: req.user, reader, mineIds: req.user && req.user.id !== reader.id ? store.inLibrary(req.user.id) : null, following: auth.follows(req.user?.id, reader.id), follows }));
+  res.send(pages.libraryPage({ rows, user: req.user, reader, now: nowFor(reader.id), mineIds: req.user && req.user.id !== reader.id ? store.inLibrary(req.user.id) : null, following: auth.follows(req.user?.id, reader.id), follows }));
 });
 // The owner's page before usernames (/reader/max) moved to /@maxua.
 app.get(OLD_READER, (req, res) => res.redirect(301, pub(auth.reader(OWNER_ID)).href));
@@ -592,7 +592,7 @@ app.get("/book/:id", (req, res) => {
   if (store.href(id) !== `/book/${encodeURIComponent(req.params.id)}`) return res.redirect(301, store.href(id));
   const book = bookFor(req, store.bookPage(id), !!store.entry(req.user?.id, id));
   if (!book) return res.status(404).send(pages.messagePage({ title: "Немає такої книжки", text: "", user: req.user }));
-  res.send(pages.bookPage({ book, entry: store.sharedEntry(req.user?.id, book.id), user: req.user, shelf: book.shelf && (req.owner || !isDraft(book.shelf)) ? store.shelf(book.shelf) : null, inLibrary: inLibraryMap(req), readers: readersOf(book.id), also: social.alsoLiked([book.id], { limit: 4 }), writings: reviews.of(book.id, { owner: req.owner }) }));
+  res.send(pages.bookPage({ book, entry: store.sharedEntry(req.user?.id, book.id), now: !!req.user && nowIds(req.user.id).has(store.canonical(book.id)), user: req.user, shelf: book.shelf && (req.owner || !isDraft(book.shelf)) ? store.shelf(book.shelf) : null, inLibrary: inLibraryMap(req), readers: readersOf(book.id), also: social.alsoLiked([book.id], { limit: 4 }), writings: reviews.of(book.id, { owner: req.owner }) }));
 });
 
 // An author: their works from Wikidata (linked to our books of them) and every book of theirs we have.
@@ -641,6 +641,54 @@ const back = (req, res, fallback) => {
   res.redirect(/^\/(?!\/)/.test(next) ? next : req.body.back ? req.get("referer") || fallback : fallback);
 };
 
+// ---- «Читаю зараз» (Max, 2026-10-22: a reader's status) ----
+// The book the reader has in hand right now (one: Max, 2026-10-22); set by hand only. A book
+// leaves it when it is marked read, abandoned or wanted, or taken off the shelf.
+function nowFor(readerId, { own = false } = {}) {
+  const v = auth.nowOf(readerId);
+  const books = v.books
+    .map((n) => ({ id: store.canonical(n.id), since: n.since }))
+    .map((n) => ({ ...n, book: store.book(n.id), entry: store.entry(readerId, n.id) }))
+    .filter((n) => n.book && n.entry && (own || (n.entry.status !== "abandoned" && !isRussian(n.book))));
+  return { books };
+}
+const nowIds = (readerId) => new Set(auth.nowOf(readerId).books.map((n) => store.canonical(n.id)));
+function dropNow(readerId, id) {
+  const v = auth.nowOf(readerId);
+  const c = store.canonical(id);
+  if (v.books.some((n) => store.canonical(n.id) === c)) auth.setNow(readerId, { books: v.books.filter((n) => store.canonical(n.id) !== c) });
+}
+// From a book page: put it first (a book that wasn't «Читаю» becomes it; a read one stays read, it's a
+// re-read) or take it off. It takes the place of the book that was there.
+app.post("/api/now/:id", signed, (req, res) => {
+  const id = store.canonical(store.resolve(req.params.id) || "");
+  if (!id || !store.book(id)) return res.status(404).send("Немає такої книжки");
+  const v = auth.nowOf(req.user.id);
+  if (v.books.some((n) => store.canonical(n.id) === id)) dropNow(req.user.id, id);
+  else {
+    const e = store.entry(req.user.id, id);
+    if (!e || !["reading", "read"].includes(e.status)) store.setEntry(req.user.id, id, { status: "reading" });
+    auth.setNow(req.user.id, { books: [{ id, since: new Date().toISOString().slice(0, 10) }, ...v.books] });
+  }
+  req.body ||= {};
+  back(req, res, store.href(id));
+});
+app.get("/me/now", signed, (req, res) => {
+  const now = nowFor(req.user.id, { own: true });
+  const ids = new Set(now.books.map((n) => n.id));
+  const candidates = store.library(req.user.id).filter((r) => r.status === "reading" && !ids.has(r.id));
+  res.send(pages.nowPage({ user: req.user, now, candidates }));
+});
+app.post("/me/now", signed, (req, res) => {
+  const v = auth.nowOf(req.user.id);
+  const since = new Map(v.books.map((n) => [store.canonical(n.id), n.since]));
+  const today = new Date().toISOString().slice(0, 10);
+  req.body ||= {};
+  const picked = [...new Set([].concat(req.body.book || []).map((id) => store.canonical(store.resolve(String(id)) || "")))].filter((id) => store.entry(req.user.id, id));
+  auth.setNow(req.user.id, { books: picked.map((id) => ({ id, since: since.get(id) || today })) });
+  res.redirect(req.user.href);
+});
+
 const STATUSES = ["read", "reading", "want", "abandoned"];
 app.post("/api/entry/:id", signed, (req, res) => {
   const b = req.body;
@@ -652,10 +700,12 @@ app.post("/api/entry/:id", signed, (req, res) => {
   if ("note" in b) patch.note = String(b.note).trim();
   const e = store.setEntry(req.user.id, req.params.id, patch);
   if (!e) return res.status(404).send("Немає такої книжки");
+  if (["read", "want", "abandoned"].includes(patch.status)) dropNow(req.user.id, req.params.id);
   back(req, res, store.href(req.params.id));
 });
 
 app.post("/api/entry/:id/remove", signed, (req, res) => {
+  dropNow(req.user.id, req.params.id);
   store.removeEntry(req.user.id, req.params.id);
   res.redirect("/me");
 });
