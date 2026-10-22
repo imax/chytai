@@ -1094,8 +1094,16 @@ function addAside() {
   return `<div class="add-imports"><p class="add-k">Або імпортуйте</p>${row("/import/goodreads", "Goodreads", "Імпорт з CSV")}${row("/import/apple-books", "Apple Books", "Імпорт з Мака")}</div>`;
 }
 const addCrumbs = `<p class="add-k"><a href="/me">Моя полиця</a> · <b>Додати книжки</b></p>`;
+// The example list shows a few shapes a line can take, so nobody thinks there is one right way (Max):
+// «Назва, Автор», just the title, «Назва Прізвище», «Автор. Назва», all lower case.
+function exampleLine(b, i) {
+  const a = b.author || "";
+  const last = a.split(" ").pop();
+  if (!a) return b.title;
+  return [`${b.title}, ${a}`, b.title, `${b.title} ${last}`, `${a}. ${b.title}`, b.title.toLowerCase()][i % 5];
+}
 function addPage({ user, text = "", popular = [], error = "" }) {
-  const example = popular.length ? popular.map((b) => `${b.title}${b.author ? ` — ${b.author}` : ""}`).join("\n") : "Тарас Шевченко — Кобзар\nМісто — Валер'ян Підмогильний";
+  const example = popular.length ? popular.map(exampleLine).join("\n") : "Кобзар Тарас Шевченко\nМісто Валер'ян Підмогильний";
   const body = `<section class="add">
   <div class="add-intro">
     ${addCrumbs}
@@ -1106,7 +1114,7 @@ function addPage({ user, text = "", popular = [], error = "" }) {
   <form method="post" action="/import/list" class="add-paste">
     ${errorLine(error)}
     <div class="add-field"><textarea name="text" required spellcheck="false" placeholder="${attr(example)}">${esc(text)}</textarea>${popular.length ? `<span class="add-hint">Популярне на Chytai — як приклад</span>` : ""}</div>
-    <p class="small muted">Один рядок — одна книжка. Формат вільний: «Назва — Автор» або просто назва.</p>
+    <p class="small muted">Один рядок — одна книжка. Формат вільний: назва й автор або просто назва.</p>
     <button class="btn primary">Знайти книжки</button>
   </form>
   <div class="narrow-only">${addAside()}</div>

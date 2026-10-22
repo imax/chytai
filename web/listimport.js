@@ -106,6 +106,30 @@ function resolve(store, books) {
   return books.map((b) => {
     let { title, author, alt, ...rest } = b;
     if (alt && !store.findWork({ title, author }) && store.findWork(alt)) ({ title, author } = alt);
+    // No separator at all («Тигролови Іван Багряний»): try every place the line could split into a title and
+    // an author, either way round, and keep the first the catalog knows (Max, 2026-10-22: the example list
+    // goes without dashes).
+    if (!author && !store.findWork({ title })) {
+      const w = title.split(" ");
+      for (let k = 1; k < w.length && w.length <= 12; k++) {
+        const [a1, a2] = [w.slice(0, k).join(" "), w.slice(k).join(" ")];
+        const hit = [{ title: a1, author: a2 }, { title: a2, author: a1 }].find((x) => looksLikeName(x.author) && store.findWork(x));
+        if (hit) {
+          ({ title, author } = hit);
+          break;
+        }
+      }
+    }
+    // Nothing known: a name of two or three capitalised words at the end is the author («… Іван Іванов»).
+    if (!author && !store.findWork({ title })) {
+      const w = title.split(" ");
+      for (const n of [3, 2]) {
+        if (w.length > n && looksLikeName(w.slice(-n).join(" "))) {
+          [title, author] = [w.slice(0, -n).join(" "), w.slice(-n).join(" ")];
+          break;
+        }
+      }
+    }
     return { ...rest, title, author, touched: `${b.year || thisYear}-01-01T00:00:00.000Z` };
   });
 }
