@@ -708,7 +708,7 @@ ${list}
     ${followBlock}
   </aside>
 </div>
-${own ? addDialog() : ""}`;
+`;
   return layout({ title: own ? "Моя полиця" : reader.name, body, user, path: own ? "/me" : "/@", canonical: own ? "" : reader.href, noindex: true, description: own ? "" : `Книжки, які читає ${reader.name}: ${books(rows.length)}, оцінки й нотатки.`, jsonld: own ? null : { "@context": "https://schema.org", "@type": "ProfilePage", mainEntity: { "@type": "Person", name: reader.name, url: ORIGIN + reader.href } } });
 }
 
@@ -722,23 +722,6 @@ function followButton(reader, on, user) {
 function yearHead(year, rows) {
   const n = rows.filter((r) => (r.year ?? null) === (year ?? null)).length;
   return `<h2 class="year" data-year="${year ?? ""}">${year || "Без дати"} <span>${books(n)}</span></h2>`;
-}
-
-function addDialog() {
-  return `
-<dialog id="add">
-  <form method="post" action="/api/book" class="form">
-    <h2>Нова книжка</h2>
-    <label>Назва <input name="title" required autofocus></label>
-    <label>Автор <input name="author"></label>
-    <label>Обкладинка (URL) <input name="cover" type="url" placeholder="https://…"></label>
-    <div class="two">
-      <label>Статус <select name="status"><option value="">без статусу</option><option value="reading">Читаю</option><option value="read">Прочитано</option><option value="want" selected>Хочу прочитати</option></select></label>
-      <label>Примірник <select name="copy"><option value="">не вказано</option><option value="paper">На папері</option><option value="ebook">E-book</option><option value="seeking">Шукаю на папері</option></select></label>
-    </div>
-    <div class="actions"><a class="text-link small" href="/add">Кілька книжок, список чи імпорт</a><span class="grow"></span><button type="button" class="btn" data-close>Скасувати</button><button class="btn primary">Додати</button></div>
-  </form>
-</dialog>`;
 }
 
 // ---- readers (/community) ----
@@ -849,7 +832,8 @@ function searchPage({ q, user, results }) {
 function searchResults({ q, user, hits = [], authors = [], readers = [], shelves = [], similar = [], tag = "" }) {
   if (!q.trim()) return "";
   const n = hits.length + authors.length + readers.length + shelves.length;
-  if (!n) return `<p class="found">Нічого не знайшлося за «${esc(q)}». ${user ? `<button type="button" class="text-link" data-open="add">Додати книжку, якої ще немає на Chytai</button>` : ""}</p>${user ? addDialog() : ""}`;
+  const addLink = user ? `<a class="text-link" href="/add?text=${attr(encodeURIComponent(q))}">Додати книжку, якої ще немає на Chytai</a>` : "";
+  if (!n) return `<p class="found">Нічого не знайшлося за «${esc(q)}». ${addLink}</p>`;
   return `<p class="found">${count(n, "збіг", "збіги", "збігів")}${tag ? ` · жанр «${esc(tag)}»` : ""}</p>
 <div class="split">
   <div>
@@ -857,7 +841,7 @@ function searchResults({ q, user, hits = [], authors = [], readers = [], shelves
     ${hits.length ? `<section class="block">${label(`Книжки · ${hits.length}`)}<div class="rows">${hits.map((h) => bookRow(h.book, { meta: readersMeta(h.book.id), action: h.entry ? myStatus(h.entry) : markButtons(h.book, user) })).join("")}</div></section>` : ""}
     ${authors.length ? `<section class="block">${label(`Автори · ${authors.length}`)}<div class="name-rows">${authors.map((a) => `<a class="name-row" href="${attr(a.href)}"><b>${esc(a.name)}</b><span>${[books(a.books), a.readers ? count(a.readers, "читач", "читачі", "читачів") : ""].filter(Boolean).join(" · ")}</span></a>`).join("")}</div></section>` : ""}
     ${readers.length ? `<section class="block">${label(`Читачі · ${readers.length}`)}<div class="name-rows">${readers.map((r) => `<a class="name-row" href="${attr(r.reader.href)}"><b>${esc(r.reader.name)}</b><span>${books(r.count)}</span></a>`).join("")}</div></section>` : ""}
-    ${user ? `<p class="muted end-note">Не те? <button type="button" class="text-link" data-open="add">Додати книжку, якої ще немає на Chytai</button></p>${addDialog()}` : ""}
+    ${user ? `<p class="muted end-note">Не те? ${addLink}</p>` : ""}
   </div>
   <aside>${similar.length ? `${label("Схоже на те, що шукаєш")}${minis(similar)}` : ""}</aside>
 </div>`;

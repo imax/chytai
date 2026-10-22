@@ -238,7 +238,8 @@ const popular = () => {
   const list = [...n].sort((a, b) => b[1] - a[1]).map(([id]) => store.book(id)).filter((b) => b && b.title.length <= 40).slice(0, 5).map((b) => ({ title: b.title, author: pages.byline(b.author || "") }));
   return (popularCache = { at: Date.now(), list }).list;
 };
-app.get("/add", signed, (req, res) => res.send(pages.addPage({ user: req.user, popular: popular() })));
+// ?text= fills the list: «Додати книжку, якої ще немає» from a search that found nothing (the old one-book form is gone).
+app.get("/add", signed, (req, res) => res.send(pages.addPage({ user: req.user, text: String(req.query.text || "").slice(0, 2000), popular: popular() })));
 app.get("/api/add/find", signed, (req, res) => res.set("Cache-Control", "no-store").send(pages.addFindResults(store.search(String(req.query.q || "").slice(0, 100), { limit: 6 }))));
 const IMPORTS = {
   list: { name: "списку", parse: null },

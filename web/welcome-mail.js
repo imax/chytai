@@ -41,8 +41,16 @@ class WelcomeMail {
     const subject = fill(first.replace(/^Тема:\s*/, ""), false);
     const paras = rest.join("\n").trim().split(/\n\s*\n/);
     // Plain text: links as «text (url)», unless the text is the address itself.
-    const text = paras.map((p) => fill(p, false).replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_, t, u) => (u.replace(/^https?:\/\//, "").startsWith(t) ? u : `${t} (${u})`))).join("\n\n");
-    const body = paras.map((p) => `<p style="font-size:16px;line-height:1.55;color:#3d3a33;margin:0 0 16px">${marked.parseInline(fill(p, true)).replace(/<a /g, '<a style="color:#1b1a17" ').replace(/\n/g, "<br>")}</p>`).join("\n  ");
+    const text = paras.map((p) => fill(p, false).replace(/^Кнопка:\s*\[([^\]]+)\]\(([^)]+)\)\s*$/, "$1: $2").replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_, t, u) => (u.replace(/^https?:\/\//, "").startsWith(t) ? u : `${t} (${u})`))).join("\n\n");
+    // A paragraph «Кнопка: [Текст](адреса)» is a green button (Max, 2026-10-22: «кнопку Додати книжки в welcome email»).
+    const BUTTON = /^Кнопка:\s*\[([^\]]+)\]\(([^)]+)\)\s*$/;
+    const body = paras
+      .map((p) => {
+        const b = BUTTON.exec(p.trim());
+        if (b) return `<p style="margin:6px 0 22px"><a href="${esc(fill(b[2], false))}" style="display:inline-block;background:#24613f;color:#fff;text-decoration:none;font-size:15px;font-weight:500;padding:12px 24px;border-radius:999px">${esc(fill(b[1], false))}</a></p>`;
+        return `<p style="font-size:16px;line-height:1.55;color:#3d3a33;margin:0 0 16px">${marked.parseInline(fill(p, true)).replace(/<a /g, '<a style="color:#1b1a17" ').replace(/\n/g, "<br>")}</p>`;
+      })
+      .join("\n  ");
     const html = `<!doctype html><html lang="uk"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="color-scheme" content="light"><title>${esc(subject)}</title></head>
 <body style="margin:0;background:#f7f4ee;color:#1b1a17;font-family:Onest,-apple-system,BlinkMacSystemFont,'Helvetica Neue',Arial,sans-serif;-webkit-font-smoothing:antialiased">
 <div style="max-width:560px;margin:0 auto;padding:32px 20px 40px">
