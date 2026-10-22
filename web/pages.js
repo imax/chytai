@@ -1428,12 +1428,33 @@ function digestPage({ on, action, user }) {
 </section>` });
 }
 
+// /admin/letter: Max's own text on top of the next Friday letter (digest.js). He writes it; the page only keeps it.
+function letterEditorPage({ user, editorial: e, sent, audiences, counts, next, saved }) {
+  const MONTHS = ["січня", "лютого", "березня", "квітня", "травня", "червня", "липня", "серпня", "вересня", "жовтня", "листопада", "грудня"];
+  const day = (d) => `${d.getDate()} ${MONTHS[d.getMonth()]}`;
+  const iso = (s) => day(new Date(s));
+  const aud = e?.audience || "all";
+  const body = `
+${pageHead({ crumbs: `<a href="/admin">Статистика</a>`, kicker: "Щотижневий лист", title: "Твій текст у листі", sub: `Стоїть на початку листа, над тим, що сталося на полицях читача. Піде з листом у п’ятницю, ${day(next)}, о 9:00, і більше не повториться.` })}
+<form method="post" action="/admin/letter" class="form">
+  ${saved ? `<p class="saved">Збережено.</p>` : ""}
+  <label>Тема листа<input type="text" name="subject" value="${attr(e?.subject || "")}" maxlength="120" placeholder="Як порожньо, тема складається сама з новин полиць"></label>
+  <label>Текст<textarea name="text" rows="14" placeholder="Абзаци через порожній рядок. Посилання: [текст](https://…)">${esc(e?.text || "")}</textarea></label>
+  <label>Кому<select name="audience">${Object.entries(audiences).map(([k, l]) => `<option value="${k}"${k === aud ? " selected" : ""}>${esc(l)} (${counts[k]})</option>`).join("")}</select><span class="hint">Решта отримають свій звичайний лист без цього тексту, якщо на їхніх полицях є новини.</span></label>
+  <div class="actions"><button class="btn primary">Зберегти</button><button class="btn" name="preview" value="1">Зберегти й подивитись лист</button><span class="grow"></span>${e ? `<span class="muted small">Змінено ${iso(e.updated)}</span>` : ""}</div>
+  <p class="muted small">Щоб нічого не додавати до листа, зітри текст і збережи.</p>
+</form>
+${sent.length ? `<section class="form"><h2>Уже надіслані</h2>${sent.map((x) => `<details><summary>${iso(x.sent)}${x.subject ? ` · ${esc(x.subject)}` : ""} · ${x.readers} ${x.readers % 10 === 1 && x.readers % 100 !== 11 ? "читачу" : "читачам"}</summary><p class="muted small" style="white-space:pre-wrap">${esc(x.text)}</p></details>`).join("")}</section>` : ""}`;
+  return layout({ title: "Текст у листі", body, user, path: "/admin", noindex: true });
+}
+
 function messagePage({ title, text, user }) {
   return layout({ title, body: pageHead({ title: esc(title), sub: esc(text) }), user, noindex: true });
 }
 
 module.exports = {
   nowPage,
+  letterEditorPage,
   dupesPage,
   reviewsAdminPage,
   translationsPage,

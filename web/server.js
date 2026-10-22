@@ -19,7 +19,7 @@ const wikidata = require("./wikidata");
 const authors = require("./authors");
 const { Social } = require("./social");
 const goodreads = require("./goodreads");
-const { Digest } = require("./digest");
+const { Digest, AUDIENCES } = require("./digest");
 const { WelcomeMail } = require("./welcome-mail");
 const listimport = require("./listimport");
 const applebooks = require("./applebooks");
@@ -836,23 +836,42 @@ app.get("/digest/preview", owner, async (req, res) => {
   const reader = req.query.reader ? auth.byUsername(req.query.reader) : auth.reader(req.user.id);
   if (!reader) return res.status(404).send("Немає такого читача");
   const d = await digest.build(reader.id);
-  if (d.empty) return res.type("text").send(`@${reader.username}: за цей період нічого нового, лист не пішов би.\n\n${JSON.stringify(d.state, null, 2)}`);
-  const letter = digest.render({ ...reader }, d);
+  const ed = digest.editorial();
+  const editorial = ed && digest.audience(ed.audience).has(reader.id) ? ed : null;
+  if (d.empty && !editorial) return res.type("text").send(`@${reader.username}: за цей період нічого нового, лист не пішов би.\n\n${JSON.stringify(d.state, null, 2)}`);
+  const letter = digest.render({ ...reader }, d, editorial);
   if (req.query.text) return res.type("text").send(`Тема: ${letter.subject}\n\n${letter.text}`);
   // On top of the letter, for the owner: the subject and a button that mails it to them.
-  const bar = `<div style="background:#1b1a17;color:#ece8df;font:14px -apple-system,sans-serif;padding:10px 20px;display:flex;gap:16px;align-items:center;flex-wrap:wrap"><span>Тема: <b>${pages.esc(letter.subject)}</b></span><span style="flex:1"></span><a href="?text=1" style="color:#a29d92">текстова версія</a>${reader.id === req.user.id ? `<form method="post" action="/api/digest?test=1" style="margin:0"><button style="border:1px solid #ece8df;background:none;color:#ece8df;border-radius:999px;padding:6px 14px;cursor:pointer">Надіслати собі</button></form>` : ""}</div>`;
+  const bar = `<div style="background:#1b1a17;color:#ece8df;font:14px -apple-system,sans-serif;padding:10px 20px;display:flex;gap:16px;align-items:center;flex-wrap:wrap"><span>Тема: <b>${pages.esc(letter.subject)}</b></span><span style="flex:1"></span><a href="/admin/letter" style="color:#a29d92">твій текст</a><a href="?text=1${req.query.reader ? `&reader=${encodeURIComponent(req.query.reader)}` : ""}" style="color:#a29d92">текстова версія</a>${reader.id === req.user.id ? `<form method="post" action="/api/digest?test=1" style="margin:0"><button style="border:1px solid #ece8df;background:none;color:#ece8df;border-radius:999px;padding:6px 14px;cursor:pointer">Надіслати собі</button></form>` : ""}</div>`;
   res.send(letter.html.replace("<body", `${bar}<body`));
 });
 // POST /api/digest?test=1 mails the owner their own letter without recording it; without `test` it is the
 // weekly run itself (every recipient, recorded), for when the Friday timer has to be redone by hand.
 app.post("/api/digest", owner, async (req, res) => {
   if (req.query.test) {
-    const r = await digest.sendTo(auth.reader(req.user.id), { dry: true, force: true });
+    const r = await digest.sendTo(auth.reader(req.user.id), { dry: true, force: true, editorial: digest.editorial() });
     return res.send(pages.messagePage({ title: r.sent ? "Лист надіслано" : "Листа не було б", text: r.sent ? `Тема: ${r.subject}` : r.reason, user: req.user }));
   }
   const r = await digest.run();
   res.send(pages.messagePage({ title: "Розсилку виконано", text: `надіслано ${r.sent}, пропущено ${r.skipped}${r.errors.length ? `; помилки: ${r.errors.join("; ")}` : ""}`, user: req.user }));
 });
+// Max's own text on top of the next Friday letter (digest.js): a form, who gets it, what went out before.
+app.get("/admin/letter", owner, (req, res) => {
+  res.send(pages.letterEditorPage({ user: req.user, editorial: digest.editorial(), sent: digest.sentEditorials(), audiences: AUDIENCES, counts: digest.audienceCounts(), next: nextFriday(), saved: !!req.query.saved }));
+});
+app.post("/admin/letter", owner, (req, res) => {
+  digest.setEditorial({ subject: String(req.body.subject || ""), text: String(req.body.text || ""), audience: String(req.body.audience || "all") });
+  res.redirect(303, req.body.preview ? "/digest/preview" : "/admin/letter?saved=1");
+});
+// The next Friday 9:00 Kyiv the letter goes out, for the form's «піде …» line (today, until the run has been).
+function nextFriday() {
+  const t = new Date(new Date().toLocaleString("en-US", { timeZone: "Europe/Kyiv" }));
+  const today = `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, "0")}-${String(t.getDate()).padStart(2, "0")}`;
+  let add = (5 - t.getDay() + 7) % 7;
+  if (add === 0 && store.db.get("digest:lastRun") === today) add = 7;
+  t.setDate(t.getDate() + add);
+  return t;
+}
 // The owner looks at the welcome letter (as their own, or ?reader=<username>'s), mails it to themselves and
 // switches it on or off for new readers.
 app.get("/welcome-mail/preview", owner, (req, res) => {

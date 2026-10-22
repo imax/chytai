@@ -354,7 +354,7 @@ ${s.cohorts.length ? `<div class="tbl"><table class="cohorts">
 <tbody>${readerRows}</tbody></table></div>
 
 <h2>Щотижневий лист</h2>
-<p>${digestLine} <a class="text-link" href="/digest/preview">Переглянути свій лист</a> · <a class="text-link" href="/digest/status">стан розсилки</a> · <a class="text-link" href="/refresh-status">стан каталогів</a></p>
+<p>${digestLine} <a class="text-link" href="/admin/letter">Твій текст у листі</a> · <a class="text-link" href="/digest/preview">Переглянути свій лист</a> · <a class="text-link" href="/digest/status">стан розсилки</a> · <a class="text-link" href="/refresh-status">стан каталогів</a></p>
 <p class="muted small">Сесій (пристроїв, що залишились увійшовши): ${t.sessions}.</p>
 </section>`;
   return layout({ title: "Статистика", user, path: "/admin", body });

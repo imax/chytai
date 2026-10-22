@@ -8,7 +8,12 @@
 // signing in, and a switch in /settings; the mail client's own unsubscribe button works too
 // (List-Unsubscribe). Everyone who has not switched it off gets it (Max looked at his own first and said
 // «Включаємо на всіх», 2026-10-20); WEB_DIGEST_TO=owner sends it to the owner alone.
+// Max's own text on top of the letter (2026-10-22: «editorial текст, який йде наверх розсилки»): he writes it on
+// /admin/letter; it goes out with the next Friday letter, to the readers he picks there, and then moves to the
+// archive so it never goes twice. A reader whose shelves had nothing new still gets the letter when it has his
+// text. Max writes every word of it; nothing here writes it for him.
 const crypto = require("crypto");
+const { marked } = require("marked");
 const pages = require("./pages");
 const { isRussian } = require("./store");
 
@@ -20,6 +25,13 @@ const MAX_FEED = 6;
 const MAX_NEW = 5;
 const MAX_WANT = 6;
 const WANT_LOOKUPS = 30; // how many «хочу прочитати» books get a library lookup per letter
+
+// Who gets Max's text (the others still get their letter when their shelves have news, without it).
+const AUDIENCES = {
+  all: "усім, хто не відписався",
+  books: "тим, у кого на полиці є хоч одна книжка",
+  returning: "тим, хто заходив на сайт хоча б двічі (у різні дні)",
+};
 
 const esc = pages.esc;
 const attr = esc;
@@ -78,6 +90,39 @@ class Digest {
   }
   setEnabled(readerId, on) {
     this.store.db.prepare("UPDATE readers SET digest = ? WHERE id = ?").run(on ? 1 : 0, readerId);
+  }
+
+  // ---- Max's text ----
+
+  // The text for the next letter: { subject, text, audience, updated } or null. `audience` is who gets it.
+  editorial() {
+    const e = JSON.parse(this.store.db.get("digest:editorial") || "null");
+    return e && e.text && e.text.trim() ? e : null;
+  }
+  setEditorial({ subject = "", text = "", audience = "all" }) {
+    const e = { subject: subject.trim(), text: text.replace(/\r\n/g, "\n").trim(), audience: AUDIENCES[audience] ? audience : "all", updated: new Date().toISOString() };
+    this.store.db.set("digest:editorial", e.text ? JSON.stringify(e) : "null");
+  }
+  // The texts that went out, newest first.
+  sentEditorials() {
+    return JSON.parse(this.store.db.get("digest:editorials") || "[]");
+  }
+  // Who an audience is, as reader ids among the recipients.
+  audience(kind) {
+    const db = this.store.db;
+    const all = this.recipients();
+    if (kind === "books") {
+      const has = new Set(db.prepare("SELECT DISTINCT reader FROM entries").all().map((r) => r.reader));
+      return new Set(all.filter((r) => has.has(r.id)).map((r) => r.id));
+    }
+    if (kind === "returning") {
+      const back = new Set(db.prepare("SELECT reader FROM visits GROUP BY reader HAVING COUNT(*) >= 2").all().map((r) => r.reader));
+      return new Set(all.filter((r) => back.has(r.id) || r.id === this.ownerId).map((r) => r.id));
+    }
+    return new Set(all.map((r) => r.id));
+  }
+  audienceCounts() {
+    return Object.fromEntries(Object.keys(AUDIENCES).map((k) => [k, this.audience(k).size]));
   }
 
   // ---- what goes in ----
@@ -173,13 +218,38 @@ class Digest {
     const pick = this.social.picks(40).find((x) => x.reader.id !== readerId && !own.has(x.id)) || null;
 
     const state = { avail };
-    if (!feed.length && !news.length && !want.length) return { empty: true, state, since, now };
-    return { empty: false, state, since, now, feed, feedMore: feedAll.length - feed.length, news, newsMore: fresh.filter((x) => x.book).length - news.length, want, reading, pick };
+    const site = this.siteWeek(now);
+    const empty = !feed.length && !news.length && !want.length;
+    return { empty, state, since, now, site, feed, feedMore: feedAll.length - feed.length, news, newsMore: fresh.filter((x) => x.book).length - news.length, want, reading, pick };
+  }
+
+  // The site's week in numbers (Max, 2026-10-22: «скільки додалось читачів, скільки додалось книжок»): the last
+  // seven days, the same for every reader. Imports count as books added; that is what happened on the shelves.
+  siteWeek(now = new Date()) {
+    const db = this.store.db;
+    const from = new Date(now - 7 * DAY).toISOString();
+    const one = (sql, ...a) => db.prepare(sql).get(...a).n;
+    const reviews = (() => {
+      try {
+        return one("SELECT COUNT(*) AS n FROM reviews WHERE added_by != '' AND seen >= ?", from);
+      } catch {
+        return 0;
+      }
+    })();
+    return {
+      readers: one("SELECT COUNT(*) AS n FROM readers"),
+      newReaders: one("SELECT COUNT(*) AS n FROM readers WHERE created >= ?", from),
+      added: one("SELECT COUNT(*) AS n FROM entries WHERE added >= ?", from),
+      read: one("SELECT COUNT(*) AS n FROM entries WHERE status = 'read' AND updated >= ?", from),
+      notes: one("SELECT COUNT(*) AS n FROM entries WHERE note != '' AND updated >= ?", from),
+      reviews,
+    };
   }
 
   // ---- the letter ----
 
-  render(reader, d) {
+  // `editorial` is Max's text for this reader's letter, or null.
+  render(reader, d, editorial = null) {
     const site = this.site;
     const url = (href) => (href.startsWith("http") ? href : site + href);
     const when = period(d.since, d.now);
@@ -198,8 +268,9 @@ class Digest {
     }
     if (d.want.length) bits.push(`«${d.want[0].book.title}» ${d.want[0].places[0].key.startsWith("lib:") ? "є в бібліотеці" : "з'явилась у каталозі"}`);
     // The subject takes the pieces that fit in about 90 characters, the first one always.
-    const subject = bits.map((b) => b.replace(/«([^»]+)»/g, (_, t) => `«${short(t)}»`)).reduce((acc, b) => (!acc ? b : `${acc}, ${b}`.length <= 90 ? `${acc}, ${b}` : acc), "") || `Chytai: тиждень ${when}`;
-    const lead = `${bits.map((b, i) => (i ? b : b.charAt(0).toUpperCase() + b.slice(1))).join(", ")}.`;
+    const auto = bits.map((b) => b.replace(/«([^»]+)»/g, (_, t) => `«${short(t)}»`)).reduce((acc, b) => (!acc ? b : `${acc}, ${b}`.length <= 90 ? `${acc}, ${b}` : acc), "");
+    const subject = editorial?.subject || auto || `Chytai: тиждень ${when}`;
+    const lead = bits.length ? `${bits.map((b, i) => (i ? b : b.charAt(0).toUpperCase() + b.slice(1))).join(", ")}.` : "";
 
     const cover = (book) => (book.cover ? `<img src="${attr(book.cover)}" width="44" height="64" alt="" style="width:44px;height:64px;object-fit:cover;border-radius:3px;display:block;background:#ded8cb">` : `<div style="width:44px;height:64px;border-radius:3px;background:#ded8cb"></div>`);
     const row = (book, who, note = "") => `<tr><td style="padding:12px 0;border-bottom:1px solid #e4dfd5;vertical-align:top;width:44px">${cover(book)}</td><td style="padding:12px 0 12px 14px;border-bottom:1px solid #e4dfd5;vertical-align:top">
@@ -211,7 +282,13 @@ class Digest {
     const stars = (r) => (r == null ? "" : ` · <span style="color:#3d7a55;letter-spacing:1px">${starsText(r)}</span>`);
     const b = (t) => `<b style="color:#1b1a17;font-weight:500">${esc(t)}</b>`;
     const html = [];
-    const text = [`Chytai, ${when}`, "", lead, ""];
+    const text = [`Chytai, ${when}`, ""];
+    // Max's text: Markdown paragraphs (a single line break stays one), links allowed.
+    const paras = editorial ? editorial.text.split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean) : [];
+    if (paras.length) text.push(paras.map((p) => p.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_, t, u) => (u.replace(/^https?:\/\//, "").startsWith(t) ? u : `${t} (${u})`))).join("\n\n"), "");
+    const own = paras.map((p) => `<p style="font-family:'Source Serif 4',Georgia,serif;font-size:17px;line-height:1.55;color:#1b1a17;margin:0 0 16px">${marked.parseInline(esc(p).replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (m) => m.replace(/&amp;/g, "&"))).replace(/<a /g, '<a style="color:#1b1a17" ').replace(/\n/g, "<br>")}</p>`).join("\n  ");
+    const shelvesNews = d.feed.length || d.news.length || d.want.length;
+    if (shelvesNews) text.push(...(paras.length ? ["—", "", "ЩО СТАЛОСЯ НА ВАШИХ ПОЛИЦЯХ"] : []), lead, "");
 
     if (d.feed.length) {
       html.push(label("Читачі, за якими ви стежите", ["стрічка", `${site}/community`]));
@@ -247,14 +324,31 @@ class Digest {
 </div>`);
       text.push("ОДНА КНИЖКА НА ВИХІДНІ", `${p.reader.name} про «${p.book.title}»${p.book.author ? ` (${p.book.author})` : ""}${p.entry.rating != null ? `, ${uk(p.entry.rating)}/5` : ""}:`, p.entry.note.replace(/\s+/g, " ").slice(0, 400), url(p.book.href), "");
     }
+    // The site's week: numbers that are not zero, in one small block at the end.
+    const w = d.site;
+    const nums = w ? [
+      [w.newReaders, plural(w.newReaders, "новий читач", "нових читачі", "нових читачів"), `усього ${w.readers}`],
+      [w.added, plural(w.added, "книжку додали на полиці", "книжки додали на полиці", "книжок додали на полиці")],
+      [w.read, plural(w.read, "книжку позначили прочитаною", "книжки позначили прочитаними", "книжок позначили прочитаними")],
+      [w.notes, plural(w.notes, "нотатку про книжку", "нотатки про книжки", "нотаток про книжки")],
+      [w.reviews, plural(w.reviews, "огляд додали до книжок", "огляди додали до книжок", "оглядів додали до книжок")],
+    ].filter(([n]) => n > 0) : [];
+    if (nums.length) {
+      html.push(label("Chytai за тиждень"));
+      html.push(`<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse:collapse;margin-top:6px">${nums.map(([n, l, sub]) => `<tr><td style="padding:7px 14px 7px 0;width:1%;white-space:nowrap;text-align:right;font-family:'Source Serif 4',Georgia,serif;font-size:22px;color:#1b1a17;vertical-align:baseline">${n}</td><td style="padding:7px 0;font-size:15px;color:#3d3a33;vertical-align:baseline">${l}${sub ? ` <span style="color:#6b675f;font-size:13px">· ${sub}</span>` : ""}</td></tr>`).join("")}</table>`);
+      text.push("CHYTAI ЗА ТИЖДЕНЬ", ...nums.map(([n, l, sub]) => `${n} ${l}${sub ? ` (${sub})` : ""}`), "");
+    }
     text.push("—", "Цей лист приходить раз на тиждень, у п'ятницю вранці, і лише коли є що розповісти.", `Відписатися: ${unsub}`, `Налаштування: ${site}/settings`);
 
     const page = `<!doctype html><html lang="uk"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="color-scheme" content="light"><title>${esc(subject)}</title></head>
 <body style="margin:0;background:#f7f4ee;color:#1b1a17;font-family:Onest,-apple-system,BlinkMacSystemFont,'Helvetica Neue',Arial,sans-serif;-webkit-font-smoothing:antialiased">
 <div style="max-width:560px;margin:0 auto;padding:32px 20px 40px">
   <div style="font-weight:600;font-size:15px"><a href="${site}" style="color:#1b1a17;text-decoration:none">Chytai</a> <span style="color:#6b675f;font-weight:400;margin-left:10px">${esc(when)}</span></div>
-  <h1 style="font-family:'Source Serif 4',Georgia,serif;font-weight:500;font-size:26px;line-height:1.25;margin:22px 0 6px">Що сталося на ваших полицях за тиждень</h1>
-  <p style="color:#3d3a33;font-size:15px;line-height:1.5;margin:0 0 26px">${esc(lead)}</p>
+  ${own ? `<div style="margin:24px 0 10px">
+  ${own}
+  </div>` : ""}
+  ${shelvesNews ? `<h${own ? 2 : 1} style="font-family:'Source Serif 4',Georgia,serif;font-weight:500;font-size:${own ? 21 : 26}px;line-height:1.25;margin:${own ? "34px" : "22px"} 0 6px">Що сталося на ваших полицях за тиждень</h${own ? 2 : 1}>
+  <p style="color:#3d3a33;font-size:15px;line-height:1.5;margin:0 0 26px">${esc(lead)}</p>` : ""}
   ${html.join("\n")}
   <div style="border-top:1px solid #1b1a17;margin-top:36px;padding-top:14px;font-size:12px;line-height:1.6;color:#6b675f">
     Цей лист приходить раз на тиждень, у п'ятницю вранці, і лише коли є що розповісти.<br>
@@ -273,12 +367,13 @@ class Digest {
     return this.auth.readers().filter((r) => r.email && r.digest !== 0 && (this.to === "all" || r.id === this.ownerId));
   }
 
-  async sendTo(reader, { now = new Date(), dry = false, force = false } = {}) {
+  // `editorial`: Max's text when this reader is in its audience (the run decides), else null.
+  async sendTo(reader, { now = new Date(), dry = false, force = false, editorial = null } = {}) {
     const d = await this.build(reader.id, { now });
     if (!dry) this.store.db.prepare("INSERT INTO digest_log (reader, sent, state) VALUES (?, ?, ?) ON CONFLICT (reader) DO UPDATE SET sent = excluded.sent, state = excluded.state").run(reader.id, now.toISOString(), JSON.stringify(d.state));
-    if (d.empty && !force) return { sent: false, reason: "nothing new" };
-    if (d.empty) return { sent: false, reason: "nothing new (forced: still nothing to show)" };
-    const letter = this.render(reader, d);
+    if (d.empty && !editorial && !force) return { sent: false, reason: "nothing new" };
+    if (d.empty && !editorial) return { sent: false, reason: "nothing new (forced: still nothing to show)" };
+    const letter = this.render(reader, d, editorial);
     await this.auth.send(reader.email, letter.subject, letter.text, { html: letter.html, headers: { "List-Unsubscribe": `<${letter.unsubscribe}>`, "List-Unsubscribe-Post": "List-Unsubscribe=One-Click" } });
     return { sent: true, subject: letter.subject };
   }
@@ -287,10 +382,15 @@ class Digest {
   async run({ now = new Date() } = {}) {
     if (this.running) return this.running;
     const out = { started: now.toISOString(), sent: 0, skipped: 0, errors: [] };
+    // Max's text is read once, at the start, so an edit during the run does not split the letters.
+    const editorial = this.editorial();
+    const audience = editorial ? this.audience(editorial.audience) : new Set();
+    let withText = 0;
     this.running = (async () => {
       for (const r of this.recipients()) {
         try {
-          const res = await this.sendTo(r, { now });
+          const res = await this.sendTo(r, { now, editorial: audience.has(r.id) ? editorial : null });
+          if (res.sent && audience.has(r.id)) withText++;
           res.sent ? out.sent++ : out.skipped++;
           this.log(`digest @${r.username}: ${res.sent ? `sent «${res.subject}»` : res.reason}`);
         } catch (e) {
@@ -299,6 +399,13 @@ class Digest {
         }
       }
       out.finished = new Date().toISOString();
+      // The text went out: into the archive, so the next letter starts without it.
+      if (editorial && withText) {
+        out.editorial = withText;
+        const db = this.store.db;
+        db.set("digest:editorials", JSON.stringify([{ ...editorial, sent: out.started, readers: withText }, ...this.sentEditorials()]));
+        if (JSON.stringify(this.editorial()) === JSON.stringify(editorial)) db.set("digest:editorial", "null");
+      }
       this.store.db.set("digest:last", JSON.stringify(out));
       return out;
     })().finally(() => (this.running = null));
@@ -319,4 +426,4 @@ class Digest {
   }
 }
 
-module.exports = { Digest };
+module.exports = { Digest, AUDIENCES };
