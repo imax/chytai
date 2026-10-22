@@ -33,6 +33,7 @@ const SECTIONS = [
   ["book", "Книжки", (p) => p.startsWith("/book/")],
   ["author", "Автори", (p) => p.startsWith("/author/")],
   ["search", "Пошук", (p) => p === "/search"],
+  ["popular", "Популярне", (p) => p === "/popular"],
   ["publishers", "Видавництва", (p) => p === "/publishers" || p.startsWith("/publishers/") || p.startsWith("/shelf/")],
   ["community", "Спільнота", (p) => p === "/community" || p === "/readers"],
   ["shelf", "Полиці читачів", (p) => p.startsWith("/@") || p.startsWith("/reader/")],
