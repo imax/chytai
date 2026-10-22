@@ -130,7 +130,7 @@ ${path === "/" ? `<meta name="google-site-verification" content="5cswdBTj0bCY9oY
 <main class="${home ? "home" : ""}">
 ${body}
 </main>
-<footer class="foot"><div class="bar"><span class="motto">Chytai.org.ua: читай більше.</span><a href="https://chytai.fly.dev">Читалка</a><a href="/updates">Що нового</a><a href="/privacy">Приватність</a><a href="mailto:ischenko@gmail.com">Написати нам</a>${user?.owner ? `<a href="/admin">Адмінка</a>` : ""}</div></footer>
+<footer class="foot"><div class="bar"><span class="motto">Chytai.org.ua: читай більше.</span><a href="https://app.chytai.org.ua">Читалка</a><a href="/updates">Що нового</a><a href="/privacy">Приватність</a><a href="mailto:ischenko@gmail.com">Написати нам</a>${user?.owner ? `<a href="/admin">Адмінка</a>` : ""}</div></footer>
 <script src="${ASSETS.js}"></script>
 </body>
 </html>`;
@@ -1091,7 +1091,7 @@ function welcomePage({ user, next = "" }) {
     ${step("01", "Зберіть свою полицю", "Діліться своїми книжками, оцінками й рейтингами.", "/add", "Додати книжки")}
     ${step("02", "Дивіться, що читають інші", "Знаходьте людей зі схожими смаками і додавайте їх книжки собі.", "/community", "Спільнота")}
     ${step("03", "Знаходьте нові книжки для себе", "Пошук по каталогах українських видавництв, полицях читачів та офлайн бібліотеках.", "/", "Каталог")}
-    ${step("04", "Читалка з AI-explainer (beta)", "Для зручного читання. Веб версія і мобільний застосунок (поки в TestFlight).", "https://chytai.fly.dev/", "Читалка", true)}
+    ${step("04", "Читалка з AI-explainer (beta)", "Для зручного читання. Веб версія і мобільний застосунок (поки в TestFlight).", "https://app.chytai.org.ua/", "Читалка", true)}
   </ol>
   <div class="welcome-end"><a class="btn primary" href="/add">Додати книжки</a><a class="text-link" href="${attr(next || "/")}">Пізніше</a></div>
 </section>`;
