@@ -104,6 +104,61 @@ class Social {
     return out;
   }
 
+  // «Популярне» (/popular): what readers do most, by work (a translation counts for its pair, shown as the
+  // Ukrainian one). Kept for ten minutes: it looks at every entry of every reader.
+  // `reading` — readers with it «Читаю» now; `want` — «Хочу прочитати»; `top` — the best mean rating
+  // with a few ratings at least; `month` — readers who added, rated or changed it in the last 30 days.
+  popular({ limit = 12 } = {}) {
+    if (this.pop && Date.now() - this.pop.at < 10 * 60 * 1000) return this.pop.out;
+    const s = this.store;
+    const key = (id) => {
+      const c = s.canonical(id);
+      const tr = s.translations?.get(c);
+      return tr?.size ? [c, ...tr].sort()[0] : c;
+    };
+    const cutoff = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
+    const works = new Map(); // key -> { ids, reading, want, sum, rated, month }
+    for (const { reader, id, entry: e } of this.all()) {
+      const k = key(id);
+      const w = works.get(k) || works.set(k, { ids: new Map(), reading: new Set(), want: new Set(), sum: 0, rated: 0, month: new Set(), all: new Set() }).get(k);
+      w.ids.set(id, (w.ids.get(id) || 0) + 1);
+      w.all.add(reader.id);
+      if (e.status === "reading") w.reading.add(reader.id);
+      if (e.status === "want") w.want.add(reader.id);
+      if (e.rating != null) (w.sum += e.rating), w.rated++;
+      if ((e.updated || e.added || "") >= cutoff) w.month.add(reader.id);
+    }
+    // The member to show: one with a Ukrainian title first, then the one most readers have.
+    const shown = (w) => {
+      const bs = [...w.ids].sort((a, b) => b[1] - a[1]).map(([id]) => s.book(id)).filter(Boolean);
+      return bs.find((b) => /[а-яіїєґ]/i.test(b.title)) || bs[0] || null;
+    };
+    const rows = [...works.values()];
+    const taken = new Set();
+    const take = (list, score, min, extra, { fresh = false } = {}) => {
+      const out = [];
+      for (const w of list.filter((w) => score(w) >= min).sort((a, b) => score(b) - score(a) || b.all.size - a.all.size)) {
+        const book = shown(w);
+        if (!book || isRussian(book) || (fresh && taken.has(book.id))) continue;
+        taken.add(book.id);
+        out.push({ book, avg: w.rated ? Math.round((w.sum / w.rated) * 10) / 10 : null, rated: w.rated, n: extra(w) });
+        if (out.length >= limit) break;
+      }
+      return out;
+    };
+    // A mean of few ratings is pulled toward 4 (the site's usual), so one reader's five doesn't top it.
+    const top = (w) => (w.rated >= 2 ? (w.sum + 4 * 3) / (w.rated + 3) : 0);
+    const out = {
+      reading: take(rows, (w) => w.reading.size, 1, (w) => w.reading.size),
+      want: take(rows, (w) => w.want.size, 2, (w) => w.want.size),
+      // Books already up there are left out, so the month shows what else is moving.
+      month: take(rows, (w) => w.month.size, 2, (w) => w.month.size, { fresh: true }),
+      top: take(rows, top, 0.01, (w) => w.rated),
+    };
+    this.pop = { at: Date.now(), out };
+    return out;
+  }
+
   // «Якщо сподобалась X»: well rated books sharing most of X's tags, X itself and `skip` left out.
   similar(ids, { limit = 6, skip = new Set() } = {}) {
     const want = new Map();

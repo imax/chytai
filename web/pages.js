@@ -80,7 +80,8 @@ const label = (text, aside = "") => `<div class="label"><h2>${text}</h2>${aside 
 // The logo is the way home (Max, 2026-10-20: «для чого Відкрити в навбар?»).
 const NAV = [
   ["/community", "Читачі", (p) => p === "/community" || p === "/@"],
-  ["/publishers", "Видавництва", (p) => p.startsWith("/publishers")],
+  // «Популярне» took the publishers' place (Max, 2026-10-22); they are in the footer and on the homepage.
+  ["/popular", "Популярне", (p) => p === "/popular"],
 ];
 
 function layout({ title, body, user, path = "", description = "", q = "", home = false, canonical = "", image = "", noindex = false, jsonld = null, type = "website" }) {
@@ -130,7 +131,7 @@ ${path === "/" ? `<meta name="google-site-verification" content="5cswdBTj0bCY9oY
 <main class="${home ? "home" : ""}">
 ${body}
 </main>
-<footer class="foot"><div class="bar"><span class="motto">Chytai.org.ua: читай більше.</span><a href="https://app.chytai.org.ua">Читалка</a><a href="/updates">Що нового</a><a href="/privacy">Приватність</a><a href="mailto:ischenko@gmail.com">Написати нам</a>${user?.owner ? `<a href="/admin">Адмінка</a>` : ""}</div></footer>
+<footer class="foot"><div class="bar"><span class="motto">Chytai.org.ua: читай більше.</span><a href="/publishers">Видавництва</a><a href="https://app.chytai.org.ua">Читалка</a><a href="/updates">Що нового</a><a href="/privacy">Приватність</a><a href="mailto:ischenko@gmail.com">Написати нам</a>${user?.owner ? `<a href="/admin">Адмінка</a>` : ""}</div></footer>
 <script src="${ASSETS.js}"></script>
 </body>
 </html>`;
@@ -810,6 +811,32 @@ function yearHead(year, rows) {
   return `<h2 class="year" data-year="${year ?? ""}">${year || "Без дати"} <span>${books(n)}</span></h2>`;
 }
 
+// ---- «Популярне» (/popular) ----
+
+// What Chytai readers read, want and rate most (Max, 2026-10-22). Readers' numbers on the cards, no shops.
+function popularPage({ user, pop }) {
+  const n = (k, x) => {
+    if (k === "reading") return `читають ${x.n}`;
+    if (k === "want") return `${x.n} ${plural(x.n, "хоче", "хочуть", "хочуть")} прочитати`;
+    if (k === "month") return `${count(x.n, "читач", "читачі", "читачів")} за місяць`;
+    return count(x.rated, "оцінка", "оцінки", "оцінок");
+  };
+  const sections = [
+    ["reading", "Зараз читають", "у статусі «Читаю»"],
+    ["want", "Найбільше хочуть прочитати", "«Хочу прочитати»"],
+    ["top", "Найвище оцінені", "середня оцінка читачів"],
+    ["month", "Цього місяця", "додали, оцінили чи почали за 30 днів"],
+  ].filter(([k]) => pop[k].length);
+  const body = `
+${pageHead({ kicker: "Читачі Chytai", title: "Популярне", sub: "Що читають, хочуть прочитати й найвище оцінюють читачі Chytai. Оновлюється саме." })}
+${sections.map(([k, title, aside]) => `<section class="block pop">
+  ${label(title, esc(aside))}
+  <div class="grid six">${pop[k].map((x) => card(x.book, { avg: x.avg, extra: `<p class="meta pop-n">${n(k, x)}</p>` })).join("")}</div>
+</section>`).join("")}
+${sections.length ? "" : `<p class="muted">Поки замало читачів, щоб щось порахувати.</p>`}`;
+  return layout({ title: "Популярне", body, user, path: "/popular", canonical: "/popular", description: "Що читають, хочуть прочитати й найвище оцінюють читачі Chytai." });
+}
+
 // ---- readers (/community) ----
 
 function readersPage({ user, feed, readers, totals, followed = new Set() }) {
@@ -1482,7 +1509,7 @@ module.exports = {
   decidedList,
   welcomePage,
   addPage, addReviewPage, addFindResults,
-  layout, homePage, bookPage, editPage, libraryPage, readersPage, publishersPage, publisherPage, searchPage, searchResults, authorPage,
+  layout, homePage, bookPage, editPage, libraryPage, readersPage, popularPage, publishersPage, publisherPage, searchPage, searchResults, authorPage,
   loginPage, codePage, signupPage, settingsPage, privacyPage, updatesPage, messagePage, digestPage, followMailPage, importPage, importPreviewPage, importDonePage,
   esc, byline, STATUS, COPY, inline, isUk, setTitleLinks, setAuthorLinks, setStats, setReadersWithNote,
 };

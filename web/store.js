@@ -13,7 +13,8 @@ const readJson = (f) => JSON.parse(fs.readFileSync(f, "utf8"));
 
 // Office books that match a library book under a different spelling (title-matching misses them).
 const OFFICE_MATCHES = { 6: "bastiat-essays", 7: "гемінгвей-нічого-не-знає", 35: "deep-work", 44: "subtle-art-of-not-giving-a-fuck", 46: "andy-grove-one-on-ones" };
-const RU = /[ыэъё]/i; // Russian-only letters: these office books stay out of the profile until Max says otherwise
+// Russian-only letters; «ье» (Ukrainian writes «ьє»: «12 стульев») and the initial «И.» (Ukrainian «І.»: «И. Ильф») too.
+const RU = /[ыэъёЫЭЪЁ]|[ьЬ][еЕ]|(?<![\p{L}])И\./u; // these office books stay out of the profile until Max says otherwise
 const FMT = (f) => (f === "аудіо" ? 2 : f === "e-book" ? 1 : 0); // print first, then e-book, then audio
 const PICK = { "": 0, "є": 1, передзамовлення: 2, анонс: 3, немає: 4 }; // which edition stands for the work on a shelf
 

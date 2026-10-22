@@ -584,6 +584,8 @@ app.get("/me/book/:id", signed, (req, res) => {
   res.send(pages.editPage({ book, entry: store.entry(req.user.id, book.id), user: req.user }));
 });
 
+app.get("/popular", (req, res) => res.send(pages.popularPage({ user: req.user, pop: social.popular() })));
+
 app.get("/publishers", (req, res) => {
   res.send(pages.publishersPage({ user: req.user, shelves: shelvesFor(req).map((s) => shelfSummary(req, s, 4)).sort((a, b) => b.fresh - a.fresh), libraries: librariesFor(req) }));
 });
@@ -668,7 +670,7 @@ app.get("/sitemap.xml", (req, res) => {
   if (Date.now() - sitemap.at > 3600 * 1000) {
     const t0 = Date.now();
     const origin = `https://${DOMAIN || req.get("host")}`;
-    const urls = ["/", "/community", "/publishers", "/updates", "/privacy"];
+    const urls = ["/", "/community", "/popular", "/publishers", "/updates", "/privacy"];
     for (const shelf of store.shelves) if (!shelf.draft) urls.push(`/publishers/${encodeURIComponent(shelf.id)}`);
     for (const w of authors.allWorks(store)) {
       const b = store.book(w.id);
