@@ -61,9 +61,10 @@ function parseLine(raw) {
       break;
     }
   }
+  let bracket = false;
   if (!parts) {
     const b = /^(.{2,})\s+\(([^()]{2,})\)$/.exec(line);
-    if (b) parts = [clean(b[1]), clean(b[2])];
+    if (b) (parts = [clean(b[1]), clean(b[2])]), (bracket = true);
   }
   if (!parts) {
     const c = /^([^,]{2,}),\s+(.{2,})$/.exec(line);
@@ -86,7 +87,8 @@ function parseLine(raw) {
   // Author first unless only the second part is a name («Кобзар — Тарас Шевченко»); when both could be
   // one («Дюна, Френк Герберт»), the part with more words is the person.
   const words = (s) => s.split(" ").length;
-  const authorFirst = firstName && secondName ? words(first) >= words(second) : firstName || !secondName;
+  // A name in brackets at the end is the author («On Writing (Stephen King)»).
+  const authorFirst = bracket && secondName ? false : firstName && secondName ? words(first) >= words(second) : firstName || !secondName;
   const main = authorFirst ? { author: first, title: second } : { author: second, title: first };
   return { ...main, alt: { author: main.title, title: main.author }, year, rating };
 }
@@ -146,13 +148,14 @@ function resolve(store, books) {
     }
     if (only) return { ...rest, title: only.title, author: only.author || "", isbns: [], touched: `${b.year || thisYear}-01-01T00:00:00.000Z` };
     // Nothing known: two capitalised words at the end are the author («Неіснуюча книжка Іван Іванов»), but
-    // only when the rest reads like a title in sentence case or is one word: an English title is in Title
-    // Case and «Their Eyes Were Watching God» has no author in it.
+    // only when the rest reads like a title in sentence case, or is one Cyrillic word («Кобзар Тарас Шевченко»):
+    // an English title is in Title Case, and neither «Their Eyes Were Watching God» nor «The Big Short» has
+    // an author in it (Max, 2026-10-22: «The Tipping Point» came out as «The»).
     if (!author && !store.findWork({ title })) {
       const w = title.split(" ");
       for (const n of [2]) {
         const rest = w.slice(0, -n);
-        if (w.length > n && looksLikeName(w.slice(-n).join(" ")) && (rest.length === 1 || rest.some((x) => /^\p{Ll}/u.test(x)))) {
+        if (w.length > n && looksLikeName(w.slice(-n).join(" ")) && ((rest.length === 1 && /\p{Script=Cyrillic}/u.test(rest[0])) || rest.some((x) => /^\p{Ll}/u.test(x)))) {
           [title, author] = [w.slice(0, -n).join(" "), w.slice(-n).join(" ")];
           break;
         }
