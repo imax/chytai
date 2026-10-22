@@ -88,6 +88,21 @@ function editDistance(a, b, max) {
   return prev[b.length];
 }
 
+// Do two author strings name the same person? Names are compared transliterated, so «Метт Рідлі» is
+// Matt Ridley, and a typo or a different spelling («Khvylovy»/«Хвильовий») is allowed two letters.
+// A side without a name cannot disagree.
+const authorNames = (a) =>
+  norm(a)
+    .split(" ")
+    .filter((w) => w.length >= 3)
+    .map((w) => (/[а-яіїєґ]/.test(w) ? translit(w).replace(/[^a-z]/g, "") : w.normalize("NFKD").replace(/\p{M}/gu, "")));
+function sameAuthor(a, b) {
+  const mine = authorNames(a);
+  const theirs = authorNames(b);
+  if (!mine.length || !theirs.length) return true;
+  return mine.some((m) => theirs.some((t) => m === t || (m.length >= 4 && t.length >= 4 && editDistance(m, t, 2) <= 2)));
+}
+
 // Two entries for one work (one saved under an edition id): keep the fuller of each field.
 const RANK = { read: 3, abandoned: 2.5, reading: 2, want: 1, "": 0 };
 function mergeEntries(a, b) {
@@ -569,25 +584,30 @@ class Store {
     // Failing that, the library book links to the item's own page, or has the same words in its main
     // title, in any order, by the same author («Я кров твою змішаю з вугіллям» is Старий Лев's
     // «Я змішаю твою кров із вугіллям: зрозуміти український Схід»).
-    const byTitle = new Map();
+    const byTitle = new Map(); // normalized title -> [{ id, author }], exact titles first, then titles without the author's name
     const byUrl = new Map();
     const byWords = new Map();
     const byIsbn = new Map(); // a library book's ISBN (a Goodreads import keeps it; Books.md links to Amazon by ISBN-10)
     const pageKey = (u) => String(u || "").replace(/^https?:\/\/(www\.)?/, "").replace(/[?#].*$/, "").replace(/\/+$/, "");
     const words = (t) => norm(String(t || "").split(/[:.(]/)[0]).split(" ").filter((w) => w.length >= 3).sort().join(" ");
     const names = (a) => norm(a).split(" ").filter((w) => w.length >= 3);
-    // Books.md often adds the author to the title («Моя війна Залужний», «Genome, Matt Ridley»): the
-    // title without the author's names at its end counts too.
+    // Books.md often adds the author to the title («Моя війна Залужний», «Genome, Matt Ridley», «Жадан
+    // Арабески»): the title without the author's names at either end counts too.
     const bare = (t, author) => {
       const ws = norm(t).split(" ");
       const a = new Set(norm(author).split(" ").filter((w) => w.length >= 3));
       while (ws.length > 1 && a.has(ws[ws.length - 1])) ws.pop();
+      while (ws.length > 1 && a.has(ws[0])) ws.shift();
       return ws.join(" ");
     };
     for (const b of [...this.seedBooks, ...Object.values(this.lib.books).filter((b) => !this.seedBooks.some((s) => s.id === b.id))]) {
       const own = this.lib.books[b.id] || b; // an edited copy keeps its old title
-      for (const t of [b.title, b.altTitle]) if (norm(t).length >= 6) byTitle.set(norm(t), b.id);
-      for (const t of [own.title, b.title]) if (norm(bare(t, b.author)).length >= 6 && !byTitle.has(bare(t, b.author))) byTitle.set(bare(t, b.author), b.id);
+      const addTitle = (t, exact) => {
+        const l = byTitle.get(t) || byTitle.set(t, []).get(t);
+        if (!l.some((x) => x.id === b.id)) l.push({ id: b.id, author: b.author || "", exact });
+      };
+      for (const t of [b.title, b.altTitle]) if (norm(t).length >= 6) addTitle(norm(t), true);
+      for (const t of [own.title, b.title]) if (norm(bare(t, b.author)).length >= 6) addTitle(bare(t, b.author), false);
       for (const l of b.links || []) if (pageKey(l.url).includes("/")) byUrl.set(pageKey(l.url), b.id);
       for (const i of isbnsOf(own)) byIsbn.set(i, b.id);
       for (const t of [b.title, b.altTitle]) if (words(t).includes(" ")) (byWords.get(words(t)) || byWords.set(words(t), []).get(words(t))).push(b);
@@ -596,7 +616,13 @@ class Store {
       if (matches.same[it.id]) return matches.same[it.id];
       const ok = (id) => id && !no.has(`${it.id}|${id}`);
       if (isbnKey(it.isbn).length >= 10 && ok(byIsbn.get(isbnKey(it.isbn)))) return byIsbn.get(isbnKey(it.isbn));
-      for (const t of [it.title, it.altTitle]) if (ok(byTitle.get(norm(t)))) return byTitle.get(norm(t));
+      // The same title by a different author is a different book: Жадан's «Арабески» is not Хвильовий's
+      // (2026-10-22). An exact title wins over one with the author's name trimmed off («Жадан Арабески»).
+      for (const t of [it.title, it.altTitle]) {
+        const found = (byTitle.get(norm(t)) || []).filter((x) => ok(x.id) && sameAuthor(x.author, it.author));
+        const b = found.find((x) => x.exact) || found[0];
+        if (b) return b.id;
+      }
       if (ok(byUrl.get(pageKey(it.url)))) return byUrl.get(pageKey(it.url));
       for (const t of [it.title, it.altTitle]) {
         const b = (byWords.get(words(t)) || []).find((b) => names(b.author).some((n) => names(it.author).includes(n)));
@@ -846,6 +872,25 @@ class Store {
     }
   }
 
+  // Re-home readers' entries from one work to another (after a mis-merge split two books apart, the
+  // entries that migrated onto the wrong one stay there). readers: user ids, or every reader when empty.
+  moveEntries(from, to, readers = []) {
+    const a = this.canonical(from);
+    const b = this.canonical(to);
+    if (a === b || !this.isWork(a) || !this.isWork(b)) return 0;
+    let n = 0;
+    for (const [reader, entries] of this.entries) {
+      if (readers.length && !readers.includes(reader)) continue;
+      const e = entries[a];
+      if (!e) continue;
+      entries[b] = entries[b] ? mergeEntries(entries[b], e) : e;
+      delete entries[a];
+      this.db.tx(() => (this.writeEntry(reader, b, entries[b]), this.writeEntry(reader, a, null)));
+      n++;
+    }
+    return n;
+  }
+
   seed() {
     const max = readJson(path.join(SEED, "max.json"));
     const lib = { name: max.name, books: {}, entries: {}, subscriptions: [], seeded: new Date().toISOString() };
@@ -973,21 +1018,14 @@ class Store {
   findWork({ title, author = "", isbns = [] }) {
     const { byIsbn, byTitle } = this.workIndex();
     for (const i of isbns) if (byIsbn.has(isbnKey(i))) return byIsbn.get(isbnKey(i));
-    const names = (a) =>
-      norm(a)
-        .split(" ")
-        .filter((w) => w.length >= 3)
-        .map((w) => (/[а-яіїєґ]/.test(w) ? translit(w).replace(/[^a-z]/g, "") : w.normalize("NFKD").replace(/\p{M}/gu, "")));
+    const names = authorNames;
     const mine = names(author);
-    const sameAuthor = (a) => {
-      const theirs = names(a);
-      return mine.some((m) => theirs.some((t) => m === t || (m.length >= 4 && t.length >= 4 && editDistance(m, t, 2) <= 2)));
-    };
+    const alike = (a) => mine.length > 0 && names(a).length > 0 && sameAuthor(author, a);
     // The title as given, then without a subtitle after a colon («Sapiens: A Brief History of Humankind»).
     const variants = [...new Set([norm(title), norm(String(title).split(/[:(]/)[0]), norm(String(title).split(/\.\s/)[0])].filter((t) => t.length >= 2))];
     for (const t of variants) {
       const found = byTitle.get(t) || [];
-      const byAuthor = found.filter((w) => sameAuthor(w.author));
+      const byAuthor = found.filter((w) => alike(w.author));
       if (byAuthor.length) return byAuthor[0].id;
       if (found.length === 1 && t === norm(title) && (t.includes(" ") || t.length >= 8) && (!norm(author) || !names(found[0].author).length)) return found[0].id;
     }

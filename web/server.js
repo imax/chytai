@@ -758,6 +758,13 @@ app.post("/admin/dupes/translation", owner, (req, res) => {
   store.decideTranslation(String(req.body.uk || ""), String(req.body.orig || ""));
   decidedJson(req, res, "/admin/translations#top");
 });
+// Move readers' entries from one work to another after a wrong merge was split: from, to (ids or
+// slugs), readers (usernames, comma-separated; empty moves everyone's).
+app.post("/admin/entries/move", owner, (req, res) => {
+  const readers = String(req.body.readers || "").split(",").map((u) => auth.byUsername(u.trim().replace(/^@/, ""))?.id).filter(Boolean);
+  const moved = store.moveEntries(store.workId(String(req.body.from || "")), store.workId(String(req.body.to || "")), readers);
+  res.json({ ok: true, moved });
+});
 app.post("/admin/dupes/undo", owner, (req, res) => {
   store.undecide(["different", "translations"].includes(req.body.kind) ? req.body.kind : "same", Number(req.body.index));
   decidedJson(req, res, "/admin/dupes#decided");
