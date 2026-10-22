@@ -28,8 +28,6 @@ const SOURCES = [
   // channels found by a YouTube search on 2026-10-22.
   yt("prolit", "Проліт", "UCMw_BiVMRQ4N9txZ1o_MlSA"),
   yt("peake-week", "Peake-week Papers", "UCxc_X8K5gOpls_0uXcCXtbA"),
-  yt("readna", "ReadNa", "UC6QbDamy-AZVYLDP1HJzTiA"),
-  yt("demydenko", "Книги Ксенії Демиденко", "UCioIsB6XDIu8EkkjUj95I1g"),
   yt("romanska", "Дарина Романська", "UCmRNxrYo9mWATIETKjYGAgQ"),
   yt("vyshnevyi-tsvit", "Вишневий Цвіт", "UC74_-1ivw94o2O0xH74YlDQ"),
   yt("petro-chtyvo", "Petro Chtyvo", "UCH2QKLE7ET2M_43aZvPtfOg"),
@@ -72,8 +70,17 @@ function quoteOf(text) {
 }
 
 // ---- reading the sources ----
-async function get(url, headers = HEADERS) {
-  const res = await fetch(url, { headers, signal: AbortSignal.timeout(30000), redirect: "follow" });
+async function get(url, headers = HEADERS, tries = 3) {
+  let res;
+  for (let i = 1; ; i++) {
+    try {
+      res = await fetch(url, { headers, signal: AbortSignal.timeout(30000), redirect: "follow" });
+      if (res.status < 500 || i >= tries) break;
+    } catch (e) {
+      if (i >= tries) throw new Error(`${e.cause?.code || e.message} on ${url}`);
+    }
+    await sleep(5000 * i);
+  }
   if (!res.ok) throw Object.assign(new Error(`HTTP ${res.status} on ${url}`), { status: res.status });
   return res.text();
 }
@@ -107,16 +114,40 @@ function ytJson(html, name) {
     return null;
   }
 }
+// «2 тижні тому», «3 weeks ago» -> the day it roughly was.
+const AGO = [[/^(тиж|w)/, 7], [/^(міс|mo)/, 30], [/^(р|y)/, 365], [/^(д|d)/, 1], [/^(хв|год|сек|m|h|s)/, 0]];
+function agoDate(s) {
+  const m = String(s || "").match(/(\d+)\s*(\S+)/);
+  const unit = m && AGO.find(([re]) => re.test(m[2]));
+  return unit ? new Date(Date.now() - Number(m[1]) * unit[1] * 86400000).toISOString().slice(0, 10) : null;
+}
+// The latest videos of a channel from its /videos page: id, title and a rough date. No description
+// there; that is on each video's own page (video()) or in the Data API (apiVideos()).
 async function channelVideos(src) {
-  const data = ytJson(await get(`https://www.youtube.com/channel/${src.channel}/videos`, YT_HEADERS), "ytInitialData");
+  const data = ytJson(await get(`https://www.youtube.com/channel/${src.channel}/videos?hl=uk`, YT_HEADERS), "ytInitialData");
   if (!data) throw new Error(`${src.id}: no ytInitialData on the channel page (a consent or bot page?)`);
-  const ids = [];
+  const out = [];
   JSON.stringify(data, (k, v) => {
-    const id = k === "videoRenderer" ? v?.videoId : k === "lockupViewModel" && v?.contentType === "LOCKUP_CONTENT_TYPE_VIDEO" ? v.contentId : null;
-    if (id && !ids.includes(id)) ids.push(id);
+    let it = null;
+    if (k === "videoRenderer" && v?.videoId) it = { id: v.videoId, title: v.title?.runs?.map((r) => r.text).join("") || "", ago: v.publishedTimeText?.simpleText };
+    if (k === "lockupViewModel" && v?.contentType === "LOCKUP_CONTENT_TYPE_VIDEO") {
+      const parts = [];
+      JSON.stringify(v.metadata || {}, (kk, vv) => (kk === "content" && typeof vv === "string" && parts.push(vv), vv));
+      it = { id: v.contentId, title: v.metadata?.lockupMetadataViewModel?.title?.content || "", ago: parts.find((p) => /тому|ago/.test(p)) };
+    }
+    if (it && !out.some((o) => o.id === it.id)) out.push(it);
     return v;
   });
-  return ids.slice(0, NEW_VIDEOS);
+  return out.slice(0, NEW_VIDEOS).map((v) => ({ url: `https://www.youtube.com/watch?v=${v.id}`, title: v.title, date: agoDate(v.ago), quote: "", text: v.title, thin: true }));
+}
+// With a YouTube Data API key (YOUTUBE_API_KEY): the uploads playlist, with full descriptions and dates.
+async function apiVideos(src, key) {
+  const u = `https://www.googleapis.com/youtube/v3/playlistItems?part=snippet&maxResults=${NEW_VIDEOS}&playlistId=UU${src.channel.slice(2)}&key=${encodeURIComponent(key)}`;
+  const data = JSON.parse(await get(u, { "User-Agent": "Chytai/1.0 (https://chytai.org.ua)" }));
+  return (data.items || [])
+    .map((i) => i.snippet)
+    .filter((sn) => sn?.resourceId?.videoId && sn.title !== "Private video")
+    .map((sn) => ({ url: `https://www.youtube.com/watch?v=${sn.resourceId.videoId}`, title: sn.title, date: String(sn.publishedAt || "").slice(0, 10) || null, quote: quoteOf(sn.description), text: `${sn.title}\n${sn.description || ""}`.slice(0, 6000) }));
 }
 async function video(id) {
   const p = ytJson(await get(`https://www.youtube.com/watch?v=${id}&hl=uk`, YT_HEADERS), "ytInitialPlayerResponse");
@@ -225,6 +256,7 @@ class Reviews {
     this.db = store.db;
     this.log = log;
     this.db.exec(SCHEMA);
+    this.db.exec("UPDATE OR IGNORE reviews SET url = replace(replace(url, 'http://litakcent.com/', 'https://litakcent.online/'), 'https://litakcent.com/', 'https://litakcent.online/') WHERE url LIKE '%litakcent.com/%'");
     this.running = null;
     this.status = JSON.parse(this.db.get("reviews:status") || "{}"); // source id -> { at, ok, error, added }
     this.index();
@@ -281,11 +313,12 @@ class Reviews {
   save(src, items, matcher) {
     const now = new Date().toISOString();
     const has = this.db.prepare("SELECT 1 FROM reviews WHERE url = ?");
-    const put = this.db.prepare("INSERT INTO reviews (url, source, title, date, quote, text, works, seen) VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (url) DO UPDATE SET title = excluded.title, quote = excluded.quote, text = excluded.text, works = excluded.works");
+    const put = this.db.prepare("INSERT INTO reviews (url, source, title, date, quote, text, works, seen) VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (url) DO UPDATE SET title = excluded.title, date = COALESCE(excluded.date, date), quote = excluded.quote, text = excluded.text, works = excluded.works");
     let added = 0;
     this.db.tx(() => {
       for (const it of items) {
         if (!it.url || !it.title) continue;
+        it.url = it.url.replace(/^https?:\/\/(www\.)?litakcent\.com\//, "https://litakcent.online/"); // the site is an archive now
         if (!has.get(it.url)) added++;
         put.run(it.url, src.id, it.title.slice(0, 300), it.date, it.quote, it.text, JSON.stringify(matcher.match(it.text)), now);
       }
@@ -316,18 +349,31 @@ class Reviews {
       return added;
     }
     if (src.kind === "youtube") {
-      const known = this.db.prepare("SELECT 1 FROM reviews WHERE url = ?");
-      const fresh = (await channelVideos(src)).filter((id) => !known.get(`https://www.youtube.com/watch?v=${id}`));
+      if (process.env.YOUTUBE_API_KEY) return this.save(src, await apiVideos(src, process.env.YOUTUBE_API_KEY), matcher);
+      // Without a key: titles from the channel page, and the description from a video's own page while
+      // YouTube lets us (from Fly it asks «are you a bot» after a few). A video kept with its title only
+      // is tried again on the next pass, a few a pass.
+      const have = this.db.prepare("SELECT text FROM reviews WHERE url = ?");
+      const list = (await channelVideos(src)).filter((v) => {
+        const row = have.get(v.url);
+        return !row || !row.text.includes("\n");
+      });
       const items = [];
-      for (const id of fresh) {
-        try {
-          items.push(await video(id));
-        } catch (e) {
-          this.log(`reviews: ${src.id}: ${e.message}`);
-        }
-        await sleep(1500);
+      let tries = 0;
+      for (const v of list) {
+        if (!this.ytBlocked && tries < 5) {
+          tries++;
+          try {
+            const full = await video(v.url.split("=")[1]);
+            items.push({ ...full, date: full.date || v.date });
+          } catch (e) {
+            this.ytBlocked = true; // no more video pages this pass
+            this.log(`reviews: ${src.id}: ${e.message}; titles only for now`);
+            items.push(v);
+          }
+          await sleep(4000);
+        } else items.push(v);
       }
-      if (fresh.length && !items.length) throw new Error(`${src.id}: none of ${fresh.length} new videos could be read`);
       return this.save(src, items, matcher);
     }
     return 0;
@@ -339,6 +385,7 @@ class Reviews {
     this.running = (async () => {
       const t0 = Date.now();
       const matcher = this.matcher();
+      this.ytBlocked = false;
       for (const src of SOURCES) {
         if (only && src.id !== only) continue;
         const last = this.status[src.id];
