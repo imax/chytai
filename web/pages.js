@@ -264,9 +264,13 @@ function since(day) {
 }
 function nowBlock(now, { own = false } = {}) {
   if (!now || !now.books.length) return own ? `<p class="now-empty"><a class="text-link" href="/me/now">Що читаєш зараз?</a> <span class="muted">Постав статус, його побачать на твоїй сторінці.</span></p>` : "";
-  const books = now.books.map(({ book, since: day, entry: e }) => `<a class="now-book" href="${attr(book.href)}">${cover(book, "xs")}<span><b>${esc(book.title)}</b>${book.author ? `<span class="by">${esc(byline(book.author))}</span>` : ""}<span class="meta">${[e.status === "read" ? "перечитує" : "", since(day), e.progress > 0 && e.progress < 98 ? `${e.progress}%` : ""].filter(Boolean).join(" · ")}</span></span></a>`).join("");
+  // The date sits in a tooltip; only a status up for two weeks or more says so by the heading (Max, 2026-10-22).
+  const [first] = now.books;
+  const weeks = first.since ? Math.floor((Date.now() - new Date(`${first.since}T12:00:00Z`)) / (7 * 86400000)) : 0;
+  const long = weeks >= 2 ? `<span class="now-age" title="${attr(since(first.since))}">вже ${count(weeks, "тиждень", "тижні", "тижнів")}</span>` : "";
+  const books = now.books.map(({ book, since: day, entry: e }) => `<a class="now-book" href="${attr(book.href)}" title="${attr(since(day))}">${cover(book, "xs")}<span><b>${esc(book.title)}</b>${book.author ? `<span class="by">${esc(byline(book.author))}</span>` : ""}${e.status === "read" ? `<span class="meta">перечитує</span>` : ""}</span></a>`).join("");
   return `<div class="now">
-  <p class="now-head"><span class="kicker">${own ? "Читаю зараз" : "Зараз читає"}</span>${own ? `<a class="text-link small" href="/me/now">змінити</a>` : ""}</p>
+  <p class="now-head"><span class="kicker">${own ? "Читаю зараз" : "Зараз читає"}</span>${long}${own ? `<a class="text-link small" href="/me/now">змінити</a>` : ""}</p>
   <div class="now-books">${books}</div>
 </div>`;
 }

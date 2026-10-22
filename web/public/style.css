@@ -615,9 +615,10 @@ form.inline button:not(.btn) { background: none; border: 0; padding: 0; cursor: 
 .row.big .twins { margin-top: 10px; }
 
 /* «Читаю зараз»: the reader's status under their name, (2026-10-22). */
-.now { margin-top: 22px; padding: 14px 18px 16px; border-left: 2px solid var(--accent); background: color-mix(in oklab, var(--accent) 6%, transparent); border-radius: 0 6px 6px 0; max-width: 720px; }
+.now { margin-top: 22px; padding: 12px 18px 14px; border-left: 2px solid var(--accent); background: color-mix(in oklab, var(--accent) 6%, transparent); border-radius: 0 6px 6px 0; max-width: 720px; }
 .now-head { display: flex; align-items: baseline; gap: 14px; }
 .now-head .kicker { margin: 0; }
+.now-age { font-size: 12px; color: var(--muted); }
 .now-books { display: flex; flex-wrap: wrap; gap: 14px 28px; margin-top: 12px; }
 .now-book { display: flex; gap: 12px; align-items: flex-start; max-width: 300px; }
 .now-book > span:last-child { min-width: 0; padding-top: 2px; }
