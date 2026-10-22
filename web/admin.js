@@ -32,6 +32,8 @@ class Admin {
     this.ownerId = ownerId;
     this.seen = new Set(); // `${day}:${reader}` already written today
     this.seenDay = "";
+    // The funnel counts readers who signed up from the day the steps started being kept.
+    if (!db.get("steps:since")) db.set("steps:since", new Date().toISOString());
   }
 
   // A page opened: remember the reader's day and count the view. Cheap: one insert per reader a day,
@@ -56,6 +58,18 @@ class Admin {
       this.db.prepare(`INSERT INTO views (day, readers, guests) VALUES (?, ?, ?) ON CONFLICT (day) DO UPDATE SET readers = readers + excluded.readers, guests = guests + excluded.guests`).run(day, readerId ? 1 : 0, readerId ? 0 : 1);
     } catch (e) {
       console.error("admin touch failed:", e.message);
+    }
+  }
+
+  // The first time a reader got to a step of adding books: «welcome» (/welcome), «add» (/add), «review» (the
+  // list or file looked at, before confirming), «saved» (confirmed). For the funnel on /admin (Max, 2026-10-22):
+  // where new readers stop before their books are on the shelf. Nothing else is kept, not what they pasted.
+  step(readerId, step) {
+    if (!readerId || readerId === this.ownerId) return;
+    try {
+      this.db.prepare("INSERT OR IGNORE INTO steps (reader, step, at) VALUES (?, ?, ?)").run(readerId, step, new Date().toISOString());
+    } catch (e) {
+      console.error("admin step failed:", e.message);
     }
   }
 
@@ -147,6 +161,27 @@ class Admin {
       })
       .filter((c) => c.size);
 
+    // From sign-up to books on the shelf, for readers who signed up once the steps were counted.
+    const since = db.get("steps:since");
+    const steps = db.prepare("SELECT reader, step FROM steps").all();
+    const reached = (step) => new Set(steps.filter((x) => x.step === step).map((x) => x.reader));
+    const shelfCount = byReader(entries);
+    const funnelOf = (list) => {
+      const ids = new Set(list.map((r) => r.id));
+      const of = (set) => [...set].filter((id) => ids.has(id)).length;
+      return {
+        signups: list.length,
+        welcome: of(reached("welcome")),
+        add: of(reached("add")),
+        review: of(reached("review")),
+        saved: of(reached("saved")),
+        one: list.filter((r) => (shelfCount.get(r.id) || 0) >= 1).length,
+        ten: list.filter((r) => (shelfCount.get(r.id) || 0) >= 10).length,
+      };
+    };
+    const others = readers.filter((r) => r.id !== this.ownerId);
+    const funnel = { since: since ? dayOf(since) : null, fresh: since ? funnelOf(others.filter((r) => r.created >= since)) : null, all: funnelOf(others) };
+
     const books = byReader(entries);
     const ratings = byReader(entries.filter((e) => e.rating));
     const notes = byReader(entries.filter((e) => e.note));
@@ -202,6 +237,7 @@ class Admin {
         viewsSince: Object.keys(views).sort()[0] || null,
       },
       weeks: weekRows,
+      funnel,
       cohorts,
       later: LATER,
       readers: readerRows,
@@ -218,6 +254,30 @@ const short = (day) => (day ? `${Number(day.slice(8, 10))} ${MONTHS[Number(day.s
 const weekLabel = (w) => `${short(w)} – ${short(addDays(w, 6))}`;
 const tile = (value, label, sub = "") => `<div class="stat"><b>${value}</b><span>${label}</span>${sub ? `<small>${sub}</small>` : ""}</div>`;
 const pct = (c) => (c === null ? `<td class="na">·</td>` : `<td class="pct${c.partial ? " partial" : ""}${c.pct >= 50 ? " hi" : c.pct > 0 ? " mid" : ""}" title="${c.back} з когорти${c.partial ? ", тиждень ще триває" : ""}">${c.pct}%</td>`);
+
+// From sign-up to books on the shelf (Max, 2026-10-22: «чи працює /add у нових читачів»). The steps are counted
+// from the day they started (`since`); the shelf counts (1+, 10+) are for every reader.
+function funnelBlock(f) {
+  if (!f) return "";
+  const share = (v, of) => (of ? `${v} <span class="muted">· ${Math.round((100 * v) / of)}%</span>` : n(v));
+  const x = f.fresh;
+  const rows = x
+    ? [
+        ["Зареєструвались", x.signups],
+        ["Відкрили «Ласкаво просимо»", x.welcome],
+        ["Відкрили «Додати книжки»", x.add],
+        ["Дійшли до перевірки списку чи файлу", x.review],
+        ["Підтвердили, книжки на полиці", x.saved],
+        ["1+ книжка на полиці", x.one],
+        ["10+ книжок на полиці", x.ten],
+      ]
+        .map(([l, v]) => `<tr><th>${l}</th><td>${share(v, x.signups)}</td></tr>`)
+        .join("")
+    : "";
+  return `<h2>Від реєстрації до полиці</h2>
+<p class="muted small">${x ? `Нові читачі з ${short(f.since)}, коли почали рахувати кроки; частка від тих, хто зареєструвався. Кожен крок рахується раз на читача, без того, що він вставив.` : ""} За весь час (читачів: ${f.all.signups}) у ${share(f.all.one, f.all.signups)} є хоч одна книжка, у ${share(f.all.ten, f.all.signups)} 10 і більше.</p>
+${x ? `<div class="tbl"><table class="funnel"><tbody>${rows}</tbody></table></div>` : ""}`;
+}
 
 // `withBooks`: the readers table shows only readers with a book on the shelf (Max, 2026-10-20: «фільтр 1+ книжка»);
 // `sort`: last (activity, the default), books or created (Max, 2026-10-21: fewer columns, sortable).
@@ -251,8 +311,9 @@ function adminPage({ user, stats: s, layout, withBooks = false, sort = "created"
 
   const SORTS = { last: (a, b) => (b.last || "").localeCompare(a.last || "") || a.created.localeCompare(b.created), books: (a, b) => b.books - a.books || a.created.localeCompare(b.created), created: (a, b) => b.created.localeCompare(a.created) };
   if (!SORTS[sort]) sort = "created"; // newest readers on top by default (Max, 2026-10-21: «неясно як знайти нових»)
-  const shown = (withBooks ? s.readers.filter((r) => r.books) : s.readers).slice().sort(SORTS[sort]);
-  const url = ({ books = withBooks, by = sort } = {}) => `/admin${[books ? "books=1" : "", by !== "created" ? `sort=${by}` : ""].filter(Boolean).map((q, i) => (i ? "&" : "?") + q).join("")}`;
+  const min = withBooks === 10 ? 10 : withBooks ? 1 : 0;
+  const shown = s.readers.filter((r) => r.books >= min).slice().sort(SORTS[sort]);
+  const url = ({ books = min, by = sort } = {}) => `/admin${[books ? `books=${books}` : "", by !== "created" ? `sort=${by}` : ""].filter(Boolean).map((q, i) => (i ? "&" : "?") + q).join("")}`;
   const col = (key, label) => (sort === key ? `<th class="sorted">${label} ↓</th>` : `<th><a href="${url({ by: key })}" title="Відсортувати">${label}</a></th>`);
   const readerRows = shown
     .map(
@@ -271,6 +332,8 @@ function adminPage({ user, stats: s, layout, withBooks = false, sort = "created"
 <section class="page-head"><div><p class="kicker">Лише для власника</p><h1>Статистика</h1><p class="sub">Сайт станом на ${short(s.now)}. Активний читач — той, хто відкрив сайт або щось зробив на полиці того дня. Перегляди рахуються з ${s.totals.viewsSince ? short(s.totals.viewsSince) : "сьогодні"}; раніше за активність правлять входи й зміни на полиці.</p></div></section>
 <div class="stats">${tiles}</div>
 
+${funnelBlock(s.funnel)}
+
 <h2>По тижнях</h2>
 <p class="muted small">Читачі без власника. «Повернулись» — активні цього тижня, але зареєстровані раніше. Перегляди: сторінок, відкритих читачами / гостями (без ботів).</p>
 <div class="tbl"><table>
@@ -285,7 +348,7 @@ ${s.cohorts.length ? `<div class="tbl"><table class="cohorts">
 
 <h2>Читачі</h2>
 <p class="muted small">Нові зверху; «новий» — зареєструвався за останні 7 днів. «Днів» — скільки різних днів читач був на сайті після реєстрації. Заголовки «Зареєструвався», «Востаннє» і «Книжок» сортують таблицю.</p>
-<p class="filter">${withBooks ? `<a href="${url({ books: false })}">Усі (${s.readers.length})</a> · <b>1+ книжка (${shown.length})</b>` : `<b>Усі (${s.readers.length})</b> · <a href="${url({ books: true })}">1+ книжка (${s.readers.filter((r) => r.books).length})</a>`}</p>
+<p class="filter">${[[0, "Усі"], [1, "1+ книжка"], [10, "10+ книжок"]].map(([k, l]) => { const c = s.readers.filter((r) => r.books >= k).length; return k === min ? `<b>${l} (${c})</b>` : `<a href="${url({ books: k })}">${l} (${c})</a>`; }).join(" · ")}</p>
 <div class="tbl"><table class="readers">
 <thead><tr><th>Читач</th>${col("created", "Зареєструвався")}${col("last", "Востаннє")}<th>Днів</th>${col("books", "Книжок")}<th>Лист</th></tr></thead>
 <tbody>${readerRows}</tbody></table></div>

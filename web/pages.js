@@ -829,8 +829,13 @@ function searchPage({ q, user, results }) {
 
 // The results in groups (books, authors, readers) with «схоже» on the side; also served alone by
 // /api/search for search as you type.
-function searchResults({ q, user, hits = [], authors = [], readers = [], shelves = [], similar = [], tag = "" }) {
+function searchResults({ q, user, hits = [], authors = [], readers = [], shelves = [], similar = [], tag = "", like = null, likeNone = null }) {
   if (!q.trim()) return "";
+  // «Щось як Міллер»: books like an author or a book, from what readers here liked.
+  if (like) return `<p class="found">Схоже на ${like.href ? `<a class="text-link" href="${attr(like.href)}">${esc(like.name)}</a>` : esc(like.name)} · ${books(hits.length)}, які сподобались читачам</p>
+<section class="block">${label(`Якщо подобається ${esc(like.name)}`)}<div class="rows">${hits.map((h) => bookRow(h.book, { meta: readersMeta(h.book.id), action: h.entry ? myStatus(h.entry) : markButtons(h.book, user) })).join("")}</div></section>`;
+  const none = likeNone ? `<p class="muted">Схожого на ${esc(likeNone.name)} поки не знайшли: читачі ще мало оцінили таких книжок. Ось що є за цим запитом.</p>` : "";
+  if (likeNone) return none + searchResults({ q, user, hits, authors, readers, shelves, similar, tag });
   const n = hits.length + authors.length + readers.length + shelves.length;
   const addLink = user ? `<a class="text-link" href="/add?text=${attr(encodeURIComponent(q))}">Додати книжку, якої ще немає на Chytai</a>` : "";
   if (!n) return `<p class="found">Нічого не знайшлося за «${esc(q)}». ${addLink}</p>`;

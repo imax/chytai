@@ -41,6 +41,7 @@ CREATE TABLE IF NOT EXISTS sessions (id TEXT PRIMARY KEY, reader TEXT NOT NULL, 
 CREATE INDEX IF NOT EXISTS sessions_reader ON sessions (reader);
 CREATE TABLE IF NOT EXISTS visits (day TEXT NOT NULL, reader TEXT NOT NULL, PRIMARY KEY (day, reader));
 CREATE TABLE IF NOT EXISTS views (day TEXT PRIMARY KEY, readers INTEGER NOT NULL DEFAULT 0, guests INTEGER NOT NULL DEFAULT 0);
+CREATE TABLE IF NOT EXISTS steps (reader TEXT NOT NULL, step TEXT NOT NULL, at TEXT NOT NULL, PRIMARY KEY (reader, step));
 CREATE VIRTUAL TABLE IF NOT EXISTS search USING fts5 (id UNINDEXED, title, alt, author, series, extra, tokenize = 'unicode61 remove_diacritics 2');
 CREATE VIRTUAL TABLE IF NOT EXISTS search_vocab USING fts5vocab (search, 'row');
 CREATE VIRTUAL TABLE IF NOT EXISTS search_tri USING fts5 (id UNINDEXED, text, tokenize = 'trigram');

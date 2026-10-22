@@ -180,7 +180,7 @@ app.post("/login/signup", (req, res) => {
   welcomeMail.newReader(reader);
   signIn(req, res, reader, `/welcome${next ? `?next=${encodeURIComponent(next)}` : ""}`);
 });
-app.get("/welcome", signed, (req, res) => res.send(pages.welcomePage({ user: req.user, next: safeNext(req.query.next) })));
+app.get("/welcome", signed, (req, res) => (admin.step(req.user.id, "welcome"), res.send(pages.welcomePage({ user: req.user, next: safeNext(req.query.next) }))));
 function signIn(req, res, reader, next) {
   res.setHeader("Set-Cookie", auth.cookie(auth.signIn(reader.id), { secure: secure(req) }));
   res.redirect(next || "/me");
@@ -239,7 +239,7 @@ const popular = () => {
   return (popularCache = { at: Date.now(), list }).list;
 };
 // ?text= fills the list: «Додати книжку, якої ще немає» from a search that found nothing (the old one-book form is gone).
-app.get("/add", signed, (req, res) => res.send(pages.addPage({ user: req.user, text: String(req.query.text || "").slice(0, 2000), popular: popular() })));
+app.get("/add", signed, (req, res) => (admin.step(req.user.id, "add"), res.send(pages.addPage({ user: req.user, text: String(req.query.text || "").slice(0, 2000), popular: popular() }))));
 app.get("/api/add/find", signed, (req, res) => res.set("Cache-Control", "no-store").send(pages.addFindResults(store.search(String(req.query.q || "").slice(0, 100), { limit: 6 }))));
 const IMPORTS = {
   list: { name: "списку", parse: null },
@@ -254,6 +254,7 @@ const importPreview = (req, res, books, { filename = "", skipped = 0, text = "" 
   for (const [t, p] of pendingImports) if (Date.now() - p.at > IMPORT_TTL) pendingImports.delete(t);
   const token = require("crypto").randomBytes(12).toString("hex");
   pendingImports.set(token, { reader: req.user.id, source: req.source, rows, filename, at: Date.now() });
+  admin.step(req.user.id, "review");
   if (req.source === "list") return res.send(pages.addReviewPage({ user: req.user, token, rows, text }));
   res.send(pages.importPreviewPage({ user: req.user, source: req.source, token, rows, counts: { ...counts, skipped }, filename }));
 };
@@ -279,6 +280,7 @@ app.post("/import/:source/apply", signed, importSource, (req, res) => {
   const p = pendingImports.get(String(req.body.token || ""));
   if (!p || p.reader !== req.user.id || p.source !== req.source || Date.now() - p.at > IMPORT_TTL) return res.status(400).send(req.source === "list" ? pages.addPage({ user: req.user, text: "", error: "Час вийшов або список уже імпортовано. Вставте його ще раз." }) : pages.importPage({ user: req.user, source: req.source, error: "Час вийшов або файл уже імпортовано. Виберіть файл ще раз." }));
   pendingImports.delete(req.body.token);
+  admin.step(req.user.id, "saved");
   const keep = new Set([].concat(req.body.keep ?? []).map(Number));
   // «Інша книжка» on /add: the reader picked the right book for a line.
   const swapped = (r, i) => {
@@ -499,10 +501,39 @@ const searchHits = (req, q) => store.search(q, { reader: req.user?.id }).map((h)
 const normQ = (s) => String(s || "").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
 // Everything /search shows: books (a genre's name lists that genre's books by rating), authors, readers,
 // and books like the first hit on the side.
+// «Щось як Міллер», «схоже на Цирцею»: recommendations instead of the search (the 2026-10-20 design, Max
+// 2026-10-22). The rest of the query names an author (their books are the seeds) or a book (the first hit);
+// what the reader already has stays out. Nothing to recommend: the plain search for the rest, with a line saying so.
+const LIKE = /^(?:щось|шось|що[сш]ь)\s+(?:як|схоже на|подібне до|на кшталт|типу)\s+(.+)$|^(?:схоже на|something like)\s+(.+)$/iu;
+function likeSearch(req, rest) {
+  const nr = normQ(rest);
+  const author = (store.authors?.list || []).find((a) => nameHas(a.name, nr) || (a.other && nameHas(a.other, nr)));
+  const first = author ? null : searchHits(req, rest)[0];
+  const ids = author ? author.ids.map((id) => store.canonical(id)) : first ? [first.book.id] : [];
+  if (!ids.length) return null;
+  const skip = new Set([...ids, ...Object.keys(req.user ? store.entriesOf(req.user.id) : {})]);
+  const books = social.alsoLiked(ids, { limit: 12, skip }).filter((b) => !ids.includes(b.id) && (!author || !author.ids.includes(b.id)));
+  const like = author ? { name: author.name, href: author.href } : { name: `«${first.book.title}»`, href: first.book.href };
+  return { like, hits: books.map((b) => ({ book: bookFor(req, b, false), entry: store.sharedEntry(req.user?.id, b.id) })).filter((h) => h.book) };
+}
+// Every word typed starts a word of the name, or sounds like one of its Latin words («міллер», Madeline Miller).
+function nameHas(name, nq) {
+  const words = normQ(name).normalize("NFKD").replace(/\p{M}/gu, "").split(" ");
+  return nq.split(" ").filter(Boolean).every((t) => {
+    const alts = store.latinAlts(t);
+    return words.some((w) => w.startsWith(t) || alts.includes(w));
+  });
+}
 function searchAll(req, q) {
   if (!q) return {};
+  const m = LIKE.exec(q.trim());
+  if (m) {
+    const rest = (m[1] || m[2]).trim();
+    const found = likeSearch(req, rest);
+    if (found?.hits.length) return { hits: found.hits, like: found.like, authors: [], readers: [], shelves: [], similar: [] };
+    return { ...searchAll(req, rest), likeNone: found?.like || { name: `«${rest}»` } };
+  }
   const nq = normQ(q);
-  const terms = nq.split(" ").filter(Boolean);
   const tag = [...new Set(store.library(OWNER_ID).flatMap((r) => r.book.tags || []))].find((t) => t === nq) || "";
   let hits = searchHits(req, q);
   if (tag) {
@@ -510,7 +541,7 @@ function searchAll(req, q) {
     const seen = new Set(hits.map((h) => h.book.id));
     hits = [...tagged.filter((x) => !seen.has(x.book.id)).map((x) => ({ book: x.book, entry: store.sharedEntry(req.user?.id, x.book.id) })), ...hits].slice(0, 40);
   }
-  const has = (name) => terms.every((t) => normQ(name).split(" ").some((w) => w.startsWith(t)));
+  const has = (name) => nameHas(name, nq);
   const authorsFound = (store.authors?.list || [])
     .filter((a) => has(a.name) || (a.other && has(a.other)))
     .slice(0, 6)
@@ -738,7 +769,7 @@ app.post("/api/welcome-mail", owner, async (req, res) => {
   res.redirect("/welcome-mail/preview");
 });
 // The owner's statistics page: readers, retention by sign-up week, what people do on the site (admin.js).
-app.get("/admin", owner, (req, res) => res.send(adminPage({ user: req.user, stats: admin.stats(), layout: pages.layout, withBooks: req.query.books === "1", sort: String(req.query.sort || "created") })));
+app.get("/admin", owner, (req, res) => res.send(adminPage({ user: req.user, stats: admin.stats(), layout: pages.layout, withBooks: req.query.books === "10" ? 10 : req.query.books === "1", sort: String(req.query.sort || "created") })));
 app.get("/admin.json", owner, (req, res) => res.json(admin.stats()));
 // One Google Books request with the server's key, for the owner to see what Google answers from here.
 app.get("/admin/google", owner, async (req, res) => {
