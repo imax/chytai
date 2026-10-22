@@ -1254,7 +1254,7 @@ function addPage({ user, text = "", error = "" }) {
   <div class="add-intro">
     ${addCrumbs}
     <h1>Мої книжки</h1>
-    <p class="lead">Додайте книжки, які ви вже прочитали і хочете бачити на своїй полиці.</p>
+    <p class="lead">Додайте книжки на свою поличку, щоб ставити оцінки й писати відгуки.</p>
     <div class="wide-only">${addAside()}</div>
   </div>
   <form method="post" action="/import/list" class="add-paste">
