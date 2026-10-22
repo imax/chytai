@@ -205,7 +205,7 @@ app.get("/logout", (req, res) => {
 // its login page sends the reader here, the site makes a one-time ticket for whoever is signed in and
 // sends them back with it, and the reader's server trades the ticket for who it is (POST below).
 // The reader keeps its own cookie after that; a ticket lasts two minutes and works once.
-const READER_ORIGINS = (process.env.READER_ORIGINS || "https://chytai.fly.dev,https://read.chytai.org.ua").split(",").map((o) => o.trim()).filter(Boolean);
+const READER_ORIGINS = (process.env.READER_ORIGINS || "https://read.chytai.org.ua,https://chytai.fly.dev").split(",").map((o) => o.trim()).filter(Boolean);
 const readerTickets = new Map(); // ticket -> { id, expires }
 const READER_URL = (process.env.READER_URL || READER_ORIGINS[0]).replace(/\/$/, "");
 // With the account the reader also gets a key for that account alone, to tell the site which books it
