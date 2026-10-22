@@ -45,7 +45,7 @@ const ACCOUNTS_DIR = path.join(DATA_DIR, "accounts");
 const SHARE_COOKIE = "reader_share";
 const DEVICE_COOKIE = "reader_device";
 const SHARE_DAYS = 30;
-const SHARE_MAX = 10;
+const SHARE_MAX = 5;
 const SHARE_EXPLAIN_LIMIT = 20;
 // Guests (the /demo) get their own cookie.
 const GUEST_COOKIE = "reader_guest";
