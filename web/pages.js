@@ -1149,13 +1149,13 @@ function mailSettingsPage({ user, values, saved = false }) {
   const form = `${settingsTabs("mail")}<form method="post" action="/settings/mail" class="form">
   ${saved ? `<p class="saved">Збережено.</p>` : ""}
   ${user.email ? `<p class="muted small">Листи приходять на ${esc(user.email)}. <a class="text-link" href="/settings">Змінити пошту</a></p>` : `<p class="muted small">Пошти не вказано, тож листів не буде. <a class="text-link" href="/settings">Додати пошту</a></p>`}
-  ${sw("digest", "Щотижневий лист", "У п'ятницю вранці: що читають ті, за ким ви стежите, новинки видавництв, на які ви підписані, і де з'явились книжки з «Хочу прочитати». Іноді з кількома словами від нас.")}
-  ${sw("follow_mail", "Новий читач стежить за вами", "Один лист, коли хтось уперше почне стежити за вашою полицею.")}
+  ${sw("digest", "Пʼятничний дайджест", "Новинки на сайті, полиці та видавництва, на які ви підписані.")}
+  ${sw("follow_mail", "Новий читач стежить за вами", "Лист, коли хтось уперше почне стежити за вашою полицею.")}
   <div class="actions"><button class="btn primary">Зберегти</button></div>
 </form>
 <section class="form import-box">
   <h2>Ці листи приходять завжди</h2>
-  <p class="muted small">Код для входу: лише коли ви самі входите на сайт.<br>Вітальний лист: один раз, одразу після реєстрації.</p>
+  <p class="muted small">Код для входу: лише коли ви самі входите на сайт.<br>Вітальний лист: після реєстрації.</p>
 </section>`;
   return authLayout({ title: "Налаштування", lead: "", form, user, path: "/settings" });
 }
