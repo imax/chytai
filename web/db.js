@@ -2,6 +2,7 @@
 // Node's built-in node:sqlite, so there is nothing to install. It holds
 //   - catalog items of every shelf, with the day each was first seen (for «нове»),
 //   - the library: manual books, readers (accounts: e-mail, username, name), their sessions, entries, subscriptions and whom they follow,
+//   - which books each reader has in the reader app (reader_files: titles only, for «Читати» on a book's page),
 //   - for the owner's statistics (admin.js): the days each reader opened the site, and page views a day,
 //   - book addresses: a slug, once given to a work, stays with it,
 //   - the search index (FTS5), rebuilt from the works whenever the shelves change.
@@ -39,6 +40,7 @@ CREATE TABLE IF NOT EXISTS readers (
 );
 CREATE TABLE IF NOT EXISTS sessions (id TEXT PRIMARY KEY, reader TEXT NOT NULL, created TEXT NOT NULL, seen TEXT);
 CREATE INDEX IF NOT EXISTS sessions_reader ON sessions (reader);
+CREATE TABLE IF NOT EXISTS reader_files (reader TEXT NOT NULL, name TEXT NOT NULL, title TEXT NOT NULL, authors TEXT NOT NULL DEFAULT '', PRIMARY KEY (reader, name));
 CREATE TABLE IF NOT EXISTS visits (day TEXT NOT NULL, reader TEXT NOT NULL, PRIMARY KEY (day, reader));
 CREATE TABLE IF NOT EXISTS views (day TEXT PRIMARY KEY, readers INTEGER NOT NULL DEFAULT 0, guests INTEGER NOT NULL DEFAULT 0);
 CREATE VIRTUAL TABLE IF NOT EXISTS search USING fts5 (id UNINDEXED, title, alt, author, series, extra, tokenize = 'unicode61 remove_diacritics 2');

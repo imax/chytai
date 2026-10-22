@@ -414,6 +414,12 @@
         // iPhone app, where the first load is slower than in Safari).
         // The family starts on the home screen (home.js); a guest has one book and goes straight to it.
         if (settings.guest && settings.lastBook) afterLoad(() => openServerBook(settings.lastBook));
+        // «Читати» on a book's page at chytai.org.ua opens /?open=<file name> here.
+        const open = !settings.guest && new URLSearchParams(location.search).get("open");
+        if (open) {
+          history.replaceState(null, "", "/");
+          afterLoad(() => openServerBook(open));
+        }
       }
       return settings;
     },

@@ -15,9 +15,6 @@ import { WebView } from 'react-native-webview';
 
 export const READER_URL = 'https://chytai.fly.dev';
 const READER_HOST = new URL(READER_URL).host;
-// Signing in goes through the web site's account (2026-10-22): its login pages open inside the app,
-// and the site sends the reader back to READER_URL/auth; the rest of the site opens in Safari.
-const SITE_LOGIN = /^https:\/\/chytai\.org\.ua\/(login|reader-login|welcome)(\/|\?|$)/;
 
 // The reader's own background colours (style.css), so the native area behind the page matches
 // while it loads and the splash screen does not flash white on the dark theme.
@@ -90,7 +87,6 @@ export default function App() {
     let host = '';
     try { host = new URL(request.url).host; } catch { return true; }
     if (host === READER_HOST || request.url.startsWith('about:') || request.url.startsWith('blob:')) return true;
-    if (SITE_LOGIN.test(request.url)) return true;
     Linking.openURL(request.url).catch(() => {});
     return false;
   }, []);

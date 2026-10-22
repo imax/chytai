@@ -89,6 +89,7 @@ main.home { padding-top: 56px; }
 .btn.danger { border-color: var(--danger); color: var(--danger); }
 .btn.danger:hover { background: var(--danger); color: var(--paper); }
 .acts { display: flex; flex-wrap: wrap; gap: 12px 18px; align-items: center; }
+.read-here { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; margin: 14px 0 0; }
 .marks { display: inline-flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
 
 /* ---- tabs (text switches under a label or a rule) ---- */

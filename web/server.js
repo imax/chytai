@@ -10,7 +10,7 @@
 const express = require("express");
 const fs = require("fs");
 const path = require("path");
-const { Store, OWNER: OWNER_ID, slugify, isRussian } = require("./store");
+const { Store, OWNER: OWNER_ID, slugify, isRussian, norm, workName } = require("./store");
 const { Auth } = require("./auth");
 const pages = require("./pages");
 const catalogs = require("./catalogs");
@@ -203,6 +203,11 @@ app.get("/logout", (req, res) => {
 // The reader keeps its own cookie after that; a ticket lasts two minutes and works once.
 const READER_ORIGINS = (process.env.READER_ORIGINS || "https://chytai.fly.dev,https://read.chytai.org.ua").split(",").map((o) => o.trim()).filter(Boolean);
 const readerTickets = new Map(); // ticket -> { id, expires }
+const READER_URL = (process.env.READER_URL || READER_ORIGINS[0]).replace(/\/$/, "");
+// With the account the reader also gets a key for that account alone, to tell the site which books it
+// has (POST /api/reader-library). The key is an HMAC with the site's own secret, kept in the database.
+const readerSecret = () => store.db.get("reader:secret") || (store.db.set("reader:secret", require("crypto").randomBytes(32).toString("hex")), store.db.get("reader:secret"));
+const readerKey = (id) => require("crypto").createHmac("sha256", readerSecret()).update(`reader:${id}`).digest("hex");
 app.get("/reader-login", signed, (req, res) => {
   let origin = "";
   try {
@@ -219,8 +224,40 @@ app.post("/api/reader-ticket", (req, res) => {
   readerTickets.delete(String(req.body?.ticket || ""));
   const r = t && t.expires > Date.now() ? auth.reader(t.id) : null;
   if (!r) return res.status(404).json({ error: "ticket" });
-  res.json({ id: r.id, name: r.name, username: r.username });
+  res.json({ id: r.id, name: r.name, username: r.username, key: readerKey(r.id) });
 });
+// The reader's list of books for one account: titles and authors only, never the files. Replaces the old list.
+app.post("/api/reader-library", (req, res) => {
+  const id = String(req.body?.id || "");
+  const key = String(req.body?.key || "");
+  const want = auth.reader(id) && readerKey(id);
+  if (!want || key.length !== want.length || !require("crypto").timingSafeEqual(Buffer.from(key), Buffer.from(want))) return res.status(403).json({ error: "key" });
+  const books = (Array.isArray(req.body?.books) ? req.body.books : []).slice(0, 5000);
+  store.db.tx(() => {
+    store.db.prepare("DELETE FROM reader_files WHERE reader = ?").run(id);
+    const add = store.db.prepare("INSERT OR IGNORE INTO reader_files (reader, name, title, authors) VALUES (?, ?, ?, ?)");
+    for (const b of books) if (b?.name && b?.title) add.run(id, String(b.name).slice(0, 300), String(b.title).slice(0, 300), (Array.isArray(b.authors) ? b.authors : []).map(String).join("; ").slice(0, 300));
+  });
+  res.json({ ok: true, books: books.length });
+});
+// The reader's file of this book, if the signed-in reader has one: same title (or the original's, or
+// another edition's) and, when both name an author in the same alphabet, a shared surname.
+function readerFileFor(readerId, book) {
+  if (!readerId || !book) return null;
+  const files = store.db.prepare("SELECT name, title, authors FROM reader_files WHERE reader = ?").all(readerId);
+  if (!files.length) return null;
+  const key = (t) => norm(workName(t));
+  const titles = new Set([book.title, book.altTitle, ...(book.editions || []).map((e) => e.title), ...(book.translations || []).map((t) => t.title)].filter(Boolean).map(key).filter((t) => t.length > 1));
+  const surnames = (a) => new Set(norm(a).split(" ").filter((w) => w.length > 2));
+  const bookAuthors = surnames([book.author, ...(book.translations || []).map((t) => t.author)].join(" "));
+  const cyr = (set) => [...set].some((w) => /[а-яіїєґ]/.test(w));
+  const sameAuthor = (f) => {
+    const mine = surnames(f.authors);
+    if (!mine.size || !bookAuthors.size || cyr(mine) !== cyr(bookAuthors)) return true; // «Орвелл» and «Orwell» can't be compared
+    return [...mine].some((w) => bookAuthors.has(w));
+  };
+  return files.find((f) => titles.has(key(f.title)) && sameAuthor(f)) || null;
+}
 
 // The reader asks once a day which of its accounts are gone (deleted here), to delete their books too.
 app.post("/api/readers-gone", (req, res) => {
@@ -610,7 +647,8 @@ app.get("/book/:id", (req, res) => {
   if (store.href(id) !== `/book/${encodeURIComponent(req.params.id)}`) return res.redirect(301, store.href(id));
   const book = bookFor(req, store.bookPage(id), !!store.entry(req.user?.id, id));
   if (!book) return res.status(404).send(pages.messagePage({ title: "Немає такої книжки", text: "", user: req.user }));
-  res.send(pages.bookPage({ book, entry: store.sharedEntry(req.user?.id, book.id), user: req.user, shelf: book.shelf && (req.owner || !isDraft(book.shelf)) ? store.shelf(book.shelf) : null, inLibrary: inLibraryMap(req), readers: readersOf(book.id), also: social.alsoLiked([book.id], { limit: 4 }) }));
+  const file = readerFileFor(req.user?.id, book);
+  res.send(pages.bookPage({ book, entry: store.sharedEntry(req.user?.id, book.id), user: req.user, readUrl: file ? `${READER_URL}/?open=${encodeURIComponent(file.name)}` : "", shelf: book.shelf && (req.owner || !isDraft(book.shelf)) ? store.shelf(book.shelf) : null, inLibrary: inLibraryMap(req), readers: readersOf(book.id), also: social.alsoLiked([book.id], { limit: 4 }) }));
 });
 
 // An author: their works from Wikidata (linked to our books of them) and every book of theirs we have.

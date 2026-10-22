@@ -368,7 +368,7 @@ function bookLd(book, shelf, s, readers) {
 }
 
 // The book, the reader's own buttons, where to get it, what readers said, what it is about.
-function bookPage({ book, entry, user, shelf, inLibrary = new Map(), readers = [], also = [] }) {
+function bookPage({ book, entry, user, shelf, inLibrary = new Map(), readers = [], also = [], readUrl = "" }) {
   const s = statsOf(book.id);
   const kicker = [book.tags?.find((t) => t !== "українською"), isUk(book) ? "українською" : LANG_ADV[String(book.language || "").toLowerCase()] || ""].filter(Boolean).map(cap).join(" · ");
   const sub = [book.altTitle ? esc(book.altTitle) : "", book.author ? `<span class="authors">${authorLinks(book.author)}</span>` : "", book.published ? String(book.published) : "", book.pages ? `${book.pages} с.` : ""].filter(Boolean).join(" · ");
@@ -389,6 +389,7 @@ function bookPage({ book, entry, user, shelf, inLibrary = new Map(), readers = [
         ${score}
         ${twins(book)}
         ${mine(book, entry, user)}
+        ${readUrl ? `<p class="read-here"><a class="btn primary" href="${attr(readUrl)}">Читати</a><span class="muted">ваш файл у читалці Chytai</span></p>` : ""}
         ${where(book)}
       </div>
     </article>

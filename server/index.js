@@ -514,7 +514,14 @@ app.get("/sw.js", (_req, res) => {
   res.type("application/javascript").send(serviceWorker);
 });
 
-app.get("/login", (req, res) => (currentAccount(req) ? res.redirect("/") : res.type("html").send(loginPage(req))));
+// Where to go after signing in (a book from «Читати» on the site), kept in a cookie for the round trip.
+const NEXT_COOKIE = "reader_next";
+const safeNext = (v) => (/^\/(?!\/)/.test(String(v || "")) ? String(v).slice(0, 500) : "");
+app.get("/login", (req, res) => {
+  if (currentAccount(req)) return res.redirect(safeNext(req.query.next) || "/");
+  if (safeNext(req.query.next)) res.setHeader("Set-Cookie", cookieHeader(req, NEXT_COOKIE, safeNext(req.query.next), 1 / 96));
+  res.type("html").send(loginPage(req));
+});
 // Back from the site with a ticket (web/server.js /reader-login).
 app.get("/auth", async (req, res) => {
   const ticket = String(req.query.ticket || "");
@@ -529,10 +536,14 @@ app.get("/auth", async (req, res) => {
   if (!who) return res.status(401).type("html").send(loginPage(req, "Посилання для входу застаріло. Натисніть «Увійти» ще раз."));
   const a = (state.accounts[who.id] ??= { since: Date.now() });
   Object.assign(a, { name: String(who.name || "").slice(0, 60), username: String(who.username || "").slice(0, 30), seen: Date.now() });
+  if (/^[a-f0-9]{64}$/.test(String(who.key || ""))) a.key = who.key;
   saveState();
+  tellSite(who.id);
   console.log(`reader sign-in @${a.username}`);
   setLoginCookie(req, res, who.id);
-  res.redirect("/");
+  const next = safeNext(parseCookies(req)[NEXT_COOKIE]);
+  if (next) res.append("Set-Cookie", cookieHeader(req, NEXT_COOKIE, "", 0));
+  res.redirect(next || "/");
 });
 app.post("/logout", (req, res) => {
   res.setHeader("Set-Cookie", [cookieHeader(req, COOKIE, "", 0), cookieHeader(req, GUEST_COOKIE, "", 0), cookieHeader(req, OLD_COOKIE, "", 0)]);
@@ -552,7 +563,7 @@ app.use((req, res, next) => {
   const guest = acct ? null : currentGuest(req);
   if (!acct && !guest) {
     if (req.path.startsWith("/api/")) return res.status(401).json({ error: "login" });
-    return res.redirect("/login");
+    return res.redirect(req.originalUrl === "/" ? "/login" : `/login?next=${encodeURIComponent(req.originalUrl)}`);
   }
   // Max can switch the reader off for one account (/admin); the site stays theirs.
   if (acct && state.accounts[acct]?.off) {
@@ -734,6 +745,24 @@ async function dropDeletedAccounts() {
 }
 setTimeout(dropDeletedAccounts, 60 * 1000).unref();
 setInterval(dropDeletedAccounts, 24 * 3600 * 1000).unref();
+
+// The site shows «Читати» on a book's page when the reader has its file here, so it gets each library's
+// titles and authors (never the files) after every change, with the account's key from signing in.
+const tellTimers = new Map();
+function tellSite(id) {
+  if (!state.accounts[id]?.key) return;
+  clearTimeout(tellTimers.get(id));
+  tellTimers.set(id, setTimeout(async () => {
+    tellTimers.delete(id);
+    try {
+      const books = (await scanLibrary(libOf(id))).map((b) => ({ name: path.basename(b.path), title: b.title || "", authors: b.authors || [] }));
+      const res = await fetch(`${WEB_URL}/api/reader-library`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, key: state.accounts[id].key, books }), signal: AbortSignal.timeout(20000) });
+      if (!res.ok) throw new Error(`reader-library ${res.status}`);
+    } catch (err) {
+      console.error(`reader-library ${id}:`, err.message);
+    }
+  }, 2000));
+}
 
 // ---------- Libraries: one per account, private to it ----------
 
@@ -995,6 +1024,7 @@ api.put("/books/:name", express.raw({ type: () => true, limit: MAX_UPLOAD }), as
   (req.lib.meta.added ??= {})[name] = { by: req.acct, at: Date.now() };
   saveState();
   warmCovers(req.lib, [name]);
+  tellSite(req.acct);
   res.json({ path: name });
 });
 
@@ -1011,6 +1041,7 @@ api.patch("/books/:name", (req, res) => {
   if (title || authors.length) meta[name] = { title, authors };
   else delete meta[name];
   saveState();
+  tellSite(req.acct);
   res.json({ path: name, title, authors, edited: !!meta[name] });
 });
 

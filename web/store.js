@@ -1147,4 +1147,4 @@ class Store {
   }
 }
 
-module.exports = { isRussian, Store, slugify, OWNER };
+module.exports = { isRussian, Store, slugify, OWNER, norm, workName };
