@@ -239,8 +239,6 @@ const popular = () => {
   return (popularCache = { at: Date.now(), list }).list;
 };
 app.get("/add", signed, (req, res) => res.send(pages.addPage({ user: req.user, popular: popular() })));
-// «Назад до списку» brings the pasted text back.
-app.post("/add", signed, (req, res) => res.send(pages.addPage({ user: req.user, text: String(req.body.text || ""), popular: popular() })));
 app.get("/api/add/find", signed, (req, res) => res.set("Cache-Control", "no-store").send(pages.addFindResults(store.search(String(req.query.q || "").slice(0, 100), { limit: 6 }))));
 const IMPORTS = {
   list: { name: "списку", parse: null },

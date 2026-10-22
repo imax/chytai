@@ -1157,12 +1157,9 @@ function addReviewPage({ user, token, rows, text }) {
     <h1>Знайшли ${found} з ${rows.length}</h1>
     <p class="lead">Перевірте :) Якщо книжки немає, її можна додати вручну. «Інша книжка», якщо знайшли неправильно.</p>
     <button class="btn primary" data-cta>Додати <span data-n></span> на полицю</button>
-    <p><button type="submit" class="text-link" form="add-back">Назад до списку</button></p>
-    <p class="small muted">Усе потрапить у «прочитано». Оцінки й нотатки на полиці.</p>
   </div>
   <ol class="add-rows">${rows.map(line).join("")}</ol>
 </form>
-<form method="post" action="/add" id="add-back" hidden><input type="hidden" name="text" value="${attr(text)}"></form>
 <script>
 (() => {
   const form = document.querySelector(".add-review");
