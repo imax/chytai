@@ -68,10 +68,14 @@ function stars(r, { num = true } = {}) {
 
 // A cover, or a coloured block with the title when there is none or the picture fails.
 // Sizes: xl 200×300, lg 120×180, md 64×96, sm 52×78, xs 40×60, feed 48×72, card (the grid's width).
+// Open Library's cover server often fails the first request for a picture it has not cached
+// (Max saw «Фундація» without its cover, 2026-10-22), so a failed picture is asked twice more
+// before the block stays.
+const COVER_ERR = "var r=+(this.dataset.r||0);if(r<2){this.dataset.r=r+1;var s=this.src.split('?')[0];setTimeout(()=>{this.src=s+'?r='+(r+1)},1500*(r+1))}else this.remove()";
 function cover(book, size = "md") {
   const hue = [...String(book.title)].reduce((a, c) => (a * 31 + c.charCodeAt(0)) % 360, 7);
   const ph = `<span class="ph">${esc(book.title)}</span>`;
-  return `<span class="cover ${size}" style="--h:${hue}">${ph}${book.cover ? `<img src="${attr(book.cover)}" alt="" loading="lazy" onerror="this.remove()">` : ""}</span>`;
+  return `<span class="cover ${size}" style="--h:${hue}">${ph}${book.cover ? `<img src="${attr(book.cover)}" alt="" loading="lazy" onerror="${COVER_ERR}">` : ""}</span>`;
 }
 
 // A section heading: a rule, a small green label and, on the right, a quiet aside (a link, a switch).
