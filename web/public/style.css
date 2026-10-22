@@ -426,6 +426,14 @@ dialog .form { margin-top: 18px; }
 .steps li { font-size: 16px; line-height: 1.55; margin-top: 10px; }
 .form input[type="file"] { padding: 8px; font-size: 14px; }
 .import-box { margin-top: 44px; }
+/* /add: the list on the left, one book and the imports on the right */
+.add-page { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); gap: 56px; align-items: start; margin-top: 8px; }
+.add-page .form { margin-top: 0; }
+.add-page .form > .small { margin: -4px 0 2px; }
+.add-page .form h2 { margin: 0; }
+.add-page .add-imports { margin-top: 40px; }
+.add-page textarea { min-height: 220px; }
+@media (max-width: 760px) { .add-page { grid-template-columns: 1fr; gap: 40px; } .add-page .add-imports { margin-top: 32px; } }
 .import-preview { margin-top: 24px; }
 .imp-bar { display: flex; align-items: center; gap: 14px; padding: 12px 0; border-bottom: 1px solid var(--ink); position: sticky; top: 0; background: var(--paper); z-index: 2; }
 .imp-bar.bottom { border-bottom: 0; border-top: 1px solid var(--rule); position: static; margin-top: 20px; }

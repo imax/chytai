@@ -87,6 +87,8 @@ function layout({ title, body, user, path = "", description = "", q = "", home =
   const nav = [
     ...NAV.map(([href, name, is]) => `<a href="${href}"${on(is(path))}>${name}</a>`),
     // Settings live on one's own shelf, not in the menu (Max, 2026-10-20).
+    // Adding books is a page of its own in the menu, not something hidden in the profile (Max, 2026-10-22).
+    ...(user ? [`<a href="/add"${on(path === "/add")}>Додати книжки</a>`] : []),
     user ? `<a href="${attr(user.href || "/me")}"${on(path === "/me" || path === "/settings")}>Моє</a>` : `<a href="/login"${on(path === "/login")}>Увійти</a>`,
   ].join("");
   const find = home || path === "/search" ? "" : `<form class="find" action="/search" role="search"><input type="search" name="q" value="${attr(q)}" placeholder="назва, автор, жанр або видавництво" autocomplete="off" aria-label="Пошук"></form>`;
@@ -676,7 +678,7 @@ function libraryPage({ rows, user, reader, own = false, mineIds = null, recs = [
     .join("\n");
   const wants = own ? [] : rows.filter((r) => r.status === "want").slice(0, 3);
   const body = `
-${pageHead({ crumbs: own ? "" : `<a href="/community">Читачі</a> / ${esc(reader.name)}`, kicker: own ? "Моя полиця" : "Полиця читача", title: esc(reader.name), sub, action: own ? `<div class="acts"><button class="btn primary" data-open="add">+ Додати книжку</button><a class="text-link small" href="/import/goodreads">Перенести з Goodreads</a></div>` : user?.id === reader.id ? "" : followButton(reader, following, user) })}
+${pageHead({ crumbs: own ? "" : `<a href="/community">Читачі</a> / ${esc(reader.name)}`, kicker: own ? "Моя полиця" : "Полиця читача", title: esc(reader.name), sub, action: own ? `<div class="acts"><a class="btn primary" href="/add">+ Додати книжки</a></div>` : user?.id === reader.id ? "" : followButton(reader, following, user) })}
 <div class="split">
   <div>
     <div class="tabs-bar">
@@ -734,7 +736,7 @@ function addDialog() {
       <label>Статус <select name="status"><option value="">без статусу</option><option value="reading">Читаю</option><option value="read">Прочитано</option><option value="want" selected>Хочу прочитати</option></select></label>
       <label>Примірник <select name="copy"><option value="">не вказано</option><option value="paper">На папері</option><option value="ebook">E-book</option><option value="seeking">Шукаю на папері</option></select></label>
     </div>
-    <div class="actions"><a class="text-link small" href="/import/goodreads">Імпорт з Goodreads</a><a class="text-link small" href="/import/apple-books">з Apple Books</a><span class="grow"></span><button type="button" class="btn" data-close>Скасувати</button><button class="btn primary">Додати</button></div>
+    <div class="actions"><a class="text-link small" href="/add">Кілька книжок, список чи імпорт</a><span class="grow"></span><button type="button" class="btn" data-close>Скасувати</button><button class="btn primary">Додати</button></div>
   </form>
 </dialog>`;
 }
@@ -1013,15 +1015,15 @@ function welcomePage({ user, next = "" }) {
     <p class="kicker">Вітаємо</p>
     <h1>Вітаємо в ${mark}!</h1>
     <p class="lead">${mark} це проєкт для тих, хто любить книжки. Спільнота людей, каталоги українських видавництв, пошук і рекомендації.</p>
-    <div class="acts"><a class="btn primary" href="${attr(next || "/")}">Почати</a><a class="text-link" href="/import/goodreads">Імпорт з Goodreads</a></div>
+    <div class="acts"><a class="btn primary" href="/add">Додати свої книжки</a><a class="text-link" href="${attr(next || "/")}">Спочатку роздивитись</a></div>
   </div>
   <ol class="welcome-steps">
-    ${step("01", "Зберіть свою полицю", "Що прочитали, що читаєте, що хочете прочитати: з оцінками й нотатками. Є імпорт з Goodreads та Apple Books.", user.href, "Моя полиця")}
+    ${step("01", "Зберіть свою полицю", "Що прочитали, що читаєте, що хочете прочитати: з оцінками й нотатками. Вставте список текстом або перенесіть з Goodreads чи Apple Books.", "/add", "Додати книжки")}
     ${step("02", "Дивіться, що читають інші", "Знаходьте людей зі схожими смаками і додавайте їх книжки собі.", "/community", "Спільнота")}
     ${step("03", "Пошук", "Пошук по каталогах українських видавництв, полицях читачів та офлайн бібліотеках.", "/", "Каталог")}
     ${step("04", "Читайте у Читалці", "Читалка з AI-explainer для зручного читання. Веб версія і мобільний застосунок (поки в TestFlight).", "https://chytai.fly.dev/", "Читалка", true)}
   </ol>
-  <div class="welcome-end"><a class="btn primary" href="${attr(next || "/")}">Почати</a><a class="text-link" href="/import/goodreads">Імпорт з Goodreads</a></div>
+  <div class="welcome-end"><a class="btn primary" href="/add">Додати свої книжки</a><a class="text-link" href="${attr(next || "/")}">Спочатку роздивитись</a></div>
 </section>`;
   return layout({ title: "Вітаємо", body, user, path: "/welcome" });
 }
@@ -1037,9 +1039,9 @@ function settingsPage({ user, values, error = "", suggested = "", saved = false 
   <div class="actions"><button class="btn primary">Зберегти</button><a class="text-link small" href="${attr(user.href)}">Моя сторінка</a>${user.owner ? `<a class="text-link small" href="/admin">Статистика</a>` : ""}<span class="grow"></span><a class="text-link small" href="/logout">Вийти</a></div>
 </form>
 <section class="form import-box">
-  <h2>Перенести полицю</h2>
-  <p class="muted small">Читали деінде? Перенесіть бібліотеку сюди: з Goodreads зі статусами, оцінками, датами й рецензіями; з Apple Books (на Mac) книжки й статуси.</p>
-  <div class="actions"><a class="btn" href="/import/goodreads">Імпорт з Goodreads</a><a class="btn" href="/import/apple-books">Імпорт з Apple Books</a></div>
+  <h2>Книжки</h2>
+  <p class="muted small">Додати книжки на полицю: списком текстом, по одній або перенести з Goodreads чи Apple Books.</p>
+  <div class="actions"><a class="btn" href="/add">Додати книжки</a></div>
 </section>
 ${user.owner ? "" : `<form method="post" action="/settings/delete" class="form danger-zone" onsubmit="return confirm('Видалити акаунт разом з усіма книжками, оцінками й нотатками?')">
   <h2>Видалити акаунт</h2>
@@ -1099,9 +1101,56 @@ ${updatesCache.html}
 </section>` });
 }
 
-// ---- import from elsewhere (/import/goodreads, /import/apple-books) ----
+// ---- /add: every way to put books on the shelf, on one page (Max, 2026-10-22: «окрему сторінку для
+// додавання, а не як зараз захована в профіль»). A list as text first, then one book by hand, then the
+// imports from Goodreads and Apple Books.
+function addPage({ user, text = "", status = "read", error = "" }) {
+  const opt = (v, l) => `<option value="${v}"${status === v ? " selected" : ""}>${l}</option>`;
+  const body = `
+${pageHead({ kicker: "Моя полиця", title: "Додати книжки", sub: "Список текстом, по одній, або перенести з Goodreads чи Apple Books." })}
+<div class="add-page">
+<section class="add-list">
+  <form method="post" action="/import/list" class="form">
+    <h2>Списком</h2>
+    <p class="muted small">Вставте свій список, по одній книжці на рядок: «Автор — Назва», «Назва — Автор», «Автор. Назва» чи просто назва. Рік або оцінка в кінці рядка теж зрозуміються: «Дюна — Френк Герберт (2019) ★★★★★». Далі покажемо, що знайшлось у каталозі, і спитаємо підтвердження.</p>
+    ${errorLine(error)}
+    <label>Список<textarea name="text" rows="12" required placeholder="Тарас Шевченко — Кобзар
+Валер'ян Підмогильний. Місто
+Дюна — Френк Герберт (2019) ★★★★★
+Sapiens: A Brief History of Humankind — Yuval Noah Harari">${esc(text)}</textarea></label>
+    <div class="two">
+      <label>Ці книжки я<select name="status">${opt("read", "Прочитав(ла)")}${opt("want", "Хочу прочитати")}${opt("reading", "Читаю зараз")}</select></label>
+    </div>
+    <div class="actions"><button class="btn primary">Переглянути</button><span class="muted small">Нічого не запишеться, поки ви не підтвердите.</span></div>
+  </form>
+</section>
+<section class="add-one">
+  <form method="post" action="/api/book" class="form">
+    <h2>Одна книжка</h2>
+    <p class="muted small">Спершу <a class="text-link" href="/search">пошукайте</a>: книжка з каталогу стане на полицю з обкладинкою і сторінкою. Тут додайте ту, якої на Chytai ще немає.</p>
+    <label>Назва <input name="title" required></label>
+    <label>Автор <input name="author"></label>
+    <label>Обкладинка (URL) <input name="cover" type="url" placeholder="https://…"></label>
+    <div class="two">
+      <label>Статус <select name="status"><option value="">без статусу</option><option value="reading">Читаю</option><option value="read">Прочитано</option><option value="want" selected>Хочу прочитати</option></select></label>
+      <label>Примірник <select name="copy"><option value="">не вказано</option><option value="paper">На папері</option><option value="ebook">E-book</option><option value="seeking">Шукаю на папері</option></select></label>
+    </div>
+    <div class="actions"><button class="btn primary">Додати</button></div>
+  </form>
+  <section class="form add-imports">
+    <h2>Перенести звідкись</h2>
+    <p class="muted small">З Goodreads: статуси, оцінки, дати й рецензії з файлу експорту. З Apple Books (лише на Mac): книжки і статуси.</p>
+    <div class="actions"><a class="btn" href="/import/goodreads">Імпорт з Goodreads</a><a class="btn" href="/import/apple-books">Імпорт з Apple Books</a></div>
+  </section>
+</section>
+</div>`;
+  return layout({ title: "Додати книжки", body, user, path: "/add", noindex: true });
+}
 
-const IMPORT_NAMES = { goodreads: "Goodreads", "apple-books": "Apple Books" };
+// ---- import from elsewhere (/import/goodreads, /import/apple-books, /import/list) ----
+
+const IMPORT_NAMES = { goodreads: "Goodreads", "apple-books": "Apple Books", list: "списку" };
+const IMPORT_BACK = (source) => (source === "list" ? "/add" : `/import/${source}`);
 
 // Step one: where to get the file and where to drop it.
 function importPage({ user, source = "goodreads", error = "" }) {
@@ -1122,12 +1171,12 @@ function importPage({ user, source = "goodreads", error = "" }) {
     title: `Імпорт з ${IMPORT_NAMES[source]}`,
     lead: apple ? "Перенесіть бібліотеку з Apple Books на Mac: що прочитали, що читаєте, що лежить непочате." : "Перенесіть свою бібліотеку з Goodreads: прочитане, оцінки, дати, рецензії і список «хочу прочитати».",
     user,
-    path: "/settings",
+    path: "/add",
     form: `${steps}
 <form method="post" action="/import/${source}" enctype="multipart/form-data" class="form">
   ${errorLine(error)}
   <label>${apple ? "Файли з теки BKLibrary" : "Файл експорту"}<input type="file" name="file" ${apple ? "multiple" : 'accept=".csv,text/csv"'} required></label>
-  <div class="actions"><button class="btn primary">Переглянути</button><a class="text-link small" href="/settings">Назад</a></div>
+  <div class="actions"><button class="btn primary">Переглянути</button><a class="text-link small" href="/add">Назад</a></div>
 </form>
 <p class="muted small">${apple ? "Файли читаються один раз і не зберігаються: з них ми беремо лише назви, авторів і прогрес читання." : "Файл читається один раз і не зберігається; приватних нотаток Goodreads ми не читаємо."} <a class="text-link" href="/privacy">Приватність</a>.</p>`,
   });
@@ -1150,11 +1199,11 @@ function importPreviewPage({ user, source = "goodreads", token, rows, counts, fi
   const indexed = rows.map((r, i) => [r, i]);
   const skipped = counts.skipped ? ` · ${counts.skipped} PDF пропущено` : "";
   const body = `
-${pageHead({ crumbs: `<a href="/settings">Налаштування</a> / <a href="/import/${source}">Імпорт з ${IMPORT_NAMES[source]}</a>`, title: "Що потрапить на полицю", sub: [books(counts.all), counts.read ? `${counts.read} прочитано` : "", counts.want ? `${counts.want} ${source === "apple-books" ? "не почато" : "хочу прочитати"}` : "", counts.reading ? `${counts.reading} читаю` : "", counts.abandoned ? `${counts.abandoned} покинуто` : "", counts.rated ? `${counts.rated} з оцінками` : "", counts.notes ? `${counts.notes} з рецензіями` : ""].filter(Boolean).join(" · ") + skipped })}
+${pageHead({ crumbs: `<a href="/add">Додати книжки</a> / <a href="${IMPORT_BACK(source)}">${source === "list" ? "Список" : `Імпорт з ${IMPORT_NAMES[source]}`}</a>`, title: "Що потрапить на полицю", sub: [books(counts.all), counts.read ? `${counts.read} прочитано` : "", counts.want ? `${counts.want} ${source === "apple-books" ? "не почато" : "хочу прочитати"}` : "", counts.reading ? `${counts.reading} читаю` : "", counts.abandoned ? `${counts.abandoned} покинуто` : "", counts.rated ? `${counts.rated} з оцінками` : "", counts.notes ? `${counts.notes} з рецензіями` : ""].filter(Boolean).join(" · ") + skipped })}
 <form method="post" action="/import/${source}/apply" class="import-preview">
   <input type="hidden" name="token" value="${attr(token)}">
   <div class="imp-bar">
-    <span class="small muted">${filename ? `${esc(filename)} · ` : ""}зніміть галочку з того, що переносити не треба, або зніміть усі й виберіть лише обране</span>
+    <span class="small muted">${filename ? `${esc(filename)} · ` : ""}${source === "list" ? "переплутали автора з назвою? поправити можна буде на полиці · " : ""}зніміть галочку з того, що переносити не треба, або зніміть усі й виберіть лише обране</span>
     ${toggles}
     <span class="grow"></span>
     <button class="btn primary">Імпортувати <span id="imp-n">${counts.all}</span></button>
@@ -1162,7 +1211,7 @@ ${pageHead({ crumbs: `<a href="/settings">Налаштування</a> / <a href
   ${group("Є в каталозі", "Ці книжки ми знайшли за ISBN або назвою й автором; вони стануть на полицю як є, з обкладинкою і сторінкою.", indexed.filter(([r]) => r.match && !r.own))}
   ${group("Вже на вашій полиці", "Ці книжки у вас уже є. Те, що на полиці вже записано, лишиться; візьмемо лише те, чого бракує (оцінку, рік, рецензію).", indexed.filter(([r]) => r.own))}
   ${group("Нові книжки", "Таких у каталозі поки немає: додамо як ваші книжки, за назвою й автором, без обкладинки. Коли вони з’являться в якомусь каталозі, самі з’єднаються.", indexed.filter(([r]) => !r.match))}
-  <div class="imp-bar bottom"><a class="text-link small" href="/import/${source}">Інший файл</a><span class="grow"></span><button class="btn primary">Імпортувати <span>${counts.all}</span></button></div>
+  <div class="imp-bar bottom"><a class="text-link small" href="${IMPORT_BACK(source)}">${source === "list" ? "Інший список" : "Інший файл"}</a><span class="grow"></span><button class="btn primary">Імпортувати <span>${counts.all}</span></button></div>
 </form>
 <script>
 (() => {
@@ -1179,7 +1228,7 @@ ${pageHead({ crumbs: `<a href="/settings">Налаштування</a> / <a href
   });
 })();
 </script>`;
-  return layout({ title: `Імпорт з ${IMPORT_NAMES[source]}`, body, user, path: "/settings" });
+  return layout({ title: source === "list" ? "Додати книжки" : `Імпорт з ${IMPORT_NAMES[source]}`, body, user, path: "/add" });
 }
 
 // Step three: done.
@@ -1189,8 +1238,8 @@ function importDonePage({ user, source = "goodreads", result, skipped = 0 }) {
     title: "Готово",
     lead: bits.length ? `${cap(bits.join(", "))}.` : "Нічого не змінилося.",
     user,
-    path: "/settings",
-    form: `<div class="form"><div class="actions"><a class="btn primary" href="${attr(user.href)}">Моя полиця</a><a class="text-link small" href="/import/${source}">Імпортувати ще один файл</a></div></div>
+    path: "/add",
+    form: `<div class="form"><div class="actions"><a class="btn primary" href="${attr(user.href)}">Моя полиця</a><a class="text-link small" href="${IMPORT_BACK(source)}">${source === "list" ? "Додати ще" : "Імпортувати ще один файл"}</a></div></div>
 ${result.created.length ? `<p class="muted small" style="margin-top:24px">Нові книжки без обкладинок: якщо котрась із них насправді вже є в каталозі під іншою назвою, напишіть нам, з’єднаємо.</p>` : ""}`,
   });
 }
@@ -1222,6 +1271,7 @@ module.exports = {
   translationsPage,
   decidedList,
   welcomePage,
+  addPage,
   layout, homePage, bookPage, editPage, libraryPage, readersPage, publishersPage, publisherPage, searchPage, searchResults, authorPage,
   loginPage, codePage, signupPage, settingsPage, privacyPage, updatesPage, messagePage, digestPage, followMailPage, importPage, importPreviewPage, importDonePage,
   esc, STATUS, COPY, inline, isUk, setTitleLinks, setAuthorLinks, setStats, setReadersWithNote,
