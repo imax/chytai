@@ -149,6 +149,9 @@ function build(store) {
     bySlug.set(slug, a);
     list.push(a);
   }
+  // The address of every other spelling keeps working («/author/john-steinbeck» once a Ukrainian
+  // edition makes «Джон Стейнбек» the shown name): it serves the same page.
+  for (const a of list) for (const g of [groups.get(a.key)]) for (const [n] of g.names) if (!bySlug.has(slugify(n))) bySlug.set(slugify(n), a);
   const byKey = new Map(list.map((a) => [a.key, a]));
   return {
     list,

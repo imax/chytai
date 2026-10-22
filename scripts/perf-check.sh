@@ -16,19 +16,24 @@ pages=(
   /@maxua                             # the biggest reader's shelf
   /book/east-of-eden                  # a book with editions and readers
   /book/tsyrtseia
-  /author/john-steinbeck
   /updates
 )
-# The fastest of three answers, in seconds (99 when none came).
+# The fastest of three answers, in seconds (99 when none came); a redirect is followed (a renamed slug is
+# not a breakage). A page that does not answer 200 has its status and the start of its body printed.
 measure() {
   local best=99 r code t
   for _ in 1 2 3; do
-    r=$(curl -s -o /dev/null -m 30 -w "%{http_code} %{time_total}" "$SITE$1" || echo "000 99")
+    r=$(curl -sL -o /tmp/perf-page -m 30 -w "%{http_code} %{time_total}" "$SITE$1" || echo "000 99")
     code=${r%% *} t=${r##* }
-    [ "$code" = 200 ] && awk "BEGIN{exit !($t < $best)}" && best=$t
+    if [ "$code" = 200 ]; then awk "BEGIN{exit !($t < $best)}" && best=$t
+    else echo "  $1: HTTP $code: $(head -c 300 /tmp/perf-page 2>/dev/null | tr '\n' ' ')" >&2; fi
   done
   echo "$best"
 }
+# An author's address follows the spelling most of their books use, so it can change with the data
+# (Стейнбек's moved on 2026-10-22): the author page is the one linked from a book page.
+author=$(curl -s -m 30 "$SITE/book/east-of-eden" | grep -o 'href="/author/[^"]*"' | head -1 | cut -d'"' -f2)
+pages+=("${author:-/author/missing-on-book-page}")
 slow=()
 for p in "${pages[@]}"; do
   best=$(measure "$p")

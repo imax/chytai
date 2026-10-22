@@ -25,6 +25,7 @@ const listimport = require("./listimport");
 const applebooks = require("./applebooks");
 const enrich = require("./enrich");
 const { Admin, adminPage } = require("./admin");
+const { Reviews } = require("./reviews");
 
 const ROOT = path.join(__dirname, "..");
 loadDotEnv(path.join(ROOT, ".env"));
@@ -100,6 +101,9 @@ const refreshAuthors = () => authors.refresh(store, { log: console.log }).catch(
 const refreshDetails = () => enrich.refresh(store, { log: console.log, googleKey: process.env.GOOGLE_BOOKS_KEY || "" }).catch((e) => console.error("enrich failed:", e));
 setTimeout(() => refreshUk().then(refreshAuthors).then(refreshDetails), 60000).unref();
 setInterval(() => refreshUk().then(refreshAuthors).then(refreshDetails), 6 * 3600 * 1000).unref();
+
+// «Огляди» on book pages (reviews.js): links the owner adds on /admin/reviews.
+const reviews = new Reviews(store, { log: console.log });
 
 pages.setTitleLinks((md, id) => store.linkTitles(md, id));
 pages.setAuthorLinks((name) => store.authors?.byName(name)?.href || null);
@@ -181,7 +185,7 @@ app.post("/login/signup", (req, res) => {
   // Someone who came from the reader goes straight back to it; the welcome page is about the site.
   signIn(req, res, reader, next.startsWith("/reader-login") ? next : `/welcome${next ? `?next=${encodeURIComponent(next)}` : ""}`);
 });
-app.get("/welcome", signed, (req, res) => res.send(pages.welcomePage({ user: req.user, next: safeNext(req.query.next) })));
+app.get("/welcome", signed, (req, res) => (admin.step(req.user.id, "welcome"), res.send(pages.welcomePage({ user: req.user, next: safeNext(req.query.next) }))));
 function signIn(req, res, reader, next) {
   res.setHeader("Set-Cookie", auth.cookie(auth.signIn(reader.id), { secure: secure(req) }));
   res.redirect(next || "/me");
@@ -308,8 +312,16 @@ const popular = () => {
   return (popularCache = { at: Date.now(), list }).list;
 };
 // ?text= fills the list: «Додати книжку, якої ще немає» from a search that found nothing (the old one-book form is gone).
-app.get("/add", signed, (req, res) => res.send(pages.addPage({ user: req.user, text: String(req.query.text || "").slice(0, 2000), popular: popular() })));
-app.get("/api/add/find", signed, (req, res) => res.set("Cache-Control", "no-store").send(pages.addFindResults(store.search(String(req.query.q || "").slice(0, 100), { limit: 6 }))));
+app.get("/add", signed, (req, res) => (admin.step(req.user.id, "add"), res.send(pages.addPage({ user: req.user, text: String(req.query.text || "").slice(0, 2000), popular: popular() }))));
+// «Шукати» / «Інша книжка» on /add: our catalog first, then Open Library, so a book nobody here has yet can
+// come in with its cover and ISBNs (Max, 2026-10-22: «напів-мануальне наповнення бази»).
+app.get("/api/add/find", signed, async (req, res) => {
+  const q = String(req.query.q || "").slice(0, 100);
+  const hits = store.search(q, { limit: 6 });
+  const known = new Set(hits.map((h) => h.book.id));
+  const outside = (await enrich.searchOpenLibrary(q)).filter((b) => !known.has(store.findWork(b)));
+  res.set("Cache-Control", "no-store").send(pages.addFindResults(hits, outside));
+});
 const IMPORTS = {
   list: { name: "списку", parse: null },
   goodreads: { name: "Goodreads", parse: (files) => goodreads.parseExport(files[0].body.toString("utf8")) },
@@ -323,6 +335,7 @@ const importPreview = (req, res, books, { filename = "", skipped = 0, text = "" 
   for (const [t, p] of pendingImports) if (Date.now() - p.at > IMPORT_TTL) pendingImports.delete(t);
   const token = require("crypto").randomBytes(12).toString("hex");
   pendingImports.set(token, { reader: req.user.id, source: req.source, rows, filename, at: Date.now() });
+  admin.step(req.user.id, "review");
   if (req.source === "list") return res.send(pages.addReviewPage({ user: req.user, token, rows, text }));
   res.send(pages.importPreviewPage({ user: req.user, source: req.source, token, rows, counts: { ...counts, skipped }, filename }));
 };
@@ -348,18 +361,33 @@ app.post("/import/:source/apply", signed, importSource, (req, res) => {
   const p = pendingImports.get(String(req.body.token || ""));
   if (!p || p.reader !== req.user.id || p.source !== req.source || Date.now() - p.at > IMPORT_TTL) return res.status(400).send(req.source === "list" ? pages.addPage({ user: req.user, text: "", error: "Час вийшов або список уже імпортовано. Вставте його ще раз." }) : pages.importPage({ user: req.user, source: req.source, error: "Час вийшов або файл уже імпортовано. Виберіть файл ще раз." }));
   pendingImports.delete(req.body.token);
+  admin.step(req.user.id, "saved");
   const keep = new Set([].concat(req.body.keep ?? []).map(Number));
   // «Інша книжка» on /add: the reader picked the right book for a line.
   const swapped = (r, i) => {
     const to = String(req.body[`swap_${i}`] || "");
     const b = to && store.book(to);
-    return b ? { ...r, match: { id: b.id, title: b.title, author: b.author, href: b.href } } : r;
+    if (b) return { ...r, match: { id: b.id, title: b.title, author: b.author, href: b.href } };
+    // A book picked from Open Library: the catalog's own copy if we have one after all, else a new book with its cover.
+    let ol = null;
+    try {
+      ol = req.body[`ol_${i}`] ? JSON.parse(req.body[`ol_${i}`]) : null;
+    } catch {}
+    if (!ol?.title) return r;
+    const book = { title: String(ol.title).slice(0, 200), author: String(ol.author || "").slice(0, 200), isbns: [].concat(ol.isbns || []).map(String).filter((x) => /^[\dX]{10,13}$/.test(x)).slice(0, 20) };
+    const id = store.findWork(book);
+    const m = id && store.book(id);
+    if (m) return { ...r, match: { id: m.id, title: m.title, author: m.author, href: m.href } };
+    return { ...r, ...book, match: null, cover: /^https:\/\/covers\.openlibrary\.org\//.test(ol.cover || "") ? ol.cover : "", ol: /^\/works\/OL\w+$/.test(ol.ol || "") ? ol.ol : "", published: Number(ol.published) || null };
   };
-  const chosen = p.rows.map(swapped).filter((r, i) => keep.has(i) && !(p.source === "list" && r.match && store.entry(req.user.id, r.match.id)));
+  // The status picked on /add for the whole list; «На папері» is no status but where the copy is.
+  const as = p.source === "list" ? String(req.body.status || "read") : null;
+  const batch = (r) => (as === "paper" ? { ...r, status: "", year: null, copy: "paper" } : as && ["read", "reading", "want", "abandoned"].includes(as) ? { ...r, status: as, year: as === "read" ? r.year : null, rating: ["want", "reading"].includes(as) ? null : r.rating } : r);
+  const chosen = p.rows.map(swapped).map(batch).filter((r, i) => keep.has(i) && !(p.source === "list" && r.match && store.entry(req.user.id, r.match.id)));
   // On the shelf they sit after what is already there: the read ones by date read, oldest first, then the rest by date added.
   const key = (r) => (r.read ? `0${r.read}` : `1${r.added || "9999"}`);
   chosen.sort((a, b) => key(a).localeCompare(key(b)));
-  const result = store.importEntries(req.user.id, chosen.map((r) => ({ id: r.match?.id || null, title: r.title, author: r.author, isbns: r.isbns, goodreadsId: r.goodreadsId, appleId: r.appleId, status: r.status, rating: r.rating, year: r.year, note: r.note, copy: r.copy, added: r.added, read: r.read, touched: r.touched })), { source: req.source });
+  const result = store.importEntries(req.user.id, chosen.map((r) => ({ id: r.match?.id || null, title: r.title, author: r.author, isbns: r.isbns, goodreadsId: r.goodreadsId, appleId: r.appleId, status: r.status, rating: r.rating, year: r.year, note: r.note, copy: r.copy, added: r.added, read: r.read, touched: r.touched, cover: r.cover, ol: r.ol, published: r.published })), { source: req.source });
   const name = IMPORTS[req.source].name;
   console.log(`${name} import @${req.user.username}: ${result.added} added, ${result.updated} updated, ${result.created.length} new books`);
   // New books by hand are mailed to the owner one by one; an import sends one letter with the list.
@@ -390,7 +418,7 @@ const readersOf = (id) =>
     .readersOf(id)
     .map(({ reader, entry }) => ({ reader: pub(auth.reader(reader)), entry }))
     .filter((r) => r.reader)
-    .map(({ reader, entry }) => ({ name: reader.name, href: `${reader.href}#${entry.via ? entry.via.id : store.canonical(id)}`, entry }));
+    .map(({ reader, entry }) => ({ name: reader.name, href: `${reader.href}#${entry.via ? entry.via.id : store.canonical(id)}`, entry, now: nowIds(reader.id).has(entry.via ? store.canonical(entry.via.id) : store.canonical(id)) }));
 const visible = (s) => store.visible(s);
 // Letters to the owner (WEB_NOTIFY_EMAIL, else the e-mail he signs in with), sent in the background.
 const site = (req) => (DOMAIN ? `https://${DOMAIN}` : `${req.protocol}://${req.get("host")}`);
@@ -423,12 +451,12 @@ function readerList() {
   const year = new Date().getFullYear();
   return auth
     .readers()
-    .map((r) => ({ reader: pub(r), rows: publicRows(store.library(r.id)) }))
+    .map((r) => ({ reader: pub(r), rows: store.library(r.id) }))
     .filter((c) => c.rows.length)
     .sort((a, b) => b.rows.length - a.rows.length)
     .map(({ reader, rows }) => {
       const last = social.feed({ limit: 1, notes: true, books: new Set(rows.map((r) => r.id)) }).find((x) => x.reader.id === reader.id);
-      return { reader, count: rows.length, read: rows.filter((r) => r.status === "read").length, thisYear: rows.filter((r) => r.status === "read" && r.year === year).length, note: last ? pages.inline(last.entry.note) : "" };
+      return { reader, now: nowFor(reader.id), count: rows.length, read: rows.filter((r) => r.status === "read").length, thisYear: rows.filter((r) => r.status === "read" && r.year === year).length, note: last ? pages.inline(last.entry.note) : "" };
     });
 }
 
@@ -511,10 +539,8 @@ app.get("/follow-mail/unsubscribe/:id/:token", (req, res) => followMailSwitch(re
 app.post("/follow-mail/unsubscribe/:id/:token", (req, res) => followMailSwitch(req, res, false));
 app.post("/follow-mail/resubscribe/:id/:token", (req, res) => followMailSwitch(req, res, true));
 
-// «Покинуто» is the reader's own: other readers don't see it on the shelf (pages.js STATUS).
-const publicRows = (rows) => rows.filter((r) => r.status !== "abandoned");
-function libraryRows(reader, { own = false } = {}) {
-  const rows = own ? store.library(reader) : publicRows(store.library(reader));
+function libraryRows(reader) {
+  const rows = store.library(reader);
   let prev;
   for (const r of rows) {
     r._prevYear = prev;
@@ -531,14 +557,14 @@ app.get("/@:username", (req, res) => {
   if (!reader) return res.status(404).send(pages.messagePage({ title: "Немає такого читача", text: "", user: req.user }));
   if (reader.username !== req.params.username) return res.redirect(301, reader.href);
   const own = req.user?.id === reader.id && !("public" in req.query);
-  const rows = libraryRows(reader.id, { own });
+  const rows = libraryRows(reader.id);
   const follows = { followers: auth.followers(reader.id).map((id) => pub(auth.reader(id))).filter(Boolean), following: auth.following(reader.id).map((id) => pub(auth.reader(id))).filter(Boolean) };
   if (own) {
     const fives = rows.filter((r) => r.rating >= 5).slice(0, 5).map((r) => r.id);
     const recs = social.alsoLiked(fives, { limit: 4, skip: new Set(rows.map((r) => r.id)) });
-    return res.send(pages.libraryPage({ rows, user: req.user, reader: req.user, own: true, recs, follows }));
+    return res.send(pages.libraryPage({ rows, user: req.user, reader: req.user, own: true, recs, follows, now: nowFor(reader.id, { own: true }) }));
   }
-  res.send(pages.libraryPage({ rows, user: req.user, reader, mineIds: req.user && req.user.id !== reader.id ? store.inLibrary(req.user.id) : null, following: auth.follows(req.user?.id, reader.id), follows }));
+  res.send(pages.libraryPage({ rows, user: req.user, reader, now: nowFor(reader.id), mineIds: req.user && req.user.id !== reader.id ? store.inLibrary(req.user.id) : null, following: auth.follows(req.user?.id, reader.id), follows }));
 });
 // The owner's page before usernames (/reader/max) moved to /@maxua.
 app.get(OLD_READER, (req, res) => res.redirect(301, pub(auth.reader(OWNER_ID)).href));
@@ -568,10 +594,17 @@ const searchHits = (req, q) => store.search(q, { reader: req.user?.id }).map((h)
 const normQ = (s) => String(s || "").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
 // Everything /search shows: books (a genre's name lists that genre's books by rating), authors, readers,
 // and books like the first hit on the side.
+// Every word typed starts a word of the name, or sounds like one of its Latin words («міллер», Madeline Miller).
+function nameHas(name, nq) {
+  const words = normQ(name).normalize("NFKD").replace(/\p{M}/gu, "").split(" ");
+  return nq.split(" ").filter(Boolean).every((t) => {
+    const alts = store.latinAlts(t);
+    return words.some((w) => w.startsWith(t) || alts.includes(w));
+  });
+}
 function searchAll(req, q) {
   if (!q) return {};
   const nq = normQ(q);
-  const terms = nq.split(" ").filter(Boolean);
   const tag = [...new Set(store.library(OWNER_ID).flatMap((r) => r.book.tags || []))].find((t) => t === nq) || "";
   let hits = searchHits(req, q);
   if (tag) {
@@ -579,7 +612,7 @@ function searchAll(req, q) {
     const seen = new Set(hits.map((h) => h.book.id));
     hits = [...tagged.filter((x) => !seen.has(x.book.id)).map((x) => ({ book: x.book, entry: store.sharedEntry(req.user?.id, x.book.id) })), ...hits].slice(0, 40);
   }
-  const has = (name) => terms.every((t) => normQ(name).split(" ").some((w) => w.startsWith(t)));
+  const has = (name) => nameHas(name, nq);
   const authorsFound = (store.authors?.list || [])
     .filter((a) => has(a.name) || (a.other && has(a.other)))
     .slice(0, 6)
@@ -648,7 +681,7 @@ app.get("/book/:id", (req, res) => {
   const book = bookFor(req, store.bookPage(id), !!store.entry(req.user?.id, id));
   if (!book) return res.status(404).send(pages.messagePage({ title: "Немає такої книжки", text: "", user: req.user }));
   const file = readerFileFor(req.user?.id, book);
-  res.send(pages.bookPage({ book, entry: store.sharedEntry(req.user?.id, book.id), user: req.user, readUrl: file ? `${READER_URL}/?open=${encodeURIComponent(file.name)}` : "", shelf: book.shelf && (req.owner || !isDraft(book.shelf)) ? store.shelf(book.shelf) : null, inLibrary: inLibraryMap(req), readers: readersOf(book.id), also: social.alsoLiked([book.id], { limit: 4 }) }));
+  res.send(pages.bookPage({ book, entry: store.sharedEntry(req.user?.id, book.id), now: !!req.user && nowIds(req.user.id).has(store.canonical(book.id)), user: req.user, readUrl: file ? `${READER_URL}/?open=${encodeURIComponent(file.name)}` : "", shelf: book.shelf && (req.owner || !isDraft(book.shelf)) ? store.shelf(book.shelf) : null, inLibrary: inLibraryMap(req), readers: readersOf(book.id), also: social.alsoLiked([book.id], { limit: 4 }), writings: reviews.of(book.id), reviewError: String(req.query.review_error || "").slice(0, 300) }));
 });
 
 // An author: their works from Wikidata (linked to our books of them) and every book of theirs we have.
@@ -673,7 +706,7 @@ app.get("/author/:slug", async (req, res) => {
   // Who reads this author, and what else those readers rated highest.
   const ids = new Set(hits.map((h) => h.book.id));
   const who = [...new Set(hits.flatMap((h) => store.readersOf(h.book.id).map((r) => r.reader)))]
-    .map((id) => ({ reader: pub(auth.reader(id)), rows: publicRows(store.library(id)) }))
+    .map((id) => ({ reader: pub(auth.reader(id)), rows: store.library(id) }))
     .filter((r) => r.reader)
     .map(({ reader, rows }) => ({ reader, count: rows.length, read: rows.filter((r) => r.status === "read").length }));
   const also = social.alsoLiked([...ids], { limit: 4, skip: ids }).filter((b) => !author.ids.includes(b.id));
@@ -697,6 +730,54 @@ const back = (req, res, fallback) => {
   res.redirect(/^\/(?!\/)/.test(next) ? next : req.body.back ? req.get("referer") || fallback : fallback);
 };
 
+// ---- «Читаю зараз» (Max, 2026-10-22: a reader's status) ----
+// The book the reader has in hand right now (one: Max, 2026-10-22); set by hand only. A book
+// leaves it when it is marked read, abandoned or wanted, or taken off the shelf.
+function nowFor(readerId, { own = false } = {}) {
+  const v = auth.nowOf(readerId);
+  const books = v.books
+    .map((n) => ({ id: store.canonical(n.id), since: n.since }))
+    .map((n) => ({ ...n, book: store.book(n.id), entry: store.entry(readerId, n.id) }))
+    .filter((n) => n.book && n.entry && (own || (n.entry.status !== "abandoned" && !isRussian(n.book))));
+  return { books };
+}
+const nowIds = (readerId) => new Set(auth.nowOf(readerId).books.map((n) => store.canonical(n.id)));
+function dropNow(readerId, id) {
+  const v = auth.nowOf(readerId);
+  const c = store.canonical(id);
+  if (v.books.some((n) => store.canonical(n.id) === c)) auth.setNow(readerId, { books: v.books.filter((n) => store.canonical(n.id) !== c) });
+}
+// From a book page: put it first (a book that wasn't «Читаю» becomes it; a read one stays read, it's a
+// re-read) or take it off. It takes the place of the book that was there.
+app.post("/api/now/:id", signed, (req, res) => {
+  const id = store.canonical(store.resolve(req.params.id) || "");
+  if (!id || !store.book(id)) return res.status(404).send("Немає такої книжки");
+  const v = auth.nowOf(req.user.id);
+  if (v.books.some((n) => store.canonical(n.id) === id)) dropNow(req.user.id, id);
+  else {
+    const e = store.entry(req.user.id, id);
+    if (!e || !["reading", "read"].includes(e.status)) store.setEntry(req.user.id, id, { status: "reading" });
+    auth.setNow(req.user.id, { books: [{ id, since: new Date().toISOString().slice(0, 10) }, ...v.books] });
+  }
+  req.body ||= {};
+  back(req, res, store.href(id));
+});
+app.get("/me/now", signed, (req, res) => {
+  const now = nowFor(req.user.id, { own: true });
+  const ids = new Set(now.books.map((n) => n.id));
+  const candidates = store.library(req.user.id).filter((r) => r.status === "reading" && !ids.has(r.id));
+  res.send(pages.nowPage({ user: req.user, now, candidates }));
+});
+app.post("/me/now", signed, (req, res) => {
+  const v = auth.nowOf(req.user.id);
+  const since = new Map(v.books.map((n) => [store.canonical(n.id), n.since]));
+  const today = new Date().toISOString().slice(0, 10);
+  req.body ||= {};
+  const picked = [...new Set([].concat(req.body.book || []).map((id) => store.canonical(store.resolve(String(id)) || "")))].filter((id) => store.entry(req.user.id, id));
+  auth.setNow(req.user.id, { books: picked.map((id) => ({ id, since: since.get(id) || today })) });
+  res.redirect(req.user.href);
+});
+
 const STATUSES = ["read", "reading", "want", "abandoned"];
 app.post("/api/entry/:id", signed, (req, res) => {
   const b = req.body;
@@ -708,10 +789,12 @@ app.post("/api/entry/:id", signed, (req, res) => {
   if ("note" in b) patch.note = String(b.note).trim();
   const e = store.setEntry(req.user.id, req.params.id, patch);
   if (!e) return res.status(404).send("Немає такої книжки");
+  if (["read", "want", "abandoned"].includes(patch.status)) dropNow(req.user.id, req.params.id);
   back(req, res, store.href(req.params.id));
 });
 
 app.post("/api/entry/:id/remove", signed, (req, res) => {
+  dropNow(req.user.id, req.params.id);
   store.removeEntry(req.user.id, req.params.id);
   res.redirect("/me");
 });
@@ -808,7 +891,7 @@ app.post("/api/welcome-mail", owner, async (req, res) => {
   res.redirect("/welcome-mail/preview");
 });
 // The owner's statistics page: readers, retention by sign-up week, what people do on the site (admin.js).
-app.get("/admin", owner, (req, res) => res.send(adminPage({ user: req.user, stats: admin.stats(), layout: pages.layout, withBooks: req.query.books === "1", sort: String(req.query.sort || "created") })));
+app.get("/admin", owner, (req, res) => res.send(adminPage({ user: req.user, stats: admin.stats(), layout: pages.layout, withBooks: req.query.books === "10" ? 10 : req.query.books === "1", sort: String(req.query.sort || "created") })));
 app.get("/admin.json", owner, (req, res) => res.json(admin.stats()));
 // One Google Books request with the server's key, for the owner to see what Google answers from here.
 app.get("/admin/google", owner, async (req, res) => {
@@ -848,6 +931,41 @@ app.get("/admin/ip", owner, async (req, res) => {
     res.type("text").send(`error ${e.message}`);
   }
 });
+app.get("/admin/reviews", owner, (req, res) => {
+  const done = req.query.added ? store.book(store.resolve(String(req.query.added))) : null;
+  const list = reviews.all().map((w) => ({ ...w, adder: w.by ? pub(auth.reader(w.by)) : null }));
+  res.send(pages.reviewsAdminPage({ user: req.user, list, error: String(req.query.error || ""), done: done && { title: done.title, href: store.href(done.id) } }));
+});
+// A link added by hand: any reader from a book's page (book=<id>, back=book), the owner also on
+// /admin/reviews, where the book is a link to its page, an address or a title (the first search hit).
+app.post("/api/reviews/add", signed, async (req, res) => {
+  const q = String(req.body.book || "").trim();
+  const slug = (q.match(/\/book\/([^/?#\s]+)/) || [])[1];
+  const id = (slug && store.resolve(decodeURIComponent(slug))) || store.resolve(q) || (req.owner ? store.search(q, { limit: 1 })[0]?.book.id : null);
+  const fromBook = req.body.back === "book" || !req.owner;
+  const back = (error) => res.redirect(303, fromBook && id ? `${store.href(id)}?review_error=${encodeURIComponent(error)}#writings` : `/admin/reviews?error=${encodeURIComponent(error)}`);
+  if (!id) return back(`Не знайшов книжку «${q}». Встав посилання на її сторінку.`);
+  if (!req.owner && auth.tooMany(`review:${req.user.id}`, 20)) return back("Забагато оглядів за годину. Спробуйте трохи згодом.");
+  try {
+    await reviews.add(String(req.body.url || ""), id, { date: String(req.body.date || ""), by: req.user.id, owner: req.owner });
+  } catch (e) {
+    return back(e.message);
+  }
+  res.redirect(303, fromBook ? `${store.href(id)}#writings` : `/admin/reviews?added=${encodeURIComponent(id)}`);
+});
+app.post("/api/reviews/date", owner, (req, res) => {
+  reviews.setDate(String(req.body.url || ""), String(req.body.date || ""));
+  res.redirect(303, "/admin/reviews");
+});
+// The owner takes any link off; a reader, the ones they added.
+app.post("/api/reviews/remove", signed, (req, res) => {
+  const id = store.resolve(String(req.body.work || ""));
+  if (!id || !req.body.url) return res.status(400).send("Немає такої книжки чи посилання.");
+  if (!req.owner && reviews.row(String(req.body.url))?.by !== req.user.id) return res.status(403).send("Прибрати можна лише свій огляд.");
+  reviews.remove(id, String(req.body.url));
+  res.redirect(303, req.body.back === "admin" ? "/admin/reviews" : `${store.href(id)}#writings`);
+});
+
 app.get("/admin/dupes", owner, (req, res) => res.send(pages.dupesPage({ user: req.user, groups: store.dupes(), decisions: store.decisions(), book: (id) => store.book(id), all: req.query.all === "1" })));
 app.get("/admin/translations", owner, (req, res) => res.send(pages.translationsPage({ user: req.user, translations: store.translationCandidates(), decisions: store.decisions(), book: (id) => store.book(id) })));
 // The owner's verdict on a group of look-alikes: keep=<id> folds the rest into it, verdict=different keeps them apart.

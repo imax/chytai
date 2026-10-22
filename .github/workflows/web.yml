@@ -7,15 +7,24 @@ name: Deploy web
 on:
   push:
     branches: [main]
-    paths: ["web/**", "package.json", "package-lock.json", ".github/workflows/web.yml"]
+    paths: ["web/**", "package.json", "package-lock.json", ".github/workflows/web.yml", "scripts/perf-check.sh"]
   workflow_dispatch:
 
-concurrency: deploy-web
-
 jobs:
+  # Several threads push small fixes minutes apart (Max, 2026-10-22: «деплой йде довше ніж наступний фікс
+  # зробити»): a push waits 2 quiet minutes, and a newer push cancels the waiting one, so a burst of
+  # commits goes out as one deploy of the newest.
+  settle:
+    runs-on: ubuntu-latest
+    concurrency: { group: web-settle, cancel-in-progress: true }
+    steps:
+      - run: sleep 120
   deploy:
+    needs: settle
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    # One deploy at a time; a newer one waiting replaces an older one waiting (never one mid-deploy).
+    concurrency: deploy-web
     steps:
       - uses: actions/checkout@v4
       - uses: superfly/flyctl-actions/setup-flyctl@master

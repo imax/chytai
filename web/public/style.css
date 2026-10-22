@@ -250,6 +250,18 @@ h2.year span { font: 13px var(--sans); color: var(--muted); }
 .reader-line { display: flex; gap: 18px; padding: 14px 0; border-bottom: 1px solid var(--rule); font-size: 14px; }
 .reader-line > a { min-width: 90px; }
 .reader-line b { font-weight: 500; }
+.writing { display: flex; flex-direction: column; gap: 3px; padding: 14px 0; border-bottom: 1px solid var(--rule); font-size: 14px; }
+.writing > a { font: 400 17px/1.35 var(--serif); text-decoration: underline; text-decoration-color: var(--under); text-underline-offset: 3px; }
+.writing > a:hover { text-decoration-color: currentColor; }
+.writing-quote { color: var(--text); font-size: 15px; }
+.writing-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; margin-top: 6px; font-size: 13px; }
+.queue-book { display: block; margin-top: 8px; font-size: 14px; }
+.review-date { display: inline-flex; gap: 8px; align-items: center; }
+.review-date input { padding: 3px 6px; border: 1px solid var(--under); border-radius: 4px; background: transparent; color: var(--ink); font: inherit; }
+.reviews-admin .review-add { max-width: 560px; margin-top: 12px; }
+.reviews-admin .flash { margin-top: 16px; padding: 10px 14px; border-left: 2px solid var(--accent); }
+.writing-tools form { display: inline; }
+.more-writings summary { padding: 12px 0; font-size: 14px; color: var(--muted); cursor: pointer; }
 .reader-line .note { font-size: 16px; margin-top: 4px; -webkit-line-clamp: 4; }
 .about p { font-size: 16px; line-height: 1.65; color: var(--text); }
 .about p + p { margin-top: 0.75em; }
@@ -447,6 +459,8 @@ dialog .form { margin-top: 18px; }
 .add-field textarea:not(:placeholder-shown) + .add-hint { display: none; }
 .add .narrow-only { display: none; }
 .add-review .add-intro .btn { margin-bottom: 18px; }
+.add-status { display: flex; align-items: center; gap: 10px; margin: 0 0 14px; font-size: 14px; color: var(--muted); }
+.add-status select { font: inherit; color: var(--ink); padding: 6px 10px; border: 1px solid var(--under); border-radius: 4px; background: transparent; }
 .add-review .add-intro p { margin: 0 0 14px; }
 .add-review .btn:disabled { opacity: 0.4; cursor: default; }
 .add-rows { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--ink); }
@@ -472,6 +486,7 @@ dialog .form { margin-top: 18px; }
 .add-found { display: flex; flex-direction: column; margin-top: 6px; }
 .add-pick { display: flex; gap: 12px; align-items: center; padding: 8px 0; border: 0; border-bottom: 1px solid var(--rule); background: none; text-align: left; cursor: pointer; }
 .add-pick:hover b { color: var(--accent); }
+.add-src { font: 500 11px var(--sans); text-transform: uppercase; letter-spacing: 0.12em; color: var(--muted); margin: 12px 0 0; }
 .add-pick > span { display: flex; flex-direction: column; font-size: 14px; }
 .add-pick b { font: 600 15px/1.3 var(--serif); }
 @media (prefers-color-scheme: dark) { .add-field textarea { background: #23211d; } .add-field textarea::placeholder { color: #6f6a61; } }
@@ -607,3 +622,29 @@ form.inline button:not(.btn) { background: none; border: 0; padding: 0; cursor: 
 .twin b { font: 600 15px/1.3 var(--serif); }
 .twin:hover b { text-decoration: underline; text-decoration-color: var(--under); text-underline-offset: 3px; }
 .row.big .twins { margin-top: 10px; }
+
+/* «Читаю зараз»: the reader's status under their name, (2026-10-22). */
+.now { margin-top: 22px; padding: 12px 18px 14px; border-left: 2px solid var(--accent); background: color-mix(in oklab, var(--accent) 6%, transparent); border-radius: 0 6px 6px 0; max-width: 720px; }
+.now-head { display: flex; align-items: baseline; gap: 14px; }
+.now-head .kicker { margin: 0; }
+.now-age { font-size: 12px; color: var(--muted); }
+.now-books { display: flex; flex-wrap: wrap; gap: 14px 28px; margin-top: 12px; }
+.now-book { display: flex; gap: 12px; align-items: flex-start; max-width: 300px; }
+.now-book > span:last-child { min-width: 0; padding-top: 2px; }
+.now-book b { display: block; font: 600 15px/1.25 var(--serif); }
+.now-book .by { display: block; font-size: 13px; margin-top: 0; }
+.now-book .meta { display: block; font-size: 12px; margin-top: 4px; }
+.now-empty { margin-top: 18px; font-size: 14px; }
+.now-line { font-size: 13px; margin-top: 6px; }
+.now-line a { color: var(--ink); text-decoration: underline; text-decoration-color: var(--under); text-underline-offset: 3px; }
+.now-form { max-width: 640px; }
+.now-picks { display: flex; flex-direction: column; }
+.form label.now-pick { flex-direction: row; align-items: center; gap: 14px; padding: 10px 0; border-bottom: 1px solid var(--rule); color: var(--ink); cursor: pointer; }
+.now-pick > span:not(.cover) { flex: 1; min-width: 0; }
+.now-pick b { display: block; font: 600 15px/1.25 var(--serif); }
+.now-pick .by, .now-pick .meta { display: block; font-size: 12px; color: var(--muted); }
+.form .now-pick input[type="radio"] { width: 20px; height: 20px; padding: 0; accent-color: var(--accent); }
+.add-writing { margin-top: 12px; }
+.add-writing summary { list-style: none; cursor: pointer; font-size: 14px; }
+.add-writing summary::-webkit-details-marker { display: none; }
+.add-writing .review-add { max-width: 560px; margin-top: 10px; }

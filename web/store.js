@@ -62,8 +62,11 @@ const EDITION = /[\s:.,]*(?:[(\[]\s*)?(\d+-?[а-яі]{1,3}\s+(видання|в�
 // The name of the work a shop's title stands for: without a bracketed note («(м'яка обкладинка)»), a genre
 // word or an edition note at its end. A bracket with a number or a volume word stays («(том 2)», «(1984)»),
 // unless it is an edition («(2-ге видання)»); volumes never fold into one book.
+// A shop's promo prefix is not part of the name either: «Акція (−10%): Пісня Ахілла» (Max, 2026-10-22).
+const PROMO = /^\s*(акція|знижка|розпродаж|суперціна|спецціна)(?=[\s(:])[^:]{0,20}:\s*/iu;
 const workName = (t) =>
   String(t || "")
+    .replace(PROMO, "")
     .replace(/\s*\(([^()]*)\)/g, (m, inner) => (/\d|том|книга|частина|част\./i.test(inner) && !/видання|вид\./i.test(inner) ? m : ""))
     .replace(GENRE, "")
     .replace(EDITION, "")
@@ -73,6 +76,36 @@ const workName = (t) =>
 const isbnsOf = (b) => [...(b.isbns || []), b.isbn || "", ...(b.links || []).map((l) => /amazon\.[a-z.]+\/(?:[^/]+\/)?dp\/([0-9X]{10})/i.exec(l.url || "")?.[1] || "")].map(isbnKey).filter((i) => i.length >= 10);
 
 // Levenshtein distance, giving up once it is past max.
+// A rough sound of a word, the same for «міллер» and «miller», «оруелл» and «orwell», «гемінгвей» and «hemingway»:
+// Cyrillic is spelled out in Latin letters, Latin spellings that Ukrainian writes one way are folded (c/k,
+// ph/f, w/v, y/i, g/h, au/o…), double letters become one. Only for search, never shown.
+const SOUND = { а: "a", б: "b", в: "v", г: "h", ґ: "h", д: "d", е: "e", є: "ie", ж: "zh", з: "z", и: "i", і: "i", ї: "i", й: "i", к: "k", л: "l", м: "m", н: "n", о: "o", п: "p", р: "r", с: "s", т: "t", у: "u", ф: "f", х: "h", ц: "ts", ч: "ch", ш: "sh", щ: "shch", ь: "", ю: "iu", я: "ia", ы: "i", э: "e", ё: "io", ъ: "", "’": "", "'": "", ʼ: "" };
+function soundOf(word) {
+  const w = String(word).toLowerCase().normalize("NFKD").replace(/\p{M}/gu, "");
+  const latin = /[a-z]/.test(w) && !/[а-яіїєґ]/.test(w);
+  let s = latin
+    ? w
+        .replace(/sch/g, "sh")
+        .replace(/ph/g, "f")
+        .replace(/ck/g, "k")
+        .replace(/kh/g, "h")
+        .replace(/th/g, "t")
+        .replace(/ay|ai|ey/g, "ei")
+        .replace(/au/g, "o")
+        .replace(/oo/g, "u")
+        .replace(/ee|ea|ie/g, "i")
+        .replace(/([^aeiouy])e$/, "$1")
+        .replace(/c(?=[eiy])/g, "s")
+        .replace(/[cq]/g, "k")
+        .replace(/x/g, "ks")
+        .replace(/w/g, "v")
+        .replace(/j/g, "dzh")
+        .replace(/y/g, "i")
+        .replace(/g/g, "h")
+    : [...w].map((c) => SOUND[c] ?? c).join("");
+  return s.replace(/[^a-z0-9]/g, "").replace(/(.)\1+/g, "$1");
+}
+
 function editDistance(a, b, max) {
   let prev = Array.from({ length: b.length + 1 }, (_, j) => j);
   for (let i = 1; i <= a.length; i++) {
@@ -454,6 +487,7 @@ class Store {
     db.tx(() => {
       db.exec("DELETE FROM search; DELETE FROM search_tri;");
       this.vocab = null; // the typo search reloads the word list
+      this.sounds = null;
       const add = db.prepare("INSERT INTO search (id, title, alt, author, series, extra) VALUES (?, ?, ?, ?, ?, ?)");
       const tri = db.prepare("INSERT INTO search_tri (id, text) VALUES (?, ?)");
       for (const id of ids) {
@@ -481,12 +515,46 @@ class Store {
     return this.db.prepare("SELECT id FROM search WHERE search MATCH ? ORDER BY bm25(search, 0, 10, 10, 5, 4, 1) LIMIT ?").all(match, limit * 2);
   }
 
+  // Latin words of the index that sound like a Cyrillic word: «міллер» → miller, «оруелл» → orwell.
+  // Typing the start of a name finds it too («мураk…» once it is 4 letters or more). A Latin word, or one
+  // shorter than 3 letters, has none.
+  latinAlts(term) {
+    if (!/[а-яіїєґ]/.test(term) || term.length < 3) return [];
+    if (this.altCache?.has(term)) return this.altCache.get(term);
+    if (!this.sounds) {
+      this.altCache = new Map(); // term -> words: the author and reader lists ask once per name
+      this.vocab ??= this.db.prepare("SELECT term FROM search_vocab").all().map((r) => r.term);
+      this.sounds = new Map(); // sound -> [latin words]
+      for (const w of this.vocab) if (/^[a-z]{3,}$/.test(w)) (this.sounds.get(soundOf(w)) || this.sounds.set(soundOf(w), []).get(soundOf(w))).push(w);
+    }
+    const k = soundOf(term);
+    const max = k.length >= 7 ? 2 : k.length >= 4 ? 1 : 0;
+    const exact = [], near = [], start = [];
+    for (const [s, words] of this.sounds) {
+      if (s === k) exact.push(...words);
+      else if (k.length >= 4 && s.startsWith(k)) start.push(...words);
+      else if (max && Math.abs(s.length - k.length) <= max && editDistance(k, s, max) <= max) near.push(...words);
+    }
+    const out = [...exact, ...near, ...start].slice(0, 12);
+    if (this.altCache.size > 1000) this.altCache.clear();
+    this.altCache.set(term, out);
+    return out;
+  }
+
   search(q, { reader = null, limit = 40 } = {}) {
     const terms = norm(q).split(" ").filter(Boolean);
     if (!terms.length) return [];
     let rows = this.db
       .prepare("SELECT id FROM search WHERE search MATCH ? ORDER BY bm25(search, 0, 10, 10, 5, 4, 1) LIMIT ?")
       .all(terms.map((t) => `"${t.replace(/"/g, "")}"*`).join(" "), limit * 2);
+    // A Latin name typed in Cyrillic («міллер», «мураками»): the same search with the words that sound like
+    // it, after what the Cyrillic itself found (Max, 2026-10-22).
+    const alts = terms.map((t) => this.latinAlts(t));
+    if (alts.some((a) => a.length)) {
+      const seen = new Set(rows.map((r) => r.id));
+      const match = terms.map((t, i) => `("${t.replace(/"/g, "")}"*${alts[i].map((w) => ` OR "${w}"`).join("")})`).join(" AND ");
+      rows = [...rows, ...this.db.prepare("SELECT id FROM search WHERE search MATCH ? ORDER BY bm25(search, 0, 10, 10, 5, 4, 1) LIMIT ?").all(match, limit * 2).filter((r) => !seen.has(r.id))];
+    }
     if (!rows.length && terms.every((t) => t.length >= 3)) rows = this.db.prepare("SELECT id FROM search_tri WHERE search_tri MATCH ? ORDER BY rank LIMIT ?").all(terms.map((t) => `"${t}"`).join(" AND "), limit * 2);
     if (!rows.length) rows = this.fuzzy(terms, limit);
     const exact = norm(q);
@@ -495,10 +563,10 @@ class Store {
       const b = this.book(id);
       if (!b || isRussian(b)) continue;
       // An exact title (or original title) goes first, then books where every typed word is a whole
-      // word of the title or the author («Лем» is Станіслав Лем, not «Моцарт із Лемберга»); otherwise
-      // the index's own order.
-      const words = new Set(norm([b.title, b.altTitle, b.author].join(" ")).split(" "));
-      const whole = terms.every((t) => words.has(t));
+      // word of the title or the author («Лем» is Станіслав Лем, not «Моцарт із Лемберга»; «міллер» is
+      // Madeline Miller); otherwise the index's own order.
+      const words = new Set(norm([b.title, b.altTitle, b.author].join(" ")).normalize("NFKD").replace(/\p{M}/gu, "").split(" "));
+      const whole = terms.every((t, j) => words.has(t) || alts[j].some((w) => words.has(w)));
       const score = (norm(b.title) === exact || norm(b.altTitle) === exact ? 1000 : 0) + (whole ? 500 : 0) - i;
       hits.push({ book: b, entry: reader ? this.sharedEntry(reader, id) : null, score });
     }
@@ -604,7 +672,7 @@ class Store {
       const own = this.lib.books[b.id] || b; // an edited copy keeps its old title
       const addTitle = (t, exact) => {
         const l = byTitle.get(t) || byTitle.set(t, []).get(t);
-        if (!l.some((x) => x.id === b.id)) l.push({ id: b.id, author: b.author || "", exact });
+        if (!l.some((x) => x.id === b.id)) l.push({ id: b.id, author: b.author || "", title: b.title, exact });
       };
       for (const t of [b.title, b.altTitle]) if (norm(t).length >= 6) addTitle(norm(t), true);
       for (const t of [own.title, b.title]) if (norm(bare(t, b.author)).length >= 6) addTitle(bare(t, b.author), false);
@@ -618,8 +686,13 @@ class Store {
       if (isbnKey(it.isbn).length >= 10 && ok(byIsbn.get(isbnKey(it.isbn)))) return byIsbn.get(isbnKey(it.isbn));
       // The same title by a different author is a different book: Жадан's «Арабески» is not Хвильовий's
       // (2026-10-22). An exact title wins over one with the author's name trimmed off («Жадан Арабески»).
+      // A match through an original title («Марсіанин» / The Martian, «Чотири тисячі тижнів» / Four
+      // Thousand Weeks) is a translation, not an edition: the two stay separate pages with shared readers
+      // (Max, 2026-10-21/22), and linkTranslations pairs them. So two books merge only when their own
+      // titles are written in the same script.
+      const script = (t) => (/[а-яіїєґ]/i.test(t) ? "cyr" : "lat");
       for (const t of [it.title, it.altTitle]) {
-        const found = (byTitle.get(norm(t)) || []).filter((x) => ok(x.id) && sameAuthor(x.author, it.author));
+        const found = (byTitle.get(norm(t)) || []).filter((x) => ok(x.id) && sameAuthor(x.author, it.author) && script(x.title) === script(it.title));
         const b = found.find((x) => x.exact) || found[0];
         if (b) return b.id;
       }
@@ -1022,6 +1095,11 @@ class Store {
     return (this._works = { byIsbn, byTitle });
   }
 
+  // Every work with exactly this title (or original title): a pasted list often has titles only.
+  worksTitled(title) {
+    return [...new Set((this.workIndex().byTitle.get(norm(title)) || []).map((w) => w.id))];
+  }
+
   // The work for a book named from outside ({ title, author, isbns }), or null. An ISBN is enough on
   // its own; a title needs the same author (a surname in common, in either alphabet, a typo allowed),
   // unless only one work has that title and the title is not a single short word.
@@ -1056,7 +1134,7 @@ class Store {
         if (!id) {
           id = slugify(r.title);
           while (this.book(id)) id += "-2";
-          this.lib.books[id] = { id, title: r.title.trim(), author: (r.author || "").trim(), cover: "", tags: [], links: [], source, ...(r.isbns?.length ? { isbns: r.isbns } : {}), ...(r.goodreadsId ? { goodreads: r.goodreadsId } : {}), ...(r.appleId ? { apple: r.appleId } : {}) };
+          this.lib.books[id] = { id, title: r.title.trim(), author: (r.author || "").trim(), cover: "", tags: [], links: [], source, ...(r.isbns?.length ? { isbns: r.isbns } : {}), ...(r.cover ? { cover: r.cover } : {}), ...(r.ol ? { ol: r.ol } : {}), ...(r.published ? { published: r.published } : {}), ...(r.goodreadsId ? { goodreads: r.goodreadsId } : {}), ...(r.appleId ? { apple: r.appleId } : {}) };
           this.writeBook(id);
           result.created.push(this.lib.books[id]);
         }
@@ -1147,4 +1225,4 @@ class Store {
   }
 }
 
-module.exports = { isRussian, Store, slugify, OWNER, norm, workName };
+module.exports = { isRussian, Store, slugify, soundOf, norm, workName, OWNER };

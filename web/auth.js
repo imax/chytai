@@ -19,6 +19,7 @@ const SESSION_DAYS = 365;
 // punctuation. Words that are, or could become, site sections are kept out of reach.
 const USERNAME = /^[a-z0-9](?:[a-z0-9._]{1,28}[a-z0-9])$/;
 const RESERVED = new Set("admin administrator api app author authors book books chytai discovery help info login logout me mail news owner privacy reader readers root search settings shelf shelves signup support team www".split(" "));
+const NOW_MAX = 1; // Max, 2026-10-22: «давай одну книжку»
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
 const sha = (s) => crypto.createHash("sha256").update(s).digest("hex");
@@ -51,6 +52,21 @@ class Auth {
   }
   readers() {
     return this.db.prepare("SELECT * FROM readers ORDER BY created").all();
+  }
+
+  // «Читаю зараз»: one book from the reader's shelf and the day it went up. Set by hand
+  // only: a reader also reads on paper.
+  nowOf(id) {
+    try {
+      const v = JSON.parse(this.reader(id)?.now || "null");
+      if (v) return { books: Array.isArray(v.books) ? v.books : [], at: v.at || null };
+    } catch {}
+    return { books: [], at: null };
+  }
+  setNow(id, { books }) {
+    const v = { books: books.slice(0, NOW_MAX), at: now() };
+    this.db.prepare("UPDATE readers SET now = ? WHERE id = ?").run(v.books.length ? JSON.stringify(v) : null, id);
+    return v;
   }
 
   // The owner's row, made on the first start with accounts; the name and username come from the env.
@@ -267,4 +283,4 @@ class Auth {
   }
 }
 
-module.exports = { Auth, USERNAME, RESERVED };
+module.exports = { NOW_MAX, Auth, USERNAME, RESERVED };
