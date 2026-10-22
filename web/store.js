@@ -62,8 +62,11 @@ const EDITION = /[\s:.,]*(?:[(\[]\s*)?(\d+-?[а-яі]{1,3}\s+(видання|в�
 // The name of the work a shop's title stands for: without a bracketed note («(м'яка обкладинка)»), a genre
 // word or an edition note at its end. A bracket with a number or a volume word stays («(том 2)», «(1984)»),
 // unless it is an edition («(2-ге видання)»); volumes never fold into one book.
+// A shop's promo prefix is not part of the name either: «Акція (−10%): Пісня Ахілла» (Max, 2026-10-22).
+const PROMO = /^\s*(акція|знижка|розпродаж|суперціна|спецціна)(?=[\s(:])[^:]{0,20}:\s*/iu;
 const workName = (t) =>
   String(t || "")
+    .replace(PROMO, "")
     .replace(/\s*\(([^()]*)\)/g, (m, inner) => (/\d|том|книга|частина|част\./i.test(inner) && !/видання|вид\./i.test(inner) ? m : ""))
     .replace(GENRE, "")
     .replace(EDITION, "")
