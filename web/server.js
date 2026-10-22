@@ -361,7 +361,7 @@ function readerList() {
   const year = new Date().getFullYear();
   return auth
     .readers()
-    .map((r) => ({ reader: pub(r), rows: publicRows(store.library(r.id)) }))
+    .map((r) => ({ reader: pub(r), rows: store.library(r.id) }))
     .filter((c) => c.rows.length)
     .sort((a, b) => b.rows.length - a.rows.length)
     .map(({ reader, rows }) => {
@@ -449,10 +449,8 @@ app.get("/follow-mail/unsubscribe/:id/:token", (req, res) => followMailSwitch(re
 app.post("/follow-mail/unsubscribe/:id/:token", (req, res) => followMailSwitch(req, res, false));
 app.post("/follow-mail/resubscribe/:id/:token", (req, res) => followMailSwitch(req, res, true));
 
-// «Покинуто» is the reader's own: other readers don't see it on the shelf (pages.js STATUS).
-const publicRows = (rows) => rows.filter((r) => r.status !== "abandoned");
-function libraryRows(reader, { own = false } = {}) {
-  const rows = own ? store.library(reader) : publicRows(store.library(reader));
+function libraryRows(reader) {
+  const rows = store.library(reader);
   let prev;
   for (const r of rows) {
     r._prevYear = prev;
@@ -469,7 +467,7 @@ app.get("/@:username", (req, res) => {
   if (!reader) return res.status(404).send(pages.messagePage({ title: "Немає такого читача", text: "", user: req.user }));
   if (reader.username !== req.params.username) return res.redirect(301, reader.href);
   const own = req.user?.id === reader.id && !("public" in req.query);
-  const rows = libraryRows(reader.id, { own });
+  const rows = libraryRows(reader.id);
   const follows = { followers: auth.followers(reader.id).map((id) => pub(auth.reader(id))).filter(Boolean), following: auth.following(reader.id).map((id) => pub(auth.reader(id))).filter(Boolean) };
   if (own) {
     const fives = rows.filter((r) => r.rating >= 5).slice(0, 5).map((r) => r.id);
@@ -617,7 +615,7 @@ app.get("/author/:slug", async (req, res) => {
   // Who reads this author, and what else those readers rated highest.
   const ids = new Set(hits.map((h) => h.book.id));
   const who = [...new Set(hits.flatMap((h) => store.readersOf(h.book.id).map((r) => r.reader)))]
-    .map((id) => ({ reader: pub(auth.reader(id)), rows: publicRows(store.library(id)) }))
+    .map((id) => ({ reader: pub(auth.reader(id)), rows: store.library(id) }))
     .filter((r) => r.reader)
     .map(({ reader, rows }) => ({ reader, count: rows.length, read: rows.filter((r) => r.status === "read").length }));
   const also = social.alsoLiked([...ids], { limit: 4, skip: ids }).filter((b) => !author.ids.includes(b.id));

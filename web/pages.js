@@ -26,7 +26,8 @@ const BOOKS = ["книжка", "книжки", "книжок"];
 const books = (n) => count(n, ...BOOKS);
 
 // «Покинуто» (a reader's idea, 2026-10-21): a book put down for good. Not read, and quiet: it stays on the
-// reader's shelf but never reaches the feed, the letters, a book's «У читачів» or its rating (social.js).
+// reader's shelf, public like the other tabs (Max, 2026-10-22), but never reaches the feed, the letters, a
+// book's «У читачів» or its rating (social.js).
 const STATUS = { read: "Прочитано", reading: "Читаю", want: "Хочу прочитати", abandoned: "Покинуто" };
 const COPY = { paper: "На папері", ebook: "E-book", seeking: "Шукаю на папері" };
 // What a reader did, as the feed says it: «Оля К. оцінка ★★★★», «Андрій читає».
@@ -677,7 +678,7 @@ function editPage({ book, entry, user }) {
   return layout({ title: book.title, body, user, path: "/me" });
 }
 
-const WHY = "Чому не пішла, якщо хочеться (нотатку бачать лише на вашій полиці)";
+const WHY = "Чому не пішла, якщо хочеться";
 function entryForm(book, entry) {
   const e = entry || { status: "", rating: null, year: "", copy: "", note: "" };
   const ratings = [5, 4.5, 4, 3.5, 3, 2.5, 2, 1.5, 1];
