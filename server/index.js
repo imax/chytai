@@ -473,12 +473,13 @@ const app = express();
 app.set("trust proxy", true);
 app.disable("x-powered-by");
 
-// The reader's address is read.chytai.org.ua (2026-10-22). Browsers on chytai.fly.dev go there; the
-// iPhone app (ChytaiApp in its user agent) stays on chytai.fly.dev until it is rebuilt, as does
-// /sw.js, so a service worker installed there can still update itself.
-const READER_DOMAIN = process.env.READER_DOMAIN ?? "read.chytai.org.ua";
+// The reader's address is app.chytai.org.ua (2026-10-22; read.chytai.org.ua for its first hour). Browsers
+// on chytai.fly.dev and read. go there; the iPhone app (ChytaiApp in its user agent) stays on
+// chytai.fly.dev until it is rebuilt, as does /sw.js, so a service worker installed there can still update itself.
+const READER_DOMAIN = process.env.READER_DOMAIN ?? "app.chytai.org.ua";
 app.use((req, res, next) => {
-  if (READER_DOMAIN && req.method === "GET" && req.hostname.endsWith(".fly.dev") && !/ChytaiApp/.test(req.get("user-agent") || "") && !req.path.startsWith("/api/") && req.path !== "/sw.js") {
+  const old = req.hostname === "read.chytai.org.ua" || (req.hostname.endsWith(".fly.dev") && !/ChytaiApp/.test(req.get("user-agent") || ""));
+  if (READER_DOMAIN && req.method === "GET" && old && !req.path.startsWith("/api/") && req.path !== "/sw.js") {
     return res.redirect(302, `https://${READER_DOMAIN}${req.originalUrl}`);
   }
   next();

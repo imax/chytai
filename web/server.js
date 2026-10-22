@@ -201,11 +201,11 @@ app.get("/logout", (req, res) => {
   res.redirect("/");
 });
 
-// The reader (chytai.fly.dev, read.chytai.org.ua) signs in with the site's account (Max, 2026-10-22):
+// The reader (app.chytai.org.ua; chytai.fly.dev in the iPhone app) signs in with the site's account (Max, 2026-10-22):
 // its login page sends the reader here, the site makes a one-time ticket for whoever is signed in and
 // sends them back with it, and the reader's server trades the ticket for who it is (POST below).
 // The reader keeps its own cookie after that; a ticket lasts two minutes and works once.
-const READER_ORIGINS = (process.env.READER_ORIGINS || "https://read.chytai.org.ua,https://chytai.fly.dev").split(",").map((o) => o.trim()).filter(Boolean);
+const READER_ORIGINS = (process.env.READER_ORIGINS || "https://app.chytai.org.ua,https://read.chytai.org.ua,https://chytai.fly.dev").split(",").map((o) => o.trim()).filter(Boolean);
 const readerTickets = new Map(); // ticket -> { id, expires }
 const READER_URL = (process.env.READER_URL || READER_ORIGINS[0]).replace(/\/$/, "");
 // With the account the reader also gets a key for that account alone, to tell the site which books it
