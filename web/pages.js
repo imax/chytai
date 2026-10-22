@@ -1122,8 +1122,7 @@ function settingsPage({ user, values, error = "", suggested = "", saved = false 
   <label>Ім'я<input type="text" name="name" value="${attr(values.name || "")}" required maxlength="60"></label>
   <label>Адреса сторінки<span class="prefix">chytai.org.ua/@<input type="text" name="username" value="${attr(values.username || "")}" required maxlength="30" spellcheck="false" placeholder="${attr(suggested)}"></span><span class="hint">Якщо змінити, стара адреса перестане працювати.</span></label>
   <label>Пошта для входу<input type="email" name="email" value="${attr(values.email || "")}" ${user.owner ? "" : "required"} autocomplete="email"></label>
-  <label class="check"><span><input type="checkbox" name="digest" value="1"${values.digest ? " checked" : ""}> Щотижневий лист</span><span class="hint">У п'ятницю вранці: що читають ті, за ким ви стежите, новинки видавництв, на які ви підписані, і де з'явились книжки з «Хочу прочитати». Приходить лише коли є що розповісти.</span></label>
-  <!-- The follow letter and search-engine listing are always on for now (Max, 2026-10-21): the letter has its own unsubscribe link, readers.noindex stays in the database for later. -->
+  <!-- Search-engine listing is always on for now (Max, 2026-10-21): readers.noindex stays in the database for later. The letters have their own tab, /settings/mail. -->
   <div class="actions"><button class="btn primary">Зберегти</button><a class="text-link small" href="${attr(user.href)}">Моя сторінка</a>${user.owner ? `<a class="text-link small" href="/admin">Статистика</a>` : ""}<span class="grow"></span><a class="text-link small" href="/logout">Вийти</a></div>
 </form>
 <section class="form import-box">
@@ -1137,6 +1136,27 @@ ${user.owner ? "" : `<form method="post" action="/settings/delete" class="form d
   <label>Впишіть ${esc(user.username)}, щоб підтвердити<input type="text" name="confirm" autocomplete="off"></label>
   <div class="actions"><button class="btn danger">Видалити назавжди</button></div>
 </form>`}`;
+  return authLayout({ title: "Налаштування", lead: "", form: settingsTabs("account") + form, user, path: "/settings" });
+}
+
+// The settings' two tabs: the account itself, and the letters (Max, 2026-10-22: «вкладку в налаштуваннях, де
+// будуть різні імейли»).
+const settingsTabs = (on) => `<nav class="tabs settings-tabs">${[["account", "/settings", "Акаунт"], ["mail", "/settings/mail", "Листи"]].map(([k, href, l]) => (k === on ? `<span class="tab on">${l}</span>` : `<a class="tab" href="${href}">${l}</a>`)).join("")}</nav>`;
+
+// /settings/mail: every letter the site sends, the ones a reader can switch and the ones that come only when asked.
+function mailSettingsPage({ user, values, saved = false }) {
+  const sw = (name, title, hint) => `<label class="check"><span><input type="checkbox" name="${name}" value="1"${values[name] ? " checked" : ""}> ${title}</span><span class="hint">${hint}</span></label>`;
+  const form = `${settingsTabs("mail")}<form method="post" action="/settings/mail" class="form">
+  ${saved ? `<p class="saved">Збережено.</p>` : ""}
+  ${user.email ? `<p class="muted small">Листи приходять на ${esc(user.email)}. <a class="text-link" href="/settings">Змінити пошту</a></p>` : `<p class="muted small">Пошти не вказано, тож листів не буде. <a class="text-link" href="/settings">Додати пошту</a></p>`}
+  ${sw("digest", "Щотижневий лист", "У п'ятницю вранці: що читають ті, за ким ви стежите, новинки видавництв, на які ви підписані, і де з'явились книжки з «Хочу прочитати». Іноді з кількома словами від нас.")}
+  ${sw("follow_mail", "Новий читач стежить за вами", "Один лист, коли хтось уперше почне стежити за вашою полицею.")}
+  <div class="actions"><button class="btn primary">Зберегти</button></div>
+</form>
+<section class="form import-box">
+  <h2>Ці листи приходять завжди</h2>
+  <p class="muted small">Код для входу: лише коли ви самі входите на сайт.<br>Вітальний лист: один раз, одразу після реєстрації.</p>
+</section>`;
   return authLayout({ title: "Налаштування", lead: "", form, user, path: "/settings" });
 }
 
@@ -1455,6 +1475,7 @@ function messagePage({ title, text, user }) {
 module.exports = {
   nowPage,
   letterEditorPage,
+  mailSettingsPage,
   dupesPage,
   reviewsAdminPage,
   translationsPage,

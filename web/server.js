@@ -276,7 +276,7 @@ app.get("/reader", (_req, res) => res.redirect(302, `${READER_URL}/`)); // short
 // ---- settings: name, username, e-mail, deleting the account ----
 
 app.get("/settings", signed, (req, res) => {
-  res.send(pages.settingsPage({ user: req.user, values: { ...req.user, digest: digest.enabled(req.user.id), }, suggested: auth.suggestUsername(req.user.name, slugify), saved: !!req.query.saved }));
+  res.send(pages.settingsPage({ user: req.user, values: { ...req.user }, suggested: auth.suggestUsername(req.user.name, slugify), saved: !!req.query.saved }));
 });
 app.post("/settings", signed, (req, res) => {
   const name = auth.checkName(req.body.name);
@@ -284,11 +284,19 @@ app.post("/settings", signed, (req, res) => {
   const email = req.body.email ? auth.checkEmail(req.body.email) : { email: req.user.email };
   const taken = email.email && auth.byEmail(email.email) && auth.byEmail(email.email).id !== req.user.id;
   const error = name.error || username.error || email.error || (taken ? "Ця пошта вже зайнята іншим читачем." : "");
-  const values = { ...req.user, name: req.body.name, username: req.body.username, email: req.body.email, digest: !!req.body.digest, };
+  const values = { ...req.user, name: req.body.name, username: req.body.username, email: req.body.email };
   if (error) return res.status(400).send(pages.settingsPage({ user: req.user, values, error }));
   auth.updateReader(req.user.id, { name: name.name, username: username.username, email: email.email || null });
-  digest.setEnabled(req.user.id, !!req.body.digest);
   res.redirect("/settings?saved=1");
+});
+// The letters' tab: the weekly letter and the «стежить за вами» letter, each on or off.
+app.get("/settings/mail", signed, (req, res) => {
+  res.send(pages.mailSettingsPage({ user: req.user, values: { digest: digest.enabled(req.user.id), follow_mail: auth.followMailEnabled(req.user.id) }, saved: !!req.query.saved }));
+});
+app.post("/settings/mail", signed, (req, res) => {
+  digest.setEnabled(req.user.id, !!req.body.digest);
+  auth.setFollowMail(req.user.id, !!req.body.follow_mail);
+  res.redirect("/settings/mail?saved=1");
 });
 app.post("/settings/delete", signed, (req, res) => {
   if (req.owner) return res.status(400).send(pages.messagePage({ title: "Власника не видаляємо", text: "Для цього є інший шлях.", user: req.user }));

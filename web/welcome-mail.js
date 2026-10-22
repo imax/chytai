@@ -57,7 +57,7 @@ class WelcomeMail {
   <div style="font-weight:600;font-size:15px;margin-bottom:26px"><a href="${this.site}" style="color:#1b1a17;text-decoration:none">Chytai</a></div>
   ${body}
   <div style="border-top:1px solid #1b1a17;margin-top:30px;padding-top:14px;font-size:12px;line-height:1.6;color:#6b675f">
-    <a href="${this.site}/settings" style="color:#6b675f">Налаштування</a> · <a href="${this.site}" style="color:#6b675f">chytai.org.ua</a>: читай більше
+    <a href="${this.site}/settings/mail" style="color:#6b675f">Налаштування</a> · <a href="${this.site}" style="color:#6b675f">chytai.org.ua</a>: читай більше
   </div>
 </div></body></html>`;
     return { subject, text, html };

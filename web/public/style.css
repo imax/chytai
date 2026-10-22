@@ -100,6 +100,8 @@ main.home { padding-top: 56px; }
 .tab:hover { color: var(--accent); }
 .tab.on { color: var(--ink); border-bottom-color: var(--ink); }
 .tabs.wrap { margin: 0 0 14px; }
+.settings-tabs { margin-top: 26px; }
+.settings-tabs .tab { font-size: 15px; text-decoration: none; }
 
 /* ---- stars ---- */
 .stars { color: var(--accent); letter-spacing: 1px; }
