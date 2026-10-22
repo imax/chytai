@@ -178,7 +178,8 @@ app.post("/login/signup", (req, res) => {
   auth.useTicket(req.body.ticket);
   console.log(`new reader @${reader.username}`);
   welcomeMail.newReader(reader);
-  signIn(req, res, reader, `/welcome${next ? `?next=${encodeURIComponent(next)}` : ""}`);
+  // Someone who came from the reader goes straight back to it; the welcome page is about the site.
+  signIn(req, res, reader, next.startsWith("/reader-login") ? next : `/welcome${next ? `?next=${encodeURIComponent(next)}` : ""}`);
 });
 app.get("/welcome", signed, (req, res) => res.send(pages.welcomePage({ user: req.user, next: safeNext(req.query.next) })));
 function signIn(req, res, reader, next) {
@@ -194,6 +195,37 @@ app.get("/logout", (req, res) => {
   auth.signOut(req.token);
   res.setHeader("Set-Cookie", auth.cookie("", { clear: true, secure: secure(req) }));
   res.redirect("/");
+});
+
+// The reader (chytai.fly.dev, read.chytai.org.ua) signs in with the site's account (Max, 2026-10-22):
+// its login page sends the reader here, the site makes a one-time ticket for whoever is signed in and
+// sends them back with it, and the reader's server trades the ticket for who it is (POST below).
+// The reader keeps its own cookie after that; a ticket lasts two minutes and works once.
+const READER_ORIGINS = (process.env.READER_ORIGINS || "https://chytai.fly.dev,https://read.chytai.org.ua").split(",").map((o) => o.trim()).filter(Boolean);
+const readerTickets = new Map(); // ticket -> { id, expires }
+app.get("/reader-login", signed, (req, res) => {
+  let origin = "";
+  try {
+    origin = new URL(String(req.query.back || "")).origin;
+  } catch {}
+  if (!READER_ORIGINS.includes(origin)) return res.status(400).send(pages.messagePage({ title: "Невідома адреса читалки", text: "Відкрийте читалку ще раз і натисніть «Увійти».", user: req.user }));
+  for (const [t, v] of readerTickets) if (v.expires < Date.now()) readerTickets.delete(t);
+  const ticket = require("crypto").randomBytes(16).toString("hex");
+  readerTickets.set(ticket, { id: req.user.id, expires: Date.now() + 120000 });
+  res.redirect(`${origin}/auth?ticket=${ticket}`);
+});
+app.post("/api/reader-ticket", (req, res) => {
+  const t = readerTickets.get(String(req.body?.ticket || ""));
+  readerTickets.delete(String(req.body?.ticket || ""));
+  const r = t && t.expires > Date.now() ? auth.reader(t.id) : null;
+  if (!r) return res.status(404).json({ error: "ticket" });
+  res.json({ id: r.id, name: r.name, username: r.username });
+});
+
+// The reader asks once a day which of its accounts are gone (deleted here), to delete their books too.
+app.post("/api/readers-gone", (req, res) => {
+  const ids = (Array.isArray(req.body?.ids) ? req.body.ids : []).map(String).slice(0, 10000);
+  res.json({ gone: ids.filter((id) => !auth.reader(id)) });
 });
 
 app.get("/privacy", (req, res) => res.send(pages.privacyPage({ user: req.user })));

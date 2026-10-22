@@ -250,7 +250,7 @@
           const b = bookFor(w);
           return `<div class="wish-row"><span class="row-text"><span class="t">${esc(w.title)}</span><span class="m">${esc(w.author)}</span></span>
             ${b ? `<button class="pill small" data-open="${esc(b.path)}">Уже є</button>` : ""}</div>`;
-        }).join("") : `<p class="m">Запишіть книжку, яку хочете прочитати: коли хтось із родини її додасть, вона з'явиться тут.</p>`}</div>
+        }).join("") : `<p class="m">Запишіть книжку, яку хочете прочитати: коли вона з'явиться в бібліотеці, ви побачите це тут.</p>`}</div>
         <div class="wide-only">
           <form class="wish-form"><input placeholder="Назва та автор" autocomplete="off" /><button type="submit" class="pill">Додати</button></form>
           ${wishRows(list)}

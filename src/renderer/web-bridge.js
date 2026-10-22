@@ -407,6 +407,8 @@
       if (!firstLoadDone) {
         firstLoadDone = true;
         if (settings.guest) enterGuestMode(settings);
+        // Model, language, the demo book and the stats are the owner's (Max); other accounts read with his choice.
+        document.body.classList.toggle("not-owner", !settings.guest && !settings.owner);
         // Only once the page is fully laid out: opened during the initial load, epub.js measured
         // the reading area before it had a size and rendered a 0x0 chapter (white screen in the
         // iPhone app, where the first load is slower than in Safari).

@@ -325,6 +325,7 @@ body.web #btn-logout { margin-right: auto; align-self: center; }
 body.web:not(.guest) .demo-setting { display: block; }
 body.guest #btn-open, body.guest #btn-open-empty, body.guest #lib-add, body.guest #lib-refresh, body.guest .shared-setting { display: none !important; }
 body.guest #empty p { display: none; }
+body.not-owner .shared-setting, body.not-owner .demo-setting, body.not-owner #btn-admin { display: none !important; }
 .panel-actions { display: flex; gap: 12px; }
 
 @media (max-width: 760px) {

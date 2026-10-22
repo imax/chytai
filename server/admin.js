@@ -58,18 +58,24 @@ function adminPage(s) {
   const costTotal = s.models.reduce((sum, m) => (sum == null || m.cost == null ? null : sum + m.cost), 0);
   const cost30 = s.days.slice(0, 30).reduce((sum, d) => (sum == null || d.cost == null ? null : sum + d.cost), 0);
 
+  // The off switch stops the reader for that account (index.js POST /admin/off); the web site stays theirs.
+  const offButton = (u) =>
+    u.owner ? "" : `<form method="post" action="/admin/off"><input type="hidden" name="id" value="${esc(u.id)}">${u.off ? `<button>Увімкнути</button>` : `<input type="hidden" name="off" value="1"><button class="danger">Вимкнути</button>`}</form>`;
   const users = table(
-    ["Хто", "Пояснень сьогодні", "За 7 днів", "Усього", "Книжок почато", "Остання активність", "Остання книжка"],
-    s.users.map((u) => [esc(u.name), n(u.today), n(u.week), n(u.total), n(u.started), esc(ago(u.lastSeen)), esc(u.lastBook || "—")]),
+    ["Хто", "Пояснень сьогодні", "За 7 днів", "Усього", "≈ $ за 30 днів", "Книжок", "Почато", "Остання активність", ""],
+    s.users.map((u) => [
+      `${esc(u.name)}${u.username ? ` <span class="muted">@${esc(u.username)}</span>` : ""}${u.off ? ` <span class="off">вимкнено</span>` : ""}`,
+      n(u.today), n(u.week), n(u.total), usd(u.cost30), n(u.books), n(u.started), esc(ago(u.lastSeen)), offButton(u),
+    ]),
     "Ще ніхто не входив."
   );
   const books = table(
-    ["Книжка", "Автор", "Читачів", "Розмір"],
-    s.books.map((b) => [esc(b.title), esc(b.authors), n(b.readers), mb(b.size)]),
+    ["Книжка", "Автор", "Почато", "Розмір"],
+    s.books.map((b) => [esc(b.title), esc(b.authors), b.readers ? "так" : "—", mb(b.size)]),
     "У бібліотеці ще немає книжок."
   );
   const days = table(
-    ["День", "Пояснень", "Родина", "Гості", "Токенів на вході", "На виході", "≈ Вартість"],
+    ["День", "Пояснень", "Читачі", "Гості", "Токенів на вході", "На виході", "≈ Вартість"],
     s.days.slice(0, 30).map((d) => [esc(d.day), n(d.explains), n(d.family), n(d.guests), n(d.input + d.cacheRead + d.cacheWrite), n(d.output), usd(d.cost)]),
     "Пояснень ще не було."
   );
@@ -110,13 +116,16 @@ function adminPage(s) {
   th:not(:first-child) { text-align: right; }
   .wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; border-radius: 12px; }
   .empty, .note { color: var(--muted); font-size: 13px; }
+  .muted { color: var(--muted); } .off { color: #c0392b; font-size: 12px; font-weight: 600; }
+  td form { margin: 0; } td button { font: inherit; font-size: 13px; padding: 3px 10px; border-radius: 6px; border: 1px solid var(--line); background: none; color: var(--fg); cursor: pointer; }
+  td button.danger { color: #c0392b; }
 </style></head>
 <body><main>
   <header><h1>Chytai · статистика</h1><a href="/">← до читалки</a><span class="when">${esc(new Date().toLocaleString("uk-UA", { timeZone: s.timeZone }))}</span></header>
   <div class="tiles">
-    ${tile("Читачів у родині", n(s.users.length), s.users.filter((u) => u.activeWeek).length ? `${n(s.users.filter((u) => u.activeWeek).length)} за тиждень` : "")}
+    ${tile("Читачів", n(s.users.length), s.users.filter((u) => u.activeWeek).length ? `${n(s.users.filter((u) => u.activeWeek).length)} за тиждень` : "")}
     ${tile("Гостей сьогодні", n(s.guestsToday), `${n(s.guestExplainsToday)} із ${n(s.guestTotalLimit)} пояснень`)}
-    ${tile("Книжок", n(s.books.length), mb(s.books.reduce((a, b) => a + b.size, 0)))}
+    ${tile("Твоїх книжок", n(s.books.length), mb(s.books.reduce((a, b) => a + b.size, 0)))}
     ${tile("Пояснень сьогодні", n(totals.today))}
     ${tile("За 7 днів", n(totals.week))}
     ${tile("Усього", n(totals.all), `з ${esc(s.since || "сьогодні")}`)}
@@ -125,8 +134,9 @@ function adminPage(s) {
   </div>
   <p class="note">Пояснення рахуються з ${esc(s.since || "сьогодні")}: кожен запит до Claude (пояснення, «Детальніше», уточнення) — один. Вартість приблизна, за тарифами API без знижок; вхідні токени включають кеш.</p>
 
-  <h2>Читачі</h2><div class="wrap">${users}</div>
-  <h2>Книжки</h2><div class="wrap">${books}</div>
+  <h2 id="readers">Читачі</h2><div class="wrap">${users}</div>
+  <p class="note">«Вимкнути» закриває читалку для цього акаунта, сайт лишається йому. Ліміту пояснень немає, лише запобіжник: ${n(s.accountCap)} на день на акаунт, крім тебе.</p>
+  <h2>Твої книжки</h2><div class="wrap">${books}</div>
   <h2>Хочу прочитати</h2>
   ${w.total ? `<p class="note">${n(w.total)} записів у ${n(w.lists)} читачів. Зверху те, що хоче більше людей і чого ще немає в бібліотеці.</p>` : ""}
   <div class="wrap">${wishes}</div>
