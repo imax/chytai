@@ -246,8 +246,61 @@
     $("#edit-authors").value = editing.authors.join(", ");
     $("#edit-file").textContent = `Файл: ${name}`;
     $("#book-edit").returnValue = "";
+    $("#share-for").value = "";
+    $("#share-list").innerHTML = "";
+    loadShares(name);
     $("#book-edit").showModal();
   }
+
+  // ---------- «Дати почитати»: a link to one book for one person (web) ----------
+
+  const shareDate = (ts) => new Date(ts).toLocaleDateString("uk-UA", { day: "numeric", month: "long" });
+  function renderShares(list) {
+    $("#share-list").innerHTML = list
+      .map((s) => `<li><span class="who">${esc(s.for)}</span><span class="state">${s.opened ? "відкрито" : "ще не відкривали"} · до ${esc(shareDate(s.expires))}</span>
+        <button type="button" class="link" data-copy="${esc(s.url)}">Скопіювати</button><button type="button" class="link" data-unshare="${esc(s.token)}">Вимкнути</button>
+        <input type="text" readonly value="${esc(s.url)}"></li>`)
+      .join("");
+  }
+  async function loadShares(name) {
+    if (!window.reader.shares || !document.body.classList.contains("web") || document.body.classList.contains("guest")) return;
+    try {
+      const { shares } = await window.reader.shares(name);
+      if (editing?.path === name) renderShares(shares);
+    } catch {
+      /* offline: no links to show */
+    }
+  }
+  $("#share-make").onclick = async () => {
+    const book = editing;
+    const who = $("#share-for").value.trim();
+    if (!book) return;
+    if (!who) return $("#share-for").focus();
+    try {
+      const res = await window.reader.shareBook(book.path, who);
+      if (res.error) return showNotice(res.error, false);
+      $("#share-for").value = "";
+      await loadShares(book.path);
+      navigator.clipboard?.writeText(res.share.url).then(() => showNotice(`Посилання для «${who}» скопійовано.`, false), () => {});
+    } catch (err) {
+      showNotice(`Не вдалося створити посилання: ${err.message}`, false);
+    }
+  };
+  $("#share-for").addEventListener("keydown", (e) => e.key === "Enter" && (e.preventDefault(), $("#share-make").click()));
+  $("#share-list").addEventListener("click", async (e) => {
+    const copy = e.target.closest("[data-copy]")?.dataset.copy;
+    const token = e.target.closest("[data-unshare]")?.dataset.unshare;
+    if (copy) {
+      navigator.clipboard?.writeText(copy).then(() => showNotice("Посилання скопійовано.", false), () => e.target.closest("li").querySelector("input").select());
+    } else if (token && editing) {
+      try {
+        await window.reader.unshare(token);
+        loadShares(editing.path);
+      } catch (err) {
+        showNotice(`Не вдалося вимкнути: ${err.message}`, false);
+      }
+    }
+  });
 
   $("#book-edit").addEventListener("close", async () => {
     const dialog = $("#book-edit");

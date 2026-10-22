@@ -283,6 +283,18 @@ button.lib-book:hover .lib-edit, .lib-li.show-edit .lib-edit { display: flex; }
 .lib-index { position: absolute; right: 2px; top: 50%; transform: translateY(-50%); z-index: 3; display: flex; flex-direction: column; align-items: center; }
 #shell .lib-index button { width: 20px; height: 20px; border: none; background: none; padding: 0; color: var(--accent); font-size: 11px; font-weight: 600; text-align: center; }
 #book-edit menu #edit-reset { margin-right: auto; align-self: center; }
+/* «Дати почитати»: links to one book (web, signed-in readers only). */
+#share-box { display: none; border: none; border-top: 1px solid var(--border, rgba(0,0,0,0.1)); margin: 14px 0 0; padding: 12px 0 0; }
+body.web:not(.guest) #share-box { display: block; }
+#share-box legend { padding: 0; font-weight: 600; }
+#share-box small { display: block; margin: 2px 0 8px; color: var(--muted); }
+#share-box .share-new { display: flex; gap: 8px; }
+#share-box .share-new input { flex: 1; min-width: 0; }
+#share-list { list-style: none; margin: 8px 0 0; padding: 0; }
+#share-list li { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; padding: 6px 0; border-bottom: 1px solid var(--border, rgba(0,0,0,0.08)); font-size: 14px; }
+#share-list li .who { font-weight: 600; }
+#share-list li .state { color: var(--muted); font-size: 13px; flex: 1; }
+#share-list li input { width: 100%; font-size: 13px; }
 .lib-empty { color: var(--muted); text-align: center; margin-top: 15%; }
 
 /* ---------- Search (⌘F) ---------- */

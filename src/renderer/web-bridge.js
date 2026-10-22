@@ -390,6 +390,9 @@
     },
     libraryRemoveFolder: async () => {},
     // Managing the shared library (family only; the server refuses guests).
+    shares: (name) => api("GET", `/api/shares?path=${encodeURIComponent(name)}`).then((r) => r.json()),
+    shareBook: (name, who) => api("POST", "/api/shares", { path: name, for: who }).then((r) => r.json()),
+    unshare: (token) => api("DELETE", `/api/shares/${encodeURIComponent(token)}`).then((r) => r.json()),
     libraryUpdateBook: (name, patch) => api("PATCH", `/api/books/${encodeURIComponent(name)}`, patch).then((r) => r.json()),
     getSettings: async () => {
       let settings;
@@ -602,11 +605,16 @@
   function enterGuestMode(settings) {
     document.body.classList.add("guest");
     const logout = document.getElementById("btn-logout");
-    if (logout) (logout.textContent = "Вийти з демо"), (logout.title = "Повернутися на сторінку входу");
+    if (logout) (logout.textContent = settings.share ? "Вийти" : "Вийти з демо"), (logout.title = "Повернутися на сторінку входу");
     const { limit = 0, used = 0 } = settings.guestLimit || {};
     const left = Math.max(0, limit - used);
     setTimeout(() => {
       if (typeof showNotice !== "function") return;
+      // By a link to one book: whose it is and until when.
+      if (settings.share) {
+        const until = new Date(settings.share.until).toLocaleDateString("uk-UA", { day: "numeric", month: "long" });
+        return showNotice(`${settings.share.from} дає вам почитати цю книжку. Посилання діє до ${until}, на цьому пристрої. Виділіть слово чи речення, і Claude пояснить (до ${limit} разів на день).`, false);
+      }
       showNotice(
         left
           ? `Демо-режим: одна книжка і до ${limit} пояснень на день (залишилось ${left}). Виділіть слово чи речення, щоб побачити, як це працює.`

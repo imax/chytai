@@ -39,6 +39,14 @@ const OWNER_ID = "owner"; // web/store.js OWNER
 const OWNER_LEGACY_NAME = process.env.READER_OWNER_NAME || "Макс"; // Max's name under the family password
 const ACCOUNT_ID = /^(?:owner|[a-f0-9]{16})$/;
 const ACCOUNTS_DIR = path.join(DATA_DIR, "accounts");
+// A link to one book for one person (Max, 2026-10-22): it opens without an account, on the first device
+// that opens it and no other, for SHARE_DAYS, until its owner switches it off; read only, a few
+// explanations a day. A reader has at most SHARE_MAX links at a time.
+const SHARE_COOKIE = "reader_share";
+const DEVICE_COOKIE = "reader_device";
+const SHARE_DAYS = 30;
+const SHARE_MAX = 10;
+const SHARE_EXPLAIN_LIMIT = 20;
 // Guests (the /demo) get their own cookie.
 const GUEST_COOKIE = "reader_guest";
 const GUEST_ENABLED = process.env.GUEST_MODE !== "off";
@@ -94,6 +102,7 @@ try {
 }
 state.accounts ??= {};
 state.libs ??= {};
+state.shares ??= {}; // token -> { acct, book, for, created, expires, device, off, opened, usage: { day, n }, reader: { positions, … } }
 
 // 2026-10-22: from names under one family password to accounts. The names were tests (Max), except his
 // own, which becomes the owner's account; the rest stay in state.legacyUsers, unused.
@@ -132,7 +141,7 @@ function userState(name) {
 
 function settingsFor(req) {
   const { notes, ...u } = req.guest ? guestState(req.guest) : userState(req.acct);
-  const demo = req.guest ? demoBooks() : null;
+  const demo = req.guest ? guestBooks(req) : null;
   return {
     ...SHARED_DEFAULTS,
     ...state.shared,
@@ -148,8 +157,9 @@ function settingsFor(req) {
     demoBook: state.shared.demoBook || "",
     demoDefault: demoBooks(true)[0]?.name || "",
     ...(req.guest
-      ? { lastBook: u.lastBook || demo[0]?.name || null, guestLimit: { used: guestUsage().guests[req.guest] || 0, limit: GUEST_LIMIT } }
+      ? { lastBook: u.lastBook || demo[0]?.name || null, guestLimit: req.share ? { used: shareUsage(req.share).n, limit: SHARE_EXPLAIN_LIMIT } : { used: guestUsage().guests[req.guest] || 0, limit: GUEST_LIMIT } }
       : {}),
+    ...(req.share ? { share: { from: accountName(req.share.acct), until: req.share.expires } } : {}),
   };
 }
 
@@ -159,6 +169,8 @@ const guests = new Map(); // guest id -> { positions, lastBook, ...settings }
 const GUEST_MAX = 5000;
 
 function guestState(id) {
+  // Someone reading by a link keeps their place on the server, with the link.
+  if (id.startsWith("share:")) return (state.shares[id.slice(6)].reader ??= { positions: {} });
   let g = guests.get(id);
   if (!g) {
     if (guests.size >= GUEST_MAX) guests.delete(guests.keys().next().value); // oldest first
@@ -338,6 +350,12 @@ function wishStats(library) {
   rows.sort((a, b) => b.who.length - a.who.length || a.inLibrary - b.inLibrary || b.addedAt - a.addedAt);
   const lists = Object.values(state.users).filter((u) => u.wish?.length).length;
   return { rows, total: Object.values(state.users).reduce((n, u) => n + (u.wish?.length || 0), 0), lists };
+}
+
+// What a guest may open: the book of their link, or the demo.
+function guestBooks(req) {
+  if (req.share) return [{ dir: libOf(req.share.acct).dir, name: req.share.book }];
+  return demoBooks();
 }
 
 // [{ dir, name }] of the books a guest may open. builtInOnly skips the library choice.
@@ -546,7 +564,7 @@ app.get("/auth", async (req, res) => {
   res.redirect(next || "/");
 });
 app.post("/logout", (req, res) => {
-  res.setHeader("Set-Cookie", [cookieHeader(req, COOKIE, "", 0), cookieHeader(req, GUEST_COOKIE, "", 0), cookieHeader(req, OLD_COOKIE, "", 0)]);
+  res.setHeader("Set-Cookie", [cookieHeader(req, COOKIE, "", 0), cookieHeader(req, GUEST_COOKIE, "", 0), cookieHeader(req, OLD_COOKIE, "", 0), cookieHeader(req, SHARE_COOKIE, "", 0)]);
   res.redirect("/login");
 });
 
@@ -558,9 +576,56 @@ app.get("/demo", (req, res) => {
   res.redirect("/");
 });
 
+// ---------- Links to one book ----------
+
+const shareActive = (sh) => !!sh && !sh.off && sh.expires > Date.now() && fs.existsSync(path.join(libOf(sh.acct).dir, sh.book)) && !state.accounts[sh.acct]?.off;
+function shareUsage(sh) {
+  const day = statsDay();
+  if (sh.usage?.day !== day) sh.usage = { day, n: 0 };
+  return sh.usage;
+}
+function signedCookie(req, name, kind) {
+  const raw = parseCookies(req)[name];
+  const i = raw ? raw.lastIndexOf(".") : -1;
+  if (i < 0) return null;
+  const v = raw.slice(0, i);
+  const sig = raw.slice(i + 1);
+  const expected = sign(`${kind}:${v}`);
+  return /^[\w-]{16,32}$/.test(v) && sig.length === expected.length && crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected)) ? v : null;
+}
+// The link this device reads by, while it still works here.
+function currentShare(req) {
+  const token = signedCookie(req, SHARE_COOKIE, "share");
+  const sh = token && state.shares[token];
+  if (!shareActive(sh) || sh.device !== signedCookie(req, DEVICE_COOKIE, "device")) return null;
+  return Object.assign(sh, { token });
+}
+const sharePage = (req, title, text) => loginPage(req, `${title} ${text}`);
+
+app.get("/s/:token", (req, res) => {
+  const token = String(req.params.token);
+  const sh = state.shares[token];
+  if (!shareActive(sh)) return res.status(404).type("html").send(sharePage(req, "Посилання вже не діє.", "Попросіть того, хто його надіслав, зробити нове."));
+  const acct = currentAccount(req);
+  if (acct === sh.acct) return res.redirect(`/?open=${encodeURIComponent(sh.book)}`); // the owner trying their own link
+  if (acct) return res.type("html").send(sharePage(req, "Ви вже в читалці під своїм акаунтом.", "Це посилання для когось без акаунта: відкрийте його на іншому пристрої або вийдіть."));
+  let device = signedCookie(req, DEVICE_COOKIE, "device");
+  if (sh.device && sh.device !== device) return res.status(403).type("html").send(sharePage(req, "Це посилання вже відкрили на іншому пристрої.", "Попросіть нове посилання для цього пристрою."));
+  const cookies = [];
+  if (!device) {
+    device = crypto.randomBytes(12).toString("base64url");
+    cookies.push(cookieHeader(req, DEVICE_COOKIE, `${device}.${sign(`device:${device}`)}`, 400));
+  }
+  if (!sh.device) Object.assign(sh, { device, opened: Date.now() }), saveState();
+  cookies.push(cookieHeader(req, SHARE_COOKIE, `${token}.${sign(`share:${token}`)}`, SHARE_DAYS), cookieHeader(req, GUEST_COOKIE, "", 0));
+  res.setHeader("Set-Cookie", cookies);
+  res.redirect("/");
+});
+
 app.use((req, res, next) => {
   const acct = currentAccount(req);
-  const guest = acct ? null : currentGuest(req);
+  const share = acct ? null : currentShare(req);
+  const guest = acct ? null : share ? `share:${share.token}` : currentGuest(req);
   if (!acct && !guest) {
     if (req.path.startsWith("/api/")) return res.status(401).json({ error: "login" });
     return res.redirect(req.originalUrl === "/" ? "/login" : `/login?next=${encodeURIComponent(req.originalUrl)}`);
@@ -574,6 +639,7 @@ app.use((req, res, next) => {
   req.owner = acct === OWNER_ID;
   req.user = acct ? accountName(acct) : "Гість";
   req.guest = guest;
+  req.share = share;
   req.lib = acct ? libOf(acct) : null;
   next();
 });
@@ -636,7 +702,7 @@ api.patch("/settings", (req, res) => {
     } else if (k === "customStyle") u[k] = String(v ?? "").slice(0, 1500);
     else if (USER_KEYS.has(k) && k !== "positions") u[k] = v;
   }
-  if (!req.guest) saveState();
+  if (!req.guest || req.share) saveState();
   res.json(settingsFor(req));
 });
 
@@ -653,7 +719,7 @@ api.put("/position", (req, res) => {
   if (Number.isFinite(pct)) {
     (u.progress ??= {})[name] = { pct: Math.max(0, Math.min(100, Math.round(pct))), chapter: typeof chapter === "string" ? chapter.slice(0, 200) : "" };
   }
-  if (!req.guest) saveState();
+  if (!req.guest || req.share) saveState();
   res.json({ ok: true });
 });
 
@@ -697,7 +763,7 @@ api.post("/notes", (req, res) => {
     createdAt: Date.now(),
   };
   list.push(note);
-  if (!req.guest) saveState();
+  if (!req.guest || req.share) saveState();
   res.json({ note });
 });
 
@@ -706,7 +772,7 @@ api.patch("/notes/:id", (req, res) => {
   const note = list.find((n) => n.id === req.params.id);
   if (!note) return res.status(404).json({ error: "Нотатки немає." });
   if (typeof req.body?.comment === "string") note.comment = req.body.comment.slice(0, NOTE_TEXT_MAX);
-  if (!req.guest) saveState();
+  if (!req.guest || req.share) saveState();
   res.json({ note });
 });
 
@@ -715,7 +781,7 @@ api.delete("/notes/:id", (req, res) => {
   const { u, list } = notesOf(req, bookPath);
   u.notes[bookPath] = list.filter((n) => n.id !== req.params.id);
   if (!u.notes[bookPath].length) delete u.notes[bookPath];
-  if (!req.guest) saveState();
+  if (!req.guest || req.share) saveState();
   res.json({ ok: true });
 });
 
@@ -735,6 +801,7 @@ async function dropDeletedAccounts() {
       delete state.accounts[id];
       delete state.users[id];
       delete state.libs[id];
+      for (const [t, sh] of Object.entries(state.shares)) if (sh.acct === id) delete state.shares[t];
       libs.delete(id);
       console.log(`account ${id} deleted on the site: its reader data is gone too`);
     }
@@ -807,9 +874,9 @@ api.get("/library", async (req, res) => {
   const u = req.guest ? guestState(req.guest) : userState(req.acct);
   let books;
   if (req.guest) {
-    const demo = demoBooks();
+    const demo = guestBooks(req);
     const allowed = new Set(demo.map((d) => path.join(d.dir, d.name)));
-    const scanned = await library.scan([...new Set(demo.map((d) => d.dir))], path.join(DATA_DIR, "demo-cache.json"));
+    const scanned = await library.scan([...new Set(demo.map((d) => d.dir))], req.share ? libOf(req.share.acct).cache : path.join(DATA_DIR, "demo-cache.json"));
     books = scanned.filter((b) => allowed.has(b.path)).map((b) => ({ ...b, dir: path.dirname(b.path) }));
   } else {
     books = (await scanLibrary(req.lib)).map((b) => ({ ...b, dir: req.lib.dir }));
@@ -840,19 +907,19 @@ api.get("/library", async (req, res) => {
       seen: !!(openedAt || aside || u.seen?.[name]) || (!!req.acct && added[name]?.by === req.acct),
     };
   });
-  res.json({ folders: [], books: list, lastBook: u.lastBook || (req.guest ? demoBooks()[0]?.name : null) || null });
+  res.json({ folders: [], books: list, lastBook: u.lastBook || (req.guest ? guestBooks(req)[0]?.name : null) || null });
 });
 
 api.get("/book", (req, res) => {
   const name = safeBookName(req.query.path);
-  const demo = req.guest ? demoBooks().find((d) => d.name === name) : null;
+  const demo = req.guest ? guestBooks(req).find((d) => d.name === name) : null;
   const file = req.guest ? demo && path.join(demo.dir, demo.name) : name && bookFile(req.lib, name);
   if (!file || !fs.existsSync(file)) return res.status(404).json({ error: "Книжки немає на сервері." });
   const u = req.guest ? guestState(req.guest) : userState(req.acct);
   u.lastBook = name;
   (u.opened ??= {})[name] = Date.now();
   if (u.setAside) delete u.setAside[name];
-  if (!req.guest) saveState();
+  if (!req.guest || req.share) saveState();
   res.setHeader("X-Book-Position", encodeURIComponent(u.positions?.[name] || ""));
   res.setHeader("X-Book-Reflow-Position", encodeURIComponent(u.positions?.[`${name}#reflow`] || ""));
   res.sendFile(file);
@@ -922,7 +989,7 @@ function customCover(lib, name) {
 
 api.get("/cover", async (req, res) => {
   const name = safeBookName(req.query.path);
-  const demo = req.guest ? demoBooks().find((d) => d.name === name) : null;
+  const demo = req.guest ? guestBooks(req).find((d) => d.name === name) : null;
   const file = req.guest ? demo && path.join(demo.dir, demo.name) : name && bookFile(req.lib, name);
   if (!file || !fs.existsSync(file)) return res.status(404).end();
   const custom = !req.guest && customCover(req.lib, name);
@@ -960,6 +1027,32 @@ api.put("/cover", guestsCannot("У демо-режимі не можна змі�
   res.json({ path: name, coverAt: Date.now() });
 });
 
+// Links to one book: GET /api/shares?path=<book>, POST /api/shares { path, for }, DELETE /api/shares/<token>.
+const shareView = (req, token, sh) => ({ token, url: `${req.protocol}://${req.get("host")}/s/${token}`, for: sh.for, created: sh.created, expires: sh.expires, opened: sh.opened || 0, active: shareActive(sh) });
+const mySharesOf = (req) => Object.entries(state.shares).filter(([, sh]) => sh.acct === req.acct);
+api.get("/shares", guestsCannot("Гість не може ділитися книжками."), (req, res) => {
+  const name = safeBookName(req.query.path);
+  res.json({ shares: mySharesOf(req).filter(([, sh]) => sh.book === name && !sh.off && sh.expires > Date.now()).map(([t, sh]) => shareView(req, t, sh)), max: SHARE_MAX });
+});
+api.post("/shares", guestsCannot("Гість не може ділитися книжками."), (req, res) => {
+  const name = safeBookName(req.body?.path);
+  const who = clean(req.body?.for, 60);
+  if (!name || !fs.existsSync(bookFile(req.lib, name))) return res.status(404).json({ error: "Книжки немає на сервері." });
+  if (!who) return res.status(400).json({ error: "Напишіть, для кого посилання." });
+  if (mySharesOf(req).filter(([, sh]) => shareActive(sh)).length >= SHARE_MAX) return res.status(400).json({ error: `Діючих посилань може бути до ${SHARE_MAX}. Вимкніть якесь старе.` });
+  const token = crypto.randomBytes(12).toString("base64url");
+  const sh = (state.shares[token] = { acct: req.acct, book: name, for: who, created: Date.now(), expires: Date.now() + SHARE_DAYS * 86400000, device: null });
+  saveState();
+  res.json({ share: shareView(req, token, sh) });
+});
+api.delete("/shares/:token", guestsCannot("Гість не може ділитися книжками."), (req, res) => {
+  const sh = state.shares[req.params.token];
+  if (!sh || sh.acct !== req.acct) return res.status(404).json({ error: "Немає такого посилання." });
+  sh.off = Date.now();
+  saveState();
+  res.json({ ok: true });
+});
+
 // "Позначити переглянутими" on the new arrivals.
 api.post("/library/seen", (req, res) => {
   const u = req.guest ? guestState(req.guest) : userState(req.acct);
@@ -967,7 +1060,7 @@ api.post("/library/seen", (req, res) => {
     const name = safeBookName(p);
     if (name) (u.seen ??= {})[name] = Date.now();
   }
-  if (!req.guest) saveState();
+  if (!req.guest || req.share) saveState();
   res.json({ ok: true });
 });
 
@@ -978,7 +1071,7 @@ api.post("/library/aside", (req, res) => {
   if (!name) return res.status(400).json({ error: "bad request" });
   (u.setAside ??= {})[name] = Date.now();
   if (u.lastBook === name) u.lastBook = null;
-  if (!req.guest) saveState();
+  if (!req.guest || req.share) saveState();
   res.json({ ok: true });
 });
 
@@ -1092,7 +1185,16 @@ api.post("/explain", async (req, res) => {
     send({ type: "error", message: "На сьогодні пояснень забагато, це схоже на автоматичні запити. Завтра все запрацює знову; якщо це помилка, напишіть Максові." });
     return res.end();
   }
-  if (req.guest) {
+  if (req.share) {
+    const usage = shareUsage(req.share);
+    if (usage.n >= SHARE_EXPLAIN_LIMIT) {
+      send({ type: "error", message: `За цим посиланням можна ${SHARE_EXPLAIN_LIMIT} пояснень на день, на сьогодні вони закінчились. Книжку можна читати далі.` });
+      return res.end();
+    }
+    usage.n++;
+    saveState();
+    trimGuestRequest(request);
+  } else if (req.guest) {
     const denied = guestExplainAllowed(req);
     if (denied) {
       send({ type: "error", message: denied });
