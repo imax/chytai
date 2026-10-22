@@ -28,6 +28,12 @@ function parseLine(raw) {
   if (!line) return null;
   let rating = null;
   let year = null;
+  // Stars in the middle (Books.md: «Назва ★★★★ нотатка»): the stars are the rating, the rest is a note we leave out.
+  const mid = /\s*[★⭐]{1,5}(?:½)?\s+\S.*$/u.exec(line);
+  if (mid && mid.index > 0) {
+    rating = (mid[0].match(/[★⭐]/gu) || []).length;
+    line = line.slice(0, mid.index).trim();
+  }
   const r = STARS.exec(line);
   if (r) {
     rating = r[2] ? Number(r[2].replace(",", ".")) : [...r[1]].length;
@@ -88,10 +94,22 @@ function parseLine(raw) {
 // The whole text -> { books, error }. `status` applies to every row; rows that name a year keep it.
 function parseList(text, { status = "read" } = {}) {
   const books = [];
+  let headingYear = null;
   for (const raw of String(text || "").split(/\r?\n/)) {
-    const p = parseLine(raw);
+    // A Markdown list (Max pasted his Books.md): «## 2026» is no book but the year of the books under it;
+    // other headings, rules and tables are skipped, and **bold**, _italics_ and [links](…) lose their marks.
+    const h = /^\s*#{1,6}\s*(.*)$/.exec(raw);
+    if (h) {
+      const y = /^((?:19|20)\d\d)\b/.exec(h[1].trim());
+      headingYear = y ? Number(y[1]) : headingYear;
+      continue;
+    }
+    if (/^\s*([-*_=]\s*){3,}$|^\s*\|/.test(raw)) continue;
+    const md = raw.replace(/!?\[([^\]]*)\]\([^)]*\)/g, "$1").replace(/(\*\*|__)(.+?)\1/g, "$2").replace(/(^|\s)[*_](\S.*?\S|\S)[*_](?=\s|$|[.,;:])/g, "$1$2");
+    const p = parseLine(md);
     if (!p) continue;
-    books.push({ line: raw.trim().slice(0, 200), title: p.title, author: p.author, alt: p.alt, isbns: [], status, rating: p.rating, year: status === "read" ? p.year : null, note: "", copy: "", added: "", read: "" });
+    const year = p.year ?? headingYear;
+    books.push({ line: raw.trim().slice(0, 200), title: p.title, author: p.author, alt: p.alt, isbns: [], status, rating: p.rating, year: status === "read" ? year : null, note: "", copy: "", added: "", read: "" });
   }
   if (!books.length) return { error: "Список порожній: по одній книжці на рядок." };
   if (books.length > 1000) return { error: "Забагато рядків: до тисячі за раз." };
@@ -120,11 +138,21 @@ function resolve(store, books) {
         }
       }
     }
-    // Nothing known: two capitalised words at the end are the author («… Іван Іванов»).
+    // A bare title the catalog has once and only once («The Road»): that book, however short the title.
+    let only = null;
+    if (!author && !store.findWork({ title })) {
+      const ids = store.worksTitled ? store.worksTitled(title) : [];
+      if (ids.length === 1 && store.book(ids[0])) only = store.book(ids[0]);
+    }
+    if (only) return { ...rest, title: only.title, author: only.author || "", isbns: [], touched: `${b.year || thisYear}-01-01T00:00:00.000Z` };
+    // Nothing known: two capitalised words at the end are the author («Неіснуюча книжка Іван Іванов»), but
+    // only when the rest reads like a title in sentence case or is one word: an English title is in Title
+    // Case and «Their Eyes Were Watching God» has no author in it.
     if (!author && !store.findWork({ title })) {
       const w = title.split(" ");
       for (const n of [2]) {
-        if (w.length > n && looksLikeName(w.slice(-n).join(" "))) {
+        const rest = w.slice(0, -n);
+        if (w.length > n && looksLikeName(w.slice(-n).join(" ")) && (rest.length === 1 || rest.some((x) => /^\p{Ll}/u.test(x)))) {
           [title, author] = [w.slice(0, -n).join(" "), w.slice(-n).join(" ")];
           break;
         }

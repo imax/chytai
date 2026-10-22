@@ -42,7 +42,7 @@ const CYR = /[а-яіїєґ]/i;
 // typed in or imported, and an unknown language is not called Ukrainian.
 const RU_ONLY = /[ыэъё]/i;
 const UK_ONLY = /[іїєґ]/i;
-const OWN_SOURCES = new Set(["manual", "goodreads", "apple-books", "office"]);
+const OWN_SOURCES = new Set(["manual", "goodreads", "apple-books", "office", "list"]);
 function isUk(book) {
   const lang = String(book.language || "").toLowerCase();
   if (lang) return /^(uk|укр)/.test(lang);
@@ -1222,6 +1222,9 @@ function addPage({ user, text = "", popular = [], error = "" }) {
 // one (addFindResults); a line with no match can be looked for or added as the reader's own book, without a cover.
 function addReviewPage({ user, token, rows, text }) {
   const found = rows.filter((r) => r.match).length;
+  // Found books first, then the ones already on the shelf, then what we could not find (Max: «щоб довго не гортати»).
+  const rank = (r) => (r.match && !r.own ? 0 : r.own ? 1 : 2);
+  const order = rows.map((r, i) => i).sort((a, b) => rank(rows[a]) - rank(rows[b]) || a - b);
   const line = (r, i) => {
     const own = !!r.own;
     const b = r.match;
@@ -1234,7 +1237,7 @@ function addReviewPage({ user, token, rows, text }) {
     ${b ? `<span class="add-from">з рядка «${esc(r.line || r.title)}»</span>` : `<button type="button" class="text-link small" data-own>Додати без обкладинки</button>`}
   </span>
   <span class="add-act">${own ? "" : `<button type="button" class="text-link" data-find>${b ? "Інша книжка" : "Шукати"}</button>`}</span>
-  <input type="hidden" name="swap_${i}" value="">
+  <input type="hidden" name="swap_${i}" value=""><input type="hidden" name="ol_${i}" value="">
   <div class="add-find" hidden><input type="search" value="${attr(r.title)}" placeholder="назва або автор" autocomplete="off"><div class="add-found"></div></div>
 </li>`;
   };
@@ -1243,10 +1246,10 @@ function addReviewPage({ user, token, rows, text }) {
   <div class="add-intro">
     ${addCrumbs}
     <h1>Знайшли ${found} з ${rows.length}</h1>
-    <p class="lead">Перевірте :) Якщо книжки немає, її можна додати вручну. «Інша книжка», якщо знайшли неправильно.</p>
+    <p class="lead">Перевірте :) «Інша книжка», якщо знайшли неправильно. «Шукати» знайде книжку в нашому каталозі або в Open Library, з обкладинкою.</p>
     <button class="btn primary" data-cta>Додати <span data-n></span> на полицю</button>
   </div>
-  <ol class="add-rows">${rows.map(line).join("")}</ol>
+  <ol class="add-rows">${order.map((i) => line(rows[i], i)).join("")}</ol>
 </form>
 <script>
 (() => {
@@ -1268,9 +1271,10 @@ function addReviewPage({ user, token, rows, text }) {
     if (!row) return;
     if (e.target.closest("[data-find]")) { const f = row.querySelector(".add-find"); f.hidden = !f.hidden; if (!f.hidden) { f.querySelector("input").focus(); look(row); } }
     if (e.target.closest("[data-own]")) { row.querySelector("input[name=keep]").checked = true; row.classList.add("as-own"); count(); }
-    const pick = e.target.closest("[data-pick]");
+    const pick = e.target.closest("[data-pick], [data-ol]");
     if (pick) {
-      row.querySelector("input[name=swap_" + row.dataset.i + "]").value = pick.dataset.pick;
+      row.querySelector("input[name=swap_" + row.dataset.i + "]").value = pick.dataset.pick || "";
+      row.querySelector("input[name=ol_" + row.dataset.i + "]").value = pick.dataset.ol || "";
       row.querySelector(".add-cover").innerHTML = pick.querySelector(".cover").outerHTML;
       row.querySelector(".add-title").textContent = pick.dataset.title;
       row.querySelector(".add-by").textContent = pick.dataset.author;
@@ -1288,9 +1292,11 @@ function addReviewPage({ user, token, rows, text }) {
   return layout({ title: "Додати книжки", body, user, path: "/add", noindex: true });
 }
 // «Інша книжка»: what the catalog has for the typed words, each a button that takes its place.
-function addFindResults(hits) {
-  if (!hits.length) return `<p class="small muted">Нічого не знайшлося. Спробуйте інакше або додайте без обкладинки.</p>`;
-  return hits.map(({ book: b }) => `<button type="button" class="add-pick" data-pick="${attr(b.id)}" data-title="${attr(b.title)}" data-author="${attr(byline(b.author || ""))}">${cover(b, "xs")}<span><b>${esc(b.title)}</b><span class="muted">${esc(byline(b.author || ""))}</span></span></button>`).join("");
+function addFindResults(hits, outside = []) {
+  if (!hits.length && !outside.length) return `<p class="small muted">Нічого не знайшлося. Спробуйте інакше або додайте без обкладинки.</p>`;
+  const ours = hits.map(({ book: b }) => `<button type="button" class="add-pick" data-pick="${attr(b.id)}" data-title="${attr(b.title)}" data-author="${attr(byline(b.author || ""))}">${cover(b, "xs")}<span><b>${esc(b.title)}</b><span class="muted">${esc(byline(b.author || ""))}</span></span></button>`).join("");
+  const theirs = outside.map((b) => `<button type="button" class="add-pick" data-ol="${attr(JSON.stringify(b))}" data-title="${attr(b.title)}" data-author="${attr(b.author)}">${cover(b, "xs")}<span><b>${esc(b.title)}</b><span class="muted">${esc(b.author)}${b.published ? ` · ${b.published}` : ""}</span></span></button>`).join("");
+  return `${ours}${theirs ? `<p class="add-src">Open Library</p>${theirs}` : ""}`;
 }
 
 // ---- import from elsewhere (/import/goodreads, /import/apple-books, /import/list) ----

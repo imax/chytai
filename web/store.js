@@ -1095,6 +1095,11 @@ class Store {
     return (this._works = { byIsbn, byTitle });
   }
 
+  // Every work with exactly this title (or original title): a pasted list often has titles only.
+  worksTitled(title) {
+    return [...new Set((this.workIndex().byTitle.get(norm(title)) || []).map((w) => w.id))];
+  }
+
   // The work for a book named from outside ({ title, author, isbns }), or null. An ISBN is enough on
   // its own; a title needs the same author (a surname in common, in either alphabet, a typo allowed),
   // unless only one work has that title and the title is not a single short word.
@@ -1129,7 +1134,7 @@ class Store {
         if (!id) {
           id = slugify(r.title);
           while (this.book(id)) id += "-2";
-          this.lib.books[id] = { id, title: r.title.trim(), author: (r.author || "").trim(), cover: "", tags: [], links: [], source, ...(r.isbns?.length ? { isbns: r.isbns } : {}), ...(r.goodreadsId ? { goodreads: r.goodreadsId } : {}), ...(r.appleId ? { apple: r.appleId } : {}) };
+          this.lib.books[id] = { id, title: r.title.trim(), author: (r.author || "").trim(), cover: "", tags: [], links: [], source, ...(r.isbns?.length ? { isbns: r.isbns } : {}), ...(r.cover ? { cover: r.cover } : {}), ...(r.ol ? { ol: r.ol } : {}), ...(r.published ? { published: r.published } : {}), ...(r.goodreadsId ? { goodreads: r.goodreadsId } : {}), ...(r.appleId ? { apple: r.appleId } : {}) };
           this.writeBook(id);
           result.created.push(this.lib.books[id]);
         }

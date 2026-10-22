@@ -15,7 +15,7 @@ const HEADERS = { "User-Agent": "Chytai/1.0 (https://chytai.org.ua; book details
 const FIELDS = "key,title,subtitle,author_name,cover_i,isbn,first_publish_year,number_of_pages_median,language,id_amazon";
 const MONTH = 30 * 86400000;
 const WEEK = 7 * 86400000;
-const OWN = new Set(["manual", "goodreads", "apple-books", "office"]);
+const OWN = new Set(["manual", "goodreads", "apple-books", "office", "list"]);
 const LANG = { eng: "англійська", ukr: "українська", rus: "російська", pol: "польська", ger: "німецька", fre: "французька", spa: "іспанська", ita: "італійська" };
 const GLANG = { en: "англійська", uk: "українська", ru: "російська", pl: "польська", de: "німецька", fr: "французька", es: "іспанська", it: "італійська" };
 const GOOGLE = "https://www.googleapis.com/books/v1/volumes";
@@ -268,4 +268,36 @@ async function refresh(store, opts = {}) {
   return true;
 }
 
-module.exports = { enrich, refresh, lookup, lookupGoogle, apply, wanting, descriptionText, same };
+// «Шукати» on /add (Max, 2026-10-22: «пошук по зовнішніх каталогах … напів-мануальне наповнення бази»): what
+// Open Library has for typed words, as books a reader can put on the shelf: { title, author, cover, isbns,
+// published, ol }. Answers are kept for an hour; a failure is an empty list.
+const found = new Map();
+async function searchOpenLibrary(q, { fetchImpl = fetch, limit = 6 } = {}) {
+  q = String(q || "").trim().slice(0, 100);
+  if (q.length < 2) return [];
+  const hit = found.get(q.toLowerCase());
+  if (hit && Date.now() - hit.at < 3600e3) return hit.list;
+  let list = [];
+  try {
+    const params = new URLSearchParams({ q, fields: FIELDS, limit: String(limit * 2) });
+    const data = await getJson(`${SEARCH}?${params}`, fetchImpl);
+    const seen = new Set();
+    for (const d of data?.docs || []) {
+      if (!d.title) continue;
+      const author = (d.author_name || []).slice(0, 2).join(", ");
+      const key = `${norm(d.title)}|${surname(author)}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      list.push({ title: [d.title, d.subtitle].filter(Boolean).join(": ").slice(0, 200), author, cover: d.cover_i ? `https://covers.openlibrary.org/b/id/${d.cover_i}-L.jpg` : "", isbns: cleanIsbns(d.isbn).slice(0, 20), published: d.first_publish_year || null, ol: d.key || "" });
+      if (list.length >= limit) break;
+    }
+    list.sort((a, b) => (b.cover ? 1 : 0) - (a.cover ? 1 : 0));
+  } catch {
+    return [];
+  }
+  if (found.size > 500) found.clear();
+  found.set(q.toLowerCase(), { at: Date.now(), list });
+  return list;
+}
+
+module.exports = { enrich, refresh, lookup, searchOpenLibrary, lookupGoogle, apply, wanting, descriptionText, same };

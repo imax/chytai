@@ -245,7 +245,15 @@ const popular = () => {
 };
 // ?text= fills the list: «Додати книжку, якої ще немає» from a search that found nothing (the old one-book form is gone).
 app.get("/add", signed, (req, res) => (admin.step(req.user.id, "add"), res.send(pages.addPage({ user: req.user, text: String(req.query.text || "").slice(0, 2000), popular: popular() }))));
-app.get("/api/add/find", signed, (req, res) => res.set("Cache-Control", "no-store").send(pages.addFindResults(store.search(String(req.query.q || "").slice(0, 100), { limit: 6 }))));
+// «Шукати» / «Інша книжка» on /add: our catalog first, then Open Library, so a book nobody here has yet can
+// come in with its cover and ISBNs (Max, 2026-10-22: «напів-мануальне наповнення бази»).
+app.get("/api/add/find", signed, async (req, res) => {
+  const q = String(req.query.q || "").slice(0, 100);
+  const hits = store.search(q, { limit: 6 });
+  const known = new Set(hits.map((h) => h.book.id));
+  const outside = (await enrich.searchOpenLibrary(q)).filter((b) => !known.has(store.findWork(b)));
+  res.set("Cache-Control", "no-store").send(pages.addFindResults(hits, outside));
+});
 const IMPORTS = {
   list: { name: "списку", parse: null },
   goodreads: { name: "Goodreads", parse: (files) => goodreads.parseExport(files[0].body.toString("utf8")) },
@@ -291,13 +299,24 @@ app.post("/import/:source/apply", signed, importSource, (req, res) => {
   const swapped = (r, i) => {
     const to = String(req.body[`swap_${i}`] || "");
     const b = to && store.book(to);
-    return b ? { ...r, match: { id: b.id, title: b.title, author: b.author, href: b.href } } : r;
+    if (b) return { ...r, match: { id: b.id, title: b.title, author: b.author, href: b.href } };
+    // A book picked from Open Library: the catalog's own copy if we have one after all, else a new book with its cover.
+    let ol = null;
+    try {
+      ol = req.body[`ol_${i}`] ? JSON.parse(req.body[`ol_${i}`]) : null;
+    } catch {}
+    if (!ol?.title) return r;
+    const book = { title: String(ol.title).slice(0, 200), author: String(ol.author || "").slice(0, 200), isbns: [].concat(ol.isbns || []).map(String).filter((x) => /^[\dX]{10,13}$/.test(x)).slice(0, 20) };
+    const id = store.findWork(book);
+    const m = id && store.book(id);
+    if (m) return { ...r, match: { id: m.id, title: m.title, author: m.author, href: m.href } };
+    return { ...r, ...book, match: null, cover: /^https:\/\/covers\.openlibrary\.org\//.test(ol.cover || "") ? ol.cover : "", ol: /^\/works\/OL\w+$/.test(ol.ol || "") ? ol.ol : "", published: Number(ol.published) || null };
   };
   const chosen = p.rows.map(swapped).filter((r, i) => keep.has(i) && !(p.source === "list" && r.match && store.entry(req.user.id, r.match.id)));
   // On the shelf they sit after what is already there: the read ones by date read, oldest first, then the rest by date added.
   const key = (r) => (r.read ? `0${r.read}` : `1${r.added || "9999"}`);
   chosen.sort((a, b) => key(a).localeCompare(key(b)));
-  const result = store.importEntries(req.user.id, chosen.map((r) => ({ id: r.match?.id || null, title: r.title, author: r.author, isbns: r.isbns, goodreadsId: r.goodreadsId, appleId: r.appleId, status: r.status, rating: r.rating, year: r.year, note: r.note, copy: r.copy, added: r.added, read: r.read, touched: r.touched })), { source: req.source });
+  const result = store.importEntries(req.user.id, chosen.map((r) => ({ id: r.match?.id || null, title: r.title, author: r.author, isbns: r.isbns, goodreadsId: r.goodreadsId, appleId: r.appleId, status: r.status, rating: r.rating, year: r.year, note: r.note, copy: r.copy, added: r.added, read: r.read, touched: r.touched, cover: r.cover, ol: r.ol, published: r.published })), { source: req.source });
   const name = IMPORTS[req.source].name;
   console.log(`${name} import @${req.user.username}: ${result.added} added, ${result.updated} updated, ${result.created.length} new books`);
   // New books by hand are mailed to the owner one by one; an import sends one letter with the list.
