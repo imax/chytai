@@ -10,7 +10,7 @@ RUN npm ci --omit=dev --no-audit --no-fund
 
 COPY src ./src
 COPY server ./server
-COPY build/icon.png ./build/icon.png
+COPY build/icon.png build/landing-desk.jpg build/landing-phone.jpg ./build/
 COPY demo ./demo
 
 ENV PORT=8080 DATA_DIR=/data
