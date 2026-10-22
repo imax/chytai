@@ -951,6 +951,9 @@ app.post("/api/reviews/add", signed, async (req, res) => {
   } catch (e) {
     return back(e.message);
   }
+  // Max, 2026-10-22: a letter to him for every review a reader adds, to check it.
+  const r = !req.owner && reviews.row(String(req.body.url || "").trim());
+  if (r) notifyOwner(`Новий огляд: ${store.book(id)?.title || id}`, [`${req.user.name} (@${req.user.username}) додав(ла) огляд до книжки.`, "", `Огляд: ${r.title}`, `Де: ${r.name}${r.date ? `, ${r.date}` : ""}`, `Посилання: ${r.url}`, "", `Книжка: ${site(req)}${store.href(id)}#writings`, `Усі огляди і «Прибрати»: ${site(req)}/admin/reviews`, `Полиця читача: ${site(req)}${req.user.href}`].join("\n"));
   res.redirect(303, fromBook ? `${store.href(id)}#writings` : `/admin/reviews?added=${encodeURIComponent(id)}`);
 });
 app.post("/api/reviews/date", owner, (req, res) => {
