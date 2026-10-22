@@ -12,6 +12,7 @@ COPY src ./src
 COPY server ./server
 COPY build/icon.png build/landing-desk.jpg build/landing-phone.jpg ./build/
 COPY demo ./demo
+COPY free ./free
 
 ENV PORT=8080 DATA_DIR=/data
 EXPOSE 8080

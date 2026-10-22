@@ -58,6 +58,9 @@ const GUEST_MAX_TURNS = 8;
 // DATA_DIR/demo (on the Fly volume), else the one shipped in the repo under demo/.
 const DEMO_DIRS = [path.join(DATA_DIR, "demo"), path.join(ROOT, "demo")];
 const BOOK_EXT = /\.(epub|pdf)$/i;
+// Free books (public domain, 2026-10-22): «Читати» on the site gives a signed-in reader a copy in their
+// own library; without an account it asks to sign in first (Max: «акаунт потрібен щоб читати»). Shipped in the repo under free/.
+const FREE_DIR = path.join(ROOT, "free");
 const MAX_UPLOAD = "300mb";
 // Days in the usage stats (/admin) are counted in this time zone, and kept for this long.
 const STATS_TZ = process.env.STATS_TZ || "Europe/Kyiv";
@@ -358,6 +361,15 @@ function guestBooks(req) {
   return demoBooks();
 }
 
+// [{ dir, name }] of the free books.
+function freeBooks() {
+  try {
+    return fs.readdirSync(FREE_DIR).filter((n) => !n.startsWith(".") && BOOK_EXT.test(n)).sort().map((name) => ({ dir: FREE_DIR, name }));
+  } catch {
+    return [];
+  }
+}
+
 // [{ dir, name }] of the books a guest may open. builtInOnly skips the library choice.
 function demoBooks(builtInOnly) {
   const chosen = state.shared.demoBook;
@@ -642,6 +654,28 @@ app.get("/demo", (req, res) => {
   if (!GUEST_ENABLED || !demoBooks().length) return res.redirect("/login");
   if (!currentGuest(req)) startGuest(req, res);
   res.redirect("/");
+});
+
+// /free/<file> opens a free book from the site: copied into the reader's library (once) and opened there.
+app.get("/free/:name", (req, res) => {
+  const name = safeBookName(req.params.name);
+  if (!name || !freeBooks().some((f) => f.name === name)) return res.redirect("/");
+  const open = `/?open=${encodeURIComponent(name)}`;
+  const acct = currentAccount(req);
+  if (acct) {
+    if (state.accounts[acct]?.off) return res.redirect("/");
+    const lib = libOf(acct);
+    const file = bookFile(lib, name);
+    if (!fs.existsSync(file)) {
+      fs.copyFileSync(path.join(FREE_DIR, name), file);
+      (lib.meta.added ??= {})[name] = { by: acct, at: Date.now() };
+      saveState();
+      warmCovers(lib, [name]);
+      tellSite(acct);
+    }
+    return res.redirect(open);
+  }
+  res.redirect(`/login?next=${encodeURIComponent(`/free/${encodeURIComponent(name)}`)}`);
 });
 
 // ---------- Links to one book ----------

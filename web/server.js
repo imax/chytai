@@ -248,7 +248,12 @@ app.post("/api/reader-library", (req, res) => {
 // another edition's) and, when both name an author in the same alphabet, a shared surname.
 function readerFileFor(readerId, book) {
   if (!readerId || !book) return null;
-  const files = store.db.prepare("SELECT name, title, authors FROM reader_files WHERE reader = ?").all(readerId);
+  return fileFor(store.db.prepare("SELECT name, title, authors FROM reader_files WHERE reader = ?").all(readerId), book);
+}
+// Free books in the reader (public domain, its free/ folder), listed in seed/free.json as { name, title, authors }.
+const FREE = JSON.parse(fs.readFileSync(path.join(__dirname, "seed", "free.json"), "utf8"));
+const freeFileFor = (book) => (book ? fileFor(FREE, book) : null);
+function fileFor(files, book) {
   if (!files.length) return null;
   const key = (t) => norm(workName(t));
   const titles = new Set([book.title, book.altTitle, ...(book.editions || []).map((e) => e.title), ...(book.translations || []).map((t) => t.title)].filter(Boolean).map(key).filter((t) => t.length > 1));
@@ -692,7 +697,8 @@ app.get("/book/:id", (req, res) => {
   const book = bookFor(req, store.bookPage(id), !!store.entry(req.user?.id, id));
   if (!book) return res.status(404).send(pages.messagePage({ title: "Немає такої книжки", text: "", user: req.user }));
   const file = readerFileFor(req.user?.id, book);
-  res.send(pages.bookPage({ book, entry: store.sharedEntry(req.user?.id, book.id), now: !!req.user && nowIds(req.user.id).has(store.canonical(book.id)), user: req.user, readUrl: file ? `${READER_URL}/?open=${encodeURIComponent(file.name)}` : "", shelf: book.shelf && (req.owner || !isDraft(book.shelf)) ? store.shelf(book.shelf) : null, inLibrary: inLibraryMap(req), readers: readersOf(book.id), also: social.alsoLiked([book.id], { limit: 4 }), writings: reviews.of(book.id), reviewError: String(req.query.review_error || "").slice(0, 300) }));
+  const free = !file && freeFileFor(book);
+  res.send(pages.bookPage({ freeRead: !!free, book, entry: store.sharedEntry(req.user?.id, book.id), now: !!req.user && nowIds(req.user.id).has(store.canonical(book.id)), user: req.user, readUrl: file ? `${READER_URL}/?open=${encodeURIComponent(file.name)}` : free ? `${READER_URL}/free/${encodeURIComponent(free.name)}` : "", shelf: book.shelf && (req.owner || !isDraft(book.shelf)) ? store.shelf(book.shelf) : null, inLibrary: inLibraryMap(req), readers: readersOf(book.id), also: social.alsoLiked([book.id], { limit: 4 }), writings: reviews.of(book.id), reviewError: String(req.query.review_error || "").slice(0, 300) }));
 });
 
 // An author: their works from Wikidata (linked to our books of them) and every book of theirs we have.

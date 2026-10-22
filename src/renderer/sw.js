@@ -36,7 +36,8 @@ self.addEventListener("fetch", (event) => {
   if (req.method !== "GET") return;
   const url = new URL(req.url);
   if (url.origin !== location.origin) return;
-  if (url.pathname.startsWith("/api/") || url.pathname === "/sw.js" || /^\/(login|logout|demo|admin)$/.test(url.pathname)) return;
+  // /free/<file> (a free book from the site) is the server's: it copies the book, then redirects.
+  if (url.pathname.startsWith("/api/") || url.pathname.startsWith("/free/") || url.pathname === "/sw.js" || /^\/(login|logout|demo|admin)$/.test(url.pathname)) return;
 
   if (req.mode === "navigate") {
     // The page itself comes from the cache like its scripts, so they always match. A signed-out visitor
