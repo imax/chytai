@@ -28,7 +28,7 @@
       if (text && !(it.dataset.search || "").includes(text)) return false;
       if (filters.status) {
         const v = filters.status;
-        if (v === "paper" || v === "seeking" || v === "give") { if (it.dataset.copy !== v) return false; }
+        if (v === "paper" || v === "seeking") { if (it.dataset.copy !== v) return false; }
         else if (v === "common") { if (it.dataset.common !== "1") return false; }
         else if (it.dataset.status !== v) return false;
       }
@@ -94,7 +94,6 @@
       });
     }
     if (location.hash === "#want") $(".tab[data-v=want]")?.click();
-    if (location.hash === "#give") $(".tab[data-v=give]")?.click();
     // A link to one row (/@maxua#book) must find it even past the first rows.
     const at = location.hash ? order.findIndex((it) => it.id === decodeURIComponent(location.hash.slice(1))) : -1;
     if (at >= limit) limit = at + STEP;
@@ -307,17 +306,5 @@
     year.addEventListener("pointerdown", (e) => e.offsetX > year.clientWidth - 28 && fill()); // the arrows, not the text
     year.addEventListener("keydown", (e) => (e.key === "ArrowUp" || e.key === "ArrowDown") && fill());
     year.addEventListener("wheel", fill, { passive: true });
-  }
-  // The exchange picker (/settings/exchange/books): find a book by title or author, count the ticked ones.
-  const pick = document.querySelector(".pick-form");
-  if (pick) {
-    const find = pick.querySelector(".pick-find");
-    const items = [...pick.querySelectorAll(".pick")];
-    find?.addEventListener("input", () => {
-      const q = find.value.trim().toLowerCase();
-      for (const it of items) it.classList.toggle("hidden", !!q && !it.dataset.search.includes(q));
-    });
-    const n = pick.querySelector("[data-picked]");
-    pick.addEventListener("change", () => n && (n.textContent = pick.querySelectorAll(".pick input:checked").length));
   }
 })();

@@ -105,7 +105,6 @@ class Auth {
     this.db.tx(() => {
       for (const t of ["entries", "subscriptions", "sessions", "follows", "follow_mails", "visits", "digest_log"]) this.db.prepare(`DELETE FROM ${t} WHERE reader = ?`).run(id);
       for (const t of ["follows", "follow_mails"]) this.db.prepare(`DELETE FROM ${t} WHERE target = ?`).run(id);
-      this.db.prepare("DELETE FROM asks WHERE asker = ? OR giver = ?").run(id, id);
       this.db.prepare("DELETE FROM readers WHERE id = ?").run(id);
     });
     for (const [h, r] of this.cache) if (r === id) this.cache.delete(h);
@@ -154,25 +153,6 @@ class Auth {
   }
   setFollowMail(readerId, on) {
     this.db.prepare("UPDATE readers SET follow_mail = ? WHERE id = ?").run(on ? 1 : 0, readerId);
-  }
-
-  // ---- book exchange: how a reader passes books on, and who asked whom for what ----
-
-  // `swap` is the ways, space-separated out of «np» (Нова пошта) and «meet» (in person, exchange point).
-  setSwap(readerId, { on = false, ways = [], city = "" } = {}) {
-    const swap = ["np", "meet"].filter((w) => ways.includes(w)).join(" ");
-    this.db.prepare("UPDATE readers SET exchange = ?, swap = ?, city = ? WHERE id = ?").run(on ? 1 : 0, swap, String(city || "").replace(/\s+/g, " ").trim().slice(0, 40), readerId);
-  }
-  // One letter per asker, giver and book; up to 10 letters a day from one reader.
-  askDue(askerId, giverId, bookId) {
-    if (this.db.prepare("SELECT 1 FROM asks WHERE asker = ? AND giver = ? AND book = ?").get(askerId, giverId, bookId)) return "already";
-    const day = now().slice(0, 10);
-    if (this.db.prepare("SELECT count(*) AS n FROM asks WHERE asker = ? AND sent >= ?").get(askerId, day).n >= 10) return "limit";
-    this.db.prepare("INSERT INTO asks (asker, giver, book, sent) VALUES (?, ?, ?, ?)").run(askerId, giverId, bookId, now());
-    return "ok";
-  }
-  asked(askerId) {
-    return new Set(askerId ? this.db.prepare("SELECT giver || '|' || book AS k FROM asks WHERE asker = ?").all(askerId).map((r) => r.k) : []);
   }
 
   // ---- sessions ----
@@ -273,7 +253,7 @@ class Auth {
 
   // A letter through Resend (plain text, with an HTML version and extra headers when given); without
   // the key it goes to the log instead.
-  async send(to, subject, text, { html = "", headers = null, replyTo = "" } = {}) {
+  async send(to, subject, text, { html = "", headers = null } = {}) {
     if (!this.resendKey) {
       this.log(`[mail] no RESEND_API_KEY: to ${to}: ${subject}\n${text}`);
       return;
@@ -281,7 +261,7 @@ class Auth {
     const res = await fetch("https://api.resend.com/emails", {
       method: "POST",
       headers: { Authorization: `Bearer ${this.resendKey}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ from: this.from, to: [to], subject, text, ...(html ? { html } : {}), ...(headers ? { headers } : {}), ...(replyTo ? { reply_to: replyTo } : {}) }),
+      body: JSON.stringify({ from: this.from, to: [to], subject, text, ...(html ? { html } : {}), ...(headers ? { headers } : {}) }),
     });
     if (!res.ok) throw new Error(`Resend ${res.status}: ${(await res.text()).slice(0, 200)}`);
   }

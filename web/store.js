@@ -1036,14 +1036,6 @@ class Store {
     return (reader && this.entriesOf(reader)[this.canonical(id)]) || null;
   }
 
-  // Every paper book readers give away (copy «give», Max 2026-10-21): [{ reader, id, entry }], the
-  // newest marks first. Russian-language books stay off, as everywhere public.
-  giving() {
-    const out = [];
-    for (const [reader, entries] of this.entries) for (const [id, e] of Object.entries(entries)) if (e.copy === "give" && this.book(id) && !isRussian(this.book(id))) out.push({ reader, id, entry: e });
-    return out.sort((a, b) => String(b.entry.updated || "").localeCompare(String(a.entry.updated || "")));
-  }
-
   // The reader's library membership by any id, edition ids included (for the shelf cards).
   inLibrary(reader) {
     if (!reader) return new Map();
@@ -1054,14 +1046,12 @@ class Store {
     return m;
   }
 
-  // `touch: false` leaves the entry's date alone, so a quiet change (marking fifty books «На обмін» at
-  // once) doesn't bring them all to the top of the feed as news.
-  setEntry(reader, id, patch, { touch = true } = {}) {
+  setEntry(reader, id, patch) {
     id = this.canonical(id);
     if (!this.book(id)) return null;
     const entries = this.entriesOf(reader);
     const cur = entries[id] || { status: "", year: null, rating: null, note: "", copy: "", order: Object.keys(entries).length, added: new Date().toISOString().slice(0, 10) };
-    const next = { ...cur, ...patch, ...(touch || !cur.updated ? { updated: new Date().toISOString() } : {}) };
+    const next = { ...cur, ...patch, updated: new Date().toISOString() };
     if (next.rating === "" || next.rating === undefined) next.rating = cur.rating ?? null;
     entries[id] = next;
     this.writeEntry(reader, id, next);

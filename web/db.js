@@ -41,7 +41,6 @@ CREATE TABLE IF NOT EXISTS sessions (id TEXT PRIMARY KEY, reader TEXT NOT NULL, 
 CREATE INDEX IF NOT EXISTS sessions_reader ON sessions (reader);
 CREATE TABLE IF NOT EXISTS visits (day TEXT NOT NULL, reader TEXT NOT NULL, PRIMARY KEY (day, reader));
 CREATE TABLE IF NOT EXISTS views (day TEXT PRIMARY KEY, readers INTEGER NOT NULL DEFAULT 0, guests INTEGER NOT NULL DEFAULT 0);
-CREATE TABLE IF NOT EXISTS asks (asker TEXT NOT NULL, giver TEXT NOT NULL, book TEXT NOT NULL, sent TEXT NOT NULL, PRIMARY KEY (asker, giver, book));
 CREATE VIRTUAL TABLE IF NOT EXISTS search USING fts5 (id UNINDEXED, title, alt, author, series, extra, tokenize = 'unicode61 remove_diacritics 2');
 CREATE VIRTUAL TABLE IF NOT EXISTS search_vocab USING fts5vocab (search, 'row');
 CREATE VIRTUAL TABLE IF NOT EXISTS search_tri USING fts5 (id UNINDEXED, text, tokenize = 'trigram');
@@ -58,11 +57,6 @@ function open(dataDir) {
   if (!db.prepare("PRAGMA table_info(readers)").all().some((c) => c.name === "follow_mail")) db.exec("ALTER TABLE readers ADD COLUMN follow_mail INTEGER NOT NULL DEFAULT 1");
   // Whether search engines may list the reader's page (settings, 2026-10-21); yes by default.
   if (!db.prepare("PRAGMA table_info(readers)").all().some((c) => c.name === "noindex")) db.exec("ALTER TABLE readers ADD COLUMN noindex INTEGER NOT NULL DEFAULT 0");
-  // Book exchange (Max, 2026-10-21): how a reader hands over the paper books they give away («np» Нова
-  // пошта, «meet» in person or at an exchange point, both or none) and their city. No address, no phone.
-  if (!db.prepare("PRAGMA table_info(readers)").all().some((c) => c.name === "swap")) db.exec("ALTER TABLE readers ADD COLUMN swap TEXT NOT NULL DEFAULT ''; ALTER TABLE readers ADD COLUMN city TEXT NOT NULL DEFAULT ''");
-  // Opt-in (Max, 2026-10-21: «Обмін треба робити як opt-in»): until a reader turns it on, nothing of the exchange shows up for them.
-  if (!db.prepare("PRAGMA table_info(readers)").all().some((c) => c.name === "exchange")) db.exec("ALTER TABLE readers ADD COLUMN exchange INTEGER NOT NULL DEFAULT 0");
   // A work may have several addresses (an old one redirects to the current): the table once made id
   // UNIQUE, so a second slug for an id was silently dropped and lived only in memory (2026-10-21).
   if (db.prepare("PRAGMA index_list(slugs)").all().some((i) => i.unique && i.origin === "u")) {
@@ -82,6 +76,26 @@ function open(dataDir) {
   };
   db.get = (key) => db.prepare("SELECT value FROM meta WHERE key = ?").get(key)?.value ?? null;
   db.set = (key, value) => db.prepare("INSERT INTO meta (key, value) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value").run(key, value);
+  // The book exchange is gone (Max, 2026-10-22: «прибираємо цю фічу повністю»). Once: every book marked
+  // for it goes back to «На папері»; the owner's marked books also get back their copy and date from the
+  // 2026-10-21 backup, since marking dated them and they came up in the feed as yesterday's reviews.
+  if (!db.get("exchange:removed")) {
+    let before = {};
+    try {
+      before = JSON.parse(fs.readFileSync(path.join(__dirname, "seed", "exchange-undo.json"), "utf8"));
+    } catch {}
+    const ownerId = "owner"; // store.js OWNER
+    db.tx(() => {
+      for (const r of db.prepare("SELECT reader, book FROM entries WHERE copy = 'give'").all()) {
+        const was = r.reader === ownerId ? before[r.book] : null;
+        if (was) db.prepare("UPDATE entries SET copy = ?, updated = ? WHERE reader = ? AND book = ?").run(was[0] === "give" ? "paper" : was[0] || "paper", was[1] ?? null, r.reader, r.book);
+        else db.prepare("UPDATE entries SET copy = 'paper' WHERE reader = ? AND book = ?").run(r.reader, r.book);
+      }
+      db.exec("DROP TABLE IF EXISTS asks");
+      for (const col of ["swap", "city", "exchange"]) if (db.prepare("PRAGMA table_info(readers)").all().some((c) => c.name === col)) db.exec(`ALTER TABLE readers DROP COLUMN ${col}`);
+      db.set("exchange:removed", new Date().toISOString());
+    });
+  }
   return db;
 }
 

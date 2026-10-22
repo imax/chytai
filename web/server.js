@@ -115,7 +115,7 @@ app.get("/icon.png", (req, res) => res.sendFile(path.join(ROOT, "build", "icon.p
 // ---- auth: readers signed in by a code sent to their e-mail (auth.js) ----
 
 // A reader as the pages see them: name, username and the address of their page.
-const pub = (r) => (r ? { id: r.id, name: r.name, username: r.username, href: `/@${r.username}`, owner: r.id === OWNER_ID, email: r.email, noindex: !!r.noindex, exchange: !!r.exchange, swap: r.swap || "", city: r.city || "" } : null);
+const pub = (r) => (r ? { id: r.id, name: r.name, username: r.username, href: `/@${r.username}`, owner: r.id === OWNER_ID, email: r.email, noindex: !!r.noindex } : null);
 function cookies(req) {
   return Object.fromEntries((req.headers.cookie || "").split(";").map((c) => c.trim().split("=")).filter((p) => p[0]).map(([k, ...v]) => [k, decodeURIComponent(v.join("="))]));
 }
@@ -214,35 +214,6 @@ app.post("/settings", signed, (req, res) => {
   auth.updateReader(req.user.id, { name: name.name, username: username.username, email: email.email || null });
   digest.setEnabled(req.user.id, !!req.body.digest);
   res.redirect("/settings?saved=1");
-});
-// The book exchange has its own tab (Max, 2026-10-21): the opt-in switch, the ways and the city.
-app.get("/settings/exchange", signed, (req, res) => res.send(pages.exchangeSettingsPage({ user: req.user, values: { exchange: req.user.exchange, ways: req.user.swap.split(" "), city: req.user.city }, saved: !!req.query.saved })));
-// Picking books for the exchange in one go (Max, 2026-10-21: «тільки ходити по кожній редагувати?»):
-// all of one's books with a checkbox each, paper ones first. A book unticked goes back to «На папері».
-app.get("/settings/exchange/books", signed, (req, res) => {
-  if (!req.user.exchange) return res.redirect("/settings/exchange");
-  const rank = (r) => (r.copy === "give" ? 0 : r.copy === "paper" ? 1 : r.copy === "ebook" ? 3 : 2);
-  const rows = store.library(req.user.id).sort((a, b) => rank(a) - rank(b) || a.book.title.localeCompare(b.book.title, "uk"));
-  res.send(pages.exchangeBooksPage({ user: req.user, rows, saved: Number(req.query.saved) || 0 }));
-});
-app.post("/settings/exchange/books", signed, (req, res) => {
-  if (!req.user.exchange) return res.redirect("/settings/exchange");
-  const picked = new Set([].concat(req.body.give || []).map(String));
-  let changed = 0;
-  store.db.tx(() => {
-    for (const r of store.library(req.user.id)) {
-      const on = picked.has(r.id);
-      if (on === (r.copy === "give")) continue;
-      store.setEntry(req.user.id, r.id, { copy: on ? "give" : "paper" }, { touch: false });
-      changed++;
-    }
-  });
-  res.redirect(`/settings/exchange/books?saved=${changed || "0"}`);
-});
-app.post("/settings/exchange", signed, (req, res) => {
-  const ways = [req.body.swap_np ? "np" : "", req.body.swap_meet ? "meet" : ""].filter(Boolean);
-  auth.setSwap(req.user.id, { on: !!req.body.exchange, ways, city: req.body.city });
-  res.redirect("/settings/exchange?saved=1");
 });
 app.post("/settings/delete", signed, (req, res) => {
   if (req.owner) return res.status(400).send(pages.messagePage({ title: "Власника не видаляємо", text: "Для цього є інший шлях.", user: req.user }));
@@ -438,64 +409,6 @@ app.get("/follow-mail/unsubscribe/:id/:token", (req, res) => followMailSwitch(re
 app.post("/follow-mail/unsubscribe/:id/:token", (req, res) => followMailSwitch(req, res, false));
 app.post("/follow-mail/resubscribe/:id/:token", (req, res) => followMailSwitch(req, res, true));
 
-// ---- book exchange (Max, 2026-10-21: «обмін книжками … які книжки готовий віддати і як») ----
-
-// Every paper book readers give away, as the pages need it: [{ book, giver }], newest marks first;
-// `skip` leaves out one reader's own.
-const offersFor = (skip = null) =>
-  store
-    .giving()
-    .filter((o) => o.reader !== skip)
-    .map((o) => ({ book: store.book(o.id), giver: pub(auth.reader(o.reader)) }))
-    .filter((o) => o.book && o.giver?.exchange) // a reader who left the exchange keeps their marks, unseen
-    .map((o) => ({ ...o, book: { ...o.book, href: store.href(o.book.id) } }));
-app.get("/swap", (req, res) => {
-  const offers = offersFor(req.user?.id); // one's own books aren't offered to oneself
-  res.send(pages.swapPage({ user: req.user, offers, mine: inLibraryMap(req), asked: auth.asked(req.user?.id), givers: new Set(offers.map((o) => o.giver.id)).size }));
-});
-
-// «Попросити»: one letter to the reader who gives the book, with the asker's name, shelf and e-mail to
-// answer to, and what the asker could give back. Addresses are never on the site; they settle it by mail.
-app.post("/api/ask/:id/:username", signed, async (req, res) => {
-  const id = store.resolve(req.params.id);
-  const giver = auth.byUsername(req.params.username);
-  const entry = id && giver && store.entry(giver.id, id);
-  const back = (title, text) => res.send(pages.messagePage({ title, text, user: req.user }));
-  if (!entry || entry.copy !== "give" || !giver.exchange) return res.status(404).send(pages.messagePage({ title: "Цієї книжки вже немає на обмін", text: "Можливо, її щойно забрали.", user: req.user }));
-  if (giver.id === req.user.id) return res.redirect(store.href(id));
-  const to = giver.email || (giver.id === OWNER_ID ? process.env.WEB_NOTIFY_EMAIL : "");
-  if (!to || !req.user.email) return back("Не вийшло надіслати", "У цього читача немає пошти для листів.");
-  const due = auth.askDue(req.user.id, giver.id, id);
-  if (due === "already") return back("Ви вже просили цю книжку", "Лист уже пішов; зачекайте на відповідь.");
-  if (due === "limit") return back("Забагато прохань за день", "Не більше десяти на день, спробуйте завтра.");
-  const book = store.book(id);
-  const g = pub(giver);
-  // What the asker could give back: their «На обмін» that the giver wants, else any of theirs.
-  const theirs = store.giving().filter((o) => o.reader === req.user.id).map((o) => store.book(o.id)).filter(Boolean);
-  const wanted = theirs.filter((b) => store.entry(giver.id, b.id)?.status === "want");
-  const list = (bs) => bs.slice(0, 5).map((b) => `«${b.title}»${b.author ? ` (${b.author})` : ""}  ${SITE}${store.href(b.id)}`);
-  const ways = [g.swap.includes("np") ? "Нова пошта" : "", g.swap.includes("meet") ? "особисто чи на точці обміну" : ""].filter(Boolean).join(", ");
-  const text = [
-    `${req.user.name} (${SITE}${req.user.href}) побачив(ла) на вашій полиці «${book.title}» з позначкою «На обмін» і просить її.`,
-    ``,
-    ways ? `Ви вказали, що передаєте книжки так: ${ways}${g.city ? ` (${g.city})` : ""}.` : `Ви ще не вказали, як передаєте книжки (Нова пошта чи особисто): ${SITE}/settings/exchange`,
-    ...(wanted.length ? [``, `Навзаєм: у ${req.user.name} на обмін є книжки з вашого «Хочу прочитати»:`, ...list(wanted)] : theirs.length ? [``, `У ${req.user.name} на обмін:`, ...list(theirs)] : []),
-    ``,
-    `Щоб відповісти, просто дайте відповідь на цей лист: він піде на ${req.user.email}. Домовтесь про відділення Нової пошти чи зустріч самі; Chytai у передачі не бере участі й грошей не бере. Не хочете: нічого не відповідайте або приберіть позначку «На обмін».`,
-    ``,
-    `Книжка: ${SITE}${store.href(id)}`,
-    `Полиця ${req.user.name}: ${SITE}${req.user.href}`,
-  ].join("\n");
-  try {
-    await auth.send(to, `${req.user.name} просить вашу книжку «${book.title}»`, text, { replyTo: req.user.email });
-  } catch (e) {
-    console.log(`ask mail to @${giver.username} failed: ${e.message}`);
-    return res.status(500).send(pages.messagePage({ title: "Лист не пішов", text: "Щось зламалось на пошті, спробуйте пізніше.", user: req.user }));
-  }
-  console.log(`ask: @${req.user.username} → @${giver.username}: ${id}`);
-  back("Лист надіслано", `${g.name} отримає листа з вашим ім'ям і поштою (${req.user.email}); відповідь прийде вам на пошту. Далі домовтесь про Нову пошту чи зустріч.`);
-});
-
 // «Покинуто» is the reader's own: other readers don't see it on the shelf (pages.js STATUS).
 const publicRows = (rows) => rows.filter((r) => r.status !== "abandoned");
 function libraryRows(reader, { own = false } = {}) {
@@ -523,7 +436,7 @@ app.get("/@:username", (req, res) => {
     const recs = social.alsoLiked(fives, { limit: 4, skip: new Set(rows.map((r) => r.id)) });
     return res.send(pages.libraryPage({ rows, user: req.user, reader: req.user, own: true, recs, follows }));
   }
-  res.send(pages.libraryPage({ rows, user: req.user, reader, mineIds: req.user && req.user.id !== reader.id ? store.inLibrary(req.user.id) : null, following: auth.follows(req.user?.id, reader.id), follows, asked: auth.asked(req.user?.id) }));
+  res.send(pages.libraryPage({ rows, user: req.user, reader, mineIds: req.user && req.user.id !== reader.id ? store.inLibrary(req.user.id) : null, following: auth.follows(req.user?.id, reader.id), follows }));
 });
 // The owner's page before usernames (/reader/max) moved to /@maxua.
 app.get(OLD_READER, (req, res) => res.redirect(301, pub(auth.reader(OWNER_ID)).href));
@@ -688,7 +601,7 @@ app.post("/api/entry/:id", signed, (req, res) => {
   if ("status" in b) patch.status = STATUSES.includes(b.status) ? b.status : "";
   if ("rating" in b) patch.rating = b.rating === "none" || b.rating === "" ? null : Math.max(0, Math.min(5, Number(b.rating)));
   if ("year" in b) patch.year = b.year ? Number(b.year) : null;
-  if ("copy" in b) patch.copy = ["paper", "ebook", "seeking", "give"].includes(b.copy) ? b.copy : "";
+  if ("copy" in b) patch.copy = ["paper", "ebook", "seeking"].includes(b.copy) ? b.copy : "";
   if ("note" in b) patch.note = String(b.note).trim();
   const e = store.setEntry(req.user.id, req.params.id, patch);
   if (!e) return res.status(404).send("Немає такої книжки");
@@ -704,7 +617,7 @@ app.post("/api/book", signed, (req, res) => {
   const { title, author, cover, status, copy } = req.body;
   if (!title || !title.trim()) return res.status(400).send("Потрібна назва");
   const b = store.addBook({ title, author, cover: /^https?:\/\//.test(cover || "") ? cover : "" });
-  store.setEntry(req.user.id, b.id, { status: STATUSES.includes(status) ? status : "", copy: ["paper", "ebook", "seeking", "give"].includes(copy) ? copy : "" });
+  store.setEntry(req.user.id, b.id, { status: STATUSES.includes(status) ? status : "", copy: ["paper", "ebook", "seeking"].includes(copy) ? copy : "" });
   enrich.enrich(store, { ids: [b.id], log: console.log, googleKey: process.env.GOOGLE_BOOKS_KEY || "" }).catch((e) => console.error("enrich failed:", e));
   // A book typed in by hand may duplicate a catalog's or be junk: the owner gets a letter and sorts it out
   // (Max, 2026-10-20: «треба … сповіщення мені на імейл. будемо поки вручну розбирати»).

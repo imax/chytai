@@ -28,13 +28,7 @@ const books = (n) => count(n, ...BOOKS);
 // «Покинуто» (a reader's idea, 2026-10-21): a book put down for good. Not read, and quiet: it stays on the
 // reader's shelf but never reaches the feed, the letters, a book's «У читачів» or its rating (social.js).
 const STATUS = { read: "Прочитано", reading: "Читаю", want: "Хочу прочитати", abandoned: "Покинуто" };
-const COPY = { paper: "На папері", ebook: "E-book", seeking: "Шукаю на папері", give: "На обмін" };
-// The same, said of another reader (the same words since «Віддам» became «На обмін», Max 2026-10-21).
-// What others see of it: the exchange mark only on /swap (Max, 2026-10-21: «показувати тільки на сторінці /swap»).
-const COPY_SAID = { ...COPY, give: COPY.paper };
-// How a reader hands books over (settings): «Київ · Нова пошта, особисто».
-const WAYS = { np: "Нова пошта", meet: "особисто чи на точці обміну" };
-const handover = (r) => [r.city, (r.swap || "").split(" ").filter((w) => WAYS[w]).map((w) => WAYS[w]).join(", ")].filter(Boolean).join(" · ");
+const COPY = { paper: "На папері", ebook: "E-book", seeking: "Шукаю на папері" };
 // What a reader did, as the feed says it: «Оля К. оцінка ★★★★», «Андрій читає».
 const VERB = { read: "прочитано", reading: "читає", want: "хоче прочитати", abandoned: "покинуто" };
 const GENRES = ["художня", "фантастика", "детективи", "трилери", "бізнес", "компанії", "менеджмент", "продукт", "гроші", "розробка", "історія", "війна", "біографії", "наука", "саморозвиток", "суспільство"];
@@ -91,7 +85,6 @@ const NAV = [
 function layout({ title, body, user, path = "", description = "", q = "", home = false, canonical = "", image = "", noindex = false, jsonld = null, type = "website" }) {
   const on = (p) => (p ? ' class="on"' : "");
   const nav = [
-    // No «Обмін» here (Max, 2026-10-21): /swap is reached from the exchange settings and book pages.
     ...NAV.map(([href, name, is]) => `<a href="${href}"${on(is(path))}>${name}</a>`),
     // Settings live on one's own shelf, not in the menu (Max, 2026-10-20).
     user ? `<a href="${attr(user.href || "/me")}"${on(path === "/me" || path === "/settings")}>Моє</a>` : `<a href="/login"${on(path === "/login")}>Увійти</a>`,
@@ -187,20 +180,11 @@ function wantButton(book, user, { size = "small", label: text = "Хочу про
 // should not need its page (a reader's feedback, 2026-10-20).
 // A book the signed-in reader already has: their status, quietly, where the buttons would be (search, shelves).
 const myStatus = (e) => `<span class="muted small">${esc(e.status ? STATUS[e.status].toLowerCase() : "на полиці")}${e.via ? `, як «${esc(e.via.title)}»` : ""}</span>`;
-// «Попросити» a paper book its reader gives away: a letter to them through the site (no addresses
-// shown anywhere); pressed once, it reads «попросили».
-function askButton(book, giver, user, asked = new Set()) {
-  const href = `/api/ask/${encodeURIComponent(book.id)}/${encodeURIComponent(giver.username)}`;
-  if (!user) return `<a class="btn small" href="/login?next=${attr(encodeURIComponent(book.href || "/swap"))}">Попросити</a>`;
-  if (user.id === giver.id) return `<span class="muted small">ваша, на обмін</span>`;
-  if (asked.has(`${giver.id}|${book.id}`)) return `<span class="muted small">попросили</span>`;
-  return `<form method="post" action="${attr(href)}" class="inline"><button class="btn small" title="Лист читачу через Chytai">Попросити</button></form>`;
-}
 const markButtons = (book, user) => `<span class="marks">${wantButton(book, user)}${wantButton(book, user, { label: "Прочитано", status: "read" })}</span>`;
 
 // The status, rating and copy of an entry as one quiet line: «★★★★★ 5 · прочитано · на папері».
-function entryMeta(e, { said = false } = {}) {
-  const bits = [e.status ? VERB[e.status] : "", e.copy ? (said ? COPY_SAID : COPY)[e.copy].toLowerCase() : ""].filter(Boolean);
+function entryMeta(e) {
+  const bits = [e.status ? VERB[e.status] : "", e.copy ? COPY[e.copy].toLowerCase() : ""].filter(Boolean);
   return `${stars(e.rating)}${bits.length ? `<span>${e.rating != null ? " · " : ""}${esc(bits.join(" · "))}</span>` : ""}`;
 }
 
@@ -382,7 +366,7 @@ function bookLd(book, shelf, s, readers) {
 }
 
 // The book, the reader's own buttons, where to get it, what readers said, what it is about.
-function bookPage({ book, entry, user, shelf, inLibrary = new Map(), readers = [], also = [], givers = [], asked = new Set() }) {
+function bookPage({ book, entry, user, shelf, inLibrary = new Map(), readers = [], also = [] }) {
   const s = statsOf(book.id);
   const kicker = [book.tags?.find((t) => t !== "українською"), isUk(book) ? "українською" : LANG_ADV[String(book.language || "").toLowerCase()] || ""].filter(Boolean).map(cap).join(" · ");
   const sub = [book.altTitle ? esc(book.altTitle) : "", book.author ? `<span class="authors">${authorLinks(book.author)}</span>` : "", book.published ? String(book.published) : "", book.pages ? `${book.pages} с.` : ""].filter(Boolean).join(" · ");
@@ -403,7 +387,7 @@ function bookPage({ book, entry, user, shelf, inLibrary = new Map(), readers = [
         ${score}
         ${twins(book)}
         ${mine(book, entry, user)}
-        ${where(book, { givers, user, asked })}
+        ${where(book)}
       </div>
     </article>
     ${series(book, inLibrary)}
@@ -436,13 +420,13 @@ function twins(book, list = book.translations || []) {
 // The first reader's note as the big quote: «— Макс І, прочитано у 2026, на папері».
 function quote({ name, href, entry: e }, id) {
   const long = stripMd(e.note).length > 280;
-  const what = [e.status ? VERB[e.status] + (e.status === "read" && e.year ? ` у ${e.year}` : "") : "", e.copy ? COPY_SAID[e.copy].toLowerCase() : "", e.via ? `як «${e.via.title}»` : ""].filter(Boolean).join(", ");
+  const what = [e.status ? VERB[e.status] + (e.status === "read" && e.year ? ` у ${e.year}` : "") : "", e.copy ? COPY[e.copy].toLowerCase() : "", e.via ? `як «${e.via.title}»` : ""].filter(Boolean).join(", ");
   return `<blockquote class="big-quote${long ? " long" : ""}">${marked.parse(titleLinks(e.note, e.via ? e.via.id : id)).replace(/<a href="http/g, '<a target="_blank" rel="noopener" href="http')}</blockquote>
 <p class="said">— <a href="${attr(href)}"><b>${esc(name)}</b></a>${e.rating != null ? ` ${stars(e.rating)}` : ""}${what ? `, ${esc(what)}` : ""}</p>`;
 }
 // Every other reader: name, what they did, their note if any.
 function readerLine({ name, href, entry: e }, id) {
-  const what = [e.status ? VERB[e.status] + (e.status === "read" && e.year ? ` у ${e.year}` : "") : "", e.copy ? COPY_SAID[e.copy].toLowerCase() : "", e.via ? `як «${e.via.title}»` : ""].filter(Boolean).join(" · ");
+  const what = [e.status ? VERB[e.status] + (e.status === "read" && e.year ? ` у ${e.year}` : "") : "", e.copy ? COPY[e.copy].toLowerCase() : "", e.via ? `як «${e.via.title}»` : ""].filter(Boolean).join(" · ");
   return `<div class="reader-line"><a href="${attr(href)}"><b>${esc(name)}</b></a><span>${e.rating != null ? `${stars(e.rating)} ` : ""}<span class="muted">${esc(what)}</span>${e.note ? `<span class="note">${noteOf(e, id)}</span>` : ""}</span></div>`;
 }
 
@@ -459,7 +443,7 @@ function mine(book, entry, user) {
 
 // «Де взяти»: every edition's shop (with its format, price and stock, the one place prices are shown),
 // other links, and the libraries that hold the book (filled in by app.js from /api/libraries).
-function where(book, { givers = [], user = null, asked = new Set() } = {}) {
+function where(book) {
   const seen = new Set();
   // In stock first, then the publisher's own over a shop reselling it (Старий Лев sells partners' books).
   const rank = (e) => (e.status === "є" ? 0 : e.status === "передзамовлення" ? 1 : 2) * 4 + (e.edition ? 2 : 0) + (e.format === "e-book" ? 1 : 0) + (e.format === "аудіо" ? 1 : 0);
@@ -475,14 +459,12 @@ function where(book, { givers = [], user = null, asked = new Set() } = {}) {
   const shown = new Set(); // the same shop, format, edition and price twice is one row
   const have = eds.filter((e) => !gone(e) && ((k) => !shown.has(k) && shown.add(k))([e.shelf.id, e.format, e.edition, e.price, e.narrator].join("|")));
   const out = [...new Map(eds.filter(gone).map((e) => [e.shelf.id, e])).values()];
-  // Readers who give their paper copy away come first: a book from a reader beats a shop (Max, 2026-10-20: readers first).
-  const give = (g) => `<span class="where-give">на обмін у <a href="${attr(g.href)}">${esc(g.name)}</a>${handover(g) ? ` <span class="muted">${esc(handover(g))}</span>` : ""} ${askButton(book, g, user, asked)}</span>`;
   const items = [
     ...have.map(shop),
     ...links.map((l) => `<a href="${attr(l.url)}" target="_blank" rel="noopener">${esc(l.label)}</a>`),
     ...(out.length ? [`<span class="muted">${have.length ? "немає:" : "зараз немає в наявності:"} </span>${out.map((e) => `<a class="muted" href="${attr(e.links[0].url)}" target="_blank" rel="noopener">${esc(e.shelf.name)}</a>`).join(", ")}`] : []),
   ];
-  return `<div class="where${items.length || givers.length ? "" : " hidden"}" data-src="/api/libraries/${attr(encodeURIComponent(book.id))}"><span class="where-label">Де взяти</span>${givers.map(give).join("")}${items.map((x) => `<span class="where-item">${x}</span>`).join("")}</div>`;
+  return `<div class="where${items.length ? "" : " hidden"}" data-src="/api/libraries/${attr(encodeURIComponent(book.id))}"><span class="where-label">Де взяти</span>${items.map((x) => `<span class="where-item">${x}</span>`).join("")}</div>`;
 }
 
 // The volumes of the series this book belongs to, each with its own page and where to get it.
@@ -610,14 +592,14 @@ function editPage({ book, entry, user }) {
     <p class="crumbs"><a href="/me">Моя полиця</a></p>
     <h1><a href="${attr(book.href)}">${esc(book.title)}</a></h1>
     ${book.author ? `<p class="book-by">${esc(book.author)}</p>` : ""}
-    ${entryForm(book, entry, user)}
+    ${entryForm(book, entry)}
   </div>
 </article>`;
   return layout({ title: book.title, body, user, path: "/me" });
 }
 
 const WHY = "Чому не пішла, якщо хочеться (нотатку бачать лише на вашій полиці)";
-function entryForm(book, entry, user) {
+function entryForm(book, entry) {
   const e = entry || { status: "", rating: null, year: "", copy: "", note: "" };
   const ratings = [5, 4.5, 4, 3.5, 3, 2.5, 2, 1.5, 1];
   return `
@@ -644,8 +626,7 @@ function entryForm(book, entry, user) {
     <option value="paper" ${e.copy === "paper" ? "selected" : ""}>Є на папері</option>
     <option value="ebook" ${e.copy === "ebook" ? "selected" : ""}>Є e-book</option>
     <option value="seeking" ${e.copy === "seeking" ? "selected" : ""}>Шукаю на папері</option>
-    ${user?.exchange || e.copy === "give" ? `<option value="give" ${e.copy === "give" ? "selected" : ""}>На обмін (паперова)</option>` : ""}
-  </select>${user?.exchange ? `<span class="hint">«На обмін»: книжку побачать ті, хто хоче її прочитати, і зможуть попросити листом. Як передаєте — у <a class="text-link" href="/settings/exchange">налаштуваннях</a>.</span>` : ""}</label>
+  </select></label>
   <label>Нотатка <textarea name="note" rows="5" placeholder="${e.status === "abandoned" ? WHY : "Кілька слів про книжку"}" data-why="${WHY}">${esc(e.note || "")}</textarea></label>
   <div class="actions">
     ${entry ? `<button type="submit" class="btn danger" formaction="/api/entry/${encodeURIComponent(book.id)}/remove" formnovalidate>Прибрати з полиці</button>` : ""}
@@ -661,8 +642,6 @@ function entryForm(book, entry, user) {
 // place where status, rating and notes are edited); /@<username> is that reader's public shelf, where a
 // signed-in visitor sees what they share and can want any book in one tap.
 function libraryPage({ rows, user, reader, own = false, mineIds = null, recs = [], following = false, follows = { followers: [], following: [] } }) {
-  // Another reader's shelf doesn't say which books they'd give: that is on /swap only (Max, 2026-10-21).
-  if (!own) rows = rows.map((r) => (r.copy === "give" ? { ...r, copy: "paper" } : r));
   const year = new Date().getFullYear();
   const read = rows.filter((r) => r.status === "read").length;
   const thisYear = rows.filter((r) => r.status === "read" && r.year === year);
@@ -678,7 +657,6 @@ function libraryPage({ rows, user, reader, own = false, mineIds = null, recs = [
     ["abandoned", "Покинуто", rows.filter((r) => r.status === "abandoned").length],
     ["paper", "На папері", rows.filter((r) => r.copy === "paper").length],
     ["seeking", "Шукаю", rows.filter((r) => r.copy === "seeking").length],
-    ...(own ? [["give", "На обмін", rows.filter((r) => r.copy === "give").length]] : []),
     ...(common.length ? [["common", "Спільні", common.length]] : []),
   ].filter(([k, , n]) => !k || n || (own && ["read", "reading", "want"].includes(k)));
   const sub = [books(rows.length), count(read, "прочитана", "прочитані", "прочитаних"), thisYear.length ? `${thisYear.length} цього року` : "", common.length ? `<b>${common.length} ${plural(common.length, "спільна", "спільні", "спільних")} з тобою</b>` : "", follows.followers.length ? `<a href="#follows">${count(follows.followers.length, "читач стежить", "читачі стежать", "читачів стежать")}</a>` : "", own ? `<a href="${attr(reader.href)}?public">як бачать інші</a> · <a href="/settings">налаштування</a>` : `<span class="muted">@${esc(reader.username)}</span>`].filter(Boolean).join(" · ");
@@ -692,9 +670,8 @@ function libraryPage({ rows, user, reader, own = false, mineIds = null, recs = [
       const search = [b.title, b.altTitle, b.author, stripMd(r.note || "")].join(" ").toLowerCase();
       const data = ` data-status="${r.status || ""}" data-copy="${r.copy || ""}" data-common="${common.includes(r) ? 1 : ""}" data-tags="${attr((b.tags || []).join(" "))}" data-rating="${r.rating ?? ""}" data-title="${attr(b.title.toLowerCase())}" data-search="${attr(search)}" data-order="${i}"`;
       const edit = b.href ? `/me${b.href}` : `/me/book/${encodeURIComponent(r.id)}`;
-      // A book this reader gives away: «Попросити» for everyone else, even a guest (it leads to sign-in).
       const action = own ? `<a class="text-link small" href="${attr(edit)}">змінити</a>` : user && mineIds ? (mineIds.has(r.id) ? myStatus(mineIds.get(r.id)) : markButtons(b, user)) : "";
-      return head + bookRow(b, { entry: r, meta: own ? "" : entryMeta(r, { said: true }), action, id: r.id, data });
+      return head + bookRow(b, { entry: r, action, id: r.id, data });
     })
     .join("\n");
   const wants = own ? [] : rows.filter((r) => r.status === "want").slice(0, 3);
@@ -729,7 +706,7 @@ ${list}
     ${followBlock}
   </aside>
 </div>
-${own ? addDialog(user) : ""}`;
+${own ? addDialog() : ""}`;
   return layout({ title: own ? "Моя полиця" : reader.name, body, user, path: own ? "/me" : "/@", canonical: own ? "" : reader.href, noindex: true, description: own ? "" : `Книжки, які читає ${reader.name}: ${books(rows.length)}, оцінки й нотатки.`, jsonld: own ? null : { "@context": "https://schema.org", "@type": "ProfilePage", mainEntity: { "@type": "Person", name: reader.name, url: ORIGIN + reader.href } } });
 }
 
@@ -745,7 +722,7 @@ function yearHead(year, rows) {
   return `<h2 class="year" data-year="${year ?? ""}">${year || "Без дати"} <span>${books(n)}</span></h2>`;
 }
 
-function addDialog(user) {
+function addDialog() {
   return `
 <dialog id="add">
   <form method="post" action="/api/book" class="form">
@@ -755,7 +732,7 @@ function addDialog(user) {
     <label>Обкладинка (URL) <input name="cover" type="url" placeholder="https://…"></label>
     <div class="two">
       <label>Статус <select name="status"><option value="">без статусу</option><option value="reading">Читаю</option><option value="read">Прочитано</option><option value="want" selected>Хочу прочитати</option></select></label>
-      <label>Примірник <select name="copy"><option value="">не вказано</option><option value="paper">На папері</option><option value="ebook">E-book</option><option value="seeking">Шукаю на папері</option>${user?.exchange ? `<option value="give">На обмін (паперова)</option>` : ""}</select></label>
+      <label>Примірник <select name="copy"><option value="">не вказано</option><option value="paper">На папері</option><option value="ebook">E-book</option><option value="seeking">Шукаю на папері</option></select></label>
     </div>
     <div class="actions"><a class="text-link small" href="/import/goodreads">Імпорт з Goodreads</a><a class="text-link small" href="/import/apple-books">з Apple Books</a><span class="grow"></span><button type="button" class="btn" data-close>Скасувати</button><button class="btn primary">Додати</button></div>
   </form>
@@ -870,7 +847,7 @@ function searchPage({ q, user, results }) {
 function searchResults({ q, user, hits = [], authors = [], readers = [], shelves = [], similar = [], tag = "" }) {
   if (!q.trim()) return "";
   const n = hits.length + authors.length + readers.length + shelves.length;
-  if (!n) return `<p class="found">Нічого не знайшлося за «${esc(q)}». ${user ? `<button type="button" class="text-link" data-open="add">Додати книжку, якої ще немає на Chytai</button>` : ""}</p>${user ? addDialog(user) : ""}`;
+  if (!n) return `<p class="found">Нічого не знайшлося за «${esc(q)}». ${user ? `<button type="button" class="text-link" data-open="add">Додати книжку, якої ще немає на Chytai</button>` : ""}</p>${user ? addDialog() : ""}`;
   return `<p class="found">${count(n, "збіг", "збіги", "збігів")}${tag ? ` · жанр «${esc(tag)}»` : ""}</p>
 <div class="split">
   <div>
@@ -878,7 +855,7 @@ function searchResults({ q, user, hits = [], authors = [], readers = [], shelves
     ${hits.length ? `<section class="block">${label(`Книжки · ${hits.length}`)}<div class="rows">${hits.map((h) => bookRow(h.book, { meta: readersMeta(h.book.id), action: h.entry ? myStatus(h.entry) : markButtons(h.book, user) })).join("")}</div></section>` : ""}
     ${authors.length ? `<section class="block">${label(`Автори · ${authors.length}`)}<div class="name-rows">${authors.map((a) => `<a class="name-row" href="${attr(a.href)}"><b>${esc(a.name)}</b><span>${[books(a.books), a.readers ? count(a.readers, "читач", "читачі", "читачів") : ""].filter(Boolean).join(" · ")}</span></a>`).join("")}</div></section>` : ""}
     ${readers.length ? `<section class="block">${label(`Читачі · ${readers.length}`)}<div class="name-rows">${readers.map((r) => `<a class="name-row" href="${attr(r.reader.href)}"><b>${esc(r.reader.name)}</b><span>${books(r.count)}</span></a>`).join("")}</div></section>` : ""}
-    ${user ? `<p class="muted end-note">Не те? <button type="button" class="text-link" data-open="add">Додати книжку, якої ще немає на Chytai</button></p>${addDialog(user)}` : ""}
+    ${user ? `<p class="muted end-note">Не те? <button type="button" class="text-link" data-open="add">Додати книжку, якої ще немає на Chytai</button></p>${addDialog()}` : ""}
   </div>
   <aside>${similar.length ? `${label("Схоже на те, що шукаєш")}${minis(similar)}` : ""}</aside>
 </div>`;
@@ -1070,39 +1047,7 @@ ${user.owner ? "" : `<form method="post" action="/settings/delete" class="form d
   <label>Впишіть ${esc(user.username)}, щоб підтвердити<input type="text" name="confirm" autocomplete="off"></label>
   <div class="actions"><button class="btn danger">Видалити назавжди</button></div>
 </form>`}`;
-  return authLayout({ title: "Налаштування", lead: settingsTabs("account"), form, user, path: "/settings" });
-}
-
-// Settings have tabs (Max, 2026-10-21: one long form «це вже unwieldy»): the account, and the book exchange.
-const settingsTabs = (on) => `<div class="tabs settings-tabs">${[["account", "Акаунт", "/settings"], ["exchange", "Обмін книжками", "/settings/exchange"]].map(([k, t, href]) => `<a class="tab${k === on ? " on" : ""}" href="${href}">${t}</a>`).join("")}</div>`;
-
-// /settings/exchange: opt in to the book exchange and say how one hands books over. Nothing of the exchange
-// shows up for a reader until the switch is on.
-function exchangeSettingsPage({ user, values, saved = false }) {
-  const form = `<form method="post" action="/settings/exchange" class="form">
-  ${saved ? `<p class="saved">Збережено.</p>` : ""}
-  <p class="muted small">Обмін паперовими книжками для користувачів Chytai. <a class="text-link" href="/swap">Що є на обмін</a>.</p>
-  <label class="check"><span><input type="checkbox" name="exchange" value="1"${values.exchange ? " checked" : ""}> Беру участь в обміні</span></label>
-  <label class="check"><span><input type="checkbox" name="swap_np" value="1"${values.ways?.includes("np") ? " checked" : ""}> Нова пошта</span></label>
-  <label class="check"><span><input type="checkbox" name="swap_meet" value="1"${values.ways?.includes("meet") ? " checked" : ""}> Особисто чи на точці обміну</span></label>
-  <label>Місто<input type="text" name="city" value="${attr(values.city || "")}" maxlength="40" placeholder="Київ"><span class="hint">Його бачать усі поруч з вашими книжками «На обмін».</span></label>
-  <div class="actions"><button class="btn primary">Зберегти</button>${values.exchange ? `<a class="btn" href="/settings/exchange/books">Вибрати книжки</a>` : ""}<span class="grow"></span></div>
-</form>`;
-  return authLayout({ title: "Налаштування", lead: settingsTabs("exchange"), form, user, path: "/settings" });
-}
-
-// /settings/exchange/books: every book on one's shelf with a checkbox, «На обмін» ones ticked; one save.
-function exchangeBooksPage({ user, rows, saved = 0 }) {
-  const n = rows.filter((r) => r.copy === "give").length;
-  const item = (r) => `<label class="pick" data-search="${attr([r.book.title, r.book.author].join(" ").toLowerCase())}"><input type="checkbox" name="give" value="${attr(r.id)}"${r.copy === "give" ? " checked" : ""}>${cover(r.book, "sm")}<span class="pick-text"><b>${esc(r.book.title)}</b>${r.book.author ? `<span class="muted">${esc(byline(r.book.author))}</span>` : ""}</span>${r.copy === "paper" ? `<span class="muted small">на папері</span>` : ""}</label>`;
-  const form = `<form method="post" action="/settings/exchange/books" class="form pick-form">
-  ${saved ? `<p class="saved">Збережено.</p>` : ""}
-  <p class="muted small">Позначте книжки, які готові обміняти. Зараз на обмін: <b data-picked>${n}</b>. Спершу йдуть ті, що «На папері».</p>
-  <input type="search" class="pick-find" placeholder="шукати: назва чи автор" autocomplete="off">
-  <div class="pick-list">${rows.map(item).join("")}</div>
-  <div class="actions pick-save"><button class="btn primary">Зберегти</button><a class="text-link small" href="/settings/exchange">Назад</a><span class="grow"></span><a class="text-link small" href="${attr(user.href)}?public#give">Як бачать інші</a></div>
-</form>`;
-  return authLayout({ title: "Книжки на обмін", lead: settingsTabs("exchange"), form, user, path: "/settings" });
+  return authLayout({ title: "Налаштування", lead: "", form, user, path: "/settings" });
 }
 
 // Max (2026-10-20): any new outside service that sees readers' data (mail, hosting, fonts, analytics, AI) must be added here.
@@ -1117,8 +1062,6 @@ function privacyPage({ user }) {
 <p>Імпорт з Goodreads або Apple Books: файл експорту читаємо один раз і не зберігаємо. Беремо назву книги, опис, публічні нотатки, якщо вони є. Перед імпортом ви бачите список і вибираєте, що саме переносити.</p>
 <h2>Що бачать інші</h2>
 <p><strong>Ваша публічна полиця з книжками та оцінками.</strong> Будь-хто може відкрити chytai.org.ua/@нікнейм і побачити ваше ім’я, книжки, оцінки й нотатки. Так і задумано, бо Читай це про те, щоб знаходити цікаві книжки. Тож пишіть у нотатках лише те, чим готові поділитися.</p>
-<h2>Обмін книжками</h2>
-<p>Обмін працює лише для тих, хто увімкнув його в налаштуваннях. Якщо ви позначили книжку «На обмін», її разом з вашим ім’ям, містом і способом передачі (Нова пошта чи особисто) бачать усі на сторінці книжки, на вашій полиці і на сторінці <a class="text-link" href="/swap">обміну</a>. Адресу чи телефон ми не питаємо і не показуємо. Коли інший читач тисне «Попросити», ми надсилаємо вам лист з його ім’ям, полицею і поштою для відповіді; його пошту бачите лише ви, а вашу він побачить, якщо відповісте. Далі ви домовляєтесь самі, Chytai у передачі не бере участі.</p>
 <h2>Розсилки</h2>
 <p>У нас є щотижнева розсилка з новинками на сайті і ми також надсилаємо вам листа коли хтось починає стежити за вашою полицею. Вимкнути розсилки можна одним кліком за посиланням у листі або в <a class="text-link" href="/settings">налаштуваннях</a>.</p>
 <h2>Видалення акаунту</h2>
@@ -1141,7 +1084,7 @@ function privacyPage({ user }) {
 <h2>Хто відповідає</h2>
 <p>Власник сайту і даних — ФОП Іщенко М. Ф. Пишіть на <a class="text-link" href="mailto:ischenko@gmail.com">ischenko@gmail.com</a> — відповімо.</p>
 <p>Якщо ми щось змінимо в цих правилах, оновимо цю сторінку і дату нижче.</p>
-<p><em>Оновлено 22 жовтня 2026 року.</em></p>
+<p><em>Оновлено 21 жовтня 2026 року.</em></p>
 </section>` });
 }
 
@@ -1270,36 +1213,6 @@ function digestPage({ on, action, user }) {
 </section>` });
 }
 
-// ---- book exchange (/swap) ----
-
-// Every paper book readers give away: the ones from the visitor's «Хочу прочитати» first, then the rest,
-// each with who gives it and how. Nothing is sold: a reader asks, a letter goes, they settle it by mail.
-function swapPage({ user, offers, mine = new Map(), asked = new Set(), givers = 0 }) {
-  const wanted = offers.filter((o) => mine.get(o.book.id)?.status === "want");
-  const rest = offers.filter((o) => !wanted.includes(o));
-  const row = (o) => bookRow(o.book, { meta: `на обмін у <a href="${attr(o.giver.href)}">${esc(o.giver.name)}</a>${handover(o.giver) ? ` <span class="muted">· ${esc(handover(o.giver))}</span>` : ""}`, action: `${mine.has(o.book.id) ? myStatus(mine.get(o.book.id)) + " " : ""}${askButton(o.book, o.giver, user, asked)}`, id: `${o.giver.username}-${o.book.id}` });
-  const body = `
-${pageHead({ kicker: "Обмін", title: "Книжки на обмін", sub: offers.length ? `${books(offers.length)} від ${count(givers, "читача", "читачів", "читачів")} · без грошей` : "поки нічого", action: user?.exchange ? `<a class="btn primary" href="${attr(user.href)}?public#give">Мої «На обмін»</a>` : user ? `<a class="btn primary" href="/settings/exchange">Долучитися</a>` : `<a class="btn primary" href="/login?next=/swap">Увійти</a>` })}
-<div class="split">
-  <div>
-    ${wanted.length ? `${label("З твого «Хочу прочитати»")}<section class="rows">${wanted.map(row).join("\n")}</section>` : ""}
-    ${rest.length ? `${label(wanted.length ? "Решта" : "Усі книжки")}<section class="rows">${rest.map(row).join("\n")}</section>` : ""}
-    ${offers.length ? "" : `<p class="empty">Поки нічого немає. Будьте першими: позначте книжку на своїй полиці як «На обмін».</p>`}
-  </div>
-  <aside>
-    ${label("Як це працює")}
-    <ol class="steps small">
-      <li>У <a class="text-link" href="/settings/exchange">налаштуваннях</a> увімкніть обмін, вкажіть місто і як передаєте: Нова пошта чи особисто.</li>
-      <li>На своїй полиці позначте паперову книжку «На обмін» (кнопка «змінити» біля книжки).</li>
-      <li>Хто хоче прочитати, тисне «Попросити». Вам приходить лист, далі домовляєтесь поштою.</li>
-      <li>Обміняли: приберіть позначку або саму книжку з полиці.</li>
-    </ol>
-    <p class="small muted">Адреси й телефони на сайті не показуються. Chytai не бере грошей і не бере участі в передачі.</p>
-  </aside>
-</div>`;
-  return layout({ title: "Обмін книжками", body, user, path: "/swap", description: "Паперові книжки читачів Chytai на обмін: Нова пошта або особисто, без грошей." });
-}
-
 function messagePage({ title, text, user }) {
   return layout({ title, body: pageHead({ title: esc(title), sub: esc(text) }), user, noindex: true });
 }
@@ -1310,7 +1223,6 @@ module.exports = {
   decidedList,
   welcomePage,
   layout, homePage, bookPage, editPage, libraryPage, readersPage, publishersPage, publisherPage, searchPage, searchResults, authorPage,
-  swapPage, exchangeSettingsPage, exchangeBooksPage,
   loginPage, codePage, signupPage, settingsPage, privacyPage, updatesPage, messagePage, digestPage, followMailPage, importPage, importPreviewPage, importDonePage,
   esc, STATUS, COPY, inline, isUk, setTitleLinks, setAuthorLinks, setStats, setReadersWithNote,
 };
