@@ -271,6 +271,7 @@ app.post("/api/readers-gone", (req, res) => {
 
 app.get("/privacy", (req, res) => res.send(pages.privacyPage({ user: req.user })));
 app.get("/updates", (req, res) => res.send(pages.updatesPage({ user: req.user })));
+app.get("/reader", (_req, res) => res.redirect(302, `${READER_URL}/`)); // shortcut to the reader (Max 2026-10-22)
 
 // ---- settings: name, username, e-mail, deleting the account ----
 
