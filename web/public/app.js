@@ -4,6 +4,7 @@
 (function () {
   const $ = (s, r = document) => r.querySelector(s);
   const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+  const plural = (n, one, few, many) => (n % 10 === 1 && n % 100 !== 11 ? one : n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20) ? few : many);
 
   const rows = $("#rows");
   if (rows) {
@@ -53,14 +54,20 @@
         $("span", more).textContent = left > STEP ? `${STEP} з ${left}` : left;
       }
       // Year headings only make sense in the import order; hide them when sorting or filtering.
+      // Their count is of the rows that pass the filters, not of the whole year («Без дати 1 книжка» under
+      // «Покинуто 1», not 100); rows held back by «Показати ще» still count.
       const byOrder = !sort || sort.value === "order";
+      const hit = new Set(matched);
       for (const h of years) {
-        let next = h.nextElementSibling, any = false;
+        let next = h.nextElementSibling, any = false, n = 0;
         while (next && !next.matches("h2.year")) {
-          if (!next.classList.contains("hidden")) { any = true; break; }
+          if (!next.classList.contains("hidden")) any = true;
+          if (hit.has(next)) n++;
           next = next.nextElementSibling;
         }
         h.classList.toggle("hidden", !byOrder || !any);
+        const label = $("span", h);
+        if (label) label.textContent = `${n} ${plural(n, "книжка", "книжки", "книжок")}`;
       }
       if (empty) empty.classList.toggle("hidden", shown > 0);
     }
