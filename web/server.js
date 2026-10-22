@@ -501,21 +501,6 @@ const searchHits = (req, q) => store.search(q, { reader: req.user?.id }).map((h)
 const normQ = (s) => String(s || "").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
 // Everything /search shows: books (a genre's name lists that genre's books by rating), authors, readers,
 // and books like the first hit on the side.
-// «Щось як Міллер», «схоже на Цирцею»: recommendations instead of the search (the 2026-10-20 design, Max
-// 2026-10-22). The rest of the query names an author (their books are the seeds) or a book (the first hit);
-// what the reader already has stays out. Nothing to recommend: the plain search for the rest, with a line saying so.
-const LIKE = /^(?:щось|шось|що[сш]ь)\s+(?:як|схоже на|подібне до|на кшталт|типу)\s+(.+)$|^(?:схоже на|something like)\s+(.+)$/iu;
-function likeSearch(req, rest) {
-  const nr = normQ(rest);
-  const author = (store.authors?.list || []).find((a) => nameHas(a.name, nr) || (a.other && nameHas(a.other, nr)));
-  const first = author ? null : searchHits(req, rest)[0];
-  const ids = author ? author.ids.map((id) => store.canonical(id)) : first ? [first.book.id] : [];
-  if (!ids.length) return null;
-  const skip = new Set([...ids, ...Object.keys(req.user ? store.entriesOf(req.user.id) : {})]);
-  const books = social.alsoLiked(ids, { limit: 12, skip }).filter((b) => !ids.includes(b.id) && (!author || !author.ids.includes(b.id)));
-  const like = author ? { name: author.name, href: author.href } : { name: `«${first.book.title}»`, href: first.book.href };
-  return { like, hits: books.map((b) => ({ book: bookFor(req, b, false), entry: store.sharedEntry(req.user?.id, b.id) })).filter((h) => h.book) };
-}
 // Every word typed starts a word of the name, or sounds like one of its Latin words («міллер», Madeline Miller).
 function nameHas(name, nq) {
   const words = normQ(name).normalize("NFKD").replace(/\p{M}/gu, "").split(" ");
@@ -526,13 +511,6 @@ function nameHas(name, nq) {
 }
 function searchAll(req, q) {
   if (!q) return {};
-  const m = LIKE.exec(q.trim());
-  if (m) {
-    const rest = (m[1] || m[2]).trim();
-    const found = likeSearch(req, rest);
-    if (found?.hits.length) return { hits: found.hits, like: found.like, authors: [], readers: [], shelves: [], similar: [] };
-    return { ...searchAll(req, rest), likeNone: found?.like || { name: `«${rest}»` } };
-  }
   const nq = normQ(q);
   const tag = [...new Set(store.library(OWNER_ID).flatMap((r) => r.book.tags || []))].find((t) => t === nq) || "";
   let hits = searchHits(req, q);
