@@ -1112,11 +1112,11 @@ ${pageHead({ kicker: "Моя полиця", title: "Додати книжки", 
 <section class="add-list">
   <form method="post" action="/import/list" class="form">
     <h2>Списком</h2>
-    <p class="muted small">Вставте свій список, по одній книжці на рядок: «Автор — Назва», «Назва — Автор», «Автор. Назва» чи просто назва. Рік або оцінка в кінці рядка теж зрозуміються: «Дюна — Френк Герберт (2019) ★★★★★». Далі покажемо, що знайшлось у каталозі, і спитаємо підтвердження.</p>
+    <p class="muted small">Вставте свій список, по одній книжці на рядок: «Автор — Назва», «Назва — Автор», «Автор. Назва» чи просто назва. Далі покажемо, що знайшлось у каталозі, і спитаємо підтвердження.</p>
     ${errorLine(error)}
     <label>Список<textarea name="text" rows="12" required placeholder="Тарас Шевченко — Кобзар
 Валер'ян Підмогильний. Місто
-Дюна — Френк Герберт (2019) ★★★★★
+Дюна — Френк Герберт
 Sapiens: A Brief History of Humankind — Yuval Noah Harari">${esc(text)}</textarea></label>
     <div class="two">
       <label>Ці книжки я<select name="status">${opt("read", "Прочитав(ла)")}${opt("want", "Хочу прочитати")}${opt("reading", "Читаю зараз")}</select></label>
