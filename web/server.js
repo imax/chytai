@@ -316,17 +316,8 @@ app.post("/settings/delete", signed, (req, res) => {
 // A pasted list (listimport.js), Goodreads (goodreads.js) or Apple Books (applebooks.js): the reader looks at
 // what each row becomes, unticks what should not go, confirms. A looked-at list waits in memory for half an
 // hour under a token; nothing of it is written before the reader confirms.
-// The empty list shows a few books readers here have most often as an example, «Назва — Автор».
-let popularCache = { at: 0, list: [] };
-const popular = () => {
-  if (Date.now() - popularCache.at < 3600e3) return popularCache.list;
-  const n = new Map();
-  for (const { id } of social.all()) n.set(id, (n.get(id) || 0) + 1);
-  const list = [...n].sort((a, b) => b[1] - a[1]).map(([id]) => store.book(id)).filter((b) => b && b.title.length <= 40).slice(0, 5).map((b) => ({ title: b.title, author: pages.byline(b.author || "") }));
-  return (popularCache = { at: Date.now(), list }).list;
-};
 // ?text= fills the list: «Додати книжку, якої ще немає» from a search that found nothing (the old one-book form is gone).
-app.get("/add", signed, (req, res) => (admin.step(req.user.id, "add"), res.send(pages.addPage({ user: req.user, text: String(req.query.text || "").slice(0, 2000), popular: popular() }))));
+app.get("/add", signed, (req, res) => (admin.step(req.user.id, "add"), res.send(pages.addPage({ user: req.user, text: String(req.query.text || "").slice(0, 2000) }))));
 // «Шукати» / «Інша книжка» on /add: our catalog first, then Open Library, so a book nobody here has yet can
 // come in with its cover and ISBNs (Max, 2026-10-22: «напів-мануальне наповнення бази»).
 app.get("/api/add/find", signed, async (req, res) => {
@@ -358,7 +349,7 @@ app.post("/import/list", signed, (req, res) => {
   req.source = "list";
   const text = String(req.body.text || "");
   const { books, error } = listimport.parseList(text, { status: "read" });
-  if (error) return res.status(400).send(pages.addPage({ user: req.user, text, popular: popular(), error }));
+  if (error) return res.status(400).send(pages.addPage({ user: req.user, text, error }));
   importPreview(req, res, listimport.resolve(store, books), { text });
 });
 app.get("/import/:source", signed, importSource, (req, res) => res.send(pages.importPage({ user: req.user, source: req.source })));
