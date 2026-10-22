@@ -25,6 +25,7 @@ const listimport = require("./listimport");
 const applebooks = require("./applebooks");
 const enrich = require("./enrich");
 const { Admin, adminPage } = require("./admin");
+const { Reviews } = require("./reviews");
 
 const ROOT = path.join(__dirname, "..");
 loadDotEnv(path.join(ROOT, ".env"));
@@ -100,6 +101,10 @@ const refreshAuthors = () => authors.refresh(store, { log: console.log }).catch(
 const refreshDetails = () => enrich.refresh(store, { log: console.log, googleKey: process.env.GOOGLE_BOOKS_KEY || "" }).catch((e) => console.error("enrich failed:", e));
 setTimeout(() => refreshUk().then(refreshAuthors).then(refreshDetails), 60000).unref();
 setInterval(() => refreshUk().then(refreshAuthors).then(refreshDetails), 6 * 3600 * 1000).unref();
+
+// «Про цю книжку писали» (reviews.js): sites and BookTube channels, every 6 hours; the first pass 2 minutes after start.
+const reviews = new Reviews(store, { log: console.log });
+reviews.start();
 
 pages.setTitleLinks((md, id) => store.linkTitles(md, id));
 pages.setAuthorLinks((name) => store.authors?.byName(name)?.href || null);
@@ -587,7 +592,7 @@ app.get("/book/:id", (req, res) => {
   if (store.href(id) !== `/book/${encodeURIComponent(req.params.id)}`) return res.redirect(301, store.href(id));
   const book = bookFor(req, store.bookPage(id), !!store.entry(req.user?.id, id));
   if (!book) return res.status(404).send(pages.messagePage({ title: "Немає такої книжки", text: "", user: req.user }));
-  res.send(pages.bookPage({ book, entry: store.sharedEntry(req.user?.id, book.id), user: req.user, shelf: book.shelf && (req.owner || !isDraft(book.shelf)) ? store.shelf(book.shelf) : null, inLibrary: inLibraryMap(req), readers: readersOf(book.id), also: social.alsoLiked([book.id], { limit: 4 }) }));
+  res.send(pages.bookPage({ book, entry: store.sharedEntry(req.user?.id, book.id), user: req.user, shelf: book.shelf && (req.owner || !isDraft(book.shelf)) ? store.shelf(book.shelf) : null, inLibrary: inLibraryMap(req), readers: readersOf(book.id), also: social.alsoLiked([book.id], { limit: 4 }), writings: reviews.of(book.id, { owner: req.owner }) }));
 });
 
 // An author: their works from Wikidata (linked to our books of them) and every book of theirs we have.
@@ -786,6 +791,11 @@ app.get("/admin/ip", owner, async (req, res) => {
   } catch (e) {
     res.type("text").send(`error ${e.message}`);
   }
+});
+app.get("/admin/reviews", owner, (req, res) => res.send(pages.reviewsAdminPage({ user: req.user, report: reviews.report({ source: String(req.query.source || "") }), source: String(req.query.source || "") })));
+app.post("/api/reviews/refresh", owner, (req, res) => {
+  reviews.refresh({ force: true, only: String(req.query.only || "") });
+  res.redirect(303, "/admin/reviews");
 });
 app.get("/admin/dupes", owner, (req, res) => res.send(pages.dupesPage({ user: req.user, groups: store.dupes(), decisions: store.decisions(), book: (id) => store.book(id), all: req.query.all === "1" })));
 app.get("/admin/translations", owner, (req, res) => res.send(pages.translationsPage({ user: req.user, translations: store.translationCandidates(), decisions: store.decisions(), book: (id) => store.book(id) })));

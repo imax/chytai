@@ -1215,4 +1215,4 @@ class Store {
   }
 }
 
-module.exports = { isRussian, Store, slugify, soundOf, OWNER };
+module.exports = { isRussian, Store, slugify, soundOf, norm, OWNER };

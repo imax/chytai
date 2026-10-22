@@ -368,7 +368,7 @@ function bookLd(book, shelf, s, readers) {
 }
 
 // The book, the reader's own buttons, where to get it, what readers said, what it is about.
-function bookPage({ book, entry, user, shelf, inLibrary = new Map(), readers = [], also = [] }) {
+function bookPage({ book, entry, user, shelf, inLibrary = new Map(), readers = [], also = [], writings = [] }) {
   const s = statsOf(book.id);
   const kicker = [book.tags?.find((t) => t !== "українською"), isUk(book) ? "українською" : LANG_ADV[String(book.language || "").toLowerCase()] || ""].filter(Boolean).map(cap).join(" · ");
   const sub = [book.altTitle ? esc(book.altTitle) : "", book.author ? `<span class="authors">${authorLinks(book.author)}</span>` : "", book.published ? String(book.published) : "", book.pages ? `${book.pages} с.` : ""].filter(Boolean).join(" · ");
@@ -398,6 +398,10 @@ function bookPage({ book, entry, user, shelf, inLibrary = new Map(), readers = [
       ${first.entry.note ? quote(first, book.id) : ""}
       ${(first.entry.note ? rest : readers).length ? `<div class="others">${(first.entry.note ? rest : readers).map((r) => readerLine(r, book.id)).join("")}</div>` : ""}
     </section>` : ""}
+    ${writings.length ? `<section class="block">
+      ${label("Про цю книжку писали")}
+      <div class="others">${writings.slice(0, 5).map(writingLine).join("")}${writings.length > 5 ? `<details class="more-writings"><summary>Ще ${writings.length - 5}</summary>${writings.slice(5).map(writingLine).join("")}</details>` : ""}</div>
+    </section>` : ""}
     ${book.blurb || book.ukTitle ? `<section class="block">
       ${label("Про книжку")}
       ${book.blurb ? `<div class="about">${book.blurb.split(/\n\n+/).map((t) => `<p>${esc(t)}</p>`).join("")}</div>` : ""}
@@ -410,6 +414,34 @@ function bookPage({ book, entry, user, shelf, inLibrary = new Map(), readers = [
 </div>`;
   const description = [book.author, book.blurb?.replace(/\s+/g, " ") || stripMd(readers.find((r) => r.entry.note)?.entry.note || "")].filter(Boolean).join(". ");
   return layout({ title: book.title, body, user, path: "/book", description, canonical: book.href, image: book.cover || "", type: "book", noindex: require("./store").isRussian(book), jsonld: bookLd(book, shelf, s, readers) });
+}
+
+// «Про цю книжку писали»: a review, an article or a video about the book, with where, when and its
+// first sentence; the rest is on the other site (reviews.js).
+const WRITING_KIND = { youtube: "відео", site: "", podcast: "подкаст" };
+function writingLine(w) {
+  const d = w.date ? new Date(`${w.date}T12:00:00Z`) : null;
+  const date = d ? `${d.getDate()} ${MONTHS[d.getMonth()]}${d.getFullYear() !== new Date().getFullYear() ? ` ${d.getFullYear()}` : ""}` : "";
+  const where = [w.source, WRITING_KIND[w.kind], date, w.draft ? "чернетка" : ""].filter(Boolean).join(" · ");
+  return `<div class="writing"><a href="${attr(w.url)}" target="_blank" rel="noopener">${esc(w.title)}</a><span class="muted">${esc(where)}</span>${w.quote ? `<span class="writing-quote">${esc(w.quote)}</span>` : ""}</div>`;
+}
+
+// What the owner checks before the sources go public (/admin/reviews): each source's state and the
+// latest items with the books they were matched to.
+function reviewsAdminPage({ user, report, source = "" }) {
+  const { sources, items, running } = report;
+  const when = (at) => (at ? new Date(at).toISOString().slice(0, 16).replace("T", " ") : "—");
+  const body = `<div class="admin"><h1>Огляди книжок</h1>
+<p class="muted">Звідки беруться посилання «Про цю книжку писали». Поки джерело в чернетці, посилання бачиш лише ти.${running ? " Зараз іде оновлення." : ""}</p>
+<form method="post" action="/api/reviews/refresh"><button class="btn small">Оновити все зараз</button></form>
+<div class="tbl"><table><thead><tr><th>Джерело</th><th>Матеріалів</th><th>З книжками</th><th>Востаннє</th><th></th></tr></thead><tbody>
+${sources.map((s) => `<tr><td><a href="/admin/reviews?source=${attr(s.id)}">${esc(s.name)}</a>${s.draft ? ' <span class="muted">чернетка</span>' : ""}</td><td>${s.items}</td><td>${s.matched}</td><td>${when(s.at)}</td><td>${s.ok === false ? `<span style="color: var(--danger); white-space: normal">${esc(s.error)}</span>` : s.at ? `+${s.added || 0}` : ""}</td></tr>`).join("")}
+</tbody></table></div>
+<h2>${source ? esc(sources.find((s) => s.id === source)?.name || source) : "Останні"}${source ? ' · <a href="/admin/reviews">усі</a>' : ""}</h2>
+<div class="others">${items
+    .map((it) => `<div class="writing"><a href="${attr(it.url)}" target="_blank" rel="noopener">${esc(it.title)}</a><span class="muted">${esc(it.sourceName)} · ${esc(it.date || "")}</span>${it.books.length ? `<span>${it.books.map((b) => `<a href="${attr(b.href || `/book/${encodeURIComponent(b.id)}`)}">${esc(b.title)}</a> <span class="muted">${esc(b.author || "")}</span>`).join(", ")}</span>` : '<span class="muted">— жодної книжки не знайшлось</span>'}${it.quote ? `<span class="writing-quote">${esc(it.quote)}</span>` : ""}</div>`)
+    .join("")}</div></div>`;
+  return layout({ title: "Огляди книжок", user, path: "/admin", body, noindex: true });
 }
 
 // A book's other-language pages (Max, 2026-10-21: «дві сторінки і спільні оцінки»): the original under a
@@ -1318,6 +1350,7 @@ function messagePage({ title, text, user }) {
 
 module.exports = {
   dupesPage,
+  reviewsAdminPage,
   translationsPage,
   decidedList,
   welcomePage,

@@ -249,6 +249,11 @@ h2.year span { font: 13px var(--sans); color: var(--muted); }
 .reader-line { display: flex; gap: 18px; padding: 14px 0; border-bottom: 1px solid var(--rule); font-size: 14px; }
 .reader-line > a { min-width: 90px; }
 .reader-line b { font-weight: 500; }
+.writing { display: flex; flex-direction: column; gap: 3px; padding: 14px 0; border-bottom: 1px solid var(--rule); font-size: 14px; }
+.writing > a { font: 400 17px/1.35 var(--serif); text-decoration: underline; text-decoration-color: var(--under); text-underline-offset: 3px; }
+.writing > a:hover { text-decoration-color: currentColor; }
+.writing-quote { color: var(--text); font-size: 15px; }
+.more-writings summary { padding: 12px 0; font-size: 14px; color: var(--muted); cursor: pointer; }
 .reader-line .note { font-size: 16px; margin-top: 4px; -webkit-line-clamp: 4; }
 .about p { font-size: 16px; line-height: 1.65; color: var(--text); }
 .about p + p { margin-top: 0.75em; }
