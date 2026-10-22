@@ -486,14 +486,14 @@ function landingPage(req) {
   header { display: flex; align-items: center; gap: 10px; padding: 18px 0; }
   header img { width: 34px; height: 34px; border-radius: 8px; }
   header b { font-size: 20px; } header a.in { margin-left: auto; color: var(--accent); font-weight: 600; text-decoration: none; }
-  .hero { padding: 30px 0 34px; max-width: 640px; }
+  .hero { padding: 30px 0 8px; max-width: 640px; }
   .wip { display: inline-block; margin: 0 0 14px; padding: 3px 10px; border: 1px solid var(--accent); border-radius: 999px; color: var(--accent); font-size: 13px; font-weight: 600; }
   h1 { font-size: 40px; line-height: 1.15; margin: 0 0 14px; letter-spacing: -0.01em; }
   .lead { font-size: 19px; color: var(--muted); margin: 0 0 26px; }
-  .acts { display: flex; flex-wrap: wrap; gap: 12px 18px; align-items: center; }
+  .acts { padding: 0 0 30px; display: flex; flex-wrap: wrap; gap: 12px 18px; align-items: center; }
   .btn { display: inline-block; padding: 13px 28px; font-weight: 600; text-decoration: none; color: #fff; background: var(--accent); border-radius: 10px; }
   .acts a.demo { color: var(--accent); font-weight: 600; }
-  .shots { position: relative; padding: 0 0 50px; }
+  .shots { position: relative; padding: 0 0 30px; }
   .desk { margin-right: 120px; border-radius: 10px; overflow: hidden; box-shadow: 0 20px 50px rgba(0,0,0,0.18); border: 1px solid rgba(0,0,0,0.12); background: #fff; }
   .desk i { display: block; height: 26px; background: #e9e6df; border-bottom: 1px solid rgba(0,0,0,0.08); }
   .phone { position: absolute; right: 0; bottom: 20px; width: 230px; border-radius: 30px; overflow: hidden; box-shadow: 0 20px 50px rgba(0,0,0,0.25); border: 8px solid #1d1d1f; }
@@ -513,13 +513,13 @@ function landingPage(req) {
       <span class="wip">Work-in-progress</span>
       <h1>Читалка з AI-explainer</h1>
       <p class="lead">Спроба пере-придумати зручний інтерфейс для читання онлайн.</p>
-      <div class="acts"><a class="btn" href="${esc(signIn)}">Увійти</a>${demo ? `<a class="demo" href="/demo">Подивитися демо</a>` : ""}</div>
     </div>
   </section>
   <section class="shots">
     <div class="desk"><i></i><img src="/landing-desk.jpg" alt="Читалка Chytai на комп'ютері: пояснення виділеного речення"></div>
     <div class="phone"><img src="/landing-phone.jpg" alt="Читалка Chytai на телефоні: пояснення виділеного рядка"></div>
   </section>
+  <div class="acts"><a class="btn" href="${esc(signIn)}">Увійти</a>${demo ? `<a class="demo" href="/demo">Подивитися демо</a>` : ""}</div>
   <footer>Частина <a href="https://chytai.org.ua">chytai.org.ua</a></footer>
 </div></body></html>`;
 }
