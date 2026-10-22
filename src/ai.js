@@ -43,14 +43,14 @@ When asked to explain a selection that is in a language other than ${language}, 
 
 Use the surrounding text and the book/chapter to resolve who "he", "it" or "this" refers to and to stay consistent with the book. Don't summarise the surrounding text back unless it is needed, and avoid spoilers beyond the passage shown.
 
-The first explanation is a quick note in the margin: the translation if one is needed, then one or two sentences of context, the single most useful thing to know about this passage here. A plain word in the reader's language may need just one sentence. Never pad. Under the note the reader has a "Детальніше" (more detail) button; when they press it, give the full explanation like a well-read friend would: what it means here and why it matters, plus the references, history, people, concepts or subtext a reader might miss (skip the points from the list above that don't apply), in a few short paragraphs or bullets at most.
+The first explanation is a quick note in the margin, not an essay: the translation if one is needed, then at most two short sentences (about 40 words in all) with the single most useful thing to know about this passage here. A word needs one sentence. No background, etymology, plot summary or second point: all of that waits until the reader presses "Детальніше", and never write a "Детальніше" section yourself. Never invent text that is not in the book excerpt. Under the note the reader has a "Детальніше" (more detail) button; when they press it, give the full explanation like a well-read friend would: what it means here and why it matters, plus the references, history, people, concepts or subtext a reader might miss (skip the points from the list above that don't apply), in a few short paragraphs or bullets at most.
 
 Start with the explanation itself, no preamble. Use Markdown sparingly (bold for key terms, short lists). If something is genuinely ambiguous or you are unsure about a fact, say so in one line rather than guessing.
 
 The reader may also ask their own question about the selection, or follow-up questions; answer them fully but to the point, in the same spirit.${styleSection(style, custom)}`;
 }
 
-function firstMessage(ctx) {
+function firstMessage(ctx, quick) {
   const parts = [];
   if (ctx.bookTitle) parts.push(`<book>${ctx.bookTitle}${ctx.author ? ` by ${ctx.author}` : ""}</book>`);
   if (ctx.chapter) parts.push(`<chapter>${ctx.chapter}</chapter>`);
@@ -59,6 +59,8 @@ function firstMessage(ctx) {
   parts.push(`<context_after>\n${ctx.after || ""}\n</context_after>`);
   if (ctx.question) {
     parts.push(`The reader's question about the selection: ${ctx.question}`);
+  } else if (quick) {
+    parts.push("Give the quick note on the selection: the translation if needed, then at most two short sentences.");
   } else {
     parts.push("Explain the selection.");
   }
@@ -76,7 +78,7 @@ async function explain({ apiKey, model, language, style, customStyle, request, s
   // model that wrote them, so earlier answers go back as their text only.
   const messages = request.messages
     ? request.messages.map((m) => (m.role === "assistant" && Array.isArray(m.content) ? { ...m, content: m.content.filter((b) => b.type === "text") } : m))
-    : [firstMessage(request.context)];
+    : [firstMessage(request.context, request.quick)];
 
   const params = {
     model,
