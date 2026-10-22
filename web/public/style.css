@@ -548,14 +548,14 @@ dialog .form { margin-top: 18px; }
 }
 
 /* /welcome, after sign-up (design 4a) */
-.welcome { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr); gap: 72px; padding: 32px 0 80px; align-items: start; }
+.welcome { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr); gap: 72px; padding: 0 0 64px; align-items: start; }
 .welcome h1 { font: 400 56px/1.05 var(--serif); letter-spacing: -0.02em; margin: 0 0 22px; }
 .welcome .wordmark { font-family: var(--serif); font-weight: 600; color: var(--ink); }
 .welcome .lead { font: 17px/1.55 var(--sans); color: var(--muted); margin: 0 0 30px; }
-.welcome-steps { list-style: none; padding: 0; margin: 0; border-top: 1px solid var(--ink); }
-.welcome-steps li { display: grid; grid-template-columns: 48px minmax(0, 1fr) auto; gap: 0 20px; align-items: baseline; padding: 22px 0; border-bottom: 1px solid var(--rule); }
-.welcome-steps .n { font: 400 26px var(--serif); color: var(--muted); }
-.welcome-steps h3 { font: 600 22px/1.25 var(--serif); margin: 0 0 6px; }
+.welcome-steps { list-style: none; padding: 0; margin: 4px 0 0; border-top: 1px solid var(--ink); }
+.welcome-steps li { display: grid; grid-template-columns: 48px minmax(0, 1fr) auto; gap: 0 20px; align-items: baseline; padding: 18px 0; border-bottom: 1px solid var(--rule); }
+.welcome-steps .n { font: 400 24px var(--serif); color: var(--muted); }
+.welcome-steps h3 { font: 600 20px/1.25 var(--serif); margin: 0 0 4px; }
 .welcome-steps p { color: var(--muted); margin: 0; }
 .welcome-steps .text-link { font-size: 14px; white-space: nowrap; }
 @media (max-width: 760px) {
