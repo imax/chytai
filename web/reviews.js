@@ -19,11 +19,13 @@ const HEADERS = { "User-Agent": UA, "Accept-Language": "uk,en;q=0.5" };
 // The EU consent page stands in front of YouTube for a server in Frankfurt; SOCS=CAI is «reject all».
 const YT_HEADERS = { ...HEADERS, Cookie: "SOCS=CAI; CONSENT=PENDING+987" };
 
-// New sources start as drafts: only the owner sees their links until Max has looked at them.
-const yt = (id, name, channel) => ({ id: `yt-${id}`, name, kind: "youtube", channel, url: `https://www.youtube.com/channel/${channel}`, draft: true });
+// Nothing reaches a book page by itself: what the sources bring is a queue on /admin/reviews, and the
+// owner adds an item to a book in one click, or adds any link by hand (Max, 2026-10-22: «черга ревю
+// щоб додати їх в один клік на сторінку книжки. або просто мануальна форма»).
+const yt = (id, name, channel) => ({ id: `yt-${id}`, name, kind: "youtube", channel, url: `https://www.youtube.com/channel/${channel}` });
 const SOURCES = [
-  { id: "chytomo", name: "Читомо", kind: "site", feed: "https://chytomo.com/feed/", url: "https://chytomo.com/", draft: true },
-  { id: "litakcent", name: "ЛітАкцент", kind: "site", archive: (n) => `https://litakcent.online/category/recenzija/feed/?paged=${n}`, url: "https://litakcent.online/", draft: true },
+  { id: "chytomo", name: "Читомо", kind: "site", feed: "https://chytomo.com/feed/", url: "https://chytomo.com/" },
+  { id: "litakcent", name: "ЛітАкцент", kind: "site", archive: (n) => `https://litakcent.online/category/recenzija/feed/?paged=${n}`, url: "https://litakcent.online/" },
   // Ukrainian BookTube: the jury of the book bloggers' award (Книжкова країна, 2026) and the larger
   // channels found by a YouTube search on 2026-10-22.
   yt("prolit", "Проліт", "UCMw_BiVMRQ4N9txZ1o_MlSA"),
@@ -38,7 +40,10 @@ const SOURCES = [
   yt("znovu", "знову ті її книжки", "UCrnYhHrcrcjZpgW0o-6oRWA"),
   yt("svitlo-bibliotek", "Svitlo Bibliotek", "UCiC-mxz5_AMiNzSMbKcEgDQ"),
 ];
-const byId = new Map(SOURCES.map((s) => [s.id, s]));
+// Links the owner added by hand: their site's name is kept with each one.
+const MANUAL = { id: "manual", name: "", kind: "site" };
+const byId = new Map([...SOURCES, MANUAL].map((s) => [s.id, s]));
+const kindOf = (url) => (/^https?:\/\/(www\.|m\.)?(youtube\.com|youtu\.be)\//.test(url) ? "youtube" : "site");
 const EVERY_MS = 6 * 3600 * 1000;
 const NEW_VIDEOS = 30; // the newest videos of a channel looked at per pass (its whole /videos page)
 
@@ -256,6 +261,7 @@ class Reviews {
     this.db = store.db;
     this.log = log;
     this.db.exec(SCHEMA);
+    if (!this.db.prepare("PRAGMA table_info(reviews)").all().some((c) => c.name === "name")) this.db.exec("ALTER TABLE reviews ADD COLUMN name TEXT NOT NULL DEFAULT ''");
     this.db.exec("UPDATE OR IGNORE reviews SET url = replace(replace(url, 'http://litakcent.com/', 'https://litakcent.online/'), 'https://litakcent.com/', 'https://litakcent.online/') WHERE url LIKE '%litakcent.com/%'");
     this.running = null;
     this.status = JSON.parse(this.db.get("reviews:status") || "{}"); // source id -> { at, ok, error, added }
@@ -267,47 +273,104 @@ class Reviews {
   // work id -> [item], newest first; rebuilt after every pass and when the works change.
   index() {
     const byWork = new Map();
-    for (const r of this.db.prepare("SELECT url, source, title, date, quote, works FROM reviews WHERE works != '[]' ORDER BY date DESC").all()) {
+    for (const r of this.db.prepare("SELECT url, source, name, title, date, quote, works FROM reviews WHERE works != '[]' ORDER BY date DESC").all()) {
       const src = byId.get(r.source);
       if (!src) continue;
-      const item = { url: r.url, title: r.title, date: r.date, quote: r.quote, source: src.name, sourceId: src.id, kind: src.kind, draft: !!src.draft };
+      const item = { url: r.url, title: r.title, date: r.date, quote: r.quote, source: r.name || src.name, sourceId: src.id, kind: src === MANUAL ? kindOf(r.url) : src.kind };
       for (const id of new Set(JSON.parse(r.works).map((w) => this.store.canonical(w)))) (byWork.get(id) || byWork.set(id, []).get(id)).push(item);
     }
     this.byWork = byWork;
   }
-  // What was written about a work (and its editions), for its page; drafts only for the owner. The
-  // owner's picks for the work come first, marked `picked` (Max, 2026-10-22: «обрати 1, 2, 3, які
-  // показувати»); items he said are not about this book are gone.
+  // What a work's page shows: the items the owner added, in the order added. For the owner also what
+  // the sources found and he has not decided on yet (`suggestions`).
   of(workId, { owner = false } = {}) {
     const id = this.store.canonical(workId);
     const picks = this.picks()[id] || [];
     const hidden = new Set(this.hidden()[id] || []);
-    const items = (this.byWork.get(id) || []).filter((it) => (owner || !it.draft) && !hidden.has(it.url)).map((it) => ({ ...it, picked: picks.includes(it.url) }));
-    return [...picks.map((u) => items.find((it) => it.url === u)).filter(Boolean), ...items.filter((it) => !it.picked)];
+    const items = this.byWork.get(id) || [];
+    const shown = picks.map((u) => items.find((it) => it.url === u)).filter(Boolean);
+    return { shown, suggestions: owner ? items.filter((it) => !picks.includes(it.url) && !hidden.has(it.url)) : [] };
   }
   picks() {
-    return JSON.parse(this.db.get("reviews:picks") || "{}"); // work id -> [url], at most 3, in order picked
+    return JSON.parse(this.db.get("reviews:picks") || "{}"); // work id -> [url], in the order added
   }
   hidden() {
     return JSON.parse(this.db.get("reviews:hidden") || "{}"); // work id -> [url]
   }
-  // Show this item on the work's page or stop showing it; a fourth pick pushes out the first.
-  pick(workId, url) {
+  // Show an item on the work's page (add), or take it off (remove).
+  pick(workId, url, on = true) {
     const id = this.store.canonical(workId);
     const all = this.picks();
-    const list = all[id] || [];
-    all[id] = list.includes(url) ? list.filter((u) => u !== url) : [...list, url].slice(-3);
+    const list = (all[id] || []).filter((u) => u !== url);
+    all[id] = on ? [...list, url] : list;
     if (!all[id].length) delete all[id];
     this.db.set("reviews:picks", JSON.stringify(all));
   }
-  // «Не про цю книжку»: a wrong match, off this work's page for good (the item stays for other books).
+  // «Не про цю книжку»: off this work's queue and page for good (the item stays for other books).
   hide(workId, url) {
     const id = this.store.canonical(workId);
     const all = this.hidden();
     all[id] = [...new Set([...(all[id] || []), url])];
     this.db.set("reviews:hidden", JSON.stringify(all));
+    this.pick(id, url, false);
+  }
+  // A matcher's works for an item, plus every work the owner added it to by hand.
+  withPicks(url, ids, picked = this.pickedBy()) {
+    return JSON.stringify([...new Set([...ids, ...(picked.get(url) || [])])]);
+  }
+  pickedBy() {
+    const m = new Map();
+    for (const [id, urls] of Object.entries(this.picks())) for (const u of urls) (m.get(u) || m.set(u, []).get(u)).push(id);
+    return m;
+  }
+  // The queue: items the sources matched to a work that the owner has neither added nor turned down, newest first.
+  queue({ limit = 60 } = {}) {
     const picks = this.picks();
-    if (picks[id]?.includes(url)) this.pick(id, url);
+    const hidden = this.hidden();
+    const out = [];
+    for (const r of this.db.prepare("SELECT url, source, name, title, date, quote, works FROM reviews WHERE works != '[]' AND source != 'manual' ORDER BY date DESC").all()) {
+      const books = [...new Set(JSON.parse(r.works).map((w) => this.store.canonical(w)))]
+        .filter((id) => !(picks[id] || []).includes(r.url) && !(hidden[id] || []).includes(r.url))
+        .map((id) => this.store.book(id))
+        .filter(Boolean);
+      if (!books.length) continue;
+      out.push({ ...r, sourceName: r.name || byId.get(r.source)?.name || r.source, books });
+      if (out.length >= limit) break;
+    }
+    return out;
+  }
+  // A link the owner gives by hand: its title, site and first sentence from the page (YouTube through
+  // oEmbed), kept as an item of the work and added to its page at once.
+  async add(url, workId) {
+    url = String(url).trim();
+    if (!/^https?:\/\/[^\s]+$/.test(url)) throw new Error("Це не схоже на посилання.");
+    const id = this.store.canonical(workId);
+    const known = this.db.prepare("SELECT works FROM reviews WHERE url = ?").get(url);
+    if (known) {
+      const works = [...new Set([...JSON.parse(known.works), id])];
+      this.db.prepare("UPDATE reviews SET works = ? WHERE url = ?").run(JSON.stringify(works), url);
+    } else {
+      let it = { title: url, name: new URL(url).hostname.replace(/^www\./, ""), date: null, quote: "" };
+      try {
+        if (kindOf(url) === "youtube") {
+          const o = JSON.parse(await get(`https://www.youtube.com/oembed?format=json&url=${encodeURIComponent(url)}`));
+          it = { ...it, title: o.title || it.title, name: o.author_name ? `${o.author_name}` : "YouTube" };
+        } else {
+          const html = await get(url);
+          const meta = (p) => decode((html.match(new RegExp(`<meta[^>]+(?:property|name)=["']${p}["'][^>]*content=["']([^"']*)`, "i")) || [])[1] || "");
+          const title = meta("og:title") || plain((html.match(/<title[^>]*>([\s\S]*?)<\/title>/i) || [])[1] || "");
+          const date = meta("article:published_time") || meta("datePublished");
+          it = { ...it, title: title || it.title, name: meta("og:site_name") || it.name, quote: quoteOf(meta("og:description") || meta("description")), date: /^\d{4}-\d\d-\d\d/.test(date) ? date.slice(0, 10) : null };
+        }
+      } catch (e) {
+        this.log(`reviews: add ${url}: ${e.message}`); // kept with the address as its title
+      }
+      this.db.prepare("INSERT INTO reviews (url, source, name, title, date, quote, text, works, seen) VALUES (?, 'manual', ?, ?, ?, ?, '', ?, ?)").run(url, it.name, it.title.slice(0, 300), it.date || new Date().toISOString().slice(0, 10), it.quote, JSON.stringify([id]), new Date().toISOString());
+    }
+    const hidden = this.hidden();
+    if ((hidden[id] || []).includes(url)) (hidden[id] = hidden[id].filter((u) => u !== url)), this.db.set("reviews:hidden", JSON.stringify(hidden));
+    this.pick(id, url, true);
+    this.index();
   }
 
   save(src, items, matcher) {
@@ -315,12 +378,13 @@ class Reviews {
     const has = this.db.prepare("SELECT 1 FROM reviews WHERE url = ?");
     const put = this.db.prepare("INSERT INTO reviews (url, source, title, date, quote, text, works, seen) VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (url) DO UPDATE SET title = excluded.title, date = COALESCE(excluded.date, date), quote = excluded.quote, text = excluded.text, works = excluded.works");
     let added = 0;
+    const picked = this.pickedBy();
     this.db.tx(() => {
       for (const it of items) {
         if (!it.url || !it.title) continue;
         it.url = it.url.replace(/^https?:\/\/(www\.)?litakcent\.com\//, "https://litakcent.online/"); // the site is an archive now
         if (!has.get(it.url)) added++;
-        put.run(it.url, src.id, it.title.slice(0, 300), it.date, it.quote, it.text, JSON.stringify(matcher.match(it.text)), now);
+        put.run(it.url, src.id, it.title.slice(0, 300), it.date, it.quote, it.text, this.withPicks(it.url, matcher.match(it.text), picked), now);
       }
     });
     return added;
@@ -411,11 +475,12 @@ class Reviews {
   // Match every kept item again: the catalog grows and the matcher changes.
   async rematch(matcher = this.matcher()) {
     const t0 = Date.now();
-    const rows = this.db.prepare("SELECT url, text, works FROM reviews").all();
+    const rows = this.db.prepare("SELECT url, text, works FROM reviews WHERE source != 'manual'").all();
     const put = this.db.prepare("UPDATE reviews SET works = ? WHERE url = ?");
     const changes = [];
+    const picked = this.pickedBy();
     for (let i = 0; i < rows.length; i++) {
-      const works = JSON.stringify(matcher.match(rows[i].text));
+      const works = this.withPicks(rows[i].url, matcher.match(rows[i].text), picked);
       if (works !== rows[i].works) changes.push([works, rows[i].url]);
       if (i % 100 === 99) await new Promise((r) => setImmediate(r)); // let pages be served meanwhile
     }
@@ -432,7 +497,7 @@ class Reviews {
       .prepare(`SELECT url, source, title, date, quote, works FROM reviews ${source ? "WHERE source = ?" : ""} ORDER BY date DESC LIMIT ?`)
       .all(...(source ? [source, limit] : [limit]))
       .map((r) => ({ ...r, sourceName: byId.get(r.source)?.name || r.source, books: JSON.parse(r.works).map((id) => this.store.book(id)).filter(Boolean) }));
-    return { sources, items, running: !!this.running };
+    return { sources, items, queue: this.queue(), running: !!this.running };
   }
 
   start() {

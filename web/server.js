@@ -859,17 +859,35 @@ app.get("/admin/ip", owner, async (req, res) => {
     res.type("text").send(`error ${e.message}`);
   }
 });
-app.get("/admin/reviews", owner, (req, res) => res.send(pages.reviewsAdminPage({ user: req.user, report: reviews.report({ source: String(req.query.source || "") }), source: String(req.query.source || "") })));
+app.get("/admin/reviews", owner, (req, res) => {
+  const done = req.query.added ? store.book(store.resolve(String(req.query.added))) : null;
+  res.send(pages.reviewsAdminPage({ user: req.user, report: reviews.report(), error: String(req.query.error || ""), done: done && { title: done.title, href: store.href(done.id) } }));
+});
 app.post("/api/reviews/refresh", owner, (req, res) => {
   reviews.refresh({ force: true, only: String(req.query.only || "") });
   res.redirect(303, "/admin/reviews");
 });
-for (const what of ["pick", "hide"])
+// A link added by hand: the book is a link to its page, an address or a title (the first search hit).
+app.post("/api/reviews/add", owner, async (req, res) => {
+  const q = String(req.body.book || "").trim();
+  const slug = (q.match(/\/book\/([^/?#\s]+)/) || [])[1];
+  const id = (slug && store.resolve(decodeURIComponent(slug))) || store.resolve(q) || store.search(q, { limit: 1 })[0]?.book.id;
+  const back = (error) => res.redirect(303, `/admin/reviews?error=${encodeURIComponent(error)}`);
+  if (!id) return back(`Не знайшов книжку «${q}». Встав посилання на її сторінку.`);
+  try {
+    await reviews.add(String(req.body.url || ""), id);
+  } catch (e) {
+    return back(e.message);
+  }
+  res.redirect(303, `/admin/reviews?added=${encodeURIComponent(id)}`);
+});
+for (const what of ["pick", "unpick", "hide"])
   app.post(`/api/reviews/${what}`, owner, (req, res) => {
     const id = store.resolve(String(req.body.work || ""));
     if (!id || !req.body.url) return res.status(400).send("Немає такої книжки чи посилання.");
-    reviews[what](id, String(req.body.url));
-    res.redirect(303, `${store.href(id)}#writings`);
+    if (what === "hide") reviews.hide(id, String(req.body.url));
+    else reviews.pick(id, String(req.body.url), what === "pick");
+    res.redirect(303, req.body.back === "admin" ? "/admin/reviews" : `${store.href(id)}#writings`);
   });
 app.get("/admin/dupes", owner, (req, res) => res.send(pages.dupesPage({ user: req.user, groups: store.dupes(), decisions: store.decisions(), book: (id) => store.book(id), all: req.query.all === "1" })));
 app.get("/admin/translations", owner, (req, res) => res.send(pages.translationsPage({ user: req.user, translations: store.translationCandidates(), decisions: store.decisions(), book: (id) => store.book(id) })));
