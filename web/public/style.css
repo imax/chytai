@@ -546,6 +546,8 @@ dialog .form { margin-top: 18px; }
 .admin .filter { margin-top: 10px; font-size: 14px; }
 .admin .filter a { text-decoration: underline; text-decoration-color: var(--under); text-underline-offset: 3px; }
 .admin .filter b { font-weight: 500; }
+.admin .admin-find { margin: 24px 0 0; max-width: 360px; }
+.admin .pager a, .admin .pager b { margin-right: 8px; }
 .admin .tbl { margin-top: 16px; overflow-x: auto; -webkit-overflow-scrolling: touch; }
 .admin table { border-collapse: collapse; width: 100%; font-size: 14px; font-variant-numeric: tabular-nums; }
 .admin th, .admin td { padding: 9px 12px 9px 0; border-bottom: 1px solid var(--rule); text-align: right; white-space: nowrap; vertical-align: baseline; }

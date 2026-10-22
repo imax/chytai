@@ -26,6 +26,23 @@ const weekOf = (day) => {
 };
 const today = () => dayOf(new Date());
 
+// Which part of the site a page belongs to, for the views by section (Max, 2026-10-22: «головна vs
+// publishers vs community»). Only the kind of page is kept, never the path itself.
+const SECTIONS = [
+  ["home", "Головна", (p) => p === "/"],
+  ["book", "Книжки", (p) => p.startsWith("/book/")],
+  ["author", "Автори", (p) => p.startsWith("/author/")],
+  ["search", "Пошук", (p) => p === "/search"],
+  ["publishers", "Видавництва", (p) => p === "/publishers" || p.startsWith("/publishers/") || p.startsWith("/shelf/")],
+  ["community", "Спільнота", (p) => p === "/community" || p === "/readers"],
+  ["shelf", "Полиці читачів", (p) => p.startsWith("/@") || p.startsWith("/reader/")],
+  ["me", "Своя полиця", (p) => p === "/me" || p.startsWith("/me/") || p === "/add" || p.startsWith("/import")],
+  ["account", "Вхід і налаштування", (p) => p.startsWith("/login") || p === "/welcome" || p === "/logout" || p.startsWith("/settings") || p === "/reader-login"],
+  ["other", "Інше", () => true],
+];
+const sectionOf = (p) => SECTIONS.find(([, , is]) => is(p))[0];
+const SECTION_NAMES = Object.fromEntries(SECTIONS.map(([id, name]) => [id, name]));
+
 class Admin {
   constructor(db, { ownerId = "owner" } = {}) {
     this.db = db;
@@ -43,7 +60,7 @@ class Admin {
     const accept = req.headers.accept || "";
     if (accept && !accept.includes("text/html")) return;
     const p = req.path || "";
-    if (p.startsWith("/api/") || p === "/refresh-status" || p === "/admin" || p.includes(".")) return;
+    if (p.startsWith("/api/") || p === "/refresh-status" || p === "/admin" || p.startsWith("/admin/") || p.includes(".")) return;
     if (BOT.test(req.headers["user-agent"] || "")) return;
     const day = today();
     if (day !== this.seenDay) (this.seen = new Set()), (this.seenDay = day);
@@ -56,6 +73,7 @@ class Admin {
         }
       }
       this.db.prepare(`INSERT INTO views (day, readers, guests) VALUES (?, ?, ?) ON CONFLICT (day) DO UPDATE SET readers = readers + excluded.readers, guests = guests + excluded.guests`).run(day, readerId ? 1 : 0, readerId ? 0 : 1);
+      this.db.prepare(`INSERT INTO section_views (day, section, views) VALUES (?, ?, 1) ON CONFLICT (day, section) DO UPDATE SET views = views + 1`).run(day, sectionOf(p));
     } catch (e) {
       console.error("admin touch failed:", e.message);
     }
@@ -83,6 +101,7 @@ class Admin {
     const sessions = db.prepare("SELECT reader, created, seen FROM sessions").all();
     const visits = db.prepare("SELECT day, reader FROM visits").all();
     const views = Object.fromEntries(db.prepare("SELECT day, readers, guests FROM views").all().map((v) => [v.day, v]));
+    const sectionRows = db.prepare("SELECT day, section, views FROM section_views").all();
     const digestLog = db.prepare("SELECT reader, sent FROM digest_log").all();
 
     // Which days each reader was around: visits, plus everything else that leaves a date.
@@ -237,12 +256,26 @@ class Admin {
         viewsSince: Object.keys(views).sort()[0] || null,
       },
       weeks: weekRows,
+      sections: this.sections(sectionRows, now),
       funnel,
       cohorts,
       later: LATER,
       readers: readerRows,
       digest: digestLast ? { ...digestLast, lastRun: db.get("digest:lastRun") } : null,
     };
+  }
+
+  // Page views by part of the site: today, the last 7 and 28 days, most viewed first.
+  sections(rows, now) {
+    const week7 = addDays(now, -6), month = addDays(now, -27);
+    const sum = {};
+    for (const r of rows) {
+      const x = (sum[r.section] ||= { id: r.section, name: SECTION_NAMES[r.section] || r.section, today: 0, week: 0, month: 0 });
+      if (r.day === now) x.today += r.views;
+      if (r.day >= week7) x.week += r.views;
+      if (r.day >= month) x.month += r.views;
+    }
+    return Object.values(sum).sort((a, b) => b.week - a.week || b.month - a.month);
   }
 }
 
@@ -279,9 +312,43 @@ function funnelBlock(f) {
 ${x ? `<div class="tbl"><table class="funnel"><tbody>${rows}</tbody></table></div>` : ""}`;
 }
 
-// `withBooks`: the readers table shows only readers with a book on the shelf (Max, 2026-10-20: «фільтр 1+ книжка»);
-// `sort`: last (activity, the default), books or created (Max, 2026-10-21: fewer columns, sortable).
-function adminPage({ user, stats: s, layout, withBooks = false, sort = "created" }) {
+const READER_HEAD = `<th>Читач</th><th>Зареєструвався</th><th>Востаннє</th><th>Днів</th><th>Книжок</th><th>Лист</th>`;
+const readerRow = (r) => `<tr${r.owner ? ' class="owner"' : ""}>
+  <th><a href="/@${esc(r.username)}">${esc(r.name)}</a> <span class="muted">@${esc(r.username)}</span></th>
+  <td>${short(r.created)}</td><td>${short(r.last)}</td><td>${n(r.days)}</td><td>${n(r.books)}</td>
+  <td>${r.digest ? "так" : r.email ? "ні" : `<span class="muted">без пошти</span>`}</td>
+</tr>`;
+
+// /admin/readers: everyone, with a search by name or username, a books filter, sorting and pages of
+// fifty (Max, 2026-10-22: one table of everybody «unwieldy, а що буде коли їх буде пара сотень?»).
+const PAGE = 50;
+function readersPage({ user, stats: s, layout, q = "", min = 0, sort = "created", page = 1 }) {
+  const SORTS = { last: (a, b) => (b.last || "").localeCompare(a.last || "") || a.created.localeCompare(b.created), books: (a, b) => b.books - a.books || a.created.localeCompare(b.created), created: (a, b) => b.created.localeCompare(a.created), days: (a, b) => b.days - a.days || b.created.localeCompare(a.created) };
+  if (!SORTS[sort]) sort = "created";
+  min = [0, 1, 10].includes(min) ? min : 0;
+  q = String(q || "").trim().toLowerCase().slice(0, 60);
+  const all = s.readers.filter((r) => r.books >= min && (!q || r.name.toLowerCase().includes(q) || r.username.includes(q))).sort(SORTS[sort]);
+  const pages = Math.max(1, Math.ceil(all.length / PAGE));
+  page = Math.min(Math.max(1, Number(page) || 1), pages);
+  const shown = all.slice((page - 1) * PAGE, page * PAGE);
+  const url = ({ books = min, by = sort, p = 1, query = q } = {}) => `/admin/readers${[query ? `q=${encodeURIComponent(query)}` : "", books ? `books=${books}` : "", by !== "created" ? `sort=${by}` : "", p > 1 ? `page=${p}` : ""].filter(Boolean).map((x, i) => (i ? "&" : "?") + x).join("")}`;
+  const col = (key, label) => (sort === key ? `<th class="sorted">${label} ↓</th>` : `<th><a href="${url({ by: key })}" title="Відсортувати">${label}</a></th>`);
+  const filters = [[0, "Усі"], [1, "1+ книжка"], [10, "10+ книжок"]].map(([k, l]) => { const c = s.readers.filter((r) => r.books >= k).length; return k === min ? `<b>${l} (${c})</b>` : `<a href="${url({ books: k })}">${l} (${c})</a>`; }).join(" · ");
+  const pager = pages > 1 ? `<p class="filter pager">${[...Array(pages)].map((_, i) => (i + 1 === page ? `<b>${i + 1}</b>` : `<a href="${url({ p: i + 1 })}">${i + 1}</a>`)).join(" ")}</p>` : "";
+  const body = `<section class="admin">
+<section class="page-head"><div><p class="crumbs"><a href="/admin">Статистика</a> / Читачі</p><h1>Читачі</h1><p class="sub">«Днів» — скільки різних днів читач був на сайті після реєстрації. Заголовки сортують таблицю.</p></div></section>
+<form class="find admin-find" action="/admin/readers" role="search"><input type="search" name="q" value="${esc(q)}" placeholder="ім'я або нікнейм" autocomplete="off" aria-label="Пошук читача">${min ? `<input type="hidden" name="books" value="${min}">` : ""}${sort !== "created" ? `<input type="hidden" name="sort" value="${sort}">` : ""}</form>
+<p class="filter">${filters}${q ? ` · знайдено ${all.length} <a href="${url({ query: "" })}">скинути пошук</a>` : ""}</p>
+${pager}
+${shown.length ? `<div class="tbl"><table class="readers">
+<thead><tr><th>Читач</th>${col("created", "Зареєструвався")}${col("last", "Востаннє")}${col("days", "Днів")}${col("books", "Книжок")}<th>Лист</th></tr></thead>
+<tbody>${shown.map(readerRow).join("")}</tbody></table></div>` : `<p class="muted">Нікого не знайдено.</p>`}
+${pager}
+</section>`;
+  return layout({ title: "Читачі · Статистика", user, path: "/admin", body });
+}
+
+function adminPage({ user, stats: s, layout }) {
   const t = s.totals;
   const tiles = [
     tile(t.readers, "читачів", `+${t.signupsWeek} за тиждень, +${t.signupsMonth} за місяць`),
@@ -309,21 +376,9 @@ function adminPage({ user, stats: s, layout, withBooks = false, sort = "created"
     .map((c) => `<tr><th>${weekLabel(c.week)}</th><td>${c.size}</td>${c.later.map(pct).join("")}</tr>`)
     .join("");
 
-  const SORTS = { last: (a, b) => (b.last || "").localeCompare(a.last || "") || a.created.localeCompare(b.created), books: (a, b) => b.books - a.books || a.created.localeCompare(b.created), created: (a, b) => b.created.localeCompare(a.created) };
-  if (!SORTS[sort]) sort = "created"; // newest readers on top by default (Max, 2026-10-21: «неясно як знайти нових»)
-  const min = withBooks === 10 ? 10 : withBooks ? 1 : 0;
-  const shown = s.readers.filter((r) => r.books >= min).slice().sort(SORTS[sort]);
-  const url = ({ books = min, by = sort } = {}) => `/admin${[books ? `books=${books}` : "", by !== "created" ? `sort=${by}` : ""].filter(Boolean).map((q, i) => (i ? "&" : "?") + q).join("")}`;
-  const col = (key, label) => (sort === key ? `<th class="sorted">${label} ↓</th>` : `<th><a href="${url({ by: key })}" title="Відсортувати">${label}</a></th>`);
-  const readerRows = shown
-    .map(
-      (r) => `<tr${r.owner ? ' class="owner"' : ""}>
-  <th><a href="/@${esc(r.username)}">${esc(r.name)}</a> <span class="muted">@${esc(r.username)}</span>${!r.owner && r.created >= addDays(s.now, -6) ? ` <em class="new">новий</em>` : ""}</th>
-  <td>${short(r.created)}</td><td>${short(r.last)}</td><td>${n(r.days)}</td><td>${n(r.books)}</td>
-  <td>${r.digest ? "так" : r.email ? "ні" : `<span class="muted">без пошти</span>`}</td>
-</tr>`
-    )
-    .join("");
+  // Only this week's sign-ups here; everyone is on /admin/readers (Max, 2026-10-22: the full table got unwieldy).
+  const fresh = s.readers.filter((r) => !r.owner && r.created >= addDays(s.now, -6)).sort((a, b) => b.created.localeCompare(a.created));
+  const readerRows = fresh.map(readerRow).join("");
 
   const d = s.digest;
   const digestLine = d ? `Останню розсилку виконано ${short(dayOf(d.finished || d.started))}: надіслано ${d.sent}, пропущено ${d.skipped}${d.errors?.length ? `, помилок ${d.errors.length}` : ""}.` : "Розсилка ще не виконувалась.";
@@ -346,12 +401,17 @@ ${s.cohorts.length ? `<div class="tbl"><table class="cohorts">
 <thead><tr><th>Зареєструвались</th><th>Читачів</th>${s.later.map((k) => `<th>+${k} тиж.</th>`).join("")}</tr></thead>
 <tbody>${cohortRows}</tbody></table></div>` : `<p class="muted">Поки нема жодної когорти.</p>`}
 
-<h2>Читачі</h2>
-<p class="muted small">Нові зверху; «новий» — зареєструвався за останні 7 днів. «Днів» — скільки різних днів читач був на сайті після реєстрації. Заголовки «Зареєструвався», «Востаннє» і «Книжок» сортують таблицю.</p>
-<p class="filter">${[[0, "Усі"], [1, "1+ книжка"], [10, "10+ книжок"]].map(([k, l]) => { const c = s.readers.filter((r) => r.books >= k).length; return k === min ? `<b>${l} (${c})</b>` : `<a href="${url({ books: k })}">${l} (${c})</a>`; }).join(" · ")}</p>
-<div class="tbl"><table class="readers">
-<thead><tr><th>Читач</th>${col("created", "Зареєструвався")}${col("last", "Востаннє")}<th>Днів</th>${col("books", "Книжок")}<th>Лист</th></tr></thead>
-<tbody>${readerRows}</tbody></table></div>
+<h2>Нові читачі за 7 днів</h2>
+<p class="muted small">${fresh.length ? `${fresh.length} ${fresh.length === 1 ? "читач" : fresh.length < 5 ? "читачі" : "читачів"}. ` : "Цього тижня ніхто не реєструвався. "}<a href="/admin/readers">Усі читачі (${s.readers.length})</a>: з пошуком, фільтрами й сортуванням.</p>
+${fresh.length ? `<div class="tbl"><table class="readers">
+<thead><tr>${READER_HEAD}</tr></thead>
+<tbody>${readerRows}</tbody></table></div>` : ""}
+
+<h2>Перегляди за розділами</h2>
+<p class="muted small">Скільки сторінок кожного розділу відкрили (читачі й гості разом, без ботів). Рахується з ${s.sections.length ? "22 жовтня" : "сьогодні"}; які саме сторінки, не зберігаємо.</p>
+${s.sections.length ? `<div class="tbl"><table class="sections">
+<thead><tr><th>Розділ</th><th>Сьогодні</th><th>7 днів</th><th>28 днів</th></tr></thead>
+<tbody>${s.sections.map((x) => `<tr><th>${x.name}</th><td>${n(x.today)}</td><td>${n(x.week)}</td><td>${n(x.month)}</td></tr>`).join("")}</tbody></table></div>` : `<p class="muted">Поки нічого не нарахувалось.</p>`}
 
 <h2>Щотижневий лист</h2>
 <p>${digestLine} <a class="text-link" href="/admin/letter">Твій текст у листі</a> · <a class="text-link" href="/digest/preview">Переглянути свій лист</a> · <a class="text-link" href="/digest/status">стан розсилки</a> · <a class="text-link" href="/refresh-status">стан каталогів</a></p>
@@ -360,4 +420,4 @@ ${s.cohorts.length ? `<div class="tbl"><table class="cohorts">
   return layout({ title: "Статистика", user, path: "/admin", body });
 }
 
-module.exports = { Admin, adminPage, dayOf, weekOf };
+module.exports = { Admin, adminPage, readersPage, dayOf, weekOf, sectionOf };

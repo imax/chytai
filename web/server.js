@@ -24,7 +24,7 @@ const { WelcomeMail } = require("./welcome-mail");
 const listimport = require("./listimport");
 const applebooks = require("./applebooks");
 const enrich = require("./enrich");
-const { Admin, adminPage } = require("./admin");
+const { Admin, adminPage, readersPage } = require("./admin");
 const { Reviews } = require("./reviews");
 
 const ROOT = path.join(__dirname, "..");
@@ -919,7 +919,8 @@ app.post("/api/welcome-mail", owner, async (req, res) => {
   res.redirect("/welcome-mail/preview");
 });
 // The owner's statistics page: readers, retention by sign-up week, what people do on the site (admin.js).
-app.get("/admin", owner, (req, res) => res.send(adminPage({ user: req.user, stats: admin.stats(), layout: pages.layout, withBooks: req.query.books === "10" ? 10 : req.query.books === "1", sort: String(req.query.sort || "created") })));
+app.get("/admin", owner, (req, res) => res.send(adminPage({ user: req.user, stats: admin.stats(), layout: pages.layout })));
+app.get("/admin/readers", owner, (req, res) => res.send(readersPage({ user: req.user, stats: admin.stats(), layout: pages.layout, q: req.query.q, min: Number(req.query.books) || 0, sort: String(req.query.sort || "created"), page: req.query.page })));
 app.get("/admin.json", owner, (req, res) => res.json(admin.stats()));
 // One Google Books request with the server's key, for the owner to see what Google answers from here.
 app.get("/admin/google", owner, async (req, res) => {
