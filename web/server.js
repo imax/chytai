@@ -229,7 +229,19 @@ app.post("/settings/delete", signed, (req, res) => {
 // A pasted list (listimport.js), Goodreads (goodreads.js) or Apple Books (applebooks.js): the reader looks at
 // what each row becomes, unticks what should not go, confirms. A looked-at list waits in memory for half an
 // hour under a token; nothing of it is written before the reader confirms.
-app.get("/add", signed, (req, res) => res.send(pages.addPage({ user: req.user, text: "", error: "" })));
+// The empty list shows a few books readers here have most often as an example, «Назва — Автор».
+let popularCache = { at: 0, list: [] };
+const popular = () => {
+  if (Date.now() - popularCache.at < 3600e3) return popularCache.list;
+  const n = new Map();
+  for (const { id } of social.all()) n.set(id, (n.get(id) || 0) + 1);
+  const list = [...n].sort((a, b) => b[1] - a[1]).map(([id]) => store.book(id)).filter((b) => b && b.title.length <= 40).slice(0, 5).map((b) => ({ title: b.title, author: pages.byline(b.author || "") }));
+  return (popularCache = { at: Date.now(), list }).list;
+};
+app.get("/add", signed, (req, res) => res.send(pages.addPage({ user: req.user, popular: popular() })));
+// «Назад до списку» brings the pasted text back.
+app.post("/add", signed, (req, res) => res.send(pages.addPage({ user: req.user, text: String(req.body.text || ""), popular: popular() })));
+app.get("/api/add/find", signed, (req, res) => res.set("Cache-Control", "no-store").send(pages.addFindResults(store.search(String(req.query.q || "").slice(0, 100), { limit: 6 }))));
 const IMPORTS = {
   list: { name: "списку", parse: null },
   goodreads: { name: "Goodreads", parse: (files) => goodreads.parseExport(files[0].body.toString("utf8")) },
@@ -238,21 +250,21 @@ const IMPORTS = {
 const pendingImports = new Map(); // token -> { reader, source, rows, filename, at }
 const IMPORT_TTL = 30 * 60 * 1000;
 const importSource = (req, res, next) => (IMPORTS[req.params.source] ? ((req.source = req.params.source), next()) : res.status(404).send(pages.messagePage({ title: "Немає такого імпорту", text: "", user: req.user })));
-const importPreview = (req, res, books, { filename = "", skipped = 0 } = {}) => {
+const importPreview = (req, res, books, { filename = "", skipped = 0, text = "" } = {}) => {
   const { rows, counts } = goodreads.plan(store, req.user.id, books);
   for (const [t, p] of pendingImports) if (Date.now() - p.at > IMPORT_TTL) pendingImports.delete(t);
   const token = require("crypto").randomBytes(12).toString("hex");
   pendingImports.set(token, { reader: req.user.id, source: req.source, rows, filename, at: Date.now() });
+  if (req.source === "list") return res.send(pages.addReviewPage({ user: req.user, token, rows, text }));
   res.send(pages.importPreviewPage({ user: req.user, source: req.source, token, rows, counts: { ...counts, skipped }, filename }));
 };
 app.get("/import/list", (req, res) => res.redirect("/add"));
 app.post("/import/list", signed, (req, res) => {
   req.source = "list";
   const text = String(req.body.text || "");
-  const status = STATUSES.includes(req.body.status) ? req.body.status : "read";
-  const { books, error } = listimport.parseList(text, { status });
-  if (error) return res.status(400).send(pages.addPage({ user: req.user, text, status, error }));
-  importPreview(req, res, listimport.resolve(store, books));
+  const { books, error } = listimport.parseList(text, { status: "read" });
+  if (error) return res.status(400).send(pages.addPage({ user: req.user, text, popular: popular(), error }));
+  importPreview(req, res, listimport.resolve(store, books), { text });
 });
 app.get("/import/:source", signed, importSource, (req, res) => res.send(pages.importPage({ user: req.user, source: req.source })));
 app.post("/import/:source", signed, importSource, express.raw({ type: "multipart/form-data", limit: "60mb" }), (req, res) => {
@@ -269,7 +281,13 @@ app.post("/import/:source/apply", signed, importSource, (req, res) => {
   if (!p || p.reader !== req.user.id || p.source !== req.source || Date.now() - p.at > IMPORT_TTL) return res.status(400).send(req.source === "list" ? pages.addPage({ user: req.user, text: "", error: "Час вийшов або список уже імпортовано. Вставте його ще раз." }) : pages.importPage({ user: req.user, source: req.source, error: "Час вийшов або файл уже імпортовано. Виберіть файл ще раз." }));
   pendingImports.delete(req.body.token);
   const keep = new Set([].concat(req.body.keep ?? []).map(Number));
-  const chosen = p.rows.filter((r, i) => keep.has(i));
+  // «Інша книжка» on /add: the reader picked the right book for a line.
+  const swapped = (r, i) => {
+    const to = String(req.body[`swap_${i}`] || "");
+    const b = to && store.book(to);
+    return b ? { ...r, match: { id: b.id, title: b.title, author: b.author, href: b.href } } : r;
+  };
+  const chosen = p.rows.map(swapped).filter((r, i) => keep.has(i) && !(p.source === "list" && r.match && store.entry(req.user.id, r.match.id)));
   // On the shelf they sit after what is already there: the read ones by date read, oldest first, then the rest by date added.
   const key = (r) => (r.read ? `0${r.read}` : `1${r.added || "9999"}`);
   chosen.sort((a, b) => key(a).localeCompare(key(b)));
@@ -280,6 +298,7 @@ app.post("/import/:source/apply", signed, importSource, (req, res) => {
   if (!req.owner && result.created.length) notifyOwner(`Імпорт з ${name}: ${result.created.length} нових книжок`, [`${req.user.name} (@${req.user.username}) імпортував(ла) полицю з ${name}: ${result.added} додано, ${result.updated} доповнено.`, `Нові книжки, яких немає в каталозі (${result.created.length}):`, "", ...result.created.slice(0, 100).map((b) => `• ${b.title}${b.author ? ` — ${b.author}` : ""}  ${site(req)}${store.href(b.id)}`), result.created.length > 100 ? `… і ще ${result.created.length - 100}` : "", "", `Полиця читача: ${site(req)}${req.user.href}`].join("\n"));
   // The new books go to Open Library for covers and details in the background, while the reader looks at the shelf.
   if (result.created.length) enrich.enrich(store, { ids: result.created.map((b) => b.id), log: console.log, googleKey: process.env.GOOGLE_BOOKS_KEY || "" }).catch((e) => console.error("enrich failed:", e));
+  if (req.source === "list") return res.redirect(req.user.href);
   res.send(pages.importDonePage({ user: req.user, source: req.source, result, skipped: p.rows.length - chosen.length }));
 });
 

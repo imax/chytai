@@ -1101,50 +1101,111 @@ ${updatesCache.html}
 </section>` });
 }
 
-// ---- /add: every way to put books on the shelf, on one page (Max, 2026-10-22: «окрему сторінку для
-// додавання, а не як зараз захована в профіль»). A list as text first, then one book by hand, then the
-// imports from Goodreads and Apple Books.
-function addPage({ user, text = "", status = "read", error = "" }) {
-  const opt = (v, l) => `<option value="${v}"${status === v ? " selected" : ""}>${l}</option>`;
-  const body = `
-${pageHead({ kicker: "Моя полиця", title: "Додати книжки", sub: "Список текстом, по одній, або перенести з Goodreads чи Apple Books." })}
-<div class="add-page">
-<section class="add-list">
-  <form method="post" action="/import/list" class="form">
-    <h2>Списком</h2>
-    <p class="muted small">Вставте свій список, по одній книжці на рядок: «Автор — Назва», «Назва — Автор», «Автор. Назва» чи просто назва. Далі покажемо, що знайшлось у каталозі, і спитаємо підтвердження.</p>
+// ---- /add «Додати книжки» (design 4b of 2026-10-22, Max: «окрему сторінку для додавання, а не як зараз
+// захована в профіль»). Reachable any time: the menu, the shelf, /welcome, the welcome letter. Left: what
+// this is and the imports; right: a list to paste, one book per line, any shape. «Знайти книжки» shows
+// what each line matched (addReviewPage); everything goes on the shelf as «прочитано».
+function addAside() {
+  const row = (href, name, what) => `<a class="add-imp" href="${href}"><span>${name}</span><span class="muted">${what} →</span></a>`;
+  return `<div class="add-imports"><p class="add-k">Або імпортуйте</p>${row("/import/goodreads", "Goodreads", "CSV-експорт")}${row("/import/apple-books", "Apple Books", "Імпорт з Мака")}</div>`;
+}
+const addCrumbs = `<p class="add-k"><a href="/me">Моя полиця</a> · <b>Додати книжки</b></p>`;
+function addPage({ user, text = "", popular = [], error = "" }) {
+  const example = popular.length ? popular.map((b) => `${b.title}${b.author ? ` — ${b.author}` : ""}`).join("\n") : "Тарас Шевченко — Кобзар\nМісто — Валер'ян Підмогильний";
+  const body = `<section class="add">
+  <div class="add-intro">
+    ${addCrumbs}
+    <h1>Мої книжки</h1>
+    <p class="lead">Додайте книжки, які ви вже прочитали і хочете бачити на своїй полиці. Оцінки можна проставити наступним кроком.</p>
+    <div class="wide-only">${addAside()}</div>
+  </div>
+  <form method="post" action="/import/list" class="add-paste">
     ${errorLine(error)}
-    <label>Список<textarea name="text" rows="12" required placeholder="Тарас Шевченко — Кобзар
-Валер'ян Підмогильний. Місто
-Дюна — Френк Герберт
-Sapiens: A Brief History of Humankind — Yuval Noah Harari">${esc(text)}</textarea></label>
-    <div class="two">
-      <label>Ці книжки я<select name="status">${opt("read", "Прочитав(ла)")}${opt("want", "Хочу прочитати")}${opt("reading", "Читаю зараз")}</select></label>
-    </div>
-    <div class="actions"><button class="btn primary">Переглянути</button><span class="muted small">Нічого не запишеться, поки ви не підтвердите.</span></div>
+    <div class="add-field"><textarea name="text" required spellcheck="false" placeholder="${attr(example)}">${esc(text)}</textarea>${popular.length ? `<span class="add-hint">Популярне на Chytai — як приклад</span>` : ""}</div>
+    <p class="small muted">Один рядок — одна книжка. Формат вільний: «Назва — Автор» або просто назва.</p>
+    <button class="btn primary">Знайти книжки</button>
   </form>
-</section>
-<section class="add-one">
-  <form method="post" action="/api/book" class="form">
-    <h2>Одна книжка</h2>
-    <p class="muted small">Спершу <a class="text-link" href="/search">пошукайте</a>: книжка з каталогу стане на полицю з обкладинкою і сторінкою. Тут додайте ту, якої на Chytai ще немає.</p>
-    <label>Назва <input name="title" required></label>
-    <label>Автор <input name="author"></label>
-    <label>Обкладинка (URL) <input name="cover" type="url" placeholder="https://…"></label>
-    <div class="two">
-      <label>Статус <select name="status"><option value="">без статусу</option><option value="reading">Читаю</option><option value="read">Прочитано</option><option value="want" selected>Хочу прочитати</option></select></label>
-      <label>Примірник <select name="copy"><option value="">не вказано</option><option value="paper">На папері</option><option value="ebook">E-book</option><option value="seeking">Шукаю на папері</option></select></label>
-    </div>
-    <div class="actions"><button class="btn primary">Додати</button></div>
-  </form>
-  <section class="form add-imports">
-    <h2>Перенести звідкись</h2>
-    <p class="muted small">З Goodreads: статуси, оцінки, дати й рецензії з файлу експорту. З Apple Books (лише на Mac): книжки і статуси.</p>
-    <div class="actions"><a class="btn" href="/import/goodreads">Імпорт з Goodreads</a><a class="btn" href="/import/apple-books">Імпорт з Apple Books</a></div>
-  </section>
-</section>
-</div>`;
+  <div class="narrow-only">${addAside()}</div>
+</section>`;
   return layout({ title: "Додати книжки", body, user, path: "/add", noindex: true });
+}
+
+// Step two of /add: every line with what it matched. A found book is ticked; «Інша книжка» looks for the right
+// one (addFindResults); a line with no match can be looked for or added as the reader's own book, without a cover.
+function addReviewPage({ user, token, rows, text }) {
+  const found = rows.filter((r) => r.match).length;
+  const line = (r, i) => {
+    const own = !!r.own;
+    const b = r.match;
+    return `<li class="add-row${b ? "" : " missing"}${own ? " own" : ""}" data-i="${i}">
+  <label class="add-tick"><input type="checkbox" name="keep" value="${i}"${b && !own ? " checked" : ""}${own ? " disabled" : ""}><span></span></label>
+  <span class="add-cover">${b ? cover(b, "sm") : `<span class="cover-none"></span>`}</span>
+  <span class="add-body">
+    <b class="add-title">${esc(b ? b.title : r.title)}</b>
+    <span class="add-by">${b ? esc(byline(b.author || "")) : "Не знайшли в каталозі"}${own ? ` · <span class="badge">вже на полиці</span>` : ""}</span>
+    ${b ? `<span class="add-from">з рядка «${esc(r.line || r.title)}»</span>` : `<button type="button" class="text-link small" data-own>Додати без обкладинки</button>`}
+  </span>
+  <span class="add-act">${own ? "" : `<button type="button" class="text-link" data-find>${b ? "Інша книжка" : "Шукати"}</button>`}</span>
+  <input type="hidden" name="swap_${i}" value="">
+  <div class="add-find" hidden><input type="search" value="${attr(r.title)}" placeholder="назва або автор" autocomplete="off"><div class="add-found"></div></div>
+</li>`;
+  };
+  const body = `<form method="post" action="/import/list/apply" class="add add-review">
+  <input type="hidden" name="token" value="${attr(token)}">
+  <div class="add-intro">
+    ${addCrumbs}
+    <h1>Знайшли ${found} з ${rows.length}</h1>
+    <p class="lead">Перевірте :) Якщо книжки немає, її можна додати вручну. «Інша книжка», якщо знайшли неправильно.</p>
+    <button class="btn primary" data-cta>Додати <span data-n></span> на полицю</button>
+    <p><button type="submit" class="text-link" form="add-back">Назад до списку</button></p>
+    <p class="small muted">Усе потрапить у «прочитано». Оцінки й нотатки на полиці.</p>
+  </div>
+  <ol class="add-rows">${rows.map(line).join("")}</ol>
+</form>
+<form method="post" action="/add" id="add-back" hidden><input type="hidden" name="text" value="${attr(text)}"></form>
+<script>
+(() => {
+  const form = document.querySelector(".add-review");
+  const word = (n) => (n % 10 === 1 && n % 100 !== 11 ? "книжку" : n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20) ? "книжки" : "книжок");
+  const count = () => { const n = form.querySelectorAll("input[name=keep]:checked").length; form.querySelectorAll("[data-n]").forEach((s) => (s.textContent = n + " " + word(n))); form.querySelectorAll("[data-cta]").forEach((b) => (b.disabled = !n)); };
+  form.addEventListener("change", count);
+  let timer;
+  const look = (row) => {
+    const box = row.querySelector(".add-found");
+    const q = row.querySelector(".add-find input").value.trim();
+    clearTimeout(timer);
+    timer = setTimeout(async () => { box.innerHTML = q.length < 2 ? "" : await (await fetch("/api/add/find?q=" + encodeURIComponent(q))).text(); }, 200);
+  };
+  form.addEventListener("input", (e) => { const row = e.target.closest(".add-find") && e.target.closest(".add-row"); if (row) look(row); });
+  form.addEventListener("keydown", (e) => { if (e.key === "Enter" && e.target.closest(".add-find")) e.preventDefault(); });
+  form.addEventListener("click", (e) => {
+    const row = e.target.closest(".add-row");
+    if (!row) return;
+    if (e.target.closest("[data-find]")) { const f = row.querySelector(".add-find"); f.hidden = !f.hidden; if (!f.hidden) { f.querySelector("input").focus(); look(row); } }
+    if (e.target.closest("[data-own]")) { row.querySelector("input[name=keep]").checked = true; row.classList.add("as-own"); count(); }
+    const pick = e.target.closest("[data-pick]");
+    if (pick) {
+      row.querySelector("input[name=swap_" + row.dataset.i + "]").value = pick.dataset.pick;
+      row.querySelector(".add-cover").innerHTML = pick.querySelector(".cover").outerHTML;
+      row.querySelector(".add-title").textContent = pick.dataset.title;
+      row.querySelector(".add-by").textContent = pick.dataset.author;
+      row.classList.remove("missing", "as-own");
+      row.querySelector("[data-own]")?.remove();
+      row.querySelector("[data-find]").textContent = "Інша книжка";
+      row.querySelector(".add-find").hidden = true;
+      row.querySelector("input[name=keep]").checked = true;
+      count();
+    }
+  });
+  count();
+})();
+</script>`;
+  return layout({ title: "Додати книжки", body, user, path: "/add", noindex: true });
+}
+// «Інша книжка»: what the catalog has for the typed words, each a button that takes its place.
+function addFindResults(hits) {
+  if (!hits.length) return `<p class="small muted">Нічого не знайшлося. Спробуйте інакше або додайте без обкладинки.</p>`;
+  return hits.map(({ book: b }) => `<button type="button" class="add-pick" data-pick="${attr(b.id)}" data-title="${attr(b.title)}" data-author="${attr(byline(b.author || ""))}">${cover(b, "xs")}<span><b>${esc(b.title)}</b><span class="muted">${esc(byline(b.author || ""))}</span></span></button>`).join("");
 }
 
 // ---- import from elsewhere (/import/goodreads, /import/apple-books, /import/list) ----
@@ -1271,8 +1332,8 @@ module.exports = {
   translationsPage,
   decidedList,
   welcomePage,
-  addPage,
+  addPage, addReviewPage, addFindResults,
   layout, homePage, bookPage, editPage, libraryPage, readersPage, publishersPage, publisherPage, searchPage, searchResults, authorPage,
   loginPage, codePage, signupPage, settingsPage, privacyPage, updatesPage, messagePage, digestPage, followMailPage, importPage, importPreviewPage, importDonePage,
-  esc, STATUS, COPY, inline, isUk, setTitleLinks, setAuthorLinks, setStats, setReadersWithNote,
+  esc, byline, STATUS, COPY, inline, isUk, setTitleLinks, setAuthorLinks, setStats, setReadersWithNote,
 };

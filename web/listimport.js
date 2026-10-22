@@ -91,7 +91,7 @@ function parseList(text, { status = "read" } = {}) {
   for (const raw of String(text || "").split(/\r?\n/)) {
     const p = parseLine(raw);
     if (!p) continue;
-    books.push({ title: p.title, author: p.author, alt: p.alt, isbns: [], status, rating: p.rating, year: status === "read" ? p.year : null, note: "", copy: "", added: "", read: "" });
+    books.push({ line: raw.trim().slice(0, 200), title: p.title, author: p.author, alt: p.alt, isbns: [], status, rating: p.rating, year: status === "read" ? p.year : null, note: "", copy: "", added: "", read: "" });
   }
   if (!books.length) return { error: "Список порожній: по одній книжці на рядок." };
   if (books.length > 1000) return { error: "Забагато рядків: до тисячі за раз." };
