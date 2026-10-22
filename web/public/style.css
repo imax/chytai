@@ -460,6 +460,7 @@ dialog .form { margin-top: 18px; }
 .add-hint { position: absolute; right: 16px; bottom: 12px; font-size: 12px; color: var(--muted); pointer-events: none; }
 .add-field textarea:not(:placeholder-shown) + .add-hint { display: none; }
 .add .narrow-only { display: none; }
+.add-review .add-intro { position: sticky; top: 24px; } /* a long list scrolls, the button stays (Max) */
 .add-review .add-intro .btn { margin-bottom: 18px; }
 .add-status { display: flex; align-items: center; gap: 10px; margin: 0 0 14px; font-size: 14px; color: var(--muted); }
 .add-status select { border: 0; background: transparent; color: var(--ink); cursor: pointer; padding: 2px 0; }
@@ -500,7 +501,9 @@ dialog .form { margin-top: 18px; }
   .add .narrow-only { display: block; }
   .add-field textarea { min-height: 220px; }
   .add-paste .btn { width: 100%; text-align: center; }
-  .add-review .add-intro .btn { width: 100%; }
+  .add-review { padding-bottom: 104px; }
+  .add-review .add-intro { position: static; }
+  .add-review .add-intro .btn { position: fixed; left: 16px; right: 16px; bottom: calc(12px + env(safe-area-inset-bottom)); width: auto; margin: 0; z-index: 3; box-shadow: 0 6px 20px rgba(var(--shadow), 0.18); }
   .add-row { grid-template-columns: 22px 44px minmax(0, 1fr); gap: 0 12px; }
   .add-row .cover.sm, .add-cover .cover-none { width: 44px; }
   .add-act { grid-column: 3; }
