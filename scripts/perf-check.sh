@@ -16,7 +16,6 @@ pages=(
   /@maxua                             # the biggest reader's shelf
   /book/east-of-eden                  # a book with editions and readers
   /book/tsyrtseia
-  /author/john-steinbeck
   /updates
 )
 # The fastest of three answers, in seconds (99 when none came); a redirect is followed (a renamed slug is
@@ -31,6 +30,10 @@ measure() {
   done
   echo "$best"
 }
+# An author's address follows the spelling most of their books use, so it can change with the data
+# (Стейнбек's moved on 2026-10-22): the author page is the one linked from a book page.
+author=$(curl -s -m 30 "$SITE/book/east-of-eden" | grep -o 'href="/author/[^"]*"' | head -1 | cut -d'"' -f2)
+pages+=("${author:-/author/missing-on-book-page}")
 slow=()
 for p in "${pages[@]}"; do
   best=$(measure "$p")

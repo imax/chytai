@@ -7,7 +7,7 @@ name: Deploy web
 on:
   push:
     branches: [main]
-    paths: ["web/**", "package.json", "package-lock.json", ".github/workflows/web.yml"]
+    paths: ["web/**", "package.json", "package-lock.json", ".github/workflows/web.yml", "scripts/perf-check.sh"]
   workflow_dispatch:
 
 concurrency: deploy-web
