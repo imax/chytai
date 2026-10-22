@@ -120,10 +120,10 @@ function resolve(store, books) {
         }
       }
     }
-    // Nothing known: a name of two or three capitalised words at the end is the author («… Іван Іванов»).
+    // Nothing known: two capitalised words at the end are the author («… Іван Іванов»).
     if (!author && !store.findWork({ title })) {
       const w = title.split(" ");
-      for (const n of [3, 2]) {
+      for (const n of [2]) {
         if (w.length > n && looksLikeName(w.slice(-n).join(" "))) {
           [title, author] = [w.slice(0, -n).join(" "), w.slice(-n).join(" ")];
           break;
