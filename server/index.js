@@ -468,19 +468,18 @@ function loginPage(req, error) {
 }
 
 // The first thing someone not signed in sees (Max, 2026-10-22): what the reader is, then «Увійти».
-// The words in [квадратних дужках] are places for Max's text; he writes the copy himself.
+// The words are Max's; he writes the copy himself.
 function landingPage(req) {
   const signIn = `${WEB_URL}/reader-login?back=${encodeURIComponent(`${req.protocol}://${req.get("host")}`)}`;
   const demo = GUEST_ENABLED && demoBooks().length;
-  const feature = (title, text) => `<div class="f"><h3>${esc(title)}</h3><p>${esc(text)}</p></div>`;
   return `<!doctype html>
 <html lang="uk"><head><meta charset="utf-8"><title>Chytai · читалка</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="description" content="Читалка з AI-explainer: веб-версія і мобільний застосунок.">
+<meta name="description" content="Читалка з AI-explainer. Спроба пере-придумати зручний інтерфейс для читання онлайн.">
 <link rel="icon" href="/icon.png"><link rel="apple-touch-icon" href="/icon.png">
 <style>
-  :root { color-scheme: light dark; --bg: #f6efe0; --fg: #3b2f1e; --muted: rgba(59,47,30,0.65); --card: rgba(255,255,255,0.55); --accent: #b7791f; }
-  @media (prefers-color-scheme: dark) { :root { --bg: #1e1e20; --fg: #e6e6e6; --muted: rgba(230,230,230,0.65); --card: #2a2a2d; } }
+  :root { color-scheme: light dark; --bg: #f6efe0; --fg: #3b2f1e; --muted: rgba(59,47,30,0.65); --accent: #b7791f; }
+  @media (prefers-color-scheme: dark) { :root { --bg: #1e1e20; --fg: #e6e6e6; --muted: rgba(230,230,230,0.65); } }
   * { box-sizing: border-box; }
   body { margin: 0; font: 17px/1.55 -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif; background: var(--bg); color: var(--fg); }
   .wrap { max-width: 980px; margin: 0 auto; padding: 0 20px; }
@@ -488,6 +487,7 @@ function landingPage(req) {
   header img { width: 34px; height: 34px; border-radius: 8px; }
   header b { font-size: 20px; } header a.in { margin-left: auto; color: var(--accent); font-weight: 600; text-decoration: none; }
   .hero { display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 40px; align-items: center; padding: 30px 0 50px; }
+  .wip { display: inline-block; margin: 0 0 14px; padding: 3px 10px; border: 1px solid var(--accent); border-radius: 999px; color: var(--accent); font-size: 13px; font-weight: 600; }
   h1 { font-size: 40px; line-height: 1.15; margin: 0 0 14px; letter-spacing: -0.01em; }
   .lead { font-size: 19px; color: var(--muted); margin: 0 0 26px; }
   .acts { display: flex; flex-wrap: wrap; gap: 12px 18px; align-items: center; }
@@ -495,35 +495,25 @@ function landingPage(req) {
   .acts a.demo { color: var(--accent); font-weight: 600; }
   .shot { justify-self: center; width: min(320px, 100%); border-radius: 28px; overflow: hidden; box-shadow: 0 20px 50px rgba(0,0,0,0.18); border: 8px solid #1d1d1f; }
   .shot img { display: block; width: 100%; }
-  .features { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; padding-bottom: 50px; }
-  .f { background: var(--card); border-radius: 16px; padding: 20px 22px; }
-  .f h3 { margin: 0 0 6px; font-size: 18px; } .f p { margin: 0; color: var(--muted); font-size: 15px; }
-  .todo { color: #c0392b; }
-  .err { color: #c0392b; margin: 0 0 16px; }
   footer { padding: 24px 0 40px; color: var(--muted); font-size: 14px; } footer a { color: inherit; }
   @media (max-width: 760px) {
     .hero { grid-template-columns: 1fr; gap: 30px; padding-top: 10px; }
     h1 { font-size: 30px; }
-    .features { grid-template-columns: 1fr; }
   }
 </style></head>
 <body><div class="wrap">
   <header><img src="/icon.png" alt=""><b>Chytai</b><a class="in" href="${esc(signIn)}">Увійти</a></header>
   <section class="hero">
     <div>
-      <h1>Читалка з AI-explainer <span class="todo">[заголовок]</span></h1>
-      <p class="lead">Для зручного читання. Веб версія і мобільний застосунок (поки в TestFlight). <span class="todo">[текст]</span></p>
+      <span class="wip">Work-in-progress</span>
+      <h1>Читалка з AI-explainer</h1>
+      <p class="lead">Спроба пере-придумати зручний інтерфейс для читання онлайн.</p>
       <div class="acts"><a class="btn" href="${esc(signIn)}">Увійти</a>${demo ? `<a class="demo" href="/demo">Подивитися демо</a>` : ""}</div>
     </div>
     <div class="shot"><img src="/landing-explain.jpg" alt="Читалка Chytai: переклад виділеного абзацу"></div>
   </section>
-  <section class="features">
-    ${feature("Пояснення", "[текст]")}
-    ${feature("Переклад", "[текст]")}
-    ${feature("Нотатки", "[текст]")}
-  </section>
   <footer>Частина <a href="https://chytai.org.ua">chytai.org.ua</a></footer>
-</div></body></html>`.replace(/\[(заголовок|текст)\]/g, '<span class="todo">[$1]</span>').replace(/<span class="todo"><span class="todo">(\[[^\]]+\])<\/span><\/span>/g, '<span class="todo">$1</span>');
+</div></body></html>`;
 }
 
 // ---------- App ----------
