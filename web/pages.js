@@ -582,6 +582,27 @@ ${list.length ? `<table class="readers"><tr><th>Книжка</th><th>Резул�
   return layout({ title: "Українські видання", user, path: "/admin", body, noindex: true });
 }
 
+// /admin/readeat: Readeat as a source of details for the readers' own books (readeat.js). A trial shows what it
+// would fill and writes nothing; «Увімкнути» lets the weekly pass, imports and ukfind use it.
+function readeatPage({ user, on, waiting, trial, log }) {
+  const what = (p) => [p.cover ? "обкладинка" : "", p.isbns ? "ISBN" : "", p.published ? `рік ${p.published}` : "", p.pages ? `${p.pages} с.` : "", p.language ? p.language : "", p.altTitle ? `оригінал «${p.altTitle}»` : "", p.blurb ? "опис" : "", p.links ? "посилання" : ""].filter(Boolean).join(", ");
+  const row = (r) => `<tr><td><a href="${attr(r.book.href || `/book/${r.book.id}`)}">${esc(r.book.title)}</a><br><span class="small muted">${esc(r.book.author || "")}</span></td>
+<td>${r.info ? `<div style="display:flex;gap:.6em;align-items:flex-start">${r.info.cover ? `<img src="${attr(r.info.cover)}" alt="" style="width:48px;height:auto;border-radius:3px">` : ""}<span><a href="${attr(r.info.url)}" target="_blank" rel="noopener">${esc(r.info.title)}</a><br><span class="small muted">${esc([r.info.author, r.info.publisher, r.info.published, r.info.translator ? `пер. ${r.info.translator}` : ""].filter(Boolean).join(" · "))}</span>${r.info.blurb ? `<br><span class="small">${esc(r.info.blurb.slice(0, 220))}${r.info.blurb.length > 220 ? "…" : ""}</span>` : ""}</span></div>` : `<span class="muted">${r.error ? `помилка: ${esc(r.error)}` : "не знайшли"}</span>`}</td>
+<td class="small">${r.info ? esc(what(r.patch)) || "нічого нового" : ""}</td></tr>`;
+  const found = trial?.rows ? trial.rows.filter((r) => r.info).length : 0;
+  const body = `<div class="admin"><h1>Readeat</h1>
+<p class="lead">Readeat як джерело даних для книжок читачів, набраних українською: обкладинка українського видання, ISBN, рік, сторінки, опис, назва оригіналу і посилання. Також перший, безкоштовний крок пошуку українських видань (<a class="text-link" href="/admin/ukfind">/admin/ukfind</a>). Російськомовні видання не беремо.</p>
+<p>Зараз: <b>${on ? "увімкнено" : "вимкнено"}</b> · книжок, яким чогось бракує: ${waiting}${log ? `<br><span class="small muted">${esc(log)}</span>` : ""}</p>
+<form method="post" action="/admin/readeat" class="form"><button class="btn ${on ? "ghost" : "primary"}" name="on" value="${on ? "0" : "1"}">${on ? "Вимкнути" : "Увімкнути"}</button></form>
+<h2>Пробний прогін</h2>
+<p class="muted">Нічого не записує, лише показує, що заповнив би.</p>
+${trial?.running ? `<p class="flash">Шукаю… Оновіть сторінку за хвилину.</p>` : `<form method="post" action="/admin/readeat" class="form"><label>Скільки книжок<input name="n" type="number" min="1" max="30" value="10"></label><label>Або конкретні книжки (посилання чи id через пробіл)<input name="ids" placeholder="https://chytai.org.ua/book/…"></label><button class="btn primary">Спробувати</button></form>`}
+${trial && !trial.running ? `<p>${esc(trial.at.slice(0, 16).replace("T", " "))}: ${trial.error ? `помилка: ${esc(trial.error)}` : `знайшли ${found} з ${trial.asked} за ${Math.round(trial.ms / 1000)} с`}</p>
+${trial.rows?.length ? `<table class="readers"><tr><th>Книжка</th><th>На Readeat</th><th>Додасть</th></tr>${trial.rows.map(row).join("")}</table>` : ""}` : ""}
+</div>`;
+  return layout({ title: "Readeat", user, path: "/admin", body, noindex: true });
+}
+
 // A book's other-language pages (Max, 2026-10-21: «дві сторінки і спільні оцінки»): the original under a
 // Ukrainian edition, the Ukrainian edition under the original; the readers and ratings are shared.
 const twinLabel = (book, t) => (CYR.test(book.title) && !CYR.test(t.title) ? "Оригінал" : !CYR.test(book.title) && CYR.test(t.title) ? "Українською" : "Інше видання");
@@ -1707,6 +1728,7 @@ function messagePage({ title, text, user }) {
 }
 
 module.exports = {
+  readeatPage,
   nowPage,
   letterEditorPage,
   mailSettingsPage,

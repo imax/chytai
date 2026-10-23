@@ -1011,11 +1011,6 @@ class Store {
     this.entries = new Map(); // reader id -> { book id -> entry }
     this.subs = new Map(); // reader id -> [shelf id]
     for (const r of db.prepare("SELECT id, data FROM books").all()) this.lib.books[r.id] = JSON.parse(r.data);
-    // Max (2026-10-19): «не дуже люблю Readeat», so its links (imported from Books.md) go.
-    for (const b of Object.values(this.lib.books)) {
-      const links = (b.links || []).filter((l) => !/readeat\.com/i.test(l.url));
-      if (links.length !== (b.links || []).length) (b.links = links), this.writeBook(b.id);
-    }
     for (const r of db.prepare("SELECT * FROM entries").all()) this.entriesOf(r.reader)[r.book] = { status: r.status, year: r.year, rating: r.rating, note: r.note, copy: r.copy, order: r.ord, ...(r.added ? { added: r.added } : {}), ...(r.updated ? { updated: r.updated } : {}), ...(r.kids ? { kids: true } : {}) };
     for (const r of db.prepare("SELECT reader, shelf FROM subscriptions").all()) this.subscriptions(r.reader).push(r.shelf);
   }

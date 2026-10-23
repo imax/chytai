@@ -24,6 +24,7 @@ const { WelcomeMail } = require("./welcome-mail");
 const listimport = require("./listimport");
 const applebooks = require("./applebooks");
 const enrich = require("./enrich");
+const readeat = require("./readeat");
 const { BookPage, isUrl } = require("./bookpage");
 const { UkFinder } = require("./ukfind");
 const { Admin, adminPage, readersPage, overviewsPage } = require("./admin");
@@ -101,7 +102,10 @@ const refreshUk = () => wikidata.refreshUk(store, { log: console.log }).catch((e
 // Who is who among the authors (authors.js), weekly, after the Ukrainian titles.
 const refreshAuthors = () => authors.refresh(store, { log: console.log }).catch((e) => console.error("authors failed:", e));
 // Details of the readers' own books from Open Library (enrich.js), weekly, after those.
-const refreshDetails = () => enrich.refresh(store, { log: console.log, googleKey: process.env.GOOGLE_BOOKS_KEY || "" }).catch((e) => console.error("enrich failed:", e));
+// Readeat (readeat.js) goes first for books typed in Ukrainian: the Ukrainian edition's cover, not the original's.
+const readeatPass = (ids) => readeat.enrich(store, { ids, log: console.log }).catch((e) => console.error("readeat failed:", e));
+const details = (opts) => readeatPass(opts.ids).then(() => enrich.enrich(store, { log: console.log, googleKey: process.env.GOOGLE_BOOKS_KEY || "", ...opts })).catch((e) => console.error("enrich failed:", e));
+const refreshDetails = () => readeatPass().then(() => enrich.refresh(store, { log: console.log, googleKey: process.env.GOOGLE_BOOKS_KEY || "" })).catch((e) => console.error("enrich failed:", e));
 setTimeout(() => refreshUk().then(refreshAuthors).then(refreshDetails), 60000).unref();
 setInterval(() => refreshUk().then(refreshAuthors).then(refreshDetails), 6 * 3600 * 1000).unref();
 
@@ -380,11 +384,8 @@ app.post("/import/:source", signed, importSource, express.raw({ type: "multipart
   importPreview(req, res, books, { filename: files.length > 1 ? `${files.length} файли` : files[0].filename, skipped });
 });
 // A book read from a page, as an import row: the store's link on the book page, the annotation as its blurb.
-// No Readeat on the site (Max, 2026-10-19): a book from there keeps its title, author and cover, not the link or the description.
-const fromPage = (b) => {
-  const readeat = /readeat\.com/i.test(b.url || "");
-  return { title: b.title, author: b.author, isbns: b.isbns || [], cover: b.cover || "", blurb: readeat ? "" : b.blurb || "", blurbSource: b.site || "", pages: b.pages || null, published: b.published || null, link: b.url && !readeat ? { label: b.site || new URL(b.url).hostname, url: b.url } : null };
-};
+// Readeat links are fine on the site again (Max, 2026-10-23: «думаю і на сайті можемо лінки додавати насправді»).
+const fromPage = (b) => ({ title: b.title, author: b.author, isbns: b.isbns || [], cover: b.cover || "", blurb: b.blurb || "", blurbSource: b.site || "", pages: b.pages || null, published: b.published || null, link: b.url ? { label: b.site || new URL(b.url).hostname, url: b.url } : null });
 app.post("/import/:source/apply", signed, importSource, async (req, res) => {
   const p = pendingImports.get(String(req.body.token || ""));
   if (!p || p.reader !== req.user.id || p.source !== req.source || Date.now() - p.at > IMPORT_TTL) return res.status(400).send(req.source === "list" ? pages.addPage({ user: req.user, text: "", error: "Час вийшов або список уже імпортовано. Вставте його ще раз." }) : pages.importPage({ user: req.user, source: req.source, error: "Час вийшов або файл уже імпортовано. Виберіть файл ще раз." }));
@@ -442,8 +443,8 @@ app.post("/import/:source/apply", signed, importSource, async (req, res) => {
   console.log(`${name} import @${req.user.username}: ${result.added} added, ${result.updated} updated, ${result.created.length} new books`);
   // New books by hand are mailed to the owner one by one; an import sends one letter with the list.
   if (!req.owner && result.created.length) notifyOwner(`Імпорт з ${name}: ${result.created.length} нових книжок`, [`${req.user.name} (@${req.user.username}) імпортував(ла) полицю з ${name}: ${result.added} додано, ${result.updated} доповнено.`, `Нові книжки, яких немає в каталозі (${result.created.length}):`, "", ...result.created.slice(0, 100).map((b) => `• ${b.title}${b.author ? ` — ${b.author}` : ""}  ${site(req)}${store.href(b.id)}`), result.created.length > 100 ? `… і ще ${result.created.length - 100}` : "", "", `Полиця читача: ${site(req)}${req.user.href}`].join("\n"));
-  // The new books go to Open Library for covers and details in the background, while the reader looks at the shelf.
-  if (result.created.length) enrich.enrich(store, { ids: result.created.map((b) => b.id), log: console.log, googleKey: process.env.GOOGLE_BOOKS_KEY || "" }).catch((e) => console.error("enrich failed:", e));
+  // The new books go to Readeat and Open Library for covers and details in the background, while the reader looks at the shelf.
+  if (result.created.length) details({ ids: result.created.map((b) => b.id) });
   if (req.source === "list") return res.redirect(req.user.href);
   res.send(pages.importDonePage({ user: req.user, source: req.source, result, skipped: p.rows.length - chosen.length }));
 });
@@ -895,7 +896,7 @@ app.post("/api/book", signed, (req, res) => {
   const b = store.addBook({ title, author, cover: /^https?:\/\//.test(cover || "") ? cover : "" });
   store.setEntry(req.user.id, b.id, { status: STATUSES.includes(status) ? status : "", copy: ["paper", "ebook", "seeking"].includes(copy) ? copy : "" });
   if (status === "want") advice.want(b.id);
-  enrich.enrich(store, { ids: [b.id], log: console.log, googleKey: process.env.GOOGLE_BOOKS_KEY || "" }).catch((e) => console.error("enrich failed:", e));
+  details({ ids: [b.id] });
   // A book typed in by hand may duplicate a catalog's or be junk: the owner gets a letter and sorts it out
   // (Max, 2026-10-20: «треба … сповіщення мені на імейл. будемо поки вручну розбирати»).
   if (!req.owner) notifyOwner(`Нова книжка: ${b.title}`, [`${req.user.name} (@${req.user.username}) додав(ла) книжку вручну.`, "", `Назва: ${b.title}`, `Автор: ${b.author || "не вказано"}`, b.cover ? `Обкладинка: ${b.cover}` : "", "", `Книжка: ${site(req)}${store.href(b.id)}`, `Полиця читача: ${site(req)}${req.user.href}`].filter((l, i, a) => l || a[i - 1]).join("\n"));
@@ -1126,6 +1127,21 @@ function ukAskFor(req, book) {
   const st = ukfind.state(book.id);
   return st === "found" ? null : !ukfind.client && st !== "none" ? "ask" : st;
 }
+// /admin/readeat: what Readeat would fill for the readers' own books (a trial writes nothing), and the switch.
+let readeatTrial = null;
+app.get("/admin/readeat", owner, (req, res) => res.send(pages.readeatPage({ user: req.user, on: readeat.on(store), waiting: readeat.wanting(store).length, trial: readeatTrial, log: store.db.get("readeat:log") || "" })));
+app.post("/admin/readeat", owner, (req, res) => {
+  if (req.body.on != null) store.db.set("readeat:on", req.body.on === "1" ? "1" : "0");
+  else if (!readeatTrial?.running) {
+    const ids = String(req.body.ids || "").split(/[\s,]+/).map((x) => store.resolve(x.replace(/^.*\/book\//, "")) || "").filter(Boolean);
+    readeatTrial = { running: true, at: new Date().toISOString() };
+    readeat.enrich(store, { dry: true, ids: ids.length ? ids : undefined, max: Math.min(Number(req.body.n) || 10, 30), log: console.log })
+      .then((r) => (readeatTrial = { ...r, at: readeatTrial.at }))
+      .catch((e) => (readeatTrial = { error: e.message, at: readeatTrial.at, rows: [] }));
+  }
+  if (req.body.on === "1") readeatPass();
+  res.redirect(303, "/admin/readeat");
+});
 app.get("/admin/ukfind", owner, (req, res) => res.send(pages.ukFindPage({ user: req.user, candidates: ukfind.candidates().length, list: ukfind.list(), running: ukfind.running, enabled: !!ukfind.client })));
 app.post("/admin/ukfind", owner, async (req, res) => {
   const ids = String(req.body.ids || "").split(/[\s,]+/).map((x) => store.resolve(x.replace(/^.*\/book\//, "")) || "").filter(Boolean);

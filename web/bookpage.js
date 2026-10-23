@@ -174,6 +174,11 @@ class BookPage {
     const day = new Date().toISOString().slice(0, 10);
     const a = this.asked.get(reader);
     this.asked.set(reader, a && a.day === day ? { day, n: a.n + 1 } : { day, n: 1 });
+    // Readeat's pages carry the book whole (readeat.js), no need to ask Claude.
+    if (!debug && /^https:\/\/(www\.)?readeat\.com\/product\//.test(url)) {
+      const p = await require("./readeat").product(url, this.fetchImpl === fetch ? {} : { fetchImpl: this.fetchImpl }).catch((e) => (this.log(`bookpage ${url}: ${e.message}`), null));
+      if (p?.title) return this.keep(url, { title: p.title.slice(0, 200), author: p.author.slice(0, 200), cover: p.cover, blurb: p.blurb.slice(0, 1500), isbns: p.isbns, published: p.published, pages: p.pages, url: p.url, site: p.site });
+    }
     let m;
     try {
       const page = await getPage(url, this.fetchImpl, this.check);
