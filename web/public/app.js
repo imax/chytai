@@ -64,7 +64,7 @@
         let next = h.nextElementSibling, any = false, n = 0;
         while (next && !next.matches("h2.year")) {
           if (!next.classList.contains("hidden")) any = true;
-          if (hit.has(next)) n++;
+          if (hit.has(next)) n += Number(next.dataset.books) || 1; // a series row counts its volumes
           next = next.nextElementSibling;
         }
         h.classList.toggle("hidden", !byOrder || !any);

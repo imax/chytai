@@ -461,6 +461,47 @@ class Store {
     return list.find((x) => !had.has(x.n))?.id || null;
   }
 
+  // A book's series in short, for a reader's shelf (pages.libraryPage folds the volumes a reader has into
+  // one row): { key, name, n, total } or null. `total` counts the volumes we know of, ours or Wikidata's.
+  seriesOf(id) {
+    const c = this.cycles?.get(this.canonical(id));
+    if (!c) return null;
+    const info = this.cycleInfo.get(c.key) || { name: "", members: [] };
+    const ns = new Set([...info.members.map((m) => m.n), ...this.cycleIds.get(c.key).map((x) => x.n)]);
+    const cyr = !!info.uk && /[а-яіїєґ]/i.test(this.book(id)?.title || "");
+    return { key: c.key, name: (cyr && info.uk) || info.name, n: c.n, total: ns.size };
+  }
+
+  // «Уся серія» on the edit page (Max, 2026-10-23: the eight volumes of Dungeon Crawler Carl read in one
+  // summer are one row on the shelf, not eight): the status, rating, year and copy go on every volume of
+  // the series of `id`; the note stays on the book being edited. A volume we know only from Wikidata is
+  // added as the reader's own book, in the series at its place, so the shelf shows the whole set.
+  // Returns the ids of the books added, for the details pass.
+  markSeries(reader, id, patch) {
+    const c = this.cycleOf(id);
+    if (!c) return [];
+    const author = this.book(id)?.author || "";
+    const added = [];
+    const { note, ...rest } = patch;
+    const entries = this.entriesOf(reader);
+    for (const v of c.items) {
+      // The reader may have the volume as the original where we'd show the translation: their entry wins.
+      let vid = (v.id && this.cycleIds.get(c.key).find((x) => x.n === v.n && entries[x.id])?.id) || v.id;
+      if (!vid) {
+        vid = this.addBook({ title: v.title, author, cover: "", links: [], cycle: { name: c.name, n: v.n } }).id;
+        added.push(vid);
+      }
+      this.setEntry(reader, vid, this.canonical(vid) === this.canonical(id) ? patch : rest);
+    }
+    if (added.length) this.linkCycles();
+    return added;
+  }
+
+  removeSeries(reader, id) {
+    const c = this.cycleOf(id);
+    for (const v of c?.items || []) if (v.id && this.entry(reader, v.id)) this.removeEntry(reader, v.id);
+  }
+
   // For the book page: the series and every volume of it we know of, in order, with our page when we have one.
   cycleOf(id) {
     const c = this.cycles?.get(this.canonical(id));

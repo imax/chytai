@@ -284,10 +284,12 @@ function nowBlock(now, { own = false } = {}) {
 const nowLine = (now) => (now?.books.length ? `<p class="now-line"><span class="muted">зараз читає</span> ${now.books.map(({ book }) => `<a href="${attr(book.href)}">${esc(book.title)}</a>`).join(", ")}</p>` : "");
 
 // One line of the activity feed. `wide` is the /community layout (who first, then the book).
-function feedRow({ reader, book, entry: e }, { wide = false, followed = null } = {}) {
+// A line for several volumes of a series (social.feed folds them) is named by the series: «Dungeon Crawler
+// Carl · серія, 8 книг».
+function feedRow({ reader, book, entry: e, series = null }, { wide = false, followed = null } = {}) {
   const t = when(e);
   const who = `<span class="who"><a href="${attr(reader.href)}#${attr(book.id)}"><b>${esc(reader.name)}</b></a> ${did(e)}${t ? ` · ${esc(t)}` : ""}</span>`;
-  const title = `<a class="title" href="${attr(book.href)}">${esc(book.title)}</a>`;
+  const title = `<a class="title" href="${attr(book.href)}">${esc(series ? series.name : book.title)}${series ? ` <span class="badge">серія · ${books(series.books.length)}</span>` : ""}</a>`;
   return `<article class="feed-row${wide ? " wide" : ""}${e.note ? " noted" : ""}${followed?.has(reader.id) ? " followed" : ""}" data-rating="${e.rating ?? ""}">
   <a class="cover-link" href="${attr(book.href)}">${cover(book, wide ? "feed" : "xs")}</a>
   <div>${wide ? `${who}${title}${book.author ? `<span class="by">${esc(byline(book.author))}</span>` : ""}` : `${title}${who}`}${e.note ? `<p class="note">${noteOf(e, book.id)}</p>` : ""}</div>
@@ -647,9 +649,11 @@ function mine(book, entry, user, now = false, readUrl = "") {
   // Read in another language: the mark comes from that book, and so does the edit link.
   const href = entry?.via ? entry.via.href : book.href;
   const edit = href ? `/me${href}` : `/me/book/${encodeURIComponent(entry?.via ? entry.via.id : book.id)}`;
-  if (!entry) return `<div class="acts">${wantButton(book, user, { size: "", primary: true })}${moreMenu([open, nowItem(book, false, user), `<a href="${attr(user ? edit : `/login?next=${encodeURIComponent(edit)}`)}">Прочитано · оцінити</a>`, kidsItem(book, false, user)])}</div>`;
+  // A volume of a series: «Прочитано · всю серію» opens the edit page with «Уся серія» ticked.
+  const allOf = book.cycle?.items?.length > 1 ? `<a href="${attr(user ? `${edit}?series` : `/login?next=${encodeURIComponent(`${edit}?series`)}`)}">Прочитано · всю серію</a>` : "";
+  if (!entry) return `<div class="acts">${wantButton(book, user, { size: "", primary: true })}${moreMenu([open, nowItem(book, false, user), `<a href="${attr(user ? edit : `/login?next=${encodeURIComponent(edit)}`)}">Прочитано · оцінити</a>`, allOf, kidsItem(book, false, user)])}</div>`;
   const what = [entry.kids ? "Дитяча полиця" : "", entry.status ? STATUS[entry.status] + (entry.status === "read" && entry.year ? ` ${entry.year}` : "") : entry.kids ? "" : "У моїх книжках", entry.rating != null ? `${uk(entry.rating)} з 5` : "", entry.copy ? COPY[entry.copy] : ""].filter(Boolean).join(" · ");
-  return `<div class="acts"><span class="have">✓ ${esc(what)}${entry.via ? ` <span class="muted">як <a href="${attr(entry.via.href)}">${esc(entry.via.title)}</a></span>` : ""}</span>${moreMenu([open, entry.via ? "" : nowItem(book, now, user), `<a href="${attr(edit)}">Змінити</a>`, entry.via ? "" : kidsItem(book, !!entry.kids, user)])}</div>`;
+  return `<div class="acts"><span class="have">✓ ${esc(what)}${entry.via ? ` <span class="muted">як <a href="${attr(entry.via.href)}">${esc(entry.via.title)}</a></span>` : ""}</span>${moreMenu([open, entry.via ? "" : nowItem(book, now, user), `<a href="${attr(edit)}">Змінити</a>`, entry.status === "read" ? "" : allOf, entry.via ? "" : kidsItem(book, !!entry.kids, user)])}</div>`;
 }
 
 // «Де взяти»: every edition's shop (with its format, price and stock, the one place prices are shown),
@@ -812,7 +816,7 @@ ${decideScript}`;
 }
 
 // /me/book/:id: the one place to edit a book in your library.
-function editPage({ book, entry, user }) {
+function editPage({ book, entry, user, series = null }) {
   const body = `
 <article class="book-top edit">
   <div class="book-cover">${cover(book, "lg")}</div>
@@ -820,7 +824,7 @@ function editPage({ book, entry, user }) {
     <p class="crumbs"><a href="/me">Моя полиця</a></p>
     <h1><a href="${attr(book.href)}">${esc(book.title)}</a></h1>
     ${book.author ? `<p class="book-by">${esc(book.author)}</p>` : ""}
-    ${entryForm(book, entry)}
+    ${entryForm(book, entry, series)}
   </div>
 </article>`;
   return layout({ title: book.title, body, user, path: "/me" });
@@ -883,8 +887,11 @@ function bookEditPage({ book, raw, user }) {
 }
 
 const WHY = "Чому не пішла, якщо хочеться";
-function entryForm(book, entry) {
-  const e = entry || { status: "", rating: null, year: "", copy: "", note: "" };
+// `series` ({ name, total, checked }): the book is a volume of a series, and «Уся серія» puts the status,
+// rating and year on every volume (Max, 2026-10-23); checked when the reader's shelf already shows the
+// series as one row, or when they came by «Прочитано · всю серію».
+function entryForm(book, entry, series = null) {
+  const e = entry || { status: series?.checked ? "read" : "", rating: null, year: series?.checked ? new Date().getFullYear() : "", copy: "", note: "" };
   const ratings = [5, 4.5, 4, 3.5, 3, 2.5, 2, 1.5, 1];
   return `
 <form method="post" action="/api/entry/${encodeURIComponent(book.id)}" class="form entry-form">
@@ -906,6 +913,7 @@ function entryForm(book, entry) {
     </select></label>
     <label>Рік <input name="year" type="number" min="1990" max="${new Date().getFullYear()}" value="${attr(e.year || "")}" placeholder="без дати"></label>
   </div>
+  ${series ? `<label class="check"><span><input type="checkbox" name="series" value="1"${series.checked ? " checked" : ""}> Уся серія «${esc(series.name)}» · ${books(series.total)}</span><span class="hint">Статус, оцінка і рік стануть на всі томи, яких ще немає на полиці — додадуться. На полиці серія буде одним рядком; нотатка лишається на цій книжці.</span></label>` : ""}
   <label>Примірник <select name="copy">
     <option value="" ${!e.copy ? "selected" : ""}>не вказано</option>
     <option value="paper" ${e.copy === "paper" ? "selected" : ""}>Є на папері</option>
@@ -922,6 +930,54 @@ function entryForm(book, entry) {
 }
 
 // ---- shelves (/me and /@<username>) ----
+
+// The volumes of one series with the same status and year fold into one row (Max, 2026-10-23: a series
+// read in one summer shouldn't take eight rows of the shelf). The row stands where the first volume was,
+// carries the volume with a note (else the lowest number) as its entry, and the mean rating; rows keep
+// `_prevYear` so year headings stay right. `server.libraryRows` puts `series` on each row.
+function foldSeries(rows) {
+  const out = [];
+  const groups = new Map();
+  for (const r of rows) {
+    const key = r.series && `${r.series.key}|${r.status || ""}|${r.year ?? ""}|${r.kids ? 1 : 0}`;
+    const g = key && groups.get(key);
+    if (g) g.volumes.push(r);
+    else {
+      const row = key ? { ...r, volumes: [r] } : r;
+      if (key) groups.set(key, row);
+      out.push(row);
+    }
+  }
+  return out.map((r) => {
+    if (!r.volumes) return r;
+    if (r.volumes.length < 2) return r.volumes[0];
+    const vols = r.volumes.sort((a, b) => a.series.n - b.series.n);
+    const rep = vols.find((v) => v.note) || vols[0];
+    const rated = vols.filter((v) => v.rating != null);
+    const rating = rated.length ? Math.round((rated.reduce((s, v) => s + v.rating, 0) / rated.length) * 2) / 2 : null;
+    return { ...rep, _prevYear: r._prevYear, rating, volumes: vols };
+  });
+}
+
+// A series on a shelf: the first covers fanned, the series' name, «серія · 8 томів» (or «3 з 8» when the
+// reader has some of it), one rating and status, the note, and the volumes in order, each a link.
+function seriesRow(r, { action = "", data = "" } = {}) {
+  const vols = r.volumes;
+  const b = r.book;
+  const badge = vols.length < r.series.total ? `серія · ${vols.length} з ${r.series.total}` : `серія · ${count(vols.length, "том", "томи", "томів")}`;
+  const covers = vols.slice(0, 3).map((v) => cover(v.book, "md")).join("");
+  return `<article class="row series-row" id="${attr(r.id)}"${data}>
+  <a class="cover-link covers" href="${attr(b.href)}">${covers}</a>
+  <div class="row-body">
+    <h3><a href="${attr(b.href)}">${esc(r.series.name)}</a> <span class="badge">${badge}</span></h3>
+    <p class="by">${b.author ? authorLinks(b.author) : ""}</p>
+    <p class="meta">${entryMeta(r)}</p>
+    ${r.note ? `<p class="note">${noteOf(r, b.id)}</p>` : ""}
+    <p class="vols">${vols.map((v) => `<a href="${attr(v.book.href)}"${v.id !== r.id ? ` id="${attr(v.id)}"` : ""}><span class="num">${v.series.n}</span>${esc(v.book.title)}</a>`).join("")}</p>
+  </div>
+  ${action ? `<div class="row-act">${action}</div>` : ""}
+</article>`;
+}
 
 // The same list twice: /me is the signed-in reader's own shelf with «змінити» on every row (the only
 // place where status, rating and notes are edited); /@<username> is that reader's public shelf, where a
@@ -953,15 +1009,16 @@ function libraryPage({ rows, user, reader, own = false, mineIds = null, followin
   // Who follows this reader and whom they follow, as rows of names (Max, 2026-10-20: lists and counts are fine).
   const names = (list) => `<p class="small">${list.map((r) => `<a href="${attr(r.href)}">${esc(r.name)}</a>`).join(", ")}</p>`;
   const followBlock = follows.followers.length || follows.following.length ? `<div id="follows">${follows.followers.length ? `${label(own ? "Стежать за тобою" : "Стежать", String(follows.followers.length))}${names(follows.followers)}` : ""}${follows.following.length ? `${label(own ? "Ти стежиш за" : "Стежить за", String(follows.following.length))}${names(follows.following)}` : ""}</div>` : "";
-  const list = rows
+  const list = foldSeries(rows)
     .map((r, i) => {
       const b = r.book;
       const head = r.year !== r._prevYear || i === 0 ? yearHead(r.year, rows) : "";
-      const search = [b.title, b.altTitle, b.author, b.authorOrig, stripMd(r.note || "")].join(" ").toLowerCase();
-      const data = ` data-status="${r.status || ""}" data-copy="${r.copy || ""}" data-common="${common.includes(r) ? 1 : ""}" data-kids="${r.kids ? 1 : ""}" data-tags="${attr((b.tags || []).join("|"))}" data-rating="${r.rating ?? ""}" data-title="${attr(b.title.toLowerCase())}" data-search="${attr(search)}" data-order="${i}"`;
+      const vols = r.volumes || [r];
+      const search = [r.series?.name, ...vols.flatMap((v) => [v.book.title, v.book.altTitle, stripMd(v.note || "")]), b.author, b.authorOrig].join(" ").toLowerCase();
+      const data = ` data-status="${r.status || ""}" data-copy="${r.copy || ""}" data-common="${vols.some((v) => common.includes(v)) ? 1 : ""}" data-kids="${r.kids ? 1 : ""}" data-tags="${attr((b.tags || []).join("|"))}" data-rating="${r.rating ?? ""}" data-title="${attr((r.volumes ? r.series.name : b.title).toLowerCase())}" data-search="${attr(search)}" data-order="${i}"${r.volumes ? ` data-books="${vols.length}"` : ""}`;
       const edit = b.href ? `/me${b.href}` : `/me/book/${encodeURIComponent(r.id)}`;
       const action = own ? `<a class="text-link small" href="${attr(edit)}">змінити</a>` : user && mineIds ? (mineIds.has(r.id) ? myStatus(mineIds.get(r.id)) : markButtons(b, user)) : "";
-      return head + bookRow(b, { entry: r, action, id: r.id, data });
+      return head + (r.volumes ? seriesRow(r, { action, data }) : bookRow(b, { entry: r, action, id: r.id, data }));
     })
     .join("\n");
   const wants = own ? [] : mine.filter((r) => r.status === "want").slice(0, 3);

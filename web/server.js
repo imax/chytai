@@ -605,6 +605,7 @@ function libraryRows(reader) {
   for (const r of rows) {
     r._prevYear = prev;
     prev = r.year ?? null;
+    r.series = store.seriesOf(r.id); // pages.foldSeries folds a series' volumes into one row
   }
   return rows;
 }
@@ -629,7 +630,13 @@ app.get("/me/book/:id", signed, (req, res) => {
   const id = store.resolve(req.params.id);
   if (!id) return res.status(404).send(pages.messagePage({ title: "Немає такої книжки", text: "", user: req.user }));
   const book = store.book(id);
-  res.send(pages.editPage({ book, entry: store.entry(req.user.id, book.id), user: req.user }));
+  const entry = store.entry(req.user.id, book.id);
+  // «Уся серія» (Max, 2026-10-23): offered on every volume of a series; ticked when they came by «Прочитано ·
+  // всю серію» (?series) or their shelf already shows the series as one row (another volume with the same
+  // status and year).
+  const c = store.cycleOf(book.id);
+  const series = c && c.items.length > 1 ? { name: c.name, total: c.items.length, checked: "series" in req.query || (!!entry && c.items.some((v) => v.id && v.id !== book.id && ((e) => e && e.status === entry.status && (e.year ?? null) === (entry.year ?? null))(store.entry(req.user.id, v.id)))) } : null;
+  res.send(pages.editPage({ book, entry, user: req.user, series }));
 });
 
 app.get("/popular", (req, res) => res.send(pages.popularPage({ user: req.user, pop: social.popular() })));
@@ -903,6 +910,13 @@ app.post("/api/entry/:id", signed, (req, res) => {
   }
   const e = store.setEntry(req.user.id, req.params.id, patch);
   if (!e) return res.status(404).send("Немає такої книжки");
+  // «Уся серія»: the same on every volume (the note stays here); volumes we only knew of get a book and
+  // their details. No overview for each of them: one book's worth of AI, not eight.
+  if (b.series === "1") {
+    const added = store.markSeries(req.user.id, req.params.id, patch);
+    if (added.length) details({ ids: added });
+    if (["read", "want", "abandoned"].includes(patch.status)) for (const v of store.cycleOf(req.params.id)?.items || []) if (v.id) dropNow(req.user.id, v.id);
+  }
   if (["read", "want", "abandoned"].includes(patch.status)) dropNow(req.user.id, req.params.id);
   // A rating, a note, or «Хочу прочитати» (Max, 2026-10-23) gets the book its overview.
   if (e.status === "want" || (e.status !== "abandoned" && (e.rating != null || e.note))) advice.want(req.params.id);
@@ -911,6 +925,7 @@ app.post("/api/entry/:id", signed, (req, res) => {
 
 app.post("/api/entry/:id/remove", signed, (req, res) => {
   dropNow(req.user.id, req.params.id);
+  if (req.body.series === "1") store.removeSeries(req.user.id, req.params.id);
   store.removeEntry(req.user.id, req.params.id);
   res.redirect("/me");
 });

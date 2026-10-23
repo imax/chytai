@@ -17,6 +17,18 @@ const shuffle = (a) => {
   return a;
 };
 
+// A feed line that stands for several volumes: the volume with a note (else the first) is the line's book
+// and entry, with the mean rating of the volumes rated, rounded to a half.
+function foldSeries(line) {
+  const books = line.series.books.sort((a, b) => a.n - b.n);
+  const rep = books.find((x) => x.entry.note) || books[0];
+  const rated = books.filter((x) => x.entry.rating != null);
+  const rating = rated.length ? Math.round((rated.reduce((s, x) => s + x.entry.rating, 0) / rated.length) * 2) / 2 : null;
+  line.id = rep.book.id;
+  line.book = rep.book;
+  line.entry = { ...rep.entry, rating };
+}
+
 class Social {
   constructor(store, who) {
     this.store = store;
@@ -62,15 +74,34 @@ class Social {
     items.sort((a, b) => (at(b.entry) > at(a.entry) ? 1 : at(b.entry) < at(a.entry) ? -1 : 0) || (b.entry.year ?? 0) - (a.entry.year ?? 0) || (a.entry.order ?? 0) - (b.entry.order ?? 0));
     const out = [];
     const per = new Map(); // reader id -> rows taken, for `perReader`
+    // The volumes of a series one reader has with the same status and year are one line (Max, 2026-10-23:
+    // eight volumes read in a summer are one event, not eight): the line stands where the newest of them
+    // is, says the series' name and how many books, and shows the volume with a note, else the first.
+    const groups = new Map(); // reader|series|status|year -> the line
     for (const it of items) {
+      const ser = this.store.seriesOf(it.id);
+      const gk = ser && `${it.reader.id}|${ser.key}|${it.entry.status || ""}|${it.entry.year ?? ""}`;
+      const g = gk && groups.get(gk);
+      if (g) {
+        const book = this.store.book(it.id);
+        if (book) g.series.books.push({ book, entry: it.entry, n: ser.n });
+        continue;
+      }
       if (perReader && (per.get(it.reader.id) || 0) >= perReader) continue;
       const book = this.store.book(it.id);
       if (!book) continue;
-      out.push({ ...it, book });
+      const line = { ...it, book, ...(ser ? { series: { name: ser.name, books: [{ book, entry: it.entry, n: ser.n }] } } : {}) };
+      if (gk) groups.set(gk, line);
+      out.push(line);
       per.set(it.reader.id, (per.get(it.reader.id) || 0) + 1);
-      if (out.length >= limit) break;
+      if (out.length >= limit * 3) break;
     }
-    return out;
+    for (const line of out) {
+      if (!line.series) continue;
+      if (line.series.books.length < 2) delete line.series;
+      else foldSeries(line);
+    }
+    return out.slice(0, limit);
   }
 
   // «Книжка навмання»: books someone rated 4,5 or more and wrote about, a different order every time.

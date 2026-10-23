@@ -144,6 +144,15 @@ main.home { padding-top: 56px; }
 .meta { color: var(--muted); font-size: 13px; margin-top: 8px; }
 .note { font: italic 17px/1.45 var(--serif); color: var(--text); margin-top: 10px; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 .note a { text-decoration: underline; text-decoration-color: var(--under); text-underline-offset: 3px; }
+/* A series folded into one row (Max, 2026-10-23): the first covers fanned, the volumes listed under the note. */
+.row .covers { display: flex; isolation: isolate; }
+.row .covers .cover + .cover { margin-left: -46px; position: relative; z-index: -1; }
+.row .covers .cover:nth-child(3) { z-index: -2; }
+.row .vols { margin-top: 8px; font-size: 13px; color: var(--muted); line-height: 1.7; }
+.row .vols a { display: inline-block; color: var(--muted); text-decoration: underline; text-decoration-color: var(--under); text-underline-offset: 3px; margin-right: 12px; }
+.row .vols a:hover { color: var(--accent); }
+.row .vols .num { color: var(--under); margin-right: 3px; }
+.feed-row .badge { font: 400 12px var(--sans); color: var(--muted); margin-left: 6px; }
 .row-act { flex: none; align-self: center; }
 .row-act:has(.text-link) { align-self: flex-start; }
 .row:target { background: linear-gradient(90deg, transparent, color-mix(in oklab, var(--accent) 10%, transparent), transparent); }
