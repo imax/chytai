@@ -6,7 +6,7 @@
 // Books don't know: covers and details of books readers typed in Ukrainian, and Ukrainian editions of
 // foreign books (ukfind.js asks here before paying Claude to search the web).
 // Starts off (meta readeat:on): /admin/readeat shows the owner what a run would fill and switches it on.
-// Every book is asked once a month at most (meta readeat:<id>), one request every 1.5 s.
+// Every book is asked once a month at most (meta readeat:<id>), one request every 1.5 s, 200 books a day.
 
 const BASE = "https://readeat.com";
 const HEADERS = { "User-Agent": "Mozilla/5.0 (compatible; Chytai/1.0; +https://chytai.org.ua)", Accept: "application/json, text/html", "Accept-Language": "uk" };
@@ -205,6 +205,17 @@ function wanting(store, ids) {
 }
 
 const on = (store) => store.db.get("readeat:on") === "1";
+// At most DAILY books a day are asked about, every way together (Max, 2026-10-23: «давай сильно їх не грузити.
+// 200 книжок за день нам має вистачити»). take(store) counts one and says whether it is still allowed.
+const DAILY = 200;
+function take(store) {
+  const day = new Date().toISOString().slice(0, 10);
+  const [d, n] = String(store.db.get("readeat:day") || "").split(" ");
+  const used = d === day ? Number(n) || 0 : 0;
+  if (used >= DAILY) return false;
+  store.db.set("readeat:day", `${day} ${used + 1}`);
+  return true;
+}
 
 // enrich(store, { ids, dry }) -> { asked, found, rows: [{ book, info, patch }], ms }. A dry run writes nothing and
 // asks again books asked before (the owner's sample on /admin/readeat).
@@ -219,6 +230,7 @@ async function enrich(store, { ids, dry = false, max = 200, log = () => {}, fetc
   let failed = 0;
   const errors = [];
   for (const b of books) {
+    if (!dry && !take(store)) break; // the day's ceiling: the rest tomorrow
     if (!dry) store.db.set(`readeat:${b.id}`, String(Date.now()));
     try {
       const info = await findBook(b, { fetchImpl, pause });
@@ -248,4 +260,4 @@ async function enrich(store, { ids, dry = false, max = 200, log = () => {}, fetc
   return { asked: books.length, found, rows, ms: Date.now() - t0, errors };
 }
 
-module.exports = { search, product, parse, findBook, patchFor, wanting, enrich, on, same, BASE };
+module.exports = { search, product, parse, findBook, patchFor, wanting, enrich, on, take, same, BASE };

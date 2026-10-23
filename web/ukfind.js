@@ -68,7 +68,7 @@ class UkFinder {
     };
     // Readeat first (readeat.js): a free search by the Ukrainian title, before paying for Claude's.
     const readeat = require("./readeat");
-    if (uk.uk && readeat.on(this.store)) {
+    if (uk.uk && readeat.on(this.store) && readeat.take(this.store)) {
       try {
         const p = await readeat.findBook({ title: uk.uk, author: uk.ukAuthor || "" }, { original: book.title });
         const edition = p && this.addEdition(book, p, null);
