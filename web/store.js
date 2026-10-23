@@ -744,8 +744,24 @@ class Store {
   // One index over everything: the library and every shelf, works only (editions and volumes fold
   // in as extra text). FTS5 with prefix matching ranks title over author over series; when that finds
   // nothing, a trigram index catches a word typed from its middle («кирпат» in «Кирпатого»).
+  // Every work once: the library and every shelf, editions folded in.
+  workIds() {
+    return new Set([...this.seedBooks.map((b) => b.id), ...Object.keys(this.lib.books), ...[...this.shelfItems.keys()].filter((id) => this.canonical(id) === id && !this.hidden.has(id))].filter((id) => this.canonical(id) === id));
+  }
+
+  // Haiku's genres for a work (genretrial.js, table ai_genre; Max 2026-10-23 «вогонь. на все»): they come
+  // first and replace the genres guessed from shop shelves and subjects; the owner's «Основний жанр» still wins.
+  aiGenres() {
+    return (this.aiG ??= new Map(this.db.prepare("SELECT id, genres FROM ai_genre").all().map((r) => [r.id, JSON.parse(r.genres)])));
+  }
+
+  setAiGenres(id, genres, prompt) {
+    this.db.prepare("INSERT OR REPLACE INTO ai_genre (id, genres, prompt, at) VALUES (?, ?, ?, ?)").run(id, JSON.stringify(genres), prompt, new Date().toISOString());
+    this.aiGenres().set(id, genres);
+  }
+
   indexSearch() {
-    const ids = new Set([...this.seedBooks.map((b) => b.id), ...Object.keys(this.lib.books), ...[...this.shelfItems.keys()].filter((id) => this.canonical(id) === id && !this.hidden.has(id))].filter((id) => this.canonical(id) === id));
+    const ids = this.workIds();
     const db = this.db;
     db.tx(() => {
       db.exec("DELETE FROM search; DELETE FROM search_tri;");
@@ -1379,6 +1395,8 @@ class Store {
     }
     if (ser) out.series = { name: ser.name, head: ser.head, volumes: ser.volumes, items: ser.items.map(({ shelf, item }) => ({ ...this.fromShelfItem(shelf, item), shelf, work: this.canonical(item.id), href: this.href(item.id) })) };
     out.tags = this.genresOf(id, b, eds);
+    const ai = edited && this.aiGenres().get(id);
+    if (ai?.length) out.tags = [...ai, ...out.tags.filter((t) => !OUR_GENRES.has(t))];
     // A year before 1800 on a reader's book is Open Library's or an import's noise far more often than a real
     // date («Lolita» 1777, Max 2026-10-23); the owner can still set one in «Редагувати».
     if (Number(out.published) < 1800) delete out.published;

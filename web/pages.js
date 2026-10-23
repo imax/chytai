@@ -1192,7 +1192,7 @@ ${sections.length ? "" : `<p class="muted">Поки замало читачів,
 
 // ---- /admin/genres-trial: our genres next to Haiku's for 200 books (genretrial.js) ----
 
-function genreTrialPage({ user, st, running, href }) {
+function genreTrialPage({ user, st, running, all = {}, href }) {
   const items = st?.items || [];
   const changed = items.filter((x) => !x.error && x.after[0] !== x.before[0]);
   const show = (gs) => (gs.length ? gs.map((g) => esc(cap(g))).join(", ") : `<span class="muted">—</span>`);
@@ -1200,11 +1200,16 @@ function genreTrialPage({ user, st, running, href }) {
   const body = `
 ${pageHead({ crumbs: `<a href="/admin">Статистика</a>`, kicker: "Проба", title: "Жанри від Haiku", sub: st ? [`промпт v${st.prompt || 1}`, `${st.done} з ${st.total}`, `основний жанр змінився у ${changed.length}`, st.errors ? `помилок ${st.errors}` : "", `$${(st.cost || 0).toFixed(3)}`, running ? "іде…" : st.finished ? "готово" : "зупинилось"].filter(Boolean).join(" · ") : "Ще не запускали. 200 випадкових книжок з полиць читачів, на сайті нічого не змінюється." })}
 ${st?.key ? `<p class="small muted">Посилання для Claude (тільки назви й жанри): <a href="/genres-trial/${attr(st.key)}">chytai.org.ua/genres-trial/${esc(st.key)}</a></p>` : ""}
+<section class="block">
+  ${label("Весь каталог", all.at ? `промпт v${all.prompt}` : "")}
+  <p>${[`з жанрами від Haiku ${books(all.have || 0)}`, all.at ? `цей прогін ${all.done} з ${all.total}` : "", all.errors ? `помилок ${all.errors}` : "", all.at ? `усього $${(all.cost || 0).toFixed(2)}` : "", all.running ? "іде…" : all.finished ? "готово" : all.stopped ? "зупинено" : ""].filter(Boolean).join(" · ")}</p>
+  <form method="post" action="/admin/genres-all">${all.running ? `<input type="hidden" name="stop" value="1"><button class="btn">Зупинити</button>` : `<button class="btn primary">${all.have ? "Продовжити (тільки книжки без жанру від Haiku)" : "Прогнати весь каталог"}</button>`}</form>
+</section>
 ${running ? "" : `<form method="post" action="/admin/genres-trial"><button class="btn primary">${st ? "Прогнати ще 200 інших" : "Запустити"}</button></form>`}
 ${items.length ? `<div class="tabs" data-trial><button type="button" class="tab on" data-v="diff">Змінилось <span>${changed.length}</span></button><button type="button" class="tab" data-v="">Усі <span>${items.length}</span></button></div>
 <table class="trial"><thead><tr><th>Книжка</th><th>Було</th><th>Стало (Haiku)</th></tr></thead><tbody>${[...changed, ...items.filter((x) => !changed.includes(x))].map(row).join("")}</tbody></table>
 <script>(() => { const t = document.querySelector(".trial"); const set = (v) => t.classList.toggle("only-diff", v === "diff"); set("diff"); document.querySelector("[data-trial]").addEventListener("click", (e) => { const b = e.target.closest(".tab"); if (!b) return; document.querySelectorAll("[data-trial] .tab").forEach((x) => x.classList.toggle("on", x === b)); set(b.dataset.v); }); })();</script>` : ""}
-${running ? `<script>setTimeout(() => location.reload(), 5000)</script>` : ""}`;
+${running || all.running ? `<script>setTimeout(() => location.reload(), 5000)</script>` : ""}`;
   return layout({ title: "Жанри від Haiku", body, user, path: "/admin" });
 }
 

@@ -10,6 +10,8 @@ const { mainGenres, isRussian } = require("./store");
 const MODEL = "claude-haiku-5-5";
 const SIZE = 200;
 const PARALLEL = 4;
+const PARALLEL_ALL = 8;
+const PROMPT = 3; // the SYSTEM version below; bump it with every change
 const PRICE = { input: 0.1 / 1e6, output: 0.5 / 1e6 }; // $ per token, Haiku 5.5
 
 const SYSTEM = (genres) => `You sort books into the genres of Chytai, a Ukrainian book site. The genres, in Ukrainian:
@@ -100,12 +102,58 @@ class GenreTrial {
     return { genres, usage: message.usage };
   }
 
+  // The whole catalog (Max 2026-10-23 «вогонь. на все»), after three trials of 200: every work not asked yet,
+  // no Russian books. Answers go to store.setAiGenres and show on the site at once; genre pages catch up as the
+  // search index is rebuilt every 2000 books and at the end. Progress in meta `genreall`. A restart resumes
+  // it (server.js), and later runs only ask about books added since.
+  allState() {
+    return JSON.parse(this.db.get("genreall") || "null");
+  }
+
+  async runAll() {
+    if (this.allRunning || !this.client) return false;
+    this.allRunning = true;
+    this.stopAll = false;
+    const have = this.store.aiGenres();
+    const todo = [...this.store.workIds()].filter((id) => !have.has(id)).map((id) => this.store.book(id)).filter((b) => b && !isRussian(b));
+    const st = { cost: 0, errors: 0, ...this.allState(), at: new Date().toISOString(), prompt: PROMPT, total: todo.length, done: 0, finished: null, stopped: null };
+    const save = () => this.db.set("genreall", JSON.stringify(st));
+    save();
+    let next = 0;
+    const worker = async () => {
+      while (next < todo.length && !this.stopAll) {
+        const b = todo[next++];
+        try {
+          const { genres, usage } = await this.ask(b);
+          st.cost += (usage.input_tokens || 0) * PRICE.input + (usage.output_tokens || 0) * PRICE.output;
+          if (genres.length) this.store.setAiGenres(b.id, genres, PROMPT);
+        } catch (e) {
+          st.errors++;
+          this.log(`genreall: ${b.id}: ${e.message}`);
+        }
+        st.done++;
+        if (st.done % 20 === 0) save();
+        if (st.done % 2000 === 0) this.store.indexSearch();
+      }
+    };
+    try {
+      await Promise.all(Array.from({ length: PARALLEL_ALL }, worker));
+    } finally {
+      if (this.stopAll) st.stopped = new Date().toISOString();
+      else st.finished = new Date().toISOString();
+      save();
+      this.allRunning = false;
+      if (st.done) this.store.indexSearch();
+    }
+    return true;
+  }
+
   // Runs in the background; the admin page shows progress from meta `genretrial`.
   async run() {
     if (this.running || !this.client) return false;
     this.running = true;
     const books = this.pick();
-    const st = { prompt: 3, key: require("crypto").randomBytes(12).toString("hex"), at: new Date().toISOString(), model: MODEL, total: books.length, done: 0, cost: 0, items: [], errors: 0 };
+    const st = { prompt: PROMPT, key: require("crypto").randomBytes(12).toString("hex"), at: new Date().toISOString(), model: MODEL, total: books.length, done: 0, cost: 0, items: [], errors: 0 };
     const save = () => this.db.set("genretrial", JSON.stringify(st));
     save();
     let next = 0;

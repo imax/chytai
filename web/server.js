@@ -551,6 +551,16 @@ const withCovers = (l) => ({ ...l, covers: lists.covers(l.id) });
 const bookpage = new BookPage({ apiKey: process.env.ANTHROPIC_API_KEY || "", log: console.log });
 const advice = new Advice({ store, social, db: store.db, apiKey: process.env.ANTHROPIC_API_KEY || "", log: console.log });
 const genreTrial = new (require("./genretrial").GenreTrial)({ store, social, db: store.db, apiKey: process.env.ANTHROPIC_API_KEY || "", genres: pages.GENRES, log: console.log });
+// A whole-catalog run cut by a deploy goes on a minute after the start; once it has finished, books added
+// since are asked about every six hours.
+setTimeout(() => {
+  const st = genreTrial.allState();
+  if (st && !st.stopped) genreTrial.runAll().catch((e) => console.log(`genreall: ${e.message}`));
+}, 60 * 1000).unref();
+setInterval(() => {
+  const st = genreTrial.allState();
+  if (st?.finished) genreTrial.runAll().catch((e) => console.log(`genreall: ${e.message}`));
+}, 6 * 3600 * 1000).unref();
 if (!advice.enabled) console.log("ANTHROPIC_API_KEY is not set: «Чи варто читати?» is off");
 // «Відгуки в інтернеті» by itself: a minute after start, overviews made with an older prompt are redone,
 // and (while advice.js BACKFILL is on) every rated book without one gets queued, again once a day; a
@@ -1290,7 +1300,7 @@ app.post("/api/welcome-mail", owner, async (req, res) => {
 });
 // The owner's statistics page: readers, retention by sign-up week, what people do on the site (admin.js).
 // The genres trial (genretrial.js): Haiku's genres for 200 books on readers' shelves next to ours.
-app.get("/admin/genres-trial", owner, (req, res) => res.send(pages.genreTrialPage({ user: req.user, st: genreTrial.state(), running: genreTrial.running, href: (id) => store.href(id) })));
+app.get("/admin/genres-trial", owner, (req, res) => res.send(pages.genreTrialPage({ user: req.user, st: genreTrial.state(), running: genreTrial.running, all: { ...genreTrial.allState(), running: genreTrial.allRunning, have: store.aiGenres().size }, href: (id) => store.href(id) })));
 // The results as plain text behind an unguessable link the owner can hand to Claude, who reads the site as a
 // guest (Max 2026-10-23: «що треба щоб побачив?»). Only titles and genres; the link changes with every run.
 app.get("/genres-trial/:key", (req, res) => {
@@ -1298,6 +1308,12 @@ app.get("/genres-trial/:key", (req, res) => {
   if (!st?.key || req.params.key !== st.key) return res.status(404).send("Немає");
   const line = (x) => `${x.after[0] !== x.before[0] ? "*" : " "} ${x.title} — ${x.author} | було: ${x.before.join(", ") || "—"} | стало: ${x.error ? `помилка ${x.error}` : x.after.join(", ") || "—"}`;
   res.type("text/plain").send([`промпт v${st.prompt || 1}, ${st.model || ""}, ${st.at || ""}: ${st.done} з ${st.total}, $${(st.cost || 0).toFixed(3)}${st.finished ? "" : ", ще йде"}`, "* = змінився основний жанр", "", ...st.items.map(line)].join("\n"));
+});
+// The whole catalog: start, or stop (the books asked so far keep their genres).
+app.post("/admin/genres-all", owner, (req, res) => {
+  if (req.body?.stop) genreTrial.stopAll = true;
+  else genreTrial.runAll().catch((e) => console.log(`genreall: ${e.message}`));
+  res.redirect(303, "/admin/genres-trial");
 });
 app.post("/admin/genres-trial", owner, (req, res) => {
   genreTrial.run().catch((e) => console.log(`genretrial: ${e.message}`));
