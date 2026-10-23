@@ -487,7 +487,7 @@ const OVERVIEW_PUBLIC = true;
 // On the page the text starts folded to three lines with «Читати далі» (Max, 2026-10-23: «для захисту
 // від спойлерів»); the one a reader just asked for comes whole.
 function overviewHtml(o, user, vote = null, { folded = false } = {}) {
-  const votes = user ? ` · <span class="advice-vote" title="Чи добрий цей огляд?"><button class="text-link small${vote === 1 ? " on" : ""}" data-vote="1">👍 Корисно</button> <button class="text-link small${vote === -1 ? " on" : ""}" data-vote="-1">👎 Не те</button></span>` : "";
+  const votes = user ? ` · <span class="advice-vote" title="Чи добрий цей огляд?"><button class="text-link small${vote === 1 ? " on" : ""}" data-vote="1">👍 Корисно</button> <button class="text-link small${vote === -1 ? " on" : ""}" data-vote="-1">Повідомити про проблему</button></span>` : "";
   return `<div class="advice-text${folded ? " folded" : ""}">${marked.parse(o.text).replace(/<a href="http/g, '<a target="_blank" rel="noopener" href="http')}</div>
 ${folded ? `<p class="advice-more"><button class="text-link" data-unfold>Читати далі</button></p>` : ""}<p class="small muted">Claude, за відгуками в інтернеті · ${writingDate(o.created.slice(0, 10))}${votes}${user?.owner ? ` · <button class="text-link small" data-ask="overview" data-again>Оновити</button>` : ""}</p>`;
 }
