@@ -26,7 +26,7 @@ const OVERVIEW_DAILY = 150; // fresh overviews a day on readers' clicks, all rea
 // чи оцінка читачів», plus a backfill over the books already rated): a sweep finds every book with a
 // reader's rating or note and no overview, and a small queue makes them a couple at a time. Its own
 // ceiling a day, so a big Goodreads import or the backfill can't run the bill away in one night.
-const AUTO_DAILY = 500;
+const AUTO_DAILY = 150; // Max, 2026-10-23: «давай зменшемо до 150 [на] день»
 const AUTO_PARALLEL = 2;
 // «Що пишуть в інтернеті» (Max, 2026-10-23): one summary per book, not per reader, of what readers and
 // reviewers say, from the web, kept on the page for everyone. Our own words only: a review's text may
