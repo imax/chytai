@@ -437,6 +437,7 @@ class Store {
     }
     for (const [a, b] of pairs) link(this.slugs.get(a) || a, this.slugs.get(b) || b);
     for (const [a, b] of this.decisions().translations) link(a, b); // the owner's pairs from /admin/dupes
+    for (const [a, b] of this.crossPairs || []) link(a, b); // same ISBN, link or words across scripts (linkEditions)
     this.linkCycles();
     this.authors = require("./authors").build(this);
   }
@@ -1030,17 +1031,27 @@ class Store {
       for (const i of isbnsOf(own)) byIsbn.set(i, b.id);
       for (const t of [b.title, b.altTitle]) if (words(t).includes(" ")) (byWords.get(words(t)) || byWords.set(words(t), []).get(words(t))).push(b);
     }
+    const script = (t) => (/[а-яіїєґ]/i.test(t) ? "cyr" : "lat");
+    this.crossPairs = [];
     const bookOf = (it) => {
       if (matches.same[it.id]) return matches.same[it.id];
       const ok = (id) => id && !no.has(`${it.id}|${id}`);
-      if (isbnKey(it.isbn).length >= 10 && ok(byIsbn.get(isbnKey(it.isbn)))) return byIsbn.get(isbnKey(it.isbn));
+      // A book titled in the other script is a translation, whatever else matches (an ISBN, a link, the
+      // words): Старий Лев's «Під скляним ковпаком» is not an edition of a reader's «The Bell Jar» (Max, 2026-10-23).
+      // Such a pair is linked as a translation instead (linkTranslations).
+      const same = (id) => {
+        if (!ok(id)) return false;
+        if (script((this.lib.books[id] || this.seedBooks.find((b) => b.id === id))?.title || "") === script(it.title)) return true;
+        this.crossPairs.push([id, it.id]);
+        return false;
+      };
+      if (isbnKey(it.isbn).length >= 10 && same(byIsbn.get(isbnKey(it.isbn)))) return byIsbn.get(isbnKey(it.isbn));
       // The same title by a different author is a different book: Жадан's «Арабески» is not Хвильовий's
       // (2026-10-22). An exact title wins over one with the author's name trimmed off («Жадан Арабески»).
       // A match through an original title («Марсіанин» / The Martian, «Чотири тисячі тижнів» / Four
       // Thousand Weeks) is a translation, not an edition: the two stay separate pages with shared readers
       // (Max, 2026-10-21/22), and linkTranslations pairs them. So two books merge only when their own
       // titles are written in the same script.
-      const script = (t) => (/[а-яіїєґ]/i.test(t) ? "cyr" : "lat");
       for (const t of [it.title, it.altTitle]) {
         const found = (byTitle.get(norm(t)) || []).filter((x) => ok(x.id) && sameAuthor(x.author, it.author) && script(x.title) === script(it.title));
         const b = found.find((x) => x.exact) || found[0];
@@ -1053,10 +1064,10 @@ class Store {
         const b = (byTitle.get(norm(tail)) || []).find((x) => x.exact && ok(x.id) && sameAuthor(x.author, it.author) && script(x.title) === script(tail));
         if (b) return b.id;
       }
-      if (ok(byUrl.get(pageKey(it.url)))) return byUrl.get(pageKey(it.url));
+      if (same(byUrl.get(pageKey(it.url)))) return byUrl.get(pageKey(it.url));
       for (const t of [it.title, it.altTitle]) {
         const b = (byWords.get(words(t)) || []).find((b) => names(b.author).some((n) => names(it.author).includes(n)));
-        if (b && ok(b.id)) return b.id;
+        if (b && same(b.id)) return b.id;
       }
       return null;
     };
