@@ -1147,12 +1147,12 @@ app.post("/api/book/:id/uk-hint", signed, async (req, res, next) => {
   }
   const ok = ukfind.hint(orig, req.user.id, title);
   console.log(`uk hint @${req.user.username}: ${orig.id}${title ? ` «${title}»` : ""}${ok ? "" : " (not queued)"}`);
-  res.redirect(303, `${store.href(orig.id)}#uk`);
+  res.redirect(303, `${store.href(orig.id)}#about`);
 });
 app.post(["/api/book/:id/edition", "/api/book/:id/uk-hint"], signed, async (req, res) => {
   const orig = store.book(store.resolve(req.params.id) || req.params.id);
   if (!orig) return res.status(404).send(pages.messagePage({ title: "Немає такої книжки", text: "", user: req.user }));
-  const back = (error) => res.redirect(303, `${store.href(orig.id)}${error ? `?edition_error=${encodeURIComponent(error)}` : ""}#uk`);
+  const back = (error) => res.redirect(303, `${store.href(orig.id)}${error ? `?edition_error=${encodeURIComponent(error)}` : ""}#about`);
   const url = String(req.body.url || "").trim().slice(0, 500);
   if (!isUrl(url)) return back("Вставте посилання на сторінку книжки в магазині чи у видавництва.");
   if (!req.owner && auth.tooMany(`edition:${req.user.id}`, 20)) return back("Забагато посилань за годину. Спробуйте трохи згодом.");
