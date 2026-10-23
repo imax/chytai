@@ -675,6 +675,7 @@ form.inline button:not(.btn) { background: none; border: 0; padding: 0; cursor: 
 .advice-more { margin-top: 8px; }
 .advice-more .text-link { font-size: 15px; }
 .advice-more + .small { margin-top: 12px; }
+.advice-text.folded ~ .small .advice-acts { display: none; }
 .advice-error { color: var(--danger); margin-top: 10px; }
 .advice-vote .text-link { margin-right: 6px; }
 .advice-vote .text-link.on { color: var(--accent); font-weight: 600; }

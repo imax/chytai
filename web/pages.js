@@ -508,11 +508,12 @@ const OVERVIEW_PUBLIC = true;
 // On the page the text starts folded to three lines with «Читати далі» (Max, 2026-10-23: «для захисту
 // від спойлерів»); the one a reader just asked for comes whole.
 function overviewHtml(o, user, vote = null, { folded = false } = {}) {
-  const votes = user ? ` · <span class="advice-vote" title="Чи добрий цей огляд?"><button class="text-link small${vote === 1 ? " on" : ""}" data-vote="1">👍 Корисно</button> <button class="text-link small${vote === -1 ? " on" : ""}" data-vote="-1">${vote === -1 ? "Скаргу передано" : "Повідомити про проблему"}</button></span>` : "";
+  // The actions (vote, complain, the owner's «Оновити») stay hidden while the text is folded (Max, 2026-10-23).
+  const votes = user ? `<span class="advice-acts"> · <span class="advice-vote" title="Чи добрий цей огляд?"><button class="text-link small${vote === 1 ? " on" : ""}" data-vote="1">👍 Корисно</button> <button class="text-link small${vote === -1 ? " on" : ""}" data-vote="-1">${vote === -1 ? "Скаргу передано" : "Повідомити про проблему"}</button></span>${user.owner ? ` · <button class="text-link small" data-ask="overview" data-again>Оновити</button>` : ""}</span>` : "";
   // The complaint form opens under the line (app.js): what is wrong, in the reader's words, to the owner.
   const report = user ? `<form class="advice-report" hidden><textarea name="note" rows="3" maxlength="1000" placeholder="Що не так в огляді? Неточність, спойлер, не та книжка…"></textarea><p><button class="btn small primary">Надіслати</button> <button type="button" class="text-link small" data-report-cancel>Скасувати</button></p></form>` : "";
   return `<div class="advice-text${folded ? " folded" : ""}">${marked.parse(o.text).replace(/<a href="http/g, '<a target="_blank" rel="noopener" href="http')}</div>
-${folded ? `<p class="advice-more"><button class="text-link" data-unfold>Читати далі</button></p>` : ""}<p class="small muted">Claude, за відгуками в інтернеті · ${writingDate(o.created.slice(0, 10))}${votes}${user?.owner ? ` · <button class="text-link small" data-ask="overview" data-again>Оновити</button>` : ""}</p>${report}`;
+${folded ? `<p class="advice-more"><button class="text-link" data-unfold>Читати далі</button></p>` : ""}<p class="small muted">Claude, за відгуками в інтернеті · ${writingDate(o.created.slice(0, 10))}${votes}</p>${report}`;
 }
 function overviewBlock(book, o, user, vote = null) {
   const canSee = o && (OVERVIEW_PUBLIC || user?.owner);
