@@ -66,12 +66,15 @@ async function enQuery(authors, fetchImpl) {
 async function enTitles(books, { fetchImpl = fetch, log = () => {} } = {}) {
   const ours = books.filter((b) => isCyrillic(b.title) && isCyrillic(firstAuthor(b.author)));
   const authors = [...new Set(ours.map((b) => firstAuthor(b.author)))];
-  const works = new Map(); // author|norm(uk) -> { en, enAuthor }
+  const works = new Map(); // author|loose(uk) -> { en, enAuthor }
+  const enAuthors = new Map(); // Ukrainian name -> English name
+  const loose = (t) => norm(t).replace(/(^|\s)(та|і|й|and)(?=\s|$)/g, "$1i"); // «Янголи та демони» is «Янголи і демони» (\b is ASCII-only)
   for (let i = 0; i < authors.length; i += 40) {
     try {
       for (const w of await enQuery(authors.slice(i, i + 40), fetchImpl)) {
-        const key = `${w.name}|${norm(w.uk)}`;
+        const key = `${w.name}|${loose(w.uk)}`;
         if (!works.has(key) && w.enAuthor) works.set(key, { en: w.en, enAuthor: w.enAuthor });
+        if (w.enAuthor) enAuthors.set(w.name, w.enAuthor);
       }
     } catch (e) {
       log(`wikidata: ${e.cause?.code || e.message}`);
@@ -80,12 +83,15 @@ async function enTitles(books, { fetchImpl = fetch, log = () => {} } = {}) {
   const out = {};
   for (const b of ours) {
     for (const t of [b.title, mainTitle(b.title), String(b.title).split(/[.]\s/)[0]]) {
-      const w = works.get(`${firstAuthor(b.author)}|${norm(t)}`);
+      const w = works.get(`${firstAuthor(b.author)}|${loose(t)}`);
       if (w) {
         out[b.id] = w;
         break;
       }
     }
+    // «Джерело (Origin)»: the original title is right there in the brackets.
+    const inBrackets = /\(([A-Za-z][^()]{1,80})\)/.exec(b.title)?.[1];
+    if (!out[b.id] && inBrackets && enAuthors.has(firstAuthor(b.author))) out[b.id] = { en: inBrackets.trim(), enAuthor: enAuthors.get(firstAuthor(b.author)) };
   }
   if (ours.length) log(`wikidata: ${Object.keys(out).length} originals for ${ours.length} Ukrainian-titled books (${authors.length} authors)`);
   return out;
