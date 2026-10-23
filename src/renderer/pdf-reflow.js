@@ -4,10 +4,11 @@
 // join lines into paragraphs, mark larger text as headings, split chapters by the outline.
 // Pages of verse keep their line breaks: a poem reflowed into prose is unreadable.
 
-export const REFLOW_VERSION = 4;
+export const REFLOW_VERSION = 5;
 const PAGES_PER_SECTION = 20;
 
-const esc = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+// Control characters are not allowed in XML: one of them turns a whole section into a blank page.
+const esc = (s) => s.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\uFFFE\uFFFF]/g, "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 const median = (xs) => {
   if (!xs.length) return 0;
   const s = [...xs].sort((a, b) => a - b);
@@ -249,7 +250,8 @@ export async function pdfToEpub(doc, { title, author, language }, onProgress) {
     else sec.push(b.type === "h" ? `<h2${anchor}>${esc(b.text)}</h2>` : `<p${anchor}>${esc(b.text)}</p>`);
   }
 
-  const lang = language || "en";
+  // Some PDFs carry junk in /Lang (bytes, not a language tag), which would break every XHTML file.
+  const lang = /^[a-z]{2,3}(-[a-z0-9]{1,8})*$/i.test(language || "") ? language : "en";
   const zip = new JSZip();
   zip.file("mimetype", "application/epub+zip", { compression: "STORE" });
   zip.file(
