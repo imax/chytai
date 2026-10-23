@@ -84,7 +84,16 @@ class Advice {
     const year = Number(book.published) || Number(first("year")) || Number(own?.published) || 0;
     const original = [book.altTitle, first("originalTitle"), first("altTitle")].map((t) => String(t || "").trim()).find((t) => t && t !== book.title) || "";
     const translator = first("translator") || "";
-    const publishers = [...new Set(raw.map((r) => r.item.publisher || store.shelf(r.shelf.id || r.shelf)?.name || "").filter(Boolean))];
+    // The publisher with the two words the site says about it (its shelf's tagline), e.g. «Лабораторія
+    // (Київське видавництво нонфікшну: історія, психологія, бізнес, наука)»; a shop that only sells it is named as such.
+    const publishers = [];
+    for (const r of raw) {
+      const sh = store.shelf(r.shelf.id || r.shelf);
+      const own = sh?.kind === "publisher" || sh?.kind === "audio";
+      const name = (own ? sh.name : r.item.publisher) || sh?.name || "";
+      if (!name || publishers.some((p) => p.startsWith(name))) continue;
+      publishers.push(own && sh.tagline ? `${name} (${sh.tagline})` : !own && sh ? `${name}${sh.name !== name ? `, sold by ${sh.name}` : " (a shop)"}` : name);
+    }
     const genres = [...new Set([...(book.tags || []), ...raw.flatMap((r) => r.item.genres || [])])].filter((g) => g && g !== "українською");
     const formats = [...new Set(raw.map((r) => r.item.format || "").filter(Boolean))];
     const duration = first("duration") || "";
@@ -144,7 +153,7 @@ class Advice {
     if (f.pages) bits.push(`Pages: ${f.pages}${f.olPages ? " (the original edition)" : ""}`);
     if (f.duration) bits.push(`Audiobook length: ${f.duration}`);
     if (book.language) bits.push(`Language of this edition: ${book.language}`);
-    if (f.publishers.length) bits.push(`Publisher / sold by: ${f.publishers.join(", ")}`);
+    if (f.publishers.length) bits.push(`Publisher: ${f.publishers.join("; ")}`);
     if (f.formats.length) bits.push(`Formats: ${f.formats.join(", ")}`);
     if (f.genres.length) bits.push(`Genres (the shops' shelves): ${f.genres.join(", ")}`);
     if (book.series?.name) bits.push(`Series: ${book.series.name}${book.series.volumes ? ` (${book.series.volumes} volumes)` : ""}`);
