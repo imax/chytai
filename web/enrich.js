@@ -151,7 +151,7 @@ async function lookup(book, { fetchImpl = fetch } = {}) {
   if (doc.cover_i) out.cover = `https://covers.openlibrary.org/b/id/${doc.cover_i}-L.jpg`;
   const found = cleanIsbns(doc.isbn);
   if (found.length) out.isbns = found.slice(0, 40);
-  if (doc.first_publish_year) out.published = doc.first_publish_year;
+  if (doc.first_publish_year >= 1800) out.published = doc.first_publish_year; // older ones are mostly noise («Lolita» 1777)
   if (doc.number_of_pages_median) out.pages = doc.number_of_pages_median;
   const langs = (doc.language || []).filter((l) => LANG[l]);
   // Open Library knows the original, not the Ukrainian edition: a Cyrillic-titled book keeps its own language.

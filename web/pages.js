@@ -923,6 +923,7 @@ function bookEditPage({ book, raw, user }) {
       <label>Опис <textarea name="blurb" rows="8" placeholder="${attr(raw.blurb || "")}">${esc(fix.blurb || "")}</textarea></label>
       ${field("cover", "Обкладинка", `Посилання на картинку · <button type="button" class="text-link small" id="find-covers">Знайти обкладинку</button>`)}
       <div id="covers" class="cover-picks" hidden></div>
+      ${field("published", "Рік", "Рік першого видання")}
       ${field("aliases", "Інші назви для пошуку", "Через кому, як люди скорочують: DCC, ГП")}
       <label>Основний жанр <select name="genre">${[["", `як у каталозі${require("./store").mainGenres(raw.tags).length ? ` (${require("./store").mainGenres(raw.tags).join(", ")})` : ""}`], ...GENRES.map((g) => [g, cap(g)])].map(([v, t]) => `<option value="${attr(v)}" ${(fix.genre || "") === v ? "selected" : ""}>${esc(t)}</option>`).join("")}</select></label>
       <label>Мова <select name="language">${[["", `як у каталозі${raw.language ? ` (${raw.language})` : ""}`], ["українська", "українська"], ["англійська", "англійська"], ["російська", "російська: сховати з пошуку й рекомендацій"]].map(([v, t]) => `<option value="${v}" ${(fix.language || "") === v ? "selected" : ""}>${esc(t)}</option>`).join("")}</select></label>

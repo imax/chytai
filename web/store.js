@@ -80,7 +80,7 @@ const isRussian = (b) => {
 const norm = (s) => String(s || "").toLowerCase().replace(/^(the|a)\s+/, "").replace(/[^\p{L}\p{N}]+/gu, " ").trim();
 // Separators left at the end of a title: «Diary of Samuel Pepys -», «Назва:».
 const DANGLING = /[\s\-‐‑–—:;,/|]+$/u;
-const EDITABLE = ["title", "author", "blurb", "cover", "language", "aliases", "genre"];
+const EDITABLE = ["title", "author", "blurb", "cover", "language", "aliases", "genre", "published"];
 // A short name as typed in search: «DCC», «Л.О.Т.Р.» and «lotr» are one key.
 const aliasKey = (s) => String(s || "").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, "");
 // The first letters of a name of three or more words, as readers shorten it: «Dungeon Crawler Carl» → dcc,
@@ -1379,6 +1379,9 @@ class Store {
     }
     if (ser) out.series = { name: ser.name, head: ser.head, volumes: ser.volumes, items: ser.items.map(({ shelf, item }) => ({ ...this.fromShelfItem(shelf, item), shelf, work: this.canonical(item.id), href: this.href(item.id) })) };
     out.tags = this.genresOf(id, b, eds);
+    // A year before 1800 on a reader's book is Open Library's or an import's noise far more often than a real
+    // date («Lolita» 1777, Max 2026-10-23); the owner can still set one in «Редагувати».
+    if (Number(out.published) < 1800) delete out.published;
     if (this.covers?.has(id)) out.cover = this.covers.get(id);
     // A book a reader added by hand or imported has no cover; its catalog editions do («Сила інтровертів»).
     else if (!out.cover) out.cover = (out.editions || []).find((e) => e.cover)?.cover || "";
@@ -1416,6 +1419,8 @@ class Store {
         ours = [...new Set([...ours, ...ourGenres([...(tb?.tags || tb?.genres || []), ...(this.editions.get(t) || []).flatMap(({ item }) => item.genres || [])])])];
       }
     }
+    // A classic is not genre romance, whatever its subjects say (Max 2026-10-23: «Лоліта» was «Любовні романи»).
+    if (ours.includes("класика")) ours = ours.filter((g) => g !== "любовні романи");
     // A specific genre first, then «художня».
     ours.sort((x, y) => (x === "художня") - (y === "художня"));
     return [...new Set([...ours.slice(0, 3), ...own])];
@@ -1458,7 +1463,7 @@ class Store {
     const fix = {};
     for (const k of EDITABLE) {
       const v = k === "blurb" ? String(patch[k] ?? "").replace(/\r\n?/g, "\n").trim() : String(patch[k] ?? "").replace(/\s+/g, " ").trim();
-      if (v && !(k === "genre" && !OUR_GENRES.has(v))) fix[k] = v;
+      if (v && !(k === "genre" && !OUR_GENRES.has(v)) && !(k === "published" && !/^-?\d{1,4}$/.test(v))) fix[k] = v;
     }
     if (Object.keys(fix).length) all[id] = fix;
     else delete all[id];

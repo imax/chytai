@@ -892,7 +892,10 @@ function discovery(req, book, also = []) {
   const inGenre = genre
     ? [...social.liked().values()]
         .filter((x) => !skip.has(x.book.id) && mainGenres(x.book.tags)[0] === genre)
-        .sort((a, b) => b.avg - a.avg || !!b.book.cover - !!a.book.cover)
+        // Four of the well rated ones, different every time (Max 2026-10-23: «ті самі книжки» on every page).
+        .map((x) => ({ x, r: Math.random() + (x.book.cover ? 0.5 : 0) }))
+        .sort((a, b) => b.r - a.r)
+        .map(({ x }) => x)
         .slice(0, 4)
         .map((x) => x.book)
     : [];
