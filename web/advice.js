@@ -19,7 +19,7 @@ const SCHEMA = `CREATE TABLE IF NOT EXISTS advice (
 const OVERVIEW_SCHEMA = `CREATE TABLE IF NOT EXISTS overview (
   book TEXT PRIMARY KEY, text TEXT NOT NULL, model TEXT NOT NULL, created TEXT NOT NULL, by TEXT NOT NULL DEFAULT '',
   input_tokens INTEGER NOT NULL DEFAULT 0, output_tokens INTEGER NOT NULL DEFAULT 0, searches INTEGER NOT NULL DEFAULT 0,
-  prompt INTEGER NOT NULL DEFAULT 1
+  prompt INTEGER NOT NULL DEFAULT 1, sources TEXT NOT NULL DEFAULT ''
 );`;
 // A reader's word on an overview (Max, 2026-10-23: «кнопки щоб оцінити якість AI summary. похвалити або
 // навпаки поскаржитись»): one vote a reader a book, +1 or -1; the owner sees the sums on /admin/overviews.
@@ -89,7 +89,8 @@ class Advice {
     }
     db.exec(SCHEMA);
     db.exec(OVERVIEW_SCHEMA);
-    if (!db.prepare("PRAGMA table_info(overview)").all().some((c) => c.name === "prompt")) db.exec("ALTER TABLE overview ADD COLUMN prompt INTEGER NOT NULL DEFAULT 1");
+    for (const [col, def] of [["prompt", "INTEGER NOT NULL DEFAULT 1"], ["sources", "TEXT NOT NULL DEFAULT ''"]])
+      if (!db.prepare("PRAGMA table_info(overview)").all().some((c) => c.name === col)) db.exec(`ALTER TABLE overview ADD COLUMN ${col} ${def}`);
     db.exec(VOTE_SCHEMA);
     if (!db.prepare("PRAGMA table_info(overview_vote)").all().some((c) => c.name === "note")) db.exec("ALTER TABLE overview_vote ADD COLUMN note TEXT NOT NULL DEFAULT ''");
     this.client = apiKey ? new Anthropic({ apiKey }) : null;
@@ -283,9 +284,17 @@ class Advice {
   // For /admin/overviews: every overview with its votes, the ones readers complained about first.
   overviewList() {
     return this.db
-      .prepare("SELECT o.book, o.created, o.by, o.model, o.input_tokens, o.output_tokens, o.searches, COALESCE(SUM(v.vote = 1), 0) AS up, COALESCE(SUM(v.vote = -1), 0) AS down FROM overview o LEFT JOIN overview_vote v ON v.book = o.book GROUP BY o.book ORDER BY down DESC, up DESC, o.created DESC")
+      .prepare("SELECT o.book, o.created, o.by, o.model, o.input_tokens, o.output_tokens, o.searches, o.sources, COALESCE(SUM(v.vote = 1), 0) AS up, COALESCE(SUM(v.vote = -1), 0) AS down FROM overview o LEFT JOIN overview_vote v ON v.book = o.book GROUP BY o.book ORDER BY down DESC, up DESC, o.created DESC")
       .all()
-      .map((r) => ({ ...r, book: this.store.book(r.book) || { id: r.book, title: r.book, href: "" } }));
+      .map((r) => {
+        let found = { queries: [], sources: [] };
+        try {
+          found = r.sources ? JSON.parse(r.sources) : found;
+        } catch {
+          /* an older row */
+        }
+        return { ...r, ...found, book: this.store.book(r.book) || { id: r.book, title: r.book, href: "" } };
+      });
   }
   // Book titles the overview names in «лапки» become links to their pages when the catalog has them
   // (Max, 2026-10-23: «автоматично додавати лінки на книги, які згадуються у відгуку»). Ukrainian
@@ -350,8 +359,18 @@ class Advice {
   async turn(params) {
     let message;
     const usage = { input: 0, cached: 0, output: 0, searches: 0 };
+    // What the web search asked and found (Max, 2026-10-23: «звідки відгуки він тягне?»): kept with the overview for /admin/overviews.
+    const queries = [];
+    const sources = [];
+    const note = (content) => {
+      for (const b of content || []) {
+        if (b.type === "server_tool_use" && b.input?.query) queries.push(String(b.input.query));
+        if (b.type === "web_search_tool_result" && Array.isArray(b.content)) for (const r of b.content) if (r.type === "web_search_result" && r.url && !sources.some((x) => x.url === r.url)) sources.push({ url: r.url, title: String(r.title || "").slice(0, 120) });
+      }
+    };
     for (let i = 0; i < 4; i++) {
       message = await this.client.beta.messages.create(params);
+      note(message.content);
       const u = message.usage || {};
       usage.input += u.input_tokens || 0;
       usage.cached += (u.cache_read_input_tokens || 0) + (u.cache_creation_input_tokens || 0);
@@ -363,7 +382,7 @@ class Advice {
     if (message.stop_reason === "refusal") throw new Error("Claude не зміг відповісти про цю книжку.");
     const text = message.content.filter((b) => b.type === "text").map((b) => b.text).join("\n").trim();
     if (!text) throw new Error("Порожня відповідь, спробуйте ще раз.");
-    return { text, model: message.model, usage };
+    return { text, model: message.model, usage, queries, sources };
   }
   // Books with a reader's rating or note («Покинуто» doesn't count, as nowhere on the site; nor books in Russian).
   voiced() {
@@ -458,7 +477,7 @@ class Advice {
     const day = new Date().toISOString().slice(0, 10);
     if (by !== "auto" && by !== "redo" && this.db.prepare("SELECT COUNT(*) AS n FROM overview WHERE by NOT IN ('auto', 'redo') AND created >= ?").get(day).n >= OVERVIEW_DAILY) throw new Error("На сьогодні оглядів більше немає, спробуйте завтра.");
     const t0 = Date.now();
-    const { text, model, usage } = await this.turn({
+    const { text, model, usage, queries, sources } = await this.turn({
       model: this.model,
       max_tokens: 6000,
       betas: ["server-side-fallback-2026-07-01"],
@@ -470,8 +489,8 @@ class Advice {
     });
     const row = { text, model, created: new Date().toISOString() };
     this.db
-      .prepare("INSERT INTO overview (book, text, model, created, by, input_tokens, output_tokens, searches, prompt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (book) DO UPDATE SET text = excluded.text, model = excluded.model, created = excluded.created, by = excluded.by, input_tokens = excluded.input_tokens, output_tokens = excluded.output_tokens, searches = excluded.searches, prompt = excluded.prompt")
-      .run(id, text, model, row.created, by, usage.input + usage.cached, usage.output, usage.searches, PROMPT_VERSION);
+      .prepare("INSERT INTO overview (book, text, model, created, by, input_tokens, output_tokens, searches, prompt, sources) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (book) DO UPDATE SET text = excluded.text, model = excluded.model, created = excluded.created, by = excluded.by, input_tokens = excluded.input_tokens, output_tokens = excluded.output_tokens, searches = excluded.searches, prompt = excluded.prompt, sources = excluded.sources")
+      .run(id, text, model, row.created, by, usage.input + usage.cached, usage.output, usage.searches, PROMPT_VERSION, JSON.stringify({ queries, sources: sources.slice(0, 30) }));
     this.log(`overview: ${book.title} in ${Date.now() - t0} ms, ${usage.input + usage.cached} in, ${usage.output} out, ${usage.searches} searches, ${model}`);
     return { ...row, cached: false };
   }

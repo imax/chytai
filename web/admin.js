@@ -423,7 +423,9 @@ function overviewsPage({ user, list, stats: o, who, layout }) {
     .map((r) => {
       const by = who(r.by);
       const notes = (r.complaints || []).filter((c) => c.note).map((c) => { const w = who(c.reader); return `<div class="muted" style="white-space:normal;max-width:520px;margin-top:4px">👎 ${w ? `<a href="${esc(w.href)}">${esc(w.name)}</a>: ` : ""}${esc(c.note)}</div>`; }).join("");
-      return `<tr${r.down ? ' class="now"' : ""}><td><a href="${esc(r.book.href)}">${esc(r.book.title)}</a> <span class="muted">${esc(r.book.author || "")}</span>${notes}</td><td>${r.up || ""}</td><td>${r.down || ""}</td><td>${r.created.slice(0, 10)}</td><td>${by ? `<a href="${esc(by.href)}">${esc(by.name)}</a>` : r.by === "auto" ? "сам" : r.by === "redo" ? "перероблено" : ""}</td><td>${n(r.searches)}</td><td>${n(r.input_tokens)}</td><td>${n(r.output_tokens)}</td></tr>`;
+      const host = (u) => { try { return new URL(u).hostname.replace(/^www\./, ""); } catch { return u; } };
+      const found = r.queries?.length || r.sources?.length ? `<details style="margin-top:4px"><summary class="muted" style="cursor:pointer">запити ${r.queries?.length || 0}, джерела ${r.sources?.length || 0}</summary><div class="muted" style="white-space:normal;max-width:520px">${(r.queries || []).map((q) => `🔍 ${esc(q)}`).join("<br>")}${r.queries?.length ? "<br>" : ""}${(r.sources || []).map((x) => `<a href="${esc(x.url)}" target="_blank" rel="noopener" title="${esc(x.title)}">${esc(host(x.url))}</a>`).join(" · ")}</div></details>` : "";
+      return `<tr${r.down ? ' class="now"' : ""}><td><a href="${esc(r.book.href)}">${esc(r.book.title)}</a> <span class="muted">${esc(r.book.author || "")}</span>${notes}${found}</td><td>${r.up || ""}</td><td>${r.down || ""}</td><td>${r.created.slice(0, 10)}</td><td>${by ? `<a href="${esc(by.href)}">${esc(by.name)}</a>` : r.by === "auto" ? "сам" : r.by === "redo" ? "перероблено" : ""}</td><td>${n(r.searches)}</td><td>${n(r.input_tokens)}</td><td>${n(r.output_tokens)}</td></tr>`;
     })
     .join("\n");
   const body = `<section class="admin">
