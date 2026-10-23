@@ -653,7 +653,6 @@ form.inline button:not(.btn) { background: none; border: 0; padding: 0; cursor: 
 .form .now-pick input[type="radio"] { width: 20px; height: 20px; padding: 0; accent-color: var(--accent); }
 /* «Чи варто читати?» on a book page */
 .advice-ask .text-link { font-size: 15px; }
-.advice-part + .advice-part { margin-top: 18px; }
 .advice-wait { font: 17px/1.5 var(--serif); max-width: 560px; }
 .advice-wait { color: var(--muted); animation: advice-pulse 1.4s ease-in-out infinite; }
 @keyframes advice-pulse { 50% { opacity: 0.45; } }

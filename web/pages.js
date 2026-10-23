@@ -402,7 +402,7 @@ function bookLd(book, shelf, s, readers) {
 }
 
 // The book, the reader's own buttons, where to get it, what readers said, what it is about.
-function bookPage({ book, entry, now = false, user, shelf, inLibrary = new Map(), readers = [], also = [], writings = [], reviewError = "", readUrl = "", freeRead = false, advice = null }) {
+function bookPage({ book, entry, now = false, user, shelf, inLibrary = new Map(), readers = [], also = [], writings = [], reviewError = "", readUrl = "", freeRead = false, advice = null, overview = null }) {
   const s = statsOf(book.id);
   const kicker = [book.tags?.find((t) => t !== "українською"), isUk(book) ? "українською" : LANG_ADV[String(book.language || "").toLowerCase()] || ""].filter(Boolean).map(cap).join(" · ");
   const sub = [book.altTitle ? esc(book.altTitle) : "", book.author ? `<span class="authors">${authorLinks(book.author)}</span>` : "", book.published ? String(book.published) : "", book.pages ? `${book.pages} с.` : ""].filter(Boolean).join(" · ");
@@ -434,6 +434,7 @@ function bookPage({ book, entry, now = false, user, shelf, inLibrary = new Map()
       ${(first.entry.note ? rest : readers).length ? `<div class="others">${(first.entry.note ? rest : readers).map((r) => readerLine(r, book.id)).join("")}</div>` : ""}
     </section>` : ""}
     ${adviceBlock(book, advice)}
+    ${overviewBlock(book, overview, user)}
     ${SHOW_REVIEWS && (writings.length || user) ? `<section class="block" id="writings">
       ${label("Огляди")}
       ${writings.length ? writingsList(writings, book, user) : ""}
@@ -457,24 +458,36 @@ function bookPage({ book, entry, now = false, user, shelf, inLibrary = new Map()
 const SHOW_REVIEWS = false;
 // «AI-рекомендація» (advice.js): Claude's take on the book for this reader, by their own shelf, on a click.
 // A guest sees why to sign in, a reader with an empty shelf why to add books, a kept answer shows at once.
-const ADVICE_LINK = { shelf: "Чи варто мені читати?", web: "Те саме, з пошуком в інтернеті" };
-const ADVICE_BY = { shelf: "Claude, за вашою полицею", web: "Claude, за вашою полицею і пошуком в інтернеті" };
 function adviceHtml(a) {
-  const mode = a.mode || "shelf";
   return `<div class="advice-text">${marked.parse(a.text).replace(/<a href="http/g, '<a target="_blank" rel="noopener" href="http')}</div>
-<p class="small muted">${ADVICE_BY[mode]} · ${writingDate(a.created.slice(0, 10))} · <button class="text-link small" data-advice-again data-mode="${mode}">Спитати ще раз</button></p>`;
+<p class="small muted">Claude, за вашою полицею · ${writingDate(a.created.slice(0, 10))} · <button class="text-link small" data-ask="advice" data-again>Спитати ще раз</button></p>`;
 }
-// One part per mode: the kept answer, or its link. The web mode (a second link) is the owner's trial for now.
-const advicePart = ({ mode, kept }) => `<div class="advice-part" data-mode="${mode}">${kept ? adviceHtml(kept) : `<p class="advice-ask"><button class="text-link" data-advice data-mode="${mode}">${ADVICE_LINK[mode]}</button></p>`}</div>`;
 function adviceBlock(book, a) {
   if (!a) return "";
   // One dotted link in every state (Max, 2026-10-23): a guest's goes to sign in, an empty shelf's to «Додати».
   const inner =
     a.kind === "guest" ? `<p class="advice-ask"><a class="text-link" href="/login?next=${attr(encodeURIComponent(book.href))}">Чи варто мені читати?</a></p>`
     : a.kind === "empty" ? `<p class="advice-ask"><a class="text-link" href="/add">Додайте прочитане, і Claude скаже, чи варто</a></p>`
-    : a.modes.map(advicePart).join("");
+    : a.kind === "kept" ? adviceHtml(a)
+    : `<p class="advice-ask"><button class="text-link" data-ask="advice">Чи варто мені читати?</button></p>`;
   return `<section class="block advice" id="advice" data-book="${attr(book.id)}">
       ${label("AI-рекомендація")}
+      <div class="advice-body">${inner}</div>
+    </section>`;
+}
+// «Що кажуть про книжку» (advice.js overview): one summary per book from the web, the same for everyone.
+// The owner's trial for now (Max, 2026-10-23): only he sees it and makes it; OVERVIEW_PUBLIC opens it to all.
+const OVERVIEW_PUBLIC = false;
+function overviewHtml(o, user) {
+  return `<div class="advice-text">${marked.parse(o.text).replace(/<a href="http/g, '<a target="_blank" rel="noopener" href="http')}</div>
+<p class="small muted">Claude, за відгуками в інтернеті · ${writingDate(o.created.slice(0, 10))}${user?.owner ? ` · <button class="text-link small" data-ask="overview" data-again>Оновити</button>` : ""}</p>`;
+}
+function overviewBlock(book, o, user) {
+  const canSee = o && (OVERVIEW_PUBLIC || user?.owner);
+  if (!canSee && !user?.owner) return "";
+  const inner = canSee ? overviewHtml(o, user) : `<p class="advice-ask"><button class="text-link" data-ask="overview">Що кажуть про цю книжку?</button></p>`;
+  return `<section class="block advice" id="overview" data-book="${attr(book.id)}">
+      ${label("Що кажуть про книжку")}
       <div class="advice-body">${inner}</div>
     </section>`;
 }
@@ -1531,6 +1544,7 @@ module.exports = {
   dupesPage,
   reviewsAdminPage,
   adviceHtml,
+  overviewHtml,
   translationsPage,
   decidedList,
   welcomePage,
