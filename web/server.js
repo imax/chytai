@@ -1237,6 +1237,14 @@ app.post("/api/welcome-mail", owner, async (req, res) => {
 // The owner's statistics page: readers, retention by sign-up week, what people do on the site (admin.js).
 // The genres trial (genretrial.js): Haiku's genres for 200 books on readers' shelves next to ours.
 app.get("/admin/genres-trial", owner, (req, res) => res.send(pages.genreTrialPage({ user: req.user, st: genreTrial.state(), running: genreTrial.running, href: (id) => store.href(id) })));
+// The results as plain text behind an unguessable link the owner can hand to Claude, who reads the site as a
+// guest (Max 2026-10-23: «що треба щоб побачив?»). Only titles and genres; the link changes with every run.
+app.get("/genres-trial/:key", (req, res) => {
+  const st = genreTrial.state();
+  if (!st?.key || req.params.key !== st.key) return res.status(404).send("Немає");
+  const line = (x) => `${x.after[0] !== x.before[0] ? "*" : " "} ${x.title} — ${x.author} | було: ${x.before.join(", ") || "—"} | стало: ${x.error ? `помилка ${x.error}` : x.after.join(", ") || "—"}`;
+  res.type("text/plain").send([`${st.done} з ${st.total}, $${(st.cost || 0).toFixed(3)}${st.finished ? "" : ", ще йде"}`, "* = змінився основний жанр", "", ...st.items.map(line)].join("\n"));
+});
 app.post("/admin/genres-trial", owner, (req, res) => {
   genreTrial.run().catch((e) => console.log(`genretrial: ${e.message}`));
   res.redirect(303, "/admin/genres-trial");

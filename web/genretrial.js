@@ -29,7 +29,13 @@ class GenreTrial {
   }
 
   state() {
-    return JSON.parse(this.db.get("genretrial") || "null");
+    const st = JSON.parse(this.db.get("genretrial") || "null");
+    // A run from before the share link existed gets its key now.
+    if (st && !st.key) {
+      st.key = require("crypto").randomBytes(12).toString("hex");
+      this.db.set("genretrial", JSON.stringify(st));
+    }
+    return st;
   }
 
   // 200 random works from readers' shelves (one per work, no Russian books).
@@ -88,7 +94,7 @@ class GenreTrial {
     if (this.running || !this.client) return false;
     this.running = true;
     const books = this.pick();
-    const st = { at: new Date().toISOString(), model: MODEL, total: books.length, done: 0, cost: 0, items: [], errors: 0 };
+    const st = { key: require("crypto").randomBytes(12).toString("hex"), at: new Date().toISOString(), model: MODEL, total: books.length, done: 0, cost: 0, items: [], errors: 0 };
     const save = () => this.db.set("genretrial", JSON.stringify(st));
     save();
     let next = 0;
