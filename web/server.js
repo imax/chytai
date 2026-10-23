@@ -431,7 +431,6 @@ app.post("/import/:source/apply", signed, importSource, async (req, res) => {
   const key = (r) => (r.read ? `0${r.read}` : `1${r.added || "9999"}`);
   chosen.sort((a, b) => key(a).localeCompare(key(b)));
   const result = store.importEntries(req.user.id, chosen.map((r) => ({ id: r.match?.id || null, title: r.title, author: r.author, isbns: r.isbns, goodreadsId: r.goodreadsId, appleId: r.appleId, status: r.status, rating: r.rating, year: r.year, note: r.note, copy: r.copy, added: r.added, read: r.read, touched: r.touched, cover: r.cover, ol: r.ol, published: r.published, blurb: r.blurb, blurbSource: r.blurbSource, pages: r.pages, links: r.link ? [r.link] : [] })), { source: req.source });
-  advice.soon();
   const name = IMPORTS[req.source].name;
   console.log(`${name} import @${req.user.username}: ${result.added} added, ${result.updated} updated, ${result.created.length} new books`);
   // New books by hand are mailed to the owner one by one; an import sends one letter with the list.
@@ -479,9 +478,10 @@ const social = new Social(store, (id) => pub(auth.reader(id)));
 const bookpage = new BookPage({ apiKey: process.env.ANTHROPIC_API_KEY || "", log: console.log });
 const advice = new Advice({ store, social, db: store.db, apiKey: process.env.ANTHROPIC_API_KEY || "", log: console.log });
 if (!advice.enabled) console.log("ANTHROPIC_API_KEY is not set: «Чи варто читати?» is off");
-// «Що пишуть в інтернеті» by itself: a minute after start the backfill over every rated book without an
-// overview, then once a day for what the daily ceiling left; ratings, notes and imports call advice.soon().
-setTimeout(() => console.log(`overview: ${advice.sweep()} books queued`), 60 * 1000).unref();
+// «Відгуки в інтернеті» by itself: a minute after start, overviews made with an older prompt are redone,
+// and (while advice.js BACKFILL is on) every rated book without one gets queued, again once a day; a
+// rating or a note queues its own book (advice.want). Imports wait for the backfill.
+setTimeout(() => console.log(`overview: ${advice.redo()} to redo, ${advice.sweep()} books queued`), 60 * 1000).unref();
 setInterval(() => advice.sweep(), 24 * 3600 * 1000).unref();
 pages.setStats((id) => social.stats(id));
 // The weekly letter (digest.js): Friday 9:00 Kyiv, to every reader who has not switched it off (Max,
@@ -845,7 +845,7 @@ app.post("/api/entry/:id", signed, (req, res) => {
   const e = store.setEntry(req.user.id, req.params.id, patch);
   if (!e) return res.status(404).send("Немає такої книжки");
   if (["read", "want", "abandoned"].includes(patch.status)) dropNow(req.user.id, req.params.id);
-  if (e.status !== "abandoned" && (e.rating != null || e.note)) advice.soon();
+  if (e.status !== "abandoned" && (e.rating != null || e.note)) advice.want(req.params.id);
   back(req, res, store.href(req.params.id));
 });
 

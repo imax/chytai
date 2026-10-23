@@ -18,7 +18,8 @@ const SCHEMA = `CREATE TABLE IF NOT EXISTS advice (
 );`;
 const OVERVIEW_SCHEMA = `CREATE TABLE IF NOT EXISTS overview (
   book TEXT PRIMARY KEY, text TEXT NOT NULL, model TEXT NOT NULL, created TEXT NOT NULL, by TEXT NOT NULL DEFAULT '',
-  input_tokens INTEGER NOT NULL DEFAULT 0, output_tokens INTEGER NOT NULL DEFAULT 0, searches INTEGER NOT NULL DEFAULT 0
+  input_tokens INTEGER NOT NULL DEFAULT 0, output_tokens INTEGER NOT NULL DEFAULT 0, searches INTEGER NOT NULL DEFAULT 0,
+  prompt INTEGER NOT NULL DEFAULT 1
 );`;
 // A reader's word on an overview (Max, 2026-10-23: «кнопки щоб оцінити якість AI summary. похвалити або
 // навпаки поскаржитись»): one vote a reader a book, +1 or -1; the owner sees the sums on /admin/overviews.
@@ -35,6 +36,13 @@ const OVERVIEW_DAILY = 150; // fresh overviews a day on readers' clicks, all rea
 // ceiling a day, so a big Goodreads import or the backfill can't run the bill away in one night.
 const AUTO_DAILY = 150; // Max, 2026-10-23: «давай зменшемо до 150 [на] день»
 const AUTO_PARALLEL = 2;
+// The backfill over books rated before the feature is OFF for now (Max, 2026-10-23 08:09: «давай поки не
+// робити авто-backfill … я ще подумаю»); a book gets its overview when a reader rates or notes it from
+// now on. Flip to true to let sweep() run at start and daily.
+const BACKFILL = false;
+// The overview prompt's version: rows made with an older one are redone at start, two at a time
+// (Max, 2026-10-23 08:09, after the prompt lost its obligatory paragraph of complaints: «старі теж»).
+const PROMPT_VERSION = 2;
 // «Що пишуть в інтернеті» (Max, 2026-10-23): one summary per book, not per reader, of what readers and
 // reviewers say, from the web, kept on the page for everyone. Our own words only: a review's text may
 // not be reproduced (Закон 2811-IX), so no quotes, no names, no links.
@@ -81,10 +89,11 @@ class Advice {
     }
     db.exec(SCHEMA);
     db.exec(OVERVIEW_SCHEMA);
+    if (!db.prepare("PRAGMA table_info(overview)").all().some((c) => c.name === "prompt")) db.exec("ALTER TABLE overview ADD COLUMN prompt INTEGER NOT NULL DEFAULT 1");
     db.exec(VOTE_SCHEMA);
     if (!db.prepare("PRAGMA table_info(overview_vote)").all().some((c) => c.name === "note")) db.exec("ALTER TABLE overview_vote ADD COLUMN note TEXT NOT NULL DEFAULT ''");
     this.client = apiKey ? new Anthropic({ apiKey }) : null;
-    this.queue = new Set(); // book ids waiting for an automatic overview
+    this.queue = new Map(); // book id -> { fresh } waiting for an automatic overview
     this.running = 0;
   }
   get enabled() {
@@ -321,34 +330,46 @@ class Advice {
   autoToday() {
     return this.db.prepare("SELECT COUNT(*) AS n FROM overview WHERE by = 'auto' AND created >= ?").get(new Date().toISOString().slice(0, 10)).n;
   }
-  // Queues every book that needs an overview and starts on them. Called at start (the backfill), once a
-  // day (what the ceiling left over) and after a rating, a note or an import (via soon()).
+  // The backfill: queues every book that needs an overview and starts on them. Meant for start and once
+  // a day; held back while BACKFILL is off.
   sweep() {
-    if (!this.client) return 0;
+    if (!this.client || !BACKFILL) return 0;
     const ids = this.missing();
-    for (const id of ids) this.queue.add(id);
+    for (const id of ids) if (!this.queue.has(id)) this.queue.set(id, { fresh: false });
     this.pump();
     return ids.length;
   }
-  // A sweep a moment after a change, many changes in a row (an import) folded into one.
-  soon() {
-    clearTimeout(this.soonTimer);
-    this.soonTimer = setTimeout(() => this.sweep(), 3000).unref();
+  // One book, after a reader rated or noted it: queued if it has no overview (nor its translation).
+  want(bookId) {
+    if (!this.client) return;
+    const id = this.store.canonical(bookId);
+    if (!this.store.book(id) || isRussian(this.store.book(id)) || this.overviewOf(id) || this.queue.has(id)) return;
+    this.queue.set(id, { fresh: false });
+    this.pump();
+  }
+  // Overviews made with an older prompt, redone with the current one; runs once at start, resumes after a restart.
+  redo() {
+    if (!this.client) return 0;
+    const ids = this.db.prepare("SELECT book FROM overview WHERE prompt < ? ORDER BY created").all(PROMPT_VERSION).map((r) => r.book);
+    for (const id of ids) if (!this.queue.has(id)) this.queue.set(id, { fresh: true });
+    this.pump();
+    return ids.length;
   }
   pump() {
     while (this.running < AUTO_PARALLEL && this.queue.size) {
-      if (this.autoToday() + this.running >= AUTO_DAILY) {
+      const [id, { fresh }] = this.queue.entries().next().value;
+      // The daily ceiling is for new overviews; a redo of an existing one is a bounded one-off and passes.
+      if (!fresh && this.autoToday() + this.running >= AUTO_DAILY) {
         if (!this.capped) this.log(`overview: ${AUTO_DAILY} made by itself today, ${this.queue.size} wait for tomorrow`);
         this.capped = true;
         return;
       }
       this.capped = false;
-      const id = this.queue.values().next().value;
       this.queue.delete(id);
       const book = this.store.book(id);
       if (!book) continue;
       this.running++;
-      this.overview(book, { by: "auto" })
+      this.overview(book, { by: fresh ? "redo" : "auto", fresh })
         .catch((e) => this.log(`overview failed: ${book.title}: ${e.message}`))
         .finally(() => {
           this.running--;
@@ -358,7 +379,7 @@ class Advice {
   }
   // For the owner: how many overviews there are, what they cost so far and what waits in the queue.
   overviewStats() {
-    const t = this.db.prepare("SELECT COUNT(*) AS n, SUM(input_tokens) AS input, SUM(output_tokens) AS output, SUM(searches) AS searches, SUM(CASE WHEN by = 'auto' THEN 1 ELSE 0 END) AS auto FROM overview").get();
+    const t = this.db.prepare("SELECT COUNT(*) AS n, SUM(input_tokens) AS input, SUM(output_tokens) AS output, SUM(searches) AS searches, SUM(CASE WHEN by IN ('auto', 'redo') THEN 1 ELSE 0 END) AS auto FROM overview").get();
     const today = this.db.prepare("SELECT COUNT(*) AS n FROM overview WHERE created >= ?").get(new Date().toISOString().slice(0, 10)).n;
     const v = this.db.prepare("SELECT SUM(vote = 1) AS up, SUM(vote = -1) AS down FROM overview_vote").get();
     // Opus 5.5 list prices: $4/M in, $20/M out, $10 per 1000 web searches.
@@ -375,7 +396,7 @@ class Advice {
     // A ceiling for the day on readers' clicks: each overview is a few web searches and a long Opus turn.
     // Automatic ones have their own ceiling in pump().
     const day = new Date().toISOString().slice(0, 10);
-    if (by !== "auto" && this.db.prepare("SELECT COUNT(*) AS n FROM overview WHERE by != 'auto' AND created >= ?").get(day).n >= OVERVIEW_DAILY) throw new Error("На сьогодні оглядів більше немає, спробуйте завтра.");
+    if (by !== "auto" && by !== "redo" && this.db.prepare("SELECT COUNT(*) AS n FROM overview WHERE by NOT IN ('auto', 'redo') AND created >= ?").get(day).n >= OVERVIEW_DAILY) throw new Error("На сьогодні оглядів більше немає, спробуйте завтра.");
     const t0 = Date.now();
     const { text, model, usage } = await this.turn({
       model: this.model,
@@ -389,8 +410,8 @@ class Advice {
     });
     const row = { text, model, created: new Date().toISOString() };
     this.db
-      .prepare("INSERT INTO overview (book, text, model, created, by, input_tokens, output_tokens, searches) VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (book) DO UPDATE SET text = excluded.text, model = excluded.model, created = excluded.created, by = excluded.by, input_tokens = excluded.input_tokens, output_tokens = excluded.output_tokens, searches = excluded.searches")
-      .run(id, text, model, row.created, by, usage.input + usage.cached, usage.output, usage.searches);
+      .prepare("INSERT INTO overview (book, text, model, created, by, input_tokens, output_tokens, searches, prompt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (book) DO UPDATE SET text = excluded.text, model = excluded.model, created = excluded.created, by = excluded.by, input_tokens = excluded.input_tokens, output_tokens = excluded.output_tokens, searches = excluded.searches, prompt = excluded.prompt")
+      .run(id, text, model, row.created, by, usage.input + usage.cached, usage.output, usage.searches, PROMPT_VERSION);
     this.log(`overview: ${book.title} in ${Date.now() - t0} ms, ${usage.input + usage.cached} in, ${usage.output} out, ${usage.searches} searches, ${model}`);
     return { ...row, cached: false };
   }
