@@ -15,8 +15,8 @@ const SCHEMA = `CREATE TABLE IF NOT EXISTS uk_find (
   created TEXT NOT NULL, input_tokens INTEGER NOT NULL DEFAULT 0, output_tokens INTEGER NOT NULL DEFAULT 0, searches INTEGER NOT NULL DEFAULT 0
 );`;
 
-const SYSTEM = `You find where a Ukrainian translation of a book is sold. Search the web (up to ${SEARCHES} searches) for the page of this exact book, in Ukrainian, in a Ukrainian online bookstore or on its Ukrainian publisher's site (for example vivat.com.ua, ksd.ua, laboratory.ua, starylev.com.ua, komubook.com.ua, nashformat.ua, bookclub.ua, readeat.com is not wanted). A product page of one book, not a search, a category, an article, a review or a library catalog. Prefer the publisher's own site, then big stores. Paper, e-book or audio are all fine.
-Answer with one JSON object and nothing else: {"urls": ["https://…", "…"]} with up to 4 addresses, best first, or {"urls": []} if you found no such page. Only addresses you saw in the search results; never make one up.`;
+const SYSTEM = `You find where a Ukrainian translation of a book is sold. Search the web in Ukrainian (up to ${SEARCHES} searches), for example «<Ukrainian title> <author's surname in Ukrainian> купити книгу», then «<Ukrainian title> видавництво». You are looking for the page of this exact book in Ukrainian in a Ukrainian online bookstore or on its Ukrainian publisher's site: vivat.com.ua, ksd.ua, bookclub.ua, laboratory.ua, starylev.com.ua, komubook.com.ua, book.ua, bookchef.ua, folio.com.ua, nashformat.ua, yakaboo.ua, book-ye.com.ua, knigoland, bukva.ua, ababahalamaha.com.ua, artbooks.ua, ranok.com.ua, rozetka.com.ua and others; not readeat.com. A product page of one book, not a search, a category, an article, a review or a library catalog. A Ukrainian edition counts even with a slightly different title or a subtitle. List every such page you saw, the publisher's site and smaller stores first (big marketplaces and Yakaboo often block us).
+Answer with one JSON object and nothing else: {"urls": ["https://…", "…"]} with up to 6 addresses, or {"urls": []} if the search shows no Ukrainian edition. Only addresses you saw in the search results; never make one up.`;
 
 const norm = (s) => String(s || "").toLowerCase().replace(/[’'`ʼ"«»]/g, "").replace(/[^\p{L}\p{N}]+/gu, " ").trim();
 
@@ -80,21 +80,21 @@ class UkFinder {
         params = { ...params, messages: [...params.messages, { role: "assistant", content: message.content }] };
       }
       const out = message.content.filter((c) => c.type === "text").map((c) => c.text).join("");
-      urls = (JSON.parse(out.slice(out.indexOf("{"), out.lastIndexOf("}") + 1)).urls || []).filter((u) => /^https?:\/\//.test(u) && !/readeat\.com/i.test(u)).slice(0, 4);
+      urls = (JSON.parse(out.slice(out.indexOf("{"), out.lastIndexOf("}") + 1)).urls || []).filter((u) => /^https?:\/\//.test(u) && !/readeat\.com/i.test(u)).slice(0, 6);
     } catch (e) {
       return save("error", { note: `Claude: ${e.message}` });
     }
     if (!urls.length) return save("none", { note: "Claude нічого не знайшов" });
     // The first address we can read whose title is the Ukrainian one (its first words, at least).
     const notes = [];
-    const want = norm(uk.uk).split(" ").slice(0, 3).join(" ");
+    const want = norm(uk.uk).split(" ").filter((w) => w.length > 2).slice(0, 2);
     for (const url of urls) {
       const p = await this.bookpage.fromUrl(url, "ukfind");
       if (p.error) {
         notes.push(`${new URL(url).hostname}: ${p.error.split(".")[0]}`);
         continue;
       }
-      if (!/[а-яіїєґ]/i.test(p.title) || !norm(p.title).startsWith(want)) {
+      if (!/[а-яіїєґ]/i.test(p.title) || !want.every((w) => norm(p.title).includes(w))) {
         notes.push(`${new URL(url).hostname}: «${p.title}»`);
         continue;
       }
