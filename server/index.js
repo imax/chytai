@@ -479,6 +479,11 @@ function loginPage(req, error) {
 </form></body></html>`;
 }
 
+// Readers' words on the landing (Max, 2026-10-23). Add one more { text, author } to show it; author may be left out.
+const TESTIMONIALS = [
+  { text: "AI нотатки і пояснення — афігенна фіча, і навіть елементарний зміст по книжці значно зручніше чим ті читалки що я дивився" },
+];
+
 // The first thing someone not signed in sees (Max, 2026-10-22): what the reader is, then «Увійти».
 // The words are Max's; he writes the copy himself.
 function landingPage(req) {
@@ -510,6 +515,13 @@ function landingPage(req) {
   .desk i { display: block; height: 26px; background: #e9e6df; border-bottom: 1px solid rgba(0,0,0,0.08); }
   .phone { position: absolute; right: 0; bottom: 20px; width: 230px; border-radius: 30px; overflow: hidden; box-shadow: 0 20px 50px rgba(0,0,0,0.25); border: 8px solid #1d1d1f; }
   .shots img { display: block; width: 100%; }
+  .quotes { padding: 10px 0 20px; }
+  .quotes h2 { margin: 0 0 14px; font-size: 13px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+  .quotes ul { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; }
+  .quotes blockquote { margin: 0; height: 100%; padding: 20px 22px; border-left: 3px solid var(--accent); border-radius: 4px 12px 12px 4px; background: rgba(255,255,255,0.55); font-size: 18px; }
+  @media (prefers-color-scheme: dark) { .quotes blockquote { background: #2a2a2d; } }
+  .quotes blockquote p { margin: 0; } .quotes blockquote p::before { content: "«"; } .quotes blockquote p::after { content: "»"; }
+  .quotes cite { display: block; margin-top: 10px; font-size: 15px; font-style: normal; color: var(--muted); }
   footer { padding: 24px 0 40px; color: var(--muted); font-size: 14px; } footer a { color: inherit; }
   @media (max-width: 760px) {
     .hero { padding-top: 10px; }
@@ -532,6 +544,7 @@ function landingPage(req) {
     <div class="phone"><img src="/landing-phone.jpg" alt="Читалка Chytai на телефоні: пояснення виділеного рядка"></div>
   </section>
   <div class="acts"><a class="btn" href="${esc(signIn)}">Увійти</a>${demo ? `<a class="demo" href="/demo">Подивитися демо</a>` : ""}</div>
+  ${TESTIMONIALS.length ? `<section class="quotes"><h2>Відгуки</h2><ul>${TESTIMONIALS.map((q) => `<li><blockquote><p>${esc(q.text)}</p>${q.author ? `<cite>— ${esc(q.author)}</cite>` : ""}</blockquote></li>`).join("")}</ul></section>` : ""}
   <footer>Частина <a href="https://chytai.org.ua">chytai.org.ua</a></footer>
 </div></body></html>`;
 }
