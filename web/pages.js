@@ -402,20 +402,21 @@ function bookLd(book, shelf, s, readers) {
 }
 
 // The book, the reader's own buttons, where to get it, what readers said, what it is about.
-// «Є український переклад» on a foreign book's page (Max, 2026-10-23: «читач може сказати нам = є переклад,
-// йди пошукай … хай може і урл буде, але за бажанням»): a signed-in reader says a translation exists; the
-// address of its page is optional, without it we look ourselves (ukfind.js). `state`: ask | searching | none | found.
-function ukTip(book, state, error) {
-  if (state === "searching") return `<p class="small muted uk-tip" id="uk">Шукаємо українське видання. Зазирніть сюди за хвилину.</p>`;
-  const lead = state === "none" ? "Ми шукали український переклад і поки не знайшли. Знаєте, де він є?" : book.ukTitle ? "Знаєте, де знайти українською?" : "Є український переклад?";
-  return `<details class="edition-tip uk-tip" id="uk"${error ? " open" : ""}>
-  <summary class="text-link small">${lead}</summary>
-  <form method="post" action="/api/book/${attr(encodeURIComponent(book.id))}/uk-hint" class="edition-form">
-    <p class="small muted">Скажіть нам, і ми його пошукаємо. Якщо знаєте сторінку книжки в магазині чи у видавництва, вставте посилання: так буде точніше.</p>
-    ${error ? `<p class="error small">${esc(error)}</p>` : ""}
-    <div class="edition-row"><input type="url" name="url" placeholder="Посилання (необов'язково)" autocomplete="off"><button class="btn">${state === "none" ? "Додати" : "Є переклад"}</button></div>
-  </form>
-</details>`;
+// «Додати» next to «Українською: «…», у каталогах поки немає» (Max, 2026-10-23: «залишити той блок … а поруч
+// зробити лінк Додати який відкриває форму»): a signed-in reader tells us the translation is out there; the
+// address of its page is optional, without it we look ourselves (ukfind.js). `state`: ask | searching | none.
+function ukLine(book, state) {
+  const line = `Українською: «${esc(book.ukTitle)}», у каталогах поки немає`;
+  if (state === "searching") return `${line} · шукаємо…`;
+  return state ? `${line} · <button type="button" class="text-link small" onclick="var f=document.getElementById('uk');f.hidden=!f.hidden;if(!f.hidden)f.querySelector('input').focus()">Додати</button>` : line;
+}
+function ukForm(book, state, error) {
+  if (!state || state === "searching") return "";
+  return `<form method="post" action="/api/book/${attr(encodeURIComponent(book.id))}/uk-hint" class="edition-form" id="uk"${error ? "" : " hidden"}>
+  <p class="small muted">${state === "none" ? "Ми вже шукали і не знайшли. " : ""}Вставте посилання на сторінку книжки в магазині чи у видавництва, або просто натисніть «Додати», і ми пошукаємо самі.</p>
+  ${error ? `<p class="error small">${esc(error)}</p>` : ""}
+  <div class="edition-row"><input type="url" name="url" placeholder="Посилання (необов'язково)" autocomplete="off"><button class="btn">Додати</button></div>
+</form>`;
 }
 
 function bookPage({ book, entry, now = false, user, shelf, inLibrary = new Map(), readers = [], also = [], writings = [], reviewError = "", editionError = "", ukAsk = null, readUrl = "", freeRead = false, advice = null, overview = null, overviewVote = null }) {
@@ -457,11 +458,11 @@ function bookPage({ book, entry, now = false, user, shelf, inLibrary = new Map()
       ${writings.length ? writingsList(writings, book, user) : ""}
       ${user ? addWriting(book, reviewError) : ""}
     </section>` : ""}
-    ${book.blurb || book.ukTitle || ukAsk ? `<section class="block" id="about">
+    ${book.blurb || book.ukTitle ? `<section class="block" id="about">
       ${label("Про книжку")}
       ${book.blurb ? `<div class="about">${book.blurb.split(/\n\n+/).map((t) => `<p>${esc(t)}</p>`).join("")}</div>` : ""}
-      <p class="small muted">${[book.blurb && !book.edited?.blurb ? (book.blurbSource ? `Опис: ${esc(book.blurbSource)}` : `Опис з сайту ${esc(shelf ? shelf.name : book.source)}`) : "", book.ukTitle ? `Українською: «${esc(book.ukTitle)}», у каталогах поки немає` : ""].filter(Boolean).join(" · ")}</p>
-      ${ukAsk && ukAsk !== "found" ? ukTip(book, ukAsk, editionError) : ""}
+      <p class="small muted">${[book.blurb && !book.edited?.blurb ? (book.blurbSource ? `Опис: ${esc(book.blurbSource)}` : `Опис з сайту ${esc(shelf ? shelf.name : book.source)}`) : "", book.ukTitle ? ukLine(book, ukAsk) : ""].filter(Boolean).join(" · ")}</p>
+      ${book.ukTitle ? ukForm(book, ukAsk, editionError) : ""}
     </section>` : ""}
   </div>
   <aside>

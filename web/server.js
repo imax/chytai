@@ -1091,13 +1091,12 @@ function addEdition(orig, p, by) {
 // A reader's hint that found the edition is news for the owner, to check the pair.
 const onUkHint = (b, r) => r.status === "found" && r.edition && notifyOwner(`Знайшли українське видання: ${r.edition.title}`, [`Читач підказав, що є переклад «${b.title}», і пошук знайшов:`, "", `Переклад: ${r.edition.title}${r.edition.author ? ` — ${r.edition.author}` : ""}  ${SITE}${store.href(r.edition.id)}`, `Сторінка: ${r.url}`, "", `Прибрати пару: ${SITE}/admin/dupes#decided`, `Усі пошуки: ${SITE}/admin/ukfind`].join("\n"));
 const ukfind = new UkFinder({ store, db: store.db, apiKey: process.env.ANTHROPIC_API_KEY || "", bookpage, addEdition, onHint: onUkHint, log: console.log });
-// The «Є український переклад» line for a signed-in reader: a book with a Latin title and no Ukrainian edition.
+// «Додати» after «Українською: …, у каталогах поки немає» for a signed-in reader (pages.ukLine).
 function ukAskFor(req, book) {
-  if (!req.user || !ukfind.client || !/[a-z]/i.test(book.title) || CYR_RE.test(book.title)) return null;
-  if (store.translationsOf(book.id).some((t) => CYR_RE.test(t.title)) || (book.editions || []).some((e) => CYR_RE.test(e.title))) return null;
-  return ukfind.state(book.id);
+  if (!req.user || !book.ukTitle) return null;
+  const st = ukfind.state(book.id);
+  return st === "found" ? null : !ukfind.client && st !== "none" ? "ask" : st;
 }
-const CYR_RE = /[а-яіїєґ]/i;
 app.get("/admin/ukfind", owner, (req, res) => res.send(pages.ukFindPage({ user: req.user, candidates: ukfind.candidates().length, list: ukfind.list(), running: ukfind.running, enabled: !!ukfind.client })));
 app.post("/admin/ukfind", owner, async (req, res) => {
   const ids = String(req.body.ids || "").split(/[\s,]+/).map((x) => store.resolve(x.replace(/^.*\/book\//, "")) || "").filter(Boolean);
