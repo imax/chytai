@@ -12,6 +12,8 @@
 // /admin/letter; it goes out with the next Friday letter, to the readers he picks there, and then moves to the
 // archive so it never goes twice. A reader whose shelves had nothing new still gets the letter when it has his
 // text. Max writes every word of it; nothing here writes it for him.
+const fs = require("fs");
+const path = require("path");
 const crypto = require("crypto");
 const { marked } = require("marked");
 const pages = require("./pages");
@@ -24,6 +26,7 @@ const READING_WEEKS = 3; // «Ви зараз читаєте» after this long
 const MAX_FEED = 6;
 const MAX_NEW = 5;
 const MAX_WANT = 6;
+const MAX_UPDATES = 5;
 const WANT_LOOKUPS = 30; // how many «хочу прочитати» books get a library lookup per letter
 
 // Who gets Max's text (the others still get their letter when their shelves have news, without it).
@@ -222,8 +225,9 @@ class Digest {
 
     const state = { avail };
     const site = this.siteWeek(now);
+    const updates = this.siteNews(now);
     const empty = !feed.length && !news.length && !want.length;
-    return { empty, state, since, now, site, feed, feedMore: feedAll.length - feed.length, news, newsMore: fresh.filter((x) => x.book).length - news.length, want, reading, pick };
+    return { empty, state, since, now, site, updates, feed, feedMore: feedAll.length - feed.length, news, newsMore: fresh.filter((x) => x.book).length - news.length, want, reading, pick };
   }
 
   // The site's week in numbers (Max, 2026-10-22: «скільки додалось читачів, скільки додалось книжок»): the last
@@ -247,6 +251,29 @@ class Digest {
       notes: one("SELECT COUNT(*) AS n FROM entries WHERE note != '' AND updated >= ?", from),
       reviews,
     };
+  }
+
+  // «Нове на сайті» (Max, 2026-10-23): the «Що нового» lines (web/updates.md) of the last seven days, newest first,
+  // as they stand there; the file has «## Жовтень 2026» headings and «- 22.10 · …» lines.
+  siteNews(now = new Date(), max = MAX_UPDATES) {
+    let src;
+    try {
+      src = fs.readFileSync(path.join(__dirname, "updates.md"), "utf8");
+    } catch {
+      return { lines: [], more: 0 };
+    }
+    const from = new Date(now - 7 * DAY);
+    const out = [];
+    let year = kyiv(now).getFullYear();
+    for (const line of src.replace(/<!--[\s\S]*?-->/g, "").split("\n")) {
+      const h = /^##\s.*?(\d{4})/.exec(line);
+      if (h) year = Number(h[1]);
+      const m = /^[-*]\s+(\d{1,2})\.(\d{1,2})\s*·\s*(.+)$/.exec(line.trim());
+      if (!m) continue;
+      const day = new Date(`${year}-${m[2].padStart(2, "0")}-${m[1].padStart(2, "0")}T00:00:00Z`);
+      if (day >= from && day <= now) out.push(m[3].trim());
+    }
+    return { lines: out.slice(0, max), more: Math.max(0, out.length - max) };
   }
 
   // ---- the letter ----
@@ -326,6 +353,14 @@ class Digest {
   <a href="${attr(url(p.book.href))}" style="display:inline-block;border:1px solid #1b1a17;color:#1b1a17;border-radius:999px;padding:8px 18px;font-size:14px;font-weight:500;text-decoration:none;margin-top:12px">Відкрити книжку</a>
 </div>`);
       text.push("ОДНА КНИЖКА НА ВИХІДНІ", `${p.reader.name} про «${p.book.title}»${p.book.author ? ` (${p.book.author})` : ""}${p.entry.rating != null ? `, ${uk(p.entry.rating)}/5` : ""}:`, p.entry.note.replace(/\s+/g, " ").slice(0, 400), url(p.book.href), "");
+    }
+    // What is new on the site this week, from «Що нового».
+    const up = d.updates;
+    if (up?.lines?.length) {
+      html.push(label("Нове на сайті", ["усі зміни", `${site}/updates`]));
+      html.push(`<ul style="margin:12px 0 0;padding:0 0 0 18px;font-size:15px;line-height:1.5;color:#3d3a33">${up.lines.map((l) => `<li style="margin:0 0 6px">${marked.parseInline(esc(l)).replace(/<a /g, '<a style="color:#1b1a17" ')}</li>`).join("")}</ul>`);
+      if (up.more > 0) html.push(muted(`і ще ${up.more} на <a href="${site}/updates" style="color:#6b675f">сторінці «Що нового»</a>`));
+      text.push("НОВЕ НА САЙТІ", ...up.lines.map((l) => `• ${l.replace(/\[([^\]]+)\]\(([^)]+)\)/g, "$1")}`), `  ${site}/updates`, "");
     }
     // The site's week: numbers that are not zero, in one small block at the end.
     const w = d.site;
