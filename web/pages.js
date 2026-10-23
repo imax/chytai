@@ -457,18 +457,22 @@ function bookPage({ book, entry, now = false, user, shelf, inLibrary = new Map()
 const SHOW_REVIEWS = false;
 // «AI-рекомендація» (advice.js): Claude's take on the book for this reader, by their own shelf, on a click.
 // A guest sees why to sign in, a reader with an empty shelf why to add books, a kept answer shows at once.
+const ADVICE_LINK = { shelf: "Чи варто мені читати?", web: "Те саме, з пошуком в інтернеті" };
+const ADVICE_BY = { shelf: "Claude, за вашою полицею", web: "Claude, за вашою полицею і пошуком в інтернеті" };
 function adviceHtml(a) {
+  const mode = a.mode || "shelf";
   return `<div class="advice-text">${marked.parse(a.text).replace(/<a href="http/g, '<a target="_blank" rel="noopener" href="http')}</div>
-<p class="small muted">Claude, за вашою полицею · ${writingDate(a.created.slice(0, 10))} · <button class="text-link small" data-advice-again>Спитати ще раз</button></p>`;
+<p class="small muted">${ADVICE_BY[mode]} · ${writingDate(a.created.slice(0, 10))} · <button class="text-link small" data-advice-again data-mode="${mode}">Спитати ще раз</button></p>`;
 }
+// One part per mode: the kept answer, or its link. The web mode (a second link) is the owner's trial for now.
+const advicePart = ({ mode, kept }) => `<div class="advice-part" data-mode="${mode}">${kept ? adviceHtml(kept) : `<p class="advice-ask"><button class="text-link" data-advice data-mode="${mode}">${ADVICE_LINK[mode]}</button></p>`}</div>`;
 function adviceBlock(book, a) {
   if (!a) return "";
   // One dotted link in every state (Max, 2026-10-23): a guest's goes to sign in, an empty shelf's to «Додати».
   const inner =
     a.kind === "guest" ? `<p class="advice-ask"><a class="text-link" href="/login?next=${attr(encodeURIComponent(book.href))}">Чи варто мені читати?</a></p>`
     : a.kind === "empty" ? `<p class="advice-ask"><a class="text-link" href="/add">Додайте прочитане, і Claude скаже, чи варто</a></p>`
-    : a.kind === "kept" ? adviceHtml(a)
-    : `<p class="advice-ask"><button class="text-link" data-advice>Чи варто мені читати?</button></p>`;
+    : a.modes.map(advicePart).join("");
   return `<section class="block advice" id="advice" data-book="${attr(book.id)}">
       ${label("AI-рекомендація")}
       <div class="advice-body">${inner}</div>

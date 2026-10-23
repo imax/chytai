@@ -975,7 +975,8 @@ app.post("/api/advice/:id", signed, async (req, res) => {
   const book = bookFor(req, store.bookPage(store.resolve(req.params.id)), !!store.entry(req.user.id, req.params.id));
   if (!book) return res.status(404).json({ error: "Книжку не знайдено." });
   try {
-    const a = await advice.ask(req.user.id, book, { fresh: req.body?.fresh === "1" });
+    const mode = req.body?.mode === "web" && req.owner ? "web" : "shelf"; // the web search is the owner's trial for now
+    const a = await advice.ask(req.user.id, book, { fresh: req.body?.fresh === "1", mode });
     res.json({ html: pages.adviceHtml(a), cached: a.cached });
   } catch (e) {
     console.error("advice failed:", e);

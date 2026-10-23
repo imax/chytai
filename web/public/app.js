@@ -315,25 +315,27 @@
     year.addEventListener("wheel", fill, { passive: true });
   }
 })();
-// «Чи варто мені читати?» on a book page: the button asks Claude and the answer takes its place.
+// «Чи варто мені читати?» on a book page: the link asks Claude and the answer takes its place (each mode
+// is its own part of the block, so the owner's web-search trial sits next to the plain one).
 document.addEventListener("click", async (e) => {
   const button = e.target.closest("[data-advice], [data-advice-again]");
   const block = button?.closest(".advice");
   if (!block) return;
-  const body = block.querySelector(".advice-body");
-  const was = body.innerHTML;
-  body.innerHTML = `<p class="advice-wait">Claude читає вашу полицю…</p>`;
+  const part = button.closest(".advice-part") || block.querySelector(".advice-body");
+  const mode = button.dataset.mode || "shelf";
+  const was = part.innerHTML;
+  part.innerHTML = `<p class="advice-wait">${mode === "web" ? "Claude читає вашу полицю й шукає в інтернеті…" : "Claude читає вашу полицю…"}</p>`;
   try {
-    const r = await fetch(`/api/advice/${encodeURIComponent(block.dataset.book)}`, { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: new URLSearchParams(button.hasAttribute("data-advice-again") ? { fresh: "1" } : {}) });
+    const r = await fetch(`/api/advice/${encodeURIComponent(block.dataset.book)}`, { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ mode, ...(button.hasAttribute("data-advice-again") ? { fresh: "1" } : {}) }) });
     const data = await r.json();
     if (!r.ok) throw new Error(data.error || r.status);
-    body.innerHTML = data.html;
+    part.innerHTML = data.html;
   } catch (err) {
-    body.innerHTML = was;
+    part.innerHTML = was;
     const p = document.createElement("p");
     p.className = "advice-error small";
     p.textContent = err.message === "Failed to fetch" ? "Немає звʼязку, спробуйте ще раз." : err.message;
-    body.append(p);
+    part.append(p);
   }
 });
 // The «⋯» menu on book pages closes on a tap outside it or on Escape.

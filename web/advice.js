@@ -9,11 +9,17 @@ const MODEL = "claude-opus-5-5";
 const DAILY_LIMIT = 30; // fresh answers per reader per day; kept answers are free
 const SHELF_MIN = 3; // fewer books than this and there is nothing to compare with
 
+// `mode`: "shelf" (the site's facts only) or "web" (Claude may also search the web; owner-only trial, Max 2026-10-23).
 const SCHEMA = `CREATE TABLE IF NOT EXISTS advice (
-  reader TEXT NOT NULL, book TEXT NOT NULL, text TEXT NOT NULL, model TEXT NOT NULL, created TEXT NOT NULL,
-  input_tokens INTEGER NOT NULL DEFAULT 0, cached_tokens INTEGER NOT NULL DEFAULT 0, output_tokens INTEGER NOT NULL DEFAULT 0,
-  PRIMARY KEY (reader, book)
+  reader TEXT NOT NULL, book TEXT NOT NULL, mode TEXT NOT NULL DEFAULT 'shelf', text TEXT NOT NULL, model TEXT NOT NULL, created TEXT NOT NULL,
+  input_tokens INTEGER NOT NULL DEFAULT 0, cached_tokens INTEGER NOT NULL DEFAULT 0, output_tokens INTEGER NOT NULL DEFAULT 0, searches INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (reader, book, mode)
 );`;
+const MODES = ["shelf", "web"];
+const WEB_SEARCHES = 3;
+const WEB = `
+
+You may also search the web, up to ${WEB_SEARCHES} searches, for what this book is actually like: reviews, what readers say (Goodreads, Ukrainian book sites and blogs for a Ukrainian edition), the author's standing. Use what you find as facts in the same answer: say in a few words what reviewers agree on, including common complaints. Don't list sources, don't paste URLs, don't say that you searched.`;
 
 const SYSTEM = `You are a well-read friend built into Chytai, a Ukrainian site where people keep shelves of the books they read. A reader is looking at a book's page and wants to know what this book is like for them. You know their shelf: the books they read with their ratings (1 to 5) and notes, what they are reading, want to read, and gave up on.
 
@@ -42,6 +48,12 @@ class Advice {
     this.apiKey = apiKey;
     this.model = model;
     this.log = log;
+    // Before the web mode the key was (reader, book): rebuild the table once, keeping the answers.
+    if (db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'advice'").get() && !db.prepare("PRAGMA table_info(advice)").all().some((c) => c.name === "mode")) {
+      db.exec("ALTER TABLE advice RENAME TO advice_old");
+      db.exec(SCHEMA);
+      db.exec("INSERT INTO advice (reader, book, mode, text, model, created, input_tokens, cached_tokens, output_tokens) SELECT reader, book, 'shelf', text, model, created, input_tokens, cached_tokens, output_tokens FROM advice_old; DROP TABLE advice_old");
+    }
     db.exec(SCHEMA);
     this.client = apiKey ? new Anthropic({ apiKey }) : null;
   }
@@ -169,8 +181,8 @@ class Advice {
     return bits.join("\n");
   }
 
-  kept(readerId, bookId) {
-    return this.db.prepare("SELECT text, model, created FROM advice WHERE reader = ? AND book = ?").get(readerId, this.store.canonical(bookId)) || null;
+  kept(readerId, bookId, mode = "shelf") {
+    return this.db.prepare("SELECT text, model, created, mode FROM advice WHERE reader = ? AND book = ? AND mode = ?").get(readerId, this.store.canonical(bookId), mode) || null;
   }
   usedToday(readerId) {
     const day = new Date().toISOString().slice(0, 10);
@@ -185,49 +197,65 @@ class Advice {
     if (own && (own.status === "read" || own.status === "abandoned")) return null;
     const shelf = this.shelfText(user.id);
     if (shelf.count < SHELF_MIN) return { kind: "empty", count: shelf.count };
-    const kept = this.kept(user.id, bookId);
-    return kept ? { kind: "kept", ...kept } : { kind: "ask" };
+    // Each mode is its own link and its own kept answer; the web mode is the owner's trial for now.
+    const modes = (user.owner ? MODES : ["shelf"]).map((mode) => ({ mode, kept: this.kept(user.id, bookId, mode) }));
+    return { kind: "ask", modes };
   }
 
   // A fresh answer from Claude; the shelf goes in the system prompt behind a cache breakpoint, so the
   // same reader asking about several books in a row pays for the shelf once.
-  async ask(readerId, book, { fresh = false } = {}) {
+  async ask(readerId, book, { fresh = false, mode = "shelf" } = {}) {
     if (!this.client) throw new Error("Порада зараз недоступна.");
+    if (!MODES.includes(mode)) throw new Error("Невідомий режим.");
     const id = this.store.canonical(book.id);
-    const old = fresh ? null : this.kept(readerId, id);
+    const old = fresh ? null : this.kept(readerId, id, mode);
     if (old) return { ...old, cached: true };
     if (this.usedToday(readerId) >= DAILY_LIMIT) throw new Error(`На сьогодні порад більше немає: ${DAILY_LIMIT} на день.`);
     const shelf = this.shelfText(readerId);
     if (shelf.count < SHELF_MIN) throw new Error("Додайте кілька прочитаних книжок з оцінками, і буде з чим порівняти.");
     const t0 = Date.now();
-    const message = await this.client.beta.messages.create({
+    const web = mode === "web";
+    const params = {
       model: this.model,
-      max_tokens: 2000,
+      max_tokens: web ? 6000 : 2000,
       betas: ["server-side-fallback-2026-07-01"],
       fallbacks: "default",
       output_config: { effort: "low" },
+      ...(web ? { tools: [{ type: "web_search_20260209", name: "web_search", max_uses: WEB_SEARCHES }] } : {}),
       system: [
-        { type: "text", text: SYSTEM },
+        { type: "text", text: SYSTEM + (web ? WEB : "") },
         { type: "text", text: `The reader's shelf (${shelf.count} books):\n${shelf.text}`, cache_control: { type: "ephemeral" } },
       ],
-      messages: [{ role: "user", content: `The book on the page:\n${await this.bookText(book)}\n\nWhat is this book like for me, given my shelf? Facts only, no verdict.` }],
-    });
+      messages: [{ role: "user", content: `The book on the page:\n${await this.bookText(book)}\n\nWhat is this book like for me, given my shelf${web ? " and what the web says about it" : ""}? Facts only, no verdict.` }],
+    };
+    // A web search can pause the turn (pause_turn); the turn goes on with the content so far, a few times at most.
+    let message;
+    const usage = { input: 0, cached: 0, output: 0, searches: 0 };
+    for (let i = 0; i < 4; i++) {
+      message = await this.client.beta.messages.create(params);
+      const u = message.usage || {};
+      usage.input += u.input_tokens || 0;
+      usage.cached += (u.cache_read_input_tokens || 0) + (u.cache_creation_input_tokens || 0);
+      usage.output += u.output_tokens || 0;
+      usage.searches += u.server_tool_use?.web_search_requests || 0;
+      if (message.stop_reason !== "pause_turn") break;
+      params.messages = [...params.messages, { role: "assistant", content: message.content }];
+    }
     if (message.stop_reason === "refusal") throw new Error("Claude не зміг відповісти про цю книжку.");
     const text = message.content.filter((b) => b.type === "text").map((b) => b.text).join("\n").trim();
     if (!text) throw new Error("Порожня відповідь, спробуйте ще раз.");
-    const u = message.usage || {};
-    const row = { text, model: message.model, created: new Date().toISOString() };
+    const row = { text, model: message.model, created: new Date().toISOString(), mode };
     this.db
-      .prepare("INSERT INTO advice (reader, book, text, model, created, input_tokens, cached_tokens, output_tokens) VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (reader, book) DO UPDATE SET text = excluded.text, model = excluded.model, created = excluded.created, input_tokens = excluded.input_tokens, cached_tokens = excluded.cached_tokens, output_tokens = excluded.output_tokens")
-      .run(readerId, id, text, row.model, row.created, u.input_tokens || 0, (u.cache_read_input_tokens || 0) + (u.cache_creation_input_tokens || 0), u.output_tokens || 0);
-    this.log(`advice: ${book.title} for ${readerId} in ${Date.now() - t0} ms, ${u.input_tokens || 0}+${u.cache_read_input_tokens || 0} cached in, ${u.output_tokens || 0} out, ${message.model}`);
+      .prepare("INSERT INTO advice (reader, book, mode, text, model, created, input_tokens, cached_tokens, output_tokens, searches) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (reader, book, mode) DO UPDATE SET text = excluded.text, model = excluded.model, created = excluded.created, input_tokens = excluded.input_tokens, cached_tokens = excluded.cached_tokens, output_tokens = excluded.output_tokens, searches = excluded.searches")
+      .run(readerId, id, mode, text, row.model, row.created, usage.input, usage.cached, usage.output, usage.searches);
+    this.log(`advice (${mode}): ${book.title} for ${readerId} in ${Date.now() - t0} ms, ${usage.input}+${usage.cached} cached in, ${usage.output} out, ${usage.searches} searches, ${message.model}`);
     return { ...row, cached: false };
   }
 
   // For the owner: how much the feature has been used (tokens are what the bill is made of).
   totals() {
-    return this.db.prepare("SELECT COUNT(*) AS n, COUNT(DISTINCT reader) AS readers, SUM(input_tokens) AS input_tokens, SUM(cached_tokens) AS cached_tokens, SUM(output_tokens) AS output_tokens FROM advice").get();
+    return this.db.prepare("SELECT COUNT(*) AS n, COUNT(DISTINCT reader) AS readers, SUM(input_tokens) AS input_tokens, SUM(cached_tokens) AS cached_tokens, SUM(output_tokens) AS output_tokens, SUM(searches) AS searches FROM advice").get();
   }
 }
 
-module.exports = { Advice, MODEL, DAILY_LIMIT, SHELF_MIN };
+module.exports = { Advice, MODEL, MODES, DAILY_LIMIT, SHELF_MIN };
