@@ -51,13 +51,14 @@ const AUTO_PARALLEL = 2;
 const BACKFILL = false;
 // Automatic overviews (first rating/note, «Хочу прочитати») are PAUSED while Max tunes the prompt
 // (2026-10-23 15:03: «поки давай вимкнемо backfill»); readers' own clicks and the owner's «Оновити» still work.
-const AUTO = false;
+const AUTO = true; // back on 2026-10-23 15:43 with the prompt settled
 // The overview prompt's version: rows made with an older one are redone at start, two at a time
 // (Max, 2026-10-23 08:09, after the prompt lost its obligatory paragraph of complaints: «старі теж»).
 const PROMPT_VERSION = 8; // 3: the site's own notes and ratings no longer go in (2026-10-23 08:35); 4: shops blocked (09:16); 5: shorter, reservations one sentence at most (14:40); 6: like a friend, about what people love, no pros/cons balance (15:05); 7: calmer tone, no blurb language, 40–70 words (15:22); 8: back to v5's neutral base + calm tone, no «friend» framing (15:25)
 // Version 4 is redone only for books with a Cyrillic title (Max, 2026-10-23 09:15: «перезапустимо пошук для всіх укр
 // книжок»): their searches were all shops. Latin-titled books keep their version-3 overview.
-const REDO_ALL_BELOW = 3;
+// 2026-10-23 15:43 (Max: «Викладаємо»): every overview below prompt 8 is redone once with the calm prompt (~200, ≈$26).
+const REDO_ALL_BELOW = 8;
 const REDO_CYR_BELOW = 4;
 // Version 5 (shorter, reservations one sentence at most; Max 14:33: a paragraph of complaints «читати не хочеться»)
 // redoes nothing by itself: only new overviews and the owner's «Оновити» get it (Max: no mass regeneration).
