@@ -81,6 +81,47 @@ const norm = (s) => String(s || "").toLowerCase().replace(/^(the|a)\s+/, "").rep
 // Separators left at the end of a title: «Diary of Samuel Pepys -», «Назва:».
 const DANGLING = /[\s\-‐‑–—:;,/|]+$/u;
 const EDITABLE = ["title", "author", "blurb", "cover", "language"];
+// Our genres (pages.js GENRES) in a shop's shelf names («Фентезі», «Художня література», «Науково-популярна»)
+// and in Open Library's English subjects; the specific ones first, «художня» last.
+const SHOP_GENRES = [
+  ["дитячі", /дитяч|для дітей|казк|children|juvenile/i],
+  ["підліткові", /підлітк|young adult|teen/i],
+  ["комікси", /комікс|манґ|манга|графічн|comic|graphic novel/i],
+  ["фентезі", /фентез|фэнтез|fantasy/i],
+  ["фантастика", /фантаст|антиутоп|science[ -]fiction|sci-fi|dystopia/i],
+  ["жахи", /жах|horror/i],
+  ["детективи", /детектив|detective|mystery/i],
+  ["трилери", /трилер|thriller/i],
+  ["любовні романи", /любовн|романтичн|romance/i],
+  ["поезія", /поезі|вірш|poetry/i],
+  ["класика", /класик|classic/i],
+  ["біографії", /біограф|мемуар|спогад|biograph|memoir/i],
+  ["історія", /історі|історичн|\bhistory\b|historical/i],
+  ["війна", /війн|військ|\bwar\b|military/i],
+  ["психологія", /психолог|psycholog/i],
+  ["філософія", /філософ|philosoph/i],
+  ["наука", /наука|науков|science(?!.*fiction)/i],
+  ["здоров'я", /здоров|медицин|харчуван|\bhealth\b/i],
+  ["подорожі", /подорож|травел|travel/i],
+  ["саморозвиток", /саморозвит|мотивац|особистісн|self-help/i],
+  ["бізнес", /бізнес|підприємни|стартап|business/i],
+  ["менеджмент", /менеджмент|лідерств|management|leadership/i],
+  ["гроші", /фінанс|гроші|інвест|finance|investing/i],
+  ["розробка", /програмуван|programming|software/i],
+  ["суспільство", /соціолог|політик|політолог|економік|суспільств|sociology|politics|economics/i],
+  ["художня", /художн|проза|(?<!non-?)fiction|novels?\b/i],
+];
+const OUR_GENRES = new Set(SHOP_GENRES.map(([g]) => g).concat(["компанії", "продукт"]));
+const genreMemo = new Map();
+const ourGenres = (names) => {
+  const out = new Set();
+  for (const n of names || []) {
+    const k = String(n || "").toLowerCase().trim();
+    if (!genreMemo.has(k)) genreMemo.set(k, OUR_GENRES.has(k) ? [k] : /нон-?фікшн|non-?fiction|документальн/i.test(k) ? SHOP_GENRES.filter(([g, re]) => g !== "художня" && re.test(k)).map(([g]) => g) : SHOP_GENRES.filter(([, re]) => re.test(k)).map(([g]) => g));
+    for (const g of genreMemo.get(k)) out.add(g);
+  }
+  return [...out];
+};
 const isbnKey = (s) => String(s || "").replace(/[^0-9X]/gi, "");
 const GENRE = /\s*[:.]\s*(казка|казки|роман|повість|повісті|оповідання|новели|п[’']єса|есеї|есей|поезії|вірші|збірка|нариси|спогади|мемуари|(осіннє|зимове|весняне|літнє|подарункове|ювілейне|ілюстроване|нове|повне|доповнене|колекційне)\s+видання)\s*$/iu;
 // A note on the edition at the end of a title, which names a printing, not a book: «Дракула (2-ге видання)»,
@@ -1174,6 +1215,7 @@ class Store {
       }
     }
     if (ser) out.series = { name: ser.name, head: ser.head, volumes: ser.volumes, items: ser.items.map(({ shelf, item }) => ({ ...this.fromShelfItem(shelf, item), shelf, work: this.canonical(item.id), href: this.href(item.id) })) };
+    out.tags = this.genresOf(id, b, eds);
     if (this.covers?.has(id)) out.cover = this.covers.get(id);
     // A book a reader added by hand or imported has no cover; its catalog editions do («Сила інтровертів»).
     else if (!out.cover) out.cover = (out.editions || []).find((e) => e.cover)?.cover || "";
@@ -1188,6 +1230,24 @@ class Store {
     }
     out.href = this.slugs ? this.href(id) : `/book/${encodeURIComponent(id)}`;
     return out;
+  }
+
+  // The book's tags with our genres first: from its own tags and its editions' shop shelves, and when those
+  // name no genre but «художня», from its translation's or original's (Max 2026-10-23: the Ukrainian
+  // «Володар перснів» showed no «Фентезі»). The shop's own names stay after ours.
+  genresOf(id, b, eds) {
+    const own = b.tags || [];
+    const names = [...own, ...(eds || []).flatMap(({ item }) => item.genres || [])];
+    let ours = ourGenres(names);
+    if (!ours.some((g) => g !== "художня")) {
+      for (const t of this.translations?.get(id) || []) {
+        const tb = this.lib.books[t] || this.shelfItems.get(t)?.item || this.seedBooks.find((x) => x.id === t);
+        ours = [...new Set([...ours, ...ourGenres([...(tb?.tags || tb?.genres || []), ...(this.editions.get(t) || []).flatMap(({ item }) => item.genres || [])])])];
+      }
+    }
+    // A specific genre first, then «художня».
+    ours.sort((x, y) => (x === "художня") - (y === "художня"));
+    return [...new Set([...ours.slice(0, 3), ...own])];
   }
 
   // ---- the owner's hand edits of a book's title, author, description and cover, kept in meta `edits` ----

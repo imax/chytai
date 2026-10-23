@@ -52,7 +52,7 @@ const GENRE_OF = [
 // Subjects are many and noisy: a genre counts when one of the first twenty says so.
 const genresOf = (subjects) => GENRE_OF.filter(([, re]) => (subjects || []).slice(0, 20).some((x) => re.test(String(x)))).map(([g]) => g).slice(0, 3);
 // Bumped when a source is added or fixed, so every book is asked again: the per-book memory is enrich:<GEN>:<id>.
-const GEN = 4; // 3: genres, 4: a genre list for every reader, «фентезі» apart from «фантастика» (2026-10-23)
+const GEN = 5; // 3: genres, 4: a genre list for every reader, «фентезі» apart from «фантастика», 5: genres through the original (2026-10-23)
 
 const norm = (s) => String(s || "").toLowerCase().replace(/^(the|a|an)\s+/, "").replace(/[’'`]/g, "").replace(/[^\p{L}\p{N}]+/gu, " ").trim();
 const mainTitle = (t) => String(t || "").replace(/\s*\(.*?\)\s*/g, " ").split(/[:]/)[0].trim();
@@ -242,7 +242,7 @@ function apply(book, info) {
 // («Інферно», Ден Браун; Max, 2026-10-23: «пачка книжок Брауна без обкладинок») is asked through its
 // original: Wikidata gives the English title and author, Open Library the cover.
 const isCyrillic = (t) => /[а-яіїєґ]/i.test(t);
-const viaOriginal = (b) => isCyrillic(b.title) && isCyrillic(firstAuthor(b.author)) && !cleanIsbns(b.isbns).length && !(b.cover && b.altTitle);
+const viaOriginal = (b) => isCyrillic(b.title) && isCyrillic(firstAuthor(b.author)) && !cleanIsbns(b.isbns).length && !(b.cover && b.altTitle && (b.tags || []).length);
 function wanting(store, ids, { google = false } = {}) {
   const all = ids ? ids.map((id) => store.lib.books[id]).filter(Boolean) : Object.values(store.lib.books);
   return all.filter((b) => OWN.has(b.source) && (viaOriginal(b) || ((cleanIsbns(b.isbns).length || ((google || isLatin(b.title)) && firstAuthor(b.author))) && (!(b.cover && b.published && b.blurb && (b.tags || []).length && cleanIsbns(b.isbns).length) || !store.db.get(`enrich:${GEN}:${b.id}`)))));
@@ -255,6 +255,8 @@ function applyOriginal(book, info, orig) {
   const patch = {};
   if (!book.cover && info?.cover) patch.cover = info.cover;
   if (!book.altTitle && orig.en) patch.altTitle = orig.en;
+  // Genres belong to the work, not the edition («Володар перснів» had none, Max 2026-10-23).
+  if (!(book.tags || []).length && info?.tags?.length) patch.tags = info.tags;
   return patch;
 }
 
