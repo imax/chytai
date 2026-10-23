@@ -156,10 +156,10 @@ class BookPage {
   }
 
   // fromUrl(url, reader) -> { title, author, cover, blurb, isbns, published, pages, url, site } or { error }.
-  async fromUrl(url, reader = "") {
+  async fromUrl(url, reader = "", { debug = false } = {}) {
     url = String(url || "").trim();
     if (!isUrl(url)) return { error: "Це не схоже на адресу сторінки." };
-    const hit = this.cache.get(url);
+    const hit = !debug && this.cache.get(url);
     if (hit && Date.now() - hit.at < DAY) return hit.book;
     if (!this.allowed(reader, url)) return { error: "На сьогодні досить посилань, спробуйте завтра або заповніть вручну." };
     const day = new Date().toISOString().slice(0, 10);
@@ -179,6 +179,7 @@ class BookPage {
         const ask = { url: m.url, site: m.site, title: m.pageTitle, h1: m.h1, marks: { title: m.title, author: m.author, description: m.description, isbn: m.isbn }, text: m.text };
         const res = await this.client.messages.create({ model: MODEL, max_tokens: 1500, system: SYSTEM, messages: [{ role: "user", content: JSON.stringify(ask) }] });
         const out = res.content.map((c) => c.text || "").join("");
+        if (debug) return { debug: { marks: { ...m, text: m.text.slice(0, 1500) }, claude: out } };
         const j = JSON.parse(out.slice(out.indexOf("{"), out.lastIndexOf("}") + 1));
         if (j.book === false) return this.keep(url, { error: "На цій сторінці не видно однієї книжки. Вставте посилання на сторінку самої книжки." });
         info = { title: squash(j.title) || info.title, author: squash(j.author), description: squash(j.annotation) || info.description, isbn: String(j.isbn || info.isbn || "").replace(/[^0-9X]/gi, ""), published: Number(j.year) || info.published, pages: Number(j.pages) || info.pages };

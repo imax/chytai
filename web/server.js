@@ -325,7 +325,8 @@ app.get("/add", signed, (req, res) => (admin.step(req.user.id, "add"), res.send(
 app.get("/api/add/find", signed, async (req, res) => {
   // An address instead of words: the book from its page on a store's or a publisher's site (bookpage.js).
   if (isUrl(req.query.q)) {
-    const b = await bookpage.fromUrl(String(req.query.q).trim().slice(0, 500), req.user.id);
+    const b = await bookpage.fromUrl(String(req.query.q).trim().slice(0, 500), req.user.id, { debug: req.owner && req.query.debug === "1" });
+    if (b.debug) return res.json(b.debug); // the owner's look at what the server saw on the page
     const id = !b.error && store.findWork(b);
     return res.set("Cache-Control", "no-store").send(pages.addPageResult(b, id ? store.book(id) : null));
   }
