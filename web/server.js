@@ -1183,6 +1183,20 @@ app.post(["/api/book/:id/edition", "/api/book/:id/uk-hint"], signed, async (req,
   const back = (error) => res.redirect(303, `${store.href(orig.id)}${error ? `?edition_error=${encodeURIComponent(error)}` : ""}#about`);
   const url = String(req.body.url || "").trim().slice(0, 500);
   if (!isUrl(url)) return back("Вставте посилання на сторінку книжки в магазині чи у видавництва.");
+  // A link to one of our own books (Max, 2026-10-23: «що буде якщо вказати урл з Chytai?»): no page to
+  // read, the two works are paired as original and translation.
+  const own = url.match(/^https?:\/\/(?:www\.)?(?:chytai\.org\.ua|chytai-web\.fly\.dev|localhost(?::\d+)?)\/book\/([^/?#\s]+)/i);
+  if (own) {
+    const id = store.resolve(decodeURIComponent(own[1]));
+    if (!id) return back("Такої книжки в нас немає.");
+    if (store.canonical(id) === store.canonical(orig.id)) return back("Це та сама книжка, а не її український переклад.");
+    const uk = store.book(id);
+    if (!/[а-яіїєґ]/i.test(uk.title)) return back(`На сторінці книжка «${uk.title}», а не українське видання.`);
+    store.decideTranslation(orig.id, id);
+    console.log(`edition tip @${req.user.username}: ${orig.id} -> ${id} (our page)`);
+    if (!req.owner) notifyOwner(`Українське видання: ${uk.title}`, [`${req.user.name} (@${req.user.username}) з’єднав(ла) переклад із оригіналом.`, "", `Оригінал: ${orig.title}  ${site(req)}${store.href(orig.id)}`, `Переклад: ${uk.title}  ${site(req)}${store.href(id)}`, "", `Прибрати пару: ${site(req)}/admin/dupes#decided`].join("\n"));
+    return res.redirect(303, store.href(id));
+  }
   if (!req.owner && auth.tooMany(`edition:${req.user.id}`, 20)) return back("Забагато посилань за годину. Спробуйте трохи згодом.");
   const p = await bookpage.fromUrl(url, req.user.id);
   if (p.error) return back(p.error);
