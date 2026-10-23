@@ -1630,6 +1630,36 @@ function mailSettingsPage({ user, values, saved = false }) {
   return authLayout({ title: "Налаштування", lead: "", form, user, path: "/settings" });
 }
 
+// /mcp-howto: what Chytai in Claude or ChatGPT is and how to connect it (Max, 2026-10-23: «маленький лендінг про цей mcp»).
+// The same 5/7 frame as /welcome: what it is on the left, the steps on the right.
+function chatsPage({ user, url }) {
+  const step = (n, title, text) => `<li><span class="n">${n}</span><div><h3>${title}</h3><p>${text}</p></div></li>`;
+  const say = (t) => `<li>«${t}»</li>`;
+  const body = `<section class="welcome chats">
+  <div class="welcome-intro">
+    <p class="kicker">Chytai у чаті</p>
+    <h1>Додавайте книжки просто з Claude чи ChatGPT</h1>
+    <p class="lead">Підключіть Chytai до свого AI-чату й кажіть текстом або голосом, що прочитали. Чат сам знайде книжки в каталозі й покладе на вашу полицю.</p>
+    <label class="chats-url">Адреса для підключення<input type="text" value="${attr(url)}" readonly onclick="this.select()"></label>
+    <h2>Що можна попросити</h2>
+    <ul class="chats-say">${[
+      "Додай «Тигроловів» Багряного в прочитане, пʼять зірок",
+      "Додай на мою полицю всі книжки, які ти знаєш, що я читав",
+      "Я зараз читаю «Інтернат» Жадана",
+      "Що в мене в «Хочу прочитати»?",
+      "Постав «Пісні Ахілла» чотири зірки й нотатку: плакав у кінці",
+    ].map(say).join("")}</ul>
+  </div>
+  <ol class="welcome-steps">
+    ${step("01", "Claude", `Відкрийте Налаштування → Конектори → Додати власний конектор. Назва будь-яка, наприклад Chytai, адреса ${esc(url)}. Працює в claude.ai, у застосунках на телефоні й компʼютері.`)}
+    ${step("02", "ChatGPT", "Налаштування → Застосунки й конектори → увімкніть режим розробника → Створити, вставте ту саму адресу. Поки що ChatGPT пускає власні конектори лише так.")}
+    ${step("03", "Увійдіть у Chytai", "Чат відкриє наш сайт: вхід кодом на пошту, як завжди, і кнопка «Дозволити». Якщо акаунта ще немає, він створиться тут же.")}
+    ${step("04", "Що чат може, а чого ні", "Шукати книжки, бачити вашу полицю, додавати книжки й міняти статус, оцінку чи нотатку. Видаляти книжки й чіпати акаунт не може. Відключити чат можна будь-коли в <a class=\"text-link\" href=\"/settings/chats\">налаштуваннях</a>.")}
+  </ol>
+</section>`;
+  return layout({ title: "Chytai у Claude і ChatGPT", body, user, path: "/mcp-howto", canonical: "/mcp-howto", description: "Підключіть Chytai до Claude чи ChatGPT і додавайте прочитані книжки на свою полицю просто в чаті." });
+}
+
 // /settings/chats (mcp.js): how to let Claude or ChatGPT add books to the shelf, and the chats already let in.
 const dayUk = (iso) => (iso ? new Date(iso).toLocaleDateString("uk-UA", { timeZone: "Europe/Kyiv", day: "numeric", month: "long", year: "numeric" }) : "");
 function chatsSettingsPage({ user, url, grants }) {
@@ -1639,7 +1669,7 @@ function chatsSettingsPage({ user, url, grants }) {
   const form = `${settingsTabs("chats")}<section class="form">
   <p class="muted small">Підключіть Chytai до Claude чи ChatGPT, і просіть просто в чаті: «додай Тигроловів у прочитане, пʼять зірок» або «додай на полицю всі книжки, які ти знаєш, що я читав». Чат знаходить книжки в каталозі й кладе на вашу полицю. Видаляти книжки він не може.</p>
   <label>Адреса для конектора<input type="text" value="${attr(url)}" readonly onclick="this.select()"></label>
-  <p class="muted small"><b>Claude:</b> Налаштування → Конектори → Додати власний конектор, вставте адресу, далі увійдіть у Chytai і натисніть «Дозволити».<br><b>ChatGPT:</b> Налаштування → Застосунки й конектори, у режимі розробника створіть конектор з цією адресою.</p>
+  <p class="muted small"><b>Claude:</b> Налаштування → Конектори → Додати власний конектор, вставте адресу, далі увійдіть у Chytai і натисніть «Дозволити».<br><b>ChatGPT:</b> Налаштування → Застосунки й конектори, у режимі розробника створіть конектор з цією адресою.<br><a class="text-link" href="/mcp-howto">Докладніше й приклади</a></p>
 </section>
 <section class="form import-box">
   <h2>Підключені чати</h2>
@@ -2114,6 +2144,7 @@ ${user ? `<dialog id="new-list"><div class="dlg-head"><h2>Новий списо�
 }
 
 module.exports = {
+  chatsPage,
   chatsSettingsPage,
   consentPage,
   listPage, listsPage,

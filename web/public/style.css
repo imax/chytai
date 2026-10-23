@@ -474,6 +474,13 @@ dialog .form { margin-top: 18px; }
 .steps li { font-size: 16px; line-height: 1.55; margin-top: 10px; }
 .form input[type="file"] { padding: 8px; font-size: 14px; }
 .import-box { margin-top: 44px; }
+/* /mcp-howto: Chytai in Claude or ChatGPT, on the /welcome frame */
+.chats h2 { font: 400 24px/1.2 var(--serif); margin: 36px 0 10px; }
+.chats-url { display: flex; flex-direction: column; gap: 6px; font-size: 14px; color: var(--muted); margin-top: 26px; }
+.chats-url input { font: 16px var(--sans); padding: 10px 12px; border: 1px solid var(--rule); border-radius: 8px; background: transparent; color: var(--ink); }
+.chats .welcome-steps p .text-link { display: inline; white-space: normal; font-size: inherit; }
+.chats-say { padding-left: 20px; margin: 0; }
+.chats-say li { font-size: 16px; line-height: 1.5; margin-top: 8px; }
 /* /settings/chats: the chats a reader connected (mcp.js) */
 .chat-grant { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 12px 0; border-top: 1px solid var(--rule); }
 .chat-grant > span { display: flex; flex-direction: column; gap: 2px; }
