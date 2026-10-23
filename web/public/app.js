@@ -283,6 +283,10 @@
     }
     if (button) button.disabled = false;
     const status = form.querySelector("input[name=status]")?.value;
+    if (action.startsWith("/api/entry/") && status === "read" && form.closest(".marks")) {
+      form.closest(".marks").replaceWith(rateLine(decodeURIComponent(action.slice("/api/entry/".length))));
+      return;
+    }
     if (action.startsWith("/api/entry/") && status) {
       const mark = document.createElement("span");
       mark.className = "muted small";
@@ -299,6 +303,41 @@
       button.textContent = on ? "✓ Підписано" : "Підписатися";
       if (on) button.classList.remove("primary");
     }
+  });
+
+  // Stars and the year after «Прочитано» on someone else's shelf (pages.js rateLine): each tap is saved
+  // in the background; the stars stay lit up to the chosen one and can be changed.
+  const rateLine = (id) => {
+    const el = document.createElement("span");
+    el.className = "rate";
+    el.dataset.id = id;
+    const year = new Date().getFullYear();
+    el.innerHTML = `<span class="muted small">прочитано</span><span class="rate-stars" role="group" aria-label="Оцінка">${[1, 2, 3, 4, 5].map((n) => `<button type="button" data-r="${n}" title="${n} з 5">★</button>`).join("")}</span><select class="rate-year" aria-label="Рік"><option value="">рік?</option>${Array.from({ length: 10 }, (_, i) => `<option>${year - i}</option>`).join("")}</select>`;
+    return el;
+  };
+  const saveRate = async (box, field, value) => {
+    box.classList.add("saving");
+    try {
+      const r = await fetch(`/api/entry/${encodeURIComponent(box.dataset.id)}`, { method: "POST", body: new URLSearchParams({ [field]: value, back: "1" }), credentials: "same-origin" });
+      if (!r.ok) throw new Error(r.status);
+      box.classList.remove("failed");
+    } catch {
+      box.classList.add("failed");
+    }
+    box.classList.remove("saving");
+  };
+  document.addEventListener("click", (e) => {
+    const star = e.target.closest(".rate-stars button");
+    if (!star) return;
+    const box = star.closest(".rate");
+    const n = Number(star.dataset.r);
+    for (const b of box.querySelectorAll(".rate-stars button")) b.classList.toggle("on", Number(b.dataset.r) <= n);
+    box.classList.add("rated");
+    saveRate(box, "rating", n);
+  });
+  document.addEventListener("change", (e) => {
+    const year = e.target.closest(".rate-year");
+    if (year) saveRate(year.closest(".rate"), "year", year.value);
   });
 
   // «Покинуто» chosen: the note asks why, quietly (pages.js WHY).

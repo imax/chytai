@@ -622,7 +622,7 @@ app.get("/@:username", (req, res) => {
   const follows = { followers: auth.followers(reader.id).map((id) => pub(auth.reader(id))).filter(Boolean), following: auth.following(reader.id).map((id) => pub(auth.reader(id))).filter(Boolean) };
   // The profile is the reader's own stats and books; recommendations live on other pages (Max, 2026-10-23).
   if (own) return res.send(pages.libraryPage({ rows, user: req.user, reader: req.user, own: true, follows, now: nowFor(reader.id, { own: true }) }));
-  res.send(pages.libraryPage({ rows, user: req.user, reader, now: nowFor(reader.id), mineIds: req.user && req.user.id !== reader.id ? store.inLibrary(req.user.id) : null, following: auth.follows(req.user?.id, reader.id), follows }));
+  res.send(pages.libraryPage({ rows, user: req.user, reader, now: nowFor(reader.id), mineIds: req.user && req.user.id !== reader.id ? store.inLibrary(req.user.id) : null, mineDirect: req.user ? new Set(Object.keys(store.entriesOf(req.user.id))) : null, following: auth.follows(req.user?.id, reader.id), follows }));
 });
 // The owner's page before usernames (/reader/max) moved to /@maxua.
 app.get(OLD_READER, (req, res) => res.redirect(301, pub(auth.reader(OWNER_ID)).href));

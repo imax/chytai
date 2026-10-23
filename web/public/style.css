@@ -91,6 +91,14 @@ main.home { padding-top: 56px; }
 .acts { display: flex; flex-wrap: wrap; gap: 12px 18px; align-items: center; }
 .read-here { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; margin: 14px 0 0; }
 .marks { display: inline-flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
+.rate { display: inline-flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; justify-content: flex-end; }
+.rate-stars { display: inline-flex; }
+.rate-stars button { background: none; border: 0; padding: 2px 3px; font-size: 22px; line-height: 1; cursor: pointer; color: var(--under); transition: color .12s; }
+.rate-stars button.on, .rate-stars:hover button { color: var(--accent); }
+.rate-stars button:hover ~ button { color: var(--under); }
+.rate-year { font: inherit; font-size: 13px; color: var(--muted); background: transparent; border: 1px solid var(--rule); border-radius: 6px; padding: 4px 6px; }
+.rate.saving { opacity: .6; }
+.rate.failed .rate-stars button.on { color: var(--danger); }
 
 /* ---- tabs (text switches under a label or a rule) ---- */
 .tabs { display: flex; flex-wrap: wrap; gap: 6px 22px; }
@@ -420,7 +428,9 @@ dialog .form { margin-top: 18px; }
   .row-act { align-self: flex-start; }
   .row:has(.marks) { flex-wrap: wrap; row-gap: 12px; }
   .row:has(.marks), .row:has(.row-act > .muted) { flex-wrap: wrap; row-gap: 12px; }
-  .row-act:has(.marks), .row-act:has(> .muted) { flex-basis: 100%; padding-left: 80px; }
+  .row:has(.rate) { flex-wrap: wrap; row-gap: 12px; }
+  .row-act:has(.marks), .row-act:has(> .muted), .row-act:has(.rate) { flex-basis: 100%; padding-left: 80px; }
+  .row-act .rate { justify-content: flex-start; }
   .row.big { gap: 18px; }
   .row.big .cover.lg { width: 84px; }
   .row.big h3 { font-size: 22px; }

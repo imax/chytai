@@ -188,6 +188,12 @@ function wantButton(book, user, { size = "small", label: text = "Хочу про
 // 2026-10-20). Not in search: there the books get the room, the buttons are on the book page (Max, 2026-10-23).
 // A book the signed-in reader already has: their status, quietly, where the buttons would be (search, shelves).
 const myStatus = (e) => `<span class="muted small">${esc(e.status ? STATUS[e.status].toLowerCase() : "на полиці")}${e.via ? `, як «${esc(e.via.title)}»` : ""}</span>`;
+// A book just marked «Прочитано» on someone else's shelf (or read there earlier without a rating): five
+// stars and the year right in the row, so it needs no trip to one's own shelf (Olena's feedback, 2026-10-23).
+// app.js builds the same after the button; each tap is saved in the background.
+const rateYears = () => Array.from({ length: 10 }, (_, i) => new Date().getFullYear() - i);
+const rateLine = (id) =>
+  `<span class="rate" data-id="${attr(id)}"><span class="muted small">прочитано</span><span class="rate-stars" role="group" aria-label="Оцінка">${[1, 2, 3, 4, 5].map((n) => `<button type="button" data-r="${n}" title="${n} з 5">★</button>`).join("")}</span><select class="rate-year" aria-label="Рік"><option value="">рік?</option>${rateYears().map((y) => `<option>${y}</option>`).join("")}</select></span>`;
 const markButtons = (book, user) => `<span class="marks">${wantButton(book, user)}${wantButton(book, user, { label: "Прочитано", status: "read" })}</span>`;
 
 // The status, rating and copy of an entry as one quiet line: «★★★★★ 5 · прочитано · на папері».
@@ -984,8 +990,11 @@ function seriesRow(r, { action = "", data = "" } = {}) {
 // The same list twice: /me is the signed-in reader's own shelf with «змінити» on every row (the only
 // place where status, rating and notes are edited); /@<username> is that reader's public shelf, where a
 // signed-in visitor sees what they share and can want any book in one tap.
-function libraryPage({ rows, user, reader, own = false, mineIds = null, following = false, follows = { followers: [], following: [] }, now = null }) {
+function libraryPage({ rows, user, reader, own = false, mineIds = null, mineDirect = null, following = false, follows = { followers: [], following: [] }, now = null }) {
   const year = new Date().getFullYear();
+  // Stars in the row only for the reader's own entry of this very book (not one reached through a
+  // translation or a series, where a rating would land on another book).
+  const rateable = (e, id) => e.status === "read" && e.rating == null && !e.via && mineDirect?.has(id);
   // «Дитяча полиця» (Max, 2026-10-23): books kept for the children have a tab of their own and count in none
   // of the reader's numbers or other tabs.
   const kids = rows.filter((r) => r.kids);
@@ -1019,7 +1028,7 @@ function libraryPage({ rows, user, reader, own = false, mineIds = null, followin
       const search = [r.series?.name, ...vols.flatMap((v) => [v.book.title, v.book.altTitle, stripMd(v.note || "")]), b.author, b.authorOrig].join(" ").toLowerCase();
       const data = ` data-status="${r.status || ""}" data-copy="${r.copy || ""}" data-common="${vols.some((v) => common.includes(v)) ? 1 : ""}" data-kids="${r.kids ? 1 : ""}" data-tags="${attr((b.tags || []).join("|"))}" data-rating="${r.rating ?? ""}" data-title="${attr((r.volumes ? r.series.name : b.title).toLowerCase())}" data-search="${attr(search)}" data-order="${i}"${r.volumes ? ` data-books="${vols.length}"` : ""}`;
       const edit = b.href ? `/me${b.href}` : `/me/book/${encodeURIComponent(r.id)}`;
-      const action = own ? `<a class="text-link small" href="${attr(edit)}">змінити</a>` : user && mineIds ? (mineIds.has(r.id) ? myStatus(mineIds.get(r.id)) : markButtons(b, user)) : "";
+      const action = own ? `<a class="text-link small" href="${attr(edit)}">змінити</a>` : user && mineIds ? (mineIds.has(r.id) ? (rateable(mineIds.get(r.id), r.id) ? rateLine(r.id) : myStatus(mineIds.get(r.id))) : markButtons(b, user)) : "";
       return head + (r.volumes ? seriesRow(r, { action, data }) : bookRow(b, { entry: r, action, id: r.id, data }));
     })
     .join("\n");
