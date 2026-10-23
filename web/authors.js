@@ -171,7 +171,9 @@ function build(store) {
   for (const g of [...groups.values()].sort((a, b) => b.ids.size - a.ids.size || a.key.localeCompare(b.key))) {
     // Shown as our most used spelling, Cyrillic first; Wikidata's English name as the second line.
     const spellings = [...g.names].sort((a, b) => CYR.test(b[0]) - CYR.test(a[0]) || b[1] - a[1]);
-    const name = spellings[0][0];
+    // With no Cyrillic spelling in our books, Wikidata's Ukrainian name (Max 2026-10-23: «Max Kidruk»
+    // is Макс Кідрук); the old address keeps working as another spelling's.
+    const name = CYR.test(spellings[0][0]) || !CYR.test(g.wd?.uk || "") ? spellings[0][0] : g.wd.uk;
     const other = [g.wd?.en, ...spellings.map(([n]) => n)].find((n) => n && norm(n) !== norm(name) && !CYR.test(n)) || "";
     let slug = slugify(name);
     while (bySlug.has(slug)) slug += "-2";
