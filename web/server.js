@@ -734,7 +734,7 @@ app.get("/sitemap.xml", (req, res) => {
 // The book's overview with the titles it names linked to their pages (advice.linkTitles).
 const linkedOverview = (book) => {
   const o = advice.overviewOf(book.id);
-  return o && { ...o, text: advice.linkTitles(o.text, book) };
+  return o && { ...o, text: advice.linkTitles(o.text, book, `${o.book}|${o.created}|${store.canonical(book.id)}`) };
 };
 app.get("/book/:id", (req, res) => {
   const id = store.resolve(req.params.id);

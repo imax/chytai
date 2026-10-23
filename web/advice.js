@@ -292,7 +292,12 @@ class Advice {
   // stem (the word less its last three letters, four at least) as a prefix in the search index, and
   // only a title with the same number of words, every one starting with its stem, counts. The book's
   // own title and its translations are never linked; one-word titles only by the same author.
-  linkTitles(text, book) {
+  linkTitles(text, book, key = "") {
+    // Linked once per overview per process: a page view costs no search (the index has ~20k rows).
+    if (key) {
+      const hit = this.linkCache?.get(key);
+      if (hit !== undefined) return hit;
+    }
     const { norm } = require("./store");
     const own = new Set(this.family(book.id));
     const stem = (w) => (w.length >= 5 ? w.slice(0, Math.max(4, w.length - 3)) : w);
@@ -328,11 +333,17 @@ class Advice {
       cache.set(phrase, href);
       return href;
     };
-    return text.replace(/«([^«»\n]{2,80})»/g, (m, inner) => {
+    const out = text.replace(/«([^«»\n]{2,80})»/g, (m, inner) => {
       if (/[\[\]()]/.test(inner)) return m;
       const href = find(inner);
       return href ? `[«${inner}»](${href})` : m;
     });
+    if (key) {
+      this.linkCache ||= new Map();
+      if (this.linkCache.size > 1000) this.linkCache.clear();
+      this.linkCache.set(key, out);
+    }
+    return out;
   }
   // Runs the Claude turn, following pause_turn (a web search can pause it) a few times; returns the text and the usage.
   async turn(params) {
