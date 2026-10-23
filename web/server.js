@@ -551,6 +551,7 @@ const withCovers = (l) => ({ ...l, covers: lists.covers(l.id) });
 const bookpage = new BookPage({ apiKey: process.env.ANTHROPIC_API_KEY || "", log: console.log });
 const advice = new Advice({ store, social, db: store.db, apiKey: process.env.ANTHROPIC_API_KEY || "", log: console.log });
 const genreTrial = new (require("./genretrial").GenreTrial)({ store, social, db: store.db, apiKey: process.env.ANTHROPIC_API_KEY || "", genres: pages.GENRES, log: console.log });
+const origTrial = new (require("./origtrial").OrigTrial)({ store, social, db: store.db, apiKey: process.env.ANTHROPIC_API_KEY || "", log: console.log });
 const langTrial = new (require("./langtrial").LangTrial)({ store, db: store.db, apiKey: process.env.ANTHROPIC_API_KEY || "", log: console.log });
 // A whole-catalog run cut by a deploy goes on a minute after the start; once it has finished, books added
 // since are asked about every six hours.
@@ -1322,6 +1323,18 @@ app.get("/lang-trial/:key", (req, res) => {
 app.post("/admin/lang-trial", owner, (req, res) => {
   langTrial.run().catch((e) => console.log(`langtrial: ${e.message}`));
   res.redirect(303, "/admin/lang-trial");
+});
+// The originals trial (origtrial.js): what Haiku says a reader's Ukrainian book was translated from.
+app.get("/admin/orig-trial", owner, (req, res) => res.send(pages.origTrialPage({ user: req.user, st: origTrial.state(), running: origTrial.running, href: (id) => store.href(id) })));
+app.get("/orig-trial/:key", (req, res) => {
+  const st = origTrial.state();
+  if (!st?.key || req.params.key !== st.key) return res.status(404).send("Немає");
+  const line = (x) => `${x.title} — ${x.author} | ${x.error ? `помилка ${x.error}` : x.kind === "translation" ? `оригінал: ${x.orig} — ${x.origAuthor} (${x.lang})${x.inCatalog ? " [є в каталозі]" : ""}` : x.kind === "ukrainian" ? "українська книжка" : "не знає"}`;
+  res.type("text/plain").send([`промпт v${st.prompt}, ${st.model}, ${st.at}: ${st.done} з ${st.total} (без оригіналу на полицях ${st.pool}), $${(st.cost || 0).toFixed(3)}${st.finished ? "" : ", ще йде"}`, "", ...st.items.map(line)].join("\n"));
+});
+app.post("/admin/orig-trial", owner, (req, res) => {
+  origTrial.run().catch((e) => console.log(`origtrial: ${e.message}`));
+  res.redirect(303, "/admin/orig-trial");
 });
 // The whole catalog: start, or stop (the books asked so far keep their genres).
 app.post("/admin/genres-all", owner, (req, res) => {

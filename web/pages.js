@@ -1231,6 +1231,24 @@ ${running ? `<script>setTimeout(() => location.reload(), 5000)</script>` : ""}`;
   return layout({ title: "Мова від Haiku", body, user, path: "/admin" });
 }
 
+// ---- /admin/orig-trial: the original Haiku names for readers' Ukrainian books (origtrial.js) ----
+
+function origTrialPage({ user, st, running, href }) {
+  const items = st?.items || [];
+  const found = items.filter((x) => x.kind === "translation");
+  const said = (x) => (x.error ? `<span class="error small">${esc(x.error)}</span>` : x.kind === "translation" ? `<b>${esc(x.orig)}</b><br><span class="small muted">${esc(x.origAuthor)} · ${esc(x.lang)}${x.inCatalog ? ` · <a href="${attr(href(x.inCatalog))}">є в каталозі</a>` : ""}</span>` : `<span class="muted">${x.kind === "ukrainian" ? "українська книжка" : "не знає"}</span>`);
+  const row = (x) => `<tr${x.kind === "translation" ? ' class="diff"' : ""}><td><a href="${attr(href(x.id))}">${esc(x.title)}</a><br><span class="small muted">${esc(x.author)}</span></td><td>${said(x)}</td></tr>`;
+  const body = `
+${pageHead({ crumbs: `<a href="/admin">Статистика</a>`, kicker: "Проба", title: "Оригінали від Haiku", sub: st ? [`промпт v${st.prompt}`, `${st.done} з ${st.total}`, `без оригіналу на полицях ${st.pool}`, `знайшов ${found.length}`, `з них у каталозі ${found.filter((x) => x.inCatalog).length}`, st.errors ? `помилок ${st.errors}` : "", `$${(st.cost || 0).toFixed(3)}`, running ? "іде…" : st.finished ? "готово" : "зупинилось"].filter(Boolean).join(" · ") : "Ще не запускали. 200 випадкових українських книжок з полиць читачів, для яких ми не знаємо оригіналу; на сайті нічого не змінюється." })}
+${st?.key ? `<p class="small muted">Посилання для Claude (тільки назви): <a href="/orig-trial/${attr(st.key)}">chytai.org.ua/orig-trial/${esc(st.key)}</a></p>` : ""}
+${running ? "" : `<form method="post" action="/admin/orig-trial"><button class="btn primary">${st ? "Прогнати ще 200 інших" : "Запустити"}</button></form>`}
+${items.length ? `<div class="tabs" data-trial><button type="button" class="tab on" data-v="diff">Переклади <span>${found.length}</span></button><button type="button" class="tab" data-v="">Усі <span>${items.length}</span></button></div>
+<table class="trial"><thead><tr><th>Книжка</th><th>Оригінал (Haiku)</th></tr></thead><tbody>${[...found, ...items.filter((x) => !found.includes(x))].map(row).join("")}</tbody></table>
+<script>(() => { const t = document.querySelector(".trial"); const set = (v) => t.classList.toggle("only-diff", v === "diff"); set("diff"); document.querySelector("[data-trial]").addEventListener("click", (e) => { const b = e.target.closest(".tab"); if (!b) return; document.querySelectorAll("[data-trial] .tab").forEach((x) => x.classList.toggle("on", x === b)); set(b.dataset.v); }); })();</script>` : ""}
+${running ? `<script>setTimeout(() => location.reload(), 5000)</script>` : ""}`;
+  return layout({ title: "Оригінали від Haiku", body, user, path: "/admin" });
+}
+
 // ---- a genre (/genre/<slug>) ----
 
 // One genre's books: the ones readers rate best, then all of them, the ones on readers' shelves first;
@@ -2160,7 +2178,7 @@ module.exports = {
   decidedList,
   welcomePage,
   addPage, addReviewPage, addFindResults, addPageResult, ukFindPage,
-  layout, homePage, bookPage, bookEditPage, russianPage, editPage, libraryPage, readersPage, popularPage, genrePage, genreTrialPage, langTrialPage, publishersPage, publisherPage, searchPage, searchResults, authorPage,
+  layout, homePage, bookPage, bookEditPage, russianPage, editPage, libraryPage, readersPage, popularPage, genrePage, genreTrialPage, langTrialPage, origTrialPage, publishersPage, publisherPage, searchPage, searchResults, authorPage,
   loginPage, codePage, signupPage, settingsPage, privacyPage, updatesPage, messagePage, digestPage, followMailPage, importPage, importPreviewPage, importDonePage,
   GENRES, esc, byline, STATUS, COPY, inline, isUk, setTitleLinks, setAuthorLinks, setStats, setReadersWithNote,
 };
