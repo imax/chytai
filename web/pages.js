@@ -926,8 +926,8 @@ function bookEditPage({ book, raw, user, coverError = "" }) {
       ${field("title", "Назва")}
       ${field("author", "Автор", "Кілька авторів через кому")}
       <label>Опис <textarea name="blurb" rows="8" placeholder="${attr(raw.blurb || "")}">${esc(fix.blurb || "")}</textarea></label>
-      ${field("cover", "Обкладинка", `Посилання на картинку · <button type="button" class="text-link small" id="find-covers">Знайти обкладинку</button>`)}
-${coverError ? `<p class="error">Копію обкладинки не вдалося зберегти в нас (${esc(coverError)}), поки вона береться з того сайту.</p>` : ""}
+      ${field("cover", "Обкладинка", `Посилання на картинку · <button type="button" class="text-link small" id="find-covers">Знайти обкладинку</button> · <button type="button" class="text-link small" id="upload-cover">Завантажити файл</button><input type="file" id="cover-file" accept="image/*" hidden>`)}
+${coverError ? `<p class="error">Сайт не віддав нам картинку (${esc(coverError)}), тож поки вона береться з нього. Можна зберегти її собі й натиснути «Завантажити файл».</p>` : ""}
       <div id="covers" class="cover-picks" hidden></div>
       ${field("published", "Рік", "Рік першого видання")}
       ${field("aliases", "Інші назви для пошуку", "Через кому, як люди скорочують: DCC, ГП")}
@@ -961,6 +961,15 @@ ${coverError ? `<p class="error">Копію обкладинки не вдало
     }
   };
   btn.onclick = find;
+  const file = document.getElementById("cover-file");
+  document.getElementById("upload-cover").onclick = () => file.click();
+  file.onchange = async () => {
+    const f = file.files[0];
+    if (!f) return;
+    const r = await fetch(${JSON.stringify(`/admin/book/${encodeURIComponent(book.id)}/cover`)}, { method: "POST", headers: { "Content-Type": f.type }, body: f }).then((x) => x.json()).catch(() => ({ error: "не вдалося" }));
+    if (r.url) { input.value = r.url; document.querySelector(".book-cover img")?.setAttribute("src", r.url); }
+    else alert(r.error);
+  };
   if (new URLSearchParams(location.search).has("find")) find();
 })();</script>`;
   return layout({ title: `Редагувати: ${book.title}`, body: body + script, user, path: "/admin" });

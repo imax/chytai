@@ -132,10 +132,28 @@ app.use("/covers", express.static(COVERS, { maxAge: "1y", immutable: true }));
 const COVER_TYPES = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp", "image/gif": "gif", "image/avif": "avif" };
 // A picture's address -> { url: our own /covers/<hash>.<ext> } or, when it can't be fetched, { url: the
 // address itself, error }.
+// A GET over IPv6 with a body as bytes, shaped like fetch's answer for keepCover.
+function getV6(url, headers) {
+  const u = new URL(url);
+  const lib = u.protocol === "http:" ? require("http") : require("https");
+  return new Promise((resolve, reject) => {
+    const rq = lib.request({ host: u.hostname, family: 6, path: u.pathname + u.search, headers, timeout: 15000 }, (r) => {
+      const chunks = [];
+      r.on("data", (c) => chunks.push(c));
+      r.on("end", () => resolve({ ok: r.statusCode >= 200 && r.statusCode < 300, status: r.statusCode, headers: { get: (k) => r.headers[k.toLowerCase()] }, arrayBuffer: async () => Buffer.concat(chunks) }));
+    });
+    rq.on("timeout", () => rq.destroy(new Error("timeout")));
+    rq.on("error", reject);
+    rq.end();
+  });
+}
 async function keepCover(url) {
   if (!/^https?:\/\//i.test(url || "")) return { url };
   try {
-    const r = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0 Safari/537.36", Accept: "image/avif,image/webp,image/*,*/*;q=0.8", Referer: new URL(url).origin + "/" }, signal: AbortSignal.timeout(15000) });
+    const headers = { "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0 Safari/537.36", Accept: "image/avif,image/webp,image/*,*/*;q=0.8", Referer: new URL(url).origin + "/" };
+    let r = await fetch(url, { headers, signal: AbortSignal.timeout(15000) });
+    // Some shops turn Fly's shared IPv4 away (Наш Формат: 403); over IPv6 they may not.
+    if (!r.ok) r = (await getV6(url, headers).catch(() => null)) || r;
     const type = String(r.headers.get("content-type") || "").split(";")[0].trim();
     const buf = Buffer.from(await r.arrayBuffer());
     // Some shops say octet-stream: the first bytes tell a picture anyway.
@@ -1529,6 +1547,15 @@ app.post("/admin/russian", owner, (req, res) => {
   if (id) store.editField(id, "language", req.body.ru === "1" ? "російська" : "українська");
   if (req.get("accept")?.includes("json")) return res.json({ ok: !!id });
   res.redirect(303, "/admin/russian");
+});
+// A cover file from the owner's computer, for shops that won't give the picture to our server.
+app.post("/admin/book/:id/cover", owner, express.raw({ type: "image/*", limit: "8mb" }), (req, res) => {
+  const id = store.resolve(req.params.id);
+  const ext = COVER_TYPES[String(req.get("content-type") || "").split(";")[0].trim()];
+  if (!id || !ext || !Buffer.isBuffer(req.body) || req.body.length < 500) return res.status(400).json({ error: "Потрібна картинка: jpg, png або webp." });
+  const name = `${require("crypto").createHash("sha1").update(req.body).digest("hex").slice(0, 20)}.${ext}`;
+  fs.writeFileSync(path.join(COVERS, name), req.body);
+  res.json({ url: `/covers/${name}` });
 });
 // Pictures to pick a cover from: other editions in our catalogs first, then Open Library and Google Books.
 app.get("/admin/book/:id/covers", owner, async (req, res) => {
