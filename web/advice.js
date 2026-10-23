@@ -20,6 +20,7 @@ const OVERVIEW_SCHEMA = `CREATE TABLE IF NOT EXISTS overview (
   input_tokens INTEGER NOT NULL DEFAULT 0, output_tokens INTEGER NOT NULL DEFAULT 0, searches INTEGER NOT NULL DEFAULT 0
 );`;
 const WEB_SEARCHES = 3;
+const OVERVIEW_DAILY = 150; // fresh overviews a day, all readers together
 // «Що кажуть про книжку» (Max, 2026-10-23): one summary per book, not per reader, of what readers and
 // reviewers say, from the web, kept on the page for everyone. Our own words only: a review's text may
 // not be reproduced (Закон 2811-IX), so no quotes, no names, no links.
@@ -239,6 +240,9 @@ class Advice {
     const id = this.store.canonical(book.id);
     const old = fresh ? null : this.overviewOf(id);
     if (old) return { ...old, cached: true };
+    // A ceiling for the day across all readers: each overview is a few web searches and a long Opus turn.
+    const day = new Date().toISOString().slice(0, 10);
+    if (this.db.prepare("SELECT COUNT(*) AS n FROM overview WHERE created >= ?").get(day).n >= OVERVIEW_DAILY) throw new Error("На сьогодні оглядів більше немає, спробуйте завтра.");
     const t0 = Date.now();
     const { text, model, usage } = await this.turn({
       model: this.model,

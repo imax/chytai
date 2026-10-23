@@ -476,15 +476,16 @@ function adviceBlock(book, a) {
     </section>`;
 }
 // «Що кажуть про книжку» (advice.js overview): one summary per book from the web, the same for everyone.
-// The owner's trial for now (Max, 2026-10-23): only he sees it and makes it; OVERVIEW_PUBLIC opens it to all.
-const OVERVIEW_PUBLIC = false;
+// Open to all since 2026-10-23 (Max: «це треба викочувати на всіх»): any signed-in reader can make it,
+// a guest sees it once made; only the owner can redo one.
+const OVERVIEW_PUBLIC = true;
 function overviewHtml(o, user) {
   return `<div class="advice-text">${marked.parse(o.text).replace(/<a href="http/g, '<a target="_blank" rel="noopener" href="http')}</div>
 <p class="small muted">Claude, за відгуками в інтернеті · ${writingDate(o.created.slice(0, 10))}${user?.owner ? ` · <button class="text-link small" data-ask="overview" data-again>Оновити</button>` : ""}</p>`;
 }
 function overviewBlock(book, o, user) {
   const canSee = o && (OVERVIEW_PUBLIC || user?.owner);
-  if (!canSee && !user?.owner) return "";
+  if (!canSee && !(user && (OVERVIEW_PUBLIC || user.owner))) return "";
   const inner = canSee ? overviewHtml(o, user) : `<p class="advice-ask"><button class="text-link" data-ask="overview">Що кажуть про цю книжку?</button></p>`;
   return `<section class="block advice" id="overview" data-book="${attr(book.id)}">
       ${label("Що кажуть про книжку")}

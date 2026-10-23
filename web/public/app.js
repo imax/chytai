@@ -324,13 +324,24 @@ document.addEventListener("click", async (e) => {
   const kind = button.dataset.ask;
   const body = block.querySelector(".advice-body");
   const was = body.innerHTML;
-  body.innerHTML = `<p class="advice-wait">${kind === "overview" ? "Claude шукає відгуки в інтернеті…" : "Claude читає вашу полицю…"}</p>`;
+  // The wait is long (a web search takes 15–40 s), so the line changes every few seconds (Max, 2026-10-23).
+  const steps = kind === "overview"
+    ? ["Claude шукає відгуки в інтернеті…", "Читає, що пишуть читачі…", "Дивиться рецензії…", "Збирає, в чому сходяться думки…", "Пише коротко своїми словами…", "Ще трохи…"]
+    : ["Claude читає вашу полицю…", "Порівнює з тим, що ви читали…", "Пише…", "Ще трохи…"];
+  let step = 0;
+  body.innerHTML = `<p class="advice-wait">${steps[0]}</p>`;
+  const ticker = setInterval(() => {
+    const p = body.querySelector(".advice-wait");
+    if (p) p.textContent = steps[Math.min(++step, steps.length - 1)];
+  }, kind === "overview" ? 5000 : 3500);
   try {
     const r = await fetch(`/api/${kind}/${encodeURIComponent(block.dataset.book)}`, { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: new URLSearchParams(button.hasAttribute("data-again") ? { fresh: "1" } : {}) });
     const data = await r.json();
     if (!r.ok) throw new Error(data.error || r.status);
+    clearInterval(ticker);
     body.innerHTML = data.html;
   } catch (err) {
+    clearInterval(ticker);
     body.innerHTML = was;
     const p = document.createElement("p");
     p.className = "advice-error small";

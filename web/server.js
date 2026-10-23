@@ -982,12 +982,12 @@ app.post("/api/advice/:id", signed, async (req, res) => {
     res.status(e.status >= 400 && e.status < 600 ? 502 : 400).json({ error: e.status ? "Claude зараз не відповідає, спробуйте трохи згодом." : e.message });
   }
 });
-// «Що кажуть про книжку»: one overview per book from the web; the owner makes it for now (Max, 2026-10-23).
-app.post("/api/overview/:id", owner, async (req, res) => {
-  const book = bookFor(req, store.bookPage(store.resolve(req.params.id)), true);
+// «Що кажуть про книжку»: one overview per book from the web; any signed-in reader makes it, only the owner redoes one.
+app.post("/api/overview/:id", signed, async (req, res) => {
+  const book = bookFor(req, store.bookPage(store.resolve(req.params.id)), !!store.entry(req.user.id, req.params.id));
   if (!book) return res.status(404).json({ error: "Книжку не знайдено." });
   try {
-    const o = await advice.overview(book, { fresh: req.body?.fresh === "1", by: req.user.id });
+    const o = await advice.overview(book, { fresh: req.body?.fresh === "1" && req.owner, by: req.user.id });
     res.json({ html: pages.overviewHtml(o, req.user), cached: o.cached });
   } catch (e) {
     console.error("overview failed:", e);
