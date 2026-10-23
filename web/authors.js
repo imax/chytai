@@ -129,14 +129,15 @@ const altOf = (store, id) => store.lib.books[id]?.altTitle ?? store.seedBooks.fi
 const authorOf = (store, id) => store.lib.books[id]?.author ?? store.seedBooks.find((b) => b.id === id)?.author ?? store.shelfItems.get(id)?.item.author ?? "";
 
 // Pairs of spellings of one person: the seed's, then the owner's (each owner join keeps its index for undo).
-function joins(store) {
-  let seed = [];
+function seedJson() {
   try {
-    seed = JSON.parse(require("fs").readFileSync(require("path").join(__dirname, "seed", "matches.json"), "utf8")).authors || [];
+    return JSON.parse(require("fs").readFileSync(require("path").join(__dirname, "seed", "matches.json"), "utf8"));
   } catch {
-    /* none */
+    return {};
   }
-  return [...seed, ...ownerJoins(store)];
+}
+function joins(store) {
+  return [...(seedJson().authors || []), ...ownerJoins(store)];
 }
 function ownerJoins(store) {
   try {
@@ -188,6 +189,7 @@ function build(store) {
     for (const id of from.ids) into.ids.add(id);
     groups.delete(from.key);
   }
+  const shown = seedJson().authorNames || {};
   const bySlug = new Map();
   const list = [];
   for (const g of [...groups.values()].sort((a, b) => b.ids.size - a.ids.size || a.key.localeCompare(b.key))) {
@@ -195,7 +197,10 @@ function build(store) {
     const spellings = [...g.names].sort((a, b) => CYR.test(b[0]) - CYR.test(a[0]) || b[1] - a[1]);
     // With no Cyrillic spelling in our books, Wikidata's Ukrainian name (Max 2026-10-23: «Max Kidruk»
     // is Макс Кідрук); the old address keeps working as another spelling's.
-    const name = CYR.test(spellings[0][0]) || !CYR.test(g.wd?.uk || "") ? spellings[0][0] : g.wd.uk;
+    let name = CYR.test(spellings[0][0]) || !CYR.test(g.wd?.uk || "") ? spellings[0][0] : g.wd.uk;
+    // A name fixed by hand (matches.json «authorNames», spelling -> shown name; Max 2026-10-23: «Артур Конан Дойль»).
+    const fixed = [...g.names.keys()].map((n) => shown[n]).find(Boolean);
+    if (fixed) (name = fixed), keyOfName.set(fixed, g.key); // a book edited to that byline links here
     const other = [g.wd?.en, ...spellings.map(([n]) => n)].find((n) => n && norm(n) !== norm(name) && !CYR.test(n)) || "";
     let slug = slugify(name);
     while (bySlug.has(slug)) slug += "-2";

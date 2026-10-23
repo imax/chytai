@@ -360,11 +360,28 @@ class Store {
       d.same.push([k, x]);
       changed = true;
     }
+    if (changed) {
+      this.saveDecisions(d);
+      this.indexSlugs();
+      this.pickCovers();
+    }
+    // Hand edits asked in chat («Пригоди Шерлока Холмса» without «Том I», «Артур Конан Дойль»), matches.json
+    // «edits» {slug: {title, author, …}}: put once into the owner's edits, as if made on /admin/book/:id.
+    let edits = {};
+    try {
+      edits = readJson(path.join(SEED, "matches.json")).edits || {};
+    } catch {
+      /* none */
+    }
+    for (const [slug, fix] of Object.entries(edits)) {
+      const key = `edit:${slug}:${JSON.stringify(fix)}`;
+      if (done.has(key)) continue;
+      const id = this.workId(slug);
+      if (!this.isWork(id)) continue;
+      done.add(key);
+      this.editBook(id, { ...(this.edits()[id] || {}), ...fix });
+    }
     this.db.set("merges:seeded", JSON.stringify([...done]));
-    if (!changed) return;
-    this.saveDecisions(d);
-    this.indexSlugs();
-    this.pickCovers();
   }
 
   // A book and its translation are two works, linked: each page points at the other, and having read

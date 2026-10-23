@@ -1,10 +1,18 @@
 {
- "_": "Hand-confirmed links that the automatic matching misses or gets wrong. same: catalog item id -> library book id. different: pairs the matcher must not join. merges: [keep, dup] works (ids or /book/ slugs) folded into one, put once into the owner's /admin/dupes decisions (undo there). volumes: item id -> volume number, for series whose titles carry no numbering. translations: pairs of works (ids or /book/ slugs) where one translates the other. covers: work (id or /book/ slug) -> the cover to show, when the edition picked for the work has a worse one.",
+ "_": "Hand-confirmed links that the automatic matching misses or gets wrong. same: catalog item id -> library book id. different: pairs the matcher must not join. authorNames: an author spelling -> the name shown. edits: slug -> {title, author, …}, put once into the owner's hand edits. merges: [keep, dup] works (ids or /book/ slugs) folded into one, put once into the owner's /admin/dupes decisions (undo there). volumes: item id -> volume number, for series whose titles carry no numbering. translations: pairs of works (ids or /book/ slugs) where one translates the other. covers: work (id or /book/ slug) -> the cover to show, when the edition picked for the work has a worse one.",
  "same": {
   "lobster-8110": "mickey7",
   "lobster-8109": "we-are-legion-bobiverse"
  },
  "different": [],
+ "authorNames": {
+  "Артур Дойль": "Артур Конан Дойль"
+ },
+ "edits": {
+  "pryhody-sherloka-kholmsa-tom-i": { "title": "Пригоди Шерлока Холмса", "author": "Артур Конан Дойль" },
+  "zahublenyi-svit": { "author": "Артур Конан Дойль" },
+  "sobaka-baskerviliv-doil": { "author": "Артур Конан Дойль" }
+ },
  "authors": [
   ["Charles Bukowski", "Чарльз Буковскі"]
  ],
@@ -15,7 +23,10 @@
   ["hraf-monte-kristo", "hraf-monte-kristo-roman-t-3"],
   ["hraf-monte-kristo", "hraf-monte-kristo-roman-t-4"],
   ["hraf-monte-kristo", "hraf-monte-kristo-knyha-1"],
-  ["volodar-mukh-golding", "volodar-mukh"]
+  ["volodar-mukh-golding", "volodar-mukh"],
+  ["pryhody-sherloka-kholmsa-tom-i", "pryhody-sherloka-kholmsa-tom-ii"],
+  ["pryhody-sherloka-kholmsa-tom-i", "pryhody-sherloka-kholmsa-tom-iii"],
+  ["pryhody-sherloka-kholmsa-tom-i", "pryhody-sherloka-kholmsa-tom-iv"]
  ],
  "translations": [
   ["the-hobbit-or-there-and-back-again", "hobit-abo-tudy-i-zvidty"],
