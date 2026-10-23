@@ -71,6 +71,8 @@ const clip = (s, n) => {
   const t = String(s || "").replace(/\s+/g, " ").trim();
   return t.length <= n ? t : t.slice(0, n).replace(/\s+\S*$/, "") + "…";
 };
+// No blank before punctuation, no doubled spaces (the seams between cited text blocks).
+const tidy = (s) => String(s || "").replace(/[ \t]+([.,;:!?»)])/g, "$1").replace(/[ \t]{2,}/g, " ").trim();
 const stripMd = (s) => String(s || "").replace(/\[([^\]]*)\]\([^)]*\)/g, "$1").replace(/[*_`>#]+/g, "");
 
 class Advice {
@@ -303,6 +305,7 @@ class Advice {
   // only a title with the same number of words, every one starting with its stem, counts. The book's
   // own title and its translations are never linked; one-word titles only by the same author.
   linkTitles(text, book, key = "") {
+    text = tidy(text);
     // Linked once per overview per process: a page view costs no search (the index has ~20k rows).
     if (key) {
       const hit = this.linkCache?.get(key);
@@ -385,8 +388,10 @@ class Advice {
     const content = message.content || [];
     let from = 0;
     for (const [i, b] of content.entries()) if (b.type === "server_tool_use" || b.type === "web_search_tool_result") from = i + 1;
-    let text = content.slice(from).filter((b) => b.type === "text").map((b) => b.text).join("\n").trim();
-    if (!text) text = content.filter((b) => b.type === "text").map((b) => b.text).join("\n").trim();
+    // Text with citations comes as several blocks of one answer («…досліджень» + «. Сприйняття…»): glued
+    // without a separator, else a space shows before the full stop (Max, 2026-10-23, Endurance).
+    let text = tidy(content.slice(from).filter((b) => b.type === "text").map((b) => b.text).join(""));
+    if (!text) text = tidy(content.filter((b) => b.type === "text").map((b) => b.text).join(""));
     if (!text) throw new Error("Порожня відповідь, спробуйте ще раз.");
     // A real answer is Ukrainian prose of some length; anything else is not kept.
     if (params.tools && (text.length < 120 || !/[а-яіїєґ]/i.test(text))) throw new Error(`Не схоже на огляд: «${clip(text, 60)}»`);
