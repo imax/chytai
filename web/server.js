@@ -1099,6 +1099,19 @@ app.post("/api/reviews/remove", signed, (req, res) => {
   res.redirect(303, req.body.back === "admin" ? "/admin/reviews" : `${store.href(id)}#writings`);
 });
 
+// The owner fixes a book's title, author, description or cover by hand (Max, 2026-10-23: «як тут дефіс в
+// тайтл поправити?»); the fix outlives catalog refreshes (store.editBook, meta `edits`).
+app.get("/admin/book/:id", owner, (req, res) => {
+  const id = store.resolve(req.params.id);
+  if (!id) return res.status(404).send(pages.messagePage({ title: "Немає такої книжки", text: "", user: req.user }));
+  res.send(pages.bookEditPage({ book: store.book(id), raw: store.book(id, { edited: false }), user: req.user }));
+});
+app.post("/admin/book/:id", owner, (req, res) => {
+  const id = store.resolve(req.params.id);
+  if (!id) return res.status(404).send("Немає такої книжки");
+  const b = store.editBook(id, req.body.reset ? {} : req.body);
+  res.redirect(303, b.href);
+});
 app.get("/admin/dupes", owner, (req, res) => res.send(pages.dupesPage({ user: req.user, groups: store.dupes(), decisions: store.decisions(), book: (id) => store.book(id), all: req.query.all === "1" })));
 app.get("/admin/translations", owner, (req, res) => res.send(pages.translationsPage({ user: req.user, translations: store.translationCandidates(), decisions: store.decisions(), book: (id) => store.book(id) })));
 // The owner's verdict on a group of look-alikes: keep=<id> folds the rest into it, verdict=different keeps them apart.

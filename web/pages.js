@@ -425,6 +425,7 @@ function bookPage({ book, entry, now = false, user, shelf, inLibrary = new Map()
         ${mine(book, entry, user, now, freeRead ? "" : readUrl)}
         ${readUrl && freeRead ? `<p class="read-here"><a class="btn primary" href="${attr(readUrl)}">Додати в Читалку</a></p>` : ""}
         ${where(book)}
+        ${user?.owner ? `<p class="small muted"><a class="muted" href="/admin/book/${encodeURIComponent(book.id)}">Редагувати</a>${book.edited ? " · виправлено вручну" : ""}</p>` : ""}
       </div>
     </article>
     ${series(book, inLibrary)}
@@ -443,7 +444,7 @@ function bookPage({ book, entry, now = false, user, shelf, inLibrary = new Map()
     ${book.blurb || book.ukTitle ? `<section class="block">
       ${label("Про книжку")}
       ${book.blurb ? `<div class="about">${book.blurb.split(/\n\n+/).map((t) => `<p>${esc(t)}</p>`).join("")}</div>` : ""}
-      <p class="small muted">${[book.blurb ? (book.blurbSource ? `Опис: ${esc(book.blurbSource)}` : `Опис з сайту ${esc(shelf ? shelf.name : book.source)}`) : "", book.ukTitle ? `Українською: «${esc(book.ukTitle)}», у каталогах поки немає` : ""].filter(Boolean).join(" · ")}</p>
+      <p class="small muted">${[book.blurb && !book.edited?.blurb ? (book.blurbSource ? `Опис: ${esc(book.blurbSource)}` : `Опис з сайту ${esc(shelf ? shelf.name : book.source)}`) : "", book.ukTitle ? `Українською: «${esc(book.ukTitle)}», у каталогах поки немає` : ""].filter(Boolean).join(" · ")}</p>
     </section>` : ""}
   </div>
   <aside>
@@ -743,6 +744,35 @@ function editPage({ book, entry, user }) {
   </div>
 </article>`;
   return layout({ title: book.title, body, user, path: "/me" });
+}
+
+// The owner's fix of a book's title, author, description and cover (/admin/book/:id). An empty field
+// says what the catalog says, shown as its placeholder.
+function bookEditPage({ book, raw, user }) {
+  const fix = book.edited || {};
+  const field = (name, label, hint = "") => `<label>${label} <input name="${name}" value="${attr(fix[name] || "")}" placeholder="${attr(raw[name] || "")}">${hint ? `<span class="hint">${hint}</span>` : ""}</label>`;
+  const body = `
+<article class="book-top edit">
+  <div class="book-cover">${cover(book, "lg")}</div>
+  <div class="book-main">
+    <p class="crumbs"><a href="${attr(book.href)}">До книжки</a></p>
+    <h1>Редагувати</h1>
+    <form method="post" action="/admin/book/${encodeURIComponent(book.id)}" class="form">
+      ${field("title", "Назва")}
+      ${field("author", "Автор", "Кілька авторів через кому")}
+      <label>Опис <textarea name="blurb" rows="8" placeholder="${attr(raw.blurb || "")}">${esc(fix.blurb || "")}</textarea></label>
+      ${field("cover", "Обкладинка", "Посилання на картинку")}
+      <p class="hint">Порожнє поле — як у каталозі (сіре). Виправлення не злітають після оновлення каталогів.</p>
+      <div class="actions">
+        ${book.edited ? `<button type="submit" class="btn danger" name="reset" value="1">Повернути як було</button>` : ""}
+        <span class="grow"></span>
+        <a class="btn" href="${attr(book.href)}">Скасувати</a>
+        <button class="btn primary">Зберегти</button>
+      </div>
+    </form>
+  </div>
+</article>`;
+  return layout({ title: `Редагувати: ${book.title}`, body, user, path: "/admin" });
 }
 
 const WHY = "Чому не пішла, якщо хочеться";
@@ -1598,7 +1628,7 @@ module.exports = {
   decidedList,
   welcomePage,
   addPage, addReviewPage, addFindResults, addPageResult,
-  layout, homePage, bookPage, editPage, libraryPage, readersPage, popularPage, publishersPage, publisherPage, searchPage, searchResults, authorPage,
+  layout, homePage, bookPage, bookEditPage, editPage, libraryPage, readersPage, popularPage, publishersPage, publisherPage, searchPage, searchResults, authorPage,
   loginPage, codePage, signupPage, settingsPage, privacyPage, updatesPage, messagePage, digestPage, followMailPage, importPage, importPreviewPage, importDonePage,
   esc, byline, STATUS, COPY, inline, isUk, setTitleLinks, setAuthorLinks, setStats, setReadersWithNote,
 };

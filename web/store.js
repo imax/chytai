@@ -55,6 +55,9 @@ const isRussian = (b) => {
   return RU.test(text) || (!/[іїєґ]/i.test(text) && RU_ENDING.test(b?.title || ""));
 };
 const norm = (s) => String(s || "").toLowerCase().replace(/^(the|a)\s+/, "").replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+// Separators left at the end of a title: «Diary of Samuel Pepys -», «Назва:».
+const DANGLING = /[\s\-‐‑–—:;,/|]+$/u;
+const EDITABLE = ["title", "author", "blurb", "cover"];
 const isbnKey = (s) => String(s || "").replace(/[^0-9X]/gi, "");
 const GENRE = /\s*[:.]\s*(казка|казки|роман|повість|повісті|оповідання|новели|п[’']єса|есеї|есей|поезії|вірші|збірка|нариси|спогади|мемуари|(осіннє|зимове|весняне|літнє|подарункове|ювілейне|ілюстроване|нове|повне|доповнене|колекційне)\s+видання)\s*$/iu;
 // A note on the edition at the end of a title, which names a printing, not a book: «Дракула (2-ге видання)»,
@@ -1011,7 +1014,7 @@ class Store {
 
   // ---- books ----
 
-  book(id) {
+  book(id, { edited = true } = {}) {
     id = this.canonical(id);
     const own = this.lib.books[id];
     const seed = own || this.seedBooks.find((b) => b.id === id);
@@ -1038,8 +1041,45 @@ class Store {
     if (this.covers?.has(id)) out.cover = this.covers.get(id);
     // A book a reader added by hand or imported has no cover; its catalog editions do («Сила інтровертів»).
     else if (!out.cover) out.cover = (out.editions || []).find((e) => e.cover)?.cover || "";
+    // A title cut short by an import keeps a dangling separator («Diary of Samuel Pepys -», Max 2026-10-23).
+    out.title = String(out.title || "").replace(DANGLING, "") || out.title;
+    // The owner's hand edits (/admin/book/:id) win over the catalogs and outlive their refreshes.
+    const fix = edited && this.edits()[id];
+    if (fix) {
+      for (const k of EDITABLE) if (fix[k]) out[k] = fix[k];
+      if (fix.blurb) out.blurbSource = "";
+      out.edited = fix;
+    }
     out.href = this.slugs ? this.href(id) : `/book/${encodeURIComponent(id)}`;
     return out;
+  }
+
+  // ---- the owner's hand edits of a book's title, author, description and cover, kept in meta `edits` ----
+  edits() {
+    if (this._edits) return this._edits;
+    try {
+      this._edits = JSON.parse(this.db.get("edits") || "{}") || {};
+    } catch {
+      this._edits = {};
+    }
+    return this._edits;
+  }
+  // An empty field goes back to what the catalog says.
+  editBook(id, patch) {
+    id = this.canonical(id);
+    const all = { ...this.edits() };
+    const fix = {};
+    for (const k of EDITABLE) {
+      const v = k === "blurb" ? String(patch[k] ?? "").replace(/\r\n?/g, "\n").trim() : String(patch[k] ?? "").replace(/\s+/g, " ").trim();
+      if (v) fix[k] = v;
+    }
+    if (Object.keys(fix).length) all[id] = fix;
+    else delete all[id];
+    this.db.set("edits", JSON.stringify(all));
+    this._edits = all;
+    this._works = null;
+    this.indexSearch();
+    return this.book(id);
   }
 
   // book() plus its translations, for the book page (kept out of book() so the two don't recurse).

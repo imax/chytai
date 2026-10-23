@@ -47,6 +47,7 @@ const isbnOf = (s) => String(s || "").replace(/[^0-9Xx]/g, "").toUpperCase();
 const cleanTitle = (t) =>
   String(t || "")
     .replace(/\s*\(([^()]*#\s*\d[^()]*|[^()]*,\s*(book|vol\.?|volume|частина|книга|том)\s*\d+[^()]*)\)\s*$/i, "")
+    .replace(/[\s\-–—:;,/]+$/u, "") // «Diary of Samuel Pepys - (…)» leaves its dash behind
     .trim();
 // A review is written in Goodreads' editor: <br/> for line breaks, sometimes <b> and <i>.
 const reviewText = (s) =>
