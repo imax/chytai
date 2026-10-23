@@ -27,6 +27,7 @@ const MAX_FEED = 6;
 const MAX_NEW = 5;
 const MAX_WANT = 6;
 const MAX_UPDATES = 5;
+const BUILD_AT_ONCE = 8; // readers whose letters are made side by side
 const WANT_LOOKUPS = 30; // how many «хочу прочитати» books get a library lookup per letter
 
 // Who gets Max's text (the others still get their letter when their shelves have news, without it).
@@ -408,22 +409,34 @@ class Digest {
   }
 
   // `editorial`: Max's text when this reader is in its audience (the run decides), else null.
-  async sendTo(reader, { now = new Date(), dry = false, force = false, editorial = null } = {}) {
+  // The letter for a reader as it would go: { letter } or { reason } when there is nothing to send, plus the
+  // state to remember once it is sent.
+  async prepare(reader, { now = new Date(), force = false, editorial = null } = {}) {
     const d = await this.build(reader.id, { now });
-    if (!dry) this.store.db.prepare("INSERT INTO digest_log (reader, sent, state) VALUES (?, ?, ?) ON CONFLICT (reader) DO UPDATE SET sent = excluded.sent, state = excluded.state").run(reader.id, now.toISOString(), JSON.stringify(d.state));
-    if (d.empty && !editorial && !force) return { sent: false, reason: "nothing new" };
-    if (d.empty && !editorial) return { sent: false, reason: "nothing new (forced: still nothing to show)" };
+    if (d.empty && !editorial) return { state: d.state, reason: force ? "nothing new (forced: still nothing to show)" : "nothing new" };
     const letter = this.render(reader, d, editorial);
-    await this.auth.send(reader.email, letter.subject, letter.text, { html: letter.html, headers: { "List-Unsubscribe": `<${letter.unsubscribe}>`, "List-Unsubscribe-Post": "List-Unsubscribe=One-Click" } });
-    return { sent: true, subject: letter.subject };
+    return { state: d.state, letter: { to: reader.email, subject: letter.subject, text: letter.text, html: letter.html, headers: { "List-Unsubscribe": `<${letter.unsubscribe}>`, "List-Unsubscribe-Post": "List-Unsubscribe=One-Click" } } };
+  }
+  record(readerId, now, state) {
+    this.store.db.prepare("INSERT INTO digest_log (reader, sent, state) VALUES (?, ?, ?) ON CONFLICT (reader) DO UPDATE SET sent = excluded.sent, state = excluded.state").run(readerId, now.toISOString(), JSON.stringify(state));
+  }
+  async sendTo(reader, { now = new Date(), dry = false, force = false, editorial = null } = {}) {
+    const p = await this.prepare(reader, { now, force, editorial });
+    if (!dry) this.record(reader.id, now, p.state);
+    if (!p.letter) return { sent: false, reason: p.reason };
+    const l = p.letter;
+    await this.auth.send(l.to, l.subject, l.text, { html: l.html, headers: l.headers });
+    return { sent: true, subject: l.subject };
   }
 
-  // The weekly run: every recipient in turn; one failure does not stop the rest. A deploy restarts the machine,
-  // so a run can be cut off (2026-10-23: a deploy at 9:19 stopped the first one after 17 of 62 readers): meta
-  // digest:running holds the day of an unfinished run, the timer picks it up again after a restart, and a
-  // reader already done that day (digest_log.sent) is skipped, so nobody gets two letters.
-  // `skip` (reader ids), when given, replaces «done today»: a second run the same day to everyone but those
-  // (Max, 2026-10-23: «розішлемо повторно, крім тих трьох, хто вже отримав»).
+  // The weekly run. A deploy restarts the machine, so a run can be cut off (2026-10-23: a deploy at 9:19 stopped
+  // the first one after 17 of 62 readers): meta digest:running holds the day of an unfinished run, the timer
+  // picks it up again after a restart, and a reader already done that day (digest_log.sent) is skipped, so
+  // nobody gets two letters. `skip` (reader ids), when given, replaces «done today»: a second run the same day
+  // to everyone but those (Max, 2026-10-23: «розішлемо повторно, крім тих трьох, хто вже отримав»).
+  // Fast (Max, 2026-10-23: «щоб миттєво проходило»): the letters are made BUILD_AT_ONCE readers at a time (the
+  // library lookups are the slow part), then go out through Resend's batch call, 100 a request; a reader is
+  // recorded as done once their letter is accepted. One failure does not stop the rest.
   async run({ now = new Date(), skip = null } = {}) {
     if (this.running) return this.running;
     const db = this.store.db;
@@ -436,16 +449,45 @@ class Digest {
     const audience = editorial ? this.audience(editorial.audience) : new Set();
     let withText = 0;
     this.running = (async () => {
-      for (const r of this.recipients()) {
-        if (done.has(r.id)) continue;
+      const todo = this.recipients().filter((r) => !done.has(r.id));
+      const ready = [];
+      for (let i = 0; i < todo.length; i += BUILD_AT_ONCE) {
+        await Promise.all(todo.slice(i, i + BUILD_AT_ONCE).map(async (r) => {
+          try {
+            const p = await this.prepare(r, { now, editorial: audience.has(r.id) ? editorial : null });
+            if (p.letter) return ready.push({ r, p });
+            this.record(r.id, now, p.state);
+            out.skipped++;
+            this.log(`digest @${r.username}: ${p.reason}`);
+          } catch (e) {
+            out.errors.push(`@${r.username}: ${e.message}`);
+            this.log(`digest @${r.username} failed: ${e.message}`);
+          }
+        }));
+      }
+      const sent = ({ r, p }) => {
+        this.record(r.id, now, p.state);
+        out.sent++;
+        if (audience.has(r.id)) withText++;
+        this.log(`digest @${r.username}: sent «${p.letter.subject}»`);
+      };
+      for (let i = 0; i < ready.length; i += 100) {
+        const chunk = ready.slice(i, i + 100);
         try {
-          const res = await this.sendTo(r, { now, editorial: audience.has(r.id) ? editorial : null });
-          if (res.sent && audience.has(r.id)) withText++;
-          res.sent ? out.sent++ : out.skipped++;
-          this.log(`digest @${r.username}: ${res.sent ? `sent «${res.subject}»` : res.reason}`);
+          await this.auth.sendBatch(chunk.map((x) => x.p.letter));
+          chunk.forEach(sent);
         } catch (e) {
-          out.errors.push(`@${r.username}: ${e.message}`);
-          this.log(`digest @${r.username} failed: ${e.message}`);
+          // The batch call failed as a whole: one by one, so one bad address does not cost everyone their letter.
+          this.log(`digest batch failed (${e.message}), sending one by one`);
+          for (const x of chunk) {
+            try {
+              const l = x.p.letter;
+              await this.auth.send(l.to, l.subject, l.text, { html: l.html, headers: l.headers });
+              sent(x);
+            } catch (e2) {
+              out.errors.push(`@${x.r.username}: ${e2.message}`);
+            }
+          }
         }
       }
       out.finished = new Date().toISOString();

@@ -281,6 +281,20 @@ class Auth {
     });
     if (!res.ok) throw new Error(`Resend ${res.status}: ${(await res.text()).slice(0, 200)}`);
   }
+  // Up to 100 letters in one Resend call ({ to, subject, text, html, headers } each), for the weekly letter.
+  async sendBatch(letters) {
+    if (!letters.length) return;
+    if (!this.resendKey) {
+      for (const l of letters) this.log(`[mail] no RESEND_API_KEY: to ${l.to}: ${l.subject}`);
+      return;
+    }
+    const res = await fetch("https://api.resend.com/emails/batch", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${this.resendKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify(letters.map((l) => ({ from: this.from, to: [l.to], subject: l.subject, text: l.text, ...(l.html ? { html: l.html } : {}), ...(l.headers ? { headers: l.headers } : {}) }))),
+    });
+    if (!res.ok) throw new Error(`Resend batch ${res.status}: ${(await res.text()).slice(0, 200)}`);
+  }
 }
 
 module.exports = { NOW_MAX, Auth, USERNAME, RESERVED };
