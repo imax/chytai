@@ -153,9 +153,26 @@
   // Dialogs: delegated, since search results (with «Додати книжку») arrive after the page loads.
   document.addEventListener("click", (e) => {
     const open = e.target.closest("[data-open]");
-    if (open) $("#" + open.dataset.open)?.showModal();
+    if (open) {
+      open.closest("details")?.removeAttribute("open"); // the «⋯» menu it was in
+      $("#" + open.dataset.open)?.showModal();
+    }
     const close = e.target.closest("[data-close]");
     if (close) close.closest("dialog")?.close();
+  });
+
+  // «Поділитися» on a list's page: the phone's own share sheet, else the address goes to the clipboard.
+  document.addEventListener("click", async (e) => {
+    const b = e.target.closest("[data-share]");
+    if (!b) return;
+    const url = b.dataset.share;
+    try {
+      if (navigator.share) return await navigator.share({ title: b.dataset.title || document.title, url });
+      await navigator.clipboard.writeText(url);
+      const was = b.textContent;
+      b.textContent = "Посилання скопійовано";
+      setTimeout(() => (b.textContent = was), 2000);
+    } catch {}
   });
 
   // Phones: «Меню» opens the navigation and the search.

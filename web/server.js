@@ -30,6 +30,7 @@ const { UkFinder } = require("./ukfind");
 const { Admin, adminPage, readersPage, overviewsPage } = require("./admin");
 const { Reviews } = require("./reviews");
 const { Advice } = require("./advice");
+const { Lists } = require("./lists");
 
 const ROOT = path.join(__dirname, "..");
 loadDotEnv(path.join(ROOT, ".env"));
@@ -313,6 +314,7 @@ app.post("/settings/mail", signed, (req, res) => {
 app.post("/settings/delete", signed, (req, res) => {
   if (req.owner) return res.status(400).send(pages.messagePage({ title: "Власника не видаляємо", text: "Для цього є інший шлях.", user: req.user }));
   if (req.body.confirm !== req.user.username) return res.status(400).send(pages.settingsPage({ user: req.user, values: req.user, error: "Щоб видалити акаунт, впишіть своє ім'я для адреси." }));
+  lists.forgetReader(req.user.id);
   auth.deleteReader(req.user.id);
   store.forgetReader(req.user.id);
   res.setHeader("Set-Cookie", auth.cookie("", { clear: true, secure: secure(req) }));
@@ -482,6 +484,9 @@ function notifyOwner(subject, text) {
 const librariesFor = (req) => libraries.LIBRARIES.filter((l) => req.owner || !l.draft);
 // What readers do with books (social.js): ratings, the feed, «книжка навмання», recommendations.
 const social = new Social(store, (id) => pub(auth.reader(id)));
+// «Списки» (lists.js): readers' own public lists of books.
+const lists = new Lists(store, (id) => pub(auth.reader(id)));
+const withCovers = (l) => ({ ...l, covers: lists.covers(l.id) });
 // «Чи варто читати?» on book pages (advice.js): Claude, by the reader's own shelf, on a click.
 const bookpage = new BookPage({ apiKey: process.env.ANTHROPIC_API_KEY || "", log: console.log });
 const advice = new Advice({ store, social, db: store.db, apiKey: process.env.ANTHROPIC_API_KEY || "", log: console.log });
@@ -494,7 +499,7 @@ setInterval(() => advice.sweep(), 24 * 3600 * 1000).unref();
 pages.setStats((id) => social.stats(id));
 // The weekly letter (digest.js): Friday 9:00 Kyiv, to every reader who has not switched it off (Max,
 // 2026-10-20: «Включаємо на всіх»); WEB_DIGEST_TO=owner limits it to the owner again.
-const digest = new Digest({ store, auth, social, libraries, site: SITE, ownerId: OWNER_ID, to: process.env.WEB_DIGEST_TO === "owner" ? "owner" : "all" });
+const digest = new Digest({ store, auth, social, lists, libraries, site: SITE, ownerId: OWNER_ID, to: process.env.WEB_DIGEST_TO === "owner" ? "owner" : "all" });
 digest.schedule();
 // The welcome letter right after sign-up (welcome-mail.js), while the owner has it switched on.
 const welcomeMail = new WelcomeMail({ store, auth, site: SITE, ownerId: OWNER_ID });
@@ -621,9 +626,88 @@ app.get("/@:username", (req, res) => {
   const rows = libraryRows(reader.id);
   const follows = { followers: auth.followers(reader.id).map((id) => pub(auth.reader(id))).filter(Boolean), following: auth.following(reader.id).map((id) => pub(auth.reader(id))).filter(Boolean) };
   // The profile is the reader's own stats and books; recommendations live on other pages (Max, 2026-10-23).
-  if (own) return res.send(pages.libraryPage({ rows, user: req.user, reader: req.user, own: true, follows, now: nowFor(reader.id, { own: true }) }));
-  res.send(pages.libraryPage({ rows, user: req.user, reader, now: nowFor(reader.id), mineIds: req.user && req.user.id !== reader.id ? store.inLibrary(req.user.id) : null, mineDirect: req.user ? new Set(Object.keys(store.entriesOf(req.user.id))) : null, following: auth.follows(req.user?.id, reader.id), follows }));
+  const theirLists = lists.of(reader.id).filter((l) => own || l.count);
+  if (own) return res.send(pages.libraryPage({ lists: theirLists, savedLists: lists.savedBy(reader.id), rows, user: req.user, reader: req.user, own: true, follows, now: nowFor(reader.id, { own: true }) }));
+  res.send(pages.libraryPage({ lists: theirLists, rows, user: req.user, reader, now: nowFor(reader.id), mineIds: req.user && req.user.id !== reader.id ? store.inLibrary(req.user.id) : null, mineDirect: req.user ? new Set(Object.keys(store.entriesOf(req.user.id))) : null, following: auth.follows(req.user?.id, reader.id), follows }));
 });
+// ---- «Списки» (lists.js): /@<username>/list/<slug>, /lists, and what the author does with a list ----
+app.get("/@:username/list/:slug", (req, res) => {
+  const reader = pub(auth.byUsername(req.params.username));
+  const list = reader && lists.bySlug(reader.id, req.params.slug);
+  if (!list) return res.status(404).send(pages.messagePage({ title: "Немає такого списку", text: "", user: req.user }));
+  if (reader.username !== req.params.username) return res.redirect(301, list.href);
+  const own = req.user?.id === reader.id;
+  const items = lists.items(list.id, { own });
+  const q = own ? String(req.query.add || "").trim().slice(0, 100) : "";
+  const inList = own && q ? lists.ids(list.id) : null;
+  const find = q ? { q, hits: searchHits(req, q).slice(0, 8).map((h) => ({ book: h.book, in: inList.has(store.canonical(h.book.id)) })) } : null;
+  const more = lists.of(reader.id).filter((l) => l.id !== list.id && (own || l.count)).slice(0, 5);
+  res.send(pages.listPage({ list: { ...list, count: items.length }, items, user: req.user, own, saved: lists.saved(req.user?.id, list.id), more, similar: lists.similar(list), find }));
+});
+app.get("/lists", (req, res) => {
+  const tab = ["new", "saved", "mine"].includes(req.query.tab) && (req.user || req.query.tab === "new") ? req.query.tab : "popular";
+  const shown = tab === "saved" ? lists.savedBy(req.user.id) : tab === "mine" ? lists.of(req.user.id) : lists.all({ sort: tab });
+  res.send(pages.listsPage({ user: req.user, tab, lists: shown.map(withCovers), savedCount: req.user ? lists.savedBy(req.user.id).length : 0 }));
+});
+// The author's own list, or 404 for anyone else.
+const myList = (req, res, next) => {
+  const l = lists.get(req.params.id);
+  if (!l || l.reader.id !== req.user.id) return res.status(404).send(pages.messagePage({ title: "Немає такого списку", text: "", user: req.user }));
+  req.list = l;
+  next();
+};
+const bookParam = (req) => store.canonical(store.resolve(String(req.body.book || "")) || "");
+// A new list; from a book's «Додати до списку…» it starts with that book and the page stays where it was.
+app.post("/api/lists", signed, (req, res) => {
+  if (auth.tooMany(`lists:${req.user.id}`, 30)) return res.status(429).send(pages.messagePage({ title: "Забагато нових списків за годину", text: "Спробуйте трохи згодом.", user: req.user }));
+  const l = lists.create(req.user.id, { title: req.body.title, note: req.body.note });
+  if (!l) return res.redirect(req.get("referer") || "/lists");
+  const id = bookParam(req);
+  if (id && store.book(id)) {
+    lists.add(l.id, id);
+    return res.redirect(303, store.href(id));
+  }
+  res.redirect(303, l.href);
+});
+app.post("/api/lists/:id", signed, myList, (req, res) => res.redirect(303, lists.edit(req.list.id, { title: req.body.title, note: req.body.note }).href));
+app.post("/api/lists/:id/delete", signed, myList, (req, res) => (lists.remove(req.list.id), res.redirect(303, req.user.href)));
+app.post("/api/lists/:id/add", signed, myList, (req, res) => {
+  const id = bookParam(req);
+  if (id) lists.add(req.list.id, id);
+  res.redirect(303, `${req.list.href}#${encodeURIComponent(id)}`);
+});
+app.post("/api/lists/:id/remove", signed, myList, (req, res) => (lists.drop(req.list.id, bookParam(req)), res.redirect(303, req.list.href)));
+app.post("/api/lists/:id/why", signed, myList, (req, res) => {
+  const id = bookParam(req);
+  lists.setWhy(req.list.id, id, req.body.why);
+  res.redirect(303, `${req.list.href}#${encodeURIComponent(id)}`);
+});
+app.post("/api/lists/:id/move", signed, myList, (req, res) => {
+  const id = bookParam(req);
+  lists.move(req.list.id, id, Number(req.body.dir));
+  res.redirect(303, `${req.list.href}#${encodeURIComponent(id)}`);
+});
+app.post("/api/lists/:id/save", signed, (req, res) => {
+  const l = lists.get(req.params.id);
+  if (!l) return res.status(404).send(pages.messagePage({ title: "Немає такого списку", text: "", user: req.user }));
+  lists.toggleSave(req.user.id, l.id);
+  res.redirect(303, l.href);
+});
+// «Додати до списку…» on a book's page: the ticks of the reader's lists shown there (`shown`), as they are now.
+app.post("/api/book/:id/lists", signed, (req, res) => {
+  const id = store.canonical(store.resolve(req.params.id) || "");
+  if (!id || !store.book(id)) return res.status(404).send("Немає такої книжки");
+  const on = new Set([].concat(req.body.list || []).map(String));
+  for (const lid of new Set([].concat(req.body.shown || []).map(String))) {
+    const l = lists.get(lid);
+    if (!l || l.reader.id !== req.user.id) continue;
+    const has = lists.has(l.id, id);
+    if (on.has(l.id) && !has) lists.add(l.id, id);
+    if (!on.has(l.id) && has) lists.drop(l.id, id);
+  }
+  res.redirect(303, store.href(id));
+});
+
 // The owner's page before usernames (/reader/max) moved to /@maxua.
 app.get(OLD_READER, (req, res) => res.redirect(301, pub(auth.reader(OWNER_ID)).href));
 app.get("/me/book/:id", signed, (req, res) => {
@@ -772,7 +856,8 @@ app.get("/book/:id", (req, res) => {
   if (!book) return res.status(404).send(pages.messagePage({ title: "Немає такої книжки", text: "", user: req.user }));
   const file = readerFileFor(req.user?.id, book);
   const free = !file && freeFileFor(book);
-  res.send(pages.bookPage({ freeRead: !!free, book, entry: store.sharedEntry(req.user?.id, book.id), now: !!req.user && nowIds(req.user.id).has(store.canonical(book.id)), user: req.user, readUrl: file ? `${READER_URL}/?open=${encodeURIComponent(file.name)}` : free ? `${READER_URL}/free/${encodeURIComponent(free.name)}` : "", shelf: book.shelf && (req.owner || !isDraft(book.shelf)) ? store.shelf(book.shelf) : null, inLibrary: inLibraryMap(req), readers: readersOf(book.id), ...alsoFor(req, book.id), writings: reviews.of(book.id), reviewError: String(req.query.review_error || "").slice(0, 300), editionError: String(req.query.edition_error || "").slice(0, 300), ukAsk: ukAskFor(req, book), advice: advice.state(req.user, book.id), overview: linkedOverview(book), overviewVote: advice.voteOf(book.id, req.user?.id) }));
+  const myLists = req.user ? lists.of(req.user.id).map((l) => ({ id: l.id, title: l.title, count: l.count, has: lists.has(l.id, book.id) })) : null;
+  res.send(pages.bookPage({ lists: lists.withBook(book.id).map(withCovers), myLists, freeRead: !!free, book, entry: store.sharedEntry(req.user?.id, book.id), now: !!req.user && nowIds(req.user.id).has(store.canonical(book.id)), user: req.user, readUrl: file ? `${READER_URL}/?open=${encodeURIComponent(file.name)}` : free ? `${READER_URL}/free/${encodeURIComponent(free.name)}` : "", shelf: book.shelf && (req.owner || !isDraft(book.shelf)) ? store.shelf(book.shelf) : null, inLibrary: inLibraryMap(req), readers: readersOf(book.id), ...alsoFor(req, book.id), writings: reviews.of(book.id), reviewError: String(req.query.review_error || "").slice(0, 300), editionError: String(req.query.edition_error || "").slice(0, 300), ukAsk: ukAskFor(req, book), advice: advice.state(req.user, book.id), overview: linkedOverview(book), overviewVote: advice.voteOf(book.id, req.user?.id) }));
 });
 
 // An author: their works from Wikidata (linked to our books of them) and every book of theirs we have.

@@ -57,10 +57,11 @@ function period(from, to) {
 const did = (status) => ({ read: "прочитано", reading: "читає зараз", want: "хоче прочитати" }[status] || "оцінка");
 
 class Digest {
-  constructor({ store, auth, social, libraries, site, log = console.log, to = "owner", ownerId = "owner" }) {
+  constructor({ store, auth, social, lists = null, libraries, site, log = console.log, to = "owner", ownerId = "owner" }) {
     this.store = store;
     this.auth = auth;
     this.social = social;
+    this.lists = lists; // «Списки» (lists.js): new books in the lists a reader saved
     this.libraries = libraries;
     this.site = site; // https://chytai.org.ua
     this.log = log;
@@ -205,6 +206,10 @@ class Digest {
     fresh.sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0));
     const news = fresh.filter((x) => x.book).slice(0, MAX_NEW);
 
+    // 3. Books added to the lists they saved («Зберегти список», 2026-10-23), the ones not on their shelf.
+    const listAll = this.lists ? this.lists.newInSaved(readerId, sinceIso).filter((x) => !own.has(x.id) && !isRussian(x.book)) : [];
+    const listNews = listAll.slice(0, MAX_NEW);
+
     // «Хочу прочитати» books turning up in libraries were a section here until 2026-10-23: the library lookups made
     // a run take half an hour, and Max dropped it («давай не питати про хочу прочитати»).
 
@@ -221,8 +226,8 @@ class Digest {
     const state = {};
     const site = this.siteWeek(now);
     const updates = this.siteNews(now);
-    const empty = !feed.length && !news.length;
-    return { empty, state, since, now, site, updates, feed, feedMore: feedAll.length - feed.length, news, newsMore: fresh.filter((x) => x.book).length - news.length, want: [], reading, pick };
+    const empty = !feed.length && !news.length && !listNews.length;
+    return { empty, state, since, now, site, updates, feed, feedMore: feedAll.length - feed.length, news, newsMore: fresh.filter((x) => x.book).length - news.length, lists: listNews, listsMore: listAll.length - listNews.length, want: [], reading, pick };
   }
 
   // The site's week in numbers (Max, 2026-10-22: «скільки додалось читачів, скільки додалось книжок»): the last
@@ -291,6 +296,11 @@ class Digest {
       const [name, n] = [...by.entries()].sort((a, b) => b[1] - a[1])[0];
       bits.push(`${count(n + (by.size === 1 ? d.newsMore : 0), "новинка", "новинки", "новинок")} у «${name}»`);
     }
+    if (d.lists?.length) {
+      const l = d.lists[0].list;
+      const n = d.lists.filter((x) => x.list.id === l.id).length + (new Set(d.lists.map((x) => x.list.id)).size === 1 ? d.listsMore : 0);
+      bits.push(`${count(n, "нова книжка", "нові книжки", "нових книжок")} у списку «${l.title}»`);
+    }
     // The subject takes the pieces that fit in about 90 characters, the first one always.
     const auto = bits.map((b) => b.replace(/«([^»]+)»/g, (_, t) => `«${short(t)}»`)).reduce((acc, b) => (!acc ? b : `${acc}, ${b}`.length <= 90 ? `${acc}, ${b}` : acc), "");
     const subject = editorial?.subject || auto || `Chytai: тиждень ${when}`;
@@ -311,7 +321,7 @@ class Digest {
     const paras = editorial ? editorial.text.split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean) : [];
     if (paras.length) text.push(paras.map((p) => p.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_, t, u) => (u.replace(/^https?:\/\//, "").startsWith(t) ? u : `${t} (${u})`))).join("\n\n"), "");
     const own = paras.map((p) => `<p style="font-family:'Source Serif 4',Georgia,serif;font-size:17px;line-height:1.55;color:#1b1a17;margin:0 0 16px">${marked.parseInline(esc(p).replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (m) => m.replace(/&amp;/g, "&"))).replace(/<a /g, '<a style="color:#1b1a17" ').replace(/\n/g, "<br>")}</p>`).join("\n  ");
-    const shelvesNews = d.feed.length || d.news.length;
+    const shelvesNews = d.feed.length || d.news.length || d.lists?.length;
     if (shelvesNews) text.push(...(paras.length ? ["—", "", "ЩО СТАЛОСЯ НА ВАШИХ ПОЛИЦЯХ"] : []), lead, "");
 
     if (d.feed.length) {
@@ -325,6 +335,12 @@ class Digest {
       html.push(table(d.news.map((x) => row(x.book, [esc(x.shelf.name), esc(x.book.author), esc((x.book.tags || []).find((t) => t !== "українською") || "")].filter(Boolean).join(" · ")))));
       if (d.newsMore > 0) html.push(muted(`і ще ${count(d.newsMore, "новинка", "новинки", "новинок")} на полицях, на які ви підписані`));
       text.push("НОВЕ У ВИДАВНИЦТВ", ...d.news.map((x) => `• ${x.book.title}${x.book.author ? ` — ${x.book.author}` : ""} (${x.shelf.name})\n  ${url(x.book.href)}`), ...(d.newsMore > 0 ? [`  …і ще ${d.newsMore}: ${site}/publishers`] : []), "");
+    }
+    if (d.lists?.length) {
+      html.push(label("Нове у збережених списках", ["списки", `${site}/lists?tab=saved`]));
+      html.push(table(d.lists.map((x) => row(x.book, `у списку «<a href="${attr(url(x.list.href))}" style="color:#1b1a17">${esc(x.list.title)}</a>» · ${esc(x.list.reader.name)}`, x.why ? pages.inline(x.why) : ""))));
+      if (d.listsMore > 0) html.push(muted(`і ще ${count(d.listsMore, "книжка", "книжки", "книжок")} у <a href="${site}/lists?tab=saved" style="color:#6b675f">збережених списках</a>`));
+      text.push("НОВЕ У ЗБЕРЕЖЕНИХ СПИСКАХ", ...d.lists.map((x) => `• ${x.book.title}${x.book.author ? ` — ${x.book.author}` : ""} (список «${x.list.title}», ${x.list.reader.name})${x.why ? `\n  ${x.why.replace(/\s+/g, " ")}` : ""}\n  ${url(x.book.href)}`), ...(d.listsMore > 0 ? [`  …і ще ${d.listsMore}: ${site}/lists?tab=saved`] : []), "");
     }
     if (d.reading) {
       const r = d.reading;

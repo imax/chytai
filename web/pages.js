@@ -428,7 +428,7 @@ function ukForm(book, state, error) {
 </form>`;
 }
 
-function bookPage({ book, entry, now = false, user, shelf, inLibrary = new Map(), readers = [], also = [], alsoTitle = "Читали це, сподобалось і це", writings = [], reviewError = "", editionError = "", ukAsk = null, readUrl = "", freeRead = false, advice = null, overview = null, overviewVote = null }) {
+function bookPage({ lists = [], myLists = null, book, entry, now = false, user, shelf, inLibrary = new Map(), readers = [], also = [], alsoTitle = "Читали це, сподобалось і це", writings = [], reviewError = "", editionError = "", ukAsk = null, readUrl = "", freeRead = false, advice = null, overview = null, overviewVote = null }) {
   const s = statsOf(book.id);
   const kicker = [book.tags?.find((t) => t !== "українською"), isUk(book) ? "українською" : LANG_ADV[String(book.language || "").toLowerCase()] || ""].filter(Boolean).map(cap).join(" · ");
   const sub = [book.altTitle ? esc(book.altTitle) : "", book.author ? `<span class="authors">${authorLinks(book.author)}</span>` : "", book.published ? String(book.published) : "", book.pages ? `${book.pages} с.` : ""].filter(Boolean).join(" · ");
@@ -448,7 +448,7 @@ function bookPage({ book, entry, now = false, user, shelf, inLibrary = new Map()
         ${sub ? `<p class="book-by">${sub}</p>` : ""}
         ${score}
         ${twins(book)}
-        ${mine(book, entry, user, now, freeRead ? "" : readUrl)}
+        ${mine(book, entry, user, now, freeRead ? "" : readUrl, listsItem(book, user))}
         ${readUrl && freeRead ? `<p class="read-here"><a class="btn primary" href="${attr(readUrl)}">Додати в Читалку</a></p>` : ""}
         ${where(book)}
         ${user?.owner ? `<p class="small muted"><a class="muted" href="/admin/book/${encodeURIComponent(book.id)}">Редагувати</a>${book.edited ? " · виправлено вручну" : ""}</p>` : ""}
@@ -461,6 +461,7 @@ function bookPage({ book, entry, now = false, user, shelf, inLibrary = new Map()
       ${first.entry.note ? quote(first, book.id) : ""}
       ${(first.entry.note ? rest : readers).length ? `<div class="others">${(first.entry.note ? rest : readers).map((r) => readerLine(r, book.id)).join("")}</div>` : ""}
     </section>` : ""}
+    ${lists.length ? `<section class="block">${label("У списках", `<a href="/lists">усі списки</a>`)}<div class="lists">${lists.map(listLine).join("")}</div></section>` : ""}
     ${adviceBlock(book, advice)}
     ${SHOW_REVIEWS && (writings.length || user) ? `<section class="block" id="writings">
       ${label("Огляди")}
@@ -472,7 +473,8 @@ function bookPage({ book, entry, now = false, user, shelf, inLibrary = new Map()
   <aside>
     ${also.length ? `${label(alsoTitle)}${minis(also)}` : ""}
   </aside>
-</div>`;
+</div>
+${myLists ? listsDialog(book, myLists) : ""}`;
   const description = [book.author, book.blurb?.replace(/\s+/g, " ") || stripMd(readers.find((r) => r.entry.note)?.entry.note || "")].filter(Boolean).join(". ");
   return layout({ title: book.title, body, user, path: "/book", description, canonical: book.href, image: book.cover || "", type: "book", noindex: require("./store").isRussian(book), jsonld: bookLd(book, shelf, s, readers) });
 }
@@ -650,16 +652,16 @@ const kidsItem = (book, on, user) =>
     : `<a href="/login?next=${attr(encodeURIComponent(book.href || ""))}">На дитячу полицю</a>`;
 const moreMenu = (items) => `<details class="more-acts"><summary class="btn" aria-label="Інші дії" title="Інші дії">⋯</summary><div class="more-menu">${items.join("")}</div></details>`;
 // `readUrl`: the reader's own file in the Chytai reader, «Відкрити в Читалці» in the menu (Max, 2026-10-23).
-function mine(book, entry, user, now = false, readUrl = "") {
+function mine(book, entry, user, now = false, readUrl = "", listItem = "") {
   const open = readUrl ? `<a href="${attr(readUrl)}">Відкрити в Читалці</a>` : "";
   // Read in another language: the mark comes from that book, and so does the edit link.
   const href = entry?.via ? entry.via.href : book.href;
   const edit = href ? `/me${href}` : `/me/book/${encodeURIComponent(entry?.via ? entry.via.id : book.id)}`;
   // A volume of a series: «Прочитано · всю серію» opens the edit page with «Уся серія» ticked.
   const allOf = book.cycle?.items?.length > 1 ? `<a href="${attr(user ? `${edit}?series` : `/login?next=${encodeURIComponent(`${edit}?series`)}`)}">Прочитано · всю серію</a>` : "";
-  if (!entry) return `<div class="acts">${wantButton(book, user, { size: "", primary: true })}${moreMenu([open, nowItem(book, false, user), `<a href="${attr(user ? edit : `/login?next=${encodeURIComponent(edit)}`)}">Прочитано · оцінити</a>`, allOf, kidsItem(book, false, user)])}</div>`;
+  if (!entry) return `<div class="acts">${wantButton(book, user, { size: "", primary: true })}${moreMenu([open, nowItem(book, false, user), `<a href="${attr(user ? edit : `/login?next=${encodeURIComponent(edit)}`)}">Прочитано · оцінити</a>`, allOf, listItem, kidsItem(book, false, user)])}</div>`;
   const what = [entry.kids ? "Дитяча полиця" : "", entry.status ? STATUS[entry.status] + (entry.status === "read" && entry.year ? ` ${entry.year}` : "") : entry.kids ? "" : "У моїх книжках", entry.rating != null ? `${uk(entry.rating)} з 5` : "", entry.copy ? COPY[entry.copy] : ""].filter(Boolean).join(" · ");
-  return `<div class="acts"><span class="have">✓ ${esc(what)}${entry.via ? ` <span class="muted">як <a href="${attr(entry.via.href)}">${esc(entry.via.title)}</a></span>` : ""}</span>${moreMenu([open, entry.via ? "" : nowItem(book, now, user), `<a href="${attr(edit)}">Змінити</a>`, entry.status === "read" ? "" : allOf, entry.via ? "" : kidsItem(book, !!entry.kids, user)])}</div>`;
+  return `<div class="acts"><span class="have">✓ ${esc(what)}${entry.via ? ` <span class="muted">як <a href="${attr(entry.via.href)}">${esc(entry.via.title)}</a></span>` : ""}</span>${moreMenu([open, entry.via ? "" : nowItem(book, now, user), `<a href="${attr(edit)}">Змінити</a>`, entry.status === "read" ? "" : allOf, listItem, entry.via ? "" : kidsItem(book, !!entry.kids, user)])}</div>`;
 }
 
 // «Де взяти»: every edition's shop (with its format, price and stock, the one place prices are shown),
@@ -990,7 +992,7 @@ function seriesRow(r, { action = "", data = "" } = {}) {
 // The same list twice: /me is the signed-in reader's own shelf with «змінити» on every row (the only
 // place where status, rating and notes are edited); /@<username> is that reader's public shelf, where a
 // signed-in visitor sees what they share and can want any book in one tap.
-function libraryPage({ rows, user, reader, own = false, mineIds = null, mineDirect = null, following = false, follows = { followers: [], following: [] }, now = null }) {
+function libraryPage({ lists = [], savedLists = [], rows, user, reader, own = false, mineIds = null, mineDirect = null, following = false, follows = { followers: [], following: [] }, now = null }) {
   const year = new Date().getFullYear();
   // Stars in the row only for the reader's own entry of this very book (not one reached through a
   // translation or a series, where a rating would land on another book).
@@ -1052,6 +1054,9 @@ ${list}
     <p class="more hidden"><button type="button" class="text-link" id="more">Показати ще <span></span> →</button></p>
   </div>
   <aside>
+    ${lists.length || own ? `${label(own ? "Мої списки" : "Списки", own ? `<button type="button" class="text-link" data-open="new-list">+ новий</button>` : "")}${lists.length ? sideLists(lists, (l) => listMeta(l, { by: false })) : `<p class="small muted">Склади список книжок, щоб поділитися ним: «Найкраще про війну», «Для підлітків 12+»…</p>`}` : ""}
+    ${savedLists.length ? `${label("Збережені списки")}${sideLists(savedLists, (l) => `${esc(l.reader.name)} · ${books(l.count)}`)}` : ""}
+    ${own ? `<dialog id="new-list"><div class="dlg-head"><h2>Новий список</h2><button type="button" class="dlg-x" data-close aria-label="Закрити">×</button></div>${newListForm()}</dialog>` : ""}
     ${thisYear.length ? `${label("Цього року")}<div class="numbers">
       <p><b>${thisYear.length}</b>прочитано</p>
       ${rated.length ? `<p><b>${uk(Math.round((rated.reduce((s, r) => s + r.rating, 0) / rated.length) * 10) / 10)}</b>середня оцінка</p>` : ""}
@@ -1807,7 +1812,119 @@ function messagePage({ title, text, user }) {
   return layout({ title, body: pageHead({ title: esc(title), sub: esc(text) }), user, noindex: true });
 }
 
+// ---- «Списки» (lists.js): readers' own public lists of books ----
+
+const listMeta = (l, { by = true } = {}) => [by ? `<a href="${attr(l.reader.href)}">${esc(l.reader.name)}</a>` : "", books(l.count), l.saves ? `${l.saves} ${plural(l.saves, "зберіг", "зберегли", "зберегли")}` : ""].filter(Boolean).join(" · ");
+// A fan of the list's first covers.
+const stack = (list) => `<span class="stack">${list.map((b) => cover(b, "md")).join("")}</span>`;
+// A list as a line (the book page's «У списках»): covers, title, who and how many.
+const listLine = (l) => `<div class="litem"><a href="${attr(l.href)}" tabindex="-1">${stack(l.covers)}</a><span><a href="${attr(l.href)}"><b>${esc(l.title)}</b></a><span class="m">${listMeta(l)}</span></span></div>`;
+// A list as a card (/lists): covers, title, who, the first words of its note.
+const listCard = (l) => `<article class="lcard"><a href="${attr(l.href)}" tabindex="-1">${stack(l.covers)}</a><h3><a href="${attr(l.href)}">${esc(l.title)}</a></h3><p class="m">${listMeta(l)}</p>${l.note ? `<p class="d">${esc(l.note.length > 140 ? `${l.note.slice(0, 137).replace(/[\s,.;:—-]+\S*$/, "")}…` : l.note)}</p>` : ""}</article>`;
+// Lists in a sidebar: title and one line under it.
+const sideLists = (lists, line) => `<div class="side-lists">${lists.map((l) => `<a href="${attr(l.href)}"><b>${esc(l.title)}</b><span>${line(l)}</span></a>`).join("")}</div>`;
+const newListForm = (book = null) => `<form method="post" action="/api/lists" class="new-list">${book ? `<input type="hidden" name="book" value="${attr(book.id)}">` : ""}<input name="title" maxlength="100" placeholder="${book ? "+ Новий список: назва" : "Назва, напр. «Найкраще про війну»"}" required aria-label="Назва нового списку"><button class="btn small primary">Створити</button></form>`;
+
+// «Додати до списку…» from a book's «⋯» menu: the reader's lists with ticks, and a new one.
+function listsDialog(book, mine) {
+  return `<dialog id="lists-dlg" class="sheet">
+  <div class="dlg-head"><h2>Додати до списку</h2><button type="button" class="dlg-x" data-close aria-label="Закрити">×</button></div>
+  <p class="muted small">${esc(book.title)}${book.author ? ` · ${esc(byline(book.author))}` : ""}</p>
+  ${mine.length ? `<form method="post" action="/api/book/${attr(encodeURIComponent(book.id))}/lists" class="pick-lists">
+    ${mine.map((l) => `<input type="hidden" name="shown" value="${attr(l.id)}"><label><input type="checkbox" name="list" value="${attr(l.id)}"${l.has ? " checked" : ""}> <span>${esc(l.title)}</span><small>${books(l.count)}</small></label>`).join("")}
+    <p class="dlg-acts"><button class="btn">Готово</button></p>
+  </form>` : `<p class="small muted" style="margin-top:14px">Списків у тебе ще немає. Назви перший, і ця книжка стане в ньому першою.</p>`}
+  ${newListForm(book)}
+</dialog>`;
+}
+const listsItem = (book, user) => (user ? `<button type="button" data-open="lists-dlg">Додати до списку…</button>` : `<a href="/login?next=${attr(encodeURIComponent(book.href || ""))}">Додати до списку…</a>`);
+
+// /@<username>/list/<slug>. The author sees the tools: the books' order, a line on each, the title and note,
+// adding books by search (`find`: the query and what it found).
+function listPage({ list, items, user, own = false, saved = false, more = [], similar = [], find = null }) {
+  const id = attr(encodeURIComponent(list.id));
+  const save = own
+    ? ""
+    : user
+      ? `<form method="post" action="/api/lists/${id}/save" class="inline"><button class="btn${saved ? " on" : " primary"}">${saved ? "✓ Збережено" : "Зберегти список"}</button></form>`
+      : `<a class="btn primary" href="/login?next=${attr(encodeURIComponent(list.href))}">Зберегти список</a>`;
+  const share = `<button type="button" class="btn" data-share="${attr(ORIGIN + list.href)}" data-title="${attr(list.title)}">Поділитися</button>`;
+  const tools = own ? `<button type="button" class="btn" data-open="list-edit">Редагувати</button>` : "";
+  const updated = when({ updated: list.updated });
+  const rows = items
+    .map((x, i) => {
+      const b = x.book;
+      const ownTools = own
+        ? `<div class="list-tools">
+      <form method="post" action="/api/lists/${id}/move" class="inline"><input type="hidden" name="book" value="${attr(x.id)}"><input type="hidden" name="dir" value="-1"><button class="text-link small" title="Вище"${i ? "" : " disabled"}>↑</button></form>
+      <form method="post" action="/api/lists/${id}/move" class="inline"><input type="hidden" name="book" value="${attr(x.id)}"><input type="hidden" name="dir" value="1"><button class="text-link small" title="Нижче"${i < items.length - 1 ? "" : " disabled"}>↓</button></form>
+      <details class="why-edit"><summary class="text-link small">${x.why ? "змінити рядок" : "+ чому вона тут"}</summary><form method="post" action="/api/lists/${id}/why"><input type="hidden" name="book" value="${attr(x.id)}"><textarea name="why" rows="2" maxlength="300" placeholder="Один-два рядки: чому ця книжка в списку">${esc(x.why)}</textarea><button class="btn small">Зберегти</button></form></details>
+      <form method="post" action="/api/lists/${id}/remove" class="inline"><input type="hidden" name="book" value="${attr(x.id)}"><button class="text-link small muted">прибрати</button></form>
+    </div>`
+        : "";
+      return `<article class="lrow" id="${attr(x.id)}"><span class="n">${i + 1}</span><a class="cover-link" href="${attr(b.href)}">${cover(b, "md")}</a><div class="row-body">
+    <h3><a href="${attr(b.href)}">${esc(b.title)}</a></h3>
+    ${b.author ? `<p class="by">${authorLinks(b.author)}</p>` : ""}
+    ${readersMeta(x.id) ? `<p class="meta">${readersMeta(x.id)}</p>` : ""}
+    ${x.why ? `<p class="why">${inline(x.why)}</p>` : ""}
+    ${ownTools}
+  </div></article>`;
+    })
+    .join("\n");
+  const adder = own
+    ? `<section class="list-add" id="add">
+    <form method="get" action="${attr(list.href)}#add" class="list-find"><input type="search" name="add" value="${attr(find?.q || "")}" placeholder="Додати книжку: назва або автор" autocomplete="off" aria-label="Знайти книжку для списку"><button class="btn small">Знайти</button></form>
+    ${find ? (find.hits.length ? `<div class="list-hits">${find.hits.map((h) => `<div class="hit">${cover(h.book, "xs")}<span><b>${esc(h.book.title)}</b>${h.book.author ? `<span class="by">${esc(byline(h.book.author))}</span>` : ""}</span>${h.in ? `<span class="muted small">уже в списку</span>` : `<form method="post" action="/api/lists/${id}/add"><input type="hidden" name="book" value="${attr(h.book.id)}"><button class="btn small">+ Додати</button></form>`}</div>`).join("")}</div>` : `<p class="small muted">Нічого не знайшлося. Книжки, якої немає в каталозі, можна <a href="/add">додати на свою полицю</a>, тоді вона знайдеться й тут.</p>`) : ""}
+  </section>`
+    : "";
+  const edit = own
+    ? `<dialog id="list-edit">
+  <div class="dlg-head"><h2>Список</h2><button type="button" class="dlg-x" data-close aria-label="Закрити">×</button></div>
+  <form method="post" action="/api/lists/${id}" class="form">
+    <label>Назва<input name="title" value="${attr(list.title)}" maxlength="100" required></label>
+    <label>Кілька слів про список<textarea name="note" rows="4" maxlength="600" placeholder="Для кого він і чому саме ці книжки">${esc(list.note)}</textarea></label>
+    <div class="actions"><button class="btn primary">Зберегти</button></div>
+  </form>
+  <form method="post" action="/api/lists/${id}/delete" class="form" onsubmit="return confirm('Видалити список «${attr(list.title.replace(/'/g, "’"))}»? Книжки на полиці лишаться.')"><div class="actions"><button class="btn danger small">Видалити список</button></div></form>
+</dialog>`
+    : "";
+  const body = `
+<div class="split">
+<div>
+<section class="list-head">
+  <p class="kicker">Список · ${books(items.length)}</p>
+  <h1>${esc(list.title)}</h1>
+  ${list.note ? `<p class="lead">${inline(list.note)}</p>` : own ? `<p class="lead muted"><button type="button" class="text-link" data-open="list-edit">Додай кілька слів про список</button></p>` : ""}
+  <p class="by-line"><a href="${attr(list.reader.href)}"><b>${esc(list.reader.name)}</b></a>${updated ? ` · оновлено ${updated}` : ""}${list.saves ? ` · ${list.saves} ${plural(list.saves, "зберіг", "зберегли", "зберегли")}` : ""}</p>
+  <div class="acts">${save}${share}${tools}</div>
+</section>
+${adder}
+${items.length ? `<section class="lrows">${rows}</section>` : `<p class="muted">${own ? "Список порожній. Знайди книжку вище або на її сторінці натисни «⋯» → «Додати до списку…»." : "У списку поки немає книжок."}</p>`}
+</div>
+<aside>
+  ${more.length ? `${label(own ? "Мої інші списки" : `Ще списки: ${esc(list.reader.name)}`)}${sideLists(more, (l) => listMeta(l, { by: false }))}` : ""}
+  ${similar.length ? `${label("Схожі списки")}${sideLists(similar, (l) => `${esc(l.reader.name)} · ${books(l.count)}`)}` : ""}
+  <p class="small${more.length || similar.length ? " side-more" : ""}"><a class="text-link" href="/lists">Усі списки читачів →</a></p>
+</aside>
+</div>
+${edit}`;
+  const description = [list.note, `${books(items.length)}: ${items.slice(0, 5).map((x) => x.book.title).join(", ")}`].filter(Boolean).join(" ");
+  return layout({ title: list.title, body, user, path: "/lists", canonical: list.href, noindex: !!list.reader.noindex, description, image: items.find((x) => x.book.cover)?.book.cover || "" });
+}
+
+// /lists «Списки читачів»: popular, new, and the ones the reader saved.
+function listsPage({ user, tab = "popular", lists, savedCount = 0 }) {
+  const tabs = [["popular", "Популярні"], ["new", "Нові"], ...(user ? [["saved", `Збережені мною${savedCount ? ` · ${savedCount}` : ""}`], ["mine", "Мої"]] : [])];
+  const body = `
+${pageHead({ title: "Списки читачів", lead: "Добірки книжок, які склали читачі Chytai. Збережи список, і нові книжки з нього прийдуть у п'ятничному листі.", action: user ? `<button type="button" class="btn primary" data-open="new-list">+ Новий список</button>` : "" })}
+<div class="tabs list-tabs">${tabs.map(([k, l]) => `<a class="tab${k === tab ? " on" : ""}" href="/lists${k === "popular" ? "" : `?tab=${k}`}">${l}</a>`).join("")}</div>
+${lists.length ? `<div class="lgrid">${lists.map(listCard).join("")}</div>` : `<p class="muted">${tab === "saved" ? "Ти ще не зберіг жодного списку. На сторінці списку є кнопка «Зберегти список»." : tab === "mine" ? "У тебе ще немає списків." : "Списків ще немає. Склади перший!"}</p>`}
+${user ? `<dialog id="new-list"><div class="dlg-head"><h2>Новий список</h2><button type="button" class="dlg-x" data-close aria-label="Закрити">×</button></div>${newListForm()}</dialog>` : ""}`;
+  return layout({ title: "Списки читачів", body, user, path: "/lists", canonical: "/lists", description: "Добірки книжок від читачів Chytai: що почитати про війну, підліткам, коли важко зосередитись." });
+}
+
 module.exports = {
+  listPage, listsPage,
   readeatPage,
   nowPage,
   letterEditorPage,

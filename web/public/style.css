@@ -726,3 +726,81 @@ form.inline button:not(.btn) { background: none; border: 0; padding: 0; cursor: 
 .edition-row .btn { height: 44px; box-sizing: border-box; margin: 0; flex: none; }
 .person .note-book { font-style: normal; color: var(--muted); }
 .uk-line { margin-top: 28px; }
+
+/* ---- «Списки» (2026-10-23): a list's page, lists as lines, cards and sidebar links, «Додати до списку…» ---- */
+.list-head { margin-bottom: 28px; }
+.list-head h1 { font: 400 52px/1.02 var(--serif); letter-spacing: -0.02em; }
+.list-head .lead { font: 20px/1.4 var(--serif); color: var(--text); margin-top: 14px; max-width: 46em; }
+.list-head .by-line { margin-top: 16px; font-size: 14px; color: var(--muted); }
+.list-head .by-line b { color: var(--ink); font-weight: 500; }
+.list-head .acts { margin-top: 22px; gap: 10px; }
+.lrow { display: flex; gap: 18px; padding: 20px 0; border-bottom: 1px solid var(--rule); }
+.lrow .n { font: 400 22px/1 var(--serif); color: var(--muted); width: 28px; flex: none; padding-top: 30px; text-align: right; }
+.lrow .row-body { flex: 1; min-width: 0; }
+.lrow h3 { font: 600 21px/1.3 var(--serif); }
+.lrow .by { color: var(--muted); font-size: 14px; margin-top: 2px; }
+.lrow .meta { font-size: 13px; color: var(--muted); margin-top: 6px; }
+.lrow .why { font: italic 17px/1.45 var(--serif); margin-top: 10px; }
+.lrow:target { background: linear-gradient(90deg, transparent, color-mix(in oklab, var(--accent) 10%, transparent), transparent); }
+.list-tools { display: flex; flex-wrap: wrap; gap: 6px 16px; align-items: baseline; margin-top: 10px; }
+.list-tools button[disabled] { opacity: 0.3; cursor: default; }
+.why-edit form { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; margin-top: 8px; width: min(520px, 80vw); }
+.why-edit textarea { width: 100%; padding: 8px 10px; border: 1px solid var(--under); border-radius: 4px; background: transparent; font: 16px/1.45 var(--serif); }
+.list-add { margin-bottom: 18px; }
+.list-find { display: flex; gap: 12px; align-items: center; }
+.list-find input { flex: 1; border: 0; border-bottom: 1px solid var(--under); background: none; font: 18px var(--serif); padding: 8px 0; color: var(--ink); }
+.list-find input:focus { outline: 0; border-color: var(--ink); }
+.list-hits { margin-top: 10px; }
+.list-hits .hit { display: flex; gap: 14px; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--rule); }
+.list-hits .hit > span:not(.cover):not(.muted) { flex: 1; min-width: 0; }
+.list-hits b { display: block; font: 600 16px/1.3 var(--serif); }
+.list-hits .by { display: block; font-size: 13px; color: var(--muted); }
+.stack { display: flex; isolation: isolate; flex: none; }
+.stack .cover { width: 56px; flex: none; }
+.stack .cover + .cover { margin-left: -34px; position: relative; z-index: -1; }
+.stack .cover + .cover .ph { visibility: hidden; }
+.stack .cover:nth-child(3) { z-index: -2; }
+.stack .cover:nth-child(4) { z-index: -3; }
+.lists { display: flex; flex-direction: column; }
+.litem .stack { width: 122px; }
+.litem { display: flex; gap: 18px; padding: 14px 0; border-bottom: 1px solid var(--rule); align-items: center; }
+.litem b { display: block; font: 600 19px/1.25 var(--serif); }
+.litem .m { display: block; font-size: 13px; color: var(--muted); margin-top: 4px; }
+.lgrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 40px 32px; }
+.lcard .stack .cover { width: 80px; }
+.lcard .stack .cover + .cover { margin-left: -48px; }
+.lcard h3 { font: 600 19px/1.25 var(--serif); margin-top: 14px; }
+.lcard .m { font-size: 13px; color: var(--muted); margin-top: 4px; }
+.lcard .d { font: italic 15px/1.4 var(--serif); margin-top: 6px; }
+.list-tabs { margin-bottom: 28px; }
+.list-tabs .tab { font-size: 15px; }
+.side-lists a { display: block; padding: 10px 0; border-bottom: 1px solid var(--rule); }
+.side-lists b { display: block; font: 600 16px/1.3 var(--serif); }
+.side-lists span { font-size: 12px; color: var(--muted); }
+.side-lists + .label { margin-top: 40px; }
+aside .side-lists + .label, aside p + .label, aside dialog + .label { margin-top: 40px; }
+.label .aside button.text-link { font-size: 13px; }
+.dlg-head { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; padding-top: 14px; }
+.dlg-head h2 { font: 400 26px/1.2 var(--serif); }
+.dlg-x { background: none; border: 0; font-size: 26px; line-height: 1; cursor: pointer; color: var(--muted); padding: 0 4px; }
+.pick-lists { margin-top: 12px; }
+.pick-lists label { display: flex; gap: 12px; align-items: center; padding: 13px 0; border-bottom: 1px solid var(--rule); font-size: 15px; cursor: pointer; }
+.pick-lists label input { width: 18px; height: 18px; margin: 0; accent-color: var(--accent); flex: none; }
+.pick-lists label span { flex: 1; min-width: 0; }
+.pick-lists label small { color: var(--muted); font-size: 12px; white-space: nowrap; }
+.dlg-acts { margin-top: 16px; text-align: right; }
+.new-list { display: flex; gap: 10px; align-items: center; margin-top: 16px; }
+.new-list input { flex: 1; min-width: 0; border: 0; border-bottom: 1px solid var(--under); background: none; font: 16px var(--serif); padding: 8px 0; color: var(--ink); }
+.new-list input:focus { outline: 0; border-color: var(--ink); }
+@media (max-width: 960px) { .lgrid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 760px) {
+  .list-head h1 { font-size: 40px; }
+  .lrow .n { display: none; }
+  .lgrid { gap: 28px 18px; }
+  .lcard .stack .cover { width: 64px; }
+  .lcard .stack .cover + .cover { margin-left: -42px; }
+  dialog.sheet { margin: auto 0 0; width: 100%; max-width: none; border: 0; border-radius: 16px 16px 0 0; padding: 4px 22px 32px; }
+}
+.side-more { margin-top: 28px; }
+.why-edit summary { list-style: none; cursor: pointer; display: inline; }
+.why-edit summary::-webkit-details-marker { display: none; }
