@@ -429,12 +429,36 @@ function ukForm(book, state, error) {
 </form>`;
 }
 
-function bookPage({ lists = [], myLists = null, book, entry, now = false, user, shelf, inLibrary = new Map(), readers = [], also = [], alsoTitle = "Читали це, сподобалось і це", writings = [], reviewError = "", editionError = "", ukAsk = null, readUrl = "", freeRead = false, advice = null, overview = null, overviewVote = null }) {
+// How long the book takes to read (Max, 2026-10-23: «просто загально 9 годин»): about 50 pages an hour.
+function readingTime(pages) {
+  if (!(pages > 0)) return "";
+  const h = Math.round(pages / 50);
+  return h < 1 ? "≈ 1 година читання" : `≈ ${count(h, "година", "години", "годин")} читання`;
+}
+
+// The awards the book won, a line under the rating, and «Про автора» (Wikidata, authors.aboutNow()).
+const awardsLine = (awards) => (awards.length ? `<p class="awards"><span>Нагороди:</span> ${awards.slice(0, 4).map((a) => `${esc(a.name)}${a.year ? ` <span>${a.year}</span>` : ""}`).join(" · ")}</p>` : "");
+function authorBlock(a) {
+  if (!a || !(a.desc || a.born)) return "";
+  const years = a.born ? (a.died ? `${a.born}–${a.died}` : `нар. ${a.born}`) : "";
+  const desc = a.desc ? cap(a.desc) : "";
+  const img = a.image ? `<img class="author-photo" src="${attr(a.image.replace(/^http:/, "https:"))}?width=160" alt="" loading="lazy">` : "";
+  return `<section class="block author-about">
+  ${label("Про автора")}
+  <div class="author-card">${img}<div>
+    <p class="author-name"><a href="${attr(a.href)}">${esc(a.name)}</a>${years ? ` <span class="muted">${years}</span>` : ""}</p>
+    ${desc ? `<p>${esc(desc)}</p>` : ""}
+    <p class="small muted">${a.books > 1 ? `<a class="text-link" href="${attr(a.href)}">${books(a.books)} на Chytai</a>` : ""}${a.books > 1 && a.wiki ? " · " : ""}${a.wiki ? `<a class="text-link" href="${attr(a.wiki)}" target="_blank" rel="noopener">Вікіпедія ↗</a>` : ""}</p>
+  </div></div>
+</section>`;
+}
+
+function bookPage({ awards = [], authorInfo = null, lists = [], myLists = null, book, entry, now = false, user, shelf, inLibrary = new Map(), readers = [], also = [], alsoTitle = "Читали це, сподобалось і це", writings = [], reviewError = "", editionError = "", ukAsk = null, readUrl = "", freeRead = false, advice = null, overview = null, overviewVote = null }) {
   const s = statsOf(book.id);
   // The genre leads to its page (/genre/biohrafii; Max 2026-10-23), when it is one of ours.
   const genre = book.tags?.find((t) => t !== "українською");
   const kicker = [genre ? (GENRES.includes(genre) ? `<a href="/genre/${attr(genreSlug(genre))}">${esc(cap(genre))}</a>` : esc(cap(genre))) : "", isUk(book) ? "Українською" : esc(cap(LANG_ADV[String(book.language || "").toLowerCase()] || ""))].filter(Boolean).join(" · ");
-  const sub = [book.altTitle ? esc(book.altTitle) : "", book.author ? `<span class="authors">${authorLinks(book.author)}</span>` : "", book.published ? String(book.published) : "", book.pages ? `${book.pages} с.` : ""].filter(Boolean).join(" · ");
+  const sub = [book.altTitle ? esc(book.altTitle) : "", book.author ? `<span class="authors">${authorLinks(book.author)}</span>` : "", book.published ? String(book.published) : "", book.pages ? `${book.pages} с.` : "", readingTime(book.pages)].filter(Boolean).join(" · ");
   // «Дочитали 12, покинули 3»: only once someone gave up, and only numbers.
   const bits = [s.avg != null ? `${stars(s.avg, { num: false })} <b>${uk(s.avg.toFixed(1))}</b> від ${count(s.rated, "читача", "читачів", "читачів")}` : "", s.want ? `${s.want} ${plural(s.want, "хоче", "хочуть", "хочуть")} прочитати` : "", s.dropped ? `дочитали ${s.finished || 0}, покинули ${s.dropped}` : ""].filter(Boolean);
   const score = bits.length ? `<p class="score">${bits.join(" · ")}</p>` : "";
@@ -450,6 +474,7 @@ function bookPage({ lists = [], myLists = null, book, entry, now = false, user, 
         <h1>${esc(book.title)}</h1>
         ${sub ? `<p class="book-by">${sub}</p>` : ""}
         ${score}
+        ${awardsLine(awards)}
         ${twins(book)}
         ${mine(book, entry, user, now, freeRead ? "" : readUrl, listsItem(book, user))}
         ${readUrl && freeRead ? `<p class="read-here"><a class="btn primary" href="${attr(readUrl)}">Додати в Читалку</a></p>` : ""}
@@ -472,6 +497,7 @@ function bookPage({ lists = [], myLists = null, book, entry, now = false, user, 
       ${user ? addWriting(book, reviewError) : ""}
     </section>` : ""}
     ${aboutBlock(book, shelf, overview, user, overviewVote, ukAsk, editionError)}
+    ${authorBlock(authorInfo)}
   </div>
   <aside>
     ${also.length ? `${label(alsoTitle)}${minis(also)}` : ""}

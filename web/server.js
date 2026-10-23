@@ -883,6 +883,22 @@ function alsoFor(req, id) {
   }
   return { also: out, alsoTitle: "Новинки видавництв" };
 }
+// «Про автора» and the book's awards (Max, 2026-10-23), from Wikidata through authors.aboutNow(): the
+// first of the book's authors Wikidata knows. Nothing yet on the first view of an author's book.
+function authorAbout(book) {
+  const a = [book.author, book.authorOrig].flatMap((x) => authors.splitAuthors(x)).map((n) => store.authors?.byName(n)).find((x) => x?.qid);
+  if (!a) return {};
+  const info = authors.aboutNow(store, a.qid, { log: console.log });
+  if (!info) return {};
+  const ids = new Set([book.id, ...store.translationsOf(book.id).map((t) => t.id)]);
+  const awards = authors
+    .matchWorks(store, a, info.works || [])
+    .filter((w) => w.books.some((b) => ids.has(b.id)))
+    .flatMap((w) => w.awards)
+    .filter((x, i, all) => all.findIndex((y) => y.name === x.name) === i)
+    .sort((x, y) => (x.year || 9999) - (y.year || 9999));
+  return { awards, authorInfo: info.person && { ...info.person, name: a.name, href: a.href, books: a.ids.length } };
+}
 app.get("/book/:id", (req, res) => {
   const id = store.resolve(req.params.id);
   if (!id) return res.status(404).send(pages.messagePage({ title: "Немає такої книжки", text: "", user: req.user }));
@@ -893,7 +909,7 @@ app.get("/book/:id", (req, res) => {
   const file = readerFileFor(req.user?.id, book);
   const free = !file && freeFileFor(book);
   const myLists = req.user ? lists.of(req.user.id).map((l) => ({ id: l.id, title: l.title, count: l.count, has: lists.has(l.id, book.id) })) : null;
-  res.send(pages.bookPage({ lists: lists.withBook(book.id).map(withCovers), myLists, freeRead: !!free, book, entry: store.sharedEntry(req.user?.id, book.id), now: !!req.user && nowIds(req.user.id).has(store.canonical(book.id)), user: req.user, readUrl: file ? `${READER_URL}/?open=${encodeURIComponent(file.name)}` : free ? `${READER_URL}/free/${encodeURIComponent(free.name)}` : "", shelf: book.shelf && (req.owner || !isDraft(book.shelf)) ? store.shelf(book.shelf) : null, inLibrary: inLibraryMap(req), readers: readersOf(book.id), ...alsoFor(req, book.id), writings: reviews.of(book.id), reviewError: String(req.query.review_error || "").slice(0, 300), editionError: String(req.query.edition_error || "").slice(0, 300), ukAsk: ukAskFor(req, book), advice: advice.state(req.user, book.id), overview: linkedOverview(book), overviewVote: advice.voteOf(book.id, req.user?.id) }));
+  res.send(pages.bookPage({ ...authorAbout(book), lists: lists.withBook(book.id).map(withCovers), myLists, freeRead: !!free, book, entry: store.sharedEntry(req.user?.id, book.id), now: !!req.user && nowIds(req.user.id).has(store.canonical(book.id)), user: req.user, readUrl: file ? `${READER_URL}/?open=${encodeURIComponent(file.name)}` : free ? `${READER_URL}/free/${encodeURIComponent(free.name)}` : "", shelf: book.shelf && (req.owner || !isDraft(book.shelf)) ? store.shelf(book.shelf) : null, inLibrary: inLibraryMap(req), readers: readersOf(book.id), ...alsoFor(req, book.id), writings: reviews.of(book.id), reviewError: String(req.query.review_error || "").slice(0, 300), editionError: String(req.query.edition_error || "").slice(0, 300), ukAsk: ukAskFor(req, book), advice: advice.state(req.user, book.id), overview: linkedOverview(book), overviewVote: advice.voteOf(book.id, req.user?.id) }));
 });
 
 // An author: their works from Wikidata (linked to our books of them) and every book of theirs we have.

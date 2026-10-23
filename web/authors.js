@@ -263,6 +263,49 @@ async function wikidataWorks(store, qid, { fetchImpl = fetch, log = () => {} } =
   }
 }
 
+// «Про автора» and the awards on a book page (Max, 2026-10-23): the person's short Ukrainian description,
+// years, photo and Wikipedia article, and the awards (P166, with the year) their works won. Kept 30 days in
+// meta `authorabout:<qid>`; a book page never waits for it: aboutNow() gives what is kept and asks Wikidata
+// in the background when nothing is, so the next view has it.
+const asking = new Set();
+const failed = new Map(); // qid -> when Wikidata last failed; asked again an hour later
+async function about(store, qid, { fetchImpl = fetch, log = () => {} } = {}) {
+  const key = `authorabout:${qid}`;
+  const cached = JSON.parse(store.db.get(key) || "null");
+  if (cached && Date.now() - cached.at < 30 * DAY) return cached;
+  try {
+    const [p] = await sparql(`SELECT ?desc ?descEn ?born ?died ?img ?ukwiki ?enwiki WHERE { BIND(wd:${qid} AS ?a) OPTIONAL { ?a schema:description ?desc FILTER(lang(?desc) = "uk") } OPTIONAL { ?a schema:description ?descEn FILTER(lang(?descEn) = "en") } OPTIONAL { ?a wdt:P569 ?born } OPTIONAL { ?a wdt:P570 ?died } OPTIONAL { ?a wdt:P18 ?img } OPTIONAL { ?ukwiki schema:about ?a; schema:isPartOf <https://uk.wikipedia.org/> } OPTIONAL { ?enwiki schema:about ?a; schema:isPartOf <https://en.wikipedia.org/> } } LIMIT 1`, fetchImpl);
+    const rows = await sparql(`SELECT ?w ?uk ?en ?orig ?award ?awuk ?awen (MIN(YEAR(?t)) AS ?year) WHERE { ?w wdt:P50 wd:${qid}; p:P166 ?st. ?st ps:P166 ?award. OPTIONAL { ?st pq:P585 ?t } OPTIONAL { ?w rdfs:label ?uk FILTER(lang(?uk) = "uk") } OPTIONAL { ?w rdfs:label ?en FILTER(lang(?en) = "en") } OPTIONAL { ?w wdt:P1476 ?orig } OPTIONAL { ?award rdfs:label ?awuk FILTER(lang(?awuk) = "uk") } OPTIONAL { ?award rdfs:label ?awen FILTER(lang(?awen) = "en") } } GROUP BY ?w ?uk ?en ?orig ?award ?awuk ?awen`, fetchImpl);
+    const year = (v) => Number(String(v?.value || "").slice(0, 4)) || 0;
+    const works = new Map();
+    for (const r of rows) {
+      const q = r.w.value.split("/").pop();
+      const w = works.get(q) || works.set(q, { qid: q, uk: r.uk?.value || "", en: r.en?.value || "", orig: r.orig?.value || "", awards: [] }).get(q);
+      const name = r.awuk?.value || r.awen?.value || "";
+      if (name && !w.awards.some((a) => a.name === name)) w.awards.push({ name, year: Number(r.year?.value) || 0 });
+    }
+    const out = {
+      at: Date.now(),
+      person: p ? { desc: p.desc?.value || "", descEn: p.descEn?.value || "", born: year(p.born), died: year(p.died), image: p.img?.value || "", wiki: p.ukwiki?.value || p.enwiki?.value || "" } : null,
+      works: [...works.values()],
+    };
+    store.db.set(key, JSON.stringify(out));
+    return out;
+  } catch (e) {
+    log(`authors: about ${qid}: ${e.cause?.code || e.message}`);
+    failed.set(qid, Date.now());
+    return cached;
+  }
+}
+function aboutNow(store, qid, opts) {
+  const cached = JSON.parse(store.db.get(`authorabout:${qid}`) || "null");
+  if ((!cached || Date.now() - cached.at > 30 * DAY) && !asking.has(qid) && !(Date.now() - (failed.get(qid) || 0) < 3600000)) {
+    asking.add(qid);
+    about(store, qid, opts).finally(() => asking.delete(qid));
+  }
+  return cached;
+}
+
 // Each work with our books of it: the same title in any language, a part of a collection's title
 // («Едем. Соларіс. Повернення з зірок»), or a spelling one letter off («Соларіс» / «Соляріс»).
 // One letter changed, added or dropped.
@@ -287,4 +330,4 @@ function matchWorks(store, author, works) {
   });
 }
 
-module.exports = { refresh, build, wikidataWorks, matchWorks, splitAuthors, allWorks, ownerJoins };
+module.exports = { refresh, build, wikidataWorks, about, aboutNow, matchWorks, splitAuthors, allWorks, ownerJoins };
