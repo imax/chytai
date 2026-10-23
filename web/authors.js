@@ -27,7 +27,14 @@ const person = (r) => ({ qid: r.a.value.split("/").pop(), uk: r.uk?.value || "",
 
 async function sparql(query, fetchImpl) {
   // POST: thirty names make a URL too long for a GET.
-  const r = await fetchImpl(ENDPOINT, { method: "POST", headers: { ...HEADERS, "Content-Type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ query, format: "json" }), signal: AbortSignal.timeout(60000) });
+  const ask = () => fetchImpl(ENDPOINT, { method: "POST", headers: { ...HEADERS, "Content-Type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ query, format: "json" }), signal: AbortSignal.timeout(60000) });
+  let r = await ask();
+  // Too many requests: Wikidata asks to slow down, so wait and ask again (a missed batch left
+  // «Frank Herbert» Latin on «Дюна» for a week, 2026-10-23).
+  for (let i = 0; r.status === 429 && i < 3; i++) {
+    await new Promise((ok) => setTimeout(ok, (Number(r.headers?.get?.("retry-after")) || 10 * (i + 1)) * 1000));
+    r = await ask();
+  }
   if (!r.ok) throw new Error(`HTTP ${r.status}`);
   return (await r.json()).results.bindings;
 }
