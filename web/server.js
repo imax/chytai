@@ -872,7 +872,8 @@ app.post("/api/entry/:id", signed, (req, res) => {
   const e = store.setEntry(req.user.id, req.params.id, patch);
   if (!e) return res.status(404).send("Немає такої книжки");
   if (["read", "want", "abandoned"].includes(patch.status)) dropNow(req.user.id, req.params.id);
-  if (e.status !== "abandoned" && (e.rating != null || e.note)) advice.want(req.params.id);
+  // A rating, a note, or «Хочу прочитати» (Max, 2026-10-23) gets the book its overview.
+  if (e.status === "want" || (e.status !== "abandoned" && (e.rating != null || e.note))) advice.want(req.params.id);
   back(req, res, store.href(req.params.id));
 });
 
@@ -887,6 +888,7 @@ app.post("/api/book", signed, (req, res) => {
   if (!title || !title.trim()) return res.status(400).send("Потрібна назва");
   const b = store.addBook({ title, author, cover: /^https?:\/\//.test(cover || "") ? cover : "" });
   store.setEntry(req.user.id, b.id, { status: STATUSES.includes(status) ? status : "", copy: ["paper", "ebook", "seeking"].includes(copy) ? copy : "" });
+  if (status === "want") advice.want(b.id);
   enrich.enrich(store, { ids: [b.id], log: console.log, googleKey: process.env.GOOGLE_BOOKS_KEY || "" }).catch((e) => console.error("enrich failed:", e));
   // A book typed in by hand may duplicate a catalog's or be junk: the owner gets a letter and sorts it out
   // (Max, 2026-10-20: «треба … сповіщення мені на імейл. будемо поки вручну розбирати»).
