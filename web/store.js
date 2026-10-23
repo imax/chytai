@@ -50,12 +50,13 @@ const OWNER = "owner"; // the reader id of the owner (Max): the only reader befo
 const RU_ENDING = /(ое|ая|ые|ие)(?![\p{L}])|(?<![\p{L}])(и|что|как|это|лет|или)(?![\p{L}])/iu;
 // Writers whose books here are in Russian whatever the letters say («Черновик», Sergei Lukyanenko: Max,
 // 2026-10-23 «не хочу бачити цю русняву г в рекомендаціях»), in Cyrillic and Latin spellings.
-const RU_AUTHOR = /лук[ья'’ʼ]{0,2}[яа]ненко|lukyanenko|lukianenko|пелев[иі]н|pelevin|акун[иі]н|akunin|донцова|dontsova|прилеп[иі]н|prilepin|лимонов|limonov|маринина|marinina|устинова|ustinova|перумов|perumov|головач[её]в|golovachev|дугин|dugin/iu;
+const RU_AUTHOR = /лук[ья'’ʼ]{0,2}[яа]ненко|lukyanenko|lukianenko|пелев[иі]н|pelevin|акун[иі]н|akunin|донцова|dontsova|прилеп[иі]н|prilepin|лимонов|limonov|маринина|marinina|устинова|ustinova|перумов|perumov|головач[её]в|golovachev|дугин|dugin|стругацк|strugatsk|булыч[её]в|bulychev|bulychov|ефремов|yefremov|efremov|беляев|belyaev|beliaev|гончаров|goncharov|солженицын|solzhenitsyn|шукшин|shukshin|улицкая|ulitskaya|глуховск|glukhovsk|пикуль|pikul|роберт штильмарк/iu;
 // A Cyrillic title with the author written the Russian way in Latin («Sergei», not «Serhii»).
-const RU_LATIN_NAME = /^(sergei|sergey|aleksei|alexei|alexey|aleksey|dmitry|dmitri|nikolai|yevgeny|evgeny|vasily|vasiliy|mikhail|pyotr|fyodor|yuri|yury|grigory|alexandr)\b/i;
+const RU_LATIN_NAME = /^(arkady|arkadi|boris|sergei|sergey|aleksei|alexei|alexey|aleksey|dmitry|dmitri|nikolai|yevgeny|evgeny|vasily|vasiliy|mikhail|pyotr|fyodor|yuri|yury|grigory|alexandr)\b/i;
 const isRussian = (b) => {
-  if (RU_AUTHOR.test(b?.author || "")) return true;
   const lang = String(b?.language || "").toLowerCase();
+  // A Ukrainian translation of such a writer is a Ukrainian book; anything else of theirs is not.
+  if (RU_AUTHOR.test(b?.author || "") && !/^(uk|укр)/.test(lang) && !/[іїєґ]/i.test(b?.title || "")) return true;
   if (lang) return /^(ru|рос)/.test(lang);
   const text = `${b?.title || ""} ${b?.author || ""}`;
   if (/[а-яё]/i.test(b?.title || "") && !/[іїєґ]/i.test(b?.title || "") && RU_LATIN_NAME.test(String(b?.author || "").trim())) return true;
@@ -64,7 +65,7 @@ const isRussian = (b) => {
 const norm = (s) => String(s || "").toLowerCase().replace(/^(the|a)\s+/, "").replace(/[^\p{L}\p{N}]+/gu, " ").trim();
 // Separators left at the end of a title: «Diary of Samuel Pepys -», «Назва:».
 const DANGLING = /[\s\-‐‑–—:;,/|]+$/u;
-const EDITABLE = ["title", "author", "blurb", "cover"];
+const EDITABLE = ["title", "author", "blurb", "cover", "language"];
 const isbnKey = (s) => String(s || "").replace(/[^0-9X]/gi, "");
 const GENRE = /\s*[:.]\s*(казка|казки|роман|повість|повісті|оповідання|новели|п[’']єса|есеї|есей|поезії|вірші|збірка|нариси|спогади|мемуари|(осіннє|зимове|весняне|літнє|подарункове|ювілейне|ілюстроване|нове|повне|доповнене|колекційне)\s+видання)\s*$/iu;
 // A note on the edition at the end of a title, which names a printing, not a book: «Дракула (2-ге видання)»,
