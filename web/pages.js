@@ -665,17 +665,11 @@ function mine(book, entry, user, now = false, readUrl = "", listItem = "") {
   const edit = href ? `/me${href}` : `/me/book/${encodeURIComponent(entry?.via ? entry.via.id : book.id)}`;
   // A volume of a series: «Прочитано · всю серію» opens the edit page with «Уся серія» ticked.
   const allOf = book.cycle?.items?.length > 1 ? `<a href="${attr(user ? `${edit}?series` : `/login?next=${encodeURIComponent(`${edit}?series`)}`)}">Прочитано · всю серію</a>` : "";
-<<<<<<< Updated upstream
-  if (!entry) return `<div class="acts">${wantButton(book, user, { size: "", primary: true })}${moreMenu([open, nowItem(book, false, user), `<a href="${attr(user ? edit : `/login?next=${encodeURIComponent(edit)}`)}">Прочитано · оцінити</a>`, allOf, listItem, kidsItem(book, false, user)])}</div>`;
-  const what = [entry.kids ? "Дитяча полиця" : "", entry.status ? STATUS[entry.status] + (entry.status === "read" && entry.year ? ` ${entry.year}` : "") : entry.kids ? "" : "У моїх книжках", entry.rating != null ? `${uk(entry.rating)} з 5` : "", entry.copy ? COPY[entry.copy] : ""].filter(Boolean).join(" · ");
-  return `<div class="acts"><span class="have">✓ ${esc(what)}${entry.via ? ` <span class="muted">як <a href="${attr(entry.via.href)}">${esc(entry.via.title)}</a></span>` : ""}</span>${moreMenu([open, entry.via ? "" : nowItem(book, now, user), `<a href="${attr(edit)}">Змінити</a>`, entry.status === "read" ? "" : allOf, listItem, entry.via ? "" : kidsItem(book, !!entry.kids, user)])}</div>`;
-=======
-  if (!entry) return `<div class="acts">${wantButton(book, user, { size: "", primary: true })}${moreMenu([open, nowItem(book, false, user), readItem(book, user), allOf, kidsItem(book, false, user)])}</div>`;
+  if (!entry) return `<div class="acts">${wantButton(book, user, { size: "", primary: true })}${moreMenu([open, nowItem(book, false, user), readItem(book, user), allOf, listItem, kidsItem(book, false, user)])}</div>`;
   const what = [entry.kids ? "Дитяча полиця" : "", entry.status ? STATUS[entry.status] + (entry.status === "read" && entry.year ? ` ${entry.year}` : "") : entry.kids ? "" : "У моїх книжках", entry.rating != null ? `${uk(entry.rating)} з 5` : "", entry.copy ? COPY[entry.copy] : ""].filter(Boolean).join(" · ");
   // Read and not rated yet: the stars right here, no trip to the form (Vova's feedback, 2026-10-23).
   const rate = entry.status === "read" && entry.rating == null && !entry.via && !entry.kids ? rateLine(book.id, "оцініть:") : "";
-  return `<div class="acts"><span class="have">✓ ${esc(what)}${entry.via ? ` <span class="muted">як <a href="${attr(entry.via.href)}">${esc(entry.via.title)}</a></span>` : ""}</span>${moreMenu([open, entry.via ? "" : nowItem(book, now, user), `<a href="${attr(edit)}">Оцінка, рік, нотатка</a>`, entry.status === "read" ? "" : allOf, entry.via ? "" : kidsItem(book, !!entry.kids, user)])}${rate}</div>`;
->>>>>>> Stashed changes
+  return `<div class="acts"><span class="have">✓ ${esc(what)}${entry.via ? ` <span class="muted">як <a href="${attr(entry.via.href)}">${esc(entry.via.title)}</a></span>` : ""}</span>${moreMenu([open, entry.via ? "" : nowItem(book, now, user), `<a href="${attr(edit)}">Оцінка, рік, нотатка</a>`, entry.status === "read" ? "" : allOf, listItem, entry.via ? "" : kidsItem(book, !!entry.kids, user)])}${rate}</div>`;
 }
 
 // «Де взяти»: every edition's shop (with its format, price and stock, the one place prices are shown),
