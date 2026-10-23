@@ -22,8 +22,9 @@ const OVERVIEW_SCHEMA = `CREATE TABLE IF NOT EXISTS overview (
 );`;
 // A reader's word on an overview (Max, 2026-10-23: «кнопки щоб оцінити якість AI summary. похвалити або
 // навпаки поскаржитись»): one vote a reader a book, +1 or -1; the owner sees the sums on /admin/overviews.
+// A complaint carries the reader's words on what is wrong (Max: «хай читач напише що саме йому не сподобалось»).
 const VOTE_SCHEMA = `CREATE TABLE IF NOT EXISTS overview_vote (
-  book TEXT NOT NULL, reader TEXT NOT NULL, vote INTEGER NOT NULL, created TEXT NOT NULL,
+  book TEXT NOT NULL, reader TEXT NOT NULL, vote INTEGER NOT NULL, created TEXT NOT NULL, note TEXT NOT NULL DEFAULT '',
   PRIMARY KEY (book, reader)
 );`;
 const WEB_SEARCHES = 3;
@@ -77,6 +78,7 @@ class Advice {
     db.exec(SCHEMA);
     db.exec(OVERVIEW_SCHEMA);
     db.exec(VOTE_SCHEMA);
+    if (!db.prepare("PRAGMA table_info(overview_vote)").all().some((c) => c.name === "note")) db.exec("ALTER TABLE overview_vote ADD COLUMN note TEXT NOT NULL DEFAULT ''");
     this.client = apiKey ? new Anthropic({ apiKey }) : null;
     this.queue = new Set(); // book ids waiting for an automatic overview
     this.running = 0;
@@ -227,25 +229,41 @@ class Advice {
     return kept ? { kind: "kept", ...kept } : { kind: "ask" };
   }
 
-  // The book's overview, if one was made.
+  // The work and its translations (Max, 2026-10-23: «для перекладів можна реюзати ту саму відповідь»):
+  // one overview serves the original's page and the Ukrainian edition's.
+  family(bookId) {
+    const id = this.store.canonical(bookId);
+    return [id, ...(this.store.translations?.get(id) || [])];
+  }
+  // Where the family's overview lives (or would): the member that has one, else the book itself.
+  homeOf(bookId) {
+    const ids = this.family(bookId);
+    const row = this.db.prepare(`SELECT book FROM overview WHERE book IN (${ids.map(() => "?").join(",")})`).all(...ids);
+    return row.find((r) => r.book === ids[0])?.book || row[0]?.book || ids[0];
+  }
+  // The book's overview, if one was made for it or a translation of it.
   overviewOf(bookId) {
-    return this.db.prepare("SELECT text, model, created FROM overview WHERE book = ?").get(this.store.canonical(bookId)) || null;
+    return this.db.prepare("SELECT book, text, model, created FROM overview WHERE book = ?").get(this.homeOf(bookId)) || null;
   }
   // The reader's own vote on a book's overview: 1, -1 or null.
   voteOf(bookId, readerId) {
     if (!readerId) return null;
-    return this.db.prepare("SELECT vote FROM overview_vote WHERE book = ? AND reader = ?").get(this.store.canonical(bookId), readerId)?.vote ?? null;
+    return this.db.prepare("SELECT vote FROM overview_vote WHERE book = ? AND reader = ?").get(this.homeOf(bookId), readerId)?.vote ?? null;
   }
-  // Sets (1, -1) or takes back (0) the reader's vote; returns the sums and their vote.
-  vote(bookId, readerId, v) {
-    const id = this.store.canonical(bookId);
+  // Sets (1, or -1 with the reader's words) or takes back (0) the reader's vote; returns the sums and their vote.
+  vote(bookId, readerId, v, note = "") {
+    const id = this.homeOf(bookId);
     if (!this.overviewOf(id)) throw new Error("Огляду ще немає.");
     if (v === 0) this.db.prepare("DELETE FROM overview_vote WHERE book = ? AND reader = ?").run(id, readerId);
-    else this.db.prepare("INSERT INTO overview_vote (book, reader, vote, created) VALUES (?, ?, ?, ?) ON CONFLICT (book, reader) DO UPDATE SET vote = excluded.vote, created = excluded.created").run(id, readerId, v, new Date().toISOString());
+    else this.db.prepare("INSERT INTO overview_vote (book, reader, vote, created, note) VALUES (?, ?, ?, ?, ?) ON CONFLICT (book, reader) DO UPDATE SET vote = excluded.vote, created = excluded.created, note = excluded.note").run(id, readerId, v, new Date().toISOString(), v === -1 ? clip(note, 1000) : "");
     return { ...this.votesOf(id), vote: v || null };
   }
+  // Readers' complaints on a book's overview: [{ reader, note, created }].
+  complaintsOf(bookId) {
+    return this.db.prepare("SELECT reader, note, created FROM overview_vote WHERE book = ? AND vote = -1 ORDER BY created DESC").all(this.homeOf(bookId));
+  }
   votesOf(bookId) {
-    const r = this.db.prepare("SELECT SUM(vote = 1) AS up, SUM(vote = -1) AS down FROM overview_vote WHERE book = ?").get(this.store.canonical(bookId));
+    const r = this.db.prepare("SELECT SUM(vote = 1) AS up, SUM(vote = -1) AS down FROM overview_vote WHERE book = ?").get(this.homeOf(bookId));
     return { up: r.up || 0, down: r.down || 0 };
   }
   // For /admin/overviews: every overview with its votes, the ones readers complained about first.
@@ -281,10 +299,20 @@ class Advice {
       for (const [id, e] of Object.entries(entries)) if (e.status !== "abandoned" && (e.rating != null || e.note)) ids.add(this.store.canonical(id));
     return [...ids].filter((id) => this.store.book(id) && !isRussian(this.store.book(id)));
   }
-  // Those of them without an overview yet.
+  // Those of them without an overview yet, one per work and its translations (the Cyrillic title first,
+  // so the Ukrainian edition's facts go into the prompt).
   missing() {
     const have = new Set(this.db.prepare("SELECT book FROM overview").all().map((r) => r.book));
-    return this.voiced().filter((id) => !have.has(id));
+    const taken = new Set();
+    const out = [];
+    const cyr = (id) => /[а-яіїєґ]/i.test(this.store.book(id)?.title || "");
+    for (const id of this.voiced().sort((a, b) => cyr(b) - cyr(a))) {
+      const ids = this.family(id);
+      if (ids.some((x) => have.has(x) || taken.has(x))) continue;
+      taken.add(id);
+      out.push(id);
+    }
+    return out;
   }
   autoToday() {
     return this.db.prepare("SELECT COUNT(*) AS n FROM overview WHERE by = 'auto' AND created >= ?").get(new Date().toISOString().slice(0, 10)).n;
@@ -337,7 +365,7 @@ class Advice {
   // A fresh overview of the book from the web, kept for everyone.
   async overview(book, { fresh = false, by = "" } = {}) {
     if (!this.client) throw new Error("Зараз недоступно.");
-    const id = this.store.canonical(book.id);
+    const id = this.homeOf(book.id);
     const old = fresh ? null : this.overviewOf(id);
     if (old) return { ...old, cached: true };
     // A ceiling for the day on readers' clicks: each overview is a few web searches and a long Opus turn.

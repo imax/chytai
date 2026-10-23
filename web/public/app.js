@@ -357,19 +357,46 @@ document.addEventListener("click", (e) => {
   block.querySelector(".advice-text")?.classList.remove("folded");
   button.closest(".advice-more")?.remove();
 });
-// 👍 / 👎 under «Що пишуть в інтернеті»: a second tap on the same one takes the vote back.
+// 👍 / «Повідомити про проблему» under «Що пишуть в інтернеті»: a second tap on the same one takes the
+// vote back; the complaint first opens a box for the reader's words, and goes with them.
+async function sendVote(block, vote, note = "") {
+  const r = await fetch(`/api/overview/${encodeURIComponent(block.dataset.book)}/vote`, { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ vote: String(vote), note }) });
+  const data = await r.json();
+  if (!r.ok) throw new Error(data.error || r.status);
+  for (const b of block.querySelectorAll("[data-vote]")) {
+    b.classList.toggle("on", Number(b.dataset.vote) === data.vote);
+    if (b.dataset.vote === "-1") b.textContent = data.vote === -1 ? "Скаргу передано" : "Повідомити про проблему";
+  }
+}
 document.addEventListener("click", async (e) => {
-  const button = e.target.closest("[data-vote]");
+  const button = e.target.closest("[data-vote], [data-report-cancel]");
   const block = button?.closest(".advice");
   if (!block) return;
+  const form = block.querySelector(".advice-report");
+  if (button.hasAttribute("data-report-cancel")) return (form.hidden = true);
   const vote = button.classList.contains("on") ? 0 : Number(button.dataset.vote);
+  if (vote === -1 && form) {
+    form.hidden = !form.hidden;
+    if (!form.hidden) form.querySelector("textarea").focus();
+    return;
+  }
   try {
-    const r = await fetch(`/api/overview/${encodeURIComponent(block.dataset.book)}/vote`, { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ vote: String(vote) }) });
-    const data = await r.json();
-    if (!r.ok) throw new Error(data.error || r.status);
-    for (const b of block.querySelectorAll("[data-vote]")) b.classList.toggle("on", Number(b.dataset.vote) === data.vote);
+    await sendVote(block, vote);
   } catch (err) {
     button.title = err.message;
+  }
+});
+document.addEventListener("submit", async (e) => {
+  const form = e.target.closest(".advice-report");
+  if (!form) return;
+  e.preventDefault();
+  const block = form.closest(".advice");
+  try {
+    await sendVote(block, -1, form.querySelector("textarea").value.trim());
+    form.hidden = true;
+    form.querySelector("textarea").value = "";
+  } catch (err) {
+    form.querySelector("button").textContent = err.message;
   }
 });
 // The «⋯» menu on book pages closes on a tap outside it or on Escape.

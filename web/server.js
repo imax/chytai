@@ -938,7 +938,7 @@ app.post("/api/welcome-mail", owner, async (req, res) => {
 });
 // The owner's statistics page: readers, retention by sign-up week, what people do on the site (admin.js).
 app.get("/admin", owner, (req, res) => res.send(adminPage({ user: req.user, stats: admin.stats(), overviews: advice.overviewStats(), layout: pages.layout })));
-app.get("/admin/overviews", owner, (req, res) => res.send(overviewsPage({ user: req.user, list: advice.overviewList(), stats: advice.overviewStats(), who: (id) => (id && id !== "auto" ? pub(auth.reader(id)) : null), layout: pages.layout })));
+app.get("/admin/overviews", owner, (req, res) => res.send(overviewsPage({ user: req.user, list: advice.overviewList().map((r) => ({ ...r, complaints: r.down ? advice.complaintsOf(r.book.id) : [] })), stats: advice.overviewStats(), who: (id) => (id && id !== "auto" ? pub(auth.reader(id)) : null), layout: pages.layout })));
 app.get("/admin/readers", owner, (req, res) => res.send(readersPage({ user: req.user, stats: admin.stats(), layout: pages.layout, q: req.query.q, min: Number(req.query.books) || 0, sort: String(req.query.sort || "created"), page: req.query.page })));
 app.get("/admin.json", owner, (req, res) => res.json(admin.stats()));
 // One Google Books request with the server's key, for the owner to see what Google answers from here.
@@ -1016,8 +1016,12 @@ app.post("/api/overview/:id/vote", signed, (req, res) => {
   if (!book) return res.status(404).json({ error: "Немає такої книжки" });
   const v = Number(req.body?.vote);
   if (![1, -1, 0].includes(v)) return res.status(400).json({ error: "Не той голос" });
+  const note = String(req.body?.note || "").trim().slice(0, 1000);
   try {
-    res.json(advice.vote(book.id, req.user.id, v));
+    const r = advice.vote(book.id, req.user.id, v, note);
+    // A complaint goes to the owner at once, like a new review.
+    if (v === -1 && !req.owner) notifyOwner(`Скарга на огляд: ${book.title}`, [`${req.user.name} (@${req.user.username}) про «Що пишуть в інтернеті»:`, "", note || "(без слів)", "", `Книжка: ${site(req)}${store.href(book.id)}#overview`, `Усі огляди: ${site(req)}/admin/overviews`].join("\n"));
+    res.json(r);
   } catch (e) {
     res.status(400).json({ error: e.message });
   }

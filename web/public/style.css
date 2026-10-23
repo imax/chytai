@@ -667,6 +667,9 @@ form.inline button:not(.btn) { background: none; border: 0; padding: 0; cursor: 
 .advice-error { color: var(--danger); margin-top: 10px; }
 .advice-vote .text-link { margin-right: 6px; }
 .advice-vote .text-link.on { color: var(--accent); font-weight: 600; }
+.advice-report { margin-top: 12px; max-width: 560px; }
+.advice-report textarea { width: 100%; font: 15px/1.45 var(--sans); padding: 10px 12px; border: 1px solid var(--rule); border-radius: 8px; background: var(--paper); color: var(--text); resize: vertical; }
+.advice-report p { margin-top: 8px; display: flex; gap: 14px; align-items: center; }
 .add-writing { margin-top: 12px; }
 .add-writing summary { list-style: none; cursor: pointer; font-size: 14px; }
 .add-writing summary::-webkit-details-marker { display: none; }
