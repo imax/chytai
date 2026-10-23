@@ -54,7 +54,6 @@ let rendition = null;
 let pdfView = null; // set instead of book/rendition when a PDF is open
 let current = null; // { path, title, author }
 let pendingSelection = null; // last selection, for the floating toolbar
-let autoTimer = null;
 let reqCounter = 0;
 const conversations = new Map(); // request id -> conversation state
 
@@ -81,7 +80,6 @@ function openSettings() {
   $("#set-style").value = settings.explainStyle || "default";
   $("#set-custom-style").value = settings.customStyle || "";
   $("#custom-style-row").hidden = $("#set-style").value !== "custom";
-  $("#set-auto").checked = settings.autoExplain;
   $("#set-font").value = settings.font;
   $("#set-page-taps").value = settings.pageTaps ? "taps" : "scroll";
   $("#set-desk-scroll").value = settings.deskScroll ? "scroll" : "pages";
@@ -96,7 +94,6 @@ $("#settings").addEventListener("close", async () => {
     language: $("#set-language").value.trim() || "українська",
     explainStyle: $("#set-style").value,
     customStyle: $("#set-custom-style").value.trim(),
-    autoExplain: $("#set-auto").checked,
     font: $("#set-font").value,
     margins: $("#set-margins").value,
     pageTaps: $("#set-page-taps").value === "taps",
@@ -292,6 +289,7 @@ async function openEpub(payload, { posKey, source }) {
   rendition.on("relocated", onRelocated);
   rendition.on("rendered", () => decorateNoteMarks());
   rendition.on("keyup", onKey);
+  rendition.hooks.content.register((contents) => contents.document.addEventListener("wheel", onWheel, { passive: true }));
   // Keys pressed while the page has focus reach only the book's frame; pass them on.
   rendition.on("keydown", (e) => window.Shell?.key(e));
   rendition.on("click", (e) => {
@@ -665,8 +663,25 @@ function onKey(e) {
   if (document.body.classList.contains("library-open")) return; // the home screen covers the book
   const view = pdfView || rendition;
   if (!view) return;
-  if (e.key === "ArrowLeft" || e.key === "PageUp") view.prev();
-  if (e.key === "ArrowRight" || e.key === "PageDown" || (e.key === " " && !e.shiftKey)) view.next();
+  // In page mode the up/down arrows turn pages too; while scrolling they scroll.
+  const paged = !scrolled();
+  if (e.key === "ArrowLeft" || e.key === "PageUp" || (paged && e.key === "ArrowUp") || (e.key === " " && e.shiftKey)) view.prev();
+  if (e.key === "ArrowRight" || e.key === "PageDown" || (paged && e.key === "ArrowDown") || (e.key === " " && !e.shiftKey)) view.next();
+}
+
+// Page mode on a computer: scrolling down with the mouse wheel or trackpad turns the page, as people
+// expect it to. One turn per gesture: a trackpad keeps sending wheel events while it coasts.
+let wheelQuietAt = 0;
+function onWheel(e) {
+  if (!rendition || scrolled() || document.body.classList.contains("library-open")) return;
+  const now = Date.now();
+  const busy = now < wheelQuietAt;
+  const d = Math.abs(e.deltaY) >= Math.abs(e.deltaX) ? e.deltaY : e.deltaX;
+  if (!busy && Math.abs(d) < 4) return;
+  wheelQuietAt = now + 250;
+  if (busy) return;
+  if (d > 0) rendition.next();
+  else rendition.prev();
 }
 
 // ---------- Selection ----------
@@ -683,7 +698,7 @@ function onSelected(cfiRange, contents) {
   handleSelection(range, cfiRange, { ...ctx, chapter }, contents.document.defaultView.frameElement.getBoundingClientRect());
 }
 
-// Shared by EPUB and PDF: remember the selection, show the toolbar, maybe auto-explain.
+// Shared by EPUB and PDF: remember the selection and show the toolbar; «Пояснити» there explains it.
 // `frame` is the offset of the document holding the range (the epub iframe, or 0,0 for PDF).
 function handleSelection(range, cfiRange, ctx, frame) {
   pendingSelection = {
@@ -692,16 +707,6 @@ function handleSelection(range, cfiRange, ctx, frame) {
     context: { ...ctx, bookTitle: current.title, author: current.author },
   };
   showSelToolbar(range, frame);
-
-  clearTimeout(autoTimer);
-  // On a touch screen the selection grows by dragging handles, so it would fire on the first word: explain only on a tap.
-  if (settings.autoExplain && !PHONE.matches && !TOUCH.matches) {
-    // Short pause so a still-adjusting selection doesn't fire several requests.
-    const snapshot = pendingSelection;
-    autoTimer = setTimeout(() => {
-      if (pendingSelection === snapshot) startExplanation(snapshot);
-    }, 450);
-  }
 }
 
 function showSelToolbar(range, frame) {
@@ -748,7 +753,6 @@ $("#sel-toolbar").addEventListener("mousedown", (e) => e.preventDefault());
 $("#sel-toolbar").addEventListener("click", (e) => {
   const action = e.target.dataset.action;
   if (!action || !pendingSelection) return;
-  clearTimeout(autoTimer);
   const snapshot = pendingSelection;
   if (action === "note") {
     addNote(snapshot);
@@ -1426,6 +1430,7 @@ $("#btn-font-up").onclick = () => setFont(10);
 DARK_QUERY.addEventListener("change", () => settings?.theme === "auto" && applyTheme());
 
 document.addEventListener("keyup", onKey);
+["#viewer", "#prev", "#next"].forEach((id) => $(id).addEventListener("wheel", onWheel, { passive: true }));
 window.addEventListener("resize", () => hideSelToolbar());
 $("#pdf-container").addEventListener("mouseup", onPdfMouseUp);
 $("#pdf-container").addEventListener("scroll", () => hideSelToolbar(), { passive: true });

@@ -90,7 +90,7 @@ function loadDotEnv(file) {
 
 // «Пояснити» starts with a quick note on the cheap model; «Детальніше» and questions go to `model` (Max, 2026-10-22).
 const SHARED_DEFAULTS = { model: "claude-opus-5-5", quickModel: "claude-sonnet-5-5", language: "українська" };
-const USER_DEFAULTS = { autoExplain: true, pageTaps: false, deskScroll: false, font: "literata", margins: "normal", pdfMode: "reflow", fontSizes: {}, theme: "auto", explainStyle: "default", customStyle: "", lastBook: null, positions: {} };
+const USER_DEFAULTS = { pageTaps: false, deskScroll: false, font: "literata", margins: "normal", pdfMode: "reflow", fontSizes: {}, theme: "auto", explainStyle: "default", customStyle: "", lastBook: null, positions: {} };
 const SHARED_KEYS = new Set(Object.keys(SHARED_DEFAULTS));
 const USER_KEYS = new Set(Object.keys(USER_DEFAULTS));
 

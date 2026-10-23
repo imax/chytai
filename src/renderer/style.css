@@ -65,7 +65,7 @@ button, select, input { font: inherit; color: inherit; }
 }
 .pager {
   position: absolute; top: 0; bottom: 30px; width: 64px; z-index: 2;
-  border: none; background: transparent; font-size: 34px; color: var(--muted); opacity: 0.25; cursor: pointer;
+  border: none; background: transparent; font-size: 34px; color: var(--muted); opacity: 0.5; cursor: pointer;
 }
 .pager:hover { opacity: 0.9; }
 #prev { left: 0; } #next { right: 0; }

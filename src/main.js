@@ -25,7 +25,6 @@ const DEFAULT_SETTINGS = {
   model: "claude-opus-5-5",
   quickModel: "claude-sonnet-5-5", // the first short note; «Детальніше» and questions use `model`
   language: "українська",
-  autoExplain: true,
   pageTaps: false, // phone only: page turns instead of continuous scrolling
   font: "literata",
   margins: "normal", // narrow | normal | wide
