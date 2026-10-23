@@ -402,7 +402,7 @@ function bookLd(book, shelf, s, readers) {
 }
 
 // The book, the reader's own buttons, where to get it, what readers said, what it is about.
-function bookPage({ book, entry, now = false, user, shelf, inLibrary = new Map(), readers = [], also = [], writings = [], reviewError = "", readUrl = "", freeRead = false, advice = null, overview = null }) {
+function bookPage({ book, entry, now = false, user, shelf, inLibrary = new Map(), readers = [], also = [], writings = [], reviewError = "", readUrl = "", freeRead = false, advice = null, overview = null, overviewVote = null }) {
   const s = statsOf(book.id);
   const kicker = [book.tags?.find((t) => t !== "українською"), isUk(book) ? "українською" : LANG_ADV[String(book.language || "").toLowerCase()] || ""].filter(Boolean).map(cap).join(" · ");
   const sub = [book.altTitle ? esc(book.altTitle) : "", book.author ? `<span class="authors">${authorLinks(book.author)}</span>` : "", book.published ? String(book.published) : "", book.pages ? `${book.pages} с.` : ""].filter(Boolean).join(" · ");
@@ -434,7 +434,7 @@ function bookPage({ book, entry, now = false, user, shelf, inLibrary = new Map()
       ${(first.entry.note ? rest : readers).length ? `<div class="others">${(first.entry.note ? rest : readers).map((r) => readerLine(r, book.id)).join("")}</div>` : ""}
     </section>` : ""}
     ${adviceBlock(book, advice)}
-    ${overviewBlock(book, overview, user)}
+    ${overviewBlock(book, overview, user, overviewVote)}
     ${SHOW_REVIEWS && (writings.length || user) ? `<section class="block" id="writings">
       ${label("Огляди")}
       ${writings.length ? writingsList(writings, book, user) : ""}
@@ -482,14 +482,17 @@ function adviceBlock(book, a) {
 // Open to all since 2026-10-23 (Max: «це треба викочувати на всіх»): any signed-in reader can make it,
 // a guest sees it once made; only the owner can redo one.
 const OVERVIEW_PUBLIC = true;
-function overviewHtml(o, user) {
+// Under the text, for a signed-in reader, two words on the overview itself (Max, 2026-10-23: praise or
+// complain); `vote` is the reader's own, 1 or -1, and the chosen one stays marked.
+function overviewHtml(o, user, vote = null) {
+  const votes = user ? ` · <span class="advice-vote" title="Чи добрий цей огляд?"><button class="text-link small${vote === 1 ? " on" : ""}" data-vote="1">👍 Корисно</button> <button class="text-link small${vote === -1 ? " on" : ""}" data-vote="-1">👎 Не те</button></span>` : "";
   return `<div class="advice-text">${marked.parse(o.text).replace(/<a href="http/g, '<a target="_blank" rel="noopener" href="http')}</div>
-<p class="small muted">Claude, за відгуками в інтернеті · ${writingDate(o.created.slice(0, 10))}${user?.owner ? ` · <button class="text-link small" data-ask="overview" data-again>Оновити</button>` : ""}</p>`;
+<p class="small muted">Claude, за відгуками в інтернеті · ${writingDate(o.created.slice(0, 10))}${votes}${user?.owner ? ` · <button class="text-link small" data-ask="overview" data-again>Оновити</button>` : ""}</p>`;
 }
-function overviewBlock(book, o, user) {
+function overviewBlock(book, o, user, vote = null) {
   const canSee = o && (OVERVIEW_PUBLIC || user?.owner);
   if (!canSee && !(user && (OVERVIEW_PUBLIC || user.owner))) return "";
-  const inner = canSee ? overviewHtml(o, user) : `<p class="advice-ask"><button class="text-link" data-ask="overview">Що кажуть про цю книжку?</button></p>`;
+  const inner = canSee ? overviewHtml(o, user, vote) : `<p class="advice-ask"><button class="text-link" data-ask="overview">Що кажуть про цю книжку?</button></p>`;
   return `<section class="block advice" id="overview" data-book="${attr(book.id)}">
       ${label("Що пишуть в інтернеті")}
       <div class="advice-body">${inner}</div>

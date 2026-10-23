@@ -349,6 +349,21 @@ document.addEventListener("click", async (e) => {
     body.append(p);
   }
 });
+// 👍 / 👎 under «Що пишуть в інтернеті»: a second tap on the same one takes the vote back.
+document.addEventListener("click", async (e) => {
+  const button = e.target.closest("[data-vote]");
+  const block = button?.closest(".advice");
+  if (!block) return;
+  const vote = button.classList.contains("on") ? 0 : Number(button.dataset.vote);
+  try {
+    const r = await fetch(`/api/overview/${encodeURIComponent(block.dataset.book)}/vote`, { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ vote: String(vote) }) });
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error || r.status);
+    for (const b of block.querySelectorAll("[data-vote]")) b.classList.toggle("on", Number(b.dataset.vote) === data.vote);
+  } catch (err) {
+    button.title = err.message;
+  }
+});
 // The «⋯» menu on book pages closes on a tap outside it or on Escape.
 document.addEventListener("click", (e) => {
   for (const d of document.querySelectorAll("details.more-acts[open]")) if (!d.contains(e.target)) d.open = false;

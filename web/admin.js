@@ -358,7 +358,7 @@ function adminPage({ user, stats: s, overviews: o = null, layout }) {
     tile(t.entries, "книжок на полицях", `+${t.entriesWeek} за тиждень · ${t.want} у «хочу прочитати»`),
     tile(t.ratings, "оцінок", `${t.notes} нотаток`),
     tile(t.follows, "стежень", `${t.digestOn} підписані на лист, ${t.digestOff} відписались`),
-    ...(o ? [tile(o.n, "оглядів від Claude", `${o.today} сьогодні · ${o.queue} в черзі · ≈ $${o.cost.toFixed(2)}`)] : []),
+    ...(o ? [tile(o.n, `<a href="/admin/overviews">оглядів від Claude</a>`, `${o.today} сьогодні · ${o.queue} в черзі · 👍 ${o.up} 👎 ${o.down} · ≈ $${o.cost.toFixed(2)}`)] : []),
   ].join("");
 
   // Newest week on top in both tables (Max, 2026-10-20: «свіжі зверху», «починаємо з цього тижня»).
@@ -422,4 +422,22 @@ ${s.sections.length ? `<div class="tbl"><table class="sections">
   return layout({ title: "Статистика", user, path: "/admin", body });
 }
 
-module.exports = { Admin, adminPage, readersPage, dayOf, weekOf, sectionOf };
+// /admin/overviews: every «Що пишуть в інтернеті» with readers' 👍/👎, the complained-about ones on top.
+function overviewsPage({ user, list, stats: o, who, layout }) {
+  const esc = (t) => String(t ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+  const rows = list
+    .map((r) => {
+      const by = who(r.by);
+      return `<tr${r.down ? ' class="now"' : ""}><td><a href="${esc(r.book.href)}">${esc(r.book.title)}</a> <span class="muted">${esc(r.book.author || "")}</span></td><td>${r.up || ""}</td><td>${r.down || ""}</td><td>${r.created.slice(0, 10)}</td><td>${by ? `<a href="${esc(by.href)}">${esc(by.name)}</a>` : r.by === "auto" ? "сам" : ""}</td><td>${n(r.searches)}</td><td>${n(r.input_tokens)}</td><td>${n(r.output_tokens)}</td></tr>`;
+    })
+    .join("\n");
+  const body = `<section class="admin">
+<p class="small"><a href="/admin">← Статистика</a></p>
+<h1>Огляди від Claude</h1>
+<p>${n(o.n)} оглядів, ${o.auto} зроблені самі · 👍 ${o.up} · 👎 ${o.down} · ${o.queue} в черзі · ≈ $${o.cost.toFixed(2)} за весь час</p>
+<table><thead><tr><th>Книжка</th><th>👍</th><th>👎</th><th>Коли</th><th>Хто</th><th>Пошуків</th><th>Токенів in</th><th>out</th></tr></thead><tbody>${rows}</tbody></table>
+</section>`;
+  return layout({ title: "Огляди від Claude · Статистика", user, path: "/admin", body });
+}
+
+module.exports = { Admin, adminPage, readersPage, overviewsPage, dayOf, weekOf, sectionOf };

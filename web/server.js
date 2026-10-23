@@ -24,7 +24,7 @@ const { WelcomeMail } = require("./welcome-mail");
 const listimport = require("./listimport");
 const applebooks = require("./applebooks");
 const enrich = require("./enrich");
-const { Admin, adminPage, readersPage } = require("./admin");
+const { Admin, adminPage, readersPage, overviewsPage } = require("./admin");
 const { Reviews } = require("./reviews");
 const { Advice } = require("./advice");
 
@@ -698,7 +698,7 @@ app.get("/book/:id", (req, res) => {
   if (!book) return res.status(404).send(pages.messagePage({ title: "Немає такої книжки", text: "", user: req.user }));
   const file = readerFileFor(req.user?.id, book);
   const free = !file && freeFileFor(book);
-  res.send(pages.bookPage({ freeRead: !!free, book, entry: store.sharedEntry(req.user?.id, book.id), now: !!req.user && nowIds(req.user.id).has(store.canonical(book.id)), user: req.user, readUrl: file ? `${READER_URL}/?open=${encodeURIComponent(file.name)}` : free ? `${READER_URL}/free/${encodeURIComponent(free.name)}` : "", shelf: book.shelf && (req.owner || !isDraft(book.shelf)) ? store.shelf(book.shelf) : null, inLibrary: inLibraryMap(req), readers: readersOf(book.id), also: social.alsoLiked([book.id], { limit: 4 }), writings: reviews.of(book.id), reviewError: String(req.query.review_error || "").slice(0, 300), advice: advice.state(req.user, book.id), overview: advice.overviewOf(book.id) }));
+  res.send(pages.bookPage({ freeRead: !!free, book, entry: store.sharedEntry(req.user?.id, book.id), now: !!req.user && nowIds(req.user.id).has(store.canonical(book.id)), user: req.user, readUrl: file ? `${READER_URL}/?open=${encodeURIComponent(file.name)}` : free ? `${READER_URL}/free/${encodeURIComponent(free.name)}` : "", shelf: book.shelf && (req.owner || !isDraft(book.shelf)) ? store.shelf(book.shelf) : null, inLibrary: inLibraryMap(req), readers: readersOf(book.id), also: social.alsoLiked([book.id], { limit: 4 }), writings: reviews.of(book.id), reviewError: String(req.query.review_error || "").slice(0, 300), advice: advice.state(req.user, book.id), overview: advice.overviewOf(book.id), overviewVote: advice.voteOf(book.id, req.user?.id) }));
 });
 
 // An author: their works from Wikidata (linked to our books of them) and every book of theirs we have.
@@ -938,6 +938,7 @@ app.post("/api/welcome-mail", owner, async (req, res) => {
 });
 // The owner's statistics page: readers, retention by sign-up week, what people do on the site (admin.js).
 app.get("/admin", owner, (req, res) => res.send(adminPage({ user: req.user, stats: admin.stats(), overviews: advice.overviewStats(), layout: pages.layout })));
+app.get("/admin/overviews", owner, (req, res) => res.send(overviewsPage({ user: req.user, list: advice.overviewList(), stats: advice.overviewStats(), who: (id) => (id && id !== "auto" ? pub(auth.reader(id)) : null), layout: pages.layout })));
 app.get("/admin/readers", owner, (req, res) => res.send(readersPage({ user: req.user, stats: admin.stats(), layout: pages.layout, q: req.query.q, min: Number(req.query.books) || 0, sort: String(req.query.sort || "created"), page: req.query.page })));
 app.get("/admin.json", owner, (req, res) => res.json(admin.stats()));
 // One Google Books request with the server's key, for the owner to see what Google answers from here.
@@ -1007,6 +1008,18 @@ app.post("/api/overview/:id", signed, async (req, res) => {
   } catch (e) {
     console.error("overview failed:", e);
     res.status(e.status >= 400 && e.status < 600 ? 502 : 400).json({ error: e.status ? "Claude зараз не відповідає, спробуйте трохи згодом." : e.message });
+  }
+});
+// 👍 / 👎 under an overview: vote=1, -1, or 0 to take it back.
+app.post("/api/overview/:id/vote", signed, (req, res) => {
+  const book = store.book(store.resolve(req.params.id));
+  if (!book) return res.status(404).json({ error: "Немає такої книжки" });
+  const v = Number(req.body?.vote);
+  if (![1, -1, 0].includes(v)) return res.status(400).json({ error: "Не той голос" });
+  try {
+    res.json(advice.vote(book.id, req.user.id, v));
+  } catch (e) {
+    res.status(400).json({ error: e.message });
   }
 });
 app.post("/api/reviews/add", signed, async (req, res) => {

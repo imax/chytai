@@ -20,6 +20,12 @@ const OVERVIEW_SCHEMA = `CREATE TABLE IF NOT EXISTS overview (
   book TEXT PRIMARY KEY, text TEXT NOT NULL, model TEXT NOT NULL, created TEXT NOT NULL, by TEXT NOT NULL DEFAULT '',
   input_tokens INTEGER NOT NULL DEFAULT 0, output_tokens INTEGER NOT NULL DEFAULT 0, searches INTEGER NOT NULL DEFAULT 0
 );`;
+// A reader's word on an overview (Max, 2026-10-23: «кнопки щоб оцінити якість AI summary. похвалити або
+// навпаки поскаржитись»): one vote a reader a book, +1 or -1; the owner sees the sums on /admin/overviews.
+const VOTE_SCHEMA = `CREATE TABLE IF NOT EXISTS overview_vote (
+  book TEXT NOT NULL, reader TEXT NOT NULL, vote INTEGER NOT NULL, created TEXT NOT NULL,
+  PRIMARY KEY (book, reader)
+);`;
 const WEB_SEARCHES = 3;
 const OVERVIEW_DAILY = 150; // fresh overviews a day on readers' clicks, all readers together
 // Made by itself (Max, 2026-10-23: «запускати її автоматично коли у книжки з'являється хоча б один відгук
@@ -70,6 +76,7 @@ class Advice {
     }
     db.exec(SCHEMA);
     db.exec(OVERVIEW_SCHEMA);
+    db.exec(VOTE_SCHEMA);
     this.client = apiKey ? new Anthropic({ apiKey }) : null;
     this.queue = new Set(); // book ids waiting for an automatic overview
     this.running = 0;
@@ -224,6 +231,30 @@ class Advice {
   overviewOf(bookId) {
     return this.db.prepare("SELECT text, model, created FROM overview WHERE book = ?").get(this.store.canonical(bookId)) || null;
   }
+  // The reader's own vote on a book's overview: 1, -1 or null.
+  voteOf(bookId, readerId) {
+    if (!readerId) return null;
+    return this.db.prepare("SELECT vote FROM overview_vote WHERE book = ? AND reader = ?").get(this.store.canonical(bookId), readerId)?.vote ?? null;
+  }
+  // Sets (1, -1) or takes back (0) the reader's vote; returns the sums and their vote.
+  vote(bookId, readerId, v) {
+    const id = this.store.canonical(bookId);
+    if (!this.overviewOf(id)) throw new Error("Огляду ще немає.");
+    if (v === 0) this.db.prepare("DELETE FROM overview_vote WHERE book = ? AND reader = ?").run(id, readerId);
+    else this.db.prepare("INSERT INTO overview_vote (book, reader, vote, created) VALUES (?, ?, ?, ?) ON CONFLICT (book, reader) DO UPDATE SET vote = excluded.vote, created = excluded.created").run(id, readerId, v, new Date().toISOString());
+    return { ...this.votesOf(id), vote: v || null };
+  }
+  votesOf(bookId) {
+    const r = this.db.prepare("SELECT SUM(vote = 1) AS up, SUM(vote = -1) AS down FROM overview_vote WHERE book = ?").get(this.store.canonical(bookId));
+    return { up: r.up || 0, down: r.down || 0 };
+  }
+  // For /admin/overviews: every overview with its votes, the ones readers complained about first.
+  overviewList() {
+    return this.db
+      .prepare("SELECT o.book, o.created, o.by, o.model, o.input_tokens, o.output_tokens, o.searches, COALESCE(SUM(v.vote = 1), 0) AS up, COALESCE(SUM(v.vote = -1), 0) AS down FROM overview o LEFT JOIN overview_vote v ON v.book = o.book GROUP BY o.book ORDER BY down DESC, up DESC, o.created DESC")
+      .all()
+      .map((r) => ({ ...r, book: this.store.book(r.book) || { id: r.book, title: r.book, href: "" } }));
+  }
   // Runs the Claude turn, following pause_turn (a web search can pause it) a few times; returns the text and the usage.
   async turn(params) {
     let message;
@@ -297,9 +328,10 @@ class Advice {
   overviewStats() {
     const t = this.db.prepare("SELECT COUNT(*) AS n, SUM(input_tokens) AS input, SUM(output_tokens) AS output, SUM(searches) AS searches, SUM(CASE WHEN by = 'auto' THEN 1 ELSE 0 END) AS auto FROM overview").get();
     const today = this.db.prepare("SELECT COUNT(*) AS n FROM overview WHERE created >= ?").get(new Date().toISOString().slice(0, 10)).n;
+    const v = this.db.prepare("SELECT SUM(vote = 1) AS up, SUM(vote = -1) AS down FROM overview_vote").get();
     // Opus 5.5 list prices: $4/M in, $20/M out, $10 per 1000 web searches.
     const cost = ((t.input || 0) * 4 + (t.output || 0) * 20) / 1e6 + (t.searches || 0) / 100;
-    return { ...t, today, cost, queue: this.queue.size + this.running };
+    return { ...t, today, cost, queue: this.queue.size + this.running, up: v.up || 0, down: v.down || 0 };
   }
 
   // A fresh overview of the book from the web, kept for everyone.
