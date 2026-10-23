@@ -823,11 +823,12 @@ function entryForm(book, entry) {
   <h2>${entry ? "На моїй полиці" : "Додати на мою полицю"}</h2>
   <div class="three">
     <label>Статус <select name="status">
-      <option value="" ${!e.status ? "selected" : ""}>без статусу</option>
-      <option value="reading" ${e.status === "reading" ? "selected" : ""}>Читаю</option>
-      <option value="read" ${e.status === "read" ? "selected" : ""}>Прочитано</option>
-      <option value="want" ${e.status === "want" ? "selected" : ""}>Хочу прочитати</option>
-      <option value="abandoned" ${e.status === "abandoned" ? "selected" : ""}>Покинуто</option>
+      <option value="" ${!e.status && !e.kids ? "selected" : ""}>без статусу</option>
+      <option value="reading" ${e.status === "reading" && !e.kids ? "selected" : ""}>Читаю</option>
+      <option value="read" ${e.status === "read" && !e.kids ? "selected" : ""}>Прочитано</option>
+      <option value="want" ${e.status === "want" && !e.kids ? "selected" : ""}>Хочу прочитати</option>
+      <option value="abandoned" ${e.status === "abandoned" && !e.kids ? "selected" : ""}>Покинуто</option>
+      <option value="kids" ${e.kids ? "selected" : ""} title="Книжка для дітей: не рахується у твої оцінки й рекомендації">Дитяча полиця</option>
     </select></label>
     <label>Оцінка <select name="rating">
       <option value="none" ${e.rating == null ? "selected" : ""}>без оцінки</option>
@@ -843,8 +844,6 @@ function entryForm(book, entry) {
     <option value="seeking" ${e.copy === "seeking" ? "selected" : ""}>Шукаю на папері</option>
   </select></label>
   <label>Нотатка <textarea name="note" rows="5" placeholder="${e.status === "abandoned" ? WHY : "Кілька слів про книжку"}" data-why="${WHY}">${esc(e.note || "")}</textarea></label>
-  <input type="hidden" name="kids" value="0">
-  <label class="check"><span><input type="checkbox" name="kids" value="1"${e.kids ? " checked" : ""}> На дитячу полицю</span><span class="hint">Книжка для дітей: не рахується у твої оцінки й рекомендації</span></label>
   <div class="actions">
     ${entry ? `<button type="submit" class="btn danger" formaction="/api/entry/${encodeURIComponent(book.id)}/remove" formnovalidate>Прибрати з полиці</button>` : ""}
     <span class="grow"></span>
@@ -1405,7 +1404,7 @@ function addPage({ user, text = "", error = "" }) {
 // one (addFindResults); a line with no match can be looked for or added as the reader's own book, without a cover.
 // One status for the whole list, picked right before «Додати» (Max: «один для всіх, не кожній окремо»):
 // a pasted list can be books read, a pile of «Хочу прочитати» or the reader's paper shelf.
-const ADD_STATUS = [["read", "Прочитано"], ["reading", "Читаю"], ["want", "Хочу прочитати"], ["abandoned", "Покинуто"], ["paper", "На папері"]];
+const ADD_STATUS = [["read", "Прочитано"], ["reading", "Читаю"], ["want", "Хочу прочитати"], ["abandoned", "Покинуто"], ["paper", "На папері"], ["kids", "Дитяча полиця"]];
 function addReviewPage({ user, token, rows, text }) {
   // A line that was a page address and was read is found too: the book comes from that page.
   const fromPage = (r) => !r.match && r.url && !r.pageError;
@@ -1439,7 +1438,6 @@ function addReviewPage({ user, token, rows, text }) {
     <h1>Знайшли ${found} з ${rows.length}</h1>
     <p class="lead">Перевірте :) «Інша книжка», якщо знайшли неправильно. «Шукати» знайде книжку в нашому каталозі або в Open Library, з обкладинкою. Якщо немає і там, вставте в пошук посилання на книжку в магазині чи у видавництва, або заповніть вручну.</p>
     <label class="add-status">Статус <select name="status">${ADD_STATUS.map(([v, l]) => `<option value="${v}">${l}</option>`).join("")}</select></label>
-    <label class="add-kids"><input type="checkbox" name="kids" value="1"> На дитячу полицю</label>
     <button class="btn primary" data-cta>Додати <span data-n></span> на полицю</button>
   </div>
   <ol class="add-rows">${order.map((i) => line(rows[i], i)).join("")}</ol>

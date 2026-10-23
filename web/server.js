@@ -423,8 +423,8 @@ app.post("/import/:source/apply", signed, importSource, async (req, res) => {
   };
   // The status picked on /add for the whole list; «На папері» is no status but where the copy is.
   const as = p.source === "list" ? String(req.body.status || "read") : null;
-  const kids = p.source === "list" && req.body.kids === "1";
-  const batch = (r) => ({ ...batchStatus(r), ...(kids ? { kids: true } : {}) });
+  const kids = as === "kids";
+  const batch = (r) => (kids ? { ...r, status: "", kids: true } : batchStatus(r));
   const batchStatus = (r) => (as === "paper" ? { ...r, status: "", year: null, copy: "paper" } : as && ["read", "reading", "want", "abandoned"].includes(as) ? { ...r, status: as, year: as === "read" ? r.year : null, rating: ["want", "reading"].includes(as) ? null : r.rating } : r);
   const chosen = (await Promise.all(p.rows.map(swapped))).map(batch).filter((r, i) => keep.has(i) && !r.pageError && !(p.source === "list" && r.match && store.entry(req.user.id, r.match.id)));
   // One new book once, however many lines brought it (a pasted link and «Шукати» on another line for the same book).
@@ -867,12 +867,17 @@ app.post("/api/entry/:id", signed, (req, res) => {
   const b = req.body;
   const patch = {};
   if ("status" in b) patch.status = STATUSES.includes(b.status) ? b.status : "";
+  // «Дитяча полиця» is one of the statuses in the edit form (Max, 2026-10-23: «в Статус»): any other one takes the book back.
+  if ("status" in b) patch.kids = b.status === "kids";
   if ("rating" in b) patch.rating = b.rating === "none" || b.rating === "" ? null : Math.max(0, Math.min(5, Number(b.rating)));
   if ("year" in b) patch.year = b.year ? Number(b.year) : null;
   if ("copy" in b) patch.copy = ["paper", "ebook", "seeking"].includes(b.copy) ? b.copy : "";
   if ("note" in b) patch.note = String(b.note).trim();
-  // «Дитяча полиця»: the edit form sends kids=0 and, ticked, kids=1 too; the «⋯» menu sends one of them.
-  if ("kids" in b) patch.kids = [].concat(b.kids).includes("1");
+  // The «⋯» menu: kids=1 puts the book on «Дитяча полиця» (no other status), kids=0 takes it back.
+  if ("kids" in b) {
+    patch.kids = b.kids === "1";
+    if (patch.kids) patch.status = "";
+  }
   const e = store.setEntry(req.user.id, req.params.id, patch);
   if (!e) return res.status(404).send("Немає такої книжки");
   if (["read", "want", "abandoned"].includes(patch.status)) dropNow(req.user.id, req.params.id);
