@@ -24,6 +24,7 @@ const { WelcomeMail } = require("./welcome-mail");
 const listimport = require("./listimport");
 const applebooks = require("./applebooks");
 const enrich = require("./enrich");
+const { BookPage, isUrl } = require("./bookpage");
 const { Admin, adminPage, readersPage, overviewsPage } = require("./admin");
 const { Reviews } = require("./reviews");
 const { Advice } = require("./advice");
@@ -322,6 +323,12 @@ app.get("/add", signed, (req, res) => (admin.step(req.user.id, "add"), res.send(
 // «Шукати» / «Інша книжка» on /add: our catalog first, then Open Library, so a book nobody here has yet can
 // come in with its cover and ISBNs (Max, 2026-10-22: «напів-мануальне наповнення бази»).
 app.get("/api/add/find", signed, async (req, res) => {
+  // An address instead of words: the book from its page on a store's or a publisher's site (bookpage.js).
+  if (isUrl(req.query.q)) {
+    const b = await bookpage.fromUrl(String(req.query.q).trim().slice(0, 500), req.user.id);
+    const id = !b.error && store.findWork(b);
+    return res.set("Cache-Control", "no-store").send(pages.addPageResult(b, id ? store.book(id) : null));
+  }
   const q = String(req.query.q || "").slice(0, 100);
   const hits = store.search(q, { limit: 6 });
   const known = new Set(hits.map((h) => h.book.id));
@@ -346,12 +353,19 @@ const importPreview = (req, res, books, { filename = "", skipped = 0, text = "" 
   res.send(pages.importPreviewPage({ user: req.user, source: req.source, token, rows, counts: { ...counts, skipped }, filename }));
 };
 app.get("/import/list", (req, res) => res.redirect("/add"));
-app.post("/import/list", signed, (req, res) => {
+app.post("/import/list", signed, async (req, res) => {
   req.source = "list";
   const text = String(req.body.text || "");
   const { books, error } = listimport.parseList(text, { status: "read" });
   if (error) return res.status(400).send(pages.addPage({ user: req.user, text, error }));
-  importPreview(req, res, listimport.resolve(store, books), { text });
+  // Lines that are addresses of books' pages: read at once, ten at most (the rest can go one by one via «Шукати»).
+  const rows = listimport.resolve(store, books);
+  await Promise.all(rows.filter((r) => r.url).map(async (r, k) => {
+    const b = k < 10 ? await bookpage.fromUrl(r.url, req.user.id) : { error: "Забагато посилань за раз: до десяти." };
+    if (b.error) Object.assign(r, { title: r.url, pageError: b.error });
+    else Object.assign(r, fromPage(b));
+  }));
+  importPreview(req, res, rows, { text });
 });
 app.get("/import/:source", signed, importSource, (req, res) => res.send(pages.importPage({ user: req.user, source: req.source })));
 app.post("/import/:source", signed, importSource, express.raw({ type: "multipart/form-data", limit: "60mb" }), (req, res) => {
@@ -363,17 +377,32 @@ app.post("/import/:source", signed, importSource, express.raw({ type: "multipart
   if (error) return fail(error);
   importPreview(req, res, books, { filename: files.length > 1 ? `${files.length} файли` : files[0].filename, skipped });
 });
-app.post("/import/:source/apply", signed, importSource, (req, res) => {
+// A book read from a page, as an import row: the store's link on the book page, the annotation as its blurb.
+const fromPage = (b) => ({ title: b.title, author: b.author, isbns: b.isbns || [], cover: b.cover || "", blurb: b.blurb || "", blurbSource: b.site || "", pages: b.pages || null, published: b.published || null, link: b.url ? { label: b.site || new URL(b.url).hostname, url: b.url } : null });
+app.post("/import/:source/apply", signed, importSource, async (req, res) => {
   const p = pendingImports.get(String(req.body.token || ""));
   if (!p || p.reader !== req.user.id || p.source !== req.source || Date.now() - p.at > IMPORT_TTL) return res.status(400).send(req.source === "list" ? pages.addPage({ user: req.user, text: "", error: "Час вийшов або список уже імпортовано. Вставте його ще раз." }) : pages.importPage({ user: req.user, source: req.source, error: "Час вийшов або файл уже імпортовано. Виберіть файл ще раз." }));
   pendingImports.delete(req.body.token);
   admin.step(req.user.id, "saved");
   const keep = new Set([].concat(req.body.keep ?? []).map(Number));
   // «Інша книжка» on /add: the reader picked the right book for a line.
-  const swapped = (r, i) => {
+  const swapped = async (r, i) => {
     const to = String(req.body[`swap_${i}`] || "");
     const b = to && store.book(to);
     if (b) return { ...r, match: { id: b.id, title: b.title, author: b.author, href: b.href } };
+    // A book from a pasted page address: read again from the cache (the browser sends only the address).
+    const page = String(req.body[`page_${i}`] || "");
+    if (isUrl(page)) {
+      const p = await bookpage.fromUrl(page.slice(0, 500), req.user.id);
+      if (!p.error) {
+        const id = store.findWork(p);
+        const m = id && store.book(id);
+        return m ? { ...r, match: { id: m.id, title: m.title, author: m.author, href: m.href } } : { ...r, ...fromPage(p), match: null };
+      }
+    }
+    // Filled in by hand: a title (and an author) the reader typed for a line we could not find.
+    const title = String(req.body[`title_${i}`] || "").trim().slice(0, 200);
+    if (!r.match && title) return { ...r, title, author: String(req.body[`author_${i}`] || "").trim().slice(0, 200), url: null, pageError: null };
     // A book picked from Open Library: the catalog's own copy if we have one after all, else a new book with its cover.
     let ol = null;
     try {
@@ -389,11 +418,18 @@ app.post("/import/:source/apply", signed, importSource, (req, res) => {
   // The status picked on /add for the whole list; «На папері» is no status but where the copy is.
   const as = p.source === "list" ? String(req.body.status || "read") : null;
   const batch = (r) => (as === "paper" ? { ...r, status: "", year: null, copy: "paper" } : as && ["read", "reading", "want", "abandoned"].includes(as) ? { ...r, status: as, year: as === "read" ? r.year : null, rating: ["want", "reading"].includes(as) ? null : r.rating } : r);
-  const chosen = p.rows.map(swapped).map(batch).filter((r, i) => keep.has(i) && !(p.source === "list" && r.match && store.entry(req.user.id, r.match.id)));
+  const chosen = (await Promise.all(p.rows.map(swapped))).map(batch).filter((r, i) => keep.has(i) && !r.pageError && !(p.source === "list" && r.match && store.entry(req.user.id, r.match.id)));
+  // One new book once, however many lines brought it (a pasted link and «Шукати» on another line for the same book).
+  const fresh = new Set();
+  const unique = chosen.filter((r) => {
+    const key = !r.match && `${r.title}|${r.author}`.toLowerCase();
+    return !key || (!fresh.has(key) && fresh.add(key));
+  });
+  chosen.splice(0, chosen.length, ...unique);
   // On the shelf they sit after what is already there: the read ones by date read, oldest first, then the rest by date added.
   const key = (r) => (r.read ? `0${r.read}` : `1${r.added || "9999"}`);
   chosen.sort((a, b) => key(a).localeCompare(key(b)));
-  const result = store.importEntries(req.user.id, chosen.map((r) => ({ id: r.match?.id || null, title: r.title, author: r.author, isbns: r.isbns, goodreadsId: r.goodreadsId, appleId: r.appleId, status: r.status, rating: r.rating, year: r.year, note: r.note, copy: r.copy, added: r.added, read: r.read, touched: r.touched, cover: r.cover, ol: r.ol, published: r.published })), { source: req.source });
+  const result = store.importEntries(req.user.id, chosen.map((r) => ({ id: r.match?.id || null, title: r.title, author: r.author, isbns: r.isbns, goodreadsId: r.goodreadsId, appleId: r.appleId, status: r.status, rating: r.rating, year: r.year, note: r.note, copy: r.copy, added: r.added, read: r.read, touched: r.touched, cover: r.cover, ol: r.ol, published: r.published, blurb: r.blurb, blurbSource: r.blurbSource, pages: r.pages, links: r.link ? [r.link] : [] })), { source: req.source });
   advice.soon();
   const name = IMPORTS[req.source].name;
   console.log(`${name} import @${req.user.username}: ${result.added} added, ${result.updated} updated, ${result.created.length} new books`);
@@ -439,6 +475,7 @@ const librariesFor = (req) => libraries.LIBRARIES.filter((l) => req.owner || !l.
 // What readers do with books (social.js): ratings, the feed, «книжка навмання», recommendations.
 const social = new Social(store, (id) => pub(auth.reader(id)));
 // «Чи варто читати?» on book pages (advice.js): Claude, by the reader's own shelf, on a click.
+const bookpage = new BookPage({ apiKey: process.env.ANTHROPIC_API_KEY || "", log: console.log });
 const advice = new Advice({ store, social, db: store.db, apiKey: process.env.ANTHROPIC_API_KEY || "", log: console.log });
 if (!advice.enabled) console.log("ANTHROPIC_API_KEY is not set: «Чи варто читати?» is off");
 // «Що пишуть в інтернеті» by itself: a minute after start the backfill over every rated book without an

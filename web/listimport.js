@@ -107,6 +107,12 @@ function parseList(text, { status = "read" } = {}) {
       continue;
     }
     if (/^\s*([-*_=]\s*){3,}$|^\s*\|/.test(raw)) continue;
+    // The address of a book's page on a store's or a publisher's site: the server reads the page (bookpage.js).
+    const url = /^\s*(?:[-*•]\s*)?(https?:\/\/\S+)\s*$/i.exec(raw)?.[1];
+    if (url) {
+      books.push({ line: url.slice(0, 200), url: url.slice(0, 500), title: "", author: "", alt: null, isbns: [], status, rating: null, year: status === "read" ? headingYear : null, note: "", copy: "", added: "", read: "" });
+      continue;
+    }
     const md = raw.replace(/!?\[([^\]]*)\]\([^)]*\)/g, "$1").replace(/(\*\*|__)(.+?)\1/g, "$2").replace(/(^|\s)[*_](\S.*?\S|\S)[*_](?=\s|$|[.,;:])/g, "$1$2");
     const p = parseLine(md);
     if (!p) continue;
@@ -124,6 +130,8 @@ function parseList(text, { status = "read" } = {}) {
 function resolve(store, books) {
   const thisYear = new Date().getFullYear();
   return books.map((b) => {
+    // A book from a page: its own title and author, the catalog's book when it has one.
+    if (b.url) return { ...b, touched: `${b.year || thisYear}-01-01T00:00:00.000Z` };
     let { title, author, alt, ...rest } = b;
     if (alt && !store.findWork({ title, author }) && store.findWork(alt)) ({ title, author } = alt);
     // No separator at all («Тигролови Іван Багряний»): try every place the line could split into a title and

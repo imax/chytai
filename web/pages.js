@@ -1318,7 +1318,7 @@ function addPage({ user, text = "", error = "" }) {
   <form method="post" action="/import/list" class="add-paste">
     ${errorLine(error)}
     <div class="add-field"><textarea name="text" required spellcheck="false" placeholder="${attr(ADD_EXAMPLE)}">${esc(text)}</textarea><span class="add-hint">Один рядок — одна книжка</span></div>
-    <p class="small muted">Формат вільний: назва й автор або просто назва.</p>
+    <p class="small muted">Формат вільний: назва й автор, просто назва або посилання на сторінку книжки в магазині чи у видавництва.</p>
     <button class="btn primary">Знайти книжки</button>
   </form>
   <div class="narrow-only">${addAside()}</div>
@@ -1332,24 +1332,29 @@ function addPage({ user, text = "", error = "" }) {
 // a pasted list can be books read, a pile of «Хочу прочитати» or the reader's paper shelf.
 const ADD_STATUS = [["read", "Прочитано"], ["reading", "Читаю"], ["want", "Хочу прочитати"], ["abandoned", "Покинуто"], ["paper", "На папері"]];
 function addReviewPage({ user, token, rows, text }) {
-  const found = rows.filter((r) => r.match).length;
+  // A line that was a page address and was read is found too: the book comes from that page.
+  const fromPage = (r) => !r.match && r.url && !r.pageError;
+  const found = rows.filter((r) => r.match || fromPage(r)).length;
   // Found books first, then the ones already on the shelf, then what we could not find (Max: «щоб довго не гортати»).
-  const rank = (r) => (r.match && !r.own ? 0 : r.own ? 1 : 2);
+  const rank = (r) => (r.match && !r.own ? 0 : fromPage(r) ? 0 : r.own ? 1 : 2);
   const order = rows.map((r, i) => i).sort((a, b) => rank(rows[a]) - rank(rows[b]) || a - b);
   const line = (r, i) => {
     const own = !!r.own;
-    const b = r.match;
+    const page = fromPage(r);
+    const b = r.match || (page ? r : null);
+    const from = page ? `з сайту ${r.link?.label || ""}` : `з рядка «${r.line || r.title}»`;
     return `<li class="add-row${b ? "" : " missing"}${own ? " own" : ""}" data-i="${i}">
   <label class="add-tick"><input type="checkbox" name="keep" value="${i}"${b && !own ? " checked" : ""}${own ? " disabled" : ""}><span></span></label>
   <span class="add-cover">${b ? cover(b, "sm") : `<span class="cover-none"></span>`}</span>
   <span class="add-body">
-    <b class="add-title">${esc(b ? b.title : r.title)}</b>
-    <span class="add-by">${b ? esc(byline(b.author || "")) : "Не знайшли в каталозі"}${own ? ` · <span class="badge">вже на полиці</span>` : ""}</span>
-    ${b ? `<span class="add-from">з рядка «${esc(r.line || r.title)}»</span>` : `<button type="button" class="text-link small" data-own>Додати без обкладинки</button>`}
+    <b class="add-title">${esc(b ? b.title : r.pageError ? "Посилання не відкрилося" : r.title)}</b>
+    <span class="add-by">${b ? esc(byline(b.author || "")) : esc(r.pageError || "Не знайшли в каталозі")}${own ? ` · <span class="badge">вже на полиці</span>` : ""}</span>
+    ${b ? `<span class="add-from">${esc(from)}</span>` : `<button type="button" class="text-link small" data-own>Заповнити вручну</button>`}
   </span>
   <span class="add-act">${own ? "" : `<button type="button" class="text-link" data-find>${b ? "Інша книжка" : "Шукати"}</button>`}</span>
-  <input type="hidden" name="swap_${i}" value=""><input type="hidden" name="ol_${i}" value="">
-  <div class="add-find" hidden><input type="search" value="${attr(r.title)}" placeholder="назва або автор" autocomplete="off"><div class="add-found"></div></div>
+  <input type="hidden" name="swap_${i}" value=""><input type="hidden" name="ol_${i}" value=""><input type="hidden" name="page_${i}" value="">
+  ${b || own ? "" : `<div class="add-manual" hidden><label>Назва<input name="title_${i}" value="${attr(r.pageError ? "" : r.title)}" autocomplete="off" disabled></label><label>Автор<input name="author_${i}" value="${attr(r.pageError ? "" : r.author || "")}" autocomplete="off" disabled></label></div>`}
+  <div class="add-find" hidden><input type="search" value="${attr(r.pageError ? r.url : r.title)}" placeholder="назва, автор або посилання на книжку" autocomplete="off"><div class="add-found"></div></div>
 </li>`;
   };
   const body = `<form method="post" action="/import/list/apply" class="add add-review">
@@ -1357,7 +1362,7 @@ function addReviewPage({ user, token, rows, text }) {
   <div class="add-intro">
     ${addCrumbs}
     <h1>Знайшли ${found} з ${rows.length}</h1>
-    <p class="lead">Перевірте :) «Інша книжка», якщо знайшли неправильно. «Шукати» знайде книжку в нашому каталозі або в Open Library, з обкладинкою.</p>
+    <p class="lead">Перевірте :) «Інша книжка», якщо знайшли неправильно. «Шукати» знайде книжку в нашому каталозі або в Open Library, з обкладинкою. Якщо немає і там, вставте в пошук посилання на книжку в магазині чи у видавництва, або заповніть вручну.</p>
     <label class="add-status">Статус <select name="status">${ADD_STATUS.map(([v, l]) => `<option value="${v}">${l}</option>`).join("")}</select></label>
     <button class="btn primary" data-cta>Додати <span data-n></span> на полицю</button>
   </div>
@@ -1377,16 +1382,30 @@ function addReviewPage({ user, token, rows, text }) {
     timer = setTimeout(async () => { box.innerHTML = q.length < 2 ? "" : await (await fetch("/api/add/find?q=" + encodeURIComponent(q))).text(); }, 200);
   };
   form.addEventListener("input", (e) => { const row = e.target.closest(".add-find") && e.target.closest(".add-row"); if (row) look(row); });
+  form.addEventListener("input", (e) => { const m = e.target.closest(".add-manual"); if (m) { const row = m.closest(".add-row"); row.querySelector(".add-title").textContent = m.querySelector("input[name^=title_]").value || "Без назви"; row.querySelector(".add-by").textContent = m.querySelector("input[name^=author_]").value; } });
+  form.addEventListener("keydown", (e) => { if (e.key === "Enter" && e.target.closest(".add-manual")) e.preventDefault(); });
   form.addEventListener("keydown", (e) => { if (e.key === "Enter" && e.target.closest(".add-find")) e.preventDefault(); });
   form.addEventListener("click", (e) => {
     const row = e.target.closest(".add-row");
     if (!row) return;
     if (e.target.closest("[data-find]")) { const f = row.querySelector(".add-find"); f.hidden = !f.hidden; if (!f.hidden) { f.querySelector("input").focus(); look(row); } }
-    if (e.target.closest("[data-own]")) { row.querySelector("input[name=keep]").checked = true; row.classList.add("as-own"); count(); }
-    const pick = e.target.closest("[data-pick], [data-ol]");
+    // «Заповнити вручну»: a title and an author typed in for a line nobody found; the inputs go with the form only then.
+    if (e.target.closest("[data-own]")) {
+      const m = row.querySelector(".add-manual");
+      m.hidden = false;
+      m.querySelectorAll("input").forEach((x) => (x.disabled = false));
+      row.querySelector(".add-find").hidden = true;
+      row.querySelector("input[name=keep]").checked = true;
+      row.classList.add("as-own");
+      (m.querySelector("input[name^=title_]").value ? m.querySelector("input[name^=author_]") : m.querySelector("input")).focus();
+      count();
+    }
+    const pick = e.target.closest("[data-pick], [data-ol], [data-page]");
     if (pick) {
       row.querySelector("input[name=swap_" + row.dataset.i + "]").value = pick.dataset.pick || "";
       row.querySelector("input[name=ol_" + row.dataset.i + "]").value = pick.dataset.ol || "";
+      row.querySelector("input[name=page_" + row.dataset.i + "]").value = pick.dataset.page || "";
+      row.querySelector(".add-manual")?.remove();
       row.querySelector(".add-cover").innerHTML = pick.querySelector(".cover").outerHTML;
       row.querySelector(".add-title").textContent = pick.dataset.title;
       row.querySelector(".add-by").textContent = pick.dataset.author;
@@ -1405,10 +1424,18 @@ function addReviewPage({ user, token, rows, text }) {
 }
 // «Інша книжка»: what the catalog has for the typed words, each a button that takes its place.
 function addFindResults(hits, outside = []) {
-  if (!hits.length && !outside.length) return `<p class="small muted">Нічого не знайшлося. Спробуйте інакше або додайте без обкладинки.</p>`;
+  if (!hits.length && !outside.length) return `<p class="small muted">Нічого не знайшлося. Вставте сюди посилання на сторінку книжки в інтернет-магазині чи у видавництва, і ми візьмемо звідти назву, автора, обкладинку й опис. Або заповніть вручну.</p>`;
   const ours = hits.map(({ book: b }) => `<button type="button" class="add-pick" data-pick="${attr(b.id)}" data-title="${attr(b.title)}" data-author="${attr(byline(b.author || ""))}">${cover(b, "xs")}<span><b>${esc(b.title)}</b><span class="muted">${esc(byline(b.author || ""))}</span></span></button>`).join("");
   const theirs = outside.map((b) => `<button type="button" class="add-pick" data-ol="${attr(JSON.stringify(b))}" data-title="${attr(b.title)}" data-author="${attr(b.author)}">${cover(b, "xs")}<span><b>${esc(b.title)}</b><span class="muted">${esc(b.author)}${b.published ? ` · ${b.published}` : ""}</span></span></button>`).join("");
   return `${ours}${theirs ? `<p class="add-src">Open Library</p>${theirs}` : ""}`;
+}
+
+// An address pasted into «Шукати»: the book read from that page (bookpage.js), or the catalog's own copy of it.
+function addPageResult(b, known) {
+  if (b.error) return `<p class="small muted">${esc(b.error)}</p>`;
+  if (known) return `<button type="button" class="add-pick" data-pick="${attr(known.id)}" data-title="${attr(known.title)}" data-author="${attr(byline(known.author || ""))}">${cover(known, "xs")}<span><b>${esc(known.title)}</b><span class="muted">${esc(byline(known.author || ""))} · вже є на Chytai</span></span></button>`;
+  const by = byline(b.author || "");
+  return `<p class="add-src">З сайту ${esc(b.site)}</p><button type="button" class="add-pick" data-page="${attr(b.url)}" data-title="${attr(b.title)}" data-author="${attr(by)}">${cover(b, "xs")}<span><b>${esc(b.title)}</b><span class="muted">${esc([by, b.published].filter(Boolean).join(" · "))}</span>${b.blurb ? `<span class="add-blurb">${esc(b.blurb.length > 160 ? b.blurb.slice(0, 160).replace(/\s+\S*$/, "") + "…" : b.blurb)}</span>` : ""}</span></button>`;
 }
 
 // ---- import from elsewhere (/import/goodreads, /import/apple-books, /import/list) ----
@@ -1566,7 +1593,7 @@ module.exports = {
   translationsPage,
   decidedList,
   welcomePage,
-  addPage, addReviewPage, addFindResults,
+  addPage, addReviewPage, addFindResults, addPageResult,
   layout, homePage, bookPage, editPage, libraryPage, readersPage, popularPage, publishersPage, publisherPage, searchPage, searchResults, authorPage,
   loginPage, codePage, signupPage, settingsPage, privacyPage, updatesPage, messagePage, digestPage, followMailPage, importPage, importPreviewPage, importDonePage,
   esc, byline, STATUS, COPY, inline, isUk, setTitleLinks, setAuthorLinks, setStats, setReadersWithNote,

@@ -1144,7 +1144,7 @@ class Store {
         if (!id) {
           id = slugify(r.title);
           while (this.book(id)) id += "-2";
-          this.lib.books[id] = { id, title: r.title.trim(), author: (r.author || "").trim(), cover: "", tags: [], links: [], source, ...(r.isbns?.length ? { isbns: r.isbns } : {}), ...(r.cover ? { cover: r.cover } : {}), ...(r.ol ? { ol: r.ol } : {}), ...(r.published ? { published: r.published } : {}), ...(r.goodreadsId ? { goodreads: r.goodreadsId } : {}), ...(r.appleId ? { apple: r.appleId } : {}) };
+          this.lib.books[id] = { id, title: r.title.trim(), author: (r.author || "").trim(), cover: "", tags: [], links: [], source, ...(r.isbns?.length ? { isbns: r.isbns } : {}), ...(r.cover ? { cover: r.cover } : {}), ...(r.ol ? { ol: r.ol } : {}), ...(r.published ? { published: r.published } : {}), ...(r.blurb ? { blurb: r.blurb, blurbSource: r.blurbSource || "" } : {}), ...(r.pages ? { pages: r.pages } : {}), ...(r.links?.length ? { links: r.links } : {}), ...(r.goodreadsId ? { goodreads: r.goodreadsId } : {}), ...(r.appleId ? { apple: r.appleId } : {}) };
           this.writeBook(id);
           result.created.push(this.lib.books[id]);
         }
