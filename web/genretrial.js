@@ -50,8 +50,13 @@ class GenreTrial {
       const j = Math.floor(Math.random() * (i + 1));
       [ids[i], ids[j]] = [ids[j], ids[i]];
     }
+    // Books an earlier run already asked about are left for later, so a second run is a fresh sample.
+    const prev = this.state();
+    const seen = new Set([...(JSON.parse(this.db.get("genretrial:seen") || "[]")), ...(prev?.items || []).map((x) => x.id)]);
+    this.db.set("genretrial:seen", JSON.stringify([...seen]));
     const out = [];
     for (const id of ids) {
+      if (seen.has(id)) continue;
       const b = this.store.book(id);
       if (!b || isRussian(b)) continue;
       out.push(b);
@@ -99,7 +104,7 @@ class GenreTrial {
     if (this.running || !this.client) return false;
     this.running = true;
     const books = this.pick();
-    const st = { key: require("crypto").randomBytes(12).toString("hex"), at: new Date().toISOString(), model: MODEL, total: books.length, done: 0, cost: 0, items: [], errors: 0 };
+    const st = { prompt: 2, key: require("crypto").randomBytes(12).toString("hex"), at: new Date().toISOString(), model: MODEL, total: books.length, done: 0, cost: 0, items: [], errors: 0 };
     const save = () => this.db.set("genretrial", JSON.stringify(st));
     save();
     let next = 0;
