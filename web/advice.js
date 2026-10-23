@@ -24,7 +24,7 @@ const OVERVIEW_SCHEMA = `CREATE TABLE IF NOT EXISTS overview (
 // A reader's word on an overview (Max, 2026-10-23: «кнопки щоб оцінити якість AI summary. похвалити або
 // навпаки поскаржитись»): one vote a reader a book; the owner sees the sums on /admin/overviews.
 // Since 2026-10-23 15:30 three faces (Max: «три смайлика для оцінки якості опису, і так нам читачі допоможуть
-// дебажити промпт»): vote 1 = 😍 good, 2 = 😐 so-so, -1 = 😕 bad (with an optional note). 1 and -1 keep the old 👍/👎 rows.
+// дебажити промпт»): vote 1 = 🤩 good, 2 = 🙂 so-so, -1 = 🙁 bad (set 2 picked by Max, no words). 1 and -1 keep the old 👍/👎 rows.
 // A complaint carries the reader's words on what is wrong (Max: «хай читач напише що саме йому не сподобалось»).
 const VOTE_SCHEMA = `CREATE TABLE IF NOT EXISTS overview_vote (
   book TEXT NOT NULL, reader TEXT NOT NULL, vote INTEGER NOT NULL, created TEXT NOT NULL, note TEXT NOT NULL DEFAULT '',

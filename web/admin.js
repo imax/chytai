@@ -358,7 +358,7 @@ function adminPage({ user, stats: s, overviews: o = null, layout }) {
     tile(t.entries, "книжок на полицях", `+${t.entriesWeek} за тиждень · ${t.want} у «хочу прочитати»`),
     tile(t.ratings, "оцінок", `${t.notes} нотаток`),
     tile(t.follows, "стежень", `${t.digestOn} підписані на лист, ${t.digestOff} відписались`),
-    ...(o ? [tile(o.n, `<a href="/admin/overviews">оглядів від Claude</a>`, `${o.today} сьогодні · ${o.queue} в черзі · 😍 ${o.up} 😐 ${o.mid} 😕 ${o.down} · ≈ $${o.cost.toFixed(2)}`)] : []),
+    ...(o ? [tile(o.n, `<a href="/admin/overviews">оглядів від Claude</a>`, `${o.today} сьогодні · ${o.queue} в черзі · 🤩 ${o.up} 🙂 ${o.mid} 🙁 ${o.down} · ≈ $${o.cost.toFixed(2)}`)] : []),
   ].join("");
 
   // Newest week on top in both tables (Max, 2026-10-20: «свіжі зверху», «починаємо з цього тижня»).
@@ -416,13 +416,13 @@ ${s.sections.length ? `<div class="tbl"><table class="sections">
   return layout({ title: "Статистика", user, path: "/admin", body });
 }
 
-// /admin/overviews: every overview with readers' 😍/😐/😕, the complained-about ones on top.
+// /admin/overviews: every overview with readers' 🤩/🙂/🙁, the complained-about ones on top.
 function overviewsPage({ user, list, stats: o, who, layout }) {
   const esc = (t) => String(t ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
   const rows = list
     .map((r) => {
       const by = who(r.by);
-      const notes = (r.complaints || []).filter((c) => c.note).map((c) => { const w = who(c.reader); return `<div class="muted" style="white-space:normal;max-width:520px;margin-top:4px">😕 ${w ? `<a href="${esc(w.href)}">${esc(w.name)}</a>: ` : ""}${esc(c.note)}</div>`; }).join("");
+      const notes = (r.complaints || []).filter((c) => c.note).map((c) => { const w = who(c.reader); return `<div class="muted" style="white-space:normal;max-width:520px;margin-top:4px">🙁 ${w ? `<a href="${esc(w.href)}">${esc(w.name)}</a>: ` : ""}${esc(c.note)}</div>`; }).join("");
       const host = (u) => { try { return new URL(u).hostname.replace(/^www\./, ""); } catch { return u; } };
       const found = r.queries?.length || r.sources?.length ? `<details style="margin-top:4px"><summary class="muted" style="cursor:pointer">запити ${r.queries?.length || 0}, джерела ${r.sources?.length || 0}</summary><div class="muted" style="white-space:normal;max-width:520px">${(r.queries || []).map((q) => `🔍 ${esc(q)}`).join("<br>")}${r.queries?.length ? "<br>" : ""}${(r.sources || []).map((x) => `<a href="${esc(x.url)}" target="_blank" rel="noopener" title="${esc(x.title)}">${esc(host(x.url))}</a>`).join(" · ")}</div></details>` : "";
       return `<tr${r.down ? ' class="now"' : ""}><td><a href="${esc(r.book.href)}">${esc(r.book.title)}</a> <span class="muted">${esc(r.book.author || "")}</span>${notes}${found}</td><td>${r.up || ""}</td><td>${r.mid || ""}</td><td>${r.down || ""}</td><td>${r.created.slice(0, 16).replace("T", " ")}</td><td>${by ? `<a href="${esc(by.href)}">${esc(by.name)}</a>` : r.by === "auto" ? "сам" : r.by === "redo" ? "перероблено" : ""}</td><td>${n(r.searches)}</td><td>${n(r.input_tokens)}</td><td>${n(r.output_tokens)}</td></tr>`;
@@ -431,9 +431,9 @@ function overviewsPage({ user, list, stats: o, who, layout }) {
   const body = `<section class="admin">
 <p class="small"><a href="/admin">← Статистика</a></p>
 <h1>Огляди від Claude</h1>
-<p>${n(o.n)} оглядів, ${o.auto} зроблені самі · 😍 ${o.up} · 😐 ${o.mid} · 😕 ${o.down} · ${o.queue} в черзі · ≈ $${o.cost.toFixed(2)} за весь час</p>
+<p>${n(o.n)} оглядів, ${o.auto} зроблені самі · 🤩 ${o.up} · 🙂 ${o.mid} · 🙁 ${o.down} · ${o.queue} в черзі · ≈ $${o.cost.toFixed(2)} за весь час</p>
 <p class="muted">Поточна версія промпту ${o.version}: ${o.current} з ${o.n} · невдалих після рестарту: ${o.failed}${o.lastError ? ` · остання помилка: ${esc(o.lastError)}` : ""}</p>
-<table><thead><tr><th>Книжка</th><th>😍</th><th>😐</th><th>😕</th><th>Коли</th><th>Хто</th><th>Пошуків</th><th>Токенів in</th><th>out</th></tr></thead><tbody>${rows}</tbody></table>
+<table><thead><tr><th>Книжка</th><th>🤩</th><th>🙂</th><th>🙁</th><th>Коли</th><th>Хто</th><th>Пошуків</th><th>Токенів in</th><th>out</th></tr></thead><tbody>${rows}</tbody></table>
 </section>`;
   return layout({ title: "Огляди від Claude · Статистика", user, path: "/admin", body });
 }

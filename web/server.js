@@ -1211,7 +1211,7 @@ app.post("/api/overview/:id", signed, async (req, res) => {
     res.status(e.status >= 400 && e.status < 600 ? 502 : 400).json({ error: e.status ? "Claude зараз не відповідає, спробуйте трохи згодом." : e.message });
   }
 });
-// 😍 / 😐 / 😕 under an overview: vote=1, 2, -1, or 0 to take it back.
+// 🤩 / 🙂 / 🙁 under an overview: vote=1, 2, -1, or 0 to take it back.
 app.post("/api/overview/:id/vote", signed, (req, res) => {
   const book = store.book(store.resolve(req.params.id));
   if (!book) return res.status(404).json({ error: "Немає такої книжки" });

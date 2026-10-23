@@ -416,7 +416,7 @@ document.addEventListener("click", (e) => {
   block.querySelector(".advice-text")?.classList.remove("folded");
   button.closest(".advice-more")?.remove();
 });
-// 😍 / 😐 / 😕 under the overview: a second tap on the same face takes the vote back.
+// 🤩 / 🙂 / 🙁 under the overview: a second tap on the same face takes the vote back.
 async function sendVote(block, vote) {
   const r = await fetch(`/api/overview/${encodeURIComponent(block.dataset.book)}/vote`, { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ vote: String(vote) }) });
   const data = await r.json();

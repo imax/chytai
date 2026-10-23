@@ -515,7 +515,7 @@ function overviewHtml(o, user, vote = null, { folded = false } = {}) {
   // The actions (vote, complain, the owner's «Оновити») stay hidden while the text is folded (Max, 2026-10-23).
   // Three faces (Max, 2026-10-23: «три смайлика для оцінки якості опису»): 1 good, 2 so-so, -1 bad, no words (Max: «без слів»).
   const face = (v, glyph, title) => `<button class="face${vote === v ? " on" : ""}" data-vote="${v}" title="${title}" aria-label="${title}">${glyph}</button>`;
-  const votes = user ? `<span class="advice-acts"> · <span class="advice-vote">Як вам цей опис? ${face(1, "😍", "Добрий опис")}${face(2, "😐", "Так собі")}${face(-1, "😕", "Поганий")}</span>${user.owner ? ` · <button class="text-link small" data-ask="overview" data-again>Оновити</button>` : ""}</span>` : "";
+  const votes = user ? `<span class="advice-acts"> · <span class="advice-vote">Як вам цей опис? ${face(1, "🤩", "Добрий опис")}${face(2, "🙂", "Так собі")}${face(-1, "🙁", "Поганий")}</span>${user.owner ? ` · <button class="text-link small" data-ask="overview" data-again>Оновити</button>` : ""}</span>` : "";
   return `<div class="advice-text${folded ? " folded" : ""}">${marked.parse(o.text).replace(/<a href="http/g, '<a target="_blank" rel="noopener" href="http')}</div>
 ${folded ? `<p class="advice-more"><button class="text-link" data-unfold>Читати далі</button></p>` : ""}<p class="small muted">Claude, за відгуками в інтернеті · ${writingDate(o.created.slice(0, 10))}${votes}</p>`;
 }
