@@ -960,7 +960,8 @@ function foldSeries(rows) {
 }
 
 // A series on a shelf: the first covers fanned, the series' name, «серія · 8 томів» (or «3 з 8» when the
-// reader has some of it), one rating and status, the note, and the volumes in order, each a link.
+// reader has some of it), one rating and status, the note. The volumes are listed on the book page, not
+// here (Max, 2026-10-23); each keeps an anchor so a feed link to /@user#<volume> still lands on the row.
 function seriesRow(r, { action = "", data = "" } = {}) {
   const vols = r.volumes;
   const b = r.book;
@@ -973,7 +974,7 @@ function seriesRow(r, { action = "", data = "" } = {}) {
     <p class="by">${b.author ? authorLinks(b.author) : ""}</p>
     <p class="meta">${entryMeta(r)}</p>
     ${r.note ? `<p class="note">${noteOf(r, b.id)}</p>` : ""}
-    <p class="vols">${vols.map((v) => `<a href="${attr(v.book.href)}"${v.id !== r.id ? ` id="${attr(v.id)}"` : ""}><span class="num">${v.series.n}</span>${esc(v.book.title)}</a>`).join("")}</p>
+    ${vols.filter((v) => v.id !== r.id).map((v) => `<span id="${attr(v.id)}"></span>`).join("")}
   </div>
   ${action ? `<div class="row-act">${action}</div>` : ""}
 </article>`;
