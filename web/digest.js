@@ -45,6 +45,7 @@ const MONTHS = ["січня", "лютого", "березня", "квітня", 
 const plural = (n, one, few, many) => (n % 10 === 1 && n % 100 !== 11 ? one : n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20) ? few : many);
 const count = (n, one, few, many) => `${n} ${plural(n, one, few, many)}`;
 const kyiv = (d) => new Date(d.toLocaleString("en-US", { timeZone: "Europe/Kyiv" }));
+const dayKyiv = (d) => d.toLocaleDateString("sv-SE", { timeZone: "Europe/Kyiv" }); // 2026-10-23
 const uk = (n) => String(n).replace(".", ",");
 const starsText = (r) => (r == null ? "" : "★".repeat(Math.floor(r)) + (r - Math.floor(r) >= 0.4 ? "½" : ""));
 // «13–19 жовтня» or «28 вересня – 4 жовтня».
@@ -417,16 +418,24 @@ class Digest {
     return { sent: true, subject: letter.subject };
   }
 
-  // The weekly run: every recipient in turn; one failure does not stop the rest.
+  // The weekly run: every recipient in turn; one failure does not stop the rest. A deploy restarts the machine,
+  // so a run can be cut off (2026-10-23: a deploy at 9:19 stopped the first one after 17 of 62 readers): meta
+  // digest:running holds the day of an unfinished run, the timer picks it up again after a restart, and a
+  // reader already done that day (digest_log.sent) is skipped, so nobody gets two letters.
   async run({ now = new Date() } = {}) {
     if (this.running) return this.running;
-    const out = { started: now.toISOString(), sent: 0, skipped: 0, errors: [] };
+    const db = this.store.db;
+    const today = dayKyiv(now);
+    db.set("digest:running", today);
+    const done = new Set(db.prepare("SELECT reader, sent FROM digest_log").all().filter((l) => dayKyiv(new Date(l.sent)) === today).map((l) => l.reader));
+    const out = { started: now.toISOString(), sent: 0, skipped: 0, errors: [], resumed: done.size };
     // Max's text is read once, at the start, so an edit during the run does not split the letters.
     const editorial = this.editorial();
     const audience = editorial ? this.audience(editorial.audience) : new Set();
     let withText = 0;
     this.running = (async () => {
       for (const r of this.recipients()) {
+        if (done.has(r.id)) continue;
         try {
           const res = await this.sendTo(r, { now, editorial: audience.has(r.id) ? editorial : null });
           if (res.sent && audience.has(r.id)) withText++;
@@ -445,7 +454,11 @@ class Digest {
         db.set("digest:editorials", JSON.stringify([{ ...editorial, sent: out.started, readers: withText }, ...this.sentEditorials()]));
         if (JSON.stringify(this.editorial()) === JSON.stringify(editorial)) db.set("digest:editorial", "null");
       }
-      this.store.db.set("digest:last", JSON.stringify(out));
+      // A resumed run adds up with the part before the restart.
+      const prev = JSON.parse(db.get("digest:last") || "null");
+      if (done.size && prev && dayKyiv(new Date(prev.started)) === today) Object.assign(out, { started: prev.started, sent: prev.sent + out.sent, skipped: prev.skipped + out.skipped, errors: [...prev.errors, ...out.errors] });
+      db.set("digest:last", JSON.stringify(out));
+      db.set("digest:running", "");
       return out;
     })().finally(() => (this.running = null));
     return this.running;
@@ -455,7 +468,9 @@ class Digest {
   schedule() {
     const tick = () => {
       const t = kyiv(new Date());
-      const today = `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, "0")}-${String(t.getDate()).padStart(2, "0")}`;
+      const today = dayKyiv(new Date());
+      // A run cut off by a restart goes on where it stopped.
+      if (this.store.db.get("digest:running") === today && !this.running) return void this.run().catch((e) => this.log(`digest run failed: ${e.message}`));
       if (t.getDay() !== SEND_DAY || t.getHours() < SEND_HOUR || this.store.db.get("digest:lastRun") === today) return;
       this.store.db.set("digest:lastRun", today);
       this.run().catch((e) => this.log(`digest run failed: ${e.message}`));
