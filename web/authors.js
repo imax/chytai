@@ -9,7 +9,7 @@ const ENDPOINT = "https://query.wikidata.org/sparql";
 const HEADERS = { "User-Agent": "Chytai/1.0 (https://chytai.org.ua; author pages)", Accept: "application/sparql-results+json" };
 const DAY = 86400000;
 // Bumped when the lookup learns something new, so it runs again without waiting out the week.
-const VERSION = "2";
+const VERSION = "3"; // 3: Ukrainian citizenship (ua), writers with no works on Wikidata (2026-10-23)
 
 const norm = (s) => String(s || "").toLowerCase().replace(/^(the|a)\s+/, "").replace(/[’'ʼ`]/g, "").replace(/[^\p{L}\p{N}]+/gu, " ").trim();
 const CYR = /[а-яіїєґ]/i;
@@ -20,6 +20,10 @@ const forms = (name) => {
   const w = name.split(" ");
   return w.length === 2 ? [name, `${w[1]} ${w[0]}`] : [name];
 };
+
+// Citizens of Ukraine or the Ukrainian SSR (P27) are «ua»: their name is Ukrainian on every book.
+const UA = `OPTIONAL { ?a wdt:P27 ?ua_ FILTER(?ua_ IN (wd:Q212, wd:Q133356)) }`;
+const person = (r) => ({ qid: r.a.value.split("/").pop(), uk: r.uk?.value || "", en: r.en?.value || "", ...(r.ua ? { ua: true } : {}) });
 
 async function sparql(query, fetchImpl) {
   // POST: thirty names make a URL too long for a GET.
@@ -43,10 +47,28 @@ async function refresh(store, { fetchImpl = fetch, log = () => {} } = {}) {
     const batch = names.slice(i, i + 30);
     const values = batch.flatMap(forms).map((f) => `${JSON.stringify(f)}@uk ${JSON.stringify(f)}@en`).join(" ");
     try {
-      const rows = await sparql(`SELECT ?name ?a (SAMPLE(?uk_) AS ?uk) (SAMPLE(?en_) AS ?en) (COUNT(DISTINCT ?w) AS ?works) WHERE { VALUES ?name { ${values} } { ?a rdfs:label ?name } UNION { ?a skos:altLabel ?name } ?a wdt:P31 wd:Q5. ?w wdt:P50 ?a. OPTIONAL { ?a rdfs:label ?uk_ FILTER(lang(?uk_) = "uk") } OPTIONAL { ?a rdfs:label ?en_ FILTER(lang(?en_) = "en") } } GROUP BY ?name ?a`, fetchImpl);
+      const rows = await sparql(`SELECT ?name ?a (SAMPLE(?uk_) AS ?uk) (SAMPLE(?en_) AS ?en) (SAMPLE(?ua_) AS ?ua) (COUNT(DISTINCT ?w) AS ?works) WHERE { VALUES ?name { ${values} } { ?a rdfs:label ?name } UNION { ?a skos:altLabel ?name } ?a wdt:P31 wd:Q5. ?w wdt:P50 ?a. OPTIONAL { ?a rdfs:label ?uk_ FILTER(lang(?uk_) = "uk") } OPTIONAL { ?a rdfs:label ?en_ FILTER(lang(?en_) = "en") } ${UA} } GROUP BY ?name ?a`, fetchImpl);
       for (const name of batch) {
         const best = rows.filter((r) => forms(name).includes(r.name.value)).sort((a, b) => b.works.value - a.works.value)[0];
-        if (best) found[name] = { qid: best.a.value.split("/").pop(), uk: best.uk?.value || "", en: best.en?.value || "" };
+        if (best) found[name] = person(best);
+      }
+    } catch (e) {
+      errors++;
+      lastError = e.cause?.code || e.message;
+    }
+  }
+  // A writer whose books Wikidata doesn't link to them («Max Kidruk», Max 2026-10-23): a person of that
+  // name who is a writer, novelist, poet or author, when only one person fits.
+  const rest = names.filter((n) => !found[n] && !CYR.test(n));
+  for (let i = 0; i < rest.length; i += 30) {
+    const batch = rest.slice(i, i + 30);
+    const values = batch.flatMap(forms).map((f) => `${JSON.stringify(f)}@uk ${JSON.stringify(f)}@en`).join(" ");
+    try {
+      const rows = await sparql(`SELECT ?name ?a (SAMPLE(?uk_) AS ?uk) (SAMPLE(?en_) AS ?en) (SAMPLE(?ua_) AS ?ua) WHERE { VALUES ?name { ${values} } { ?a rdfs:label ?name } UNION { ?a skos:altLabel ?name } ?a wdt:P31 wd:Q5; wdt:P106 ?job. FILTER(?job IN (wd:Q36180, wd:Q6625963, wd:Q49757, wd:Q482980, wd:Q4853732, wd:Q28389)) OPTIONAL { ?a rdfs:label ?uk_ FILTER(lang(?uk_) = "uk") } OPTIONAL { ?a rdfs:label ?en_ FILTER(lang(?en_) = "en") } ${UA} } GROUP BY ?name ?a`, fetchImpl);
+      for (const name of batch) {
+        // Namesakes («John Smith»): no guess, the name stays an author of its own.
+        const people = rows.filter((r) => forms(name).includes(r.name.value));
+        if (new Set(people.map((r) => r.a.value)).size === 1) found[name] = person(people[0]);
       }
     } catch (e) {
       errors++;
@@ -68,12 +90,12 @@ async function refresh(store, { fetchImpl = fetch, log = () => {} } = {}) {
     const batch = titles.slice(i, i + 30);
     const values = batch.map((t) => `${JSON.stringify(t)}@en`).join(" ");
     try {
-      const rows = await sparql(`SELECT ?t ?a (SAMPLE(?uk_) AS ?uk) (SAMPLE(?en_) AS ?en) WHERE { VALUES ?t { ${values} } ?w rdfs:label ?t; wdt:P50 ?a. ?a wdt:P31 wd:Q5. OPTIONAL { ?a rdfs:label ?uk_ FILTER(lang(?uk_) = "uk") } OPTIONAL { ?a rdfs:label ?en_ FILTER(lang(?en_) = "en") } } GROUP BY ?t ?a`, fetchImpl);
+      const rows = await sparql(`SELECT ?t ?a (SAMPLE(?uk_) AS ?uk) (SAMPLE(?en_) AS ?en) (SAMPLE(?ua_) AS ?ua) WHERE { VALUES ?t { ${values} } ?w rdfs:label ?t; wdt:P50 ?a. ?a wdt:P31 wd:Q5. OPTIONAL { ?a rdfs:label ?uk_ FILTER(lang(?uk_) = "uk") } OPTIONAL { ?a rdfs:label ?en_ FILTER(lang(?en_) = "en") } ${UA} } GROUP BY ?t ?a`, fetchImpl);
       for (const t of batch) {
         const people = rows.filter((r) => r.t.value === t);
         if (people.length !== 1) continue; // two books of that title by different people: can't tell
         const r = people[0];
-        for (const name of byTitle.get(t)) if (!found[name]) found[name] = { qid: r.a.value.split("/").pop(), uk: r.uk?.value || "", en: r.en?.value || "" };
+        for (const name of byTitle.get(t)) if (!found[name]) found[name] = person(r);
       }
     } catch (e) {
       errors++;
@@ -84,7 +106,7 @@ async function refresh(store, { fetchImpl = fetch, log = () => {} } = {}) {
   log(`authors: ${line}`);
   store.db.set("authors:log", line);
   refresh.running = false;
-  const batches = Math.ceil(names.length / 30) + Math.ceil(titles.length / 30);
+  const batches = Math.ceil(names.length / 30) + Math.ceil(rest.length / 30) + Math.ceil(titles.length / 30);
   if (errors > batches / 2) return false; // try again at the next round (every 6 hours) instead of in a week
   store.db.set("authors:checked", String(Date.now()));
   store.db.set("authors:v", VERSION);
@@ -179,7 +201,7 @@ function build(store) {
     while (bySlug.has(slug)) slug += "-2";
     // The Ukrainian name for a Ukrainian edition's byline: our own Cyrillic spelling, else Wikidata's.
     const uk = CYR.test(name) ? name : CYR.test(g.wd?.uk || "") ? g.wd.uk : "";
-    const a = { key: g.key, qid: g.qid, name, other, uk, slug, href: `/author/${slug}`, ids: [...g.ids], names: [...g.names.keys()] };
+    const a = { key: g.key, qid: g.qid, name, other, uk, ua: !!g.wd?.ua, slug, href: `/author/${slug}`, ids: [...g.ids], names: [...g.names.keys()] };
     bySlug.set(slug, a);
     list.push(a);
   }
@@ -189,16 +211,21 @@ function build(store) {
   for (const a of list) if (a.uk && !keyOfName.has(a.uk)) keyOfName.set(a.uk, a.key);
   const byKey = new Map(list.map((a) => [a.key, a]));
   const byName = (name) => byKey.get(keyOfName.get(name)) || null;
-  // «Erich Maria Remarque» -> «Еріх Марія Ремарк» for a book with a Ukrainian title (Max, 2026-10-23),
-  // name by name; "" when no name has a Ukrainian form. Cached: book() asks for every card.
+  // «Erich Maria Remarque» -> «Еріх Марія Ремарк» for a book with a Ukrainian title, and a Ukrainian
+  // author's name on any book («Max Kidruk» -> «Макс Кідрук»; Max, 2026-10-23), name by name; "" when no
+  // name changes. Cached: book() asks for every card.
   const ukCache = new Map();
-  const ukName = (author) => {
-    if (!ukCache.has(author)) {
+  const ukName = (author, ukTitle = true) => {
+    const k = `${ukTitle ? 1 : 0}${author}`;
+    if (!ukCache.has(k)) {
       const names = splitAuthors(author);
-      const uk = names.map((n) => (CYR.test(n) ? n : byName(n)?.uk || n));
-      ukCache.set(author, uk.some((n, i) => n !== names[i]) ? uk.join(", ") : "");
+      const uk = names.map((n) => {
+        const a = !CYR.test(n) && byName(n);
+        return a?.uk && (ukTitle || a.ua) ? a.uk : n;
+      });
+      ukCache.set(k, uk.some((n, i) => n !== names[i]) ? uk.join(", ") : "");
     }
-    return ukCache.get(author);
+    return ukCache.get(k);
   };
   return { list, bySlug, byName, ukName };
 }
@@ -211,7 +238,7 @@ async function wikidataWorks(store, qid, { fetchImpl = fetch, log = () => {} } =
   const cached = JSON.parse(store.db.get(key) || "null");
   if (cached && Date.now() - cached.at < 30 * DAY) return cached.works;
   try {
-    const rows = await sparql(`SELECT ?w (SAMPLE(?uk_) AS ?uk) (SAMPLE(?en_) AS ?en) (SAMPLE(?orig_) AS ?orig) (MIN(YEAR(?date_)) AS ?year) (SAMPLE(?sl_) AS ?sl) WHERE { ?w wdt:P50 wd:${qid}; wikibase:sitelinks ?sl_. FILTER NOT EXISTS { ?w wdt:P31 wd:Q3331189 } OPTIONAL { ?w rdfs:label ?uk_ FILTER(lang(?uk_) = "uk") } OPTIONAL { ?w rdfs:label ?en_ FILTER(lang(?en_) = "en") } OPTIONAL { ?w wdt:P1476 ?orig_ } OPTIONAL { ?w wdt:P577 ?date_ } } GROUP BY ?w`, fetchImpl);
+    const rows = await sparql(`SELECT ?w (SAMPLE(?uk_) AS ?uk) (SAMPLE(?en_) AS ?en) (SAMPLE(?orig_) AS ?orig) (MIN(YEAR(?date_)) AS ?year) WHERE { ?w wdt:P50 wd:${qid}; wikibase:sitelinks ?sl_. FILTER NOT EXISTS { ?w wdt:P31 wd:Q3331189 } OPTIONAL { ?w rdfs:label ?uk_ FILTER(lang(?uk_) = "uk") } OPTIONAL { ?w rdfs:label ?en_ FILTER(lang(?en_) = "en") } OPTIONAL { ?w wdt:P1476 ?orig_ } OPTIONAL { ?w wdt:P577 ?date_ } } GROUP BY ?w`, fetchImpl);
     const works = rows
       .map((r) => ({ qid: r.w.value.split("/").pop(), uk: r.uk?.value || "", en: r.en?.value || "", orig: r.orig?.value || "", year: Number(r.year?.value) || 0, sl: Number(r.sl?.value) || 0 }))
       .filter((w) => (w.uk || w.en || w.orig) && (w.sl >= 2 || w.uk))

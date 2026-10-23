@@ -1271,8 +1271,9 @@ class Store {
     }
     // A Ukrainian edition names its author in Ukrainian too («Еріх Марія Ремарк», not «Erich Maria
     // Remarque»; Max 2026-10-23), when the author pages know the Ukrainian name. Search keeps both.
-    if (!fix?.author && out.author && /[а-яіїєґ]/i.test(out.title || "") && !/[а-яіїєґ]/i.test(out.author)) {
-      const uk = this.authors?.ukName(out.author);
+    // A Ukrainian author's name is Ukrainian on any book («Макс Кідрук»).
+    if (!fix?.author && out.author && !/[а-яіїєґ]/i.test(out.author)) {
+      const uk = this.authors?.ukName(out.author, /[а-яіїєґ]/i.test(out.title || ""));
       if (uk) (out.authorOrig = out.author), (out.author = uk);
     }
     out.href = this.slugs ? this.href(id) : `/book/${encodeURIComponent(id)}`;
