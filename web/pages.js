@@ -1572,7 +1572,7 @@ ${user.owner ? "" : `<form method="post" action="/settings/delete" class="form d
 
 // The settings' two tabs: the account itself, and the letters (Max, 2026-10-22: «вкладку в налаштуваннях, де
 // будуть різні імейли»).
-const settingsTabs = (on) => `<nav class="tabs settings-tabs">${[["account", "/settings", "Акаунт"], ["mail", "/settings/mail", "Листи"]].map(([k, href, l]) => (k === on ? `<span class="tab on">${l}</span>` : `<a class="tab" href="${href}">${l}</a>`)).join("")}</nav>`;
+const settingsTabs = (on) => `<nav class="tabs settings-tabs">${[["account", "/settings", "Акаунт"], ["mail", "/settings/mail", "Листи"], ["chats", "/settings/chats", "AI-чати"]].map(([k, href, l]) => (k === on ? `<span class="tab on">${l}</span>` : `<a class="tab" href="${href}">${l}</a>`)).join("")}</nav>`;
 
 // /settings/mail: every letter the site sends, the ones a reader can switch and the ones that come only when asked.
 function mailSettingsPage({ user, values, saved = false }) {
@@ -1589,6 +1589,36 @@ function mailSettingsPage({ user, values, saved = false }) {
   <p class="muted small">Код для входу: лише коли ви самі входите на сайт.<br>Вітальний лист: після реєстрації.</p>
 </section>`;
   return authLayout({ title: "Налаштування", lead: "", form, user, path: "/settings" });
+}
+
+// /settings/chats (mcp.js): how to let Claude or ChatGPT add books to the shelf, and the chats already let in.
+const dayUk = (iso) => (iso ? new Date(iso).toLocaleDateString("uk-UA", { timeZone: "Europe/Kyiv", day: "numeric", month: "long", year: "numeric" }) : "");
+function chatsSettingsPage({ user, url, grants }) {
+  const list = grants.length
+    ? grants.map((g) => `<div class="chat-grant"><span><b>${esc(g.name)}</b><span class="hint">Підключено ${esc(dayUk(g.created))}${g.used ? ` · востаннє ${esc(dayUk(g.used))}` : ""}</span></span><form method="post" action="/settings/chats/${attr(g.id)}/revoke"><button class="btn small">Відключити</button></form></div>`).join("")
+    : `<p class="muted small">Поки жодного.</p>`;
+  const form = `${settingsTabs("chats")}<section class="form">
+  <p class="muted small">Підключіть Chytai до Claude чи ChatGPT, і просіть просто в чаті: «додай Тигроловів у прочитане, пʼять зірок» або «додай на полицю всі книжки, які ти знаєш, що я читав». Чат знаходить книжки в каталозі й кладе на вашу полицю. Видаляти книжки він не може.</p>
+  <label>Адреса для конектора<input type="text" value="${attr(url)}" readonly onclick="this.select()"></label>
+  <p class="muted small"><b>Claude:</b> Налаштування → Конектори → Додати власний конектор, вставте адресу, далі увійдіть у Chytai і натисніть «Дозволити».<br><b>ChatGPT:</b> Налаштування → Застосунки й конектори, у режимі розробника створіть конектор з цією адресою.</p>
+</section>
+<section class="form import-box">
+  <h2>Підключені чати</h2>
+  ${list}
+</section>`;
+  return authLayout({ title: "Налаштування", lead: "", form, user, path: "/settings" });
+}
+
+// /oauth/authorize: a chat asks to see and fill the reader's shelf.
+function consentPage({ user, client, host, fields }) {
+  const hidden = Object.entries(fields).map(([k, v]) => `<input type="hidden" name="${attr(k)}" value="${attr(v)}">`).join("");
+  const form = `<form method="post" action="/oauth/authorize" class="form">${hidden}
+  <p>«${esc(client.name)}» просить доступ до полиці <b>${esc(user.name)}</b> (@${esc(user.username)}). Він зможе:</p>
+  <ul class="small"><li>шукати книжки в каталозі Chytai;</li><li>бачити ваші книжки, оцінки й нотатки;</li><li>додавати книжки на полицю й змінювати їхній статус та оцінку.</li></ul>
+  <p class="muted small">Видаляти книжки чи змінювати акаунт він не зможе. Відключити чат можна будь-коли в <a class="text-link" href="/settings/chats">налаштуваннях</a>. Після дозволу вас поверне на ${esc(host)}.</p>
+  <div class="actions"><button class="btn primary" name="allow" value="1">Дозволити</button><button class="btn" name="allow" value="0">Скасувати</button></div>
+</form>`;
+  return authLayout({ title: "Підключити чат до Chytai", lead: "", form, user, path: "/settings" });
 }
 
 // Max (2026-10-20): any new outside service that sees readers' data (mail, hosting, fonts, analytics, AI) must be added here.
@@ -1616,6 +1646,7 @@ function privacyPage({ user }) {
 <li><strong>Fly.io</strong> — сервери у Франкфурті (Німеччина), там лежить база сайту і книжки з читалки.</li>
 <li><strong>Anthropic</strong> (Claude) — коли в читалці ви просите пояснити чи перекласти уривок, сам уривок і трохи тексту навколо йдуть в Anthropic, щоб Claude відповів. Для огляду відгуків у розділі «Про книжку» на сторінці книжки туди йдуть лише назва, автор і опис книжки. Вашої пошти, імені й полиці Anthropic не отримує.</li>
 <li><strong>Resend</strong> — листи від code@chytai.org.ua.</li>
+<li><strong>Claude, ChatGPT чи інший AI-чат</strong>, якщо ви самі підключили його до Chytai в <a class="text-link" href="/settings/chats">налаштуваннях</a>. Тоді чат бачить вашу полицю (книжки, оцінки, нотатки) і може додавати на неї книжки, коли ви його про це просите. Що далі відбувається з розмовою, вирішують правила того чату. Відключити його можна будь-коли.</li>
 <li><strong>Google Fonts</strong> — шрифти сайту. Ваш браузер завантажує їх з серверів Google, тож Google бачить вашу IP-адресу, як і на більшості сайтів.</li>
 <li><strong>Open Library</strong> (openlibrary.org, некомерційний проєкт Internet Archive) — для книжок, яких немає в каталогах, ми питаємо в нього обкладинку, ISBN, рік і опис.</li>
 <li><strong>Google Books</strong> — те саме для книжок, яких Open Library не знає (зокрема російською й українською): туди йдуть лише назва й автор, обкладинки ваш браузер завантажує з books.google.com.</li>
@@ -1627,7 +1658,7 @@ function privacyPage({ user }) {
 <h2>Хто відповідає</h2>
 <p>Власник сайту і даних — ФОП Іщенко М. Ф. Пишіть на <a class="text-link" href="mailto:ischenko@gmail.com">ischenko@gmail.com</a> — відповімо.</p>
 <p>Якщо ми щось змінимо в цих правилах, оновимо цю сторінку і дату нижче.</p>
-<p><em>Оновлено 22 жовтня 2026 року.</em></p>
+<p><em>Оновлено 23 жовтня 2026 року.</em></p>
 </section>` });
 }
 
@@ -2044,6 +2075,8 @@ ${user ? `<dialog id="new-list"><div class="dlg-head"><h2>Новий списо�
 }
 
 module.exports = {
+  chatsSettingsPage,
+  consentPage,
   listPage, listsPage,
   readeatPage,
   nowPage,

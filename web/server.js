@@ -28,6 +28,7 @@ const readeat = require("./readeat");
 const { BookPage, isUrl } = require("./bookpage");
 const { UkFinder } = require("./ukfind");
 const { Admin, adminPage, readersPage, overviewsPage } = require("./admin");
+const { Mcp } = require("./mcp");
 const { Reviews } = require("./reviews");
 const { Advice } = require("./advice");
 const { Lists } = require("./lists");
@@ -191,7 +192,7 @@ app.post("/login/signup", (req, res) => {
   console.log(`new reader @${reader.username}`);
   welcomeMail.newReader(reader);
   // Someone who came from the reader goes straight back to it; the welcome page is about the site.
-  signIn(req, res, reader, next.startsWith("/reader-login") ? next : `/welcome${next ? `?next=${encodeURIComponent(next)}` : ""}`);
+  signIn(req, res, reader, next.startsWith("/reader-login") || next.startsWith("/oauth/authorize") ? next : `/welcome${next ? `?next=${encodeURIComponent(next)}` : ""}`);
 });
 app.get("/welcome", signed, (req, res) => (admin.step(req.user.id, "welcome"), res.send(pages.welcomePage({ user: req.user, next: safeNext(req.query.next) }))));
 function signIn(req, res, reader, next) {
@@ -315,11 +316,16 @@ app.post("/settings/delete", signed, (req, res) => {
   if (req.owner) return res.status(400).send(pages.messagePage({ title: "Власника не видаляємо", text: "Для цього є інший шлях.", user: req.user }));
   if (req.body.confirm !== req.user.username) return res.status(400).send(pages.settingsPage({ user: req.user, values: req.user, error: "Щоб видалити акаунт, впишіть своє ім'я для адреси." }));
   lists.forgetReader(req.user.id);
+  mcp.forgetReader(req.user.id);
   auth.deleteReader(req.user.id);
   store.forgetReader(req.user.id);
   res.setHeader("Set-Cookie", auth.cookie("", { clear: true, secure: secure(req) }));
   res.send(pages.messagePage({ title: "Акаунт видалено", text: "Книжки, оцінки й нотатки стерто. Дякуємо, що читали з нами." }));
 });
+
+// ---- Chytai in a chat: the MCP server at /mcp and its OAuth (mcp.js) ----
+const mcp = new Mcp({ store, auth, pages, site: (req) => site(req), notifyOwner, details, dropNow: (reader, id) => dropNow(reader, id) });
+mcp.routes(app, { signed });
 
 // ---- adding books: /add (one page with every way in), and imports from elsewhere ----
 // A pasted list (listimport.js), Goodreads (goodreads.js) or Apple Books (applebooks.js): the reader looks at
