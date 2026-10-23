@@ -454,18 +454,12 @@ function bookPage({ book, entry, now = false, user, shelf, inLibrary = new Map()
       ${(first.entry.note ? rest : readers).length ? `<div class="others">${(first.entry.note ? rest : readers).map((r) => readerLine(r, book.id)).join("")}</div>` : ""}
     </section>` : ""}
     ${adviceBlock(book, advice)}
-    ${overviewBlock(book, overview, user, overviewVote)}
     ${SHOW_REVIEWS && (writings.length || user) ? `<section class="block" id="writings">
       ${label("Огляди")}
       ${writings.length ? writingsList(writings, book, user) : ""}
       ${user ? addWriting(book, reviewError) : ""}
     </section>` : ""}
-    ${book.blurb || book.ukTitle || ukAsk ? `<section class="block" id="about">
-      ${label("Про книжку")}
-      ${book.blurb ? `<div class="about">${book.blurb.split(/\n\n+/).map((t) => `<p>${esc(t)}</p>`).join("")}</div>` : ""}
-      <p class="small muted">${[book.blurb && !book.edited?.blurb ? (book.blurbSource ? `Опис: ${esc(book.blurbSource)}` : `Опис з сайту ${esc(shelf ? shelf.name : book.source)}`) : "", book.ukTitle || ukAsk ? ukLine(book, ukAsk) : ""].filter(Boolean).join(" · ")}</p>
-      ${ukForm(book, ukAsk, editionError)}
-    </section>` : ""}
+    ${aboutBlock(book, shelf, overview, user, overviewVote, ukAsk, editionError)}
   </div>
   <aside>
     ${also.length ? `${label(alsoTitle)}${minis(also)}` : ""}
@@ -515,13 +509,23 @@ function overviewHtml(o, user, vote = null, { folded = false } = {}) {
   return `<div class="advice-text${folded ? " folded" : ""}">${marked.parse(o.text).replace(/<a href="http/g, '<a target="_blank" rel="noopener" href="http')}</div>
 ${folded ? `<p class="advice-more"><button class="text-link" data-unfold>Читати далі</button></p>` : ""}<p class="small muted">Claude, за відгуками в інтернеті · ${writingDate(o.created.slice(0, 10))}${votes}</p>${report}`;
 }
-function overviewBlock(book, o, user, vote = null) {
+// «Про книжку» (Max, 2026-10-23: «зробити ці відгуки як підрозділ про книжку, а старий про книжку викинути»):
+// one section under the old heading. With an overview it shows the overview instead of the shop's blurb;
+// without one, the blurb as before, and a signed-in reader can ask for the overview under it.
+function aboutBlock(book, shelf, o, user, vote, ukAsk, editionError) {
   const canSee = o && (OVERVIEW_PUBLIC || user?.owner);
-  if (!canSee && !(user && (OVERVIEW_PUBLIC || user.owner))) return "";
-  const inner = canSee ? overviewHtml(o, user, vote, { folded: true }) : `<p class="advice-ask"><button class="text-link" data-ask="overview">Що кажуть про цю книжку?</button></p>`;
-  return `<section class="block advice" id="overview" data-book="${attr(book.id)}">
-      ${label("Відгуки в інтернеті")}
-      <div class="advice-body">${inner}</div>
+  const canAsk = !canSee && user && (OVERVIEW_PUBLIC || user.owner);
+  if (!canSee && !canAsk && !book.blurb && !book.ukTitle && !ukAsk) return "";
+  const blurb = book.blurb ? `<div class="about">${book.blurb.split(/\n\n+/).map((t) => `<p>${esc(t)}</p>`).join("")}</div>` : "";
+  const blurbSource = book.blurb && !book.edited?.blurb ? (book.blurbSource ? `Опис: ${esc(book.blurbSource)}` : `Опис з сайту ${esc(shelf ? shelf.name : book.source)}`) : "";
+  const body = canSee ? overviewHtml(o, user, vote, { folded: true })
+    : `${blurb}${blurbSource || canAsk ? `<p class="small muted">${[blurbSource, canAsk ? `<button class="text-link small" data-ask="overview">Що кажуть про цю книжку?</button>` : ""].filter(Boolean).join(" · ")}</p>` : ""}`;
+  const uk = book.ukTitle || ukAsk ? `<p class="small muted">${ukLine(book, ukAsk)}</p>` : "";
+  return `<section class="block advice" id="about" data-book="${attr(book.id)}">
+      ${label("Про книжку")}
+      <div class="advice-body">${body}</div>
+      ${uk}
+      ${ukForm(book, ukAsk, editionError)}
     </section>`;
 }
 // «Огляди» (reviews.js): three links, the rest under «Ще N»; the owner, or the reader who added it, can take one off.
