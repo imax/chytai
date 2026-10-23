@@ -42,7 +42,7 @@ const AUTO_PARALLEL = 2;
 const BACKFILL = false;
 // The overview prompt's version: rows made with an older one are redone at start, two at a time
 // (Max, 2026-10-23 08:09, after the prompt lost its obligatory paragraph of complaints: «старі теж»).
-const PROMPT_VERSION = 2;
+const PROMPT_VERSION = 3; // 3: the site's own notes and ratings no longer go in (2026-10-23 08:35)
 // «Що пишуть в інтернеті» (Max, 2026-10-23): one summary per book, not per reader, of what readers and
 // reviewers say, from the web, kept on the page for everyone. Our own words only: a review's text may
 // not be reproduced (Закон 2811-IX), so no quotes, no names, no links.
@@ -192,8 +192,10 @@ class Advice {
   }
 
   // The book as text for the prompt: what it is, what the site knows, what other readers said (their notes are public).
-  async bookText(book, { overview = true } = {}) {
-    const s = this.social.stats(book.id);
+  // `site: false` leaves out what Chytai's own readers wrote and rated: the overview is about the web, and
+  // a reader's note fed in came back as «частина українських читачів» (Max, 2026-10-23, Chickenhawk).
+  async bookText(book, { overview = true, site = true } = {}) {
+    const s = site ? this.social.stats(book.id) : { rated: 0 };
     const f = await this.facts(book);
     const bits = [`Title: ${book.title}`];
     if (f.original) bits.push(`Original title: ${f.original}`);
@@ -213,8 +215,7 @@ class Advice {
     const ov = overview ? this.overviewOf(book.id) : null;
     if (ov) bits.push(`What readers and critics say (the site's own summary from the web): ${ov.text}`);
     if (s.rated) bits.push(`On Chytai: average rating ${s.avg}/5 from ${s.rated} readers; ${s.finished} finished, ${s.dropped} gave up, ${s.want} want to read.`);
-    const notes = this.store
-      .readersOf(book.id, { all: true })
+    const notes = (site ? this.store.readersOf(book.id, { all: true }) : [])
       .filter((r) => r.entry.note)
       .slice(0, 5)
       .map((r) => `- ${r.entry.rating != null ? `${r.entry.rating}/5: ` : ""}«${clip(stripMd(r.entry.note), 300)}»`);
@@ -465,7 +466,7 @@ class Advice {
       output_config: { effort: "low" },
       tools: [{ type: "web_search_20260209", name: "web_search", max_uses: WEB_SEARCHES }],
       system: OVERVIEW_SYSTEM,
-      messages: [{ role: "user", content: `The book:\n${await this.bookText(book, { overview: false })}\n\nWhat do readers and critics say about it?` }],
+      messages: [{ role: "user", content: `The book:\n${await this.bookText(book, { overview: false, site: false })}\n\nWhat do readers and critics say about it?` }],
     });
     const row = { text, model, created: new Date().toISOString() };
     this.db
