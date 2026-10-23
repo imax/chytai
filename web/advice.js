@@ -47,6 +47,9 @@ const AUTO_PARALLEL = 2;
 // робити авто-backfill … я ще подумаю»); a book gets its overview when a reader rates or notes it from
 // now on. Flip to true to let sweep() run at start and daily.
 const BACKFILL = false;
+// Automatic overviews (first rating/note, «Хочу прочитати») are PAUSED while Max tunes the prompt
+// (2026-10-23 15:03: «поки давай вимкнемо backfill»); readers' own clicks and the owner's «Оновити» still work.
+const AUTO = false;
 // The overview prompt's version: rows made with an older one are redone at start, two at a time
 // (Max, 2026-10-23 08:09, after the prompt lost its obligatory paragraph of complaints: «старі теж»).
 const PROMPT_VERSION = 6; // 3: the site's own notes and ratings no longer go in (2026-10-23 08:35); 4: shops blocked (09:16); 5: shorter, reservations one sentence at most (14:40); 6: like a friend, about what people love, no pros/cons balance (15:05)
@@ -446,7 +449,7 @@ class Advice {
   }
   // One book, after a reader rated or noted it: queued if it has no overview (nor its translation).
   want(bookId) {
-    if (!this.client) return;
+    if (!this.client || !AUTO) return;
     const id = this.store.canonical(bookId);
     if (!this.store.book(id) || isRussian(this.store.book(id)) || this.overviewOf(id) || this.queue.has(id)) return;
     this.queue.set(id, { fresh: false });
