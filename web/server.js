@@ -883,6 +883,39 @@ function alsoFor(req, id) {
   }
   return { also: out, alsoTitle: "Новинки видавництв" };
 }
+// Discovery blocks under «Читали це, сподобалось і це» (Max, 2026-10-23): the best rated books of the
+// book's genre, the new books of its publisher, and one random book a reader rated 4,5+ and wrote about.
+function discovery(req, book, also = []) {
+  const skip = new Set([book.id, ...store.translationsOf(book.id).map((t) => t.id), ...also.map((b) => b.id)]);
+  const genre = book.tags?.find((t) => pages.GENRES.includes(t));
+  const inGenre = genre
+    ? [...social.liked().values()]
+        .filter((x) => !skip.has(x.book.id) && (x.book.tags || []).includes(genre))
+        .sort((a, b) => b.avg - a.avg || !!b.book.cover - !!a.book.cover)
+        .slice(0, 4)
+        .map((x) => x.book)
+    : [];
+  // The publisher: the book's own shelf or an edition's, the first with new books.
+  const own = new Set([book.shelf, ...(book.editions || []).map((e) => e.shelf?.id || e.shelf)].filter(Boolean));
+  let fresh = null;
+  for (const sh of shelvesFor(req).filter((sh) => own.has(sh.id) && sh.kind !== "free")) {
+    const items = [];
+    for (const it of visible(sh).filter((it) => it.isNew && it.cover)) {
+      const b = store.book(it.id);
+      if (!b || skip.has(b.id) || isRussian(b) || items.some((x) => x.id === b.id)) continue;
+      items.push(b);
+      if (items.length >= 4) break;
+    }
+    if (items.length >= 2) {
+      fresh = { shelf: sh, books: items };
+      break;
+    }
+  }
+  const pick = social.picks(3).find((p) => !skip.has(p.book.id) && !inGenre.some((b) => b.id === p.book.id)) || null;
+  return { inGenre: genre && inGenre.length >= 2 ? { genre, books: inGenre } : null, fresh, pick };
+}
+// Off for now (Max, 2026-10-23: «Решту поки ні»): authorAbout() asks Wikidata, so it is not even called.
+const SHOW_AUTHOR_ABOUT = false;
 // «Про автора» and the book's awards (Max, 2026-10-23), from Wikidata through authors.aboutNow(): the
 // first of the book's authors Wikidata knows. Nothing yet on the first view of an author's book.
 function authorAbout(book) {
@@ -908,8 +941,9 @@ app.get("/book/:id", (req, res) => {
   if (!book) return res.status(404).send(pages.messagePage({ title: "Немає такої книжки", text: "", user: req.user }));
   const file = readerFileFor(req.user?.id, book);
   const free = !file && freeFileFor(book);
+  const alsoBooks = alsoFor(req, book.id);
   const myLists = req.user ? lists.of(req.user.id).map((l) => ({ id: l.id, title: l.title, count: l.count, has: lists.has(l.id, book.id) })) : null;
-  res.send(pages.bookPage({ ...authorAbout(book), lists: lists.withBook(book.id).map(withCovers), myLists, freeRead: !!free, book, entry: store.sharedEntry(req.user?.id, book.id), now: !!req.user && nowIds(req.user.id).has(store.canonical(book.id)), user: req.user, readUrl: file ? `${READER_URL}/?open=${encodeURIComponent(file.name)}` : free ? `${READER_URL}/free/${encodeURIComponent(free.name)}` : "", shelf: book.shelf && (req.owner || !isDraft(book.shelf)) ? store.shelf(book.shelf) : null, inLibrary: inLibraryMap(req), readers: readersOf(book.id), ...alsoFor(req, book.id), writings: reviews.of(book.id), reviewError: String(req.query.review_error || "").slice(0, 300), editionError: String(req.query.edition_error || "").slice(0, 300), ukAsk: ukAskFor(req, book), advice: advice.state(req.user, book.id), overview: linkedOverview(book), overviewVote: advice.voteOf(book.id, req.user?.id) }));
+  res.send(pages.bookPage({ ...(SHOW_AUTHOR_ABOUT ? authorAbout(book) : {}), ...discovery(req, book, alsoBooks.also), lists: lists.withBook(book.id).map(withCovers), myLists, freeRead: !!free, book, entry: store.sharedEntry(req.user?.id, book.id), now: !!req.user && nowIds(req.user.id).has(store.canonical(book.id)), user: req.user, readUrl: file ? `${READER_URL}/?open=${encodeURIComponent(file.name)}` : free ? `${READER_URL}/free/${encodeURIComponent(free.name)}` : "", shelf: book.shelf && (req.owner || !isDraft(book.shelf)) ? store.shelf(book.shelf) : null, inLibrary: inLibraryMap(req), readers: readersOf(book.id), ...alsoBooks, writings: reviews.of(book.id), reviewError: String(req.query.review_error || "").slice(0, 300), editionError: String(req.query.edition_error || "").slice(0, 300), ukAsk: ukAskFor(req, book), advice: advice.state(req.user, book.id), overview: linkedOverview(book), overviewVote: advice.voteOf(book.id, req.user?.id) }));
 });
 
 // An author: their works from Wikidata (linked to our books of them) and every book of theirs we have.

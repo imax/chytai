@@ -453,7 +453,7 @@ function authorBlock(a) {
 </section>`;
 }
 
-function bookPage({ awards = [], authorInfo = null, lists = [], myLists = null, book, entry, now = false, user, shelf, inLibrary = new Map(), readers = [], also = [], alsoTitle = "Читали це, сподобалось і це", writings = [], reviewError = "", editionError = "", ukAsk = null, readUrl = "", freeRead = false, advice = null, overview = null, overviewVote = null }) {
+function bookPage({ inGenre = null, fresh = null, pick = null, awards = [], authorInfo = null, lists = [], myLists = null, book, entry, now = false, user, shelf, inLibrary = new Map(), readers = [], also = [], alsoTitle = "Читали це, сподобалось і це", writings = [], reviewError = "", editionError = "", ukAsk = null, readUrl = "", freeRead = false, advice = null, overview = null, overviewVote = null }) {
   const s = statsOf(book.id);
   // The genre leads to its page (/genre/biohrafii; Max 2026-10-23), when it is one of ours.
   const genre = book.tags?.find((t) => t !== "українською");
@@ -500,7 +500,10 @@ function bookPage({ awards = [], authorInfo = null, lists = [], myLists = null, 
     ${authorBlock(authorInfo)}
   </div>
   <aside>
-    ${also.length ? `${label(alsoTitle)}${minis(also)}` : ""}
+    ${also.length && !(fresh && alsoTitle === "Новинки видавництв") ? `${label(alsoTitle)}${minis(also)}` : ""}
+    ${inGenre ? `${label(`Ще в жанрі «${esc(cap(inGenre.genre))}»`, `<a href="/genre/${attr(genreSlug(inGenre.genre))}">усі</a>`)}${minis(inGenre.books)}` : ""}
+    ${fresh ? `${label(`Нове · ${esc(fresh.shelf.name)}`, `<a href="/publishers/${attr(fresh.shelf.id)}">усе</a>`)}${minis(fresh.books)}` : ""}
+    ${pick ? `${label("Книжка навмання", "оцінка 4,5+")}${feedList([pick])}` : ""}
   </aside>
 </div>
 ${myLists ? listsDialog(book, myLists) : ""}`;
