@@ -804,10 +804,25 @@ function editPage({ book, entry, user }) {
 function russianPage({ user, books }) {
   const row = (b) => `<form method="post" action="/admin/russian" class="dupe-row"><input type="hidden" name="id" value="${attr(b.id)}"><span><a href="${attr(b.href)}" target="_blank">${esc(b.title)}</a><span class="muted"> · ${esc([b.author, b.readers ? count(b.readers, "читач", "читачі", "читачів") : ""].filter(Boolean).join(" · "))}</span></span><button class="btn small danger" name="ru" value="1">Російська</button><button class="btn small ghost" name="ru" value="0">Ні</button></form>`;
   const body = `<div class="admin">
-<h1>Може, російською? <span class="muted">${books.length}</span></h1>
+<h1>Може, російською? <span class="muted" id="ru-count">${books.length}</span></h1>
 <p class="muted">Книжки з полиць читачів: кирилична назва без і, ї, є, ґ, і сайт поки не знає, якою вона мовою. «Російська» ховає книжку з пошуку, рекомендацій і стрічок (на полиці читача вона лишається), «Ні» прибирає її з цього списку. Змінити потім можна в «Редагувати» на сторінці книжки.</p>
 ${books.length ? `<div class="dupe">${books.map(row).join("")}</div>` : `<p>Нічого підозрілого.</p>`}
-</div>`;
+</div>
+<script>
+// A click marks the book and takes its row away, without reloading the page (Max, 2026-10-23).
+document.addEventListener("submit", async (e) => {
+  const form = e.target.closest("form.dupe-row");
+  if (!form) return;
+  e.preventDefault();
+  const body = new URLSearchParams(new FormData(form, e.submitter));
+  form.style.opacity = 0.4;
+  const r = await fetch(form.action, { method: "POST", body, headers: { Accept: "application/json" } }).catch(() => null);
+  if (!r || !r.ok) return (form.style.opacity = 1);
+  form.remove();
+  const c = document.getElementById("ru-count");
+  if (c) c.textContent = document.querySelectorAll("form.dupe-row").length;
+});
+</script>`;
   return layout({ title: "Може, російською?", body, user, path: "/admin" });
 }
 
