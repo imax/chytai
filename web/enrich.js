@@ -58,7 +58,8 @@ const norm = (s) => String(s || "").toLowerCase().replace(/^(the|a|an)\s+/, "").
 const mainTitle = (t) => String(t || "").replace(/\s*\(.*?\)\s*/g, " ").split(/[:]/)[0].trim();
 const isLatin = (t) => /[a-z]/i.test(t) && !/[а-яіїєґ]/i.test(t);
 const firstAuthor = (a) => String(a || "").split(/\s+and\s+|\s*[,&;]\s*/)[0].replace(/\s+/g, " ").trim();
-const surname = (a) => norm(firstAuthor(a)).split(" ").filter((w) => w.length > 1).pop() || "";
+// «Kurt Vonnegut Jr.» is Vonnegut, not «jr».
+const surname = (a) => norm(firstAuthor(a)).split(" ").filter((w) => w.length > 1 && !/^(jr|sr|ii|iii|iv)$/.test(w)).pop() || "";
 const isbn10 = (s) => /^\d{9}[\dX]$/.test(s);
 const cleanIsbns = (list) => [...new Set((list || []).map((x) => String(x).replace(/[^0-9Xx]/g, "").toUpperCase()).filter((x) => x.length === 10 || x.length === 13))];
 
@@ -66,7 +67,9 @@ const cleanIsbns = (list) => [...new Set((list || []).map((x) => String(x).repla
 // surname must be among the hit's authors; a hit found by ISBN is trusted on the ISBN alone.
 function same(book, doc, byIsbn) {
   if (byIsbn) return true;
-  const titles = new Set([norm(doc.title), norm(mainTitle(doc.title)), norm(`${doc.title} ${doc.subtitle || ""}`)]);
+  // «The Adventures of Sherlock Holmes [12 stories]»: Open Library's notes in brackets are not the title.
+  const bare = String(doc.title || "").replace(/\s*[[(][^\])]*[\])]\s*/g, " ").trim();
+  const titles = new Set([norm(doc.title), norm(mainTitle(doc.title)), norm(`${doc.title} ${doc.subtitle || ""}`), norm(bare)]);
   const mine = [norm(book.title), norm(mainTitle(book.title))];
   if (!mine.some((t) => t && titles.has(t))) return false;
   const s = surname(book.author);
@@ -290,7 +293,10 @@ async function enrich(store, { ids, log = () => {}, fetchImpl = fetch, force = f
   let failed = 0;
   let googleFailed = 0;
   const errors = [];
-  const originals = books.some(viaOriginal) ? await require("./wikidata").enTitles(books.filter(viaOriginal), { fetchImpl, log }).catch((e) => (log(`wikidata: ${e.message}`), {})) : {};
+  // A Ukrainian edition with an ISBN still needs its original when neither Open Library nor Google knows
+  // the ISBN («Біле Ікло» from Goodreads, 2026-10-23).
+  const ukrainian = (b) => isCyrillic(b.title) && isCyrillic(firstAuthor(b.author));
+  const originals = books.some(ukrainian) ? await require("./wikidata").enTitles(books.filter(ukrainian), { fetchImpl, log }).catch((e) => (log(`wikidata: ${e.message}`), {})) : {};
   for (const b of books) {
     store.db.set(`enrich:${GEN}:${b.id}`, String(Date.now()));
     try {
@@ -322,8 +328,13 @@ async function enrich(store, { ids, log = () => {}, fetchImpl = fetch, force = f
         });
         if (g) info = { ...g, ...Object.fromEntries(Object.entries(info || {}).filter(([, v]) => v != null)), blurbSource: info?.blurb ? "Open Library" : "Google Books", isbns: cleanIsbns([...(info?.isbns || []), ...(g.isbns || [])]) };
       }
-      if (info) {
-        const patch = apply(b, info);
+      if (info || originals[b.id]) {
+        const patch = info ? apply(b, info) : {};
+        if (originals[b.id] && !patch.cover && !(b.cover && !fromOpenLibrary(b.cover))) {
+          const orig = originals[b.id];
+          const more = applyOriginal({ ...b, ...patch }, await lookup({ ...b, title: orig.en, author: orig.enAuthor, isbns: [] }, { fetchImpl, prefer: ["ukr", "eng"] }), orig);
+          Object.assign(patch, more);
+        }
         if (Object.keys(patch).length) {
           store.updateBook(b.id, patch);
           touched = true;

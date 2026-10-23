@@ -17,7 +17,13 @@ const isForeign = (t) => /[a-z]/i.test(t) && !/[а-яіїєґ]/i.test(t);
 async function query(authors, fetchImpl) {
   const values = authors.map((a) => `${JSON.stringify(a)}@en`).join(" ");
   const sparql = `SELECT ?name ?en ?uk ?auk WHERE { VALUES ?name { ${values} } ?a rdfs:label ?name. ?w wdt:P50 ?a; rdfs:label ?uk. FILTER(lang(?uk) = "uk") ?w rdfs:label ?en. FILTER(lang(?en) = "en") OPTIONAL { ?a rdfs:label ?auk. FILTER(lang(?auk) = "uk") } }`;
-  const r = await fetchImpl(ENDPOINT, { method: "POST", headers: { ...HEADERS, "Content-Type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ query: sparql, format: "json" }), signal: AbortSignal.timeout(60000) });
+  const ask = () => fetchImpl(ENDPOINT, { method: "POST", headers: { ...HEADERS, "Content-Type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ query: sparql, format: "json" }), signal: AbortSignal.timeout(60000) });
+  let r = await ask();
+  // Too many requests: wait and ask again, as authors.js does (the classics on «Класика» stayed bare, 2026-10-23).
+  for (let i = 0; r.status === 429 && i < 3; i++) {
+    await new Promise((ok) => setTimeout(ok, (Number(r.headers?.get?.("retry-after")) || 10 * (i + 1)) * 1000));
+    r = await ask();
+  }
   if (!r.ok) throw new Error(`HTTP ${r.status}`);
   return (await r.json()).results.bindings.map((b) => ({ name: b.name.value, en: b.en.value, uk: b.uk.value.replace(/\s*\((роман|книга|повість|збірка)[^)]*\)\s*$/i, ""), ukAuthor: b.auk?.value || "" }));
 }
@@ -59,7 +65,13 @@ const isCyrillic = (t) => /[а-яіїєґ]/i.test(t);
 async function enQuery(authors, fetchImpl) {
   const values = authors.map((a) => `${JSON.stringify(a)}@uk`).join(" ");
   const sparql = `SELECT ?name ?en ?uk ?aen WHERE { VALUES ?name { ${values} } ?a rdfs:label ?name. ?w wdt:P50 ?a; rdfs:label ?uk. FILTER(lang(?uk) = "uk") ?w rdfs:label ?en. FILTER(lang(?en) = "en") OPTIONAL { ?a rdfs:label ?aen. FILTER(lang(?aen) = "en") } }`;
-  const r = await fetchImpl(ENDPOINT, { method: "POST", headers: { ...HEADERS, "Content-Type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ query: sparql, format: "json" }), signal: AbortSignal.timeout(60000) });
+  const ask = () => fetchImpl(ENDPOINT, { method: "POST", headers: { ...HEADERS, "Content-Type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ query: sparql, format: "json" }), signal: AbortSignal.timeout(60000) });
+  let r = await ask();
+  // Too many requests: wait and ask again, as authors.js does (the classics on «Класика» stayed bare, 2026-10-23).
+  for (let i = 0; r.status === 429 && i < 3; i++) {
+    await new Promise((ok) => setTimeout(ok, (Number(r.headers?.get?.("retry-after")) || 10 * (i + 1)) * 1000));
+    r = await ask();
+  }
   if (!r.ok) throw new Error(`HTTP ${r.status}`);
   return (await r.json()).results.bindings.map((b) => ({ name: b.name.value, en: b.en.value, uk: b.uk.value.replace(/\s*\((роман|книга|повість|збірка)[^)]*\)\s*$/i, ""), enAuthor: b.aen?.value || "" }));
 }
