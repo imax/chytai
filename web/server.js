@@ -731,6 +731,11 @@ app.get("/sitemap.xml", (req, res) => {
   res.type("application/xml").set("Cache-Control", "public, max-age=3600").send(sitemap.xml);
 });
 
+// The book's overview with the titles it names linked to their pages (advice.linkTitles).
+const linkedOverview = (book) => {
+  const o = advice.overviewOf(book.id);
+  return o && { ...o, text: advice.linkTitles(o.text, book) };
+};
 app.get("/book/:id", (req, res) => {
   const id = store.resolve(req.params.id);
   if (!id) return res.status(404).send(pages.messagePage({ title: "Немає такої книжки", text: "", user: req.user }));
@@ -740,7 +745,7 @@ app.get("/book/:id", (req, res) => {
   if (!book) return res.status(404).send(pages.messagePage({ title: "Немає такої книжки", text: "", user: req.user }));
   const file = readerFileFor(req.user?.id, book);
   const free = !file && freeFileFor(book);
-  res.send(pages.bookPage({ freeRead: !!free, book, entry: store.sharedEntry(req.user?.id, book.id), now: !!req.user && nowIds(req.user.id).has(store.canonical(book.id)), user: req.user, readUrl: file ? `${READER_URL}/?open=${encodeURIComponent(file.name)}` : free ? `${READER_URL}/free/${encodeURIComponent(free.name)}` : "", shelf: book.shelf && (req.owner || !isDraft(book.shelf)) ? store.shelf(book.shelf) : null, inLibrary: inLibraryMap(req), readers: readersOf(book.id), also: social.alsoLiked([book.id], { limit: 4 }), writings: reviews.of(book.id), reviewError: String(req.query.review_error || "").slice(0, 300), advice: advice.state(req.user, book.id), overview: advice.overviewOf(book.id), overviewVote: advice.voteOf(book.id, req.user?.id) }));
+  res.send(pages.bookPage({ freeRead: !!free, book, entry: store.sharedEntry(req.user?.id, book.id), now: !!req.user && nowIds(req.user.id).has(store.canonical(book.id)), user: req.user, readUrl: file ? `${READER_URL}/?open=${encodeURIComponent(file.name)}` : free ? `${READER_URL}/free/${encodeURIComponent(free.name)}` : "", shelf: book.shelf && (req.owner || !isDraft(book.shelf)) ? store.shelf(book.shelf) : null, inLibrary: inLibraryMap(req), readers: readersOf(book.id), also: social.alsoLiked([book.id], { limit: 4 }), writings: reviews.of(book.id), reviewError: String(req.query.review_error || "").slice(0, 300), advice: advice.state(req.user, book.id), overview: linkedOverview(book), overviewVote: advice.voteOf(book.id, req.user?.id) }));
 });
 
 // An author: their works from Wikidata (linked to our books of them) and every book of theirs we have.
@@ -1046,7 +1051,7 @@ app.post("/api/overview/:id", signed, async (req, res) => {
   if (!book) return res.status(404).json({ error: "Книжку не знайдено." });
   try {
     const o = await advice.overview(book, { fresh: req.body?.fresh === "1" && req.owner, by: req.user.id });
-    res.json({ html: pages.overviewHtml(o, req.user), cached: o.cached });
+    res.json({ html: pages.overviewHtml({ ...o, text: advice.linkTitles(o.text, book) }, req.user), cached: o.cached });
   } catch (e) {
     console.error("overview failed:", e);
     res.status(e.status >= 400 && e.status < 600 ? 502 : 400).json({ error: e.status ? "Claude зараз не відповідає, спробуйте трохи згодом." : e.message });

@@ -286,6 +286,54 @@ class Advice {
       .all()
       .map((r) => ({ ...r, book: this.store.book(r.book) || { id: r.book, title: r.book, href: "" } }));
   }
+  // Book titles the overview names in «лапки» become links to their pages when the catalog has them
+  // (Max, 2026-10-23: «автоматично додавати лінки на книги, які згадуються у відгуку»). Ukrainian
+  // inflects titles («Кривавим меридіаном» for «Кривавий меридіан»), so each word is matched by its
+  // stem (the word less its last three letters, four at least) as a prefix in the search index, and
+  // only a title with the same number of words, every one starting with its stem, counts. The book's
+  // own title and its translations are never linked; one-word titles only by the same author.
+  linkTitles(text, book) {
+    const { norm } = require("./store");
+    const own = new Set(this.family(book.id));
+    const stem = (w) => (w.length >= 5 ? w.slice(0, Math.max(4, w.length - 3)) : w);
+    const fits = (title, stems) => {
+      const words = norm(title).split(" ");
+      return words.length === stems.length && words.every((w, i) => w.startsWith(stems[i]));
+    };
+    const cache = new Map();
+    const find = (phrase) => {
+      if (cache.has(phrase)) return cache.get(phrase);
+      let href = "";
+      const stems = norm(phrase).split(" ").filter(Boolean).map(stem);
+      if (stems.length && stems.every((t) => t.length >= 2)) {
+        let rows = [];
+        try {
+          rows = this.db.prepare("SELECT id FROM search WHERE search MATCH ? LIMIT 20").all(stems.map((t) => `"${t.replace(/"/g, "")}"*`).join(" AND "));
+        } catch {
+          rows = [];
+        }
+        const hits = [];
+        for (const { id } of rows) {
+          const b = this.store.book(id);
+          if (!b || own.has(this.store.canonical(b.id)) || isRussian(b)) continue;
+          if (!(fits(b.title, stems) || fits(b.altTitle, stems))) continue;
+          const authors = (x) => String(x || "").split(/,|&| і | та /).map((n) => norm(n)).filter(Boolean);
+          const mine = authors(book.author);
+          hits.push({ b, same: authors(b.author).some((n) => mine.includes(n)) });
+        }
+        const same = hits.filter((h) => h.same);
+        const pick = same.length ? same[0] : stems.length > 1 && hits.length === 1 ? hits[0] : null;
+        if (pick) href = this.store.href(pick.b.id);
+      }
+      cache.set(phrase, href);
+      return href;
+    };
+    return text.replace(/«([^«»\n]{2,80})»/g, (m, inner) => {
+      if (/[\[\]()]/.test(inner)) return m;
+      const href = find(inner);
+      return href ? `[«${inner}»](${href})` : m;
+    });
+  }
   // Runs the Claude turn, following pause_turn (a web search can pause it) a few times; returns the text and the usage.
   async turn(params) {
     let message;
