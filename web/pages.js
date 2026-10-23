@@ -455,7 +455,7 @@ function bookPage({ book, entry, now = false, user, shelf, inLibrary = new Map()
 
 // «Огляди» are hidden on book pages for now (Max, 2026-10-23); /admin/reviews, the API and the data stay.
 const SHOW_REVIEWS = false;
-// «Чи варто читати?» (advice.js): Claude's take on the book for this reader, by their own shelf, on a click.
+// «AI-порада» (advice.js): Claude's take on the book for this reader, by their own shelf, on a click.
 // A guest sees why to sign in, a reader with an empty shelf why to add books, a kept answer shows at once.
 function adviceHtml(a) {
   return `<div class="advice-text">${marked.parse(a.text).replace(/<a href="http/g, '<a target="_blank" rel="noopener" href="http')}</div>
@@ -469,7 +469,7 @@ function adviceBlock(book, a) {
     : a.kind === "kept" ? adviceHtml(a)
     : `<p class="advice-ask"><button class="btn" data-advice>Чи варто мені читати?</button><span class="muted small">Claude порівняє з книжками на вашій полиці</span></p>`;
   return `<section class="block advice" id="advice" data-book="${attr(book.id)}">
-      ${label("Чи варто читати?")}
+      ${label("AI-порада")}
       <div class="advice-body">${inner}</div>
     </section>`;
 }
