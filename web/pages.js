@@ -462,8 +462,11 @@ function adviceHtml(a) {
   return `<div class="advice-text">${marked.parse(a.text).replace(/<a href="http/g, '<a target="_blank" rel="noopener" href="http')}</div>
 <p class="small muted">Claude, за вашою полицею · ${writingDate(a.created.slice(0, 10))} · <button class="text-link small" data-ask="advice" data-again>Спитати ще раз</button></p>`;
 }
+// The per-reader «AI-рекомендація» came off the page the same day (Max, 2026-10-23: «AI-рекомендація
+// викидаємо»); advice.js, /api/advice and the kept answers stay, in case it comes back.
+const SHOW_ADVICE = false;
 function adviceBlock(book, a) {
-  if (!a) return "";
+  if (!a || !SHOW_ADVICE) return "";
   // One dotted link in every state (Max, 2026-10-23): a guest's goes to sign in, an empty shelf's to «Додати».
   const inner =
     a.kind === "guest" ? `<p class="advice-ask"><a class="text-link" href="/login?next=${attr(encodeURIComponent(book.href))}">Чи варто мені читати?</a></p>`
@@ -1258,7 +1261,7 @@ function privacyPage({ user }) {
 <p>Ми користуємося кількома сервісами, без яких сайт не працює:</p>
 <ul>
 <li><strong>Fly.io</strong> — сервери у Франкфурті (Німеччина), там лежить база сайту і книжки з читалки.</li>
-<li><strong>Anthropic</strong> (Claude) — коли в читалці ви просите пояснити чи перекласти уривок, сам уривок і трохи тексту навколо йдуть в Anthropic, щоб Claude відповів. Коли на сторінці книжки ви натискаєте «Чи варто мені читати?», туди йде ваша полиця: назви, оцінки й нотатки. Вашої пошти й імені Anthropic не отримує.</li>
+<li><strong>Anthropic</strong> (Claude) — коли в читалці ви просите пояснити чи перекласти уривок, сам уривок і трохи тексту навколо йдуть в Anthropic, щоб Claude відповів. Коли на сторінці книжки хтось натискає «Що пишуть в інтернеті?», туди йдуть лише назва, автор і опис книжки. Вашої пошти, імені й полиці Anthropic не отримує.</li>
 <li><strong>Resend</strong> — листи від code@chytai.org.ua.</li>
 <li><strong>Google Fonts</strong> — шрифти сайту. Ваш браузер завантажує їх з серверів Google, тож Google бачить вашу IP-адресу, як і на більшості сайтів.</li>
 <li><strong>Open Library</strong> (openlibrary.org, некомерційний проєкт Internet Archive) — для книжок, яких немає в каталогах, ми питаємо в нього обкладинку, ISBN, рік і опис.</li>
