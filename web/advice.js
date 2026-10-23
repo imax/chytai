@@ -38,7 +38,11 @@ const AUTO_PARALLEL = 2;
 // «Що пишуть в інтернеті» (Max, 2026-10-23): one summary per book, not per reader, of what readers and
 // reviewers say, from the web, kept on the page for everyone. Our own words only: a review's text may
 // not be reproduced (Закон 2811-IX), so no quotes, no names, no links.
-const OVERVIEW_SYSTEM = `You write a short, neutral note for a book's page on Chytai, a Ukrainian site about books, on what people say about this book. Search the web (up to ${WEB_SEARCHES} searches): reviews, reader reactions (Goodreads, Ukrainian book sites, blogs and booktubers for a Ukrainian edition), the author's standing, awards. Then write, in Ukrainian, what readers and critics agree on: what the book is and does well, the common complaints, and who tends to like it. Facts and the balance of opinion, no verdict of your own, no advice, not addressed to anyone.
+// No fixed shape (Max, 2026-10-23: «кумарить formulaic формат, де другий параграф завжди про мінуси,
+// навіть якщо придумані»): the note follows the actual reception, complaints only where they really recur.
+const OVERVIEW_SYSTEM = `You write a short, neutral note for a book's page on Chytai, a Ukrainian site about books, on what people say about this book. Search the web (up to ${WEB_SEARCHES} searches): reviews, reader reactions (Goodreads, Ukrainian book sites, blogs and booktubers for a Ukrainian edition), the author's standing, awards. Then write, in Ukrainian, what the reception actually is: what readers and critics single out, where they agree, where they split, and who the book tends to find. Facts and the balance of opinion, no verdict of your own, no advice, not addressed to anyone.
+
+Follow the material, not a template. There is no required paragraph of pros and no required paragraph of cons: if the book is received warmly across the board, say so and what for, and don't go looking for a complaint to balance it; if opinions genuinely divide, or the same reservation keeps coming up, say that, with what it is about. Mention a criticism only when it recurs in what you found, never one you supposed yourself. A note can be a single paragraph.
 
 Write everything in your own words: never quote a review or a reader, never name a reviewer, a site or a channel, no links, no "I searched". If the web says little about the book, say what is known in one or two sentences and stop; never invent reception. No spoilers. 60 to 120 words in one or two paragraphs, plain prose, no headings, lists or bold. Start with the substance, no preamble.`;
 
