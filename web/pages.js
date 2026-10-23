@@ -457,6 +457,9 @@ function authorBlock(a) {
 
 function bookPage({ inGenre = null, fresh = null, pick = null, awards = [], authorInfo = null, lists = [], myLists = null, book, entry, now = false, user, shelf, inLibrary = new Map(), readers = [], also = [], alsoTitle = "Читали це, сподобалось і це", writings = [], reviewError = "", editionError = "", ukAsk = null, readUrl = "", freeRead = false, advice = null, overview = null, overviewVote = null }) {
   const s = statsOf(book.id);
+  // A book in Russian stays on its reader's shelf, and its page shows no «Про книжку» and no side blocks
+  // (Max 2026-10-23): nothing that would lead people to it or on from it.
+  const ru = require("./store").isRussian(book);
   // The genre leads to its page (/genre/biohrafii; Max 2026-10-23), when it is one of ours.
   // Two of them when the book has two (Max, 2026-10-23: Atomic Habits is «Психологія» and «Саморозвиток»).
   const main = require("./store").mainGenres(book.tags);
@@ -500,14 +503,14 @@ function bookPage({ inGenre = null, fresh = null, pick = null, awards = [], auth
       ${writings.length ? writingsList(writings, book, user) : ""}
       ${user ? addWriting(book, reviewError) : ""}
     </section>` : ""}
-    ${aboutBlock(book, shelf, overview, user, overviewVote, ukAsk, editionError)}
+    ${ru ? "" : aboutBlock(book, shelf, overview, user, overviewVote, ukAsk, editionError)}
     ${authorBlock(authorInfo)}
   </div>
   <aside>
-    ${also.length && !(fresh && alsoTitle === "Новинки видавництв") ? `${label(alsoTitle)}${minis(also)}` : ""}
+    ${ru ? "" : `${also.length && !(fresh && alsoTitle === "Новинки видавництв") ? `${label(alsoTitle)}${minis(also)}` : ""}
     ${inGenre ? `${label(`Ще в жанрі «${esc(cap(inGenre.genre))}»`, `<a href="/genre/${attr(genreSlug(inGenre.genre))}">усі</a>`)}${minis(inGenre.books)}` : ""}
     ${fresh ? `${label(`Нове · ${esc(fresh.shelf.name)}`, `<a href="/publishers/${attr(fresh.shelf.id)}">усе</a>`)}${minis(fresh.books)}` : ""}
-    ${pick ? `${label("Книжка навмання", "оцінка 4,5+")}${feedList([pick])}` : ""}
+    ${pick ? `${label("Книжка навмання", "оцінка 4,5+")}${feedList([pick])}` : ""}`}
   </aside>
 </div>
 ${myLists ? listsDialog(book, myLists) : ""}`;

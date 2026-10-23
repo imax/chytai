@@ -1345,6 +1345,8 @@ app.post("/api/advice/:id", signed, async (req, res) => {
 app.post("/api/overview/:id", signed, async (req, res) => {
   const book = bookFor(req, store.bookPage(store.resolve(req.params.id)), !!store.entry(req.user.id, req.params.id));
   if (!book) return res.status(404).json({ error: "Книжку не знайдено." });
+  // No overview for a book in Russian (Max 2026-10-23): its page has no «Про книжку» at all.
+  if (isRussian(book)) return res.status(404).json({ error: "Книжку не знайдено." });
   try {
     const o = await advice.overview(book, { fresh: req.body?.fresh === "1" && req.owner, by: req.user.id });
     res.json({ html: pages.overviewHtml({ ...o, text: advice.linkTitles(o.text, book) }, req.user), cached: o.cached });
