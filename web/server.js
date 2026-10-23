@@ -551,6 +551,7 @@ const withCovers = (l) => ({ ...l, covers: lists.covers(l.id) });
 const bookpage = new BookPage({ apiKey: process.env.ANTHROPIC_API_KEY || "", log: console.log });
 const advice = new Advice({ store, social, db: store.db, apiKey: process.env.ANTHROPIC_API_KEY || "", log: console.log });
 const genreTrial = new (require("./genretrial").GenreTrial)({ store, social, db: store.db, apiKey: process.env.ANTHROPIC_API_KEY || "", genres: pages.GENRES, log: console.log });
+const langTrial = new (require("./langtrial").LangTrial)({ store, db: store.db, apiKey: process.env.ANTHROPIC_API_KEY || "", log: console.log });
 // A whole-catalog run cut by a deploy goes on a minute after the start; once it has finished, books added
 // since are asked about every six hours.
 setTimeout(() => {
@@ -1308,6 +1309,19 @@ app.get("/genres-trial/:key", (req, res) => {
   if (!st?.key || req.params.key !== st.key) return res.status(404).send("Немає");
   const line = (x) => `${x.after[0] !== x.before[0] ? "*" : " "} ${x.title} — ${x.author} | було: ${x.before.join(", ") || "—"} | стало: ${x.error ? `помилка ${x.error}` : x.after.join(", ") || "—"}`;
   res.type("text/plain").send([`промпт v${st.prompt || 1}, ${st.model || ""}, ${st.at || ""}: ${st.done} з ${st.total}, $${(st.cost || 0).toFixed(3)}${st.finished ? "" : ", ще йде"}`, "* = змінився основний жанр", "", ...st.items.map(line)].join("\n"));
+});
+// The language trial (langtrial.js): Haiku's language for 200 doubtful Cyrillic editions next to isRussian().
+app.get("/admin/lang-trial", owner, (req, res) => res.send(pages.langTrialPage({ user: req.user, st: langTrial.state(), running: langTrial.running, differs: require("./langtrial").differs, href: (id) => store.href(id) })));
+app.get("/lang-trial/:key", (req, res) => {
+  const st = langTrial.state();
+  if (!st?.key || req.params.key !== st.key) return res.status(404).send("Немає");
+  const { differs } = require("./langtrial");
+  const line = (x) => `${differs(x) ? "*" : " "} ${x.title} — ${x.author} | зараз: ${x.before} | Haiku: ${x.error ? `помилка ${x.error}` : x.after}`;
+  res.type("text/plain").send([`промпт v${st.prompt}, ${st.model}, ${st.at}: ${st.done} з ${st.total} (сумнівних у каталозі ${st.pool}), $${(st.cost || 0).toFixed(3)}${st.finished ? "" : ", ще йде"}`, "* = Haiku не згоден з сайтом (рос чи ні)", "", ...st.items.map(line)].join("\n"));
+});
+app.post("/admin/lang-trial", owner, (req, res) => {
+  langTrial.run().catch((e) => console.log(`langtrial: ${e.message}`));
+  res.redirect(303, "/admin/lang-trial");
 });
 // The whole catalog: start, or stop (the books asked so far keep their genres).
 app.post("/admin/genres-all", owner, (req, res) => {

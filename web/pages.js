@@ -1213,6 +1213,24 @@ ${running || all.running ? `<script>setTimeout(() => location.reload(), 5000)</s
   return layout({ title: "Жанри від Haiku", body, user, path: "/admin" });
 }
 
+// ---- /admin/lang-trial: isRussian() next to Haiku's language for 200 doubtful editions (langtrial.js) ----
+
+function langTrialPage({ user, st, running, differs, href }) {
+  const items = st?.items || [];
+  const changed = items.filter(differs);
+  const NAMES = { uk: "українська", ru: "російська", en: "англійська", other: "інша", unknown: "не знає", "не ru": "не російська" };
+  const row = (x) => `<tr${differs(x) ? ' class="diff"' : ""}><td><a href="${attr(href(x.id))}">${esc(x.title)}</a><br><span class="small muted">${esc(x.author)}</span></td><td>${esc(NAMES[x.before] || x.before)}</td><td>${x.error ? `<span class="error small">${esc(x.error)}</span>` : esc(NAMES[x.after] || x.after)}</td></tr>`;
+  const body = `
+${pageHead({ crumbs: `<a href="/admin">Статистика</a>`, kicker: "Проба", title: "Мова від Haiku", sub: st ? [`промпт v${st.prompt}`, `${st.done} з ${st.total}`, `сумнівних у каталозі ${st.pool}`, `не згоден у ${changed.length}`, st.errors ? `помилок ${st.errors}` : "", `$${(st.cost || 0).toFixed(3)}`, running ? "іде…" : st.finished ? "готово" : "зупинилось"].filter(Boolean).join(" · ") : "Ще не запускали. 200 випадкових книжок з кириличною назвою без і/ї/є/ґ і ы/э/ъ/ё і без мови від магазину; на сайті нічого не змінюється." })}
+${st?.key ? `<p class="small muted">Посилання для Claude (тільки назви й мови): <a href="/lang-trial/${attr(st.key)}">chytai.org.ua/lang-trial/${esc(st.key)}</a></p>` : ""}
+${running ? "" : `<form method="post" action="/admin/lang-trial"><button class="btn primary">${st ? "Прогнати ще 200 інших" : "Запустити"}</button></form>`}
+${items.length ? `<div class="tabs" data-trial><button type="button" class="tab on" data-v="diff">Не згоден <span>${changed.length}</span></button><button type="button" class="tab" data-v="">Усі <span>${items.length}</span></button></div>
+<table class="trial"><thead><tr><th>Книжка</th><th>Зараз на сайті</th><th>Haiku</th></tr></thead><tbody>${[...changed, ...items.filter((x) => !changed.includes(x))].map(row).join("")}</tbody></table>
+<script>(() => { const t = document.querySelector(".trial"); const set = (v) => t.classList.toggle("only-diff", v === "diff"); set("diff"); document.querySelector("[data-trial]").addEventListener("click", (e) => { const b = e.target.closest(".tab"); if (!b) return; document.querySelectorAll("[data-trial] .tab").forEach((x) => x.classList.toggle("on", x === b)); set(b.dataset.v); }); })();</script>` : ""}
+${running ? `<script>setTimeout(() => location.reload(), 5000)</script>` : ""}`;
+  return layout({ title: "Мова від Haiku", body, user, path: "/admin" });
+}
+
 // ---- a genre (/genre/<slug>) ----
 
 // One genre's books: the ones readers rate best, then all of them, the ones on readers' shelves first;
@@ -2111,7 +2129,7 @@ module.exports = {
   decidedList,
   welcomePage,
   addPage, addReviewPage, addFindResults, addPageResult, ukFindPage,
-  layout, homePage, bookPage, bookEditPage, russianPage, editPage, libraryPage, readersPage, popularPage, genrePage, genreTrialPage, publishersPage, publisherPage, searchPage, searchResults, authorPage,
+  layout, homePage, bookPage, bookEditPage, russianPage, editPage, libraryPage, readersPage, popularPage, genrePage, genreTrialPage, langTrialPage, publishersPage, publisherPage, searchPage, searchResults, authorPage,
   loginPage, codePage, signupPage, settingsPage, privacyPage, updatesPage, messagePage, digestPage, followMailPage, importPage, importPreviewPage, importDonePage,
   GENRES, esc, byline, STATUS, COPY, inline, isUk, setTitleLinks, setAuthorLinks, setStats, setReadersWithNote,
 };

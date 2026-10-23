@@ -1,0 +1,110 @@
+// A trial of book languages by Claude (Max, 2026-10-23: «візьмемося за визначення мови книги? особливо
+// цікаво рос»). Without a language from the shop, isRussian() guesses from the title and author: letters,
+// typical Russian words and endings, a list of Russian writers. A Cyrillic title with none of і/ї/є/ґ and
+// ы/э/ъ/ё rests on those word guesses alone. This asks Haiku the language of such editions, for 200 random
+// works, and keeps the answers in meta `langtrial` for /admin/lang-trial. Nothing on the site changes.
+
+const Anthropic = require("@anthropic-ai/sdk");
+const { isRussian } = require("./store");
+
+const MODEL = "claude-haiku-5-5";
+const SIZE = 200;
+const PARALLEL = 4;
+const PROMPT = 1; // the SYSTEM version below; bump it with every change
+const PRICE = { input: 0.1 / 1e6, output: 0.5 / 1e6 }; // $ per token, Haiku 5.5
+const LANGS = ["uk", "ru", "en", "other", "unknown"];
+
+const SYSTEM = `You tell the language of one edition of a book listed on Chytai, a Ukrainian book site. Judge the language this edition is printed in, from its title, the description and the publisher or shop, not the language the book was first written in: a Ukrainian translation of a Russian or English book is «uk». Ukrainian and Russian look alike: Ukrainian uses і, ї, є, ґ and words like «та», «що», «як», «це», «від»; Russian uses ы, э, ъ, ё and words like «и», «что», «как», «это», «от». A short title can be the same in both; then rely on the description and the publisher. Answer «unknown» only when nothing given tells them apart.`;
+
+// A Cyrillic title with no letter that settles the language: the cases the word guesses decide.
+const doubtful = (b) => !b.language && /[а-яА-Я]/.test(b.title || "") && !/[іїєґІЇЄҐыэъёЫЭЪЁ]/.test(b.title || "");
+
+class LangTrial {
+  constructor({ store, db, apiKey, log = () => {} }) {
+    this.store = store;
+    this.db = db;
+    this.log = log;
+    this.client = apiKey ? new Anthropic({ apiKey }) : null;
+    this.running = false;
+  }
+
+  state() {
+    return JSON.parse(this.db.get("langtrial") || "null");
+  }
+
+  // 200 random doubtful works from the whole catalog; a second run takes others.
+  pick() {
+    const all = [...this.store.workIds()].map((id) => this.store.book(id)).filter((b) => b && doubtful(b));
+    for (let i = all.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [all[i], all[j]] = [all[j], all[i]];
+    }
+    const seen = new Set([...JSON.parse(this.db.get("langtrial:seen") || "[]"), ...(this.state()?.items || []).map((x) => x.id)]);
+    this.db.set("langtrial:seen", JSON.stringify([...seen]));
+    return { books: all.filter((b) => !seen.has(b.id)).slice(0, SIZE), doubtful: all.length };
+  }
+
+  async ask(b) {
+    const publishers = [...new Set([...(b.links || []), ...(b.editions || []).flatMap((e) => e.links || [])].map((l) => l.label).filter(Boolean))];
+    const facts = [
+      `Title: ${b.title}`,
+      b.author ? `Author: ${b.author}` : "",
+      publishers.length ? `Publisher or shop: ${publishers.slice(0, 4).join(", ")}` : "",
+      b.blurb ? `Description: ${String(b.blurb).replace(/\s+/g, " ").slice(0, 700)}` : "",
+    ].filter(Boolean);
+    const message = await this.client.messages.create({
+      model: MODEL,
+      max_tokens: 1024,
+      system: SYSTEM,
+      output_config: {
+        effort: "low",
+        format: { type: "json_schema", schema: { type: "object", properties: { language: { type: "string", enum: LANGS } }, required: ["language"], additionalProperties: false } },
+      },
+      messages: [{ role: "user", content: facts.join("\n") }],
+    });
+    if (message.stop_reason === "refusal") throw new Error("refusal");
+    const text = message.content.filter((c) => c.type === "text").map((c) => c.text).join("");
+    return { language: JSON.parse(text).language, usage: message.usage };
+  }
+
+  // Runs in the background; the admin page shows progress from meta `langtrial`.
+  async run() {
+    if (this.running || !this.client) return false;
+    this.running = true;
+    const { books, doubtful: pool } = this.pick();
+    const st = { prompt: PROMPT, key: require("crypto").randomBytes(12).toString("hex"), at: new Date().toISOString(), model: MODEL, pool, total: books.length, done: 0, cost: 0, items: [], errors: 0 };
+    const save = () => this.db.set("langtrial", JSON.stringify(st));
+    save();
+    let next = 0;
+    const worker = async () => {
+      while (next < books.length) {
+        const b = books[next++];
+        const before = isRussian(b) ? "ru" : "не ru";
+        try {
+          const { language, usage } = await this.ask(b);
+          st.cost += (usage.input_tokens || 0) * PRICE.input + (usage.output_tokens || 0) * PRICE.output;
+          st.items.push({ id: b.id, title: b.title, author: b.author || "", before, after: language });
+        } catch (e) {
+          st.errors++;
+          st.items.push({ id: b.id, title: b.title, author: b.author || "", before, after: "", error: String(e.message || e).slice(0, 200) });
+          this.log(`langtrial: ${b.id}: ${e.message}`);
+        }
+        st.done++;
+        if (st.done % 10 === 0) save();
+      }
+    };
+    try {
+      await Promise.all(Array.from({ length: PARALLEL }, worker));
+    } finally {
+      st.finished = new Date().toISOString();
+      save();
+      this.running = false;
+    }
+    return true;
+  }
+}
+
+// Whether Haiku's answer disagrees with what the site does now (hide as Russian or not).
+const differs = (x) => !x.error && x.after !== "unknown" && (x.after === "ru") !== (x.before === "ru");
+
+module.exports = { LangTrial, differs };
