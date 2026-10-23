@@ -192,8 +192,8 @@ const myStatus = (e) => `<span class="muted small">${esc(e.status ? STATUS[e.sta
 // stars and the year right in the row, so it needs no trip to one's own shelf (Olena's feedback, 2026-10-23).
 // app.js builds the same after the button; each tap is saved in the background.
 const rateYears = () => Array.from({ length: 10 }, (_, i) => new Date().getFullYear() - i);
-const rateLine = (id) =>
-  `<span class="rate" data-id="${attr(id)}"><span class="muted small">прочитано</span><span class="rate-stars" role="group" aria-label="Оцінка">${[1, 2, 3, 4, 5].map((n) => `<button type="button" data-r="${n}" title="${n} з 5">★</button>`).join("")}</span><select class="rate-year" aria-label="Рік"><option value="">рік?</option>${rateYears().map((y) => `<option>${y}</option>`).join("")}</select></span>`;
+const rateLine = (id, label = "прочитано") =>
+  `<span class="rate" data-id="${attr(id)}"><span class="muted small">${label}</span><span class="rate-stars" role="group" aria-label="Оцінка">${[1, 2, 3, 4, 5].map((n) => `<button type="button" data-r="${n}" title="${n} з 5">★</button>`).join("")}</span><select class="rate-year" aria-label="Рік"><option value="">рік?</option>${rateYears().map((y) => `<option>${y}</option>`).join("")}</select></span>`;
 const markButtons = (book, user) => `<span class="marks">${wantButton(book, user)}${wantButton(book, user, { label: "Прочитано", status: "read" })}</span>`;
 
 // The status, rating and copy of an entry as one quiet line: «★★★★★ 5 · прочитано · на папері».
@@ -638,7 +638,7 @@ function readerLine({ name, href, entry: e, now }, id) {
   return `<div class="reader-line"><a href="${attr(href)}"><b>${esc(name)}</b></a><span>${e.rating != null ? `${stars(e.rating)} ` : ""}<span class="muted">${esc(what)}</span>${e.note ? `<span class="note">${noteOf(e, id)}</span>` : ""}</span></div>`;
 }
 
-// The signed-in reader's own buttons: «Хочу прочитати», «Прочитано · оцінити», or where the book is
+// The signed-in reader's own buttons: «Хочу прочитати», «Прочитано», or where the book is
 // in their library and «Змінити».
 // «Читаю зараз» as an item of the «⋯» menu next to the one main button (Max, 2026-10-23: one button, the rest in a menu).
 const nowItem = (book, on, user) =>
@@ -650,6 +650,12 @@ const kidsItem = (book, on, user) =>
   user
     ? `<form method="post" action="/api/entry/${attr(encodeURIComponent(book.id))}"><input type="hidden" name="kids" value="${on ? 0 : 1}"><button title="${on ? "Повернути до моїх книжок" : "Книжка для дітей: не рахується у твої оцінки й рекомендації"}">${on ? "Прибрати з дитячої полиці" : "На дитячу полицю"}</button></form>`
     : `<a href="/login?next=${attr(encodeURIComponent(book.href || ""))}">На дитячу полицю</a>`;
+// «Прочитано» in the menu marks it at once and the page comes back with the stars (mine below), so a
+// rating is one more tap, not a form (Vova's feedback, 2026-10-23).
+const readItem = (book, user) =>
+  user
+    ? `<form method="post" action="/api/entry/${attr(encodeURIComponent(book.id))}"><input type="hidden" name="status" value="read"><input type="hidden" name="back" value="1"><button>Прочитано</button></form>`
+    : `<a href="/login?next=${attr(encodeURIComponent(book.href || ""))}">Прочитано</a>`;
 const moreMenu = (items) => `<details class="more-acts"><summary class="btn" aria-label="Інші дії" title="Інші дії">⋯</summary><div class="more-menu">${items.join("")}</div></details>`;
 // `readUrl`: the reader's own file in the Chytai reader, «Відкрити в Читалці» in the menu (Max, 2026-10-23).
 function mine(book, entry, user, now = false, readUrl = "", listItem = "") {
@@ -659,9 +665,17 @@ function mine(book, entry, user, now = false, readUrl = "", listItem = "") {
   const edit = href ? `/me${href}` : `/me/book/${encodeURIComponent(entry?.via ? entry.via.id : book.id)}`;
   // A volume of a series: «Прочитано · всю серію» opens the edit page with «Уся серія» ticked.
   const allOf = book.cycle?.items?.length > 1 ? `<a href="${attr(user ? `${edit}?series` : `/login?next=${encodeURIComponent(`${edit}?series`)}`)}">Прочитано · всю серію</a>` : "";
+<<<<<<< Updated upstream
   if (!entry) return `<div class="acts">${wantButton(book, user, { size: "", primary: true })}${moreMenu([open, nowItem(book, false, user), `<a href="${attr(user ? edit : `/login?next=${encodeURIComponent(edit)}`)}">Прочитано · оцінити</a>`, allOf, listItem, kidsItem(book, false, user)])}</div>`;
   const what = [entry.kids ? "Дитяча полиця" : "", entry.status ? STATUS[entry.status] + (entry.status === "read" && entry.year ? ` ${entry.year}` : "") : entry.kids ? "" : "У моїх книжках", entry.rating != null ? `${uk(entry.rating)} з 5` : "", entry.copy ? COPY[entry.copy] : ""].filter(Boolean).join(" · ");
   return `<div class="acts"><span class="have">✓ ${esc(what)}${entry.via ? ` <span class="muted">як <a href="${attr(entry.via.href)}">${esc(entry.via.title)}</a></span>` : ""}</span>${moreMenu([open, entry.via ? "" : nowItem(book, now, user), `<a href="${attr(edit)}">Змінити</a>`, entry.status === "read" ? "" : allOf, listItem, entry.via ? "" : kidsItem(book, !!entry.kids, user)])}</div>`;
+=======
+  if (!entry) return `<div class="acts">${wantButton(book, user, { size: "", primary: true })}${moreMenu([open, nowItem(book, false, user), readItem(book, user), allOf, kidsItem(book, false, user)])}</div>`;
+  const what = [entry.kids ? "Дитяча полиця" : "", entry.status ? STATUS[entry.status] + (entry.status === "read" && entry.year ? ` ${entry.year}` : "") : entry.kids ? "" : "У моїх книжках", entry.rating != null ? `${uk(entry.rating)} з 5` : "", entry.copy ? COPY[entry.copy] : ""].filter(Boolean).join(" · ");
+  // Read and not rated yet: the stars right here, no trip to the form (Vova's feedback, 2026-10-23).
+  const rate = entry.status === "read" && entry.rating == null && !entry.via && !entry.kids ? rateLine(book.id, "оцініть:") : "";
+  return `<div class="acts"><span class="have">✓ ${esc(what)}${entry.via ? ` <span class="muted">як <a href="${attr(entry.via.href)}">${esc(entry.via.title)}</a></span>` : ""}</span>${moreMenu([open, entry.via ? "" : nowItem(book, now, user), `<a href="${attr(edit)}">Оцінка, рік, нотатка</a>`, entry.status === "read" ? "" : allOf, entry.via ? "" : kidsItem(book, !!entry.kids, user)])}${rate}</div>`;
+>>>>>>> Stashed changes
 }
 
 // «Де взяти»: every edition's shop (with its format, price and stock, the one place prices are shown),

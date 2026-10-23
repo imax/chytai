@@ -97,6 +97,7 @@ main.home { padding-top: 56px; }
 .rate-stars button.on, .rate-stars:hover button { color: var(--accent); }
 .rate-stars button:hover ~ button { color: var(--under); }
 .rate-year { font: inherit; font-size: 13px; color: var(--muted); background: transparent; border: 1px solid var(--rule); border-radius: 6px; padding: 4px 6px; }
+.acts .rate { flex-basis: 100%; justify-content: flex-start; }
 .rate.saving { opacity: .6; }
 .rate.failed .rate-stars button.on { color: var(--danger); }
 
