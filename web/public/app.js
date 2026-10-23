@@ -416,43 +416,21 @@ document.addEventListener("click", (e) => {
   block.querySelector(".advice-text")?.classList.remove("folded");
   button.closest(".advice-more")?.remove();
 });
-// 😍 / 😐 / 😕 under the overview: a second tap on the same face takes the vote back; the sad face sends
-// the vote at once and opens a box for the reader's words, which go with a second send.
-async function sendVote(block, vote, note = "") {
-  const r = await fetch(`/api/overview/${encodeURIComponent(block.dataset.book)}/vote`, { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ vote: String(vote), note }) });
+// 😍 / 😐 / 😕 under the overview: a second tap on the same face takes the vote back.
+async function sendVote(block, vote) {
+  const r = await fetch(`/api/overview/${encodeURIComponent(block.dataset.book)}/vote`, { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ vote: String(vote) }) });
   const data = await r.json();
   if (!r.ok) throw new Error(data.error || r.status);
   for (const b of block.querySelectorAll("[data-vote]")) b.classList.toggle("on", Number(b.dataset.vote) === data.vote);
-  return data;
 }
 document.addEventListener("click", async (e) => {
-  const button = e.target.closest("[data-vote], [data-report-cancel]");
+  const button = e.target.closest("[data-vote]");
   const block = button?.closest(".advice");
   if (!block) return;
-  const form = block.querySelector(".advice-report");
-  if (button.hasAttribute("data-report-cancel")) return (form.hidden = true);
-  const vote = button.classList.contains("on") ? 0 : Number(button.dataset.vote);
   try {
-    await sendVote(block, vote);
-    if (form) {
-      form.hidden = vote !== -1;
-      if (vote === -1) form.querySelector("textarea").focus();
-    }
+    await sendVote(block, button.classList.contains("on") ? 0 : Number(button.dataset.vote));
   } catch (err) {
     button.title = err.message;
-  }
-});
-document.addEventListener("submit", async (e) => {
-  const form = e.target.closest(".advice-report");
-  if (!form) return;
-  e.preventDefault();
-  const block = form.closest(".advice");
-  try {
-    await sendVote(block, -1, form.querySelector("textarea").value.trim());
-    form.hidden = true;
-    form.querySelector("textarea").value = "";
-  } catch (err) {
-    form.querySelector("button").textContent = err.message;
   }
 });
 // The «⋯» menu on book pages closes on a tap outside it or on Escape.
