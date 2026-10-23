@@ -456,7 +456,7 @@ class Advice {
     const ids = this.db
       .prepare("SELECT book, prompt, length(text) AS len FROM overview WHERE prompt < ? OR length(text) < 120 ORDER BY created")
       .all(PROMPT_VERSION)
-      .filter((r) => r.prompt < REDO_ALL_BELOW || r.len < 120 || cyr(r.book))
+      .filter((r) => r.prompt < REDO_ALL_BELOW || r.len < 120 || this.family(r.book).some(cyr))
       .map((r) => r.book);
     for (const id of ids) if (!this.queue.has(id)) this.queue.set(id, { fresh: true });
     this.pump();
