@@ -475,7 +475,7 @@ function adviceBlock(book, a) {
       <div class="advice-body">${inner}</div>
     </section>`;
 }
-// «Що кажуть про книжку» (advice.js overview): one summary per book from the web, the same for everyone.
+// «Що пишуть в інтернеті» (advice.js overview): one summary per book from the web, the same for everyone.
 // Open to all since 2026-10-23 (Max: «це треба викочувати на всіх»): any signed-in reader can make it,
 // a guest sees it once made; only the owner can redo one.
 const OVERVIEW_PUBLIC = true;
@@ -488,7 +488,7 @@ function overviewBlock(book, o, user) {
   if (!canSee && !(user && (OVERVIEW_PUBLIC || user.owner))) return "";
   const inner = canSee ? overviewHtml(o, user) : `<p class="advice-ask"><button class="text-link" data-ask="overview">Що кажуть про цю книжку?</button></p>`;
   return `<section class="block advice" id="overview" data-book="${attr(book.id)}">
-      ${label("Що кажуть про книжку")}
+      ${label("Що пишуть в інтернеті")}
       <div class="advice-body">${inner}</div>
     </section>`;
 }

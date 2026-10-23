@@ -21,7 +21,7 @@ const OVERVIEW_SCHEMA = `CREATE TABLE IF NOT EXISTS overview (
 );`;
 const WEB_SEARCHES = 3;
 const OVERVIEW_DAILY = 150; // fresh overviews a day, all readers together
-// «Що кажуть про книжку» (Max, 2026-10-23): one summary per book, not per reader, of what readers and
+// «Що пишуть в інтернеті» (Max, 2026-10-23): one summary per book, not per reader, of what readers and
 // reviewers say, from the web, kept on the page for everyone. Our own words only: a review's text may
 // not be reproduced (Закон 2811-IX), so no quotes, no names, no links.
 const OVERVIEW_SYSTEM = `You write a short, neutral note for a book's page on Chytai, a Ukrainian site about books, on what people say about this book. Search the web (up to ${WEB_SEARCHES} searches): reviews, reader reactions (Goodreads, Ukrainian book sites, blogs and booktubers for a Ukrainian edition), the author's standing, awards. Then write, in Ukrainian, what readers and critics agree on: what the book is and does well, the common complaints, and who tends to like it. Facts and the balance of opinion, no verdict of your own, no advice, not addressed to anyone.
