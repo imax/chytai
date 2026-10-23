@@ -122,6 +122,8 @@ main.home { padding-top: 56px; }
 /* ---- covers ---- */
 .cover { position: relative; display: block; flex: none; overflow: hidden; border-radius: 2px; aspect-ratio: 2 / 3; background: hsl(var(--h, 30) 35% 45%); box-shadow: 0 8px 18px -8px rgba(var(--shadow), 0.45); }
 .cover img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+/* A cover with a transparent background (a 3D shop render) sits on white, not on the placeholder colour. */
+.cover img[src^="/covers/"] { background: #fff; }
 .cover .ph { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; padding: 10%; text-align: center; color: #fff; font: 15px/1.25 var(--serif); overflow: hidden; }
 .cover.xl { width: 200px; box-shadow: 0 24px 48px -16px rgba(var(--shadow), 0.5); }
 .cover.xl .ph { font-size: 18px; }
