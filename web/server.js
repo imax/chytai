@@ -1128,12 +1128,25 @@ app.post("/admin/ukfind", owner, async (req, res) => {
 // translation. Published at once, like «Огляди»; Max gets a letter and can undo the pair on /admin/dupes.
 // «Є український переклад» on a foreign book's page: with an address, that page is the edition (below);
 // without one, we look for it ourselves (ukfind.js) and the page says so meanwhile.
+// The field takes «Назва або посилання» (Max, 2026-10-23): an address is read as the edition's page; a
+// title is looked for in our catalogs first, then searched for under that title; empty, under Wikidata's.
 app.post("/api/book/:id/uk-hint", signed, async (req, res, next) => {
-  if (String(req.body.url || "").trim()) return next();
+  const q = String(req.body.q ?? req.body.url ?? "").trim().slice(0, 500);
+  if (isUrl(q)) return (req.body.url = q), next();
   const orig = store.book(store.resolve(req.params.id) || req.params.id);
   if (!orig) return res.status(404).send(pages.messagePage({ title: "Немає такої книжки", text: "", user: req.user }));
-  const ok = ukfind.hint(orig, req.user.id);
-  console.log(`uk hint @${req.user.username}: ${orig.id}${ok ? "" : " (not queued)"}`);
+  const title = q.slice(0, 200);
+  if (title && /[а-яіїєґ]/i.test(title)) {
+    const id = store.findWork({ title, author: orig.author }) || store.findWork({ title, author: store.ukTitles?.[orig.id]?.ukAuthor || "" });
+    if (id && store.canonical(id) !== store.canonical(orig.id) && /[а-яіїєґ]/i.test(store.book(id)?.title || "")) {
+      store.decideTranslation(orig.id, id);
+      console.log(`uk hint @${req.user.username}: ${orig.id} -> ${id} (catalog, «${title}»)`);
+      if (!req.owner) notifyOwner(`Українське видання: ${store.book(id).title}`, [`${req.user.name} (@${req.user.username}) підказав(ла) українську назву «${title}», і вона знайшлася в каталозі.`, "", `Оригінал: ${orig.title}  ${site(req)}${store.href(orig.id)}`, `Переклад: ${store.book(id).title}  ${site(req)}${store.href(id)}`, "", `Прибрати пару: ${site(req)}/admin/dupes#decided`].join("\n"));
+      return res.redirect(303, store.href(id));
+    }
+  }
+  const ok = ukfind.hint(orig, req.user.id, title);
+  console.log(`uk hint @${req.user.username}: ${orig.id}${title ? ` «${title}»` : ""}${ok ? "" : " (not queued)"}`);
   res.redirect(303, `${store.href(orig.id)}#uk`);
 });
 app.post(["/api/book/:id/edition", "/api/book/:id/uk-hint"], signed, async (req, res) => {

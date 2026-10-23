@@ -32,6 +32,7 @@ class UkFinder {
     db.exec("CREATE TABLE IF NOT EXISTS uk_hint (book TEXT NOT NULL, reader TEXT NOT NULL, created TEXT NOT NULL, PRIMARY KEY (book, reader))");
     this.running = false;
     this.queue = new Set(); // book ids from readers' hints
+    this.titles = new Map(); // book id -> the Ukrainian title a reader typed
     this.onHint = onHint;
   }
 
@@ -54,8 +55,9 @@ class UkFinder {
   }
 
   // One book: { status: "found" | "none" | "error", url, edition, note }.
-  async find(book) {
-    const uk = this.store.ukTitles?.[book.id] || {};
+  async find(book, title = "") {
+    const known = this.store.ukTitles?.[book.id] || {};
+    const uk = title ? { uk: title, ukAuthor: known.ukAuthor } : known;
     const usage = { input: 0, output: 0, searches: 0 };
     const save = (status, { url = "", found = "", note = "" } = {}) => {
       this.db
@@ -111,12 +113,15 @@ class UkFinder {
   // A reader's «Є український переклад» (Max, 2026-10-23: «читач може сказати нам = є переклад, йди пошукай»):
   // the book goes into a small queue and is searched for in the background. Returns false when the reader
   // asked too much today or the book was searched for within a month.
-  hint(book, reader) {
+  hint(book, reader, title = "") {
     if (!this.client) return false;
     const day = new Date().toISOString().slice(0, 10);
     if (this.db.prepare("SELECT COUNT(*) AS n FROM uk_hint WHERE reader = ? AND created >= ?").get(reader, day).n >= 10) return false;
     this.db.prepare("INSERT OR IGNORE INTO uk_hint (book, reader, created) VALUES (?, ?, ?)").run(book.id, reader, new Date().toISOString());
-    if (this.state(book.id) !== "ask") return false;
+    // A title the reader typed is worth a new search even after one found nothing.
+    const st = this.state(book.id);
+    if (st === "searching" || st === "found" || (st === "none" && !title)) return false;
+    if (title) this.titles.set(book.id, title);
     this.queue.add(book.id);
     this.pump();
     return true;
@@ -134,10 +139,11 @@ class UkFinder {
       for (const id of this.queue) {
         const b = this.store.book(id);
         if (b && this.today() < DAILY) {
-          const r = await this.find(b).catch((e) => ({ status: "error", note: e.message }));
+          const r = await this.find(b, this.titles.get(id) || "").catch((e) => ({ status: "error", note: e.message }));
           this.onHint?.(b, r);
         }
         this.queue.delete(id);
+        this.titles.delete(id);
       }
     } finally {
       this.pumping = false;

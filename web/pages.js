@@ -408,14 +408,14 @@ function bookLd(book, shelf, s, readers) {
 function ukLine(book, state) {
   const line = `Українською: «${esc(book.ukTitle)}», у каталогах поки немає`;
   if (state === "searching") return `${line} · шукаємо…`;
-  return state ? `${line} · <button type="button" class="text-link small" onclick="var f=document.getElementById('uk');f.hidden=!f.hidden;if(!f.hidden)f.querySelector('input').focus()">Додати</button>` : line;
+  return state ? `${line} · <button type="button" class="text-link small" onclick="var f=document.getElementById('uk');f.hidden=!f.hidden;if(!f.hidden)f.querySelector('input').select()">Додати</button>` : line;
 }
 function ukForm(book, state, error) {
   if (!state || state === "searching") return "";
   return `<form method="post" action="/api/book/${attr(encodeURIComponent(book.id))}/uk-hint" class="edition-form" id="uk"${error ? "" : " hidden"}>
-  <p class="small muted">${state === "none" ? "Ми вже шукали і не знайшли. " : ""}Вставте посилання на сторінку книжки в магазині чи у видавництва, або просто натисніть «Додати», і ми пошукаємо самі.</p>
+  <p class="small muted">${state === "none" ? "Ми вже шукали і не знайшли. " : ""}Напишіть українську назву або вставте посилання на сторінку книжки в магазині чи у видавництва.</p>
   ${error ? `<p class="error small">${esc(error)}</p>` : ""}
-  <div class="edition-row"><input type="url" name="url" placeholder="Посилання (необов'язково)" autocomplete="off"><button class="btn">Додати</button></div>
+  <div class="edition-row"><input name="q" value="${attr(book.ukTitle || "")}" placeholder="Назва або посилання" autocomplete="off"><button class="btn">Шукати</button></div>
 </form>`;
 }
 
