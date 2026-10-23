@@ -419,7 +419,7 @@ function ukForm(book, state, error) {
 </form>`;
 }
 
-function bookPage({ book, entry, now = false, user, shelf, inLibrary = new Map(), readers = [], also = [], writings = [], reviewError = "", editionError = "", ukAsk = null, readUrl = "", freeRead = false, advice = null, overview = null, overviewVote = null }) {
+function bookPage({ book, entry, now = false, user, shelf, inLibrary = new Map(), readers = [], also = [], alsoTitle = "Читали це, сподобалось і це", writings = [], reviewError = "", editionError = "", ukAsk = null, readUrl = "", freeRead = false, advice = null, overview = null, overviewVote = null }) {
   const s = statsOf(book.id);
   const kicker = [book.tags?.find((t) => t !== "українською"), isUk(book) ? "українською" : LANG_ADV[String(book.language || "").toLowerCase()] || ""].filter(Boolean).map(cap).join(" · ");
   const sub = [book.altTitle ? esc(book.altTitle) : "", book.author ? `<span class="authors">${authorLinks(book.author)}</span>` : "", book.published ? String(book.published) : "", book.pages ? `${book.pages} с.` : ""].filter(Boolean).join(" · ");
@@ -466,7 +466,7 @@ function bookPage({ book, entry, now = false, user, shelf, inLibrary = new Map()
     </section>` : ""}
   </div>
   <aside>
-    ${also.length ? `${label("Читали це, сподобалось і це")}${minis(also)}` : ""}
+    ${also.length ? `${label(alsoTitle)}${minis(also)}` : ""}
   </aside>
 </div>`;
   const description = [book.author, book.blurb?.replace(/\s+/g, " ") || stripMd(readers.find((r) => r.entry.note)?.entry.note || "")].filter(Boolean).join(". ");
