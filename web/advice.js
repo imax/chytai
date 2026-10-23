@@ -23,7 +23,7 @@ Answer in Ukrainian, addressing the reader as «ви». Be honest and specific, 
 
 Use their shelf only where it genuinely bears on this book: mention a book of theirs when it is a close match in kind and tells something (how they rated or described it; quote a few words from a note when it helps). That may be one book, or none at all; never pad the answer with loose comparisons. A book they rated low tells as much as a book they loved. Watch for the author already on their shelf, a translation or original they already read, and books they abandoned.
 
-Be careful with facts about the book itself: use the description and readers' notes given to you plus what you reliably know; if you are unsure what the book is like, say so in a few words rather than inventing. No spoilers.
+Be careful with facts about the book itself: use what is given to you (length, year, genres, the descriptions, readers' notes) plus what you reliably know about the book or the author. When little is known, say what is known and stop: don't speculate about what the book is probably like, and don't spend sentences on what you don't know. No spoilers.
 
 Length follows what there is to say, not a fixed size. When the book is weak, or plainly far from what this reader reads, one to three short sentences are the whole answer. When the book is interesting, and especially when their shelf gives real reasons why it would be interesting for them, take the room to lay them out: up to about 120 words, in one or two paragraphs. Plain prose, no headings, no bullet lists, no bold. Start with the most telling fact, no preamble, no closing offer, no mention of being an AI.`;
 
@@ -66,19 +66,90 @@ class Advice {
     return { count: list.length, text: list.map(line).join("\n") };
   }
 
-  // The book as text: what it is, what the site knows, what other readers said (their notes are public).
-  bookText(book) {
+  // Everything the site knows about the book, from every edition and source, so the model doesn't have
+  // to guess the length or the kind of book (Max, 2026-10-23: «А у нас дійсно немає чого дати моделі?»):
+  // the shops' pages, year, original title, translator, publisher and genres live on the raw catalog
+  // items (fromShelfItem drops most of them), the descriptions differ from shop to shop, a linked
+  // original or translation has its own, and Open Library knows the original's length and year.
+  async facts(book) {
+    const store = this.store;
+    const id = store.canonical(book.id);
+    const raw = [];
+    const main = store.shelfItems?.get(id);
+    if (main) raw.push({ shelf: main.shelf, item: main.item });
+    for (const e of store.editions?.get(id) || []) if (e.item.id !== main?.item?.id) raw.push(e);
+    const own = store.lib?.books?.[id] || null;
+    const first = (k) => raw.map((r) => r.item[k]).find((v) => v && String(v).trim());
+    const pages = Number(book.pages) || Number(first("pages")) || Number(own?.pages) || 0;
+    const year = Number(book.published) || Number(first("year")) || Number(own?.published) || 0;
+    const original = [book.altTitle, first("originalTitle"), first("altTitle")].map((t) => String(t || "").trim()).find((t) => t && t !== book.title) || "";
+    const translator = first("translator") || "";
+    const publishers = [...new Set(raw.map((r) => r.item.publisher || store.shelf(r.shelf.id || r.shelf)?.name || "").filter(Boolean))];
+    const genres = [...new Set([...(book.tags || []), ...raw.flatMap((r) => r.item.genres || [])])].filter((g) => g && g !== "українською");
+    const formats = [...new Set(raw.map((r) => r.item.format || "").filter(Boolean))];
+    const duration = first("duration") || "";
+    // Descriptions: the page's own, then other shops' when they say something else, then the original's or the translation's.
+    const blurbs = [];
+    const seen = new Set();
+    const addBlurb = (text, from) => {
+      const t = clip(text, 1500);
+      const key = t.slice(0, 120).toLowerCase();
+      if (t.length < 80 || seen.has(key)) return;
+      seen.add(key);
+      blurbs.push({ text: t, from });
+    };
+    addBlurb(book.blurb, book.blurbSource || (book.shelf ? store.shelf(book.shelf)?.name : book.source) || "the catalog");
+    for (const r of raw) addBlurb(require("./catalogs").about(r.item.blurb || ""), store.shelf(r.shelf.id || r.shelf)?.name || "a shop");
+    const twins = [];
+    for (const t of book.translations || []) {
+      const tb = store.book(t.id);
+      if (!tb) continue;
+      twins.push(`${tb.title}${tb.author && tb.author !== book.author ? ` — ${tb.author}` : ""}${tb.pages ? `, ${tb.pages} pages` : ""}${tb.published ? `, ${tb.published}` : ""}`);
+      addBlurb(tb.blurb, `the ${/[а-яіїєґ]/i.test(tb.title) ? "Ukrainian edition" : "original"} «${tb.title}»`);
+    }
+    // Open Library for the original: length, year and a description, once a month per work.
+    let ol = null;
+    const isbns = [...new Set([...(own?.isbns || []), ...raw.map((r) => r.item.isbn).filter(Boolean)])];
+    const latin = (t) => /[a-z]/i.test(t) && !/[а-яіїєґ]/i.test(t);
+    const olTitle = latin(book.title) ? book.title : latin(original) ? original : (book.translations || []).map((t) => t.title).find(latin) || "";
+    if ((olTitle || isbns.length) && (!pages || !year || blurbs.length < 2)) {
+      const key = `advice:ol:${id}`;
+      const cached = this.db.get(key);
+      const fresh = cached && JSON.parse(cached);
+      // A miss (or Open Library down) is asked again after an hour, a hit after a month.
+      if (fresh && Date.now() - Date.parse(fresh.at) < (fresh.data ? 30 * 86400000 : 3600000)) ol = fresh.data;
+      else {
+        try {
+          ol = await Promise.race([require("./enrich").lookup({ title: olTitle || book.title, author: book.author, isbns }), new Promise((r) => setTimeout(() => r(null), 4000))]);
+        } catch {
+          ol = null;
+        }
+        this.db.set(key, JSON.stringify({ at: new Date().toISOString(), data: ol }));
+      }
+      if (ol?.blurb) addBlurb(ol.blurb, "Open Library");
+    }
+    return { pages: pages || ol?.pages || 0, year, firstYear: ol?.published || 0, original, translator, publishers, genres, formats, duration, blurbs, twins, olPages: !pages && ol?.pages ? ol.pages : 0 };
+  }
+
+  // The book as text for the prompt: what it is, what the site knows, what other readers said (their notes are public).
+  async bookText(book) {
     const s = this.social.stats(book.id);
+    const f = await this.facts(book);
     const bits = [`Title: ${book.title}`];
-    if (book.altTitle && book.altTitle !== book.title) bits.push(`Also known as: ${book.altTitle}`);
+    if (f.original) bits.push(`Original title: ${f.original}`);
     if (book.author) bits.push(`Author: ${book.author}`);
-    if (book.published) bits.push(`Year: ${book.published}`);
-    if (book.pages) bits.push(`Pages: ${book.pages}`);
+    if (f.translator) bits.push(`Translator: ${f.translator}`);
+    if (f.firstYear && f.firstYear !== f.year) bits.push(`First published: ${f.firstYear}`);
+    if (f.year) bits.push(`Year of this edition: ${f.year}`);
+    if (f.pages) bits.push(`Pages: ${f.pages}${f.olPages ? " (the original edition)" : ""}`);
+    if (f.duration) bits.push(`Audiobook length: ${f.duration}`);
     if (book.language) bits.push(`Language of this edition: ${book.language}`);
-    if (book.tags?.length) bits.push(`Tags: ${book.tags.join(", ")}`);
+    if (f.publishers.length) bits.push(`Publisher / sold by: ${f.publishers.join(", ")}`);
+    if (f.formats.length) bits.push(`Formats: ${f.formats.join(", ")}`);
+    if (f.genres.length) bits.push(`Genres (the shops' shelves): ${f.genres.join(", ")}`);
     if (book.series?.name) bits.push(`Series: ${book.series.name}${book.series.volumes ? ` (${book.series.volumes} volumes)` : ""}`);
-    if (book.translations?.length) bits.push(`Other editions (original or translation): ${book.translations.map((t) => `${t.title}${t.author && t.author !== book.author ? ` — ${t.author}` : ""}`).join("; ")}`);
-    if (book.blurb) bits.push(`Description: ${clip(book.blurb, 1500)}`);
+    if (f.twins.length) bits.push(`Other editions (original or translation): ${f.twins.join("; ")}`);
+    for (const b of f.blurbs) bits.push(`Description (${b.from}): ${b.text}`);
     if (s.rated) bits.push(`On Chytai: average rating ${s.avg}/5 from ${s.rated} readers; ${s.finished} finished, ${s.dropped} gave up, ${s.want} want to read.`);
     const notes = this.store
       .readersOf(book.id, { all: true })
@@ -130,7 +201,7 @@ class Advice {
         { type: "text", text: SYSTEM },
         { type: "text", text: `The reader's shelf (${shelf.count} books):\n${shelf.text}`, cache_control: { type: "ephemeral" } },
       ],
-      messages: [{ role: "user", content: `The book on the page:\n${this.bookText(book)}\n\nWhat is this book like for me, given my shelf? Facts only, no verdict.` }],
+      messages: [{ role: "user", content: `The book on the page:\n${await this.bookText(book)}\n\nWhat is this book like for me, given my shelf? Facts only, no verdict.` }],
     });
     if (message.stop_reason === "refusal") throw new Error("Claude не зміг відповісти про цю книжку.");
     const text = message.content.filter((b) => b.type === "text").map((b) => b.text).join("\n").trim();
