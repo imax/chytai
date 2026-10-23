@@ -406,7 +406,7 @@ function bookLd(book, shelf, s, readers) {
 // зробити лінк Додати який відкриває форму»): a signed-in reader tells us the translation is out there; the
 // address of its page is optional, without it we look ourselves (ukfind.js). `state`: ask | searching | none.
 function ukLine(book, state) {
-  const line = `Українською: «${esc(book.ukTitle)}», у каталогах поки немає`;
+  const line = book.ukTitle ? `Українською: «${esc(book.ukTitle)}», у каталогах поки немає` : "Українського перекладу в каталогах поки немає";
   // The search takes a minute or so: the page looks again by itself, staying at this block.
   if (state === "searching") return `${line} · шукаємо…<script>setTimeout(() => location.reload(), 20000)</script>`;
   return state ? `${line} · <button type="button" class="text-link small" onclick="var f=document.getElementById('uk');f.hidden=!f.hidden;if(!f.hidden)f.querySelector('input').select()">Додати</button>` : line;
@@ -459,11 +459,11 @@ function bookPage({ book, entry, now = false, user, shelf, inLibrary = new Map()
       ${writings.length ? writingsList(writings, book, user) : ""}
       ${user ? addWriting(book, reviewError) : ""}
     </section>` : ""}
-    ${book.blurb || book.ukTitle ? `<section class="block" id="about">
+    ${book.blurb || book.ukTitle || ukAsk ? `<section class="block" id="about">
       ${label("Про книжку")}
       ${book.blurb ? `<div class="about">${book.blurb.split(/\n\n+/).map((t) => `<p>${esc(t)}</p>`).join("")}</div>` : ""}
-      <p class="small muted">${[book.blurb && !book.edited?.blurb ? (book.blurbSource ? `Опис: ${esc(book.blurbSource)}` : `Опис з сайту ${esc(shelf ? shelf.name : book.source)}`) : "", book.ukTitle ? ukLine(book, ukAsk) : ""].filter(Boolean).join(" · ")}</p>
-      ${book.ukTitle ? ukForm(book, ukAsk, editionError) : ""}
+      <p class="small muted">${[book.blurb && !book.edited?.blurb ? (book.blurbSource ? `Опис: ${esc(book.blurbSource)}` : `Опис з сайту ${esc(shelf ? shelf.name : book.source)}`) : "", book.ukTitle || ukAsk ? ukLine(book, ukAsk) : ""].filter(Boolean).join(" · ")}</p>
+      ${ukForm(book, ukAsk, editionError)}
     </section>` : ""}
   </div>
   <aside>

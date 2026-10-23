@@ -1120,8 +1120,12 @@ function addEdition(orig, p, by) {
 const onUkHint = (b, r) => r.status === "found" && r.edition && notifyOwner(`Знайшли українське видання: ${r.edition.title}`, [`Читач підказав, що є переклад «${b.title}», і пошук знайшов:`, "", `Переклад: ${r.edition.title}${r.edition.author ? ` — ${r.edition.author}` : ""}  ${SITE}${store.href(r.edition.id)}`, `Сторінка: ${r.url}`, "", `Прибрати пару: ${SITE}/admin/dupes#decided`, `Усі пошуки: ${SITE}/admin/ukfind`].join("\n"));
 const ukfind = new UkFinder({ store, db: store.db, apiKey: process.env.ANTHROPIC_API_KEY || "", bookpage, addEdition, onHint: onUkHint, log: console.log });
 // «Додати» after «Українською: …, у каталогах поки немає» for a signed-in reader (pages.ukLine).
+// Also a foreign book Wikidata knows no translation of (Max, 2026-10-23: «тут немає перекладу але він є», Feynman):
+// a Latin title, no Ukrainian edition or translation linked.
+const CYR_RE = /[а-яіїєґ]/i;
 function ukAskFor(req, book) {
-  if (!req.user || !book.ukTitle) return null;
+  if (!req.user) return null;
+  if (!book.ukTitle && (!/[a-z]/i.test(book.title) || CYR_RE.test(book.title) || (book.translations || []).some((t) => CYR_RE.test(t.title)) || (book.editions || []).some((e) => CYR_RE.test(e.title)))) return null;
   const st = ukfind.state(book.id);
   return st === "found" ? null : !ukfind.client && st !== "none" ? "ask" : st;
 }

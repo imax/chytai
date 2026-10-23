@@ -100,7 +100,8 @@ class UkFinder {
         notes.push(`${new URL(url).hostname}: ${p.error.split(".")[0]}`);
         continue;
       }
-      if (!/[а-яіїєґ]/i.test(p.title) || !want.every((w) => norm(p.title).includes(w))) {
+      // Cyrillic but not Russian (ы, э, ъ, ё), and the Ukrainian title's main words when we know them.
+      if (!/[а-яіїєґ]/i.test(p.title) || /[ыэъё]/i.test(p.title) || !want.every((w) => norm(p.title).includes(w))) {
         notes.push(`${new URL(url).hostname}: «${p.title}»`);
         continue;
       }
