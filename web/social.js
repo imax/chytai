@@ -24,7 +24,9 @@ class Social {
   }
 
   // Every entry of every reader that has something to say (a status or a rating): [{ reader, id, entry }].
-  // «Покинуто» never is: no feed line, no rating counted, nothing in the letters.
+  // «Покинуто» never is: no feed line, no rating counted, nothing in the letters. Nor is a book on the
+  // reader's «Дитяча полиця» (Max, 2026-10-23): it is their children's taste, not theirs, so it stays out of
+  // the feed, ratings, picks, «Популярне» and every «схожі» / «Читали це, сподобалось і це».
   // Kept until the current request is done: a page asks for it many times (/community once per reader), and
   // each time looks up every reader's every book (2.2 s for /community on 2026-10-21).
   all() {
@@ -34,7 +36,7 @@ class Social {
     for (const [rid, entries] of this.store.entries) {
       const reader = this.who(rid);
       if (!reader) continue;
-      for (const [id, e] of Object.entries(entries)) if ((e.status || e.rating != null) && e.status !== "abandoned" && !isRussian(this.store.book(id))) out.push({ reader, id, entry: e });
+      for (const [id, e] of Object.entries(entries)) if ((e.status || e.rating != null) && e.status !== "abandoned" && !e.kids && !isRussian(this.store.book(id))) out.push({ reader, id, entry: e });
     }
     return out;
   }
@@ -43,7 +45,7 @@ class Social {
   // finished it and how many gave up on it (Max, 2026-10-21: like YouTube's dislikes, the ratio says
   // something about a book; only the numbers, never who).
   stats(id) {
-    const all = this.store.readersOf(id, { all: true }).filter((r) => this.who(r.reader));
+    const all = this.store.readersOf(id, { all: true }).filter((r) => this.who(r.reader) && !r.entry.kids);
     const rs = all.filter((r) => r.entry.status !== "abandoned");
     const rated = rs.filter((r) => r.entry.rating != null);
     const avg = rated.length ? Math.round((rated.reduce((s, r) => s + r.entry.rating, 0) / rated.length) * 10) / 10 : null;
@@ -176,7 +178,7 @@ class Social {
   // Three books to start recommendations from: the reader's own latest fives, or for a guest (or a
   // reader without fives) three random well rated books with tags.
   seeds(readerId) {
-    const own = readerId ? this.store.library(readerId).filter((r) => r.rating >= 5 && tagsOf(r.book).length) : [];
+    const own = readerId ? this.store.library(readerId).filter((r) => r.rating >= 5 && !r.kids && tagsOf(r.book).length) : [];
     if (own.length) return own.slice(0, 3).map((r) => r.book);
     return shuffle([...this.liked().values()].filter((x) => x.avg >= 4.5 && tagsOf(x.book).length && x.book.cover)).slice(0, 3).map((x) => x.book);
   }

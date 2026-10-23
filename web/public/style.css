@@ -463,6 +463,8 @@ dialog .form { margin-top: 18px; }
 .add-review .add-intro { position: sticky; top: 24px; } /* a long list scrolls, the button stays (Max) */
 .add-review .add-intro .btn { margin-bottom: 18px; }
 .add-status { display: flex; align-items: center; gap: 10px; margin: 0 0 14px; font-size: 14px; color: var(--muted); }
+.add-kids { display: flex; align-items: center; gap: 8px; margin: 0 0 14px; font-size: 14px; color: var(--ink); cursor: pointer; }
+.add-kids input { width: 16px; height: 16px; margin: 0; accent-color: var(--accent); }
 .add-status select { border: 0; background: transparent; color: var(--ink); cursor: pointer; padding: 2px 0; }
 .add-review .add-intro p { margin: 0 0 14px; }
 .add-review .btn:disabled { opacity: 0.4; cursor: default; }

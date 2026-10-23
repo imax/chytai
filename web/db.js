@@ -63,6 +63,8 @@ function open(dataDir) {
   if (!db.prepare("PRAGMA table_info(readers)").all().some((c) => c.name === "noindex")) db.exec("ALTER TABLE readers ADD COLUMN noindex INTEGER NOT NULL DEFAULT 0");
   // «Читаю зараз» (Max, 2026-10-22), a reader's status: JSON { books: [{ id, since }], at }.
   if (!db.prepare("PRAGMA table_info(readers)").all().some((c) => c.name === "now")) db.exec("ALTER TABLE readers ADD COLUMN now TEXT");
+  // «Дитяча полиця» (Max, 2026-10-23): a book the reader keeps for their children, out of their own taste.
+  if (!db.prepare("PRAGMA table_info(entries)").all().some((c) => c.name === "kids")) db.exec("ALTER TABLE entries ADD COLUMN kids INTEGER NOT NULL DEFAULT 0");
   // A work may have several addresses (an old one redirects to the current): the table once made id
   // UNIQUE, so a second slug for an id was silently dropped and lived only in memory (2026-10-21).
   if (db.prepare("PRAGMA index_list(slugs)").all().some((i) => i.unique && i.origin === "u")) {

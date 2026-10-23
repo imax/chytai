@@ -144,7 +144,7 @@ function sameAuthor(a, b) {
 const RANK = { read: 3, abandoned: 2.5, reading: 2, want: 1, "": 0 };
 function mergeEntries(a, b) {
   const pick = (x, y) => (x !== "" && x != null ? x : y);
-  return { ...b, ...a, status: (RANK[a.status] ?? 0) >= (RANK[b.status] ?? 0) ? a.status : b.status, rating: Math.max(a.rating ?? -1, b.rating ?? -1) < 0 ? null : Math.max(a.rating ?? 0, b.rating ?? 0), year: pick(a.year, b.year), note: (a.note || "").length >= (b.note || "").length ? a.note || "" : b.note, copy: pick(a.copy, b.copy), order: Math.min(a.order ?? 1e9, b.order ?? 1e9) };
+  return { ...b, ...a, status: (RANK[a.status] ?? 0) >= (RANK[b.status] ?? 0) ? a.status : b.status, rating: Math.max(a.rating ?? -1, b.rating ?? -1) < 0 ? null : Math.max(a.rating ?? 0, b.rating ?? 0), year: pick(a.year, b.year), note: (a.note || "").length >= (b.note || "").length ? a.note || "" : b.note, copy: pick(a.copy, b.copy), order: Math.min(a.order ?? 1e9, b.order ?? 1e9), ...(a.kids || b.kids ? { kids: true } : {}) };
 }
 
 class Store {
@@ -918,7 +918,7 @@ class Store {
       const links = (b.links || []).filter((l) => !/readeat\.com/i.test(l.url));
       if (links.length !== (b.links || []).length) (b.links = links), this.writeBook(b.id);
     }
-    for (const r of db.prepare("SELECT * FROM entries").all()) this.entriesOf(r.reader)[r.book] = { status: r.status, year: r.year, rating: r.rating, note: r.note, copy: r.copy, order: r.ord, ...(r.added ? { added: r.added } : {}), ...(r.updated ? { updated: r.updated } : {}) };
+    for (const r of db.prepare("SELECT * FROM entries").all()) this.entriesOf(r.reader)[r.book] = { status: r.status, year: r.year, rating: r.rating, note: r.note, copy: r.copy, order: r.ord, ...(r.added ? { added: r.added } : {}), ...(r.updated ? { updated: r.updated } : {}), ...(r.kids ? { kids: true } : {}) };
     for (const r of db.prepare("SELECT reader, shelf FROM subscriptions").all()) this.subscriptions(r.reader).push(r.shelf);
   }
 
@@ -940,8 +940,8 @@ class Store {
   writeEntry(reader, id, e) {
     if (!e) return this.db.prepare("DELETE FROM entries WHERE reader = ? AND book = ?").run(reader, id);
     this.db
-      .prepare("INSERT INTO entries (reader, book, status, rating, year, note, copy, ord, added, updated) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (reader, book) DO UPDATE SET status = excluded.status, rating = excluded.rating, year = excluded.year, note = excluded.note, copy = excluded.copy, ord = excluded.ord, added = excluded.added, updated = excluded.updated")
-      .run(reader, id, e.status || "", e.rating ?? null, e.year ?? null, e.note || "", e.copy || "", e.order ?? null, e.added || null, e.updated || null);
+      .prepare("INSERT INTO entries (reader, book, status, rating, year, note, copy, ord, added, updated, kids) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (reader, book) DO UPDATE SET status = excluded.status, rating = excluded.rating, year = excluded.year, note = excluded.note, copy = excluded.copy, ord = excluded.ord, added = excluded.added, updated = excluded.updated, kids = excluded.kids")
+      .run(reader, id, e.status || "", e.rating ?? null, e.year ?? null, e.note || "", e.copy || "", e.order ?? null, e.added || null, e.updated || null, e.kids ? 1 : 0);
   }
 
   writeBook(id) {
@@ -1197,7 +1197,7 @@ class Store {
         // An import is history, not news: the entry is dated when the book was read (or added) on Goodreads,
         // so a hundred old books don't fill the feed as «сьогодні» (Max, 2026-10-20). An entry the reader
         // already had keeps its own date.
-        const imported = { status: r.status || "", year: r.year ?? null, rating: r.rating ?? null, note: r.note || "", copy: r.copy || "", order: order++, added: r.added || now.slice(0, 10), updated: r.read || r.touched || r.added || now };
+        const imported = { status: r.status || "", year: r.year ?? null, rating: r.rating ?? null, note: r.note || "", copy: r.copy || "", order: order++, added: r.added || now.slice(0, 10), updated: r.read || r.touched || r.added || now, ...(r.kids ? { kids: true } : {}) };
         const cur = entries[id];
         entries[id] = cur ? { ...mergeEntries(cur, imported), updated: cur.updated || cur.added || imported.updated } : imported;
         this.writeEntry(reader, id, entries[id]);
@@ -1235,6 +1235,7 @@ class Store {
     const cur = entries[id] || { status: "", year: null, rating: null, note: "", copy: "", order: Object.keys(entries).length, added: new Date().toISOString().slice(0, 10) };
     const next = { ...cur, ...patch, updated: new Date().toISOString() };
     if (next.rating === "" || next.rating === undefined) next.rating = cur.rating ?? null;
+    if (!next.kids) delete next.kids;
     entries[id] = next;
     this.writeEntry(reader, id, next);
     return next;

@@ -126,7 +126,7 @@ class Advice {
       if (r.note) bits.push(`«${clip(stripMd(r.note), 220)}»`);
       return bits.join(" · ");
     };
-    const list = rows.filter((r) => r.book).sort((a, b) => (order[a.status] ?? 4) - (order[b.status] ?? 4) || (b.year ?? 0) - (a.year ?? 0));
+    const list = rows.filter((r) => r.book && !r.kids).sort((a, b) => (order[a.status] ?? 4) - (order[b.status] ?? 4) || (b.year ?? 0) - (a.year ?? 0));
     return { count: list.length, text: list.map(line).join("\n") };
   }
 

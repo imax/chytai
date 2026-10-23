@@ -423,7 +423,9 @@ app.post("/import/:source/apply", signed, importSource, async (req, res) => {
   };
   // The status picked on /add for the whole list; «На папері» is no status but where the copy is.
   const as = p.source === "list" ? String(req.body.status || "read") : null;
-  const batch = (r) => (as === "paper" ? { ...r, status: "", year: null, copy: "paper" } : as && ["read", "reading", "want", "abandoned"].includes(as) ? { ...r, status: as, year: as === "read" ? r.year : null, rating: ["want", "reading"].includes(as) ? null : r.rating } : r);
+  const kids = p.source === "list" && req.body.kids === "1";
+  const batch = (r) => ({ ...batchStatus(r), ...(kids ? { kids: true } : {}) });
+  const batchStatus = (r) => (as === "paper" ? { ...r, status: "", year: null, copy: "paper" } : as && ["read", "reading", "want", "abandoned"].includes(as) ? { ...r, status: as, year: as === "read" ? r.year : null, rating: ["want", "reading"].includes(as) ? null : r.rating } : r);
   const chosen = (await Promise.all(p.rows.map(swapped))).map(batch).filter((r, i) => keep.has(i) && !r.pageError && !(p.source === "list" && r.match && store.entry(req.user.id, r.match.id)));
   // One new book once, however many lines brought it (a pasted link and «Шукати» on another line for the same book).
   const fresh = new Set();
@@ -435,7 +437,7 @@ app.post("/import/:source/apply", signed, importSource, async (req, res) => {
   // On the shelf they sit after what is already there: the read ones by date read, oldest first, then the rest by date added.
   const key = (r) => (r.read ? `0${r.read}` : `1${r.added || "9999"}`);
   chosen.sort((a, b) => key(a).localeCompare(key(b)));
-  const result = store.importEntries(req.user.id, chosen.map((r) => ({ id: r.match?.id || null, title: r.title, author: r.author, isbns: r.isbns, goodreadsId: r.goodreadsId, appleId: r.appleId, status: r.status, rating: r.rating, year: r.year, note: r.note, copy: r.copy, added: r.added, read: r.read, touched: r.touched, cover: r.cover, ol: r.ol, published: r.published, blurb: r.blurb, blurbSource: r.blurbSource, pages: r.pages, links: r.link ? [r.link] : [] })), { source: req.source });
+  const result = store.importEntries(req.user.id, chosen.map((r) => ({ id: r.match?.id || null, title: r.title, author: r.author, isbns: r.isbns, goodreadsId: r.goodreadsId, appleId: r.appleId, status: r.status, rating: r.rating, year: r.year, note: r.note, copy: r.copy, kids: r.kids, added: r.added, read: r.read, touched: r.touched, cover: r.cover, ol: r.ol, published: r.published, blurb: r.blurb, blurbSource: r.blurbSource, pages: r.pages, links: r.link ? [r.link] : [] })), { source: req.source });
   const name = IMPORTS[req.source].name;
   console.log(`${name} import @${req.user.username}: ${result.added} added, ${result.updated} updated, ${result.created.length} new books`);
   // New books by hand are mailed to the owner one by one; an import sends one letter with the list.
@@ -508,7 +510,7 @@ function readerList() {
   const year = new Date().getFullYear();
   return auth
     .readers()
-    .map((r) => ({ reader: pub(r), rows: store.library(r.id) }))
+    .map((r) => ({ reader: pub(r), rows: store.library(r.id).filter((x) => !x.kids) }))
     .filter((c) => c.rows.length)
     .sort((a, b) => b.rows.length - a.rows.length)
     .map(({ reader, rows }) => {
@@ -617,7 +619,7 @@ app.get("/@:username", (req, res) => {
   const rows = libraryRows(reader.id);
   const follows = { followers: auth.followers(reader.id).map((id) => pub(auth.reader(id))).filter(Boolean), following: auth.following(reader.id).map((id) => pub(auth.reader(id))).filter(Boolean) };
   if (own) {
-    const fives = rows.filter((r) => r.rating >= 5).slice(0, 5).map((r) => r.id);
+    const fives = rows.filter((r) => r.rating >= 5 && !r.kids).slice(0, 5).map((r) => r.id);
     const recs = social.alsoLiked(fives, { limit: 4, skip: new Set(rows.map((r) => r.id)) });
     return res.send(pages.libraryPage({ rows, user: req.user, reader: req.user, own: true, recs, follows, now: nowFor(reader.id, { own: true }) }));
   }
@@ -869,6 +871,8 @@ app.post("/api/entry/:id", signed, (req, res) => {
   if ("year" in b) patch.year = b.year ? Number(b.year) : null;
   if ("copy" in b) patch.copy = ["paper", "ebook", "seeking"].includes(b.copy) ? b.copy : "";
   if ("note" in b) patch.note = String(b.note).trim();
+  // «Дитяча полиця»: the edit form sends kids=0 and, ticked, kids=1 too; the «⋯» menu sends one of them.
+  if ("kids" in b) patch.kids = [].concat(b.kids).includes("1");
   const e = store.setEntry(req.user.id, req.params.id, patch);
   if (!e) return res.status(404).send("Немає такої книжки");
   if (["read", "want", "abandoned"].includes(patch.status)) dropNow(req.user.id, req.params.id);

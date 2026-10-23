@@ -27,7 +27,9 @@
 
     function match(it, text, g) {
       if (text && !(it.dataset.search || "").includes(text)) return false;
-      if (filters.status) {
+      // The books on a reader's «Дитяча полиця» are only under that tab.
+      if ((filters.status === "kids") !== (it.dataset.kids === "1") && it.dataset.kids !== undefined) return false;
+      if (filters.status && filters.status !== "kids") {
         const v = filters.status;
         if (v === "paper" || v === "seeking") { if (it.dataset.copy !== v) return false; }
         else if (v === "common") { if (it.dataset.common !== "1") return false; }
@@ -100,9 +102,10 @@
         again();
       });
     }
-    if (location.hash === "#want") $(".tab[data-v=want]")?.click();
-    // A link to one row (/@maxua#book) must find it even past the first rows.
+    if (location.hash === "#want" || location.hash === "#kids") $(`.tab[data-v=${location.hash.slice(1)}]`)?.click();
+    // A link to one row (/@maxua#book) must find it even past the first rows, and under «Дитяча полиця» if it is there.
     const at = location.hash ? order.findIndex((it) => it.id === decodeURIComponent(location.hash.slice(1))) : -1;
+    if (at >= 0 && order[at].dataset.kids === "1") $(".tab[data-v=kids]")?.click();
     if (at >= limit) limit = at + STEP;
     apply();
     if (location.hash) document.getElementById(decodeURIComponent(location.hash.slice(1)))?.scrollIntoView();
