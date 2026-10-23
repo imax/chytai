@@ -484,15 +484,17 @@ function adviceBlock(book, a) {
 const OVERVIEW_PUBLIC = true;
 // Under the text, for a signed-in reader, two words on the overview itself (Max, 2026-10-23: praise or
 // complain); `vote` is the reader's own, 1 or -1, and the chosen one stays marked.
-function overviewHtml(o, user, vote = null) {
+// On the page the text starts folded to three lines with «Читати далі» (Max, 2026-10-23: «для захисту
+// від спойлерів»); the one a reader just asked for comes whole.
+function overviewHtml(o, user, vote = null, { folded = false } = {}) {
   const votes = user ? ` · <span class="advice-vote" title="Чи добрий цей огляд?"><button class="text-link small${vote === 1 ? " on" : ""}" data-vote="1">👍 Корисно</button> <button class="text-link small${vote === -1 ? " on" : ""}" data-vote="-1">👎 Не те</button></span>` : "";
-  return `<div class="advice-text">${marked.parse(o.text).replace(/<a href="http/g, '<a target="_blank" rel="noopener" href="http')}</div>
-<p class="small muted">Claude, за відгуками в інтернеті · ${writingDate(o.created.slice(0, 10))}${votes}${user?.owner ? ` · <button class="text-link small" data-ask="overview" data-again>Оновити</button>` : ""}</p>`;
+  return `<div class="advice-text${folded ? " folded" : ""}">${marked.parse(o.text).replace(/<a href="http/g, '<a target="_blank" rel="noopener" href="http')}</div>
+${folded ? `<p class="advice-more"><button class="text-link" data-unfold>Читати далі</button></p>` : ""}<p class="small muted">Claude, за відгуками в інтернеті · ${writingDate(o.created.slice(0, 10))}${votes}${user?.owner ? ` · <button class="text-link small" data-ask="overview" data-again>Оновити</button>` : ""}</p>`;
 }
 function overviewBlock(book, o, user, vote = null) {
   const canSee = o && (OVERVIEW_PUBLIC || user?.owner);
   if (!canSee && !(user && (OVERVIEW_PUBLIC || user.owner))) return "";
-  const inner = canSee ? overviewHtml(o, user, vote) : `<p class="advice-ask"><button class="text-link" data-ask="overview">Що кажуть про цю книжку?</button></p>`;
+  const inner = canSee ? overviewHtml(o, user, vote, { folded: true }) : `<p class="advice-ask"><button class="text-link" data-ask="overview">Що кажуть про цю книжку?</button></p>`;
   return `<section class="block advice" id="overview" data-book="${attr(book.id)}">
       ${label("Що пишуть в інтернеті")}
       <div class="advice-body">${inner}</div>

@@ -349,6 +349,14 @@ document.addEventListener("click", async (e) => {
     body.append(p);
   }
 });
+// «Читати далі» under a folded overview: the whole text, the link goes away.
+document.addEventListener("click", (e) => {
+  const button = e.target.closest("[data-unfold]");
+  const block = button?.closest(".advice");
+  if (!block) return;
+  block.querySelector(".advice-text")?.classList.remove("folded");
+  button.closest(".advice-more")?.remove();
+});
 // 👍 / 👎 under «Що пишуть в інтернеті»: a second tap on the same one takes the vote back.
 document.addEventListener("click", async (e) => {
   const button = e.target.closest("[data-vote]");

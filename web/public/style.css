@@ -659,6 +659,11 @@ form.inline button:not(.btn) { background: none; border: 0; padding: 0; cursor: 
 .advice-text p { font: 17px/1.55 var(--serif); color: var(--text); max-width: 620px; }
 .advice-text p + p { margin-top: 0.7em; }
 .advice-text + .small { margin-top: 12px; }
+.advice-text.folded { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.advice-text.folded p + p { display: none; }
+.advice-more { margin-top: 8px; }
+.advice-more .text-link { font-size: 15px; }
+.advice-more + .small { margin-top: 12px; }
 .advice-error { color: var(--danger); margin-top: 10px; }
 .advice-vote .text-link { margin-right: 6px; }
 .advice-vote .text-link.on { color: var(--accent); font-weight: 600; }
