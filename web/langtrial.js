@@ -1,20 +1,20 @@
 // A trial of book languages by Claude (Max, 2026-10-23: «візьмемося за визначення мови книги? особливо
 // цікаво рос»). Without a language from the shop, isRussian() guesses from the title and author: letters,
 // typical Russian words and endings, a list of Russian writers. A Cyrillic title with none of і/ї/є/ґ and
-// ы/э/ъ/ё rests on those word guesses alone. This asks Haiku the language of such editions, for 200 random
+// ы/э/ъ/ё rests on those word guesses alone. This asks Haiku the language of such editions, for all such
 // works, and keeps the answers in meta `langtrial` for /admin/lang-trial. Nothing on the site changes.
 
 const Anthropic = require("@anthropic-ai/sdk");
 const { isRussian } = require("./store");
 
 const MODEL = "claude-haiku-5-5";
-const SIZE = 200;
+const SIZE = 400; // the whole pool: 247 doubtful works on 2026-10-23
 const PARALLEL = 4;
-const PROMPT = 1; // the SYSTEM version below; bump it with every change
+const PROMPT = 2; // the SYSTEM version below; bump it with every change
 const PRICE = { input: 0.1 / 1e6, output: 0.5 / 1e6 }; // $ per token, Haiku 5.5
 const LANGS = ["uk", "ru", "en", "other", "unknown"];
 
-const SYSTEM = `You tell the language of one edition of a book listed on Chytai, a Ukrainian book site. Judge the language this edition is printed in, from its title, the description and the publisher or shop, not the language the book was first written in: a Ukrainian translation of a Russian or English book is «uk». Ukrainian and Russian look alike: Ukrainian uses і, ї, є, ґ and words like «та», «що», «як», «це», «від»; Russian uses ы, э, ъ, ё and words like «и», «что», «как», «это», «от». A short title can be the same in both; then rely on the description and the publisher. Answer «unknown» only when nothing given tells them apart.`;
+const SYSTEM = `You tell the language of one edition of a book listed on Chytai, a Ukrainian book site. Judge the language this edition is printed in, from its title, the description and the publisher or shop, not the language the book was first written in: a Ukrainian translation of a Russian or English book is «uk». Ukrainian and Russian look alike: Ukrainian uses і, ї, є, ґ and words like «та», «що», «як», «це», «від»; Russian uses ы, э, ъ, ё and words like «и», «что», «как», «это», «от». A short title can be the same in both; then rely on the description and the publisher. The spelling of the title decides first: a title that is correct Russian and not correct Ukrainian («Академия», not «Академія»; «Пассажир», not «Пасажир»; «Возвращение», not «Повернення»; «Зов кукушки») is «ru», even when the description is in Ukrainian, because Ukrainian shops describe Russian editions in Ukrainian. The author's name spelled the Ukrainian way does not make the edition Ukrainian either. Answer «unknown» only when the title is correct in both languages («Дракон») and nothing else tells them apart.`;
 
 // A Cyrillic title with no letter that settles the language: the cases the word guesses decide.
 const doubtful = (b) => !b.language && /[а-яА-Я]/.test(b.title || "") && !/[іїєґІЇЄҐыэъёЫЭЪЁ]/.test(b.title || "");
@@ -32,16 +32,15 @@ class LangTrial {
     return JSON.parse(this.db.get("langtrial") || "null");
   }
 
-  // 200 random doubtful works from the whole catalog; a second run takes others.
+  // The doubtful works of the whole catalog, in random order.
   pick() {
     const all = [...this.store.workIds()].map((id) => this.store.book(id)).filter((b) => b && doubtful(b));
     for (let i = all.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
       [all[i], all[j]] = [all[j], all[i]];
     }
-    const seen = new Set([...JSON.parse(this.db.get("langtrial:seen") || "[]"), ...(this.state()?.items || []).map((x) => x.id)]);
-    this.db.set("langtrial:seen", JSON.stringify([...seen]));
-    return { books: all.filter((b) => !seen.has(b.id)).slice(0, SIZE), doubtful: all.length };
+    // The pool is small, so every run asks about all of it: a new prompt is checked on the same books.
+    return { books: all.slice(0, SIZE), doubtful: all.length };
   }
 
   async ask(b) {
