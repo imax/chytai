@@ -52,7 +52,7 @@ const GENRE_OF = [
 // Subjects are many and noisy: a genre counts when one of the first twenty says so.
 const genresOf = (subjects) => GENRE_OF.filter(([, re]) => (subjects || []).slice(0, 20).some((x) => re.test(String(x)))).map(([g]) => g).slice(0, 3);
 // Bumped when a source is added or fixed, so every book is asked again: the per-book memory is enrich:<GEN>:<id>.
-const GEN = 5; // 3: genres, 4: a genre list for every reader, «фентезі» apart from «фантастика», 5: genres through the original (2026-10-23)
+const GEN = 6; // 3: genres, 4: a genre list for every reader, «фентезі» apart from «фантастика», 5: genres through the original, 6: recent editions' covers, Ukrainian covers from Google (2026-10-23)
 
 const norm = (s) => String(s || "").toLowerCase().replace(/^(the|a|an)\s+/, "").replace(/[’'`]/g, "").replace(/[^\p{L}\p{N}]+/gu, " ").trim();
 const mainTitle = (t) => String(t || "").replace(/\s*\(.*?\)\s*/g, " ").split(/[:]/)[0].trim();
@@ -122,8 +122,25 @@ async function getJson(url, fetchImpl) {
   return r.json();
 }
 
+// The cover of a recent edition of a work, not the first one (Max, 2026-10-23: «часто знаходимо дуже старі
+// обкладинки, перших видань. хочеться більш сучасні»): the newest edition with a cover in the first language
+// of `prefer` that has one, else in any language; "" when no edition has a cover.
+async function editionCover(workKey, prefer = ["eng"], fetchImpl = fetch) {
+  if (!/^\/works\/OL\d+W$/.test(workKey || "")) return "";
+  const data = await getJson(`https://openlibrary.org${workKey}/editions.json?limit=200`, fetchImpl).catch(() => null);
+  const next = new Date().getFullYear() + 1;
+  const eds = (data?.entries || [])
+    .map((e) => ({ cover: (e.covers || []).find((c) => c > 0), year: Number(/\b(1[5-9]\d\d|20\d\d)\b/.exec(e.publish_date || "")?.[1] || 0), langs: (e.languages || []).map((l) => String(l.key || "").split("/").pop()) }))
+    .filter((e) => e.cover && e.year <= next);
+  for (const lang of [...prefer, null]) {
+    const pick = eds.filter((e) => !lang || e.langs.includes(lang)).sort((a, b) => b.year - a.year)[0];
+    if (pick) return `https://covers.openlibrary.org/b/id/${pick.cover}-L.jpg`;
+  }
+  return "";
+}
+
 // lookup(book) -> { cover, isbns, published, pages, language, blurb, ol } | null, from one or two requests.
-async function lookup(book, { fetchImpl = fetch } = {}) {
+async function lookup(book, { fetchImpl = fetch, prefer = ["eng"] } = {}) {
   const isbns = cleanIsbns(book.isbns);
   const queries = [];
   if (isbns.length) queries.push({ q: `isbn:${isbns.slice(0, 5).join(" OR isbn:")}`, byIsbn: true });
@@ -148,7 +165,10 @@ async function lookup(book, { fetchImpl = fetch } = {}) {
   }
   if (!doc) return null;
   const out = { ol: doc.key };
-  if (doc.cover_i) out.cover = `https://covers.openlibrary.org/b/id/${doc.cover_i}-L.jpg`;
+  // A recent edition's cover when one has it; the work's own (often the first edition's) otherwise.
+  const recent = await editionCover(doc.key, prefer, fetchImpl);
+  if (recent) out.cover = recent;
+  else if (doc.cover_i) out.cover = `https://covers.openlibrary.org/b/id/${doc.cover_i}-L.jpg`;
   const found = cleanIsbns(doc.isbn);
   if (found.length) out.isbns = found.slice(0, 40);
   if (doc.first_publish_year >= 1800) out.published = doc.first_publish_year; // older ones are mostly noise («Lolita» 1777)
@@ -211,10 +231,12 @@ async function lookupGoogle(book, key, { fetchImpl = fetchV6 } = {}) {
   return null;
 }
 
+// A cover this lookup set before may give way to a better pick (a recent edition); any other one stays.
+const fromOpenLibrary = (u) => /^https:\/\/covers\.openlibrary\.org\//.test(u || "");
 // The book as it should be after the lookup: nothing the reader or a catalog set is overwritten.
 function apply(book, info) {
   const patch = {};
-  if (!book.cover && info.cover) patch.cover = info.cover;
+  if (info.cover && (!book.cover || (fromOpenLibrary(book.cover) && info.cover !== book.cover))) patch.cover = info.cover;
   const isbns = cleanIsbns([...(book.isbns || []), ...(info.isbns || [])]);
   if (isbns.length > (book.isbns || []).length) patch.isbns = isbns;
   if (!book.published && info.published) patch.published = info.published;
@@ -242,7 +264,7 @@ function apply(book, info) {
 // («Інферно», Ден Браун; Max, 2026-10-23: «пачка книжок Брауна без обкладинок») is asked through its
 // original: Wikidata gives the English title and author, Open Library the cover.
 const isCyrillic = (t) => /[а-яіїєґ]/i.test(t);
-const viaOriginal = (b) => isCyrillic(b.title) && isCyrillic(firstAuthor(b.author)) && !cleanIsbns(b.isbns).length && !(b.cover && b.altTitle && (b.tags || []).length);
+const viaOriginal = (b) => isCyrillic(b.title) && isCyrillic(firstAuthor(b.author)) && !cleanIsbns(b.isbns).length && !(b.cover && !fromOpenLibrary(b.cover) && b.altTitle && (b.tags || []).length);
 function wanting(store, ids, { google = false } = {}) {
   const all = ids ? ids.map((id) => store.lib.books[id]).filter(Boolean) : Object.values(store.lib.books);
   return all.filter((b) => OWN.has(b.source) && (viaOriginal(b) || ((cleanIsbns(b.isbns).length || ((google || isLatin(b.title)) && firstAuthor(b.author))) && (!(b.cover && b.published && b.blurb && (b.tags || []).length && cleanIsbns(b.isbns).length) || !store.db.get(`enrich:${GEN}:${b.id}`)))));
@@ -253,7 +275,7 @@ function wanting(store, ids, { google = false } = {}) {
 // and the Amazon link belong to the English edition, not to this one.
 function applyOriginal(book, info, orig) {
   const patch = {};
-  if (!book.cover && info?.cover) patch.cover = info.cover;
+  if (info?.cover && (!book.cover || (fromOpenLibrary(book.cover) && info.cover !== book.cover))) patch.cover = info.cover;
   if (!book.altTitle && orig.en) patch.altTitle = orig.en;
   // Genres belong to the work, not the edition («Володар перснів» had none, Max 2026-10-23).
   if (!(book.tags || []).length && info?.tags?.length) patch.tags = info.tags;
@@ -274,9 +296,12 @@ async function enrich(store, { ids, log = () => {}, fetchImpl = fetch, force = f
     try {
       if (viaOriginal(b)) {
         const orig = originals[b.id];
-        if (!orig) continue;
-        const info = await lookup({ ...b, title: orig.en, author: orig.enAuthor, isbns: [] }, { fetchImpl });
-        const patch = applyOriginal(b, info, orig);
+        // A Ukrainian edition's own cover from Google Books comes first (it knows Ukrainian books, Open
+        // Library mostly the originals); then the newest Ukrainian, else English, edition on Open Library.
+        const ukCover = googleKey && !(b.cover && !fromOpenLibrary(b.cover)) ? (await lookupGoogle(b, googleKey).catch(() => null))?.cover : "";
+        if (!orig && !ukCover) continue;
+        const info = orig ? await lookup({ ...b, title: orig.en, author: orig.enAuthor, isbns: [] }, { fetchImpl, prefer: ["ukr", "eng"] }) : null;
+        const patch = applyOriginal(b, ukCover ? { ...info, cover: ukCover } : info, orig || {});
         if (Object.keys(patch).length) {
           store.updateBook(b.id, patch);
           touched = true;
