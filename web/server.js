@@ -515,7 +515,7 @@ function readerList() {
     .sort((a, b) => b.rows.length - a.rows.length)
     .map(({ reader, rows }) => {
       const last = social.feed({ limit: 1, notes: true, books: new Set(rows.map((r) => r.id)) }).find((x) => x.reader.id === reader.id);
-      return { reader, now: nowFor(reader.id), count: rows.length, read: rows.filter((r) => r.status === "read").length, thisYear: rows.filter((r) => r.status === "read" && r.year === year).length, note: last ? pages.inline(last.entry.note) : "" };
+      return { reader, now: nowFor(reader.id), count: rows.length, read: rows.filter((r) => r.status === "read").length, thisYear: rows.filter((r) => r.status === "read" && r.year === year).length, note: last ? pages.inline(last.entry.note) : "", noteBook: last ? { id: store.canonical(last.id), title: last.book.title } : null };
     });
 }
 

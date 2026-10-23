@@ -700,3 +700,4 @@ form.inline button:not(.btn) { background: none; border: 0; padding: 0; cursor: 
 .edition-row { display: flex; gap: 10px; align-items: center; }
 .edition-row input { flex: 1; min-width: 0; height: 44px; box-sizing: border-box; padding: 0 12px; border: 1px solid var(--under); border-radius: 4px; background: transparent; color: var(--ink); font-size: 15px; }
 .edition-row .btn { height: 44px; box-sizing: border-box; margin: 0; flex: none; }
+.person .note-book { font-style: normal; color: var(--muted); }

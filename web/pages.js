@@ -970,6 +970,10 @@ ${sections.length ? "" : `<p class="muted">Поки замало читачів,
 
 // ---- readers (/community) ----
 
+// The note on a reader's card is their latest one and is often about another book than «зараз читає»,
+// so it names its book unless that is the one being read (Max, 2026-10-23).
+const noteAbout = (r) => (!r.noteBook || r.now?.books.some((n) => n.id === r.noteBook.id) ? "" : `<span class="note-book">${esc(r.noteBook.title)}:</span> `);
+
 function readersPage({ user, feed, readers, totals, followed = new Set() }) {
   // A reader who follows someone gets a fourth filter: only those readers.
   const tabs = [["", "усе"], ...(followed.size ? [["followed", "за ким стежу"]] : []), ["notes", "з нотатками"], ["top", "оцінки 4,5+"]];
@@ -983,7 +987,7 @@ ${pageHead({ kicker: "Спільнота", title: "Що читають інші"
   <aside>
     ${label("Читачі")}
     <div class="people">${readers
-      .map((r) => `<div class="person"><p class="person-head"><a href="${attr(r.reader.href)}">${esc(r.reader.name)}</a>${followed.has(r.reader.id) ? `<span>стежу</span>` : r.thisYear ? `<span>${r.thisYear} цього року</span>` : ""}</p><p class="sub">${books(r.count)}, ${count(r.read, "прочитана", "прочитані", "прочитаних")}</p>${nowLine(r.now)}${r.note ? `<p class="note">${r.note}</p>` : ""}</div>`)
+      .map((r) => `<div class="person"><p class="person-head"><a href="${attr(r.reader.href)}">${esc(r.reader.name)}</a>${followed.has(r.reader.id) ? `<span>стежу</span>` : r.thisYear ? `<span>${r.thisYear} цього року</span>` : ""}</p><p class="sub">${books(r.count)}, ${count(r.read, "прочитана", "прочитані", "прочитаних")}</p>${nowLine(r.now)}${r.note ? `<p class="note">${noteAbout(r)}${r.note}</p>` : ""}</div>`)
       .join("")}</div>
     <p class="small muted">Полиці відкриті для всіх.</p>
   </aside>
