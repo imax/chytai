@@ -878,8 +878,8 @@ app.post("/api/digest", owner, async (req, res) => {
 // (Max, 2026-10-23: «урл поміняємо на admin/digest»; the old address redirects.) Also the weekend book, one for everyone.
 const letterPage = (req, res, error = "", values = null) => {
   const w = digest.weekend();
-  const weekend = values || (w ? { book: `${SITE}${store.href(w.book)}`, note: w.note, title: store.book(w.book)?.title } : { book: "", note: "" });
-  res.status(error ? 400 : 200).send(pages.letterEditorPage({ user: req.user, editorial: digest.editorial(), weekend, error, sent: digest.sentEditorials(), audiences: AUDIENCES, counts: digest.audienceCounts(), next: nextFriday(), saved: !!req.query.saved }));
+  const weekend = values || (w ? { id: w.book, book: `${SITE}${store.href(w.book)}`, note: w.note, title: store.book(w.book)?.title } : { book: "", note: "" });
+  res.status(error ? 400 : 200).send(pages.letterEditorPage({ user: req.user, editorial: digest.editorial(), weekend, weekends: digest.sentWeekends(), error, sent: digest.sentEditorials(), audiences: AUDIENCES, counts: digest.audienceCounts(), next: nextFriday(), saved: !!req.query.saved }));
 };
 app.get("/admin/digest", owner, (req, res) => letterPage(req, res));
 app.get("/admin/letter", owner, (req, res) => res.redirect(301, "/admin/digest"));

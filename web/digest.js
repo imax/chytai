@@ -136,6 +136,10 @@ class Digest {
     const w = JSON.parse(this.store.db.get("digest:weekend") || "null");
     return w && w.book && this.store.book(w.book) ? w : null;
   }
+  // The weekend books that went out, newest first ({ book, title, note, sent }), so Max does not repeat one.
+  sentWeekends() {
+    return JSON.parse(this.store.db.get("digest:weekends") || "[]");
+  }
   // `book` is a book page address (https://chytai.org.ua/book/…), its slug or id; "" clears it. Returns an error.
   setWeekend({ book = "", note = "" }) {
     const ref = decodeURIComponent(String(book).trim().replace(/[?#].*$/, "").replace(/\/+$/, "").split("/book/").pop().split("/").pop() || "");
@@ -149,9 +153,11 @@ class Digest {
   weekendPick() {
     const w = this.weekend();
     if (w) {
-      const owner = this.social.who(this.ownerId);
-      const entry = this.store.entry(this.ownerId, w.book);
-      return { id: w.book, book: this.store.book(w.book), reader: owner || { name: "Chytai", href: "/" }, entry: { note: w.note, rating: entry?.rating ?? null } };
+      // Max's words, if any, stand as the editors' note; under them what the site's readers think of the book
+      // (Max, 2026-10-23: «відгук може бути не мій, а як ми на сайті показуємо: оцінка 4,5, 3 відгуки»).
+      const st = this.social.stats(w.book);
+      const notes = this.store.readersOf(w.book, { all: true }).filter((r) => r.entry.note && r.entry.status !== "abandoned" && this.social.who(r.reader)).length;
+      return { mine: true, id: w.book, book: this.store.book(w.book), entry: { note: w.note, rating: st.avg }, rated: st.rated, notes };
     }
     return this.social.picks(40)[0] || null;
   }
@@ -331,10 +337,11 @@ class Digest {
       html.push(label("Одна книжка на вихідні"));
       html.push(`<div style="border:1px solid #e4dfd5;border-radius:10px;padding:16px 18px;margin-top:12px">
   ${p.entry.note ? `<p style="font-family:'Source Serif 4',Georgia,serif;font-size:16px;line-height:1.45;color:#1b1a17;margin:0 0 8px">${pages.inline(p.entry.note)}</p>` : ""}
-  <div style="font-size:13px;color:#6b675f"><a href="${attr(url(p.reader.href))}" style="color:#1b1a17;text-decoration:none">${b(p.reader.name)}</a> про «<a href="${attr(url(p.book.href))}" style="color:#6b675f">${esc(p.book.title)}</a>»${p.book.author ? ` ${esc(p.book.author)}` : ""}${stars(p.entry.rating)}</div>
+  ${p.mine ? `<div style="font-size:13px;color:#6b675f">«<a href="${attr(url(p.book.href))}" style="color:#1b1a17">${esc(p.book.title)}</a>»${p.book.author ? ` ${esc(p.book.author)}` : ""}${stars(p.entry.rating)}${p.entry.rating != null ? ` ${uk(p.entry.rating)}` : ""}${p.rated ? ` · ${count(p.rated, "оцінка", "оцінки", "оцінок")}` : ""}${p.notes ? ` · ${count(p.notes, "відгук", "відгуки", "відгуків")}` : ""}</div>` : `<div style="font-size:13px;color:#6b675f"><a href="${attr(url(p.reader.href))}" style="color:#1b1a17;text-decoration:none">${b(p.reader.name)}</a> про «<a href="${attr(url(p.book.href))}" style="color:#6b675f">${esc(p.book.title)}</a>»${p.book.author ? ` ${esc(p.book.author)}` : ""}${stars(p.entry.rating)}</div>`}
   <a href="${attr(url(p.book.href))}" style="display:inline-block;border:1px solid #1b1a17;color:#1b1a17;border-radius:999px;padding:8px 18px;font-size:14px;font-weight:500;text-decoration:none;margin-top:12px">Відкрити книжку</a>
 </div>`);
-      text.push("ОДНА КНИЖКА НА ВИХІДНІ", `${p.reader.name} про «${p.book.title}»${p.book.author ? ` (${p.book.author})` : ""}${p.entry.rating != null ? `, ${uk(p.entry.rating)}/5` : ""}${p.entry.note ? ":" : ""}`, ...(p.entry.note ? [p.entry.note.replace(/\s+/g, " ").slice(0, 400)] : []), url(p.book.href), "");
+      if (p.mine) text.push("ОДНА КНИЖКА НА ВИХІДНІ", ...(p.entry.note ? [p.entry.note, ""] : []), `«${p.book.title}»${p.book.author ? ` (${p.book.author})` : ""}${p.entry.rating != null ? `, ${uk(p.entry.rating)}/5` : ""}${p.rated ? `, ${count(p.rated, "оцінка", "оцінки", "оцінок")}` : ""}${p.notes ? `, ${count(p.notes, "відгук", "відгуки", "відгуків")}` : ""}`, url(p.book.href), "");
+      else text.push("ОДНА КНИЖКА НА ВИХІДНІ", `${p.reader.name} про «${p.book.title}»${p.book.author ? ` (${p.book.author})` : ""}${p.entry.rating != null ? `, ${uk(p.entry.rating)}/5` : ""}${p.entry.note ? ":" : ""}`, ...(p.entry.note ? [p.entry.note.replace(/\s+/g, " ").slice(0, 400)] : []), url(p.book.href), "");
     }
     // What is new on the site this week, from «Що нового».
     const up = d.updates;
@@ -481,7 +488,10 @@ class Digest {
         if (JSON.stringify(this.editorial()) === JSON.stringify(editorial)) db.set("digest:editorial", "null");
       }
       // Max's weekend book went out: next week starts without it.
-      if (weekend && out.sent && JSON.stringify(this.weekend()) === JSON.stringify(weekend)) db.set("digest:weekend", "null");
+      if (weekend && out.sent) {
+        db.set("digest:weekends", JSON.stringify([{ ...weekend, title: this.store.book(weekend.book)?.title || "", sent: out.started }, ...this.sentWeekends()]));
+        if (JSON.stringify(this.weekend()) === JSON.stringify(weekend)) db.set("digest:weekend", "null");
+      }
       // A resumed run adds up with the part before the restart.
       const prev = JSON.parse(db.get("digest:last") || "null");
       if (done.size && prev && dayKyiv(new Date(prev.started)) === today) Object.assign(out, { started: prev.started, sent: prev.sent + out.sent, skipped: prev.skipped + out.skipped, errors: [...prev.errors, ...out.errors] });

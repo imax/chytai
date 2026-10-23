@@ -1520,7 +1520,7 @@ function digestPage({ on, action, user }) {
 }
 
 // /admin/letter: Max's own text on top of the next Friday letter (digest.js). He writes it; the page only keeps it.
-function letterEditorPage({ user, editorial: e, weekend = {}, error = "", sent, audiences, counts, next, saved }) {
+function letterEditorPage({ user, editorial: e, weekend = {}, weekends = [], error = "", sent, audiences, counts, next, saved }) {
   const MONTHS = ["січня", "лютого", "березня", "квітня", "травня", "червня", "липня", "серпня", "вересня", "жовтня", "листопада", "грудня"];
   const day = (d) => `${d.getDate()} ${MONTHS[d.getMonth()]}`;
   const iso = (s) => day(new Date(s));
@@ -1534,7 +1534,9 @@ ${pageHead({ crumbs: `<a href="/admin">Статистика</a>`, kicker: "Що�
   <label>Кому<select name="audience">${Object.entries(audiences).map(([k, l]) => `<option value="${k}"${k === aud ? " selected" : ""}>${esc(l)} (${counts[k]})</option>`).join("")}</select><span class="hint">Решта отримають свій звичайний лист без цього тексту, якщо на їхніх полицях є новини.</span></label>
   <h2>Одна книжка на вихідні</h2>
   <label>Книжка<input type="url" name="book" value="${attr(weekend.book || "")}" placeholder="https://chytai.org.ua/book/…"><span class="hint">${weekend.title ? `Зараз: «${esc(weekend.title)}». ` : ""}Адреса сторінки книжки на сайті. Одна для всіх листів. Як порожньо, візьметься нотатка читача про книжку з високою оцінкою.</span></label>
-  <label>Кілька слів про неї<textarea name="book_note" rows="3">${esc(weekend.note || "")}</textarea></label>
+  ${weekend.id && weekends.some((x) => x.book === weekend.id) ? `<p class="error">Ця книжка вже була ${iso(weekends.find((x) => x.book === weekend.id).sent)}.</p>` : ""}
+  <label>Кілька слів про неї<textarea name="book_note" rows="3">${esc(weekend.note || "")}</textarea><span class="hint">Під ними в листі стоїть оцінка читачів сайту й кількість відгуків.</span></label>
+  ${weekends.length ? `<details><summary class="small">Уже були: ${weekends.length}</summary><p class="muted small">${weekends.map((x) => `${iso(x.sent)} · «${esc(x.title)}»`).join("<br>")}</p></details>` : ""}
   <div class="actions"><button class="btn primary">Зберегти</button><button class="btn" name="preview" value="1">Зберегти й подивитись лист</button><span class="grow"></span>${e ? `<span class="muted small">Змінено ${iso(e.updated)}</span>` : ""}</div>
   <p class="muted small">Щоб нічого не додавати до листа, зітри текст і збережи.</p>
 </form>
