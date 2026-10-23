@@ -315,3 +315,10 @@
     year.addEventListener("wheel", fill, { passive: true });
   }
 })();
+// The «⋯» menu on book pages closes on a tap outside it or on Escape.
+document.addEventListener("click", (e) => {
+  for (const d of document.querySelectorAll("details.more-acts[open]")) if (!d.contains(e.target)) d.open = false;
+});
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") for (const d of document.querySelectorAll("details.more-acts[open]")) d.open = false;
+});

@@ -433,7 +433,7 @@ function bookPage({ book, entry, now = false, user, shelf, inLibrary = new Map()
       ${first.entry.note ? quote(first, book.id) : ""}
       ${(first.entry.note ? rest : readers).length ? `<div class="others">${(first.entry.note ? rest : readers).map((r) => readerLine(r, book.id)).join("")}</div>` : ""}
     </section>` : ""}
-    ${writings.length || user ? `<section class="block" id="writings">
+    ${SHOW_REVIEWS && (writings.length || user) ? `<section class="block" id="writings">
       ${label("Огляди")}
       ${writings.length ? writingsList(writings, book, user) : ""}
       ${user ? addWriting(book, reviewError) : ""}
@@ -452,6 +452,8 @@ function bookPage({ book, entry, now = false, user, shelf, inLibrary = new Map()
   return layout({ title: book.title, body, user, path: "/book", description, canonical: book.href, image: book.cover || "", type: "book", noindex: require("./store").isRussian(book), jsonld: bookLd(book, shelf, s, readers) });
 }
 
+// «Огляди» are hidden on book pages for now (Max, 2026-10-23); /admin/reviews, the API and the data stay.
+const SHOW_REVIEWS = false;
 // «Огляди» (reviews.js): three links, the rest under «Ще N»; the owner, or the reader who added it, can take one off.
 function writingsList(writings, book, user) {
   const line = (w) => writingLine(w, user && (user.owner || w.by === user.id) ? `<span class="writing-tools">${reviewForm("/api/reviews/remove", { work: book.id, url: w.url }, "Прибрати зі сторінки")}</span>` : "");
@@ -519,17 +521,19 @@ function readerLine({ name, href, entry: e, now }, id) {
 
 // The signed-in reader's own buttons: «Хочу прочитати», «Прочитано · оцінити», or where the book is
 // in their library and «Змінити».
-const nowButton = (book, on, user) =>
+// «Читаю зараз» as an item of the «⋯» menu next to the one main button (Max, 2026-10-23: one button, the rest in a menu).
+const nowItem = (book, on, user) =>
   user
-    ? `<form method="post" action="/api/now/${attr(encodeURIComponent(book.id))}" class="inline"><input type="hidden" name="back" value="1"><button class="btn${on ? " on" : ""}" title="${on ? "Прибрати з «Читаю зараз»" : "Показати на своїй сторінці, що читаєш її зараз"}">${on ? "✓ Читаю зараз" : "Читаю зараз"}</button></form>`
-    : `<a class="btn" href="/login?next=${attr(encodeURIComponent(book.href || ""))}">Читаю зараз</a>`;
+    ? `<form method="post" action="/api/now/${attr(encodeURIComponent(book.id))}"><input type="hidden" name="back" value="1"><button title="${on ? "Прибрати з «Читаю зараз»" : "Показати на своїй сторінці, що читаєш її зараз"}">${on ? "Прибрати з «Читаю зараз»" : "Читаю зараз"}</button></form>`
+    : `<a href="/login?next=${attr(encodeURIComponent(book.href || ""))}">Читаю зараз</a>`;
+const moreMenu = (items) => `<details class="more-acts"><summary class="btn" aria-label="Інші дії" title="Інші дії">⋯</summary><div class="more-menu">${items.join("")}</div></details>`;
 function mine(book, entry, user, now = false) {
   // Read in another language: the mark comes from that book, and so does the edit link.
   const href = entry?.via ? entry.via.href : book.href;
   const edit = href ? `/me${href}` : `/me/book/${encodeURIComponent(entry?.via ? entry.via.id : book.id)}`;
-  if (!entry) return `<div class="acts">${wantButton(book, user, { size: "", primary: true })}${nowButton(book, false, user)}<a class="btn" href="${attr(user ? edit : `/login?next=${encodeURIComponent(edit)}`)}">Прочитано · оцінити</a></div>`;
+  if (!entry) return `<div class="acts">${wantButton(book, user, { size: "", primary: true })}${moreMenu([nowItem(book, false, user), `<a href="${attr(user ? edit : `/login?next=${encodeURIComponent(edit)}`)}">Прочитано · оцінити</a>`])}</div>`;
   const what = [entry.status ? STATUS[entry.status] + (entry.status === "read" && entry.year ? ` ${entry.year}` : "") : "У моїх книжках", entry.rating != null ? `${uk(entry.rating)} з 5` : "", entry.copy ? COPY[entry.copy] : ""].filter(Boolean).join(" · ");
-  return `<div class="acts"><span class="have">✓ ${esc(what)}${entry.via ? ` <span class="muted">як <a href="${attr(entry.via.href)}">${esc(entry.via.title)}</a></span>` : ""}</span>${entry.via ? "" : nowButton(book, now, user).replace('class="btn', 'class="btn small')}<a class="btn small" href="${attr(edit)}">Змінити</a></div>`;
+  return `<div class="acts"><span class="have">✓ ${esc(what)}${entry.via ? ` <span class="muted">як <a href="${attr(entry.via.href)}">${esc(entry.via.title)}</a></span>` : ""}</span>${moreMenu([entry.via ? "" : nowItem(book, now, user), `<a href="${attr(edit)}">Змінити</a>`])}</div>`;
 }
 
 // «Де взяти»: every edition's shop (with its format, price and stock, the one place prices are shown),
