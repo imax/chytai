@@ -172,6 +172,7 @@ class BookPage {
       if (debug) m.raw = { status: page.status, type: page.type, server: page.server, size: page.html.length, head: page.html.slice(0, 600) };
     } catch (e) {
       this.log(`bookpage ${url}: ${e.name === "TimeoutError" ? "timeout" : e.cause?.code || e.message}`);
+      if (debug) return { debug: { error: `${e.name}: ${e.cause?.code || ""} ${e.message}` } };
       return { error: "Не вдалося відкрити цю сторінку. Спробуйте інше посилання або заповніть вручну." };
     }
     let info = plain(m);
