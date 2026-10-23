@@ -77,6 +77,13 @@ const isRussian = (b) => {
   if (/[а-яё]/i.test(b?.title || "") && !/[іїєґ]/i.test(b?.title || "") && RU_LATIN_NAME.test(String(b?.author || "").trim())) return true;
   return RU.test(text) || (!/[іїєґ]/i.test(text) && RU_ENDING.test(b?.title || ""));
 };
+// Which original Haiku named is worth naming: not a Russian one (Max 2026-10-23: «не додаємо оригінал якщо він
+// рос»), and not one in an ancient language or a script a reader here can't read or search («Πολιτεία», Max:
+// «сумніваюсь щодо таких»). Only a title in Latin letters, in a living language.
+const origShown = (r) => {
+  const ok = r.kind === "translation" && !/^(ru|rus|russian|рос)/i.test(r.lang || "") && !/ancient|classical|old|medieval|middle|latin|^la$|^grc$/i.test(r.lang || "") && /\p{Script=Latin}/u.test(r.title || "") && !/[^\p{Script=Latin}\p{N}\p{P}\p{Zs}\p{S}\p{M}]/u.test(r.title || "");
+  return { ...r, title: ok ? r.title : "", author: ok ? r.author : "" };
+};
 const norm = (s) => String(s || "").toLowerCase().replace(/^(the|a)\s+/, "").replace(/[^\p{L}\p{N}]+/gu, " ").trim();
 // Separators left at the end of a title: «Diary of Samuel Pepys -», «Назва:».
 const DANGLING = /[\s\-‐‑–—:;,/|]+$/u;
@@ -773,13 +780,11 @@ class Store {
   // { kind: translation | ukrainian | unknown, title, author, lang }. The original title pairs the book with the
   // original in linkTranslations when a catalog has it, and is named on the book page while none does.
   aiOrigs() {
-    return (this.aiO ??= new Map(this.db.prepare("SELECT id, kind, title, author, lang FROM ai_orig").all().map((r) => [r.id, r])));
+    return (this.aiO ??= new Map(this.db.prepare("SELECT id, kind, title, author, lang FROM ai_orig").all().map((r) => [r.id, origShown(r)])));
   }
 
   setAiOrig(id, { kind, title = "", author = "", lang = "" }, prompt) {
-    // A Russian original is never named or paired (Max 2026-10-23: «не додаємо оригінал якщо він рос»).
-    const named = kind === "translation" && !/^(ru|rus|russian|рос)/i.test(lang || "");
-    const r = { id, kind, title: named ? title : "", author: named ? author : "", lang };
+    const r = origShown({ id, kind, title, author, lang });
     this.db.prepare("INSERT OR REPLACE INTO ai_orig (id, kind, title, author, lang, prompt, at) VALUES (?, ?, ?, ?, ?, ?, ?)").run(id, r.kind, r.title, r.author, r.lang, prompt, new Date().toISOString());
     this.aiOrigs().set(id, r);
   }
