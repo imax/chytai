@@ -1297,7 +1297,7 @@ app.get("/genres-trial/:key", (req, res) => {
   const st = genreTrial.state();
   if (!st?.key || req.params.key !== st.key) return res.status(404).send("Немає");
   const line = (x) => `${x.after[0] !== x.before[0] ? "*" : " "} ${x.title} — ${x.author} | було: ${x.before.join(", ") || "—"} | стало: ${x.error ? `помилка ${x.error}` : x.after.join(", ") || "—"}`;
-  res.type("text/plain").send([`${st.done} з ${st.total}, $${(st.cost || 0).toFixed(3)}${st.finished ? "" : ", ще йде"}`, "* = змінився основний жанр", "", ...st.items.map(line)].join("\n"));
+  res.type("text/plain").send([`промпт v${st.prompt || 1}, ${st.model || ""}, ${st.at || ""}: ${st.done} з ${st.total}, $${(st.cost || 0).toFixed(3)}${st.finished ? "" : ", ще йде"}`, "* = змінився основний жанр", "", ...st.items.map(line)].join("\n"));
 });
 app.post("/admin/genres-trial", owner, (req, res) => {
   genreTrial.run().catch((e) => console.log(`genretrial: ${e.message}`));

@@ -20,6 +20,7 @@ For the book given, pick the one genre that fits it best. Add a second one only 
 - «класика» is only for the established canon, books read for generations; a recent novel, even one retelling a myth or a classic, is not «класика».
 - A memoir or diary goes under «біографії» only when it is about a life; a travel or adventure memoir is «подорожі», a doctor's stories about medicine are «здоров'я».
 - A literary classic is «класика», not «любовні романи».
+- «фантастика» (science fiction) and «фентезі» (magic, myth) never go together: pick the one the book is; the Witcher is «фентезі».
 - Children's and teen books are «дитячі» or «підліткові» whatever else they are; a classic read at school is not a children's book.`;
 
 class GenreTrial {
@@ -104,7 +105,7 @@ class GenreTrial {
     if (this.running || !this.client) return false;
     this.running = true;
     const books = this.pick();
-    const st = { prompt: 2, key: require("crypto").randomBytes(12).toString("hex"), at: new Date().toISOString(), model: MODEL, total: books.length, done: 0, cost: 0, items: [], errors: 0 };
+    const st = { prompt: 3, key: require("crypto").randomBytes(12).toString("hex"), at: new Date().toISOString(), model: MODEL, total: books.length, done: 0, cost: 0, items: [], errors: 0 };
     const save = () => this.db.set("genretrial", JSON.stringify(st));
     save();
     let next = 0;
