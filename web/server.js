@@ -10,7 +10,7 @@
 const express = require("express");
 const fs = require("fs");
 const path = require("path");
-const { Store, OWNER: OWNER_ID, slugify, isRussian, norm, workName } = require("./store");
+const { Store, OWNER: OWNER_ID, slugify, isRussian, norm, workName, mainGenres } = require("./store");
 const { Auth } = require("./auth");
 const pages = require("./pages");
 const catalogs = require("./catalogs");
@@ -887,10 +887,11 @@ function alsoFor(req, id) {
 // book's genre, the new books of its publisher, and one random book a reader rated 4,5+ and wrote about.
 function discovery(req, book, also = []) {
   const skip = new Set([book.id, ...store.translationsOf(book.id).map((t) => t.id), ...also.map((b) => b.id)]);
-  const genre = book.tags?.find((t) => pages.GENRES.includes(t));
+  // By the main genre only, on both sides: «Соляріс» has «психологія» somewhere in its tags too (Max 2026-10-23).
+  const genre = mainGenres(book.tags)[0];
   const inGenre = genre
     ? [...social.liked().values()]
-        .filter((x) => !skip.has(x.book.id) && (x.book.tags || []).includes(genre))
+        .filter((x) => !skip.has(x.book.id) && mainGenres(x.book.tags)[0] === genre)
         .sort((a, b) => b.avg - a.avg || !!b.book.cover - !!a.book.cover)
         .slice(0, 4)
         .map((x) => x.book)

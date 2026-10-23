@@ -456,8 +456,10 @@ function authorBlock(a) {
 function bookPage({ inGenre = null, fresh = null, pick = null, awards = [], authorInfo = null, lists = [], myLists = null, book, entry, now = false, user, shelf, inLibrary = new Map(), readers = [], also = [], alsoTitle = "Читали це, сподобалось і це", writings = [], reviewError = "", editionError = "", ukAsk = null, readUrl = "", freeRead = false, advice = null, overview = null, overviewVote = null }) {
   const s = statsOf(book.id);
   // The genre leads to its page (/genre/biohrafii; Max 2026-10-23), when it is one of ours.
-  const genre = book.tags?.find((t) => t !== "українською");
-  const kicker = [genre ? (GENRES.includes(genre) ? `<a href="/genre/${attr(genreSlug(genre))}">${esc(cap(genre))}</a>` : esc(cap(genre))) : "", isUk(book) ? "Українською" : esc(cap(LANG_ADV[String(book.language || "").toLowerCase()] || ""))].filter(Boolean).join(" · ");
+  // Two of them when the book has two (Max, 2026-10-23: Atomic Habits is «Психологія» and «Саморозвиток»).
+  const main = require("./store").mainGenres(book.tags);
+  const other = main.length ? "" : book.tags?.find((t) => t !== "українською");
+  const kicker = [...main.map((g) => `<a href="/genre/${attr(genreSlug(g))}">${esc(cap(g))}</a>`), other ? esc(cap(other)) : "", isUk(book) ? "Українською" : esc(cap(LANG_ADV[String(book.language || "").toLowerCase()] || ""))].filter(Boolean).join(" · ");
   const sub = [book.altTitle ? esc(book.altTitle) : "", book.author ? `<span class="authors">${authorLinks(book.author)}</span>` : "", book.published ? String(book.published) : "", book.pages ? `${book.pages} с.` : "", readingTime(book.pages)].filter(Boolean).join(" · ");
   // «Дочитали 12, покинули 3»: only once someone gave up, and only numbers.
   const bits = [s.avg != null ? `${stars(s.avg, { num: false })} <b>${uk(s.avg.toFixed(1))}</b> від ${count(s.rated, "читача", "читачів", "читачів")}` : "", s.want ? `${s.want} ${plural(s.want, "хоче", "хочуть", "хочуть")} прочитати` : "", s.dropped ? `дочитали ${s.finished || 0}, покинули ${s.dropped}` : ""].filter(Boolean);
@@ -922,6 +924,7 @@ function bookEditPage({ book, raw, user }) {
       ${field("cover", "Обкладинка", `Посилання на картинку · <button type="button" class="text-link small" id="find-covers">Знайти обкладинку</button>`)}
       <div id="covers" class="cover-picks" hidden></div>
       ${field("aliases", "Інші назви для пошуку", "Через кому, як люди скорочують: DCC, ГП")}
+      <label>Основний жанр <select name="genre">${[["", `як у каталозі${require("./store").mainGenres(raw.tags).length ? ` (${require("./store").mainGenres(raw.tags).join(", ")})` : ""}`], ...GENRES.map((g) => [g, cap(g)])].map(([v, t]) => `<option value="${attr(v)}" ${(fix.genre || "") === v ? "selected" : ""}>${esc(t)}</option>`).join("")}</select></label>
       <label>Мова <select name="language">${[["", `як у каталозі${raw.language ? ` (${raw.language})` : ""}`], ["українська", "українська"], ["англійська", "англійська"], ["російська", "російська: сховати з пошуку й рекомендацій"]].map(([v, t]) => `<option value="${v}" ${(fix.language || "") === v ? "selected" : ""}>${esc(t)}</option>`).join("")}</select></label>
       <p class="hint">Порожнє поле — як у каталозі (сіре). Виправлення не злітають після оновлення каталогів.</p>
       <div class="actions">

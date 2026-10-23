@@ -80,7 +80,7 @@ const isRussian = (b) => {
 const norm = (s) => String(s || "").toLowerCase().replace(/^(the|a)\s+/, "").replace(/[^\p{L}\p{N}]+/gu, " ").trim();
 // Separators left at the end of a title: «Diary of Samuel Pepys -», «Назва:».
 const DANGLING = /[\s\-‐‑–—:;,/|]+$/u;
-const EDITABLE = ["title", "author", "blurb", "cover", "language", "aliases"];
+const EDITABLE = ["title", "author", "blurb", "cover", "language", "aliases", "genre"];
 // A short name as typed in search: «DCC», «Л.О.Т.Р.» and «lotr» are one key.
 const aliasKey = (s) => String(s || "").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, "");
 // The first letters of a name of three or more words, as readers shorten it: «Dungeon Crawler Carl» → dcc,
@@ -132,6 +132,13 @@ const ourGenres = (names) => {
     for (const g of genreMemo.get(k)) out.add(g);
   }
   return [...out];
+};
+// The genres a book is shown under (Max, 2026-10-23: «може просто показувати два»): its first two of ours,
+// «художня» only when nothing more specific; the owner's main genre («Редагувати») comes first.
+const mainGenres = (tags) => {
+  const ours = (tags || []).filter((t) => OUR_GENRES.has(t));
+  const specific = ours.filter((t) => t !== "художня");
+  return (specific.length ? specific : ours).slice(0, 2);
 };
 const isbnKey = (s) => String(s || "").replace(/[^0-9X]/gi, "");
 const GENRE = /\s*[:.]\s*(казка|казки|роман|повість|повісті|оповідання|новели|п[’']єса|есеї|есей|поезії|вірші|збірка|нариси|спогади|мемуари|(осіннє|зимове|весняне|літнє|подарункове|ювілейне|ілюстроване|нове|повне|доповнене|колекційне)\s+видання)\s*$/iu;
@@ -752,7 +759,7 @@ class Store {
       for (const id of ids) {
         const b = this.book(id);
         if (!b) continue;
-        if (!isRussian(b)) for (const g of b.tags || []) if (OUR_GENRES.has(g)) (genres.get(g) || genres.set(g, []).get(g)).push(id);
+        if (!isRussian(b)) for (const g of mainGenres(b.tags)) (genres.get(g) || genres.set(g, []).get(g)).push(id);
         const uk = this.ukTitles?.[id];
         const extra = [...(b.editions || []).map((e) => [e.title, e.altTitle, e.author, e.isbn].filter(Boolean).join(" ")), uk ? `${uk.uk} ${uk.ukAuthor}` : "", ...isbnsOf(b)].join(" ");
         // The series' own name too («Dungeon Crawler Carl» finds every volume), and the owner's other names.
@@ -1381,6 +1388,7 @@ class Store {
     const fix = edited && this.edits()[id];
     if (fix) {
       for (const k of EDITABLE) if (fix[k]) out[k] = fix[k];
+      if (fix.genre) out.tags = [fix.genre, ...(out.tags || []).filter((t) => t !== fix.genre)];
       if (fix.blurb) out.blurbSource = "";
       out.edited = fix;
     }
@@ -1450,7 +1458,7 @@ class Store {
     const fix = {};
     for (const k of EDITABLE) {
       const v = k === "blurb" ? String(patch[k] ?? "").replace(/\r\n?/g, "\n").trim() : String(patch[k] ?? "").replace(/\s+/g, " ").trim();
-      if (v) fix[k] = v;
+      if (v && !(k === "genre" && !OUR_GENRES.has(v))) fix[k] = v;
     }
     if (Object.keys(fix).length) all[id] = fix;
     else delete all[id];
@@ -1660,4 +1668,4 @@ class Store {
   }
 }
 
-module.exports = { isRussian, langGuess, Store, slugify, soundOf, norm, workName, OWNER };
+module.exports = { mainGenres, isRussian, langGuess, Store, slugify, soundOf, norm, workName, OWNER };
