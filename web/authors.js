@@ -106,6 +106,25 @@ function allWorks(store) {
 const altOf = (store, id) => store.lib.books[id]?.altTitle ?? store.seedBooks.find((b) => b.id === id)?.altTitle ?? store.shelfItems.get(id)?.item.altTitle ?? "";
 const authorOf = (store, id) => store.lib.books[id]?.author ?? store.seedBooks.find((b) => b.id === id)?.author ?? store.shelfItems.get(id)?.item.author ?? "";
 
+// Pairs of spellings of one person: the seed's, then the owner's (each owner join keeps its index for undo).
+function joins(store) {
+  let seed = [];
+  try {
+    seed = JSON.parse(require("fs").readFileSync(require("path").join(__dirname, "seed", "matches.json"), "utf8")).authors || [];
+  } catch {
+    /* none */
+  }
+  return [...seed, ...ownerJoins(store)];
+}
+function ownerJoins(store) {
+  try {
+    const j = JSON.parse(store.db.get("authors:join") || "[]");
+    return Array.isArray(j) ? j : [];
+  } catch {
+    return [];
+  }
+}
+
 // The author index: { list, bySlug, byName(name) -> author, ofWork(id) -> [author] }.
 function build(store) {
   const { slugify } = require("./store");
@@ -136,6 +155,17 @@ function build(store) {
     for (const id of g.ids) into.ids.add(id);
     groups.delete(g.key);
   }
+  // Spellings the owner said are one person («Чарльз Буковскі» and «Charles Bukowski», Max 2026-10-23):
+  // matches.json «authors» and the owner's joins from an author page (meta `authors:join`), [name, name].
+  for (const [a, b] of joins(store)) {
+    const ka = keyOfName.get(a);
+    const kb = keyOfName.get(b);
+    if (!ka || !kb || ka === kb || !groups.has(ka) || !groups.has(kb)) continue;
+    const [into, from] = groups.get(ka).qid || !groups.get(kb).qid ? [groups.get(ka), groups.get(kb)] : [groups.get(kb), groups.get(ka)];
+    for (const [n, c] of from.names) into.names.set(n, (into.names.get(n) || 0) + c), keyOfName.set(n, into.key);
+    for (const id of from.ids) into.ids.add(id);
+    groups.delete(from.key);
+  }
   const bySlug = new Map();
   const list = [];
   for (const g of [...groups.values()].sort((a, b) => b.ids.size - a.ids.size || a.key.localeCompare(b.key))) {
@@ -147,7 +177,7 @@ function build(store) {
     while (bySlug.has(slug)) slug += "-2";
     // The Ukrainian name for a Ukrainian edition's byline: our own Cyrillic spelling, else Wikidata's.
     const uk = CYR.test(name) ? name : CYR.test(g.wd?.uk || "") ? g.wd.uk : "";
-    const a = { key: g.key, qid: g.qid, name, other, uk, slug, href: `/author/${slug}`, ids: [...g.ids] };
+    const a = { key: g.key, qid: g.qid, name, other, uk, slug, href: `/author/${slug}`, ids: [...g.ids], names: [...g.names.keys()] };
     bySlug.set(slug, a);
     list.push(a);
   }
@@ -216,4 +246,4 @@ function matchWorks(store, author, works) {
   });
 }
 
-module.exports = { refresh, build, wikidataWorks, matchWorks, splitAuthors, allWorks };
+module.exports = { refresh, build, wikidataWorks, matchWorks, splitAuthors, allWorks, ownerJoins };

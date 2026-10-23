@@ -5,6 +5,9 @@
   "lobster-8109": "we-are-legion-bobiverse"
  },
  "different": [],
+ "authors": [
+  ["Charles Bukowski", "Чарльз Буковскі"]
+ ],
  "merges": [
   ["hraf-monte-kristo", "hraf-monte-krysto"],
   ["hraf-monte-kristo", "hraf-monte-kristo-roman-t-1"],

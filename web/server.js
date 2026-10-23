@@ -793,7 +793,32 @@ app.get("/author/:slug", async (req, res) => {
     .map(({ reader, rows }) => ({ reader, count: rows.length, read: rows.filter((r) => r.status === "read").length }));
   const also = social.alsoLiked([...ids], { limit: 4, skip: ids }).filter((b) => !author.ids.includes(b.id));
   const pairing = req.user?.owner ? store.translationPairing(author) : null;
-  res.send(pages.authorPage({ author, works, hits, user: req.user, readers: who, also, pairing }));
+  const joins = req.user?.owner ? authors.ownerJoins(store).map((p, index) => ({ p, index })).filter(({ p }) => p.some((n) => author.names?.includes(n))).map(({ p, index }) => ({ names: p, index })) : null;
+  res.send(pages.authorPage({ author, works, hits, user: req.user, readers: who, also, pairing, joins }));
+});
+
+// The owner joins two spellings of one person (Max, 2026-10-23: «як нам зєднувати авторів?»): on an author
+// page, another author's address or name. Kept in meta `authors:join` as [name, name]; undone by index.
+app.post("/admin/authors/join", owner, (req, res) => {
+  const a = store.authors.bySlug.get(String(req.body.author || ""));
+  const q = String(req.body.other || "").trim();
+  const slug = (q.match(/\/author\/([^/?#\s]+)/) || [])[1];
+  const b = slug ? store.authors.bySlug.get(decodeURIComponent(slug)) : store.authors.byName(q) || store.authors.bySlug.get(slugify(q));
+  if (!a || !b) return res.status(404).send(pages.messagePage({ title: "Немає такого автора", text: q, user: req.user }));
+  if (a.key !== b.key) {
+    const j = authors.ownerJoins(store);
+    j.push([a.names[0], b.names[0]]);
+    store.db.set("authors:join", JSON.stringify(j));
+    store.linkTranslations(); // rebuilds the author index
+  }
+  res.redirect(303, store.authors.byName(a.names[0])?.href || "/");
+});
+app.post("/admin/authors/unjoin", owner, (req, res) => {
+  const j = authors.ownerJoins(store);
+  const [pair] = j.splice(Number(req.body.index), 1);
+  store.db.set("authors:join", JSON.stringify(j));
+  store.linkTranslations();
+  res.redirect(303, (pair && store.authors.byName(pair[0])?.href) || "/");
 });
 
 // Where the book can be borrowed: libraries with open catalogs (libraries.js), asked when the page loads.
