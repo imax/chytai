@@ -29,6 +29,13 @@ const VOTE_SCHEMA = `CREATE TABLE IF NOT EXISTS overview_vote (
   PRIMARY KEY (book, reader)
 );`;
 const WEB_SEARCHES = 3;
+// Shops and publishers' own sites are not reviews (Max, 2026-10-23: «суцільні магазини … у мене їм довіри
+// немає»): kept out of the search. Goodreads, the press, blogs and BookTube stay.
+const BLOCKED_DOMAINS = [
+  "yakaboo.ua", "nashformat.ua", "laboratory.ua", "laboratoria.pro", "vivat.com.ua", "vivat-book.com.ua", "readeat.com", "book-ye.com.ua", "bookclub.ua",
+  "starylev.com.ua", "ranok.com.ua", "bookzone.com.ua", "megogo.net", "abuk.com.ua", "booklya.ua", "grenka.ua", "balka-book.com", "rozetka.com.ua",
+  "prom.ua", "knigoland.com.ua", "bookovka.ua", "kmbooks.com.ua", "folio.com.ua", "ababahalamaha.com.ua", "lobster.com.ua", "bukva.ua", "kniga.biz.ua", "artbooks.ua",
+];
 const OVERVIEW_DAILY = 150; // fresh overviews a day on readers' clicks, all readers together
 // Made by itself (Max, 2026-10-23: «запускати її автоматично коли у книжки з'являється хоча б один відгук
 // чи оцінка читачів», plus a backfill over the books already rated): a sweep finds every book with a
@@ -42,13 +49,16 @@ const AUTO_PARALLEL = 2;
 const BACKFILL = false;
 // The overview prompt's version: rows made with an older one are redone at start, two at a time
 // (Max, 2026-10-23 08:09, after the prompt lost its obligatory paragraph of complaints: «старі теж»).
-const PROMPT_VERSION = 3; // 3: the site's own notes and ratings no longer go in (2026-10-23 08:35)
+const PROMPT_VERSION = 4; // 3: the site's own notes and ratings no longer go in (2026-10-23 08:35); 4: shops blocked (09:16)
+// Version 4 is redone only for books with a Cyrillic title (Max, 2026-10-23 09:15: «перезапустимо пошук для всіх укр
+// книжок»): their searches were all shops. Latin-titled books keep their version-3 overview.
+const REDO_ALL_BELOW = 3;
 // «Що пишуть в інтернеті» (Max, 2026-10-23): one summary per book, not per reader, of what readers and
 // reviewers say, from the web, kept on the page for everyone. Our own words only: a review's text may
 // not be reproduced (Закон 2811-IX), so no quotes, no names, no links.
 // No fixed shape (Max, 2026-10-23: «кумарить formulaic формат, де другий параграф завжди про мінуси,
 // навіть якщо придумані»): the note follows the actual reception, complaints only where they really recur.
-const OVERVIEW_SYSTEM = `You write a short, neutral note for a book's page on Chytai, a Ukrainian site about books, on what people say about this book. Search the web (up to ${WEB_SEARCHES} searches): reviews, reader reactions (Goodreads, Ukrainian book sites, blogs and booktubers for a Ukrainian edition), the author's standing, awards. Then write, in Ukrainian, what the reception actually is: what readers and critics single out, where they agree, where they split, and who the book tends to find. Facts and the balance of opinion, no verdict of your own, no advice, not addressed to anyone.
+const OVERVIEW_SYSTEM = `You write a short, neutral note for a book's page on Chytai, a Ukrainian site about books, on what people say about this book. Search the web (up to ${WEB_SEARCHES} searches): reviews in the press and on book sites, reader reactions (Goodreads, blogs and booktubers for a Ukrainian edition), the author's standing, awards. For a Ukrainian book, look for English-language press too: a translation may have been reviewed abroad. Online shops and publishers' own pages are not a source: their blurbs and their review sections don't count as reception, even if a search turns them up. Then write, in Ukrainian, what the reception actually is: what readers and critics single out, where they agree, where they split, and who the book tends to find. Facts and the balance of opinion, no verdict of your own, no advice, not addressed to anyone.
 
 Follow the material, not a template. There is no required paragraph of pros and no required paragraph of cons: if the book is received warmly across the board, say so and what for, and don't go looking for a complaint to balance it; if opinions genuinely divide, or the same reservation keeps coming up, say that, with what it is about. Mention a criticism only when it recurs in what you found, never one you supposed yourself. A note can be a single paragraph.
 
@@ -442,7 +452,12 @@ class Advice {
   // Overviews made with an older prompt, redone with the current one; runs once at start, resumes after a restart.
   redo() {
     if (!this.client) return 0;
-    const ids = this.db.prepare("SELECT book FROM overview WHERE prompt < ? OR length(text) < 120 ORDER BY created").all(PROMPT_VERSION).map((r) => r.book);
+    const cyr = (id) => /[а-яіїєґ]/i.test(this.store.book(id)?.title || "");
+    const ids = this.db
+      .prepare("SELECT book, prompt, length(text) AS len FROM overview WHERE prompt < ? OR length(text) < 120 ORDER BY created")
+      .all(PROMPT_VERSION)
+      .filter((r) => r.prompt < REDO_ALL_BELOW || r.len < 120 || cyr(r.book))
+      .map((r) => r.book);
     for (const id of ids) if (!this.queue.has(id)) this.queue.set(id, { fresh: true });
     this.pump();
     return ids.length;
@@ -496,7 +511,7 @@ class Advice {
       betas: ["server-side-fallback-2026-07-01"],
       fallbacks: "default",
       output_config: { effort: "low" },
-      tools: [{ type: "web_search_20260209", name: "web_search", max_uses: WEB_SEARCHES }],
+      tools: [{ type: "web_search_20260209", name: "web_search", max_uses: WEB_SEARCHES, blocked_domains: BLOCKED_DOMAINS }],
       system: OVERVIEW_SYSTEM,
       messages: [{ role: "user", content: `The book:\n${await this.bookText(book, { overview: false, site: false })}\n\nWhat do readers and critics say about it?` }],
     });
