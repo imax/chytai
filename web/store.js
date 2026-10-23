@@ -53,12 +53,27 @@ const RU_ENDING = /(ое|ая|ые|ие)(?![\p{L}])|(?<![\p{L}])(и|что|ка�
 const RU_AUTHOR = /лук[ья'’ʼ]{0,2}[яа]ненко|lukyanenko|lukianenko|пелев[иі]н|pelevin|акун[иі]н|akunin|донцова|dontsova|прилеп[иі]н|prilepin|лимонов|limonov|маринина|marinina|устинова|ustinova|перумов|perumov|головач[её]в|golovachev|дугин|dugin|стругацк|strugatsk|булыч[её]в|bulychev|bulychov|ефремов|yefremov|efremov|беляев|belyaev|beliaev|гончаров|goncharov|солженицын|solzhenitsyn|шукшин|shukshin|улицкая|ulitskaya|глуховск|glukhovsk|пикуль|pikul|роберт штильмарк/iu;
 // A Cyrillic title with the author written the Russian way in Latin («Sergei», not «Serhii»).
 const RU_LATIN_NAME = /^(arkady|arkadi|boris|sergei|sergey|aleksei|alexei|alexey|aleksey|dmitry|dmitri|nikolai|yevgeny|evgeny|vasily|vasiliy|mikhail|pyotr|fyodor|yuri|yury|grigory|alexandr)\b/i;
+// Russian and Ukrainian word forms, for a Cyrillic title with none of і ї є ґ (Max, 2026-10-23: «прогнати
+// через простий фільтр слів, типу кава або кофе»): langGuess() says "ru", "uk" or "" when it can't tell.
+const WB = "(?<![\\p{L}])", WE = "(?![\\p{L}])";
+const RU_WORDS = new RegExp(`${WB}(и|из|из-под|от|о|об|как|что|чтобы|это|кто|они|она|оно|его|её|ее|под|после|между|уже|ещё|еще|только|нет|жизнь|жизни|ведь|кофе|человек|человека|сквозь|вокруг|себя|себе|тебя|меня|трех|двух|две|сердца|где|когда|почему|зачем|путь|ночь|ночью|мечты|мечта|война)${WE}`, "iu");
+const RU_FORMS = new RegExp(`(ость|ости|ние|ния|нию|ниями|ниях|ия|ии|ию|ией|иям|иях|ие|ью|ный|ная|ное|ные|ной|ных)${WE}|russian edition|\\p{L}сс\\p{L}|\\p{L}мм\\p{L}`, "iu");
+const UK_WORDS = new RegExp(`${WB}(та|що|це|як|із|зі|від|під|або|чи|й|вже|ще|мій|моя|наш|людина|дитини|пригоди|казки)${WE}`, "iu");
+const UK_FORMS = new RegExp(`[’'ʼ][яюєї]|ння|ття|сся|лля|ддя|жжя|ччя|шшя|ць|ця${WE}|цю${WE}`, "iu");
+const langGuess = (title) => {
+  const t = String(title || "");
+  if (/[іїєґ]/i.test(t)) return "uk";
+  const uk = UK_WORDS.test(t) || UK_FORMS.test(t);
+  const ru = RU.test(t) || RU_WORDS.test(t) || RU_FORMS.test(t);
+  return ru && !uk ? "ru" : uk && !ru ? "uk" : "";
+};
 const isRussian = (b) => {
   const lang = String(b?.language || "").toLowerCase();
   // A Ukrainian translation of such a writer is a Ukrainian book; anything else of theirs is not.
   if (RU_AUTHOR.test(b?.author || "") && !/^(uk|укр)/.test(lang) && !/[іїєґ]/i.test(b?.title || "")) return true;
   if (lang) return /^(ru|рос)/.test(lang);
   const text = `${b?.title || ""} ${b?.author || ""}`;
+  if (/[а-яё]/i.test(b?.title || "") && langGuess(b.title) === "ru") return true;
   if (/[а-яё]/i.test(b?.title || "") && !/[іїєґ]/i.test(b?.title || "") && RU_LATIN_NAME.test(String(b?.author || "").trim())) return true;
   return RU.test(text) || (!/[іїєґ]/i.test(text) && RU_ENDING.test(b?.title || ""));
 };
@@ -1167,7 +1182,7 @@ class Store {
       const b = this.book(id);
       if (!b || b.edited?.language || isRussian(b) || /^(uk|укр)/i.test(b.language || "")) continue;
       const cyr = /[а-я]/i.test(b.title) && !/[іїєґ]/i.test(`${b.title} ${b.author}`);
-      if (!cyr) continue;
+      if (!cyr || langGuess(b.title) === "uk") continue;
       out.push({ ...b, readers: this.readersOf(id).length });
     }
     return out.sort((a, b) => b.readers - a.readers || a.title.localeCompare(b.title, "uk"));
@@ -1390,4 +1405,4 @@ class Store {
   }
 }
 
-module.exports = { isRussian, Store, slugify, soundOf, norm, workName, OWNER };
+module.exports = { isRussian, langGuess, Store, slugify, soundOf, norm, workName, OWNER };
