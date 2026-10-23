@@ -567,7 +567,7 @@ ${list.length ? `<h2>Додано: ${list.length}</h2>
 // /admin/ukfind: our own search for Ukrainian editions (ukfind.js), run by hand for now.
 function ukFindPage({ user, candidates, list, running, enabled }) {
   const found = list.filter((r) => r.status === "found").length;
-  const cost = list.reduce((a, r) => a + r.input_tokens * 3e-6 + r.output_tokens * 15e-6 + r.searches * 0.01, 0);
+  const cost = list.reduce((a, r) => a + r.input_tokens * 1e-6 + r.output_tokens * 5e-6 + r.searches * 0.01, 0);
   const st = { found: "знайшли", none: "не знайшли", error: "помилка" };
   const body = `<div class="admin"><h1>Українські видання</h1>
 <p class="lead">Книжки, для яких Вікідані знають український переклад, а каталоги його не мають. Claude шукає сторінку видання в магазині чи у видавництва, і знайдене стає парою «Оригінал / Українською».</p>

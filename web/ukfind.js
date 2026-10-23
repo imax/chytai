@@ -5,7 +5,7 @@
 // server can read (bookpage.js) and whose title is the Ukrainian one becomes the book, paired with the
 // original as its translation, with the store in «Де взяти» (server.js addEdition, as for a reader's tip).
 // Every book is asked once (table uk_find); «none» is asked again after a month. A ceiling a day.
-const MODEL = "claude-sonnet-5-5";
+const MODEL = "claude-haiku-5-5"; // Sonnet came to ≈ $0.21 a book (2026-10-23), too dear for this
 const SEARCHES = 3;
 const DAILY = 100;
 const MONTH = 30 * 86400000;

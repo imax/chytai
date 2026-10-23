@@ -286,7 +286,13 @@ class Store {
     // A foreign book's Ukrainian title from Wikidata (wikidata.js): a book of that title by the same author.
     this.ukTitles = JSON.parse(this.db.get("wikidata:uk") || "{}");
     const names = (a) => norm(a).split(" ").filter((w) => w.length >= 3);
-    for (const [id, { uk, ukAuthor }] of Object.entries(this.ukTitles)) for (const o of byTitle.get(norm(uk)) || []) if (names(o.author).some((n) => names(ukAuthor).includes(n))) link(id, o.id);
+    // A catalog title with a subtitle («Розумний інвестор. Стратегія вартісного інвестування») counts by its main part.
+    const byMain = new Map();
+    for (const w of works) {
+      const m = norm(String(w.title || "").split(/[.:]\s/)[0]);
+      if (m.length >= 4 && m !== norm(w.title)) (byMain.get(m) || byMain.set(m, []).get(m)).push(w);
+    }
+    for (const [id, { uk, ukAuthor }] of Object.entries(this.ukTitles)) for (const o of [...(byTitle.get(norm(uk)) || []), ...(byMain.get(norm(uk)) || [])]) if (names(o.author).some((n) => names(ukAuthor).includes(n))) link(id, o.id);
     let pairs = [];
     try {
       pairs = readJson(path.join(SEED, "matches.json")).translations || [];
