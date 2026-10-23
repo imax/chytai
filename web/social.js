@@ -201,6 +201,24 @@ class Social {
     }
     return out;
   }
+
+  // The same, and when that leaves room (a book nobody rated yet, with no genres: Max 2026-10-23, Піпс),
+  // the author's other books, readers' favourites first.
+  alsoForBook(id, { limit = 4 } = {}) {
+    const out = this.alsoLiked([id], { limit });
+    if (out.length >= limit) return out;
+    const book = this.store.book(id);
+    const have = new Set([id, ...out.map((b) => b.id)]);
+    const liked = this.liked();
+    const { splitAuthors } = require("./authors");
+    const ids = [...new Set(splitAuthors(book?.author).flatMap((n) => this.store.authors?.byName(n)?.ids || []))].map((i) => this.store.canonical(i));
+    const more = [...new Set(ids)]
+      .filter((i) => !have.has(i))
+      .map((i) => ({ book: this.store.book(i), avg: liked.get(i)?.avg ?? 0 }))
+      .filter((x) => x.book)
+      .sort((a, b) => b.avg - a.avg || !!b.book.cover - !!a.book.cover);
+    return [...out, ...more.slice(0, limit - out.length).map((x) => x.book)];
+  }
 }
 
 module.exports = { Social, tagsOf };

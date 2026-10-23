@@ -19,8 +19,28 @@ const OWN = new Set(["manual", "goodreads", "apple-books", "office", "list"]);
 const LANG = { eng: "англійська", ukr: "українська", rus: "російська", pol: "польська", ger: "німецька", fre: "французька", spa: "іспанська", ita: "італійська" };
 const GLANG = { en: "англійська", uk: "українська", ru: "російська", pl: "польська", de: "німецька", fr: "французька", es: "іспанська", it: "італійська" };
 const GOOGLE = "https://www.googleapis.com/books/v1/volumes";
+// Our genres (the tags «Читали це, сподобалось і це» matches books by) from Open Library's subjects and
+// Google's categories, so a book a reader added gets neighbours before anyone rates it (Max, 2026-10-23).
+const GENRE_OF = [
+  ["фантастика", /science fiction|fantasy|dystopia/i],
+  ["детективи", /detective|mystery|crime fiction/i],
+  ["трилери", /thriller|suspense/i],
+  ["художня", /^(?!.*non-?fiction).*\bfiction\b|\bnovels?\b/i],
+  ["біографії", /biograph|memoir|diaries|diarists/i],
+  ["історія", /\bhistory\b|historical/i],
+  ["війна", /\bwar\b|military/i],
+  ["бізнес", /business|entrepreneur|start-?ups?/i],
+  ["менеджмент", /management|leadership/i],
+  ["гроші", /finance|investment|investing|\bmoney\b/i],
+  ["розробка", /programming|software|computer science/i],
+  ["наука", /^(?!.*fiction).*(science|physics|biology|mathematics|neuroscien|evolution)/i],
+  ["саморозвиток", /self-help|personal (development|growth)|self-improvement|^habits?$|^success$/i],
+  ["суспільство", /sociology|social science|political science|politics|economics/i],
+];
+// Subjects are many and noisy: a genre counts when one of the first twenty says so.
+const genresOf = (subjects) => GENRE_OF.filter(([, re]) => (subjects || []).slice(0, 20).some((x) => re.test(String(x)))).map(([g]) => g).slice(0, 3);
 // Bumped when a source is added or fixed, so every book is asked again: the per-book memory is enrich:<GEN>:<id>.
-const GEN = 2;
+const GEN = 3; // 3: genres (2026-10-23)
 
 const norm = (s) => String(s || "").toLowerCase().replace(/^(the|a|an)\s+/, "").replace(/[’'`]/g, "").replace(/[^\p{L}\p{N}]+/gu, " ").trim();
 const mainTitle = (t) => String(t || "").replace(/\s*\(.*?\)\s*/g, " ").split(/[:]/)[0].trim();
@@ -129,6 +149,8 @@ async function lookup(book, { fetchImpl = fetch } = {}) {
     const work = await getJson(`https://openlibrary.org${doc.key}.json`, fetchImpl);
     const text = descriptionText(work?.description);
     if (text.length >= 80) out.blurb = text;
+    const tags = genresOf(work?.subjects);
+    if (tags.length) out.tags = tags;
   } catch {}
   return out;
 }
@@ -168,6 +190,8 @@ async function lookupGoogle(book, key, { fetchImpl = fetchV6 } = {}) {
     if (GLANG[v.language]) out.language = GLANG[v.language];
     const text = descriptionText(String(v.description || "").replace(/<br\s*\/?>/gi, "\n").replace(/<\/p>/gi, "\n\n").replace(/<[^>]+>/g, "").replace(/&(#\d+|#x[\da-f]+|quot|amp|nbsp|mdash|ndash|laquo|raquo|hellip|lt|gt|#39|apos);/gi, (m, e) => ({ quot: '"', amp: "&", nbsp: " ", mdash: "—", ndash: "–", laquo: "«", raquo: "»", hellip: "…", lt: "<", gt: ">", "#39": "'", apos: "'" })[e.toLowerCase()] ?? String.fromCodePoint(/^#x/i.test(e) ? parseInt(e.slice(2), 16) : Number(e.slice(1)))));
     if (text.length >= 80) out.blurb = text;
+    const tags = genresOf((v.categories || []).flatMap((c) => String(c).split(/\s*\/\s*/)));
+    if (tags.length) out.tags = tags;
     if (v.canonicalVolumeLink || v.infoLink) out.google = (v.canonicalVolumeLink || v.infoLink).replace(/^http:/, "https:");
     return out;
   }
@@ -184,6 +208,7 @@ function apply(book, info) {
   if (!book.published && info.published) patch.published = info.published;
   if (!book.pages && info.pages) patch.pages = info.pages;
   if (!book.language && info.language) patch.language = info.language;
+  if (!(book.tags || []).length && info.tags?.length) patch.tags = info.tags;
   if (!book.blurb && info.blurb) (patch.blurb = info.blurb), (patch.blurbSource = info.blurbSource || "Open Library");
   const links = [...(book.links || [])];
   const has = (re) => links.some((l) => re.test(l.url));
@@ -202,7 +227,7 @@ function apply(book, info) {
 // ISBN to ask by, and something still missing.
 function wanting(store, ids, { google = false } = {}) {
   const all = ids ? ids.map((id) => store.lib.books[id]).filter(Boolean) : Object.values(store.lib.books);
-  return all.filter((b) => OWN.has(b.source) && (cleanIsbns(b.isbns).length || ((google || isLatin(b.title)) && firstAuthor(b.author))) && !(b.cover && b.published && b.blurb && cleanIsbns(b.isbns).length));
+  return all.filter((b) => OWN.has(b.source) && (cleanIsbns(b.isbns).length || ((google || isLatin(b.title)) && firstAuthor(b.author))) && !(b.cover && b.published && b.blurb && (b.tags || []).length && cleanIsbns(b.isbns).length));
 }
 
 // enrich(store, { ids, log, fetchImpl, force }) -> { asked, found }: looks up the books not asked within a month.
@@ -300,4 +325,4 @@ async function searchOpenLibrary(q, { fetchImpl = fetch, limit = 6 } = {}) {
   return list;
 }
 
-module.exports = { enrich, refresh, lookup, searchOpenLibrary, lookupGoogle, apply, wanting, descriptionText, same };
+module.exports = { enrich, refresh, lookup, genresOf, searchOpenLibrary, lookupGoogle, apply, wanting, descriptionText, same };
