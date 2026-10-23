@@ -422,8 +422,8 @@ function bookPage({ book, entry, now = false, user, shelf, inLibrary = new Map()
         ${sub ? `<p class="book-by">${sub}</p>` : ""}
         ${score}
         ${twins(book)}
-        ${mine(book, entry, user, now)}
-        ${readUrl ? `<p class="read-here"><a class="btn primary" href="${attr(readUrl)}">${freeRead ? "Додати в Читалку" : "Читати"}</a>${freeRead ? "" : `<span class="muted">ваш файл у читалці Chytai</span>`}</p>` : ""}
+        ${mine(book, entry, user, now, freeRead ? "" : readUrl)}
+        ${readUrl && freeRead ? `<p class="read-here"><a class="btn primary" href="${attr(readUrl)}">Додати в Читалку</a></p>` : ""}
         ${where(book)}
       </div>
     </article>
@@ -565,13 +565,15 @@ const nowItem = (book, on, user) =>
     ? `<form method="post" action="/api/now/${attr(encodeURIComponent(book.id))}"><input type="hidden" name="back" value="1"><button title="${on ? "Прибрати з «Читаю зараз»" : "Показати на своїй сторінці, що читаєш її зараз"}">${on ? "Прибрати з «Читаю зараз»" : "Читаю зараз"}</button></form>`
     : `<a href="/login?next=${attr(encodeURIComponent(book.href || ""))}">Читаю зараз</a>`;
 const moreMenu = (items) => `<details class="more-acts"><summary class="btn" aria-label="Інші дії" title="Інші дії">⋯</summary><div class="more-menu">${items.join("")}</div></details>`;
-function mine(book, entry, user, now = false) {
+// `readUrl`: the reader's own file in the Chytai reader, «Відкрити в Читалці» in the menu (Max, 2026-10-23).
+function mine(book, entry, user, now = false, readUrl = "") {
+  const open = readUrl ? `<a href="${attr(readUrl)}">Відкрити в Читалці</a>` : "";
   // Read in another language: the mark comes from that book, and so does the edit link.
   const href = entry?.via ? entry.via.href : book.href;
   const edit = href ? `/me${href}` : `/me/book/${encodeURIComponent(entry?.via ? entry.via.id : book.id)}`;
-  if (!entry) return `<div class="acts">${wantButton(book, user, { size: "", primary: true })}${moreMenu([nowItem(book, false, user), `<a href="${attr(user ? edit : `/login?next=${encodeURIComponent(edit)}`)}">Прочитано · оцінити</a>`])}</div>`;
+  if (!entry) return `<div class="acts">${wantButton(book, user, { size: "", primary: true })}${moreMenu([open, nowItem(book, false, user), `<a href="${attr(user ? edit : `/login?next=${encodeURIComponent(edit)}`)}">Прочитано · оцінити</a>`])}</div>`;
   const what = [entry.status ? STATUS[entry.status] + (entry.status === "read" && entry.year ? ` ${entry.year}` : "") : "У моїх книжках", entry.rating != null ? `${uk(entry.rating)} з 5` : "", entry.copy ? COPY[entry.copy] : ""].filter(Boolean).join(" · ");
-  return `<div class="acts"><span class="have">✓ ${esc(what)}${entry.via ? ` <span class="muted">як <a href="${attr(entry.via.href)}">${esc(entry.via.title)}</a></span>` : ""}</span>${moreMenu([entry.via ? "" : nowItem(book, now, user), `<a href="${attr(edit)}">Змінити</a>`])}</div>`;
+  return `<div class="acts"><span class="have">✓ ${esc(what)}${entry.via ? ` <span class="muted">як <a href="${attr(entry.via.href)}">${esc(entry.via.title)}</a></span>` : ""}</span>${moreMenu([open, entry.via ? "" : nowItem(book, now, user), `<a href="${attr(edit)}">Змінити</a>`])}</div>`;
 }
 
 // «Де взяти»: every edition's shop (with its format, price and stock, the one place prices are shown),
