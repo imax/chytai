@@ -15,7 +15,7 @@ const PAPER = 6;
 const EBOOK = 4;
 const OWN = new Set(["manual", "goodreads", "apple-books", "office", "list", "tip"]);
 
-const norm = (s) => String(s || "").toLowerCase().replace(/[’'`ʼ"«»]/g, "").replace(/ё/g, "е").replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+const norm = (s) => String(s || "").toLowerCase().replace(/[’'`ʼ"«»]/g, "").replace(/ё/g, "е").replace(/ґ/g, "г").replace(/[^\p{L}\p{N}]+/gu, " ").trim();
 const mainTitle = (t) => String(t || "").replace(/\s*\(.*?\)\s*/g, " ").split(/[:.]/)[0].trim();
 const firstAuthor = (a) => String(a || "").split(/\s+(?:and|і|та)\s+|\s*[,&;]\s*/)[0].replace(/\s+/g, " ").trim();
 const surname = (a) => norm(firstAuthor(a)).split(" ").filter((w) => w.length > 1).pop() || "";
@@ -97,7 +97,8 @@ function parse(html, url) {
   const year = Number(ld?.datePublished || feature("Рік видання")) || null;
   const pages = Number(ld?.numberOfPages || rec.pages_count) || null;
   const blurb = strip(rec.text);
-  const original = String(rec.english_name || "").trim();
+  // english_name is often «<title>: A Memoir by <author>»: the title alone.
+  const original = String(rec.english_name || "").replace(/^(.+?:.+?)\s+by\s+[^:]+$/i, "$1").replace(/\s*:\s*(a|an)\s+(memoir|biography|novel)$/i, "").trim();
   return {
     title: String(ld?.name || rec.title || "").replace(/\s*\((електронна книга|аудіокнига)\)\s*$/i, "").trim(),
     author: [].concat(ld?.author || []).map(name).filter(Boolean).join(", ") || (rec.authors || []).map((a) => a.name).join(", "),
@@ -128,6 +129,9 @@ function same(book, hit) {
   const b = norm(mainTitle(hit.title));
   const full = norm(hit.title);
   if (!a || !(a === b || a === full || full.startsWith(a + " ") || norm(book.title) === full)) return false;
+  // «Шерлок Голмс. Том 2» is not «… у 2 томах. Том 1»: the same volume numbers.
+  const vols = (t) => [...norm(t).matchAll(/(?:том|книга|кн|частина|ч|випуск|вип|сезон)\s+(\d+)/g)].map((m) => m[1]).join();
+  if (vols(book.title) !== vols(hit.title)) return false;
   const s = surname(book.author);
   return !s || !hit.author || norm(hit.author).split(" ").some((w) => w === s || (s.length > 4 && w.startsWith(s.slice(0, -1))));
 }
