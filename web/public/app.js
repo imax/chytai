@@ -416,16 +416,14 @@ document.addEventListener("click", (e) => {
   block.querySelector(".advice-text")?.classList.remove("folded");
   button.closest(".advice-more")?.remove();
 });
-// 👍 / «Повідомити про проблему» under «Що пишуть в інтернеті»: a second tap on the same one takes the
-// vote back; the complaint first opens a box for the reader's words, and goes with them.
+// 😍 / 😐 / 😕 under the overview: a second tap on the same face takes the vote back; the sad face sends
+// the vote at once and opens a box for the reader's words, which go with a second send.
 async function sendVote(block, vote, note = "") {
   const r = await fetch(`/api/overview/${encodeURIComponent(block.dataset.book)}/vote`, { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ vote: String(vote), note }) });
   const data = await r.json();
   if (!r.ok) throw new Error(data.error || r.status);
-  for (const b of block.querySelectorAll("[data-vote]")) {
-    b.classList.toggle("on", Number(b.dataset.vote) === data.vote);
-    if (b.dataset.vote === "-1") b.textContent = data.vote === -1 ? "Скаргу передано" : "Повідомити про проблему";
-  }
+  for (const b of block.querySelectorAll("[data-vote]")) b.classList.toggle("on", Number(b.dataset.vote) === data.vote);
+  return data;
 }
 document.addEventListener("click", async (e) => {
   const button = e.target.closest("[data-vote], [data-report-cancel]");
@@ -434,13 +432,12 @@ document.addEventListener("click", async (e) => {
   const form = block.querySelector(".advice-report");
   if (button.hasAttribute("data-report-cancel")) return (form.hidden = true);
   const vote = button.classList.contains("on") ? 0 : Number(button.dataset.vote);
-  if (vote === -1 && form) {
-    form.hidden = !form.hidden;
-    if (!form.hidden) form.querySelector("textarea").focus();
-    return;
-  }
   try {
     await sendVote(block, vote);
+    if (form) {
+      form.hidden = vote !== -1;
+      if (vote === -1) form.querySelector("textarea").focus();
+    }
   } catch (err) {
     button.title = err.message;
   }

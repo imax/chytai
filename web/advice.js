@@ -22,7 +22,9 @@ const OVERVIEW_SCHEMA = `CREATE TABLE IF NOT EXISTS overview (
   prompt INTEGER NOT NULL DEFAULT 1, sources TEXT NOT NULL DEFAULT ''
 );`;
 // A reader's word on an overview (Max, 2026-10-23: «кнопки щоб оцінити якість AI summary. похвалити або
-// навпаки поскаржитись»): one vote a reader a book, +1 or -1; the owner sees the sums on /admin/overviews.
+// навпаки поскаржитись»): one vote a reader a book; the owner sees the sums on /admin/overviews.
+// Since 2026-10-23 15:30 three faces (Max: «три смайлика для оцінки якості опису, і так нам читачі допоможуть
+// дебажити промпт»): vote 1 = 😍 good, 2 = 😐 so-so, -1 = 😕 bad (with an optional note). 1 and -1 keep the old 👍/👎 rows.
 // A complaint carries the reader's words on what is wrong (Max: «хай читач напише що саме йому не сподобалось»).
 const VOTE_SCHEMA = `CREATE TABLE IF NOT EXISTS overview_vote (
   book TEXT NOT NULL, reader TEXT NOT NULL, vote INTEGER NOT NULL, created TEXT NOT NULL, note TEXT NOT NULL DEFAULT '',
@@ -278,12 +280,12 @@ class Advice {
   overviewOf(bookId) {
     return this.db.prepare("SELECT book, text, model, created FROM overview WHERE book = ?").get(this.homeOf(bookId)) || null;
   }
-  // The reader's own vote on a book's overview: 1, -1 or null.
+  // The reader's own vote on a book's overview: 1 (good), 2 (so-so), -1 (bad) or null.
   voteOf(bookId, readerId) {
     if (!readerId) return null;
     return this.db.prepare("SELECT vote FROM overview_vote WHERE book = ? AND reader = ?").get(this.homeOf(bookId), readerId)?.vote ?? null;
   }
-  // Sets (1, or -1 with the reader's words) or takes back (0) the reader's vote; returns the sums and their vote.
+  // Sets (1, 2, or -1 with the reader's words) or takes back (0) the reader's vote; returns the sums and their vote.
   vote(bookId, readerId, v, note = "") {
     const id = this.homeOf(bookId);
     if (!this.overviewOf(id)) throw new Error("Огляду ще немає.");
@@ -296,13 +298,13 @@ class Advice {
     return this.db.prepare("SELECT reader, note, created FROM overview_vote WHERE book = ? AND vote = -1 ORDER BY created DESC").all(this.homeOf(bookId));
   }
   votesOf(bookId) {
-    const r = this.db.prepare("SELECT SUM(vote = 1) AS up, SUM(vote = -1) AS down FROM overview_vote WHERE book = ?").get(this.homeOf(bookId));
-    return { up: r.up || 0, down: r.down || 0 };
+    const r = this.db.prepare("SELECT SUM(vote = 1) AS up, SUM(vote = 2) AS mid, SUM(vote = -1) AS down FROM overview_vote WHERE book = ?").get(this.homeOf(bookId));
+    return { up: r.up || 0, mid: r.mid || 0, down: r.down || 0 };
   }
   // For /admin/overviews: every overview with its votes, the ones readers complained about first.
   overviewList() {
     return this.db
-      .prepare("SELECT o.book, o.created, o.by, o.model, o.input_tokens, o.output_tokens, o.searches, o.sources, COALESCE(SUM(v.vote = 1), 0) AS up, COALESCE(SUM(v.vote = -1), 0) AS down FROM overview o LEFT JOIN overview_vote v ON v.book = o.book GROUP BY o.book ORDER BY down DESC, up DESC, o.created DESC")
+      .prepare("SELECT o.book, o.created, o.by, o.model, o.input_tokens, o.output_tokens, o.searches, o.sources, COALESCE(SUM(v.vote = 1), 0) AS up, COALESCE(SUM(v.vote = 2), 0) AS mid, COALESCE(SUM(v.vote = -1), 0) AS down FROM overview o LEFT JOIN overview_vote v ON v.book = o.book GROUP BY o.book ORDER BY down DESC, up DESC, o.created DESC")
       .all()
       .map((r) => {
         let found = { queries: [], sources: [] };
@@ -501,11 +503,11 @@ class Advice {
   overviewStats() {
     const t = this.db.prepare("SELECT COUNT(*) AS n, SUM(input_tokens) AS input, SUM(output_tokens) AS output, SUM(searches) AS searches, SUM(CASE WHEN by IN ('auto', 'redo') THEN 1 ELSE 0 END) AS auto FROM overview").get();
     const today = this.db.prepare("SELECT COUNT(*) AS n FROM overview WHERE created >= ?").get(new Date().toISOString().slice(0, 10)).n;
-    const v = this.db.prepare("SELECT SUM(vote = 1) AS up, SUM(vote = -1) AS down FROM overview_vote").get();
+    const v = this.db.prepare("SELECT SUM(vote = 1) AS up, SUM(vote = 2) AS mid, SUM(vote = -1) AS down FROM overview_vote").get();
     // Opus 5.5 list prices: $4/M in, $20/M out, $10 per 1000 web searches.
     const cost = ((t.input || 0) * 4 + (t.output || 0) * 20) / 1e6 + (t.searches || 0) / 100;
     const current = this.db.prepare("SELECT COUNT(*) AS n FROM overview WHERE prompt = ?").get(PROMPT_VERSION).n;
-    return { ...t, today, cost, queue: this.queue.size + this.running, up: v.up || 0, down: v.down || 0, current, version: PROMPT_VERSION, failed: this.failed || 0, lastError: this.lastError || "" };
+    return { ...t, today, cost, queue: this.queue.size + this.running, up: v.up || 0, mid: v.mid || 0, down: v.down || 0, current, version: PROMPT_VERSION, failed: this.failed || 0, lastError: this.lastError || "" };
   }
 
   // A fresh overview of the book from the web, kept for everyone.

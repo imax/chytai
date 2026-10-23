@@ -1211,17 +1211,17 @@ app.post("/api/overview/:id", signed, async (req, res) => {
     res.status(e.status >= 400 && e.status < 600 ? 502 : 400).json({ error: e.status ? "Claude зараз не відповідає, спробуйте трохи згодом." : e.message });
   }
 });
-// 👍 / 👎 under an overview: vote=1, -1, or 0 to take it back.
+// 😍 / 😐 / 😕 under an overview: vote=1, 2, -1, or 0 to take it back.
 app.post("/api/overview/:id/vote", signed, (req, res) => {
   const book = store.book(store.resolve(req.params.id));
   if (!book) return res.status(404).json({ error: "Немає такої книжки" });
   const v = Number(req.body?.vote);
-  if (![1, -1, 0].includes(v)) return res.status(400).json({ error: "Не той голос" });
+  if (![1, 2, -1, 0].includes(v)) return res.status(400).json({ error: "Не той голос" });
   const note = String(req.body?.note || "").trim().slice(0, 1000);
   try {
     const r = advice.vote(book.id, req.user.id, v, note);
     // A complaint goes to the owner at once, like a new review.
-    if (v === -1 && !req.owner) notifyOwner(`Скарга на огляд: ${book.title}`, [`${req.user.name} (@${req.user.username}) про «Що пишуть в інтернеті»:`, "", note || "(без слів)", "", `Книжка: ${site(req)}${store.href(book.id)}#about`, `Усі огляди: ${site(req)}/admin/overviews`].join("\n"));
+    if (v === -1 && note && !req.owner) notifyOwner(`Скарга на огляд: ${book.title}`, [`${req.user.name} (@${req.user.username}) про «Що пишуть в інтернеті»:`, "", note || "(без слів)", "", `Книжка: ${site(req)}${store.href(book.id)}#about`, `Усі огляди: ${site(req)}/admin/overviews`].join("\n"));
     res.json(r);
   } catch (e) {
     res.status(400).json({ error: e.message });
