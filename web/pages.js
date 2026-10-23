@@ -479,7 +479,7 @@ function bookPage({ inGenre = null, fresh = null, pick = null, awards = [], auth
         ${mine(book, entry, user, now, freeRead ? "" : readUrl, listsItem(book, user))}
         ${readUrl && freeRead ? `<p class="read-here"><a class="btn primary" href="${attr(readUrl)}">Додати в Читалку</a></p>` : ""}
         ${where(book)}
-        ${user?.owner ? `<p class="small muted"><a class="muted" href="/admin/book/${encodeURIComponent(book.id)}">Редагувати</a>${book.edited ? " · виправлено вручну" : ""}</p>` : ""}
+        ${user?.owner ? `<p class="small muted"><a class="muted" href="/admin/book/${encodeURIComponent(book.id)}">Редагувати</a>${book.cover ? "" : ` · <a class="muted" href="/admin/book/${encodeURIComponent(book.id)}?find=1">Знайти обкладинку</a>`}${book.edited ? " · виправлено вручну" : ""}</p>` : ""}
       </div>
     </article>
     ${series(book, inLibrary)}
@@ -919,7 +919,8 @@ function bookEditPage({ book, raw, user }) {
       ${field("title", "Назва")}
       ${field("author", "Автор", "Кілька авторів через кому")}
       <label>Опис <textarea name="blurb" rows="8" placeholder="${attr(raw.blurb || "")}">${esc(fix.blurb || "")}</textarea></label>
-      ${field("cover", "Обкладинка", "Посилання на картинку")}
+      ${field("cover", "Обкладинка", `Посилання на картинку · <button type="button" class="text-link small" id="find-covers">Знайти обкладинку</button>`)}
+      <div id="covers" class="cover-picks" hidden></div>
       ${field("aliases", "Інші назви для пошуку", "Через кому, як люди скорочують: DCC, ГП")}
       <label>Мова <select name="language">${[["", `як у каталозі${raw.language ? ` (${raw.language})` : ""}`], ["українська", "українська"], ["англійська", "англійська"], ["російська", "російська: сховати з пошуку й рекомендацій"]].map(([v, t]) => `<option value="${v}" ${(fix.language || "") === v ? "selected" : ""}>${esc(t)}</option>`).join("")}</select></label>
       <p class="hint">Порожнє поле — як у каталозі (сіре). Виправлення не злітають після оновлення каталогів.</p>
@@ -932,7 +933,27 @@ function bookEditPage({ book, raw, user }) {
     </form>
   </div>
 </article>`;
-  return layout({ title: `Редагувати: ${book.title}`, body, user, path: "/admin" });
+  // «Знайти обкладинку»: pictures from our other editions, Open Library and Google Books; a click puts the
+  // address into the field, «Зберегти» keeps it (Max, 2026-10-23). ?find=1 (from the book page) starts at once.
+  const script = `<script>(() => {
+  const box = document.getElementById("covers"), btn = document.getElementById("find-covers"), input = document.querySelector('input[name="cover"]');
+  const find = async () => {
+    box.hidden = false; box.textContent = "Шукаю…";
+    const { covers } = await fetch(${JSON.stringify(`/admin/book/${encodeURIComponent(book.id)}/covers`)}).then((r) => r.json()).catch(() => ({ covers: [] }));
+    box.textContent = covers.length ? "" : "Нічого не знайшлося. Можна вставити посилання на картинку самому.";
+    for (const c of covers) {
+      const b = document.createElement("button");
+      b.type = "button"; b.className = "cover-pick"; b.title = [c.title, c.author, c.from].filter(Boolean).join(" · ");
+      b.innerHTML = '<img loading="lazy" alt=""><span></span>';
+      b.querySelector("img").src = c.src; b.querySelector("img").onerror = () => b.remove(); b.querySelector("span").textContent = c.from;
+      b.onclick = () => { input.value = c.src; document.querySelector(".book-cover img")?.setAttribute("src", c.src); box.querySelectorAll(".on").forEach((x) => x.classList.remove("on")); b.classList.add("on"); };
+      box.append(b);
+    }
+  };
+  btn.onclick = find;
+  if (new URLSearchParams(location.search).has("find")) find();
+})();</script>`;
+  return layout({ title: `Редагувати: ${book.title}`, body: body + script, user, path: "/admin" });
 }
 
 const WHY = "Чому не пішла, якщо хочеться";

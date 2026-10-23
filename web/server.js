@@ -1467,6 +1467,16 @@ app.post("/admin/russian", owner, (req, res) => {
   if (req.get("accept")?.includes("json")) return res.json({ ok: !!id });
   res.redirect(303, "/admin/russian");
 });
+// Pictures to pick a cover from: other editions in our catalogs first, then Open Library and Google Books.
+app.get("/admin/book/:id/covers", owner, async (req, res) => {
+  const id = store.resolve(req.params.id);
+  if (!id) return res.status(404).json({ covers: [] });
+  const book = store.book(id, { edited: false });
+  const ours = (store.editions.get(id) || []).filter(({ item }) => item.cover).map(({ shelf, item }) => ({ src: item.cover, title: item.title, author: item.author || "", from: shelf.name }));
+  const outside = await enrich.searchCovers(book, { googleKey: process.env.GOOGLE_BOOKS_KEY || "" });
+  const all = [...ours, ...outside];
+  res.json({ covers: all.filter((c, i) => all.findIndex((x) => x.src === c.src) === i).slice(0, 24) });
+});
 app.post("/admin/book/:id", owner, (req, res) => {
   const id = store.resolve(req.params.id);
   if (!id) return res.status(404).send("Немає такої книжки");

@@ -369,4 +369,25 @@ async function searchOpenLibrary(q, { fetchImpl = fetch, limit = 6 } = {}) {
   return list;
 }
 
-module.exports = { enrich, refresh, lookup, genresOf, searchOpenLibrary, lookupGoogle, apply, wanting, descriptionText, same };
+// «Знайти обкладинку» for the owner (Max, 2026-10-23): pictures a book could have, to pick from by hand:
+// Open Library and Google Books by title and author, any script. [{ src, title, author, from }]; a source
+// that fails gives nothing.
+async function searchCovers(book, { googleKey = "", fetchImpl = fetch } = {}) {
+  const q = [mainTitle(book.title), firstAuthor(book.author)].filter(Boolean).join(" ");
+  const out = [];
+  for (const b of await searchOpenLibrary(q, { fetchImpl, limit: 8 })) if (b.cover) out.push({ src: b.cover, title: b.title, author: b.author, from: "Open Library" });
+  if (googleKey) {
+    try {
+      const params = new URLSearchParams({ q, maxResults: "12", printType: "books", key: googleKey });
+      const data = await getJson(`${GOOGLE}?${params}`, fetchV6);
+      for (const it of data?.items || []) {
+        const v = it.volumeInfo || {};
+        const thumb = v.imageLinks?.thumbnail || v.imageLinks?.smallThumbnail;
+        if (thumb) out.push({ src: thumb.replace(/^http:/, "https:").replace(/&edge=curl/, "").replace(/zoom=1/, "zoom=2"), title: [v.title, v.subtitle].filter(Boolean).join(": "), author: (v.authors || []).join(", "), from: "Google Books" });
+      }
+    } catch {}
+  }
+  return out.filter((c, i) => out.findIndex((x) => x.src === c.src) === i);
+}
+
+module.exports = { enrich, refresh, lookup, genresOf, searchOpenLibrary, searchCovers, lookupGoogle, apply, wanting, descriptionText, same };
