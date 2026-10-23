@@ -404,6 +404,8 @@ function bookLd(book, shelf, s, readers) {
 // The book, the reader's own buttons, where to get it, what readers said, what it is about.
 // «Знаєте, де знайти?» under «Українською: …, у каталогах поки немає»: a reader pastes the page of the
 // Ukrainian edition in a store or at its publisher (POST /api/book/:id/edition).
+// Only the owner sees it while our own search (ukfind.js) is tried (Max, 2026-10-23: «чи нам дійсно треба урл»).
+const SHOW_EDITION_TIP = true;
 function editionTip(book, error) {
   return `<details class="edition-tip"${error ? " open" : ""}>
   <summary class="text-link small">Знаєте, де знайти українською?</summary>
@@ -458,7 +460,7 @@ function bookPage({ book, entry, now = false, user, shelf, inLibrary = new Map()
       ${label("Про книжку")}
       ${book.blurb ? `<div class="about">${book.blurb.split(/\n\n+/).map((t) => `<p>${esc(t)}</p>`).join("")}</div>` : ""}
       <p class="small muted">${[book.blurb && !book.edited?.blurb ? (book.blurbSource ? `Опис: ${esc(book.blurbSource)}` : `Опис з сайту ${esc(shelf ? shelf.name : book.source)}`) : "", book.ukTitle ? `Українською: «${esc(book.ukTitle)}», у каталогах поки немає` : ""].filter(Boolean).join(" · ")}</p>
-      ${book.ukTitle && user ? editionTip(book, editionError) : ""}
+      ${book.ukTitle && user?.owner && SHOW_EDITION_TIP ? editionTip(book, editionError) : ""}
     </section>` : ""}
   </div>
   <aside>
@@ -560,6 +562,20 @@ ${list.length ? `<h2>Додано: ${list.length}</h2>
 <div class="others">${list.map((w) => writingLine(w, `<span class="queue-book"><a href="${attr(w.book.href || "")}">${esc(w.book.title)}</a> <span class="muted">${esc(w.book.author || "")}</span>${w.adder && !w.adder.owner ? ` <span class="muted">· додав(ла) <a href="${attr(w.adder.href)}">${esc(w.adder.name)}</a></span>` : ""}</span><span class="writing-tools"><form method="post" action="/api/reviews/date" class="review-date"><input type="hidden" name="url" value="${attr(w.url)}"><input type="date" name="date" value="${attr(w.date || "")}"><button class="text-link">Зберегти дату</button></form>${reviewForm("/api/reviews/remove", { work: w.book.id, url: w.url, back: "admin" }, "Прибрати")}</span>`)).join("")}</div>` : ""}
 </div>`;
   return layout({ title: "Огляди", user, path: "/admin", body, noindex: true });
+}
+
+// /admin/ukfind: our own search for Ukrainian editions (ukfind.js), run by hand for now.
+function ukFindPage({ user, candidates, list, running, enabled }) {
+  const found = list.filter((r) => r.status === "found").length;
+  const cost = list.reduce((a, r) => a + r.input_tokens * 3e-6 + r.output_tokens * 15e-6 + r.searches * 0.01, 0);
+  const st = { found: "знайшли", none: "не знайшли", error: "помилка" };
+  const body = `<div class="admin"><h1>Українські видання</h1>
+<p class="lead">Книжки, для яких Вікідані знають український переклад, а каталоги його не мають. Claude шукає сторінку видання в магазині чи у видавництва, і знайдене стає парою «Оригінал / Українською».</p>
+<p>Чекають пошуку: <b>${candidates}</b> · перевірено: ${list.length} · знайшли: ${found} · ≈ $${cost.toFixed(2)}${list.length ? ` (≈ $${(cost / list.length).toFixed(3)} за книжку)` : ""}</p>
+${!enabled ? `<p class="error">Немає ANTHROPIC_API_KEY.</p>` : running ? `<p class="flash">Шукаю… Оновіть сторінку за хвилину.</p>` : `<form method="post" action="/admin/ukfind" class="form"><label>Скільки книжок<input name="n" type="number" min="1" max="20" value="5"></label><label>Або конкретні книжки (посилання чи id через пробіл)<input name="ids" placeholder="https://chytai.org.ua/book/the-selfish-gene"></label><button class="btn primary">Шукати</button></form>`}
+${list.length ? `<table class="readers"><tr><th>Книжка</th><th>Результат</th><th>Сторінка</th><th>Коли</th></tr>${list.map((r) => `<tr><td><a href="${attr(r.book.href || "")}">${esc(r.book.title)}</a></td><td>${st[r.status] || r.status}${r.edition ? `: <a href="${attr(r.edition.href)}">${esc(r.edition.title)}</a>` : ""}${r.note ? `<br><span class="small muted">${esc(r.note)}</span>` : ""}</td><td>${r.url ? `<a href="${attr(r.url)}" target="_blank" rel="noopener">${esc(new URL(r.url).hostname.replace(/^www\./, ""))}</a>` : ""}</td><td class="small muted">${esc(r.created.slice(0, 16).replace("T", " "))}</td></tr>`).join("")}</table>` : ""}
+</div>`;
+  return layout({ title: "Українські видання", user, path: "/admin", body, noindex: true });
 }
 
 // A book's other-language pages (Max, 2026-10-21: «дві сторінки і спільні оцінки»): the original under a
@@ -1641,7 +1657,7 @@ module.exports = {
   translationsPage,
   decidedList,
   welcomePage,
-  addPage, addReviewPage, addFindResults, addPageResult,
+  addPage, addReviewPage, addFindResults, addPageResult, ukFindPage,
   layout, homePage, bookPage, bookEditPage, editPage, libraryPage, readersPage, popularPage, publishersPage, publisherPage, searchPage, searchResults, authorPage,
   loginPage, codePage, signupPage, settingsPage, privacyPage, updatesPage, messagePage, digestPage, followMailPage, importPage, importPreviewPage, importDonePage,
   esc, byline, STATUS, COPY, inline, isUk, setTitleLinks, setAuthorLinks, setStats, setReadersWithNote,

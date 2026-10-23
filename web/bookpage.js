@@ -158,7 +158,7 @@ class BookPage {
 
   // Can this reader ask about one more page today? Pages already read don't count.
   allowed(reader, url) {
-    if (this.cache.has(url)) return true;
+    if (this.cache.has(url) || reader === "ukfind") return true; // our own search has its own ceiling (ukfind.js)
     const day = new Date().toISOString().slice(0, 10);
     const a = this.asked.get(reader);
     return !a || a.day !== day || a.n < PER_READER;

@@ -25,6 +25,7 @@ const listimport = require("./listimport");
 const applebooks = require("./applebooks");
 const enrich = require("./enrich");
 const { BookPage, isUrl } = require("./bookpage");
+const { UkFinder } = require("./ukfind");
 const { Admin, adminPage, readersPage, overviewsPage } = require("./admin");
 const { Reviews } = require("./reviews");
 const { Advice } = require("./advice");
@@ -1073,6 +1074,28 @@ app.post("/api/overview/:id/vote", signed, (req, res) => {
     res.status(400).json({ error: e.message });
   }
 });
+// The Ukrainian edition of `orig` from its page (bookpage.js): the catalog's book when it has one, else a new
+// book with the store as «Де взяти»; paired with the original as its translation. Null if it is the original.
+function addEdition(orig, p, by) {
+  const row = fromPage(p);
+  // The catalog knows the Ukrainian title as the original's other name (store.workIndex): that is no edition yet.
+  const found = store.findWork(p);
+  const known = found && store.canonical(found) !== store.canonical(orig.id) ? found : null;
+  let book = known && store.book(known);
+  if (!book) book = store.addBook({ title: row.title, author: row.author, cover: row.cover, links: row.link ? [row.link] : [], source: "tip", ...(by ? { by } : {}), ...(row.isbns.length ? { isbns: row.isbns } : {}), ...(row.blurb ? { blurb: row.blurb, blurbSource: row.blurbSource } : {}), ...(row.pages ? { pages: row.pages } : {}), ...(row.published ? { published: row.published } : {}) });
+  if (store.canonical(book.id) === store.canonical(orig.id)) return null;
+  store.decideTranslation(orig.id, book.id);
+  return book;
+}
+// Our own search for those editions (ukfind.js); the owner runs it on /admin/ukfind for now.
+const ukfind = new UkFinder({ store, db: store.db, apiKey: process.env.ANTHROPIC_API_KEY || "", bookpage, addEdition, log: console.log });
+app.get("/admin/ukfind", owner, (req, res) => res.send(pages.ukFindPage({ user: req.user, candidates: ukfind.candidates().length, list: ukfind.list(), running: ukfind.running, enabled: !!ukfind.client })));
+app.post("/admin/ukfind", owner, async (req, res) => {
+  const ids = String(req.body.ids || "").split(/[\s,]+/).map((x) => store.resolve(x.replace(/^.*\/book\//, "")) || "").filter(Boolean);
+  ukfind.run(Math.min(Number(req.body.n) || 5, 20), ids.length ? { ids } : {}).catch((e) => console.error("ukfind failed:", e)); // a few minutes; the page shows it running
+  res.redirect(303, "/admin/ukfind");
+});
+
 // «Знаєте, де знайти?» on a foreign book whose Ukrainian translation Wikidata knows and no catalog has
 // (Max, 2026-10-23: «вона насправді є, це у нас в базі її немає … щоб читачі могли нам підказати де її
 // знайти»): a reader pastes the address of the Ukrainian edition's page; it is read like a link on /add
@@ -1088,14 +1111,9 @@ app.post("/api/book/:id/edition", signed, async (req, res) => {
   const p = await bookpage.fromUrl(url, req.user.id);
   if (p.error) return back(p.error);
   if (!/[а-яіїєґ]/i.test(p.title)) return back(`На сторінці книжка «${p.title}», а не українське видання.`);
-  const row = fromPage(p);
-  // The catalog knows the Ukrainian title as the original's other name (store.workIndex): that is no edition yet.
-  const found = store.findWork(p);
-  const known = found && store.canonical(found) !== store.canonical(orig.id) ? found : null;
-  let book = known && store.book(known);
-  if (!book) book = store.addBook({ title: row.title, author: row.author, cover: row.cover, links: row.link ? [row.link] : [], source: "tip", by: req.user.id, ...(row.isbns.length ? { isbns: row.isbns } : {}), ...(row.blurb ? { blurb: row.blurb, blurbSource: row.blurbSource } : {}), ...(row.pages ? { pages: row.pages } : {}), ...(row.published ? { published: row.published } : {}) });
-  if (store.canonical(book.id) === store.canonical(orig.id)) return back("Це та сама книжка, а не її український переклад.");
-  store.decideTranslation(orig.id, book.id);
+  const known = store.findWork(p) && store.canonical(store.findWork(p)) !== store.canonical(orig.id);
+  const book = addEdition(orig, p, req.user.id);
+  if (!book) return back("Це та сама книжка, а не її український переклад.");
   console.log(`edition tip @${req.user.username}: ${orig.id} -> ${book.id}${known ? " (known)" : ""} ${url}`);
   if (!req.owner) notifyOwner(`Українське видання: ${book.title}`, [`${req.user.name} (@${req.user.username}) підказав(ла), де знайти українське видання.`, "", `Оригінал: ${orig.title}${orig.author ? ` — ${orig.author}` : ""}  ${site(req)}${store.href(orig.id)}`, `Переклад: ${book.title}${book.author ? ` — ${book.author}` : ""}  ${site(req)}${store.href(book.id)}${known ? " (вже була в каталозі)" : ""}`, `Посилання: ${url}`, "", `Прибрати пару: ${site(req)}/admin/dupes#decided`, `Полиця читача: ${site(req)}${req.user.href}`].join("\n"));
   res.redirect(303, store.href(book.id));
