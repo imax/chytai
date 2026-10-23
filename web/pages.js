@@ -32,7 +32,7 @@ const STATUS = { read: "Прочитано", reading: "Читаю", want: "Хо�
 const COPY = { paper: "На папері", ebook: "E-book", seeking: "Шукаю на папері" };
 // What a reader did, as the feed says it: «Оля К. оцінка ★★★★», «Андрій читає».
 const VERB = { read: "прочитано", reading: "читає", want: "хоче прочитати", abandoned: "покинуто" };
-const GENRES = ["художня", "фантастика", "детективи", "трилери", "бізнес", "компанії", "менеджмент", "продукт", "гроші", "розробка", "історія", "війна", "біографії", "наука", "саморозвиток", "суспільство"];
+const GENRES = ["художня", "фантастика", "фентезі", "детективи", "трилери", "жахи", "любовні романи", "класика", "поезія", "дитячі", "підліткові", "комікси", "бізнес", "компанії", "менеджмент", "продукт", "гроші", "розробка", "історія", "війна", "біографії", "наука", "психологія", "філософія", "здоров'я", "подорожі", "саморозвиток", "суспільство"];
 const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
 const CYR = /[а-яіїєґ]/i;
 // Is the book in Ukrainian? A reader's own books can be in any language («Ненасильственное общение»,
@@ -889,7 +889,7 @@ function libraryPage({ rows, user, reader, own = false, mineIds = null, followin
       const b = r.book;
       const head = r.year !== r._prevYear || i === 0 ? yearHead(r.year, rows) : "";
       const search = [b.title, b.altTitle, b.author, stripMd(r.note || "")].join(" ").toLowerCase();
-      const data = ` data-status="${r.status || ""}" data-copy="${r.copy || ""}" data-common="${common.includes(r) ? 1 : ""}" data-kids="${r.kids ? 1 : ""}" data-tags="${attr((b.tags || []).join(" "))}" data-rating="${r.rating ?? ""}" data-title="${attr(b.title.toLowerCase())}" data-search="${attr(search)}" data-order="${i}"`;
+      const data = ` data-status="${r.status || ""}" data-copy="${r.copy || ""}" data-common="${common.includes(r) ? 1 : ""}" data-kids="${r.kids ? 1 : ""}" data-tags="${attr((b.tags || []).join("|"))}" data-rating="${r.rating ?? ""}" data-title="${attr(b.title.toLowerCase())}" data-search="${attr(search)}" data-order="${i}"`;
       const edit = b.href ? `/me${b.href}` : `/me/book/${encodeURIComponent(r.id)}`;
       const action = own ? `<a class="text-link small" href="${attr(edit)}">змінити</a>` : user && mineIds ? (mineIds.has(r.id) ? myStatus(mineIds.get(r.id)) : markButtons(b, user)) : "";
       return head + bookRow(b, { entry: r, action, id: r.id, data });

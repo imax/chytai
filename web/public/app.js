@@ -37,7 +37,7 @@
       }
       if (filters.genre && !(it.dataset.genre || "").split("|").includes(filters.genre)) return false;
       if (filters.avail && it.dataset.avail !== filters.avail) return false;
-      if (g && !(it.dataset.tags || "").split(" ").includes(g)) return false;
+      if (g && !(it.dataset.tags || "").split("|").includes(g)) return false;
       return true;
     }
 

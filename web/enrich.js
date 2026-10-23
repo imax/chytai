@@ -22,25 +22,37 @@ const GOOGLE = "https://www.googleapis.com/books/v1/volumes";
 // Our genres (the tags «Читали це, сподобалось і це» matches books by) from Open Library's subjects and
 // Google's categories, so a book a reader added gets neighbours before anyone rates it (Max, 2026-10-23).
 const GENRE_OF = [
-  ["фантастика", /science fiction|fantasy|dystopia/i],
+  ["дитячі", /juvenile|children'?s (fiction|literature|stories|books)|picture books/i],
+  ["підліткові", /young adult|teen/i],
+  ["комікси", /comic|graphic novel/i],
+  ["фентезі", /fantasy/i],
+  ["фантастика", /science[ -]fiction|sci-fi|dystopia/i],
+  ["жахи", /horror/i],
   ["детективи", /detective|mystery|crime fiction/i],
   ["трилери", /thriller|suspense/i],
+  ["любовні романи", /romance|love stories/i],
+  ["поезія", /poetry|poems/i],
+  ["класика", /classic/i],
   ["художня", /^(?!.*non-?fiction).*\bfiction\b|\bnovels?\b/i],
   ["біографії", /biograph|memoir|diaries|diarists/i],
   ["історія", /\bhistory\b|historical/i],
   ["війна", /\bwar\b|military/i],
+  ["психологія", /psycholog/i],
+  ["філософія", /philosoph/i],
+  ["наука", /^(?!.*fiction).*(science|physics|biology|mathematics|neuroscien|evolution)/i],
+  ["здоров'я", /\bhealth\b|nutrition|medicine|fitness/i],
+  ["подорожі", /travel/i],
+  ["саморозвиток", /self-help|personal (development|growth)|self-improvement|^habits?$|^success$/i],
   ["бізнес", /business|entrepreneur|start-?ups?/i],
   ["менеджмент", /management|leadership/i],
   ["гроші", /finance|investment|investing|\bmoney\b/i],
   ["розробка", /programming|software|computer science/i],
-  ["наука", /^(?!.*fiction).*(science|physics|biology|mathematics|neuroscien|evolution)/i],
-  ["саморозвиток", /self-help|personal (development|growth)|self-improvement|^habits?$|^success$/i],
   ["суспільство", /sociology|social science|political science|politics|economics/i],
 ];
 // Subjects are many and noisy: a genre counts when one of the first twenty says so.
 const genresOf = (subjects) => GENRE_OF.filter(([, re]) => (subjects || []).slice(0, 20).some((x) => re.test(String(x)))).map(([g]) => g).slice(0, 3);
 // Bumped when a source is added or fixed, so every book is asked again: the per-book memory is enrich:<GEN>:<id>.
-const GEN = 3; // 3: genres (2026-10-23)
+const GEN = 4; // 3: genres, 4: a genre list for every reader, «фентезі» apart from «фантастика» (2026-10-23)
 
 const norm = (s) => String(s || "").toLowerCase().replace(/^(the|a|an)\s+/, "").replace(/[’'`]/g, "").replace(/[^\p{L}\p{N}]+/gu, " ").trim();
 const mainTitle = (t) => String(t || "").replace(/\s*\(.*?\)\s*/g, " ").split(/[:]/)[0].trim();
@@ -208,7 +220,9 @@ function apply(book, info) {
   if (!book.published && info.published) patch.published = info.published;
   if (!book.pages && info.pages) patch.pages = info.pages;
   if (!book.language && info.language) patch.language = info.language;
-  if (!(book.tags || []).length && info.tags?.length) patch.tags = info.tags;
+  // A reader's own book has only the genres this lookup gave it (imports bring none), so a better mapping
+  // («фентезі», 2026-10-23) replaces them.
+  if (info.tags?.length && (!(book.tags || []).length || OWN.has(book.source)) && info.tags.join() !== (book.tags || []).join()) patch.tags = info.tags;
   if (!book.blurb && info.blurb) (patch.blurb = info.blurb), (patch.blurbSource = info.blurbSource || "Open Library");
   const links = [...(book.links || [])];
   const has = (re) => links.some((l) => re.test(l.url));
@@ -231,7 +245,7 @@ const isCyrillic = (t) => /[а-яіїєґ]/i.test(t);
 const viaOriginal = (b) => isCyrillic(b.title) && isCyrillic(firstAuthor(b.author)) && !cleanIsbns(b.isbns).length && !(b.cover && b.altTitle);
 function wanting(store, ids, { google = false } = {}) {
   const all = ids ? ids.map((id) => store.lib.books[id]).filter(Boolean) : Object.values(store.lib.books);
-  return all.filter((b) => OWN.has(b.source) && (viaOriginal(b) || ((cleanIsbns(b.isbns).length || ((google || isLatin(b.title)) && firstAuthor(b.author))) && !(b.cover && b.published && b.blurb && (b.tags || []).length && cleanIsbns(b.isbns).length))));
+  return all.filter((b) => OWN.has(b.source) && (viaOriginal(b) || ((cleanIsbns(b.isbns).length || ((google || isLatin(b.title)) && firstAuthor(b.author))) && (!(b.cover && b.published && b.blurb && (b.tags || []).length && cleanIsbns(b.isbns).length) || !store.db.get(`enrich:${GEN}:${b.id}`)))));
 }
 
 // What a Ukrainian edition takes from its original's record: the cover when it has none, and the
