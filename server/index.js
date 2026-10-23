@@ -481,7 +481,7 @@ function loginPage(req, error) {
 
 // Readers' words on the landing (Max, 2026-10-23). Add one more { text, author } to show it; author may be left out.
 const TESTIMONIALS = [
-  { text: "AI нотатки і пояснення — афігенна фіча, і навіть елементарний зміст по книжці значно зручніше чим ті читалки що я дивився" },
+  { text: "AI нотатки і пояснення — афігенна фіча, і навіть елементарний зміст по книжці значно зручніше чим ті читалки що я дивився", author: "Микола Я" },
 ];
 
 // The first thing someone not signed in sees (Max, 2026-10-22): what the reader is, then «Увійти».
