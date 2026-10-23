@@ -58,7 +58,7 @@ async function getPage(url, fetchImpl, check = publicHost) {
         break;
       }
     }
-    return { html: Buffer.concat(chunks.map((c) => Buffer.from(c))).toString("utf8"), url: u.href };
+    return { html: Buffer.concat(chunks.map((c) => Buffer.from(c))).toString("utf8"), url: u.href, status: res.status, type: res.headers.get("content-type") || "", server: res.headers.get("server") || "" };
   }
   throw new Error("too many redirects");
 }
@@ -169,6 +169,7 @@ class BookPage {
     try {
       const page = await getPage(url, this.fetchImpl, this.check);
       m = marks(page.html, page.url);
+      if (debug) m.raw = { status: page.status, type: page.type, server: page.server, size: page.html.length, head: page.html.slice(0, 600) };
     } catch (e) {
       this.log(`bookpage ${url}: ${e.name === "TimeoutError" ? "timeout" : e.cause?.code || e.message}`);
       return { error: "Не вдалося відкрити цю сторінку. Спробуйте інше посилання або заповніть вручну." };
