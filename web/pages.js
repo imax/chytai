@@ -784,6 +784,17 @@ function editPage({ book, entry, user }) {
   return layout({ title: book.title, body, user, path: "/me" });
 }
 
+// /admin/russian: books on readers' shelves that look Russian but aren't caught, one click each.
+function russianPage({ user, books }) {
+  const row = (b) => `<form method="post" action="/admin/russian" class="dupe-row"><input type="hidden" name="id" value="${attr(b.id)}"><span><a href="${attr(b.href)}" target="_blank">${esc(b.title)}</a><span class="muted"> · ${esc([b.author, b.readers ? count(b.readers, "читач", "читачі", "читачів") : ""].filter(Boolean).join(" · "))}</span></span><button class="btn small danger" name="ru" value="1">Російська</button><button class="btn small ghost" name="ru" value="0">Ні</button></form>`;
+  const body = `<div class="admin">
+<h1>Може, російською? <span class="muted">${books.length}</span></h1>
+<p class="muted">Книжки з полиць читачів: кирилична назва без і, ї, є, ґ, і сайт поки не знає, якою вона мовою. «Російська» ховає книжку з пошуку, рекомендацій і стрічок (на полиці читача вона лишається), «Ні» прибирає її з цього списку. Змінити потім можна в «Редагувати» на сторінці книжки.</p>
+${books.length ? `<div class="dupe">${books.map(row).join("")}</div>` : `<p>Нічого підозрілого.</p>`}
+</div>`;
+  return layout({ title: "Може, російською?", body, user, path: "/admin" });
+}
+
 // The owner's fix of a book's title, author, description and cover (/admin/book/:id). An empty field
 // says what the catalog says, shown as its placeholder.
 function bookEditPage({ book, raw, user }) {
@@ -1676,7 +1687,7 @@ module.exports = {
   decidedList,
   welcomePage,
   addPage, addReviewPage, addFindResults, addPageResult, ukFindPage,
-  layout, homePage, bookPage, bookEditPage, editPage, libraryPage, readersPage, popularPage, publishersPage, publisherPage, searchPage, searchResults, authorPage,
+  layout, homePage, bookPage, bookEditPage, russianPage, editPage, libraryPage, readersPage, popularPage, publishersPage, publisherPage, searchPage, searchResults, authorPage,
   loginPage, codePage, signupPage, settingsPage, privacyPage, updatesPage, messagePage, digestPage, followMailPage, importPage, importPreviewPage, importDonePage,
   esc, byline, STATUS, COPY, inline, isUk, setTitleLinks, setAuthorLinks, setStats, setReadersWithNote,
 };

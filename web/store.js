@@ -1078,6 +1078,26 @@ class Store {
     }
     return this._edits;
   }
+  // One field of the owner's fix, the rest kept (the «російська / не російська» buttons on /admin/russian).
+  editField(id, k, v) {
+    id = this.canonical(id);
+    return this.editBook(id, { ...(this.edits()[id] || {}), [k]: v });
+  }
+  // Books on readers' shelves that may be Russian yet pass isRussian(): a Cyrillic title without і ї є ґ,
+  // or an author written the Russian way, with no language the owner or a catalog set (/admin/russian).
+  russianSuspects() {
+    const out = [];
+    const ids = new Set([...this.entries.values()].flatMap((e) => Object.keys(e)).map((i) => this.canonical(i)));
+    for (const id of ids) {
+      const b = this.book(id);
+      if (!b || b.edited?.language || isRussian(b) || /^(uk|укр)/i.test(b.language || "")) continue;
+      const cyr = /[а-я]/i.test(b.title) && !/[іїєґ]/i.test(`${b.title} ${b.author}`);
+      if (!cyr) continue;
+      out.push({ ...b, readers: this.readersOf(id).length });
+    }
+    return out.sort((a, b) => b.readers - a.readers || a.title.localeCompare(b.title, "uk"));
+  }
+
   // An empty field goes back to what the catalog says.
   editBook(id, patch) {
     id = this.canonical(id);

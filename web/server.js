@@ -1216,6 +1216,14 @@ app.get("/admin/book/:id", owner, (req, res) => {
   if (!id) return res.status(404).send(pages.messagePage({ title: "Немає такої книжки", text: "", user: req.user }));
   res.send(pages.bookEditPage({ book: store.book(id), raw: store.book(id, { edited: false }), user: req.user }));
 });
+// Suspected Russian books on readers' shelves, each marked by hand (Max, 2026-10-23: «Жук в муравейнике»).
+app.get("/admin/russian", owner, (req, res) => res.send(pages.russianPage({ user: req.user, books: store.russianSuspects() })));
+app.post("/admin/russian", owner, (req, res) => {
+  const id = store.resolve(String(req.body.id || ""));
+  if (id) store.editField(id, "language", req.body.ru === "1" ? "російська" : "українська");
+  if (req.get("accept")?.includes("json")) return res.json({ ok: !!id });
+  res.redirect(303, "/admin/russian");
+});
 app.post("/admin/book/:id", owner, (req, res) => {
   const id = store.resolve(req.params.id);
   if (!id) return res.status(404).send("Немає такої книжки");
