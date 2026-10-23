@@ -522,7 +522,7 @@ function aboutBlock(book, shelf, o, user, vote, ukAsk, editionError) {
   const blurbSource = book.blurb && !book.edited?.blurb ? (book.blurbSource ? `Опис: ${esc(book.blurbSource)}` : `Опис з сайту ${esc(shelf ? shelf.name : book.source)}`) : "";
   const body = canSee ? overviewHtml(o, user, vote, { folded: true })
     : `${blurb}${blurbSource || canAsk ? `<p class="small muted">${[blurbSource, canAsk ? `<button class="text-link small" data-ask="overview">Що кажуть про цю книжку?</button>` : ""].filter(Boolean).join(" · ")}</p>` : ""}`;
-  const uk = book.ukTitle || ukAsk ? `<p class="small muted">${ukLine(book, ukAsk)}</p>` : "";
+  const uk = book.ukTitle || ukAsk ? `<p class="small muted uk-line">${ukLine(book, ukAsk)}</p>` : "";
   return `<section class="block advice" id="about" data-book="${attr(book.id)}">
       ${label("Про книжку")}
       <div class="advice-body">${body}</div>
