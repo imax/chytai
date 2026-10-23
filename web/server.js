@@ -678,7 +678,9 @@ function searchAll(req, q) {
     const seen = new Set(hits.map((h) => h.book.id));
     hits = [...tagged.filter((x) => !seen.has(x.book.id)).map((x) => ({ book: x.book, entry: store.sharedEntry(req.user?.id, x.book.id) })), ...hits].slice(0, 40);
   }
-  const has = (name) => nameHas(name, nq);
+  // A short name («grrm», «гп») finds the authors of what it stands for too.
+  const nqs = [nq, normQ(store.aliasQuery(q))].filter(Boolean);
+  const has = (name) => nqs.some((n) => nameHas(name, n));
   const authorsFound = (store.authors?.list || [])
     .filter((a) => has(a.name) || (a.other && has(a.other)))
     .slice(0, 6)

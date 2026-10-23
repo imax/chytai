@@ -872,6 +872,7 @@ function bookEditPage({ book, raw, user }) {
       ${field("author", "Автор", "Кілька авторів через кому")}
       <label>Опис <textarea name="blurb" rows="8" placeholder="${attr(raw.blurb || "")}">${esc(fix.blurb || "")}</textarea></label>
       ${field("cover", "Обкладинка", "Посилання на картинку")}
+      ${field("aliases", "Інші назви для пошуку", "Через кому, як люди скорочують: DCC, ГП")}
       <label>Мова <select name="language">${[["", `як у каталозі${raw.language ? ` (${raw.language})` : ""}`], ["українська", "українська"], ["англійська", "англійська"], ["російська", "російська: сховати з пошуку й рекомендацій"]].map(([v, t]) => `<option value="${v}" ${(fix.language || "") === v ? "selected" : ""}>${esc(t)}</option>`).join("")}</select></label>
       <p class="hint">Порожнє поле — як у каталозі (сіре). Виправлення не злітають після оновлення каталогів.</p>
       <div class="actions">

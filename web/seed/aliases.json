@@ -1,0 +1,23 @@
+{
+  "_": "Short names readers type in search -> what to search instead (store.aliases). Case, dots and spaces don't matter: «DCC», «d.c.c.» and «dcc» are one key. First letters of a series or of a shelved book's title (dcc, lotr, asoiaf) work on their own; add here what they miss: two-word names, Ukrainian short forms, nicknames.",
+  "aliases": {
+    "dcc": "Dungeon Crawler Carl",
+    "дкк": "Dungeon Crawler Carl",
+    "hp": "Harry Potter",
+    "гп": "Гаррі Поттер",
+    "lotr": "Lord of the Rings",
+    "вп": "Володар перснів",
+    "got": "Song of Ice and Fire",
+    "asoiaf": "Song of Ice and Fire",
+    "гра престолів": "Пісня льоду й полум'я",
+    "пльп": "Пісня льоду й полум'я",
+    "grrm": "George R. R. Martin",
+    "jrrt": "Tolkien",
+    "jkr": "Rowling",
+    "hhgttg": "Hitchhiker's Guide to the Galaxy",
+    "h2g2": "Hitchhiker's Guide to the Galaxy",
+    "wot": "Wheel of Time",
+    "3bp": "Three-Body Problem",
+    "phm": "Project Hail Mary"
+  }
+}

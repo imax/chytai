@@ -80,7 +80,18 @@ const isRussian = (b) => {
 const norm = (s) => String(s || "").toLowerCase().replace(/^(the|a)\s+/, "").replace(/[^\p{L}\p{N}]+/gu, " ").trim();
 // Separators left at the end of a title: «Diary of Samuel Pepys -», «Назва:».
 const DANGLING = /[\s\-‐‑–—:;,/|]+$/u;
-const EDITABLE = ["title", "author", "blurb", "cover", "language"];
+const EDITABLE = ["title", "author", "blurb", "cover", "language", "aliases"];
+// A short name as typed in search: «DCC», «Л.О.Т.Р.» and «lotr» are one key.
+const aliasKey = (s) => String(s || "").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, "");
+// The first letters of a name of three or more words, as readers shorten it: «Dungeon Crawler Carl» → dcc,
+// «A Song of Ice and Fire» → asoiaf and soiaf, «The Lord of the Rings» → lotr and tlotr. The main title
+// only («Dungeon Crawler Carl: …»).
+function acronyms(name) {
+  const words = String(name || "").split(/[.:(]\s/)[0].toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim().split(" ").filter((w) => /^\p{L}/u.test(w));
+  const out = new Set();
+  for (const ws of [words, /^(the|a)$/.test(words[0]) ? words.slice(1) : []]) if (ws.length >= 3 && ws.length <= 7) out.add(ws.map((w) => w[0]).join(""));
+  return [...out];
+}
 // Our genres (pages.js GENRES) in a shop's shelf names («Фентезі», «Художня література», «Науково-популярна»)
 // and in Open Library's English subjects; the specific ones first, «художня» last.
 const SHOP_GENRES = [
@@ -432,6 +443,7 @@ class Store {
     this.cycles = new Map(); // work id -> { key, n }
     this.cycleInfo = new Map(); // key -> { name, uk, members: [{ n, en, uk }] } (members from Wikidata only)
     this.cycleIds = new Map(); // key -> [{ n, id }] by n
+    this.aliasIdx = null;
     const set = (id, key, n) => {
       id = this.canonical(id);
       if (n > 0 && !this.cycles.has(id)) this.cycles.set(id, { key, n });
@@ -732,6 +744,7 @@ class Store {
       db.exec("DELETE FROM search; DELETE FROM search_tri;");
       this.vocab = null; // the typo search reloads the word list
       this.sounds = null;
+      this.aliasIdx = null;
       const add = db.prepare("INSERT INTO search (id, title, alt, author, series, extra) VALUES (?, ?, ?, ?, ?, ?)");
       const tri = db.prepare("INSERT INTO search_tri (id, text) VALUES (?, ?)");
       for (const id of ids) {
@@ -739,8 +752,11 @@ class Store {
         if (!b) continue;
         const uk = this.ukTitles?.[id];
         const extra = [...(b.editions || []).map((e) => [e.title, e.altTitle, e.author, e.isbn].filter(Boolean).join(" ")), uk ? `${uk.uk} ${uk.ukAuthor}` : "", ...isbnsOf(b)].join(" ");
-        add.run(id, b.title || "", b.altTitle || "", [b.author, b.authorOrig].filter(Boolean).join(" "), b.series?.name || "", extra);
-        tri.run(id, [b.title, b.altTitle, b.author, b.authorOrig, b.series?.name, uk?.uk].filter(Boolean).join(" · "));
+        // The series' own name too («Dungeon Crawler Carl» finds every volume), and the owner's other names.
+        const c = this.cycles?.get(id) && this.cycleInfo.get(this.cycles.get(id).key);
+        const series = [...new Set([b.series?.name, c?.name, c?.uk].filter(Boolean))].join(" ");
+        add.run(id, b.title || "", b.altTitle || "", [b.author, b.authorOrig].filter(Boolean).join(" "), series, [extra, b.aliases].filter(Boolean).join(" "));
+        tri.run(id, [b.title, b.altTitle, b.author, b.authorOrig, series, uk?.uk].filter(Boolean).join(" · "));
       }
     });
   }
@@ -785,9 +801,73 @@ class Store {
     return out;
   }
 
-  search(q, { reader = null, limit = 40 } = {}) {
+  // Short names readers type for a series, a book or an author (Max, 2026-10-23: «DCC» found nothing).
+  // seed/aliases.json maps a short name to what to search instead («гп» → «Гаррі Поттер»); the owner's
+  // «Інші назви» on /admin/book/:id point at one book; and the first letters of a series' name or of the title
+  // of a book on readers' shelves point at those books, when no more than three names share them.
+  searchAliases() {
+    // Rebuilt after a reindex, and every ten minutes for the titles readers have just shelved.
+    if (this.aliasIdx && Date.now() - this.aliasIdx.at < 600e3) return this.aliasIdx;
+    let seed = {};
+    try {
+      seed = readJson(path.join(SEED, "aliases.json")).aliases || {};
+    } catch {
+      /* none */
+    }
+    const query = new Map(Object.entries(seed).map(([k, v]) => [aliasKey(k), v]));
+    const own = new Map(); // key -> [ids]
+    for (const [id, fix] of Object.entries(this.edits())) for (const a of String(fix.aliases || "").split(/[,;]/)) if (aliasKey(a)) (own.get(aliasKey(a)) || own.set(aliasKey(a), []).get(aliasKey(a))).push(this.canonical(id));
+    const auto = new Map(); // key -> Map(name -> [ids])
+    const put = (name, ids) => {
+      for (const k of acronyms(name)) {
+        const m = auto.get(k) || auto.set(k, new Map()).get(k);
+        m.set(norm(name), [...(m.get(norm(name)) || []), ...ids]);
+      }
+    };
+    for (const [key, list] of this.cycleIds || []) {
+      const info = this.cycleInfo.get(key) || {};
+      for (const name of new Set([info.name, info.uk].filter(Boolean))) put(name, list.map((x) => x.id));
+    }
+    const shelved = new Set([...this.entries.values()].flatMap((e) => Object.keys(e)).map((i) => this.canonical(i)));
+    // The title without building the whole book: a few thousand of them every ten minutes.
+    const seedTitle = new Map(this.seedBooks.map((b) => [b.id, b.title]));
+    for (const id of shelved) put(this.edits()[id]?.title || this.lib.books[id]?.title || this.shelfItems.get(id)?.item.title || seedTitle.get(id), [id]);
+    const acr = new Map();
+    for (const [k, names] of auto) if (names.size <= 3) acr.set(k, [...new Set([...names.values()].flat())]);
+    return (this.aliasIdx = { query, own, acr, at: Date.now() });
+  }
+  aliasQuery(q) {
+    return this.searchAliases().query.get(aliasKey(q)) || "";
+  }
+
+  search(q, { reader = null, limit = 40, alias = true } = {}) {
     const terms = norm(q).split(" ").filter(Boolean);
     if (!terms.length) return [];
+    if (alias) {
+      // A short name: its books go first (after a book of that very title), then what the words find.
+      const { own, acr } = this.searchAliases();
+      const key = aliasKey(q);
+      const to = this.aliasQuery(q);
+      const mine = own.get(key) || [];
+      const guessed = key.length >= 3 ? acr.get(key) || [] : [];
+      if (to || mine.length || guessed.length) {
+        const out = this.search(q, { reader, limit, alias: false });
+        const byId = new Map(out.map((h) => [h.book.id, h]));
+        // Named by hand: above the books whose words match. Guessed from first letters: just below them.
+        let n = 0;
+        const add = (b, top) => {
+          if (!b || isRussian(b)) return;
+          const score = (top ? 900 : 450) - n++;
+          const h = byId.get(b.id);
+          if (h) h.score = Math.max(h.score, score);
+          else byId.set(b.id, { book: b, entry: reader ? this.sharedEntry(reader, b.id) : null, score });
+        };
+        for (const h of to ? this.search(to, { reader, limit, alias: false }) : []) add(h.book, true);
+        for (const id of mine) add(this.book(id), true);
+        for (const id of guessed) add(this.book(id), false);
+        return [...byId.values()].sort((a, b) => b.score - a.score).slice(0, limit);
+      }
+    }
     let rows = this.db
       .prepare("SELECT id FROM search WHERE search MATCH ? ORDER BY bm25(search, 0, 10, 10, 5, 4, 1) LIMIT ?")
       .all(terms.map((t) => `"${t.replace(/"/g, "")}"*`).join(" "), limit * 2);
@@ -1480,12 +1560,12 @@ class Store {
         cur ? result.updated++ : result.added++;
       }
     });
+    if (rows.some((r) => r.cycle)) this.linkCycles();
     if (result.created.length) {
       this._works = null;
       this.indexSlugs();
       this.indexSearch();
     }
-    if (rows.some((r) => r.cycle)) this.linkCycles();
     return result;
   }
 
