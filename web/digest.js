@@ -27,6 +27,9 @@ const MAX_WANT = 6;
 const WANT_LOOKUPS = 30; // how many «хочу прочитати» books get a library lookup per letter
 
 // Who gets Max's text (the others still get their letter when their shelves have news, without it).
+// The readers' Telegram group (Max, 2026-10-23: «давай додамо десь лінк на групу в тг»), the welcome letter's link.
+const TELEGRAM = "https://t.me/+dUhn-l9grTQ4NDky";
+
 const AUDIENCES = {
   all: "усім, хто не відписався",
   books: "тим, у кого на полиці є хоч одна книжка",
@@ -338,7 +341,7 @@ class Digest {
       html.push(`<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse:collapse;margin-top:6px">${nums.map(([n, l, sub]) => `<tr><td style="padding:7px 14px 7px 0;width:1%;white-space:nowrap;text-align:right;font-family:'Source Serif 4',Georgia,serif;font-size:22px;color:#1b1a17;vertical-align:baseline">${n}</td><td style="padding:7px 0;font-size:15px;color:#3d3a33;vertical-align:baseline">${l}${sub ? ` <span style="color:#6b675f;font-size:13px">· ${sub}</span>` : ""}</td></tr>`).join("")}</table>`);
       text.push("CHYTAI ЗА ТИЖДЕНЬ", ...nums.map(([n, l, sub]) => `${n} ${l}${sub ? ` (${sub})` : ""}`), "");
     }
-    text.push("—", "Цей лист приходить раз на тиждень, у п'ятницю вранці, і лише коли є що розповісти.", `Відписатися: ${unsub}`, `Налаштування: ${site}/settings/mail`);
+    text.push("—", `Група читачів Chytai у Telegram: ${TELEGRAM}`, "", "Цей лист приходить раз на тиждень, у п'ятницю вранці, і лише коли є що розповісти.", `Відписатися: ${unsub}`, `Налаштування: ${site}/settings/mail`);
 
     const page = `<!doctype html><html lang="uk"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="color-scheme" content="light"><title>${esc(subject)}</title></head>
 <body style="margin:0;background:#f7f4ee;color:#1b1a17;font-family:Onest,-apple-system,BlinkMacSystemFont,'Helvetica Neue',Arial,sans-serif;-webkit-font-smoothing:antialiased">
@@ -351,6 +354,7 @@ class Digest {
   <p style="color:#3d3a33;font-size:15px;line-height:1.5;margin:0 0 26px">${esc(lead)}</p>` : ""}
   ${html.join("\n")}
   <div style="border-top:1px solid #1b1a17;margin-top:36px;padding-top:14px;font-size:12px;line-height:1.6;color:#6b675f">
+    <div style="font-size:14px;color:#1b1a17;margin-bottom:10px"><a href="${TELEGRAM}" style="color:#1b1a17">Група читачів Chytai у Telegram</a></div>
     Цей лист приходить раз на тиждень, у п'ятницю вранці, і лише коли є що розповісти.<br>
     <a href="${attr(unsub)}" style="color:#6b675f">Відписатися</a> · <a href="${site}/settings/mail" style="color:#6b675f">Налаштування</a> · <a href="${site}" style="color:#6b675f">chytai.org.ua</a>
   </div>
