@@ -65,6 +65,8 @@ main.home { padding-top: 56px; }
 .label .aside { font-size: 13px; color: var(--muted); text-align: right; }
 .label .aside a { text-decoration: underline; text-decoration-color: var(--under); text-underline-offset: 3px; }
 .kicker { font: 600 12px/1.4 var(--sans); text-transform: uppercase; letter-spacing: 0.14em; color: var(--accent); margin-bottom: 10px; }
+.kicker a { color: inherit; text-decoration: none; border-bottom: 1px solid color-mix(in srgb, var(--accent) 35%, transparent); }
+.kicker a:hover { border-bottom-color: var(--accent); }
 .crumbs { font-size: 13px; color: var(--muted); margin-bottom: 18px; }
 .crumbs a { text-decoration: underline; text-decoration-color: var(--under); text-underline-offset: 3px; }
 .page-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 32px; margin-bottom: 48px; }

@@ -724,6 +724,42 @@ app.get("/me/book/:id", signed, (req, res) => {
 });
 
 app.get("/popular", (req, res) => res.send(pages.popularPage({ user: req.user, pop: social.popular() })));
+// A genre's books (/genre/biohrafii, the label on a book page): what readers have and rate first, then the
+// rest with Ukrainian titles and covers ahead. Kept ten minutes per genre: it looks at every book of it.
+const genreCache = new Map();
+function genreList(g) {
+  const hit = genreCache.get(g);
+  if (hit && Date.now() - hit.at < 10 * 60 * 1000) return hit.out;
+  const by = new Map(); // work -> { readers, sum, rated }
+  for (const { reader, id, entry: e } of social.all()) {
+    const k = store.canonical(id);
+    const x = by.get(k) || by.set(k, { readers: new Set(), sum: 0, rated: 0 }).get(k);
+    x.readers.add(reader.id);
+    if (e.rating != null) (x.sum += e.rating), x.rated++;
+  }
+  const rows = [];
+  for (const id of store.genreBooks(g)) {
+    const book = store.book(id);
+    if (!book) continue;
+    const x = by.get(id);
+    rows.push({ book, readers: x?.readers.size || 0, rated: x?.rated || 0, avg: x?.rated ? Math.round((x.sum / x.rated) * 10) / 10 : null, uk: /[а-яіїєґ]/i.test(book.title) });
+  }
+  rows.sort((a, b) => b.readers - a.readers || (b.avg ?? 0) - (a.avg ?? 0) || b.uk - a.uk || !!b.book.cover - !!a.book.cover || a.book.title.localeCompare(b.book.title, "uk"));
+  const top = rows.filter((r) => r.avg >= 4).sort((a, b) => b.avg - a.avg || b.rated - a.rated).slice(0, 6);
+  const out = { rows, top, works: new Set(rows.filter((r) => r.readers).map((r) => r.book.id)) };
+  genreCache.set(g, { at: Date.now(), out });
+  return out;
+}
+app.get("/genre/:slug", (req, res) => {
+  const slug = req.params.slug;
+  const g = store.genreBySlug(slug) || store.genreBySlug(slugify(slug));
+  if (!g) return res.status(404).send(pages.messagePage({ title: "Немає такого жанру", text: "", user: req.user }));
+  if (slugify(g) !== slug) return res.redirect(301, `/genre/${slugify(g)}`);
+  const { rows, top, works } = genreList(g);
+  const shown = rows.map((r) => ({ ...r, book: bookFor(req, r.book, false) })).filter((r) => r.book);
+  const others = pages.GENRES.filter((x) => x !== g).map((x) => [x, store.genreBooks(x).length]).filter(([, n]) => n);
+  res.send(pages.genrePage({ genre: g, rows: shown, top, feed: social.feed({ limit: 6, books: works, notes: true }), others, user: req.user }));
+});
 
 app.get("/publishers", (req, res) => {
   res.send(pages.publishersPage({ user: req.user, shelves: shelvesFor(req).map((s) => shelfSummary(req, s, 4)).sort((a, b) => b.fresh - a.fresh), libraries: librariesFor(req) }));

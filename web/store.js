@@ -747,9 +747,12 @@ class Store {
       this.aliasIdx = null;
       const add = db.prepare("INSERT INTO search (id, title, alt, author, series, extra) VALUES (?, ?, ?, ?, ?, ?)");
       const tri = db.prepare("INSERT INTO search_tri (id, text) VALUES (?, ?)");
+      const genres = new Map(); // our genre -> the works with it, for /genre/<slug>
+      this.genreIdx = genres;
       for (const id of ids) {
         const b = this.book(id);
         if (!b) continue;
+        if (!isRussian(b)) for (const g of b.tags || []) if (OUR_GENRES.has(g)) (genres.get(g) || genres.set(g, []).get(g)).push(id);
         const uk = this.ukTitles?.[id];
         const extra = [...(b.editions || []).map((e) => [e.title, e.altTitle, e.author, e.isbn].filter(Boolean).join(" ")), uk ? `${uk.uk} ${uk.ukAuthor}` : "", ...isbnsOf(b)].join(" ");
         // The series' own name too («Dungeon Crawler Carl» finds every volume), and the owner's other names.
@@ -1210,6 +1213,14 @@ class Store {
         if (si !== head) this.hidden.add(si.item.id);
       }
     }
+  }
+
+  // The works of one of our genres (built with the search index), and the genre a /genre/<slug> names.
+  genreBooks(g) {
+    return this.genreIdx?.get(g) || [];
+  }
+  genreBySlug(slug) {
+    return [...OUR_GENRES].find((g) => slugify(g) === slug) || "";
   }
 
   canonical(id) {

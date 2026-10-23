@@ -33,6 +33,7 @@ const COPY = { paper: "На папері", ebook: "E-book", seeking: "Шукаю
 // What a reader did, as the feed says it: «Оля К. оцінка ★★★★», «Андрій читає».
 const VERB = { read: "прочитано", reading: "читає", want: "хоче прочитати", abandoned: "покинуто" };
 const GENRES = ["художня", "фантастика", "фентезі", "детективи", "трилери", "жахи", "любовні романи", "класика", "поезія", "дитячі", "підліткові", "комікси", "бізнес", "компанії", "менеджмент", "продукт", "гроші", "розробка", "історія", "війна", "біографії", "наука", "психологія", "філософія", "здоров'я", "подорожі", "саморозвиток", "суспільство"];
+const genreSlug = (g) => require("./store").slugify(g);
 const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
 const CYR = /[а-яіїєґ]/i;
 // Is the book in Ukrainian? A reader's own books can be in any language («Ненасильственное общение»,
@@ -430,7 +431,9 @@ function ukForm(book, state, error) {
 
 function bookPage({ lists = [], myLists = null, book, entry, now = false, user, shelf, inLibrary = new Map(), readers = [], also = [], alsoTitle = "Читали це, сподобалось і це", writings = [], reviewError = "", editionError = "", ukAsk = null, readUrl = "", freeRead = false, advice = null, overview = null, overviewVote = null }) {
   const s = statsOf(book.id);
-  const kicker = [book.tags?.find((t) => t !== "українською"), isUk(book) ? "українською" : LANG_ADV[String(book.language || "").toLowerCase()] || ""].filter(Boolean).map(cap).join(" · ");
+  // The genre leads to its page (/genre/biohrafii; Max 2026-10-23), when it is one of ours.
+  const genre = book.tags?.find((t) => t !== "українською");
+  const kicker = [genre ? (GENRES.includes(genre) ? `<a href="/genre/${attr(genreSlug(genre))}">${esc(cap(genre))}</a>` : esc(cap(genre))) : "", isUk(book) ? "Українською" : esc(cap(LANG_ADV[String(book.language || "").toLowerCase()] || ""))].filter(Boolean).join(" · ");
   const sub = [book.altTitle ? esc(book.altTitle) : "", book.author ? `<span class="authors">${authorLinks(book.author)}</span>` : "", book.published ? String(book.published) : "", book.pages ? `${book.pages} с.` : ""].filter(Boolean).join(" · ");
   // «Дочитали 12, покинули 3»: only once someone gave up, and only numbers.
   const bits = [s.avg != null ? `${stars(s.avg, { num: false })} <b>${uk(s.avg.toFixed(1))}</b> від ${count(s.rated, "читача", "читачів", "читачів")}` : "", s.want ? `${s.want} ${plural(s.want, "хоче", "хочуть", "хочуть")} прочитати` : "", s.dropped ? `дочитали ${s.finished || 0}, покинули ${s.dropped}` : ""].filter(Boolean);
@@ -443,7 +446,7 @@ function bookPage({ lists = [], myLists = null, book, entry, now = false, user, 
       <div class="book-cover">${cover(book, "xl")}</div>
       <div class="book-main">
         ${shelf ? `<p class="crumbs"><a href="/publishers/${attr(shelf.id)}">${esc(shelf.name)}</a></p>` : ""}
-        ${kicker ? `<p class="kicker">${esc(kicker)}</p>` : ""}
+        ${kicker ? `<p class="kicker">${kicker}</p>` : ""}
         <h1>${esc(book.title)}</h1>
         ${sub ? `<p class="book-by">${sub}</p>` : ""}
         ${score}
@@ -1118,6 +1121,44 @@ ${sections.length ? "" : `<p class="muted">Поки замало читачів,
   return layout({ title: "Популярне", body, user, path: "/popular", canonical: "/popular", description: "Що читають, хочуть прочитати й найвище оцінюють читачі Chytai." });
 }
 
+// ---- a genre (/genre/<slug>) ----
+
+// One genre's books: the ones readers rate best, then all of them, the ones on readers' shelves first;
+// what readers wrote about them on the side, and the other genres (Max, 2026-10-23).
+function genrePage({ genre, rows, top, feed, others, user }) {
+  const CAP = 600; // a page of «художня» would be thousands of cards; search finds the rest
+  const shelved = rows.filter((r) => r.readers).length;
+  // The best rated stand above, so the list below goes on from where they end.
+  const shownTop = top.length >= 3 ? top : [];
+  const above = new Set(shownTop.map((x) => x.book.id));
+  const rest = rows.filter((r) => !above.has(r.book.id));
+  const body = `
+${pageHead({ kicker: "Жанр", title: esc(cap(genre)), sub: [books(rows.length), shelved ? `${shelved} на полицях читачів` : ""].filter(Boolean).join(" · ") })}
+${shownTop.length ? `<section class="block">
+  ${label("Найвище оцінені читачами")}
+  <div class="grid six">${shownTop.map((x) => card(x.book, { avg: x.avg, extra: `<p class="meta pop-n">${count(x.rated, "оцінка", "оцінки", "оцінок")}</p>` })).join("")}</div>
+</section>` : ""}
+<div class="split">
+  <section class="block" id="catalog">
+    ${label(shownTop.length ? `Ще в жанрі · ${rest.length}` : `Усі книжки · ${rest.length}`, "спершу ті, що є в читачів")}
+    <div class="shelf-tools">
+      <input type="search" id="q" placeholder="назва або автор" autocomplete="off">
+    </div>
+    <div class="grid four" id="rows">
+${rest.slice(0, CAP).map((r) => card(r.book, { avg: r.avg ?? undefined, data: ` data-search="${attr([r.book.title, r.book.author, r.book.authorOrig, r.book.altTitle].join(" ").toLowerCase())}"` })).join("\n")}
+    </div>
+    <p class="empty hidden" id="empty">Нічого не знайшлося.</p>
+    <p class="more hidden"><button type="button" class="text-link" id="more">Показати ще <span></span> →</button></p>
+    ${rest.length > CAP ? `<p class="muted small end-note">Тут ${CAP} перших. Решту знайде <a class="text-link" href="/search">пошук</a>.</p>` : ""}
+  </section>
+  <aside>
+    ${feed.length ? `${label("Читачі про ці книжки")}${feedList(feed)}` : ""}
+    ${others.length ? `${label("Інші жанри")}<div class="others-list">${others.map(([g, n]) => `<a href="/genre/${attr(genreSlug(g))}"><b>${esc(cap(g))}</b><span>${books(n)}</span></a>`).join("")}</div>` : ""}
+  </aside>
+</div>`;
+  return layout({ title: cap(genre), body, user, path: "/genre", canonical: `/genre/${genreSlug(genre)}`, description: `${cap(genre)} на Chytai: ${books(rows.length)}, оцінки й нотатки читачів.` });
+}
+
 // ---- readers (/community) ----
 
 // The note on a reader's card is their latest one and is often about another book than «зараз читає»,
@@ -1232,7 +1273,7 @@ function searchResults({ q, user, hits = [], authors = [], readers = [], shelves
   const n = hits.length + authors.length + readers.length + shelves.length;
   const addLink = user ? `<a class="text-link" href="/add?text=${attr(encodeURIComponent(q))}">Додати книжку, якої ще немає на Chytai</a>` : "";
   if (!n) return `<p class="found">Нічого не знайшлося за «${esc(q)}». ${addLink}</p>`;
-  return `<p class="found">${count(n, "збіг", "збіги", "збігів")}${tag ? ` · жанр «${esc(tag)}»` : ""}</p>
+  return `<p class="found">${count(n, "збіг", "збіги", "збігів")}${tag ? ` · жанр «${GENRES.includes(tag) ? `<a class="text-link" href="/genre/${attr(genreSlug(tag))}">${esc(tag)}</a>` : esc(tag)}»` : ""}</p>
 <div class="split">
   <div>
     ${shelves.length ? `<section class="block">${label(`Видавництва · ${shelves.length}`)}<div class="name-rows">${shelves.map((s) => `<a class="name-row" href="/publishers/${attr(s.shelf.id)}"><b>${esc(s.shelf.name)}</b><span>${[books(s.total), s.shelf.tagline ? esc(s.shelf.tagline) : ""].filter(Boolean).join(" · ")}</span></a>`).join("")}</div></section>` : ""}
@@ -1945,7 +1986,7 @@ module.exports = {
   decidedList,
   welcomePage,
   addPage, addReviewPage, addFindResults, addPageResult, ukFindPage,
-  layout, homePage, bookPage, bookEditPage, russianPage, editPage, libraryPage, readersPage, popularPage, publishersPage, publisherPage, searchPage, searchResults, authorPage,
+  layout, homePage, bookPage, bookEditPage, russianPage, editPage, libraryPage, readersPage, popularPage, genrePage, publishersPage, publisherPage, searchPage, searchResults, authorPage,
   loginPage, codePage, signupPage, settingsPage, privacyPage, updatesPage, messagePage, digestPage, followMailPage, importPage, importPreviewPage, importDonePage,
-  esc, byline, STATUS, COPY, inline, isUk, setTitleLinks, setAuthorLinks, setStats, setReadersWithNote,
+  GENRES, esc, byline, STATUS, COPY, inline, isUk, setTitleLinks, setAuthorLinks, setStats, setReadersWithNote,
 };
