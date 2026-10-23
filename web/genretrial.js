@@ -15,7 +15,12 @@ const PRICE = { input: 0.1 / 1e6, output: 0.5 / 1e6 }; // $ per token, Haiku 5.5
 const SYSTEM = (genres) => `You sort books into the genres of Chytai, a Ukrainian book site. The genres, in Ukrainian:
 ${genres.join(", ")}
 
-For the book given, pick the one genre that fits it best, and a second one only when it clearly fits too. Use what you know about the book itself first; the shop shelves and subjects given are noisy hints, not facts. «художня» is for fiction that fits no more specific genre. A memoir or diary goes under «біографії» only when it is about a life; a travel or adventure memoir is «подорожі», a doctor's stories about medicine are «здоров'я». A literary classic is «класика», not «любовні романи». Children's and teen books are «дитячі» or «підліткові» whatever else they are.`;
+For the book given, pick the one genre that fits it best. Add a second one only when the whole book is also clearly that, not because of a theme it touches (a satire about a utopia is not «гроші»). Use what you know about the book itself first; the shop shelves and subjects given are noisy hints, not facts.
+- «художня» is only for fiction that fits no more specific genre, and never goes together with another fiction genre.
+- «класика» is only for the established canon, books read for generations; a recent novel, even one retelling a myth or a classic, is not «класика».
+- A memoir or diary goes under «біографії» only when it is about a life; a travel or adventure memoir is «подорожі», a doctor's stories about medicine are «здоров'я».
+- A literary classic is «класика», not «любовні романи».
+- Children's and teen books are «дитячі» or «підліткові» whatever else they are; a classic read at school is not a children's book.`;
 
 class GenreTrial {
   constructor({ store, social, db, apiKey, genres, log = () => {} }) {
