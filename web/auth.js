@@ -2,8 +2,12 @@
 // their e-mail, no passwords. Each reader has a public page /@<username> and a display name.
 //   - readers and sessions live in the database (db.js); the session cookie carries a random token
 //     whose hash is the sessions row, so a leaked database does not sign anyone in.
-//   - sign-in codes are six digits, kept in memory for ten minutes, five tries each; a few codes per
-//     address and per IP an hour. Without RESEND_API_KEY the code is printed to the log instead of
+//   - sign-in codes are six digits, good for ten minutes, five tries per address; a few codes per
+//     address and per IP an hour. They live in the database (login_codes, keyed by a hash of the
+//     address, no e-mail stored), not in memory: a deploy or restart in those ten minutes used to lose
+//     the code, and the reader got «Код застарів» a minute after the letter (2026-10-23). Every code
+//     still within its ten minutes works, so an earlier letter is fine after asking for a new one.
+//     The ticket after a code for a new address is signed, not stored, for the same reason. Without RESEND_API_KEY the code is printed to the log instead of
 //     mailed (local runs and the first days on prod).
 //   - the owner (reader id "owner", Max) existed before accounts: WEB_LOGIN_TOKEN's magic link still
 //     signs in as the owner, and the cookie it set before accounts keeps working, so nothing logs him out.
@@ -33,9 +37,9 @@ class Auth {
     this.from = from;
     this.resendKey = resendKey;
     this.log = log;
-    this.codes = new Map(); // email -> { hash, expires, tries }
     this.sent = new Map(); // email or ip -> [timestamps]
-    this.tickets = new Map(); // ticket -> { email, expires }: a verified e-mail that has no reader yet
+    // Signs tickets (a verified e-mail that has no reader yet); kept in meta so restarts keep them valid.
+    this.ticketKey = db.get("ticket_key") || (db.set("ticket_key", crypto.randomBytes(32).toString("hex")), db.get("ticket_key"));
     this.cache = new Map(); // session hash -> reader id
   }
 
@@ -227,12 +231,14 @@ class Auth {
   async sendCode(email, ip) {
     if (this.tooMany(`ip:${ip}`, PER_IP_HOUR) || this.tooMany(`email:${email}`, PER_EMAIL_HOUR)) return { error: "Забагато спроб. Спробуйте за годину." };
     const code = String(crypto.randomInt(0, 1000000)).padStart(6, "0");
-    this.codes.set(email, { hash: sha(`${email}:${code}`), expires: Date.now() + CODE_TTL, tries: 0 });
+    const hash = sha(`${email}:${code}`);
+    this.db.prepare("DELETE FROM login_codes WHERE expires < ?").run(Date.now());
+    this.db.prepare("INSERT INTO login_codes (key, hash, expires) VALUES (?, ?, ?)").run(sha(`code:${email}`), hash, Date.now() + CODE_TTL);
     try {
       await this.mail(email, code);
     } catch (e) {
       this.log(`mail to ${email} failed: ${e.message}`);
-      this.codes.delete(email);
+      this.db.prepare("DELETE FROM login_codes WHERE hash = ?").run(hash);
       return { error: "Не вдалося надіслати лист. Спробуйте ще раз трохи згодом." };
     }
     return { ok: true };
@@ -240,26 +246,38 @@ class Auth {
 
   // Check the code. Returns { reader } for a known address, { ticket } for a new one, or { error }.
   verify(email, code) {
-    const c = this.codes.get(email);
-    if (!c || c.expires < Date.now()) return { error: "Код застарів. Запросіть новий." };
-    if (++c.tries > CODE_TRIES) return (this.codes.delete(email), { error: "Забагато спроб. Запросіть новий код." });
-    if (c.hash !== sha(`${email}:${String(code).replace(/\D/g, "")}`)) return { error: "Код не підходить." };
-    this.codes.delete(email);
+    const key = sha(`code:${email}`);
+    const rows = this.db.prepare("SELECT hash, tries FROM login_codes WHERE key = ? AND expires >= ?").all(key, Date.now());
+    if (!rows.length) return { error: "Код застарів. Запросіть новий." };
+    if (rows.every((r) => r.tries >= CODE_TRIES)) return (this.db.prepare("DELETE FROM login_codes WHERE key = ?").run(key), { error: "Забагато спроб. Запросіть новий код." });
+    this.db.prepare("UPDATE login_codes SET tries = tries + 1 WHERE key = ?").run(key);
+    rows.splice(0, rows.length, ...rows.filter((r) => r.tries < CODE_TRIES));
+    const hash = sha(`${email}:${String(code).replace(/\D/g, "")}`);
+    if (!rows.some((r) => r.hash === hash)) return { error: "Код не підходить." };
+    this.db.prepare("DELETE FROM login_codes WHERE key = ?").run(key);
     const reader = this.byEmail(email);
     if (reader) return { reader };
-    const ticket = crypto.randomBytes(16).toString("hex");
-    this.tickets.set(ticket, { email, expires: Date.now() + CODE_TTL });
-    return { ticket };
+    const body = Buffer.from(JSON.stringify({ email, expires: Date.now() + CODE_TTL })).toString("base64url");
+    return { ticket: `${body}.${this.signTicket(body)}` };
+  }
+  signTicket(body) {
+    return crypto.createHmac("sha256", this.ticketKey).update(body).digest("base64url");
   }
   // The e-mail a ticket stands for, while it lasts.
   ticketEmail(ticket) {
-    const t = ticket && this.tickets.get(ticket);
-    if (!t || t.expires < Date.now()) return null;
-    return t.email;
+    const [body, sig] = String(ticket || "").split(".");
+    if (!body || !sig) return null;
+    const want = Buffer.from(this.signTicket(body));
+    if (want.length !== Buffer.from(sig).length || !crypto.timingSafeEqual(want, Buffer.from(sig))) return null;
+    try {
+      const t = JSON.parse(Buffer.from(body, "base64url").toString());
+      return t.expires >= Date.now() ? t.email : null;
+    } catch {
+      return null;
+    }
   }
-  useTicket(ticket) {
-    this.tickets.delete(ticket);
-  }
+  // Nothing to forget: once the reader exists, signup with the same ticket just signs them in.
+  useTicket() {}
 
   async mail(email, code) {
     const subject = `${code} — код для входу в Chytai`;
