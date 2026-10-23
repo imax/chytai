@@ -49,6 +49,11 @@ const cleanTitle = (t) =>
     .replace(/\s*\(([^()]*#\s*\d[^()]*|[^()]*,\s*(book|vol\.?|volume|частина|книга|том)\s*\d+[^()]*)\)\s*$/i, "")
     .replace(/[\s\-–—:;,/]+$/u, "") // «Diary of Samuel Pepys - (…)» leaves its dash behind
     .trim();
+// «… (Dungeon Crawler Carl, #4)»: the series and the volume, so recommendations start it from book one.
+const seriesOf = (t) => {
+  const m = /\(([^()]+?),?\s*#\s*(\d+)\)\s*$/.exec(String(t || ""));
+  return m ? { name: m[1].trim(), n: Number(m[2]) } : null;
+};
 // A review is written in Goodreads' editor: <br/> for line breaks, sometimes <b> and <i>.
 const reviewText = (s) =>
   String(s || "")
@@ -92,6 +97,7 @@ function parseExport(text) {
       goodreadsId: get(r, "Book Id"),
       title,
       fullTitle: get(r, "Title"),
+      cycle: seriesOf(get(r, "Title")),
       author: get(r, "Author").replace(/\s+/g, " "),
       isbns: [isbnOf(get(r, "ISBN13")), isbnOf(get(r, "ISBN"))].filter((x) => x.length >= 10),
       status: statusOf(shelf, get(r, "Bookshelves")),

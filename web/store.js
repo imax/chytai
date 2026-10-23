@@ -309,7 +309,82 @@ class Store {
     }
     for (const [a, b] of pairs) link(this.slugs.get(a) || a, this.slugs.get(b) || b);
     for (const [a, b] of this.decisions().translations) link(a, b); // the owner's pairs from /admin/dupes
+    this.linkCycles();
     this.authors = require("./authors").build(this);
+  }
+
+  // A book's place in a series, for recommendations and the book page (Max, 2026-10-23: «ніхто не почне
+  // рандомно читати шосту книгу з 8»). From Wikidata (wikidata.seriesOf, meta `wikidata:series`), a Goodreads
+  // title «(Dungeon Crawler Carl, #4)» kept at import (`cycle` on the book), and the numbered volumes of a
+  // shop's shelf (linkSeries). A translation is in its original's series at the same place.
+  linkCycles() {
+    const wd = JSON.parse(this.db.get("wikidata:series") || "{}");
+    this.cycles = new Map(); // work id -> { key, n }
+    this.cycleInfo = new Map(); // key -> { name, uk, members: [{ n, en, uk }] } (members from Wikidata only)
+    this.cycleIds = new Map(); // key -> [{ n, id }] by n
+    const set = (id, key, n) => {
+      id = this.canonical(id);
+      if (n > 0 && !this.cycles.has(id)) this.cycles.set(id, { key, n });
+    };
+    const byName = new Map();
+    for (const [qid, s] of Object.entries(wd.series || {})) {
+      this.cycleInfo.set(qid, s);
+      for (const name of [s.name, s.uk]) if (name) byName.set(norm(name), qid);
+    }
+    for (const [id, { qid, n }] of Object.entries(wd.books || {})) set(id, qid, n);
+    for (const b of Object.values(this.lib.books)) {
+      if (!b.cycle?.n) continue;
+      const key = byName.get(norm(b.cycle.name)) || `goodreads:${norm(b.cycle.name)}`;
+      if (!this.cycleInfo.has(key)) this.cycleInfo.set(key, { name: b.cycle.name, members: [] });
+      set(b.id, key, b.cycle.n);
+    }
+    for (const ser of new Set(this.series?.values() || [])) {
+      for (const { item } of ser.items) if (!item.bundle) set(item.id, `shelf:${ser.head}`, item.volume);
+      if (!this.cycleInfo.has(`shelf:${ser.head}`)) this.cycleInfo.set(`shelf:${ser.head}`, { name: ser.name, members: [] });
+    }
+    for (const [id, c] of [...this.cycles]) for (const t of this.translations.get(id) || []) set(t, c.key, c.n);
+    for (const [id, c] of this.cycles) (this.cycleIds.get(c.key) || this.cycleIds.set(c.key, []).get(c.key)).push({ n: c.n, id });
+    // Of two books at one place (an original and its translation) the Ukrainian one comes first.
+    const uk = (id) => (/[а-яіїєґ]/i.test(this.lib.books[id]?.title || this.shelfItems.get(id)?.item.title || "") ? 0 : 1);
+    for (const list of this.cycleIds.values()) list.sort((a, b) => a.n - b.n || uk(a.id) - uk(b.id));
+  }
+
+  // The series key of a book, or "".
+  cycleKey(id) {
+    return this.cycles?.get(this.canonical(id))?.key || "";
+  }
+
+  // The book to recommend in place of this one: itself unless it is a later volume of a series, then the
+  // series' first book, or null when we don't have the first one (nobody starts a series at book six).
+  // For a reader who has some of it (`own`, canonical ids), the first volume they don't have yet.
+  seriesStart(id, own = null) {
+    id = this.canonical(id);
+    const c = this.cycles?.get(id);
+    if (!c || (c.n === 1 && !own)) return id;
+    const list = this.cycleIds.get(c.key);
+    if (list[0].n !== 1) return null;
+    if (!own) return list[0].id;
+    const had = new Set(list.filter((x) => own.has(x.id)).map((x) => x.n));
+    return list.find((x) => !had.has(x.n))?.id || null;
+  }
+
+  // For the book page: the series and every volume of it we know of, in order, with our page when we have one.
+  cycleOf(id) {
+    const c = this.cycles?.get(this.canonical(id));
+    if (!c) return null;
+    const info = this.cycleInfo.get(c.key) || { name: "", members: [] };
+    const ours = new Map();
+    for (const x of this.cycleIds.get(c.key)) if (!ours.has(x.n)) ours.set(x.n, x.id);
+    const ns = [...new Set([...info.members.map((m) => m.n), ...ours.keys()])].sort((a, b) => a - b);
+    // A volume we don't have is named in the language of the book the page is about.
+    const cyr = /[а-яіїєґ]/i.test(this.book(id)?.title || "");
+    const items = ns.map((n) => {
+      const id = ours.get(n);
+      const b = id && this.book(id);
+      const m = info.members.find((x) => x.n === n);
+      return { n, title: b?.title || (cyr ? m?.uk || m?.en : m?.en || m?.uk) || "", href: b?.href || "", id: b?.id || "" };
+    });
+    return { key: c.key, name: (cyr && info.uk) || info.name, n: c.n, items: items.filter((x) => x.title) };
   }
 
   // Titles of known books mentioned in a note become links (Max, 2026-10-19: «Див також Circe» ->
@@ -1124,7 +1199,7 @@ class Store {
     // not as an edition either (MEGOGO Books gives «Марсіанин» the original title, so it joins The Martian).
     const uk = (b && this.ukTitles?.[b.id]?.uk) || "";
     const inCatalog = translations?.length || (b?.editions || []).some((e) => norm(e.title) === norm(uk) || /[а-яіїєґ]/i.test(e.title));
-    return b && { ...b, translations, ukTitle: inCatalog ? "" : uk };
+    return b && { ...b, translations, ukTitle: inCatalog ? "" : uk, cycle: this.cycleOf(b.id) };
   }
 
   fromShelfItem(shelf, it) {
@@ -1215,10 +1290,11 @@ class Store {
     this.db.tx(() => {
       for (const r of rows) {
         let id = r.id && this.book(r.id) ? this.canonical(r.id) : null;
+        if (id && r.cycle && this.lib.books[id] && !this.lib.books[id].cycle) (this.lib.books[id].cycle = r.cycle), this.writeBook(id);
         if (!id) {
           id = slugify(r.title);
           while (this.book(id)) id += "-2";
-          this.lib.books[id] = { id, title: r.title.trim(), author: (r.author || "").trim(), cover: "", tags: [], links: [], source, ...(r.isbns?.length ? { isbns: r.isbns } : {}), ...(r.cover ? { cover: r.cover } : {}), ...(r.ol ? { ol: r.ol } : {}), ...(r.published ? { published: r.published } : {}), ...(r.blurb ? { blurb: r.blurb, blurbSource: r.blurbSource || "" } : {}), ...(r.pages ? { pages: r.pages } : {}), ...(r.links?.length ? { links: r.links } : {}), ...(r.goodreadsId ? { goodreads: r.goodreadsId } : {}), ...(r.appleId ? { apple: r.appleId } : {}) };
+          this.lib.books[id] = { id, title: r.title.trim(), author: (r.author || "").trim(), cover: "", tags: [], links: [], source, ...(r.isbns?.length ? { isbns: r.isbns } : {}), ...(r.cover ? { cover: r.cover } : {}), ...(r.ol ? { ol: r.ol } : {}), ...(r.published ? { published: r.published } : {}), ...(r.blurb ? { blurb: r.blurb, blurbSource: r.blurbSource || "" } : {}), ...(r.pages ? { pages: r.pages } : {}), ...(r.links?.length ? { links: r.links } : {}), ...(r.goodreadsId ? { goodreads: r.goodreadsId } : {}), ...(r.cycle ? { cycle: r.cycle } : {}), ...(r.appleId ? { apple: r.appleId } : {}) };
           this.writeBook(id);
           result.created.push(this.lib.books[id]);
         }
@@ -1237,6 +1313,7 @@ class Store {
       this.indexSlugs();
       this.indexSearch();
     }
+    if (rows.some((r) => r.cycle)) this.linkCycles();
     return result;
   }
 

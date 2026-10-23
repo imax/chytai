@@ -161,8 +161,30 @@ class Social {
     return out;
   }
 
+  // A recommendation list read the way people read series (Max, 2026-10-23): a later volume gives way to the
+  // series' first book (or goes, when we don't have it), one book per series, and nothing from the series
+  // of the books it starts from. `list` holds ids, or rows with a `book` when `row` makes a row for an id.
+  // With `own` (a reader's books) a series they have started gives the first volume they don't have.
+  bySeries(list, from = [], { row = null, own = null } = {}) {
+    const s = this.store;
+    const used = new Set(from.map((id) => s.cycleKey(id)).filter(Boolean));
+    const seen = new Set(from.map((id) => s.canonical(id)));
+    const out = [];
+    for (const x of list) {
+      const id = row ? x.book.id : x;
+      const start = s.seriesStart(id, own);
+      if (!start || seen.has(start)) continue;
+      const key = s.cycleKey(start);
+      if (key && used.has(key)) continue;
+      if (key) used.add(key);
+      seen.add(start);
+      out.push(start === s.canonical(id) ? x : row ? row(start, x) : start);
+    }
+    return out;
+  }
+
   // «Якщо сподобалась X»: well rated books sharing most of X's tags, X itself and `skip` left out.
-  similar(ids, { limit = 6, skip = new Set() } = {}) {
+  similar(ids, { limit = 6, skip = new Set(), own = null } = {}) {
     const want = new Map();
     for (const id of ids) for (const t of tagsOf(this.store.book(id))) want.set(t, (want.get(t) || 0) + 1);
     if (!want.size) return [];
@@ -172,7 +194,9 @@ class Social {
       const shared = tagsOf(x.book).reduce((s, t) => s + (want.get(t) || 0), 0);
       if (shared) out.push({ ...x, score: shared * 10 + x.avg + Math.random() });
     }
-    return out.sort((a, b) => b.score - a.score).slice(0, limit);
+    out.sort((a, b) => b.score - a.score);
+    const book = (id, x) => ({ ...x, book: this.store.book(id) });
+    return this.bySeries(out, ids, { row: book, own }).filter((x) => x.book && !skip.has(x.book.id)).slice(0, limit);
   }
 
   // Three books to start recommendations from: the reader's own latest fives, or for a guest (or a
@@ -196,12 +220,10 @@ class Social {
       const shared = m.has(id) ? 0 : tagsOf(this.store.book(id)).filter((t) => tags.has(t)).length * 2;
       m.set(id, (m.get(id) || Math.random()) + 1 + shared);
     }
-    const out = [...m].sort((a, b) => b[1] - a[1]).map(([id]) => this.store.book(id)).filter(Boolean).slice(0, limit);
-    if (out.length < limit) {
-      const have = new Set([...out.map((b) => b.id), ...skip]);
-      out.push(...this.similar(ids, { limit: limit - out.length, skip: have }).map((x) => x.book));
-    }
-    return out;
+    const pick = (list) => this.bySeries(list, ids).filter((id) => !skip.has(id) && this.store.book(id)).slice(0, limit);
+    let out = pick([...m].sort((a, b) => b[1] - a[1]).map(([id]) => id));
+    if (out.length < limit) out = pick([...out, ...this.similar(ids, { limit: limit * 2, skip: new Set([...skip, ...out]) }).map((x) => x.book.id)]);
+    return out.map((id) => this.store.book(id));
   }
 
   // The same, and when that leaves room (a book nobody rated yet, with no genres: Max 2026-10-23, Піпс),
@@ -219,7 +241,10 @@ class Social {
       .map((i) => ({ book: this.store.book(i), avg: liked.get(i)?.avg ?? 0 }))
       .filter((x) => x.book)
       .sort((a, b) => b.avg - a.avg || !!b.book.cover - !!a.book.cover);
-    return [...out, ...more.slice(0, limit - out.length).map((x) => x.book)];
+    return this.bySeries([...out.map((b) => b.id), ...more.map((x) => x.book.id)], [id])
+      .slice(0, limit)
+      .map((i) => this.store.book(i))
+      .filter(Boolean);
   }
 }
 

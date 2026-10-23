@@ -437,7 +437,7 @@ app.post("/import/:source/apply", signed, importSource, async (req, res) => {
   // On the shelf they sit after what is already there: the read ones by date read, oldest first, then the rest by date added.
   const key = (r) => (r.read ? `0${r.read}` : `1${r.added || "9999"}`);
   chosen.sort((a, b) => key(a).localeCompare(key(b)));
-  const result = store.importEntries(req.user.id, chosen.map((r) => ({ id: r.match?.id || null, title: r.title, author: r.author, isbns: r.isbns, goodreadsId: r.goodreadsId, appleId: r.appleId, status: r.status, rating: r.rating, year: r.year, note: r.note, copy: r.copy, kids: r.kids, added: r.added, read: r.read, touched: r.touched, cover: r.cover, ol: r.ol, published: r.published, blurb: r.blurb, blurbSource: r.blurbSource, pages: r.pages, links: r.link ? [r.link] : [] })), { source: req.source });
+  const result = store.importEntries(req.user.id, chosen.map((r) => ({ id: r.match?.id || null, title: r.title, author: r.author, isbns: r.isbns, goodreadsId: r.goodreadsId, cycle: r.cycle, appleId: r.appleId, status: r.status, rating: r.rating, year: r.year, note: r.note, copy: r.copy, kids: r.kids, added: r.added, read: r.read, touched: r.touched, cover: r.cover, ol: r.ol, published: r.published, blurb: r.blurb, blurbSource: r.blurbSource, pages: r.pages, links: r.link ? [r.link] : [] })), { source: req.source });
   const name = IMPORTS[req.source].name;
   console.log(`${name} import @${req.user.username}: ${result.added} added, ${result.updated} updated, ${result.created.length} new books`);
   // New books by hand are mailed to the owner one by one; an import sends one letter with the list.
@@ -524,7 +524,7 @@ app.get("/", (req, res) => {
   if (req.query.q) return res.redirect(301, `/search?${new URLSearchParams({ q: String(req.query.q) })}`);
   const seeds = social.seeds(req.user?.id);
   const own = req.user ? new Map(Object.entries(store.entriesOf(req.user.id))) : new Set();
-  const recs = seeds.map((seed) => ({ seed, own: own.has(seed.id), books: social.similar([seed.id], { limit: 6, skip: own }) })).filter((r) => r.books.length);
+  const recs = seeds.map((seed) => ({ seed, own: own.has(seed.id), books: social.similar([seed.id], { limit: 6, skip: own, own }) })).filter((r) => r.books.length);
   // The two publishers with the most new books, subscriptions first.
   const showcase = shelvesFor(req)
     .map((s) => shelfSummary(req, s, 5))

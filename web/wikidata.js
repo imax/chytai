@@ -97,17 +97,82 @@ async function enTitles(books, { fetchImpl = fetch, log = () => {} } = {}) {
   return out;
 }
 
+// Series and the volume's number (Max, 2026-10-23: «ніхто не почне рандомно читати шосту книгу з 8»): the
+// works of the readers' authors that are part of a series (P179) with an ordinal (P1545), in English or
+// Ukrainian, so recommendations offer a series by its first book and a book page lists the volumes in order.
+// An edition (Q3331189) is skipped: Czech printings of «Відьмак» sit in a publisher's «Fantasy» series.
+// books: [{ id, title, author }] -> { books: { id: { qid, n } }, series: { qid: { name, uk, members: [{ n, en, uk }] } } }
+async function seriesQuery(names, fetchImpl) {
+  const values = names.map((a) => `${JSON.stringify(a)}@${isCyrillic(a) ? "uk" : "en"}`).join(" ");
+  const sparql = `SELECT ?name ?w ?t ?s ?sl ?su ?n WHERE { VALUES ?name { ${values} } ?a rdfs:label ?name. ?w wdt:P50 ?a; p:P179 ?st. ?st ps:P179 ?s; pq:P1545 ?n. FILTER NOT EXISTS { ?w wdt:P31 wd:Q3331189 } ?w rdfs:label ?t. FILTER(lang(?t) = "en" || lang(?t) = "uk") OPTIONAL { ?s rdfs:label ?sl. FILTER(lang(?sl) = "en") } OPTIONAL { ?s rdfs:label ?su. FILTER(lang(?su) = "uk") } }`;
+  const r = await fetchImpl(ENDPOINT, { method: "POST", headers: { ...HEADERS, "Content-Type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ query: sparql, format: "json" }), signal: AbortSignal.timeout(60000) });
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  const qid = (u) => u.slice(u.lastIndexOf("/") + 1);
+  return (await r.json()).results.bindings.map((b) => ({ name: b.name.value, w: qid(b.w.value), t: b.t.value, lang: b.t["xml:lang"], s: qid(b.s.value), sl: b.sl?.value || "", su: b.su?.value || "", n: Number(b.n.value) || 0 }));
+}
+async function seriesOf(books, { fetchImpl = fetch, log = () => {} } = {}) {
+  const named = books.filter((b) => b.title && firstAuthor(b.author));
+  const authors = [...new Set(named.map((b) => firstAuthor(b.author)))];
+  const works = new Map(); // wikidata work -> { en, uk, of: Map(series -> n) }
+  const series = new Map(); // series -> { name, uk }
+  const byTitle = new Map(); // author|norm(title) -> work
+  let answered = 0;
+  for (let i = 0; i < authors.length; i += 40) {
+    try {
+      for (const r of await seriesQuery(authors.slice(i, i + 40), fetchImpl)) {
+        if (!r.n || (!r.sl && !r.su)) continue;
+        const w = works.get(r.w) || works.set(r.w, { en: "", uk: "", of: new Map() }).get(r.w);
+        if (r.lang === "uk") w.uk = r.t.replace(/\s*\((роман|книга|повість|збірка)[^)]*\)\s*$/i, "");
+        else w.en = r.t;
+        w.of.set(r.s, r.n);
+        if (!series.has(r.s)) series.set(r.s, { name: r.sl || r.su, uk: r.su });
+        byTitle.set(`${r.name}|${norm(r.t)}`, r.w);
+      }
+      answered++;
+    } catch (e) {
+      log(`wikidata series: ${e.cause?.code || e.message}`);
+    }
+  }
+  if (authors.length && !answered) throw new Error("wikidata series: no answer"); // asked again on the next tick
+  // A work in several numbered series (Mistborn and the Cosmere, the Witcher and its saga) counts in the
+  // smallest one with two volumes or more: that is the reading order people mean.
+  const size = new Map();
+  for (const w of works.values()) for (const s of w.of.keys()) size.set(s, (size.get(s) || 0) + 1);
+  const out = { books: {}, series: {} };
+  const pick = (w) => [...w.of.keys()].filter((s) => size.get(s) >= 2).sort((a, b) => size.get(a) - size.get(b))[0];
+  for (const b of named) {
+    let wid = null;
+    for (const t of [b.title, mainTitle(b.title)]) if ((wid = byTitle.get(`${firstAuthor(b.author)}|${norm(t)}`))) break;
+    const s = wid && pick(works.get(wid));
+    if (!s) continue;
+    out.books[b.id] = { qid: s, n: works.get(wid).of.get(s) };
+    if (!out.series[s]) {
+      const members = [...works.values()].filter((w) => w.of.has(s)).map((w) => ({ n: w.of.get(s), en: w.en, uk: w.uk }));
+      out.series[s] = { ...series.get(s), members: members.sort((a, b) => a.n - b.n) };
+    }
+  }
+  log(`wikidata: ${Object.keys(out.books).length} books in ${Object.keys(out.series).length} series (${authors.length} authors)`);
+  return out;
+}
+
 // Look them up when the stored answer is older than a week; the store relinks translations after.
 async function refreshUk(store, opts = {}) {
   const at = Number(store.db.get("wikidata:at") || 0);
-  if (Date.now() - at < WEEK) return false;
+  if (Date.now() - at < WEEK) {
+    if (store.db.get("wikidata:series")) return false;
+    // The series came a few days after the titles (2026-10-23): asked once now, then with them weekly.
+    store.db.set("wikidata:series", JSON.stringify(await seriesOf([...store.seedBooks, ...Object.values(store.lib.books)], opts)));
+    store.linkTranslations();
+    return true;
+  }
   store.db.set("wikidata:at", String(Date.now())); // one attempt a week, even when it fails
   const books = [...store.seedBooks, ...Object.values(store.lib.books)];
   const found = await ukTitles(books, opts);
   store.db.set("wikidata:uk", JSON.stringify(found));
+  store.db.set("wikidata:series", JSON.stringify(await seriesOf(books, opts)));
   store.linkTranslations();
   store.indexSearch();
   return true;
 }
 
-module.exports = { ukTitles, enTitles, refreshUk, firstAuthor, mainTitle };
+module.exports = { ukTitles, enTitles, seriesOf, refreshUk, firstAuthor, mainTitle };

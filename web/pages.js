@@ -447,6 +447,7 @@ function bookPage({ book, entry, now = false, user, shelf, inLibrary = new Map()
       </div>
     </article>
     ${series(book, inLibrary)}
+    ${cycle(book, inLibrary)}
     ${first ? `<section class="block">
       ${label("У читачів")}
       ${first.entry.note ? quote(first, book.id) : ""}
@@ -665,6 +666,21 @@ function series(book, inLibrary) {
       return `<li class="${v.work === book.id ? "this" : ""}"><a href="${attr(v.href)}">${esc(name(v))}</a>${has?.status ? ` <span class="muted small">${STATUS[has.status].toLowerCase()}</span>` : ""}<span class="muted small">${esc(tail)}</span><a class="text-link small" href="${attr(v.links[0].url)}" target="_blank" rel="noopener">${esc(v.shelf.name)} ↗</a></li>`;
     })
     .join("")}</ul></section>`;
+}
+
+// A series known from Wikidata or a Goodreads title (store.cycleOf), when no shop's shelf lists its volumes:
+// the books in order, this one in bold, ours linked, the rest named so the reader sees where to start.
+function cycle(book, inLibrary) {
+  const c = book.cycle;
+  if (!c || book.series?.items || c.items.length < 2) return "";
+  const last = c.items.at(-1).n;
+  return `<section class="block series cycle">${label(`Серія «${esc(c.name)}»`, `книга ${c.n} з ${last}`)}<ol>${c.items
+    .map((v) => {
+      const has = v.id && inLibrary.get(v.id);
+      const name = v.href ? `<a href="${attr(v.href)}">${esc(v.title)}</a>` : `<span>${esc(v.title)}</span>`;
+      return `<li class="${v.n === c.n ? "this" : ""}"><span class="num">${v.n}</span>${name}${has?.status ? ` <span class="muted small">${STATUS[has.status].toLowerCase()}</span>` : ""}</li>`;
+    })
+    .join("")}</ol></section>`;
 }
 
 // /admin/dupes (owner): works that look like one book twice, for a human to judge (Max, 2026-10-21:
