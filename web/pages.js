@@ -463,11 +463,12 @@ function adviceHtml(a) {
 }
 function adviceBlock(book, a) {
   if (!a) return "";
+  // One dotted link in every state (Max, 2026-10-23): a guest's goes to sign in, an empty shelf's to «Додати».
   const inner =
-    a.kind === "guest" ? `<p class="advice-note"><a href="/login?next=${attr(encodeURIComponent(book.href))}">Увійдіть</a>, і Claude скаже, чи ця книжка для вас: порівняє її з тим, що ви читали й як оцінили.</p>`
-    : a.kind === "empty" ? `<p class="advice-note"><a href="/add">Додайте</a> кілька прочитаних книжок з оцінками, і Claude скаже, чи ця книжка для вас, порівнявши з ними.</p>`
+    a.kind === "guest" ? `<p class="advice-ask"><a class="text-link" href="/login?next=${attr(encodeURIComponent(book.href))}">Чи варто мені читати?</a></p>`
+    : a.kind === "empty" ? `<p class="advice-ask"><a class="text-link" href="/add">Додайте прочитане, і Claude скаже, чи варто</a></p>`
     : a.kind === "kept" ? adviceHtml(a)
-    : `<p class="advice-ask"><button class="btn" data-advice>Чи варто мені читати?</button><span class="muted small">Claude порівняє з книжками на вашій полиці</span></p>`;
+    : `<p class="advice-ask"><button class="text-link" data-advice>Чи варто мені читати?</button></p>`;
   return `<section class="block advice" id="advice" data-book="${attr(book.id)}">
       ${label("AI-порада")}
       <div class="advice-body">${inner}</div>

@@ -23,7 +23,7 @@ Ground the advice in their shelf: name two or three of their own books that are 
 
 Be careful with facts about the book itself: use the description and readers' notes given to you plus what you reliably know; if you are unsure what the book is like, say so in a few words rather than inventing. No spoilers.
 
-Length and shape: about 80 to 130 words, two short paragraphs at most, plain prose, no headings, no bullet lists. The first sentence is the verdict (worth it, probably not, or it depends on what), in bold. No preamble, no closing offer, no mention of being an AI.`;
+Length and shape: short, about 50 to 70 words in one paragraph, plain prose, no headings, no bullet lists. The first sentence is the verdict (worth it, probably not, or it depends on what), in bold; then the comparison with their books in two or three sentences, nothing more. No preamble, no closing offer, no mention of being an AI.`;
 
 const STATUS = { read: "прочитано", reading: "читаю зараз", want: "хочу прочитати", abandoned: "покинуто" };
 const clip = (s, n) => {
