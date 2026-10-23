@@ -913,7 +913,7 @@ document.addEventListener("submit", async (e) => {
 
 // The owner's fix of a book's title, author, description and cover (/admin/book/:id). An empty field
 // says what the catalog says, shown as its placeholder.
-function bookEditPage({ book, raw, user }) {
+function bookEditPage({ book, raw, user, coverError = "" }) {
   const fix = book.edited || {};
   const field = (name, label, hint = "") => `<label>${label} <input name="${name}" value="${attr(fix[name] || "")}" placeholder="${attr(raw[name] || "")}">${hint ? `<span class="hint">${hint}</span>` : ""}</label>`;
   const body = `
@@ -927,6 +927,7 @@ function bookEditPage({ book, raw, user }) {
       ${field("author", "Автор", "Кілька авторів через кому")}
       <label>Опис <textarea name="blurb" rows="8" placeholder="${attr(raw.blurb || "")}">${esc(fix.blurb || "")}</textarea></label>
       ${field("cover", "Обкладинка", `Посилання на картинку · <button type="button" class="text-link small" id="find-covers">Знайти обкладинку</button>`)}
+${coverError ? `<p class="error">Копію обкладинки не вдалося зберегти в нас (${esc(coverError)}), поки вона береться з того сайту.</p>` : ""}
       <div id="covers" class="cover-picks" hidden></div>
       ${field("published", "Рік", "Рік першого видання")}
       ${field("aliases", "Інші назви для пошуку", "Через кому, як люди скорочують: DCC, ГП")}

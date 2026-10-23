@@ -130,29 +130,34 @@ const COVERS = path.join(DATA_DIR, "covers");
 fs.mkdirSync(COVERS, { recursive: true });
 app.use("/covers", express.static(COVERS, { maxAge: "1y", immutable: true }));
 const COVER_TYPES = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp", "image/gif": "gif", "image/avif": "avif" };
-// A picture's address -> our own /covers/<hash>.<ext>; the address itself when it can't be fetched.
+// A picture's address -> { url: our own /covers/<hash>.<ext> } or, when it can't be fetched, { url: the
+// address itself, error }.
 async function keepCover(url) {
-  if (!/^https?:\/\//i.test(url || "")) return url;
+  if (!/^https?:\/\//i.test(url || "")) return { url };
   try {
-    const r = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0 Safari/537.36", Accept: "image/*" }, signal: AbortSignal.timeout(15000) });
-    const ext = COVER_TYPES[String(r.headers.get("content-type") || "").split(";")[0].trim()];
-    if (!r.ok || !ext) return url;
+    const r = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0 Safari/537.36", Accept: "image/avif,image/webp,image/*,*/*;q=0.8", Referer: new URL(url).origin + "/" }, signal: AbortSignal.timeout(15000) });
+    const type = String(r.headers.get("content-type") || "").split(";")[0].trim();
     const buf = Buffer.from(await r.arrayBuffer());
-    if (buf.length < 500 || buf.length > 8e6) return url;
+    // Some shops say octet-stream: the first bytes tell a picture anyway.
+    const sniff = buf[0] === 0xff && buf[1] === 0xd8 ? "jpg" : buf.slice(1, 4).toString() === "PNG" ? "png" : buf.slice(8, 12).toString() === "WEBP" ? "webp" : buf.slice(0, 3).toString() === "GIF" ? "gif" : "";
+    const ext = COVER_TYPES[type] || sniff;
+    if (!r.ok) return { url, error: `HTTP ${r.status}` };
+    if (!ext) return { url, error: `не картинка (${type || "без типу"})` };
+    if (buf.length < 500 || buf.length > 8e6) return { url, error: `розмір ${buf.length} байт` };
     const name = `${require("crypto").createHash("sha1").update(buf).digest("hex").slice(0, 20)}.${ext}`;
     fs.writeFileSync(path.join(COVERS, name), buf);
-    return `/covers/${name}`;
+    return { url: `/covers/${name}` };
   } catch (e) {
-    console.error("cover not kept:", url, e.message);
-    return url;
+    console.error("cover not kept:", url, e.message, e.cause?.code || "");
+    return { url, error: [e.message, e.cause?.code].filter(Boolean).join(", ") };
   }
 }
 // Covers set by hand before we kept them: fetched once after a start, in the background.
 setTimeout(async () => {
   for (const [id, fix] of Object.entries(store.edits())) {
     if (!/^https?:/i.test(fix.cover || "")) continue;
-    const local = await keepCover(fix.cover);
-    if (local !== fix.cover) store.editBook(id, { ...store.edits()[id], cover: local });
+    const { url } = await keepCover(fix.cover);
+    if (url !== fix.cover) store.editBook(id, { ...store.edits()[id], cover: url });
   }
 }, 30000);
 app.get("/icon.png", (req, res) => res.sendFile(path.join(ROOT, "build", "icon.png")));
@@ -1515,7 +1520,7 @@ app.post("/api/reviews/remove", signed, (req, res) => {
 app.get("/admin/book/:id", owner, (req, res) => {
   const id = store.resolve(req.params.id);
   if (!id) return res.status(404).send(pages.messagePage({ title: "Немає такої книжки", text: "", user: req.user }));
-  res.send(pages.bookEditPage({ book: store.book(id), raw: store.book(id, { edited: false }), user: req.user }));
+  res.send(pages.bookEditPage({ book: store.book(id), raw: store.book(id, { edited: false }), user: req.user, coverError: String(req.query.cover_error || "").slice(0, 200) }));
 });
 // Suspected Russian books on readers' shelves, each marked by hand (Max, 2026-10-23: «Жук в муравейнике»).
 app.get("/admin/russian", owner, (req, res) => res.send(pages.russianPage({ user: req.user, books: store.russianSuspects() })));
@@ -1539,9 +1544,11 @@ app.post("/admin/book/:id", owner, async (req, res) => {
   const id = store.resolve(req.params.id);
   if (!id) return res.status(404).send("Немає такої книжки");
   const body = req.body.reset ? {} : { ...req.body };
-  if (body.cover && body.cover !== store.edits()[store.canonical(id)]?.cover) body.cover = await keepCover(String(body.cover).trim());
+  // A cover still on someone else's site (just pasted, or one that failed before) is fetched again.
+  let error = "";
+  if (/^https?:/i.test(body.cover || "")) ({ url: body.cover, error = "" } = await keepCover(String(body.cover).trim()));
   const b = store.editBook(id, body);
-  res.redirect(303, b.href);
+  res.redirect(303, error ? `/admin/book/${encodeURIComponent(id)}?cover_error=${encodeURIComponent(error.slice(0, 200))}` : b.href);
 });
 app.get("/admin/dupes", owner, (req, res) => res.send(pages.dupesPage({ user: req.user, groups: store.dupes(), decisions: store.decisions(), book: (id) => store.book(id), all: req.query.all === "1" })));
 app.get("/admin/translations", owner, (req, res) => res.send(pages.translationsPage({ user: req.user, translations: store.translationCandidates(), decisions: store.decisions(), book: (id) => store.book(id) })));
