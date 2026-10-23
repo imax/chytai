@@ -49,20 +49,23 @@ const AUTO_PARALLEL = 2;
 const BACKFILL = false;
 // The overview prompt's version: rows made with an older one are redone at start, two at a time
 // (Max, 2026-10-23 08:09, after the prompt lost its obligatory paragraph of complaints: «старі теж»).
-const PROMPT_VERSION = 4; // 3: the site's own notes and ratings no longer go in (2026-10-23 08:35); 4: shops blocked (09:16)
+const PROMPT_VERSION = 5; // 3: the site's own notes and ratings no longer go in (2026-10-23 08:35); 4: shops blocked (09:16); 5: shorter, reservations one sentence at most (14:40)
 // Version 4 is redone only for books with a Cyrillic title (Max, 2026-10-23 09:15: «перезапустимо пошук для всіх укр
 // книжок»): their searches were all shops. Latin-titled books keep their version-3 overview.
 const REDO_ALL_BELOW = 3;
+const REDO_CYR_BELOW = 4;
+// Version 5 (shorter, reservations one sentence at most; Max 14:33: a paragraph of complaints «читати не хочеться»)
+// redoes nothing by itself: only new overviews and the owner's «Оновити» get it (Max: no mass regeneration).
 // «Що пишуть в інтернеті» (Max, 2026-10-23): one summary per book, not per reader, of what readers and
 // reviewers say, from the web, kept on the page for everyone. Our own words only: a review's text may
 // not be reproduced (Закон 2811-IX), so no quotes, no names, no links.
 // No fixed shape (Max, 2026-10-23: «кумарить formulaic формат, де другий параграф завжди про мінуси,
 // навіть якщо придумані»): the note follows the actual reception, complaints only where they really recur.
-const OVERVIEW_SYSTEM = `You write a short, neutral note for a book's page on Chytai, a Ukrainian site about books, on what people say about this book. Search the web (up to ${WEB_SEARCHES} searches): reviews in the press and on book sites, reader reactions (Goodreads, blogs and booktubers for a Ukrainian edition), the author's standing, awards. For a Ukrainian book, look for English-language press too: a translation may have been reviewed abroad. Online shops and publishers' own pages are not a source: their blurbs and their review sections don't count as reception, even if a search turns them up. Then write, in Ukrainian, what the reception actually is: what readers and critics single out, where they agree, where they split, and who the book tends to find. Facts and the balance of opinion, no verdict of your own, no advice, not addressed to anyone.
+const OVERVIEW_SYSTEM = `You write a short, neutral note for a book's page on Chytai, a Ukrainian site about books, on what people say about this book. Search the web (up to ${WEB_SEARCHES} searches): reviews in the press and on book sites, reader reactions (Goodreads, blogs and booktubers for a Ukrainian edition), the author's standing, awards. For a Ukrainian book, look for English-language press too: a translation may have been reviewed abroad. Online shops and publishers' own pages are not a source: their blurbs and their review sections don't count as reception, even if a search turns them up. Then write, in Ukrainian, what the reception actually is: what readers and critics single out, what kind of reading experience they describe, and who the book tends to find. Facts and the balance of opinion, no verdict of your own, no advice, not addressed to anyone.
 
-Follow the material, not a template. There is no required paragraph of pros and no required paragraph of cons: if the book is received warmly across the board, say so and what for, and don't go looking for a complaint to balance it; if opinions genuinely divide, or the same reservation keeps coming up, say that, with what it is about. Mention a criticism only when it recurs in what you found, never one you supposed yourself. A note can be a single paragraph.
+Keep it to the essentials a reader wants before opening the book: what it is valued for, what people say it feels like to read, and whether it is a hit, a cult thing or a quiet book. Reservations get one short sentence at most, and only when they are a real part of the reception (a split between critics and readers, or the same complaint coming up again and again); never list several complaints, never pad a warm reception with a reservation for balance, never invent one. A note is one paragraph; a second only when the reception genuinely has two sides worth a paragraph each.
 
-Write everything in your own words: never quote a review or a reader, never name a reviewer, a site or a channel, no links, no "I searched". If the web says little about the book, say what is known in one or two sentences and stop; never invent reception. No spoilers. 60 to 120 words in one or two paragraphs, plain prose, no headings, lists or bold. Start with the substance, no preamble.`;
+Write everything in your own words: never quote a review or a reader, never name a reviewer, a site or a channel, no links, no "I searched". If the web says little about the book, say what is known in one or two sentences and stop; never invent reception. No spoilers. 50 to 90 words, plain prose, no headings, lists or bold. Start with the substance, no preamble.`;
 
 const SYSTEM = `You are a well-read friend built into Chytai, a Ukrainian site where people keep shelves of the books they read. A reader is looking at a book's page and wants to know what this book is like for them. You know their shelf: the books they read with their ratings (1 to 5) and notes, what they are reading, want to read, and gave up on.
 
@@ -456,7 +459,7 @@ class Advice {
     const ids = this.db
       .prepare("SELECT book, prompt, length(text) AS len FROM overview WHERE prompt < ? OR length(text) < 120 ORDER BY created")
       .all(PROMPT_VERSION)
-      .filter((r) => r.prompt < REDO_ALL_BELOW || r.len < 120 || this.family(r.book).some(cyr))
+      .filter((r) => r.prompt < REDO_ALL_BELOW || r.len < 120 || (r.prompt < REDO_CYR_BELOW && this.family(r.book).some(cyr)))
       .map((r) => r.book);
     for (const id of ids) if (!this.queue.has(id)) this.queue.set(id, { fresh: true });
     this.pump();
