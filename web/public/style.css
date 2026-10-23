@@ -651,6 +651,16 @@ form.inline button:not(.btn) { background: none; border: 0; padding: 0; cursor: 
 .now-pick b { display: block; font: 600 15px/1.25 var(--serif); }
 .now-pick .by, .now-pick .meta { display: block; font-size: 12px; color: var(--muted); }
 .form .now-pick input[type="radio"] { width: 20px; height: 20px; padding: 0; accent-color: var(--accent); }
+/* «Чи варто читати?» on a book page */
+.advice-ask { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; }
+.advice-note, .advice-wait { font: 17px/1.5 var(--serif); color: var(--text); max-width: 560px; }
+.advice-note a { text-decoration: underline; text-decoration-color: var(--under); text-underline-offset: 4px; }
+.advice-wait { color: var(--muted); animation: advice-pulse 1.4s ease-in-out infinite; }
+@keyframes advice-pulse { 50% { opacity: 0.45; } }
+.advice-text p { font: 17px/1.55 var(--serif); color: var(--text); max-width: 620px; }
+.advice-text p + p { margin-top: 0.7em; }
+.advice-text + .small { margin-top: 12px; }
+.advice-error { color: var(--danger); margin-top: 10px; }
 .add-writing { margin-top: 12px; }
 .add-writing summary { list-style: none; cursor: pointer; font-size: 14px; }
 .add-writing summary::-webkit-details-marker { display: none; }

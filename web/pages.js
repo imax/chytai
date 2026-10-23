@@ -402,7 +402,7 @@ function bookLd(book, shelf, s, readers) {
 }
 
 // The book, the reader's own buttons, where to get it, what readers said, what it is about.
-function bookPage({ book, entry, now = false, user, shelf, inLibrary = new Map(), readers = [], also = [], writings = [], reviewError = "", readUrl = "", freeRead = false }) {
+function bookPage({ book, entry, now = false, user, shelf, inLibrary = new Map(), readers = [], also = [], writings = [], reviewError = "", readUrl = "", freeRead = false, advice = null }) {
   const s = statsOf(book.id);
   const kicker = [book.tags?.find((t) => t !== "українською"), isUk(book) ? "українською" : LANG_ADV[String(book.language || "").toLowerCase()] || ""].filter(Boolean).map(cap).join(" · ");
   const sub = [book.altTitle ? esc(book.altTitle) : "", book.author ? `<span class="authors">${authorLinks(book.author)}</span>` : "", book.published ? String(book.published) : "", book.pages ? `${book.pages} с.` : ""].filter(Boolean).join(" · ");
@@ -433,6 +433,7 @@ function bookPage({ book, entry, now = false, user, shelf, inLibrary = new Map()
       ${first.entry.note ? quote(first, book.id) : ""}
       ${(first.entry.note ? rest : readers).length ? `<div class="others">${(first.entry.note ? rest : readers).map((r) => readerLine(r, book.id)).join("")}</div>` : ""}
     </section>` : ""}
+    ${adviceBlock(book, advice)}
     ${SHOW_REVIEWS && (writings.length || user) ? `<section class="block" id="writings">
       ${label("Огляди")}
       ${writings.length ? writingsList(writings, book, user) : ""}
@@ -454,6 +455,24 @@ function bookPage({ book, entry, now = false, user, shelf, inLibrary = new Map()
 
 // «Огляди» are hidden on book pages for now (Max, 2026-10-23); /admin/reviews, the API and the data stay.
 const SHOW_REVIEWS = false;
+// «Чи варто читати?» (advice.js): Claude's take on the book for this reader, by their own shelf, on a click.
+// A guest sees why to sign in, a reader with an empty shelf why to add books, a kept answer shows at once.
+function adviceHtml(a) {
+  return `<div class="advice-text">${marked.parse(a.text).replace(/<a href="http/g, '<a target="_blank" rel="noopener" href="http')}</div>
+<p class="small muted">Claude, за вашою полицею · ${writingDate(a.created.slice(0, 10))} · <button class="text-link small" data-advice-again>Спитати ще раз</button></p>`;
+}
+function adviceBlock(book, a) {
+  if (!a) return "";
+  const inner =
+    a.kind === "guest" ? `<p class="advice-note"><a href="/login?next=${attr(encodeURIComponent(book.href))}">Увійдіть</a>, і Claude скаже, чи ця книжка для вас: порівняє її з тим, що ви читали й як оцінили.</p>`
+    : a.kind === "empty" ? `<p class="advice-note"><a href="/add">Додайте</a> кілька прочитаних книжок з оцінками, і Claude скаже, чи ця книжка для вас, порівнявши з ними.</p>`
+    : a.kind === "kept" ? adviceHtml(a)
+    : `<p class="advice-ask"><button class="btn" data-advice>Чи варто мені читати?</button><span class="muted small">Claude порівняє з книжками на вашій полиці</span></p>`;
+  return `<section class="block advice" id="advice" data-book="${attr(book.id)}">
+      ${label("Чи варто читати?")}
+      <div class="advice-body">${inner}</div>
+    </section>`;
+}
 // «Огляди» (reviews.js): three links, the rest under «Ще N»; the owner, or the reader who added it, can take one off.
 function writingsList(writings, book, user) {
   const line = (w) => writingLine(w, user && (user.owner || w.by === user.id) ? `<span class="writing-tools">${reviewForm("/api/reviews/remove", { work: book.id, url: w.url }, "Прибрати зі сторінки")}</span>` : "");
@@ -1218,7 +1237,7 @@ function privacyPage({ user }) {
 <p>Ми користуємося кількома сервісами, без яких сайт не працює:</p>
 <ul>
 <li><strong>Fly.io</strong> — сервери у Франкфурті (Німеччина), там лежить база сайту і книжки з читалки.</li>
-<li><strong>Anthropic</strong> (Claude) — коли в читалці ви просите пояснити чи перекласти уривок, сам уривок і трохи тексту навколо йдуть в Anthropic, щоб Claude відповів. Вашої пошти й імені Anthropic не отримує.</li>
+<li><strong>Anthropic</strong> (Claude) — коли в читалці ви просите пояснити чи перекласти уривок, сам уривок і трохи тексту навколо йдуть в Anthropic, щоб Claude відповів. Коли на сторінці книжки ви натискаєте «Чи варто мені читати?», туди йде ваша полиця: назви, оцінки й нотатки. Вашої пошти й імені Anthropic не отримує.</li>
 <li><strong>Resend</strong> — листи від code@chytai.org.ua.</li>
 <li><strong>Google Fonts</strong> — шрифти сайту. Ваш браузер завантажує їх з серверів Google, тож Google бачить вашу IP-адресу, як і на більшості сайтів.</li>
 <li><strong>Open Library</strong> (openlibrary.org, некомерційний проєкт Internet Archive) — для книжок, яких немає в каталогах, ми питаємо в нього обкладинку, ISBN, рік і опис.</li>
@@ -1506,6 +1525,7 @@ module.exports = {
   mailSettingsPage,
   dupesPage,
   reviewsAdminPage,
+  adviceHtml,
   translationsPage,
   decidedList,
   welcomePage,
