@@ -378,9 +378,8 @@ function adminPage({ user, stats: s, overviews: o = null, layout }) {
     .map((c) => `<tr><th>${weekLabel(c.week)}</th><td>${c.size}</td>${c.later.map(pct).join("")}</tr>`)
     .join("");
 
-  // Only this week's sign-ups here; everyone is on /admin/readers (Max, 2026-10-22: the full table got unwieldy).
-  const fresh = s.readers.filter((r) => !r.owner && r.created >= addDays(s.now, -6)).sort((a, b) => b.created.localeCompare(a.created));
-  const readerRows = fresh.map(readerRow).join("");
+  // Readers live on /admin/readers; here only a link and this week's count (Max, 2026-10-23: no table here).
+  const fresh = s.readers.filter((r) => !r.owner && r.created >= addDays(s.now, -6));
 
   const d = s.digest;
   const digestLine = d ? `Останню розсилку виконано ${short(dayOf(d.finished || d.started))}: надіслано ${d.sent}, пропущено ${d.skipped}${d.errors?.length ? `, помилок ${d.errors.length}` : ""}.` : "Розсилка ще не виконувалась.";
@@ -388,6 +387,7 @@ function adminPage({ user, stats: s, overviews: o = null, layout }) {
   const body = `<section class="admin">
 <section class="page-head"><div><p class="kicker">Лише для власника</p><h1>Статистика</h1><p class="sub">Сайт станом на ${short(s.now)}. Активний читач — той, хто відкрив сайт або щось зробив на полиці того дня. Перегляди рахуються з ${s.totals.viewsSince ? short(s.totals.viewsSince) : "сьогодні"}; раніше за активність правлять входи й зміни на полиці.</p></div></section>
 <div class="stats">${tiles}</div>
+<p><a class="text-link" href="/admin/readers">Усі читачі (${s.readers.length})</a>, нових за 7 днів: ${fresh.length}.</p>
 
 ${funnelBlock(s.funnel)}
 
@@ -402,12 +402,6 @@ ${funnelBlock(s.funnel)}
 ${s.cohorts.length ? `<div class="tbl"><table class="cohorts">
 <thead><tr><th>Зареєструвались</th><th>Читачів</th>${s.later.map((k) => `<th>+${k} тиж.</th>`).join("")}</tr></thead>
 <tbody>${cohortRows}</tbody></table></div>` : `<p class="muted">Поки нема жодної когорти.</p>`}
-
-<h2>Нові читачі за 7 днів</h2>
-<p class="muted small">${fresh.length ? `${fresh.length} ${fresh.length === 1 ? "читач" : fresh.length < 5 ? "читачі" : "читачів"}. ` : "Цього тижня ніхто не реєструвався. "}<a href="/admin/readers">Усі читачі (${s.readers.length})</a>: з пошуком, фільтрами й сортуванням.</p>
-${fresh.length ? `<div class="tbl"><table class="readers">
-<thead><tr>${READER_HEAD}</tr></thead>
-<tbody>${readerRows}</tbody></table></div>` : ""}
 
 <h2>Перегляди за розділами</h2>
 <p class="muted small">Скільки сторінок кожного розділу відкрили (читачі й гості разом, без ботів). Рахується з ${s.sections.length ? "22 жовтня" : "сьогодні"}; які саме сторінки, не зберігаємо.</p>
