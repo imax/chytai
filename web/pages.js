@@ -402,7 +402,20 @@ function bookLd(book, shelf, s, readers) {
 }
 
 // The book, the reader's own buttons, where to get it, what readers said, what it is about.
-function bookPage({ book, entry, now = false, user, shelf, inLibrary = new Map(), readers = [], also = [], writings = [], reviewError = "", readUrl = "", freeRead = false, advice = null, overview = null, overviewVote = null }) {
+// «Знаєте, де знайти?» under «Українською: …, у каталогах поки немає»: a reader pastes the page of the
+// Ukrainian edition in a store or at its publisher (POST /api/book/:id/edition).
+function editionTip(book, error) {
+  return `<details class="edition-tip"${error ? " open" : ""}>
+  <summary class="text-link small">Знаєте, де знайти українською?</summary>
+  <form method="post" action="/api/book/${attr(encodeURIComponent(book.id))}/edition" class="edition-form">
+    <p class="small muted">Вставте посилання на сторінку цієї книжки в магазині чи у видавництва. Ми візьмемо звідти назву, обкладинку й опис і покажемо, де її взяти.</p>
+    ${error ? `<p class="error small">${esc(error)}</p>` : ""}
+    <div class="edition-row"><input type="url" name="url" required placeholder="https://…" autocomplete="off"><button class="btn">Додати</button></div>
+  </form>
+</details>`;
+}
+
+function bookPage({ book, entry, now = false, user, shelf, inLibrary = new Map(), readers = [], also = [], writings = [], reviewError = "", editionError = "", readUrl = "", freeRead = false, advice = null, overview = null, overviewVote = null }) {
   const s = statsOf(book.id);
   const kicker = [book.tags?.find((t) => t !== "українською"), isUk(book) ? "українською" : LANG_ADV[String(book.language || "").toLowerCase()] || ""].filter(Boolean).map(cap).join(" · ");
   const sub = [book.altTitle ? esc(book.altTitle) : "", book.author ? `<span class="authors">${authorLinks(book.author)}</span>` : "", book.published ? String(book.published) : "", book.pages ? `${book.pages} с.` : ""].filter(Boolean).join(" · ");
@@ -441,10 +454,11 @@ function bookPage({ book, entry, now = false, user, shelf, inLibrary = new Map()
       ${writings.length ? writingsList(writings, book, user) : ""}
       ${user ? addWriting(book, reviewError) : ""}
     </section>` : ""}
-    ${book.blurb || book.ukTitle ? `<section class="block">
+    ${book.blurb || book.ukTitle ? `<section class="block" id="about">
       ${label("Про книжку")}
       ${book.blurb ? `<div class="about">${book.blurb.split(/\n\n+/).map((t) => `<p>${esc(t)}</p>`).join("")}</div>` : ""}
       <p class="small muted">${[book.blurb && !book.edited?.blurb ? (book.blurbSource ? `Опис: ${esc(book.blurbSource)}` : `Опис з сайту ${esc(shelf ? shelf.name : book.source)}`) : "", book.ukTitle ? `Українською: «${esc(book.ukTitle)}», у каталогах поки немає` : ""].filter(Boolean).join(" · ")}</p>
+      ${book.ukTitle && user ? editionTip(book, editionError) : ""}
     </section>` : ""}
   </div>
   <aside>

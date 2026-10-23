@@ -1097,10 +1097,10 @@ class Store {
     return { id: it.id, title: it.title, author: it.author, altTitle: it.altTitle || "", cover: it.cover, tags: it.genres || [], links: [{ label: shelf.name, url: it.url }], source: shelf.id, shelf: shelf.id, blurb: require("./catalogs").about(it.blurb || ""), price: it.price, status: it.status, expected: it.expected || "", language: it.language, edition: it.edition || "", isbn: it.isbn || "", volume: it.volume || 0, bundle: !!it.bundle, format: it.format || (shelf.kind === "free" ? "e-book" : shelf.kind === "audio" ? "аудіо" : "папір"), narrator: it.narrator || "", duration: it.duration || "", subscription: !!it.subscription };
   }
 
-  addBook({ title, author, cover, links }) {
+  addBook({ title, author, cover, links, source = "manual", ...more }) {
     let id = slugify(title);
     while (this.book(id)) id += "-2";
-    this.lib.books[id] = { id, title: title.trim(), author: (author || "").trim(), cover: cover || "", tags: [], links: links || [], source: "manual" };
+    this.lib.books[id] = { id, title: title.trim(), author: (author || "").trim(), cover: cover || "", tags: [], links: links || [], source, ...more };
     this.writeBook(id);
     this._works = null;
     this.indexSlugs();

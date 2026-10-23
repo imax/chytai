@@ -690,3 +690,11 @@ form.inline button:not(.btn) { background: none; border: 0; padding: 0; cursor: 
 .more-menu form { margin: 0; }
 .more-menu a, .more-menu button { display: block; width: 100%; padding: 11px 18px; background: none; border: 0; font: inherit; font-size: 14px; color: var(--ink); text-align: left; cursor: pointer; white-space: nowrap; }
 .more-menu a:hover, .more-menu button:hover { background: var(--rule); color: var(--ink); }
+
+/* «Знаєте, де знайти українською?» on a book page */
+.edition-tip { margin-top: 8px; }
+.edition-tip summary { cursor: pointer; list-style: none; display: inline; }
+.edition-tip summary::-webkit-details-marker { display: none; }
+.edition-form { margin-top: 12px; max-width: 560px; }
+.edition-row { display: flex; gap: 10px; }
+.edition-row input { flex: 1; min-width: 0; padding: 8px 12px; border: 1px solid var(--under); border-radius: 4px; background: transparent; color: var(--ink); font-size: 15px; }

@@ -745,7 +745,7 @@ app.get("/book/:id", (req, res) => {
   if (!book) return res.status(404).send(pages.messagePage({ title: "Немає такої книжки", text: "", user: req.user }));
   const file = readerFileFor(req.user?.id, book);
   const free = !file && freeFileFor(book);
-  res.send(pages.bookPage({ freeRead: !!free, book, entry: store.sharedEntry(req.user?.id, book.id), now: !!req.user && nowIds(req.user.id).has(store.canonical(book.id)), user: req.user, readUrl: file ? `${READER_URL}/?open=${encodeURIComponent(file.name)}` : free ? `${READER_URL}/free/${encodeURIComponent(free.name)}` : "", shelf: book.shelf && (req.owner || !isDraft(book.shelf)) ? store.shelf(book.shelf) : null, inLibrary: inLibraryMap(req), readers: readersOf(book.id), also: social.alsoForBook(book.id, { limit: 4 }), writings: reviews.of(book.id), reviewError: String(req.query.review_error || "").slice(0, 300), advice: advice.state(req.user, book.id), overview: linkedOverview(book), overviewVote: advice.voteOf(book.id, req.user?.id) }));
+  res.send(pages.bookPage({ freeRead: !!free, book, entry: store.sharedEntry(req.user?.id, book.id), now: !!req.user && nowIds(req.user.id).has(store.canonical(book.id)), user: req.user, readUrl: file ? `${READER_URL}/?open=${encodeURIComponent(file.name)}` : free ? `${READER_URL}/free/${encodeURIComponent(free.name)}` : "", shelf: book.shelf && (req.owner || !isDraft(book.shelf)) ? store.shelf(book.shelf) : null, inLibrary: inLibraryMap(req), readers: readersOf(book.id), also: social.alsoForBook(book.id, { limit: 4 }), writings: reviews.of(book.id), reviewError: String(req.query.review_error || "").slice(0, 300), editionError: String(req.query.edition_error || "").slice(0, 300), advice: advice.state(req.user, book.id), overview: linkedOverview(book), overviewVote: advice.voteOf(book.id, req.user?.id) }));
 });
 
 // An author: their works from Wikidata (linked to our books of them) and every book of theirs we have.
@@ -1072,6 +1072,33 @@ app.post("/api/overview/:id/vote", signed, (req, res) => {
   } catch (e) {
     res.status(400).json({ error: e.message });
   }
+});
+// «Знаєте, де знайти?» on a foreign book whose Ukrainian translation Wikidata knows and no catalog has
+// (Max, 2026-10-23: «вона насправді є, це у нас в базі її немає … щоб читачі могли нам підказати де її
+// знайти»): a reader pastes the address of the Ukrainian edition's page; it is read like a link on /add
+// (bookpage.js), becomes a book of its own with that store as «Де взяти», paired with the original as its
+// translation. Published at once, like «Огляди»; Max gets a letter and can undo the pair on /admin/dupes.
+app.post("/api/book/:id/edition", signed, async (req, res) => {
+  const orig = store.book(store.resolve(req.params.id) || req.params.id);
+  if (!orig) return res.status(404).send(pages.messagePage({ title: "Немає такої книжки", text: "", user: req.user }));
+  const back = (error) => res.redirect(303, `${store.href(orig.id)}${error ? `?edition_error=${encodeURIComponent(error)}` : ""}#about`);
+  const url = String(req.body.url || "").trim().slice(0, 500);
+  if (!isUrl(url)) return back("Вставте посилання на сторінку книжки в магазині чи у видавництва.");
+  if (!req.owner && auth.tooMany(`edition:${req.user.id}`, 20)) return back("Забагато посилань за годину. Спробуйте трохи згодом.");
+  const p = await bookpage.fromUrl(url, req.user.id);
+  if (p.error) return back(p.error);
+  if (!/[а-яіїєґ]/i.test(p.title)) return back(`На сторінці книжка «${p.title}», а не українське видання.`);
+  const row = fromPage(p);
+  // The catalog knows the Ukrainian title as the original's other name (store.workIndex): that is no edition yet.
+  const found = store.findWork(p);
+  const known = found && store.canonical(found) !== store.canonical(orig.id) ? found : null;
+  let book = known && store.book(known);
+  if (!book) book = store.addBook({ title: row.title, author: row.author, cover: row.cover, links: row.link ? [row.link] : [], source: "tip", by: req.user.id, ...(row.isbns.length ? { isbns: row.isbns } : {}), ...(row.blurb ? { blurb: row.blurb, blurbSource: row.blurbSource } : {}), ...(row.pages ? { pages: row.pages } : {}), ...(row.published ? { published: row.published } : {}) });
+  if (store.canonical(book.id) === store.canonical(orig.id)) return back("Це та сама книжка, а не її український переклад.");
+  store.decideTranslation(orig.id, book.id);
+  console.log(`edition tip @${req.user.username}: ${orig.id} -> ${book.id}${known ? " (known)" : ""} ${url}`);
+  if (!req.owner) notifyOwner(`Українське видання: ${book.title}`, [`${req.user.name} (@${req.user.username}) підказав(ла), де знайти українське видання.`, "", `Оригінал: ${orig.title}${orig.author ? ` — ${orig.author}` : ""}  ${site(req)}${store.href(orig.id)}`, `Переклад: ${book.title}${book.author ? ` — ${book.author}` : ""}  ${site(req)}${store.href(book.id)}${known ? " (вже була в каталозі)" : ""}`, `Посилання: ${url}`, "", `Прибрати пару: ${site(req)}/admin/dupes#decided`, `Полиця читача: ${site(req)}${req.user.href}`].join("\n"));
+  res.redirect(303, store.href(book.id));
 });
 app.post("/api/reviews/add", signed, async (req, res) => {
   const q = String(req.body.book || "").trim();
