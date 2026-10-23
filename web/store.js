@@ -48,10 +48,17 @@ const OWNER = "owner"; // the reader id of the owner (Max): the only reader befo
 // otherwise the Russian-only letters ы э ъ ё in the title or the author, or, with no Ukrainian-only
 // letter, a Russian ending: «Ненасильственное общение» has neither ы nor э.
 const RU_ENDING = /(ое|ая|ые|ие)(?![\p{L}])|(?<![\p{L}])(и|что|как|это|лет|или)(?![\p{L}])/iu;
+// Writers whose books here are in Russian whatever the letters say («Черновик», Sergei Lukyanenko: Max,
+// 2026-10-23 «не хочу бачити цю русняву г в рекомендаціях»), in Cyrillic and Latin spellings.
+const RU_AUTHOR = /лук[ья'’ʼ]{0,2}[яа]ненко|lukyanenko|lukianenko|пелев[иі]н|pelevin|акун[иі]н|akunin|донцова|dontsova|прилеп[иі]н|prilepin|лимонов|limonov|маринина|marinina|устинова|ustinova|перумов|perumov|головач[её]в|golovachev|дугин|dugin/iu;
+// A Cyrillic title with the author written the Russian way in Latin («Sergei», not «Serhii»).
+const RU_LATIN_NAME = /^(sergei|sergey|aleksei|alexei|alexey|aleksey|dmitry|dmitri|nikolai|yevgeny|evgeny|vasily|vasiliy|mikhail|pyotr|fyodor|yuri|yury|grigory|alexandr)\b/i;
 const isRussian = (b) => {
+  if (RU_AUTHOR.test(b?.author || "")) return true;
   const lang = String(b?.language || "").toLowerCase();
   if (lang) return /^(ru|рос)/.test(lang);
   const text = `${b?.title || ""} ${b?.author || ""}`;
+  if (/[а-яё]/i.test(b?.title || "") && !/[іїєґ]/i.test(b?.title || "") && RU_LATIN_NAME.test(String(b?.author || "").trim())) return true;
   return RU.test(text) || (!/[іїєґ]/i.test(text) && RU_ENDING.test(b?.title || ""));
 };
 const norm = (s) => String(s || "").toLowerCase().replace(/^(the|a)\s+/, "").replace(/[^\p{L}\p{N}]+/gu, " ").trim();
