@@ -410,6 +410,9 @@ class Advice {
     if (!text) text = tidy(content.filter((b) => b.type === "text").map((b) => b.text).join(""));
     if (!text) throw new Error("Порожня відповідь, спробуйте ще раз.");
     // A real answer is Ukrainian prose of some length; anything else is not kept.
+    // A model's aside before the note («Enough with known context.», 2026-10-23) comes as its own paragraph
+    // without a Ukrainian letter: drop such paragraphs, they are never part of the note.
+    text = text.split(/\n\n+/).filter((p) => /[а-яіїєґ]/i.test(p)).join("\n\n");
     if (params.tools && (text.length < 120 || !/[а-яіїєґ]/i.test(text))) throw new Error(`Не схоже на огляд: «${clip(text, 60)}»`);
     return { text, model: message.model, usage, queries, sources };
   }
