@@ -25,10 +25,8 @@ const SEND_HOUR = 9; // Kyiv time (TZ=Europe/Kyiv on Fly; the check uses local t
 const READING_WEEKS = 3; // «Ви зараз читаєте» after this long
 const MAX_FEED = 6;
 const MAX_NEW = 5;
-const MAX_WANT = 6;
 const MAX_UPDATES = 5;
 const BUILD_AT_ONCE = 8; // readers whose letters are made side by side
-const WANT_LOOKUPS = 30; // how many «хочу прочитати» books get a library lookup per letter
 
 // Who gets Max's text (the others still get their letter when their shelves have news, without it).
 // The readers' Telegram group (Max, 2026-10-23: «давай додамо десь лінк на групу в тг»), the welcome letter's link.
@@ -133,11 +131,36 @@ class Digest {
     return Object.fromEntries(Object.keys(AUDIENCES).map((k) => [k, this.audience(k).size]));
   }
 
+  // The weekend book Max chose on /admin/digest ({ book: id, note }), or null.
+  weekend() {
+    const w = JSON.parse(this.store.db.get("digest:weekend") || "null");
+    return w && w.book && this.store.book(w.book) ? w : null;
+  }
+  // `book` is a book page address (https://chytai.org.ua/book/…), its slug or id; "" clears it. Returns an error.
+  setWeekend({ book = "", note = "" }) {
+    const ref = decodeURIComponent(String(book).trim().replace(/[?#].*$/, "").replace(/\/+$/, "").split("/book/").pop().split("/").pop() || "");
+    if (!ref) return void this.store.db.set("digest:weekend", "null");
+    const id = this.store.resolve(ref);
+    if (!id) return "Не знайшов такої книжки на сайті. Встав адресу сторінки книжки.";
+    this.store.db.set("digest:weekend", JSON.stringify({ book: id, note: String(note).replace(/\r\n/g, "\n").trim() }));
+  }
+  // The book for the weekend, one for every letter of a run: Max's choice, or a reader's note about a well
+  // rated book (the home page's «Книжка навмання»).
+  weekendPick() {
+    const w = this.weekend();
+    if (w) {
+      const owner = this.social.who(this.ownerId);
+      const entry = this.store.entry(this.ownerId, w.book);
+      return { id: w.book, book: this.store.book(w.book), reader: owner || { name: "Chytai", href: "/" }, entry: { note: w.note, rating: entry?.rating ?? null } };
+    }
+    return this.social.picks(40)[0] || null;
+  }
+
   // ---- what goes in ----
 
   // The letter's content for a reader since their last one (or the last week): sections and the state
   // to remember. `null` when there is nothing worth a letter.
-  async build(readerId, { now = new Date() } = {}) {
+  async build(readerId, { now = new Date(), pick } = {}) {
     const store = this.store;
     const log = store.db.prepare("SELECT sent, state FROM digest_log WHERE reader = ?").get(readerId);
     const prev = log ? JSON.parse(log.state || "{}") : null;
@@ -176,44 +199,8 @@ class Digest {
     fresh.sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0));
     const news = fresh.filter((x) => x.book).slice(0, MAX_NEW);
 
-    // 3. «Хочу прочитати» books that are now somewhere they were not: a library (looked up, a day's cache)
-    // or a catalog shelf. The first letter only remembers where things are; from the second on it compares.
-    const wants = store
-      .library(readerId)
-      .filter((r) => r.status === "want")
-      .sort((a, b) => ((b.updated || b.added || "") > (a.updated || a.added || "") ? 1 : -1))
-      .slice(0, WANT_LOOKUPS);
-    const avail = {};
-    const found = [];
-    // Library lookups go five books at a time (each is cached for a day in libraries.js).
-    const holdingsOf = new Map();
-    for (let i = 0; i < wants.length; i += 5) await Promise.all(wants.slice(i, i + 5).map(async (r) => {
-      const book = store.book(r.id);
-      if (!book) return;
-      try {
-        holdingsOf.set(r.id, await this.libraries.holdings(store.db, book, { log: this.log }));
-      } catch (e) {
-        this.log(`digest: libraries for ${book.id}: ${e.message}`);
-      }
-    }));
-    for (const r of wants) {
-      const book = store.book(r.id);
-      if (!book) continue;
-      const places = [];
-      const shelves = [book.shelf, ...(book.editions || []).map((e) => e.shelf?.id || e.shelf)].filter(Boolean).map((s) => (typeof s === "string" ? store.shelf(s) : s)).filter((s) => s && !s.draft);
-      for (const s of shelves) if (!places.some((p) => p.key === `shelf:${s.id}`)) places.push({ key: `shelf:${s.id}`, name: s.name, url: `${this.site}${book.href}` });
-      for (const h of holdingsOf.get(r.id) || []) {
-        const branches = [...new Set(h.records.flatMap((rec) => rec.branches.filter((b) => b.onShelf > 0).map((b) => b.branch)))];
-        if (branches.length) places.push({ key: `lib:${h.id}`, name: h.name, where: branches.slice(0, 2).join(", "), url: h.records[0].url });
-      }
-      avail[r.id] = places.map((p) => p.key);
-      const before = prev?.avail?.[r.id];
-      if (before) {
-        const fresh = places.filter((p) => !before.includes(p.key));
-        if (fresh.length) found.push({ book, places: fresh });
-      }
-    }
-    const want = found.slice(0, MAX_WANT);
+    // «Хочу прочитати» books turning up in libraries were a section here until 2026-10-23: the library lookups made
+    // a run take half an hour, and Max dropped it («давай не питати про хочу прочитати»).
 
     // 4. The book in the reader's «Читаю зараз» status for weeks: one line (Max, 2026-10-22: the status, not
     // the longest of the shelf's «Читаю» books, which may be ten read side by side). No status, no line.
@@ -222,14 +209,14 @@ class Digest {
     const weeks = n?.since ? Math.floor((now - new Date(`${n.since}T12:00:00Z`)) / (7 * DAY)) : 0;
     const reading = n && weeks >= READING_WEEKS && entries[nowId] && store.book(nowId) ? { id: nowId, entry: entries[nowId], book: store.book(nowId), weeks } : null;
 
-    // 5. One reader's note about a well rated book they don't have (the home page's «Книжка навмання»).
-    const pick = this.social.picks(40).find((x) => x.reader.id !== readerId && !own.has(x.id)) || null;
+    // 5. One book for the weekend, the same for everyone (Max, 2026-10-23): the run picks it once (weekendPick).
+    if (pick === undefined) pick = this.weekendPick();
 
-    const state = { avail };
+    const state = {};
     const site = this.siteWeek(now);
     const updates = this.siteNews(now);
-    const empty = !feed.length && !news.length && !want.length;
-    return { empty, state, since, now, site, updates, feed, feedMore: feedAll.length - feed.length, news, newsMore: fresh.filter((x) => x.book).length - news.length, want, reading, pick };
+    const empty = !feed.length && !news.length;
+    return { empty, state, since, now, site, updates, feed, feedMore: feedAll.length - feed.length, news, newsMore: fresh.filter((x) => x.book).length - news.length, want: [], reading, pick };
   }
 
   // The site's week in numbers (Max, 2026-10-22: «скільки додалось читачів, скільки додалось книжок»): the last
@@ -298,7 +285,6 @@ class Digest {
       const [name, n] = [...by.entries()].sort((a, b) => b[1] - a[1])[0];
       bits.push(`${count(n + (by.size === 1 ? d.newsMore : 0), "новинка", "новинки", "новинок")} у «${name}»`);
     }
-    if (d.want.length) bits.push(`«${d.want[0].book.title}» ${d.want[0].places[0].key.startsWith("lib:") ? "є в бібліотеці" : "з'явилась у каталозі"}`);
     // The subject takes the pieces that fit in about 90 characters, the first one always.
     const auto = bits.map((b) => b.replace(/«([^»]+)»/g, (_, t) => `«${short(t)}»`)).reduce((acc, b) => (!acc ? b : `${acc}, ${b}`.length <= 90 ? `${acc}, ${b}` : acc), "");
     const subject = editorial?.subject || auto || `Chytai: тиждень ${when}`;
@@ -319,7 +305,7 @@ class Digest {
     const paras = editorial ? editorial.text.split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean) : [];
     if (paras.length) text.push(paras.map((p) => p.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_, t, u) => (u.replace(/^https?:\/\//, "").startsWith(t) ? u : `${t} (${u})`))).join("\n\n"), "");
     const own = paras.map((p) => `<p style="font-family:'Source Serif 4',Georgia,serif;font-size:17px;line-height:1.55;color:#1b1a17;margin:0 0 16px">${marked.parseInline(esc(p).replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (m) => m.replace(/&amp;/g, "&"))).replace(/<a /g, '<a style="color:#1b1a17" ').replace(/\n/g, "<br>")}</p>`).join("\n  ");
-    const shelvesNews = d.feed.length || d.news.length || d.want.length;
+    const shelvesNews = d.feed.length || d.news.length;
     if (shelvesNews) text.push(...(paras.length ? ["—", "", "ЩО СТАЛОСЯ НА ВАШИХ ПОЛИЦЯХ"] : []), lead, "");
 
     if (d.feed.length) {
@@ -334,12 +320,6 @@ class Digest {
       if (d.newsMore > 0) html.push(muted(`і ще ${count(d.newsMore, "новинка", "новинки", "новинок")} на полицях, на які ви підписані`));
       text.push("НОВЕ У ВИДАВНИЦТВ", ...d.news.map((x) => `• ${x.book.title}${x.book.author ? ` — ${x.book.author}` : ""} (${x.shelf.name})\n  ${url(x.book.href)}`), ...(d.newsMore > 0 ? [`  …і ще ${d.newsMore}: ${site}/publishers`] : []), "");
     }
-    if (d.want.length) {
-      html.push(label("Хотіли прочитати, і ось де є"));
-      const where = (p) => (p.key.startsWith("lib:") ? `з'явилась у ${b(p.name)}${p.where ? ` (${esc(p.where)})` : ""}` : `з'явилась у ${b(p.name)}`);
-      html.push(table(d.want.map((x) => row(x.book, [esc(x.book.author), x.places.map((p) => `<a href="${attr(p.url)}" style="color:#6b675f;text-decoration:none">${where(p)}</a>`).join("; ")].filter(Boolean).join(" · ")))));
-      text.push("ХОТІЛИ ПРОЧИТАТИ, І ОСЬ ДЕ Є", ...d.want.map((x) => `• ${x.book.title}: ${x.places.map((p) => `${p.name}${p.where ? ` (${p.where})` : ""}`).join("; ")}\n  ${url(x.book.href)}`), "");
-    }
     if (d.reading) {
       const r = d.reading;
       html.push(label("Ви зараз читаєте"));
@@ -350,11 +330,11 @@ class Digest {
       const p = d.pick;
       html.push(label("Одна книжка на вихідні"));
       html.push(`<div style="border:1px solid #e4dfd5;border-radius:10px;padding:16px 18px;margin-top:12px">
-  <p style="font-family:'Source Serif 4',Georgia,serif;font-size:16px;line-height:1.45;color:#1b1a17;margin:0 0 8px">${pages.inline(p.entry.note)}</p>
+  ${p.entry.note ? `<p style="font-family:'Source Serif 4',Georgia,serif;font-size:16px;line-height:1.45;color:#1b1a17;margin:0 0 8px">${pages.inline(p.entry.note)}</p>` : ""}
   <div style="font-size:13px;color:#6b675f"><a href="${attr(url(p.reader.href))}" style="color:#1b1a17;text-decoration:none">${b(p.reader.name)}</a> про «<a href="${attr(url(p.book.href))}" style="color:#6b675f">${esc(p.book.title)}</a>»${p.book.author ? ` ${esc(p.book.author)}` : ""}${stars(p.entry.rating)}</div>
   <a href="${attr(url(p.book.href))}" style="display:inline-block;border:1px solid #1b1a17;color:#1b1a17;border-radius:999px;padding:8px 18px;font-size:14px;font-weight:500;text-decoration:none;margin-top:12px">Відкрити книжку</a>
 </div>`);
-      text.push("ОДНА КНИЖКА НА ВИХІДНІ", `${p.reader.name} про «${p.book.title}»${p.book.author ? ` (${p.book.author})` : ""}${p.entry.rating != null ? `, ${uk(p.entry.rating)}/5` : ""}:`, p.entry.note.replace(/\s+/g, " ").slice(0, 400), url(p.book.href), "");
+      text.push("ОДНА КНИЖКА НА ВИХІДНІ", `${p.reader.name} про «${p.book.title}»${p.book.author ? ` (${p.book.author})` : ""}${p.entry.rating != null ? `, ${uk(p.entry.rating)}/5` : ""}${p.entry.note ? ":" : ""}`, ...(p.entry.note ? [p.entry.note.replace(/\s+/g, " ").slice(0, 400)] : []), url(p.book.href), "");
     }
     // What is new on the site this week, from «Що нового».
     const up = d.updates;
@@ -411,8 +391,8 @@ class Digest {
   // `editorial`: Max's text when this reader is in its audience (the run decides), else null.
   // The letter for a reader as it would go: { letter } or { reason } when there is nothing to send, plus the
   // state to remember once it is sent.
-  async prepare(reader, { now = new Date(), force = false, editorial = null } = {}) {
-    const d = await this.build(reader.id, { now });
+  async prepare(reader, { now = new Date(), force = false, editorial = null, pick } = {}) {
+    const d = await this.build(reader.id, { now, pick });
     if (d.empty && !editorial) return { state: d.state, reason: force ? "nothing new (forced: still nothing to show)" : "nothing new" };
     const letter = this.render(reader, d, editorial);
     return { state: d.state, letter: { to: reader.email, subject: letter.subject, text: letter.text, html: letter.html, headers: { "List-Unsubscribe": `<${letter.unsubscribe}>`, "List-Unsubscribe-Post": "List-Unsubscribe=One-Click" } } };
@@ -448,13 +428,15 @@ class Digest {
     const editorial = this.editorial();
     const audience = editorial ? this.audience(editorial.audience) : new Set();
     let withText = 0;
+    const pick = this.weekendPick();
+    const weekend = this.weekend();
     this.running = (async () => {
       const todo = this.recipients().filter((r) => !done.has(r.id));
       const ready = [];
       for (let i = 0; i < todo.length; i += BUILD_AT_ONCE) {
         await Promise.all(todo.slice(i, i + BUILD_AT_ONCE).map(async (r) => {
           try {
-            const p = await this.prepare(r, { now, editorial: audience.has(r.id) ? editorial : null });
+            const p = await this.prepare(r, { now, pick, editorial: audience.has(r.id) ? editorial : null });
             if (p.letter) return ready.push({ r, p });
             this.record(r.id, now, p.state);
             out.skipped++;
@@ -498,6 +480,8 @@ class Digest {
         db.set("digest:editorials", JSON.stringify([{ ...editorial, sent: out.started, readers: withText }, ...this.sentEditorials()]));
         if (JSON.stringify(this.editorial()) === JSON.stringify(editorial)) db.set("digest:editorial", "null");
       }
+      // Max's weekend book went out: next week starts without it.
+      if (weekend && out.sent && JSON.stringify(this.weekend()) === JSON.stringify(weekend)) db.set("digest:weekend", "null");
       // A resumed run adds up with the part before the restart.
       const prev = JSON.parse(db.get("digest:last") || "null");
       if (done.size && prev && dayKyiv(new Date(prev.started)) === today) Object.assign(out, { started: prev.started, sent: prev.sent + out.sent, skipped: prev.skipped + out.skipped, errors: [...prev.errors, ...out.errors] });

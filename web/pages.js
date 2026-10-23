@@ -1517,18 +1517,21 @@ function digestPage({ on, action, user }) {
 }
 
 // /admin/letter: Max's own text on top of the next Friday letter (digest.js). He writes it; the page only keeps it.
-function letterEditorPage({ user, editorial: e, sent, audiences, counts, next, saved }) {
+function letterEditorPage({ user, editorial: e, weekend = {}, error = "", sent, audiences, counts, next, saved }) {
   const MONTHS = ["січня", "лютого", "березня", "квітня", "травня", "червня", "липня", "серпня", "вересня", "жовтня", "листопада", "грудня"];
   const day = (d) => `${d.getDate()} ${MONTHS[d.getMonth()]}`;
   const iso = (s) => day(new Date(s));
   const aud = e?.audience || "all";
   const body = `
 ${pageHead({ crumbs: `<a href="/admin">Статистика</a>`, kicker: "Щотижневий лист", title: "Твій текст у листі", sub: `Стоїть на початку листа, над тим, що сталося на полицях читача. Піде з листом у п’ятницю, ${day(next)}, о 9:00, і більше не повториться.` })}
-<form method="post" action="/admin/letter" class="form">
-  ${saved ? `<p class="saved">Збережено.</p>` : ""}
+<form method="post" action="/admin/digest" class="form">
+  ${errorLine(error)}${saved ? `<p class="saved">Збережено.</p>` : ""}
   <label>Тема листа<input type="text" name="subject" value="${attr(e?.subject || "")}" maxlength="120" placeholder="Як порожньо, тема складається сама з новин полиць"></label>
   <label>Текст<textarea name="text" rows="14" placeholder="Абзаци через порожній рядок. Посилання: [текст](https://…)">${esc(e?.text || "")}</textarea></label>
   <label>Кому<select name="audience">${Object.entries(audiences).map(([k, l]) => `<option value="${k}"${k === aud ? " selected" : ""}>${esc(l)} (${counts[k]})</option>`).join("")}</select><span class="hint">Решта отримають свій звичайний лист без цього тексту, якщо на їхніх полицях є новини.</span></label>
+  <h2>Одна книжка на вихідні</h2>
+  <label>Книжка<input type="url" name="book" value="${attr(weekend.book || "")}" placeholder="https://chytai.org.ua/book/…"><span class="hint">${weekend.title ? `Зараз: «${esc(weekend.title)}». ` : ""}Адреса сторінки книжки на сайті. Одна для всіх листів. Як порожньо, візьметься нотатка читача про книжку з високою оцінкою.</span></label>
+  <label>Кілька слів про неї<textarea name="book_note" rows="3">${esc(weekend.note || "")}</textarea></label>
   <div class="actions"><button class="btn primary">Зберегти</button><button class="btn" name="preview" value="1">Зберегти й подивитись лист</button><span class="grow"></span>${e ? `<span class="muted small">Змінено ${iso(e.updated)}</span>` : ""}</div>
   <p class="muted small">Щоб нічого не додавати до листа, зітри текст і збережи.</p>
 </form>

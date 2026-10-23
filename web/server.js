@@ -853,7 +853,7 @@ app.get("/digest/preview", owner, async (req, res) => {
   const letter = digest.render({ ...reader }, d, editorial);
   if (req.query.text) return res.type("text").send(`Тема: ${letter.subject}\n\n${letter.text}`);
   // On top of the letter, for the owner: the subject and a button that mails it to them.
-  const bar = `<div style="background:#1b1a17;color:#ece8df;font:14px -apple-system,sans-serif;padding:10px 20px;display:flex;gap:16px;align-items:center;flex-wrap:wrap"><span>Тема: <b>${pages.esc(letter.subject)}</b></span><span style="flex:1"></span><a href="/admin/letter" style="color:#a29d92">твій текст</a><a href="?text=1${req.query.reader ? `&reader=${encodeURIComponent(req.query.reader)}` : ""}" style="color:#a29d92">текстова версія</a>${reader.id === req.user.id ? `<form method="post" action="/api/digest?test=1" style="margin:0"><button style="border:1px solid #ece8df;background:none;color:#ece8df;border-radius:999px;padding:6px 14px;cursor:pointer">Надіслати собі</button></form>` : ""}</div>`;
+  const bar = `<div style="background:#1b1a17;color:#ece8df;font:14px -apple-system,sans-serif;padding:10px 20px;display:flex;gap:16px;align-items:center;flex-wrap:wrap"><span>Тема: <b>${pages.esc(letter.subject)}</b></span><span style="flex:1"></span><a href="/admin/digest" style="color:#a29d92">твій текст</a><a href="?text=1${req.query.reader ? `&reader=${encodeURIComponent(req.query.reader)}` : ""}" style="color:#a29d92">текстова версія</a>${reader.id === req.user.id ? `<form method="post" action="/api/digest?test=1" style="margin:0"><button style="border:1px solid #ece8df;background:none;color:#ece8df;border-radius:999px;padding:6px 14px;cursor:pointer">Надіслати собі</button></form>` : ""}</div>`;
   res.send(letter.html.replace("<body", `${bar}<body`));
 });
 // POST /api/digest?test=1 mails the owner their own letter without recording it; without `test` it is the
@@ -869,12 +869,19 @@ app.post("/api/digest", owner, async (req, res) => {
   res.send(pages.messagePage({ title: "Розсилку виконано", text: `надіслано ${r.sent}, пропущено ${r.skipped}${r.errors.length ? `; помилки: ${r.errors.join("; ")}` : ""}`, user: req.user }));
 });
 // Max's own text on top of the next Friday letter (digest.js): a form, who gets it, what went out before.
-app.get("/admin/letter", owner, (req, res) => {
-  res.send(pages.letterEditorPage({ user: req.user, editorial: digest.editorial(), sent: digest.sentEditorials(), audiences: AUDIENCES, counts: digest.audienceCounts(), next: nextFriday(), saved: !!req.query.saved }));
-});
-app.post("/admin/letter", owner, (req, res) => {
+// (Max, 2026-10-23: «урл поміняємо на admin/digest»; the old address redirects.) Also the weekend book, one for everyone.
+const letterPage = (req, res, error = "", values = null) => {
+  const w = digest.weekend();
+  const weekend = values || (w ? { book: `${SITE}${store.href(w.book)}`, note: w.note, title: store.book(w.book)?.title } : { book: "", note: "" });
+  res.status(error ? 400 : 200).send(pages.letterEditorPage({ user: req.user, editorial: digest.editorial(), weekend, error, sent: digest.sentEditorials(), audiences: AUDIENCES, counts: digest.audienceCounts(), next: nextFriday(), saved: !!req.query.saved }));
+};
+app.get("/admin/digest", owner, (req, res) => letterPage(req, res));
+app.get("/admin/letter", owner, (req, res) => res.redirect(301, "/admin/digest"));
+app.post("/admin/digest", owner, (req, res) => {
   digest.setEditorial({ subject: String(req.body.subject || ""), text: String(req.body.text || ""), audience: String(req.body.audience || "all") });
-  res.redirect(303, req.body.preview ? "/digest/preview" : "/admin/letter?saved=1");
+  const error = digest.setWeekend({ book: String(req.body.book || ""), note: String(req.body.book_note || "") });
+  if (error) return letterPage(req, res, error, { book: req.body.book, note: req.body.book_note });
+  res.redirect(303, req.body.preview ? "/digest/preview" : "/admin/digest?saved=1");
 });
 // The next Friday 9:00 Kyiv the letter goes out, for the form's «піде …» line (today, until the run has been).
 function nextFriday() {
