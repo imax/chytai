@@ -84,6 +84,52 @@ class OrigTrial {
     return { answer: JSON.parse(text), usage: message.usage };
   }
 
+  // Every such book on readers' shelves not asked yet (Max 2026-10-23), answers into store.setAiOrig; then the
+  // translations are linked again, so an original already in a catalog pairs at once. server.js repeats it
+  // every six hours for books readers add. Progress in meta `origall`.
+  allState() {
+    return JSON.parse(this.db.get("origall") || "null");
+  }
+
+  async runAll() {
+    if (this.allRunning || !this.client) return false;
+    this.allRunning = true;
+    const have = this.store.aiOrigs();
+    const ids = [...new Set(this.social.all().map((x) => this.store.canonical(x.id)))].filter((id) => !have.has(id));
+    const todo = ids.map((id) => this.store.book(id)).filter((b) => this.orphan(b));
+    const st = { cost: 0, errors: 0, ...this.allState(), at: new Date().toISOString(), prompt: PROMPT, total: todo.length, done: 0, finished: null };
+    const save = () => this.db.set("origall", JSON.stringify(st));
+    save();
+    let next = 0;
+    const worker = async () => {
+      while (next < todo.length) {
+        const b = todo[next++];
+        try {
+          const { answer, usage } = await this.ask(b);
+          st.cost += (usage.input_tokens || 0) * PRICE.input + (usage.output_tokens || 0) * PRICE.output;
+          this.store.setAiOrig(b.id, answer, PROMPT);
+        } catch (e) {
+          st.errors++;
+          this.log(`origall: ${b.id}: ${e.message}`);
+        }
+        st.done++;
+        if (st.done % 20 === 0) save();
+      }
+    };
+    try {
+      await Promise.all(Array.from({ length: PARALLEL }, worker));
+    } finally {
+      st.finished = new Date().toISOString();
+      save();
+      this.allRunning = false;
+      if (st.done) {
+        this.store.linkTranslations();
+        this.store.indexSearch();
+      }
+    }
+    return true;
+  }
+
   // Runs in the background; the admin page shows progress from meta `origtrial`.
   async run() {
     if (this.running || !this.client) return false;

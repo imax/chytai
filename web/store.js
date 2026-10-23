@@ -429,6 +429,8 @@ class Store {
       if (m.length >= 4 && m !== norm(w.title)) (byMain.get(m) || byMain.set(m, []).get(m)).push(w);
     }
     for (const [id, { uk, ukAuthor }] of Object.entries(this.ukTitles)) for (const o of [...(byTitle.get(norm(uk)) || []), ...(byMain.get(norm(uk)) || [])]) if (names(o.author).some((n) => names(ukAuthor).includes(n))) link(id, o.id);
+    // The original Haiku named for a reader's Ukrainian book: a work of that title by the same author.
+    for (const [id, o] of this.aiOrigs()) if (o.title) for (const w of [...(byTitle.get(norm(o.title)) || []), ...(byMain.get(norm(o.title)) || [])]) if (names(w.author).some((n) => names(o.author).includes(n))) link(id, w.id);
     let pairs = [];
     try {
       pairs = readJson(path.join(SEED, "matches.json")).translations || [];
@@ -754,6 +756,32 @@ class Store {
   // first and replace the genres guessed from shop shelves and subjects; the owner's «Основний жанр» still wins.
   aiGenres() {
     return (this.aiG ??= new Map(this.db.prepare("SELECT id, genres FROM ai_genre").all().map((r) => [r.id, JSON.parse(r.genres)])));
+  }
+
+  // Haiku's language for an edition with a Cyrillic title that settles nothing and no language from its shop
+  // (langtrial.js, table ai_lang; Max 2026-10-23): book() takes it as the language, so isRussian() follows it.
+  aiLangs() {
+    return (this.aiL ??= new Map(this.db.prepare("SELECT id, lang FROM ai_lang").all().map((r) => [r.id, r.lang])));
+  }
+
+  setAiLang(id, lang, prompt) {
+    this.db.prepare("INSERT OR REPLACE INTO ai_lang (id, lang, prompt, at) VALUES (?, ?, ?, ?)").run(id, lang, prompt, new Date().toISOString());
+    this.aiLangs().set(id, lang);
+  }
+
+  // Haiku's answer to «what was this Ukrainian book translated from» (origtrial.js, table ai_orig; Max 2026-10-23):
+  // { kind: translation | ukrainian | unknown, title, author, lang }. The original title pairs the book with the
+  // original in linkTranslations when a catalog has it, and is named on the book page while none does.
+  aiOrigs() {
+    return (this.aiO ??= new Map(this.db.prepare("SELECT id, kind, title, author, lang FROM ai_orig").all().map((r) => [r.id, r])));
+  }
+
+  setAiOrig(id, { kind, title = "", author = "", lang = "" }, prompt) {
+    // A Russian original is never named or paired (Max 2026-10-23: «не додаємо оригінал якщо він рос»).
+    const named = kind === "translation" && !/^(ru|rus|russian|рос)/i.test(lang || "");
+    const r = { id, kind, title: named ? title : "", author: named ? author : "", lang };
+    this.db.prepare("INSERT OR REPLACE INTO ai_orig (id, kind, title, author, lang, prompt, at) VALUES (?, ?, ?, ?, ?, ?, ?)").run(id, r.kind, r.title, r.author, r.lang, prompt, new Date().toISOString());
+    this.aiOrigs().set(id, r);
   }
 
   setAiGenres(id, genres, prompt) {
@@ -1406,6 +1434,10 @@ class Store {
     }
     if (ser) out.series = { name: ser.name, head: ser.head, volumes: ser.volumes, items: ser.items.map(({ shelf, item }) => ({ ...this.fromShelfItem(shelf, item), shelf, work: this.canonical(item.id), href: this.href(item.id) })) };
     out.tags = this.genresOf(id, b, eds);
+    const lang = !out.language && this.aiLangs().get(id);
+    // Only to hide: a «uk» answer leaves the word guesses as they are, since Haiku called a few Russian
+    // titles Ukrainian («День бульдозериста», trial v2), and a Russian book shown is worse than one hidden.
+    if (lang === "ru") out.language = lang;
     const ai = edited && this.aiGenres().get(id);
     if (ai?.length) out.tags = [...ai, ...out.tags.filter((t) => !OUR_GENRES.has(t))];
     // A year before 1800 on a reader's book is Open Library's or an import's noise far more often than a real
@@ -1511,7 +1543,9 @@ class Store {
     // not as an edition either (MEGOGO Books gives «Марсіанин» the original title, so it joins The Martian).
     const uk = (b && this.ukTitles?.[b.id]?.uk) || "";
     const inCatalog = translations?.length || (b?.editions || []).some((e) => norm(e.title) === norm(uk) || /[а-яіїєґ]/i.test(e.title));
-    return b && { ...b, translations, ukTitle: inCatalog ? "" : uk, cycle: this.cycleOf(b.id) };
+    // The original Haiku named, while no catalog has it (aiOrigs).
+    const o = b && !translations.length && /[а-яіїєґ]/i.test(b.title || "") && this.aiOrigs().get(b.id);
+    return b && { ...b, translations, ukTitle: inCatalog ? "" : uk, origTitle: o?.title || "", origAuthor: o?.title ? o.author : "", cycle: this.cycleOf(b.id) };
   }
 
   fromShelfItem(shelf, it) {

@@ -558,10 +558,13 @@ const langTrial = new (require("./langtrial").LangTrial)({ store, db: store.db, 
 setTimeout(() => {
   const st = genreTrial.allState();
   if (st && !st.stopped) genreTrial.runAll().catch((e) => console.log(`genreall: ${e.message}`));
+  // Originals and languages (Max 2026-10-23 «включаємо і те і те»): the first run starts by itself, a cut one goes on.
+  for (const t of [origTrial, langTrial]) if (!t.allState()?.finished) t.runAll().catch((e) => console.log(`${t.constructor.name}: ${e.message}`));
 }, 60 * 1000).unref();
 setInterval(() => {
   const st = genreTrial.allState();
   if (st?.finished) genreTrial.runAll().catch((e) => console.log(`genreall: ${e.message}`));
+  for (const t of [origTrial, langTrial]) if (t.allState()?.finished) t.runAll().catch((e) => console.log(`${t.constructor.name}: ${e.message}`));
 }, 6 * 3600 * 1000).unref();
 if (!advice.enabled) console.log("ANTHROPIC_API_KEY is not set: «Чи варто читати?» is off");
 // «Відгуки в інтернеті» by itself: a minute after start, overviews made with an older prompt are redone,
@@ -1325,7 +1328,7 @@ app.post("/admin/lang-trial", owner, (req, res) => {
   res.redirect(303, "/admin/lang-trial");
 });
 // The originals trial (origtrial.js): what Haiku says a reader's Ukrainian book was translated from.
-app.get("/admin/orig-trial", owner, (req, res) => res.send(pages.origTrialPage({ user: req.user, st: origTrial.state(), running: origTrial.running, href: (id) => store.href(id) })));
+app.get("/admin/orig-trial", owner, (req, res) => res.send(pages.origTrialPage({ user: req.user, st: origTrial.state(), running: origTrial.running, all: { ...origTrial.allState(), running: origTrial.allRunning, have: store.aiOrigs().size }, href: (id) => store.href(id) })));
 app.get("/orig-trial/:key", (req, res) => {
   const st = origTrial.state();
   if (!st?.key || req.params.key !== st.key) return res.status(404).send("Немає");
@@ -1333,7 +1336,8 @@ app.get("/orig-trial/:key", (req, res) => {
   res.type("text/plain").send([`промпт v${st.prompt}, ${st.model}, ${st.at}: ${st.done} з ${st.total} (без оригіналу на полицях ${st.pool}), $${(st.cost || 0).toFixed(3)}${st.finished ? "" : ", ще йде"}`, "", ...st.items.map(line)].join("\n"));
 });
 app.post("/admin/orig-trial", owner, (req, res) => {
-  origTrial.run().catch((e) => console.log(`origtrial: ${e.message}`));
+  if (req.body?.all) origTrial.runAll().catch((e) => console.log(`origall: ${e.message}`));
+  else origTrial.run().catch((e) => console.log(`origtrial: ${e.message}`));
   res.redirect(303, "/admin/orig-trial");
 });
 // The whole catalog: start, or stop (the books asked so far keep their genres).

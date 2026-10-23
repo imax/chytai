@@ -66,6 +66,47 @@ class LangTrial {
     return { language: JSON.parse(text).language, usage: message.usage };
   }
 
+  // Every doubtful work of the catalog not asked yet (Max 2026-10-23 «включаємо»), answers into
+  // store.setAiLang; server.js repeats it every six hours for new books. Progress in meta `langall`.
+  allState() {
+    return JSON.parse(this.db.get("langall") || "null");
+  }
+
+  async runAll() {
+    if (this.allRunning || !this.client) return false;
+    this.allRunning = true;
+    const have = this.store.aiLangs();
+    const todo = [...this.store.workIds()].filter((id) => !have.has(id)).map((id) => this.store.book(id)).filter((b) => b && doubtful(b));
+    const st = { cost: 0, errors: 0, ...this.allState(), at: new Date().toISOString(), prompt: PROMPT, total: todo.length, done: 0, finished: null };
+    const save = () => this.db.set("langall", JSON.stringify(st));
+    save();
+    let next = 0;
+    const worker = async () => {
+      while (next < todo.length) {
+        const b = todo[next++];
+        try {
+          const { language, usage } = await this.ask(b);
+          st.cost += (usage.input_tokens || 0) * PRICE.input + (usage.output_tokens || 0) * PRICE.output;
+          this.store.setAiLang(b.id, language, PROMPT);
+        } catch (e) {
+          st.errors++;
+          this.log(`langall: ${b.id}: ${e.message}`);
+        }
+        st.done++;
+        if (st.done % 20 === 0) save();
+      }
+    };
+    try {
+      await Promise.all(Array.from({ length: PARALLEL }, worker));
+    } finally {
+      st.finished = new Date().toISOString();
+      save();
+      this.allRunning = false;
+      if (st.done) this.store.indexSearch();
+    }
+    return true;
+  }
+
   // Runs in the background; the admin page shows progress from meta `langtrial`.
   async run() {
     if (this.running || !this.client) return false;
