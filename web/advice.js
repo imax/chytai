@@ -25,7 +25,7 @@ Use their shelf only where it genuinely bears on this book: mention a book of th
 
 Be careful with facts about the book itself: use the description and readers' notes given to you plus what you reliably know; if you are unsure what the book is like, say so in a few words rather than inventing. No spoilers.
 
-Length and shape: short, about 50 to 70 words in one paragraph, plain prose, no headings, no bullet lists, no bold. Start with the most telling fact, no preamble, no closing offer, no mention of being an AI.`;
+Length follows what there is to say, not a fixed size. When the book is weak, or plainly far from what this reader reads, one to three short sentences are the whole answer. When the book is interesting, and especially when their shelf gives real reasons why it would be interesting for them, take the room to lay them out: up to about 120 words, in one or two paragraphs. Plain prose, no headings, no bullet lists, no bold. Start with the most telling fact, no preamble, no closing offer, no mention of being an AI.`;
 
 const STATUS = { read: "прочитано", reading: "читаю зараз", want: "хочу прочитати", abandoned: "покинуто" };
 const clip = (s, n) => {
