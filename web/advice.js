@@ -380,8 +380,16 @@ class Advice {
       params = { ...params, messages: [...params.messages, { role: "assistant", content: message.content }] };
     }
     if (message.stop_reason === "refusal") throw new Error("Claude не зміг відповісти про цю книжку.");
-    const text = message.content.filter((b) => b.type === "text").map((b) => b.text).join("\n").trim();
+    // The answer is the text after the last search; a line the model says to itself between searches
+    // («Results are a JSON string.», 2026-10-23, Франкл) is not it.
+    const content = message.content || [];
+    let from = 0;
+    for (const [i, b] of content.entries()) if (b.type === "server_tool_use" || b.type === "web_search_tool_result") from = i + 1;
+    let text = content.slice(from).filter((b) => b.type === "text").map((b) => b.text).join("\n").trim();
+    if (!text) text = content.filter((b) => b.type === "text").map((b) => b.text).join("\n").trim();
     if (!text) throw new Error("Порожня відповідь, спробуйте ще раз.");
+    // A real answer is Ukrainian prose of some length; anything else is not kept.
+    if (params.tools && (text.length < 120 || !/[а-яіїєґ]/i.test(text))) throw new Error(`Не схоже на огляд: «${clip(text, 60)}»`);
     return { text, model: message.model, usage, queries, sources };
   }
   // Books with a reader's rating or note («Покинуто» doesn't count, as nowhere on the site; nor books in Russian).
@@ -429,7 +437,7 @@ class Advice {
   // Overviews made with an older prompt, redone with the current one; runs once at start, resumes after a restart.
   redo() {
     if (!this.client) return 0;
-    const ids = this.db.prepare("SELECT book FROM overview WHERE prompt < ? ORDER BY created").all(PROMPT_VERSION).map((r) => r.book);
+    const ids = this.db.prepare("SELECT book FROM overview WHERE prompt < ? OR length(text) < 120 ORDER BY created").all(PROMPT_VERSION).map((r) => r.book);
     for (const id of ids) if (!this.queue.has(id)) this.queue.set(id, { fresh: true });
     this.pump();
     return ids.length;
