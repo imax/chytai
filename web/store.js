@@ -1023,6 +1023,13 @@ class Store {
         const b = found.find((x) => x.exact) || found[0];
         if (b) return b.id;
       }
+      // A shop that puts the series first («Нові Темні Віки. Колонія», Абук) sells the reader's «Колонія»:
+      // the part after the series, as an exact title by the same author (Max, 2026-10-23: no covers on Кідрук).
+      const tail = /^[^.:]{3,}[.:]\s+(.{3,})$/.exec(String(it.title || ""))?.[1];
+      if (tail) {
+        const b = (byTitle.get(norm(tail)) || []).find((x) => x.exact && ok(x.id) && sameAuthor(x.author, it.author) && script(x.title) === script(tail));
+        if (b) return b.id;
+      }
       if (ok(byUrl.get(pageKey(it.url)))) return byUrl.get(pageKey(it.url));
       for (const t of [it.title, it.altTitle]) {
         const b = (byWords.get(words(t)) || []).find((b) => names(b.author).some((n) => names(it.author).includes(n)));
