@@ -1379,7 +1379,10 @@ function addReviewPage({ user, token, rows, text }) {
     const box = row.querySelector(".add-found");
     const q = row.querySelector(".add-find input").value.trim();
     clearTimeout(timer);
-    timer = setTimeout(async () => { box.innerHTML = q.length < 2 ? "" : await (await fetch("/api/add/find?q=" + encodeURIComponent(q))).text(); }, 200);
+    timer = setTimeout(async () => {
+      box.innerHTML = q.length < 2 ? "" : await (await fetch("/api/add/find?q=" + encodeURIComponent(q))).text();
+      if (!row.querySelector(".add-manual")) box.querySelector("[data-own]")?.remove();
+    }, 200);
   };
   form.addEventListener("input", (e) => { const row = e.target.closest(".add-find") && e.target.closest(".add-row"); if (row) look(row); });
   form.addEventListener("input", (e) => { const m = e.target.closest(".add-manual"); if (m) { const row = m.closest(".add-row"); row.querySelector(".add-title").textContent = m.querySelector("input[name^=title_]").value || "Без назви"; row.querySelector(".add-by").textContent = m.querySelector("input[name^=author_]").value; } });
@@ -1392,6 +1395,7 @@ function addReviewPage({ user, token, rows, text }) {
     // «Заповнити вручну»: a title and an author typed in for a line nobody found; the inputs go with the form only then.
     if (e.target.closest("[data-own]")) {
       const m = row.querySelector(".add-manual");
+      if (!m) return;
       m.hidden = false;
       m.querySelectorAll("input").forEach((x) => (x.disabled = false));
       row.querySelector(".add-find").hidden = true;
@@ -1432,7 +1436,7 @@ function addFindResults(hits, outside = []) {
 
 // An address pasted into «Шукати»: the book read from that page (bookpage.js), or the catalog's own copy of it.
 function addPageResult(b, known) {
-  if (b.error) return `<p class="small muted">${esc(b.error)}</p>`;
+  if (b.error) return `<p class="small muted">${esc(b.error)}</p><button type="button" class="text-link small" data-own>Заповнити вручну</button>`;
   if (known) return `<button type="button" class="add-pick" data-pick="${attr(known.id)}" data-title="${attr(known.title)}" data-author="${attr(byline(known.author || ""))}">${cover(known, "xs")}<span><b>${esc(known.title)}</b><span class="muted">${esc(byline(known.author || ""))} · вже є на Chytai</span></span></button>`;
   const by = byline(b.author || "");
   return `<p class="add-src">З сайту ${esc(b.site)}</p><button type="button" class="add-pick" data-page="${attr(b.url)}" data-title="${attr(b.title)}" data-author="${attr(by)}">${cover(b, "xs")}<span><b>${esc(b.title)}</b><span class="muted">${esc([by, b.published].filter(Boolean).join(" · "))}</span>${b.blurb ? `<span class="add-blurb">${esc(b.blurb.length > 160 ? b.blurb.slice(0, 160).replace(/\s+\S*$/, "") + "…" : b.blurb)}</span>` : ""}</span></button>`;

@@ -173,7 +173,13 @@ class BookPage {
     } catch (e) {
       this.log(`bookpage ${url}: ${e.name === "TimeoutError" ? "timeout" : e.cause?.code || e.message}`);
       if (debug) return { debug: { error: `${e.name}: ${e.cause?.code || ""} ${e.message}` } };
-      return { error: "Не вдалося відкрити цю сторінку. Спробуйте інше посилання або заповніть вручну." };
+      return { error: `Не вдалося відкрити сторінку на ${new URL(url).hostname.replace(/^www\./, "")}. Спробуйте посилання з іншого магазину або заповніть вручну.` };
+    }
+    // A page with nothing on it is a gate in front of the site (Сенс answers servers with a script that sets
+    // a cookie and reloads): we don't go round it, the reader fills the book in by hand.
+    if (!m.title && m.text.length < 200) {
+      this.log(`bookpage ${url}: empty page, ${m.text.length} chars`);
+      return this.keep(url, { error: `Сайт ${new URL(m.url).hostname.replace(/^www\./, "")} не показує сторінку нашому серверу. Спробуйте посилання з іншого магазину або заповніть вручну.` });
     }
     let info = plain(m);
     if (this.client) {
