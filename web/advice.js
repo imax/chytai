@@ -4,6 +4,7 @@
 // second look costs nothing; «Спитати ще раз» after the shelf changed makes a new one.
 // Guests and readers with an empty shelf get a line of text instead of the button (pages.js).
 const Anthropic = require("@anthropic-ai/sdk");
+const { isRussian } = require("./store");
 
 const MODEL = "claude-opus-5-5";
 const DAILY_LIMIT = 30; // fresh answers per reader per day; kept answers are free
@@ -20,7 +21,13 @@ const OVERVIEW_SCHEMA = `CREATE TABLE IF NOT EXISTS overview (
   input_tokens INTEGER NOT NULL DEFAULT 0, output_tokens INTEGER NOT NULL DEFAULT 0, searches INTEGER NOT NULL DEFAULT 0
 );`;
 const WEB_SEARCHES = 3;
-const OVERVIEW_DAILY = 150; // fresh overviews a day, all readers together
+const OVERVIEW_DAILY = 150; // fresh overviews a day on readers' clicks, all readers together
+// Made by itself (Max, 2026-10-23: «запускати її автоматично коли у книжки з'являється хоча б один відгук
+// чи оцінка читачів», plus a backfill over the books already rated): a sweep finds every book with a
+// reader's rating or note and no overview, and a small queue makes them a couple at a time. Its own
+// ceiling a day, so a big Goodreads import or the backfill can't run the bill away in one night.
+const AUTO_DAILY = 500;
+const AUTO_PARALLEL = 2;
 // «Що пишуть в інтернеті» (Max, 2026-10-23): one summary per book, not per reader, of what readers and
 // reviewers say, from the web, kept on the page for everyone. Our own words only: a review's text may
 // not be reproduced (Закон 2811-IX), so no quotes, no names, no links.
@@ -64,6 +71,8 @@ class Advice {
     db.exec(SCHEMA);
     db.exec(OVERVIEW_SCHEMA);
     this.client = apiKey ? new Anthropic({ apiKey }) : null;
+    this.queue = new Set(); // book ids waiting for an automatic overview
+    this.running = 0;
   }
   get enabled() {
     return !!this.client;
@@ -234,15 +243,75 @@ class Advice {
     if (!text) throw new Error("Порожня відповідь, спробуйте ще раз.");
     return { text, model: message.model, usage };
   }
+  // Books with a reader's rating or note («Покинуто» doesn't count, as nowhere on the site; nor books in Russian).
+  voiced() {
+    const ids = new Set();
+    for (const [, entries] of this.store.entries)
+      for (const [id, e] of Object.entries(entries)) if (e.status !== "abandoned" && (e.rating != null || e.note)) ids.add(this.store.canonical(id));
+    return [...ids].filter((id) => this.store.book(id) && !isRussian(this.store.book(id)));
+  }
+  // Those of them without an overview yet.
+  missing() {
+    const have = new Set(this.db.prepare("SELECT book FROM overview").all().map((r) => r.book));
+    return this.voiced().filter((id) => !have.has(id));
+  }
+  autoToday() {
+    return this.db.prepare("SELECT COUNT(*) AS n FROM overview WHERE by = 'auto' AND created >= ?").get(new Date().toISOString().slice(0, 10)).n;
+  }
+  // Queues every book that needs an overview and starts on them. Called at start (the backfill), once a
+  // day (what the ceiling left over) and after a rating, a note or an import (via soon()).
+  sweep() {
+    if (!this.client) return 0;
+    const ids = this.missing();
+    for (const id of ids) this.queue.add(id);
+    this.pump();
+    return ids.length;
+  }
+  // A sweep a moment after a change, many changes in a row (an import) folded into one.
+  soon() {
+    clearTimeout(this.soonTimer);
+    this.soonTimer = setTimeout(() => this.sweep(), 3000).unref();
+  }
+  pump() {
+    while (this.running < AUTO_PARALLEL && this.queue.size) {
+      if (this.autoToday() + this.running >= AUTO_DAILY) {
+        if (!this.capped) this.log(`overview: ${AUTO_DAILY} made by itself today, ${this.queue.size} wait for tomorrow`);
+        this.capped = true;
+        return;
+      }
+      this.capped = false;
+      const id = this.queue.values().next().value;
+      this.queue.delete(id);
+      const book = this.store.book(id);
+      if (!book) continue;
+      this.running++;
+      this.overview(book, { by: "auto" })
+        .catch((e) => this.log(`overview failed: ${book.title}: ${e.message}`))
+        .finally(() => {
+          this.running--;
+          this.pump();
+        });
+    }
+  }
+  // For the owner: how many overviews there are, what they cost so far and what waits in the queue.
+  overviewStats() {
+    const t = this.db.prepare("SELECT COUNT(*) AS n, SUM(input_tokens) AS input, SUM(output_tokens) AS output, SUM(searches) AS searches, SUM(CASE WHEN by = 'auto' THEN 1 ELSE 0 END) AS auto FROM overview").get();
+    const today = this.db.prepare("SELECT COUNT(*) AS n FROM overview WHERE created >= ?").get(new Date().toISOString().slice(0, 10)).n;
+    // Opus 5.5 list prices: $4/M in, $20/M out, $10 per 1000 web searches.
+    const cost = ((t.input || 0) * 4 + (t.output || 0) * 20) / 1e6 + (t.searches || 0) / 100;
+    return { ...t, today, cost, queue: this.queue.size + this.running };
+  }
+
   // A fresh overview of the book from the web, kept for everyone.
   async overview(book, { fresh = false, by = "" } = {}) {
     if (!this.client) throw new Error("Зараз недоступно.");
     const id = this.store.canonical(book.id);
     const old = fresh ? null : this.overviewOf(id);
     if (old) return { ...old, cached: true };
-    // A ceiling for the day across all readers: each overview is a few web searches and a long Opus turn.
+    // A ceiling for the day on readers' clicks: each overview is a few web searches and a long Opus turn.
+    // Automatic ones have their own ceiling in pump().
     const day = new Date().toISOString().slice(0, 10);
-    if (this.db.prepare("SELECT COUNT(*) AS n FROM overview WHERE created >= ?").get(day).n >= OVERVIEW_DAILY) throw new Error("На сьогодні оглядів більше немає, спробуйте завтра.");
+    if (by !== "auto" && this.db.prepare("SELECT COUNT(*) AS n FROM overview WHERE by != 'auto' AND created >= ?").get(day).n >= OVERVIEW_DAILY) throw new Error("На сьогодні оглядів більше немає, спробуйте завтра.");
     const t0 = Date.now();
     const { text, model, usage } = await this.turn({
       model: this.model,

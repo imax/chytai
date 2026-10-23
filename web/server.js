@@ -394,6 +394,7 @@ app.post("/import/:source/apply", signed, importSource, (req, res) => {
   const key = (r) => (r.read ? `0${r.read}` : `1${r.added || "9999"}`);
   chosen.sort((a, b) => key(a).localeCompare(key(b)));
   const result = store.importEntries(req.user.id, chosen.map((r) => ({ id: r.match?.id || null, title: r.title, author: r.author, isbns: r.isbns, goodreadsId: r.goodreadsId, appleId: r.appleId, status: r.status, rating: r.rating, year: r.year, note: r.note, copy: r.copy, added: r.added, read: r.read, touched: r.touched, cover: r.cover, ol: r.ol, published: r.published })), { source: req.source });
+  advice.soon();
   const name = IMPORTS[req.source].name;
   console.log(`${name} import @${req.user.username}: ${result.added} added, ${result.updated} updated, ${result.created.length} new books`);
   // New books by hand are mailed to the owner one by one; an import sends one letter with the list.
@@ -440,6 +441,10 @@ const social = new Social(store, (id) => pub(auth.reader(id)));
 // «Чи варто читати?» on book pages (advice.js): Claude, by the reader's own shelf, on a click.
 const advice = new Advice({ store, social, db: store.db, apiKey: process.env.ANTHROPIC_API_KEY || "", log: console.log });
 if (!advice.enabled) console.log("ANTHROPIC_API_KEY is not set: «Чи варто читати?» is off");
+// «Що пишуть в інтернеті» by itself: a minute after start the backfill over every rated book without an
+// overview, then once a day for what the daily ceiling left; ratings, notes and imports call advice.soon().
+setTimeout(() => console.log(`overview: ${advice.sweep()} books queued`), 60 * 1000).unref();
+setInterval(() => advice.sweep(), 24 * 3600 * 1000).unref();
 pages.setStats((id) => social.stats(id));
 // The weekly letter (digest.js): Friday 9:00 Kyiv, to every reader who has not switched it off (Max,
 // 2026-10-20: «Включаємо на всіх»); WEB_DIGEST_TO=owner limits it to the owner again.
@@ -802,6 +807,7 @@ app.post("/api/entry/:id", signed, (req, res) => {
   const e = store.setEntry(req.user.id, req.params.id, patch);
   if (!e) return res.status(404).send("Немає такої книжки");
   if (["read", "want", "abandoned"].includes(patch.status)) dropNow(req.user.id, req.params.id);
+  if (e.status !== "abandoned" && (e.rating != null || e.note)) advice.soon();
   back(req, res, store.href(req.params.id));
 });
 
@@ -931,7 +937,7 @@ app.post("/api/welcome-mail", owner, async (req, res) => {
   res.redirect("/welcome-mail/preview");
 });
 // The owner's statistics page: readers, retention by sign-up week, what people do on the site (admin.js).
-app.get("/admin", owner, (req, res) => res.send(adminPage({ user: req.user, stats: admin.stats(), layout: pages.layout })));
+app.get("/admin", owner, (req, res) => res.send(adminPage({ user: req.user, stats: admin.stats(), overviews: advice.overviewStats(), layout: pages.layout })));
 app.get("/admin/readers", owner, (req, res) => res.send(readersPage({ user: req.user, stats: admin.stats(), layout: pages.layout, q: req.query.q, min: Number(req.query.books) || 0, sort: String(req.query.sort || "created"), page: req.query.page })));
 app.get("/admin.json", owner, (req, res) => res.json(admin.stats()));
 // One Google Books request with the server's key, for the owner to see what Google answers from here.

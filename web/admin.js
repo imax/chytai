@@ -349,7 +349,7 @@ ${pager}
   return layout({ title: "Читачі · Статистика", user, path: "/admin", body });
 }
 
-function adminPage({ user, stats: s, layout }) {
+function adminPage({ user, stats: s, overviews: o = null, layout }) {
   const t = s.totals;
   const tiles = [
     tile(t.readers, "читачів", `+${t.signupsWeek} за тиждень, +${t.signupsMonth} за місяць`),
@@ -358,6 +358,7 @@ function adminPage({ user, stats: s, layout }) {
     tile(t.entries, "книжок на полицях", `+${t.entriesWeek} за тиждень · ${t.want} у «хочу прочитати»`),
     tile(t.ratings, "оцінок", `${t.notes} нотаток`),
     tile(t.follows, "стежень", `${t.digestOn} підписані на лист, ${t.digestOff} відписались`),
+    ...(o ? [tile(o.n, "оглядів від Claude", `${o.today} сьогодні · ${o.queue} в черзі · ≈ $${o.cost.toFixed(2)}`)] : []),
   ].join("");
 
   // Newest week on top in both tables (Max, 2026-10-20: «свіжі зверху», «починаємо з цього тижня»).
