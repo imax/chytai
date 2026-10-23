@@ -477,7 +477,11 @@ class Advice {
       if (!book) continue;
       this.running++;
       this.overview(book, { by: fresh ? "redo" : "auto", fresh })
-        .catch((e) => this.log(`overview failed: ${book.title}: ${e.message}`))
+        .catch((e) => {
+          this.failed = (this.failed || 0) + 1;
+          this.lastError = `${book.title}: ${e.message}`.slice(0, 300);
+          this.log(`overview failed: ${book.title}: ${e.message}`);
+        })
         .finally(() => {
           this.running--;
           this.pump();
@@ -491,7 +495,8 @@ class Advice {
     const v = this.db.prepare("SELECT SUM(vote = 1) AS up, SUM(vote = -1) AS down FROM overview_vote").get();
     // Opus 5.5 list prices: $4/M in, $20/M out, $10 per 1000 web searches.
     const cost = ((t.input || 0) * 4 + (t.output || 0) * 20) / 1e6 + (t.searches || 0) / 100;
-    return { ...t, today, cost, queue: this.queue.size + this.running, up: v.up || 0, down: v.down || 0 };
+    const current = this.db.prepare("SELECT COUNT(*) AS n FROM overview WHERE prompt = ?").get(PROMPT_VERSION).n;
+    return { ...t, today, cost, queue: this.queue.size + this.running, up: v.up || 0, down: v.down || 0, current, version: PROMPT_VERSION, failed: this.failed || 0, lastError: this.lastError || "" };
   }
 
   // A fresh overview of the book from the web, kept for everyone.
