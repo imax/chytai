@@ -402,22 +402,23 @@ function bookLd(book, shelf, s, readers) {
 }
 
 // The book, the reader's own buttons, where to get it, what readers said, what it is about.
-// «Знаєте, де знайти?» under «Українською: …, у каталогах поки немає»: a reader pastes the page of the
-// Ukrainian edition in a store or at its publisher (POST /api/book/:id/edition).
-// Only the owner sees it while our own search (ukfind.js) is tried (Max, 2026-10-23: «чи нам дійсно треба урл»).
-const SHOW_EDITION_TIP = true;
-function editionTip(book, error) {
-  return `<details class="edition-tip"${error ? " open" : ""}>
-  <summary class="text-link small">Знаєте, де знайти українською?</summary>
-  <form method="post" action="/api/book/${attr(encodeURIComponent(book.id))}/edition" class="edition-form">
-    <p class="small muted">Вставте посилання на сторінку цієї книжки в магазині чи у видавництва. Ми візьмемо звідти назву, обкладинку й опис і покажемо, де її взяти.</p>
+// «Є український переклад» on a foreign book's page (Max, 2026-10-23: «читач може сказати нам = є переклад,
+// йди пошукай … хай може і урл буде, але за бажанням»): a signed-in reader says a translation exists; the
+// address of its page is optional, without it we look ourselves (ukfind.js). `state`: ask | searching | none | found.
+function ukTip(book, state, error) {
+  if (state === "searching") return `<p class="small muted uk-tip" id="uk">Шукаємо українське видання. Зазирніть сюди за хвилину.</p>`;
+  const lead = state === "none" ? "Ми шукали український переклад і поки не знайшли. Знаєте, де він є?" : book.ukTitle ? "Знаєте, де знайти українською?" : "Є український переклад?";
+  return `<details class="edition-tip uk-tip" id="uk"${error ? " open" : ""}>
+  <summary class="text-link small">${lead}</summary>
+  <form method="post" action="/api/book/${attr(encodeURIComponent(book.id))}/uk-hint" class="edition-form">
+    <p class="small muted">Скажіть нам, і ми його пошукаємо. Якщо знаєте сторінку книжки в магазині чи у видавництва, вставте посилання: так буде точніше.</p>
     ${error ? `<p class="error small">${esc(error)}</p>` : ""}
-    <div class="edition-row"><input type="url" name="url" required placeholder="https://…" autocomplete="off"><button class="btn">Додати</button></div>
+    <div class="edition-row"><input type="url" name="url" placeholder="Посилання (необов'язково)" autocomplete="off"><button class="btn">${state === "none" ? "Додати" : "Є переклад"}</button></div>
   </form>
 </details>`;
 }
 
-function bookPage({ book, entry, now = false, user, shelf, inLibrary = new Map(), readers = [], also = [], writings = [], reviewError = "", editionError = "", readUrl = "", freeRead = false, advice = null, overview = null, overviewVote = null }) {
+function bookPage({ book, entry, now = false, user, shelf, inLibrary = new Map(), readers = [], also = [], writings = [], reviewError = "", editionError = "", ukAsk = null, readUrl = "", freeRead = false, advice = null, overview = null, overviewVote = null }) {
   const s = statsOf(book.id);
   const kicker = [book.tags?.find((t) => t !== "українською"), isUk(book) ? "українською" : LANG_ADV[String(book.language || "").toLowerCase()] || ""].filter(Boolean).map(cap).join(" · ");
   const sub = [book.altTitle ? esc(book.altTitle) : "", book.author ? `<span class="authors">${authorLinks(book.author)}</span>` : "", book.published ? String(book.published) : "", book.pages ? `${book.pages} с.` : ""].filter(Boolean).join(" · ");
@@ -456,11 +457,11 @@ function bookPage({ book, entry, now = false, user, shelf, inLibrary = new Map()
       ${writings.length ? writingsList(writings, book, user) : ""}
       ${user ? addWriting(book, reviewError) : ""}
     </section>` : ""}
-    ${book.blurb || book.ukTitle ? `<section class="block" id="about">
+    ${book.blurb || book.ukTitle || ukAsk ? `<section class="block" id="about">
       ${label("Про книжку")}
       ${book.blurb ? `<div class="about">${book.blurb.split(/\n\n+/).map((t) => `<p>${esc(t)}</p>`).join("")}</div>` : ""}
       <p class="small muted">${[book.blurb && !book.edited?.blurb ? (book.blurbSource ? `Опис: ${esc(book.blurbSource)}` : `Опис з сайту ${esc(shelf ? shelf.name : book.source)}`) : "", book.ukTitle ? `Українською: «${esc(book.ukTitle)}», у каталогах поки немає` : ""].filter(Boolean).join(" · ")}</p>
-      ${book.ukTitle && user?.owner && SHOW_EDITION_TIP ? editionTip(book, editionError) : ""}
+      ${ukAsk && ukAsk !== "found" ? ukTip(book, ukAsk, editionError) : ""}
     </section>` : ""}
   </div>
   <aside>

@@ -746,7 +746,7 @@ app.get("/book/:id", (req, res) => {
   if (!book) return res.status(404).send(pages.messagePage({ title: "Немає такої книжки", text: "", user: req.user }));
   const file = readerFileFor(req.user?.id, book);
   const free = !file && freeFileFor(book);
-  res.send(pages.bookPage({ freeRead: !!free, book, entry: store.sharedEntry(req.user?.id, book.id), now: !!req.user && nowIds(req.user.id).has(store.canonical(book.id)), user: req.user, readUrl: file ? `${READER_URL}/?open=${encodeURIComponent(file.name)}` : free ? `${READER_URL}/free/${encodeURIComponent(free.name)}` : "", shelf: book.shelf && (req.owner || !isDraft(book.shelf)) ? store.shelf(book.shelf) : null, inLibrary: inLibraryMap(req), readers: readersOf(book.id), also: social.alsoForBook(book.id, { limit: 4 }), writings: reviews.of(book.id), reviewError: String(req.query.review_error || "").slice(0, 300), editionError: String(req.query.edition_error || "").slice(0, 300), advice: advice.state(req.user, book.id), overview: linkedOverview(book), overviewVote: advice.voteOf(book.id, req.user?.id) }));
+  res.send(pages.bookPage({ freeRead: !!free, book, entry: store.sharedEntry(req.user?.id, book.id), now: !!req.user && nowIds(req.user.id).has(store.canonical(book.id)), user: req.user, readUrl: file ? `${READER_URL}/?open=${encodeURIComponent(file.name)}` : free ? `${READER_URL}/free/${encodeURIComponent(free.name)}` : "", shelf: book.shelf && (req.owner || !isDraft(book.shelf)) ? store.shelf(book.shelf) : null, inLibrary: inLibraryMap(req), readers: readersOf(book.id), also: social.alsoForBook(book.id, { limit: 4 }), writings: reviews.of(book.id), reviewError: String(req.query.review_error || "").slice(0, 300), editionError: String(req.query.edition_error || "").slice(0, 300), ukAsk: ukAskFor(req, book), advice: advice.state(req.user, book.id), overview: linkedOverview(book), overviewVote: advice.voteOf(book.id, req.user?.id) }));
 });
 
 // An author: their works from Wikidata (linked to our books of them) and every book of theirs we have.
@@ -1088,7 +1088,16 @@ function addEdition(orig, p, by) {
   return book;
 }
 // Our own search for those editions (ukfind.js); the owner runs it on /admin/ukfind for now.
-const ukfind = new UkFinder({ store, db: store.db, apiKey: process.env.ANTHROPIC_API_KEY || "", bookpage, addEdition, log: console.log });
+// A reader's hint that found the edition is news for the owner, to check the pair.
+const onUkHint = (b, r) => r.status === "found" && r.edition && notifyOwner(`Знайшли українське видання: ${r.edition.title}`, [`Читач підказав, що є переклад «${b.title}», і пошук знайшов:`, "", `Переклад: ${r.edition.title}${r.edition.author ? ` — ${r.edition.author}` : ""}  ${SITE}${store.href(r.edition.id)}`, `Сторінка: ${r.url}`, "", `Прибрати пару: ${SITE}/admin/dupes#decided`, `Усі пошуки: ${SITE}/admin/ukfind`].join("\n"));
+const ukfind = new UkFinder({ store, db: store.db, apiKey: process.env.ANTHROPIC_API_KEY || "", bookpage, addEdition, onHint: onUkHint, log: console.log });
+// The «Є український переклад» line for a signed-in reader: a book with a Latin title and no Ukrainian edition.
+function ukAskFor(req, book) {
+  if (!req.user || !ukfind.client || !/[a-z]/i.test(book.title) || CYR_RE.test(book.title)) return null;
+  if (store.translationsOf(book.id).some((t) => CYR_RE.test(t.title)) || (book.editions || []).some((e) => CYR_RE.test(e.title))) return null;
+  return ukfind.state(book.id);
+}
+const CYR_RE = /[а-яіїєґ]/i;
 app.get("/admin/ukfind", owner, (req, res) => res.send(pages.ukFindPage({ user: req.user, candidates: ukfind.candidates().length, list: ukfind.list(), running: ukfind.running, enabled: !!ukfind.client })));
 app.post("/admin/ukfind", owner, async (req, res) => {
   const ids = String(req.body.ids || "").split(/[\s,]+/).map((x) => store.resolve(x.replace(/^.*\/book\//, "")) || "").filter(Boolean);
@@ -1101,10 +1110,20 @@ app.post("/admin/ukfind", owner, async (req, res) => {
 // знайти»): a reader pastes the address of the Ukrainian edition's page; it is read like a link on /add
 // (bookpage.js), becomes a book of its own with that store as «Де взяти», paired with the original as its
 // translation. Published at once, like «Огляди»; Max gets a letter and can undo the pair on /admin/dupes.
-app.post("/api/book/:id/edition", signed, async (req, res) => {
+// «Є український переклад» on a foreign book's page: with an address, that page is the edition (below);
+// without one, we look for it ourselves (ukfind.js) and the page says so meanwhile.
+app.post("/api/book/:id/uk-hint", signed, async (req, res, next) => {
+  if (String(req.body.url || "").trim()) return next();
   const orig = store.book(store.resolve(req.params.id) || req.params.id);
   if (!orig) return res.status(404).send(pages.messagePage({ title: "Немає такої книжки", text: "", user: req.user }));
-  const back = (error) => res.redirect(303, `${store.href(orig.id)}${error ? `?edition_error=${encodeURIComponent(error)}` : ""}#about`);
+  const ok = ukfind.hint(orig, req.user.id);
+  console.log(`uk hint @${req.user.username}: ${orig.id}${ok ? "" : " (not queued)"}`);
+  res.redirect(303, `${store.href(orig.id)}#uk`);
+});
+app.post(["/api/book/:id/edition", "/api/book/:id/uk-hint"], signed, async (req, res) => {
+  const orig = store.book(store.resolve(req.params.id) || req.params.id);
+  if (!orig) return res.status(404).send(pages.messagePage({ title: "Немає такої книжки", text: "", user: req.user }));
+  const back = (error) => res.redirect(303, `${store.href(orig.id)}${error ? `?edition_error=${encodeURIComponent(error)}` : ""}#uk`);
   const url = String(req.body.url || "").trim().slice(0, 500);
   if (!isUrl(url)) return back("Вставте посилання на сторінку книжки в магазині чи у видавництва.");
   if (!req.owner && auth.tooMany(`edition:${req.user.id}`, 20)) return back("Забагато посилань за годину. Спробуйте трохи згодом.");

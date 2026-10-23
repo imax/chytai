@@ -21,7 +21,7 @@ Answer with one JSON object and nothing else: {"urls": ["https://…", "…"]} w
 const norm = (s) => String(s || "").toLowerCase().replace(/[’'`ʼ"«»]/g, "").replace(/[^\p{L}\p{N}]+/gu, " ").trim();
 
 class UkFinder {
-  constructor({ store, db, apiKey = "", bookpage, addEdition, log = () => {} }) {
+  constructor({ store, db, apiKey = "", bookpage, addEdition, onHint = null, log = () => {} }) {
     this.store = store;
     this.db = db;
     this.bookpage = bookpage;
@@ -29,7 +29,10 @@ class UkFinder {
     this.log = log;
     this.client = apiKey ? new (require("@anthropic-ai/sdk"))({ apiKey }) : null;
     db.exec(SCHEMA);
+    db.exec("CREATE TABLE IF NOT EXISTS uk_hint (book TEXT NOT NULL, reader TEXT NOT NULL, created TEXT NOT NULL, PRIMARY KEY (book, reader))");
     this.running = false;
+    this.queue = new Set(); // book ids from readers' hints
+    this.onHint = onHint;
   }
 
   // Foreign books whose Ukrainian title Wikidata knows and no catalog has, not asked within a month.
@@ -68,7 +71,8 @@ class UkFinder {
         max_tokens: 2000,
         tools: [{ type: "web_search_20260209", name: "web_search", max_uses: SEARCHES }],
         system: SYSTEM,
-        messages: [{ role: "user", content: `The Ukrainian translation: «${uk.uk}»${uk.ukAuthor ? `, ${uk.ukAuthor}` : ""}.\nThe original: «${book.title}»${book.author ? `, ${book.author}` : ""}.` }],
+        // From a reader's «Є український переклад» we may know only the original.
+        messages: [{ role: "user", content: `${uk.uk ? `The Ukrainian translation: «${uk.uk}»${uk.ukAuthor ? `, ${uk.ukAuthor}` : ""}.\n` : "A reader says this book has been translated into Ukrainian; its Ukrainian title is unknown to us.\n"}The original: «${book.title}»${book.author ? `, ${book.author}` : ""}.` }],
       };
       let message;
       for (let i = 0; i < 4; i++) {
@@ -87,7 +91,7 @@ class UkFinder {
     if (!urls.length) return save("none", { note: "Claude нічого не знайшов" });
     // The first address we can read whose title is the Ukrainian one (its first words, at least).
     const notes = [];
-    const want = norm(uk.uk).split(" ").filter((w) => w.length > 2).slice(0, 2);
+    const want = uk.uk ? norm(uk.uk).split(" ").filter((w) => w.length > 2).slice(0, 2) : [];
     for (const url of urls) {
       const p = await this.bookpage.fromUrl(url, "ukfind");
       if (p.error) {
@@ -102,6 +106,42 @@ class UkFinder {
       if (edition) return save("found", { url, found: edition.id });
     }
     return save("none", { url: urls[0], note: notes.join("; ") });
+  }
+
+  // A reader's «Є український переклад» (Max, 2026-10-23: «читач може сказати нам = є переклад, йди пошукай»):
+  // the book goes into a small queue and is searched for in the background. Returns false when the reader
+  // asked too much today or the book was searched for within a month.
+  hint(book, reader) {
+    if (!this.client) return false;
+    const day = new Date().toISOString().slice(0, 10);
+    if (this.db.prepare("SELECT COUNT(*) AS n FROM uk_hint WHERE reader = ? AND created >= ?").get(reader, day).n >= 10) return false;
+    this.db.prepare("INSERT OR IGNORE INTO uk_hint (book, reader, created) VALUES (?, ?, ?)").run(book.id, reader, new Date().toISOString());
+    if (this.state(book.id) !== "ask") return false;
+    this.queue.add(book.id);
+    this.pump();
+    return true;
+  }
+  // What the book page shows a reader: "ask", "searching", or "none" (searched within a month, nothing found).
+  state(id) {
+    if (this.queue.has(id)) return "searching";
+    const r = this.db.prepare("SELECT status, created FROM uk_find WHERE book = ?").get(id);
+    return r && r.status !== "error" && Date.now() - Date.parse(r.created) < MONTH ? (r.status === "found" ? "found" : "none") : "ask";
+  }
+  async pump() {
+    if (this.pumping) return;
+    this.pumping = true;
+    try {
+      for (const id of this.queue) {
+        const b = this.store.book(id);
+        if (b && this.today() < DAILY) {
+          const r = await this.find(b).catch((e) => ({ status: "error", note: e.message }));
+          this.onHint?.(b, r);
+        }
+        this.queue.delete(id);
+      }
+    } finally {
+      this.pumping = false;
+    }
   }
 
   // Up to n books, one at a time; returns what each gave.
