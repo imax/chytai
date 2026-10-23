@@ -422,12 +422,14 @@ class Digest {
   // so a run can be cut off (2026-10-23: a deploy at 9:19 stopped the first one after 17 of 62 readers): meta
   // digest:running holds the day of an unfinished run, the timer picks it up again after a restart, and a
   // reader already done that day (digest_log.sent) is skipped, so nobody gets two letters.
-  async run({ now = new Date() } = {}) {
+  // `skip` (reader ids), when given, replaces «done today»: a second run the same day to everyone but those
+  // (Max, 2026-10-23: «розішлемо повторно, крім тих трьох, хто вже отримав»).
+  async run({ now = new Date(), skip = null } = {}) {
     if (this.running) return this.running;
     const db = this.store.db;
     const today = dayKyiv(now);
     db.set("digest:running", today);
-    const done = new Set(db.prepare("SELECT reader, sent FROM digest_log").all().filter((l) => dayKyiv(new Date(l.sent)) === today).map((l) => l.reader));
+    const done = skip || new Set(db.prepare("SELECT reader, sent FROM digest_log").all().filter((l) => dayKyiv(new Date(l.sent)) === today).map((l) => l.reader));
     const out = { started: now.toISOString(), sent: 0, skipped: 0, errors: [], resumed: done.size };
     // Max's text is read once, at the start, so an edit during the run does not split the letters.
     const editorial = this.editorial();

@@ -863,7 +863,9 @@ app.post("/api/digest", owner, async (req, res) => {
     const r = await digest.sendTo(auth.reader(req.user.id), { dry: true, force: true, editorial: digest.editorial() });
     return res.send(pages.messagePage({ title: r.sent ? "Лист надіслано" : "Листа не було б", text: r.sent ? `Тема: ${r.subject}` : r.reason, user: req.user }));
   }
-  const r = await digest.run();
+  // ?skip=a@x,b@y: the same day once more, to everyone but these addresses.
+  const skip = req.query.skip ? new Set(String(req.query.skip).split(",").map((e) => auth.byEmail(e.trim())?.id).filter(Boolean)) : null;
+  const r = await digest.run({ skip });
   res.send(pages.messagePage({ title: "Розсилку виконано", text: `надіслано ${r.sent}, пропущено ${r.skipped}${r.errors.length ? `; помилки: ${r.errors.join("; ")}` : ""}`, user: req.user }));
 });
 // Max's own text on top of the next Friday letter (digest.js): a form, who gets it, what went out before.
