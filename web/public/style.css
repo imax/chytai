@@ -816,3 +816,8 @@ aside .side-lists + .label, aside p + .label, aside dialog + .label { margin-top
 .cover-pick { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 4px; border: 2px solid transparent; border-radius: 6px; background: none; cursor: pointer; font: inherit; font-size: 11px; color: var(--muted); }
 .cover-pick img { width: 84px; height: 126px; object-fit: cover; border-radius: 3px; }
 .cover-pick.on { border-color: var(--accent, #2e6b3f); }
+.trial { width: 100%; border-collapse: collapse; margin-top: 18px; font-size: 15px; }
+.trial th, .trial td { text-align: left; padding: 10px 8px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+.trial th { font: 600 12px/1.4 var(--sans); text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); }
+.trial tr.diff td:last-child { color: var(--accent); font-weight: 500; }
+.trial.only-diff tbody tr:not(.diff) { display: none; }

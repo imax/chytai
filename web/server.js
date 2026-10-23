@@ -490,6 +490,7 @@ const withCovers = (l) => ({ ...l, covers: lists.covers(l.id) });
 // «Чи варто читати?» on book pages (advice.js): Claude, by the reader's own shelf, on a click.
 const bookpage = new BookPage({ apiKey: process.env.ANTHROPIC_API_KEY || "", log: console.log });
 const advice = new Advice({ store, social, db: store.db, apiKey: process.env.ANTHROPIC_API_KEY || "", log: console.log });
+const genreTrial = new (require("./genretrial").GenreTrial)({ store, social, db: store.db, apiKey: process.env.ANTHROPIC_API_KEY || "", genres: pages.GENRES, log: console.log });
 if (!advice.enabled) console.log("ANTHROPIC_API_KEY is not set: «Чи варто читати?» is off");
 // «Відгуки в інтернеті» by itself: a minute after start, overviews made with an older prompt are redone,
 // and (while advice.js BACKFILL is on) every rated book without one gets queued, again once a day; a
@@ -1228,6 +1229,12 @@ app.post("/api/welcome-mail", owner, async (req, res) => {
   res.redirect("/welcome-mail/preview");
 });
 // The owner's statistics page: readers, retention by sign-up week, what people do on the site (admin.js).
+// The genres trial (genretrial.js): Haiku's genres for 200 books on readers' shelves next to ours.
+app.get("/admin/genres-trial", owner, (req, res) => res.send(pages.genreTrialPage({ user: req.user, st: genreTrial.state(), running: genreTrial.running, href: (id) => store.href(id) })));
+app.post("/admin/genres-trial", owner, (req, res) => {
+  genreTrial.run().catch((e) => console.log(`genretrial: ${e.message}`));
+  res.redirect(303, "/admin/genres-trial");
+});
 app.get("/admin", owner, (req, res) => res.send(adminPage({ user: req.user, stats: admin.stats(), overviews: advice.overviewStats(), layout: pages.layout })));
 app.get("/admin/overviews", owner, (req, res) => res.send(overviewsPage({ user: req.user, list: advice.overviewList().map((r) => ({ ...r, complaints: r.down ? advice.complaintsOf(r.book.id) : [] })), stats: advice.overviewStats(), who: (id) => (id && id !== "auto" ? pub(auth.reader(id)) : null), layout: pages.layout })));
 app.get("/admin/readers", owner, (req, res) => res.send(readersPage({ user: req.user, stats: admin.stats(), layout: pages.layout, q: req.query.q, min: Number(req.query.books) || 0, sort: String(req.query.sort || "created"), page: req.query.page })));

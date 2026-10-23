@@ -1175,6 +1175,23 @@ ${sections.length ? "" : `<p class="muted">Поки замало читачів,
   return layout({ title: "Популярне", body, user, path: "/popular", canonical: "/popular", description: "Що читають, хочуть прочитати й найвище оцінюють читачі Chytai." });
 }
 
+// ---- /admin/genres-trial: our genres next to Haiku's for 200 books (genretrial.js) ----
+
+function genreTrialPage({ user, st, running, href }) {
+  const items = st?.items || [];
+  const changed = items.filter((x) => !x.error && x.after[0] !== x.before[0]);
+  const show = (gs) => (gs.length ? gs.map((g) => esc(cap(g))).join(", ") : `<span class="muted">—</span>`);
+  const row = (x) => `<tr${x.after[0] !== x.before[0] ? ' class="diff"' : ""}><td><a href="${attr(href(x.id))}">${esc(x.title)}</a><br><span class="small muted">${esc(x.author)}</span></td><td>${show(x.before)}</td><td>${x.error ? `<span class="error small">${esc(x.error)}</span>` : show(x.after)}</td></tr>`;
+  const body = `
+${pageHead({ crumbs: `<a href="/admin">Статистика</a>`, kicker: "Проба", title: "Жанри від Haiku", sub: st ? [`${st.done} з ${st.total}`, `основний жанр змінився у ${changed.length}`, st.errors ? `помилок ${st.errors}` : "", `$${(st.cost || 0).toFixed(3)}`, running ? "іде…" : st.finished ? "готово" : "зупинилось"].filter(Boolean).join(" · ") : "Ще не запускали. 200 випадкових книжок з полиць читачів, на сайті нічого не змінюється." })}
+${running ? "" : `<form method="post" action="/admin/genres-trial"><button class="btn primary">${st ? "Прогнати ще 200 інших" : "Запустити"}</button></form>`}
+${items.length ? `<div class="tabs" data-trial><button type="button" class="tab on" data-v="diff">Змінилось <span>${changed.length}</span></button><button type="button" class="tab" data-v="">Усі <span>${items.length}</span></button></div>
+<table class="trial"><thead><tr><th>Книжка</th><th>Було</th><th>Стало (Haiku)</th></tr></thead><tbody>${[...changed, ...items.filter((x) => !changed.includes(x))].map(row).join("")}</tbody></table>
+<script>(() => { const t = document.querySelector(".trial"); const set = (v) => t.classList.toggle("only-diff", v === "diff"); set("diff"); document.querySelector("[data-trial]").addEventListener("click", (e) => { const b = e.target.closest(".tab"); if (!b) return; document.querySelectorAll("[data-trial] .tab").forEach((x) => x.classList.toggle("on", x === b)); set(b.dataset.v); }); })();</script>` : ""}
+${running ? `<script>setTimeout(() => location.reload(), 5000)</script>` : ""}`;
+  return layout({ title: "Жанри від Haiku", body, user, path: "/admin" });
+}
+
 // ---- a genre (/genre/<slug>) ----
 
 // One genre's books: the ones readers rate best, then all of them, the ones on readers' shelves first;
@@ -2040,7 +2057,7 @@ module.exports = {
   decidedList,
   welcomePage,
   addPage, addReviewPage, addFindResults, addPageResult, ukFindPage,
-  layout, homePage, bookPage, bookEditPage, russianPage, editPage, libraryPage, readersPage, popularPage, genrePage, publishersPage, publisherPage, searchPage, searchResults, authorPage,
+  layout, homePage, bookPage, bookEditPage, russianPage, editPage, libraryPage, readersPage, popularPage, genrePage, genreTrialPage, publishersPage, publisherPage, searchPage, searchResults, authorPage,
   loginPage, codePage, signupPage, settingsPage, privacyPage, updatesPage, messagePage, digestPage, followMailPage, importPage, importPreviewPage, importDonePage,
   GENRES, esc, byline, STATUS, COPY, inline, isUk, setTitleLinks, setAuthorLinks, setStats, setReadersWithNote,
 };
