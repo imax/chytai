@@ -233,7 +233,7 @@ function card(book, { avg, extra = "", data = "" } = {}) {
 </article>`;
 }
 
-// A small book in a sidebar: «Читали це, сподобалось і це», «Тобі може зайти».
+// A small book in a sidebar: «Читали це, сподобалось і це».
 function mini(book, size = "sm") {
   const r = statsOf(book.id).avg;
   return `<a class="mini" href="${attr(book.href)}">${cover(book, size)}<span><b>${esc(book.title)}</b>${book.author ? `<span class="by">${esc(byline(book.author))}</span>` : ""}${r != null ? `<span class="meta">${stars(r, { num: false })}</span>` : ""}</span></a>`;
@@ -857,7 +857,7 @@ function entryForm(book, entry) {
 // The same list twice: /me is the signed-in reader's own shelf with «змінити» on every row (the only
 // place where status, rating and notes are edited); /@<username> is that reader's public shelf, where a
 // signed-in visitor sees what they share and can want any book in one tap.
-function libraryPage({ rows, user, reader, own = false, mineIds = null, recs = [], following = false, follows = { followers: [], following: [] }, now = null }) {
+function libraryPage({ rows, user, reader, own = false, mineIds = null, following = false, follows = { followers: [], following: [] }, now = null }) {
   const year = new Date().getFullYear();
   // «Дитяча полиця» (Max, 2026-10-23): books kept for the children have a tab of their own and count in none
   // of the reader's numbers or other tabs.
@@ -923,7 +923,6 @@ ${list}
     </div>` : ""}
     ${common.length ? `${label("Спільне з тобою")}<p class="small muted">${books(common.length)}, які ви обоє маєте на полиці.</p><div class="grid four">${common.slice(0, 4).map((r) => `<a href="${attr(r.book.href)}">${cover(r.book, "card")}</a>`).join("")}</div>` : ""}
     ${wants.length ? `${label("Хоче прочитати")}${minis(wants.map((r) => r.book), "xs")}` : ""}
-    ${recs.length ? `${label("Тобі може зайти")}<p class="small muted">За твоїми п’ятірками</p>${minis(recs)}` : ""}
     ${followBlock}
   </aside>
 </div>

@@ -618,11 +618,8 @@ app.get("/@:username", (req, res) => {
   const own = req.user?.id === reader.id && !("public" in req.query);
   const rows = libraryRows(reader.id);
   const follows = { followers: auth.followers(reader.id).map((id) => pub(auth.reader(id))).filter(Boolean), following: auth.following(reader.id).map((id) => pub(auth.reader(id))).filter(Boolean) };
-  if (own) {
-    const fives = rows.filter((r) => r.rating >= 5 && !r.kids).slice(0, 5).map((r) => r.id);
-    const recs = social.alsoLiked(fives, { limit: 4, skip: new Set(rows.map((r) => r.id)) });
-    return res.send(pages.libraryPage({ rows, user: req.user, reader: req.user, own: true, recs, follows, now: nowFor(reader.id, { own: true }) }));
-  }
+  // The profile is the reader's own stats and books; recommendations live on other pages (Max, 2026-10-23).
+  if (own) return res.send(pages.libraryPage({ rows, user: req.user, reader: req.user, own: true, follows, now: nowFor(reader.id, { own: true }) }));
   res.send(pages.libraryPage({ rows, user: req.user, reader, now: nowFor(reader.id), mineIds: req.user && req.user.id !== reader.id ? store.inLibrary(req.user.id) : null, following: auth.follows(req.user?.id, reader.id), follows }));
 });
 // The owner's page before usernames (/reader/max) moved to /@maxua.
