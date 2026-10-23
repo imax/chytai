@@ -287,6 +287,43 @@ class Store {
     this.pickCovers();
     this.linkTranslations();
     this.indexSearch();
+    this.seedMerges();
+  }
+
+  // Merges written into matches.json «merges» ([keep, dup], ids or /book/ slugs) when the owner asks in
+  // chat (Max, 2026-10-23: «залишимо одного Графа»): each pair goes into the owner's decisions once, as if
+  // «Лишити цю» was pressed on /admin/dupes, so it can be undone there and an undo sticks.
+  seedMerges() {
+    let pairs = [];
+    try {
+      pairs = readJson(path.join(SEED, "matches.json")).merges || [];
+    } catch {
+      /* none */
+    }
+    let done;
+    try {
+      done = new Set(JSON.parse(this.db.get("merges:seeded") || "[]"));
+    } catch {
+      done = new Set();
+    }
+    const d = this.decisions();
+    let changed = false;
+    for (const [keep, dup] of pairs) {
+      const key = `${keep}|${dup}`;
+      if (done.has(key)) continue;
+      const k = this.workId(keep);
+      const x = this.workId(dup);
+      if (!this.isWork(k) || !this.isWork(x)) continue; // not in the catalogs yet: tried again on the next load
+      done.add(key);
+      if (k === x || d.same.some(([a, b]) => a === k && b === x)) continue;
+      d.same.push([k, x]);
+      changed = true;
+    }
+    this.db.set("merges:seeded", JSON.stringify([...done]));
+    if (!changed) return;
+    this.saveDecisions(d);
+    this.indexSlugs();
+    this.pickCovers();
   }
 
   // A book and its translation are two works, linked: each page points at the other, and having read

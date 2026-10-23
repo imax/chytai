@@ -1,10 +1,18 @@
 {
- "_": "Hand-confirmed links that the automatic matching misses or gets wrong. same: catalog item id -> library book id. different: pairs the matcher must not join. volumes: item id -> volume number, for series whose titles carry no numbering. translations: pairs of works (ids or /book/ slugs) where one translates the other. covers: work (id or /book/ slug) -> the cover to show, when the edition picked for the work has a worse one.",
+ "_": "Hand-confirmed links that the automatic matching misses or gets wrong. same: catalog item id -> library book id. different: pairs the matcher must not join. merges: [keep, dup] works (ids or /book/ slugs) folded into one, put once into the owner's /admin/dupes decisions (undo there). volumes: item id -> volume number, for series whose titles carry no numbering. translations: pairs of works (ids or /book/ slugs) where one translates the other. covers: work (id or /book/ slug) -> the cover to show, when the edition picked for the work has a worse one.",
  "same": {
   "lobster-8110": "mickey7",
   "lobster-8109": "we-are-legion-bobiverse"
  },
  "different": [],
+ "merges": [
+  ["hraf-monte-kristo", "hraf-monte-krysto"],
+  ["hraf-monte-kristo", "hraf-monte-kristo-roman-t-1"],
+  ["hraf-monte-kristo", "hraf-monte-kristo-roman-t-2"],
+  ["hraf-monte-kristo", "hraf-monte-kristo-roman-t-3"],
+  ["hraf-monte-kristo", "hraf-monte-kristo-roman-t-4"],
+  ["hraf-monte-kristo", "hraf-monte-kristo-knyha-1"]
+ ],
  "translations": [
   [
    "song-of-achilles",
