@@ -681,8 +681,8 @@ class Store {
         if (!b) continue;
         const uk = this.ukTitles?.[id];
         const extra = [...(b.editions || []).map((e) => [e.title, e.altTitle, e.author, e.isbn].filter(Boolean).join(" ")), uk ? `${uk.uk} ${uk.ukAuthor}` : "", ...isbnsOf(b)].join(" ");
-        add.run(id, b.title || "", b.altTitle || "", b.author || "", b.series?.name || "", extra);
-        tri.run(id, [b.title, b.altTitle, b.author, b.series?.name, uk?.uk].filter(Boolean).join(" · "));
+        add.run(id, b.title || "", b.altTitle || "", [b.author, b.authorOrig].filter(Boolean).join(" "), b.series?.name || "", extra);
+        tri.run(id, [b.title, b.altTitle, b.author, b.authorOrig, b.series?.name, uk?.uk].filter(Boolean).join(" · "));
       }
     });
   }
@@ -1227,6 +1227,12 @@ class Store {
       for (const k of EDITABLE) if (fix[k]) out[k] = fix[k];
       if (fix.blurb) out.blurbSource = "";
       out.edited = fix;
+    }
+    // A Ukrainian edition names its author in Ukrainian too («Еріх Марія Ремарк», not «Erich Maria
+    // Remarque»; Max 2026-10-23), when the author pages know the Ukrainian name. Search keeps both.
+    if (!fix?.author && out.author && /[а-яіїєґ]/i.test(out.title || "") && !/[а-яіїєґ]/i.test(out.author)) {
+      const uk = this.authors?.ukName(out.author);
+      if (uk) (out.authorOrig = out.author), (out.author = uk);
     }
     out.href = this.slugs ? this.href(id) : `/book/${encodeURIComponent(id)}`;
     return out;

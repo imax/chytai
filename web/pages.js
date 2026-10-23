@@ -957,7 +957,7 @@ function libraryPage({ rows, user, reader, own = false, mineIds = null, followin
     .map((r, i) => {
       const b = r.book;
       const head = r.year !== r._prevYear || i === 0 ? yearHead(r.year, rows) : "";
-      const search = [b.title, b.altTitle, b.author, stripMd(r.note || "")].join(" ").toLowerCase();
+      const search = [b.title, b.altTitle, b.author, b.authorOrig, stripMd(r.note || "")].join(" ").toLowerCase();
       const data = ` data-status="${r.status || ""}" data-copy="${r.copy || ""}" data-common="${common.includes(r) ? 1 : ""}" data-kids="${r.kids ? 1 : ""}" data-tags="${attr((b.tags || []).join("|"))}" data-rating="${r.rating ?? ""}" data-title="${attr(b.title.toLowerCase())}" data-search="${attr(search)}" data-order="${i}"`;
       const edit = b.href ? `/me${b.href}` : `/me/book/${encodeURIComponent(r.id)}`;
       const action = own ? `<a class="text-link small" href="${attr(edit)}">змінити</a>` : user && mineIds ? (mineIds.has(r.id) ? myStatus(mineIds.get(r.id)) : markButtons(b, user)) : "";
@@ -1122,7 +1122,7 @@ ${fresh.length ? `<section class="block">
     ${genres.length ? `<div class="tabs wrap" data-filter="genre"><button type="button" class="tab on" data-v="">Усі <span>${items.length}</span></button>${genres.map(([g, n]) => `<button type="button" class="tab" data-v="${attr(g)}">${esc(g)} <span>${n}</span></button>`).join("")}</div>` : ""}
     ${statuses.length > 1 ? `<div class="tabs wrap" data-filter="avail"><button type="button" class="tab on" data-v="">Будь-які</button>${statuses.map((s) => `<button type="button" class="tab" data-v="${attr(s)}">${esc(cap(s || "є"))}</button>`).join("")}</div>` : ""}
     <div class="grid four" id="rows">
-${items.map((it) => card(it, { data: ` data-genre="${attr((it.genres || []).join("|"))}" data-avail="${attr(it.status || "")}" data-search="${attr([it.title, it.author, it.altTitle].join(" ").toLowerCase())}"` })).join("\n")}
+${items.map((it) => card(it, { data: ` data-genre="${attr((it.genres || []).join("|"))}" data-avail="${attr(it.status || "")}" data-search="${attr([it.title, it.author, it.authorOrig, it.altTitle].join(" ").toLowerCase())}"` })).join("\n")}
     </div>
     <p class="empty hidden" id="empty">Нічого не знайшлося.</p>
     <p class="more hidden"><button type="button" class="text-link" id="more">Показати ще <span></span> →</button></p>

@@ -145,19 +145,30 @@ function build(store) {
     const other = [g.wd?.en, ...spellings.map(([n]) => n)].find((n) => n && norm(n) !== norm(name) && !CYR.test(n)) || "";
     let slug = slugify(name);
     while (bySlug.has(slug)) slug += "-2";
-    const a = { key: g.key, qid: g.qid, name, other, slug, href: `/author/${slug}`, ids: [...g.ids] };
+    // The Ukrainian name for a Ukrainian edition's byline: our own Cyrillic spelling, else Wikidata's.
+    const uk = CYR.test(name) ? name : CYR.test(g.wd?.uk || "") ? g.wd.uk : "";
+    const a = { key: g.key, qid: g.qid, name, other, uk, slug, href: `/author/${slug}`, ids: [...g.ids] };
     bySlug.set(slug, a);
     list.push(a);
   }
   // The address of every other spelling keeps working («/author/john-steinbeck» once a Ukrainian
   // edition makes «Джон Стейнбек» the shown name): it serves the same page.
   for (const a of list) for (const g of [groups.get(a.key)]) for (const [n] of g.names) if (!bySlug.has(slugify(n))) bySlug.set(slugify(n), a);
+  for (const a of list) if (a.uk && !keyOfName.has(a.uk)) keyOfName.set(a.uk, a.key);
   const byKey = new Map(list.map((a) => [a.key, a]));
-  return {
-    list,
-    bySlug,
-    byName: (name) => byKey.get(keyOfName.get(name)) || null,
+  const byName = (name) => byKey.get(keyOfName.get(name)) || null;
+  // «Erich Maria Remarque» -> «Еріх Марія Ремарк» for a book with a Ukrainian title (Max, 2026-10-23),
+  // name by name; "" when no name has a Ukrainian form. Cached: book() asks for every card.
+  const ukCache = new Map();
+  const ukName = (author) => {
+    if (!ukCache.has(author)) {
+      const names = splitAuthors(author);
+      const uk = names.map((n) => (CYR.test(n) ? n : byName(n)?.uk || n));
+      ukCache.set(author, uk.some((n, i) => n !== names[i]) ? uk.join(", ") : "");
+    }
+    return ukCache.get(author);
   };
+  return { list, bySlug, byName, ukName };
 }
 
 // The person's works from Wikidata, newest knowledge kept 30 days: [{ qid, uk, en, orig, year }].
