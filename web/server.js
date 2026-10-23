@@ -124,6 +124,37 @@ app.use(express.json({ limit: "1mb" }));
 app.use(require("compression")()); // pages are 50–150 KB of HTML; gzip cuts that about five times
 // Style and script addresses carry a content hash (pages.js asset()), so they can live in caches for a year.
 app.use(express.static(path.join(__dirname, "public"), { maxAge: "1y", immutable: true }));
+// Covers the owner sets by hand live here, not on a shop's site (Max, 2026-10-23: «я думав ми обкладинки самі
+// хостимо»). The file name is a hash of the picture, so it never changes and can be cached for good.
+const COVERS = path.join(DATA_DIR, "covers");
+fs.mkdirSync(COVERS, { recursive: true });
+app.use("/covers", express.static(COVERS, { maxAge: "1y", immutable: true }));
+const COVER_TYPES = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp", "image/gif": "gif", "image/avif": "avif" };
+// A picture's address -> our own /covers/<hash>.<ext>; the address itself when it can't be fetched.
+async function keepCover(url) {
+  if (!/^https?:\/\//i.test(url || "")) return url;
+  try {
+    const r = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0 Safari/537.36", Accept: "image/*" }, signal: AbortSignal.timeout(15000) });
+    const ext = COVER_TYPES[String(r.headers.get("content-type") || "").split(";")[0].trim()];
+    if (!r.ok || !ext) return url;
+    const buf = Buffer.from(await r.arrayBuffer());
+    if (buf.length < 500 || buf.length > 8e6) return url;
+    const name = `${require("crypto").createHash("sha1").update(buf).digest("hex").slice(0, 20)}.${ext}`;
+    fs.writeFileSync(path.join(COVERS, name), buf);
+    return `/covers/${name}`;
+  } catch (e) {
+    console.error("cover not kept:", url, e.message);
+    return url;
+  }
+}
+// Covers set by hand before we kept them: fetched once after a start, in the background.
+setTimeout(async () => {
+  for (const [id, fix] of Object.entries(store.edits())) {
+    if (!/^https?:/i.test(fix.cover || "")) continue;
+    const local = await keepCover(fix.cover);
+    if (local !== fix.cover) store.editBook(id, { ...store.edits()[id], cover: local });
+  }
+}, 30000);
 app.get("/icon.png", (req, res) => res.sendFile(path.join(ROOT, "build", "icon.png")));
 
 // ---- auth: readers signed in by a code sent to their e-mail (auth.js) ----
@@ -1502,10 +1533,12 @@ app.get("/admin/book/:id/covers", owner, async (req, res) => {
   const all = [...ours, ...outside];
   res.json({ covers: all.filter((c, i) => all.findIndex((x) => x.src === c.src) === i).slice(0, 24) });
 });
-app.post("/admin/book/:id", owner, (req, res) => {
+app.post("/admin/book/:id", owner, async (req, res) => {
   const id = store.resolve(req.params.id);
   if (!id) return res.status(404).send("Немає такої книжки");
-  const b = store.editBook(id, req.body.reset ? {} : req.body);
+  const body = req.body.reset ? {} : { ...req.body };
+  if (body.cover && body.cover !== store.edits()[store.canonical(id)]?.cover) body.cover = await keepCover(String(body.cover).trim());
+  const b = store.editBook(id, body);
   res.redirect(303, b.href);
 });
 app.get("/admin/dupes", owner, (req, res) => res.send(pages.dupesPage({ user: req.user, groups: store.dupes(), decisions: store.decisions(), book: (id) => store.book(id), all: req.query.all === "1" })));

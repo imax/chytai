@@ -12,6 +12,8 @@ const asset = (name) => `/${name}?v=${crypto.createHash("sha1").update(fs.readFi
 const ASSETS = { css: asset("style.css"), js: asset("app.js") };
 // The public origin for canonical and Open Graph addresses (search engines want absolute ones).
 const ORIGIN = `https://${process.env.WEB_DOMAIN || "chytai.org.ua"}`;
+// Our own covers (/covers/…) need the site in front where a page is read elsewhere: Open Graph, JSON-LD.
+const abs = (u) => (u && u.startsWith("/") ? ORIGIN + u : u);
 // Pages nobody should find through a search engine: one's own, the sign-in flow, the owner's tools and
 // search results (an endless set of addresses). Public pages name their canonical address instead.
 const NOINDEX = new Set(["/search", "/login", "/settings", "/welcome", "/me", "/admin", "/import"]);
@@ -398,7 +400,7 @@ function bookLd(book, shelf, s, readers) {
     ...(book.author ? { author: splitAuthors(book.author).map((n) => ({ "@type": "Person", name: n, ...(authorHref(n) ? { url: ORIGIN + authorHref(n) } : {}) })) } : {}),
     ...(isbn ? { isbn } : {}),
     ...(isUk(book) ? { inLanguage: "uk" } : {}),
-    ...(book.cover ? { image: book.cover } : {}),
+    ...(book.cover ? { image: abs(book.cover) } : {}),
     ...(book.published ? { datePublished: String(book.published) } : {}),
     ...(book.pages ? { numberOfPages: book.pages } : {}),
     ...(shelf ? { publisher: { "@type": "Organization", name: shelf.name } } : {}),
@@ -510,7 +512,7 @@ function bookPage({ inGenre = null, fresh = null, pick = null, awards = [], auth
 </div>
 ${myLists ? listsDialog(book, myLists) : ""}`;
   const description = [book.author, book.blurb?.replace(/\s+/g, " ") || stripMd(readers.find((r) => r.entry.note)?.entry.note || "")].filter(Boolean).join(". ");
-  return layout({ title: book.title, body, user, path: "/book", description, canonical: book.href, image: book.cover || "", type: "book", noindex: require("./store").isRussian(book), jsonld: bookLd(book, shelf, s, readers) });
+  return layout({ title: book.title, body, user, path: "/book", description, canonical: book.href, image: abs(book.cover || ""), type: "book", noindex: require("./store").isRussian(book), jsonld: bookLd(book, shelf, s, readers) });
 }
 
 // «Огляди» are hidden on book pages for now (Max, 2026-10-23); /admin/reviews, the API and the data stay.
@@ -2061,7 +2063,7 @@ ${items.length ? `<section class="lrows">${rows}</section>` : `<p class="muted">
 </div>
 ${edit}`;
   const description = [list.note, `${books(items.length)}: ${items.slice(0, 5).map((x) => x.book.title).join(", ")}`].filter(Boolean).join(" ");
-  return layout({ title: list.title, body, user, path: "/lists", canonical: list.href, noindex: !!list.reader.noindex, description, image: items.find((x) => x.book.cover)?.book.cover || "" });
+  return layout({ title: list.title, body, user, path: "/lists", canonical: list.href, noindex: !!list.reader.noindex, description, image: abs(items.find((x) => x.book.cover)?.book.cover || "") });
 }
 
 // /lists «Списки читачів»: popular, new, and the ones the reader saved.
