@@ -1630,7 +1630,7 @@ function mailSettingsPage({ user, values, saved = false }) {
   return authLayout({ title: "Налаштування", lead: "", form, user, path: "/settings" });
 }
 
-// /mcp-howto: what Chytai in Claude or ChatGPT is and how to connect it (Max, 2026-10-23: «маленький лендінг про цей mcp»).
+// /mcp in a browser: what Chytai in Claude or ChatGPT is and how to connect it (Max, 2026-10-23: «маленький лендінг про цей mcp»).
 // The same 5/7 frame as /welcome: what it is on the left, the steps on the right.
 function chatsPage({ user, url }) {
   const step = (n, title, text) => `<li><span class="n">${n}</span><div><h3>${title}</h3><p>${text}</p></div></li>`;
@@ -1657,7 +1657,7 @@ function chatsPage({ user, url }) {
     ${step("04", "Що чат може, а чого ні", "Шукати книжки, бачити вашу полицю, додавати книжки й міняти статус, оцінку чи нотатку. Видаляти книжки й чіпати акаунт не може. Відключити чат можна будь-коли в <a class=\"text-link\" href=\"/settings/chats\">налаштуваннях</a>.")}
   </ol>
 </section>`;
-  return layout({ title: "Chytai у Claude і ChatGPT", body, user, path: "/mcp-howto", canonical: "/mcp-howto", description: "Підключіть Chytai до Claude чи ChatGPT і додавайте прочитані книжки на свою полицю просто в чаті." });
+  return layout({ title: "Chytai у Claude і ChatGPT", body, user, path: "/mcp", canonical: "/mcp", description: "Підключіть Chytai до Claude чи ChatGPT і додавайте прочитані книжки на свою полицю просто в чаті." });
 }
 
 // /settings/chats (mcp.js): how to let Claude or ChatGPT add books to the shelf, and the chats already let in.
@@ -1669,7 +1669,7 @@ function chatsSettingsPage({ user, url, grants }) {
   const form = `${settingsTabs("chats")}<section class="form">
   <p class="muted small">Підключіть Chytai до Claude чи ChatGPT, і просіть просто в чаті: «додай Тигроловів у прочитане, пʼять зірок» або «додай на полицю всі книжки, які ти знаєш, що я читав». Чат знаходить книжки в каталозі й кладе на вашу полицю. Видаляти книжки він не може.</p>
   <label>Адреса для конектора<input type="text" value="${attr(url)}" readonly onclick="this.select()"></label>
-  <p class="muted small"><b>Claude:</b> Налаштування → Конектори → Додати власний конектор, вставте адресу, далі увійдіть у Chytai і натисніть «Дозволити».<br><b>ChatGPT:</b> Налаштування → Застосунки й конектори, у режимі розробника створіть конектор з цією адресою.<br><a class="text-link" href="/mcp-howto">Докладніше й приклади</a></p>
+  <p class="muted small"><b>Claude:</b> Налаштування → Конектори → Додати власний конектор, вставте адресу, далі увійдіть у Chytai і натисніть «Дозволити».<br><b>ChatGPT:</b> Налаштування → Застосунки й конектори, у режимі розробника створіть конектор з цією адресою.<br><a class="text-link" href="/mcp">Докладніше й приклади</a></p>
 </section>
 <section class="form import-box">
   <h2>Підключені чати</h2>

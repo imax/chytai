@@ -455,7 +455,7 @@ class Mcp {
       next();
     };
     const origin = (req) => (this.origin = this.site(req));
-    const resourceMeta = (req) => ({ resource: `${origin(req)}/mcp`, authorization_servers: [this.origin], scopes_supported: ["books"], bearer_methods_supported: ["header"], resource_name: "Chytai", resource_documentation: `${this.origin}/mcp-howto` });
+    const resourceMeta = (req) => ({ resource: `${origin(req)}/mcp`, authorization_servers: [this.origin], scopes_supported: ["books"], bearer_methods_supported: ["header"], resource_name: "Chytai", resource_documentation: `${this.origin}/mcp` });
     app.use(["/.well-known/oauth-protected-resource", "/.well-known/oauth-authorization-server", "/.well-known/openid-configuration", "/oauth/register", "/oauth/token", "/mcp"], cors);
     app.get(["/.well-known/oauth-protected-resource", "/.well-known/oauth-protected-resource/mcp"], (req, res) => res.json(resourceMeta(req)));
     app.get(["/.well-known/oauth-authorization-server", "/.well-known/oauth-authorization-server/mcp", "/.well-known/openid-configuration"], (req, res) =>
@@ -470,7 +470,7 @@ class Mcp {
         token_endpoint_auth_methods_supported: ["none"],
         scopes_supported: ["books"],
         client_id_metadata_document_supported: true,
-        service_documentation: `${this.origin}/mcp-howto`,
+        service_documentation: `${this.origin}/mcp`,
       })
     );
     app.post("/oauth/register", (req, res) => {
@@ -520,7 +520,7 @@ class Mcp {
     });
 
     // /settings/chats: how to connect, and who is connected.
-    app.get("/mcp-howto", (req, res) => res.send(this.pages.chatsPage({ user: req.user, url: `${origin(req)}/mcp` })));
+    app.get("/mcp-howto", (req, res) => res.redirect(301, "/mcp"));
     app.get("/settings/chats", signed, (req, res) => res.send(this.pages.chatsSettingsPage({ user: req.user, url: `${origin(req)}/mcp`, grants: this.grants(req.user.id) })));
     app.post("/settings/chats/:id/revoke", signed, (req, res) => (this.revoke(req.user.id, req.params.id), res.redirect("/settings/chats")));
 
@@ -542,8 +542,8 @@ class Mcp {
       const out = this.call(who, body);
       out ? res.json(out) : res.sendStatus(202);
     });
-    // No stream from us; a browser that opens the address gets the page about it.
-    app.get("/mcp", (req, res) => (/text\/html/.test(req.headers.accept || "") ? res.redirect("/mcp-howto") : res.set("Allow", "POST").sendStatus(405)));
+    // No stream from us; a browser that opens the address gets the page about it, at the same address (Max, 2026-10-23).
+    app.get("/mcp", (req, res) => (res.set("Vary", "Accept"), /text\/html/.test(req.headers.accept || "") ? res.send(this.pages.chatsPage({ user: req.user, url: `${origin(req)}/mcp` })) : res.set("Allow", "POST").sendStatus(405)));
     app.delete("/mcp", (req, res) => res.set("Allow", "POST").sendStatus(405));
   }
 }
