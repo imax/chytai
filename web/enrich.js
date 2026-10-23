@@ -224,10 +224,24 @@ function apply(book, info) {
 }
 
 // Which of the library's own books are worth asking about: no catalog behind them, a Latin title or an
-// ISBN to ask by, and something still missing.
+// ISBN to ask by, and something still missing. A book typed in Ukrainian with a Ukrainian author name
+// («Інферно», Ден Браун; Max, 2026-10-23: «пачка книжок Брауна без обкладинок») is asked through its
+// original: Wikidata gives the English title and author, Open Library the cover.
+const isCyrillic = (t) => /[а-яіїєґ]/i.test(t);
+const viaOriginal = (b) => isCyrillic(b.title) && isCyrillic(firstAuthor(b.author)) && !cleanIsbns(b.isbns).length && !(b.cover && b.altTitle);
 function wanting(store, ids, { google = false } = {}) {
   const all = ids ? ids.map((id) => store.lib.books[id]).filter(Boolean) : Object.values(store.lib.books);
-  return all.filter((b) => OWN.has(b.source) && (cleanIsbns(b.isbns).length || ((google || isLatin(b.title)) && firstAuthor(b.author))) && !(b.cover && b.published && b.blurb && (b.tags || []).length && cleanIsbns(b.isbns).length));
+  return all.filter((b) => OWN.has(b.source) && (viaOriginal(b) || ((cleanIsbns(b.isbns).length || ((google || isLatin(b.title)) && firstAuthor(b.author))) && !(b.cover && b.published && b.blurb && (b.tags || []).length && cleanIsbns(b.isbns).length))));
+}
+
+// What a Ukrainian edition takes from its original's record: the cover when it has none, and the
+// original title (which also pairs it with the original's page as a translation). ISBNs, year, pages
+// and the Amazon link belong to the English edition, not to this one.
+function applyOriginal(book, info, orig) {
+  const patch = {};
+  if (!book.cover && info?.cover) patch.cover = info.cover;
+  if (!book.altTitle && orig.en) patch.altTitle = orig.en;
+  return patch;
 }
 
 // enrich(store, { ids, log, fetchImpl, force }) -> { asked, found }: looks up the books not asked within a month.
@@ -238,9 +252,23 @@ async function enrich(store, { ids, log = () => {}, fetchImpl = fetch, force = f
   let failed = 0;
   let googleFailed = 0;
   const errors = [];
+  const originals = books.some(viaOriginal) ? await require("./wikidata").enTitles(books.filter(viaOriginal), { fetchImpl, log }).catch((e) => (log(`wikidata: ${e.message}`), {})) : {};
   for (const b of books) {
     store.db.set(`enrich:${GEN}:${b.id}`, String(Date.now()));
     try {
+      if (viaOriginal(b)) {
+        const orig = originals[b.id];
+        if (!orig) continue;
+        const info = await lookup({ ...b, title: orig.en, author: orig.enAuthor, isbns: [] }, { fetchImpl });
+        const patch = applyOriginal(b, info, orig);
+        if (Object.keys(patch).length) {
+          store.updateBook(b.id, patch);
+          touched = true;
+          found++;
+        }
+        if (pause) await new Promise((r) => setTimeout(r, pause));
+        continue;
+      }
       let info = isLatin(b.title) || cleanIsbns(b.isbns).length ? await lookup(b, { fetchImpl }) : null;
       // Google Books fills what Open Library left out, and is the only source for Cyrillic titles.
       if (googleKey && !(info?.cover && info?.blurb && info?.published)) {

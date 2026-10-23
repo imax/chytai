@@ -1232,6 +1232,14 @@ app.post("/admin/entries/move", owner, (req, res) => {
   const moved = store.moveEntries(store.workId(String(req.body.from || "")), store.workId(String(req.body.to || "")), readers);
   res.json({ ok: true, moved });
 });
+// Ask Open Library (and Wikidata for Ukrainian titles) again, now: ids (ids or slugs, comma-separated)
+// or, with none, every own book still wanting something, up to max (300).
+app.post("/admin/enrich", owner, (req, res) => {
+  const ids = String(req.body.ids || "").split(",").map((x) => store.workId(x.trim())).filter(Boolean);
+  // Runs in the background (a pass of 300 books takes five minutes); /refresh-status shows the result.
+  enrich.enrich(store, { ids: ids.length ? ids : undefined, force: true, max: Math.min(Number(req.body.max) || 300, 1000), log: console.log, googleKey: process.env.GOOGLE_BOOKS_KEY || "" }).catch((e) => console.error("enrich failed:", e));
+  res.json({ started: true, ids: ids.length });
+});
 app.post("/admin/dupes/undo", owner, (req, res) => {
   store.undecide(["different", "translations"].includes(req.body.kind) ? req.body.kind : "same", Number(req.body.index));
   decidedJson(req, res, "/admin/dupes#decided");

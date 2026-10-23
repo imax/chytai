@@ -51,6 +51,46 @@ async function ukTitles(books, { fetchImpl = fetch, log = () => {} } = {}) {
   return out;
 }
 
+// The other way round, for a reader's book typed in Ukrainian («Інферно», Ден Браун): the original's
+// English title and the author's English name, so enrich.js can ask Open Library for a cover (it knows
+// next to no Ukrainian editions; Google Books refuses Fly). One query per 40 Ukrainian author names.
+// books: [{ id, title, author }] -> { id: { en, enAuthor } }
+const isCyrillic = (t) => /[а-яіїєґ]/i.test(t);
+async function enQuery(authors, fetchImpl) {
+  const values = authors.map((a) => `${JSON.stringify(a)}@uk`).join(" ");
+  const sparql = `SELECT ?name ?en ?uk ?aen WHERE { VALUES ?name { ${values} } ?a rdfs:label ?name. ?w wdt:P50 ?a; rdfs:label ?uk. FILTER(lang(?uk) = "uk") ?w rdfs:label ?en. FILTER(lang(?en) = "en") OPTIONAL { ?a rdfs:label ?aen. FILTER(lang(?aen) = "en") } }`;
+  const r = await fetchImpl(ENDPOINT, { method: "POST", headers: { ...HEADERS, "Content-Type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ query: sparql, format: "json" }), signal: AbortSignal.timeout(60000) });
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  return (await r.json()).results.bindings.map((b) => ({ name: b.name.value, en: b.en.value, uk: b.uk.value.replace(/\s*\((роман|книга|повість|збірка)[^)]*\)\s*$/i, ""), enAuthor: b.aen?.value || "" }));
+}
+async function enTitles(books, { fetchImpl = fetch, log = () => {} } = {}) {
+  const ours = books.filter((b) => isCyrillic(b.title) && isCyrillic(firstAuthor(b.author)));
+  const authors = [...new Set(ours.map((b) => firstAuthor(b.author)))];
+  const works = new Map(); // author|norm(uk) -> { en, enAuthor }
+  for (let i = 0; i < authors.length; i += 40) {
+    try {
+      for (const w of await enQuery(authors.slice(i, i + 40), fetchImpl)) {
+        const key = `${w.name}|${norm(w.uk)}`;
+        if (!works.has(key) && w.enAuthor) works.set(key, { en: w.en, enAuthor: w.enAuthor });
+      }
+    } catch (e) {
+      log(`wikidata: ${e.cause?.code || e.message}`);
+    }
+  }
+  const out = {};
+  for (const b of ours) {
+    for (const t of [b.title, mainTitle(b.title), String(b.title).split(/[.]\s/)[0]]) {
+      const w = works.get(`${firstAuthor(b.author)}|${norm(t)}`);
+      if (w) {
+        out[b.id] = w;
+        break;
+      }
+    }
+  }
+  if (ours.length) log(`wikidata: ${Object.keys(out).length} originals for ${ours.length} Ukrainian-titled books (${authors.length} authors)`);
+  return out;
+}
+
 // Look them up when the stored answer is older than a week; the store relinks translations after.
 async function refreshUk(store, opts = {}) {
   const at = Number(store.db.get("wikidata:at") || 0);
@@ -64,4 +104,4 @@ async function refreshUk(store, opts = {}) {
   return true;
 }
 
-module.exports = { ukTitles, refreshUk, firstAuthor, mainTitle };
+module.exports = { ukTitles, enTitles, refreshUk, firstAuthor, mainTitle };
