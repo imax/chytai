@@ -58,7 +58,16 @@ async function getPage(url, fetchImpl, check = publicHost) {
         break;
       }
     }
-    return { html: Buffer.concat(chunks.map((c) => Buffer.from(c))).toString("utf8"), url: u.href, status: res.status, type: res.headers.get("content-type") || "", server: res.headers.get("server") || "" };
+    // Some Ukrainian sites still answer in windows-1251 (Богдан): the header or the page's own meta says so.
+    const buf = Buffer.concat(chunks.map((c) => Buffer.from(c)));
+    const charset = /charset=["']?([\w-]+)/i.exec(res.headers.get("content-type") || "")?.[1] || /<meta[^>]+charset=["']?([\w-]+)/i.exec(buf.subarray(0, 4096).toString("latin1"))?.[1] || "utf-8";
+    let html;
+    try {
+      html = new TextDecoder(charset).decode(buf);
+    } catch {
+      html = buf.toString("utf8");
+    }
+    return { html, url: u.href, status: res.status, type: res.headers.get("content-type") || "", server: res.headers.get("server") || "" };
   }
   throw new Error("too many redirects");
 }
