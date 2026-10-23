@@ -379,7 +379,11 @@ app.post("/import/:source", signed, importSource, express.raw({ type: "multipart
   importPreview(req, res, books, { filename: files.length > 1 ? `${files.length} файли` : files[0].filename, skipped });
 });
 // A book read from a page, as an import row: the store's link on the book page, the annotation as its blurb.
-const fromPage = (b) => ({ title: b.title, author: b.author, isbns: b.isbns || [], cover: b.cover || "", blurb: b.blurb || "", blurbSource: b.site || "", pages: b.pages || null, published: b.published || null, link: b.url ? { label: b.site || new URL(b.url).hostname, url: b.url } : null });
+// No Readeat on the site (Max, 2026-10-19): a book from there keeps its title, author and cover, not the link or the description.
+const fromPage = (b) => {
+  const readeat = /readeat\.com/i.test(b.url || "");
+  return { title: b.title, author: b.author, isbns: b.isbns || [], cover: b.cover || "", blurb: readeat ? "" : b.blurb || "", blurbSource: b.site || "", pages: b.pages || null, published: b.published || null, link: b.url && !readeat ? { label: b.site || new URL(b.url).hostname, url: b.url } : null };
+};
 app.post("/import/:source/apply", signed, importSource, async (req, res) => {
   const p = pendingImports.get(String(req.body.token || ""));
   if (!p || p.reader !== req.user.id || p.source !== req.source || Date.now() - p.at > IMPORT_TTL) return res.status(400).send(req.source === "list" ? pages.addPage({ user: req.user, text: "", error: "Час вийшов або список уже імпортовано. Вставте його ще раз." }) : pages.importPage({ user: req.user, source: req.source, error: "Час вийшов або файл уже імпортовано. Виберіть файл ще раз." }));
