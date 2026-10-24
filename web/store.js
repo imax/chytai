@@ -236,6 +236,37 @@ function mergeEntries(a, b) {
   return { ...b, ...a, status: (RANK[a.status] ?? 0) >= (RANK[b.status] ?? 0) ? a.status : b.status, rating: Math.max(a.rating ?? -1, b.rating ?? -1) < 0 ? null : Math.max(a.rating ?? 0, b.rating ?? 0), year: pick(a.year, b.year), note: (a.note || "").length >= (b.note || "").length ? a.note || "" : b.note, copy: pick(a.copy, b.copy), order: Math.min(a.order ?? 1e9, b.order ?? 1e9), ...(a.kids || b.kids ? { kids: true } : {}) };
 }
 
+// One series inside another of the same name (Wikidata's «Foundation Trilogy» inside «Foundation», a
+// saga inside «The Witcher»): wikidata.seriesOf gives each work its smallest series, so the trilogy's books
+// and the later volumes landed in two series and a reader's shelf showed Foundation as two rows (a reader,
+// 2026-10-24). Such a series goes into the bigger one, each volume at its place there: qid -> { to, n: Map }.
+// Only when every volume of the small one is in the big one and the names agree once «trilogy», «saga»,
+// «series» are dropped, so Mistborn stays apart from the Cosmere.
+function nestedSeries(series) {
+  const core = (s) => norm(String(s || "").replace(/\b(the|series|saga|trilogy|cycle|sequence|universe|novels|books)\b|(серія|цикл|сага|трилогія|всесвіт)/giu, " "));
+  const key = (m) => [m.en && norm(m.en), m.uk && norm(m.uk)].filter(Boolean);
+  const out = new Map();
+  const list = Object.entries(series);
+  for (const [a, sa] of list) {
+    let best = null;
+    for (const [b, sb] of list) {
+      if (a === b || sb.members.length <= sa.members.length) continue;
+      const names = [sa.name, sa.uk].map(core).filter(Boolean);
+      const bigNames = [sb.name, sb.uk].map(core).filter(Boolean);
+      if (!names.some((x) => bigNames.some((y) => x === y || x.startsWith(`${y} `) || x.endsWith(` ${y}`)))) continue;
+      const n = new Map();
+      for (const m of sa.members) {
+        const hit = sb.members.find((x) => key(x).some((k) => key(m).includes(k)));
+        if (!hit) break;
+        n.set(m.n, hit.n);
+      }
+      if (n.size === sa.members.length && (!best || sb.members.length > best.size)) best = { to: b, n, size: sb.members.length };
+    }
+    if (best) out.set(a, best);
+  }
+  return out;
+}
+
 class Store {
   constructor(dataDir) {
     this.dir = dataDir;
@@ -470,7 +501,11 @@ class Store {
       this.cycleInfo.set(qid, s);
       for (const name of [s.name, s.uk]) if (name) byName.set(norm(name), qid);
     }
-    for (const [id, { qid, n }] of Object.entries(wd.books || {})) set(id, qid, n);
+    const into = nestedSeries(wd.series || {});
+    for (const [id, { qid, n }] of Object.entries(wd.books || {})) {
+      const m = into.get(qid);
+      set(id, m ? m.to : qid, m ? m.n.get(n) || n : n);
+    }
     for (const b of Object.values(this.lib.books)) {
       if (!b.cycle?.n) continue;
       const key = byName.get(norm(b.cycle.name)) || `goodreads:${norm(b.cycle.name)}`;

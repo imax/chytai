@@ -1050,7 +1050,9 @@ function foldSeries(rows) {
     const rep = vols.find((v) => v.note) || vols[0];
     const rated = vols.filter((v) => v.rating != null);
     const rating = rated.length ? Math.round((rated.reduce((s, v) => s + v.rating, 0) / rated.length) * 2) / 2 : null;
-    return { ...rep, _prevYear: r._prevYear, rating, volumes: vols };
+    // Named the way the reader's books are: «Фундація» when any of them is Ukrainian, not «Foundation series».
+    const uk = vols.find((v) => /[а-яіїєґ]/i.test(v.book.title) && /[а-яіїєґ]/i.test(v.series.name));
+    return { ...rep, _prevYear: r._prevYear, rating, volumes: vols, series: { ...rep.series, name: (uk || rep).series.name } };
   });
 }
 
