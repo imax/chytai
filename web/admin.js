@@ -564,7 +564,11 @@ ${s.sections.length ? `<div class="tbl"><table class="sections">
     : `<section class="admin">
 <section class="page-head"><div><p class="kicker">Лише для власника</p><h1>Статистика</h1><p class="sub">Сайт станом на ${short(s.now)}. Активний читач — той, хто відкрив сайт або щось зробив на полиці того дня. Перегляди рахуються з ${s.totals.viewsSince ? short(s.totals.viewsSince) : "сьогодні"}; раніше за активність правлять входи й зміни на полиці.</p></div></section>
 <div class="stats">${tiles}</div>
-<p><a class="text-link" href="/admin/readers">Усі читачі (${s.readers.length})</a>, нових за 7 днів: ${fresh.length}. <a class="text-link" href="/admin/traffic">Трафік: звідки приходять</a></p>
+<p><a class="text-link" href="/admin/readers">Усі читачі (${s.readers.length})</a>, нових за 7 днів: ${fresh.length}.</p>
+
+${s.arrivals ? `<h2>Звідки приходять</h2>
+${sourcesTable(s.arrivals)}
+<p class="small"><a class="text-link" href="/admin/traffic">Трафік: звідки саме, сторінки з пошуку, перегляди за розділами</a></p>` : ""}
 
 ${funnelBlock(s.funnel)}
 
