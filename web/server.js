@@ -831,6 +831,21 @@ app.get("/me/book/:id", signed, (req, res) => {
   res.send(pages.editPage({ book, entry, user: req.user, series }));
 });
 
+// A volume in a book page's series list that no catalog has: a click makes its page (a book of the reader's
+// kind, in the series at its place) and opens it, so it is marked like any other book.
+app.post("/api/series-volume/:id", signed, (req, res) => {
+  const c = store.cycleOf(req.params.id);
+  const v = c?.items.find((x) => x.n === Number(req.body.n));
+  if (!v) return res.status(404).send("Немає такої книжки");
+  let id = v.id;
+  if (!id) {
+    id = store.addBook({ title: v.title, author: store.book(req.params.id)?.author || "", cover: "", links: [], cycle: { name: c.name, n: v.n } }).id;
+    store.linkCycles();
+    details({ ids: [id] });
+  }
+  res.redirect(store.href(id));
+});
+
 app.get("/popular", (req, res) => res.send(pages.popularPage({ user: req.user, pop: social.popular() })));
 // A genre's books (/genre/biohrafii, the label on a book page): what readers have and rate first, then the
 // rest with Ukrainian titles and covers ahead. Kept ten minutes per genre: it looks at every book of it.

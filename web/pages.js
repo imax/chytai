@@ -494,7 +494,7 @@ function bookPage({ inGenre = null, fresh = null, pick = null, awards = [], auth
       </div>
     </article>
     ${series(book, inLibrary)}
-    ${cycle(book, inLibrary)}
+    ${cycle(book, inLibrary, user)}
     ${first ? `<section class="block">
       ${label("У читачів")}
       ${first.entry.note ? quote(first, book.id) : ""}
@@ -761,14 +761,17 @@ function series(book, inLibrary) {
 
 // A series known from Wikidata or a Goodreads title (store.cycleOf), when no shop's shelf lists its volumes:
 // the books in order, this one in bold, ours linked, the rest named so the reader sees where to start.
-function cycle(book, inLibrary) {
+// A volume no catalog has is named, not linked; for a signed-in reader the name is a button that makes its
+// page (POST /api/series-volume), where it is marked like any book (a reader, 2026-10-24: «в серії не
+// зрозуміло як «прочитати» окремі книжки»; Max: no special flow for that).
+function cycle(book, inLibrary, user = null) {
   const c = book.cycle;
   if (!c || book.series?.items || c.items.length < 2) return "";
   const last = c.items.at(-1).n;
   return `<section class="block series cycle">${label(`Серія «${esc(c.name)}»`, `книга ${c.n} з ${last}`)}<ol>${c.items
     .map((v) => {
       const has = v.id && inLibrary.get(v.id);
-      const name = v.href ? `<a href="${attr(v.href)}">${esc(v.title)}</a>` : `<span>${esc(v.title)}</span>`;
+      const name = v.href ? `<a href="${attr(v.href)}">${esc(v.title)}</a>` : user ? `<form method="post" action="/api/series-volume/${attr(encodeURIComponent(book.id))}" class="make"><input type="hidden" name="n" value="${v.n}"><button>${esc(v.title)}</button></form>` : `<span>${esc(v.title)}</span>`;
       return `<li class="${v.n === c.n ? "this" : ""}"><span class="num">${v.n}</span>${name}${has?.status ? ` <span class="muted small">${STATUS[has.status].toLowerCase()}</span>` : ""}</li>`;
     })
     .join("")}</ol></section>`;

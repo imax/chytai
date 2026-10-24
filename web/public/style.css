@@ -307,6 +307,8 @@ h2.year span { font: 13px var(--sans); color: var(--muted); }
 .cycle li > .num + a, .cycle li > .num + span { font: 17px var(--serif); }
 .cycle li > .num + span { color: var(--muted); }
 .cycle li.this > .num + a, .cycle li.this > .num + span { font-weight: 600; color: inherit; }
+.cycle li > .num + form.make button { background: none; border: 0; padding: 0; cursor: pointer; font: 17px var(--serif); color: var(--muted); text-align: left; text-decoration: underline; text-decoration-color: var(--under); text-underline-offset: 4px; }
+.cycle li > .num + form.make button:hover { color: var(--accent); }
 
 /* ---- shelves ---- */
 .tabs-bar { border-top: 1px solid var(--ink); padding-top: 14px; }
