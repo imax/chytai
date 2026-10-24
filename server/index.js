@@ -364,19 +364,24 @@ function guestBooks(req) {
   return demoBooks();
 }
 
-// [{ dir, name }] of the free books.
-function freeBooks() {
-  try {
-    return fs.readdirSync(FREE_DIR).filter((n) => !n.startsWith(".") && BOOK_EXT.test(n)).sort().map((name) => ({ dir: FREE_DIR, name }));
-  } catch {
-    return [];
-  }
-}
 let freeShelf = [];
 try {
   freeShelf = JSON.parse(fs.readFileSync(path.join(FREE_DIR, "shelf.json"), "utf8"));
 } catch {
   /* no manifest: the files' own titles, one group */
+}
+// A book whose author's rights run out later waits for its day: { "from": "2027-01-01" } (Остап Вишня, †1956).
+const notYet = (name) => {
+  const from = freeShelf.find((f) => f.name === name)?.from;
+  return !!from && statsDay() < from;
+};
+// [{ dir, name }] of the free books.
+function freeBooks() {
+  try {
+    return fs.readdirSync(FREE_DIR).filter((n) => !n.startsWith(".") && BOOK_EXT.test(n) && !notYet(n)).sort().map((name) => ({ dir: FREE_DIR, name }));
+  } catch {
+    return [];
+  }
 }
 const isFree = (name) => !!name && freeBooks().some((f) => f.name === name);
 // The file a signed-in reader opens by this name: their own copy first, else the shelf's.
@@ -1033,6 +1038,7 @@ api.get("/library", async (req, res) => {
     const shelf = new Map(freeShelf.map((f, i) => [f.name, { ...f, order: i }]));
     const scanned = await library.scan([FREE_DIR], FREE_CACHE).catch(() => []);
     free = scanned
+      .filter((b) => !notYet(path.basename(b.path)))
       .map((b) => {
         const name = path.basename(b.path);
         const m = shelf.get(name) || {};
