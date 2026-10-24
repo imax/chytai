@@ -106,9 +106,8 @@ function passes({ store, social, db, apiKey, log }) {
       schema: { type: "object", properties: { known: { type: "string", enum: ["yes", "unknown"] }, year: { type: "integer" } }, required: ["known", "year"], additionalProperties: false },
       candidates: () => {
         const mine = shelved();
-        // Readers' books without a year first, then the rest of the catalog without one.
-        const all = works().filter((b) => !b.published);
-        return [...all.filter((b) => mine.has(b.id)), ...all.filter((b) => !mine.has(b.id))];
+        // Readers' books without a year: the whole catalog (7 thousand more) cost about $5 for little.
+        return works().filter((b) => !b.published && mine.has(b.id));
       },
       facts: (s) => about(s.b, 300),
       item: (s, a) => {
@@ -184,14 +183,19 @@ function passes({ store, social, db, apiKey, log }) {
         const q = { good: "добра", dated: "застаріла", bad: "погана", broken: "немає" }[a?.quality] || "";
         return { ...book(s.b), thumb: s.b.cover, before: "Open Library", after: a ? `${q}${foreign ? `, мовою: ${a.language}` : ""}` : "", diff: !!a && (a.quality !== "good" || foreign) };
       },
-      // A bad or missing picture is hidden (a placeholder looks better); a Ukrainian book with a foreign cover
-      // is asked on Readeat again for its own; a dated one stays until we look for a newer edition.
+      // A bad or missing picture is hidden (a placeholder looks better), and so is a foreign cover on a Ukrainian
+      // book, which is asked on Readeat again for its own; a dated one stays until we look for a newer edition.
       apply: (items) => {
         const hide = {};
         const ask = [];
         for (const { s: sub, answer: a } of items) {
           if (a.quality === "bad" || a.quality === "broken") hide[sub.b.id] = sub.b.cover;
-          else if (CYR.test(sub.b.title) && !/ukrain|українськ|^uk$/i.test(a.language) && store.lib.books[sub.b.id]) ask.push(sub.b.id);
+          else if (CYR.test(sub.b.title) && !/ukrain|українськ|^uk$/i.test(a.language)) {
+            // The original's cover on a Ukrainian book goes («Фундація», Max: «виглядають не дуже»); Readeat may
+            // bring the Ukrainian one, which shows since it is another picture.
+            hide[sub.b.id] = sub.b.cover;
+            if (store.lib.books[sub.b.id]) ask.push(sub.b.id);
+          }
         }
         if (Object.keys(hide).length) store.hideCovers(hide);
         if (ask.length) require("./readeat").enrich(store, { ids: ask, force: true, max: ask.length, log }).then(() => store.indexSearch()).catch((e) => log(`covers readeat: ${e.message}`));
