@@ -28,7 +28,7 @@ const t0 = Date.now();
 const res = await refresh({ store, only: "ksd", log: (m) => console.log("  " + m) });
 console.log(`refresh ksd: ${((Date.now() - t0) / 1000).toFixed(0)} s, ${JSON.stringify(res.errors)}`);
 time("with КСД");
-const ksd = store.shelves.find((s) => s.id === "ksd").items;
+const ksd = store.shelves.find((s) => s.id === "ksd")?.items || [];
 const c = (f) => ksd.filter(f).length;
 console.log(`ksd items ${ksd.length}: paper ${c((x) => x.format === "папір")}, e-book ${c((x) => x.format === "e-book")}, in stock ${c((x) => x.status === "є")}, isbn ${c((x) => x.isbn)}, original title ${c((x) => x.altTitle)}, translator ${c((x) => x.translator)}, blurb ${c((x) => x.blurb)}, cover ${c((x) => x.cover)}, bundles ${c((x) => x.bundle)}, with an e-book edition ${c((x) => (x.editions || 1) > 1)}`);
 const yrs = {}; for (const x of ksd) { const y = x.year ? Math.floor(x.year / 5) * 5 : "?"; yrs[y] = (yrs[y] || 0) + 1; } console.log("years:", JSON.stringify(yrs));

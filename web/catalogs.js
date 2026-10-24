@@ -543,36 +543,44 @@ async function ksdProducts(src, { fetchImpl = fetch, log = () => {}, previous = 
     if (!old?.checked || (bucket(url) === today && !fresh.has(url))) due.push({ p, item });
     out.push(item);
   }
+  // One record at a time with a pause: four at once got HTTP 429 (2026-10-24). After a 429 we wait a
+  // minute; after three in a row the rest wait for the next refresh, so a first fill may take a few days.
   let failed = 0;
+  let throttled = 0;
   const got = [];
-  for (let i = 0; i < due.length; i += 4) {
-    await Promise.all(
-      due.slice(i, i + 4).map(async ({ p, item }) => {
-        try {
-          const b = (await ksdAsk(fetchImpl, KSD_BOOK, { s: p.slug })).productPage;
-          if (!b) throw new Error("no record");
-          const spec = Object.fromEntries((b.specifications || []).map((s) => [s.type, (s.values || []).map((v) => v.name).join(", ")]));
-          Object.assign(item, {
-            isbn: String(b.isbn || "").replace(/[^\dX]/gi, ""),
-            altTitle: b.original_name && ent(b.original_name).trim() !== item.title ? ent(b.original_name).trim() : "",
-            translator: ent(b.translators || "").trim(),
-            year: b.publishing_year ? String(b.publishing_year) : "",
-            pages: b.pages ? String(b.pages) : "",
-            genres: (b.categories || []).map((c) => ent(c.name)),
-            blurb: ksdAbout(b.main_text),
-            language: spec.language || "українська",
-            checked: new Date().toISOString().slice(0, 10),
-          });
-          got.push(item);
-        } catch (e) {
-          if (!failed++) log(`${src.id}: ${item.url}: ${e.cause?.code || e.message}`);
-        }
-      })
-    );
-    if (i % 100 < 4 && i) checkpoint(got), log(`${src.id}: ${i} of ${due.length} books read`); // a restart half-way resumes from here
+  for (let i = 0; i < due.length && throttled < 3; i++) {
+    const { p, item } = due[i];
+    await new Promise((r) => setTimeout(r, src.pace));
+    try {
+      const b = (await ksdAsk(fetchImpl, KSD_BOOK, { s: p.slug })).productPage;
+      throttled = 0;
+      if (!b) throw new Error("no record");
+      const spec = Object.fromEntries((b.specifications || []).map((s) => [s.type, (s.values || []).map((v) => v.name).join(", ")]));
+      Object.assign(item, {
+        isbn: String(b.isbn || "").replace(/[^\dX]/gi, ""),
+        altTitle: b.original_name && ent(b.original_name).trim() !== item.title ? ent(b.original_name).trim() : "",
+        translator: ent(b.translators || "").trim(),
+        year: b.publishing_year ? String(b.publishing_year) : "",
+        pages: b.pages ? String(b.pages) : "",
+        genres: (b.categories || []).map((c) => ent(c.name)),
+        blurb: ksdAbout(b.main_text),
+        language: spec.language || "українська",
+        checked: new Date().toISOString().slice(0, 10),
+      });
+      got.push(item);
+    } catch (e) {
+      if (/HTTP 429/.test(e.message) && ++throttled < 3) {
+        log(`${src.id}: HTTP 429, waiting a minute`);
+        await new Promise((r) => setTimeout(r, 60000));
+        i--; // the same book again
+        continue;
+      }
+      if (!failed++) log(`${src.id}: ${item.url}: ${e.cause?.code || e.message}`);
+    }
+    if (i % 100 === 99) checkpoint(got), log(`${src.id}: ${i + 1} of ${due.length} books read`); // a restart half-way resumes from here
   }
-  log(`${src.id}: ${books.length} books, ${due.length} records due${failed ? `, ${failed} failed` : ""}`);
-  if (failed > due.length / 3 && failed > 10) throw new Error(`${src.id}: ${failed} of ${due.length} records failed`);
+  log(`${src.id}: ${books.length} books, ${due.length} records due, ${got.length} read${failed ? `, ${failed} failed` : ""}${throttled >= 3 ? " (the shop kept answering 429; the rest next time)" : ""}`);
+  if (due.length > 10 && !got.length) throw new Error(`${src.id}: none of ${due.length} records read`);
   return JSON.parse(JSON.stringify(out));
 }
 
@@ -861,6 +869,7 @@ const SOURCES = [
     tagline: "Харківське видавництво «Клуб Сімейного Дозвілля»: світові бестселери, класика, детективи й романтика в перекладі",
     url: "https://ksd.ua/",
     draft: true, // until Max has looked at it (2026-10-24)
+    pace: 300,
     fetchAll: (src, opts) => ksdProducts(src, opts),
     normalize: (p) => p,
     keep: (p) => !/рос/i.test(p.language),
