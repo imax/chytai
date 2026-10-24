@@ -181,10 +181,14 @@ function inline(md) {
 }
 const noteOf = (e, id) => (e.note ? inline(titleLinks(e.note, e.via ? e.via.id : id)) : "");
 
+// A guest's tap on «Хочу прочитати» (or «Прочитано», «Читаю зараз», «На дитячу полицю») goes to the sign-in page
+// and on to /do/<what>/<id>, which does it once they are in: the book is not lost on the way through sign-up
+// (a new reader's feedback, 2026-10-24).
+const guestDo = (book, what) => `/login?next=${encodeURIComponent(`/do/${what}/${(book.href || "").startsWith("/book/") ? book.href.slice(6) : encodeURIComponent(book.id || "")}`)}`;
 // «Хочу прочитати» as one tap: a form for a signed-in reader, the sign-in page for a guest.
 function wantButton(book, user, { size = "small", label: text = "Хочу прочитати", primary = false, status = "want" } = {}) {
   const cls = `btn ${primary ? "primary" : ""} ${size}`;
-  if (!user) return `<a class="${cls}" href="/login?next=${attr(encodeURIComponent(book.href || ""))}">${text}</a>`;
+  if (!user) return `<a class="${cls}" href="${attr(guestDo(book, status))}">${text}</a>`;
   return `<form method="post" action="/api/entry/${attr(encodeURIComponent(book.id))}" class="inline"><input type="hidden" name="status" value="${status}"><input type="hidden" name="back" value="1"><button class="${cls}">${text}</button></form>`;
 }
 // «Хочу прочитати» and «Прочитано» side by side, for rows on other readers' shelves (a reader's feedback,
@@ -685,18 +689,18 @@ function readerLine({ name, href, entry: e, now }, id) {
 const nowItem = (book, on, user) =>
   user
     ? `<form method="post" action="/api/now/${attr(encodeURIComponent(book.id))}"><input type="hidden" name="back" value="1"><button title="${on ? "Прибрати з «Читаю зараз»" : "Показати на своїй сторінці, що читаєш її зараз"}">${on ? "Прибрати з «Читаю зараз»" : "Читаю зараз"}</button></form>`
-    : `<a href="/login?next=${attr(encodeURIComponent(book.href || ""))}">Читаю зараз</a>`;
+    : `<a href="${attr(guestDo(book, "now"))}">Читаю зараз</a>`;
 // «На дитячу полицю» (Max, 2026-10-23): a book kept for the children; it stays out of the reader's own taste.
 const kidsItem = (book, on, user) =>
   user
     ? `<form method="post" action="/api/entry/${attr(encodeURIComponent(book.id))}"><input type="hidden" name="kids" value="${on ? 0 : 1}"><button title="${on ? "Повернути до моїх книжок" : "Книжка для дітей: не рахується у твої оцінки й рекомендації"}">${on ? "Прибрати з дитячої полиці" : "На дитячу полицю"}</button></form>`
-    : `<a href="/login?next=${attr(encodeURIComponent(book.href || ""))}">На дитячу полицю</a>`;
+    : `<a href="${attr(guestDo(book, "kids"))}">На дитячу полицю</a>`;
 // «Прочитано» in the menu marks it at once and the page comes back with the stars (mine below), so a
 // rating is one more tap, not a form (Vova's feedback, 2026-10-23).
 const readItem = (book, user) =>
   user
     ? `<form method="post" action="/api/entry/${attr(encodeURIComponent(book.id))}"><input type="hidden" name="status" value="read"><input type="hidden" name="back" value="1"><button>Прочитано</button></form>`
-    : `<a href="/login?next=${attr(encodeURIComponent(book.href || ""))}">Прочитано</a>`;
+    : `<a href="${attr(guestDo(book, "read"))}">Прочитано</a>`;
 const moreMenu = (items) => `<details class="more-acts"><summary class="btn" aria-label="Інші дії" title="Інші дії">⋯</summary><div class="more-menu">${items.join("")}</div></details>`;
 // `readUrl`: the reader's own file in the Chytai reader, «Відкрити в Читалці» in the menu (Max, 2026-10-23).
 function mine(book, entry, user, now = false, readUrl = "", listItem = "") {
@@ -1872,7 +1876,8 @@ function addPage({ user, text = "", error = "" }) {
 // Step two of /add: every line with what it matched. A found book is ticked; «Інша книжка» looks for the right
 // one (addFindResults); a line with no match can be looked for or added as the reader's own book, without a cover.
 // One status for the whole list, picked right before «Додати» (Max: «один для всіх, не кожній окремо»):
-// a pasted list can be books read, a pile of «Хочу прочитати» or the reader's paper shelf.
+// a pasted list can be books read, a pile of «Хочу прочитати» or the reader's paper shelf. «Хочу прочитати» is
+// picked to start with: a new reader adding one book expects that, not «Прочитано» (feedback, 2026-10-24).
 const ADD_STATUS = [["read", "Прочитано"], ["reading", "Читаю"], ["want", "Хочу прочитати"], ["abandoned", "Покинуто"], ["paper", "На папері"], ["kids", "Дитяча полиця"]];
 function addReviewPage({ user, token, rows, text }) {
   // A line that was a page address and was read is found too: the book comes from that page.
@@ -1906,7 +1911,7 @@ function addReviewPage({ user, token, rows, text }) {
     ${addCrumbs}
     <h1>Знайшли ${found} з ${rows.length}</h1>
     <p class="lead">Перевірте :) «Інша книжка», якщо знайшли неправильно. «Шукати» знайде книжку в нашому каталозі або в Open Library, з обкладинкою. Якщо немає і там, вставте в пошук посилання на книжку в магазині чи у видавництва, або заповніть вручну.</p>
-    <label class="add-status">Статус <select name="status">${ADD_STATUS.map(([v, l]) => `<option value="${v}">${l}</option>`).join("")}</select></label>
+    <label class="add-status">Статус <select name="status">${ADD_STATUS.map(([v, l]) => `<option value="${v}"${v === "want" ? " selected" : ""}>${l}</option>`).join("")}</select></label>
     <button class="btn primary" data-cta>Додати <span data-n></span> на полицю</button>
   </div>
   <ol class="add-rows">${order.map((i) => line(rows[i], i)).join("")}</ol>
@@ -1922,9 +1927,16 @@ function addReviewPage({ user, token, rows, text }) {
     const box = row.querySelector(".add-found");
     const q = row.querySelector(".add-find input").value.trim();
     clearTimeout(timer);
+    // The catalog's books at once, then the same list with Open Library's added (it can take seconds); a newer
+    // query typed meanwhile wins.
+    const mine = (row._q = q);
+    const show = (html) => { if (row._q !== mine) return; box.innerHTML = html; if (!row.querySelector(".add-manual")) box.querySelector("[data-own]")?.remove(); };
     timer = setTimeout(async () => {
-      box.innerHTML = q.length < 2 ? "" : await (await fetch("/api/add/find?q=" + encodeURIComponent(q))).text();
-      if (!row.querySelector(".add-manual")) box.querySelector("[data-own]")?.remove();
+      if (q.length < 2) return show("");
+      const url = "/api/add/find?q=" + encodeURIComponent(q);
+      const all = fetch(url).then((r) => r.text());
+      if (!/^https?:/i.test(q)) show(await (await fetch(url + "&ours=1")).text());
+      show(await all);
     }, 200);
   };
   form.addEventListener("input", (e) => { const row = e.target.closest(".add-find") && e.target.closest(".add-row"); if (row) look(row); });
@@ -1970,7 +1982,8 @@ function addReviewPage({ user, token, rows, text }) {
   return layout({ title: "Додати книжки", body, user, path: "/add", noindex: true });
 }
 // «Інша книжка»: what the catalog has for the typed words, each a button that takes its place.
-function addFindResults(hits, outside = []) {
+function addFindResults(hits, outside = [], { waiting = false } = {}) {
+  if (waiting) return `${hits.map(({ book: b }) => `<button type="button" class="add-pick" data-pick="${attr(b.id)}" data-title="${attr(b.title)}" data-author="${attr(byline(b.author || ""))}">${cover(b, "xs")}<span><b>${esc(b.title)}</b><span class="muted">${esc(byline(b.author || ""))}</span></span></button>`).join("")}<p class="add-src">Шукаємо ще в Open Library…</p>`;
   if (!hits.length && !outside.length) return `<p class="small muted">Нічого не знайшлося. Вставте сюди посилання на сторінку книжки в інтернет-магазині чи у видавництва, і ми візьмемо звідти назву, автора, обкладинку й опис. Або заповніть вручну.</p>`;
   const ours = hits.map(({ book: b }) => `<button type="button" class="add-pick" data-pick="${attr(b.id)}" data-title="${attr(b.title)}" data-author="${attr(byline(b.author || ""))}">${cover(b, "xs")}<span><b>${esc(b.title)}</b><span class="muted">${esc(byline(b.author || ""))}</span></span></button>`).join("");
   const theirs = outside.map((b) => `<button type="button" class="add-pick" data-ol="${attr(JSON.stringify(b))}" data-title="${attr(b.title)}" data-author="${attr(b.author)}">${cover(b, "xs")}<span><b>${esc(b.title)}</b><span class="muted">${esc(b.author)}${b.published ? ` · ${b.published}` : ""}</span></span></button>`).join("");

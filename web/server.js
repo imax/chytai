@@ -122,6 +122,24 @@ app.set("trust proxy", true);
 app.use(express.urlencoded({ extended: false, limit: "1mb" }));
 app.use(express.json({ limit: "1mb" }));
 app.use(require("compression")()); // pages are 50–150 KB of HTML; gzip cuts that about five times
+// A page that took over two seconds, and a main loop that stood still for over one, go to the log (a new reader
+// waited ~30 s for search and their shelf on 2026-10-24, and nothing told us where): `fly logs | grep slow`.
+app.use((req, res, next) => {
+  const t0 = Date.now();
+  res.on("finish", () => {
+    const ms = Date.now() - t0;
+    if (ms > 2000) console.log(`slow: ${req.method} ${req.originalUrl.slice(0, 120)} ${ms} ms ${res.statusCode}${req.user ? ` @${req.user.username}` : ""}`);
+  });
+  next();
+});
+{
+  let tick = Date.now();
+  setInterval(() => {
+    const late = Date.now() - tick - 1000;
+    if (late > 1000) console.log(`slow: the main loop stood still for ${late} ms`);
+    tick = Date.now();
+  }, 1000).unref();
+}
 // Style and script addresses carry a content hash (pages.js asset()), so they can live in caches for a year.
 app.use(express.static(path.join(__dirname, "public"), { maxAge: "1y", immutable: true }));
 // Covers the owner sets by hand live here, not on a shop's site (Max, 2026-10-23: «я думав ми обкладинки самі
@@ -249,7 +267,8 @@ app.post("/login/signup", (req, res) => {
   console.log(`new reader @${reader.username}`);
   welcomeMail.newReader(reader);
   // Someone who came from the reader goes straight back to it; the welcome page is about the site.
-  signIn(req, res, reader, next.startsWith("/reader-login") || next.startsWith("/oauth/authorize") ? next : `/welcome${next ? `?next=${encodeURIComponent(next)}` : ""}`);
+  // So does one who signed up to save a book (/do/…): the book is saved and they are back on its page.
+  signIn(req, res, reader, next.startsWith("/reader-login") || next.startsWith("/oauth/authorize") || next.startsWith("/do/") ? next : `/welcome${next ? `?next=${encodeURIComponent(next)}` : ""}`);
 });
 app.get("/welcome", signed, (req, res) => (admin.step(req.user.id, "welcome"), res.send(pages.welcomePage({ user: req.user, next: safeNext(req.query.next) }))));
 function signIn(req, res, reader, next) {
@@ -402,6 +421,8 @@ app.get("/api/add/find", signed, async (req, res) => {
   }
   const q = String(req.query.q || "").slice(0, 100);
   const hits = store.search(q, { limit: 6 });
+  // ours=1: the catalog alone, at once; the page shows it while Open Library (seconds, at times ten) answers.
+  if (req.query.ours === "1") return res.set("Cache-Control", "no-store").send(pages.addFindResults(hits, [], { waiting: true }));
   const known = new Set(hits.map((h) => h.book.id));
   const outside = (await enrich.searchOpenLibrary(q)).filter((b) => !known.has(store.findWork(b)));
   res.set("Cache-Control", "no-store").send(pages.addFindResults(hits, outside));
@@ -1185,6 +1206,24 @@ app.post("/api/entry/:id", signed, (req, res) => {
   // A rating, a note, or «Хочу прочитати» (Max, 2026-10-23) gets the book its overview.
   if (e.status === "want" || (e.status !== "abandoned" && (e.rating != null || e.note))) advice.want(req.params.id);
   back(req, res, store.href(req.params.id));
+});
+
+// What a guest tapped before signing in (pages.guestDo): done once they are in, then back to the book. Only a
+// book not on the shelf yet is touched, so a link followed by someone else's hand changes nothing they have.
+app.get("/do/:what/:id", signed, (req, res) => {
+  const id = store.canonical(store.resolve(req.params.id) || "");
+  if (!id || !store.book(id)) return res.redirect("/me");
+  const what = req.params.what;
+  if (!store.entry(req.user.id, id)) {
+    if (["want", "read"].includes(what)) store.setEntry(req.user.id, id, { status: what });
+    else if (what === "kids") store.setEntry(req.user.id, id, { kids: true, status: "" });
+    else if (what === "now") {
+      store.setEntry(req.user.id, id, { status: "reading" });
+      auth.setNow(req.user.id, { books: [{ id, since: new Date().toISOString().slice(0, 10) }, ...auth.nowOf(req.user.id).books] });
+    }
+    if (what === "want") advice.want(id);
+  }
+  res.redirect(store.href(id));
 });
 
 app.post("/api/entry/:id/remove", signed, (req, res) => {
