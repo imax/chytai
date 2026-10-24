@@ -986,6 +986,17 @@ function flash(card) {
 
 function showPanel(show, tab) {
   document.body.classList.toggle("panel-hidden", !show);
+  // A closed panel leaves no yellow behind: a tap on it would open the explanation again instead of
+  // letting the reader select the text for a note (Max, 2026-10-24). The cards stay in the panel.
+  if (!show) {
+    for (const conv of conversations.values()) {
+      try {
+        rendition?.annotations.remove(conv.cfiRange, "highlight");
+      } catch {
+        /* ignore */
+      }
+    }
+  }
   if (tab) showTab(tab);
   // epub.js needs a resize to reflow pages after the layout changes width.
   setTimeout(resizeView, 220);
