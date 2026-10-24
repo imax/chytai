@@ -528,6 +528,8 @@ body[data-theme="dark"] .cover { background: hsl(var(--hue) 18% 30%); color: hsl
 .shelf-book { flex: none; width: 96px; display: flex; flex-direction: column; gap: 6px; background: none; border: none; padding: 0; color: inherit; }
 #shell .shelf-book .t { font-size: 13px; line-height: 1.25; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 #shell .shelf-book .m { font-size: 11px; margin-top: -4px; }
+#shell .free-group { font-size: 12px; margin: 10px 0 6px; }
+#shell .sec-head + .free-group { margin-top: 0; }
 
 .notes-card { width: 100%; display: flex; flex-direction: column; gap: 10px; padding: 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--card); color: inherit; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04); }
 .notes-card:active { background: var(--accent-soft); }
@@ -600,7 +602,7 @@ body[data-theme="dark"] .cover { background: hsl(var(--hue) 18% 30%); color: hsl
   body.library-open #toast, body.library-open #notice { bottom: calc(76px + env(safe-area-inset-bottom)); }
   /* The rows of the wide layout dissolve; sections stack in the phone mock-up's order. */
   .home-row { display: contents; }
-  .sec-cont { order: 1; } .sec-shelf { order: 2; } .sec-notes { order: 3; } .sec-arr { order: 4; } .sec-wish { order: 5; }
+  .sec-cont { order: 1; } .sec-shelf { order: 2; } .sec-notes { order: 3; } .sec-arr { order: 4; } .sec-wish { order: 5; } .sec-free { order: 6; }
 }
 
 /* ---------- Home screen on a wider screen: the desktop mock-up of 2026-10-15 ---------- */

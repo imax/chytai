@@ -370,7 +370,7 @@
         await sync();
         const lib = await (await api("GET", "/api/library")).json();
         kvSet("library", lib);
-        return { ...lib, books: lib.books.map((b) => ({ ...b, onDevice: onDevice.has(b.path) })) };
+        return { ...lib, books: lib.books.map((b) => ({ ...b, onDevice: onDevice.has(b.path) })), free: (lib.free || []).map((b) => ({ ...b, onDevice: onDevice.has(b.path) })) };
       } catch (err) {
         if (!isNetworkError(err)) throw err;
         const lib = await kvGet("library");
@@ -381,6 +381,7 @@
           ...lib,
           lastBook: s.lastBook || lib.lastBook,
           books: lib.books.map((b) => ({ ...b, onDevice: onDevice.has(b.path), unavailable: !onDevice.has(b.path), started: b.started || (!b.aside && (!!s.positions?.[b.path] || !!s.positions?.[`${b.path}#reflow`])) })),
+          free: (lib.free || []).map((b) => ({ ...b, onDevice: onDevice.has(b.path), unavailable: !onDevice.has(b.path) })),
         };
       }
     },

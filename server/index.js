@@ -58,9 +58,12 @@ const GUEST_MAX_TURNS = 8;
 // DATA_DIR/demo (on the Fly volume), else the one shipped in the repo under demo/.
 const DEMO_DIRS = [path.join(DATA_DIR, "demo"), path.join(ROOT, "demo")];
 const BOOK_EXT = /\.(epub|pdf)$/i;
-// Free books (public domain, 2026-10-22): «Читати» on the site gives a signed-in reader a copy in their
-// own library; without an account it asks to sign in first (Max: «акаунт потрібен щоб читати»). Shipped in the repo under free/.
+// Free books (public domain, 2026-10-22), shipped in the repo under free/. Since 2026-10-24 they are
+// «Вільна полиця», one copy every account sees (Max: «полиця яка видна в усіх акаунтах»); free/shelf.json
+// gives each its title, authors and group. A book taken from the shelf (opened) shows with the reader's own
+// books too. Reading needs an account (Max: «акаунт потрібен щоб читати»).
 const FREE_DIR = path.join(ROOT, "free");
+const FREE_CACHE = path.join(DATA_DIR, "free-cache.json");
 const MAX_UPLOAD = "300mb";
 // Days in the usage stats (/admin) are counted in this time zone, and kept for this long.
 const STATS_TZ = process.env.STATS_TZ || "Europe/Kyiv";
@@ -369,6 +372,19 @@ function freeBooks() {
     return [];
   }
 }
+let freeShelf = [];
+try {
+  freeShelf = JSON.parse(fs.readFileSync(path.join(FREE_DIR, "shelf.json"), "utf8"));
+} catch {
+  /* no manifest: the files' own titles, one group */
+}
+const isFree = (name) => !!name && freeBooks().some((f) => f.name === name);
+// The file a signed-in reader opens by this name: their own copy first, else the shelf's.
+function readerFile(lib, name) {
+  if (!name) return null;
+  const own = bookFile(lib, name);
+  return fs.existsSync(own) || !isFree(name) ? own : path.join(FREE_DIR, name);
+}
 
 // [{ dir, name }] of the books a guest may open. builtInOnly skips the library choice.
 function demoBooks(builtInOnly) {
@@ -669,25 +685,12 @@ app.get("/demo", (req, res) => {
   res.redirect("/");
 });
 
-// /free/<file> opens a free book from the site: copied into the reader's library (once) and opened there.
+// /free/<file> opens a book of the free shelf from the site.
 app.get("/free/:name", (req, res) => {
   const name = safeBookName(req.params.name);
   if (!name || !freeBooks().some((f) => f.name === name)) return res.redirect("/");
   const open = `/?open=${encodeURIComponent(name)}`;
-  const acct = currentAccount(req);
-  if (acct) {
-    if (state.accounts[acct]?.off) return res.redirect("/");
-    const lib = libOf(acct);
-    const file = bookFile(lib, name);
-    if (!fs.existsSync(file)) {
-      fs.copyFileSync(path.join(FREE_DIR, name), file);
-      (lib.meta.added ??= {})[name] = { by: acct, at: Date.now() };
-      saveState();
-      warmCovers(lib, [name]);
-      tellSite(acct);
-    }
-    return res.redirect(open);
-  }
+  if (currentAccount(req)) return res.redirect(open); // the shelf's copy, nothing to copy any more
   res.redirect(`/login?next=${encodeURIComponent(`/free/${encodeURIComponent(name)}`)}`);
 });
 
@@ -1022,13 +1025,38 @@ api.get("/library", async (req, res) => {
       seen: !!(openedAt || aside || u.seen?.[name]) || (!!req.acct && added[name]?.by === req.acct),
     };
   });
-  res.json({ folders: [], books: list, lastBook: u.lastBook || (req.guest ? guestBooks(req)[0]?.name : null) || null });
+  // «Вільна полиця»: everyone's, except the books this reader has a copy of. One taken from it (opened and
+  // not put aside) is also among the reader's books, so it shows in «Продовжити» and the library.
+  let free = [];
+  if (!req.guest) {
+    const own = new Set(list.map((b) => b.path));
+    const shelf = new Map(freeShelf.map((f, i) => [f.name, { ...f, order: i }]));
+    const scanned = await library.scan([FREE_DIR], FREE_CACHE).catch(() => []);
+    free = scanned
+      .map((b) => {
+        const name = path.basename(b.path);
+        const m = shelf.get(name) || {};
+        const progress = u.progress?.[name];
+        const aside = !!u.setAside?.[name];
+        return {
+          ...b, path: name, cloud: false, free: true, group: m.group || "", order: m.order ?? 1e6,
+          title: m.title || b.title, authors: m.authors?.length ? m.authors : b.authors, year: m.year || b.year,
+          openedAt: aside ? 0 : u.opened?.[name] || 0, aside,
+          started: !aside && !!positions[name], pct: aside || !progress ? null : progress.pct, chapter: (!aside && progress?.chapter) || "",
+          addedAt: 0, addedBy: "", coverAt: 0, seen: true,
+        };
+      })
+      .filter((b) => !own.has(b.path))
+      .sort((x, y) => x.order - y.order || x.title.localeCompare(y.title, "uk"));
+    list.push(...free.filter((b) => b.openedAt || b.started));
+  }
+  res.json({ folders: [], books: list, free, lastBook: u.lastBook || (req.guest ? guestBooks(req)[0]?.name : null) || null });
 });
 
 api.get("/book", (req, res) => {
   const name = safeBookName(req.query.path);
   const demo = req.guest ? guestBooks(req).find((d) => d.name === name) : null;
-  const file = req.guest ? demo && path.join(demo.dir, demo.name) : name && bookFile(req.lib, name);
+  const file = req.guest ? demo && path.join(demo.dir, demo.name) : readerFile(req.lib, name);
   if (!file || !fs.existsSync(file)) return res.status(404).json({ error: "Книжки немає на сервері." });
   const u = req.guest ? guestState(req.guest) : userState(req.acct);
   u.lastBook = name;
@@ -1105,7 +1133,7 @@ function customCover(lib, name) {
 api.get("/cover", async (req, res) => {
   const name = safeBookName(req.query.path);
   const demo = req.guest ? guestBooks(req).find((d) => d.name === name) : null;
-  const file = req.guest ? demo && path.join(demo.dir, demo.name) : name && bookFile(req.lib, name);
+  const file = req.guest ? demo && path.join(demo.dir, demo.name) : readerFile(req.lib, name);
   if (!file || !fs.existsSync(file)) return res.status(404).end();
   const custom = !req.guest && customCover(req.lib, name);
   if (custom) {

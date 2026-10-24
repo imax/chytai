@@ -79,7 +79,7 @@
     return "";
   }
 
-  const editButton = (b) => (canEdit() ? `<span class="lib-edit" role="button" data-edit="${esc(b.path)}" title="Назва й автор${b.edited ? " (виправлено вручну)" : ""}">${PENCIL}</span>` : "");
+  const editButton = (b) => (canEdit() && !b.free ? `<span class="lib-edit" role="button" data-edit="${esc(b.path)}" title="Назва й автор${b.edited ? " (виправлено вручну)" : ""}">${PENCIL}</span>` : "");
 
 
   function render() {

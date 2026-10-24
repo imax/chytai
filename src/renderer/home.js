@@ -209,6 +209,22 @@
       </section>`;
     }
 
+    // Вільна полиця: the public-domain books every account sees, by group (free/shelf.json on the server).
+    const free = lib.free || [];
+    if (free.length) {
+      const groups = new Map();
+      for (const b of free) {
+        if (!groups.has(b.group)) groups.set(b.group, []);
+        groups.get(b.group).push(b);
+      }
+      parts.free = `<section class="home-sec sec-shelf sec-free"><div class="sec-head"><span>Вільна полиця · ${free.length}</span></div>
+        ${[...groups].map(([group, list]) => `${group ? `<div class="free-group m">${esc(group)}</div>` : ""}
+          <div class="shelf">${list.map((b) => `<button class="shelf-book" data-open="${esc(b.path)}">
+            ${cover(b, "mid")}<span class="t">${esc(b.title)}</span><span class="m ellipsis">${esc(b.authors[0] || "")}</span>
+          </button>`).join("")}</div>`).join("")}
+      </section>`;
+    }
+
     // Нотатки: how many, and in which books.
     const noteBooks = Object.entries(notes || {}).filter(([, list]) => list.length).sort((a, b) => b[1].length - a[1].length);
     const noteCount = noteBooks.reduce((n, [, list]) => n + list.length, 0);
@@ -261,7 +277,7 @@
     // Rows for a wide screen (Продовжити | Нотатки, the shelf, Нові надходження | Хочу прочитати); on a phone the
     // rows dissolve and the sections stack in the order of the mock-up (style.css).
     const row = (cls, ...xs) => (xs.some(Boolean) ? `<div class="home-row ${cls}">${xs.filter(Boolean).join("")}</div>` : "");
-    html += row("top", parts.cont, parts.notes) + (parts.shelf || "") + row("bottom", parts.arr, parts.wish);
+    html += row("top", parts.cont, parts.notes) + (parts.shelf || "") + row("bottom", parts.arr, parts.wish) + (parts.free || "");
     $("#home-body").innerHTML = html;
   }
 
@@ -327,7 +343,7 @@
   // ---------- Clicks ----------
 
   function openBook(path) {
-    const b = lib?.books.find((x) => x.path === path);
+    const b = lib?.books.find((x) => x.path === path) || lib?.free?.find((x) => x.path === path);
     if (b) b.seen = true;
     // The book already on screen just comes back; any other one opens.
     if (current?.path === path) return hide();
