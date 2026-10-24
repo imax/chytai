@@ -136,9 +136,54 @@ app.use((req, res, next) => {
   let tick = Date.now();
   setInterval(() => {
     const late = Date.now() - tick - 1000;
-    if (late > 1000) console.log(`slow: the main loop stood still for ${late} ms`);
+    if (late > 1000) console.log(`slow: the main loop stood still for ${late} ms`), stalls++;
+    else stalls = 0;
+    if (stalls >= 3 && Date.now() - profiled > 10 * 60 * 1000) (profiled = Date.now()), profile();
     tick = Date.now();
   }, 1000).unref();
+  // Three stalls in a row (2026-10-24: 2–4 s every 3 s for an hour, and the log said nothing of whose):
+  // a 15-second CPU profile, its top functions by own time to the log as `slow: cpu …`, once in ten minutes.
+  let stalls = 0;
+  let profiled = 0;
+  function profile() {
+    const s = new (require("inspector").Session)();
+    s.connect();
+    s.post("Profiler.enable", () =>
+      s.post("Profiler.start", () =>
+        setTimeout(() =>
+          s.post("Profiler.stop", (err, { profile } = {}) => {
+            s.disconnect();
+            if (err || !profile) return console.log(`slow: cpu profile failed: ${err?.message}`);
+            const dt = new Map(); // node id -> ms of own time
+            for (let i = 0; i < profile.samples.length; i++) dt.set(profile.samples[i], (dt.get(profile.samples[i]) || 0) + (profile.timeDeltas[i] || 0) / 1000);
+            const self = new Map();
+            for (const n of profile.nodes) {
+              const f = n.callFrame;
+              const k = `${f.functionName || "(anon)"} ${f.url.replace(/^.*\/(web|node_modules)\//, "$1/")}:${f.lineNumber + 1}`;
+              self.set(k, (self.get(k) || 0) + (dt.get(n.id) || 0));
+            }
+            const top = [...self].sort((a, b) => b[1] - a[1]).slice(0, 12);
+            console.log(`slow: cpu 15 s, own time: ${top.map(([k, ms]) => `${Math.round(ms)} ms ${k}`).join(" | ")}`);
+            // And our own functions with what they called: whose work it was.
+            const parent = new Map();
+            for (const n of profile.nodes) for (const c of n.children || []) parent.set(c, n);
+            const byId = new Map(profile.nodes.map((n) => [n.id, n]));
+            const total = new Map();
+            for (const [id, ms] of dt) {
+              const seen = new Set();
+              for (let n = byId.get(id); n; n = parent.get(n.id)) {
+                const f = n.callFrame;
+                if (!/\/web\/[^/]+\.js$/.test(f.url)) continue;
+                const k = `${f.functionName || "(anon)"} ${f.url.replace(/^.*\//, "")}:${f.lineNumber + 1}`;
+                if (!seen.has(k)) seen.add(k), total.set(k, (total.get(k) || 0) + ms);
+              }
+            }
+            console.log(`slow: cpu 15 s, ours with callees: ${[...total].sort((a, b) => b[1] - a[1]).slice(0, 12).map(([k, ms]) => `${Math.round(ms)} ms ${k}`).join(" | ")}`);
+          }),
+        15000).unref()
+      )
+    );
+  }
 }
 // Style and script addresses carry a content hash (pages.js asset()), so they can live in caches for a year.
 app.use(express.static(path.join(__dirname, "public"), { maxAge: "1y", immutable: true }));
