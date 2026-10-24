@@ -1,6 +1,6 @@
 // One-off probe for the КСД thread: what ksd.ua and Google Books give a server. Not part of the site.
 const UA = "Mozilla/5.0 (compatible; ChytaiBot/1.0; +https://chytai.org.ua)";
-const get = async (u, o = {}) => { try { const r = await fetch(u, { headers: { "user-agent": UA, ...(o.h || {}) } }); const t = await r.text(); return { s: r.status, t }; } catch (e) { return { s: "ERR " + e.message, t: "" }; } };
+const get = async (u, o = {}) => { try { const r = await fetch(u, { headers: { "user-agent": UA, ...(o.h || {}) }, signal: AbortSignal.timeout(20000) }); const t = await r.text(); return { s: r.status, t }; } catch (e) { return { s: "ERR " + e.message, t: "" }; } };
 const log = (...a) => console.log(...a);
 for (const u of ["https://ksd.ua/", "https://ksd.ua/product/aeroport-6", "https://ksd.ua/product/aeroport-e"]) {
   const { s, t } = await get(u);
@@ -20,7 +20,7 @@ for (const u of ["https://ksd.ua/", "https://ksd.ua/product/aeroport-6", "https:
   log("scripts:", scripts.length);
   if (u === "https://ksd.ua/") {
     const apis = new Set();
-    for (const sc of scripts.slice(0, 40)) { const r = await get(new URL(sc, u).href); for (const m of r.t.matchAll(/["'`](https?:\/\/[^"'`\s]*api[^"'`\s]*|\/api\/v?\d*[^"'`\s]{0,80})["'`]/g)) apis.add(m[1]); }
+    for (const sc of scripts.slice(0, 15)) { const r = await get(new URL(sc, u).href); for (const m of r.t.matchAll(/["'`](https?:\/\/[^"'`\s]*api[^"'`\s]*|\/api\/v?\d*[^"'`\s]{0,80})["'`]/g)) apis.add(m[1]); }
     log("api in js:", [...apis].slice(0, 60).join("\n"));
   }
 }
