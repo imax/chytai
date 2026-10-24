@@ -446,20 +446,31 @@ ${x ? `<div class="tbl"><table class="funnel"><tbody>${rows}</tbody></table></di
 // «Звідки приходять» (Max, 2026-10-24): arrivals by source, the exact addresses when the other site passes them,
 // and the pages people land on from search engines and AI chats.
 const KIND_NAMES = { search: "пошук", ai: "AI-чат", social: "соцмережа", mail: "пошта", own: "наше", direct: "", other: "сайт" };
+function sourcesTable(a, limit = Infinity) {
+  const pair = (v, fresh) => `${n(v)}${v ? ` <span class="muted">/ ${fresh}</span>` : ""}`;
+  const rows = a.sources.slice(0, limit).map((x) => `<tr><th>${esc(x.source)}${KIND_NAMES[x.kind] && KIND_NAMES[x.kind] !== x.source.toLowerCase() ? ` <span class="muted">${KIND_NAMES[x.kind]}</span>` : ""}</th><td>${pair(x.week, x.weekNew)}</td><td>${pair(x.month, x.monthNew)}</td><td>${n(x.signups)}</td></tr>`).join("");
+  return a.sources.length ? `<div class="tbl"><table class="sources">
+<thead><tr><th>Джерело</th><th>7 днів</th><th>28 днів</th><th>Реєстрацій</th></tr></thead>
+<tbody>${rows}</tbody></table></div>` : `<p class="muted">Поки нікого не нарахувалось.</p>`;
+}
+// The short block on /admin (Max, 2026-10-24: no help text, the rest on /admin/stats).
+const SHORT_SOURCES = 8;
 function arrivalsBlock(a) {
+  if (!a) return "";
+  const more = a.sources.length > SHORT_SOURCES ? ` <a class="text-link" href="/admin/stats#sources">Усі джерела (${a.sources.length})</a>` : "";
+  return `<h2>Звідки приходять</h2>
+${sourcesTable(a, SHORT_SOURCES)}
+<p class="small">${more ? `${more} · ` : ""}<a class="text-link" href="/admin/stats">Уся статистика</a></p>`;
+}
+function arrivalsDetails(a) {
   if (!a) return "";
   const pair = (v, fresh) => `${n(v)}${v ? ` <span class="muted">/ ${fresh}</span>` : ""}`;
   const link = (ref) => (ref.startsWith("кампанія") ? esc(ref) : `<a href="https://${esc(ref)}" target="_blank" rel="noopener noreferrer">${esc(ref.length > 70 ? ref.slice(0, 70) + "…" : ref)}</a>`);
-  const sources = a.sources.map((x) => `<tr><th>${esc(x.source)}${KIND_NAMES[x.kind] && KIND_NAMES[x.kind] !== x.source.toLowerCase() ? ` <span class="muted">${KIND_NAMES[x.kind]}</span>` : ""}</th><td>${pair(x.week, x.weekNew)}</td><td>${pair(x.month, x.monthNew)}</td><td>${n(x.signups)}</td></tr>`).join("");
   const refs = a.refs.map((x) => `<tr><th>${link(x.ref)} <span class="muted">${esc(x.source)}</span></th><td>${pair(x.week, x.weekNew)}</td><td>${pair(x.month, x.monthNew)}</td></tr>`).join("");
   const landings = a.landings.map((x) => `<tr><th><a href="${esc(x.landing)}">${esc(x.landing)}</a></th><td>${n(x.week)}</td><td>${n(x.month)}</td></tr>`).join("");
-  return `<h2>Звідки приходять</h2>
-<p class="muted small">Заходи на сайт: з іншого сайту або напряму на початку візиту, без ботів і тебе. Через скісну — скільки з них уперше. «Реєстрацій» — нові читачі за 28 днів за тим, звідки вони прийшли першого разу. Рахується з ${a.since ? short(a.since) : "сьогодні"}.</p>
-${a.sources.length ? `<div class="tbl"><table class="sources">
-<thead><tr><th>Джерело</th><th>7 днів</th><th>28 днів</th><th>Реєстрацій</th></tr></thead>
-<tbody>${sources}</tbody></table></div>` : `<p class="muted">Поки нікого не нарахувалось.</p>`}
+  return `<h2 id="sources">Звідки приходять</h2>
+${sourcesTable(a)}
 ${a.refs.length ? `<h3>Звідки саме</h3>
-<p class="muted small">Повні адреси, коли інший сайт їх передає (великі сайти зазвичай дають лише домен), і кампанії з utm_campaign.</p>
 <div class="tbl"><table class="refs urls">
 <thead><tr><th>Адреса</th><th>7 днів</th><th>28 днів</th></tr></thead>
 <tbody>${refs}</tbody></table></div>` : ""}
@@ -507,7 +518,8 @@ ${pager}
   return layout({ title: "Читачі · Статистика", user, path: "/admin", body });
 }
 
-function adminPage({ user, stats: s, overviews: o = null, layout }) {
+function adminPage({ user, stats: s, overviews: o = null, layout, page = "main" }) {
+  const stats = page === "stats";
   const t = s.totals;
   const tiles = [
     tile(t.readers, "читачів", `+${t.signupsWeek} за тиждень, +${t.signupsMonth} за місяць`),
@@ -544,12 +556,12 @@ function adminPage({ user, stats: s, overviews: o = null, layout }) {
   const d = s.digest;
   const digestLine = d ? `Останню розсилку виконано ${short(dayOf(d.finished || d.started))}: надіслано ${d.sent}, пропущено ${d.skipped}${d.errors?.length ? `, помилок ${d.errors.length}` : ""}.` : "Розсилка ще не виконувалась.";
 
-  const body = `<section class="admin">
-<section class="page-head"><div><p class="kicker">Лише для власника</p><h1>Статистика</h1><p class="sub">Сайт станом на ${short(s.now)}. Активний читач — той, хто відкрив сайт або щось зробив на полиці того дня. Перегляди рахуються з ${s.totals.viewsSince ? short(s.totals.viewsSince) : "сьогодні"}; раніше за активність правлять входи й зміни на полиці.</p></div></section>
-<div class="stats">${tiles}</div>
-<p><a class="text-link" href="/admin/readers">Усі читачі (${s.readers.length})</a>, нових за 7 днів: ${fresh.length}.</p>
+  // /admin: the tiles and where people come from; everything else is on /admin/stats (Max, 2026-10-24).
+  const body = stats
+    ? `<section class="admin">
+<section class="page-head"><div><p class="crumbs"><a href="/admin">Статистика</a> / Уся статистика</p><h1>Уся статистика</h1></div></section>
 
-${arrivalsBlock(s.arrivals)}
+${arrivalsDetails(s.arrivals)}
 
 ${funnelBlock(s.funnel)}
 
@@ -574,8 +586,15 @@ ${s.sections.length ? `<div class="tbl"><table class="sections">
 <h2>Щотижневий лист</h2>
 <p>${digestLine} <a class="text-link" href="/admin/digest">Твій текст у листі</a> · <a class="text-link" href="/digest/preview">Переглянути свій лист</a> · <a class="text-link" href="/digest/status">стан розсилки</a> · <a class="text-link" href="/refresh-status">стан каталогів</a> · <a class="text-link" href="/admin/refresh">оновити каталоги зараз</a></p>
 <p class="muted small">Сесій (пристроїв, що залишились увійшовши): ${t.sessions}.</p>
+</section>`
+    : `<section class="admin">
+<section class="page-head"><div><p class="kicker">Лише для власника</p><h1>Статистика</h1><p class="sub">Сайт станом на ${short(s.now)}. Активний читач — той, хто відкрив сайт або щось зробив на полиці того дня. Перегляди рахуються з ${s.totals.viewsSince ? short(s.totals.viewsSince) : "сьогодні"}; раніше за активність правлять входи й зміни на полиці.</p></div></section>
+<div class="stats">${tiles}</div>
+<p><a class="text-link" href="/admin/readers">Усі читачі (${s.readers.length})</a>, нових за 7 днів: ${fresh.length}.</p>
+
+${arrivalsBlock(s.arrivals)}
 </section>`;
-  return layout({ title: "Статистика", user, path: "/admin", body });
+  return layout({ title: stats ? "Уся статистика · Статистика" : "Статистика", user, path: "/admin", body });
 }
 
 // /admin/overviews: every overview with readers' 🤩/🙂/🙁, the complained-about ones on top.
