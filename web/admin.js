@@ -572,7 +572,7 @@ ${s.sections.length ? `<div class="tbl"><table class="sections">
 <tbody>${s.sections.map((x) => `<tr><th>${x.name}</th><td>${n(x.today)}</td><td>${n(x.week)}</td><td>${n(x.month)}</td></tr>`).join("")}</tbody></table></div>` : `<p class="muted">Поки нічого не нарахувалось.</p>`}
 
 <h2>Щотижневий лист</h2>
-<p>${digestLine} <a class="text-link" href="/admin/digest">Твій текст у листі</a> · <a class="text-link" href="/digest/preview">Переглянути свій лист</a> · <a class="text-link" href="/digest/status">стан розсилки</a> · <a class="text-link" href="/refresh-status">стан каталогів</a></p>
+<p>${digestLine} <a class="text-link" href="/admin/digest">Твій текст у листі</a> · <a class="text-link" href="/digest/preview">Переглянути свій лист</a> · <a class="text-link" href="/digest/status">стан розсилки</a> · <a class="text-link" href="/refresh-status">стан каталогів</a> · <a class="text-link" href="/admin/refresh">оновити каталоги зараз</a></p>
 <p class="muted small">Сесій (пристроїв, що залишились увійшовши): ${t.sessions}.</p>
 </section>`;
   return layout({ title: "Статистика", user, path: "/admin", body });

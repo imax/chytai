@@ -1261,6 +1261,12 @@ app.post("/api/book", signed, (req, res) => {
   res.redirect(store.href(b.id));
 });
 
+// The same as a link for the owner (Max, 2026-10-24, after the console quest for КСД): starts the refresh,
+// or one source with ?only=<id>, and shows its progress instead of waiting for the end.
+app.get("/admin/refresh", owner, (req, res) => {
+  refreshShelves(true, String(req.query.only || ""));
+  res.redirect("/refresh-status");
+});
 app.post("/api/refresh", owner, async (req, res) => {
   const r = await refreshShelves(true, String(req.query.only || ""));
   res.send(pages.messagePage({ title: r.ok ? "Каталоги оновлено" : "Не вдалося оновити", text: [...(r.counts || []).map(([id, n]) => `${id}: ${n}`), ...r.errors].join("; "), user: req.user }));
