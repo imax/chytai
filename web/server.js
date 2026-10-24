@@ -570,6 +570,7 @@ setInterval(() => {
   const st = genreTrial.allState();
   if (st?.finished) genreTrial.runAll().catch((e) => console.log(`genreall: ${e.message}`));
   for (const t of [origTrial, langTrial]) if (t.allState()?.finished) t.runAll().catch((e) => console.log(`${t.constructor.name}: ${e.message}`));
+  for (const p of aiPasses.values()) if (p.apply && p.live()) p.runAll().catch((e) => console.log(`aipass ${p.key} all: ${e.message}`));
 }, 6 * 3600 * 1000).unref();
 if (!advice.enabled) console.log("ANTHROPIC_API_KEY is not set: «Чи варто читати?» is off");
 // «Відгуки в інтернеті» by itself: a minute after start, overviews made with an older prompt are redone,
@@ -1339,15 +1340,57 @@ app.get("/admin/catalog", owner, (req, res) => {
   const trial = (t) => { const st = t.state(); return st && { done: st.done, total: st.total, cost: st.cost, at: st.at, running: t.running, prompt: st.prompt }; };
   res.send(pages.catalogAdminPage({
     user: req.user,
+    claude: `/claude/${claudeKey()}`,
     passes: [
       { key: "genres", name: "Жанри", what: "Один-два жанри для кожної книжки замість жанрів з полиць магазинів. Твій «Основний жанр» важливіший.", href: "/admin/genres-trial", all: all(genreTrial, store.aiGenres().size), trial: trial(genreTrial) },
       { key: "lang", name: "Мова", what: "Мова видань з кириличною назвою, з якої не видно мови. «Рос» ховає книжку, «укр» нічого не змінює.", href: "/admin/lang-trial", all: all(langTrial, store.aiLangs().size), trial: trial(langTrial) },
       { key: "orig", name: "Оригінали", what: "З чого перекладена українська книжка: пара з оригіналом у каталозі або рядок «Оригінал: …».", href: "/admin/orig-trial", all: all(origTrial, store.aiOrigs().size), trial: trial(origTrial) },
       { key: "uk", name: "Переклади", what: "Українське видання іноземної книжки, яке Haiku знає і яке є в каталозі. Поки тільки проба.", href: "/admin/uk-trial", all: null, trial: trial(ukTrial) },
-      ...[...aiPasses.values()].map((p) => ({ key: p.key, name: p.name, what: `${p.what} Поки тільки проба.`, href: `/admin/ai/${p.key}`, all: null, trial: trial(p) })),
+      ...[...aiPasses.values()].map((p) => ({ key: p.key, name: p.name, what: p.apply && p.live() ? p.what : `${p.what} Поки тільки проба.`, href: `/admin/ai/${p.key}`, all: p.apply && p.allState() ? all(p, p.answered().size) : null, trial: trial(p) })),
     ],
   }));
 });
+// Claude's own handle on the catalog passes (Max 2026-10-24: «зберігай output десь в базі, щоб ти сам міг
+// читати і керувати»): plain text behind one unguessable link shown on /admin/catalog. It reads every pass's
+// state and starts a trial or a whole-catalog run; GET only, since that is what Claude can send. At most 30
+// starts a day, each a few cents at most.
+const claudeKey = () => {
+  let k = store.db.get("claude:key");
+  if (!k) store.db.set("claude:key", (k = require("crypto").randomBytes(16).toString("hex")));
+  return k;
+};
+const applies = (k, p) => (["genres", "lang", "orig"].includes(k) ? true : !!p.apply);
+const passByKey = () => ({ genres: genreTrial, lang: langTrial, orig: origTrial, uk: ukTrial, ...Object.fromEntries(aiPasses) });
+app.get(["/claude/:key", "/claude/:key/:action/:pass"], (req, res) => {
+  if (req.params.key !== store.db.get("claude:key")) return res.status(404).send("Немає");
+  res.type("text/plain");
+  const all = passByKey();
+  const { action, pass } = req.params;
+  if (action) {
+    const p = all[pass];
+    if (!p) return res.status(404).send(`Немає перевірки ${pass}`);
+    const day = new Date().toISOString().slice(0, 10);
+    const used = JSON.parse(store.db.get("claude:starts") || "{}");
+    if ((used[day] || 0) >= 30) return res.send("На сьогодні вже 30 запусків, більше не можна.");
+    const run = action === "run" ? p.run : action === "apply" && applies(pass, p) ? p.runAll : null;
+    if (!run) return res.status(404).send("Дії: run (проба), apply (весь каталог і на сайт, де вміє)");
+    if (p.running || p.allRunning) return res.send(`${pass}: уже йде`);
+    store.db.set("claude:starts", JSON.stringify({ [day]: (used[day] || 0) + 1 }));
+    run.call(p).catch((e) => console.log(`claude ${action} ${pass}: ${e.message}`));
+    return res.send(`${pass}: ${action === "run" ? "проба" : "прогін по каталогу"} запущено`);
+  }
+  const fmt = (o) => (o ? Object.entries(o).filter(([k]) => !["items", "key"].includes(k)).map(([k, v]) => `${k}=${typeof v === "number" ? Math.round(v * 1000) / 1000 : v}`).join(" ") : "—");
+  const share = { genres: "genres-trial", lang: "lang-trial", orig: "orig-trial", uk: "uk-trial" };
+  const lines = [];
+  for (const [k, p] of Object.entries(all)) {
+    const st = p.state();
+    const link = st?.key ? (share[k] ? `/${share[k]}/${st.key}` : `/ai-trial/${k}/${st.key}`) : "";
+    lines.push(`## ${k}${p.name ? ` (${p.name})` : ""}${p.running ? " · проба йде" : ""}${p.allRunning ? " · прогін йде" : ""}`, `проба: ${fmt(st)}${link ? `\nрезультати: https://chytai.org.ua${link}` : ""}`, applies(k, p) ? `весь каталог: ${fmt(p.allState())}` : "весь каталог: ще не вміє застосовувати, тільки проба", "");
+  }
+  lines.push(`Дії: https://chytai.org.ua/claude/<ключ>/run/<перевірка> — проба; /apply/<перевірка> — весь каталог і на сайт. Запусків сьогодні: ${JSON.parse(store.db.get("claude:starts") || "{}")[new Date().toISOString().slice(0, 10)] || 0} з 30.`);
+  res.send(lines.join("\n"));
+});
+
 // The other catalog passes (catalogpasses.js on aipass.js): a trial page each, a plain-text link for Claude.
 app.get("/admin/ai/:key", owner, (req, res) => {
   const p = aiPasses.get(req.params.key);

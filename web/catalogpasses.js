@@ -20,6 +20,12 @@ const about = (b, n = 400) =>
     .filter(Boolean)
     .join("\n");
 
+// Two author pages are one person only if their surnames start with the same two letters once transliterated («Совелл» and
+// «Соуелл», «Haidt» and «Гайдт»): Haiku once named Lewis Carroll for Jane Carruth, a reteller of his book.
+const { slugify } = require("./store");
+const head = (name) => slugify(String(name || "").trim().split(/\s+/).pop()).replace(/^the-/, "").replace(/h/g, "g").replace(/k/g, "c").slice(0, 2);
+const kin = (a, b) => a.names.some((x) => b.names.some((y) => head(x).length === 2 && head(x) === head(y)));
+
 function passes({ store, social, db, apiKey, log }) {
   // Readers' works first: they are what people look at.
   const shelved = () => new Set(social.all().map((x) => store.canonical(x.id)));
@@ -48,6 +54,13 @@ function passes({ store, social, db, apiKey, log }) {
         diff: a?.verdict === "same",
         links: s.group.map((x) => x.id),
       }),
+      // «Same» merges into the page Haiku keeps, like «Лишити цю» on /admin/dupes (undo there); «different»
+      // and «unsure» stay on that list for a human.
+      apply: (items) => {
+        const groups = items.filter((x) => x.answer.verdict === "same" && x.s.group[x.answer.keep]).map((x) => [x.s.group.map((g) => g.id), x.s.group[x.answer.keep].id]);
+        if (groups.length) store.decideMany(groups);
+        return groups.length;
+      },
     },
     {
       key: "notbooks",
@@ -110,8 +123,24 @@ function passes({ store, social, db, apiKey, log }) {
       facts: (s) => `Names used: ${s.a.names.join("; ")}\nBooks: ${s.a.ids.slice(0, 5).map((id) => store.book(id)?.title).filter(Boolean).join("; ")}`,
       item: (s, a) => {
         // Another author page that the same person already has: the merge Haiku suggests.
-        const other = a?.known === "yes" && [a.original, a.ukrainian].map((n) => store.authors.byName(n)).find((x) => x && x.key !== s.a.key);
+        const other = a?.known === "yes" && [a.original, a.ukrainian].map((n) => store.authors.byName(n)).find((x) => x && x.key !== s.a.key && kin(s.a, x));
         return { id: s.id, title: s.a.name, author: "", before: s.a.names.join("; "), after: a ? (a.known === "yes" ? `${a.original} / ${a.ukrainian}${other ? ` → злити з «${other.name}»` : ""}` : "не знає") : "", diff: !!other, merge: other ? other.slug : "" };
+      },
+      // A merge into another page goes in the owner's joins (undo on the author page, «роз'єднати»).
+      apply: (items) => {
+        const j = require("./authors").ownerJoins(store);
+        let n = 0;
+        for (const { item, s: sub } of items) {
+          const other = item.merge && store.authors.bySlug.get(item.merge);
+          if (!other || other.key === sub.a.key) continue;
+          j.push([sub.a.names[0], other.names[0]]);
+          n++;
+        }
+        if (n) {
+          store.db.set("authors:join", JSON.stringify(j));
+          store.linkTranslations(); // rebuilds the author index
+        }
+        return n;
       },
       // Two pages in this sample that Haiku names as one person.
       finish: (st) => {

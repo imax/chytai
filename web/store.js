@@ -1216,6 +1216,15 @@ class Store {
     }
     this.saveDecisions(d);
   }
+  // Many «same» decisions at once ([[ids, keep]]), with one rebuild at the end (catalogpasses.js dupes).
+  decideMany(groups) {
+    const d = this.decisions();
+    for (const [ids, keep] of groups) {
+      const k = this.workId(keep);
+      for (const id of new Set(ids.map((i) => this.workId(i)))) if (id !== k && !d.same.some(([a, x]) => a === k && x === id)) d.same.push([k, id]);
+    }
+    this.saveDecisions(d);
+  }
   undecide(kind, index) {
     const d = this.decisions();
     if (d[kind]) d[kind].splice(index, 1);

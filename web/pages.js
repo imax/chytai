@@ -1280,7 +1280,7 @@ ${running ? `<script>setTimeout(() => location.reload(), 5000)</script>` : ""}`;
 
 // ---- /admin/catalog: «Якість каталогу», every Claude pass over the catalog on one page ----
 
-function catalogAdminPage({ user, passes }) {
+function catalogAdminPage({ user, passes, claude }) {
   const when = (iso) => (iso ? new Date(iso).toLocaleString("uk-UA", { timeZone: "Europe/Kyiv", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "");
   const state = (a) => (a.running ? "іде" : a.finished ? `готово ${when(a.finished)}` : a.stopped ? "зупинено" : a.at ? "перерваний, продовжиться сам" : "ще не запускали");
   const card = (p) => `<section class="block catalog-pass">
@@ -1299,6 +1299,7 @@ function catalogAdminPage({ user, passes }) {
   ];
   const body = `
 ${pageHead({ crumbs: `<a href="/admin">Статистика</a>`, kicker: "Адмінка", title: "Якість каталогу", sub: "Що Claude робить з каталогом: прогони по всіх книжках і проби перед ними. Нові книжки обробляються самі кожні 6 годин." })}
+<p class="small muted">Посилання для Claude (стан усіх перевірок і запуск, без входу; одне на все, давай тільки Claude): <a href="${attr(claude)}">chytai.org.ua${esc(claude)}</a></p>
 <div class="catalog-passes">${passes.map(card).join("")}</div>
 <section class="block">
   ${label("Інші інструменти")}
