@@ -202,11 +202,46 @@ function passes({ store, social, db, apiKey, log }) {
         return Object.keys(hide).length + ask.length;
       },
     },
+    {
+      // Max 2026-10-24: «інші книжки, які згадуються в книжці, або посилаються на неї». Haiku names both from
+      // what it knows; only works our catalog has count, so a made-up title just finds nothing.
+      key: "mentions",
+      name: "Згадки",
+      what: "Книжки, які згадуються в цій книжці, і книжки, які згадують її, з тих, що є в каталозі.",
+      system: `You help Chytai, a Ukrainian book site, show which books a book talks about. Given one book, list other books that are explicitly named in its text: a book a character reads, quotes or discusses, a work the author cites or discusses, an epigraph's source, a book retold or answered. Then list well-known books that explicitly name or discuss this book in their text. Only books, not films, songs, the Bible's single verses or authors in general; not mere influence you infer, and not the author's other books unless the text itself refers to them. Give each title as usually published, the Ukrainian title if the book is known in Ukrainian, the author, and in «how» a few Ukrainian words on how it is mentioned (up to 8 words). At most 8 in each list, the most notable first. Answer «unknown» with empty lists when you are not sure which book this is or know nothing reliable: a wrong mention is worse than none.`,
+      maxTokens: 1500,
+      schema: (() => {
+        const ref = { type: "object", properties: { title: { type: "string" }, ukrainian_title: { type: "string" }, author: { type: "string" }, how: { type: "string" } }, required: ["title", "ukrainian_title", "author", "how"], additionalProperties: false };
+        return { type: "object", properties: { known: { type: "string", enum: ["yes", "unknown"] }, mentions: { type: "array", items: ref }, mentioned_in: { type: "array", items: ref } }, required: ["known", "mentions", "mentioned_in"], additionalProperties: false };
+      })(),
+      // Readers' books: the ones Haiku is likely to know, and the pages people open.
+      candidates: () => {
+        const mine = shelved();
+        return works().filter((b) => mine.has(b.id));
+      },
+      facts: (s) => about(s.b, 300),
+      item: (s, a) => {
+        const self = new Set([s.b.id, ...(store.translations?.get(s.b.id) || [])]);
+        const find = (r) => {
+          for (const title of [r.ukrainian_title, r.title].filter(Boolean)) {
+            const id = store.findWork({ title, author: r.author });
+            if (id && !self.has(store.canonical(id))) return store.canonical(id);
+          }
+          return "";
+        };
+        const list = (rs) => (rs || []).map((r) => ({ ...r, id: find(r) }));
+        const out = list(a?.mentions);
+        const into = list(a?.mentioned_in);
+        const show = (rs) => [...rs.filter((r) => r.id).map((r) => `✓ «${store.book(r.id)?.title || r.title}» (${r.how})`), ...(rs.some((r) => !r.id) ? [`поза каталогом: ${rs.filter((r) => !r.id).map((r) => r.ukrainian_title || r.title).join("; ")}`] : [])].join(" · ");
+        const after = !a ? "" : a.known !== "yes" ? "не знає" : [out.length ? `Згадує: ${show(out)}` : "", into.length ? `Згадують: ${show(into)}` : ""].filter(Boolean).join(" | ") || "нічого";
+        return { ...book(s.b), before: "—", after, diff: [...out, ...into].some((r) => r.id), mentions: out.filter((r) => r.id).map((r) => r.id), mentionedIn: into.filter((r) => r.id).map((r) => r.id) };
+      },
+    },
   ];
   // Book subjects carry the book itself.
   for (const d of defs) {
     const c = d.candidates;
-    if (["notbooks", "series", "year", "covers"].includes(d.key)) d.candidates = () => c().map((b) => ({ id: b.id, b }));
+    if (["notbooks", "series", "year", "covers", "mentions"].includes(d.key)) d.candidates = () => c().map((b) => ({ id: b.id, b }));
   }
   return defs.map((d) => new AiPass(d, { db, apiKey, log }));
 }
