@@ -480,6 +480,102 @@ function abukBook(json, url) {
   };
 }
 
+// КСД (Клуб Сімейного Дозвілля, ksd.ua; a reader's suggestion, 2026-10-24). Its shop is a Next.js site on a
+// public GraphQL API (prod-api.ksd.ua/graphql) that sells other publishers' books too: the list is asked
+// for KSD's own (`publishing_house_slug: "ksd"`, ~2 thousand products, paper and e-books, 100 a page), and
+// each book's ISBN, original title, translators, year and annotation come from its own record, a new
+// book right away and the rest once a week, like product pages elsewhere. Price and stock come from the
+// list, so they are fresh every day.
+const KSD_API = "https://prod-api.ksd.ua/graphql";
+const KSD_LIST = `query($p:Int){ catalogProducts(page:$p, per_page:100, publishing_house_slug:"ksd"){ data { id slug name type available cost authors { name surname } image { medium_x2 { url } } } meta { last_page } } }`;
+const KSD_BOOK = `query($s:String!){ productPage(slug:$s){ isbn original_name translators publishing_year pages main_text categories { name } specifications { type values { name } } } }`;
+const ksdAsk = async (fetchImpl, query, variables) => {
+  const r = await fetchImpl(KSD_API, { method: "POST", headers: { ...HEADERS, "Content-Type": "application/json", Accept: "application/json" }, body: JSON.stringify({ query, variables }), signal: AbortSignal.timeout(30000) });
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  const j = await r.json();
+  if (!j.data) throw new Error(String(j.errors?.[0]?.message || "no data").slice(0, 120));
+  return j.data;
+};
+// Its annotations open with the shop's bullets («• Серія художньої літератури «КУЛЬТREAD»», «• Роман було
+// екранізовано…»): those lines are left out when there is text after them.
+const ksdAbout = (h) => {
+  const lines = String(h || "").split(/<br\s*\/?>|\r?\n/i);
+  const rest = lines.filter((l) => !/^\s*(<[^>]+>\s*)*•/.test(l));
+  return about(text(rest.join(" ")).length > 80 ? rest.join("<br>") : h);
+};
+async function ksdProducts(src, { fetchImpl = fetch, log = () => {}, previous = new Map(), checkpoint = () => {}, fresh = new Set() }) {
+  const list = [];
+  for (let p = 1, last = 1; p <= last && p <= 60; p++) {
+    const d = await ksdAsk(fetchImpl, KSD_LIST, { p }).catch((e) => {
+      throw new Error(`${src.id}: ${e.cause?.code || e.message} on catalog page ${p}`);
+    });
+    list.push(...d.catalogProducts.data);
+    last = d.catalogProducts.meta.last_page;
+  }
+  const books = list.filter((p) => p.type === "paper" || p.type === "ebook"); // «other» is gift sets and merch
+  log(`${src.id}: ${list.length} products, ${books.length} books`);
+  if (!books.length) throw new Error(`${src.id}: empty catalog`);
+  const today = dayOfWeek();
+  const out = [];
+  const due = [];
+  for (const p of books) {
+    const url = `https://ksd.ua/product/${p.slug}`;
+    const title = ent(p.name).trim();
+    const cover = (p.image?.medium_x2 || []).map((i) => i.url).find((u) => !/\.webp\b/.test(u)); // the .jpg, not its .webp twin
+    const item = {
+      id: `ksd-${p.id}`,
+      title,
+      author: (p.authors || []).map((a) => ent(`${a.name || ""} ${a.surname || ""}`).trim()).filter(Boolean).join(", "),
+      format: p.type === "ebook" ? "e-book" : "папір",
+      series: volumeOf(title)?.series || "",
+      volume: volumeOf(title)?.volume || 0,
+      bundle: /^комплект/i.test(title),
+      cover: cover ? `https://ksd.ua${cover}` : "",
+      url,
+      price: uah(p.cost),
+      status: p.available ? "є" : "немає",
+      isNew: false,
+      language: "українська",
+    };
+    const old = previous.get(url);
+    const DETAILS = ["isbn", "altTitle", "translator", "year", "pages", "genres", "blurb", "language", "checked"];
+    if (old?.checked) for (const k of DETAILS) if (k in old) item[k] = old[k];
+    if (!old?.checked || (bucket(url) === today && !fresh.has(url))) due.push({ p, item });
+    out.push(item);
+  }
+  let failed = 0;
+  const got = [];
+  for (let i = 0; i < due.length; i += 4) {
+    await Promise.all(
+      due.slice(i, i + 4).map(async ({ p, item }) => {
+        try {
+          const b = (await ksdAsk(fetchImpl, KSD_BOOK, { s: p.slug })).productPage;
+          if (!b) throw new Error("no record");
+          const spec = Object.fromEntries((b.specifications || []).map((s) => [s.type, (s.values || []).map((v) => v.name).join(", ")]));
+          Object.assign(item, {
+            isbn: String(b.isbn || "").replace(/[^\dX]/gi, ""),
+            altTitle: b.original_name && ent(b.original_name).trim() !== item.title ? ent(b.original_name).trim() : "",
+            translator: ent(b.translators || "").trim(),
+            year: b.publishing_year ? String(b.publishing_year) : "",
+            pages: b.pages ? String(b.pages) : "",
+            genres: (b.categories || []).map((c) => ent(c.name)),
+            blurb: ksdAbout(b.main_text),
+            language: spec.language || "українська",
+            checked: new Date().toISOString().slice(0, 10),
+          });
+          got.push(item);
+        } catch (e) {
+          if (!failed++) log(`${src.id}: ${item.url}: ${e.cause?.code || e.message}`);
+        }
+      })
+    );
+    if (i % 100 < 4 && i) checkpoint(got), log(`${src.id}: ${i} of ${due.length} books read`); // a restart half-way resumes from here
+  }
+  log(`${src.id}: ${books.length} books, ${due.length} records due${failed ? `, ${failed} failed` : ""}`);
+  if (failed > due.length / 3 && failed > 10) throw new Error(`${src.id}: ${failed} of ${due.length} records failed`);
+  return JSON.parse(JSON.stringify(out));
+}
+
 const SOURCES = [
   {
     id: "lobster",
@@ -757,6 +853,19 @@ const SOURCES = [
     keep: () => true,
     toItem: (p) => p,
     finish: bohdanFinish,
+  },
+  {
+    id: "ksd",
+    kind: "publisher",
+    name: "КСД",
+    tagline: "Харківське видавництво «Клуб Сімейного Дозвілля»: світові бестселери, класика, детективи й романтика в перекладі",
+    url: "https://ksd.ua/",
+    draft: true, // until Max has looked at it (2026-10-24)
+    fetchAll: (src, opts) => ksdProducts(src, opts),
+    normalize: (p) => p,
+    keep: (p) => !/рос/i.test(p.language),
+    toItem: (p) => p,
+    finish: joinEbooks,
   },
   {
     id: "abuk",
