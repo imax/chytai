@@ -138,6 +138,19 @@ app.use((req, res, next) => {
     const late = Date.now() - tick - 1000;
     if (late > 1000) console.log(`slow: the main loop stood still for ${late} ms`), stalls++;
     else stalls = 0;
+    // Stood still over half of the last five minutes: the site is as good as down (2026-10-24: an hour of it,
+    // and we learned from a reader). The owner gets a letter, and the process exits so Fly starts it afresh.
+    const t = Date.now();
+    recent.push([t, Math.max(0, late)]);
+    while (recent[0][0] < t - 5 * 60 * 1000) recent.shift();
+    const still = recent.reduce((n, [, ms]) => n + ms, 0);
+    if (still > 150 * 1000 && !exiting) {
+      exiting = true;
+      const msg = `За останні 5 хвилин сервер стояв ${Math.round(still / 1000)} с: сайт майже не відповідав. Перезапускаю процес. Що їло процесор, дивись у fly logs: grep "slow: cpu".`;
+      console.log(`slow: ${msg}`);
+      notifyOwner("Chytai: сайт гальмував, перезапуск", msg);
+      setTimeout(() => process.exit(1), 5000);
+    }
     if (stalls >= 3 && Date.now() - profiled > 10 * 60 * 1000) (profiled = Date.now()), profile();
     tick = Date.now();
   }, 1000).unref();
@@ -145,6 +158,8 @@ app.use((req, res, next) => {
   // a 15-second CPU profile, its top functions by own time to the log as `slow: cpu …`, once in ten minutes.
   let stalls = 0;
   let profiled = 0;
+  const recent = []; // [time, ms the loop was late] for the last five minutes
+  let exiting = false;
   function profile() {
     const s = new (require("inspector").Session)();
     s.connect();
