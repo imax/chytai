@@ -1,0 +1,15 @@
+# One-off probe (КСД thread, 2026-10-24); runs only on this branch, never on main.
+name: Probe KSD
+on:
+  push:
+    branches: [claude/project-thread-55zhz1]
+    paths: [".github/probe/**", ".github/workflows/probe-ksd.yml"]
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - run: node .github/probe/ksd.mjs
