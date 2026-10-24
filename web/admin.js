@@ -42,6 +42,58 @@ const SECTIONS = [
   ["other", "Інше", () => true],
 ];
 const sectionOf = (p) => SECTIONS.find(([, , is]) => is(p))[0];
+
+// Where visitors come from (Max, 2026-10-24: «звідки приходять»). An arrival is a page opened from another site,
+// or with no referrer at the start of a visit. Kept per day: the source, the referring address without its
+// query (Max: «цікаво саме з якого треду»), the page they landed on (no query either), how many and how many new.
+// Cookies, all first-party and without an id: chytai_here (a visit is going on, 30 minutes), chytai_seen (was here
+// before, a year) and chytai_came (where a guest first came from, 30 days, moved to their account on sign-up).
+const SOURCES = [
+  // [label, kind, test on the host or the utm_source]
+  ["Gemini", "ai", /(^|\.)gemini\.google\.|^gemini$/],
+  ["Пошта", "mail", /^mail\.google\.|outlook\.|^mail\.|(^|\.)ukr\.net$|^email$|^digest$|^newsletter$/],
+  ["Google", "search", /(^|\.)google\.[a-z.]+$|^google$/],
+  ["Bing", "search", /(^|\.)bing\.com$|^bing$/],
+  ["DuckDuckGo", "search", /duckduckgo\.com$|^duckduckgo$/],
+  ["Yahoo", "search", /(^|\.)yahoo\.com$/],
+  ["Ecosia", "search", /ecosia\.org$/],
+  ["Brave Search", "search", /search\.brave\.com$/],
+  ["ChatGPT", "ai", /chatgpt\.com$|chat\.openai\.com$|^chatgpt$|^openai$/],
+  ["Claude", "ai", /(^|\.)claude\.ai$|^claude$/],
+  ["Perplexity", "ai", /perplexity\.ai$|^perplexity$/],
+  ["Copilot", "ai", /copilot\.microsoft\.com$|^copilot$/],
+  ["Telegram", "social", /(^|\.)t\.me$|telegram\.(org|me)$|^telegram$|^tg$/],
+  ["Facebook", "social", /(^|\.)(facebook\.com|fb\.com|fb\.me)$|^facebook$|^fb$/],
+  ["Instagram", "social", /instagram\.com$|^instagram$|^ig$/],
+  ["Threads", "social", /threads\.(net|com)$|^threads$/],
+  ["X", "social", /(^|\.)(x\.com|twitter\.com|t\.co)$|^x$|^twitter$/],
+  ["Reddit", "social", /(^|\.)reddit\.com$|^reddit$/],
+  ["LinkedIn", "social", /linkedin\.com$|lnkd\.in$|^linkedin$/],
+  ["Bluesky", "social", /bsky\.app$|^bluesky$/],
+  ["Mastodon", "social", /mastodon|^mstdn/],
+  ["Читалка Chytai", "own", /^(app|read)\.chytai\.org\.ua$|^chytai\.fly\.dev$/],
+];
+const KIND = Object.fromEntries(SOURCES.map(([label, kind]) => [label, kind]));
+const clean = (t, max) => String(t || "").replace(/[\u0000-\u001f<>"]/g, "").trim().slice(0, max);
+// The source of an arrival: a label like «Google» or the bare host, and the address it came from.
+function sourceOf(referer, query, ownHosts) {
+  let host = "", ref = "";
+  try {
+    const u = new URL(referer);
+    if (/^https?:$/.test(u.protocol)) {
+      host = u.hostname.toLowerCase().replace(/^(www|m|l|lm|old|new)\./, "");
+      ref = clean(host + (u.pathname === "/" ? "" : decodeURIComponent(u.pathname)).replace(/\/$/, ""), 200);
+    }
+  } catch {}
+  if (host && ownHosts.has(host)) return null; // a page of the site itself: not an arrival
+  const utm = clean(query?.utm_source, 40).toLowerCase();
+  const campaign = clean(query?.utm_campaign, 80);
+  const key = utm || host;
+  if (!key) return { source: "Напряму", ref: "" };
+  const known = SOURCES.find(([, , re]) => re.test(key));
+  return { source: known ? known[0] : key, ref: campaign ? `кампанія: ${campaign}` : ref };
+}
+const ARRIVAL_DAYS = 28;
 const SECTION_NAMES = Object.fromEntries(SECTIONS.map(([id, name]) => [id, name]));
 
 class Admin {
@@ -78,6 +130,82 @@ class Admin {
     } catch (e) {
       console.error("admin touch failed:", e.message);
     }
+  }
+
+  // An arrival on the site (see SOURCES): counted once at the start of a visit, or whenever a page is opened from
+  // another site. Same filters as touch(), plus browser prefetches. Sets the three cookies described above.
+  arrive(req, res, readerId, { cookies = {}, ownHosts = new Set(), secure = false } = {}) {
+    if (req.method !== "GET" || readerId === this.ownerId) return;
+    const accept = req.headers.accept || "";
+    if (accept && !accept.includes("text/html")) return;
+    const p = req.path || "";
+    if (p.startsWith("/api/") || p === "/refresh-status" || p === "/admin" || p.startsWith("/admin/") || p.includes(".") || p === "/mcp" || p.startsWith("/oauth/")) return;
+    if (BOT.test(req.headers["user-agent"] || "") || /prefetch|prerender/i.test(req.headers["sec-purpose"] || req.headers.purpose || "")) return;
+    try {
+      const referer = req.headers.referer || req.headers.referrer || "";
+      const from = sourceOf(referer, req.query, ownHosts);
+      const set = [];
+      const tail = `; Path=/; HttpOnly; SameSite=Lax${secure ? "; Secure" : ""}`;
+      set.push(`chytai_here=1; Max-Age=1800${tail}`);
+      const arrival = from && (referer || !cookies.chytai_here);
+      if (arrival) {
+        const fresh = !readerId && !cookies.chytai_seen ? 1 : 0;
+        const landing = clean(decodeURIComponent(p), 120) || "/";
+        this.db.prepare(`INSERT INTO arrivals (day, source, ref, landing, visits, fresh) VALUES (?, ?, ?, ?, 1, ?) ON CONFLICT (day, source, ref, landing) DO UPDATE SET visits = visits + 1, fresh = fresh + excluded.fresh`).run(today(), from.source, from.ref, landing, fresh);
+        if (!readerId && !cookies.chytai_came && from.source !== "Напряму") set.push(`chytai_came=${encodeURIComponent(JSON.stringify({ source: from.source, ref: from.ref, landing, day: today() }))}; Max-Age=${30 * 86400}${tail}`);
+      }
+      if (!cookies.chytai_seen) set.push(`chytai_seen=1; Max-Age=${365 * 86400}${tail}`);
+      res.append("Set-Cookie", set);
+    } catch (e) {
+      console.error("admin arrive failed:", e.message);
+    }
+  }
+
+  // A new reader: keep where they first came from (the chytai_came cookie, else «Напряму»).
+  came(readerId, cookie) {
+    let c = null;
+    try {
+      c = JSON.parse(cookie || "null");
+    } catch {}
+    const came = c && typeof c === "object" ? { source: clean(c.source, 60), ref: clean(c.ref, 200), landing: clean(c.landing, 120), day: clean(c.day, 10) } : { source: "Напряму", ref: "", landing: "", day: today() };
+    try {
+      this.db.prepare("UPDATE readers SET came = ? WHERE id = ?").run(JSON.stringify(came), readerId);
+    } catch (e) {
+      console.error("admin came failed:", e.message);
+    }
+  }
+
+  // Arrivals of the last 7 and 28 days: by source, by referring address, and the pages people land on from
+  // search engines and AI chats. Sign-ups by source come from readers.came.
+  arrivals(readers, now) {
+    const week7 = addDays(now, -6), month = addDays(now, -(ARRIVAL_DAYS - 1));
+    const rows = this.db.prepare("SELECT day, source, ref, landing, visits, fresh FROM arrivals WHERE day >= ?").all(month);
+    const since = this.db.prepare("SELECT MIN(day) AS d FROM arrivals").get()?.d || null;
+    const bySource = {}, byRef = {}, byLanding = {};
+    const add = (m, key, extra, r) => {
+      const x = (m[key] ||= { ...extra, week: 0, weekNew: 0, month: 0, monthNew: 0, signups: 0 });
+      if (r.day >= week7) (x.week += r.visits), (x.weekNew += r.fresh);
+      x.month += r.visits;
+      x.monthNew += r.fresh;
+    };
+    for (const r of rows) {
+      add(bySource, r.source, { source: r.source, kind: KIND[r.source] || (r.source === "Напряму" ? "direct" : "other") }, r);
+      if (r.ref.includes("/") || r.ref.startsWith("кампанія")) add(byRef, `${r.source}\t${r.ref}`, { source: r.source, ref: r.ref }, r);
+      if (["search", "ai"].includes(KIND[r.source])) add(byLanding, r.landing, { landing: r.landing }, r);
+    }
+    for (const rd of readers) {
+      if (rd.id === this.ownerId || !rd.came || dayOf(rd.created) < month) continue;
+      let c;
+      try {
+        c = JSON.parse(rd.came);
+      } catch {
+        continue;
+      }
+      const x = (bySource[c.source] ||= { source: c.source, kind: KIND[c.source] || "other", week: 0, weekNew: 0, month: 0, monthNew: 0, signups: 0 });
+      x.signups++;
+    }
+    const top = (m, k = 20) => Object.values(m).sort((a, b) => b.month - a.month || b.week - a.week).slice(0, k);
+    return { since, sources: top(bySource, 40), refs: top(byRef), landings: top(byLanding, 15) };
   }
 
   // The first time a reader got to a step of adding books: «welcome» (/welcome), «add» (/add), «review» (the
@@ -226,6 +354,7 @@ class Admin {
           following: following.get(r.id) || 0,
           followers: followers.get(r.id) || 0,
           digest: r.digest !== 0 && !!r.email,
+          came: (() => { try { return JSON.parse(r.came || "null"); } catch { return null; } })(),
           lastDigest: lastDigest[r.id] ? dayOf(lastDigest[r.id]) : null,
         };
       })
@@ -258,6 +387,7 @@ class Admin {
       },
       weeks: weekRows,
       sections: this.sections(sectionRows, now),
+      arrivals: this.arrivals(readers, now),
       funnel,
       cohorts,
       later: LATER,
@@ -313,10 +443,38 @@ function funnelBlock(f) {
 ${x ? `<div class="tbl"><table class="funnel"><tbody>${rows}</tbody></table></div>` : ""}`;
 }
 
-const READER_HEAD = `<th>Читач</th><th>Зареєструвався</th><th>Востаннє</th><th>Днів</th><th>Книжок</th><th>Лист</th>`;
+// «Звідки приходять» (Max, 2026-10-24): arrivals by source, the exact addresses when the other site passes them,
+// and the pages people land on from search engines and AI chats.
+const KIND_NAMES = { search: "пошук", ai: "AI-чат", social: "соцмережа", mail: "пошта", own: "наше", direct: "", other: "сайт" };
+function arrivalsBlock(a) {
+  if (!a) return "";
+  const pair = (v, fresh) => `${n(v)}${v ? ` <span class="muted">/ ${fresh}</span>` : ""}`;
+  const link = (ref) => (ref.startsWith("кампанія") ? esc(ref) : `<a href="https://${esc(ref)}" target="_blank" rel="noopener noreferrer">${esc(ref.length > 70 ? ref.slice(0, 70) + "…" : ref)}</a>`);
+  const sources = a.sources.map((x) => `<tr><th>${esc(x.source)}${KIND_NAMES[x.kind] && KIND_NAMES[x.kind] !== x.source.toLowerCase() ? ` <span class="muted">${KIND_NAMES[x.kind]}</span>` : ""}</th><td>${pair(x.week, x.weekNew)}</td><td>${pair(x.month, x.monthNew)}</td><td>${n(x.signups)}</td></tr>`).join("");
+  const refs = a.refs.map((x) => `<tr><th>${link(x.ref)} <span class="muted">${esc(x.source)}</span></th><td>${pair(x.week, x.weekNew)}</td><td>${pair(x.month, x.monthNew)}</td></tr>`).join("");
+  const landings = a.landings.map((x) => `<tr><th><a href="${esc(x.landing)}">${esc(x.landing)}</a></th><td>${n(x.week)}</td><td>${n(x.month)}</td></tr>`).join("");
+  return `<h2>Звідки приходять</h2>
+<p class="muted small">Заходи на сайт: з іншого сайту або напряму на початку візиту, без ботів і тебе. Через скісну — скільки з них уперше. «Реєстрацій» — нові читачі за 28 днів за тим, звідки вони прийшли першого разу. Рахується з ${a.since ? short(a.since) : "сьогодні"}.</p>
+${a.sources.length ? `<div class="tbl"><table class="sources">
+<thead><tr><th>Джерело</th><th>7 днів</th><th>28 днів</th><th>Реєстрацій</th></tr></thead>
+<tbody>${sources}</tbody></table></div>` : `<p class="muted">Поки нікого не нарахувалось.</p>`}
+${a.refs.length ? `<h3>Звідки саме</h3>
+<p class="muted small">Повні адреси, коли інший сайт їх передає (великі сайти зазвичай дають лише домен), і кампанії з utm_campaign.</p>
+<div class="tbl"><table class="refs">
+<thead><tr><th>Адреса</th><th>7 днів</th><th>28 днів</th></tr></thead>
+<tbody>${refs}</tbody></table></div>` : ""}
+${a.landings.length ? `<h3>Куди потрапляють з пошуку й AI-чатів</h3>
+<div class="tbl"><table class="landings">
+<thead><tr><th>Сторінка</th><th>7 днів</th><th>28 днів</th></tr></thead>
+<tbody>${landings}</tbody></table></div>` : ""}`;
+}
+
+const cameCell = (c) => (c ? `${esc(c.source)}${c.ref && c.ref.includes("/") ? ` <a class="muted" href="https://${esc(c.ref)}" target="_blank" rel="noopener noreferrer" title="${esc(c.ref)}">↗</a>` : ""}` : `<span class="muted">—</span>`);
+
+const READER_HEAD = `<th>Читач</th><th>Зареєструвався</th><th>Востаннє</th><th>Днів</th><th>Книжок</th><th>Звідки</th><th>Лист</th>`;
 const readerRow = (r) => `<tr${r.owner ? ' class="owner"' : ""}>
   <th><a href="/@${esc(r.username)}">${esc(r.name)}</a> <span class="muted">@${esc(r.username)}</span></th>
-  <td>${short(r.created)}</td><td>${short(r.last)}</td><td>${n(r.days)}</td><td>${n(r.books)}</td>
+  <td>${short(r.created)}</td><td>${short(r.last)}</td><td>${n(r.days)}</td><td>${n(r.books)}</td><td>${cameCell(r.came)}</td>
   <td>${r.digest ? "так" : r.email ? "ні" : `<span class="muted">без пошти</span>`}</td>
 </tr>`;
 
@@ -342,7 +500,7 @@ function readersPage({ user, stats: s, layout, q = "", min = 0, sort = "created"
 <p class="filter">${filters}${q ? ` · знайдено ${all.length} <a href="${url({ query: "" })}">скинути пошук</a>` : ""}</p>
 ${pager}
 ${shown.length ? `<div class="tbl"><table class="readers">
-<thead><tr><th>Читач</th>${col("created", "Зареєструвався")}${col("last", "Востаннє")}${col("days", "Днів")}${col("books", "Книжок")}<th>Лист</th></tr></thead>
+<thead><tr><th>Читач</th>${col("created", "Зареєструвався")}${col("last", "Востаннє")}${col("days", "Днів")}${col("books", "Книжок")}<th>Звідки</th><th>Лист</th></tr></thead>
 <tbody>${shown.map(readerRow).join("")}</tbody></table></div>` : `<p class="muted">Нікого не знайдено.</p>`}
 ${pager}
 </section>`;
@@ -389,6 +547,8 @@ function adminPage({ user, stats: s, overviews: o = null, layout }) {
 <section class="page-head"><div><p class="kicker">Лише для власника</p><h1>Статистика</h1><p class="sub">Сайт станом на ${short(s.now)}. Активний читач — той, хто відкрив сайт або щось зробив на полиці того дня. Перегляди рахуються з ${s.totals.viewsSince ? short(s.totals.viewsSince) : "сьогодні"}; раніше за активність правлять входи й зміни на полиці.</p></div></section>
 <div class="stats">${tiles}</div>
 <p><a class="text-link" href="/admin/readers">Усі читачі (${s.readers.length})</a>, нових за 7 днів: ${fresh.length}.</p>
+
+${arrivalsBlock(s.arrivals)}
 
 ${funnelBlock(s.funnel)}
 

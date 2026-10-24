@@ -49,6 +49,7 @@ CREATE TABLE IF NOT EXISTS reader_files (reader TEXT NOT NULL, name TEXT NOT NUL
 CREATE TABLE IF NOT EXISTS visits (day TEXT NOT NULL, reader TEXT NOT NULL, PRIMARY KEY (day, reader));
 CREATE TABLE IF NOT EXISTS views (day TEXT PRIMARY KEY, readers INTEGER NOT NULL DEFAULT 0, guests INTEGER NOT NULL DEFAULT 0);
 CREATE TABLE IF NOT EXISTS section_views (day TEXT NOT NULL, section TEXT NOT NULL, views INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (day, section));
+CREATE TABLE IF NOT EXISTS arrivals (day TEXT NOT NULL, source TEXT NOT NULL, ref TEXT NOT NULL, landing TEXT NOT NULL, visits INTEGER NOT NULL DEFAULT 0, fresh INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (day, source, ref, landing));
 CREATE TABLE IF NOT EXISTS steps (reader TEXT NOT NULL, step TEXT NOT NULL, at TEXT NOT NULL, PRIMARY KEY (reader, step));
 CREATE VIRTUAL TABLE IF NOT EXISTS search USING fts5 (id UNINDEXED, title, alt, author, series, extra, tokenize = 'unicode61 remove_diacritics 2');
 CREATE VIRTUAL TABLE IF NOT EXISTS search_vocab USING fts5vocab (search, 'row');
@@ -68,6 +69,8 @@ function open(dataDir) {
   if (!db.prepare("PRAGMA table_info(readers)").all().some((c) => c.name === "noindex")) db.exec("ALTER TABLE readers ADD COLUMN noindex INTEGER NOT NULL DEFAULT 0");
   // «Читаю зараз» (Max, 2026-10-22), a reader's status: JSON { books: [{ id, since }], at }.
   if (!db.prepare("PRAGMA table_info(readers)").all().some((c) => c.name === "now")) db.exec("ALTER TABLE readers ADD COLUMN now TEXT");
+  // Where a reader first came from before signing up (/admin, Max 2026-10-24): JSON { source, ref, landing, day }.
+  if (!db.prepare("PRAGMA table_info(readers)").all().some((c) => c.name === "came")) db.exec("ALTER TABLE readers ADD COLUMN came TEXT");
   // «Дитяча полиця» (Max, 2026-10-23): a book the reader keeps for their children, out of their own taste.
   if (!db.prepare("PRAGMA table_info(entries)").all().some((c) => c.name === "kids")) db.exec("ALTER TABLE entries ADD COLUMN kids INTEGER NOT NULL DEFAULT 0");
   // A work may have several addresses (an old one redirects to the current): the table once made id

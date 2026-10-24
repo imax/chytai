@@ -197,6 +197,7 @@ app.use((req, res, next) => {
   req.owner = !!req.user?.owner; // drafts, refresh: the owner's business
   res.locals.user = req.user;
   admin.touch(req, req.user?.id);
+  admin.arrive(req, res, req.user?.id, { cookies: cookies(req), ownHosts: new Set([host, DOMAIN, `www.${DOMAIN}`, `${process.env.FLY_APP_NAME}.fly.dev`, "localhost"].filter(Boolean)), secure: secure(req) });
   next();
 });
 const signed = (req, res, next) => (req.user ? next() : res.redirect(`/login?next=${encodeURIComponent(req.originalUrl)}`));
@@ -243,6 +244,8 @@ app.post("/login/signup", (req, res) => {
   if (auth.byEmail(email)) return signIn(req, res, auth.byEmail(email), next);
   const reader = auth.createReader({ email, name: name.name, username: username.username });
   auth.useTicket(req.body.ticket);
+  admin.came(reader.id, cookies(req).chytai_came);
+  res.append("Set-Cookie", `chytai_came=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax`);
   console.log(`new reader @${reader.username}`);
   welcomeMail.newReader(reader);
   // Someone who came from the reader goes straight back to it; the welcome page is about the site.
@@ -250,7 +253,7 @@ app.post("/login/signup", (req, res) => {
 });
 app.get("/welcome", signed, (req, res) => (admin.step(req.user.id, "welcome"), res.send(pages.welcomePage({ user: req.user, next: safeNext(req.query.next) }))));
 function signIn(req, res, reader, next) {
-  res.setHeader("Set-Cookie", auth.cookie(auth.signIn(reader.id), { secure: secure(req) }));
+  res.append("Set-Cookie", auth.cookie(auth.signIn(reader.id), { secure: secure(req) }));
   res.redirect(next || "/me");
 }
 // The owner's magic link from before accounts still works, so Max is never locked out.
