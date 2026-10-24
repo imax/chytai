@@ -271,7 +271,7 @@ app.get("/icon.png", (req, res) => res.sendFile(path.join(ROOT, "build", "icon.p
 // ---- auth: readers signed in by a code sent to their e-mail (auth.js) ----
 
 // A reader as the pages see them: name, username and the address of their page.
-const pub = (r) => (r ? { id: r.id, name: r.name, username: r.username, href: `/@${r.username}`, owner: r.id === OWNER_ID, email: r.email, noindex: !!r.noindex } : null);
+const pub = (r) => (r ? { id: r.id, name: r.name, username: r.username, href: `/@${r.username}`, owner: r.id === OWNER_ID, email: r.email, noindex: !!r.noindex, created: r.created || "" } : null);
 function cookies(req) {
   return Object.fromEntries((req.headers.cookie || "").split(";").map((c) => c.trim().split("=")).filter((p) => p[0]).map(([k, ...v]) => [k, decodeURIComponent(v.join("="))]));
 }

@@ -253,6 +253,12 @@ function mini(book, size = "sm") {
 }
 const minis = (list, size) => (list.length ? `<div class="minis">${list.map((b) => mini(b, size)).join("")}</div>` : "");
 
+// A reader's registration month: «з жовтня 2026» (Max, 2026-10-24).
+const joined = (iso) => {
+  const d = new Date(iso || "");
+  return isNaN(d) ? "" : `з ${MONTHS[d.getMonth()]} ${d.getFullYear()}`;
+};
+
 // When an entry changed, as people say it: «сьогодні», «вчора», «3 дні тому», «12 жовтня».
 const MONTHS = ["січня", "лютого", "березня", "квітня", "травня", "червня", "липня", "серпня", "вересня", "жовтня", "листопада", "грудня"];
 function when(e) {
@@ -1109,7 +1115,7 @@ function libraryPage({ lists = [], savedLists = [], rows, user, reader, own = fa
     ...(common.length ? [["common", "Спільні", common.length]] : []),
     ["kids", "Дитяча полиця", kids.length],
   ].filter(([k, , n]) => !k || n || (own && ["read", "reading", "want"].includes(k)));
-  const sub = [books(mine.length), kids.length ? `${kids.length} на дитячій полиці` : "", count(read, "прочитана", "прочитані", "прочитаних"), thisYear.length ? `${thisYear.length} цього року` : "", common.length ? `<b>${common.length} ${plural(common.length, "спільна", "спільні", "спільних")} з тобою</b>` : "", follows.followers.length ? `<a href="#follows">${count(follows.followers.length, "читач стежить", "читачі стежать", "читачів стежать")}</a>` : "", own ? `<a href="${attr(reader.href)}?public">як бачать інші</a> · <a href="/settings">налаштування</a>` : `<span class="muted">@${esc(reader.username)}</span>`].filter(Boolean).join(" · ");
+  const sub = [books(mine.length), kids.length ? `${kids.length} на дитячій полиці` : "", count(read, "прочитана", "прочитані", "прочитаних"), thisYear.length ? `${thisYear.length} цього року` : "", common.length ? `<b>${common.length} ${plural(common.length, "спільна", "спільні", "спільних")} з тобою</b>` : "", follows.followers.length ? `<a href="#follows">${count(follows.followers.length, "читач стежить", "читачі стежать", "читачів стежать")}</a>` : "", joined(reader.created), own ? `<a href="${attr(reader.href)}?public">як бачать інші</a> · <a href="/settings">налаштування</a>` : `<span class="muted">@${esc(reader.username)}</span>`].filter(Boolean).join(" · ");
   // Who follows this reader and whom they follow, as rows of names (Max, 2026-10-20: lists and counts are fine).
   const names = (list) => `<p class="small">${list.map((r) => `<a href="${attr(r.href)}">${esc(r.name)}</a>`).join(", ")}</p>`;
   const followBlock = follows.followers.length || follows.following.length ? `<div id="follows">${follows.followers.length ? `${label(own ? "Стежать за тобою" : "Стежать", String(follows.followers.length))}${names(follows.followers)}` : ""}${follows.following.length ? `${label(own ? "Ти стежиш за" : "Стежить за", String(follows.following.length))}${names(follows.following)}` : ""}</div>` : "";
