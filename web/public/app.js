@@ -8,7 +8,7 @@
 
   const rows = $("#rows");
   if (rows) {
-    const items = $$(".row, .card", rows);
+    const items = $$(".row, .card", rows).filter((el) => !el.classList.contains("cover")); // a card's cover is `.cover.card` too
     const q = $("#q");
     const genre = $("#genre");
     const sort = $("#sort");
