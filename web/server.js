@@ -32,6 +32,7 @@ const { Mcp } = require("./mcp");
 const { Reviews } = require("./reviews");
 const { Advice } = require("./advice");
 const { Lists } = require("./lists");
+const bg = require("./jobs"); // background jobs in their own process (main.js, jobs.js)
 
 const ROOT = path.join(__dirname, "..");
 loadDotEnv(path.join(ROOT, ".env"));
@@ -74,7 +75,7 @@ let lastRefresh = Date.parse(store.shelvesRefreshedAt) || 0;
 let refreshing = null;
 let lastResult = null; // { at, ok, errors, counts } of the last attempt, for /refresh-status
 let currentLog = []; // the running refresh's log so far
-function refreshShelves(force = false, only = "") {
+function refreshCatalogs(force = false, only = "") {
   if (refreshing) return refreshing;
   if (!force && Date.now() - lastRefresh < REFRESH_MS) return null;
   if (!only) lastRefresh = Date.now(); // even on failure: one attempt a day, not one per request
@@ -88,11 +89,14 @@ function refreshShelves(force = false, only = "") {
     .finally(() => (refreshing = null));
   return refreshing;
 }
+const refreshShelves = bg.fn("refresh", refreshCatalogs, true, () => ({ refreshRunning: !!refreshing, log: currentLog.slice(-30), last: lastResult, lastRefresh }));
+// The daily refresh starts by itself once the shelves are older than REFRESH_MS (refreshCatalogs checks).
+bg.every("refresh-check", 10 * 60 * 1000, () => refreshShelves(), { db: store.db, first: 2 * 60 * 1000 });
 // After a start, go on with a source a restart (a deploy) cut short (its progress is in partial:<id>), and
 // read a source added since the last refresh (no shelf yet) instead of leaving it for the next morning;
 // one source at a time.
 const pendingSources = catalogs.SOURCES.filter((s) => !store.shelf(s.id) || JSON.parse(store.db.get(`partial:${s.id}`) || "[]").length).map((s) => s.id);
-if (pendingSources.length)
+if (pendingSources.length && bg.background)
   setTimeout(async () => {
     for (const id of pendingSources) {
       while (refreshing) await refreshing;
@@ -108,8 +112,12 @@ const refreshAuthors = () => authors.refresh(store, { log: console.log }).catch(
 const readeatPass = (ids) => readeat.enrich(store, { ids, log: console.log }).catch((e) => console.error("readeat failed:", e));
 const details = (opts) => readeatPass(opts.ids).then(() => enrich.enrich(store, { log: console.log, googleKey: process.env.GOOGLE_BOOKS_KEY || "", ...opts })).catch((e) => console.error("enrich failed:", e));
 const refreshDetails = () => readeatPass().then(() => enrich.refresh(store, { log: console.log, googleKey: process.env.GOOGLE_BOOKS_KEY || "" })).catch((e) => console.error("enrich failed:", e));
-setTimeout(() => refreshUk().then(refreshAuthors).then(refreshDetails), 60000).unref();
-setInterval(() => refreshUk().then(refreshAuthors).then(refreshDetails), 6 * 3600 * 1000).unref();
+const refreshWikidata = bg.fn("wikidata", () => refreshUk().then(refreshAuthors).then(refreshDetails).then(() => true), true);
+bg.every("wikidata", 6 * 3600 * 1000, () => refreshWikidata(), { db: store.db });
+// Bulk passes the owner starts (/admin/readeat, /admin/enrich) go to the jobs process too; a reader's own
+// new book (details above) is looked up right here, so its cover shows at once.
+const readeatAll = bg.fn("readeat", () => readeatPass().then(() => true), true);
+const enrichMany = bg.fn("enrich", (opts) => enrich.enrich(store, { ...opts, log: console.log, googleKey: process.env.GOOGLE_BOOKS_KEY || "" }).then(() => true), true);
 
 // «Огляди» on book pages (reviews.js): links the owner adds on /admin/reviews.
 const reviews = new Reviews(store, { log: console.log });
@@ -133,10 +141,12 @@ app.use((req, res, next) => {
   next();
 });
 {
+  // In the jobs process a stall keeps no reader waiting: it is only logged («jobs slow:»), for the profile.
+  const who = bg.ROLE === "jobs" ? "jobs " : "";
   let tick = Date.now();
   setInterval(() => {
     const late = Date.now() - tick - 1000;
-    if (late > 1000) console.log(`slow: the main loop stood still for ${late} ms`), stalls++;
+    if (late > 1000) console.log(`${who}slow: the main loop stood still for ${late} ms`), stalls++;
     else stalls = 0;
     // Stood still over half of the last five minutes: the site is as good as down (2026-10-24: an hour of it,
     // and we learned from a reader). The owner gets a letter, and the process exits so Fly starts it afresh.
@@ -144,10 +154,10 @@ app.use((req, res, next) => {
     recent.push([t, Math.max(0, late)]);
     while (recent[0][0] < t - 5 * 60 * 1000) recent.shift();
     const still = recent.reduce((n, [, ms]) => n + ms, 0);
-    if (still > 150 * 1000 && !exiting) {
+    if (still > 150 * 1000 && !exiting && bg.serving) {
       exiting = true;
       const msg = `За останні 5 хвилин сервер стояв ${Math.round(still / 1000)} с: сайт майже не відповідав. Перезапускаю процес. Що їло процесор, дивись у fly logs: grep "slow: cpu".`;
-      console.log(`slow: ${msg}`);
+      console.log(`${who}slow: ${msg}`);
       notifyOwner("Chytai: сайт гальмував, перезапуск", msg);
       setTimeout(() => process.exit(1), 5000);
     }
@@ -168,7 +178,7 @@ app.use((req, res, next) => {
         setTimeout(() =>
           s.post("Profiler.stop", (err, { profile } = {}) => {
             s.disconnect();
-            if (err || !profile) return console.log(`slow: cpu profile failed: ${err?.message}`);
+            if (err || !profile) return console.log(`${who}slow: cpu profile failed: ${err?.message}`);
             const dt = new Map(); // node id -> ms of own time
             for (let i = 0; i < profile.samples.length; i++) dt.set(profile.samples[i], (dt.get(profile.samples[i]) || 0) + (profile.timeDeltas[i] || 0) / 1000);
             const self = new Map();
@@ -178,7 +188,7 @@ app.use((req, res, next) => {
               self.set(k, (self.get(k) || 0) + (dt.get(n.id) || 0));
             }
             const top = [...self].sort((a, b) => b[1] - a[1]).slice(0, 12);
-            console.log(`slow: cpu 15 s, own time: ${top.map(([k, ms]) => `${Math.round(ms)} ms ${k}`).join(" | ")}`);
+            console.log(`${who}slow: cpu 15 s, own time: ${top.map(([k, ms]) => `${Math.round(ms)} ms ${k}`).join(" | ")}`);
             // And our own functions with what they called: whose work it was.
             const parent = new Map();
             for (const n of profile.nodes) for (const c of n.children || []) parent.set(c, n);
@@ -193,7 +203,7 @@ app.use((req, res, next) => {
                 if (!seen.has(k)) seen.add(k), total.set(k, (total.get(k) || 0) + ms);
               }
             }
-            console.log(`slow: cpu 15 s, ours with callees: ${[...total].sort((a, b) => b[1] - a[1]).slice(0, 12).map(([k, ms]) => `${Math.round(ms)} ms ${k}`).join(" | ")}`);
+            console.log(`${who}slow: cpu 15 s, ours with callees: ${[...total].sort((a, b) => b[1] - a[1]).slice(0, 12).map(([k, ms]) => `${Math.round(ms)} ms ${k}`).join(" | ")}`);
           }),
         15000).unref()
       )
@@ -266,7 +276,6 @@ function cookies(req) {
   return Object.fromEntries((req.headers.cookie || "").split(";").map((c) => c.trim().split("=")).filter((p) => p[0]).map(([k, ...v]) => [k, decodeURIComponent(v.join("="))]));
 }
 app.use((req, res, next) => {
-  if (req.method === "GET") refreshShelves();
   // One public host: www and the Fly hostname go to the domain once it is live.
   const host = req.hostname || "";
   if (DOMAIN && host !== DOMAIN && (host === `www.${DOMAIN}` || host === `${process.env.FLY_APP_NAME}.fly.dev`)) return res.redirect(301, `https://${DOMAIN}${req.originalUrl}`);
@@ -285,7 +294,8 @@ const safeNext = (v) => (/^\/(?!\/)/.test(String(v || "")) ? String(v) : "");
 
 // Public and harmless: when the shelves were last refreshed and whether the sources answered.
 app.get("/refresh-status", (req, res) => {
-  res.json({ running: !!refreshing, ...(refreshing && { log: currentLog.slice(-30) }), last: lastResult, shelvesFetched: store.shelvesFetched, refreshedAt: store.shelvesRefreshedAt, authors: store.db.get("authors:log"), enrich: store.db.get("enrich:log"), memoryMb: Object.fromEntries(Object.entries(process.memoryUsage()).map(([k, v]) => [k, Math.round(v / 1048576)])), nextAfter: new Date(lastRefresh + REFRESH_MS).toISOString() });
+  const r = bg.ROLE === "web" ? bg.status("refresh") : { refreshRunning: !!refreshing, log: currentLog.slice(-30), last: lastResult, lastRefresh };
+  res.json({ running: !!r.refreshRunning, ...(r.refreshRunning && { log: r.log }), last: r.last, shelvesFetched: store.shelvesFetched, refreshedAt: store.shelvesRefreshedAt, authors: store.db.get("authors:log"), enrich: store.db.get("enrich:log"), memoryMb: Object.fromEntries(Object.entries(process.memoryUsage()).map(([k, v]) => [k, Math.round(v / 1048576)])), nextAfter: new Date((r.lastRefresh || 0) + REFRESH_MS).toISOString(), jobs: bg.ROLE });
 });
 
 // Sign in or sign up, the same door: an e-mail, a code, and for a new address a name and a username.
@@ -631,8 +641,8 @@ const lists = new Lists(store, (id) => pub(auth.reader(id)));
 const withCovers = (l) => ({ ...l, covers: lists.covers(l.id) });
 // Wanted books already out of copyright (freebooks.js): once a day, /admin/free, and the owner's list when he has it on.
 const freeBooks = new (require("./freebooks").FreeBooks)({ store, lists, who: (id) => pub(auth.reader(id)), ownerId: OWNER_ID, log: console.log });
-setTimeout(() => freeBooks.run().catch((e) => console.log(`free: ${e.message}`)), 10 * 60 * 1000).unref();
-setInterval(() => freeBooks.run().catch((e) => console.log(`free: ${e.message}`)), 24 * 3600 * 1000).unref();
+bg.register("freeBooks", freeBooks, { run: true });
+bg.every("free", 24 * 3600 * 1000, () => freeBooks.run(), { db: store.db, first: 10 * 60 * 1000 });
 // «Чи варто читати?» on book pages (advice.js): Claude, by the reader's own shelf, on a click.
 const bookpage = new BookPage({ apiKey: process.env.ANTHROPIC_API_KEY || "", log: console.log });
 const advice = new Advice({ store, social, db: store.db, apiKey: process.env.ANTHROPIC_API_KEY || "", log: console.log });
@@ -641,9 +651,16 @@ const origTrial = new (require("./origtrial").OrigTrial)({ store, social, db: st
 const ukTrial = new (require("./uktrial").UkTrial)({ store, social, db: store.db, apiKey: process.env.ANTHROPIC_API_KEY || "", log: console.log });
 const aiPasses = new Map(require("./catalogpasses").passes({ store, social, db: store.db, apiKey: process.env.ANTHROPIC_API_KEY || "", log: console.log }).map((p) => [p.key, p]));
 const langTrial = new (require("./langtrial").LangTrial)({ store, db: store.db, apiKey: process.env.ANTHROPIC_API_KEY || "", log: console.log });
+// A trial (run) changes nothing on the site; a whole-catalog run (runAll) does.
+for (const [name, t] of Object.entries({ genreTrial, origTrial, langTrial })) bg.register(name, t, { run: false, runAll: true });
+bg.register("ukTrial", ukTrial, { run: false });
+for (const p of aiPasses.values()) bg.register(`pass:${p.key}`, p, { run: false, runAll: true });
+// Automatic overviews (advice.want/sweep/redo and their queue) are made in the jobs process; a reader's own
+// «Чи варто читати?» is answered here.
+bg.register("advice", advice, { want: false, sweep: false, redo: false }, [], { mirror: false });
 // A whole-catalog run cut by a deploy goes on a minute after the start; once it has finished, books added
 // since are asked about every six hours.
-setTimeout(() => {
+if (bg.background) setTimeout(() => {
   const fixed = store.dropPublishedYears();
   if (fixed) console.log(`read years that were publication years: ${fixed.length} dropped`);
   const st = genreTrial.allState();
@@ -652,23 +669,23 @@ setTimeout(() => {
   for (const t of [origTrial, langTrial]) if (!t.allState()?.finished) t.runAll().catch((e) => console.log(`${t.constructor.name}: ${e.message}`));
   for (const p of aiPasses.values()) if (p.apply && p.allState() && !p.allState().finished) p.runAll().catch((e) => console.log(`aipass ${p.key} all: ${e.message}`));
 }, 60 * 1000).unref();
-setInterval(() => {
+bg.every("aipasses", 6 * 3600 * 1000, () => {
   const st = genreTrial.allState();
   if (st?.finished) genreTrial.runAll().catch((e) => console.log(`genreall: ${e.message}`));
   for (const t of [origTrial, langTrial]) if (t.allState()?.finished) t.runAll().catch((e) => console.log(`${t.constructor.name}: ${e.message}`));
   for (const p of aiPasses.values()) if (p.apply && p.live()) p.runAll().catch((e) => console.log(`aipass ${p.key} all: ${e.message}`));
-}, 6 * 3600 * 1000).unref();
+}, { db: store.db, first: 5 * 60 * 1000 });
 if (!advice.enabled) console.log("ANTHROPIC_API_KEY is not set: «Чи варто читати?» is off");
 // «Відгуки в інтернеті» by itself: a minute after start, overviews made with an older prompt are redone,
 // and (while advice.js BACKFILL is on) every rated book without one gets queued, again once a day; a
 // rating or a note queues its own book (advice.want). Imports wait for the backfill.
-setTimeout(() => console.log(`overview: ${advice.redo()} to redo, ${advice.sweep()} books queued`), 60 * 1000).unref();
-setInterval(() => advice.sweep(), 24 * 3600 * 1000).unref();
+if (bg.background) setTimeout(async () => console.log(`overview: ${await advice.redo()} to redo, ${await advice.sweep()} books queued`), 60 * 1000).unref();
+bg.every("overviews", 24 * 3600 * 1000, () => advice.sweep(), { db: store.db });
 pages.setStats((id) => social.stats(id));
 // The weekly letter (digest.js): Friday 9:00 Kyiv, to every reader who has not switched it off (Max,
 // 2026-10-20: «Включаємо на всіх»); WEB_DIGEST_TO=owner limits it to the owner again.
 const digest = new Digest({ store, auth, social, lists, libraries, site: SITE, ownerId: OWNER_ID, to: process.env.WEB_DIGEST_TO === "owner" ? "owner" : "all" });
-digest.schedule();
+if (bg.background) digest.schedule();
 // The welcome letter right after sign-up (welcome-mail.js), while the owner has it switched on.
 const welcomeMail = new WelcomeMail({ store, auth, site: SITE, ownerId: OWNER_ID });
 pages.setReadersWithNote((id) => readersOf(id).find((r) => r.entry.note) || null);
@@ -1713,7 +1730,7 @@ app.post("/admin/readeat", owner, (req, res) => {
       .then((r) => (readeatTrial = { ...r, at: readeatTrial.at }))
       .catch((e) => (readeatTrial = { error: e.message, at: readeatTrial.at, rows: [] }));
   }
-  if (req.body.on === "1") readeatPass();
+  if (req.body.on === "1") readeatAll();
   res.redirect(303, "/admin/readeat");
 });
 app.get("/admin/ukfind", owner, (req, res) => res.send(pages.ukFindPage({ user: req.user, candidates: ukfind.candidates().length, list: ukfind.list(), running: ukfind.running, enabled: !!ukfind.client })));
@@ -1882,7 +1899,7 @@ app.post("/admin/entries/move", owner, (req, res) => {
 app.post("/admin/enrich", owner, (req, res) => {
   const ids = String(req.body.ids || "").split(",").map((x) => store.workId(x.trim())).filter(Boolean);
   // Runs in the background (a pass of 300 books takes five minutes); /refresh-status shows the result.
-  enrich.enrich(store, { ids: ids.length ? ids : undefined, force: true, max: Math.min(Number(req.body.max) || 300, 1000), log: console.log, googleKey: process.env.GOOGLE_BOOKS_KEY || "" }).catch((e) => console.error("enrich failed:", e));
+  enrichMany({ ids: ids.length ? ids : undefined, force: true, max: Math.min(Number(req.body.max) || 300, 1000) }).catch((e) => console.error("enrich failed:", e));
   res.json({ started: true, ids: ids.length });
 });
 app.post("/admin/dupes/undo", owner, (req, res) => {
@@ -1896,10 +1913,17 @@ app.post("/api/subscribe/:id", signed, (req, res) => {
   res.redirect(req.get("referer") || "/");
 });
 
-app.listen(PORT, () => {
-  console.log(`Chytai web on http://localhost:${PORT}  (library: ${store.file})`);
-  watchdog();
-});
+if (bg.serving) {
+  const server = app.listen(PORT, () => {
+    console.log(`Chytai web on http://localhost:${PORT}  (library: ${store.file})${bg.ROLE === "web" ? ", the jobs in their own process" : ""}`);
+    watchdog();
+  });
+  // main.js has a fresh web process answering: finish what is in flight and go.
+  process.on("message", (m) => m?.type === "shutdown" && server.close(() => process.exit(0)));
+}
+// The jobs process ends itself to read fresh data only when the overview queue is empty too (or capped for today).
+bg.startJobs({ idle: () => !advice.queue.size || advice.capped });
+if (bg.ROLE === "jobs") console.log(`Chytai jobs ready (library: ${store.file})`);
 
 // A process stuck in a CPU loop answers nothing but stays up (2026-10-21: an hour down). A thread beside it
 // watches a heartbeat the main loop writes every 5 s and kills the process after 60 s of silence, so Fly

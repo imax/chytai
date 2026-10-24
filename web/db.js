@@ -60,7 +60,8 @@ CREATE VIRTUAL TABLE IF NOT EXISTS search_tri USING fts5 (id UNINDEXED, text, to
 function open(dataDir) {
   fs.mkdirSync(dataDir, { recursive: true });
   const db = new DatabaseSync(path.join(dataDir, "chytai.db"));
-  db.exec("PRAGMA journal_mode = WAL; PRAGMA synchronous = NORMAL;");
+  // busy_timeout: the site and the background jobs (jobs.js) are two processes writing one database.
+  db.exec("PRAGMA journal_mode = WAL; PRAGMA synchronous = NORMAL; PRAGMA busy_timeout = 10000;");
   db.exec(SCHEMA);
   // When an entry last changed, for the activity feed (added 2026-10-20; older rows have none).
   if (!db.prepare("PRAGMA table_info(entries)").all().some((c) => c.name === "updated")) db.exec("ALTER TABLE entries ADD COLUMN updated TEXT");

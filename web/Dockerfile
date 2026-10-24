@@ -12,4 +12,4 @@ COPY build/icon.png ./build/icon.png
 
 ENV PORT=8080 DATA_DIR=/data
 EXPOSE 8080
-CMD ["node", "web/server.js"]
+CMD ["node", "web/main.js"]

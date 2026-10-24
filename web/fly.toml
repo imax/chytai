@@ -13,7 +13,7 @@ primary_region = "fra"
   TZ = "Europe/Kyiv"
   PORT = "8080"
   WEB_DOMAIN = "chytai.org.ua"
-  # Past this the process dies and Fly restarts it, instead of hanging in garbage collection (2026-10-19).
+  # Past this a process dies and is started again, instead of hanging in garbage collection (2026-10-19).
   NODE_OPTIONS = "--max-old-space-size=420"
 
 [[mounts]]
@@ -30,6 +30,8 @@ primary_region = "fra"
   min_machines_running = 1
 
 # 512 MB since 2026-10-21 (Max OK): with ~16 thousand catalog books a refresh no longer fit in 256 MB.
+# 2 CPUs and 1 GB since 2026-10-24 (Max chose it): the site and the background jobs are two processes
+# (web/main.js), each with its own copy of the catalog, and a third for a moment while the site reloads.
 [[vm]]
-  size = "shared-cpu-1x"
-  memory = "512mb"
+  size = "shared-cpu-2x"
+  memory = "1gb"

@@ -839,6 +839,7 @@ class Store {
   }
 
   hideCovers(map) {
+    this._hiddenCovers = null; // read again: the other process may have hidden some since
     this._hiddenCovers = { ...this.hiddenCovers(), ...map };
     this.db.set("covers:hidden", JSON.stringify(this._hiddenCovers));
   }
@@ -1403,6 +1404,13 @@ class Store {
       .run(reader, id, e.status || "", e.rating ?? null, e.year ?? null, e.note || "", e.copy || "", e.order ?? null, e.added || null, e.updated || null, e.kids ? 1 : 0);
   }
 
+  // A book another process made (the site, while this is the jobs process): read its row.
+  readBook(id) {
+    const row = this.db.prepare("SELECT data FROM books WHERE id = ?").get(id);
+    if (row) this.lib.books[id] = JSON.parse(row.data);
+    return !!row;
+  }
+
   writeBook(id) {
     const b = this.lib.books[id];
     if (b) this.db.prepare("INSERT OR REPLACE INTO books (id, data) VALUES (?, ?)").run(id, JSON.stringify(b));
@@ -1598,6 +1606,7 @@ class Store {
   // An empty field goes back to what the catalog says.
   editBook(id, patch) {
     id = this.canonical(id);
+    this._edits = null; // the other process (the site or the jobs) may have changed them since
     const all = { ...this.edits() };
     const fix = {};
     for (const k of EDITABLE) {
@@ -1642,6 +1651,9 @@ class Store {
   }
 
   updateBook(id, patch) {
+    // The row as it is now: the site and the jobs (jobs.js) are two processes, each with its own copy.
+    const row = this.db.prepare("SELECT data FROM books WHERE id = ?").get(id);
+    if (row) this.lib.books[id] = JSON.parse(row.data);
     const b = this.lib.books[id] || this.book(id);
     if (!b) return null;
     const copy = { ...b, ...patch, id };

@@ -456,6 +456,7 @@ class Advice {
   // One book, after a reader rated or noted it: queued if it has no overview (nor its translation).
   want(bookId) {
     if (!this.client || !AUTO) return;
+    if (!this.store.book(bookId)) this.store.readBook?.(bookId); // a reader's new book, made in the web process (jobs.js)
     const id = this.store.canonical(bookId);
     if (!this.store.book(id) || isRussian(this.store.book(id)) || this.overviewOf(id) || this.queue.has(id)) return;
     this.queue.set(id, { fresh: false });
