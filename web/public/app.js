@@ -365,7 +365,7 @@
     status.addEventListener("change", () => (note.placeholder = status.value === "abandoned" ? note.dataset.why : plain));
   }
 
-  // An empty «Рік» («без дати») would start its arrows from the minimum (1990), so this year becomes
+  // An empty «Рік» («без дати») would start its arrows from the minimum (1940), so this year becomes
   // the value first (a reader's feedback, 2026-10-20).
   for (const year of $$("input[name=year]")) {
     const fill = () => { if (!year.value) year.value = new Date().getFullYear(); };

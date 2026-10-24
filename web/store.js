@@ -1690,7 +1690,7 @@ class Store {
         // An import is history, not news: the entry is dated when the book was read (or added) on Goodreads,
         // so a hundred old books don't fill the feed as «сьогодні» (Max, 2026-10-20). An entry the reader
         // already had keeps its own date.
-        const imported = { status: r.status || "", year: r.year ?? null, rating: r.rating ?? null, note: r.note || "", copy: r.copy || "", order: order++, added: r.added || now.slice(0, 10), updated: r.read || r.touched || r.added || now, ...(r.kids ? { kids: true } : {}) };
+        const imported = { status: r.status || "", year: r.year && !this.publishedYear(id, r.year) ? r.year : null, rating: r.rating ?? null, note: r.note || "", copy: r.copy || "", order: order++, added: r.added || now.slice(0, 10), updated: r.read || r.touched || r.added || now, ...(r.kids ? { kids: true } : {}) };
         const cur = entries[id];
         entries[id] = cur ? { ...mergeEntries(cur, imported), updated: cur.updated || cur.added || imported.updated } : imported;
         this.writeEntry(reader, id, entries[id]);
@@ -1722,9 +1722,34 @@ class Store {
     return m;
   }
 
+  // A «read in» year that is the book's publication year (± 1) of an old book: a chat assistant over /mcp or a
+  // pasted «Фундація (1951)» gave when the book came out, not when the reader read it (Vova, 2026-10-24:
+  // «прочитано у 1952», and the edit form then refused it, «значення має бути більше 1990»).
+  publishedYear(id, year) {
+    if (!(year < 2000)) return false;
+    const ids = [this.canonical(id), ...(this.translations?.get(this.canonical(id)) || [])];
+    return ids.some((x) => Math.abs((Number(this.book(x)?.published) || 0) - year) <= 1);
+  }
+
+  // Such years already saved go (once, meta `fix:readyear` keeps what changed).
+  dropPublishedYears() {
+    if (this.db.get("fix:readyear")) return null;
+    const fixed = [];
+    for (const [reader, entries] of this.entries)
+      for (const [id, e] of Object.entries(entries))
+        if (e.year && this.publishedYear(id, e.year)) {
+          fixed.push({ reader, id, year: e.year });
+          e.year = null;
+          this.writeEntry(reader, id, e);
+        }
+    this.db.set("fix:readyear", JSON.stringify({ at: new Date().toISOString(), readers: new Set(fixed.map((f) => f.reader)).size, fixed }));
+    return fixed;
+  }
+
   setEntry(reader, id, patch) {
     id = this.canonical(id);
     if (!this.book(id)) return null;
+    if (patch.year && this.publishedYear(id, patch.year)) patch = { ...patch, year: null };
     const entries = this.entriesOf(reader);
     const cur = entries[id] || { status: "", year: null, rating: null, note: "", copy: "", order: Object.keys(entries).length, added: new Date().toISOString().slice(0, 10) };
     const next = { ...cur, ...patch, updated: new Date().toISOString() };

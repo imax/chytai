@@ -586,6 +586,8 @@ const langTrial = new (require("./langtrial").LangTrial)({ store, db: store.db, 
 // A whole-catalog run cut by a deploy goes on a minute after the start; once it has finished, books added
 // since are asked about every six hours.
 setTimeout(() => {
+  const fixed = store.dropPublishedYears();
+  if (fixed) console.log(`read years that were publication years: ${fixed.length} dropped`);
   const st = genreTrial.allState();
   if (st && !st.stopped) genreTrial.runAll().catch((e) => console.log(`genreall: ${e.message}`));
   // Originals and languages (Max 2026-10-23 «включаємо і те і те»): the first run starts by itself, a cut one goes on.
@@ -1442,6 +1444,8 @@ app.get(["/claude/:key", "/claude/:key/:action/:pass"], (req, res) => {
     lines.push(`## ${k}${p.name ? ` (${p.name})` : ""}${p.running ? " · проба йде" : ""}${p.allRunning ? " · прогін йде" : ""}`, `проба: ${fmt(st)}${link ? `\nрезультати: https://chytai.org.ua${link}` : ""}`, applies(k, p) ? `весь каталог: ${fmt(p.allState())}` : "весь каталог: ще не вміє застосовувати, тільки проба", "");
   }
   lines.push("Вільні книжки з «Хочу прочитати»: https://chytai.org.ua/claude/<ключ>/free", "");
+  const ry = JSON.parse(store.db.get("fix:readyear") || "null");
+  if (ry) lines.push(`## Роки прочитання = роки видання (прибрано ${ry.at}): ${ry.fixed.length} записів у ${ry.readers} читачів`, ...ry.fixed.map((f) => `${f.reader} ${f.id} ${f.year}`), "");
   lines.push(`Дії: https://chytai.org.ua/claude/<ключ>/run/<перевірка> — проба; /apply/<перевірка> — весь каталог і на сайт. Запусків сьогодні: ${JSON.parse(store.db.get("claude:starts") || "{}")[new Date().toISOString().slice(0, 10)] || 0} з 30.`);
   res.send(lines.join("\n"));
 });

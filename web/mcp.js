@@ -218,7 +218,7 @@ class Mcp {
   tools() {
     const status = { type: "string", enum: STATUSES, description: "read = прочитано, reading = читаю зараз, want = хочу прочитати, abandoned = покинуто" };
     const rating = { type: "number", minimum: 1, maximum: 5, description: "1 to 5 stars, halves allowed. Only when the reader said it; never guess." };
-    const year = { type: "integer", minimum: 1900, maximum: 2100, description: "Year the reader finished the book, if known" };
+    const year = { type: "integer", minimum: 1900, maximum: 2100, description: "Year the reader finished reading the book, only if the reader said it. Never the year the book was published." };
     return [
       {
         name: "search_books",

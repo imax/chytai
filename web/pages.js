@@ -1006,7 +1006,7 @@ function entryForm(book, entry, series = null) {
       ${ratings.map((r) => `<option value="${r}" ${e.rating === r ? "selected" : ""}>${uk(r)}</option>`).join("")}
       ${e.rating != null && !ratings.includes(e.rating) ? `<option value="${e.rating}" selected>${uk(e.rating)}</option>` : ""}
     </select></label>
-    <label>Рік <input name="year" type="number" min="1990" max="${new Date().getFullYear()}" value="${attr(e.year || "")}" placeholder="без дати"></label>
+    <label>Рік <input name="year" type="number" min="1940" max="${new Date().getFullYear()}" value="${attr(e.year || "")}" placeholder="без дати"></label>
   </div>
   ${series ? `<label class="check"><span><input type="checkbox" name="series" value="1"${series.checked ? " checked" : ""}> Уся серія «${esc(series.name)}» · ${books(series.total)}</span><span class="hint">Статус, оцінка і рік стануть на всі томи, яких ще немає на полиці — додадуться. На полиці серія буде одним рядком; нотатка лишається на цій книжці.</span></label>` : ""}
   <label>Примірник <select name="copy">
