@@ -1503,7 +1503,9 @@ function addEdition(orig, p, by) {
 }
 // Our own search for those editions (ukfind.js); the owner runs it on /admin/ukfind for now.
 // A reader's hint that found the edition is news for the owner, to check the pair.
-const onUkHint = (b, r) => r.status === "found" && r.edition && notifyOwner(`Знайшли українське видання: ${r.edition.title}`, [`Читач підказав, що є переклад «${b.title}», і пошук знайшов:`, "", `Переклад: ${r.edition.title}${r.edition.author ? ` — ${r.edition.author}` : ""}  ${SITE}${store.href(r.edition.id)}`, `Сторінка: ${r.url}`, "", `Прибрати пару: ${SITE}/admin/dupes#decided`, `Усі пошуки: ${SITE}/admin/ukfind`].join("\n"));
+// Who asked (Max, 2026-10-24: «додай в цей імейл хто»): the readers who pressed «Є український переклад».
+const hintedBy = (id) => store.db.prepare("SELECT DISTINCT reader FROM uk_hint WHERE book = ? ORDER BY created").all(id).map((h) => pub(auth.reader(h.reader))).filter(Boolean).map((u) => `${u.name} (${SITE}${u.href})`).join(", ");
+const onUkHint = (b, r) => r.status === "found" && r.edition && notifyOwner(`Знайшли українське видання: ${r.edition.title}`, [`${hintedBy(b.id) || "Читач"} підказав(ла), що є переклад «${b.title}», і пошук знайшов:`, "", `Переклад: ${r.edition.title}${r.edition.author ? ` — ${r.edition.author}` : ""}  ${SITE}${store.href(r.edition.id)}`, `Сторінка: ${r.url}`, "", `Прибрати пару: ${SITE}/admin/dupes#decided`, `Усі пошуки: ${SITE}/admin/ukfind`].join("\n"));
 const ukfind = new UkFinder({ store, db: store.db, apiKey: process.env.ANTHROPIC_API_KEY || "", bookpage, addEdition, onHint: onUkHint, log: console.log });
 // «Додати» after «Українською: …, у каталогах поки немає» for a signed-in reader (pages.ukLine).
 // Also a foreign book Wikidata knows no translation of (Max, 2026-10-23: «тут немає перекладу але він є», Feynman):
