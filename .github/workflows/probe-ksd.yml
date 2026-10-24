@@ -1,15 +1,12 @@
-# One-off probe (КСД thread, 2026-10-24); runs only on this branch, never on main.
+# One-off (КСД thread): print chytai.org.ua/refresh-status and the КСД shelf count. Branch only.
 name: Probe KSD
 on:
   push:
     branches: [claude/project-thread-55zhz1]
-    paths: [".github/probe/**", ".github/workflows/probe-ksd.yml"]
 jobs:
-  probe:
+  status:
     runs-on: ubuntu-latest
-    timeout-minutes: 40
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with: { node-version: 22 }
-      - run: node .github/probe/ksd.mjs
+      - run: |
+          curl -s https://chytai.org.ua/refresh-status | jq '{running, last: (.last // {} | {started, finished, ok, errors, log: ((.log // [])[-12:])}), log: ((.log // [])[-8:]), shelvesFetched}'
+          curl -s https://chytai.org.ua/publishers/ksd | grep -o "[0-9 ]* книж[^<]*" | head -3
