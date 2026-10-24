@@ -51,7 +51,7 @@ const AUTO_PARALLEL = 2;
 const BACKFILL = false;
 // Automatic overviews (first rating/note, «Хочу прочитати») are PAUSED while Max tunes the prompt
 // (2026-10-23 15:03: «поки давай вимкнемо backfill»); readers' own clicks and the owner's «Оновити» still work.
-const AUTO = true; // back on 2026-10-23 15:43 with the prompt settled
+const AUTO = false; // paused again 2026-10-24 05:52 (Max: «тормозни backfill для авто-оглядів», more prompt work later)
 // The overview prompt's version: rows made with an older one are redone at start, two at a time
 // (Max, 2026-10-23 08:09, after the prompt lost its obligatory paragraph of complaints: «старі теж»).
 const PROMPT_VERSION = 8; // 3: the site's own notes and ratings no longer go in (2026-10-23 08:35); 4: shops blocked (09:16); 5: shorter, reservations one sentence at most (14:40); 6: like a friend, about what people love, no pros/cons balance (15:05); 7: calmer tone, no blurb language, 40–70 words (15:22); 8: back to v5's neutral base + calm tone, no «friend» framing (15:25)
