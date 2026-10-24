@@ -421,8 +421,6 @@ app.get("/api/add/find", signed, async (req, res) => {
   }
   const q = String(req.query.q || "").slice(0, 100);
   const hits = store.search(q, { limit: 6 });
-  // ours=1: the catalog alone, at once; the page shows it while Open Library (seconds, at times ten) answers.
-  if (req.query.ours === "1") return res.set("Cache-Control", "no-store").send(pages.addFindResults(hits, [], { waiting: true }));
   const known = new Set(hits.map((h) => h.book.id));
   const outside = (await enrich.searchOpenLibrary(q)).filter((b) => !known.has(store.findWork(b)));
   res.set("Cache-Control", "no-store").send(pages.addFindResults(hits, outside));

@@ -1876,8 +1876,7 @@ function addPage({ user, text = "", error = "" }) {
 // Step two of /add: every line with what it matched. A found book is ticked; «Інша книжка» looks for the right
 // one (addFindResults); a line with no match can be looked for or added as the reader's own book, without a cover.
 // One status for the whole list, picked right before «Додати» (Max: «один для всіх, не кожній окремо»):
-// a pasted list can be books read, a pile of «Хочу прочитати» or the reader's paper shelf. «Хочу прочитати» is
-// picked to start with: a new reader adding one book expects that, not «Прочитано» (feedback, 2026-10-24).
+// a pasted list can be books read, a pile of «Хочу прочитати» or the reader's paper shelf.
 const ADD_STATUS = [["read", "Прочитано"], ["reading", "Читаю"], ["want", "Хочу прочитати"], ["abandoned", "Покинуто"], ["paper", "На папері"], ["kids", "Дитяча полиця"]];
 function addReviewPage({ user, token, rows, text }) {
   // A line that was a page address and was read is found too: the book comes from that page.
@@ -1911,7 +1910,7 @@ function addReviewPage({ user, token, rows, text }) {
     ${addCrumbs}
     <h1>Знайшли ${found} з ${rows.length}</h1>
     <p class="lead">Перевірте :) «Інша книжка», якщо знайшли неправильно. «Шукати» знайде книжку в нашому каталозі або в Open Library, з обкладинкою. Якщо немає і там, вставте в пошук посилання на книжку в магазині чи у видавництва, або заповніть вручну.</p>
-    <label class="add-status">Статус <select name="status">${ADD_STATUS.map(([v, l]) => `<option value="${v}"${v === "want" ? " selected" : ""}>${l}</option>`).join("")}</select></label>
+    <label class="add-status">Статус <select name="status">${ADD_STATUS.map(([v, l]) => `<option value="${v}">${l}</option>`).join("")}</select></label>
     <button class="btn primary" data-cta>Додати <span data-n></span> на полицю</button>
   </div>
   <ol class="add-rows">${order.map((i) => line(rows[i], i)).join("")}</ol>
@@ -1927,16 +1926,9 @@ function addReviewPage({ user, token, rows, text }) {
     const box = row.querySelector(".add-found");
     const q = row.querySelector(".add-find input").value.trim();
     clearTimeout(timer);
-    // The catalog's books at once, then the same list with Open Library's added (it can take seconds); a newer
-    // query typed meanwhile wins.
-    const mine = (row._q = q);
-    const show = (html) => { if (row._q !== mine) return; box.innerHTML = html; if (!row.querySelector(".add-manual")) box.querySelector("[data-own]")?.remove(); };
     timer = setTimeout(async () => {
-      if (q.length < 2) return show("");
-      const url = "/api/add/find?q=" + encodeURIComponent(q);
-      const all = fetch(url).then((r) => r.text());
-      if (!/^https?:/i.test(q)) show(await (await fetch(url + "&ours=1")).text());
-      show(await all);
+      box.innerHTML = q.length < 2 ? "" : await (await fetch("/api/add/find?q=" + encodeURIComponent(q))).text();
+      if (!row.querySelector(".add-manual")) box.querySelector("[data-own]")?.remove();
     }, 200);
   };
   form.addEventListener("input", (e) => { const row = e.target.closest(".add-find") && e.target.closest(".add-row"); if (row) look(row); });
@@ -1982,8 +1974,7 @@ function addReviewPage({ user, token, rows, text }) {
   return layout({ title: "Додати книжки", body, user, path: "/add", noindex: true });
 }
 // «Інша книжка»: what the catalog has for the typed words, each a button that takes its place.
-function addFindResults(hits, outside = [], { waiting = false } = {}) {
-  if (waiting) return `${hits.map(({ book: b }) => `<button type="button" class="add-pick" data-pick="${attr(b.id)}" data-title="${attr(b.title)}" data-author="${attr(byline(b.author || ""))}">${cover(b, "xs")}<span><b>${esc(b.title)}</b><span class="muted">${esc(byline(b.author || ""))}</span></span></button>`).join("")}<p class="add-src">Шукаємо ще в Open Library…</p>`;
+function addFindResults(hits, outside = []) {
   if (!hits.length && !outside.length) return `<p class="small muted">Нічого не знайшлося. Вставте сюди посилання на сторінку книжки в інтернет-магазині чи у видавництва, і ми візьмемо звідти назву, автора, обкладинку й опис. Або заповніть вручну.</p>`;
   const ours = hits.map(({ book: b }) => `<button type="button" class="add-pick" data-pick="${attr(b.id)}" data-title="${attr(b.title)}" data-author="${attr(byline(b.author || ""))}">${cover(b, "xs")}<span><b>${esc(b.title)}</b><span class="muted">${esc(byline(b.author || ""))}</span></span></button>`).join("");
   const theirs = outside.map((b) => `<button type="button" class="add-pick" data-ol="${attr(JSON.stringify(b))}" data-title="${attr(b.title)}" data-author="${attr(b.author)}">${cover(b, "xs")}<span><b>${esc(b.title)}</b><span class="muted">${esc(b.author)}${b.published ? ` · ${b.published}` : ""}</span></span></button>`).join("");
