@@ -784,6 +784,7 @@ function startExplanation(selection, { ask = false } = {}) {
   // Same selection already explained: just bring that card into view.
   for (const conv of ask ? [] : conversations.values()) {
     if ((conv.cfiRange === selection.cfiRange || conv.context.selection === selection.context.selection) && !conv.ask) {
+      highlightConv(conv);
       conv.card.scrollIntoView({ behavior: "smooth", block: "nearest" });
       flash(conv.card);
       return conv.card;
@@ -814,16 +815,7 @@ function startExplanation(selection, { ask = false } = {}) {
   const conv = { id, card, ask, cfiRange: selection.cfiRange, context: selection.context, messages: null, busy: false };
   conversations.set(id, conv);
 
-  try {
-    rendition.annotations.remove(selection.cfiRange, "highlight");
-    rendition.annotations.highlight(selection.cfiRange, { id }, () => {
-      showPanel(true, "cards");
-      card.scrollIntoView({ behavior: "smooth", block: "nearest" });
-      flash(card);
-    }, "ai-hl", HIGHLIGHT_STYLE);
-  } catch {
-    /* highlighting is cosmetic */
-  }
+  highlightConv(conv);
 
   card.querySelector(".stop").onclick = () => window.reader.abort(conv.reqId);
   card.querySelector(".more").onclick = () => {
@@ -984,33 +976,43 @@ function flash(card) {
   head.addEventListener("pointercancel", end);
 })();
 
-function showPanel(show, tab) {
-  document.body.classList.toggle("panel-hidden", !show);
-  // A closed panel leaves no yellow behind: a tap on it would open the explanation again instead of
-  // letting the reader select the text for a note (Max, 2026-10-24). The cards stay in the panel.
-  if (!show) {
-    for (const conv of conversations.values()) {
-      try {
-        rendition?.annotations.remove(conv.cfiRange, "highlight");
-      } catch {
-        /* ignore */
-      }
-    }
+function highlightConv(conv) {
+  try {
+    rendition.annotations.remove(conv.cfiRange, "highlight");
+    rendition.annotations.highlight(conv.cfiRange, { id: conv.id }, () => {
+      showPanel(true, "cards");
+      conv.card.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      flash(conv.card);
+    }, "ai-hl", HIGHLIGHT_STYLE);
+  } catch {
+    /* highlighting is cosmetic */
   }
-  if (tab) showTab(tab);
-  // epub.js needs a resize to reflow pages after the layout changes width.
-  setTimeout(resizeView, 220);
 }
 
-function clearExplanations() {
+// No yellow is left behind once the cards are out of sight (panel closed or the Notes tab open):
+// a tap on it would open the explanation again instead of letting the reader select the text for a
+// note (Max, 2026-10-24). The cards stay in the panel; explaining the same text again marks it again.
+function unhighlightConvs() {
   for (const conv of conversations.values()) {
-    if (conv.busy) window.reader.abort(conv.reqId);
     try {
       rendition?.annotations.remove(conv.cfiRange, "highlight");
     } catch {
       /* ignore */
     }
   }
+}
+
+function showPanel(show, tab) {
+  document.body.classList.toggle("panel-hidden", !show);
+  if (!show) unhighlightConvs();
+  if (tab) showTab(tab);
+  // epub.js needs a resize to reflow pages after the layout changes width.
+  setTimeout(resizeView, 220);
+}
+
+function clearExplanations() {
+  for (const conv of conversations.values()) if (conv.busy) window.reader.abort(conv.reqId);
+  unhighlightConvs();
   conversations.clear();
   $("#cards").innerHTML = `<div id="panel-empty" class="panel-empty">Виділіть текст у книжці, щоб отримати пояснення в контексті.</div>`;
 }
@@ -1051,6 +1053,7 @@ function showTab(tab) {
   for (const b of document.querySelectorAll("#panel .tab")) b.classList.toggle("active", b.dataset.tab === tab);
   $("#cards").classList.toggle("hidden", tab !== "cards");
   $("#notes").classList.toggle("hidden", tab !== "notes");
+  if (tab !== "cards") unhighlightConvs();
   $("#btn-clear").classList.toggle("hidden", tab !== "cards");
   if (tab === "notes") requestAnimationFrame(() => document.querySelectorAll(".note-comment").forEach(fitComment));
 }
