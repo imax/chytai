@@ -552,6 +552,7 @@ const bookpage = new BookPage({ apiKey: process.env.ANTHROPIC_API_KEY || "", log
 const advice = new Advice({ store, social, db: store.db, apiKey: process.env.ANTHROPIC_API_KEY || "", log: console.log });
 const genreTrial = new (require("./genretrial").GenreTrial)({ store, social, db: store.db, apiKey: process.env.ANTHROPIC_API_KEY || "", genres: pages.GENRES, log: console.log });
 const origTrial = new (require("./origtrial").OrigTrial)({ store, social, db: store.db, apiKey: process.env.ANTHROPIC_API_KEY || "", log: console.log });
+const ukTrial = new (require("./uktrial").UkTrial)({ store, social, db: store.db, apiKey: process.env.ANTHROPIC_API_KEY || "", log: console.log });
 const langTrial = new (require("./langtrial").LangTrial)({ store, db: store.db, apiKey: process.env.ANTHROPIC_API_KEY || "", log: console.log });
 // A whole-catalog run cut by a deploy goes on a minute after the start; once it has finished, books added
 // since are asked about every six hours.
@@ -1315,7 +1316,7 @@ app.get("/genres-trial/:key", (req, res) => {
   res.type("text/plain").send([`промпт v${st.prompt || 1}, ${st.model || ""}, ${st.at || ""}: ${st.done} з ${st.total}, $${(st.cost || 0).toFixed(3)}${st.finished ? "" : ", ще йде"}`, "* = змінився основний жанр", "", ...st.items.map(line)].join("\n"));
 });
 // The language trial (langtrial.js): Haiku's language for 200 doubtful Cyrillic editions next to isRussian().
-app.get("/admin/lang-trial", owner, (req, res) => res.send(pages.langTrialPage({ user: req.user, st: langTrial.state(), running: langTrial.running, differs: require("./langtrial").differs, href: (id) => store.href(id) })));
+app.get("/admin/lang-trial", owner, (req, res) => res.send(pages.langTrialPage({ user: req.user, st: langTrial.state(), running: langTrial.running, all: { ...langTrial.allState(), running: langTrial.allRunning, have: store.aiLangs().size }, differs: require("./langtrial").differs, href: (id) => store.href(id) })));
 app.get("/lang-trial/:key", (req, res) => {
   const st = langTrial.state();
   if (!st?.key || req.params.key !== st.key) return res.status(404).send("Немає");
@@ -1326,6 +1327,33 @@ app.get("/lang-trial/:key", (req, res) => {
 app.post("/admin/lang-trial", owner, (req, res) => {
   langTrial.run().catch((e) => console.log(`langtrial: ${e.message}`));
   res.redirect(303, "/admin/lang-trial");
+});
+// «Якість каталогу» (Max 2026-10-24: «нормальну адмінку для всього цього, а не пачку окремих сторінок»): every
+// Claude pass over the catalog on one page, with what it has done and a link to its own page and trial.
+app.get("/admin/catalog", owner, (req, res) => {
+  const all = (t, have) => ({ ...t.allState(), running: t.allRunning, have });
+  const trial = (t) => { const st = t.state(); return st && { done: st.done, total: st.total, cost: st.cost, at: st.at, running: t.running, prompt: st.prompt }; };
+  res.send(pages.catalogAdminPage({
+    user: req.user,
+    passes: [
+      { key: "genres", name: "Жанри", what: "Один-два жанри для кожної книжки замість жанрів з полиць магазинів. Твій «Основний жанр» важливіший.", href: "/admin/genres-trial", all: all(genreTrial, store.aiGenres().size), trial: trial(genreTrial) },
+      { key: "lang", name: "Мова", what: "Мова видань з кириличною назвою, з якої не видно мови. «Рос» ховає книжку, «укр» нічого не змінює.", href: "/admin/lang-trial", all: all(langTrial, store.aiLangs().size), trial: trial(langTrial) },
+      { key: "orig", name: "Оригінали", what: "З чого перекладена українська книжка: пара з оригіналом у каталозі або рядок «Оригінал: …».", href: "/admin/orig-trial", all: all(origTrial, store.aiOrigs().size), trial: trial(origTrial) },
+      { key: "uk", name: "Переклади", what: "Українське видання іноземної книжки, яке Haiku знає і яке є в каталозі. Поки тільки проба.", href: "/admin/uk-trial", all: null, trial: trial(ukTrial) },
+    ],
+  }));
+});
+// The translations trial (uktrial.js): the Ukrainian edition Haiku names for a foreign book, checked against the catalogs.
+app.get("/admin/uk-trial", owner, (req, res) => res.send(pages.ukTrialPage({ user: req.user, st: ukTrial.state(), running: ukTrial.running, href: (id) => store.href(id), title: (id) => store.book(id)?.title || id })));
+app.get("/uk-trial/:key", (req, res) => {
+  const st = ukTrial.state();
+  if (!st?.key || req.params.key !== st.key) return res.status(404).send("Немає");
+  const line = (x) => `${x.found ? "*" : " "} ${x.title} — ${x.author} | ${x.error ? `помилка ${x.error}` : x.answer === "yes" ? `українською: ${x.uk} — ${x.ukAuthor} (${x.publisher})${x.found ? ` [у каталозі: ${store.book(x.found)?.title || x.found}]` : ""}` : x.answer === "no" ? "перекладу немає" : "не знає"}`;
+  res.type("text/plain").send([`промпт v${st.prompt}, ${st.model}, ${st.at}: ${st.done} з ${st.total} (без перекладу на полицях ${st.pool}), $${(st.cost || 0).toFixed(3)}${st.finished ? "" : ", ще йде"}`, "* = знайшли це видання в каталозі", "", ...st.items.map(line)].join("\n"));
+});
+app.post("/admin/uk-trial", owner, (req, res) => {
+  ukTrial.run().catch((e) => console.log(`uktrial: ${e.message}`));
+  res.redirect(303, "/admin/uk-trial");
 });
 // The originals trial (origtrial.js): what Haiku says a reader's Ukrainian book was translated from.
 app.get("/admin/orig-trial", owner, (req, res) => res.send(pages.origTrialPage({ user: req.user, st: origTrial.state(), running: origTrial.running, all: { ...origTrial.allState(), running: origTrial.allRunning, have: store.aiOrigs().size }, href: (id) => store.href(id) })));

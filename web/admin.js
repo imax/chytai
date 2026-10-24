@@ -358,6 +358,7 @@ function adminPage({ user, stats: s, overviews: o = null, layout }) {
     tile(t.entries, "книжок на полицях", `+${t.entriesWeek} за тиждень · ${t.want} у «хочу прочитати»`),
     tile(t.ratings, "оцінок", `${t.notes} нотаток`),
     tile(t.follows, "стежень", `${t.digestOn} підписані на лист, ${t.digestOff} відписались`),
+    tile("→", `<a href="/admin/catalog">якість каталогу</a>`, "жанри, мова, оригінали, переклади"),
     ...(o ? [tile(o.n, `<a href="/admin/overviews">оглядів від Claude</a>`, `${o.today} сьогодні · ${o.queue} в черзі · 🤩 ${o.up} 🙂 ${o.mid} 🙁 ${o.down} · ≈ $${o.cost.toFixed(2)}`)] : []),
   ].join("");
 

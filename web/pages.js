@@ -1200,7 +1200,7 @@ function genreTrialPage({ user, st, running, all = {}, href }) {
   const show = (gs) => (gs.length ? gs.map((g) => esc(cap(g))).join(", ") : `<span class="muted">—</span>`);
   const row = (x) => `<tr${x.after[0] !== x.before[0] ? ' class="diff"' : ""}><td><a href="${attr(href(x.id))}">${esc(x.title)}</a><br><span class="small muted">${esc(x.author)}</span></td><td>${show(x.before)}</td><td>${x.error ? `<span class="error small">${esc(x.error)}</span>` : show(x.after)}</td></tr>`;
   const body = `
-${pageHead({ crumbs: `<a href="/admin">Статистика</a>`, kicker: "Проба", title: "Жанри від Haiku", sub: st ? [`промпт v${st.prompt || 1}`, `${st.done} з ${st.total}`, `основний жанр змінився у ${changed.length}`, st.errors ? `помилок ${st.errors}` : "", `$${(st.cost || 0).toFixed(3)}`, running ? "іде…" : st.finished ? "готово" : "зупинилось"].filter(Boolean).join(" · ") : "Ще не запускали. 200 випадкових книжок з полиць читачів, на сайті нічого не змінюється." })}
+${pageHead({ crumbs: `<a href="/admin">Статистика</a> / <a href="/admin/catalog">Якість каталогу</a>`, kicker: "Проба", title: "Жанри від Haiku", sub: st ? [`промпт v${st.prompt || 1}`, `${st.done} з ${st.total}`, `основний жанр змінився у ${changed.length}`, st.errors ? `помилок ${st.errors}` : "", `$${(st.cost || 0).toFixed(3)}`, running ? "іде…" : st.finished ? "готово" : "зупинилось"].filter(Boolean).join(" · ") : "Ще не запускали. 200 випадкових книжок з полиць читачів, на сайті нічого не змінюється." })}
 ${st?.key ? `<p class="small muted">Посилання для Claude (тільки назви й жанри): <a href="/genres-trial/${attr(st.key)}">chytai.org.ua/genres-trial/${esc(st.key)}</a></p>` : ""}
 <section class="block">
   ${label("Весь каталог", all.at ? `промпт v${all.prompt}` : "")}
@@ -1217,15 +1217,19 @@ ${running || all.running ? `<script>setTimeout(() => location.reload(), 5000)</s
 
 // ---- /admin/lang-trial: isRussian() next to Haiku's language for 200 doubtful editions (langtrial.js) ----
 
-function langTrialPage({ user, st, running, differs, href }) {
+function langTrialPage({ user, st, running, all = {}, differs, href }) {
   const items = st?.items || [];
   const changed = items.filter(differs);
   const NAMES = { uk: "українська", ru: "російська", en: "англійська", other: "інша", unknown: "не знає", "не ru": "не російська" };
   const row = (x) => `<tr${differs(x) ? ' class="diff"' : ""}><td><a href="${attr(href(x.id))}">${esc(x.title)}</a><br><span class="small muted">${esc(x.author)}</span></td><td>${esc(NAMES[x.before] || x.before)}</td><td>${x.error ? `<span class="error small">${esc(x.error)}</span>` : esc(NAMES[x.after] || x.after)}</td></tr>`;
   const body = `
-${pageHead({ crumbs: `<a href="/admin">Статистика</a>`, kicker: "Проба", title: "Мова від Haiku", sub: st ? [`промпт v${st.prompt}`, `${st.done} з ${st.total}`, `сумнівних у каталозі ${st.pool}`, `не згоден у ${changed.length}`, st.errors ? `помилок ${st.errors}` : "", `$${(st.cost || 0).toFixed(3)}`, running ? "іде…" : st.finished ? "готово" : "зупинилось"].filter(Boolean).join(" · ") : "Ще не запускали. Усі книжки з кириличною назвою без і/ї/є/ґ і ы/э/ъ/ё і без мови від магазину; на сайті нічого не змінюється." })}
+${pageHead({ crumbs: `<a href="/admin">Статистика</a> / <a href="/admin/catalog">Якість каталогу</a>`, kicker: "Проба", title: "Мова від Haiku", sub: st ? [`промпт v${st.prompt}`, `${st.done} з ${st.total}`, `сумнівних у каталозі ${st.pool}`, `не згоден у ${changed.length}`, st.errors ? `помилок ${st.errors}` : "", `$${(st.cost || 0).toFixed(3)}`, running ? "іде…" : st.finished ? "готово" : "зупинилось"].filter(Boolean).join(" · ") : "Ще не запускали. Усі книжки з кириличною назвою без і/ї/є/ґ і ы/э/ъ/ё і без мови від магазину; на сайті нічого не змінюється." })}
 ${st?.key ? `<p class="small muted">Посилання для Claude (тільки назви й мови): <a href="/lang-trial/${attr(st.key)}">chytai.org.ua/lang-trial/${esc(st.key)}</a></p>` : ""}
-${running ? "" : `<form method="post" action="/admin/lang-trial"><button class="btn primary">${st ? "Прогнати знову (усі сумнівні)" : "Запустити"}</button></form>`}
+<section class="block">
+  ${label("На сайті: увесь каталог", all.at ? `промпт v${all.prompt}` : "")}
+  <p>${[`з мовою від Haiku ${books(all.have || 0)}`, all.at ? `останній прогін ${all.done} з ${all.total}` : "", all.errors ? `помилок ${all.errors}` : "", all.at ? `усього $${(all.cost || 0).toFixed(2)}` : "", all.running ? "іде…" : all.finished ? "готово, далі нові кожні 6 годин" : ""].filter(Boolean).join(" · ")}</p>
+</section>
+${running ? "" : `<form method="post" action="/admin/lang-trial"><button class="btn">${st ? "Прогнати знову (усі сумнівні)" : "Запустити"}</button></form>`}
 ${items.length ? `<div class="tabs" data-trial><button type="button" class="tab on" data-v="diff">Не згоден <span>${changed.length}</span></button><button type="button" class="tab" data-v="">Усі <span>${items.length}</span></button></div>
 <table class="trial"><thead><tr><th>Книжка</th><th>Зараз на сайті</th><th>Haiku</th></tr></thead><tbody>${[...changed, ...items.filter((x) => !changed.includes(x))].map(row).join("")}</tbody></table>
 <script>(() => { const t = document.querySelector(".trial"); const set = (v) => t.classList.toggle("only-diff", v === "diff"); set("diff"); document.querySelector("[data-trial]").addEventListener("click", (e) => { const b = e.target.closest(".tab"); if (!b) return; document.querySelectorAll("[data-trial] .tab").forEach((x) => x.classList.toggle("on", x === b)); set(b.dataset.v); }); })();</script>` : ""}
@@ -1241,10 +1245,10 @@ function origTrialPage({ user, st, running, all = {}, href }) {
   const said = (x) => (x.error ? `<span class="error small">${esc(x.error)}</span>` : x.kind === "translation" ? `<b>${esc(x.orig)}</b><br><span class="small muted">${esc(x.origAuthor)} · ${esc(x.lang)}${x.inCatalog ? ` · <a href="${attr(href(x.inCatalog))}">є в каталозі</a>` : ""}</span>` : `<span class="muted">${x.kind === "ukrainian" ? "українська книжка" : "не знає"}</span>`);
   const row = (x) => `<tr${x.kind === "translation" ? ' class="diff"' : ""}><td><a href="${attr(href(x.id))}">${esc(x.title)}</a><br><span class="small muted">${esc(x.author)}</span></td><td>${said(x)}</td></tr>`;
   const body = `
-${pageHead({ crumbs: `<a href="/admin">Статистика</a>`, kicker: "Проба", title: "Оригінали від Haiku", sub: st ? [`промпт v${st.prompt}`, `${st.done} з ${st.total}`, `без оригіналу на полицях ${st.pool}`, `знайшов ${found.length}`, `з них у каталозі ${found.filter((x) => x.inCatalog).length}`, st.errors ? `помилок ${st.errors}` : "", `$${(st.cost || 0).toFixed(3)}`, running ? "іде…" : st.finished ? "готово" : "зупинилось"].filter(Boolean).join(" · ") : "Ще не запускали. 200 випадкових українських книжок з полиць читачів, для яких ми не знаємо оригіналу; на сайті нічого не змінюється." })}
+${pageHead({ crumbs: `<a href="/admin">Статистика</a> / <a href="/admin/catalog">Якість каталогу</a>`, kicker: "Проба", title: "Оригінали від Haiku", sub: st ? [`промпт v${st.prompt}`, `${st.done} з ${st.total}`, `без оригіналу на полицях ${st.pool}`, `знайшов ${found.length}`, `з них у каталозі ${found.filter((x) => x.inCatalog).length}`, st.errors ? `помилок ${st.errors}` : "", `$${(st.cost || 0).toFixed(3)}`, running ? "іде…" : st.finished ? "готово" : "зупинилось"].filter(Boolean).join(" · ") : "Ще не запускали. 200 випадкових українських книжок з полиць читачів, для яких ми не знаємо оригіналу; на сайті нічого не змінюється." })}
 ${st?.key ? `<p class="small muted">Посилання для Claude (тільки назви): <a href="/orig-trial/${attr(st.key)}">chytai.org.ua/orig-trial/${esc(st.key)}</a></p>` : ""}
 <section class="block">
-  ${label("На сайт: усі полиці читачів", all.at ? `промпт v${all.prompt}` : "")}
+  ${label("На сайт: увесь каталог", all.at ? `промпт v${all.prompt}` : "")}
   <p>${[`з відповіддю Haiku ${books(all.have || 0)}`, all.at ? `цей прогін ${all.done} з ${all.total}` : "", all.errors ? `помилок ${all.errors}` : "", all.at ? `усього $${(all.cost || 0).toFixed(2)}` : "", all.running ? "іде…" : all.finished ? "готово, далі нові кожні 6 годин" : ""].filter(Boolean).join(" · ")}</p>
   ${all.running ? "" : `<form method="post" action="/admin/orig-trial"><input type="hidden" name="all" value="1"><button class="btn primary">Прогнати всі й поставити на сайт</button></form>`}
 </section>
@@ -1254,6 +1258,55 @@ ${items.length ? `<div class="tabs" data-trial><button type="button" class="tab 
 <script>(() => { const t = document.querySelector(".trial"); const set = (v) => t.classList.toggle("only-diff", v === "diff"); set("diff"); document.querySelector("[data-trial]").addEventListener("click", (e) => { const b = e.target.closest(".tab"); if (!b) return; document.querySelectorAll("[data-trial] .tab").forEach((x) => x.classList.toggle("on", x === b)); set(b.dataset.v); }); })();</script>` : ""}
 ${running || all.running ? `<script>setTimeout(() => location.reload(), 5000)</script>` : ""}`;
   return layout({ title: "Оригінали від Haiku", body, user, path: "/admin" });
+}
+
+// ---- /admin/catalog: «Якість каталогу», every Claude pass over the catalog on one page ----
+
+function catalogAdminPage({ user, passes }) {
+  const when = (iso) => (iso ? new Date(iso).toLocaleString("uk-UA", { timeZone: "Europe/Kyiv", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "");
+  const state = (a) => (a.running ? "іде" : a.finished ? `готово ${when(a.finished)}` : a.stopped ? "зупинено" : a.at ? "перерваний, продовжиться сам" : "ще не запускали");
+  const card = (p) => `<section class="block catalog-pass">
+  ${label(p.name, `<a class="text-link" href="${p.href}">детальніше</a>`)}
+  <p class="muted">${esc(p.what)}</p>
+  ${p.all ? `<p><b>${books(p.all.have || 0)}</b> · ${state(p.all)}${p.all.at ? ` · останній прогін ${p.all.done} з ${p.all.total}` : ""}${p.all.errors ? ` · помилок ${p.all.errors}` : ""} · усього $${(p.all.cost || 0).toFixed(2)}${p.all.prompt ? ` · промпт v${p.all.prompt}` : ""}</p>` : ""}
+  ${p.trial ? `<p class="small muted">Остання проба: ${p.trial.done} з ${p.trial.total}, $${(p.trial.cost || 0).toFixed(3)}, промпт v${p.trial.prompt}${p.trial.running ? ", іде" : `, ${when(p.trial.at)}`}</p>` : `<p class="small muted">Проби ще не було.</p>`}
+</section>`;
+  const tools = [
+    ["/admin/dupes", "Дублікати", "одна книжка двома сторінками"],
+    ["/admin/translations", "Пари перекладів", "кандидати з Вікіданих"],
+    ["/admin/ukfind", "Пошук українських видань", "Claude з веб-пошуком, вручну"],
+    ["/admin/readeat", "Readeat", "дані для книжок читачів"],
+    ["/admin/overviews", "Огляди від Claude", "«Про книжку» і голоси читачів"],
+    ["/admin/russian", "Російські книжки", "що сайт вважає російським"],
+  ];
+  const body = `
+${pageHead({ crumbs: `<a href="/admin">Статистика</a>`, kicker: "Адмінка", title: "Якість каталогу", sub: "Що Claude робить з каталогом: прогони по всіх книжках і проби перед ними. Нові книжки обробляються самі кожні 6 годин." })}
+<div class="catalog-passes">${passes.map(card).join("")}</div>
+<section class="block">
+  ${label("Інші інструменти")}
+  <ul class="tool-list">${tools.map(([href, name, sub]) => `<li><a class="text-link" href="${href}">${name}</a> <span class="muted small">${sub}</span></li>`).join("")}</ul>
+</section>
+${passes.some((p) => p.all?.running || p.trial?.running) ? `<script>setTimeout(() => location.reload(), 10000)</script>` : ""}`;
+  return layout({ title: "Якість каталогу", body, user, path: "/admin" });
+}
+
+// ---- /admin/uk-trial: the Ukrainian edition Haiku names for a foreign book (uktrial.js) ----
+
+function ukTrialPage({ user, st, running, href, title }) {
+  const items = st?.items || [];
+  const named = items.filter((x) => x.answer === "yes");
+  const found = items.filter((x) => x.found);
+  const said = (x) => (x.error ? `<span class="error small">${esc(x.error)}</span>` : x.answer === "yes" ? `<b>${esc(x.uk)}</b><br><span class="small muted">${[x.ukAuthor, x.publisher].filter(Boolean).map(esc).join(" · ")}</span>${x.found ? `<br><a class="small" href="${attr(href(x.found))}">у каталозі: ${esc(title(x.found))}</a>` : ""}` : `<span class="muted">${x.answer === "no" ? "перекладу немає" : "не знає"}</span>`);
+  const row = (x) => `<tr${x.found ? ' class="diff"' : ""}><td><a href="${attr(href(x.id))}">${esc(x.title)}</a><br><span class="small muted">${esc(x.author)}</span></td><td>${said(x)}</td></tr>`;
+  const body = `
+${pageHead({ crumbs: `<a href="/admin">Статистика</a> / <a href="/admin/catalog">Якість каталогу</a>`, kicker: "Проба", title: "Переклади від Haiku", sub: st ? [`промпт v${st.prompt}`, `${st.done} з ${st.total}`, `без перекладу на полицях ${st.pool}`, `назвав переклад ${named.length}`, `знайшли в каталозі ${found.length}`, st.errors ? `помилок ${st.errors}` : "", `$${(st.cost || 0).toFixed(3)}`, running ? "іде…" : st.finished ? "готово" : "зупинилось"].filter(Boolean).join(" · ") : "Ще не запускали. 200 випадкових іноземних книжок з полиць читачів, для яких ми не знаємо українського видання; на сайті нічого не змінюється." })}
+${st?.key ? `<p class="small muted">Посилання для Claude (тільки назви): <a href="/uk-trial/${attr(st.key)}">chytai.org.ua/uk-trial/${esc(st.key)}</a></p>` : ""}
+${running ? "" : `<form method="post" action="/admin/uk-trial"><button class="btn primary">${st ? "Прогнати ще 200 інших" : "Запустити"}</button></form>`}
+${items.length ? `<div class="tabs" data-trial><button type="button" class="tab on" data-v="diff">У каталозі <span>${found.length}</span></button><button type="button" class="tab" data-v="">Усі <span>${items.length}</span></button></div>
+<table class="trial"><thead><tr><th>Книжка</th><th>Українською (Haiku)</th></tr></thead><tbody>${[...found, ...named.filter((x) => !x.found), ...items.filter((x) => x.answer !== "yes")].map(row).join("")}</tbody></table>
+<script>(() => { const t = document.querySelector(".trial"); const set = (v) => t.classList.toggle("only-diff", v === "diff"); set("diff"); document.querySelector("[data-trial]").addEventListener("click", (e) => { const b = e.target.closest(".tab"); if (!b) return; document.querySelectorAll("[data-trial] .tab").forEach((x) => x.classList.toggle("on", x === b)); set(b.dataset.v); }); })();</script>` : ""}
+${running ? `<script>setTimeout(() => location.reload(), 5000)</script>` : ""}`;
+  return layout({ title: "Переклади від Haiku", body, user, path: "/admin" });
 }
 
 // ---- a genre (/genre/<slug>) ----
@@ -2185,7 +2238,7 @@ module.exports = {
   decidedList,
   welcomePage,
   addPage, addReviewPage, addFindResults, addPageResult, ukFindPage,
-  layout, homePage, bookPage, bookEditPage, russianPage, editPage, libraryPage, readersPage, popularPage, genrePage, genreTrialPage, langTrialPage, origTrialPage, publishersPage, publisherPage, searchPage, searchResults, authorPage,
+  layout, homePage, bookPage, bookEditPage, russianPage, editPage, libraryPage, readersPage, popularPage, genrePage, genreTrialPage, langTrialPage, origTrialPage, ukTrialPage, catalogAdminPage, publishersPage, publisherPage, searchPage, searchResults, authorPage,
   loginPage, codePage, signupPage, settingsPage, privacyPage, updatesPage, messagePage, digestPage, followMailPage, importPage, importPreviewPage, importDonePage,
   GENRES, esc, byline, STATUS, COPY, inline, isUk, setTitleLinks, setAuthorLinks, setStats, setReadersWithNote,
 };

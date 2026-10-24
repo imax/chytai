@@ -84,7 +84,7 @@ class OrigTrial {
     return { answer: JSON.parse(text), usage: message.usage };
   }
 
-  // Every such book on readers' shelves not asked yet (Max 2026-10-23), answers into store.setAiOrig; then the
+  // Every such book not asked yet, readers' first (Max 2026-10-23/24), answers into store.setAiOrig; then the
   // translations are linked again, so an original already in a catalog pairs at once. server.js repeats it
   // every six hours for books readers add. Progress in meta `origall`.
   allState() {
@@ -95,7 +95,8 @@ class OrigTrial {
     if (this.allRunning || !this.client) return false;
     this.allRunning = true;
     const have = this.store.aiOrigs();
-    const ids = [...new Set(this.social.all().map((x) => this.store.canonical(x.id)))].filter((id) => !have.has(id));
+    // Readers' books first, then the rest of the catalogs (Max 2026-10-24: «якісний каталог це дуже важливо»).
+    const ids = [...new Set([...this.social.all().map((x) => this.store.canonical(x.id)), ...this.store.workIds()])].filter((id) => !have.has(id));
     const todo = ids.map((id) => this.store.book(id)).filter((b) => this.orphan(b));
     const st = { cost: 0, errors: 0, ...this.allState(), at: new Date().toISOString(), prompt: PROMPT, total: todo.length, done: 0, finished: null };
     const save = () => this.db.set("origall", JSON.stringify(st));

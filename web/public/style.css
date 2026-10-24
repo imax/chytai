@@ -834,3 +834,9 @@ aside .side-lists + .label, aside p + .label, aside dialog + .label { margin-top
 .trial th { font: 600 12px/1.4 var(--sans); text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); }
 .trial tr.diff td:last-child { color: var(--accent); font-weight: 500; }
 .trial.only-diff tbody tr:not(.diff) { display: none; }
+
+/* /admin/catalog */
+.catalog-passes { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 22rem), 1fr)); gap: 0 2rem; }
+.catalog-pass p { margin: .35rem 0; }
+.tool-list { list-style: none; padding: 0; margin: 0; }
+.tool-list li { padding: .3rem 0; }
