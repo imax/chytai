@@ -553,6 +553,7 @@ const advice = new Advice({ store, social, db: store.db, apiKey: process.env.ANT
 const genreTrial = new (require("./genretrial").GenreTrial)({ store, social, db: store.db, apiKey: process.env.ANTHROPIC_API_KEY || "", genres: pages.GENRES, log: console.log });
 const origTrial = new (require("./origtrial").OrigTrial)({ store, social, db: store.db, apiKey: process.env.ANTHROPIC_API_KEY || "", log: console.log });
 const ukTrial = new (require("./uktrial").UkTrial)({ store, social, db: store.db, apiKey: process.env.ANTHROPIC_API_KEY || "", log: console.log });
+const aiPasses = new Map(require("./catalogpasses").passes({ store, social, db: store.db, apiKey: process.env.ANTHROPIC_API_KEY || "", log: console.log }).map((p) => [p.key, p]));
 const langTrial = new (require("./langtrial").LangTrial)({ store, db: store.db, apiKey: process.env.ANTHROPIC_API_KEY || "", log: console.log });
 // A whole-catalog run cut by a deploy goes on a minute after the start; once it has finished, books added
 // since are asked about every six hours.
@@ -1340,8 +1341,26 @@ app.get("/admin/catalog", owner, (req, res) => {
       { key: "lang", name: "Мова", what: "Мова видань з кириличною назвою, з якої не видно мови. «Рос» ховає книжку, «укр» нічого не змінює.", href: "/admin/lang-trial", all: all(langTrial, store.aiLangs().size), trial: trial(langTrial) },
       { key: "orig", name: "Оригінали", what: "З чого перекладена українська книжка: пара з оригіналом у каталозі або рядок «Оригінал: …».", href: "/admin/orig-trial", all: all(origTrial, store.aiOrigs().size), trial: trial(origTrial) },
       { key: "uk", name: "Переклади", what: "Українське видання іноземної книжки, яке Haiku знає і яке є в каталозі. Поки тільки проба.", href: "/admin/uk-trial", all: null, trial: trial(ukTrial) },
+      ...[...aiPasses.values()].map((p) => ({ key: p.key, name: p.name, what: `${p.what} Поки тільки проба.`, href: `/admin/ai/${p.key}`, all: null, trial: trial(p) })),
     ],
   }));
+});
+// The other catalog passes (catalogpasses.js on aipass.js): a trial page each, a plain-text link for Claude.
+app.get("/admin/ai/:key", owner, (req, res) => {
+  const p = aiPasses.get(req.params.key);
+  if (!p) return res.status(404).send(pages.messagePage({ title: "Немає такої перевірки", text: req.params.key, user: req.user }));
+  res.send(pages.aiPassPage({ user: req.user, pass: p, st: p.state(), running: p.running, href: (id) => store.href(id) }));
+});
+app.post("/admin/ai/:key", owner, (req, res) => {
+  const p = aiPasses.get(req.params.key);
+  if (p) p.run().catch((e) => console.log(`aipass ${p.key}: ${e.message}`));
+  res.redirect(303, `/admin/ai/${encodeURIComponent(req.params.key)}`);
+});
+app.get("/ai-trial/:key/:token", (req, res) => {
+  const p = aiPasses.get(req.params.key);
+  const st = p?.state();
+  if (!st?.key || req.params.token !== st.key) return res.status(404).send("Немає");
+  res.type("text/plain").send(p.text());
 });
 // The translations trial (uktrial.js): the Ukrainian edition Haiku names for a foreign book, checked against the catalogs.
 app.get("/admin/uk-trial", owner, (req, res) => res.send(pages.ukTrialPage({ user: req.user, st: ukTrial.state(), running: ukTrial.running, href: (id) => store.href(id), title: (id) => store.book(id)?.title || id })));

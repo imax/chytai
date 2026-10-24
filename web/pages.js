@@ -1260,6 +1260,24 @@ ${running || all.running ? `<script>setTimeout(() => location.reload(), 5000)</s
   return layout({ title: "Оригінали від Haiku", body, user, path: "/admin" });
 }
 
+// ---- /admin/ai/<key>: one catalog pass's trial (aipass.js, catalogpasses.js) ----
+
+function aiPassPage({ user, pass, st, running, href }) {
+  const items = st?.items || [];
+  const changed = items.filter((x) => x.diff);
+  const link = (x) => (x.links ? x.links.map((id, i) => `<a href="${attr(href(id))}">${i + 1}</a>`).join(" · ") : "");
+  const row = (x) => `<tr${x.diff ? ' class="diff"' : ""}><td>${x.thumb ? `<img src="${attr(x.thumb)}" alt="" loading="lazy" style="height:72px;float:left;margin-right:.6rem">` : ""}${x.links ? esc(x.title) : `<a href="${attr(href(x.id))}">${esc(x.title)}</a>`}<br><span class="small muted">${esc(x.author || "")} ${link(x)}</span></td><td>${esc(x.before || "—")}</td><td>${x.error ? `<span class="error small">${esc(x.error)}</span>` : esc(x.after || "—")}</td></tr>`;
+  const body = `
+${pageHead({ crumbs: `<a href="/admin">Статистика</a> / <a href="/admin/catalog">Якість каталогу</a>`, kicker: "Проба", title: esc(pass.name), sub: st ? [`промпт v${st.prompt}`, `${st.done} з ${st.total}`, `кандидатів ${st.pool}`, `пропонує змінити ${changed.length}`, st.errors ? `помилок ${st.errors}` : "", `$${(st.cost || 0).toFixed(3)}`, running ? "іде…" : st.finished ? "готово" : "зупинилось"].filter(Boolean).join(" · ") : `${esc(pass.what)} Ще не запускали: ${pass.size} випадкових, на сайті нічого не змінюється.` })}
+${st?.key ? `<p class="small muted">Посилання для Claude: <a href="/ai-trial/${attr(pass.key)}/${attr(st.key)}">chytai.org.ua/ai-trial/${esc(pass.key)}/${esc(st.key)}</a></p>` : ""}
+${running ? "" : `<form method="post" action="/admin/ai/${attr(pass.key)}"><button class="btn primary">${st ? `Прогнати ще ${pass.size} інших` : "Запустити"}</button></form>`}
+${items.length ? `<div class="tabs" data-trial><button type="button" class="tab on" data-v="diff">Пропонує змінити <span>${changed.length}</span></button><button type="button" class="tab" data-v="">Усі <span>${items.length}</span></button></div>
+<table class="trial"><thead><tr><th>Що</th><th>Зараз</th><th>Haiku</th></tr></thead><tbody>${[...changed, ...items.filter((x) => !x.diff)].map(row).join("")}</tbody></table>
+<script>(() => { const t = document.querySelector(".trial"); const set = (v) => t.classList.toggle("only-diff", v === "diff"); set("diff"); document.querySelector("[data-trial]").addEventListener("click", (e) => { const b = e.target.closest(".tab"); if (!b) return; document.querySelectorAll("[data-trial] .tab").forEach((x) => x.classList.toggle("on", x === b)); set(b.dataset.v); }); })();</script>` : ""}
+${running ? `<script>setTimeout(() => location.reload(), 5000)</script>` : ""}`;
+  return layout({ title: `${pass.name} · Проба`, body, user, path: "/admin" });
+}
+
 // ---- /admin/catalog: «Якість каталогу», every Claude pass over the catalog on one page ----
 
 function catalogAdminPage({ user, passes }) {
@@ -2238,7 +2256,7 @@ module.exports = {
   decidedList,
   welcomePage,
   addPage, addReviewPage, addFindResults, addPageResult, ukFindPage,
-  layout, homePage, bookPage, bookEditPage, russianPage, editPage, libraryPage, readersPage, popularPage, genrePage, genreTrialPage, langTrialPage, origTrialPage, ukTrialPage, catalogAdminPage, publishersPage, publisherPage, searchPage, searchResults, authorPage,
+  layout, homePage, bookPage, bookEditPage, russianPage, editPage, libraryPage, readersPage, popularPage, genrePage, genreTrialPage, langTrialPage, origTrialPage, ukTrialPage, catalogAdminPage, aiPassPage, publishersPage, publisherPage, searchPage, searchResults, authorPage,
   loginPage, codePage, signupPage, settingsPage, privacyPage, updatesPage, messagePage, digestPage, followMailPage, importPage, importPreviewPage, importDonePage,
   GENRES, esc, byline, STATUS, COPY, inline, isUk, setTitleLinks, setAuthorLinks, setStats, setReadersWithNote,
 };
