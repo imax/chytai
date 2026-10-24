@@ -184,7 +184,7 @@ async function findBook(book, { fetchImpl = fetch, pause = 1500, original = "" }
 // What a book takes from Readeat: nothing the reader or a catalog set is overwritten.
 function patchFor(book, info) {
   const patch = {};
-  if (!book.cover && info.cover) patch.cover = info.cover;
+  if ((!book.cover || foreignCover(book)) && info.cover) patch.cover = info.cover;
   const isbns = [...new Set([...(book.isbns || []), ...info.isbns])];
   if (isbns.length > (book.isbns || []).length) patch.isbns = isbns;
   if (!book.published && info.published) patch.published = info.published;
@@ -198,10 +198,13 @@ function patchFor(book, info) {
 
 // The readers' own books worth asking: typed in Ukrainian (or with a Ukrainian ISBN) and missing a cover, a
 // description or an ISBN.
+// An Open Library cover on a Ukrainian book is the original's (often an old first edition, «Фундація», Max
+// 2026-10-24): Readeat's cover of the Ukrainian edition replaces it.
+const foreignCover = (b) => /^https:\/\/covers\.openlibrary\.org\//.test(b.cover || "") && isCyrillic(b.title);
 function wanting(store, ids) {
   const all = ids ? ids.map((id) => store.lib.books[id]).filter(Boolean) : Object.values(store.lib.books);
   const { isRussian } = require("./store");
-  return all.filter((b) => OWN.has(b.source) && !isRussian(b) && ((isCyrillic(b.title) && !russian(b.title)) || (b.isbns || []).some((x) => ukIsbn(cleanIsbn(x)))) && !(b.cover && b.blurb && (b.isbns || []).length));
+  return all.filter((b) => OWN.has(b.source) && !isRussian(b) && ((isCyrillic(b.title) && !russian(b.title)) || (b.isbns || []).some((x) => ukIsbn(cleanIsbn(x)))) && !(b.cover && !foreignCover(b) && b.blurb && (b.isbns || []).length));
 }
 
 const on = (store) => store.db.get("readeat:on") === "1";

@@ -113,10 +113,9 @@ class AiPass {
     this.allRunning = true;
     const done = this.answered();
     const todo = this.candidates().filter((s) => !done.has(s.id));
-    const st = { cost: 0, errors: 0, applied: 0, ...this.allState(), at: new Date().toISOString(), prompt: this.prompt, total: todo.length, done: 0, finished: null };
+    const st = { cost: 0, errors: 0, ...this.allState(), at: new Date().toISOString(), prompt: this.prompt, total: todo.length, done: 0, finished: null };
     const save = () => this.db.set(`aipass:${this.key}:all`, JSON.stringify(st));
     save();
-    const items = [];
     const put = this.db.prepare("INSERT OR REPLACE INTO ai_answer (pass, id, answer, prompt, at) VALUES (?, ?, ?, ?, ?)");
     let next = 0;
     const worker = async () => {
@@ -126,7 +125,6 @@ class AiPass {
           const { answer, usage } = await this.ask(s);
           st.cost += (usage.input_tokens || 0) * PRICE.input + (usage.output_tokens || 0) * PRICE.output;
           put.run(this.key, s.id, JSON.stringify(answer), this.prompt, new Date().toISOString());
-          items.push({ s, answer, item: this.item(s, answer) });
         } catch (e) {
           st.errors++;
           this.log(`aipass ${this.key} all: ${s.id}: ${e.message}`);
@@ -137,7 +135,11 @@ class AiPass {
     };
     try {
       await Promise.all(Array.from({ length: this.parallel }, worker));
-      st.applied += this.apply(items) || 0;
+      // Every stored answer goes to apply, not only this run's: a run cut by a deploy asked some already, and
+      // apply is safe to repeat.
+      const saved = new Map(this.db.prepare("SELECT id, answer FROM ai_answer WHERE pass = ?").all(this.key).map((r) => [r.id, JSON.parse(r.answer)]));
+      const all = this.candidates().filter((s) => saved.has(s.id)).map((s) => ({ s, answer: saved.get(s.id), item: this.item(s, saved.get(s.id)) }));
+      st.applied = this.apply(all) || 0;
     } finally {
       st.finished = new Date().toISOString();
       save();

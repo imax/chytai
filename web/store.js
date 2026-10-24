@@ -789,6 +789,25 @@ class Store {
     this.aiOrigs().set(id, r);
   }
 
+  // Answers of a catalog pass (aipass.js, table ai_answer) by id, cached until the pass applies again.
+  aiAnswers(pass) {
+    this._aiAnswers ??= {};
+    return (this._aiAnswers[pass] ??= new Map(this.db.prepare("SELECT id, answer FROM ai_answer WHERE pass = ?").all(pass).map((r) => [r.id, JSON.parse(r.answer)])));
+  }
+
+  aiAnswersChanged(pass) {
+    if (this._aiAnswers) delete this._aiAnswers[pass];
+  }
+
+  hiddenCovers() {
+    return (this._hiddenCovers ??= JSON.parse(this.db.get("covers:hidden") || "{}"));
+  }
+
+  hideCovers(map) {
+    this._hiddenCovers = { ...this.hiddenCovers(), ...map };
+    this.db.set("covers:hidden", JSON.stringify(this._hiddenCovers));
+  }
+
   setAiGenres(id, genres, prompt) {
     this.db.prepare("INSERT OR REPLACE INTO ai_genre (id, genres, prompt, at) VALUES (?, ?, ?, ?)").run(id, JSON.stringify(genres), prompt, new Date().toISOString());
     this.aiGenres().set(id, genres);
@@ -966,6 +985,8 @@ class Store {
     this.aliases = new Map(); // edition id -> canonical id
     this.editions = new Map(); // canonical id -> [{ shelf, item }]
     this.hidden = new Set(); // shelf items that are a second edition of another item on the same shelf
+    // and shop items that are not books (catalogpasses.js notbooks: sticker books, colouring books, postcards)
+    for (const [id, a] of this.aiAnswers("notbooks")) if (a.kind === "not_book") this.hidden.add(id);
     let matches = { same: {}, different: [] };
     try {
       matches = readJson(path.join(SEED, "matches.json"));
@@ -1457,9 +1478,17 @@ class Store {
     // A year before 1800 on a reader's book is Open Library's or an import's noise far more often than a real
     // date («Lolita» 1777, Max 2026-10-23); the owner can still set one in «Редагувати».
     if (Number(out.published) < 1800) delete out.published;
+    // The year Haiku gives for the work's first publication, where we have none (catalogpasses.js year).
+    if (!out.published && edited) {
+      const y = this.aiAnswers("year").get(id);
+      if (y?.known === "yes" && y.year > 0) out.published = y.year;
+    }
     if (this.covers?.has(id)) out.cover = this.covers.get(id);
     // A book a reader added by hand or imported has no cover; its catalog editions do («Сила інтровертів»).
     else if (!out.cover) out.cover = (out.editions || []).find((e) => e.cover)?.cover || "";
+    // A cover Haiku judged a bad scan, a blank binding or another book (catalogpasses.js covers) is not shown,
+    // as long as it is still that picture; a placeholder looks better.
+    if (out.cover && this.hiddenCovers()[id] === out.cover) out.cover = (out.editions || []).find((e) => e.cover && e.cover !== out.cover)?.cover || "";
     // A title cut short by an import keeps a dangling separator («Diary of Samuel Pepys -», Max 2026-10-23).
     out.title = String(out.title || "").replace(DANGLING, "") || out.title;
     // The owner's hand edits (/admin/book/:id) win over the catalogs and outlive their refreshes.

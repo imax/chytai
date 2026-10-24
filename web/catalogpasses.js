@@ -76,6 +76,14 @@ function passes({ store, social, db, apiKey, log }) {
       },
       facts: (s) => about(s.b, 300),
       item: (s, a) => ({ ...book(s.b), before: "книжка", after: a ? (a.kind === "book" ? "книжка" : a.kind === "not_book" ? `не книжка: ${a.what}` : `не знає: ${a.what}`) : "", diff: a?.kind === "not_book" }),
+      // Not-books leave the works (search, genres, recommendations) in linkEditions; the shop's shelf keeps them.
+      apply: (items) => {
+        store.aiAnswersChanged("notbooks");
+        store.linkEditions();
+        store.linkTranslations();
+        store.indexSearch();
+        return items.filter((x) => x.answer.kind === "not_book").length;
+      },
     },
     {
       key: "series",
@@ -98,15 +106,20 @@ function passes({ store, social, db, apiKey, log }) {
       schema: { type: "object", properties: { known: { type: "string", enum: ["yes", "unknown"] }, year: { type: "integer" } }, required: ["known", "year"], additionalProperties: false },
       candidates: () => {
         const mine = shelved();
-        const all = works().filter((b) => mine.has(b.id));
-        // Missing years first, then a few with one to compare against.
-        return [...all.filter((b) => !b.published), ...all.filter((b) => b.published)];
+        // Readers' books without a year first, then the rest of the catalog without one.
+        const all = works().filter((b) => !b.published);
+        return [...all.filter((b) => mine.has(b.id)), ...all.filter((b) => !mine.has(b.id))];
       },
       facts: (s) => about(s.b, 300),
       item: (s, a) => {
         const was = Number(s.b.published) || 0;
         const now = a?.known === "yes" ? a.year : 0;
         return { ...book(s.b), before: was ? String(was) : "—", after: a ? (now ? String(now) : "не знає") : "", diff: !!now && (!was || Math.abs(was - now) > 1) };
+      },
+      // Fills only a missing year (store.book reads the answers); a year we have stays.
+      apply: (items) => {
+        store.aiAnswersChanged("year");
+        return items.filter((x) => x.answer.known === "yes" && x.answer.year > 0 && !x.s.b.published).length;
       },
     },
     {
@@ -132,7 +145,7 @@ function passes({ store, social, db, apiKey, log }) {
         let n = 0;
         for (const { item, s: sub } of items) {
           const other = item.merge && store.authors.bySlug.get(item.merge);
-          if (!other || other.key === sub.a.key) continue;
+          if (!other || other.key === sub.a.key || j.some(([x, y]) => x === sub.a.names[0] && y === other.names[0])) continue;
           j.push([sub.a.names[0], other.names[0]]);
           n++;
         }
@@ -170,6 +183,19 @@ function passes({ store, social, db, apiKey, log }) {
         const foreign = a && CYR.test(s.b.title) && !/ukrain|українськ|^uk$/i.test(a.language);
         const q = { good: "добра", dated: "застаріла", bad: "погана", broken: "немає" }[a?.quality] || "";
         return { ...book(s.b), thumb: s.b.cover, before: "Open Library", after: a ? `${q}${foreign ? `, мовою: ${a.language}` : ""}` : "", diff: !!a && (a.quality !== "good" || foreign) };
+      },
+      // A bad or missing picture is hidden (a placeholder looks better); a Ukrainian book with a foreign cover
+      // is asked on Readeat again for its own; a dated one stays until we look for a newer edition.
+      apply: (items) => {
+        const hide = {};
+        const ask = [];
+        for (const { s: sub, answer: a } of items) {
+          if (a.quality === "bad" || a.quality === "broken") hide[sub.b.id] = sub.b.cover;
+          else if (CYR.test(sub.b.title) && !/ukrain|українськ|^uk$/i.test(a.language) && store.lib.books[sub.b.id]) ask.push(sub.b.id);
+        }
+        if (Object.keys(hide).length) store.hideCovers(hide);
+        if (ask.length) require("./readeat").enrich(store, { ids: ask, force: true, max: ask.length, log }).then(() => store.indexSearch()).catch((e) => log(`covers readeat: ${e.message}`));
+        return Object.keys(hide).length + ask.length;
       },
     },
   ];

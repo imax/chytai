@@ -565,6 +565,7 @@ setTimeout(() => {
   if (st && !st.stopped) genreTrial.runAll().catch((e) => console.log(`genreall: ${e.message}`));
   // Originals and languages (Max 2026-10-23 «включаємо і те і те»): the first run starts by itself, a cut one goes on.
   for (const t of [origTrial, langTrial]) if (!t.allState()?.finished) t.runAll().catch((e) => console.log(`${t.constructor.name}: ${e.message}`));
+  for (const p of aiPasses.values()) if (p.apply && p.allState() && !p.allState().finished) p.runAll().catch((e) => console.log(`aipass ${p.key} all: ${e.message}`));
 }, 60 * 1000).unref();
 setInterval(() => {
   const st = genreTrial.allState();
