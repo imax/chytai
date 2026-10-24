@@ -460,11 +460,11 @@ ${a.sources.length ? `<div class="tbl"><table class="sources">
 <tbody>${sources}</tbody></table></div>` : `<p class="muted">Поки нікого не нарахувалось.</p>`}
 ${a.refs.length ? `<h3>Звідки саме</h3>
 <p class="muted small">Повні адреси, коли інший сайт їх передає (великі сайти зазвичай дають лише домен), і кампанії з utm_campaign.</p>
-<div class="tbl"><table class="refs">
+<div class="tbl"><table class="refs urls">
 <thead><tr><th>Адреса</th><th>7 днів</th><th>28 днів</th></tr></thead>
 <tbody>${refs}</tbody></table></div>` : ""}
-${a.landings.length ? `<h3>Куди потрапляють з пошуку й AI-чатів</h3>
-<div class="tbl"><table class="landings">
+${a.landings.length ? `<h3>Сторінки з пошуку</h3>
+<div class="tbl"><table class="landings urls">
 <thead><tr><th>Сторінка</th><th>7 днів</th><th>28 днів</th></tr></thead>
 <tbody>${landings}</tbody></table></div>` : ""}`;
 }

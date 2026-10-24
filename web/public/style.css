@@ -607,6 +607,8 @@ dialog .form { margin-top: 18px; }
 .admin thead th { font: 600 12px var(--sans); color: var(--muted); letter-spacing: 0.04em; }
 .admin thead th a { text-decoration: underline; text-decoration-color: var(--under); text-underline-offset: 3px; }
 .admin thead th.sorted { color: var(--ink); }
+.admin .urls tbody th { font: 400 13px var(--sans); color: var(--muted); max-width: 60vw; overflow: hidden; text-overflow: ellipsis; }
+.admin .urls tbody th a { color: var(--muted); }
 .admin tbody th em.new { font-style: normal; font-size: 11px; color: var(--on-accent); background: var(--accent); border-radius: 999px; padding: 1px 7px; margin-left: 6px; }
 .admin tbody th { font-weight: 400; }
 .admin tbody th a { text-decoration: underline; text-decoration-color: var(--under); text-underline-offset: 3px; }
