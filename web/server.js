@@ -1599,7 +1599,8 @@ app.post("/admin/genres-trial", owner, (req, res) => {
   res.redirect(303, "/admin/genres-trial");
 });
 app.get("/admin", owner, (req, res) => res.send(adminPage({ user: req.user, stats: admin.stats(), overviews: advice.overviewStats(), layout: pages.layout })));
-app.get("/admin/stats", owner, (req, res) => res.send(adminPage({ user: req.user, stats: admin.stats(), layout: pages.layout, page: "stats" })));
+app.get("/admin/traffic", owner, (req, res) => res.send(adminPage({ user: req.user, stats: admin.stats(), layout: pages.layout, page: "traffic" })));
+app.get("/admin/stats", owner, (req, res) => res.redirect(301, "/admin/traffic"));
 app.get("/admin/overviews", owner, (req, res) => res.send(overviewsPage({ user: req.user, list: advice.overviewList().map((r) => ({ ...r, complaints: r.down ? advice.complaintsOf(r.book.id) : [] })), stats: advice.overviewStats(), who: (id) => (id && id !== "auto" ? pub(auth.reader(id)) : null), layout: pages.layout })));
 app.get("/admin/readers", owner, (req, res) => res.send(readersPage({ user: req.user, stats: admin.stats(), layout: pages.layout, q: req.query.q, min: Number(req.query.books) || 0, sort: String(req.query.sort || "created"), page: req.query.page })));
 app.get("/admin.json", owner, (req, res) => res.json(admin.stats()));
