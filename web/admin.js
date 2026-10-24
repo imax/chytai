@@ -346,6 +346,7 @@ class Admin {
           owner: r.id === this.ownerId,
           email: !!r.email,
           created: dayOf(r.created),
+          at: r.created,
           last: days[days.length - 1] || null,
           days: days.length,
           books: books.get(r.id) || 0,
@@ -564,7 +565,11 @@ ${s.sections.length ? `<div class="tbl"><table class="sections">
     : `<section class="admin">
 <section class="page-head"><div><p class="kicker">Лише для власника</p><h1>Статистика</h1><p class="sub">Сайт станом на ${short(s.now)}. Активний читач — той, хто відкрив сайт або щось зробив на полиці того дня. Перегляди рахуються з ${s.totals.viewsSince ? short(s.totals.viewsSince) : "сьогодні"}; раніше за активність правлять входи й зміни на полиці.</p></div></section>
 <div class="stats">${tiles}</div>
-<p><a class="text-link" href="/admin/readers">Усі читачі (${s.readers.length})</a>, нових за 7 днів: ${fresh.length}.</p>
+<h2>Нові читачі</h2>
+<div class="tbl"><table class="readers">
+<thead><tr>${READER_HEAD}</tr></thead>
+<tbody>${s.readers.filter((r) => !r.owner).sort((a, b) => String(b.at).localeCompare(String(a.at))).slice(0, 5).map(readerRow).join("")}</tbody></table></div>
+<p class="small"><a class="text-link" href="/admin/readers">Усі читачі (${s.readers.length})</a>, нових за 7 днів: ${fresh.length}.</p>
 
 ${s.arrivals ? `<h2>Звідки приходять</h2>
 ${sourcesTable(s.arrivals)}
