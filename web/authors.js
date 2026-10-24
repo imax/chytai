@@ -330,4 +330,4 @@ function matchWorks(store, author, works) {
   });
 }
 
-module.exports = { refresh, build, wikidataWorks, about, aboutNow, matchWorks, splitAuthors, allWorks, ownerJoins };
+module.exports = { sparql, refresh, build, wikidataWorks, about, aboutNow, matchWorks, splitAuthors, allWorks, ownerJoins };

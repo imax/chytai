@@ -550,6 +550,10 @@ const social = new Social(store, (id) => pub(auth.reader(id)));
 // «Списки» (lists.js): readers' own public lists of books.
 const lists = new Lists(store, (id) => pub(auth.reader(id)));
 const withCovers = (l) => ({ ...l, covers: lists.covers(l.id) });
+// Wanted books already out of copyright (freebooks.js): once a day, /admin/free, and the owner's list when he has it on.
+const freeBooks = new (require("./freebooks").FreeBooks)({ store, lists, who: (id) => pub(auth.reader(id)), ownerId: OWNER_ID, log: console.log });
+setTimeout(() => freeBooks.run().catch((e) => console.log(`free: ${e.message}`)), 10 * 60 * 1000).unref();
+setInterval(() => freeBooks.run().catch((e) => console.log(`free: ${e.message}`)), 24 * 3600 * 1000).unref();
 // «Чи варто читати?» on book pages (advice.js): Claude, by the reader's own shelf, on a click.
 const bookpage = new BookPage({ apiKey: process.env.ANTHROPIC_API_KEY || "", log: console.log });
 const advice = new Advice({ store, social, db: store.db, apiKey: process.env.ANTHROPIC_API_KEY || "", log: console.log });
@@ -1351,6 +1355,16 @@ app.get("/admin/catalog", owner, (req, res) => {
     ],
   }));
 });
+app.get("/admin/free", owner, (req, res) => res.send(pages.freeBooksPage({ user: req.user, st: freeBooks.state(), running: freeBooks.running, list: freeBooks.list(), claude: `/claude/${claudeKey()}/free` })));
+app.post("/admin/free", owner, (req, res) => {
+  if (req.body?.list !== undefined) freeBooks.setList(req.body.list === "1");
+  if (req.body?.run) freeBooks.run().catch((e) => console.log(`free: ${e.message}`));
+  res.redirect(303, "/admin/free");
+});
+app.get("/claude/:key/free", (req, res) => {
+  if (req.params.key !== store.db.get("claude:key")) return res.status(404).send("Немає");
+  res.type("text/plain").send(freeBooks.text());
+});
 // Claude's own handle on the catalog passes (Max 2026-10-24: «зберігай output десь в базі, щоб ти сам міг
 // читати і керувати»): plain text behind one unguessable link shown on /admin/catalog. It reads every pass's
 // state and starts a trial or a whole-catalog run; GET only, since that is what Claude can send. At most 30
@@ -1388,6 +1402,7 @@ app.get(["/claude/:key", "/claude/:key/:action/:pass"], (req, res) => {
     const link = st?.key ? (share[k] ? `/${share[k]}/${st.key}` : `/ai-trial/${k}/${st.key}`) : "";
     lines.push(`## ${k}${p.name ? ` (${p.name})` : ""}${p.running ? " · проба йде" : ""}${p.allRunning ? " · прогін йде" : ""}`, `проба: ${fmt(st)}${link ? `\nрезультати: https://chytai.org.ua${link}` : ""}`, applies(k, p) ? `весь каталог: ${fmt(p.allState())}` : "весь каталог: ще не вміє застосовувати, тільки проба", "");
   }
+  lines.push("Вільні книжки з «Хочу прочитати»: https://chytai.org.ua/claude/<ключ>/free", "");
   lines.push(`Дії: https://chytai.org.ua/claude/<ключ>/run/<перевірка> — проба; /apply/<перевірка> — весь каталог і на сайт. Запусків сьогодні: ${JSON.parse(store.db.get("claude:starts") || "{}")[new Date().toISOString().slice(0, 10)] || 0} з 30.`);
   res.send(lines.join("\n"));
 });

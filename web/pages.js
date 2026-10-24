@@ -2240,7 +2240,36 @@ ${user ? `<dialog id="new-list"><div class="dlg-head"><h2>Новий списо�
   return layout({ title: "Списки читачів", body, user, path: "/lists", canonical: "/lists", description: "Добірки книжок від читачів Chytai: що почитати про війну, підліткам, коли важко зосередитись." });
 }
 
+// ---- /admin/free: wanted books already out of copyright (freebooks.js) ----
+
+function freeBooksPage({ user, st, running, list, claude }) {
+  const items = st?.items || [];
+  const free = items.filter((x) => x.died <= st.last);
+  const years = (x) => `${x.born < 9999 ? `${x.born}–` : "п. "}${x.died}`;
+  const text = (x) => {
+    if (x.ukText) return `Український текст автора${x.inReader ? " · <b>уже в Читалці</b>" : ""}`;
+    const tr = x.translators.length ? x.translators.map((t, i) => `${esc(t)}${x.translatorsDied[i] ? ` (п. ${x.translatorsDied[i]})` : ""}`).join(", ") : "перекладача не знаємо";
+    return `Оригінал${x.orig ? ` «${esc(x.orig)}»` : ""} вільний${x.inReader ? " · <b>уже в Читалці</b>" : ""}<br><span class="small muted">Переклад: ${tr} — ${x.ukFree ? "теж вільний" : "мабуть, захищений"}</span>`;
+  };
+  const where = (x) => (x.sources || []).map((s) => `<a href="${attr(s.url)}" target="_blank" rel="noopener">${esc(s.site)}</a>`).join("<br>") || `<span class="muted">не знайшли</span>`;
+  const row = (x, soon = false) => `<tr${x.check ? ' class="diff"' : ""}><td><a href="${attr(x.href)}">${esc(x.title)}</a><br><span class="small muted">${esc(x.author)}, ${years(x)}</span>${x.check ? `<br><span class="small error">Перевір реабілітацію: тоді 70 років рахують від неї</span>` : ""}</td><td>${x.readers}</td><td>${soon ? `з 1 січня ${x.freeFrom}` : text(x)}</td>${soon ? "" : `<td class="small">${where(x)}</td>`}</tr>`;
+  const soon = items.filter((x) => x.died > st.last);
+  const body = `
+${pageHead({ crumbs: `<a href="/admin">Статистика</a>`, kicker: "Адмінка", title: "Вільні книжки з «Хочу прочитати»", sub: st ? [`${books(st.wanted)} у «Хочу прочитати»`, `вільних ${free.length}`, st.unknown ? `автора не знаємо у ${st.unknown}` : "", `перевірено ${new Date(st.at).toLocaleString("uk-UA", { timeZone: "Europe/Kyiv", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}`, running ? "перевіряю…" : ""].filter(Boolean).join(" · ") : running ? "Перевіряю…" : "Ще не перевіряли." })}
+<p class="lead">Книжки, які читачі хочуть прочитати і автори яких померли у ${st?.last || "…"} або раніше: в Україні їхні тексти вже в суспільному надбанні (70 років після смерті). У перекладу свій строк, від смерті перекладача. Перевіряється раз на день за Вікіданими, тексти шукаю на Вікіджерелах, Gutenberg і Standard Ebooks.</p>
+<form method="post" action="/admin/free" style="display:flex;gap:.6em;flex-wrap:wrap;align-items:center;margin:1em 0">
+  ${list ? `<a class="btn" href="${attr(list.href)}">Мій список (${list.count})</a><button class="btn ghost" name="list" value="0">Не оновлювати список</button>` : `<button class="btn primary" name="list" value="1">Вести список у моєму акаунті</button>`}
+  ${running ? "" : `<button class="btn ghost" name="run" value="1">Перевірити зараз</button>`}
+</form>
+<p class="small muted">${list ? "Нові вільні книжки додаються в кінець списку самі; ту, яку ти прибрав, я не додам знову. Книжки з позначкою «перевір реабілітацію» в список не йдуть." : "Список буде публічним, як інші списки, на твоїй сторінці: тільки книжки, без імен читачів."}${claude ? ` Для Claude: <a href="${attr(claude)}">текстом</a>.` : ""}</p>
+${free.length ? `<section class="block">${label("Вже вільні")}<table class="trial"><thead><tr><th>Книжка</th><th>Хочуть</th><th>Що вільне</th><th>Де текст</th></tr></thead><tbody>${free.map((x) => row(x)).join("")}</tbody></table></section>` : st ? `<p class="muted">Поки жодної.</p>` : ""}
+${soon.length ? `<section class="block">${label("Звільняться скоро")}<table class="trial"><thead><tr><th>Книжка</th><th>Хочуть</th><th>Коли</th></tr></thead><tbody>${soon.map((x) => row(x, true)).join("")}</tbody></table></section>` : ""}
+${running ? `<script>setTimeout(() => location.reload(), 10000)</script>` : ""}`;
+  return layout({ title: "Вільні книжки", body, user, path: "/admin" });
+}
+
 module.exports = {
+  freeBooksPage,
   chatsPage,
   chatsSettingsPage,
   consentPage,
