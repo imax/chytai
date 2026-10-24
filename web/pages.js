@@ -1118,7 +1118,7 @@ function libraryPage({ lists = [], savedLists = [], rows, user, reader, own = fa
     .join("\n");
   const wants = own ? [] : mine.filter((r) => r.status === "want").slice(0, 3);
   const body = `
-${pageHead({ crumbs: own ? "" : `<a href="/community">Читачі</a> / ${esc(reader.name)}`, kicker: own ? "Моя полиця" : "Полиця читача", title: esc(reader.name), sub, extra: nowBlock(now, { own }), action: own ? `<div class="acts"><a class="btn primary" href="/add">+ Додати книжки</a></div>` : user?.id === reader.id ? "" : followButton(reader, following, user) })}
+${pageHead({ crumbs: own ? "" : `<a href="/community">Читачі</a> / ${esc(reader.name)}`, kicker: own ? "Моя полиця" : "Полиця читача", title: esc(reader.name), sub, extra: nowBlock(now, { own }), action: own ? `<div class="acts own-acts"><a class="btn primary" href="/add">+ Додати книжки</a><a class="text-link small" href="/mcp">або голосом чи текстом у Claude чи ChatGPT</a></div>` : user?.id === reader.id ? "" : followButton(reader, following, user) })}
 <div class="split">
   <div>
     <div class="tabs-bar">
@@ -1826,7 +1826,7 @@ ${updatesCache.html}
 // what each line matched (addReviewPage), with one status for the whole list («Прочитано» by default).
 function addAside() {
   const row = (href, name, what) => `<a class="add-imp" href="${href}"><span>${name}</span><span class="muted">${what} →</span></a>`;
-  return `<div class="add-imports"><p class="add-k">Або імпортуйте</p>${row("/import/goodreads", "Goodreads", "Імпорт з CSV")}${row("/import/apple-books", "Apple Books", "Імпорт з Мака")}</div>`;
+  return `<div class="add-imports"><p class="add-k">Або імпортуйте</p>${row("/import/goodreads", "Goodreads", "Імпорт з CSV")}${row("/import/apple-books", "Apple Books", "Імпорт з Мака")}${row("/mcp", "Claude чи ChatGPT", "Попросіть у чаті")}</div>`;
 }
 const addCrumbs = `<p class="add-k"><a href="/me">Моя полиця</a> · <b>Додати книжки</b></p>`;
 // The example shows a few shapes a line can take, so nobody thinks there is one right way (Max, 2026-10-22).
