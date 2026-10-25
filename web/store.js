@@ -447,15 +447,17 @@ class Store {
     this._titles = null; // titleIndex() and workIndex() are rebuilt with the new shelves
     this._works = null;
     this.translations = new Map(); // work id -> Set of work ids
-    const link = (a, b) => {
-      a = a && this.canonical(a);
-      b = b && this.canonical(b);
-      if (!a || !b || a === b) return;
-      for (const [x, y] of [[a, b], [b, a]]) (this.translations.get(x) || this.translations.set(x, new Set()).get(x)).add(y);
-    };
+    // Every way of linking proposes a pair with its strength; the strongest are applied first, and an original
+    // takes one Ukrainian book only (Max, 2026-10-25: «якщо вже є пара то інша книжка не може теж до неї парою
+    // бути»), so a weaker guess (Haiku naming «The Adventures of Sherlock Holmes» for «Спілка рудих») drops out.
+    // The owner's own pairs always stand.
+    const proposed = [];
+    let tier = 0;
+    const link = (a, b) => proposed.push([a, b, tier]);
     const works = [...this.seedBooks, ...Object.values(this.lib.books), ...[...this.shelfItems.values()].filter(({ item }) => this.canonical(item.id) === item.id && !this.hidden.has(item.id)).map(({ item }) => item)];
     const byTitle = new Map();
     for (const w of works) if (norm(w.title).length >= 4) (byTitle.get(norm(w.title)) || byTitle.set(norm(w.title), []).get(norm(w.title))).push(w);
+    tier = 3;
     for (const w of works) for (const o of byTitle.get(norm(w.altTitle)) || []) link(w.id, o.id); // the same work already shares one id
     // A foreign book's Ukrainian title from Wikidata (wikidata.js): a book of that title by the same author.
     this.ukTitles = JSON.parse(this.db.get("wikidata:uk") || "{}");
@@ -466,18 +468,35 @@ class Store {
       const m = norm(String(w.title || "").split(/[.:]\s/)[0]);
       if (m.length >= 4 && m !== norm(w.title)) (byMain.get(m) || byMain.set(m, []).get(m)).push(w);
     }
-    for (const [id, { uk, ukAuthor }] of Object.entries(this.ukTitles)) for (const o of [...(byTitle.get(norm(uk)) || []), ...(byMain.get(norm(uk)) || [])]) if (names(o.author).some((n) => names(ukAuthor).includes(n))) link(id, o.id);
+    for (const [id, { uk, ukAuthor }] of Object.entries(this.ukTitles))
+      for (const [t, list] of [[2, byTitle], [1, byMain]]) for (const o of list.get(norm(uk)) || []) if (names(o.author).some((n) => names(ukAuthor).includes(n))) (tier = t), link(id, o.id);
     // The original Haiku named for a reader's Ukrainian book: a work of that title by the same author.
-    for (const [id, o] of this.aiOrigs()) if (o.title) for (const w of [...(byTitle.get(norm(o.title)) || []), ...(byMain.get(norm(o.title)) || [])]) if (names(w.author).some((n) => names(o.author).includes(n))) link(id, w.id);
+    for (const [id, o] of this.aiOrigs())
+      if (o.title) for (const [t, list] of [[2, byTitle], [1, byMain]]) for (const w of list.get(norm(o.title)) || []) if (names(w.author).some((n) => names(o.author).includes(n))) (tier = t), link(id, w.id);
     let pairs = [];
     try {
       pairs = readJson(path.join(SEED, "matches.json")).translations || [];
     } catch {
       /* none */
     }
+    tier = 4;
     for (const [a, b] of pairs) link(this.slugs.get(a) || a, this.slugs.get(b) || b);
+    tier = 5;
     for (const [a, b] of this.decisions().translations) link(a, b); // the owner's pairs from /admin/dupes
+    tier = 3;
     for (const [a, b] of this.crossPairs || []) link(a, b); // same ISBN, link or words across scripts (linkEditions)
+    const titles = new Map(works.map((w) => [this.canonical(w.id), w.title]));
+    const cyr = (id) => /[а-яіїєґ]/i.test(titles.get(id) || this.lib.books[id]?.title || "");
+    const taken = new Set(); // ids already in a Ukrainian–foreign pair
+    for (const [x, y, t] of proposed.sort((p, q) => q[2] - p[2])) {
+      const a = x && this.canonical(x);
+      const b = y && this.canonical(y);
+      if (!a || !b || a === b || this.translations.get(a)?.has(b)) continue;
+      const across = cyr(a) !== cyr(b);
+      if (across && t < 5 && (taken.has(a) || taken.has(b))) continue;
+      if (across) taken.add(a).add(b);
+      for (const [p, q] of [[a, b], [b, a]]) (this.translations.get(p) || this.translations.set(p, new Set()).get(p)).add(q);
+    }
     this.linkCycles();
     this.authors = require("./authors").build(this);
   }
