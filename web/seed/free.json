@@ -28,5 +28,10 @@
   {"name": "franko-lys-mykyta.epub", "title": "Коли ще звірі говорили", "authors": "Іван Франко"},
   {"name": "barrie-peter-pan.epub", "title": "Peter and Wendy", "authors": "J. M. Barrie"},
   {"name": "pepys-the-diary.epub", "title": "The Diary", "authors": "Samuel Pepys"},
-  {"name": "pepys-the-diary.epub", "title": "Diary of Samuel Pepys", "authors": "Samuel Pepys"}
+  {"name": "pepys-the-diary.epub", "title": "Diary of Samuel Pepys", "authors": "Samuel Pepys"},
+  {"name": "sivers-anything-you-want.epub", "title": "Anything You Want", "authors": "Derek Sivers"},
+  {"name": "sivers-hell-yeah-or-no.epub", "title": "Hell Yeah or No", "authors": "Derek Sivers"},
+  {"name": "sivers-how-to-live.epub", "title": "How to Live", "authors": "Derek Sivers"},
+  {"name": "sivers-useful-not-true.epub", "title": "Useful Not True", "authors": "Derek Sivers"},
+  {"name": "sivers-your-music-and-people.epub", "title": "Your Music and People", "authors": "Derek Sivers"}
 ]

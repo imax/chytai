@@ -207,5 +207,50 @@
       "Charles Dickens"
     ],
     "group": "Англійською"
+  },
+  {
+    "name": "sivers-anything-you-want.epub",
+    "title": "Anything You Want",
+    "authors": [
+      "Derek Sivers"
+    ],
+    "group": "З дозволу автора",
+    "permission": "Derek Sivers, email to Max 2026-10-24: «You are welcome to use the English original text» (not public domain)"
+  },
+  {
+    "name": "sivers-hell-yeah-or-no.epub",
+    "title": "Hell Yeah or No",
+    "authors": [
+      "Derek Sivers"
+    ],
+    "group": "З дозволу автора",
+    "permission": "Derek Sivers, email to Max 2026-10-24: «You are welcome to use the English original text» (not public domain)"
+  },
+  {
+    "name": "sivers-how-to-live.epub",
+    "title": "How to Live",
+    "authors": [
+      "Derek Sivers"
+    ],
+    "group": "З дозволу автора",
+    "permission": "Derek Sivers, email to Max 2026-10-24: «You are welcome to use the English original text» (not public domain)"
+  },
+  {
+    "name": "sivers-useful-not-true.epub",
+    "title": "Useful Not True",
+    "authors": [
+      "Derek Sivers"
+    ],
+    "group": "З дозволу автора",
+    "permission": "Derek Sivers, email to Max 2026-10-24: «You are welcome to use the English original text» (not public domain)"
+  },
+  {
+    "name": "sivers-your-music-and-people.epub",
+    "title": "Your Music and People",
+    "authors": [
+      "Derek Sivers"
+    ],
+    "group": "З дозволу автора",
+    "permission": "Derek Sivers, email to Max 2026-10-24: «You are welcome to use the English original text» (not public domain)"
   }
 ]

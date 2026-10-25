@@ -877,6 +877,36 @@ const SOURCES = [
     finish: joinEbooks,
   },
   {
+    // The reader's «Вільна полиця» (repo free/, listed in seed/free.json): public-domain books and the ones
+    // their authors let Chytai give away (Derek Sivers, 2026-10-24). On the site they are catalog books with
+    // «Додати в Читалку» (Max 2026-10-25: «на сайті теж додамо їх в каталог»). Nothing is fetched.
+    id: "chytai-free",
+    kind: "free",
+    name: "Вільна полиця Читалки",
+    tagline: "Книжки, які можна читати в Читалці безкоштовно: класика в суспільному надбанні і книжки, якими поділились автори",
+    url: `${(process.env.READER_URL || "https://app.chytai.org.ua").replace(/\/$/, "")}/`,
+    fetchAll: async () => {
+      const seen = new Set();
+      return JSON.parse(require("fs").readFileSync(require("path").join(__dirname, "seed", "free.json"), "utf8")).filter((f) => !seen.has(f.name) && seen.add(f.name));
+    },
+    normalize: (p) => p,
+    keep: () => true,
+    toItem: (f) => ({
+      id: `chytai-free-${f.name.replace(/\.[^.]+$/, "")}`,
+      title: f.title,
+      author: f.authors,
+      altTitle: "",
+      cover: "",
+      url: `${(process.env.READER_URL || "https://app.chytai.org.ua").replace(/\/$/, "")}/free/${encodeURIComponent(f.name)}`,
+      price: "безкоштовно",
+      status: "є",
+      genres: [],
+      blurb: "",
+      language: /[а-яіїєґ]/i.test(f.title) ? "українська" : "англійська",
+      format: "e-book",
+    }),
+  },
+  {
     id: "abuk",
     kind: "audio",
     name: "Абук",
