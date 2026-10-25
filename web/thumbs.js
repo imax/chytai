@@ -17,7 +17,8 @@ const PARALLEL = 3; // pictures made at once; the rest wait their turn
 const QUEUE = 40; // beyond this many waiting the browser goes to the original at once
 
 class Thumbs {
-  constructor({ db, dir, log = console.log }) {
+  constructor({ db, dir, log = console.log, isBot = () => false }) {
+    this.isBot = isBot;
     this.dir = path.join(dir, "t");
     this.log = log;
     let key = db.get("thumbs:key");
@@ -54,7 +55,8 @@ class Thumbs {
     const send = () => res.set("Cache-Control", "public, max-age=31536000, immutable").type("image/webp").sendFile(file);
     if (fs.existsSync(file)) return send();
     const away = () => res.set("Cache-Control", "public, max-age=3600").redirect(302, src);
-    if (Date.now() - (this.failed.get(src) || 0) < 3600 * 1000) return away();
+    // A robot is not worth making one for (2026-10-25: a crawler's pages stood the site still): it gets the original.
+    if (this.isBot(req) || Date.now() - (this.failed.get(src) || 0) < 3600 * 1000) return away();
     if (this.waiting.length >= QUEUE && !this.made.has(file)) return away();
     const ok = await (this.made.get(file) || this.make(src, w, file));
     if (ok) send();

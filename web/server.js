@@ -237,7 +237,7 @@ const COVERS = path.join(DATA_DIR, "covers");
 fs.mkdirSync(COVERS, { recursive: true });
 app.use("/covers", express.static(COVERS, { maxAge: "1y", immutable: true }));
 // Small copies of the covers on shelves and lists (thumbs.js).
-const thumbs = new (require("./thumbs").Thumbs)({ db: store.db, dir: COVERS, log: console.log });
+const thumbs = new (require("./thumbs").Thumbs)({ db: store.db, dir: COVERS, log: console.log, isBot: (req) => BOT.test(req.headers["user-agent"] || "") });
 pages.setThumbs((src, shown) => thumbs.url(src, shown));
 app.get("/t/:w/:sig/:src", (req, res) => thumbs.serve(req, res).catch(() => res.status(500).end()));
 bg.every("thumbs-prune", 24 * 3600 * 1000, () => thumbs.prune(), { db: store.db, first: 30 * 60 * 1000 });
