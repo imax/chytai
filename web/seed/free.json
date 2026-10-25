@@ -20,6 +20,7 @@
   {"name": "fitzgerald-the-great-gatsby.epub", "title": "The Great Gatsby", "authors": "F. Scott Fitzgerald"},
   {"name": "pepys-the-diary.epub", "title": "The Diary of Samuel Pepys", "authors": "Samuel Pepys"},
   {"name": "joyce-ulysses.epub", "title": "Ulysses", "authors": "James Joyce"},
+  {"name": "london-star-rover.epub", "title": "The Star Rover", "authors": "Jack London"},
   {"name": "austen-pride-and-prejudice.epub", "title": "Pride and Prejudice", "authors": "Jane Austen"},
   {"name": "doyle-sherlock-holmes.epub", "title": "The Adventures of Sherlock Holmes", "authors": "Arthur Conan Doyle"},
   {"name": "shelley-frankenstein.epub", "title": "Frankenstein", "authors": "Mary Shelley"},
@@ -33,5 +34,6 @@
   {"name": "sivers-hell-yeah-or-no.epub", "title": "Hell Yeah or No", "authors": "Derek Sivers"},
   {"name": "sivers-how-to-live.epub", "title": "How to Live", "authors": "Derek Sivers"},
   {"name": "sivers-useful-not-true.epub", "title": "Useful Not True", "authors": "Derek Sivers"},
-  {"name": "sivers-your-music-and-people.epub", "title": "Your Music and People", "authors": "Derek Sivers"}
+  {"name": "sivers-your-music-and-people.epub", "title": "Your Music and People", "authors": "Derek Sivers"},
+  {"name": "london-star-rover.epub", "title": "The Jacket", "authors": "Jack London"}
 ]
