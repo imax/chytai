@@ -875,6 +875,26 @@ ${decideScript}`;
   return layout({ title: "Схожі на дублі", body, user, path: "/admin" });
 }
 
+// /admin/volumes: the volumes of one work that fold into one book (store.volumeGroups), and the switch
+// (Max, 2026-10-25: «зʼєднаємо том 1 і том 1-2 в одну книгу»). «Окремі книжки» keeps a group apart for good.
+function volumesPage({ user, groups, on }) {
+  const meta = (it, shelf) => [shelf.name, it.format, it.status].filter(Boolean).join(" · ");
+  const group = (g) => `<div class="dupe"><p class="dupe-author"><b>${esc(g.name)}</b> <span class="muted">· ${esc(g.author)}</span></p>
+${g.items.map(({ shelf, item }) => `<div class="dupe-row"><span><a href="${attr(item.href || "")}" target="_blank">${esc(item.title)}</a><span class="muted"> · ${esc(meta(item, shelf))}</span></span></div>`).join("")}
+<form method="post" action="/admin/volumes/apart" class="dupe-foot"><input type="hidden" name="ids" value="${attr(g.items.map(({ item }) => item.id).join(","))}"><button class="btn small ghost">Окремі книжки</button></form>
+</div>`;
+  const body = `<div class="admin" id="top">
+<h1>Томи однієї книжки <span class="muted" id="dupe-count">${groups.length}</span></h1>
+<p class="muted">Томи одного твору від одного автора («… Том 1», «… Том 1-2», «… (у 2 томах)», а з ними й видання без тому), коли їх щонайменше два. Номер тому в кінці назви, без власної назви після нього; комікси, манга й томи з різними оригінальними назвами лишаються окремо. ${on ? "З’єднання <b>увімкнене</b>: кожна група нижче — одна сторінка з назвою без тому, а томи стоять у «Де взяти»." : "Поки <b>вимкнене</b>: нижче те, що з’єднається."} «Окремі книжки» лишає групу окремими сторінками назавжди.</p>
+<form method="post" action="/admin/volumes"><input type="hidden" name="on" value="${on ? "0" : "1"}"><button class="btn${on ? " ghost" : ""}">${on ? "Вимкнути з’єднання" : "З’єднати всі"}</button></form>
+<div id="dupes">${groups.map(group).join("")}</div>
+<p class="muted" id="dupe-none"${groups.length ? " hidden" : ""}>Нічого не знайшлося.</p>
+<div id="decided-box"></div>
+</div>
+${decideScript}`;
+  return layout({ title: "Томи однієї книжки", body, user, path: "/admin" });
+}
+
 // /admin/translations (its own page since 2026-10-21, Max: «переклади зламали сторінку, давай їх на окремий
 // урл»): authors with both a foreign-titled and a Cyrillic-titled book not yet linked; the owner picks the original.
 function translationsPage({ user, translations = [], decisions = { same: [], different: [], translations: [] }, book = () => null }) {
@@ -1323,6 +1343,7 @@ function catalogAdminPage({ user, passes, claude }) {
 </section>`;
   const tools = [
     ["/admin/dupes", "Дублікати", "одна книжка двома сторінками"],
+    ["/admin/volumes", "Томи однієї книжки", "«Том 1» і «Том 1-2» однією сторінкою"],
     ["/admin/translations", "Пари перекладів", "кандидати з Вікіданих"],
     ["/admin/ukfind", "Пошук українських видань", "Claude з веб-пошуком, вручну"],
     ["/admin/readeat", "Readeat", "дані для книжок читачів"],
@@ -2319,6 +2340,7 @@ module.exports = {
   letterEditorPage,
   mailSettingsPage,
   dupesPage,
+  volumesPage,
   reviewsAdminPage,
   adviceHtml,
   overviewHtml,

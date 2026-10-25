@@ -165,6 +165,19 @@ const workName = (t) =>
     .replace(EDITION, "")
     .replace(GENRE, "")
     .trim();
+// A volume of one work, as a shop names it: the volume word and number end the title, with no name of its
+// own after them («Злет і падіння Третього Райху. Том 1», «… Том 1-2», «Війна і мир (у 4 томах)»). Such
+// volumes fold into one book (Max, 2026-10-25: «ти її або прочитав або ні»); «Хроніки Амбера. Кн. 1:
+// Дев’ять принців Амбера» has a name of its own, so it stays a book of a series. Returns the work's name or "".
+const VOL_ORD = "перший|перша|другий|друга|третій|третя|четвертий|четверта|п[’']ятий|п[’']ята|шостий|шоста|сьомий|сьома|восьмий|восьма|дев[’']ятий|десятий";
+const VOL_N = `(?:\\d+|[IVX]+\\b|${VOL_ORD})`;
+const VOL_TAIL = new RegExp(`[\\s,.:;–—-]*[(\\[]?\\s*(?:(?:том|томи|т\\.|частина|vol\\.?|volume)\\s*${VOL_N}(?:\\s*(?:[-–—,]|і|та|й)\\s*${VOL_N})*|(?:у|в)\\s+\\d+(?:-?(?:х|ти|ох|ми))?\\s+(?:томах|т\\.|частинах))\\s*[)\\]]?\\s*$`, "iu");
+const volumeWork = (t) => {
+  const s = String(t || "").replace(PROMO, "");
+  if (!VOL_TAIL.test(s)) return "";
+  const base = workName(s.replace(VOL_TAIL, "")).replace(/[\s,.:;–—-]+$/, "");
+  return norm(base).length >= 4 ? base : "";
+};
 // The ISBNs a library book is known by: its own field, plus the Amazon /dp/<ISBN-10> links from Books.md.
 const isbnsOf = (b) => [...(b.isbns || []), b.isbn || "", ...(b.links || []).map((l) => /amazon\.[a-z.]+\/(?:[^/]+\/)?dp\/([0-9X]{10})/i.exec(l.url || "")?.[1] || "")].map(isbnKey).filter((i) => i.length >= 10);
 
@@ -772,7 +785,7 @@ class Store {
     };
     for (const b of this.seedBooks) take(b.id, b.id, "");
     for (const b of Object.values(this.lib.books)) take(b.id, b.id, "");
-    for (const { item } of this.shelfItems.values()) if (this.canonical(item.id) === item.id) take(item.id, workName(item.title) || item.title, item.author, item.title);
+    for (const { item } of this.shelfItems.values()) if (this.canonical(item.id) === item.id) take(item.id, this.volWork.get(item.id) || workName(item.title) || item.title, item.author, item.title);
     // Every edition's full title keeps an address that redirects to its work: it had that address while
     // it was a work of its own, or before the work's name dropped its edition note («…-podarunkove-vydann»).
     // Until 2026-10-21 the table allowed one slug per id, so such addresses lived only in memory.
@@ -1112,6 +1125,37 @@ class Store {
       const other = (byAuthor.get(norm(it.author)) || []).find((o) => (o.item.volume || 0) === (it.volume || 0) && alike(o.item, it) && short(o.item).includes(" "));
       if (other) join(`at:${norm(other.item.author)}|${workTitle(other.item.title)}`, si);
     }
+    // Volumes of one work by one author («… Том 1» and «… Том 1-2», or the work without a volume) are one
+    // book, when there are two of them at least. Kept apart: comics and manga (each volume is read on its
+    // own), volumes with different original titles (novels of a series), and pairs the owner called
+    // «Різні книжки». Until the owner turns it on (/admin/volumes, meta `volumes:on`), only listed there.
+    this.volumeGroups = [];
+    this.volWork = new Map(); // canonical id -> the work's name, set after the groups are built
+    const volOn = this.db.get("volumes:on") === "1";
+    const vols = new Map(); // at:author|work -> items
+    for (const si of this.shelfItems.values()) {
+      delete si.item.volWork;
+      const base = norm(si.item.author) && !si.item.bundle && volumeWork(si.item.title);
+      if (!base) continue;
+      const key = `at:${norm(si.item.author)}|${norm(base)}`;
+      (vols.get(key) || vols.set(key, []).get(key)).push({ si, base });
+    }
+    const origOf = (it) => norm(volumeWork(it.altTitle) || workName(it.altTitle || ""));
+    for (const [key, vs] of vols) {
+      const whole = (groups.get(key) || []).filter((si) => !vs.some((v) => v.si === si));
+      const all = [...vs.map((v) => v.si), ...whole];
+      if (new Set(all.map((si) => norm(si.item.title))).size < 2) continue;
+      const genres = (it) => [...(this.aiGenres().get(it.id) || []), ...ourGenres(it.genres)];
+      if (all.some((si) => genres(si.item).includes("комікси"))) continue;
+      if (new Set(all.map((si) => origOf(si.item)).filter(Boolean)).size > 1) continue;
+      if (all.some((a) => all.some((b) => no.has(`${a.item.id}|${b.item.id}`)))) continue;
+      this.volumeGroups.push({ name: vs[0].base, author: vs[0].si.item.author, items: all });
+      if (!volOn) continue;
+      for (const v of vs) {
+        join(key, v.si);
+        v.si.item.volWork = vs[0].base;
+      }
+    }
 
     // 2. A shelf item whose title (or original title) is exactly a library book's title is that book.
     // Failing that, the library book links to the item's own page, or has the same words in its main
@@ -1198,6 +1242,8 @@ class Store {
         perShelf.add(si.shelf.id);
         si.item.editions = g.length; // for the cards
       }
+      const vw = g.find((si) => si.item.volWork);
+      if (vw) this.volWork.set(canonical, vw.item.volWork);
       seen.add(canonical);
     }
     // 3. What the owner decided on /admin/dupes: [keep, dup] pairs; dup and everything folded into it
@@ -1317,6 +1363,19 @@ class Store {
     }
     this.saveDecisions(d);
   }
+  // /admin/volumes: fold the volumes of one work into one book, or stop (linkEditions).
+  setVolumesOn(on) {
+    this.db.set("volumes:on", on ? "1" : "0");
+    this.saveDecisions(this.decisions());
+    this.indexSlugs();
+  }
+  // «Окремі книжки» there: the shelf items themselves, since folded volumes share one canonical id.
+  keepApart(ids) {
+    const d = this.decisions();
+    for (let i = 0; i < ids.length; i++) for (let j = i + 1; j < ids.length; j++) if (!d.different.some(([a, b]) => (a === ids[i] && b === ids[j]) || (a === ids[j] && b === ids[i]))) d.different.push([ids[i], ids[j]]);
+    this.saveDecisions(d);
+    this.indexSlugs();
+  }
   undecide(kind, index) {
     const d = this.decisions();
     if (d[kind]) d[kind].splice(index, 1);
@@ -1345,7 +1404,7 @@ class Store {
       // An item read before the title pattern knew a numbering (Богдан's «Експансія. Кн. 3») gets it here.
       const v = !it.series && !it.bundle && volumeOf(it.title);
       if (v) (it.series = v.series), (it.volume = v.volume);
-      if (!it.series) continue;
+      if (!it.series || it.volWork) continue; // the volumes of one work are one book, not a series
       if (volumes[it.id]) it.volume = volumes[it.id];
       const key = `${si.shelf.id}|${norm(it.series)}`;
       if (!groups.has(key)) groups.set(key, []);
@@ -1535,6 +1594,7 @@ class Store {
     // A shop's edition note is not the book's name (Max, 2026-10-21: «як мені прибрати "Подарункове видання"»);
     // the «Де взяти» rows keep it, so the reader can tell the editions apart.
     if (si && workName(b.title)) out.title = workName(b.title);
+    if (this.volWork.has(id)) out.title = this.volWork.get(id); // «Злет і падіння Третього Райху», not «… Том 1»
     // A Books.md title that carries the author's name («Жадан Арабески», «Genome, Matt Ridley») takes the
     // name a shop gives the same book, once an edition with that name is linked.
     if (seed && eds) {

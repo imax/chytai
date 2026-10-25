@@ -1908,6 +1908,15 @@ app.post("/admin/book/:id", owner, async (req, res) => {
   res.redirect(303, error ? `/admin/book/${encodeURIComponent(store.href(id).split("/").pop())}?cover_error=${encodeURIComponent(error.slice(0, 200))}` : b.href);
 });
 app.get("/admin/dupes", owner, (req, res) => res.send(pages.dupesPage({ user: req.user, groups: store.dupes(), decisions: store.decisions(), book: (id) => store.book(id), all: req.query.all === "1" })));
+app.get("/admin/volumes", owner, (req, res) => res.send(pages.volumesPage({ user: req.user, groups: store.volumeGroups || [], on: store.db.get("volumes:on") === "1" })));
+app.post("/admin/volumes", owner, (req, res) => {
+  store.setVolumesOn(req.body.on === "1");
+  res.redirect(303, "/admin/volumes");
+});
+app.post("/admin/volumes/apart", owner, (req, res) => {
+  store.keepApart(String(req.body.ids || "").split(",").filter(Boolean));
+  decidedJson(req, res, "/admin/volumes#top");
+});
 app.get("/admin/translations", owner, (req, res) => res.send(pages.translationsPage({ user: req.user, translations: store.translationCandidates(), decisions: store.decisions(), book: (id) => store.book(id) })));
 // Every Ukrainian–foreign pair with how it was made (tier 5 owner … 1 main-title guess), and the ones the
 // one-pair rule dropped, with the pair that took their place.
