@@ -194,8 +194,8 @@ class Social {
 
   // «або почни з» under the home page's search (Max, 2026-10-25: «давай зробимо ці підказки динамічними»),
   // from what readers want, read or are reading («враховувати книжки або авторів або видавництва які люди
-  // додають в Хочу або вже прочитане»): a genre, a book, a Ukrainian author, another author and a publisher,
-  // the more readers the likelier (each reader once, a change in the last 30 days counting three times).
+  // додають в Хочу або вже прочитане»): a genre, a book, a Ukrainian author and another author (no publishers:
+  // Max took them out the same day), the more readers the likelier (each reader once, a change in the last 30 days counting three times).
   // Only things readers rated or wrote about in those 30 days, one other at most («ніхто не буде шукати те
   // що ніхто не шукав раніше ... ну або макс 1 така»), and a genre only with two such books at least; one
   // in Latin letters at most («обмежемо підказку українською, макс 1 англ.»). The tallies are kept ten
@@ -212,7 +212,7 @@ class Social {
         t.readers.set(reader, Math.max(t.readers.get(reader) || 0, w));
         if (fresh) t.fresh.add(book);
       };
-      const genres = tally(), books = tally(), authors = tally(), shelves = tally();
+      const genres = tally(), books = tally(), authors = tally();
       for (const { reader, id, entry: e } of this.all()) {
         if (!["want", "reading", "read"].includes(e.status)) continue;
         const recent = (e.updated || e.added || "") >= cutoff;
@@ -225,7 +225,6 @@ class Social {
         for (const g of mainGenres(book.tags || [])) if (g !== "художня") add(genres, g);
         const a = authorOf.get(id) || authorOf.get(c);
         if (a) add(authors, a);
-        for (const { shelf } of s.editions.get(c) || []) if (shelf.kind === "publisher" && !shelf.draft) add(shelves, shelf);
       }
       // Ukrainian: Wikidata says so, or a Cyrillic name with no Latin spelling anywhere and no book of theirs
       // a translation (Haiku's ai_orig, or one paired with an original).
@@ -246,7 +245,6 @@ class Social {
         books: top(books, 20, (id) => s.book(id).title.length <= 32, (id) => ({ text: s.book(id).title, href: s.book(id).href })),
         ua: top(authors, 12, isUa, author),
         other: top(authors, 20, (a) => !isUa(a), author),
-        shelves: top(shelves, 10, () => true, (sh) => ({ text: sh.name, href: `/publishers/${encodeURIComponent(sh.id)}` })),
       };
     }
     const p = this.startPool;
@@ -263,8 +261,8 @@ class Social {
       return x;
     };
     // Examples of what to type (Max: «ідея щоб це були приклади популярних запросів»), so each goes to the search.
-    const [g, ua, book, other, shelf] = [draw(p.genres), draw(p.ua), draw(p.books), draw(p.other) || draw(p.ua), draw(p.shelves)];
-    return [g, book, ua, other, shelf].filter(Boolean).map((x) => ({ text: x.text, href: `/search?q=${encodeURIComponent(x.q || x.text)}` }));
+    const [g, ua, book, other] = [draw(p.genres), draw(p.ua), draw(p.books), draw(p.other) || draw(p.ua)];
+    return [g, book, ua, other].filter(Boolean).map((x) => ({ text: x.text, href: `/search?q=${encodeURIComponent(x.q || x.text)}` }));
   }
 
   // A recommendation list read the way people read series (Max, 2026-10-23): a later volume gives way to the
