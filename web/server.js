@@ -719,7 +719,7 @@ app.get("/", (req, res) => {
   if (req.query.q) return res.redirect(301, `/search?${new URLSearchParams({ q: String(req.query.q) })}`);
   const seeds = social.seeds(req.user?.id);
   const own = req.user ? new Map(Object.entries(store.entriesOf(req.user.id))) : new Set();
-  const recs = seeds.map((seed) => ({ seed, own: own.has(seed.id), books: social.similar([seed.id], { limit: 6, skip: own, own }) })).filter((r) => r.books.length);
+  const recs = seeds.map((seed) => ({ seed, name: store.seriesOf(seed.id)?.name || seed.title, own: own.has(seed.id), books: social.similar([seed.id], { limit: 6, skip: own, own }) })).filter((r) => r.books.length);
   // The two publishers with the most new books, subscriptions first.
   const showcase = shelvesFor(req)
     .map((s) => shelfSummary(req, s, 5))

@@ -307,7 +307,13 @@ class Social {
   // reader without fives) three random well rated books with tags.
   seeds(readerId) {
     const own = readerId ? this.store.library(readerId).filter((r) => r.rating >= 5 && !r.kids && tagsOf(r.book).length) : [];
-    if (own.length) return own.slice(0, 3).map((r) => r.book);
+    // Volumes of one series are one seed (Max 2026-10-25: three Dungeon Crawler Carl tabs side by side).
+    const seen = new Set();
+    const one = own.filter((r) => {
+      const k = this.store.seriesOf(r.book.id)?.key || r.book.id;
+      return !seen.has(k) && seen.add(k);
+    });
+    if (one.length) return one.slice(0, 3).map((r) => r.book);
     return shuffle([...this.liked().values()].filter((x) => x.avg >= 4.5 && tagsOf(x.book).length && x.book.cover)).slice(0, 3).map((x) => x.book);
   }
 

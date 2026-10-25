@@ -348,7 +348,7 @@ function homePage({ user, picks, feed, recs, showcase, fetched, libraries = [], 
     <div class="acts">${wantButton(p.book, user, { size: "", primary: true })}${picks.length > 1 ? `<button type="button" class="text-link" data-next-pick>Ще одну →</button>` : ""}</div>
   </div>
 </article>`;
-  const seedTabs = recs.length > 1 ? `<span class="tabs">${recs.map((r, i) => `<button type="button" class="tab${i ? "" : " on"}" data-seed="${i}">${esc(r.seed.title)}</button>`).join("")}</span>` : "";
+  const seedTabs = recs.length > 1 ? `<span class="tabs">${recs.map((r, i) => `<button type="button" class="tab${i ? "" : " on"}" data-seed="${i}">${esc(r.name || r.seed.title)}</button>`).join("")}</span>` : "";
   const recTitle = (r) => (user && r.own ? "Схожі на те, що тобі сподобалось" : `Якщо сподобалась «${esc(r.seed.title)}»`);
   const body = `
 <section class="hero">
