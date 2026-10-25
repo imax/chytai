@@ -84,6 +84,13 @@ const origShown = (r) => {
   const ok = r.kind === "translation" && !/^(ru|rus|russian|рос)/i.test(r.lang || "") && !/ancient|classical|old|medieval|middle|latin|^la$|^grc$/i.test(r.lang || "") && /\p{Script=Latin}/u.test(r.title || "") && !/[^\p{Script=Latin}\p{N}\p{P}\p{Zs}\p{S}\p{M}]/u.test(r.title || "");
   return { ...r, title: ok ? r.title : "", author: ok ? r.author : "" };
 };
+// A cover from Open Library, at its address or kept here (server.js keeps them: theirs take seconds to load).
+// Such a cover is a guess the lookups may replace (enrich.js, readeat.js); `coverKept` tells a kept copy
+// from a cover set since.
+const OPEN_LIBRARY = /^https?:\/\/covers\.openlibrary\.org\//;
+const fromOpenLibrary = (b) => !!b && (OPEN_LIBRARY.test(b.cover || "") || (OPEN_LIBRARY.test(b.coverFrom || "") && !!b.cover && b.cover === b.coverKept));
+// The same cover at Open Library's address and kept here count as one.
+const sameCover = (b, url) => url === b.cover || (!!url && url === b.coverFrom && b.cover === b.coverKept);
 // A shop's text -> its cleaned description (fromShelfItem); emptied when it grows past the catalog's size.
 const blurbs = new Map();
 const blurbOf = (h) => {
@@ -2107,4 +2114,4 @@ class Store {
   }
 }
 
-module.exports = { mainGenres, isRussian, langGuess, Store, slugify, soundOf, norm, workName, OWNER };
+module.exports = { fromOpenLibrary, sameCover, OPEN_LIBRARY, mainGenres, isRussian, langGuess, Store, slugify, soundOf, norm, workName, OWNER };

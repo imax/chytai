@@ -200,7 +200,7 @@ function patchFor(book, info) {
 // description or an ISBN.
 // An Open Library cover on a Ukrainian book is the original's (often an old first edition, «Фундація», Max
 // 2026-10-24): Readeat's cover of the Ukrainian edition replaces it.
-const foreignCover = (b) => /^https:\/\/covers\.openlibrary\.org\//.test(b.cover || "") && isCyrillic(b.title);
+const foreignCover = (b) => require("./store").fromOpenLibrary(b) && isCyrillic(b.title);
 function wanting(store, ids) {
   const all = ids ? ids.map((id) => store.lib.books[id]).filter(Boolean) : Object.values(store.lib.books);
   const { isRussian } = require("./store");

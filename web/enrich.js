@@ -235,11 +235,11 @@ async function lookupGoogle(book, key, { fetchImpl = fetchV6 } = {}) {
 }
 
 // A cover this lookup set before may give way to a better pick (a recent edition); any other one stays.
-const fromOpenLibrary = (u) => /^https:\/\/covers\.openlibrary\.org\//.test(u || "");
+const { fromOpenLibrary, sameCover } = require("./store");
 // The book as it should be after the lookup: nothing the reader or a catalog set is overwritten.
 function apply(book, info) {
   const patch = {};
-  if (info.cover && (!book.cover || (fromOpenLibrary(book.cover) && info.cover !== book.cover))) patch.cover = info.cover;
+  if (info.cover && (!book.cover || (fromOpenLibrary(book) && !sameCover(book, info.cover)))) patch.cover = info.cover;
   const isbns = cleanIsbns([...(book.isbns || []), ...(info.isbns || [])]);
   if (isbns.length > (book.isbns || []).length) patch.isbns = isbns;
   if (!book.published && info.published) patch.published = info.published;
@@ -267,7 +267,7 @@ function apply(book, info) {
 // («Інферно», Ден Браун; Max, 2026-10-23: «пачка книжок Брауна без обкладинок») is asked through its
 // original: Wikidata gives the English title and author, Open Library the cover.
 const isCyrillic = (t) => /[а-яіїєґ]/i.test(t);
-const viaOriginal = (b) => isCyrillic(b.title) && isCyrillic(firstAuthor(b.author)) && !cleanIsbns(b.isbns).length && !(b.cover && !fromOpenLibrary(b.cover) && b.altTitle && (b.tags || []).length);
+const viaOriginal = (b) => isCyrillic(b.title) && isCyrillic(firstAuthor(b.author)) && !cleanIsbns(b.isbns).length && !(b.cover && !fromOpenLibrary(b) && b.altTitle && (b.tags || []).length);
 function wanting(store, ids, { google = false } = {}) {
   const all = ids ? ids.map((id) => store.lib.books[id]).filter(Boolean) : Object.values(store.lib.books);
   return all.filter((b) => OWN.has(b.source) && (viaOriginal(b) || ((cleanIsbns(b.isbns).length || ((google || isLatin(b.title)) && firstAuthor(b.author))) && (!(b.cover && b.published && b.blurb && (b.tags || []).length && cleanIsbns(b.isbns).length) || !store.db.get(`enrich:${GEN}:${b.id}`)))));
@@ -278,7 +278,7 @@ function wanting(store, ids, { google = false } = {}) {
 // and the Amazon link belong to the English edition, not to this one.
 function applyOriginal(book, info, orig) {
   const patch = {};
-  if (info?.cover && (!book.cover || (fromOpenLibrary(book.cover) && info.cover !== book.cover))) patch.cover = info.cover;
+  if (info?.cover && (!book.cover || (fromOpenLibrary(book) && !sameCover(book, info.cover)))) patch.cover = info.cover;
   if (!book.altTitle && orig.en) patch.altTitle = orig.en;
   // Genres belong to the work, not the edition («Володар перснів» had none, Max 2026-10-23).
   if (!(book.tags || []).length && info?.tags?.length) patch.tags = info.tags;
@@ -304,7 +304,7 @@ async function enrich(store, { ids, log = () => {}, fetchImpl = fetch, force = f
         const orig = originals[b.id];
         // A Ukrainian edition's own cover from Google Books comes first (it knows Ukrainian books, Open
         // Library mostly the originals); then the newest Ukrainian, else English, edition on Open Library.
-        const ukCover = googleKey && !(b.cover && !fromOpenLibrary(b.cover)) ? (await lookupGoogle(b, googleKey).catch(() => null))?.cover : "";
+        const ukCover = googleKey && !(b.cover && !fromOpenLibrary(b)) ? (await lookupGoogle(b, googleKey).catch(() => null))?.cover : "";
         if (!orig && !ukCover) continue;
         const info = orig ? await lookup({ ...b, title: orig.en, author: orig.enAuthor, isbns: [] }, { fetchImpl, prefer: ["ukr", "eng"] }) : null;
         const patch = applyOriginal(b, ukCover ? { ...info, cover: ukCover } : info, orig || {});
@@ -330,7 +330,7 @@ async function enrich(store, { ids, log = () => {}, fetchImpl = fetch, force = f
       }
       if (info || originals[b.id]) {
         const patch = info ? apply(b, info) : {};
-        if (originals[b.id] && !patch.cover && !(b.cover && !fromOpenLibrary(b.cover))) {
+        if (originals[b.id] && !patch.cover && !(b.cover && !fromOpenLibrary(b))) {
           const orig = originals[b.id];
           const more = applyOriginal({ ...b, ...patch }, await lookup({ ...b, title: orig.en, author: orig.enAuthor, isbns: [] }, { fetchImpl, prefer: ["ukr", "eng"] }), orig);
           Object.assign(patch, more);

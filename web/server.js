@@ -132,8 +132,15 @@ app.use(express.json({ limit: "1mb" }));
 app.use(require("compression")()); // pages are 50–150 KB of HTML; gzip cuts that about five times
 // A page that took over two seconds, and a main loop that stood still for over one, go to the log (a new reader
 // waited ~30 s for search and their shelf on 2026-10-24, and nothing told us where): `fly logs | grep slow`.
+// The server's own time goes out as `Server-Timing: app;dur=…` (the browser's network tab shows it, and
+// scripts/perf-check.sh holds every deploy to it, network aside).
 app.use((req, res, next) => {
   const t0 = Date.now();
+  const head = res.writeHead;
+  res.writeHead = function (...args) {
+    if (!res.headersSent) res.setHeader("Server-Timing", `app;dur=${Date.now() - t0}`);
+    return head.apply(this, args);
+  };
   res.on("finish", () => {
     const ms = Date.now() - t0;
     if (ms > 2000) console.log(`slow: ${req.method} ${req.originalUrl.slice(0, 120)} ${ms} ms ${res.statusCode}${req.user ? ` @${req.user.username}` : ""}`);
@@ -270,6 +277,24 @@ async function keepCover(url) {
     return { url, error: [e.message, e.cause?.code].filter(Boolean).join(", ") };
   }
 }
+// Open Library's covers take 2–9 s each (2026-10-25: the slowest thing on readers' shelves), so the books'
+// covers from there are kept here too, a few hundred a run, and new ones each run after. The old address
+// stays in `coverFrom` (store.js fromOpenLibrary).
+const OL_COVER = /^https?:\/\/covers\.openlibrary\.org\//;
+const keepOpenLibraryCovers = bg.fn("ol-covers", async () => {
+  const ids = Object.values(store.lib.books).filter((b) => OL_COVER.test(b.cover || "")).map((b) => b.id);
+  let kept = 0;
+  for (const id of ids.slice(0, 300)) {
+    const b = store.lib.books[id];
+    if (!b || !OL_COVER.test(b.cover || "")) continue;
+    const r = await keepCover(b.cover);
+    if (!r.error) store.updateBook(id, { cover: r.url, coverFrom: b.cover, coverKept: r.url }), kept++;
+    await new Promise((ok) => setTimeout(ok, 1000));
+  }
+  if (ids.length) console.log(`covers: kept ${kept} of ${Math.min(ids.length, 300)} Open Library covers here, ${ids.length - kept} left`);
+  return kept > 0;
+}, true);
+bg.every("ol-covers", 3 * 3600 * 1000, () => keepOpenLibraryCovers(), { db: store.db, first: 15 * 60 * 1000 });
 // Covers set by hand before we kept them: fetched once after a start, in the background.
 setTimeout(async () => {
   for (const [id, fix] of Object.entries(store.edits())) {
