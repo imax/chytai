@@ -525,7 +525,6 @@ function landingPage(req) {
   header img { width: 34px; height: 34px; border-radius: 8px; }
   header b { font-size: 20px; } header a.in { margin-left: auto; color: var(--accent); font-weight: 600; text-decoration: none; }
   .hero { padding: 30px 0 8px; max-width: 640px; }
-  .wip { display: inline-block; margin: 0 0 14px; padding: 3px 10px; border: 1px solid var(--accent); border-radius: 999px; color: var(--accent); font-size: 13px; font-weight: 600; }
   h1 { font-size: 40px; line-height: 1.15; margin: 0 0 14px; letter-spacing: -0.01em; }
   .lead { font-size: 19px; color: var(--muted); margin: 0 0 26px; }
   .acts { padding: 0 0 30px; display: flex; flex-wrap: wrap; gap: 12px 18px; align-items: center; }
@@ -555,7 +554,6 @@ function landingPage(req) {
   <header><img src="/icon.png" alt=""><b>Chytai</b><a class="in" href="${esc(signIn)}">Увійти</a></header>
   <section class="hero">
     <div>
-      <span class="wip">Work-in-progress</span>
       <h1>Читалка з AI-explainer</h1>
       <p class="lead">Спроба пере-придумати зручний інтерфейс для читання онлайн.</p>
     </div>
