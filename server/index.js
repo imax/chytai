@@ -384,6 +384,13 @@ function freeBooks() {
   }
 }
 const isFree = (name) => !!name && freeBooks().some((f) => f.name === name);
+// A free book's cover when its file has none: free/covers/<book name without .epub>.<jpg|png|webp>.
+function freeCover(name) {
+  const dir = path.join(FREE_DIR, "covers");
+  const base = name.replace(/\.[^.]+$/, "");
+  const file = fs.existsSync(dir) && fs.readdirSync(dir).find((f) => f.replace(/\.[^.]+$/, "") === base);
+  return file ? path.join(dir, file) : null;
+}
 // The file a signed-in reader opens by this name: their own copy first, else the shelf's.
 function readerFile(lib, name) {
   if (!name) return null;
@@ -1047,7 +1054,7 @@ api.get("/library", async (req, res) => {
           title: m.title || b.title, authors: m.authors?.length ? m.authors : b.authors, year: m.year || b.year,
           openedAt: aside ? 0 : u.opened?.[name] || 0, aside,
           started: !aside && !!positions[name], pct: aside || !progress ? null : progress.pct, chapter: (!aside && progress?.chapter) || "",
-          addedAt: 0, addedBy: "", coverAt: 0, seen: true,
+          addedAt: 0, addedBy: "", coverAt: freeCover(name) ? Math.round(fs.statSync(freeCover(name)).mtimeMs) : 0, seen: true,
         };
       })
       .filter((b) => !own.has(b.path))
@@ -1139,7 +1146,7 @@ api.get("/cover", async (req, res) => {
   const demo = req.guest ? guestBooks(req).find((d) => d.name === name) : null;
   const file = req.guest ? demo && path.join(demo.dir, demo.name) : readerFile(req.lib, name);
   if (!file || !fs.existsSync(file)) return res.status(404).end();
-  const custom = !req.guest && customCover(req.lib, name);
+  const custom = !req.guest && (customCover(req.lib, name) || (file.startsWith(FREE_DIR + path.sep) && freeCover(name)));
   if (custom) {
     res.setHeader("Cache-Control", "private, max-age=2592000, immutable");
     return res.type(COVER_TYPES[path.extname(custom).slice(1)]).sendFile(custom);
