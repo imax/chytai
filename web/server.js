@@ -1353,7 +1353,7 @@ app.post("/api/entry/:id/remove", signed, (req, res) => {
   dropNow(req.user.id, req.params.id);
   if (req.body.series === "1") store.removeSeries(req.user.id, req.params.id);
   store.removeEntry(req.user.id, req.params.id);
-  res.redirect("/me");
+  res.redirect(303, req.body.back ? req.get("referer") || "/me" : "/me");
 });
 
 app.post("/api/book", signed, (req, res) => {
