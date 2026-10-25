@@ -1155,6 +1155,32 @@ class Store {
       const other = (byAuthor.get(norm(it.author)) || []).find((o) => (o.item.volume || 0) === (it.volume || 0) && alike(o.item, it) && short(o.item).includes(" "));
       if (other) join(`at:${norm(other.item.author)}|${workTitle(other.item.title)}`, si);
     }
+    // The same work under another spelling of its author (Max 2026-10-25, with the 26 MEGOGO Books shelves):
+    // «Ґюстав Флобер» and «Гюстав Флобер», «Луцій Сенека» and «Луцій Анней Сенека», «Єн Бенкс» and «Ієн
+    // Бенкс». The same work title (6+ letters) and the first author's surname (a letter apart at most) join;
+    // with no author on either side, a title of three words or more on two shelves joins, unless their ISBNs differ. Not bundles with
+    // single books, not different volumes, not pairs the owner called «Різні книжки».
+    const lastName = (a) => authorNames(String(a || "").split(/[,;]/)[0]).pop() || "";
+    const near = (a, b) => (a === b && a.length >= 3) || (Math.min(a.length, b.length) >= 5 && editDistance(a, b, 1) <= 1);
+    const byWork = new Map(); // work title -> items
+    for (const si of this.shelfItems.values()) {
+      const t = workTitle(si.item.title);
+      if (t.length >= 6) (byWork.get(t) || byWork.set(t, []).get(t)).push(si);
+    }
+    for (const [t, sis] of byWork) {
+      for (let i = 0; i < sis.length; i++)
+        for (let j = i + 1; j < sis.length; j++) {
+          const [x, y] = [sis[i], sis[j]];
+          const [a, b] = [x.item, y.item];
+          if (groupOf.get(a.id) === groupOf.get(b.id) || !a.bundle !== !b.bundle || (a.volume || 0) !== (b.volume || 0)) continue;
+          if (no.has(`${a.id}|${b.id}`) || no.has(`${b.id}|${a.id}`)) continue;
+          const [la, lb] = [lastName(a.author), lastName(b.author)];
+          const isbns = isbnKey(a.isbn).length >= 10 && isbnKey(b.isbn).length >= 10 && isbnKey(a.isbn) !== isbnKey(b.isbn);
+          if (la && lb ? !near(la, lb) : la || lb || isbns || x.shelf === y.shelf || t.split(" ").length < 3) continue;
+          join(`same:${a.id}`, x);
+          join(`same:${a.id}`, y);
+        }
+    }
     // Volumes of one work by one author («… Том 1» and «… Том 1-2», or the work without a volume) are one
     // book, when there are two of them at least. Kept apart: comics and manga (each volume is read on its
     // own), volumes with different original titles (novels of a series), and pairs the owner called
