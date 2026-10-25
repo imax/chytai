@@ -1899,7 +1899,7 @@ app.post("/admin/book/:id", owner, async (req, res) => {
   let error = "";
   if (/^https?:/i.test(body.cover || "")) ({ url: body.cover, error = "" } = await keepCover(String(body.cover).trim()));
   const b = store.editBook(id, body);
-  res.redirect(303, error ? `/admin/book/${encodeURIComponent(id)}?cover_error=${encodeURIComponent(error.slice(0, 200))}` : b.href);
+  res.redirect(303, error ? `/admin/book/${encodeURIComponent(store.href(id).split("/").pop())}?cover_error=${encodeURIComponent(error.slice(0, 200))}` : b.href);
 });
 app.get("/admin/dupes", owner, (req, res) => res.send(pages.dupesPage({ user: req.user, groups: store.dupes(), decisions: store.decisions(), book: (id) => store.book(id), all: req.query.all === "1" })));
 app.get("/admin/translations", owner, (req, res) => res.send(pages.translationsPage({ user: req.user, translations: store.translationCandidates(), decisions: store.decisions(), book: (id) => store.book(id) })));

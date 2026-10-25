@@ -500,7 +500,7 @@ function bookPage({ inGenre = null, fresh = null, pick = null, awards = [], auth
         ${mine(book, entry, user, now, freeRead ? "" : readUrl, listsItem(book, user))}
         ${readUrl && freeRead ? `<p class="read-here"><a class="btn primary" href="${attr(readUrl)}">Додати в Читалку</a></p>` : ""}
         ${where(book)}
-        ${user?.owner ? `<p class="small muted"><a class="muted" href="/admin/book/${encodeURIComponent(book.id)}">Редагувати</a>${book.cover ? "" : ` · <a class="muted" href="/admin/book/${encodeURIComponent(book.id)}?find=1">Знайти обкладинку</a>`}${book.edited ? " · виправлено вручну" : ""}</p>` : ""}
+        ${user?.owner ? `<p class="small muted"><a class="muted" href="/admin/book/${encodeURIComponent(book.href.split("/").pop())}">Редагувати</a>${book.cover ? "" : ` · <a class="muted" href="/admin/book/${encodeURIComponent(book.href.split("/").pop())}?find=1">Знайти обкладинку</a>`}${book.edited ? " · виправлено вручну" : ""}</p>` : ""}
       </div>
     </article>
     ${series(book, inLibrary)}
@@ -942,6 +942,9 @@ document.addEventListener("submit", async (e) => {
 // The owner's fix of a book's title, author, description and cover (/admin/book/:id). An empty field
 // says what the catalog says, shown as its placeholder.
 function bookEditPage({ book, raw, user, coverError = "" }) {
+  // By its address, not its id: a reader's book id can be another work's address («…-nimechch» is «Том 1»
+  // while the reader's «Том 1-2» lives at «…-nimechch-2»), and the address wins in store.resolve (2026-10-25).
+  const editKey = encodeURIComponent(book.href.split("/").pop());
   const fix = book.edited || {};
   const field = (name, label, hint = "") => `<label>${label} <input name="${name}" value="${attr(fix[name] || "")}" placeholder="${attr(raw[name] || "")}">${hint ? `<span class="hint">${hint}</span>` : ""}</label>`;
   const body = `
@@ -950,7 +953,7 @@ function bookEditPage({ book, raw, user, coverError = "" }) {
   <div class="book-main">
     <p class="crumbs"><a href="${attr(book.href)}">До книжки</a></p>
     <h1>Редагувати</h1>
-    <form method="post" action="/admin/book/${encodeURIComponent(book.id)}" class="form">
+    <form method="post" action="/admin/book/${editKey}" class="form">
       ${field("title", "Назва")}
       ${field("author", "Автор", "Кілька авторів через кому")}
       <label>Опис <textarea name="blurb" rows="8" placeholder="${attr(raw.blurb || "")}">${esc(fix.blurb || "")}</textarea></label>
@@ -977,7 +980,7 @@ ${coverError ? `<p class="error">Сайт не віддав нам картин�
   const box = document.getElementById("covers"), btn = document.getElementById("find-covers"), input = document.querySelector('input[name="cover"]');
   const find = async () => {
     box.hidden = false; box.textContent = "Шукаю…";
-    const { covers } = await fetch(${JSON.stringify(`/admin/book/${encodeURIComponent(book.id)}/covers`)}).then((r) => r.json()).catch(() => ({ covers: [] }));
+    const { covers } = await fetch(${JSON.stringify(`/admin/book/${editKey}/covers`)}).then((r) => r.json()).catch(() => ({ covers: [] }));
     box.textContent = covers.length ? "" : "Нічого не знайшлося. Можна вставити посилання на картинку самому.";
     for (const c of covers) {
       const b = document.createElement("button");
@@ -994,7 +997,7 @@ ${coverError ? `<p class="error">Сайт не віддав нам картин�
   file.onchange = async () => {
     const f = file.files[0];
     if (!f) return;
-    const r = await fetch(${JSON.stringify(`/admin/book/${encodeURIComponent(book.id)}/cover`)}, { method: "POST", headers: { "Content-Type": f.type }, body: f }).then((x) => x.json()).catch(() => ({ error: "не вдалося" }));
+    const r = await fetch(${JSON.stringify(`/admin/book/${editKey}/cover`)}, { method: "POST", headers: { "Content-Type": f.type }, body: f }).then((x) => x.json()).catch(() => ({ error: "не вдалося" }));
     if (r.url) { input.value = r.url; document.querySelector(".book-cover img")?.setAttribute("src", r.url); }
     else alert(r.error);
   };
