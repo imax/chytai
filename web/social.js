@@ -242,7 +242,7 @@ class Social {
       const author = (a) => ({ text: a.name, href: a.href });
       this.startPool = {
         at: Date.now(),
-        genres: top(genres, 10, (g, t) => t.fresh.size >= 2 && (s.genreBooks(g) || []).length >= 20, (g) => ({ text: g, href: `/genre/${slugify(g)}` })),
+        genres: top(genres, 10, (g, t) => t.fresh.size >= 2 && (s.genreBooks(g) || []).length >= 20, (g) => ({ text: g[0].toUpperCase() + g.slice(1), q: g, href: `/genre/${slugify(g)}` })),
         books: top(books, 20, (id) => s.book(id).title.length <= 32, (id) => ({ text: s.book(id).title, href: s.book(id).href })),
         ua: top(authors, 12, isUa, author),
         other: top(authors, 20, (a) => !isUa(a), author),
@@ -264,7 +264,7 @@ class Social {
     };
     // Examples of what to type (Max: «ідея щоб це були приклади популярних запросів»), so each goes to the search.
     const [g, ua, book, other, shelf] = [draw(p.genres), draw(p.ua), draw(p.books), draw(p.other) || draw(p.ua), draw(p.shelves)];
-    return [g, book, ua, other, shelf].filter(Boolean).map((x) => ({ text: x.text, href: `/search?q=${encodeURIComponent(x.text)}` }));
+    return [g, book, ua, other, shelf].filter(Boolean).map((x) => ({ text: x.text, href: `/search?q=${encodeURIComponent(x.q || x.text)}` }));
   }
 
   // A recommendation list read the way people read series (Max, 2026-10-23): a later volume gives way to the
