@@ -84,6 +84,17 @@ const origShown = (r) => {
   const ok = r.kind === "translation" && !/^(ru|rus|russian|рос)/i.test(r.lang || "") && !/ancient|classical|old|medieval|middle|latin|^la$|^grc$/i.test(r.lang || "") && /\p{Script=Latin}/u.test(r.title || "") && !/[^\p{Script=Latin}\p{N}\p{P}\p{Zs}\p{S}\p{M}]/u.test(r.title || "");
   return { ...r, title: ok ? r.title : "", author: ok ? r.author : "" };
 };
+// A shop's text -> its cleaned description (fromShelfItem); emptied when it grows past the catalog's size.
+const blurbs = new Map();
+const blurbOf = (h) => {
+  if (!h) return "";
+  let b = blurbs.get(h);
+  if (b === undefined) {
+    if (blurbs.size > 50000) blurbs.clear();
+    blurbs.set(h, (b = require("./catalogs").about(h)));
+  }
+  return b;
+};
 const norm = (s) => String(s || "").toLowerCase().replace(/^(the|a)\s+/, "").replace(/[^\p{L}\p{N}]+/gu, " ").trim();
 // Separators left at the end of a title: «Diary of Samuel Pepys -», «Назва:».
 const DANGLING = /[\s\-‐‑–—:;,/|]+$/u;
@@ -1877,8 +1888,11 @@ class Store {
     return b && { ...b, translations, ukTitle: inCatalog ? "" : uk, origTitle: o?.title || "", origAuthor: o?.title ? o.author : "", cycle: this.cycleOf(b.id) };
   }
 
+  // A shop's description is cleaned (catalogs.about) once, not on every page that shows the book: a book page
+  // builds every edition of itself and every book in its blocks, and on 2026-10-25 that cleaning was a third of
+  // what a crawler's book page cost.
   fromShelfItem(shelf, it) {
-    return { id: it.id, title: it.title, author: it.author, altTitle: it.altTitle || "", cover: it.cover, tags: it.genres || [], links: [{ label: shelf.name, url: it.url }], source: shelf.id, shelf: shelf.id, blurb: require("./catalogs").about(it.blurb || ""), price: it.price, status: it.status, expected: it.expected || "", language: it.language, edition: it.edition || "", isbn: it.isbn || "", volume: it.volume || 0, bundle: !!it.bundle, format: it.format || (shelf.kind === "free" ? "e-book" : shelf.kind === "audio" ? "аудіо" : "папір"), narrator: it.narrator || "", duration: it.duration || "", subscription: !!it.subscription };
+    return { id: it.id, title: it.title, author: it.author, altTitle: it.altTitle || "", cover: it.cover, tags: it.genres || [], links: [{ label: shelf.name, url: it.url }], source: shelf.id, shelf: shelf.id, blurb: blurbOf(it.blurb), price: it.price, status: it.status, expected: it.expected || "", language: it.language, edition: it.edition || "", isbn: it.isbn || "", volume: it.volume || 0, bundle: !!it.bundle, format: it.format || (shelf.kind === "free" ? "e-book" : shelf.kind === "audio" ? "аудіо" : "папір"), narrator: it.narrator || "", duration: it.duration || "", subscription: !!it.subscription };
   }
 
   addBook({ title, author, cover, links, source = "manual", ...more }) {

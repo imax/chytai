@@ -27,7 +27,7 @@ const enrich = require("./enrich");
 const readeat = require("./readeat");
 const { BookPage, isUrl } = require("./bookpage");
 const { UkFinder } = require("./ukfind");
-const { Admin, adminPage, shelvesPage, readersPage, overviewsPage } = require("./admin");
+const { Admin, adminPage, shelvesPage, readersPage, overviewsPage, BOT } = require("./admin");
 const { Mcp } = require("./mcp");
 const { Reviews } = require("./reviews");
 const { Advice } = require("./advice");
@@ -140,6 +140,8 @@ app.use((req, res, next) => {
   });
   next();
 });
+// How long the main loop stood still in the last 30 seconds (the stall watch below fills it).
+let stillRecently = () => 0;
 {
   // In the jobs process a stall keeps no reader waiting: it is only logged («jobs slow:»), for the profile.
   const who = bg.ROLE === "jobs" ? "jobs " : "";
@@ -169,6 +171,7 @@ app.use((req, res, next) => {
   let stalls = 0;
   let profiled = 0;
   const recent = []; // [time, ms the loop was late] for the last five minutes
+  stillRecently = () => recent.reduce((n, [t, ms]) => n + (t > Date.now() - 30 * 1000 ? ms : 0), 0);
   let exiting = false;
   function profile() {
     const s = new (require("inspector").Session)();
@@ -210,6 +213,15 @@ app.use((req, res, next) => {
     );
   }
 }
+// Robots wait while the site is struggling (2026-10-25: Google's crawler, let in by the new sitemap, stood the
+// site still for readers): when the main loop stood still over 3 s of the last 30, a robot gets 503 and «come
+// back in five minutes», which Google and Bing take as a sign to crawl slower; people are served as always.
+let turnedAway = 0;
+app.use((req, res, next) => {
+  if (stillRecently() < 3000 || !["GET", "HEAD"].includes(req.method) || /^\/(mcp|oauth|\.well-known)/.test(req.path) || !BOT.test(req.headers["user-agent"] || "")) return next();
+  if (!turnedAway++) setTimeout(() => (console.log(`slow: ${turnedAway} robot requests turned away (503) while the site was busy`), (turnedAway = 0)), 60 * 1000).unref();
+  res.set("Retry-After", "300").status(503).type("text").send("Busy, please come back later.");
+});
 // Style and script addresses carry a content hash (pages.js asset()), so they can live in caches for a year.
 app.use(express.static(path.join(__dirname, "public"), { maxAge: "1y", immutable: true }));
 // Covers the owner sets by hand live here, not on a shop's site (Max, 2026-10-23: «я думав ми обкладинки самі

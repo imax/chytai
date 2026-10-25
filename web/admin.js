@@ -664,4 +664,4 @@ function overviewsPage({ user, list, stats: o, who, layout }) {
   return layout({ title: "Огляди від Claude · Статистика", user, path: "/admin", body });
 }
 
-module.exports = { Admin, adminPage, shelvesPage, readersPage, overviewsPage, dayOf, weekOf, sectionOf };
+module.exports = { BOT, Admin, adminPage, shelvesPage, readersPage, overviewsPage, dayOf, weekOf, sectionOf };

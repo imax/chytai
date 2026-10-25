@@ -30,6 +30,12 @@ let reloadTimer = null;
 function startJobs() {
   jobsReady = false;
   jobs = cluster.fork({ CHYTAI_ROLE: "jobs" });
+  // The jobs wait when the pages need the processor: both share the machine's two CPUs and Fly's CPU allowance.
+  try {
+    require("os").setPriority(jobs.process.pid, 10);
+  } catch (e) {
+    console.log(`main: could not lower the jobs' priority: ${e.message}`);
+  }
   jobs.on("message", (m) => {
     if (m?.type === "ready") {
       jobsReady = true;
