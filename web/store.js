@@ -528,6 +528,9 @@ class Store {
       this.pairLog.kept.push([a, b, t]);
       for (const [p, q] of [[a, b], [b, a]]) (this.translations.get(p) || this.translations.set(p, new Set()).get(p)).add(q);
     }
+    // An original with several Ukrainian pages that look like one book is most likely the same edition twice
+    // («Пітер Пен» from two shops): dupes() offers them on /admin/dupes (Max, 2026-10-25: «залиш перевірку на майбутнє»).
+    this.ukTwins = [...partners].filter(([id, ps]) => !cyr(id) && ps.size > 1).map(([, ps]) => [...ps].filter((p) => !russian(p))).filter((ps) => ps.length > 1);
     this.linkCycles();
     this.authors = require("./authors").build(this);
   }
@@ -760,6 +763,20 @@ class Store {
           const b = this.book(id);
           const si = this.shelfItems.get(id);
           return { id, title: b?.title || g.get(id).title, author: b?.author || "", href: this.href(id), source: this.lib.books[id]?.source || (si ? si.shelf.name : "books.md"), readers: this.readersOf(id).length, editions: (this.editions.get(id) || []).length };
+        })
+      );
+    }
+    // Several Ukrainian pages under one original (linkTranslations): unless the owner said they differ.
+    const listed = new Set(out.flat().map((x) => x.id));
+    for (const ids of this.ukTwins || []) {
+      if (ids.every((id) => listed.has(id))) continue;
+      if (ids.some((a) => ids.some((b) => a !== b && no.has(`${a}|${b}`)))) continue;
+      if (ids.some((id) => this.shelfItems.get(id)?.item.bundle)) continue;
+      out.push(
+        ids.map((id) => {
+          const b = this.book(id);
+          const si = this.shelfItems.get(id);
+          return { id, title: b?.title || id, author: b?.author || "", href: this.href(id), source: this.lib.books[id]?.source || (si ? si.shelf.name : "books.md"), readers: this.readersOf(id).length, editions: (this.editions.get(id) || []).length };
         })
       );
     }
