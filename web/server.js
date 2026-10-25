@@ -1723,9 +1723,12 @@ const CYR_RE = /[а-яіїєґ]/i;
 // title starts with the set's name, each as its Ukrainian translation: [{ title, href }].
 const OMNIBUS = /(?:\b(?:vol(?:ume)?s?\.?|books?)|#)\s*\d+\s*[-–—]\s*\d+|\bbox(?:ed)?[\s-]*set\b|\bcomplete\s+(?:series|collection|saga)\b|\bomnibus\b/i;
 function ukVolumes(book) {
-  const raw = store.book(book.id, { edited: false })?.title || book.title;
-  if (!OMNIBUS.test(raw) || CYR_RE.test(raw)) return [];
-  const name = norm(raw.replace(OMNIBUS, " ").replace(/[([]\s*[)\]]/g, " "));
+  // The title as imported: book() has already dropped «, Vol. 1-7» as an edition note (workName).
+  const raw = store.lib.books[book.id]?.title || store.shelfItems.get(book.id)?.item.title || book.title;
+  // An imported title may have lost the volumes on the way, the address keeps them («harry-potter-vol-1-7»).
+  const slug = store.href(book.id).split("/").pop().replace(/-/g, " ").replace(/(\d+) (\d+)$/, "$1-$2");
+  if (!(OMNIBUS.test(raw) || OMNIBUS.test(slug)) || CYR_RE.test(raw)) return [];
+  const name = norm((OMNIBUS.test(raw) ? raw : book.title).replace(OMNIBUS, " ").replace(/[([]\s*[)\]]/g, " "));
   const surname = norm(String(book.author || "").split(/,|&| and /)[0]).split(" ").filter((w) => w.length > 2).pop();
   if (name.length < 3 || !surname) return [];
   const out = new Map();
