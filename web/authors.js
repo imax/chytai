@@ -181,6 +181,7 @@ function build(store) {
     for (const id of g.ids) for (const t of store.translations?.get(id) || []) for (const n of splitAuthors(authorOf(store, t))) if (wd[n]) qids.add(`q:${wd[n].qid}`);
     if (qids.size !== 1 || ![...g.ids].every((id) => splitAuthors(authorOf(store, id)).length === 1)) continue;
     const into = groups.get([...qids][0]);
+    if (!into) continue; // that person is known only from a book left out above (a Russian edition)
     for (const [n, c] of g.names) into.names.set(n, (into.names.get(n) || 0) + c), keyOfName.set(n, into.key);
     for (const id of g.ids) into.ids.add(id);
     groups.delete(g.key);
