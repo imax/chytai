@@ -6,7 +6,7 @@
 // `who(readerId)` turns a reader id into the public reader ({ name, href, ... }) or null.
 
 // Tags that say nothing about what a book is like.
-const { isRussian } = require("./store");
+const { isRussian, mainGenres, slugify } = require("./store");
 const PLAIN = new Set(["українською"]);
 const tagsOf = (b) => (b?.tags || []).filter((t) => !PLAIN.has(t));
 const shuffle = (a) => {
@@ -190,6 +190,45 @@ class Social {
     };
     this.pop = { at: Date.now(), out };
     return out;
+  }
+
+  // «або почни з» under the home page's search (Max, 2026-10-25: «давай зробимо ці підказки динамічними»):
+  // the genres and authors readers have on their shelves, a recent change counting three times, and the
+  // publishers' shelves. The pools are kept ten minutes; each visit draws two genres, a Ukrainian author,
+  // one more author and a publisher from them, so every link leads somewhere readers have been.
+  starts() {
+    if (!this.startPool || Date.now() - this.startPool.at > 10 * 60 * 1000) {
+      const s = this.store;
+      const cutoff = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
+      const authorOf = new Map();
+      for (const a of s.authors?.list || []) for (const id of a.ids) authorOf.set(id, a);
+      const genres = new Map();
+      const authors = new Map();
+      for (const { id, entry: e } of this.all()) {
+        const w = (e.updated || e.added || "") >= cutoff ? 3 : 1;
+        const book = s.book(id);
+        for (const g of mainGenres(book?.tags || [])) if (g !== "художня") genres.set(g, (genres.get(g) || 0) + w);
+        const a = authorOf.get(id) || authorOf.get(s.canonical(id));
+        if (a) authors.set(a, (authors.get(a) || 0) + w);
+      }
+      // Ukrainian: Wikidata says so, or a Cyrillic name with no Latin spelling anywhere (not a translated one).
+      const isUa = (a) => a.ua || (/[а-яіїєґ]/i.test(a.name) && !a.other);
+      const top = (m, n, ok = () => true) => [...m].filter(([k]) => ok(k)).sort((a, b) => b[1] - a[1]).slice(0, n).map(([k]) => k);
+      this.startPool = {
+        at: Date.now(),
+        genres: top(genres, 12, (g) => (s.genreBooks(g) || []).length >= 20).map((g) => ({ text: g, href: `/genre/${slugify(g)}` })),
+        ua: top(authors, 12, (a) => isUa(a) && a.ids.length >= 2).map((a) => ({ text: a.name, href: a.href })),
+        other: top(authors, 20, (a) => !isUa(a) && a.ids.length >= 2).map((a) => ({ text: a.name, href: a.href })),
+        shelves: s.shelves.filter((sh) => sh.kind === "publisher" && !sh.draft && sh.items.length >= 20).map((sh) => ({ text: sh.name, href: `/publishers/${encodeURIComponent(sh.id)}` })),
+
+      };
+    }
+    const p = this.startPool;
+    const [g1, g2] = shuffle([...p.genres]);
+    const [u1, u2] = shuffle([...p.ua]);
+    const [o1] = shuffle([...p.other]);
+    const [sh] = shuffle([...p.shelves]);
+    return [g1, u1, g2, o1 || u2, sh].filter(Boolean);
   }
 
   // A recommendation list read the way people read series (Max, 2026-10-23): a later volume gives way to the

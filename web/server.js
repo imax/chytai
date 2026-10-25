@@ -726,7 +726,7 @@ app.get("/", (req, res) => {
     .filter((s) => s.items.length)
     .sort((a, b) => b.subscribed - a.subscribed || b.fresh - a.fresh)
     .slice(0, 2);
-  res.send(pages.homePage({ user: req.user, picks: social.picks(), feed: feedFor(req, 6), recs, showcase, fetched: day(store.shelvesRefreshedAt), libraries: librariesFor(req) }));
+  res.send(pages.homePage({ user: req.user, starts: social.starts(), picks: social.picks(), feed: feedFor(req, 6), recs, showcase, fetched: day(store.shelvesRefreshedAt), libraries: librariesFor(req) }));
 });
 
 // «Зараз читають» on the homepage: the readers one follows first, then everyone else, at most two rows

@@ -337,7 +337,7 @@ const pageHead = ({ crumbs = "", kicker = "", title, sub = "", action = "", lead
 // ---- home (/) ----
 
 // «Що почитати?»: the search, a random well rated book, the feed, recommendations, new books.
-function homePage({ user, picks, feed, recs, showcase, fetched, libraries = [] }) {
+function homePage({ user, picks, feed, recs, showcase, fetched, libraries = [], starts = [] }) {
   const pick = (p, i) => `<article class="pick${i ? " hidden" : ""}">
   <a class="cover-link" href="${attr(p.book.href)}">${cover(p.book, "xl")}</a>
   <div class="pick-body">
@@ -354,7 +354,7 @@ function homePage({ user, picks, feed, recs, showcase, fetched, libraries = [] }
 <section class="hero">
   <h1>Що почитати?</h1>
   <form class="search-box big" action="/search" role="search"><input type="search" name="q" placeholder="назва, автор, жанр або видавництво" aria-label="Пошук" autocomplete="off"><span class="enter">Enter ↵</span></form>
-  <p class="starts"><span>або почни з</span> ${["фантастика", "Madeline Miller", "війна", "біографії", "українською"].map((s) => `<a href="/search?q=${attr(encodeURIComponent(s))}">${esc(s)}</a>`).join(" ")}</p>
+  <p class="starts"><span>або почни з</span> ${(starts.length >= 3 ? starts : ["фантастика", "Madeline Miller", "війна", "біографії", "українською"].map((s) => ({ text: s, href: `/search?q=${encodeURIComponent(s)}` }))).map((s) => `<a href="${attr(s.href)}">${esc(s.text)}</a>`).join(" ")}</p>
 </section>
 <div id="live"></div>
 <div id="browse">
