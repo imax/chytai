@@ -724,9 +724,6 @@ form.inline button:not(.btn) { background: none; border: 0; padding: 0; cursor: 
 .advice-more + .small { margin-top: 12px; }
 .advice-text.folded ~ .small .advice-acts { display: none; }
 .advice-error { color: var(--danger); margin-top: 10px; }
-.advice-vote .face { font: inherit; font-size: 20px; line-height: 1; background: none; border: 0; padding: 2px 3px; margin-left: 2px; cursor: pointer; opacity: 0.45; filter: grayscale(1); transition: opacity 0.15s, transform 0.15s; vertical-align: -3px; }
-.advice-vote .face:hover { opacity: 0.8; filter: none; }
-.advice-vote .face.on { opacity: 1; filter: none; transform: scale(1.2); }
 .add-writing { margin-top: 12px; }
 .add-writing summary { list-style: none; cursor: pointer; font-size: 14px; }
 .add-writing summary::-webkit-details-marker { display: none; }

@@ -416,23 +416,6 @@ document.addEventListener("click", (e) => {
   block.querySelector(".advice-text")?.classList.remove("folded");
   button.closest(".advice-more")?.remove();
 });
-// 🤩 / 🙂 / 🙁 under the overview: a second tap on the same face takes the vote back.
-async function sendVote(block, vote) {
-  const r = await fetch(`/api/overview/${encodeURIComponent(block.dataset.book)}/vote`, { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ vote: String(vote) }) });
-  const data = await r.json();
-  if (!r.ok) throw new Error(data.error || r.status);
-  for (const b of block.querySelectorAll("[data-vote]")) b.classList.toggle("on", Number(b.dataset.vote) === data.vote);
-}
-document.addEventListener("click", async (e) => {
-  const button = e.target.closest("[data-vote]");
-  const block = button?.closest(".advice");
-  if (!block) return;
-  try {
-    await sendVote(block, button.classList.contains("on") ? 0 : Number(button.dataset.vote));
-  } catch (err) {
-    button.title = err.message;
-  }
-});
 // The «⋯» menu on book pages closes on a tap outside it or on Escape.
 document.addEventListener("click", (e) => {
   for (const d of document.querySelectorAll("details.more-acts[open]")) if (!d.contains(e.target)) d.open = false;
