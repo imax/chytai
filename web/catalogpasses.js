@@ -170,12 +170,12 @@ function passes({ store, social, db, apiKey, log }) {
       schema: { type: "object", properties: { quality: { type: "string", enum: ["good", "dated", "bad", "broken"] }, language: { type: "string" } }, required: ["quality", "language"], additionalProperties: false },
       candidates: () => {
         const mine = shelved();
-        const all = works().filter((b) => /openlibrary\.org/.test(b.cover || ""));
+        const all = works().filter((b) => require("./store").fromOpenLibrary(b));
         const rank = (b) => (mine.has(b.id) ? 0 : 2) + (CYR.test(b.title) ? 0 : 1);
         return all.sort((x, y) => rank(x) - rank(y));
       },
       facts: (s) => [
-        { type: "image", source: { type: "url", url: s.b.cover } },
+        { type: "image", source: { type: "url", url: require("./store").OPEN_LIBRARY.test(s.b.cover || "") ? s.b.cover : s.b.coverFrom } }, // a kept copy is at its Open Library address too
         { type: "text", text: `The book: «${s.b.title}»${s.b.author ? ` by ${s.b.author}` : ""}, an edition in ${CYR.test(s.b.title) ? "Ukrainian" : "its original language"}.` },
       ],
       item: (s, a) => {
