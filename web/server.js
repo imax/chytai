@@ -624,7 +624,7 @@ const readersOf = (id) =>
     .readersOf(id)
     .map(({ reader, entry }) => ({ reader: pub(auth.reader(reader)), entry }))
     .filter((r) => r.reader)
-    .map(({ reader, entry }) => ({ name: reader.name, href: `${reader.href}#${entry.via ? entry.via.id : store.canonical(id)}`, entry, now: nowIds(reader.id).has(entry.via ? store.canonical(entry.via.id) : store.canonical(id)) }));
+    .map(({ reader, entry }) => ({ name: reader.name, href: reader.href, entry, now: nowIds(reader.id).has(entry.via ? store.canonical(entry.via.id) : store.canonical(id)) }));
 const visible = (s) => store.visible(s);
 // Letters to the owner (WEB_NOTIFY_EMAIL, else the e-mail he signs in with), sent in the background.
 const site = (req) => (DOMAIN ? `https://${DOMAIN}` : `${req.protocol}://${req.get("host")}`);

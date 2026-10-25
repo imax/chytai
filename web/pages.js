@@ -311,7 +311,7 @@ const nowLine = (now) => (now?.books.length ? `<p class="now-line"><span class="
 // Carl · серія, 8 книг».
 function feedRow({ reader, book, entry: e, series = null }, { wide = false, followed = null } = {}) {
   const t = when(e);
-  const who = `<span class="who"><a href="${attr(reader.href)}#${attr(book.id)}"><b>${esc(reader.name)}</b></a> ${did(e)}${t ? ` · ${esc(t)}` : ""}</span>`;
+  const who = `<span class="who"><a href="${attr(reader.href)}"><b>${esc(reader.name)}</b></a> ${did(e)}${t ? ` · ${esc(t)}` : ""}</span>`;
   const title = `<a class="title" href="${attr(book.href)}">${esc(series ? series.name : book.title)}${series ? ` <span class="badge">серія · ${books(series.books.length)}</span>` : ""}</a>`;
   return `<article class="feed-row${wide ? " wide" : ""}${e.note ? " noted" : ""}${followed?.has(reader.id) ? " followed" : ""}" data-rating="${e.rating ?? ""}">
   <a class="cover-link" href="${attr(book.href)}">${cover(book, wide ? "feed" : "xs")}</a>
@@ -344,7 +344,7 @@ function homePage({ user, picks, feed, recs, showcase, fetched, libraries = [], 
     <h3><a href="${attr(p.book.href)}">${esc(p.book.title)}</a></h3>
     ${p.book.author ? `<p class="by">${authorLinks(p.book.author)}</p>` : ""}
     <p class="quote">${noteOf(p.entry, p.book.id)}</p>
-    <p class="said">— <a href="${attr(p.reader.href)}#${attr(p.book.id)}"><b>${esc(p.reader.name)}</b></a>, ${stars(p.entry.rating)}${p.entry.year ? ` · ${p.entry.year}` : ""}</p>
+    <p class="said">— <a href="${attr(p.reader.href)}"><b>${esc(p.reader.name)}</b></a>, ${stars(p.entry.rating)}${p.entry.year ? ` · ${p.entry.year}` : ""}</p>
     <div class="acts">${wantButton(p.book, user, { size: "", primary: true })}${picks.length > 1 ? `<button type="button" class="text-link" data-next-pick>Ще одну →</button>` : ""}</div>
   </div>
 </article>`;
