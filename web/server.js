@@ -1100,7 +1100,9 @@ function discovery(req, book, also = []) {
         .map((x) => x.book)
     : [];
   // The publisher: the book's own shelf or an edition's, the first with new books.
-  const own = new Set([book.shelf, ...(book.editions || []).map((e) => e.shelf?.id || e.shelf)].filter(Boolean));
+  // A shop reselling another publisher's book («Старий Лев» selling Meridian Czernowitz's «Бурчак», its
+  // edition names that publisher) is not the book's publisher (Max, 2026-10-25).
+  const own = new Set([book.shelf, ...(book.editions || []).filter((e) => !e.edition).map((e) => e.shelf?.id || e.shelf)].filter(Boolean));
   let fresh = null;
   for (const sh of shelvesFor(req).filter((sh) => own.has(sh.id) && sh.kind !== "free")) {
     const items = [];
