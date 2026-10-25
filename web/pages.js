@@ -574,7 +574,7 @@ function overviewHtml(o, user, vote = null, { folded = false } = {}) {
 ${folded ? `<p class="advice-more"><button class="text-link" data-unfold>Читати далі</button></p>` : ""}<p class="small muted">Claude, за відгуками в інтернеті · ${writingDate(o.created.slice(0, 10))}${votes}</p>`;
 }
 // «Про книжку»: the publisher's or shop's description, the Ukrainian edition line and the «Додати» form.
-// (2026-10-23 the overview lived in here instead of the blurb; 2026-10-25 Max moved it to «Відгуки» below.)
+// (2026-10-23 the overview lived in here instead of the blurb; 2026-10-25 Max moved it to «Що кажуть про книжку» below.)
 function aboutBlock(book, shelf, ukAsk, editionError) {
   if (!book.blurb && !book.ukTitle && !book.origTitle && !ukAsk) return "";
   const blurb = book.blurb ? `<div class="about">${book.blurb.split(/\n\n+/).map((t) => `<p>${esc(t)}</p>`).join("")}</div>` : "";
@@ -589,7 +589,7 @@ function aboutBlock(book, shelf, ukAsk, editionError) {
       ${ukForm(book, ukAsk, editionError)}
     </section>`;
 }
-// «Відгуки» (Max, 2026-10-25: «повернемо блок Про книжку з описом видавництв, а наш ai-overview поставимо після
+// «Що кажуть про книжку» (heading since 2026-10-25 13:50, was «Відгуки»; Max, 2026-10-25: «повернемо блок Про книжку з описом видавництв, а наш ai-overview поставимо після
 // нього»): Claude's overview of the reception as its own block after «Про книжку», folded; a signed-in reader
 // can ask for one where there is none yet.
 function reviewsBlock(book, o, user, vote) {
@@ -598,7 +598,7 @@ function reviewsBlock(book, o, user, vote) {
   if (!canSee && !canAsk) return "";
   const inner = canSee ? overviewHtml(o, user, vote, { folded: true }) : `<p class="advice-ask"><button class="text-link" data-ask="overview">Що кажуть про цю книжку?</button></p>`;
   return `<section class="block advice" id="reviews" data-book="${attr(book.id)}">
-      ${label("Відгуки")}
+      ${label("Що кажуть про книжку")}
       <div class="advice-body">${inner}</div>
     </section>`;
 }
@@ -1347,7 +1347,7 @@ function catalogAdminPage({ user, passes, claude }) {
     ["/admin/translations", "Пари перекладів", "кандидати з Вікіданих"],
     ["/admin/ukfind", "Пошук українських видань", "Claude з веб-пошуком, вручну"],
     ["/admin/readeat", "Readeat", "дані для книжок читачів"],
-    ["/admin/overviews", "Огляди від Claude", "«Відгуки» і голоси читачів"],
+    ["/admin/overviews", "Огляди від Claude", "«Що кажуть про книжку» і голоси читачів"],
     ["/admin/russian", "Російські книжки", "що сайт вважає російським"],
   ];
   const body = `
@@ -1864,7 +1864,7 @@ function privacyPage({ user }) {
 <p>Ми користуємося кількома сервісами, без яких сайт не працює:</p>
 <ul>
 <li><strong>Fly.io</strong> — сервери у Франкфурті (Німеччина), там лежить база сайту і книжки з читалки.</li>
-<li><strong>Anthropic</strong> (Claude) — коли в читалці ви просите пояснити чи перекласти уривок, сам уривок і трохи тексту навколо йдуть в Anthropic, щоб Claude відповів. Для блоку «Відгуки» на сторінці книжки туди йдуть лише назва, автор і опис книжки. Вашої пошти, імені й полиці Anthropic не отримує.</li>
+<li><strong>Anthropic</strong> (Claude) — коли в читалці ви просите пояснити чи перекласти уривок, сам уривок і трохи тексту навколо йдуть в Anthropic, щоб Claude відповів. Для блоку «Що кажуть про книжку» на сторінці книжки туди йдуть лише назва, автор і опис книжки. Вашої пошти, імені й полиці Anthropic не отримує.</li>
 <li><strong>Resend</strong> — листи від code@chytai.org.ua.</li>
 <li><strong>Claude, ChatGPT чи інший AI-чат</strong>, якщо ви самі підключили його до Chytai в <a class="text-link" href="/settings/chats">налаштуваннях</a>. Тоді чат бачить вашу полицю (книжки, оцінки, нотатки) і може додавати на неї книжки, коли ви його про це просите. Що далі відбувається з розмовою, вирішують правила того чату. Відключити його можна будь-коли.</li>
 <li><strong>Google Fonts</strong> — шрифти сайту. Ваш браузер завантажує їх з серверів Google, тож Google бачить вашу IP-адресу, як і на більшості сайтів.</li>
