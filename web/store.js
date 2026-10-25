@@ -1153,21 +1153,48 @@ class Store {
       const key = `at:${norm(si.item.author)}|${norm(base)}`;
       (vols.get(key) || vols.set(key, []).get(key)).push({ si, base });
     }
+    // Readers' own books count too (a reader's «… Том 1-2» next to a shop's «… Том 1», Ширер): one with a
+    // volume, or the work's bare name next to a shop's volumes. The author may be spelled another way.
+    const keysByWork = new Map(); // work name -> keys
+    for (const key of vols.keys()) {
+      const w = key.slice(key.indexOf("|") + 1);
+      (keysByWork.get(w) || keysByWork.set(w, []).get(w)).push(key);
+    }
+    const libVols = new Map(); // key -> library books folded into its work
+    const libSeen = new Set();
+    for (const b of [...Object.values(this.lib.books), ...this.seedBooks]) {
+      if (libSeen.has(b.id) || !norm(b.author)) continue;
+      libSeen.add(b.id);
+      const base = volumeWork(b.title);
+      const w = norm(base || workName(b.title));
+      const key = (keysByWork.get(w) || []).find((k) => k === `at:${norm(b.author)}|${w}`) || (keysByWork.get(w) || []).find((k) => sameAuthor(vols.get(k)[0].si.item.author, b.author)) || (base && `at:${norm(b.author)}|${w}`);
+      if (!key) continue;
+      const si = { shelf: { name: "полиця читача" }, item: { id: b.id, title: b.title, altTitle: b.altTitle || "", author: b.author, genres: b.tags || [] }, lib: true };
+      if (!vols.has(key)) vols.set(key, []);
+      if (base) vols.get(key).push({ si, base });
+      (libVols.get(key) || libVols.set(key, []).get(key)).push(si);
+    }
     const origOf = (it) => norm(volumeWork(it.altTitle) || workName(it.altTitle || ""));
+    const libFolds = []; // [the work's shelf item or first book, library books], folded after step 3
     for (const [key, vs] of vols) {
-      const whole = (groups.get(key) || []).filter((si) => !vs.some((v) => v.si === si));
+      const libs = libVols.get(key) || [];
+      const whole = [...(groups.get(key) || []).filter((si) => !vs.some((v) => v.si === si)), ...libs.filter((si) => !vs.some((v) => v.si === si))];
       const all = [...vs.map((v) => v.si), ...whole];
-      if (new Set(all.map((si) => norm(si.item.title))).size < 2) continue;
+      if (!vs.length || new Set(all.map((si) => norm(si.item.title))).size < 2) continue;
       const genres = (it) => [...(this.aiGenres().get(it.id) || []), ...ourGenres(it.genres)];
       if (all.some((si) => genres(si.item).includes("комікси"))) continue;
       if (new Set(all.map((si) => origOf(si.item)).filter(Boolean)).size > 1) continue;
       if (all.some((a) => all.some((b) => no.has(`${a.item.id}|${b.item.id}`)))) continue;
-      this.volumeGroups.push({ name: vs[0].base, author: vs[0].si.item.author, items: all });
+      const name = (vs.find((v) => !v.si.lib) || vs[0]).base;
+      this.volumeGroups.push({ name, author: all[0].item.author, items: all });
       if (!volOn) continue;
       for (const v of vs) {
+        if (v.si.lib) continue;
         join(key, v.si);
-        v.si.item.volWork = vs[0].base;
+        v.si.item.volWork = name;
       }
+      const shop = all.find((si) => !si.lib);
+      if (libs.length) libFolds.push([shop ? shop.item.id : libs[0].item.id, libs.map((si) => si.item.id), name]);
     }
 
     // 2. A shelf item whose title (or original title) is exactly a library book's title is that book.
@@ -1261,10 +1288,10 @@ class Store {
     }
     // 3. What the owner decided on /admin/dupes: [keep, dup] pairs; dup and everything folded into it
     // become editions of keep, whichever kind of work each is (a shelf item or a library book).
-    for (const [keep, dup] of decided.same) {
+    const fold = (keep, dup) => {
       const k = this.canonical(keep);
       const d = this.canonical(dup);
-      if (k === d || !this.isWork(k) || !this.isWork(d)) continue;
+      if (k === d || !this.isWork(k) || !this.isWork(d)) return;
       for (const [alias, c] of this.aliases) if (c === d) this.aliases.set(alias, k);
       this.aliases.set(d, k);
       const eds = [...(this.editions.get(k) || []), ...(this.editions.get(d) || [])];
@@ -1274,6 +1301,12 @@ class Store {
       if (ksi && !eds.includes(ksi)) eds.unshift(ksi);
       if (eds.length) this.editions.set(k, eds);
       this.editions.delete(d);
+    };
+    for (const [keep, dup] of decided.same) fold(keep, dup);
+    // Readers' own volumes of one work (see above) join the work's page.
+    for (const [keep, ids, name] of libFolds) {
+      for (const id of ids) fold(keep, id);
+      this.volWork.set(this.canonical(keep), name);
     }
     this.linkSeries(matches.volumes || {});
   }

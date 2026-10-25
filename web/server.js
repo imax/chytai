@@ -1910,7 +1910,7 @@ app.post("/admin/book/:id", owner, async (req, res) => {
   res.redirect(303, error ? `/admin/book/${encodeURIComponent(store.href(id).split("/").pop())}?cover_error=${encodeURIComponent(error.slice(0, 200))}` : b.href);
 });
 app.get("/admin/dupes", owner, (req, res) => res.send(pages.dupesPage({ user: req.user, groups: store.dupes(), decisions: store.decisions(), book: (id) => store.book(id), all: req.query.all === "1" })));
-app.get("/admin/volumes", owner, (req, res) => res.send(pages.volumesPage({ user: req.user, groups: store.volumeGroups || [], on: store.db.get("volumes:on") === "1" })));
+app.get("/admin/volumes", owner, (req, res) => res.send(pages.volumesPage({ user: req.user, groups: (store.volumeGroups || []).map((g) => ({ ...g, items: g.items.map((si) => ({ ...si, item: { ...si.item, href: si.item.href || store.href(si.item.id) } })) })), on: store.db.get("volumes:on") === "1" })));
 app.post("/admin/volumes", owner, (req, res) => {
   store.setVolumesOn(req.body.on === "1");
   res.redirect(303, "/admin/volumes");
