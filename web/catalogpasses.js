@@ -237,11 +237,38 @@ function passes({ store, social, db, apiKey, log }) {
         return { ...book(s.b), before: "—", after, diff: [...out, ...into].some((r) => r.id), mentions: out.filter((r) => r.id).map((r) => r.id), mentionedIn: into.filter((r) => r.id).map((r) => r.id) };
       },
     },
+    {
+      // Max 2026-10-25: «У деяких книжок немає опису в Про Книжку … ще одна задача для Haiku?». Only books with
+      // no description anywhere: not their own, not a catalog edition's, not their Ukrainian translation's.
+      key: "blurb",
+      name: "Описи",
+      what: "Короткий опис для «Про книжку» там, де його немає ні в книжки, ні в її видань чи перекладу.",
+      system: `You write the short description for the «Про книжку» block of Chytai, a Ukrainian book site, for a book that has none. If you know this specific book well, write 2–3 sentences in Ukrainian, 35–60 words, on what it is: its kind (novel, memoir, business book…), its subject, setting or main idea. Neutral and factual like a library catalogue note: no praise or evaluative adjectives («захоплива», «блискуча»), no calls to read, no ending or twists, nothing about sales, awards, adaptations or reviews. Write only what you are sure of; leave out any name, date or number you are not sure of. Natural modern Ukrainian, Ukrainian spellings of names, no Russianisms. Answer «unknown» with an empty text when you are not sure which book this is or don't know what is in it: no description is far better than a wrong one.`,
+      schema: { type: "object", properties: { known: { type: "string", enum: ["yes", "unknown"] }, text: { type: "string" } }, required: ["known", "text"], additionalProperties: false },
+      // Readers' books first: those are the pages people open.
+      candidates: () => {
+        const mine = shelved();
+        const all = works().filter((b) => !b.blurb);
+        return [...all.filter((b) => mine.has(b.id)), ...all.filter((b) => !mine.has(b.id))];
+      },
+      facts: (s) => [about(s.b), (s.b.tags || []).length ? `Genres: ${s.b.tags.slice(0, 4).join(", ")}` : "", s.b.pages ? `Pages: ${s.b.pages}` : ""].filter(Boolean).join("\n"),
+      item: (s, a) => ({ ...book(s.b), before: "—", after: a ? (a.known === "yes" ? a.text : "не знає") : "", diff: a?.known === "yes" && !!a.text }),
+      // How many of the books without a description are on readers' shelves, for the trial's header.
+      finish: (st) => {
+        const mine = shelved();
+        st.mine = works().filter((b) => !b.blurb && mine.has(b.id)).length;
+      },
+      // store.book shows a stored answer where a book still has no description of its own.
+      apply: (items) => {
+        store.aiAnswersChanged("blurb");
+        return items.filter((x) => x.answer.known === "yes" && x.answer.text).length;
+      },
+    },
   ];
   // Book subjects carry the book itself.
   for (const d of defs) {
     const c = d.candidates;
-    if (["notbooks", "series", "year", "covers", "mentions"].includes(d.key)) d.candidates = () => c().map((b) => ({ id: b.id, b }));
+    if (["notbooks", "series", "year", "covers", "mentions", "blurb"].includes(d.key)) d.candidates = () => c().map((b) => ({ id: b.id, b }));
   }
   return defs.map((d) => new AiPass(d, { db, apiKey, log }));
 }

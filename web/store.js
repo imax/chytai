@@ -1487,7 +1487,7 @@ class Store {
 
   // ---- books ----
 
-  book(id, { edited = true } = {}) {
+  book(id, { edited = true, borrow = true } = {}) {
     id = this.canonical(id);
     const own = this.lib.books[id];
     const seed = own || this.seedBooks.find((b) => b.id === id);
@@ -1532,6 +1532,21 @@ class Store {
     // A cover Haiku judged a bad scan, a blank binding or another book (catalogpasses.js covers) is not shown,
     // as long as it is still that picture; a placeholder looks better.
     if (out.cover && this.hiddenCovers()[id] === out.cover) out.cover = (out.editions || []).find((e) => e.cover && e.cover !== out.cover)?.cover || "";
+    // No description of its own (a reader's import, an Amazon link; Max 2026-10-25: «The Five Dysfunctions of a
+    // Team» showed an empty «Про книжку»): a catalog edition's, else the Ukrainian translation's, named as such;
+    // else the short one Haiku wrote (catalogpasses.js blurb; its answers are stored only by a whole-catalog run).
+    if (!out.blurb && borrow) {
+      const e = (out.editions || []).find((x) => x.blurb);
+      if (e) (out.blurb = e.blurb), (out.blurbSource = e.shelf?.name || "");
+      else {
+        const t = [...(this.translations?.get(id) || [])].map((x) => this.book(x, { edited: false, borrow: false })).find((x) => x?.blurb && /[а-яіїєґ]/i.test(x.title) && !isRussian(x));
+        if (t) (out.blurb = t.blurb), (out.blurbSource = [t.blurbSource || this.shelfItems.get(t.id)?.shelf.name, `українське видання «${t.title}»`].filter(Boolean).join(", "));
+        else if (edited) {
+          const a = this.aiAnswers("blurb").get(id);
+          if (a?.known === "yes" && a.text) (out.blurb = a.text), (out.blurbSource = "Claude, коротко про книжку");
+        }
+      }
+    }
     // A title cut short by an import keeps a dangling separator («Diary of Samuel Pepys -», Max 2026-10-23).
     out.title = String(out.title || "").replace(DANGLING, "") || out.title;
     // The owner's hand edits (/admin/book/:id) win over the catalogs and outlive their refreshes.
