@@ -1543,7 +1543,8 @@ class Store {
         if (t) (out.blurb = t.blurb), (out.blurbSource = [t.blurbSource || this.shelfItems.get(t.id)?.shelf.name, `українське видання «${t.title}»`].filter(Boolean).join(", "));
         else if (edited) {
           const a = this.aiAnswers("blurb").get(id);
-          if (a?.known === "yes" && a.text) (out.blurb = a.text), (out.blurbSource = "Claude, коротко про книжку");
+          // A word with Latin and Cyrillic letters mixed («adresоване», trial v2) marks a broken answer.
+          if (a?.known === "yes" && a.text && !/[a-z][а-яіїєґ]|[а-яіїєґ][a-z]/i.test(a.text)) (out.blurb = a.text), (out.blurbSource = "Claude, коротко про книжку");
         }
       }
     }

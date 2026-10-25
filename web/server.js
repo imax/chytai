@@ -1558,7 +1558,9 @@ app.get("/admin/ai/:key", owner, (req, res) => {
 });
 app.post("/admin/ai/:key", owner, (req, res) => {
   const p = aiPasses.get(req.params.key);
-  if (p) p.run().catch((e) => console.log(`aipass ${p.key}: ${e.message}`));
+  // «На весь каталог» (Max 2026-10-25, «Описи»): the owner starts the whole-catalog run himself after a trial.
+  if (p && req.body?.all && p.apply) p.runAll().catch((e) => console.log(`aipass ${p.key} all: ${e.message}`));
+  else if (p) p.run().catch((e) => console.log(`aipass ${p.key}: ${e.message}`));
   res.redirect(303, `/admin/ai/${encodeURIComponent(req.params.key)}`);
 });
 app.get("/ai-trial/:key/:token", (req, res) => {
