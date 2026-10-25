@@ -49,7 +49,9 @@ function about(h, max = 1000) {
   const end = body.findIndex((l) => l[0] === "\u0001");
   if (end >= 0 && (end > 0 || head >= 0)) body = body.slice(0, end);
   else body = body.filter((l) => l[0] !== "\u0001");
-  const cutOff = !/<\/?[a-z]/i.test(raw) && raw.length >= 595 && !whole(raw.trim()); // an older refresh's text cut at 600
+  // An older refresh's text cut at 600 (shorter once its entities are decoded), or any plain text ending on
+  // a stub of one word (Старий Лев's «Маркетер» ended «…характеру. Лю», Max 2026-10-25).
+  const cutOff = !/<\/?[a-z]/i.test(raw) && !whole(raw.trim()) && (raw.length >= 520 || /[.!?…»"]\s+\S+$/.test(raw.trim()));
   const paras = body
     .filter((l) => l[0] !== "\u0002")
     .map((l, i, all) => {
