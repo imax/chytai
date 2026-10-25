@@ -13,7 +13,11 @@ on:
   # A change to the backup itself runs it once, so it is tested right away.
   push:
     branches: [main]
-    paths: [".github/workflows/backup.yml", "scripts/backup-snapshot.js"]
+    paths: [".github/workflows/backup.yml", "scripts/backup-snapshot.js", "scripts/test-db-scrub.py"]
+
+# contents: write for the test copy's release (below).
+permissions:
+  contents: write
 
 concurrency:
   group: backup
@@ -90,6 +94,25 @@ jobs:
           age -r "$AGE_RECIPIENT" -o "$name.tar.gz.age" backup.tar.gz
           ls -l "$name.tar.gz.age"
           echo "NAME=$name" >> "$GITHUB_ENV"
+      # A test copy of the site's database for threads and the Mac (Max, 2026-10-25): real emails, sessions,
+      # tokens and secrets taken out (scripts/test-db-scrub.py), encrypted with the same key and published as
+      # the asset of the release "test-db", replaced every night. Fetch it with scripts/fetch-test-db.sh.
+      - name: Test copy
+        if: matrix.app == 'chytai-web'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p test/web
+          python3 scripts/test-db-scrub.py check/web/chytai.db test/web/chytai.db
+          if [ -d check/web/covers ]; then cp -r check/web/covers test/web/; fi
+          tar czf test.tar.gz -C test .
+          age -r "$AGE_RECIPIENT" -o chytai-web-test.tar.gz.age test.tar.gz
+          ls -l chytai-web-test.tar.gz.age
+          gh release view test-db >/dev/null 2>&1 || gh release create test-db --prerelease --latest=false \
+            --title "Тестова копія бази сайту" \
+            --notes "Очищена й зашифрована копія бази chytai-web для тестів, оновлюється щоночі. Без ключа нечитабельна. Як узяти: scripts/fetch-test-db.sh."
+          gh release upload test-db chytai-web-test.tar.gz.age --clobber
+          rm -rf test test.tar.gz
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ env.NAME }}

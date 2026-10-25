@@ -86,6 +86,16 @@ fly machine restart -a chytai-web
 
 Або зі знімка Fly: `fly volumes snapshots list <vol>` і `fly volumes create web_data --snapshot-id <id> -a chytai-web`.
 
+### Тестова копія бази сайту
+
+Тим самим запуском робиться копія бази сайту для тестів: справжні емейли замінено на `<id читача>@test.invalid`, сесії, коди входу, токени MCP і секрети з `meta` вирізано (`scripts/test-db-scrub.py`). Вона зашифрована тим самим ключем і лежить файлом у релізі [`test-db`](https://github.com/imax/chytai/releases/tag/test-db), щоночі новий. Узяти її в `data/web/` (стара база збережеться поруч як `chytai.db.bak-…`):
+
+```bash
+scripts/fetch-test-db.sh
+```
+
+Увійти можна будь-яким читачем кодом з емейлу: без `RESEND_API_KEY` код пишеться в лог сервера.
+
 ## Десктопна версія (macOS)
 
 Потрібен Node.js 20 або новіший (`brew install node`, якщо його ще немає).
