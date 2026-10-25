@@ -192,51 +192,57 @@ class Social {
     return out;
   }
 
-  // «або почни з» under the home page's search (Max, 2026-10-25: «давай зробимо ці підказки динамічними»;
-  // then «враховувати книжки або авторів або видавництва які люди додають в Хочу або вже прочитане»): the
-  // books, authors, publishers and genres of what readers want, read or are reading, each reader once, a
-  // change in the last 30 days counting three times. The tallies are kept ten minutes; each visit draws a
-  // genre, a book, a Ukrainian author, another author and a publisher, the more readers the likelier.
+  // «або почни з» under the home page's search (Max, 2026-10-25: «давай зробимо ці підказки динамічними»),
+  // from what readers want, read or are reading («враховувати книжки або авторів або видавництва які люди
+  // додають в Хочу або вже прочитане»): a genre, a book, a Ukrainian author, another author and a publisher,
+  // the more readers the likelier (each reader once, a change in the last 30 days counting three times).
+  // Only things readers rated or wrote about in those 30 days, one other at most («ніхто не буде шукати те
+  // що ніхто не шукав раніше ... ну або макс 1 така»), and a genre only with two such books at least; one
+  // in Latin letters at most («обмежемо підказку українською, макс 1 англ.»). The tallies are kept ten
+  // minutes; a visit only draws from them.
   starts() {
     if (!this.startPool || Date.now() - this.startPool.at > 10 * 60 * 1000) {
       const s = this.store;
       const cutoff = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
       const authorOf = new Map();
       for (const a of s.authors?.list || []) for (const id of a.ids) authorOf.set(id, a);
-      const tally = () => new Map(); // thing -> Map(reader id -> weight)
-      const count = (m, k, reader, w) => {
-        const r = m.get(k) || m.set(k, new Map()).get(k);
-        r.set(reader, Math.max(r.get(reader) || 0, w));
+      const tally = () => new Map(); // thing -> { readers: Map(reader id -> weight), fresh: Set of books rated or noted lately }
+      const count = (m, k, reader, w, book, fresh) => {
+        const t = m.get(k) || m.set(k, { readers: new Map(), fresh: new Set() }).get(k);
+        t.readers.set(reader, Math.max(t.readers.get(reader) || 0, w));
+        if (fresh) t.fresh.add(book);
       };
       const genres = tally(), books = tally(), authors = tally(), shelves = tally();
       for (const { reader, id, entry: e } of this.all()) {
         if (!["want", "reading", "read"].includes(e.status)) continue;
-        const w = (e.updated || e.added || "") >= cutoff ? 3 : 1;
+        const recent = (e.updated || e.added || "") >= cutoff;
+        const fresh = recent && (e.rating != null || !!e.note);
         const c = s.canonical(id);
         const book = s.book(c);
         if (!book) continue;
-        count(books, c, reader.id, w);
-        for (const g of mainGenres(book.tags || [])) if (g !== "художня") count(genres, g, reader.id, w);
+        const add = (m, k) => count(m, k, reader.id, recent ? 3 : 1, c, fresh);
+        add(books, c);
+        for (const g of mainGenres(book.tags || [])) if (g !== "художня") add(genres, g);
         const a = authorOf.get(id) || authorOf.get(c);
-        if (a) count(authors, a, reader.id, w);
-        for (const { shelf } of s.editions.get(c) || []) if (shelf.kind === "publisher" && !shelf.draft) count(shelves, shelf, reader.id, w);
+        if (a) add(authors, a);
+        for (const { shelf } of s.editions.get(c) || []) if (shelf.kind === "publisher" && !shelf.draft) add(shelves, shelf);
       }
       // Ukrainian: Wikidata says so, or a Cyrillic name with no Latin spelling anywhere and no book of theirs
       // a translation (Haiku's ai_orig, or one paired with an original).
       const origs = s.aiOrigs();
       const translated = (id) => origs.get(id)?.kind === "translation" || s.translations?.get(id)?.size;
       const isUa = (a) => a.ua || (/[а-яіїєґ]/i.test(a.name) && !a.other && !a.ids.some(translated));
-      // The things at least two readers have, most first: [{ text, href, w }].
+      // The things at least two readers have, most first: [{ text, href, w, fresh }].
       const top = (m, n, ok, link) =>
         [...m]
-          .filter(([k, r]) => r.size >= 2 && ok(k))
-          .map(([k, r]) => ({ ...link(k), w: [...r.values()].reduce((x, y) => x + y, 0) }))
+          .filter(([k, t]) => t.readers.size >= 2 && ok(k, t))
+          .map(([k, t]) => ({ ...link(k), w: [...t.readers.values()].reduce((x, y) => x + y, 0), fresh: t.fresh.size > 0 }))
           .sort((x, y) => y.w - x.w)
           .slice(0, n);
       const author = (a) => ({ text: a.name, href: a.href });
       this.startPool = {
         at: Date.now(),
-        genres: top(genres, 10, (g) => (s.genreBooks(g) || []).length >= 20, (g) => ({ text: g, href: `/genre/${slugify(g)}` })),
+        genres: top(genres, 10, (g, t) => t.fresh.size >= 2 && (s.genreBooks(g) || []).length >= 20, (g) => ({ text: g, href: `/genre/${slugify(g)}` })),
         books: top(books, 20, (id) => s.book(id).title.length <= 32, (id) => ({ text: s.book(id).title, href: s.book(id).href })),
         ua: top(authors, 12, isUa, author),
         other: top(authors, 20, (a) => !isUa(a), author),
@@ -245,15 +251,20 @@ class Social {
     }
     const p = this.startPool;
     const taken = new Set();
-    // One of the list, as likely as its weight; nothing twice.
+    let latin = false, stale = false;
+    const isLatin = (x) => !/[а-яіїєґ]/i.test(x.text);
+    // One of the list, as likely as its weight, nothing twice: a fresh one, else (once) another.
     const draw = (list) => {
-      const left = list.filter((x) => !taken.has(x.href));
+      const ok = list.filter((x) => !taken.has(x.href) && !(latin && isLatin(x)));
+      const left = ok.some((x) => x.fresh) ? ok.filter((x) => x.fresh) : stale ? [] : ok;
       let r = Math.random() * left.reduce((s, x) => s + x.w, 0);
       const x = left.find((x) => (r -= x.w) < 0) || left[0];
-      if (x) taken.add(x.href);
+      if (x) taken.add(x.href), (latin ||= isLatin(x)), (stale ||= !x.fresh);
       return x;
     };
-    return [draw(p.genres), draw(p.books), draw(p.ua), draw(p.other) || draw(p.ua), draw(p.shelves)].filter(Boolean);
+    // Examples of what to type (Max: «ідея щоб це були приклади популярних запросів»), so each goes to the search.
+    const [g, ua, book, other, shelf] = [draw(p.genres), draw(p.ua), draw(p.books), draw(p.other) || draw(p.ua), draw(p.shelves)];
+    return [g, book, ua, other, shelf].filter(Boolean).map((x) => ({ text: x.text, href: `/search?q=${encodeURIComponent(x.text)}` }));
   }
 
   // A recommendation list read the way people read series (Max, 2026-10-23): a later volume gives way to the
