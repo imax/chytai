@@ -488,13 +488,18 @@ class Store {
     const titles = new Map(works.map((w) => [this.canonical(w.id), w.title]));
     const cyr = (id) => /[а-яіїєґ]/i.test(titles.get(id) || this.lib.books[id]?.title || "");
     const taken = new Set(); // ids already in a Ukrainian–foreign pair
+    this.pairLog = { kept: [], dropped: [] }; // for the owner's check, /admin/translations/check
     for (const [x, y, t] of proposed.sort((p, q) => q[2] - p[2])) {
       const a = x && this.canonical(x);
       const b = y && this.canonical(y);
       if (!a || !b || a === b || this.translations.get(a)?.has(b)) continue;
       const across = cyr(a) !== cyr(b);
-      if (across && t < 5 && (taken.has(a) || taken.has(b))) continue;
+      if (across && t < 5 && (taken.has(a) || taken.has(b))) {
+        this.pairLog.dropped.push([a, b, t]);
+        continue;
+      }
       if (across) taken.add(a).add(b);
+      this.pairLog.kept.push([a, b, t]);
       for (const [p, q] of [[a, b], [b, a]]) (this.translations.get(p) || this.translations.set(p, new Set()).get(p)).add(q);
     }
     this.linkCycles();

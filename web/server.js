@@ -1909,6 +1909,16 @@ app.post("/admin/book/:id", owner, async (req, res) => {
 });
 app.get("/admin/dupes", owner, (req, res) => res.send(pages.dupesPage({ user: req.user, groups: store.dupes(), decisions: store.decisions(), book: (id) => store.book(id), all: req.query.all === "1" })));
 app.get("/admin/translations", owner, (req, res) => res.send(pages.translationsPage({ user: req.user, translations: store.translationCandidates(), decisions: store.decisions(), book: (id) => store.book(id) })));
+// Every Ukrainian–foreign pair with how it was made (tier 5 owner … 1 main-title guess), and the ones the
+// one-pair rule dropped, with the pair that took their place.
+app.get("/admin/translations/check", owner, (req, res) => {
+  const t = (id) => store.book(id)?.title || id;
+  const cyr = (id) => /[а-яіїєґ]/i.test(t(id));
+  const row = ([a, b, tier]) => ({ uk: t(cyr(a) ? a : b), orig: t(cyr(a) ? b : a), tier, ids: [a, b] });
+  const kept = store.pairLog.kept.filter(([a, b]) => cyr(a) !== cyr(b)).map(row);
+  const dropped = store.pairLog.dropped.map((p) => ({ ...row(p), instead: [...(store.translations.get(p[0]) || []), ...(store.translations.get(p[1]) || [])].map(t) }));
+  res.json({ kept: kept.length, byTier: kept.reduce((m, k) => ({ ...m, [k.tier]: (m[k.tier] || 0) + 1 }), {}), dropped, weak: kept.filter((k) => k.tier <= 2), owner: kept.filter((k) => k.tier === 5) });
+});
 // The owner's verdict on a group of look-alikes: keep=<id> folds the rest into it, verdict=different keeps them apart.
 const decidedJson = (req, res, back) => (req.get("X-Requested-With") === "fetch" ? res.json({ ok: true, decided: pages.decidedList(store.decisions(), (id) => store.book(id)) }) : res.redirect(back));
 app.post("/admin/dupes/decide", owner, (req, res) => {
