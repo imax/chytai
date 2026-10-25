@@ -117,9 +117,7 @@ class WantMail {
       ``,
       ...shown.flatMap((x) => [`${x.book.title}${x.book.author ? ` — ${x.book.author}` : ""}`, ...x.news.map((n) => `  ${this.line(n, x.id)}`), `  ${site}${x.news.find((n) => n.href)?.href || x.book.href}`, ``]),
       ...(books.length > shown.length ? [`І ще ${books.length - shown.length}: ${site}/@${reader.username}`, ``] : []),
-      `Про кожну книжку пишемо один раз.`,
-      `Не хочете таких листів: ${off}`,
-      `Інші налаштування: ${site}/settings/mail`,
+      `Відписатися від цих листів: ${off}`,
     ];
     return { to: reader.email, subject, text: text.join("\n"), headers: { "List-Unsubscribe": `<${off}>`, "List-Unsubscribe-Post": "List-Unsubscribe=One-Click" } };
   }
