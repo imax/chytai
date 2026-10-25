@@ -1185,12 +1185,18 @@ app.get("/author/:slug", async (req, res) => {
     .map((h) => ({ ...h, avg: social.stats(h.book.id).avg }))
     .sort((a, b) => (b.avg ?? -1) - (a.avg ?? -1) || !!b.entry - !!a.entry || shown.has(a.book.id) - shown.has(b.book.id) || a.book.title.localeCompare(b.book.title, "uk"))
     .map((h) => ({ ...h, twins: store.translationsOf(h.book.id) }));
-  // A translation sits right after its original (or the other way round), as one book in two editions.
+  // A translation and its original are one card (Max, 2026-10-25: two rows «трохи плутає»): the Ukrainian
+  // edition leads, the other pages are a line under its title. Readers and ratings are shared anyway.
+  const seen = new Set();
   for (let i = 0; i < hits.length; i++) {
-    for (const t of hits[i].twins) {
-      const j = hits.findIndex((h) => h.book.id === t.id);
-      if (j > i + 1) hits.splice(i + 1, 0, ...hits.splice(j, 1));
+    if (seen.has(hits[i].book.id)) {
+      hits.splice(i--, 1);
+      continue;
     }
+    const group = [hits[i], ...hits[i].twins.map((t) => hits.find((h) => h.book.id === t.id)).filter(Boolean)];
+    for (const h of group) seen.add(h.book.id);
+    const lead = group.find((h) => CYR_RE.test(h.book.title)) || group[0];
+    hits[i] = { ...lead, entry: lead.entry || group.find((h) => h.entry)?.entry, others: group.filter((h) => h !== lead).map((h) => h.book) };
   }
   // Who reads this author, and what else those readers rated highest.
   const ids = new Set(hits.map((h) => h.book.id));

@@ -171,6 +171,8 @@ main.home { padding-top: 56px; }
 .row.big { padding: 28px 0; gap: 28px; }
 .row.big h3 { font-size: 28px; }
 .row.big .orig { font: 15px var(--serif); color: var(--muted); margin-top: 2px; }
+.row.big .orig a { color: inherit; text-decoration: underline; text-decoration-color: var(--under); text-underline-offset: 3px; }
+.row.big .orig a:hover { color: var(--ink); }
 .row.big .meta { font-size: 13px; }
 .row.big .meta .stars { font-size: 15px; }
 .row.big .note { font-size: 18px; -webkit-line-clamp: 4; margin-top: 14px; }
