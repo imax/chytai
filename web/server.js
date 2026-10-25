@@ -1181,7 +1181,9 @@ app.get("/author/:slug", async (req, res) => {
   const shown = new Set(works.flatMap((w) => w.books.map((b) => b.id)));
   const hits = author.ids
     .map((id) => ({ book: bookFor(req, store.book(id), !!store.entry(req.user?.id, id)), entry: store.sharedEntry(req.user?.id, id) }))
-    .filter((h) => h.book)
+    // Box sets and workbooks are noise on an author's page (Max 2026-10-25, James Clear: «Комплект»,
+    // «Посібник для змін» next to «Атомні звички»); their own pages stay. A reader's own copy still shows.
+    .filter((h) => h.book && (h.entry || !(h.book.bundle || /комплект|workbook|робочий зошит/i.test(`${h.book.title} ${h.book.altTitle || ""} ${h.book.origTitle || ""}`))))
     .map((h) => ({ ...h, avg: social.stats(h.book.id).avg }))
     .sort((a, b) => (b.avg ?? -1) - (a.avg ?? -1) || !!b.entry - !!a.entry || shown.has(a.book.id) - shown.has(b.book.id) || a.book.title.localeCompare(b.book.title, "uk"))
     .map((h) => ({ ...h, twins: store.translationsOf(h.book.id) }));
