@@ -1070,11 +1070,14 @@ app.get("/sitemap.xml", (req, res) => {
     const origin = `https://${DOMAIN || req.get("host")}`;
     const urls = ["/", "/community", "/popular", "/publishers", "/updates", "/privacy"];
     for (const shelf of store.shelves) if (!shelf.draft) urls.push(`/publishers/${encodeURIComponent(shelf.id)}`);
+    const ru = new Set();
     for (const w of authors.allWorks(store)) {
       const b = store.book(w.id);
       if (b && !isRussian(b)) urls.push(b.href);
+      else if (b) ru.add(w.id);
     }
-    for (const a of store.authors?.list || []) urls.push(a.href);
+    // An author whose every book here is Russian is left out too (Max 2026-10-25: no search traffic to Russian editions).
+    for (const a of store.authors?.list || []) if (!a.ids?.length || a.ids.some((id) => !ru.has(store.canonical(id)))) urls.push(a.href);
     // Readers' pages are not listed: noindex (Max, 2026-10-21), their notes live on the book pages.
     sitemap = { at: Date.now(), xml: `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls.map((u) => `<url><loc>${pages.esc(origin + u)}</loc></url>`).join("\n")}\n</urlset>\n` };
     console.log(`sitemap: ${urls.length} addresses in ${Date.now() - t0} ms`);
