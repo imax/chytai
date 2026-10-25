@@ -576,10 +576,11 @@ ${folded ? `<p class="advice-more"><button class="text-link" data-unfold>Чит�
 // «Про книжку»: the publisher's or shop's description, the Ukrainian edition line and the «Додати» form.
 // (2026-10-23 the overview lived in here instead of the blurb; 2026-10-25 Max moved it to «Відгуки» below.)
 function aboutBlock(book, shelf, ukAsk, editionError) {
-  if (!book.blurb && !book.ukTitle && !book.origTitle && !ukAsk) return "";
+  if (!book.blurb && !book.ukTitle && !book.origTitle && !ukAsk && !book.ukVolumes) return "";
   const blurb = book.blurb ? `<div class="about">${book.blurb.split(/\n\n+/).map((t) => `<p>${esc(t)}</p>`).join("")}</div>` : "";
   const blurbSource = book.blurb && !book.edited?.blurb ? `<p class="small muted">${book.blurbSource ? `Опис: ${esc(book.blurbSource)}` : `Опис з сайту ${esc(shelf ? shelf.name : book.source)}`}</p>` : "";
-  const uk = book.ukTitle || ukAsk ? `<p class="small muted uk-line">${ukLine(book, ukAsk)}</p>` : "";
+  // A box set's volumes, each in Ukrainian (server.js ukVolumes).
+  const uk = book.ukVolumes ? `<p class="small muted uk-line">Українською окремими книжками: ${book.ukVolumes.map((v) => `<a href="${attr(v.href)}">${esc(v.title)}</a>`).join(", ")}</p>` : book.ukTitle || ukAsk ? `<p class="small muted uk-line">${ukLine(book, ukAsk)}</p>` : "";
   // The original Haiku named for a Ukrainian book while no catalog has it (store.aiOrigs).
   const orig = book.origTitle ? `<p class="small muted uk-line">Оригінал: «${esc(book.origTitle)}»${book.origAuthor ? `, ${esc(book.origAuthor)}` : ""}</p>` : "";
   return `<section class="block" id="about">
