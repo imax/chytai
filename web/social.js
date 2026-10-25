@@ -39,12 +39,22 @@ class Social {
   // «Покинуто» never is: no feed line, no rating counted, nothing in the letters. Nor is a book on the
   // reader's «Дитяча полиця» (Max, 2026-10-23): it is their children's taste, not theirs, so it stays out of
   // the feed, ratings, picks, «Популярне» and every «схожі» / «Читали це, сподобалось і це».
-  // Kept until the current request is done: a page asks for it many times (/community once per reader), and
-  // each time looks up every reader's every book (2.2 s for /community on 2026-10-21).
+  // Kept until an entry changes (store.entriesV), or for five minutes (a book's details or a reader's account
+  // change elsewhere): each build looks up every reader's every book, and on 2026-10-25 a crawler on book and
+  // author pages built it, and liked(), on every page, 2–3 s each, until the site stood still.
+  fresh(key) {
+    const c = this[key];
+    return c && c.v === this.store.entriesV && Date.now() - c.at < 5 * 60 * 1000 ? c.value : null;
+  }
+  keep(key, value) {
+    this[key] = { v: this.store.entriesV, at: Date.now(), value };
+    return value;
+  }
+
   all() {
-    if (this.cached) return this.cached;
-    const out = (this.cached = []);
-    setImmediate(() => (this.cached = null));
+    const had = this.fresh("_all");
+    if (had) return had;
+    const out = this.keep("_all", []);
     for (const [rid, entries] of this.store.entries) {
       const reader = this.who(rid);
       if (!reader) continue;
@@ -120,6 +130,9 @@ class Social {
 
   // Books readers rated 4 or more, with their mean rating: id -> { book, avg }.
   liked() {
+    return this.fresh("_liked") || this.keep("_liked", this.likedNow());
+  }
+  likedNow() {
     const m = new Map();
     for (const { id, entry: e } of this.all()) {
       if (e.rating == null) continue;

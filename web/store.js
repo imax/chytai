@@ -1613,11 +1613,13 @@ class Store {
   }
   // A reader who is gone (deleted account): their rows are already deleted by auth.js.
   forgetReader(reader) {
+    this.entriesV = (this.entriesV || 0) + 1;
     this.entries.delete(reader);
     this.subs.delete(reader);
   }
 
   writeEntry(reader, id, e) {
+    this.entriesV = (this.entriesV || 0) + 1; // social.js keeps what it counts from the entries until this changes
     if (!e) return this.db.prepare("DELETE FROM entries WHERE reader = ? AND book = ?").run(reader, id);
     this.db
       .prepare("INSERT INTO entries (reader, book, status, rating, year, note, copy, ord, added, updated, kids) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (reader, book) DO UPDATE SET status = excluded.status, rating = excluded.rating, year = excluded.year, note = excluded.note, copy = excluded.copy, ord = excluded.ord, added = excluded.added, updated = excluded.updated, kids = excluded.kids")
