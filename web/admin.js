@@ -510,7 +510,43 @@ ${pager}
   return layout({ title: "Читачі · Статистика", user, path: "/admin", body });
 }
 
-function adminPage({ user, stats: s, overviews: o = null, layout, page = "main" }) {
+// The catalog's size and how fast it grows (store.catalogStats; Max, 2026-10-25). Days start 2026-10-25.
+function catalogBlock(c) {
+  if (!c) return "";
+  const days = Object.keys(c.daily).sort();
+  const at = (back) => {
+    const d = addDays(days[days.length - 1] || "", -back);
+    const k = days.filter((x) => x <= d).pop();
+    return k ? c.daily[k].works : null;
+  };
+  const growth = (back) => (at(back) === null || !days.length ? "" : `+${c.works - at(back)}`);
+  const rows = days
+    .slice(-14)
+    .reverse()
+    .map((d) => {
+      const i = days.indexOf(d);
+      const prev = i > 0 ? c.daily[days[i - 1]] : null;
+      const x = c.daily[d];
+      return `<tr><th>${short(d)}</th><td>${x.works}</td><td>${prev ? n(x.works - prev.works) : "·"}</td><td>${x.items}</td><td>${x.draft ? x.draft : n(0)}</td></tr>`;
+    })
+    .join("");
+  const shelves = [...c.shelves]
+    .sort((a, b) => b.works - a.works)
+    .map((s) => `<tr><th style="white-space:normal">${s.name}${s.draft ? ' <em>чернетка</em>' : ""}</th><td>${s.works}</td><td>${s.items}</td></tr>`)
+    .join("");
+  return `<h2>Каталог</h2>
+<p class="muted small">Книжка — один твір з усіма виданнями (папір, e-book, аудіо, різні видавництва). Чернетки бачиш лише ти; книжки, які є й на відкритих полицях, у чернетках не рахуються. Рахується з 25 жовтня.</p>
+<div class="stats">${tile(c.works, "книжок у каталогі", `${c.items} видань на ${c.shelves.filter((s) => !s.draft).length} полицях`)}${tile(growth(7) || "·", "за 7 днів", growth(1) ? `${growth(1)} за добу` : "ще нема з чим порівняти")}${tile(growth(28) || "·", "за 28 днів")}${tile(c.draft, "у чернетках", `${c.shelves.filter((s) => s.draft).length} полиць бачиш лише ти`)}</div>
+<div class="tbl"><table>
+<thead><tr><th>День</th><th>Книжок</th><th>За день</th><th>Видань</th><th>У чернетках</th></tr></thead>
+<tbody>${rows}</tbody></table></div>
+<details><summary class="small">По полицях (${c.shelves.length})</summary>
+<div class="tbl"><table>
+<thead><tr><th>Полиця</th><th>Книжок</th><th>Видань</th></tr></thead>
+<tbody>${shelves}</tbody></table></div></details>`;
+}
+
+function adminPage({ user, stats: s, overviews: o = null, catalog = null, layout, page = "main" }) {
   const traffic = page === "traffic";
   const t = s.totals;
   const tiles = [
@@ -576,6 +612,8 @@ ${sourcesTable(s.arrivals, 4)}
 <p class="small"><a class="text-link" href="/admin/traffic">Усі джерела (${s.arrivals.sources.length})</a>, звідки саме, сторінки з пошуку, перегляди за розділами.</p>` : ""}
 
 ${funnelBlock(s.funnel)}
+
+${catalogBlock(catalog)}
 
 <h2>По тижнях</h2>
 <p class="muted small">Читачі без власника. «Повернулись» — активні цього тижня, але зареєстровані раніше. Перегляди: сторінок, відкритих читачами / гостями (без ботів).</p>

@@ -1631,7 +1631,7 @@ app.post("/admin/genres-trial", owner, (req, res) => {
   genreTrial.run().catch((e) => console.log(`genretrial: ${e.message}`));
   res.redirect(303, "/admin/genres-trial");
 });
-app.get("/admin", owner, (req, res) => res.send(adminPage({ user: req.user, stats: admin.stats(), overviews: advice.overviewStats(), layout: pages.layout })));
+app.get("/admin", owner, (req, res) => res.send(adminPage({ user: req.user, stats: admin.stats(), overviews: advice.overviewStats(), catalog: store.catalogStats(), layout: pages.layout })));
 app.get("/admin/traffic", owner, (req, res) => res.send(adminPage({ user: req.user, stats: admin.stats(), layout: pages.layout, page: "traffic" })));
 app.get("/admin/stats", owner, (req, res) => res.redirect(301, "/admin/traffic"));
 app.get("/admin/overviews", owner, (req, res) => res.send(overviewsPage({ user: req.user, list: advice.overviewList().map((r) => ({ ...r, complaints: r.down ? advice.complaintsOf(r.book.id) : [] })), stats: advice.overviewStats(), who: (id) => (id && id !== "auto" ? pub(auth.reader(id)) : null), layout: pages.layout })));

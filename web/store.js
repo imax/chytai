@@ -398,6 +398,43 @@ class Store {
     this.linkTranslations();
     this.indexSearch();
     this.seedMerges();
+    this.noteCatalogSize();
+  }
+
+  // How big the catalog is, for /admin (Max, 2026-10-25: «розмір нашого каталогу і темпи поповнення»):
+  // books (works) and editions on the public shelves, the draft shelves apart, per shelf, and one snapshot
+  // a day in meta `catalog:daily` (Kyiv date -> { works, items, draft }), the day's last load wins.
+  catalogStats() {
+    const pub = new Set();
+    const draft = new Set();
+    let items = 0;
+    const shelves = this.shelves.map((s) => {
+      const works = new Set(s.items.filter((it) => !this.hidden.has(it.id)).map((it) => this.canonical(it.id)));
+      for (const w of works) (s.draft ? draft : pub).add(w);
+      if (!s.draft) items += s.items.length;
+      return { id: s.id, name: s.name, kind: s.kind, draft: !!s.draft, items: s.items.length, works: works.size };
+    });
+    for (const w of pub) draft.delete(w);
+    let daily = {};
+    try {
+      daily = JSON.parse(this.db.get("catalog:daily") || "{}");
+    } catch {
+      /* start again */
+    }
+    return { works: pub.size, items, draft: draft.size, shelves, daily };
+  }
+  noteCatalogSize() {
+    try {
+      const { works, items, draft, daily } = this.catalogStats();
+      const day = new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Kyiv" });
+      const last = daily[day];
+      if (last && last.works === works && last.items === items && last.draft === draft) return;
+      daily[day] = { works, items, draft };
+      const keep = Object.keys(daily).sort().slice(-400);
+      this.db.set("catalog:daily", JSON.stringify(Object.fromEntries(keep.map((d) => [d, daily[d]]))));
+    } catch (e) {
+      console.error("catalog size:", e.message);
+    }
   }
 
   // Merges written into matches.json «merges» ([keep, dup], ids or /book/ slugs) when the owner asks in
