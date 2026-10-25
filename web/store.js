@@ -1535,6 +1535,9 @@ class Store {
     // No description of its own (a reader's import, an Amazon link; Max 2026-10-25: «The Five Dysfunctions of a
     // Team» showed an empty «Про книжку»): a catalog edition's, else the Ukrainian translation's, named as such;
     // else the short one Haiku wrote (catalogpasses.js blurb; its answers are stored only by a whole-catalog run).
+    // An English description on a Ukrainian edition (Open Library's Kindle blurb on a reader's «Солярис», Max
+    // 2026-10-25) is not shown; the book then borrows one or gets Haiku's.
+    if (out.blurb && /[а-яіїєґ]/i.test(out.title || "") && !/[а-яіїєґ]/i.test(out.blurb.slice(0, 300))) delete out.blurb;
     if (!out.blurb && borrow) {
       const e = (out.editions || []).find((x) => x.blurb);
       if (e) (out.blurb = e.blurb), (out.blurbSource = e.shelf?.name || "");

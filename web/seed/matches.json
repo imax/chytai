@@ -26,7 +26,9 @@
   ["volodar-mukh-golding", "volodar-mukh"],
   ["pryhody-sherloka-kholmsa-tom-i", "pryhody-sherloka-kholmsa-tom-ii"],
   ["pryhody-sherloka-kholmsa-tom-i", "pryhody-sherloka-kholmsa-tom-iii"],
-  ["pryhody-sherloka-kholmsa-tom-i", "pryhody-sherloka-kholmsa-tom-iv"]
+  ["pryhody-sherloka-kholmsa-tom-i", "pryhody-sherloka-kholmsa-tom-iv"],
+  ["soliaris", "solaris-solaris"],
+  ["soliaris", "soliarys"]
  ],
  "translations": [
   ["all-systems-red", "shchodennyky-vbyvtsebota-vsi-systemy-nebezpeka"],
