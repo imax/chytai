@@ -2,6 +2,8 @@
 FROM node:22-slim
 
 WORKDIR /app
+# vipsthumbnail makes the covers' small copies (thumbs.js).
+RUN apt-get update && apt-get install -y --no-install-recommends libvips-tools && rm -rf /var/lib/apt/lists/*
 ENV NODE_ENV=production
 
 COPY package.json package-lock.json ./

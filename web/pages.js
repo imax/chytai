@@ -75,10 +75,15 @@ function stars(r, { num = true } = {}) {
 // (Max saw «Фундація» without its cover, 2026-10-22), so a failed picture is asked twice more
 // before the block stays.
 const COVER_ERR = "var r=+(this.dataset.r||0);if(r<2){this.dataset.r=r+1;var s=this.src.split('?')[0];setTimeout(()=>{this.src=s+'?r='+(r+1)},1500*(r+1))}else this.remove()";
+// Below the book page's own cover a small copy is shown (thumbs.js): the width shown, in px.
+const SHOWN = { lg: 120, card: 120, md: 64, sm: 52, feed: 48, xs: 40 };
+let thumb = (src) => src;
+const setThumbs = (fn) => (thumb = fn);
 function cover(book, size = "md") {
   const hue = [...String(book.title)].reduce((a, c) => (a * 31 + c.charCodeAt(0)) % 360, 7);
   const ph = `<span class="ph">${esc(book.title)}</span>`;
-  return `<span class="cover ${size}" style="--h:${hue}">${ph}${book.cover ? `<img src="${attr(book.cover)}" alt="" loading="lazy" onerror="${COVER_ERR}">` : ""}</span>`;
+  const src = SHOWN[size] ? thumb(book.cover, SHOWN[size]) : book.cover;
+  return `<span class="cover ${size}" style="--h:${hue}">${ph}${book.cover ? `<img src="${attr(src)}" alt="" loading="lazy" onerror="${COVER_ERR}">` : ""}</span>`;
 }
 
 // A section heading: a rule, a small green label and, on the right, a quiet aside (a link, a switch).
@@ -2355,5 +2360,5 @@ module.exports = {
   addPage, addReviewPage, addFindResults, addPageResult, ukFindPage,
   layout, homePage, bookPage, bookEditPage, russianPage, editPage, libraryPage, readersPage, popularPage, genrePage, genreTrialPage, langTrialPage, origTrialPage, ukTrialPage, catalogAdminPage, aiPassPage, publishersPage, publisherPage, searchPage, searchResults, authorPage,
   loginPage, codePage, signupPage, settingsPage, privacyPage, updatesPage, messagePage, digestPage, followMailPage, wantMailPage, importPage, importPreviewPage, importDonePage,
-  GENRES, esc, byline, STATUS, COPY, inline, isUk, setTitleLinks, setAuthorLinks, setStats, setReadersWithNote,
+  GENRES, esc, byline, STATUS, COPY, inline, isUk, setTitleLinks, setAuthorLinks, setThumbs, setStats, setReadersWithNote,
 };

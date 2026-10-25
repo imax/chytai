@@ -236,6 +236,12 @@ app.use(express.static(path.join(__dirname, "public"), { maxAge: "1y", immutable
 const COVERS = path.join(DATA_DIR, "covers");
 fs.mkdirSync(COVERS, { recursive: true });
 app.use("/covers", express.static(COVERS, { maxAge: "1y", immutable: true }));
+// Small copies of the covers on shelves and lists (thumbs.js).
+const thumbs = new (require("./thumbs").Thumbs)({ db: store.db, dir: COVERS, log: console.log });
+pages.setThumbs((src, shown) => thumbs.url(src, shown));
+app.get("/t/:w/:sig/:src", (req, res) => thumbs.serve(req, res).catch(() => res.status(500).end()));
+bg.every("thumbs-prune", 24 * 3600 * 1000, () => thumbs.prune(), { db: store.db, first: 30 * 60 * 1000 });
+bg.every("thumbs-warm", 6 * 3600 * 1000, () => thumbs.warm([...store.entries.values()].flatMap((es) => Object.keys(es)).map((id) => store.book(id)?.cover)), { db: store.db, first: 20 * 60 * 1000 });
 const COVER_TYPES = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp", "image/gif": "gif", "image/avif": "avif" };
 // A picture's address -> { url: our own /covers/<hash>.<ext> } or, when it can't be fetched, { url: the
 // address itself, error }.
