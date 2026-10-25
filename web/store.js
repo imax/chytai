@@ -499,19 +499,31 @@ class Store {
     tier = 3;
     for (const [a, b] of this.crossPairs || []) link(a, b); // same ISBN, link or words across scripts (linkEditions)
     const titles = new Map(works.map((w) => [this.canonical(w.id), w.title]));
-    const cyr = (id) => /[а-яіїєґ]/i.test(titles.get(id) || this.lib.books[id]?.title || "");
-    const taken = new Set(); // ids already in a Ukrainian–foreign pair
+    const title = (id) => titles.get(id) || this.lib.books[id]?.title || "";
+    const cyr = (id) => /[а-яіїєґ]/i.test(title(id));
+    // A Russian edition never takes the place (it showed «Бог мелочей» instead of «Бог дрібниць»).
+    const russian = (id) => cyr(id) && isRussian(this.book(id, { edited: false, borrow: false }) || { title: title(id) });
+    // Two books that look like one work may share an original: volumes («Атлант розправив плечі. Частина 1» and
+    // «… Частина друга»), editions spelled apart («Пригоди Тома Сойєра» / «Соєра»), a box set. More than half of
+    // the shorter main title's words (first four letters) must be in the other.
+    const stems = (t) => new Set(norm(String(t).replace(/ґ/gi, "г").split(/[.:(]\s*/)[0]).split(" ").filter((w) => w.length >= 3).map((w) => w.slice(0, 4)));
+    const alike = (x, y) => {
+      const [a, b] = [stems(title(x)), stems(title(y))].sort((p, q) => p.size - q.size);
+      return a.size > 0 && (a.size > 1 || b.size === 1) && [...a].filter((w) => b.has(w)).length * 2 > a.size; // one word only against one word («Шерлок» is not «Пригоди Шерлока Холмса»)
+    };
+    const partners = new Map(); // id -> ids across the script line it is paired with
+    const fits = (id, other) => [...(partners.get(id) || [])].every((p) => alike(p, other));
     this.pairLog = { kept: [], dropped: [] }; // for the owner's check, /admin/translations/check
     for (const [x, y, t] of proposed.sort((p, q) => q[2] - p[2])) {
       const a = x && this.canonical(x);
       const b = y && this.canonical(y);
       if (!a || !b || a === b || this.translations.get(a)?.has(b)) continue;
-      const across = cyr(a) !== cyr(b);
-      if (across && t < 5 && (taken.has(a) || taken.has(b))) {
+      const across = cyr(a) !== cyr(b) && !russian(a) && !russian(b);
+      if (across && t < 5 && !(fits(a, b) && fits(b, a))) {
         this.pairLog.dropped.push([a, b, t]);
         continue;
       }
-      if (across) taken.add(a).add(b);
+      if (across) for (const [p, q] of [[a, b], [b, a]]) (partners.get(p) || partners.set(p, new Set()).get(p)).add(q);
       this.pairLog.kept.push([a, b, t]);
       for (const [p, q] of [[a, b], [b, a]]) (this.translations.get(p) || this.translations.set(p, new Set()).get(p)).add(q);
     }
