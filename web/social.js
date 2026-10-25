@@ -192,43 +192,68 @@ class Social {
     return out;
   }
 
-  // «або почни з» under the home page's search (Max, 2026-10-25: «давай зробимо ці підказки динамічними»):
-  // the genres and authors readers have on their shelves, a recent change counting three times, and the
-  // publishers' shelves. The pools are kept ten minutes; each visit draws two genres, a Ukrainian author,
-  // one more author and a publisher from them, so every link leads somewhere readers have been.
+  // «або почни з» under the home page's search (Max, 2026-10-25: «давай зробимо ці підказки динамічними»;
+  // then «враховувати книжки або авторів або видавництва які люди додають в Хочу або вже прочитане»): the
+  // books, authors, publishers and genres of what readers want, read or are reading, each reader once, a
+  // change in the last 30 days counting three times. The tallies are kept ten minutes; each visit draws a
+  // genre, a book, a Ukrainian author, another author and a publisher, the more readers the likelier.
   starts() {
     if (!this.startPool || Date.now() - this.startPool.at > 10 * 60 * 1000) {
       const s = this.store;
       const cutoff = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
       const authorOf = new Map();
       for (const a of s.authors?.list || []) for (const id of a.ids) authorOf.set(id, a);
-      const genres = new Map();
-      const authors = new Map();
-      for (const { id, entry: e } of this.all()) {
+      const tally = () => new Map(); // thing -> Map(reader id -> weight)
+      const count = (m, k, reader, w) => {
+        const r = m.get(k) || m.set(k, new Map()).get(k);
+        r.set(reader, Math.max(r.get(reader) || 0, w));
+      };
+      const genres = tally(), books = tally(), authors = tally(), shelves = tally();
+      for (const { reader, id, entry: e } of this.all()) {
+        if (!["want", "reading", "read"].includes(e.status)) continue;
         const w = (e.updated || e.added || "") >= cutoff ? 3 : 1;
-        const book = s.book(id);
-        for (const g of mainGenres(book?.tags || [])) if (g !== "художня") genres.set(g, (genres.get(g) || 0) + w);
-        const a = authorOf.get(id) || authorOf.get(s.canonical(id));
-        if (a) authors.set(a, (authors.get(a) || 0) + w);
+        const c = s.canonical(id);
+        const book = s.book(c);
+        if (!book) continue;
+        count(books, c, reader.id, w);
+        for (const g of mainGenres(book.tags || [])) if (g !== "художня") count(genres, g, reader.id, w);
+        const a = authorOf.get(id) || authorOf.get(c);
+        if (a) count(authors, a, reader.id, w);
+        for (const { shelf } of s.editions.get(c) || []) if (shelf.kind === "publisher" && !shelf.draft) count(shelves, shelf, reader.id, w);
       }
-      // Ukrainian: Wikidata says so, or a Cyrillic name with no Latin spelling anywhere (not a translated one).
-      const isUa = (a) => a.ua || (/[а-яіїєґ]/i.test(a.name) && !a.other);
-      const top = (m, n, ok = () => true) => [...m].filter(([k]) => ok(k)).sort((a, b) => b[1] - a[1]).slice(0, n).map(([k]) => k);
+      // Ukrainian: Wikidata says so, or a Cyrillic name with no Latin spelling anywhere and no book of theirs
+      // a translation (Haiku's ai_orig, or one paired with an original).
+      const origs = s.aiOrigs();
+      const translated = (id) => origs.get(id)?.kind === "translation" || s.translations?.get(id)?.size;
+      const isUa = (a) => a.ua || (/[а-яіїєґ]/i.test(a.name) && !a.other && !a.ids.some(translated));
+      // The things at least two readers have, most first: [{ text, href, w }].
+      const top = (m, n, ok, link) =>
+        [...m]
+          .filter(([k, r]) => r.size >= 2 && ok(k))
+          .map(([k, r]) => ({ ...link(k), w: [...r.values()].reduce((x, y) => x + y, 0) }))
+          .sort((x, y) => y.w - x.w)
+          .slice(0, n);
+      const author = (a) => ({ text: a.name, href: a.href });
       this.startPool = {
         at: Date.now(),
-        genres: top(genres, 12, (g) => (s.genreBooks(g) || []).length >= 20).map((g) => ({ text: g, href: `/genre/${slugify(g)}` })),
-        ua: top(authors, 12, (a) => isUa(a) && a.ids.length >= 2).map((a) => ({ text: a.name, href: a.href })),
-        other: top(authors, 20, (a) => !isUa(a) && a.ids.length >= 2).map((a) => ({ text: a.name, href: a.href })),
-        shelves: s.shelves.filter((sh) => sh.kind === "publisher" && !sh.draft && sh.items.length >= 20).map((sh) => ({ text: sh.name, href: `/publishers/${encodeURIComponent(sh.id)}` })),
-
+        genres: top(genres, 10, (g) => (s.genreBooks(g) || []).length >= 20, (g) => ({ text: g, href: `/genre/${slugify(g)}` })),
+        books: top(books, 20, (id) => s.book(id).title.length <= 32, (id) => ({ text: s.book(id).title, href: s.book(id).href })),
+        ua: top(authors, 12, isUa, author),
+        other: top(authors, 20, (a) => !isUa(a), author),
+        shelves: top(shelves, 10, () => true, (sh) => ({ text: sh.name, href: `/publishers/${encodeURIComponent(sh.id)}` })),
       };
     }
     const p = this.startPool;
-    const [g1, g2] = shuffle([...p.genres]);
-    const [u1, u2] = shuffle([...p.ua]);
-    const [o1] = shuffle([...p.other]);
-    const [sh] = shuffle([...p.shelves]);
-    return [g1, u1, g2, o1 || u2, sh].filter(Boolean);
+    const taken = new Set();
+    // One of the list, as likely as its weight; nothing twice.
+    const draw = (list) => {
+      const left = list.filter((x) => !taken.has(x.href));
+      let r = Math.random() * left.reduce((s, x) => s + x.w, 0);
+      const x = left.find((x) => (r -= x.w) < 0) || left[0];
+      if (x) taken.add(x.href);
+      return x;
+    };
+    return [draw(p.genres), draw(p.books), draw(p.ua), draw(p.other) || draw(p.ua), draw(p.shelves)].filter(Boolean);
   }
 
   // A recommendation list read the way people read series (Max, 2026-10-23): a later volume gives way to the
