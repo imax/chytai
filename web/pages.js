@@ -446,8 +446,10 @@ function ukForm(book, state, error) {
 }
 
 // How long the book takes to read (Max, 2026-10-23: «просто загально 9 годин»): about 50 pages an hour.
+// Hidden since 2026-10-25 (Max: «Не зайшло мені»); flip READING_TIME to bring it back.
+const READING_TIME = false;
 function readingTime(pages) {
-  if (!(pages > 0)) return "";
+  if (!READING_TIME || !(pages > 0)) return "";
   const h = Math.round(pages / 50);
   return h < 1 ? "≈ 1 година читання" : `≈ ${count(h, "година", "години", "годин")} читання`;
 }
