@@ -511,7 +511,7 @@ ${pager}
 }
 
 // The catalog's size and how fast it grows (store.catalogStats; Max, 2026-10-25). Days start 2026-10-25.
-function catalogBlock(c) {
+function catalogBlock(c, full = false) {
   if (!c) return "";
   const days = Object.keys(c.daily).sort();
   const at = (back) => {
@@ -534,16 +534,24 @@ function catalogBlock(c) {
     .sort((a, b) => b.works - a.works)
     .map((s) => `<tr><th style="white-space:normal">${s.name}${s.draft ? ' <em>чернетка</em>' : ""}</th><td>${s.works}</td><td>${s.items}</td></tr>`)
     .join("");
-  return `<h2>Каталог</h2>
-<p class="muted small">Книжка — один твір з усіма виданнями (папір, e-book, аудіо, різні видавництва). Чернетки бачиш лише ти; книжки, які є й на відкритих полицях, у чернетках не рахуються. Рахується з 25 жовтня.</p>
-<div class="stats">${tile(c.works, "книжок у каталогі", `${c.items} видань на ${c.shelves.filter((s) => !s.draft).length} полицях`)}${tile(growth(7) || "·", "за 7 днів", growth(1) ? `${growth(1)} за добу` : "ще нема з чим порівняти")}${tile(growth(28) || "·", "за 28 днів")}${tile(c.draft, "у чернетках", `${c.shelves.filter((s) => s.draft).length} полиць бачиш лише ти`)}</div>
+  const tiles = `<div class="stats">${tile(c.works, "книжок у каталогі", `${c.items} видань на ${c.shelves.filter((s) => !s.draft).length} полицях`)}${tile(growth(7) || "·", "за 7 днів", growth(1) ? `${growth(1)} за добу` : "ще нема з чим порівняти")}${tile(growth(28) || "·", "за 28 днів")}${tile(c.draft, "у чернетках", c.draft ? `${c.shelves.filter((s) => s.draft).length} полиць бачиш лише ти` : "")}</div>`;
+  // On /admin only the summary, the tables on /admin/shelves (Max, 2026-10-25: like «Нові читачі»).
+  if (!full) return `<h2>Каталог</h2>\n${tiles}\n<p class="small"><a class="text-link" href="/admin/shelves">Каталог по днях і по полицях (${c.shelves.length})</a></p>`;
+  return `<section class="admin">
+<section class="page-head"><div><p class="crumbs"><a href="/admin">Статистика</a> / Каталог</p><h1>Каталог</h1><p class="sub">Книжка — один твір з усіма виданнями (папір, e-book, аудіо, різні видавництва). Чернетки бачиш лише ти; книжки, які є й на відкритих полицях, у чернетках не рахуються. Рахується з 25 жовтня.</p></div></section>
+${tiles}
+<h2>По днях</h2>
 <div class="tbl"><table>
 <thead><tr><th>День</th><th>Книжок</th><th>За день</th><th>Видань</th><th>У чернетках</th></tr></thead>
 <tbody>${rows}</tbody></table></div>
-<details><summary class="small">По полицях (${c.shelves.length})</summary>
+<h2>По полицях</h2>
 <div class="tbl"><table>
 <thead><tr><th>Полиця</th><th>Книжок</th><th>Видань</th></tr></thead>
-<tbody>${shelves}</tbody></table></div></details>`;
+<tbody>${shelves}</tbody></table></div>
+</section>`;
+}
+function shelvesPage({ user, catalog, layout }) {
+  return layout({ title: "Каталог · Статистика", user, path: "/admin", body: catalogBlock(catalog, true) });
 }
 
 function adminPage({ user, stats: s, overviews: o = null, catalog = null, layout, page = "main" }) {
@@ -656,4 +664,4 @@ function overviewsPage({ user, list, stats: o, who, layout }) {
   return layout({ title: "Огляди від Claude · Статистика", user, path: "/admin", body });
 }
 
-module.exports = { Admin, adminPage, readersPage, overviewsPage, dayOf, weekOf, sectionOf };
+module.exports = { Admin, adminPage, shelvesPage, readersPage, overviewsPage, dayOf, weekOf, sectionOf };
