@@ -1928,7 +1928,14 @@ app.get("/admin/translations/check", owner, (req, res) => {
   const row = ([a, b, tier]) => ({ uk: t(cyr(a) ? a : b), orig: t(cyr(a) ? b : a), tier, ids: [a, b] });
   const kept = store.pairLog.kept.filter(([a, b]) => cyr(a) !== cyr(b)).map(row);
   const dropped = store.pairLog.dropped.map((p) => ({ ...row(p), instead: [...(store.translations.get(p[0]) || []), ...(store.translations.get(p[1]) || [])].map(t) }));
-  res.json({ kept: kept.length, byTier: kept.reduce((m, k) => ({ ...m, [k.tier]: (m[k.tier] || 0) + 1 }), {}), dropped, weak: kept.filter((k) => k.tier <= 2), owner: kept.filter((k) => k.tier === 5) });
+  // Originals with more than one Ukrainian page: the same edition twice is a dupe to merge on /admin/dupes.
+  const many = new Map();
+  for (const k of kept) {
+    const o = cyr(k.ids[0]) ? k.ids[1] : k.ids[0];
+    (many.get(o) || many.set(o, []).get(o)).push(cyr(k.ids[0]) ? k.ids[0] : k.ids[1]);
+  }
+  const groups = [...many].filter(([, uk]) => uk.length > 1).map(([o, uk]) => ({ orig: t(o), href: store.href(o), uk: uk.map((id) => ({ title: t(id), href: store.href(id) })) }));
+  res.json({ groups, kept: kept.length, byTier: kept.reduce((m, k) => ({ ...m, [k.tier]: (m[k.tier] || 0) + 1 }), {}), dropped, weak: kept.filter((k) => k.tier <= 2), owner: kept.filter((k) => k.tier === 5) });
 });
 // The owner's verdict on a group of look-alikes: keep=<id> folds the rest into it, verdict=different keeps them apart.
 const decidedJson = (req, res, back) => (req.get("X-Requested-With") === "fetch" ? res.json({ ok: true, decided: pages.decidedList(store.decisions(), (id) => store.book(id)) }) : res.redirect(back));
