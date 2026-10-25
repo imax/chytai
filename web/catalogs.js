@@ -32,7 +32,8 @@ const ABOUT_HEAD = /^про що (ця |цей |це )?(книжк|книг|ро
 const sentences = (p) => p.split(/(?<=[.!?…»"])(?<!(?:^|\s)\p{Lu}\.)\s+(?=[«"„(—–\-\p{Lu}\d])/u);
 const whole = (s) => /[.!?…»")]$/.test(s);
 function about(h, max = 1000) {
-  const raw = String(h || "");
+  // Markup sent escaped («&lt;br&gt;», Богдан's «Соляріс», Max 2026-10-25) is markup once decoded.
+  const raw = /&lt;\/?[a-z][^&]*&gt;/i.test(String(h || "")) ? String(h).replace(/&amp;(lt|gt);/g, "&$1;").replace(/&lt;/g, "<").replace(/&gt;/g, ">") : String(h || "");
   const lines = ent(
     raw
       .replace(/<h\d[^>]*>([\s\S]*?)<\/h\d>/gi, "\n\u0001$1\n")
@@ -52,7 +53,7 @@ function about(h, max = 1000) {
   const paras = body
     .filter((l) => l[0] !== "\u0002")
     .map((l, i, all) => {
-      let s = sentences(l).filter((s) => !BUY.test(s) && !ABOUT_HEAD.test(s) && !/^(чому варто|для кого)(?=\s).*\?$/i.test(s));
+      let s = sentences(l).filter((s) => !BUY.test(s) && !ABOUT_HEAD.test(s) && !/^(чому варто|для кого)(?=\s).*\?$/i.test(s) && !/^рецензія на книг/i.test(s));
       if (cutOff && i === all.length - 1 && s.length > 1 && !whole(s[s.length - 1])) s = s.slice(0, -1);
       return s;
     })
