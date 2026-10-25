@@ -33,6 +33,7 @@ CREATE TABLE IF NOT EXISTS entries (
 CREATE TABLE IF NOT EXISTS subscriptions (reader TEXT NOT NULL, shelf TEXT NOT NULL, PRIMARY KEY (reader, shelf));
 CREATE TABLE IF NOT EXISTS follows (reader TEXT NOT NULL, target TEXT NOT NULL, created TEXT NOT NULL, PRIMARY KEY (reader, target));
 CREATE TABLE IF NOT EXISTS follow_mails (reader TEXT NOT NULL, target TEXT NOT NULL, sent TEXT NOT NULL, PRIMARY KEY (reader, target));
+CREATE TABLE IF NOT EXISTS want_mail (reader TEXT NOT NULL, book TEXT NOT NULL, had TEXT NOT NULL, at TEXT NOT NULL, PRIMARY KEY (reader, book));
 CREATE TABLE IF NOT EXISTS slugs (slug TEXT PRIMARY KEY, id TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS ai_genre (id TEXT PRIMARY KEY, genres TEXT NOT NULL, prompt INTEGER NOT NULL, at TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS ai_answer (pass TEXT NOT NULL, id TEXT NOT NULL, answer TEXT NOT NULL, prompt INTEGER NOT NULL, at TEXT NOT NULL, PRIMARY KEY (pass, id));
@@ -67,6 +68,8 @@ function open(dataDir) {
   if (!db.prepare("PRAGMA table_info(entries)").all().some((c) => c.name === "updated")) db.exec("ALTER TABLE entries ADD COLUMN updated TEXT");
   // Whether a reader wants a letter when someone starts following them (Max, 2026-10-20); on by default.
   if (!db.prepare("PRAGMA table_info(readers)").all().some((c) => c.name === "follow_mail")) db.exec("ALTER TABLE readers ADD COLUMN follow_mail INTEGER NOT NULL DEFAULT 1");
+  // Whether a reader wants a letter when a «хочу» book turns up (wantmail.js, Max 2026-10-25); on by default.
+  if (!db.prepare("PRAGMA table_info(readers)").all().some((c) => c.name === "want_mail")) db.exec("ALTER TABLE readers ADD COLUMN want_mail INTEGER NOT NULL DEFAULT 1");
   // Whether search engines may list the reader's page (settings, 2026-10-21); yes by default.
   if (!db.prepare("PRAGMA table_info(readers)").all().some((c) => c.name === "noindex")) db.exec("ALTER TABLE readers ADD COLUMN noindex INTEGER NOT NULL DEFAULT 0");
   // «Читаю зараз» (Max, 2026-10-22), a reader's status: JSON { books: [{ id, since }], at }.

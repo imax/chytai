@@ -123,7 +123,7 @@ class Auth {
   // Everything of theirs goes: entries, subscriptions, sessions, follows both ways, the row.
   deleteReader(id) {
     this.db.tx(() => {
-      for (const t of ["entries", "subscriptions", "sessions", "follows", "follow_mails", "visits", "digest_log"]) this.db.prepare(`DELETE FROM ${t} WHERE reader = ?`).run(id);
+      for (const t of ["entries", "subscriptions", "sessions", "follows", "follow_mails", "visits", "digest_log", "want_mail"]) this.db.prepare(`DELETE FROM ${t} WHERE reader = ?`).run(id);
       for (const t of ["follows", "follow_mails"]) this.db.prepare(`DELETE FROM ${t} WHERE target = ?`).run(id);
       this.db.prepare("DELETE FROM readers WHERE id = ?").run(id);
     });

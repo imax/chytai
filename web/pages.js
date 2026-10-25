@@ -1747,6 +1747,7 @@ function mailSettingsPage({ user, values, saved = false }) {
   ${user.email ? `<p class="muted small">Листи приходять на ${esc(user.email)}. <a class="text-link" href="/settings">Змінити пошту</a></p>` : `<p class="muted small">Пошти не вказано, тож листів не буде. <a class="text-link" href="/settings">Додати пошту</a></p>`}
   ${sw("digest", "Пʼятничний дайджест", "Новинки на сайті, полиці та видавництва, на які ви підписані.")}
   ${sw("follow_mail", "Новий читач стежить за вами", "Лист, коли хтось уперше почне стежити за вашою полицею.")}
+  ${sw("want_mail", "Книжка з «Хочу прочитати» тепер є", "Лист, коли книжка зі списку зʼявилась у продажу, українською чи безкоштовно в Читалці.")}
   <div class="actions"><button class="btn primary">Зберегти</button></div>
 </form>
 <section class="form import-box">
@@ -1830,7 +1831,7 @@ function privacyPage({ user }) {
 <h2>Що бачать інші</h2>
 <p><strong>Ваша публічна полиця з книжками та оцінками.</strong> Будь-хто може відкрити chytai.org.ua/@нікнейм і побачити ваше ім’я, книжки, оцінки й нотатки. Так і задумано, бо Читай це про те, щоб знаходити цікаві книжки. Тож пишіть у нотатках лише те, чим готові поділитися.</p>
 <h2>Розсилки</h2>
-<p>У нас є щотижнева розсилка з новинками на сайті і ми також надсилаємо вам листа коли хтось починає стежити за вашою полицею. Вимкнути розсилки можна одним кліком за посиланням у листі або в <a class="text-link" href="/settings">налаштуваннях</a>.</p>
+<p>У нас є щотижнева розсилка з новинками на сайті і ми також надсилаємо вам листа коли хтось починає стежити за вашою полицею або коли книжка з вашого «Хочу прочитати» зʼявляється в продажу, українською чи безкоштовно. Вимкнути розсилки можна одним кліком за посиланням у листі або в <a class="text-link" href="/settings">налаштуваннях</a>.</p>
 <h2>Видалення акаунту</h2>
 <p>У <a class="text-link" href="/settings">налаштуваннях</a> є кнопка «Видалити акаунт». Вона стирає ваші дані і виходить з усіх пристроїв. Відновити це не можна, тільки створіть новий акаунт.</p>
 <p>З резервних копій ваші дані зникнуть самі, коли старі копії видаляться (до 90 днів). Якщо хочете швидше — напишіть нам.</p>
@@ -2121,6 +2122,13 @@ function followMailPage({ on, action, user }) {
 <form method="post" action="${attr(action)}"><input type="hidden" name="page" value="1"><button class="btn">${on ? "Вимкнути" : "Увімкнути знову"}</button></form>
 </section>` });
 }
+function wantMailPage({ on, action, user }) {
+  const title = on ? "Листи знову приходять" : "Листів більше не буде";
+  return layout({ title, user, body: `<section class="auth prose"><h1>${title}</h1>
+<p>${on ? "Коли книжка з вашого «Хочу прочитати» зʼявиться в продажу, українською чи безкоштовно, ви отримаєте лист." : "Листів про книжки з «Хочу прочитати» більше не буде. Список лишається як був."}</p>
+<form method="post" action="${attr(action)}"><input type="hidden" name="page" value="1"><button class="btn">${on ? "Вимкнути" : "Увімкнути знову"}</button></form>
+</section>` });
+}
 function digestPage({ on, action, user }) {
   const title = on ? "Листи знову приходять" : "Листів більше не буде";
   return layout({ title, user, body: `<section class="auth prose"><h1>${title}</h1>
@@ -2316,6 +2324,6 @@ module.exports = {
   welcomePage,
   addPage, addReviewPage, addFindResults, addPageResult, ukFindPage,
   layout, homePage, bookPage, bookEditPage, russianPage, editPage, libraryPage, readersPage, popularPage, genrePage, genreTrialPage, langTrialPage, origTrialPage, ukTrialPage, catalogAdminPage, aiPassPage, publishersPage, publisherPage, searchPage, searchResults, authorPage,
-  loginPage, codePage, signupPage, settingsPage, privacyPage, updatesPage, messagePage, digestPage, followMailPage, importPage, importPreviewPage, importDonePage,
+  loginPage, codePage, signupPage, settingsPage, privacyPage, updatesPage, messagePage, digestPage, followMailPage, wantMailPage, importPage, importPreviewPage, importDonePage,
   GENRES, esc, byline, STATUS, COPY, inline, isUk, setTitleLinks, setAuthorLinks, setStats, setReadersWithNote,
 };

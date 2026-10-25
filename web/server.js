@@ -451,11 +451,12 @@ app.post("/settings", signed, (req, res) => {
 });
 // The letters' tab: the weekly letter and the «стежить за вами» letter, each on or off.
 app.get("/settings/mail", signed, (req, res) => {
-  res.send(pages.mailSettingsPage({ user: req.user, values: { digest: digest.enabled(req.user.id), follow_mail: auth.followMailEnabled(req.user.id) }, saved: !!req.query.saved }));
+  res.send(pages.mailSettingsPage({ user: req.user, values: { digest: digest.enabled(req.user.id), follow_mail: auth.followMailEnabled(req.user.id), want_mail: wantMail.enabled(req.user.id) }, saved: !!req.query.saved }));
 });
 app.post("/settings/mail", signed, (req, res) => {
   digest.setEnabled(req.user.id, !!req.body.digest);
   auth.setFollowMail(req.user.id, !!req.body.follow_mail);
+  wantMail.setEnabled(req.user.id, !!req.body.want_mail);
   res.redirect("/settings/mail?saved=1");
 });
 app.post("/settings/delete", signed, (req, res) => {
@@ -686,6 +687,9 @@ pages.setStats((id) => social.stats(id));
 // 2026-10-20: «Включаємо на всіх»); WEB_DIGEST_TO=owner limits it to the owner again.
 const digest = new Digest({ store, auth, social, lists, libraries, site: SITE, ownerId: OWNER_ID, to: process.env.WEB_DIGEST_TO === "owner" ? "owner" : "all" });
 if (bg.background) digest.schedule();
+// «Книжка з вашого «Хочу прочитати» тепер є» (wantmail.js): once a day, a letter of its own (Max, 2026-10-25).
+const wantMail = new (require("./wantmail").WantMail)({ store, auth, digest, site: SITE, ownerId: OWNER_ID, to: process.env.WEB_WANTMAIL_TO === "owner" ? "owner" : "all" });
+if (bg.background) wantMail.schedule();
 // The welcome letter right after sign-up (welcome-mail.js), while the owner has it switched on.
 const welcomeMail = new WelcomeMail({ store, auth, site: SITE, ownerId: OWNER_ID });
 pages.setReadersWithNote((id) => readersOf(id).find((r) => r.entry.note) || null);
@@ -788,6 +792,23 @@ const followMailSwitch = (req, res, on) => {
 app.get("/follow-mail/unsubscribe/:id/:token", (req, res) => followMailSwitch(req, res, false));
 app.post("/follow-mail/unsubscribe/:id/:token", (req, res) => followMailSwitch(req, res, false));
 app.post("/follow-mail/resubscribe/:id/:token", (req, res) => followMailSwitch(req, res, true));
+const wantMailSwitch = (req, res, on) => {
+  const reader = auth.reader(req.params.id);
+  if (!reader || !digest.check(reader.id, req.params.token)) return res.status(404).send(pages.messagePage({ title: "Посилання не підходить", text: "Вимкнути листи можна в налаштуваннях.", user: req.user }));
+  wantMail.setEnabled(reader.id, on);
+  if (req.method === "POST" && !req.body.page) return res.type("text").send("OK");
+  res.send(pages.wantMailPage({ on, action: `/want-mail/${on ? "unsubscribe" : "resubscribe"}/${encodeURIComponent(reader.id)}/${req.params.token}`, user: req.user }));
+};
+app.get("/want-mail/unsubscribe/:id/:token", (req, res) => wantMailSwitch(req, res, false));
+app.post("/want-mail/unsubscribe/:id/:token", (req, res) => wantMailSwitch(req, res, false));
+app.post("/want-mail/resubscribe/:id/:token", (req, res) => wantMailSwitch(req, res, true));
+// The owner's look at it: what a reader would get now (?reader=<username>), and the last run.
+app.get("/want-mail/preview", owner, (req, res) => {
+  const reader = req.query.reader ? auth.byUsername(req.query.reader) : auth.reader(req.user.id);
+  if (!reader) return res.status(404).type("text").send("Немає такого читача");
+  const l = wantMail.preview(reader);
+  res.type("text").send(l ? `Тема: ${l.subject}\n\n${l.text}` : `Для @${reader.username} зараз нічого нового (або ще не було першої перевірки).\nОстанній запуск: ${store.db.get("wantmail:last") || "ще не було"}`);
+});
 
 function libraryRows(reader) {
   const rows = store.library(reader);
