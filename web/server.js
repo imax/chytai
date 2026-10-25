@@ -1685,7 +1685,7 @@ app.post("/api/overview/:id/vote", signed, (req, res) => {
   try {
     const r = advice.vote(book.id, req.user.id, v, note);
     // A complaint goes to the owner at once, like a new review.
-    if (v === -1 && note && !req.owner) notifyOwner(`Скарга на огляд: ${book.title}`, [`${req.user.name} (@${req.user.username}) про «Що пишуть в інтернеті»:`, "", note || "(без слів)", "", `Книжка: ${site(req)}${store.href(book.id)}#about`, `Усі огляди: ${site(req)}/admin/overviews`].join("\n"));
+    if (v === -1 && note && !req.owner) notifyOwner(`Скарга на огляд: ${book.title}`, [`${req.user.name} (@${req.user.username}) про «Що пишуть в інтернеті»:`, "", note || "(без слів)", "", `Книжка: ${site(req)}${store.href(book.id)}#reviews`, `Усі огляди: ${site(req)}/admin/overviews`].join("\n"));
     res.json(r);
   } catch (e) {
     res.status(400).json({ error: e.message });

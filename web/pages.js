@@ -513,7 +513,8 @@ function bookPage({ inGenre = null, fresh = null, pick = null, awards = [], auth
       ${writings.length ? writingsList(writings, book, user) : ""}
       ${user ? addWriting(book, reviewError) : ""}
     </section>` : ""}
-    ${ru ? "" : aboutBlock(book, shelf, overview, user, overviewVote, ukAsk, editionError)}
+    ${ru ? "" : aboutBlock(book, shelf, ukAsk, editionError)}
+    ${ru ? "" : reviewsBlock(book, overview, user, overviewVote)}
     ${authorBlock(authorInfo)}
   </div>
   <aside>
@@ -568,25 +569,33 @@ function overviewHtml(o, user, vote = null, { folded = false } = {}) {
   return `<div class="advice-text${folded ? " folded" : ""}">${marked.parse(o.text).replace(/<a href="http/g, '<a target="_blank" rel="noopener" href="http')}</div>
 ${folded ? `<p class="advice-more"><button class="text-link" data-unfold>Читати далі</button></p>` : ""}<p class="small muted">Claude, за відгуками в інтернеті · ${writingDate(o.created.slice(0, 10))}${votes}</p>`;
 }
-// «Про книжку» (Max, 2026-10-23: «зробити ці відгуки як підрозділ про книжку, а старий про книжку викинути»):
-// one section under the old heading. With an overview it shows the overview instead of the shop's blurb;
-// without one, the blurb as before, and a signed-in reader can ask for the overview under it.
-function aboutBlock(book, shelf, o, user, vote, ukAsk, editionError) {
-  const canSee = o && (OVERVIEW_PUBLIC || user?.owner);
-  const canAsk = !canSee && user && (OVERVIEW_PUBLIC || user.owner);
-  if (!canSee && !canAsk && !book.blurb && !book.ukTitle && !book.origTitle && !ukAsk) return "";
+// «Про книжку»: the publisher's or shop's description, the Ukrainian edition line and the «Додати» form.
+// (2026-10-23 the overview lived in here instead of the blurb; 2026-10-25 Max moved it to «Відгуки» below.)
+function aboutBlock(book, shelf, ukAsk, editionError) {
+  if (!book.blurb && !book.ukTitle && !book.origTitle && !ukAsk) return "";
   const blurb = book.blurb ? `<div class="about">${book.blurb.split(/\n\n+/).map((t) => `<p>${esc(t)}</p>`).join("")}</div>` : "";
-  const blurbSource = book.blurb && !book.edited?.blurb ? (book.blurbSource ? `Опис: ${esc(book.blurbSource)}` : `Опис з сайту ${esc(shelf ? shelf.name : book.source)}`) : "";
-  const body = canSee ? overviewHtml(o, user, vote, { folded: true })
-    : `${blurb}${blurbSource || canAsk ? `<p class="small muted">${[blurbSource, canAsk ? `<button class="text-link small" data-ask="overview">Що кажуть про цю книжку?</button>` : ""].filter(Boolean).join(" · ")}</p>` : ""}`;
+  const blurbSource = book.blurb && !book.edited?.blurb ? `<p class="small muted">${book.blurbSource ? `Опис: ${esc(book.blurbSource)}` : `Опис з сайту ${esc(shelf ? shelf.name : book.source)}`}</p>` : "";
   const uk = book.ukTitle || ukAsk ? `<p class="small muted uk-line">${ukLine(book, ukAsk)}</p>` : "";
   // The original Haiku named for a Ukrainian book while no catalog has it (store.aiOrigs).
   const orig = book.origTitle ? `<p class="small muted uk-line">Оригінал: «${esc(book.origTitle)}»${book.origAuthor ? `, ${esc(book.origAuthor)}` : ""}</p>` : "";
-  return `<section class="block advice" id="about" data-book="${attr(book.id)}">
+  return `<section class="block" id="about">
       ${label("Про книжку")}
-      <div class="advice-body">${body}</div>
+      ${blurb}${blurbSource}
       ${uk}${orig}
       ${ukForm(book, ukAsk, editionError)}
+    </section>`;
+}
+// «Відгуки» (Max, 2026-10-25: «повернемо блок Про книжку з описом видавництв, а наш ai-overview поставимо після
+// нього»): Claude's overview of the reception as its own block after «Про книжку», folded; a signed-in reader
+// can ask for one where there is none yet.
+function reviewsBlock(book, o, user, vote) {
+  const canSee = o && (OVERVIEW_PUBLIC || user?.owner);
+  const canAsk = !canSee && user && (OVERVIEW_PUBLIC || user.owner);
+  if (!canSee && !canAsk) return "";
+  const inner = canSee ? overviewHtml(o, user, vote, { folded: true }) : `<p class="advice-ask"><button class="text-link" data-ask="overview">Що кажуть про цю книжку?</button></p>`;
+  return `<section class="block advice" id="reviews" data-book="${attr(book.id)}">
+      ${label("Відгуки")}
+      <div class="advice-body">${inner}</div>
     </section>`;
 }
 // «Огляди» (reviews.js): three links, the rest under «Ще N»; the owner, or the reader who added it, can take one off.
@@ -1309,7 +1318,7 @@ function catalogAdminPage({ user, passes, claude }) {
     ["/admin/translations", "Пари перекладів", "кандидати з Вікіданих"],
     ["/admin/ukfind", "Пошук українських видань", "Claude з веб-пошуком, вручну"],
     ["/admin/readeat", "Readeat", "дані для книжок читачів"],
-    ["/admin/overviews", "Огляди від Claude", "«Про книжку» і голоси читачів"],
+    ["/admin/overviews", "Огляди від Claude", "«Відгуки» і голоси читачів"],
     ["/admin/russian", "Російські книжки", "що сайт вважає російським"],
   ];
   const body = `
@@ -1825,7 +1834,7 @@ function privacyPage({ user }) {
 <p>Ми користуємося кількома сервісами, без яких сайт не працює:</p>
 <ul>
 <li><strong>Fly.io</strong> — сервери у Франкфурті (Німеччина), там лежить база сайту і книжки з читалки.</li>
-<li><strong>Anthropic</strong> (Claude) — коли в читалці ви просите пояснити чи перекласти уривок, сам уривок і трохи тексту навколо йдуть в Anthropic, щоб Claude відповів. Для огляду відгуків у розділі «Про книжку» на сторінці книжки туди йдуть лише назва, автор і опис книжки. Вашої пошти, імені й полиці Anthropic не отримує.</li>
+<li><strong>Anthropic</strong> (Claude) — коли в читалці ви просите пояснити чи перекласти уривок, сам уривок і трохи тексту навколо йдуть в Anthropic, щоб Claude відповів. Для блоку «Відгуки» на сторінці книжки туди йдуть лише назва, автор і опис книжки. Вашої пошти, імені й полиці Anthropic не отримує.</li>
 <li><strong>Resend</strong> — листи від code@chytai.org.ua.</li>
 <li><strong>Claude, ChatGPT чи інший AI-чат</strong>, якщо ви самі підключили його до Chytai в <a class="text-link" href="/settings/chats">налаштуваннях</a>. Тоді чат бачить вашу полицю (книжки, оцінки, нотатки) і може додавати на неї книжки, коли ви його про це просите. Що далі відбувається з розмовою, вирішують правила того чату. Відключити його можна будь-коли.</li>
 <li><strong>Google Fonts</strong> — шрифти сайту. Ваш браузер завантажує їх з серверів Google, тож Google бачить вашу IP-адресу, як і на більшості сайтів.</li>
