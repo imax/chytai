@@ -1149,9 +1149,7 @@ app.get("/book/:id", (req, res) => {
   const free = !file && freeFileFor(book);
   const alsoBooks = alsoFor(req, book.id);
   const myLists = req.user ? lists.of(req.user.id).map((l) => ({ id: l.id, title: l.title, count: l.count, has: lists.has(l.id, book.id) })) : null;
-  const volumes = book.translations?.length ? [] : ukVolumes(book);
-  if (volumes.length) book.ukVolumes = volumes;
-  res.send(pages.bookPage({ ...(SHOW_AUTHOR_ABOUT ? authorAbout(book) : {}), ...discovery(req, book, alsoBooks.also), lists: lists.withBook(book.id).map(withCovers), myLists, freeRead: !!free, book, entry: store.sharedEntry(req.user?.id, book.id), now: !!req.user && nowIds(req.user.id).has(store.canonical(book.id)), user: req.user, readUrl: file ? `${READER_URL}/?open=${encodeURIComponent(file.name)}` : free ? `${READER_URL}/free/${encodeURIComponent(free.name)}` : "", shelf: book.shelf && (req.owner || !isDraft(book.shelf)) ? store.shelf(book.shelf) : null, inLibrary: inLibraryMap(req), readers: readersOf(book.id), ...alsoBooks, writings: reviews.of(book.id), reviewError: String(req.query.review_error || "").slice(0, 300), editionError: String(req.query.edition_error || "").slice(0, 300), ukAsk: book.ukVolumes ? null : ukAskFor(req, book) || (req.user && req.query.edition_error ? "ask" : null), advice: advice.state(req.user, book.id), overview: linkedOverview(book), overviewVote: advice.voteOf(book.id, req.user?.id) }));
+  res.send(pages.bookPage({ ...(SHOW_AUTHOR_ABOUT ? authorAbout(book) : {}), ...discovery(req, book, alsoBooks.also), lists: lists.withBook(book.id).map(withCovers), myLists, freeRead: !!free, book, entry: store.sharedEntry(req.user?.id, book.id), now: !!req.user && nowIds(req.user.id).has(store.canonical(book.id)), user: req.user, readUrl: file ? `${READER_URL}/?open=${encodeURIComponent(file.name)}` : free ? `${READER_URL}/free/${encodeURIComponent(free.name)}` : "", shelf: book.shelf && (req.owner || !isDraft(book.shelf)) ? store.shelf(book.shelf) : null, inLibrary: inLibraryMap(req), readers: readersOf(book.id), ...alsoBooks, writings: reviews.of(book.id), reviewError: String(req.query.review_error || "").slice(0, 300), editionError: String(req.query.edition_error || "").slice(0, 300), ukAsk: ukAskFor(req, book) || (req.user && req.query.edition_error ? "ask" : null), advice: advice.state(req.user, book.id), overview: linkedOverview(book), overviewVote: advice.voteOf(book.id, req.user?.id) }));
 });
 
 // An author: their works from Wikidata (linked to our books of them) and every book of theirs we have.
@@ -1720,27 +1718,6 @@ const ukfind = new UkFinder({ store, db: store.db, apiKey: process.env.ANTHROPIC
 // Also a foreign book Wikidata knows no translation of (Max, 2026-10-23: «тут немає перекладу але він є», Feynman):
 // a Latin title, no Ukrainian edition or translation linked.
 const CYR_RE = /[а-яіїєґ]/i;
-// A box set or an omnibus («Harry Potter vol 1-7», «… Box Set», «Books 1–3») has no Ukrainian edition of its
-// own, but its volumes may (Max, 2026-10-25: «Поттера точно мав би знайти»): the same author's books whose
-// title starts with the set's name, each as its Ukrainian translation: [{ title, href }].
-const OMNIBUS = /(?:\b(?:vol(?:ume)?s?\.?|books?)|#)\s*\d+\s*[-–—]\s*\d+|\bbox(?:ed)?[\s-]*set\b|\bcomplete\s+(?:series|collection|saga)\b|\bomnibus\b/i;
-function ukVolumes(book) {
-  // The title as imported: book() has already dropped «, Vol. 1-7» as an edition note (workName).
-  const raw = store.lib.books[book.id]?.title || store.shelfItems.get(book.id)?.item.title || book.title;
-  // An imported title may have lost the volumes on the way, the address keeps them («harry-potter-vol-1-7»).
-  const slug = store.href(book.id).split("/").pop().replace(/-/g, " ").replace(/(\d+) (\d+)$/, "$1-$2");
-  if (!(OMNIBUS.test(raw) || OMNIBUS.test(slug)) || CYR_RE.test(raw)) return [];
-  const name = norm((OMNIBUS.test(raw) ? raw : book.title).replace(OMNIBUS, " ").replace(/[([]\s*[)\]]/g, " "));
-  const surname = norm(String(book.author || "").split(/,|&| and /)[0]).split(" ").filter((w) => w.length > 2).pop();
-  if (name.length < 3 || !surname) return [];
-  const out = new Map();
-  for (const { book: b } of store.search(name, { limit: 80, alias: false })) {
-    if (b.id === book.id || OMNIBUS.test(b.title) || !(norm(b.title) === name || norm(b.title).startsWith(`${name} `)) || !norm(b.author).includes(surname)) continue;
-    const uk = CYR_RE.test(b.title) ? b : store.translationsOf(b.id).find((t) => CYR_RE.test(t.title));
-    if (uk && !out.has(uk.id)) out.set(uk.id, { title: uk.title, href: uk.href || store.href(uk.id), year: Number(b.published) || 9999 });
-  }
-  return [...out.values()].sort((a, b) => a.year - b.year || a.title.localeCompare(b.title, "uk")).slice(0, 12);
-}
 function ukAskFor(req, book) {
   if (!req.user) return null;
   if (!book.ukTitle && (!/[a-z]/i.test(book.title) || CYR_RE.test(book.title) || (book.translations || []).some((t) => CYR_RE.test(t.title)) || (book.editions || []).some((e) => CYR_RE.test(e.title)))) return null;
