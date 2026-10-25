@@ -896,7 +896,8 @@ const SOURCES = [
       title: f.title,
       author: f.authors,
       altTitle: "",
-      cover: "",
+      // Covers taken out of the EPUBs (or free/covers) into web/public/free-covers when a book is added.
+      cover: require("fs").existsSync(require("path").join(__dirname, "public", "free-covers", f.name.replace(/\.[^.]+$/, ".jpg"))) ? `/free-covers/${f.name.replace(/\.[^.]+$/, ".jpg")}` : "",
       url: `${(process.env.READER_URL || "https://app.chytai.org.ua").replace(/\/$/, "")}/free/${encodeURIComponent(f.name)}`,
       price: "безкоштовно",
       status: "є",
