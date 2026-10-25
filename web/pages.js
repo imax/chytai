@@ -117,10 +117,14 @@ ${canonical ? `<link rel="canonical" href="${attr(ORIGIN + canonical)}">
 <meta property="og:title" content="${attr(title || "Chytai · читай більше")}">
 ${description ? `<meta property="og:description" content="${attr(description.slice(0, 200))}">` : ""}
 <meta property="og:image" content="${attr(image || `${ORIGIN}/icon.png`)}">
+${image ? "" : `<meta property="og:image:width" content="1024">
+<meta property="og:image:height" content="1024">
+<link rel="image_src" href="${ORIGIN}/icon.png">`}
 <meta name="twitter:card" content="summary">
 ${jsonld ? `<script type="application/ld+json">${JSON.stringify(jsonld).replace(/</g, "\\u003c")}</script>` : ""}
 ${path === "/" ? `<meta name="google-site-verification" content="5cswdBTj0bCY9oY1I-PTqyMBiCpQJ1Xu6CzQLOEYwRI">` : ""}
 <link rel="icon" href="/icon.png">
+<link rel="apple-touch-icon" href="/icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="${FONTS}">
@@ -374,7 +378,7 @@ ${showcase.length ? `<section class="showcase">
 </section>` : ""}
 ${librariesBlock(libraries)}
 </div>`;
-  return layout({ title: "", body, user, path: "/", home: true, canonical: "/", description: "Що почитати далі: книжки з оцінками й нотатками читачів і новинки українських видавництв.", jsonld: { "@context": "https://schema.org", "@type": "WebSite", name: "Chytai", url: ORIGIN, inLanguage: "uk", potentialAction: { "@type": "SearchAction", target: { "@type": "EntryPoint", urlTemplate: `${ORIGIN}/search?q={q}` }, "query-input": "required name=q" } } });
+  return layout({ title: "", body, user, path: "/", home: true, canonical: "/", description: "Що почитати далі: книжки з оцінками й нотатками читачів і новинки українських видавництв.", jsonld: { "@context": "https://schema.org", "@type": "WebSite", name: "Chytai", url: ORIGIN, image: `${ORIGIN}/icon.png`, inLanguage: "uk", potentialAction: { "@type": "SearchAction", target: { "@type": "EntryPoint", urlTemplate: `${ORIGIN}/search?q={q}` }, "query-input": "required name=q" } } });
 }
 
 function showcaseColumn({ shelf, items, fresh, total, subscribed }, user) {
