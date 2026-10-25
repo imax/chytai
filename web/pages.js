@@ -1540,7 +1540,7 @@ function authorPage({ author, works, hits, user, readers = [], also = [], pairin
     if (!pairing) return "";
     const l = pairing.linked[book.id];
     if (l) return l.index != null ? `<div class="pair muted small">пара з «${esc(l.title)}» · <form method="post" action="/admin/dupes/undo" class="inline"><input type="hidden" name="kind" value="translations"><input type="hidden" name="index" value="${l.index}"><button class="text-link small">скасувати</button></form></div>` : "";
-    const options = pairing.foreign.filter((f) => f.id !== book.id);
+    const options = (pairing.options[book.id] || []).filter((f) => f.id !== book.id);
     if (!options.length || !CYR.test(book.title)) return "";
     return `<form method="post" action="/admin/dupes/translation" class="pair tr-row"><input type="hidden" name="uk" value="${attr(book.id)}"><span class="tr-pick"><select name="orig">${options.map((o) => `<option value="${attr(o.id)}">${esc(o.title)}</option>`).join("")}</select><button class="btn small pair-btn">Позначити як переклад</button></span></form>`;
   };

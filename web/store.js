@@ -1254,7 +1254,18 @@ class Store {
       const i = decided.findIndex(([x, y]) => (x === b.id && y === o.id) || (x === o.id && y === b.id));
       linked[b.id] = { ...o, index: i >= 0 ? i : null };
     }
-    return { foreign, linked };
+    // An original that already has its Ukrainian edition is not offered again (Max, 2026-10-25: «пропонує книги у
+    // яких вже є пара»); the original Haiku named for the book, when one of ours looks like it, comes first.
+    const free = foreign.filter((f) => ![...(this.translations.get(f.id) || [])].some((t) => /[а-яіїєґ]/i.test(this.book(t)?.title || "")));
+    const main = (t) => norm(String(t).split(/[:.(]/)[0]);
+    const options = {};
+    for (const b of books) {
+      if (linked[b.id] || !/[а-яіїєґ]/i.test(b.title)) continue;
+      const o = this.aiOrigs().get(b.id)?.title;
+      const g = o && free.find((f) => main(f.title) && (main(f.title).startsWith(main(o)) || main(o).startsWith(main(f.title))));
+      options[b.id] = g ? [g, ...free.filter((f) => f !== g)] : free;
+    }
+    return { foreign, linked, options };
   }
   // decide(ids, keep): every id in ids becomes an edition of keep; decide(ids, null): they are different books.
   // An id or a /book/<slug> address, as the owner may paste either.
