@@ -472,7 +472,8 @@ class Store {
     for (const w of works) if (norm(w.title).length >= 4) (byTitle.get(norm(w.title)) || byTitle.set(norm(w.title), []).get(norm(w.title))).push(w);
     tier = 3;
     for (const w of works) for (const o of byTitle.get(norm(w.altTitle)) || []) link(w.id, o.id); // the same work already shares one id
-    // A foreign book's Ukrainian title from Wikidata (wikidata.js): a book of that title by the same author.
+    // A foreign book's Ukrainian title from Wikidata (wikidata.js): a book of that title by the same author. The exact
+    // title outranks a shop's original title («Шерлок. 1 сезон» says «The Adventures of Sherlock Holmes»).
     this.ukTitles = JSON.parse(this.db.get("wikidata:uk") || "{}");
     const names = (a) => norm(a).split(" ").filter((w) => w.length >= 3);
     // A catalog title with a subtitle («Розумний інвестор. Стратегія вартісного інвестування») counts by its main part.
@@ -482,7 +483,7 @@ class Store {
       if (m.length >= 4 && m !== norm(w.title)) (byMain.get(m) || byMain.set(m, []).get(m)).push(w);
     }
     for (const [id, { uk, ukAuthor }] of Object.entries(this.ukTitles))
-      for (const [t, list] of [[2, byTitle], [1, byMain]]) for (const o of list.get(norm(uk)) || []) if (names(o.author).some((n) => names(ukAuthor).includes(n))) (tier = t), link(id, o.id);
+      for (const [t, list] of [[3.5, byTitle], [1.5, byMain]]) for (const o of list.get(norm(uk)) || []) if (names(o.author).some((n) => names(ukAuthor).includes(n))) (tier = t), link(id, o.id);
     // The original Haiku named for a reader's Ukrainian book: a work of that title by the same author.
     for (const [id, o] of this.aiOrigs())
       if (o.title) for (const [t, list] of [[2, byTitle], [1, byMain]]) for (const w of list.get(norm(o.title)) || []) if (names(w.author).some((n) => names(o.author).includes(n))) (tier = t), link(id, w.id);
