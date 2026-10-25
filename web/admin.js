@@ -572,8 +572,8 @@ ${s.sections.length ? `<div class="tbl"><table class="sections">
 <p class="small"><a class="text-link" href="/admin/readers">Усі читачі (${s.readers.length})</a>, нових за 7 днів: ${fresh.length}.</p>
 
 ${s.arrivals ? `<h2>Звідки приходять</h2>
-${sourcesTable(s.arrivals)}
-<p class="small"><a class="text-link" href="/admin/traffic">Трафік: звідки саме, сторінки з пошуку, перегляди за розділами</a></p>` : ""}
+${sourcesTable(s.arrivals, 4)}
+<p class="small"><a class="text-link" href="/admin/traffic">Усі джерела (${s.arrivals.sources.length})</a>, звідки саме, сторінки з пошуку, перегляди за розділами.</p>` : ""}
 
 ${funnelBlock(s.funnel)}
 
