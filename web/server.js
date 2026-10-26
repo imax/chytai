@@ -1068,7 +1068,7 @@ function searchAll(req, q) {
   const authorsFound = (store.authors?.list || [])
     .filter((a) => has(a.name) || (a.other && has(a.other)))
     .slice(0, 6)
-    .map((a) => ({ ...a, books: a.ids.length, readers: new Set(a.ids.flatMap((id) => store.readersOf(id).map((r) => r.reader))).size }));
+    .map((a) => ({ ...a, books: a.ids.length, readers: new Set(a.ids.flatMap((id) => store.readersOf(id).filter((r) => r.entry.status !== "abandoned").map((r) => r.reader))).size }));
   const readersFound = auth
     .readers()
     .filter((r) => has(r.name) || r.username.startsWith(nq))
@@ -1255,7 +1255,7 @@ app.get("/author/:slug", async (req, res) => {
   foldTwins(hits);
   // Who reads this author, and what else those readers rated highest.
   const ids = new Set(hits.map((h) => h.book.id));
-  const who = [...new Set(hits.flatMap((h) => store.readersOf(h.book.id).map((r) => r.reader)))]
+  const who = [...new Set(hits.flatMap((h) => store.readersOf(h.book.id).filter((r) => r.entry.status !== "abandoned").map((r) => r.reader)))]
     .map((id) => ({ reader: pub(auth.reader(id)), rows: store.library(id) }))
     .filter((r) => r.reader)
     .map(({ reader, rows }) => ({ reader, count: rows.length, read: rows.filter((r) => r.status === "read").length }));
