@@ -1822,7 +1822,8 @@ class Store {
     const fix = edited && this.edits()[id];
     if (fix) {
       for (const k of EDITABLE) if (fix[k]) out[k] = fix[k];
-      if (fix.genre) out.tags = [fix.genre, ...(out.tags || []).filter((t) => t !== fix.genre)];
+      // The owner's «Основний жанр» is the book's only genre (Max 2026-10-26: «Кав'ярня «Пряний гарбузик»» kept «любовні романи» next to it).
+      if (fix.genre) out.tags = [fix.genre, ...(out.tags || []).filter((t) => t !== fix.genre && !OUR_GENRES.has(t))];
       if (fix.blurb) out.blurbSource = "";
       out.edited = fix;
     }
