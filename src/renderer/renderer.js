@@ -1564,11 +1564,10 @@ function printColophon() {
   const link = free ? `${READER_URL}/free/${encodeURIComponent(current.path)}` : SITE_URL;
   const foot = document.createElement("footer");
   foot.className = "print-colophon";
-  foot.innerHTML = `<div class="print-colophon-row"><div class="print-colophon-text">
-      <div class="pc-book"></div><div class="pc-source"></div>
-      <div class="pc-from"></div><div class="pc-link"></div>
-    </div><div class="pc-qr"></div></div>`;
-  foot.querySelector(".pc-book").textContent = [current?.title, current?.author].filter(Boolean).join(" · ");
+  foot.innerHTML = `<div class="pc-book"></div><div class="pc-author"></div><div class="pc-source"></div>
+    <div class="pc-qr"></div><div class="pc-from"></div><div class="pc-link"></div>`;
+  foot.querySelector(".pc-book").textContent = current?.title || "";
+  foot.querySelector(".pc-author").textContent = current?.author || "";
   foot.querySelector(".pc-source").textContent = printSource();
   foot.querySelector(".pc-from").textContent = free
     ? "Надруковано з Chytai. Цю книжку можна читати безкоштовно на телефоні чи комп'ютері:"
