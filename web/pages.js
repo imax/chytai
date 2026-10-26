@@ -1133,7 +1133,23 @@ function seriesRow(r, { action = "", data = "" } = {}) {
 // The same list twice: /me is the signed-in reader's own shelf with «змінити» on every row (the only
 // place where status, rating and notes are edited); /@<username> is that reader's public shelf, where a
 // signed-in visitor sees what they share and can want any book in one tap.
-function libraryPage({ lists = [], savedLists = [], rows, user, reader, own = false, mineIds = null, mineDirect = null, following = false, follows = { followers: [], following: [] }, now = null }) {
+// A long list (a reader's 1,000 books, a publisher's 8,000) comes in two parts (2026-10-26, Max: «можливо варто
+// додати пейджер»): the page carries the first rows, which is all «Показати ще» shows at first anyway, and app.js
+// fetches the rest with ?rest right after the page opens, so search and the tabs still find every book. On a slow
+// phone the shelf was 640 KB and 7,500 elements, ready to use after 4 s. `items` are [html, counts]; counts is
+// false for a row the first view hides (the reader's «Дитяча полиця»).
+const FIRST = { rows: 60, grid: 24 }; // app.js's STEP: what «Показати ще» shows at first
+function twoParts(items, n, part) {
+  let seen = 0;
+  let cut = items.length;
+  if (items.filter(([, c]) => c !== false).length > n + 10) // app.js shows up to STEP + 10 without the button
+    for (let i = 0; i < items.length; i++) if (items[i][1] !== false && ++seen > n) { cut = i; break; }
+  const html = (xs) => xs.map(([h]) => h).join("\n");
+  if (part === "rest") return html(items.slice(cut));
+  return { first: html(items.slice(0, cut)), rest: cut < items.length ? ` data-rest="${items.length - cut}"` : "" };
+}
+
+function libraryPage({ part = "",  lists = [], savedLists = [], rows, user, reader, own = false, mineIds = null, mineDirect = null, following = false, follows = { followers: [], following: [] }, now = null }) {
   const year = new Date().getFullYear();
   // Stars in the row only for the reader's own entry of this very book (not one reached through a
   // translation or a series, where a rating would land on another book).
@@ -1172,9 +1188,10 @@ function libraryPage({ lists = [], savedLists = [], rows, user, reader, own = fa
       const data = ` data-status="${r.status || ""}" data-copy="${r.copy || ""}" data-common="${vols.some((v) => common.includes(v)) ? 1 : ""}" data-kids="${r.kids ? 1 : ""}" data-tags="${attr((b.tags || []).join("|"))}" data-rating="${r.rating ?? ""}" data-title="${attr((r.volumes ? r.series.name : b.title).toLowerCase())}" data-search="${attr(search)}" data-order="${i}"${r.volumes ? ` data-books="${vols.length}"` : ""}`;
       const edit = b.href ? `/me${b.href}` : `/me/book/${encodeURIComponent(r.id)}`;
       const action = own ? `<a class="text-link small" href="${attr(edit)}">змінити</a>` : user && mineIds ? (mineIds.has(r.id) ? (rateable(mineIds.get(r.id), r.id) ? rateLine(r.id) : myStatus(mineIds.get(r.id))) : markButtons(b, user)) : "";
-      return head + (r.volumes ? seriesRow(r, { action, data }) : bookRow(b, { entry: r, action, id: r.id, data }));
-    })
-    .join("\n");
+      return [head + (r.volumes ? seriesRow(r, { action, data }) : bookRow(b, { entry: r, action, id: r.id, data })), !r.kids];
+    });
+  const parts = twoParts(list, FIRST.rows, part);
+  if (part === "rest") return parts;
   const wants = own ? [] : mine.filter((r) => r.status === "want").slice(0, 3);
   const body = `
 ${pageHead({ crumbs: own ? "" : `<a href="/community">Читачі</a> / ${esc(reader.name)}`, kicker: own ? "Моя полиця" : "Полиця читача", title: esc(reader.name), sub, extra: nowBlock(now, { own }), action: own ? `<div class="acts own-acts"><a class="btn primary" href="/add">+ Додати книжки</a><a class="text-link small" href="/mcp">або голосом чи текстом у Claude чи ChatGPT</a></div>` : user?.id === reader.id ? "" : followButton(reader, following, user) })}
@@ -1188,8 +1205,8 @@ ${pageHead({ crumbs: own ? "" : `<a href="/community">Читачі</a> / ${esc(r
       <select id="genre" aria-label="Жанр"><option value="">усі жанри</option>${genres.map((g) => `<option value="${g}">${g}</option>`).join("")}</select>
       <select id="sort" aria-label="Порядок"><option value="order">за порядком</option><option value="rating">за оцінкою</option><option value="title">за назвою</option></select>
     </div>
-    <section class="rows" id="rows">
-${list}
+    <section class="rows" id="rows"${parts.rest}>
+${parts.first}
     </section>
     <p class="empty hidden" id="empty">Нічого не знайшлося.</p>
     <p class="more hidden"><button type="button" class="text-link" id="more">Показати ще <span></span> →</button></p>
@@ -1393,13 +1410,15 @@ ${running ? `<script>setTimeout(() => location.reload(), 5000)</script>` : ""}`;
 
 // One genre's books: the ones readers rate best, then all of them, the ones on readers' shelves first;
 // what readers wrote about them on the side, and the other genres (Max, 2026-10-23).
-function genrePage({ genre, rows, top, feed, others, user }) {
+function genrePage({ genre, rows, top, feed, others, user, part = "" }) {
   const CAP = 600; // a page of «художня» would be thousands of cards; search finds the rest
   const shelved = rows.filter((r) => r.readers).length;
   // The best rated stand above, so the list below goes on from where they end.
   const shownTop = top.length >= 3 ? top : [];
   const above = new Set(shownTop.map((x) => x.book.id));
   const rest = rows.filter((r) => !above.has(r.book.id));
+  const parts = twoParts(rest.slice(0, CAP).map((r) => [card(r.book, { avg: r.avg ?? undefined, data: ` data-search="${attr([r.book.title, r.book.author, r.book.authorOrig, r.book.altTitle].join(" ").toLowerCase())}"` })]), FIRST.grid, part);
+  if (part === "rest") return parts;
   const body = `
 ${pageHead({ kicker: "Жанр", title: esc(cap(genre)), sub: [books(rows.length), shelved ? `${shelved} на полицях читачів` : ""].filter(Boolean).join(" · ") })}
 ${shownTop.length ? `<section class="block">
@@ -1412,8 +1431,8 @@ ${shownTop.length ? `<section class="block">
     <div class="shelf-tools">
       <input type="search" id="q" placeholder="назва або автор" autocomplete="off">
     </div>
-    <div class="grid four" id="rows">
-${rest.slice(0, CAP).map((r) => card(r.book, { avg: r.avg ?? undefined, data: ` data-search="${attr([r.book.title, r.book.author, r.book.authorOrig, r.book.altTitle].join(" ").toLowerCase())}"` })).join("\n")}
+    <div class="grid four" id="rows"${parts.rest}>
+${parts.first}
     </div>
     <p class="empty hidden" id="empty">Нічого не знайшлося.</p>
     <p class="more hidden"><button type="button" class="text-link" id="more">Показати ще <span></span> →</button></p>
@@ -1487,8 +1506,10 @@ ${librariesBlock(libraries)}`;
   return layout({ title: "Видавництва", body, user, path: "/publishers", canonical: "/publishers", description: "Новинки українських видавництв щодня." });
 }
 
-function publisherPage({ shelf, subscribed, user, fresh, feed, others, visible = (s) => s.items }) {
+function publisherPage({ shelf, subscribed, user, fresh, feed, others, visible = (s) => s.items, part = "" }) {
   const items = visible(shelf);
+  const parts = twoParts(items.map((it) => [card(it, { data: ` data-genre="${attr((it.genres || []).join("|"))}" data-avail="${attr(it.status || "")}" data-search="${attr([it.title, it.author, it.authorOrig, it.altTitle].join(" ").toLowerCase())}"` })]), FIRST.grid, part);
+  if (part === "rest") return parts;
   // Filter chips from the publisher's own categories: only those with a few books that don't cover the
   // whole shelf, and only when there are at least two («Повне зібрання творів Лесі Українки 1» is a series,
   // not a genre; Комора's one real category alone filters nothing useful).
@@ -1511,8 +1532,8 @@ ${fresh.length ? `<section class="block">
     </div>
     ${genres.length ? `<div class="tabs wrap" data-filter="genre"><button type="button" class="tab on" data-v="">Усі <span>${items.length}</span></button>${genres.map(([g, n]) => `<button type="button" class="tab" data-v="${attr(g)}">${esc(g)} <span>${n}</span></button>`).join("")}</div>` : ""}
     ${statuses.length > 1 ? `<div class="tabs wrap" data-filter="avail"><button type="button" class="tab on" data-v="">Будь-які</button>${statuses.map((s) => `<button type="button" class="tab" data-v="${attr(s)}">${esc(cap(s || "є"))}</button>`).join("")}</div>` : ""}
-    <div class="grid four" id="rows">
-${items.map((it) => card(it, { data: ` data-genre="${attr((it.genres || []).join("|"))}" data-avail="${attr(it.status || "")}" data-search="${attr([it.title, it.author, it.authorOrig, it.altTitle].join(" ").toLowerCase())}"` })).join("\n")}
+    <div class="grid four" id="rows"${parts.rest}>
+${parts.first}
     </div>
     <p class="empty hidden" id="empty">Нічого не знайшлося.</p>
     <p class="more hidden"><button type="button" class="text-link" id="more">Показати ще <span></span> →</button></p>

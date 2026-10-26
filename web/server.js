@@ -866,6 +866,8 @@ function libraryRows(reader) {
 // /@<username> is a reader's shelf: their own (with «змінити», recommendations, «+ Додати книжку») when
 // they open it, the public one for everyone else and with ?public. /me is a shortcut to your own
 // (Max, 2026-10-20: one address for a shelf, so the one in the address bar can be shared).
+// ?rest: the rest of a long list, which app.js fetches after the page opens (pages.twoParts); not a page for search.
+const restPart = (req, res) => ("rest" in req.query ? (res.set("X-Robots-Tag", "noindex"), "rest") : "");
 app.get("/me", signed, (req, res) => res.redirect(req.user.href));
 app.get("/@:username", (req, res) => {
   const reader = pub(auth.byUsername(req.params.username));
@@ -876,8 +878,9 @@ app.get("/@:username", (req, res) => {
   const follows = { followers: auth.followers(reader.id).map((id) => pub(auth.reader(id))).filter(Boolean), following: auth.following(reader.id).map((id) => pub(auth.reader(id))).filter(Boolean) };
   // The profile is the reader's own stats and books; recommendations live on other pages (Max, 2026-10-23).
   const theirLists = lists.of(reader.id).filter((l) => own || l.count);
-  if (own) return res.send(pages.libraryPage({ lists: theirLists, savedLists: lists.savedBy(reader.id), rows, user: req.user, reader: req.user, own: true, follows, now: nowFor(reader.id, { own: true }) }));
-  res.send(pages.libraryPage({ lists: theirLists, rows, user: req.user, reader, now: nowFor(reader.id), mineIds: req.user && req.user.id !== reader.id ? store.inLibrary(req.user.id) : null, mineDirect: req.user ? new Set(Object.keys(store.entriesOf(req.user.id))) : null, following: auth.follows(req.user?.id, reader.id), follows }));
+  const part = restPart(req, res);
+  if (own) return res.send(pages.libraryPage({ part, lists: theirLists, savedLists: lists.savedBy(reader.id), rows, user: req.user, reader: req.user, own: true, follows, now: nowFor(reader.id, { own: true }) }));
+  res.send(pages.libraryPage({ part, lists: theirLists, rows, user: req.user, reader, now: nowFor(reader.id), mineIds: req.user && req.user.id !== reader.id ? store.inLibrary(req.user.id) : null, mineDirect: req.user ? new Set(Object.keys(store.entriesOf(req.user.id))) : null, following: auth.follows(req.user?.id, reader.id), follows }));
 });
 // ---- «Списки» (lists.js): /@<username>/list/<slug>, /lists, and what the author does with a list ----
 app.get("/@:username/list/:slug", (req, res) => {
@@ -1022,7 +1025,7 @@ app.get("/genre/:slug", (req, res) => {
   const { rows, top, works } = genreList(g);
   const shown = rows.map((r) => ({ ...r, book: bookFor(req, r.book, false) })).filter((r) => r.book);
   const others = pages.GENRES.filter((x) => x !== g).map((x) => [x, store.genreBooks(x).length]).filter(([, n]) => n);
-  res.send(pages.genrePage({ genre: g, rows: shown, top, feed: social.feed({ limit: 6, books: works, notes: true }), others, user: req.user }));
+  res.send(pages.genrePage({ part: restPart(req, res), genre: g, rows: shown, top, feed: social.feed({ limit: 6, books: works, notes: true }), others, user: req.user }));
 });
 
 app.get("/publishers", (req, res) => {
@@ -1035,7 +1038,7 @@ app.get("/publishers/:id", (req, res) => {
   const fresh = items.filter((it) => it.isNew).slice(0, 6);
   const works = new Set(items.map((it) => store.canonical(it.id)));
   const others = shelvesFor(req).filter((s) => s.id !== shelf.id).map((s) => ({ shelf: s, total: visible(s).length }));
-  res.send(pages.publisherPage({ shelf, subscribed: store.subscribed(req.user?.id, shelf.id), user: req.user, fresh, feed: social.feed({ limit: 6, books: works }), others, visible }));
+  res.send(pages.publisherPage({ part: restPart(req, res), shelf, subscribed: store.subscribed(req.user?.id, shelf.id), user: req.user, fresh, feed: social.feed({ limit: 6, books: works }), others, visible }));
 });
 // The shelves' address before the 2026-10-20 design.
 app.get("/shelf/:id", (req, res) => res.redirect(301, `/publishers/${encodeURIComponent(req.params.id)}`));

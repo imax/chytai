@@ -8,13 +8,16 @@
 
   const rows = $("#rows");
   if (rows) {
-    const items = $$(".row, .card", rows).filter((el) => !el.classList.contains("cover")); // a card's cover is `.cover.card` too
+    const all = () => $$(".row, .card", rows).filter((el) => !el.classList.contains("cover")); // a card's cover is `.cover.card` too
+    let items = all();
     const q = $("#q");
     const genre = $("#genre");
     const sort = $("#sort");
     const empty = $("#empty");
     const filters = {}; // chip group -> value
-    const years = $$("h2.year", rows);
+    let years = $$("h2.year", rows);
+    // A long list comes with its first rows only; the rest (data-rest of them) is fetched below (pages.twoParts).
+    let partial = !!rows.dataset.rest;
 
     // A long shelf (a catalog of 8000 books) shows its rows a portion at a time: «Показати ще 60 →» adds
     // the next portion (Max, 2026-10-20). Searching or filtering starts again from the first portion.
@@ -69,7 +72,7 @@
         }
         h.classList.toggle("hidden", !byOrder || !any);
         const label = $("span", h);
-        if (label) label.textContent = `${n} ${plural(n, "книжка", "книжки", "книжок")}`;
+        if (label && !partial) label.textContent = `${n} ${plural(n, "книжка", "книжки", "книжок")}`;
       }
       if (empty) empty.classList.toggle("hidden", shown > 0);
     }
@@ -88,7 +91,10 @@
     }
 
     // Remember the original positions so «за порядком» can restore the year headings.
-    $$("h2.year, .row, .card", rows).forEach((el, i) => (el.dataset.pos = i));
+    // (Rows that come later go after the ones there.)
+    let pos = 0;
+    const number = () => $$("h2.year, .row, .card", rows).forEach((el) => el.dataset.pos ?? (el.dataset.pos = pos++));
+    number();
 
     q?.addEventListener("input", again);
     genre?.addEventListener("change", again);
@@ -104,10 +110,33 @@
     }
     if (location.hash === "#want" || location.hash === "#kids") $(`.tab[data-v=${location.hash.slice(1)}]`)?.click();
     // A link to one row (/@maxua#book) must find it even past the first rows, and under «Дитяча полиця» if it is there.
-    const at = location.hash ? order.findIndex((it) => it.id === decodeURIComponent(location.hash.slice(1))) : -1;
-    if (at >= 0 && order[at].dataset.kids === "1") $(".tab[data-v=kids]")?.click();
-    if (at >= limit) limit = at + STEP;
+    const toHash = () => {
+      const at = location.hash ? order.findIndex((it) => it.id === decodeURIComponent(location.hash.slice(1))) : -1;
+      if (at >= 0 && order[at].dataset.kids === "1") $(".tab[data-v=kids]")?.click();
+      if (at >= limit) limit = at + STEP;
+      return at >= 0;
+    };
+    const found = toHash();
     apply();
+    if (partial) {
+      const u = new URL(location.href);
+      u.hash = "";
+      u.searchParams.set("rest", "");
+      const add = (html) => {
+        rows.insertAdjacentHTML("beforeend", html);
+        items = all();
+        years = $$("h2.year", rows);
+        partial = false;
+        number();
+        if (sort && sort.value !== "order") resort();
+        else order = items;
+        const late = !found && toHash();
+        apply();
+        if (late) document.getElementById(decodeURIComponent(location.hash.slice(1)))?.scrollIntoView();
+      };
+      const get = (n) => fetch(u, { credentials: "same-origin" }).then((r) => (r.ok ? r.text() : Promise.reject(r.status))).then(add, () => n && setTimeout(() => get(n - 1), 3000));
+      get(2);
+    }
     if (location.hash) document.getElementById(decodeURIComponent(location.hash.slice(1)))?.scrollIntoView();
   }
 
