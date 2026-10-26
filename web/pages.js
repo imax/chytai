@@ -195,7 +195,7 @@ const guestDo = (book, what) => `/login?next=${encodeURIComponent(`/do/${what}/$
 // «Хочу прочитати» as one tap: a form for a signed-in reader, the sign-in page for a guest.
 function wantButton(book, user, { size = "small", label: text = "Хочу прочитати", primary = false, status = "want" } = {}) {
   const cls = `btn ${primary ? "primary" : ""} ${size}`;
-  if (!user) return `<a class="${cls}" href="${attr(guestDo(book, status))}">${text}</a>`;
+  if (!user) return `<a class="${cls}" rel="nofollow" href="${attr(guestDo(book, status))}">${text}</a>`;
   return `<form method="post" action="/api/entry/${attr(encodeURIComponent(book.id))}" class="inline"><input type="hidden" name="status" value="${status}"><input type="hidden" name="back" value="1"><button class="${cls}">${text}</button></form>`;
 }
 // «Хочу прочитати» and «Прочитано» side by side, for rows on other readers' shelves (a reader's feedback,
@@ -553,7 +553,7 @@ function adviceBlock(book, a) {
   if (!a || !SHOW_ADVICE) return "";
   // One dotted link in every state (Max, 2026-10-23): a guest's goes to sign in, an empty shelf's to «Додати».
   const inner =
-    a.kind === "guest" ? `<p class="advice-ask"><a class="text-link" href="/login?next=${attr(encodeURIComponent(book.href))}">Чи варто мені читати?</a></p>`
+    a.kind === "guest" ? `<p class="advice-ask"><a class="text-link" rel="nofollow" href="/login?next=${attr(encodeURIComponent(book.href))}">Чи варто мені читати?</a></p>`
     : a.kind === "empty" ? `<p class="advice-ask"><a class="text-link" href="/add">Додайте прочитане, і Claude скаже, чи варто</a></p>`
     : a.kind === "kept" ? adviceHtml(a)
     : `<p class="advice-ask"><button class="text-link" data-ask="advice">Чи варто мені читати?</button></p>`;
@@ -713,18 +713,18 @@ function readerLine({ name, href, entry: e, now }, id) {
 const nowItem = (book, on, user) =>
   user
     ? `<form method="post" action="/api/now/${attr(encodeURIComponent(book.id))}"><input type="hidden" name="back" value="1"><button title="${on ? "Прибрати з «Читаю зараз»" : "Показати на своїй сторінці, що читаєш її зараз"}">${on ? "Прибрати з «Читаю зараз»" : "Читаю зараз"}</button></form>`
-    : `<a href="${attr(guestDo(book, "now"))}">Читаю зараз</a>`;
+    : `<a rel="nofollow" href="${attr(guestDo(book, "now"))}">Читаю зараз</a>`;
 // «На дитячу полицю» (Max, 2026-10-23): a book kept for the children; it stays out of the reader's own taste.
 const kidsItem = (book, on, user) =>
   user
     ? `<form method="post" action="/api/entry/${attr(encodeURIComponent(book.id))}"><input type="hidden" name="kids" value="${on ? 0 : 1}"><button title="${on ? "Повернути до моїх книжок" : "Книжка для дітей: не рахується у твої оцінки й рекомендації"}">${on ? "Прибрати з дитячої полиці" : "На дитячу полицю"}</button></form>`
-    : `<a href="${attr(guestDo(book, "kids"))}">На дитячу полицю</a>`;
+    : `<a rel="nofollow" href="${attr(guestDo(book, "kids"))}">На дитячу полицю</a>`;
 // «Прочитано» in the menu marks it at once and the page comes back with the stars (mine below), so a
 // rating is one more tap, not a form (Vova's feedback, 2026-10-23).
 const readItem = (book, user) =>
   user
     ? `<form method="post" action="/api/entry/${attr(encodeURIComponent(book.id))}"><input type="hidden" name="status" value="read"><input type="hidden" name="back" value="1"><button>Прочитано</button></form>`
-    : `<a href="${attr(guestDo(book, "read"))}">Прочитано</a>`;
+    : `<a rel="nofollow" href="${attr(guestDo(book, "read"))}">Прочитано</a>`;
 // «Прибрати з полиці» in the menu (Max, 2026-10-25: «Вже не хочу читати, як відмінити?»); a rating or a note asks first.
 const removeItem = (book, entry) =>
   `<form method="post" action="/api/entry/${attr(encodeURIComponent(book.id))}/remove"${entry.rating != null || entry.note ? ` onsubmit="return confirm('Прибрати книжку з полиці разом з оцінкою й нотаткою?')"` : ""}><input type="hidden" name="back" value="1"><button>Прибрати з полиці</button></form>`;
@@ -745,7 +745,7 @@ function mine(book, entry, user, now = false, readUrl = "", listItem = "", { fre
   const href = entry?.via ? entry.via.href : book.href;
   const edit = href ? `/me${href}` : `/me/book/${encodeURIComponent(entry?.via ? entry.via.id : book.id)}`;
   // A volume of a series: «Прочитано · всю серію» opens the edit page with «Уся серія» ticked.
-  const allOf = book.cycle?.items?.length > 1 ? `<a href="${attr(user ? `${edit}?series` : `/login?next=${encodeURIComponent(`${edit}?series`)}`)}">Прочитано · всю серію</a>` : "";
+  const allOf = book.cycle?.items?.length > 1 ? `<a rel="nofollow" href="${attr(user ? `${edit}?series` : `/login?next=${encodeURIComponent(`${edit}?series`)}`)}">Прочитано · всю серію</a>` : "";
   if (!entry) return `<div class="acts">${wantButton(book, user, { size: "", primary: true })}${moreMenu([open, nowItem(book, false, user), readItem(book, user), allOf, listItem, kidsItem(book, false, user)])}</div>`;
   const what = [entry.kids ? "Дитяча полиця" : "", entry.status ? STATUS[entry.status] + (entry.status === "read" && entry.year ? ` ${entry.year}` : "") : entry.kids ? "" : "У моїх книжках", entry.rating != null ? `${uk(entry.rating)} з 5` : "", entry.copy ? COPY[entry.copy] : ""].filter(Boolean).join(" · ");
   // Read and not rated yet: the stars right here, no trip to the form (Vova's feedback, 2026-10-23).
@@ -1242,7 +1242,7 @@ ${parts.first}
 // «Стежити» on another reader's page (the design's secondary button); pressed, it reads «✓ Стежу».
 // Whom one follows is private: it only puts their activity first in the feed.
 function followButton(reader, on, user) {
-  if (!user) return `<a class="btn" href="/login?next=${attr(encodeURIComponent(reader.href))}">Стежити</a>`;
+  if (!user) return `<a class="btn" rel="nofollow" href="/login?next=${attr(encodeURIComponent(reader.href))}">Стежити</a>`;
   return `<form method="post" action="/api/follow/${attr(reader.username)}" class="inline"><button class="btn${on ? " on" : ""}" title="${on ? "Більше не стежити" : "Бачити книжки цього читача першими у стрічці"}">${on ? "✓ Стежу" : "Стежити"}</button></form>`;
 }
 
@@ -1485,12 +1485,12 @@ ${pageHead({ kicker: "Спільнота", title: "Що читають інші"
 // ---- publishers (/publishers, /publishers/:id) ----
 
 function subscribeLink(id, on, user) {
-  if (!user) return `<a class="text-link small" href="/login?next=/publishers/${attr(id)}">підписатися</a>`;
+  if (!user) return `<a class="text-link small" rel="nofollow" href="/login?next=/publishers/${attr(id)}">підписатися</a>`;
   return `<form method="post" action="/api/subscribe/${attr(id)}" class="inline"><button class="text-link small${on ? " on" : ""}">${on ? "✓ підписано" : "підписатися"}</button></form>`;
 }
 function subscribeButton(id, on, user, primary = false) {
   const text = on ? "✓ Підписано" : primary ? "Підписатися на новинки" : "Підписатися";
-  if (!user) return `<a class="btn${primary ? " primary" : ""}" href="/login?next=/publishers/${attr(id)}">${text}</a>`;
+  if (!user) return `<a class="btn${primary ? " primary" : ""}" rel="nofollow" href="/login?next=/publishers/${attr(id)}">${text}</a>`;
   return `<form method="post" action="/api/subscribe/${attr(id)}" class="inline"><button class="btn${primary && !on ? " primary" : ""}">${text}</button></form>`;
 }
 
@@ -2259,7 +2259,7 @@ function listsDialog(book, mine) {
   ${newListForm(book)}
 </dialog>`;
 }
-const listsItem = (book, user) => (user ? `<button type="button" data-open="lists-dlg">Додати до списку…</button>` : `<a href="/login?next=${attr(encodeURIComponent(book.href || ""))}">Додати до списку…</a>`);
+const listsItem = (book, user) => (user ? `<button type="button" data-open="lists-dlg">Додати до списку…</button>` : `<a rel="nofollow" href="/login?next=${attr(encodeURIComponent(book.href || ""))}">Додати до списку…</a>`);
 
 // /@<username>/list/<slug>. The author sees the tools: the books' order, a line on each, the title and note,
 // adding books by search (`find`: the query and what it found).
@@ -2269,7 +2269,7 @@ function listPage({ list, items, user, own = false, saved = false, more = [], si
     ? ""
     : user
       ? `<form method="post" action="/api/lists/${id}/save" class="inline"><button class="btn${saved ? " on" : " primary"}">${saved ? "✓ Збережено" : "Зберегти список"}</button></form>`
-      : `<a class="btn primary" href="/login?next=${attr(encodeURIComponent(list.href))}">Зберегти список</a>`;
+      : `<a class="btn primary" rel="nofollow" href="/login?next=${attr(encodeURIComponent(list.href))}">Зберегти список</a>`;
   const share = `<button type="button" class="btn" data-share="${attr(ORIGIN + list.href)}" data-title="${attr(list.title)}">Поділитися</button>`;
   const tools = own ? `<button type="button" class="btn" data-open="list-edit">Редагувати</button>` : "";
   const updated = when({ updated: list.updated });
