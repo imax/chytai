@@ -1803,6 +1803,8 @@ class Store {
     // An English description on a Ukrainian edition (Open Library's Kindle blurb on a reader's «Солярис», Max
     // 2026-10-25) is not shown; the book then borrows one or gets Haiku's.
     if (out.blurb && /[а-яіїєґ]/i.test(out.title || "") && !/[а-яіїєґ]/i.test(out.blurb.slice(0, 300))) delete out.blurb;
+    // Readeat's text comes with its SEO questions and a buy-and-delivery paragraph (Max 2026-10-26): cleaned like a shop's.
+    if (out.blurb && out.blurbSource === "Readeat") out.blurb = require("./catalogs").about(out.blurb, 3000);
     if (!out.blurb && borrow) {
       const e = (out.editions || []).find((x) => x.blurb);
       if (e) (out.blurb = e.blurb), (out.blurbSource = e.shelf?.name || "");

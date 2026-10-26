@@ -27,7 +27,10 @@ const text = (h) => ent(String(h || "").replace(/<[^>]+>/g, " ").replace(/&nbsp;
 // is a «Про що» heading only its section is kept; otherwise the text before the first heading. Lists and
 // buy calls go, paragraphs stay, and it ends on a whole sentence within `max` characters.
 // Takes the shop's HTML or a description kept by an older refresh (plain text, maybe cut at 600).
-const BUY = /(^|[\s«"(])(купу[йв]\p{L}*|купити|придба[йт]\p{L}*|замовля[йт]\p{L}*|замовте|обирай\p{L}*)(?=[\s,.!:]|$)|megogo|mbooks|у нашому (магазині|інтернет)|на нашому сайті/iu;
+const BUY = /(^|[\s«"(])(купу[йв]\p{L}*|купити|придба[йт]\p{L}*|замовля[йт]\p{L}*|замовте|обирай\p{L}*)(?=[\s,.!:]|$)|megogo|mbooks|у нашому (магазині|інтернет)|на нашому сайті|на сайті readeat|(зробіть|оформіть|оформлюйте) замовлення|доставка по україні|тарифами (служби доставки|пошти)|(ціна|вартість) доставки|замовити\s.{0,80}(онлайн|книгарн\p{L}*|на сайті)/iu;
+// A shop's SEO questions standing as headings (Readeat, Max 2026-10-26: «Чому книгу "Аркан вовків" варто прочитати?»,
+// «Кому буде цікава книга …?»). Only a question about the book itself: «Чому вона пішла?» stays.
+const SEO_Q = /^(чому|кому|для кого|навіщо|що чекає|про що)\s(.{0,60}(книг|книжк)\p{L}*\s*["«„].{0,80}|.{0,60}(варто|слід) (обрати|купити|(про)?читати).{0,120})\?$/iu;
 const ABOUT_HEAD = /^про що (ця |цей |це )?(книжк|книг|роман|історі|збірк|видання|комікс|аудіокниг)/i;
 const sentences = (p) => p.split(/(?<=[.!?…»"])(?<!(?:^|\s)\p{Lu}\.)\s+(?=[«"„(—–\-\p{Lu}\d])/u);
 const whole = (s) => /[.!?…»")]$/.test(s);
@@ -62,8 +65,9 @@ function about(h, max = 1000) {
   const cutOff = !/<\/?[a-z]/i.test(raw) && !whole(raw.trim()) && (raw.length >= 520 || /[.!?…»"]\s+\S+$/.test(raw.trim()));
   const paras = body
     .filter((l) => l[0] !== "\u0002")
+    .filter((l) => !SEO_Q.test(l))
     .map((l, i, all) => {
-      let s = sentences(l).filter((s) => !BUY.test(s) && !ABOUT_HEAD.test(s) && !/^(чому варто|для кого)(?=\s).*\?$/i.test(s) && !/^рецензія на книг/i.test(s));
+      let s = sentences(l).filter((s) => !BUY.test(s) && !ABOUT_HEAD.test(s) && !/^(чому варто|для кого)(?=\s).*\?$/i.test(s) && !SEO_Q.test(s) && !/^рецензія на книг/i.test(s));
       if (cutOff && i === all.length - 1 && s.length > 1 && !whole(s[s.length - 1])) s = s.slice(0, -1);
       return s;
     })
