@@ -724,6 +724,9 @@ if (!advice.enabled) console.log("ANTHROPIC_API_KEY is not set: «Чи варт�
 // and (while advice.js BACKFILL is on) every rated book without one gets queued, again once a day; a
 // rating or a note queues its own book (advice.want). Imports wait for the backfill.
 if (bg.background) setTimeout(async () => console.log(`overview: ${await advice.redo()} to redo, ${await advice.sweep()} books queued`), 60 * 1000).unref();
+// Google Search Console numbers for /admin/traffic, once a day (gsc.js).
+const gsc = bg.register("gsc", require("./gsc").create(store.db), { run: false });
+bg.every("gsc", 24 * 3600 * 1000, () => gsc.run(), { db: store.db, first: 5 * 60 * 1000 });
 bg.every("overviews", 24 * 3600 * 1000, () => advice.sweep(), { db: store.db });
 pages.setStats((id) => social.stats(id));
 // The weekly letter (digest.js): Friday 9:00 Kyiv, to every reader who has not switched it off (Max,
@@ -1690,7 +1693,7 @@ app.post("/admin/genres-trial", owner, (req, res) => {
 });
 app.get("/admin", owner, (req, res) => res.send(adminPage({ user: req.user, stats: admin.stats(), overviews: advice.overviewStats(), catalog: store.catalogStats(), layout: pages.layout })));
 app.get("/admin/shelves", owner, (req, res) => res.send(shelvesPage({ user: req.user, catalog: store.catalogStats(), layout: pages.layout })));
-app.get("/admin/traffic", owner, (req, res) => res.send(adminPage({ user: req.user, stats: admin.stats(), layout: pages.layout, page: "traffic" })));
+app.get("/admin/traffic", owner, (req, res) => res.send(adminPage({ user: req.user, stats: admin.stats(), gsc: gsc.data(), gscOn: gsc.configured(), layout: pages.layout, page: "traffic" })));
 app.get("/admin/stats", owner, (req, res) => res.redirect(301, "/admin/traffic"));
 app.get("/admin/overviews", owner, (req, res) => res.send(overviewsPage({ user: req.user, list: advice.overviewList().map((r) => ({ ...r, complaints: r.down ? advice.complaintsOf(r.book.id) : [] })), stats: advice.overviewStats(), who: (id) => (id && id !== "auto" ? pub(auth.reader(id)) : null), layout: pages.layout })));
 app.get("/admin/readers", owner, (req, res) => res.send(readersPage({ user: req.user, stats: admin.stats(), layout: pages.layout, q: req.query.q, min: Number(req.query.books) || 0, sort: String(req.query.sort || "created"), page: req.query.page })));

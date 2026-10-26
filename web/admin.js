@@ -472,6 +472,69 @@ ${a.landings.length ? `<h3>Сторінки з пошуку</h3>
 <tbody>${landings}</tbody></table></div>` : ""}`;
 }
 
+// Google Search Console (Max, 2026-10-26): what Google shows of the site in its results, fetched once a day
+// by gsc.js. The last 28 days with data against the 28 before, by weeks, and the top queries and pages.
+function gscBlock(g, configured) {
+  const head = `<h2 id="google">Google Пошук</h2>`;
+  if (!g || !g.days) {
+    const why = g?.error ? `Не вдалося взяти дані: ${esc(g.error)}` : configured ? "Дані ще не завантажились, перше завантаження за кілька хвилин після старту." : "Ще не підключено: потрібен секрет GSC_KEY з ключем сервісного акаунта.";
+    return `${head}\n<p class="muted small">${why}</p>`;
+  }
+  const sum = (rows) => {
+    const c = rows.reduce((a, r) => a + r.clicks, 0);
+    const i = rows.reduce((a, r) => a + r.impressions, 0);
+    return { clicks: c, impressions: i, ctr: i ? (100 * c) / i : 0, position: i ? rows.reduce((a, r) => a + r.position * r.impressions, 0) / i : 0 };
+  };
+  const now = g.days.filter((d) => d.day >= g.from && d.day <= g.to);
+  const before = g.days.filter((d) => d.day >= addDays(g.from, -28) && d.day < g.from);
+  const a = sum(now);
+  const b = before.length >= 20 ? sum(before) : null;
+  const fmt = (v, digits = 0) => v.toLocaleString("uk-UA", { minimumFractionDigits: digits, maximumFractionDigits: digits });
+  const delta = (x, y, digits = 0, unit = "") => {
+    if (!b) return "";
+    const d = x - y;
+    return `${d > 0 ? "+" : d < 0 ? "−" : "±"}${fmt(Math.abs(d), digits)}${unit} до попередніх 28 днів`;
+  };
+  const pctOf = (x, y) => (y ? `${x >= y ? "+" : "−"}${Math.round((100 * Math.abs(x - y)) / y)}% до попередніх 28 днів` : "");
+  const tiles = `<div class="stats four">${tile(fmt(a.clicks), "кліків", b ? pctOf(a.clicks, b.clicks) : "")}${tile(fmt(a.impressions), "показів", b ? pctOf(a.impressions, b.impressions) : "")}${tile(`${fmt(a.ctr, 1)}%`, "CTR", delta(a.ctr, b?.ctr, 1, " п.п."))}${tile(fmt(a.position, 1), "середня позиція", b ? `${fmt(b.position, 1)} у попередні 28 днів` : "")}</div>`;
+  const weeks = new Map();
+  for (const d of g.days) {
+    const w = weekOf(d.day);
+    if (!weeks.has(w)) weeks.set(w, []);
+    weeks.get(w).push(d);
+  }
+  const weekRows = [...weeks]
+    .sort((x, y) => y[0].localeCompare(x[0]))
+    .slice(0, 12)
+    .map(([w, rows], i) => {
+      const x = sum(rows);
+      const part = rows.length < 7;
+      if (part && i > 0) return `<tr><th>${weekLabel(w)} <span class="muted">${rows.length} дн.</span></th><td>${n(x.clicks)}</td><td>${n(x.impressions)}</td><td>${x.impressions ? fmt(x.ctr, 1) + "%" : n(0)}</td><td>${x.impressions ? fmt(x.position, 1) : `<span class="na">·</span>`}</td></tr>`;
+      return `<tr${part ? ' class="now"' : ""}><th>${weekLabel(w)}${part ? ` <em>${rows.length} дн.</em>` : ""}</th><td>${n(x.clicks)}</td><td>${n(x.impressions)}</td><td>${x.impressions ? fmt(x.ctr, 1) + "%" : n(0)}</td><td>${x.impressions ? fmt(x.position, 1) : `<span class="na">·</span>`}</td></tr>`;
+    })
+    .join("");
+  const ctr = (r) => (r.impressions ? `${fmt((100 * r.clicks) / r.impressions, 1)}%` : "");
+  const top = (rows, label) => rows.slice(0, 25).map((r) => `<tr><th>${label(r.keys[0])}</th><td>${n(r.clicks)}</td><td>${n(r.impressions)}</td><td>${ctr(r)}</td><td>${fmt(r.position, 1)}</td></tr>`).join("");
+  const path = (u) => { try { const x = new URL(u); return decodeURIComponent(x.pathname + x.search); } catch { return u; } };
+  const page = (u) => `<a href="${esc(u)}" target="_blank" rel="noopener">${esc(path(u).length > 70 ? path(u).slice(0, 70) + "…" : path(u))}</a>`;
+  const cols = `<th>Кліки</th><th>Покази</th><th>CTR</th><th>Позиція</th>`;
+  return `${head}
+<p class="muted small">З Google Search Console, ${short(g.from)} – ${short(g.to)} (Google віддає дані з затримкою в 2–3 дні). Оновлюється раз на добу, востаннє ${short(dayOf(g.at))}.${g.error ? ` Остання спроба не вдалась: ${esc(g.error)}` : ""}</p>
+${tiles}
+<h3>По тижнях</h3>
+<div class="tbl"><table>
+<thead><tr><th>Тиждень</th>${cols}</tr></thead>
+<tbody>${weekRows}</tbody></table></div>
+${g.queries.length ? `<h3>Запити за 28 днів</h3>
+<div class="tbl"><table class="refs">
+<thead><tr><th>Запит</th>${cols}</tr></thead>
+<tbody>${top(g.queries, esc)}</tbody></table></div>` : ""}
+${g.pages.length ? `<h3>Сторінки за 28 днів</h3>
+<div class="tbl"><table class="urls">
+<thead><tr><th>Сторінка</th>${cols}</tr></thead>
+<tbody>${top(g.pages, page)}</tbody></table></div>` : ""}`;
+}
+
 const cameCell = (c) => (c ? `${esc(c.source)}${c.ref && c.ref.includes("/") ? ` <a class="muted" href="https://${esc(c.ref)}" target="_blank" rel="noopener noreferrer" title="${esc(c.ref)}">↗</a>` : ""}` : `<span class="muted">—</span>`);
 
 const READER_HEAD = `<th>Читач</th><th>Зареєструвався</th><th>Востаннє</th><th>Днів</th><th>Книжок</th><th>Звідки</th><th>Лист</th>`;
@@ -554,7 +617,7 @@ function shelvesPage({ user, catalog, layout }) {
   return layout({ title: "Каталог · Статистика", user, path: "/admin", body: catalogBlock(catalog, true) });
 }
 
-function adminPage({ user, stats: s, overviews: o = null, catalog = null, layout, page = "main" }) {
+function adminPage({ user, stats: s, overviews: o = null, catalog = null, gsc = null, gscOn = false, layout, page = "main" }) {
   const traffic = page === "traffic";
   const t = s.totals;
   const tiles = [
@@ -596,6 +659,8 @@ function adminPage({ user, stats: s, overviews: o = null, catalog = null, layout
   const body = traffic
     ? `<section class="admin">
 <section class="page-head"><div><p class="crumbs"><a href="/admin">Статистика</a> / Трафік</p><h1>Трафік</h1></div></section>
+
+${gscBlock(gsc, gscOn)}
 
 ${arrivalsDetails(s.arrivals)}
 
