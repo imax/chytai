@@ -276,9 +276,10 @@ class Social {
       if (x) taken.add(x.href), (latin ||= isLatin(x)), (stale ||= !x.fresh);
       return x;
     };
-    // Examples of what to type (Max: «ідея щоб це були приклади популярних запросів»), so each goes to the search.
+    // Each goes straight to its own page, author, genre or book (Max, 2026-10-26: «Підказки на автора мають
+    // відправляти на сторінку автора. Те саме про жанр»), the search only when there is none.
     const [g, ua, book, other] = [draw(p.genres), draw(p.ua), draw(p.books), draw(p.other) || draw(p.ua)];
-    return [g, book, ua, other].filter(Boolean).map((x) => ({ text: x.text, href: `/search?q=${encodeURIComponent(x.q || x.text)}` }));
+    return [g, book, ua, other].filter(Boolean).map((x) => ({ text: x.text, href: x.href || `/search?q=${encodeURIComponent(x.q || x.text)}` }));
   }
 
   // A recommendation list read the way people read series (Max, 2026-10-23): a later volume gives way to the
