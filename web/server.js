@@ -477,6 +477,19 @@ function fileFor(files, book) {
   return files.find((f) => titles.has(key(f.title)) && sameAuthor(f)) || null;
 }
 
+// A free book's page here by its file name in the reader: the QR on the last page the reader prints
+// (Max, 2026-10-26: «qr код має вести на сайт каталога»). Not found: a search for its title.
+app.get("/free-book/:name", (req, res) => {
+  const f = FREE.find((x) => x.name === req.params.name);
+  if (!f) return res.redirect("/");
+  // The file's title can be longer than the catalog's («Лис Микита. Коли ще звірі говорили»): try its first part too.
+  const queries = [...new Set([f.title, f.title.split(/[.:(]/)[0].trim()])].filter((q) => q.length > 1);
+  const hit = queries
+    .flatMap((q) => store.search(q, { limit: 10, alias: false }))
+    .find((h) => freeFileFor(store.bookPage(h.book.id))?.name === f.name);
+  res.redirect(hit ? store.href(hit.book.id) : `/search?q=${encodeURIComponent(f.title)}`);
+});
+
 // The reader asks once a day which of its accounts are gone (deleted here), to delete their books too.
 app.post("/api/readers-gone", (req, res) => {
   const ids = (Array.isArray(req.body?.ids) ? req.body.ids : []).map(String).slice(0, 10000);

@@ -618,8 +618,9 @@
       if (typeof showNotice !== "function") return;
       // A free book from the site, without an account.
       if (settings.free) {
-        showNotice("Читайте без акаунта, місце, де ви зупинились, запамʼятає цей пристрій.", false);
-        if (settings.free.download) noticeLink(settings.free.download, "Завантажити EPUB");
+        // The file is downloaded from the site's catalog; here, what an account adds (Max, 2026-10-26).
+        showNotice("Читайте без акаунта, місце, де ви зупинились, запамʼятає цей пристрій. З акаунтом Claude пояснить незрозуміле слово чи речення, а нотатки й місце читання будуть на всіх ваших пристроях.", false);
+        noticeLink(settings.free.signIn, "Створити акаунт");
         return;
       }
       // By a link to one book: whose it is and until when.

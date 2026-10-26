@@ -1539,7 +1539,8 @@ function fillPrintFromScreen() {
 }
 
 // The last page: where the text comes from, and a way back to it in Chytai (Max: «звідки книжка і
-// посилання на сайт + qr маленький»). A free-shelf book's QR opens that book; any other, the site.
+// посилання на сайт + qr маленький»). A free-shelf book's QR opens its page in the site's catalog
+// («qr код має вести на сайт каталога»); any other book's, the site.
 const READER_URL = "https://app.chytai.org.ua";
 const SITE_URL = "https://chytai.org.ua";
 
@@ -1561,7 +1562,7 @@ function printSource() {
 
 function printColophon() {
   const free = (settings.freeBooks || []).includes(current?.path);
-  const link = free ? `${READER_URL}/free/${encodeURIComponent(current.path)}` : SITE_URL;
+  const link = free ? `${SITE_URL}/free-book/${encodeURIComponent(current.path)}` : SITE_URL;
   const foot = document.createElement("footer");
   foot.className = "print-colophon";
   foot.innerHTML = `<div class="pc-book"></div><div class="pc-author"></div><div class="pc-source"></div>
@@ -1570,9 +1571,9 @@ function printColophon() {
   foot.querySelector(".pc-author").textContent = current?.author || "";
   foot.querySelector(".pc-source").textContent = printSource();
   foot.querySelector(".pc-from").textContent = free
-    ? "Надруковано з Chytai. Цю книжку можна читати безкоштовно на телефоні чи комп'ютері:"
+    ? "Надруковано з Chytai. Цю книжку можна безкоштовно читати на телефоні чи комп'ютері:"
     : "Надруковано з Chytai, читалки й сайту про книжки:";
-  foot.querySelector(".pc-link").textContent = link.replace(/^https:\/\//, "");
+  foot.querySelector(".pc-link").textContent = SITE_URL.replace(/^https:\/\//, "");
   try {
     const qr = qrcode(0, "M");
     qr.addData(link);
