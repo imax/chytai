@@ -1286,6 +1286,9 @@ function foldTwins(hits) {
 // An author: their works from Wikidata (linked to our books of them) and every book of theirs we have.
 app.get("/author/:slug", async (req, res) => {
   const author = store.authors.bySlug.get(req.params.slug);
+  // «-2» slugs come and go as same-named authors merge or part (Google kept /author/reid-hoffman-2, 2026-10-26).
+  const base = !author && req.params.slug.replace(/(-2)+$/, "");
+  if (base && base !== req.params.slug && store.authors.bySlug.get(base)) return res.redirect(301, store.authors.bySlug.get(base).href);
   if (!author) return res.status(404).send(pages.messagePage({ title: "Немає такого автора", text: "", user: req.user }));
   const works = author.qid ? authors.matchWorks(store, author, await authors.wikidataWorks(store, author.qid, { log: console.log })) : [];
   const shown = new Set(works.flatMap((w) => w.books.map((b) => b.id)));
