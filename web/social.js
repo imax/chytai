@@ -69,7 +69,7 @@ class Social {
   stats(id) {
     const all = this.store.readersOf(id, { all: true }).filter((r) => this.who(r.reader) && !r.entry.kids);
     const rs = all.filter((r) => r.entry.status !== "abandoned");
-    const rated = rs.filter((r) => r.entry.rating != null);
+    const rated = all.filter((r) => r.entry.rating != null); // a rating given on giving up counts too (Max, 2026-10-26)
     const avg = rated.length ? Math.round((rated.reduce((s, r) => s + r.entry.rating, 0) / rated.length) * 10) / 10 : null;
     const dropped = all.length - rs.length;
     return { avg, rated: rated.length, want: rs.filter((r) => r.entry.status === "want").length, readers: rs.length, finished: rs.filter((r) => r.entry.status === "read").length, dropped };
