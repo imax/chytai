@@ -167,6 +167,8 @@ function settingsFor(req) {
       ? { lastBook: (demo.some((d) => d.name === u.lastBook) ? u.lastBook : demo[0]?.name) || null, guestLimit: req.share ? { used: shareUsage(req.share).n, limit: SHARE_EXPLAIN_LIMIT } : { used: guestUsage().guests[req.guest] || 0, limit: GUEST_LIMIT } }
       : {}),
     ...(req.share ? { share: { from: accountName(req.share.acct), until: req.share.expires } } : {}),
+    // Printing those gives the current chapter, not the whole book (renderer.js, «Print»).
+    noFileBooks: freeShelf.filter((f) => !fileAllowed(f.name)).map((f) => f.name),
     ...(req.free ? { free: { signIn: `/login?go=1&next=${encodeURIComponent(`/free/${encodeURIComponent(req.free)}`)}`, download: fileAllowed(req.free) ? `/free-file/${encodeURIComponent(req.free)}` : "" } } : {}),
   };
 }

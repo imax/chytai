@@ -724,3 +724,20 @@ body[data-theme="dark"] .cover { background: hsl(var(--hue) 18% 30%); color: hsl
 /* epub.js shifts the scroll itself when a chapter above grows; Chrome's
    scroll anchoring would shift it a second time and throw the reader off. */
 #viewer .epub-container { overflow-anchor: none; }
+
+/* Print (renderer.js «Print»): only the book's text, black on white, one chapter after another. */
+#print-book { display: none; }
+@media print {
+  @page { margin: 18mm 16mm; }
+  body.printing > *:not(#print-book) { display: none !important; }
+  html:has(body.printing), body.printing { height: auto !important; overflow: visible !important; background: #fff !important; color: #000 !important; }
+  body.printing #print-book { display: block; font-family: "Literata Variable", Literata, Georgia, serif; font-size: 13pt; line-height: 1.5; color: #000; }
+  #print-book .print-head { text-align: center; margin: 0 0 10mm; }
+  #print-book .print-title { font-size: 20pt; font-weight: 700; line-height: 1.2; }
+  #print-book .print-author { font-size: 13pt; margin-top: 4px; }
+  #print-book .print-section + .print-section { break-before: page; }
+  #print-book p { margin: 0 0 0.4em; text-align: justify; hyphens: auto; orphans: 2; widows: 2; }
+  #print-book h1, #print-book h2, #print-book h3 { line-height: 1.25; break-after: avoid; }
+  #print-book img, #print-book svg { max-width: 100%; height: auto; break-inside: avoid; }
+  #print-book a { color: inherit; text-decoration: none; }
+}

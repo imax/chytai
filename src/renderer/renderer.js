@@ -291,7 +291,7 @@ async function openEpub(payload, { posKey, source }) {
   rendition.on("keyup", onKey);
   rendition.hooks.content.register((contents) => contents.document.addEventListener("wheel", onWheel, { passive: true }));
   // Keys pressed while the page has focus reach only the book's frame; pass them on.
-  rendition.on("keydown", (e) => window.Shell?.key(e));
+  rendition.on("keydown", (e) => (onPrintKey(e), e.defaultPrevented || window.Shell?.key(e)));
   rendition.on("click", (e) => {
     // A plain click inside the page clears the selection. Touch taps are handled in onTouchEnd:
     // iOS Safari does not deliver clicks on plain text to the iframe's document listener.
@@ -1491,6 +1491,114 @@ function noticeLink(href, label) {
   $("#notice .notice-text").append(" ", a);
 }
 window.reader.onTogglePanel(() => showPanel(document.body.classList.contains("panel-hidden")));
+
+// ---------- Print: the book's text on paper, without the panel, toolbar or notices ----------
+// Ctrl/Cmd+P prints the whole book (svoloshyn: «роздрукувати казку дитині»). Books shared by their
+// author's permission have no file to download, so printing them gives the current chapter only.
+// The browser's own Print menu gives no time to load the other chapters: it prints the chapter on screen.
+
+// The book's font lives in the page frames; the printed copy needs it here too (it loads only when used).
+for (const href of FONT_CSS) document.head.append(Object.assign(document.createElement("link"), { rel: "stylesheet", href }));
+const printBox = document.createElement("div");
+printBox.id = "print-book";
+document.body.append(printBox);
+
+const printWholeBook = () => !(settings.noFileBooks || []).includes(current?.path);
+
+function printHead() {
+  const h = document.createElement("header");
+  h.className = "print-head";
+  h.innerHTML = `<div class="print-title"></div><div class="print-author"></div>`;
+  h.querySelector(".print-title").textContent = current?.title || "";
+  h.querySelector(".print-author").textContent = current?.author || "";
+  return h;
+}
+
+function printSection(body) {
+  const sec = document.createElement("section");
+  sec.className = "print-section";
+  for (const el of body.querySelectorAll("script, style, link")) el.remove();
+  for (const a of body.querySelectorAll("a[href]")) a.removeAttribute("href");
+  sec.innerHTML = body.innerHTML;
+  return sec;
+}
+
+// What is on screen now: the chapter being read (or every chapter laid out, for a whole book).
+function fillPrintFromScreen() {
+  const index = rendition?.currentLocation?.()?.start?.index;
+  const all = rendition?.getContents() || [];
+  const shown = all.filter((c) => c.sectionIndex === index);
+  printBox.replaceChildren(printHead(), ...(shown.length ? shown : all).map((c) => printSection(c.document.body.cloneNode(true))));
+  printBox.style.fontFamily = FONTS[settings.font] || "";
+}
+
+async function fillPrintWholeBook() {
+  const parts = [];
+  for (const section of book.spine.spineItems) {
+    if (section.linear === false || section.properties?.includes?.("nav")) continue;
+    try {
+      const doc = (await section.load(book.load.bind(book))).ownerDocument;
+      const body = doc.body || doc.querySelector("body");
+      if (!body) continue;
+      const clone = document.importNode(body, true);
+      // Pictures point into the book file; give them the same blob URLs the pages use.
+      for (const img of clone.querySelectorAll("img[src], image")) {
+        const attr = img.tagName.toLowerCase() === "img" ? "src" : img.hasAttribute("href") ? "href" : "xlink:href";
+        const src = img.getAttribute(attr);
+        if (!src || /^(data|blob|https?):/.test(src)) continue;
+        try {
+          const abs = decodeURI(new URL(src, `https://book${section.url.startsWith("/") ? "" : "/"}${section.url}`).pathname);
+          const url = book.archive ? await book.archive.createUrl(abs) : abs;
+          img.setAttribute(attr, url);
+        } catch {
+          img.remove();
+        }
+      }
+      parts.push(printSection(clone));
+    } catch {
+      /* a chapter that does not load is left out */
+    } finally {
+      section.unload?.();
+    }
+  }
+  printBox.replaceChildren(printHead(), ...parts);
+  printBox.style.fontFamily = FONTS[settings.font] || "";
+}
+
+let printReady = false;
+async function printBook() {
+  if (!rendition || current?.pdf) return window.print();
+  showNotice("Готую книжку до друку…", true);
+  try {
+    if (printWholeBook()) await fillPrintWholeBook();
+    else fillPrintFromScreen();
+  } finally {
+    $("#notice").classList.add("hidden");
+  }
+  printReady = true;
+  document.body.classList.add("printing");
+  await document.fonts?.ready;
+  window.print();
+}
+
+function onPrintKey(e) {
+  if ((e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === "p" && rendition && !current?.pdf) {
+    e.preventDefault();
+    printBook();
+  }
+}
+document.addEventListener("keydown", onPrintKey);
+
+window.addEventListener("beforeprint", () => {
+  if (!rendition || current?.pdf) return;
+  if (!printReady) fillPrintFromScreen();
+  document.body.classList.add("printing");
+});
+window.addEventListener("afterprint", () => {
+  document.body.classList.remove("printing");
+  printBox.replaceChildren();
+  printReady = false;
+});
 
 settingsReady = loadSettings();
 settingsReady.then(() => {
