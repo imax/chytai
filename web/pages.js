@@ -82,7 +82,7 @@ function cover(book, size = "md") {
   const hue = [...String(book.title)].reduce((a, c) => (a * 31 + c.charCodeAt(0)) % 360, 7);
   const ph = `<span class="ph">${esc(book.title)}</span>`;
   const src = SHOWN[size] ? thumb(book.cover, SHOWN[size]) : book.cover;
-  return `<span class="cover ${size}" style="--h:${hue}">${ph}${book.cover ? `<img src="${attr(src)}" alt="" loading="lazy" onerror="${COVER_ERR}">` : ""}</span>`;
+  return `<span class="cover ${size}" style="--h:${hue}">${ph}${book.cover ? `<img src="${attr(src)}" alt=""${size === "xl" ? ' fetchpriority="high"' : ' loading="lazy"'} onerror="${COVER_ERR}">` : ""}</span>`;
 }
 
 // A section heading: a rule, a small green label and, on the right, a quiet aside (a link, a switch).
