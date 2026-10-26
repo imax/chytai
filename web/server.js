@@ -1123,8 +1123,9 @@ app.get("/sitemap.xml", (req, res) => {
       if (b && !isRussian(b)) urls.push(b.href);
       else if (b) ru.add(w.id);
     }
-    // An author whose every book here is Russian is left out too (Max 2026-10-25: no search traffic to Russian editions).
-    for (const a of store.authors?.list || []) if (!a.ids?.length || a.ids.some((id) => !ru.has(store.canonical(id)))) urls.push(a.href);
+    // An author with fewer than two non-Russian books is left out: one book's author page mostly repeats the
+    // book page (Max 2026-10-26), and none goes to Russian editions (Max 2026-10-25). The second book adds them.
+    for (const a of store.authors?.list || []) if (new Set((a.ids || []).map((id) => store.canonical(id)).filter((id) => !ru.has(id))).size >= 2) urls.push(a.href);
     // Readers' pages are not listed: noindex (Max, 2026-10-21), their notes live on the book pages.
     sitemap = { at: Date.now(), xml: `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls.map((u) => `<url><loc>${pages.esc(origin + u)}</loc></url>`).join("\n")}\n</urlset>\n` };
     console.log(`sitemap: ${urls.length} addresses in ${Date.now() - t0} ms`);
