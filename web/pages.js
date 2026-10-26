@@ -736,7 +736,7 @@ const moreMenu = (items) => `<details class="more-acts"><summary class="btn" ari
 function freeReadLine(book) {
   const slug = attr((book.href || "").split("/").pop() || encodeURIComponent(book.id));
   return `<div class="free-read"><a class="btn primary" href="/go/read/${slug}">Читати безкоштовно</a><a class="text-link" href="/go/epub/${slug}">Завантажити EPUB</a></div>
-<p class="want-why free-why">Вільний текст: читайте онлайн або завантажте файл, без реєстрації.</p>`;
+<p class="want-why free-why">Читайте онлайн або завантажте файл, без реєстрації.</p>`;
 }
 
 function mine(book, entry, user, now = false, readUrl = "", listItem = "", { primary = true } = {}) {
