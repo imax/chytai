@@ -530,7 +530,11 @@ class Advice {
       fallbacks: "default",
       output_config: { effort: "low" },
       tools: [{ type: "web_search_20260209", name: "web_search", max_uses: WEB_SEARCHES, blocked_domains: BLOCKED_DOMAINS }],
-      system: OVERVIEW_SYSTEM,
+      // Prompt caching: the instructions are the same for every book (the auto job does them in a row), and
+      // with caching on, each step after a web search reads the earlier results from the cache instead of
+      // paying for them again.
+      system: [{ type: "text", text: OVERVIEW_SYSTEM, cache_control: { type: "ephemeral" } }],
+      cache_control: { type: "ephemeral" },
       messages: [{ role: "user", content: `The book:\n${await this.bookText(book, { overview: false, site: false })}\n\nWhat do readers and critics say about it?` }],
     });
     const row = { text, model, created: new Date().toISOString() };

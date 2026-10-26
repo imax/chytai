@@ -8,7 +8,8 @@
 const Anthropic = require("@anthropic-ai/sdk");
 
 const MODEL = "claude-haiku-5-5";
-const PRICE = { input: 0.1 / 1e6, output: 0.5 / 1e6 }; // $ per token, Haiku 5.5
+const PRICE = { input: 0.1 / 1e6, output: 0.5 / 1e6, cacheRead: 0.01 / 1e6, cacheWrite: 0.125 / 1e6 }; // $ per token, Haiku 5.5
+const costOf = (u) => (u.input_tokens || 0) * PRICE.input + (u.cache_read_input_tokens || 0) * PRICE.cacheRead + (u.cache_creation_input_tokens || 0) * PRICE.cacheWrite + (u.output_tokens || 0) * PRICE.output;
 
 class AiPass {
   // def: { key, name, what, prompt, system, schema, size, candidates(), facts(s) -> string | content blocks,
@@ -44,7 +45,8 @@ class AiPass {
     const message = await this.client.messages.create({
       model: MODEL,
       max_tokens: this.maxTokens,
-      system: this.system,
+      // The same system prompt for every book of a pass: cached, so a run of hundreds pays for it once per 5 minutes.
+      system: [{ type: "text", text: this.system, cache_control: { type: "ephemeral" } }],
       output_config: { effort: "low", format: { type: "json_schema", schema: this.schema } },
       messages: [{ role: "user", content }],
     });
@@ -69,7 +71,7 @@ class AiPass {
           const s = subjects[next++];
           try {
             const { answer, usage } = await this.ask(s);
-            st.cost += (usage.input_tokens || 0) * PRICE.input + (usage.output_tokens || 0) * PRICE.output;
+            st.cost += costOf(usage);
             st.items.push({ ...this.item(s, answer), answer });
           } catch (e) {
             st.errors++;
@@ -123,7 +125,7 @@ class AiPass {
         const s = todo[next++];
         try {
           const { answer, usage } = await this.ask(s);
-          st.cost += (usage.input_tokens || 0) * PRICE.input + (usage.output_tokens || 0) * PRICE.output;
+          st.cost += costOf(usage);
           put.run(this.key, s.id, JSON.stringify(answer), this.prompt, new Date().toISOString());
         } catch (e) {
           st.errors++;

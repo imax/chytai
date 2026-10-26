@@ -11,7 +11,8 @@ const MODEL = "claude-haiku-5-5";
 const SIZE = 400; // the whole pool: 247 doubtful works on 2026-10-23
 const PARALLEL = 4;
 const PROMPT = 2; // the SYSTEM version below; bump it with every change
-const PRICE = { input: 0.1 / 1e6, output: 0.5 / 1e6 }; // $ per token, Haiku 5.5
+const PRICE = { input: 0.1 / 1e6, output: 0.5 / 1e6, cacheRead: 0.01 / 1e6, cacheWrite: 0.125 / 1e6 }; // $ per token, Haiku 5.5
+const costOf = (u) => (u.input_tokens || 0) * PRICE.input + (u.cache_read_input_tokens || 0) * PRICE.cacheRead + (u.cache_creation_input_tokens || 0) * PRICE.cacheWrite + (u.output_tokens || 0) * PRICE.output;
 const LANGS = ["uk", "ru", "en", "other", "unknown"];
 
 const SYSTEM = `You tell the language of one edition of a book listed on Chytai, a Ukrainian book site. Judge the language this edition is printed in, from its title, the description and the publisher or shop, not the language the book was first written in: a Ukrainian translation of a Russian or English book is «uk». Ukrainian and Russian look alike: Ukrainian uses і, ї, є, ґ and words like «та», «що», «як», «це», «від»; Russian uses ы, э, ъ, ё and words like «и», «что», «как», «это», «от». A short title can be the same in both; then rely on the description and the publisher. The spelling of the title decides first: a title that is correct Russian and not correct Ukrainian («Академия», not «Академія»; «Пассажир», not «Пасажир»; «Возвращение», not «Повернення»; «Зов кукушки») is «ru», even when the description is in Ukrainian, because Ukrainian shops describe Russian editions in Ukrainian. The author's name spelled the Ukrainian way does not make the edition Ukrainian either. Answer «unknown» only when the title is correct in both languages («Дракон») and nothing else tells them apart.`;
@@ -54,7 +55,7 @@ class LangTrial {
     const message = await this.client.messages.create({
       model: MODEL,
       max_tokens: 1024,
-      system: SYSTEM,
+      system: [{ type: "text", text: SYSTEM, cache_control: { type: "ephemeral" } }],
       output_config: {
         effort: "low",
         format: { type: "json_schema", schema: { type: "object", properties: { language: { type: "string", enum: LANGS } }, required: ["language"], additionalProperties: false } },
@@ -86,7 +87,7 @@ class LangTrial {
         const b = todo[next++];
         try {
           const { language, usage } = await this.ask(b);
-          st.cost += (usage.input_tokens || 0) * PRICE.input + (usage.output_tokens || 0) * PRICE.output;
+          st.cost += costOf(usage);
           this.store.setAiLang(b.id, language, PROMPT);
         } catch (e) {
           st.errors++;
@@ -122,7 +123,7 @@ class LangTrial {
         const before = isRussian(b) ? "ru" : "не ru";
         try {
           const { language, usage } = await this.ask(b);
-          st.cost += (usage.input_tokens || 0) * PRICE.input + (usage.output_tokens || 0) * PRICE.output;
+          st.cost += costOf(usage);
           st.items.push({ id: b.id, title: b.title, author: b.author || "", before, after: language });
         } catch (e) {
           st.errors++;

@@ -91,12 +91,17 @@ async function explain({ apiKey, model, language, style, customStyle, request, s
     ? request.messages.map((m) => (m.role === "assistant" && Array.isArray(m.content) ? { ...m, content: m.content.filter((b) => b.type === "text") } : m))
     : [firstMessage(request.context, request.mode)];
 
+  // Prompt caching: the system prompt is the same for every reader with the same style, so it sits behind a
+  // cache breakpoint. A follow-up («Детальніше», a question) resends the whole card, so it also caches up
+  // to its last message, and the next follow-up reads that back at a twentieth of the price. A first
+  // request isn't cached past the system prompt: its book context is new every time.
   const params = {
     model,
     max_tokens: 16000,
-    system: request.mode === "translate" ? translatePrompt(language) : systemPrompt(language, style, customStyle),
+    system: [{ type: "text", text: request.mode === "translate" ? translatePrompt(language) : systemPrompt(language, style, customStyle), cache_control: { type: "ephemeral" } }],
     messages,
     output_config: { effort: EFFORT[model] || "low" },
+    ...(request.messages ? { cache_control: { type: "ephemeral" } } : {}),
   };
 
   let stream;

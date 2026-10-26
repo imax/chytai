@@ -83,14 +83,16 @@ class UkFinder {
         model: MODEL,
         max_tokens: 2000,
         tools: [{ type: "web_search_20260209", name: "web_search", max_uses: SEARCHES }],
-        system: SYSTEM,
+        // Cached like the overviews (advice.js): the same instructions every time, and search results read back cheaply.
+        system: [{ type: "text", text: SYSTEM, cache_control: { type: "ephemeral" } }],
+        cache_control: { type: "ephemeral" },
         // From a reader's «Є український переклад» we may know only the original.
         messages: [{ role: "user", content: `${uk.uk ? `The Ukrainian translation: «${uk.uk}»${uk.ukAuthor ? `, ${uk.ukAuthor}` : ""}.\n` : "A reader says this book has been translated into Ukrainian; its Ukrainian title is unknown to us.\n"}The original: «${book.title}»${book.author ? `, ${book.author}` : ""}.` }],
       };
       let message;
       for (let i = 0; i < 4; i++) {
         message = await this.client.messages.create(params);
-        usage.input += (message.usage?.input_tokens || 0) + (message.usage?.cache_read_input_tokens || 0);
+        usage.input += (message.usage?.input_tokens || 0) + (message.usage?.cache_read_input_tokens || 0) + (message.usage?.cache_creation_input_tokens || 0);
         usage.output += message.usage?.output_tokens || 0;
         usage.searches += message.usage?.server_tool_use?.web_search_requests || 0;
         if (message.stop_reason !== "pause_turn") break;

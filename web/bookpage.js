@@ -199,7 +199,7 @@ class BookPage {
     if (this.client) {
       try {
         const ask = { url: m.url, site: m.site, title: m.pageTitle, h1: m.h1, marks: { title: m.title, author: m.author, description: m.description, isbn: m.isbn }, text: m.text };
-        const res = await this.client.messages.create({ model: MODEL, max_tokens: 1500, system: SYSTEM, messages: [{ role: "user", content: JSON.stringify(ask) }] });
+        const res = await this.client.messages.create({ model: MODEL, max_tokens: 1500, system: [{ type: "text", text: SYSTEM, cache_control: { type: "ephemeral" } }], messages: [{ role: "user", content: JSON.stringify(ask) }] });
         const out = res.content.map((c) => c.text || "").join("");
         if (debug) return { debug: { marks: { ...m, text: m.text.slice(0, 1500) }, claude: out } };
         const j = JSON.parse(out.slice(out.indexOf("{"), out.lastIndexOf("}") + 1));

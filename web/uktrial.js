@@ -12,7 +12,8 @@ const MODEL = "claude-haiku-5-5";
 const SIZE = 200;
 const PARALLEL = 4;
 const PROMPT = 1; // the SYSTEM version below; bump it with every change
-const PRICE = { input: 0.1 / 1e6, output: 0.5 / 1e6 }; // $ per token, Haiku 5.5
+const PRICE = { input: 0.1 / 1e6, output: 0.5 / 1e6, cacheRead: 0.01 / 1e6, cacheWrite: 0.125 / 1e6 }; // $ per token, Haiku 5.5
+const costOf = (u) => (u.input_tokens || 0) * PRICE.input + (u.cache_read_input_tokens || 0) * PRICE.cacheRead + (u.cache_creation_input_tokens || 0) * PRICE.cacheWrite + (u.output_tokens || 0) * PRICE.output;
 const CYR = /[а-яіїєґ]/i;
 
 const SYSTEM = `You help Chytai, a Ukrainian book site, find the Ukrainian translation of a foreign book. Given the book's title and author, say whether it has been published in Ukrainian (not Russian), and if so give the Ukrainian title exactly as printed on that edition, the author's name as written in Ukrainian, and the publisher. Answer «no» when you know of no Ukrainian edition, and «unknown» when you are not sure which book this is. Never translate the title yourself: give only a title you know an edition was published under.`;
@@ -58,7 +59,7 @@ class UkTrial {
     const message = await this.client.messages.create({
       model: MODEL,
       max_tokens: 1024,
-      system: SYSTEM,
+      system: [{ type: "text", text: SYSTEM, cache_control: { type: "ephemeral" } }],
       output_config: {
         effort: "low",
         format: {
@@ -106,7 +107,7 @@ class UkTrial {
         const item = { id: b.id, title: b.title, author: b.author || "" };
         try {
           const { answer, usage } = await this.ask(b);
-          st.cost += (usage.input_tokens || 0) * PRICE.input + (usage.output_tokens || 0) * PRICE.output;
+          st.cost += costOf(usage);
           Object.assign(item, { answer: answer.answer, uk: answer.answer === "yes" ? answer.title : "", ukAuthor: answer.answer === "yes" ? answer.author : "", publisher: answer.answer === "yes" ? answer.publisher : "", found: this.match(b, answer) });
         } catch (e) {
           st.errors++;

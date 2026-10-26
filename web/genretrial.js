@@ -12,7 +12,8 @@ const SIZE = 200;
 const PARALLEL = 4;
 const PARALLEL_ALL = 8;
 const PROMPT = 3; // the SYSTEM version below; bump it with every change
-const PRICE = { input: 0.1 / 1e6, output: 0.5 / 1e6 }; // $ per token, Haiku 5.5
+const PRICE = { input: 0.1 / 1e6, output: 0.5 / 1e6, cacheRead: 0.01 / 1e6, cacheWrite: 0.125 / 1e6 }; // $ per token, Haiku 5.5
+const costOf = (u) => (u.input_tokens || 0) * PRICE.input + (u.cache_read_input_tokens || 0) * PRICE.cacheRead + (u.cache_creation_input_tokens || 0) * PRICE.cacheWrite + (u.output_tokens || 0) * PRICE.output;
 
 const SYSTEM = (genres) => `You sort books into the genres of Chytai, a Ukrainian book site. The genres, in Ukrainian:
 ${genres.join(", ")}
@@ -81,7 +82,7 @@ class GenreTrial {
     const message = await this.client.messages.create({
       model: MODEL,
       max_tokens: 2048,
-      system: SYSTEM(this.genres),
+      system: [{ type: "text", text: SYSTEM(this.genres), cache_control: { type: "ephemeral" } }],
       output_config: {
         effort: "low",
         format: {
@@ -125,7 +126,7 @@ class GenreTrial {
         const b = todo[next++];
         try {
           const { genres, usage } = await this.ask(b);
-          st.cost += (usage.input_tokens || 0) * PRICE.input + (usage.output_tokens || 0) * PRICE.output;
+          st.cost += costOf(usage);
           if (genres.length) this.store.setAiGenres(b.id, genres, PROMPT);
         } catch (e) {
           st.errors++;
@@ -163,7 +164,7 @@ class GenreTrial {
         const before = mainGenres(b.tags);
         try {
           const { genres, usage } = await this.ask(b);
-          st.cost += (usage.input_tokens || 0) * PRICE.input + (usage.output_tokens || 0) * PRICE.output;
+          st.cost += costOf(usage);
           st.items.push({ id: b.id, title: b.title, author: b.author || "", before, after: genres });
         } catch (e) {
           st.errors++;

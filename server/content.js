@@ -112,7 +112,7 @@ async function checkUpload(name, buffer, { apiKey = process.env.ANTHROPIC_API_KE
   try {
     const parts = /\.pdf$/i.test(name) ? await pdfParts(buffer) : await epubParts(buffer);
     const client = new Anthropic({ apiKey });
-    const message = await client.messages.create({ model: MODEL, max_tokens: 100, system: PROMPT, messages: [userMessage(name, parts)] });
+    const message = await client.messages.create({ model: MODEL, max_tokens: 100, system: [{ type: "text", text: PROMPT, cache_control: { type: "ephemeral" } }], messages: [userMessage(name, parts)] });
     // A refusal here means the model would not even look at the excerpts.
     if (message.stop_reason === "refusal") return { blocked: true, reason: "model refused", usage: message.usage };
     const text = message.content.map((b) => b.text || "").join("").trim();

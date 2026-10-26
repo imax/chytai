@@ -12,7 +12,8 @@ const MODEL = "claude-haiku-5-5";
 const SIZE = 200;
 const PARALLEL = 4;
 const PROMPT = 1; // the SYSTEM version below; bump it with every change
-const PRICE = { input: 0.1 / 1e6, output: 0.5 / 1e6 }; // $ per token, Haiku 5.5
+const PRICE = { input: 0.1 / 1e6, output: 0.5 / 1e6, cacheRead: 0.01 / 1e6, cacheWrite: 0.125 / 1e6 }; // $ per token, Haiku 5.5
+const costOf = (u) => (u.input_tokens || 0) * PRICE.input + (u.cache_read_input_tokens || 0) * PRICE.cacheRead + (u.cache_creation_input_tokens || 0) * PRICE.cacheWrite + (u.output_tokens || 0) * PRICE.output;
 const CYR = /[а-яіїєґ]/i;
 
 const SYSTEM = `You help Chytai, a Ukrainian book site, link a Ukrainian edition to the book it was translated from. Given a book's Ukrainian title, author and description, say whether it is a translation, and if so give the original title as published in the original language (the full main title, without a subtitle unless it is part of the name everyone uses) and the author's name as written in the original. Answer «ukrainian» for a book written in Ukrainian, and «unknown» when you are not sure which book this is: a wrong original is worse than none, so do not guess from the title's words alone.`;
@@ -59,7 +60,7 @@ class OrigTrial {
     const message = await this.client.messages.create({
       model: MODEL,
       max_tokens: 1024,
-      system: SYSTEM,
+      system: [{ type: "text", text: SYSTEM, cache_control: { type: "ephemeral" } }],
       output_config: {
         effort: "low",
         format: {
@@ -107,7 +108,7 @@ class OrigTrial {
         const b = todo[next++];
         try {
           const { answer, usage } = await this.ask(b);
-          st.cost += (usage.input_tokens || 0) * PRICE.input + (usage.output_tokens || 0) * PRICE.output;
+          st.cost += costOf(usage);
           this.store.setAiOrig(b.id, answer, PROMPT);
         } catch (e) {
           st.errors++;
@@ -152,7 +153,7 @@ class OrigTrial {
         const item = { id: b.id, title: b.title, author: b.author || "" };
         try {
           const { answer, usage } = await this.ask(b);
-          st.cost += (usage.input_tokens || 0) * PRICE.input + (usage.output_tokens || 0) * PRICE.output;
+          st.cost += costOf(usage);
           Object.assign(item, { kind: answer.kind, orig: answer.kind === "translation" ? answer.title : "", origAuthor: answer.kind === "translation" ? answer.author : "", lang: answer.language || "" });
           if (item.orig) item.inCatalog = byTitle.get(norm(item.orig)) || "";
         } catch (e) {
