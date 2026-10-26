@@ -619,7 +619,7 @@
       // A free book from the site, without an account.
       if (settings.free) {
         // The file is downloaded from the site's catalog; here, what an account adds (Max, 2026-10-26).
-        showNotice("Читайте без акаунта, місце, де ви зупинились, запамʼятає цей пристрій. З акаунтом Claude пояснить незрозуміле слово чи речення, а нотатки й місце читання будуть на всіх ваших пристроях.", false);
+        showNotice("З акаунтом є пояснення від Claude і нотатки.", false);
         noticeLink(settings.free.signIn, "Створити акаунт");
         return;
       }
