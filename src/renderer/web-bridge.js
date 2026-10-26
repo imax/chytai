@@ -100,6 +100,8 @@
   async function rememberPosition(path, cfi) {
     const s = (await localSettings()) || {};
     await patchLocalSettings({ positions: { ...(s.positions || {}), [path]: cfi } });
+    // Also apart from the settings, which the server's copy replaces on every load.
+    await kvSet("here", { ...((await kvGet("here")) || {}), [path]: cfi });
   }
 
   const enqueue = (item) => idb("queue", "readwrite", (s) => s.add(item)).catch(() => {});
@@ -262,7 +264,10 @@
       const data = await res.arrayBuffer();
       const position = decodeURIComponent(res.headers.get("X-Book-Position") || "") || null;
       const reflowPosition = decodeURIComponent(res.headers.get("X-Book-Reflow-Position") || "") || null;
-      payload = { path: name, name, data, position, reflowPosition };
+      // A guest's place lives in the server's memory only; after a restart (or once they sign in) the one
+      // kept on this device carries on.
+      const kept = position || reflowPosition ? null : (await kvGet("here").catch(() => null)) || {};
+      payload = { path: name, name, data, position: position || kept?.[name] || null, reflowPosition: reflowPosition || kept?.[`${name}#reflow`] || null };
       idb("books", "readwrite", (s) => s.put({ data, savedAt: Date.now() }, name)).catch(() => {});
     } catch (err) {
       if (err.message === "login") return;
@@ -606,11 +611,16 @@
   function enterGuestMode(settings) {
     document.body.classList.add("guest");
     const logout = document.getElementById("btn-logout");
-    if (logout) (logout.textContent = settings.share ? "Вийти" : "Вийти з демо"), (logout.title = "Повернутися на сторінку входу");
+    if (logout) (logout.textContent = settings.share || settings.free ? "Вийти" : "Вийти з демо"), (logout.title = "Повернутися на сторінку входу");
     const { limit = 0, used = 0 } = settings.guestLimit || {};
     const left = Math.max(0, limit - used);
     setTimeout(() => {
       if (typeof showNotice !== "function") return;
+      // A free book from the site, without an account.
+      if (settings.free) {
+        showNotice("Вільний текст: читайте без акаунта, місце, де ви зупинились, запамʼятає цей пристрій.", false);
+        return noticeLink(settings.free.download, "Завантажити EPUB");
+      }
       // By a link to one book: whose it is and until when.
       if (settings.share) {
         const until = new Date(settings.share.until).toLocaleDateString("uk-UA", { day: "numeric", month: "long" });

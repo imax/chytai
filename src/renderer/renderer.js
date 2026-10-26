@@ -754,6 +754,12 @@ $("#sel-toolbar").addEventListener("click", (e) => {
   const action = e.target.dataset.action;
   if (!action || !pendingSelection) return;
   const snapshot = pendingSelection;
+  // A free book read without an account: explanations and notes come with one (they cost Max tokens).
+  if (settings.free) {
+    hideSelToolbar();
+    showNotice("Пояснення, питання і нотатки працюють після входу. Це безкоштовно, потрібна лише пошта.", false);
+    return noticeLink(settings.free.signIn, "Увійти");
+  }
   if (action === "note") {
     addNote(snapshot);
   } else {
@@ -1475,6 +1481,14 @@ function showNotice(text, busy) {
   box.querySelector(".notice-text").textContent = text;
   box.classList.toggle("busy", busy);
   box.classList.remove("hidden");
+}
+// A link at the end of the notice shown last («Увійти», «Завантажити EPUB»); the next notice drops it.
+function noticeLink(href, label) {
+  const a = document.createElement("a");
+  a.href = href;
+  a.textContent = label;
+  a.className = "notice-link";
+  $("#notice .notice-text").append(" ", a);
 }
 window.reader.onTogglePanel(() => showPanel(document.body.classList.contains("panel-hidden")));
 

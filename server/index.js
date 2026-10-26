@@ -43,6 +43,7 @@ const ACCOUNTS_DIR = path.join(DATA_DIR, "accounts");
 // that opens it and no other, for SHARE_DAYS, until its owner switches it off; read only, a few
 // explanations a day. A reader has at most SHARE_MAX links at a time.
 const SHARE_COOKIE = "reader_share";
+const FREE_COOKIE = "reader_free"; // the free-shelf book a guest reads without an account
 const DEVICE_COOKIE = "reader_device";
 const SHARE_DAYS = 30;
 const SHARE_MAX = 5;
@@ -163,9 +164,10 @@ function settingsFor(req) {
     demoBook: state.shared.demoBook || "",
     demoDefault: demoBooks(true)[0]?.name || "",
     ...(req.guest
-      ? { lastBook: u.lastBook || demo[0]?.name || null, guestLimit: req.share ? { used: shareUsage(req.share).n, limit: SHARE_EXPLAIN_LIMIT } : { used: guestUsage().guests[req.guest] || 0, limit: GUEST_LIMIT } }
+      ? { lastBook: (demo.some((d) => d.name === u.lastBook) ? u.lastBook : demo[0]?.name) || null, guestLimit: req.share ? { used: shareUsage(req.share).n, limit: SHARE_EXPLAIN_LIMIT } : { used: guestUsage().guests[req.guest] || 0, limit: GUEST_LIMIT } }
       : {}),
     ...(req.share ? { share: { from: accountName(req.share.acct), until: req.share.expires } } : {}),
+    ...(req.free ? { free: { signIn: `/login?go=1&next=${encodeURIComponent(`/free/${encodeURIComponent(req.free)}`)}`, download: `/free-file/${encodeURIComponent(req.free)}` } } : {}),
   };
 }
 
@@ -361,6 +363,7 @@ function wishStats(library) {
 // What a guest may open: the book of their link, or the demo.
 function guestBooks(req) {
   if (req.share) return [{ dir: libOf(req.share.acct).dir, name: req.share.book }];
+  if (req.free) return [{ dir: FREE_DIR, name: req.free }];
   return demoBooks();
 }
 
@@ -657,6 +660,8 @@ const safeNext = (v) => (/^\/(?!\/)/.test(String(v || "")) ? String(v).slice(0, 
 app.get("/login", (req, res) => {
   if (currentAccount(req)) return res.redirect(safeNext(req.query.next) || "/");
   if (safeNext(req.query.next)) res.setHeader("Set-Cookie", cookieHeader(req, NEXT_COOKIE, safeNext(req.query.next), 1 / 96));
+  // «Увійти» from inside the reader (a free book's guest): straight to the site, no landing on the way.
+  if (req.query.go) return res.redirect(`${WEB_URL}/reader-login?back=${encodeURIComponent(`${req.protocol}://${req.get("host")}`)}`);
   res.type("html").send(landingPage(req));
 });
 // Back from the site with a ticket (web/server.js /reader-login).
@@ -683,7 +688,7 @@ app.get("/auth", async (req, res) => {
   res.redirect(next || "/");
 });
 app.post("/logout", (req, res) => {
-  res.setHeader("Set-Cookie", [cookieHeader(req, COOKIE, "", 0), cookieHeader(req, GUEST_COOKIE, "", 0), cookieHeader(req, OLD_COOKIE, "", 0), cookieHeader(req, SHARE_COOKIE, "", 0)]);
+  res.setHeader("Set-Cookie", [cookieHeader(req, COOKIE, "", 0), cookieHeader(req, GUEST_COOKIE, "", 0), cookieHeader(req, OLD_COOKIE, "", 0), cookieHeader(req, SHARE_COOKIE, "", 0), cookieHeader(req, FREE_COOKIE, "", 0)]);
   res.redirect("/login");
 });
 
@@ -692,17 +697,45 @@ app.get("/demo", (req, res) => {
   if (currentAccount(req)) return res.redirect("/");
   if (!GUEST_ENABLED || !demoBooks().length) return res.redirect("/login");
   if (!currentGuest(req)) startGuest(req, res);
+  res.append("Set-Cookie", cookieHeader(req, FREE_COOKIE, "", 0)); // the demo, not a free book read before
   res.redirect("/");
 });
 
-// /free/<file> opens a book of the free shelf from the site.
+// /free/<file> opens a book of the free shelf from the site. Without an account it opens as a guest who
+// sees only that book and gets no explanations (svoloshyn, Max 2026-10-26: a child reading «Лис Микита» needs
+// no account; the explanations cost tokens, so they wait for a sign-in).
 app.get("/free/:name", (req, res) => {
   const name = safeBookName(req.params.name);
-  if (!name || !freeBooks().some((f) => f.name === name)) return res.redirect("/");
+  if (!name || !isFree(name)) return res.redirect("/");
   const open = `/?open=${encodeURIComponent(name)}`;
   if (currentAccount(req)) return res.redirect(open); // the shelf's copy, nothing to copy any more
-  res.redirect(`/login?next=${encodeURIComponent(`/free/${encodeURIComponent(name)}`)}`);
+  if (!GUEST_ENABLED || currentShare(req)) return res.redirect(`/login?next=${encodeURIComponent(`/free/${encodeURIComponent(name)}`)}`);
+  const cookies = [cookieHeader(req, FREE_COOKIE, `${name}.${sign(`free:${name}`)}`, 30)];
+  const guest = currentGuest(req);
+  if (guest) guestState(guest).lastBook = name;
+  else {
+    const id = crypto.randomBytes(12).toString("hex");
+    cookies.push(cookieHeader(req, GUEST_COOKIE, `${id}.${sign(`guest:${id}`)}`, 30));
+  }
+  res.setHeader("Set-Cookie", cookies);
+  res.redirect("/");
 });
+// The file itself, for «Завантажити EPUB» on the site: no account needed.
+app.get("/free-file/:name", (req, res) => {
+  const name = safeBookName(req.params.name);
+  if (!name || !isFree(name)) return res.status(404).end();
+  res.download(path.join(FREE_DIR, name), name);
+});
+// The free book this guest reads, while it is still on the shelf.
+function currentFree(req) {
+  const raw = parseCookies(req)[FREE_COOKIE];
+  const i = raw ? raw.lastIndexOf(".") : -1;
+  if (i < 0) return null;
+  const name = safeBookName(raw.slice(0, i));
+  const sig = raw.slice(i + 1);
+  const expected = name && sign(`free:${name}`);
+  return expected && sig.length === expected.length && crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected)) && isFree(name) ? name : null;
+}
 
 // ---------- Links to one book ----------
 
@@ -768,6 +801,9 @@ app.use((req, res, next) => {
   req.user = acct ? accountName(acct) : "Гість";
   req.guest = guest;
   req.share = share;
+  req.free = guest && !share ? currentFree(req) : null;
+  // A free book's guest reads; explanations and notes come with an account.
+  if (req.free && req.method !== "GET" && /^\/api\/(explain|notes)/.test(req.path)) return res.status(403).json({ error: "Пояснення і нотатки працюють після входу." });
   req.lib = acct ? libOf(acct) : null;
   next();
 });

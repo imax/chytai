@@ -205,6 +205,7 @@ dialog menu button.primary { border: none; }
 #notice:not(.hidden) { animation: notice-in 0.22s var(--ease-out); }
 @keyframes notice-in { from { opacity: 0; transform: translate(-50%, 8px); } }
 #notice .notice-text { flex: 1; }
+#notice .notice-link { color: var(--accent); font-weight: 600; white-space: nowrap; }
 #notice .spinner { display: none; width: 14px; height: 14px; margin-top: 2px; border: 2px solid var(--line); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; }
 #notice.busy .spinner { display: inline-block; }
 #notice.busy button { display: none; }
