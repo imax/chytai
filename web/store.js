@@ -1236,6 +1236,30 @@ class Store {
           join(`same:${a.id}`, y);
         }
     }
+    // A series name one shop puts in the middle of the title (Max 2026-10-26): «Кав'ярня «Пряний гарбузик».
+    // Книга 1» and «Кав'ярня «Пряний гарбузик». Гавань Мрій. Книга 1». The same author, the same volume, and
+    // the longer title is the shorter one with one more part between its first and last (parts split at «. »);
+    // the first part has 6+ letters. Not bundles with single books, not pairs the owner called «Різні книжки».
+    const parts = (t) => String(t || "").split(/\.\s+/).map(norm).filter(Boolean);
+    const byName = new Map(); // author -> items
+    for (const si of this.shelfItems.values()) {
+      const a = norm(si.item.author);
+      if (a) (byName.get(a) || byName.set(a, []).get(a)).push({ si, p: parts(si.item.title) });
+    }
+    const midExtra = (s, l) => s.length >= 2 && l.length === s.length + 1 && s[0].length >= 6 && s[0] === l[0] && s[s.length - 1] === l[l.length - 1] && s.slice(1, -1).every((x, i) => x === l[i + 1] || x === l[i + 2]);
+    for (const list of byName.values()) {
+      if (list.length < 2) continue;
+      for (let i = 0; i < list.length; i++)
+        for (let j = i + 1; j < list.length; j++) {
+          const [x, y] = [list[i], list[j]];
+          const [a, b] = [x.si.item, y.si.item];
+          if (groupOf.get(a.id) === groupOf.get(b.id) || !a.bundle !== !b.bundle || (a.volume || 0) !== (b.volume || 0)) continue;
+          if (no.has(`${a.id}|${b.id}`) || no.has(`${b.id}|${a.id}`)) continue;
+          if (!midExtra(x.p, y.p) && !midExtra(y.p, x.p)) continue;
+          join(`mid:${a.id}`, x.si);
+          join(`mid:${a.id}`, y.si);
+        }
+    }
     // Volumes of one work by one author («… Том 1» and «… Том 1-2», or the work without a volume) are one
     // book, when there are two of them at least. Kept apart: comics and manga (each volume is read on its
     // own), volumes with different original titles (novels of a series), and pairs the owner called
