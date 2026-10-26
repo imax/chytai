@@ -1702,7 +1702,7 @@ const DO_WHAT = { want: "буде у вашому «Хочу прочитати�
 function loginPage({ next = "", email = "", error = "", book = null, what = "", free = false }) {
   return authLayout({
     title: book ? "Зберегти книжку" : "Увійти",
-    before: book ? `<div class="login-book">${cover(book, "sm")}<p><b>${esc(book.title)}</b><br>одразу після входу ${DO_WHAT[what] || DO_WHAT.want}</p></div>${free || what !== "want" ? "" : `<p class="want-why">Chytai — сайт про книжки: що почитати, де взяти і що кажуть читачі. Самих книжок тут немає. Ми збережемо цю у ваш список і напишемо, коли вона зʼявиться в продажу, українською чи безкоштовно.</p>`}` : "",
+    before: book ? `<div class="login-book">${cover(book, "sm")}<p><b>${esc(book.title)}</b><br>одразу після входу ${DO_WHAT[what] || DO_WHAT.want}</p></div>${free || what !== "want" ? "" : `<p class="want-why">Самої книжки тут немає: Chytai — сайт про книжки. Напишемо, коли вона зʼявиться в продажу чи безкоштовно.</p>`}` : "",
     lead: book ? "Вкажіть пошту, і ми надішлемо код. Без паролів, акаунт створиться сам." : "Вкажіть пошту, і ми надішлемо код. Без паролів. Якщо ви тут уперше, акаунт створиться сам.",
     form: `<form method="post" action="/login" class="form">
   ${hidden("next", next)}${errorLine(error)}
