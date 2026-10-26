@@ -27,6 +27,10 @@ const text = (h) => ent(String(h || "").replace(/<[^>]+>/g, " ").replace(/&nbsp;
 // is a «Про що» heading only its section is kept; otherwise the text before the first heading. Lists and
 // buy calls go, paragraphs stay, and it ends on a whole sentence within `max` characters.
 // Takes the shop's HTML or a description kept by an older refresh (plain text, maybe cut at 600).
+// A shop's notice instead of a description (Старий Лев, Max 2026-10-26: «Відкрито передзамовлення на новий наклад
+// книги! … ми надішлемо його одразу після надходження книги з друку»): those sentences go too, and when nothing
+// is left the book takes another edition's description or Claude's short one (store.book).
+const NOTICE = /(відкрито|оформ\p{L}*|одним|зробіть) передзамовлен|передзамовлення (на|відкрито)|деталі передпродажу|дата надходження|надходження (книги|видання|накладу) з друку|графіки друкарень|не гарантуємо|закріпити за собою примірник|наклад\p{L}* [^.]{0,60}заплановано|(ми )?надішлемо (його|її|книгу|замовлення)/iu;
 const BUY = /(^|[\s«"(])(купу[йв]\p{L}*|купити|придба[йт]\p{L}*|замовля[йт]\p{L}*|замовте|обирай\p{L}*)(?=[\s,.!:]|$)|megogo|mbooks|у нашому (магазині|інтернет)|на нашому сайті|на сайті readeat|(зробіть|оформіть|оформлюйте) замовлення|доставка по україні|тарифами (служби доставки|пошти)|(ціна|вартість) доставки|замовити\s.{0,80}(онлайн|книгарн\p{L}*|на сайті)/iu;
 // A shop's SEO questions standing as headings (Readeat, Max 2026-10-26: «Чому книгу "Аркан вовків" варто прочитати?»,
 // «Кому буде цікава книга …?»). Only a question about the book itself: «Чому вона пішла?» stays.
@@ -67,7 +71,7 @@ function about(h, max = 1000) {
     .filter((l) => l[0] !== "\u0002")
     .filter((l) => !SEO_Q.test(l))
     .map((l, i, all) => {
-      let s = sentences(l).filter((s) => !BUY.test(s) && !ABOUT_HEAD.test(s) && !/^(чому варто|для кого)(?=\s).*\?$/i.test(s) && !SEO_Q.test(s) && !/^рецензія на книг/i.test(s));
+      let s = sentences(l).filter((s) => !BUY.test(s) && !NOTICE.test(s) && !ABOUT_HEAD.test(s) && !/^(чому варто|для кого)(?=\s).*\?$/i.test(s) && !SEO_Q.test(s) && !/^рецензія на книг/i.test(s));
       if (cutOff && i === all.length - 1 && s.length > 1 && !whole(s[s.length - 1])) s = s.slice(0, -1);
       return s;
     })
