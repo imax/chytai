@@ -776,7 +776,7 @@ function readerList() {
   return auth
     .readers()
     .map((r) => ({ reader: pub(r), rows: store.library(r.id).filter((x) => !x.kids) }))
-    .filter((c) => c.rows.length)
+    .filter((c) => c.rows.some((r) => r.rating != null)) // no ratings yet: not listed (Max 2026-10-26)
     .sort((a, b) => b.rows.length - a.rows.length)
     .map(({ reader, rows }) => {
       const last = social.feed({ limit: 1, notes: true, books: new Set(rows.map((r) => r.id)) }).find((x) => x.reader.id === reader.id);
