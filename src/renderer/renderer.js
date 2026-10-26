@@ -66,7 +66,6 @@ async function loadSettings() {
 }
 
 function openSettings() {
-  $("#btn-print").classList.toggle("hidden", !rendition || !!current?.pdf);
   if (settings.web && !settings.guest) fillDemoBooks();
   $("#set-key").value = "";
   $("#key-hint").textContent = settings.apiKeyFromEnv
@@ -119,10 +118,7 @@ $("#set-style").onchange = () => {
 };
 $("#btn-logout").onclick = () => window.reader.logout?.();
 $("#btn-admin").onclick = () => (location.href = "/admin");
-$("#btn-print").onclick = () => {
-  $("#settings").close();
-  setTimeout(printBook, 300);
-};
+$("#btn-print").onclick = () => printBook();
 
 // Family members choose which library book guests see in the demo (web only).
 async function fillDemoBooks() {
@@ -347,6 +343,7 @@ async function openEpub(payload, { posKey, source }) {
   const nav = await book.loaded.navigation;
   renderToc(nav.toc);
   $("#btn-toc").disabled = false;
+  $("#btn-print").classList.remove("hidden");
 
   // Page-accurate progress needs the locations index; build it in the background.
   book.locations.generate(1600).then(() => {
@@ -424,6 +421,7 @@ function resizeView() {
 }
 
 function closeBook() {
+  $("#btn-print").classList.add("hidden");
   // A failure while tearing down the previous book must never block opening the next one.
   for (const item of [rendition, book, pdfView]) {
     try {

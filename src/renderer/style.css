@@ -752,3 +752,4 @@ body[data-theme="dark"] .cover { background: hsl(var(--hue) 18% 30%); color: hsl
   #print-book .pc-from { max-width: 110mm; color: #333; }
   #print-book .pc-link { font-weight: 600; margin-top: 1mm; word-break: break-all; }
 }
+#toolbar .icon-btn { display: inline-flex; align-items: center; justify-content: center; }
