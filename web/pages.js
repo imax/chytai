@@ -1697,10 +1697,12 @@ function authLayout({ title, lead, form, user = null, path = "/login", before = 
 const DO_WHAT = { want: "буде у вашому «Хочу прочитати»", read: "буде у ваших прочитаних", now: "буде у «Читаю зараз»", kids: "буде на вашій дитячій полиці" };
 
 // Step one: the e-mail. The same page signs in and signs up; nobody has to know which they are doing.
-function loginPage({ next = "", email = "", error = "", book = null, what = "" }) {
+// Many take «Хочу прочитати» for «sign up and read it here» (Max, 2026-10-26), so the card says plainly that we
+// don't have the book itself, unless it is on the free shelf.
+function loginPage({ next = "", email = "", error = "", book = null, what = "", free = false }) {
   return authLayout({
     title: book ? "Зберегти книжку" : "Увійти",
-    before: book ? `<div class="login-book">${cover(book, "sm")}<p><b>${esc(book.title)}</b><br>одразу після входу ${DO_WHAT[what] || DO_WHAT.want}</p></div>` : "",
+    before: book ? `<div class="login-book">${cover(book, "sm")}<p><b>${esc(book.title)}</b><br>одразу після входу ${DO_WHAT[what] || DO_WHAT.want}</p></div>${free || what !== "want" ? "" : `<p class="want-why">Chytai — сайт про книжки: що почитати, де взяти і що кажуть читачі. Самих книжок тут немає. Ми збережемо цю у ваш список і напишемо, коли вона зʼявиться в продажу, українською чи безкоштовно.</p>`}` : "",
     lead: book ? "Вкажіть пошту, і ми надішлемо код. Без паролів, акаунт створиться сам." : "Вкажіть пошту, і ми надішлемо код. Без паролів. Якщо ви тут уперше, акаунт створиться сам.",
     form: `<form method="post" action="/login" class="form">
   ${hidden("next", next)}${errorLine(error)}

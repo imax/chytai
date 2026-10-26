@@ -354,7 +354,7 @@ app.get("/login", (req, res) => {
   const id = m && store.canonical(store.resolve(decodeURIComponent(m[2])) || "");
   const book = id ? store.bookPage(id) : null;
   if (book) admin.guestTap(req, null, m[1] === "want" ? "want" : "mark", cookies(req));
-  res.send(pages.loginPage({ next, book, what: m?.[1] }));
+  res.send(pages.loginPage({ next, book, what: m?.[1], free: !!freeFileFor(book) }));
 });
 app.post("/login", async (req, res) => {
   const next = safeNext(req.body.next);
