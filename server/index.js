@@ -168,6 +168,7 @@ function settingsFor(req) {
       : {}),
     ...(req.share ? { share: { from: accountName(req.share.acct), until: req.share.expires } } : {}),
     // Printing those gives the current chapter, not the whole book (renderer.js, «Print»).
+    freeBooks: freeShelf.map((f) => f.name),
     noFileBooks: freeShelf.filter((f) => !fileAllowed(f.name)).map((f) => f.name),
     ...(req.free ? { free: { signIn: `/login?go=1&next=${encodeURIComponent(`/free/${encodeURIComponent(req.free)}`)}`, download: fileAllowed(req.free) ? `/free-file/${encodeURIComponent(req.free)}` : "" } } : {}),
   };
@@ -631,6 +632,7 @@ const serviceWorker = (() => {
     "epubjs/dist/epub.min.js",
     "marked/lib/marked.umd.js",
     "dompurify/dist/purify.min.js",
+    "qrcode-generator/dist/qrcode.js",
     "pdfjs-dist/build/pdf.mjs",
     "pdfjs-dist/build/pdf.worker.mjs",
     "pdfjs-dist/web/pdf_viewer.mjs",

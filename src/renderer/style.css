@@ -741,3 +741,14 @@ body[data-theme="dark"] .cover { background: hsl(var(--hue) 18% 30%); color: hsl
   #print-book img, #print-book svg { max-width: 100%; height: auto; break-inside: avoid; }
   #print-book a { color: inherit; text-decoration: none; }
 }
+@media print {
+  /* A page of its own, the note at its foot. */
+  #print-book .print-colophon { break-before: page; break-inside: avoid; height: calc(100vh - 4mm); display: flex; flex-direction: column; justify-content: flex-end; font-size: 10pt; line-height: 1.45; }
+  #print-book .print-colophon-row { display: flex; gap: 8mm; align-items: flex-end; padding-top: 5mm; border-top: 0.5pt solid #999; }
+  #print-book .print-colophon-text { flex: 1; }
+  #print-book .pc-book { font-weight: 700; }
+  #print-book .pc-source { margin-bottom: 3mm; }
+  #print-book .pc-link { font-weight: 600; word-break: break-all; }
+  #print-book .pc-qr { width: 22mm; flex: none; }
+  #print-book .pc-qr svg { width: 22mm; height: 22mm; display: block; }
+}

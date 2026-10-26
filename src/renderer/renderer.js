@@ -66,6 +66,7 @@ async function loadSettings() {
 }
 
 function openSettings() {
+  $("#btn-print").classList.toggle("hidden", !rendition || !!current?.pdf);
   if (settings.web && !settings.guest) fillDemoBooks();
   $("#set-key").value = "";
   $("#key-hint").textContent = settings.apiKeyFromEnv
@@ -118,6 +119,10 @@ $("#set-style").onchange = () => {
 };
 $("#btn-logout").onclick = () => window.reader.logout?.();
 $("#btn-admin").onclick = () => (location.href = "/admin");
+$("#btn-print").onclick = () => {
+  $("#settings").close();
+  setTimeout(printBook, 300);
+};
 
 // Family members choose which library book guests see in the demo (web only).
 async function fillDemoBooks() {
@@ -334,6 +339,7 @@ async function openEpub(payload, { posKey, source }) {
   const meta = await book.loaded.metadata;
   current.title = meta.title || current.title;
   current.author = meta.creator || "";
+  current.meta = meta;
   $("#book-title").textContent = current.author ? `${current.title} · ${current.author}` : current.title;
   $("#running-head").textContent = current.title;
   document.title = current.title;
@@ -1528,8 +1534,55 @@ function fillPrintFromScreen() {
   const index = rendition?.currentLocation?.()?.start?.index;
   const all = rendition?.getContents() || [];
   const shown = all.filter((c) => c.sectionIndex === index);
-  printBox.replaceChildren(printHead(), ...(shown.length ? shown : all).map((c) => printSection(c.document.body.cloneNode(true))));
+  printBox.replaceChildren(printHead(), ...(shown.length ? shown : all).map((c) => printSection(c.document.body.cloneNode(true))), printColophon());
   printBox.style.fontFamily = FONTS[settings.font] || "";
+}
+
+// The last page: where the text comes from, and a way back to it in Chytai (Max: «звідки книжка і
+// посилання на сайт + qr маленький»). A free-shelf book's QR opens that book; any other, the site.
+const READER_URL = "https://app.chytai.org.ua";
+const SITE_URL = "https://chytai.org.ua";
+
+function printSource() {
+  const m = current?.meta || {};
+  const rights = String(m.rights || "").trim();
+  const publisher = String(m.publisher || "").trim();
+  const id = String(m.identifier || "");
+  const permitted = (settings.noFileBooks || []).includes(current?.path);
+  if (/^Суспільне надбання/.test(rights)) return rights;
+  if (publisher === "Standard Ebooks") return "Суспільне надбання. Текст: Standard Ebooks (standardebooks.org).";
+  if (/gutenberg\.org/.test(id) || /^Public domain/i.test(rights)) return "Суспільне надбання. Текст: Project Gutenberg (gutenberg.org).";
+  const parts = [];
+  if (permitted) parts.push("Публікується з дозволу автора.");
+  if (publisher) parts.push(`Видавець: ${publisher}.`);
+  if (rights && rights.length < 120) parts.push(rights.replace(/\.?$/, "."));
+  return parts.join(" ");
+}
+
+function printColophon() {
+  const free = (settings.freeBooks || []).includes(current?.path);
+  const link = free ? `${READER_URL}/free/${encodeURIComponent(current.path)}` : SITE_URL;
+  const foot = document.createElement("footer");
+  foot.className = "print-colophon";
+  foot.innerHTML = `<div class="print-colophon-row"><div class="print-colophon-text">
+      <div class="pc-book"></div><div class="pc-source"></div>
+      <div class="pc-from"></div><div class="pc-link"></div>
+    </div><div class="pc-qr"></div></div>`;
+  foot.querySelector(".pc-book").textContent = [current?.title, current?.author].filter(Boolean).join(" · ");
+  foot.querySelector(".pc-source").textContent = printSource();
+  foot.querySelector(".pc-from").textContent = free
+    ? "Надруковано з Chytai. Цю книжку можна читати безкоштовно на телефоні чи комп'ютері:"
+    : "Надруковано з Chytai, читалки й сайту про книжки:";
+  foot.querySelector(".pc-link").textContent = link.replace(/^https:\/\//, "");
+  try {
+    const qr = qrcode(0, "M");
+    qr.addData(link);
+    qr.make();
+    foot.querySelector(".pc-qr").innerHTML = qr.createSvgTag({ cellSize: 2, margin: 0, scalable: true });
+  } catch {
+    /* no QR, the link is there */
+  }
+  return foot;
 }
 
 async function fillPrintWholeBook() {
@@ -1561,7 +1614,7 @@ async function fillPrintWholeBook() {
       section.unload?.();
     }
   }
-  printBox.replaceChildren(printHead(), ...parts);
+  printBox.replaceChildren(printHead(), ...parts, printColophon());
   printBox.style.fontFamily = FONTS[settings.font] || "";
 }
 

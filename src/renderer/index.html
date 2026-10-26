@@ -251,6 +251,7 @@
         </select>
       </label>
       <menu>
+        <button type="button" id="btn-print" class="link hidden" title="Надрукувати книжку (⌘P)">Друкувати</button>
         <button type="button" id="btn-admin" class="link web-only family-only" title="Хто читає, скільки книжок і пояснень">Статистика</button>
         <button type="button" id="btn-keys" class="link desktop-only" title="Клавіатурні скорочення (?)">Клавіші</button>
         <button type="button" id="btn-logout" class="link web-only" title="Вийти з облікового запису на цьому пристрої">Вийти</button>
@@ -310,6 +311,7 @@
   <script src="../../node_modules/epubjs/dist/epub.min.js"></script>
   <script src="../../node_modules/marked/lib/marked.umd.js"></script>
   <script src="../../node_modules/dompurify/dist/purify.min.js"></script>
+  <script src="../../node_modules/qrcode-generator/dist/qrcode.js"></script>
   <script src="web-bridge.js"></script>
   <script src="motion.js"></script>
   <script src="context.js"></script>
