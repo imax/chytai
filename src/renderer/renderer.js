@@ -710,7 +710,16 @@ function handleSelection(range, cfiRange, ctx, frame) {
     text: range.toString().trim(),
     context: { ...ctx, bookTitle: current.title, author: current.author },
   };
+  const bar = $("#sel-toolbar");
+  bar.classList.remove("mark");
+  bar.querySelector('[data-action="translate"]').hidden = isUkrainian(pendingSelection.text);
   showSelToolbar(range, frame);
+}
+
+// No «Переклад» in Ukrainian books (Max, 2026-10-26): the book says so, or the text has і/ї/є/ґ.
+function isUkrainian(text) {
+  const lang = String(book?.packaging?.metadata?.language || "").toLowerCase();
+  return lang.startsWith("uk") || /[іїєґ]/i.test(text);
 }
 
 function showSelToolbar(range, frame) {
@@ -750,13 +759,18 @@ function watchFirstPage() {
 
 let selGoneTimer = 0;
 function hideSelToolbar() {
-  $("#sel-toolbar").classList.add("hidden");
+  const bar = $("#sel-toolbar");
+  // The tap that opened the yellow's menu also looks like a click that clears the selection.
+  if (bar.classList.contains("mark") && Date.now() - markShownAt < 400) return;
+  bar.classList.add("hidden");
 }
 
 $("#sel-toolbar").addEventListener("mousedown", (e) => e.preventDefault());
 $("#sel-toolbar").addEventListener("click", (e) => {
   const action = e.target.dataset.action;
-  if (!action || !pendingSelection) return;
+  if (!action) return;
+  if ($("#sel-toolbar").classList.contains("mark")) return onMarkAction(action);
+  if (!pendingSelection) return;
   const snapshot = pendingSelection;
   // A free book read without an account: explanations and notes come with one (they cost Max tokens).
   if (settings.free) {
@@ -767,10 +781,21 @@ $("#sel-toolbar").addEventListener("click", (e) => {
   if (action === "note") {
     addNote(snapshot);
   } else {
-    startExplanation(snapshot, { ask: action === "ask" });
+    startExplanation(snapshot, { mode: action === "translate" ? "translate" : "explain" });
   }
   hideSelToolbar();
 });
+
+function onMarkAction(action) {
+  const conv = pendingMark;
+  markShownAt = 0;
+  hideSelToolbar();
+  if (!conv) return;
+  if (action === "open") return openConvCard(conv);
+  // A note takes the yellow's place: its own bars or underline mark the passage from now on.
+  unhighlightConv(conv);
+  if (action === "mark-note") addNote({ cfiRange: conv.cfiRange, text: conv.context.selection, context: conv.context });
+}
 
 // ---------- Explanations panel ----------
 
@@ -786,14 +811,14 @@ function modelLabel(model) {
     .replace(/^./, (c) => c.toUpperCase());
 }
 
-// «Пояснити» starts with a quick note at once; «Запитати» opens the card with the question field instead.
-function startExplanation(selection, { ask = false } = {}) {
+// «Пояснити» explains on the main model; «Переклад» only translates, on the cheaper one.
+function startExplanation(selection, { mode = "explain" } = {}) {
   showPanel(true, "cards");
   $("#panel-empty")?.remove();
 
   // Same selection already explained: just bring that card into view.
-  for (const conv of ask ? [] : conversations.values()) {
-    if ((conv.cfiRange === selection.cfiRange || conv.context.selection === selection.context.selection) && !conv.ask) {
+  for (const conv of conversations.values()) {
+    if ((conv.cfiRange === selection.cfiRange || conv.context.selection === selection.context.selection) && conv.mode === mode) {
       highlightConv(conv);
       conv.card.scrollIntoView({ behavior: "smooth", block: "nearest" });
       flash(conv.card);
@@ -803,7 +828,7 @@ function startExplanation(selection, { ask = false } = {}) {
 
   const id = `r${++reqCounter}`;
   const card = document.createElement("article");
-  card.className = "card";
+  card.className = mode === "translate" ? "card translation" : "card";
   card.dataset.id = id;
   const quote = selection.context.selection;
   card.innerHTML = `
@@ -822,7 +847,7 @@ function startExplanation(selection, { ask = false } = {}) {
   // The new card is at the top; bring it into view even if the list was scrolled down.
   $("#cards").scrollTop = 0;
 
-  const conv = { id, card, ask, cfiRange: selection.cfiRange, context: selection.context, messages: null, busy: false };
+  const conv = { id, card, mode, cfiRange: selection.cfiRange, context: selection.context, messages: null, busy: false };
   conversations.set(id, conv);
 
   highlightConv(conv);
@@ -849,13 +874,8 @@ function startExplanation(selection, { ask = false } = {}) {
     runTurn(conv, q);
   };
 
-  if (ask) {
-    const input = card.querySelector(".followup input");
-    input.placeholder = "Ваше питання про цей фрагмент…";
-    input.focus();
-  } else {
-    runTurn(conv, null);
-  }
+  if (mode === "translate") card.querySelector(".followup input").placeholder = "Запитати про переклад…";
+  runTurn(conv, null);
   return card;
 }
 
@@ -875,9 +895,9 @@ function runTurn(conv, question) {
 
   let request;
   if (!conv.messages) {
-    request = { context: { ...conv.context, question: question || undefined }, quick: !question };
+    request = { context: { ...conv.context, question: question || undefined }, mode: conv.mode };
   } else {
-    request = { messages: [...conv.messages, { role: "user", content: question }] };
+    request = { messages: [...conv.messages, { role: "user", content: question }], mode: conv.mode };
   }
 
   const reqId = `${conv.id}-${Date.now()}`;
@@ -911,8 +931,8 @@ window.reader.onAiEvent((reqId, ev) => {
   if (ev.type === "done") {
     conv.messages = ev.messages;
     // One "more detail" per card: after it, the follow-up field is the way to ask further.
-    if (!conv.ask && conv.lastQuestion !== "Детальніше") conv.card.querySelector(".more").classList.remove("hidden");
-    conv.card.querySelector(".model").textContent = modelLabel(ev.model) + (ev.truncated ? " · обрізано" : "");
+    if (conv.mode !== "translate" && conv.lastQuestion !== "Детальніше") conv.card.querySelector(".more").classList.remove("hidden");
+    conv.card.querySelector(".model").textContent = (conv.mode === "translate" ? "Переклад · " : "") + modelLabel(ev.model) + (ev.truncated ? " · обрізано" : "");
     if (!conv.text) el.innerHTML = `<em>Порожня відповідь.</em>`;
   } else if (ev.type === "aborted") {
     if (!conv.text) el.innerHTML = `<em>Зупинено.</em>`;
@@ -986,35 +1006,55 @@ function flash(card) {
   head.addEventListener("pointercancel", end);
 })();
 
+// The yellow stays on explained text; a tap on it offers the explanation, a note or removing the
+// yellow (Max, 2026-10-26), so it no longer stands in the way of saving that text as a note.
 function highlightConv(conv) {
   try {
     rendition.annotations.remove(conv.cfiRange, "highlight");
-    rendition.annotations.highlight(conv.cfiRange, { id: conv.id }, () => {
-      showPanel(true, "cards");
-      conv.card.scrollIntoView({ behavior: "smooth", block: "nearest" });
-      flash(conv.card);
-    }, "ai-hl", HIGHLIGHT_STYLE);
+    rendition.annotations.highlight(conv.cfiRange, { id: conv.id }, () => showMarkToolbar(conv), "ai-hl", HIGHLIGHT_STYLE);
   } catch {
     /* highlighting is cosmetic */
   }
 }
 
-// No yellow is left behind once the cards are out of sight (panel closed or the Notes tab open):
-// a tap on it would open the explanation again instead of letting the reader select the text for a
-// note (Max, 2026-10-24). The cards stay in the panel; explaining the same text again marks it again.
-function unhighlightConvs() {
-  for (const conv of conversations.values()) {
-    try {
-      rendition?.annotations.remove(conv.cfiRange, "highlight");
-    } catch {
-      /* ignore */
-    }
+function unhighlightConv(conv) {
+  try {
+    rendition?.annotations.remove(conv.cfiRange, "highlight");
+  } catch {
+    /* ignore */
   }
+}
+
+function unhighlightConvs() {
+  for (const conv of conversations.values()) unhighlightConv(conv);
+}
+
+let pendingMark = null; // the explanation whose yellow was tapped, for the toolbar
+let markShownAt = 0;
+function showMarkToolbar(conv) {
+  let range;
+  try {
+    range = rendition.getRange(conv.cfiRange);
+  } catch {
+    /* fall back to opening the card */
+  }
+  if (!range) return openConvCard(conv);
+  pendingMark = conv;
+  markShownAt = Date.now();
+  const bar = $("#sel-toolbar");
+  bar.classList.add("mark");
+  bar.querySelector('[data-action="open"]').textContent = conv.mode === "translate" ? "Переклад" : "Пояснення";
+  showSelToolbar(range, range.startContainer.ownerDocument.defaultView.frameElement.getBoundingClientRect());
+}
+
+function openConvCard(conv) {
+  showPanel(true, "cards");
+  conv.card.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  flash(conv.card);
 }
 
 function showPanel(show, tab) {
   document.body.classList.toggle("panel-hidden", !show);
-  if (!show) unhighlightConvs();
   if (tab) showTab(tab);
   // epub.js needs a resize to reflow pages after the layout changes width.
   setTimeout(resizeView, 220);
@@ -1063,7 +1103,6 @@ function showTab(tab) {
   for (const b of document.querySelectorAll("#panel .tab")) b.classList.toggle("active", b.dataset.tab === tab);
   $("#cards").classList.toggle("hidden", tab !== "cards");
   $("#notes").classList.toggle("hidden", tab !== "notes");
-  if (tab !== "cards") unhighlightConvs();
   $("#btn-clear").classList.toggle("hidden", tab !== "cards");
   if (tab === "notes") requestAnimationFrame(() => document.querySelectorAll(".note-comment").forEach(fitComment));
 }

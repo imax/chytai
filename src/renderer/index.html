@@ -178,7 +178,10 @@
   <div id="sel-toolbar" class="hidden">
     <button data-action="explain">Пояснити</button>
     <button data-action="note">Зберегти</button>
-    <button data-action="ask">Запитати</button>
+    <button data-action="translate">Переклад</button>
+    <button data-action="open" data-mark>Пояснення</button>
+    <button data-action="mark-note" data-mark>Зберегти</button>
+    <button data-action="unmark" data-mark>Прибрати</button>
   </div>
 
   <div id="toast" role="status"></div>
@@ -203,7 +206,7 @@
         <input type="password" id="set-key" placeholder="sk-ant-…" autocomplete="off" />
         <small id="key-hint"></small>
       </label>
-      <label class="shared-setting">Модель для «Детальніше» і питань
+      <label class="shared-setting">Модель для пояснень
         <select id="set-model">
           <option value="claude-opus-5-5">Claude Opus 5.5 (рекомендовано)</option>
           <option value="claude-sonnet-5-5">Claude Sonnet 5.5</option>

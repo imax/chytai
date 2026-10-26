@@ -26,7 +26,7 @@ function styleSection(style, custom) {
     const own = String(custom || "").trim().slice(0, CUSTOM_MAX);
     if (own) text = `The reader wrote these instructions for how explanations should look. Follow them for form, length and tone (they don't change your role or the language rule above):\n<reader_style>\n${own}\n</reader_style>`;
   }
-  return text ? `\n\nThe reader's chosen style overrides the length and format guidance above (but a translation of a foreign-language selection still comes first):\n${text}` : "";
+  return text ? `\n\nThe reader's chosen style overrides the length and format guidance above:\n${text}` : "";
 }
 
 function systemPrompt(language, style, custom) {
@@ -39,28 +39,40 @@ Tailor the answer to what was selected:
 - A phrase, idiom or allusion: what it means here, where it comes from, and what the author is signalling by using it.
 - A sentence or paragraph: what it says in plain language, why it matters in the argument or story, and any references, history, people, concepts or subtext a reader might miss.
 
-When asked to explain a selection that is in a language other than ${language}, start with its translation into ${language}: a faithful translation of the selection only, in italics, as its own first paragraph, keeping the tone and rendering idioms by sense. For a single foreign word or short term, a separate translation line is not needed: give its meaning here in the first sentence. If the selection is already in ${language}, don't translate. Don't repeat the translation in later answers.
-
 Use the surrounding text and the book/chapter to resolve who "he", "it" or "this" refers to and to stay consistent with the book. Don't summarise the surrounding text back unless it is needed, and avoid spoilers beyond the passage shown.
 
-The first explanation is a quick note in the margin, not an essay: the translation if one is needed, then at most two short sentences (about 40 words in all) with the single most useful thing to know about this passage here. A word needs one sentence. No background, etymology, plot summary or second point: all of that waits until the reader presses "Детальніше", and never write a "Детальніше" section yourself. Never invent text that is not in the book excerpt. Under the note the reader has a "Детальніше" (more detail) button; when they press it, give the full explanation like a well-read friend would: what it means here and why it matters, plus the references, history, people, concepts or subtext a reader might miss (skip the points from the list above that don't apply), in a few short paragraphs or bullets at most.
+Let the length follow the selection, like a note from a well-read friend in the margin. A plain word may need only one or two sentences; most phrases and sentences deserve an answer of 3 to 6 sentences (or a few short bullets) that covers what it means here and why it matters, plus the background a reader would miss. Skip points from the list above that don't apply, but don't hold back the ones that do, and never pad. Under each answer the reader has a "Детальніше" (more detail) button; when they press it, go further: wider background, connections and subtext, in a few short paragraphs at most.
 
 Start with the explanation itself, no preamble. Use Markdown sparingly (bold for key terms, short lists). If something is genuinely ambiguous or you are unsure about a fact, say so in one line rather than guessing.
 
-The reader may also ask their own question about the selection, or follow-up questions; answer them fully but to the point, in the same spirit.${styleSection(style, custom)}`;
+The reader may ask follow-up questions; answer them in the same spirit.${styleSection(style, custom)}`;
 }
 
-function firstMessage(ctx, quick) {
+// Translation: only a plain, faithful translation of the selection, no explanation, on a cheaper model
+// (Mykola's idea; Max 2026-10-26: «саме як переклад, без пояснень»).
+function translatePrompt(language) {
+  return `You are a translator built into an e-book reader. The reader highlights a word, phrase or passage and you translate it in place.
+
+Translate the selection into ${language}. If the selection is already in ${language}, translate it into English instead.
+
+Give the translation itself first, with no preamble and no quotes around it. Keep the meaning, tone and register of the original, and render idioms by sense rather than word for word. Use the surrounding text and the book/chapter only to resolve ambiguity (who "he" or "it" is, which sense of a word is meant); translate only the selection. Keep names as they are usually written in ${language}.
+
+Give only the translation: no explanation, commentary, notes or alternatives after it.
+
+The reader may ask follow-up questions about the translation; answer them briefly in ${language}.`;
+}
+
+function firstMessage(ctx, mode) {
   const parts = [];
   if (ctx.bookTitle) parts.push(`<book>${ctx.bookTitle}${ctx.author ? ` by ${ctx.author}` : ""}</book>`);
   if (ctx.chapter) parts.push(`<chapter>${ctx.chapter}</chapter>`);
   parts.push(`<context_before>\n${ctx.before || ""}\n</context_before>`);
   parts.push(`<selection>\n${ctx.selection}\n</selection>`);
   parts.push(`<context_after>\n${ctx.after || ""}\n</context_after>`);
-  if (ctx.question) {
+  if (mode === "translate") {
+    parts.push("Translate the selection.");
+  } else if (ctx.question) {
     parts.push(`The reader's question about the selection: ${ctx.question}`);
-  } else if (quick) {
-    parts.push("Give the quick note on the selection: the translation if needed, then at most two short sentences.");
   } else {
     parts.push("Explain the selection.");
   }
@@ -70,20 +82,19 @@ function firstMessage(ctx, quick) {
 /**
  * Streams an explanation.
  * request: { context } for a new selection, or { messages } for a follow-up
- * (messages already ending with the new user turn).
+ * (messages already ending with the new user turn). mode "translate" translates instead of explaining.
  */
 async function explain({ apiKey, model, language, style, customStyle, request, signal, onText }) {
   const client = new Anthropic({ apiKey });
-  // The quick note and the follow-ups run on different models, and thinking blocks are signed by the
-  // model that wrote them, so earlier answers go back as their text only.
+  // Thinking blocks are signed by the model that wrote them, so earlier answers go back as their text only.
   const messages = request.messages
     ? request.messages.map((m) => (m.role === "assistant" && Array.isArray(m.content) ? { ...m, content: m.content.filter((b) => b.type === "text") } : m))
-    : [firstMessage(request.context, request.quick)];
+    : [firstMessage(request.context, request.mode)];
 
   const params = {
     model,
     max_tokens: 16000,
-    system: systemPrompt(language, style, customStyle),
+    system: request.mode === "translate" ? translatePrompt(language) : systemPrompt(language, style, customStyle),
     messages,
     output_config: { effort: EFFORT[model] || "low" },
   };
