@@ -167,7 +167,7 @@ function settingsFor(req) {
       ? { lastBook: (demo.some((d) => d.name === u.lastBook) ? u.lastBook : demo[0]?.name) || null, guestLimit: req.share ? { used: shareUsage(req.share).n, limit: SHARE_EXPLAIN_LIMIT } : { used: guestUsage().guests[req.guest] || 0, limit: GUEST_LIMIT } }
       : {}),
     ...(req.share ? { share: { from: accountName(req.share.acct), until: req.share.expires } } : {}),
-    ...(req.free ? { free: { signIn: `/login?go=1&next=${encodeURIComponent(`/free/${encodeURIComponent(req.free)}`)}`, download: `/free-file/${encodeURIComponent(req.free)}` } } : {}),
+    ...(req.free ? { free: { signIn: `/login?go=1&next=${encodeURIComponent(`/free/${encodeURIComponent(req.free)}`)}`, download: fileAllowed(req.free) ? `/free-file/${encodeURIComponent(req.free)}` : "" } } : {}),
   };
 }
 
@@ -721,9 +721,11 @@ app.get("/free/:name", (req, res) => {
   res.redirect("/");
 });
 // The file itself, for «Завантажити EPUB» on the site: no account needed.
+// Not the books shared by their author's permission («З дозволу автора»): those are read here only (Max, 2026-10-26).
+const fileAllowed = (name) => ((f) => !f?.permission && f?.group !== "З дозволу автора")(freeShelf.find((f) => f.name === name));
 app.get("/free-file/:name", (req, res) => {
   const name = safeBookName(req.params.name);
-  if (!name || !isFree(name)) return res.status(404).end();
+  if (!name || !isFree(name) || !fileAllowed(name)) return res.status(404).end();
   res.download(path.join(FREE_DIR, name), name);
 });
 // The free book this guest reads, while it is still on the shelf.
