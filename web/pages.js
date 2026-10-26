@@ -17,7 +17,6 @@ const abs = (u) => (u && u.startsWith("/") ? ORIGIN + u : u);
 // Pages nobody should find through a search engine: one's own, the sign-in flow, the owner's tools and
 // search results (an endless set of addresses). Public pages name their canonical address instead.
 const NOINDEX = new Set(["/search", "/login", "/settings", "/welcome", "/me", "/admin", "/import"]);
-const FONTS = "https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=Onest:wght@400;500;600&display=swap";
 
 const esc = (s) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 const attr = esc;
@@ -128,11 +127,10 @@ ${image ? "" : `<meta property="og:image:width" content="1024">
 <meta name="twitter:card" content="summary">
 ${jsonld ? `<script type="application/ld+json">${JSON.stringify(jsonld).replace(/</g, "\\u003c")}</script>` : ""}
 ${path === "/" ? `<meta name="google-site-verification" content="5cswdBTj0bCY9oY1I-PTqyMBiCpQJ1Xu6CzQLOEYwRI">` : ""}
-<link rel="icon" href="/icon.png">
-<link rel="apple-touch-icon" href="/icon.png">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="${FONTS}">
+<link rel="icon" href="/icon-32.png" sizes="32x32">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="preload" href="/fonts/source-serif-4-cyrillic.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/fonts/onest-cyrillic.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="${ASSETS.css}">
 </head>
 <body>
