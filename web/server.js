@@ -146,8 +146,11 @@ app.use((req, res, next) => {
     const ms = Date.now() - t0;
     if (ms > 2000) console.log(`slow: ${req.method} ${req.originalUrl.slice(0, 120)} ${ms} ms ${res.statusCode}${req.user ? ` @${req.user.username}` : ""}`);
     // A page (HTML, not a picture, a call or /admin) for /admin/speed: people and robots apart.
-    if (req.method === "GET" && res.statusCode === 200 && /text\/html/.test(res.getHeader("Content-Type") || "") && !/^\/(api|admin|t)\//.test(req.path) && !("rest" in req.query))
-      speed.add(BOT.test(req.headers["user-agent"] || "") ? "bot" : "page", ms);
+    const ua = req.headers["user-agent"] || "";
+    const isBot = BOT.test(ua);
+    const page = req.method === "GET" && res.statusCode === 200 && /text\/html/.test(res.getHeader("Content-Type") || "") && !/^\/(api|admin|t)\//.test(req.path) && !("rest" in req.query);
+    if (page) speed.add(isBot ? "bot" : "page", ms);
+    if (isBot) speed.bot(ua, ms, page, res.statusCode === 503);
   });
   next();
 });
@@ -1739,7 +1742,7 @@ app.post("/api/speed", (req, res) => {
   }
   res.status(204).end();
 });
-app.get("/admin/speed", owner, (req, res) => res.send(speedPage({ user: req.user, days: speed.days(), layout: pages.layout })));
+app.get("/admin/speed", owner, (req, res) => res.send(speedPage({ user: req.user, days: speed.days(), bots: speed.bots(), layout: pages.layout })));
 app.get("/admin/traffic", owner, (req, res) => res.send(adminPage({ user: req.user, stats: admin.stats(), gsc: gsc.data(), gscOn: gsc.configured(), layout: pages.layout, page: "traffic" })));
 app.get("/admin/stats", owner, (req, res) => res.redirect(301, "/admin/traffic"));
 app.get("/admin/overviews", owner, (req, res) => res.send(overviewsPage({ user: req.user, list: advice.overviewList().map((r) => ({ ...r, complaints: r.down ? advice.complaintsOf(r.book.id) : [] })), stats: advice.overviewStats(), who: (id) => (id && id !== "auto" ? pub(auth.reader(id)) : null), layout: pages.layout })));

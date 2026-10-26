@@ -30,11 +30,23 @@ const HISTORY = {
   },
 };
 
+// Which robot a user agent is (Max, 2026-10-26: «що це за боти, яких так багато?»): the known ones by name, the
+// rest by the word in it that says bot/crawler/spider, else its product token. Only this name is kept.
+const KNOWN = ["Googlebot", "Google-InspectionTool", "GoogleOther", "Google-Extended", "AdsBot-Google", "Storebot-Google", "bingbot", "BingPreview", "YandexBot", "YandexImages", "Applebot", "DuckDuckBot", "Baiduspider", "PetalBot", "SeznamBot", "GPTBot", "OAI-SearchBot", "ChatGPT-User", "ClaudeBot", "Claude-User", "Claude-SearchBot", "PerplexityBot", "Perplexity-User", "Amazonbot", "meta-externalagent", "meta-externalfetcher", "facebookexternalhit", "Bytespider", "CCBot", "AhrefsBot", "SemrushBot", "MJ12bot", "DotBot", "DataForSeoBot", "BLEXBot", "serpstatbot", "Barkrowler", "ImagesiftBot", "TelegramBot", "WhatsApp", "Twitterbot", "LinkedInBot", "Slackbot", "Discordbot", "UptimeRobot", "Pinterestbot", "MojeekBot", "Qwantbot", "Timpibot", "YisouSpider", "Sogou", "TikTokSpider", "Diffbot", "cohere-ai", "AI2Bot", "Kangaroo Bot", "anthropic-ai", "curl", "Wget", "python-requests", "python-httpx", "aiohttp", "Go-http-client", "node-fetch", "axios", "HeadlessChrome"];
+const KNOWN_RE = new RegExp(KNOWN.map((k) => k.replace(/[.*+?^${}()|[\]\\-]/g, "\\$&")).join("|"), "i");
+function botName(ua) {
+  const k = ua.match(KNOWN_RE);
+  if (k) return KNOWN.find((x) => x.toLowerCase() === k[0].toLowerCase()) || k[0];
+  const w = ua.match(/[\w.-]*(?:bot|crawl|spider|fetch|scan)[\w.-]*/i);
+  return (w ? w[0] : ua.split(/[\s/;(]/)[0] || "?").slice(0, 40);
+}
+
 class Speed {
   constructor({ db, today }) {
     this.db = db;
     this.today = today;
     this.pending = new Map(); // `${day} ${kind}` -> { n, sum, b: [] }
+    this.robots = new Map(); // `${day}\t${name}` -> { n, pages, ms, turned }
     setInterval(() => this.flush(), 60 * 1000).unref();
   }
 
@@ -49,7 +61,36 @@ class Speed {
     this.pending.set(key, x);
   }
 
+  // A robot's request: how many, how many of them pages, the server's milliseconds, and how many got 503.
+  bot(ua, ms, page, turned) {
+    const key = `${this.today()}\t${botName(ua)}`;
+    if (!this.robots.has(key) && this.robots.size > 500) return;
+    const x = this.robots.get(key) || { n: 0, pages: 0, ms: 0, turned: 0 };
+    x.n++;
+    x.ms += ms;
+    if (page) x.pages++;
+    if (turned) x.turned++;
+    this.robots.set(key, x);
+  }
+
+  // Robots of the last `days` days, the busiest first: { name, n, pages, ms, turned, today }.
+  bots(days = 7) {
+    this.flush();
+    const since = new Date(new Date(`${this.today()}T12:00:00`).getTime() - (days - 1) * 86400000).toISOString().slice(0, 10);
+    return this.db.prepare(`SELECT name, SUM(n) n, SUM(pages) pages, SUM(ms) ms, SUM(turned) turned, SUM(CASE WHEN day = ? THEN n ELSE 0 END) today FROM bots WHERE day >= ? GROUP BY name ORDER BY n DESC`).all(this.today(), since);
+  }
+
   flush() {
+    if (this.robots.size) {
+      const rows = [...this.robots];
+      this.robots.clear();
+      try {
+        const up = this.db.prepare("INSERT INTO bots (day, name, n, pages, ms, turned) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT (day, name) DO UPDATE SET n = n + excluded.n, pages = pages + excluded.pages, ms = ms + excluded.ms, turned = turned + excluded.turned");
+        for (const [key, x] of rows) up.run(...key.split("\t"), x.n, x.pages, x.ms, x.turned);
+      } catch (e) {
+        console.error("bots flush failed:", e.message);
+      }
+    }
     if (!this.pending.size) return;
     const rows = [...this.pending];
     this.pending.clear();
@@ -90,4 +131,4 @@ function quantile(b, n, q) {
   return null;
 }
 
-module.exports = { Speed, EDGES, KINDS, HISTORY };
+module.exports = { Speed, EDGES, KINDS, HISTORY, botName };

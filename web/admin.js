@@ -836,7 +836,7 @@ function overviewsPage({ user, list, stats: o, who, layout }) {
 }
 
 // /admin/speed (speed.js): how fast the site was, before we counted (Fly's metrics, the logs) and day by day since.
-function speedPage({ user, days, layout }) {
+function speedPage({ user, days, bots = [], layout }) {
   const { HISTORY, EDGES } = require("./speed");
   const s = (ms) => (ms == null ? "" : ms === Infinity ? `> ${EDGES[EDGES.length - 1] / 1000} с` : `${String(ms / 1000).replace(".", ",")} с`);
   const pct = (x) => (x == null ? "" : `${String(Math.round(x * 1000) / 10).replace(".", ",")}%`);
@@ -869,6 +869,12 @@ ${days.size ? `<div class="tbl"><table>
 <tr><th>Медіана</th><th>95%</th><th>&gt; 2 с</th><th>Скільки</th><th>Медіана</th><th>95%</th><th>&gt; 2 с</th><th>Скільки</th></tr></thead>
 <tbody>${rows}</tbody></table></div>
 <p class="muted small">Медіана й 95% — верхня межа кошика (до 0,1 / 0,2 / 0,5 / 1 / 2 / 5 / 10 с): «95% за 0,2 с» значить, що 95 сторінок зі 100 сервер віддав швидше за 0,2 с.</p>` : `<p class="muted">Рахуємо з сьогодні; перші числа з'являться за хвилину після першої сторінки.</p>`}
+
+<h2>Роботи за 7 днів</h2>
+${bots.length ? `<p class="muted small">Усі запити роботів (сторінки, обкладинки, файли), за назвою з їхнього User-Agent. «Час сервера» — скільки секунд сервер на них витратив; «503» — скільки разів ми попросили прийти пізніше, бо сайт був зайнятий.</p>
+<div class="tbl"><table>
+<thead><tr><th>Робот</th><th>Запитів</th><th>З них сторінок</th><th>Час сервера</th><th>503</th><th>Сьогодні</th></tr></thead>
+<tbody>${bots.map((r) => `<tr><th>${esc(r.name)}</th><td>${n(r.n)}</td><td>${n(r.pages)}</td><td>${n(Math.round(r.ms / 1000))} с</td><td>${n(r.turned)}</td><td>${n(r.today)}</td></tr>`).join("")}</tbody></table></div>` : `<p class="muted">Рахуємо з сьогодні.</p>`}
 </section>`;
   return layout({ title: "Швидкість · Статистика", user, path: "/admin", body });
 }
