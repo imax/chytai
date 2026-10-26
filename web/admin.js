@@ -51,7 +51,7 @@ const sectionOf = (p) => SECTIONS.find(([, , is]) => is(p))[0];
 const SOURCES = [
   // [label, kind, test on the host or the utm_source]
   ["Gemini", "ai", /(^|\.)gemini\.google\.|^gemini$/],
-  ["Пошта", "mail", /^mail\.google\.|outlook\.|^mail\.|(^|\.)ukr\.net$|^email$|^digest$|^newsletter$/],
+  ["Пошта", "mail", /^mail\.google\.|outlook\.|^mail\.|(^|\.)ukr\.net$|^email$|^digest$|^newsletter$|^(e?mail\d*|webmail|exmail|email)\.|deref|kmail-lists|^links\.rediff\./],
   ["Google", "search", /(^|\.)google\.[a-z.]+$|^google$/],
   ["Bing", "search", /(^|\.)bing\.com$|^bing$/],
   ["DuckDuckGo", "search", /duckduckgo\.com$|^duckduckgo$/],
@@ -114,7 +114,7 @@ class Admin {
     if (accept && !accept.includes("text/html")) return;
     const p = req.path || "";
     if (p.startsWith("/api/") || p === "/refresh-status" || p === "/admin" || p.startsWith("/admin/") || p.includes(".")) return;
-    if (BOT.test(req.headers["user-agent"] || "")) return;
+    if (BOT.test(req.headers["user-agent"] || "") || !req.headers["accept-language"]) return; // browsers always send Accept-Language, most crawlers with a browser's user agent don't (2026-10-26)
     const day = today();
     if (day !== this.seenDay) (this.seen = new Set()), (this.seenDay = day);
     try {
@@ -140,7 +140,7 @@ class Admin {
     if (accept && !accept.includes("text/html")) return;
     const p = req.path || "";
     if (p.startsWith("/api/") || p === "/refresh-status" || p === "/admin" || p.startsWith("/admin/") || p.includes(".") || p === "/mcp" || p.startsWith("/oauth/")) return;
-    if (BOT.test(req.headers["user-agent"] || "") || /prefetch|prerender/i.test(req.headers["sec-purpose"] || req.headers.purpose || "")) return;
+    if (BOT.test(req.headers["user-agent"] || "") || !req.headers["accept-language"] || /prefetch|prerender/i.test(req.headers["sec-purpose"] || req.headers.purpose || "")) return;
     try {
       const referer = req.headers.referer || req.headers.referrer || "";
       const from = sourceOf(referer, req.query, ownHosts);
@@ -188,7 +188,10 @@ class Admin {
       x.month += r.visits;
       x.monthNew += r.fresh;
     };
-    for (const r of rows) {
+    // Rows kept before a host got its label (webmail hosts → «Пошта», 2026-10-26) are relabelled here.
+    const label = (src) => (KIND[src] || src === "Напряму" ? src : SOURCES.find(([, , re]) => re.test(src))?.[0] || src);
+    for (const r0 of rows) {
+      const r = { ...r0, source: label(r0.source) };
       add(bySource, r.source, { source: r.source, kind: KIND[r.source] || (r.source === "Напряму" ? "direct" : "other") }, r);
       if (r.ref.includes("/") || r.ref.startsWith("кампанія")) add(byRef, `${r.source}\t${r.ref}`, { source: r.source, ref: r.ref }, r);
       if (["search", "ai"].includes(KIND[r.source])) add(byLanding, r.landing, { landing: r.landing }, r);
@@ -201,11 +204,20 @@ class Admin {
       } catch {
         continue;
       }
-      const x = (bySource[c.source] ||= { source: c.source, kind: KIND[c.source] || "other", week: 0, weekNew: 0, month: 0, monthNew: 0, signups: 0 });
+      const src = label(c.source);
+      const x = (bySource[src] ||= { source: src, kind: KIND[src] || (src === "Напряму" ? "direct" : "other"), week: 0, weekNew: 0, month: 0, monthNew: 0, signups: 0 });
       x.signups++;
     }
     const top = (m, k = 20) => Object.values(m).sort((a, b) => b.month - a.month || b.week - a.week).slice(0, k);
-    return { since, sources: top(bySource, 40), refs: top(byRef), landings: top(byLanding, 15) };
+    // By weeks, for the weekly table on /admin/traffic (twelve weeks back).
+    const weeks = this.db.prepare("SELECT day, SUM(visits) AS visits, SUM(fresh) AS fresh FROM arrivals WHERE day >= ? GROUP BY day").all(weekOf(addDays(now, -83)));
+    const byWeek = {};
+    for (const r of weeks) {
+      const x = (byWeek[weekOf(r.day)] ||= { week: weekOf(r.day), visits: 0, fresh: 0 });
+      x.visits += r.visits;
+      x.fresh += r.fresh;
+    }
+    return { since, sources: top(bySource, 200), refs: top(byRef, 60), landings: top(byLanding, 60), weeks: Object.values(byWeek) };
   }
 
   // The first time a reader got to a step of adding books: «welcome» (/welcome), «add» (/add), «review» (the
@@ -454,85 +466,125 @@ function sourcesTable(a, limit = Infinity) {
 <thead><tr><th>Джерело</th><th>7 днів</th><th>28 днів</th><th>Реєстрацій</th></tr></thead>
 <tbody>${rows}</tbody></table></div>` : `<p class="muted">Поки нікого не нарахувалось.</p>`;
 }
-function arrivalsDetails(a) {
-  if (!a) return "";
-  const pair = (v, fresh) => `${n(v)}${v ? ` <span class="muted">/ ${fresh}</span>` : ""}`;
-  const link = (ref) => (ref.startsWith("кампанія") ? esc(ref) : `<a href="https://${esc(ref)}" target="_blank" rel="noopener noreferrer">${esc(ref.length > 70 ? ref.slice(0, 70) + "…" : ref)}</a>`);
-  const refs = a.refs.map((x) => `<tr><th>${link(x.ref)} <span class="muted">${esc(x.source)}</span></th><td>${pair(x.week, x.weekNew)}</td><td>${pair(x.month, x.monthNew)}</td></tr>`).join("");
-  const landings = a.landings.map((x) => `<tr><th><a href="${esc(x.landing)}">${esc(x.landing)}</a></th><td>${n(x.week)}</td><td>${n(x.month)}</td></tr>`).join("");
-  return `<h2 id="sources">Звідки приходять</h2>
-${sourcesTable(a)}
-${a.refs.length ? `<h3>Звідки саме</h3>
-<div class="tbl"><table class="refs urls">
-<thead><tr><th>Адреса</th><th>7 днів</th><th>28 днів</th></tr></thead>
-<tbody>${refs}</tbody></table></div>` : ""}
-${a.landings.length ? `<h3>Сторінки з пошуку</h3>
-<div class="tbl"><table class="landings urls">
-<thead><tr><th>Сторінка</th><th>7 днів</th><th>28 днів</th></tr></thead>
-<tbody>${landings}</tbody></table></div>` : ""}`;
-}
 
-// Google Search Console (Max, 2026-10-26): what Google shows of the site in its results, fetched once a day
-// by gsc.js. The last 28 days with data against the 28 before, by weeks, and the top queries and pages.
-function gscBlock(g, configured) {
-  const head = `<h2 id="google">Google Пошук</h2>`;
-  if (!g || !g.days) {
-    const why = g?.error ? `Не вдалося взяти дані: ${esc(g.error)}` : configured ? "Дані ще не завантажились, перше завантаження за кілька хвилин після старту." : "Ще не підключено: потрібен секрет GSC_KEY з ключем сервісного акаунта.";
-    return `${head}\n<p class="muted small">${why}</p>`;
+// /admin/traffic, redone 2026-10-26 (Max: «блоки дублюються, важлива інфа губиться»): the month in four numbers,
+// sources grouped by kind with the exact addresses under them, one weekly table for our counter and Google,
+// Google's queries, and the pages people land on (Google Search Console and our counter side by side).
+const KIND_ORDER = [["search", "Пошук"], ["ai", "AI-чати"], ["social", "Соцмережі"], ["mail", "Пошта"], ["other", "Інші сайти"], ["own", "Читалка Chytai"], ["direct", "Напряму"]];
+const fmtN = (v, digits = 0) => v.toLocaleString("uk-UA", { minimumFractionDigits: digits, maximumFractionDigits: digits });
+const sumGsc = (rows) => {
+  const c = rows.reduce((a, r) => a + r.clicks, 0);
+  const i = rows.reduce((a, r) => a + r.impressions, 0);
+  return { clicks: c, impressions: i, ctr: i ? (100 * c) / i : 0, position: i ? rows.reduce((a, r) => a + r.position * r.impressions, 0) / i : 0 };
+};
+const pathOf = (u) => { try { const x = new URL(u); return decodeURIComponent(x.pathname + x.search); } catch { return u; } };
+
+function trafficBody(s, g, gscOn) {
+  const a = s.arrivals;
+  const hasG = !!g?.days;
+  const short7 = !a.since || a.since > addDays(s.now, -6); // under a week of data: 7 and 28 days are the same
+  const since = a.since ? short(a.since) : "сьогодні";
+
+  // The four numbers.
+  const all = a.sources.reduce((t, x) => ({ month: t.month + x.month, fresh: t.fresh + x.monthNew, week: t.week + x.week, signups: t.signups + x.signups }), { month: 0, fresh: 0, week: 0, signups: 0 });
+  const signups = s.weeks.filter((w) => w.week >= weekOf(addDays(s.now, -27))).reduce((t, w) => t + w.signups, 0);
+  let gNow = null, gBefore = null;
+  if (hasG) {
+    gNow = sumGsc(g.days.filter((d) => d.day >= g.from && d.day <= g.to));
+    const before = g.days.filter((d) => d.day >= addDays(g.from, -28) && d.day < g.from);
+    gBefore = before.length >= 20 ? sumGsc(before) : null;
   }
-  const sum = (rows) => {
-    const c = rows.reduce((a, r) => a + r.clicks, 0);
-    const i = rows.reduce((a, r) => a + r.impressions, 0);
-    return { clicks: c, impressions: i, ctr: i ? (100 * c) / i : 0, position: i ? rows.reduce((a, r) => a + r.position * r.impressions, 0) / i : 0 };
-  };
-  const now = g.days.filter((d) => d.day >= g.from && d.day <= g.to);
-  const before = g.days.filter((d) => d.day >= addDays(g.from, -28) && d.day < g.from);
-  const a = sum(now);
-  const b = before.length >= 20 ? sum(before) : null;
-  const fmt = (v, digits = 0) => v.toLocaleString("uk-UA", { minimumFractionDigits: digits, maximumFractionDigits: digits });
-  const delta = (x, y, digits = 0, unit = "") => {
-    if (!b) return "";
-    const d = x - y;
-    return `${d > 0 ? "+" : d < 0 ? "−" : "±"}${fmt(Math.abs(d), digits)}${unit} до попередніх 28 днів`;
-  };
-  const pctOf = (x, y) => (y ? `${x >= y ? "+" : "−"}${Math.round((100 * Math.abs(x - y)) / y)}% до попередніх 28 днів` : "");
-  const tiles = `<div class="stats four">${tile(fmt(a.clicks), "кліків", b ? pctOf(a.clicks, b.clicks) : "")}${tile(fmt(a.impressions), "показів", b ? pctOf(a.impressions, b.impressions) : "")}${tile(`${fmt(a.ctr, 1)}%`, "CTR", delta(a.ctr, b?.ctr, 1, " п.п."))}${tile(fmt(a.position, 1), "середня позиція", b ? `${fmt(b.position, 1)} у попередні 28 днів` : "")}</div>`;
-  const weeks = new Map();
-  for (const d of g.days) {
+  const change = (x, y) => (y ? `${x >= y ? "+" : "−"}${Math.round((100 * Math.abs(x - y)) / y)}% до попередніх 28 днів` : "");
+  const tiles = `<div class="stats four">
+${tile(fmtN(all.month), "відвідувань", short7 ? `з ${since}` : `${fmtN(all.week)} за 7 днів`)}
+${tile(fmtN(all.fresh), "нових людей", all.month ? `${Math.round((100 * all.fresh) / all.month)}% відвідувань` : "")}
+${tile(fmtN(signups), "реєстрацій", all.fresh ? `${fmtN((100 * signups) / all.fresh, 1)}% нових людей` : "")}
+${hasG ? tile(fmtN(gNow.clicks), "кліків з Google", gBefore ? change(gNow.clicks, gBefore.clicks) : `${fmtN(gNow.impressions)} показів · позиція ${fmtN(gNow.position, 1)}`) : tile("·", "кліків з Google", gscOn ? "ще завантажується" : "не підключено")}
+</div>
+<p class="muted small">Відвідування й нові люди за 28 днів (рахуємо з ${since}): відвідування — прихід з іншого сайту або початок візиту, нові — ті, хто раніше не був. Google — за ${hasG ? `${short(g.from)} – ${short(g.to)}, його дані відстають на 2–3 дні` : "28 днів"}.</p>`;
+
+  // Sources by kind, each with its sources, and the exact addresses under a source when the site passed them.
+  const refsOf = (src) => a.refs.filter((r) => r.source === src).slice(0, 5);
+  const link = (ref) => (ref.startsWith("кампанія") ? esc(ref) : `<a href="https://${esc(ref)}" target="_blank" rel="noopener noreferrer">${esc(ref.length > 60 ? ref.slice(0, 60) + "…" : ref)}</a>`);
+  const cells = (x) => `${short7 ? "" : `<td>${n(x.week)}</td>`}<td>${n(x.month)}</td><td>${n(x.monthNew)}</td><td>${n(x.signups)}</td>`;
+  const groups = KIND_ORDER.map(([kind, name]) => {
+    const list = a.sources.filter((x) => (x.kind || "other") === kind);
+    if (!list.length) return null;
+    const t = list.reduce((t, x) => ({ week: t.week + x.week, month: t.month + x.month, monthNew: t.monthNew + x.monthNew, signups: t.signups + x.signups }), { week: 0, month: 0, monthNew: 0, signups: 0 });
+    return { kind, name, list, t };
+  }).filter(Boolean).sort((x, y) => y.t.month - x.t.month);
+  const body = groups.map(({ kind, name, list, t }) => {
+    const single = list.length === 1 && (list[0].source === name || kind === "direct" || kind === "own");
+    const tail = list.filter((x) => x.month <= 1);
+    const few = tail.length > 1 ? tail : [];
+    const many = list.filter((x) => !few.includes(x));
+    const rows = single ? [] : [
+      ...many.map((x) => `<tr class="src"><th>${esc(x.source)}${refsOf(x.source).map((r) => `<div class="ref">${link(r.ref)} <span>${r.month}</span></div>`).join("")}</th>${cells(x)}</tr>`),
+      ...(few.length ? [`<tr class="src"><th><span class="muted">ще ${few.length} по одному: ${few.slice(0, 6).map((x) => esc(x.source)).join(", ")}${few.length > 6 ? "…" : ""}</span></th>${cells(few.reduce((t, x) => ({ week: t.week + x.week, month: t.month + x.month, monthNew: t.monthNew + x.monthNew, signups: t.signups + x.signups }), { week: 0, month: 0, monthNew: 0, signups: 0 }))}</tr>`] : []),
+    ];
+    return `<tr class="kind"><th>${name}</th>${cells(t)}</tr>${rows.join("")}`;
+  }).join("");
+  const sources = a.sources.length ? `<div class="tbl"><table class="sources grouped">
+<thead><tr><th>Джерело</th>${short7 ? "" : "<th>7 днів</th>"}<th>${short7 ? `З ${since}` : "28 днів"}</th><th>Нових</th><th>Реєстрацій</th></tr></thead>
+<tbody>${body}</tbody></table></div>` : `<p class="muted">Поки нікого не нарахувалось.</p>`;
+
+  // One table by weeks: our counter, sign-ups and Google.
+  const gWeeks = new Map();
+  for (const d of hasG ? g.days : []) {
     const w = weekOf(d.day);
-    if (!weeks.has(w)) weeks.set(w, []);
-    weeks.get(w).push(d);
+    if (!gWeeks.has(w)) gWeeks.set(w, []);
+    gWeeks.get(w).push(d);
   }
-  const weekRows = [...weeks]
-    .sort((x, y) => y[0].localeCompare(x[0]))
-    .slice(0, 12)
-    .map(([w, rows], i) => {
-      const x = sum(rows);
-      const part = rows.length < 7;
-      if (part && i > 0) return `<tr><th>${weekLabel(w)} <span class="muted">${rows.length} дн.</span></th><td>${n(x.clicks)}</td><td>${n(x.impressions)}</td><td>${x.impressions ? fmt(x.ctr, 1) + "%" : n(0)}</td><td>${x.impressions ? fmt(x.position, 1) : `<span class="na">·</span>`}</td></tr>`;
-      return `<tr${part ? ' class="now"' : ""}><th>${weekLabel(w)}${part ? ` <em>${rows.length} дн.</em>` : ""}</th><td>${n(x.clicks)}</td><td>${n(x.impressions)}</td><td>${x.impressions ? fmt(x.ctr, 1) + "%" : n(0)}</td><td>${x.impressions ? fmt(x.position, 1) : `<span class="na">·</span>`}</td></tr>`;
-    })
-    .join("");
-  const ctr = (r) => (r.impressions ? `${fmt((100 * r.clicks) / r.impressions, 1)}%` : "");
-  const top = (rows, label) => rows.slice(0, 25).map((r) => `<tr><th>${label(r.keys[0])}</th><td>${n(r.clicks)}</td><td>${n(r.impressions)}</td><td>${ctr(r)}</td><td>${fmt(r.position, 1)}</td></tr>`).join("");
-  const path = (u) => { try { const x = new URL(u); return decodeURIComponent(x.pathname + x.search); } catch { return u; } };
-  const page = (u) => `<a href="${esc(u)}" target="_blank" rel="noopener">${esc(path(u).length > 70 ? path(u).slice(0, 70) + "…" : path(u))}</a>`;
-  const cols = `<th>Кліки</th><th>Покази</th><th>CTR</th><th>Позиція</th>`;
-  return `${head}
-<p class="muted small">З Google Search Console, ${short(g.from)} – ${short(g.to)} (Google віддає дані з затримкою в 2–3 дні). Оновлюється раз на добу, востаннє ${short(dayOf(g.at))}.${g.error ? ` Остання спроба не вдалась: ${esc(g.error)}` : ""}</p>
-${tiles}
-<h3>По тижнях</h3>
-<div class="tbl"><table>
-<thead><tr><th>Тиждень</th>${cols}</tr></thead>
+  const weekKeys = [...new Set([...a.weeks.map((w) => w.week), ...gWeeks.keys(), ...s.weeks.map((w) => w.week).filter((w) => w >= (a.since ? weekOf(a.since) : s.now) || gWeeks.has(w))])].sort().reverse().slice(0, 12);
+  const weekRows = weekKeys.map((w) => {
+    const ours = a.weeks.find((x) => x.week === w);
+    const site = s.weeks.find((x) => x.week === w);
+    const gw = gWeeks.get(w) ? sumGsc(gWeeks.get(w)) : null;
+    const now = w === weekOf(s.now);
+    const na = `<td class="na">·</td>`;
+    return `<tr${now ? ' class="now"' : ""}><th>${weekLabel(w)}${now ? " <em>зараз</em>" : ""}</th>${ours ? `<td>${n(ours.visits)}</td><td>${n(ours.fresh)}</td>` : na + na}<td>${n(site?.signups || 0)}</td>${gw ? `<td>${n(gw.clicks)}</td><td>${n(gw.impressions)}</td><td>${gw.impressions ? fmtN(gw.position, 1) : "·"}</td>` : na + na + na}</tr>`;
+  }).join("");
+  const weeks = `<div class="tbl"><table class="weeks">
+<thead><tr><th>Тиждень</th><th>Відвідувань</th><th>Нових</th><th>Реєстрацій</th><th>Google кліки</th><th>Покази</th><th>Позиція</th></tr></thead>
 <tbody>${weekRows}</tbody></table></div>
-${g.queries.length ? `<h3>Запити за 28 днів</h3>
-<div class="tbl"><table class="refs">
-<thead><tr><th>Запит</th>${cols}</tr></thead>
-<tbody>${top(g.queries, esc)}</tbody></table></div>` : ""}
-${g.pages.length ? `<h3>Сторінки за 28 днів</h3>
-<div class="tbl"><table class="urls">
-<thead><tr><th>Сторінка</th>${cols}</tr></thead>
-<tbody>${top(g.pages, page)}</tbody></table></div>` : ""}`;
+<p class="muted small">Крапка — тоді ще не рахували. Google за останні 2–3 дні ще не віддав.</p>`;
+
+  // Google's queries.
+  const ctr = (r) => (r.impressions ? `${fmtN((100 * r.clicks) / r.impressions, 1)}%` : "");
+  const queries = hasG && g.queries.length ? `<div class="tbl"><table class="refs">
+<thead><tr><th>Запит</th><th>Кліки</th><th>Покази</th><th>CTR</th><th>Позиція</th></tr></thead>
+<tbody>${g.queries.slice(0, 25).map((r) => `<tr><th>${esc(r.keys[0])}</th><td>${n(r.clicks)}</td><td>${n(r.impressions)}</td><td>${ctr(r)}</td><td>${fmtN(r.position, 1)}</td></tr>`).join("")}</tbody></table></div>` : `<p class="muted small">${g?.error ? `Не вдалося взяти дані з Google: ${esc(g.error)}` : gscOn ? "Дані з Google ще завантажуються." : "Google Search Console не підключено (секрет GSC_KEY)."}</p>`;
+
+  // Pages people land on: Google's clicks and impressions next to arrivals from any search engine or AI chat.
+  const pages = new Map();
+  for (const r of hasG ? g.pages : []) pages.set(pathOf(r.keys[0]), { path: pathOf(r.keys[0]), g: r, ours: 0 });
+  for (const l of a.landings) {
+    const x = pages.get(l.landing) || { path: l.landing, g: null, ours: 0 };
+    x.ours = l.month;
+    pages.set(l.landing, x);
+  }
+  const pageRows = [...pages.values()]
+    .sort((x, y) => (y.g?.clicks || 0) + y.ours - ((x.g?.clicks || 0) + x.ours) || (y.g?.impressions || 0) - (x.g?.impressions || 0))
+    .slice(0, 30)
+    .map((x) => `<tr><th><a href="${esc(x.path)}">${esc(x.path.length > 64 ? x.path.slice(0, 64) + "…" : x.path)}</a></th>${x.g ? `<td>${n(x.g.clicks)}</td><td>${n(x.g.impressions)}</td><td>${fmtN(x.g.position, 1)}</td>` : `<td class="na">·</td><td class="na">·</td><td class="na">·</td>`}<td>${n(x.ours)}</td></tr>`)
+    .join("");
+  const landings = pages.size ? `<div class="tbl"><table class="urls">
+<thead><tr><th>Сторінка</th><th>Google кліки</th><th>Покази</th><th>Позиція</th><th>З пошуку й AI</th></tr></thead>
+<tbody>${pageRows}</tbody></table></div>
+<p class="muted small">«З пошуку й AI» — наш лічильник: приходи з усіх пошуковиків і AI-чатів за 28 днів. Крапка — Google сторінку не показував.</p>` : "";
+
+  return `${tiles}
+
+<h2 id="sources">Звідки приходять</h2>
+${sources}
+
+<h2>По тижнях</h2>
+${weeks}
+
+<h2 id="google">Що шукають у Google</h2>
+${queries}
+
+${landings ? `<h2>На які сторінки приходять з пошуку</h2>\n${landings}` : ""}`;
 }
 
 const cameCell = (c) => (c ? `${esc(c.source)}${c.ref && c.ref.includes("/") ? ` <a class="muted" href="https://${esc(c.ref)}" target="_blank" rel="noopener noreferrer" title="${esc(c.ref)}">↗</a>` : ""}` : `<span class="muted">—</span>`);
@@ -660,9 +712,7 @@ function adminPage({ user, stats: s, overviews: o = null, catalog = null, gsc = 
     ? `<section class="admin">
 <section class="page-head"><div><p class="crumbs"><a href="/admin">Статистика</a> / Трафік</p><h1>Трафік</h1></div></section>
 
-${gscBlock(gsc, gscOn)}
-
-${arrivalsDetails(s.arrivals)}
+${trafficBody(s, gsc, gscOn)}
 
 <h2>Перегляди за розділами</h2>
 <p class="muted small">Скільки сторінок кожного розділу відкрили (читачі й гості разом, без ботів). Рахується з ${s.sections.length ? "22 жовтня" : "сьогодні"}; які саме сторінки, не зберігаємо.</p>
@@ -683,7 +733,7 @@ ${s.sections.length ? `<div class="tbl"><table class="sections">
 ${s.arrivals ? `<h2>Звідки приходять</h2>
 ${sourcesTable(s.arrivals, 4)}
 <p class="small"><a class="text-link" href="/admin/speed">Швидкість сайту</a></p>
-<p class="small"><a class="text-link" href="/admin/traffic">Усі джерела (${s.arrivals.sources.length})</a>, звідки саме, сторінки з пошуку, перегляди за розділами.</p>` : ""}
+<p class="small"><a class="text-link" href="/admin/traffic">Усі джерела (${s.arrivals.sources.length})</a>, Google, тижні, сторінки входу, перегляди за розділами.</p>` : ""}
 
 ${funnelBlock(s.funnel)}
 

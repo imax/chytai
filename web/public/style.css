@@ -604,6 +604,13 @@ dialog .form { margin-top: 18px; }
 .admin h2 { font: 600 12px var(--sans); text-transform: uppercase; letter-spacing: 0.14em; color: var(--accent); margin-top: 48px; }
 .admin h2 + p { margin-top: 8px; max-width: 720px; }
 .admin .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; background: var(--rule); border: 1px solid var(--rule); }
+.admin .grouped tr.kind th, .admin .grouped tr.kind td { font-weight: 600; border-top: 1px solid var(--ink); }
+.admin .grouped tr.src th { padding-left: 18px; white-space: normal; }
+.admin .grouped tr.src th, .admin .grouped tr.src td { color: var(--muted); font-size: 13px; }
+.admin .grouped .ref { font-size: 12px; margin-top: 3px; }
+.admin .grouped .ref a { color: var(--muted); }
+.admin .grouped .ref span { margin-left: 6px; }
+.admin .stats + p.small { margin-top: 8px; }
 .admin .stats.four { grid-template-columns: repeat(4, 1fr); }
 .admin .stat { background: var(--paper); padding: 18px 20px; }
 .admin .stat b { display: block; font: 400 40px/1 var(--serif); letter-spacing: -0.02em; }
