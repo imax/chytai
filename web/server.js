@@ -27,7 +27,7 @@ const enrich = require("./enrich");
 const readeat = require("./readeat");
 const { BookPage, isUrl } = require("./bookpage");
 const { UkFinder } = require("./ukfind");
-const { Admin, adminPage, shelvesPage, readersPage, overviewsPage, BOT } = require("./admin");
+const { Admin, adminPage, shelvesPage, readersPage, overviewsPage, speedPage, BOT } = require("./admin");
 const { Mcp } = require("./mcp");
 const { Reviews } = require("./reviews");
 const { Advice } = require("./advice");
@@ -61,6 +61,7 @@ const store = new Store(DATA_DIR);
 const auth = new Auth(store.db, { ownerToken: TOKEN, resendKey: process.env.RESEND_API_KEY || "", from: process.env.WEB_MAIL_FROM || `Chytai <code@${DOMAIN || "chytai.org.ua"}>` });
 auth.ensureOwner({ id: OWNER_ID, name: OWNER, username: OWNER_USERNAME });
 const admin = new Admin(store.db, { ownerId: OWNER_ID }); // the owner's statistics (/admin): visits and page views
+const speed = new (require("./speed").Speed)({ db: store.db, today: () => require("./admin").dayOf(new Date()) }); // /admin/speed
 if (!process.env.RESEND_API_KEY) console.log("RESEND_API_KEY is not set: sign-in codes are printed here instead of mailed");
 
 // ---- daily catalog refresh ----
@@ -144,6 +145,9 @@ app.use((req, res, next) => {
   res.on("finish", () => {
     const ms = Date.now() - t0;
     if (ms > 2000) console.log(`slow: ${req.method} ${req.originalUrl.slice(0, 120)} ${ms} ms ${res.statusCode}${req.user ? ` @${req.user.username}` : ""}`);
+    // A page (HTML, not a picture, a call or /admin) for /admin/speed: people and robots apart.
+    if (req.method === "GET" && res.statusCode === 200 && /text\/html/.test(res.getHeader("Content-Type") || "") && !/^\/(api|admin|t)\//.test(req.path) && !("rest" in req.query))
+      speed.add(BOT.test(req.headers["user-agent"] || "") ? "bot" : "page", ms);
   });
   next();
 });
@@ -155,7 +159,7 @@ let stillRecently = () => 0;
   let tick = Date.now();
   setInterval(() => {
     const late = Date.now() - tick - 1000;
-    if (late > 1000) console.log(`${who}slow: the main loop stood still for ${late} ms`), stalls++;
+    if (late > 1000) console.log(`${who}slow: the main loop stood still for ${late} ms`), stalls++, who || speed.add("stall", late);
     else stalls = 0;
     // Stood still over half of the last five minutes: the site is as good as down (2026-10-24: an hour of it,
     // and we learned from a reader). The owner gets a letter, and the process exits so Fly starts it afresh.
@@ -1693,6 +1697,18 @@ app.post("/admin/genres-trial", owner, (req, res) => {
 });
 app.get("/admin", owner, (req, res) => res.send(adminPage({ user: req.user, stats: admin.stats(), overviews: advice.overviewStats(), catalog: store.catalogStats(), layout: pages.layout })));
 app.get("/admin/shelves", owner, (req, res) => res.send(shelvesPage({ user: req.user, catalog: store.catalogStats(), layout: pages.layout })));
+// How long pages take (speed.js): the server's time for every page, and the reader's browser's own, which app.js
+// sends once a page has loaded (two numbers and whether it is a phone).
+app.post("/api/speed", (req, res) => {
+  const { load, first, phone } = req.body || {};
+  if (!BOT.test(req.headers["user-agent"] || "")) {
+    const kind = phone ? "phone" : "computer";
+    if (Number.isFinite(load) && load > 0 && load < 120000) speed.add(kind, Math.round(load));
+    if (Number.isFinite(first) && first > 0 && first < 120000) speed.add(`${kind}-first`, Math.round(first));
+  }
+  res.status(204).end();
+});
+app.get("/admin/speed", owner, (req, res) => res.send(speedPage({ user: req.user, days: speed.days(), layout: pages.layout })));
 app.get("/admin/traffic", owner, (req, res) => res.send(adminPage({ user: req.user, stats: admin.stats(), gsc: gsc.data(), gscOn: gsc.configured(), layout: pages.layout, page: "traffic" })));
 app.get("/admin/stats", owner, (req, res) => res.redirect(301, "/admin/traffic"));
 app.get("/admin/overviews", owner, (req, res) => res.send(overviewsPage({ user: req.user, list: advice.overviewList().map((r) => ({ ...r, complaints: r.down ? advice.complaintsOf(r.book.id) : [] })), stats: advice.overviewStats(), who: (id) => (id && id !== "auto" ? pub(auth.reader(id)) : null), layout: pages.layout })));

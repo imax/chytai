@@ -2,6 +2,16 @@
 // menu on phones, the switches of the homepage, /community and /publishers.
 // Everything else is plain forms handled by the server.
 (function () {
+  // How long this page took to open here (/admin/speed): once it has loaded, two numbers and whether this is a phone.
+  addEventListener("load", () => setTimeout(() => {
+    try {
+      const nav = performance.getEntriesByType("navigation")[0];
+      const fcp = performance.getEntriesByName("first-contentful-paint")[0];
+      if (!nav || nav.type === "back_forward" || document.visibilityState !== "visible") return;
+      const phone = matchMedia("(pointer: coarse)").matches && innerWidth < 900;
+      navigator.sendBeacon?.("/api/speed", new Blob([JSON.stringify({ load: nav.loadEventEnd || nav.domContentLoadedEventEnd, first: fcp?.startTime, phone })], { type: "application/json" }));
+    } catch {}
+  }, 0));
   const $ = (s, r = document) => r.querySelector(s);
   const $$ = (s, r = document) => [...r.querySelectorAll(s)];
   const plural = (n, one, few, many) => (n % 10 === 1 && n % 100 !== 11 ? one : n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20) ? few : many);

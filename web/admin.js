@@ -682,6 +682,7 @@ ${s.sections.length ? `<div class="tbl"><table class="sections">
 
 ${s.arrivals ? `<h2>Звідки приходять</h2>
 ${sourcesTable(s.arrivals, 4)}
+<p class="small"><a class="text-link" href="/admin/speed">Швидкість сайту</a></p>
 <p class="small"><a class="text-link" href="/admin/traffic">Усі джерела (${s.arrivals.sources.length})</a>, звідки саме, сторінки з пошуку, перегляди за розділами.</p>` : ""}
 
 ${funnelBlock(s.funnel)}
@@ -729,4 +730,42 @@ function overviewsPage({ user, list, stats: o, who, layout }) {
   return layout({ title: "Огляди від Claude · Статистика", user, path: "/admin", body });
 }
 
-module.exports = { BOT, Admin, adminPage, shelvesPage, readersPage, overviewsPage, dayOf, weekOf, sectionOf };
+// /admin/speed (speed.js): how fast the site was, before we counted (Fly's metrics, the logs) and day by day since.
+function speedPage({ user, days, layout }) {
+  const { HISTORY, EDGES } = require("./speed");
+  const s = (ms) => (ms == null ? "" : ms === Infinity ? `> ${EDGES[EDGES.length - 1] / 1000} с` : `${String(ms / 1000).replace(".", ",")} с`);
+  const pct = (x) => (x == null ? "" : `${String(Math.round(x * 1000) / 10).replace(".", ",")}%`);
+  const short = (d) => `${d.slice(8, 10)}.${d.slice(5, 7)}`;
+  const cell = (k) => (k ? `<td>${s(k.median)}</td><td>${s(k.p95)}</td><td>${pct(k.slow)}</td><td class="muted">${n(k.n)}</td>` : `<td></td><td></td><td></td><td></td>`);
+  const { before: b, after: a } = HISTORY.logs;
+  const maxP95 = Math.max(...HISTORY.fly.map((r) => r[2]));
+  const bars = HISTORY.fly.map(([d, , p95]) => `<div title="${short(d)}: 95% відповідей за ${String(p95).replace(".", ",")} с"><span style="height:${Math.max(2, Math.round((p95 / maxP95) * 100))}%"></span><b>${String(p95).replace(".", ",")}</b><i>${short(d)}</i></div>`).join("");
+  const rows = [...days].map(([d, k]) => `<tr><th>${short(d)}</th>${cell(k.page)}${cell(k.phone)}<td>${k.stall ? `${Math.round(k.stall.sum / 1000)} с` : "0"}</td><td class="muted">${k.bot ? n(k.bot.n) : ""}</td></tr>`).join("");
+  const body = `<section class="admin speed">
+<p class="small"><a href="/admin">← Статистика</a></p>
+<section class="page-head"><div><p class="kicker">Лише для власника</p><h1>Швидкість сайту</h1><p class="sub">Що казали метрики Fly й наші журнали до 26 жовтня, і що ми рахуємо самі відтоді: скільки сервер думав над сторінкою і за скільки вона відкрилась у браузері читача. Тільки числа за день, без адрес і людей.</p></div></section>
+
+<h2>Було → стало</h2>
+<div class="stats">
+  <div class="stat"><b>${b.slowPages} → ${a.slowPages}</b>сторінок на день, які вантажились понад 2 с</div>
+  <div class="stat"><b>${b.over5s} → ${a.over5s}</b>з них понад 5 с</div>
+  <div class="stat"><b>${b.worst} → ${String(a.worst).replace(".", ",")} с</b>найдовше очікування</div>
+  <div class="stat"><b>${String(b.stillMin).replace(".", ",")} → ${String(a.stillMin).replace(".", ",")} хв</b>на день сайт стояв і нікому не відповідав</div>
+</div>
+<p class="muted small">Із журналів сервера: ${b.from} – ${b.to} (до виправлень) і ${a.from} – ${a.to} (після), час київський, у перерахунку на добу.</p>
+
+<h3>95% відповідей сервера встигали за…</h3>
+<div class="speed-bars">${bars}</div>
+<p class="muted small">Метрики Fly, усі відповіді сайту разом з обкладинками й запитами до ШІ, тож це повільніше, ніж самі сторінки. 26.10 до 08:50.</p>
+
+<h2>День за днем</h2>
+${days.size ? `<div class="tbl"><table>
+<thead><tr><th rowspan="2">День</th><th colspan="4">Сервер: сторінки для людей</th><th colspan="4">Браузер на телефоні: сторінка відкрилась</th><th rowspan="2">Сервер стояв</th><th rowspan="2">Роботам</th></tr>
+<tr><th>Медіана</th><th>95%</th><th>&gt; 2 с</th><th>Скільки</th><th>Медіана</th><th>95%</th><th>&gt; 2 с</th><th>Скільки</th></tr></thead>
+<tbody>${rows}</tbody></table></div>
+<p class="muted small">Медіана й 95% — верхня межа кошика (до 0,1 / 0,2 / 0,5 / 1 / 2 / 5 / 10 с): «95% за 0,2 с» значить, що 95 сторінок зі 100 сервер віддав швидше за 0,2 с.</p>` : `<p class="muted">Рахуємо з сьогодні; перші числа з'являться за хвилину після першої сторінки.</p>`}
+</section>`;
+  return layout({ title: "Швидкість · Статистика", user, path: "/admin", body });
+}
+
+module.exports = { BOT, Admin, adminPage, shelvesPage, readersPage, overviewsPage, speedPage, dayOf, weekOf, sectionOf };
