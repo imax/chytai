@@ -219,8 +219,8 @@ function entryMeta(e) {
 }
 
 // A book in a list (shelves, search): cover, title, author, stars and the note, an action on the right.
-function bookRow(book, { entry = null, meta = "", action = "", id = "", data = "" } = {}) {
-  const alt = book.altTitle ? ` · ${esc(book.altTitle)}` : "";
+function bookRow(book, { entry = null, meta = "", action = "", id = "", data = "", others = [] } = {}) {
+  const alt = others.length ? others.map((o) => ` · ${twinLabel(book, o).toLowerCase()}: <a class="text-link" href="${attr(o.href)}">${esc(o.title)}</a>`).join("") : book.altTitle ? ` · ${esc(book.altTitle)}` : "";
   // The card that stands for a whole series is called by the series («Експансія», not «Експансія. Кн. 1. …»).
   const ser = book.series;
   const head = ser?.volumes > 1 && ser.items.find((i) => i.id === ser.head);
@@ -1548,7 +1548,7 @@ function searchResults({ q, user, hits = [], authors = [], readers = [], shelves
   <div>
     ${shelves.length ? `<section class="block">${label(`Видавництва · ${shelves.length}`)}<div class="name-rows">${shelves.map((s) => `<a class="name-row" href="/publishers/${attr(s.shelf.id)}"><b>${esc(s.shelf.name)}</b><span>${[books(s.total), s.shelf.tagline ? esc(s.shelf.tagline) : ""].filter(Boolean).join(" · ")}</span></a>`).join("")}</div></section>` : ""}
     ${authors.length ? `<section class="block">${label(`Автори · ${authors.length}`)}<div class="name-rows">${authors.map((a) => `<a class="name-row" href="${attr(a.href)}"><b>${esc(a.name)}</b><span>${[books(a.books), a.readers ? count(a.readers, "читач", "читачі", "читачів") : ""].filter(Boolean).join(" · ")}</span></a>`).join("")}</div></section>` : ""}
-    ${hits.length ? `<section class="block">${label(`Книжки · ${hits.length}`)}<div class="rows">${hits.map((h) => bookRow(h.book, { meta: readersMeta(h.book.id), action: h.entry ? myStatus(h.entry) : "" })).join("")}</div></section>` : ""}
+    ${hits.length ? `<section class="block">${label(`Книжки · ${hits.length}`)}<div class="rows">${hits.map((h) => bookRow(h.book, { meta: readersMeta(h.book.id), action: h.entry ? myStatus(h.entry) : "", others: h.others })).join("")}</div></section>` : ""}
     ${readers.length ? `<section class="block">${label(`Читачі · ${readers.length}`)}<div class="name-rows">${readers.map((r) => `<a class="name-row" href="${attr(r.reader.href)}"><b>${esc(r.reader.name)}</b><span>${books(r.count)}</span></a>`).join("")}</div></section>` : ""}
     ${user ? `<p class="muted end-note">Не те? ${addLink}</p>` : ""}
   </div>

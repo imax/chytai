@@ -1090,6 +1090,7 @@ function searchAll(req, q) {
       .filter((h) => h.book);
     hits = [...own, ...hits].slice(0, 40);
   }
+  foldTwins(hits);
   const similar = hits.length ? social.alsoLiked([hits[0].book.id], { limit: 4, skip: new Set(hits.map((h) => h.book.id)) }) : [];
   return { hits, authors: authorsFound, readers: readersFound, shelves: shelvesFound, similar, tag };
 }
@@ -1219,6 +1220,24 @@ app.get("/book/:id", (req, res) => {
   res.send(pages.bookPage({ ...(SHOW_AUTHOR_ABOUT ? authorAbout(book) : {}), ...discovery(req, book, alsoBooks.also), lists: lists.withBook(book.id).map(withCovers), myLists, freeRead: !!free, book, entry: store.sharedEntry(req.user?.id, book.id), now: !!req.user && nowIds(req.user.id).has(store.canonical(book.id)), user: req.user, readUrl: file ? `${READER_URL}/?open=${encodeURIComponent(file.name)}` : free ? `${READER_URL}/free/${encodeURIComponent(free.name)}` : "", shelf: book.shelf && (req.owner || !isDraft(book.shelf)) ? store.shelf(book.shelf) : null, inLibrary: inLibraryMap(req), readers: readersOf(book.id), ...alsoBooks, writings: reviews.of(book.id), reviewError: String(req.query.review_error || "").slice(0, 300), editionError: String(req.query.edition_error || "").slice(0, 300), ukAsk: ukAskFor(req, book) || (req.user && req.query.edition_error ? "ask" : null), advice: advice.state(req.user, book.id), overview: linkedOverview(book), overviewVote: advice.voteOf(book.id, req.user?.id) }));
 });
 
+// A translation and its original in one list are one card (Max, 2026-10-25: two rows «трохи плутає»; 2026-10-26: the same
+// in search): the Ukrainian edition leads, the other pages are a line under its title. Readers and ratings are shared anyway.
+function foldTwins(hits) {
+  const seen = new Set();
+  for (let i = 0; i < hits.length; i++) {
+    if (seen.has(hits[i].book.id)) {
+      hits.splice(i--, 1);
+      continue;
+    }
+    const twins = hits[i].twins || store.translationsOf(hits[i].book.id);
+    const group = [hits[i], ...twins.map((t) => hits.find((h) => h.book.id === t.id)).filter(Boolean)];
+    for (const h of group) seen.add(h.book.id);
+    const lead = group.find((h) => CYR_RE.test(h.book.title)) || group[0];
+    hits[i] = { ...lead, entry: lead.entry || group.find((h) => h.entry)?.entry, others: group.filter((h) => h !== lead).map((h) => h.book) };
+  }
+  return hits;
+}
+
 // An author: their works from Wikidata (linked to our books of them) and every book of theirs we have.
 app.get("/author/:slug", async (req, res) => {
   const author = store.authors.bySlug.get(req.params.slug);
@@ -1233,19 +1252,7 @@ app.get("/author/:slug", async (req, res) => {
     .map((h) => ({ ...h, avg: social.stats(h.book.id).avg }))
     .sort((a, b) => (b.avg ?? -1) - (a.avg ?? -1) || !!b.entry - !!a.entry || shown.has(a.book.id) - shown.has(b.book.id) || a.book.title.localeCompare(b.book.title, "uk"))
     .map((h) => ({ ...h, twins: store.translationsOf(h.book.id) }));
-  // A translation and its original are one card (Max, 2026-10-25: two rows «трохи плутає»): the Ukrainian
-  // edition leads, the other pages are a line under its title. Readers and ratings are shared anyway.
-  const seen = new Set();
-  for (let i = 0; i < hits.length; i++) {
-    if (seen.has(hits[i].book.id)) {
-      hits.splice(i--, 1);
-      continue;
-    }
-    const group = [hits[i], ...hits[i].twins.map((t) => hits.find((h) => h.book.id === t.id)).filter(Boolean)];
-    for (const h of group) seen.add(h.book.id);
-    const lead = group.find((h) => CYR_RE.test(h.book.title)) || group[0];
-    hits[i] = { ...lead, entry: lead.entry || group.find((h) => h.entry)?.entry, others: group.filter((h) => h !== lead).map((h) => h.book) };
-  }
+  foldTwins(hits);
   // Who reads this author, and what else those readers rated highest.
   const ids = new Set(hits.map((h) => h.book.id));
   const who = [...new Set(hits.flatMap((h) => store.readersOf(h.book.id).map((r) => r.reader)))]
