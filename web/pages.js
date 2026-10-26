@@ -474,7 +474,7 @@ function authorBlock(a) {
 </section>`;
 }
 
-function bookPage({ inGenre = null, fresh = null, pick = null, awards = [], authorInfo = null, lists = [], myLists = null, book, entry, now = false, user, shelf, inLibrary = new Map(), readers = [], also = [], alsoTitle = "Читали це, сподобалось і це", writings = [], reviewError = "", editionError = "", ukAsk = null, readUrl = "", freeRead = false, advice = null, overview = null, overviewVote = null }) {
+function bookPage({ inGenre = null, fresh = null, pick = null, awards = [], authorInfo = null, lists = [], myLists = null, book, entry, now = false, user, shelf, inLibrary = new Map(), readers = [], also = [], alsoTitle = "Читали це, сподобалось і це", writings = [], reviewError = "", editionError = "", ukAsk = null, readUrl = "", freeRead = false, freeFile = false, advice = null, overview = null, overviewVote = null }) {
   const s = statsOf(book.id);
   // A book in Russian stays on its reader's shelf, and its page shows no «Про книжку» and no side blocks
   // (Max 2026-10-23): nothing that would lead people to it or on from it.
@@ -502,7 +502,7 @@ function bookPage({ inGenre = null, fresh = null, pick = null, awards = [], auth
         ${score}
         ${awardsLine(awards)}
         ${twins(book)}
-        ${readUrl && freeRead ? freeReadLine(book) : ""}
+        ${readUrl && freeRead ? freeReadLine(book, freeFile) : ""}
         ${mine(book, entry, user, now, freeRead ? "" : readUrl, listsItem(book, user), { primary: !freeRead })}
         ${!user && !entry && !freeRead ? `<p class="want-why">Збережемо у ваш список і напишемо, коли книжка зʼявиться в продажу, вийде українською чи стане безкоштовною. Вхід лише за поштою, без паролів.</p>` : ""}
         ${where(book)}
@@ -733,10 +733,11 @@ const moreMenu = (items) => `<details class="more-acts"><summary class="btn" ari
 // `readUrl`: the reader's own file in the Chytai reader, «Відкрити в Читалці» in the menu (Max, 2026-10-23).
 // A book of the free shelf: read it right away, or take the file, no account needed (svoloshyn, Max 2026-10-26).
 // Both go through /go/… so /admin/traffic can count them. «Хочу прочитати» moves to second place.
-function freeReadLine(book) {
+// Books shared by their author's permission are read in the reader only, no file (Max, 2026-10-26).
+function freeReadLine(book, file = true) {
   const slug = attr((book.href || "").split("/").pop() || encodeURIComponent(book.id));
-  return `<div class="free-read"><a class="btn primary" href="/go/read/${slug}">Читати безкоштовно</a><a class="text-link" href="/go/epub/${slug}">Завантажити EPUB</a></div>
-<p class="want-why free-why">Читайте онлайн або завантажте файл, без реєстрації.</p>`;
+  return `<div class="free-read"><a class="btn primary" href="/go/read/${slug}">Читати безкоштовно</a>${file ? `<a class="text-link" href="/go/epub/${slug}">Завантажити EPUB</a>` : ""}</div>
+<p class="want-why free-why">${file ? "Читайте онлайн або завантажте файл, без реєстрації." : "Читайте онлайн, без реєстрації."}</p>`;
 }
 
 function mine(book, entry, user, now = false, readUrl = "", listItem = "", { primary = true } = {}) {

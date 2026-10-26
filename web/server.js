@@ -459,6 +459,7 @@ function readerFileFor(readerId, book) {
   return fileFor(store.db.prepare("SELECT name, title, authors FROM reader_files WHERE reader = ?").all(readerId), book);
 }
 // Free books in the reader (public domain, its free/ folder), listed in seed/free.json as { name, title, authors }.
+// readerOnly: given «з дозволу автора» to read in the reader, never as a file (Max, 2026-10-26: Sivers).
 const FREE = JSON.parse(fs.readFileSync(path.join(__dirname, "seed", "free.json"), "utf8"));
 const freeFileFor = (book) => (book ? fileFor(FREE, book) : null);
 function fileFor(files, book) {
@@ -1229,7 +1230,7 @@ for (const what of ["read", "epub"]) {
   app.get(`/go/${what}/:id`, (req, res) => {
     const id = store.resolve(req.params.id);
     const free = id && freeFileFor(store.bookPage(id));
-    if (!free) return res.redirect(id ? store.href(id) : "/");
+    if (!free || (what === "epub" && free.readerOnly)) return res.redirect(id ? store.href(id) : "/");
     admin.guestTap(req, req.user?.id, what, cookies(req));
     res.redirect(`${READER_URL}/${what === "epub" ? "free-file" : "free"}/${encodeURIComponent(free.name)}`);
   });
@@ -1245,7 +1246,7 @@ app.get("/book/:id", (req, res) => {
   const free = !file && freeFileFor(book);
   const alsoBooks = alsoFor(req, book.id);
   const myLists = req.user ? lists.of(req.user.id).map((l) => ({ id: l.id, title: l.title, count: l.count, has: lists.has(l.id, book.id) })) : null;
-  res.send(pages.bookPage({ ...(SHOW_AUTHOR_ABOUT ? authorAbout(book) : {}), ...discovery(req, book, alsoBooks.also), lists: lists.withBook(book.id).map(withCovers), myLists, freeRead: !!free, book, entry: store.sharedEntry(req.user?.id, book.id), now: !!req.user && nowIds(req.user.id).has(store.canonical(book.id)), user: req.user, readUrl: file ? `${READER_URL}/?open=${encodeURIComponent(file.name)}` : free ? `${READER_URL}/free/${encodeURIComponent(free.name)}` : "", shelf: book.shelf && (req.owner || !isDraft(book.shelf)) ? store.shelf(book.shelf) : null, inLibrary: inLibraryMap(req), readers: readersOf(book.id), ...alsoBooks, writings: reviews.of(book.id), reviewError: String(req.query.review_error || "").slice(0, 300), editionError: String(req.query.edition_error || "").slice(0, 300), ukAsk: ukAskFor(req, book) || (req.user && req.query.edition_error ? "ask" : null), advice: advice.state(req.user, book.id), overview: linkedOverview(book), overviewVote: advice.voteOf(book.id, req.user?.id) }));
+  res.send(pages.bookPage({ ...(SHOW_AUTHOR_ABOUT ? authorAbout(book) : {}), ...discovery(req, book, alsoBooks.also), lists: lists.withBook(book.id).map(withCovers), myLists, freeRead: !!free, freeFile: !!free && !free.readerOnly, book, entry: store.sharedEntry(req.user?.id, book.id), now: !!req.user && nowIds(req.user.id).has(store.canonical(book.id)), user: req.user, readUrl: file ? `${READER_URL}/?open=${encodeURIComponent(file.name)}` : free ? `${READER_URL}/free/${encodeURIComponent(free.name)}` : "", shelf: book.shelf && (req.owner || !isDraft(book.shelf)) ? store.shelf(book.shelf) : null, inLibrary: inLibraryMap(req), readers: readersOf(book.id), ...alsoBooks, writings: reviews.of(book.id), reviewError: String(req.query.review_error || "").slice(0, 300), editionError: String(req.query.edition_error || "").slice(0, 300), ukAsk: ukAskFor(req, book) || (req.user && req.query.edition_error ? "ask" : null), advice: advice.state(req.user, book.id), overview: linkedOverview(book), overviewVote: advice.voteOf(book.id, req.user?.id) }));
 });
 
 // A translation and its original in one list are one card (Max, 2026-10-25: two rows «трохи плутає»; 2026-10-26: the same
