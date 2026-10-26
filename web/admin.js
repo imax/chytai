@@ -672,7 +672,7 @@ ${s.sections.length ? `<div class="tbl"><table class="sections">
 
 </section>`
     : `<section class="admin">
-<section class="page-head"><div><p class="kicker">Лише для власника</p><h1>Статистика</h1><p class="sub">Сайт станом на ${short(s.now)}. Активний читач — той, хто відкрив сайт або щось зробив на полиці того дня. Перегляди рахуються з ${s.totals.viewsSince ? short(s.totals.viewsSince) : "сьогодні"}; раніше за активність правлять входи й зміни на полиці.</p></div></section>
+<section class="page-head"><div><h1>Статистика</h1><p class="sub">Сайт станом на ${short(s.now)}. Активний читач — той, хто відкрив сайт або щось зробив на полиці того дня. Перегляди рахуються з ${s.totals.viewsSince ? short(s.totals.viewsSince) : "сьогодні"}; раніше за активність правлять входи й зміни на полиці.</p></div></section>
 <div class="stats">${tiles}</div>
 <h2>Нові читачі</h2>
 <div class="tbl"><table class="readers">
@@ -743,7 +743,7 @@ function speedPage({ user, days, layout }) {
   const rows = [...days].map(([d, k]) => `<tr><th>${short(d)}</th>${cell(k.page)}${cell(k.phone)}<td>${k.stall ? `${Math.round(k.stall.sum / 1000)} с` : "0"}</td><td class="muted">${k.bot ? n(k.bot.n) : ""}</td></tr>`).join("");
   const body = `<section class="admin speed">
 <p class="small"><a href="/admin">← Статистика</a></p>
-<section class="page-head"><div><p class="kicker">Лише для власника</p><h1>Швидкість сайту</h1><p class="sub">Що казали метрики Fly й наші журнали до 26 жовтня, і що ми рахуємо самі відтоді: скільки сервер думав над сторінкою і за скільки вона відкрилась у браузері читача. Тільки числа за день, без адрес і людей.</p></div></section>
+<section class="page-head"><div><h1>Швидкість сайту</h1><p class="sub">Що казали метрики Fly й наші журнали до 26 жовтня, і що ми рахуємо самі відтоді: скільки сервер думав над сторінкою і за скільки вона відкрилась у браузері читача. Тільки числа за день, без адрес і людей.</p></div></section>
 
 <h2>Було → стало</h2>
 <div class="stats">
