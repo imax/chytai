@@ -487,8 +487,8 @@ function bookPage({ inGenre = null, fresh = null, pick = null, awards = [], auth
   const other = main.length ? "" : book.tags?.find((t) => t !== "українською");
   const kicker = [...main.map((g) => `<a href="/genre/${attr(genreSlug(g))}">${esc(cap(g))}</a>`), other ? esc(cap(other)) : "", isUk(book) ? "Українською" : esc(cap(LANG_ADV[String(book.language || "").toLowerCase()] || ""))].filter(Boolean).join(" · ");
   const sub = [book.altTitle ? esc(book.altTitle) : "", book.author ? `<span class="authors">${authorLinks(book.author)}</span>` : "", book.published ? String(book.published) : "", book.pages ? `${book.pages} с.` : "", readingTime(book.pages)].filter(Boolean).join(" · ");
-  // «Дочитали 12, покинули 3»: only once someone gave up, and only numbers.
-  const bits = [s.avg != null ? `${stars(s.avg, { num: false })} <b>${uk(s.avg.toFixed(1))}</b> від ${count(s.rated, "читача", "читачів", "читачів")}` : "", s.want ? `${s.want} ${plural(s.want, "хоче", "хочуть", "хочуть")} прочитати` : "", s.dropped ? `дочитали ${s.finished || 0}, покинули ${s.dropped}` : ""].filter(Boolean);
+  // «Дочитали 12, покинули 3» was here until 2026-10-26 (Max: «Оцінка і є оцінка»).
+  const bits = [s.avg != null ? `${stars(s.avg, { num: false })} <b>${uk(s.avg.toFixed(1))}</b> від ${count(s.rated, "читача", "читачів", "читачів")}` : "", s.want ? `${s.want} ${plural(s.want, "хоче", "хочуть", "хочуть")} прочитати` : ""].filter(Boolean);
   const score = bits.length ? `<p class="score">${bits.join(" · ")}</p>` : "";
   const [first, ...rest] = readers;
   const body = `
