@@ -56,6 +56,9 @@ CREATE TABLE IF NOT EXISTS bots (day TEXT NOT NULL, name TEXT NOT NULL, n INTEGE
 CREATE TABLE IF NOT EXISTS speed (day TEXT NOT NULL, kind TEXT NOT NULL, n INTEGER NOT NULL, sum INTEGER NOT NULL, buckets TEXT NOT NULL, PRIMARY KEY (day, kind));
 CREATE TABLE IF NOT EXISTS guest_steps (day TEXT NOT NULL, step TEXT NOT NULL, search INTEGER NOT NULL, n INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (day, step, search));
 CREATE TABLE IF NOT EXISTS steps (reader TEXT NOT NULL, step TEXT NOT NULL, at TEXT NOT NULL, PRIMARY KEY (reader, step));
+CREATE TABLE IF NOT EXISTS job_runs (job TEXT NOT NULL, how TEXT NOT NULL, started TEXT NOT NULL, ms INTEGER NOT NULL, ok INTEGER NOT NULL, note TEXT NOT NULL);
+CREATE INDEX IF NOT EXISTS job_runs_started ON job_runs (started);
+CREATE INDEX IF NOT EXISTS job_runs_job ON job_runs (job, started);
 CREATE VIRTUAL TABLE IF NOT EXISTS search USING fts5 (id UNINDEXED, title, alt, author, series, extra, tokenize = 'unicode61 remove_diacritics 2');
 CREATE VIRTUAL TABLE IF NOT EXISTS search_vocab USING fts5vocab (search, 'row');
 CREATE VIRTUAL TABLE IF NOT EXISTS search_tri USING fts5 (id UNINDEXED, text, tokenize = 'trigram');

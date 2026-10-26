@@ -621,6 +621,14 @@ dialog .form { margin-top: 18px; }
 .admin .stat b { display: block; font: 400 40px/1 var(--serif); letter-spacing: -0.02em; }
 .admin.speed .stats { grid-template-columns: repeat(2, 1fr); }
 .admin.speed .stat b { font-size: 32px; }
+.admin.jobs .stat b { font-size: 28px; }
+.admin.jobs th, .admin.jobs td { text-align: left; }
+.admin.jobs tbody th { white-space: normal; font-weight: 400; min-width: 200px; }
+.admin.jobs th small { display: block; margin-top: 2px; font-size: 12px; color: var(--muted); }
+.admin.jobs td.res { white-space: normal; min-width: 220px; font-size: 13px; }
+.admin.jobs .ok { color: var(--accent); }
+.admin.jobs .bad { color: #b3261e; }
+.admin.jobs .warn { color: #a86b00; }
 .speed-bars { display: flex; gap: 6px; align-items: flex-end; height: 160px; margin: 8px 0 28px; }
 .speed-bars div { flex: 1; height: 100%; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; position: relative; }
 .speed-bars span { width: 100%; background: var(--accent, #b4532a); border-radius: 2px 2px 0 0; }

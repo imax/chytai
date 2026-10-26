@@ -787,7 +787,7 @@ ${s.sections.length ? `<div class="tbl"><table class="sections">
 
 ${s.arrivals ? `<h2>Звідки приходять</h2>
 ${sourcesTable(s.arrivals, 4)}
-<p class="small"><a class="text-link" href="/admin/speed">Швидкість сайту</a></p>
+<p class="small"><a class="text-link" href="/admin/speed">Швидкість сайту</a> · <a class="text-link" href="/admin/jobs">Фонові задачі</a></p>
 <p class="small"><a class="text-link" href="/admin/traffic">Усі джерела (${s.arrivals.sources.length})</a>, Google, тижні, сторінки входу, перегляди за розділами.</p>` : ""}
 
 ${funnelBlock(s.funnel)}
@@ -879,4 +879,140 @@ ${bots.length ? `<p class="muted small">Усі запити роботів (ст
   return layout({ title: "Швидкість · Статистика", user, path: "/admin", body });
 }
 
-module.exports = { BOT, Admin, adminPage, shelvesPage, readersPage, overviewsPage, speedPage, dayOf, weekOf, sectionOf };
+// /admin/jobs (Max, 2026-10-26: «сторінку про ці background tasks»): what the jobs process (jobs.js) does
+// on its own: the schedules, what runs now, and every run of the last month with how long it took and how it went.
+const JOBS = {
+  "refresh.run": "Оновлення полиць магазинів і бібліотек",
+  "wikidata.run": "Wikidata: українські назви, автори, деталі книжок",
+  "readeat.run": "Readeat: деталі книжок",
+  "enrich.run": "Open Library: деталі книжок",
+  "ol-covers.run": "Обкладинки з Open Library до себе",
+  "thumbs-warm": "Малі обкладинки для полиць читачів",
+  "thumbs-prune": "Прибрати зайві малі обкладинки",
+  "freeBooks.run": "Вільні книжки з «Хочу прочитати»",
+  "genreTrial.run": "Жанри: проба на 200",
+  "genreTrial.runAll": "Жанри: весь каталог і нові книжки",
+  "origTrial.run": "Оригінали: проба на 200",
+  "origTrial.runAll": "Оригінали: весь каталог і нові книжки",
+  "langTrial.run": "Мова: проба на 200",
+  "langTrial.runAll": "Мова: весь каталог і нові книжки",
+  "ukTrial.run": "Переклади: проба",
+  "advice.sweep": "Відгуки в інтернеті: книжки в чергу",
+  "advice.redo": "Відгуки в інтернеті: переробити за новим промптом",
+  "gsc.run": "Google Search Console",
+};
+const PASSES = { dupes: "Дублі", notbooks: "Не книжки", series: "Серії", year: "Рік прочитання", authors: "Автори", covers: "Обкладинки", mentions: "Згадки", blurb: "Опис" };
+const jobName = (job) => {
+  if (JOBS[job]) return JOBS[job];
+  const m = /^pass:(\w+)\.(run|runAll)$/.exec(job);
+  if (m) return `${PASSES[m[1]] || m[1]}: ${m[2] === "run" ? "проба" : "весь каталог і нові книжки"}`;
+  return job;
+};
+// Schedule -> the jobs it starts (their runs are written down under the job's name).
+const PLANS = {
+  "refresh-check": { what: "Оновлення полиць", note: "перевіряє кожні 10 хв, оновлює раз на 20 год", jobs: ["refresh.run"] },
+  wikidata: { what: "Wikidata, автори, деталі книжок", jobs: ["wikidata.run"] },
+  "ol-covers": { what: "Обкладинки з Open Library", jobs: ["ol-covers.run"] },
+  "thumbs-warm": { what: "Малі обкладинки для полиць", jobs: ["thumbs-warm"] },
+  "thumbs-prune": { what: "Прибрати зайві малі обкладинки", jobs: ["thumbs-prune"] },
+  free: { what: "Вільні книжки з «Хочу прочитати»", jobs: ["freeBooks.run"] },
+  aipasses: { what: "Haiku: нові книжки (жанри, мова, оригінали, дублі…)", jobs: ["genreTrial.runAll", "origTrial.runAll", "langTrial.runAll", /^pass:\w+\.runAll$/] },
+  gsc: { what: "Google Search Console", jobs: ["gsc.run"] },
+  overviews: { what: "Відгуки в інтернеті: книжки в чергу", jobs: ["advice.sweep"] },
+};
+const fits = (job, keys) => keys.some((k) => (k instanceof RegExp ? k.test(job) : k === job));
+
+function jobsPage({ user, layout, o, digest, wantMail, now = new Date() }) {
+  const esc = (t) => String(t ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+  const kyiv = (iso, day = true) => {
+    if (!iso) return "—";
+    const d = new Date(iso);
+    const time = d.toLocaleTimeString("uk-UA", { timeZone: "Europe/Kyiv", hour: "2-digit", minute: "2-digit" });
+    const date = d.toLocaleDateString("uk-UA", { timeZone: "Europe/Kyiv", day: "numeric", month: "short" });
+    const today = now.toLocaleDateString("uk-UA", { timeZone: "Europe/Kyiv", day: "numeric", month: "short" });
+    return day && date !== today ? `${date}, ${time}` : `${time}`;
+  };
+  const dur = (ms) => {
+    if (ms == null) return "";
+    if (ms < 10000) return `${String(Math.round(ms / 100) / 10).replace(".", ",")} с`;
+    const sec = Math.round(ms / 1000);
+    if (sec < 60) return `${sec} с`;
+    const min = Math.round(sec / 60);
+    if (min < 60) return `${min} хв`;
+    return `${Math.floor(min / 60)} год${min % 60 ? ` ${min % 60} хв` : ""}`;
+  };
+  const often = (ms) => (ms % (3600 * 1000) ? `кожні ${ms / 60000} хв` : ms === 24 * 3600 * 1000 ? "раз на добу" : `кожні ${ms / 3600000} год`);
+  const result = (r) => (!r ? "" : `${["<span class=\"bad\">✗</span>", "<span class=\"ok\">✓</span>", "<span class=\"warn\">⚠</span>"][r.ok]} ${esc(r.note)}`);
+  const ago = (iso) => {
+    const ms = Date.parse(iso) - now;
+    if (ms <= 60000) return "зараз";
+    return ms > 24 * 3600 * 1000 ? kyiv(iso) : `через ${dur(ms)}`;
+  };
+  const live = o.live || {};
+  const proc = live["@"] || {};
+  const runningNow = [
+    ...Object.entries(live)
+      .filter(([k, v]) => k !== "@" && (v.running || v.allRunning))
+      .map(([k, v]) => jobName(`${k}.${v.allRunning ? "runAll" : "run"}`)),
+    ...(proc.sched || []).filter((name) => !PLANS[name]?.jobs.some((j) => typeof j === "string" && live[j.split(".")[0]]?.running)).map((name) => PLANS[name]?.what || name),
+  ];
+  const queued = live.advice?.queued || 0;
+  const lastOf = (keys) => o.last.filter((r) => fits(r.job, keys)).sort((a, b) => b.started.localeCompare(a.started))[0];
+  const countOf = (keys) => o.counts.filter((c) => fits(c.job, keys)).reduce((t, c) => ({ n: t.n + c.n, failed: t.failed + c.failed }), { n: 0, failed: 0 });
+  const week = o.counts.reduce((t, c) => ({ n: t.n + c.n, failed: t.failed + c.failed }), { n: 0, failed: 0 });
+  const seven = (c) => (c.n ? `${c.n}${c.failed ? ` <span class="bad">(${c.failed} ✗)</span>` : ""}` : `<span class="zero">0</span>`);
+
+  const plans = o.plans.map((p) => {
+    const plan = PLANS[p.name] || { what: p.name, jobs: [p.name] };
+    const r = lastOf(plan.jobs);
+    const next = p.last ? new Date(Date.parse(p.last) + p.ms).toISOString() : null;
+    return `<tr><th>${esc(plan.what)}<small>${plan.note || often(p.ms)} · перевірка ${kyiv(p.last)}</small></th><td>${r ? kyiv(r.started) : "—"}</td><td>${r ? dur(r.ms) : ""}</td><td class="res">${result(r)}</td><td>${seven(countOf(plan.jobs))}</td><td>${next ? ago(next) : "після старту"}</td></tr>`;
+  });
+  // The letters keep their own schedule and their last run in meta (digest.js, wantmail.js).
+  const nextAt = (dayOfWeek, hour) => {
+    const k = new Date(now.toLocaleString("en-US", { timeZone: "Europe/Kyiv" }));
+    const t = new Date(k);
+    t.setHours(hour, 0, 0, 0);
+    while ((dayOfWeek != null && t.getDay() !== dayOfWeek) || t <= k) t.setDate(t.getDate() + 1);
+    return new Date(now.getTime() + (t - k)).toISOString();
+  };
+  const letter = (what, often, last, next) => `<tr><th>${what}<small>${often}</small></th><td>${kyiv(last?.started)}</td><td>${last?.finished ? dur(Date.parse(last.finished) - Date.parse(last.started)) : last ? "іде" : ""}</td><td class="res">${last ? `${last.errors?.length ? `<span class="bad">✗</span> помилок ${last.errors.length}: ${esc(String(last.errors[0]?.message || last.errors[0]).slice(0, 120))}, ` : `<span class="ok">✓</span> `}надіслано ${last.sent || 0}` : ""}</td><td></td><td>${ago(next)}</td></tr>`;
+  plans.push(letter("Щотижневий лист", "щоп'ятниці о 9:00", digest, nextAt(5, 9)));
+  plans.push(letter("Лист «з вашого «Хочу» тепер є»", "щодня о 10:00", wantMail, nextAt(null, 10)));
+
+  const planned = Object.values(PLANS).flatMap((p) => p.jobs);
+  const others = o.last.filter((r) => !fits(r.job, planned)).sort((a, b) => b.started.localeCompare(a.started));
+  const how = (h) => (h === "розклад" ? "за розкладом" : h === "сайт" ? "з адмінки чи сайту" : "після старту");
+  const recent = o.recent.map((r) => `<tr><td>${kyiv(r.started)}</td><th>${esc(jobName(r.job))}</th><td class="muted">${how(r.how)}</td><td>${dur(r.ms)}</td><td class="res">${result(r)}</td></tr>`).join("");
+
+  const body = `<section class="admin jobs">
+<p class="small"><a href="/admin">← Статистика</a></p>
+<section class="page-head"><div><h1>Фонові задачі</h1><p class="sub">Окремий процес поруч із сайтом: оновлює полиці, питає Haiku й Claude, шле листи. Сайт від нього не гальмує, а коли задача змінила книжки, сайт сам перечитує дані. Час київський, записи за 30 днів.</p></div></section>
+<div class="stats four">
+  <div class="stat"><b>${o.role === "web" ? (proc.born ? kyiv(proc.born) : "—") : "в одному процесі"}</b>${o.role === "web" ? `процес задач запущено${proc.mb ? `, ${proc.mb} МБ пам'яті` : ""}` : "сайт і задачі разом (локальний запуск)"}</div>
+  <div class="stat"><b>${runningNow.length}</b>${runningNow.length ? `іде зараз: ${esc(runningNow.join(", "))}` : "зараз нічого не йде"}</div>
+  <div class="stat"><b>${queued}</b>книжок чекають на «Відгуки в інтернеті»${live.advice?.capped ? " (на сьогодні ліміт 150 вичерпано)" : ""}</div>
+  <div class="stat"><b>${week.n}${week.failed ? ` / <span class="bad">${week.failed} ✗</span>` : ""}</b>запусків за 7 днів${week.failed ? ", з них невдалих" : ""}</div>
+</div>
+
+<h2>За розкладом</h2>
+<div class="tbl"><table>
+<thead><tr><th>Задача</th><th>Остання робота</th><th>Тривала</th><th>Як пройшла</th><th>7 днів</th><th>Наступна</th></tr></thead>
+<tbody>${plans.join("")}</tbody></table></div>
+<p class="muted small">«Перевірка» — коли розклад востаннє будив задачу; «Остання робота» — коли вона справді щось робила (якщо нічого не знайшла, не пишемо). Після рестарту процесу задачі чекають 1–30 хв, поки сайт розігріється.</p>
+
+${others.length ? `<h2>Інші задачі</h2>
+<p class="muted small">Ті, що запускаються з адмінки, або продовжуються самі після рестарту.</p>
+<div class="tbl"><table>
+<thead><tr><th>Задача</th><th>Остання</th><th>Хто запустив</th><th>Тривала</th><th>Як пройшла</th><th>7 днів</th></tr></thead>
+<tbody>${others.map((r) => `<tr><th>${esc(jobName(r.job))}</th><td>${kyiv(r.started)}</td><td class="muted">${how(r.how)}</td><td>${dur(r.ms)}</td><td class="res">${result(r)}</td><td>${seven(countOf([r.job]))}</td></tr>`).join("")}</tbody></table></div>` : ""}
+
+<h2>Останні запуски</h2>
+${recent ? `<div class="tbl"><table>
+<thead><tr><th>Коли</th><th>Задача</th><th>Хто запустив</th><th>Тривала</th><th>Як пройшла</th></tr></thead>
+<tbody>${recent}</tbody></table></div>` : `<p class="muted">Записуємо з сьогодні: перші рядки з'являться після першої задачі.</p>`}
+</section>`;
+  return layout({ title: "Фонові задачі · Статистика", user, path: "/admin", body });
+}
+
+module.exports = { BOT, Admin, adminPage, shelvesPage, readersPage, overviewsPage, speedPage, jobsPage, dayOf, weekOf, sectionOf };
