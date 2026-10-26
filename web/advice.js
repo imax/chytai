@@ -501,6 +501,10 @@ class Advice {
         });
     }
   }
+  // Books waiting for an automatic overview, for /admin/jobs (the jobs process sends it with its status).
+  get queued() {
+    return this.queue.size + this.running;
+  }
   // For the owner: how many overviews there are, what they cost so far and what waits in the queue.
   overviewStats() {
     const t = this.db.prepare("SELECT COUNT(*) AS n, SUM(input_tokens) AS input, SUM(output_tokens) AS output, SUM(searches) AS searches, SUM(CASE WHEN by IN ('auto', 'redo') THEN 1 ELSE 0 END) AS auto FROM overview").get();

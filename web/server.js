@@ -27,7 +27,7 @@ const enrich = require("./enrich");
 const readeat = require("./readeat");
 const { BookPage, isUrl } = require("./bookpage");
 const { UkFinder } = require("./ukfind");
-const { Admin, adminPage, shelvesPage, readersPage, overviewsPage, speedPage, BOT } = require("./admin");
+const { Admin, adminPage, shelvesPage, readersPage, overviewsPage, speedPage, jobsPage, BOT } = require("./admin");
 const { Mcp } = require("./mcp");
 const { Reviews } = require("./reviews");
 const { Advice } = require("./advice");
@@ -725,7 +725,7 @@ bg.register("ukTrial", ukTrial, { run: false });
 for (const p of aiPasses.values()) bg.register(`pass:${p.key}`, p, { run: false, runAll: true });
 // Automatic overviews (advice.want/sweep/redo and their queue) are made in the jobs process; a reader's own
 // «Чи варто читати?» is answered here.
-bg.register("advice", advice, { want: false, sweep: false, redo: false }, [], { mirror: false });
+bg.register("advice", advice, { want: false, sweep: false, redo: false }, ["queued", "capped"], { mirror: false, quiet: ["want"] });
 // A whole-catalog run cut by a deploy goes on a minute after the start; once it has finished, books added
 // since are asked about every six hours.
 if (bg.background) setTimeout(() => {
@@ -1739,6 +1739,7 @@ app.post("/api/speed", (req, res) => {
   }
   res.status(204).end();
 });
+app.get("/admin/jobs", owner, (req, res) => res.send(jobsPage({ user: req.user, layout: pages.layout, o: bg.overview(store.db), digest: JSON.parse(store.db.get("digest:last") || "null"), wantMail: JSON.parse(store.db.get("wantmail:last") || "null") })));
 app.get("/admin/speed", owner, (req, res) => res.send(speedPage({ user: req.user, days: speed.days(), layout: pages.layout })));
 app.get("/admin/traffic", owner, (req, res) => res.send(adminPage({ user: req.user, stats: admin.stats(), gsc: gsc.data(), gscOn: gsc.configured(), layout: pages.layout, page: "traffic" })));
 app.get("/admin/stats", owner, (req, res) => res.redirect(301, "/admin/traffic"));
@@ -2091,7 +2092,7 @@ if (bg.serving) {
   process.on("message", (m) => m?.type === "shutdown" && server.close(() => process.exit(0)));
 }
 // The jobs process ends itself to read fresh data only when the overview queue is empty too (or capped for today).
-bg.startJobs({ idle: () => !advice.queue.size || advice.capped });
+bg.startJobs({ idle: () => !advice.queue.size || advice.capped, db: store.db });
 if (bg.ROLE === "jobs") console.log(`Chytai jobs ready (library: ${store.file})`);
 
 // A process stuck in a CPU loop answers nothing but stays up (2026-10-21: an hour down). A thread beside it
