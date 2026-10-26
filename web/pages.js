@@ -736,7 +736,7 @@ const moreMenu = (items) => `<details class="more-acts"><summary class="btn" ari
 // Books shared by their author's permission are read in the reader only, no file (Max, 2026-10-26).
 function freeItems(book, file = true) {
   const slug = attr((book.href || "").split("/").pop() || encodeURIComponent(book.id));
-  return `<a href="/go/read/${slug}">Читати безкоштовно</a>${file ? `<a href="/go/epub/${slug}">Завантажити EPUB</a>` : ""}`;
+  return `<a href="/go/read/${slug}">Відкрити в Читалці</a>${file ? `<a href="/go/epub/${slug}">Завантажити EPUB</a>` : ""}`;
 }
 
 function mine(book, entry, user, now = false, readUrl = "", listItem = "", { free = "" } = {}) {
