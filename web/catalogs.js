@@ -44,6 +44,14 @@ function about(h, max = 1000) {
     .split(/\n/)
     .map((l) => l.replace(/[ \t \r]+/g, " ").trim())
     .filter((l) => l && l !== "\u0001" && l !== "\u0002");
+  // A publisher's playlist for the book (КСД's «Кав'ярня «Пряний гарбузик»», Max 2026-10-26: «wtf»): the
+  // «Плейліст:» line and the short lines after it go.
+  for (let i = 0; i < lines.length; i++) {
+    if (!/^[\u0001\u0002]?\s*(плейліст|плейлист|playlist|саундтрек|soundtrack)[^.!?]{0,30}:?\s*$/i.test(lines[i])) continue;
+    let j = i + 1;
+    while (j < lines.length && lines[j].length <= 100) j++; // songs are short lines; prose after them stays
+    lines.splice(i, j - i), i--;
+  }
   const head = lines.findIndex((l) => l[0] === "\u0001" && ABOUT_HEAD.test(l.slice(1).trim()) && lines[lines.indexOf(l) + 1]?.[0] !== "\u0001");
   let body = head >= 0 ? lines.slice(head + 1) : lines;
   const end = body.findIndex((l) => l[0] === "\u0001");
