@@ -148,6 +148,16 @@ class Admin {
       const tail = `; Path=/; HttpOnly; SameSite=Lax${secure ? "; Secure" : ""}`;
       set.push(`chytai_here=1; Max-Age=1800${tail}`);
       const arrival = from && (referer || !cookies.chytai_here);
+      // A guest's visit, for «Що роблять гості» (Max, 2026-10-26: people from Google land on a book and leave):
+      // chytai_q says the visit began at a search engine or an AI chat, chytai_more that a second page was opened.
+      if (!readerId && arrival) {
+        const q = ["search", "ai"].includes(KIND[from.source]);
+        set.push(`chytai_q=${q ? 1 : 0}; Max-Age=1800${tail}`, `chytai_more=; Max-Age=0${tail}`);
+        this.guestStep("arrive", q);
+      } else if (!readerId && cookies.chytai_here && !cookies.chytai_more) {
+        set.push(`chytai_more=1; Max-Age=1800${tail}`);
+        this.guestStep("second", cookies.chytai_q === "1");
+      }
       if (arrival) {
         const fresh = !readerId && !cookies.chytai_seen ? 1 : 0;
         const landing = clean(decodeURIComponent(p), 120) || "/";
@@ -159,6 +169,21 @@ class Admin {
     } catch (e) {
       console.error("admin arrive failed:", e.message);
     }
+  }
+
+  // One step of a guest's visit (arrive, second, want, read, epub), counted per day and by whether the visit began
+  // at a search engine or an AI chat. No id, nothing else kept.
+  guestStep(step, search) {
+    try {
+      this.db.prepare(`INSERT INTO guest_steps (day, step, search, n) VALUES (?, ?, ?, 1) ON CONFLICT (day, step, search) DO UPDATE SET n = n + 1`).run(today(), step, search ? 1 : 0);
+    } catch (e) {
+      console.error("admin guestStep failed:", e.message);
+    }
+  }
+  // The same for a step taken by a request (a guest's tap): a crawler or the owner is not counted.
+  guestTap(req, readerId, step, cookies = {}) {
+    if (readerId || BOT.test(req.headers["user-agent"] || "") || !req.headers["accept-language"]) return;
+    this.guestStep(step, cookies.chytai_q === "1");
   }
 
   // A new reader: keep where they first came from (the chytai_came cookie, else «Напряму»).
@@ -217,7 +242,18 @@ class Admin {
       x.visits += r.visits;
       x.fresh += r.fresh;
     }
-    return { since, sources: top(bySource, 200), refs: top(byRef, 60), landings: top(byLanding, 60), weeks: Object.values(byWeek) };
+    // What guests do after they arrive, 28 days; sign-ups by whether they first came from search or an AI chat.
+    const guests = { search: {}, other: {} };
+    for (const r of this.db.prepare("SELECT step, search, SUM(n) AS n FROM guest_steps WHERE day >= ? GROUP BY step, search").all(month)) guests[r.search ? "search" : "other"][r.step] = r.n;
+    const stepsSince = this.db.prepare("SELECT MIN(day) AS d FROM guest_steps").get()?.d || null;
+    for (const rd of readers) {
+      if (rd.id === this.ownerId || !rd.came || dayOf(rd.created) < (stepsSince || "9999")) continue;
+      try {
+        const k = ["search", "ai"].includes(KIND[label(JSON.parse(rd.came).source)]) ? "search" : "other";
+        guests[k].signup = (guests[k].signup || 0) + 1;
+      } catch {}
+    }
+    return { since, sources: top(bySource, 200), refs: top(byRef, 60), landings: top(byLanding, 60), weeks: Object.values(byWeek), guests: stepsSince ? { ...guests, since: stepsSince } : null };
   }
 
   // The first time a reader got to a step of adding books: «welcome» (/welcome), «add» (/add), «review» (the
@@ -584,7 +620,26 @@ ${weeks}
 <h2 id="google">Що шукають у Google</h2>
 ${queries}
 
-${landings ? `<h2>На які сторінки приходять з пошуку</h2>\n${landings}` : ""}`;
+${landings ? `<h2>На які сторінки приходять з пошуку</h2>\n${landings}` : ""}
+
+${guestSteps(a.guests)}`;
+}
+
+// «Що роблять гості»: of the guests who came in 28 days, how many went on to a second page, tapped «Хочу прочитати»
+// (and so the sign-in page), signed up, opened a free book or took its EPUB. From search and AI chats, and the rest.
+function guestSteps(g) {
+  if (!g) return "";
+  const rows = [["arrive", "Прийшли"], ["second", "Відкрили ще сторінку"], ["want", "Натиснули «Хочу прочитати»"], ["signup", "Зареєструвались"], ["read", "Читати безкоштовно"], ["epub", "Завантажили EPUB"]];
+  const cell = (side, k) => {
+    const v = g[side][k] || 0;
+    const base = g[side].arrive || 0;
+    return `<td>${n(v)}${k !== "arrive" && base ? ` <span class="muted">${fmtN((100 * v) / base, 0)}%</span>` : ""}</td>`;
+  };
+  return `<h2>Що роблять гості</h2>
+<div class="tbl"><table class="refs">
+<thead><tr><th></th><th>З пошуку й AI</th><th>Інші</th></tr></thead>
+<tbody>${rows.map(([k, name]) => `<tr><th>${name}</th>${cell("search", k)}${cell("other", k)}</tr>`).join("")}</tbody></table></div>
+<p class="muted small">Відвідування гостей (без акаунта) за 28 днів, рахуємо з ${short(g.since)}. Відсоток — від тих, хто прийшов.</p>`;
 }
 
 const cameCell = (c) => (c ? `${esc(c.source)}${c.ref && c.ref.includes("/") ? ` <a class="muted" href="https://${esc(c.ref)}" target="_blank" rel="noopener noreferrer" title="${esc(c.ref)}">↗</a>` : ""}` : `<span class="muted">—</span>`);

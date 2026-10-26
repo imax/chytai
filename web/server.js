@@ -348,7 +348,13 @@ app.get("/refresh-status", (req, res) => {
 // Sign in or sign up, the same door: an e-mail, a code, and for a new address a name and a username.
 app.get("/login", (req, res) => {
   if (req.user) return res.redirect(safeNext(req.query.next) || "/me");
-  res.send(pages.loginPage({ next: safeNext(req.query.next) }));
+  const next = safeNext(req.query.next);
+  // A guest's «Хочу прочитати» (or another /do/ step): the page says which book it is for.
+  const m = /^\/do\/(want|read|now|kids)\/([^/?#]+)$/.exec(next);
+  const id = m && store.canonical(store.resolve(decodeURIComponent(m[2])) || "");
+  const book = id ? store.bookPage(id) : null;
+  if (book) admin.guestTap(req, null, m[1] === "want" ? "want" : "mark", cookies(req));
+  res.send(pages.loginPage({ next, book, what: m?.[1] }));
 });
 app.post("/login", async (req, res) => {
   const next = safeNext(req.body.next);
@@ -1216,6 +1222,17 @@ function authorAbout(book) {
     .filter((x, i, all) => all.findIndex((y) => y.name === x.name) === i)
     .sort((x, y) => (x.year || 9999) - (y.year || 9999));
   return { awards, authorInfo: info.person && { ...info.person, name: a.name, href: a.href, books: a.ids.length } };
+}
+// «Читати безкоштовно» and «Завантажити EPUB» on a free book's page go through here, so /admin/traffic can count
+// the guests who used them; then on to the reader, which opens the book without an account.
+for (const what of ["read", "epub"]) {
+  app.get(`/go/${what}/:id`, (req, res) => {
+    const id = store.resolve(req.params.id);
+    const free = id && freeFileFor(store.bookPage(id));
+    if (!free) return res.redirect(id ? store.href(id) : "/");
+    admin.guestTap(req, req.user?.id, what, cookies(req));
+    res.redirect(`${READER_URL}/${what === "epub" ? "free-file" : "free"}/${encodeURIComponent(free.name)}`);
+  });
 }
 app.get("/book/:id", (req, res) => {
   const id = store.resolve(req.params.id);

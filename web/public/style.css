@@ -100,7 +100,12 @@ main.home { padding-top: 56px; }
 .btn.danger { border-color: var(--danger); color: var(--danger); }
 .btn.danger:hover { background: var(--danger); color: var(--paper); }
 .acts { display: flex; flex-wrap: wrap; gap: 12px 18px; align-items: center; }
-.read-here { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; margin: 14px 0 0; }
+.free-read { display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: center; margin-top: 22px; }
+.free-read + .want-why + .acts { margin-top: 16px; }
+.want-why { margin: 12px 0 0; max-width: 440px; font: 14px/1.5 var(--sans); color: var(--muted); }
+.login-book { display: flex; gap: 16px; align-items: center; margin: 24px 0 0; padding: 14px 16px; border: 1px solid var(--rule); border-radius: 10px; }
+.login-book p { margin: 0; font: 15px/1.45 var(--sans); color: var(--text); }
+.login-book b { font: 600 18px/1.3 var(--serif); color: var(--ink); }
 .marks { display: inline-flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
 .rate { display: inline-flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; justify-content: flex-end; }
 .rate-stars { display: inline-flex; }
@@ -412,7 +417,9 @@ dialog .form { margin-top: 18px; }
   .brand { font-size: 22px; }
   .top .motto { margin-left: 0; font-size: 11px; }
   .menu { display: block; margin-left: auto; background: none; border: 0; padding: 0; font-size: 14px; color: var(--ink); cursor: pointer; }
-  .top nav, .top .find { display: none; }
+  .top nav { display: none; }
+  /* Search stays in sight on a phone (2026-10-26): someone who came from Google to the wrong book finds the next one here. */
+  .top .find { display: block; order: 5; flex: 1 0 100%; max-width: none; margin-top: 14px; }
   header.top.open nav { display: flex; flex-direction: column; gap: 12px; width: 100%; margin: 18px 0 4px; font-size: 16px; }
   header.top.open nav a { align-self: flex-start; }
   header.top.open .find { display: block; order: 5; width: 100%; max-width: none; margin-top: 16px; }

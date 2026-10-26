@@ -502,8 +502,9 @@ function bookPage({ inGenre = null, fresh = null, pick = null, awards = [], auth
         ${score}
         ${awardsLine(awards)}
         ${twins(book)}
-        ${mine(book, entry, user, now, freeRead ? "" : readUrl, listsItem(book, user))}
-        ${readUrl && freeRead ? `<p class="read-here"><a class="btn primary" href="${attr(readUrl)}">Додати в Читалку</a></p>` : ""}
+        ${readUrl && freeRead ? freeReadLine(book) : ""}
+        ${mine(book, entry, user, now, freeRead ? "" : readUrl, listsItem(book, user), { primary: !freeRead })}
+        ${!user && !entry && !freeRead ? `<p class="want-why">Збережемо у ваш список і напишемо, коли книжка зʼявиться в продажу, вийде українською чи стане безкоштовною. Вхід лише за поштою, без паролів.</p>` : ""}
         ${where(book)}
         ${user?.owner ? `<p class="small muted"><a class="muted" href="/admin/book/${encodeURIComponent(book.href.split("/").pop())}">Редагувати</a>${book.cover ? "" : ` · <a class="muted" href="/admin/book/${encodeURIComponent(book.href.split("/").pop())}?find=1">Знайти обкладинку</a>`}${book.edited ? " · виправлено вручну" : ""}</p>` : ""}
       </div>
@@ -730,14 +731,22 @@ const removeItem = (book, entry) =>
   `<form method="post" action="/api/entry/${attr(encodeURIComponent(book.id))}/remove"${entry.rating != null || entry.note ? ` onsubmit="return confirm('Прибрати книжку з полиці разом з оцінкою й нотаткою?')"` : ""}><input type="hidden" name="back" value="1"><button>Прибрати з полиці</button></form>`;
 const moreMenu = (items) => `<details class="more-acts"><summary class="btn" aria-label="Інші дії" title="Інші дії">⋯</summary><div class="more-menu">${items.join("")}</div></details>`;
 // `readUrl`: the reader's own file in the Chytai reader, «Відкрити в Читалці» in the menu (Max, 2026-10-23).
-function mine(book, entry, user, now = false, readUrl = "", listItem = "") {
+// A book of the free shelf: read it right away, or take the file, no account needed (svoloshyn, Max 2026-10-26).
+// Both go through /go/… so /admin/traffic can count them. «Хочу прочитати» moves to second place.
+function freeReadLine(book) {
+  const slug = attr((book.href || "").split("/").pop() || encodeURIComponent(book.id));
+  return `<div class="free-read"><a class="btn primary" href="/go/read/${slug}">Читати безкоштовно</a><a class="text-link" href="/go/epub/${slug}">Завантажити EPUB</a></div>
+<p class="want-why free-why">Вільний текст: читайте онлайн або завантажте файл, без реєстрації.</p>`;
+}
+
+function mine(book, entry, user, now = false, readUrl = "", listItem = "", { primary = true } = {}) {
   const open = readUrl ? `<a href="${attr(readUrl)}">Відкрити в Читалці</a>` : "";
   // Read in another language: the mark comes from that book, and so does the edit link.
   const href = entry?.via ? entry.via.href : book.href;
   const edit = href ? `/me${href}` : `/me/book/${encodeURIComponent(entry?.via ? entry.via.id : book.id)}`;
   // A volume of a series: «Прочитано · всю серію» opens the edit page with «Уся серія» ticked.
   const allOf = book.cycle?.items?.length > 1 ? `<a href="${attr(user ? `${edit}?series` : `/login?next=${encodeURIComponent(`${edit}?series`)}`)}">Прочитано · всю серію</a>` : "";
-  if (!entry) return `<div class="acts">${wantButton(book, user, { size: "", primary: true })}${moreMenu([open, nowItem(book, false, user), readItem(book, user), allOf, listItem, kidsItem(book, false, user)])}</div>`;
+  if (!entry) return `<div class="acts">${wantButton(book, user, { size: "", primary })}${moreMenu([open, nowItem(book, false, user), readItem(book, user), allOf, listItem, kidsItem(book, false, user)])}</div>`;
   const what = [entry.kids ? "Дитяча полиця" : "", entry.status ? STATUS[entry.status] + (entry.status === "read" && entry.year ? ` ${entry.year}` : "") : entry.kids ? "" : "У моїх книжках", entry.rating != null ? `${uk(entry.rating)} з 5` : "", entry.copy ? COPY[entry.copy] : ""].filter(Boolean).join(" · ");
   // Read and not rated yet: the stars right here, no trip to the form (Vova's feedback, 2026-10-23).
   const rate = entry.status === "read" && entry.rating == null && !entry.via && !entry.kids ? rateLine(book.id, "оцініть:") : "";
@@ -1679,15 +1688,19 @@ const setReadersWithNote = (fn) => (readersWithNote = fn);
 
 const hidden = (name, v) => (v ? `<input type="hidden" name="${name}" value="${attr(v)}">` : "");
 const errorLine = (error) => (error ? `<p class="error">${esc(error)}</p>` : "");
-function authLayout({ title, lead, form, user = null, path = "/login" }) {
-  return layout({ title, user, path, body: `<section class="auth"><h1>${esc(title)}</h1>${lead ? `<p class="lead">${lead}</p>` : ""}${form}</section>` });
+function authLayout({ title, lead, form, user = null, path = "/login", before = "" }) {
+  return layout({ title, user, path, body: `<section class="auth"><h1>${esc(title)}</h1>${before}${lead ? `<p class="lead">${lead}</p>` : ""}${form}</section>` });
 }
+// What a guest's tap on a book page will do once they are in (Max, 2026-10-26: a visitor from Google tapped
+// «Хочу прочитати» and saw a bare «Увійти»).
+const DO_WHAT = { want: "буде у вашому «Хочу прочитати»", read: "буде у ваших прочитаних", now: "буде у «Читаю зараз»", kids: "буде на вашій дитячій полиці" };
 
 // Step one: the e-mail. The same page signs in and signs up; nobody has to know which they are doing.
-function loginPage({ next = "", email = "", error = "" }) {
+function loginPage({ next = "", email = "", error = "", book = null, what = "" }) {
   return authLayout({
-    title: "Увійти",
-    lead: "Вкажіть пошту, і ми надішлемо код. Без паролів. Якщо ви тут уперше, акаунт створиться сам.",
+    title: book ? "Зберегти книжку" : "Увійти",
+    before: book ? `<div class="login-book">${cover(book, "sm")}<p><b>${esc(book.title)}</b><br>одразу після входу ${DO_WHAT[what] || DO_WHAT.want}</p></div>` : "",
+    lead: book ? "Вкажіть пошту, і ми надішлемо код. Без паролів, акаунт створиться сам." : "Вкажіть пошту, і ми надішлемо код. Без паролів. Якщо ви тут уперше, акаунт створиться сам.",
     form: `<form method="post" action="/login" class="form">
   ${hidden("next", next)}${errorLine(error)}
   <label>Пошта<input type="email" name="email" value="${attr(email)}" required autofocus autocomplete="email" inputmode="email" placeholder="ви@пошта.ua"></label>
