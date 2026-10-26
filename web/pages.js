@@ -502,8 +502,7 @@ function bookPage({ inGenre = null, fresh = null, pick = null, awards = [], auth
         ${score}
         ${awardsLine(awards)}
         ${twins(book)}
-        ${readUrl && freeRead ? freeReadLine(book, freeFile) : ""}
-        ${mine(book, entry, user, now, freeRead ? "" : readUrl, listsItem(book, user), { primary: !freeRead })}
+        ${mine(book, entry, user, now, freeRead ? "" : readUrl, listsItem(book, user), { free: readUrl && freeRead ? freeItems(book, freeFile) : "" })}
         ${!user && !entry && !freeRead ? `<p class="want-why">Збережемо у ваш список і напишемо, коли книжка зʼявиться в продажу, вийде українською чи стане безкоштовною. Вхід лише за поштою, без паролів.</p>` : ""}
         ${where(book)}
         ${user?.owner ? `<p class="small muted"><a class="muted" href="/admin/book/${encodeURIComponent(book.href.split("/").pop())}">Редагувати</a>${book.cover ? "" : ` · <a class="muted" href="/admin/book/${encodeURIComponent(book.href.split("/").pop())}?find=1">Знайти обкладинку</a>`}${book.edited ? " · виправлено вручну" : ""}</p>` : ""}
@@ -731,23 +730,23 @@ const removeItem = (book, entry) =>
   `<form method="post" action="/api/entry/${attr(encodeURIComponent(book.id))}/remove"${entry.rating != null || entry.note ? ` onsubmit="return confirm('Прибрати книжку з полиці разом з оцінкою й нотаткою?')"` : ""}><input type="hidden" name="back" value="1"><button>Прибрати з полиці</button></form>`;
 const moreMenu = (items) => `<details class="more-acts"><summary class="btn" aria-label="Інші дії" title="Інші дії">⋯</summary><div class="more-menu">${items.join("")}</div></details>`;
 // `readUrl`: the reader's own file in the Chytai reader, «Відкрити в Читалці» in the menu (Max, 2026-10-23).
-// A book of the free shelf: read it right away, or take the file, no account needed (svoloshyn, Max 2026-10-26).
-// Both go through /go/… so /admin/traffic can count them. «Хочу прочитати» moves to second place.
+// A book of the free shelf: read it right away, or take the file, no account needed (svoloshyn, Max 2026-10-26),
+// from the «⋯» menu like «Відкрити в Читалці»: «Хочу прочитати» stays the green button (Max, the same day: «Бісить
+// мене оце сіошне «читай безкоштовно»»). Both go through /go/… so /admin/traffic can count them.
 // Books shared by their author's permission are read in the reader only, no file (Max, 2026-10-26).
-function freeReadLine(book, file = true) {
+function freeItems(book, file = true) {
   const slug = attr((book.href || "").split("/").pop() || encodeURIComponent(book.id));
-  return `<div class="free-read"><a class="btn primary" href="/go/read/${slug}">Читати безкоштовно</a>${file ? `<a class="text-link" href="/go/epub/${slug}">Завантажити EPUB</a>` : ""}</div>
-<p class="want-why free-why">${file ? "Читайте онлайн або завантажте файл, без реєстрації." : "Читайте онлайн, без реєстрації."}</p>`;
+  return `<a href="/go/read/${slug}">Читати безкоштовно</a>${file ? `<a href="/go/epub/${slug}">Завантажити EPUB</a>` : ""}`;
 }
 
-function mine(book, entry, user, now = false, readUrl = "", listItem = "", { primary = true } = {}) {
-  const open = readUrl ? `<a href="${attr(readUrl)}">Відкрити в Читалці</a>` : "";
+function mine(book, entry, user, now = false, readUrl = "", listItem = "", { free = "" } = {}) {
+  const open = free || (readUrl ? `<a href="${attr(readUrl)}">Відкрити в Читалці</a>` : "");
   // Read in another language: the mark comes from that book, and so does the edit link.
   const href = entry?.via ? entry.via.href : book.href;
   const edit = href ? `/me${href}` : `/me/book/${encodeURIComponent(entry?.via ? entry.via.id : book.id)}`;
   // A volume of a series: «Прочитано · всю серію» opens the edit page with «Уся серія» ticked.
   const allOf = book.cycle?.items?.length > 1 ? `<a href="${attr(user ? `${edit}?series` : `/login?next=${encodeURIComponent(`${edit}?series`)}`)}">Прочитано · всю серію</a>` : "";
-  if (!entry) return `<div class="acts">${wantButton(book, user, { size: "", primary })}${moreMenu([open, nowItem(book, false, user), readItem(book, user), allOf, listItem, kidsItem(book, false, user)])}</div>`;
+  if (!entry) return `<div class="acts">${wantButton(book, user, { size: "", primary: true })}${moreMenu([open, nowItem(book, false, user), readItem(book, user), allOf, listItem, kidsItem(book, false, user)])}</div>`;
   const what = [entry.kids ? "Дитяча полиця" : "", entry.status ? STATUS[entry.status] + (entry.status === "read" && entry.year ? ` ${entry.year}` : "") : entry.kids ? "" : "У моїх книжках", entry.rating != null ? `${uk(entry.rating)} з 5` : "", entry.copy ? COPY[entry.copy] : ""].filter(Boolean).join(" · ");
   // Read and not rated yet: the stars right here, no trip to the form (Vova's feedback, 2026-10-23).
   const rate = entry.status === "read" && entry.rating == null && !entry.via && !entry.kids ? rateLine(book.id, "оцініть:") : "";

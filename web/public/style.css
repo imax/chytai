@@ -100,8 +100,6 @@ main.home { padding-top: 56px; }
 .btn.danger { border-color: var(--danger); color: var(--danger); }
 .btn.danger:hover { background: var(--danger); color: var(--paper); }
 .acts { display: flex; flex-wrap: wrap; gap: 12px 18px; align-items: center; }
-.free-read { display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: center; margin-top: 22px; }
-.free-read + .want-why + .acts { margin-top: 16px; }
 .want-why { margin: 12px 0 0; max-width: 440px; font: 14px/1.5 var(--sans); color: var(--muted); }
 .login-book { display: flex; gap: 16px; align-items: center; margin: 24px 0 0; padding: 14px 16px; border: 1px solid var(--rule); border-radius: 10px; }
 .login-book p { margin: 0; font: 15px/1.45 var(--sans); color: var(--text); }
