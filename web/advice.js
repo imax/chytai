@@ -70,11 +70,12 @@ const BACKFILL = false;
 const AUTO = false; // paused again 2026-10-24 05:52 (Max: «тормозни backfill для авто-оглядів», more prompt work later)
 // The overview prompt's version: rows made with an older one are redone at start, two at a time
 // (Max, 2026-10-23 08:09, after the prompt lost its obligatory paragraph of complaints: «старі теж»).
-const PROMPT_VERSION = 9; // 9: live since 2026-10-27 after the trial on /admin/overviews-trial (Max: «угу вогонь»); the 296 v8 rows stay (REDO_ALL_BELOW is 8); 3: the site's own notes and ratings no longer go in (2026-10-23 08:35); 4: shops blocked (09:16); 5: shorter, reservations one sentence at most (14:40); 6: like a friend, about what people love, no pros/cons balance (15:05); 7: calmer tone, no blurb language, 40–70 words (15:22); 8: back to v5's neutral base + calm tone, no «friend» framing (15:25)
+const PROMPT_VERSION = 9; // 9: live since 2026-10-27 after the trial on /admin/overviews-trial (Max: «угу вогонь»); every v8 row is redone once (Max 06:40: «старі теж», REDO_ALL_BELOW 9, ≈$50); 3: the site's own notes and ratings no longer go in (2026-10-23 08:35); 4: shops blocked (09:16); 5: shorter, reservations one sentence at most (14:40); 6: like a friend, about what people love, no pros/cons balance (15:05); 7: calmer tone, no blurb language, 40–70 words (15:22); 8: back to v5's neutral base + calm tone, no «friend» framing (15:25)
 // Version 4 is redone only for books with a Cyrillic title (Max, 2026-10-23 09:15: «перезапустимо пошук для всіх укр
 // книжок»): their searches were all shops. Latin-titled books keep their version-3 overview.
 // 2026-10-23 15:43 (Max: «Викладаємо»): every overview below prompt 8 is redone once with the calm prompt (~200, ≈$26).
-const REDO_ALL_BELOW = 8;
+// 2026-10-27 06:40 (Max: «старі теж»): every overview below prompt 9 is redone once with v9 (~300, ≈$50), two at a time from the jobs process.
+const REDO_ALL_BELOW = 9;
 const REDO_CYR_BELOW = 4;
 // Version 5 (shorter, reservations one sentence at most; Max 14:33: a paragraph of complaints «читати не хочеться»)
 // redoes nothing by itself: only new overviews and the owner's «Оновити» get it (Max: no mass regeneration).
