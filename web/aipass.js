@@ -147,7 +147,7 @@ class AiPass {
       save();
       this.allRunning = false;
     }
-    return true;
+    return todo.length > 0 || !!st.applied; // nothing to ask: no reload of the site, no line on /admin/jobs
   }
 
   // Only the candidates about these books (newbooks.js): a dupes group holding one, or the book itself; asked

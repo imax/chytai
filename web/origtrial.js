@@ -129,7 +129,7 @@ class OrigTrial {
         this.store.indexSearch();
       }
     }
-    return true;
+    return todo.length > 0; // nothing to ask: no reload of the site, no line on /admin/jobs
   }
 
   // One new book (newbooks.js), once the whole catalog has been asked; the caller links the translations after.

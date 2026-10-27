@@ -105,7 +105,7 @@ class LangTrial {
       this.allRunning = false;
       if (st.done) this.store.indexSearch();
     }
-    return true;
+    return todo.length > 0; // nothing to ask: no reload of the site, no line on /admin/jobs
   }
 
   // One new book (newbooks.js), once the whole catalog has been asked: a doubtful title not asked yet.

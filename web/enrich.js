@@ -298,6 +298,8 @@ async function enrich(store, { ids, log = () => {}, fetchImpl = fetch, force = f
   const ukrainian = (b) => isCyrillic(b.title) && isCyrillic(firstAuthor(b.author));
   const originals = books.some(ukrainian) ? await require("./wikidata").enTitles(books.filter(ukrainian), { fetchImpl, log }).catch((e) => (log(`wikidata: ${e.message}`), {})) : {};
   for (const b of books) {
+    // Asked: not again for a month. A failed request (Open Library slow or away from Fly) takes the mark back
+    // below, so the book is asked at the next pass, not a month later (The Gone World, Max 2026-10-27).
     store.db.set(`enrich:${GEN}:${b.id}`, String(Date.now()));
     try {
       if (viaOriginal(b)) {
@@ -345,6 +347,7 @@ async function enrich(store, { ids, log = () => {}, fetchImpl = fetch, force = f
       const why = `${e.name === "TimeoutError" ? "timeout" : ""}${e.cause?.code || e.message}`;
       log(`enrich ${b.id}: ${why}`);
       errors.push(`${b.id}: ${why}`);
+      store.db.prepare("DELETE FROM meta WHERE key = ?").run(`enrich:${GEN}:${b.id}`);
       if (/timeout|HTTP 429|HTTP 5\d\d|ENOTFOUND|ECONNREFUSED|fetch failed/.test(why) && ++failed >= 3) break; // Open Library is away: the rest another time
     }
     if (pause) await new Promise((r) => setTimeout(r, pause));
