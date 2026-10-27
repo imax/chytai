@@ -689,7 +689,8 @@ app.post("/import/:source/apply", signed, importSource, async (req, res) => {
 const inLibraryMap = (req) => store.inLibrary(req.user?.id);
 // Draft shelves (a new catalog Max has not looked at yet) are seen only by the signed-in owner.
 const isDraft = (shelfId) => !!store.shelf(shelfId)?.draft;
-const shelvesFor = (req) => (req.owner ? store.shelves : store.shelves.filter((s) => !s.draft));
+// A join-only shop (book.ua) is no shelf: it is only rows in «Де взяти».
+const shelvesFor = (req) => store.shelves.filter((s) => !s.joinOnly && (req.owner || !s.draft));
 function bookFor(req, book, hasEntry) {
   if (req.owner || !book) return book;
   const editions = book.editions && book.editions.filter((e) => !e.shelf.draft);
@@ -1134,7 +1135,7 @@ app.get("/publishers", (req, res) => {
 });
 app.get("/publishers/:id", (req, res) => {
   const shelf = store.shelf(req.params.id);
-  if (!shelf || (shelf.draft && !req.owner)) return res.status(404).send(pages.messagePage({ title: "Немає такого видавництва", text: "", user: req.user }));
+  if (!shelf || shelf.joinOnly || (shelf.draft && !req.owner)) return res.status(404).send(pages.messagePage({ title: "Немає такого видавництва", text: "", user: req.user }));
   const items = visible(shelf);
   const fresh = items.filter((it) => it.isNew).slice(0, 6);
   const works = new Set(items.map((it) => store.canonical(it.id)));
@@ -1217,7 +1218,7 @@ app.get("/sitemap.xml", (req, res) => {
     const t0 = Date.now();
     const origin = `https://${DOMAIN || req.get("host")}`;
     const urls = ["/", "/community", "/popular", "/publishers", "/updates", "/privacy"];
-    for (const shelf of store.shelves) if (!shelf.draft) urls.push(`/publishers/${encodeURIComponent(shelf.id)}`);
+    for (const shelf of store.shelves) if (!shelf.draft && !shelf.joinOnly) urls.push(`/publishers/${encodeURIComponent(shelf.id)}`);
     const ru = new Set();
     for (const w of authors.allWorks(store)) {
       const b = store.book(w.id);

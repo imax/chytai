@@ -611,6 +611,91 @@ async function ksdProducts(src, { fetchImpl = fetch, log = () => {}, previous = 
   return JSON.parse(JSON.stringify(out));
 }
 
+// book.ua (Kyiv bookshops with an e-book store: EPUB and MOBI from Фоліо, Богдан, Ранок, Старий Лев, Vivat,
+// Віхола and others, ~7 thousand; Max 2026-10-27, after «Тигролови» showed paper and audio only). Its e-book
+// section is a list of 28 books a page (/books/elektronni-knyhy?page=N, open to robots), and the page carries
+// them as Nuxt data (devalue: one array, objects pointing at other entries by index) with the title, authors,
+// publisher, price, cover and, in the єКнига code, the ISBN («ua.ubi.prd.45226551.9786175221860.E.2026.1»).
+// Only the list is read, once a day, no product pages. The shop only adds rows to «Де взяти» (`joinOnly`):
+// a book matching nothing else in the catalog gets no page.
+const BOOKUA_LIST = "https://book.ua/books/elektronni-knyhy";
+function nuxtData(html) {
+  const raw = (html.match(/id="__NUXT_DATA__"[^>]*>([\s\S]*?)<\/script>/) || [])[1];
+  if (!raw) return null;
+  const a = JSON.parse(raw);
+  const memo = new Map();
+  const get = (i) => {
+    if (typeof i !== "number" || i < 0) return undefined;
+    if (memo.has(i)) return memo.get(i);
+    const v = a[i];
+    if (v === null || typeof v !== "object") return v;
+    if (Array.isArray(v) && typeof v[0] === "string" && v.length === 2 && /^[A-Z]/.test(v[0])) return memo.set(i, get(v[1])).get(i); // ["Reactive", i]
+    const out = Array.isArray(v) ? [] : {};
+    memo.set(i, out);
+    for (const k of Object.keys(v)) out[k] = get(v[k]);
+    return out;
+  };
+  return get(0);
+}
+function bookuaTiles(html) {
+  const found = [];
+  const seen = new Set();
+  const walk = (o) => {
+    if (!o || typeof o !== "object" || seen.has(o)) return;
+    seen.add(o);
+    if (o.urlKey && o.sku && o.format) return found.push(o);
+    for (const k of Object.keys(o)) walk(o[k]);
+  };
+  walk(nuxtData(html));
+  return found
+    .filter((p) => p.format === "electronic")
+    .map((p) => {
+      const attr = (code) => ((p.attributes?.items || []).find((x) => x.code === code)?.selectedOptions || []).map((x) => text(x.label)).filter(Boolean);
+      const title = text(p.name);
+      const price = Number(p.priceRange?.minimumPrice?.finalPrice?.value || 0);
+      return {
+        id: `bookua-${(String(p.urlKey).match(/^(\d+)-/) || [])[1] || p.urlKey}`,
+        title,
+        author: [...new Set(attr("author"))].join(", "),
+        isbn: (String(p.eKnyha || "").match(/\.(97[89]\d{10})\./) || [])[1] || "",
+        format: "e-book",
+        edition: attr("publisher")[0] || "",
+        series: volumeOf(title)?.series || "",
+        volume: volumeOf(title)?.volume || 0,
+        bundle: /^комплект/i.test(title),
+        cover: String(p.image || ""),
+        url: `https://book.ua/book/${p.urlKey}`,
+        price: uah(price),
+        status: p.stockStatus === "IN_STOCK" ? "є" : "немає",
+        isNew: false,
+        genres: [],
+        blurb: "",
+        language: /[а-яіїєґ]/i.test(title) ? "українська" : "англійська",
+      };
+    });
+}
+async function bookuaProducts(src, { fetchImpl = fetch, log = () => {} }) {
+  const found = new Map();
+  let pages = 0;
+  let idle = 0; // pages in a row that added nothing: past the last page (the list is sorted by popularity, so one page may repeat)
+  for (let n = 1; n <= 400; n++) {
+    const res = await fetchImpl(`${BOOKUA_LIST}${n > 1 ? `?page=${n}` : ""}`, { headers: HEADERS, signal: AbortSignal.timeout(60000) }).catch((e) => {
+      throw new Error(`${src.id}: ${e.cause?.code || e.message} on list page ${n}`);
+    });
+    if (!res.ok) throw new Error(`${src.id}: HTTP ${res.status} on list page ${n}`);
+    const tiles = bookuaTiles(await res.text());
+    const before = found.size;
+    for (const t of tiles) found.set(t.id, JSON.parse(JSON.stringify(t))); // a copy: the page is not kept alive
+    pages++;
+    if (!tiles.length || (found.size === before && ++idle >= 2)) break;
+    if (found.size > before) idle = 0;
+    await new Promise((r) => setTimeout(r, 300));
+  }
+  log(`${src.id}: ${pages} list pages, ${found.size} e-books`);
+  if (!found.size) throw new Error(`${src.id}: empty catalog`);
+  return [...found.values()];
+}
+
 const SOURCES = [
   {
     id: "lobster",
@@ -978,6 +1063,21 @@ const SOURCES = [
     keep: (p) => !p.genres.includes("Подкасти, лекції"), // podcasts are not books
     toItem: (p) => p,
   },
+  {
+    id: "bookua",
+    kind: "shop",
+    name: "Book.ua",
+    tagline: "Київські книгарні з магазином електронних книжок (EPUB, MOBI)",
+    url: "https://book.ua/books/elektronni-knyhy",
+    draft: true,
+    joinOnly: true,
+    fetchAll: (src, opts) => bookuaProducts(src, opts),
+    normalize: (p) => p,
+    // Books in English («1984 (англійська)», «The Forsyte Saga. Volume 1») come with the author in Cyrillic and
+    // would join an original to its Ukrainian translation: only Ukrainian titles are kept.
+    keep: (p) => /[а-яіїєґ]/i.test(p.title) && !/\((англійська|англ\.?)\)/i.test(p.title),
+    toItem: (p) => p,
+  },
 ];
 
 // All products of one source, normalised. Pages until a short page; a failed page fails the source.
@@ -1062,9 +1162,9 @@ async function refresh({ store, log = console.log, fetchImpl, only }) {
   store.loadShelves();
   const counts = store.shelves.map((s) => [s.id, s.items.length]);
   // How many audiobooks found their print or e-book edition (Абук gives no ISBN, so it is by author and title).
-  for (const s of store.shelves.filter((s) => s.kind === "audio")) log(`${s.id}: ${s.items.filter((it) => (it.editions || 1) > 1 || store.aliases.has(it.id)).length} of ${s.items.length} joined with another edition`);
+  for (const s of store.shelves.filter((s) => s.kind === "audio" || s.joinOnly)) log(`${s.id}: ${s.items.filter((it) => (it.editions || 1) > 1 || store.aliases.has(it.id)).length} of ${s.items.length} joined with another edition`);
   log(`refresh: shelves rebuilt, ${counts.map(([id, n]) => `${id} ${n}`).join(", ")}${errors.length ? `; failed: ${errors.join("; ")}` : ""}`);
   return { ok: true, errors, counts };
 }
 
-module.exports = { SOURCES, fetchSource, buildShelves, refresh, volumeOf, ent, about, pageProducts, ldBookPage };
+module.exports = { bookuaTiles, bookuaProducts, SOURCES, fetchSource, buildShelves, refresh, volumeOf, ent, about, pageProducts, ldBookPage };

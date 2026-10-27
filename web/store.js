@@ -390,10 +390,12 @@ class Store {
     const order = SOURCES.map((s) => s.id);
     // A draft shelf is draft while its source says so (catalogs.js).
     const draft = new Set(SOURCES.filter((s) => s.draft).map((s) => s.id));
+    // A shop that only adds to «Де взяти» (book.ua's e-books): no shelf of its own, no book pages of its own.
+    const joinOnly = new Set(SOURCES.filter((s) => s.joinOnly).map((s) => s.id));
     const shelves = this.db
       .prepare("SELECT id, data FROM shelves")
       .all()
-      .map((r) => ({ ...JSON.parse(r.data), draft: draft.has(r.id), items: [] }))
+      .map((r) => ({ ...JSON.parse(r.data), draft: draft.has(r.id), joinOnly: joinOnly.has(r.id), items: [] }))
       .filter((s) => order.includes(s.id)) // a source that was removed (Standard Ebooks) leaves its rows behind, unseen
       .sort((a, b) => order.indexOf(a.id) - order.indexOf(b.id));
     const byId = new Map(shelves.map((s) => [s.id, s]));
@@ -1407,6 +1409,8 @@ class Store {
       const vw = g.find((si) => si.item.volWork);
       if (vw) this.volWork.set(canonical, vw.item.volWork);
       seen.add(canonical);
+      // An item of a join-only shop that matched nothing else (no other shop's edition, no reader's book) stays out.
+      if (g.every((si) => si.shelf.joinOnly) && canonical === sorted[0].item.id) for (const si of g) this.hidden.add(si.item.id);
     }
     // 3. What the owner decided on /admin/dupes: [keep, dup] pairs; dup and everything folded into it
     // become editions of keep, whichever kind of work each is (a shelf item or a library book).
