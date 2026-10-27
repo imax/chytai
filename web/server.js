@@ -541,7 +541,7 @@ app.post("/settings/delete", signed, (req, res) => {
 });
 
 // ---- Chytai in a chat: the MCP server at /mcp and its OAuth (mcp.js) ----
-const mcp = new Mcp({ store, auth, pages, site: (req) => site(req), notifyOwner, details, dropNow: (reader, id) => dropNow(reader, id) });
+const mcp = new Mcp({ store, auth, pages, site: (req) => site(req), notifyOwner, details, putNow: (reader, id) => putNow(reader, id), dropNow: (reader, id) => dropNow(reader, id), isNow: (reader, id) => nowIds(reader).has(store.canonical(id)) });
 mcp.routes(app, { signed });
 
 // ---- adding books: /add (one page with every way in), and imports from elsewhere ----
@@ -1369,6 +1369,12 @@ function dropNow(readerId, id) {
   const v = auth.nowOf(readerId);
   const c = store.canonical(id);
   if (v.books.some((n) => store.canonical(n.id) === c)) auth.setNow(readerId, { books: v.books.filter((n) => store.canonical(n.id) !== c) });
+}
+// Puts a book first on «Читаю зараз» (a chat over /mcp); one already there stays where it is.
+function putNow(readerId, id) {
+  const c = store.canonical(id);
+  const v = auth.nowOf(readerId);
+  if (!v.books.some((n) => store.canonical(n.id) === c)) auth.setNow(readerId, { books: [{ id: c, since: new Date().toISOString().slice(0, 10) }, ...v.books] });
 }
 // From a book page: put it first (a book that wasn't «Читаю» becomes it; a read one stays read, it's a
 // re-read) or take it off. It takes the place of the book that was there.

@@ -13,7 +13,7 @@ const HEADERS = { "User-Agent": "Mozilla/5.0 (compatible; Chytai/1.0; +https://c
 const MONTH = 30 * 86400000;
 const PAPER = 6;
 const EBOOK = 4;
-const OWN = new Set(["manual", "goodreads", "apple-books", "office", "list", "tip"]);
+const OWN = new Set(["manual", "goodreads", "apple-books", "office", "list", "tip", "chat"]);
 
 const norm = (s) => String(s || "").toLowerCase().replace(/[’'`ʼ"«»]/g, "").replace(/ё/g, "е").replace(/ґ/g, "г").replace(/[^\p{L}\p{N}]+/gu, " ").trim();
 const mainTitle = (t) => String(t || "").replace(/\s*\(.*?\)\s*/g, " ").split(/[:.]/)[0].trim();

@@ -44,7 +44,7 @@ const CYR = /[а-яіїєґ]/i;
 // typed in or imported, and an unknown language is not called Ukrainian.
 const RU_ONLY = /[ыэъё]/i;
 const UK_ONLY = /[іїєґ]/i;
-const OWN_SOURCES = new Set(["manual", "goodreads", "apple-books", "office", "list"]);
+const OWN_SOURCES = new Set(["manual", "goodreads", "apple-books", "office", "list", "chat"]);
 function isUk(book) {
   const lang = String(book.language || "").toLowerCase();
   if (lang) return /^(uk|укр)/.test(lang);
