@@ -246,7 +246,14 @@ function build(store) {
 // The person's works from Wikidata, newest knowledge kept 30 days: [{ qid, uk, en, orig, year }].
 // Editions and translations are left out, and so are works no Wikipedia writes about unless they have a
 // Ukrainian name.
-async function wikidataWorks(store, qid, { fetchImpl = fetch, log = () => {} } = {}) {
+// seed/worktitles.json adds Ukrainian titles of real translations Wikidata lacks (Max, 2026-10-27:
+// Rex Stout's «Чорна гора», «Різдвяна вечірка» were published, Wikidata knows only «Дзвінок у двері»).
+const WORK_UK = require("./seed/worktitles.json");
+const withUk = (works) => works.map((w) => (!w.uk && WORK_UK[w.qid] ? { ...w, uk: WORK_UK[w.qid] } : w));
+async function wikidataWorks(store, qid, opts) {
+  return withUk(await worksOf(store, qid, opts));
+}
+async function worksOf(store, qid, { fetchImpl = fetch, log = () => {} } = {}) {
   const key = `authorworks:${qid}`;
   const cached = JSON.parse(store.db.get(key) || "null");
   if (cached && Date.now() - cached.at < 30 * DAY) return cached.works;
