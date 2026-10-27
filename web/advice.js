@@ -64,7 +64,9 @@ const AUTO_PARALLEL = 2;
 // The backfill over books rated before the feature is OFF for now (Max, 2026-10-23 08:09: «давай поки не
 // робити авто-backfill … я ще подумаю»); a book gets its overview when a reader rates or notes it from
 // now on. Flip to true to let sweep() run at start and daily.
-const BACKFILL = false;
+// ON since 2026-10-27 07:04 (Max: «передумав, включай бекфіл … коли закінчимо ці 296»): ~1,100 rated books without an
+// overview, queued after the v9 redo (the queue keeps its order), at most AUTO_DAILY a day, ≈$0.16 each.
+const BACKFILL = true;
 // Automatic overviews (first rating/note, «Хочу прочитати») are PAUSED while Max tunes the prompt
 // (2026-10-23 15:03: «поки давай вимкнемо backfill»); readers' own clicks and the owner's «Оновити» still work.
 const AUTO = true; // paused 2026-10-24 05:52 (Max: «тормозни backfill для авто-оглядів», more prompt work later); ON again 2026-10-27 06:58 with prompt v9 (Max: «включаємо auto далі, до 250 книжок на день»)
