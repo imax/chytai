@@ -1739,15 +1739,15 @@ const DO_WHAT = { want: "буде у вашому «Хочу прочитати�
 // don't have the book itself, unless it is on the free shelf.
 function loginPage({ next = "", email = "", error = "", book = null, what = "", free = false }) {
   return authLayout({
-    title: book ? "Зберегти книжку" : "Увійти",
+    title: book ? "Зберегти книжку" : "Вхід у Chytai",
     before: book ? `<div class="login-book">${cover(book, "sm")}<p><b>${esc(book.title)}</b><br>одразу після входу ${DO_WHAT[what] || DO_WHAT.want}</p></div>${free || what !== "want" ? "" : `<p class="want-why">Самої книжки тут немає: Chytai — сайт про книжки. Напишемо, коли вона зʼявиться в продажу чи безкоштовно.</p>`}` : "",
-    lead: book ? "Вкажіть пошту, і ми надішлемо код. Без паролів, акаунт створиться сам." : "Вкажіть пошту, і ми надішлемо код. Без паролів. Якщо ви тут уперше, акаунт створиться сам.",
+    // Max's text, 2026-10-27.
+    lead: "Якщо ви тут вперше, вкажіть пошту, на яку ми вишлемо код для реєстрації. Те саме для входу з іншого пристрою.",
     form: `<form method="post" action="/login" class="form">
   ${hidden("next", next)}${errorLine(error)}
   <label>Пошта<input type="email" name="email" value="${attr(email)}" required autofocus autocomplete="email" inputmode="email" placeholder="ви@пошта.ua"></label>
-  <div class="actions"><button class="btn primary">Надіслати код</button></div>
-</form>
-<p class="muted small">Пошту ми використовуємо лише для входу. <a class="text-link" href="/privacy">Приватність</a>.</p>`,
+  <div class="actions"><button class="btn primary">Отримати код</button></div>
+</form>`,
   });
 }
 
