@@ -960,7 +960,7 @@ function jobsPage({ user, layout, o, queue, book = () => null, href = () => "#",
   const runningNow = [
     ...Object.entries(live)
       .filter(([k, v]) => k !== "@" && (v.running || v.allRunning))
-      .map(([k, v]) => jobName(`${k}.${v.allRunning ? "runAll" : "run"}`)),
+      .map(([k, v]) => (k === "advice" ? "Відгуки в інтернеті: огляди" : jobName(`${k}.${v.allRunning ? "runAll" : "run"}`))),
     ...(proc.sched || []).filter((name) => !PLANS[name]?.jobs.some((j) => typeof j === "string" && live[j.split(".")[0]]?.running)).map((name) => PLANS[name]?.what || name),
   ];
   const queued = live.advice?.queued || 0;
