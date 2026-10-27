@@ -540,15 +540,16 @@ ${myLists ? listsDialog(book, myLists) : ""}`;
 
 // «Огляди» are hidden on book pages for now (Max, 2026-10-23); /admin/reviews, the API and the data stay.
 // For guests, at the bottom of a book page: what the site is and a way in (Max, 2026-10-27, variant B of
-// three; he will rewrite the text and links). The «Хочу прочитати» block itself is not shown to guests.
+// three; text and links his, 2026-10-27). The «Хочу прочитати» block itself is not shown to guests.
 function joinBand(book) {
   return `<section class="join-band">
   <div>
     <p class="kicker">Chytai</p>
-    <p class="join-title">Сайт для тих, хто читає</p>
-    <p class="join-points"><span>📚 Ваша полиця</span><span>⭐ Оцінки читачів</span><span>✉️ Лист, коли книжка зʼявиться</span></p>
+    <p class="join-title">Проєкт для тих, хто любить книжки</p>
+    <p class="join-text">Спільнота людей, каталоги українських видавництв, пошук і рекомендації, читалка з AI-explainer та перекладом.</p>
+    <p class="join-links"><a href="/publishers">Каталог</a><a href="/community">Спільнота</a><a href="https://app.chytai.org.ua">Читалка</a></p>
   </div>
-  <a class="btn primary" rel="nofollow" href="${attr(`/login?next=${encodeURIComponent(book.href)}`)}">Створити акаунт</a>
+  <a class="btn primary" rel="nofollow" href="${attr(`/login?next=${encodeURIComponent(book.href)}`)}">Доєднатися</a>
 </section>`;
 }
 const SHOW_REVIEWS = false;
