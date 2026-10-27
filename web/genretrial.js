@@ -149,6 +149,14 @@ class GenreTrial {
     return true;
   }
 
+  // One new book (newbooks.js), once the whole catalog has been asked: not Russian, no genres from Haiku yet.
+  async one(b) {
+    if (!this.client || !this.allState()?.finished || isRussian(b) || this.store.aiGenres().has(b.id)) return null;
+    const { genres, usage } = await this.ask(b);
+    if (genres.length) this.store.setAiGenres(b.id, genres, PROMPT);
+    return { answer: genres.join(", "), cost: costOf(usage) };
+  }
+
   // Runs in the background; the admin page shows progress from meta `genretrial`.
   async run() {
     if (this.running || !this.client) return false;

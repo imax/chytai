@@ -41,15 +41,16 @@ function summary(r) {
   if (r == null || r === true) return "";
   if (r === false) return "без змін";
   if (typeof r !== "object") return String(r).slice(0, 300);
+  if (typeof r.note === "string") return r.note.slice(0, 300);
   const errors = Array.isArray(r.errors) ? r.errors : [];
-  const plain = Object.entries(r).filter(([k, v]) => !["ok", "started", "finished", "at", "log"].includes(k) && (typeof v === "number" || typeof v === "boolean" || (typeof v === "string" && v.length < 60)));
+  const plain = Object.entries(r).filter(([k, v]) => !["ok", "changed", "started", "finished", "at", "log"].includes(k) && (typeof v === "number" || typeof v === "boolean" || (typeof v === "string" && v.length < 60)));
   const parts = plain.slice(0, 6).map(([k, v]) => `${k}: ${v}`);
   if (errors.length) parts.push(`помилок ${errors.length}: ${String(errors[0]?.message || errors[0]).slice(0, 150)}`);
   return parts.join(", ").slice(0, 300);
 }
 
 // Put an object's jobs under a name. methods: { run: true } — true when a finished run changed what the
-// pages show (the site then reloads); `extra` names fields to report besides running/allRunning.
+// pages show (the site then reloads, unless the run says { changed: false }); `extra` names fields to report besides running/allRunning.
 // mirror: false keeps the object's own `running` in the web process (advice counts its own requests there).
 // quiet: methods not written down on /admin/jobs (a reader's rating queues an overview: many a day).
 function register(name, obj, methods, extra = [], { mirror = true, quiet = [] } = {}) {
@@ -66,7 +67,7 @@ function register(name, obj, methods, extra = [], { mirror = true, quiet = [] } 
         const t0 = Date.now();
         const p = Promise.resolve(own(...args));
         if (!quiet.includes(m)) (calls++, p.then((r) => remember(job, how, t0, true, r), (e) => remember(job, how, t0, false, e)));
-        if (reload && ROLE === "jobs") p.then((r) => r !== false && r !== null && r?.ok !== false && changed(job), () => {});
+        if (reload && ROLE === "jobs") p.then((r) => r !== false && r !== null && r?.ok !== false && r?.changed !== false && changed(job), () => {});
         return p;
       };
     }

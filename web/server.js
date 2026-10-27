@@ -83,9 +83,15 @@ function refreshCatalogs(force = false, only = "") {
   const started = new Date().toISOString();
   const lines = (currentLog = []); // the refresh's own log, kept for /refresh-status
   const log = (m) => (console.log(m), lines.push(String(m).slice(0, 300)));
+  const before = store.workIds(); // what is new after it goes to the new books' queue (newbooks.js)
   refreshing = catalogs
     .refresh({ store, log, only })
     .catch((e) => (console.error("refresh failed:", e), { ok: false, errors: [e.message] }))
+    .then((r) => {
+      const fresh = [...store.workIds()].filter((id) => !before.has(id));
+      if (fresh.length) store.queueBooks(fresh, "catalog"), log(`refresh: ${fresh.length} new books queued for their checks`);
+      return r;
+    })
     .then((r) => (lastResult = { started, finished: new Date().toISOString(), ...r, log: lines.slice(-30) }))
     .finally(() => (refreshing = null));
   return refreshing;
@@ -294,8 +300,8 @@ async function keepCover(url) {
 // covers from there are kept here too, a few hundred a run, and new ones each run after. The old address
 // stays in `coverFrom` (store.js fromOpenLibrary).
 const OL_COVER = /^https?:\/\/covers\.openlibrary\.org\//;
-const keepOpenLibraryCovers = bg.fn("ol-covers", async () => {
-  const ids = Object.values(store.lib.books).filter((b) => OL_COVER.test(b.cover || "")).map((b) => b.id);
+async function keepOlCovers(only) {
+  const ids = (only ? only.map((id) => store.lib.books[id]).filter(Boolean) : Object.values(store.lib.books)).filter((b) => OL_COVER.test(b.cover || "")).map((b) => b.id);
   let kept = 0;
   for (const id of ids.slice(0, 300)) {
     const b = store.lib.books[id];
@@ -305,8 +311,9 @@ const keepOpenLibraryCovers = bg.fn("ol-covers", async () => {
     await new Promise((ok) => setTimeout(ok, 1000));
   }
   if (ids.length) console.log(`covers: kept ${kept} of ${Math.min(ids.length, 300)} Open Library covers here, ${ids.length - kept} left`);
-  return kept > 0;
-}, true);
+  return kept;
+}
+const keepOpenLibraryCovers = bg.fn("ol-covers", async () => (await keepOlCovers()) > 0, true);
 bg.every("ol-covers", 3 * 3600 * 1000, () => keepOpenLibraryCovers(), { db: store.db, first: 15 * 60 * 1000 });
 // Covers set by hand before we kept them: fetched once after a start, in the background.
 setTimeout(async () => {
@@ -727,6 +734,11 @@ const langTrial = new (require("./langtrial").LangTrial)({ store, db: store.db, 
 for (const [name, t] of Object.entries({ genreTrial, origTrial, langTrial })) bg.register(name, t, { run: false, runAll: true });
 bg.register("ukTrial", ukTrial, { run: false });
 for (const p of aiPasses.values()) bg.register(`pass:${p.key}`, p, { run: false, runAll: true });
+// New books' checks right after they come in (newbooks.js), a batch every few minutes; not while the catalogs
+// are being refreshed (the refresh queues its own new books when it ends).
+const newBooks = new (require("./newbooks").NewBooks)({ store, db: store.db, details, lang: langTrial, genre: genreTrial, orig: origTrial, passes: [...aiPasses.values()], keepCovers: keepOlCovers, warm: (covers) => thumbs.warm(covers), busy: () => !!refreshing, log: console.log });
+bg.register("newBooks", newBooks, { run: true });
+bg.every("newbooks", 3 * 60 * 1000, () => newBooks.run(), { db: store.db, first: 3 * 60 * 1000 });
 // Automatic overviews (advice.want/sweep/redo and their queue) are made in the jobs process; a reader's own
 // «Чи варто читати?» is answered here.
 bg.register("advice", advice, { want: false, sweep: false, redo: false }, ["queued", "capped"], { mirror: false, quiet: ["want"] });
@@ -1765,7 +1777,7 @@ app.post("/api/speed", (req, res) => {
   }
   res.status(204).end();
 });
-app.get("/admin/jobs", owner, (req, res) => res.send(jobsPage({ user: req.user, layout: pages.layout, o: bg.overview(store.db), digest: JSON.parse(store.db.get("digest:last") || "null"), wantMail: JSON.parse(store.db.get("wantmail:last") || "null") })));
+app.get("/admin/jobs", owner, (req, res) => res.send(jobsPage({ user: req.user, layout: pages.layout, o: bg.overview(store.db), queue: newBooks.overview(), book: (id) => store.book(id), href: (id) => store.href(id), digest: JSON.parse(store.db.get("digest:last") || "null"), wantMail: JSON.parse(store.db.get("wantmail:last") || "null") })));
 app.get("/admin/speed", owner, (req, res) => res.send(speedPage({ user: req.user, days: speed.days(), bots: speed.bots(), layout: pages.layout })));
 app.get("/admin/traffic", owner, (req, res) => res.send(adminPage({ user: req.user, stats: admin.stats(), gsc: gsc.data(), gscOn: gsc.configured(), layout: pages.layout, page: "traffic" })));
 app.get("/admin/stats", owner, (req, res) => res.redirect(301, "/admin/traffic"));

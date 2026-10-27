@@ -132,6 +132,14 @@ class OrigTrial {
     return true;
   }
 
+  // One new book (newbooks.js), once the whole catalog has been asked; the caller links the translations after.
+  async one(b) {
+    if (!this.client || !this.allState()?.finished || !this.orphan(b) || this.store.aiOrigs().has(b.id)) return null;
+    const { answer, usage } = await this.ask(b);
+    this.store.setAiOrig(b.id, answer, PROMPT);
+    return { answer: answer.kind, cost: costOf(usage) };
+  }
+
   // Runs in the background; the admin page shows progress from meta `origtrial`.
   async run() {
     if (this.running || !this.client) return false;

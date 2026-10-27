@@ -150,6 +150,33 @@ class AiPass {
     return true;
   }
 
+  // Only the candidates about these books (newbooks.js): a dupes group holding one, or the book itself; asked
+  // and applied like runAll, while this pass is applied on the whole catalog.
+  async runFor(ids) {
+    if (!this.apply || !this.live() || this.allRunning || this.running || !this.client) return null;
+    const about = (s) => [...String(s.id).split("|"), ...(s.group || []).map((x) => x.id)].some((id) => ids.has(id));
+    const done = this.answered();
+    const todo = this.candidates().filter((s) => about(s) && !done.has(s.id));
+    if (!todo.length) return null;
+    const put = this.db.prepare("INSERT OR REPLACE INTO ai_answer (pass, id, answer, prompt, at) VALUES (?, ?, ?, ?, ?)");
+    const out = { asked: 0, applied: 0, cost: 0, errors: 0 };
+    const items = [];
+    for (const s of todo) {
+      try {
+        const { answer, usage } = await this.ask(s);
+        out.cost += costOf(usage);
+        out.asked++;
+        put.run(this.key, s.id, JSON.stringify(answer), this.prompt, new Date().toISOString());
+        items.push({ s, answer, item: this.item(s, answer) });
+      } catch (e) {
+        out.errors++;
+        this.log(`aipass ${this.key} new: ${s.id}: ${e.message}`);
+      }
+    }
+    if (items.length) out.applied = this.apply(items) || 0;
+    return out;
+  }
+
   // The results as plain text for the share link.
   text() {
     const st = this.state();

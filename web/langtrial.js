@@ -108,6 +108,14 @@ class LangTrial {
     return true;
   }
 
+  // One new book (newbooks.js), once the whole catalog has been asked: a doubtful title not asked yet.
+  async one(b) {
+    if (!this.client || !this.allState()?.finished || !doubtful(b) || this.store.aiLangs().has(b.id)) return null;
+    const { language, usage } = await this.ask(b);
+    this.store.setAiLang(b.id, language, PROMPT);
+    return { answer: language, cost: costOf(usage) };
+  }
+
   // Runs in the background; the admin page shows progress from meta `langtrial`.
   async run() {
     if (this.running || !this.client) return false;

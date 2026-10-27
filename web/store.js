@@ -1937,7 +1937,23 @@ class Store {
     this._works = null;
     this.indexSlugs();
     this.indexSearch();
+    this.queueBooks([id], source);
     return this.lib.books[id];
+  }
+
+  // New books wait in `book_queue` for their checks in the jobs process (newbooks.js): every way a book comes
+  // in, a reader's or a catalog's (Max, 2026-10-27: «можливо нам треба саме черга, а не просто розклад»).
+  queueBooks(ids, source) {
+    const put = this.db.prepare("INSERT OR IGNORE INTO book_queue (id, source, added) VALUES (?, ?, ?)");
+    const at = new Date().toISOString();
+    for (const id of ids) put.run(id, source || "", at); // no tx: a caller may hold one
+  }
+
+  // Everything read again from the database, as at a start: the jobs process, before it checks books the site added.
+  fresh() {
+    this.load();
+    this.loadShelves();
+    this.entriesV = (this.entriesV || 0) + 1;
   }
 
   updateBook(id, patch) {
@@ -2039,6 +2055,7 @@ class Store {
       this._works = null;
       this.indexSlugs();
       this.indexSearch();
+      this.queueBooks(result.created.map((b) => b.id), source);
     }
     return result;
   }

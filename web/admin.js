@@ -900,6 +900,7 @@ const JOBS = {
   "advice.sweep": "Відгуки в інтернеті: книжки в чергу",
   "advice.redo": "Відгуки в інтернеті: переробити за новим промптом",
   "gsc.run": "Google Search Console",
+  "newBooks.run": "Нові книжки: перевірки",
 };
 const PASSES = { dupes: "Дублі", notbooks: "Не книжки", series: "Серії", year: "Рік прочитання", authors: "Автори", covers: "Обкладинки", mentions: "Згадки", blurb: "Опис" };
 const jobName = (job) => {
@@ -910,6 +911,7 @@ const jobName = (job) => {
 };
 // Schedule -> the jobs it starts (their runs are written down under the job's name).
 const PLANS = {
+  newbooks: { what: "Нові книжки: перевірки", note: "кожні 3 хв, коли є черга", jobs: ["newBooks.run"] },
   "refresh-check": { what: "Оновлення полиць", note: "перевіряє кожні 10 хв, оновлює раз на 20 год", jobs: ["refresh.run"] },
   wikidata: { what: "Wikidata, автори, деталі книжок", jobs: ["wikidata.run"] },
   "ol-covers": { what: "Обкладинки з Open Library", jobs: ["ol-covers.run"] },
@@ -922,7 +924,12 @@ const PLANS = {
 };
 const fits = (job, keys) => keys.some((k) => (k instanceof RegExp ? k.test(job) : k === job));
 
-function jobsPage({ user, layout, o, digest, wantMail, now = new Date() }) {
+// Where a new book came from (store.js source), for the queue on /admin/jobs.
+const FROM = { catalog: "каталог", manual: "вручну", goodreads: "Goodreads", "apple-books": "Apple Books", list: "список", chat: "чат", tip: "українське видання" };
+const STEPS = { lang: "мова", genre: "жанри", orig: "переклад?", details: "деталі" };
+const ANSWERS = { uk: "українська", ru: "російська", en: "англійська", other: "інша", unknown: "не знає", translation: "так", ukrainian: "ні, українська" };
+
+function jobsPage({ user, layout, o, queue, book = () => null, href = () => "#", digest, wantMail, now = new Date() }) {
   const esc = (t) => String(t ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
   const kyiv = (iso, day = true) => {
     if (!iso) return "—";
@@ -985,6 +992,28 @@ function jobsPage({ user, layout, o, digest, wantMail, now = new Date() }) {
   const how = (h) => (h === "розклад" ? "за розкладом" : h === "сайт" ? "з адмінки чи сайту" : "після старту");
   const recent = o.recent.map((r) => `<tr><td>${kyiv(r.started)}</td><th>${esc(jobName(r.job))}</th><td class="muted">${how(r.how)}</td><td>${dur(r.ms)}</td><td class="res">${result(r)}</td></tr>`).join("");
 
+  const q = queue || { waiting: 0, day: {}, week: {}, bySource: [], latest: [] };
+  const money = (x) => `$${(x || 0).toFixed(3)}`;
+  const found = (st) => {
+    if (st.gone) return `<span class="muted">злита з іншою чи видалена</span>`;
+    const parts = Object.entries(STEPS).filter(([k]) => st[k]).map(([k, name]) => (String(st[k]).startsWith("✗") ? `<span class="bad">${name} ${esc(st[k])}</span>` : `${name}: ${esc(ANSWERS[st[k]] || st[k])}`));
+    if (st.ru) parts.push(`<span class="warn">російська, схована</span>`);
+    if (st.work) parts.push(`<span class="muted">видання книжки <a href="${href(st.work)}">${esc(book(st.work)?.title || st.work)}</a></span>`);
+    return parts.join(" · ") || `<span class="muted">нічого не треба було</span>`;
+  };
+  const queueBlock = `<h2>Нові книжки</h2>
+<p class="muted small">Кожна нова книжка, від читача чи з каталогу, стає в чергу, і за кілька хвилин її перевіряють: деталі й обкладинка, мова (російську ховаємо), жанри, оригінал, дублі, обкладинка до себе. До ${require("./newbooks").DAILY} книжок на день.</p>
+<div class="stats four">
+  <div class="stat"><b>${q.waiting}</b>чекають${q.oldest ? `, найдовше з ${kyiv(q.oldest)}` : ""}</div>
+  <div class="stat"><b>${q.day.n || 0}</b>перевірено за добу${q.day.failed ? `, <span class="bad">${q.day.failed} з помилкою</span>` : ""}</div>
+  <div class="stat"><b>${q.week.n || 0}</b>за 7 днів${q.bySource.length ? `: ${q.bySource.map((x) => `${FROM[x.source] || esc(x.source)} ${x.n}`).join(", ")}` : ""}</div>
+  <div class="stat"><b>${money(q.week.cost)}</b>Haiku за 7 днів</div>
+</div>
+${q.latest.length ? `<div class="tbl"><table>
+<thead><tr><th>Книжка</th><th>Звідки</th><th>Додано</th><th>Перевірено</th><th>Що знайшли</th></tr></thead>
+<tbody>${q.latest.map((r) => `<tr><th><a href="${href(r.id)}">${esc(book(r.id)?.title || r.id)}</a></th><td class="muted">${FROM[r.source] || esc(r.source)}</td><td>${kyiv(r.added)}</td><td>${kyiv(r.done)}</td><td class="res">${found(r.steps)}</td></tr>`).join("")}</tbody></table></div>` : ""}
+`;
+
   const body = `<section class="admin jobs">
 <p class="small"><a href="/admin">← Статистика</a></p>
 <section class="page-head"><div><h1>Фонові задачі</h1><p class="sub">Окремий процес поруч із сайтом: оновлює полиці, питає Haiku й Claude, шле листи. Сайт від нього не гальмує, а коли задача змінила книжки, сайт сам перечитує дані. Час київський, записи за 30 днів.</p></div></section>
@@ -995,6 +1024,7 @@ function jobsPage({ user, layout, o, digest, wantMail, now = new Date() }) {
   <div class="stat"><b>${week.n}${week.failed ? ` / <span class="bad">${week.failed} ✗</span>` : ""}</b>запусків за 7 днів${week.failed ? ", з них невдалих" : ""}</div>
 </div>
 
+${queueBlock}
 <h2>За розкладом</h2>
 <div class="tbl"><table>
 <thead><tr><th>Задача</th><th>Остання робота</th><th>Тривала</th><th>Як пройшла</th><th>7 днів</th><th>Наступна</th></tr></thead>
