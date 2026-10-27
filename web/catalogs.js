@@ -188,7 +188,8 @@ async function listingProducts(src, opts) {
 async function pageProducts(src, urls, { fetchImpl = fetch, log = () => {}, previous = new Map(), skip = new Set(), checkpoint = () => {}, fresh = new Set() }) {
   const today = dayOfWeek();
   urls = urls.filter((u) => !skip.has(u) || bucket(u) === today);
-  const due = urls.filter((u) => !previous.has(u) || (bucket(u) === today && !fresh.has(u)));
+  // `src.stale(item)`: a page read wrong before a parser fix is read again at once, not on its weekday.
+  const due = urls.filter((u) => !previous.has(u) || (bucket(u) === today && !fresh.has(u)) || (src.stale?.(previous.get(u)) && !fresh.has(u)));
   const out = urls.filter((u) => !due.includes(u)).map((u) => previous.get(u)).filter(Boolean);
   const got = urls.filter((u) => fresh.has(u)).map((u) => previous.get(u)); // read this run or the cut-short one
   let failed = 0;
@@ -416,9 +417,12 @@ function bohdanPage(html, url) {
   const title = name.replace(/^eBook\s+/i, "").replace(/\s+:\s+[\p{Ll}\s.,-]+$/u, "").trim(); // «Снотворець : роман»
   const prod = ldOf(html).find((x) => [].concat(x["@type"]).includes("Product")) || {};
   const spec = (k) => text((html.match(new RegExp(`<b class="koala_title">${k}:?</b>([\\s\\S]*?)<br`)) || [])[1] || "");
-  const author = [...html.matchAll(/product-author-link[^>]*>([\s\S]*?)<\/a>/g)]
-    .map((m) => text(m[1]).split(" "))
-    .map((w) => (w.length > 1 && !w.some(initial) ? [...w.slice(1), w[0]] : w).join(" ")) // «Джеймс С. А. Корі» stays
+  // A link per author, written «Желязни Роджер»; a book of many authors has spans with the name in an <h2>
+  // instead, already «Анна Багряна», most of them hidden behind «Показати всіх» (2026-10-27: reading on to the
+  // next </a> took that button's script for an author).
+  const author = [...html.matchAll(/<(a|span)[^>]*product-author-link[^>]*>([\s\S]*?)<\/\1>/g)]
+    .map((m) => [text(m[2]).split(" "), m[1] === "span"])
+    .map(([w, asIs]) => (!asIs && w.length > 1 && !w.some(initial) ? [...w.slice(1), w[0]] : w).join(" ")) // «Джеймс С. А. Корі» stays
     .filter((a, i, all) => a && all.indexOf(a) === i)
     .join(", ");
   const isbn = spec("ISBN").replace(/[^\dX]/gi, "");
@@ -451,8 +455,12 @@ function bohdanPage(html, url) {
 // Without a description of its own, a Богдан page's meta says «Актуальна ціна на … | Замовити в інтернет-магазині».
 const SHOP_BLURB = /^\s*Актуальна ціна на[\s\S]*$/u;
 
+// Read before 2026-10-27, a book of many authors got «Багряна Олександр … Показати всіх $('.auth_book…» as
+// its author: read again at the next refresh (stale), and shown with no author till then.
+const bohdanStale = (it) => /\$\(|Показати всіх/.test(it?.author || "");
 function bohdanFinish(items) {
   for (const it of items) if (SHOP_BLURB.test(it.blurb || "")) it.blurb = "";
+  for (const it of items) if (bohdanStale(it)) it.author = "";
   for (const it of items)
     if (it.parser !== 2) {
       const w = it.author.split(" ");
@@ -903,6 +911,7 @@ const SOURCES = [
     charset: "windows-1251",
     fetchAll: (src, opts) => sitemapProducts(src, opts),
     parsePage: bohdanPage,
+    stale: bohdanStale,
     normalize: (p) => p,
     keep: () => true,
     toItem: (p) => p,
