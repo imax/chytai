@@ -532,12 +532,25 @@ function bookPage({ inGenre = null, fresh = null, pick = null, awards = [], auth
     ${pick ? `${label("Книжка навмання", "оцінка 4,5+")}${feedList([pick])}` : ""}`}
   </aside>
 </div>
+${user ? "" : joinBand(book)}
 ${myLists ? listsDialog(book, myLists) : ""}`;
   const description = [book.author, book.blurb?.replace(/\s+/g, " ") || stripMd(readers.find((r) => r.entry.note)?.entry.note || "")].filter(Boolean).join(". ");
   return layout({ title: book.title, body, user, path: "/book", description, canonical: book.href, image: abs(book.cover || ""), type: "book", noindex: require("./store").isRussian(book), jsonld: bookLd(book, shelf, s, readers) });
 }
 
 // «Огляди» are hidden on book pages for now (Max, 2026-10-23); /admin/reviews, the API and the data stay.
+// For guests, at the bottom of a book page: what the site is and a way in (Max, 2026-10-27, variant B of
+// three; he will rewrite the text and links). The «Хочу прочитати» block itself is not shown to guests.
+function joinBand(book) {
+  return `<section class="join-band">
+  <div>
+    <p class="kicker">Chytai</p>
+    <p class="join-title">Сайт для тих, хто читає</p>
+    <p class="join-points"><span>📚 Ваша полиця</span><span>⭐ Оцінки читачів</span><span>✉️ Лист, коли книжка зʼявиться</span></p>
+  </div>
+  <a class="btn primary" rel="nofollow" href="${attr(`/login?next=${encodeURIComponent(book.href)}`)}">Створити акаунт</a>
+</section>`;
+}
 const SHOW_REVIEWS = false;
 // «AI-рекомендація» (advice.js): Claude's take on the book for this reader, by their own shelf, on a click.
 // A guest sees why to sign in, a reader with an empty shelf why to add books, a kept answer shows at once.
