@@ -1006,27 +1006,54 @@ function flash(card) {
   head.addEventListener("pointercancel", end);
 })();
 
-// The yellow stays on explained text; a tap on it offers the explanation, a note or removing the
-// yellow (Max, 2026-10-26), so it no longer stands in the way of saving that text as a note.
+// The yellow marks only the explanation being read. Once its card is out of sight (the panel closed, the
+// Notes tab, a newer explanation) the yellow goes and a small asterisk after the passage stays, like a
+// footnote: a tap on it opens the explanation again (Max, 2026-10-27: «прибирати автоматично, але залишати
+// asterisk як типу сноску»). A tap on the yellow offers the explanation, a note or removing it.
 function highlightConv(conv) {
+  for (const other of conversations.values()) if (other !== conv && other.marked === "yellow") starConv(other);
   try {
-    rendition.annotations.remove(conv.cfiRange, "highlight");
+    unhighlightConv(conv);
     rendition.annotations.highlight(conv.cfiRange, { id: conv.id }, () => showMarkToolbar(conv), "ai-hl", HIGHLIGHT_STYLE);
+    conv.marked = "yellow";
   } catch {
     /* highlighting is cosmetic */
   }
 }
 
+function starConv(conv) {
+  unhighlightConv(conv);
+  // A note on the very same words already marks them (and shares the annotation's key).
+  if (notes.some((n) => n.cfi === conv.cfiRange)) return;
+  try {
+    rendition.annotations.underline(conv.cfiRange, { id: conv.id }, () => {
+      highlightConv(conv);
+      openConvCard(conv);
+    }, "ai-star");
+    conv.marked = "star";
+    decorateNoteMarks();
+  } catch {
+    /* cosmetic too */
+  }
+}
+
 function unhighlightConv(conv) {
   try {
-    rendition?.annotations.remove(conv.cfiRange, "highlight");
+    if (conv.marked === "yellow") rendition?.annotations.remove(conv.cfiRange, "highlight");
+    if (conv.marked === "star") rendition?.annotations.remove(conv.cfiRange, "underline");
   } catch {
     /* ignore */
   }
+  conv.marked = "";
 }
 
 function unhighlightConvs() {
   for (const conv of conversations.values()) unhighlightConv(conv);
+}
+
+// Panel closed or on another tab: the yellow turns into asterisks.
+function starConvs() {
+  for (const conv of conversations.values()) if (conv.marked === "yellow") starConv(conv);
 }
 
 let pendingMark = null; // the explanation whose yellow was tapped, for the toolbar
@@ -1056,6 +1083,7 @@ function openConvCard(conv) {
 function showPanel(show, tab) {
   document.body.classList.toggle("panel-hidden", !show);
   if (tab) showTab(tab);
+  if (!show) starConvs();
   // epub.js needs a resize to reflow pages after the layout changes width.
   setTimeout(resizeView, 220);
 }
@@ -1103,6 +1131,7 @@ function showTab(tab) {
   for (const b of document.querySelectorAll("#panel .tab")) b.classList.toggle("active", b.dataset.tab === tab);
   $("#cards").classList.toggle("hidden", tab !== "cards");
   $("#notes").classList.toggle("hidden", tab !== "notes");
+  if (tab !== "cards") starConvs();
   $("#btn-clear").classList.toggle("hidden", tab !== "cards");
   if (tab === "notes") requestAnimationFrame(() => document.querySelectorAll(".note-comment").forEach(fitComment));
 }
@@ -1149,11 +1178,12 @@ function decorateNoteMarks() {
   const views = rendition?.views();
   for (const view of views?.all ? views.all() : views || []) {
     for (const { mark } of Object.values(view.underlines || {})) {
-      if (mark.className !== "note-ul" || mark.bracketed) continue;
+      if ((mark.className !== "note-ul" && mark.className !== "ai-star") || mark.bracketed) continue;
       const render = mark.render;
+      const draw = mark.className === "ai-star" ? drawStar : drawBars;
       mark.render = function () {
         render.call(this);
-        drawBars(this);
+        draw(this);
       };
       mark.bracketed = true;
       mark.render();
@@ -1204,6 +1234,25 @@ function drawBars(mark) {
     add("path", { class: "bar", d: `M${left + 7},${top - 2 + rand() * 2} Q${left + 1},${top - 1} ${left},${top + 6}` + wobble(left, top + 6, bottom, rand) });
     add("path", { class: "bar", d: `M${right + rand() * 2},${top}` + wobble(right, top, bottom - 6, rand) + ` Q${right + 1},${bottom + 1} ${right - 7},${bottom + 2 + rand() * 2}` });
   }
+}
+
+// An explanation put away: only an asterisk after its last word, and only the asterisk takes a tap
+// (marks-pane hit-tests the group's own boxes, so the line rects go and a small clear square stays).
+function drawStar(mark) {
+  const g = mark.element;
+  const rects = [...g.querySelectorAll("rect")]
+    .map((r) => ({ x: +r.getAttribute("x"), y: +r.getAttribute("y"), w: +r.getAttribute("width"), h: +r.getAttribute("height") }))
+    .filter((r) => r.w > 0 && r.h > 0);
+  g.replaceChildren();
+  const last = rects.at(-1);
+  if (!last) return;
+  const el = (tag, attrs) => {
+    const e = document.createElementNS(SVG_NS, tag);
+    for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v);
+    return g.appendChild(e);
+  };
+  el("rect", { class: "star-hit", x: last.x + last.w - 6, y: last.y - 6, width: 26, height: 26 });
+  el("text", { class: "star", x: last.x + last.w + 1, y: last.y + 1, "dominant-baseline": "hanging" }).textContent = "*";
 }
 
 // A note with a comment gets a small asterisk after its last word; tapping the passage shows it.

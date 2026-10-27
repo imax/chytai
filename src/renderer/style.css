@@ -755,3 +755,7 @@ body[data-theme="dark"] .cover { background: hsl(var(--hue) 18% 30%); color: hsl
   #print-book .pc-link { font-weight: 600; margin-top: 1mm; word-break: break-all; }
 }
 #toolbar .icon-btn { display: inline-flex; align-items: center; justify-content: center; }
+/* An explanation put away (renderer.js drawStar): a footnote asterisk after the passage. */
+g.ai-star { fill: none; stroke: none; }
+g.ai-star rect.star-hit { fill: #000; fill-opacity: 0; stroke: none; }
+g.ai-star text.star { fill: var(--accent); fill-opacity: 1; font: bold 18px Georgia, serif; }
