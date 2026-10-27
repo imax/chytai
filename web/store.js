@@ -105,7 +105,7 @@ const blurbOf = (h) => {
 const norm = (s) => String(s || "").toLowerCase().replace(/^(the|a)\s+/, "").replace(/[^\p{L}\p{N}]+/gu, " ").trim();
 // Separators left at the end of a title: «Diary of Samuel Pepys -», «Назва:».
 const DANGLING = /[\s\-‐‑–—:;,/|]+$/u;
-const EDITABLE = ["title", "author", "blurb", "cover", "language", "aliases", "genre", "published"];
+const EDITABLE = ["title", "author", "blurb", "cover", "language", "aliases", "genre", "published", "ebook"]; // ebook: the book.ua item «Де взяти» shows
 // A short name as typed in search: «DCC», «Л.О.Т.Р.» and «lotr» are one key.
 const aliasKey = (s) => String(s || "").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, "");
 // The first letters of a name of three or more words, as readers shorten it: «Dungeon Crawler Carl» → dcc,
@@ -1939,7 +1939,7 @@ class Store {
   // builds every edition of itself and every book in its blocks, and on 2026-10-25 that cleaning was a third of
   // what a crawler's book page cost.
   fromShelfItem(shelf, it) {
-    return { id: it.id, title: it.title, author: it.author, altTitle: it.altTitle || "", cover: it.cover, tags: it.genres || [], links: [{ label: shelf.name, url: it.url }], source: shelf.id, shelf: shelf.id, blurb: blurbOf(it.blurb), price: it.price, status: it.status, expected: it.expected || "", language: it.language, edition: it.edition || "", isbn: it.isbn || "", volume: it.volume || 0, bundle: !!it.bundle, format: it.format || (shelf.kind === "free" ? "e-book" : shelf.kind === "audio" ? "аудіо" : "папір"), narrator: it.narrator || "", duration: it.duration || "", subscription: !!it.subscription };
+    return { id: it.id, title: it.title, author: it.author, altTitle: it.altTitle || "", cover: it.cover, tags: it.genres || [], links: [{ label: shelf.name, url: it.url }], source: shelf.id, shelf: shelf.id, blurb: blurbOf(it.blurb), price: it.price, status: it.status, expected: it.expected || "", language: it.language, edition: it.edition || "", isbn: it.isbn || "", volume: it.volume || 0, bundle: !!it.bundle, format: it.format || (shelf.kind === "free" ? "e-book" : shelf.kind === "audio" ? "аудіо" : "папір"), narrator: it.narrator || "", duration: it.duration || "", subscription: !!it.subscription, issued: /^\d{4}$/.test(it.year || "") ? it.year : "" };
   }
 
   addBook({ title, author, cover, links, source = "manual", ...more }) {

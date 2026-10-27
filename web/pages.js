@@ -792,19 +792,21 @@ function where(book, ukrlib = null) {
   // that are out of it fold into one quiet line, each named once.
   const gone = (e) => e.status === "немає";
   const shown = new Set(); // the same shop, format, edition and price twice is one row
-  // A join-only shop (book.ua) is one row (Max, 2026-10-27: four e-book rows of «Тигролови» were «забагато»,
-  // «оберемо для читача одну»): the edition of the publisher whose book the page shows, else the shop's oldest item.
+  // A join-only shop (book.ua) is one row (Max, 2026-10-27: four e-book rows of «Тигролови» were «забагато»;
+  // «найновіше … коли була видана електронна книжка», «тоді можна дивитись на чиє це видавництво», «з можливістю
+  // змінити через адмінку»): the owner's pick («Редагувати», `ebook`), else the latest year of issue, else the
+  // publisher of the page's own edition, else the shop's newest item (the highest number in its address).
   const pubKey = (s) => String(s || "").toLowerCase().replace(/видавництв\p{L}*|видавнича група|в-во|[«»"'’]/gu, " ").replace(/старого лева/, "старий лев").split(/\s+/).filter(Boolean)[0] || "";
   const main = (book.editions || []).find((e) => e.id === book.id) || (book.editions || [])[0];
   const pub = pubKey(main?.edition || main?.shelf?.name);
-  const age = (e) => Number((e.id.match(/-(\d+)$/) || [])[1]) || Infinity;
+  const score = (e) => [e.id === book.edited?.ebook ? 1 : 0, Number(e.issued) || 0, pub && pubKey(e.edition) === pub ? 1 : 0, Number((e.id.match(/-(\d+)$/) || [])[1]) || 0];
+  const better = (a, b) => {
+    const [x, y] = [score(a), score(b)];
+    const i = x.findIndex((v, k) => v !== y[k]);
+    return i >= 0 && x[i] > y[i];
+  };
   const one = new Map(); // shelf id -> the edition shown
-  for (const e of eds) {
-    if (!e.shelf.joinOnly || gone(e)) continue;
-    const was = one.get(e.shelf.id);
-    const mine = (x) => !!pub && pubKey(x.edition) === pub;
-    if (!was || (mine(e) && !mine(was)) || (mine(e) === mine(was) && age(e) < age(was))) one.set(e.shelf.id, e);
-  }
+  for (const e of eds) if (e.shelf.joinOnly && !gone(e) && (!one.has(e.shelf.id) || better(e, one.get(e.shelf.id)))) one.set(e.shelf.id, e);
   const have = eds.filter((e) => !gone(e) && (!e.shelf.joinOnly || one.get(e.shelf.id) === e) && ((k) => !shown.has(k) && shown.add(k))([e.shelf.id, e.format, e.edition, e.price, e.narrator].join("|")));
   const out = [...new Map(eds.filter(gone).map((e) => [e.shelf.id, e])).values()];
   const items = [
@@ -1014,6 +1016,14 @@ document.addEventListener("submit", async (e) => {
 
 // The owner's fix of a book's title, author, description and cover (/admin/book/:id). An empty field
 // says what the catalog says, shown as its placeholder.
+// Which book.ua e-book «Де взяти» shows when the shop has several (Max, 2026-10-27): the newest unless picked here.
+function ebookPick(book) {
+  const eds = (book.editions || []).filter((e) => e.shelf.joinOnly && e.status !== "немає");
+  if (eds.length < 2) return "";
+  const pick = book.edited?.ebook || "";
+  const label = (e) => [e.shelf.name, e.edition, e.title, e.issued, e.price].filter(Boolean).join(", ");
+  return `<label>E-book у «Де взяти» <select name="ebook"><option value="">найновіше видання</option>${eds.map((e) => `<option value="${attr(e.id)}" ${e.id === pick ? "selected" : ""}>${esc(label(e))}</option>`).join("")}</select></label>`;
+}
 function bookEditPage({ book, raw, user, coverError = "" }) {
   // By its address, not its id: a reader's book id can be another work's address («…-nimechch» is «Том 1»
   // while the reader's «Том 1-2» lives at «…-nimechch-2»), and the address wins in store.resolve (2026-10-25).
@@ -1034,6 +1044,7 @@ function bookEditPage({ book, raw, user, coverError = "" }) {
 ${coverError ? `<p class="error">Сайт не віддав нам картинку (${esc(coverError)}), тож поки вона береться з нього. Можна зберегти її собі й натиснути «Завантажити файл».</p>` : ""}
       <div id="covers" class="cover-picks" hidden></div>
       ${field("published", "Рік", "Рік першого видання")}
+      ${ebookPick(book)}
       ${field("aliases", "Інші назви для пошуку", "Через кому, як люди скорочують: DCC, ГП")}
       <label>Основний жанр <select name="genre">${[["", `як у каталозі${require("./store").mainGenres(raw.tags).length ? ` (${require("./store").mainGenres(raw.tags).join(", ")})` : ""}`], ...GENRES.map((g) => [g, cap(g)])].map(([v, t]) => `<option value="${attr(v)}" ${(fix.genre || "") === v ? "selected" : ""}>${esc(t)}</option>`).join("")}</select></label>
       <label>Мова <select name="language">${[["", `як у каталозі${raw.language ? ` (${raw.language})` : ""}`], ["українська", "українська"], ["англійська", "англійська"], ["російська", "російська: сховати з пошуку й рекомендацій"]].map(([v, t]) => `<option value="${v}" ${(fix.language || "") === v ? "selected" : ""}>${esc(t)}</option>`).join("")}</select></label>

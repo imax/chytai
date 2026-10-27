@@ -696,6 +696,31 @@ async function bookuaProducts(src, { fetchImpl = fetch, log = () => {} }) {
   return [...found.values()];
 }
 
+// The e-book's year is only on its own page («Рік видання 2025»), and «Де взяти» shows the newest of a shop's
+// editions (Max, 2026-10-27: «найновіше … коли була видана електронна книжка»). The year does not change: each
+// page is read once, up to 1500 a refresh, so the first fill takes about five days; «?» = the page gives none.
+async function bookuaYears(products, { previous, fetchImpl = fetch, log = () => {} }) {
+  for (const p of products) p.year = previous.get(p.url)?.year || "";
+  const due = products.filter((p) => !p.year && /[а-яіїєґ]/i.test(p.title)).slice(0, 1500);
+  let failed = 0;
+  for (let i = 0; i < due.length; i += 4) {
+    await Promise.all(
+      due.slice(i, i + 4).map(async (p) => {
+        try {
+          const r = await fetchImpl(p.url, { headers: HEADERS, signal: AbortSignal.timeout(30000) });
+          if (!r.ok) throw new Error(`HTTP ${r.status}`);
+          const m = (await r.text()).match(/product-features__label">\s*Рік видання\s*<\/span>[\s\S]{0,400}?\b((?:19|20)\d\d)\b/);
+          p.year = m ? String(Number(m[1])) : "?"; // a copy, not a slice of the page
+        } catch {
+          failed++;
+        }
+      }),
+    );
+    await new Promise((r) => setTimeout(r, 200));
+  }
+  log(`bookua: ${due.length} e-book pages read for the year${failed ? `, ${failed} failed` : ""}, ${products.filter((p) => /^\d/.test(p.year)).length} with a year`);
+}
+
 const SOURCES = [
   {
     id: "lobster",
@@ -1072,6 +1097,7 @@ const SOURCES = [
     draft: false,
     joinOnly: true,
     fetchAll: (src, opts) => bookuaProducts(src, opts),
+    enrich: bookuaYears,
     normalize: (p) => p,
     // Books in English («1984 (англійська)», «The Forsyte Saga. Volume 1») come with the author in Cyrillic and
     // would join an original to its Ukrainian translation: only Ukrainian titles are kept.
