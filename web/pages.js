@@ -503,7 +503,6 @@ function bookPage({ inGenre = null, fresh = null, pick = null, awards = [], auth
         ${awardsLine(awards)}
         ${twins(book)}
         ${mine(book, entry, user, now, freeRead ? "" : readUrl, listsItem(book, user), { free: readUrl && freeRead ? freeItems(book, freeFile) : "" })}
-        ${!user && !entry && !freeRead ? `<p class="want-why">Збережемо у ваш список і напишемо, коли книжка зʼявиться в продажу, вийде українською чи стане безкоштовною. Вхід лише за поштою, без паролів.</p>` : ""}
         ${where(book)}
         ${user?.owner ? `<p class="small muted"><a class="muted" href="/admin/book/${encodeURIComponent(book.href.split("/").pop())}">Редагувати</a>${book.cover ? "" : ` · <a class="muted" href="/admin/book/${encodeURIComponent(book.href.split("/").pop())}?find=1">Знайти обкладинку</a>`}${book.edited ? " · виправлено вручну" : ""}</p>` : ""}
       </div>
