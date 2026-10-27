@@ -21,11 +21,23 @@ CREATE TABLE IF NOT EXISTS list_items (
 CREATE INDEX IF NOT EXISTS list_items_book ON list_items (book);
 CREATE TABLE IF NOT EXISTS list_saves (reader TEXT NOT NULL, list TEXT NOT NULL, created TEXT NOT NULL, PRIMARY KEY (reader, list));
 CREATE INDEX IF NOT EXISTS list_saves_list ON list_saves (list);
+CREATE TABLE IF NOT EXISTS list_comments (
+  id TEXT PRIMARY KEY, list TEXT NOT NULL, reader TEXT NOT NULL, text TEXT NOT NULL, created TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS list_comments_list ON list_comments (list, created);
 `;
 const TITLE_MAX = 100;
-const NOTE_MAX = 600;
+// A list can be a small article (Max, 2026-10-27: «списки в контексті editorial … header image, якийсь опис»):
+// a picture on top and an intro of a few paragraphs.
+const NOTE_MAX = 4000;
 const WHY_MAX = 300;
 const ITEMS_MAX = 300;
+// «Клуб Chytai» (Max, 2026-10-27): readers' words under a list, signed-in readers only, no likes and no
+// replies; the list's author sees the new ones in the Friday letter.
+const COMMENT_MAX = 2000;
+const COMMENTS_A_DAY = 20;
+// «Добірка Chytai»: the owner's list in the site's name («Редакція Chytai» instead of his own).
+const EDITORIAL = "Редакція Chytai";
 
 class Lists {
   // `who(readerId)` is the public reader ({ name, username, href }) or null.
@@ -34,6 +46,8 @@ class Lists {
     this.db = store.db;
     this.who = who;
     this.db.exec(SCHEMA);
+    for (const [col, def] of [["image", "TEXT NOT NULL DEFAULT ''"], ["editorial", "INTEGER NOT NULL DEFAULT 0"]])
+      if (!this.db.prepare("PRAGMA table_info(lists)").all().some((c) => c.name === col)) this.db.exec(`ALTER TABLE lists ADD COLUMN ${col} ${def}`);
   }
 
   // A list as the pages see it: its author, address and how many books and saves it has.
@@ -43,7 +57,7 @@ class Lists {
     if (!reader) return null;
     const n = this.db.prepare("SELECT COUNT(*) AS n FROM list_items WHERE list = ?").get(row.id).n;
     const saves = this.db.prepare("SELECT COUNT(*) AS n FROM list_saves WHERE list = ?").get(row.id).n;
-    return { ...row, reader, href: `${reader.href}/list/${row.slug}`, count: n, saves };
+    return { ...row, editorial: !!row.editorial, by: row.editorial ? EDITORIAL : reader.name, reader, href: `${reader.href}/list/${row.slug}`, count: n, saves };
   }
   get(id) {
     return this.view(this.db.prepare("SELECT * FROM lists WHERE id = ?").get(String(id)));
@@ -67,22 +81,66 @@ class Lists {
     this.db.prepare("INSERT INTO lists (id, reader, slug, title, note, created, updated) VALUES (?, ?, ?, ?, ?, ?, ?)").run(id, readerId, slug, title, String(note).trim().slice(0, NOTE_MAX), now, now);
     return this.get(id);
   }
-  edit(id, { title, note }) {
+  // `editorial` is the owner's to set (server.js); undefined leaves it as it is.
+  edit(id, { title, note, editorial }) {
     const l = this.get(id);
     if (!l) return null;
     const t = String(title ?? l.title).replace(/\s+/g, " ").trim().slice(0, TITLE_MAX) || l.title;
-    this.db.prepare("UPDATE lists SET title = ?, note = ?, updated = ? WHERE id = ?").run(t, String(note ?? l.note).trim().slice(0, NOTE_MAX), new Date().toISOString(), id);
+    const ed = editorial === undefined ? l.editorial : !!editorial;
+    this.db.prepare("UPDATE lists SET title = ?, note = ?, editorial = ?, updated = ? WHERE id = ?").run(t, String(note ?? l.note).replace(/\r/g, "").trim().slice(0, NOTE_MAX), ed ? 1 : 0, new Date().toISOString(), id);
     return this.get(id);
+  }
+  // The picture on top: our own /covers/<name>, or "" for the one made of the list's covers.
+  setImage(id, url) {
+    this.db.prepare("UPDATE lists SET image = ? WHERE id = ?").run(/^\/covers\/[\w.-]+$/.test(url || "") ? url : "", id);
+  }
+  // «Добірки Chytai» on the homepage: the owner's editorial lists with books, the newest first.
+  editorials() {
+    return this.db.prepare("SELECT * FROM lists WHERE editorial = 1 ORDER BY created DESC").all().map((r) => this.view(r)).filter((l) => l && l.count);
+  }
+
+  // ---- «Клуб Chytai» ----
+  comments(listId) {
+    return this.db.prepare("SELECT * FROM list_comments WHERE list = ? ORDER BY created").all(listId).map((c) => ({ ...c, reader: this.who(c.reader) })).filter((c) => c.reader);
+  }
+  comment(id) {
+    return this.db.prepare("SELECT * FROM list_comments WHERE id = ?").get(String(id)) || null;
+  }
+  // null when there is nothing to say or the reader has said enough today.
+  addComment(listId, readerId, text) {
+    text = String(text || "").replace(/\r/g, "").replace(/\n{3,}/g, "\n\n").trim().slice(0, COMMENT_MAX);
+    if (!text || !this.get(listId)) return null;
+    const day = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
+    if (this.db.prepare("SELECT COUNT(*) AS n FROM list_comments WHERE reader = ? AND created > ?").get(readerId, day).n >= COMMENTS_A_DAY) return null;
+    const id = crypto.randomBytes(6).toString("hex");
+    this.db.prepare("INSERT INTO list_comments (id, list, reader, text, created) VALUES (?, ?, ?, ?, ?)").run(id, listId, readerId, text, new Date().toISOString());
+    return id;
+  }
+  dropComment(id) {
+    this.db.prepare("DELETE FROM list_comments WHERE id = ?").run(String(id));
+  }
+  // /admin/comments: the newest everywhere.
+  recentComments(limit = 200) {
+    return this.db.prepare("SELECT * FROM list_comments ORDER BY created DESC LIMIT ?").all(limit).map((c) => ({ ...c, reader: this.who(c.reader), list: this.get(c.list) })).filter((c) => c.list);
+  }
+  // For the Friday letter: others' words under the reader's own lists since `sinceIso`, [{ list, reader, text }].
+  newComments(readerId, sinceIso) {
+    return this.db
+      .prepare("SELECT c.* FROM list_comments c JOIN lists l ON l.id = c.list WHERE l.reader = ? AND c.reader != ? AND c.created > ? ORDER BY c.created DESC")
+      .all(readerId, readerId, sinceIso)
+      .map((c) => ({ ...c, reader: this.who(c.reader), list: this.get(c.list) }))
+      .filter((c) => c.reader && c.list);
   }
   remove(id) {
     this.db.tx(() => {
-      for (const [t, c] of [["list_items", "list"], ["list_saves", "list"], ["lists", "id"]]) this.db.prepare(`DELETE FROM ${t} WHERE ${c} = ?`).run(id);
+      for (const [t, c] of [["list_items", "list"], ["list_saves", "list"], ["list_comments", "list"], ["lists", "id"]]) this.db.prepare(`DELETE FROM ${t} WHERE ${c} = ?`).run(id);
     });
   }
   // Everything of a reader's goes with the account: their lists and the lists they saved.
   forgetReader(readerId) {
     for (const l of this.db.prepare("SELECT id FROM lists WHERE reader = ?").all(readerId)) this.remove(l.id);
     this.db.prepare("DELETE FROM list_saves WHERE reader = ?").run(readerId);
+    this.db.prepare("DELETE FROM list_comments WHERE reader = ?").run(readerId);
   }
 
   // The books of a list in its order: [{ id, book, why, added }]. Books we no longer know are left out,
@@ -201,4 +259,4 @@ class Lists {
   }
 }
 
-module.exports = { Lists };
+module.exports = { Lists, EDITORIAL };

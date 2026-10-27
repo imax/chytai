@@ -253,6 +253,8 @@ app.use("/covers", express.static(COVERS, { maxAge: "1y", immutable: true }));
 const thumbs = new (require("./thumbs").Thumbs)({ db: store.db, dir: COVERS, log: console.log, isBot: (req) => BOT.test(req.headers["user-agent"] || "") });
 pages.setThumbs((src, shown) => thumbs.url(src, shown));
 app.get("/t/:w/:sig/:src", (req, res) => thumbs.serve(req, res).catch(() => res.status(500).end()));
+// A list's picture for social networks, made of its covers (listimage.js).
+const listImage = new (require("./listimage").ListImage)({ dir: COVERS, thumbs, log: console.log });
 bg.every("thumbs-prune", 24 * 3600 * 1000, () => thumbs.prune(), { db: store.db, first: 30 * 60 * 1000 });
 bg.every("thumbs-warm", 6 * 3600 * 1000, () => thumbs.warm([...store.entries.values()].flatMap((es) => Object.keys(es)).map((id) => store.book(id)?.cover)), { db: store.db, first: 20 * 60 * 1000 });
 const COVER_TYPES = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp", "image/gif": "gif", "image/avif": "avif" };
@@ -815,7 +817,7 @@ app.get("/", (req, res) => {
     .filter((s) => s.items.length)
     .sort((a, b) => b.subscribed - a.subscribed || b.fresh - a.fresh)
     .slice(0, 2);
-  res.send(pages.homePage({ user: req.user, starts: social.starts(), picks: social.picks(), feed: feedFor(req, 6), recs, showcase, fetched: day(store.shelvesRefreshedAt), libraries: librariesFor(req) }));
+  res.send(pages.homePage({ editorials: lists.editorials().slice(0, 3).map(withCovers), user: req.user, starts: social.starts(), picks: social.picks(), feed: feedFor(req, 6), recs, showcase, fetched: day(store.shelvesRefreshedAt), libraries: librariesFor(req) }));
 });
 
 // «Зараз читають» on the homepage: the readers one follows first, then everyone else, at most two rows
@@ -939,8 +941,20 @@ app.get("/@:username/list/:slug", (req, res) => {
   const q = own ? String(req.query.add || "").trim().slice(0, 100) : "";
   const inList = own && q ? lists.ids(list.id) : null;
   const find = q ? { q, hits: searchHits(req, q).slice(0, 8).map((h) => ({ book: h.book, in: inList.has(store.canonical(h.book.id)) })) } : null;
-  const more = lists.of(reader.id).filter((l) => l.id !== list.id && (own || l.count)).slice(0, 5);
-  res.send(pages.listPage({ list: { ...list, count: items.length }, items, user: req.user, own, saved: lists.saved(req.user?.id, list.id), more, similar: lists.similar(list), find }));
+  // An editorial list shows the site's other ones, not its author's own (Max's name stays off «Добірка Chytai»).
+  const more = lists.of(reader.id).filter((l) => l.id !== list.id && (own || l.count) && (own || l.editorial === list.editorial)).slice(0, 5);
+  const og = list.image ? list.image : ogCovers(items).length ? `/og/list/${encodeURIComponent(list.id)}.jpg?v=${listImage.name(ogCovers(items)).slice(0, 8)}` : "";
+  res.send(pages.listPage({ list: { ...list, count: items.length }, items, user: req.user, own, owner: req.owner, saved: lists.saved(req.user?.id, list.id), more, similar: lists.similar(list), find, og, comments: lists.comments(list.id), commentError: String(req.query.comment_error || "").slice(0, 200) }));
+});
+const ogCovers = (items) => items.map((x) => x.book.cover).filter(Boolean).slice(0, 5);
+// The picture a list's link shows in Telegram, Facebook and the rest: made of its first covers once, then kept.
+app.get("/og/list/:id.jpg", async (req, res) => {
+  const l = lists.get(req.params.id);
+  if (!l) return res.status(404).end();
+  const covers = ogCovers(lists.items(l.id));
+  const file = await listImage.file(covers).catch(() => null);
+  if (!file) return res.redirect(302, covers[0] || "/icon.png");
+  res.set("Cache-Control", "public, max-age=86400").type("image/jpeg").sendFile(file);
 });
 app.get("/lists", (req, res) => {
   const tab = ["new", "saved", "mine"].includes(req.query.tab) && (req.user || req.query.tab === "new") ? req.query.tab : "popular";
@@ -967,7 +981,48 @@ app.post("/api/lists", signed, (req, res) => {
   }
   res.redirect(303, l.href);
 });
-app.post("/api/lists/:id", signed, myList, (req, res) => res.redirect(303, lists.edit(req.list.id, { title: req.body.title, note: req.body.note }).href));
+// «Добірка Chytai» is the owner's switch (the form shows it only to him).
+app.post("/api/lists/:id", signed, myList, (req, res) => res.redirect(303, lists.edit(req.list.id, { title: req.body.title, note: req.body.note, editorial: req.owner && req.body.ed_shown ? req.body.editorial === "1" : undefined }).href));
+// The picture on top of a list, from the author's computer: kept here, made no wider than 1600 px.
+app.post("/api/lists/:id/image", signed, myList, express.raw({ type: "image/*", limit: "15mb" }), async (req, res) => {
+  const ext = COVER_TYPES[String(req.get("content-type") || "").split(";")[0].trim()];
+  if (!ext || !Buffer.isBuffer(req.body) || req.body.length < 500) return res.status(400).json({ error: "Потрібна картинка: jpg, png або webp." });
+  const hash = require("crypto").createHash("sha1").update(req.body).digest("hex").slice(0, 20);
+  const src = path.join(COVERS, `${hash}.src.${ext}`);
+  const name = `${hash}.jpg`;
+  try {
+    fs.writeFileSync(src, req.body);
+    await new Promise((ok, fail) => require("child_process").execFile("nice", ["-n", "10", "vipsthumbnail", src, "--size", "1600x>", "-o", `${path.join(COVERS, name)}[Q=82,strip]`], { timeout: 30000 }, (e, _o, err) => (e ? fail(new Error(String(err || e.message).trim().split("\n")[0])) : ok())));
+  } catch (e) {
+    console.log(`list image: ${e.message}`);
+    return res.status(400).json({ error: "Не вдалося прочитати картинку." });
+  } finally {
+    fs.rmSync(src, { force: true });
+  }
+  lists.setImage(req.list.id, `/covers/${name}`);
+  res.json({ url: `/covers/${name}` });
+});
+app.post("/api/lists/:id/image/remove", signed, myList, (req, res) => (lists.setImage(req.list.id, ""), res.redirect(303, req.list.href)));
+// «Клуб Chytai»: a signed-in reader's words under a list.
+app.post("/api/lists/:id/comments", signed, (req, res) => {
+  const l = lists.get(req.params.id);
+  if (!l) return res.status(404).send(pages.messagePage({ title: "Немає такого списку", text: "", user: req.user }));
+  const back = (err) => res.redirect(303, `${l.href}${err ? `?comment_error=${encodeURIComponent(err)}` : ""}#club`);
+  if (auth.tooMany(`comments:${req.user.id}`, 10)) return back("Забагато за годину. Спробуй трохи згодом.");
+  const id = lists.addComment(l.id, req.user.id, req.body.text);
+  if (!id && String(req.body.text || "").trim()) return back("На сьогодні досить, завтра можна знову.");
+  back("");
+});
+// One's own words go; the list's author and the owner take any away.
+app.post("/api/lists/comments/:cid/delete", signed, (req, res) => {
+  const c = lists.comment(req.params.cid);
+  const l = c && lists.get(c.list);
+  if (!c || !l) return res.redirect(303, req.get("referer") || "/lists");
+  if (c.reader !== req.user.id && l.reader.id !== req.user.id && !req.owner) return res.status(403).send(pages.messagePage({ title: "Це не твій коментар", text: "", user: req.user }));
+  lists.dropComment(c.id);
+  res.redirect(303, req.body.back === "admin" ? "/admin/comments" : `${l.href}#club`);
+});
+app.get("/admin/comments", owner, (req, res) => res.send(pages.commentsAdminPage({ user: req.user, comments: lists.recentComments() })));
 app.post("/api/lists/:id/delete", signed, myList, (req, res) => (lists.remove(req.list.id), res.redirect(303, req.user.href)));
 app.post("/api/lists/:id/add", signed, myList, (req, res) => {
   const id = bookParam(req);

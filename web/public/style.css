@@ -802,6 +802,34 @@ form.inline button:not(.btn) { background: none; border: 0; padding: 0; cursor: 
 .list-head .by-line { margin-top: 16px; font-size: 14px; color: var(--muted); }
 .list-head .by-line b { color: var(--ink); font-weight: 500; }
 .list-head .acts { margin-top: 22px; gap: 10px; }
+/* An editorial list (2026-10-27): a picture on top (the author's, or the first covers fanned out on green, as in
+   its social picture, listimage.js), an intro of a few paragraphs, «Клуб Chytai» under the books. */
+.lhero { position: relative; height: 320px; margin: 0 0 34px; border-radius: 6px; overflow: hidden; background: radial-gradient(120% 140% at 15% 10%, #2f5d48 0%, #1d3a2e 55%, #14271f 100%); }
+.lhero:not(.photo)::before { content: ""; position: absolute; inset: 0; opacity: 0.55; background-image: radial-gradient(#fff9 1px, transparent 1.6px), radial-gradient(#fff5 1px, transparent 1.4px); background-size: 38px 38px, 23px 23px; background-position: 0 0, 11px 17px; }
+.lhero.photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.lhero .fan { position: absolute; left: 50%; bottom: -40px; transform: translateX(-50%); display: flex; align-items: flex-end; }
+.lhero .fc { margin: 0 -18px; z-index: calc(10 - var(--abs) * 2); transform: rotate(calc(var(--off) * 5deg)) translateY(calc(var(--abs) * 16px)); transform-origin: 50% 100%; }
+.lhero .fc .cover { width: 150px; border: 3px solid #f7f4ee; border-radius: 3px; box-shadow: 0 10px 30px #0008; }
+.list-head .intro { max-width: 38em; }
+.list-head .intro p { font: 19px/1.6 var(--serif); color: var(--text); margin-top: 14px; }
+.list-head .intro p:first-child { font-size: 21px; line-height: 1.5; color: var(--ink); }
+.club { margin-top: 44px; padding-top: 22px; border-top: 1px solid var(--ink); }
+.club h2 { font: 600 24px/1.2 var(--serif); margin-bottom: 4px; }
+.cmt { padding: 16px 0; border-bottom: 1px solid var(--rule); }
+.cmt .who { font-size: 14px; color: var(--muted); }
+.cmt .who b { color: var(--ink); font-weight: 500; }
+.cmt .txt { font: 17px/1.5 var(--serif); color: var(--text); margin-top: 4px; overflow-wrap: anywhere; }
+.cmt-form { margin-top: 18px; display: flex; flex-direction: column; gap: 10px; max-width: 640px; }
+.cmt-form textarea { width: 100%; min-height: 84px; padding: 12px; border: 1px solid var(--under); border-radius: 6px; background: transparent; font: 16px/1.5 var(--serif); }
+.list-image { margin-top: 18px; }
+.editorials { margin-top: 44px; }
+@media (max-width: 760px) {
+  .lhero { height: 220px; margin: 0 -20px 26px; border-radius: 0; }
+  .lhero .fc { margin: 0 -14px; }
+  .lhero .fc .cover { width: 96px; }
+  .list-head .intro p { font-size: 17px; }
+  .list-head .intro p:first-child { font-size: 19px; }
+}
 .lrow { display: flex; gap: 18px; padding: 20px 0; border-bottom: 1px solid var(--rule); }
 .lrow .n { font: 400 22px/1 var(--serif); color: var(--muted); width: 28px; flex: none; padding-top: 30px; text-align: right; }
 .lrow .row-body { flex: 1; min-width: 0; }

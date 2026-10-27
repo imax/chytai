@@ -106,6 +106,15 @@ class Thumbs {
     }
   }
 
+  // The small copy as a file on our disk (made now if need be), or null: for pictures made of covers (listimage.js).
+  async file(src, w = WIDTHS[1]) {
+    if (!src || this.url(src, 1) === src) return null;
+    const file = path.join(this.dir, String(w), `${crypto.createHash("sha1").update(src).digest("hex")}.webp`);
+    if (fs.existsSync(file)) return file;
+    if (Date.now() - (this.failed.get(src) || 0) < 3600 * 1000) return null;
+    return (await (this.made.get(file) || this.make(src, w, file))) ? file : null;
+  }
+
   // Makes the small copies of these covers ahead of the first reader who would wait for them (the jobs
   // process: every cover on a reader's shelf), one at a time.
   async warm(srcs, w = WIDTHS[0]) {
