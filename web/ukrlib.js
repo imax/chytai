@@ -4,9 +4,10 @@
 // library (/books/) is read, and a link goes up only when Wikidata says the author's term is over. An author
 // of the USSR who died in 1930–1953 (or was executed) may have been rehabilitated, and then the term runs from
 // that: those get no link until someone checks by hand (as on /admin/free). Its own books are not added.
-// Weekly: the sitemap's author pages (windows-1251, «author.php?id=N[&page=N]»), one a second, saved as it
-// goes so a restart picks up where it stopped (meta `ukrlib:index`); then the works are matched with ours by
-// author and title (`ukrlib:links`: book id -> text id).
+// Once (Max, 2026-10-27: «без перевірок раз на тиждень. що додали то і залишається»): the sitemap's author
+// pages (windows-1251, «author.php?id=N[&page=N]»), one a second, saved as it goes so a restart picks up where
+// it stopped (meta `ukrlib:index`). Daily the works are matched with ours by author and title, from that copy
+// and with no visit to the site (`ukrlib:links`: book id -> text id); a link once made stays.
 const { sparql, splitAuthors, allWorks } = require("./authors");
 const { isRussian } = require("./store");
 const { lastFree } = require("./freebooks");
@@ -57,11 +58,11 @@ class Ukrlib {
     return new TextDecoder("windows-1251").decode(await r.arrayBuffer());
   }
 
-  // The author pages, once a week; false when the last read is fresh.
+  // The author pages, read once; false when they have been.
   async crawl() {
     let st = JSON.parse(this.db.get("ukrlib:index") || "null");
-    if (st?.done && Date.now() - st.at < 7 * DAY) return false;
-    if (!st || st.done) st = { at: Date.now(), authors: {}, pages: null, i: 0 };
+    if (st?.done) return false;
+    if (!st) st = { at: Date.now(), authors: {}, pages: null, i: 0 };
     if (!st.pages) {
       const sm = await (await this.fetchImpl(`${BASE}/newsitemap.xml`, { headers: { "User-Agent": UA }, signal: AbortSignal.timeout(60000) })).text();
       st.pages = [...new Set([...sm.matchAll(/\/books\/author\.php\?id=(\d+)(?:&amp;page=(\d+))?/g)].map((m) => `${m[1]}:${m[2] || 1}`))];
@@ -143,7 +144,7 @@ class Ukrlib {
     Object.assign(known, await this.qidsByName(Object.keys(known).filter((n) => !known[n])));
     const people = await this.freeBooks.people([...new Set(Object.values(known).filter(Boolean))]);
     const last = lastFree();
-    const links = {};
+    const links = JSON.parse(this.db.get("ukrlib:links") || "null")?.links || {};
     let check = 0;
     for (const f of found) {
       const p = people[known[f.ukName]];
