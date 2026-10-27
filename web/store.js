@@ -1909,13 +1909,22 @@ class Store {
     return this.book(id);
   }
 
+  overviewUk() {
+    if (!this._overviewUk || this._overviewUk.raw !== this.db.get("overview:uk")) {
+      const raw = this.db.get("overview:uk");
+      this._overviewUk = { raw, map: JSON.parse(raw || "{}") };
+    }
+    return this._overviewUk.map;
+  }
+
   // book() plus its translations, for the book page (kept out of book() so the two don't recurse).
   bookPage(id) {
     const b = this.book(id);
     const translations = b && this.translationsOf(b.id);
     // The Ukrainian title from Wikidata is named only while no catalog has it: not as a translation, and
     // not as an edition either (MEGOGO Books gives «Марсіанин» the original title, so it joins The Martian).
-    const uk = (b && this.ukTitles?.[b.id]?.uk) || "";
+    // Wikidata's, else the one an overview names («Українською роман вийшов … як «Бункер. Ілюзія»», server.js).
+    const uk = (b && (this.ukTitles?.[b.id]?.uk || this.overviewUk()[b.id])) || "";
     const inCatalog = translations?.length || (b?.editions || []).some((e) => norm(e.title) === norm(uk) || /[а-яіїєґ]/i.test(e.title));
     // The original Haiku named, while no catalog has it (aiOrigs).
     const o = b && !translations.length && /[а-яіїєґ]/i.test(b.title || "") && this.aiOrigs().get(b.id);

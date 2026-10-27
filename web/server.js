@@ -1893,6 +1893,33 @@ function addEdition(orig, p, by) {
 const hintedBy = (id) => store.db.prepare("SELECT DISTINCT reader FROM uk_hint WHERE book = ? ORDER BY created").all(id).map((h) => pub(auth.reader(h.reader))).filter(Boolean).map((u) => `${u.name} (${SITE}${u.href})`).join(", ");
 const onUkHint = (b, r) => r.status === "found" && r.edition && notifyOwner(`Знайшли українське видання: ${r.edition.title}`, [`${hintedBy(b.id) || "Читач"} підказав(ла), що є переклад «${b.title}», і пошук знайшов:`, "", `Переклад: ${r.edition.title}${r.edition.author ? ` — ${r.edition.author}` : ""}  ${SITE}${store.href(r.edition.id)}`, `Сторінка: ${r.url}`, "", `Прибрати пару: ${SITE}/admin/dupes#decided`, `Усі пошуки: ${SITE}/admin/ukfind`].join("\n"));
 const ukfind = new UkFinder({ store, db: store.db, apiKey: process.env.ANTHROPIC_API_KEY || "", bookpage, addEdition, onHint: onUkHint, log: console.log });
+// An overview that says the book is out in Ukrainian while no catalog of ours has that edition (Max,
+// 2026-10-27, Wool: «Українського перекладу в каталогах поки немає» right above «Українською роман вийшов 2018
+// року у BookChef як «Бункер. Ілюзія»»): the title it names is kept for the «Українською: …» line, and the
+// edition is looked for like after a reader's «Додати» (ukfind.js), once a month at most.
+const UK_SAID = /українськ\p{L}*\s+(переклад|видання)|українською\s[^.]{0,80}(вийш|вийд|вид(ал|ав)|переклал|виход)/iu;
+function ukFromOverview(book, text) {
+  const b = store.bookPage(book.id);
+  if (!b || !UK_SAID.test(text || "") || !/[a-z]/i.test(b.title) || CYR_RE.test(b.title)) return;
+  if ((b.translations || []).some((t) => CYR_RE.test(t.title)) || (b.editions || []).some((e) => CYR_RE.test(e.title))) return;
+  const m = String(text).match(/українськ[^.]{0,160}?«([^»]{2,80})»/iu);
+  const title = m && CYR_RE.test(m[1]) && !/[ыэъё]/i.test(m[1]) ? m[1].trim() : "";
+  if (title && !store.ukTitles?.[b.id]?.uk) store.db.set("overview:uk", JSON.stringify({ ...store.overviewUk(), [b.id]: title }));
+  if (ukfind.state(b.id) !== "ask") return;
+  const ok = ukfind.hint(b, "overview", title);
+  console.log(`uk from overview: ${b.id}${title ? ` «${title}»` : ""}${ok ? "" : " (not queued)"}`);
+}
+advice.onOverview = ukFromOverview;
+// The overviews written before this, once (the jobs process).
+if (bg.ROLE !== "web" && !store.db.get("overview:uk:swept")) {
+  store.db.set("overview:uk:swept", new Date().toISOString());
+  setTimeout(() => {
+    for (const r of store.db.prepare("SELECT book, text FROM overview").all()) {
+      const book = store.book(r.book);
+      if (book) ukFromOverview(book, r.text);
+    }
+  }, 60000);
+}
 // «Додати» after «Українською: …, у каталогах поки немає» for a signed-in reader (pages.ukLine).
 // Also a foreign book Wikidata knows no translation of (Max, 2026-10-23: «тут немає перекладу але він є», Feynman):
 // a Latin title, no Ukrainian edition or translation linked.
