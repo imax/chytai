@@ -547,7 +547,7 @@ function joinBand(book) {
     <p class="kicker">Chytai</p>
     <p class="join-title">Проєкт для тих, хто любить книжки</p>
     <p class="join-text">Спільнота людей, каталоги українських видавництв, пошук і рекомендації, читалка з AI-explainer та перекладом.</p>
-    <p class="join-links"><a href="/publishers">Каталог</a><a href="/community">Спільнота</a><a href="https://app.chytai.org.ua">Читалка</a></p>
+    <p class="join-links"><a href="/publishers">📚 Видавництва</a><a href="/popular">⭐ Популярне</a><a href="/community">👥 Спільнота</a><a href="/">🔍 Пошук</a><a href="https://app.chytai.org.ua">📖 Читалка</a></p>
   </div>
   <a class="btn primary" rel="nofollow" href="${attr(`/login?next=${encodeURIComponent(book.href)}`)}">Доєднатися</a>
 </section>`;
