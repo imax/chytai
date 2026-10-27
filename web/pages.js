@@ -792,7 +792,20 @@ function where(book, ukrlib = null) {
   // that are out of it fold into one quiet line, each named once.
   const gone = (e) => e.status === "немає";
   const shown = new Set(); // the same shop, format, edition and price twice is one row
-  const have = eds.filter((e) => !gone(e) && ((k) => !shown.has(k) && shown.add(k))([e.shelf.id, e.format, e.edition, e.price, e.narrator].join("|")));
+  // A join-only shop (book.ua) is one row (Max, 2026-10-27: four e-book rows of «Тигролови» were «забагато»,
+  // «оберемо для читача одну»): the edition of the publisher whose book the page shows, else the shop's oldest item.
+  const pubKey = (s) => String(s || "").toLowerCase().replace(/видавництв\p{L}*|видавнича група|в-во|[«»"'’]/gu, " ").replace(/старого лева/, "старий лев").split(/\s+/).filter(Boolean)[0] || "";
+  const main = (book.editions || []).find((e) => e.id === book.id) || (book.editions || [])[0];
+  const pub = pubKey(main?.edition || main?.shelf?.name);
+  const age = (e) => Number((e.id.match(/-(\d+)$/) || [])[1]) || Infinity;
+  const one = new Map(); // shelf id -> the edition shown
+  for (const e of eds) {
+    if (!e.shelf.joinOnly || gone(e)) continue;
+    const was = one.get(e.shelf.id);
+    const mine = (x) => !!pub && pubKey(x.edition) === pub;
+    if (!was || (mine(e) && !mine(was)) || (mine(e) === mine(was) && age(e) < age(was))) one.set(e.shelf.id, e);
+  }
+  const have = eds.filter((e) => !gone(e) && (!e.shelf.joinOnly || one.get(e.shelf.id) === e) && ((k) => !shown.has(k) && shown.add(k))([e.shelf.id, e.format, e.edition, e.price, e.narrator].join("|")));
   const out = [...new Map(eds.filter(gone).map((e) => [e.shelf.id, e])).values()];
   const items = [
     ...have.map(shop),

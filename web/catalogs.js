@@ -1069,7 +1069,7 @@ const SOURCES = [
     name: "Book.ua",
     tagline: "Київські книгарні з магазином електронних книжок (EPUB, MOBI)",
     url: "https://book.ua/books/elektronni-knyhy",
-    draft: true,
+    draft: false,
     joinOnly: true,
     fetchAll: (src, opts) => bookuaProducts(src, opts),
     normalize: (p) => p,
