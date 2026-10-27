@@ -144,6 +144,7 @@ ${path === "/" ? `<meta name="google-site-verification" content="5cswdBTj0bCY9oY
 </header>
 <main class="${home ? "home" : ""}">
 ${body}
+${!user && JOIN_PATHS.has(path) ? joinBand(canonical) : ""}
 </main>
 <footer class="foot"><div class="bar"><span class="motto">Chytai.org.ua: читай більше.</span><a href="https://app.chytai.org.ua">Читалка</a><a href="/updates">Що нового</a><a href="/privacy">Приватність</a><a href="mailto:ischenko@gmail.com">Написати нам</a>${user?.owner ? `<a href="/admin">Адмінка</a>` : ""}</div></footer>
 <script src="${ASSETS.js}"></script>
@@ -532,23 +533,25 @@ function bookPage({ ukrlib = null, inGenre = null, fresh = null, pick = null, aw
     ${pick ? `${label("Книжка навмання", "оцінка 4,5+")}${feedList([pick])}` : ""}`}
   </aside>
 </div>
-${user ? "" : joinBand(book)}
 ${myLists ? listsDialog(book, myLists) : ""}`;
   const description = [book.author, book.blurb?.replace(/\s+/g, " ") || stripMd(readers.find((r) => r.entry.note)?.entry.note || "")].filter(Boolean).join(". ");
   return layout({ title: book.title, body, user, path: "/book", description, canonical: book.href, image: abs(book.cover || ""), type: "book", noindex: require("./store").isRussian(book), jsonld: bookLd(book, shelf, s, readers) });
 }
 
 // «Огляди» are hidden on book pages for now (Max, 2026-10-23); /admin/reviews, the API and the data stay.
-// For guests, at the bottom of a book page: what the site is and a way in (Max, 2026-10-27, variant B of
-// three; he will rewrite the text and links). The «Хочу прочитати» block itself is not shown to guests.
-function joinBand(book) {
+// For guests, at the bottom of the pages people land on from a search engine: what the site is and a way in
+// (Max, 2026-10-27, variant B of three; text and links his). Not on the home page, search, sign-in or settings.
+// On book pages the «Хочу прочитати» block itself is not shown to guests.
+const JOIN_PATHS = new Set(["/book", "/author", "/genre", "/publishers", "/@", "/lists", "/popular", "/community"]);
+function joinBand(back) {
   return `<section class="join-band">
   <div>
     <p class="kicker">Chytai</p>
-    <p class="join-title">Сайт для тих, хто читає</p>
-    <p class="join-points"><span>📚 Ваша полиця</span><span>⭐ Оцінки читачів</span><span>✉️ Лист, коли книжка зʼявиться</span></p>
+    <p class="join-title">Проєкт для тих, хто любить книжки</p>
+    <p class="join-text">Спільнота людей, каталоги українських видавництв, пошук і рекомендації, читалка з AI-explainer та перекладом.</p>
+    <p class="join-links"><a href="/publishers">📚 Видавництва</a><a href="/popular">⭐ Популярне</a><a href="/community">👥 Спільнота</a><a href="/">🔍 Пошук</a><a href="https://app.chytai.org.ua">📖 Читалка</a></p>
   </div>
-  <a class="btn primary" rel="nofollow" href="${attr(`/login?next=${encodeURIComponent(book.href)}`)}">Створити акаунт</a>
+  <a class="btn primary" rel="nofollow" href="${attr(back ? `/login?next=${encodeURIComponent(back)}` : "/login")}">Доєднатися</a>
 </section>`;
 }
 const SHOW_REVIEWS = false;
@@ -1737,15 +1740,15 @@ const DO_WHAT = { want: "буде у вашому «Хочу прочитати�
 // don't have the book itself, unless it is on the free shelf.
 function loginPage({ next = "", email = "", error = "", book = null, what = "", free = false }) {
   return authLayout({
-    title: book ? "Зберегти книжку" : "Увійти",
+    title: book ? "Зберегти книжку" : "Вхід у Chytai",
     before: book ? `<div class="login-book">${cover(book, "sm")}<p><b>${esc(book.title)}</b><br>одразу після входу ${DO_WHAT[what] || DO_WHAT.want}</p></div>${free || what !== "want" ? "" : `<p class="want-why">Самої книжки тут немає: Chytai — сайт про книжки. Напишемо, коли вона зʼявиться в продажу чи безкоштовно.</p>`}` : "",
-    lead: book ? "Вкажіть пошту, і ми надішлемо код. Без паролів, акаунт створиться сам." : "Вкажіть пошту, і ми надішлемо код. Без паролів. Якщо ви тут уперше, акаунт створиться сам.",
+    // Max's text, 2026-10-27.
+    lead: "Якщо ви тут вперше, вкажіть пошту, на яку ми вишлемо код для реєстрації. Те саме для входу з іншого пристрою.",
     form: `<form method="post" action="/login" class="form">
   ${hidden("next", next)}${errorLine(error)}
-  <label>Пошта<input type="email" name="email" value="${attr(email)}" required autofocus autocomplete="email" inputmode="email" placeholder="ви@пошта.ua"></label>
-  <div class="actions"><button class="btn primary">Надіслати код</button></div>
-</form>
-<p class="muted small">Пошту ми використовуємо лише для входу. <a class="text-link" href="/privacy">Приватність</a>.</p>`,
+  <label>Пошта для входу або реєстрації<input type="email" name="email" value="${attr(email)}" required autofocus autocomplete="email" inputmode="email"></label>
+  <div class="actions"><button class="btn primary">Отримати код</button></div>
+</form>`,
   });
 }
 
