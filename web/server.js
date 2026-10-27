@@ -718,6 +718,7 @@ bg.every("free", 24 * 3600 * 1000, () => freeBooks.run(), { db: store.db, first:
 const bookpage = new BookPage({ apiKey: process.env.ANTHROPIC_API_KEY || "", log: console.log });
 const advice = new Advice({ store, social, db: store.db, apiKey: process.env.ANTHROPIC_API_KEY || "", log: console.log });
 const genreTrial = new (require("./genretrial").GenreTrial)({ store, social, db: store.db, apiKey: process.env.ANTHROPIC_API_KEY || "", genres: pages.GENRES, log: console.log });
+const overviewTrial = new (require("./overviewtrial").OverviewTrial)({ store, advice, db: store.db, log: console.log });
 const origTrial = new (require("./origtrial").OrigTrial)({ store, social, db: store.db, apiKey: process.env.ANTHROPIC_API_KEY || "", log: console.log });
 const ukTrial = new (require("./uktrial").UkTrial)({ store, social, db: store.db, apiKey: process.env.ANTHROPIC_API_KEY || "", log: console.log });
 const aiPasses = new Map(require("./catalogpasses").passes({ store, social, db: store.db, apiKey: process.env.ANTHROPIC_API_KEY || "", log: console.log }).map((p) => [p.key, p]));
@@ -1714,6 +1715,19 @@ app.get("/uk-trial/:key", (req, res) => {
 app.post("/admin/uk-trial", owner, (req, res) => {
   ukTrial.run().catch((e) => console.log(`uktrial: ${e.message}`));
   res.redirect(303, "/admin/uk-trial");
+});
+// The overview prompt trial (overviewtrial.js): the next prompt on twenty books next to the live one.
+app.get("/admin/overviews-trial", owner, (req, res) => res.send(pages.overviewTrialPage({ user: req.user, items: overviewTrial.items(), st: overviewTrial.state(), running: overviewTrial.running, live: overviewTrial.live, version: overviewTrial.version })));
+app.get("/overviews-trial/:key", (req, res) => {
+  const st = overviewTrial.state();
+  if (!st?.key || req.params.key !== st.key) return res.status(404).send("Немає");
+  const line = (x) => [`## ${store.book(x.id)?.title || x.id}`, x.error ? `помилка: ${x.error}` : x.text, x.queries?.length ? `запити: ${x.queries.join(" | ")}` : "", x.sources?.length ? `джерела: ${x.sources.map((s) => s.url).join(" ")}` : ""].filter(Boolean).join("\n");
+  res.type("text/plain").send([`промпт v${st.version}, ${st.at}: ${st.done} з ${st.total}, $${(st.cost || 0).toFixed(2)}${st.finished ? "" : ", ще йде"}`, "", ...st.items.map(line)].join("\n\n"));
+});
+app.post("/admin/overviews-trial", owner, (req, res) => {
+  if (req.body?.keep) console.log(`overviewtrial: ${overviewTrial.keep()} overviews put on the site`);
+  else overviewTrial.run().catch((e) => console.log(`overviewtrial: ${e.message}`));
+  res.redirect(303, "/admin/overviews-trial");
 });
 // The originals trial (origtrial.js): what Haiku says a reader's Ukrainian book was translated from.
 app.get("/admin/orig-trial", owner, (req, res) => res.send(pages.origTrialPage({ user: req.user, st: origTrial.state(), running: origTrial.running, all: { ...origTrial.allState(), running: origTrial.allRunning, have: store.aiOrigs().size }, href: (id) => store.href(id) })));

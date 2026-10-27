@@ -37,6 +37,15 @@ const BLOCKED_DOMAINS = [
   "yakaboo.ua", "nashformat.ua", "laboratory.ua", "laboratoria.pro", "vivat.com.ua", "vivat-book.com.ua", "readeat.com", "book-ye.com.ua", "bookclub.ua",
   "starylev.com.ua", "ranok.com.ua", "bookzone.com.ua", "megogo.net", "abuk.com.ua", "booklya.ua", "grenka.ua", "balka-book.com", "rozetka.com.ua",
   "prom.ua", "knigoland.com.ua", "bookovka.ua", "kmbooks.com.ua", "folio.com.ua", "ababahalamaha.com.ua", "lobster.com.ua", "bukva.ua", "kniga.biz.ua", "artbooks.ua",
+  // 2026-10-27, from the sources of 296 overviews: the shops a Ukrainian query turns up, the reading apps and
+  // pirate libraries whose «відгуки» are a shop's, the summary services, and Russian sites (an overview on a
+  // Ukrainian site is not built from Russian readers' reactions).
+  "findbook.com.ua", "4read.org", "fabulabook.com", "ksd.ua", "book.ua", "vikhola.com", "pocketbook.ua", "epub.com.ua", "mbooks.com.ua", "knigogo.top", "akvarel.com",
+  "bookopt.com.ua", "knygy.com.ua", "epicentrk.ua", "chtyvo.org.ua", "bookchef.ua", "arkush.net", "booksa.in.ua", "emmystore.com.ua", "uabook.com.ua", "mybookshelf.com.ua",
+  "vsiknygy.com.ua", "bookking.com.ua", "megakniga.com.ua", "brain.com.ua", "chitaka.com.ua", "bizlit.com.ua", "ua-read.com.ua", "e-bookua.org.ua", "javalibre.com.ua", "bookmate.com",
+  "livelib.ru", "litres.ru", "litres.com", "rulit.me", "royallib.com", "readli.net", "mirknig.su", "labirint.ru", "ozon.ru", "ast.ru", "fantlab.ru", "flibusta.is",
+  "blinkist.com", "getabstract.com", "fourminutebooks.com", "bookey.app", "superbook.ai", "bookinsighthub.com", "growthabit.com", "shortform.com", "sobrief.com",
+  "amazon.com", "thriftbooks.com", "barnesandnoble.com", "audible.com", "books.apple.com", "everand.com", "scribd.com", "play.google.com", "ebay.com", "allbookstores.com",
 ];
 const OVERVIEW_DAILY = 150; // fresh overviews a day on readers' clicks, all readers together
 // Made by itself (Max, 2026-10-23: «запускати її автоматично коли у книжки з'являється хоча б один відгук
@@ -72,6 +81,37 @@ const OVERVIEW_SYSTEM = `You write a short, neutral note for a book's page on Ch
 Keep it to the essentials a reader wants before opening the book, said matter-of-factly, in a low key: no blurb language, no superlatives, no cheering («тримає до останньої сторінки», «не шкодують», «змушує думати»), no selling; a fact such as a prize or a place on a list is said once, flatly. Reservations get one short sentence at most, and only when they are a real part of the reception (a split between critics and readers, or the same complaint coming up again and again); never list several complaints, never pad a warm reception with a reservation for balance, never invent one. One paragraph.
 
 Write everything in your own words: never quote a review or a reader, never name a reviewer, a site or a channel, no links, no "I searched". If the web says little about the book, say what is known in one or two sentences and stop; never invent reception. No spoilers. 40 to 70 words, plain prose, no headings, lists or bold. Start with the substance, no preamble.`;
+
+// Version 9 (2026-10-27, thread «Покращити огляди „Що кажуть про книжку“», after a review of 296 overviews:
+// 14% made without a search, 72% from one English query, «Найчастіше» in 40%, a guessed «who reads it»
+// sentence in 37%, every note in the same shape): search is obligatory and in two languages, the note opens
+// with the most specific fact, no audience guesses, the Ukrainian edition's reception first, nothing about
+// the search itself. Live only once PROMPT_VERSION says 9; /admin/overviews-trial shows it next to v8.
+const OVERVIEW_SYSTEM_V9 = `You write a short, neutral note for a book's page on Chytai, a Ukrainian site about books, on what people say about this book.
+
+First search the web, always, even for a classic you know well: a note written from memory is not what this block is for. Make at least two different searches (up to ${WEB_SEARCHES}): one in Ukrainian with the Ukrainian title («<назва> рецензія» or «відгуки») whenever the book has a Ukrainian edition, and one in English with the original title for a translated book, or for a Ukrainian book that has been translated. Never send the same query twice; when a search finds nothing useful, change the words. Look for reviews in the press and on literary sites, reader reactions (Goodreads, blogs, booktubers, podcasts), awards and year lists, the author's standing. Online shops, publishers' own pages, summary services and pirate libraries are not a source, even if a search turns them up; Russian-language sites are not a source either.
+
+Then write, in Ukrainian, what the reception actually is. Open with the most specific thing the web says about this very book: a prize with its year, a well-known dispute or controversy, a film, a place on a notable list, what the Ukrainian press made of it, a comparison critics keep making. Never open with a general sentence about how readers feel. If nothing that specific exists, the note gets shorter; it is not padded with general words. Then what readers and critics single out, in concrete terms (which character, what device, which part of the book), and what kind of reading experience they describe. If the Ukrainian edition itself drew reactions (the translation praised or faulted, the edition, the illustrations), or the book won Ukrainian awards or made Ukrainian year lists, that goes in and comes before the foreign reception. For a book older than a few decades, say how it was met at the time and how it is read now, a sentence each. When reviewers keep comparing it with other books, name one or two of them in «лапки».
+
+Do not say who the book «tends to find» or who «usually reads it» unless that is a documented fact (a school program, a university syllabus): such sentences are guesses. Use «найчастіше» or «здебільшого» at most once, and never open with «Читачі здебільшого…», «Критики й читачі…» or «Книжку сприймають…». Facts and the balance of opinion, no verdict of your own, no advice, not addressed to anyone.
+
+Keep it low key: no blurb language, no superlatives, no cheering, no selling; a fact such as a prize is said once, flatly. Reservations get one short sentence at most, and only when they are a real part of the reception (a split between critics and readers, or the same complaint coming up again and again); never list several complaints, never pad a warm reception with a reservation for balance, never invent one. One paragraph.
+
+Everything in your own words: never quote a review or a reader, never name a reviewer, a site or a channel, no links. Nothing about yourself or your search: no «I searched», no notes, caveats or remarks for the editor, no parentheses about what you could not check. If a search fails or the web says little, say in one or two sentences what is known and stop; never invent reception. No spoilers. 40 to 70 words, plain prose, no headings, lists or bold. Start with the substance, no preamble.`;
+const OVERVIEW_PROMPTS = { 8: OVERVIEW_SYSTEM, 9: OVERVIEW_SYSTEM_V9 };
+
+// A model's aside to the editor («Примітка: я не робив пошук…», «Пошук не спрацював…», «На сторінці книжки має
+// бути таке:», 2026-10-27, Ecce Homo, Dalio, Foucault, Lord of the Flies) is never part of the note: such
+// paragraphs, and such a lead-in before the first sentence, are cut before the text is kept.
+const ASIDE = /^\(?\s*примітка|пошук не спрацював|не (робив|виконував|зробив) пошук|\bя (написав|не маю|не зміг|не робив|спирався)|варто перевірити ці|перш ніж публікувати|інструмент повернув|із? (загальних|власних) знань/i;
+const LEAD_IN = /^[^.!?\n]{0,60}(має бути таке|ось (текст|нотатка)|нотатка для сторінки)[^:\n]*:\s*/i;
+const stripAsides = (text) =>
+  String(text || "")
+    .split(/\n+/)
+    .map((p) => p.replace(LEAD_IN, "").trim())
+    .map((p) => p.charAt(0).toUpperCase() + p.slice(1))
+    .filter((p) => p && !ASIDE.test(p))
+    .join("\n\n");
 
 const SYSTEM = `You are a well-read friend built into Chytai, a Ukrainian site where people keep shelves of the books they read. A reader is looking at a book's page and wants to know what this book is like for them. You know their shelf: the books they read with their ratings (1 to 5) and notes, what they are reading, want to read, and gave up on.
 
@@ -324,7 +364,8 @@ class Advice {
   // only a title with the same number of words, every one starting with its stem, counts. The book's
   // own title and its translations are never linked; one-word titles only by the same author.
   linkTitles(text, book, key = "") {
-    text = tidy(text);
+    // An aside the model left in an older overview is cut here too, so the five such rows read clean at once.
+    text = stripAsides(tidy(text));
     // Linked once per overview per process: a page view costs no search (the index has ~20k rows).
     if (key) {
       const hit = this.linkCache?.get(key);
@@ -388,6 +429,8 @@ class Advice {
       for (const b of content || []) {
         if (b.type === "server_tool_use" && b.input?.query) queries.push(String(b.input.query));
         if (b.type === "web_search_tool_result" && Array.isArray(b.content)) for (const r of b.content) if (r.type === "web_search_result" && r.url && !sources.some((x) => x.url === r.url)) sources.push({ url: r.url, title: String(r.title || "").slice(0, 120) });
+        // A failed search comes back as an error block; the model then writes from memory and says so (2026-10-27).
+        if (b.type === "web_search_tool_result" && b.content && !Array.isArray(b.content) && /error/.test(b.content.type || "")) usage.failed = (usage.failed || 0) + 1;
       }
     };
     for (let i = 0; i < 4; i++) {
@@ -416,6 +459,7 @@ class Advice {
     // A model's aside before the note («Enough with known context.», 2026-10-23) comes as its own paragraph
     // without a Ukrainian letter: drop such paragraphs, they are never part of the note.
     text = text.split(/\n\n+/).filter((p) => /[а-яіїєґ]/i.test(p)).join("\n\n");
+    if (params.tools) text = stripAsides(text);
     if (params.tools && (text.length < 120 || !/[а-яіїєґ]/i.test(text))) throw new Error(`Не схоже на огляд: «${clip(text, 60)}»`);
     return { text, model: message.model, usage, queries, sources };
   }
@@ -517,17 +561,21 @@ class Advice {
   }
 
   // A fresh overview of the book from the web, kept for everyone.
-  async overview(book, { fresh = false, by = "" } = {}) {
+  // `version` picks the prompt (the live one by default); `keep: false` only returns the result (the trial).
+  async overview(book, { fresh = false, by = "", version = PROMPT_VERSION, keep = true } = {}) {
     if (!this.client) throw new Error("Зараз недоступно.");
+    // A Russian-language book has no overview (Max, 2026-10-23); a reader's or the owner's click is no exception (2026-10-27).
+    if (isRussian(book)) throw new Error("Для російськомовних книжок огляду немає.");
     const id = this.homeOf(book.id);
-    const old = fresh ? null : this.overviewOf(id);
+    const old = fresh || !keep ? null : this.overviewOf(id);
     if (old) return { ...old, cached: true };
     // A ceiling for the day on readers' clicks: each overview is a few web searches and a long Opus turn.
     // Automatic ones have their own ceiling in pump().
     const day = new Date().toISOString().slice(0, 10);
     if (by !== "auto" && by !== "redo" && this.db.prepare("SELECT COUNT(*) AS n FROM overview WHERE by NOT IN ('auto', 'redo') AND created >= ?").get(day).n >= OVERVIEW_DAILY) throw new Error("На сьогодні оглядів більше немає, спробуйте завтра.");
     const t0 = Date.now();
-    const { text, model, usage, queries, sources } = await this.turn({
+    const facts = await this.bookText(book, { overview: false, site: false });
+    const params = {
       model: this.model,
       max_tokens: 6000,
       betas: ["server-side-fallback-2026-07-01"],
@@ -537,14 +585,26 @@ class Advice {
       // Prompt caching: the instructions are the same for every book (the auto job does them in a row), and
       // with caching on, each step after a web search reads the earlier results from the cache instead of
       // paying for them again.
-      system: [{ type: "text", text: OVERVIEW_SYSTEM, cache_control: { type: "ephemeral" } }],
+      system: [{ type: "text", text: OVERVIEW_PROMPTS[version] || OVERVIEW_SYSTEM, cache_control: { type: "ephemeral" } }],
       cache_control: { type: "ephemeral" },
-      messages: [{ role: "user", content: `The book:\n${await this.bookText(book, { overview: false, site: false })}\n\nWhat do readers and critics say about it?` }],
-    });
-    const row = { text, model, created: new Date().toISOString() };
+      messages: [{ role: "user", content: `The book:\n${facts}\n\nWhat do readers and critics say about it?` }],
+    };
+    let r = await this.turn(params);
+    // Written from memory (no search, or the search failed): one more try, told to search first (2026-10-27:
+    // 41 of 296 overviews had no search behind them, and a failed search left a note to the editor in the text).
+    if (!r.usage.searches || r.usage.failed) {
+      const again = await this.turn({ ...params, messages: [...params.messages, { role: "assistant", content: r.text }, { role: "user", content: "Search the web first, then write the note again from what you find." }] });
+      again.usage = { input: r.usage.input + again.usage.input, cached: r.usage.cached + again.usage.cached, output: r.usage.output + again.usage.output, searches: r.usage.searches + again.usage.searches, failed: again.usage.failed };
+      again.queries = [...r.queries, ...again.queries];
+      again.sources = [...r.sources, ...again.sources];
+      if (again.usage.searches || !r.usage.searches) r = again;
+    }
+    const { text, model, usage, queries, sources } = r;
+    const row = { text, model, created: new Date().toISOString(), usage, queries, sources, version };
+    if (!keep) return row;
     this.db
       .prepare("INSERT INTO overview (book, text, model, created, by, input_tokens, output_tokens, searches, prompt, sources) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (book) DO UPDATE SET text = excluded.text, model = excluded.model, created = excluded.created, by = excluded.by, input_tokens = excluded.input_tokens, output_tokens = excluded.output_tokens, searches = excluded.searches, prompt = excluded.prompt, sources = excluded.sources")
-      .run(id, text, model, row.created, by, usage.input + usage.cached, usage.output, usage.searches, PROMPT_VERSION, JSON.stringify({ queries, sources: sources.slice(0, 30) }));
+      .run(id, text, model, row.created, by, usage.input + usage.cached, usage.output, usage.searches, version, JSON.stringify({ queries, sources: sources.slice(0, 30) }));
     this.log(`overview: ${book.title} in ${Date.now() - t0} ms, ${usage.input + usage.cached} in, ${usage.output} out, ${usage.searches} searches, ${model}`);
     return { ...row, cached: false };
   }
@@ -586,4 +646,4 @@ class Advice {
   }
 }
 
-module.exports = { Advice, MODEL, DAILY_LIMIT, SHELF_MIN };
+module.exports = { Advice, MODEL, DAILY_LIMIT, SHELF_MIN, PROMPT_VERSION, OVERVIEW_PROMPTS, stripAsides };

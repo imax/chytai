@@ -1322,6 +1322,30 @@ ${running ? `<script>setTimeout(() => location.reload(), 5000)</script>` : ""}`;
   return layout({ title: "Мова від Haiku", body, user, path: "/admin" });
 }
 
+// ---- /admin/overviews-trial: the next overview prompt on twenty books next to what the page shows now (overviewtrial.js) ----
+
+function overviewTrialPage({ user, items, st, running, live, version }) {
+  const host = (u) => { try { return new URL(u).hostname.replace(/^www\./, ""); } catch { return u; } };
+  const found = (x) => (x?.queries?.length || x?.sources?.length ? `<details><summary class="small muted">запити ${x.queries?.length || 0}, джерела ${x.sources?.length || 0}</summary><div class="small muted">${(x.queries || []).map((q) => `🔍 ${esc(q)}`).join("<br>")}${x.queries?.length ? "<br>" : ""}${(x.sources || []).map((s) => `<a href="${attr(s.url)}" target="_blank" rel="noopener" title="${attr(s.title)}">${esc(host(s.url))}</a>`).join(" · ")}</div></details>` : "");
+  const byId = new Map((st?.items || []).map((x) => [x.id, x]));
+  const row = (b) => {
+    const x = byId.get(b.id);
+    const fresh = !x ? `<span class="muted">—</span>` : x.error ? `<span class="error small">${esc(x.error)}</span>` : `${esc(x.text).split(/\n+/).map((t) => `<p>${t}</p>`).join("")}<p class="small muted">${x.searches} ${x.searches === 1 ? "пошук" : "пошуки"} · $${(x.cost || 0).toFixed(2)}</p>${found(x)}`;
+    return `<tr><td><a href="${attr(b.href || "#")}">${esc(b.title)}</a><br><span class="small muted">${esc(b.author)}</span><br><span class="small muted">${esc(b.why)}</span></td><td>${b.old ? esc(b.old).split(/\n+/).map((t) => `<p>${t}</p>`).join("") : `<span class="muted">немає</span>`}${b.oldPrompt ? `<p class="small muted">v${b.oldPrompt.prompt} · ${b.oldPrompt.searches} ${b.oldPrompt.searches === 1 ? "пошук" : "пошуки"}</p>` : ""}</td><td>${fresh}</td></tr>`;
+  };
+  const sub = st
+    ? [`промпт v${st.version}`, `${st.done} з ${st.total}`, st.errors ? `помилок ${st.errors}` : "", `$${(st.cost || 0).toFixed(2)}`, running ? "іде…" : st.finished ? "готово" : "зупинилось", st.kept ? `поставлено на сайт ${st.kept.slice(0, 16).replace("T", " ")}` : ""].filter(Boolean).join(" · ")
+    : `Ще не запускали. Книжки, чиї огляди v${live} показали слабке місце, прогнати промптом v${version}; на сайті нічого не змінюється.`;
+  const body = `
+${pageHead({ crumbs: `<a href="/admin">Статистика</a> / <a href="/admin/overviews">Огляди</a>`, kicker: "Проба", title: `Огляди: промпт v${version} поруч із v${live}`, sub })}
+${st?.key ? `<p class="small muted">Посилання для Claude (тільки тексти): <a href="/overviews-trial/${attr(st.key)}">chytai.org.ua/overviews-trial/${esc(st.key)}</a></p>` : ""}
+<p class="small muted">На сайті зараз промпт v${live}. Нові тексти нікуди не записуються, поки не натиснути «Поставити ці огляди на сайт»: тоді ці ${items.length} книжок отримають огляди v${version}, решта лишається як є.</p>
+${running ? "" : `<div class="row"><form method="post" action="/admin/overviews-trial"><button class="btn">${st ? "Прогнати ще раз" : "Запустити"}</button></form>${st?.finished ? `<form method="post" action="/admin/overviews-trial"><input type="hidden" name="keep" value="1"><button class="btn primary">Поставити ці огляди на сайт</button></form>` : ""}</div>`}
+<table class="trial"><colgroup><col style="width:20%"><col style="width:40%"><col style="width:40%"></colgroup><thead><tr><th>Книжка</th><th>Зараз (v${live})</th><th>Проба (v${version})</th></tr></thead><tbody>${items.map(row).join("")}</tbody></table>
+${running ? `<script>setTimeout(() => location.reload(), 5000)</script>` : ""}`;
+  return layout({ title: `Огляди: промпт v${version}`, body, user, path: "/admin" });
+}
+
 // ---- /admin/orig-trial: the original Haiku names for readers' Ukrainian books (origtrial.js) ----
 
 function origTrialPage({ user, st, running, all = {}, href }) {
@@ -2392,7 +2416,7 @@ module.exports = {
   decidedList,
   welcomePage,
   addPage, addReviewPage, addFindResults, addPageResult, ukFindPage,
-  layout, homePage, bookPage, bookEditPage, russianPage, editPage, libraryPage, readersPage, popularPage, genrePage, genreTrialPage, langTrialPage, origTrialPage, ukTrialPage, catalogAdminPage, aiPassPage, publishersPage, publisherPage, searchPage, searchResults, authorPage,
+  layout, homePage, bookPage, bookEditPage, russianPage, editPage, libraryPage, readersPage, popularPage, genrePage, genreTrialPage, langTrialPage, origTrialPage, overviewTrialPage, ukTrialPage, catalogAdminPage, aiPassPage, publishersPage, publisherPage, searchPage, searchResults, authorPage,
   loginPage, codePage, signupPage, settingsPage, privacyPage, updatesPage, messagePage, digestPage, followMailPage, wantMailPage, importPage, importPreviewPage, importDonePage,
   GENRES, esc, byline, STATUS, COPY, inline, isUk, setTitleLinks, setAuthorLinks, setThumbs, setStats, setReadersWithNote,
 };

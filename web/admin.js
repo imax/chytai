@@ -829,7 +829,7 @@ function overviewsPage({ user, list, stats: o, who, layout }) {
 <p class="small"><a href="/admin">← Статистика</a></p>
 <h1>Огляди від Claude</h1>
 <p>${n(o.n)} оглядів, ${o.auto} зроблені самі · 🤩 ${o.up} · 🙂 ${o.mid} · 🙁 ${o.down} · ${o.queue} в черзі · ≈ $${o.cost.toFixed(2)} за весь час</p>
-<p class="muted">Поточна версія промпту ${o.version}: ${o.current} з ${o.n} · невдалих після рестарту: ${o.failed}${o.lastError ? ` · остання помилка: ${esc(o.lastError)}` : ""}</p>
+<p class="muted"><a href="/admin/overviews-trial">Проба нового промпту</a> · Поточна версія промпту ${o.version}: ${o.current} з ${o.n} · невдалих після рестарту: ${o.failed}${o.lastError ? ` · остання помилка: ${esc(o.lastError)}` : ""}</p>
 <table><thead><tr><th>Книжка</th><th>🤩</th><th>🙂</th><th>🙁</th><th>Коли</th><th>Хто</th><th>Пошуків</th><th>Токенів in</th><th>out</th></tr></thead><tbody>${rows}</tbody></table>
 </section>`;
   return layout({ title: "Огляди від Claude · Статистика", user, path: "/admin", body });
