@@ -502,7 +502,7 @@ function bookPage({ inGenre = null, fresh = null, pick = null, awards = [], auth
         ${score}
         ${awardsLine(awards)}
         ${twins(book)}
-        ${mine(book, entry, user, now, freeRead ? "" : readUrl, listsItem(book, user), { free: readUrl && freeRead ? freeItems(book, freeFile) : "" })}
+        ${!user && !freeRead ? "" : mine(book, entry, user, now, freeRead ? "" : readUrl, listsItem(book, user), { free: readUrl && freeRead ? freeItems(book, freeFile) : "" })}
         ${where(book)}
         ${user?.owner ? `<p class="small muted"><a class="muted" href="/admin/book/${encodeURIComponent(book.href.split("/").pop())}">Редагувати</a>${book.cover ? "" : ` · <a class="muted" href="/admin/book/${encodeURIComponent(book.href.split("/").pop())}?find=1">Знайти обкладинку</a>`}${book.edited ? " · виправлено вручну" : ""}</p>` : ""}
       </div>
