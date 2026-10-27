@@ -1745,7 +1745,7 @@ function loginPage({ next = "", email = "", error = "", book = null, what = "", 
     lead: "Якщо ви тут вперше, вкажіть пошту, на яку ми вишлемо код для реєстрації. Те саме для входу з іншого пристрою.",
     form: `<form method="post" action="/login" class="form">
   ${hidden("next", next)}${errorLine(error)}
-  <label>Пошта<input type="email" name="email" value="${attr(email)}" required autofocus autocomplete="email" inputmode="email" placeholder="ви@пошта.ua"></label>
+  <label>Пошта для входу або реєстрації<input type="email" name="email" value="${attr(email)}" required autofocus autocomplete="email" inputmode="email"></label>
   <div class="actions"><button class="btn primary">Отримати код</button></div>
 </form>`,
   });
