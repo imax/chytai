@@ -14,4 +14,11 @@ Disallow: /refresh-status
 Disallow: /search
 Disallow: /do/
 
+# SEO data sellers: of no use to readers, a fifth of all robot requests (Max, 2026-10-27).
+User-agent: DataForSeoBot
+User-agent: SemrushBot
+User-agent: AhrefsBot
+User-agent: MJ12bot
+Disallow: /
+
 Sitemap: https://chytai.org.ua/sitemap.xml
