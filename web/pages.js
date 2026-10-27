@@ -1647,7 +1647,7 @@ function authorPage({ author, works, hits, user, readers = [], also = [], pairin
     const title = w.uk || w.en || w.orig;
     const orig = [w.orig, w.en].find((t) => t && t !== title) || "";
     const b = w.books[0];
-    return `<li${b ? "" : ' class="none"'}><span class="year">${w.year || ""}</span> ${b ? `<a href="${attr(b.href)}">${esc(title)}</a>` : esc(title)}${orig ? ` <span class="alt">${esc(orig)}</span>` : ""}${!b && !w.uk ? ` <span class="small muted">· перекладу не знайшли</span>` : ""}</li>`;
+    return `<li${b ? "" : ' class="none"'}><span class="year">${w.year || ""}</span> ${b ? `<a href="${attr(b.href)}">${esc(title)}</a>` : esc(title)}${orig ? ` <span class="alt">${esc(orig)}</span>` : ""}${!b && !w.uk ? ` <span class="small muted">· у каталогах поки немає</span>` : ""}</li>`;
   };
   const bigRow = (hit) => {
     const { book, entry } = hit;
