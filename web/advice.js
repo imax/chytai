@@ -59,7 +59,7 @@ const OVERVIEW_DAILY = 150; // fresh overviews a day on readers' clicks, all rea
 // чи оцінка читачів», plus a backfill over the books already rated): a sweep finds every book with a
 // reader's rating or note and no overview, and a small queue makes them a couple at a time. Its own
 // ceiling a day, so a big Goodreads import or the backfill can't run the bill away in one night.
-const AUTO_DAILY = 150; // Max, 2026-10-23: «давай зменшемо до 150 [на] день»
+const AUTO_DAILY = 250; // Max, 2026-10-23: «давай зменшемо до 150 [на] день»; 2026-10-27: «до 250 книжок на день»
 const AUTO_PARALLEL = 2;
 // The backfill over books rated before the feature is OFF for now (Max, 2026-10-23 08:09: «давай поки не
 // робити авто-backfill … я ще подумаю»); a book gets its overview when a reader rates or notes it from
@@ -67,7 +67,7 @@ const AUTO_PARALLEL = 2;
 const BACKFILL = false;
 // Automatic overviews (first rating/note, «Хочу прочитати») are PAUSED while Max tunes the prompt
 // (2026-10-23 15:03: «поки давай вимкнемо backfill»); readers' own clicks and the owner's «Оновити» still work.
-const AUTO = false; // paused again 2026-10-24 05:52 (Max: «тормозни backfill для авто-оглядів», more prompt work later)
+const AUTO = true; // paused 2026-10-24 05:52 (Max: «тормозни backfill для авто-оглядів», more prompt work later); ON again 2026-10-27 06:58 with prompt v9 (Max: «включаємо auto далі, до 250 книжок на день»)
 // The overview prompt's version: rows made with an older one are redone at start, two at a time
 // (Max, 2026-10-23 08:09, after the prompt lost its obligatory paragraph of complaints: «старі теж»).
 const PROMPT_VERSION = 9; // 9: live since 2026-10-27 after the trial on /admin/overviews-trial (Max: «угу вогонь»); every v8 row is redone once (Max 06:40: «старі теж», REDO_ALL_BELOW 9, ≈$50); 3: the site's own notes and ratings no longer go in (2026-10-23 08:35); 4: shops blocked (09:16); 5: shorter, reservations one sentence at most (14:40); 6: like a friend, about what people love, no pros/cons balance (15:05); 7: calmer tone, no blurb language, 40–70 words (15:22); 8: back to v5's neutral base + calm tone, no «friend» framing (15:25)
