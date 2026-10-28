@@ -918,20 +918,6 @@ function libraryRows(reader) {
   }
   return rows;
 }
-// A shelf with fewer than three books starts with a search and the most finished Ukrainian books, each saved in
-// one tap (usability review 2026-10-28: a new reader saw empty tabs, filters and «Нічого не знайшлося»).
-function startFor(req) {
-  const has = (id) => !!store.entry(req.user.id, id);
-  const q = String(req.query.find || "").trim().slice(0, 100);
-  const hits = q ? searchHits(req, q).slice(0, 8).map((h) => ({ book: h.book, entry: store.entry(req.user.id, h.book.id) })) : null;
-  const books = readPool().works
-    .filter((w) => w.book.cover && /[іїєґ]/i.test(w.book.title) && !has(w.book.id))
-    .sort((a, b) => b.s.finished - a.s.finished || b.s.rated - a.s.rated)
-    .slice(0, 8)
-    .map((w) => ({ book: bookFor(req, w.book, false), entry: null }))
-    .filter((x) => x.book);
-  return { q, hits, books };
-}
 // /@<username> is a reader's shelf: their own (with «змінити», recommendations, «+ Додати книжку») when
 // they open it, the public one for everyone else and with ?public. /me is a shortcut to your own
 // (Max, 2026-10-20: one address for a shelf, so the one in the address bar can be shared).
@@ -948,7 +934,7 @@ app.get("/@:username", (req, res) => {
   // The profile is the reader's own stats and books; recommendations live on other pages (Max, 2026-10-23).
   const theirLists = lists.of(reader.id).filter((l) => own || l.count);
   const part = restPart(req, res);
-  if (own) return res.send(pages.libraryPage({ part, lists: theirLists, savedLists: lists.savedBy(reader.id), rows, user: req.user, reader: req.user, own: true, follows, now: nowFor(reader.id, { own: true }), start: rows.filter((r) => !r.kids).length < 3 ? startFor(req) : null }));
+  if (own) return res.send(pages.libraryPage({ part, lists: theirLists, savedLists: lists.savedBy(reader.id), rows, user: req.user, reader: req.user, own: true, follows, now: nowFor(reader.id, { own: true }) }));
   res.send(pages.libraryPage({ part, lists: theirLists, rows, user: req.user, reader, now: nowFor(reader.id), mineIds: req.user && req.user.id !== reader.id ? store.inLibrary(req.user.id) : null, mineDirect: req.user ? new Set(Object.keys(store.entriesOf(req.user.id))) : null, following: auth.follows(req.user?.id, reader.id), follows }));
 });
 // ---- «Списки» (lists.js): /@<username>/list/<slug>, /lists, and what the author does with a list ----

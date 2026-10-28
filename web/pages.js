@@ -1190,19 +1190,7 @@ function twoParts(items, n, part) {
   return { first: html(items.slice(0, cut)), rest: cut < items.length ? ` data-rest="${items.length - cut}"` : "" };
 }
 
-// The top of a shelf with fewer than three books: find the ones already read, or take a widely read one.
-function startBlock({ q, hits, books }, href, empty) {
-  const back = q ? `${href}?find=${encodeURIComponent(q)}` : href;
-  return `<section class="shelf-start">
-  <h2>${empty ? "Почніть з книжки, яку вже прочитали" : "Додайте ще кілька книжок"}</h2>
-  <form method="get" action="${attr(href)}" class="list-find"><input type="search" name="find" value="${attr(q)}" placeholder="Назва або автор" autocomplete="off" aria-label="Знайти книжку"><button class="btn small">Знайти</button></form>
-  ${hits ? (hits.length ? `<div class="list-hits">${hits.map((x) => pickRow(x, back)).join("")}</div>` : `<p class="small muted">Не знайшлося. Книжку, якої немає в каталозі, можна <a href="/add">додати вручну</a>.</p>`) : ""}
-  ${books.length ? `<h3>Найчастіше дочитують</h3><div class="list-hits">${books.map((x) => pickRow(x, back)).join("")}</div>` : ""}
-  <p class="small muted">Цілий список чи Goodreads: <a href="/add">Додати книжки</a>.</p>
-</section>`;
-}
-
-function libraryPage({ part = "",  lists = [], savedLists = [], rows, user, reader, own = false, mineIds = null, mineDirect = null, following = false, follows = { followers: [], following: [] }, now = null, start = null }) {
+function libraryPage({ part = "",  lists = [], savedLists = [], rows, user, reader, own = false, mineIds = null, mineDirect = null, following = false, follows = { followers: [], following: [] }, now = null }) {
   const year = new Date().getFullYear();
   // Stars in the row only for the reader's own entry of this very book (not one reached through a
   // translation or a series, where a rating would land on another book).
@@ -1247,11 +1235,10 @@ function libraryPage({ part = "",  lists = [], savedLists = [], rows, user, read
   if (part === "rest") return parts;
   const wants = own ? [] : mine.filter((r) => r.status === "want").slice(0, 3);
   const body = `
-${pageHead({ crumbs: own ? "" : `<a href="/community">Читачі</a> / ${esc(reader.name)}`, kicker: own ? "Моя полиця" : "Полиця читача", title: esc(reader.name), sub, extra: start && !mine.length ? "" : nowBlock(now, { own }), action: own ? `<div class="acts own-acts"><a class="btn primary" href="/add">+ Додати книжки</a><a class="text-link small" href="/mcp">або голосом чи текстом у Claude чи ChatGPT</a></div>` : user?.id === reader.id ? "" : followButton(reader, following, user) })}
+${pageHead({ crumbs: own ? "" : `<a href="/community">Читачі</a> / ${esc(reader.name)}`, kicker: own ? "Моя полиця" : "Полиця читача", title: esc(reader.name), sub, extra: nowBlock(now, { own }), action: own ? `<div class="acts own-acts"><a class="btn primary" href="/add">+ Додати книжки</a><a class="text-link small" href="/mcp">або голосом чи текстом у Claude чи ChatGPT</a></div>` : user?.id === reader.id ? "" : followButton(reader, following, user) })}
 <div class="split">
   <div>
-    ${start ? startBlock(start, reader.href, !mine.length) : ""}
-    ${mine.length || !start ? `<div class="tabs-bar">
+    <div class="tabs-bar">
       <div class="tabs" data-filter="status">${tabs.map(([k, l, n]) => `<button type="button" class="tab${k === "" ? " on" : ""}" data-v="${k}">${l} <span>${n}</span></button>`).join("")}</div>
     </div>
     <div class="shelf-tools">
@@ -1263,7 +1250,7 @@ ${pageHead({ crumbs: own ? "" : `<a href="/community">Читачі</a> / ${esc(r
 ${parts.first}
     </section>
     <p class="empty hidden" id="empty">Нічого не знайшлося.</p>
-    <p class="more hidden"><button type="button" class="text-link" id="more">Показати ще <span></span> →</button></p>` : ""}
+    <p class="more hidden"><button type="button" class="text-link" id="more">Показати ще <span></span> →</button></p>
   </div>
   <aside>
     ${lists.length || own ? `${label(own ? "Мої списки" : "Списки", own ? `<button type="button" class="text-link" data-open="new-list">+ новий</button>` : "")}${lists.length ? sideLists(lists, (l) => listMeta(l, { by: false })) : `<p class="small muted">Склади список книжок, щоб поділитися ним: «Найкраще про війну», «Для підлітків 12+»…</p>`}` : ""}
@@ -1867,7 +1854,7 @@ function signupPage({ next = "", ticket, email, name = "", username = "", error 
 // /welcome: shown once, right after sign-up: what Chytai is and what one can do here (design 4a of
 // 2026-10-20, texts by Max). «Почати» goes to the homepage, or back to where sign-up started.
 // A book row with «Хочу прочитати» and «Прочитано» as plain links through /do/…, back to `back` after the tap
-// (/welcome and a new reader's shelf); ✓ and the status once it is on the shelf.
+// (/welcome); ✓ and the status once it is on the shelf.
 const MY_STATUS = { read: "Прочитано", reading: "Читаю", want: "Хочу прочитати", abandoned: "Покинуто" };
 function pickRow({ book, entry }, back) {
   const slug = attr((book.href || "").split("/").pop() || encodeURIComponent(book.id));
