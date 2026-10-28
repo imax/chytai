@@ -25,6 +25,7 @@ const listimport = require("./listimport");
 const applebooks = require("./applebooks");
 const enrich = require("./enrich");
 const readeat = require("./readeat");
+const findCovers = require("./findcovers");
 const { BookPage, isUrl } = require("./bookpage");
 const { UkFinder } = require("./ukfind");
 const { Admin, adminPage, catalogBlock, shelvesPage, readersPage, overviewsPage, speedPage, jobsPage, BOT } = require("./admin");
@@ -117,7 +118,9 @@ const refreshAuthors = () => authors.refresh(store, { log: console.log }).catch(
 // Details of the readers' own books from Open Library (enrich.js), weekly, after those.
 // Readeat (readeat.js) goes first for books typed in Ukrainian: the Ukrainian edition's cover, not the original's.
 const readeatPass = (ids) => readeat.enrich(store, { ids, log: console.log }).catch((e) => console.error("readeat failed:", e));
-const details = (opts) => readeatPass(opts.ids).then(() => enrich.enrich(store, { log: console.log, googleKey: process.env.GOOGLE_BOOKS_KEY || "", ...opts })).catch((e) => console.error("enrich failed:", e));
+// Then the covers still missing: Goodreads' page of the reader's edition, Open Library by ISBN (findcovers.js).
+const coversPass = (ids) => findCovers.find(store, { ids, keep: keepCover, log: console.log }).catch((e) => console.error("covers failed:", e));
+const details = (opts) => readeatPass(opts.ids).then(() => enrich.enrich(store, { log: console.log, googleKey: process.env.GOOGLE_BOOKS_KEY || "", ...opts })).then(() => coversPass(opts.ids)).catch((e) => console.error("enrich failed:", e));
 const refreshDetails = () => readeatPass().then(() => enrich.refresh(store, { log: console.log, googleKey: process.env.GOOGLE_BOOKS_KEY || "" })).catch((e) => console.error("enrich failed:", e));
 const refreshWikidata = bg.fn("wikidata", () => refreshUk().then(refreshAuthors).then(refreshDetails).then(() => true), true);
 bg.every("wikidata", 6 * 3600 * 1000, () => refreshWikidata(), { db: store.db });
@@ -317,6 +320,9 @@ async function keepOlCovers(only) {
 }
 const keepOpenLibraryCovers = bg.fn("ol-covers", async () => (await keepOlCovers()) > 0, true);
 bg.every("ol-covers", 3 * 3600 * 1000, () => keepOpenLibraryCovers(), { db: store.db, first: 15 * 60 * 1000 });
+// The readers' books still without a cover, a few hundred a day (findcovers.js); new books go through the queue.
+const findMissingCovers = bg.fn("covers", async () => (await coversPass())?.found > 0, true);
+bg.every("covers", 6 * 3600 * 1000, () => findMissingCovers(), { db: store.db, first: 20 * 60 * 1000 });
 // Covers set by hand before we kept them: fetched once after a start, in the background.
 setTimeout(async () => {
   for (const [id, fix] of Object.entries(store.edits())) {
