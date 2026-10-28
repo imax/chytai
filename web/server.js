@@ -1232,6 +1232,8 @@ app.get("/sitemap.xml", (req, res) => {
     // book page (Max 2026-10-26), and none goes to Russian editions (Max 2026-10-25). The second book adds them.
     for (const a of store.authors?.list || []) if (new Set((a.ids || []).map((id) => store.canonical(id)).filter((id) => !ru.has(id))).size >= 2) urls.push(a.href);
     // Readers' pages are not listed: noindex (Max, 2026-10-21), their notes live on the book pages.
+    // Editorial lists are (Max, 2026-10-28): a whole list answers searches like «що почитати восени».
+    for (const l of lists.editorials()) urls.push(l.href);
     sitemap = { at: Date.now(), xml: `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls.map((u) => `<url><loc>${pages.esc(origin + u)}</loc></url>`).join("\n")}\n</urlset>\n` };
     console.log(`sitemap: ${urls.length} addresses in ${Date.now() - t0} ms`);
   }

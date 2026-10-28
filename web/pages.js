@@ -2458,7 +2458,9 @@ ${items.length || comments.length ? listClub({ list, comments, user, own, owner,
 </div>
 ${edit}`;
   const description = [list.note ? firstWords(list.note, 220) : "", `${books(items.length)}: ${items.slice(0, 5).map((x) => x.book.title).join(", ")}`].filter(Boolean).join(" ");
-  return layout({ title: list.title, body, user, path: "/lists", canonical: list.href, noindex: !!list.reader.noindex && !list.editorial, description, image: abs(og || items.find((x) => x.book.cover)?.book.cover || ""), imageSize: og && !list.image ? [1200, 630] : null, wide: !!og, type: "article" });
+  // An editorial list tells search engines it is a list of books, in order (Max, 2026-10-28: «в сайтмап і розмітку так»).
+  const jsonld = list.editorial ? { "@context": "https://schema.org", "@type": "ItemList", name: list.title, url: ORIGIN + list.href, ...(list.note ? { description: firstWords(list.note, 300) } : {}), author: { "@type": "Organization", name: list.by, url: ORIGIN }, numberOfItems: items.length, itemListOrder: "https://schema.org/ItemListOrderAscending", itemListElement: items.map((x, i) => ({ "@type": "ListItem", position: i + 1, item: { "@type": "Book", name: x.book.title, url: ORIGIN + x.book.href, ...(x.book.author ? { author: { "@type": "Person", name: x.book.author } } : {}), ...(x.book.cover ? { image: abs(x.book.cover) } : {}) } })) } : null;
+  return layout({ title: list.title, body, user, path: "/lists", canonical: list.href, noindex: !!list.reader.noindex && !list.editorial, description, image: abs(og || items.find((x) => x.book.cover)?.book.cover || ""), imageSize: og && !list.image ? [1200, 630] : null, wide: !!og, type: "article", jsonld });
 }
 
 // /lists «Списки читачів»: popular, new, and the ones the reader saved.
