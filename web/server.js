@@ -1139,6 +1139,61 @@ app.get("/genre/:slug", (req, res) => {
   res.send(pages.genrePage({ part: restPart(req, res), genre: g, rows: shown, top, feed: social.feed({ limit: 6, books: works, notes: true }), others, user: req.user }));
 });
 
+// ---- «Що почитати» (/read): a prototype (Max, 2026-10-28), not in the menu yet ----
+// Shelves by what a reader is after, not by counters: readers' advice with a note, books people finish,
+// Ukrainian authors, short ones, free ones, genres. A filter (?f=) narrows every shelf at once.
+const READ_FILTERS = {
+  short: ["Коротке", (b) => b.pages > 0 && b.pages <= 250],
+  ua: ["Українські автори", (b) => store.aiOrigs().get(b.id)?.kind === "ukrainian"],
+  fiction: ["Художнє", (b) => mainGenres(b.tags).some((g) => FICTION.has(g))],
+  nonfiction: ["Нон-фікшн", (b) => { const g = mainGenres(b.tags); return g.length && !g.some((x) => FICTION.has(x)); }],
+};
+const FICTION = new Set(["художня", "фантастика", "фентезі", "детективи", "трилери", "жахи", "любовні романи", "класика", "поезія", "комікси", "підліткові"]);
+let readCache = null;
+function readPool() {
+  if (readCache && Date.now() - readCache.at < 10 * 60 * 1000) return readCache.out;
+  const seen = new Set();
+  const works = [];
+  for (const { id } of social.all()) {
+    const k = store.canonical(id);
+    if (seen.has(k)) continue;
+    seen.add(k);
+    const book = store.book(k);
+    if (!book || isRussian(book)) continue;
+    works.push({ book, s: social.stats(k) });
+  }
+  const out = { works };
+  readCache = { at: Date.now(), out };
+  return out;
+}
+app.get("/read", (req, res) => {
+  const f = READ_FILTERS[req.query.f] ? req.query.f : "";
+  const ok = (b) => !f || READ_FILTERS[f][1](b);
+  const { works } = readPool();
+  // Ukrainian titles with covers first, one book per reader, so it isn't three of one reader's English business books.
+  const byReader = new Set();
+  const picks = social.picks(200).filter((p) => ok(p.book)).sort((a, b) => (/[а-яіїєґ]/i.test(b.book.title) && !!b.book.cover) - (/[а-яіїєґ]/i.test(a.book.title) && !!a.book.cover)).filter((p) => !byReader.has(p.reader.id) && byReader.add(p.reader.id)).slice(0, 3);
+  const pickIds = new Set(picks.map((p) => store.canonical(p.book.id)));
+  const finish = works
+    .filter((w) => ok(w.book) && w.s.finished >= 2 && w.s.dropped === 0 && (w.s.avg ?? 0) >= 4 && !pickIds.has(w.book.id))
+    .sort((a, b) => b.s.finished - a.s.finished || b.s.avg - a.s.avg)
+    .slice(0, 6);
+  const used = new Set([...pickIds, ...finish.map((w) => w.book.id)]);
+  const liked = (pred) => works.filter((w) => ok(w.book) && pred(w.book) && (w.s.avg ?? 0) >= 4.3 && w.s.rated >= 1 && !used.has(w.book.id)).sort((a, b) => b.s.rated - a.s.rated || b.s.avg - a.s.avg);
+  const ua = f === "ua" ? [] : liked(READ_FILTERS.ua[1]).slice(0, 6);
+  ua.forEach((w) => used.add(w.book.id));
+  const short = f === "short" ? [] : liked(READ_FILTERS.short[1]).slice(0, 6);
+  const freeShelf = store.shelves.find((s) => s.kind === "free");
+  const free = freeShelf ? visible(freeShelf).filter((it) => it.cover).map((it) => store.book(it.id)).filter((b) => b && ok(b)).slice(0, 6) : [];
+  const wanted = social.popular().want.filter((x) => ok(x.book)).slice(0, 6);
+  const genres = pages.GENRES.map((g) => ({ g, n: store.genreBooks(g).length, top: genreList(g).top[0]?.book || null })).filter((x) => x.n >= 20).sort((a, b) => b.n - a.n).slice(0, 12);
+  const editorials = lists.editorials().slice(0, 3).map(withCovers);
+  const seeds = req.user ? social.seeds(req.user.id) : [];
+  const own = req.user ? new Map(Object.entries(store.entriesOf(req.user.id))) : new Set();
+  const forYou = req.user && seeds.length ? social.similar(seeds.map((s) => s.id), { limit: 6, skip: own, own }).filter((x) => ok(x.book)) : [];
+  res.send(pages.readPage({ user: req.user, f, filters: READ_FILTERS, picks, finish, ua, short, free, wanted, genres, editorials, forYou, variant: req.query.v || "" }));
+});
+
 app.get("/publishers", (req, res) => {
   res.send(pages.publishersPage({ user: req.user, shelves: shelvesFor(req).map((s) => shelfSummary(req, s, 4)).sort((a, b) => b.fresh - a.fresh), libraries: librariesFor(req) }));
 });

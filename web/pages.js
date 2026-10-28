@@ -1315,6 +1315,44 @@ function yearHead(year, rows) {
   return `<h2 class="year" data-year="${year ?? ""}">${year || "Без дати"} <span>${books(n)}</span></h2>`;
 }
 
+// ---- «Що почитати» (/read): a prototype (Max, 2026-10-28) ----
+// `variant` "home": the same page as the homepage, with the big search on top and «Зараз читають» beside the advice.
+function readPage({ user, f, filters, picks, finish, ua, short, free, wanted, genres, editorials, forYou, variant, feed = [] }) {
+  const home = variant === "home";
+  const q = (k) => `/read?${new URLSearchParams({ ...(k ? { f: k } : {}), ...(variant ? { v: variant } : {}) })}`;
+  const chips = `<nav class="read-chips">${[["", "Усе"], ...Object.entries(filters).map(([k, [n]]) => [k, n])].map(([k, n]) => (k === f ? `<span class="chip on">${n}</span>` : `<a class="chip" href="${attr(q(k))}">${n}</a>`)).join("")}</nav>`;
+  const advice = (p) => `<article class="advice">
+  <a class="cover-link" href="${attr(p.book.href)}">${cover(p.book, "card")}</a>
+  <div>
+    <h3><a href="${attr(p.book.href)}">${esc(p.book.title)}</a></h3>
+    ${p.book.author ? `<p class="by">${esc(byline(p.book.author))}</p>` : ""}
+    <p class="quote">${noteOf(p.entry, p.book.id)}</p>
+    <p class="said">— <a href="${attr(p.reader.href)}"><b>${esc(p.reader.name)}</b></a> ${stars(p.entry.rating)}</p>
+  </div>
+</article>`;
+  const row = (title, aside, items, extra) => (items.length ? `<section class="block read-row">${label(title, aside)}<div class="grid six">${items.map((x) => card(x.book || x, { avg: x.s?.avg ?? x.avg, extra: extra ? `<p class="meta pop-n">${extra(x)}</p>` : "" })).join("")}</div></section>` : "");
+  const top = home
+    ? `<section class="hero">
+  <h1>Що почитати?</h1>
+  <form class="search-box big" action="/search" role="search"><input type="search" name="q" placeholder="назва, автор, жанр або видавництво" aria-label="Пошук" autocomplete="off"><span class="enter">Enter ↵</span></form>
+  ${chips}
+</section>`
+    : `${pageHead({ title: "Що почитати" })}${chips}`;
+  const adviceBlock = picks.length ? `<section class="block">${label("Читачі радять", "оцінка 4,5+ і пару слів чому")}<div class="advices">${picks.map(advice).join("")}</div></section>` : "";
+  const body = `
+${top}
+${adviceBlock}
+${row("Для тебе", "схожі на те, що тобі сподобалось", forYou)}
+${!f && editorials.length ? `<section class="block editorials">${label("Добірки Chytai", `<a href="/lists">усі списки</a>`)}<div class="lgrid">${editorials.map(listCard).join("")}</div></section>` : ""}
+${row("Дочитують до кінця", "ніхто не покинув", finish, (w) => `дочитали ${w.s.finished}`)}
+${row("Українські автори", "", ua)}
+${row("Коротке", "до 250 сторінок", short, (w) => `${w.book.pages} с.`)}
+${row("Найбільше хочуть прочитати", `<a href="/popular">популярне</a>`, wanted, (x) => `${x.n} ${plural(x.n, "хоче", "хочуть", "хочуть")}`)}
+${row("Безкоштовно", "класика в Читалці", free.map((b) => ({ book: b })))}
+${!f && genres.length ? `<section class="block">${label("Жанри")}<div class="gtiles">${genres.map((x) => `<a class="gtile" href="/genre/${attr(genreSlug(x.g))}">${x.top ? cover(x.top, "xs") : ""}<span><b>${esc(cap(x.g))}</b><span class="muted">${books(x.n)}</span></span></a>`).join("")}</div></section>` : ""}`;
+  return layout({ title: home ? "" : "Що почитати", body, user, path: home ? "/" : "/read", home, noindex: true, description: "" });
+}
+
 // ---- «Популярне» (/popular) ----
 
 // What Chytai readers read, want and rate most (Max, 2026-10-22). Readers' numbers on the cards, no shops.
@@ -2575,7 +2613,7 @@ module.exports = {
   decidedList,
   welcomePage,
   addPage, addReviewPage, addFindResults, addPageResult, ukFindPage,
-  layout, homePage, bookPage, bookEditPage, russianPage, editPage, libraryPage, readersPage, popularPage, genrePage, genreTrialPage, langTrialPage, origTrialPage, overviewTrialPage, ukTrialPage, catalogAdminPage, aiPassPage, publishersPage, publisherPage, searchPage, searchResults, authorPage,
+  layout, homePage, bookPage, bookEditPage, russianPage, editPage, libraryPage, readersPage, popularPage, readPage, genrePage, genreTrialPage, langTrialPage, origTrialPage, overviewTrialPage, ukTrialPage, catalogAdminPage, aiPassPage, publishersPage, publisherPage, searchPage, searchResults, authorPage,
   loginPage, codePage, signupPage, settingsPage, privacyPage, updatesPage, messagePage, digestPage, followMailPage, wantMailPage, importPage, importPreviewPage, importDonePage,
   GENRES, esc, byline, STATUS, COPY, inline, isUk, setTitleLinks, setAuthorLinks, setThumbs, setStats, setReadersWithNote,
 };
