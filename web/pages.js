@@ -2475,7 +2475,7 @@ function listPage({ list, items, user, own = false, owner = false, saved = false
       return `<article class="lrow" id="${attr(x.id)}"><span class="n">${i + 1}</span><a class="cover-link" href="${attr(b.href)}">${cover(b, "md")}</a><div class="row-body">
     <h3><a href="${attr(b.href)}">${esc(b.title)}</a></h3>
     ${b.author ? `<p class="by">${authorLinks(b.author)}</p>` : ""}
-    ${readersMeta(x.id) ? `<p class="meta">${readersMeta(x.id)}</p>` : ""}
+    ${readersMeta(x.id) || x.free ? `<p class="meta">${[readersMeta(x.id), x.free ? `<a class="text-link" href="/go/read/${attr((b.href || "").split("/").pop())}">є в Читалці</a>` : ""].filter(Boolean).join(" · ")}</p>` : ""}
     ${x.why ? `<p class="why">${inline(x.why)}</p>` : ""}
     ${ownTools}
   </div></article>`;

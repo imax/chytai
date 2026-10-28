@@ -917,7 +917,8 @@ app.get("/@:username/list/:slug", (req, res) => {
   if (!list) return res.status(404).send(pages.messagePage({ title: "Немає такого списку", text: "", user: req.user }));
   if (reader.username !== req.params.username) return res.redirect(301, list.href);
   const own = req.user?.id === reader.id;
-  const items = lists.items(list.id, { own });
+  // Free-shelf books get a quiet «є в Читалці» in their row (usability review 2026-10-28: «Розстріляне відродження»).
+  const items = lists.items(list.id, { own }).map((x) => ({ ...x, free: !!freeFileFor(store.bookPage(x.id)) }));
   const q = own ? String(req.query.add || "").trim().slice(0, 100) : "";
   const inList = own && q ? lists.ids(list.id) : null;
   const find = q ? { q, hits: searchHits(req, q).slice(0, 8).map((h) => ({ book: h.book, in: inList.has(store.canonical(h.book.id)) })) } : null;
