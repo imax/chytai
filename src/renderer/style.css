@@ -355,6 +355,15 @@ body.not-owner .shared-setting, body.not-owner .demo-setting, body.not-owner #bt
   dialog h2:focus { outline: none; }
   #toolbar button, #toolbar select { padding: 4px 7px; }
   #toolbar .title, #btn-open { display: none; }
+  /* A phone's toolbar: search instead of «Нотатки» and printing (Max, 2026-10-28); notes stay on Головна
+     and in the panel, a book prints from a computer. */
+  #btn-notes, #btn-print { display: none !important; }
+  #btn-search:not(.hidden) { display: inline-flex !important; align-items: center; justify-content: center; }
+  #btn-search.hidden { display: none !important; }
+  #search { top: calc(52px + env(safe-area-inset-top)); left: 8px; right: 8px; width: auto; max-width: none; max-height: 60dvh; }
+  #search-input { font-size: 16px; }
+  #search-input::-webkit-search-cancel-button { display: none; } /* the bar has its own ✕ */
+  body.reading:not(.chrome-shown) #search { top: 8px; }
   #layout { height: auto; position: absolute; top: calc(44px + env(safe-area-inset-top)); bottom: 0; left: 0; right: 0; }
   /* Reading a book: the page takes the whole screen, a tap in the middle brings the toolbar back over it. */
   body.reading #layout { top: env(safe-area-inset-top); }
