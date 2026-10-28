@@ -400,9 +400,10 @@ class Store {
       .sort((a, b) => order.indexOf(a.id) - order.indexOf(b.id));
     const byId = new Map(shelves.map((s) => [s.id, s]));
     // Names saved before a catalog's entities were decoded («Neurosurgeon&#x27;s Journey») are decoded here.
-    const { ent } = require("./catalogs");
+    const { ent, isPromo } = require("./catalogs");
     for (const r of this.db.prepare("SELECT shelf, data FROM items ORDER BY shelf, ord").all()) {
       const it = JSON.parse(r.data);
+      if (isPromo(it.title)) continue;
       for (const k of ["title", "altTitle", "author", "series", "translator", "publisher"]) if (typeof it[k] === "string" && it[k].includes("&")) it[k] = ent(it[k]);
       byId.get(r.shelf)?.items.push(it);
     }

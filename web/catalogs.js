@@ -247,6 +247,10 @@ const ldOf = (html) =>
     }
   });
 // «Stolen Focus. Why You Can't Pay Attention by Johann Hari» -> the title only; none when it is the title.
+// A shop's promo item, not a book: a free excerpt («Процес. Безкоштовний фрагмент», «… (фрагмент)»), a free
+// bundle («4 соціальні мальописи – безкоштовно»), a sample test (Max, 2026-10-28: «таке треба видаляти»).
+// Left out when the shelves are loaded (store.js), so old rows and new ones alike.
+const isPromo = (title) => /безкоштовн\S*\s+фрагмент|\((ознайомч\S*\s+)?(фрагмент|уривок)\)\s*$|[–—-]\s*безкоштовно\s*$|пробний тест/iu.test(String(title || ""));
 const alt = (a, title) => ((a = a.replace(/\s+by\s+(\p{Lu}[\p{L}.'’-]*\s*)+$/u, "").trim()) === title ? "" : a);
 const names = (v) => [].concat(v || []).map((x) => ent(x.name || x).trim()).filter(Boolean).join(", ");
 function ldBookPage(src, brands) {
@@ -1193,4 +1197,4 @@ async function refresh({ store, log = console.log, fetchImpl, only }) {
   return { ok: true, errors, counts };
 }
 
-module.exports = { bookuaTiles, bookuaProducts, SOURCES, fetchSource, buildShelves, refresh, volumeOf, ent, about, pageProducts, ldBookPage };
+module.exports = { isPromo, bookuaTiles, bookuaProducts, SOURCES, fetchSource, buildShelves, refresh, volumeOf, ent, about, pageProducts, ldBookPage };
