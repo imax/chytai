@@ -266,9 +266,7 @@ button.lib-book:hover { border-color: var(--accent); background: rgba(255, 196, 
 .lib-book .cover.small { flex: none; width: 26px; height: 39px; }
 .lib-edit { flex: none; display: none; align-items: center; justify-content: center; width: 28px; height: 28px; margin: -4px -2px -4px 0; border-radius: 6px; color: var(--muted); }
 .lib-edit:hover { color: var(--accent); background: var(--accent-soft); }
-button.lib-book:hover .lib-edit, .lib-li.show-edit .lib-edit { display: flex; }
-.lib-li.show-edit .lib-edit { width: 44px; height: 44px; color: var(--accent); }
-.lib-li.show-edit .lib-tag { display: none; }
+button.lib-book:hover .lib-edit { display: flex; }
 .lib-sep { display: flex; align-items: center; gap: 12px; margin: 6px 0 16px; font-size: 12px; color: var(--muted); }
 .lib-sep i { flex: 1; height: 1px; background: var(--line); }
 
@@ -278,6 +276,16 @@ button.lib-book:hover .lib-edit, .lib-li.show-edit .lib-edit { display: flex; }
 .lib-li { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 64px; padding: 8px 4px 8px 14px; border: none; border-bottom: 1px solid var(--line); background: transparent; color: inherit; text-align: left; }
 .lib-li:active { background: var(--accent-soft); }
 .lib-li.unavailable { opacity: 0.45; }
+/* Phone: a row slides left to show what can be done with the book (Max, 2026-10-28). */
+.lib-swipe { position: relative; overflow: hidden; }
+.lib-swipe > .lib-li { position: relative; z-index: 1; background: var(--bg); transition: transform 0.2s var(--ease-out); touch-action: pan-y; }
+.lib-swipe.dragging > .lib-li { transition: none; }
+.lib-acts { position: absolute; inset: 0 0 1px auto; display: flex; }
+.lib-acts button { width: 76px; border: none; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; font-size: 12px; color: #fff; background: var(--muted); }
+.lib-acts button svg { width: 20px; height: 20px; }
+.lib-acts [data-share] { background: var(--accent); }
+.lib-acts [data-edit] { background: #6b7280; }
+.lib-acts [data-aside] { background: #9a6b52; }
 .lib-li-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
 #shell .lib-li .t { font-size: 16px; }
 .lib-tag { flex: none; font-size: 12px; color: var(--muted); }
@@ -287,17 +295,15 @@ button.lib-book:hover .lib-edit, .lib-li.show-edit .lib-edit { display: flex; }
 #shell .lib-index button { width: 20px; height: 20px; border: none; background: none; padding: 0; color: var(--accent); font-size: 11px; font-weight: 600; text-align: center; }
 #book-edit menu #edit-reset { margin-right: auto; align-self: center; }
 /* «Дати почитати»: links to one book (web, signed-in readers only). */
-#share-box { display: none; border: none; border-top: 1px solid var(--border, rgba(0,0,0,0.1)); margin: 14px 0 0; padding: 12px 0 0; }
-body.web:not(.guest) #share-box { display: block; }
-#share-box legend { padding: 0; font-weight: 600; }
-#share-box small { display: block; margin: 2px 0 8px; color: var(--muted); }
-#share-box .share-new { display: flex; gap: 8px; }
-#share-box .share-new input { flex: 1; min-width: 0; }
+.share-book { margin: -4px 0 8px; font-weight: 600; }
+.share-new { display: flex; gap: 8px; margin-top: 12px; }
+.share-new input { flex: 1; min-width: 0; padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: inherit; font: inherit; }
+.share-new button { border: none; border-radius: 8px; padding: 6px 14px; cursor: pointer; }
 #share-list { list-style: none; margin: 8px 0 0; padding: 0; }
 #share-list li { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; padding: 6px 0; border-bottom: 1px solid var(--border, rgba(0,0,0,0.08)); font-size: 14px; }
 #share-list li .who { font-weight: 600; }
 #share-list li .state { color: var(--muted); font-size: 13px; flex: 1; }
-#share-list li input { width: 100%; font-size: 13px; }
+#share-list li input { width: 100%; font-size: 13px; padding: 5px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--muted); }
 .lib-empty { color: var(--muted); text-align: center; margin-top: 15%; }
 
 /* ---------- Search (⌘F) ---------- */

@@ -274,20 +274,27 @@
         <input type="text" id="edit-authors" autocomplete="off" placeholder="Кілька авторів через кому" />
         <small id="edit-file"></small>
       </label>
-      <fieldset id="share-box" class="web-share">
-        <legend>Дати почитати</legend>
-        <small>Посилання для однієї людини: відкривається без реєстрації на першому пристрої, де його відкрили, діє місяць.</small>
-        <div class="share-new">
-          <input type="text" id="share-for" placeholder="Для кого, наприклад: Юля" maxlength="60" autocomplete="off" />
-          <button type="button" id="share-make">Створити</button>
-        </div>
-        <ul id="share-list"></ul>
-      </fieldset>
       <menu>
         <button type="button" id="edit-reset" class="link" title="Повернути назву й автора з файлу">Як у файлі</button>
         <button value="cancel" formnovalidate>Скасувати</button>
         <button value="save" class="primary">Зберегти</button>
       </menu>
+    </form>
+  </dialog>
+
+  <!-- «Дати почитати»: a link to one of your books for one person (web); from a library row's swipe on a
+       phone or its share icon on a computer. -->
+  <dialog id="share-dialog">
+    <form method="dialog">
+      <h2 tabindex="-1" autofocus>Дати почитати</h2>
+      <p id="share-book" class="share-book"></p>
+      <small>Посилання для однієї людини: відкривається без реєстрації на першому пристрої, де його відкрили, діє місяць.</small>
+      <div class="share-new">
+        <input type="text" id="share-for" placeholder="Для кого, наприклад: Юля" maxlength="60" autocomplete="off" />
+        <button type="button" id="share-make" class="primary">Створити</button>
+      </div>
+      <ul id="share-list"></ul>
+      <menu><button value="close">Готово</button></menu>
     </form>
   </dialog>
 

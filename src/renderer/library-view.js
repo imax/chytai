@@ -15,6 +15,8 @@
   // Web, family only: a pencil on a book (on hover, or after a long press on a phone) fixes its title and author.
   const canEdit = () => typeof window.reader.libraryUpdateBook === "function" && !settings.guest;
   const PENCIL = `<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.17 6.81a2.83 2.83 0 0 0-4-4L3.84 16.17a2 2 0 0 0-.5.83l-1.32 4.35a.5.5 0 0 0 .62.62l4.35-1.32a2 2 0 0 0 .83-.5z"/></svg>`;
+  const SHARE = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m8 7 4-4 4 4"/><path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7"/></svg>`;
+  const ASIDE = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>`;
   // What the reader picked last time on this device: filter and language.
   const view = { f: "all", lang: "" };
   try {
@@ -79,6 +81,18 @@
     return "";
   }
 
+  // Phone: what a row's swipe shows. Own books are shared by a link for one person; a free-shelf book's own link works for anyone.
+  function swipeActions(b) {
+    if (!canEdit()) return "";
+    const acts = [
+      `<button data-share="${esc(b.path)}">${SHARE}Поділитися</button>`,
+      b.free ? "" : `<button data-edit="${esc(b.path)}">${PENCIL}Назва</button>`,
+      status(b) === "reading" ? `<button data-aside="${esc(b.path)}">${ASIDE}Прибрати</button>` : "",
+    ].join("");
+    return `<div class="lib-acts" aria-hidden="true">${acts}</div>`;
+  }
+  const shareButton = (b) => (canEdit() && !b.free ? `<span class="lib-edit" role="button" data-share="${esc(b.path)}" title="Дати почитати">${SHARE.replace("<svg ", '<svg width="15" height="15" ')}</span>` : "");
+
   const editButton = (b) => (canEdit() && !b.free ? `<span class="lib-edit" role="button" data-edit="${esc(b.path)}" title="Назва й автор${b.edited ? " (виправлено вручну)" : ""}">${PENCIL}</span>` : "");
 
 
@@ -129,8 +143,8 @@
       for (const b of list2) {
         const body = `${window.Shell.cover(b, "small")}
           <span class="lib-li-text"><span class="t ellipsis">${esc(b.title)}</span><span class="m ellipsis">${esc([mainAuthor(b), b.year].filter(Boolean).join(" · "))}</span>
-          </span>${tag(b)}${editButton(b)}`;
-        list += `<button class="lib-li${b.unavailable ? " unavailable" : ""}" data-path="${esc(b.path)}">${body}</button>`;
+          </span>${tag(b)}`;
+        list += `<div class="lib-swipe">${swipeActions(b)}<button class="lib-li${b.unavailable ? " unavailable" : ""}" data-path="${esc(b.path)}">${body}</button></div>`;
       }
       list += `</section>`;
     }
@@ -168,7 +182,7 @@
         ${list.map((b) => {
           const body = `${window.Shell.cover(b, "small")}
             <span class="lib-li-text"><span class="t ellipsis">${esc(b.title)}</span><span class="m ellipsis">${esc([b.year, addedLabel(b)].filter(Boolean).join(" · "))}${b.ext !== "epub" ? ` · ${esc(b.ext.toUpperCase())}` : ""}${b.cloud ? " · ☁︎" : ""}</span>
-            </span>${tag(b)}${editButton(b)}`;
+            </span>${tag(b)}${shareButton(b)}${editButton(b)}`;
           return `<button class="lib-book${b.unavailable ? " unavailable" : ""}" data-path="${esc(b.path)}" title="${b.unavailable ? "Немає з'єднання, а ця книжка ще не збережена на пристрої" : ""}">${body}</button>`;
         }).join("")}</section>`;
     }
@@ -190,8 +204,14 @@
   };
 
   $("#lib-body").addEventListener("click", (e) => {
-    const pencil = e.target.closest("[data-edit]");
-    if (pencil) return editBook(pencil.dataset.edit);
+    const act = e.target.closest("[data-edit], [data-share], [data-aside]");
+    if (act) {
+      closeSwipe();
+      if (act.dataset.edit) return editBook(act.dataset.edit);
+      if (act.dataset.share) return shareBook(act.dataset.share);
+      return window.Shell.setAside(act.dataset.aside);
+    }
+    if (swiped) return closeSwipe(); // a tap on an open row closes it
     if (e.target.closest("[data-act=seen]")) {
       window.Shell.markSeen();
       return render();
@@ -217,26 +237,50 @@
 
   // ---------- Fixing a title or author (web, family) ----------
 
-  // A long press on a phone row shows its pencil; the tap that ends the press does not open the book.
-  let pressTimer = null;
-  let pressed = false;
+  // A row slides left under the finger to show its actions; one row open at a time, any tap closes it.
+  let swiped = null;
+  function closeSwipe() {
+    swiped?.querySelector(".lib-li").style.removeProperty("transform");
+    swiped = null;
+  }
+  let drag = null;
   $("#lib-body").addEventListener("touchstart", (e) => {
-    const row = e.target.closest(".lib-li");
-    if (!row || !canEdit()) return;
-    pressed = false;
-    pressTimer = setTimeout(() => {
-      pressed = true;
-      document.querySelectorAll("#lib-body .show-edit").forEach((r) => r.classList.remove("show-edit"));
-      row.classList.add("show-edit");
-    }, 500);
+    const row = e.target.closest(".lib-swipe");
+    if (!row?.querySelector(".lib-acts") || e.target.closest(".lib-acts")) return (drag = null);
+    if (swiped && swiped !== row) closeSwipe();
+    const t = e.touches[0];
+    drag = { row, x: t.clientX, y: t.clientY, base: row === swiped ? -row.querySelector(".lib-acts").offsetWidth : 0, dx: 0, on: false };
   }, { passive: true });
-  for (const type of ["touchend", "touchmove", "touchcancel"]) $("#lib-body").addEventListener(type, () => clearTimeout(pressTimer), { passive: true });
-  $("#lib-body").addEventListener("contextmenu", (e) => e.target.closest(".lib-li") && e.preventDefault());
-  $("#lib-body").addEventListener("click", (e) => {
-    if (!pressed) return;
-    pressed = false;
-    if (!e.target.closest("[data-edit]")) e.stopImmediatePropagation();
-  }, true);
+  $("#lib-body").addEventListener("touchmove", (e) => {
+    if (!drag) return;
+    const t = e.touches[0];
+    const dx = t.clientX - drag.x;
+    if (!drag.on) {
+      if (Math.abs(t.clientY - drag.y) > 10) return (drag = null); // scrolling the list
+      if (Math.abs(dx) < 10) return;
+      drag.on = true;
+      drag.row.classList.add("dragging");
+    }
+    const w = drag.row.querySelector(".lib-acts").offsetWidth;
+    drag.dx = Math.max(-w, Math.min(0, drag.base + dx));
+    drag.row.querySelector(".lib-li").style.transform = `translateX(${drag.dx}px)`;
+  }, { passive: true });
+  $("#lib-body").addEventListener("touchend", () => {
+    if (!drag?.on) return (drag = null);
+    const { row, dx } = drag;
+    drag = null;
+    row.classList.remove("dragging");
+    const w = row.querySelector(".lib-acts").offsetWidth;
+    if (dx < -w / 3) {
+      swiped = row;
+      row.querySelector(".lib-li").style.transform = `translateX(${-w}px)`;
+    } else if (swiped === row) closeSwipe();
+    else row.querySelector(".lib-li").style.removeProperty("transform");
+    // The touch that ends a swipe must not also open the book.
+    const stop = (ev) => (ev.stopImmediatePropagation(), ev.preventDefault());
+    $("#lib-body").addEventListener("click", stop, { capture: true, once: true });
+    setTimeout(() => $("#lib-body").removeEventListener("click", stop, { capture: true }), 400);
+  });
 
   let editing = null;
   function editBook(name) {
@@ -246,11 +290,26 @@
     $("#edit-authors").value = editing.authors.join(", ");
     $("#edit-file").textContent = `Файл: ${name}`;
     $("#book-edit").returnValue = "";
+    $("#book-edit").showModal();
+  }
+
+  // Own book: the dialog with its links. A free-shelf book: its public link, through the phone's own share sheet.
+  function shareBook(name) {
+    const b = data.books.find((x) => x.path === name);
+    if (!b) return;
+    if (b.free) {
+      const url = `${location.origin}/free/${encodeURIComponent(name)}`;
+      if (navigator.share) return navigator.share({ title: b.title, url }).catch(() => {});
+      return navigator.clipboard?.writeText(url).then(() => showNotice("Посилання скопійовано.", false), () => {});
+    }
+    editing = b;
+    $("#share-book").textContent = b.authors.length ? `«${b.title}», ${b.authors[0]}` : `«${b.title}»`;
     $("#share-for").value = "";
     $("#share-list").innerHTML = "";
     loadShares(name);
-    $("#book-edit").showModal();
+    $("#share-dialog").showModal();
   }
+  $("#share-dialog").addEventListener("close", () => (editing = null));
 
   // ---------- «Дати почитати»: a link to one book for one person (web) ----------
 
@@ -281,6 +340,8 @@
       if (res.error) return showNotice(res.error, false);
       $("#share-for").value = "";
       await loadShares(book.path);
+      // A phone sends it straight from its share sheet (Telegram, Viber…); elsewhere it goes to the clipboard.
+      if (navigator.share && matchMedia("(pointer: coarse)").matches) return navigator.share({ title: book.title, text: `${who}, даю тобі почитати «${book.title}»`, url: res.share.url }).catch(() => {});
       navigator.clipboard?.writeText(res.share.url).then(() => showNotice(`Посилання для «${who}» скопійовано.`, false), () => {});
     } catch (err) {
       showNotice(`Не вдалося створити посилання: ${err.message}`, false);
