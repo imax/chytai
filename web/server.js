@@ -1139,7 +1139,7 @@ app.get("/genre/:slug", (req, res) => {
   res.send(pages.genrePage({ part: restPart(req, res), genre: g, rows: shown, top, feed: social.feed({ limit: 6, books: works, notes: true }), others, user: req.user }));
 });
 
-// ---- «Що почитати» (/read): a prototype (Max, 2026-10-28), not in the menu yet ----
+// ---- «Що почитати» (/new): a prototype (Max, 2026-10-28), not in the menu yet ----
 // Shelves by what a reader is after, not by counters: readers' advice with a note, books people finish,
 // Ukrainian authors, short ones, free ones, genres. A filter (?f=) narrows every shelf at once.
 const READ_FILTERS = {
@@ -1152,21 +1152,41 @@ const FICTION = new Set(["художня", "фантастика", "фентез
 let readCache = null;
 function readPool() {
   if (readCache && Date.now() - readCache.at < 10 * 60 * 1000) return readCache.out;
-  const seen = new Set();
+  // One pass over every reader's entries (social.stats per book took 0,4 s): finished, gave up, ratings, by work.
+  const by = new Map();
+  for (const [rid, entries] of store.entries) {
+    if (!pub(auth.reader(rid))) continue;
+    for (const [id, e] of Object.entries(entries)) {
+      if (e.kids) continue;
+      const k = store.canonical(id);
+      const x = by.get(k) || by.set(k, { finished: 0, dropped: 0, sum: 0, rated: 0 }).get(k);
+      if (e.status === "read") x.finished++;
+      if (e.status === "abandoned") x.dropped++;
+      if (e.rating != null) (x.sum += e.rating), x.rated++;
+    }
+  }
   const works = [];
-  for (const { id } of social.all()) {
-    const k = store.canonical(id);
-    if (seen.has(k)) continue;
-    seen.add(k);
+  for (const [k, x] of by) {
+    if (!x.rated && !x.finished) continue;
     const book = store.book(k);
     if (!book || isRussian(book)) continue;
-    works.push({ book, s: social.stats(k) });
+    works.push({ book, s: { ...x, avg: x.rated ? Math.round((x.sum / x.rated) * 10) / 10 : null } });
   }
   const out = { works };
   readCache = { at: Date.now(), out };
   return out;
 }
-app.get("/read", (req, res) => {
+// Genre tiles look at every book of each genre: kept ten minutes.
+let readGenresAt = null;
+const readGenres = () => {
+  if (readGenresAt && Date.now() - readGenresAt.at < 10 * 60 * 1000) return readGenresAt.out;
+  const best = new Map();
+  for (const w of readPool().works.filter((w) => w.book.cover && w.s.avg != null).sort((a, b) => b.s.avg - a.s.avg || b.s.rated - a.s.rated)) for (const g of mainGenres(w.book.tags)) if (!best.has(g)) best.set(g, w.book);
+  const out = pages.GENRES.map((g) => ({ g, n: store.genreBooks(g).length, top: best.get(g) || null })).filter((x) => x.n >= 20).sort((a, b) => b.n - a.n).slice(0, 12);
+  readGenresAt = { at: Date.now(), out };
+  return out;
+};
+app.get("/new", (req, res) => {
   const f = READ_FILTERS[req.query.f] ? req.query.f : "";
   const ok = (b) => !f || READ_FILTERS[f][1](b);
   const { works } = readPool();
@@ -1184,9 +1204,9 @@ app.get("/read", (req, res) => {
   ua.forEach((w) => used.add(w.book.id));
   const short = f === "short" ? [] : liked(READ_FILTERS.short[1]).slice(0, 6);
   const freeShelf = store.shelves.find((s) => s.kind === "free");
-  const free = freeShelf ? visible(freeShelf).filter((it) => it.cover).map((it) => store.book(it.id)).filter((b) => b && ok(b)).slice(0, 6) : [];
+  const free = freeShelf ? visible(freeShelf).filter((it) => it.cover).map((it) => store.book(it.id)).filter((b) => b && ok(b)).sort((a, b) => /[а-яіїєґ]/i.test(b.title) - /[а-яіїєґ]/i.test(a.title)).slice(0, 6) : [];
   const wanted = social.popular().want.filter((x) => ok(x.book)).slice(0, 6);
-  const genres = pages.GENRES.map((g) => ({ g, n: store.genreBooks(g).length, top: genreList(g).top[0]?.book || null })).filter((x) => x.n >= 20).sort((a, b) => b.n - a.n).slice(0, 12);
+  const genres = readGenres();
   const editorials = lists.editorials().slice(0, 3).map(withCovers);
   const seeds = req.user ? social.seeds(req.user.id) : [];
   const own = req.user ? new Map(Object.entries(store.entriesOf(req.user.id))) : new Set();

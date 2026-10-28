@@ -959,7 +959,7 @@ aside .side-lists + .label, aside p + .label, aside dialog + .label { margin-top
   .author-grid h3 { font-size: 14px; }
 }
 
-/* «Що почитати» (/read): filters, readers' advice, genre tiles. */
+/* «Що почитати» (/new): filters, readers' advice, genre tiles. */
 .read-chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 18px 0 36px; }
 .chip { font-size: 14px; padding: 6px 14px; border: 1px solid var(--rule); border-radius: 999px; color: var(--ink); }
 .chip:hover { border-color: var(--accent); color: var(--accent); }

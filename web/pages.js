@@ -1315,11 +1315,11 @@ function yearHead(year, rows) {
   return `<h2 class="year" data-year="${year ?? ""}">${year || "Без дати"} <span>${books(n)}</span></h2>`;
 }
 
-// ---- «Що почитати» (/read): a prototype (Max, 2026-10-28) ----
+// ---- «Що почитати» (/new): a prototype (Max, 2026-10-28) ----
 // `variant` "home": the same page as the homepage, with the big search on top and «Зараз читають» beside the advice.
 function readPage({ user, f, filters, picks, finish, ua, short, free, wanted, genres, editorials, forYou, variant, feed = [] }) {
   const home = variant === "home";
-  const q = (k) => `/read?${new URLSearchParams({ ...(k ? { f: k } : {}), ...(variant ? { v: variant } : {}) })}`;
+  const q = (k) => `/new?${new URLSearchParams({ ...(k ? { f: k } : {}), ...(variant ? { v: variant } : {}) })}`;
   const chips = `<nav class="read-chips">${[["", "Усе"], ...Object.entries(filters).map(([k, [n]]) => [k, n])].map(([k, n]) => (k === f ? `<span class="chip on">${n}</span>` : `<a class="chip" href="${attr(q(k))}">${n}</a>`)).join("")}</nav>`;
   const advice = (p) => `<article class="advice">
   <a class="cover-link" href="${attr(p.book.href)}">${cover(p.book, "card")}</a>
@@ -1350,7 +1350,7 @@ ${row("Коротке", "до 250 сторінок", short, (w) => `${w.book.pag
 ${row("Найбільше хочуть прочитати", `<a href="/popular">популярне</a>`, wanted, (x) => `${x.n} ${plural(x.n, "хоче", "хочуть", "хочуть")}`)}
 ${row("Безкоштовно", "класика в Читалці", free.map((b) => ({ book: b })))}
 ${!f && genres.length ? `<section class="block">${label("Жанри")}<div class="gtiles">${genres.map((x) => `<a class="gtile" href="/genre/${attr(genreSlug(x.g))}">${x.top ? cover(x.top, "xs") : ""}<span><b>${esc(cap(x.g))}</b><span class="muted">${books(x.n)}</span></span></a>`).join("")}</div></section>` : ""}`;
-  return layout({ title: home ? "" : "Що почитати", body, user, path: home ? "/" : "/read", home, noindex: true, description: "" });
+  return layout({ title: home ? "" : "Що почитати", body, user, path: home ? "/" : "/new", home, noindex: true, description: "" });
 }
 
 // ---- «Популярне» (/popular) ----
