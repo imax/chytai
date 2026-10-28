@@ -1200,7 +1200,7 @@ app.get("/", (req, res) => {
   const short = f === "short" ? [] : liked(READ_FILTERS.short[1]).slice(0, 6).map((w) => ({ ...w, pages: pagesOf(w.book) }));
   const freeShelf = store.shelves.find((s) => s.kind === "free");
   const free = freeShelf ? visible(freeShelf).filter((it) => it.cover).map((it) => store.book(it.id)).filter((b) => b && ok(b)).sort((a, b) => /[а-яіїєґ]/i.test(b.title) - /[а-яіїєґ]/i.test(a.title)).slice(0, 6) : [];
-  const wanted = social.popular().want.filter((x) => ok(x.book)).slice(0, 6);
+  const wanted = social.popular().want.map((x) => ({ ...x, book: ukWork(x.book) })).filter((x) => ok(x.book)).slice(0, 6);
   const genres = readGenres();
   const editorials = lists.editorials().slice(0, 3).map(withCovers);
   const seeds = req.user ? social.seeds(req.user.id) : [];
