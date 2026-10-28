@@ -829,7 +829,7 @@ function speedPage({ user, days, bots = [], layout }) {
   const body = `<section class="admin speed">
 <section class="page-head"><div><h1>Швидкість сайту</h1><p class="sub">Скільки сервер думав над сторінкою і за скільки вона відкрилась у браузері читача. Тільки числа за день, без адрес і людей.</p></div></section>
 
-<h2>День за днем</h2>
+<h2>По днях</h2>
 ${days.size ? `<div class="tbl"><table>
 <thead><tr><th rowspan="2">День</th><th colspan="4">Сервер: сторінки для людей</th><th colspan="4">Браузер на телефоні: сторінка відкрилась</th><th rowspan="2">Сервер стояв</th><th rowspan="2">Роботам</th></tr>
 <tr><th>Медіана</th><th>95%</th><th>&gt; 2 с</th><th>Скільки</th><th>Медіана</th><th>95%</th><th>&gt; 2 с</th><th>Скільки</th></tr></thead>
