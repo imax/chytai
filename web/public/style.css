@@ -100,6 +100,9 @@ main.home { padding-top: 56px; }
 .btn.danger { border-color: var(--danger); color: var(--danger); }
 .btn.danger:hover { background: var(--danger); color: var(--paper); }
 .acts { display: flex; flex-wrap: wrap; gap: 12px 18px; align-items: center; }
+.admin-nav { display: flex; flex-wrap: wrap; gap: 6px 16px; margin: 0 0 28px; padding-bottom: 12px; border-bottom: 1px solid var(--rule); font-size: 13px; }
+.admin-nav a { color: var(--muted); text-decoration: none; }
+.admin-nav a:hover, .admin-nav a.on { color: var(--accent); }
 .join-band { margin-top: 24px; padding: 48px 0; border-top: 1px solid var(--ink); display: flex; flex-wrap: wrap; gap: 24px 32px; align-items: center; justify-content: space-between; }
 .join-title { font: 600 28px/1.25 var(--serif); margin: 0 0 14px; }
 .join-text { margin: 0 0 14px; max-width: 620px; color: var(--muted); }

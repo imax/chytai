@@ -146,6 +146,7 @@ ${path === "/" ? `<meta name="google-site-verification" content="5cswdBTj0bCY9oY
   </div>
 </header>
 <main class="${home ? "home" : ""}">
+${path === "/admin" && user?.owner ? adminNav() : ""}
 ${body}
 ${!user && JOIN_PATHS.has(path) ? joinBand(canonical) : ""}
 </main>
@@ -546,6 +547,16 @@ ${myLists ? listsDialog(book, myLists) : ""}`;
 }
 
 // «Огляди» are hidden on book pages for now (Max, 2026-10-23); /admin/reviews, the API and the data stay.
+// Every admin page gets one row of links to the others (Max, 2026-10-28: «їх треба вишукувати, це прям незручно»).
+const ADMIN_LINKS = [
+  ["/admin", "Статистика"], ["/admin/traffic", "Трафік"], ["/admin/readers", "Читачі"], ["/admin/speed", "Швидкість"],
+  ["/admin/jobs", "Задачі"], ["/admin/catalog", "Каталог"], ["/admin/shelves", "Полиці"], ["/admin/overviews", "Огляди"],
+  ["/admin/dupes", "Дублі"], ["/admin/translations", "Переклади"], ["/admin/volumes", "Томи"], ["/admin/russian", "Російські"],
+  ["/admin/ukfind", "Укр. видання"], ["/admin/readeat", "Readeat"], ["/admin/free", "Вільні"], ["/admin/digest", "Лист"],
+  ["/admin/comments", "Коментарі"], ["/admin/google", "Google"],
+];
+const adminNav = () => `<nav class="admin-nav">${ADMIN_LINKS.map(([href, name]) => `<a href="${href}">${name}</a>`).join("")}</nav>`;
+
 // For guests, at the bottom of the pages people land on from a search engine: what the site is and a way in
 // (Max, 2026-10-27, variant B of three; text and links his). Not on the home page, search, sign-in or settings.
 // On book pages the «Хочу прочитати» block itself is not shown to guests.
