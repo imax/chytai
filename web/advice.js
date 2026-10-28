@@ -59,7 +59,7 @@ const OVERVIEW_DAILY = 150; // fresh overviews a day on readers' clicks, all rea
 // чи оцінка читачів», plus a backfill over the books already rated): a sweep finds every book with a
 // reader's rating or note and no overview, and a small queue makes them a couple at a time. Its own
 // ceiling a day, so a big Goodreads import or the backfill can't run the bill away in one night.
-const AUTO_DAILY = 250; // Max, 2026-10-23: «давай зменшемо до 150 [на] день»; 2026-10-27: «до 250 книжок на день»
+const AUTO_DAILY = 1000; // Max, 2026-10-23: «давай зменшемо до 150 [на] день»; 2026-10-27: «до 250 книжок на день»; 2026-10-28, for one day: «давай всі прогонимо сьогодні» (back to 250 after)
 const AUTO_PARALLEL = 2;
 // The backfill over books rated before the feature is OFF for now (Max, 2026-10-23 08:09: «давай поки не
 // робити авто-backfill … я ще подумаю»); a book gets its overview when a reader rates or notes it from
