@@ -584,20 +584,43 @@ async function addTocPages(forBook) {
   }
 }
 
-function chapterTitle(href) {
+// Several contents entries can point into one file (a whole book in one file, chapters as anchors). Then
+// the chapter is the last of them whose anchor comes before the place being read; without a place (search
+// results) or the anchors, the first one. «Тигролови» showed «Розділ шостий» on page ten (Max, 2026-10-28).
+function chapterTitle(href, cfi) {
   if (!book?.navigation || !href) return "";
   const base = href.split("#")[0];
-  let found = "";
+  const found = [];
   const walk = (items) => {
     for (const item of items) {
-      if (item.href.split("#")[0].endsWith(base) || base.endsWith(item.href.split("#")[0])) {
-        found = item.label.trim();
-      }
+      const file = item.href.split("#")[0];
+      if (file.endsWith(base) || base.endsWith(file)) found.push(item);
       if (item.subitems?.length) walk(item.subitems);
     }
   };
   walk(book.navigation.toc);
-  return found;
+  if (found.length < 2) return found[0]?.label.trim() || "";
+  let range = null;
+  try {
+    range = cfi && rendition?.getRange(cfi);
+  } catch {
+    /* not laid out */
+  }
+  if (!range) return found[0].label.trim();
+  const doc = range.startContainer.ownerDocument;
+  const here = doc.createRange();
+  here.setStart(range.startContainer, range.startOffset);
+  let best = found[0];
+  for (const item of found) {
+    const frag = item.href.split("#")[1];
+    if (!frag) continue;
+    const el = doc.getElementById(decodeURIComponent(frag));
+    if (!el) continue;
+    const at = doc.createRange();
+    at.setStartBefore(el);
+    if (at.compareBoundaryPoints(Range.START_TO_START, here) <= 0) best = item;
+  }
+  return best.label.trim();
 }
 
 function onRelocated(location) {
@@ -611,12 +634,12 @@ function onRelocated(location) {
 // How far into the book and which chapter, for the home screen; nothing until the locations index exists.
 function readingProgress(location) {
   if (!book?.locations.length() || !location?.start) return undefined;
-  return { pct: Math.round(book.locations.percentageFromCfi(location.start.cfi) * 100), chapter: chapterTitle(location.start.href) };
+  return { pct: Math.round(book.locations.percentageFromCfi(location.start.cfi) * 100), chapter: chapterTitle(location.start.href, location.start.cfi) };
 }
 
 function updateProgress(location) {
   if (!location?.start) return;
-  $("#chapter-label").textContent = chapterTitle(location.start.href);
+  $("#chapter-label").textContent = chapterTitle(location.start.href, location.start.cfi);
   if (book.locations.length()) {
     $("#progress-label").textContent = `${Math.round(book.locations.percentageFromCfi(location.start.cfi) * 100)}%`;
   }
@@ -641,6 +664,7 @@ function onTouchEnd(e) {
   const dy = t.screenY - touchStart.y;
   const ms = Date.now() - touchStart.t;
   touchStart = null;
+  if (Math.abs(dx) >= 12 || Math.abs(dy) >= 12) fontPlace = null;
   const sel = rendition?.getContents()[0]?.window.getSelection();
   if (sel && !sel.isCollapsed) return;
   if (!scrolled() && ms < 600 && Math.abs(dx) >= 40 && Math.abs(dx) > Math.abs(dy)) {
@@ -669,6 +693,7 @@ function onKey(e) {
   if (!view) return;
   // In page mode the up/down arrows turn pages too; while scrolling they scroll.
   const paged = !scrolled();
+  if (/^(Arrow|Page)|^ $/.test(e.key)) fontPlace = null; // moved on: a font change starts from here
   if (e.key === "ArrowLeft" || e.key === "PageUp" || (paged && e.key === "ArrowUp") || (e.key === " " && e.shiftKey)) view.prev();
   if (e.key === "ArrowRight" || e.key === "PageDown" || (paged && e.key === "ArrowDown") || (e.key === " " && !e.shiftKey)) view.next();
 }
@@ -677,6 +702,7 @@ function onKey(e) {
 // expect it to. One turn per gesture: a trackpad keeps sending wheel events while it coasts.
 let wheelQuietAt = 0;
 function onWheel(e) {
+  fontPlace = null;
   if (!rendition || scrolled() || document.body.classList.contains("library-open")) return;
   const now = Date.now();
   const busy = now < wheelQuietAt;
@@ -698,7 +724,7 @@ function onSelected(cfiRange, contents) {
   if (!text) return;
 
   const ctx = extractContext(contents.document, range);
-  const chapter = chapterTitle(contents.section?.href || rendition.currentLocation()?.start?.href);
+  const chapter = chapterTitle(contents.section?.href || rendition.currentLocation()?.start?.href, cfiRange);
   handleSelection(range, cfiRange, { ...ctx, chapter }, contents.document.defaultView.frameElement.getBoundingClientRect());
 }
 
@@ -1527,11 +1553,22 @@ function bookFontSize() {
   return settings.fontSizes?.[current?.path] || 100;
 }
 
+let fontPlace = null; // where the reader was when the font size started changing
 async function setFont(delta) {
   if (!current) return;
   const size = Math.min(200, Math.max(70, bookFontSize() + delta));
   settings.fontSizes = { ...settings.fontSizes, [current.path]: size };
+  // A new size reflows every page; go back to the words that were on screen, or the place drifts away
+  // (Max, 2026-10-28: «губиться позиція в тексті»).
+  // Several taps in a row keep coming back to the place of the first one, so they don't drift.
+  const now = Date.now();
+  if (!fontPlace || now - fontPlace.at > 15000 || fontPlace.book !== current.path) {
+    fontPlace = { cfi: rendition?.currentLocation?.()?.start?.cfi, book: current.path };
+  }
+  fontPlace.at = now;
+  const place = fontPlace.cfi;
   rendition?.themes.fontSize(`${size * BASE_SCALE}%`);
+  if (place) requestAnimationFrame(() => rendition?.display(place));
   pdfView?.setZoom(size);
   settings = await window.reader.setSettings({ fontSizes: settings.fontSizes });
 }
