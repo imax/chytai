@@ -101,6 +101,8 @@ function layout({ title, body, user, path = "", description = "", q = "", home =
     // Settings live on one's own shelf, not in the menu (Max, 2026-10-20).
     // Adding books is a page of its own in the menu, not something hidden in the profile (Max, 2026-10-22).
     ...(user ? [`<a href="/add"${on(path === "/add")}>Додати книжки</a>`] : []),
+    // The owner's admin link sits in the menu, not the footer (Max, 2026-10-28).
+    ...(user?.owner ? [`<a href="/admin"${on(path === "/admin")}>Адмінка</a>`] : []),
     user ? `<a href="${attr(user.href || "/me")}"${on(path === "/me" || path === "/settings")}>Моє</a>` : `<a href="/login"${on(path === "/login")}>Увійти</a>`,
   ].join("");
   const find = home || path === "/search" ? "" : `<form class="find" action="/search" role="search"><input type="search" name="q" value="${attr(q)}" placeholder="назва, автор, жанр або видавництво" autocomplete="off" aria-label="Пошук"></form>`;
@@ -148,7 +150,7 @@ ${path === "/admin" && user?.owner ? adminNav() : ""}
 ${body}
 ${!user && JOIN_PATHS.has(path) ? joinBand(canonical) : ""}
 </main>
-<footer class="foot"><div class="bar"><span class="motto">Chytai.org.ua: читай більше.</span><a href="https://app.chytai.org.ua">Читалка</a><a href="/updates">Що нового</a><a href="/privacy">Приватність</a><a href="mailto:ischenko@gmail.com">Написати нам</a>${user?.owner ? `<a href="/admin">Адмінка</a>` : ""}</div></footer>
+<footer class="foot"><div class="bar"><span class="motto">Chytai.org.ua: читай більше.</span><a href="https://app.chytai.org.ua">Читалка</a><a href="/updates">Що нового</a><a href="/privacy">Приватність</a><a href="mailto:ischenko@gmail.com">Написати нам</a></div></footer>
 <script src="${ASSETS.js}"></script>
 </body>
 </html>`;
