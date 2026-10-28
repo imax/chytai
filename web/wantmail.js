@@ -87,7 +87,11 @@ class WantMail {
       if (!fresh.length) continue;
       state.push([id, [...had, ...fresh]]);
       const b = this.store.book(id);
-      if (b && !isRussian(b)) books.push({ id, book: b, news: fresh.map((k) => ({ kind: k, ...has[k], href: has[k].work !== id ? this.store.href(has[k].work) : "" })) });
+      let news = fresh.map((k) => ({ kind: k, ...has[k], href: has[k].work !== id ? this.store.href(has[k].work) : "" }));
+      // The Ukrainian edition that turned up is the one on sale: one line, not the same title twice (Max, 2026-10-28).
+      const uk = news.find((n) => n.kind === "uk" && n.item.status !== "анонс");
+      if (uk) news = news.filter((n) => n.kind !== "sale" || n.work !== uk.work);
+      if (b && !isRussian(b)) books.push({ id, book: b, news });
     }
     return { books, state, at: now.toISOString() };
   }
