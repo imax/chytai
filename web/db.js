@@ -59,6 +59,10 @@ CREATE TABLE IF NOT EXISTS steps (reader TEXT NOT NULL, step TEXT NOT NULL, at T
 CREATE TABLE IF NOT EXISTS job_runs (job TEXT NOT NULL, how TEXT NOT NULL, started TEXT NOT NULL, ms INTEGER NOT NULL, ok INTEGER NOT NULL, note TEXT NOT NULL);
 CREATE INDEX IF NOT EXISTS job_runs_started ON job_runs (started);
 CREATE INDEX IF NOT EXISTS job_runs_job ON job_runs (job, started);
+-- When a reader set or changed a rating (draw.js, Max 2026-10-28): entries.updated moves on any change.
+CREATE TABLE IF NOT EXISTS rated (reader TEXT NOT NULL, book TEXT NOT NULL, rating REAL NOT NULL, at TEXT NOT NULL, how TEXT NOT NULL);
+CREATE INDEX IF NOT EXISTS rated_at ON rated (at);
+CREATE TABLE IF NOT EXISTS draws (week TEXT PRIMARY KEY, data TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS book_queue (id TEXT PRIMARY KEY, source TEXT NOT NULL, added TEXT NOT NULL, done TEXT, steps TEXT NOT NULL DEFAULT '{}', cost REAL NOT NULL DEFAULT 0);
 CREATE INDEX IF NOT EXISTS book_queue_done ON book_queue (done, added);
 CREATE VIRTUAL TABLE IF NOT EXISTS search USING fts5 (id UNINDEXED, title, alt, author, series, extra, tokenize = 'unicode61 remove_diacritics 2');
@@ -84,6 +88,8 @@ function open(dataDir) {
   if (!db.prepare("PRAGMA table_info(readers)").all().some((c) => c.name === "now")) db.exec("ALTER TABLE readers ADD COLUMN now TEXT");
   // Where a reader first came from before signing up (/admin, Max 2026-10-24): JSON { source, ref, landing, day }.
   if (!db.prepare("PRAGMA table_info(readers)").all().some((c) => c.name === "came")) db.exec("ALTER TABLE readers ADD COLUMN came TEXT");
+  // «Беру участь» in the weekly draw (draw.js, Max 2026-10-28): when the reader joined, null if not.
+  if (!db.prepare("PRAGMA table_info(readers)").all().some((c) => c.name === "draw")) db.exec("ALTER TABLE readers ADD COLUMN draw TEXT");
   // «Дитяча полиця» (Max, 2026-10-23): a book the reader keeps for their children, out of their own taste.
   if (!db.prepare("PRAGMA table_info(entries)").all().some((c) => c.name === "kids")) db.exec("ALTER TABLE entries ADD COLUMN kids INTEGER NOT NULL DEFAULT 0");
   // A work may have several addresses (an old one redirects to the current): the table once made id

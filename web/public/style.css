@@ -986,3 +986,20 @@ aside .side-lists + .label, aside p + .label, aside dialog + .label { margin-top
   .read-chips { flex-wrap: nowrap; overflow-x: auto; margin: 14px -16px 26px; padding: 0 16px; }
   .chip { white-space: nowrap; }
 }
+/* /rozihrash, the weekly draw (draw.js). .draw-ph marks a place for Max's text until he writes it. */
+.draw-ph { display: inline-block; padding: 2px 8px; border: 1px dashed var(--rule); border-radius: 4px; color: var(--muted); font: 400 0.8em/1.4 var(--sans); }
+.welcome h1 .draw-ph { font-size: 28px; padding: 10px 14px; }
+p.draw-ph { display: block; padding: 24px; text-align: center; }
+.draw-card { border-top: 1px solid var(--ink); padding-top: 18px; display: flex; flex-direction: column; gap: 12px; align-items: flex-start; }
+.draw-when { font: 600 13px/1.5 var(--sans); color: var(--muted); margin: 0; }
+.draw-state { margin: 0; font-size: 16px; }
+.draw-state.ok::before { content: "✓ "; color: var(--accent); font-weight: 600; }
+.draw-card form { margin: 0; }
+.draw-leave button { background: none; border: 0; padding: 0; cursor: pointer; font-size: 13px; color: var(--muted); }
+.draw-rules { margin: 8px 0 48px; }
+.draw-past { margin: 0 0 64px; }
+.draw-past h2 { font: 400 28px/1.15 var(--serif); }
+.draw-table { width: 100%; max-width: 640px; border-collapse: collapse; font-size: 15px; }
+.draw-table th { text-align: left; font: 600 12px var(--sans); color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; }
+.draw-table th, .draw-table td { padding: 10px 8px 10px 0; border-bottom: 1px solid var(--rule); }
+@media (max-width: 760px) { .draw-card { margin-top: 24px; } }

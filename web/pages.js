@@ -2103,6 +2103,50 @@ ${updatesCache.html}
 </section>` });
 }
 
+// ---- /rozihrash, the weekly draw (draw.js, Max 2026-10-28). Every public word on it is Max's: the title,
+// the lead, the steps and the rules (draw.md) are his; ours are only the button and the reader's state.
+let drawRulesCache = { mtime: 0, html: "" };
+const drawDay = (d) => d.toLocaleDateString("uk-UA", { timeZone: "Europe/Kyiv", day: "numeric", month: "long" });
+const drawSpan = (w) => {
+  const [a, b] = [new Date(`${w.from}T12:00:00Z`), new Date(`${w.to}T12:00:00Z`)];
+  const month = (d) => d.toLocaleDateString("uk-UA", { timeZone: "UTC", month: "long", day: "numeric" }).replace(/^\d+\s*/, "");
+  return a.getUTCMonth() === b.getUTCMonth() ? `${a.getUTCDate()}–${b.getUTCDate()} ${month(b)}` : `${a.getUTCDate()} ${month(a)} – ${b.getUTCDate()} ${month(b)}`;
+};
+function drawPage({ user, week, status, count, history = [], copy = {} }) {
+  const file = path.join(__dirname, "draw.md");
+  const mtime = fs.statSync(file).mtimeMs;
+  if (mtime !== drawRulesCache.mtime) drawRulesCache = { mtime, html: marked.parse(fs.readFileSync(file, "utf8").replace(/<!--[\s\S]*?-->/g, "")) };
+  const ph = (what) => `<span class="draw-ph">${esc(what)}</span>`;
+  const leave = `<form method="post" action="/rozihrash/leave" class="draw-leave"><button class="text-link">Не брати участь</button></form>`;
+  const card = {
+    guest: `<a class="btn primary" rel="nofollow" href="/login?next=%2Frozihrash">Увійти й узяти участь</a>`,
+    out: `<form method="post" action="/rozihrash/join"><button class="btn primary">Беру участь</button></form><p class="muted small">Ви погоджуєтесь із <a class="text-link" href="#rules">правилами</a>.</p>`,
+    joined: `<p class="draw-state">Ви берете участь. Цього тижня оцінок ще немає.</p>${leave}`,
+    in: `<p class="draw-state ok">Цього тижня ви в розіграші${status.book ? `: <a href="${attr(status.book.href || "")}">${esc(status.book.title)}</a>` : ""}.</p>${leave}`,
+    mail: `<p class="draw-state">${status.why === "no mail" ? "Потрібна пошта, на неї прийде сертифікат." : "З цією поштою вже бере участь інший акаунт або вона тимчасова."} <a class="text-link" href="/settings">Налаштування</a></p>${leave}`,
+  }[status.state];
+  const when = `${week.upcoming ? "Перший тиждень" : "Цей тиждень"}: ${drawSpan(week)} · розіграш ${drawDay(week.drawAt)} о 8:05${week.upcoming ? "" : ` · ${count} ${plural(count, "учасник", "учасники", "учасників")}`}`;
+  const past = history.length
+    ? `<section class="draw-past"><h2>Минулі тижні</h2><table class="draw-table"><tr><th>Тиждень</th><th>Учасників</th><th>Переможець</th><th></th></tr>${history
+        .map((h) => `<tr><td>${esc(drawSpan(h))}</td><td>${h.count}</td><td>${h.winner ? `<a href="/@${attr(h.winner)}">@${esc(h.winner)}</a>` : "—"}</td><td><a class="text-link" href="/rozihrash/${attr(h.week)}">Перевірити</a></td></tr>`)
+        .join("")}</table></section>`
+    : "";
+  const body = `<section class="welcome draw">
+  <div class="welcome-intro">
+    <p class="kicker">Розіграш</p>
+    <h1>${copy.title ? esc(copy.title) : ph("Заголовок: текст Макса")}</h1>
+    <p class="lead">${copy.lead ? esc(copy.lead) : ph("Кілька речень: що розігруємо і навіщо. Текст Макса")}</p>
+    <div class="draw-card"><p class="draw-when">${esc(when)}</p>${card}</div>
+  </div>
+  <ol class="welcome-steps">
+    ${[1, 2, 3, 4].map((n) => `<li><span class="n">0${n}</span><div><h3>${ph(`Крок ${n}`)}</h3><p>${ph("Пояснення кроку: текст Макса")}</p></div></li>`).join("")}
+  </ol>
+</section>
+<section class="auth prose draw-rules" id="rules"><h2>Правила</h2>${drawRulesCache.html}</section>
+${past}`;
+  return layout({ title: "Розіграш", user, path: "/rozihrash", canonical: "/rozihrash", noindex: true, description: "", body });
+}
+
 // ---- /add «Додати книжки» (design 4b of 2026-10-22, Max: «окрему сторінку для додавання, а не як зараз
 // захована в профіль»). Reachable any time: the menu, the shelf, /welcome, the welcome letter. Left: what
 // this is and the imports; right: a list to paste, one book per line, any shape. «Знайти книжки» shows
@@ -2614,6 +2658,6 @@ module.exports = {
   welcomePage,
   addPage, addReviewPage, addFindResults, addPageResult, ukFindPage,
   layout, homePage, bookPage, bookEditPage, russianPage, editPage, libraryPage, readersPage, popularPage, readPage, genrePage, genreTrialPage, langTrialPage, origTrialPage, overviewTrialPage, ukTrialPage, catalogAdminPage, aiPassPage, publishersPage, publisherPage, searchPage, searchResults, authorPage,
-  loginPage, codePage, signupPage, settingsPage, privacyPage, updatesPage, messagePage, digestPage, followMailPage, wantMailPage, importPage, importPreviewPage, importDonePage,
+  loginPage, codePage, signupPage, settingsPage, privacyPage, updatesPage, drawPage, messagePage, digestPage, followMailPage, wantMailPage, importPage, importPreviewPage, importDonePage,
   GENRES, esc, byline, STATUS, COPY, inline, isUk, setTitleLinks, setAuthorLinks, setThumbs, setStats, setReadersWithNote,
 };

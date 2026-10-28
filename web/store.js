@@ -1662,6 +1662,7 @@ class Store {
     this.entriesV = (this.entriesV || 0) + 1;
     this.entries.delete(reader);
     this.subs.delete(reader);
+    this.db.prepare("DELETE FROM rated WHERE reader = ?").run(reader);
   }
 
   writeEntry(reader, id, e) {
@@ -2060,6 +2061,7 @@ class Store {
         const cur = entries[id];
         entries[id] = cur ? { ...mergeEntries(cur, imported), updated: cur.updated || cur.added || imported.updated } : imported;
         this.writeEntry(reader, id, entries[id]);
+        if (entries[id].rating != null && entries[id].rating !== (cur?.rating ?? null)) this.logRating(reader, id, entries[id].rating, now, source);
         cur ? result.updated++ : result.added++;
       }
     });
@@ -2124,7 +2126,13 @@ class Store {
     if (!next.kids) delete next.kids;
     entries[id] = next;
     this.writeEntry(reader, id, next);
+    if (next.rating != null && next.rating !== (cur.rating ?? null)) this.logRating(reader, id, next.rating, next.updated, "site");
     return next;
+  }
+
+  // The weekly draw counts ratings set that week (draw.js); imports count too, they are the reader's own history.
+  logRating(reader, id, rating, at, how) {
+    this.db.prepare("INSERT INTO rated (reader, book, rating, at, how) VALUES (?, ?, ?, ?, ?)").run(reader, id, rating, at, how);
   }
 
   removeEntry(reader, id) {
