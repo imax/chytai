@@ -28,11 +28,14 @@ const person = (s) => norm(s).split(" ").filter(Boolean).sort().join(" ");
 // An author page: the name and the works ({ text id: title }), without the «most read» box (it repeats
 // the list, and on a page of the list it is another page's works).
 function parse(html) {
-  const name = (/<h1[^>]*>([^<]+)<\/h1>/.exec(html)?.[1] || "").replace(/\s+/g, " ").trim();
+  const name = (/<h1[^>]*>([^<]+)<\/h1>/i.exec(html)?.[1] || "").replace(/\s+/g, " ").trim();
   const works = {};
-  for (const m of html.replace(/<ul class="popular">[\s\S]*?<\/ul>/g, "").matchAll(/<a href="printit\.php\?tid=(\d+)">([^<]+)<\/a>/g)) {
-    const t = m[2].replace(/&quot;/g, '"').replace(/&amp;/g, "&").replace(/&#039;/g, "'").replace(/\s+/g, " ").trim();
-    if (!/^Читати повністю/.test(t)) works[m[1]] = t;
+  // Any spelling of the link (quotes or none, more attributes, tags inside): the first read on 2026-10-27
+  // looked for one exact form, found the names and not a single work.
+  const body = html.replace(/<ul[^>]*class=["']?popular\b[\s\S]*?<\/ul>/gi, "");
+  for (const m of body.matchAll(/<a\s[^>]*?href=["']?(?:\.\/|(?:https?:\/\/[^/"' >]+)?\/books\/)?printit\.php\?tid=(\d+)[^>]*>([\s\S]*?)<\/a>/gi)) {
+    const t = m[2].replace(/<[^>]+>/g, "").replace(/&quot;/g, '"').replace(/&amp;/g, "&").replace(/&#0?39;|&apos;/g, "'").replace(/&nbsp;/g, " ").replace(/\s+/g, " ").trim();
+    if (t && !/^Читати повністю/.test(t)) works[m[1]] = t;
   }
   return { name, works };
 }
@@ -61,8 +64,9 @@ class Ukrlib {
   // The author pages, read once; false when they have been.
   async crawl() {
     let st = JSON.parse(this.db.get("ukrlib:index") || "null");
-    if (st?.done) return false;
-    if (!st) st = { at: Date.now(), authors: {}, pages: null, i: 0 };
+    if (st?.done && st.v === 2) return false;
+    // v2: the first read kept no works (parse() above), so it is read once more.
+    if (!st || st.v !== 2) st = { v: 2, at: Date.now(), authors: {}, pages: null, i: 0 };
     if (!st.pages) {
       const sm = await (await this.fetchImpl(`${BASE}/newsitemap.xml`, { headers: { "User-Agent": UA }, signal: AbortSignal.timeout(60000) })).text();
       st.pages = [...new Set([...sm.matchAll(/\/books\/author\.php\?id=(\d+)(?:&amp;page=(\d+))?/g)].map((m) => `${m[1]}:${m[2] || 1}`))];
@@ -72,7 +76,10 @@ class Ukrlib {
     for (; st.i < st.pages.length; st.i++) {
       const [id, page] = st.pages[st.i].split(":");
       try {
-        const { name, works } = parse(await this.get(`${BASE}/books/author.php?id=${id}${page === "1" ? "" : `&page=${page}`}`));
+        const html = await this.get(`${BASE}/books/author.php?id=${id}${page === "1" ? "" : `&page=${page}`}`);
+        const { name, works } = parse(html);
+        // A page's links as they came, to see what parse() met (the test copy of the database has it).
+        if (st.i === 0 || (!Object.keys(works).length && !this.db.get("ukrlib:sample"))) this.db.set("ukrlib:sample", html.slice(Math.max(0, html.indexOf("printit") - 1500), html.indexOf("printit") + 1500));
         const a = st.authors[id] || (st.authors[id] = { name, works: {} });
         if (name && page === "1") a.name = name;
         Object.assign(a.works, works);
@@ -84,7 +91,10 @@ class Ukrlib {
       if (st.i % 50 === 0) this.db.set("ukrlib:index", JSON.stringify(st));
       await wait(1000);
     }
-    if (st.i >= st.pages.length) Object.assign(st, { done: true, at: Date.now() });
+    // Names and no works means parse() missed the links again: not done, so a fix reads it once more.
+    const works = Object.values(st.authors).reduce((n, a) => n + Object.keys(a.works).length, 0);
+    if (st.i >= st.pages.length && !works) this.log("ukrlib: read all pages and found no works, see ukrlib:sample");
+    else if (st.i >= st.pages.length) Object.assign(st, { done: true, at: Date.now() });
     this.db.set("ukrlib:index", JSON.stringify(st));
     return st.done || false;
   }
