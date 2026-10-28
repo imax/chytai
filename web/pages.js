@@ -1240,10 +1240,15 @@ function libraryPage({ part = "",  lists = [], savedLists = [], rows, user, read
   const parts = twoParts(list, FIRST.rows, part);
   if (part === "rest") return parts;
   const wants = own ? [] : mine.filter((r) => r.status === "want").slice(0, 3);
+  // On a phone the sidebar comes after the whole shelf, so the lists also stand above it there, in a row
+  // (Max, 2026-10-28: «Треба списки на Моє»).
+  const listsHead = label(own ? "Мої списки" : "Списки", own ? `<button type="button" class="text-link" data-open="new-list">+ новий</button>` : "");
+  const topLists = lists.length || savedLists.length || own ? `<div class="top-lists">${listsHead}${lists.length || savedLists.length ? "" : `<p class="small muted">Складіть список книжок, щоб поділитися ним.</p>`}<div class="lchips">${[...lists.map((l) => [l, listMeta(l, { by: false })]), ...savedLists.map((l) => [l, `${esc(l.reader.name)} · ${books(l.count)}`])].map(([l, m]) => `<a href="${attr(l.href)}"><b>${esc(l.title)}</b><span>${m}</span></a>`).join("")}</div></div>` : "";
   const body = `
 ${pageHead({ crumbs: own ? "" : `<a href="/community">Читачі</a> / ${esc(reader.name)}`, kicker: own ? "Моя полиця" : "Полиця читача", title: esc(reader.name), sub, extra: nowBlock(now, { own }), action: own ? `<div class="acts own-acts"><a class="btn primary" href="/add">+ Додати книжки</a><a class="text-link small" href="/mcp">або голосом чи текстом у Claude чи ChatGPT</a></div>` : user?.id === reader.id ? "" : followButton(reader, following, user) })}
 <div class="split">
   <div>
+    ${topLists}
     <div class="tabs-bar">
       <div class="tabs" data-filter="status">${tabs.map(([k, l, n]) => `<button type="button" class="tab${k === "" ? " on" : ""}" data-v="${k}">${l} <span>${n}</span></button>`).join("")}</div>
     </div>
@@ -1259,8 +1264,7 @@ ${parts.first}
     <p class="more hidden"><button type="button" class="text-link" id="more">Показати ще <span></span> →</button></p>
   </div>
   <aside>
-    ${lists.length || own ? `${label(own ? "Мої списки" : "Списки", own ? `<button type="button" class="text-link" data-open="new-list">+ новий</button>` : "")}${lists.length ? sideLists(lists, (l) => listMeta(l, { by: false })) : `<p class="small muted">Складіть список книжок, щоб поділитися ним: «Найкраще про війну», «Для підлітків 12+»…</p>`}` : ""}
-    ${savedLists.length ? `${label("Збережені списки")}${sideLists(savedLists, (l) => `${esc(l.reader.name)} · ${books(l.count)}`)}` : ""}
+    ${lists.length || own ? `<div class="side-own-lists${topLists ? " has-top" : ""}">${listsHead}${lists.length ? sideLists(lists, (l) => listMeta(l, { by: false })) : `<p class="small muted">Складіть список книжок, щоб поділитися ним: «Найкраще про війну», «Для підлітків 12+»…</p>`}${savedLists.length ? `${label("Збережені списки")}${sideLists(savedLists, (l) => `${esc(l.reader.name)} · ${books(l.count)}`)}` : ""}</div>` : ""}
     ${own ? `<dialog id="new-list"><div class="dlg-head"><h2>Новий список</h2><button type="button" class="dlg-x" data-close aria-label="Закрити">×</button></div>${newListForm()}</dialog>` : ""}
     ${thisYear.length ? `${label("Цього року")}<div class="numbers">
       <p><b>${thisYear.length}</b>прочитано</p>
