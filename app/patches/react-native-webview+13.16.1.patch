@@ -1,5 +1,5 @@
 diff --git a/node_modules/react-native-webview/apple/RNCWebViewImpl.m b/node_modules/react-native-webview/apple/RNCWebViewImpl.m
-index 7f5c24d..bf4f068 100644
+index 7f5c24d..2f26aa7 100644
 --- a/node_modules/react-native-webview/apple/RNCWebViewImpl.m
 +++ b/node_modules/react-native-webview/apple/RNCWebViewImpl.m
 @@ -94,12 +94,21 @@ NSString *const CUSTOM_SELECTOR = @"_CUSTOM_SELECTOR_";
@@ -25,3 +25,105 @@ index 7f5c24d..bf4f068 100644
  }
  #else // TARGET_OS_OSX
  - (void)scrollWheel:(NSEvent *)theEvent {
+@@ -114,6 +123,91 @@ NSString *const CUSTOM_SELECTOR = @"_CUSTOM_SELECTOR_";
+ #endif // TARGET_OS_OSX
+ @end
+ 
++#if TARGET_OS_IOS
++// No system edit menu (Copy / Look Up / Translate / Share) over a read-only selection when
++// menuItems is an empty array: the page shows its own toolbar there. On iOS 16+ WebKit builds
++// that menu in its private content view, and neither canPerformAction nor buildMenuWithBuilder
++// on the WKWebView reach it (Look Up went, Copy and Translate stayed), so the content view and
++// UIEditMenuInteraction are patched directly. Selection handles stay, and so does the menu in
++// a text field (Cut / Paste), so a login code can still be pasted.
++static BOOL RNCKeyboardShown = NO;
++
++static BOOL RNCEditMenuSuppressed(UIView *view) {
++  for (UIView *v = view; v != nil; v = v.superview) {
++    if ([v isKindOfClass:[RNCWKWebView class]]) {
++      NSArray *items = ((RNCWKWebView *)v).menuItems;
++      return items != nil && items.count == 0;
++    }
++  }
++  return NO;
++}
++
++static BOOL RNCMenuHasEditing(NSArray<UIMenuElement *> *elements) API_AVAILABLE(ios(13.0)) {
++  for (UIMenuElement *element in elements) {
++    if ([element isKindOfClass:[UIMenu class]]) {
++      if (RNCMenuHasEditing(((UIMenu *)element).children)) return YES;
++    } else if ([element isKindOfClass:[UICommand class]]) {
++      SEL action = ((UICommand *)element).action;
++      if (action == @selector(cut:) || action == @selector(paste:)) return YES;
++    }
++  }
++  return NO;
++}
++
++// nil keeps the system's suggested actions; an empty menu is not presented at all.
++static UIMenu *RNCFilterEditMenu(UIView *view, UIMenu *menu, NSArray<UIMenuElement *> *suggested) API_AVAILABLE(ios(16.0)) {
++  if (!RNCEditMenuSuppressed(view)) return menu;
++  if (RNCMenuHasEditing(menu ? menu.children : suggested)) return menu;
++  return [UIMenu menuWithChildren:@[]];
++}
++
++static void RNCPatchEditMenus(void) {
++  if (@available(iOS 16.0, *)) {
++    static dispatch_once_t once;
++    dispatch_once(&once, ^{
++      NSNotificationCenter *center = [NSNotificationCenter defaultCenter];
++      [center addObserverForName:UIKeyboardWillShowNotification object:nil queue:nil usingBlock:^(NSNotification *note) { RNCKeyboardShown = YES; }];
++      [center addObserverForName:UIKeyboardWillHideNotification object:nil queue:nil usingBlock:^(NSNotification *note) { RNCKeyboardShown = NO; }];
++
++      Class contentView = NSClassFromString(@"WKContentView");
++      if (contentView) {
++        // UITextInput (iOS 16): the menu UIKit's text interaction shows for a selection.
++        SEL textMenu = @selector(editMenuForTextRange:suggestedActions:);
++        Method method = class_getInstanceMethod(contentView, textMenu);
++        IMP original = method ? method_getImplementation(method) : NULL;
++        class_replaceMethod(contentView, textMenu, imp_implementationWithBlock(^UIMenu *(UIView *me, UITextRange *range, NSArray<UIMenuElement *> *suggested) {
++          UIMenu *menu = original ? ((UIMenu *(*)(id, SEL, UITextRange *, NSArray *))original)(me, textMenu, range, suggested) : nil;
++          return RNCFilterEditMenu(me, menu, suggested);
++        }), "@@:@@");
++
++        // The content view's own UIEditMenuInteraction, where WebKit has one.
++        SEL interactionMenu = @selector(editMenuInteraction:menuForConfiguration:suggestedActions:);
++        Method method2 = class_getInstanceMethod(contentView, interactionMenu);
++        if (method2) {
++          IMP original2 = method_getImplementation(method2);
++          class_replaceMethod(contentView, interactionMenu, imp_implementationWithBlock(^UIMenu *(UIView *me, UIEditMenuInteraction *interaction, UIEditMenuConfiguration *configuration, NSArray<UIMenuElement *> *suggested) {
++            UIMenu *menu = ((UIMenu *(*)(id, SEL, UIEditMenuInteraction *, UIEditMenuConfiguration *, NSArray *))original2)(me, interactionMenu, interaction, configuration, suggested);
++            return RNCFilterEditMenu(me, menu, suggested);
++          }), method_getTypeEncoding(method2));
++        }
++      }
++
++      // Last resort: whatever builds the menu, it is shown through UIEditMenuInteraction. Inside
++      // the reader nothing is presented unless the keyboard is up (a focused text field).
++      SEL present = @selector(presentEditMenuWithConfiguration:);
++      Method presentMethod = class_getInstanceMethod([UIEditMenuInteraction class], present);
++      if (presentMethod) {
++        IMP originalPresent = method_getImplementation(presentMethod);
++        method_setImplementation(presentMethod, imp_implementationWithBlock(^(UIEditMenuInteraction *me, UIEditMenuConfiguration *configuration) {
++          if (!RNCKeyboardShown && RNCEditMenuSuppressed(me.view)) return;
++          ((void (*)(id, SEL, UIEditMenuConfiguration *))originalPresent)(me, present, configuration);
++        }));
++      }
++    });
++  }
++}
++#endif // TARGET_OS_IOS
++
+ @interface RNCWebViewImpl () <WKUIDelegate, WKNavigationDelegate, WKScriptMessageHandler, WKHTTPCookieStoreObserver,
+ #if !TARGET_OS_OSX
+ UIScrollViewDelegate,
+@@ -516,6 +610,9 @@ RCTAutoInsetsProtocol>
+ {
+   if (self.window != nil && _webView == nil) {
+     WKWebViewConfiguration *wkWebViewConfig = [self setUpWkWebViewConfig];
++#if TARGET_OS_IOS
++    RNCPatchEditMenus();
++#endif // TARGET_OS_IOS
+     _webView = [[RNCWKWebView alloc] initWithFrame:self.bounds configuration: wkWebViewConfig];
+     [self setBackgroundColor: _savedBackgroundColor];
+ #if !TARGET_OS_OSX

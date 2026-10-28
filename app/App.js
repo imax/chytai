@@ -122,8 +122,8 @@ export default function App() {
         bounces={false}
         textInteractionEnabled
         // No system Copy / Look Up / Translate callout over a selection: the reader shows its
-        // own toolbar (explain, copy) there, exactly as in Safari. An empty list keeps text
-        // selectable but makes the shell answer "no" to every system menu action.
+        // own toolbar there. An empty list keeps text and its handles selectable; the native side
+        // is patches/react-native-webview+13.16.1.patch, so changing it needs a new build.
         menuItems={[]}
         // The default whitelist (http, https, about:blank) silently cancels every other navigation
         // before onShouldStartLoadWithRequest runs. epub.js loads each chapter into an iframe via
