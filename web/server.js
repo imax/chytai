@@ -985,10 +985,8 @@ const bookParam = (req) => store.canonical(store.resolve(String(req.body.book ||
 // A new list; from a book's «Додати до списку…» it starts with that book and the page stays where it was.
 app.post("/api/lists", signed, (req, res) => {
   if (auth.tooMany(`lists:${req.user.id}`, 30)) return res.status(429).send(pages.messagePage({ title: "Забагато нових списків за годину", text: "Спробуйте трохи згодом.", user: req.user }));
-  const l = lists.create(req.user.id, { title: req.body.title, note: req.body.note });
+  const l = lists.create(req.user.id, { title: req.body.title, note: req.body.note, draft: true });
   if (!l) return res.redirect(req.get("referer") || "/lists");
-  // Readers' own content mails Max (2026-10-28: «надсилай мені листа коли хтось створює список»).
-  if (!req.owner) notifyOwner(`Новий список: ${l.title}`, [`${req.user.name} (${SITE}/@${req.user.username}) створив(ла) список «${l.title}».`, "", `${SITE}${l.href}`].join("\n"));
   const id = bookParam(req);
   if (id && store.book(id)) {
     lists.add(l.id, id);
@@ -1007,8 +1005,9 @@ app.post("/api/lists/:id/publish", signed, myList, (req, res) => {
   if (req.list.draft) published(req, l);
   res.redirect(303, l.href);
 });
-// A reader's draft out in the open mails Max too, like a new list.
-const published = (req, l) => !req.owner && notifyOwner(`Опубліковано список: ${l.title}`, [`${req.user.name} (${SITE}/@${req.user.username}) опублікував(ла) список «${l.title}».`, "", `${SITE}${l.href}`].join("\n"));
+// Readers' own content mails Max (2026-10-28: «надсилай мені листа коли хтось створює список»): a list when it is
+// published, since a new one starts as a draft.
+const published = (req, l) => !req.owner && notifyOwner(`Новий список: ${l.title}`, [`${req.user.name} (${SITE}/@${req.user.username}) опублікував(ла) список «${l.title}».`, "", `${SITE}${l.href}`].join("\n"));
 // The picture on top of a list, from the author's computer: kept here, made no wider than 1600 px.
 app.post("/api/lists/:id/image", signed, myList, express.raw({ type: "image/*", limit: "15mb" }), async (req, res) => {
   const ext = COVER_TYPES[String(req.get("content-type") || "").split(";")[0].trim()];

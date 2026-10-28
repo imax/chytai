@@ -72,7 +72,9 @@ class Lists {
     return this.db.prepare("SELECT * FROM lists WHERE reader = ? ORDER BY updated DESC").all(readerId).map((r) => this.view(r)).filter(Boolean);
   }
 
-  create(readerId, { title, note = "" }) {
+  // A reader's new list starts as a draft (Max, 2026-10-28: «Статус чернетка по дефолту, кнопка Опублікувати»);
+  // the site's own (seeded) lists don't ask for `draft`.
+  create(readerId, { title, note = "", draft = false }) {
     title = String(title || "").replace(/\s+/g, " ").trim().slice(0, TITLE_MAX);
     if (!title) return null;
     const base = slugify(title).slice(0, 60).replace(/-+$/, "") || "spysok";
@@ -80,7 +82,7 @@ class Lists {
     for (let i = 2; this.db.prepare("SELECT 1 FROM lists WHERE reader = ? AND slug = ?").get(readerId, slug); i++) slug = `${base}-${i}`;
     const id = crypto.randomBytes(6).toString("hex");
     const now = new Date().toISOString();
-    this.db.prepare("INSERT INTO lists (id, reader, slug, title, note, created, updated) VALUES (?, ?, ?, ?, ?, ?, ?)").run(id, readerId, slug, title, String(note).trim().slice(0, NOTE_MAX), now, now);
+    this.db.prepare("INSERT INTO lists (id, reader, slug, title, note, created, updated, draft) VALUES (?, ?, ?, ?, ?, ?, ?, ?)").run(id, readerId, slug, title, String(note).trim().slice(0, NOTE_MAX), now, now, draft ? 1 : 0);
     return this.get(id);
   }
   // `editorial` is the owner's to set (server.js); undefined leaves it (and `draft`) as it is.
