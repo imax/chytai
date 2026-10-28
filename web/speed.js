@@ -5,30 +5,9 @@
 //   has loaded: the navigation timing, nothing else);
 // - stall: how long the main loop stood still (the site answered nobody meanwhile).
 // Each is a row of counts by time bucket, so the share of slow answers and a median can be read from it.
-// /admin/speed shows them, with what Fly's metrics and our logs said about the days before (HISTORY).
+// /admin/speed shows them day by day.
 const EDGES = [100, 200, 500, 1000, 2000, 5000, 10000]; // ms; the last bucket is everything slower
 const KINDS = ["page", "bot", "phone", "computer", "phone-first", "computer-first", "stall"];
-
-// The days before we counted, from Fly's edge metrics (all answers 2xx, covers and AI calls included, so
-// slower than pages alone) and the «slow:» log lines (from 24.10 10:43 UTC), read on 2026-10-26.
-const HISTORY = {
-  fly: [
-    // day (Kyiv), median s, 95% within s, answers, answers over 5 s
-    ["2026-10-19", 0.15, 0.23, 6508, 20],
-    ["2026-10-20", 0.15, 0.54, 16161, 175],
-    ["2026-10-21", 0.2, 4.36, 40369, 684],
-    ["2026-10-22", 0.17, 0.81, 26482, 547],
-    ["2026-10-23", 0.14, 7.7, 29592, 1661],
-    ["2026-10-24", 0.35, 2.73, 17977, 183],
-    ["2026-10-25", 0.31, 3.3, 28270, 268],
-    ["2026-10-26", 0.12, 0.22, 12843, 13], // until 08:50 Kyiv
-  ],
-  // pages a person or robot waited over 2 s for, per day; how long the site stood still, minutes per day
-  logs: {
-    before: { from: "24.10 13:43", to: "25.10 21:40", slowPages: 335, over5s: 58, worst: 121, stillMin: 34.4 },
-    after: { from: "25.10 22:30", to: "26.10 08:50", slowPages: 7, over5s: 0, worst: 3.4, stillMin: 1.3 },
-  },
-};
 
 // Which robot a user agent is (Max, 2026-10-26: «що це за боти, яких так багато?»): the known ones by name, the
 // rest by the word in it that says bot/crawler/spider, else its product token. Only this name is kept.
@@ -131,4 +110,4 @@ function quantile(b, n, q) {
   return null;
 }
 
-module.exports = { Speed, EDGES, KINDS, HISTORY, botName };
+module.exports = { Speed, EDGES, KINDS, botName };

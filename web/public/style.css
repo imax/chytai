@@ -652,11 +652,6 @@ dialog .form { margin-top: 18px; }
 .admin.jobs .ok { color: var(--accent); }
 .admin.jobs .bad { color: #b3261e; }
 .admin.jobs .warn { color: #a86b00; }
-.speed-bars { display: flex; gap: 6px; align-items: flex-end; height: 160px; margin: 8px 0 28px; }
-.speed-bars div { flex: 1; height: 100%; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; position: relative; }
-.speed-bars span { width: 100%; background: var(--accent, #b4532a); border-radius: 2px 2px 0 0; }
-.speed-bars b { font-size: 12px; font-weight: 500; order: -1; margin-bottom: 2px; }
-.speed-bars i { position: absolute; bottom: -20px; font-size: 11px; font-style: normal; color: var(--muted, #888); }
 .admin .stat span { display: block; margin-top: 8px; font-size: 14px; }
 .admin .stat small { display: block; margin-top: 4px; font-size: 12px; color: var(--muted); }
 .admin .filter { margin-top: 10px; font-size: 14px; }

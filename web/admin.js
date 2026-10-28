@@ -818,32 +818,16 @@ function overviewsPage({ user, list, stats: o, who, layout }) {
   return layout({ title: "Огляди від Claude · Адмінка", user, path: "/admin", body });
 }
 
-// /admin/speed (speed.js): how fast the site was, before we counted (Fly's metrics, the logs) and day by day since.
+// /admin/speed (speed.js): how fast the site is, day by day.
 function speedPage({ user, days, bots = [], layout }) {
-  const { HISTORY, EDGES } = require("./speed");
+  const { EDGES } = require("./speed");
   const s = (ms) => (ms == null ? "" : ms === Infinity ? `> ${EDGES[EDGES.length - 1] / 1000} с` : `${String(ms / 1000).replace(".", ",")} с`);
   const pct = (x) => (x == null ? "" : `${String(Math.round(x * 1000) / 10).replace(".", ",")}%`);
   const short = (d) => `${d.slice(8, 10)}.${d.slice(5, 7)}`;
   const cell = (k) => (k ? `<td>${s(k.median)}</td><td>${s(k.p95)}</td><td>${pct(k.slow)}</td><td class="muted">${n(k.n)}</td>` : `<td></td><td></td><td></td><td></td>`);
-  const { before: b, after: a } = HISTORY.logs;
-  const maxP95 = Math.max(...HISTORY.fly.map((r) => r[2]));
-  const bars = HISTORY.fly.map(([d, , p95]) => `<div title="${short(d)}: 95% відповідей за ${String(p95).replace(".", ",")} с"><span style="height:${Math.max(2, Math.round((p95 / maxP95) * 100))}%"></span><b>${String(p95).replace(".", ",")}</b><i>${short(d)}</i></div>`).join("");
   const rows = [...days].map(([d, k]) => `<tr><th>${short(d)}</th>${cell(k.page)}${cell(k.phone)}<td>${k.stall ? `${Math.round(k.stall.sum / 1000)} с` : "0"}</td><td class="muted">${k.bot ? n(k.bot.n) : ""}</td></tr>`).join("");
   const body = `<section class="admin speed">
-<section class="page-head"><div><h1>Швидкість сайту</h1><p class="sub">Що казали метрики Fly й наші журнали до 26 жовтня, і що ми рахуємо самі відтоді: скільки сервер думав над сторінкою і за скільки вона відкрилась у браузері читача. Тільки числа за день, без адрес і людей.</p></div></section>
-
-<h2>Було → стало</h2>
-<div class="stats">
-  <div class="stat"><b>${b.slowPages} → ${a.slowPages}</b>сторінок на день, які вантажились понад 2 с</div>
-  <div class="stat"><b>${b.over5s} → ${a.over5s}</b>з них понад 5 с</div>
-  <div class="stat"><b>${b.worst} → ${String(a.worst).replace(".", ",")} с</b>найдовше очікування</div>
-  <div class="stat"><b>${String(b.stillMin).replace(".", ",")} → ${String(a.stillMin).replace(".", ",")} хв</b>на день сайт стояв і нікому не відповідав</div>
-</div>
-<p class="muted small">Із журналів сервера: ${b.from} – ${b.to} (до виправлень) і ${a.from} – ${a.to} (після), час київський, у перерахунку на добу.</p>
-
-<h3>95% відповідей сервера встигали за…</h3>
-<div class="speed-bars">${bars}</div>
-<p class="muted small">Метрики Fly, усі відповіді сайту разом з обкладинками й запитами до ШІ, тож це повільніше, ніж самі сторінки. 26.10 до 08:50.</p>
+<section class="page-head"><div><h1>Швидкість сайту</h1><p class="sub">Скільки сервер думав над сторінкою і за скільки вона відкрилась у браузері читача. Тільки числа за день, без адрес і людей.</p></div></section>
 
 <h2>День за днем</h2>
 ${days.size ? `<div class="tbl"><table>
