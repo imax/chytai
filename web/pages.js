@@ -515,7 +515,7 @@ function joinBand(back) {
   <div>
     <p class="kicker">Chytai</p>
     <p class="join-title">Проєкт для тих, хто любить книжки</p>
-    <p class="join-text">Спільнота людей, каталоги українських видавництв, пошук і рекомендації, читалка з AI-explainer та перекладом.</p>
+    <p class="join-text">Спільнота людей, каталоги українських видавництв, пошук і рекомендації, читалка, яка пояснює й перекладає.</p>
     <p class="join-links"><a href="/publishers">📚 Видавництва</a><a href="/community">👥 Спільнота</a><a href="/">🔍 Пошук</a><a href="https://app.chytai.org.ua">📖 Читалка</a></p>
   </div>
   <a class="btn primary" rel="nofollow" href="${attr(back ? `/login?next=${encodeURIComponent(back)}` : "/login")}">Доєднатися</a>
@@ -1858,16 +1858,15 @@ function welcomePage({ user, next = "" }) {
   const step = (n, title, text, href, link, ext = false) => `<li><span class="n">${n}</span><div><h3>${title}</h3><p>${text}</p></div><a class="text-link" href="${attr(href)}"${ext ? ' target="_blank" rel="noopener"' : ""}>${link} →</a></li>`;
   const body = `<section class="welcome">
   <div class="welcome-intro">
-    <p class="kicker">Вітаємо</p>
     <h1>Вітаємо в ${mark}!</h1>
     <p class="lead">${mark} це проєкт для тих, хто любить книжки. Спільнота людей, каталоги українських видавництв, пошук і рекомендації.</p>
     <div class="acts"><a class="btn primary" href="/add">Додати книжки</a><a class="text-link" href="${attr(next || "/")}">Пізніше</a></div>
   </div>
   <ol class="welcome-steps">
-    ${step("01", "Зберіть свою полицю", "Діліться своїми книжками, оцінками й рейтингами.", "/add", "Додати книжки")}
+    ${step("01", "Зберіть свою полицю", "Діліться своїми книжками, оцінками й нотатками.", "/add", "Додати книжки")}
     ${step("02", "Дивіться, що читають інші", "Знаходьте людей зі схожими смаками і додавайте їх книжки собі.", "/community", "Спільнота")}
     ${step("03", "Знаходьте нові книжки для себе", "Пошук по каталогах українських видавництв, полицях читачів та офлайн бібліотеках.", "/", "Каталог")}
-    ${step("04", "Читалка з AI-explainer (beta)", "Для зручного читання. Веб версія і мобільний застосунок (поки в TestFlight).", "https://app.chytai.org.ua/", "Читалка", true)}
+    ${step("04", "Читалка, яка пояснює складні місця", "У браузері й на iPhone (поки бета).", "https://app.chytai.org.ua/", "Читалка", true)}
   </ol>
   <div class="welcome-end"><a class="btn primary" href="/add">Додати книжки</a><a class="text-link" href="${attr(next || "/")}">Пізніше</a></div>
 </section>`;
