@@ -1563,7 +1563,7 @@ function publisherPage({ shelf, subscribed, user, fresh, feed, others, visible =
   // not a genre; Комора's one real category alone filters nothing useful).
   let genres = [...items.flatMap((it) => it.genres || []).reduce((m, g) => m.set(g, (m.get(g) || 0) + 1), new Map())].filter(([, n]) => n >= 3 && n < items.length).sort((a, b) => b[1] - a[1]).slice(0, 10);
   if (genres.length < 2) genres = [];
-  const statuses = [...new Set(items.map((it) => it.status))];
+  // No filter by stock («Є · Очікується · Передзамовлення · Немає»): the site is for readers, not shopping (Max, 2026-10-28).
   const newCount = items.filter((it) => it.isNew).length;
   const body = `
 ${pageHead({ crumbs: `<a href="/publishers">Видавництва</a> / ${esc(shelf.name)}`, kicker: shelf.kind === "audio" ? "Аудіокнигарня" : "Видавництво", title: esc(shelf.name), lead: esc(shelf.tagline), sub: [books(items.length), newCount ? `${newCount} ${plural(newCount, "нова", "нові", "нових")}` : "", `<a href="${attr(shelf.url)}" target="_blank" rel="noopener">${esc(host(shelf.url))} ↗</a>`].filter(Boolean).join(" · "), action: subscribeButton(shelf.id, subscribed, user, true) })}
@@ -1579,7 +1579,6 @@ ${fresh.length ? `<section class="block">
       <input type="search" id="q" placeholder="назва або автор" autocomplete="off">
     </div>
     ${genres.length ? `<div class="tabs wrap" data-filter="genre"><button type="button" class="tab on" data-v="">Усі <span>${items.length}</span></button>${genres.map(([g, n]) => `<button type="button" class="tab" data-v="${attr(g)}">${esc(g)} <span>${n}</span></button>`).join("")}</div>` : ""}
-    ${statuses.length > 1 ? `<div class="tabs wrap" data-filter="avail"><button type="button" class="tab on" data-v="">Будь-які</button>${statuses.map((s) => `<button type="button" class="tab" data-v="${attr(s)}">${esc(cap(s || "є"))}</button>`).join("")}</div>` : ""}
     <div class="grid four" id="rows"${parts.rest}>
 ${parts.first}
     </div>
