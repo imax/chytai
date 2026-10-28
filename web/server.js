@@ -1019,7 +1019,7 @@ app.post("/api/lists/:id/comments", signed, (req, res) => {
   const l = lists.get(req.params.id);
   if (!l) return res.status(404).send(pages.messagePage({ title: "Немає такого списку", text: "", user: req.user }));
   const back = (err) => res.redirect(303, `${l.href}${err ? `?comment_error=${encodeURIComponent(err)}` : ""}#club`);
-  if (auth.tooMany(`comments:${req.user.id}`, 10)) return back("Забагато за годину. Спробуй трохи згодом.");
+  if (auth.tooMany(`comments:${req.user.id}`, 10)) return back("Забагато за годину. Спробуйте трохи згодом.");
   const id = lists.addComment(l.id, req.user.id, req.body.text);
   if (!id && String(req.body.text || "").trim()) return back("На сьогодні досить, завтра можна знову.");
   if (id && !req.owner) notifyOwner(`Коментар у Клубі: ${l.title}`, [`${req.user.name} (${SITE}/@${req.user.username}) під списком «${l.title}»:`, "", String(req.body.text).trim().slice(0, 1000), "", `${SITE}${l.href}#club`, `Усі коментарі: ${SITE}/admin/comments`].join("\n"));
@@ -1030,7 +1030,7 @@ app.post("/api/lists/comments/:cid/delete", signed, (req, res) => {
   const c = lists.comment(req.params.cid);
   const l = c && lists.get(c.list);
   if (!c || !l) return res.redirect(303, req.get("referer") || "/lists");
-  if (c.reader !== req.user.id && l.reader.id !== req.user.id && !req.owner) return res.status(403).send(pages.messagePage({ title: "Це не твій коментар", text: "", user: req.user }));
+  if (c.reader !== req.user.id && l.reader.id !== req.user.id && !req.owner) return res.status(403).send(pages.messagePage({ title: "Це не ваш коментар", text: "", user: req.user }));
   lists.dropComment(c.id);
   res.redirect(303, req.body.back === "admin" ? "/admin/comments" : `${l.href}#club`);
 });
@@ -1241,10 +1241,10 @@ app.get("/", (req, res) => {
   const shelf = req.user ? store.library(req.user.id) : [];
   // social.seeds() falls back to random well rated books for a reader without fives: not «для тебе».
   let seeds = shelf.some((r) => r.rating >= 5 && !r.kids && tagsOf(r.book).length) ? social.seeds(req.user.id) : [];
-  let forWhy = "схожі на те, що тобі сподобалось";
+  let forWhy = "схожі на те, що вам сподобалось";
   if (req.user && !seeds.length) {
     seeds = shelf.filter((r) => r.status === "want" && !r.kids && r.book).sort((a, b) => String(b.updated || b.added || "").localeCompare(String(a.updated || a.added || ""))).slice(0, 3).map((r) => r.book);
-    forWhy = "схожі на те, що ти хочеш прочитати";
+    forWhy = "схожі на те, що ви хочете прочитати";
   }
   const own = req.user ? new Map(Object.entries(store.entriesOf(req.user.id))) : new Set();
   const forYou = req.user && seeds.length ? social.similar(seeds.map((s) => s.id), { limit: 6, skip: own, own }).map((x) => ({ ...x, book: ukWork(x.book) })).filter((x) => ok(x.book)) : [];
@@ -1506,8 +1506,8 @@ app.get("/author/:slug", async (req, res) => {
     // «Посібник для змін» next to «Атомні звички»); their own pages stay. A reader's own copy still shows.
     .filter((h) => h.book && (h.entry || !(h.book.bundle || /комплект|workbook|робочий зошит/i.test(`${h.book.title} ${h.book.altTitle || ""} ${h.book.origTitle || ""}`))))
     .map((h) => {
-      const { avg, readers } = social.stats(h.book.id);
-      return { ...h, avg, readers };
+      const { avg, readers, rated } = social.stats(h.book.id);
+      return { ...h, avg, readers, rated };
     })
     // Most read first, then the best rated (one 5★ no longer beats ten 4★ ones, Max 2026-10-28), then ours.
     .sort((a, b) => b.readers - a.readers || (b.avg ?? -1) - (a.avg ?? -1) || !!b.entry - !!a.entry || shown.has(a.book.id) - shown.has(b.book.id) || a.book.title.localeCompare(b.book.title, "uk"))
@@ -1528,10 +1528,12 @@ app.get("/author/:slug", async (req, res) => {
   const about = author.qid ? authors.aboutNow(store, author.qid, { log: console.log })?.person : null;
   // Who reads this author, and what else those readers rated highest.
   const ids = new Set(hits.map((h) => h.book.id));
+  const mineIds = new Set(hits.flatMap((h) => [h.book.id, ...(h.twins || []).map((t) => t.id)]).map((id) => store.canonical(id)));
   const who = [...new Set(hits.flatMap((h) => store.readersOf(h.book.id).filter((r) => r.entry.status !== "abandoned").map((r) => r.reader)))]
     .map((id) => ({ reader: pub(auth.reader(id)), rows: store.library(id) }))
     .filter((r) => r.reader)
-    .map(({ reader, rows }) => ({ reader, count: rows.length, read: rows.filter((r) => r.status === "read").length }));
+    // What each reader gave this author's books, best first («Воно ★5, Сяйво ★4»), not their shelf's size (usability review #8).
+    .map(({ reader, rows }) => ({ reader, count: rows.length, read: rows.filter((r) => r.status === "read").length, mine: rows.filter((r) => mineIds.has(store.canonical(r.id))).sort((x, y) => (y.rating ?? -1) - (x.rating ?? -1)).map((r) => ({ ...r, book: ukWork(r.book) || r.book })) }));
   const also = social.alsoLiked([...ids], { limit: 4, skip: ids }).filter((b) => !author.ids.includes(b.id));
   const pairing = req.user?.owner ? store.translationPairing(author) : null;
   const joins = req.user?.owner ? authors.ownerJoins(store).map((p, index) => ({ p, index })).filter(({ p }) => p.some((n) => author.names?.includes(n))).map(({ p, index }) => ({ names: p, index })) : null;
@@ -2278,7 +2280,7 @@ app.post("/api/reviews/add", signed, async (req, res) => {
   const id = (slug && store.resolve(decodeURIComponent(slug))) || store.resolve(q) || (req.owner ? store.search(q, { limit: 1 })[0]?.book.id : null);
   const fromBook = req.body.back === "book" || !req.owner;
   const back = (error) => res.redirect(303, fromBook && id ? `${store.href(id)}?review_error=${encodeURIComponent(error)}#writings` : `/admin/reviews?error=${encodeURIComponent(error)}`);
-  if (!id) return back(`Не знайшов книжку «${q}». Встав посилання на її сторінку.`);
+  if (!id) return back(`Не знайшов книжку «${q}». Вставте посилання на її сторінку.`);
   if (!req.owner && auth.tooMany(`review:${req.user.id}`, 20)) return back("Забагато оглядів за годину. Спробуйте трохи згодом.");
   try {
     await reviews.add(String(req.body.url || ""), id, { date: String(req.body.date || ""), by: req.user.id, owner: req.owner });

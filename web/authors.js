@@ -256,14 +256,26 @@ async function wikidataWorks(store, qid, opts) {
 async function worksOf(store, qid, { fetchImpl = fetch, log = () => {} } = {}) {
   const key = `authorworks:${qid}`;
   const cached = JSON.parse(store.db.get(key) || "null");
-  if (cached && Date.now() - cached.at < 30 * DAY) return cached.works;
+  const fresh = cached && Date.now() - cached.at < 30 * DAY;
+  if (fresh && (cached.v === 2 || cached.works.some((w) => w.sl))) return cached.works;
+  // Kept from 2026-10-27 to v2 the works had no sitelinks (the query asked for ?sl_ and never returned it): the page
+  // shows them as they are and they are asked again in the background, so no author page waits on Wikidata for this.
+  if (fresh) {
+    // One such question at a time across all authors, so crawlers walking author pages don't fan out to Wikidata.
+    if (!reasking.size) reasking.add(qid), fetchWorks(store, qid, key, cached, { fetchImpl, log }).finally(() => reasking.delete(qid));
+    return cached.works;
+  }
+  return fetchWorks(store, qid, key, cached, { fetchImpl, log });
+}
+const reasking = new Set();
+async function fetchWorks(store, qid, key, cached, { fetchImpl, log }) {
   try {
-    const rows = await sparql(`SELECT ?w (SAMPLE(?uk_) AS ?uk) (SAMPLE(?en_) AS ?en) (SAMPLE(?orig_) AS ?orig) (MIN(YEAR(?date_)) AS ?year) WHERE { ?w wdt:P50 wd:${qid}; wikibase:sitelinks ?sl_. FILTER NOT EXISTS { ?w wdt:P31 wd:Q3331189 } OPTIONAL { ?w rdfs:label ?uk_ FILTER(lang(?uk_) = "uk") } OPTIONAL { ?w rdfs:label ?en_ FILTER(lang(?en_) = "en") } OPTIONAL { ?w wdt:P1476 ?orig_ } OPTIONAL { ?w wdt:P577 ?date_ } } GROUP BY ?w`, fetchImpl);
+    const rows = await sparql(`SELECT ?w (SAMPLE(?uk_) AS ?uk) (SAMPLE(?en_) AS ?en) (SAMPLE(?orig_) AS ?orig) (MIN(YEAR(?date_)) AS ?year) (MAX(?sl_) AS ?sl) WHERE { ?w wdt:P50 wd:${qid}; wikibase:sitelinks ?sl_. FILTER NOT EXISTS { ?w wdt:P31 wd:Q3331189 } OPTIONAL { ?w rdfs:label ?uk_ FILTER(lang(?uk_) = "uk") } OPTIONAL { ?w rdfs:label ?en_ FILTER(lang(?en_) = "en") } OPTIONAL { ?w wdt:P1476 ?orig_ } OPTIONAL { ?w wdt:P577 ?date_ } } GROUP BY ?w`, fetchImpl);
     const works = rows
       .map((r) => ({ qid: r.w.value.split("/").pop(), uk: r.uk?.value || "", en: r.en?.value || "", orig: r.orig?.value || "", year: Number(r.year?.value) || 0, sl: Number(r.sl?.value) || 0 }))
       .filter((w) => (w.uk || w.en || w.orig) && (w.sl >= 2 || w.uk))
       .sort((a, b) => (a.year || 9999) - (b.year || 9999) || b.sl - a.sl);
-    store.db.set(key, JSON.stringify({ at: Date.now(), works }));
+    store.db.set(key, JSON.stringify({ at: Date.now(), v: 2, works }));
     return works;
   } catch (e) {
     log(`authors: works of ${qid}: ${e.cause?.code || e.message}`);

@@ -302,7 +302,7 @@ function since(day) {
   return `з ${d.getDate()} ${MONTHS[d.getMonth()]}${d.getFullYear() !== new Date().getFullYear() ? ` ${d.getFullYear()}` : ""}`;
 }
 function nowBlock(now, { own = false } = {}) {
-  if (!now || !now.books.length) return own ? `<p class="now-empty"><a class="text-link" href="/me/now">Що читаєш зараз?</a> <span class="muted">Постав статус, його побачать на твоїй сторінці.</span></p>` : "";
+  if (!now || !now.books.length) return own ? `<p class="now-empty"><a class="text-link" href="/me/now">Що читаєте зараз?</a> <span class="muted">Поставте статус, його побачать на вашій сторінці.</span></p>` : "";
   // No date (Max, 2026-10-22); only a status up for two weeks or more says so by the heading.
   const [first] = now.books;
   const weeks = first.since ? Math.floor((Date.now() - new Date(`${first.since}T12:00:00Z`)) / (7 * 86400000)) : 0;
@@ -696,12 +696,12 @@ function readerLine({ name, href, entry: e, now }, id) {
 // «Читаю зараз» as an item of the «⋯» menu next to the one main button (Max, 2026-10-23: one button, the rest in a menu).
 const nowItem = (book, on, user) =>
   user
-    ? `<form method="post" action="/api/now/${attr(encodeURIComponent(book.id))}"><input type="hidden" name="back" value="1"><button title="${on ? "Прибрати з «Читаю зараз»" : "Показати на своїй сторінці, що читаєш її зараз"}">${on ? "Прибрати з «Читаю зараз»" : "Читаю зараз"}</button></form>`
+    ? `<form method="post" action="/api/now/${attr(encodeURIComponent(book.id))}"><input type="hidden" name="back" value="1"><button title="${on ? "Прибрати з «Читаю зараз»" : "Показати на своїй сторінці, що читаєте її зараз"}">${on ? "Прибрати з «Читаю зараз»" : "Читаю зараз"}</button></form>`
     : `<a rel="nofollow" href="${attr(guestDo(book, "now"))}">Читаю зараз</a>`;
 // «На дитячу полицю» (Max, 2026-10-23): a book kept for the children; it stays out of the reader's own taste.
 const kidsItem = (book, on, user) =>
   user
-    ? `<form method="post" action="/api/entry/${attr(encodeURIComponent(book.id))}"><input type="hidden" name="kids" value="${on ? 0 : 1}"><button title="${on ? "Повернути до моїх книжок" : "Книжка для дітей: не рахується у твої оцінки й рекомендації"}">${on ? "Прибрати з дитячої полиці" : "На дитячу полицю"}</button></form>`
+    ? `<form method="post" action="/api/entry/${attr(encodeURIComponent(book.id))}"><input type="hidden" name="kids" value="${on ? 0 : 1}"><button title="${on ? "Повернути до моїх книжок" : "Книжка для дітей: не рахується у ваші оцінки й рекомендації"}">${on ? "Прибрати з дитячої полиці" : "На дитячу полицю"}</button></form>`
     : `<a rel="nofollow" href="${attr(guestDo(book, "kids"))}">На дитячу полицю</a>`;
 // «Прочитано» in the menu marks it at once and the page comes back with the stars (mine below), so a
 // rating is one more tap, not a form (Vova's feedback, 2026-10-23).
@@ -1093,7 +1093,7 @@ function entryForm(book, entry, series = null) {
       <option value="read" ${e.status === "read" && !e.kids ? "selected" : ""}>Прочитано</option>
       <option value="want" ${e.status === "want" && !e.kids ? "selected" : ""}>Хочу прочитати</option>
       <option value="abandoned" ${e.status === "abandoned" && !e.kids ? "selected" : ""}>Покинуто</option>
-      <option value="kids" ${e.kids ? "selected" : ""} title="Книжка для дітей: не рахується у твої оцінки й рекомендації">Дитяча полиця</option>
+      <option value="kids" ${e.kids ? "selected" : ""} title="Книжка для дітей: не рахується у ваші оцінки й рекомендації">Дитяча полиця</option>
     </select></label>
     <label>Оцінка <select name="rating">
       <option value="none" ${e.rating == null ? "selected" : ""}>без оцінки</option>
@@ -1216,10 +1216,10 @@ function libraryPage({ part = "",  lists = [], savedLists = [], rows, user, read
     ...(common.length ? [["common", "Спільні", common.length]] : []),
     ["kids", "Дитяча полиця", kids.length],
   ].filter(([k, , n]) => !k || n || (own && ["read", "reading", "want"].includes(k)));
-  const sub = [books(mine.length), kids.length ? `${kids.length} на дитячій полиці` : "", count(read, "прочитана", "прочитані", "прочитаних"), thisYear.length ? `${thisYear.length} цього року` : "", common.length ? `<b>${common.length} ${plural(common.length, "спільна", "спільні", "спільних")} з тобою</b>` : "", follows.followers.length ? `<a href="#follows">${count(follows.followers.length, "читач стежить", "читачі стежать", "читачів стежать")}</a>` : "", own ? joined(reader.created) : "", own ? `<a href="${attr(reader.href)}?public">як бачать інші</a> · <a href="/settings">налаштування</a>` : `<span class="muted">@${esc(reader.username)}</span>`, own ? "" : joined(reader.created)].filter(Boolean).join(" · ");
+  const sub = [books(mine.length), kids.length ? `${kids.length} на дитячій полиці` : "", count(read, "прочитана", "прочитані", "прочитаних"), thisYear.length ? `${thisYear.length} цього року` : "", common.length ? `<b>${common.length} ${plural(common.length, "спільна", "спільні", "спільних")} з вами</b>` : "", follows.followers.length ? `<a href="#follows">${count(follows.followers.length, "читач стежить", "читачі стежать", "читачів стежать")}</a>` : "", own ? joined(reader.created) : "", own ? `<a href="${attr(reader.href)}?public">як бачать інші</a> · <a href="/settings">налаштування</a>` : `<span class="muted">@${esc(reader.username)}</span>`, own ? "" : joined(reader.created)].filter(Boolean).join(" · ");
   // Who follows this reader and whom they follow, as rows of names (Max, 2026-10-20: lists and counts are fine).
   const names = (list) => `<p class="small">${list.map((r) => `<a href="${attr(r.href)}">${esc(r.name)}</a>`).join(", ")}</p>`;
-  const followBlock = follows.followers.length || follows.following.length ? `<div id="follows">${follows.followers.length ? `${label(own ? "Стежать за тобою" : "Стежать", String(follows.followers.length))}${names(follows.followers)}` : ""}${follows.following.length ? `${label(own ? "Ти стежиш за" : "Стежить за", String(follows.following.length))}${names(follows.following)}` : ""}</div>` : "";
+  const followBlock = follows.followers.length || follows.following.length ? `<div id="follows">${follows.followers.length ? `${label(own ? "Стежать за вами" : "Стежать", String(follows.followers.length))}${names(follows.followers)}` : ""}${follows.following.length ? `${label(own ? "Ви стежите за" : "Стежить за", String(follows.following.length))}${names(follows.following)}` : ""}</div>` : "";
   const list = foldSeries(rows)
     .map((r, i) => {
       const b = r.book;
@@ -1253,7 +1253,7 @@ ${parts.first}
     <p class="more hidden"><button type="button" class="text-link" id="more">Показати ще <span></span> →</button></p>
   </div>
   <aside>
-    ${lists.length || own ? `${label(own ? "Мої списки" : "Списки", own ? `<button type="button" class="text-link" data-open="new-list">+ новий</button>` : "")}${lists.length ? sideLists(lists, (l) => listMeta(l, { by: false })) : `<p class="small muted">Склади список книжок, щоб поділитися ним: «Найкраще про війну», «Для підлітків 12+»…</p>`}` : ""}
+    ${lists.length || own ? `${label(own ? "Мої списки" : "Списки", own ? `<button type="button" class="text-link" data-open="new-list">+ новий</button>` : "")}${lists.length ? sideLists(lists, (l) => listMeta(l, { by: false })) : `<p class="small muted">Складіть список книжок, щоб поділитися ним: «Найкраще про війну», «Для підлітків 12+»…</p>`}` : ""}
     ${savedLists.length ? `${label("Збережені списки")}${sideLists(savedLists, (l) => `${esc(l.reader.name)} · ${books(l.count)}`)}` : ""}
     ${own ? `<dialog id="new-list"><div class="dlg-head"><h2>Новий список</h2><button type="button" class="dlg-x" data-close aria-label="Закрити">×</button></div>${newListForm()}</dialog>` : ""}
     ${thisYear.length ? `${label("Цього року")}<div class="numbers">
@@ -1262,7 +1262,7 @@ ${parts.first}
       <p><b>${thisYear.filter((r) => isUk(r.book)).length}</b>українською</p>
       <p><b>${thisYear.filter((r) => r.note).length}</b>з нотатками</p>
     </div>` : ""}
-    ${common.length ? `${label("Спільне з тобою")}<p class="small muted">${books(common.length)}, які ви обоє маєте на полиці.</p><div class="grid four">${common.slice(0, 4).map((r) => `<a href="${attr(r.book.href)}">${cover(r.book, "card")}</a>`).join("")}</div>` : ""}
+    ${common.length ? `${label("Спільне з вами")}<p class="small muted">${books(common.length)}, які ви обоє маєте на полиці.</p><div class="grid four">${common.slice(0, 4).map((r) => `<a href="${attr(r.book.href)}">${cover(r.book, "card")}</a>`).join("")}</div>` : ""}
     ${wants.length ? `${label("Хоче прочитати")}${minis(wants.map((r) => r.book), "xs")}` : ""}
     ${followBlock}
   </aside>
@@ -1308,7 +1308,7 @@ function readPage({ user, f, filters, picks, finish, ua, short, free, wanted, ge
 <div id="live"></div>
 <div id="browse">
 ${picks.length ? `<section class="block">${label("Читачі радять", "оцінка 4,5+ і пару слів чому")}<div class="advices">${picks.map(advice).join("")}</div></section>` : ""}
-${row("Для тебе", forWhy, forYou)}
+${row("Для вас", forWhy, forYou)}
 ${!f && editorials.length ? `<section class="block editorials">${label("Добірки Chytai", `<a href="/lists">усі списки</a>`)}<div class="lgrid">${editorials.map(listCard).join("")}</div></section>` : ""}
 ${row("Дочитують до кінця", "ніхто не покинув", finish, (w) => `дочитали ${w.s.finished}`)}
 ${row("Українські автори", "", ua)}
@@ -1568,11 +1568,11 @@ function publishersPage({ user, shelves, libraries = [] }) {
   <div class="grid four">${items.map((it) => `<a class="tiny" href="${attr(it.href)}">${cover(it, "card")}<b>${esc(it.title)}</b></a>`).join("")}</div>
 </article>`;
   const body = `
-${pageHead({ kicker: "Вітрина", title: "Українські видавництва", sub: "Новинки підтягуються з сайтів видавництв щодня. Підпишись, щоб бачити їх на головній." })}
+${pageHead({ kicker: "Вітрина", title: "Українські видавництва", sub: "Новинки підтягуються з сайтів видавництв щодня. Підпишіться, щоб бачити їх на головній." })}
 <section>
   ${label(count(shelves.length, "видавництво", "видавництва", "видавництв"), `<span class="tabs" data-sort-pubs><button type="button" class="tab on" data-v="fresh">за новинками</button><button type="button" class="tab" data-v="name">за назвою</button></span>`)}
   <div class="pubs">${shelves.map(row).join("")}</div>
-  <p class="muted end-note">Видавництво, якого тут немає? <a class="text-link" href="mailto:ischenko@gmail.com">Напиши нам</a>, під’єднаємо.</p>
+  <p class="muted end-note">Видавництво, якого тут немає? <a class="text-link" href="mailto:ischenko@gmail.com">Напишіть нам</a>, під’єднаємо.</p>
 </section>
 ${librariesBlock(libraries)}`;
   return layout({ title: "Видавництва", body, user, path: "/publishers", canonical: "/publishers", description: "Новинки українських видавництв щодня." });
@@ -1647,7 +1647,7 @@ function searchResults({ q, user, hits = [], authors = [], readers = [], shelves
     ${readers.length ? `<section class="block">${label(`Читачі · ${readers.length}`)}<div class="name-rows">${readers.map((r) => `<a class="name-row" href="${attr(r.reader.href)}"><b>${esc(r.reader.name)}</b><span>${books(r.count)}</span></a>`).join("")}</div></section>` : ""}
     ${user ? `<p class="muted end-note">Не те? ${addLink}</p>` : ""}
   </div>
-  <aside>${similar.length ? `${label("Схоже на те, що шукаєш")}${minis(similar)}` : ""}</aside>
+  <aside>${similar.length ? `${label("Схоже на те, що ви шукаєте")}${minis(similar)}` : ""}</aside>
 </div>`;
 }
 
@@ -1748,8 +1748,28 @@ document.addEventListener("submit", async (e) => {
   const series = many ? [...groups.values()].filter((g) => g.length >= 2).map((g) => g.sort((x, y) => x.series.n - y.series.n)) : [];
   series.sort((x, y) => y.reduce((n, h) => n + h.readers, 0) - x.reduce((n, h) => n + h.readers, 0) || y.length - x.length);
   const inSeries = new Set(series.flat());
-  // Where to start: books readers have, a series only from its first volume, Ukrainian editions first.
-  const start = many ? hits.filter((h) => h.readers && !(h.series?.n > 1)).sort((x, y) => isUk(y.book) - isUk(x.book)).slice(0, 3) : hits;
+  // Where to start: books readers have, a series only from its first volume, Ukrainian editions first. While no book of the
+  // author has five ratings here, the works most written about on Wikipedias go first instead (Wikidata
+  // sitelinks; usability review #8: Stephen King began with books one or two readers had, «Воно» and «Сяйво» below).
+  const fame = new Map();
+  const workOf = new Map();
+  for (const w of works) for (const b of w.books) if ((w.sl || 0) > (fame.get(b.id) || 0)) fame.set(b.id, w.sl || 0), workOf.set(b.id, w.qid);
+  const ids = (h) => [h.book.id, ...(h.twins || []).map((t) => t.id)];
+  const famous = (h) => Math.max(0, ...ids(h).map((id) => fame.get(id) || 0));
+  const few = Math.max(0, ...hits.map((h) => h.rated || 0)) < 5;
+  // One edition per work («Лісова пісня» comes in three).
+  const taken = new Set();
+  const byFame = few
+    ? hits
+        .filter((h) => famous(h) && !(h.series?.n > 1))
+        .sort((x, y) => isUk(y.book) - isUk(x.book) || famous(y) - famous(x))
+        .filter((h) => {
+          const w = ids(h).map((id) => workOf.get(id)).find(Boolean);
+          return !taken.has(w) && taken.add(w);
+        })
+        .slice(0, 3)
+    : [];
+  const start = !many ? hits : byFame.length === 3 ? byFame : hits.filter((h) => h.readers && !(h.series?.n > 1)).sort((x, y) => isUk(y.book) - isUk(x.book)).slice(0, 3);
   const rest = many ? hits.filter((h) => !start.includes(h) && !inSeries.has(h)).sort((x, y) => !!y.readers - !!x.readers || isUk(y.book) - isUk(x.book)) : [];
   const quotes = many
     ? hits
@@ -1761,7 +1781,7 @@ document.addEventListener("submit", async (e) => {
   const tile = (h, extra = "") => card(h.book, { avg: h.avg ?? null, by: false, extra });
   const shelf = !hits.length
     ? `<section class="block">${label("Книжки")}<p class="muted">Поки ні в каталогах, ні в читачів.</p></section>`
-    : `${start.length ? `<section class="block">${label(many ? "З чого почати" : "Книжки", many ? "найбільше читають" : "")}<div class="rows">${start.map(bigRow).join("")}</div></section>` : ""}
+    : `${start.length ? `<section class="block">${label(many ? "З чого почати" : "Книжки", many ? (start === byFame ? "найвідоміші" : "найбільше читають") : "")}<div class="rows">${start.map(bigRow).join("")}</div></section>` : ""}
     ${quotes.length ? `<section class="block">${label("Що кажуть читачі")}<div class="quotes">${quotes.map(({ h, top }) => `<figure><blockquote>${noteOf(top.entry, h.book.id)}</blockquote><figcaption>— <a href="${attr(top.href)}"><b>${esc(top.name)}</b></a> про <a href="${attr(h.book.href)}">«${esc(h.book.title)}»</a></figcaption></figure>`).join("")}</div></section>` : ""}
     ${series.map((g) => `<section class="block">${label(`Серія «${esc(g[0].series.name)}»`, g[0].series.total > g.length ? `${g.length} з ${g[0].series.total} у нас` : "")}<div class="grid five author-grid">${g.map((h) => tile({ ...h, book: { ...h.book, title: inSeriesTitle(h.book.title, h.series.name) } }, `<p class="meta">Книга ${h.series.n}</p>`)).join("")}</div></section>`).join("")}
     ${rest.length ? `<section class="block">${label(start.length || series.length ? `Інші книжки · ${rest.length}` : `Книжки · ${rest.length}`, "спершу українською")}<div class="grid five author-grid">${rest.slice(0, 15).map((h) => tile(h)).join("")}</div>${rest.length > 15 ? `<details class="more-books"><summary class="btn">Ще ${books(rest.length - 15)}</summary><div class="grid five author-grid">${rest.slice(15).map((h) => tile(h)).join("")}</div></details>` : ""}</section>` : ""}`;
@@ -1777,7 +1797,7 @@ ${head}
     ${pairing && many ? `<section class="block">${label("Переклади", "лише власнику")}<div class="rows">${hits.filter((h) => !start.includes(h) && pair(h.book)).map((h) => `<div class="pair-line"><a href="${attr(h.book.href)}">${esc(h.book.title)}</a>${pair(h.book)}</div>`).join("")}</div></section>` : ""}
   </div>
   <aside>
-    ${readers.length ? `${label("Хто читає")}<div class="others-list">${readers.map((r) => `<a href="${attr(r.reader.href)}"><b>${esc(r.reader.name)}</b><span>${books(r.count)}, ${count(r.read, "прочитана", "прочитані", "прочитаних")}</span></a>`).join("")}</div>` : ""}
+    ${readers.length ? `${label("Хто читає")}<div class="others-list">${readers.map((r) => `<a href="${attr(r.reader.href)}"><b>${esc(r.reader.name)}</b><span>${r.mine?.length ? r.mine.slice(0, 2).map((e) => `${esc(e.book.title)}${e.rating != null ? ` ★${uk(String(e.rating))}` : ""}`).join(", ") + (r.mine.length > 2 ? ` і ще ${r.mine.length - 2}` : "") : `${books(r.count)}, ${count(r.read, "прочитана", "прочитані", "прочитаних")}`}</span></a>`).join("")}</div>` : ""}
     ${also.length ? `${label("Ті, хто читає автора, також люблять")}${minis(also)}` : ""}
     ${joinBlock}
   </aside>
@@ -1892,7 +1912,7 @@ function welcomePage({ user, next = "", from = null }) {
 function nowPage({ user, now, candidates }) {
   const row = (book, on, meta = "") => `<label class="now-pick">${cover(book, "xs")}<span><b>${esc(book.title)}</b>${book.author ? `<span class="by">${esc(byline(book.author))}</span>` : ""}${meta ? `<span class="meta">${meta}</span>` : ""}</span><input type="radio" name="book" value="${attr(book.id)}"${on ? " checked" : ""}></label>`;
   const body = `
-${pageHead({ crumbs: `<a href="${attr(user.href)}">Моя полиця</a>`, kicker: "Статус", title: "Читаю зараз", lead: "Що у тебе в руках зараз. Видно під твоїм ім’ям на сторінці й у списку читачів." })}
+${pageHead({ crumbs: `<a href="${attr(user.href)}">Моя полиця</a>`, kicker: "Статус", title: "Читаю зараз", lead: "Що у вас у руках зараз. Видно під вашим ім’ям на сторінці й у списку читачів." })}
 <form method="post" action="/me/now" class="form now-form">
   <h2>Книжка</h2>
   <div class="now-picks">
@@ -1900,7 +1920,7 @@ ${pageHead({ crumbs: `<a href="${attr(user.href)}">Моя полиця</a>`, kic
     ${candidates.map((r) => row(r.book, false, "на полиці «Читаю»")).join("")}
     ${now.books.length || candidates.length ? `<label class="now-pick"><span>Нічого зараз не читаю</span><input type="radio" name="book" value=""${now.books.length ? "" : " checked"}></label>` : ""}
   </div>
-  ${!now.books.length && !candidates.length ? `<p class="muted small">На полиці немає книжок зі статусом «Читаю». Відкрий сторінку книжки і натисни «Читаю зараз».</p>` : `<p class="muted small">Іншої книжки тут немає? Відкрий її сторінку і натисни «Читаю зараз». Прочитана чи покинута книжка зникає зі статусу сама.</p>`}
+  ${!now.books.length && !candidates.length ? `<p class="muted small">На полиці немає книжок зі статусом «Читаю». Відкрийте сторінку книжки і натисніть «Читаю зараз».</p>` : `<p class="muted small">Іншої книжки тут немає? Відкрийте її сторінку і натисніть «Читаю зараз». Прочитана чи покинута книжка зникає зі статусу сама.</p>`}
   <div class="actions"><span class="grow"></span><button class="btn primary">Зберегти</button></div>
 </form>`;
   return layout({ title: "Читаю зараз", body, user, path: "/me" });
@@ -2440,7 +2460,7 @@ const paragraphs = (md) => md.split(/\n\s*\n/).map((p) => p.trim()).filter(Boole
 function listClub({ list, comments, user, own, owner, error }) {
   const item = (c) => `<div class="cmt" id="c-${attr(c.id)}"><p class="who"><a href="${attr(c.reader.href)}"><b>${esc(c.reader.name)}</b></a> · ${when({ updated: c.created })}${user && (c.reader.id === user.id || own || owner) ? ` · <button class="text-link small muted" form="del-${attr(c.id)}">видалити</button>` : ""}</p><p class="txt">${esc(c.text).replace(/\n/g, "<br>")}</p>${user && (c.reader.id === user.id || own || owner) ? `<form method="post" action="/api/lists/comments/${attr(c.id)}/delete" id="del-${attr(c.id)}" onsubmit="return confirm('Видалити коментар?')"></form>` : ""}</div>`;
   const form = user
-    ? `<form method="post" action="/api/lists/${attr(encodeURIComponent(list.id))}/comments" class="cmt-form"><textarea name="text" rows="3" maxlength="2000" required placeholder="${comments.length ? "Що думаєш про цей список або яку книжку додав би?" : "Будь першим: що думаєш про цей список або яку книжку додав би?"}" aria-label="Коментар"></textarea>${error ? `<p class="error small">${esc(error)}</p>` : ""}<div><button class="btn primary">Додати коментар</button></div></form>`
+    ? `<form method="post" action="/api/lists/${attr(encodeURIComponent(list.id))}/comments" class="cmt-form"><textarea name="text" rows="3" maxlength="2000" required placeholder="${comments.length ? "Що думаєте про цей список або яку книжку додали б?" : "Що думаєте про цей список або яку книжку додали б?"}" aria-label="Коментар"></textarea>${error ? `<p class="error small">${esc(error)}</p>` : ""}<div><button class="btn primary">Додати коментар</button></div></form>`
     : `<p class="small"><a class="text-link" rel="nofollow" href="/login?next=${attr(encodeURIComponent(`${list.href}#club`))}">Увійдіть</a>, щоб додати коментар.</p>`;
   return `<section class="club" id="club"><h2>Клуб Chytai</h2>${comments.map(item).join("")}${form}</section>`;
 }
@@ -2456,7 +2476,7 @@ function listsDialog(book, mine) {
   ${mine.length ? `<form method="post" action="/api/book/${attr(encodeURIComponent(book.id))}/lists" class="pick-lists">
     ${mine.map((l) => `<input type="hidden" name="shown" value="${attr(l.id)}"><label><input type="checkbox" name="list" value="${attr(l.id)}"${l.has ? " checked" : ""}> <span>${esc(l.title)}</span><small>${books(l.count)}</small></label>`).join("")}
     <p class="dlg-acts"><button class="btn">Готово</button></p>
-  </form>` : `<p class="small muted" style="margin-top:14px">Списків у тебе ще немає. Назви перший, і ця книжка стане в ньому першою.</p>`}
+  </form>` : `<p class="small muted" style="margin-top:14px">У вас ще немає списків. Назвіть перший, і ця книжка стане в ньому першою.</p>`}
   ${newListForm(book)}
 </dialog>`;
 }
@@ -2551,13 +2571,13 @@ ${listHero(list, items)}
 <section class="list-head">
   <p class="kicker">${list.editorial ? "Добірка Chytai" : "Список"} · ${books(items.length)}</p>
   <h1>${esc(list.title)}</h1>
-  ${list.note ? `<div class="intro">${paragraphs(list.note)}</div>` : own ? `<p class="lead muted"><button type="button" class="text-link" data-open="list-edit">Додай кілька слів про список</button></p>` : ""}
+  ${list.note ? `<div class="intro">${paragraphs(list.note)}</div>` : own ? `<p class="lead muted"><button type="button" class="text-link" data-open="list-edit">Додайте кілька слів про список</button></p>` : ""}
   ${list.source ? `<p class="small muted">Джерело: <a class="text-link" href="${attr(list.source)}" target="_blank" rel="noopener nofollow">${esc(host(list.source))}</a></p>` : ""}
   <p class="by-line">${list.editorial ? `<b>${esc(list.by)}</b>` : `<a href="${attr(list.reader.href)}"><b>${esc(list.reader.name)}</b></a>`}${updated ? ` · оновлено ${updated}` : ""}${list.saves ? ` · ${list.saves} ${plural(list.saves, "зберіг", "зберегли", "зберегли")}` : ""}</p>
   <div class="acts">${save}${share}${tools}</div>
 </section>
 ${adder}
-${items.length ? `<section class="lrows">${rows}</section>` : `<p class="muted">${own ? "Список порожній. Знайди книжку вище або на її сторінці натисни «⋯» → «Додати до списку…»." : "У списку поки немає книжок."}</p>`}
+${items.length ? `<section class="lrows">${rows}</section>` : `<p class="muted">${own ? "Список порожній. Знайдіть книжку вище або на її сторінці натисни «⋯» → «Додати до списку…»." : "У списку поки немає книжок."}</p>`}
 ${items.length || comments.length ? listClub({ list, comments, user, own, owner, error: commentError }) : ""}
 </div>
 <aside>
@@ -2577,9 +2597,9 @@ ${edit}`;
 function listsPage({ user, tab = "popular", lists, savedCount = 0 }) {
   const tabs = [["popular", "Популярні"], ["new", "Нові"], ...(user ? [["saved", `Збережені мною${savedCount ? ` · ${savedCount}` : ""}`], ["mine", "Мої"]] : [])];
   const body = `
-${pageHead({ title: "Списки читачів", lead: "Добірки книжок, які склали читачі Chytai. Збережи список, і нові книжки з нього прийдуть у п'ятничному листі.", action: user ? `<button type="button" class="btn primary" data-open="new-list">+ Новий список</button>` : "" })}
+${pageHead({ title: "Списки читачів", lead: "Добірки книжок, які склали читачі Chytai. Збережіть список, і нові книжки з нього прийдуть у п'ятничному листі.", action: user ? `<button type="button" class="btn primary" data-open="new-list">+ Новий список</button>` : "" })}
 <div class="tabs list-tabs">${tabs.map(([k, l]) => `<a class="tab${k === tab ? " on" : ""}" href="/lists${k === "popular" ? "" : `?tab=${k}`}">${l}</a>`).join("")}</div>
-${lists.length ? `<div class="lgrid">${lists.map(listCard).join("")}</div>` : `<p class="muted">${tab === "saved" ? "Ти ще не зберіг жодного списку. На сторінці списку є кнопка «Зберегти список»." : tab === "mine" ? "У тебе ще немає списків." : "Списків ще немає. Склади перший!"}</p>`}
+${lists.length ? `<div class="lgrid">${lists.map(listCard).join("")}</div>` : `<p class="muted">${tab === "saved" ? "Ви ще не зберегли жодного списку. На сторінці списку є кнопка «Зберегти список»." : tab === "mine" ? "У вас ще немає списків." : "Списків ще немає. Складіть перший!"}</p>`}
 ${user ? `<dialog id="new-list"><div class="dlg-head"><h2>Новий список</h2><button type="button" class="dlg-x" data-close aria-label="Закрити">×</button></div>${newListForm()}</dialog>` : ""}`;
   return layout({ title: "Списки читачів", body, user, path: "/lists", canonical: "/lists", description: "Добірки книжок від читачів Chytai: що почитати про війну, підліткам, коли важко зосередитись." });
 }
