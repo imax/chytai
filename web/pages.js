@@ -548,9 +548,11 @@ ${myLists ? listsDialog(book, myLists) : ""}`;
 
 // «Огляди» are hidden on book pages for now (Max, 2026-10-23); /admin/reviews, the API and the data stay.
 // Admin menu: four tabs, each with its own few pages under it (Max, 2026-10-28: 18 links in a row were «каша»).
+// One row (Max, 2026-10-28): the open tab's pages sit right after the tabs, «Трафік» is a tab of its own.
 // The catalog's queues (dupes, volumes, translations…) open from /admin/catalog, not from the menu.
 const ADMIN_TABS = [
-  ["Огляд", [["/admin", "Головне"], ["/admin/traffic", "Трафік"]]],
+  ["Огляд", [["/admin", "Огляд"]]],
+  ["Трафік", [["/admin/traffic", "Трафік"]]],
   ["Читачі", [["/admin/readers", "Усі читачі"], ["/admin/comments", "Коментарі"], ["/admin/digest", "Лист"]]],
   ["Каталог", [["/admin/catalog", "Каталог"]], /^\/admin\/(catalog|shelves|overviews|dupes|translations|volumes|russian|ukfind|readeat|free|ai\/|book\/|reviews)|-trial$/],
   ["Система", [["/admin/jobs", "Задачі"], ["/admin/speed", "Швидкість"]]],

@@ -100,11 +100,13 @@ main.home { padding-top: 56px; }
 .btn.danger { border-color: var(--danger); color: var(--danger); }
 .btn.danger:hover { background: var(--danger); color: var(--paper); }
 .acts { display: flex; flex-wrap: wrap; gap: 12px 18px; align-items: center; }
-.admin-nav { position: relative; display: flex; gap: 28px; margin: 0 0 56px; border-bottom: 1px solid var(--rule); font-size: 15px; }
-.admin-tab > a { display: block; padding: 0 0 12px; color: var(--muted); text-decoration: none; border-bottom: 2px solid transparent; margin-bottom: -1px; }
+.admin-nav { display: flex; flex-wrap: wrap; align-items: flex-end; column-gap: 24px; margin: 0 0 36px; border-bottom: 1px solid var(--rule); font-size: 15px; }
+main:has(> .admin-nav) { padding-top: 24px; }
+.admin-tab { display: contents; }
+.admin-tab > a { display: block; padding: 0 0 10px; color: var(--muted); text-decoration: none; border-bottom: 2px solid transparent; margin-bottom: -1px; }
 .admin-tab > a:hover { color: var(--ink); }
 .admin-tab.on > a { color: var(--ink); border-bottom-color: var(--ink); }
-.admin-sub { display: none; position: absolute; left: 0; top: 100%; padding-top: 14px; gap: 20px; font-size: 13px; }
+.admin-sub { display: none; order: 1; padding: 0 0 11px 24px; border-left: 1px solid var(--rule); gap: 18px; font-size: 13px; line-height: 1.2; }
 .admin-tab.on .admin-sub { display: flex; }
 .admin-sub a { color: var(--muted); text-decoration: none; }
 .admin-sub a:hover, .admin-sub a.on { color: var(--ink); }
@@ -442,6 +444,7 @@ dialog .form { margin-top: 18px; }
   header.top.open nav a { align-self: flex-start; }
   header.top.open .find { display: block; order: 5; width: 100%; max-width: none; margin-top: 16px; }
   main, main.home { padding: 28px 20px 48px; }
+  .admin-nav { flex-wrap: nowrap; overflow-x: auto; white-space: nowrap; column-gap: 20px; scrollbar-width: none; }
   .hero h1 { font-size: 40px; }
   .search-box.big { margin-top: 22px; }
   .search-box.big input { font-size: 21px; padding-bottom: 10px; }
