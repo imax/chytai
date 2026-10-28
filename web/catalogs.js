@@ -188,7 +188,8 @@ async function listingProducts(src, opts) {
 async function pageProducts(src, urls, { fetchImpl = fetch, log = () => {}, previous = new Map(), skip = new Set(), checkpoint = () => {}, fresh = new Set() }) {
   const today = dayOfWeek();
   urls = urls.filter((u) => !skip.has(u) || bucket(u) === today);
-  const due = urls.filter((u) => !previous.has(u) || (bucket(u) === today && !fresh.has(u)));
+  // `src.stale(item)`: a page read wrong before a parser fix is read again at once, not on its weekday.
+  const due = urls.filter((u) => !previous.has(u) || (bucket(u) === today && !fresh.has(u)) || (src.stale?.(previous.get(u)) && !fresh.has(u)));
   const out = urls.filter((u) => !due.includes(u)).map((u) => previous.get(u)).filter(Boolean);
   const got = urls.filter((u) => fresh.has(u)).map((u) => previous.get(u)); // read this run or the cut-short one
   let failed = 0;
@@ -416,9 +417,12 @@ function bohdanPage(html, url) {
   const title = name.replace(/^eBook\s+/i, "").replace(/\s+:\s+[\p{Ll}\s.,-]+$/u, "").trim(); // «Снотворець : роман»
   const prod = ldOf(html).find((x) => [].concat(x["@type"]).includes("Product")) || {};
   const spec = (k) => text((html.match(new RegExp(`<b class="koala_title">${k}:?</b>([\\s\\S]*?)<br`)) || [])[1] || "");
-  const author = [...html.matchAll(/product-author-link[^>]*>([\s\S]*?)<\/a>/g)]
-    .map((m) => text(m[1]).split(" "))
-    .map((w) => (w.length > 1 && !w.some(initial) ? [...w.slice(1), w[0]] : w).join(" ")) // «Джеймс С. А. Корі» stays
+  // A link per author, written «Желязни Роджер»; a book of many authors has spans with the name in an <h2>
+  // instead, already «Анна Багряна», most of them hidden behind «Показати всіх» (2026-10-27: reading on to the
+  // next </a> took that button's script for an author).
+  const author = [...html.matchAll(/<(a|span)[^>]*product-author-link[^>]*>([\s\S]*?)<\/\1>/g)]
+    .map((m) => [text(m[2]).split(" "), m[1] === "span"])
+    .map(([w, asIs]) => (!asIs && w.length > 1 && !w.some(initial) ? [...w.slice(1), w[0]] : w).join(" ")) // «Джеймс С. А. Корі» stays
     .filter((a, i, all) => a && all.indexOf(a) === i)
     .join(", ");
   const isbn = spec("ISBN").replace(/[^\dX]/gi, "");
@@ -451,8 +455,12 @@ function bohdanPage(html, url) {
 // Without a description of its own, a Богдан page's meta says «Актуальна ціна на … | Замовити в інтернет-магазині».
 const SHOP_BLURB = /^\s*Актуальна ціна на[\s\S]*$/u;
 
+// Read before 2026-10-27, a book of many authors got «Багряна Олександр … Показати всіх $('.auth_book…» as
+// its author: read again at the next refresh (stale), and shown with no author till then.
+const bohdanStale = (it) => /\$\(|Показати всіх/.test(it?.author || "");
 function bohdanFinish(items) {
   for (const it of items) if (SHOP_BLURB.test(it.blurb || "")) it.blurb = "";
+  for (const it of items) if (bohdanStale(it)) it.author = "";
   for (const it of items)
     if (it.parser !== 2) {
       const w = it.author.split(" ");
@@ -601,6 +609,116 @@ async function ksdProducts(src, { fetchImpl = fetch, log = () => {}, previous = 
   log(`${src.id}: ${books.length} books, ${due.length} records due, ${got.length} read${failed ? `, ${failed} failed` : ""}${throttled >= 3 ? " (the shop kept answering 429; the rest next time)" : ""}`);
   if (due.length > 10 && !got.length) throw new Error(`${src.id}: none of ${due.length} records read`);
   return JSON.parse(JSON.stringify(out));
+}
+
+// book.ua (Kyiv bookshops with an e-book store: EPUB and MOBI from Фоліо, Богдан, Ранок, Старий Лев, Vivat,
+// Віхола and others, ~7 thousand; Max 2026-10-27, after «Тигролови» showed paper and audio only). Its e-book
+// section is a list of 28 books a page (/books/elektronni-knyhy?page=N, open to robots), and the page carries
+// them as Nuxt data (devalue: one array, objects pointing at other entries by index) with the title, authors,
+// publisher, price, cover and, in the єКнига code, the ISBN («ua.ubi.prd.45226551.9786175221860.E.2026.1»).
+// Only the list is read, once a day, no product pages. The shop only adds rows to «Де взяти» (`joinOnly`):
+// a book matching nothing else in the catalog gets no page.
+const BOOKUA_LIST = "https://book.ua/books/elektronni-knyhy";
+function nuxtData(html) {
+  const raw = (html.match(/id="__NUXT_DATA__"[^>]*>([\s\S]*?)<\/script>/) || [])[1];
+  if (!raw) return null;
+  const a = JSON.parse(raw);
+  const memo = new Map();
+  const get = (i) => {
+    if (typeof i !== "number" || i < 0) return undefined;
+    if (memo.has(i)) return memo.get(i);
+    const v = a[i];
+    if (v === null || typeof v !== "object") return v;
+    if (Array.isArray(v) && typeof v[0] === "string" && v.length === 2 && /^[A-Z]/.test(v[0])) return memo.set(i, get(v[1])).get(i); // ["Reactive", i]
+    const out = Array.isArray(v) ? [] : {};
+    memo.set(i, out);
+    for (const k of Object.keys(v)) out[k] = get(v[k]);
+    return out;
+  };
+  return get(0);
+}
+function bookuaTiles(html) {
+  const found = [];
+  const seen = new Set();
+  const walk = (o) => {
+    if (!o || typeof o !== "object" || seen.has(o)) return;
+    seen.add(o);
+    if (o.urlKey && o.sku && o.format) return found.push(o);
+    for (const k of Object.keys(o)) walk(o[k]);
+  };
+  walk(nuxtData(html));
+  return found
+    .filter((p) => p.format === "electronic")
+    .map((p) => {
+      const attr = (code) => ((p.attributes?.items || []).find((x) => x.code === code)?.selectedOptions || []).map((x) => text(x.label)).filter(Boolean);
+      const title = text(p.name);
+      const price = Number(p.priceRange?.minimumPrice?.finalPrice?.value || 0);
+      return {
+        id: `bookua-${(String(p.urlKey).match(/^(\d+)-/) || [])[1] || p.urlKey}`,
+        title,
+        author: [...new Set(attr("author"))].join(", "),
+        isbn: (String(p.eKnyha || "").match(/\.(97[89]\d{10})\./) || [])[1] || "",
+        format: "e-book",
+        edition: attr("publisher")[0] || "",
+        series: volumeOf(title)?.series || "",
+        volume: volumeOf(title)?.volume || 0,
+        bundle: /^комплект/i.test(title),
+        cover: String(p.image || ""),
+        url: `https://book.ua/book/${p.urlKey}`,
+        price: uah(price),
+        status: p.stockStatus === "IN_STOCK" ? "є" : "немає",
+        isNew: false,
+        genres: [],
+        blurb: "",
+        language: /[а-яіїєґ]/i.test(title) ? "українська" : "англійська",
+      };
+    });
+}
+async function bookuaProducts(src, { fetchImpl = fetch, log = () => {} }) {
+  const found = new Map();
+  let pages = 0;
+  let idle = 0; // pages in a row that added nothing: past the last page (the list is sorted by popularity, so one page may repeat)
+  for (let n = 1; n <= 400; n++) {
+    const res = await fetchImpl(`${BOOKUA_LIST}${n > 1 ? `?page=${n}` : ""}`, { headers: HEADERS, signal: AbortSignal.timeout(60000) }).catch((e) => {
+      throw new Error(`${src.id}: ${e.cause?.code || e.message} on list page ${n}`);
+    });
+    if (!res.ok) throw new Error(`${src.id}: HTTP ${res.status} on list page ${n}`);
+    const tiles = bookuaTiles(await res.text());
+    const before = found.size;
+    for (const t of tiles) found.set(t.id, JSON.parse(JSON.stringify(t))); // a copy: the page is not kept alive
+    pages++;
+    if (!tiles.length || (found.size === before && ++idle >= 2)) break;
+    if (found.size > before) idle = 0;
+    await new Promise((r) => setTimeout(r, 300));
+  }
+  log(`${src.id}: ${pages} list pages, ${found.size} e-books`);
+  if (!found.size) throw new Error(`${src.id}: empty catalog`);
+  return [...found.values()];
+}
+
+// The e-book's year is only on its own page («Рік видання 2025»), and «Де взяти» shows the newest of a shop's
+// editions (Max, 2026-10-27: «найновіше … коли була видана електронна книжка»). The year does not change: each
+// page is read once, up to 1500 a refresh, so the first fill takes about five days; «?» = the page gives none.
+async function bookuaYears(products, { previous, fetchImpl = fetch, log = () => {} }) {
+  for (const p of products) p.year = previous.get(p.url)?.year || "";
+  const due = products.filter((p) => !p.year && /[а-яіїєґ]/i.test(p.title)).slice(0, 1500);
+  let failed = 0;
+  for (let i = 0; i < due.length; i += 4) {
+    await Promise.all(
+      due.slice(i, i + 4).map(async (p) => {
+        try {
+          const r = await fetchImpl(p.url, { headers: HEADERS, signal: AbortSignal.timeout(30000) });
+          if (!r.ok) throw new Error(`HTTP ${r.status}`);
+          const m = (await r.text()).match(/product-features__label">\s*Рік видання\s*<\/span>[\s\S]{0,400}?\b((?:19|20)\d\d)\b/);
+          p.year = m ? String(Number(m[1])) : "?"; // a copy, not a slice of the page
+        } catch {
+          failed++;
+        }
+      }),
+    );
+    await new Promise((r) => setTimeout(r, 200));
+  }
+  log(`bookua: ${due.length} e-book pages read for the year${failed ? `, ${failed} failed` : ""}, ${products.filter((p) => /^\d/.test(p.year)).length} with a year`);
 }
 
 const SOURCES = [
@@ -903,6 +1021,7 @@ const SOURCES = [
     charset: "windows-1251",
     fetchAll: (src, opts) => sitemapProducts(src, opts),
     parsePage: bohdanPage,
+    stale: bohdanStale,
     normalize: (p) => p,
     keep: () => true,
     toItem: (p) => p,
@@ -967,6 +1086,22 @@ const SOURCES = [
     parsePage: abukBook,
     normalize: (p) => p,
     keep: (p) => !p.genres.includes("Подкасти, лекції"), // podcasts are not books
+    toItem: (p) => p,
+  },
+  {
+    id: "bookua",
+    kind: "shop",
+    name: "Book.ua",
+    tagline: "Київські книгарні з магазином електронних книжок (EPUB, MOBI)",
+    url: "https://book.ua/books/elektronni-knyhy",
+    draft: false,
+    joinOnly: true,
+    fetchAll: (src, opts) => bookuaProducts(src, opts),
+    enrich: bookuaYears,
+    normalize: (p) => p,
+    // Books in English («1984 (англійська)», «The Forsyte Saga. Volume 1») come with the author in Cyrillic and
+    // would join an original to its Ukrainian translation: only Ukrainian titles are kept.
+    keep: (p) => /[а-яіїєґ]/i.test(p.title) && !/\((англійська|англ\.?)\)/i.test(p.title),
     toItem: (p) => p,
   },
 ];
@@ -1053,9 +1188,9 @@ async function refresh({ store, log = console.log, fetchImpl, only }) {
   store.loadShelves();
   const counts = store.shelves.map((s) => [s.id, s.items.length]);
   // How many audiobooks found their print or e-book edition (Абук gives no ISBN, so it is by author and title).
-  for (const s of store.shelves.filter((s) => s.kind === "audio")) log(`${s.id}: ${s.items.filter((it) => (it.editions || 1) > 1 || store.aliases.has(it.id)).length} of ${s.items.length} joined with another edition`);
+  for (const s of store.shelves.filter((s) => s.kind === "audio" || s.joinOnly)) log(`${s.id}: ${s.items.filter((it) => (it.editions || 1) > 1 || store.aliases.has(it.id)).length} of ${s.items.length} joined with another edition`);
   log(`refresh: shelves rebuilt, ${counts.map(([id, n]) => `${id} ${n}`).join(", ")}${errors.length ? `; failed: ${errors.join("; ")}` : ""}`);
   return { ok: true, errors, counts };
 }
 
-module.exports = { SOURCES, fetchSource, buildShelves, refresh, volumeOf, ent, about, pageProducts, ldBookPage };
+module.exports = { bookuaTiles, bookuaProducts, SOURCES, fetchSource, buildShelves, refresh, volumeOf, ent, about, pageProducts, ldBookPage };

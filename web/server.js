@@ -253,6 +253,8 @@ app.use("/covers", express.static(COVERS, { maxAge: "1y", immutable: true }));
 const thumbs = new (require("./thumbs").Thumbs)({ db: store.db, dir: COVERS, log: console.log, isBot: (req) => BOT.test(req.headers["user-agent"] || "") });
 pages.setThumbs((src, shown) => thumbs.url(src, shown));
 app.get("/t/:w/:sig/:src", (req, res) => thumbs.serve(req, res).catch(() => res.status(500).end()));
+// A list's picture for social networks, made of its covers (listimage.js).
+const listImage = new (require("./listimage").ListImage)({ dir: COVERS, thumbs, log: console.log });
 bg.every("thumbs-prune", 24 * 3600 * 1000, () => thumbs.prune(), { db: store.db, first: 30 * 60 * 1000 });
 bg.every("thumbs-warm", 6 * 3600 * 1000, () => thumbs.warm([...store.entries.values()].flatMap((es) => Object.keys(es)).map((id) => store.book(id)?.cover)), { db: store.db, first: 20 * 60 * 1000 });
 const COVER_TYPES = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp", "image/gif": "gif", "image/avif": "avif" };
@@ -687,7 +689,8 @@ app.post("/import/:source/apply", signed, importSource, async (req, res) => {
 const inLibraryMap = (req) => store.inLibrary(req.user?.id);
 // Draft shelves (a new catalog Max has not looked at yet) are seen only by the signed-in owner.
 const isDraft = (shelfId) => !!store.shelf(shelfId)?.draft;
-const shelvesFor = (req) => (req.owner ? store.shelves : store.shelves.filter((s) => !s.draft));
+// A join-only shop (book.ua) is no shelf: it is only rows in «Де взяти».
+const shelvesFor = (req) => store.shelves.filter((s) => !s.joinOnly && (req.owner || !s.draft));
 function bookFor(req, book, hasEntry) {
   if (req.owner || !book) return book;
   const editions = book.editions && book.editions.filter((e) => !e.shelf.draft);
@@ -815,7 +818,7 @@ app.get("/", (req, res) => {
     .filter((s) => s.items.length)
     .sort((a, b) => b.subscribed - a.subscribed || b.fresh - a.fresh)
     .slice(0, 2);
-  res.send(pages.homePage({ user: req.user, starts: social.starts(), picks: social.picks(), feed: feedFor(req, 6), recs, showcase, fetched: day(store.shelvesRefreshedAt), libraries: librariesFor(req) }));
+  res.send(pages.homePage({ editorials: lists.editorials().slice(0, 3).map(withCovers), user: req.user, starts: social.starts(), picks: social.picks(), feed: feedFor(req, 6), recs, showcase, fetched: day(store.shelvesRefreshedAt), libraries: librariesFor(req) }));
 });
 
 // «Зараз читають» on the homepage: the readers one follows first, then everyone else, at most two rows
@@ -939,8 +942,20 @@ app.get("/@:username/list/:slug", (req, res) => {
   const q = own ? String(req.query.add || "").trim().slice(0, 100) : "";
   const inList = own && q ? lists.ids(list.id) : null;
   const find = q ? { q, hits: searchHits(req, q).slice(0, 8).map((h) => ({ book: h.book, in: inList.has(store.canonical(h.book.id)) })) } : null;
-  const more = lists.of(reader.id).filter((l) => l.id !== list.id && (own || l.count)).slice(0, 5);
-  res.send(pages.listPage({ list: { ...list, count: items.length }, items, user: req.user, own, saved: lists.saved(req.user?.id, list.id), more, similar: lists.similar(list), find }));
+  // An editorial list shows the site's other ones, not its author's own (Max's name stays off «Добірка Chytai»).
+  const more = lists.of(reader.id).filter((l) => l.id !== list.id && (own || l.count) && (own || l.editorial === list.editorial)).slice(0, 5);
+  const og = list.image ? list.image : ogCovers(items).length ? `/og/list/${encodeURIComponent(list.id)}.jpg?v=${listImage.name(ogCovers(items)).slice(0, 8)}` : "";
+  res.send(pages.listPage({ list: { ...list, count: items.length }, items, user: req.user, own, owner: req.owner, saved: lists.saved(req.user?.id, list.id), more, similar: lists.similar(list), find, og, comments: lists.comments(list.id), commentError: String(req.query.comment_error || "").slice(0, 200) }));
+});
+const ogCovers = (items) => items.map((x) => x.book.cover).filter(Boolean).slice(0, 5);
+// The picture a list's link shows in Telegram, Facebook and the rest: made of its first covers once, then kept.
+app.get("/og/list/:id.jpg", async (req, res) => {
+  const l = lists.get(req.params.id);
+  if (!l) return res.status(404).end();
+  const covers = ogCovers(lists.items(l.id));
+  const file = await listImage.file(covers).catch(() => null);
+  if (!file) return res.redirect(302, covers[0] || "/icon.png");
+  res.set("Cache-Control", "public, max-age=86400").type("image/jpeg").sendFile(file);
 });
 app.get("/lists", (req, res) => {
   const tab = ["new", "saved", "mine"].includes(req.query.tab) && (req.user || req.query.tab === "new") ? req.query.tab : "popular";
@@ -967,7 +982,48 @@ app.post("/api/lists", signed, (req, res) => {
   }
   res.redirect(303, l.href);
 });
-app.post("/api/lists/:id", signed, myList, (req, res) => res.redirect(303, lists.edit(req.list.id, { title: req.body.title, note: req.body.note }).href));
+// «Добірка Chytai» is the owner's switch (the form shows it only to him).
+app.post("/api/lists/:id", signed, myList, (req, res) => res.redirect(303, lists.edit(req.list.id, { title: req.body.title, note: req.body.note, source: req.body.source ?? "", editorial: req.owner && req.body.ed_shown ? req.body.editorial === "1" : undefined }).href));
+// The picture on top of a list, from the author's computer: kept here, made no wider than 1600 px.
+app.post("/api/lists/:id/image", signed, myList, express.raw({ type: "image/*", limit: "15mb" }), async (req, res) => {
+  const ext = COVER_TYPES[String(req.get("content-type") || "").split(";")[0].trim()];
+  if (!ext || !Buffer.isBuffer(req.body) || req.body.length < 500) return res.status(400).json({ error: "Потрібна картинка: jpg, png або webp." });
+  const hash = require("crypto").createHash("sha1").update(req.body).digest("hex").slice(0, 20);
+  const src = path.join(COVERS, `${hash}.src.${ext}`);
+  const name = `${hash}.jpg`;
+  try {
+    fs.writeFileSync(src, req.body);
+    await new Promise((ok, fail) => require("child_process").execFile("nice", ["-n", "10", "vipsthumbnail", src, "--size", "1600x>", "-o", `${path.join(COVERS, name)}[Q=82,strip]`], { timeout: 30000 }, (e, _o, err) => (e ? fail(new Error(String(err || e.message).trim().split("\n")[0])) : ok())));
+  } catch (e) {
+    console.log(`list image: ${e.message}`);
+    return res.status(400).json({ error: "Не вдалося прочитати картинку." });
+  } finally {
+    fs.rmSync(src, { force: true });
+  }
+  lists.setImage(req.list.id, `/covers/${name}`);
+  res.json({ url: `/covers/${name}` });
+});
+app.post("/api/lists/:id/image/remove", signed, myList, (req, res) => (lists.setImage(req.list.id, ""), res.redirect(303, req.list.href)));
+// «Клуб Chytai»: a signed-in reader's words under a list.
+app.post("/api/lists/:id/comments", signed, (req, res) => {
+  const l = lists.get(req.params.id);
+  if (!l) return res.status(404).send(pages.messagePage({ title: "Немає такого списку", text: "", user: req.user }));
+  const back = (err) => res.redirect(303, `${l.href}${err ? `?comment_error=${encodeURIComponent(err)}` : ""}#club`);
+  if (auth.tooMany(`comments:${req.user.id}`, 10)) return back("Забагато за годину. Спробуй трохи згодом.");
+  const id = lists.addComment(l.id, req.user.id, req.body.text);
+  if (!id && String(req.body.text || "").trim()) return back("На сьогодні досить, завтра можна знову.");
+  back("");
+});
+// One's own words go; the list's author and the owner take any away.
+app.post("/api/lists/comments/:cid/delete", signed, (req, res) => {
+  const c = lists.comment(req.params.cid);
+  const l = c && lists.get(c.list);
+  if (!c || !l) return res.redirect(303, req.get("referer") || "/lists");
+  if (c.reader !== req.user.id && l.reader.id !== req.user.id && !req.owner) return res.status(403).send(pages.messagePage({ title: "Це не твій коментар", text: "", user: req.user }));
+  lists.dropComment(c.id);
+  res.redirect(303, req.body.back === "admin" ? "/admin/comments" : `${l.href}#club`);
+});
+app.get("/admin/comments", owner, (req, res) => res.send(pages.commentsAdminPage({ user: req.user, comments: lists.recentComments() })));
 app.post("/api/lists/:id/delete", signed, myList, (req, res) => (lists.remove(req.list.id), res.redirect(303, req.user.href)));
 app.post("/api/lists/:id/add", signed, myList, (req, res) => {
   const id = bookParam(req);
@@ -1079,7 +1135,7 @@ app.get("/publishers", (req, res) => {
 });
 app.get("/publishers/:id", (req, res) => {
   const shelf = store.shelf(req.params.id);
-  if (!shelf || (shelf.draft && !req.owner)) return res.status(404).send(pages.messagePage({ title: "Немає такого видавництва", text: "", user: req.user }));
+  if (!shelf || shelf.joinOnly || (shelf.draft && !req.owner)) return res.status(404).send(pages.messagePage({ title: "Немає такого видавництва", text: "", user: req.user }));
   const items = visible(shelf);
   const fresh = items.filter((it) => it.isNew).slice(0, 6);
   const works = new Set(items.map((it) => store.canonical(it.id)));
@@ -1162,7 +1218,7 @@ app.get("/sitemap.xml", (req, res) => {
     const t0 = Date.now();
     const origin = `https://${DOMAIN || req.get("host")}`;
     const urls = ["/", "/community", "/popular", "/publishers", "/updates", "/privacy"];
-    for (const shelf of store.shelves) if (!shelf.draft) urls.push(`/publishers/${encodeURIComponent(shelf.id)}`);
+    for (const shelf of store.shelves) if (!shelf.draft && !shelf.joinOnly) urls.push(`/publishers/${encodeURIComponent(shelf.id)}`);
     const ru = new Set();
     for (const w of authors.allWorks(store)) {
       const b = store.book(w.id);
@@ -1890,9 +1946,75 @@ function addEdition(orig, p, by) {
 // Our own search for those editions (ukfind.js); the owner runs it on /admin/ukfind for now.
 // A reader's hint that found the edition is news for the owner, to check the pair.
 // Who asked (Max, 2026-10-24: «додай в цей імейл хто»): the readers who pressed «Є український переклад».
-const hintedBy = (id) => store.db.prepare("SELECT DISTINCT reader FROM uk_hint WHERE book = ? ORDER BY created").all(id).map((h) => pub(auth.reader(h.reader))).filter(Boolean).map((u) => `${u.name} (${SITE}${u.href})`).join(", ");
-const onUkHint = (b, r) => r.status === "found" && r.edition && notifyOwner(`Знайшли українське видання: ${r.edition.title}`, [`${hintedBy(b.id) || "Читач"} підказав(ла), що є переклад «${b.title}», і пошук знайшов:`, "", `Переклад: ${r.edition.title}${r.edition.author ? ` — ${r.edition.author}` : ""}  ${SITE}${store.href(r.edition.id)}`, `Сторінка: ${r.url}`, "", `Прибрати пару: ${SITE}/admin/dupes#decided`, `Усі пошуки: ${SITE}/admin/ukfind`].join("\n"));
+// Who said there is a Ukrainian edition, by name and page, so Max can thank them (Max, 2026-10-28). "overview" is
+// not a reader: the «Що кажуть про книжку» text named the edition (ukFromOverview).
+const hintedBy = (id) => store.db.prepare("SELECT DISTINCT reader FROM uk_hint WHERE book = ? ORDER BY created").all(id).map((h) => (h.reader === "overview" ? "overview" : pub(auth.reader(h.reader)))).filter((u) => u && (u === "overview" || !u.owner));
+const onUkHint = (b, r) => {
+  if (r.status !== "found" || !r.edition) return;
+  const by = hintedBy(b.id);
+  const people = by.filter((u) => u !== "overview").map((u) => `${u.name} (${SITE}${u.href})`);
+  const who = people.length ? `${people.join(", ")} ${people.length > 1 ? "підказали" : "підказав(ла)"}, що є переклад «${b.title}», і пошук знайшов:` : by.includes("overview") ? `Огляд «Що кажуть про книжку» згадує переклад «${b.title}», і пошук знайшов:` : `Знайшли переклад «${b.title}»:`;
+  notifyOwner(`Знайшли українське видання: ${r.edition.title}`, [who, "", `Переклад: ${r.edition.title}${r.edition.author ? ` — ${r.edition.author}` : ""}  ${SITE}${store.href(r.edition.id)}`, `Сторінка: ${r.url}`, "", `Прибрати пару: ${SITE}/admin/dupes#decided`, `Усі пошуки: ${SITE}/admin/ukfind`].join("\n"));
+};
 const ukfind = new UkFinder({ store, db: store.db, apiKey: process.env.ANTHROPIC_API_KEY || "", bookpage, addEdition, onHint: onUkHint, log: console.log });
+// An overview that says the book is out in Ukrainian while no catalog of ours has that edition (Max,
+// 2026-10-27, Wool: «Українського перекладу в каталогах поки немає» right above «Українською роман вийшов 2018
+// року у BookChef як «Бункер. Ілюзія»»): the title it names is kept for the «Українською: …» line, and the
+// edition is looked for like after a reader's «Додати» (ukfind.js), once a month at most.
+const UK_SAID = /українськ\p{L}*\s+(переклад|видання)|українською\s[^.]{0,80}(вийш|вийд|вид(ал|ав)|переклал|виход)/iu;
+function ukFromOverview(book, text) {
+  const b = store.bookPage(book.id);
+  if (!b || !UK_SAID.test(text || "") || !/[a-z]/i.test(b.title) || CYR_RE.test(b.title)) return;
+  if ((b.translations || []).some((t) => CYR_RE.test(t.title)) || (b.editions || []).some((e) => CYR_RE.test(e.title))) return;
+  const m = String(text).match(/українськ[^.]{0,160}?«([^»]{2,80})»/iu);
+  const title = m && CYR_RE.test(m[1]) && !/[ыэъё]/i.test(m[1]) ? m[1].trim() : "";
+  if (title && !store.ukTitles?.[b.id]?.uk) store.db.set("overview:uk", JSON.stringify({ ...store.overviewUk(), [b.id]: title }));
+  if (ukfind.state(b.id) !== "ask") return;
+  const ok = ukfind.hint(b, "overview", title);
+  console.log(`uk from overview: ${b.id}${title ? ` «${title}»` : ""}${ok ? "" : " (not queued)"}`);
+}
+advice.onOverview = ukFromOverview;
+// The overviews written before this, once (the jobs process).
+if (bg.ROLE !== "web" && !store.db.get("overview:uk:swept")) {
+  store.db.set("overview:uk:swept", new Date().toISOString());
+  setTimeout(() => {
+    for (const r of store.db.prepare("SELECT book, text FROM overview").all()) {
+      const book = store.book(r.book);
+      if (book) ukFromOverview(book, r.text);
+    }
+  }, 60000);
+}
+// Editorial lists written by Claude for the owner (seed/editorial.json), made once each in the web process
+// (Max, 2026-10-28: «візьмемо номер 2, тільки додай книжку якої не вистачає»). A book the catalog lacks
+// comes in from its store page (cover, annotation), else from the fields given there.
+async function seedEditorials() {
+  for (const e of require("./seed/editorial.json")) {
+    const done = `editorial:seed:${e.key}`;
+    const had = e.source && store.db.get(done) && lists.bySlug(OWNER_ID, slugify(e.title).slice(0, 60).replace(/-+$/, ""));
+    if (had && !had.source && !store.db.get(`${done}:source`)) store.db.set(`${done}:source`, "1"), lists.edit(had.id, { source: e.source });
+    if (store.db.get(done) || !auth.reader(OWNER_ID)) continue;
+    store.db.set(done, new Date().toISOString());
+    const ids = [];
+    for (const b of e.books) {
+      let id = b.id && store.resolve(b.id);
+      if (!id && b.title) {
+        id = store.findWork({ title: b.title, author: b.author, isbns: b.isbns || [] });
+        if (!id) {
+          const p = b.page ? await bookpage.fromUrl(b.page, OWNER_ID).catch((err) => ({ error: err.message })) : { error: "no page" };
+          const row = p.error ? { title: b.title, author: b.author, cover: "", isbns: b.isbns || [], blurb: "", pages: b.pages || null, published: b.published || null, link: b.page ? { label: new URL(b.page).hostname, url: b.page } : null } : fromPage(p);
+          id = store.addBook({ title: b.title, author: b.author, cover: row.cover, links: row.link ? [row.link] : [], source: "tip", ...(row.isbns.length ? { isbns: row.isbns } : {}), ...(row.blurb ? { blurb: row.blurb, blurbSource: row.blurbSource } : {}), pages: row.pages || b.pages || null, published: row.published || b.published || null }).id;
+        }
+      }
+      if (id) ids.push([id, b.why || ""]);
+      else console.log(`editorial ${e.key}: no book ${b.id || b.title}`);
+    }
+    const l = lists.create(OWNER_ID, { title: e.title, note: e.note });
+    for (const [id, why] of ids) lists.add(l.id, id, why);
+    lists.edit(l.id, { editorial: true, source: e.source });
+    console.log(`editorial ${e.key}: ${l.href}, ${ids.length} books`);
+  }
+}
+if (bg.ROLE !== "jobs") setTimeout(() => seedEditorials().catch((err) => console.log(`editorial seed: ${err.message}`)), 5000);
 // «Додати» after «Українською: …, у каталогах поки немає» for a signed-in reader (pages.ukLine).
 // Also a foreign book Wikidata knows no translation of (Max, 2026-10-23: «тут немає перекладу але він є», Feynman):
 // a Latin title, no Ukrainian edition or translation linked.

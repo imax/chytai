@@ -105,7 +105,7 @@ const blurbOf = (h) => {
 const norm = (s) => String(s || "").toLowerCase().replace(/^(the|a)\s+/, "").replace(/[^\p{L}\p{N}]+/gu, " ").trim();
 // Separators left at the end of a title: «Diary of Samuel Pepys -», «Назва:».
 const DANGLING = /[\s\-‐‑–—:;,/|]+$/u;
-const EDITABLE = ["title", "author", "blurb", "cover", "language", "aliases", "genre", "published"];
+const EDITABLE = ["title", "author", "blurb", "cover", "language", "aliases", "genre", "published", "ebook"]; // ebook: the book.ua item «Де взяти» shows
 // A short name as typed in search: «DCC», «Л.О.Т.Р.» and «lotr» are one key.
 const aliasKey = (s) => String(s || "").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, "");
 // The first letters of a name of three or more words, as readers shorten it: «Dungeon Crawler Carl» → dcc,
@@ -390,10 +390,12 @@ class Store {
     const order = SOURCES.map((s) => s.id);
     // A draft shelf is draft while its source says so (catalogs.js).
     const draft = new Set(SOURCES.filter((s) => s.draft).map((s) => s.id));
+    // A shop that only adds to «Де взяти» (book.ua's e-books): no shelf of its own, no book pages of its own.
+    const joinOnly = new Set(SOURCES.filter((s) => s.joinOnly).map((s) => s.id));
     const shelves = this.db
       .prepare("SELECT id, data FROM shelves")
       .all()
-      .map((r) => ({ ...JSON.parse(r.data), draft: draft.has(r.id), items: [] }))
+      .map((r) => ({ ...JSON.parse(r.data), draft: draft.has(r.id), joinOnly: joinOnly.has(r.id), items: [] }))
       .filter((s) => order.includes(s.id)) // a source that was removed (Standard Ebooks) leaves its rows behind, unseen
       .sort((a, b) => order.indexOf(a.id) - order.indexOf(b.id));
     const byId = new Map(shelves.map((s) => [s.id, s]));
@@ -1407,6 +1409,8 @@ class Store {
       const vw = g.find((si) => si.item.volWork);
       if (vw) this.volWork.set(canonical, vw.item.volWork);
       seen.add(canonical);
+      // An item of a join-only shop that matched nothing else (no other shop's edition, no reader's book) stays out.
+      if (g.every((si) => si.shelf.joinOnly) && canonical === sorted[0].item.id) for (const si of g) this.hidden.add(si.item.id);
     }
     // 3. What the owner decided on /admin/dupes: [keep, dup] pairs; dup and everything folded into it
     // become editions of keep, whichever kind of work each is (a shelf item or a library book).
@@ -1909,13 +1913,22 @@ class Store {
     return this.book(id);
   }
 
+  overviewUk() {
+    if (!this._overviewUk || this._overviewUk.raw !== this.db.get("overview:uk")) {
+      const raw = this.db.get("overview:uk");
+      this._overviewUk = { raw, map: JSON.parse(raw || "{}") };
+    }
+    return this._overviewUk.map;
+  }
+
   // book() plus its translations, for the book page (kept out of book() so the two don't recurse).
   bookPage(id) {
     const b = this.book(id);
     const translations = b && this.translationsOf(b.id);
     // The Ukrainian title from Wikidata is named only while no catalog has it: not as a translation, and
     // not as an edition either (MEGOGO Books gives «Марсіанин» the original title, so it joins The Martian).
-    const uk = (b && this.ukTitles?.[b.id]?.uk) || "";
+    // Wikidata's, else the one an overview names («Українською роман вийшов … як «Бункер. Ілюзія»», server.js).
+    const uk = (b && (this.ukTitles?.[b.id]?.uk || this.overviewUk()[b.id])) || "";
     const inCatalog = translations?.length || (b?.editions || []).some((e) => norm(e.title) === norm(uk) || /[а-яіїєґ]/i.test(e.title));
     // The original Haiku named, while no catalog has it (aiOrigs).
     const o = b && !translations.length && /[а-яіїєґ]/i.test(b.title || "") && this.aiOrigs().get(b.id);
@@ -1926,7 +1939,7 @@ class Store {
   // builds every edition of itself and every book in its blocks, and on 2026-10-25 that cleaning was a third of
   // what a crawler's book page cost.
   fromShelfItem(shelf, it) {
-    return { id: it.id, title: it.title, author: it.author, altTitle: it.altTitle || "", cover: it.cover, tags: it.genres || [], links: [{ label: shelf.name, url: it.url }], source: shelf.id, shelf: shelf.id, blurb: blurbOf(it.blurb), price: it.price, status: it.status, expected: it.expected || "", language: it.language, edition: it.edition || "", isbn: it.isbn || "", volume: it.volume || 0, bundle: !!it.bundle, format: it.format || (shelf.kind === "free" ? "e-book" : shelf.kind === "audio" ? "аудіо" : "папір"), narrator: it.narrator || "", duration: it.duration || "", subscription: !!it.subscription };
+    return { id: it.id, title: it.title, author: it.author, altTitle: it.altTitle || "", cover: it.cover, tags: it.genres || [], links: [{ label: shelf.name, url: it.url }], source: shelf.id, shelf: shelf.id, blurb: blurbOf(it.blurb), price: it.price, status: it.status, expected: it.expected || "", language: it.language, edition: it.edition || "", isbn: it.isbn || "", volume: it.volume || 0, bundle: !!it.bundle, format: it.format || (shelf.kind === "free" ? "e-book" : shelf.kind === "audio" ? "аудіо" : "папір"), narrator: it.narrator || "", duration: it.duration || "", subscription: !!it.subscription, issued: /^\d{4}$/.test(it.year || "") ? it.year : "" };
   }
 
   addBook({ title, author, cover, links, source = "manual", ...more }) {

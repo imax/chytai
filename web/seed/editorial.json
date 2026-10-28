@@ -1,0 +1,77 @@
+[
+  {
+    "key": "znakovi-dii-2026",
+    "title": "Знакові книжки за версією читачів",
+    "note": "У жовтні 2026 року читачі голосували в Дії за знакові книжки Незалежності. Голосування провели Український інститут книги та MEGOGO BOOKS.\n\nПеремогла «Колонія» Макса Кідрука: 14 052 голоси. Ось перша п'ятнадцятка в тому порядку, як за неї голосували.",
+    "source": "https://diia.gov.ua/news/knyzhky-nashoi-nezalezhnosti-pidsumky-vseukrainskoho-holosuvannia-v-dii",
+    "books": [
+      {
+        "id": "koloniia",
+        "why": "Перемога: 14 052 голоси"
+      },
+      {
+        "id": "tantsi-z-kistkamy",
+        "why": "7 699 голосів"
+      },
+      {
+        "id": "za-perekopom-ye-zemlia",
+        "why": "7 035 голосів"
+      },
+      {
+        "id": "bunt-proty-imperii-ukrainski-shistdesiatnyky-mokryk",
+        "why": "5 831 голос"
+      },
+      {
+        "id": "virshi-z-biinytsi",
+        "why": "4 289 голосів"
+      },
+      {
+        "id": "heminhvei-nichoho-ne-znaie",
+        "why": "4 118 голосів"
+      },
+      {
+        "id": "mova-mech",
+        "why": "3 424 голоси"
+      },
+      {
+        "id": "ya-peretvoriuius-shchodennyk-okupatsii-vybrani-virshi",
+        "why": "3 373 голоси"
+      },
+      {
+        "page": "https://book-ye.com.ua/nekhudozhnya-literatura/gumanitarni-nauky/psykholohiya/lyudyna-na-perekhresti-rozdumy-pro-ekzystentsijnyj-intelekt/",
+        "title": "Людина на перехресті. Роздуми про екзистенційний інтелект",
+        "author": "Ігор Козловський",
+        "isbns": [
+          "9789661501170"
+        ],
+        "pages": 119,
+        "published": 2023,
+        "why": "2 210 голосів"
+      },
+      {
+        "id": "pozyvnyi-dlia-yova-khroniky-vtorhnennia",
+        "why": "1 705 голосів"
+      },
+      {
+        "id": "letytsiia-kuriata-ta-vsi-yii-vyhadani-kokhantsi-yakym-vona-z",
+        "why": "1 571 голос"
+      },
+      {
+        "id": "svidchennia",
+        "why": "1 501 голос"
+      },
+      {
+        "id": "hra-v-perevdiahannia",
+        "why": "1 501 голос"
+      },
+      {
+        "id": "yak-chytaty-ukrainskykh-klasykiv",
+        "why": "1 155 голосів"
+      },
+      {
+        "id": "spysky-laiuk",
+        "why": "1 132 голоси"
+      }
+    ]
+  }
+]

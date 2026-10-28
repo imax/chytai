@@ -59,7 +59,7 @@ const OVERVIEW_DAILY = 150; // fresh overviews a day on readers' clicks, all rea
 // чи оцінка читачів», plus a backfill over the books already rated): a sweep finds every book with a
 // reader's rating or note and no overview, and a small queue makes them a couple at a time. Its own
 // ceiling a day, so a big Goodreads import or the backfill can't run the bill away in one night.
-const AUTO_DAILY = 250; // Max, 2026-10-23: «давай зменшемо до 150 [на] день»; 2026-10-27: «до 250 книжок на день»
+const AUTO_DAILY = 1000; // Max, 2026-10-23: «давай зменшемо до 150 [на] день»; 2026-10-27: «до 250 книжок на день»; 2026-10-28, for one day: «давай всі прогонимо сьогодні» (back to 250 after)
 const AUTO_PARALLEL = 2;
 // The backfill over books rated before the feature is OFF for now (Max, 2026-10-23 08:09: «давай поки не
 // робити авто-backfill … я ще подумаю»); a book gets its overview when a reader rates or notes it from
@@ -146,6 +146,7 @@ const stripMd = (s) => String(s || "").replace(/\[([^\]]*)\]\([^)]*\)/g, "$1").r
 
 class Advice {
   constructor({ store, social, db, apiKey = "", model = MODEL, log = () => {} }) {
+    this.onOverview = null; // (book, text) after a new overview is kept (server.js: a Ukrainian edition it names)
     this.store = store;
     this.social = social;
     this.db = db;
@@ -615,6 +616,11 @@ class Advice {
     this.db
       .prepare("INSERT INTO overview (book, text, model, created, by, input_tokens, output_tokens, searches, prompt, sources) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (book) DO UPDATE SET text = excluded.text, model = excluded.model, created = excluded.created, by = excluded.by, input_tokens = excluded.input_tokens, output_tokens = excluded.output_tokens, searches = excluded.searches, prompt = excluded.prompt, sources = excluded.sources")
       .run(id, text, model, row.created, by, usage.input + usage.cached, usage.output, usage.searches, version, JSON.stringify({ queries, sources: sources.slice(0, 30) }));
+    try {
+      this.onOverview?.(book, text);
+    } catch (e) {
+      this.log(`overview hook: ${e.message}`);
+    }
     this.log(`overview: ${book.title} in ${Date.now() - t0} ms, ${usage.input + usage.cached} in, ${usage.output} out, ${usage.searches} searches, ${model}`);
     return { ...row, cached: false };
   }
