@@ -2008,10 +2008,10 @@ async function seedEditorials() {
     for (const b of e.books) {
       let id = b.id && store.resolve(b.id);
       if (!id && b.title) {
-        id = store.findWork({ title: b.title, author: b.author, isbns: b.isbns || [] });
+        id = !b.add && store.findWork({ title: b.title, author: b.author, isbns: b.isbns || [] });
         if (!id) {
-          const p = b.page ? await bookpage.fromUrl(b.page, OWNER_ID).catch((err) => ({ error: err.message })) : { error: "no page" };
-          const row = p.error ? { title: b.title, author: b.author, cover: "", isbns: b.isbns || [], blurb: "", pages: b.pages || null, published: b.published || null, link: b.page ? { label: new URL(b.page).hostname, url: b.page } : null } : fromPage(p);
+          const p = b.page && !b.cover ? await bookpage.fromUrl(b.page, OWNER_ID).catch((err) => ({ error: err.message })) : { error: "no page" };
+          const row = p.error ? { title: b.title, author: b.author, cover: b.cover || "", isbns: b.isbns || [], blurb: "", pages: b.pages || null, published: b.published || null, link: b.page ? { label: new URL(b.page).hostname, url: b.page } : null } : fromPage(p);
           id = store.addBook({ title: b.title, author: b.author, cover: row.cover, links: row.link ? [row.link] : [], source: "tip", ...(row.isbns.length ? { isbns: row.isbns } : {}), ...(row.blurb ? { blurb: row.blurb, blurbSource: row.blurbSource } : {}), pages: row.pages || b.pages || null, published: row.published || b.published || null }).id;
         }
       }
