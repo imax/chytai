@@ -411,7 +411,34 @@ app.post("/login/signup", (req, res) => {
   // So does one who signed up to save a book (/do/…): the book is saved and they are back on its page.
   signIn(req, res, reader, next.startsWith("/reader-login") || next.startsWith("/oauth/authorize") || next.startsWith("/do/") ? next : `/welcome${next ? `?next=${encodeURIComponent(next)}` : ""}`);
 });
-app.get("/welcome", signed, (req, res) => (admin.step(req.user.id, "welcome"), res.send(pages.welcomePage({ user: req.user, next: safeNext(req.query.next) }))));
+// Someone who signed up from a book's or an author's page sees that book (or the author's best-read three) first,
+// to save in one tap (usability review 2026-10-28, Max: «окремий флоу якщо людина прийшла на сторінку книжки або автора»).
+app.get("/welcome", signed, (req, res) => {
+  admin.step(req.user.id, "welcome");
+  const next = safeNext(req.query.next);
+  res.send(pages.welcomePage({ user: req.user, next, from: welcomeFrom(req, next) }));
+});
+function welcomeFrom(req, next) {
+  const m = next.match(/^\/(book|author)\/([^/?#]+)/);
+  if (!m) return null;
+  const slug = decodeURIComponent(m[2]);
+  const mark = (book) => ({ book, entry: store.entry(req.user.id, book.id) });
+  if (m[1] === "book") {
+    const book = bookFor(req, store.book(store.canonical(store.resolve(slug) || "")), false);
+    return book ? { books: [mark(book)] } : null;
+  }
+  const author = store.authors.bySlug.get(slug);
+  if (!author) return null;
+  // One card per work, the Ukrainian edition where there is one («Повна темрява», not «Full Dark, No Stars»).
+  const books = [...new Set(author.ids.map((id) => ukWork(store.book(store.canonical(id)))?.id).filter(Boolean))]
+    .map((id) => bookFor(req, store.book(id), false))
+    .filter((b) => b && !isRussian(b) && !b.bundle && !/комплект/i.test(b.title))
+    .map((b) => ({ b, n: [b.id, ...store.translationsOf(b.id).map((t) => t.id)].reduce((n, id) => n + store.readersOf(id).length, 0), uk: /[іїєґ]/i.test(b.title) }))
+    .sort((x, y) => y.uk - x.uk || y.n - x.n || !!y.b.cover - !!x.b.cover)
+    .slice(0, 3)
+    .map((x) => mark(x.b));
+  return books.length ? { author, books } : null;
+}
 function signIn(req, res, reader, next) {
   res.append("Set-Cookie", auth.cookie(auth.signIn(reader.id), { secure: secure(req) }));
   res.redirect(next || "/me");
@@ -891,6 +918,20 @@ function libraryRows(reader) {
   }
   return rows;
 }
+// A shelf with fewer than three books starts with a search and the most finished Ukrainian books, each saved in
+// one tap (usability review 2026-10-28: a new reader saw empty tabs, filters and «Нічого не знайшлося»).
+function startFor(req) {
+  const has = (id) => !!store.entry(req.user.id, id);
+  const q = String(req.query.find || "").trim().slice(0, 100);
+  const hits = q ? searchHits(req, q).slice(0, 8).map((h) => ({ book: h.book, entry: store.entry(req.user.id, h.book.id) })) : null;
+  const books = readPool().works
+    .filter((w) => w.book.cover && /[іїєґ]/i.test(w.book.title) && !has(w.book.id))
+    .sort((a, b) => b.s.finished - a.s.finished || b.s.rated - a.s.rated)
+    .slice(0, 8)
+    .map((w) => ({ book: bookFor(req, w.book, false), entry: null }))
+    .filter((x) => x.book);
+  return { q, hits, books };
+}
 // /@<username> is a reader's shelf: their own (with «змінити», recommendations, «+ Додати книжку») when
 // they open it, the public one for everyone else and with ?public. /me is a shortcut to your own
 // (Max, 2026-10-20: one address for a shelf, so the one in the address bar can be shared).
@@ -907,7 +948,7 @@ app.get("/@:username", (req, res) => {
   // The profile is the reader's own stats and books; recommendations live on other pages (Max, 2026-10-23).
   const theirLists = lists.of(reader.id).filter((l) => own || l.count);
   const part = restPart(req, res);
-  if (own) return res.send(pages.libraryPage({ part, lists: theirLists, savedLists: lists.savedBy(reader.id), rows, user: req.user, reader: req.user, own: true, follows, now: nowFor(reader.id, { own: true }) }));
+  if (own) return res.send(pages.libraryPage({ part, lists: theirLists, savedLists: lists.savedBy(reader.id), rows, user: req.user, reader: req.user, own: true, follows, now: nowFor(reader.id, { own: true }), start: rows.filter((r) => !r.kids).length < 3 ? startFor(req) : null }));
   res.send(pages.libraryPage({ part, lists: theirLists, rows, user: req.user, reader, now: nowFor(reader.id), mineIds: req.user && req.user.id !== reader.id ? store.inLibrary(req.user.id) : null, mineDirect: req.user ? new Set(Object.keys(store.entriesOf(req.user.id))) : null, following: auth.follows(req.user?.id, reader.id), follows }));
 });
 // ---- «Списки» (lists.js): /@<username>/list/<slug>, /lists, and what the author does with a list ----
@@ -1651,7 +1692,7 @@ app.get("/do/:what/:id", signed, (req, res) => {
     }
     if (what === "want") advice.want(id);
   }
-  res.redirect(store.href(id));
+  res.redirect(safeNext(req.query.next) || store.href(id));
 });
 
 app.post("/api/entry/:id/remove", signed, (req, res) => {
