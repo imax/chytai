@@ -16,6 +16,142 @@
     "group": "Для дітей"
   },
   {
+    "name": "franko-farbovanyi-lys.epub",
+    "title": "Фарбований лис",
+    "authors": [
+      "Іван Франко"
+    ],
+    "group": "Для дітей"
+  },
+  {
+    "name": "franko-ripka.epub",
+    "title": "Ріпка",
+    "authors": [
+      "Іван Франко"
+    ],
+    "group": "Для дітей"
+  },
+  {
+    "name": "franko-abu-kasymovi-kaptsi.epub",
+    "title": "Абу-Касимові капці",
+    "authors": [
+      "Іван Франко"
+    ],
+    "group": "Для дітей"
+  },
+  {
+    "name": "franko-hrytseva-shkilna-nauka.epub",
+    "title": "Грицева шкільна наука",
+    "authors": [
+      "Іван Франко"
+    ],
+    "group": "Для дітей"
+  },
+  {
+    "name": "ukrainka-bida-navchyt.epub",
+    "title": "Біда навчить",
+    "authors": [
+      "Леся Українка"
+    ],
+    "group": "Для дітей"
+  },
+  {
+    "name": "kotsiubynskyi-kharytia.epub",
+    "title": "Харитя",
+    "authors": [
+      "Михайло Коцюбинський"
+    ],
+    "group": "Для дітей"
+  },
+  {
+    "name": "kotsiubynskyi-malenkyi-hrishnyk.epub",
+    "title": "Маленький грішник",
+    "authors": [
+      "Михайло Коцюбинський"
+    ],
+    "group": "Для дітей"
+  },
+  {
+    "name": "kotsiubynskyi-yalynka.epub",
+    "title": "Ялинка",
+    "authors": [
+      "Михайло Коцюбинський"
+    ],
+    "group": "Для дітей"
+  },
+  {
+    "name": "hrinchenko-olesia.epub",
+    "title": "Олеся",
+    "authors": [
+      "Борис Грінченко"
+    ],
+    "group": "Для дітей"
+  },
+  {
+    "name": "vynnychenko-kumediia-z-kostem.epub",
+    "title": "Кумедія з Костем",
+    "authors": [
+      "Володимир Винниченко"
+    ],
+    "group": "Для дітей"
+  },
+  {
+    "name": "vynnychenko-babusyn-podarunok.epub",
+    "title": "Бабусин подарунок",
+    "authors": [
+      "Володимир Винниченко"
+    ],
+    "group": "Для дітей"
+  },
+  {
+    "name": "vasylchenko-charivna-koza.epub",
+    "title": "Чарівна коза",
+    "authors": [
+      "Степан Васильченко"
+    ],
+    "group": "Для дітей"
+  },
+  {
+    "name": "korolivstaryi-khukha-mokhovynka.epub",
+    "title": "Хуха-Моховинка",
+    "authors": [
+      "Василь Королів-Старий"
+    ],
+    "group": "Для дітей"
+  },
+  {
+    "name": "hlibov-baiky.epub",
+    "title": "Байки",
+    "authors": [
+      "Леонід Глібов"
+    ],
+    "group": "Для дітей"
+  },
+  {
+    "name": "oles-kniazha-ukraina.epub",
+    "title": "Княжа Україна",
+    "authors": [
+      "Олександр Олесь"
+    ],
+    "group": "Для дітей"
+  },
+  {
+    "name": "kashchenko-nad-kodatskym-porohom.epub",
+    "title": "Над Кодацьким порогом",
+    "authors": [
+      "Адріан Кащенко"
+    ],
+    "group": "Для дітей"
+  },
+  {
+    "name": "narodni-kazky-rudchenko.epub",
+    "title": "Українські народні казки",
+    "authors": [
+      "Іван Рудченко"
+    ],
+    "group": "Для дітей"
+  },
+  {
     "name": "carroll-alice.epub",
     "title": "Alice's Adventures in Wonderland",
     "authors": [
