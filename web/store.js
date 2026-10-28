@@ -568,6 +568,10 @@ class Store {
     const stems = (t) => new Set(norm(String(t).replace(/ґ/gi, "г").split(/[.:(]\s*/)[0]).split(" ").filter((w) => w.length >= 3).map((w) => w.slice(0, 4)));
     const alike = (x, y) => {
       const [a, b] = [stems(title(x)), stems(title(y))].sort((p, q) => p.size - q.size);
+      // Titles of two words or more start alike too: «Нотатки про Шерлока Голмса» and «Справи Шерлока Голмса»
+      // are other books than «Пригоди Шерлока Голмса» (Max, 2026-10-28: three «Українською» on one original).
+      const first = (t) => [...stems(t)][0];
+      if (a.size > 1 && first(title(x)) !== first(title(y))) return false;
       return a.size > 0 && (a.size > 1 || b.size === 1) && [...a].filter((w) => b.has(w)).length * 2 > a.size; // one word only against one word («Шерлок» is not «Пригоди Шерлока Холмса»)
     };
     const partners = new Map(); // id -> ids across the script line it is paired with

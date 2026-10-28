@@ -1156,16 +1156,15 @@ function foldSeries(rows) {
   });
 }
 
-// A series on a shelf: the first covers fanned, the series' name, «серія · 8 томів» (or «3 з 8» when the
+// A series on a shelf: the first volume's cover (Max, 2026-10-28: a fan broke the row's layout), the series' name, «серія · 8 томів» (or «3 з 8» when the
 // reader has some of it), one rating and status, the note. The volumes are listed on the book page, not
 // here (Max, 2026-10-23); each keeps an anchor so a feed link to /@user#<volume> still lands on the row.
 function seriesRow(r, { action = "", data = "" } = {}) {
   const vols = r.volumes;
   const b = r.book;
   const badge = vols.length < r.series.total ? `серія · ${vols.length} з ${r.series.total}` : `серія · ${count(vols.length, "том", "томи", "томів")}`;
-  const covers = vols.slice(0, 3).map((v) => cover(v.book, "md")).join("");
   return `<article class="row series-row" id="${attr(r.id)}"${data}>
-  <a class="cover-link covers" href="${attr(b.href)}">${covers}</a>
+  <a class="cover-link" href="${attr(b.href)}">${cover(vols[0].book, "md")}</a>
   <div class="row-body">
     <h3><a href="${attr(b.href)}">${esc(r.series.name)}</a> <span class="badge">${badge}</span></h3>
     <p class="by">${b.author ? authorLinks(b.author) : ""}</p>
