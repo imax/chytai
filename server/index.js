@@ -486,7 +486,8 @@ function startGuest(req, res) {
 
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
 
-function loginPage(req, error) {
+// opts.button { href, label } replaces «Увійти» (and the demo link) for someone already signed in.
+function loginPage(req, error, opts = {}) {
   const signIn = `${WEB_URL}/reader-login?back=${encodeURIComponent(`${req.protocol}://${req.get("host")}`)}`;
   return `<!doctype html>
 <html lang="uk"><head><meta charset="utf-8"><title>Chytai</title>
@@ -508,8 +509,8 @@ function loginPage(req, error) {
 <body><form onsubmit="return false">
   <h1>Chytai</h1><p>Читалка з поясненнями від Claude</p>
   ${error ? `<div class="err">${esc(error)}</div>` : ""}
-  <a class="btn" href="${esc(signIn)}">Увійти</a>
-  ${GUEST_ENABLED && demoBooks().length ? `<p class="demo">Або <a href="/demo">подивитися демо</a> з однією книжкою.</p>` : ""}
+  ${opts.button ? `<a class="btn" href="${esc(opts.button.href)}">${esc(opts.button.label)}</a>` : `<a class="btn" href="${esc(signIn)}">Увійти</a>`}
+  ${!opts.button && GUEST_ENABLED && demoBooks().length ? `<p class="demo">Або <a href="/demo">подивитися демо</a> з однією книжкою.</p>` : ""}
 </form></body></html>`;
 }
 
@@ -775,7 +776,7 @@ app.get("/s/:token", (req, res) => {
   if (!shareActive(sh)) return res.status(404).type("html").send(sharePage(req, "Посилання вже не діє.", "Попросіть того, хто його надіслав, зробити нове."));
   const acct = currentAccount(req);
   if (acct === sh.acct) return res.redirect(`/?open=${encodeURIComponent(sh.book)}`); // the owner trying their own link
-  if (acct) return res.type("html").send(sharePage(req, "Ви вже в читалці під своїм акаунтом.", "Це посилання для когось без акаунта: відкрийте його на іншому пристрої або вийдіть."));
+  if (acct) return res.type("html").send(loginPage(req, "Це посилання для читання без акаунта, а ви вже в Читалці під своїм. Відкрийте його на іншому пристрої.", { button: { href: "/", label: "Відкрити мою бібліотеку" } }));
   let device = signedCookie(req, DEVICE_COOKIE, "device");
   if (sh.device && sh.device !== device) return res.status(403).type("html").send(sharePage(req, "Це посилання вже відкрили на іншому пристрої.", "Попросіть нове посилання для цього пристрою."));
   const cookies = [];

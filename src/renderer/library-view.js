@@ -61,7 +61,7 @@
   }
 
   function addedLabel(b) {
-    const who = !b.addedBy ? "" : b.addedBy === settings.user ? "ви" : b.addedBy;
+    const who = !b.addedBy || b.addedBy === settings.user ? "" : b.addedBy; // your own library: always you
     if (!b.addedAt) return who;
     const days = Math.floor((new Date().setHours(24, 0, 0, 0) - b.addedAt) / 864e5);
     const date = new Date(b.addedAt);

@@ -647,6 +647,10 @@
   const libAdd = document.getElementById("lib-add");
   if (libAdd) {
     libAdd.textContent = "Додати книжки…";
-    libAdd.title = "Завантажити EPUB або PDF у спільну бібліотеку (можна кілька за раз)";
+    libAdd.title = "Завантажити EPUB або PDF (можна кілька за раз)";
   }
+  // The Mac app's «Оновити» rescans folders and its «Відкрити» opens a file from the disk; on the web there are no
+  // folders, and books come in through «Додати книжки…» on Головна.
+  document.getElementById("lib-refresh")?.classList.add("hidden");
+  document.getElementById("btn-open")?.classList.add("hidden");
 })();
