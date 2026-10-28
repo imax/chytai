@@ -73,5 +73,134 @@
         "why": "1 132 голоси"
       }
     ]
+  },
+  {
+    "key": "35-znakovykh-2026",
+    "replaces": "Знакові книжки за версією читачів",
+    "title": "35 знакових книжок Незалежності",
+    "note": "До 35-річчя Незалежності Український інститут книги та MEGOGO Books запропонували обрати 35 знакових книжок. Експерти склали довгий список зі ста, а читачі віддали 168 889 голосів. Результати оголосили 22 жовтня 2026 року.\n\nТут книжки в порядку голосування. Серії та багатотомники показуємо першою книжкою. Кількох позицій тут немає, бо в каталозі їх поки немає повністю: «Українська поетична антологія» (8 місце), «Vivat Класика» (9), «Неканонічний канон» (16), серія «Розстріляне відродження. Вибрані твори» (28) і Шевченко у 12 томах (29).",
+    "source": "https://mbooks.com.ua/35-books/",
+    "books": [
+      {
+        "id": "ya-bachu-vas-tsikavyt-pitma",
+        "why": "1 місце"
+      },
+      {
+        "id": "heminhvei-nichoho-ne-znaie",
+        "why": "2 місце"
+      },
+      {
+        "id": "za-perekopom-ye-zemlia",
+        "why": "3 місце"
+      },
+      {
+        "id": "starylev-37991",
+        "why": "4 місце: трилогія «Літопис Сірого Ордену», тут перша книжка"
+      },
+      {
+        "id": "sprava-vasylia-stusa-zbirka-dokumentiv-z-arkhivu-kolyshnoho-",
+        "why": "5 місце"
+      },
+      {
+        "id": "koloniia",
+        "why": "6 місце: серія «Нові темні віки», тут перша книжка. А в Дії «Колонія» отримала відзнаку читацьких симпатій"
+      },
+      {
+        "id": "brama-yevropy-istoriia-ukrainy-vid-skifskykh-voien-do-nezale-plokhii",
+        "why": "7 місце"
+      },
+      {
+        "id": "zapysky-ukrainskoho-samashedshoho-kostenko",
+        "why": "10 місце"
+      },
+      {
+        "id": "marusia-churai",
+        "why": "11 місце"
+      },
+      {
+        "id": "mova-mech",
+        "why": "12 місце"
+      },
+      {
+        "id": "spytaite-miiechku",
+        "why": "13 місце"
+      },
+      {
+        "id": "internat-zhadan",
+        "why": "14 місце"
+      },
+      {
+        "id": "abetka-kulish-zinkiv",
+        "why": "15 місце"
+      },
+      {
+        "id": "starylev-50041",
+        "why": "17 місце"
+      },
+      {
+        "id": "usi-virshi-1993-2023",
+        "why": "18 місце"
+      },
+      {
+        "id": "starylev-2648",
+        "why": "19 місце"
+      },
+      {
+        "id": "povne-zibrannia-tvoriv-tom-1-rannia-poeziia",
+        "why": "20 місце: повне зібрання творів Стуса, тут перший том"
+      },
+      {
+        "id": "100-kazok-tom-1",
+        "why": "21 місце: «100 казок» у трьох томах, тут перший"
+      },
+      {
+        "id": "povne-zibrannia-tvoriv-lesi-ukrainky-u-14-tomakh",
+        "why": "22 місце"
+      },
+      {
+        "id": "tantsi-z-kistkamy",
+        "why": "23 місце"
+      },
+      {
+        "id": "polovi-doslidzhennia-z-ukrainskoho-seksu",
+        "why": "24 місце"
+      },
+      {
+        "id": "muzei-pokynutykh-sekretiv",
+        "why": "25 місце"
+      },
+      {
+        "id": "bunt-proty-imperii-ukrainski-shistdesiatnyky-mokryk",
+        "why": "26 місце"
+      },
+      {
+        "id": "voroshylovhrad",
+        "why": "27 місце"
+      },
+      {
+        "id": "uliubleni-virshi-tom-1",
+        "why": "30 місце: «Улюблені вірші» у трьох томах, тут перший"
+      },
+      {
+        "id": "virshi-z-biinytsi",
+        "why": "31 місце"
+      },
+      {
+        "id": "dotsia",
+        "why": "32 місце"
+      },
+      {
+        "id": "ya-peretvoriuius-shchodennyk-okupatsii-vybrani-virshi",
+        "why": "33 місце"
+      },
+      {
+        "id": "amadoka",
+        "why": "34 місце"
+      },
+      {
+        "id": "stolittia-yakova",
+        "why": "35 місце"
+      }
+    ]
   }
 ]

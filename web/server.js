@@ -2018,6 +2018,9 @@ async function seedEditorials() {
       if (id) ids.push([id, b.why || ""]);
       else console.log(`editorial ${e.key}: no book ${b.id || b.title}`);
     }
+    // An earlier editorial list this one takes the place of (Max, 2026-10-28: the MEGOGO vote's 35 instead of Diia's 15).
+    const old = e.replaces && lists.bySlug(OWNER_ID, slugify(e.replaces).slice(0, 60).replace(/-+$/, ""));
+    if (old) lists.remove(old.id);
     const l = lists.create(OWNER_ID, { title: e.title, note: e.note });
     for (const [id, why] of ids) lists.add(l.id, id, why);
     lists.edit(l.id, { editorial: true, source: e.source });
