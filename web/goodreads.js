@@ -117,7 +117,8 @@ function parseExport(text) {
 // plan(store, reader, books) -> { rows: [{ ...book, match: { id, title, author, href } | null, own: entry | null }], counts }
 function plan(store, reader, books) {
   const rows = books.map((b) => {
-    const id = store.findWork(b);
+    // A pasted list's line the catalog already pinned to one work (listimport.resolve) keeps it.
+    const id = (b.workId && store.book(b.workId) && b.workId) || store.findWork(b);
     const match = id ? store.book(id) : null;
     return { ...b, match: match ? { id: match.id, title: match.title, author: match.author, href: match.href, cover: match.cover } : null, own: match ? store.entry(reader, match.id) : null };
   });

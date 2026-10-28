@@ -149,12 +149,14 @@ function resolve(store, books) {
       }
     }
     // A bare title the catalog has once and only once («The Road»): that book, however short the title.
+    // Several under that title by one author, or the title before a dot or a colon («Шьоґун. Книга 1»): store.workForTitle.
     let only = null;
     if (!author && !store.findWork({ title })) {
       const ids = store.worksTitled ? store.worksTitled(title) : [];
-      if (ids.length === 1 && store.book(ids[0])) only = store.book(ids[0]);
+      const id = ids.length === 1 ? ids[0] : store.workForTitle?.(title);
+      if (id && store.book(id)) only = store.book(id);
     }
-    if (only) return { ...rest, title: only.title, author: only.author || "", isbns: [], touched: `${b.year || thisYear}-01-01T00:00:00.000Z` };
+    if (only) return { ...rest, workId: only.id, title: only.title, author: only.author || "", isbns: [], touched: `${b.year || thisYear}-01-01T00:00:00.000Z` };
     // Nothing known: two capitalised words at the end are the author («Неіснуюча книжка Іван Іванов»), but
     // only when the rest reads like a title in sentence case, or is one Cyrillic word («Кобзар Тарас Шевченко»):
     // an English title is in Title Case, and neither «Their Eyes Were Watching God» nor «The Big Short» has
@@ -173,4 +175,42 @@ function resolve(store, books) {
   });
 }
 
-module.exports = { parseLine, parseList, resolve, looksLikeName };
+// Lines the catalog does not know, looked up in Open Library before the reader sees the list (Max, 2026-10-28:
+// an Apple Books list of English titles came out as a column of «Не знайшли» and «Додати 0 книжок»). The first
+// result is taken only when its title is the line's (before a subtitle) and, if the line named an author, by
+// that author; then the row is a book with a cover, ticked like a found one, and the catalog's own copy when its
+// ISBNs say so. At most `limit` lines and `wait` ms: a long list must not keep the reader waiting.
+async function lookOutside(store, rows, search, { limit = 40, wait = 8000, norm, sameAuthor } = {}) {
+  const head = (t) => norm(String(t || "").split(/[:(]|\.\s/)[0]);
+  const todo = rows.filter((r) => !r.url && !r.workId && r.title && !store.findWork(r)).slice(0, limit);
+  // A row's new fields, or null.
+  const one = async (r) => {
+    // «Thinking, Fast and Slow» was split at its comma: the line itself is the better question when nothing matched.
+    const line = clean(r.line || "");
+    for (const q of [...new Set([[r.title, r.author].filter(Boolean).join(" "), line].filter((q) => q.length >= 2))]) {
+      const hit = (await search(q))[0];
+      const whole = q === line && q !== r.title;
+      if (!hit || head(hit.title) !== head(whole ? q : r.title) || (r.author && !whole && !sameAuthor(r.author, hit.author))) continue;
+      const id = store.findWork(hit);
+      if (id) return { workId: id, title: hit.title, author: hit.author };
+      return { title: hit.title, author: hit.author || r.author, isbns: hit.isbns || [], cover: hit.cover || "", ol: hit.ol || "", published: hit.published || null, outside: "Open Library" };
+    }
+    return null;
+  };
+  // What came back after the reader was shown the list stays out of it: they confirm what they saw.
+  let late = false;
+  const worker = async () => {
+    for (let r; (r = todo.shift()); ) {
+      const patch = await one(r).catch(() => null);
+      if (late) return;
+      if (patch) Object.assign(r, patch);
+    }
+  };
+  let timer;
+  await Promise.race([Promise.all([...Array(6)].map(worker)), new Promise((ok) => (timer = setTimeout(ok, wait)))]);
+  clearTimeout(timer);
+  late = true;
+  return rows;
+}
+
+module.exports = { parseLine, parseList, resolve, lookOutside, looksLikeName };

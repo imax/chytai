@@ -2030,6 +2030,27 @@ class Store {
     return [...new Set((this.workIndex().byTitle.get(norm(title)) || []).map((w) => w.id))];
   }
 
+  // The work a bare title from a pasted list names, or null (Max's Apple Books list, 2026-10-28: «The Blade
+  // Itself», «Шьоґун» came out «Не знайшли»). Several works under the title, all by one author (the English
+  // edition a reader brought and the Ukrainian one with it as its original title): the one titled so itself.
+  // No work of that very title: the one whose title is it before a dot, a colon or a bracket («Шьоґун. Книга 1»),
+  // when every such book is by one author.
+  workForTitle(title) {
+    const key = norm(title);
+    if (key.length < 4) return null;
+    const one = (ids) => {
+      const books = ids.map((id) => this.book(id)).filter(Boolean);
+      if (!books.length || !books.every((b) => sameAuthor(b.author || "", books[0].author || ""))) return null;
+      const rank = (b) => (norm(b.title) === key ? 0 : 2) + (b.author ? 0 : 1);
+      return this.canonical(books.reduce((best, b) => (rank(b) < rank(best) ? b : best)).id);
+    };
+    const titled = this.worksTitled(title);
+    if (titled.length) return one(titled);
+    const head = (t) => norm(String(t || "").split(/\s*[.:(]\s|,\s+(?:or|або|чи)\s/i)[0].split(/[:(]/)[0]);
+    const hits = this.search(title, { limit: 10, alias: false }).filter((h) => !isRussian(h.book) && [h.book.title, h.book.altTitle].some((t) => head(t) === key));
+    return hits.length ? one(hits.map((h) => h.book.id)) : null;
+  }
+
   // The work for a book named from outside ({ title, author, isbns }), or null. An ISBN is enough on
   // its own; a title needs the same author (a surname in common, in either alphabet, a typo allowed),
   // unless only one work has that title and the title is not a single short word.
@@ -2194,4 +2215,4 @@ class Store {
   }
 }
 
-module.exports = { fromOpenLibrary, sameCover, OPEN_LIBRARY, mainGenres, isRussian, langGuess, Store, slugify, soundOf, norm, workName, OWNER };
+module.exports = { fromOpenLibrary, sameCover, sameAuthor, OPEN_LIBRARY, mainGenres, isRussian, langGuess, Store, slugify, soundOf, norm, workName, OWNER };

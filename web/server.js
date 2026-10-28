@@ -10,7 +10,7 @@
 const express = require("express");
 const fs = require("fs");
 const path = require("path");
-const { Store, OWNER: OWNER_ID, slugify, isRussian, norm, workName, mainGenres } = require("./store");
+const { Store, OWNER: OWNER_ID, slugify, isRussian, norm, workName, mainGenres, sameAuthor } = require("./store");
 const { Auth } = require("./auth");
 const pages = require("./pages");
 const catalogs = require("./catalogs");
@@ -650,6 +650,8 @@ app.post("/import/list", signed, async (req, res) => {
     if (b.error) Object.assign(r, { title: r.url, pageError: b.error });
     else Object.assign(r, fromPage(b));
   }));
+  // What the catalog does not know: Open Library, so a book nobody here has yet comes with its cover (listimport.lookOutside).
+  await listimport.lookOutside(store, rows, (q) => enrich.searchOpenLibrary(q), { norm, sameAuthor });
   importPreview(req, res, rows, { text });
 });
 app.get("/import/:source", signed, importSource, (req, res) => res.send(pages.importPage({ user: req.user, source: req.source })));

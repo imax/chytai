@@ -2181,7 +2181,8 @@ function addPage({ user, text = "", error = "" }) {
 const ADD_STATUS = [["read", "Прочитано"], ["reading", "Читаю"], ["want", "Хочу прочитати"], ["abandoned", "Покинуто"], ["paper", "На папері"], ["kids", "Дитяча полиця"]];
 function addReviewPage({ user, token, rows, text }) {
   // A line that was a page address and was read is found too: the book comes from that page.
-  const fromPage = (r) => !r.match && r.url && !r.pageError;
+  // So is a line Open Library knew (listimport.lookOutside): the book comes with its cover.
+  const fromPage = (r) => !r.match && ((r.url && !r.pageError) || r.outside);
   const found = rows.filter((r) => r.match || fromPage(r)).length;
   // Found books first, then the ones already on the shelf, then what we could not find (Max: «щоб довго не гортати»).
   const rank = (r) => (r.match && !r.own ? 0 : fromPage(r) ? 0 : r.own ? 1 : 2);
@@ -2190,7 +2191,7 @@ function addReviewPage({ user, token, rows, text }) {
     const own = !!r.own;
     const page = fromPage(r);
     const b = r.match || (page ? r : null);
-    const from = page ? `з сайту ${r.link?.label || ""}` : `з рядка «${r.line || r.title}»`;
+    const from = page && r.outside ? `з ${r.outside}` : page ? `з сайту ${r.link?.label || ""}` : `з рядка «${r.line || r.title}»`;
     return `<li class="add-row${b ? "" : " missing"}${own ? " own" : ""}" data-i="${i}">
   <label class="add-tick"><input type="checkbox" name="keep" value="${i}"${b && !own ? " checked" : ""}${own ? " disabled" : ""}><span></span></label>
   <span class="add-cover">${b ? cover(b, "sm") : `<span class="cover-none"></span>`}</span>
