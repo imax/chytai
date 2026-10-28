@@ -14,7 +14,10 @@ self.addEventListener("install", (event) => {
       const cache = await caches.open(CACHE);
       // One asset at a time rather than cache.addAll: one missing file must not keep the reader from
       // working offline, and the fonts alone are a few dozen requests.
-      await Promise.all(ASSETS.map((url) => cache.add(url).catch((err) => console.warn("sw: not cached", url, err))));
+      // The page itself only when it came as it is: signed out, / is a redirect to /login, and a
+      // redirected answer served to a navigation fails («Увійти» then showed a network error).
+      const add = (url) => (url === "/" ? fetch(url).then((res) => res.ok && !res.redirected && cache.put(url, res)) : cache.add(url));
+      await Promise.all(ASSETS.map((url) => add(url).catch((err) => console.warn("sw: not cached", url, err))));
     })(),
   );
 });
@@ -40,6 +43,9 @@ self.addEventListener("fetch", (event) => {
   if (url.pathname.startsWith("/api/") || url.pathname.startsWith("/free/") || url.pathname === "/sw.js" || /^\/(login|logout|demo|admin)$/.test(url.pathname)) return;
 
   if (req.mode === "navigate") {
+    // Only the reader's own page. Every other address (/auth back from the site, /s/<link>, /free-file/…)
+    // is the server's: served from here it lost the sign-in and the share cookie, and «Увійти» looped.
+    if (url.pathname !== "/") return;
     // The page itself comes from the cache like its scripts, so they always match. A signed-out visitor
     // still ends up on /login: the page's first /api call answers 401 and the bridge sends them there.
     // The server answers / with a redirect to /login in that case, and that must not replace the page.
@@ -47,7 +53,7 @@ self.addEventListener("fetch", (event) => {
       (async () => {
         const cache = await caches.open(CACHE);
         const hit = await cache.match("/");
-        if (hit) return hit;
+        if (hit && !hit.redirected) return hit;
         const res = await fetch(req);
         if (res.ok && url.pathname === "/" && !res.redirected) cache.put("/", res.clone()).catch(() => {});
         return res;
