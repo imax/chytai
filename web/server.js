@@ -938,7 +938,8 @@ app.get("/og/list/:id.jpg", async (req, res) => {
 });
 app.get("/lists", (req, res) => {
   const tab = ["new", "saved", "mine"].includes(req.query.tab) && (req.user || req.query.tab === "new") ? req.query.tab : "popular";
-  const shown = tab === "saved" ? lists.savedBy(req.user.id) : tab === "mine" ? lists.of(req.user.id) : lists.all({ sort: tab });
+  // Others' lists of one or two books («Random · 1 книжка») stay on their readers' pages (usability review 2026-10-28).
+  const shown = tab === "saved" ? lists.savedBy(req.user.id) : tab === "mine" ? lists.of(req.user.id) : lists.all({ sort: tab }).filter((l) => l.editorial || l.count >= 3);
   res.send(pages.listsPage({ user: req.user, tab, lists: shown.map(withCovers), savedCount: req.user ? lists.savedBy(req.user.id).length : 0 }));
 });
 // The author's own list, or 404 for anyone else.
@@ -1186,8 +1187,12 @@ app.get("/", (req, res) => {
   const ok = (b) => !f || READ_FILTERS[f][1](b);
   const { works } = readPool();
   // Ukrainian titles with covers first, one book per reader, so it isn't three of one reader's English business books.
+  // A note in Ukrainian before one in English (usability review 2026-10-28: a guest's first line was «A book that
+  // every person needs to read…»; Max: «якщо є то ставимо»).
   const byReader = new Set();
-  const picks = social.picks(200).map((p) => ({ ...p, book: ukWork(p.book) })).filter((p) => ok(p.book)).sort((a, b) => (/[а-яіїєґ]/i.test(b.book.title) && !!b.book.cover) - (/[а-яіїєґ]/i.test(a.book.title) && !!a.book.cover)).filter((p) => !byReader.has(p.reader.id) && byReader.add(p.reader.id)).slice(0, 3);
+  const ukNote = (p) => /[іїєґ]/i.test(p.entry.note || "");
+  const rankPick = (p) => ukNote(p) * 2 + (/[а-яіїєґ]/i.test(p.book.title) && !!p.book.cover);
+  const picks = social.picks(200).map((p) => ({ ...p, book: ukWork(p.book) })).filter((p) => ok(p.book)).sort((a, b) => rankPick(b) - rankPick(a)).filter((p) => !byReader.has(p.reader.id) && byReader.add(p.reader.id)).slice(0, 3);
   const pickIds = new Set(picks.map((p) => store.canonical(p.book.id)));
   const finish = works
     .filter((w) => ok(w.book) && w.s.finished >= 2 && w.s.dropped === 0 && (w.s.avg ?? 0) >= 4 && !pickIds.has(w.book.id))
@@ -1344,7 +1349,10 @@ const linkedOverview = (book) => {
 // not tied to it (Max, 2026-10-23: «дефолтний сайдбар для таких книжок», «Новинки видавництв»).
 function alsoFor(req, id) {
   const also = social.alsoForBook(id, { limit: 4 });
-  if (also.length) return { also };
+  // Nobody has liked this book yet, so what is here is matched by genre, not by its readers (usability review
+  // 2026-10-28: «Читали це, сподобалось і це» under «Брати Райти», which no one had read).
+  const liked = store.readersOf(id).some((r) => (r.entry.rating ?? 0) >= 4);
+  if (also.length) return liked ? { also } : { also, alsoTitle: "Схожі книжки" };
   const seen = new Set([store.canonical(id)]);
   const fresh = shelvesFor(req).flatMap((sh) => visible(sh).filter((it) => it.isNew && it.cover));
   const out = [];

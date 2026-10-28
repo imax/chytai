@@ -170,7 +170,10 @@ main:has(> .admin-nav) { padding-top: 24px; }
 .cover.xs { width: 40px; box-shadow: 0 6px 14px -6px rgba(var(--shadow), 0.4); }
 .cover.feed { width: 48px; box-shadow: 0 6px 14px -6px rgba(var(--shadow), 0.4); }
 .cover.card { width: 100%; }
-.cover .ph { overflow-wrap: anywhere; }
+/* The title breaks between syllables, not mid-letter, and a long one ends in «…» instead of running off the top
+   (usability review 2026-10-28: «цікавит / ь пітьма», «нка лісами»). */
+.cover .ph > span { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 7; overflow: hidden; hyphens: auto; -webkit-hyphens: auto; overflow-wrap: break-word; max-height: 100%; }
+.cover .ph.long > span { font-size: 0.82em; }
 .grid.five .ph, .grid.four .ph { font-size: 11px; }
 .cover.md .ph, .cover.sm .ph, .cover.xs .ph, .cover.feed .ph { font-size: 7px; padding: 3px; }
 .cover-link { flex: none; display: block; }

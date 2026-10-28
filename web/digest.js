@@ -337,10 +337,10 @@ class Digest {
       text.push("ЧИТАЧІ, ЗА ЯКИМИ ВИ СТЕЖИТЕ", ...d.feed.map((x) => `• ${x.book.title} — ${x.reader.name} ${did(x.entry.status)}${x.entry.rating != null ? ` ${uk(x.entry.rating)}/5` : ""}${x.entry.note ? `\n  ${x.entry.note.replace(/\s+/g, " ").slice(0, 300)}` : ""}\n  ${url(x.book.href)}`), ...(d.feedMore > 0 ? [`  …і ще ${d.feedMore}: ${site}/community`] : []), "");
     }
     if (d.news.length) {
-      html.push(label("Нове у видавництв", ["усі полиці", `${site}/publishers`]));
+      html.push(label("Нове у видавництвах", ["усі полиці", `${site}/publishers`]));
       html.push(table(d.news.map((x) => row(x.book, [esc(x.shelf.name), esc(x.book.author), esc((x.book.tags || []).find((t) => t !== "українською") || "")].filter(Boolean).join(" · ")))));
       if (d.newsMore > 0) html.push(muted(`і ще ${count(d.newsMore, "новинка", "новинки", "новинок")} на полицях, на які ви підписані`));
-      text.push("НОВЕ У ВИДАВНИЦТВ", ...d.news.map((x) => `• ${x.book.title}${x.book.author ? ` — ${x.book.author}` : ""} (${x.shelf.name})\n  ${url(x.book.href)}`), ...(d.newsMore > 0 ? [`  …і ще ${d.newsMore}: ${site}/publishers`] : []), "");
+      text.push("НОВЕ У ВИДАВНИЦТВАХ", ...d.news.map((x) => `• ${x.book.title}${x.book.author ? ` — ${x.book.author}` : ""} (${x.shelf.name})\n  ${url(x.book.href)}`), ...(d.newsMore > 0 ? [`  …і ще ${d.newsMore}: ${site}/publishers`] : []), "");
     }
     if (d.lists?.length) {
       html.push(label("Нове у збережених списках", ["списки", `${site}/lists?tab=saved`]));

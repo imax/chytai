@@ -80,7 +80,7 @@ let thumb = (src) => src;
 const setThumbs = (fn) => (thumb = fn);
 function cover(book, size = "md") {
   const hue = [...String(book.title)].reduce((a, c) => (a * 31 + c.charCodeAt(0)) % 360, 7);
-  const ph = `<span class="ph">${esc(book.title)}</span>`;
+  const ph = `<span class="ph${String(book.title).length > 40 ? " long" : ""}"><span>${esc(book.title)}</span></span>`;
   // The book page's big cover is the original, except a PNG: that may be a product shot on a transparent
   // field, so it gets the trimmed copy too (thumbs.js; Max, 2026-10-28).
   const src = SHOWN[size] ? thumb(book.cover, SHOWN[size]) : /\.png(\?|$)/i.test(book.cover || "") ? thumb(book.cover, 240) : book.cover;
@@ -1632,7 +1632,12 @@ function searchResults({ q, user, hits = [], authors = [], readers = [], shelves
   if (!q.trim()) return "";
   const n = hits.length + authors.length + readers.length + shelves.length;
   const addLink = user ? `<a class="text-link" href="/add?text=${attr(encodeURIComponent(q))}">Додати книжку, якої ще немає на Chytai</a>` : "";
-  if (!n) return `<p class="found">Нічого не знайшлося за «${esc(q)}». ${addLink}</p>`;
+  // Not a dead end (usability review 2026-10-28: «щось легке на вихідні» found nothing and left nothing to do):
+  // the home page's shelves, for those who search for a mood rather than a title.
+  if (!n)
+    return `<p class="found">Нічого не знайшлося за «${esc(q)}». Шукайте назву, автора або жанр. ${addLink}</p>
+<p class="found muted">Або почніть з полиць:</p>
+<nav class="read-chips">${[["/", "Що почитати"], ["/?f=short", "Коротке"], ["/?f=ua", "Українські автори"], ["/?f=fiction", "Художнє"], ["/?f=nonfiction", "Нон-фікшн"]].map(([h, t]) => `<a class="chip" href="${h}">${t}</a>`).join("")}</nav>`;
   return `<p class="found">${count(n, "збіг", "збіги", "збігів")}${tag ? ` · жанр «${GENRES.includes(tag) ? `<a class="text-link" href="/genre/${attr(genreSlug(tag))}">${esc(tag)}</a>` : esc(tag)}»` : ""}</p>
 <div class="split">
   <div>
@@ -2386,7 +2391,12 @@ ${sent.length ? `<section class="form"><h2>Уже надіслані</h2>${sent.
 }
 
 function messagePage({ title, text, user }) {
-  return layout({ title, body: pageHead({ title: esc(title), sub: esc(text) }), user, noindex: true });
+  // «Немає такої книжки» (or author, list…) leads on: a search and the home page (usability review 2026-10-28).
+  const gone = /^Немає так/.test(title)
+    ? `<form class="search-box big query" action="/search" role="search"><input type="search" name="q" placeholder="назва, автор, жанр або видавництво" aria-label="Пошук" autocomplete="off"><span class="enter">Enter ↵</span></form>
+<p class="found">Або <a class="text-link" href="/">що почитати</a>.</p>`
+    : "";
+  return layout({ title, body: pageHead({ title: esc(title), sub: esc(text) }) + gone, user, noindex: true });
 }
 
 // ---- «Списки» (lists.js): readers' own public lists of books ----
