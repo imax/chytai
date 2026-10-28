@@ -34,6 +34,7 @@
 }
 * { box-sizing: border-box; }
 html, body { margin: 0; background: var(--paper); color: var(--ink); }
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
 body { font: 15px/1.5 var(--sans); -webkit-font-smoothing: antialiased; }
 a { color: inherit; text-decoration: none; transition: color 0.15s; }
 a:hover { color: var(--accent); }
@@ -682,6 +683,10 @@ dialog .form { margin-top: 18px; }
   .admin .stats, .admin .stats.four { grid-template-columns: repeat(2, 1fr); }
   .admin .stats > :first-child:nth-last-child(3) { grid-column: span 2; }
   .admin .stat b { font-size: 32px; }
+  /* Phone (Max, 2026-10-28): small type, the first column wraps so the numbers stay on screen. */
+  .admin table { font-size: 13px; }
+  .admin th, .admin td { padding: 7px 8px 7px 0; }
+  .admin tbody th { white-space: normal; overflow-wrap: anywhere; min-width: 7em; }
 }
 
 /* /welcome, after sign-up (design 4a) */
