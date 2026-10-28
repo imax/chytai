@@ -960,13 +960,13 @@ aside .side-lists + .label, aside p + .label, aside dialog + .label { margin-top
   .author-grid h3 { font-size: 14px; }
 }
 
-/* «Що почитати» (/new): filters, readers' advice, genre tiles. */
+/* The homepage «Що почитати»: filters, readers' advice, genre tiles. */
 .read-chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 18px 0 36px; }
 .chip { font-size: 14px; padding: 6px 14px; border: 1px solid var(--rule); border-radius: 999px; color: var(--ink); }
 .chip:hover { border-color: var(--accent); color: var(--accent); }
 .chip.on { background: var(--ink); border-color: var(--ink); color: var(--paper); }
 .hero .read-chips { margin-bottom: 8px; }
-.hero + .block { margin-top: 48px; }
+.hero ~ #browse > .block:first-child { margin-top: 48px; }
 .advices { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 32px; }
 .advice { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 18px; align-items: start; }
 .advice .cover.card { width: 96px; }

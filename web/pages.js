@@ -91,8 +91,6 @@ const label = (text, aside = "") => `<div class="label"><h2>${text}</h2>${aside 
 // The logo is the way home (Max, 2026-10-20: «для чого Відкрити в навбар?»).
 const NAV = [
   ["/community", "Читачі", (p) => p === "/community" || p === "/@"],
-  // «Популярне» took the publishers' place (Max, 2026-10-22); they are in the footer and on the homepage.
-  ["/popular", "Популярне", (p) => p === "/popular"],
 ];
 
 // `wide`: the image is a wide picture (a list's), shown big in a shared link.
@@ -345,62 +343,6 @@ const pageHead = ({ crumbs = "", kicker = "", title, sub = "", action = "", lead
 // ---- home (/) ----
 
 // «Що почитати?»: the search, a random well rated book, the feed, recommendations, new books.
-function homePage({ user, picks, feed, recs, showcase, fetched, libraries = [], starts = [], editorials = [] }) {
-  const pick = (p, i) => `<article class="pick${i ? " hidden" : ""}">
-  <a class="cover-link" href="${attr(p.book.href)}">${cover(p.book, "xl")}</a>
-  <div class="pick-body">
-    <h3><a href="${attr(p.book.href)}">${esc(p.book.title)}</a></h3>
-    ${p.book.author ? `<p class="by">${authorLinks(p.book.author)}</p>` : ""}
-    <p class="quote">${noteOf(p.entry, p.book.id)}</p>
-    <p class="said">— <a href="${attr(p.reader.href)}"><b>${esc(p.reader.name)}</b></a>, ${stars(p.entry.rating)}${p.entry.year ? ` · ${p.entry.year}` : ""}</p>
-    <div class="acts">${wantButton(p.book, user, { size: "", primary: true })}${picks.length > 1 ? `<button type="button" class="text-link" data-next-pick>Ще одну →</button>` : ""}</div>
-  </div>
-</article>`;
-  const seedTabs = recs.length > 1 ? `<span class="tabs">${recs.map((r, i) => `<button type="button" class="tab${i ? "" : " on"}" data-seed="${i}">${esc(r.name || r.seed.title)}</button>`).join("")}</span>` : "";
-  const recTitle = (r) => (user && r.own ? "Схожі на те, що тобі сподобалось" : `Якщо сподобалась «${esc(r.seed.title)}»`);
-  const body = `
-<section class="hero">
-  <h1>Що почитати?</h1>
-  <form class="search-box big" action="/search" role="search"><input type="search" name="q" placeholder="назва, автор, жанр або видавництво" aria-label="Пошук" autocomplete="off"><span class="enter">Enter ↵</span></form>
-  <p class="starts"><span>або почни з</span> ${(starts.length >= 3 ? starts : ["фантастика", "Madeline Miller", "війна", "біографії", "українською"].map((s) => ({ text: s, href: `/search?q=${encodeURIComponent(s)}` }))).map((s) => `<a href="${attr(s.href)}">${esc(s.text)}</a>`).join(" ")}</p>
-</section>
-<div id="live"></div>
-<div id="browse">
-<div class="split home-top">
-  ${picks.length ? `<section class="picks">
-    ${label("Книжка навмання", "оцінка 4,5 і вище")}
-    ${picks.map(pick).join("")}
-  </section>` : "<div></div>"}
-  <section>
-    ${label("Зараз читають", `<a href="/community">усі читачі</a>`)}
-    ${feedList(feed)}
-  </section>
-</div>
-${editorials.length ? `<section class="editorials">
-  ${label("Добірки Chytai", `<a href="/lists">усі списки</a>`)}
-  <div class="lgrid">${editorials.map(listCard).join("")}</div>
-</section>` : ""}
-${recs.length ? `<section class="recs">
-  ${recs.map((r, i) => `<div class="rec${i ? " hidden" : ""}" data-seed="${i}">${label(recTitle(r), seedTabs)}<div class="grid six">${r.books.map((x) => card(x.book, { avg: x.avg })).join("")}</div></div>`).join("")}
-</section>` : ""}
-${showcase.length ? `<section class="showcase">
-  ${label("Вітрина · нове в українських видавництвах", fetched ? `оновлено ${esc(fetched)}` : "")}
-  <div class="shop-cols">${showcase.map((s) => showcaseColumn(s, user)).join("")}</div>
-  <p class="end-note"><a class="text-link" href="/publishers">Усі видавництва →</a></p>
-</section>` : ""}
-${librariesBlock(libraries)}
-</div>`;
-  return layout({ title: "", body, user, path: "/", home: true, canonical: "/", description: "Що почитати далі: книжки з оцінками й нотатками читачів і новинки українських видавництв.", jsonld: { "@context": "https://schema.org", "@type": "WebSite", name: "Chytai", url: ORIGIN, image: `${ORIGIN}/icon.png`, inLanguage: "uk", potentialAction: { "@type": "SearchAction", target: { "@type": "EntryPoint", urlTemplate: `${ORIGIN}/search?q={q}` }, "query-input": "required name=q" } } });
-}
-
-function showcaseColumn({ shelf, items, fresh, total, subscribed }, user) {
-  return `<div class="shop">
-  <div class="shop-head"><h3><a href="/publishers/${attr(shelf.id)}">${esc(shelf.name)}</a></h3>${subscribeLink(shelf.id, subscribed, user)}</div>
-  <p class="sub">${esc(shelf.tagline)} · ${books(total)}${fresh ? ` · ${fresh} ${plural(fresh, "нова", "нові", "нових")}` : ""}</p>
-  <div class="grid five">${items.map((it) => `<a class="tiny" href="${attr(it.href)}">${cover(it, "card")}<b>${esc(it.title)}</b><span class="t-by">${esc(byline(it.author))}</span></a>`).join("")}</div>
-</div>`;
-}
-
 // Libraries with open catalogs: each book page says whether a copy is on their shelves now.
 function librariesBlock(libraries) {
   if (!libraries.length) return "";
@@ -563,14 +505,14 @@ const adminNav = () => `<nav class="admin-nav">${ADMIN_TABS.map(([name, links, m
 // For guests, at the bottom of the pages people land on from a search engine: what the site is and a way in
 // (Max, 2026-10-27, variant B of three; text and links his). Not on the home page, search, sign-in or settings.
 // On book pages the «Хочу прочитати» block itself is not shown to guests.
-const JOIN_PATHS = new Set(["/book", "/author", "/genre", "/publishers", "/@", "/lists", "/popular", "/community"]);
+const JOIN_PATHS = new Set(["/book", "/author", "/genre", "/publishers", "/@", "/lists", "/community"]);
 function joinBand(back) {
   return `<section class="join-band">
   <div>
     <p class="kicker">Chytai</p>
     <p class="join-title">Проєкт для тих, хто любить книжки</p>
     <p class="join-text">Спільнота людей, каталоги українських видавництв, пошук і рекомендації, читалка з AI-explainer та перекладом.</p>
-    <p class="join-links"><a href="/publishers">📚 Видавництва</a><a href="/popular">⭐ Популярне</a><a href="/community">👥 Спільнота</a><a href="/">🔍 Пошук</a><a href="https://app.chytai.org.ua">📖 Читалка</a></p>
+    <p class="join-links"><a href="/publishers">📚 Видавництва</a><a href="/community">👥 Спільнота</a><a href="/">🔍 Пошук</a><a href="https://app.chytai.org.ua">📖 Читалка</a></p>
   </div>
   <a class="btn primary" rel="nofollow" href="${attr(back ? `/login?next=${encodeURIComponent(back)}` : "/login")}">Доєднатися</a>
 </section>`;
@@ -1315,11 +1257,11 @@ function yearHead(year, rows) {
   return `<h2 class="year" data-year="${year ?? ""}">${year || "Без дати"} <span>${books(n)}</span></h2>`;
 }
 
-// ---- «Що почитати» (/new): a prototype (Max, 2026-10-28) ----
-// `variant` "home": the same page as the homepage, with the big search on top and «Зараз читають» beside the advice.
-function readPage({ user, f, filters, picks, finish, ua, short, free, wanted, genres, editorials, forYou, variant, feed = [] }) {
-  const home = variant === "home";
-  const q = (k) => `/new?${new URLSearchParams({ ...(k ? { f: k } : {}), ...(variant ? { v: variant } : {}) })}`;
+// ---- the homepage «Що почитати» (Max, 2026-10-28: tried at /new, then «робимо її головною») ----
+// Shelves by what a reader is after, not by counters; the chips (?f=) narrow every shelf at once.
+// #live and #browse: search as you type replaces the shelves (app.js).
+function readPage({ user, f, filters, picks, finish, ua, short, free, wanted, genres, editorials, forYou, fresh }) {
+  const q = (k) => (k ? `/?f=${k}` : "/");
   const chips = `<nav class="read-chips">${[["", "Усе"], ...Object.entries(filters).map(([k, [n]]) => [k, n])].map(([k, n]) => (k === f ? `<span class="chip on">${n}</span>` : `<a class="chip" href="${attr(q(k))}">${n}</a>`)).join("")}</nav>`;
   const advice = (p) => `<article class="advice">
   <a class="cover-link" href="${attr(p.book.href)}">${cover(p.book, "card")}</a>
@@ -1331,52 +1273,26 @@ function readPage({ user, f, filters, picks, finish, ua, short, free, wanted, ge
   </div>
 </article>`;
   const row = (title, aside, items, extra) => (items.length ? `<section class="block read-row">${label(title, aside)}<div class="grid six">${items.map((x) => card(x.book || x, { avg: x.s?.avg ?? x.avg, extra: extra ? `<p class="meta pop-n">${extra(x)}</p>` : "" })).join("")}</div></section>` : "");
-  const top = home
-    ? `<section class="hero">
+  const body = `
+<section class="hero">
   <h1>Що почитати?</h1>
   <form class="search-box big" action="/search" role="search"><input type="search" name="q" placeholder="назва, автор, жанр або видавництво" aria-label="Пошук" autocomplete="off"><span class="enter">Enter ↵</span></form>
   ${chips}
-</section>`
-    : `${pageHead({ title: "Що почитати" })}${chips}`;
-  const adviceBlock = picks.length ? `<section class="block">${label("Читачі радять", "оцінка 4,5+ і пару слів чому")}<div class="advices">${picks.map(advice).join("")}</div></section>` : "";
-  const body = `
-${top}
-${adviceBlock}
+</section>
+<div id="live"></div>
+<div id="browse">
+${picks.length ? `<section class="block">${label("Читачі радять", "оцінка 4,5+ і пару слів чому")}<div class="advices">${picks.map(advice).join("")}</div></section>` : ""}
 ${row("Для тебе", "схожі на те, що тобі сподобалось", forYou)}
 ${!f && editorials.length ? `<section class="block editorials">${label("Добірки Chytai", `<a href="/lists">усі списки</a>`)}<div class="lgrid">${editorials.map(listCard).join("")}</div></section>` : ""}
 ${row("Дочитують до кінця", "ніхто не покинув", finish, (w) => `дочитали ${w.s.finished}`)}
 ${row("Українські автори", "", ua)}
 ${row("Коротке", "до 250 сторінок", short, (w) => `${w.book.pages} с.`)}
-${row("Найбільше хочуть прочитати", `<a href="/popular">популярне</a>`, wanted, (x) => `${x.n} ${plural(x.n, "хоче", "хочуть", "хочуть")}`)}
+${row("Найбільше хочуть прочитати", "", wanted, (x) => `${x.n} ${plural(x.n, "хоче", "хочуть", "хочуть")}`)}
 ${row("Безкоштовно", "класика в Читалці", free.map((b) => ({ book: b })))}
-${!f && genres.length ? `<section class="block">${label("Жанри")}<div class="gtiles">${genres.map((x) => `<a class="gtile" href="/genre/${attr(genreSlug(x.g))}">${x.top ? cover(x.top, "xs") : ""}<span><b>${esc(cap(x.g))}</b><span class="muted">${books(x.n)}</span></span></a>`).join("")}</div></section>` : ""}`;
-  return layout({ title: home ? "" : "Що почитати", body, user, path: home ? "/" : "/new", home, noindex: true, description: "" });
-}
-
-// ---- «Популярне» (/popular) ----
-
-// What Chytai readers read, want and rate most (Max, 2026-10-22). Readers' numbers on the cards, no shops.
-function popularPage({ user, pop }) {
-  const n = (k, x) => {
-    if (k === "reading") return `читають ${x.n}`;
-    if (k === "want") return `${x.n} ${plural(x.n, "хоче", "хочуть", "хочуть")} прочитати`;
-    if (k === "month") return `${count(x.n, "читач", "читачі", "читачів")} за місяць`;
-    return count(x.rated, "оцінка", "оцінки", "оцінок");
-  };
-  const sections = [
-    ["reading", "Зараз читають", "у статусі «Читаю»"],
-    ["want", "Найбільше хочуть прочитати", "«Хочу прочитати»"],
-    ["top", "Найвище оцінені", "середня оцінка читачів"],
-    ["month", "Цього місяця", "додали, оцінили чи почали за 30 днів"],
-  ].filter(([k]) => pop[k].length);
-  const body = `
-${pageHead({ kicker: "Читачі Chytai", title: "Популярне", sub: "Що читають, хочуть прочитати й найвище оцінюють читачі Chytai." })}
-${sections.map(([k, title, aside]) => `<section class="block pop">
-  ${label(title, esc(aside))}
-  <div class="grid six">${pop[k].map((x) => card(x.book, { avg: x.avg, extra: `<p class="meta pop-n">${n(k, x)}</p>` })).join("")}</div>
-</section>`).join("")}
-${sections.length ? "" : `<p class="muted">Поки замало читачів, щоб щось порахувати.</p>`}`;
-  return layout({ title: "Популярне", body, user, path: "/popular", canonical: "/popular", description: "Що читають, хочуть прочитати й найвище оцінюють читачі Chytai." });
+${row("Нове у видавництвах", `<a href="/publishers">усі видавництва</a>`, fresh, (x) => esc(x.shelf.name))}
+${!f && genres.length ? `<section class="block">${label("Жанри")}<div class="gtiles">${genres.map((x) => `<a class="gtile" href="/genre/${attr(genreSlug(x.g))}">${x.top ? cover(x.top, "xs") : ""}<span><b>${esc(cap(x.g))}</b><span class="muted">${books(x.n)}</span></span></a>`).join("")}</div></section>` : ""}
+</div>`;
+  return layout({ title: "", body, user, path: "/", home: true, canonical: "/", description: "Що почитати далі: книжки з оцінками й нотатками читачів і новинки українських видавництв.", jsonld: { "@context": "https://schema.org", "@type": "WebSite", name: "Chytai", url: ORIGIN, image: `${ORIGIN}/icon.png`, inLanguage: "uk", potentialAction: { "@type": "SearchAction", target: { "@type": "EntryPoint", urlTemplate: `${ORIGIN}/search?q={q}` }, "query-input": "required name=q" } } });
 }
 
 // ---- /admin/genres-trial: our genres next to Haiku's for 200 books (genretrial.js) ----
@@ -2675,7 +2591,7 @@ module.exports = {
   decidedList,
   welcomePage,
   addPage, addReviewPage, addFindResults, addPageResult, ukFindPage,
-  layout, homePage, bookPage, bookEditPage, russianPage, editPage, libraryPage, readersPage, popularPage, readPage, genrePage, genreTrialPage, langTrialPage, origTrialPage, overviewTrialPage, ukTrialPage, catalogAdminPage, aiPassPage, publishersPage, publisherPage, searchPage, searchResults, authorPage,
+  layout, bookPage, bookEditPage, russianPage, editPage, libraryPage, readersPage, readPage, genrePage, genreTrialPage, langTrialPage, origTrialPage, overviewTrialPage, ukTrialPage, catalogAdminPage, aiPassPage, publishersPage, publisherPage, searchPage, searchResults, authorPage,
   loginPage, codePage, signupPage, settingsPage, privacyPage, updatesPage, drawPage, DRAW_PATH, messagePage, digestPage, followMailPage, wantMailPage, importPage, importPreviewPage, importDonePage,
   GENRES, esc, byline, STATUS, COPY, inline, isUk, setTitleLinks, setAuthorLinks, setThumbs, setStats, setReadersWithNote,
 };

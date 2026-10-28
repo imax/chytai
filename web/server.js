@@ -820,42 +820,7 @@ function readerList() {
     });
 }
 
-app.get("/", (req, res) => {
-  // Search results lived at /?q= before they got their own address.
-  if (req.query.q) return res.redirect(301, `/search?${new URLSearchParams({ q: String(req.query.q) })}`);
-  const seeds = social.seeds(req.user?.id);
-  const own = req.user ? new Map(Object.entries(store.entriesOf(req.user.id))) : new Set();
-  const recs = seeds.map((seed) => ({ seed, name: store.seriesOf(seed.id)?.name || seed.title, own: own.has(seed.id), books: social.similar([seed.id], { limit: 6, skip: own, own }) })).filter((r) => r.books.length);
-  // The two publishers with the most new books, subscriptions first.
-  const showcase = shelvesFor(req)
-    .map((s) => shelfSummary(req, s, 5))
-    .filter((s) => s.items.length)
-    .sort((a, b) => b.subscribed - a.subscribed || b.fresh - a.fresh)
-    .slice(0, 2);
-  res.send(pages.homePage({ editorials: lists.editorials().slice(0, 3).map(withCovers), user: req.user, starts: social.starts(), picks: social.picks(), feed: feedFor(req, 6), recs, showcase, fetched: day(store.shelvesRefreshedAt), libraries: librariesFor(req) }));
-});
-
-// «Зараз читають» on the homepage: the readers one follows first, then everyone else, at most two rows
-// a reader, so one person adding a dozen books doesn't fill it and the newest of others still shows
-// (Max, 2026-10-20: the homepage showed a run of one reader while the feed had someone newer). Those
-// followed take at most half of it.
 const followed = (req) => new Set(auth.following(req.user?.id));
-function feedFor(req, limit) {
-  const mine = followed(req);
-  const first = mine.size ? social.feed({ limit: Math.ceil(limit / 2), readers: mine, perReader: 2 }) : [];
-  const per = new Map();
-  for (const x of first) per.set(x.reader.id, (per.get(x.reader.id) || 0) + 1);
-  const seen = new Set(first.map((x) => `${x.reader.id}:${x.id}`));
-  const out = [...first];
-  for (const x of social.feed({ limit: limit * 4, perReader: 2 })) {
-    if (out.length >= limit) break;
-    if (seen.has(`${x.reader.id}:${x.id}`) || (per.get(x.reader.id) || 0) >= 2) continue;
-    out.push(x);
-    per.set(x.reader.id, (per.get(x.reader.id) || 0) + 1);
-  }
-  return out;
-}
-
 app.get("/readers", (req, res) => res.redirect(301, "/community"));
 app.get("/community", (req, res) => {
   const readers = readerList();
@@ -1109,7 +1074,6 @@ app.post("/api/series-volume/:id", signed, (req, res) => {
   res.redirect(store.href(id));
 });
 
-app.get("/popular", (req, res) => res.send(pages.popularPage({ user: req.user, pop: social.popular() })));
 // A genre's books (/genre/biohrafii, the label on a book page): what readers have and rate first, then the
 // rest with Ukrainian titles and covers ahead. Kept ten minutes per genre: it looks at every book of it.
 const genreCache = new Map();
@@ -1147,7 +1111,7 @@ app.get("/genre/:slug", (req, res) => {
   res.send(pages.genrePage({ part: restPart(req, res), genre: g, rows: shown, top, feed: social.feed({ limit: 6, books: works, notes: true }), others, user: req.user }));
 });
 
-// ---- «Що почитати» (/new): a prototype (Max, 2026-10-28), not in the menu yet ----
+// ---- The homepage «Що почитати» (Max, 2026-10-28: tried at /new, then «робимо її головною»; it took «Популярне»'s place) ----
 // Shelves by what a reader is after, not by counters: readers' advice with a note, books people finish,
 // Ukrainian authors, short ones, free ones, genres. A filter (?f=) narrows every shelf at once.
 const READ_FILTERS = {
@@ -1184,6 +1148,9 @@ function readPool() {
   readCache = { at: Date.now(), out };
   return out;
 }
+// Kept warm, so no visitor of the homepage waits for the pass over every reader's entries.
+if (bg.ROLE !== "jobs") setTimeout(() => (readGenres(), social.popular()), 20 * 1000).unref();
+if (bg.ROLE !== "jobs") setInterval(() => ((readCache = null), (readGenresAt = null), readGenres(), social.popular()), 9 * 60 * 1000).unref();
 // Genre tiles look at every book of each genre: kept ten minutes.
 let readGenresAt = null;
 const readGenres = () => {
@@ -1194,7 +1161,11 @@ const readGenres = () => {
   readGenresAt = { at: Date.now(), out };
   return out;
 };
-app.get("/new", (req, res) => {
+app.get("/new", (req, res) => res.redirect(301, req.query.f ? `/?${new URLSearchParams({ f: String(req.query.f) })}` : "/"));
+app.get("/popular", (req, res) => res.redirect(301, "/")); // «Популярне» became the homepage (Max, 2026-10-28)
+app.get("/", (req, res) => {
+  // Search results lived at /?q= before they got their own address.
+  if (req.query.q) return res.redirect(301, `/search?${new URLSearchParams({ q: String(req.query.q) })}`);
   const f = READ_FILTERS[req.query.f] ? req.query.f : "";
   const ok = (b) => !f || READ_FILTERS[f][1](b);
   const { works } = readPool();
@@ -1219,7 +1190,17 @@ app.get("/new", (req, res) => {
   const seeds = req.user ? social.seeds(req.user.id) : [];
   const own = req.user ? new Map(Object.entries(store.entriesOf(req.user.id))) : new Set();
   const forYou = req.user && seeds.length ? social.similar(seeds.map((s) => s.id), { limit: 6, skip: own, own }).filter((x) => ok(x.book)) : [];
-  res.send(pages.readPage({ user: req.user, f, filters: READ_FILTERS, picks, finish, ua, short, free, wanted, genres, editorials, forYou, variant: req.query.v || "" }));
+  // New in the publishers: one fresh book from each of six shelves, the ones the reader follows first.
+  const fresh = f
+    ? []
+    : shelvesFor(req)
+        .filter((sh) => sh.kind !== "free")
+        .map((sh) => ({ sh, it: visible(sh).find((it) => it.isNew && it.cover && !isRussian(it)), subscribed: store.subscribed(req.user?.id, sh.id) }))
+        .filter((x) => x.it)
+        .sort((a, b) => b.subscribed - a.subscribed || visible(b.sh).filter((it) => it.isNew).length - visible(a.sh).filter((it) => it.isNew).length)
+        .slice(0, 6)
+        .map((x) => ({ book: x.it, shelf: x.sh }));
+  res.send(pages.readPage({ user: req.user, f, filters: READ_FILTERS, picks, finish, ua, short, free, wanted, genres, editorials, forYou, fresh }));
 });
 
 app.get("/publishers", (req, res) => {
@@ -1309,7 +1290,7 @@ app.get("/sitemap.xml", (req, res) => {
   if (Date.now() - sitemap.at > 3600 * 1000) {
     const t0 = Date.now();
     const origin = `https://${DOMAIN || req.get("host")}`;
-    const urls = ["/", "/community", "/popular", "/publishers", "/updates", "/privacy"];
+    const urls = ["/", "/community", "/publishers", "/updates", "/privacy"];
     for (const shelf of store.shelves) if (!shelf.draft && !shelf.joinOnly) urls.push(`/publishers/${encodeURIComponent(shelf.id)}`);
     const ru = new Set();
     for (const w of authors.allWorks(store)) {
