@@ -626,12 +626,18 @@
       // By a link to one book: whose it is and until when.
       if (settings.share) {
         const until = new Date(settings.share.until).toLocaleDateString("uk-UA", { day: "numeric", month: "long" });
+        // Once per link: on every visit it only got in the way of the book.
+        const seen = `share-welcome:${settings.share.from}:${settings.share.until}`;
+        try {
+          if (localStorage.getItem(seen)) return;
+          localStorage.setItem(seen, "1");
+        } catch {}
         return showNotice(`${settings.share.from} дає вам почитати цю книжку. Посилання діє до ${until}, на цьому пристрої. Виділіть слово чи речення, і Claude пояснить (до ${limit} разів на день).`, false);
       }
       showNotice(
         left
           ? `Демо-режим: одна книжка і до ${limit} пояснень на день (залишилось ${left}). Виділіть слово чи речення, щоб побачити, як це працює.`
-          : "Демо-режим: денний ліміт пояснень уже використано. Книжку можна читати далі, а повний доступ дає вхід з паролем.",
+          : "Демо-режим: пояснення на сьогодні закінчились. Книжку можна читати далі.",
         false,
       );
     }, 1200);

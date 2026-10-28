@@ -458,6 +458,7 @@ $("#btn-back").onclick = () => {
 // While a book is on screen the toolbar is hidden; a tap in the middle of the page shows it.
 
 function syncReading() {
+  if (document.body.classList.contains("library-open")) hideSelToolbar(); // the bar has no book to act on there
   const reading = PHONE.matches && !!(rendition || pdfView) && !document.body.classList.contains("library-open");
   if (reading === document.body.classList.contains("reading")) return;
   document.body.classList.toggle("reading", reading);
@@ -752,6 +753,9 @@ function showSelToolbar(range, frame) {
   const rect = range.getBoundingClientRect();
   const bar = $("#sel-toolbar");
   bar.classList.remove("hidden");
+  // A notice at the bottom (a guest's welcome, «Додано книжку») would cover the bar on a phone; it has
+  // been read by now. An upload still running keeps its progress.
+  if (!$("#notice").classList.contains("busy")) $("#notice").classList.add("hidden");
   // Phone (Safari and the app alike): the bar sits at the bottom of the screen (CSS), clear of
   // the system Copy / Translate menu, which the app cannot reliably hide either.
   // Desktop: above the selection, or below when there is no room.
