@@ -2020,6 +2020,22 @@ app.post("/api/speed", (req, res) => {
   res.status(204).end();
 });
 app.get("/admin/jobs", owner, (req, res) => res.send(jobsPage({ user: req.user, layout: pages.layout, o: bg.overview(store.db), queue: newBooks.overview(), book: (id) => store.book(id), href: (id) => store.href(id), digest: JSON.parse(store.db.get("digest:last") || "null"), wantMail: JSON.parse(store.db.get("wantmail:last") || "null") })));
+// Why a work is not found (owner, plain JSON): its canonical id, whether it is a work, its index row, what search returns.
+app.get("/admin/debug/search", owner, (req, res) => {
+  const id = store.slugs.get(String(req.query.id || "")) || String(req.query.id || "");
+  const c = store.canonical(id);
+  const b = store.book(c);
+  const { isRussian } = require("./store");
+  res.json({
+    id, canonical: c, canonicalOfCanonical: store.canonical(c), isWork: store.workIds().has(c), lib: !!store.lib.books[c], shelf: !!store.shelfItems.get(c), hidden: store.hidden.has(c),
+    book: b && { id: b.id, title: b.title, author: b.author, language: b.language, russian: isRussian(b) },
+    row: store.db.prepare("SELECT id, title, author FROM search WHERE id = ?").all(c),
+    rows: store.db.prepare("SELECT count(*) n FROM search").get(),
+    aliasesTo: [...store.aliases].filter(([, v]) => v === c).map(([k]) => k).slice(0, 20),
+    search: req.query.q ? store.search(String(req.query.q), { alias: false }).slice(0, 5).map((h) => h.book.id) : null,
+    raw: req.query.q ? store.db.prepare("SELECT id FROM search WHERE search MATCH ? LIMIT 10").all(`"${String(req.query.q).toLowerCase()}"*`) : null,
+  });
+});
 app.get("/admin/speed", owner, (req, res) => res.send(speedPage({ user: req.user, days: speed.days(), bots: speed.bots(), layout: pages.layout })));
 app.get("/admin/traffic", owner, (req, res) => res.send(adminPage({ user: req.user, stats: admin.stats(), gsc: gsc.data(), gscOn: gsc.configured(), layout: pages.layout, page: "traffic" })));
 app.get("/admin/stats", owner, (req, res) => res.redirect(301, "/admin/traffic"));
