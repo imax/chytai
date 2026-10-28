@@ -2158,6 +2158,12 @@ async function seedEditorials() {
     const had = e.source && store.db.get(done) && lists.bySlug(OWNER_ID, slugify(e.title).slice(0, 60).replace(/-+$/, ""));
     if (had && !had.source && !store.db.get(`${done}:source`)) store.db.set(`${done}:source`, "1"), lists.edit(had.id, { source: e.source });
     if (store.db.get(done) || !auth.reader(OWNER_ID)) continue;
+    // `all`: wait until every book is in the catalog (the free shelf's new books come with the next refresh).
+    const missing = e.all ? e.books.filter((b) => !store.resolve(b.id)) : [];
+    if (missing.length) {
+      console.log(`editorial ${e.key}: waiting for ${missing.length} books`);
+      continue;
+    }
     store.db.set(done, new Date().toISOString());
     const ids = [];
     for (const b of e.books) {
@@ -2182,7 +2188,11 @@ async function seedEditorials() {
     console.log(`editorial ${e.key}: ${l.href}, ${ids.length} books`);
   }
 }
-if (bg.ROLE !== "jobs") setTimeout(() => seedEditorials().catch((err) => console.log(`editorial seed: ${err.message}`)), 5000);
+if (bg.ROLE !== "jobs") {
+  const seed = () => seedEditorials().catch((err) => console.log(`editorial seed: ${err.message}`));
+  setTimeout(seed, 5000);
+  setInterval(seed, 3600 * 1000); // again for a list still waiting for its books; the rest are done at once
+}
 // «Додати» after «Українською: …, у каталогах поки немає» for a signed-in reader (pages.ukLine).
 // Also a foreign book Wikidata knows no translation of (Max, 2026-10-23: «тут немає перекладу але він є», Feynman):
 // a Latin title, no Ukrainian edition or translation linked.

@@ -387,5 +387,113 @@
         "why": "Антологія Юрія Лавріненка 1959 року, яка дала поколінню назву"
       }
     ]
+  },
+  {
+    "key": "kids-free-2026",
+    "title": "Дитячі книжки, які можна читати безкоштовно",
+    "note": "Українська класика для дітей, яка вже в суспільному надбанні. Кожну можна відкрити в Читалці або завантажити, без реєстрації.\n\nСпочатку казки для малюків, далі оповідання і повісті для старших. У кінці кілька англійських класичних книжок в оригіналі.",
+    "books": [
+      {
+        "id": "chytai-free-narodni-kazky-rudchenko",
+        "why": "Народні казки в записі XIX століття. Для читання вголос"
+      },
+      {
+        "id": "chytai-free-franko-ripka",
+        "why": "«Стара казка, по-новому розповів Іван Франко»"
+      },
+      {
+        "id": "chytai-free-franko-farbovanyi-lys",
+        "why": "Найвідоміша Франкова казка"
+      },
+      {
+        "id": "chytai-free-franko-lys-mykyta",
+        "why": "Пригоди хитрого лиса у віршах"
+      },
+      {
+        "id": "chytai-free-franko-abu-kasymovi-kaptsi",
+        "why": "Східна казка про скупого купця і капці, яких не позбутися"
+      },
+      {
+        "id": "chytai-free-hlibov-baiky",
+        "why": "Коротко, смішно і з мораллю"
+      },
+      {
+        "id": "chytai-free-ukrainka-bida-navchyt",
+        "why": "Казка Лесі Українки про горобчика, якого навчила біда"
+      },
+      {
+        "id": "chytai-free-korolivstaryi-khukha-mokhovynka",
+        "why": "Казка про маленьку лісову Хуху"
+      },
+      {
+        "id": "chytai-free-vasylchenko-charivna-koza",
+        "why": "Казка Степана Васильченка"
+      },
+      {
+        "id": "chytai-free-kotsiubynskyi-yalynka",
+        "why": "Різдвяне оповідання про хлопчика, який загубився в лісі"
+      },
+      {
+        "id": "chytai-free-kotsiubynskyi-kharytia",
+        "why": "Про дівчинку, яка сама жне поле за хвору маму"
+      },
+      {
+        "id": "chytai-free-kotsiubynskyi-malenkyi-hrishnyk",
+        "why": "Коцюбинський про хлопця з міської вулиці"
+      },
+      {
+        "id": "chytai-free-vynnychenko-fedko-khalamydnyk",
+        "why": "Найвідоміший шибеник української літератури"
+      },
+      {
+        "id": "chytai-free-vynnychenko-kumediia-z-kostem",
+        "why": "Винниченко про дитинство"
+      },
+      {
+        "id": "chytai-free-vynnychenko-babusyn-podarunok",
+        "why": "Винниченко про дитинство"
+      },
+      {
+        "id": "chytai-free-franko-hrytseva-shkilna-nauka",
+        "why": "Як учили в сільській школі за Франкових часів"
+      },
+      {
+        "id": "chytai-free-hrinchenko-olesia",
+        "why": "Про дівчинку, яка завела ординців у болото"
+      },
+      {
+        "id": "chytai-free-oles-kniazha-ukraina",
+        "why": "Історія Київської держави віршами"
+      },
+      {
+        "id": "chytai-free-kashchenko-nad-kodatskym-porohom",
+        "why": "Козацька пригодницька повість"
+      },
+      {
+        "id": "chytai-free-carroll-alice",
+        "why": "Англійською, в оригіналі: для тих, хто вчить мову"
+      },
+      {
+        "id": "chytai-free-barrie-peter-pan",
+        "why": "Англійською, в оригіналі"
+      },
+      {
+        "id": "chytai-free-baum-wizard-of-oz",
+        "why": "Англійською, в оригіналі"
+      },
+      {
+        "id": "chytai-free-burnett-secret-garden",
+        "why": "Англійською, в оригіналі"
+      },
+      {
+        "id": "chytai-free-stevenson-treasure-island",
+        "why": "Англійською, в оригіналі"
+      },
+      {
+        "id": "chytai-free-montgomery-anne",
+        "why": "Англійською, в оригіналі"
+      }
+    ],
+    "all": true
   }
 ]
