@@ -2507,7 +2507,9 @@ function listPage({ list, items, user, own = false, owner = false, saved = false
       ? `<form method="post" action="/api/lists/${id}/save" class="inline"><button class="btn${saved ? " on" : " primary"}">${saved ? "✓ Збережено" : "Зберегти список"}</button></form>`
       : `<a class="btn primary" rel="nofollow" href="/login?next=${attr(encodeURIComponent(list.href))}">Зберегти список</a>`;
   const share = `<button type="button" class="btn" data-share="${attr(ORIGIN + list.href)}" data-title="${attr(list.title)}">Поділитися</button>`;
-  const tools = own ? `<button type="button" class="btn" data-open="list-edit">Редагувати</button>` : "";
+  // The author's tools under the books and the search to add one stay hidden until «Редагувати» (Max, 2026-10-28:
+  // «ці actions сховаємо в edit menu»); the mode survives the reload after each move or save, per tab.
+  const tools = own ? `<button type="button" class="btn" id="list-edit-toggle" aria-pressed="false">Редагувати</button><button type="button" class="btn list-edit-only" data-open="list-edit">Назва й опис</button>` : "";
   const updated = when({ updated: list.updated });
   const rows = items
     .map((x, i) => {
@@ -2563,12 +2565,24 @@ function listPage({ list, items, user, own = false, owner = false, saved = false
     if (r.url) location.reload();
     else msg.textContent = r.error;
   };
+  const col = document.querySelector(".lcol"), btn = document.getElementById("list-edit-toggle"), key = ${JSON.stringify(`list-edit:${list.id}`)};
+  const set = (on) => {
+    col.classList.toggle("editing", on);
+    btn.textContent = on ? "Готово" : "Редагувати";
+    btn.classList.toggle("primary", on);
+    btn.setAttribute("aria-pressed", on);
+    try { on ? sessionStorage.setItem(key, "1") : sessionStorage.removeItem(key); } catch {}
+  };
+  let on = ${!items.length || !!find};
+  try { on ||= sessionStorage.getItem(key) === "1"; } catch {}
+  set(on);
+  btn.onclick = () => set(!col.classList.contains("editing"));
 })();</script>`
     : "";
   const body = `
 ${listHero(list, items)}
 <div class="split">
-<div>
+<div${own ? ` class="lcol"` : ""}>
 <section class="list-head">
   <p class="kicker">${list.editorial ? "Добірка Chytai" : "Список"} · ${books(items.length)}</p>
   <h1>${esc(list.title)}</h1>
