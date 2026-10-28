@@ -1976,6 +1976,35 @@ if (bg.ROLE !== "web" && !store.db.get("overview:uk:swept")) {
     }
   }, 60000);
 }
+// Editorial lists written by Claude for the owner (seed/editorial.json), made once each in the web process
+// (Max, 2026-10-28: «візьмемо номер 2, тільки додай книжку якої не вистачає»). A book the catalog lacks
+// comes in from its store page (cover, annotation), else from the fields given there.
+async function seedEditorials() {
+  for (const e of require("./seed/editorial.json")) {
+    const done = `editorial:seed:${e.key}`;
+    if (store.db.get(done) || !auth.reader(OWNER_ID)) continue;
+    store.db.set(done, new Date().toISOString());
+    const ids = [];
+    for (const b of e.books) {
+      let id = b.id && store.resolve(b.id);
+      if (!id && b.title) {
+        id = store.findWork({ title: b.title, author: b.author, isbns: b.isbns || [] });
+        if (!id) {
+          const p = b.page ? await bookpage.fromUrl(b.page, OWNER_ID).catch((err) => ({ error: err.message })) : { error: "no page" };
+          const row = p.error ? { title: b.title, author: b.author, cover: "", isbns: b.isbns || [], blurb: "", pages: b.pages || null, published: b.published || null, link: b.page ? { label: new URL(b.page).hostname, url: b.page } : null } : fromPage(p);
+          id = store.addBook({ title: b.title, author: b.author, cover: row.cover, links: row.link ? [row.link] : [], source: "tip", ...(row.isbns.length ? { isbns: row.isbns } : {}), ...(row.blurb ? { blurb: row.blurb, blurbSource: row.blurbSource } : {}), pages: row.pages || b.pages || null, published: row.published || b.published || null }).id;
+        }
+      }
+      if (id) ids.push([id, b.why || ""]);
+      else console.log(`editorial ${e.key}: no book ${b.id || b.title}`);
+    }
+    const l = lists.create(OWNER_ID, { title: e.title, note: e.note });
+    for (const [id, why] of ids) lists.add(l.id, id, why);
+    lists.edit(l.id, { editorial: true });
+    console.log(`editorial ${e.key}: ${l.href}, ${ids.length} books`);
+  }
+}
+if (bg.ROLE !== "jobs") setTimeout(() => seedEditorials().catch((err) => console.log(`editorial seed: ${err.message}`)), 5000);
 // «Додати» after «Українською: …, у каталогах поки немає» for a signed-in reader (pages.ukLine).
 // Also a foreign book Wikidata knows no translation of (Max, 2026-10-23: «тут немає перекладу але він є», Feynman):
 // a Latin title, no Ukrainian edition or translation linked.
