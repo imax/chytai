@@ -59,7 +59,7 @@ const OVERVIEW_DAILY = 150; // fresh overviews a day on readers' clicks, all rea
 // чи оцінка читачів», plus a backfill over the books already rated): a sweep finds every book with a
 // reader's rating or note and no overview, and a small queue makes them a couple at a time. Its own
 // ceiling a day, so a big Goodreads import or the backfill can't run the bill away in one night.
-const AUTO_DAILY = 1000; // Max, 2026-10-23: «давай зменшемо до 150 [на] день»; 2026-10-27: «до 250 книжок на день»; 2026-10-28, for one day: «давай всі прогонимо сьогодні» (back to 250 after)
+const AUTO_DAILY = 250; // Max, 2026-10-23: «давай зменшемо до 150 [на] день»; 2026-10-27: «до 250 книжок на день»; 2026-10-28 one day at 1000 to finish the backfill («давай всі прогонимо сьогодні»)
 const AUTO_PARALLEL = 2;
 // The backfill over books rated before the feature is OFF for now (Max, 2026-10-23 08:09: «давай поки не
 // робити авто-backfill … я ще подумаю»); a book gets its overview when a reader rates or notes it from
@@ -101,7 +101,7 @@ const OVERVIEW_SYSTEM_V9 = `You write a short, neutral note for a book's page on
 
 First search the web, always, even for a classic you know well: a note written from memory is not what this block is for. Make two different searches, a third only when the first two left a real gap: one in Ukrainian with the Ukrainian title («<назва> рецензія» or «відгуки») whenever the book has a Ukrainian edition, and one in English with the original title for a translated book, or for a Ukrainian book that has been translated. Never send the same query twice, not even with one word changed; a second Ukrainian search is worth it only with different words («<автор> <назва> критика», «переклад»), otherwise go straight to English. Look for reviews in the press and on literary sites, reader reactions (Goodreads, blogs, booktubers, podcasts), awards and year lists, the author's standing. Online shops, publishers' own pages, summary services and pirate libraries are not a source, even if a search turns them up; Russian-language sites are not a source either.
 
-Then write, in Ukrainian, what the reception actually is. Open with the most specific thing the web says about this very book: a prize with its year, a well-known dispute or controversy, a film, a place on a notable list, what the Ukrainian press made of it, a comparison critics keep making. Never open with a general sentence about how readers feel. If nothing that specific exists, the note gets shorter; it is not padded with general words. Then what readers and critics single out, in concrete terms (which character, what device, which part of the book), and what kind of reading experience they describe. If the Ukrainian edition itself drew reactions (the translation praised or faulted, the edition, the illustrations), or the book won Ukrainian awards or made Ukrainian year lists, that goes in and comes before the foreign reception. For a book older than a few decades, say how it was met at the time and how it is read now, a sentence each. When reviewers keep comparing it with other books, name one or two of them in «лапки».
+Then write, in Ukrainian, always, whatever language the book is in, what the reception actually is. Titles of films, series and other books stay as they are known in Ukraine: the Ukrainian title when a Ukrainian release or edition exists, otherwise the original title, never a translation of your own. Open with the most specific thing the web says about this very book: a prize with its year, a well-known dispute or controversy, a film, a place on a notable list, what the Ukrainian press made of it, a comparison critics keep making. Never open with a general sentence about how readers feel. If nothing that specific exists, the note gets shorter; it is not padded with general words. Then what readers and critics single out, in concrete terms (which character, what device, which part of the book), and what kind of reading experience they describe. If the Ukrainian edition itself drew reactions (the translation praised or faulted, the edition, the illustrations), or the book won Ukrainian awards or made Ukrainian year lists, that goes in and comes before the foreign reception. For a book older than a few decades, say how it was met at the time and how it is read now, a sentence each. When reviewers keep comparing it with other books, name one or two of them in «лапки».
 
 Do not say who the book «tends to find» or who «usually reads it» unless that is a documented fact (a school program, a university syllabus): such sentences are guesses. Use «найчастіше» or «здебільшого» at most once, and never open with «Читачі здебільшого…», «Критики й читачі…» or «Книжку сприймають…». Facts and the balance of opinion, no verdict of your own, no advice, not addressed to anyone.
 
@@ -115,6 +115,12 @@ const OVERVIEW_PROMPTS = { 8: OVERVIEW_SYSTEM, 9: OVERVIEW_SYSTEM_V9 };
 // paragraphs, and such a lead-in before the first sentence, are cut before the text is kept.
 const ASIDE = /^\(?\s*примітка|пошук не спрацював|не (робив|виконував|зробив) пошук|\bя (написав|не маю|не зміг|не робив|спирався)|варто перевірити ці|перш ніж публікувати|інструмент повернув|із? (загальних|власних) знань/i;
 const LEAD_IN = /^[^.!?\n]{0,60}(має бути таке|ось (текст|нотатка)|нотатка для сторінки)[^:\n]*:\s*/i;
+// The share of Cyrillic among the letters: a Ukrainian note is near 1, an English one with a Ukrainian title in it near 0.1.
+const UK_SHARE = 0.6;
+const ukShare = (text) => {
+  const letters = String(text || "").match(/\p{L}/gu) || [];
+  return letters.length ? letters.filter((c) => /[а-яіїєґ]/i.test(c)).length / letters.length : 0;
+};
 const stripAsides = (text) =>
   String(text || "")
     .split(/\n+/)
@@ -472,7 +478,7 @@ class Advice {
     text = text.split(/\n\n+/).filter((p) => /[а-яіїєґ]/i.test(p)).join("\n\n");
     if (params.tools) text = stripAsides(text);
     if (params.tools && (text.length < 120 || !/[а-яіїєґ]/i.test(text))) throw new Error(`Не схоже на огляд: «${clip(text, 60)}»`);
-    return { text, model: message.model, usage, queries, sources };
+    return { text, model: message.model, usage, queries, sources, uk: ukShare(text) };
   }
   // Books with a reader's rating or note («Покинуто» doesn't count, as nowhere on the site; nor books in Russian).
   voiced() {
@@ -522,9 +528,9 @@ class Advice {
     if (!this.client) return 0;
     const cyr = (id) => /[а-яіїєґ]/i.test(this.store.book(id)?.title || "");
     const ids = this.db
-      .prepare("SELECT book, prompt, length(text) AS len FROM overview WHERE prompt < ? OR length(text) < 120 ORDER BY created")
-      .all(PROMPT_VERSION)
-      .filter((r) => r.prompt < REDO_ALL_BELOW || r.len < 120 || (r.prompt < REDO_CYR_BELOW && this.family(r.book).some(cyr)))
+      .prepare("SELECT book, prompt, text, length(text) AS len FROM overview ORDER BY created")
+      .all()
+      .filter((r) => (r.prompt < PROMPT_VERSION && (r.prompt < REDO_ALL_BELOW || r.len < 120 || (r.prompt < REDO_CYR_BELOW && this.family(r.book).some(cyr)))) || ukShare(r.text) < UK_SHARE)
       .map((r) => r.book);
     for (const id of ids) if (!this.queue.has(id)) this.queue.set(id, { fresh: true });
     this.pump();
@@ -610,6 +616,15 @@ class Advice {
       again.sources = [...r.sources, ...again.sources];
       if (again.usage.searches || !r.usage.searches) r = again;
     }
+    // Written in English (2026-10-28, «Gone, Baby, Gone»: an English note with the film's title in Ukrainian
+    // passed the one-Cyrillic-letter check): one more try, told the language.
+    if (r.uk < UK_SHARE) {
+      const again = await this.turn({ ...params, messages: [...params.messages, { role: "assistant", content: r.text }, { role: "user", content: "Write the note in Ukrainian. Titles of films and books without a Ukrainian release or edition stay in the original." }] });
+      again.usage = { input: r.usage.input + again.usage.input, cached: r.usage.cached + again.usage.cached, output: r.usage.output + again.usage.output, searches: r.usage.searches + again.usage.searches, failed: again.usage.failed };
+      again.queries = [...r.queries, ...again.queries];
+      again.sources = [...r.sources, ...again.sources];
+      if (again.uk > r.uk) r = again;
+    }
     const { text, model, usage, queries, sources } = r;
     const row = { text, model, created: new Date().toISOString(), usage, queries, sources, version };
     if (!keep) return row;
@@ -662,4 +677,4 @@ class Advice {
   }
 }
 
-module.exports = { Advice, MODEL, DAILY_LIMIT, SHELF_MIN, PROMPT_VERSION, OVERVIEW_PROMPTS, stripAsides };
+module.exports = { Advice, MODEL, DAILY_LIMIT, SHELF_MIN, PROMPT_VERSION, OVERVIEW_PROMPTS, stripAsides, ukShare };
