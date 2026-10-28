@@ -1218,7 +1218,9 @@ const readGenres = () => {
   if (readGenresAt && Date.now() - readGenresAt.at < 10 * 60 * 1000) return readGenresAt.out;
   const best = new Map();
   for (const w of readPool().works.filter((w) => w.book.cover && w.s.avg != null).sort((a, b) => b.s.avg - a.s.avg || b.s.rated - a.s.rated)) for (const g of mainGenres(w.book.tags)) if (!best.has(g)) best.set(g, w.book);
-  const out = pages.GENRES.map((g) => ({ g, n: store.genreBooks(g).length, top: best.get(g) || null })).filter((x) => x.n >= 20).sort((a, b) => b.n - a.n).slice(0, 12);
+  // The biggest genres, but «Психологія» in place of «Любовні романи» (Max, 2026-10-28).
+  const all = pages.GENRES.filter((g) => g !== "любовні романи").map((g) => ({ g, n: store.genreBooks(g).length, top: best.get(g) || null })).filter((x) => x.n >= 20).sort((a, b) => b.n - a.n);
+  const out = [...all.slice(0, 11), ...all.slice(11).filter((x) => x.g === "психологія")].concat(all.slice(11).filter((x) => x.g !== "психологія")).slice(0, 12).sort((a, b) => b.n - a.n);
   readGenresAt = { at: Date.now(), out };
   return out;
 };
