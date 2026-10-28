@@ -19,7 +19,7 @@ primary_region = "fra"
 [[mounts]]
   source = "web_data"
   destination = "/data"
-  initial_size = "1gb"
+  initial_size = "1gb" # extended to 3 GB on 2026-10-28 (web.yml): kept covers and their small copies
 
 [http_service]
   internal_port = 8080
@@ -32,6 +32,7 @@ primary_region = "fra"
 # 512 MB since 2026-10-21 (Max OK): with ~16 thousand catalog books a refresh no longer fit in 256 MB.
 # 2 CPUs and 1 GB since 2026-10-24 (Max chose it): the site and the background jobs are two processes
 # (web/main.js), each with its own copy of the catalog, and a third for a moment while the site reloads.
+# 2 GB since 2026-10-28 (Max: «угу роби»): the two processes and a reload took up to 847 MB of 962.
 [[vm]]
   size = "shared-cpu-2x"
-  memory = "1gb"
+  memory = "2gb"

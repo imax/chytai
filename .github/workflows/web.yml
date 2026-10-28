@@ -33,6 +33,13 @@ jobs:
         run: echo "image=$(flyctl machine list -a chytai-web --json | jq -r '.[0].config.image // empty')" >> "$GITHUB_OUTPUT"
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN_WEB }}
+      # The data volume at 3 GB at least (2026-10-28, Max OK: 1 GB was filling ~40 MB a day with kept covers).
+      # Grows only, so it does nothing once done; the deploy below restarts the machine onto the new size.
+      - run: |
+          flyctl volumes list -a chytai-web --json | jq -r '.[] | select(.name == "web_data" and .size_gb < 3) | .id' |
+            while read -r id; do flyctl volumes extend "$id" -s 3 -a chytai-web --yes || echo "could not extend $id"; done
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN_WEB }}
       # Fly's API sometimes drops the connection after the image is built ("unexpected EOF") or hangs after
       # pushing it (16 minutes on 2026-10-21, holding up every deploy queued behind it): each try gets 5
       # minutes, and one retry redeploys the already-built image.
