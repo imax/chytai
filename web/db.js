@@ -74,7 +74,7 @@ function open(dataDir) {
   fs.mkdirSync(dataDir, { recursive: true });
   const db = new DatabaseSync(path.join(dataDir, "chytai.db"));
   // busy_timeout: the site and the background jobs (jobs.js) are two processes writing one database.
-  db.exec("PRAGMA journal_mode = WAL; PRAGMA synchronous = NORMAL; PRAGMA busy_timeout = 10000;");
+  db.exec("PRAGMA busy_timeout = 10000; PRAGMA journal_mode = WAL; PRAGMA synchronous = NORMAL;"); // the wait first: switching to WAL locks too
   db.exec(SCHEMA);
   // When an entry last changed, for the activity feed (added 2026-10-20; older rows have none).
   if (!db.prepare("PRAGMA table_info(entries)").all().some((c) => c.name === "updated")) db.exec("ALTER TABLE entries ADD COLUMN updated TEXT");
@@ -98,8 +98,11 @@ function open(dataDir) {
     db.exec("CREATE TABLE slugs_new (slug TEXT PRIMARY KEY, id TEXT NOT NULL); INSERT INTO slugs_new (slug, id) SELECT slug, id FROM slugs ORDER BY rowid; DROP TABLE slugs; ALTER TABLE slugs_new RENAME TO slugs;");
   }
   db.exec("CREATE INDEX IF NOT EXISTS slugs_id ON slugs (id)");
+  // IMMEDIATE: takes the write lock at the start, so the other process waits out busy_timeout. A plain BEGIN
+  // that reads first and writes later fails at once with «database is locked» when the other process wrote
+  // meanwhile; both rebuild the search index at start, so the jobs process fell over after deploys (2026-10-28).
   db.tx = (fn) => {
-    db.exec("BEGIN");
+    db.exec("BEGIN IMMEDIATE");
     try {
       const r = fn();
       db.exec("COMMIT");
