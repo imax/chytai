@@ -1640,9 +1640,9 @@ function searchPage({ q, user, results }) {
 
 // The results in groups (books, authors, readers) with «схоже» on the side; also served alone by
 // /api/search for search as you type.
-function searchResults({ q, user, hits = [], authors = [], readers = [], shelves = [], similar = [], tag = "" }) {
+function searchResults({ q, user, hits = [], authors = [], readers = [], shelves = [], lists = [], similar = [], tag = "" }) {
   if (!q.trim()) return "";
-  const n = hits.length + authors.length + readers.length + shelves.length;
+  const n = hits.length + authors.length + readers.length + shelves.length + lists.length;
   const addLink = user ? `<a class="text-link" href="/add?text=${attr(encodeURIComponent(q))}">Додати книжку, якої ще немає на Chytai</a>` : "";
   // Not a dead end (usability review 2026-10-28: «щось легке на вихідні» found nothing and left nothing to do):
   // the home page's shelves, for those who search for a mood rather than a title.
@@ -1655,6 +1655,7 @@ function searchResults({ q, user, hits = [], authors = [], readers = [], shelves
   <div>
     ${shelves.length ? `<section class="block">${label(`Видавництва · ${shelves.length}`)}<div class="name-rows">${shelves.map((s) => `<a class="name-row" href="/publishers/${attr(s.shelf.id)}"><b>${esc(s.shelf.name)}</b><span>${[books(s.total), s.shelf.tagline ? esc(s.shelf.tagline) : ""].filter(Boolean).join(" · ")}</span></a>`).join("")}</div></section>` : ""}
     ${authors.length ? `<section class="block">${label(`Автори · ${authors.length}`)}<div class="name-rows">${authors.map((a) => `<a class="name-row" href="${attr(a.href)}"><b>${esc(a.name)}</b><span>${[books(a.books), a.readers ? count(a.readers, "читач", "читачі", "читачів") : ""].filter(Boolean).join(" · ")}</span></a>`).join("")}</div></section>` : ""}
+    ${lists.length ? `<section class="block">${label(`Списки · ${lists.length}`)}<div class="lgrid">${lists.map(listCard).join("")}</div></section>` : ""}
     ${hits.length ? `<section class="block">${label(`Книжки · ${hits.length}`)}<div class="rows">${hits.map((h) => bookRow(h.book, { meta: readersMeta(h.book.id), action: h.entry ? myStatus(h.entry) : "", others: h.others })).join("")}</div></section>` : ""}
     ${readers.length ? `<section class="block">${label(`Читачі · ${readers.length}`)}<div class="name-rows">${readers.map((r) => `<a class="name-row" href="${attr(r.reader.href)}"><b>${esc(r.reader.name)}</b><span>${books(r.count)}</span></a>`).join("")}</div></section>` : ""}
     ${user ? `<p class="muted end-note">Не те? ${addLink}</p>` : ""}

@@ -1341,9 +1341,11 @@ function searchAll(req, q) {
       .filter((h) => h.book);
     hits = [...own, ...hits].slice(0, 40);
   }
+  // Readers' lists by title or intro (Max, 2026-10-28: «І пошук по списках»).
+  const listsFound = lists.all().filter((l) => has(l.title) || nqs.some((n) => normQ(l.note).includes(n))).slice(0, 6).map(withCovers);
   foldTwins(hits);
   const similar = hits.length ? social.alsoLiked([hits[0].book.id], { limit: 4, skip: new Set(hits.map((h) => h.book.id)) }) : [];
-  return { hits, authors: authorsFound, readers: readersFound, shelves: shelvesFound, similar, tag };
+  return { hits, authors: authorsFound, readers: readersFound, shelves: shelvesFound, lists: listsFound, similar, tag };
 }
 app.get("/search", (req, res) => {
   const q = String(req.query.q || "").trim().slice(0, 100);
