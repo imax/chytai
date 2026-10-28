@@ -746,10 +746,6 @@ function where(book, ukrlib = null) {
   const rank = (e) => (e.status === "є" ? 0 : e.status === "передзамовлення" ? 1 : 2) * 4 + (e.edition ? 2 : 0) + (e.format === "e-book" ? 1 : 0) + (e.format === "аудіо" ? 1 : 0);
   const eds = (book.editions || []).filter((e) => !seen.has(e.links[0].url) && seen.add(e.links[0].url)).sort((a, b) => rank(a) - rank(b));
   const links = [...(book.links || []), ...(ukrlib ? [ukrlib] : [])].filter((l) => !seen.has(l.url));
-  const shop = (e) => {
-    const tail = [e.format, e.narrator ? `читає ${e.narrator}` : "", e.duration, e.edition, e.price, e.subscription ? "є в підписці" : "", avail(e)].filter(Boolean).join(", ");
-    return `<a href="${attr(e.links[0].url)}" target="_blank" rel="noopener">${esc(e.shelf.name)}</a>${tail ? ` <span class="muted">${esc(tail)}</span>` : ""}`;
-  };
   // Only where it can be had (Max, 2026-10-20: «показувати там де є, а не там де немає»); the shops
   // that are out of it fold into one quiet line, each named once.
   const gone = (e) => e.status === "немає";
@@ -770,13 +766,39 @@ function where(book, ukrlib = null) {
   const one = new Map(); // shelf id -> the edition shown
   for (const e of eds) if (e.shelf.joinOnly && !gone(e) && (!one.has(e.shelf.id) || better(e, one.get(e.shelf.id)))) one.set(e.shelf.id, e);
   const have = eds.filter((e) => !gone(e) && (!e.shelf.joinOnly || one.get(e.shelf.id) === e) && ((k) => !shown.has(k) && shown.add(k))([e.shelf.id, e.format, e.edition, e.price, e.narrator].join("|")));
-  const out = [...new Map(eds.filter(gone).map((e) => [e.shelf.id, e])).values()];
-  const items = [
-    ...have.map(shop),
-    ...links.map((l) => `<a href="${attr(l.url)}" target="_blank" rel="noopener">${esc(l.label)}</a>`),
-    ...(out.length ? [`<span class="muted">${have.length ? "немає:" : "зараз немає в наявності:"} </span>${out.map((e) => `<a class="muted" href="${attr(e.links[0].url)}" target="_blank" rel="noopener">${esc(e.shelf.name)}</a>`).join(", ")}`] : []),
-  ];
-  return `<div class="where${items.length ? "" : " hidden"}" data-src="/api/libraries/${attr(encodeURIComponent(book.id))}"><span class="where-label">Де взяти</span>${items.map((x) => `<span class="where-item">${x}</span>`).join("")}</div>`;
+  // Shops that have it in one edition are not «немає» for another (2026-10-28 usability review: «Meridian
+  // Czernowitz, папір, 480 ₴» and below it «немає: Meridian Czernowitz»); and when it can be had anywhere,
+  // the shops that are out of it are not named at all.
+  const out = have.length ? [] : [...new Map(eds.filter(gone).map((e) => [e.shelf.id, e])).values()];
+  // One row per kind (папір, e-book, аудіо), cheapest first; two shops show, the rest fold under «ще N»
+  // (the review: «Тигролови» had nine shop rows and «Старий Лев» three times on a phone screen).
+  const kinds = [["папір", "Папір"], ["e-book", "E-book"], ["аудіо", "Аудіо"]];
+  const kindOf = (e) => (kinds.some(([k]) => k === e.format) ? e.format : "папір");
+  const price = (e) => Number(String(e.price || "").replace(/[^\d]/g, "")) || Infinity;
+  const short = (e) => {
+    const tail = [e.narrator ? `читає ${e.narrator}` : "", e.price, e.subscription ? "є в підписці" : "", avail(e)].filter(Boolean).join(", ");
+    return `<a href="${attr(e.links[0].url)}" target="_blank" rel="noopener">${esc(e.shelf.name)}</a>${tail ? ` <span class="muted">${esc(tail)}</span>` : ""}`;
+  };
+  const full = (e) => {
+    const tail = [e.edition, e.narrator ? `читає ${e.narrator}` : "", e.duration, e.price, e.subscription ? "є в підписці" : "", avail(e)].filter(Boolean).join(", ");
+    return `<a href="${attr(e.links[0].url)}" target="_blank" rel="noopener">${esc(e.shelf.name)}</a>${tail ? ` <span class="muted">${esc(tail)}</span>` : ""}`;
+  };
+  const row = (label, first, rest = "") => `<div class="where-row"><span class="where-kind">${label}</span><span class="where-what">${first}${rest}</span></div>`;
+  const rows = [];
+  for (const [k, label] of kinds) {
+    const list = have.filter((e) => kindOf(e) === k).sort((a, b) => (a.status === "є" ? 0 : 1) - (b.status === "є" ? 0 : 1) || price(a) - price(b));
+    if (!list.length) continue;
+    // A shop named once in the short line; its other editions wait under «ще».
+    const firstShops = [];
+    for (const e of list) if (firstShops.length < 2 && !firstShops.some((x) => x.shelf.id === e.shelf.id)) firstShops.push(e);
+    // The same shop, reader and price in another edition (Абук's two «Тигролови» read by Борис Лобода) is not another row.
+    const said = new Set(firstShops.map((e) => [e.shelf.id, e.narrator, e.price].join("|")));
+    const rest = list.filter((e) => !firstShops.includes(e) && ((k) => !said.has(k) && said.add(k))([e.shelf.id, e.narrator, e.price].join("|")));
+    rows.push(row(label, firstShops.map(short).join(` <span class="muted">·</span> `), rest.length ? ` <details class="where-more"><summary>ще ${rest.length}</summary>${rest.map((e) => `<span>${full(e)}</span>`).join("")}</details>` : ""));
+  }
+  if (links.length) rows.push(row("Інше", links.map((l) => `<a href="${attr(l.url)}" target="_blank" rel="noopener">${esc(l.label)}</a>`).join(` <span class="muted">·</span> `)));
+  if (out.length) rows.push(row("Немає", `<span class="muted">зараз немає в наявності: </span>${out.map((e) => `<a class="muted" href="${attr(e.links[0].url)}" target="_blank" rel="noopener">${esc(e.shelf.name)}</a>`).join(", ")}`));
+  return `<div class="where${rows.length ? "" : " hidden"}" data-src="/api/libraries/${attr(encodeURIComponent(book.id))}"><span class="where-label">Де взяти</span>${rows.join("")}</div>`;
 }
 
 // The volumes of the series this book belongs to, each with its own page and where to get it.
