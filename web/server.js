@@ -1115,13 +1115,21 @@ app.get("/genre/:slug", (req, res) => {
 // Shelves by what a reader is after, not by counters: readers' advice with a note, books people finish,
 // Ukrainian authors, short ones, free ones, genres. A filter (?f=) narrows every shelf at once.
 const READ_FILTERS = {
-  short: ["Коротке", (b) => b.pages > 0 && b.pages <= 250],
+  short: ["Коротке", (b) => { const n = pagesOf(b); return n > 0 && n <= 250; }],
   ua: ["Українські автори", (b) => store.aiOrigs().get(b.id)?.kind === "ukrainian"],
   fiction: ["Художнє", (b) => mainGenres(b.tags).some((g) => FICTION.has(g))],
   nonfiction: ["Нон-фікшн", (b) => { const g = mainGenres(b.tags); return g.length && !g.some((x) => FICTION.has(x)); }],
 };
 const FICTION = new Set(["художня", "фантастика", "фентезі", "детективи", "трилери", "жахи", "любовні романи", "класика", "поезія", "комікси", "підліткові"]);
 let readCache = null;
+// Pages of a book, or of its original or translation when the catalog doesn't say.
+const pagesOf = (b) => b.pages || [...(store.translations?.get(store.canonical(b.id)) || [])].map((id) => store.book(id)?.pages).find((n) => n > 0) || 0;
+// The Ukrainian translation of a book when the catalog has one (with a cover if it can), else the book itself.
+function ukWork(book) {
+  if (!book || /[а-яіїєґ]/i.test(book.title)) return book;
+  const uk = [...(store.translations?.get(store.canonical(book.id)) || [])].map((id) => store.book(id)).filter((b) => b && /[а-яіїєґ]/i.test(b.title) && !isRussian(b));
+  return uk.find((b) => b.cover) || uk[0] || book;
+}
 function readPool() {
   if (readCache && Date.now() - readCache.at < 10 * 60 * 1000) return readCache.out;
   // One pass over every reader's entries (social.stats per book took 0,4 s): finished, gave up, ratings, by work.
@@ -1137,12 +1145,20 @@ function readPool() {
       if (e.rating != null) (x.sum += e.rating), x.rated++;
     }
   }
-  const works = [];
+  // A translation and its original are one work, shown as the Ukrainian one (Max, 2026-10-28: «ставити укр переклад якщо він є»).
+  const merged = new Map();
   for (const [k, x] of by) {
+    const key = [k, ...(store.translations?.get(k) || [])].sort()[0];
+    const m = merged.get(key);
+    if (!m) merged.set(key, { ...x, id: k });
+    else for (const f of ["finished", "dropped", "sum", "rated"]) m[f] += x[f];
+  }
+  const works = [];
+  for (const x of merged.values()) {
     if (!x.rated && !x.finished) continue;
-    const book = store.book(k);
+    const book = ukWork(store.book(x.id));
     if (!book || isRussian(book)) continue;
-    works.push({ book, s: { ...x, avg: x.rated ? Math.round((x.sum / x.rated) * 10) / 10 : null } });
+    works.push({ book, s: { finished: x.finished, dropped: x.dropped, rated: x.rated, avg: x.rated ? Math.round((x.sum / x.rated) * 10) / 10 : null } });
   }
   const out = { works };
   readCache = { at: Date.now(), out };
@@ -1171,7 +1187,7 @@ app.get("/", (req, res) => {
   const { works } = readPool();
   // Ukrainian titles with covers first, one book per reader, so it isn't three of one reader's English business books.
   const byReader = new Set();
-  const picks = social.picks(200).filter((p) => ok(p.book)).sort((a, b) => (/[а-яіїєґ]/i.test(b.book.title) && !!b.book.cover) - (/[а-яіїєґ]/i.test(a.book.title) && !!a.book.cover)).filter((p) => !byReader.has(p.reader.id) && byReader.add(p.reader.id)).slice(0, 3);
+  const picks = social.picks(200).map((p) => ({ ...p, book: ukWork(p.book) })).filter((p) => ok(p.book)).sort((a, b) => (/[а-яіїєґ]/i.test(b.book.title) && !!b.book.cover) - (/[а-яіїєґ]/i.test(a.book.title) && !!a.book.cover)).filter((p) => !byReader.has(p.reader.id) && byReader.add(p.reader.id)).slice(0, 3);
   const pickIds = new Set(picks.map((p) => store.canonical(p.book.id)));
   const finish = works
     .filter((w) => ok(w.book) && w.s.finished >= 2 && w.s.dropped === 0 && (w.s.avg ?? 0) >= 4 && !pickIds.has(w.book.id))
@@ -1181,7 +1197,7 @@ app.get("/", (req, res) => {
   const liked = (pred) => works.filter((w) => ok(w.book) && pred(w.book) && (w.s.avg ?? 0) >= 4.3 && w.s.rated >= 1 && !used.has(w.book.id)).sort((a, b) => b.s.rated - a.s.rated || b.s.avg - a.s.avg);
   const ua = f === "ua" ? [] : liked(READ_FILTERS.ua[1]).slice(0, 6);
   ua.forEach((w) => used.add(w.book.id));
-  const short = f === "short" ? [] : liked(READ_FILTERS.short[1]).slice(0, 6);
+  const short = f === "short" ? [] : liked(READ_FILTERS.short[1]).slice(0, 6).map((w) => ({ ...w, pages: pagesOf(w.book) }));
   const freeShelf = store.shelves.find((s) => s.kind === "free");
   const free = freeShelf ? visible(freeShelf).filter((it) => it.cover).map((it) => store.book(it.id)).filter((b) => b && ok(b)).sort((a, b) => /[а-яіїєґ]/i.test(b.title) - /[а-яіїєґ]/i.test(a.title)).slice(0, 6) : [];
   const wanted = social.popular().want.filter((x) => ok(x.book)).slice(0, 6);
@@ -1189,7 +1205,7 @@ app.get("/", (req, res) => {
   const editorials = lists.editorials().slice(0, 3).map(withCovers);
   const seeds = req.user ? social.seeds(req.user.id) : [];
   const own = req.user ? new Map(Object.entries(store.entriesOf(req.user.id))) : new Set();
-  const forYou = req.user && seeds.length ? social.similar(seeds.map((s) => s.id), { limit: 6, skip: own, own }).filter((x) => ok(x.book)) : [];
+  const forYou = req.user && seeds.length ? social.similar(seeds.map((s) => s.id), { limit: 6, skip: own, own }).map((x) => ({ ...x, book: ukWork(x.book) })).filter((x) => ok(x.book)) : [];
   // New in the publishers: one fresh book from each of six shelves, the ones the reader follows first.
   const fresh = f
     ? []

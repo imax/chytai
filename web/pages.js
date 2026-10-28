@@ -1288,7 +1288,7 @@ ${row("Для тебе", "схожі на те, що тобі сподобало
 ${!f && editorials.length ? `<section class="block editorials">${label("Добірки Chytai", `<a href="/lists">усі списки</a>`)}<div class="lgrid">${editorials.map(listCard).join("")}</div></section>` : ""}
 ${row("Дочитують до кінця", "ніхто не покинув", finish, (w) => `дочитали ${w.s.finished}`)}
 ${row("Українські автори", "", ua)}
-${row("Коротке", "до 250 сторінок", short, (w) => `${w.book.pages} с.`)}
+${row("Коротке", "до 250 сторінок", short, (w) => `${w.pages} с.`)}
 ${row("Найбільше хочуть прочитати", "", wanted, (x) => `${x.n} ${plural(x.n, "хоче", "хочуть", "хочуть")}`)}
 ${row("Безкоштовно", "класика в Читалці", free.map((b) => ({ book: b })))}
 ${row("Нове у видавництвах", `<a href="/publishers">усі видавництва</a>`, fresh, (x) => esc(x.shelf.name))}
