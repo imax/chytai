@@ -978,7 +978,12 @@ class Store {
     const ids = this.workIds();
     const db = this.db;
     db.tx(() => {
-      db.exec("DELETE FROM search; DELETE FROM search_tri;");
+      // Dropped and made again, not emptied: a damaged FTS index kept rows a DELETE could not clear, so search
+      // pointed words at other books («Ліна Костенко» gave «Друзі, коханки…») and missed «Тигролови» (2026-10-28).
+      db.exec(`DROP TABLE IF EXISTS search_vocab; DROP TABLE IF EXISTS search; DROP TABLE IF EXISTS search_tri;
+        CREATE VIRTUAL TABLE search USING fts5 (id UNINDEXED, title, alt, author, series, extra, tokenize = 'unicode61 remove_diacritics 2');
+        CREATE VIRTUAL TABLE search_vocab USING fts5vocab (search, 'row');
+        CREATE VIRTUAL TABLE search_tri USING fts5 (id UNINDEXED, text, tokenize = 'trigram');`);
       this.vocab = null; // the typo search reloads the word list
       this.sounds = null;
       this.aliasIdx = null;
