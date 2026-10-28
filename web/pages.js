@@ -81,7 +81,9 @@ const setThumbs = (fn) => (thumb = fn);
 function cover(book, size = "md") {
   const hue = [...String(book.title)].reduce((a, c) => (a * 31 + c.charCodeAt(0)) % 360, 7);
   const ph = `<span class="ph">${esc(book.title)}</span>`;
-  const src = SHOWN[size] ? thumb(book.cover, SHOWN[size]) : book.cover;
+  // The book page's big cover is the original, except a PNG: that may be a product shot on a transparent
+  // field, so it gets the trimmed copy too (thumbs.js; Max, 2026-10-28).
+  const src = SHOWN[size] ? thumb(book.cover, SHOWN[size]) : /\.png(\?|$)/i.test(book.cover || "") ? thumb(book.cover, 240) : book.cover;
   return `<span class="cover ${size}" style="--h:${hue}">${ph}${book.cover ? `<img src="${attr(src)}" alt=""${size === "xl" ? ' fetchpriority="high"' : ' loading="lazy"'} onerror="${COVER_ERR}">` : ""}</span>`;
 }
 

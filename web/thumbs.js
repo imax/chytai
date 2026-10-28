@@ -11,7 +11,7 @@ const fs = require("fs");
 const path = require("path");
 const { execFile } = require("child_process");
 
-const WIDTHS = [128, 240]; // twice the width shown: md/sm/xs/feed are ≤64 px, lg and the grid's cards ≤120
+const WIDTHS = [128, 240, 480]; // twice the width shown: md/sm/xs/feed are ≤64 px, lg and the grid's cards ≤120, a PNG cover on the book page 200 (240 there)
 const BUDGET = 250 * 1024 * 1024; // the copies together; the oldest go beyond it (made again when asked)
 const PARALLEL = 3; // pictures made at once; the rest wait their turn
 const QUEUE = 40; // beyond this many waiting the browser goes to the original at once
