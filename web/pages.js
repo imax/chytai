@@ -457,9 +457,8 @@ function bookPage({ ukrlib = null, inGenre = null, fresh = null, pick = null, aw
         ${score}
         ${awardsLine(awards)}
         ${twins(book)}
-        ${!user && !freeRead ? "" : mine(book, entry, user, now, freeRead ? "" : readUrl, listsItem(book, user), { free: readUrl && freeRead ? freeItems(book, freeFile) : "" })}
+        ${!user && !freeRead ? "" : mine(book, entry, user, now, freeRead ? "" : readUrl, listsItem(book, user) + ownerItems(book, user), { free: readUrl && freeRead ? freeItems(book, freeFile) : "" })}
         ${where(book, ukrlib)}
-        ${user?.owner ? `<p class="small muted"><a class="muted" href="/admin/book/${encodeURIComponent(book.href.split("/").pop())}">Редагувати</a>${book.cover ? "" : ` · <a class="muted" href="/admin/book/${encodeURIComponent(book.href.split("/").pop())}?find=1">Знайти обкладинку</a>`}${book.edited ? " · виправлено вручну" : ""}</p>` : ""}
       </div>
     </article>
     ${series(book, inLibrary)}
@@ -721,6 +720,13 @@ const moreMenu = (items) => `<details class="more-acts"><summary class="btn" ari
 function freeItems(book, file = true) {
   const slug = attr((book.href || "").split("/").pop() || encodeURIComponent(book.id));
   return `<a href="/go/read/${slug}">Відкрити в Читалці</a>${file ? `<a href="/go/epub/${slug}">Завантажити EPUB</a>` : ""}`;
+}
+
+// The owner's tools for the book sit in the «⋯» menu, not under «Де взяти» (Max, 2026-10-28: «в (..) сховаємо»).
+function ownerItems(book, user) {
+  if (!user?.owner) return "";
+  const at = `/admin/book/${encodeURIComponent(book.href.split("/").pop())}`;
+  return `<a href="${attr(at)}">Редагувати${book.edited ? ` <span class="muted">· виправлено вручну</span>` : ""}</a>${book.cover ? "" : `<a href="${attr(at)}?find=1">Знайти обкладинку</a>`}`;
 }
 
 function mine(book, entry, user, now = false, readUrl = "", listItem = "", { free = "" } = {}) {
