@@ -46,7 +46,7 @@ class Lists {
     this.db = store.db;
     this.who = who;
     this.db.exec(SCHEMA);
-    for (const [col, def] of [["image", "TEXT NOT NULL DEFAULT ''"], ["editorial", "INTEGER NOT NULL DEFAULT 0"]])
+    for (const [col, def] of [["image", "TEXT NOT NULL DEFAULT ''"], ["editorial", "INTEGER NOT NULL DEFAULT 0"], ["source", "TEXT NOT NULL DEFAULT ''"]])
       if (!this.db.prepare("PRAGMA table_info(lists)").all().some((c) => c.name === col)) this.db.exec(`ALTER TABLE lists ADD COLUMN ${col} ${def}`);
   }
 
@@ -82,12 +82,14 @@ class Lists {
     return this.get(id);
   }
   // `editorial` is the owner's to set (server.js); undefined leaves it as it is.
-  edit(id, { title, note, editorial }) {
+  // `source`: where the list comes from, an address shown under the intro (Max, 2026-10-28: the Diia vote's page).
+  edit(id, { title, note, editorial, source }) {
     const l = this.get(id);
     if (!l) return null;
     const t = String(title ?? l.title).replace(/\s+/g, " ").trim().slice(0, TITLE_MAX) || l.title;
     const ed = editorial === undefined ? l.editorial : !!editorial;
-    this.db.prepare("UPDATE lists SET title = ?, note = ?, editorial = ?, updated = ? WHERE id = ?").run(t, String(note ?? l.note).replace(/\r/g, "").trim().slice(0, NOTE_MAX), ed ? 1 : 0, new Date().toISOString(), id);
+    const src = source === undefined ? l.source : /^https?:\/\/[^\s"<>]+$/.test(String(source).trim()) ? String(source).trim().slice(0, 500) : "";
+    this.db.prepare("UPDATE lists SET title = ?, note = ?, editorial = ?, source = ?, updated = ? WHERE id = ?").run(t, String(note ?? l.note).replace(/\r/g, "").trim().slice(0, NOTE_MAX), ed ? 1 : 0, src, new Date().toISOString(), id);
     return this.get(id);
   }
   // The picture on top: our own /covers/<name>, or "" for the one made of the list's covers.

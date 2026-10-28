@@ -983,7 +983,7 @@ app.post("/api/lists", signed, (req, res) => {
   res.redirect(303, l.href);
 });
 // «Добірка Chytai» is the owner's switch (the form shows it only to him).
-app.post("/api/lists/:id", signed, myList, (req, res) => res.redirect(303, lists.edit(req.list.id, { title: req.body.title, note: req.body.note, editorial: req.owner && req.body.ed_shown ? req.body.editorial === "1" : undefined }).href));
+app.post("/api/lists/:id", signed, myList, (req, res) => res.redirect(303, lists.edit(req.list.id, { title: req.body.title, note: req.body.note, source: req.body.source ?? "", editorial: req.owner && req.body.ed_shown ? req.body.editorial === "1" : undefined }).href));
 // The picture on top of a list, from the author's computer: kept here, made no wider than 1600 px.
 app.post("/api/lists/:id/image", signed, myList, express.raw({ type: "image/*", limit: "15mb" }), async (req, res) => {
   const ext = COVER_TYPES[String(req.get("content-type") || "").split(";")[0].trim()];
@@ -1990,6 +1990,8 @@ if (bg.ROLE !== "web" && !store.db.get("overview:uk:swept")) {
 async function seedEditorials() {
   for (const e of require("./seed/editorial.json")) {
     const done = `editorial:seed:${e.key}`;
+    const had = e.source && store.db.get(done) && lists.bySlug(OWNER_ID, slugify(e.title).slice(0, 60).replace(/-+$/, ""));
+    if (had && !had.source && !store.db.get(`${done}:source`)) store.db.set(`${done}:source`, "1"), lists.edit(had.id, { source: e.source });
     if (store.db.get(done) || !auth.reader(OWNER_ID)) continue;
     store.db.set(done, new Date().toISOString());
     const ids = [];
@@ -2008,7 +2010,7 @@ async function seedEditorials() {
     }
     const l = lists.create(OWNER_ID, { title: e.title, note: e.note });
     for (const [id, why] of ids) lists.add(l.id, id, why);
-    lists.edit(l.id, { editorial: true });
+    lists.edit(l.id, { editorial: true, source: e.source });
     console.log(`editorial ${e.key}: ${l.href}, ${ids.length} books`);
   }
 }

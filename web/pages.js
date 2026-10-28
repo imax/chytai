@@ -2344,7 +2344,7 @@ function listClub({ list, comments, user, own, owner, error }) {
   const item = (c) => `<div class="cmt" id="c-${attr(c.id)}"><p class="who"><a href="${attr(c.reader.href)}"><b>${esc(c.reader.name)}</b></a> · ${when({ updated: c.created })}${user && (c.reader.id === user.id || own || owner) ? ` · <button class="text-link small muted" form="del-${attr(c.id)}">видалити</button>` : ""}</p><p class="txt">${esc(c.text).replace(/\n/g, "<br>")}</p>${user && (c.reader.id === user.id || own || owner) ? `<form method="post" action="/api/lists/comments/${attr(c.id)}/delete" id="del-${attr(c.id)}" onsubmit="return confirm('Видалити коментар?')"></form>` : ""}</div>`;
   const form = user
     ? `<form method="post" action="/api/lists/${attr(encodeURIComponent(list.id))}/comments" class="cmt-form"><textarea name="text" rows="3" maxlength="2000" required placeholder="${comments.length ? "Що думаєш про цей список або яку книжку додав би?" : "Будь першим: що думаєш про цей список або яку книжку додав би?"}" aria-label="Коментар"></textarea>${error ? `<p class="error small">${esc(error)}</p>` : ""}<div><button class="btn primary">Додати коментар</button></div></form>`
-    : `<p class="small"><a class="text-link" rel="nofollow" href="/login?next=${attr(encodeURIComponent(`${list.href}#club`))}">Увійди</a>, щоб додати коментар.</p>`;
+    : `<p class="small"><a class="text-link" rel="nofollow" href="/login?next=${attr(encodeURIComponent(`${list.href}#club`))}">Увійдіть</a>, щоб додати коментар.</p>`;
   return `<section class="club" id="club"><h2>Клуб Chytai</h2>${comments.map(item).join("")}${form}</section>`;
 }
 // Lists in a sidebar: title and one line under it.
@@ -2409,6 +2409,7 @@ function listPage({ list, items, user, own = false, owner = false, saved = false
   <form method="post" action="/api/lists/${id}" class="form">
     <label>Назва<input name="title" value="${attr(list.title)}" maxlength="100" required></label>
     <label>Про список<textarea name="note" rows="8" maxlength="4000" placeholder="Для кого він і чому саме ці книжки. Можна кілька абзаців: між ними порожній рядок.">${esc(list.note)}</textarea></label>
+    <label>Джерело<input name="source" type="url" maxlength="500" placeholder="https://… (необов'язково)" value="${attr(list.source || "")}"></label>
     ${owner ? `<input type="hidden" name="ed_shown" value="1"><label class="check"><span><input type="checkbox" name="editorial" value="1"${list.editorial ? " checked" : ""}> Добірка Chytai: від «Редакції Chytai», на головній</span></label>` : ""}
     <div class="actions"><button class="btn primary">Зберегти</button></div>
   </form>
@@ -2440,6 +2441,7 @@ ${listHero(list, items)}
   <p class="kicker">${list.editorial ? "Добірка Chytai" : "Список"} · ${books(items.length)}</p>
   <h1>${esc(list.title)}</h1>
   ${list.note ? `<div class="intro">${paragraphs(list.note)}</div>` : own ? `<p class="lead muted"><button type="button" class="text-link" data-open="list-edit">Додай кілька слів про список</button></p>` : ""}
+  ${list.source ? `<p class="small muted">Джерело: <a class="text-link" href="${attr(list.source)}" target="_blank" rel="noopener nofollow">${esc(host(list.source))}</a></p>` : ""}
   <p class="by-line">${list.editorial ? `<b>${esc(list.by)}</b>` : `<a href="${attr(list.reader.href)}"><b>${esc(list.reader.name)}</b></a>`}${updated ? ` · оновлено ${updated}` : ""}${list.saves ? ` · ${list.saves} ${plural(list.saves, "зберіг", "зберегли", "зберегли")}` : ""}</p>
   <div class="acts">${save}${share}${tools}</div>
 </section>
