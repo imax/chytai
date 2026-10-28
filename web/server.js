@@ -975,6 +975,8 @@ app.post("/api/lists", signed, (req, res) => {
   if (auth.tooMany(`lists:${req.user.id}`, 30)) return res.status(429).send(pages.messagePage({ title: "Забагато нових списків за годину", text: "Спробуйте трохи згодом.", user: req.user }));
   const l = lists.create(req.user.id, { title: req.body.title, note: req.body.note });
   if (!l) return res.redirect(req.get("referer") || "/lists");
+  // Readers' own content mails Max (2026-10-28: «надсилай мені листа коли хтось створює список»).
+  if (!req.owner) notifyOwner(`Новий список: ${l.title}`, [`${req.user.name} (${SITE}/@${req.user.username}) створив(ла) список «${l.title}».`, "", `${SITE}${l.href}`].join("\n"));
   const id = bookParam(req);
   if (id && store.book(id)) {
     lists.add(l.id, id);
@@ -1012,6 +1014,7 @@ app.post("/api/lists/:id/comments", signed, (req, res) => {
   if (auth.tooMany(`comments:${req.user.id}`, 10)) return back("Забагато за годину. Спробуй трохи згодом.");
   const id = lists.addComment(l.id, req.user.id, req.body.text);
   if (!id && String(req.body.text || "").trim()) return back("На сьогодні досить, завтра можна знову.");
+  if (id && !req.owner) notifyOwner(`Коментар у Клубі: ${l.title}`, [`${req.user.name} (${SITE}/@${req.user.username}) під списком «${l.title}»:`, "", String(req.body.text).trim().slice(0, 1000), "", `${SITE}${l.href}#club`, `Усі коментарі: ${SITE}/admin/comments`].join("\n"));
   back("");
 });
 // One's own words go; the list's author and the owner take any away.
