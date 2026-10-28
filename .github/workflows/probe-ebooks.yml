@@ -7,11 +7,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - run: |
+          export LC_ALL=C.UTF-8
           UA="Mozilla/5.0 (Macintosh; Intel Mac OS X 14_0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129 Safari/537.36"
-          for u in https://nashformat.ua/ https://laboratory.ua/ https://meridiancz.com/ https://vikhola.com/ https://vivat.com.ua/ https://stonepublishing.com.ua/ https://bookchef.ua/ https://ababahalamaha.com.ua/ https://apriori.lviv.ua/ https://komorabooks.com/ https://osnovypublishing.com/ https://www.lobster.net.ua/ https://nebopublishing.com.ua/ https://folio.com.ua/ https://bohdan-books.com/ https://starylev.com.ua/ https://ksd.ua/ https://knigolove.ua/ https://www.ranok.com.ua/ https://zhorzh.com.ua/ https://artbooks.ua/ https://abuk.com.ua/ https://tamaryn.com.ua/ https://komubuk.com.ua/ https://vavylonska.com.ua/ https://choven.ua/ https://arthuss.com.ua/ https://antonenko-publishing.com/; do
-            echo "=== $u"
-            curl -sL -m 25 -A "$UA" -o /tmp/p.html -w "%{http_code} %{url_effective}\n" "$u"
-            grep -oiE 'href="[^"]*(elektron|e-book|ebook|epub|ebooks|електрон|digital|cyfrov|tsyfrov)[^"]*"' /tmp/p.html | sort -u | head -8
-            echo -n "words: "; grep -oiE 'електронн[а-яії]+|e-book|epub|PocketBook|Google Play|Apple Books|yakaboo|mobi\b' /tmp/p.html | tr 'A-ZА-Я' 'a-zа-я' | sort | uniq -c | tr '\n' ' '; echo
-            curl -s -m 15 -A "$UA" "${u%/}/robots.txt" | grep -iE "^(user-agent: \*|disallow: /$)" | head -3
-          done
+          probe() {
+            echo "=== $1"
+            curl -sL -m 25 -A "$UA" -H "Accept-Language: uk" -o /tmp/p.html -w "%{http_code} %{url_effective} %{size_download}\n" "$1" || echo "curl fail"
+            grep -oiE 'href="[^"]*(elektron|e-book|ebook|epub|digital|format=|type=)[^"]*"' /tmp/p.html | sort -u | head -6 || true
+            echo -n "words: "; grep -oiE 'електронн[^ <"]{0,8}|e-book|epub|pdf|mobi|PocketBook|Google Play|Apple Books|yakaboo|Аудіо' /tmp/p.html | sort | uniq -c | sort -rn | head -12 | tr '\n' ' ' || true; echo
+            echo -n "products: "; grep -oiE 'class="[^"]*(product|book-card|card)[^"]*"' /tmp/p.html | wc -l
+            grep -oiE '(знайдено|товарів|результат)[^<]{0,40}' /tmp/p.html | head -3 || true
+          }
+          for u in https://nashformat.ua/ https://nashformat.ua/catalog/elektronni-knygy https://laboratory.ua/ https://laboratory.ua/catalog https://meridiancz.com/ https://vikhola.com/ https://vikhola.com/shop/ https://folio.com.ua/ https://folio.com.ua/books/ https://apriori-publishing.com/ https://bookchef.ua/ https://bookchef.ua/catalog https://abuk.com.ua/ https://www.ranok.com.ua/ https://vivat.com.ua/category/elektronni-knyhy/ https://starylev.com.ua/bookstore/category--elektronni-knyzhky https://ksd.ua/e-books https://knigolove.ua/ebook https://artbooks.ua/e-books/ https://bohdan-books.com/ebooks/ https://komubuk.com.ua/ https://vavylonska.com.ua/ https://choven.ua/ https://arthuss.com.ua/ https://antonenko-publishing.com/ https://komorabooks.com/ https://osnovypublishing.com/ https://nebopublishing.com.ua/ https://stonepublishing.com.ua/ https://www.lobster.net.ua/ https://zhorzh.com.ua/ https://ababahalamaha.com.ua/ https://tamaryn.com.ua/ https://borodatyi-tamaryn.com/ https://proxima-nova.com.ua/ https://www.fabula.club/ https://yakaboo.ua/ua/publishing; do probe "$u"; done
