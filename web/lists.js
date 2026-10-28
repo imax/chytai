@@ -38,6 +38,8 @@ const COMMENT_MAX = 2000;
 const COMMENTS_A_DAY = 20;
 // «Добірка Chytai»: the owner's list in the site's name («Редакція Chytai» instead of his own).
 const EDITORIAL = "Редакція Chytai";
+// A draft (Max, 2026-10-28: «мій до публікації не готовий ще») is its author's alone: others get a 404 on its
+// page, and it stays off /lists, the reader's page, «У списках», «Схожі списки», the homepage and the sitemap.
 
 class Lists {
   // `who(readerId)` is the public reader ({ name, username, href }) or null.
@@ -46,7 +48,7 @@ class Lists {
     this.db = store.db;
     this.who = who;
     this.db.exec(SCHEMA);
-    for (const [col, def] of [["image", "TEXT NOT NULL DEFAULT ''"], ["editorial", "INTEGER NOT NULL DEFAULT 0"], ["source", "TEXT NOT NULL DEFAULT ''"]])
+    for (const [col, def] of [["image", "TEXT NOT NULL DEFAULT ''"], ["editorial", "INTEGER NOT NULL DEFAULT 0"], ["source", "TEXT NOT NULL DEFAULT ''"], ["draft", "INTEGER NOT NULL DEFAULT 0"]])
       if (!this.db.prepare("PRAGMA table_info(lists)").all().some((c) => c.name === col)) this.db.exec(`ALTER TABLE lists ADD COLUMN ${col} ${def}`);
   }
 
@@ -57,7 +59,7 @@ class Lists {
     if (!reader) return null;
     const n = this.db.prepare("SELECT COUNT(*) AS n FROM list_items WHERE list = ?").get(row.id).n;
     const saves = this.db.prepare("SELECT COUNT(*) AS n FROM list_saves WHERE list = ?").get(row.id).n;
-    return { ...row, editorial: !!row.editorial, by: row.editorial ? EDITORIAL : reader.name, reader, href: `${reader.href}/list/${row.slug}`, count: n, saves };
+    return { ...row, editorial: !!row.editorial, draft: !!row.draft, by: row.editorial ? EDITORIAL : reader.name, reader, href: `${reader.href}/list/${row.slug}`, count: n, saves };
   }
   get(id) {
     return this.view(this.db.prepare("SELECT * FROM lists WHERE id = ?").get(String(id)));
@@ -81,15 +83,16 @@ class Lists {
     this.db.prepare("INSERT INTO lists (id, reader, slug, title, note, created, updated) VALUES (?, ?, ?, ?, ?, ?, ?)").run(id, readerId, slug, title, String(note).trim().slice(0, NOTE_MAX), now, now);
     return this.get(id);
   }
-  // `editorial` is the owner's to set (server.js); undefined leaves it as it is.
+  // `editorial` is the owner's to set (server.js); undefined leaves it (and `draft`) as it is.
   // `source`: where the list comes from, an address shown under the intro (Max, 2026-10-28: the Diia vote's page).
-  edit(id, { title, note, editorial, source }) {
+  edit(id, { title, note, editorial, source, draft }) {
     const l = this.get(id);
     if (!l) return null;
     const t = String(title ?? l.title).replace(/\s+/g, " ").trim().slice(0, TITLE_MAX) || l.title;
     const ed = editorial === undefined ? l.editorial : !!editorial;
+    const dr = draft === undefined ? l.draft : !!draft;
     const src = source === undefined ? l.source : /^https?:\/\/[^\s"<>]+$/.test(String(source).trim()) ? String(source).trim().slice(0, 500) : "";
-    this.db.prepare("UPDATE lists SET title = ?, note = ?, editorial = ?, source = ?, updated = ? WHERE id = ?").run(t, String(note ?? l.note).replace(/\r/g, "").trim().slice(0, NOTE_MAX), ed ? 1 : 0, src, new Date().toISOString(), id);
+    this.db.prepare("UPDATE lists SET title = ?, note = ?, editorial = ?, source = ?, draft = ?, updated = ? WHERE id = ?").run(t, String(note ?? l.note).replace(/\r/g, "").trim().slice(0, NOTE_MAX), ed ? 1 : 0, src, dr ? 1 : 0, new Date().toISOString(), id);
     return this.get(id);
   }
   // The picture on top: our own /covers/<name>, or "" for the one made of the list's covers.
@@ -98,7 +101,7 @@ class Lists {
   }
   // «Добірки Chytai» on the homepage: the owner's editorial lists with books, the newest first.
   editorials() {
-    return this.db.prepare("SELECT * FROM lists WHERE editorial = 1 ORDER BY created DESC").all().map((r) => this.view(r)).filter((l) => l && l.count);
+    return this.db.prepare("SELECT * FROM lists WHERE editorial = 1 AND draft = 0 ORDER BY created DESC").all().map((r) => this.view(r)).filter((l) => l && l.count);
   }
 
   // ---- «Клуб Chytai» ----
@@ -205,7 +208,7 @@ class Lists {
   // «Зберегти список» / «✓ Збережено»; true when saved now. One's own list is not saved.
   toggleSave(readerId, listId) {
     const l = this.get(listId);
-    if (!l || l.reader.id === readerId) return null;
+    if (!l || l.reader.id === readerId || l.draft) return null;
     if (this.saved(readerId, listId)) {
       this.db.prepare("DELETE FROM list_saves WHERE reader = ? AND list = ?").run(readerId, listId);
       return false;
@@ -217,16 +220,16 @@ class Lists {
     return !!readerId && !!this.db.prepare("SELECT 1 FROM list_saves WHERE reader = ? AND list = ?").get(readerId, listId);
   }
   savedBy(readerId) {
-    return this.db.prepare("SELECT l.* FROM list_saves s JOIN lists l ON l.id = s.list WHERE s.reader = ? ORDER BY s.created DESC").all(readerId).map((r) => this.view(r)).filter(Boolean);
+    return this.db.prepare("SELECT l.* FROM list_saves s JOIN lists l ON l.id = s.list WHERE s.reader = ? AND l.draft = 0 ORDER BY s.created DESC").all(readerId).map((r) => this.view(r)).filter(Boolean);
   }
 
   // A few covers for a list's card: its first books.
   covers(listId, n = 4) {
     return this.items(listId).slice(0, n).map((x) => x.book);
   }
-  // Every list with books in it (others see no empty ones): `popular` by saves, `new` by when made.
+  // Every published list with books in it (others see no empty ones or drafts): `popular` by saves, `new` by when made.
   all({ sort = "popular" } = {}) {
-    const rows = this.db.prepare("SELECT * FROM lists").all().map((r) => this.view(r)).filter((l) => l && l.count);
+    const rows = this.db.prepare("SELECT * FROM lists WHERE draft = 0").all().map((r) => this.view(r)).filter((l) => l && l.count);
     return sort === "new" ? rows.sort((a, b) => (b.created > a.created ? 1 : -1)) : rows.sort((a, b) => b.saves - a.saves || b.count - a.count || (b.updated > a.updated ? 1 : -1));
   }
   // The lists a book is in («У списках» on its page), the most saved first.
@@ -235,7 +238,7 @@ class Lists {
     const ids = new Set([id, ...(this.store.editions?.get(id) || []).map((e) => e.item.id)]);
     const lists = new Set();
     for (const r of this.db.prepare("SELECT list, book FROM list_items").all()) if (ids.has(r.book) || this.store.canonical(r.book) === id) lists.add(r.list);
-    return [...lists].map((l) => this.get(l)).filter(Boolean).sort((a, b) => b.saves - a.saves || b.count - a.count);
+    return [...lists].map((l) => this.get(l)).filter((l) => l && !l.draft).sort((a, b) => b.saves - a.saves || b.count - a.count);
   }
   // «Схожі списки»: other readers' lists sharing the most books with this one.
   similar(list, limit = 3) {
@@ -255,7 +258,7 @@ class Lists {
     for (const s of this.db.prepare("SELECT list, created FROM list_saves WHERE reader = ?").all(readerId)) {
       const l = this.get(s.list);
       const from = s.created > sinceIso ? s.created : sinceIso;
-      if (l) for (const x of this.items(l.id)) if (x.added > from) out.push({ list: l, ...x });
+      if (l && !l.draft) for (const x of this.items(l.id)) if (x.added > from) out.push({ list: l, ...x });
     }
     return out.sort((a, b) => (b.added > a.added ? 1 : -1));
   }

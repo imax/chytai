@@ -2437,7 +2437,7 @@ function messagePage({ title, text, user }) {
 
 // ---- «Списки» (lists.js): readers' own public lists of books ----
 
-const listMeta = (l, { by = true } = {}) => [by ? (l.editorial ? esc(l.by) : `<a href="${attr(l.reader.href)}">${esc(l.reader.name)}</a>`) : "", books(l.count), l.saves ? `${l.saves} ${plural(l.saves, "зберіг", "зберегли", "зберегли")}` : ""].filter(Boolean).join(" · ");
+const listMeta = (l, { by = true } = {}) => [l.draft ? "чернетка" : "", by ? (l.editorial ? esc(l.by) : `<a href="${attr(l.reader.href)}">${esc(l.reader.name)}</a>`) : "", books(l.count), l.saves ? `${l.saves} ${plural(l.saves, "зберіг", "зберегли", "зберегли")}` : ""].filter(Boolean).join(" · ");
 // A fan of the list's first covers.
 const stack = (list) => `<span class="stack">${list.map((b) => cover(b, "md")).join("")}</span>`;
 // A list as a line (the book page's «У списках»): covers, title, who and how many.
@@ -2493,7 +2493,8 @@ function listPage({ list, items, user, own = false, owner = false, saved = false
     : user
       ? `<form method="post" action="/api/lists/${id}/save" class="inline"><button class="btn${saved ? " on" : " primary"}">${saved ? "✓ Збережено" : "Зберегти список"}</button></form>`
       : `<a class="btn primary" rel="nofollow" href="/login?next=${attr(encodeURIComponent(list.href))}">Зберегти список</a>`;
-  const share = `<button type="button" class="btn" data-share="${attr(ORIGIN + list.href)}" data-title="${attr(list.title)}">Поділитися</button>`;
+  // A draft is the author's alone: no sharing yet, «Опублікувати» instead.
+  const share = list.draft ? `<form method="post" action="/api/lists/${id}/publish" class="inline"><button class="btn primary">Опублікувати</button></form>` : `<button type="button" class="btn" data-share="${attr(ORIGIN + list.href)}" data-title="${attr(list.title)}">Поділитися</button>`;
   // The author's tools under the books and the search to add one stay hidden until «Редагувати» (Max, 2026-10-28:
   // «ці actions сховаємо в edit menu»); the mode survives the reload after each move or save, per tab.
   const tools = own ? `<button type="button" class="btn" id="list-edit-toggle" aria-pressed="false">Редагувати</button><button type="button" class="btn list-edit-only" data-open="list-edit">Назва й опис</button>` : "";
@@ -2531,6 +2532,7 @@ function listPage({ list, items, user, own = false, owner = false, saved = false
     <label>Назва<input name="title" value="${attr(list.title)}" maxlength="100" required></label>
     <label>Про список<textarea name="note" rows="8" maxlength="4000" placeholder="Для кого він і чому саме ці книжки. Можна кілька абзаців: між ними порожній рядок.">${esc(list.note)}</textarea></label>
     <label>Джерело<input name="source" type="url" maxlength="500" placeholder="https://… (необов'язково)" value="${attr(list.source || "")}"></label>
+    <input type="hidden" name="dr_shown" value="1"><label class="check"><span><input type="checkbox" name="draft" value="1"${list.draft ? " checked" : ""}> Чернетка: бачите тільки ви</span></label>
     ${owner ? `<input type="hidden" name="ed_shown" value="1"><label class="check"><span><input type="checkbox" name="editorial" value="1"${list.editorial ? " checked" : ""}> Добірка Chytai: від «Редакції Chytai», на головній</span></label>` : ""}
     <div class="actions"><button class="btn primary">Зберегти</button></div>
   </form>
@@ -2571,7 +2573,7 @@ ${listHero(list, items)}
 <div class="split">
 <div${own ? ` class="lcol"` : ""}>
 <section class="list-head">
-  <p class="kicker">${list.editorial ? "Добірка Chytai" : "Список"} · ${books(items.length)}</p>
+  <p class="kicker">${list.draft ? "Чернетка · " : ""}${list.editorial ? "Добірка Chytai" : "Список"} · ${books(items.length)}</p>
   <h1>${esc(list.title)}</h1>
   ${list.note ? `<div class="intro">${paragraphs(list.note)}</div>` : own ? `<p class="lead muted"><button type="button" class="text-link" data-open="list-edit">Додайте кілька слів про список</button></p>` : ""}
   ${list.source ? `<p class="small muted">Джерело: <a class="text-link" href="${attr(list.source)}" target="_blank" rel="noopener nofollow">${esc(host(list.source))}</a></p>` : ""}
@@ -2580,7 +2582,7 @@ ${listHero(list, items)}
 </section>
 ${adder}
 ${items.length ? `<section class="lrows">${rows}</section>` : `<p class="muted">${own ? "Список порожній. Знайдіть книжку вище або на її сторінці натисни «⋯» → «Додати до списку…»." : "У списку поки немає книжок."}</p>`}
-${items.length || comments.length ? listClub({ list, comments, user, own, owner, error: commentError }) : ""}
+${(items.length && !list.draft) || comments.length ? listClub({ list, comments, user, own, owner, error: commentError }) : ""}
 </div>
 <aside>
   ${more.length ? `${label(own ? "Мої інші списки" : list.editorial ? "Ще добірки Chytai" : `Ще списки: ${esc(list.reader.name)}`)}${sideLists(more, (l) => listMeta(l, { by: false }))}` : ""}

@@ -936,7 +936,7 @@ app.get("/@:username", (req, res) => {
   const rows = libraryRows(reader.id);
   const follows = { followers: auth.followers(reader.id).map((id) => pub(auth.reader(id))).filter(Boolean), following: auth.following(reader.id).map((id) => pub(auth.reader(id))).filter(Boolean) };
   // The profile is the reader's own stats and books; recommendations live on other pages (Max, 2026-10-23).
-  const theirLists = lists.of(reader.id).filter((l) => own || l.count);
+  const theirLists = lists.of(reader.id).filter((l) => own || (l.count && !l.draft));
   const part = restPart(req, res);
   if (own) return res.send(pages.libraryPage({ part, lists: theirLists, savedLists: lists.savedBy(reader.id), rows, user: req.user, reader: req.user, own: true, follows, now: nowFor(reader.id, { own: true }) }));
   res.send(pages.libraryPage({ part, lists: theirLists, rows, user: req.user, reader, now: nowFor(reader.id), mineIds: req.user && req.user.id !== reader.id ? store.inLibrary(req.user.id) : null, mineDirect: req.user ? new Set(Object.keys(store.entriesOf(req.user.id))) : null, following: auth.follows(req.user?.id, reader.id), follows }));
@@ -945,7 +945,7 @@ app.get("/@:username", (req, res) => {
 app.get("/@:username/list/:slug", (req, res) => {
   const reader = pub(auth.byUsername(req.params.username));
   const list = reader && lists.bySlug(reader.id, req.params.slug);
-  if (!list) return res.status(404).send(pages.messagePage({ title: "Немає такого списку", text: "", user: req.user }));
+  if (!list || (list.draft && req.user?.id !== reader.id)) return res.status(404).send(pages.messagePage({ title: "Немає такого списку", text: "", user: req.user }));
   if (reader.username !== req.params.username) return res.redirect(301, list.href);
   const own = req.user?.id === reader.id;
   // Free-shelf books get a quiet «є в Читалці» in their row (usability review 2026-10-28: «Розстріляне відродження»).
@@ -954,7 +954,7 @@ app.get("/@:username/list/:slug", (req, res) => {
   const inList = own && q ? lists.ids(list.id) : null;
   const find = q ? { q, hits: searchHits(req, q).slice(0, 8).map((h) => ({ book: h.book, in: inList.has(store.canonical(h.book.id)) })) } : null;
   // An editorial list shows the site's other ones, not its author's own (Max's name stays off «Добірка Chytai»).
-  const more = lists.of(reader.id).filter((l) => l.id !== list.id && (own || l.count) && (own || l.editorial === list.editorial)).slice(0, 5);
+  const more = lists.of(reader.id).filter((l) => l.id !== list.id && (own || (l.count && !l.draft)) && (own || l.editorial === list.editorial)).slice(0, 5);
   const og = list.image ? list.image : ogCovers(items).length ? `/og/list/${encodeURIComponent(list.id)}.jpg?v=${listImage.name(ogCovers(items)).slice(0, 8)}` : "";
   res.send(pages.listPage({ list: { ...list, count: items.length }, items, user: req.user, own, owner: req.owner, saved: lists.saved(req.user?.id, list.id), more, similar: lists.similar(list), find, og, comments: lists.comments(list.id), commentError: String(req.query.comment_error || "").slice(0, 200) }));
 });
@@ -962,7 +962,7 @@ const ogCovers = (items) => items.map((x) => x.book.cover).filter(Boolean).slice
 // The picture a list's link shows in Telegram, Facebook and the rest: made of its first covers once, then kept.
 app.get("/og/list/:id.jpg", async (req, res) => {
   const l = lists.get(req.params.id);
-  if (!l) return res.status(404).end();
+  if (!l || l.draft) return res.status(404).end();
   const covers = ogCovers(lists.items(l.id));
   const file = await listImage.file(covers).catch(() => null);
   if (!file) return res.redirect(302, covers[0] || "/icon.png");
@@ -996,8 +996,19 @@ app.post("/api/lists", signed, (req, res) => {
   }
   res.redirect(303, l.href);
 });
-// «Добірка Chytai» is the owner's switch (the form shows it only to him).
-app.post("/api/lists/:id", signed, myList, (req, res) => res.redirect(303, lists.edit(req.list.id, { title: req.body.title, note: req.body.note, source: req.body.source ?? "", editorial: req.owner && req.body.ed_shown ? req.body.editorial === "1" : undefined }).href));
+// «Добірка Chytai» is the owner's switch (the form shows it only to him). «Чернетка» is the author's.
+app.post("/api/lists/:id", signed, myList, (req, res) => {
+  const l = lists.edit(req.list.id, { title: req.body.title, note: req.body.note, source: req.body.source ?? "", editorial: req.owner && req.body.ed_shown ? req.body.editorial === "1" : undefined, draft: req.body.dr_shown ? req.body.draft === "1" : undefined });
+  if (req.list.draft && !l.draft) published(req, l);
+  res.redirect(303, l.href);
+});
+app.post("/api/lists/:id/publish", signed, myList, (req, res) => {
+  const l = lists.edit(req.list.id, { draft: false });
+  if (req.list.draft) published(req, l);
+  res.redirect(303, l.href);
+});
+// A reader's draft out in the open mails Max too, like a new list.
+const published = (req, l) => !req.owner && notifyOwner(`Опубліковано список: ${l.title}`, [`${req.user.name} (${SITE}/@${req.user.username}) опублікував(ла) список «${l.title}».`, "", `${SITE}${l.href}`].join("\n"));
 // The picture on top of a list, from the author's computer: kept here, made no wider than 1600 px.
 app.post("/api/lists/:id/image", signed, myList, express.raw({ type: "image/*", limit: "15mb" }), async (req, res) => {
   const ext = COVER_TYPES[String(req.get("content-type") || "").split(";")[0].trim()];
@@ -1021,7 +1032,7 @@ app.post("/api/lists/:id/image/remove", signed, myList, (req, res) => (lists.set
 // «Клуб Chytai»: a signed-in reader's words under a list.
 app.post("/api/lists/:id/comments", signed, (req, res) => {
   const l = lists.get(req.params.id);
-  if (!l) return res.status(404).send(pages.messagePage({ title: "Немає такого списку", text: "", user: req.user }));
+  if (!l || (l.draft && l.reader.id !== req.user.id)) return res.status(404).send(pages.messagePage({ title: "Немає такого списку", text: "", user: req.user }));
   const back = (err) => res.redirect(303, `${l.href}${err ? `?comment_error=${encodeURIComponent(err)}` : ""}#club`);
   if (auth.tooMany(`comments:${req.user.id}`, 10)) return back("Забагато за годину. Спробуйте трохи згодом.");
   const id = lists.addComment(l.id, req.user.id, req.body.text);
