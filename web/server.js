@@ -27,7 +27,7 @@ const enrich = require("./enrich");
 const readeat = require("./readeat");
 const { BookPage, isUrl } = require("./bookpage");
 const { UkFinder } = require("./ukfind");
-const { Admin, adminPage, shelvesPage, readersPage, overviewsPage, speedPage, jobsPage, BOT } = require("./admin");
+const { Admin, adminPage, catalogBlock, shelvesPage, readersPage, overviewsPage, speedPage, jobsPage, BOT } = require("./admin");
 const { Mcp } = require("./mcp");
 const { Reviews } = require("./reviews");
 const { Advice } = require("./advice");
@@ -1690,9 +1690,19 @@ app.post("/admin/lang-trial", owner, (req, res) => {
 app.get("/admin/catalog", owner, (req, res) => {
   const all = (t, have) => ({ ...t.allState(), running: t.allRunning, have });
   const trial = (t) => { const st = t.state(); return st && { done: st.done, total: st.total, cost: st.cost, at: st.at, running: t.running, prompt: st.prompt }; };
+  const fb = freeBooks.state();
+  const waiting = [
+    ["/admin/dupes", "схожі на дублі", store.dupes().filter((g) => g.some((b) => b.readers)).length],
+    ["/admin/volumes", "томи однієї книжки", (store.volumeGroups || []).length],
+    ["/admin/russian", "може, російською", store.russianSuspects().length],
+    ["/admin/translations", "пари перекладів", store.translationCandidates().reduce((n, t) => n + t.uk.length, 0)],
+    ["/admin/free", "вільні, але не в Читалці", (fb?.items || []).filter((x) => x.died <= fb.last && !x.inReader).length],
+  ].filter(([, , n]) => n).map(([href, name, n]) => ({ href, name, n }));
   res.send(pages.catalogAdminPage({
     user: req.user,
     claude: `/claude/${claudeKey()}`,
+    tiles: catalogBlock(store.catalogStats()),
+    waiting,
     passes: [
       { key: "genres", name: "Жанри", what: "Один-два жанри для кожної книжки замість жанрів з полиць магазинів. Твій «Основний жанр» важливіший.", href: "/admin/genres-trial", all: all(genreTrial, store.aiGenres().size), trial: trial(genreTrial) },
       { key: "lang", name: "Мова", what: "Мова видань з кириличною назвою, з якої не видно мови. «Рос» ховає книжку, «укр» нічого не змінює.", href: "/admin/lang-trial", all: all(langTrial, store.aiLangs().size), trial: trial(langTrial) },

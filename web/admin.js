@@ -668,7 +668,7 @@ function readersPage({ user, stats: s, layout, q = "", min = 0, sort = "created"
   const filters = [[0, "Усі"], [1, "1+ книжка"], [10, "10+ книжок"]].map(([k, l]) => { const c = s.readers.filter((r) => r.books >= k).length; return k === min ? `<b>${l} (${c})</b>` : `<a href="${url({ books: k })}">${l} (${c})</a>`; }).join(" · ");
   const pager = pages > 1 ? `<p class="filter pager">${[...Array(pages)].map((_, i) => (i + 1 === page ? `<b>${i + 1}</b>` : `<a href="${url({ p: i + 1 })}">${i + 1}</a>`)).join(" ")}</p>` : "";
   const body = `<section class="admin">
-<section class="page-head"><div><p class="crumbs"><a href="/admin">Статистика</a> / Читачі</p><h1>Читачі</h1><p class="sub">«Днів» — скільки різних днів читач був на сайті після реєстрації. Заголовки сортують таблицю.</p></div></section>
+<section class="page-head"><div><h1>Читачі</h1><p class="sub">«Днів» — скільки різних днів читач був на сайті після реєстрації. Заголовки сортують таблицю.</p></div></section>
 <form class="find admin-find" action="/admin/readers" role="search"><input type="search" name="q" value="${esc(q)}" placeholder="ім'я або нікнейм" autocomplete="off" aria-label="Пошук читача">${min ? `<input type="hidden" name="books" value="${min}">` : ""}${sort !== "created" ? `<input type="hidden" name="sort" value="${sort}">` : ""}</form>
 <p class="filter">${filters}${q ? ` · знайдено ${all.length} <a href="${url({ query: "" })}">скинути пошук</a>` : ""}</p>
 ${pager}
@@ -677,7 +677,7 @@ ${shown.length ? `<div class="tbl"><table class="readers">
 <tbody>${shown.map(readerRow).join("")}</tbody></table></div>` : `<p class="muted">Нікого не знайдено.</p>`}
 ${pager}
 </section>`;
-  return layout({ title: "Читачі · Статистика", user, path: "/admin", body });
+  return layout({ title: "Читачі · Адмінка", user, path: "/admin", body });
 }
 
 // The catalog's size and how fast it grows (store.catalogStats; Max, 2026-10-25). Days start 2026-10-25.
@@ -689,7 +689,12 @@ function catalogBlock(c, full = false) {
     const k = days.filter((x) => x <= d).pop();
     return k ? c.daily[k].works : null;
   };
-  const growth = (back) => (at(back) === null || !days.length ? "" : `+${c.works - at(back)}`);
+  const growth = (back) => {
+    const was = at(back);
+    if (was === null || !days.length) return "";
+    const d = c.works - was;
+    return d < 0 ? `−${-d}` : `+${d}`;
+  };
   const rows = days
     .slice(-14)
     .reverse()
@@ -704,11 +709,12 @@ function catalogBlock(c, full = false) {
     .sort((a, b) => b.works - a.works)
     .map((s) => `<tr><th style="white-space:normal">${s.name}${s.draft ? ' <em>чернетка</em>' : ""}</th><td>${s.works}</td><td>${s.items}</td></tr>`)
     .join("");
-  const tiles = `<div class="stats">${tile(c.works, "книжок у каталогі", `${c.items} видань на ${c.shelves.filter((s) => !s.draft).length} полицях`)}${tile(growth(7) || "·", "за 7 днів", growth(1) ? `${growth(1)} за добу` : "ще нема з чим порівняти")}${tile(growth(28) || "·", "за 28 днів")}${tile(c.draft, "у чернетках", c.draft ? `${c.shelves.filter((s) => s.draft).length} полиць бачиш лише ти` : "")}</div>`;
+  const since = days.length ? `рахуємо з ${short(days[0])}` : "";
+  const tiles = `<div class="stats">${tile(c.works, "книжок у каталогі", `${c.items} видань на ${c.shelves.filter((s) => !s.draft).length} полицях${c.draft ? `, ${c.draft} у чернетках` : ""}`)}${tile(growth(7) || "—", "за 7 днів", growth(7) ? (growth(1) ? `${growth(1)} за добу` : "") : since)}${tile(growth(28) || "—", "за 28 днів", growth(28) ? "" : since)}</div>`;
   // On /admin only the summary, the tables on /admin/shelves (Max, 2026-10-25: like «Нові читачі»).
-  if (!full) return `<h2>Каталог</h2>\n${tiles}\n<p class="small"><a class="text-link" href="/admin/shelves">Каталог по днях і по полицях (${c.shelves.length})</a></p>`;
+  if (!full) return tiles;
   return `<section class="admin">
-<section class="page-head"><div><p class="crumbs"><a href="/admin">Статистика</a> / Каталог</p><h1>Каталог</h1><p class="sub">Книжка — один твір з усіма виданнями (папір, e-book, аудіо, різні видавництва). Чернетки бачиш лише ти; книжки, які є й на відкритих полицях, у чернетках не рахуються. Рахується з 25 жовтня.</p></div></section>
+<section class="page-head"><div><p class="crumbs"><a href="/admin/catalog">Каталог</a></p><h1>Полиці</h1><p class="sub">Книжка — один твір з усіма виданнями (папір, e-book, аудіо, різні видавництва). Чернетки бачиш лише ти; книжки, які є й на відкритих полицях, у чернетках не рахуються. Рахується з 25 жовтня.</p></div></section>
 ${tiles}
 <h2>По днях</h2>
 <div class="tbl"><table>
@@ -721,7 +727,7 @@ ${tiles}
 </section>`;
 }
 function shelvesPage({ user, catalog, layout }) {
-  return layout({ title: "Каталог · Статистика", user, path: "/admin", body: catalogBlock(catalog, true) });
+  return layout({ title: "Полиці · Адмінка", user, path: "/admin", body: catalogBlock(catalog, true) });
 }
 
 function adminPage({ user, stats: s, overviews: o = null, catalog = null, gsc = null, gscOn = false, layout, page = "main" }) {
@@ -734,10 +740,6 @@ function adminPage({ user, stats: s, overviews: o = null, catalog = null, gsc = 
     tile(t.entries, "книжок на полицях", `+${t.entriesWeek} за тиждень · ${t.want} у «хочу прочитати»`),
     tile(t.ratings, "оцінок", `${t.notes} нотаток`),
     tile(t.follows, "стежень", `${t.digestOn} підписані на лист, ${t.digestOff} відписались`),
-    tile("→", `<a href="/admin/catalog">якість каталогу</a>`, "жанри, мова, оригінали, переклади"),
-    tile("→", `<a href="/admin/free">вільні книжки</a>`, "з «Хочу прочитати», вже без авторського права"),
-    tile("→", `<a href="/admin/comments">Клуб Chytai</a>`, "коментарі під списками"),
-    ...(o ? [tile(o.n, `<a href="/admin/overviews">оглядів від Claude</a>`, `${o.today} сьогодні · ${o.queue} в черзі · 🤩 ${o.up} 🙂 ${o.mid} 🙁 ${o.down} · ≈ $${o.cost.toFixed(2)}`)] : []),
   ].join("");
 
   // Newest week on top in both tables (Max, 2026-10-20: «свіжі зверху», «починаємо з цього тижня»).
@@ -757,16 +759,10 @@ function adminPage({ user, stats: s, overviews: o = null, catalog = null, gsc = 
     .map((c) => `<tr><th>${weekLabel(c.week)}</th><td>${c.size}</td>${c.later.map(pct).join("")}</tr>`)
     .join("");
 
-  // Readers live on /admin/readers; here only a link and this week's count (Max, 2026-10-23: no table here).
-  const fresh = s.readers.filter((r) => !r.owner && r.created >= addDays(s.now, -6));
-
-  const d = s.digest;
-  const digestLine = d ? `Останню розсилку виконано ${short(dayOf(d.finished || d.started))}: надіслано ${d.sent}, пропущено ${d.skipped}${d.errors?.length ? `, помилок ${d.errors.length}` : ""}.` : "Розсилка ще не виконувалась.";
-
   // /admin is about readers and retention, /admin/traffic about where visitors come from (Max, 2026-10-24).
   const body = traffic
     ? `<section class="admin">
-<section class="page-head"><div><p class="crumbs"><a href="/admin">Статистика</a> / Трафік</p><h1>Трафік</h1></div></section>
+<section class="page-head"><div><h1>Трафік</h1></div></section>
 
 ${trafficBody(s, gsc, gscOn)}
 
@@ -778,22 +774,10 @@ ${s.sections.length ? `<div class="tbl"><table class="sections">
 
 </section>`
     : `<section class="admin">
-<section class="page-head"><div><h1>Статистика</h1><p class="sub">Сайт станом на ${short(s.now)}. Активний читач — той, хто відкрив сайт або щось зробив на полиці того дня. Перегляди рахуються з ${s.totals.viewsSince ? short(s.totals.viewsSince) : "сьогодні"}; раніше за активність правлять входи й зміни на полиці.</p></div></section>
+<section class="page-head"><div><h1>Огляд</h1><p class="sub">Станом на ${short(s.now)}. Активний читач — той, хто відкрив сайт або щось зробив на полиці того дня. Перегляди рахуються з ${s.totals.viewsSince ? short(s.totals.viewsSince) : "сьогодні"}; раніше за активність правлять входи й зміни на полиці.</p></div></section>
 <div class="stats">${tiles}</div>
-<h2>Нові читачі</h2>
-<div class="tbl"><table class="readers">
-<thead><tr>${READER_HEAD}</tr></thead>
-<tbody>${s.readers.filter((r) => !r.owner).sort((a, b) => String(b.at).localeCompare(String(a.at))).slice(0, 5).map(readerRow).join("")}</tbody></table></div>
-<p class="small"><a class="text-link" href="/admin/readers">Усі читачі (${s.readers.length})</a>, нових за 7 днів: ${fresh.length}.</p>
-
-${s.arrivals ? `<h2>Звідки приходять</h2>
-${sourcesTable(s.arrivals, 4)}
-<p class="small"><a class="text-link" href="/admin/speed">Швидкість сайту</a> · <a class="text-link" href="/admin/jobs">Фонові задачі</a></p>
-<p class="small"><a class="text-link" href="/admin/traffic">Усі джерела (${s.arrivals.sources.length})</a>, Google, тижні, сторінки входу, перегляди за розділами.</p>` : ""}
 
 ${funnelBlock(s.funnel)}
-
-${catalogBlock(catalog)}
 
 <h2>По тижнях</h2>
 <p class="muted small">Читачі без власника. «Повернулись» — активні цього тижня, але зареєстровані раніше. Перегляди: сторінок, відкритих читачами / гостями (без ботів).</p>
@@ -807,11 +791,9 @@ ${s.cohorts.length ? `<div class="tbl"><table class="cohorts">
 <thead><tr><th>Зареєструвались</th><th>Читачів</th>${s.later.map((k) => `<th>+${k} тиж.</th>`).join("")}</tr></thead>
 <tbody>${cohortRows}</tbody></table></div>` : `<p class="muted">Поки нема жодної когорти.</p>`}
 
-<h2>Щотижневий лист</h2>
-<p>${digestLine} <a class="text-link" href="/admin/digest">Твій текст у листі</a> · <a class="text-link" href="/digest/preview">Переглянути свій лист</a> · <a class="text-link" href="/digest/status">стан розсилки</a> · <a class="text-link" href="/refresh-status">стан каталогів</a> · <a class="text-link" href="/admin/refresh">оновити каталоги зараз</a></p>
 <p class="muted small">Сесій (пристроїв, що залишились увійшовши): ${t.sessions}.</p>
 </section>`;
-  return layout({ title: traffic ? "Трафік · Статистика" : "Статистика", user, path: "/admin", body });
+  return layout({ title: traffic ? "Трафік · Адмінка" : "Адмінка", user, path: "/admin", body });
 }
 
 // /admin/overviews: every overview with readers' 🤩/🙂/🙁, the complained-about ones on top.
@@ -827,13 +809,13 @@ function overviewsPage({ user, list, stats: o, who, layout }) {
     })
     .join("\n");
   const body = `<section class="admin">
-<p class="small"><a href="/admin">← Статистика</a></p>
+<p class="crumbs"><a href="/admin/catalog">Каталог</a></p>
 <h1>Огляди від Claude</h1>
 <p>${n(o.n)} оглядів, ${o.auto} зроблені самі · 🤩 ${o.up} · 🙂 ${o.mid} · 🙁 ${o.down} · ${o.queue} в черзі · ≈ $${o.cost.toFixed(2)} за весь час</p>
 <p class="muted"><a href="/admin/overviews-trial">Проба нового промпту</a> · Поточна версія промпту ${o.version}: ${o.current} з ${o.n} · невдалих після рестарту: ${o.failed}${o.lastError ? ` · остання помилка: ${esc(o.lastError)}` : ""}</p>
 <table><thead><tr><th>Книжка</th><th>🤩</th><th>🙂</th><th>🙁</th><th>Коли</th><th>Хто</th><th>Пошуків</th><th>Токенів in</th><th>out</th></tr></thead><tbody>${rows}</tbody></table>
 </section>`;
-  return layout({ title: "Огляди від Claude · Статистика", user, path: "/admin", body });
+  return layout({ title: "Огляди від Claude · Адмінка", user, path: "/admin", body });
 }
 
 // /admin/speed (speed.js): how fast the site was, before we counted (Fly's metrics, the logs) and day by day since.
@@ -848,7 +830,6 @@ function speedPage({ user, days, bots = [], layout }) {
   const bars = HISTORY.fly.map(([d, , p95]) => `<div title="${short(d)}: 95% відповідей за ${String(p95).replace(".", ",")} с"><span style="height:${Math.max(2, Math.round((p95 / maxP95) * 100))}%"></span><b>${String(p95).replace(".", ",")}</b><i>${short(d)}</i></div>`).join("");
   const rows = [...days].map(([d, k]) => `<tr><th>${short(d)}</th>${cell(k.page)}${cell(k.phone)}<td>${k.stall ? `${Math.round(k.stall.sum / 1000)} с` : "0"}</td><td class="muted">${k.bot ? n(k.bot.n) : ""}</td></tr>`).join("");
   const body = `<section class="admin speed">
-<p class="small"><a href="/admin">← Статистика</a></p>
 <section class="page-head"><div><h1>Швидкість сайту</h1><p class="sub">Що казали метрики Fly й наші журнали до 26 жовтня, і що ми рахуємо самі відтоді: скільки сервер думав над сторінкою і за скільки вона відкрилась у браузері читача. Тільки числа за день, без адрес і людей.</p></div></section>
 
 <h2>Було → стало</h2>
@@ -877,7 +858,7 @@ ${bots.length ? `<p class="muted small">Усі запити роботів (ст
 <thead><tr><th>Робот</th><th>Запитів</th><th>З них сторінок</th><th>Час сервера</th><th>503</th><th>Сьогодні</th></tr></thead>
 <tbody>${bots.map((r) => `<tr><th>${esc(r.name)}</th><td>${n(r.n)}</td><td>${n(r.pages)}</td><td>${n(Math.round(r.ms / 1000))} с</td><td>${n(r.turned)}</td><td>${n(r.today)}</td></tr>`).join("")}</tbody></table></div>` : `<p class="muted">Рахуємо з сьогодні.</p>`}
 </section>`;
-  return layout({ title: "Швидкість · Статистика", user, path: "/admin", body });
+  return layout({ title: "Швидкість · Адмінка", user, path: "/admin", body });
 }
 
 // /admin/jobs (Max, 2026-10-26: «сторінку про ці background tasks»): what the jobs process (jobs.js) does
@@ -1018,7 +999,6 @@ ${q.latest.length ? `<div class="tbl"><table>
 `;
 
   const body = `<section class="admin jobs">
-<p class="small"><a href="/admin">← Статистика</a></p>
 <section class="page-head"><div><h1>Фонові задачі</h1><p class="sub">Окремий процес поруч із сайтом: оновлює полиці, питає Haiku й Claude, шле листи. Сайт від нього не гальмує, а коли задача змінила книжки, сайт сам перечитує дані. Час київський, записи за 30 днів.</p></div></section>
 <div class="stats four">
   <div class="stat"><b>${o.role === "web" ? (proc.born ? kyiv(proc.born) : "—") : "в одному процесі"}</b>${o.role === "web" ? `процес задач запущено${proc.mb ? `, ${proc.mb} МБ пам'яті` : ""}` : "сайт і задачі разом (локальний запуск)"}</div>
@@ -1044,8 +1024,9 @@ ${others.length ? `<h2>Інші задачі</h2>
 ${recent ? `<div class="tbl"><table>
 <thead><tr><th>Коли</th><th>Задача</th><th>Хто запустив</th><th>Тривала</th><th>Як пройшла</th></tr></thead>
 <tbody>${recent}</tbody></table></div>` : `<p class="muted">Записуємо з сьогодні: перші рядки з'являться після першої задачі.</p>`}
+<p class="small"><a class="text-link" href="/admin/refresh">Оновити каталоги зараз</a> · <a class="text-link" href="/refresh-status">стан каталогів</a> · <a class="text-link" href="/digest/status">стан розсилки</a></p>
 </section>`;
-  return layout({ title: "Фонові задачі · Статистика", user, path: "/admin", body });
+  return layout({ title: "Фонові задачі · Адмінка", user, path: "/admin", body });
 }
 
-module.exports = { BOT, Admin, adminPage, shelvesPage, readersPage, overviewsPage, speedPage, jobsPage, dayOf, weekOf, sectionOf };
+module.exports = { BOT, Admin, adminPage, catalogBlock, shelvesPage, readersPage, overviewsPage, speedPage, jobsPage, dayOf, weekOf, sectionOf };

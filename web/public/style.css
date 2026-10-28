@@ -100,9 +100,21 @@ main.home { padding-top: 56px; }
 .btn.danger { border-color: var(--danger); color: var(--danger); }
 .btn.danger:hover { background: var(--danger); color: var(--paper); }
 .acts { display: flex; flex-wrap: wrap; gap: 12px 18px; align-items: center; }
-.admin-nav { display: flex; flex-wrap: wrap; gap: 6px 16px; margin: 0 0 28px; padding-bottom: 12px; border-bottom: 1px solid var(--rule); font-size: 13px; }
-.admin-nav a { color: var(--muted); text-decoration: none; }
-.admin-nav a:hover, .admin-nav a.on { color: var(--accent); }
+.admin-nav { position: relative; display: flex; gap: 28px; margin: 0 0 56px; border-bottom: 1px solid var(--rule); font-size: 15px; }
+.admin-tab > a { display: block; padding: 0 0 12px; color: var(--muted); text-decoration: none; border-bottom: 2px solid transparent; margin-bottom: -1px; }
+.admin-tab > a:hover { color: var(--ink); }
+.admin-tab.on > a { color: var(--ink); border-bottom-color: var(--ink); }
+.admin-sub { display: none; position: absolute; left: 0; top: 100%; padding-top: 14px; gap: 20px; font-size: 13px; }
+.admin-tab.on .admin-sub { display: flex; }
+.admin-sub a { color: var(--muted); text-decoration: none; }
+.admin-sub a:hover, .admin-sub a.on { color: var(--ink); }
+.admin-sub a.on { text-decoration: underline; text-underline-offset: 4px; }
+.admin-queue { list-style: none; padding: 0; margin: 0 0 8px; display: flex; flex-wrap: wrap; gap: 12px; }
+.admin-queue a { display: block; min-width: 150px; padding: 14px 18px; border: 1px solid var(--rule); text-decoration: none; color: var(--muted); font-size: 13px; }
+.admin-queue a:hover { border-color: var(--ink); }
+.admin-queue b { display: block; font: 400 30px/1.1 var(--serif); color: var(--ink); margin-bottom: 4px; }
+.passes { table-layout: fixed; }
+.passes th:first-child { width: 40%; }
 .join-band { margin-top: 24px; padding: 48px 0; border-top: 1px solid var(--ink); display: flex; flex-wrap: wrap; gap: 24px 32px; align-items: center; justify-content: space-between; }
 .join-title { font: 600 28px/1.25 var(--serif); margin: 0 0 14px; }
 .join-text { margin: 0 0 14px; max-width: 620px; color: var(--muted); }
@@ -670,6 +682,7 @@ dialog .form { margin-top: 18px; }
 .admin .cohorts td.pct { min-width: 60px; }
 @media (max-width: 640px) {
   .admin .stats, .admin .stats.four { grid-template-columns: repeat(2, 1fr); }
+  .admin .stats > :first-child:nth-last-child(3) { grid-column: span 2; }
   .admin .stat b { font-size: 32px; }
 }
 
