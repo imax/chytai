@@ -103,12 +103,16 @@ bg.every("refresh-check", 10 * 60 * 1000, () => refreshShelves(), { db: store.db
 // After a start, go on with a source a restart (a deploy) cut short (its progress is in partial:<id>), and
 // read a source added since the last refresh (no shelf yet) instead of leaving it for the next morning;
 // one source at a time.
-const pendingSources = catalogs.SOURCES.filter((s) => !store.shelf(s.id) || JSON.parse(store.db.get(`partial:${s.id}`) || "[]").length).map((s) => s.id);
+// The free shelf too when seed/free.json changed (books added to the reader show on the site after the deploy,
+// Max 2026-10-28: «Щоб не чекати ранку»).
+const freeSeed = require("crypto").createHash("sha1").update(fs.readFileSync(path.join(__dirname, "seed", "free.json"))).digest("hex");
+const pendingSources = catalogs.SOURCES.filter((s) => !store.shelf(s.id) || JSON.parse(store.db.get(`partial:${s.id}`) || "[]").length || (s.id === "chytai-free" && store.db.get("free:seed") !== freeSeed)).map((s) => s.id);
 if (pendingSources.length && bg.background)
   setTimeout(async () => {
     for (const id of pendingSources) {
       while (refreshing) await refreshing;
       await refreshShelves(true, id);
+      if (id === "chytai-free" && store.shelf(id)) store.db.set("free:seed", freeSeed);
     }
   }, 30000).unref();
 // Ukrainian titles of foreign books (wikidata.js), weekly; the first time a minute after start.
