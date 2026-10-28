@@ -1130,7 +1130,22 @@ class Store {
       // Madeline Miller); otherwise the index's own order.
       const words = new Set(norm([b.title, b.altTitle, b.author].join(" ")).normalize("NFKD").replace(/\p{M}/gu, "").split(" "));
       const whole = terms.every((t, j) => words.has(t) || alts[j].some((w) => words.has(w)));
-      const score = (norm(b.title) === exact || norm(b.altTitle) === exact ? 1000 : 0) + (whole ? 500 : 0) - i;
+      // Within that, what readers have goes up and the index's order counts less (2026-10-28 usability review:
+      // «гаррі поттер» gave «Міні-Поттери» first and «Філософський камінь» ninth, «кінг» two «Комплекти»):
+      // readers, a Ukrainian title, and a bundle at the bottom of its group. A title whose first part is the
+      // query («Sapiens. Людина Розумна…») counts as exact once a reader has it.
+      // A book found only through the Latin sound-alike of a Cyrillic word («франко» → Frank Herbert) gets no lift.
+      const typed = terms.every((t) => [...words].some((w) => w.startsWith(t)));
+      const readers = typed ? this.readersOf(id).length : 0;
+      const main = norm(String(b.title || "").split(/[.:]\s/)[0]) === exact && readers > 0;
+      const bundle = b.bundle || /^комплект/i.test(b.title || "");
+      const score =
+        (norm(b.title) === exact || norm(b.altTitle) === exact || main ? 1000 : 0) +
+        (whole ? 500 : 0) +
+        Math.round(30 * Math.log2(1 + readers)) +
+        (/[а-яіїєґ]/i.test(b.title || "") ? 20 : 0) -
+        (bundle ? 300 : 0) -
+        i / 2;
       hits.push({ book: b, entry: reader ? this.sharedEntry(reader, id) : null, score });
     }
     return hits.sort((a, b) => b.score - a.score).slice(0, limit);
