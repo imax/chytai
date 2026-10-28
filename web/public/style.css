@@ -1016,3 +1016,16 @@ aside .side-lists + .label, aside p + .label, aside dialog + .label { margin-top
 .draw-table th { text-align: left; font: 600 12px var(--sans); color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; }
 .draw-table th, .draw-table td { padding: 10px 8px 10px 0; border-bottom: 1px solid var(--rule); }
 @media (max-width: 760px) { .draw-card { margin-top: 24px; } }
+/* Phone book page: a small cover beside the title, so the title, the rating, the button and «Де взяти» fit the
+   first screen (usability review 2026-10-28: the cover took half of it, the button sat on its edge). */
+@media (max-width: 560px) {
+  .book-top:not(.edit) { display: block; }
+  .book-top:not(.edit)::after { content: ""; display: block; clear: both; }
+  .book-top:not(.edit) .book-cover { float: left; margin: 4px 16px 8px 0; }
+  .book-top:not(.edit) .cover.xl { width: 96px; box-shadow: 0 10px 22px -10px rgba(var(--shadow), 0.5); }
+  .book-top:not(.edit) .cover.xl .ph { font-size: 11px; }
+  .book-top:not(.edit) .book-main h1 { font-size: 28px; }
+  .book-top:not(.edit) .book-by { font-size: 17px; margin-top: 6px; }
+  .book-top:not(.edit) .crumbs { margin-bottom: 8px; }
+  .book-top:not(.edit) .book-main > .acts, .book-top:not(.edit) .book-main > .where { clear: both; }
+}
