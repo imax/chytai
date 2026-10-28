@@ -68,6 +68,7 @@
         const left = matched.length - limit;
         $("span", more).textContent = left > STEP ? `${STEP} з ${left}` : left;
       }
+      $("#capnote")?.classList.toggle("hidden", cut);
       // Year headings only make sense in the import order; hide them when sorting or filtering.
       // Their count is of the rows that pass the filters, not of the whole year («Без дати 1 книжка» under
       // «Покинуто 1», not 100); rows held back by «Показати ще» still count.

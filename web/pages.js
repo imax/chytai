@@ -1484,6 +1484,8 @@ ${running ? `<script>setTimeout(() => location.reload(), 5000)</script>` : ""}`;
 // what readers wrote about them on the side, and the other genres (Max, 2026-10-23).
 function genrePage({ genre, rows, top, feed, others, user, part = "" }) {
   const CAP = 600; // a page of «художня» would be thousands of cards; search finds the rest
+  // The note about it shows only once «Показати ще» is used up or the box filters (app.js), not under the
+  // button (Max, 2026-10-28: «Що це за прикол»).
   const shelved = rows.filter((r) => r.readers).length;
   // The best rated stand above, so the list below goes on from where they end.
   const shownTop = top.length >= 3 ? top : [];
@@ -1508,7 +1510,7 @@ ${parts.first}
     </div>
     <p class="empty hidden" id="empty">Нічого не знайшлося.</p>
     <p class="more hidden"><button type="button" class="text-link" id="more">Показати ще <span></span> →</button></p>
-    ${rest.length > CAP ? `<p class="muted small end-note">Тут ${CAP} перших. Решту знайде <a class="text-link" href="/search">пошук</a>.</p>` : ""}
+    ${rest.length > CAP ? `<p class="muted small end-note hidden" id="capnote">Тут перші ${CAP}. Решту знайде <a class="text-link" href="/search?q=${attr(encodeURIComponent(genre))}">пошук</a>.</p>` : ""}
   </section>
   <aside>
     ${feed.length ? `${label("Читачі про ці книжки")}${feedList(feed)}` : ""}
