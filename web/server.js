@@ -518,12 +518,12 @@ app.get("/privacy", (req, res) => res.send(pages.privacyPage({ user: req.user })
 app.get("/updates", (req, res) => res.send(pages.updatesPage({ user: req.user })));
 // The weekly draw (draw.js, Max 2026-10-28): the page with the rules, «Беру участь», and the reader's state.
 const draw = new (require("./draw").Draw)({ store, auth, ownerId: OWNER_ID });
-app.get("/rozihrash", (req, res) => {
+app.get(pages.DRAW_PATH, (req, res) => {
   const week = require("./draw").weekOf();
   res.send(pages.drawPage({ user: req.user, week, status: draw.status(req.user, week), count: week.upcoming ? 0 : draw.participants(week).length, history: draw.history() }));
 });
-app.post("/rozihrash/join", signed, (req, res) => (draw.setJoined(req.user.id, true), res.redirect("/rozihrash")));
-app.post("/rozihrash/leave", signed, (req, res) => (draw.setJoined(req.user.id, false), res.redirect("/rozihrash")));
+app.post(`${pages.DRAW_PATH}/join`, signed, (req, res) => (draw.setJoined(req.user.id, true), res.redirect(pages.DRAW_PATH)));
+app.post(`${pages.DRAW_PATH}/leave`, signed, (req, res) => (draw.setJoined(req.user.id, false), res.redirect(pages.DRAW_PATH)));
 app.get("/reader", (_req, res) => res.redirect(302, `${READER_URL}/`)); // shortcut to the reader (Max 2026-10-22)
 
 // ---- settings: name, username, e-mail, deleting the account ----

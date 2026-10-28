@@ -96,7 +96,7 @@ class Draw {
     return this.entrants(week).filter((x) => !x.out);
   }
 
-  // What /rozihrash shows the reader: in this week's draw, joined with no rating yet, or not joined.
+  // What the draw page shows the reader: in this week's draw, joined with no rating yet, or not joined.
   status(user, week = weekOf()) {
     if (!user) return { state: "guest" };
     const r = this.auth.reader(user.id);

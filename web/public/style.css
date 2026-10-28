@@ -986,10 +986,7 @@ aside .side-lists + .label, aside p + .label, aside dialog + .label { margin-top
   .read-chips { flex-wrap: nowrap; overflow-x: auto; margin: 14px -16px 26px; padding: 0 16px; }
   .chip { white-space: nowrap; }
 }
-/* /rozihrash, the weekly draw (draw.js). .draw-ph marks a place for Max's text until he writes it. */
-.draw-ph { display: inline-block; padding: 2px 8px; border: 1px dashed var(--rule); border-radius: 4px; color: var(--muted); font: 400 0.8em/1.4 var(--sans); }
-.welcome h1 .draw-ph { font-size: 28px; padding: 10px 14px; }
-p.draw-ph { display: block; padding: 24px; text-align: center; }
+/* The weekly draw page (draw.js, pages.drawPage). */
 .draw-card { border-top: 1px solid var(--ink); padding-top: 18px; display: flex; flex-direction: column; gap: 12px; align-items: flex-start; }
 .draw-when { font: 600 13px/1.5 var(--sans); color: var(--muted); margin: 0; }
 .draw-state { margin: 0; font-size: 16px; }
