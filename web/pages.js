@@ -1262,7 +1262,7 @@ function yearHead(year, rows) {
 // ---- the homepage «Що почитати» (Max, 2026-10-28: tried at /new, then «робимо її головною») ----
 // Shelves by what a reader is after, not by counters; the chips (?f=) narrow every shelf at once.
 // #live and #browse: search as you type replaces the shelves (app.js).
-function readPage({ user, f, filters, picks, finish, ua, short, free, wanted, genres, editorials, forYou, fresh }) {
+function readPage({ user, f, filters, picks, finish, ua, short, free, wanted, genres, editorials, forYou, forWhy, fresh }) {
   const q = (k) => (k ? `/?f=${k}` : "/");
   const chips = `<nav class="read-chips">${[["", "Усе"], ...Object.entries(filters).map(([k, [n]]) => [k, n])].map(([k, n]) => (k === f ? `<span class="chip on">${n}</span>` : `<a class="chip" href="${attr(q(k))}">${n}</a>`)).join("")}</nav>`;
   const advice = (p) => `<article class="advice">
@@ -1284,7 +1284,7 @@ function readPage({ user, f, filters, picks, finish, ua, short, free, wanted, ge
 <div id="live"></div>
 <div id="browse">
 ${picks.length ? `<section class="block">${label("Читачі радять", "оцінка 4,5+ і пару слів чому")}<div class="advices">${picks.map(advice).join("")}</div></section>` : ""}
-${row("Для тебе", "схожі на те, що тобі сподобалось", forYou)}
+${row("Для тебе", forWhy, forYou)}
 ${!f && editorials.length ? `<section class="block editorials">${label("Добірки Chytai", `<a href="/lists">усі списки</a>`)}<div class="lgrid">${editorials.map(listCard).join("")}</div></section>` : ""}
 ${row("Дочитують до кінця", "ніхто не покинув", finish, (w) => `дочитали ${w.s.finished}`)}
 ${row("Українські автори", "", ua)}

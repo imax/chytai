@@ -17,7 +17,7 @@ const catalogs = require("./catalogs");
 const libraries = require("./libraries");
 const wikidata = require("./wikidata");
 const authors = require("./authors");
-const { Social } = require("./social");
+const { Social, tagsOf } = require("./social");
 const goodreads = require("./goodreads");
 const { Digest, AUDIENCES } = require("./digest");
 const { WelcomeMail } = require("./welcome-mail");
@@ -1203,7 +1203,16 @@ app.get("/", (req, res) => {
   const wanted = social.popular().want.map((x) => ({ ...x, book: ukWork(x.book) })).filter((x) => ok(x.book)).slice(0, 6);
   const genres = readGenres();
   const editorials = lists.editorials().slice(0, 3).map(withCovers);
-  const seeds = req.user ? social.seeds(req.user.id) : [];
+  // «Для тебе» only from the reader's own shelf (a reader who rated nothing saw «схожі на те, що тобі сподобалось»
+  // built from random books; reader's report, 2026-10-28): their fives, else what they want to read, else none.
+  const shelf = req.user ? store.library(req.user.id) : [];
+  // social.seeds() falls back to random well rated books for a reader without fives: not «для тебе».
+  let seeds = shelf.some((r) => r.rating >= 5 && !r.kids && tagsOf(r.book).length) ? social.seeds(req.user.id) : [];
+  let forWhy = "схожі на те, що тобі сподобалось";
+  if (req.user && !seeds.length) {
+    seeds = shelf.filter((r) => r.status === "want" && !r.kids && r.book).sort((a, b) => String(b.updated || b.added || "").localeCompare(String(a.updated || a.added || ""))).slice(0, 3).map((r) => r.book);
+    forWhy = "схожі на те, що ти хочеш прочитати";
+  }
   const own = req.user ? new Map(Object.entries(store.entriesOf(req.user.id))) : new Set();
   const forYou = req.user && seeds.length ? social.similar(seeds.map((s) => s.id), { limit: 6, skip: own, own }).map((x) => ({ ...x, book: ukWork(x.book) })).filter((x) => ok(x.book)) : [];
   // New in the publishers: one fresh book from each of six shelves, the ones the reader follows first.
@@ -1216,7 +1225,7 @@ app.get("/", (req, res) => {
         .sort((a, b) => b.subscribed - a.subscribed || visible(b.sh).filter((it) => it.isNew).length - visible(a.sh).filter((it) => it.isNew).length)
         .slice(0, 6)
         .map((x) => ({ book: x.it, shelf: x.sh }));
-  res.send(pages.readPage({ user: req.user, f, filters: READ_FILTERS, picks, finish, ua, short, free, wanted, genres, editorials, forYou, fresh }));
+  res.send(pages.readPage({ user: req.user, f, filters: READ_FILTERS, picks, finish, ua, short, free, wanted, genres, editorials, forYou, forWhy, fresh }));
 });
 
 app.get("/publishers", (req, res) => {
