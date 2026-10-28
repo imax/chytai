@@ -1188,7 +1188,7 @@ class Store {
       const g = groupOf.get(si.item.id);
       const other = groups.get(key);
       if (other && g && other !== g) {
-        for (const m of g) (other.push(m), groupOf.set(m.item.id, other));
+        for (const m of g) (other.includes(m) || other.push(m), groupOf.set(m.item.id, other));
       } else if (other && !g) (other.push(si), groupOf.set(si.item.id, other));
       else if (!other && g) groups.set(key, g);
       else {
@@ -1421,13 +1421,15 @@ class Store {
 
     const seen = new Set();
     for (const g of new Set(groupOf.values())) {
-      const sorted = [...g].sort((a, b) => (a.item.edition ? 1 : 0) - (b.item.edition ? 1 : 0) || FMT(a.item.format) - FMT(b.item.format) || (PICK[a.item.status] ?? 9) - (PICK[b.item.status] ?? 9) || a.item.id.localeCompare(b.item.id, "en", { numeric: true }));
+      // A group can list an item twice after merges (a stale group joined again); counted twice, the work's
+      // own item was hidden as its shelf's second edition and the work left search («Тигролови», 2026-10-28).
+      const sorted = [...new Set(g)].sort((a, b) => (a.item.edition ? 1 : 0) - (b.item.edition ? 1 : 0) || FMT(a.item.format) - FMT(b.item.format) || (PICK[a.item.status] ?? 9) - (PICK[b.item.status] ?? 9) || a.item.id.localeCompare(b.item.id, "en", { numeric: true }));
       const canonical = g.map((si) => bookOf(si.item)).find(Boolean) || sorted[0].item.id;
       this.editions.set(canonical, sorted);
       const perShelf = new Set();
       for (const si of sorted) {
         if (si.item.id !== canonical) this.aliases.set(si.item.id, canonical);
-        if (perShelf.has(si.shelf.id)) this.hidden.add(si.item.id);
+        if (perShelf.has(si.shelf.id) && si.item.id !== canonical) this.hidden.add(si.item.id);
         perShelf.add(si.shelf.id);
         si.item.editions = g.length; // for the cards
       }
