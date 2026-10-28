@@ -1946,8 +1946,16 @@ function addEdition(orig, p, by) {
 // Our own search for those editions (ukfind.js); the owner runs it on /admin/ukfind for now.
 // A reader's hint that found the edition is news for the owner, to check the pair.
 // Who asked (Max, 2026-10-24: «додай в цей імейл хто»): the readers who pressed «Є український переклад».
-const hintedBy = (id) => store.db.prepare("SELECT DISTINCT reader FROM uk_hint WHERE book = ? ORDER BY created").all(id).map((h) => pub(auth.reader(h.reader))).filter(Boolean).map((u) => `${u.name} (${SITE}${u.href})`).join(", ");
-const onUkHint = (b, r) => r.status === "found" && r.edition && notifyOwner(`Знайшли українське видання: ${r.edition.title}`, [`${hintedBy(b.id) || "Читач"} підказав(ла), що є переклад «${b.title}», і пошук знайшов:`, "", `Переклад: ${r.edition.title}${r.edition.author ? ` — ${r.edition.author}` : ""}  ${SITE}${store.href(r.edition.id)}`, `Сторінка: ${r.url}`, "", `Прибрати пару: ${SITE}/admin/dupes#decided`, `Усі пошуки: ${SITE}/admin/ukfind`].join("\n"));
+// Who said there is a Ukrainian edition, by name and page, so Max can thank them (Max, 2026-10-28). "overview" is
+// not a reader: the «Що кажуть про книжку» text named the edition (ukFromOverview).
+const hintedBy = (id) => store.db.prepare("SELECT DISTINCT reader FROM uk_hint WHERE book = ? ORDER BY created").all(id).map((h) => (h.reader === "overview" ? "overview" : pub(auth.reader(h.reader)))).filter((u) => u && (u === "overview" || !u.owner));
+const onUkHint = (b, r) => {
+  if (r.status !== "found" || !r.edition) return;
+  const by = hintedBy(b.id);
+  const people = by.filter((u) => u !== "overview").map((u) => `${u.name} (${SITE}${u.href})`);
+  const who = people.length ? `${people.join(", ")} ${people.length > 1 ? "підказали" : "підказав(ла)"}, що є переклад «${b.title}», і пошук знайшов:` : by.includes("overview") ? `Огляд «Що кажуть про книжку» згадує переклад «${b.title}», і пошук знайшов:` : `Знайшли переклад «${b.title}»:`;
+  notifyOwner(`Знайшли українське видання: ${r.edition.title}`, [who, "", `Переклад: ${r.edition.title}${r.edition.author ? ` — ${r.edition.author}` : ""}  ${SITE}${store.href(r.edition.id)}`, `Сторінка: ${r.url}`, "", `Прибрати пару: ${SITE}/admin/dupes#decided`, `Усі пошуки: ${SITE}/admin/ukfind`].join("\n"));
+};
 const ukfind = new UkFinder({ store, db: store.db, apiKey: process.env.ANTHROPIC_API_KEY || "", bookpage, addEdition, onHint: onUkHint, log: console.log });
 // An overview that says the book is out in Ukrainian while no catalog of ours has that edition (Max,
 // 2026-10-27, Wool: «Українського перекладу в каталогах поки немає» right above «Українською роман вийшов 2018
