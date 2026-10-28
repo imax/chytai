@@ -248,12 +248,12 @@ function readersMeta(id) {
 }
 
 // A book in a grid: cover, title, author, readers' stars.
-function card(book, { avg, extra = "", data = "" } = {}) {
+function card(book, { avg, extra = "", data = "", by = true } = {}) {
   const r = avg !== undefined ? avg : statsOf(book.id).avg;
   return `<article class="card"${data}>
   <a class="cover-link" href="${attr(book.href)}">${cover(book, "card")}</a>
   <h3><a href="${attr(book.href)}">${esc(book.title)}</a></h3>
-  ${book.author ? `<p class="by">${esc(byline(book.author))}</p>` : ""}
+  ${by && book.author ? `<p class="by">${esc(byline(book.author))}</p>` : ""}
   ${r != null ? `<p class="meta">${stars(r)}</p>` : ""}${extra}
 </article>`;
 }
@@ -1670,7 +1670,7 @@ function searchResults({ q, user, hits = [], authors = [], readers = [], shelves
 // ---- /author/<slug> ----
 
 // The books we have, with what readers said; who reads them; then the works from Wikidata.
-function authorPage({ author, works, hits, user, readers = [], also = [], pairing = null, joins = null }) {
+function authorPage({ author, about = null, works, hits, user, readers = [], also = [], pairing = null, joins = null }) {
   // The owner joins another spelling of this person (Max, 2026-10-23: «як нам зєднувати авторів?»).
   const joinBlock = joins
     ? `${label("Той самий автор")}<form method="post" action="/admin/authors/join" class="author-join"><input type="hidden" name="author" value="${attr(author.slug)}"><input name="other" placeholder="Посилання на автора або ім’я" required><button class="btn small">З’єднати</button></form>${joins
@@ -1737,31 +1737,76 @@ document.addEventListener("submit", async (e) => {
 });
 </script>`
     : "";
+  // Who the person is (Max, 2026-10-28: «прокачаємо сторінки авторів»): photo, years, a line from Wikidata
+  // and the start of the Ukrainian Wikipedia article, all kept 30 days by authors.about().
+  const a = about || {};
+  const years = a.born ? (a.died ? `${a.born}–${a.died}` : `нар. ${a.born}`) : "";
+  const wiki = a.wiki ? `<a class="text-link" href="${attr(a.wiki)}" target="_blank" rel="noopener">${/\/\/uk\./.test(a.wiki) ? "Вікіпедія" : "Вікіпедія англійською"} ↗</a>` : "";
+  // With no Ukrainian article the link goes on the line with the years.
+  const facts = [years, a.desc && !a.bio ? esc(cap(a.desc)) : "", a.bio ? "" : wiki].filter(Boolean).join(" · ");
+  const face = a.image ? `<img class="author-face" src="${attr(a.image.replace(/^http:/, "https:"))}?width=240" alt="${attr(author.name)}" onerror="this.remove()">` : "";
+  const head = `<section class="page-head author-head">
+  ${face}
+  <div>
+    <p class="kicker">Автор</p>
+    <h1>${esc(author.name)}</h1>
+    ${author.other ? `<p class="lead">${esc(author.other)}</p>` : ""}
+    ${facts ? `<p class="facts">${facts}</p>` : ""}
+    ${a.bio ? `<p class="bio">${esc(a.bio)} ${wiki}</p>` : ""}
+    <p class="sub">${sub}</p>
+  </div>
+</section>`;
+  // A long list of books (Stephen King has 50) reads as: where to start, the series in order, then the
+  // rest as a grid, Ukrainian editions first. Four or fewer stay big rows with what readers said.
+  const many = hits.length > 4;
+  const groups = new Map();
+  for (const h of hits) if (h.series?.key) (groups.get(h.series.key) || groups.set(h.series.key, []).get(h.series.key)).push(h);
+  const series = many ? [...groups.values()].filter((g) => g.length >= 2).map((g) => g.sort((x, y) => x.series.n - y.series.n)) : [];
+  series.sort((x, y) => y.reduce((n, h) => n + h.readers, 0) - x.reduce((n, h) => n + h.readers, 0) || y.length - x.length);
+  const inSeries = new Set(series.flat());
+  // Where to start: books readers have, a series only from its first volume, Ukrainian editions first.
+  const start = many ? hits.filter((h) => h.readers && !(h.series?.n > 1)).sort((x, y) => isUk(y.book) - isUk(x.book)).slice(0, 3) : hits;
+  const rest = many ? hits.filter((h) => !start.includes(h) && !inSeries.has(h)).sort((x, y) => !!y.readers - !!x.readers || isUk(y.book) - isUk(x.book)) : [];
+  const quotes = many
+    ? hits
+        .filter((h) => !start.includes(h))
+        .map((h) => ({ h, top: readersWithNote(h.book.id) }))
+        .filter((q) => q.top)
+        .slice(0, 3)
+    : [];
+  const tile = (h, extra = "") => card(h.book, { avg: h.avg ?? null, by: false, extra });
+  const shelf = !hits.length
+    ? `<section class="block">${label("Книжки")}<p class="muted">Поки ні в каталогах, ні в читачів.</p></section>`
+    : `${start.length ? `<section class="block">${label(many ? "З чого почати" : "Книжки", many ? "найбільше читають" : "")}<div class="rows">${start.map(bigRow).join("")}</div></section>` : ""}
+    ${quotes.length ? `<section class="block">${label("Що кажуть читачі")}<div class="quotes">${quotes.map(({ h, top }) => `<figure><blockquote>${noteOf(top.entry, h.book.id)}</blockquote><figcaption>— <a href="${attr(top.href)}"><b>${esc(top.name)}</b></a> про <a href="${attr(h.book.href)}">«${esc(h.book.title)}»</a></figcaption></figure>`).join("")}</div></section>` : ""}
+    ${series.map((g) => `<section class="block">${label(`Серія «${esc(g[0].series.name)}»`, g[0].series.total > g.length ? `${g.length} з ${g[0].series.total} у нас` : "")}<div class="grid five author-grid">${g.map((h) => tile({ ...h, book: { ...h.book, title: inSeriesTitle(h.book.title, h.series.name) } }, `<p class="meta">Книга ${h.series.n}</p>`)).join("")}</div></section>`).join("")}
+    ${rest.length ? `<section class="block">${label(start.length || series.length ? `Інші книжки · ${rest.length}` : `Книжки · ${rest.length}`, "спершу українською")}<div class="grid five author-grid">${rest.slice(0, 15).map((h) => tile(h)).join("")}</div>${rest.length > 15 ? `<details class="more-books"><summary class="btn">Ще ${books(rest.length - 15)}</summary><div class="grid five author-grid">${rest.slice(15).map((h) => tile(h)).join("")}</div></details>` : ""}</section>` : ""}`;
   const body = `
-${pageHead({ kicker: "Автор", title: esc(author.name), lead: author.other ? esc(author.other) : "", sub })}
+${head}
 <div class="split">
   <div>
-    <section class="block">
-      ${label("Книжки", "за оцінкою читачів")}
-      ${hits.length ? `<div class="rows">${hits.map(bigRow).join("")}</div>` : `<p class="muted">Поки ні в каталогах, ні в читачів.</p>`}
-    </section>
+    ${shelf}
     ${works.length ? `<section class="block">
-      ${label("Твори", author.qid ? `<a href="https://www.wikidata.org/wiki/${attr(author.qid)}" target="_blank" rel="noopener">Wikidata ↗</a>` : "")}
-      <ul class="works">${works.map(work).join("")}</ul>
+      ${label("Усі твори", author.qid ? `<a href="https://www.wikidata.org/wiki/${attr(author.qid)}" target="_blank" rel="noopener">Wikidata ↗</a>` : "")}
+      <details class="works-all"${many ? "" : " open"}><summary>${count(works.length, "твір", "твори", "творів")}, ${works.filter((w) => w.books.length).length} з них у нас</summary><ul class="works">${works.map(work).join("")}</ul></details>
     </section>` : ""}
+    ${pairing && many ? `<section class="block">${label("Переклади", "лише власнику")}<div class="rows">${hits.filter((h) => !start.includes(h) && pair(h.book)).map((h) => `<div class="pair-line"><a href="${attr(h.book.href)}">${esc(h.book.title)}</a>${pair(h.book)}</div>`).join("")}</div></section>` : ""}
   </div>
   <aside>
     ${readers.length ? `${label("Хто читає")}<div class="others-list">${readers.map((r) => `<a href="${attr(r.reader.href)}"><b>${esc(r.reader.name)}</b><span>${books(r.count)}, ${count(r.read, "прочитана", "прочитані", "прочитаних")}</span></a>`).join("")}</div>` : ""}
-    ${also.length ? `${label(`Читачі ${esc(lastName(author.name))} також люблять`)}${minis(also)}` : ""}
+    ${also.length ? `${label("Ті, хто читає автора, також люблять")}${minis(also)}` : ""}
     ${joinBlock}
   </aside>
 </div>${pairScript}`;
   const ld = { "@context": "https://schema.org", "@type": "Person", name: author.name, url: ORIGIN + author.href, ...(author.other ? { alternateName: author.other } : {}), ...(author.qid ? { sameAs: `https://www.wikidata.org/wiki/${author.qid}` } : {}) };
   return layout({ title: author.name, body, user, path: "/author", canonical: author.href, description: `Книжки ${author.name} на Chytai: ${books(hits.length)}${inUk && inUk < hits.length ? `, ${inUk} українською` : ""}, оцінки й нотатки читачів, де взяти.`, jsonld: ld });
 }
-const lastName = (name) => {
-  const w = String(name).split(" ");
-  return w.length > 1 && !CYR.test(name) ? w[w.length - 1] : name;
+// «Ритм війни. Хроніки Буресвітла. Книга 4» under the series' own heading is «Ритм війни».
+const inSeriesTitle = (title, series) => {
+  const t = title.replace(/[.,:]?\s*(?:книга|кн\.|том|book)\s*\d+\s*$/i, "");
+  const i = series ? t.toLowerCase().indexOf(series.toLowerCase()) : -1;
+  const out = i > 0 ? t.slice(0, i).replace(/[\s.,:(—-]+$/, "") : t;
+  return out.length >= 2 ? out : title;
 };
 // The reader with the longest note on a book, for the author page.
 let readersWithNote = () => null;

@@ -1374,10 +1374,27 @@ app.get("/author/:slug", async (req, res) => {
     // Box sets and workbooks are noise on an author's page (Max 2026-10-25, James Clear: «Комплект»,
     // «Посібник для змін» next to «Атомні звички»); their own pages stay. A reader's own copy still shows.
     .filter((h) => h.book && (h.entry || !(h.book.bundle || /комплект|workbook|робочий зошит/i.test(`${h.book.title} ${h.book.altTitle || ""} ${h.book.origTitle || ""}`))))
-    .map((h) => ({ ...h, avg: social.stats(h.book.id).avg }))
-    .sort((a, b) => (b.avg ?? -1) - (a.avg ?? -1) || !!b.entry - !!a.entry || shown.has(a.book.id) - shown.has(b.book.id) || a.book.title.localeCompare(b.book.title, "uk"))
+    .map((h) => {
+      const { avg, readers } = social.stats(h.book.id);
+      return { ...h, avg, readers };
+    })
+    // Most read first, then the best rated (one 5★ no longer beats ten 4★ ones, Max 2026-10-28), then ours.
+    .sort((a, b) => b.readers - a.readers || (b.avg ?? -1) - (a.avg ?? -1) || !!b.entry - !!a.entry || shown.has(a.book.id) - shown.has(b.book.id) || a.book.title.localeCompare(b.book.title, "uk"))
     .map((h) => ({ ...h, twins: store.translationsOf(h.book.id) }));
   foldTwins(hits);
+  for (const h of hits) h.series = store.seriesOf(h.book.id);
+  // A shop edition Wikidata doesn't know («Ритм війни. Хроніки Буресвітла. Книга 4», alone in a series of
+  // its own shop shelf) joins a series of the page whose name its title carries, at the number it gives.
+  const size = new Map();
+  for (const h of hits) if (h.series) size.set(h.series.key, (size.get(h.series.key) || 0) + 1);
+  const named = [...new Map(hits.filter((h) => h.series?.name && size.get(h.series.key) > 1).map((h) => [h.series.key, h.series])).values()];
+  for (const h of hits.filter((h) => !h.series || size.get(h.series.key) === 1)) {
+    const n = Number((h.book.title.match(/(?:книга|кн\.|том|book)\s*(\d+)/i) || [])[1]) || h.series?.n;
+    const s = n && named.find((x) => x.name.length >= 5 && h.book.title.toLowerCase().includes(x.name.toLowerCase()));
+    if (s) h.series = { ...s, n };
+    else if (!h.series && n > 1) h.series = { key: "", name: "", n }; // a later volume all the same: not where to start
+  }
+  const about = author.qid ? authors.aboutNow(store, author.qid, { log: console.log })?.person : null;
   // Who reads this author, and what else those readers rated highest.
   const ids = new Set(hits.map((h) => h.book.id));
   const who = [...new Set(hits.flatMap((h) => store.readersOf(h.book.id).filter((r) => r.entry.status !== "abandoned").map((r) => r.reader)))]
@@ -1387,7 +1404,7 @@ app.get("/author/:slug", async (req, res) => {
   const also = social.alsoLiked([...ids], { limit: 4, skip: ids }).filter((b) => !author.ids.includes(b.id));
   const pairing = req.user?.owner ? store.translationPairing(author) : null;
   const joins = req.user?.owner ? authors.ownerJoins(store).map((p, index) => ({ p, index })).filter(({ p }) => p.some((n) => author.names?.includes(n))).map(({ p, index }) => ({ names: p, index })) : null;
-  res.send(pages.authorPage({ author, works, hits, user: req.user, readers: who, also, pairing, joins }));
+  res.send(pages.authorPage({ author, about, works, hits, user: req.user, readers: who, also, pairing, joins }));
 });
 
 // The owner joins two spellings of one person (Max, 2026-10-23: «як нам зєднувати авторів?»): on an author

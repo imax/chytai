@@ -294,7 +294,7 @@ async function about(store, qid, { fetchImpl = fetch, log = () => {} } = {}) {
     }
     const out = {
       at: Date.now(),
-      person: p ? { desc: p.desc?.value || "", descEn: p.descEn?.value || "", born: year(p.born), died: year(p.died), image: p.img?.value || "", wiki: p.ukwiki?.value || p.enwiki?.value || "" } : null,
+      person: p ? { desc: p.desc?.value || "", descEn: p.descEn?.value || "", born: year(p.born), died: year(p.died), image: p.img?.value || "", wiki: p.ukwiki?.value || p.enwiki?.value || "", bio: p.ukwiki ? await bioOf(p.ukwiki.value, fetchImpl) : "" } : null,
       works: [...works.values()],
     };
     store.db.set(key, JSON.stringify(out));
@@ -304,6 +304,31 @@ async function about(store, qid, { fetchImpl = fetch, log = () => {} } = {}) {
     failed.set(qid, Date.now());
     return cached;
   }
+}
+// The first sentences of the person's Ukrainian Wikipedia article, for the author page (Max, 2026-10-28:
+// «прокачаємо сторінки авторів»). No Ukrainian article, no bio: an English one is no help to our readers.
+async function bioOf(url, fetchImpl) {
+  try {
+    const title = decodeURIComponent(url.split("/wiki/")[1] || "");
+    const r = await fetchImpl(`https://uk.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(title)}`, { headers: { "User-Agent": HEADERS["User-Agent"] }, signal: AbortSignal.timeout(20000) });
+    return r.ok ? shortBio((await r.json()).extract) : "";
+  } catch {
+    return "";
+  }
+}
+// Two sentences at most, the second only when both fit in 280 characters, without the stress marks
+// («Сті́вен»). A sentence ends at «. » before a capital.
+function shortBio(text) {
+  const parts = String(text || "").replace(/\u0301/g, "").replace(/\s+/g, " ").trim().split(/(?<=[.!?])\s+(?=[«"A-ZА-ЯІЇЄҐ])/u);
+  // «Дж. Р. Р. Толкін», «ст. Кінг»: a piece ending in an initial or «р.» is cut at an abbreviation.
+  const sentences = [];
+  for (const s of parts) sentences.length && /(^|\s)(\p{Lu}\p{Ll}?|ст|р|рр|нар|пом|зв)\.$/u.test(sentences[sentences.length - 1]) ? (sentences[sentences.length - 1] += ` ${s}`) : sentences.push(s);
+  let out = "";
+  for (const s of sentences.slice(0, 2)) {
+    if (out && out.length + s.length > 280) break;
+    out = out ? `${out} ${s}` : s;
+  }
+  return out.length > 400 ? `${out.slice(0, 380).replace(/\s+\S*$/, "")}…` : out;
 }
 function aboutNow(store, qid, opts) {
   const cached = JSON.parse(store.db.get(`authorabout:${qid}`) || "null");
@@ -338,4 +363,4 @@ function matchWorks(store, author, works) {
   });
 }
 
-module.exports = { sparql, refresh, build, wikidataWorks, about, aboutNow, matchWorks, splitAuthors, allWorks, ownerJoins };
+module.exports = { shortBio, sparql, refresh, build, wikidataWorks, about, aboutNow, matchWorks, splitAuthors, allWorks, ownerJoins };

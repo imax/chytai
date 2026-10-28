@@ -929,3 +929,32 @@ aside .side-lists + .label, aside p + .label, aside dialog + .label { margin-top
 .catalog-pass p { margin: .35rem 0; }
 .tool-list { list-style: none; padding: 0; margin: 0; }
 .tool-list li { padding: .3rem 0; }
+
+/* ---- author page: who the person is, then the books (2026-10-28) ---- */
+.author-head { justify-content: flex-start; align-items: flex-start; gap: 36px; }
+.author-face { width: 150px; height: 188px; object-fit: cover; border-radius: 4px; flex: none; background: var(--rule); }
+.author-head .facts { font-size: 14px; color: var(--muted); margin-top: 14px; }
+.author-head .facts .text-link { font-size: 14px; }
+.author-head .bio { font: 17px/1.5 var(--serif); color: var(--text); margin-top: 10px; max-width: 640px; }
+.author-head .bio .text-link { font: 13px var(--sans); white-space: nowrap; }
+.grid.author-grid { gap: 28px 16px; }
+.author-grid h3 { overflow-wrap: anywhere; hyphens: auto; }
+.author-grid .meta { white-space: nowrap; overflow: hidden; }
+.quotes { display: grid; gap: 22px; }
+.quotes blockquote { margin: 0; font: 18px/1.45 var(--serif); color: var(--ink); display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
+.quotes figcaption { font-size: 13px; color: var(--muted); margin-top: 6px; }
+.quotes figcaption a { color: var(--ink); }
+.more-books > summary { list-style: none; margin-top: 28px; display: inline-block; }
+.more-books > summary::-webkit-details-marker { display: none; }
+.more-books[open] > summary { display: none; }
+.more-books .author-grid { margin-top: 28px; }
+.works-all summary { cursor: pointer; font-size: 14px; color: var(--muted); }
+.works-all[open] summary { margin-bottom: 14px; }
+.pair-line { padding: 8px 0; border-bottom: 1px solid var(--rule); }
+@media (max-width: 760px) {
+  .author-head { flex-direction: column; gap: 18px; }
+  .author-face { width: 96px; height: 120px; }
+  .author-head .bio { font-size: 16px; }
+  .grid.author-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 22px 12px; }
+  .author-grid h3 { font-size: 14px; }
+}
