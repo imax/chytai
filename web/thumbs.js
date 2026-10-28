@@ -15,6 +15,11 @@ const WIDTHS = [128, 240]; // twice the width shown: md/sm/xs/feed are ≤64 px,
 const BUDGET = 250 * 1024 * 1024; // the copies together; the oldest go beyond it (made again when asked)
 const PARALLEL = 3; // pictures made at once; the rest wait their turn
 const QUEUE = 40; // beyond this many waiting the browser goes to the original at once
+// PNG covers can be a product shot on a transparent field (Старий Лев: 61% of the picture empty, the coloured
+// block and its title showed through; Max, 2026-10-28). Those are cut to the cover and put on white, under a new
+// address and file so browsers and the disk don't keep the old copies.
+const keyOf = (src) => (/\.png(\?|$)/i.test(src) ? `trim ${src}` : src);
+const run = (cmd, args) => new Promise((ok, fail) => execFile("nice", ["-n", "10", cmd, ...args], { timeout: 20000 }, (e, out, err) => (e ? fail(new Error(String(err || e.message).trim().split("\n")[0])) : ok(String(out)))));
 
 class Thumbs {
   constructor({ db, dir, log = console.log, isBot = () => false }) {
@@ -33,7 +38,7 @@ class Thumbs {
   }
 
   sign(w, url) {
-    return crypto.createHmac("sha256", this.key).update(`${w} ${url}`).digest("hex").slice(0, 16);
+    return crypto.createHmac("sha256", this.key).update(`${w} ${keyOf(url)}`).digest("hex").slice(0, 16);
   }
 
   // The small copy's address for a cover shown `shown` px wide, or the cover itself when there is none to make.
@@ -51,7 +56,7 @@ class Thumbs {
       src = Buffer.from(req.params.src, "base64url").toString();
     } catch {}
     if (!WIDTHS.includes(w) || !src || req.params.sig !== this.sign(w, src)) return res.status(404).end();
-    const file = path.join(this.dir, String(w), `${crypto.createHash("sha1").update(src).digest("hex")}.webp`);
+    const file = path.join(this.dir, String(w), `${crypto.createHash("sha1").update(keyOf(src)).digest("hex")}.webp`);
     const send = () => res.set("Cache-Control", "public, max-age=31536000, immutable").type("image/webp").sendFile(file);
     if (fs.existsSync(file)) return send();
     const away = () => res.set("Cache-Control", "public, max-age=3600").redirect(302, src);
@@ -95,21 +100,35 @@ class Thumbs {
       fs.writeFileSync(tmp, buf);
     }
     const out = `${file}.${process.pid}.tmp.webp`;
+    const cut = [`${file}.${process.pid}.a.v`, `${file}.${process.pid}.c.v`, `${file}.${process.pid}.f.v`];
     try {
+      if (keyOf(src) !== src) input = (await this.trim(input, cut).catch((e) => (this.log(`thumbs: trim ${src.slice(0, 100)}: ${e.message}`), null))) || input;
       // --size Wx>: that width, the height kept in proportion, never larger than the original; at a lower
       // priority than the pages (it runs beside the site, on the same processor).
-      await new Promise((ok, fail) => execFile("nice", ["-n", "10", "vipsthumbnail", input, "--size", `${w}x>`, "-o", `${out}[Q=72,strip]`], { timeout: 20000 }, (e, _o, err) => (e ? fail(new Error(String(err || e.message).trim().split("\n")[0])) : ok())));
+      await run("vipsthumbnail", [input, "--size", `${w}x>`, "-o", `${out}[Q=72,strip]`]);
       fs.renameSync(out, file);
       return true;
     } finally {
-      for (const f of [tmp, out]) if (f) fs.rmSync(f, { force: true });
+      for (const f of [tmp, out, ...cut]) if (f) fs.rmSync(f, { force: true });
     }
+  }
+
+  // A picture with an alpha band, cut to where it isn't (nearly) transparent and flattened on white; null if
+  // there is nothing to cut. `cut`: three scratch files (alpha, cut, flat).
+  async trim(input, [alpha, cropped, flat]) {
+    if (Number((await run("vipsheader", ["-f", "bands", input])).trim()) !== 4) return null;
+    await run("vips", ["extract_band", input, alpha, "3"]);
+    const [left, top, width, height] = ((await run("vips", ["find_trim", alpha, "--background", "0", "--threshold", "100"])).match(/\d+/g) || []).map(Number);
+    if (!(width > 10 && height > 10)) return null;
+    await run("vips", ["crop", input, cropped, left, top, width, height].map(String));
+    await run("vips", ["flatten", cropped, flat, "--background", "255 255 255"]);
+    return flat;
   }
 
   // The small copy as a file on our disk (made now if need be), or null: for pictures made of covers (listimage.js).
   async file(src, w = WIDTHS[1]) {
     if (!src || this.url(src, 1) === src) return null;
-    const file = path.join(this.dir, String(w), `${crypto.createHash("sha1").update(src).digest("hex")}.webp`);
+    const file = path.join(this.dir, String(w), `${crypto.createHash("sha1").update(keyOf(src)).digest("hex")}.webp`);
     if (fs.existsSync(file)) return file;
     if (Date.now() - (this.failed.get(src) || 0) < 3600 * 1000) return null;
     return (await (this.made.get(file) || this.make(src, w, file))) ? file : null;
