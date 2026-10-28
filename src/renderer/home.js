@@ -162,12 +162,6 @@
     let html = "";
     const parts = {};
 
-    if (!books.length) {
-      html += `<div class="home-empty">
-        <p>Бібліотека поки порожня.</p>
-        ${settings.guest ? "" : `<button class="pill" data-act="add">Додати книжки…</button>`}
-      </div>`;
-    }
 
     // Продовжити: the book read last, then up to two others still in progress.
     const cur = byPath.get(lib.lastBook);
@@ -259,7 +253,9 @@
 
     // Хочу прочитати: the top of the list, with «Уже є» once someone added the book.
     // On a wide screen the whole list is here, with its own field to add to it.
-    if (window.reader.wishList && !settings.guest) {
+    // Only for those who already keep one: the list is from the family library, and the site has its own
+    // «Хочу прочитати» (reader usability review, 2026-10-28).
+    if (window.reader.wishList && !settings.guest && wish?.length) {
       const list = wish || [];
       parts.wish = `<section class="home-sec sec-wish"><div class="sec-head"><span>Хочу прочитати${list.length ? ` · ${list.length}` : ""}</span><button class="link narrow-only" data-tab="wish">${list.length ? "Увесь список" : "Додати"}</button></div>
         <div class="narrow-only">${list.length ? list.slice(0, 3).map((w) => {
@@ -277,7 +273,12 @@
     // Rows for a wide screen (Продовжити | Нотатки, the shelf, Нові надходження | Хочу прочитати); on a phone the
     // rows dissolve and the sections stack in the order of the mock-up (style.css).
     const row = (cls, ...xs) => (xs.some(Boolean) ? `<div class="home-row ${cls}">${xs.filter(Boolean).join("")}</div>` : "");
-    html += row("top", parts.cont, parts.notes) + (parts.shelf || "") + row("bottom", parts.arr, parts.wish) + (parts.free || "");
+    // No books of your own yet: most people have no EPUB at hand, so the free shelf comes first and adding
+    // your own files is one line under it.
+    if (!books.length) {
+      const add = settings.guest ? "" : `<p class="home-own m">Свої книжки в EPUB чи PDF теж можна читати тут. <button class="link" data-act="add">Додати книжки…</button></p>`;
+      html += parts.free ? add + parts.free : `<div class="home-empty"><p>Бібліотека поки порожня.</p>${add}</div>`;
+    } else html += row("top", parts.cont, parts.notes) + (parts.shelf || "") + row("bottom", parts.arr, parts.wish) + (parts.free || "");
     $("#home-body").innerHTML = html;
   }
 
