@@ -561,7 +561,7 @@ class Store {
     const title = (id) => titles.get(id) || this.lib.books[id]?.title || "";
     const authorOf = new Map(works.map((w) => [this.canonical(w.id), w.author]));
     // A title with no letters («1984») is on the side of its author's name: Орвелл's «1984» is a Ukrainian book,
-    // not the original of «1984. Колгосп тварин» (Max, 2026-10-29).
+    // not the original of «1984. Колгосп тварин» (Max, 2026-10-29; docs/decisions.md).
     const cyr = (id) => /[а-яіїєґ]/i.test(title(id)) || (!/\p{L}/u.test(title(id)) && /[а-яіїєґ]/i.test(authorOf.get(id) || this.lib.books[id]?.author || ""));
     // A Russian edition never takes the place (it showed «Бог мелочей» instead of «Бог дрібниць»).
     const russian = (id) => cyr(id) && isRussian(this.book(id, { edited: false, borrow: false }) || { title: title(id) });
