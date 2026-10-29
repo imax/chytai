@@ -787,13 +787,15 @@ function where(book, ukrlib = null, sluhay = null) {
   const kindOf = (e) => (kinds.some(([k]) => k === e.format) ? e.format : "папір");
   // Free first: «безкоштовно» has no digits and sorted last, after «Book.ua 70 ₴».
   const price = (e) => (e.price === "безкоштовно" ? 0 : Number(String(e.price || "").replace(/[^\d]/g, "")) || Infinity);
+  // The free shelf's line goes to its catalog page on the site, not into the reader (Max, 2026-10-29); «Додати в Читалку» is the way in.
+  const go = (e, cls = "") => (e.shelf.id === "chytai-free" ? `<a${cls} href="/publishers/chytai-free">` : `<a${cls} href="${attr(e.links[0].url)}" target="_blank" rel="noopener">`);
   const short = (e) => {
     const tail = [e.narrator ? `читає ${e.narrator}` : "", e.price, e.subscription ? "є в підписці" : "", avail(e)].filter(Boolean).join(", ");
-    return `<a href="${attr(e.links[0].url)}" target="_blank" rel="noopener">${esc(e.shelf.name)}</a>${tail ? ` <span class="muted">${esc(tail)}</span>` : ""}`;
+    return `${go(e)}${esc(e.shelf.name)}</a>${tail ? ` <span class="muted">${esc(tail)}</span>` : ""}`;
   };
   const full = (e) => {
     const tail = [e.edition, e.narrator ? `читає ${e.narrator}` : "", e.duration, e.price, e.subscription ? "є в підписці" : "", avail(e)].filter(Boolean).join(", ");
-    return `<a href="${attr(e.links[0].url)}" target="_blank" rel="noopener">${esc(e.shelf.name)}</a>${tail ? ` <span class="muted">${esc(tail)}</span>` : ""}`;
+    return `${go(e)}${esc(e.shelf.name)}</a>${tail ? ` <span class="muted">${esc(tail)}</span>` : ""}`;
   };
   const row = (label, first, rest = "") => `<div class="where-row"><span class="where-kind">${label}</span><span class="where-what">${first}${rest}</span></div>`;
   const rows = [];
@@ -809,7 +811,7 @@ function where(book, ukrlib = null, sluhay = null) {
     rows.push(row(label, firstShops.map(short).join(` <span class="muted">·</span> `), rest.length ? ` <details class="where-more"><summary>ще ${rest.length}</summary>${rest.map((e) => `<span>${full(e)}</span>`).join("")}</details>` : ""));
   }
   if (links.length) rows.push(row("Інше", links.map((l) => `<a href="${attr(l.url)}" target="_blank" rel="noopener">${esc(l.label)}</a>`).join(` <span class="muted">·</span> `)));
-  if (out.length) rows.push(row("Немає", `<span class="muted">зараз немає в наявності: </span>${out.map((e) => `<a class="muted" href="${attr(e.links[0].url)}" target="_blank" rel="noopener">${esc(e.shelf.name)}</a>`).join(", ")}`));
+  if (out.length) rows.push(row("Немає", `<span class="muted">зараз немає в наявності: </span>${out.map((e) => `${go(e, ' class="muted"')}${esc(e.shelf.name)}</a>`).join(", ")}`));
   return `<div class="where${rows.length ? "" : " hidden"}" data-block="where" data-src="/api/libraries/${attr(encodeURIComponent(book.id))}"><span class="where-label">Де взяти</span>${rows.join("")}</div>`;
 }
 
