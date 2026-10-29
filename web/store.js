@@ -878,7 +878,9 @@ class Store {
       const stale = had && latin(had) && raw !== title && had.startsWith(slugify(raw)) && !this.slugs.has(slugify(title));
       // An address held by an edition that is now part of this work is the work's own («1984-orvell», not
       // «1984-orvell-2», Max 2026-10-29); the «-2» one it had stays and redirects.
-      const ours = (s) => !this.slugs.has(s) || this.slugs.get(s) === id || this.canonical(this.slugs.get(s)) === id;
+      // A reader's book keeps the address of its own id even while it is merged into another work: it may part again
+      // (Orwell's «1984» had lent «1984» to Орвелл's, 2026-10-29).
+      const ours = (s) => !this.slugs.has(s) || this.slugs.get(s) === id || (this.canonical(this.slugs.get(s)) === id && !own.has(this.slugs.get(s)));
       let slug = slugify(title);
       const surname = (author || "").split(/[,\s]+/).filter(Boolean).pop();
       const last = surname ? slugify(surname) : ""; // slugify("") is "book": «tyhrolovy-book»
@@ -889,6 +891,17 @@ class Store {
       this.slugOf.set(id, slug);
       move.run(slug, id);
     };
+    const own = new Set([...this.seedBooks.map((b) => b.id), ...Object.keys(this.lib.books)]);
+    // Give back a Books.md book its own address that another work took over (see ours above); they take theirs first.
+    for (const { id } of this.seedBooks) {
+      const s = slugify(id);
+      const holder = this.slugs.get(s);
+      if (!holder || holder === id || own.has(holder) || this.canonical(id) !== id) continue;
+      if (this.slugOf.get(holder) === s) this.slugOf.delete(holder);
+      this.slugs.set(s, id);
+      this.slugOf.set(id, s);
+      move.run(s, id);
+    }
     for (const b of this.seedBooks) take(b.id, b.id, "");
     for (const b of Object.values(this.lib.books)) take(b.id, b.id, "");
     for (const { item } of this.shelfItems.values()) if (this.canonical(item.id) === item.id) take(item.id, this.volWork.get(item.id) || workName(item.title) || item.title, item.author, item.title);
