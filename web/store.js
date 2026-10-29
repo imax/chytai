@@ -559,7 +559,7 @@ class Store {
     for (const [a, b] of this.crossPairs || []) link(a, b); // same ISBN, link or words across scripts (linkEditions)
     const titles = new Map(works.map((w) => [this.canonical(w.id), w.title]));
     const title = (id) => titles.get(id) || this.lib.books[id]?.title || "";
-    const authorOf = new Map(works.map((w) => [this.canonical(w.id), w.author]));
+    const authorOf = new Map(works.filter((w) => this.canonical(w.id) === w.id).map((w) => [w.id, w.author])); // the work's own, not a merged English edition's
     // A title with no letters («1984») is on the side of its author's name: Орвелл's «1984» is a Ukrainian book,
     // not the original of «1984. Колгосп тварин» (Max, 2026-10-29; docs/decisions.md).
     const cyr = (id) => /[а-яіїєґ]/i.test(title(id)) || (!/\p{L}/u.test(title(id)) && /[а-яіїєґ]/i.test(authorOf.get(id) || this.lib.books[id]?.author || ""));
@@ -585,6 +585,11 @@ class Store {
       const b = y && this.canonical(y);
       if (!a || !b || a === b || this.translations.get(a)?.has(b)) continue;
       const across = cyr(a) !== cyr(b) && !russian(a) && !russian(b);
+      // Two Ukrainian books are not each other's translation («1984» and «1984. Колгосп тварин», Max 2026-10-29).
+      if (t < 5 && cyr(a) && cyr(b) && !russian(a) && !russian(b)) {
+        this.pairLog.dropped.push([a, b, t]);
+        continue;
+      }
       if (across && t < 5 && !(fits(a, b) && fits(b, a))) {
         this.pairLog.dropped.push([a, b, t]);
         continue;
