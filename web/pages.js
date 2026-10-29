@@ -742,8 +742,8 @@ function mine(book, entry, user, now = false, readUrl = "", listItem = "", { fre
   const what = [entry.kids ? "Дитяча полиця" : "", entry.status ? STATUS[entry.status] + (entry.status === "read" && entry.year ? ` ${entry.year}` : "") : entry.kids ? "" : "У моїх книжках", entry.rating != null ? `${uk(entry.rating)} з 5` : "", entry.copy ? COPY[entry.copy] : ""].filter(Boolean).join(" · ");
   // Read and not rated yet: the stars right here, no trip to the form (Vova's feedback, 2026-10-23).
   const rate = entry.status === "read" && entry.rating == null && !entry.via && !entry.kids ? rateLine(book.id, "оцініть:") : "";
-  // A tap on «✓ Хочу прочитати» opens the «⋯» menu, where «Прибрати з полиці» is (Max, 2026-10-29: «Як мені відмінити статус?»).
-  return `<div class="acts"><span class="have" role="button" tabindex="0" title="Змінити або прибрати" onclick="if(!event.target.closest('a'))this.parentElement.querySelector('.more-acts').toggleAttribute('open')">✓ ${esc(what)}${entry.via ? ` <span class="muted">як <a href="${attr(entry.via.href)}">${esc(entry.via.title)}</a></span>` : ""}</span>${moreMenu([open, entry.via ? "" : nowItem(book, now, user), `<a href="${attr(edit)}">Оцінка, рік, нотатка</a>`, entry.status === "read" ? "" : allOf, listItem, entry.via ? "" : kidsItem(book, !!entry.kids, user), entry.via ? "" : removeItem(book, entry)])}${rate}</div>`;
+  // A tap on «✓ Хочу прочитати» opens the «⋯» menu (app.js).
+  return `<div class="acts"><span class="have" role="button" title="Змінити або прибрати">✓ ${esc(what)}${entry.via ? ` <span class="muted">як <a href="${attr(entry.via.href)}">${esc(entry.via.title)}</a></span>` : ""}</span>${moreMenu([open, entry.via ? "" : nowItem(book, now, user), `<a href="${attr(edit)}">Оцінка, рік, нотатка</a>`, entry.status === "read" ? "" : allOf, listItem, entry.via ? "" : kidsItem(book, !!entry.kids, user), entry.via ? "" : removeItem(book, entry)])}${rate}</div>`;
 }
 
 // «Де взяти»: every edition's shop (with its format, price and stock, the one place prices are shown),

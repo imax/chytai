@@ -461,9 +461,13 @@ document.addEventListener("click", (e) => {
   block.querySelector(".advice-text")?.classList.remove("folded");
   button.closest(".advice-more")?.remove();
 });
-// The «⋯» menu on book pages closes on a tap outside it or on Escape.
+// The «⋯» menu on book pages closes on a tap outside it or on Escape; a tap on «✓ Хочу прочитати» opens it
+// (Max, 2026-10-29: «Як мені відмінити статус?»: «Прибрати з полиці» is there).
 document.addEventListener("click", (e) => {
-  for (const d of document.querySelectorAll("details.more-acts[open]")) if (!d.contains(e.target)) d.open = false;
+  const have = !e.target.closest("a") && e.target.closest(".acts > .have");
+  const mine = have && have.parentElement.querySelector("details.more-acts");
+  for (const d of document.querySelectorAll("details.more-acts[open]")) if (!d.contains(e.target) && d !== mine) d.open = false;
+  if (mine) mine.open = !mine.open;
 });
 document.addEventListener("keydown", (e) => {
   if (e.key === "Escape") for (const d of document.querySelectorAll("details.more-acts[open]")) d.open = false;
