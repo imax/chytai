@@ -2037,6 +2037,8 @@ app.get("/admin/debug/search", owner, (req, res) => {
     series: (({ name, head, volumes, items } = {}) => name !== undefined && { name, head, volumes, items: (items || []).map((si) => [si.item.id, si.item.title, si.item.volume, si.item.bundle]) })(store.series.get(c)),
     item: store.shelfItems.get(c) && (({ series, volume, bundle, title }) => ({ series, volume, bundle, title }))(store.shelfItems.get(c).item),
     pairs: [...store.pairLog.kept.map((p) => ["kept", ...p]), ...store.pairLog.dropped.map((p) => ["dropped", ...p])].filter(([, a, b]) => a === c || b === c).map(([k, a, b, t]) => [k, store.book(a)?.title, store.book(b)?.title, t]),
+    same: store.decisions().same.filter((p) => p.some((x) => x === id || x === c || store.canonical(x) === c)),
+    volumeGroups: (store.volumeGroups || []).filter((g) => g.items.some((si) => store.canonical(si.item.id) === c)).map((g) => ({ name: g.name, items: g.items.map((si) => [si.item.id, si.item.title, si.lib || false]) })),
     aliasesTo: [...store.aliases].filter(([, v]) => v === c).map(([k]) => k).slice(0, 20),
     search: req.query.q ? store.search(String(req.query.q), { alias: false }).slice(0, 5).map((h) => h.book.id) : null,
     raw: req.query.q ? store.db.prepare("SELECT id FROM search WHERE search MATCH ? LIMIT 10").all(`"${String(req.query.q).toLowerCase()}"*`) : null,
