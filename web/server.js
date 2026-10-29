@@ -340,7 +340,7 @@ app.get("/icon.png", (req, res) => res.sendFile(path.join(ROOT, "build", "icon.p
 // ---- auth: readers signed in by a code sent to their e-mail (auth.js) ----
 
 // A reader as the pages see them: name, username and the address of their page.
-const pub = (r) => (r ? { id: r.id, name: r.name, username: r.username, href: `/@${r.username}`, owner: r.id === OWNER_ID, email: r.email, noindex: !!r.noindex, created: r.created || "" } : null);
+const pub = (r) => (r ? { id: r.id, name: r.name, username: r.username, href: `/@${r.username}`, owner: r.id === OWNER_ID, email: r.email, noindex: !!r.noindex, originals: !!r.originals, created: r.created || "" } : null);
 function cookies(req) {
   return Object.fromEntries((req.headers.cookie || "").split(";").map((c) => c.trim().split("=")).filter((p) => p[0]).map(([k, ...v]) => [k, decodeURIComponent(v.join("="))]));
 }
@@ -560,7 +560,12 @@ app.get("/reader", (_req, res) => res.redirect(302, `${READER_URL}/`)); // short
 // ---- settings: name, username, e-mail, deleting the account ----
 
 app.get("/settings", signed, (req, res) => {
-  res.send(pages.settingsPage({ user: req.user, values: { ...req.user }, suggested: auth.suggestUsername(req.user.name, slugify), saved: !!req.query.saved }));
+  res.send(pages.settingsPage({ user: req.user, values: { ...req.user }, suggested: auth.suggestUsername(req.user.name, slugify), saved: req.query.saved === "books" ? "books" : !!req.query.saved }));
+});
+// Translated books as the Ukrainian edition (default) or the original, in shelves and recommendations.
+app.post("/settings/books", signed, (req, res) => {
+  auth.setOriginals(req.user.id, req.body.originals === "1");
+  res.redirect("/settings?saved=books#books");
 });
 app.post("/settings", signed, (req, res) => {
   const name = auth.checkName(req.body.name);
@@ -1189,6 +1194,15 @@ function ukWork(book) {
   const uk = [...(store.translations?.get(store.canonical(book.id)) || [])].map((id) => store.book(id)).filter((b) => b && /[а-яіїєґ]/i.test(b.title) && !isRussian(b));
   return uk.find((b) => b.cover) || uk[0] || book;
 }
+// The original of a Ukrainian translation (Latin title, a cover if it can), for a reader who chose originals
+// in /settings (Max, 2026-10-29: «щоб можна було обрати оригінали теж»). A Ukrainian author's book stays as it is.
+function origWork(book) {
+  if (!book || !CYR_RE.test(book.title) || store.aiOrigs().get(book.id)?.kind === "ukrainian") return book;
+  const orig = [...(store.translations?.get(store.canonical(book.id)) || [])].map((id) => store.book(id)).filter((b) => b && !CYR_RE.test(b.title));
+  return orig.find((b) => b.cover) || orig[0] || book;
+}
+// The edition a reader sees in shelves and recommendations: the Ukrainian one by default, the original by choice.
+const workFor = (req, book) => (req.user?.originals ? origWork(ukWork(book)) : ukWork(book));
 function readPool() {
   if (readCache && Date.now() - readCache.at < 10 * 60 * 1000) return readCache.out;
   // One pass over every reader's entries (social.stats per book took 0,4 s): finished, gave up, ratings, by work.
@@ -1290,7 +1304,9 @@ app.get("/", (req, res) => {
         .sort((a, b) => b.subscribed - a.subscribed || visible(b.sh).filter((it) => it.isNew).length - visible(a.sh).filter((it) => it.isNew).length)
         .slice(0, 6)
         .map((x) => ({ book: x.it, shelf: x.sh }));
-  res.send(pages.readPage({ user: req.user, f, filters: READ_FILTERS, picks, finish, ua, short, free, wanted, genres, editorials, forYou, forWhy, fresh }));
+  // Chosen and ranked by the Ukrainian edition; a reader who wants originals sees those in its place.
+  const as = (list) => (req.user?.originals ? list.map((x) => ({ ...x, book: workFor(req, x.book) })) : list);
+  res.send(pages.readPage({ user: req.user, f, filters: READ_FILTERS, picks: as(picks), finish: as(finish), ua, short: as(short), free, wanted: as(wanted), genres, editorials, forYou: as(forYou), forWhy, fresh }));
 });
 
 app.get("/publishers", (req, res) => {
@@ -1360,7 +1376,7 @@ function searchAll(req, q) {
   }
   // Readers' lists by title or intro (Max, 2026-10-28: «І пошук по списках»).
   const listsFound = lists.all().filter((l) => has(l.title) || nqs.some((n) => normQ(l.note).includes(n))).slice(0, 6).map(withCovers);
-  foldTwins(hits);
+  foldTwins(hits, req);
   const similar = hits.length ? social.alsoLiked([hits[0].book.id], { limit: 4, skip: new Set(hits.map((h) => h.book.id)) }) : [];
   return { hits, authors: authorsFound, readers: readersFound, shelves: shelvesFound, lists: listsFound, similar, tag };
 }
@@ -1510,7 +1526,8 @@ app.get("/book/:id", (req, res) => {
 
 // A translation and its original in one list are one card (Max, 2026-10-25: two rows «трохи плутає»; 2026-10-26: the same
 // in search): the Ukrainian edition leads, the other pages are a line under its title. Readers and ratings are shared anyway.
-function foldTwins(hits) {
+// A reader who chose originals in /settings sees the original lead and «українською: …» under it.
+function foldTwins(hits, req) {
   const seen = new Set();
   for (let i = 0; i < hits.length; i++) {
     if (seen.has(hits[i].book.id)) {
@@ -1520,7 +1537,9 @@ function foldTwins(hits) {
     const twins = hits[i].twins || store.translationsOf(hits[i].book.id);
     const group = [hits[i], ...twins.map((t) => hits.find((h) => h.book.id === t.id)).filter(Boolean)];
     for (const h of group) seen.add(h.book.id);
-    const lead = group.find((h) => CYR_RE.test(/\p{L}/u.test(h.book.title || "") ? h.book.title : h.book.author || "")) || group[0]; // «1984»: by the author's alphabet
+    let lead = group.find((h) => CYR_RE.test(/\p{L}/u.test(h.book.title || "") ? h.book.title : h.book.author || "")) || group[0]; // «1984»: by the author's alphabet
+    const orig = req?.user?.originals && group.find((h) => h.book.id === origWork(lead.book).id);
+    if (orig) lead = orig;
     hits[i] = { ...lead, entry: lead.entry || group.find((h) => h.entry)?.entry, others: group.filter((h) => h !== lead).map((h) => h.book) };
   }
   return hits;
@@ -1547,7 +1566,7 @@ app.get("/author/:slug", async (req, res) => {
     // Most read first, then the best rated (one 5★ no longer beats ten 4★ ones, Max 2026-10-28), then ours.
     .sort((a, b) => b.readers - a.readers || (b.avg ?? -1) - (a.avg ?? -1) || !!b.entry - !!a.entry || shown.has(a.book.id) - shown.has(b.book.id) || a.book.title.localeCompare(b.book.title, "uk"))
     .map((h) => ({ ...h, twins: store.translationsOf(h.book.id) }));
-  foldTwins(hits);
+  foldTwins(hits, req);
   for (const h of hits) h.series = store.seriesOf(h.book.id);
   // A shop edition Wikidata doesn't know («Ритм війни. Хроніки Буресвітла. Книга 4», alone in a series of
   // its own shop shelf) joins a series of the page whose name its title carries, at the number it gives.
@@ -1568,7 +1587,7 @@ app.get("/author/:slug", async (req, res) => {
     .map((id) => ({ reader: pub(auth.reader(id)), rows: store.library(id) }))
     .filter((r) => r.reader)
     // What each reader gave this author's books, best first («Воно ★5, Сяйво ★4»), not their shelf's size (usability review #8).
-    .map(({ reader, rows }) => ({ reader, count: rows.length, read: rows.filter((r) => r.status === "read").length, mine: rows.filter((r) => mineIds.has(store.canonical(r.id))).sort((x, y) => (y.rating ?? -1) - (x.rating ?? -1)).map((r) => ({ ...r, book: ukWork(r.book) || r.book })) }));
+    .map(({ reader, rows }) => ({ reader, count: rows.length, read: rows.filter((r) => r.status === "read").length, mine: rows.filter((r) => mineIds.has(store.canonical(r.id))).sort((x, y) => (y.rating ?? -1) - (x.rating ?? -1)).map((r) => ({ ...r, book: workFor(req, r.book) || r.book })) }));
   const also = social.alsoLiked([...ids], { limit: 4, skip: ids }).filter((b) => !author.ids.includes(b.id));
   const pairing = req.user?.owner ? store.translationPairing(author) : null;
   const joins = req.user?.owner ? authors.ownerJoins(store).map((p, index) => ({ p, index })).filter(({ p }) => p.some((n) => author.names?.includes(n))).map(({ p, index }) => ({ names: p, index })) : null;

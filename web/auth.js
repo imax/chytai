@@ -171,6 +171,9 @@ class Auth {
   setIndexed(readerId, on) {
     this.db.prepare("UPDATE readers SET noindex = ? WHERE id = ?").run(on ? 0 : 1, readerId);
   }
+  setOriginals(readerId, on) {
+    this.db.prepare("UPDATE readers SET originals = ? WHERE id = ?").run(on ? 1 : 0, readerId);
+  }
   setFollowMail(readerId, on) {
     this.db.prepare("UPDATE readers SET follow_mail = ? WHERE id = ?").run(on ? 1 : 0, readerId);
   }

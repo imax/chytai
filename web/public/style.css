@@ -411,7 +411,7 @@ aside .small.muted { margin-top: -8px; margin-bottom: 14px; }
 .form .two, .form .three { display: flex; gap: 14px; }
 .form .actions { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; margin-top: 6px; }
 .form label.check > span:first-child { display: flex; align-items: center; gap: 10px; font-size: 15px; color: var(--ink); }
-.form label.check input[type="checkbox"] { width: 18px; height: 18px; margin: 0; padding: 0; accent-color: var(--accent); }
+.form label.check input[type="checkbox"], .form label.check input[type="radio"] { width: 18px; height: 18px; margin: 0; padding: 0; accent-color: var(--accent); }
 .form .grow { flex: 1; }
 .form .error { padding: 10px 14px; border-left: 2px solid var(--danger); color: var(--danger); font-size: 14px; }
 .form .saved { color: var(--accent); font-size: 14px; }

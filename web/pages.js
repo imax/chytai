@@ -1946,7 +1946,7 @@ ${pageHead({ crumbs: `<a href="${attr(user.href)}">Моя полиця</a>`, kic
 
 function settingsPage({ user, values, error = "", suggested = "", saved = false }) {
   const form = `<form method="post" action="/settings" class="form" data-username>
-  ${errorLine(error)}${saved ? `<p class="saved">Збережено.</p>` : ""}
+  ${errorLine(error)}${saved === true ? `<p class="saved">Збережено.</p>` : ""}
   <label>Ім'я<input type="text" name="name" value="${attr(values.name || "")}" required maxlength="60"></label>
   <label>Адреса сторінки<span class="prefix">chytai.org.ua/@<input type="text" name="username" value="${attr(values.username || "")}" required maxlength="30" spellcheck="false" placeholder="${attr(suggested)}"></span><span class="hint">Якщо змінити, стара адреса перестане працювати.</span></label>
   <label>Пошта для входу<input type="email" name="email" value="${attr(values.email || "")}" ${user.owner ? "" : "required"} autocomplete="email"></label>
@@ -1958,6 +1958,14 @@ function settingsPage({ user, values, error = "", suggested = "", saved = false 
   <p class="muted small">Додати книжки на полицю: списком текстом, по одній або перенести з Goodreads чи Apple Books.</p>
   <div class="actions"><a class="btn" href="/add">Додати книжки</a></div>
 </section>
+<form method="post" action="/settings/books" class="form import-box" id="books">
+  <h2>Перекладні книжки</h2>
+  ${saved === "books" ? `<p class="saved">Збережено.</p>` : ""}
+  <p class="muted small">Як показувати в добірках і рекомендаціях.</p>
+  <label class="check"><span><input type="radio" name="originals" value="0"${user.originals ? "" : " checked"}> Український переклад</span></label>
+  <label class="check"><span><input type="radio" name="originals" value="1"${user.originals ? " checked" : ""}> Оригінал</span></label>
+  <div class="actions"><button class="btn">Зберегти</button></div>
+</form>
 ${user.owner ? "" : `<form method="post" action="/settings/delete" class="form danger-zone" onsubmit="return confirm('Видалити акаунт разом з усіма книжками, оцінками й нотатками?')">
   <h2>Видалити акаунт</h2>
   <p class="muted small">Зітре всі ваші книжки, оцінки, нотатки й підписки. Назад не повернути.</p>
