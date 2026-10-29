@@ -1126,7 +1126,7 @@ class Store {
     }
     let rows = this.db
       .prepare("SELECT id FROM search WHERE search MATCH ? ORDER BY bm25(search, 0, 10, 10, 5, 4, 1) LIMIT ?")
-      .all(terms.map((t) => `"${t.replace(/"/g, "")}"${/^\d{1,9}$/.test(t) ? "" : "*"}`).join(" "), limit * 2); // «1984» is not the start of an ISBN
+      .all(terms.map((t) => `"${t.replace(/"/g, "")}"${/^\d{1,9}$/.test(t) ? "" : "*"}`).join(" "), limit * 2); // «1984» is a whole word, not the start of an ISBN
     // A Latin name typed in Cyrillic («міллер», «мураками»): the same search with the words that sound like
     // it, after what the Cyrillic itself found (Max, 2026-10-22).
     const alts = terms.map((t) => this.latinAlts(t));
