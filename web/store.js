@@ -585,6 +585,10 @@ class Store {
       if (a.size > 1 && first(title(x)) !== first(title(y))) return false;
       return a.size > 0 && (a.size > 1 || b.size === 1) && [...a].filter((w) => b.has(w)).length * 2 > a.size; // one word only against one word («Шерлок» is not «Пригоди Шерлока Холмса»)
     };
+    const ADAPTED = /графічн|комікс|манґа|манга|адаптац|переказ|за мотивами/i;
+    const adapted = new Set();
+    for (const [id, a] of this.aiAnswers("notbooks")) if (ADAPTED.test(a.what || "")) adapted.add(this.canonical(id));
+    for (const w of works) if (/графічн|комікс/i.test(w.title || "")) adapted.add(this.canonical(w.id));
     const partners = new Map(); // id -> ids across the script line it is paired with
     const fits = (id, other) => [...(partners.get(id) || [])].every((p) => alike(p, other));
     this.pairLog = { kept: [], dropped: [] }; // for the owner's check, /admin/translations/check
@@ -593,8 +597,9 @@ class Store {
       const b = y && this.canonical(y);
       if (!a || !b || a === b || this.translations.get(a)?.has(b)) continue;
       const across = cyr(a) !== cyr(b) && !russian(a) && !russian(b);
-      // Two Ukrainian books are not each other's translation («1984» and «1984. Колгосп тварин», Max 2026-10-29).
-      if (t < 5 && cyr(a) && cyr(b) && !russian(a) && !russian(b)) {
+      // Two Ukrainian books are not each other's translation («1984» and «1984. Колгосп тварин», Max 2026-10-29),
+      // and a graphic novel or a retelling is not one either (Ларсене's «Дорога» after Маккарті, Max the same day).
+      if (t < 5 && ((cyr(a) && cyr(b) && !russian(a) && !russian(b)) || adapted.has(a) || adapted.has(b))) {
         this.pairLog.dropped.push([a, b, t]);
         continue;
       }
