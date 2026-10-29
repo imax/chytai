@@ -732,8 +732,8 @@ function tapsBlock(t) {
   const html = [...groups.values()].sort((a, b) => b.total - a.total).map((g) => {
     const rows = [...g.rows.values()].sort((a, b) => b.guests + b.readers - a.guests - a.readers).slice(0, 12);
     return `<h3>${esc(g.name)} <span class="muted small">· ${n(g.total)} натискань${g.views ? `, ${n(g.views)} переглядів` : ""}</span></h3>
-<div class="tbl"><table class="refs"><thead><tr><th>Де</th><th>Що</th><th>Гості</th><th>Читачі</th>${g.views ? "<th>На 100 переглядів</th>" : ""}</tr></thead>
-<tbody>${rows.map((x) => `<tr><td>${esc(x.block ? BLOCK_NAMES[x.block] || x.block : "")}</td><td>${esc(targetName(x.target))}</td><td>${n(x.guests)}</td><td>${n(x.readers)}</td>${g.views ? `<td>${per100(x.guests + x.readers, g.views)}</td>` : ""}</tr>`).join("")}</tbody></table></div>
+<div class="tbl"><table class="refs"><thead><tr>${g.key === "search" ? "" : "<th>Де</th>"}<th>Що</th><th>Гості</th><th>Читачі</th>${g.views ? "<th>На 100 переглядів</th>" : ""}</tr></thead>
+<tbody>${rows.map((x) => `<tr>${g.key === "search" ? "" : `<td>${esc(BLOCK_NAMES[x.block] || x.block)}</td>`}<td>${esc(targetName(x.target))}</td><td>${n(x.guests)}</td><td>${n(x.readers)}</td>${g.views ? `<td>${per100(x.guests + x.readers, g.views)}</td>` : ""}</tr>`).join("")}</tbody></table></div>
 ${posLine(g.pos)}`;
   }).join("\n");
   return `${head}
