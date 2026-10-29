@@ -369,6 +369,24 @@
     "group": "Англійською"
   },
   {
+    "name": "doctorow-little-brother.epub",
+    "title": "Little Brother",
+    "authors": [
+      "Cory Doctorow"
+    ],
+    "group": "Англійською",
+    "license": "CC BY-NC-SA 3.0, author's own EPUB from craphound.com/littlebrother/download/"
+  },
+  {
+    "name": "watts-blindsight.epub",
+    "title": "Blindsight",
+    "authors": [
+      "Peter Watts"
+    ],
+    "group": "Англійською",
+    "license": "CC BY-NC-SA 3.0 (licence page in the EPUB), author's own EPUB from rifters.com/real/Blindsight.htm"
+  },
+  {
     "name": "sivers-anything-you-want.epub",
     "title": "Anything You Want",
     "authors": [

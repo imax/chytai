@@ -59,5 +59,7 @@
   {"name": "hlibov-baiky.epub", "title": "Байки", "authors": "Леонід Глібов"},
   {"name": "oles-kniazha-ukraina.epub", "title": "Княжа Україна", "authors": "Олександр Олесь"},
   {"name": "kashchenko-nad-kodatskym-porohom.epub", "title": "Над Кодацьким порогом", "authors": "Адріан Кащенко"},
-  {"name": "narodni-kazky-rudchenko.epub", "title": "Українські народні казки", "authors": "Іван Рудченко"}
+  {"name": "narodni-kazky-rudchenko.epub", "title": "Українські народні казки", "authors": "Іван Рудченко"},
+  {"name": "doctorow-little-brother.epub", "title": "Little Brother", "authors": "Cory Doctorow"},
+  {"name": "watts-blindsight.epub", "title": "Blindsight", "authors": "Peter Watts"}
 ]
