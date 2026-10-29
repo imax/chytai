@@ -40,13 +40,14 @@ jobs:
             while read -r id; do flyctl volumes extend "$id" -s 3 -a chytai-web --yes || echo "could not extend $id"; done
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN_WEB }}
-      # Fly's API sometimes drops the connection after the image is built ("unexpected EOF") or hangs after
-      # pushing it (16 minutes on 2026-10-21, holding up every deploy queued behind it): each try gets 5
-      # minutes, and one retry redeploys the already-built image.
+      # The image is built here on the GitHub runner and pushed to Fly (Max, 2026-10-29: «треба дивитися чому
+      # вони так тормозять»): Fly's Depot builder kept deploys «Waiting for depot builder» 2-10 minutes that
+      # day, for a build that takes about one. Fly's builders stay as the fallback. Fly's API sometimes drops
+      # the connection after the build ("unexpected EOF") or hangs after the push (16 minutes on 2026-10-21,
+      # holding up every deploy queued behind it): each try gets 5 minutes.
       - run: |
-          deploy() { timeout 300 flyctl deploy . --remote-only -a chytai-web -c web/fly.toml --dockerfile web/Dockerfile "$@"; }
-          # Fly's Depot builder answered 503 or hung for half an hour on 2026-10-29: the last try builds on Fly's own builder.
-          deploy || { echo "retrying deploy"; sleep 15; deploy; } || { echo "retrying on Fly's builder"; deploy --depot=false; }
+          deploy() { timeout 300 flyctl deploy . -a chytai-web -c web/fly.toml --dockerfile web/Dockerfile "$@"; }
+          deploy --local-only || { echo "retrying on Fly's Depot builder"; deploy --remote-only; } || { echo "retrying on Fly's own builder"; deploy --remote-only --depot=false; }
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN_WEB }}
       # The first visit after a deploy starts the daily catalog refresh if one is due; its state, once.

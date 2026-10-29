@@ -17,6 +17,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: superfly/flyctl-actions/setup-flyctl@master
-      - run: flyctl deploy --remote-only -a chytai
+      # Built here on the GitHub runner, not on Fly's Depot builder, which kept deploys waiting for minutes and
+      # failed one on 2026-10-29 (Max: «треба дивитися чому вони так тормозять»); Fly's builder is the fallback.
+      - run: |
+          timeout 600 flyctl deploy --local-only -a chytai || { echo "retrying on Fly's builder"; flyctl deploy --remote-only -a chytai; }
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
