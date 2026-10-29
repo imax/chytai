@@ -379,7 +379,7 @@ class Store {
         db.prepare("DELETE FROM keep").run();
         const up = db.prepare("INSERT INTO items (id, shelf, data, first_seen, last_seen, ord) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT (id) DO UPDATE SET shelf = excluded.shelf, data = excluded.data, last_seen = excluded.last_seen, ord = excluded.ord");
         items.forEach((it, i) => {
-          const { href, editions, volumes, ...data } = it; // derived on load
+          const { href, editions, volumes, seen: _seen, ...data } = it; // derived on load
           up.run(it.id, s.id, JSON.stringify(data), seen[it.id] || today, today, i);
           db.prepare("INSERT OR IGNORE INTO keep (id) VALUES (?)").run(it.id);
         });
@@ -407,8 +407,9 @@ class Store {
     const byId = new Map(shelves.map((s) => [s.id, s]));
     // Names saved before a catalog's entities were decoded («Neurosurgeon&#x27;s Journey») are decoded here.
     const { ent, isPromo } = require("./catalogs");
-    for (const r of this.db.prepare("SELECT shelf, data FROM items ORDER BY shelf, ord").all()) {
+    for (const r of this.db.prepare("SELECT shelf, data, first_seen FROM items ORDER BY shelf, ord").all()) {
       const it = JSON.parse(r.data);
+      it.seen = r.first_seen; // newest first in a shelf's «Нове»
       if (isPromo(it.title)) continue;
       for (const k of ["title", "altTitle", "author", "series", "translator", "publisher"]) if (typeof it[k] === "string" && it[k].includes("&")) it[k] = ent(it[k]);
       byId.get(r.shelf)?.items.push(it);

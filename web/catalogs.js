@@ -1070,7 +1070,7 @@ const SOURCES = [
       url: `${(process.env.READER_URL || "https://app.chytai.org.ua").replace(/\/$/, "")}/free/${encodeURIComponent(f.name)}`,
       price: "безкоштовно",
       status: "є",
-      genres: [],
+      genres: f.tags || [], // the filter chips on its shelf page
       blurb: "",
       language: /[а-яіїєґ]/i.test(f.title) ? "українська" : "англійська",
       format: "e-book",

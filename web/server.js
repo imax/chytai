@@ -855,9 +855,11 @@ const welcomeMail = new WelcomeMail({ store, auth, site: SITE, ownerId: OWNER_ID
 pages.setReadersWithNote((id) => readersOf(id).find((r) => r.entry.note) || null);
 const day = (iso) => ((iso = iso || store.shelvesFetched) ? new Date(iso).toLocaleDateString("uk-UA", { timeZone: "Europe/Kyiv" }) : "");
 // A publisher in the lists: its newest books (the ones marked new first), how many there are and are new.
+// A shelf's new books, newest first: a catalog appends its new books at its end (the free shelf does).
+const newest = (items) => items.filter((it) => it.isNew).sort((a, b) => (b.seen || "").localeCompare(a.seen || ""));
 function shelfSummary(req, shelf, n) {
   const items = visible(shelf);
-  const fresh = items.filter((it) => it.isNew);
+  const fresh = newest(items);
   return { shelf, items: [...fresh, ...items.filter((it) => !it.isNew && it.cover)].slice(0, n), total: items.length, fresh: fresh.length, subscribed: store.subscribed(req.user?.id, shelf.id) };
 }
 // Each reader with their shelf in numbers, fullest first.
@@ -1301,7 +1303,7 @@ app.get("/", (req, res) => {
     ? []
     : shelvesFor(req)
         .filter((sh) => sh.kind !== "free")
-        .map((sh) => ({ sh, it: visible(sh).find((it) => it.isNew && it.cover && !isRussian(it)), subscribed: store.subscribed(req.user?.id, sh.id) }))
+        .map((sh) => ({ sh, it: newest(visible(sh)).find((it) => it.cover && !isRussian(it)), subscribed: store.subscribed(req.user?.id, sh.id) }))
         .filter((x) => x.it)
         .sort((a, b) => b.subscribed - a.subscribed || visible(b.sh).filter((it) => it.isNew).length - visible(a.sh).filter((it) => it.isNew).length)
         .slice(0, 6)
@@ -1318,7 +1320,7 @@ app.get("/publishers/:id", (req, res) => {
   const shelf = store.shelf(req.params.id);
   if (!shelf || shelf.joinOnly || (shelf.draft && !req.owner)) return res.status(404).send(pages.messagePage({ title: "Немає такого видавництва", text: "", user: req.user }));
   const items = visible(shelf);
-  const fresh = items.filter((it) => it.isNew).slice(0, 6);
+  const fresh = newest(items).slice(0, 6);
   const works = new Set(items.map((it) => store.canonical(it.id)));
   const others = shelvesFor(req).filter((s) => s.id !== shelf.id).map((s) => ({ shelf: s, total: visible(s).length }));
   res.send(pages.publisherPage({ part: restPart(req, res), shelf, subscribed: store.subscribed(req.user?.id, shelf.id), user: req.user, fresh, feed: social.feed({ limit: 6, books: works }), others, visible }));
