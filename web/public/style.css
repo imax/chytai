@@ -1047,3 +1047,10 @@ aside .side-lists + .label, aside p + .label, aside dialog + .label { margin-top
   .welcome-from .list-hits .hit { flex-wrap: wrap; }
   .welcome-from .marks { width: 100%; justify-content: flex-start; padding-left: 0; }
 }
+/* On a phone the «⋯» menu opens from the left edge of the buttons' row, so it never runs off the screen (Max, 2026-10-29). */
+@media (max-width: 600px) {
+  .acts { position: relative; }
+  .acts .more-acts { position: static; }
+  .acts .more-menu { left: 0; right: auto; max-width: calc(100vw - 32px); }
+  .acts .more-menu a, .acts .more-menu button { white-space: normal; }
+}
