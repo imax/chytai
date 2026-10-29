@@ -45,7 +45,8 @@ jobs:
       # minutes, and one retry redeploys the already-built image.
       - run: |
           deploy() { timeout 300 flyctl deploy . --remote-only -a chytai-web -c web/fly.toml --dockerfile web/Dockerfile; }
-          deploy || { echo "retrying deploy"; sleep 15; deploy; }
+          # Fly's API answers 503 for a minute or two now and then (three failed deploys on 2026-10-29): two more tries, a minute apart.
+          deploy || { echo "retrying deploy"; sleep 15; deploy; } || { echo "retrying deploy"; sleep 60; deploy; }
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN_WEB }}
       # The first visit after a deploy starts the daily catalog refresh if one is due; its state, once.
