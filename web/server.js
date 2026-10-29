@@ -547,6 +547,7 @@ app.post("/api/readers-gone", (req, res) => {
 
 app.get("/privacy", (req, res) => res.send(pages.privacyPage({ user: req.user })));
 app.get("/updates", (req, res) => res.send(pages.updatesPage({ user: req.user })));
+app.get("/about", (req, res) => res.send(pages.aboutPage({ user: req.user })));
 // The weekly draw (draw.js, Max 2026-10-28): the page with the rules, «Беру участь», and the reader's state.
 const draw = new (require("./draw").Draw)({ store, auth, ownerId: OWNER_ID });
 app.get(pages.DRAW_PATH, (req, res) => {
@@ -1382,7 +1383,7 @@ app.get("/sitemap.xml", (req, res) => {
   if (Date.now() - sitemap.at > 3600 * 1000) {
     const t0 = Date.now();
     const origin = `https://${DOMAIN || req.get("host")}`;
-    const urls = ["/", "/community", "/publishers", "/updates", "/privacy"];
+    const urls = ["/", "/community", "/publishers", "/updates", "/privacy", "/about"];
     for (const shelf of store.shelves) if (!shelf.draft && !shelf.joinOnly) urls.push(`/publishers/${encodeURIComponent(shelf.id)}`);
     const ru = new Set();
     for (const w of authors.allWorks(store)) {

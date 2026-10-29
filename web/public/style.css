@@ -516,6 +516,8 @@ dialog .form { margin-top: 18px; }
 .prose li { margin-top: 8px; }
 .prose code { font-size: 14px; }
 .prose .text-link { font-size: inherit; }
+.about a { text-decoration: underline; text-decoration-color: var(--under); text-underline-offset: 4px; }
+.about a:hover { color: var(--accent); }
 .btn.on { border-color: var(--under); color: var(--muted); }
 .btn.on:hover { background: transparent; border-color: var(--ink); color: var(--ink); }
 
