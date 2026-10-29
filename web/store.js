@@ -1332,6 +1332,11 @@ class Store {
       const w = norm(base || workName(b.title));
       const key = (keysByWork.get(w) || []).find((k) => k === `at:${norm(b.author)}|${w}`) || (keysByWork.get(w) || []).find((k) => sameAuthor(vols.get(k)[0].si.item.author, b.author)) || (base && `at:${norm(b.author)}|${w}`);
       if (!key) continue;
+      // A reader's book in the other alphabet is a translation, not a volume: Orwell's «1984» next to book.ua's
+      // «1984. Том 1» (Max, 2026-10-29: «А оригінал?»). A title with no letters goes by the author's name.
+      const abc = (t, a) => /[а-яіїєґ]/i.test(/\p{L}/u.test(t || "") ? t : a || "");
+      const shop = vols.get(key)?.[0]?.si.item;
+      if (shop && abc(b.title, b.author) !== abc(shop.title, shop.author)) continue;
       const si = { shelf: { name: "полиця читача" }, item: { id: b.id, title: b.title, altTitle: b.altTitle || "", author: b.author, genres: b.tags || [] }, lib: true };
       if (!vols.has(key)) vols.set(key, []);
       if (base) vols.get(key).push({ si, base });
