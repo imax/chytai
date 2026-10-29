@@ -98,7 +98,7 @@ class Sluhay {
         if (++failed >= 5) break; // the site is down or turned us away: the rest next time
         st.todo.push(st.todo.shift());
       }
-      if (++n % 50 === 0) this.db.set("sluhay:index", JSON.stringify(st));
+      if (++n % 10 === 0) this.db.set("sluhay:index", JSON.stringify(st));
       await wait(1000);
     }
     this.db.set("sluhay:index", JSON.stringify(st));

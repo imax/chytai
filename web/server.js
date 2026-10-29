@@ -792,7 +792,9 @@ bg.every("ukrlib", 24 * 3600 * 1000, () => ukrlib.run(), { db: store.db, first: 
 const SLUHAY_PUBLIC = true;
 const sluhay = new (require("./sluhay").Sluhay)({ store, freeBooks, log: console.log });
 bg.register("sluhay", sluhay, { run: true });
-bg.every("sluhay", 24 * 3600 * 1000, () => sluhay.run(), { db: store.db, first: 5 * 60 * 1000 });
+// Hourly: a deploy can stop the first read halfway, and a daily schedule would wait a day to go on; with
+// nothing left to read and matched today, a run does nothing.
+bg.every("sluhay", 3600 * 1000, () => sluhay.run(), { db: store.db, first: 5 * 60 * 1000 });
 // «Чи варто читати?» on book pages (advice.js): Claude, by the reader's own shelf, on a click.
 const bookpage = new BookPage({ apiKey: process.env.ANTHROPIC_API_KEY || "", log: console.log });
 const advice = new Advice({ store, social, db: store.db, apiKey: process.env.ANTHROPIC_API_KEY || "", log: console.log });
