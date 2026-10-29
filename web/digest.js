@@ -412,7 +412,8 @@ class Digest {
   </div>
 </div></body></html>`;
     // Links inside notes (pages.inline) are relative to the site.
-    return { subject, html: page.replace(/href="\//g, `href="${site}/`), text: text.join("\n"), unsubscribe: unsub };
+    const { mailLinks } = require("./admin");
+    return { subject, html: mailLinks(page.replace(/href="\//g, `href="${site}/`), site, "digest", true), text: mailLinks(text.join("\n"), site, "digest"), unsubscribe: unsub };
   }
 
   // ---- sending ----

@@ -419,7 +419,7 @@ function authorBlock(a) {
   const years = a.born ? (a.died ? `${a.born}–${a.died}` : `нар. ${a.born}`) : "";
   const desc = a.desc ? cap(a.desc) : "";
   const img = a.image ? `<img class="author-photo" src="${attr(a.image.replace(/^http:/, "https:"))}?width=160" alt="" loading="lazy">` : "";
-  return `<section class="block author-about">
+  return `<section class="block author-about" data-block="author-about">
   ${label("Про автора")}
   <div class="author-card">${img}<div>
     <p class="author-name"><a href="${attr(a.href)}">${esc(a.name)}</a>${years ? ` <span class="muted">${years}</span>` : ""}</p>
@@ -451,9 +451,9 @@ function bookPage({ ukrlib = null, sluhay = null, inGenre = null, fresh = null, 
       <div class="book-cover">${cover(book, "xl")}</div>
       <div class="book-main">
         ${shelf ? `<p class="crumbs"><a href="/publishers/${attr(shelf.id)}">${esc(shelf.name)}</a></p>` : ""}
-        ${kicker ? `<p class="kicker">${kicker}</p>` : ""}
+        ${kicker ? `<p class="kicker" data-block="kicker">${kicker}</p>` : ""}
         <h1>${esc(book.title)}</h1>
-        ${sub ? `<p class="book-by">${sub}</p>` : ""}
+        ${sub ? `<p class="book-by" data-block="byline">${sub}</p>` : ""}
         ${score}
         ${awardsLine(awards)}
         ${twins(book)}
@@ -463,12 +463,12 @@ function bookPage({ ukrlib = null, sluhay = null, inGenre = null, fresh = null, 
     </article>
     ${series(book, inLibrary)}
     ${cycle(book, inLibrary, user)}
-    ${first ? `<section class="block">
+    ${first ? `<section class="block" data-block="readers">
       ${label("У читачів")}
       ${first.entry.note ? quote(first, book.id) : ""}
       ${(first.entry.note ? rest : readers).length ? `<div class="others">${(first.entry.note ? rest : readers).map((r) => readerLine(r, book.id)).join("")}</div>` : ""}
     </section>` : ""}
-    ${lists.length ? `<section class="block">${label("У списках", `<a href="/lists">усі списки</a>`)}<div class="lists">${lists.map(listLine).join("")}</div></section>` : ""}
+    ${lists.length ? `<section class="block" data-block="lists">${label("У списках", `<a href="/lists">усі списки</a>`)}<div class="lists">${lists.map(listLine).join("")}</div></section>` : ""}
     ${adviceBlock(book, advice)}
     ${SHOW_REVIEWS && (writings.length || user) ? `<section class="block" id="writings">
       ${label("Огляди")}
@@ -480,10 +480,10 @@ function bookPage({ ukrlib = null, sluhay = null, inGenre = null, fresh = null, 
     ${authorBlock(authorInfo)}
   </div>
   <aside>
-    ${ru ? "" : `${also.length && !(fresh && alsoTitle === "Новинки видавництв") ? `${label(alsoTitle)}${minis(also)}` : ""}
-    ${inGenre ? `${label(`Ще в жанрі «${esc(cap(inGenre.genre))}»`, `<a href="/genre/${attr(genreSlug(inGenre.genre))}">усі</a>`)}${minis(inGenre.books)}` : ""}
-    ${fresh ? `${label(`Нове · ${esc(fresh.shelf.name)}`, `<a href="/publishers/${attr(fresh.shelf.id)}">усе</a>`)}${minis(fresh.books)}` : ""}
-    ${pick ? `${label("Книжка навмання", "оцінка 4,5+")}${feedList([pick])}` : ""}`}
+    ${ru ? "" : `${also.length && !(fresh && alsoTitle === "Новинки видавництв") ? `<div data-block="also">${label(alsoTitle)}${minis(also)}</div>` : ""}
+    ${inGenre ? `<div data-block="in-genre">${label(`Ще в жанрі «${esc(cap(inGenre.genre))}»`, `<a href="/genre/${attr(genreSlug(inGenre.genre))}">усі</a>`)}${minis(inGenre.books)}</div>` : ""}
+    ${fresh ? `<div data-block="fresh">${label(`Нове · ${esc(fresh.shelf.name)}`, `<a href="/publishers/${attr(fresh.shelf.id)}">усе</a>`)}${minis(fresh.books)}</div>` : ""}
+    ${pick ? `<div data-block="pick">${label("Книжка навмання", "оцінка 4,5+")}${feedList([pick])}</div>` : ""}`}
   </aside>
 </div>
 ${myLists ? listsDialog(book, myLists) : ""}`;
@@ -510,7 +510,7 @@ const adminNav = () => `<nav class="admin-nav">${ADMIN_TABS.map(([name, links, m
 // On book pages the «Хочу прочитати» block itself is not shown to guests.
 const JOIN_PATHS = new Set(["/book", "/author", "/genre", "/publishers", "/@", "/lists", "/community"]);
 function joinBand(back) {
-  return `<section class="join-band">
+  return `<section class="join-band" data-block="join">
   <div>
     <p class="kicker">Chytai</p>
     <p class="join-title">Проєкт для тих, хто любить книжки</p>
@@ -538,7 +538,7 @@ function adviceBlock(book, a) {
     : a.kind === "empty" ? `<p class="advice-ask"><a class="text-link" href="/add">Додайте прочитане, і Claude скаже, чи варто</a></p>`
     : a.kind === "kept" ? adviceHtml(a)
     : `<p class="advice-ask"><button class="text-link" data-ask="advice">Чи варто мені читати?</button></p>`;
-  return `<section class="block advice" id="advice" data-book="${attr(book.id)}">
+  return `<section class="block advice" id="advice" data-block="advice" data-book="${attr(book.id)}">
       ${label("AI-рекомендація")}
       <div class="advice-body">${inner}</div>
     </section>`;
@@ -568,7 +568,7 @@ function aboutBlock(book, shelf, ukAsk, editionError) {
   const uk = book.ukTitle || ukAsk ? `<p class="small muted uk-line">${ukLine(book, ukAsk)}</p>` : "";
   // The original Haiku named for a Ukrainian book while no catalog has it (store.aiOrigs).
   const orig = book.origTitle ? `<p class="small muted uk-line">Оригінал: «${esc(book.origTitle)}»${book.origAuthor ? `, ${esc(book.origAuthor)}` : ""}</p>` : "";
-  return `<section class="block" id="about">
+  return `<section class="block" id="about" data-block="about">
       ${label("Про книжку")}
       ${blurb}${blurbSource}
       ${uk}${orig}
@@ -583,7 +583,7 @@ function reviewsBlock(book, o, user, vote) {
   const canAsk = !canSee && user && (OVERVIEW_PUBLIC || user.owner);
   if (!canSee && !canAsk) return "";
   const inner = canSee ? overviewHtml(o, user, vote, { folded: true }) : `<p class="advice-ask"><button class="text-link" data-ask="overview">Що кажуть про цю книжку?</button></p>`;
-  return `<section class="block advice" id="reviews" data-book="${attr(book.id)}">
+  return `<section class="block advice" id="reviews" data-block="reviews" data-book="${attr(book.id)}">
       ${label("Що кажуть про книжку")}
       <div class="advice-body">${inner}</div>
     </section>`;
@@ -676,7 +676,7 @@ ${trial.rows?.length ? `<table class="readers"><tr><th>Книжка</th><th>На
 const cyrBook = (b) => CYR.test(/\p{L}/u.test(b.title || "") ? b.title : b.author || "");
 const twinLabel = (book, t) => (cyrBook(book) && !cyrBook(t) ? "Оригінал" : !cyrBook(book) && cyrBook(t) ? "Українською" : "Інше видання");
 function twins(book, list = book.translations || []) {
-  return list.length ? `<div class="twins">${list.map((t) => `<a class="twin" href="${attr(t.href)}">${cover(t, "xs")}<span><span class="twin-label">${twinLabel(book, t)}</span><b>${esc(t.title)}</b></span></a>`).join("")}</div>` : "";
+  return list.length ? `<div class="twins" data-block="twins">${list.map((t) => `<a class="twin" href="${attr(t.href)}">${cover(t, "xs")}<span><span class="twin-label">${twinLabel(book, t)}</span><b>${esc(t.title)}</b></span></a>`).join("")}</div>` : "";
 }
 
 // The first reader's note as the big quote: «— Макс І, прочитано у 2026, на папері».
@@ -738,12 +738,12 @@ function mine(book, entry, user, now = false, readUrl = "", listItem = "", { fre
   const edit = href ? `/me${href}` : `/me/book/${encodeURIComponent(entry?.via ? entry.via.id : book.id)}`;
   // A volume of a series: «Прочитано · всю серію» opens the edit page with «Уся серія» ticked.
   const allOf = book.cycle?.items?.length > 1 ? `<a rel="nofollow" href="${attr(user ? `${edit}?series` : `/login?next=${encodeURIComponent(`${edit}?series`)}`)}">Прочитано · всю серію</a>` : "";
-  if (!entry) return `<div class="acts">${wantButton(book, user, { size: "", primary: true })}${moreMenu([open, nowItem(book, false, user), readItem(book, user), allOf, listItem, kidsItem(book, false, user)])}</div>`;
+  if (!entry) return `<div class="acts" data-block="acts">${wantButton(book, user, { size: "", primary: true })}${moreMenu([open, nowItem(book, false, user), readItem(book, user), allOf, listItem, kidsItem(book, false, user)])}</div>`;
   const what = [entry.kids ? "Дитяча полиця" : "", entry.status ? STATUS[entry.status] + (entry.status === "read" && entry.year ? ` ${entry.year}` : "") : entry.kids ? "" : "У моїх книжках", entry.rating != null ? `${uk(entry.rating)} з 5` : "", entry.copy ? COPY[entry.copy] : ""].filter(Boolean).join(" · ");
   // Read and not rated yet: the stars right here, no trip to the form (Vova's feedback, 2026-10-23).
   const rate = entry.status === "read" && entry.rating == null && !entry.via && !entry.kids ? rateLine(book.id, "оцініть:") : "";
   // A tap on «✓ Хочу прочитати» opens the «⋯» menu (app.js).
-  return `<div class="acts"><span class="have" role="button" title="Змінити або прибрати">✓ ${esc(what)}${entry.via ? ` <span class="muted">як <a href="${attr(entry.via.href)}">${esc(entry.via.title)}</a></span>` : ""}</span>${moreMenu([open, entry.via ? "" : nowItem(book, now, user), `<a href="${attr(edit)}">Оцінка, рік, нотатка</a>`, entry.status === "read" ? "" : allOf, listItem, entry.via ? "" : kidsItem(book, !!entry.kids, user), entry.via ? "" : removeItem(book, entry)])}${rate}</div>`;
+  return `<div class="acts" data-block="acts"><span class="have" role="button" title="Змінити або прибрати">✓ ${esc(what)}${entry.via ? ` <span class="muted">як <a href="${attr(entry.via.href)}">${esc(entry.via.title)}</a></span>` : ""}</span>${moreMenu([open, entry.via ? "" : nowItem(book, now, user), `<a href="${attr(edit)}">Оцінка, рік, нотатка</a>`, entry.status === "read" ? "" : allOf, listItem, entry.via ? "" : kidsItem(book, !!entry.kids, user), entry.via ? "" : removeItem(book, entry)])}${rate}</div>`;
 }
 
 // «Де взяти»: every edition's shop (with its format, price and stock, the one place prices are shown),
@@ -810,7 +810,7 @@ function where(book, ukrlib = null, sluhay = null) {
   }
   if (links.length) rows.push(row("Інше", links.map((l) => `<a href="${attr(l.url)}" target="_blank" rel="noopener">${esc(l.label)}</a>`).join(` <span class="muted">·</span> `)));
   if (out.length) rows.push(row("Немає", `<span class="muted">зараз немає в наявності: </span>${out.map((e) => `<a class="muted" href="${attr(e.links[0].url)}" target="_blank" rel="noopener">${esc(e.shelf.name)}</a>`).join(", ")}`));
-  return `<div class="where${rows.length ? "" : " hidden"}" data-src="/api/libraries/${attr(encodeURIComponent(book.id))}"><span class="where-label">Де взяти</span>${rows.join("")}</div>`;
+  return `<div class="where${rows.length ? "" : " hidden"}" data-block="where" data-src="/api/libraries/${attr(encodeURIComponent(book.id))}"><span class="where-label">Де взяти</span>${rows.join("")}</div>`;
 }
 
 // The volumes of the series this book belongs to, each with its own page and where to get it.
@@ -820,7 +820,7 @@ function series(book, inLibrary) {
   // «Хроніки Амбера : у 10 кн. Кн. 2 : Рушниці Авалону» is «2. Рушниці Авалону».
   const numbered = (v) => { const p = require("./catalogs").volumeOf(v.title); return p?.subtitle && p.volume === v.volume ? `${p.volume}. ${cap(p.subtitle)}` : ""; };
   const name = (v) => (v.bundle ? `Комплект із ${count(ser.volumes, "тому", "томів", "томів")}` : numbered(v) || cap(v.title.replace(ser.name, "").replace(/^[\s,.:]+/, "")) || `Том ${v.volume}`);
-  return `<section class="block series">${label(`Серія «${esc(ser.name)}», ${count(ser.volumes, "том", "томи", "томів")}`)}<ul>${ser.items
+  return `<section class="block series" data-block="series">${label(`Серія «${esc(ser.name)}», ${count(ser.volumes, "том", "томи", "томів")}`)}<ul>${ser.items
     .map((v) => {
       const has = inLibrary.get(v.work);
       const tail = [v.price, avail(v)].filter(Boolean).join(" · ");
@@ -838,7 +838,7 @@ function cycle(book, inLibrary, user = null) {
   const c = book.cycle;
   if (!c || book.series?.items || c.items.length < 2) return "";
   const last = c.items.at(-1).n;
-  return `<section class="block series cycle">${label(`Серія «${esc(c.name)}»`, `книга ${c.n} з ${last}`)}<ol>${c.items
+  return `<section class="block series cycle" data-block="series">${label(`Серія «${esc(c.name)}»`, `книга ${c.n} з ${last}`)}<ol>${c.items
     .map((v) => {
       const has = v.id && inLibrary.get(v.id);
       const name = v.href ? `<a href="${attr(v.href)}">${esc(v.title)}</a>` : user ? `<form method="post" action="/api/series-volume/${attr(encodeURIComponent(book.id))}" class="make"><input type="hidden" name="n" value="${v.n}"><button>${esc(v.title)}</button></form>` : `<span>${esc(v.title)}</span>`;
@@ -1303,7 +1303,7 @@ function yearHead(year, rows) {
 // #live and #browse: search as you type replaces the shelves (app.js).
 function readPage({ user, f, filters, picks, finish, ua, short, free, wanted, genres, editorials, forYou, forWhy, fresh }) {
   const q = (k) => (k ? `/?f=${k}` : "/");
-  const chips = `<nav class="read-chips">${[["", "Усе"], ...Object.entries(filters).map(([k, [n]]) => [k, n])].map(([k, n]) => (k === f ? `<span class="chip on">${n}</span>` : `<a class="chip" href="${attr(q(k))}">${n}</a>`)).join("")}</nav>`;
+  const chips = `<nav class="read-chips" data-block="chips">${[["", "Усе"], ...Object.entries(filters).map(([k, [n]]) => [k, n])].map(([k, n]) => (k === f ? `<span class="chip on">${n}</span>` : `<a class="chip" href="${attr(q(k))}">${n}</a>`)).join("")}</nav>`;
   const advice = (p) => `<article class="advice">
   <a class="cover-link" href="${attr(p.book.href)}">${cover(p.book, "card")}</a>
   <div>
@@ -1313,25 +1313,27 @@ function readPage({ user, f, filters, picks, finish, ua, short, free, wanted, ge
     <p class="said">— <a href="${attr(p.reader.href)}"><b>${esc(p.reader.name)}</b></a> ${stars(p.entry.rating)}</p>
   </div>
 </article>`;
-  const row = (title, aside, items, extra) => (items.length ? `<section class="block read-row">${label(title, aside)}<div class="grid six">${items.map((x) => card(x.book || x, { avg: x.s?.avg ?? x.avg, extra: extra ? `<p class="meta pop-n">${extra(x)}</p>` : "" })).join("")}</div></section>` : "");
+  // data-block names the row for the tap counts (app.js, /admin/traffic).
+  const KEYS = { "Для вас": "for-you", "Дочитують до кінця": "finish", "Українські автори": "ua", Коротке: "short", "Найбільше хочуть прочитати": "wanted", Безкоштовно: "free", "Нове у видавництвах": "fresh" };
+  const row = (title, aside, items, extra) => (items.length ? `<section class="block read-row" data-block="${KEYS[title] || "row"}">${label(title, aside)}<div class="grid six">${items.map((x) => card(x.book || x, { avg: x.s?.avg ?? x.avg, extra: extra ? `<p class="meta pop-n">${extra(x)}</p>` : "" })).join("")}</div></section>` : "");
   const body = `
 <section class="hero">
   <h1>Що почитати?</h1>
   <form class="search-box big" action="/search" role="search"><input type="search" name="q" placeholder="назва, автор, жанр або видавництво" aria-label="Пошук" autocomplete="off"><span class="enter">Enter ↵</span></form>
   ${chips}
 </section>
-<div id="live"></div>
+<div id="live" data-block="search"></div>
 <div id="browse">
-${picks.length ? `<section class="block">${label("Читачі радять", "оцінка 4,5+ і пару слів чому")}<div class="advices">${picks.map(advice).join("")}</div></section>` : ""}
+${picks.length ? `<section class="block" data-block="picks">${label("Читачі радять", "оцінка 4,5+ і пару слів чому")}<div class="advices">${picks.map(advice).join("")}</div></section>` : ""}
 ${row("Для вас", forWhy, forYou)}
-${!f && editorials.length ? `<section class="block editorials">${label("Добірки Chytai", `<a href="/lists">усі списки</a>`)}<div class="lgrid">${editorials.map(listCard).join("")}</div></section>` : ""}
+${!f && editorials.length ? `<section class="block editorials" data-block="editorials">${label("Добірки Chytai", `<a href="/lists">усі списки</a>`)}<div class="lgrid">${editorials.map(listCard).join("")}</div></section>` : ""}
 ${row("Дочитують до кінця", "ніхто не покинув", finish, (w) => `дочитали ${w.s.finished}`)}
 ${row("Українські автори", "", ua)}
 ${row("Коротке", "до 250 сторінок", short, (w) => `${w.pages} с.`)}
 ${row("Найбільше хочуть прочитати", "", wanted, (x) => `${x.n} ${plural(x.n, "хоче", "хочуть", "хочуть")}`)}
 ${row("Безкоштовно", "класика в Читалці", free.map((b) => ({ book: b })))}
 ${row("Нове у видавництвах", `<a href="/publishers">усі видавництва</a>`, fresh, (x) => esc(x.shelf.name))}
-${!f && genres.length ? `<section class="block">${label("Жанри")}<div class="gtiles">${genres.map((x) => `<a class="gtile" href="/genre/${attr(genreSlug(x.g))}">${x.top ? cover(x.top, "xs") : ""}<span><b>${esc(cap(x.g))}</b><span class="muted">${books(x.n)}</span></span></a>`).join("")}</div></section>` : ""}
+${!f && genres.length ? `<section class="block" data-block="genres">${label("Жанри")}<div class="gtiles">${genres.map((x) => `<a class="gtile" href="/genre/${attr(genreSlug(x.g))}">${x.top ? cover(x.top, "xs") : ""}<span><b>${esc(cap(x.g))}</b><span class="muted">${books(x.n)}</span></span></a>`).join("")}</div></section>` : ""}
 </div>`;
   return layout({ title: "", body, user, path: "/", home: true, canonical: "/", description: "Що почитати далі: книжки з оцінками й нотатками читачів і новинки українських видавництв.", jsonld: { "@context": "https://schema.org", "@type": "WebSite", name: "Chytai", url: ORIGIN, image: `${ORIGIN}/icon.png`, inLanguage: "uk", potentialAction: { "@type": "SearchAction", target: { "@type": "EntryPoint", urlTemplate: `${ORIGIN}/search?q={q}` }, "query-input": "required name=q" } } });
 }
@@ -1456,7 +1458,7 @@ function searchesBlock(s) {
   const day = (d) => new Date(`${d}T12:00`).toLocaleDateString("uk-UA", { day: "numeric", month: "short" });
   const rows = (list, hits) => list.map((r) => `<tr><td><a href="/search?${attr(new URLSearchParams({ q: r.q }).toString())}">${esc(r.q)}</a></td><td>${r.n}</td>${hits ? `<td>${r.hits || `<span class="zero">0</span>`}</td>` : ""}</tr>`).join("");
   return `<h2>Що шукають</h2>
-<p class="muted small">З ${day(s.since)}: ${s.total} пошуків, ${s.queries} різних запитів, нічого не знайшли ${s.none}.</p>
+<p class="muted small">З ${day(s.since)}: ${s.total} пошуків, ${s.queries} різних запитів, нічого не знайшли ${s.none}, переходів з результатів ${s.clicks} (<a href="/admin/traffic#taps">куди</a>).</p>
 <div class="tbl"><table><thead><tr><th>Запит</th><th>Разів</th><th>Знайдено</th></tr></thead><tbody>${rows(s.top, true)}</tbody></table></div>
 ${s.empty.length ? `<h2>Нічого не знайшли</h2>
 <div class="tbl"><table><thead><tr><th>Запит</th><th>Разів</th></tr></thead><tbody>${rows(s.empty, false)}</tbody></table></div>` : ""}`;
@@ -1653,7 +1655,7 @@ ${parts.first}
 function searchPage({ q, user, results }) {
   const body = `
 <form class="search-box big query" action="/search" role="search"><input type="search" name="q" value="${attr(q)}" placeholder="назва, автор, жанр або видавництво" aria-label="Пошук" autocomplete="off"${q ? "" : " autofocus"}><span class="enter">Enter ↵</span></form>
-<div id="live">${searchResults({ q, user, ...results })}</div>`;
+<div id="live" data-block="search">${searchResults({ q, user, ...results })}</div>`;
   return layout({ title: q ? `${q} · Пошук` : "Пошук", body, user, path: "/search", q });
 }
 

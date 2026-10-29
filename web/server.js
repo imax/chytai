@@ -163,6 +163,8 @@ app.use((req, res, next) => {
     const isBot = BOT.test(ua);
     const page = req.method === "GET" && res.statusCode === 200 && /text\/html/.test(res.getHeader("Content-Type") || "") && !/^\/(api|admin|t)\//.test(req.path) && !("rest" in req.query);
     if (page) speed.add(isBot ? "bot" : "page", ms);
+    // A page people asked for and didn't find (a dead link from somewhere, an old address), for /admin/speed.
+    if (req.method === "GET" && res.statusCode === 404 && !/^\/(api|admin|t|covers)\//.test(req.path) && !/\.[a-z0-9]{2,5}$/i.test(req.path)) admin.event(req, req.user?.id, "404", req.path);
     if (isBot) speed.bot(ua, ms, page, res.statusCode === 503);
   });
   next();
@@ -376,6 +378,8 @@ app.get("/login", (req, res) => {
   const id = m && store.canonical(store.resolve(decodeURIComponent(m[2])) || "");
   const book = id ? store.bookPage(id) : null;
   if (book) admin.guestTap(req, null, m[1] === "want" ? "want" : "mark", cookies(req));
+  // The way in, step by step (admin «Вхід»): the page opened, and for what (a book's button, the reader, the menu).
+  admin.event(req, null, "login", `page:${m ? m[1] : next.startsWith("/reader-login") || next.startsWith("/oauth") ? "reader" : next ? `from:${require("./admin").sectionOf(next.split("?")[0])}` : "menu"}`);
   res.send(pages.loginPage({ next, book, what: m?.[1], free: !!freeFileFor(book) }));
 });
 app.post("/login", async (req, res) => {
@@ -384,6 +388,7 @@ app.post("/login", async (req, res) => {
   if (error) return res.status(400).send(pages.loginPage({ next, email: req.body.email, error }));
   const r = await auth.sendCode(email, req.ip);
   if (r.error) return res.status(429).send(pages.loginPage({ next, email, error: r.error }));
+  admin.event(req, null, "login", "email");
   res.send(pages.codePage({ next, email }));
 });
 app.post("/login/code", (req, res) => {
@@ -392,6 +397,7 @@ app.post("/login/code", (req, res) => {
   if (error) return res.status(400).send(pages.loginPage({ next, error }));
   const r = auth.verify(email, req.body.code);
   if (r.error) return res.status(400).send(pages.codePage({ next, email, error: r.error }));
+  admin.event(req, null, "login", r.reader ? "code:known" : "code:new");
   if (r.reader) return signIn(req, res, r.reader, next);
   res.send(pages.signupPage({ next, ticket: r.ticket, email, name: "", username: "" }));
 });
@@ -406,6 +412,7 @@ app.post("/login/signup", (req, res) => {
   if (error) return res.status(400).send(pages.signupPage({ next, ticket: req.body.ticket, email, name: req.body.name, username: req.body.username, error }));
   if (auth.byEmail(email)) return signIn(req, res, auth.byEmail(email), next);
   const reader = auth.createReader({ email, name: name.name, username: username.username });
+  admin.event(req, null, "login", "signup");
   auth.useTicket(req.body.ticket);
   admin.came(reader.id, cookies(req).chytai_came);
   res.append("Set-Cookie", `chytai_came=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax`);
@@ -906,7 +913,7 @@ async function followMail(follower, target) {
     `Це єдиний лист про цього читача. Не хочете таких листів: ${off}`,
     `Інші налаштування: ${SITE}/settings`,
   ].join("\n");
-  await auth.send(target.email, subject, text, { headers: { "List-Unsubscribe": `<${off}>`, "List-Unsubscribe-Post": "List-Unsubscribe=One-Click" } });
+  await auth.send(target.email, subject, require("./admin").mailLinks(text, SITE, "follow"), { headers: { "List-Unsubscribe": `<${off}>`, "List-Unsubscribe-Post": "List-Unsubscribe=One-Click" } });
   console.log(`follow mail: @${follower.username} → @${target.username}`);
 }
 const followMailSwitch = (req, res, on) => {
@@ -1402,6 +1409,17 @@ app.get("/api/search", (req, res) => {
   lastFound.delete(q), lastFound.set(q, foundCount(results));
   if (lastFound.size > 500) lastFound.delete(lastFound.keys().next().value);
   res.set("Cache-Control", "no-store").send(pages.searchResults({ q, user: req.user, ...results }));
+});
+// Taps and script errors from app.js (sendBeacon), for /admin/traffic and /admin/speed: counts only (admin.tap).
+app.post("/api/tap", (req, res) => {
+  const b = req.body || {};
+  admin.tap(req, req.user?.id, { path: b.path, block: b.block, target: b.target, pos: b.pos });
+  res.status(204).end();
+});
+app.post("/api/js-error", (req, res) => {
+  const where = String(req.body?.path || "").startsWith("/") ? require("./admin").sectionOf(String(req.body.path).slice(0, 200)) : "?";
+  admin.event(req, req.user?.id, "js", `${where}: ${String(req.body?.message || "").slice(0, 100)}`);
+  res.status(204).end();
 });
 app.post("/api/searched", (req, res) => {
   const q = String(req.body?.q || "").trim().slice(0, 100);
@@ -2062,7 +2080,7 @@ app.post("/admin/genres-trial", owner, (req, res) => {
   genreTrial.run().catch((e) => console.log(`genretrial: ${e.message}`));
   res.redirect(303, "/admin/genres-trial");
 });
-app.get("/admin", owner, (req, res) => res.send(adminPage({ user: req.user, stats: admin.stats(), overviews: advice.overviewStats(), catalog: store.catalogStats(), layout: pages.layout })));
+app.get("/admin", owner, (req, res) => res.send(adminPage({ user: req.user, stats: admin.stats(), login: admin.events("login"), overviews: advice.overviewStats(), catalog: store.catalogStats(), layout: pages.layout })));
 app.get("/admin/shelves", owner, (req, res) => res.send(shelvesPage({ user: req.user, catalog: store.catalogStats(), layout: pages.layout })));
 // How long pages take (speed.js): the server's time for every page, and the reader's browser's own, which app.js
 // sends once a page has loaded (two numbers and whether it is a phone).
@@ -2098,8 +2116,8 @@ app.get("/admin/debug/search", owner, (req, res) => {
     raw: req.query.q ? store.db.prepare("SELECT id FROM search WHERE search MATCH ? LIMIT 10").all(`"${String(req.query.q).toLowerCase()}"*`) : null,
   });
 });
-app.get("/admin/speed", owner, (req, res) => res.send(speedPage({ user: req.user, days: speed.days(), bots: speed.bots(), layout: pages.layout })));
-app.get("/admin/traffic", owner, (req, res) => res.send(adminPage({ user: req.user, stats: admin.stats(), gsc: gsc.data(), gscOn: gsc.configured(), layout: pages.layout, page: "traffic" })));
+app.get("/admin/speed", owner, (req, res) => res.send(speedPage({ user: req.user, days: speed.days(), bots: speed.bots(), notFound: admin.events("404"), jsErrors: admin.events("js"), layout: pages.layout })));
+app.get("/admin/traffic", owner, (req, res) => res.send(adminPage({ user: req.user, stats: admin.stats(), taps: admin.taps(), gsc: gsc.data(), gscOn: gsc.configured(), layout: pages.layout, page: "traffic" })));
 app.get("/admin/stats", owner, (req, res) => res.redirect(301, "/admin/traffic"));
 app.get("/admin/overviews", owner, (req, res) => res.send(overviewsPage({ user: req.user, list: advice.overviewList().map((r) => ({ ...r, complaints: r.down ? advice.complaintsOf(r.book.id) : [] })), stats: advice.overviewStats(), who: (id) => (id && id !== "auto" ? pub(auth.reader(id)) : null), layout: pages.layout })));
 app.get("/admin/readers", owner, (req, res) => res.send(readersPage({ user: req.user, stats: admin.stats(), layout: pages.layout, q: req.query.q, min: Number(req.query.books) || 0, sort: String(req.query.sort || "created"), page: req.query.page })));

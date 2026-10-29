@@ -123,7 +123,7 @@ class WantMail {
       ...(books.length > shown.length ? [`І ще ${books.length - shown.length}: ${site}/@${reader.username}`, ``] : []),
       `Відписатися від цих листів: ${off}`,
     ];
-    return { to: reader.email, subject, text: text.join("\n"), headers: { "List-Unsubscribe": `<${off}>`, "List-Unsubscribe-Post": "List-Unsubscribe=One-Click" } };
+    return { to: reader.email, subject, text: require("./admin").mailLinks(text.join("\n"), site, "want"), headers: { "List-Unsubscribe": `<${off}>`, "List-Unsubscribe-Post": "List-Unsubscribe=One-Click" } };
   }
 
   recipients() {

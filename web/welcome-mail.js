@@ -60,7 +60,8 @@ class WelcomeMail {
     <a href="${this.site}/settings/mail" style="color:#6b675f">Налаштування</a> · <a href="${this.site}" style="color:#6b675f">chytai.org.ua</a>: читай більше
   </div>
 </div></body></html>`;
-    return { subject, text, html };
+    const { mailLinks } = require("./admin");
+    return { subject, text: mailLinks(text, this.site, "welcome"), html: mailLinks(html, this.site, "welcome", true) };
   }
 
   async sendTo(reader, { record = false } = {}) {

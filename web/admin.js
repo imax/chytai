@@ -93,6 +93,16 @@ function sourceOf(referer, query, ownHosts) {
   const known = SOURCES.find(([, , re]) => re.test(key));
   return { source: known ? known[0] : key, ref: campaign ? `кампанія: ${campaign}` : ref };
 }
+// Links of a letter back to the site carry utm_source=email and the letter's name, so «Звідки приходять» shows
+// what each letter brings («Пошта», «кампанія: digest»; Max, 2026-10-29). Unsubscribing and settings stay bare.
+function mailLinks(s, site, campaign, html = false) {
+  const re = new RegExp(`${site.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(/[^"'\\s<>]*)?`, "g");
+  return String(s).replace(re, (url) => {
+    if (/\/(unsubscribe|resubscribe|settings)(\/|$|\?)/.test(url)) return url;
+    const [base, hash = ""] = url.split("#");
+    return `${base}${base.includes("?") ? (html ? "&amp;" : "&") : "?"}utm_source=email${html ? "&amp;" : "&"}utm_campaign=${campaign}${hash ? `#${hash}` : ""}`;
+  });
+}
 const ARRIVAL_DAYS = 28;
 const SECTION_NAMES = Object.fromEntries(SECTIONS.map(([id, name]) => [id, name]));
 
@@ -190,7 +200,7 @@ class Admin {
   // results it got, counted per day. No reader, no address, nothing else; crawlers and the owner not counted.
   searched(req, readerId, q, hits) {
     q = String(q || "").toLowerCase().replace(/\s+/g, " ").trim().slice(0, 100);
-    if (q.length < 2 || readerId === this.ownerId || BOT.test(req.headers["user-agent"] || "") || !req.headers["accept-language"]) return;
+    if (q.length < 2 || !this.counted(req, readerId)) return;
     try {
       this.db.prepare(`INSERT INTO search_log (day, q, n, hits) VALUES (?, ?, 1, ?) ON CONFLICT (day, q) DO UPDATE SET n = n + 1, hits = excluded.hits`).run(today(), q, hits | 0);
     } catch (e) {
@@ -202,7 +212,52 @@ class Admin {
     const since = dayOf(new Date(Date.now() - days * 86400000));
     const rows = this.db.prepare("SELECT q, SUM(n) AS n, MAX(hits) AS hits FROM search_log WHERE day >= ? GROUP BY q ORDER BY n DESC, q").all(since);
     const first = this.db.prepare("SELECT MIN(day) AS d FROM search_log").get()?.d || null;
-    return { since: first && first > since ? first : since, started: first, total: rows.reduce((a, r) => a + r.n, 0), queries: rows.length, none: rows.filter((r) => !r.hits).reduce((a, r) => a + r.n, 0), top: rows.slice(0, 30), empty: rows.filter((r) => !r.hits).slice(0, 30) };
+    const clicks = this.db.prepare("SELECT SUM(n) AS n FROM taps WHERE block = 'search' AND target != 'search' AND day >= ?").get(since)?.n || 0;
+    return { clicks, since: first && first > since ? first : since, started: first, total: rows.reduce((a, r) => a + r.n, 0), queries: rows.length, none: rows.filter((r) => !r.hits).reduce((a, r) => a + r.n, 0), top: rows.slice(0, 30), empty: rows.filter((r) => !r.hits).slice(0, 30) };
+  }
+
+  // Is this request a person worth counting? Crawlers, the owner and requests without a browser's
+  // Accept-Language are not.
+  counted(req, readerId) {
+    return readerId !== this.ownerId && !BOT.test(req.headers["user-agent"] || "") && !!req.headers["accept-language"];
+  }
+  // A tap on a link or a button (Max, 2026-10-29: «норм інструментацію … щоб мати дані для продуктових рішень»),
+  // sent by app.js: the kind of page (SECTIONS), the block it sat in (data-block), what it led to and, for a
+  // book in a row, its place there. Counted per day, guests apart from readers; no id, no address, no query.
+  tap(req, readerId, { path, block, target, pos }) {
+    if (!this.counted(req, readerId)) return;
+    const page = sectionOf(String(path || "/").slice(0, 200));
+    block = /^[a-z0-9-]{1,30}$/.test(block || "") ? block : "-";
+    target = String(target || "").toLowerCase().slice(0, 60);
+    if (!/^[a-z0-9][a-z0-9:._\-]*$/.test(target)) return;
+    pos = ["1", "2", "3", "4-6", "7-10", "11+"].includes(pos) ? pos : "";
+    try {
+      this.db.prepare(`INSERT INTO taps (day, page, block, target, pos, guest, n) VALUES (?, ?, ?, ?, ?, ?, 1) ON CONFLICT (day, page, block, target, pos, guest) DO UPDATE SET n = n + 1`).run(today(), page, block, target, pos, readerId ? 0 : 1);
+    } catch (e) {
+      console.error("admin tap failed:", e.message);
+    }
+  }
+  // Something that is not a tap: a step of signing in, a page not found, a script error in the browser.
+  event(req, readerId, name, prop = "") {
+    if (!this.counted(req, readerId)) return;
+    try {
+      this.db.prepare(`INSERT INTO events (day, name, prop, guest, n) VALUES (?, ?, ?, ?, 1) ON CONFLICT (day, name, prop, guest) DO UPDATE SET n = n + 1`).run(today(), name, clean(prop, 120), readerId ? 0 : 1);
+    } catch (e) {
+      console.error("admin event failed:", e.message);
+    }
+  }
+  // The last month's taps for /admin/traffic: per page and block, what was tapped, guests and readers apart.
+  taps(days = 30) {
+    const since = dayOf(new Date(Date.now() - days * 86400000));
+    const rows = this.db.prepare("SELECT page, block, target, pos, SUM(CASE WHEN guest = 1 THEN n ELSE 0 END) AS guests, SUM(CASE WHEN guest = 0 THEN n ELSE 0 END) AS readers FROM taps WHERE day >= ? GROUP BY page, block, target, pos").all(since);
+    const views = Object.fromEntries(this.db.prepare("SELECT section, SUM(views) AS v FROM section_views WHERE day >= ? GROUP BY section").all(since).map((r) => [r.section, r.v]));
+    const first = this.db.prepare("SELECT MIN(day) AS d FROM taps").get()?.d || null;
+    return { since: first && first > since ? first : since, started: first, rows, views, names: SECTION_NAMES };
+  }
+  // The last month's events of one name, most frequent first: [{ prop, guests, readers, n }].
+  events(name, days = 30) {
+    const since = dayOf(new Date(Date.now() - days * 86400000));
+    return this.db.prepare("SELECT prop, SUM(CASE WHEN guest = 1 THEN n ELSE 0 END) AS guests, SUM(CASE WHEN guest = 0 THEN n ELSE 0 END) AS readers, SUM(n) AS n FROM events WHERE name = ? AND day >= ? GROUP BY prop ORDER BY n DESC").all(name, since);
   }
 
   // A new reader: keep where they first came from (the chytai_came cookie, else «Напряму»).
@@ -646,6 +701,75 @@ ${guestSteps(a.guests)}`;
 
 // «Що роблять гості»: of the guests who came in 28 days, how many went on to a second page, tapped «Хочу прочитати»
 // (and so the sign-in page), signed up, opened a free book or took its EPUB. From search and AI chats, and the rest.
+// Names for /admin/traffic «Що натискають»: the blocks (data-block in pages.js) and what a tap led to (app.js).
+const BLOCK_NAMES = { acts: "Кнопки книжки", where: "Де взяти", twins: "Інші мови", series: "Серія", readers: "У читачів", lists: "У списках", about: "Про книжку", reviews: "Відгуки в інтернеті", advice: "Чи варто читати", "author-about": "Про автора", also: "Читали це, сподобалось і це", "in-genre": "Ще в жанрі", fresh: "Нове", pick: "Книжка навмання", kicker: "Жанр", byline: "Автор, рік", search: "Результати пошуку", picks: "Читачі радять", "for-you": "Для вас", finish: "Дочитують до кінця", ua: "Українські автори", short: "Коротке", wanted: "Найбільше хочуть", free: "Безкоштовно", editorials: "Добірки", genres: "Жанри", chips: "Фільтри", header: "Шапка", join: "Смуга «Доєднатися»", footer: "Низ сторінки", "-": "Решта сторінки" };
+const TARGET_NAMES = { book: "книжка", author: "автор", genre: "жанр", list: "список", lists: "списки", reader: "читач", publishers: "видавництво", search: "пошук", home: "головна", want: "«Хочу прочитати»", read: "«Прочитано»", reading: "«Читаю»", now: "«Читаю зараз»", kids: "дитяча полиця", remove: "прибрати з полиці", stars: "оцінка зірками", menu: "меню ⋯", open: "розгорнути", button: "кнопка", login: "увійти / доєднатися", "guest:want": "«Хочу прочитати» гостем → вхід", "guest:read": "«Прочитано» гостем → вхід", "guest:now": "«Читаю зараз» гостем → вхід", "guest:kids": "дитяча полиця гостем → вхід", "go:read": "читати безкоштовно", "go:epub": "завантажити EPUB", "reader-app": "Читалка", me: "своя полиця", add: "додати книжки", community: "спільнота", updates: "що нового", privacy: "приватність", mail: "написати нам" };
+const targetName = (t) => TARGET_NAMES[t] || (t.startsWith("out:") ? `↗ ${t.slice(4)}` : t.startsWith("form:") ? `форма ${t.slice(5)}` : t);
+// «Що натискають»: per part of the site, what was tapped and where, with taps per 100 page views; the search
+// results apart (they open on any page), and where in a row the tapped book stood.
+function tapsBlock(t) {
+  if (!t) return "";
+  const head = `<h2 id="taps">Що натискають</h2>`;
+  if (!t.rows.length) return `${head}\n<p class="muted small">Рахуємо з ${t.started ? short(t.started) : "сьогодні"}, поки порожньо.</p>`;
+  const groups = new Map();
+  for (const r of t.rows) {
+    const key = r.block === "search" ? "search" : r.page;
+    const g = groups.get(key) || { key, name: key === "search" ? "Результати пошуку (на будь-якій сторінці)" : t.names[key] || key, views: key === "search" ? 0 : t.views[key] || 0, total: 0, rows: new Map(), pos: {} };
+    groups.set(key, g);
+    const id = `${key === "search" ? "" : r.block}|${r.target}`;
+    const x = g.rows.get(id) || { block: key === "search" ? "" : r.block, target: r.target, guests: 0, readers: 0 };
+    g.rows.set(id, x);
+    x.guests += r.guests;
+    x.readers += r.readers;
+    g.total += r.guests + r.readers;
+    if (r.target === "book" && r.pos) g.pos[r.pos] = (g.pos[r.pos] || 0) + r.guests + r.readers;
+  }
+  const per100 = (v, views) => (views ? fmtN((100 * v) / views, 1) : "");
+  const posLine = (pos) => {
+    const all = Object.values(pos).reduce((a, b) => a + b, 0);
+    return all >= 5 ? `<p class="muted small">Книжка, на яку натиснули, стояла в ряду: ${["1", "2", "3", "4-6", "7-10", "11+"].filter((k) => pos[k]).map((k) => `${k.replace("-", "–")}-а ${fmtN((100 * pos[k]) / all, 0)}%`).join(", ")}.</p>` : "";
+  };
+  const html = [...groups.values()].sort((a, b) => b.total - a.total).map((g) => {
+    const rows = [...g.rows.values()].sort((a, b) => b.guests + b.readers - a.guests - a.readers).slice(0, 12);
+    return `<h3>${esc(g.name)} <span class="muted small">· ${n(g.total)} натискань${g.views ? `, ${n(g.views)} переглядів` : ""}</span></h3>
+<div class="tbl"><table class="refs"><thead><tr><th>Де</th><th>Що</th><th>Гості</th><th>Читачі</th>${g.views ? "<th>На 100 переглядів</th>" : ""}</tr></thead>
+<tbody>${rows.map((x) => `<tr><td>${esc(x.block ? BLOCK_NAMES[x.block] || x.block : "")}</td><td>${esc(targetName(x.target))}</td><td>${n(x.guests)}</td><td>${n(x.readers)}</td>${g.views ? `<td>${per100(x.guests + x.readers, g.views)}</td>` : ""}</tr>`).join("")}</tbody></table></div>
+${posLine(g.pos)}`;
+  }).join("\n");
+  return `${head}
+<p class="muted small">За 30 днів, рахуємо з ${short(t.since)}. Лише числа: розділ сайту, блок, що натиснули; без людей і адрес. Перегляди — сторінки цього розділу за той самий час.</p>
+${html}`;
+}
+
+// «Вхід» on /admin: the sign-in page opened (and why), the address given, the code typed, the new account made.
+function loginBlock(ev) {
+  if (!ev) return "";
+  const by = Object.fromEntries(ev.map((r) => [r.prop, r.n]));
+  const opened = ev.filter((r) => r.prop.startsWith("page:")).reduce((a, r) => a + r.n, 0);
+  if (!opened && !by.email) return `<h2>Вхід</h2>\n<p class="muted small">Рахуємо з сьогодні, поки порожньо.</p>`;
+  const WHY = { "page:want": "«Хочу прочитати»", "page:read": "«Прочитано»", "page:now": "«Читаю зараз»", "page:kids": "дитяча полиця", "page:menu": "«Увійти» в меню", "page:reader": "з Читалки" };
+  const whyName = (k) => WHY[k] || (k.startsWith("page:from:") ? `«Доєднатися» чи посилання: ${(SECTION_NAMES[k.slice(10)] || k.slice(10)).toLowerCase()}` : k.slice(5));
+  const why = ev.filter((r) => r.prop.startsWith("page:")).map((r) => `${whyName(r.prop)} ${n(r.n)}`).join(", ");
+  const of = (v) => (opened ? ` <span class="muted">${fmtN((100 * (v || 0)) / opened, 0)}%</span>` : "");
+  return `<h2>Вхід</h2>
+<div class="tbl"><table class="refs"><tbody>
+<tr><th>Відкрили сторінку входу</th><td>${n(opened)}</td><td class="muted small">${why}</td></tr>
+<tr><th>Ввели пошту</th><td>${n(by.email)}${of(by.email)}</td><td></td></tr>
+<tr><th>Ввели код</th><td>${n((by["code:known"] || 0) + (by["code:new"] || 0))}${of((by["code:known"] || 0) + (by["code:new"] || 0))}</td><td class="muted small">знайомих ${n(by["code:known"])}, нових ${n(by["code:new"])}</td></tr>
+<tr><th>Зареєструвались</th><td>${n(by.signup)}${of(by.signup)}</td><td></td></tr>
+</tbody></table></div>
+<p class="muted small">За 30 днів. Відсоток — від тих, хто відкрив сторінку входу.</p>`;
+}
+
+// Pages not found and script errors in readers' browsers, for /admin/speed.
+function problemsBlock(notFound = [], js = []) {
+  const table = (rows, what) => `<div class="tbl"><table class="refs"><thead><tr><th>${what}</th><th>Гості</th><th>Читачі</th></tr></thead><tbody>${rows.slice(0, 25).map((r) => `<tr><td>${esc(r.prop)}</td><td>${n(r.guests)}</td><td>${n(r.readers)}</td></tr>`).join("")}</tbody></table></div>`;
+  return `<h2>Не знайшли сторінку</h2>
+${notFound.length ? `<p class="muted small">Адреси, що дали 404 людям (не роботам), за 30 днів.</p>\n${table(notFound, "Адреса")}` : `<p class="muted">Поки жодної.</p>`}
+<h2>Помилки в браузері</h2>
+${js.length ? `<p class="muted small">Помилки JavaScript у читачів і гостей за 30 днів: розділ сайту, повідомлення, файл і рядок.</p>\n${table(js, "Помилка")}` : `<p class="muted">Поки жодної.</p>`}`;
+}
+
 function guestSteps(g) {
   if (!g) return "";
   const rows = [["arrive", "Прийшли"], ["second", "Відкрили ще сторінку"], ["want", "Натиснули «Хочу прочитати»"], ["signup", "Зареєструвались"], ["read", "Читати безкоштовно"], ["epub", "Завантажили EPUB"]];
@@ -749,7 +873,7 @@ function shelvesPage({ user, catalog, layout }) {
   return layout({ title: "Полиці · Адмінка", user, path: "/admin", body: catalogBlock(catalog, true) });
 }
 
-function adminPage({ user, stats: s, overviews: o = null, catalog = null, gsc = null, gscOn = false, layout, page = "main" }) {
+function adminPage({ user, stats: s, overviews: o = null, catalog = null, gsc = null, gscOn = false, taps = null, login = null, layout, page = "main" }) {
   const traffic = page === "traffic";
   const t = s.totals;
   const tiles = [
@@ -785,6 +909,8 @@ function adminPage({ user, stats: s, overviews: o = null, catalog = null, gsc = 
 
 ${trafficBody(s, gsc, gscOn)}
 
+${tapsBlock(taps)}
+
 <h2>Перегляди за розділами</h2>
 <p class="muted small">Скільки сторінок кожного розділу відкрили (читачі й гості разом, без ботів). Рахується з ${s.sections.length ? "22 жовтня" : "сьогодні"}; які саме сторінки, не зберігаємо.</p>
 ${s.sections.length ? `<div class="tbl"><table class="sections">
@@ -797,6 +923,8 @@ ${s.sections.length ? `<div class="tbl"><table class="sections">
 <div class="stats">${tiles}</div>
 
 ${funnelBlock(s.funnel)}
+
+${loginBlock(login)}
 
 <h2>По тижнях</h2>
 <p class="muted small">Читачі без власника. «Повернулись» — активні цього тижня, але зареєстровані раніше. Перегляди: сторінок, відкритих читачами / гостями (без ботів).</p>
@@ -838,7 +966,7 @@ function overviewsPage({ user, list, stats: o, who, layout }) {
 }
 
 // /admin/speed (speed.js): how fast the site is, day by day.
-function speedPage({ user, days, bots = [], layout }) {
+function speedPage({ user, days, bots = [], notFound = [], jsErrors = [], layout }) {
   const { EDGES } = require("./speed");
   const s = (ms) => (ms == null ? "" : ms === Infinity ? `> ${EDGES[EDGES.length - 1] / 1000} с` : `${String(ms / 1000).replace(".", ",")} с`);
   const pct = (x) => (x == null ? "" : `${String(Math.round(x * 1000) / 10).replace(".", ",")}%`);
@@ -860,6 +988,7 @@ ${bots.length ? `<p class="muted small">Усі запити роботів (ст
 <div class="tbl"><table>
 <thead><tr><th>Робот</th><th>Запитів</th><th>З них сторінок</th><th>Час сервера</th><th>503</th><th>Сьогодні</th></tr></thead>
 <tbody>${bots.map((r) => `<tr><th>${esc(r.name)}</th><td>${n(r.n)}</td><td>${n(r.pages)}</td><td>${n(Math.round(r.ms / 1000))} с</td><td>${n(r.turned)}</td><td>${n(r.today)}</td></tr>`).join("")}</tbody></table></div>` : `<p class="muted">Рахуємо з сьогодні.</p>`}
+${problemsBlock(notFound, jsErrors)}
 </section>`;
   return layout({ title: "Швидкість · Адмінка", user, path: "/admin", body });
 }
@@ -1034,4 +1163,4 @@ ${recent ? `<div class="tbl"><table>
   return layout({ title: "Фонові задачі · Адмінка", user, path: "/admin", body });
 }
 
-module.exports = { BOT, Admin, adminPage, catalogBlock, shelvesPage, readersPage, overviewsPage, speedPage, jobsPage, dayOf, weekOf, sectionOf };
+module.exports = { BOT, Admin, mailLinks, adminPage, catalogBlock, shelvesPage, readersPage, overviewsPage, speedPage, jobsPage, dayOf, weekOf, sectionOf };

@@ -336,6 +336,7 @@
   if (find && main) {
     const results = document.createElement("div");
     results.className = "find-results";
+    results.dataset.block = "search";
     main.prepend(results);
     liveSearch(find, results, [...main.children].filter((el) => el !== results));
   }
@@ -486,3 +487,65 @@ document.addEventListener("click", (e) => {
 document.addEventListener("keydown", (e) => {
   if (e.key === "Escape") for (const d of document.querySelectorAll("details.more-acts[open]")) d.open = false;
 });
+// Taps for /admin/traffic «Що натискають» (Max, 2026-10-29: «норм інструментацію … щоб мати дані для продуктових
+// рішень»): the kind of page, the block the tap was in (data-block), what it led to and, for a book in a row, its
+// place there. The server only counts them per day (admin.tap): no id, no address beyond the kind of page.
+(() => {
+  const send = (url, data) => {
+    try {
+      navigator.sendBeacon?.(url, new URLSearchParams({ path: location.pathname, ...data }));
+    } catch {}
+  };
+  const clean = (s) => String(s || "").toLowerCase().replace(/[^a-z0-9-]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 30);
+  const target = (el) => {
+    if (el.dataset.ev) return el.dataset.ev;
+    if (el.matches("summary")) return el.closest(".more-acts") ? "menu" : "open";
+    if (el.tagName === "A") {
+      let u;
+      try {
+        u = new URL(el.href, location.href);
+      } catch {
+        return "";
+      }
+      if (u.origin !== location.origin) return /(^|\.)app\.chytai\.org\.ua$/.test(u.hostname) ? "reader-app" : u.protocol === "mailto:" ? "mail" : `out:${u.hostname.replace(/^www\./, "")}`;
+      const go = /^\/go\/([a-z]+)\//.exec(u.pathname);
+      if (go) return `go:${go[1]}`;
+      if (u.pathname.startsWith("/login")) {
+        const d = /\/do\/(want|read|now|kids)\//.exec(decodeURIComponent(u.search));
+        return d ? `guest:${d[1]}` : "login";
+      }
+      if (u.pathname.startsWith("/@")) return "reader";
+      return clean(u.pathname.split("/")[1]) || "home";
+    }
+    if (el.dataset.r) return "stars";
+    const f = el.form || el.closest("form");
+    if (!f) return "button";
+    const a = f.getAttribute("action") || "";
+    if (a.startsWith("/login")) return ""; // the way in is counted on the server, step by step
+    if (/\/api\/entry\/.*\/remove$/.test(a)) return "remove";
+    if (/\/api\/entry\//.test(a)) return f.querySelector("[name=status]")?.value || (f.querySelector("[name=kids]") ? "kids" : "entry");
+    if (/\/api\/now\//.test(a)) return "now";
+    return `form:${clean(a.split("/").filter(Boolean).slice(0, 2).join("-"))}`;
+  };
+  const bucket = (i) => (i < 4 ? String(i) : i <= 6 ? "4-6" : i <= 10 ? "7-10" : "11+");
+  document.addEventListener("click", (e) => {
+    const el = e.target.closest("a[href], button, summary, [data-ev]");
+    if (!el || el.closest("[data-no-tap]")) return;
+    const what = target(el);
+    if (!what) return;
+    const box = el.closest("[data-block]");
+    const block = box ? box.dataset.block : el.closest("header") ? "header" : el.closest("footer") ? "footer" : "-";
+    let pos = "";
+    if (what === "book" && box) {
+      const hrefs = [...new Set([...box.querySelectorAll('a[href^="/book/"]')].map((a) => a.getAttribute("href")))];
+      const i = hrefs.indexOf(el.getAttribute("href"));
+      if (i >= 0) pos = bucket(i + 1);
+    }
+    send("/api/tap", { block, target: what, pos });
+  }, true);
+  // Script errors, a few per page, for /admin/speed: nobody writes in about a button that quietly does nothing.
+  let errors = 0;
+  addEventListener("error", (e) => {
+    if (errors++ < 3 && e.message) send("/api/js-error", { message: `${e.message} (${String(e.filename || "").split("/").pop().split("?")[0]}:${e.lineno || 0})` });
+  });
+})();
