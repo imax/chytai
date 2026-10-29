@@ -1505,7 +1505,7 @@ function foldTwins(hits) {
     const twins = hits[i].twins || store.translationsOf(hits[i].book.id);
     const group = [hits[i], ...twins.map((t) => hits.find((h) => h.book.id === t.id)).filter(Boolean)];
     for (const h of group) seen.add(h.book.id);
-    const lead = group.find((h) => CYR_RE.test(h.book.title)) || group[0];
+    const lead = group.find((h) => CYR_RE.test(/\p{L}/u.test(h.book.title || "") ? h.book.title : h.book.author || "")) || group[0]; // «1984»: by the author's alphabet
     hits[i] = { ...lead, entry: lead.entry || group.find((h) => h.entry)?.entry, others: group.filter((h) => h !== lead).map((h) => h.book) };
   }
   return hits;

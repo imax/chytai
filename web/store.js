@@ -530,6 +530,8 @@ class Store {
     for (const w of works) if (norm(w.title).length >= 4) (byTitle.get(norm(w.title)) || byTitle.set(norm(w.title), []).get(norm(w.title))).push(w);
     tier = 3;
     for (const w of works) for (const o of byTitle.get(norm(w.altTitle)) || []) link(w.id, o.id); // the same work already shares one id
+    // A title with no letters, the same on both sides, by one author in two alphabets: Orwell's «1984» and Орвелл's.
+    for (const [t, list] of byTitle) if (!/\p{L}/u.test(t)) for (const w of list) for (const o of list) if (w.id < o.id && sameAuthor(w.author || "", o.author || "") && /[а-яіїєґ]/i.test(w.author || "") !== /[а-яіїєґ]/i.test(o.author || "")) link(w.id, o.id);
     // A foreign book's Ukrainian title from Wikidata (wikidata.js): a book of that title by the same author. The exact
     // title outranks a shop's original title («Шерлок. 1 сезон» says «The Adventures of Sherlock Holmes»).
     this.ukTitles = JSON.parse(this.db.get("wikidata:uk") || "{}");
@@ -1390,7 +1392,10 @@ class Store {
       for (const i of isbnsOf(own)) byIsbn.set(i, b.id);
       for (const t of [b.title, b.altTitle]) if (words(t).includes(" ")) (byWords.get(words(t)) || byWords.set(words(t), []).get(words(t))).push(b);
     }
-    const script = (t) => (/[а-яіїєґ]/i.test(t) ? "cyr" : "lat");
+    // A title with no letters («1984») is in the script of its author's name: Орвелл's «1984» is a translation of
+    // Orwell's, not an edition of it (Max, 2026-10-29).
+    const script = (t, author = "") => (/[а-яіїєґ]/i.test(/\p{L}/u.test(t) ? t : author) ? "cyr" : "lat");
+    const libOf = (id) => this.lib.books[id] || this.seedBooks.find((b) => b.id === id);
     this.crossPairs = [];
     const bookOf = (it) => {
       if (matches.same[it.id]) return matches.same[it.id];
@@ -1400,7 +1405,10 @@ class Store {
       // Such a pair is linked as a translation instead (linkTranslations).
       const same = (id) => {
         if (!ok(id)) return false;
-        if (script((this.lib.books[id] || this.seedBooks.find((b) => b.id === id))?.title || "") === script(it.title)) return true;
+        if (script(libOf(id)?.title || "", libOf(id)?.author) === script(it.title, it.author)) return true;
+        // A collection is not a translation of one of its books: a bundle, or «1984. Колгосп тварин» that a reader's «1984» links to.
+        const lt = libOf(id)?.title || "";
+        if (it.bundle || /^комплект/i.test(it.title || "") || (!/\p{L}/u.test(lt) && norm(it.title) !== norm(lt))) return false;
         this.crossPairs.push([id, it.id]);
         return false;
       };
@@ -1412,7 +1420,7 @@ class Store {
       // (Max, 2026-10-21/22), and linkTranslations pairs them. So two books merge only when their own
       // titles are written in the same script.
       for (const t of [it.title, it.altTitle]) {
-        const found = (byTitle.get(norm(t)) || []).filter((x) => ok(x.id) && sameAuthor(x.author, it.author) && script(x.title) === script(it.title));
+        const found = (byTitle.get(norm(t)) || []).filter((x) => ok(x.id) && sameAuthor(x.author, it.author) && script(x.title, x.author) === script(it.title, it.author));
         const b = found.find((x) => x.exact) || found[0];
         if (b) return b.id;
       }
@@ -1420,7 +1428,7 @@ class Store {
       // the part after the series, as an exact title by the same author (Max, 2026-10-23: no covers on Кідрук).
       const tail = /^[^.:]{3,}[.:]\s+(.{3,})$/.exec(String(it.title || ""))?.[1];
       if (tail) {
-        const b = (byTitle.get(norm(tail)) || []).find((x) => x.exact && ok(x.id) && sameAuthor(x.author, it.author) && script(x.title) === script(tail));
+        const b = (byTitle.get(norm(tail)) || []).find((x) => x.exact && ok(x.id) && sameAuthor(x.author, it.author) && script(x.title, x.author) === script(tail, it.author));
         if (b) return b.id;
       }
       if (same(byUrl.get(pageKey(it.url)))) return byUrl.get(pageKey(it.url));

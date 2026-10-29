@@ -672,7 +672,9 @@ ${trial.rows?.length ? `<table class="readers"><tr><th>Книжка</th><th>На
 
 // A book's other-language pages (Max, 2026-10-21: «дві сторінки і спільні оцінки»): the original under a
 // Ukrainian edition, the Ukrainian edition under the original; the readers and ratings are shared.
-const twinLabel = (book, t) => (CYR.test(book.title) && !CYR.test(t.title) ? "Оригінал" : !CYR.test(book.title) && CYR.test(t.title) ? "Українською" : "Інше видання");
+// A title with no letters («1984») is in the alphabet of its author's name.
+const cyrBook = (b) => CYR.test(/\p{L}/u.test(b.title || "") ? b.title : b.author || "");
+const twinLabel = (book, t) => (cyrBook(book) && !cyrBook(t) ? "Оригінал" : !cyrBook(book) && cyrBook(t) ? "Українською" : "Інше видання");
 function twins(book, list = book.translations || []) {
   return list.length ? `<div class="twins">${list.map((t) => `<a class="twin" href="${attr(t.href)}">${cover(t, "xs")}<span><span class="twin-label">${twinLabel(book, t)}</span><b>${esc(t.title)}</b></span></a>`).join("")}</div>` : "";
 }
