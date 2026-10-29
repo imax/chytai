@@ -103,6 +103,12 @@ const blurbOf = (h) => {
   return b;
 };
 const norm = (s) => String(s || "").toLowerCase().replace(/^(the|a)\s+/, "").replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+// Ukrainian number words as digits, for comparing titles: «Дванадцять обручів» is «12 обручів», «Двадцять сім» 27
+// (Max 2026-10-29). Applied to a norm()ed title, where «п'ять» is «п ять».
+const NUMS = { нуль: 0, один: 1, одна: 1, одне: 1, два: 2, дві: 2, три: 3, чотири: 4, "п ять": 5, шість: 6, сім: 7, вісім: 8, "дев ять": 9, десять: 10, одинадцять: 11, дванадцять: 12, тринадцять: 13, чотирнадцять: 14, "п ятнадцять": 15, шістнадцять: 16, сімнадцять: 17, вісімнадцять: 18, "дев ятнадцять": 19, двадцять: 20, тридцять: 30, сорок: 40, "п ятдесят": 50, шістдесят: 60, сімдесят: 70, вісімдесят: 80, "дев яносто": 90, сто: 100 };
+const NUM_RE = new RegExp(`(?<![\\p{L}\\p{N}])(${Object.keys(NUMS).sort((a, b) => b.length - a.length).join("|")})(?: (${Object.keys(NUMS).filter((k) => NUMS[k] < 10 && NUMS[k] > 0).sort((a, b) => b.length - a.length).join("|")}))?(?![\\p{L}\\p{N}])`, "gu");
+const digits = (t) => t.replace(NUM_RE, (_, a, b) => String(NUMS[a] + (b && NUMS[a] >= 20 && NUMS[a] % 10 === 0 && NUMS[a] < 100 ? NUMS[b] : 0)) + (b && !(NUMS[a] >= 20 && NUMS[a] % 10 === 0 && NUMS[a] < 100) ? ` ${NUMS[b]}` : ""));
+const ntitle = (s) => digits(norm(s));
 // Separators left at the end of a title: «Diary of Samuel Pepys -», «Назва:».
 const DANGLING = /[\s\-‐‑–—:;,/|]+$/u;
 const EDITABLE = ["title", "author", "blurb", "cover", "language", "aliases", "genre", "published", "ebook"]; // ebook: the book.ua item «Де взяти» shows
@@ -1229,7 +1235,7 @@ class Store {
     const alike = (a, b) => !a.bundle === !b.bundle && (norm(a.title).startsWith(norm(b.title)) || norm(b.title).startsWith(norm(a.title)));
     // The title for that compares as the work's name (workName): Старий Лев sells «Тигролови (м'яка
     // обкладинка)» and «Тигролови (в-во Віхола)» next to «Тигролови», and «Колгосп тварин: Казка» is «Колгосп тварин».
-    const workTitle = (t) => norm(workName(t));
+    const workTitle = (t) => ntitle(workName(t));
     const titled = new Map(); // work title -> Set of authors, for the items that have none
     for (const si of this.shelfItems.values()) {
       const it = si.item;
@@ -2055,7 +2061,7 @@ class Store {
     const byIsbn = new Map();
     const byTitle = new Map(); // norm(title) -> [{ id, author }]
     const put = (t, id, author) => {
-      const k = norm(t);
+      const k = ntitle(t);
       if (k.length < 2) return;
       const list = byTitle.get(k) || byTitle.set(k, []).get(k);
       if (!list.some((w) => w.id === id)) list.push({ id, author: author || "" });
@@ -2111,12 +2117,12 @@ class Store {
     const mine = names(author);
     const alike = (a) => mine.length > 0 && names(a).length > 0 && sameAuthor(author, a);
     // The title as given, then without a subtitle after a colon («Sapiens: A Brief History of Humankind»).
-    const variants = [...new Set([norm(title), norm(String(title).split(/[:(]/)[0]), norm(String(title).split(/\.\s/)[0])].filter((t) => t.length >= 2))];
+    const variants = [...new Set([ntitle(title), ntitle(String(title).split(/[:(]/)[0]), ntitle(String(title).split(/\.\s/)[0])].filter((t) => t.length >= 2))];
     for (const t of variants) {
       const found = byTitle.get(t) || [];
       const byAuthor = found.filter((w) => alike(w.author));
       if (byAuthor.length) return byAuthor[0].id;
-      if (found.length === 1 && t === norm(title) && (t.includes(" ") || t.length >= 8) && (!norm(author) || !names(found[0].author).length)) return found[0].id;
+      if (found.length === 1 && t === ntitle(title) && (t.includes(" ") || t.length >= 8) && (!norm(author) || !names(found[0].author).length)) return found[0].id;
     }
     return null;
   }
