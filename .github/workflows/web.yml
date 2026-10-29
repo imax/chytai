@@ -22,7 +22,7 @@ jobs:
   deploy:
     needs: settle
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     # One deploy at a time; a newer one waiting replaces an older one waiting (never one mid-deploy).
     concurrency: deploy-web
     steps:
@@ -44,9 +44,9 @@ jobs:
       # pushing it (16 minutes on 2026-10-21, holding up every deploy queued behind it): each try gets 5
       # minutes, and one retry redeploys the already-built image.
       - run: |
-          deploy() { timeout 300 flyctl deploy . --remote-only -a chytai-web -c web/fly.toml --dockerfile web/Dockerfile; }
-          # Fly's API answers 503 for a minute or two now and then (three failed deploys on 2026-10-29): two more tries, a minute apart.
-          deploy || { echo "retrying deploy"; sleep 15; deploy; } || { echo "retrying deploy"; sleep 60; deploy; }
+          deploy() { timeout 300 flyctl deploy . --remote-only -a chytai-web -c web/fly.toml --dockerfile web/Dockerfile "$@"; }
+          # Fly's Depot builder answered 503 or hung for half an hour on 2026-10-29: the last try builds on Fly's own builder.
+          deploy || { echo "retrying deploy"; sleep 15; deploy; } || { echo "retrying on Fly's builder"; deploy --depot=false; }
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN_WEB }}
       # The first visit after a deploy starts the daily catalog refresh if one is due; its state, once.
