@@ -783,8 +783,8 @@ bg.every("free", 24 * 3600 * 1000, () => freeBooks.run(), { db: store.db, first:
 const ukrlib = new (require("./ukrlib").Ukrlib)({ store, freeBooks, log: console.log });
 bg.register("ukrlib", ukrlib, { run: true });
 bg.every("ukrlib", 24 * 3600 * 1000, () => ukrlib.run(), { db: store.db, first: 25 * 60 * 1000 });
-// «Слухай»'s free audiobooks in «Де взяти» (sluhay.js); only the owner sees them until Max has looked.
-const SLUHAY_PUBLIC = false;
+// «Слухай»'s free audiobooks in «Де взяти» (sluhay.js); public since Max's «ок. Слухай +» (2026-10-29).
+const SLUHAY_PUBLIC = true;
 const sluhay = new (require("./sluhay").Sluhay)({ store, freeBooks, log: console.log });
 bg.register("sluhay", sluhay, { run: true });
 bg.every("sluhay", 24 * 3600 * 1000, () => sluhay.run(), { db: store.db, first: 5 * 60 * 1000 });
