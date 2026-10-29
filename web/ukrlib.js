@@ -160,9 +160,15 @@ class Ukrlib {
     const last = lastFree();
     const links = JSON.parse(this.db.get("ukrlib:links") || "null")?.links || {};
     let check = 0;
+    // A translation is not linked, and one linked before this rule is taken off below (Max, 2026-10-29: the
+    // translator's term is another matter, unlike the rest of «що додали то і залишається»).
     for (const f of found) {
       const p = people[known[f.ukName]];
       if (!p?.died || p.died > last) continue;
+      if (this.freeBooks.translated(s.book(f.id), p)) {
+        delete links[f.id];
+        continue;
+      }
       if (p.soviet && (p.executed || (p.died >= 1930 && p.died <= 1953))) {
         check++;
         continue;

@@ -136,8 +136,8 @@ class Sluhay {
     const check = [];
     for (const f of found) {
       const p = people[known[f.their]];
-      // An author who did not write in Ukrainian is read in a translation, and the translator's term is another matter.
-      if (!p?.died || p.died > last || !p.uk || (p.soviet && (p.executed || (p.died >= 1930 && p.died <= 1953)) && !CHECKED.has(person(f.name)))) {
+      // A translation (Кафка's «Перевтілення») is free only when its translator's term is over too: not linked.
+      if (!p?.died || p.died > last || this.freeBooks.translated(s.book(f.id), p) || (p.soviet && (p.executed || (p.died >= 1930 && p.died <= 1953)) && !CHECKED.has(person(f.name)))) {
         check.push(f.id);
         continue;
       }

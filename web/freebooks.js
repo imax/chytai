@@ -82,6 +82,19 @@ class FreeBooks {
     return out;
   }
 
+  // A Ukrainian text that is a translation: the catalog knows an original or a translator, or the originals pass
+  // says so, and the author (`person`, from people()) did not write in Ukrainian. Either alone is wrong: Лесь
+  // Мартович has no «Ukrainian» on Wikidata, Франко's «Для домашнього огнища» has a Polish original of his own.
+  // Гоголь wrote in Russian, and his «Тарас Бульба» passes for a Ukrainian original.
+  translated(book, person = null) {
+    const s = this.store;
+    if (/гогол/i.test(book.author || "")) return true;
+    if (person?.uk) return false;
+    const books = [book, ...[...(s.translations?.get(s.canonical(book.id)) || [])].map((x) => s.book(x)).filter(Boolean)];
+    const f = this.facts({ books });
+    return !!(f.orig || f.translators.length || f.kind === "translation");
+  }
+
   // What we know of a work's original and Ukrainian text: the original's title (Latin, from a paired original,
   // the shop's «Оригінальна назва», altTitle or the originals pass) and the translators of its editions.
   facts(w) {
