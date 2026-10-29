@@ -296,6 +296,14 @@
     "group": "Українська класика"
   },
   {
+    "name": "khvylovy-arabesky.epub",
+    "title": "Арабески",
+    "authors": [
+      "Микола Хвильовий"
+    ],
+    "group": "Українська класика"
+  },
+  {
     "name": "vyshnia-myslyvski-usmishky.epub",
     "title": "Мисливські усмішки",
     "authors": [
@@ -385,6 +393,329 @@
     ],
     "group": "Англійською",
     "license": "CC BY-NC-SA 3.0 (licence page in the EPUB), author's own EPUB from rifters.com/real/Blindsight.htm"
+  },
+  {
+    "name": "doyle-lost-world.epub",
+    "title": "The Lost World",
+    "authors": [
+      "Arthur Conan Doyle"
+    ],
+    "group": "Англійською"
+  },
+  {
+    "name": "doyle-hound-of-the-baskervilles.epub",
+    "title": "The Hound of the Baskervilles",
+    "authors": [
+      "Arthur Conan Doyle"
+    ],
+    "group": "Англійською"
+  },
+  {
+    "name": "london-white-fang.epub",
+    "title": "White Fang",
+    "authors": [
+      "Jack London"
+    ],
+    "group": "Англійською"
+  },
+  {
+    "name": "london-martin-eden.epub",
+    "title": "Martin Eden",
+    "authors": [
+      "Jack London"
+    ],
+    "group": "Англійською"
+  },
+  {
+    "name": "defoe-robinson-crusoe.epub",
+    "title": "Robinson Crusoe",
+    "authors": [
+      "Daniel Defoe"
+    ],
+    "group": "Англійською"
+  },
+  {
+    "name": "wells-war-of-the-worlds.epub",
+    "title": "The War of the Worlds",
+    "authors": [
+      "H. G. Wells"
+    ],
+    "group": "Англійською"
+  },
+  {
+    "name": "jerome-three-men-in-a-boat.epub",
+    "title": "Three Men in a Boat",
+    "authors": [
+      "Jerome K. Jerome"
+    ],
+    "group": "Англійською"
+  },
+  {
+    "name": "cooper-deerslayer.epub",
+    "title": "The Deerslayer",
+    "authors": [
+      "James Fenimore Cooper"
+    ],
+    "group": "Англійською"
+  },
+  {
+    "name": "cooper-last-of-the-mohicans.epub",
+    "title": "The Last of the Mohicans",
+    "authors": [
+      "James Fenimore Cooper"
+    ],
+    "group": "Англійською"
+  },
+  {
+    "name": "cooper-pathfinder.epub",
+    "title": "The Pathfinder",
+    "authors": [
+      "James Fenimore Cooper"
+    ],
+    "group": "Англійською"
+  },
+  {
+    "name": "cooper-pioneers.epub",
+    "title": "The Pioneers",
+    "authors": [
+      "James Fenimore Cooper"
+    ],
+    "group": "Англійською"
+  },
+  {
+    "name": "cooper-prairie.epub",
+    "title": "The Prairie",
+    "authors": [
+      "James Fenimore Cooper"
+    ],
+    "group": "Англійською"
+  },
+  {
+    "name": "woolf-mrs-dalloway.epub",
+    "title": "Mrs. Dalloway",
+    "authors": [
+      "Virginia Woolf"
+    ],
+    "group": "Англійською"
+  },
+  {
+    "name": "woolf-orlando.epub",
+    "title": "Orlando",
+    "authors": [
+      "Virginia Woolf"
+    ],
+    "group": "Англійською"
+  },
+  {
+    "name": "conrad-lord-jim.epub",
+    "title": "Lord Jim",
+    "authors": [
+      "Joseph Conrad"
+    ],
+    "group": "Англійською"
+  },
+  {
+    "name": "conrad-heart-of-darkness.epub",
+    "title": "Short Fiction: Heart of Darkness and Other Stories",
+    "authors": [
+      "Joseph Conrad"
+    ],
+    "group": "Англійською"
+  },
+  {
+    "name": "crane-red-badge-of-courage.epub",
+    "title": "The Red Badge of Courage",
+    "authors": [
+      "Stephen Crane"
+    ],
+    "group": "Англійською"
+  },
+  {
+    "name": "cather-my-antonia.epub",
+    "title": "My Ántonia",
+    "authors": [
+      "Willa Cather"
+    ],
+    "group": "Англійською"
+  },
+  {
+    "name": "tolstoy-war-and-peace.epub",
+    "title": "War and Peace",
+    "authors": [
+      "Leo Tolstoy"
+    ],
+    "group": "Англійською"
+  },
+  {
+    "name": "buchan-thirty-nine-steps.epub",
+    "title": "The Thirty-Nine Steps",
+    "authors": [
+      "John Buchan"
+    ],
+    "group": "Англійською"
+  },
+  {
+    "name": "wharton-age-of-innocence.epub",
+    "title": "The Age of Innocence",
+    "authors": [
+      "Edith Wharton"
+    ],
+    "group": "Англійською"
+  },
+  {
+    "name": "hope-prisoner-of-zenda.epub",
+    "title": "The Prisoner of Zenda",
+    "authors": [
+      "Anthony Hope"
+    ],
+    "group": "Англійською"
+  },
+  {
+    "name": "orczy-scarlet-pimpernel.epub",
+    "title": "The Scarlet Pimpernel",
+    "authors": [
+      "Baroness Orczy"
+    ],
+    "group": "Англійською"
+  },
+  {
+    "name": "dreiser-financier.epub",
+    "title": "The Financier",
+    "authors": [
+      "Theodore Dreiser"
+    ],
+    "group": "Англійською"
+  },
+  {
+    "name": "dreiser-titan.epub",
+    "title": "The Titan",
+    "authors": [
+      "Theodore Dreiser"
+    ],
+    "group": "Англійською"
+  },
+  {
+    "name": "homer-odyssey.epub",
+    "title": "The Odyssey",
+    "authors": [
+      "Homer"
+    ],
+    "group": "Англійською"
+  },
+  {
+    "name": "watts-starfish.epub",
+    "title": "Starfish",
+    "authors": [
+      "Peter Watts"
+    ],
+    "group": "Англійською",
+    "license": "CC BY-NC-SA 2.5, author's own text from rifters.com/real/ (EPUB built by Chytai from the HTML, licence page kept)"
+  },
+  {
+    "name": "watts-maelstrom.epub",
+    "title": "Maelstrom",
+    "authors": [
+      "Peter Watts"
+    ],
+    "group": "Англійською",
+    "license": "CC BY-NC-SA 2.5, author's own text from rifters.com/real/ (EPUB built by Chytai from the HTML, licence page kept)"
+  },
+  {
+    "name": "watts-behemoth.epub",
+    "title": "Behemoth",
+    "authors": [
+      "Peter Watts"
+    ],
+    "group": "Англійською",
+    "license": "CC BY-NC-SA 2.5, author's own text from rifters.com/real/ (EPUB built by Chytai from the HTML, licence page kept)"
+  },
+  {
+    "name": "marcus-aurelius-meditations.epub",
+    "title": "Meditations",
+    "authors": [
+      "Marcus Aurelius"
+    ],
+    "group": "Англійською"
+  },
+  {
+    "name": "seneca-moral-letters.epub",
+    "title": "Moral Letters to Lucilius",
+    "authors": [
+      "Seneca"
+    ],
+    "group": "Англійською"
+  },
+  {
+    "name": "thoreau-walden.epub",
+    "title": "Walden",
+    "authors": [
+      "Henry David Thoreau"
+    ],
+    "group": "Англійською"
+  },
+  {
+    "name": "darwin-voyage-of-the-beagle.epub",
+    "title": "The Voyage of the Beagle",
+    "authors": [
+      "Charles Darwin"
+    ],
+    "group": "Англійською"
+  },
+  {
+    "name": "keynes-economic-consequences-of-the-peace.epub",
+    "title": "The Economic Consequences of the Peace",
+    "authors": [
+      "John Maynard Keynes"
+    ],
+    "group": "Англійською"
+  },
+  {
+    "name": "grant-personal-memoirs.epub",
+    "title": "Personal Memoirs of Ulysses S. Grant",
+    "authors": [
+      "Ulysses S. Grant"
+    ],
+    "group": "Англійською"
+  },
+  {
+    "name": "tocqueville-democracy-in-america-vol1.epub",
+    "title": "Democracy in America. Volume 1",
+    "authors": [
+      "Alexis de Tocqueville"
+    ],
+    "group": "Англійською"
+  },
+  {
+    "name": "tocqueville-democracy-in-america-vol2.epub",
+    "title": "Democracy in America. Volume 2",
+    "authors": [
+      "Alexis de Tocqueville"
+    ],
+    "group": "Англійською"
+  },
+  {
+    "name": "clausewitz-on-war.epub",
+    "title": "On War",
+    "authors": [
+      "Carl von Clausewitz"
+    ],
+    "group": "Англійською"
+  },
+  {
+    "name": "douglass-narrative.epub",
+    "title": "Narrative of the Life of Frederick Douglass",
+    "authors": [
+      "Frederick Douglass"
+    ],
+    "group": "Англійською"
+  },
+  {
+    "name": "james-varieties-of-religious-experience.epub",
+    "title": "The Varieties of Religious Experience",
+    "authors": [
+      "William James"
+    ],
+    "group": "Англійською"
   },
   {
     "name": "sivers-anything-you-want.epub",
