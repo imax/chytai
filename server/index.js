@@ -259,6 +259,22 @@ function recordExplain(req, { model, usage }) {
   saveState();
 }
 
+// Reading time per account (Max, 2026-10-29: «кількість хвилин … не анонім, з юзером. Бо токени»): every saved
+// position is a page turned, so the gap since the previous one, if under five minutes, is time spent reading.
+// A longer gap starts a new sitting and counts nothing. Seconds per day per account, in the same day records.
+const READ_GAP = 5 * 60 * 1000;
+const lastTurn = new Map(); // account -> time of its last saved position, in memory only
+function recordReading(acct) {
+  const now = Date.now();
+  const gap = now - (lastTurn.get(acct) || 0);
+  lastTurn.set(acct, now);
+  if (gap >= READ_GAP) return;
+  const day = statsDay(now);
+  const stats = (state.stats ??= { since: day, days: {} });
+  const d = (stats.days[day] ??= { explains: 0, users: {}, guests: 0, models: {} });
+  (d.readSec ??= {})[acct] = (d.readSec[acct] || 0) + Math.round(gap / 1000);
+}
+
 async function collectStats() {
   const stats = state.stats || { since: null, days: {} };
   const today = statsDay();
@@ -268,6 +284,7 @@ async function collectStats() {
   const sumAll = (from) => dayKeys.filter((k) => !from || k >= from).reduce((a, k) => a + stats.days[k].explains, 0);
 
   const monthAgo = statsDay(Date.now() - 30 * 86400000);
+  const minutesOf = (id, from) => Math.round(dayKeys.filter((k) => !from || k >= from).reduce((a, k) => a + (stats.days[k].readSec?.[id] || 0), 0) / 60);
   const costOf = (id) => dayKeys.filter((k) => k >= monthAgo).reduce((a, k) => a + (stats.days[k].userCost?.[id] || 0), 0);
   const ids = [...new Set([...Object.keys(state.users), ...Object.keys(state.accounts)])].filter((id) => ACCOUNT_ID.test(id));
   const users = ids
@@ -275,7 +292,7 @@ async function collectStats() {
     .map(([id, u]) => {
       const lastSeen = Math.max(0, state.accounts[id]?.seen || 0, ...Object.values(u.opened || {}));
       const started = new Set(Object.keys(u.positions || {}).map((p) => p.replace(/#reflow$/, ""))).size;
-      return { id, name: accountName(id), username: state.accounts[id]?.username || "", off: !!state.accounts[id]?.off, owner: id === OWNER_ID, cost30: costOf(id), books: countBooks(id), today: sumUser(id, today), week: sumUser(id, weekAgo), total: sumUser(id), started, lastSeen, lastBook: u.lastBook, activeWeek: lastSeen > Date.now() - 7 * 86400000 };
+      return { id, name: accountName(id), username: state.accounts[id]?.username || "", off: !!state.accounts[id]?.off, owner: id === OWNER_ID, cost30: costOf(id), readToday: minutesOf(id, today), readWeek: minutesOf(id, weekAgo), read30: minutesOf(id, monthAgo), books: countBooks(id), today: sumUser(id, today), week: sumUser(id, weekAgo), total: sumUser(id), started, lastSeen, lastBook: u.lastBook, activeWeek: lastSeen > Date.now() - 7 * 86400000 };
     })
     .sort((a, b) => b.lastSeen - a.lastSeen);
 
@@ -885,6 +902,7 @@ api.put("/position", (req, res) => {
   u.positions ??= {};
   u.positions[bookPath] = cfi;
   (u.opened ??= {})[name] = Date.now();
+  if (!req.guest) recordReading(req.acct);
   if (u.setAside) delete u.setAside[name];
   // How far in and which chapter, for the home screen: the position itself is a CFI it cannot read.
   if (Number.isFinite(pct)) {

@@ -62,10 +62,10 @@ function adminPage(s) {
   const offButton = (u) =>
     u.owner ? "" : `<form method="post" action="/admin/off"><input type="hidden" name="id" value="${esc(u.id)}">${u.off ? `<button>Увімкнути</button>` : `<input type="hidden" name="off" value="1"><button class="danger">Вимкнути</button>`}</form>`;
   const users = table(
-    ["Хто", "Пояснень сьогодні", "За 7 днів", "Усього", "≈ $ за 30 днів", "Книжок", "Почато", "Остання активність", ""],
+    ["Хто", "Читав хв сьогодні", "Хв за 7 днів", "Хв за 30 днів", "Пояснень сьогодні", "За 7 днів", "Усього", "≈ $ за 30 днів", "Книжок", "Почато", "Остання активність", ""],
     s.users.map((u) => [
       `${esc(u.name)}${u.username ? ` <span class="muted">@${esc(u.username)}</span>` : ""}${u.off ? ` <span class="off">вимкнено</span>` : ""}`,
-      n(u.today), n(u.week), n(u.total), usd(u.cost30), n(u.books), n(u.started), esc(ago(u.lastSeen)), offButton(u),
+      n(u.readToday), n(u.readWeek), n(u.read30), n(u.today), n(u.week), n(u.total), usd(u.cost30), n(u.books), n(u.started), esc(ago(u.lastSeen)), offButton(u),
     ]),
     "Ще ніхто не входив."
   );
@@ -126,6 +126,7 @@ function adminPage(s) {
     ${tile("Читачів", n(s.users.length), s.users.filter((u) => u.activeWeek).length ? `${n(s.users.filter((u) => u.activeWeek).length)} за тиждень` : "")}
     ${tile("Гостей сьогодні", n(s.guestsToday), `${n(s.guestExplainsToday)} із ${n(s.guestTotalLimit)} пояснень`)}
     ${tile("Твоїх книжок", n(s.books.length), mb(s.books.reduce((a, b) => a + b.size, 0)))}
+    ${tile("Читали за 7 днів", ((m) => (m < 120 ? `${n(m)} хв` : `${n(Math.round(m / 60))} год`))(s.users.reduce((a, u) => a + (u.readWeek || 0), 0)), `${n(s.users.filter((u) => u.readWeek >= 15).length)} читачів по 15+ хв`)}
     ${tile("Пояснень сьогодні", n(totals.today))}
     ${tile("За 7 днів", n(totals.week))}
     ${tile("Усього", n(totals.all), `з ${esc(s.since || "сьогодні")}`)}
@@ -135,6 +136,7 @@ function adminPage(s) {
   <p class="note">Пояснення рахуються з ${esc(s.since || "сьогодні")}: кожен запит до Claude (пояснення, «Детальніше», уточнення) — один. Вартість приблизна, за тарифами API без знижок; вхідні токени включають кеш.</p>
 
   <h2 id="readers">Читачі</h2><div class="wrap">${users}</div>
+  <p class="note">Хвилини читання: час між перегортаннями сторінок, якщо пауза коротша за 5 хвилин; довша пауза — нове сідання, її не рахуємо.</p>
   <p class="note">«Вимкнути» закриває читалку для цього акаунта, сайт лишається йому. Ліміту пояснень немає, лише запобіжник: ${n(s.accountCap)} на день на акаунт, крім тебе.</p>
   <h2>Твої книжки</h2><div class="wrap">${books}</div>
   <h2>Хочу прочитати</h2>
