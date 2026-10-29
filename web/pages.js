@@ -2208,7 +2208,7 @@ function addReviewPage({ user, token, rows, text }) {
 </li>`;
   };
   const body = `<form method="post" action="/import/list/apply" class="add add-review">
-  <input type="hidden" name="token" value="${attr(token)}">
+  <input type="hidden" name="token" value="${attr(token)}"><input type="hidden" name="text" value="${attr(text || "")}">
   <div class="add-intro">
     ${addCrumbs}
     <h1>Знайшли ${found} з ${rows.length}</h1>

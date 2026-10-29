@@ -625,12 +625,21 @@ const IMPORTS = {
   goodreads: { name: "Goodreads", parse: (files) => goodreads.parseExport(files[0].body.toString("utf8")) },
   "apple-books": { name: "Apple Books", parse: (files) => applebooks.parseLibrary(files) },
 };
-const pendingImports = new Map(); // token -> { reader, source, rows, filename, at }
-const IMPORT_TTL = 30 * 60 * 1000;
+// token -> { reader, source, rows, filename, at }: in the database, so a deploy between the review page and «Додати» loses nothing
+// (Max 2026-10-29: 11 books came back to the first /add screen after a restart).
+const IMPORT_TTL = 3 * 3600 * 1000;
+const pendingImports = {
+  get: (t) => (/^[0-9a-f]{24}$/.test(t) ? JSON.parse(store.db.get(`import:${t}`) || "null") : null),
+  set: (t, p) => store.db.set(`import:${t}`, JSON.stringify(p)),
+  delete: (t) => store.db.prepare("DELETE FROM meta WHERE key = ?").run(`import:${t}`),
+  purge: () => {
+    for (const { key, value } of store.db.prepare("SELECT key, value FROM meta WHERE key LIKE 'import:%'").all()) if (Date.now() - (JSON.parse(value).at || 0) > IMPORT_TTL) store.db.prepare("DELETE FROM meta WHERE key = ?").run(key);
+  },
+};
 const importSource = (req, res, next) => (IMPORTS[req.params.source] ? ((req.source = req.params.source), next()) : res.status(404).send(pages.messagePage({ title: "Немає такого імпорту", text: "", user: req.user })));
 const importPreview = (req, res, books, { filename = "", skipped = 0, text = "" } = {}) => {
   const { rows, counts } = goodreads.plan(store, req.user.id, books);
-  for (const [t, p] of pendingImports) if (Date.now() - p.at > IMPORT_TTL) pendingImports.delete(t);
+  pendingImports.purge();
   const token = require("crypto").randomBytes(12).toString("hex");
   pendingImports.set(token, { reader: req.user.id, source: req.source, rows, filename, at: Date.now() });
   admin.step(req.user.id, "review");
@@ -669,8 +678,8 @@ app.post("/import/:source", signed, importSource, express.raw({ type: "multipart
 const fromPage = (b) => ({ title: b.title, author: b.author, isbns: b.isbns || [], cover: b.cover || "", blurb: b.blurb || "", blurbSource: b.site || "", pages: b.pages || null, published: b.published || null, link: b.url ? { label: b.site || new URL(b.url).hostname, url: b.url } : null });
 app.post("/import/:source/apply", signed, importSource, async (req, res) => {
   const p = pendingImports.get(String(req.body.token || ""));
-  if (!p || p.reader !== req.user.id || p.source !== req.source || Date.now() - p.at > IMPORT_TTL) return res.status(400).send(req.source === "list" ? pages.addPage({ user: req.user, text: "", error: "Час вийшов або список уже імпортовано. Вставте його ще раз." }) : pages.importPage({ user: req.user, source: req.source, error: "Час вийшов або файл уже імпортовано. Виберіть файл ще раз." }));
-  pendingImports.delete(req.body.token);
+  if (!p || p.reader !== req.user.id || p.source !== req.source || Date.now() - p.at > IMPORT_TTL) return res.status(400).send(req.source === "list" ? pages.addPage({ user: req.user, text: String(req.body.text || "").slice(0, 100000), error: "Час вийшов або список уже додано. Перевірте його і натисніть ще раз." }) : pages.importPage({ user: req.user, source: req.source, error: "Час вийшов або файл уже імпортовано. Виберіть файл ще раз." }));
+  pendingImports.delete(String(req.body.token));
   admin.step(req.user.id, "saved");
   const keep = new Set([].concat(req.body.keep ?? []).map(Number));
   // «Інша книжка» on /add: the reader picked the right book for a line.
