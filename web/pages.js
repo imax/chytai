@@ -2445,13 +2445,13 @@ function digestPage({ on, action, user }) {
 }
 
 // /admin/letter: Max's own text on top of the next Friday letter (digest.js). He writes it; the page only keeps it.
-function letterEditorPage({ user, editorial: e, weekend = {}, weekends = [], error = "", sent, audiences, counts, next, saved }) {
+function letterEditorPage({ user, editorial: e, weekend = {}, weekends = [], error = "", sent, audiences, counts, next, at = "9:00", saved }) {
   const MONTHS = ["січня", "лютого", "березня", "квітня", "травня", "червня", "липня", "серпня", "вересня", "жовтня", "листопада", "грудня"];
   const day = (d) => `${d.getDate()} ${MONTHS[d.getMonth()]}`;
   const iso = (s) => day(new Date(s));
   const aud = e?.audience || "all";
   const body = `
-${pageHead({ kicker: "Щотижневий лист", title: "Твій текст у листі", sub: `Стоїть на початку листа, над тим, що сталося на полицях читача. Піде з листом у п’ятницю, ${day(next)}, о 9:00, і більше не повториться.` })}
+${pageHead({ kicker: "Щотижневий лист", title: "Твій текст у листі", sub: `Стоїть на початку листа, над тим, що сталося на полицях читача. Піде з листом у п’ятницю, ${day(next)}, о ${at}, і більше не повториться.` })}
 <form method="post" action="/admin/digest" class="form">
   ${errorLine(error)}${saved ? `<p class="saved">Збережено.</p>` : ""}
   <label>Тема листа<input type="text" name="subject" value="${attr(e?.subject || "")}" maxlength="120" placeholder="Як порожньо, тема складається сама з новин полиць"></label>

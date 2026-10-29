@@ -22,6 +22,9 @@ const { isRussian } = require("./store");
 const DAY = 86400000;
 const SEND_DAY = 5; // Friday
 const SEND_HOUR = 9; // Kyiv time (TZ=Europe/Kyiv on Fly; the check uses local time)
+// One-off later starts, minutes after SEND_HOUR (Max, 2026-10-29: «завтра затримаємо розсилку на півгодини»,
+// to have time for his text).
+const LATER = { "2026-10-30": 30 };
 const READING_WEEKS = 3; // «Ви зараз читаєте» after this long
 const MAX_FEED = 6;
 const MAX_NEW = 5;
@@ -538,7 +541,7 @@ class Digest {
       const today = dayKyiv(new Date());
       // A run cut off by a restart goes on where it stopped.
       if (this.store.db.get("digest:running") === today && !this.running) return void this.run().catch((e) => this.log(`digest run failed: ${e.message}`));
-      if (t.getDay() !== SEND_DAY || t.getHours() < SEND_HOUR || this.store.db.get("digest:lastRun") === today) return;
+      if (t.getDay() !== SEND_DAY || t.getHours() * 60 + t.getMinutes() < SEND_HOUR * 60 + (LATER[today] || 0) || this.store.db.get("digest:lastRun") === today) return;
       this.store.db.set("digest:lastRun", today);
       this.run().catch((e) => this.log(`digest run failed: ${e.message}`));
     };
@@ -547,4 +550,7 @@ class Digest {
   }
 }
 
-module.exports = { Digest, AUDIENCES };
+// «9:00», or the later start set for that Kyiv day (2026-10-30 → «9:30»), for the /admin/letter form.
+const sendTime = (day) => { const m = SEND_HOUR * 60 + (LATER[day] || 0); return `${Math.floor(m / 60)}:${String(m % 60).padStart(2, "0")}`; };
+
+module.exports = { Digest, AUDIENCES, sendTime };

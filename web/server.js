@@ -19,7 +19,7 @@ const wikidata = require("./wikidata");
 const authors = require("./authors");
 const { Social, tagsOf } = require("./social");
 const goodreads = require("./goodreads");
-const { Digest, AUDIENCES } = require("./digest");
+const { Digest, AUDIENCES, sendTime } = require("./digest");
 const { WelcomeMail } = require("./welcome-mail");
 const listimport = require("./listimport");
 const applebooks = require("./applebooks");
@@ -1850,7 +1850,7 @@ app.post("/api/digest", owner, async (req, res) => {
 const letterPage = (req, res, error = "", values = null) => {
   const w = digest.weekend();
   const weekend = values || (w ? { id: w.book, book: `${SITE}${store.href(w.book)}`, note: w.note, title: store.book(w.book)?.title } : { book: "", note: "" });
-  res.status(error ? 400 : 200).send(pages.letterEditorPage({ user: req.user, editorial: digest.editorial(), weekend, weekends: digest.sentWeekends(), error, sent: digest.sentEditorials(), audiences: AUDIENCES, counts: digest.audienceCounts(), next: nextFriday(), saved: !!req.query.saved }));
+  res.status(error ? 400 : 200).send(pages.letterEditorPage({ user: req.user, editorial: digest.editorial(), weekend, weekends: digest.sentWeekends(), error, sent: digest.sentEditorials(), audiences: AUDIENCES, counts: digest.audienceCounts(), next: nextFriday(), at: sendTime(nextFriday().toLocaleDateString("sv-SE")), saved: !!req.query.saved }));
 };
 app.get("/admin/digest", owner, (req, res) => letterPage(req, res));
 app.get("/admin/letter", owner, (req, res) => res.redirect(301, "/admin/digest"));
