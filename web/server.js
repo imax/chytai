@@ -1492,7 +1492,8 @@ app.get("/book/:id", (req, res) => {
   const id = store.resolve(req.params.id);
   if (!id) return res.status(404).send(pages.messagePage({ title: "Немає такої книжки", text: "", user: req.user }));
   // One address per work: an id, an edition id or an old slug redirects to the canonical one.
-  if (store.href(id) !== `/book/${encodeURIComponent(req.params.id)}`) return res.redirect(301, store.href(id));
+  // For a day only: addresses move as works part and merge, and a browser keeps a bare 301 forever.
+  if (store.href(id) !== `/book/${encodeURIComponent(req.params.id)}`) return res.set("Cache-Control", "public, max-age=86400").redirect(301, store.href(id));
   const book = bookFor(req, store.bookPage(id), !!store.entry(req.user?.id, id));
   if (!book) return res.status(404).send(pages.messagePage({ title: "Немає такої книжки", text: "", user: req.user }));
   const file = readerFileFor(req.user?.id, book);
