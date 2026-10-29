@@ -429,7 +429,7 @@ function authorBlock(a) {
 </section>`;
 }
 
-function bookPage({ ukrlib = null, inGenre = null, fresh = null, pick = null, awards = [], authorInfo = null, lists = [], myLists = null, book, entry, now = false, user, shelf, inLibrary = new Map(), readers = [], also = [], alsoTitle = "Читали це, сподобалось і це", writings = [], reviewError = "", editionError = "", ukAsk = null, readUrl = "", freeRead = false, freeFile = false, advice = null, overview = null, overviewVote = null }) {
+function bookPage({ ukrlib = null, sluhay = null, inGenre = null, fresh = null, pick = null, awards = [], authorInfo = null, lists = [], myLists = null, book, entry, now = false, user, shelf, inLibrary = new Map(), readers = [], also = [], alsoTitle = "Читали це, сподобалось і це", writings = [], reviewError = "", editionError = "", ukAsk = null, readUrl = "", freeRead = false, freeFile = false, advice = null, overview = null, overviewVote = null }) {
   const s = statsOf(book.id);
   // A book in Russian stays on its reader's shelf, and its page shows no «Про книжку» and no side blocks
   // (Max 2026-10-23): nothing that would lead people to it or on from it.
@@ -458,7 +458,7 @@ function bookPage({ ukrlib = null, inGenre = null, fresh = null, pick = null, aw
         ${awardsLine(awards)}
         ${twins(book)}
         ${!user && !freeRead ? "" : mine(book, entry, user, now, freeRead ? "" : readUrl, listsItem(book, user) + ownerItems(book, user), { free: readUrl && freeRead ? freeItems(book, freeFile) : "" })}
-        ${where(book, ukrlib)}
+        ${where(book, ukrlib, sluhay)}
       </div>
     </article>
     ${series(book, inLibrary)}
@@ -748,11 +748,13 @@ function mine(book, entry, user, now = false, readUrl = "", listItem = "", { fre
 // «Де взяти»: every edition's shop (with its format, price and stock, the one place prices are shown),
 // other links (Укрліб's free text of a classic, ukrlib.js), and the libraries that hold the book (filled in by
 // app.js from /api/libraries).
-function where(book, ukrlib = null) {
+function where(book, ukrlib = null, sluhay = null) {
   const seen = new Set();
+  // A free recording from «Слухай» (sluhay.js) is one more audio edition.
+  const free = sluhay ? [{ id: "sluhay", shelf: { id: "sluhay", name: sluhay.name }, links: [{ url: sluhay.url }], format: "аудіо", narrator: sluhay.narrator, duration: sluhay.duration, price: "безкоштовно", status: "є" }] : [];
   // In stock first, then the publisher's own over a shop reselling it (Старий Лев sells partners' books).
   const rank = (e) => (e.status === "є" ? 0 : e.status === "передзамовлення" ? 1 : 2) * 4 + (e.edition ? 2 : 0) + (e.format === "e-book" ? 1 : 0) + (e.format === "аудіо" ? 1 : 0);
-  const eds = (book.editions || []).filter((e) => !seen.has(e.links[0].url) && seen.add(e.links[0].url)).sort((a, b) => rank(a) - rank(b));
+  const eds = [...(book.editions || []), ...free].filter((e) => !seen.has(e.links[0].url) && seen.add(e.links[0].url)).sort((a, b) => rank(a) - rank(b));
   const links = [...(book.links || []), ...(ukrlib ? [ukrlib] : [])].filter((l) => !seen.has(l.url));
   // Only where it can be had (Max, 2026-10-20: «показувати там де є, а не там де немає»); the shops
   // that are out of it fold into one quiet line, each named once.
@@ -782,7 +784,8 @@ function where(book, ukrlib = null) {
   // (the review: «Тигролови» had nine shop rows and «Старий Лев» three times on a phone screen).
   const kinds = [["папір", "Папір"], ["e-book", "E-book"], ["аудіо", "Аудіо"]];
   const kindOf = (e) => (kinds.some(([k]) => k === e.format) ? e.format : "папір");
-  const price = (e) => Number(String(e.price || "").replace(/[^\d]/g, "")) || Infinity;
+  // Free first: «безкоштовно» has no digits and sorted last, after «Book.ua 70 ₴».
+  const price = (e) => (e.price === "безкоштовно" ? 0 : Number(String(e.price || "").replace(/[^\d]/g, "")) || Infinity);
   const short = (e) => {
     const tail = [e.narrator ? `читає ${e.narrator}` : "", e.price, e.subscription ? "є в підписці" : "", avail(e)].filter(Boolean).join(", ");
     return `<a href="${attr(e.links[0].url)}" target="_blank" rel="noopener">${esc(e.shelf.name)}</a>${tail ? ` <span class="muted">${esc(tail)}</span>` : ""}`;

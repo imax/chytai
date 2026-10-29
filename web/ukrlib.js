@@ -40,6 +40,27 @@ function parse(html) {
   return { name, works };
 }
 
+// People by a name in Ukrainian, both word orders: { name: qid }, the namesake with most sitelinks.
+async function qidsByName(names, fetchImpl, log) {
+  const out = {};
+  for (let i = 0; i < names.length; i += 30) {
+    const batch = names.slice(i, i + 30);
+    const values = batch.flatMap((n) => { const w = n.split(" "); return w.length === 2 ? [n, `${w[1]} ${w[0]}`] : [n]; }).map((n) => `"${n.replace(/["\\]/g, "")}"@uk`).join(" ");
+    try {
+      const rows = await sparql(`SELECT ?name ?a ?sl WHERE { VALUES ?name { ${values} } { ?a rdfs:label ?name } UNION { ?a skos:altLabel ?name } ?a wdt:P31 wd:Q5; wikibase:sitelinks ?sl. }`, fetchImpl);
+      const best = {};
+      for (const r of rows) {
+        const k = person(r.name.value);
+        if (!best[k] || Number(r.sl.value) > best[k].sl) best[k] = { qid: r.a.value.split("/").pop(), sl: Number(r.sl.value) };
+      }
+      for (const n of batch) if (best[person(n)]) out[n] = best[person(n)].qid;
+    } catch (e) {
+      log(`names: ${e.cause?.code || e.message}`);
+    }
+  }
+  return out;
+}
+
 class Ukrlib {
   constructor({ store, freeBooks, fetchImpl = fetch, log = () => {} }) {
     Object.assign(this, { store, freeBooks, fetchImpl, log, db: store.db });
@@ -99,25 +120,8 @@ class Ukrlib {
     return st.done || false;
   }
 
-  // People by a name in Ukrainian, both word orders: { name: qid }, the namesake with most sitelinks.
-  async qidsByName(names) {
-    const out = {};
-    for (let i = 0; i < names.length; i += 30) {
-      const batch = names.slice(i, i + 30);
-      const values = batch.flatMap((n) => { const w = n.split(" "); return w.length === 2 ? [n, `${w[1]} ${w[0]}`] : [n]; }).map((n) => `"${n.replace(/["\\]/g, "")}"@uk`).join(" ");
-      try {
-        const rows = await sparql(`SELECT ?name ?a ?sl WHERE { VALUES ?name { ${values} } { ?a rdfs:label ?name } UNION { ?a skos:altLabel ?name } ?a wdt:P31 wd:Q5; wikibase:sitelinks ?sl. }`, this.fetchImpl);
-        const best = {};
-        for (const r of rows) {
-          const k = person(r.name.value);
-          if (!best[k] || Number(r.sl.value) > best[k].sl) best[k] = { qid: r.a.value.split("/").pop(), sl: Number(r.sl.value) };
-        }
-        for (const n of batch) if (best[person(n)]) out[n] = best[person(n)].qid;
-      } catch (e) {
-        this.log(`ukrlib: names: ${e.cause?.code || e.message}`);
-      }
-    }
-    return out;
+  qidsByName(names) {
+    return qidsByName(names, this.fetchImpl, (m) => this.log(`ukrlib: ${m}`));
   }
 
   // Our works by an Укрліб author with the same title, kept when the author's term is over.
@@ -185,4 +189,4 @@ class Ukrlib {
   }
 }
 
-module.exports = { Ukrlib, parse, norm, head, person };
+module.exports = { Ukrlib, parse, norm, head, person, qidsByName };
