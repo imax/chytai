@@ -6,3 +6,4 @@ data/
 *.tgz
 *.zip
 .backup-key
+.probe/
