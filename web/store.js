@@ -559,7 +559,10 @@ class Store {
     for (const [a, b] of this.crossPairs || []) link(a, b); // same ISBN, link or words across scripts (linkEditions)
     const titles = new Map(works.map((w) => [this.canonical(w.id), w.title]));
     const title = (id) => titles.get(id) || this.lib.books[id]?.title || "";
-    const cyr = (id) => /[а-яіїєґ]/i.test(title(id));
+    const authorOf = new Map(works.map((w) => [this.canonical(w.id), w.author]));
+    // A title with no letters («1984») is on the side of its author's name: Орвелл's «1984» is a Ukrainian book,
+    // not the original of «1984. Колгосп тварин» (Max, 2026-10-29).
+    const cyr = (id) => /[а-яіїєґ]/i.test(title(id)) || (!/\p{L}/u.test(title(id)) && /[а-яіїєґ]/i.test(authorOf.get(id) || this.lib.books[id]?.author || ""));
     // A Russian edition never takes the place (it showed «Бог мелочей» instead of «Бог дрібниць»).
     const russian = (id) => cyr(id) && isRussian(this.book(id, { edited: false, borrow: false }) || { title: title(id) });
     // Two books that look like one work may share an original: volumes («Атлант розправив плечі. Частина 1» and
@@ -859,21 +862,25 @@ class Store {
       if (!this.slugOf.has(r.id) || latin(r.slug)) this.slugOf.set(r.id, r.slug); // the newest Latin slug is the address
     }
     const add = this.db.prepare("INSERT OR IGNORE INTO slugs (slug, id) VALUES (?, ?)");
+    const move = this.db.prepare("INSERT OR REPLACE INTO slugs (slug, id) VALUES (?, ?)");
     this.db.exec("BEGIN");
     const take = (id, title, author, raw = title) => {
       const had = this.slugOf.get(id);
       // An address given from a title with an edition note («drakula-2-he-vydannia») moves to the work's
       // name when that address is free; the old one stays in the table and redirects.
       const stale = had && latin(had) && raw !== title && had.startsWith(slugify(raw)) && !this.slugs.has(slugify(title));
-      if (had && latin(had) && !stale) return;
+      // An address held by an edition that is now part of this work is the work's own («1984-orvell», not
+      // «1984-orvell-2», Max 2026-10-29); the «-2» one it had stays and redirects.
+      const ours = (s) => !this.slugs.has(s) || this.slugs.get(s) === id || this.canonical(this.slugs.get(s)) === id;
       let slug = slugify(title);
       const surname = (author || "").split(/[,\s]+/).filter(Boolean).pop();
       const last = surname ? slugify(surname) : ""; // slugify("") is "book": «tyhrolovy-book»
-      if (this.slugs.has(slug) && this.slugs.get(slug) !== id && last) slug = `${slug}-${last}`;
-      while (this.slugs.has(slug) && this.slugs.get(slug) !== id) slug += "-2";
+      if (!ours(slug) && last) slug = `${slug}-${last}`;
+      while (!ours(slug)) slug += "-2";
+      if (had && latin(had) && !stale && !(had !== slug && /-2$/.test(had) && had.startsWith(slug))) return;
       this.slugs.set(slug, id);
       this.slugOf.set(id, slug);
-      add.run(slug, id);
+      move.run(slug, id);
     };
     for (const b of this.seedBooks) take(b.id, b.id, "");
     for (const b of Object.values(this.lib.books)) take(b.id, b.id, "");
@@ -1119,7 +1126,7 @@ class Store {
     }
     let rows = this.db
       .prepare("SELECT id FROM search WHERE search MATCH ? ORDER BY bm25(search, 0, 10, 10, 5, 4, 1) LIMIT ?")
-      .all(terms.map((t) => `"${t.replace(/"/g, "")}"*`).join(" "), limit * 2);
+      .all(terms.map((t) => `"${t.replace(/"/g, "")}"${/^\d{1,9}$/.test(t) ? "" : "*"}`).join(" "), limit * 2); // «1984» is not the start of an ISBN
     // A Latin name typed in Cyrillic («міллер», «мураками»): the same search with the words that sound like
     // it, after what the Cyrillic itself found (Max, 2026-10-22).
     const alts = terms.map((t) => this.latinAlts(t));
