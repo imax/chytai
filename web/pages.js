@@ -1951,7 +1951,7 @@ function settingsPage({ user, values, error = "", suggested = "", saved = false 
   <label>Адреса сторінки<span class="prefix">chytai.org.ua/@<input type="text" name="username" value="${attr(values.username || "")}" required maxlength="30" spellcheck="false" placeholder="${attr(suggested)}"></span><span class="hint">Якщо змінити, стара адреса перестане працювати.</span></label>
   <label>Пошта для входу<input type="email" name="email" value="${attr(values.email || "")}" ${user.owner ? "" : "required"} autocomplete="email"></label>
   <!-- Search-engine listing is always on for now (Max, 2026-10-21): readers.noindex stays in the database for later. The letters have their own tab, /settings/mail. -->
-  <div class="actions"><button class="btn primary">Зберегти</button><a class="text-link small" href="${attr(user.href)}">Моя сторінка</a>${user.owner ? `<a class="text-link small" href="/admin">Статистика</a>` : ""}<span class="grow"></span><a class="text-link small" href="/logout">Вийти</a></div>
+  <div class="actions"><button class="btn primary">Зберегти</button><a class="text-link small" href="${attr(user.href)}">Моя сторінка</a><span class="grow"></span><a class="text-link small" href="/logout">Вийти</a></div>
 </form>
 <section class="form import-box">
   <h2>Книжки</h2>
