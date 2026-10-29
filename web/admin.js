@@ -186,6 +186,25 @@ class Admin {
     this.guestStep(step, cookies.chytai_q === "1");
   }
 
+  // A search on the site (Max, 2026-10-29: «Записуємо звісно»): the query as typed, lowercased, and how many
+  // results it got, counted per day. No reader, no address, nothing else; crawlers and the owner not counted.
+  searched(req, readerId, q, hits) {
+    q = String(q || "").toLowerCase().replace(/\s+/g, " ").trim().slice(0, 100);
+    if (q.length < 2 || readerId === this.ownerId || BOT.test(req.headers["user-agent"] || "") || !req.headers["accept-language"]) return;
+    try {
+      this.db.prepare(`INSERT INTO search_log (day, q, n, hits) VALUES (?, ?, 1, ?) ON CONFLICT (day, q) DO UPDATE SET n = n + 1, hits = excluded.hits`).run(today(), q, hits | 0);
+    } catch (e) {
+      console.error("admin searched failed:", e.message);
+    }
+  }
+  // The last month's searches for /admin/catalog: the most asked, and the ones that found nothing.
+  searches(days = 30) {
+    const since = dayOf(new Date(Date.now() - days * 86400000));
+    const rows = this.db.prepare("SELECT q, SUM(n) AS n, MAX(hits) AS hits FROM search_log WHERE day >= ? GROUP BY q ORDER BY n DESC, q").all(since);
+    const first = this.db.prepare("SELECT MIN(day) AS d FROM search_log").get()?.d || null;
+    return { since: first && first > since ? first : since, started: first, total: rows.reduce((a, r) => a + r.n, 0), queries: rows.length, none: rows.filter((r) => !r.hits).reduce((a, r) => a + r.n, 0), top: rows.slice(0, 30), empty: rows.filter((r) => !r.hits).slice(0, 30) };
+  }
+
   // A new reader: keep where they first came from (the chytai_came cookie, else «Напряму»).
   came(readerId, cookie) {
     let c = null;

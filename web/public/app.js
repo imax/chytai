@@ -273,6 +273,17 @@
     const onSearch = location.pathname === "/search";
     const home = { url: location.href, title: document.title };
     let timer, ctrl, pushed = false, last = onSearch ? input.value.trim() : "";
+    // The query the reader stopped at goes to the search log once (admin.searched): after a few seconds without
+    // typing, or when they leave for a result. The pauses in between are not counted.
+    let pending = "", logged = onSearch ? last : "", logTimer;
+    const flush = () => {
+      clearTimeout(logTimer);
+      if (pending && pending !== logged) navigator.sendBeacon?.("/api/searched", new URLSearchParams({ q: pending }));
+      logged = pending || logged;
+      pending = "";
+    };
+    addEventListener("pagehide", flush);
+    live.addEventListener("click", (e) => e.target.closest("a") && flush());
     const show = (q) => {
       for (const el of browse) el.hidden = !!q;
       if (!q) {
@@ -297,6 +308,9 @@
         const r = await fetch(`/api/search?${new URLSearchParams({ q })}`, { signal: ctrl.signal });
         live.innerHTML = await r.text();
         show(q);
+        clearTimeout(logTimer);
+        pending = q;
+        logTimer = setTimeout(flush, 3000);
       } catch (e) {
         if (e.name !== "AbortError") box.submit();
       }

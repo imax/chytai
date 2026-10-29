@@ -1384,14 +1384,29 @@ function searchAll(req, q) {
   const similar = hits.length ? social.alsoLiked([hits[0].book.id], { limit: 4, skip: new Set(hits.map((h) => h.book.id)) }) : [];
   return { hits, authors: authorsFound, readers: readersFound, shelves: shelvesFound, lists: listsFound, similar, tag };
 }
+// How many things a search found, for the search log (admin.searched): books, authors, readers, shelves, lists.
+const foundCount = (r) => r.hits.length + r.authors.length + r.readers.length + r.shelves.length + r.lists.length;
+// Search as you type asks for every pause in typing; only the query the reader stopped at is counted: the page
+// sends it to /api/searched (app.js), and the count of results is taken from here, from the last few queries.
+const lastFound = new Map();
 app.get("/search", (req, res) => {
   const q = String(req.query.q || "").trim().slice(0, 100);
-  res.send(pages.searchPage({ q, user: req.user, results: searchAll(req, q) }));
+  const results = searchAll(req, q);
+  if (q) admin.searched(req, req.user?.id, q, foundCount(results));
+  res.send(pages.searchPage({ q, user: req.user, results }));
 });
 // The same results as an HTML fragment, for search as you type.
 app.get("/api/search", (req, res) => {
   const q = String(req.query.q || "").trim().slice(0, 100);
-  res.set("Cache-Control", "no-store").send(pages.searchResults({ q, user: req.user, ...searchAll(req, q) }));
+  const results = searchAll(req, q);
+  lastFound.delete(q), lastFound.set(q, foundCount(results));
+  if (lastFound.size > 500) lastFound.delete(lastFound.keys().next().value);
+  res.set("Cache-Control", "no-store").send(pages.searchResults({ q, user: req.user, ...results }));
+});
+app.post("/api/searched", (req, res) => {
+  const q = String(req.body?.q || "").trim().slice(0, 100);
+  if (q) admin.searched(req, req.user?.id, q, lastFound.has(q) ? lastFound.get(q) : foundCount(searchAll(req, q)));
+  res.status(204).end();
 });
 
 // The sitemap: every public page, so search engines need not discover 16 thousand books by links.
@@ -1916,6 +1931,7 @@ app.get("/admin/catalog", owner, (req, res) => {
     claude: `/claude/${claudeKey()}`,
     tiles: catalogBlock(store.catalogStats()),
     waiting,
+    searches: admin.searches(),
     passes: [
       { key: "genres", name: "Жанри", what: "Один-два жанри для кожної книжки замість жанрів з полиць магазинів. Твій «Основний жанр» важливіший.", href: "/admin/genres-trial", all: all(genreTrial, store.aiGenres().size), trial: trial(genreTrial) },
       { key: "lang", name: "Мова", what: "Мова видань з кириличною назвою, з якої не видно мови. «Рос» ховає книжку, «укр» нічого не змінює.", href: "/admin/lang-trial", all: all(langTrial, store.aiLangs().size), trial: trial(langTrial) },

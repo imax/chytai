@@ -1449,7 +1449,20 @@ ${running ? `<script>setTimeout(() => location.reload(), 5000)</script>` : ""}`;
 
 // ---- /admin/catalog: «Якість каталогу», every Claude pass over the catalog on one page ----
 
-function catalogAdminPage({ user, passes, claude, tiles = "", waiting = [] }) {
+// What people searched for on the site in the last month (admin.searches): the most asked, and what found nothing.
+function searchesBlock(s) {
+  if (!s) return "";
+  if (!s.total) return `<h2>Що шукають</h2>\n<p class="muted small">Запити записуються з ${esc(s.started || "сьогодні")}, поки порожньо.</p>`;
+  const day = (d) => new Date(`${d}T12:00`).toLocaleDateString("uk-UA", { day: "numeric", month: "short" });
+  const rows = (list, hits) => list.map((r) => `<tr><td><a href="/search?${attr(new URLSearchParams({ q: r.q }).toString())}">${esc(r.q)}</a></td><td>${r.n}</td>${hits ? `<td>${r.hits || `<span class="zero">0</span>`}</td>` : ""}</tr>`).join("");
+  return `<h2>Що шукають</h2>
+<p class="muted small">З ${day(s.since)}: ${s.total} пошуків, ${s.queries} різних запитів, нічого не знайшли ${s.none}.</p>
+<div class="tbl"><table><thead><tr><th>Запит</th><th>Разів</th><th>Знайдено</th></tr></thead><tbody>${rows(s.top, true)}</tbody></table></div>
+${s.empty.length ? `<h2>Нічого не знайшли</h2>
+<div class="tbl"><table><thead><tr><th>Запит</th><th>Разів</th></tr></thead><tbody>${rows(s.empty, false)}</tbody></table></div>` : ""}`;
+}
+
+function catalogAdminPage({ user, passes, claude, tiles = "", waiting = [], searches = null }) {
   const when = (iso) => (iso ? new Date(iso).toLocaleString("uk-UA", { timeZone: "Europe/Kyiv", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "");
   const state = (a) => (a.running ? "іде" : a.finished ? when(a.finished) : a.stopped ? "зупинено" : a.at ? "перерваний" : "—");
   // One row per pass instead of a card each (Max, 2026-10-28: «каша»); what it does is in the row's tooltip and on its own page.
@@ -1463,6 +1476,7 @@ ${pageHead({ title: "Каталог" })}
 ${tiles}
 ${waiting.length ? `<h2>Чекає на тебе</h2>
 <ul class="admin-queue">${waiting.map((w) => `<li><a href="${w.href}"><b>${w.n}</b>${esc(w.name)}</a></li>`).join("")}</ul>` : ""}
+${searchesBlock(searches)}
 <h2>Що Claude робить з каталогом</h2>
 <p class="muted small">Нові книжки обробляються самі кожні 6 годин.</p>
 <div class="tbl"><table class="passes"><thead><tr><th>Прогін</th><th>Зроблено</th><th>Востаннє</th><th>Коштувало</th></tr></thead>
