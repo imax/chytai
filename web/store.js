@@ -1482,9 +1482,10 @@ class Store {
         if (b) return b.id;
       }
       // …and one that puts it after («Присяжник. Хроніки Буресвітла. Книга 3» is a reader's «Присяжник», Max 2026-10-30).
+      // The whole title's script counts, not the head's: «Sapiens. Основи цивілізації. Том 2» is not Max's «Sapiens» (2026-10-30).
       const head = /^([^.:]{3,}?)[.:]\s+\S/.exec(String(it.title || ""))?.[1];
       if (head && it.series) {
-        const b = (byTitle.get(norm(head)) || []).find((x) => x.exact && ok(x.id) && sameAuthor(x.author, it.author) && script(x.title, x.author) === script(head, it.author));
+        const b = (byTitle.get(norm(head)) || []).find((x) => x.exact && ok(x.id) && sameAuthor(x.author, it.author) && script(x.title, x.author) === script(it.title, it.author));
         if (b) return b.id;
       }
       if (same(byUrl.get(pageKey(it.url)))) return byUrl.get(pageKey(it.url));
