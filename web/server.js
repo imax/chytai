@@ -1350,7 +1350,7 @@ app.get("/", (req, res) => {
   const free = freeShelf ? visible(freeShelf).filter((it) => it.cover).map((it) => store.book(it.id)).filter((b) => b && ok(b)).sort((a, b) => /[а-яіїєґ]/i.test(b.title) - /[а-яіїєґ]/i.test(a.title)).slice(0, 6) : [];
   const wanted = social.popular().want.map((x) => ({ ...x, book: ukWork(x.book) })).filter((x) => ok(x.book)).slice(0, 6);
   const genres = readGenres();
-  const editorials = lists.editorials().slice(0, 3).map(withCovers);
+  const editorials = lists.editorials().slice(0, 4).map(withCovers); // four: two rows of two on a phone (Max, 2026-10-30)
   // «Для тебе» only from the reader's own shelf (a reader who rated nothing saw «схожі на те, що тобі сподобалось»
   // built from random books; reader's report, 2026-10-28): their fives, else what they want to read, else none.
   const shelf = req.user ? store.library(req.user.id) : [];

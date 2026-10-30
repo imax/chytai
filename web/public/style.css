@@ -894,6 +894,7 @@ form.inline button:not(.btn) { background: none; border: 0; padding: 0; cursor: 
 .litem b { display: block; font: 600 19px/1.25 var(--serif); }
 .litem .m { display: block; font-size: 13px; color: var(--muted); margin-top: 4px; }
 .lgrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 40px 32px; }
+.editorials .lgrid { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 40px 24px; }
 .lcard .stack .cover { width: 80px; }
 .lcard .stack .cover + .cover { margin-left: -48px; }
 .lcard h3 { font: 600 19px/1.25 var(--serif); margin-top: 14px; }
@@ -930,11 +931,11 @@ aside .side-lists + .label, aside p + .label, aside dialog + .label { margin-top
 .new-list { display: flex; gap: 10px; align-items: center; margin-top: 16px; }
 .new-list input { flex: 1; min-width: 0; border: 0; border-bottom: 1px solid var(--under); background: none; font: 16px var(--serif); padding: 8px 0; color: var(--ink); }
 .new-list input:focus { outline: 0; border-color: var(--ink); }
-@media (max-width: 960px) { .lgrid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 960px) { .lgrid, .editorials .lgrid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 760px) {
   .list-head h1 { font-size: 40px; }
   .lrow .n { display: none; }
-  .lgrid { gap: 28px 18px; }
+  .lgrid, .editorials .lgrid { gap: 28px 18px; }
   .lcard .stack .cover { width: 64px; }
   .lcard .stack .cover + .cover { margin-left: -42px; }
   dialog.sheet { margin: auto 0 0; width: 100%; max-width: none; border: 0; border-radius: 16px 16px 0 0; padding: 4px 22px 32px; }
