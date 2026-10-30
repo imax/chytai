@@ -7151,5 +7151,25 @@
   ],
   "links": [],
   "source": "books.md"
+ },
+ {
+  "id": "dlia-menedzheriv",
+  "title": "Для менеджерів",
+  "series": 0,
+  "altTitle": "",
+  "author": "Артем Бородатюк",
+  "cover": "",
+  "tags": [
+   "бізнес",
+   "менеджмент",
+   "українською"
+  ],
+  "links": [
+   {
+    "label": "FRACTAL, e-book",
+    "url": "https://gtd.fractal.partners/"
+   }
+  ],
+  "source": "books.md"
  }
 ]
