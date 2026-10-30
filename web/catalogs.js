@@ -356,7 +356,8 @@ function mbooksPage(src, brand, slug) {
       const head = (html.match(/<title>([^<]*)/) || [])[1] || "";
       prod = { name: h1(html), brand: { name: brand }, gtin: (head.match(/ISBN ([\d\-X]+)/) || [])[1] || "", image: meta(html, "og:image"), offers: {} };
     }
-    if (!prod || ent(prod.brand?.name || "").trim().toLowerCase() !== brand.toLowerCase()) return null;
+    // No brand given: the publisher's own link on the page says whose book it is («Зелений пес» pages name no brand).
+    if (!prod || (brand ? ent(prod.brand?.name || "").trim().toLowerCase() !== brand.toLowerCase() : !html.includes(`href="/publishers/${slug}/"`))) return null;
     const head = (html.match(/<title>([^<]*)/) || [])[1] || "";
     const top = html.slice(0, html.indexOf('data-cy="book-title"'));
     const authors = [...top.matchAll(/href="\/authors\/[^"]+"[^>]*>([^<]+)</g)].map((m) => ent(m[1]).trim());
@@ -1009,6 +1010,16 @@ const SOURCES = [
   mbooks({ id: "tamaryn", slug: "borodatyi-tamaryn", brand: "Бородатий Тамарин", name: "Бородатий тамарин", tagline: "Науково-популярні книжки", url: "https://mbooks.com.ua/publishers/borodatyi-tamaryn/", draft: false }),
   // Max 2026-10-30: «Метод Казана» was searched and missing (thread «Покращити пошук книжок, яких немає в каталозі»).
   mbooks({ id: "projector", slug: "projector-publishing", brand: "Projector Publishing", name: "Projector Publishing", tagline: "Книжки про дизайн, креативність і роботу", url: "https://mbooks.com.ua/publishers/projector-publishing/", draft: false }),
+  // Max 2026-10-30 («Ок давай, але без дитячих поки що»), checked on samples of their pages: no Russian titles. Left out after
+  // the samples: Оріон, Астон, Академія (textbooks), Strateg (board games), Глорія, Теза, ТУТ, ПЕРО, Каламар (kids), MAL'OPUS,
+  // Molfar, LANTSUTA, Vovkulaka (manga and comics, waiting with the kids), Моноліт-Bizz (summaries), Мандрівець, Сумна вівця (mixed, notebooks).
+  mbooks({ id: "varvar", slug: "varvar-publishing", brand: "Varvar Publishing", name: "Varvar Publishing", tagline: "Фантастика: «Зоряні війни», Warhammer, світ Толкіна", url: "https://mbooks.com.ua/publishers/varvar-publishing/" }),
+  mbooks({ id: "ariy", slug: "ariy", brand: "Арій", name: "Арій", tagline: "Класика думки: філософія, релігія, військова теорія", url: "https://mbooks.com.ua/publishers/ariy/" }),
+  mbooks({ id: "kondor", slug: "kondor", brand: "КОНДОР", name: "Кондор", tagline: "Українська класика: вибрана проза й поезія", url: "https://mbooks.com.ua/publishers/kondor/" }),
+  mbooks({ id: "piramida", slug: "literaturna-ahentsiia-piramida", brand: "Літературна агенція «Піраміда»", name: "Піраміда", tagline: "Львівське видавництво: українська проза й есеїстика", url: "https://mbooks.com.ua/publishers/literaturna-ahentsiia-piramida/" }),
+  mbooks({ id: "chornivivtsi", slug: "chorni-vivtsi-adult", brand: "Чорні вівці adult", name: "Чорні вівці", tagline: "Сучасна проза й нонфікшн для дорослих", url: "https://mbooks.com.ua/publishers/chorni-vivtsi-adult/" }),
+  mbooks({ id: "kafedra", slug: "kafedra", brand: "Кафедра", name: "Кафедра", tagline: "Нонфікшн про психологію, безпеку й війну", url: "https://mbooks.com.ua/publishers/kafedra/" }),
+  mbooks({ id: "zelenyipes", slug: "zelenyi-pes", brand: "", name: "Зелений пес", tagline: "Сучасна українська проза: Капранови, детективи, фантастика", url: "https://mbooks.com.ua/publishers/zelenyi-pes/" }),
   mbooks({ id: "zaliznyitato", slug: "zaliznyi-tato", brand: "Залізний тато", name: "Залізний тато", tagline: "Військова історія й мемуари", url: "https://mbooks.com.ua/publishers/zaliznyi-tato/", draft: false }),
   mbooks({ id: "propala", slug: "propala-hramota", brand: "Пропала Грамота", name: "Пропала грамота", tagline: "Історія, мемуари й пригоди", url: "https://mbooks.com.ua/publishers/propala-hramota/", draft: false }),
   mbooks({ id: "cwp", slug: "creative-women-publishing", brand: "Creative Women Publishing", name: "Creative Women Publishing", tagline: "Проза й нонфікшн про жінок в Україні", url: "https://mbooks.com.ua/publishers/creative-women-publishing/", draft: false }),
