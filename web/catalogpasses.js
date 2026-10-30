@@ -111,11 +111,10 @@ function passes({ store, social, db, apiKey, log }) {
       apply: (items) => {
         const links = {};
         for (const { s: sub, answer: a } of items) {
-          const orig = a.kind === "adaptation" && store.adaptOrigin(sub.id, a);
-          if (orig) links[sub.id] = orig;
+          links[sub.id] = (a.kind === "adaptation" && store.adaptOrigin(sub.id, a)) || null;
         }
         store.setAdaptLinks(links);
-        return Object.keys(links).length;
+        return Object.values(links).filter(Boolean).length;
       },
     },
     {

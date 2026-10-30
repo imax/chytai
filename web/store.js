@@ -601,7 +601,8 @@ class Store {
     const adapted = new Set();
     for (const [id, a] of this.aiAnswers("notbooks")) if (ADAPTED.test(a.what || "")) adapted.add(this.canonical(id));
     for (const w of works) if (/графічн|комікс/i.test(w.title || "")) adapted.add(this.canonical(w.id));
-    for (const [id, a] of this.aiAnswers("adapt")) if (a.kind === "adaptation") adapted.add(this.canonical(id));
+    const folded = this.adaptLinks(); // a comic folded into its book is not that book
+    for (const [id, a] of this.aiAnswers("adapt")) if (a.kind === "adaptation" && !folded[id]) adapted.add(this.canonical(id));
     const partners = new Map(); // id -> ids across the script line it is paired with
     const fits = (id, other) => [...(partners.get(id) || [])].every((p) => alike(p, other));
     this.pairLog = { kept: [], dropped: [] }; // for the owner's check, /admin/translations/check
@@ -1559,27 +1560,54 @@ class Store {
   // The book Haiku says this item adapts, if the catalog has it: the Ukrainian title first, then the original's.
   // Not the item's own page, and not another comic.
   adaptOrigin(id, a) {
-    const self = this.canonical(id);
+    const self = this.adaptLinks()[id] ? id : this.canonical(id); // once folded, its canonical is the original
+    const si0 = this.shelfItems.get(id);
     const comic = (w) => {
       const c = this.canonical(w);
       const si = this.shelfItems.get(c);
       return c === self || (!!si && (this.aiAnswers("adapt").get(c)?.kind === "adaptation" || COMIC_WORDS.test(si.item.title)));
     };
+    // A Ukrainian comic goes to the Ukrainian book, not to its original: «Про тиранію. Графічна версія» found
+    // «On Tyranny» (trial, 2026-10-30).
+    const cyr = (t) => /[а-яіїєґ]/i.test(t || "");
+    const local = (c) => {
+      if (!cyr(si0?.item.title) || cyr(this.book(c, { edited: false, borrow: false })?.title)) return c;
+      const uk = [...(this.translations?.get(c) || [])].find((t) => !comic(t) && cyr(this.book(t, { edited: false, borrow: false })?.title) && !isRussian(this.book(t, { edited: false, borrow: false })));
+      return uk ? this.canonical(uk) : c;
+    };
+    // A title Haiku gives a little otherwise («Гобіт, або Туди і звідти назад» for «Гобіт, або Туди і звідти»):
+    // a work by that author whose title starts with the part before the first comma, period or colon.
+    const { byTitle } = this.workIndex();
     for (const title of [a.ukrainian_title, a.title].filter(Boolean)) {
       const w = this.findWork({ title, author: a.author, not: comic });
-      if (w) return this.canonical(w);
+      if (w) return local(this.canonical(w));
+      const head = ntitle(String(title).split(/[,.:(]/)[0]);
+      if (head.length < 4) continue;
+      for (const [k, ws] of byTitle) {
+        if (k !== head && !k.startsWith(`${head} `)) continue;
+        const w = ws.find((x) => !comic(x.id) && sameAuthor(a.author, x.author));
+        if (w) return local(this.canonical(w.id));
+      }
     }
+    // Already on the book's page as one of its editions (the volumes rule joined the graphic «Sapiens» to the
+    // book): it only needs its «Комікс» row. Not when the item is that page itself.
+    if (self !== id && si0 && this.comicLike(si0) && !COMIC_WORDS.test(this.shelfItems.get(self)?.item.title || "")) return self;
     return null;
   }
   adaptLinks() {
     return JSON.parse(this.db.get("adapt:links") || "{}");
   }
+  // links: item -> original for the items just answered, null for one that is no longer an adaptation.
   setAdaptLinks(links) {
     this.aiAnswersChanged("adapt");
-    this.db.set("adapt:links", JSON.stringify({ ...this.adaptLinks(), ...links }));
+    const all = this.adaptLinks();
+    for (const [id, orig] of Object.entries(links)) if (orig) all[id] = orig;
+    else delete all[id];
+    this.db.set("adapt:links", JSON.stringify(all));
     this.saveDecisions(this.decisions());
     this.indexSlugs();
   }
+
 
   // Is this id a work we know: a library book or a shelf item?
   isWork(id) {
