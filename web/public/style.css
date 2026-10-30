@@ -1054,3 +1054,21 @@ aside .side-lists + .label, aside p + .label, aside dialog + .label { margin-top
   .acts .more-menu { left: 0; right: auto; max-width: calc(100vw - 32px); }
   .acts .more-menu a, .acts .more-menu button { white-space: normal; }
 }
+
+/* The book page's status button with its «▾» menu, and «Хочу прочитати ▾» as one split button (Max, 2026-10-30). */
+.status-acts > summary.have { padding: 10px 18px; border-color: var(--accent); color: var(--accent); font-weight: 500; letter-spacing: 0; }
+.status-acts > summary.have:hover, .status-acts[open] > summary.have { background: var(--accent); color: var(--on-accent); }
+.status-acts .caret { font-size: 11px; margin-left: 4px; }
+.status-acts .more-menu { left: 0; right: auto; }
+.want-split { display: inline-flex; }
+.want-split > form .btn, .want-split > a.btn { border-top-right-radius: 0; border-bottom-right-radius: 0; padding-right: 18px; }
+.want-split .status-acts > summary { padding: 11px 14px; border-radius: 0 999px 999px 0; border-left: 1px solid rgba(255, 255, 255, 0.35); letter-spacing: 0; font-size: 13px; }
+.want-split .status-acts[open] > summary { background: var(--accent-hover); color: var(--on-accent); }
+.more-menu .on { display: block; padding: 11px 18px; font-size: 14px; font-weight: 600; color: var(--accent); }
+.more-menu .on::before { content: "✓ "; }
+.more-menu button.sub { padding-left: 34px; font-size: 13px; }
+.more-menu hr { border: 0; border-top: 1px solid var(--rule); margin: 6px 0; }
+@media (max-width: 600px) {
+  .book-main .acts { gap: 10px; }
+  .book-main .acts > .btn { padding-left: 18px; padding-right: 18px; }
+}
