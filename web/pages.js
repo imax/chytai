@@ -1639,7 +1639,7 @@ function publisherPage({ shelf, subscribed, user, fresh, liked = [], feed, other
   const body = `
 ${pageHead({ crumbs: `<a href="/publishers">Видавництва</a> / ${esc(shelf.name)}`, kicker: shelf.kind === "audio" ? "Аудіокнигарня" : "Видавництво", title: esc(shelf.name), lead: esc(shelf.tagline), sub: [books(items.length), newCount ? `${newCount} ${plural(newCount, "нова", "нові", "нових")}` : "", `<a href="${attr(shelf.url)}" target="_blank" rel="noopener">${esc(host(shelf.url))} ↗</a>`].filter(Boolean).join(" · "), action: subscribeButton(shelf.id, subscribed, user, true) })}
 ${liked.length >= 3 ? `<section class="block" data-block="liked">
-  ${label("Найкраще для читачів Chytai")}
+  ${label("Фаворити читачів Chytai")}
   <div class="grid six">${liked.map((x) => card(x.item, { avg: x.avg, extra: x.want ? `<p class="meta pop-n">${count(x.want, "хоче", "хочуть", "хочуть")} прочитати</p>` : "" })).join("")}</div>
 </section>` : ""}
 ${fresh.length ? `<section class="block">
