@@ -122,6 +122,11 @@ async function seriesQuery(names, fetchImpl) {
   const qid = (u) => u.slice(u.lastIndexOf("/") + 1);
   return (await r.json()).results.bindings.map((b) => ({ name: b.name.value, w: qid(b.w.value), t: b.t.value, lang: b.t["xml:lang"], s: qid(b.s.value), sl: b.sl?.value || "", su: b.su?.value || "", n: Number(b.n.value) || 0 }));
 }
+// Not a reading order: an author's umbrella over standalone novels (Verne's «Voyages Extraordinaires», 54 of
+// them, put a 55-book «Серія» block on «Діти капітана Гранта»; Max, 2026-10-30: «Нащо він тут потрібен?»),
+// Scott's «Waverley Novels», or xkcd's thousands of strips. Anything over 20 volumes is taken as such.
+const UMBRELLA = new Set(["Q3048935", "Q7975429", "Q13915"]);
+const umbrella = (qid, size) => UMBRELLA.has(qid) || size > 20;
 async function seriesOf(books, { fetchImpl = fetch, log = () => {} } = {}) {
   const named = books.filter((b) => b.title && firstAuthor(b.author));
   const authors = [...new Set(named.map((b) => firstAuthor(b.author)))];
@@ -151,7 +156,7 @@ async function seriesOf(books, { fetchImpl = fetch, log = () => {} } = {}) {
   const size = new Map();
   for (const w of works.values()) for (const s of w.of.keys()) size.set(s, (size.get(s) || 0) + 1);
   const out = { books: {}, series: {} };
-  const pick = (w) => [...w.of.keys()].filter((s) => size.get(s) >= 2).sort((a, b) => size.get(a) - size.get(b))[0];
+  const pick = (w) => [...w.of.keys()].filter((s) => size.get(s) >= 2 && !umbrella(s, size.get(s))).sort((a, b) => size.get(a) - size.get(b))[0];
   for (const b of named) {
     let wid = null;
     for (const t of [b.title, mainTitle(b.title)]) if ((wid = byTitle.get(`${firstAuthor(b.author)}|${norm(t)}`))) break;
@@ -187,4 +192,4 @@ async function refreshUk(store, opts = {}) {
   return true;
 }
 
-module.exports = { ukTitles, enTitles, seriesOf, refreshUk, firstAuthor, mainTitle };
+module.exports = { ukTitles, enTitles, seriesOf, umbrella, refreshUk, firstAuthor, mainTitle };

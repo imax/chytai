@@ -7,6 +7,7 @@
 const fs = require("fs");
 const path = require("path");
 const { open } = require("./db");
+const { umbrella } = require("./wikidata");
 
 const SEED = path.join(__dirname, "seed");
 const readJson = (f) => JSON.parse(fs.readFileSync(f, "utf8"));
@@ -636,6 +637,9 @@ class Store {
   // shop's shelf (linkSeries). A translation is in its original's series at the same place.
   linkCycles() {
     const wd = JSON.parse(this.db.get("wikidata:series") || "{}");
+    // Answers stored before wikidata.umbrella existed may still hold one; dropped here, not a week later.
+    for (const [qid, s] of Object.entries(wd.series || {})) if (umbrella(qid, s.members.length)) delete wd.series[qid];
+    for (const [id, b] of Object.entries(wd.books || {})) if (!wd.series[b.qid]) delete wd.books[id];
     this.cycles = new Map(); // work id -> { key, n }
     this.cycleInfo = new Map(); // key -> { name, uk, members: [{ n, en, uk }] } (members from Wikidata only)
     this.cycleIds = new Map(); // key -> [{ n, id }] by n
