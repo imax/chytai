@@ -58,9 +58,7 @@ class Social {
     for (const [rid, entries] of this.store.entries) {
       const reader = this.who(rid);
       if (!reader) continue;
-      // A reader who rated nothing yet (one «Хочу прочитати» from a search visit) stays off the feed and lists
-      // (Max 2026-10-26: «low quality / low intent»); their own page stays.
-      if (!Object.values(entries).some((e) => e.rating != null && !e.kids)) continue;
+      // A reader who rated nothing yet is in the feed too (Max 2026-10-30; from 2026-10-26 they were left out).
       for (const [id, e] of Object.entries(entries)) if ((e.status || e.rating != null) && e.status !== "abandoned" && !e.kids && !isRussian(this.store.book(id))) out.push({ reader, id, entry: e });
     }
     return out;
