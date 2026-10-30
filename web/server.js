@@ -1328,7 +1328,7 @@ app.get("/publishers", (req, res) => {
   res.send(pages.publishersPage({ user: req.user, shelves: shelvesFor(req).map((s) => shelfSummary(req, s, 4)).sort((a, b) => b.fresh - a.fresh), libraries: librariesFor(req) }));
 });
 // The publisher's books Chytai readers like most (Max, 2026-10-30: «з найвищими оцінками читачів … або у Хочу
-// прочитати»): a reader's 4–5 ★ or «Хочу прочитати» is a vote for the book, a 1–2 ★ takes one back. A translation
+// прочитати»): a reader's 4–5 ★, «Хочу прочитати» or «Прочитано» is a vote for the book, a 1–2 ★ takes one back. A translation
 // counts its original's entries too (many readers imported the English edition from Goodreads).
 function shelfFavourites(items, limit = Infinity) {
   const key = (id) => {
@@ -1349,6 +1349,7 @@ function shelfFavourites(items, limit = Infinity) {
     const x = by.get(k) || by.set(k, { item: mine.get(k), votes: 0, sum: 0, rated: 0, want: 0 }).get(k);
     if (e.rating != null) (x.sum += e.rating), x.rated++, (x.votes += e.rating >= 4 ? 1 : e.rating <= 2 ? -1 : 0);
     else if (e.status === "want") x.want++, x.votes++;
+    else if (e.status === "read") x.votes++; // finished without a rating (Max, 2026-10-30); given-up books never get here
   }
   return [...by.values()]
     .filter((x) => x.votes > 0)
