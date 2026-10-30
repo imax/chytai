@@ -1388,10 +1388,31 @@ function searchAll(req, q) {
   }
   // Readers' lists by title or intro (Max, 2026-10-28: «І пошук по списках»).
   const listsFound = lists.all().filter((l) => has(l.title) || nqs.some((n) => normQ(l.note).includes(n))).slice(0, 6).map(withCovers);
+  // A work's Ukrainian name from Wikidata when our book of it has another (Max, 2026-10-30: «Щоденник Анни Франк» found
+  // nothing, though we have «The Diary of a Young Girl»): that book, first if the words missed it, with the Ukrainian name under it.
+  const known = authors.findKnown(store, q);
+  for (const w of known.filter((w) => w.books.length).reverse()) {
+    const id = store.canonical(w.books[0]);
+    const had = hits.find((h) => h.book.id === id);
+    const h = had || { book: bookFor(req, store.book(id), !!store.entry(req.user?.id, id)), entry: store.sharedEntry(req.user?.id, id) };
+    if (!h.book) continue;
+    if (!CYR_RE.test(h.book.title || "") && !store.translationsOf(id).some((t) => CYR_RE.test(t.title || ""))) h.uk = w.uk;
+    if (!had) hits.unshift(h);
+  }
   foldTwins(hits, req);
   const similar = hits.length ? social.alsoLiked([hits[0].book.id], { limit: 4, skip: new Set(hits.map((h) => h.book.id)) }) : [];
-  return { hits, authors: authorsFound, readers: readersFound, shelves: shelvesFound, lists: listsFound, similar, tag };
+  // No book here answers it (none has every word typed in its title or author): the books that exist elsewhere are
+  // looked for after the page (/api/search/outside). Not for a genre, a publisher, a reader or a list.
+  const words = (s) => folded(s).split(" ");
+  const terms = words(q).filter(Boolean);
+  const answers = (b) => {
+    const all = [b.title, b.altTitle, b.author, b.authorOrig, ...(b.editions || []).map((e) => e.title)].flatMap(words);
+    return terms.every((t) => all.some((w) => w.startsWith(t)));
+  };
+  const outside = !tag && !named && !readersFound.length && !listsFound.length && !hits.some((h) => h.uk || answers(h.book));
+  return { hits, authors: authorsFound, readers: readersFound, shelves: shelvesFound, lists: listsFound, similar, tag, outside };
 }
+const folded = (s) => normQ(s).replace(/є/g, "е").replace(/ґ/g, "г").normalize("NFKD").replace(/\p{M}/gu, "");
 // How many things a search found, for the search log (admin.searched): books, authors, readers, shelves, lists.
 const foundCount = (r) => r.hits.length + r.authors.length + r.readers.length + r.shelves.length + r.lists.length;
 // Search as you type asks for every pause in typing; only the query the reader stopped at is counted: the page
@@ -1410,6 +1431,61 @@ app.get("/api/search", (req, res) => {
   lastFound.delete(q), lastFound.set(q, foundCount(results));
   if (lastFound.size > 500) lastFound.delete(lastFound.keys().next().value);
   res.set("Cache-Control", "no-store").send(pages.searchResults({ q, user: req.user, ...results }));
+});
+// Books that exist but are not on Chytai, for a search that found none here (pages.outsideResults; Max, 2026-10-30):
+// the known works of our authors (Wikidata), then Google Books and Open Library, five at most, none we have after all.
+// No Claude here: a search costs nothing.
+app.get("/api/search/outside", async (req, res) => {
+  const q = String(req.query.q || "").trim().slice(0, 100);
+  const out = [];
+  const seen = new Set();
+  const put = (b) => {
+    const key = `${folded(b.title).split(" ").slice(0, 4).join(" ")}|${folded(b.author).split(" ").pop()}`;
+    if (!b.title || seen.has(key) || out.length >= 5) return;
+    seen.add(key);
+    // Ours after all (an edition the search missed): not offered as new.
+    if (store.findWork(b)) return;
+    out.push(b);
+  };
+  if (q.length >= 2) {
+    for (const w of authors.findKnown(store, q)) if (!w.books.length) put({ title: w.uk, author: w.author, href: w.href, published: w.year || null, qid: w.qid, from: "Wikidata" });
+    const [google, ol] = await Promise.all([
+      Promise.race([enrich.searchGoogle(q, process.env.GOOGLE_BOOKS_KEY || ""), new Promise((r) => setTimeout(() => r([]), 6000))]),
+      Promise.race([enrich.searchOpenLibrary(q, { limit: 4 }), new Promise((r) => setTimeout(() => r([]), 6000))]),
+    ]);
+    for (const b of google) put({ ...b, from: "Google Books" });
+    for (const b of ol) put({ ...b, from: "Open Library" });
+  }
+  admin.event(req, req.user?.id, "outside", out.length ? "shown" : "none");
+  res.set("Cache-Control", "no-store").send(pages.outsideResults({ q, user: req.user, books: out }));
+});
+// «Хочу прочитати» on a book from outside: the book is made here (or found, if we have it after all), goes on the
+// reader's «Хочу прочитати», and the owner gets a letter (new books by readers are mailed one by one).
+app.post("/api/search/want", signed, (req, res) => {
+  let p = {};
+  try {
+    p = JSON.parse(String(req.body.pick || "{}"));
+  } catch {}
+  const title = String(p.title || "").trim().slice(0, 200);
+  if (!title) return res.redirect(`/search?${new URLSearchParams({ q: String(req.body.q || "") })}`);
+  const isbns = [].concat(p.isbns || []).map(String).filter((x) => /^[\dX]{10,13}$/.test(x)).slice(0, 20);
+  const book = { title, author: String(p.author || "").trim().slice(0, 200), isbns };
+  const links = [];
+  if (/^https:\/\/(books\.google\.[a-z.]+|play\.google\.com)\//.test(p.google || "")) links.push({ label: "Google Books", url: p.google });
+  if (/^Q\d+$/.test(p.qid || "")) links.push({ label: "Wikidata", url: `https://www.wikidata.org/wiki/${p.qid}` });
+  const ol = /^\/works\/OL\w+$/.test(p.ol || "") ? p.ol : "";
+  const cover = /^https:\/\/(covers\.openlibrary\.org|books\.google\.[a-z.]+|books\.googleusercontent\.com)\//.test(p.cover || "") ? p.cover : "";
+  const had = store.findWork(book);
+  const result = store.importEntries(req.user.id, [{ id: had || null, ...book, status: "want", cover, ol, published: Number(p.published) || null, links }], { source: "search" });
+  const made = result.created[0];
+  const id = had || made?.id || store.findWork(book);
+  admin.event(req, req.user.id, "outside", `want:${made ? "new" : "had"}`);
+  if (made) {
+    console.log(`search pick @${req.user.username}: ${made.title} (${p.from || "?"})`);
+    if (!req.owner) notifyOwner(`Нова книжка з пошуку: ${made.title}`, [`${req.user.name} (@${req.user.username}) не знайшов(ла) на Chytai «${String(req.body.q || "").slice(0, 100)}» і додав(ла) з ${p.from || "пошуку"} в «Хочу прочитати»:`, "", `• ${made.title}${made.author ? ` — ${made.author}` : ""}  ${site(req)}${store.href(made.id)}`, "", `Читач: ${site(req)}${req.user.href}`].join("\n"));
+    details({ ids: [made.id] });
+  }
+  res.redirect(id ? store.href(id) : "/me");
 });
 // Taps and script errors from app.js (sendBeacon), for /admin/traffic and /admin/speed: counts only (admin.tap).
 app.post("/api/tap", (req, res) => {

@@ -493,6 +493,8 @@ dialog .form { margin-top: 18px; }
   .row:has(.rate) { flex-wrap: wrap; row-gap: 12px; }
   .row-act:has(.marks), .row-act:has(> .muted), .row-act:has(.rate) { flex-basis: 100%; padding-left: 80px; }
   .row-act .rate { justify-content: flex-start; }
+  .outside .row { flex-wrap: wrap; row-gap: 12px; }
+  .outside .row-act { flex-basis: 100%; padding-left: 80px; }
   .row.big { gap: 18px; }
   .row.big .cover.lg { width: 84px; }
   .row.big h3 { font-size: 22px; }

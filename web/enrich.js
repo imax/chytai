@@ -15,7 +15,7 @@ const HEADERS = { "User-Agent": "Chytai/1.0 (https://chytai.org.ua; book details
 const FIELDS = "key,title,subtitle,author_name,cover_i,isbn,first_publish_year,number_of_pages_median,language,id_amazon";
 const MONTH = 30 * 86400000;
 const WEEK = 7 * 86400000;
-const OWN = new Set(["manual", "goodreads", "apple-books", "office", "list", "tip", "chat"]);
+const OWN = new Set(["manual", "goodreads", "apple-books", "office", "list", "tip", "chat", "search"]);
 const LANG = { eng: "англійська", ukr: "українська", rus: "російська", pol: "польська", ger: "німецька", fre: "французька", spa: "іспанська", ita: "італійська" };
 const GLANG = { en: "англійська", uk: "українська", ru: "російська", pl: "польська", de: "німецька", fr: "французька", es: "іспанська", it: "італійська" };
 const GOOGLE = "https://www.googleapis.com/books/v1/volumes";
@@ -408,6 +408,40 @@ async function searchOpenLibrary(q, { fetchImpl = fetch, limit = 6 } = {}) {
   return list;
 }
 
+// Books by a reader's search words in Google Books (Max, 2026-10-30: a search that found nothing on Chytai shows the
+// books that exist elsewhere). Google knows Ukrainian books Open Library doesn't. Kept an hour; a failure gives nothing.
+// Russian editions are left out (our search rejects them too).
+async function searchGoogle(q, key, { fetchImpl = fetchV6, limit = 5 } = {}) {
+  q = String(q || "").trim().slice(0, 100);
+  if (q.length < 2 || !key) return [];
+  const k = `g:${q.toLowerCase()}`;
+  const hit = found.get(k);
+  if (hit && Date.now() - hit.at < 3600e3) return hit.list;
+  const list = [];
+  try {
+    const params = new URLSearchParams({ q, maxResults: String(limit * 3), printType: "books", key });
+    const data = await getJson(`${GOOGLE}?${params}`, fetchImpl);
+    const seen = new Set();
+    for (const it of data?.items || []) {
+      const v = it.volumeInfo || {};
+      if (!v.title || v.language === "ru") continue;
+      const author = (v.authors || []).slice(0, 2).join(", ");
+      const key2 = `${norm(v.title)}|${surname(author)}`;
+      if (seen.has(key2)) continue;
+      seen.add(key2);
+      const thumb = v.imageLinks?.thumbnail || v.imageLinks?.smallThumbnail;
+      const year = Number(String(v.publishedDate || "").slice(0, 4));
+      list.push({ title: [v.title, v.subtitle].filter(Boolean).join(": ").slice(0, 200), author, cover: thumb ? thumb.replace(/^http:/, "https:").replace(/&edge=curl/, "") : "", isbns: cleanIsbns((v.industryIdentifiers || []).map((i) => i.identifier)), published: year > 1400 ? year : null, language: GLANG[v.language] || "", google: (v.canonicalVolumeLink || v.infoLink || "").replace(/^http:/, "https:") });
+      if (list.length >= limit) break;
+    }
+  } catch {
+    return [];
+  }
+  if (found.size > 500) found.clear();
+  found.set(k, { at: Date.now(), list });
+  return list;
+}
+
 // «Знайти обкладинку» for the owner (Max, 2026-10-23): pictures a book could have, to pick from by hand:
 // Open Library and Google Books by title and author, any script. [{ src, title, author, from }]; a source
 // that fails gives nothing.
@@ -429,4 +463,4 @@ async function searchCovers(book, { googleKey = "", fetchImpl = fetch } = {}) {
   return out.filter((c, i) => out.findIndex((x) => x.src === c.src) === i);
 }
 
-module.exports = { enrich, refresh, lookup, genresOf, searchOpenLibrary, searchCovers, lookupGoogle, apply, wanting, descriptionText, same };
+module.exports = { enrich, refresh, lookup, genresOf, searchOpenLibrary, searchGoogle, searchCovers, lookupGoogle, apply, wanting, descriptionText, same };

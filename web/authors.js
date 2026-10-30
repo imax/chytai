@@ -375,4 +375,40 @@ function matchWorks(store, author, works) {
   });
 }
 
-module.exports = { shortBio, sparql, refresh, build, wikidataWorks, about, aboutNow, matchWorks, splitAuthors, allWorks, ownerJoins };
+// Every work with a Ukrainian name that an author page has shown (meta `authorworks:<qid>`), for search (Max,
+// 2026-10-30: «Щоденник Анни Франк» found nothing, though we have «The Diary of a Young Girl»). Built once an hour;
+// our books of a work are matched only for the few a query names (matchWorks for every author took half a second).
+// [{ qid, uk, year, sl, author, words: Set, by: Set }]
+const fold = (s) => s.replace(/є/g, "е").replace(/ґ/g, "г").normalize("NFKD").replace(/\p{M}/gu, "");
+let known = { at: 0, of: null, works: [] };
+function knownWorks(store) {
+  if (known.of === store.authors && Date.now() - known.at < 3600e3) return known.works;
+  const byQid = new Map((store.authors?.list || []).filter((a) => a.qid).map((a) => [a.qid, a]));
+  const works = [];
+  for (const { key, value } of store.db.prepare("SELECT key, value FROM meta WHERE key LIKE 'authorworks:%'").all()) {
+    const author = byQid.get(key.slice(12));
+    if (!author) continue;
+    let list = [];
+    try {
+      list = withUk(JSON.parse(value).works || []).filter((w) => CYR.test(w.uk || ""));
+    } catch {}
+    const by = list.length ? new Set(fold(norm(author.name)).split(" ")) : null;
+    for (const w of list) works.push({ qid: w.qid, uk: w.uk, year: w.year, sl: w.sl || 0, author, words: new Set(fold(norm(w.uk)).split(" ")), by });
+  }
+  known = { at: Date.now(), of: store.authors, works };
+  return works;
+}
+// The known works a query names: every word of it starts a word of the Ukrainian title or of the author's name, and
+// at least one is in the title. The best known first, each with our books of it: [{ qid, uk, year, author, href, books: [ids] }].
+function findKnown(store, q, limit = 5) {
+  const terms = fold(norm(q)).split(" ").filter(Boolean);
+  if (!terms.length || terms.join("").length < 4) return [];
+  const starts = (set, t) => [...set].some((w) => w.startsWith(t));
+  return knownWorks(store)
+    .filter((w) => terms.some((t) => starts(w.words, t)) && terms.every((t) => starts(w.words, t) || starts(w.by, t)))
+    .sort((a, b) => b.sl - a.sl)
+    .slice(0, limit)
+    .map((w) => ({ qid: w.qid, uk: w.uk, year: w.year, author: w.author.name, href: w.author.href, books: matchWorks(store, w.author, [w])[0].books.map((b) => b.id) }));
+}
+
+module.exports = { shortBio, sparql, refresh, build, wikidataWorks, about, aboutNow, matchWorks, splitAuthors, allWorks, ownerJoins, knownWorks, findKnown };

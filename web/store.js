@@ -106,6 +106,9 @@ const blurbOf = (h) => {
 const LOOK = { a: "а", c: "с", e: "е", i: "і", o: "о", p: "р", x: "х", y: "у" };
 const cyrWord = (t) => (/[a-z]/.test(t) && /[а-яіїєґ]/.test(t) ? t.replace(/\S+/g, (w) => (/[а-яіїєґ]/.test(w) ? w.replace(/[aceiopxy]/g, (c) => LOOK[c]) : w)) : t);
 const norm = (s) => cyrWord(String(s || "").toLowerCase()).replace(/^(the|a)\s+/, "").replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+// Letters search takes as one (Max 2026-10-30: «Проект Аве Марія» found nothing, the book is «Проєкт…»): the index
+// keeps a folded copy of each title, and the query is folded before it is looked up.
+const fold = (s) => String(s || "").replace(/є/g, "е").replace(/Є/g, "Е").replace(/ґ/g, "г").replace(/Ґ/g, "Г");
 // Ukrainian number words as digits, for comparing titles: «Дванадцять обручів» is «12 обручів», «Двадцять сім» 27
 // (Max 2026-10-29). Applied to a norm()ed title, where «п'ять» is «п ять».
 const NUMS = { нуль: 0, один: 1, одна: 1, одне: 1, два: 2, дві: 2, три: 3, чотири: 4, "п ять": 5, шість: 6, сім: 7, вісім: 8, "дев ять": 9, десять: 10, одинадцять: 11, дванадцять: 12, тринадцять: 13, чотирнадцять: 14, "п ятнадцять": 15, шістнадцять: 16, сімнадцять: 17, вісімнадцять: 18, "дев ятнадцять": 19, двадцять: 20, тридцять: 30, сорок: 40, "п ятдесят": 50, шістдесят: 60, сімдесят: 70, вісімдесят: 80, "дев яносто": 90, сто: 100 };
@@ -1046,8 +1049,11 @@ class Store {
         // The series' own name too («Dungeon Crawler Carl» finds every volume), and the owner's other names.
         const c = this.cycles?.get(id) && this.cycleInfo.get(this.cycles.get(id).key);
         const series = [...new Set([b.series?.name, c?.name, c?.uk].filter(Boolean))].join(" ");
-        add.run(id, b.title || "", b.altTitle || "", [b.author, b.authorOrig].filter(Boolean).join(" "), series, [extra, b.aliases].filter(Boolean).join(" "));
-        tri.run(id, [b.title, b.altTitle, b.author, b.authorOrig, series, uk?.uk].filter(Boolean).join(" · "));
+        const all = [b.title, b.altTitle, b.author, b.authorOrig, series, extra, b.aliases].filter(Boolean).join(" ");
+        const folded = fold(all) !== all ? fold(all) : "";
+        add.run(id, b.title || "", b.altTitle || "", [b.author, b.authorOrig].filter(Boolean).join(" "), series, [extra, b.aliases, folded].filter(Boolean).join(" "));
+        const text = [b.title, b.altTitle, b.author, b.authorOrig, series, uk?.uk].filter(Boolean).join(" · ");
+        tri.run(id, fold(text) !== text ? `${text} · ${fold(text)}` : text);
       }
     });
   }
@@ -1132,7 +1138,7 @@ class Store {
   }
 
   search(q, { reader = null, limit = 40, alias = true } = {}) {
-    const terms = norm(q).split(" ").filter(Boolean);
+    const terms = fold(norm(q)).split(" ").filter(Boolean);
     if (!terms.length) return [];
     if (alias) {
       // A short name: its books go first (after a book of that very title), then what the words find.
@@ -1172,7 +1178,7 @@ class Store {
     }
     if (!rows.length && terms.every((t) => t.length >= 3)) rows = this.db.prepare("SELECT id FROM search_tri WHERE search_tri MATCH ? ORDER BY rank LIMIT ?").all(terms.map((t) => `"${t}"`).join(" AND "), limit * 2);
     if (!rows.length) rows = this.fuzzy(terms, limit);
-    const exact = norm(q);
+    const exact = fold(norm(q));
     const hits = [];
     for (const [i, { id }] of rows.entries()) {
       const b = this.book(id);
@@ -1180,7 +1186,7 @@ class Store {
       // An exact title (or original title) goes first, then books where every typed word is a whole
       // word of the title or the author («Лем» is Станіслав Лем, not «Моцарт із Лемберга»; «міллер» is
       // Madeline Miller); otherwise the index's own order.
-      const words = new Set(norm([b.title, b.altTitle, b.author].join(" ")).normalize("NFKD").replace(/\p{M}/gu, "").split(" "));
+      const words = new Set(fold(norm([b.title, b.altTitle, b.author].join(" "))).normalize("NFKD").replace(/\p{M}/gu, "").split(" "));
       const whole = terms.every((t, j) => words.has(t) || alts[j].some((w) => words.has(w)));
       // Within that, what readers have goes up and the index's order counts less (2026-10-28 usability review:
       // «гаррі поттер» gave «Міні-Поттери» first and «Філософський камінь» ninth, «кінг» two «Комплекти»):
@@ -1189,10 +1195,10 @@ class Store {
       // A book found only through the Latin sound-alike of a Cyrillic word («франко» → Frank Herbert) gets no lift.
       const typed = terms.every((t) => [...words].some((w) => w.startsWith(t)));
       const readers = typed ? this.readersOf(id).length : 0;
-      const main = norm(String(b.title || "").split(/[.:]\s/)[0]) === exact && readers > 0;
+      const main = fold(norm(String(b.title || "").split(/[.:]\s/)[0])) === exact && readers > 0;
       const bundle = b.bundle || /^комплект/i.test(b.title || "");
       const score =
-        (norm(b.title) === exact || norm(b.altTitle) === exact || main ? 1000 : 0) +
+        (fold(norm(b.title)) === exact || fold(norm(b.altTitle)) === exact || main ? 1000 : 0) +
         (whole ? 500 : 0) +
         Math.round(30 * Math.log2(1 + readers)) +
         (/[а-яіїєґ]/i.test(b.title || "") ? 20 : 0) -

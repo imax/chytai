@@ -268,6 +268,22 @@
   // survive a refresh: on /search itself the address follows the box; elsewhere (the homepage, the
   // header box on other pages) the first word typed adds /search?q=… to the history, so «Назад»
   // returns to the page the search started from, and clearing the box goes back there too.
+  // A search no book here answers: the books that exist elsewhere come a moment later (/api/search/outside).
+  const outside = (root) => {
+    for (const el of $$(".outside[data-src]", root)) {
+      const src = el.dataset.src;
+      el.removeAttribute("data-src");
+      // Asked only once the reader stops typing: a word still being typed would ask Google for every pause.
+      setTimeout(() => {
+        if (!el.isConnected) return;
+        fetch(src)
+          .then((r) => (r.ok ? r.text() : ""))
+          .then((html) => (el.innerHTML = html))
+          .catch(() => (el.innerHTML = ""));
+      }, root === document ? 0 : 900);
+    }
+  };
+  outside(document);
   const liveSearch = (box, live, browse) => {
     const input = $("input", box);
     const onSearch = location.pathname === "/search";
@@ -307,6 +323,7 @@
       try {
         const r = await fetch(`/api/search?${new URLSearchParams({ q })}`, { signal: ctrl.signal });
         live.innerHTML = await r.text();
+        outside(live);
         show(q);
         clearTimeout(logTimer);
         pending = q;

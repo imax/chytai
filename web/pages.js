@@ -224,7 +224,7 @@ function entryMeta(e) {
 }
 
 // A book in a list (shelves, search): cover, title, author, stars and the note, an action on the right.
-function bookRow(book, { entry = null, meta = "", action = "", id = "", data = "", others = [] } = {}) {
+function bookRow(book, { entry = null, meta = "", action = "", id = "", data = "", others = [], sub = "" } = {}) {
   const alt = others.length ? others.map((o) => ` · ${twinLabel(book, o).toLowerCase()}: <a class="text-link" href="${attr(o.href)}">${esc(o.title)}</a>`).join("") : book.altTitle ? ` · ${esc(book.altTitle)}` : "";
   // The card that stands for a whole series is called by the series («Експансія», not «Експансія. Кн. 1. …»).
   const ser = book.series;
@@ -237,6 +237,7 @@ function bookRow(book, { entry = null, meta = "", action = "", id = "", data = "
     <p class="by">${book.author ? authorLinks(book.author) : ""}${alt}</p>
     ${meta || entry ? `<p class="meta">${meta || entryMeta(entry)}</p>` : ""}
     ${entry?.note ? `<p class="note">${noteOf(entry, book.id)}</p>` : ""}
+    ${sub ? `<p class="small muted">${sub}</p>` : ""}
   </div>
   ${action ? `<div class="row-act">${action}</div>` : ""}
 </article>`;
@@ -811,6 +812,8 @@ function where(book, ukrlib = null, sluhay = null) {
     rows.push(row(label, firstShops.map(short).join(` <span class="muted">·</span> `), rest.length ? ` <details class="where-more"><summary>ще ${rest.length}</summary>${rest.map((e) => `<span>${full(e)}</span>`).join("")}</details>` : ""));
   }
   if (links.length) rows.push(row("Інше", links.map((l) => `<a href="${attr(l.url)}" target="_blank" rel="noopener">${esc(l.label)}</a>`).join(` <span class="muted">·</span> `)));
+  // No shop has it at all (a book a reader brought from outside, Max 2026-10-30): the want-mail (wantmail.js) says when one does.
+  if (book.source === "search" && !have.length && !out.length) rows.unshift(row("Магазини", `<span class="muted">поки немає; напишемо тим, хто хоче прочитати, щойно з’явиться</span>`));
   if (out.length) rows.push(row("Немає", `<span class="muted">зараз немає в наявності: </span>${out.map((e) => `${go(e, ' class="muted"')}${esc(e.shelf.name)}</a>`).join(", ")}`));
   return `<div class="where${rows.length ? "" : " hidden"}" data-block="where" data-src="/api/libraries/${attr(encodeURIComponent(book.id))}"><span class="where-label">Де взяти</span>${rows.join("")}</div>`;
 }
@@ -1461,6 +1464,7 @@ function searchesBlock(s) {
   const rows = (list, hits) => list.map((r) => `<tr><td><a href="/search?${attr(new URLSearchParams({ q: r.q }).toString())}">${esc(r.q)}</a></td><td>${r.n}</td>${hits ? `<td>${r.hits || `<span class="zero">0</span>`}</td>` : ""}</tr>`).join("");
   return `<h2>Що шукають</h2>
 <p class="muted small">З ${day(s.since)}: ${s.total} пошуків, ${s.queries} різних запитів, нічого не знайшли ${s.none}, переходів з результатів ${s.clicks} (<a href="/admin/traffic#taps">куди</a>).</p>
+${s.outside ? `<p class="muted small">«Немає на Chytai, але така книжка є»: показали ${s.outside.shown}, ніде не знайшли ${s.outside.none}, «Хочу прочитати» ${s.outside.wanted} (нових книжок ${s.outside.made}).</p>` : ""}
 <div class="tbl"><table><thead><tr><th>Запит</th><th>Разів</th><th>Знайдено</th></tr></thead><tbody>${rows(s.top, true)}</tbody></table></div>
 ${s.empty.length ? `<h2>Нічого не знайшли</h2>
 <div class="tbl"><table><thead><tr><th>Запит</th><th>Разів</th></tr></thead><tbody>${rows(s.empty, false)}</tbody></table></div>` : ""}`;
@@ -1663,15 +1667,19 @@ function searchPage({ q, user, results }) {
 
 // The results in groups (books, authors, readers) with «схоже» on the side; also served alone by
 // /api/search for search as you type.
-function searchResults({ q, user, hits = [], authors = [], readers = [], shelves = [], lists = [], similar = [], tag = "" }) {
+function searchResults({ q, user, hits = [], authors = [], readers = [], shelves = [], lists = [], similar = [], tag = "", outside = false }) {
   if (!q.trim()) return "";
   const n = hits.length + authors.length + readers.length + shelves.length + lists.length;
   const addLink = user ? `<a class="text-link" href="/add?text=${attr(encodeURIComponent(q))}">Додати книжку, якої ще немає на Chytai</a>` : "";
+  // No book on Chytai answers the query: the books that exist elsewhere, loaded after the page (outsideResults;
+  // Max, 2026-10-30), in place of the «Додати» link.
+  const elsewhere = `<div class="outside" data-src="/api/search/outside?${attr(new URLSearchParams({ q }).toString())}"><p class="small muted">Шукаємо деінде…</p></div>`;
   // Not a dead end (usability review 2026-10-28: «щось легке на вихідні» found nothing and left nothing to do):
   // the home page's shelves, for those who search for a mood rather than a title.
   if (!n)
-    return `<p class="found">Нічого не знайшлося за «${esc(q)}». Шукайте назву, автора або жанр. ${addLink}</p>
-<p class="found muted">Або почніть з полиць:</p>
+    return `<p class="found">На Chytai нічого не знайшлося за «${esc(q)}».</p>
+${elsewhere}
+<p class="found muted">Шукаєте не книжку, а настрій? Почніть з полиць:</p>
 <nav class="read-chips">${[["/", "Що почитати"], ["/?f=short", "Коротке"], ["/?f=ua", "Українські автори"], ["/?f=fiction", "Художнє"], ["/?f=nonfiction", "Нон-фікшн"]].map(([h, t]) => `<a class="chip" href="${h}">${t}</a>`).join("")}</nav>`;
   return `<p class="found">${count(n, "збіг", "збіги", "збігів")}${tag ? ` · жанр «${GENRES.includes(tag) ? `<a class="text-link" href="/genre/${attr(genreSlug(tag))}">${esc(tag)}</a>` : esc(tag)}»` : ""}</p>
 <div class="split">
@@ -1679,12 +1687,53 @@ function searchResults({ q, user, hits = [], authors = [], readers = [], shelves
     ${shelves.length ? `<section class="block">${label(`Видавництва · ${shelves.length}`)}<div class="name-rows">${shelves.map((s) => `<a class="name-row" href="/publishers/${attr(s.shelf.id)}"><b>${esc(s.shelf.name)}</b><span>${[books(s.total), s.shelf.tagline ? esc(s.shelf.tagline) : ""].filter(Boolean).join(" · ")}</span></a>`).join("")}</div></section>` : ""}
     ${authors.length ? `<section class="block">${label(`Автори · ${authors.length}`)}<div class="name-rows">${authors.map((a) => `<a class="name-row" href="${attr(a.href)}"><b>${esc(a.name)}</b><span>${[books(a.books), a.readers ? count(a.readers, "читач", "читачі", "читачів") : ""].filter(Boolean).join(" · ")}</span></a>`).join("")}</div></section>` : ""}
     ${lists.length ? `<section class="block">${label(`Списки · ${lists.length}`)}<div class="lgrid">${lists.map(listCard).join("")}</div></section>` : ""}
-    ${hits.length ? `<section class="block">${label(`Книжки · ${hits.length}`)}<div class="rows">${hits.map((h) => bookRow(h.book, { meta: readersMeta(h.book.id), action: h.entry ? myStatus(h.entry) : "", others: h.others })).join("")}</div></section>` : ""}
+    ${hits.length ? `<section class="block">${label(`Книжки · ${hits.length}`)}<div class="rows">${hits.map((h) => bookRow(h.book, { meta: readersMeta(h.book.id), action: h.entry ? myStatus(h.entry) : "", others: h.others, sub: h.uk ? `Українською: «${esc(h.uk)}» · у каталогах поки немає` : "" })).join("")}</div></section>` : ""}
     ${readers.length ? `<section class="block">${label(`Читачі · ${readers.length}`)}<div class="name-rows">${readers.map((r) => `<a class="name-row" href="${attr(r.reader.href)}"><b>${esc(r.reader.name)}</b><span>${books(r.count)}</span></a>`).join("")}</div></section>` : ""}
-    ${user ? `<p class="muted end-note">Не те? ${addLink}</p>` : ""}
+    ${outside ? elsewhere : user ? `<p class="muted end-note">Не те? ${addLink}</p>` : ""}
   </div>
   <aside>${similar.length ? `${label("Схоже на те, що ви шукаєте")}${minis(similar)}` : ""}</aside>
 </div>`;
+}
+
+// Books that exist but are not on Chytai, for a search that found none here (Max, 2026-10-30): known works of our
+// authors (Wikidata), Google Books, Open Library. «Хочу прочитати» makes the book here and puts it on the reader's
+// list (POST /api/search/want); a guest signs in first and comes back to the search. Nothing anywhere: a store's
+// link, or the title and author by hand (/add).
+function outsideResults({ q, user, books }) {
+  const back = `/search?${new URLSearchParams({ q })}`;
+  if (!books.length)
+    return `<section class="block">
+  <p>Ніде не знайшли «${esc(q)}»: ні на Chytai, ні в Google Books, ні в Open Library.</p>
+  ${
+    user
+      ? `<p class="small muted">Знаєте, де вона є? Вставте посилання на книжку в магазині чи у видавництва.</p>
+  <form method="post" action="/import/list" class="edition-form"><div class="edition-row"><input name="text" type="url" placeholder="Посилання на книжку" required autocomplete="off"><button class="btn">Додати</button></div></form>
+  <p class="small muted">Або <a class="text-link" href="/add?text=${attr(encodeURIComponent(q))}">заповніть назву й автора вручну</a>.</p>`
+      : `<p class="small muted"><a class="text-link" href="/login?next=${attr(encodeURIComponent(back))}">Увійдіть</a>, щоб додати її за посиланням на магазин.</p>`
+  }
+</section>`;
+  const from = [...new Set(books.map((b) => b.from))].join(", ").replace(/, ([^,]+)$/, " і $1");
+  const row = (b) => {
+    const pick = JSON.stringify({ title: b.title, author: b.author, cover: b.cover, isbns: b.isbns, published: b.published, ol: b.ol, google: b.google, qid: b.qid, from: b.from });
+    const act = user
+      ? `<form method="post" action="/api/search/want"><input type="hidden" name="pick" value="${attr(pick)}"><input type="hidden" name="q" value="${attr(q)}"><button class="btn primary small">Хочу прочитати</button></form>`
+      : `<a class="btn primary small" href="/login?next=${attr(encodeURIComponent(back))}">Хочу прочитати</a>`;
+    const by = [b.href ? `<a href="${attr(b.href)}">${esc(b.author)}</a>` : esc(b.author), b.published, b.language].filter(Boolean).join(" · ");
+    return `<article class="row">
+  <span class="cover-link">${cover({ title: b.title, cover: b.cover }, "md")}</span>
+  <div class="row-body">
+    <h3>${esc(b.title)}</h3>
+    ${by ? `<p class="by">${by}</p>` : ""}
+    <p class="meta"><span class="muted">${esc(b.from)}</span></p>
+  </div>
+  <div class="row-act">${act}</div>
+</article>`;
+  };
+  return `<section class="block" data-block="outside">${label("Немає на Chytai, але така книжка є")}
+  <p class="small muted">Знайшли в ${esc(from)}. Натисніть «Хочу прочитати», і ми напишемо, щойно вона з’явиться в магазині чи бібліотеці.</p>
+  <div class="rows">${books.map(row).join("")}</div>
+  ${user ? `<p class="muted end-note">Не те? <a class="text-link" href="/add?text=${attr(encodeURIComponent(q))}">Вставте посилання на книжку в магазині або заповніть вручну</a></p>` : ""}
+</section>`;
 }
 
 // ---- /author/<slug> ----
@@ -2706,6 +2755,7 @@ module.exports = {
   translationsPage,
   decidedList,
   welcomePage,
+  outsideResults,
   addPage, addReviewPage, addFindResults, addPageResult, ukFindPage,
   layout, bookPage, bookEditPage, russianPage, editPage, libraryPage, readersPage, readPage, genrePage, genreTrialPage, langTrialPage, origTrialPage, overviewTrialPage, ukTrialPage, catalogAdminPage, aiPassPage, publishersPage, publisherPage, searchPage, searchResults, authorPage,
   loginPage, codePage, signupPage, settingsPage, privacyPage, updatesPage, drawPage, DRAW_PATH, messagePage, digestPage, followMailPage, wantMailPage, importPage, importPreviewPage, importDonePage,

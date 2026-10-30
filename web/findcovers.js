@@ -12,7 +12,7 @@ const { isRussian, fromOpenLibrary } = require("./store");
 
 const MONTH = 30 * 86400000;
 const DAILY = 300;
-const OWN = new Set(["manual", "goodreads", "apple-books", "office", "list", "tip", "chat", "books.md"]);
+const OWN = new Set(["manual", "goodreads", "apple-books", "office", "list", "tip", "chat", "search", "books.md"]);
 const HEADERS = { "User-Agent": "Chytai/1.0 (https://chytai.org.ua; cover lookup)" };
 const GR_COVER = /^https:\/\/[^"]*photo\.goodreads\.com\/books\/[^"]+$/; // not the «no photo» or site pictures
 const cleanIsbn = (s) => String(s || "").replace(/[^0-9Xx]/g, "").toUpperCase();

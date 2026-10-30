@@ -213,7 +213,9 @@ class Admin {
     const rows = this.db.prepare("SELECT q, SUM(n) AS n, MAX(hits) AS hits FROM search_log WHERE day >= ? GROUP BY q ORDER BY n DESC, q").all(since);
     const first = this.db.prepare("SELECT MIN(day) AS d FROM search_log").get()?.d || null;
     const clicks = this.db.prepare("SELECT SUM(n) AS n FROM taps WHERE block = 'search' AND target != 'search' AND day >= ?").get(since)?.n || 0;
-    return { clicks, since: first && first > since ? first : since, started: first, total: rows.reduce((a, r) => a + r.n, 0), queries: rows.length, none: rows.filter((r) => !r.hits).reduce((a, r) => a + r.n, 0), top: rows.slice(0, 30), empty: rows.filter((r) => !r.hits).slice(0, 30) };
+    // The block «Немає на Chytai, але така книжка є» (Max, 2026-10-30): shown, found nothing anywhere, «Хочу прочитати».
+    const out = Object.fromEntries(this.db.prepare("SELECT prop, SUM(n) AS n FROM events WHERE name = 'outside' AND day >= ? GROUP BY prop").all(since).map((r) => [r.prop, r.n]));
+    return { clicks, outside: { shown: out.shown || 0, none: out.none || 0, wanted: (out["want:new"] || 0) + (out["want:had"] || 0), made: out["want:new"] || 0 }, since: first && first > since ? first : since, started: first, total: rows.reduce((a, r) => a + r.n, 0), queries: rows.length, none: rows.filter((r) => !r.hits).reduce((a, r) => a + r.n, 0), top: rows.slice(0, 30), empty: rows.filter((r) => !r.hits).slice(0, 30) };
   }
 
   // Is this request a person worth counting? Crawlers, the owner and requests without a browser's
