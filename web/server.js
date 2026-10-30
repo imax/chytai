@@ -1327,14 +1327,44 @@ app.get("/", (req, res) => {
 app.get("/publishers", (req, res) => {
   res.send(pages.publishersPage({ user: req.user, shelves: shelvesFor(req).map((s) => shelfSummary(req, s, 4)).sort((a, b) => b.fresh - a.fresh), libraries: librariesFor(req) }));
 });
+// The publisher's books Chytai readers like most (Max, 2026-10-30: «з найвищими оцінками читачів … або у Хочу
+// прочитати»): a reader's 4–5 ★ or «Хочу прочитати» is a vote for the book, a 1–2 ★ takes one back. A translation
+// counts its original's entries too (many readers imported the English edition from Goodreads).
+function shelfFavourites(items, limit = 6) {
+  const key = (id) => {
+    const c = store.canonical(id);
+    const tr = store.translations?.get(c);
+    return tr?.size ? [c, ...tr].sort()[0] : c;
+  };
+  const mine = new Map(); // work -> the shelf's item: a Ukrainian title with a cover first
+  const rank = (it) => /[а-яіїєґ]/i.test(it.title) * 2 + !!it.cover;
+  for (const it of items) {
+    const k = key(it.id);
+    if (!mine.has(k) || rank(it) > rank(mine.get(k))) mine.set(k, it);
+  }
+  const by = new Map();
+  for (const { id, entry: e } of social.all()) {
+    const k = key(id);
+    if (!mine.has(k)) continue;
+    const x = by.get(k) || by.set(k, { item: mine.get(k), votes: 0, sum: 0, rated: 0, want: 0 }).get(k);
+    if (e.rating != null) (x.sum += e.rating), x.rated++, (x.votes += e.rating >= 4 ? 1 : e.rating <= 2 ? -1 : 0);
+    else if (e.status === "want") x.want++, x.votes++;
+  }
+  return [...by.values()]
+    .filter((x) => x.votes > 0)
+    .map((x) => ({ ...x, avg: x.rated ? Math.round((x.sum / x.rated) * 10) / 10 : null }))
+    .sort((a, b) => b.votes - a.votes || (b.avg ?? 0) - (a.avg ?? 0) || !!b.item.cover - !!a.item.cover)
+    .slice(0, limit);
+}
 app.get("/publishers/:id", (req, res) => {
   const shelf = store.shelf(req.params.id);
   if (!shelf || shelf.joinOnly || (shelf.draft && !req.owner)) return res.status(404).send(pages.messagePage({ title: "Немає такого видавництва", text: "", user: req.user }));
   const items = visible(shelf);
   const fresh = newest(items).slice(0, 6);
   const works = new Set(items.map((it) => store.canonical(it.id)));
+  const liked = shelfFavourites(items);
   const others = shelvesFor(req).filter((s) => s.id !== shelf.id).map((s) => ({ shelf: s, total: visible(s).length }));
-  res.send(pages.publisherPage({ part: restPart(req, res), shelf, subscribed: store.subscribed(req.user?.id, shelf.id), user: req.user, fresh, feed: social.feed({ limit: 6, books: works }), others, visible }));
+  res.send(pages.publisherPage({ part: restPart(req, res), shelf, subscribed: store.subscribed(req.user?.id, shelf.id), user: req.user, fresh, liked, feed: social.feed({ limit: 6, books: works }), others, visible }));
 });
 // The shelves' address before the 2026-10-20 design.
 app.get("/shelf/:id", (req, res) => res.redirect(301, `/publishers/${encodeURIComponent(req.params.id)}`));

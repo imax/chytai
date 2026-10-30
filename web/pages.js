@@ -1625,7 +1625,7 @@ ${librariesBlock(libraries)}`;
   return layout({ title: "Видавництва", body, user, path: "/publishers", canonical: "/publishers", description: "Новинки українських видавництв щодня." });
 }
 
-function publisherPage({ shelf, subscribed, user, fresh, feed, others, visible = (s) => s.items, part = "" }) {
+function publisherPage({ shelf, subscribed, user, fresh, liked = [], feed, others, visible = (s) => s.items, part = "" }) {
   const items = visible(shelf);
   const parts = twoParts(items.map((it) => [card(it, { data: ` data-genre="${attr((it.genres || []).join("|"))}" data-avail="${attr(it.status || "")}" data-search="${attr([it.title, it.author, it.authorOrig, it.altTitle].join(" ").toLowerCase())}"` })]), FIRST.grid, part);
   if (part === "rest") return parts;
@@ -1638,6 +1638,10 @@ function publisherPage({ shelf, subscribed, user, fresh, feed, others, visible =
   const newCount = items.filter((it) => it.isNew).length;
   const body = `
 ${pageHead({ crumbs: `<a href="/publishers">Видавництва</a> / ${esc(shelf.name)}`, kicker: shelf.kind === "audio" ? "Аудіокнигарня" : "Видавництво", title: esc(shelf.name), lead: esc(shelf.tagline), sub: [books(items.length), newCount ? `${newCount} ${plural(newCount, "нова", "нові", "нових")}` : "", `<a href="${attr(shelf.url)}" target="_blank" rel="noopener">${esc(host(shelf.url))} ↗</a>`].filter(Boolean).join(" · "), action: subscribeButton(shelf.id, subscribed, user, true) })}
+${liked.length >= 3 ? `<section class="block" data-block="liked">
+  ${label("Найкраще для читачів Chytai")}
+  <div class="grid six">${liked.map((x) => card(x.item, { avg: x.avg, extra: x.want ? `<p class="meta pop-n">${count(x.want, "хоче", "хочуть", "хочуть")} прочитати</p>` : "" })).join("")}</div>
+</section>` : ""}
 ${fresh.length ? `<section class="block">
   ${label("Нове")}
   <div class="grid six">${fresh.map((it) => card(it)).join("")}</div>
