@@ -12,7 +12,7 @@
 
 const SEARCH = "https://openlibrary.org/search.json";
 const HEADERS = { "User-Agent": "Chytai/1.0 (https://chytai.org.ua; book details lookup)", Accept: "application/json" };
-const FIELDS = "key,title,subtitle,author_name,cover_i,isbn,first_publish_year,number_of_pages_median,language,id_amazon";
+const FIELDS = "key,title,subtitle,author_name,cover_i,isbn,first_publish_year,number_of_pages_median,language,id_amazon,id_project_gutenberg";
 const MONTH = 30 * 86400000;
 const WEEK = 7 * 86400000;
 const OWN = new Set(["manual", "goodreads", "apple-books", "office", "list", "tip", "chat", "search"]);
@@ -52,7 +52,7 @@ const GENRE_OF = [
 // Subjects are many and noisy: a genre counts when one of the first twenty says so.
 const genresOf = (subjects) => GENRE_OF.filter(([, re]) => (subjects || []).slice(0, 20).some((x) => re.test(String(x)))).map(([g]) => g).slice(0, 3);
 // Bumped when a source is added or fixed, so every book is asked again: the per-book memory is enrich:<GEN>:<id>.
-const GEN = 6; // 3: genres, 4: a genre list for every reader, «фентезі» apart from «фантастика», 5: genres through the original, 6: recent editions' covers, Ukrainian covers from Google (2026-10-23)
+const GEN = 7; // 7: Project Gutenberg links (2026-10-30), 3: genres, 4: a genre list for every reader, «фентезі» apart from «фантастика», 5: genres through the original, 6: recent editions' covers, Ukrainian covers from Google (2026-10-23)
 
 const norm = (s) => String(s || "").toLowerCase().replace(/^(the|a|an)\s+/, "").replace(/[’'`]/g, "").replace(/[^\p{L}\p{N}]+/gu, " ").trim();
 const mainTitle = (t) => String(t || "").replace(/\s*\(.*?\)\s*/g, " ").split(/[:]/)[0].trim();
@@ -168,6 +168,9 @@ async function lookup(book, { fetchImpl = fetch, prefer = ["eng"] } = {}) {
   }
   if (!doc) return null;
   const out = { ol: doc.key };
+  // The text on Project Gutenberg, free in the US (Max, 2026-10-30: Wodehouse; a link, the file stays there).
+  const pg = (doc.id_project_gutenberg || []).find((id) => /^\d+$/.test(id));
+  if (pg) out.gutenberg = `https://www.gutenberg.org/ebooks/${pg}`;
   // A recent edition's cover when one has it; the work's own (often the first edition's) otherwise.
   const recent = await editionCover(doc.key, prefer, fetchImpl);
   if (recent) out.cover = recent;
@@ -256,6 +259,7 @@ function apply(book, info) {
   const ten = isbns.find(isbn10);
   if (ten && !has(/amazon\./)) links.push({ label: "Amazon", url: `https://www.amazon.com/dp/${ten}` });
   if (info.ol && !has(/openlibrary\.org/)) links.push({ label: "Open Library", url: `https://openlibrary.org${info.ol}` });
+  if (info.gutenberg && !has(/gutenberg\.org/)) links.push({ label: "Project Gutenberg", url: info.gutenberg });
   if (info.google && !has(/books\.google\./)) links.push({ label: "Google Books", url: info.google });
   if (links.length > (book.links || []).length) patch.links = links;
   if (info.ol && book.ol !== info.ol) patch.ol = info.ol;

@@ -65,6 +65,9 @@ const BOOK_EXT = /\.(epub|pdf)$/i;
 // gives each its title, authors and group. A book taken from the shelf (opened) shows with the reader's own
 // books too. Reading needs an account (Max: «акаунт потрібен щоб читати»).
 const FREE_DIR = path.join(ROOT, "free");
+// Shelf books kept off the public repo, on the volume (DATA_DIR/free/<name>.epub); free/shelf.json still lists them.
+// For books free here but still protected in the US, where GitHub is (Orwell, Max 2026-10-30).
+const FREE_VOLUME_DIR = path.join(DATA_DIR, "free");
 const FREE_CACHE = path.join(DATA_DIR, "free-cache.json");
 const MAX_UPLOAD = "300mb";
 // Days in the usage stats (/admin) are counted in this time zone, and kept for this long.
@@ -386,7 +389,7 @@ function wishStats(library) {
 // What a guest may open: the book of their link, or the demo.
 function guestBooks(req) {
   if (req.share) return [{ dir: libOf(req.share.acct).dir, name: req.share.book }];
-  if (req.free) return [{ dir: FREE_DIR, name: req.free }];
+  if (req.free) return [{ dir: freeDir(req.free), name: req.free }];
   return demoBooks();
 }
 
@@ -401,15 +404,19 @@ const notYet = (name) => {
   const from = freeShelf.find((f) => f.name === name)?.from;
   return !!from && statsDay() < from;
 };
-// [{ dir, name }] of the free books.
+// [{ dir, name }] of the free books, the repo's first.
 function freeBooks() {
-  try {
-    return fs.readdirSync(FREE_DIR).filter((n) => !n.startsWith(".") && BOOK_EXT.test(n) && !notYet(n)).sort().map((name) => ({ dir: FREE_DIR, name }));
-  } catch {
-    return [];
-  }
+  const seen = new Set();
+  return [FREE_DIR, FREE_VOLUME_DIR].flatMap((dir) => {
+    try {
+      return fs.readdirSync(dir).filter((n) => !n.startsWith(".") && BOOK_EXT.test(n) && !notYet(n) && !seen.has(n) && seen.add(n)).sort().map((name) => ({ dir, name }));
+    } catch {
+      return [];
+    }
+  });
 }
 const isFree = (name) => !!name && freeBooks().some((f) => f.name === name);
+const freeDir = (name) => freeBooks().find((f) => f.name === name)?.dir || FREE_DIR;
 // Publishers' books: on the volume, read chapter by chapter, the beginning only outside the app (server/protected.js).
 const prot = createProtected({ dir: path.join(DATA_DIR, "protected"), day: () => statsDay() });
 const inApp = (req) => /ChytaiApp/.test(req.get("user-agent") || "");
@@ -425,7 +432,7 @@ function readerFile(lib, name) {
   if (!name) return null;
   const own = bookFile(lib, name);
   if (fs.existsSync(own)) return own;
-  if (isFree(name)) return path.join(FREE_DIR, name);
+  if (isFree(name)) return path.join(freeDir(name), name);
   return prot.has(name) ? path.join(prot.dir, name) : own;
 }
 
@@ -764,7 +771,7 @@ const fileAllowed = (name) => ((f) => !f?.permission && f?.group !== "З доз�
 app.get("/free-file/:name", (req, res) => {
   const name = safeBookName(req.params.name);
   if (!name || !isFree(name) || !fileAllowed(name)) return res.status(404).end();
-  res.download(path.join(FREE_DIR, name), name);
+  res.download(path.join(freeDir(name), name), name);
 });
 // The free book this guest reads, while it is still on the shelf.
 function currentFree(req) {
@@ -1122,7 +1129,7 @@ api.get("/library", async (req, res) => {
   if (!req.guest) {
     const own = new Set(list.map((b) => b.path));
     const shelf = new Map(freeShelf.map((f, i) => [f.name, { ...f, order: i }]));
-    const scanned = await library.scan([FREE_DIR], FREE_CACHE).catch(() => []);
+    const scanned = await library.scan([FREE_DIR, FREE_VOLUME_DIR].filter((d) => fs.existsSync(d)), FREE_CACHE).catch(() => []);
     free = scanned
       .filter((b) => !notYet(path.basename(b.path)))
       .map((b) => {
@@ -1263,7 +1270,7 @@ api.get("/cover", async (req, res) => {
   const demo = req.guest ? guestBooks(req).find((d) => d.name === name) : null;
   const file = req.guest ? demo && path.join(demo.dir, demo.name) : readerFile(req.lib, name);
   if (!file || !fs.existsSync(file)) return res.status(404).end();
-  const custom = !req.guest && (customCover(req.lib, name) || (file.startsWith(FREE_DIR + path.sep) && freeCover(name)));
+  const custom = !req.guest && (customCover(req.lib, name) || ([FREE_DIR, FREE_VOLUME_DIR].some((d) => file.startsWith(d + path.sep)) && freeCover(name)));
   if (custom) {
     res.setHeader("Cache-Control", "private, max-age=2592000, immutable");
     return res.type(COVER_TYPES[path.extname(custom).slice(1)]).sendFile(custom);
