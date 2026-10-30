@@ -4,7 +4,16 @@
   "lobster-8110": "mickey7",
   "lobster-8109": "we-are-legion-bobiverse"
  },
- "different": [],
+ "different": [
+  ["starylev-2805", "starylev-2723"],
+  ["bookchef-927330", "bookchef-672616"],
+  ["bookchef-353642", "bookchef-596523"],
+  ["bookua-kraina-oz-tom-1", "bookua-kraina-oz-tom-2"],
+  ["safran-171614", "safran-991904"],
+  ["safran-581708", "safran-330144"],
+  ["safran-501236", "safran-082144"],
+  ["safran-210900", "safran-216443"]
+ ],
  "authorNames": {
   "Артур Дойль": "Артур Конан Дойль"
  },

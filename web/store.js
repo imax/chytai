@@ -161,6 +161,10 @@ const SHOP_GENRES = [
 ];
 const OUR_GENRES = new Set(SHOP_GENRES.map(([g]) => g).concat(["компанії", "продукт"]));
 const genreMemo = new Map();
+// Comics and manga a shop sells without a genre (/admin/volumes, 2026-10-30): the word in the title or blurb,
+// or a comics imprint. Each of their volumes is read on its own, so they never fold into one book.
+const COMIC = /(?<![\p{L}])ман[гґ](а|и|у|ою|ами|ах)(?![\p{L}])|маньхв|манхв|комікс|вебтун/iu;
+const COMIC_IMPRINTS = new Set(["Nasha idea", "Mal'opus"]);
 const ourGenres = (names) => {
   const out = new Set();
   for (const n of names || []) {
@@ -1384,7 +1388,7 @@ class Store {
       const all = [...vs.map((v) => v.si), ...whole];
       if (!vs.length || new Set(all.map((si) => norm(si.item.title))).size < 2) continue;
       const genres = (it) => [...(this.aiGenres().get(it.id) || []), ...ourGenres(it.genres)];
-      if (all.some((si) => genres(si.item).includes("комікси"))) continue;
+      if (all.some((si) => genres(si.item).includes("комікси") || COMIC.test(`${si.item.title} ${si.item.blurb || ""}`) || COMIC_IMPRINTS.has(si.item.edition))) continue;
       if (new Set(all.map((si) => origOf(si.item)).filter(Boolean)).size > 1) continue;
       if (all.some((a) => all.some((b) => no.has(`${a.item.id}|${b.item.id}`)))) continue;
       const name = (vs.find((v) => !v.si.lib) || vs[0]).base;
