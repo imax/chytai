@@ -1619,7 +1619,7 @@ ${pageHead({ kicker: "Вітрина", title: "Українські видавн
 <section>
   ${label(count(shelves.length, "видавництво", "видавництва", "видавництв"), `<span class="tabs" data-sort-pubs><button type="button" class="tab on" data-v="fresh">за новинками</button><button type="button" class="tab" data-v="name">за назвою</button></span>`)}
   <div class="pubs">${shelves.map(row).join("")}</div>
-  <p class="muted end-note">Видавництво, якого тут немає? <a class="text-link" href="mailto:ischenko@gmail.com">Напишіть нам</a>, під’єднаємо.</p>
+  <p class="muted end-note">Видавництво, якого тут немає? <a class="text-link" href="mailto:ischenko@gmail.com">Напишіть нам</a>, під’єднаємо. Про електронні книжки в Читалці: <a class="text-link" href="/for-publishers">видавництвам</a>.</p>
 </section>
 ${librariesBlock(libraries)}`;
   return layout({ title: "Видавництва", body, user, path: "/publishers", canonical: "/publishers", description: "Новинки українських видавництв щодня." });
@@ -2135,6 +2135,41 @@ function consentPage({ user, client, host, fields }) {
   <div class="actions"><button class="btn primary" name="allow" value="1">Дозволити</button><button class="btn" name="allow" value="0">Скасувати</button></div>
 </form>`;
   return authLayout({ title: "Підключити чат до Chytai", lead: "", form, user, path: "/settings" });
+}
+
+// For publishers (Max, 2026-10-30): what Chytai offers a publisher, how protected books and reports work.
+// The facts follow docs/publisher-requirements.md; Max edits the wording.
+function forPublishersPage({ user }) {
+  return layout({ title: "Видавництвам", user, path: "/for-publishers", canonical: "/for-publishers", description: "Як видавництва працюють з Chytai: сторінки книжок, захищені електронні книжки в Читалці, щомісячні звіти.", body: `<section class="auth prose"><h1>Видавництвам</h1>
+<p>Chytai це некомерційний сайт і читалка для українських читачів. Ми хочемо, щоб в Україні більше читали і дочитували книжки. З читачів не беремо грошей, реклами немає.</p>
+<h2>Що вже є для ваших книжок</h2>
+<ul>
+<li>Сторінка кожної книжки в каталозі, а в блоці «Де взяти» посилання на ваш магазин. Самі ми нічого не продаємо.</li>
+<li><a class="text-link" href="/publishers">Сторінка видавництва</a> з новинками і книжками, які найбільше подобаються читачам Chytai.</li>
+<li>Лист читачеві, коли книжка з його «Хочу прочитати» з'являється в продажу, українською чи безкоштовно.</li>
+</ul>
+<h2>Електронні книжки в Читалці</h2>
+<p>Якщо ви дозволите, ваші книжки можна читати в Читалці Chytai: з поясненнями від Claude і нотатками.</p>
+<ul>
+<li><strong>Файл не залишає сервер.</strong> Читалка отримує книжку по розділу і лише після входу в акаунт. Скачати EPUB не можна, на пристрої книжка не зберігається.</li>
+<li><strong>У браузері лише початок,</strong> близько 10% тексту. Повністю книжку можна читати в додатку Chytai для iPhone і Android, де заблоковані скріншоти й запис екрана.</li>
+<li><strong>Без друку,</strong> а скопіювати можна лише цитату, до 500 знаків.</li>
+<li><strong>Ліміти</strong> на кількість сторінок і книжок за день не дають викачати книжку скриптом.</li>
+</ul>
+<p>Від фото екрана іншим телефоном не захищає жодна читалка, зокрема й наша.</p>
+<h2>Звіти</h2>
+<p>Першого числа щомісяця ви отримуєте лист із таблицею і CSV по кожній книжці за минулий місяць:</p>
+<ul>
+<li>скільки читачів її відкрили;</li>
+<li>скільки почали (прочитали понад 10%) і скільки дочитали (понад 90%);</li>
+<li>скільки сторінок прочитали, по 1500 знаків, як рахує Kindle Unlimited.</li>
+</ul>
+<p>Що з цього брати для розрахунку з авторами й правовласниками, вирішуєте ви. Хто саме читав, ми не передаємо, лише числа.</p>
+<h2>Пояснення від Claude</h2>
+<p>Читач може виділити слово чи речення і попросити пояснення. Тоді уривок іде в Anthropic, компанію, що робить Claude. Anthropic не навчає свої моделі на цих запитах. Якщо ви проти цього для своїх книжок, домовимося.</p>
+<h2>Як почати</h2>
+<p>Напишіть Максиму Іщенку на <a class="text-link" href="mailto:ischenko@gmail.com">ischenko@gmail.com</a>. Можна почати з кількох книжок і подивитися на перший звіт.</p>
+</section>` });
 }
 
 // Max (2026-10-20): any new outside service that sees readers' data (mail, hosting, fonts, analytics, AI) must be added here.
@@ -2801,6 +2836,6 @@ module.exports = {
   outsideResults,
   addPage, addReviewPage, addFindResults, addPageResult, ukFindPage,
   layout, bookPage, bookEditPage, russianPage, editPage, libraryPage, readersPage, readPage, genrePage, genreTrialPage, langTrialPage, origTrialPage, overviewTrialPage, ukTrialPage, catalogAdminPage, aiPassPage, publishersPage, publisherPage, publisherFavouritesPage, searchPage, searchResults, authorPage,
-  loginPage, codePage, signupPage, settingsPage, privacyPage, updatesPage, drawPage, DRAW_PATH, messagePage, digestPage, followMailPage, wantMailPage, importPage, importPreviewPage, importDonePage,
+  loginPage, codePage, signupPage, settingsPage, privacyPage, forPublishersPage, updatesPage, drawPage, DRAW_PATH, messagePage, digestPage, followMailPage, wantMailPage, importPage, importPreviewPage, importDonePage,
   GENRES, esc, byline, STATUS, COPY, inline, isUk, setTitleLinks, setAuthorLinks, setThumbs, setStats, setReadersWithNote,
 };

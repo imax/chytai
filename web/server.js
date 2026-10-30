@@ -583,6 +583,7 @@ app.post("/api/readers-gone", (req, res) => {
 });
 
 app.get("/privacy", (req, res) => res.send(pages.privacyPage({ user: req.user })));
+app.get("/for-publishers", (req, res) => res.send(pages.forPublishersPage({ user: req.user })));
 app.get("/updates", (req, res) => res.send(pages.updatesPage({ user: req.user })));
 // The weekly draw (draw.js, Max 2026-10-28): the page with the rules, «Беру участь», and the reader's state.
 const draw = new (require("./draw").Draw)({ store, auth, ownerId: OWNER_ID });
