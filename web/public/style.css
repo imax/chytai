@@ -458,6 +458,10 @@ dialog .form { margin-top: 18px; }
   .search-box.big { margin-top: 22px; }
   .search-box.big input { font-size: 21px; padding-bottom: 10px; }
   .search-box.query input { font-size: 28px; }
+  /* Results start higher on a phone (Max 2026-10-30: too much empty space above them). */
+  .search-box.query { margin-top: 0; }
+  .found { margin: 12px 0 24px; }
+  .row.big { padding: 20px 0; gap: 20px; }
   .search-box .enter { display: none; }
   .starts { font-size: 13px; gap: 6px 14px; }
   .starts span { display: none; }

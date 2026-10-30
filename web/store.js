@@ -102,13 +102,14 @@ const blurbOf = (h) => {
   }
   return b;
 };
-// Latin look-alikes inside a Cyrillic word are Cyrillic: a reader's «Iлiада» (Latin I and i) is «Іліада» (Max, 2026-10-30).
-const LOOK = { a: "а", c: "с", e: "е", i: "і", o: "о", p: "р", x: "х", y: "у" };
-const cyrWord = (t) => (/[a-z]/.test(t) && /[а-яіїєґ]/.test(t) ? t.replace(/\S+/g, (w) => (/[а-яіїєґ]/.test(w) ? w.replace(/[aceiopxy]/g, (c) => LOOK[c]) : w)) : t);
-const norm = (s) => cyrWord(String(s || "").toLowerCase()).replace(/^(the|a)\s+/, "").replace(/[^\p{L}\p{N}]+/gu, " ").trim();
 // Letters search takes as one (Max 2026-10-30: «Проект Аве Марія» found nothing, the book is «Проєкт…»): the index
 // keeps a folded copy of each title, and the query is folded before it is looked up.
 const fold = (s) => String(s || "").replace(/є/g, "е").replace(/Є/g, "Е").replace(/ґ/g, "г").replace(/Ґ/g, "Г");
+// Latin look-alikes inside a Cyrillic word are Cyrillic: a reader's «Iлiада» (Latin I and i) is «Іліада» (Max, 2026-10-30).
+const LOOK = { a: "а", c: "с", e: "е", i: "і", o: "о", p: "р", x: "х", y: "у" };
+const cyrWord = (t) => (/[a-z]/.test(t) && /[а-яіїєґ]/.test(t) ? t.replace(/\S+/g, (w) => (/[а-яіїєґ]/.test(w) ? w.replace(/[aceiopxy]/g, (c) => LOOK[c]) : w)) : t);
+// ґ is г and є is е when titles are compared: «Діти капітана Ґранта» (КСД) is a reader's «…Гранта» (Max, 2026-10-30).
+const norm = (s) => fold(cyrWord(String(s || "").toLowerCase())).replace(/^(the|a)\s+/, "").replace(/[^\p{L}\p{N}]+/gu, " ").trim();
 // Ukrainian number words as digits, for comparing titles: «Дванадцять обручів» is «12 обручів», «Двадцять сім» 27
 // (Max 2026-10-29). Applied to a norm()ed title, where «п'ять» is «п ять».
 const NUMS = { нуль: 0, один: 1, одна: 1, одне: 1, два: 2, дві: 2, три: 3, чотири: 4, "п ять": 5, шість: 6, сім: 7, вісім: 8, "дев ять": 9, десять: 10, одинадцять: 11, дванадцять: 12, тринадцять: 13, чотирнадцять: 14, "п ятнадцять": 15, шістнадцять: 16, сімнадцять: 17, вісімнадцять: 18, "дев ятнадцять": 19, двадцять: 20, тридцять: 30, сорок: 40, "п ятдесят": 50, шістдесят: 60, сімдесят: 70, вісімдесят: 80, "дев яносто": 90, сто: 100 };
