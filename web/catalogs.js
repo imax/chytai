@@ -1007,6 +1007,8 @@ const SOURCES = [
   mbooks({ id: "klio", slug: "klio", brand: "Кліо", name: "Кліо", tagline: "Історія України", url: "https://mbooks.com.ua/publishers/klio/", draft: false }),
   mbooks({ id: "litopys", slug: "litopys", brand: "Літопис", name: "Літопис", tagline: "Львівське видавництво: історія, філософія, проза", url: "https://mbooks.com.ua/publishers/litopys/", draft: false }),
   mbooks({ id: "tamaryn", slug: "borodatyi-tamaryn", brand: "Бородатий Тамарин", name: "Бородатий тамарин", tagline: "Науково-популярні книжки", url: "https://mbooks.com.ua/publishers/borodatyi-tamaryn/", draft: false }),
+  // Max 2026-10-30: «Метод Казана» was searched and missing (thread «Покращити пошук книжок, яких немає в каталозі»).
+  mbooks({ id: "projector", slug: "projector-publishing", brand: "Projector Publishing", name: "Projector Publishing", tagline: "Книжки про дизайн, креативність і роботу", url: "https://mbooks.com.ua/publishers/projector-publishing/", draft: false }),
   mbooks({ id: "zaliznyitato", slug: "zaliznyi-tato", brand: "Залізний тато", name: "Залізний тато", tagline: "Військова історія й мемуари", url: "https://mbooks.com.ua/publishers/zaliznyi-tato/", draft: false }),
   mbooks({ id: "propala", slug: "propala-hramota", brand: "Пропала Грамота", name: "Пропала грамота", tagline: "Історія, мемуари й пригоди", url: "https://mbooks.com.ua/publishers/propala-hramota/", draft: false }),
   mbooks({ id: "cwp", slug: "creative-women-publishing", brand: "Creative Women Publishing", name: "Creative Women Publishing", tagline: "Проза й нонфікшн про жінок в Україні", url: "https://mbooks.com.ua/publishers/creative-women-publishing/", draft: false }),
