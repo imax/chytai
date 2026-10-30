@@ -1453,8 +1453,15 @@ app.get("/api/search/outside", async (req, res) => {
       Promise.race([enrich.searchGoogle(q, process.env.GOOGLE_BOOKS_KEY || ""), new Promise((r) => setTimeout(() => r([]), 6000))]),
       Promise.race([enrich.searchOpenLibrary(q, { limit: 4 }), new Promise((r) => setTimeout(() => r([]), 6000))]),
     ]);
-    for (const b of google) put({ ...b, from: "Google Books" });
-    for (const b of ol) put({ ...b, from: "Open Library" });
+    // Only what the words name (Max 2026-10-30: «метод казана» got a Tatar anthology from Google): every word typed
+    // starts a word of the title or the author, give or take a Ukrainian ending; no Russian titles.
+    const terms = folded(q).split(" ").filter(Boolean);
+    const named = (b) => {
+      const words = folded(`${b.title} ${b.author}`).split(" ");
+      return !/[ыэъё]/i.test(b.title) && terms.every((t) => words.some((w) => w.startsWith(t.length >= 5 ? t.slice(0, t.length - 2) : t)));
+    };
+    for (const b of google.filter(named)) put({ ...b, from: "Google Books" });
+    for (const b of ol.filter(named)) put({ ...b, from: "Open Library" });
   }
   admin.event(req, req.user?.id, "outside", out.length ? "shown" : "none");
   res.set("Cache-Control", "no-store").send(pages.outsideResults({ q, user: req.user, books: out }));
