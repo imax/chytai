@@ -1066,9 +1066,10 @@ aside .side-lists + .label, aside p + .label, aside dialog + .label { margin-top
 .status-acts > summary.have:hover, .status-acts[open] > summary.have { background: var(--accent); color: var(--on-accent); }
 .status-acts .caret { font-size: 11px; margin-left: 4px; }
 .status-acts .more-menu { left: 0; right: auto; }
-.want-split { display: inline-flex; }
+.want-split { display: inline-flex; align-items: stretch; }
+.want-split > form, .want-split .status-acts { display: flex; }
 .want-split > form .btn, .want-split > a.btn { border-top-right-radius: 0; border-bottom-right-radius: 0; padding-right: 18px; }
-.want-split .status-acts > summary { padding: 11px 14px; border-radius: 0 999px 999px 0; border-left: 1px solid rgba(255, 255, 255, 0.35); letter-spacing: 0; font-size: 13px; }
+.want-split .status-acts > summary { display: flex; align-items: center; padding: 11px 14px; border-radius: 0 999px 999px 0; border-left: 1px solid rgba(255, 255, 255, 0.35); letter-spacing: 0; font-size: 13px; }
 .want-split .status-acts[open] > summary { background: var(--accent-hover); color: var(--on-accent); }
 .more-menu .on { display: block; padding: 11px 18px; font-size: 14px; font-weight: 600; color: var(--accent); }
 .more-menu .on::before { content: "✓ "; }
