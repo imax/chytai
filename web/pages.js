@@ -1625,6 +1625,19 @@ ${librariesBlock(libraries)}`;
   return layout({ title: "Видавництва", body, user, path: "/publishers", canonical: "/publishers", description: "Новинки українських видавництв щодня." });
 }
 
+// A book readers like, with its stars and how many want to read it.
+const favCard = (x) => card(x.item, { avg: x.avg, extra: x.want ? `<p class="meta pop-n">${count(x.want, "хоче", "хочуть", "хочуть")} прочитати</p>` : "" });
+
+// All of a publisher's books Chytai readers like (/publishers/:id/favourites, Max 2026-10-30).
+function publisherFavouritesPage({ shelf, user, liked }) {
+  const body = `
+${pageHead({ crumbs: `<a href="/publishers">Видавництва</a> / <a href="/publishers/${attr(shelf.id)}">${esc(shelf.name)}</a>`, kicker: esc(shelf.name), title: "Фаворити читачів Chytai", sub: books(liked.length) })}
+<section class="block">
+  ${liked.length ? `<div class="grid six">${liked.map(favCard).join("")}</div>` : `<p class="empty">Читачі ще не оцінили книжок цього видавництва.</p>`}
+</section>`;
+  return layout({ title: `Фаворити читачів · ${shelf.name}`, body, user, path: "/publishers", canonical: `/publishers/${encodeURIComponent(shelf.id)}/favourites`, description: `Книжки ${shelf.name}, які читачі Chytai оцінили найвище або хочуть прочитати.` });
+}
+
 function publisherPage({ shelf, subscribed, user, fresh, liked = [], feed, others, visible = (s) => s.items, part = "" }) {
   const items = visible(shelf);
   const parts = twoParts(items.map((it) => [card(it, { data: ` data-genre="${attr((it.genres || []).join("|"))}" data-avail="${attr(it.status || "")}" data-search="${attr([it.title, it.author, it.authorOrig, it.altTitle].join(" ").toLowerCase())}"` })]), FIRST.grid, part);
@@ -1639,8 +1652,8 @@ function publisherPage({ shelf, subscribed, user, fresh, liked = [], feed, other
   const body = `
 ${pageHead({ crumbs: `<a href="/publishers">Видавництва</a> / ${esc(shelf.name)}`, kicker: shelf.kind === "audio" ? "Аудіокнигарня" : "Видавництво", title: esc(shelf.name), lead: esc(shelf.tagline), sub: [books(items.length), newCount ? `${newCount} ${plural(newCount, "нова", "нові", "нових")}` : "", `<a href="${attr(shelf.url)}" target="_blank" rel="noopener">${esc(host(shelf.url))} ↗</a>`].filter(Boolean).join(" · "), action: subscribeButton(shelf.id, subscribed, user, true) })}
 ${liked.length >= 3 ? `<section class="block" data-block="liked">
-  ${label("Фаворити читачів Chytai")}
-  <div class="grid six">${liked.map((x) => card(x.item, { avg: x.avg, extra: x.want ? `<p class="meta pop-n">${count(x.want, "хоче", "хочуть", "хочуть")} прочитати</p>` : "" })).join("")}</div>
+  ${label("Фаворити читачів Chytai", liked.length > 6 ? `<a href="/publishers/${attr(shelf.id)}/favourites">усі ${liked.length}</a>` : "")}
+  <div class="grid six">${liked.slice(0, 6).map(favCard).join("")}</div>
 </section>` : ""}
 ${fresh.length ? `<section class="block">
   ${label("Нове")}
@@ -2757,7 +2770,7 @@ module.exports = {
   welcomePage,
   outsideResults,
   addPage, addReviewPage, addFindResults, addPageResult, ukFindPage,
-  layout, bookPage, bookEditPage, russianPage, editPage, libraryPage, readersPage, readPage, genrePage, genreTrialPage, langTrialPage, origTrialPage, overviewTrialPage, ukTrialPage, catalogAdminPage, aiPassPage, publishersPage, publisherPage, searchPage, searchResults, authorPage,
+  layout, bookPage, bookEditPage, russianPage, editPage, libraryPage, readersPage, readPage, genrePage, genreTrialPage, langTrialPage, origTrialPage, overviewTrialPage, ukTrialPage, catalogAdminPage, aiPassPage, publishersPage, publisherPage, publisherFavouritesPage, searchPage, searchResults, authorPage,
   loginPage, codePage, signupPage, settingsPage, privacyPage, updatesPage, drawPage, DRAW_PATH, messagePage, digestPage, followMailPage, wantMailPage, importPage, importPreviewPage, importDonePage,
   GENRES, esc, byline, STATUS, COPY, inline, isUk, setTitleLinks, setAuthorLinks, setThumbs, setStats, setReadersWithNote,
 };

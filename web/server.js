@@ -1330,7 +1330,7 @@ app.get("/publishers", (req, res) => {
 // The publisher's books Chytai readers like most (Max, 2026-10-30: «з найвищими оцінками читачів … або у Хочу
 // прочитати»): a reader's 4–5 ★ or «Хочу прочитати» is a vote for the book, a 1–2 ★ takes one back. A translation
 // counts its original's entries too (many readers imported the English edition from Goodreads).
-function shelfFavourites(items, limit = 6) {
+function shelfFavourites(items, limit = Infinity) {
   const key = (id) => {
     const c = store.canonical(id);
     const tr = store.translations?.get(c);
@@ -1365,6 +1365,11 @@ app.get("/publishers/:id", (req, res) => {
   const liked = shelfFavourites(items);
   const others = shelvesFor(req).filter((s) => s.id !== shelf.id).map((s) => ({ shelf: s, total: visible(s).length }));
   res.send(pages.publisherPage({ part: restPart(req, res), shelf, subscribed: store.subscribed(req.user?.id, shelf.id), user: req.user, fresh, liked, feed: social.feed({ limit: 6, books: works }), others, visible }));
+});
+app.get("/publishers/:id/favourites", (req, res) => {
+  const shelf = store.shelf(req.params.id);
+  if (!shelf || shelf.joinOnly || (shelf.draft && !req.owner)) return res.status(404).send(pages.messagePage({ title: "Немає такого видавництва", text: "", user: req.user }));
+  res.send(pages.publisherFavouritesPage({ shelf, user: req.user, liked: shelfFavourites(visible(shelf)) }));
 });
 // The shelves' address before the 2026-10-20 design.
 app.get("/shelf/:id", (req, res) => res.redirect(301, `/publishers/${encodeURIComponent(req.params.id)}`));
