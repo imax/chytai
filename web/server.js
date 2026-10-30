@@ -526,6 +526,18 @@ app.post("/api/reader-library", (req, res) => {
   });
   res.json({ ok: true, books: books.length });
 });
+// Chapters of publishers' protected books read in the reader (server/reads.js), for the publishers' reports.
+// Signed with the account's key; the owner's key also sends the whole protected shelf (shelf: true).
+app.post("/api/reads", (req, res) => {
+  const id = String(req.body?.id || "");
+  const key = String(req.body?.key || "");
+  const want = auth.reader(id) && readerKey(id);
+  if (!want || key.length !== want.length || !require("crypto").timingSafeEqual(Buffer.from(key), Buffer.from(want))) return res.status(403).json({ error: "key" });
+  const reads = Array.isArray(req.body?.reads) ? req.body.reads : [];
+  const books = req.body?.books && typeof req.body.books === "object" ? req.body.books : {};
+  reports.add(id, reads, books, id === OWNER_ID && req.body?.shelf === true);
+  res.json({ ok: true, reads: reads.length });
+});
 // The reader's file of this book, if the signed-in reader has one: same title (or the original's, or
 // another edition's) and, when both name an author in the same alphabet, a shared surname.
 function readerFileFor(readerId, book) {
@@ -875,6 +887,9 @@ if (bg.background) digest.schedule();
 // «Книжка з вашого «Хочу прочитати» тепер є» (wantmail.js): once a day, a letter of its own (Max, 2026-10-25).
 const wantMail = new (require("./wantmail").WantMail)({ store, auth, digest, site: SITE, ownerId: OWNER_ID, to: process.env.WEB_WANTMAIL_TO === "owner" ? "owner" : "all" });
 if (bg.background) wantMail.schedule();
+// Publishers' reading reports (reports.js, Max 2026-10-30): a letter with CSV on the 1st, 10:00 Kyiv, for last month.
+const reports = new (require("./reports").Reports)({ db: store.db, auth, ownerEmail: () => process.env.WEB_NOTIFY_EMAIL || auth.reader(OWNER_ID)?.email || "" });
+if (bg.background) reports.schedule();
 // The welcome letter right after sign-up (welcome-mail.js), while the owner has it switched on.
 const welcomeMail = new WelcomeMail({ store, auth, site: SITE, ownerId: OWNER_ID });
 pages.setReadersWithNote((id) => readersOf(id).find((r) => r.entry.note) || null);
@@ -1097,6 +1112,31 @@ app.post("/api/lists/comments/:cid/delete", signed, (req, res) => {
   if (c.reader !== req.user.id && l.reader.id !== req.user.id && !req.owner) return res.status(403).send(pages.messagePage({ title: "Це не ваш коментар", text: "", user: req.user }));
   lists.dropComment(c.id);
   res.redirect(303, req.body.back === "admin" ? "/admin/comments" : `${l.href}#club`);
+});
+app.get("/admin/publishers", owner, (req, res) => {
+  const { monthName, prevMonth, dayKyiv } = require("./reports");
+  const now = dayKyiv(new Date()).slice(0, 7);
+  const months = [now];
+  for (let i = 0; i < 5; i++) months.push(prevMonth(months[months.length - 1]));
+  const month = months.includes(String(req.query.month)) ? String(req.query.month) : prevMonth(now);
+  const rows = reports.month(month).map((r) => ({ ...r, href: r.site_id && store.book(r.site_id) ? store.href(r.site_id) : "" }));
+  res.send(pages.publisherReportsPage({ user: req.user, month, months, monthName, publishers: reports.publishers(), rows, sent: reports.sentFor(month), saved: String(req.query.saved || ""), tested: String(req.query.tested || "") }));
+});
+app.post("/admin/publishers", owner, async (req, res) => {
+  const name = String(req.body?.publisher || "").slice(0, 100);
+  const month = /^\d{4}-\d\d$/.test(String(req.body?.month)) ? String(req.body.month) : require("./reports").prevMonth(require("./reports").dayKyiv(new Date()).slice(0, 7));
+  if (!name) return res.redirect("/admin/publishers");
+  if (req.body?.test) {
+    const to = process.env.WEB_NOTIFY_EMAIL || req.user.email;
+    try {
+      await reports.send(name, month, to);
+    } catch (e) {
+      return res.status(500).send(`Не вдалося надіслати: ${e.message}`);
+    }
+    return res.redirect(`/admin/publishers?month=${month}&tested=${encodeURIComponent(name)}`);
+  }
+  reports.setEmails(name, req.body?.emails);
+  res.redirect(`/admin/publishers?month=${month}&saved=${encodeURIComponent(name)}`);
 });
 app.get("/admin/comments", owner, (req, res) => res.send(pages.commentsAdminPage({ user: req.user, comments: lists.recentComments() })));
 app.post("/api/lists/:id/delete", signed, myList, (req, res) => (lists.remove(req.list.id), res.redirect(303, req.user.href)));

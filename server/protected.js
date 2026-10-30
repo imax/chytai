@@ -27,10 +27,10 @@ const TYPES = {
 
 // Called once a reader has actually seen a chapter of a protected book (the page reports it; epub.js also
 // loads chapters it only measures or searches, so serving one is not reading it). Deduplicated here per
-// reader, book, chapter and day. The publishers' reports (thread «Зробити звіти про читання для видавців»)
-// fill this in.
-// eslint-disable-next-line no-unused-vars
-function recordRead({ reader, book, chapter, chars, chapters }) {}
+// reader, book, chapter and day. It goes to the publishers' reports (reads.js, web/reports.js).
+function recordRead(e) {
+  require("./reads").record(e);
+}
 
 function createProtected({ dir, day }) {
   const cache = new Map(); // name -> { mtime, zip, spine: [{ path, chars }], open: count of readable spine items }
@@ -126,7 +126,7 @@ function createProtected({ dir, day }) {
     if (seen.size > 200000) seen.clear();
     seen.add(key);
     const book = await load(name);
-    recordRead({ reader, book: name, chapter, chars: book.spine[chapter].chars, chapters: book.spine.length });
+    recordRead({ reader, book: name, chapter, chars: book.spine[chapter].chars, chapters: book.spine.length, total: book.spine.reduce((s, c) => s + c.chars, 0) });
     return true;
   }
 
@@ -146,7 +146,10 @@ function createProtected({ dir, day }) {
   // What the page needs to open it: whether it gets the whole book here.
   const info = (full) => ({ protected: true, preview: !full });
 
-  return { has, serve, read, info, meta, dir };
+  // Every entry of shelf.json, for the publishers' reports.
+  const metas = () => (meta(""), shelf.list);
+
+  return { has, serve, read, info, meta, metas, dir };
 }
 
 module.exports = { createProtected, recordRead };

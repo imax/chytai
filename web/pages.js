@@ -499,7 +499,7 @@ ${myLists ? listsDialog(book, myLists) : ""}`;
 const ADMIN_TABS = [
   ["Огляд", [["/admin", "Огляд"]]],
   ["Трафік", [["/admin/traffic", "Трафік"]]],
-  ["Читачі", [["/admin/readers", "Усі читачі"], ["/admin/activity", "Що роблять"], ["/admin/comments", "Коментарі"], ["/admin/digest", "Лист"]]],
+  ["Читачі", [["/admin/readers", "Усі читачі"], ["/admin/activity", "Що роблять"], ["/admin/comments", "Коментарі"], ["/admin/digest", "Лист"], ["/admin/publishers", "Видавцям"]]],
   ["Каталог", [["/admin/catalog", "Каталог"]], /^\/admin\/(catalog|shelves|overviews|dupes|translations|volumes|russian|ukfind|readeat|free|ai\/|book\/|reviews)|-trial$/],
   ["Система", [["/admin/jobs", "Задачі"], ["/admin/speed", "Швидкість"]]],
 ];
@@ -2722,6 +2722,34 @@ ${comments.map((c) => `<div class="cmt"><p class="who">${c.reader ? `<a href="${
   return layout({ title: "Клуб Chytai", body, user, path: "/admin", noindex: true });
 }
 
+// ---- /admin/publishers: the publishers' monthly reading reports (reports.js) ----
+
+function publisherReportsPage({ user, month, months, monthName, publishers, rows, sent, saved, tested }) {
+  const n = (v) => String(v).replace(/\B(?=(\d{3})+(?!\d))/g, " ");
+  const table = (list) => `<table class="trial"><thead><tr><th>Книжка</th><th>Читачів</th><th>≥10%</th><th>Дочитали</th><th>Сторінок</th></tr></thead><tbody>${list.map((r) => `<tr><td>${r.href ? `<a href="${attr(r.href)}">${esc(r.title || r.book)}</a>` : esc(r.title || r.book)}${r.authors ? `<br><span class="small muted">${esc(r.authors)}</span>` : ""}${r.on_shelf ? "" : ` <span class="small muted">· знято з полиці</span>`}</td><td>${n(r.readers)}</td><td>${n(r.started)}</td><td>${n(r.finished)}</td><td>${n(r.pages)}</td></tr>`).join("")}</tbody></table>`;
+  const block = (p) => {
+    const list = rows.filter((r) => r.publisher === p.name);
+    return `<section class="block">${label(`${esc(p.name)} · ${books(p.books)}`)}
+<form method="post" action="/admin/publishers" style="display:flex;gap:.6em;flex-wrap:wrap;align-items:center;margin:.4em 0 .8em">
+  <input type="hidden" name="publisher" value="${attr(p.name)}"><input type="hidden" name="month" value="${attr(month)}">
+  <input name="emails" value="${attr(p.emails.join(", "))}" placeholder="e-mail видавництва" style="flex:1;min-width:16em">
+  <button class="btn" name="save" value="1">Зберегти</button>
+  <button class="btn ghost" name="test" value="1">Пробний лист мені</button>
+</form>
+<p class="small muted">${p.emails.length ? (sent.includes(p.name) ? `Звіт за ${esc(monthName(month))} надіслано.` : "Звіт піде 1-го числа о 10:00, копія тобі.") : "Без адреси звіт не надсилається."}${saved === p.name ? " <b>Збережено.</b>" : ""}${tested === p.name ? " <b>Пробний лист надіслано тобі.</b>" : ""}</p>
+${list.length ? table(list) : `<p class="muted">Книжок ще немає.</p>`}</section>`;
+  };
+  const loose = rows.filter((r) => !r.publisher);
+  const body = `
+${pageHead({ crumbs: `<a href="/admin/readers">Читачі</a>`, title: "Звіти видавцям", sub: `${esc(monthName(month))}` })}
+<p class="lead">Захищені книжки видавців: скільки їх читали. Видавництво отримує цю таблицю листом 1-го числа за минулий місяць, з CSV. Хто саме читав, видавець не бачить.</p>
+<p class="small">${months.map((m) => m === month ? `<b>${esc(monthName(m))}</b>` : `<a href="/admin/publishers?month=${attr(m)}">${esc(monthName(m))}</a>`).join(" · ")}</p>
+${publishers.length ? publishers.map(block).join("") : `<p class="muted">Захищених книжок ще немає.</p>`}
+${loose.length ? `<section class="block">${label("Без видавництва")}<p class="small muted">Видавництво береться з shelf.json читалки.</p>${table(loose)}</section>` : ""}
+<p class="small muted">Читачів: хто читав книжку цього місяця. ≥10% і дочитали (≥90% тексту): кожна людина один раз, у місяці, коли пройшла межу. Сторінок: прочитане вперше, 1500 знаків.</p>`;
+  return layout({ title: "Звіти видавцям", body, user, path: "/admin", noindex: true });
+}
+
 // ---- /admin/free: wanted books already out of copyright (freebooks.js) ----
 
 function freeBooksPage({ user, st, running, list, claude }) {
@@ -2752,6 +2780,7 @@ ${running ? `<script>setTimeout(() => location.reload(), 10000)</script>` : ""}`
 
 module.exports = {
   commentsAdminPage,
+  publisherReportsPage,
   freeBooksPage,
   chatsPage,
   chatsSettingsPage,

@@ -1036,6 +1036,10 @@ function tellSite(id) {
   }, 2000));
 }
 
+// Chapters of publishers' protected books read here go to the site for the publishers' reports (reads.js).
+const reads = require("./reads");
+reads.init({ dataDir: DATA_DIR, webUrl: WEB_URL, keyOf: (id) => state.accounts[id]?.key, info: (name) => prot.meta(name), list: () => prot.metas() });
+
 // ---------- Libraries: one per account, private to it ----------
 
 // Where an account's books, PDF conversions and hand-set covers live, and its library's state
