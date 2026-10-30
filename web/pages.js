@@ -458,8 +458,8 @@ function bookPage({ ukrlib = null, sluhay = null, inGenre = null, fresh = null, 
         ${score}
         ${awardsLine(awards)}
         ${twins(book)}
-        ${!user && !freeRead ? "" : mine(book, entry, user, now, freeRead ? "" : readUrl, listsItem(book, user) + ownerItems(book, user), { free: readUrl && freeRead ? freeItems(book, freeFile) : "" })}
-        ${where(book, ukrlib, sluhay)}
+        ${!user && !freeRead ? "" : mine(book, entry, user, now, readUrl && freeRead ? goRead(book) : readUrl, listsItem(book, user) + ownerItems(book, user))}
+        ${where(book, ukrlib, sluhay, readUrl && freeRead && freeFile ? `/go/epub/${attr((book.href || "").split("/").pop())}` : "")}
       </div>
     </article>
     ${series(book, inLibrary)}
@@ -693,37 +693,16 @@ function readerLine({ name, href, entry: e, now }, id) {
   return `<div class="reader-line"><a href="${attr(href)}"><b>${esc(name)}</b></a><span>${e.rating != null ? `${stars(e.rating)} ` : ""}<span class="muted">${esc(what)}</span>${e.note ? `<span class="note">${noteOf(e, id)}</span>` : ""}</span></div>`;
 }
 
-// The signed-in reader's own buttons: «Хочу прочитати», «Прочитано», or where the book is
-// in their library and «Змінити».
-// «Читаю зараз» as an item of the «⋯» menu next to the one main button (Max, 2026-10-23: one button, the rest in a menu).
-const nowItem = (book, on, user) =>
-  user
-    ? `<form method="post" action="/api/now/${attr(encodeURIComponent(book.id))}"><input type="hidden" name="back" value="1"><button title="${on ? "Прибрати з «Читаю зараз»" : "Показати на своїй сторінці, що читаєте її зараз"}">${on ? "Прибрати з «Читаю зараз»" : "Читаю зараз"}</button></form>`
-    : `<a rel="nofollow" href="${attr(guestDo(book, "now"))}">Читаю зараз</a>`;
-// «На дитячу полицю» (Max, 2026-10-23): a book kept for the children; it stays out of the reader's own taste.
-const kidsItem = (book, on, user) =>
-  user
-    ? `<form method="post" action="/api/entry/${attr(encodeURIComponent(book.id))}"><input type="hidden" name="kids" value="${on ? 0 : 1}"><button title="${on ? "Повернути до моїх книжок" : "Книжка для дітей: не рахується у ваші оцінки й рекомендації"}">${on ? "Прибрати з дитячої полиці" : "На дитячу полицю"}</button></form>`
-    : `<a rel="nofollow" href="${attr(guestDo(book, "kids"))}">На дитячу полицю</a>`;
-// «Прочитано» in the menu marks it at once and the page comes back with the stars (mine below), so a
-// rating is one more tap, not a form (Vova's feedback, 2026-10-23).
-const readItem = (book, user) =>
-  user
-    ? `<form method="post" action="/api/entry/${attr(encodeURIComponent(book.id))}"><input type="hidden" name="status" value="read"><input type="hidden" name="back" value="1"><button>Прочитано</button></form>`
-    : `<a rel="nofollow" href="${attr(guestDo(book, "read"))}">Прочитано</a>`;
+// The signed-in reader's own buttons (mine below).
 // «Прибрати з полиці» in the menu (Max, 2026-10-25: «Вже не хочу читати, як відмінити?»); a rating or a note asks first.
 const removeItem = (book, entry) =>
   `<form method="post" action="/api/entry/${attr(encodeURIComponent(book.id))}/remove"${entry.rating != null || entry.note ? ` onsubmit="return confirm('Прибрати книжку з полиці разом з оцінкою й нотаткою?')"` : ""}><input type="hidden" name="back" value="1"><button>Прибрати з полиці</button></form>`;
 const moreMenu = (items) => `<details class="more-acts"><summary class="btn" aria-label="Інші дії" title="Інші дії">⋯</summary><div class="more-menu">${items.join("")}</div></details>`;
-// `readUrl`: the reader's own file in the Chytai reader, «Відкрити в Читалці» in the menu (Max, 2026-10-23).
-// A book of the free shelf: read it right away, or take the file, no account needed (svoloshyn, Max 2026-10-26),
-// from the «⋯» menu like «Відкрити в Читалці»: «Хочу прочитати» stays the green button (Max, the same day: «Бісить
-// мене оце сіошне «читай безкоштовно»»). Both go through /go/… so /admin/traffic can count them.
-// Books shared by their author's permission are read in the reader only, no file (Max, 2026-10-26).
-function freeItems(book, file = true) {
-  const slug = attr((book.href || "").split("/").pop() || encodeURIComponent(book.id));
-  return `<a href="/go/read/${slug}">Відкрити в Читалці</a>${file ? `<a href="/go/epub/${slug}">Завантажити EPUB</a>` : ""}`;
-}
+// The book's own actions (Max, 2026-10-30: the «⋯» menu was «unwieldy» on free books and «overwhelming» on the
+// rest): «Читати» is a button of its own, everything about the reader's shelf is in the status button's «▾» menu,
+// and «⋯» keeps only the lists and the owner's tools. The EPUB of a free book is in «Де взяти» (where()).
+// `readUrl`: the reader's own file in the Chytai reader, or a free shelf's book through /go/read so /admin/traffic counts it.
+const goRead = (book) => `/go/read/${attr((book.href || "").split("/").pop() || encodeURIComponent(book.id))}`;
 
 // The owner's tools for the book sit in the «⋯» menu, not under «Де взяти» (Max, 2026-10-28: «в (..) сховаємо»).
 function ownerItems(book, user) {
@@ -732,25 +711,52 @@ function ownerItems(book, user) {
   return `<a href="${attr(at)}">Редагувати${book.edited ? ` <span class="muted">· виправлено вручну</span>` : ""}</a>${book.cover ? "" : `<a href="${attr(at)}?find=1">Знайти обкладинку</a>`}`;
 }
 
-function mine(book, entry, user, now = false, readUrl = "", listItem = "", { free = "" } = {}) {
-  const open = free || (readUrl ? `<a href="${attr(readUrl)}">Відкрити в Читалці</a>` : "");
+// One status of the «▾» menu: a tap puts the book there; the current one is ticked and does nothing.
+const statusItem = (book, user, status, label, on = false) =>
+  on
+    ? `<span class="on">${label}</span>`
+    : user
+      ? `<form method="post" action="/api/entry/${attr(encodeURIComponent(book.id))}"><input type="hidden" name="status" value="${status}"><input type="hidden" name="back" value="1"><button>${label}</button></form>`
+      : `<a rel="nofollow" href="${attr(guestDo(book, status))}">${label}</a>`;
+const statusMenu = (summary, items, cls = "") => `<details class="more-acts status-acts${cls}"><summary${summary}</summary><div class="more-menu">${items.filter(Boolean).join("")}</div></details>`;
+
+function mine(book, entry, user, now = false, readUrl = "", listItem = "") {
+  const read = readUrl ? `<a class="btn" href="${attr(readUrl)}">Читати</a>` : "";
+  const more = listItem ? moreMenu([listItem]) : "";
   // Read in another language: the mark comes from that book, and so does the edit link.
   const href = entry?.via ? entry.via.href : book.href;
   const edit = href ? `/me${href}` : `/me/book/${encodeURIComponent(entry?.via ? entry.via.id : book.id)}`;
   // A volume of a series: «Прочитано · всю серію» opens the edit page with «Уся серія» ticked.
   const allOf = book.cycle?.items?.length > 1 ? `<a rel="nofollow" href="${attr(user ? `${edit}?series` : `/login?next=${encodeURIComponent(`${edit}?series`)}`)}">Прочитано · всю серію</a>` : "";
-  if (!entry) return `<div class="acts" data-block="acts">${wantButton(book, user, { size: "", primary: true })}${moreMenu([open, nowItem(book, false, user), readItem(book, user), allOf, listItem, kidsItem(book, false, user)])}</div>`;
+  if (!entry) {
+    // «Хочу прочитати» stays the one green button; its «▾» has the other shelves.
+    const other = statusMenu(` class="btn primary" aria-label="Інші статуси" title="Інші статуси" data-ev="status">▾`, [statusItem(book, user, "reading", "Читаю"), statusItem(book, user, "read", "Прочитано"), allOf, statusItem(book, user, "kids", "Дитяча полиця")]);
+    return `<div class="acts" data-block="acts"><span class="want-split">${wantButton(book, user, { size: "", primary: true })}${other}</span>${read}${more}</div>`;
+  }
   const what = [entry.kids ? "Дитяча полиця" : "", entry.status ? STATUS[entry.status] + (entry.status === "read" && entry.year ? ` ${entry.year}` : "") : entry.kids ? "" : "У моїх книжках", entry.rating != null ? `${uk(entry.rating)} з 5` : "", entry.copy ? COPY[entry.copy] : ""].filter(Boolean).join(" · ");
   // Read and not rated yet: the stars right here, no trip to the form (Vova's feedback, 2026-10-23).
   const rate = entry.status === "read" && entry.rating == null && !entry.via && !entry.kids ? rateLine(book.id, "оцініть:") : "";
-  // A tap on «✓ Хочу прочитати» opens the «⋯» menu (app.js).
-  return `<div class="acts" data-block="acts"><span class="have" role="button" title="Змінити або прибрати">✓ ${esc(what)}${entry.via ? ` <span class="muted">як <a href="${attr(entry.via.href)}">${esc(entry.via.title)}</a></span>` : ""}</span>${moreMenu([open, entry.via ? "" : nowItem(book, now, user), `<a href="${attr(edit)}">Оцінка, рік, нотатка</a>`, entry.status === "read" ? "" : allOf, listItem, entry.via ? "" : kidsItem(book, !!entry.kids, user), entry.via ? "" : removeItem(book, entry)])}${rate}</div>`;
+  if (entry.via) return `<div class="acts" data-block="acts"><span class="have">✓ ${esc(what)} <span class="muted">як <a href="${attr(entry.via.href)}">${esc(entry.via.title)}</a></span></span>${read}${more}</div>`;
+  const cur = entry.kids ? "kids" : entry.status;
+  // «Читаю зараз» is a tick under «Читаю»: one book shown under the reader's name (chytai-now-reading).
+  const nowTick = entry.status === "reading" ? `<form method="post" action="/api/now/${attr(encodeURIComponent(book.id))}"><input type="hidden" name="back" value="1"><button class="sub">${now ? "✓ " : ""}Читаю зараз <span class="muted">· на моїй сторінці</span></button></form>` : "";
+  const items = [
+    statusItem(book, user, "want", "Хочу прочитати", cur === "want"),
+    statusItem(book, user, "reading", "Читаю", cur === "reading"),
+    nowTick,
+    statusItem(book, user, "read", "Прочитано", cur === "read"),
+    statusItem(book, user, "abandoned", "Покинуто", cur === "abandoned"),
+    statusItem(book, user, "kids", "Дитяча полиця", cur === "kids"),
+    `<hr><a href="${attr(edit)}">Оцінка, рік, нотатка</a>`,
+    removeItem(book, entry),
+  ];
+  return `<div class="acts" data-block="acts">${statusMenu(` class="have btn" title="Змінити або прибрати" data-ev="status">✓ ${esc(what)} <span class="caret">▾</span>`, items)}${read}${more}${rate}</div>`;
 }
 
 // «Де взяти»: every edition's shop (with its format, price and stock, the one place prices are shown),
 // other links (Укрліб's free text of a classic, ukrlib.js), and the libraries that hold the book (filled in by
 // app.js from /api/libraries).
-function where(book, ukrlib = null, sluhay = null) {
+function where(book, ukrlib = null, sluhay = null, epub = "") {
   const seen = new Set();
   // A free recording from «Слухай» (sluhay.js) is one more audio edition.
   const free = sluhay ? [{ id: "sluhay", shelf: { id: "sluhay", name: sluhay.name }, links: [{ url: sluhay.url }], format: "аудіо", narrator: sluhay.narrator, duration: sluhay.duration, price: "безкоштовно", status: "є" }] : [];
@@ -790,9 +796,11 @@ function where(book, ukrlib = null, sluhay = null) {
   const price = (e) => (e.price === "безкоштовно" ? 0 : Number(String(e.price || "").replace(/[^\d]/g, "")) || Infinity);
   // The free shelf's line goes to its catalog page on the site, not into the reader (Max, 2026-10-29); «Додати в Читалку» is the way in.
   const go = (e, cls = "") => (e.shelf.id === "chytai-free" ? `<a${cls} href="/publishers/chytai-free">` : `<a${cls} href="${attr(e.links[0].url)}" target="_blank" rel="noopener">`);
+  // The free shelf's file sits on its line (Max, 2026-10-30: out of the «⋯» menu).
+  const file = (e) => (epub && e.shelf.id === "chytai-free" ? ` <span class="muted">·</span> <a href="${attr(epub)}">EPUB</a>` : "");
   const short = (e) => {
     const tail = [e.narrator ? `читає ${e.narrator}` : "", e.price, e.subscription ? "є в підписці" : "", avail(e)].filter(Boolean).join(", ");
-    return `${go(e)}${esc(e.shelf.name)}</a>${tail ? ` <span class="muted">${esc(tail)}</span>` : ""}`;
+    return `${go(e)}${esc(e.shelf.name)}</a>${tail ? ` <span class="muted">${esc(tail)}</span>` : ""}${file(e)}`;
   };
   const full = (e) => {
     const tail = [e.edition, e.narrator ? `читає ${e.narrator}` : "", e.duration, e.price, e.subscription ? "є в підписці" : "", avail(e)].filter(Boolean).join(", ");

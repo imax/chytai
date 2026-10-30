@@ -1847,7 +1847,7 @@ app.get("/do/:what/:id", signed, (req, res) => {
   if (!id || !store.book(id)) return res.redirect("/me");
   const what = req.params.what;
   if (!store.entry(req.user.id, id)) {
-    if (["want", "read"].includes(what)) store.setEntry(req.user.id, id, { status: what });
+    if (["want", "read", "reading"].includes(what)) store.setEntry(req.user.id, id, { status: what });
     else if (what === "kids") store.setEntry(req.user.id, id, { kids: true, status: "" });
     else if (what === "now") {
       store.setEntry(req.user.id, id, { status: "reading" });

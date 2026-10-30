@@ -493,13 +493,9 @@ document.addEventListener("click", (e) => {
   block.querySelector(".advice-text")?.classList.remove("folded");
   button.closest(".advice-more")?.remove();
 });
-// The «⋯» menu on book pages closes on a tap outside it or on Escape; a tap on «✓ Хочу прочитати» opens it
-// (Max, 2026-10-29: «Як мені відмінити статус?»: «Прибрати з полиці» is there).
+// The «⋯» and status «▾» menus on book pages close on a tap outside them or on Escape; one open at a time.
 document.addEventListener("click", (e) => {
-  const have = !e.target.closest("a") && e.target.closest(".acts > .have");
-  const mine = have && have.parentElement.querySelector("details.more-acts");
-  for (const d of document.querySelectorAll("details.more-acts[open]")) if (!d.contains(e.target) && d !== mine) d.open = false;
-  if (mine) mine.open = !mine.open;
+  for (const d of document.querySelectorAll("details.more-acts[open]")) if (!d.contains(e.target)) d.open = false;
 });
 document.addEventListener("keydown", (e) => {
   if (e.key === "Escape") for (const d of document.querySelectorAll("details.more-acts[open]")) d.open = false;
@@ -528,7 +524,7 @@ document.addEventListener("keydown", (e) => {
       const go = /^\/go\/([a-z]+)\//.exec(u.pathname);
       if (go) return `go:${go[1]}`;
       if (u.pathname.startsWith("/login")) {
-        const d = /\/do\/(want|read|now|kids)\//.exec(decodeURIComponent(u.search));
+        const d = /\/do\/(want|read|reading|now|kids)\//.exec(decodeURIComponent(u.search));
         return d ? `guest:${d[1]}` : "login";
       }
       if (u.pathname.startsWith("/@")) return "reader";
