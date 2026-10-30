@@ -280,14 +280,15 @@ async function openEpub(payload, { posKey, source }) {
   $("#viewer").classList.remove("hidden");
   $("#pdf-container").classList.add("hidden");
 
-  book = ePub(payload.data);
+  // A publisher's book comes chapter by chapter from the server (payload.url), any other as a whole file.
+  book = payload.url ? ePub(payload.url, { openAs: "directory" }) : ePub(payload.data);
   book.spine.hooks.content.register(stripScripts);
   // Our typography goes into the chapter before epub.js lays it out and finds the target page.
   // The rendition's content hook runs only after that, so a jump into the middle of a chapter (a
   // contents entry, a saved position) was measured in the book's own styles and landed elsewhere
   // once line height and font changed.
   book.spine.hooks.content.register((doc) => styleContents({ document: doc }));
-  current = { path: payload.path, posKey, source, title: payload.name.replace(/\.[^.]+$/, ""), author: "" };
+  current = { path: payload.path, posKey, source, title: payload.name.replace(/\.[^.]+$/, ""), author: "", protected: !!payload.url, preview: !!payload.preview };
   bookShown = true;
   syncAppProtection();
 
@@ -305,6 +306,7 @@ async function openEpub(payload, { posKey, source }) {
   });
   rendition.hooks.content.register(styleContents);
   rendition.hooks.content.register((contents) => contents.on("linkClicked", rememberReturn));
+  if (current.protected) rendition.hooks.content.register(limitCopy);
   rendition.themes.fontSize(`${bookFontSize() * BASE_SCALE}%`);
 
   rendition.on("selected", onSelected);
@@ -364,7 +366,7 @@ async function openEpub(payload, { posKey, source }) {
   const nav = await book.loaded.navigation;
   renderToc(nav.toc);
   $("#btn-toc").disabled = false;
-  $("#btn-print").classList.remove("hidden");
+  $("#btn-print").classList.toggle("hidden", current.protected);
   $("#btn-search").classList.remove("hidden");
 
   // Page-accurate progress needs the locations index; build it in the background.
@@ -653,6 +655,7 @@ function chapterTitle(href, cfi) {
 
 function onRelocated(location) {
   if (current) window.reader.savePosition(current.posKey, location.start.cfi, readingProgress(location));
+  if (current?.protected) reportChapter(location.start?.index);
   updateProgress(location);
   // While scrolling, a selection may move off screen and back; its toolbar is pinned at the bottom anyway.
   if (!scrolled()) hideSelToolbar();
@@ -661,16 +664,36 @@ function onRelocated(location) {
 
 // How far into the book and which chapter, for the home screen; nothing until the locations index exists.
 function readingProgress(location) {
-  if (!book?.locations.length() || !location?.start) return undefined;
+  // Outside the app a publisher's book is only its beginning, so a percentage would mislead.
+  if (!book?.locations.length() || !location?.start || current?.preview) return undefined;
   return { pct: Math.round(book.locations.percentageFromCfi(location.start.cfi) * 100), chapter: chapterTitle(location.start.href, location.start.cfi) };
 }
 
 function updateProgress(location) {
   if (!location?.start) return;
   $("#chapter-label").textContent = chapterTitle(location.start.href, location.start.cfi);
-  if (book.locations.length()) {
+  if (book.locations.length() && !current?.preview) {
     $("#progress-label").textContent = `${Math.round(book.locations.percentageFromCfi(location.start.cfi) * 100)}%`;
   }
+}
+
+// A publisher's book: the chapter on screen counts for the publisher's report (server/protected.js); a
+// chapter that was only measured or searched does not.
+function reportChapter(index) {
+  if (!Number.isInteger(index) || current.reported === index) return;
+  current.reported = index;
+  fetch("/api/pbook-read", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ path: current.path, chapter: index }), credentials: "same-origin" }).catch(() => {});
+}
+
+// A publisher's book gives a quote to the clipboard, not whole chapters.
+const COPY_MAX = 500;
+function limitCopy(contents) {
+  contents.document.addEventListener("copy", (e) => {
+    const text = String(contents.window.getSelection() || "");
+    if (text.length <= COPY_MAX) return;
+    e.preventDefault();
+    e.clipboardData?.setData("text/plain", text.slice(0, COPY_MAX));
+  });
 }
 
 // Books never get to run code: drop <script> elements and inline on* handlers before rendering.
@@ -1774,6 +1797,7 @@ async function fillPrintWholeBook() {
 
 let printReady = false;
 async function printBook() {
+  if (current?.protected) return showNotice("Цю книжку не можна друкувати.", false);
   if (!rendition || current?.pdf) return window.print();
   showNotice("Готую книжку до друку…", true);
   try {
@@ -1798,7 +1822,8 @@ document.addEventListener("keydown", onPrintKey);
 
 window.addEventListener("beforeprint", () => {
   if (!rendition || current?.pdf) return;
-  if (!printReady) fillPrintFromScreen();
+  if (current?.protected) printBox.replaceChildren(printHead(), Object.assign(document.createElement("p"), { textContent: "Цю книжку не можна друкувати." }));
+  else if (!printReady) fillPrintFromScreen();
   document.body.classList.add("printing");
 });
 window.addEventListener("afterprint", () => {

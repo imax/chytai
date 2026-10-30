@@ -21,6 +21,7 @@ const library = require("../src/library");
 const { isRussian } = require("./language");
 const { checkUpload } = require("./content");
 const { adminPage, cost } = require("./admin");
+const { createProtected } = require("./protected");
 
 const ROOT = path.join(__dirname, "..");
 loadDotEnv(path.join(ROOT, ".env"));
@@ -170,6 +171,8 @@ function settingsFor(req) {
     // Printing those gives the current chapter, not the whole book (renderer.js, «Print»).
     freeBooks: freeShelf.map((f) => f.name),
     noFileBooks: freeShelf.filter((f) => !fileAllowed(f.name)).map((f) => f.name),
+    // Publishers' books: no print, no copy beyond a quote (server/protected.js).
+    protectedBooks: protectedNames(),
     ...(req.free ? { free: { signIn: `/login?go=1&next=${encodeURIComponent(`/free/${encodeURIComponent(req.free)}`)}`, download: fileAllowed(req.free) ? `/free-file/${encodeURIComponent(req.free)}` : "" } } : {}),
   };
 }
@@ -407,6 +410,9 @@ function freeBooks() {
   }
 }
 const isFree = (name) => !!name && freeBooks().some((f) => f.name === name);
+// Publishers' books: on the volume, read chapter by chapter, the beginning only outside the app (server/protected.js).
+const prot = createProtected({ dir: path.join(DATA_DIR, "protected"), day: () => statsDay() });
+const inApp = (req) => /ChytaiApp/.test(req.get("user-agent") || "");
 // A free book's cover when its file has none: free/covers/<book name without .epub>.<jpg|png|webp>.
 function freeCover(name) {
   const dir = path.join(FREE_DIR, "covers");
@@ -418,7 +424,17 @@ function freeCover(name) {
 function readerFile(lib, name) {
   if (!name) return null;
   const own = bookFile(lib, name);
-  return fs.existsSync(own) || !isFree(name) ? own : path.join(FREE_DIR, name);
+  if (fs.existsSync(own)) return own;
+  if (isFree(name)) return path.join(FREE_DIR, name);
+  return prot.has(name) ? path.join(prot.dir, name) : own;
+}
+
+function protectedNames() {
+  try {
+    return fs.readdirSync(prot.dir).filter((n) => /\.epub$/i.test(n));
+  } catch {
+    return [];
+  }
 }
 
 // [{ dir, name }] of the books a guest may open. builtInOnly skips the library choice.
@@ -1121,6 +1137,21 @@ api.get("/library", async (req, res) => {
       .filter((b) => !own.has(b.path))
       .sort((x, y) => x.order - y.order || x.title.localeCompare(y.title, "uk"));
     list.push(...free.filter((b) => b.openedAt || b.started));
+    // A publisher's book shows among the reader's own once opened (from its page on the site).
+    const pub = (await library.scan([prot.dir], path.join(DATA_DIR, "protected-cache.json")).catch(() => [])).filter((b) => !own.has(path.basename(b.path)));
+    for (const b of pub) {
+      const name = path.basename(b.path);
+      const aside = !!u.setAside?.[name];
+      const progress = u.progress?.[name];
+      const openedAt = aside ? 0 : u.opened?.[name] || 0;
+      if (!openedAt && !positions[name]) continue;
+      const m = prot.meta(name);
+      list.push({
+        ...b, title: m.title || b.title, authors: m.authors?.length ? m.authors : b.authors, path: name, cloud: false, protected: true, openedAt, aside,
+        started: !aside && !!positions[name], pct: aside || !progress ? null : progress.pct, chapter: (!aside && progress?.chapter) || "",
+        addedAt: 0, addedBy: "", coverAt: 0, seen: true,
+      });
+    }
   }
   res.json({ folders: [], books: list, free, lastBook: u.lastBook || (req.guest ? guestBooks(req)[0]?.name : null) || null });
 });
@@ -1137,7 +1168,28 @@ api.get("/book", (req, res) => {
   if (!req.guest || req.share) saveState();
   res.setHeader("X-Book-Position", encodeURIComponent(u.positions?.[name] || ""));
   res.setHeader("X-Book-Reflow-Position", encodeURIComponent(u.positions?.[`${name}#reflow`] || ""));
+  // A publisher's book: never the file, only where to read it from.
+  if (file.startsWith(prot.dir + path.sep)) return res.json({ ...prot.info(inApp(req)), base: `/api/pbook/${encodeURIComponent(name)}/` });
   res.sendFile(file);
+});
+
+// One entry of a publisher's book: GET /api/pbook/<book>/<path inside the EPUB>.
+api.get("/pbook/:name/*entry", async (req, res, next) => {
+  if (req.guest) return res.status(403).json({ error: "login" });
+  const name = safeBookName(req.params.name);
+  if (!name || fs.existsSync(bookFile(req.lib, name)) || isFree(name)) return res.status(404).end();
+  try {
+    await prot.serve(req, res, { reader: req.acct, name, entry: [].concat(req.params.entry).join("/"), full: inApp(req) });
+  } catch (err) {
+    next(err);
+  }
+});
+// The page shows a chapter of a publisher's book: POST /api/pbook-read { path, chapter } (publishers' reports).
+api.post("/pbook-read", async (req, res) => {
+  if (req.guest) return res.status(204).end();
+  const chapter = Number(req.body?.chapter);
+  if (Number.isInteger(chapter) && chapter >= 0) await prot.read({ reader: req.acct, name: safeBookName(req.body?.path), chapter }).catch(() => {});
+  res.status(204).end();
 });
 
 // ---------- Home screen: covers, "new arrivals" seen, the wish list ----------

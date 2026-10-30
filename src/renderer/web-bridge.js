@@ -261,9 +261,15 @@
     try {
       await sync(); // positions saved here first, so the server's answer is the latest one
       const res = await api("GET", `/api/book?path=${encodeURIComponent(name)}`);
-      const data = await res.arrayBuffer();
       const position = decodeURIComponent(res.headers.get("X-Book-Position") || "") || null;
       const reflowPosition = decodeURIComponent(res.headers.get("X-Book-Reflow-Position") || "") || null;
+      // A publisher's book: read chapter by chapter from the server, never kept on the device.
+      if (/json/.test(res.headers.get("Content-Type") || "")) {
+        const info = await res.json();
+        patchLocalSettings({ lastBook: name });
+        return emit("book:open", { path: name, name, url: new URL(info.base, location.href).href, preview: info.preview, position, reflowPosition });
+      }
+      const data = await res.arrayBuffer();
       // A guest's place lives in the server's memory only; after a restart (or once they sign in) the one
       // kept on this device carries on.
       const kept = position || reflowPosition ? null : (await kvGet("here").catch(() => null)) || {};
