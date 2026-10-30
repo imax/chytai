@@ -200,6 +200,8 @@ main:has(> .admin-nav) { padding-top: 24px; }
 /* A series folded into one row (Max, 2026-10-23): the first covers fanned; the volumes are on the book page. */
 .feed-row .badge { font: 400 12px var(--sans); color: var(--muted); margin-left: 6px; }
 .row-act { flex: none; align-self: center; }
+.outside-row button { all: unset; cursor: pointer; }
+.outside-row h3 button:hover { text-decoration: underline; }
 .row-act:has(.text-link) { align-self: flex-start; }
 .row:target { background: linear-gradient(90deg, transparent, color-mix(in oklab, var(--accent) 10%, transparent), transparent); }
 .row.big { padding: 28px 0; gap: 28px; }
@@ -493,8 +495,6 @@ dialog .form { margin-top: 18px; }
   .row:has(.rate) { flex-wrap: wrap; row-gap: 12px; }
   .row-act:has(.marks), .row-act:has(> .muted), .row-act:has(.rate) { flex-basis: 100%; padding-left: 80px; }
   .row-act .rate { justify-content: flex-start; }
-  .outside .row { flex-wrap: wrap; row-gap: 12px; }
-  .outside .row-act { flex-basis: 100%; padding-left: 80px; }
   .row.big { gap: 18px; }
   .row.big .cover.lg { width: 84px; }
   .row.big h3 { font-size: 22px; }

@@ -1466,33 +1466,43 @@ app.get("/api/search/outside", async (req, res) => {
   admin.event(req, req.user?.id, "outside", out.length ? "shown" : "none");
   res.set("Cache-Control", "no-store").send(pages.outsideResults({ q, user: req.user, books: out }));
 });
-// «Хочу прочитати» on a book from outside: the book is made here (or found, if we have it after all), goes on the
-// reader's «Хочу прочитати», and the owner gets a letter (new books by readers are mailed one by one).
-app.post("/api/search/want", signed, (req, res) => {
+// A book from outside picked in search (pages.outsideResults): made here (or found, if we have it after all) and opened.
+// Guests too (Max, 2026-10-30: «якщо чувак на неї клікає, то ми автоматично створюємо цю сторінку»), at most ten new
+// books an hour from one address; the owner gets a letter for each new one.
+const opened = new Map(); // address -> [times]
+app.post("/api/search/open", (req, res) => {
+  const back = `/search?${new URLSearchParams({ q: String(req.body.q || "") })}`;
   let p = {};
   try {
     p = JSON.parse(String(req.body.pick || "{}"));
   } catch {}
   const title = String(p.title || "").trim().slice(0, 200);
-  if (!title) return res.redirect(`/search?${new URLSearchParams({ q: String(req.body.q || "") })}`);
+  if (!title) return res.redirect(back);
   const isbns = [].concat(p.isbns || []).map(String).filter((x) => /^[\dX]{10,13}$/.test(x)).slice(0, 20);
   const book = { title, author: String(p.author || "").trim().slice(0, 200), isbns };
+  const had = store.findWork(book);
+  if (had) return res.redirect(store.href(had));
+  const ip = req.ip || "";
+  const times = (opened.get(ip) || []).filter((t) => Date.now() - t < 3600e3);
+  if (!req.user && times.length >= 10) return res.redirect(back);
+  opened.set(ip, [...times, Date.now()]);
+  if (opened.size > 5000) opened.clear();
   const links = [];
   if (/^https:\/\/(books\.google\.[a-z.]+|play\.google\.com)\//.test(p.google || "")) links.push({ label: "Google Books", url: p.google });
   if (/^Q\d+$/.test(p.qid || "")) links.push({ label: "Wikidata", url: `https://www.wikidata.org/wiki/${p.qid}` });
-  const ol = /^\/works\/OL\w+$/.test(p.ol || "") ? p.ol : "";
-  const cover = /^https:\/\/(covers\.openlibrary\.org|books\.google\.[a-z.]+|books\.googleusercontent\.com)\//.test(p.cover || "") ? p.cover : "";
-  const had = store.findWork(book);
-  const result = store.importEntries(req.user.id, [{ id: had || null, ...book, status: "want", cover, ol, published: Number(p.published) || null, links }], { source: "search" });
-  const made = result.created[0];
-  const id = had || made?.id || store.findWork(book);
-  admin.event(req, req.user.id, "outside", `want:${made ? "new" : "had"}`);
-  if (made) {
-    console.log(`search pick @${req.user.username}: ${made.title} (${p.from || "?"})`);
-    if (!req.owner) notifyOwner(`Нова книжка з пошуку: ${made.title}`, [`${req.user.name} (@${req.user.username}) не знайшов(ла) на Chytai «${String(req.body.q || "").slice(0, 100)}» і додав(ла) з ${p.from || "пошуку"} в «Хочу прочитати»:`, "", `• ${made.title}${made.author ? ` — ${made.author}` : ""}  ${site(req)}${store.href(made.id)}`, "", `Читач: ${site(req)}${req.user.href}`].join("\n"));
-    details({ ids: [made.id] });
-  }
-  res.redirect(id ? store.href(id) : "/me");
+  const made = store.addBook({
+    ...book,
+    cover: /^https:\/\/(covers\.openlibrary\.org|books\.google\.[a-z.]+|books\.googleusercontent\.com)\//.test(p.cover || "") ? p.cover : "",
+    links,
+    source: "search",
+    ...(/^\/works\/OL\w+$/.test(p.ol || "") ? { ol: p.ol } : {}),
+    ...(Number(p.published) ? { published: Number(p.published) } : {}),
+  });
+  admin.event(req, req.user?.id, "outside", "open");
+  console.log(`search pick ${req.user ? `@${req.user.username}` : "guest"}: ${made.title} (${p.from || "?"})`);
+  if (!req.owner) notifyOwner(`Нова книжка з пошуку: ${made.title}`, [`${req.user ? `${req.user.name} (@${req.user.username}, ${site(req)}${req.user.href})` : "Гість"} не знайшов(ла) на Chytai «${String(req.body.q || "").slice(0, 100)}» і відкрив(ла) книжку з ${p.from || "пошуку"}:`, "", `• ${made.title}${made.author ? ` — ${made.author}` : ""}  ${site(req)}${store.href(made.id)}`].join("\n"));
+  details({ ids: [made.id] });
+  res.redirect(store.href(made.id));
 });
 // Taps and script errors from app.js (sendBeacon), for /admin/traffic and /admin/speed: counts only (admin.tap).
 app.post("/api/tap", (req, res) => {

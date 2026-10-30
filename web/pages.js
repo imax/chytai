@@ -1472,7 +1472,7 @@ function searchesBlock(s) {
   const rows = (list, hits) => list.map((r) => `<tr><td><a href="/search?${attr(new URLSearchParams({ q: r.q }).toString())}">${esc(r.q)}</a></td><td>${r.n}</td>${hits ? `<td>${r.hits || `<span class="zero">0</span>`}</td>` : ""}</tr>`).join("");
   return `<h2>Що шукають</h2>
 <p class="muted small">З ${day(s.since)}: ${s.total} пошуків, ${s.queries} різних запитів, нічого не знайшли ${s.none}, переходів з результатів ${s.clicks} (<a href="/admin/traffic#taps">куди</a>).</p>
-${s.outside ? `<p class="muted small">«Немає на Chytai, але така книжка є»: показали ${s.outside.shown}, ніде не знайшли ${s.outside.none}, «Хочу прочитати» ${s.outside.wanted} (нових книжок ${s.outside.made}).</p>` : ""}
+${s.outside ? `<p class="muted small">Книжки не з Chytai під результатами: показали ${s.outside.shown}, ніде не знайшли ${s.outside.none}, відкрили (нові книжки) ${s.outside.opened}.</p>` : ""}
 <div class="tbl"><table><thead><tr><th>Запит</th><th>Разів</th><th>Знайдено</th></tr></thead><tbody>${rows(s.top, true)}</tbody></table></div>
 ${s.empty.length ? `<h2>Нічого не знайшли</h2>
 <div class="tbl"><table><thead><tr><th>Запит</th><th>Разів</th></tr></thead><tbody>${rows(s.empty, false)}</tbody></table></div>` : ""}`;
@@ -1681,12 +1681,11 @@ function searchResults({ q, user, hits = [], authors = [], readers = [], shelves
   const addLink = user ? `<a class="text-link" href="/add?text=${attr(encodeURIComponent(q))}">Додати книжку, якої ще немає на Chytai</a>` : "";
   // No book on Chytai answers the query: the books that exist elsewhere, loaded after the page (outsideResults;
   // Max, 2026-10-30), in place of the «Додати» link.
-  const elsewhere = `<div class="outside" data-src="/api/search/outside?${attr(new URLSearchParams({ q }).toString())}"><p class="small muted">Шукаємо деінде…</p></div>`;
+  const elsewhere = `<div class="outside" data-src="/api/search/outside?${attr(new URLSearchParams({ q }).toString())}"></div>`;
   // Not a dead end (usability review 2026-10-28: «щось легке на вихідні» found nothing and left nothing to do):
   // the home page's shelves, for those who search for a mood rather than a title.
   if (!n)
-    return `<p class="found">На Chytai нічого не знайшлося за «${esc(q)}».</p>
-${elsewhere}
+    return `${elsewhere}
 <p class="found muted">Шукаєте не книжку, а настрій? Почніть з полиць:</p>
 <nav class="read-chips">${[["/", "Що почитати"], ["/?f=short", "Коротке"], ["/?f=ua", "Українські автори"], ["/?f=fiction", "Художнє"], ["/?f=nonfiction", "Нон-фікшн"]].map(([h, t]) => `<a class="chip" href="${h}">${t}</a>`).join("")}</nav>`;
   return `<p class="found">${count(n, "збіг", "збіги", "збігів")}${tag ? ` · жанр «${GENRES.includes(tag) ? `<a class="text-link" href="/genre/${attr(genreSlug(tag))}">${esc(tag)}</a>` : esc(tag)}»` : ""}</p>
@@ -1704,44 +1703,33 @@ ${elsewhere}
 }
 
 // Books that exist but are not on Chytai, for a search that found none here (Max, 2026-10-30): known works of our
-// authors (Wikidata), Google Books, Open Library. «Хочу прочитати» makes the book here and puts it on the reader's
-// list (POST /api/search/want); a guest signs in first and comes back to the search. Nothing anywhere: a store's
-// link, or the title and author by hand (/add).
+// authors (Wikidata), Google Books, Open Library, as plain result rows (Max: «зробив би це більш seamless», no
+// heading, no explanation, no button). A click makes the book here and opens its page (POST /api/search/open); what
+// the reader does with it then is up to them. Nothing anywhere: a store's link, or the title and author by hand (/add).
 function outsideResults({ q, user, books }) {
-  const back = `/search?${new URLSearchParams({ q })}`;
   if (!books.length)
     return `<section class="block">
-  <p>Ніде не знайшли «${esc(q)}»: ні на Chytai, ні в Google Books, ні в Open Library.</p>
+  <p class="found">Нічого не знайшлося за «${esc(q)}».</p>
   ${
     user
       ? `<p class="small muted">Знаєте, де вона є? Вставте посилання на книжку в магазині чи у видавництва.</p>
   <form method="post" action="/import/list" class="edition-form"><div class="edition-row"><input name="text" type="url" placeholder="Посилання на книжку" required autocomplete="off"><button class="btn">Додати</button></div></form>
   <p class="small muted">Або <a class="text-link" href="/add?text=${attr(encodeURIComponent(q))}">заповніть назву й автора вручну</a>.</p>`
-      : `<p class="small muted"><a class="text-link" href="/login?next=${attr(encodeURIComponent(back))}">Увійдіть</a>, щоб додати її за посиланням на магазин.</p>`
+      : ""
   }
 </section>`;
-  const from = [...new Set(books.map((b) => b.from))].join(", ").replace(/, ([^,]+)$/, " і $1");
   const row = (b) => {
     const pick = JSON.stringify({ title: b.title, author: b.author, cover: b.cover, isbns: b.isbns, published: b.published, ol: b.ol, google: b.google, qid: b.qid, from: b.from });
-    const act = user
-      ? `<form method="post" action="/api/search/want"><input type="hidden" name="pick" value="${attr(pick)}"><input type="hidden" name="q" value="${attr(q)}"><button class="btn primary small">Хочу прочитати</button></form>`
-      : `<a class="btn primary small" href="/login?next=${attr(encodeURIComponent(back))}">Хочу прочитати</a>`;
-    const by = [b.href ? `<a href="${attr(b.href)}">${esc(b.author)}</a>` : esc(b.author), b.published, b.language].filter(Boolean).join(" · ");
-    return `<article class="row">
-  <span class="cover-link">${cover({ title: b.title, cover: b.cover }, "md")}</span>
+    const by = [esc(b.author), b.published].filter(Boolean).join(" · ");
+    return `<form class="row outside-row" method="post" action="/api/search/open"><input type="hidden" name="pick" value="${attr(pick)}"><input type="hidden" name="q" value="${attr(q)}">
+  <button class="cover-link">${cover({ title: b.title, cover: b.cover }, "md")}</button>
   <div class="row-body">
-    <h3>${esc(b.title)}</h3>
+    <h3><button>${esc(b.title)}</button></h3>
     ${by ? `<p class="by">${by}</p>` : ""}
-    <p class="meta"><span class="muted">${esc(b.from)}</span></p>
   </div>
-  <div class="row-act">${act}</div>
-</article>`;
+</form>`;
   };
-  return `<section class="block" data-block="outside">${label("Немає на Chytai, але така книжка є")}
-  <p class="small muted">Знайшли в ${esc(from)}. Натисніть «Хочу прочитати», і ми напишемо, щойно вона з’явиться в магазині чи бібліотеці.</p>
-  <div class="rows">${books.map(row).join("")}</div>
-  ${user ? `<p class="muted end-note">Не те? <a class="text-link" href="/add?text=${attr(encodeURIComponent(q))}">Вставте посилання на книжку в магазині або заповніть вручну</a></p>` : ""}
-</section>`;
+  return `<div class="rows" data-block="outside">${books.map(row).join("")}</div>`;
 }
 
 // ---- /author/<slug> ----
