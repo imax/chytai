@@ -458,9 +458,9 @@ function bookPage({ ukrlib = null, sluhay = null, inGenre = null, fresh = null, 
         ${score}
         ${awardsLine(awards)}
         ${twins(book)}
-        ${!user && !freeRead ? "" : mine(book, entry, user, now)}
-        ${where(book, ukrlib, sluhay, { read: readUrl && freeRead ? goRead(book) : readUrl, freeShelf: !!(readUrl && freeRead), epub: readUrl && freeRead && freeFile ? `/go/epub/${attr((book.href || "").split("/").pop())}` : "" })}
-        ${user?.owner ? `<p class="owner-tools small">${ownerItems(book, user)}</p>` : ""}
+        ${!user && !freeRead ? "" : mine(book, entry, user, now, readUrl && freeRead ? goRead(book) : readUrl)}
+        ${where(book, ukrlib, sluhay)}
+        ${!user && !freeRead ? "" : `<p class="book-tools small">${user ? `<button type="button" class="text-link" data-open="lists-dlg">Додати до списку…</button>` : `<a rel="nofollow" href="${attr(`/login?next=${encodeURIComponent(book.href || "")}`)}">Додати до списку…</a>`}${ownerItems(book, user)}</p>`}
       </div>
     </article>
     ${series(book, inLibrary)}
@@ -488,7 +488,7 @@ function bookPage({ ukrlib = null, sluhay = null, inGenre = null, fresh = null, 
     ${pick ? `<div data-block="pick">${label("Книжка навмання", "оцінка 4,5+")}${feedList([pick])}</div>` : ""}`}
   </aside>
 </div>
-${myLists ? listsDialog(book, myLists) : ""}${user && !entry?.via ? entryDialog(book, entry, now, !!myLists) : ""}`;
+${myLists ? listsDialog(book, myLists) : ""}`;
   const description = [book.author, book.blurb?.replace(/\s+/g, " ") || stripMd(readers.find((r) => r.entry.note)?.entry.note || "")].filter(Boolean).join(". ");
   return layout({ title: book.title, body, user, path: "/book", description, canonical: book.href, image: abs(book.cover || ""), type: "book", noindex: require("./store").isRussian(book), jsonld: bookLd(book, shelf, s, readers) });
 }
@@ -695,56 +695,46 @@ function readerLine({ name, href, entry: e, now }, id) {
 }
 
 // The book's own actions (Max, 2026-10-30: the «⋯» menu was «unwieldy» on free books and «overwhelming» on the
-// rest; «все забудемо, зробимо заново»): one status button, its «▾» opens the «На моїй полиці» form; reading a free
-// book or one's own file is a line in «Де взяти» (where()), and the owner's tools a quiet line under it.
+// rest; «все забудемо, зробимо заново»): one status button, its «▾» opens the «На моїй полиці» form; a free book or
+// one's own file has «Відкрити в Читалці» next to it (no EPUB link: the file is in the reader); the owner's tools are
+// a quiet line under «Де взяти» with «Додати до списку…».
 // The free shelf's book goes through /go/read so /admin/traffic counts it.
 const goRead = (book) => `/go/read/${attr((book.href || "").split("/").pop() || encodeURIComponent(book.id))}`;
 
-// The owner's tools for the book: a quiet line under «Де взяти».
+// The owner's tools for the book: a quiet line under «Де взяти», after «Додати до списку…».
 function ownerItems(book, user) {
   if (!user?.owner) return "";
   const at = `/admin/book/${encodeURIComponent(book.href.split("/").pop())}`;
   return `<a href="${attr(at)}">Редагувати${book.edited ? ` <span class="muted">· виправлено вручну</span>` : ""}</a>${book.cover ? "" : `<a href="${attr(at)}?find=1">Знайти обкладинку</a>`}`;
 }
 
-function mine(book, entry, user, now = false) {
+function mine(book, entry, user, now = false, readUrl = "") {
+  // A free shelf's book or the reader's own file: «Відкрити в Читалці», the second button (Max, 2026-10-30).
+  const read = readUrl ? `<a class="btn" href="${attr(readUrl)}">Відкрити в Читалці</a>` : "";
   // Read in another language: the mark comes from that book, and so does the edit link.
   const href = entry?.via ? entry.via.href : book.href;
   const edit = href ? `/me${href}` : `/me/book/${encodeURIComponent(entry?.via ? entry.via.id : book.id)}`;
-  // Everything else about the book on the reader's shelf is one form, «На моїй полиці», in a dialog over the page
-  // (Max, 2026-10-30: «читаю, прочитано, є в мене, дитяча полиця … це все одна дія, яка відкриває форму»).
-  const open = (label, cls, more = "") => (user ? `<button type="button" class="${cls}" data-open="entry-dlg"${more}>${label}</button>` : `<a class="${cls}" rel="nofollow" href="${attr(`/login?next=${encodeURIComponent(book.href || "")}`)}"${more}>${label}</a>`);
-  if (!entry) return `<div class="acts" data-block="acts"><span class="want-split">${wantButton(book, user, { size: "", primary: true })}${open("▾", "btn primary", ' aria-label="Інший статус" title="Читаю, прочитано, є в мене…"')}</span></div>`;
+  // Everything else about the book on the reader's shelf is one form, the /me/book/… page (Max, 2026-10-30: «читаю,
+  // прочитано, є в мене, дитяча полиця … це все одна дія, яка відкриває форму»; «не придумувати окрему модалку»).
+  const form = user ? edit : `/login?next=${encodeURIComponent(edit)}`;
+  const open = (label, cls, more = "") => `<a class="${cls}" rel="nofollow" href="${attr(form)}"${more}>${label}</a>`;
+  if (!entry) return `<div class="acts" data-block="acts"><span class="want-split">${wantButton(book, user, { size: "", primary: true })}${open("▾", "btn primary", ' aria-label="Інший статус" title="Читаю, прочитано, є в мене…"')}</span>${read}</div>`;
   const what = entry.kids ? "Дитяча полиця" : entry.status ? STATUS[entry.status] : entry.copy ? COPY[entry.copy] : "У моїх книжках";
-  if (entry.via) return `<div class="acts" data-block="acts"><span class="have">✓ ${esc(what)} <span class="muted">як <a href="${attr(entry.via.href)}">${esc(entry.via.title)}</a></span></span></div>`;
+  if (entry.via) return `<div class="acts" data-block="acts"><span class="have">✓ ${esc(what)} <span class="muted">як <a href="${attr(entry.via.href)}">${esc(entry.via.title)}</a></span></span>${read}</div>`;
   // A book read: its stars and year right under the button, saved as they change (app.js, .rate); «нотатка» opens the form.
   const r = Math.floor(entry.rating ?? 0);
   const years = rateYears();
   if (entry.year && !years.includes(entry.year)) years.push(entry.year);
   const line = entry.status === "read" && !entry.kids
-    ? `<div class="mine-line rate" data-id="${attr(book.id)}"><span class="rate-stars" role="group" aria-label="Оцінка">${[1, 2, 3, 4, 5].map((n) => `<button type="button" data-r="${n}" title="${n} з 5"${n <= r ? ' class="on"' : ""}>★</button>`).join("")}</span><select class="rate-year" aria-label="Рік"><option value="">рік?</option>${years.map((y) => `<option${y === entry.year ? " selected" : ""}>${y}</option>`).join("")}</select><button type="button" class="text-link" data-open="entry-dlg">${entry.note ? "нотатка" : "+ нотатка"}</button></div>`
-    : entry.note ? `<div class="mine-line"><button type="button" class="text-link" data-open="entry-dlg">нотатка</button></div>` : "";
-  return `<div class="acts" data-block="acts">${open(`✓ ${esc(what)} <span class="caret">▾</span>`, "btn have", ' title="Змінити"')}</div>${line}`;
-}
-
-// The «На моїй полиці» dialog on a book page: the same form as /me/book/…, coming back to the book; «Читаю зараз»
-// for a book being read, and the lists under it.
-function entryDialog(book, entry, now, lists) {
-  const c = book.cycle;
-  const series = c?.items?.length > 1 ? { name: c.name, total: c.items.length, checked: false } : null;
-  const nowForm = entry?.status === "reading" ? `<form method="post" action="/api/now/${attr(encodeURIComponent(book.id))}" class="now-line"><input type="hidden" name="back" value="1"><label class="check"><span><input type="checkbox"${now ? " checked" : ""} onchange="this.form.submit()"> Читаю зараз · показувати на моїй сторінці</span></label></form>` : "";
-  return `<dialog id="entry-dlg" class="sheet">
-  <div class="dlg-head"><h2>${entry ? "На моїй полиці" : "Додати на мою полицю"}</h2><button type="button" class="dlg-x" data-close aria-label="Закрити">×</button></div>
-  ${nowForm}
-  ${entryForm(book, entry, series, { next: book.href || "", fresh: "read" })}
-  ${lists ? `<p class="dlg-more"><button type="button" class="text-link" data-close data-open="lists-dlg">Додати до списку…</button></p>` : ""}
-</dialog>`;
+    ? `<div class="mine-line rate" data-id="${attr(book.id)}"><span class="rate-stars" role="group" aria-label="Оцінка">${[1, 2, 3, 4, 5].map((n) => `<button type="button" data-r="${n}" title="${n} з 5"${n <= r ? ' class="on"' : ""}>★</button>`).join("")}</span><select class="rate-year" aria-label="Рік"><option value="">рік?</option>${years.map((y) => `<option${y === entry.year ? " selected" : ""}>${y}</option>`).join("")}</select><a class="text-link" href="${attr(edit)}">${entry.note ? "нотатка" : "+ нотатка"}</a></div>`
+    : entry.note ? `<div class="mine-line"><a class="text-link" href="${attr(edit)}">нотатка</a></div>` : "";
+  return `<div class="acts" data-block="acts">${open(`✓ ${esc(what)} <span class="caret">▾</span>`, "btn have", ' title="Змінити"')}${read}</div>${line}`;
 }
 
 // «Де взяти»: every edition's shop (with its format, price and stock, the one place prices are shown),
 // other links (Укрліб's free text of a classic, ukrlib.js), and the libraries that hold the book (filled in by
 // app.js from /api/libraries).
-function where(book, ukrlib = null, sluhay = null, { read = "", freeShelf = false, epub = "" } = {}) {
+function where(book, ukrlib = null, sluhay = null) {
   const seen = new Set();
   // A free recording from «Слухай» (sluhay.js) is one more audio edition.
   const free = sluhay ? [{ id: "sluhay", shelf: { id: "sluhay", name: sluhay.name }, links: [{ url: sluhay.url }], format: "аудіо", narrator: sluhay.narrator, duration: sluhay.duration, price: "безкоштовно", status: "є" }] : [];
@@ -786,11 +776,9 @@ function where(book, ukrlib = null, sluhay = null, { read = "", freeShelf = fals
   // The free shelf's line goes to its catalog page on the site, not into the reader (Max, 2026-10-29); «Додати в Читалку» is the way in.
   const go = (e, cls = "") => (e.shelf.id === "chytai-free" ? `<a${cls} href="/publishers/chytai-free">` : `<a${cls} href="${attr(e.links[0].url)}" target="_blank" rel="noopener">`);
   // The free shelf's file sits on its line (Max, 2026-10-30: out of the «⋯» menu).
-  // The free shelf's line is where to read it: «Читати в Читалці · EPUB» (Max, 2026-10-30: no buttons for it by the status).
-  const file = (e) => (freeShelf && e.shelf.id === "chytai-free" ? ` <span class="muted">·</span> <a class="read-link" href="${attr(read)}">Читати в Читалці</a>${epub ? ` <span class="muted">·</span> <a href="${attr(epub)}">EPUB</a>` : ""}` : "");
   const short = (e) => {
     const tail = [e.narrator ? `читає ${e.narrator}` : "", e.price, e.subscription ? "є в підписці" : "", avail(e)].filter(Boolean).join(", ");
-    return `${go(e)}${esc(e.shelf.name)}</a>${tail ? ` <span class="muted">${esc(tail)}</span>` : ""}${file(e)}`;
+    return `${go(e)}${esc(e.shelf.name)}</a>${tail ? ` <span class="muted">${esc(tail)}</span>` : ""}`;
   };
   const full = (e) => {
     const tail = [e.edition, e.narrator ? `читає ${e.narrator}` : "", e.duration, e.price, e.subscription ? "є в підписці" : "", avail(e)].filter(Boolean).join(", ");
@@ -809,8 +797,6 @@ function where(book, ukrlib = null, sluhay = null, { read = "", freeShelf = fals
     const rest = list.filter((e) => !firstShops.includes(e) && ((k) => !said.has(k) && said.add(k))([e.shelf.id, e.narrator, e.price].join("|")));
     rows.push(row(label, firstShops.map(short).join(` <span class="muted">·</span> `), rest.length ? ` <details class="where-more"><summary>ще ${rest.length}</summary>${rest.map((e) => `<span>${full(e)}</span>`).join("")}</details>` : ""));
   }
-  // The reader's own file (Max, 2026-10-30: out of the buttons, into «Де взяти»).
-  if (read && !freeShelf) rows.unshift(row("Читалка", `<a class="read-link" href="${attr(read)}">Відкрити в Читалці</a> <span class="muted">ваш файл</span>`));
   if (links.length) rows.push(row("Інше", links.map((l) => `<a href="${attr(l.url)}" target="_blank" rel="noopener">${esc(l.label)}</a>`).join(` <span class="muted">·</span> `)));
   // No shop has it at all (a book a reader brought from outside, Max 2026-10-30): the want-mail (wantmail.js) says when one does.
   if (book.source === "search" && !have.length && !out.length) rows.unshift(row("Магазини", `<span class="muted">поки немає; напишемо тим, хто хоче прочитати, щойно з’явиться</span>`));
@@ -976,7 +962,9 @@ ${decideScript}`;
 }
 
 // /me/book/:id: the one place to edit a book in your library.
-function editPage({ book, entry, user, series = null }) {
+function editPage({ book, entry, user, series = null, now = false }) {
+  // «Читаю зараз» for a book being read: it left the book page's buttons on 2026-10-30, so it is here (and on /me/now).
+  const nowForm = entry?.status === "reading" ? `<form method="post" action="/api/now/${attr(encodeURIComponent(book.id))}" class="now-line"><input type="hidden" name="back" value="1"><label class="check"><span><input type="checkbox"${now ? " checked" : ""} onchange="this.form.submit()"> Читаю зараз · показувати на моїй сторінці</span></label></form>` : "";
   const body = `
 <article class="book-top edit">
   <div class="book-cover">${cover(book, "lg")}</div>
@@ -985,6 +973,7 @@ function editPage({ book, entry, user, series = null }) {
     <h1><a href="${attr(book.href)}">${esc(book.title)}</a></h1>
     ${book.author ? `<p class="book-by">${esc(book.author)}</p>` : ""}
     ${entryForm(book, entry, series)}
+    ${nowForm}
   </div>
 </article>`;
   return layout({ title: book.title, body, user, path: "/me" });
@@ -1096,16 +1085,16 @@ const WHY = "Чому не пішла, якщо хочеться";
 // `series` ({ name, total, checked }): the book is a volume of a series, and «Уся серія» puts the status,
 // rating and year on every volume (Max, 2026-10-23); checked when the reader's shelf already shows the
 // series as one row, or when they came by «Прочитано · всю серію».
-function entryForm(book, entry, series = null, { next = "", fresh = "" } = {}) {
-  const e = entry || { status: series?.checked ? "read" : fresh, rating: null, year: series?.checked ? new Date().getFullYear() : "", copy: "", note: "" };
+function entryForm(book, entry, series = null) {
+  const e = entry || { status: series?.checked ? "read" : "", rating: null, year: series?.checked ? new Date().getFullYear() : "", copy: "", note: "" };
   const ratings = [5, 4.5, 4, 3.5, 3, 2.5, 2, 1.5, 1];
   return `
 <form method="post" action="/api/entry/${encodeURIComponent(book.id)}" class="form entry-form">
-  <input type="hidden" name="next" value="${attr(next || `/me#${book.id}`)}">
+  <input type="hidden" name="next" value="/me#${attr(book.id)}">
   <h2>${entry ? "На моїй полиці" : "Додати на мою полицю"}</h2>
   <div class="three">
     <label>Статус <select name="status">
-      <option value="" ${!e.status && !e.kids ? "selected" : ""}>Є в мене, не читав</option>
+      <option value="" ${!e.status && !e.kids ? "selected" : ""}>Є в мене, ще не читав</option>
       <option value="reading" ${e.status === "reading" && !e.kids ? "selected" : ""}>Читаю</option>
       <option value="read" ${e.status === "read" && !e.kids ? "selected" : ""}>Прочитано</option>
       <option value="want" ${e.status === "want" && !e.kids ? "selected" : ""}>Хочу прочитати</option>

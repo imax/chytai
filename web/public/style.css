@@ -1081,14 +1081,11 @@ aside .side-lists + .label, aside p + .label, aside dialog + .label { margin-top
 }
 /* The book page's own line: stars, year and the note under the status button (Max, 2026-10-30). */
 .mine-line { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-start; gap: 6px 14px; margin-top: 12px; }
-.mine-line .text-link, .dlg-more .text-link { background: none; border: 0; padding: 0; font: inherit; font-size: 14px; color: var(--ink); cursor: pointer; text-decoration: underline; text-decoration-color: var(--under); text-underline-offset: 3px; }
+.mine-line .text-link, .book-tools .text-link { background: none; border: 0; padding: 0; font: inherit; font-size: 14px; color: var(--ink); cursor: pointer; text-decoration: underline; text-decoration-color: var(--under); text-underline-offset: 3px; }
 .acts .btn.have { border-color: var(--accent); color: var(--accent); }
 .acts .btn.have:hover { background: var(--accent); color: var(--on-accent); }
 .acts .have .caret { font-size: 11px; margin-left: 4px; }
 .want-split > button.btn, .want-split > a.btn + a.btn { border-radius: 0 999px 999px 0; padding: 11px 14px; border-left: 1px solid rgba(255, 255, 255, 0.35); font-size: 13px; }
-.read-link { font-weight: 600; }
-.owner-tools { margin-top: 10px; display: flex; gap: 14px; }
-.owner-tools a { color: var(--muted); }
-#entry-dlg .entry-form h2 { display: none; }
-#entry-dlg .now-line { margin: 4px 0 6px; }
-#entry-dlg .dlg-more { margin-top: 14px; }
+.book-tools { margin-top: 10px; display: flex; flex-wrap: wrap; gap: 6px 14px; }
+.book-tools a, .book-tools .text-link { color: var(--muted); font-size: 13px; }
+.now-line { margin-top: 18px; }

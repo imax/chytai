@@ -1189,7 +1189,7 @@ app.get("/me/book/:id", signed, (req, res) => {
   // status and year).
   const c = store.cycleOf(book.id);
   const series = c && c.items.length > 1 ? { name: c.name, total: c.items.length, checked: "series" in req.query || (!!entry && c.items.some((v) => v.id && v.id !== book.id && ((e) => e && e.status === entry.status && (e.year ?? null) === (entry.year ?? null))(store.entry(req.user.id, v.id)))) } : null;
-  res.send(pages.editPage({ book, entry, user: req.user, series }));
+  res.send(pages.editPage({ book, entry, user: req.user, series, now: nowIds(req.user.id).has(store.canonical(book.id)) }));
 });
 
 // A volume in a book page's series list that no catalog has: a click makes its page (a book of the reader's
