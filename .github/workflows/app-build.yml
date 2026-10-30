@@ -1,4 +1,5 @@
-# A new native build of the iPhone app, built on EAS and sent straight to TestFlight.
+# A new native build of the app, built on EAS. iPhone builds go straight to TestFlight; Android
+# builds are an APK to install by link (preview) or a bundle for Google Play (production).
 # Run it by hand (Actions → App build → Run workflow) when the native side changes or a
 # TestFlight build is about to expire (they live 90 days). Day-to-day changes to app/ do not need
 # this: app-update.yml ships them over the air.
@@ -6,10 +7,16 @@
 # Needs two repo secrets: EXPO_TOKEN (Expo access token) and ASC_API_KEY_P8 (the contents of the
 # App Store Connect API key file named in app/eas.json). Apple signing certificates live on EAS
 # since the first build from Max's Mac, so CI runs non-interactively.
-name: App build (TestFlight)
+name: App build
 
 on:
   workflow_dispatch:
+    inputs:
+      platform:
+        description: ios, android (APK by link) or android-play (bundle for Google Play)
+        type: choice
+        options: [ios, android, android-play]
+        default: ios
 
 concurrency: app-build
 
@@ -35,4 +42,10 @@ jobs:
       - run: printf '%s' "$ASC_API_KEY_P8" > AuthKey_8JWQG97Z96.p8
         env:
           ASC_API_KEY_P8: ${{ secrets.ASC_API_KEY_P8 }}
-      - run: eas build --platform ios --profile production --auto-submit --non-interactive --no-wait
+      - if: inputs.platform == 'ios'
+        run: eas build --platform ios --profile production --auto-submit --non-interactive --no-wait
+      # The first Android build makes the signing key on EAS; keep it there, Google Play ties the app to it.
+      - if: inputs.platform == 'android'
+        run: eas build --platform android --profile preview --non-interactive --no-wait
+      - if: inputs.platform == 'android-play'
+        run: eas build --platform android --profile production --non-interactive --no-wait

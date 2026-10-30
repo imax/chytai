@@ -53,6 +53,24 @@ let book = null;
 let rendition = null;
 let pdfView = null; // set instead of book/rendition when a PDF is open
 let current = null; // { path, title, author }
+
+// Books a publisher lets us show only in the app: while one is on screen, the app blocks screenshots
+// and screen recording (app/App.js: FLAG_SECURE on Android, a blank capture on iOS). Off on the home
+// screen, so a reader can still screenshot the library or a list.
+let appProtected = false;
+let bookShown = false; // current is kept after closeBook(), so this says whether it is on screen
+function syncAppProtection() {
+  const on = bookShown && (settings.protectedBooks || []).includes(current.path) && !document.body.classList.contains("library-open");
+  if (!IN_APP || on === appProtected) return;
+  appProtected = on;
+  try { window.ReactNativeWebView?.postMessage(JSON.stringify({ type: "protect", on })); } catch {}
+}
+new MutationObserver(syncAppProtection).observe(document.body, { attributes: true, attributeFilter: ["class"] });
+// Leaving the reader page (login, a site page) must not leave the block on behind it.
+addEventListener("pagehide", () => {
+  bookShown = false;
+  syncAppProtection();
+});
 let pendingSelection = null; // last selection, for the floating toolbar
 let reqCounter = 0;
 const conversations = new Map(); // request id -> conversation state
@@ -270,6 +288,8 @@ async function openEpub(payload, { posKey, source }) {
   // once line height and font changed.
   book.spine.hooks.content.register((doc) => styleContents({ document: doc }));
   current = { path: payload.path, posKey, source, title: payload.name.replace(/\.[^.]+$/, ""), author: "" };
+  bookShown = true;
+  syncAppProtection();
 
   rendition = book.renderTo("viewer", {
     width: "100%",
@@ -434,6 +454,8 @@ function closeBook() {
     }
   }
   rendition = book = pdfView = null;
+  bookShown = false;
+  syncAppProtection();
   returnCfi = null;
   $("#btn-back").classList.add("hidden");
   syncReading();
@@ -502,6 +524,8 @@ async function openPdf(payload) {
   $("#viewer").classList.add("hidden");
   $("#pdf-container").classList.remove("hidden");
   current = { path: payload.path, posKey: payload.path, source: payload, title: payload.name.replace(/\.[^.]+$/, ""), author: "", pdf: true };
+  bookShown = true;
+  syncAppProtection();
   const PdfView = await waitForPdfModule();
   pdfView = await PdfView.open($("#pdf-container"), payload.data, {
     position: payload.position,

@@ -32,6 +32,6 @@ jobs:
           eas-version: latest
           token: ${{ secrets.EXPO_TOKEN }}
       - run: npm ci --no-audit --no-fund
-      - run: eas update --branch production --platform ios --non-interactive --message "$(printf '%s' "$MESSAGE" | head -1 | cut -c1-200)"
+      - run: eas update --branch production --platform all --non-interactive --message "$(printf '%s' "$MESSAGE" | head -1 | cut -c1-200)"
         env:
           MESSAGE: ${{ github.event.head_commit.message || 'manual run' }}

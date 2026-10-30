@@ -2,7 +2,7 @@
   "expo": {
     "name": "Chytai",
     "slug": "chytai",
-    "version": "1.1.0",
+    "version": "1.2.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "scheme": "chytai",
@@ -16,15 +16,24 @@
         "ITSAppUsesNonExemptEncryption": false,
         "CFBundleAllowMixedLocalizations": true,
         "CFBundleDevelopmentRegion": "uk",
-        "WKAppBoundDomains": ["chytai.fly.dev", "chytai.org.ua"]
+        "WKAppBoundDomains": [
+          "chytai.fly.dev",
+          "chytai.org.ua"
+        ]
       }
     },
     "android": {
       "package": "com.maxua.chytai",
       "adaptiveIcon": {
-        "foregroundImage": "./assets/icon.png",
-        "backgroundColor": "#ffffff"
-      }
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#20222f"
+      },
+      "blockedPermissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.SYSTEM_ALERT_WINDOW",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE"
+      ]
     },
     "runtimeVersion": {
       "policy": "appVersion"

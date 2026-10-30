@@ -1,14 +1,17 @@
-// Chytai for iPhone: a thin native shell around the web reader.
+// Chytai for iPhone and Android: a thin native shell around the web reader.
 //
 // The reader itself (library, EPUB rendering, explanations) is the same code the browser gets
 // from https://chytai.fly.dev, so every merge to main reaches the app through the usual Fly
 // deploy. This shell only adds what Safari cannot: an icon on the home screen without Safari
-// chrome, the login cookie that survives, and (later) the share sheet for EPUB files.
+// chrome, the login cookie that survives, a screenshot block while a publisher's protected book is
+// open, and (later) the share sheet for EPUB files.
 // Changes to the shell itself ship over the air with EAS Update, without an App Store review.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Linking, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, BackHandler, Linking, Platform, Pressable, StyleSheet, Text, useColorScheme, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
+import * as ScreenCapture from 'expo-screen-capture';
+import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import * as SplashScreen from 'expo-splash-screen';
 import * as Updates from 'expo-updates';
 import { WebView } from 'react-native-webview';
@@ -19,6 +22,7 @@ const READER_HOST = new URL(READER_URL).host;
 // The reader's own background colours (style.css), so the native area behind the page matches
 // while it loads and the splash screen does not flash white on the dark theme.
 const BG = '#ffffff';
+const DARK_BG = '#1e1e20';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
@@ -40,8 +44,35 @@ const ERROR_REPORTER = `
 `;
 
 
+// Android draws the app under the status and navigation bars, and its WebView does not pass those
+// insets to the page's env(safe-area-inset-*), so there the native side keeps the page clear of
+// them. On iOS the page extends under the bars and its CSS handles the insets, as in Safari.
 export default function App() {
+  // The strips above and below the page follow the phone's light or dark mode, like the splash screen.
+  const dark = useColorScheme() === 'dark';
+  return (
+    <SafeAreaProvider>
+      {Platform.OS === 'android' ? (
+        <SafeAreaView style={[styles.root, dark && { backgroundColor: DARK_BG }]} edges={['top', 'bottom', 'left', 'right']}>
+          <Reader />
+        </SafeAreaView>
+      ) : (
+        <Reader />
+      )}
+    </SafeAreaProvider>
+  );
+}
+
+// While the page says a protected book is on screen (renderer.js, syncAppProtection): Android sets
+// FLAG_SECURE, so screenshots and recordings come out black; iOS cannot forbid a screenshot, but
+// expo-screen-capture renders the window into a secure text field's layer, which iOS leaves blank
+// in screenshots and recordings. Needs a native build, not an over-the-air update.
+const setProtected = (on) =>
+  (on ? ScreenCapture.preventScreenCaptureAsync('book') : ScreenCapture.allowScreenCaptureAsync('book')).catch(() => {});
+
+function Reader() {
   const webview = useRef(null);
+  const canGoBack = useRef(false);
   const [failed, setFailed] = useState(null);
   const [ready, setReady] = useState(false);
   const [pageError, setPageError] = useState(null);
@@ -77,6 +108,17 @@ export default function App() {
   useEffect(() => {
     if (ready || failed) SplashScreen.hideAsync().catch(() => {});
   }, [ready, failed]);
+
+  // Android's back button goes back in the reader, and leaves the app only from its first page.
+  useEffect(() => {
+    if (Platform.OS !== 'android') return;
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (!canGoBack.current) return false;
+      webview.current?.goBack();
+      return true;
+    });
+    return () => sub.remove();
+  }, []);
 
   // Links that leave the reader (a publisher's site in a footnote, a mailto) open in Safari;
   // everything on chytai.fly.dev stays inside the app.
@@ -141,8 +183,10 @@ export default function App() {
           try {
             const msg = JSON.parse(e.nativeEvent.data);
             if (msg.type === 'error') setPageError(String(msg.text).slice(0, 400));
+            if (msg.type === 'protect') setProtected(!!msg.on);
           } catch { /* not ours */ }
         }}
+        onNavigationStateChange={(nav) => { canGoBack.current = nav.canGoBack; }}
         onLoadStart={() => setProgress(0.05)}
         onLoadProgress={(e) => setProgress(e.nativeEvent.progress)}
         onLoadEnd={() => { setReady(true); setProgress(1); }}
@@ -200,7 +244,7 @@ const styles = StyleSheet.create({
   buttonText: { color: '#fff', fontSize: 16, fontWeight: '500' },
   // A thin bar under the status bar while a page or a login redirect loads, so a slow network
   // never looks like a frozen app.
-  progressTrack: { position: 'absolute', top: 54, left: 0, right: 0, height: 3, backgroundColor: 'transparent' },
+  progressTrack: { position: 'absolute', top: Platform.OS === 'ios' ? 54 : 0, left: 0, right: 0, height: 3, backgroundColor: 'transparent' },
   progressBar: { height: 3, backgroundColor: '#3b82f6', borderTopRightRadius: 2, borderBottomRightRadius: 2 },
   banner: {
     position: 'absolute', left: 12, right: 12, bottom: 40,
