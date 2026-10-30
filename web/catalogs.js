@@ -140,6 +140,18 @@ function joinEbooks(items) {
   return items;
 }
 
+// Лабораторія's books that its site no longer lists, from the catalog the publisher sent (Max, 2026-10-30:
+// «давай ці 5»). Not on sale there, so «немає»; one the site lists again (same ISBN) is left to the site.
+function labExtra(items) {
+  const have = new Set(items.map((it) => it.isbn).filter(Boolean));
+  const list = JSON.parse(require("fs").readFileSync(require("path").join(__dirname, "seed", "laboratoriya-extra.json"), "utf8"));
+  return list.filter((b) => !have.has(b.isbn)).map((b) => ({
+    id: `laboratoriya-isbn-${b.isbn}`, title: b.title, author: b.author, translator: "", altTitle: "", isbn: b.isbn, format: "папір",
+    series: volumeOf(b.title)?.series || "", volume: volumeOf(b.title)?.volume || 0, bundle: false, cover: "", url: "https://laboratory.ua/",
+    price: "", status: "немає", isNew: false, manual: true, genres: b.genres || [], blurb: "", pages: "", year: b.year, language: "українська",
+  }));
+}
+
 // ---- sitemap + product pages ----
 const HEADERS = { "User-Agent": "Mozilla/5.0 (Chytai catalog refresh; chytai.org.ua)" };
 const meta = (html, prop) => ent((html.match(new RegExp(`<meta[^>]+property=["']${prop.replace(/[.:]/g, "\\$&")}["'][^>]*content=["']([^"']*)`, "i")) || [])[1] || "");
@@ -906,7 +918,7 @@ const SOURCES = [
     normalize: (p) => p,
     keep: () => true,
     toItem: (p) => p,
-    finish: joinEbooks,
+    finish: (items) => joinEbooks([...items, ...labExtra(items)]),
   },
   // Наш Формат's own shop answers our server with 403 (2026-10-19), so its books come from MEGOGO Books.
   mbooks({ id: "nashformat", slug: "nash-format", brand: "Наш Формат", name: "Наш Формат", tagline: "Видавництво нонфікшну: бізнес, саморозвиток, історія, наука", url: "https://nashformat.ua/", draft: false }),
@@ -1162,7 +1174,7 @@ function buildShelves(raw, { seen = {}, today = new Date().toISOString().slice(0
     for (const it of items) {
       if (src.fetchAll) it.isNew = false; // items reused from the last refresh carry its flag
       seen[it.id] ??= firstTime ? baseline || today : today;
-      if (baseline && seen[it.id] > baseline && seen[it.id] >= limit) it.isNew = true;
+      if (baseline && !it.manual && seen[it.id] > baseline && seen[it.id] >= limit) it.isNew = true;
     }
     shelves.push({ id: src.id, kind: src.kind, name: src.name, tagline: src.tagline, url: src.url, ...(src.draft ? { draft: true } : {}), items });
   }
