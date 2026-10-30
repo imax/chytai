@@ -1304,7 +1304,8 @@ app.get("/", (req, res) => {
     forWhy = "схожі на те, що ви хочете прочитати";
   }
   const own = req.user ? new Map(Object.entries(store.entriesOf(req.user.id))) : new Set();
-  const forYou = req.user && seeds.length ? social.similar(seeds.map((s) => s.id), { limit: 6, skip: own, own }).map((x) => ({ ...x, book: ukWork(x.book) })).filter((x) => ok(x.book)) : [];
+  const forYou = req.user && seeds.length ? social.similar(seeds.map((s) => s.id), { limit: 6, skip: own, own }).map((x) => ({ ...x, book: ukWork(x.book) })).filter((x) => ok(x.book) && !store.sharedEntry(req.user.id, x.book.id)) : [];
+  // (Nothing from the reader's own shelf, in any language: Max had read «The War of the Worlds» and got «Війна світів», 2026-10-30.)
   // New in the publishers: one fresh book from each of six shelves, the ones the reader follows first.
   const fresh = f
     ? []
