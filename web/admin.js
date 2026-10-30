@@ -9,6 +9,10 @@
 const { esc } = require("./pages");
 
 const BOT = /bot|crawl|spider|slurp|curl|wget|python|java\b|go-http|headless|preview|monitor|uptime|fetch|scan|facebookexternalhit|whatsapp|telegram/i;
+// A person's browser, as far as the headers tell: no robot's name, an Accept-Language, and the Sec-Fetch-* headers
+// every browser has sent since 2023 (Chrome 76, Firefox 90, Safari 16.4). On 2026-10-30 a crawler with a browser's
+// user agent and an Accept-Language made 8872 «guest» views by 08:11 against the usual 600-1000 a day.
+const human = (req) => !BOT.test(req.headers["user-agent"] || "") && !!req.headers["accept-language"] && !!(req.headers["sec-fetch-mode"] || req.headers["sec-fetch-site"]);
 
 const DAY = 86400 * 1000;
 const pad = (n) => String(n).padStart(2, "0");
@@ -124,7 +128,7 @@ class Admin {
     if (accept && !accept.includes("text/html")) return;
     const p = req.path || "";
     if (p.startsWith("/api/") || p === "/refresh-status" || p === "/admin" || p.startsWith("/admin/") || p.includes(".")) return;
-    if (BOT.test(req.headers["user-agent"] || "") || !req.headers["accept-language"]) return; // browsers always send Accept-Language, most crawlers with a browser's user agent don't (2026-10-26)
+    if (!human(req)) return; // browsers always send Accept-Language, most crawlers with a browser's user agent don't (2026-10-26)
     const day = today();
     if (day !== this.seenDay) (this.seen = new Set()), (this.seenDay = day);
     try {
@@ -150,7 +154,7 @@ class Admin {
     if (accept && !accept.includes("text/html")) return;
     const p = req.path || "";
     if (p.startsWith("/api/") || p === "/refresh-status" || p === "/admin" || p.startsWith("/admin/") || p.includes(".") || p === "/mcp" || p.startsWith("/oauth/")) return;
-    if (BOT.test(req.headers["user-agent"] || "") || !req.headers["accept-language"] || /prefetch|prerender/i.test(req.headers["sec-purpose"] || req.headers.purpose || "")) return;
+    if (!human(req) || /prefetch|prerender/i.test(req.headers["sec-purpose"] || req.headers.purpose || "")) return;
     try {
       const referer = req.headers.referer || req.headers.referrer || "";
       const from = sourceOf(referer, req.query, ownHosts);
@@ -192,7 +196,7 @@ class Admin {
   }
   // The same for a step taken by a request (a guest's tap): a crawler or the owner is not counted.
   guestTap(req, readerId, step, cookies = {}) {
-    if (readerId || BOT.test(req.headers["user-agent"] || "") || !req.headers["accept-language"]) return;
+    if (readerId || !human(req)) return;
     this.guestStep(step, cookies.chytai_q === "1");
   }
 
@@ -218,10 +222,10 @@ class Admin {
     return { clicks, outside: { shown: out.shown || 0, none: out.none || 0, opened: out.open || 0 }, since: first && first > since ? first : since, started: first, total: rows.reduce((a, r) => a + r.n, 0), queries: rows.length, none: rows.filter((r) => !r.hits).reduce((a, r) => a + r.n, 0), top: rows.slice(0, 30), empty: rows.filter((r) => !r.hits).slice(0, 30) };
   }
 
-  // Is this request a person worth counting? Crawlers, the owner and requests without a browser's
-  // Accept-Language are not.
+  // Is this request a person worth counting? Crawlers, the owner and requests without a browser's headers
+  // (human() above) are not.
   counted(req, readerId) {
-    return readerId !== this.ownerId && !BOT.test(req.headers["user-agent"] || "") && !!req.headers["accept-language"];
+    return readerId !== this.ownerId && human(req);
   }
   // A tap on a link or a button (Max, 2026-10-29: «норм інструментацію … щоб мати дані для продуктових рішень»),
   // sent by app.js: the kind of page (SECTIONS), the block it sat in (data-block), what it led to and, for a
@@ -1165,4 +1169,4 @@ ${recent ? `<div class="tbl"><table>
   return layout({ title: "Фонові задачі · Адмінка", user, path: "/admin", body });
 }
 
-module.exports = { BOT, Admin, mailLinks, adminPage, catalogBlock, shelvesPage, readersPage, overviewsPage, speedPage, jobsPage, dayOf, weekOf, sectionOf };
+module.exports = { BOT, human, Admin, mailLinks, adminPage, catalogBlock, shelvesPage, readersPage, overviewsPage, speedPage, jobsPage, dayOf, weekOf, sectionOf };

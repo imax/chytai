@@ -17,7 +17,12 @@ function botName(ua) {
   const k = ua.match(KNOWN_RE);
   if (k) return KNOWN.find((x) => x.toLowerCase() === k[0].toLowerCase()) || k[0];
   const w = ua.match(/[\w.-]*(?:bot|crawl|spider|fetch|scan)[\w.-]*/i);
-  return (w ? w[0] : ua.split(/[\s/;(]/)[0] || "?").slice(0, 40);
+  if (w) return w[0].slice(0, 40);
+  // A browser's user agent without a browser's headers (admin.js human()): the browser, version and system it claims.
+  const b = ua.match(/(Edg|OPR|YaBrowser|Firefox|Chrome|Version)\/(\d+)/);
+  const os = ua.match(/Windows|Android|iPhone|iPad|Mac OS X|Linux/);
+  if (b) return `? ${b[1] === "Version" ? "Safari" : b[1]} ${b[2]}${os ? ` · ${os[0].replace("Mac OS X", "Mac")}` : ""}`;
+  return (ua.split(/[\s/;(]/)[0] || "?").slice(0, 40);
 }
 
 class Speed {

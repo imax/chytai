@@ -28,7 +28,7 @@ const readeat = require("./readeat");
 const findCovers = require("./findcovers");
 const { BookPage, isUrl } = require("./bookpage");
 const { UkFinder } = require("./ukfind");
-const { Admin, adminPage, catalogBlock, shelvesPage, readersPage, overviewsPage, speedPage, jobsPage, BOT } = require("./admin");
+const { Admin, adminPage, catalogBlock, shelvesPage, readersPage, overviewsPage, speedPage, jobsPage, BOT, human } = require("./admin");
 const { Mcp } = require("./mcp");
 const { Reviews } = require("./reviews");
 const { Advice } = require("./advice");
@@ -160,8 +160,9 @@ app.use((req, res, next) => {
     if (ms > 2000) console.log(`slow: ${req.method} ${req.originalUrl.slice(0, 120)} ${ms} ms ${res.statusCode}${req.user ? ` @${req.user.username}` : ""}`);
     // A page (HTML, not a picture, a call or /admin) for /admin/speed: people and robots apart.
     const ua = req.headers["user-agent"] || "";
-    const isBot = BOT.test(ua);
     const page = req.method === "GET" && res.statusCode === 200 && /text\/html/.test(res.getHeader("Content-Type") || "") && !/^\/(api|admin|t)\//.test(req.path) && !("rest" in req.query);
+    // A page asked for without a browser's headers is a robot too, whatever its user agent says (admin.js human()).
+    const isBot = BOT.test(ua) || (page && !human(req));
     if (page) speed.add(isBot ? "bot" : "page", ms);
     // A page people asked for and didn't find (a dead link from somewhere, an old address), for /admin/speed.
     // Only with a referrer: a person comes by a link (Google, another page), crawlers walking old addresses send none.
