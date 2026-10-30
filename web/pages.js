@@ -56,7 +56,7 @@ function isUk(book) {
 }
 const norm = (s) => String(s || "").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
 // The language word of a foreign book in the kicker («Англійською»), from the word Open Library gave it.
-const LANG_ADV = { англійська: "англійською", російська: "російською", польська: "польською", німецька: "німецькою", французька: "французькою", іспанська: "іспанською", італійська: "італійською" };
+const LANG_ADV = { англійська: "англійською", російська: "російською", польська: "польською", німецька: "німецькою", французька: "французькою", іспанська: "іспанською", італійська: "італійською", турецька: "турецькою" };
 const host = (url) => String(url || "").replace(/^https?:\/\/(www\.)?/, "").replace(/\/.*$/, "");
 // Availability as shown: «є» goes without saying; an announced book says when it is expected.
 const avail = (e) => (!e.status || e.status === "є" ? "" : e.status === "анонс" && e.expected ? `анонс, орієнтовно ${e.expected.toLowerCase()}` : e.status);

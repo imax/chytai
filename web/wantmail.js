@@ -7,7 +7,7 @@
 // once per reader and book, ever, so a shop running out and back does not bring a second letter. No prices,
 // no shop links: the letter points at the book page. One letter a day at most, with every book in it.
 // Switch: readers.want_mail (/settings/mail), one-click unsubscribe with the digest's signed token.
-const { isRussian } = require("./store");
+const { isRussian, shopLanguage } = require("./store");
 
 const SEND_HOUR = 10; // Kyiv time, after the night's catalog refresh
 const MAX_BOOKS = 10;
@@ -15,7 +15,7 @@ const KINDS = ["uk", "sale", "free"];
 
 const kyiv = (d) => new Date(d.toLocaleString("en-US", { timeZone: "Europe/Kyiv" }));
 const dayKyiv = (d) => d.toLocaleDateString("sv-SE", { timeZone: "Europe/Kyiv" });
-const ukrainian = (it) => (/^(uk|укр)/i.test(it.language || "") || (!it.language && /[а-яіїєґ]/i.test(it.title || ""))) && !isRussian(it);
+const ukrainian = (it) => (/^(uk|укр)/i.test(shopLanguage(it) || "") || (!it.language && /[а-яіїєґ]/i.test(it.title || ""))) && !isRussian(it);
 
 class WantMail {
   constructor({ store, auth, digest, site, log = console.log, to = "all", ownerId = "owner" }) {

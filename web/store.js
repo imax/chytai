@@ -68,6 +68,27 @@ const langGuess = (title) => {
   const ru = RU.test(t) || RU_WORDS.test(t) || RU_FORMS.test(t);
   return ru && !uk ? "ru" : uk && !ru ? "uk" : "";
 };
+// A shop's own language word is «українська» for everything it sells, so a publisher's book in English (Фоліо's
+// «Homage to Catalonia», an English edition with an English description; Max 2026-10-30 took it for the Ukrainian
+// translation) was shown as «Українською». A title with no Cyrillic whose description opens in Latin letters is
+// in that language. A Latin title with a Ukrainian description («Aurora Borealis») stays Ukrainian.
+const FOREIGN = [
+  ["польська", /[ąęłńśźż]|\b(się|jest|który|oraz|polski\w*)\b/i],
+  ["німецька", /\b(und|der|die|das|ist|nicht|ein|eine)\b/],
+  ["італійська", /\b(della|degli|nel|che|sono|gli)\b/],
+  ["іспанська", /[ñ¿¡]|\b(el|los|las|del|una|está)\b/],
+  ["французька", /\b(le|les|est|des|une|dans|qui)\b/],
+  ["турецька", /[şğı]/],
+];
+function shopLanguage(it) {
+  const lang = it.language;
+  if (!/^укр/i.test(lang || "") || /[а-яіїєґ]/i.test(it.title || "") || !/[a-z]/i.test(it.title || "")) return lang;
+  const { ent } = require("./catalogs");
+  const first = ent(String(it.blurb || "").replace(/<\/(p|div)>|<br\s*\/?>/gi, "\n").replace(/<[^>]+>/g, " ")).split(/\n/).find((l) => l.trim()) || "";
+  const latin = (first.match(/[a-zà-ÿąęłńśźżşğı]/gi) || []).length;
+  if (latin < 20 || latin <= (first.match(/[а-яіїєґ]/gi) || []).length) return lang;
+  return (FOREIGN.find(([, re]) => re.test(first)) || ["англійська"])[0];
+}
 const isRussian = (b) => {
   const lang = String(b?.language || "").toLowerCase();
   // A Ukrainian translation of such a writer is a Ukrainian book; anything else of theirs is not.
@@ -2113,7 +2134,7 @@ class Store {
   // builds every edition of itself and every book in its blocks, and on 2026-10-25 that cleaning was a third of
   // what a crawler's book page cost.
   fromShelfItem(shelf, it) {
-    return { id: it.id, title: it.title, author: it.author, altTitle: it.altTitle || "", cover: it.cover, tags: it.genres || [], links: [{ label: shelf.name, url: it.url }], source: shelf.id, shelf: shelf.id, blurb: blurbOf(it.blurb), price: it.price, status: it.status, expected: it.expected || "", language: it.language, edition: it.edition || "", isbn: it.isbn || "", volume: it.volume || 0, bundle: !!it.bundle, format: it.format || (shelf.kind === "free" ? "e-book" : shelf.kind === "audio" ? "аудіо" : "папір"), narrator: it.narrator || "", duration: it.duration || "", subscription: !!it.subscription, adapted: !!it.adapted, issued: /^\d{4}$/.test(it.year || "") ? it.year : "" };
+    return { id: it.id, title: it.title, author: it.author, altTitle: it.altTitle || "", cover: it.cover, tags: it.genres || [], links: [{ label: shelf.name, url: it.url }], source: shelf.id, shelf: shelf.id, blurb: blurbOf(it.blurb), price: it.price, status: it.status, expected: it.expected || "", language: shopLanguage(it), edition: it.edition || "", isbn: it.isbn || "", volume: it.volume || 0, bundle: !!it.bundle, format: it.format || (shelf.kind === "free" ? "e-book" : shelf.kind === "audio" ? "аудіо" : "папір"), narrator: it.narrator || "", duration: it.duration || "", subscription: !!it.subscription, adapted: !!it.adapted, issued: /^\d{4}$/.test(it.year || "") ? it.year : "" };
   }
 
   addBook({ title, author, cover, links, source = "manual", ...more }) {
@@ -2376,4 +2397,4 @@ class Store {
   }
 }
 
-module.exports = { fromOpenLibrary, sameCover, sameAuthor, OPEN_LIBRARY, mainGenres, isRussian, langGuess, Store, slugify, soundOf, norm, workName, OWNER };
+module.exports = { fromOpenLibrary, sameCover, sameAuthor, OPEN_LIBRARY, mainGenres, isRussian, shopLanguage, langGuess, Store, slugify, soundOf, norm, workName, OWNER };
