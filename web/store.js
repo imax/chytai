@@ -162,6 +162,9 @@ const SHOP_GENRES = [
 ];
 const OUR_GENRES = new Set(SHOP_GENRES.map(([g]) => g).concat(["компанії", "продукт"]));
 const genreMemo = new Map();
+// Comic words for store.comicLike: in a title, series or shop category, and in a description.
+const COMIC_WORDS = /комікс|манґ|манга|манхв|маньхуа|графічн(ий|а|ої) (роман|новел|версі|адаптаці)|comic|graphic novel/i;
+const COMIC_BLURB = /комікс|манґ|манга|графічн\S* (роман|новел|адаптаці|версі)|мальован\S* версі/i;
 const ourGenres = (names) => {
   const out = new Set();
   for (const n of names || []) {
@@ -597,6 +600,7 @@ class Store {
     const adapted = new Set();
     for (const [id, a] of this.aiAnswers("notbooks")) if (ADAPTED.test(a.what || "")) adapted.add(this.canonical(id));
     for (const w of works) if (/графічн|комікс/i.test(w.title || "")) adapted.add(this.canonical(w.id));
+    for (const [id, a] of this.aiAnswers("adapt")) if (a.kind === "adaptation") adapted.add(this.canonical(id));
     const partners = new Map(); // id -> ids across the script line it is paired with
     const fits = (id, other) => [...(partners.get(id) || [])].every((p) => alike(p, other));
     this.pairLog = { kept: [], dropped: [] }; // for the owner's check, /admin/translations/check
@@ -1219,6 +1223,7 @@ class Store {
     this.aliases = new Map(); // edition id -> canonical id
     this.editions = new Map(); // canonical id -> [{ shelf, item }]
     this.hidden = new Set(); // shelf items that are a second edition of another item on the same shelf
+    for (const si of this.shelfItems.values()) delete si.item.adapted;
     // and shop items that are not books (catalogpasses.js notbooks: sticker books, colouring books, postcards)
     for (const [id, a] of this.aiAnswers("notbooks")) if (a.kind === "not_book") this.hidden.add(id);
     let matches = { same: {}, different: [] };
@@ -1522,12 +1527,54 @@ class Store {
       this.editions.delete(d);
     };
     for (const [keep, dup] of decided.same) fold(keep, dup);
+    // A comic or graphic novel after a book we have is that book in one more format, a «Комікс» row in its «Де
+    // взяти» (Max, 2026-10-30, «Діти капітана Ґранта» after Verne); catalogpasses.js adapt finds them.
+    for (const [id, orig] of Object.entries(this.adaptLinks())) {
+      const si = this.shelfItems.get(id);
+      if (!si || !this.isWork(orig)) continue;
+      si.item.adapted = true;
+      fold(orig, id);
+    }
     // Readers' own volumes of one work (see above) join the work's page.
     for (const [keep, ids, name] of libFolds) {
       for (const id of ids) fold(keep, id);
       this.volWork.set(this.canonical(keep), name);
     }
     this.linkSeries(matches.volumes || {});
+  }
+
+  // ---- comic adaptations (catalogpasses.js adapt) ----
+  // A shop item that may be a comic: our genre «комікси» (the shop's or Haiku's), comic words in its title or
+  // series, or a description that calls it a comic or a graphic version.
+  comicLike(si) {
+    const it = si.item;
+    if (COMIC_WORDS.test([it.title, it.series || "", ...(it.genres || [])].join(" "))) return true;
+    if ((this.aiGenres().get(it.id) || []).includes("комікси")) return true;
+    return COMIC_BLURB.test(it.blurb || "");
+  }
+  // The book Haiku says this item adapts, if the catalog has it: the Ukrainian title first, then the original's.
+  // Not the item's own page, and not another comic.
+  adaptOrigin(id, a) {
+    const self = this.canonical(id);
+    const comic = (w) => {
+      const c = this.canonical(w);
+      const si = this.shelfItems.get(c);
+      return c === self || (!!si && (this.aiAnswers("adapt").get(c)?.kind === "adaptation" || COMIC_WORDS.test(si.item.title)));
+    };
+    for (const title of [a.ukrainian_title, a.title].filter(Boolean)) {
+      const w = this.findWork({ title, author: a.author, not: comic });
+      if (w) return this.canonical(w);
+    }
+    return null;
+  }
+  adaptLinks() {
+    return JSON.parse(this.db.get("adapt:links") || "{}");
+  }
+  setAdaptLinks(links) {
+    this.aiAnswersChanged("adapt");
+    this.db.set("adapt:links", JSON.stringify({ ...this.adaptLinks(), ...links }));
+    this.saveDecisions(this.decisions());
+    this.indexSlugs();
   }
 
   // Is this id a work we know: a library book or a shelf item?
@@ -1891,10 +1938,10 @@ class Store {
     }
     if (this.covers?.has(id)) out.cover = this.covers.get(id);
     // A book a reader added by hand or imported has no cover; its catalog editions do («Сила інтровертів»).
-    else if (!out.cover) out.cover = (out.editions || []).find((e) => e.cover)?.cover || "";
+    else if (!out.cover) out.cover = (out.editions || []).find((e) => e.cover && !e.adapted)?.cover || "";
     // A cover Haiku judged a bad scan, a blank binding or another book (catalogpasses.js covers) is not shown,
     // as long as it is still that picture; a placeholder looks better.
-    if (out.cover && this.hiddenCovers()[id] === out.cover) out.cover = (out.editions || []).find((e) => e.cover && e.cover !== out.cover)?.cover || "";
+    if (out.cover && this.hiddenCovers()[id] === out.cover) out.cover = (out.editions || []).find((e) => e.cover && e.cover !== out.cover && !e.adapted)?.cover || "";
     // No description of its own (a reader's import, an Amazon link; Max 2026-10-25: «The Five Dysfunctions of a
     // Team» showed an empty «Про книжку»): a catalog edition's, else the Ukrainian translation's, named as such;
     // else the short one Haiku wrote (catalogpasses.js blurb; its answers are stored only by a whole-catalog run).
@@ -1904,7 +1951,7 @@ class Store {
     // Readeat's text comes with its SEO questions and a buy-and-delivery paragraph (Max 2026-10-26): cleaned like a shop's.
     if (out.blurb && out.blurbSource === "Readeat") out.blurb = require("./catalogs").about(out.blurb, 3000);
     if (!out.blurb && borrow) {
-      const e = (out.editions || []).find((x) => x.blurb);
+      const e = (out.editions || []).find((x) => x.blurb && !x.adapted);
       if (e) (out.blurb = e.blurb), (out.blurbSource = e.shelf?.name || "");
       else {
         const t = [...(this.translations?.get(id) || [])].map((x) => this.book(x, { edited: false, borrow: false })).find((x) => x?.blurb && /[а-яіїєґ]/i.test(x.title) && !isRussian(x));
@@ -1943,7 +1990,7 @@ class Store {
   // «Володар перснів» showed no «Фентезі»). The shop's own names stay after ours.
   genresOf(id, b, eds) {
     const own = b.tags || [];
-    const names = [...own, ...(eds || []).flatMap(({ item }) => item.genres || [])];
+    const names = [...own, ...(eds || []).filter(({ item }) => !item.adapted).flatMap(({ item }) => item.genres || [])]; // a comic after it is not a comic
     let ours = ourGenres(names);
     if (!ours.some((g) => g !== "художня")) {
       for (const t of this.translations?.get(id) || []) {
@@ -2033,7 +2080,7 @@ class Store {
   // builds every edition of itself and every book in its blocks, and on 2026-10-25 that cleaning was a third of
   // what a crawler's book page cost.
   fromShelfItem(shelf, it) {
-    return { id: it.id, title: it.title, author: it.author, altTitle: it.altTitle || "", cover: it.cover, tags: it.genres || [], links: [{ label: shelf.name, url: it.url }], source: shelf.id, shelf: shelf.id, blurb: blurbOf(it.blurb), price: it.price, status: it.status, expected: it.expected || "", language: it.language, edition: it.edition || "", isbn: it.isbn || "", volume: it.volume || 0, bundle: !!it.bundle, format: it.format || (shelf.kind === "free" ? "e-book" : shelf.kind === "audio" ? "аудіо" : "папір"), narrator: it.narrator || "", duration: it.duration || "", subscription: !!it.subscription, issued: /^\d{4}$/.test(it.year || "") ? it.year : "" };
+    return { id: it.id, title: it.title, author: it.author, altTitle: it.altTitle || "", cover: it.cover, tags: it.genres || [], links: [{ label: shelf.name, url: it.url }], source: shelf.id, shelf: shelf.id, blurb: blurbOf(it.blurb), price: it.price, status: it.status, expected: it.expected || "", language: it.language, edition: it.edition || "", isbn: it.isbn || "", volume: it.volume || 0, bundle: !!it.bundle, format: it.format || (shelf.kind === "free" ? "e-book" : shelf.kind === "audio" ? "аудіо" : "папір"), narrator: it.narrator || "", duration: it.duration || "", subscription: !!it.subscription, adapted: !!it.adapted, issued: /^\d{4}$/.test(it.year || "") ? it.year : "" };
   }
 
   addBook({ title, author, cover, links, source = "manual", ...more }) {
@@ -2132,8 +2179,11 @@ class Store {
   // The work for a book named from outside ({ title, author, isbns }), or null. An ISBN is enough on
   // its own; a title needs the same author (a surname in common, in either alphabet, a typo allowed),
   // unless only one work has that title and the title is not a single short word.
-  findWork({ title, author = "", isbns = [] }) {
-    const { byIsbn, byTitle } = this.workIndex();
+  findWork({ title, author = "", isbns = [], not = null }) {
+    const index = this.workIndex();
+    const byIsbn = index.byIsbn;
+    // `not`: works to pass over (a comic's own page when its original is looked for, adaptOrigin).
+    const byTitle = not ? { get: (t) => (index.byTitle.get(t) || []).filter((w) => !not(w.id)) } : index.byTitle;
     for (const i of isbns) if (byIsbn.has(isbnKey(i))) return byIsbn.get(isbnKey(i));
     const names = authorNames;
     const mine = names(author);

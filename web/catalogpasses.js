@@ -86,6 +86,39 @@ function passes({ store, social, db, apiKey, log }) {
       },
     },
     {
+      // Max 2026-10-30: «Діти капітана Ґранта. Том 1» Алексіса Нема за Верном «це якби ще один формат тієї самої
+      // книжки… треба прив'язувати до оригіналу… не виводити в пошук і в рекомендації». Only comic-like shop items
+      // are asked (store.comicLike, ~400 of 28 thousand); most comics are works of their own (manga, Marvel).
+      key: "adapt",
+      name: "Комікс-адаптації",
+      what: "Комікси й графічні романи, зроблені за іншою книжкою: стають рядком «Комікс» у «Де взяти» оригіналу.",
+      system: `You help Chytai, a Ukrainian book site. You get one comic-like item from a bookshop's catalog. Say «adaptation» when it is a comic, graphic novel or manga version of one specific earlier book (a novel, a story, a play, a non-fiction book), retelling that book's own text or story: «Дракула» drawn after Bram Stoker, a graphic version of «Sapiens», «1984. Графічний роман». Say «own» when it is a work of its own: an original comic or manga, a new story with characters of a book, film, game or TV series (spin-offs, «Відьмак» comics with new plots), an adaptation of a film, game or TV series, a comic biography or a non-fiction comic. Say «unsure» when you can't tell. For «adaptation», give the adapted book's title as published in Ukrainian if it is (else empty), its title in the original language, and its author.`,
+      schema: { type: "object", properties: { kind: { type: "string", enum: ["adaptation", "own", "unsure"] }, ukrainian_title: { type: "string" }, title: { type: "string" }, author: { type: "string" } }, required: ["kind", "ukrainian_title", "title", "author"], additionalProperties: false },
+      candidates: () => [...store.shelfItems.values()].filter((si) => !store.hidden.has(si.item.id) && store.comicLike(si)).map((si) => ({ id: si.item.id, si })),
+      // The words that tell («Перший том графічної адаптації класичного роману Жуля Верна») are often at the end.
+      facts: (s) => {
+        const it = s.si.item;
+        const blurb = String(it.blurb || "").replace(/\s+/g, " ");
+        return [`Title: ${it.title}`, it.author ? `Author: ${it.author}` : "", `Publisher or shop: ${s.si.shelf.name}`, (it.genres || []).length ? `Shop's categories: ${it.genres.slice(0, 4).join(", ")}` : "", blurb ? `Description: ${blurb.length > 700 ? `${blurb.slice(0, 350)} … ${blurb.slice(-350)}` : blurb}` : ""].filter(Boolean).join("\n");
+      },
+      item: (s, a) => {
+        const orig = a?.kind === "adaptation" ? store.adaptOrigin(s.id, a) : null;
+        const named = a ? [a.ukrainian_title, a.title].filter(Boolean).join(" / ") : "";
+        const after = !a ? "" : a.kind === "own" ? "окремий твір" : a.kind === "unsure" ? "не знає" : `адаптація «${named}» — ${a.author}: ${orig ? `→ «${store.book(orig)?.title}»` : "оригіналу в каталозі немає"}`;
+        return { id: s.id, title: s.si.item.title, author: s.si.item.author || "", before: "окрема книжка", after, diff: !!orig, links: orig ? [s.id, orig] : [s.id] };
+      },
+      // An adaptation whose book we have becomes that book's edition (store.linkEditions, meta `adapt:links`).
+      apply: (items) => {
+        const links = {};
+        for (const { s: sub, answer: a } of items) {
+          const orig = a.kind === "adaptation" && store.adaptOrigin(sub.id, a);
+          if (orig) links[sub.id] = orig;
+        }
+        store.setAdaptLinks(links);
+        return Object.keys(links).length;
+      },
+    },
+    {
       key: "series",
       name: "Серії",
       what: "Назва серії й номер книжки в ній там, де сайт серії не знає.",

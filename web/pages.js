@@ -787,11 +787,12 @@ function where(book, ukrlib = null, sluhay = null, epub = "") {
   // Shops that have it in one edition are not «немає» for another (2026-10-28 usability review: «Meridian
   // Czernowitz, папір, 480 ₴» and below it «немає: Meridian Czernowitz»); and when it can be had anywhere,
   // the shops that are out of it are not named at all.
-  const out = have.length ? [] : [...new Map(eds.filter(gone).map((e) => [e.shelf.id, e])).values()];
+  const out = have.some((e) => !e.adapted) ? [] : [...new Map(eds.filter((e) => gone(e) && !e.adapted).map((e) => [e.shelf.id, e])).values()]; // a comic in stock is not the book
   // One row per kind (папір, e-book, аудіо), cheapest first; two shops show, the rest fold under «ще N»
   // (the review: «Тигролови» had nine shop rows and «Старий Лев» three times on a phone screen).
-  const kinds = [["папір", "Папір"], ["e-book", "E-book"], ["аудіо", "Аудіо"]];
-  const kindOf = (e) => (kinds.some(([k]) => k === e.format) ? e.format : "папір");
+  // A comic after the book (store.linkEditions, catalogpasses.js adapt) is its own row, last.
+  const kinds = [["папір", "Папір"], ["e-book", "E-book"], ["аудіо", "Аудіо"], ["комікс", "Комікс"]];
+  const kindOf = (e) => (e.adapted ? "комікс" : kinds.some(([k]) => k === e.format) ? e.format : "папір");
   // Free first: «безкоштовно» has no digits and sorted last, after «Book.ua 70 ₴».
   const price = (e) => (e.price === "безкоштовно" ? 0 : Number(String(e.price || "").replace(/[^\d]/g, "")) || Infinity);
   // The free shelf's line goes to its catalog page on the site, not into the reader (Max, 2026-10-29); «Додати в Читалку» is the way in.
