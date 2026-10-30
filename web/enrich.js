@@ -125,6 +125,22 @@ async function getJson(url, fetchImpl) {
   return r.json();
 }
 
+// The book's page on Project Gutenberg by its title and the author's surname, for when Open Library does not
+// know it (Right Ho, Jeeves is #10554 there; Open Library gives no id). "" when it is not there.
+async function gutenbergFor(book, fetchImpl) {
+  const title = mainTitle(book.title);
+  const surname = firstAuthor(book.author).split(" ").pop();
+  if (!title || !surname) return "";
+  const key = (t) => String(t || "").toLowerCase().replace(/&amp;/g, "&").replace(/&#39;|&#x27;|[’']/g, "").replace(/^(the|a|an)\s+/, "").replace(/[^a-z0-9]+/g, " ").trim();
+  const r = await fetchImpl(`https://www.gutenberg.org/ebooks/search/?query=${encodeURIComponent(`${title} ${surname}`)}`, { headers: HEADERS, signal: AbortSignal.timeout(12000) });
+  if (!r.ok) return "";
+  const html = await r.text();
+  for (const m of html.matchAll(/<li class="booklink">[\s\S]*?href="\/ebooks\/(\d+)"[\s\S]*?<span class="title">([^<]*)<\/span>(?:\s*<span class="subtitle">([^<]*)<\/span>)?/g)) {
+    if (key(m[2].split(/[:;]/)[0]) === key(title) && key(m[3]).includes(key(surname))) return `https://www.gutenberg.org/ebooks/${m[1]}`;
+  }
+  return "";
+}
+
 // The cover of a recent edition of a work, not the first one (Max, 2026-10-23: «часто знаходимо дуже старі
 // обкладинки, перших видань. хочеться більш сучасні»): the newest edition with a cover in the first language
 // of `prefer` that has one, else in any language; "" when no edition has a cover.
@@ -323,6 +339,10 @@ async function enrich(store, { ids, log = () => {}, fetchImpl = fetch, force = f
         continue;
       }
       let info = isLatin(b.title) || cleanIsbns(b.isbns).length ? await lookup(b, { fetchImpl }) : null;
+      if (isLatin(b.title) && !info?.gutenberg && !(b.links || []).some((l) => /gutenberg\.org/.test(l.url))) {
+        const pg = await gutenbergFor(b, fetchImpl).catch(() => "");
+        if (pg) info = { ...(info || {}), gutenberg: pg };
+      }
       // Google Books fills what Open Library left out, and is the only source for Cyrillic titles.
       if (googleKey && !(info?.cover && info?.blurb && info?.published)) {
         // Google refusing (it answers Fly's servers 503 with a key, 2026-10-21) must not stop Open Library.
