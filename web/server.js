@@ -560,7 +560,11 @@ function fileFor(files, book) {
     if (!mine.size || !bookAuthors.size || cyr(mine) !== cyr(bookAuthors)) return true; // «Орвелл» and «Orwell» can't be compared
     return [...mine].some((w) => bookAuthors.has(w));
   };
-  return files.find((f) => titles.has(key(f.title)) && sameAuthor(f)) || null;
+  // A file in another language is not this book: the Ukrainian «Аліса в Країні Див» page found the English
+  // «Alice's Adventures in Wonderland» by its original title and offered it as if it were the Ukrainian text (Max, 2026-10-30).
+  const script = (t) => (/[а-яіїєґ]/i.test(t || "") ? "cyr" : /[a-z]/i.test(t || "") ? "lat" : "");
+  const sameScript = (f) => !script(f.title) || !script(book.title) || script(f.title) === script(book.title);
+  return files.find((f) => titles.has(key(f.title)) && sameAuthor(f) && sameScript(f)) || null;
 }
 
 // A free book's page here by its file name in the reader: the QR on the last page the reader prints
