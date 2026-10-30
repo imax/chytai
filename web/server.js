@@ -164,7 +164,8 @@ app.use((req, res, next) => {
     const page = req.method === "GET" && res.statusCode === 200 && /text\/html/.test(res.getHeader("Content-Type") || "") && !/^\/(api|admin|t)\//.test(req.path) && !("rest" in req.query);
     if (page) speed.add(isBot ? "bot" : "page", ms);
     // A page people asked for and didn't find (a dead link from somewhere, an old address), for /admin/speed.
-    if (req.method === "GET" && res.statusCode === 404 && !/^\/(api|admin|t|covers)\//.test(req.path) && !/\.[a-z0-9]{2,5}$/i.test(req.path)) admin.event(req, req.user?.id, "404", req.path);
+    // Only with a referrer: a person comes by a link (Google, another page), crawlers walking old addresses send none.
+    if (req.method === "GET" && res.statusCode === 404 && req.headers.referer && !/^\/(api|admin|t|covers)\//.test(req.path) && !/\.[a-z0-9]{2,5}$/i.test(req.path)) admin.event(req, req.user?.id, "404", req.path);
     if (isBot) speed.bot(ua, ms, page, res.statusCode === 503);
   });
   next();
@@ -379,7 +380,8 @@ app.get("/login", (req, res) => {
   const book = id ? store.bookPage(id) : null;
   if (book) admin.guestTap(req, null, m[1] === "want" ? "want" : "mark", cookies(req));
   // The way in, step by step (admin «Вхід»): the page opened, and for what (a book's button, the reader, the menu).
-  admin.event(req, null, "login", `page:${m ? m[1] : next.startsWith("/reader-login") || next.startsWith("/oauth") ? "reader" : next ? `from:${require("./admin").sectionOf(next.split("?")[0])}` : "menu"}`);
+  // With a referrer only: crawlers that walk the «Увійти» links send none.
+  if (req.headers.referer) admin.event(req, null, "login", `page:${m ? m[1] : next.startsWith("/reader-login") || next.startsWith("/oauth") ? "reader" : next ? `from:${require("./admin").sectionOf(next.split("?")[0])}` : "menu"}`);
   res.send(pages.loginPage({ next, book, what: m?.[1], free: !!freeFileFor(book) }));
 });
 app.post("/login", async (req, res) => {

@@ -1467,11 +1467,11 @@ ${running ? `<script>setTimeout(() => location.reload(), 5000)</script>` : ""}`;
 // What people searched for on the site in the last month (admin.searches): the most asked, and what found nothing.
 function searchesBlock(s) {
   if (!s) return "";
-  if (!s.total) return `<h2>Що шукають</h2>\n<p class="muted small">Запити записуються з ${esc(s.started || "сьогодні")}, поки порожньо.</p>`;
+  if (!s.total) return `<h2>Що шукають</h2>\n<p class="muted small">Поки ніхто нічого не шукав. Рахуємо з 29 жовтня; твої власні пошуки, як і роботи, не рахуються.</p>`;
   const day = (d) => new Date(`${d}T12:00`).toLocaleDateString("uk-UA", { day: "numeric", month: "short" });
   const rows = (list, hits) => list.map((r) => `<tr><td><a href="/search?${attr(new URLSearchParams({ q: r.q }).toString())}">${esc(r.q)}</a></td><td>${r.n}</td>${hits ? `<td>${r.hits || `<span class="zero">0</span>`}</td>` : ""}</tr>`).join("");
   return `<h2>Що шукають</h2>
-<p class="muted small">З ${day(s.since)}: ${s.total} пошуків, ${s.queries} різних запитів, нічого не знайшли ${s.none}, переходів з результатів ${s.clicks} (<a href="/admin/traffic#taps">куди</a>).</p>
+<p class="muted small">Без твоїх власних пошуків. З ${day(s.since)}: ${s.total} пошуків, ${s.queries} різних запитів, нічого не знайшли ${s.none}, переходів з результатів ${s.clicks} (<a href="/admin/traffic#taps">куди</a>).</p>
 ${s.outside ? `<p class="muted small">Книжки не з Chytai під результатами: показали ${s.outside.shown}, ніде не знайшли ${s.outside.none}, відкрили (нові книжки) ${s.outside.opened}.</p>` : ""}
 <div class="tbl"><table><thead><tr><th>Запит</th><th>Разів</th><th>Знайдено</th></tr></thead><tbody>${rows(s.top, true)}</tbody></table></div>
 ${s.empty.length ? `<h2>Нічого не знайшли</h2>
