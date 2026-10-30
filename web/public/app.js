@@ -424,9 +424,11 @@
     const star = e.target.closest(".rate-stars button");
     if (!star) return;
     const box = star.closest(".rate");
-    // The left half of a star is half a point: 4,5 is a tap on the left of the fifth (Max, 2026-10-30).
-    const rect = star.getBoundingClientRect();
-    const n = Number(star.dataset.r) - (e.clientX && e.clientX < rect.left + rect.width / 2 ? 0.5 : 0);
+    // A second tap on the same star makes it half (4 → 4,5 is two taps on the fifth), a third makes it whole
+    // again (Max, 2026-10-30: «перший тап повна зірка, другий тап половинка»).
+    const r = Number(star.dataset.r);
+    const n = Number(box.dataset.rating) === r ? r - 0.5 : r;
+    box.dataset.rating = n;
     for (const b of box.querySelectorAll(".rate-stars button")) {
       b.classList.toggle("on", Number(b.dataset.r) <= n);
       b.classList.toggle("half", Number(b.dataset.r) === n + 0.5);

@@ -131,12 +131,16 @@ main:has(> .admin-nav) { padding-top: 24px; }
 .rate { display: inline-flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; justify-content: flex-end; }
 .rate-stars { display: inline-flex; }
 .rate-stars button { background: none; border: 0; padding: 2px 3px; font-size: 22px; line-height: 1; cursor: pointer; color: var(--under); transition: color .12s; }
-.rate-stars button.on, .rate-stars:hover button { color: var(--accent); }
-.rate-stars button:hover ~ button { color: var(--under); }
+.rate-stars button.on { color: var(--accent); }
+/* The hover preview only with a mouse: on a phone the tapped star stays «hovered» and would hide its half. */
+@media (hover: hover) {
+  .rate-stars:hover button { color: var(--accent); }
+  .rate-stars button:hover ~ button { color: var(--under); }
+  .rate-stars:hover button.half { color: var(--accent); }
+  .rate-stars button.half:hover ~ button, .rate-stars button:hover ~ button.half { color: var(--under); }
+}
 /* Half a star (4,5): the left half lit. */
 .rate-stars button.half { background: linear-gradient(90deg, var(--accent) 50%, var(--under) 50%); -webkit-background-clip: text; background-clip: text; color: transparent; }
-.rate-stars:hover button.half { color: var(--accent); }
-.rate-stars button.half:hover ~ button, .rate-stars button:hover ~ button.half { color: var(--under); }
 .rate-year { font: inherit; font-size: 13px; color: var(--muted); background: transparent; border: 1px solid var(--rule); border-radius: 6px; padding: 4px 6px; }
 .own-acts { flex-direction: column; align-items: flex-end; gap: 10px; }
 @media (max-width: 760px) { .own-acts { align-items: flex-start; } }
