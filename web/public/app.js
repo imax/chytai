@@ -424,8 +424,13 @@
     const star = e.target.closest(".rate-stars button");
     if (!star) return;
     const box = star.closest(".rate");
-    const n = Number(star.dataset.r);
-    for (const b of box.querySelectorAll(".rate-stars button")) b.classList.toggle("on", Number(b.dataset.r) <= n);
+    // The left half of a star is half a point: 4,5 is a tap on the left of the fifth (Max, 2026-10-30).
+    const rect = star.getBoundingClientRect();
+    const n = Number(star.dataset.r) - (e.clientX && e.clientX < rect.left + rect.width / 2 ? 0.5 : 0);
+    for (const b of box.querySelectorAll(".rate-stars button")) {
+      b.classList.toggle("on", Number(b.dataset.r) <= n);
+      b.classList.toggle("half", Number(b.dataset.r) === n + 0.5);
+    }
     box.classList.add("rated");
     saveRate(box, "rating", n);
   });

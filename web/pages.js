@@ -752,11 +752,11 @@ function mine(book, entry, user, now = false, readUrl = "") {
     removeItem(book, entry),
   ];
   // A book read: its stars and year right under the button, saved as they change (app.js, .rate); «нотатка» opens the form.
-  const r = Math.floor(entry.rating ?? 0);
+  const r = entry.rating ?? 0;
   const years = rateYears();
   if (entry.year && !years.includes(entry.year)) years.push(entry.year);
   const line = entry.status === "read" && !entry.kids
-    ? `<div class="mine-line rate" data-id="${attr(book.id)}"><span class="rate-stars" role="group" aria-label="Оцінка">${[1, 2, 3, 4, 5].map((n) => `<button type="button" data-r="${n}" title="${n} з 5"${n <= r ? ' class="on"' : ""}>★</button>`).join("")}</span><select class="rate-year" aria-label="Рік"><option value="">рік?</option>${years.map((y) => `<option${y === entry.year ? " selected" : ""}>${y}</option>`).join("")}</select><a class="text-link" href="${attr(edit)}">${entry.note ? "нотатка" : "+ нотатка"}</a></div>`
+    ? `<div class="mine-line rate" data-id="${attr(book.id)}"><span class="rate-stars" role="group" aria-label="Оцінка">${[1, 2, 3, 4, 5].map((n) => `<button type="button" data-r="${n}" title="${n} з 5"${n <= r ? ' class="on"' : n - 0.5 === r ? ' class="half"' : ""}>★</button>`).join("")}</span><select class="rate-year" aria-label="Рік"><option value="">рік?</option>${years.map((y) => `<option${y === entry.year ? " selected" : ""}>${y}</option>`).join("")}</select><a class="text-link" href="${attr(edit)}">${entry.note ? "нотатка" : "+ нотатка"}</a></div>`
     : "";
   return `<div class="acts" data-block="acts">${drop(` title="Змінити" data-ev="status">✓ ${esc(what)} <span class="caret">▾</span>`, "btn have", items)}${read}</div>${line}`;
 }
