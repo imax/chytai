@@ -11,7 +11,7 @@ const MODEL = "claude-haiku-5-5";
 const SIZE = 200;
 const PARALLEL = 4;
 const PARALLEL_ALL = 8;
-const PROMPT = 3; // the SYSTEM version below; bump it with every change
+const PROMPT = 4; // the SYSTEM version below; bump it with every change
 const PRICE = { input: 0.1 / 1e6, output: 0.5 / 1e6, cacheRead: 0.01 / 1e6, cacheWrite: 0.125 / 1e6 }; // $ per token, Haiku 5.5
 const costOf = (u) => (u.input_tokens || 0) * PRICE.input + (u.cache_read_input_tokens || 0) * PRICE.cacheRead + (u.cache_creation_input_tokens || 0) * PRICE.cacheWrite + (u.output_tokens || 0) * PRICE.output;
 
@@ -23,6 +23,9 @@ For the book given, pick the one genre that fits it best. Add a second one only 
 - «класика» is only for the established canon, books read for generations; a recent novel, even one retelling a myth or a classic, is not «класика».
 - A memoir or diary goes under «біографії» only when it is about a life; a travel or adventure memoir is «подорожі», a doctor's stories about medicine are «здоров'я».
 - A literary classic is «класика», not «любовні романи».
+- «любовні романи» is only for books where the love story is the point (romance, a romantic comedy); a comic novel or a novel with a wedding or an engagement in its plot is not one.
+- «гроші» is only for non-fiction about money, finance and economics, never for a novel.
+- Comic and humorous fiction (Wodehouse, Pratchett, Jerome K. Jerome, Douglas Adams) has no genre of its own here: give it the genre of what it otherwise is («класика», «фентезі», «фантастика», «дитячі»…) or «художня».
 - «фантастика» (science fiction) and «фентезі» (magic, myth) never go together: pick the one the book is; the Witcher is «фентезі».
 - Children's and teen books are «дитячі» or «підліткові» whatever else they are; a classic read at school is not a children's book.`;
 
@@ -116,7 +119,11 @@ class GenreTrial {
     this.allRunning = true;
     this.stopAll = false;
     const have = this.store.aiGenres();
-    const todo = [...this.store.workIds()].filter((id) => !have.has(id)).map((id) => this.store.book(id)).filter((b) => b && !isRussian(b));
+    // Prompt 3 had no word on humour, and Haiku filed comic novels under «гроші» or «любовні романи» (Max
+    // 2026-10-30: Wodehouse's «Неперевершений Дживс» as «Любовні романи», Pratchett as «Гроші»): those
+    // answers are asked again, the rest stay.
+    const redo = new Set(this.db.prepare("SELECT id FROM ai_genre WHERE prompt < 4 AND (genres LIKE '%гроші%' OR genres LIKE '%любовні романи%')").all().map((r) => r.id));
+    const todo = [...this.store.workIds()].filter((id) => !have.has(id) || redo.has(id)).map((id) => this.store.book(id)).filter((b) => b && !isRussian(b));
     const st = { cost: 0, errors: 0, ...this.allState(), at: new Date().toISOString(), prompt: PROMPT, total: todo.length, done: 0, finished: null, stopped: null };
     const save = () => this.db.set("genreall", JSON.stringify(st));
     save();
