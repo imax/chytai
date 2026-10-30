@@ -460,7 +460,7 @@ function bookPage({ ukrlib = null, sluhay = null, inGenre = null, fresh = null, 
         ${twins(book)}
         ${!user && !freeRead ? "" : mine(book, entry, user, now, readUrl && freeRead ? goRead(book) : readUrl)}
         ${where(book, ukrlib, sluhay)}
-        ${!user && !freeRead ? "" : `<p class="book-tools small">${user ? `<button type="button" class="text-link" data-open="lists-dlg">Додати до списку…</button>` : `<a rel="nofollow" href="${attr(`/login?next=${encodeURIComponent(book.href || "")}`)}">Додати до списку…</a>`}${ownerItems(book, user)}</p>`}
+        ${user?.owner ? `<p class="book-tools small">${ownerItems(book, user)}</p>` : ""}
       </div>
     </article>
     ${series(book, inLibrary)}
@@ -697,16 +697,28 @@ function readerLine({ name, href, entry: e, now }, id) {
 // The book's own actions (Max, 2026-10-30: the «⋯» menu was «unwieldy» on free books and «overwhelming» on the
 // rest; «все забудемо, зробимо заново»): one status button, its «▾» opens the «На моїй полиці» form; a free book or
 // one's own file has «Відкрити в Читалці» next to it (no EPUB link: the file is in the reader); the owner's tools are
-// a quiet line under «Де взяти» with «Додати до списку…».
+// a quiet line under «Де взяти».
 // The free shelf's book goes through /go/read so /admin/traffic counts it.
 const goRead = (book) => `/go/read/${attr((book.href || "").split("/").pop() || encodeURIComponent(book.id))}`;
 
-// The owner's tools for the book: a quiet line under «Де взяти», after «Додати до списку…».
+// The owner's tools for the book: a quiet line under «Де взяти».
 function ownerItems(book, user) {
   if (!user?.owner) return "";
   const at = `/admin/book/${encodeURIComponent(book.href.split("/").pop())}`;
   return `<a href="${attr(at)}">Редагувати${book.edited ? ` <span class="muted">· виправлено вручну</span>` : ""}</a>${book.cover ? "" : `<a href="${attr(at)}?find=1">Знайти обкладинку</a>`}`;
 }
+
+// One tap in the «▾» menu: a form for a signed-in reader, the sign-in page (and back to the same tap) for a guest.
+const dropItem = (book, user, field, value, label, on = false) =>
+  on
+    ? `<span class="on">${label}</span>`
+    : user
+      ? `<form method="post" action="/api/${field === "now" ? "now" : "entry"}/${attr(encodeURIComponent(book.id))}">${field === "now" ? "" : `<input type="hidden" name="${field}" value="${attr(value)}">`}<input type="hidden" name="back" value="1"><button>${label}</button></form>`
+      : `<a rel="nofollow" href="${attr(guestDo(book, field === "copy" ? "paper" : value || field))}">${label}</a>`;
+// «Прибрати з полиці»; a rating or a note asks first.
+const removeItem = (book, entry) =>
+  `<form method="post" action="/api/entry/${attr(encodeURIComponent(book.id))}/remove"${entry.rating != null || entry.note ? ` onsubmit="return confirm('Прибрати книжку з полиці разом з оцінкою й нотаткою?')"` : ""}><input type="hidden" name="back" value="1"><button>Прибрати з полиці</button></form>`;
+const drop = (summary, cls, items) => `<details class="more-acts drop"><summary class="${cls}"${summary}</summary><div class="more-menu">${items.filter(Boolean).join("")}</div></details>`;
 
 function mine(book, entry, user, now = false, readUrl = "") {
   // A free shelf's book or the reader's own file: «Відкрити в Читалці», the second button (Max, 2026-10-30).
@@ -714,21 +726,39 @@ function mine(book, entry, user, now = false, readUrl = "") {
   // Read in another language: the mark comes from that book, and so does the edit link.
   const href = entry?.via ? entry.via.href : book.href;
   const edit = href ? `/me${href}` : `/me/book/${encodeURIComponent(entry?.via ? entry.via.id : book.id)}`;
-  // Everything else about the book on the reader's shelf is one form, the /me/book/… page (Max, 2026-10-30: «читаю,
-  // прочитано, є в мене, дитяча полиця … це все одна дія, яка відкриває форму»; «не придумувати окрему модалку»).
-  const form = user ? edit : `/login?next=${encodeURIComponent(edit)}`;
-  const open = (label, cls, more = "") => `<a class="${cls}" rel="nofollow" href="${attr(form)}"${more}>${label}</a>`;
-  if (!entry) return `<div class="acts" data-block="acts"><span class="want-split">${wantButton(book, user, { size: "", primary: true })}${open("▾", "btn primary", ' aria-label="Інший статус" title="Читаю, прочитано, є в мене…"')}</span>${read}</div>`;
+  const lists = user ? `<button type="button" data-open="lists-dlg">Додати до списку…</button>` : `<a rel="nofollow" href="${attr(`/login?next=${encodeURIComponent(book.href || "")}`)}">Додати до списку…</a>`;
+  // A volume of a series: «Прочитано · всю серію» opens the edit page with «Уся серія» ticked.
+  const allOf = book.cycle?.items?.length > 1 ? `<a rel="nofollow" href="${attr(user ? `${edit}?series` : `/login?next=${encodeURIComponent(`${edit}?series`)}`)}">Прочитано · всю серію</a>` : "";
+  // One status button; its «▾» is a short menu where each line is one tap, and the full form is one of them
+  // (Max, 2026-10-30: the menu in option «А», «початок хороший»; the form behind every tap was «бред»).
+  if (!entry) {
+    const items = [dropItem(book, user, "status", "reading", "Читаю"), dropItem(book, user, "status", "read", "Прочитано"), allOf, dropItem(book, user, "copy", "paper", "Є в мене, ще не читав"), dropItem(book, user, "status", "kids", "Дитяча полиця"), "<hr>", lists];
+    return `<div class="acts" data-block="acts"><span class="want-split">${wantButton(book, user, { size: "", primary: true })}${drop(' aria-label="Інший статус" title="Інший статус" data-ev="status">▾', "btn primary", items)}</span>${read}</div>`;
+  }
   const what = entry.kids ? "Дитяча полиця" : entry.status ? STATUS[entry.status] : entry.copy ? COPY[entry.copy] : "У моїх книжках";
   if (entry.via) return `<div class="acts" data-block="acts"><span class="have">✓ ${esc(what)} <span class="muted">як <a href="${attr(entry.via.href)}">${esc(entry.via.title)}</a></span></span>${read}</div>`;
+  const cur = entry.kids ? "kids" : entry.status;
+  const items = [
+    dropItem(book, user, "status", "want", "Хочу прочитати", cur === "want"),
+    dropItem(book, user, "status", "reading", "Читаю", cur === "reading"),
+    // «Читаю зараз»: the one book under the reader's name (chytai-now-reading), a tick under «Читаю».
+    cur === "reading" ? dropItem(book, user, "now", "", `${now ? "✓ " : ""}Читаю зараз <span class="muted">· на моїй сторінці</span>`).replace("<button>", '<button class="sub">') : "",
+    dropItem(book, user, "status", "read", "Прочитано", cur === "read"),
+    dropItem(book, user, "status", "abandoned", "Покинуто", cur === "abandoned"),
+    dropItem(book, user, "status", "kids", "Дитяча полиця", cur === "kids"),
+    "<hr>",
+    `<a href="${attr(edit)}">Оцінка, рік, нотатка</a>`,
+    lists,
+    removeItem(book, entry),
+  ];
   // A book read: its stars and year right under the button, saved as they change (app.js, .rate); «нотатка» opens the form.
   const r = Math.floor(entry.rating ?? 0);
   const years = rateYears();
   if (entry.year && !years.includes(entry.year)) years.push(entry.year);
   const line = entry.status === "read" && !entry.kids
     ? `<div class="mine-line rate" data-id="${attr(book.id)}"><span class="rate-stars" role="group" aria-label="Оцінка">${[1, 2, 3, 4, 5].map((n) => `<button type="button" data-r="${n}" title="${n} з 5"${n <= r ? ' class="on"' : ""}>★</button>`).join("")}</span><select class="rate-year" aria-label="Рік"><option value="">рік?</option>${years.map((y) => `<option${y === entry.year ? " selected" : ""}>${y}</option>`).join("")}</select><a class="text-link" href="${attr(edit)}">${entry.note ? "нотатка" : "+ нотатка"}</a></div>`
-    : entry.note ? `<div class="mine-line"><a class="text-link" href="${attr(edit)}">нотатка</a></div>` : "";
-  return `<div class="acts" data-block="acts">${open(`✓ ${esc(what)} <span class="caret">▾</span>`, "btn have", ' title="Змінити"')}${read}</div>${line}`;
+    : "";
+  return `<div class="acts" data-block="acts">${drop(` title="Змінити" data-ev="status">✓ ${esc(what)} <span class="caret">▾</span>`, "btn have", items)}${read}</div>${line}`;
 }
 
 // «Де взяти»: every edition's shop (with its format, price and stock, the one place prices are shown),

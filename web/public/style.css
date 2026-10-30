@@ -1065,7 +1065,13 @@ aside .side-lists + .label, aside p + .label, aside dialog + .label { margin-top
 .want-split { display: inline-flex; align-items: stretch; }
 .want-split > form { display: flex; }
 .want-split > a.btn:first-child, .want-split > form:first-child .btn { border-radius: 999px 0 0 999px; padding-right: 18px; }
-.want-split > a.btn:last-child { display: flex; align-items: center; border-radius: 0 999px 999px 0; padding: 11px 14px; border-left: 1px solid rgba(255, 255, 255, 0.35); font-size: 13px; }
+.want-split { position: relative; }
+.want-split > .drop { display: flex; position: static; }
+.want-split > .drop > summary { display: flex; align-items: center; border-radius: 0 999px 999px 0; padding: 11px 14px; border-left: 1px solid rgba(255, 255, 255, 0.35); font-size: 13px; letter-spacing: 0; }
+.want-split > .drop[open] > summary { background: var(--accent-hover); color: var(--on-accent); }
+.drop > summary.have { padding: 10px 18px; font-size: 14px; letter-spacing: 0; border-color: var(--accent); color: var(--accent); }
+.drop[open] > summary.have { background: var(--accent); color: var(--on-accent); }
+.drop .more-menu { left: 0; right: auto; }
 .more-menu .on { display: block; padding: 11px 18px; font-size: 14px; font-weight: 600; color: var(--accent); }
 .more-menu .on::before { content: "✓ "; }
 .more-menu button.sub { padding-left: 34px; font-size: 13px; }

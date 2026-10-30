@@ -524,7 +524,7 @@ document.addEventListener("keydown", (e) => {
       const go = /^\/go\/([a-z]+)\//.exec(u.pathname);
       if (go) return `go:${go[1]}`;
       if (u.pathname.startsWith("/login")) {
-        const d = /\/do\/(want|read|reading|now|kids)\//.exec(decodeURIComponent(u.search));
+        const d = /\/do\/(want|read|reading|now|kids|paper)\//.exec(decodeURIComponent(u.search));
         return d ? `guest:${d[1]}` : "login";
       }
       if (u.pathname.startsWith("/@")) return "reader";

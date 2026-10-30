@@ -1953,6 +1953,7 @@ app.get("/do/:what/:id", signed, (req, res) => {
   if (!store.entry(req.user.id, id)) {
     if (["want", "read", "reading"].includes(what)) store.setEntry(req.user.id, id, { status: what });
     else if (what === "kids") store.setEntry(req.user.id, id, { kids: true, status: "" });
+    else if (what === "paper") store.setEntry(req.user.id, id, { copy: "paper" });
     else if (what === "now") {
       store.setEntry(req.user.id, id, { status: "reading" });
       auth.setNow(req.user.id, { books: [{ id, since: new Date().toISOString().slice(0, 10) }, ...auth.nowOf(req.user.id).books] });
