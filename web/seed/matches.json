@@ -9,6 +9,7 @@
   "Артур Дойль": "Артур Конан Дойль"
  },
  "edits": {
+  "iliada": { "title": "Іліада" },
   "tyhrolovy-bahrianyi": { "ebook": "bookua-113762" },
   "pryhody-sherloka-kholmsa-tom-i": { "title": "Пригоди Шерлока Холмса", "author": "Артур Конан Дойль" },
   "zahublenyi-svit": { "author": "Артур Конан Дойль" },
@@ -60,6 +61,7 @@
   ["kliienty-na-vse-zhyttia-yak-peretvoryty-razovoho-pokuptsia-n", "kliienty-na-vse-zhyttia-yak-peretvoryty-razovoho-pokuptsia-n-braun"]
  ],
  "translations": [
+  ["the-iliad", "iliada"],
   ["all-systems-red", "shchodennyky-vbyvtsebota-vsi-systemy-nebezpeka"],
   ["the-hobbit-or-there-and-back-again", "hobit-abo-tudy-i-zvidty"],
   ["the-lord-of-the-rings", "volodar-persniv-chastyny-1-3"],
@@ -78,6 +80,7 @@
   "lobster-8882": 3
  },
  "covers": {
+  "iliada": "https://img.imageboss.me/sl/width/400/format:webp/2026-07-13/d09897de79524e4fac815fcb1f27088f.jpeg",
   "rework": "https://covers.openlibrary.org/b/isbn/0307463745-L.jpg",
   "try-mushketera": "https://folio.com.ua/i/books/6b4ee35f6d2b3ac1399c0e6dd925e5eb.png",
   "tyhrolovy": "https://osnovypublishing.com/wp-content/uploads/2025/11/tyhrolovy-white-background.png",
