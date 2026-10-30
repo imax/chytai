@@ -1,0 +1,21 @@
+name: Probe mbooks
+on:
+  push:
+    branches: [claude/project-thread-2i76cl]
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - shell: bash {0}
+        run: |
+          UA="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/130 Safari/537.36"
+          for s in mandrivets orion-2 varvar-publishing strateg ariy malopus kondor hloriia aston akademiia literaturna-ahentsiia-piramida chorni-vivtsi chorni-vivtsi-adult monolit-bizz kafedra zelenyi-pes sumna-vivtsia vovkulaka lantsuta kalamar molfar pero teza tut; do
+            links=$(for p in 1 2 3; do u="https://mbooks.com.ua/publishers/$s/"; [ $p -gt 1 ] && u="${u}page-$p/"; curl -s -A "$UA" "$u" | grep -oE 'href="/book/[0-9]+[^"]*"' | cut -d'"' -f2; done | sort -u)
+            n=$(echo "$links" | grep -c book)
+            ru=$(echo "$links" | grep -ciE -- '-(dlia|eto|kak|chto)-|y-[a-z]*yy|[a-z]yi-' )
+            first=$(echo "$links" | head -1)
+            brand=$(curl -s -A "$UA" "https://mbooks.com.ua$first" | grep -oE '"brand":\{"@type":"Brand","name":"[^"]+"' | head -1 | sed 's/.*"name":"//; s/"$//')
+            titles=$(for l in $(echo "$links" | shuf -n 6 --random-source=<(yes)); do curl -s -A "$UA" "https://mbooks.com.ua$l" | grep -oE '<title>[^<|]*' | sed 's/<title>//; s/ купити.*//' ; done | tr '\n' ';')
+            rux=$(echo "$titles" | grep -oE '[ыэъё]' | wc -l)
+            echo "PUB|$s|$brand|$n|rulet=$rux|$titles"
+          done
