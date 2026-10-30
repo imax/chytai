@@ -28,7 +28,7 @@ const readeat = require("./readeat");
 const findCovers = require("./findcovers");
 const { BookPage, isUrl } = require("./bookpage");
 const { UkFinder } = require("./ukfind");
-const { Admin, adminPage, catalogBlock, shelvesPage, readersPage, overviewsPage, speedPage, jobsPage, BOT, human } = require("./admin");
+const { Admin, adminPage, activityPage, catalogBlock, shelvesPage, readersPage, overviewsPage, speedPage, jobsPage, BOT, human } = require("./admin");
 const { Mcp } = require("./mcp");
 const { Reviews } = require("./reviews");
 const { Advice } = require("./advice");
@@ -357,6 +357,20 @@ app.use((req, res, next) => {
   req.owner = !!req.user?.owner; // drafts, refresh: the owner's business
   res.locals.user = req.user;
   admin.touch(req, req.user?.id);
+  // What a reader changed (a mark, a rating, a list, a follow…), for /admin/activity: the address and the few
+  // fields that say what it was, never the text of a note or a comment.
+  if (req.method === "POST" && req.user && !/^\/(api\/(tap|searched|js-error|speed)|login|logout|mcp|oauth)/.test(req.path))
+    res.on("finish", () => {
+      if (res.statusCode >= 400) return;
+      const b = req.body || {};
+      const bits = ["status", "rating", "year", "kids", "copy", "on", "vote"].filter((k) => b[k] != null && String(b[k]).length < 20).map((k) => `${k}=${b[k]}`);
+      if (typeof b.note === "string" && b.note.trim()) bits.push("з нотаткою");
+      let url = req.path;
+      try {
+        url = decodeURIComponent(url);
+      } catch {}
+      admin.log(req.user.id, "do", url, bits.join(" "));
+    });
   admin.arrive(req, res, req.user?.id, { cookies: cookies(req), ownHosts: new Set([host, DOMAIN, `www.${DOMAIN}`, `${process.env.FLY_APP_NAME}.fly.dev`, "localhost"].filter(Boolean)), secure: secure(req) });
   next();
 });
@@ -401,7 +415,7 @@ app.post("/login/code", (req, res) => {
   const r = auth.verify(email, req.body.code);
   if (r.error) return res.status(400).send(pages.codePage({ next, email, error: r.error }));
   admin.event(req, null, "login", r.reader ? "code:known" : "code:new");
-  if (r.reader) return signIn(req, res, r.reader, next);
+  if (r.reader) return admin.log(r.reader.id, "login", next || ""), signIn(req, res, r.reader, next);
   res.send(pages.signupPage({ next, ticket: r.ticket, email, name: "", username: "" }));
 });
 // The last step for a new reader: who they are on the site.
@@ -416,6 +430,7 @@ app.post("/login/signup", (req, res) => {
   if (auth.byEmail(email)) return signIn(req, res, auth.byEmail(email), next);
   const reader = auth.createReader({ email, name: name.name, username: username.username });
   admin.event(req, null, "login", "signup");
+  admin.log(reader.id, "signup", next || "");
   auth.useTicket(req.body.ticket);
   admin.came(reader.id, cookies(req).chytai_came);
   res.append("Set-Cookie", `chytai_came=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax`);
@@ -2254,6 +2269,35 @@ app.get("/admin/traffic", owner, (req, res) => res.send(adminPage({ user: req.us
 app.get("/admin/stats", owner, (req, res) => res.redirect(301, "/admin/traffic"));
 app.get("/admin/overviews", owner, (req, res) => res.send(overviewsPage({ user: req.user, list: advice.overviewList().map((r) => ({ ...r, complaints: r.down ? advice.complaintsOf(r.book.id) : [] })), stats: advice.overviewStats(), who: (id) => (id && id !== "auto" ? pub(auth.reader(id)) : null), layout: pages.layout })));
 app.get("/admin/readers", owner, (req, res) => res.send(readersPage({ user: req.user, stats: admin.stats(), layout: pages.layout, q: req.query.q, min: Number(req.query.books) || 0, sort: String(req.query.sort || "created"), page: req.query.page })));
+// What the readers do on the site, in time order (Max, 2026-10-30), with the books' titles for book addresses.
+app.get("/admin/activity", owner, (req, res) => {
+  const who = req.query.reader ? auth.byUsername(String(req.query.reader)) : null;
+  const readers = new Map(auth.readers().map((r) => [r.id, r]));
+  const books = new Map(store.db.prepare("SELECT reader, COUNT(*) AS n FROM entries GROUP BY reader").all().map((r) => [r.reader, r.n]));
+  const title = (slug) => {
+    const id = store.resolve(slug);
+    return id ? store.book(store.canonical(id))?.title || "" : "";
+  };
+  const days = who ? 60 : 7;
+  const rows = admin.activity({ reader: who?.id || null, days });
+  // Before the log began (30.10) the page shows what the database already knows: sign-ups, and changes to
+  // shelves gathered by the hour (an import is one line, not hundreds).
+  const since = new Date(Date.now() - days * 86400000).toISOString();
+  const start = store.db.prepare("SELECT MIN(at) AS at FROM reader_log").get()?.at || new Date().toISOString();
+  const mine = (id) => id !== OWNER_ID && (!who || who.id === id);
+  for (const r of readers.values()) if (mine(r.id) && r.created >= since && r.created < start) rows.push({ at: r.created, reader: r.id, kind: "signup", what: "", extra: "" });
+  const hours = new Map();
+  for (const e of store.db.prepare("SELECT reader, book, status, updated FROM entries WHERE updated >= ? AND updated < ?").all(since, start)) {
+    if (!mine(e.reader)) continue;
+    const key = `${e.reader} ${e.updated.slice(0, 13)}`;
+    const h = hours.get(key) || { at: e.updated, reader: e.reader, kind: "shelf", ids: [] };
+    hours.set(key, h);
+    h.ids.push(e.book);
+  }
+  for (const h of hours.values()) rows.push({ at: h.at, reader: h.reader, kind: "shelf", what: String(h.ids.length), extra: h.ids.slice(0, 3).join(" ") });
+  rows.sort((a, b) => b.at.localeCompare(a.at));
+  res.send(activityPage({ user: req.user, rows, readers, books, title, who, layout: pages.layout }));
+});
 app.get("/admin.json", owner, (req, res) => res.json(admin.stats()));
 // One Google Books request with the server's key, for the owner to see what Google answers from here.
 app.get("/admin/google", owner, async (req, res) => {

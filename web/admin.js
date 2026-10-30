@@ -132,6 +132,13 @@ class Admin {
     const day = today();
     if (day !== this.seenDay) (this.seen = new Set()), (this.seenDay = day);
     try {
+      if (readerId && p !== "/search") {
+        let url = req.originalUrl || p;
+        try {
+          url = decodeURIComponent(url);
+        } catch {}
+        this.log(readerId, "view", url);
+      }
       if (readerId) {
         const key = `${day}:${readerId}`;
         if (!this.seen.has(key)) {
@@ -206,6 +213,7 @@ class Admin {
     q = String(q || "").toLowerCase().replace(/\s+/g, " ").trim().slice(0, 100);
     if (q.length < 2 || !this.counted(req, readerId)) return;
     try {
+      this.log(readerId, "search", q, String(hits | 0));
       this.db.prepare(`INSERT INTO search_log (day, q, n, hits) VALUES (?, ?, 1, ?) ON CONFLICT (day, q) DO UPDATE SET n = n + 1, hits = excluded.hits`).run(today(), q, hits | 0);
     } catch (e) {
       console.error("admin searched failed:", e.message);
@@ -220,6 +228,30 @@ class Admin {
     // Books from outside under the results (Max, 2026-10-30): shown, found nothing anywhere, opened (made here).
     const out = Object.fromEntries(this.db.prepare("SELECT prop, SUM(n) AS n FROM events WHERE name = 'outside' AND day >= ? GROUP BY prop").all(since).map((r) => [r.prop, r.n]));
     return { clicks, outside: { shown: out.shown || 0, none: out.none || 0, opened: out.open || 0 }, since: first && first > since ? first : since, started: first, total: rows.reduce((a, r) => a + r.n, 0), queries: rows.length, none: rows.filter((r) => !r.hits).reduce((a, r) => a + r.n, 0), top: rows.slice(0, 30), empty: rows.filter((r) => !r.hits).slice(0, 30) };
+  }
+
+  // What a signed-in reader does on the site, one line each, for /admin/activity (Max, 2026-10-30: «хтось
+  // зареєструвався, я його не бачу … хтось щось пошукав … їх дії не ясно, як побачити»): pages opened, searches,
+  // taps that leave the site, what they changed (posts), sign-up and sign-in. Readers only, never guests; the
+  // owner is left out. Kept 60 days.
+  log(readerId, kind, what = "", extra = "") {
+    if (!readerId || readerId === this.ownerId) return;
+    try {
+      this.db.prepare("INSERT INTO reader_log (at, reader, kind, what, extra) VALUES (?, ?, ?, ?, ?)").run(new Date().toISOString(), readerId, kind, clean(what, 200), clean(extra, 200));
+      const day = today();
+      if (this.prunedDay !== day) {
+        this.prunedDay = day;
+        this.db.prepare("DELETE FROM reader_log WHERE at < ?").run(new Date(Date.now() - 60 * 86400000).toISOString());
+      }
+    } catch (e) {
+      console.error("admin log failed:", e.message);
+    }
+  }
+  activity({ reader = null, days = 14, limit = 1500 } = {}) {
+    const since = new Date(Date.now() - days * 86400000).toISOString();
+    return reader
+      ? this.db.prepare("SELECT * FROM reader_log WHERE reader = ? AND at >= ? ORDER BY at DESC LIMIT ?").all(reader, since, limit)
+      : this.db.prepare("SELECT * FROM reader_log WHERE at >= ? ORDER BY at DESC LIMIT ?").all(since, limit);
   }
 
   // Is this request a person worth counting? Crawlers, the owner and requests without a browser's headers
@@ -238,6 +270,7 @@ class Admin {
     if (!/^[a-z0-9][a-z0-9:._\-]*$/.test(target)) return;
     pos = ["1", "2", "3", "4-6", "7-10", "11+"].includes(pos) ? pos : "";
     try {
+      if (/^(out:|go:|reader-app)/.test(target)) this.log(readerId, "tap", target, block);
       this.db.prepare(`INSERT INTO taps (day, page, block, target, pos, guest, n) VALUES (?, ?, ?, ?, ?, ?, 1) ON CONFLICT (day, page, block, target, pos, guest) DO UPDATE SET n = n + 1`).run(today(), page, block, target, pos, readerId ? 0 : 1);
     } catch (e) {
       console.error("admin tap failed:", e.message);
@@ -999,6 +1032,106 @@ ${problemsBlock(notFound, jsErrors)}
   return layout({ title: "Швидкість · Адмінка", user, path: "/admin", body });
 }
 
+// /admin/activity (Max, 2026-10-30): what the readers did on the site, newest first, a day at a time, one block
+// for each run of one reader's steps. A reader's name filters the page to them (60 days).
+const STATUS_WORDS = { want: "«Хочу прочитати»", read: "«Прочитано»", reading: "«Читаю»", abandoned: "«Покинуто»" };
+function activityPage({ user, rows, readers, books, title, who = null, layout }) {
+  const KYIV = { timeZone: "Europe/Kyiv" };
+  const dayOfIso = (iso) => new Date(iso).toLocaleDateString("sv-SE", KYIV);
+  const time = (iso) => new Date(iso).toLocaleTimeString("uk-UA", { ...KYIV, hour: "2-digit", minute: "2-digit" });
+  const dayName = (d) => new Date(`${d}T12:00`).toLocaleDateString("uk-UA", { weekday: "long", day: "numeric", month: "long" });
+  const bookLink = (slug, fallback = "книжку") => {
+    const t = title(slug);
+    return `<a href="/book/${esc(encodeURIComponent(slug))}">${t ? `«${esc(t)}»` : esc(fallback === "книжку" ? slug : fallback)}</a>`;
+  };
+  const page = (url) => {
+    const [p, q = ""] = url.split("?");
+    const parts = p.split("/").filter(Boolean);
+    if (p === "/") return `головну${q ? ` <span class="muted">${esc(q)}</span>` : ""}`;
+    const NAMED = { "/me": "свою полицю", "/welcome": "«Ласкаво просимо»", "/community": "спільноту", "/add": "«Додати книжки»", "/settings": "налаштування", "/lists": "списки", "/updates": "«Що нового»" };
+    if (NAMED[p]) return `<a href="${esc(p)}">${NAMED[p]}</a>${q ? ` <span class="muted">${esc(q)}</span>` : ""}`;
+    if (parts[0] === "book" && parts[1]) return bookLink(parts[1]);
+    if (parts[0] === "author" && parts[1]) return `автора <a href="${esc(p)}">${esc(parts[1])}</a>`;
+    if (p.startsWith("/@")) return `полицю <a href="${esc(p)}">${esc(parts[0])}</a>${parts[1] ? ` <span class="muted">/${esc(parts.slice(1).join("/"))}</span>` : ""}`;
+    if (parts[0] === "genre") return `жанр <a href="${esc(p)}">${esc(parts[1] || "")}</a>`;
+    if (parts[0] === "list" || parts[0] === "lists") return `<a href="${esc(p)}">${parts[0] === "lists" ? "списки" : "список"}</a>`;
+    if (parts[0] === "publishers") return `<a href="${esc(p)}">${parts[1] ? `видавництво ${esc(parts[1])}` : "видавництва"}</a>`;
+    return `<a href="${esc(url)}">${esc(url)}</a>`;
+  };
+  const line = (r) => {
+    const extra = Object.fromEntries(r.extra.split(" ").filter((x) => x.includes("=")).map((x) => x.split("=")));
+    switch (r.kind) {
+      case "signup":
+        return `<b>зареєструвався</b>`;
+      case "login":
+        return `увійшов`;
+      case "shelf": {
+        const n = Number(r.what) || 0;
+        const some = r.extra.split(" ").filter(Boolean).map((id) => bookLink(id)).join(", ");
+        return n === 1 ? `змінив на полиці ${some}` : `змінив на полиці ${n} книжок: ${some}${n > 3 ? " …" : ""}`;
+      }
+      case "view":
+        return `відкрив ${page(r.what)}`;
+      case "search":
+        return `шукав <a href="/search?q=${esc(encodeURIComponent(r.what))}"><b>«${esc(r.what)}»</b></a> ${r.extra === "0" ? `<span class="error">нічого не знайшлось</span>` : `<span class="muted">знайшлось ${esc(r.extra)}</span>`}`;
+      case "tap":
+        return r.what.startsWith("out:") ? `перейшов на ${esc(r.what.slice(4))} <span class="muted">${esc(BLOCK_NAMES[r.extra] || r.extra)}</span>` : r.what === "go:read" ? "відкрив безкоштовну книжку в Читалці" : r.what === "go:epub" ? "завантажив EPUB" : r.what === "reader-app" ? "пішов у Читалку" : esc(r.what);
+      case "do": {
+        const parts = r.what.split("/").filter(Boolean);
+        if (parts[1] === "entry" && parts[2]) {
+          if (parts[3] === "remove") return `прибрав з полиці ${bookLink(parts[2])}`;
+          const what = [extra.status ? STATUS_WORDS[extra.status] || extra.status : "", extra.rating ? `оцінка ${esc(extra.rating)}` : "", extra.kids === "1" ? "на дитячу полицю" : "", r.extra.includes("з нотаткою") ? "з нотаткою" : ""].filter(Boolean).join(", ");
+          return `позначив ${bookLink(parts[2])}${what ? `: ${what}` : ""}`;
+        }
+        if (parts[1] === "now" && parts[2]) return `«Читаю зараз»: ${bookLink(parts[2])}`;
+        if (parts[1] === "follow" && parts[2]) return `стежить за <a href="/@${esc(parts[2])}">@${esc(parts[2])}</a>`;
+        if (parts[0] === "me" && parts[1] === "book") return `змінив ${bookLink(parts[2] || "")} ${r.extra ? `<span class="muted">${esc(r.extra)}</span>` : ""}`;
+        return `${esc(r.what)} ${r.extra ? `<span class="muted">${esc(r.extra)}</span>` : ""}`;
+      }
+      default:
+        return `${esc(r.kind)} ${esc(r.what)}`;
+    }
+  };
+  // Pages opened one after another make one line: «відкрив A, B, C і ще 4».
+  const merge = (list) => {
+    const out = [];
+    for (const r of list) {
+      const last = out[out.length - 1];
+      if (r.kind === "view" && last?.pages) last.pages.push(r.what), (last.at = r.at);
+      else out.push(r.kind === "view" ? { at: r.at, pages: [r.what] } : r);
+    }
+    for (const r of out) if (r.pages) r.pages.reverse();
+    return out;
+  };
+  const days = new Map();
+  for (const r of rows) {
+    const d = dayOfIso(r.at);
+    if (!days.has(d)) days.set(d, []);
+    const runs = days.get(d);
+    const last = runs[runs.length - 1];
+    if (last && last.reader === r.reader) last.rows.push(r);
+    else runs.push({ reader: r.reader, rows: [r] });
+  }
+  const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString();
+  const head = (id) => {
+    const rd = readers.get(id);
+    if (!rd) return `<span class="muted">${esc(id)}</span>`;
+    const n = books.get(id) || 0;
+    return `<a href="/admin/activity?reader=${esc(encodeURIComponent(rd.username))}"><b>${esc(rd.name)}</b></a> <a class="muted" href="/@${esc(rd.username)}">@${esc(rd.username)}</a>${rd.created > weekAgo ? ` <span class="new">новий</span>` : ""} <span class="muted small">· ${n ? `${n} ${n % 10 === 1 && n % 100 !== 11 ? "книжка" : n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20) ? "книжки" : "книжок"}` : "без книжок"}</span>`;
+  };
+  const body = `<section class="admin activity">
+<section class="page-head"><div>${who ? `<p class="crumbs"><a href="/admin/activity">Усі читачі</a></p>` : ""}<h1>${who ? esc(who.name) : "Що роблять читачі"}</h1><p class="sub">${who ? `Усе, що @${esc(who.username)} робив на сайті за 60 днів, новіше зверху.` : "Дії зареєстрованих читачів за 7 днів, новіше зверху: сторінки, пошуки, позначки, переходи в магазини. Гостей і тебе тут немає. До 30 жовтня видно лише реєстрації й зміни на полицях."}</p></div></section>
+${days.size ? [...days].map(([d, runs]) => `<h2>${esc(dayName(d))}</h2>
+${runs.map((run) => {
+    const lis = merge(run.rows).map((r) => `<li><span class="muted small">${time(r.at)}</span> ${r.pages ? `відкрив ${r.pages.slice(0, 5).map(page).join(", ")}${r.pages.length > 5 ? ` <span class="muted">і ще ${r.pages.length - 5}</span>` : ""}` : line(r)}</li>`);
+    const more = lis.length > 10 ? `<li><details><summary class="muted">ще ${lis.length - 8}</summary><ol class="act-lines">${lis.slice(8).join("")}</ol></details></li>` : "";
+    return `<div class="act-run"><p class="act-who">${head(run.reader)}</p><ol class="act-lines">${(more ? lis.slice(0, 8) : lis).join("")}${more}</ol></div>`;
+  }).join("")}`).join("") : `<p class="muted">Поки нічого.</p>`}
+</section>
+<style>.activity .act-run{margin:0 0 18px}.activity .act-who{margin:0 0 4px}.activity .act-lines{list-style:none;margin:0;padding:0 0 0 14px;border-left:2px solid var(--line,#e4dfd5)}.activity .act-lines li{padding:2px 0;font-size:15px}.activity .act-lines .muted.small{display:inline-block;width:3.2em}.activity .error{color:#b3261e}.activity details summary{cursor:pointer;list-style:none}.activity details .act-lines{border:0;padding:0}.activity .new{font-size:12px;color:#1f7a4d;border:1px solid currentColor;border-radius:999px;padding:0 7px}</style>`;
+  return layout({ title: "Що роблять читачі · Адмінка", user, path: "/admin", body });
+}
+
 // /admin/jobs (Max, 2026-10-26: «сторінку про ці background tasks»): what the jobs process (jobs.js) does
 // on its own: the schedules, what runs now, and every run of the last month with how long it took and how it went.
 const JOBS = {
@@ -1169,4 +1302,4 @@ ${recent ? `<div class="tbl"><table>
   return layout({ title: "Фонові задачі · Адмінка", user, path: "/admin", body });
 }
 
-module.exports = { BOT, human, Admin, mailLinks, adminPage, catalogBlock, shelvesPage, readersPage, overviewsPage, speedPage, jobsPage, dayOf, weekOf, sectionOf };
+module.exports = { BOT, human, Admin, mailLinks, adminPage, activityPage, catalogBlock, shelvesPage, readersPage, overviewsPage, speedPage, jobsPage, dayOf, weekOf, sectionOf };
