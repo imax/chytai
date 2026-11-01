@@ -99,6 +99,8 @@ const NAV = [
 function layout({ title, body, user, path = "", description = "", q = "", home = false, canonical = "", image = "", imageSize = null, wide = false, noindex = false, jsonld = null, type = "website" }) {
   const on = (p) => (p ? ' class="on"' : "");
   const nav = [
+    // «Клуб» in the top menu (Max, 2026-11-01: «винести в навігацію наверху, як клуб»).
+    `<a href="/club"${on(path === "/club")}>Клуб</a>`,
     ...NAV.map(([href, name, is]) => `<a href="${href}"${on(is(path))}>${name}</a>`),
     // Settings live on one's own shelf, not in the menu (Max, 2026-10-20).
     // Adding books is a page of its own in the menu, not something hidden in the profile (Max, 2026-10-22).
@@ -430,7 +432,7 @@ function authorBlock(a) {
 </section>`;
 }
 
-function bookPage({ ukrlib = null, sluhay = null, inGenre = null, fresh = null, pick = null, awards = [], authorInfo = null, lists = [], myLists = null, book, entry, now = false, user, shelf, inLibrary = new Map(), readers = [], also = [], alsoTitle = "Читали це, сподобалось і це", writings = [], reviewError = "", editionError = "", ukAsk = null, readUrl = "", freeRead = false, freeFile = false, advice = null, overview = null, overviewVote = null }) {
+function bookPage({ club = [], ukrlib = null, sluhay = null, inGenre = null, fresh = null, pick = null, awards = [], authorInfo = null, lists = [], myLists = null, book, entry, now = false, user, shelf, inLibrary = new Map(), readers = [], also = [], alsoTitle = "Читали це, сподобалось і це", writings = [], reviewError = "", editionError = "", ukAsk = null, readUrl = "", freeRead = false, freeFile = false, advice = null, overview = null, overviewVote = null }) {
   const s = statsOf(book.id);
   // A book in Russian stays on its reader's shelf, and its page shows no «Про книжку» and no side blocks
   // (Max 2026-10-23): nothing that would lead people to it or on from it.
@@ -470,6 +472,7 @@ function bookPage({ ukrlib = null, sluhay = null, inGenre = null, fresh = null, 
       ${first.entry.note ? quote(first, book.id) : ""}
       ${(first.entry.note ? rest : readers).length ? `<div class="others">${(first.entry.note ? rest : readers).map((r) => readerLine(r, book.id)).join("")}</div>` : ""}
     </section>` : ""}
+    ${club.length ? `<section class="block" data-block="club">${label("У Клубі", `<a rel="nofollow" href="/club/new?book=${attr(encodeURIComponent(book.id))}">нова тема</a>`)}<div class="club-topics">${club.map((t) => clubRow(t, { book: false })).join("")}</div></section>` : ""}
     ${lists.length ? `<section class="block" data-block="lists">${label("У списках", `<a href="/lists">усі списки</a>`)}<div class="lists">${lists.map(listLine).join("")}</div></section>` : ""}
     ${adviceBlock(book, advice)}
     ${SHOW_REVIEWS && (writings.length || user) ? `<section class="block" id="writings">
@@ -2079,6 +2082,7 @@ function mailSettingsPage({ user, values, saved = false }) {
   ${user.email ? `<p class="muted small">Листи приходять на ${esc(user.email)}. <a class="text-link" href="/settings">Змінити пошту</a></p>` : `<p class="muted small">Пошти не вказано, тож листів не буде. <a class="text-link" href="/settings">Додати пошту</a></p>`}
   ${sw("digest", "Пʼятничний дайджест", "Новинки на сайті, полиці та видавництва, на які ви підписані.")}
   ${sw("follow_mail", "Новий читач стежить за вами", "Лист, коли хтось уперше почне стежити за вашою полицею.")}
+  ${sw("mention_mail", "Вас згадали в Клубі", "Лист, коли хтось напише @${esc(user.username)} у темі чи коментарі.")}
   ${sw("want_mail", "Книжка з «Хочу прочитати» тепер є", "Лист, коли книжка зі списку зʼявилась у продажу, українською чи безкоштовно в Читалці.")}
   <div class="actions"><button class="btn primary">Зберегти</button></div>
 </form>
@@ -2577,12 +2581,12 @@ function listHero(list, items) {
 // An intro of a few paragraphs: Markdown inside each, a single line break kept.
 const paragraphs = (md) => md.split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean).map((p) => `<p>${marked.parseInline(p).replace(/<a href="http/g, '<a target="_blank" rel="noopener" href="http').replace(/\n/g, "<br>")}</p>`).join("");
 // «Клуб Chytai» under a list: what readers said, oldest first; plain text, links not made clickable.
-function listClub({ list, comments, user, own, owner, error }) {
-  const item = (c) => `<div class="cmt" id="c-${attr(c.id)}"><p class="who"><a href="${attr(c.reader.href)}"><b>${esc(c.reader.name)}</b></a> · ${when({ updated: c.created })}${user && (c.reader.id === user.id || own || owner) ? ` · <button class="text-link small muted" form="del-${attr(c.id)}">видалити</button>` : ""}</p><p class="txt">${esc(c.text).replace(/\n/g, "<br>")}</p>${user && (c.reader.id === user.id || own || owner) ? `<form method="post" action="/api/lists/comments/${attr(c.id)}/delete" id="del-${attr(c.id)}" onsubmit="return confirm('Видалити коментар?')"></form>` : ""}</div>`;
+function listClub({ list, comments, user, own, owner, error, links = {} }) {
+  const item = (c) => `<div class="cmt" id="c-${attr(c.id)}"><p class="who"><a href="${attr(c.reader.href)}"><b>${esc(c.reader.name)}</b></a> · ${when({ updated: c.created })}${user && (c.reader.id === user.id || own || owner) ? ` · <button class="text-link small muted" form="del-${attr(c.id)}">видалити</button>` : ""}</p><div class="txt">${clubText(c.text, links)}</div>${user && (c.reader.id === user.id || own || owner) ? `<form method="post" action="/api/lists/comments/${attr(c.id)}/delete" id="del-${attr(c.id)}" onsubmit="return confirm('Видалити коментар?')"></form>` : ""}</div>`;
   const form = user
     ? `<form method="post" action="/api/lists/${attr(encodeURIComponent(list.id))}/comments" class="cmt-form"><textarea name="text" rows="3" maxlength="2000" required placeholder="${comments.length ? "Що думаєте про цей список або яку книжку додали б?" : "Що думаєте про цей список або яку книжку додали б?"}" aria-label="Коментар"></textarea>${error ? `<p class="error small">${esc(error)}</p>` : ""}<div><button class="btn primary">Додати коментар</button></div></form>`
     : `<p class="small"><a class="text-link" rel="nofollow" href="/login?next=${attr(encodeURIComponent(`${list.href}#club`))}">Увійдіть</a>, щоб додати коментар.</p>`;
-  return `<section class="club" id="club"><h2>Клуб Chytai</h2>${comments.map(item).join("")}${form}</section>`;
+  return `<section class="club" id="club"><h2><a href="/club">Клуб Chytai</a></h2>${comments.map(item).join("")}${form}</section>`;
 }
 // Lists in a sidebar: title and one line under it.
 const sideLists = (lists, line) => `<div class="side-lists">${lists.map((l) => `<a href="${attr(l.href)}"><b>${esc(l.title)}</b><span>${line(l)}</span></a>`).join("")}</div>`;
@@ -2603,7 +2607,7 @@ function listsDialog(book, mine) {
 
 // /@<username>/list/<slug>. The author sees the tools: the books' order, a line on each, the title and note,
 // adding books by search (`find`: the query and what it found).
-function listPage({ list, items, user, own = false, owner = false, saved = false, more = [], similar = [], find = null, og = "", comments = [], commentError = "" }) {
+function listPage({ list, items, user, own = false, owner = false, saved = false, more = [], similar = [], find = null, og = "", comments = [], commentError = "", commentLinks = {} }) {
   const id = attr(encodeURIComponent(list.id));
   const save = own
     ? ""
@@ -2699,7 +2703,7 @@ ${listHero(list, items)}
 </section>
 ${adder}
 ${items.length ? `<section class="lrows">${rows}</section>` : `<p class="muted">${own ? "Список порожній. Знайдіть книжку вище або на її сторінці натисни «⋯» → «Додати до списку…»." : "У списку поки немає книжок."}</p>`}
-${(items.length && !list.draft) || comments.length ? listClub({ list, comments, user, own, owner, error: commentError }) : ""}
+${(items.length && !list.draft) || comments.length ? listClub({ list, comments, user, own, owner, error: commentError, links: commentLinks }) : ""}
 </div>
 <aside>
   ${more.length ? `${label(own ? "Мої інші списки" : list.editorial ? "Ще добірки Chytai" : `Ще списки: ${esc(list.reader.name)}`)}${sideLists(more, (l) => listMeta(l, { by: false }))}` : ""}
@@ -2725,11 +2729,126 @@ ${user ? `<dialog id="new-list"><div class="dlg-head"><h2>Новий списо�
   return layout({ title: "Списки читачів", body, user, path: "/lists", canonical: "/lists", description: "Добірки книжок від читачів Chytai: що почитати про війну, підліткам, коли важко зосередитись." });
 }
 
-// /admin/comments: «Клуб Chytai» everywhere, the newest first, each with «видалити».
-function commentsAdminPage({ user, comments }) {
+// ---- «Клуб Chytai» (club.js): /club, a topic, a new topic ----
+
+// A Club text: paragraphs, line breaks, links made clickable (nofollow), and «@username» linked to the reader
+// when there is one (`links`: username -> page).
+const CLUB_TOKEN = /(https?:\/\/[^\s<>"]+[^\s<>".,;:!?)»])|(^|[^\w@.])@([a-z0-9][a-z0-9_.-]{1,30}[a-z0-9])/gi;
+function clubText(text, links = {}) {
+  let out = "";
+  let at = 0;
+  const t = String(text || "");
+  for (const m of t.matchAll(CLUB_TOKEN)) {
+    out += esc(t.slice(at, m.index));
+    at = m.index + m[0].length;
+    if (m[1]) out += `<a class="text-link" href="${attr(m[1])}" target="_blank" rel="noopener nofollow ugc">${esc(m[1].replace(/^https?:\/\/(www\.)?/, "").slice(0, 60))}${m[1].length > 70 ? "…" : ""}</a>`;
+    else {
+      const href = links[m[3].toLowerCase()];
+      out += esc(m[2]) + (href ? `<a class="at" href="${attr(href)}">@${esc(m[3])}</a>` : `@${esc(m[3])}`);
+    }
+  }
+  out += esc(t.slice(at));
+  return out.split(/\n\s*\n/).map((p) => `<p>${p.replace(/\n/g, "<br>")}</p>`).join("");
+}
+const answers = (n) => count(n, "відповідь", "відповіді", "відповідей");
+// A talk in a list: its title (with «спойлери» and the book), who started it, how many answers, when the last.
+function clubRow(t, { book = true } = {}) {
+  const meta = [t.kind === "list" ? "Список" : "", t.official ? "Chytai" : t.reader ? esc(t.reader.name) : esc(t.by || ""), t.replies ? (t.kind === "list" ? count(t.replies, "коментар", "коментарі", "коментарів") : answers(t.replies)) : "", when({ updated: t.active })].filter(Boolean).join(" · ");
+  return `<a class="ctopic${t.official ? " pinned" : ""}" href="${attr(t.href)}"><span class="t"><b>${esc(t.title)}</b>${t.spoiler ? ` <span class="tag spoil-tag">спойлери</span>` : ""}</span>${book && t.book ? `<span class="bk">${cover(t.book, "xs")}<span>${esc(t.book.title)}</span></span>` : ""}<span class="m">${meta}</span></a>`;
+}
+
+function clubPage({ user, pinned = [], rest = [] }) {
+  const add = user ? `<a class="btn primary" href="/club/new">+ Нова тема</a>` : `<a class="btn primary" rel="nofollow" href="/login?next=${encodeURIComponent("/club/new")}">+ Нова тема</a>`;
   const body = `
-${pageHead({ title: "Клуб Chytai", sub: comments.length ? `останні ${comments.length}` : "Коментарів ще немає." })}
-${comments.map((c) => `<div class="cmt"><p class="who">${c.reader ? `<a href="${attr(c.reader.href)}"><b>${esc(c.reader.name)}</b></a>` : "?"} · ${when({ updated: c.created })} · <a href="${attr(c.list.href)}#club">«${esc(c.list.title)}»</a> · <button class="text-link small muted" form="del-${attr(c.id)}">видалити</button></p><p class="txt">${esc(c.text).replace(/\n/g, "<br>")}</p><form method="post" action="/api/lists/comments/${attr(c.id)}/delete" id="del-${attr(c.id)}"><input type="hidden" name="back" value="admin"></form></div>`).join("")}`;
+${pageHead({ title: "Клуб Chytai", lead: "Розмови про книжки й читання.", action: add })}
+<div class="club-index">
+${pinned.length ? `${label("Від Chytai")}<div class="club-topics">${pinned.map((t) => clubRow(t)).join("")}</div>` : ""}
+${label("Теми")}
+${rest.length ? `<div class="club-topics">${rest.map((t) => clubRow(t)).join("")}</div>` : `<p class="muted">Тем ще немає. Почніть першу!</p>`}
+</div>`;
+  return layout({ title: "Клуб Chytai", body, user, path: "/club", canonical: "/club", description: "Клуб Chytai: читачі говорять про книжки, які читають." });
+}
+
+// The book a topic is about: a picker (search as you type, /api/club/books) with the chosen one shown.
+const bookPick = (book) => `<div class="book-pick" data-book-pick>
+  <input type="hidden" name="book" value="${attr(book?.id || "")}">
+  <div class="picked"${book ? "" : " hidden"}>${book ? `${cover(book, "xs")}<span><b>${esc(book.title)}</b>${book.author ? `<span class="by">${esc(byline(book.author))}</span>` : ""}</span>` : ""}<button type="button" class="text-link small muted" data-unpick>прибрати</button></div>
+  <input type="search" class="pick-q" placeholder="Назва або автор"${book ? " hidden" : ""} autocomplete="off" aria-label="Книжка">
+  <div class="pick-hits"></div>
+</div>`;
+const topicFields = ({ t = null, book = null, owner = false }) => `
+    <label>Назва<input name="title" maxlength="120" required value="${attr(t?.title || "")}" placeholder="${book ? `Напр. «${esc(book.title)}»: як вам фінал?` : "Напр. Хто йде на Книжковий Арсенал?"}"></label>
+    <label>Текст<textarea name="text" rows="7" maxlength="4000" placeholder="Про що хочете поговорити?">${esc(t?.text || "")}</textarea></label>
+    <p class="hint small muted">Напишіть @ім'я, і читачу прийде лист.</p>
+    <div class="field"><span class="small">Про книжку <span class="muted">· необов'язково</span></span>${bookPick(book)}</div>
+    <label class="check"><span><input type="checkbox" name="spoiler" value="1"${t?.spoiler ? " checked" : ""}> Містить спойлери</span><span class="hint">Сховаємо від тих, хто книжку ще не прочитав.</span></label>
+    ${owner ? `<label class="check"><span><input type="checkbox" name="official" value="1"${t?.official ? " checked" : ""}> Від Chytai: угорі Клубу</span></label>` : ""}`;
+
+function clubNewPage({ user, book = null, error = "" }) {
+  const body = `
+${pageHead({ crumbs: `<a href="/club">Клуб Chytai</a>`, title: "Нова тема" })}
+<form method="post" action="/api/club" class="form club-form">
+  ${error ? `<p class="error">${esc(error)}</p>` : ""}
+  ${topicFields({ book, owner: user.owner })}
+  <div class="actions"><button class="btn primary">Створити тему</button></div>
+</form>`;
+  return layout({ title: "Нова тема", body, user, path: "/club", noindex: true });
+}
+
+// A topic: what its author wrote, then the answers, oldest first. `hide`: spoilers this reader has not read, under
+// a blur until «Показати» (remembered in the browser for this topic).
+function clubTopicPage({ user, owner = false, topic: t, posts, hide = false, links = {}, error = "" }) {
+  const id = attr(t.id);
+  const mine = user && (t.reader.id === user.id || owner);
+  const who = (r) => `<a href="${attr(r.href)}"><b>${esc(r.name)}</b></a>`;
+  const reply = (r) => (user ? ` · <button type="button" class="text-link small muted" data-reply="${attr(r.username)}">відповісти</button>` : "");
+  const post = (p) => `<div class="cmt" id="p-${attr(p.id)}"><p class="who">${who(p.reader)} · ${when({ updated: p.created })}${reply(p.reader)}${user && (p.reader.id === user.id || owner) ? ` · <button class="text-link small muted" form="del-${attr(p.id)}">видалити</button><form method="post" action="/api/club/posts/${attr(p.id)}/delete" id="del-${attr(p.id)}" onsubmit="return confirm('Видалити відповідь?')"></form>` : ""}</p><div class="txt">${clubText(p.text, links)}</div></div>`;
+  const form = user
+    ? `<form method="post" action="/api/club/${id}/posts" class="cmt-form" id="reply"><textarea name="text" rows="3" maxlength="2000" required placeholder="Ваша відповідь" aria-label="Відповідь"></textarea>${error ? `<p class="error small">${esc(error)}</p>` : ""}<div><button class="btn primary">Відповісти</button></div></form>`
+    : `<p class="small" id="reply"><a class="text-link" rel="nofollow" href="/login?next=${attr(encodeURIComponent(`${t.href}#reply`))}">Увійдіть</a>, щоб відповісти.</p>`;
+  const talk = `<div class="op">${t.text ? `<div class="txt">${clubText(t.text, links)}</div>` : ""}</div>
+<section class="club-posts">${label(posts.length ? answers(posts.length) : "Відповіді")}${posts.length ? posts.map(post).join("") : `<p class="muted small">Відповідей ще немає.</p>`}${form}</section>`;
+  // Max's words (2026-11-01); once per topic: the browser remembers it was opened.
+  const gate = `<div class="spoil-gate"><p class="g-t">Увага: топік містить спойлери</p><p class="muted small">В цьому топіку можуть бути спойлери${t.book ? ` про книжку «${esc(t.book.title)}»` : ""}.</p><button type="button" class="btn" data-unspoil>Відкрити топік</button></div>`;
+  const edit = mine
+    ? `<dialog id="topic-edit"><div class="dlg-head"><h2>Тема</h2><button type="button" class="dlg-x" data-close aria-label="Закрити">×</button></div>
+  <form method="post" action="/api/club/${id}" class="form">${topicFields({ t, book: t.book, owner })}<div class="actions"><button class="btn primary">Зберегти</button></div></form>
+  <form method="post" action="/api/club/${id}/delete" class="form" onsubmit="return confirm('Видалити тему разом з відповідями?')"><div class="actions"><button class="btn danger small">Видалити тему</button></div></form>
+</dialog>`
+    : "";
+  const body = `
+<div class="split">
+<div class="topic">
+<section class="topic-head">
+  <p class="kicker"><a href="/club">Клуб</a>${t.official ? " · Від Chytai" : ""}${t.spoiler ? ` · <span class="spoil-tag">спойлери</span>` : ""}</p>
+  <h1>${esc(t.title)}</h1>
+  <p class="by-line">${t.official ? "<b>Chytai</b>" : who(t.reader)} · ${when({ updated: t.created })}${mine ? ` · <button type="button" class="text-link small" data-open="topic-edit">змінити</button>` : ""}</p>
+</section>
+${hide ? `<div class="spoil" data-spoil="${id}">${gate}<div class="spoil-body" aria-hidden="true">${talk}</div></div><script>try{localStorage.getItem("spoil:${id}")&&document.querySelector('[data-spoil="${id}"]').classList.add("open")}catch{}</script>` : talk}
+</div>
+<aside>
+  ${t.book ? `${label("Книжка")}<a class="topic-book" href="${attr(t.book.href)}">${cover(t.book, "md")}<span><b>${esc(t.book.title)}</b>${t.book.author ? `<span class="by">${esc(byline(t.book.author))}</span>` : ""}</span></a>` : ""}
+  <p class="small${t.book ? " side-more" : ""}"><a class="text-link" href="/club">Усі теми Клубу →</a></p>
+</aside>
+</div>
+${edit}`;
+  const description = t.spoiler ? `Тема в Клубі Chytai${t.book ? ` про «${t.book.title}»` : ""}.` : (t.text || t.title).replace(/\s+/g, " ").slice(0, 200);
+  return layout({ title: t.title, body, user, path: "/club", canonical: t.href, description, type: "article" });
+}
+
+// /admin/comments: «Клуб Chytai» everywhere, the newest first, each with «видалити».
+function commentsAdminPage({ user, comments, club = { posts: [], topics: [] } }) {
+  // Everything said in the Club in one feed: list comments, topics and answers.
+  const del = (action, id) => `<button class="text-link small muted" form="del-${attr(id)}">видалити</button><form method="post" action="${attr(action)}" id="del-${attr(id)}"><input type="hidden" name="back" value="admin"></form>`;
+  const who = (r) => (r ? `<a href="${attr(r.href)}"><b>${esc(r.name)}</b></a>` : "?");
+  const rows = [
+    ...comments.map((c) => ({ at: c.created, html: `<p class="who">${who(c.reader)} · ${when({ updated: c.created })} · список <a href="${attr(c.list.href)}#club">«${esc(c.list.title)}»</a> · ${del(`/api/lists/comments/${c.id}/delete`, c.id)}</p><p class="txt">${esc(c.text).replace(/\n/g, "<br>")}</p>` })),
+    ...club.topics.map((t) => ({ at: t.created, html: `<p class="who">${who(t.reader)} · ${when({ updated: t.created })} · нова тема <a href="${attr(t.href)}">«${esc(t.title)}»</a> · ${del(`/api/club/${t.id}/delete`, t.id)}</p>${t.text ? `<p class="txt">${esc(t.text.slice(0, 600)).replace(/\n/g, "<br>")}</p>` : ""}` })),
+    ...club.posts.map((p) => ({ at: p.created, html: `<p class="who">${who(p.reader)} · ${when({ updated: p.created })} · у темі <a href="${attr(p.topic.href)}#p-${attr(p.id)}">«${esc(p.topic.title)}»</a> · ${del(`/api/club/posts/${p.id}/delete`, p.id)}</p><p class="txt">${esc(p.text).replace(/\n/g, "<br>")}</p>` })),
+  ].sort((a, b) => (a.at < b.at ? 1 : -1)).slice(0, 300);
+  const body = `
+${pageHead({ title: "Клуб Chytai", sub: rows.length ? `останні ${rows.length}` : "Коментарів ще немає.", action: `<a class="btn" href="/club">Відкрити Клуб</a>` })}
+${rows.map((r) => `<div class="cmt">${r.html}</div>`).join("")}`;
   return layout({ title: "Клуб Chytai", body, user, path: "/admin", noindex: true });
 }
 
@@ -2791,6 +2910,7 @@ ${running ? `<script>setTimeout(() => location.reload(), 10000)</script>` : ""}`
 
 module.exports = {
   commentsAdminPage,
+  clubPage, clubNewPage, clubTopicPage,
   publisherReportsPage,
   freeBooksPage,
   chatsPage,

@@ -177,6 +177,13 @@ class Auth {
   setFollowMail(readerId, on) {
     this.db.prepare("UPDATE readers SET follow_mail = ? WHERE id = ?").run(on ? 1 : 0, readerId);
   }
+  mentionMailEnabled(readerId) {
+    const r = this.reader(readerId);
+    return !!r && r.mention_mail !== 0;
+  }
+  setMentionMail(readerId, on) {
+    this.db.prepare("UPDATE readers SET mention_mail = ? WHERE id = ?").run(on ? 1 : 0, readerId);
+  }
 
   // ---- sessions ----
 
