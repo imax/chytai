@@ -206,6 +206,55 @@
     if (close) close.closest("dialog")?.close();
   });
 
+  // «Клуб Chytai»: «Показати» opens a topic with spoilers (and remembers it for that topic), «відповісти» puts
+  // «@username » into the answer, and a topic's book is picked by search as you type.
+  document.addEventListener("click", (e) => {
+    const un = e.target.closest("[data-unspoil]");
+    if (un) {
+      const box = un.closest("[data-spoil]");
+      box.classList.add("open");
+      try { localStorage.setItem("spoil:" + box.dataset.spoil, "1"); } catch {}
+    }
+    const re = e.target.closest("[data-reply]");
+    if (re) {
+      const ta = $("#reply textarea");
+      if (!ta) return;
+      const at = "@" + re.dataset.reply + " ";
+      if (!ta.value.includes(at)) ta.value = (ta.value && !/\s$/.test(ta.value) ? ta.value + " " : ta.value) + at;
+      ta.focus();
+      ta.setSelectionRange(ta.value.length, ta.value.length);
+    }
+  });
+  for (const pick of document.querySelectorAll("[data-book-pick]")) {
+    const id = $('input[name="book"]', pick), q = $(".pick-q", pick), hits = $(".pick-hits", pick), picked = $(".picked", pick);
+    const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+    const show = (b) => {
+      id.value = b ? b.id : "";
+      picked.hidden = !b;
+      q.hidden = !!b;
+      hits.innerHTML = "";
+      if (b) picked.innerHTML = `${b.cover ? `<span class="cover xs"><img src="${esc(b.cover)}" alt=""></span>` : ""}<span><b>${esc(b.title)}</b><span class="by">${esc(b.author)}</span></span><button type="button" class="text-link small muted" data-unpick>прибрати</button>`;
+      else (q.value = ""), q.focus();
+    };
+    pick.addEventListener("click", (e) => {
+      if (e.target.closest("[data-unpick]")) show(null);
+      const h = e.target.closest("[data-hit]");
+      if (h) show(JSON.parse(h.dataset.hit));
+    });
+    let timer, ctrl;
+    q.addEventListener("input", () => {
+      clearTimeout(timer);
+      timer = setTimeout(async () => {
+        ctrl?.abort();
+        ctrl = new AbortController();
+        const list = await fetch(`/api/club/books?${new URLSearchParams({ q: q.value })}`, { signal: ctrl.signal }).then((r) => r.json()).catch(() => null);
+        if (!list) return;
+        hits.innerHTML = list.map((b) => `<button type="button" class="hit" data-hit="${esc(JSON.stringify(b))}">${b.cover ? `<span class="cover xs"><img src="${esc(b.cover)}" alt=""></span>` : `<span class="cover xs"></span>`}<span><b>${esc(b.title)}</b><span class="by">${esc(b.author)}</span></span></button>`).join("");
+      }, 200);
+    });
+    q.addEventListener("keydown", (e) => e.key === "Enter" && e.preventDefault());
+  }
+
   // «Поділитися» on a list's page: the phone's own share sheet, else the address goes to the clipboard.
   document.addEventListener("click", async (e) => {
     const b = e.target.closest("[data-share]");
