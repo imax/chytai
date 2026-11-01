@@ -156,66 +156,154 @@
     $(".side-head").classList.toggle("hidden", !inProgress.length);
   }
 
-  // Головна (Max, 2026-11-01, like a Kindle home screen): just your books with their covers, the one added or
-  // opened last first. Everything else (the free shelf, adding books, new arrivals) is on «Пошук».
-  let homeFilter = "";
+  // ---------- Мої книжки: design «3a» from Claude Design (Max, 2026-11-01) ----------
+  // One page: «Читаю зараз», your books with filters and a «+» tile, what others read now, the free shelf.
+  // A query in the search field replaces it with results from your books and the free shelf.
+  let homeQuery = "";
+  let homeFilter = "all"; // all | reading | new | done
+  let freeTab = "new"; // new | kids | classics | all
   let homeHtml = "";
   const lastTouched = (b) => Math.max(b.openedAt || 0, b.addedAt || 0);
-  const tile = (b) => `<button class="tile" data-open="${esc(b.path)}">
-      ${cover(b, "fill")}${settings.guest ? "" : `<span class="tile-more" role="button" data-menu="${esc(b.path)}" title="Ще" aria-label="Ще">⋯</span>`}
-      <span class="t">${esc(b.title)}</span><span class="m ellipsis">${esc(author(b))}</span>
-      ${b.finished ? `<span class="tile-done m">Прочитано</span>` : b.pct != null && b.pct > 0 && b.pct < 99 ? `<span class="tile-progress">${bar(b.pct, "thin")}<span class="m">${b.pct}%</span></span>` : ""}
-    </button>`;
   const matches = (b, q) => norm(`${b.title} ${b.authors.join(" ")}`).includes(q);
+  const hue = (t) => [...String(t || "")].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 0) % 360;
+  const isReading = (b) => !b.finished && b.pct != null && b.pct >= 1 && b.pct < 99;
+  const isNewBook = (b) => !b.finished && !b.started && !(b.pct > 0);
+  const status = (b) =>
+    b.finished ? `<span class="r-st done">Прочитано</span>` : b.pct > 0 ? `<span class="r-st">${b.pct}%</span>` : `<span class="r-st new">Не почато</span>`;
+  const statusText = (b) => (b.finished ? "прочитано" : b.pct > 0 ? `${b.pct}%` : "не почато");
+  // A cover: the picture when there is one, the site's typographic stand-in under it otherwise.
+  const rcover = (b, url = window.reader.coverUrl?.(b)) => `<span class="r-cover" style="--h:${hue(b.title)}" lang="${esc(b.language || "uk")}">
+      <span class="r-cover-t">${esc(b.title)}</span><span class="r-cover-a">${esc((b.authors || [b.author])[0] || "")}</span>
+      ${url ? `<img src="${esc(url)}" alt="" loading="lazy" onerror="this.remove()" />` : ""}</span>`;
+  const more = (b) => (settings.guest ? "" : `<span class="r-more" role="button" tabindex="0" data-menu="${esc(b.path)}" title="Ще" aria-label="Ще"><i></i><i></i><i></i></span>`);
+  const card = (b, foot, menu = true) => `<button class="r-card" data-open="${esc(b.path)}">${rcover(b)}${menu ? more(b) : ""}
+      <span class="r-t">${esc(b.title)}</span><span class="r-a">${esc(author(b))}</span>${foot}</button>`;
+  const head = (title, aside = "", plain = false) => `<div class="r-sec-head${plain ? " plain" : ""}"><h2>${title}</h2>${aside}</div>`;
+  const tabs = (list, active, attr) => `<div class="r-tabs">${list.map(([k, label, n]) => `<button class="${k === active ? "on" : ""}" ${attr}="${k}">${label}${n != null ? ` <i>${n}</i>` : ""}</button>`).join("")}</div>`;
+
+  function myBooks() {
+    return lib.books.filter((b) => !(b.aside && (b.free || b.protected))).sort((x, y) => lastTouched(y) - lastTouched(x));
+  }
+  // The book you are reading now: the one opened last, if it is between 1% and 99%.
+  function nowBook(books) {
+    const last = books.find((b) => b.path === lib.lastBook);
+    if (last && isReading(last)) return last;
+    return books.filter((b) => b.openedAt && isReading(b)).sort((x, y) => y.openedAt - x.openedAt)[0] || null;
+  }
 
   function renderHome() {
     if (!lib) return; // the skeleton stays until the library arrives
-    // Books marked read go to the bottom (Max, 2026-11-01).
-    const books = lib.books.filter((b) => !(b.aside && (b.free || b.protected))).sort((x, y) => !!x.finished - !!y.finished || lastTouched(y) - lastTouched(x));
-    if (!books.length) {
-      homeHtml = "";
-      $("#home-body").innerHTML = `<div class="home-empty"><p>Тут будуть ваші книжки.</p>
-        <button class="pill" data-tab="discover">Знайти книжку</button>
-        ${trashCount ? `<button class="link" data-act="trash">Нещодавно видалені · ${trashCount}</button>` : ""}</div>`;
-      return;
-    }
-    const q = norm(homeFilter);
-    const shown = q ? books.filter((b) => matches(b, q)) : books;
-    const field = books.length > 12 ? `<input id="home-filter" type="search" placeholder="Шукати" value="${esc(homeFilter)}" autocomplete="off" />` : "";
-    const keepFocus = document.activeElement?.id === "home-filter";
-    // The book on top is a big card with its button, as on the old home screen (Max, 2026-11-01); the rest are covers.
-    const top = !q && (shown.find((b) => !b.finished) || shown[0]);
-    const hero = top ? `<button class="hero home-hero" data-open="${esc(top.path)}">
-        ${cover(top, "big")}
-        <span class="hero-text">
-          ${top.openedAt ? `<span class="kicker">читаю зараз</span>` : ""}
-          <span class="t">${esc(top.title)}</span>
-          <span class="m">${esc(author(top))}</span>
-          <span class="hero-foot">
-            ${top.chapter ? `<span class="m ellipsis">${esc(top.chapter)}</span>` : ""}
-            ${top.pct != null ? bar(top.pct) : ""}
-            <span class="hero-row"><span class="m">${top.pct != null ? `${top.pct}%` : ""}</span><span class="pill">Читати</span></span>
-          </span>
-        </span>
-      </button>` : "";
-    const html = `${field}${hero}<div class="tiles">${shown.filter((b) => b !== top).map(tile).join("")}</div>
-      ${q && !shown.length ? `<p class="m">Нічого не знайшлося. <button class="link" data-tab="discover">Пошукати в «Пошуку»</button></p>` : ""}
-      ${trashCount && !q ? `<p class="home-trash"><button class="link" data-act="trash">Нещодавно видалені · ${trashCount}</button></p>` : ""}`;
+    $("#r-avatar").textContent = (settings.user || "Ч").trim()[0].toUpperCase();
+    const html = homeQuery.trim() ? searchHtml(norm(homeQuery)) : homePageHtml();
     // The library comes twice (the saved copy, then the server's) and again when the app comes back to the
     // front: drawing the same covers anew made them flicker, so an unchanged screen is left alone.
     if (html === homeHtml) return;
     homeHtml = html;
     $("#home-body").innerHTML = html;
-    if (keepFocus) {
-      const f = $("#home-filter");
-      f.focus();
-      f.setSelectionRange(f.value.length, f.value.length);
+  }
+
+  function homePageHtml() {
+    const books = myBooks();
+    const cur = nowBook(books);
+    let html = "";
+    if (cur) {
+      const where = [cur.parts ? `розділ ${cur.part} з ${cur.parts}` : cur.chapter].filter(Boolean).map(esc).join("");
+      html += `<section class="r-now">${head("Читаю зараз", "", true)}
+        <div class="r-now-row"><button class="r-now-cover" data-open="${esc(cur.path)}">${rcover(cur)}</button>
+          <div class="r-now-text"><h3 class="r-now-t">${esc(cur.title)}</h3><p class="r-now-a">${esc(author(cur))}</p>
+            <div class="r-progress"><span style="width:${cur.pct}%"></span></div>
+            <p class="r-now-meta"><b>${cur.pct}%</b>${where ? ` · ${where}` : ""}</p>
+            <button class="r-pill r-wide" data-open="${esc(cur.path)}">Продовжити читання</button></div></div>
+        <button class="r-pill r-narrow" data-open="${esc(cur.path)}">Продовжити читання</button></section>`;
+    }
+    const rest = books.filter((b) => b !== cur);
+    const groups = { all: rest, reading: rest.filter(isReading), new: rest.filter(isNewBook), done: rest.filter((b) => b.finished) };
+    const shown = groups[homeFilter] || rest;
+    const plus = settings.guest ? "" : `<button class="r-card r-plus" data-act="add"><span class="r-plus-box"><b>+</b><span class="wide">Завантажити свою</span><span class="narrow">Свою</span><small class="wide">EPUB, PDF, MOBI</small></span></button>`;
+    html += `<section>${head(`Мої книжки · ${books.length}`, books.length ? tabs([["all", "Усі", groups.all.length], ["reading", "Читаю", groups.reading.length], ["new", "Не почато", groups.new.length], ["done", "Прочитані", groups.done.length]], homeFilter, "data-filter") : "")}
+      <div class="r-grid">${shown.map((b) => card(b, status(b))).join("")}${homeFilter === "all" || !books.length ? plus : ""}</div>
+      ${!shown.length && homeFilter !== "all" ? `<p class="r-empty">Тут поки порожньо.</p>` : ""}
+      ${trashCount ? `<p class="r-trash"><button class="r-link" data-act="trash">Нещодавно видалені · ${trashCount} →</button></p>` : ""}</section>`;
+    const reading = (club?.reading || []).slice(0, 8);
+    if (reading.length)
+      html += `<section>${head("Зараз читають", `<a class="r-aside-link" href="${esc(club.club)}" target="_blank" rel="noopener">Обговорення на Chytai ↗</a>`)}
+        <div class="r-grid r-others">${reading.map((b) => `<a class="r-card" href="${esc(b.href)}" target="_blank" rel="noopener">${rcover({ title: b.title, authors: [b.author] }, b.cover)}
+          <span class="r-t">${esc(b.title)}</span><span class="r-a">${esc(b.reader.name)}</span></a>`).join("")}</div></section>`;
+    const free = lib.free || [];
+    if (free.length && !settings.guest) {
+      const byGroup = { new: [...free].sort((x, y) => y.order - x.order).slice(0, 16), kids: free.filter((b) => b.group === "Для дітей"), classics: free.filter((b) => /класика/i.test(b.group)), all: free };
+      html += `<section>${head(`Вільна полиця · ${free.length} <span class="r-sub">Можна читати безкоштовно</span>`, tabs([["new", "Нові"], ["kids", "Для дітей"], ["classics", "Класика"], ["all", "Усі"]], freeTab, "data-free-tab"))}
+        <div class="r-grid">${byGroup[freeTab].map((b) => card(b, "", false)).join("")}</div></section>`;
+    }
+    return html;
+  }
+
+  function searchHtml(q) {
+    const mine = myBooks().filter((b) => matches(b, q));
+    const own = new Set(mine.map((b) => b.path));
+    const free = (lib.free || []).filter((b) => !own.has(b.path) && matches(b, q));
+    const action = (b) => (b.finished || b.pct >= 99 ? "Перечитати" : b.pct > 0 ? "Продовжити" : "Почати");
+    let html = "";
+    if (mine.length)
+      html += `<section>${head(`У моїх книжках · ${mine.length}`, "", true)}<div class="r-rows">${mine.map((b) => `<button class="r-row" data-open="${esc(b.path)}">${rcover(b)}
+        <span class="r-row-t">${esc(b.title)}</span><span class="r-row-a">${esc(author(b))}</span><span class="r-row-go">${action(b)}</span></button>`).join("")}</div></section>`;
+    if (free.length)
+      html += `<section>${head(`На вільній полиці · ${free.length}`)}<div class="r-grid">${free.map((b) => card(b, `<span class="r-add">+ До моїх книжок</span>`, false)).join("")}</div></section>`;
+    if (!mine.length && !free.length) html += `<p class="r-empty">Нічого не знайшлося.</p>`;
+    html += `<p class="r-foot">Немає потрібної? ${settings.guest ? "" : `<button class="r-link" data-act="add">Завантажте свій файл</button>: EPUB, PDF або MOBI. `}<a class="r-link" href="https://chytai.org.ua/search?q=${encodeURIComponent(homeQuery.trim())}" target="_blank" rel="noopener">Шукати на chytai.org.ua ↗</a></p>`;
+    return html;
+  }
+
+  // The search field: in the header on a computer, at the top of the page on a phone; both hold the same text.
+  let searchTimer = 0;
+  for (const field of document.querySelectorAll(".r-q"))
+    field.addEventListener("input", () => {
+      homeQuery = field.value;
+      for (const f of document.querySelectorAll(".r-q")) if (f !== field) f.value = field.value;
+      clearTimeout(searchTimer);
+      searchTimer = setTimeout(renderHome, 150);
+    });
+  function clearSearch() {
+    homeQuery = "";
+    for (const f of document.querySelectorAll(".r-q")) f.value = "";
+    homeHtml = "";
+  }
+  $("#home").addEventListener("click", (e) => {
+    const f = e.target.closest("[data-filter]");
+    if (f) return (homeFilter = f.dataset.filter), renderHome();
+    const t = e.target.closest("[data-free-tab]");
+    if (t) return (freeTab = t.dataset.freeTab), renderHome();
+  });
+
+  // The avatar's menu: a popover under it on a computer, a sheet from the bottom on a phone.
+  const menuBox = $("#r-menu");
+  function toggleMenu(open = menuBox.classList.contains("hidden")) {
+    menuBox.classList.toggle("hidden", !open);
+    $("#r-avatar").classList.toggle("open", open);
+    if (open) {
+      $("#r-me-name").textContent = settings.user || "";
+      $("#r-me-user").textContent = settings.username ? `@${settings.username}` : "";
+      $("#r-me-page").href = settings.username ? `https://chytai.org.ua/@${settings.username}` : "https://chytai.org.ua";
+      $("#r-me-page").hidden = !settings.username;
+      menuBox.querySelector("[data-r=settings]").hidden = !!settings.guest;
     }
   }
-  $("#home-body").addEventListener("input", (e) => {
-    if (e.target.id !== "home-filter") return;
-    homeFilter = e.target.value;
-    renderHome();
+  $("#r-avatar").onclick = (e) => (e.stopPropagation(), toggleMenu());
+  menuBox.addEventListener("click", (e) => {
+    const r = e.target.closest("[data-r]")?.dataset.r;
+    toggleMenu(false);
+    if (r === "settings") openSettings();
+    if (r === "logout") window.reader.logout?.();
+  });
+  document.addEventListener("click", (e) => !menuBox.classList.contains("hidden") && !e.target.closest("#r-menu") && toggleMenu(false));
+  document.addEventListener("keydown", (e) => e.key === "Escape" && !menuBox.classList.contains("hidden") && toggleMenu(false));
+
+  // A file dropped anywhere on the page is added to your books.
+  $("#shell").addEventListener("dragover", (e) => !settings.guest && e.dataTransfer?.types?.includes("Files") && e.preventDefault());
+  $("#shell").addEventListener("drop", async (e) => {
+    if (settings.guest || !e.dataTransfer?.files?.length) return;
+    e.preventDefault();
+    if (await window.reader.uploadFiles?.([...e.dataTransfer.files])) (homeHtml = ""), window.Library.data(true).then((d) => ((lib = d), render()));
   });
 
   // ---------- Пошук ----------
@@ -522,12 +610,11 @@
   $("#shell").addEventListener("click", async (e) => {
     const el = e.target.closest("[data-menu], [data-aside], [data-open], [data-tab], [data-act], [data-note], [data-unwish]");
     if (!el) return;
-    if (el.dataset.menu) return bookMenu(el.dataset.menu);
+    if (el.dataset.menu) return bookMenu(el.dataset.menu, el);
     if (el.dataset.aside) return setAside(el.dataset.aside);
     if (el.dataset.open != null) return openBook(el.dataset.open);
     if (el.dataset.tab) {
       // The «Мої книжки» tab always shows all your books: a filter typed earlier goes (Max, 2026-11-01).
-      if (el.dataset.tab === "home" && el.closest("#tabbar") && homeFilter) (homeFilter = ""), (homeHtml = "");
       return show(el.dataset.tab);
     }
     if (el.dataset.note != null) {
@@ -566,14 +653,23 @@
   // ---------- A book's menu: lend it, fix its title, put it away, delete it ----------
 
   let menuBook = null;
-  function bookMenu(path) {
+  // On a phone a sheet from the bottom; with a mouse a small menu by the ⋯ or where the right click was.
+  function bookMenu(path, at = null) {
     const b = lib?.books.find((x) => x.path === path);
     if (!b || settings.guest) return;
     menuBook = b;
     const own = !b.free && !b.protected;
     const d = $("#book-menu");
     $("#bm-title").textContent = b.title;
-    $("#bm-author").textContent = b.authors.join(", ");
+    $("#bm-author").textContent = [author(b), statusText(b)].filter(Boolean).join(" · ");
+    $("#bm-cover").innerHTML = rcover(b);
+    const pop = !!at && matchMedia("(min-width: 761px)").matches;
+    d.classList.toggle("pop", pop);
+    if (pop) {
+      const r = at instanceof Element ? at.getBoundingClientRect() : { left: at.x, right: at.x, bottom: at.y, top: at.y };
+      d.style.left = `${Math.max(12, Math.min(innerWidth - 232, r.left))}px`;
+      d.style.top = `${Math.min(innerHeight - 240, r.bottom + 6)}px`;
+    } else d.style.left = d.style.top = "";
     // «Дати почитати» is hidden for now (Max, 2026-11-01).
     $("#bm-edit").hidden = !(own && window.reader.libraryUpdateBook);
     // Your own file is deleted; a book from the free shelf or a publisher just leaves the home screen.
@@ -621,10 +717,10 @@
     render();
     window.Library.render?.();
     // No question before deleting (Max, 2026-11-01); the notice gives a way back instead.
-    showNotice(`«${b.title}» у нещодавно видалених.`, false);
+    showNotice(`«${b.title}» видалено`, false);
     const undo = document.createElement("button");
     undo.className = "link notice-link";
-    undo.textContent = "Повернути";
+    undo.textContent = "Скасувати";
     undo.onclick = () => restoreBook(b.path).then(() => $("#notice").classList.add("hidden"));
     $("#notice .notice-text").append(" ", undo);
   });
@@ -667,16 +763,26 @@
     trashCount = books.length;
     const left = (until) => Math.max(1, Math.ceil((until - Date.now()) / DAY));
     box.innerHTML = books.length
-      ? books.map((b) => `<li><span class="row-text"><span class="t">${esc(b.title)}</span><span class="m">${esc(b.authors[0] || "")}${b.authors[0] ? " · " : ""}ще ${left(b.until)} ${plural(left(b.until), "день", "дні", "днів")}</span></span>
-          <button type="button" class="link" data-restore="${esc(b.path)}">Повернути</button></li>`).join("")
+      ? books.map((b) => `<li>${rcover(b, null)}<span class="row-text"><span class="t">${esc(b.title)}</span><span class="m">${esc(b.authors[0] || "")}${b.authors[0] ? " · " : ""}ще ${left(b.until)} ${plural(left(b.until), "день", "дні", "днів")}</span></span>
+          <button type="button" class="r-pill-line" data-restore="${esc(b.path)}">Відновити</button>
+          <button type="button" class="r-forget" data-forget="${esc(b.path)}">Видалити назавжди</button></li>`).join("")
       : `<li class="m">Порожньо.</li>`;
   }
   $("#trash-list").addEventListener("click", async (e) => {
-    const el = e.target.closest("[data-restore]");
+    const el = e.target.closest("[data-restore], [data-forget]");
     if (!el) return;
     el.disabled = true;
-    await restoreBook(el.dataset.restore);
+    try {
+      if (el.dataset.restore) await restoreBook(el.dataset.restore);
+      else await window.reader.libraryForgetBook(el.dataset.forget);
+    } catch (err) {
+      el.disabled = false;
+      return showNotice(err.message, false);
+    }
     el.closest("li").remove();
+    trashCount = [...$("#trash-list").children].filter((li) => !li.classList.contains("m")).length;
+    homeHtml = "";
+    render();
     if (!$("#trash-list li")) $("#trash-list").innerHTML = `<li class="m">Порожньо.</li>`;
   });
 
@@ -684,25 +790,26 @@
   let tilePress = null;
   let tilePressed = false;
   $("#shell").addEventListener("touchstart", (e) => {
-    const t = e.target.closest(".tile, .home-hero");
+    const t = e.target.closest(".tile, .home-hero, .r-card[data-open], .r-now-cover, .r-row");
     if (!t || settings.guest) return;
     tilePressed = false;
     tilePress = setTimeout(() => {
       tilePressed = true;
+      navigator.vibrate?.(10);
       bookMenu(t.dataset.open);
     }, 500);
   }, { passive: true });
   for (const type of ["touchend", "touchmove", "touchcancel"]) $("#shell").addEventListener(type, () => clearTimeout(tilePress), { passive: true });
   $("#shell").addEventListener("click", (e) => {
-    if (!tilePressed || !e.target.closest(".tile, .home-hero")) return;
+    if (!tilePressed || !e.target.closest(".tile, .home-hero, .r-card[data-open], .r-now-cover, .r-row")) return;
     tilePressed = false;
     e.stopImmediatePropagation();
   }, true);
   $("#shell").addEventListener("contextmenu", (e) => {
-    const t = e.target.closest(".tile, .home-hero");
-    if (!t || settings.guest) return;
+    const t = e.target.closest(".tile, .home-hero, .r-card[data-open], .r-now-cover, .r-row");
+    if (!t || settings.guest || !lib?.books.some((b) => b.path === t.dataset.open)) return;
     e.preventDefault();
-    bookMenu(t.dataset.open);
+    bookMenu(t.dataset.open, { x: e.clientX, y: e.clientY });
   });
 
   // A long press on a phone shows the ×; the tap that ends the press does not open the book.
@@ -726,7 +833,7 @@
     if (!e.target.closest("[data-aside]")) e.stopImmediatePropagation();
   }, true);
 
-  $("#home-settings").onclick = () => openSettings();
+  // The gear moved into the avatar menu (design «3a»).
   $("#side-settings").onclick = () => openSettings();
   $("#top-add").onclick = () => $("#lib-add").click();
   // The search on top of a wide screen searches the library, so typing there opens it.
@@ -748,7 +855,7 @@
   // Single keys on a keyboard: Esc back to the book, 1 2 3 for the tabs, / to search, T for the contents, − + for the
   // font, ? for the list. Never while typing or with a dialog open; guests have no home screen.
   // Matched by the physical key, so they work the same with the Ukrainian layout on.
-  const TAB_KEYS = { Digit1: "home", Digit2: "discover", Digit3: "club" };
+  const TAB_KEYS = {}; // one page since design «3a» (Max, 2026-11-01)
   function key(e) {
     if (e.metaKey || e.ctrlKey || e.altKey || e.repeat) return;
     if (e.target?.closest?.("input, textarea, select, [contenteditable]")) return;

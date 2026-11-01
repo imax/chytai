@@ -160,6 +160,7 @@ function settingsFor(req) {
     ...u,
     positions: u.positions || {},
     user: req.user,
+    username: (!req.guest && state.accounts[req.acct]?.username) || "",
     owner: !!req.owner,
     hasApiKey: !!process.env.ANTHROPIC_API_KEY,
     apiKeyFromEnv: true,
@@ -663,10 +664,10 @@ const serviceWorker = (() => {
   const rendererFiles = fs.readdirSync(rendererDir).filter((f) => /\.(js|css|html)$/.test(f));
   const hash = crypto.createHash("sha1");
   for (const f of [...rendererFiles.map((f) => path.join(rendererDir, f)), path.join(ROOT, "package-lock.json")]) hash.update(fs.readFileSync(f));
-  const fontDir = "@fontsource-variable/literata";
-  const fontCss = ["wght.css", "wght-italic.css"];
+  // The reader's fonts: Literata for books, Source Serif 4 and Onest for the home screen (design «3a»).
+  const fontCss = ["@fontsource-variable/literata/wght.css", "@fontsource-variable/literata/wght-italic.css", "@fontsource-variable/source-serif-4/opsz.css", "@fontsource-variable/onest/wght.css"];
   const fontFiles = fontCss.flatMap((f) =>
-    [...fs.readFileSync(path.join(ROOT, "node_modules", fontDir, f), "utf8").matchAll(/url\(\.\/([^)]+)\)/g)].map((m) => `${fontDir}/${m[1]}`),
+    [...fs.readFileSync(path.join(ROOT, "node_modules", f), "utf8").matchAll(/url\(\.\/([^)]+)\)/g)].map((m) => `${path.dirname(f)}/${m[1]}`),
   );
   const libs = [
     "jszip/dist/jszip.min.js",
@@ -678,7 +679,7 @@ const serviceWorker = (() => {
     "pdfjs-dist/build/pdf.worker.mjs",
     "pdfjs-dist/web/pdf_viewer.mjs",
     "pdfjs-dist/web/pdf_viewer.css",
-    ...fontCss.map((f) => `${fontDir}/${f}`),
+    ...fontCss,
     ...fontFiles,
   ];
   const assets = [
@@ -918,7 +919,7 @@ api.patch("/settings", (req, res) => {
 });
 
 api.put("/position", (req, res) => {
-  const { path: bookPath, cfi, pct, chapter } = req.body || {};
+  const { path: bookPath, cfi, pct, chapter, part, parts } = req.body || {};
   if (typeof bookPath !== "string" || typeof cfi !== "string") return res.status(400).json({ error: "bad request" });
   const u = req.guest ? guestState(req.guest) : userState(req.acct);
   const name = bookPath.replace(/#reflow$/, "");
@@ -930,7 +931,7 @@ api.put("/position", (req, res) => {
   if (u.setAside) delete u.setAside[name];
   // How far in and which chapter, for the home screen: the position itself is a CFI it cannot read.
   if (Number.isFinite(pct)) {
-    (u.progress ??= {})[name] = { pct: Math.max(0, Math.min(100, Math.round(pct))), chapter: typeof chapter === "string" ? chapter.slice(0, 200) : "" };
+    (u.progress ??= {})[name] = { pct: Math.max(0, Math.min(100, Math.round(pct))), chapter: typeof chapter === "string" ? chapter.slice(0, 200) : "", ...(Number.isInteger(part) && Number.isInteger(parts) && part > 0 && part <= parts && parts < 10000 ? { part, parts } : {}) };
   }
   if (!req.guest || req.share) saveState();
   res.json({ ok: true });
@@ -1142,6 +1143,7 @@ api.get("/library", async (req, res) => {
       started: !aside && !!(positions[name] || positions[`${name}#reflow`]),
       pct: progress ? progress.pct : null,
       chapter: progress?.chapter || "",
+      part: progress?.part || 0, parts: progress?.parts || 0,
       // Who put the book in the library and when; books from before this was recorded have only the file's date.
       addedAt: added[name]?.at || b.mtime || 0,
       addedBy: who(added[name]?.by),
@@ -1168,7 +1170,7 @@ api.get("/library", async (req, res) => {
           ...b, path: name, cloud: false, free: true, group: m.group || "", order: m.order ?? 1e6,
           title: m.title || b.title, authors: m.authors?.length ? m.authors : b.authors, year: m.year || b.year,
           openedAt: aside ? 0 : u.opened?.[name] || 0, aside, finished: !!u.finished?.[name],
-          started: !aside && !!positions[name], pct: aside || !progress ? null : progress.pct, chapter: (!aside && progress?.chapter) || "",
+          started: !aside && !!positions[name], pct: aside || !progress ? null : progress.pct, chapter: (!aside && progress?.chapter) || "", part: progress?.part || 0, parts: progress?.parts || 0,
           addedAt: 0, addedBy: "", coverAt: freeCover(name) ? Math.round(fs.statSync(freeCover(name)).mtimeMs) : 0, seen: true,
         };
       })
@@ -1186,7 +1188,7 @@ api.get("/library", async (req, res) => {
       const m = prot.meta(name);
       list.push({
         ...b, title: m.title || b.title, authors: m.authors?.length ? m.authors : b.authors, path: name, cloud: false, protected: true, openedAt, aside, finished: !!u.finished?.[name],
-        started: !aside && !!positions[name], pct: aside || !progress ? null : progress.pct, chapter: (!aside && progress?.chapter) || "",
+        started: !aside && !!positions[name], pct: aside || !progress ? null : progress.pct, chapter: (!aside && progress?.chapter) || "", part: progress?.part || 0, parts: progress?.parts || 0,
         addedAt: 0, addedBy: "", coverAt: 0, seen: true,
       });
     }
@@ -1440,6 +1442,7 @@ api.put("/books/:name", guestsCannot("У демо-режимі не можна �
 api.patch("/books/:name", guestsCannot("У демо-режимі не можна редагувати книжки."));
 api.delete("/books/:name", guestsCannot("У демо-режимі не можна видаляти книжки."));
 api.post("/trash/restore", guestsCannot("У демо-режимі нема видалених книжок."));
+api.post("/trash/forget", guestsCannot("У демо-режимі нема видалених книжок."));
 api.put("/reflow", guestsCannot("У демо-режимі конвертація PDF не зберігається."));
 api.get("/reflow", (req, res, next) => (req.guest ? res.status(204).end() : next()));
 
@@ -1527,6 +1530,14 @@ api.post("/trash/restore", (req, res) => {
   saveState();
   tellSite(req.acct);
   res.json({ ok: true, path: name });
+});
+// «Видалити назавжди» in «Нещодавно видалені» (design «3a», Max 2026-11-01): gone now rather than in 30 days.
+api.post("/trash/forget", (req, res) => {
+  const name = safeBookName(req.body?.path);
+  if (!name || !req.lib.meta.trash?.[name]) return res.status(404).json({ error: "Цієї книжки вже немає в нещодавно видалених." });
+  forgetBook(req.lib, req.acct, name);
+  saveState();
+  res.json({ ok: true });
 });
 // Gone for good: the file and everything this library and its reader kept about the book (the place, progress,
 // notes, a corrected title, a hand-set cover, the links that lent it out).

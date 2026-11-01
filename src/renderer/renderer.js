@@ -663,7 +663,14 @@ function onRelocated(location) {
 function readingProgress(location) {
   // Outside the app a publisher's book is only its beginning, so a percentage would mislead.
   if (!book?.locations.length() || !location?.start || current?.preview) return undefined;
-  return { pct: Math.round(book.locations.percentageFromCfi(location.start.cfi) * 100), chapter: chapterTitle(location.start.href, location.start.cfi) };
+  return { pct: Math.round(book.locations.percentageFromCfi(location.start.cfi) * 100), chapter: chapterTitle(location.start.href, location.start.cfi), ...chapterNumber(location.start.index) };
+}
+// «розділ 8 з 23» on the home screen: the contents' top-level entries, the last one at or before this page.
+function chapterNumber(spineIndex) {
+  const top = (book?.navigation?.toc || []).map((t) => book.spine.get(t.href)?.index).filter((i) => Number.isInteger(i));
+  if (top.length < 2 || !Number.isInteger(spineIndex)) return {};
+  const part = top.filter((i) => i <= spineIndex).length;
+  return part ? { part, parts: top.length } : {};
 }
 
 function updateProgress(location) {

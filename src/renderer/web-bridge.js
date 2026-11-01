@@ -472,6 +472,7 @@
       if (s.lastBook === name) patchLocalSettings({ lastBook: null });
     },
     libraryTrash: () => api("GET", "/api/trash").then((r) => r.json()),
+    libraryForgetBook: (name) => api("POST", "/api/trash/forget", { path: name }),
     libraryRestoreBook: (name) => api("POST", "/api/trash/restore", { path: name }).then((r) => r.json()),
     libraryUpdateBook: (name, patch) => api("PATCH", `/api/books/${encodeURIComponent(name)}`, patch).then((r) => r.json()),
     getSettings: async () => {
@@ -603,6 +604,7 @@
       if (s.lastBook === name) patchLocalSettings({ lastBook: null });
     },
     clubFeed: async () => (await api("GET", "/api/club")).json(),
+    uploadFiles: (files) => uploadAll(files),
     libraryFinished: (name, done) => api("POST", "/api/library/finished", { path: name, done }),
     librarySeen: (paths) => api("POST", "/api/library/seen", { paths }).catch(() => {}),
     wishList: async () => {
