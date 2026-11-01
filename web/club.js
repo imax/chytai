@@ -29,6 +29,15 @@ CREATE TABLE IF NOT EXISTS club_seen (reader TEXT NOT NULL, topic TEXT NOT NULL,
 `;
 // Reactions under an answer (Max, 2026-11-01: «давай може emoji?»): these five, one tap each, no letters about them.
 const REACTS = ["👍", "❤️", "😂", "😮", "😢"];
+// Any single emoji may be added (Max, 2026-11-01), but a comment holds at most REACT_KINDS different ones.
+const REACT_KINDS = 8;
+const rank = (e) => (REACTS.includes(e) ? REACTS.indexOf(e) : REACTS.length);
+const oneEmoji = (s) => {
+  s = String(s || "").trim();
+  if (!s || s.length > 16) return "";
+  const g = [...new Intl.Segmenter("uk", { granularity: "grapheme" }).segment(s)];
+  return g.length === 1 && /\p{Extended_Pictographic}|\p{Regional_Indicator}/u.test(s) ? s : "";
+};
 const TITLE_MAX = 120;
 const TEXT_MAX = 4000;
 const POST_MAX = 2000;
@@ -219,9 +228,11 @@ class Club {
   }
   // Toggles a reader's reaction; the post's reactions after it.
   react(postId, readerId, emoji) {
-    if (!REACTS.includes(emoji) || !this.post(postId)) return null;
+    emoji = oneEmoji(emoji);
+    if (!emoji || !this.post(postId)) return null;
     const had = this.db.prepare("SELECT 1 FROM club_reacts WHERE post = ? AND reader = ? AND emoji = ?").get(postId, readerId, emoji);
     if (had) this.db.prepare("DELETE FROM club_reacts WHERE post = ? AND reader = ? AND emoji = ?").run(postId, readerId, emoji);
+    else if (!this.db.prepare("SELECT 1 FROM club_reacts WHERE post = ? AND emoji = ?").get(postId, emoji) && this.db.prepare("SELECT COUNT(DISTINCT emoji) n FROM club_reacts WHERE post = ?").get(postId).n >= REACT_KINDS) return null;
     else this.db.prepare("INSERT INTO club_reacts (post, reader, emoji, at) VALUES (?, ?, ?, ?)").run(postId, readerId, emoji, now());
     return this.reacts([postId], readerId)[postId] || [];
   }
@@ -239,7 +250,7 @@ class Club {
       const w = this.who(r.reader);
       if (w) x.who.push(w.name);
     }
-    for (const k in out) out[k].sort((a, b) => REACTS.indexOf(a.emoji) - REACTS.indexOf(b.emoji));
+    for (const k in out) out[k].sort((a, b) => rank(a.emoji) - rank(b.emoji));
     return out;
   }
   dropPost(id) {
@@ -272,4 +283,4 @@ class Club {
   }
 }
 
-module.exports = { REACTS, Club, mentionsIn, MENTION, bookTagsIn };
+module.exports = { REACTS, REACT_KINDS, Club, mentionsIn, MENTION, bookTagsIn };

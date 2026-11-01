@@ -286,11 +286,17 @@
     e.preventDefault();
     const bar = f.closest(".reacts");
     const r = await fetch(f.action, { method: "POST", headers: { Accept: "application/json" }, body: new URLSearchParams(new FormData(f)) }).then((x) => (x.ok ? x.json() : null)).catch(() => null);
-    if (!r) return f.submit();
+    if (!r) {
+      if (f.classList.contains("react-own")) return f.querySelector("input")?.select();
+      return f.submit();
+    }
     const escH = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
     bar.querySelectorAll(":scope > .react-form").forEach((x) => x.remove());
-    bar.querySelector(".react-add")?.removeAttribute("open");
     const add = bar.querySelector(".react-add");
+    add?.removeAttribute("open");
+    if (add) add.hidden = !!r.full;
+    const own = add?.querySelector(".react-own input");
+    if (own) own.value = "";
     for (const x of r.reacts) {
       const n = document.createElement("form");
       n.method = "post";
