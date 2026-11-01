@@ -187,9 +187,9 @@ class Club {
       .map((r) => ({ ...this.view(r), fresh: r.fresh }))
       .filter((t) => t.reader);
   }
-  // The homepage's «Зараз у Клубі»: the liveliest topics now, the owner's pinned ones aside.
+  // The homepage's «Обговорюють зараз»: the liveliest readers' topics; the owner's pinned ones stay on /club (Max, 2026-11-01).
   lively(limit = 3) {
-    return this.db.prepare("SELECT * FROM club_topics ORDER BY active DESC LIMIT ?").all(limit).map((r) => this.view(r)).filter(Boolean);
+    return this.db.prepare("SELECT * FROM club_topics WHERE official = 0 ORDER BY active DESC LIMIT ?").all(limit).map((r) => this.view(r)).filter(Boolean);
   }
   // A reader's page: the topics they started.
   of(readerId, limit = 10) {
