@@ -891,7 +891,7 @@ const social = new Social(store, (id) => pub(auth.reader(id)));
 const lists = new Lists(store, (id) => pub(auth.reader(id)));
 const withCovers = (l) => ({ ...l, covers: lists.covers(l.id) });
 // «Клуб Chytai» (club.js): the forum at /club; the comments under lists are part of it.
-const { Club, mentionsIn, bookTagsIn } = require("./club");
+const { Club, mentionsIn, bookTagsIn, REACT_KINDS } = require("./club");
 const club = new Club(store, (id) => pub(auth.reader(id)), lists);
 // A wanted book the free-shelf workflow put on «Вільна полиця» mails the owner once (Max, 2026-11-01: «додавати і
 // слати мені імейл»), after the deploy that brought it.
@@ -1371,7 +1371,7 @@ app.post("/api/club/posts/:pid/react", signed, (req, res) => {
   const t = p && club.topic(p.topic);
   const list = t && club.react(p.id, req.user.id, String(req.body?.emoji || ""));
   if (!list) return res.status(400).json({ error: "Не вдалося." });
-  if (req.get("accept")?.includes("json")) return res.json({ reacts: list });
+  if (req.get("accept")?.includes("json")) return res.json({ reacts: list, full: list.length >= REACT_KINDS });
   res.redirect(303, `${t.href}#p-${p.id}`);
 });
 // «Сповіщати про відповіді» in a topic.

@@ -2780,11 +2780,12 @@ function clubRow(t, { book = true } = {}) {
 
 // Reactions under an answer: the ones given (with a count; the reader's own marked), and «🙂+» opening the five.
 // Plain forms work without the script; app.js sends them in the background.
-const REACTS = ["👍", "❤️", "😂", "😮", "😢"];
+const { REACTS, REACT_KINDS } = require("./club");
 function reactBar(postId, list, user) {
   const form = (emoji, inner, cls, title = "") => `<form method="post" action="/api/club/posts/${attr(postId)}/react" class="react-form"><input type="hidden" name="emoji" value="${attr(emoji)}"><button class="${cls}"${title ? ` title="${attr(title)}"` : ""}${user ? "" : " disabled"}>${inner}</button></form>`;
   const given = list.map((x) => form(x.emoji, `${x.emoji} <span>${x.n}</span>`, `react${x.mine ? " mine" : ""}`, x.who.join(", ")));
-  const add = user ? `<details class="react-add"><summary title="Реакція">🙂+</summary><div class="react-pick">${REACTS.map((e) => form(e, e, "react-one")).join("")}</div></details>` : "";
+  const own = `<form method="post" action="/api/club/posts/${attr(postId)}/react" class="react-form react-own"><input name="emoji" maxlength="16" autocomplete="off" placeholder="свій" aria-label="Свій емодзі"><button class="react-one" title="Додати">↵</button></form>`;
+  const add = user ? `<details class="react-add"${list.length >= REACT_KINDS ? " hidden" : ""}><summary title="Реакція">🙂+</summary><div class="react-pick">${REACTS.map((e) => form(e, e, "react-one")).join("")}${own}</div></details>` : "";
   return given.length || add ? `<div class="reacts" data-post="${attr(postId)}">${given.join("")}${add}</div>` : "";
 }
 
