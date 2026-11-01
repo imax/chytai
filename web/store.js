@@ -1700,7 +1700,8 @@ class Store {
     for (const b of books) {
       if (linked[b.id] || !/[а-яіїєґ]/i.test(b.title)) continue;
       const o = this.aiOrigs().get(b.id)?.title;
-      const g = o && free.find((f) => main(f.title) && (main(f.title).startsWith(main(o)) || main(o).startsWith(main(f.title))));
+      // The exact title first: Haiku's «Animal Farm» picked «Animal Farm / 1984» over «Animal Farm» (Max, 2026-11-01).
+      const g = o && (free.find((f) => main(f.title) === main(o)) || free.find((f) => main(f.title) && (main(f.title).startsWith(main(o)) || main(o).startsWith(main(f.title)))));
       options[b.id] = g ? [g, ...free.filter((f) => f !== g)] : free;
     }
     return { foreign, linked, options };
