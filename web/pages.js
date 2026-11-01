@@ -1350,6 +1350,26 @@ function yearHead(year, rows) {
   return `<h2 class="year" data-year="${year ?? ""}">${year || "Без дати"} <span>${books(n)}</span></h2>`;
 }
 
+// ---- the homepage block about the reader (Max, 2026-11-01; revived 2026-11-04 once the reader's new landing was live) ----
+// Same words as app.chytai.org.ua's landing, and the same real screenshot of the reader («Тіні забутих предків»,
+// an explained word): the computer one on wide screens, a crop of the phone one on phones. Leads to the reader.
+const READER = "https://app.chytai.org.ua";
+function readerBand() {
+  return `<section class="block reader-band" data-block="reader">${label("Читалка Chytai")}
+<div class="rb">
+  <div class="rb-text">
+    <h3>Читалка з AI‑поясненнями</h3>
+    <p>Виділіть незрозуміле слово, назву чи складне місце, і AI пояснить його в контексті книжки.</p>
+    <p class="rb-own">Завантажуйте вже куплені книжки в форматах EPUB, PDF, MOBI або читайте безкоштовні з Вільної полиці.</p>
+    <p class="rb-acts"><a class="btn primary" href="${READER}/">Відкрити Читалку</a></p>
+  </div>
+  <a class="rb-shot" href="${READER}/" tabindex="-1" aria-hidden="true"><picture>
+    <source media="(max-width: 760px)" srcset="/reader-phone.jpg" width="720" height="960">
+    <img src="/reader-desk.jpg" width="1200" height="750" loading="lazy" decoding="async" alt="">
+  </picture></a>
+</div></section>`;
+}
+
 // ---- the homepage «Що почитати» (Max, 2026-10-28: tried at /new, then «робимо її головною») ----
 // Shelves by what a reader is after, not by counters; the chips (?f=) narrow every shelf at once.
 // #live and #browse: search as you type replaces the shelves (app.js).
@@ -1380,6 +1400,7 @@ ${picks.length ? `<section class="block" data-block="picks">${label("Читач�
 ${row("Для вас", forWhy, forYou)}
 ${!f && editorials.length ? `<section class="block editorials" data-block="editorials">${label("Добірки Chytai", `<a href="/lists">усі списки</a>`)}<div class="lgrid">${editorials.map(listCard).join("")}</div></section>` : ""}
 ${!f && club.length ? `<section class="block" data-block="club">${label("Обговорюють зараз", `<a href="/club">Клуб Chytai</a>`)}<div class="club-topics">${club.map((t) => clubRow(t)).join("")}</div></section>` : ""}
+${!f ? readerBand() : ""}
 ${row("Дочитують до кінця", "ніхто не покинув", finish, (w) => `дочитали ${w.s.finished}`)}
 ${row("Українські автори", "", ua)}
 ${row("Коротке", "до 250 сторінок", short, (w) => `${w.pages} с.`)}

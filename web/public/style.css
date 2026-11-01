@@ -1215,3 +1215,16 @@ aside .side-lists + .label, aside p + .label, aside dialog + .label { margin-top
 .admin.overview .activity h3 { margin: 22px 0 8px; font-size: 16px; }
 .admin.overview .activity > p.small a { color: var(--muted); }
 .admin.overview .activity h2 + .act-run { margin-top: 12px; }
+/* The homepage block about the reader (2026-11-04): the landing's wording on the left, the real reader on the right. */
+.reader-band .rb { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr); gap: 48px; align-items: center; }
+.reader-band h3 { font: 600 28px/1.2 var(--serif); }
+.reader-band .rb-text > p { margin-top: 10px; font-size: 16px; line-height: 1.5; color: var(--text); max-width: 34em; }
+.reader-band .rb-text > p.rb-own { color: var(--muted); font-size: 15px; }
+.reader-band .rb-acts { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px; margin-top: 22px !important; }
+.reader-band .rb-shot { display: block; margin: 0; border: 1px solid var(--rule); border-radius: 8px; overflow: hidden; background: #f7f3ec; box-shadow: 0 10px 30px rgba(var(--shadow), 0.1); }
+.reader-band .rb-shot img { display: block; width: 100%; height: auto; }
+@media (max-width: 760px) {
+  .reader-band .rb { grid-template-columns: minmax(0, 1fr); gap: 24px; }
+  .reader-band h3 { font-size: 24px; }
+  .reader-band .rb-shot { max-width: 340px; border-radius: 14px; }
+}
