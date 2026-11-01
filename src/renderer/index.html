@@ -16,7 +16,7 @@
 <body data-theme="light">
   <header id="toolbar">
     <div class="group">
-      <button id="btn-library" title="Головна: книжки, нотатки, бажане (⌘L)">Головна</button>
+      <button id="btn-library" title="Мої книжки (⌘L)">Мої книжки</button>
       <button id="btn-open" title="Відкрити книжку (⌘O)">Відкрити</button>
       <button id="btn-toc" title="Зміст (T)" disabled>Зміст</button>
     </div>
@@ -154,7 +154,7 @@
       <div class="side-tabs">
         <button data-tab="home">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"/><path d="M3 10a2 2 0 0 1 .709-1.528l7-5.999a2 2 0 0 1 2.582 0l7 5.999A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
-          <span class="label">Головна</span>
+          <span class="label">Мої книжки</span>
         </button>
         <button data-tab="discover">
           <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.6-3.6"/></svg>
@@ -269,7 +269,7 @@
         <button value="about" id="bm-about">Про книжку</button>
         <button value="share" id="bm-share" hidden>Дати почитати</button>
         <button value="edit" id="bm-edit">Назва й автор</button>
-        <button value="aside" id="bm-aside">Прибрати з головної</button>
+        <button value="aside" id="bm-aside">Прибрати з моїх книжок</button>
         <button value="delete" id="bm-delete" class="danger">Видалити</button>
       </div>
       <menu><button value="cancel" formnovalidate>Скасувати</button></menu>
@@ -324,7 +324,7 @@
     <form method="dialog">
       <h2 tabindex="-1" autofocus>Клавіші</h2>
       <dl class="keys">
-        <dt><kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd></dt><dd>Головна, Бібліотека, Нотатки</dd>
+        <dt><kbd>1</kbd> <kbd>2</kbd></dt><dd>Мої книжки, Пошук</dd>
         <dt><kbd>/</kbd></dt><dd>Пошук: у книжці, а на головній — у бібліотеці</dd>
         <dt><kbd>Esc</kbd></dt><dd>Повернутися до книжки</dd>
         <dt><kbd>←</kbd> <kbd>→</kbd> <kbd>Пробіл</kbd></dt><dd>Гортати сторінки (і коліщатком миші)</dd>
