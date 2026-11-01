@@ -2741,22 +2741,33 @@ ${user ? `<dialog id="new-list"><div class="dlg-head"><h2>Новий списо�
 
 // A Club text: paragraphs, line breaks, links made clickable (nofollow), and «@username» linked to the reader
 // when there is one (`links`: username -> page).
-const CLUB_TOKEN = /(https?:\/\/[^\s<>"]+[^\s<>".,;:!?)»])|(^|[^\w@.])@([a-z0-9][a-z0-9_.-]{1,30}[a-z0-9])/gi;
+const CLUB_TOKEN = /(https?:\/\/[^\s<>"]+[^\s<>".,;:!?)»])|(^|[^\w@.])@([a-z0-9][a-z0-9_.-]{1,30}[a-z0-9])|(^|[^\w&#/])#([a-z0-9][a-z0-9-]{1,80})/gi;
 function clubText(text, links = {}) {
   let out = "";
   let at = 0;
   const t = String(text || "");
+  const books = [];
+  const book = (b) => (books.includes(b) || books.push(b), `<a class="at" href="${attr(b.href)}">«${esc(b.title)}»</a>`);
   for (const m of t.matchAll(CLUB_TOKEN)) {
     out += esc(t.slice(at, m.index));
     at = m.index + m[0].length;
-    if (m[1]) out += `<a class="text-link" href="${attr(m[1])}" target="_blank" rel="noopener nofollow ugc">${esc(m[1].replace(/^https?:\/\/(www\.)?/, "").slice(0, 60))}${m[1].length > 70 ? "…" : ""}</a>`;
-    else {
+    if (m[1]) {
+      // A link to a book here reads as the book.
+      const slug = (m[1].match(/^https?:\/\/(?:www\.)?chytai\.org\.ua\/book\/([a-z0-9-]+)\/?$/i) || [])[1];
+      const b = slug && links[`#${slug.toLowerCase()}`];
+      out += b ? book(b) : `<a class="text-link" href="${attr(m[1])}" target="_blank" rel="noopener nofollow ugc">${esc(m[1].replace(/^https?:\/\/(www\.)?/, "").slice(0, 60))}${m[1].length > 70 ? "…" : ""}</a>`;
+    } else if (m[3]) {
       const href = links[m[3].toLowerCase()];
       out += esc(m[2]) + (href ? `<a class="at" href="${attr(href)}">@${esc(m[3])}</a>` : `@${esc(m[3])}`);
+    } else {
+      const b = links[`#${m[5].toLowerCase()}`];
+      out += esc(m[4]) + (b ? book(b) : `#${esc(m[5])}`);
     }
   }
   out += esc(t.slice(at));
-  return out.split(/\n\s*\n/).map((p) => `<p>${p.replace(/\n/g, "<br>")}</p>`).join("");
+  // The books named, as small cards under the text.
+  const cards = books.length ? `<div class="cbooks">${books.map((b) => `<a href="${attr(b.href)}">${cover(b, "xs")}<span><b>${esc(b.title)}</b>${b.author ? `<span class="by">${esc(byline(b.author))}</span>` : ""}</span></a>`).join("")}</div>` : "";
+  return out.split(/\n\s*\n/).map((p) => `<p>${p.replace(/\n/g, "<br>")}</p>`).join("") + cards;
 }
 const answers = (n) => count(n, "відповідь", "відповіді", "відповідей");
 // A talk in a list: its title (with «спойлери» and the book), who started it, how many answers, when the last.
@@ -2788,7 +2799,7 @@ const bookPick = (book) => `<div class="book-pick" data-book-pick>
 const topicFields = ({ t = null, book = null, owner = false }) => `
     <label>Назва<input name="title" maxlength="120" required value="${attr(t?.title || "")}" placeholder="${book ? `Напр. «${esc(book.title)}»: як вам фінал?` : "Напр. Хто йде на Книжковий Арсенал?"}"></label>
     <label>Текст<textarea name="text" rows="7" maxlength="4000" placeholder="Про що хочете поговорити?">${esc(t?.text || "")}</textarea></label>
-    <p class="hint small muted">Напишіть @ім'я, і читачу прийде лист.</p>
+    <p class="hint small muted">@ім'я — покликати читача, # — згадати книжку.</p>
     <div class="field"><span class="small">Про книжку <span class="muted">· необов'язково</span></span>${bookPick(book)}</div>
     <label class="check"><span><input type="checkbox" name="spoiler" value="1"${t?.spoiler ? " checked" : ""}> Містить спойлери</span><span class="hint">Сховаємо від тих, хто книжку ще не прочитав.</span></label>
     ${owner ? `<label class="check"><span><input type="checkbox" name="official" value="1"${t?.official ? " checked" : ""}> Від Chytai: угорі Клубу</span></label>` : ""}`;

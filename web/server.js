@@ -890,7 +890,7 @@ const social = new Social(store, (id) => pub(auth.reader(id)));
 const lists = new Lists(store, (id) => pub(auth.reader(id)));
 const withCovers = (l) => ({ ...l, covers: lists.covers(l.id) });
 // «Клуб Chytai» (club.js): the forum at /club; the comments under lists are part of it.
-const { Club, mentionsIn } = require("./club");
+const { Club, mentionsIn, bookTagsIn } = require("./club");
 const club = new Club(store, (id) => pub(auth.reader(id)), lists);
 // A wanted book the free-shelf workflow put on «Вільна полиця» mails the owner once (Max, 2026-11-01: «додавати і
 // слати мені імейл»), after the deploy that brought it.
@@ -1256,7 +1256,19 @@ const mentionMailSwitch = (req, res, on) => {
 app.get("/mention-mail/unsubscribe/:id/:token", (req, res) => mentionMailSwitch(req, res, false));
 app.post("/mention-mail/unsubscribe/:id/:token", (req, res) => mentionMailSwitch(req, res, false));
 // The readers a Club text names, for linking them: username -> their page.
-const mentioned = (...texts) => Object.fromEntries(texts.flatMap((t) => mentionsIn(t)).map((u) => [u, pub(auth.byUsername(u))]).filter(([, r]) => r).map(([u, r]) => [u, r.href]));
+// …and the books it names (#slug), under "#slug": { href, title, author, cover }.
+const mentioned = (...texts) => ({
+  ...Object.fromEntries(texts.flatMap((t) => mentionsIn(t)).map((u) => [u, pub(auth.byUsername(u))]).filter(([, r]) => r).map(([u, r]) => [u, r.href])),
+  ...Object.fromEntries(
+    [...new Set(texts.flatMap((t) => bookTagsIn(t)))]
+      .map((slug) => [slug, store.resolve(slug)])
+      .filter(([, id]) => id)
+      .map(([slug, id]) => {
+        const b = store.bookPage(store.canonical(id));
+        return [`#${slug}`, { href: b.href, title: b.title, author: b.author || "", cover: b.cover || "" }];
+      }),
+  ),
+});
 
 app.get("/club", (req, res) => {
   const { pinned, rest } = club.index();
@@ -1269,9 +1281,17 @@ app.get("/club/new", signed, (req, res) => {
 // The book picker of a topic: a few books by title or author.
 app.get("/api/club/books", (req, res) => {
   const q = String(req.query.q || "").trim().slice(0, 100);
-  res.set("Cache-Control", "no-store").json(q.length < 2 ? [] : searchHits(req, q).slice(0, 6).map((h) => ({ id: h.book.id, title: h.book.title, author: byline(h.book.author || ""), cover: h.book.cover || "" })));
+  res.set("Cache-Control", "no-store").json(q.length < 2 ? [] : searchHits(req, q).slice(0, 12).map((h, i) => [h, (String(h.book.title).toLowerCase().includes(q.toLowerCase()) ? 0 : 100) + i]).sort((a, b) => a[1] - b[1]).slice(0, 6).map(([h]) => h).map((h) => ({ id: h.book.id, slug: String(h.book.href || "").split("/").pop(), title: h.book.title, author: byline(h.book.author || ""), cover: h.book.cover || "" })));
 });
 const byline = (a) => String(a || "").split(/,\s*/).slice(0, 2).join(", ");
+// «@» in a Club text: readers by name or address, for signed-in readers only.
+app.get("/api/club/readers", signed, (req, res) => {
+  const q = String(req.query.q || "").trim().toLowerCase().slice(0, 40);
+  if (!q) return res.json([]);
+  const like = `%${q.replace(/[%_]/g, "")}%`;
+  const rows = store.db.prepare("SELECT username, name FROM readers WHERE username LIKE ? OR lower(name) LIKE ? ORDER BY (username LIKE ?) DESC, username LIMIT 6").all(like, like, `${q}%`);
+  res.set("Cache-Control", "no-store").json(rows.filter((r) => r.username));
+});
 app.post("/api/club", signed, (req, res) => {
   if (auth.tooMany(`club:${req.user.id}`, 5)) return res.redirect(303, `/club/new?error=${encodeURIComponent("Забагато нових тем за годину.")}`);
   const t = club.create(req.user.id, { title: req.body.title, text: req.body.text, book: req.body.book, spoiler: req.body.spoiler === "1", official: req.owner && req.body.official === "1" });

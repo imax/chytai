@@ -225,6 +225,60 @@
       ta.setSelectionRange(ta.value.length, ta.value.length);
     }
   });
+  // «@» and «#» in a Club text: who or which book, picked from a short list under the field (Max, 2026-11-01).
+  for (const ta of document.querySelectorAll(".cmt-form textarea, .club-form textarea, #topic-edit textarea")) {
+    const box = document.createElement("div");
+    box.className = "ac-list";
+    box.hidden = true;
+    ta.insertAdjacentElement("afterend", box);
+    const escH = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+    let timer, ctrl, token = null, items = [], on = 0;
+    const close = () => ((box.hidden = true), (token = null), (items = []));
+    const draw = () => {
+      box.innerHTML = items.map((x, i) => `<button type="button" class="ac${i === on ? " on" : ""}" data-i="${i}">${x.html}</button>`).join("");
+      box.hidden = !items.length;
+    };
+    const put = (x) => {
+      const v = ta.value, end = ta.selectionStart, start = end - token.text.length - 1;
+      ta.value = v.slice(0, start) + x.put + " " + v.slice(end);
+      const c = start + x.put.length + 1;
+      ta.setSelectionRange(c, c);
+      ta.focus();
+      close();
+    };
+    ta.addEventListener("input", () => {
+      const m = ta.value.slice(0, ta.selectionStart).match(/(?:^|\s)([@#])([^\s@#]{1,40})$/);
+      if (!m) return close();
+      token = { kind: m[1], text: m[2] };
+      clearTimeout(timer);
+      timer = setTimeout(async () => {
+        ctrl?.abort();
+        ctrl = new AbortController();
+        const t = token;
+        if (!t) return;
+        const url = t.kind === "@" ? `/api/club/readers?${new URLSearchParams({ q: t.text })}` : `/api/club/books?${new URLSearchParams({ q: t.text })}`;
+        const list = await fetch(url, { signal: ctrl.signal }).then((r) => (r.ok ? r.json() : [])).catch(() => null);
+        if (!list || token !== t) return;
+        items = t.kind === "@"
+          ? list.map((r) => ({ put: "@" + r.username, html: `<b>${escH(r.name)}</b> <span class="muted">@${escH(r.username)}</span>` }))
+          : list.filter((b) => b.slug).map((b) => ({ put: "#" + b.slug, html: `${b.cover ? `<span class="cover xs"><img src="${escH(b.cover)}" alt=""></span>` : ""}<span><b>${escH(b.title)}</b> <span class="muted">${escH(b.author)}</span></span>` }));
+        on = 0;
+        draw();
+      }, 150);
+    });
+    ta.addEventListener("keydown", (e) => {
+      if (box.hidden) return;
+      if (e.key === "ArrowDown" || e.key === "ArrowUp") (on = (on + (e.key === "ArrowDown" ? 1 : items.length - 1)) % items.length), draw(), e.preventDefault();
+      else if (e.key === "Enter" || e.key === "Tab") put(items[on]), e.preventDefault();
+      else if (e.key === "Escape") close();
+    });
+    box.addEventListener("mousedown", (e) => e.preventDefault());
+    box.addEventListener("click", (e) => {
+      const b = e.target.closest("[data-i]");
+      if (b) put(items[+b.dataset.i]);
+    });
+    ta.addEventListener("blur", () => setTimeout(close, 150));
+  }
   for (const pick of document.querySelectorAll("[data-book-pick]")) {
     const id = $('input[name="book"]', pick), q = $(".pick-q", pick), hits = $(".pick-hits", pick), picked = $(".picked", pick);
     const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);

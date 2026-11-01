@@ -22,6 +22,8 @@ CREATE TABLE IF NOT EXISTS club_posts (
 CREATE INDEX IF NOT EXISTS club_posts_topic ON club_posts (topic, created);
 CREATE TABLE IF NOT EXISTS club_watch (reader TEXT NOT NULL, topic TEXT NOT NULL, on_ INTEGER NOT NULL DEFAULT 1, PRIMARY KEY (reader, topic));
 CREATE INDEX IF NOT EXISTS club_watch_topic ON club_watch (topic);
+CREATE TABLE IF NOT EXISTS club_tags (topic TEXT NOT NULL, book TEXT NOT NULL, PRIMARY KEY (topic, book));
+CREATE INDEX IF NOT EXISTS club_tags_book ON club_tags (book);
 CREATE TABLE IF NOT EXISTS club_seen (reader TEXT NOT NULL, topic TEXT NOT NULL, at TEXT NOT NULL, PRIMARY KEY (reader, topic));
 `;
 const TITLE_MAX = 120;
@@ -33,6 +35,10 @@ const POSTS_A_DAY = 40;
 
 // «@username» as typed: letters, digits, «_», «.», «-» (auth.checkUsername), not inside an e-mail address.
 const MENTION = /(^|[^\w@.])@([a-z0-9][a-z0-9_.-]{1,30}[a-z0-9])/gi;
+// «#slug» (Max, 2026-11-01: «тегати не тільки юзера, але й книжку»): a book by its address, as the «#» picker in the
+// form writes it; a pasted chytai.org.ua/book/<slug> link counts too.
+const BOOKTAG = /(^|[^\w&#/])#([a-z0-9][a-z0-9-]{1,80})|chytai\.org\.ua\/book\/([a-z0-9][a-z0-9-]{1,80})/gi;
+const bookTagsIn = (text) => [...new Set([...String(text || "").matchAll(BOOKTAG)].map((m) => (m[2] || m[3]).toLowerCase()))];
 const mentionsIn = (text) => [...new Set([...String(text || "").matchAll(MENTION)].map((m) => m[2].toLowerCase()))];
 
 const clean = (s, max) => String(s || "").replace(/\r/g, "").replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim().slice(0, max);
@@ -102,7 +108,8 @@ class Club {
   }
   // A book page's «У Клубі»: topics about this book, the liveliest first.
   ofBook(bookId) {
-    return this.db.prepare("SELECT * FROM club_topics WHERE book = ? ORDER BY active DESC LIMIT 5").all(this.store.canonical(bookId)).map((r) => this.view(r)).filter(Boolean);
+    const id = this.store.canonical(bookId);
+    return this.db.prepare("SELECT * FROM club_topics WHERE book = ? OR id IN (SELECT topic FROM club_tags WHERE book = ?) ORDER BY active DESC LIMIT 5").all(id, id).map((r) => this.view(r)).filter(Boolean);
   }
 
   // null when there is nothing to say or the reader has opened enough topics today.
@@ -116,6 +123,7 @@ class Club {
     const t = now();
     this.db.prepare("INSERT INTO club_topics (id, reader, title, text, book, spoiler, official, created, active, slug) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").run(id, readerId, title, text, this.bookId(book), spoiler ? 1 : 0, official ? 1 : 0, t, t, this.newSlug(title));
     this.follow(readerId, id);
+    this.tag(id, text);
     return this.topic(id);
   }
   // `official` is the owner's to change (server.js); undefined leaves it.
@@ -125,6 +133,7 @@ class Club {
     this.db
       .prepare("UPDATE club_topics SET title = ?, text = ?, book = ?, spoiler = ?, official = ? WHERE id = ?")
       .run(oneLine(title ?? t.title, TITLE_MAX) || t.title, clean(text ?? t.text, TEXT_MAX), book === undefined ? t.book?.id || "" : this.bookId(book), (spoiler ?? t.spoiler) ? 1 : 0, (official ?? t.official) ? 1 : 0, t.id);
+    if (text !== undefined) this.tag(t.id, text);
     return this.topic(id);
   }
   bookId(b) {
@@ -141,6 +150,7 @@ class Club {
     this.db.prepare("INSERT INTO club_posts (id, topic, reader, text, created) VALUES (?, ?, ?, ?, ?)").run(id, topicId, readerId, text, t);
     this.db.prepare("UPDATE club_topics SET active = ? WHERE id = ?").run(t, topicId);
     this.follow(readerId, topicId);
+    this.tag(topicId, text);
     return id;
   }
   // «Відповіді в темі» letters (Max, 2026-11-01: «лист на кожне повідомлення в треді»): the topic's author and everyone
@@ -156,6 +166,13 @@ class Club {
   }
   watchers(topicId) {
     return this.db.prepare("SELECT reader FROM club_watch WHERE topic = ? AND on_ = 1").all(topicId).map((r) => r.reader);
+  }
+  // The books a topic's texts name (#slug): the topic shows on their pages too.
+  tag(topicId, text) {
+    for (const slug of bookTagsIn(text).slice(0, 20)) {
+      const id = this.store.resolve(slug);
+      if (id) this.db.prepare("INSERT OR IGNORE INTO club_tags (topic, book) VALUES (?, ?)").run(topicId, this.store.canonical(id));
+    }
   }
   // What a reader has seen (Max, 2026-11-01: «підсвічувати якщо є непрочитане в треді»): opening a topic or answering in
   // it marks it read up to now.
@@ -207,6 +224,7 @@ class Club {
       this.db.prepare("DELETE FROM club_posts WHERE topic = ?").run(id);
       this.db.prepare("DELETE FROM club_watch WHERE topic = ?").run(id);
       this.db.prepare("DELETE FROM club_seen WHERE topic = ?").run(id);
+      this.db.prepare("DELETE FROM club_tags WHERE topic = ?").run(id);
       this.db.prepare("DELETE FROM club_topics WHERE id = ?").run(id);
     });
   }
@@ -225,4 +243,4 @@ class Club {
   }
 }
 
-module.exports = { Club, mentionsIn, MENTION };
+module.exports = { Club, mentionsIn, MENTION, bookTagsIn };
