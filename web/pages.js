@@ -2762,7 +2762,7 @@ function clubRow(t, { book = true } = {}) {
 function clubPage({ user, pinned = [], rest = [] }) {
   const add = user ? `<a class="btn primary" href="/club/new">+ Нова тема</a>` : `<a class="btn primary" rel="nofollow" href="/login?next=${encodeURIComponent("/club/new")}">+ Нова тема</a>`;
   const body = `
-${pageHead({ title: "Клуб Chytai", lead: "Розмови про книжки й читання.", action: add })}
+${pageHead({ title: "Клуб Chytai", lead: "Розмови про книжки.", action: add })}
 <div class="club-index">
 ${pinned.length ? `${label("Від Chytai")}<div class="club-topics">${pinned.map((t) => clubRow(t)).join("")}</div>` : ""}
 ${label("Теми")}
