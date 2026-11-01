@@ -209,7 +209,7 @@ const isbnKey = (s) => String(s || "").replace(/[^0-9X]/gi, "");
 const GENRE = /\s*[:.]\s*(казка|казки|роман|повість|повісті|оповідання|новели|п[’']єса|есеї|есей|поезії|вірші|збірка|нариси|спогади|мемуари|(осіннє|зимове|весняне|літнє|подарункове|ювілейне|ілюстроване|нове|повне|доповнене|колекційне)\s+видання)\s*$/iu;
 // A note on the edition at the end of a title, which names a printing, not a book: «Дракула (2-ге видання)»,
 // «Подолати минуле: глобальна історія України Подарункове видання», «Кобзар. Ювілейне видання».
-const EDITION = /[\s:.,]*(?:[(\[]\s*)?(\d+-?[а-яі]{1,3}\s+(видання|вид\.?)|(осіннє|зимове|весняне|літнє|подарункове|ювілейне|ілюстроване|нове|повне|доповнене|виправлене|оновлене|колекційне|святкове|лімітоване|спеціальне|перше|друге|третє)(\s+(та|і|й)\s+(доповнене|виправлене|оновлене|перероблене))?\s+видання)\s*[)\]]?\s*$/iu;
+const EDITION = /[\s:.,]*(?:[(\[]\s*)?(\d+-?[а-яі]{1,3}\s+(видання|вид\.?)|(осіннє|зимове|весняне|літнє|подарункове|ювілейне|ілюстроване|нове|повне|доповнене|виправлене|оновлене|колекційне|святкове|лімітоване|спеціальне|ексклюзивне|перше|друге|третє)(\s+(та|і|й)\s+(доповнене|виправлене|оновлене|перероблене))?\s+видання)\s*[)\]]?\s*$/iu;
 // The name of the work a shop's title stands for: without a bracketed note («(м'яка обкладинка)»), a genre
 // word or an edition note at its end. A bracket with a number or a volume word stays («(том 2)», «(1984)»),
 // unless it is an edition («(2-ге видання)»); volumes never fold into one book.
@@ -926,12 +926,14 @@ class Store {
       const had = this.slugOf.get(id);
       // An address given from a title with an edition note («drakula-2-he-vydannia») moves to the work's
       // name when that address is free; the old one stays in the table and redirects.
-      const stale = had && latin(had) && raw !== title && had.startsWith(slugify(raw)) && !this.slugs.has(slugify(title));
+      // An edition already in this work may hold that address («1984. Колгосп тварин» by Stone while КСД's
+      // «Ексклюзивне видання» leads, Max 2026-11-01): it is the work's own, see ours below.
+      const ours = (s) => !this.slugs.has(s) || this.slugs.get(s) === id || (this.canonical(this.slugs.get(s)) === id && !own.has(this.slugs.get(s)));
+      const stale = had && latin(had) && raw !== title && had.startsWith(slugify(raw)) && ours(slugify(title));
       // An address held by an edition that is now part of this work is the work's own («1984-orvell», not
       // «1984-orvell-2», Max 2026-10-29); the «-2» one it had stays and redirects.
       // A reader's book keeps the address of its own id even while it is merged into another work: it may part again
       // (Orwell's «1984» had lent «1984» to Орвелл's, 2026-10-29).
-      const ours = (s) => !this.slugs.has(s) || this.slugs.get(s) === id || (this.canonical(this.slugs.get(s)) === id && !own.has(this.slugs.get(s)));
       let slug = slugify(title);
       const surname = (author || "").split(/[,\s]+/).filter(Boolean).pop();
       const last = surname ? slugify(surname) : ""; // slugify("") is "book": «tyhrolovy-book»
