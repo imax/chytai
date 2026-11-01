@@ -2062,6 +2062,12 @@ function settingsPage({ user, values, error = "", suggested = "", saved = false 
   <label class="check"><span><input type="radio" name="originals" value="1"${user.originals ? " checked" : ""}> Оригінал</span></label>
   <div class="actions"><button class="btn">Зберегти</button></div>
 </form>
+<form method="post" action="/settings/reader" class="form import-box" id="reader">
+  <h2>Читалка</h2>
+  ${saved === "reader" ? `<p class="saved">Збережено.</p>` : ""}
+  <label class="check"><span><input type="checkbox" name="autonow" value="1"${user.autonow === 0 ? "" : " checked"}> Книжка, яку читаю в Читалці, стає «Читаю зараз»</span></label>
+  <div class="actions"><button class="btn">Зберегти</button></div>
+</form>
 ${user.owner ? "" : `<form method="post" action="/settings/delete" class="form danger-zone" onsubmit="return confirm('Видалити акаунт разом з усіма книжками, оцінками й нотатками?')">
   <h2>Видалити акаунт</h2>
   <p class="muted small">Зітре всі ваші книжки, оцінки, нотатки й підписки. Назад не повернути.</p>

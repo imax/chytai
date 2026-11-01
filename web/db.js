@@ -93,6 +93,8 @@ function open(dataDir) {
   if (!db.prepare("PRAGMA table_info(readers)").all().some((c) => c.name === "want_mail")) db.exec("ALTER TABLE readers ADD COLUMN want_mail INTEGER NOT NULL DEFAULT 1");
   // Books in the homepage's shelves and recommendations as originals, not Ukrainian translations (Max, 2026-10-29); off by default.
   if (!db.prepare("PRAGMA table_info(readers)").all().some((c) => c.name === "originals")) db.exec("ALTER TABLE readers ADD COLUMN originals INTEGER NOT NULL DEFAULT 0");
+  // A book read in the reader goes on «Читаю зараз» by itself (Max, 2026-11-01); on by default, off in /settings.
+  if (!db.prepare("PRAGMA table_info(readers)").all().some((c) => c.name === "autonow")) db.exec("ALTER TABLE readers ADD COLUMN autonow INTEGER NOT NULL DEFAULT 1");
   // Whether search engines may list the reader's page (settings, 2026-10-21); yes by default.
   if (!db.prepare("PRAGMA table_info(readers)").all().some((c) => c.name === "noindex")) db.exec("ALTER TABLE readers ADD COLUMN noindex INTEGER NOT NULL DEFAULT 0");
   // «Читаю зараз» (Max, 2026-10-22), a reader's status: JSON { books: [{ id, since }], at }.

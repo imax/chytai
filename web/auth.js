@@ -174,6 +174,9 @@ class Auth {
   setOriginals(readerId, on) {
     this.db.prepare("UPDATE readers SET originals = ? WHERE id = ?").run(on ? 1 : 0, readerId);
   }
+  setAutoNow(readerId, on) {
+    this.db.prepare("UPDATE readers SET autonow = ? WHERE id = ?").run(on ? 1 : 0, readerId);
+  }
   setFollowMail(readerId, on) {
     this.db.prepare("UPDATE readers SET follow_mail = ? WHERE id = ?").run(on ? 1 : 0, readerId);
   }

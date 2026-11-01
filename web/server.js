@@ -526,6 +526,31 @@ app.post("/api/reader-library", (req, res) => {
   });
   res.json({ ok: true, books: books.length });
 });
+// A book read in the reader for a few minutes (server/index.js noteReadingNow, once a day): it goes on «Читаю
+// зараз» and, unless it was already, the shelf status «Читаю». Not when the reader turned this off in
+// /settings, and not for a book already «Прочитано» (a look back into it is not a re-read).
+app.post("/api/reader-now", (req, res) => {
+  const id = String(req.body?.id || "");
+  const key = String(req.body?.key || "");
+  const want = auth.reader(id) && readerKey(id);
+  if (!want || key.length !== want.length || !require("crypto").timingSafeEqual(Buffer.from(key), Buffer.from(want))) return res.status(403).json({ error: "key" });
+  if (!auth.reader(id).autonow) return res.json({ ok: true, skipped: "off" });
+  const name = String(req.body?.book?.name || "").slice(0, 300);
+  if (!name) return res.status(400).json({ error: "book" });
+  const sent = req.body.book.title ? { name, title: String(req.body.book.title).slice(0, 300), authors: (Array.isArray(req.body.book.authors) ? req.body.book.authors : []).map(String).join("; ") } : null;
+  const file = store.db.prepare("SELECT name, title, authors FROM reader_files WHERE reader = ? AND name = ?").get(id, name) || FREE.find((f) => f.name === name) || sent;
+  if (!file?.title) return res.json({ ok: true, skipped: "unknown" });
+  const queries = [...new Set([file.title, file.title.split(/[.:(]/)[0].trim()])].filter((q) => q.length > 1);
+  const hit = queries.flatMap((q) => store.search(q, { limit: 10, alias: false })).find((h) => fileFor([file], store.bookPage(h.book.id)));
+  if (!hit) return res.json({ ok: true, skipped: "not in catalog" });
+  const bookId = store.canonical(hit.book.id);
+  const e = store.entry(id, bookId);
+  if (e?.status === "read") return res.json({ ok: true, skipped: "read" });
+  if (nowIds(id).has(bookId)) return res.json({ ok: true, already: true });
+  if (e?.status !== "reading") store.setEntry(id, bookId, { status: "reading" });
+  putNow(id, bookId);
+  res.json({ ok: true, now: bookId });
+});
 // Chapters of publishers' protected books read in the reader (server/reads.js), for the publishers' reports.
 // Signed with the account's key; the owner's key also sends the whole protected shelf (shelf: true).
 app.post("/api/reads", (req, res) => {
@@ -601,12 +626,17 @@ app.get("/reader", (_req, res) => res.redirect(302, `${READER_URL}/`)); // short
 // ---- settings: name, username, e-mail, deleting the account ----
 
 app.get("/settings", signed, (req, res) => {
-  res.send(pages.settingsPage({ user: req.user, values: { ...req.user }, suggested: auth.suggestUsername(req.user.name, slugify), saved: req.query.saved === "books" ? "books" : !!req.query.saved }));
+  res.send(pages.settingsPage({ user: req.user, values: { ...req.user }, suggested: auth.suggestUsername(req.user.name, slugify), saved: ["books", "reader"].includes(req.query.saved) ? req.query.saved : !!req.query.saved }));
 });
 // Translated books as the Ukrainian edition (default) or the original, in shelves and recommendations.
 app.post("/settings/books", signed, (req, res) => {
   auth.setOriginals(req.user.id, req.body.originals === "1");
   res.redirect("/settings?saved=books#books");
+});
+// A book read in the reader goes on «Читаю зараз» by itself (/api/reader-now), unless turned off here.
+app.post("/settings/reader", signed, (req, res) => {
+  auth.setAutoNow(req.user.id, req.body.autonow === "1");
+  res.redirect("/settings?saved=reader#reader");
 });
 app.post("/settings", signed, (req, res) => {
   const name = auth.checkName(req.body.name);

@@ -926,6 +926,7 @@ api.put("/position", (req, res) => {
   u.positions[bookPath] = cfi;
   (u.opened ??= {})[name] = Date.now();
   if (!req.guest) recordReading(req.acct);
+  if (!req.guest && !req.share) noteReadingNow(req.acct, name);
   if (u.setAside) delete u.setAside[name];
   // How far in and which chapter, for the home screen: the position itself is a CFI it cannot read.
   if (Number.isFinite(pct)) {
@@ -1042,6 +1043,32 @@ function tellSite(id) {
     }
   }, 2000));
 }
+
+// «Читаю зараз» on the site follows the reader (Max, 2026-11-01: «Автоматом встановлювати Читаю зараз з
+// читалки»): a book read here for a few minutes goes to the site once a day; the site puts it on «Читаю зараз»
+// unless the account turned that off in its settings there or already has the book as «Прочитано».
+const NOW_AFTER = 3 * 60 * 1000;
+const readingSince = new Map(); // "acct\tbook" -> { from, last, told: day }
+function noteReadingNow(acct, name) {
+  if (!state.accounts[acct]?.key || !name) return;
+  const key = `${acct}\t${name}`;
+  const t = Date.now();
+  let r = readingSince.get(key);
+  if (!r || t - r.last > READ_GAP * 4) r = { from: t, last: t, told: r?.told };
+  r.last = t;
+  readingSince.set(key, r);
+  const day = statsDay(t);
+  if (r.told === day || t - r.from < NOW_AFTER) return;
+  r.told = day;
+  const info = freeShelf.find((f) => f.name === name) || prot.meta(name) || {};
+  const book = { name, title: info.title || "", authors: Array.isArray(info.authors) ? info.authors : info.author ? [info.author] : [] };
+  fetch(`${WEB_URL}/api/reader-now`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: acct, key: state.accounts[acct].key, book }), signal: AbortSignal.timeout(20000) })
+    .then((res) => res.ok || console.error(`reader-now ${acct}: ${res.status}`))
+    .catch((err) => console.error(`reader-now ${acct}:`, err.message));
+}
+setInterval(() => {
+  for (const [k, r] of readingSince) if (Date.now() - r.last > 24 * 3600 * 1000) readingSince.delete(k);
+}, 3600 * 1000).unref();
 
 // Chapters of publishers' protected books read here go to the site for the publishers' reports (reads.js).
 const reads = require("./reads");
