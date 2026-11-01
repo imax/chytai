@@ -263,6 +263,9 @@ const ldOf = (html) =>
 // bundle («4 соціальні мальописи – безкоштовно»), a sample test (Max, 2026-10-28: «таке треба видаляти»).
 // Left out when the shelves are loaded (store.js), so old rows and new ones alike.
 const isPromo = (title) => /безкоштовн\S*\s+фрагмент|\((ознайомч\S*\s+)?(фрагмент|уривок)\)\s*$|[–—-]\s*безкоштовно\s*$|пробний тест/iu.test(String(title || ""));
+// A language aid, not a book to read (Max, 2026-11-01, «2000 найкорисніших німецьких слів і висловів»: «Це треба
+// видалити»). Left out when the shelves are loaded, like a promo.
+const isLangAid = (title) => /^2000 найкорисніших німецьких слів і висловів$/iu.test(String(title || "").trim());
 const alt = (a, title) => ((a = a.replace(/\s+by\s+(\p{Lu}[\p{L}.'’-]*\s*)+$/u, "").trim()) === title ? "" : a);
 const names = (v) => [].concat(v || []).map((x) => ent(x.name || x).trim()).filter(Boolean).join(", ");
 function ldBookPage(src, brands) {
@@ -1222,4 +1225,4 @@ async function refresh({ store, log = console.log, fetchImpl, only }) {
   return { ok: true, errors, counts };
 }
 
-module.exports = { isPromo, bookuaTiles, bookuaProducts, SOURCES, fetchSource, buildShelves, refresh, volumeOf, ent, about, pageProducts, ldBookPage };
+module.exports = { isPromo, isLangAid, bookuaTiles, bookuaProducts, SOURCES, fetchSource, buildShelves, refresh, volumeOf, ent, about, pageProducts, ldBookPage };
