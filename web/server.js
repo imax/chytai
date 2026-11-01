@@ -1088,7 +1088,7 @@ app.get("/@:username", (req, res) => {
   // The profile is the reader's own stats and books; recommendations live on other pages (Max, 2026-10-23).
   const theirLists = lists.of(reader.id).filter((l) => own || (l.count && !l.draft));
   const part = restPart(req, res);
-  if (own) return res.send(pages.libraryPage({ part, clubTopics: club.of(reader.id, 5), lists: theirLists, savedLists: lists.savedBy(reader.id), rows, user: req.user, reader: req.user, own: true, follows, now: nowFor(reader.id, { own: true }) }));
+  if (own) return res.send(pages.libraryPage({ part, clubTopics: club.mark(req.user.id, club.of(reader.id, 5)), lists: theirLists, savedLists: lists.savedBy(reader.id), rows, user: req.user, reader: req.user, own: true, follows, now: nowFor(reader.id, { own: true }) }));
   res.send(pages.libraryPage({ part, clubTopics: club.of(reader.id, 5), lists: theirLists, rows, user: req.user, reader, now: nowFor(reader.id), mineIds: req.user && req.user.id !== reader.id ? store.inLibrary(req.user.id) : null, mineDirect: req.user ? new Set(Object.keys(store.entriesOf(req.user.id))) : null, following: auth.follows(req.user?.id, reader.id), follows }));
 });
 // ---- «Списки» (lists.js): /@<username>/list/<slug>, /lists, and what the author does with a list ----
@@ -1187,8 +1187,8 @@ app.post("/api/lists/:id/comments", signed, (req, res) => {
   if (auth.tooMany(`comments:${req.user.id}`, 10)) return back("Забагато за годину. Спробуйте трохи згодом.");
   const id = lists.addComment(l.id, req.user.id, req.body.text);
   if (!id && String(req.body.text || "").trim()) return back("На сьогодні досить, завтра можна знову.");
-  if (id) mentionMails(req, req.body.text, { where: `під списком «${l.title}»`, href: `${l.href}#c-${id}` });
-  if (id && !req.owner) notifyOwner(`Коментар у Клубі: ${l.title}`, [`${req.user.name} (${SITE}/@${req.user.username}) під списком «${l.title}»:`, "", String(req.body.text).trim().slice(0, 1000), "", `${SITE}${l.href}#club`, `Усі коментарі: ${SITE}/admin/comments`].join("\n"));
+  const mailed = id ? mentionMails(req, req.body.text, { where: `під списком «${l.title}»`, href: `${l.href}#c-${id}` }) : new Set();
+  if (id && !req.owner && !mailed.has(OWNER_ID)) notifyOwner(`Коментар у Клубі: ${l.title}`, [`${req.user.name} (${SITE}/@${req.user.username}) під списком «${l.title}»:`, "", String(req.body.text).trim().slice(0, 1000), "", `${SITE}${l.href}#club`, `Усі коментарі: ${SITE}/admin/comments`].join("\n"));
   back("");
 });
 // One's own words go; the list's author and the owner take any away.
@@ -1221,6 +1221,7 @@ function mentionMails(req, text, { where, href }) {
 // «Нова відповідь у темі»: each answer goes to everyone following the topic (club.watchers: its author and who answered),
 // except the writer and those just mailed about a mention in it (Max, 2026-11-01: «на кожне повідомлення в треді»).
 function replyMails(req, t, postId, text, skip = new Set()) {
+  const mailed = new Set(skip);
   for (const id of club.watchers(t.id)) {
     const r = auth.reader(id);
     if (!r || r.id === req.user.id || skip.has(r.id) || !r.email || r.club_mail === 0) continue;
@@ -1230,7 +1231,9 @@ function replyMails(req, t, postId, text, skip = new Set()) {
       .send(r.email, `Клуб Chytai: ${t.title}`, require("./admin").mailLinks(body, SITE, "club"), { headers: { "List-Unsubscribe": `<${off}>`, "List-Unsubscribe-Post": "List-Unsubscribe=One-Click" } })
       .then(() => console.log(`club mail: «${t.title}» → @${r.username}`))
       .catch((e) => console.log(`club mail to @${r.username} failed: ${e.message}`));
+    mailed.add(r.id);
   }
+  return mailed;
 }
 // The letter's «не стежити»: this topic only; the settings switch all of them off.
 const clubUnwatch = (req, res) => {
@@ -1255,7 +1258,10 @@ app.post("/mention-mail/unsubscribe/:id/:token", (req, res) => mentionMailSwitch
 // The readers a Club text names, for linking them: username -> their page.
 const mentioned = (...texts) => Object.fromEntries(texts.flatMap((t) => mentionsIn(t)).map((u) => [u, pub(auth.byUsername(u))]).filter(([, r]) => r).map(([u, r]) => [u, r.href]));
 
-app.get("/club", (req, res) => res.send(pages.clubPage({ user: req.user, ...club.index() })));
+app.get("/club", (req, res) => {
+  const { pinned, rest } = club.index();
+  res.send(pages.clubPage({ user: req.user, pinned: club.mark(req.user?.id, pinned), rest: club.mark(req.user?.id, rest) }));
+});
 app.get("/club/new", signed, (req, res) => {
   const id = store.resolve(String(req.query.book || ""));
   res.send(pages.clubNewPage({ user: req.user, book: id ? store.bookPage(store.canonical(id)) : null, error: String(req.query.error || "").slice(0, 200) }));
@@ -1270,8 +1276,8 @@ app.post("/api/club", signed, (req, res) => {
   if (auth.tooMany(`club:${req.user.id}`, 5)) return res.redirect(303, `/club/new?error=${encodeURIComponent("Забагато нових тем за годину.")}`);
   const t = club.create(req.user.id, { title: req.body.title, text: req.body.text, book: req.body.book, spoiler: req.body.spoiler === "1", official: req.owner && req.body.official === "1" });
   if (!t) return res.redirect(303, `/club/new?error=${encodeURIComponent(String(req.body.title || "").trim() ? "На сьогодні досить нових тем." : "Потрібна назва.")}`);
-  if (!req.owner) notifyOwner(`Нова тема в Клубі: ${t.title}`, [`${req.user.name} (${SITE}/@${req.user.username}):`, "", t.title, t.text.slice(0, 1000), "", `${SITE}${t.href}`].join("\n"));
-  mentionMails(req, t.text, { where: `у темі «${t.title}»`, href: t.href });
+  const mailed = mentionMails(req, t.text, { where: `у темі «${t.title}»`, href: t.href });
+  if (!req.owner && !mailed.has(OWNER_ID)) notifyOwner(`Нова тема в Клубі: ${t.title}`, [`${req.user.name} (${SITE}/@${req.user.username}):`, "", t.title, t.text.slice(0, 1000), "", `${SITE}${t.href}`].join("\n"));
   res.redirect(303, t.href);
 });
 const clubTopic = (req, res, next) => {
@@ -1293,10 +1299,12 @@ app.get("/club/:key{/:rest}", (req, res, next) => {
   const t = req.topic;
   if (req.path !== t.href) return res.redirect(301, t.href);
   const posts = club.posts(t.id);
+  const seenAt = club.seenAt(req.user?.id, t.id);
+  if (req.user) club.seen(req.user.id, t.id);
   // Spoilers stay hidden from a reader who has not read the book; its author sees their own topic as it is.
   const read = !!(t.book && req.user && ["read"].includes(store.entry(req.user.id, t.book.id)?.status));
   const hide = t.spoiler && !read && req.user?.id !== t.reader.id;
-  res.send(pages.clubTopicPage({ user: req.user, owner: req.owner, topic: t, posts, hide, watching: !!req.user && club.watching(req.user.id, t.id), links: mentioned(t.text, ...posts.map((p) => p.text)), error: String(req.query.error || "").slice(0, 200) }));
+  res.send(pages.clubTopicPage({ user: req.user, owner: req.owner, topic: t, posts, hide, watching: !!req.user && club.watching(req.user.id, t.id), seenAt, links: mentioned(t.text, ...posts.map((p) => p.text)), error: String(req.query.error || "").slice(0, 200) }));
 });
 app.post("/api/club/:id", signed, clubTopic, myTopic, (req, res) => {
   const t = club.edit(req.topic.id, { title: req.body.title, text: req.body.text, book: req.body.book ?? "", spoiler: req.body.spoiler === "1", official: req.owner ? req.body.official === "1" : undefined });
@@ -1308,9 +1316,11 @@ app.post("/api/club/:id/posts", signed, clubTopic, (req, res) => {
   const back = (err, pid = "") => res.redirect(303, `${t.href}${err ? `?error=${encodeURIComponent(err)}` : ""}#${pid ? `p-${pid}` : "reply"}`);
   if (auth.tooMany(`club-posts:${req.user.id}`, 20)) return back("Забагато за годину. Спробуйте трохи згодом.");
   const id = club.addPost(t.id, req.user.id, req.body.text);
+  if (id) club.seen(req.user.id, t.id);
   if (!id) return back(String(req.body.text || "").trim() ? "На сьогодні досить, завтра можна знову." : "");
-  if (!req.owner) notifyOwner(`Клуб: ${t.title}`, [`${req.user.name} (${SITE}/@${req.user.username}) у темі «${t.title}»:`, "", String(req.body.text).trim().slice(0, 1000), "", `${SITE}${t.href}#p-${id}`, `Усі коментарі: ${SITE}/admin/comments`].join("\n"));
-  replyMails(req, t, id, req.body.text, mentionMails(req, req.body.text, { where: `у темі «${t.title}»`, href: `${t.href}#p-${id}` }));
+  // Readers who got a letter about it (a mention or «відповідь у темі»); the owner among them gets no second one (Max, 2026-11-01).
+  const mailed = replyMails(req, t, id, req.body.text, mentionMails(req, req.body.text, { where: `у темі «${t.title}»`, href: `${t.href}#p-${id}` }));
+  if (!req.owner && !mailed.has(OWNER_ID)) notifyOwner(`Клуб: ${t.title}`, [`${req.user.name} (${SITE}/@${req.user.username}) у темі «${t.title}»:`, "", String(req.body.text).trim().slice(0, 1000), "", `${SITE}${t.href}#p-${id}`, `Усі коментарі: ${SITE}/admin/comments`].join("\n"));
   back("", id);
 });
 // «Сповіщати про відповіді» in a topic.
@@ -1589,7 +1599,7 @@ app.get("/", (req, res) => {
         .map((x) => ({ book: x.it, shelf: x.sh }));
   // Chosen and ranked by the Ukrainian edition; a reader who wants originals sees those in its place.
   const as = (list) => (req.user?.originals ? list.map((x) => ({ ...x, book: workFor(req, x.book) })) : list);
-  res.send(pages.readPage({ user: req.user, f, filters: READ_FILTERS, picks, finish: as(finish), ua, short: as(short), free, wanted: as(wanted), genres, editorials, forYou: as(forYou), forWhy, fresh, club: club.lively(3) }));
+  res.send(pages.readPage({ user: req.user, f, filters: READ_FILTERS, picks, finish: as(finish), ua, short: as(short), free, wanted: as(wanted), genres, editorials, forYou: as(forYou), forWhy, fresh, club: club.mark(req.user?.id, club.lively(3)) }));
 });
 
 app.get("/publishers", (req, res) => {
@@ -1962,7 +1972,7 @@ app.get("/book/:id", (req, res) => {
   const free = !file && freeFileFor(book);
   const alsoBooks = alsoFor(req, book.id);
   const myLists = req.user ? lists.of(req.user.id).map((l) => ({ id: l.id, title: l.title, count: l.count, has: lists.has(l.id, book.id) })) : null;
-  res.send(pages.bookPage({ ukrlib: openLinks.linkFor(store, book) || ukrlib.linkFor(book), sluhay: SLUHAY_PUBLIC || req.owner ? sluhay.linkFor(book) : null, ...(SHOW_AUTHOR_ABOUT ? authorAbout(book) : {}), ...discovery(req, book, alsoBooks.also), lists: lists.withBook(book.id).map(withCovers), myLists, club: club.ofBook(book.id), freeRead: !!free, freeFile: !!free && !free.readerOnly, book, entry: store.sharedEntry(req.user?.id, book.id), now: !!req.user && nowIds(req.user.id).has(store.canonical(book.id)), user: req.user, readUrl: file ? `${READER_URL}/?open=${encodeURIComponent(file.name)}` : free ? `${READER_URL}/free/${encodeURIComponent(free.name)}` : "", shelf: book.shelf && (req.owner || !isDraft(book.shelf)) ? store.shelf(book.shelf) : null, inLibrary: inLibraryMap(req), readers: readersOf(book.id), ...alsoBooks, writings: reviews.of(book.id), reviewError: String(req.query.review_error || "").slice(0, 300), editionError: String(req.query.edition_error || "").slice(0, 300), ukAsk: ukAskFor(req, book) || (req.user && req.query.edition_error ? "ask" : null), advice: advice.state(req.user, book.id), overview: linkedOverview(book), overviewVote: advice.voteOf(book.id, req.user?.id) }));
+  res.send(pages.bookPage({ ukrlib: openLinks.linkFor(store, book) || ukrlib.linkFor(book), sluhay: SLUHAY_PUBLIC || req.owner ? sluhay.linkFor(book) : null, ...(SHOW_AUTHOR_ABOUT ? authorAbout(book) : {}), ...discovery(req, book, alsoBooks.also), lists: lists.withBook(book.id).map(withCovers), myLists, club: club.mark(req.user?.id, club.ofBook(book.id)), freeRead: !!free, freeFile: !!free && !free.readerOnly, book, entry: store.sharedEntry(req.user?.id, book.id), now: !!req.user && nowIds(req.user.id).has(store.canonical(book.id)), user: req.user, readUrl: file ? `${READER_URL}/?open=${encodeURIComponent(file.name)}` : free ? `${READER_URL}/free/${encodeURIComponent(free.name)}` : "", shelf: book.shelf && (req.owner || !isDraft(book.shelf)) ? store.shelf(book.shelf) : null, inLibrary: inLibraryMap(req), readers: readersOf(book.id), ...alsoBooks, writings: reviews.of(book.id), reviewError: String(req.query.review_error || "").slice(0, 300), editionError: String(req.query.edition_error || "").slice(0, 300), ukAsk: ukAskFor(req, book) || (req.user && req.query.edition_error ? "ask" : null), advice: advice.state(req.user, book.id), overview: linkedOverview(book), overviewVote: advice.voteOf(book.id, req.user?.id) }));
 });
 
 // A translation and its original in one list are one card (Max, 2026-10-25: two rows «трохи плутає»; 2026-10-26: the same

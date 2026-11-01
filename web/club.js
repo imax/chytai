@@ -22,6 +22,7 @@ CREATE TABLE IF NOT EXISTS club_posts (
 CREATE INDEX IF NOT EXISTS club_posts_topic ON club_posts (topic, created);
 CREATE TABLE IF NOT EXISTS club_watch (reader TEXT NOT NULL, topic TEXT NOT NULL, on_ INTEGER NOT NULL DEFAULT 1, PRIMARY KEY (reader, topic));
 CREATE INDEX IF NOT EXISTS club_watch_topic ON club_watch (topic);
+CREATE TABLE IF NOT EXISTS club_seen (reader TEXT NOT NULL, topic TEXT NOT NULL, at TEXT NOT NULL, PRIMARY KEY (reader, topic));
 `;
 const TITLE_MAX = 120;
 const TEXT_MAX = 4000;
@@ -156,6 +157,28 @@ class Club {
   watchers(topicId) {
     return this.db.prepare("SELECT reader FROM club_watch WHERE topic = ? AND on_ = 1").all(topicId).map((r) => r.reader);
   }
+  // What a reader has seen (Max, 2026-11-01: «підсвічувати якщо є непрочитане в треді»): opening a topic or answering in
+  // it marks it read up to now.
+  seenAt(readerId, topicId) {
+    return (readerId && this.db.prepare("SELECT at FROM club_seen WHERE reader = ? AND topic = ?").get(readerId, topicId)?.at) || "";
+  }
+  seen(readerId, topicId) {
+    if (readerId) this.db.prepare("INSERT INTO club_seen (reader, topic, at) VALUES (?, ?, ?) ON CONFLICT (reader, topic) DO UPDATE SET at = excluded.at").run(readerId, topicId, now());
+  }
+  // Topics as the reader sees them in a list: `unread` answers by others since they last looked, or `isNew` for a topic
+  // of the last two weeks they never opened (older ones stay quiet, so the first visit is not all bold).
+  mark(readerId, topics) {
+    if (!readerId) return topics;
+    const fresh = new Date(Date.now() - 14 * 24 * 3600 * 1000).toISOString();
+    const at = this.db.prepare("SELECT at FROM club_seen WHERE reader = ? AND topic = ?");
+    const n = this.db.prepare("SELECT COUNT(*) AS n FROM club_posts WHERE topic = ? AND created > ? AND reader != ?");
+    return topics.map((t) => {
+      if (t.kind === "list" || t.reader?.id === readerId && !t.replies) return t;
+      const seen = at.get(readerId, t.id)?.at;
+      if (seen) return { ...t, unread: t.active > seen ? n.get(t.id, seen, readerId).n : 0 };
+      return t.reader?.id !== readerId && t.created > fresh ? { ...t, isNew: true } : t;
+    });
+  }
   // The Friday letter's «У Клубі цього тижня»: the topics with the most said in them since `sinceIso`.
   week(sinceIso, limit = 3) {
     return this.db
@@ -183,6 +206,7 @@ class Club {
     this.db.tx(() => {
       this.db.prepare("DELETE FROM club_posts WHERE topic = ?").run(id);
       this.db.prepare("DELETE FROM club_watch WHERE topic = ?").run(id);
+      this.db.prepare("DELETE FROM club_seen WHERE topic = ?").run(id);
       this.db.prepare("DELETE FROM club_topics WHERE id = ?").run(id);
     });
   }
@@ -197,6 +221,7 @@ class Club {
     for (const t of this.db.prepare("SELECT id FROM club_topics WHERE reader = ?").all(readerId)) this.remove(t.id);
     this.db.prepare("DELETE FROM club_posts WHERE reader = ?").run(readerId);
     this.db.prepare("DELETE FROM club_watch WHERE reader = ?").run(readerId);
+    this.db.prepare("DELETE FROM club_seen WHERE reader = ?").run(readerId);
   }
 }
 

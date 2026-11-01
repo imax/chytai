@@ -2762,7 +2762,8 @@ const answers = (n) => count(n, "відповідь", "відповіді", "в�
 // A talk in a list: its title (with «спойлери» and the book), who started it, how many answers, when the last.
 function clubRow(t, { book = true } = {}) {
   const meta = [t.kind === "list" ? "Список" : "", t.official ? "Chytai" : t.reader ? esc(t.reader.name) : esc(t.by || ""), t.replies ? (t.kind === "list" ? count(t.replies, "коментар", "коментарі", "коментарів") : answers(t.replies)) : "", when({ updated: t.active })].filter(Boolean).join(" · ");
-  return `<a class="ctopic${t.official ? " pinned" : ""}" href="${attr(t.href)}"><span class="t"><b>${esc(t.title)}</b>${t.spoiler ? ` <span class="tag spoil-tag">спойлери</span>` : ""}</span>${book && t.book ? `<span class="bk">${cover(t.book, "xs")}<span>${esc(t.book.title)}</span></span>` : ""}<span class="m">${meta}</span></a>`;
+  const news = t.unread ? `<span class="news">${t.unread} ${plural(t.unread, "нова", "нові", "нових")}</span> · ` : t.isNew ? `<span class="news">нова тема</span> · ` : "";
+  return `<a class="ctopic${t.official ? " pinned" : ""}${news ? " unread" : ""}" href="${attr(t.href)}${t.unread ? "#unread" : ""}"><span class="t"><b>${esc(t.title)}</b>${t.spoiler ? ` <span class="tag spoil-tag">спойлери</span>` : ""}</span>${book && t.book ? `<span class="bk">${cover(t.book, "xs")}<span>${esc(t.book.title)}</span></span>` : ""}<span class="m">${news}${meta}</span></a>`;
 }
 
 function clubPage({ user, pinned = [], rest = [] }) {
@@ -2805,12 +2806,15 @@ ${pageHead({ crumbs: `<a href="/club">Клуб Chytai</a>`, title: "Нова т�
 
 // A topic: what its author wrote, then the answers, oldest first. `hide`: spoilers this reader has not read, under
 // a blur until «Показати» (remembered in the browser for this topic).
-function clubTopicPage({ user, owner = false, topic: t, posts, hide = false, watching = false, links = {}, error = "" }) {
+function clubTopicPage({ user, owner = false, topic: t, posts, hide = false, watching = false, seenAt = "", links = {}, error = "" }) {
   const id = attr(t.id);
   const mine = user && (t.reader.id === user.id || owner);
   const who = (r) => `<a href="${attr(r.href)}"><b>${esc(r.name)}</b></a>`;
   const reply = (r) => (user ? ` · <button type="button" class="text-link small muted" data-reply="${attr(r.username)}">відповісти</button>` : "");
-  const post = (p) => `<div class="cmt" id="p-${attr(p.id)}"><p class="who">${who(p.reader)} · ${when({ updated: p.created })}${reply(p.reader)}${user && (p.reader.id === user.id || owner) ? ` · <button class="text-link small muted" form="del-${attr(p.id)}">видалити</button><form method="post" action="/api/club/posts/${attr(p.id)}/delete" id="del-${attr(p.id)}" onsubmit="return confirm('Видалити відповідь?')"></form>` : ""}</p><div class="txt">${clubText(p.text, links)}</div></div>`;
+  // Answers by others since the reader last looked: a mark on each, and #unread at the first one.
+  const firstNew = seenAt && user ? posts.find((p) => p.created > seenAt && p.reader.id !== user.id)?.id : null;
+  const isNew = (p) => seenAt && user && p.created > seenAt && p.reader.id !== user.id;
+  const post = (p) => `${p.id === firstNew ? `<span id="unread"></span>` : ""}<div class="cmt${isNew(p) ? " new" : ""}" id="p-${attr(p.id)}"><p class="who">${who(p.reader)} · ${when({ updated: p.created })}${reply(p.reader)}${user && (p.reader.id === user.id || owner) ? ` · <button class="text-link small muted" form="del-${attr(p.id)}">видалити</button><form method="post" action="/api/club/posts/${attr(p.id)}/delete" id="del-${attr(p.id)}" onsubmit="return confirm('Видалити відповідь?')"></form>` : ""}</p><div class="txt">${clubText(p.text, links)}</div></div>`;
   const form = user
     ? `<form method="post" action="/api/club/${id}/posts" class="cmt-form" id="reply"><textarea name="text" rows="3" maxlength="2000" required placeholder="Ваша відповідь" aria-label="Відповідь"></textarea>${error ? `<p class="error small">${esc(error)}</p>` : ""}<div><button class="btn primary">Відповісти</button></div></form><form method="post" action="/api/club/${id}/watch" class="watch"><label><input type="checkbox" name="on" value="1"${watching ? " checked" : ""} onchange="this.form.submit()"> Сповіщати про відповіді на пошту</label><noscript><button class="text-link small">Зберегти</button></noscript></form>`
     : `<p class="small" id="reply"><a class="text-link" rel="nofollow" href="/login?next=${attr(encodeURIComponent(`${t.href}#reply`))}">Увійдіть</a>, щоб відповісти.</p>`;
