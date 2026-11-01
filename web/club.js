@@ -47,10 +47,26 @@ class Club {
     this.who = who;
     this.lists = lists;
     this.db.exec(SCHEMA);
+    // The address is the title's, made once (Max, 2026-11-01: no code in it, like books and authors): /club/<slug>.
+    if (!this.db.prepare("PRAGMA table_info(club_topics)").all().some((c) => c.name === "slug")) {
+      this.db.exec("ALTER TABLE club_topics ADD COLUMN slug TEXT NOT NULL DEFAULT ''");
+      for (const r of this.db.prepare("SELECT id, title FROM club_topics ORDER BY created").all()) this.db.prepare("UPDATE club_topics SET slug = ? WHERE id = ?").run(this.newSlug(r.title), r.id);
+    }
+    this.db.exec("CREATE UNIQUE INDEX IF NOT EXISTS club_topics_slug ON club_topics (slug) WHERE slug != ''");
     // Topics from before the letters (2026-11-01): their authors and those who answered follow them too.
     this.db.exec("INSERT OR IGNORE INTO club_watch (reader, topic, on_) SELECT reader, id, 1 FROM club_topics; INSERT OR IGNORE INTO club_watch (reader, topic, on_) SELECT DISTINCT reader, topic, 1 FROM club_posts;");
   }
 
+  // A free address from a title: «-2», «-3» for a title taken; «new» is the new-topic page.
+  newSlug(title) {
+    const base = slugify(title).slice(0, 70).replace(/-+$/, "") || "tema";
+    let slug = base === "new" ? "new-2" : base;
+    for (let i = 2; this.db.prepare("SELECT 1 FROM club_topics WHERE slug = ?").get(slug); i++) slug = `${base}-${i}`;
+    return slug;
+  }
+  bySlug(slug) {
+    return this.view(this.db.prepare("SELECT * FROM club_topics WHERE slug = ?").get(String(slug)));
+  }
   // A topic as the pages see it: its author, address, book and how many replies.
   view(row) {
     if (!row) return null;
@@ -58,7 +74,7 @@ class Club {
     if (!reader) return null;
     const n = this.db.prepare("SELECT COUNT(*) AS n FROM club_posts WHERE topic = ?").get(row.id).n;
     const book = row.book && this.store.book(row.book) ? this.store.bookPage(row.book) : null;
-    return { ...row, spoiler: !!row.spoiler, official: !!row.official, reader, book, replies: n, href: `/club/${row.id}/${slugify(row.title).slice(0, 60).replace(/-+$/, "") || "tema"}` };
+    return { ...row, spoiler: !!row.spoiler, official: !!row.official, reader, book, replies: n, href: `/club/${row.slug || row.id}` };
   }
   topic(id) {
     return this.view(this.db.prepare("SELECT * FROM club_topics WHERE id = ?").get(String(id)));
@@ -97,7 +113,7 @@ class Club {
     if (!official && this.db.prepare("SELECT COUNT(*) AS n FROM club_topics WHERE reader = ? AND created > ?").get(readerId, day).n >= TOPICS_A_DAY) return null;
     const id = newId();
     const t = now();
-    this.db.prepare("INSERT INTO club_topics (id, reader, title, text, book, spoiler, official, created, active) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)").run(id, readerId, title, text, this.bookId(book), spoiler ? 1 : 0, official ? 1 : 0, t, t);
+    this.db.prepare("INSERT INTO club_topics (id, reader, title, text, book, spoiler, official, created, active, slug) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").run(id, readerId, title, text, this.bookId(book), spoiler ? 1 : 0, official ? 1 : 0, t, t, this.newSlug(title));
     this.follow(readerId, id);
     return this.topic(id);
   }

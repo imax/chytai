@@ -1209,7 +1209,13 @@ const clubTopic = (req, res, next) => {
 };
 // The topic's author and the owner change it or take it away.
 const myTopic = (req, res, next) => (req.topic.reader.id === req.user.id || req.owner ? next() : res.status(403).send(pages.messagePage({ title: "Це не ваша тема", text: "", user: req.user })));
-app.get("/club/:id{/:slug}", clubTopic, (req, res) => {
+// /club/<slug>; the first addresses, /club/<id>/<slug>, lead there.
+app.get("/club/:key{/:rest}", (req, res, next) => {
+  const t = club.bySlug(req.params.key) || club.topic(req.params.key);
+  if (!t) return res.status(404).send(pages.messagePage({ title: "Немає такої теми", text: "", user: req.user }));
+  req.topic = t;
+  next();
+}, (req, res) => {
   const t = req.topic;
   if (req.path !== t.href) return res.redirect(301, t.href);
   const posts = club.posts(t.id);
