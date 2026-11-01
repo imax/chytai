@@ -504,7 +504,9 @@ function toggleChrome(show = !document.body.classList.contains("chrome-shown")) 
 // never reach us and the toolbar could not be brought back. The running head at the top and the
 // bare page area outside the chapter frames still get taps, so a tap there shows the toolbar.
 $("#running-head").addEventListener("click", () => toggleChrome(true));
+const panelOverPage = () => PHONE.matches && !document.body.classList.contains("panel-hidden");
 $("#viewer").addEventListener("click", (e) => {
+  if (panelOverPage()) return showPanel(false);
   if (e.target.tagName !== "IFRAME") toggleChrome();
 });
 
@@ -721,6 +723,8 @@ function onTouchEnd(e) {
   if (!scrolled() && ms < 600 && Math.abs(dx) >= 40 && Math.abs(dx) > Math.abs(dy)) {
     dx < 0 ? rendition?.next() : rendition?.prev();
   } else if (ms < 400 && Math.abs(dx) < 12 && Math.abs(dy) < 12 && !e.target?.closest?.("a")) {
+    // On a phone a tap on the page puts the open panel away first (Max, 2026-11-01).
+    if (panelOverPage()) return showPanel(false);
     tapToPage(t, e.view);
   }
 }

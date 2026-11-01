@@ -363,7 +363,10 @@ body.not-owner .shared-setting, body.not-owner .demo-setting, body.not-owner #bt
   #toolbar .title, #btn-open { display: none; }
   /* A phone's toolbar: search instead of «Нотатки» and printing (Max, 2026-10-28); notes stay on Головна
      and in the panel, a book prints from a computer. */
-  #btn-notes, #btn-print { display: none !important; }
+  /* Notes went back to the toolbar, by the search (Max, 2026-11-01: on the panel he kept hitting
+     «Нотатки» instead of «Пояснення»). */
+  #btn-print { display: none !important; }
+  #btn-notes { display: inline-flex !important; align-items: center; justify-content: center; }
   #btn-search:not(.hidden) { display: inline-flex !important; align-items: center; justify-content: center; }
   #btn-search.hidden { display: none !important; }
   #search { top: calc(52px + env(safe-area-inset-top)); left: 8px; right: 8px; width: auto; max-width: none; max-height: 60dvh; }
@@ -819,3 +822,8 @@ g.ai-star text.star { fill: var(--accent); fill-opacity: 1; font: bold 18px Geor
   #home .view-title { margin-bottom: 16px; }
   #home-filter, #disc-search { max-width: 420px; font-size: 14px; padding: 7px 12px; }
 }
+
+/* The panel has no tabs any more (Max, 2026-11-01): it shows explanations or, from the toolbar's «Нотатки», the
+   notes, and its head just says which. */
+.panel-tabs .tab:not(.active) { display: none; }
+.panel-tabs .tab.active { background: none; padding-left: 0; font-weight: 600; cursor: default; }
