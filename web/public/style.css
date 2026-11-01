@@ -1149,3 +1149,9 @@ aside .side-lists + .label, aside p + .label, aside dialog + .label { margin-top
   .op .txt { font-size: 17px; }
   .spoil-gate { top: 20px; padding: 20px; }
 }
+.club-start { margin-top: 14px; font-size: 14px; color: var(--muted); }
+.watch { margin-top: 14px; font-size: 14px; color: var(--muted); }
+.watch label { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; }
+.watch input { width: 16px; height: 16px; margin: 0; accent-color: var(--accent); }
+.side-club { margin-top: 40px; }
+.read-row + [data-block="club"], [data-block="club"].block .club-topics { max-width: 820px; }

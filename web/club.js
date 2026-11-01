@@ -20,6 +20,8 @@ CREATE TABLE IF NOT EXISTS club_posts (
   id TEXT PRIMARY KEY, topic TEXT NOT NULL, reader TEXT NOT NULL, text TEXT NOT NULL, created TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS club_posts_topic ON club_posts (topic, created);
+CREATE TABLE IF NOT EXISTS club_watch (reader TEXT NOT NULL, topic TEXT NOT NULL, on_ INTEGER NOT NULL DEFAULT 1, PRIMARY KEY (reader, topic));
+CREATE INDEX IF NOT EXISTS club_watch_topic ON club_watch (topic);
 `;
 const TITLE_MAX = 120;
 const TEXT_MAX = 4000;
@@ -45,6 +47,8 @@ class Club {
     this.who = who;
     this.lists = lists;
     this.db.exec(SCHEMA);
+    // Topics from before the letters (2026-11-01): their authors and those who answered follow them too.
+    this.db.exec("INSERT OR IGNORE INTO club_watch (reader, topic, on_) SELECT reader, id, 1 FROM club_topics; INSERT OR IGNORE INTO club_watch (reader, topic, on_) SELECT DISTINCT reader, topic, 1 FROM club_posts;");
   }
 
   // A topic as the pages see it: its author, address, book and how many replies.
@@ -94,6 +98,7 @@ class Club {
     const id = newId();
     const t = now();
     this.db.prepare("INSERT INTO club_topics (id, reader, title, text, book, spoiler, official, created, active) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)").run(id, readerId, title, text, this.bookId(book), spoiler ? 1 : 0, official ? 1 : 0, t, t);
+    this.follow(readerId, id);
     return this.topic(id);
   }
   // `official` is the owner's to change (server.js); undefined leaves it.
@@ -118,7 +123,42 @@ class Club {
     const t = now();
     this.db.prepare("INSERT INTO club_posts (id, topic, reader, text, created) VALUES (?, ?, ?, ?, ?)").run(id, topicId, readerId, text, t);
     this.db.prepare("UPDATE club_topics SET active = ? WHERE id = ?").run(t, topicId);
+    this.follow(readerId, topicId);
     return id;
+  }
+  // «Відповіді в темі» letters (Max, 2026-11-01: «лист на кожне повідомлення в треді»): the topic's author and everyone
+  // who answered follow it, until they untick «Сповіщати про відповіді» in the topic (a row with on_ = 0 stays off).
+  follow(readerId, topicId) {
+    this.db.prepare("INSERT OR IGNORE INTO club_watch (reader, topic, on_) VALUES (?, ?, 1)").run(readerId, topicId);
+  }
+  setWatch(readerId, topicId, on) {
+    this.db.prepare("INSERT INTO club_watch (reader, topic, on_) VALUES (?, ?, ?) ON CONFLICT (reader, topic) DO UPDATE SET on_ = excluded.on_").run(readerId, topicId, on ? 1 : 0);
+  }
+  watching(readerId, topicId) {
+    return !!this.db.prepare("SELECT 1 FROM club_watch WHERE reader = ? AND topic = ? AND on_ = 1").get(readerId, topicId);
+  }
+  watchers(topicId) {
+    return this.db.prepare("SELECT reader FROM club_watch WHERE topic = ? AND on_ = 1").all(topicId).map((r) => r.reader);
+  }
+  // The Friday letter's «У Клубі цього тижня»: the topics with the most said in them since `sinceIso`.
+  week(sinceIso, limit = 3) {
+    return this.db
+      .prepare("SELECT t.*, (SELECT COUNT(*) FROM club_posts p WHERE p.topic = t.id AND p.created > ?) AS fresh FROM club_topics t WHERE t.active > ? ORDER BY fresh + (t.created > ?) DESC, t.active DESC LIMIT ?")
+      .all(sinceIso, sinceIso, sinceIso, limit)
+      .map((r) => ({ ...this.view(r), fresh: r.fresh }))
+      .filter((t) => t.reader);
+  }
+  // The homepage's «Зараз у Клубі»: the liveliest topics now, the owner's pinned ones aside.
+  lively(limit = 3) {
+    return this.db.prepare("SELECT * FROM club_topics ORDER BY active DESC LIMIT ?").all(limit).map((r) => this.view(r)).filter(Boolean);
+  }
+  // A reader's page: the topics they started.
+  of(readerId, limit = 10) {
+    return this.db.prepare("SELECT * FROM club_topics WHERE reader = ? ORDER BY active DESC LIMIT ?").all(readerId, limit).map((r) => this.view(r)).filter(Boolean);
+  }
+  // The sitemap: topics without spoilers ({ href, active }).
+  forSitemap() {
+    return this.db.prepare("SELECT * FROM club_topics WHERE spoiler = 0 ORDER BY active DESC").all().map((r) => this.view(r)).filter(Boolean);
   }
   dropPost(id) {
     this.db.prepare("DELETE FROM club_posts WHERE id = ?").run(String(id));
@@ -126,6 +166,7 @@ class Club {
   remove(id) {
     this.db.tx(() => {
       this.db.prepare("DELETE FROM club_posts WHERE topic = ?").run(id);
+      this.db.prepare("DELETE FROM club_watch WHERE topic = ?").run(id);
       this.db.prepare("DELETE FROM club_topics WHERE id = ?").run(id);
     });
   }
@@ -139,6 +180,7 @@ class Club {
   forgetReader(readerId) {
     for (const t of this.db.prepare("SELECT id FROM club_topics WHERE reader = ?").all(readerId)) this.remove(t.id);
     this.db.prepare("DELETE FROM club_posts WHERE reader = ?").run(readerId);
+    this.db.prepare("DELETE FROM club_watch WHERE reader = ?").run(readerId);
   }
 }
 

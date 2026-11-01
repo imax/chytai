@@ -87,6 +87,8 @@ function open(dataDir) {
   if (!db.prepare("PRAGMA table_info(readers)").all().some((c) => c.name === "follow_mail")) db.exec("ALTER TABLE readers ADD COLUMN follow_mail INTEGER NOT NULL DEFAULT 1");
   // Whether a reader wants a letter when someone names them («@username») in the Club (club.js, Max 2026-11-01); on by default.
   if (!db.prepare("PRAGMA table_info(readers)").all().some((c) => c.name === "mention_mail")) db.exec("ALTER TABLE readers ADD COLUMN mention_mail INTEGER NOT NULL DEFAULT 1");
+  // Whether a reader wants a letter on each answer in the Club topics they follow (club.js, Max 2026-11-01); on by default.
+  if (!db.prepare("PRAGMA table_info(readers)").all().some((c) => c.name === "club_mail")) db.exec("ALTER TABLE readers ADD COLUMN club_mail INTEGER NOT NULL DEFAULT 1");
   // Whether a reader wants a letter when a «хочу» book turns up (wantmail.js, Max 2026-10-25); on by default.
   if (!db.prepare("PRAGMA table_info(readers)").all().some((c) => c.name === "want_mail")) db.exec("ALTER TABLE readers ADD COLUMN want_mail INTEGER NOT NULL DEFAULT 1");
   // Books in the homepage's shelves and recommendations as originals, not Ukrainian translations (Max, 2026-10-29); off by default.

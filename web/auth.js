@@ -184,6 +184,13 @@ class Auth {
   setMentionMail(readerId, on) {
     this.db.prepare("UPDATE readers SET mention_mail = ? WHERE id = ?").run(on ? 1 : 0, readerId);
   }
+  clubMailEnabled(readerId) {
+    const r = this.reader(readerId);
+    return !!r && r.club_mail !== 0;
+  }
+  setClubMail(readerId, on) {
+    this.db.prepare("UPDATE readers SET club_mail = ? WHERE id = ?").run(on ? 1 : 0, readerId);
+  }
 
   // ---- sessions ----
 

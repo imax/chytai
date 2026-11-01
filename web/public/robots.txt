@@ -10,6 +10,9 @@ Disallow: /admin
 Disallow: /import
 Disallow: /digest/
 Disallow: /follow-mail/
+Disallow: /mention-mail/
+Disallow: /club-mail/
+Disallow: /club/new
 Disallow: /refresh-status
 Disallow: /search
 Disallow: /do/

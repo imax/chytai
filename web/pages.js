@@ -471,7 +471,7 @@ function bookPage({ club = [], ukrlib = null, sluhay = null, inGenre = null, fre
       ${first.entry.note ? quote(first, book.id) : ""}
       ${(first.entry.note ? rest : readers).length ? `<div class="others">${(first.entry.note ? rest : readers).map((r) => readerLine(r, book.id)).join("")}</div>` : ""}
     </section>` : ""}
-    ${club.length ? `<section class="block" data-block="club">${label("У Клубі", `<a rel="nofollow" href="/club/new?book=${attr(encodeURIComponent(book.id))}">нова тема</a>`)}<div class="club-topics">${club.map((t) => clubRow(t, { book: false })).join("")}</div></section>` : ""}
+    ${ru ? "" : club.length ? `<section class="block" data-block="club">${label("У Клубі", `<a rel="nofollow" href="/club/new?book=${attr(encodeURIComponent(book.id))}">нова тема</a>`)}<div class="club-topics">${club.map((t) => clubRow(t, { book: false })).join("")}</div></section>` : `<section class="block" data-block="club">${label("У Клубі")}<p class="club-start">Тем ще немає. <a class="text-link" rel="nofollow" href="/club/new?book=${attr(encodeURIComponent(book.id))}">Обговорити в Клубі</a></p></section>`}
     ${lists.length ? `<section class="block" data-block="lists">${label("У списках", `<a href="/lists">усі списки</a>`)}<div class="lists">${lists.map(listLine).join("")}</div></section>` : ""}
     ${adviceBlock(book, advice)}
     ${SHOW_REVIEWS && (writings.length || user) ? `<section class="block" id="writings">
@@ -1228,7 +1228,7 @@ function twoParts(items, n, part) {
   return { first: html(items.slice(0, cut)), rest: cut < items.length ? ` data-rest="${items.length - cut}"` : "" };
 }
 
-function libraryPage({ part = "",  lists = [], savedLists = [], rows, user, reader, own = false, mineIds = null, mineDirect = null, following = false, follows = { followers: [], following: [] }, now = null }) {
+function libraryPage({ part = "", clubTopics = [], lists = [], savedLists = [], rows, user, reader, own = false, mineIds = null, mineDirect = null, following = false, follows = { followers: [], following: [] }, now = null }) {
   const year = new Date().getFullYear();
   // Stars in the row only for the reader's own entry of this very book (not one reached through a
   // translation or a series, where a rating would land on another book).
@@ -1297,6 +1297,7 @@ ${parts.first}
   </div>
   <aside>
     ${lists.length || own ? `<div class="side-own-lists${topLists ? " has-top" : ""}">${listsHead}${lists.length ? sideLists(lists, (l) => listMeta(l, { by: false })) : `<p class="small muted">Складіть список книжок, щоб поділитися ним: «Найкраще про війну», «Для підлітків 12+»…</p>`}${savedLists.length ? `${label("Збережені списки")}${sideLists(savedLists, (l) => `${esc(l.reader.name)} · ${books(l.count)}`)}` : ""}</div>` : ""}
+    ${clubTopics.length ? `<div class="side-club">${label("Теми в Клубі")}${sideLists(clubTopics, (t) => `${t.replies ? answers(t.replies) : "без відповідей"} · ${when({ updated: t.active })}`)}</div>` : ""}
     ${own ? `<dialog id="new-list"><div class="dlg-head"><h2>Новий список</h2><button type="button" class="dlg-x" data-close aria-label="Закрити">×</button></div>${newListForm()}</dialog>` : ""}
     ${thisYear.length ? `${label("Цього року")}<div class="numbers">
       <p><b>${thisYear.length}</b>прочитано</p>
@@ -1328,7 +1329,7 @@ function yearHead(year, rows) {
 // ---- the homepage «Що почитати» (Max, 2026-10-28: tried at /new, then «робимо її головною») ----
 // Shelves by what a reader is after, not by counters; the chips (?f=) narrow every shelf at once.
 // #live and #browse: search as you type replaces the shelves (app.js).
-function readPage({ user, f, filters, picks, finish, ua, short, free, wanted, genres, editorials, forYou, forWhy, fresh }) {
+function readPage({ user, f, filters, picks, finish, ua, short, free, wanted, genres, editorials, forYou, forWhy, fresh, club = [] }) {
   const q = (k) => (k ? `/?f=${k}` : "/");
   const chips = `<nav class="read-chips" data-block="chips">${[["", "Усе"], ...Object.entries(filters).map(([k, [n]]) => [k, n])].map(([k, n]) => (k === f ? `<span class="chip on">${n}</span>` : `<a class="chip" href="${attr(q(k))}">${n}</a>`)).join("")}</nav>`;
   const advice = (p) => `<article class="advice">
@@ -1354,6 +1355,7 @@ function readPage({ user, f, filters, picks, finish, ua, short, free, wanted, ge
 ${picks.length ? `<section class="block" data-block="picks">${label("Читачі радять", "оцінка 4,5+ і пару слів чому")}<div class="advices">${picks.map(advice).join("")}</div></section>` : ""}
 ${row("Для вас", forWhy, forYou)}
 ${!f && editorials.length ? `<section class="block editorials" data-block="editorials">${label("Добірки Chytai", `<a href="/lists">усі списки</a>`)}<div class="lgrid">${editorials.map(listCard).join("")}</div></section>` : ""}
+${!f && club.length ? `<section class="block" data-block="club">${label("Зараз у Клубі", `<a href="/club">усі теми</a>`)}<div class="club-topics">${club.map((t) => clubRow(t)).join("")}</div></section>` : ""}
 ${row("Дочитують до кінця", "ніхто не покинув", finish, (w) => `дочитали ${w.s.finished}`)}
 ${row("Українські автори", "", ua)}
 ${row("Коротке", "до 250 сторінок", short, (w) => `${w.pages} с.`)}
@@ -2081,6 +2083,7 @@ function mailSettingsPage({ user, values, saved = false }) {
   ${user.email ? `<p class="muted small">Листи приходять на ${esc(user.email)}. <a class="text-link" href="/settings">Змінити пошту</a></p>` : `<p class="muted small">Пошти не вказано, тож листів не буде. <a class="text-link" href="/settings">Додати пошту</a></p>`}
   ${sw("digest", "Пʼятничний дайджест", "Новинки на сайті, полиці та видавництва, на які ви підписані.")}
   ${sw("follow_mail", "Новий читач стежить за вами", "Лист, коли хтось уперше почне стежити за вашою полицею.")}
+  ${sw("club_mail", "Відповіді в темах Клубу", "Лист на кожну відповідь у темах, які ви почали або де відповідали.")}
   ${sw("mention_mail", "Вас згадали в Клубі", "Лист, коли хтось напише @${esc(user.username)} у темі чи коментарі.")}
   ${sw("want_mail", "Книжка з «Хочу прочитати» тепер є", "Лист, коли книжка зі списку зʼявилась у продажу, українською чи безкоштовно в Читалці.")}
   <div class="actions"><button class="btn primary">Зберегти</button></div>
@@ -2167,7 +2170,7 @@ function privacyPage({ user }) {
 <h2>Що бачать інші</h2>
 <p><strong>Ваша публічна полиця з книжками та оцінками.</strong> Будь-хто може відкрити chytai.org.ua/@нікнейм і побачити ваше ім’я, книжки, оцінки й нотатки. Так і задумано, бо Читай це про те, щоб знаходити цікаві книжки. Тож пишіть у нотатках лише те, чим готові поділитися.</p>
 <h2>Розсилки</h2>
-<p>У нас є щотижнева розсилка з новинками на сайті і ми також надсилаємо вам листа коли хтось починає стежити за вашою полицею або коли книжка з вашого «Хочу прочитати» зʼявляється в продажу, українською чи безкоштовно. Вимкнути розсилки можна одним кліком за посиланням у листі або в <a class="text-link" href="/settings">налаштуваннях</a>.</p>
+<p>У нас є щотижнева розсилка з новинками на сайті і ми також надсилаємо вам листа коли хтось починає стежити за вашою полицею або коли книжка з вашого «Хочу прочитати» зʼявляється в продажу, українською чи безкоштовно, а також коли вас згадали в Клубі чи відповіли в темі, за якою ви стежите. Вимкнути розсилки можна одним кліком за посиланням у листі або в <a class="text-link" href="/settings">налаштуваннях</a>.</p>
 <h2>Видалення акаунту</h2>
 <p>У <a class="text-link" href="/settings">налаштуваннях</a> є кнопка «Видалити акаунт». Вона стирає ваші дані і виходить з усіх пристроїв. Відновити це не можна, тільки створіть новий акаунт.</p>
 <p>З резервних копій ваші дані зникнуть самі, коли старі копії видаляться (до 90 днів). Якщо хочете швидше — напишіть нам.</p>
@@ -2796,14 +2799,14 @@ ${pageHead({ crumbs: `<a href="/club">Клуб Chytai</a>`, title: "Нова т�
 
 // A topic: what its author wrote, then the answers, oldest first. `hide`: spoilers this reader has not read, under
 // a blur until «Показати» (remembered in the browser for this topic).
-function clubTopicPage({ user, owner = false, topic: t, posts, hide = false, links = {}, error = "" }) {
+function clubTopicPage({ user, owner = false, topic: t, posts, hide = false, watching = false, links = {}, error = "" }) {
   const id = attr(t.id);
   const mine = user && (t.reader.id === user.id || owner);
   const who = (r) => `<a href="${attr(r.href)}"><b>${esc(r.name)}</b></a>`;
   const reply = (r) => (user ? ` · <button type="button" class="text-link small muted" data-reply="${attr(r.username)}">відповісти</button>` : "");
   const post = (p) => `<div class="cmt" id="p-${attr(p.id)}"><p class="who">${who(p.reader)} · ${when({ updated: p.created })}${reply(p.reader)}${user && (p.reader.id === user.id || owner) ? ` · <button class="text-link small muted" form="del-${attr(p.id)}">видалити</button><form method="post" action="/api/club/posts/${attr(p.id)}/delete" id="del-${attr(p.id)}" onsubmit="return confirm('Видалити відповідь?')"></form>` : ""}</p><div class="txt">${clubText(p.text, links)}</div></div>`;
   const form = user
-    ? `<form method="post" action="/api/club/${id}/posts" class="cmt-form" id="reply"><textarea name="text" rows="3" maxlength="2000" required placeholder="Ваша відповідь" aria-label="Відповідь"></textarea>${error ? `<p class="error small">${esc(error)}</p>` : ""}<div><button class="btn primary">Відповісти</button></div></form>`
+    ? `<form method="post" action="/api/club/${id}/posts" class="cmt-form" id="reply"><textarea name="text" rows="3" maxlength="2000" required placeholder="Ваша відповідь" aria-label="Відповідь"></textarea>${error ? `<p class="error small">${esc(error)}</p>` : ""}<div><button class="btn primary">Відповісти</button></div></form><form method="post" action="/api/club/${id}/watch" class="watch"><label><input type="checkbox" name="on" value="1"${watching ? " checked" : ""} onchange="this.form.submit()"> Сповіщати про відповіді на пошту</label><noscript><button class="text-link small">Зберегти</button></noscript></form>`
     : `<p class="small" id="reply"><a class="text-link" rel="nofollow" href="/login?next=${attr(encodeURIComponent(`${t.href}#reply`))}">Увійдіть</a>, щоб відповісти.</p>`;
   const talk = `<div class="op">${t.text ? `<div class="txt">${clubText(t.text, links)}</div>` : ""}</div>
 <section class="club-posts">${label(posts.length ? answers(posts.length) : "Відповіді")}${posts.length ? posts.map(post).join("") : `<p class="muted small">Відповідей ще немає.</p>`}${form}</section>`;
@@ -2832,7 +2835,7 @@ ${hide ? `<div class="spoil" data-spoil="${id}">${gate}<div class="spoil-body" a
 </div>
 ${edit}`;
   const description = t.spoiler ? `Тема в Клубі Chytai${t.book ? ` про «${t.book.title}»` : ""}.` : (t.text || t.title).replace(/\s+/g, " ").slice(0, 200);
-  return layout({ title: t.title, body, user, path: "/club", canonical: t.href, description, type: "article" });
+  return layout({ title: t.title, body, user, path: "/club", canonical: t.href, description, type: "article", noindex: !!t.reader.noindex });
 }
 
 // /admin/comments: «Клуб Chytai» everywhere, the newest first, each with «видалити».

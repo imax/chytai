@@ -60,10 +60,11 @@ function period(from, to) {
 const did = (status) => ({ read: "прочитано", reading: "читає зараз", want: "хоче прочитати" }[status] || "оцінка");
 
 class Digest {
-  constructor({ store, auth, social, lists = null, libraries, site, log = console.log, to = "owner", ownerId = "owner" }) {
+  constructor({ store, auth, social, lists = null, club = null, libraries, site, log = console.log, to = "owner", ownerId = "owner" }) {
     this.store = store;
     this.auth = auth;
     this.social = social;
+    this.club = club; // «Клуб Chytai» (club.js): the week's liveliest topics
     this.lists = lists; // «Списки» (lists.js): new books in the lists a reader saved
     this.libraries = libraries;
     this.site = site; // https://chytai.org.ua
@@ -231,8 +232,10 @@ class Digest {
     const state = {};
     const site = this.siteWeek(now);
     const updates = this.siteNews(now);
+    // «У Клубі цього тижня» (Max, 2026-11-01): the same for everyone; it does not make a letter on its own.
+    const clubWeek = this.club ? this.club.week(new Date(now - 7 * DAY).toISOString()) : [];
     const empty = !feed.length && !news.length && !listNews.length && !club.length;
-    return { club: club.slice(0, MAX_NEW), clubMore: Math.max(0, club.length - MAX_NEW), empty, state, since, now, site, updates, feed, feedMore: feedAll.length - feed.length, news, newsMore: fresh.filter((x) => x.book).length - news.length, lists: listNews, listsMore: listAll.length - listNews.length, want: [], reading, pick };
+    return { clubWeek, club: club.slice(0, MAX_NEW), clubMore: Math.max(0, club.length - MAX_NEW), empty, state, since, now, site, updates, feed, feedMore: feedAll.length - feed.length, news, newsMore: fresh.filter((x) => x.book).length - news.length, lists: listNews, listsMore: listAll.length - listNews.length, want: [], reading, pick };
   }
 
   // The site's week in numbers (Max, 2026-10-22: «скільки додалось читачів, скільки додалось книжок»): the last
@@ -356,6 +359,11 @@ class Digest {
       html.push(d.club.map((c) => `<div style="padding:12px 0;border-bottom:1px solid #e4dfd5"><div style="font-size:13px;color:#6b675f">${b(c.reader.name)} під списком «<a href="${attr(url(c.list.href))}#club" style="color:#1b1a17">${esc(c.list.title)}</a>»</div><div style="font-family:'Source Serif 4',Georgia,serif;font-size:15px;line-height:1.45;color:#3d3a33;margin-top:6px">${esc(c.text.length > 400 ? `${c.text.slice(0, 397)}…` : c.text).replace(/\n/g, "<br>")}</div></div>`).join(""));
       if (d.clubMore > 0) html.push(muted(`і ще ${count(d.clubMore, "коментар", "коментарі", "коментарів")}`));
       text.push("КЛУБ CHYTAI · ПІД ВАШИМИ СПИСКАМИ", ...d.club.map((c) => `• ${c.reader.name} під списком «${c.list.title}»:\n  ${c.text.replace(/\s+/g, " ").slice(0, 400)}\n  ${url(c.list.href)}#club`), ...(d.clubMore > 0 ? [`  …і ще ${d.clubMore}`] : []), "");
+    }
+    if (d.clubWeek?.length) {
+      html.push(label("У Клубі цього тижня", ["усі теми", `${site}/club`]));
+      html.push(d.clubWeek.map((t) => `<div style="padding:12px 0;border-bottom:1px solid #e4dfd5"><a href="${attr(url(t.href))}" style="font-family:'Source Serif 4',Georgia,serif;font-size:17px;line-height:1.3;color:#1b1a17;text-decoration:none">${esc(t.title)}</a><div style="font-size:13px;color:#6b675f;margin-top:4px">${esc(t.official ? "Chytai" : t.reader.name)}${t.replies ? ` · ${count(t.replies, "відповідь", "відповіді", "відповідей")}` : ""}${t.book ? ` · «${esc(t.book.title)}»` : ""}</div></div>`).join(""));
+      text.push("У КЛУБІ ЦЬОГО ТИЖНЯ", ...d.clubWeek.map((t) => `• ${t.title} (${t.official ? "Chytai" : t.reader.name}${t.replies ? `, ${count(t.replies, "відповідь", "відповіді", "відповідей")}` : ""})\n  ${url(t.href)}`), "");
     }
     if (d.reading) {
       const r = d.reading;
