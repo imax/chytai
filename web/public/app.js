@@ -269,7 +269,7 @@
     ta.addEventListener("keydown", (e) => {
       if (box.hidden) return;
       if (e.key === "ArrowDown" || e.key === "ArrowUp") (on = (on + (e.key === "ArrowDown" ? 1 : items.length - 1)) % items.length), draw(), e.preventDefault();
-      else if (e.key === "Enter" || e.key === "Tab") put(items[on]), e.preventDefault();
+      else if ((e.key === "Enter" && !e.metaKey && !e.ctrlKey) || e.key === "Tab") put(items[on]), e.preventDefault();
       else if (e.key === "Escape") close();
     });
     box.addEventListener("mousedown", (e) => e.preventDefault());
@@ -279,6 +279,14 @@
     });
     ta.addEventListener("blur", () => setTimeout(close, 150));
   }
+  // ⌘↵ / Ctrl↵ sends a comment (Max, 2026-11-01).
+  document.addEventListener("keydown", (e) => {
+    if (e.key !== "Enter" || !(e.metaKey || e.ctrlKey)) return;
+    const f = e.target.closest?.(".cmt-form, .club-form");
+    if (!f || e.target.tagName !== "TEXTAREA" || !e.target.value.trim()) return;
+    e.preventDefault();
+    f.requestSubmit();
+  });
   for (const pick of document.querySelectorAll("[data-book-pick]")) {
     const id = $('input[name="book"]', pick), q = $(".pick-q", pick), hits = $(".pick-hits", pick), picked = $(".picked", pick);
     const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
