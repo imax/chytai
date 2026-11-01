@@ -827,11 +827,5 @@ g.ai-star text.star { fill: var(--accent); fill-opacity: 1; font: bold 18px Geor
    notes, and its head just says which. */
 .panel-tabs .tab:not(.active) { display: none; }
 .panel-tabs .tab.active { background: none; padding-left: 0; font-weight: 600; cursor: default; }
-/* The way back to the site (Max, 2026-11-01). */
-.to-site { color: var(--accent); font-size: 15px; text-decoration: none; }
-@media (min-width: 761px) {
-  #tabbar .side-site { margin-top: auto; display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 8px; color: var(--muted); font-size: 13px; text-decoration: none; }
-  #tabbar .side-site:hover { background: var(--accent-soft); color: var(--fg); }
-  #tabbar .side-site svg { width: 18px; height: 18px; }
-}
-html.in-app .to-site, html.in-app .side-site, body:not(.web) .to-site, body:not(.web) .side-site { display: none !important; }
+/* The free shelf links to its page on the site (Max, 2026-11-01). */
+#shell .sec-head a { color: var(--accent); font-weight: 400; text-decoration: none; }

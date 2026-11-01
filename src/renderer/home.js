@@ -221,7 +221,7 @@
       if (!groups.has(b.group)) groups.set(b.group, []);
       groups.get(b.group).push(b);
     }
-    if (free.length) html += `<section class="home-sec"><div class="sec-head"><span>Вільна полиця · ${free.length}</span></div>
+    if (free.length) html += `<section class="home-sec"><div class="sec-head"><span>Вільна полиця · ${free.length}</span>${settings.guest ? "" : `<a class="site-link" href="https://chytai.org.ua/publishers/chytai-free" target="_blank" rel="noopener">На сайті ↗</a>`}</div>
       <p class="m disc-hint">Книжки, які можна читати безкоштовно.</p>
       ${[...groups].map(([group, list]) => `${group ? `<div class="free-group m">${esc(group)}</div>` : ""}
         <div class="shelf">${list.map((b) => `<button class="shelf-book" data-open="${esc(b.path)}">${cover(b, "mid")}<span class="t">${esc(b.title)}</span><span class="m ellipsis">${esc(b.authors[0] || "")}</span></button>`).join("")}</div>`).join("")}
