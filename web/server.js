@@ -438,7 +438,8 @@ app.post("/login/signup", (req, res) => {
   welcomeMail.newReader(reader);
   // Someone who came from the reader goes straight back to it; the welcome page is about the site.
   // So does one who signed up to save a book (/do/…): the book is saved and they are back on its page.
-  signIn(req, res, reader, next.startsWith("/reader-login") || next.startsWith("/oauth/authorize") || next.startsWith("/do/") ? next : `/welcome${next ? `?next=${encodeURIComponent(next)}` : ""}`);
+  // And one who signed up to answer in the Club: back to the topic (Max, 2026-11-01).
+  signIn(req, res, reader, next.startsWith("/reader-login") || next.startsWith("/oauth/authorize") || next.startsWith("/do/") || next.startsWith("/club/") ? next : `/welcome${next ? `?next=${encodeURIComponent(next)}` : ""}`);
 });
 // Someone who signed up from a book's or an author's page sees that book (or the author's best-read three) first,
 // to save in one tap (usability review 2026-10-28, Max: «окремий флоу якщо людина прийшла на сторінку книжки або автора»).
