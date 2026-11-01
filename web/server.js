@@ -1318,8 +1318,7 @@ app.post("/api/club", signed, (req, res) => {
   if (auth.tooMany(`club:${req.user.id}`, 5)) return res.redirect(303, `/club/new?error=${encodeURIComponent("Забагато нових тем за годину.")}`);
   const t = club.create(req.user.id, { title: req.body.title, text: req.body.text, book: req.body.book, spoiler: req.body.spoiler === "1", official: req.owner && req.body.official === "1" });
   if (!t) return res.redirect(303, `/club/new?error=${encodeURIComponent(String(req.body.title || "").trim() ? "На сьогодні досить нових тем." : "Потрібна назва.")}`);
-  const mailed = mentionMails(req, t.text, { where: `у темі «${t.title}»`, href: t.href });
-  if (!req.owner && !mailed.has(OWNER_ID)) notifyOwner(`Нова тема в Клубі: ${t.title}`, [`${req.user.name} (${SITE}/@${req.user.username}):`, "", t.title, t.text.slice(0, 1000), "", `${SITE}${t.href}`].join("\n"));
+  if (!req.owner) notifyOwner(`Нова тема в Клубі: ${t.title}`, [`${req.user.name} (${SITE}/@${req.user.username}):`, "", t.title, t.text.slice(0, 1000), "", `${SITE}${t.href}`].join("\n"));
   res.redirect(303, t.href);
 });
 const clubTopic = (req, res, next) => {
@@ -1346,7 +1345,7 @@ app.get("/club/:key{/:rest}", (req, res, next) => {
   // Spoilers stay hidden from a reader who has not read the book; its author sees their own topic as it is.
   const read = !!(t.book && req.user && ["read"].includes(store.entry(req.user.id, t.book.id)?.status));
   const hide = t.spoiler && !read && req.user?.id !== t.reader.id;
-  res.send(pages.clubTopicPage({ user: req.user, owner: req.owner, topic: t, posts, hide, watching: !!req.user && club.watching(req.user.id, t.id), seenAt, links: mentioned(t.text, ...posts.map((p) => p.text)), error: String(req.query.error || "").slice(0, 200) }));
+  res.send(pages.clubTopicPage({ user: req.user, owner: req.owner, topic: t, posts, hide, watching: !!req.user && club.watching(req.user.id, t.id), seenAt, links: mentioned(...posts.map((p) => p.text)), error: String(req.query.error || "").slice(0, 200) }));
 });
 app.post("/api/club/:id", signed, clubTopic, myTopic, (req, res) => {
   const t = club.edit(req.topic.id, { title: req.body.title, text: req.body.text, book: req.body.book ?? "", spoiler: req.body.spoiler === "1", official: req.owner ? req.body.official === "1" : undefined });

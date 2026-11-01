@@ -123,7 +123,6 @@ class Club {
     const t = now();
     this.db.prepare("INSERT INTO club_topics (id, reader, title, text, book, spoiler, official, created, active, slug) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").run(id, readerId, title, text, this.bookId(book), spoiler ? 1 : 0, official ? 1 : 0, t, t, this.newSlug(title));
     this.follow(readerId, id);
-    this.tag(id, text);
     return this.topic(id);
   }
   // `official` is the owner's to change (server.js); undefined leaves it.
@@ -133,7 +132,6 @@ class Club {
     this.db
       .prepare("UPDATE club_topics SET title = ?, text = ?, book = ?, spoiler = ?, official = ? WHERE id = ?")
       .run(oneLine(title ?? t.title, TITLE_MAX) || t.title, clean(text ?? t.text, TEXT_MAX), book === undefined ? t.book?.id || "" : this.bookId(book), (spoiler ?? t.spoiler) ? 1 : 0, (official ?? t.official) ? 1 : 0, t.id);
-    if (text !== undefined) this.tag(t.id, text);
     return this.topic(id);
   }
   bookId(b) {
