@@ -100,9 +100,9 @@ const NAV = [
 function layout({ title, body, user, path = "", description = "", q = "", home = false, canonical = "", image = "", imageSize = null, wide = false, noindex = false, jsonld = null, type = "website" }) {
   const on = (p) => (p ? ' class="on"' : "");
   const nav = [
-    // «Клуб» in the top menu (Max, 2026-11-01: «винести в навігацію наверху, як клуб»).
-    `<a href="/club"${on(path === "/club")}>Клуб</a>`,
     ...NAV.map(([href, name, is]) => `<a href="${href}"${on(is(path))}>${name}</a>`),
+    // «Клуб» in the top menu, second after «Читачі» (Max, 2026-11-01).
+    `<a href="/club"${on(path === "/club")}>Клуб</a>`,
     // Settings live on one's own shelf, not in the menu (Max, 2026-10-20).
     // Adding books is a page of its own in the menu, not something hidden in the profile (Max, 2026-10-22).
     ...(user ? [`<a href="/add"${on(path === "/add")}>Додати книжки</a>`] : []),
