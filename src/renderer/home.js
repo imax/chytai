@@ -171,7 +171,7 @@
   function renderHome() {
     if (!lib) return; // the skeleton stays until the library arrives
     // Books marked read go to the bottom (Max, 2026-11-01).
-    const books = [...lib.books].sort((x, y) => !!x.finished - !!y.finished || lastTouched(y) - lastTouched(x));
+    const books = lib.books.filter((b) => !(b.aside && (b.free || b.protected))).sort((x, y) => !!x.finished - !!y.finished || lastTouched(y) - lastTouched(x));
     if (!books.length) {
       homeHtml = "";
       $("#home-body").innerHTML = `<div class="home-empty"><p>Тут будуть ваші книжки.</p>
