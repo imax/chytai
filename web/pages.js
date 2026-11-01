@@ -679,7 +679,7 @@ ${trial.rows?.length ? `<table class="readers"><tr><th>Книжка</th><th>На
 // A title with no letters («1984») is in the alphabet of its author's name.
 const cyrBook = (b) => CYR.test(/\p{L}/u.test(b.title || "") ? b.title : b.author || "");
 const twinLabel = (book, t) => (cyrBook(book) && !cyrBook(t) ? "Оригінал" : !cyrBook(book) && cyrBook(t) ? "Українською" : "Інше видання");
-function twins(book, list = book.translations || []) {
+function twins(book, list = book.twins || book.translations || []) {
   return list.length ? `<div class="twins" data-block="twins">${list.map((t) => `<a class="twin" href="${attr(t.href)}">${cover(t, "xs")}<span><span class="twin-label">${twinLabel(book, t)}</span><b>${esc(t.title)}</b></span></a>`).join("")}</div>` : "";
 }
 

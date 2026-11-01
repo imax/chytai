@@ -230,6 +230,10 @@ const workName = (t) =>
 const VOL_ORD = "перший|перша|другий|друга|третій|третя|четвертий|четверта|п[’']ятий|п[’']ята|шостий|шоста|сьомий|сьома|восьмий|восьма|дев[’']ятий|десятий";
 const VOL_N = `(?:\\d+|[IVX]+\\b|${VOL_ORD})`;
 const VOL_TAIL = new RegExp(`[\\s,.:;–—-]*[(\\[]?\\s*(?:(?:том|томи|т\\.|частина|vol\\.?|volume)\\s*${VOL_N}(?:\\s*(?:[-–—,]|і|та|й)\\s*${VOL_N})*|(?:у|в)\\s+\\d+(?:-?(?:х|ти|ох|ми))?\\s+(?:томах|т\\.|частинах))\\s*[)\\]]?\\s*$`, "iu");
+// «Атлант розправив плечі. Частина друга. Або — Або» is a part of «Атлант розправив плечі»: the rest of the title
+// starts with a volume word and number, a name of its own may follow.
+const VOL_HEAD = new RegExp(`^[\\s,.:;–—-]*[(\\[]?\\s*(?:том|томи|т\\.|частина|ч\\.|книга|кн\\.|vol\\.?|volume|part)\\s*${VOL_N}(?![\\p{L}\\d])`, "iu");
+const volTitle = (title, whole) => VOL_HEAD.test(String(title).slice(String(whole).length));
 const volumeWork = (t) => {
   const s = String(t || "").replace(PROMO, "");
   if (!VOL_TAIL.test(s)) return "";
@@ -2132,7 +2136,13 @@ class Store {
     const inCatalog = translations?.length || (b?.editions || []).some((e) => norm(e.title) === norm(uk) || /[а-яіїєґ]/i.test(e.title));
     // The original Haiku named, while no catalog has it (aiOrigs).
     const o = b && !translations.length && /[а-яіїєґ]/i.test(b.title || "") && this.aiOrigs().get(b.id);
-    return b && { ...b, translations, ukTitle: inCatalog ? "" : uk, origTitle: o?.title || "", origAuthor: o?.title ? o.author : "", cycle: this.cycleOf(b.id) };
+    // The page lists one book per language (Max, 2026-11-01, Atlas Shrugged: three «Українською» too many): a part of
+    // a book already listed («Атлант розправив плечі. Частина друга. Або — Або» under «Атлант розправив плечі») is in
+    // the series block, and a Russian edition is not shown on a page in another language. The links stay for the rest.
+    const ru = (t) => isRussian(this.book(t.id, { edited: false, borrow: false }) || t);
+    const partOf = (t, o) => o !== t && norm(t.title).startsWith(norm(o.title) + " ") && volTitle(t.title, o.title);
+    const twins = (translations || []).filter((t) => (isRussian(b) || !ru(t)) && !translations.some((o) => partOf(t, o)));
+    return b && { ...b, translations, twins, ukTitle: inCatalog ? "" : uk, origTitle: o?.title || "", origAuthor: o?.title ? o.author : "", cycle: this.cycleOf(b.id) };
   }
 
   // A shop's description is cleaned (catalogs.about) once, not on every page that shows the book: a book page
