@@ -739,6 +739,11 @@ function tapToPage(t, win) {
 function onKey(e) {
   if (e.target?.closest?.("input, textarea, select, dialog")) return;
   if (document.body.classList.contains("library-open")) return; // the home screen covers the book
+  // Esc stops an explanation still being written (Max, 2026-11-01).
+  if (e.key === "Escape") {
+    for (const conv of conversations.values()) if (conv.busy) window.reader.abort(conv.reqId);
+    return;
+  }
   const view = pdfView || rendition;
   if (!view) return;
   // In page mode the up/down arrows turn pages too; while scrolling they scroll.
