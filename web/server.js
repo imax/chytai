@@ -1501,9 +1501,11 @@ app.get("/", (req, res) => {
   // every person needs to read…»; Max: «якщо є то ставимо»).
   const byReader = new Set();
   const ukNote = (p) => /[іїєґ]/i.test(p.entry.note || "");
-  const rankPick = (p) => ukNote(p) * 2 + (/[а-яіїєґ]/i.test(p.book.title) && !!p.book.cover);
-  const picks = social.picks(200).map((p) => ({ ...p, book: ukWork(p.book) })).filter((p) => ok(p.book)).sort((a, b) => rankPick(b) - rankPick(a)).filter((p) => !byReader.has(p.reader.id) && byReader.add(p.reader.id)).slice(0, 3);
-  const pickIds = new Set(picks.map((p) => store.canonical(p.book.id)));
+  const rankPick = (p) => ukNote(p) * 2 + (/[а-яіїєґ]/i.test(p.uk.title) && !!p.uk.cover);
+  // A review shows the edition the reader reviewed, not its Ukrainian translation (Max, 2026-11-01: «показувати версію,
+  // де я залишив відгук»); filters and ranking still look at the Ukrainian one.
+  const picks = social.picks(200).map((p) => ({ ...p, uk: ukWork(p.book) })).filter((p) => ok(p.uk)).sort((a, b) => rankPick(b) - rankPick(a)).filter((p) => !byReader.has(p.reader.id) && byReader.add(p.reader.id)).slice(0, 3);
+  const pickIds = new Set(picks.map((p) => store.canonical(p.uk.id)));
   const finish = works
     .filter((w) => ok(w.book) && w.s.finished >= 2 && w.s.dropped === 0 && (w.s.avg ?? 0) >= 4 && !pickIds.has(w.book.id))
     .sort((a, b) => b.s.finished - a.s.finished || b.s.avg - a.s.avg)
@@ -1543,7 +1545,7 @@ app.get("/", (req, res) => {
         .map((x) => ({ book: x.it, shelf: x.sh }));
   // Chosen and ranked by the Ukrainian edition; a reader who wants originals sees those in its place.
   const as = (list) => (req.user?.originals ? list.map((x) => ({ ...x, book: workFor(req, x.book) })) : list);
-  res.send(pages.readPage({ user: req.user, f, filters: READ_FILTERS, picks: as(picks), finish: as(finish), ua, short: as(short), free, wanted: as(wanted), genres, editorials, forYou: as(forYou), forWhy, fresh, club: club.lively(3) }));
+  res.send(pages.readPage({ user: req.user, f, filters: READ_FILTERS, picks, finish: as(finish), ua, short: as(short), free, wanted: as(wanted), genres, editorials, forYou: as(forYou), forWhy, fresh, club: club.lively(3) }));
 });
 
 app.get("/publishers", (req, res) => {
