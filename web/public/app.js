@@ -279,6 +279,27 @@
     });
     ta.addEventListener("blur", () => setTimeout(close, 150));
   }
+  // Reactions under a Club answer: sent in the background, the row redrawn from the answer.
+  document.addEventListener("submit", async (e) => {
+    const f = e.target.closest(".react-form");
+    if (!f) return;
+    e.preventDefault();
+    const bar = f.closest(".reacts");
+    const r = await fetch(f.action, { method: "POST", headers: { Accept: "application/json" }, body: new URLSearchParams(new FormData(f)) }).then((x) => (x.ok ? x.json() : null)).catch(() => null);
+    if (!r) return f.submit();
+    const escH = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+    bar.querySelectorAll(":scope > .react-form").forEach((x) => x.remove());
+    bar.querySelector(".react-add")?.removeAttribute("open");
+    const add = bar.querySelector(".react-add");
+    for (const x of r.reacts) {
+      const n = document.createElement("form");
+      n.method = "post";
+      n.action = f.action;
+      n.className = "react-form";
+      n.innerHTML = `<input type="hidden" name="emoji" value="${escH(x.emoji)}"><button class="react${x.mine ? " mine" : ""}" title="${escH(x.who.join(", "))}">${escH(x.emoji)} <span>${x.n}</span></button>`;
+      bar.insertBefore(n, add);
+    }
+  });
   // ⌘↵ / Ctrl↵ sends a comment (Max, 2026-11-01).
   document.addEventListener("keydown", (e) => {
     if (e.key !== "Enter" || !(e.metaKey || e.ctrlKey)) return;

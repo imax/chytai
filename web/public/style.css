@@ -1169,3 +1169,16 @@ aside .side-lists + .label, aside p + .label, aside dialog + .label { margin-top
 .cbooks b { display: block; font: 600 15px/1.25 var(--serif); color: var(--ink); }
 .cbooks .by { display: block; font-size: 12px; color: var(--muted); }
 .cbooks .cover.xs { width: 32px; }
+.reacts { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 8px; }
+.reacts .react { display: inline-flex; align-items: center; gap: 4px; padding: 2px 9px; border: 1px solid var(--rule); border-radius: 999px; background: none; font-size: 14px; line-height: 1.6; cursor: pointer; }
+.reacts .react span { font-size: 12px; color: var(--muted); }
+.reacts .react.mine { border-color: var(--accent); background: color-mix(in oklch, var(--accent) 10%, transparent); }
+.reacts .react.mine span { color: var(--accent); }
+.react-add { position: relative; }
+.react-add summary { list-style: none; cursor: pointer; padding: 2px 8px; border-radius: 999px; font-size: 13px; color: var(--muted); opacity: 0.6; }
+.react-add summary::-webkit-details-marker { display: none; }
+.reacts > .react-add:first-child summary { margin-left: -8px; }
+.react-add summary:hover, .react-add[open] summary { opacity: 1; background: var(--rule); }
+.react-pick { position: absolute; z-index: 5; left: 0; top: 100%; margin-top: 4px; display: flex; gap: 2px; padding: 4px; border: 1px solid var(--rule); border-radius: 999px; background: var(--paper); box-shadow: 0 8px 24px rgba(var(--shadow), 0.14); }
+.react-pick .react-one { border: 0; background: none; font-size: 20px; padding: 2px 6px; border-radius: 50%; cursor: pointer; }
+.react-pick .react-one:hover { background: var(--rule); }

@@ -1346,7 +1346,7 @@ app.get("/club/:key{/:rest}", (req, res, next) => {
   // Spoilers stay hidden from a reader who has not read the book; its author sees their own topic as it is.
   const read = !!(t.book && req.user && ["read"].includes(store.entry(req.user.id, t.book.id)?.status));
   const hide = t.spoiler && !read && req.user?.id !== t.reader.id;
-  res.send(pages.clubTopicPage({ user: req.user, owner: req.owner, topic: t, posts, hide, watching: !!req.user && club.watching(req.user.id, t.id), seenAt, links: mentioned(...posts.map((p) => p.text)), error: String(req.query.error || "").slice(0, 200) }));
+  res.send(pages.clubTopicPage({ user: req.user, owner: req.owner, topic: t, posts, hide, watching: !!req.user && club.watching(req.user.id, t.id), reacts: club.reacts(posts.map((p) => p.id), req.user?.id), seenAt, links: mentioned(...posts.map((p) => p.text)), error: String(req.query.error || "").slice(0, 200) }));
 });
 app.post("/api/club/:id", signed, clubTopic, myTopic, (req, res) => {
   const t = club.edit(req.topic.id, { title: req.body.title, text: req.body.text, book: req.body.book ?? "", spoiler: req.body.spoiler === "1", official: req.owner ? req.body.official === "1" : undefined });
@@ -1364,6 +1364,15 @@ app.post("/api/club/:id/posts", signed, clubTopic, (req, res) => {
   const mailed = replyMails(req, t, id, req.body.text, mentionMails(req, req.body.text, { where: `у темі «${t.title}»`, href: `${t.href}#p-${id}` }));
   if (!req.owner && !mailed.has(OWNER_ID)) notifyOwner(`Клуб: ${t.title}`, [`${req.user.name} (${SITE}/@${req.user.username}) у темі «${t.title}»:`, "", String(req.body.text).trim().slice(0, 1000), "", `${SITE}${t.href}#p-${id}`, `Усі коментарі: ${SITE}/admin/comments`].join("\n"));
   back("", id);
+});
+// A reaction under an answer: toggled; JSON for the page's script, a redirect without it.
+app.post("/api/club/posts/:pid/react", signed, (req, res) => {
+  const p = club.post(req.params.pid);
+  const t = p && club.topic(p.topic);
+  const list = t && club.react(p.id, req.user.id, String(req.body?.emoji || ""));
+  if (!list) return res.status(400).json({ error: "Не вдалося." });
+  if (req.get("accept")?.includes("json")) return res.json({ reacts: list });
+  res.redirect(303, `${t.href}#p-${p.id}`);
 });
 // «Сповіщати про відповіді» in a topic.
 app.post("/api/club/:id/watch", signed, clubTopic, (req, res) => (club.setWatch(req.user.id, req.topic.id, req.body.on === "1"), res.redirect(303, `${req.topic.href}#reply`)));

@@ -24,8 +24,11 @@ CREATE TABLE IF NOT EXISTS club_watch (reader TEXT NOT NULL, topic TEXT NOT NULL
 CREATE INDEX IF NOT EXISTS club_watch_topic ON club_watch (topic);
 CREATE TABLE IF NOT EXISTS club_tags (topic TEXT NOT NULL, book TEXT NOT NULL, PRIMARY KEY (topic, book));
 CREATE INDEX IF NOT EXISTS club_tags_book ON club_tags (book);
+CREATE TABLE IF NOT EXISTS club_reacts (post TEXT NOT NULL, reader TEXT NOT NULL, emoji TEXT NOT NULL, at TEXT NOT NULL, PRIMARY KEY (post, reader, emoji));
 CREATE TABLE IF NOT EXISTS club_seen (reader TEXT NOT NULL, topic TEXT NOT NULL, at TEXT NOT NULL, PRIMARY KEY (reader, topic));
 `;
+// Reactions under an answer (Max, 2026-11-01: «давай може emoji?»): these five, one tap each, no letters about them.
+const REACTS = ["👍", "❤️", "😂", "😮", "😢"];
 const TITLE_MAX = 120;
 const TEXT_MAX = 4000;
 const POST_MAX = 2000;
@@ -214,11 +217,38 @@ class Club {
   forSitemap() {
     return this.db.prepare("SELECT * FROM club_topics WHERE spoiler = 0 ORDER BY active DESC").all().map((r) => this.view(r)).filter(Boolean);
   }
+  // Toggles a reader's reaction; the post's reactions after it.
+  react(postId, readerId, emoji) {
+    if (!REACTS.includes(emoji) || !this.post(postId)) return null;
+    const had = this.db.prepare("SELECT 1 FROM club_reacts WHERE post = ? AND reader = ? AND emoji = ?").get(postId, readerId, emoji);
+    if (had) this.db.prepare("DELETE FROM club_reacts WHERE post = ? AND reader = ? AND emoji = ?").run(postId, readerId, emoji);
+    else this.db.prepare("INSERT INTO club_reacts (post, reader, emoji, at) VALUES (?, ?, ?, ?)").run(postId, readerId, emoji, now());
+    return this.reacts([postId], readerId)[postId] || [];
+  }
+  // { postId: [{ emoji, n, mine, who: [names] }] } in REACTS order.
+  reacts(postIds, readerId = null) {
+    const out = {};
+    if (!postIds.length) return out;
+    const rows = this.db.prepare(`SELECT post, emoji, reader FROM club_reacts WHERE post IN (${postIds.map(() => "?").join(",")}) ORDER BY at`).all(...postIds);
+    for (const r of rows) {
+      const list = (out[r.post] ||= []);
+      let x = list.find((y) => y.emoji === r.emoji);
+      if (!x) list.push((x = { emoji: r.emoji, n: 0, mine: false, who: [] }));
+      x.n++;
+      if (r.reader === readerId) x.mine = true;
+      const w = this.who(r.reader);
+      if (w) x.who.push(w.name);
+    }
+    for (const k in out) out[k].sort((a, b) => REACTS.indexOf(a.emoji) - REACTS.indexOf(b.emoji));
+    return out;
+  }
   dropPost(id) {
     this.db.prepare("DELETE FROM club_posts WHERE id = ?").run(String(id));
+    this.db.prepare("DELETE FROM club_reacts WHERE post = ?").run(String(id));
   }
   remove(id) {
     this.db.tx(() => {
+      this.db.prepare("DELETE FROM club_reacts WHERE post IN (SELECT id FROM club_posts WHERE topic = ?)").run(id);
       this.db.prepare("DELETE FROM club_posts WHERE topic = ?").run(id);
       this.db.prepare("DELETE FROM club_watch WHERE topic = ?").run(id);
       this.db.prepare("DELETE FROM club_seen WHERE topic = ?").run(id);
@@ -238,7 +268,8 @@ class Club {
     this.db.prepare("DELETE FROM club_posts WHERE reader = ?").run(readerId);
     this.db.prepare("DELETE FROM club_watch WHERE reader = ?").run(readerId);
     this.db.prepare("DELETE FROM club_seen WHERE reader = ?").run(readerId);
+    this.db.prepare("DELETE FROM club_reacts WHERE reader = ?").run(readerId);
   }
 }
 
-module.exports = { Club, mentionsIn, MENTION, bookTagsIn };
+module.exports = { REACTS, Club, mentionsIn, MENTION, bookTagsIn };
