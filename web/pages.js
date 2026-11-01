@@ -2808,7 +2808,8 @@ function clubTopicPage({ user, owner = false, topic: t, posts, hide = false, lin
     : `<p class="small" id="reply"><a class="text-link" rel="nofollow" href="/login?next=${attr(encodeURIComponent(`${t.href}#reply`))}">Увійдіть</a>, щоб відповісти.</p>`;
   const talk = `<div class="op">${t.text ? `<div class="txt">${clubText(t.text, links)}</div>` : ""}</div>
 <section class="club-posts">${label(posts.length ? answers(posts.length) : "Відповіді")}${posts.length ? posts.map(post).join("") : `<p class="muted small">Відповідей ще немає.</p>`}${form}</section>`;
-  const gate = `<div class="spoil-gate"><p class="g-t">${t.book ? `Спойлери до книжки «${esc(t.book.title)}»` : "Тут спойлери"}</p><p class="muted small">${t.book ? "Ви її ще не позначили прочитаною." : "Відкрийте, якщо не боїтеся."}</p><button type="button" class="btn" data-unspoil>Показати</button></div>`;
+  // Max's words (2026-11-01); once per topic: the browser remembers it was opened.
+  const gate = `<div class="spoil-gate"><p class="g-t">Увага: топік містить спойлери</p><p class="muted small">В цьому топіку можуть бути спойлери${t.book ? ` про книжку «${esc(t.book.title)}»` : ""}.</p><button type="button" class="btn" data-unspoil>Відкрити топік</button></div>`;
   const edit = mine
     ? `<dialog id="topic-edit"><div class="dlg-head"><h2>Тема</h2><button type="button" class="dlg-x" data-close aria-label="Закрити">×</button></div>
   <form method="post" action="/api/club/${id}" class="form">${topicFields({ t, book: t.book, owner })}<div class="actions"><button class="btn primary">Зберегти</button></div></form>
