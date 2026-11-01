@@ -1402,6 +1402,8 @@ api.delete("/wish/:id", guestsCannot("У демо-режимі список ба
 // Guests read the demo book and nothing else: no uploads, no edits, no shared caches.
 api.put("/books/:name", guestsCannot("У демо-режимі не можна додавати книжки. Увійдіть, щоб завантажити свою."));
 api.patch("/books/:name", guestsCannot("У демо-режимі не можна редагувати книжки."));
+api.delete("/books/:name", guestsCannot("У демо-режимі не можна видаляти книжки."));
+api.post("/trash/restore", guestsCannot("У демо-режимі нема видалених книжок."));
 api.put("/reflow", guestsCannot("У демо-режимі конвертація PDF не зберігається."));
 api.get("/reflow", (req, res, next) => (req.guest ? res.status(204).end() : next()));
 
@@ -1419,6 +1421,8 @@ api.put("/books/:name", express.raw({ type: () => true, limit: MAX_UPLOAD }), as
     return res.status(400).json({ error: "Схоже, це порнографія чи еротика, тому Chytai не додав книжку до бібліотеки. Якщо це помилка, напишіть Максові." });
   }
   fs.writeFileSync(bookFile(req.lib, name), req.body);
+  // The same file again while its old copy waits in the trash: the new one stays, the old one goes.
+  if (req.lib.meta.trash?.[name]) fs.rmSync(trashFile(req.lib, name), { force: true }), delete req.lib.meta.trash[name];
   (req.lib.meta.added ??= {})[name] = { by: req.acct, at: Date.now() };
   saveState();
   warmCovers(req.lib, [name]);
@@ -1442,6 +1446,81 @@ api.patch("/books/:name", (req, res) => {
   tellSite(req.acct);
   res.json({ path: name, title, authors, edited: !!meta[name] });
 });
+
+// Deleting your own book (Max, 2026-11-01, now that every library is one reader's): no question asked, the
+// file goes to the library's trash for 30 days, like Apple Notes' «Recently Deleted», and can come back from
+// there as it was. Only then does it go for good, with everything kept about it (purgeTrash below).
+const TRASH_DAYS = 30;
+const trashFile = (lib, name) => path.join(lib === OWNER_LIB ? path.join(DATA_DIR, "trash") : path.join(path.dirname(lib.dir), "trash"), name);
+api.delete("/books/:name", (req, res) => {
+  const name = safeBookName(req.params.name);
+  const file = name && bookFile(req.lib, name);
+  if (!file || !fs.existsSync(file)) return res.status(404).json({ error: "Книжки немає на сервері." });
+  fs.mkdirSync(path.dirname(trashFile(req.lib, name)), { recursive: true });
+  fs.renameSync(file, trashFile(req.lib, name));
+  (req.lib.meta.trash ??= {})[name] = { at: Date.now() };
+  const u = userState(req.acct);
+  if (u.lastBook === name) delete u.lastBook;
+  saveState();
+  tellSite(req.acct);
+  res.json({ ok: true });
+});
+// «Нещодавно видалені»: GET /api/trash, POST /api/trash/restore { path }.
+api.get("/trash", async (req, res) => {
+  if (req.guest) return res.json({ books: [], days: TRASH_DAYS });
+  const trash = req.lib.meta.trash || {};
+  const names = Object.keys(trash).filter((n) => fs.existsSync(trashFile(req.lib, n)));
+  if (!names.length) return res.json({ books: [], days: TRASH_DAYS });
+  const dir = path.dirname(trashFile(req.lib, names[0]));
+  const scanned = await library.scan([dir], path.join(dir, ".cache.json")).catch(() => []);
+  const meta = req.lib.meta.bookMeta || {};
+  const books = names.map((n) => {
+    const b = scanned.find((x) => path.basename(x.path) === n) || { title: n.replace(/\.[^.]+$/, ""), authors: [] };
+    const m = meta[n];
+    return { path: n, title: m?.title || b.title, authors: m?.authors?.length ? m.authors : b.authors || [], deletedAt: trash[n].at, until: trash[n].at + TRASH_DAYS * 864e5 };
+  }).sort((x, y) => y.deletedAt - x.deletedAt);
+  res.json({ books, days: TRASH_DAYS });
+});
+api.post("/trash/restore", (req, res) => {
+  const name = safeBookName(req.body?.path);
+  const from = name && trashFile(req.lib, name);
+  if (!from || !fs.existsSync(from)) return res.status(404).json({ error: "Цієї книжки вже немає в нещодавно видалених." });
+  if (fs.existsSync(bookFile(req.lib, name))) return res.status(409).json({ error: "У бібліотеці вже є книжка з таким файлом." });
+  fs.renameSync(from, bookFile(req.lib, name));
+  delete req.lib.meta.trash?.[name];
+  saveState();
+  tellSite(req.acct);
+  res.json({ ok: true, path: name });
+});
+// Gone for good: the file and everything this library and its reader kept about the book (the place, progress,
+// notes, a corrected title, a hand-set cover, the links that lent it out).
+function forgetBook(lib, acct, name) {
+  fs.rmSync(trashFile(lib, name), { force: true });
+  for (const key of ["added", "bookMeta", "trash"]) delete lib.meta[key]?.[name];
+  const u = state.users[acct];
+  if (u) {
+    for (const key of ["positions", "progress", "opened", "setAside", "seen", "notes"]) {
+      delete u[key]?.[name];
+      delete u[key]?.[`${name}#reflow`];
+    }
+    if (u.lastBook === name) delete u.lastBook;
+  }
+  for (const [t, sh] of Object.entries(state.shares)) if (sh.acct === acct && sh.book === name) delete state.shares[t];
+  const key = customCoverKey(name);
+  if (fs.existsSync(lib.covers)) for (const f of fs.readdirSync(lib.covers)) if (f.split(".")[0] === key) fs.rmSync(path.join(lib.covers, f), { force: true });
+}
+function purgeTrash() {
+  const old = Date.now() - TRASH_DAYS * 864e5;
+  let n = 0;
+  const each = (id, meta) => {
+    for (const [name, t] of Object.entries(meta?.trash || {})) if (t.at < old) forgetBook(libOf(id), id, name), n++;
+  };
+  each(OWNER_ID, state.shared);
+  for (const [id, meta] of Object.entries(state.libs || {})) if (id !== OWNER_ID) each(id, meta);
+  if (n) saveState(), console.log(`trash: ${n} books deleted for good`);
+}
+setTimeout(purgeTrash, 60 * 1000).unref();
+setInterval(purgeTrash, 6 * 3600 * 1000).unref();
 
 // Cache for PDFs converted to EPUB in the browser ("як книжка" mode), one per library.
 function reflowFile(lib, name, version) {

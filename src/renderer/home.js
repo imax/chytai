@@ -50,6 +50,7 @@
     if (!lib) waitTimer = setTimeout(() => !lib && $("#home-wait").classList.remove("hidden"), 2500);
     loadingAll ??= Promise.all([
       window.Library.data(true).then((d) => (lib = d)),
+      loadTrashCount(),
       Promise.resolve(window.reader.notesAll?.()).then((n) => (notes = n || {})).catch(() => {}),
       Promise.resolve(window.reader.wishList?.()).then((w) => (wish = w || [])).catch(() => {}),
     ])
@@ -170,8 +171,10 @@
     if (!lib) return; // the skeleton stays until the library arrives
     const books = [...lib.books].sort((x, y) => lastTouched(y) - lastTouched(x));
     if (!books.length) {
+      homeHtml = "";
       $("#home-body").innerHTML = `<div class="home-empty"><p>Тут будуть ваші книжки.</p>
-        <button class="pill" data-tab="discover">Знайти книжку</button></div>`;
+        <button class="pill" data-tab="discover">Знайти книжку</button>
+        ${trashCount ? `<button class="link" data-act="trash">Нещодавно видалені · ${trashCount}</button>` : ""}</div>`;
       return;
     }
     const q = norm(homeFilter);
@@ -179,7 +182,8 @@
     const field = books.length > 12 ? `<input id="home-filter" type="search" placeholder="Шукати" value="${esc(homeFilter)}" autocomplete="off" />` : "";
     const keepFocus = document.activeElement?.id === "home-filter";
     const html = `${field}<div class="tiles">${shown.map(tile).join("")}</div>
-      ${q && !shown.length ? `<p class="m">Нічого не знайшлося. <button class="link" data-tab="discover">Пошукати в «Пошуку»</button></p>` : ""}`;
+      ${q && !shown.length ? `<p class="m">Нічого не знайшлося. <button class="link" data-tab="discover">Пошукати в «Пошуку»</button></p>` : ""}
+      ${trashCount && !q ? `<p class="home-trash"><button class="link" data-act="trash">Нещодавно видалені · ${trashCount}</button></p>` : ""}`;
     // The library comes twice (the saved copy, then the server's) and again when the app comes back to the
     // front: drawing the same covers anew made them flicker, so an unchanged screen is left alone.
     if (html === homeHtml) return;
@@ -462,6 +466,7 @@
       return;
     }
     if (el.dataset.act === "add") return $("#lib-add").click();
+    if (el.dataset.act === "trash") return openTrash();
     if (el.dataset.act === "seen") markSeen();
   });
 
@@ -488,10 +493,9 @@
     menuBook = b;
     const own = !b.free && !b.protected;
     const d = $("#book-menu");
-    d.classList.remove("confirm");
     $("#bm-title").textContent = b.title;
     $("#bm-author").textContent = b.authors.join(", ");
-    $("#bm-share").hidden = !(own && window.reader.shareBook);
+    // «Дати почитати» is hidden for now (Max, 2026-11-01).
     $("#bm-edit").hidden = !(own && window.reader.libraryUpdateBook);
     // Your own file is deleted; a book from the free shelf or a publisher just leaves the home screen.
     $("#bm-aside").hidden = own;
@@ -499,7 +503,6 @@
     d.returnValue = "";
     d.showModal();
   }
-  $("#bm-delete").onclick = () => $("#book-menu").classList.add("confirm");
   $("#book-menu").addEventListener("close", async () => {
     const b = menuBook;
     menuBook = null;
@@ -521,9 +524,68 @@
     if (current?.path === b.path) closeBook?.();
     lib.books = lib.books.filter((x) => x.path !== b.path);
     if (lib.lastBook === b.path) lib.lastBook = null;
-    toast("Книжку видалено");
+    trashCount++;
+    homeHtml = "";
     render();
     window.Library.render?.();
+    // No question before deleting (Max, 2026-11-01); the notice gives a way back instead.
+    showNotice(`«${b.title}» у нещодавно видалених.`, false);
+    const undo = document.createElement("button");
+    undo.className = "link notice-link";
+    undo.textContent = "Повернути";
+    undo.onclick = () => restoreBook(b.path).then(() => $("#notice").classList.add("hidden"));
+    $("#notice .notice-text").append(" ", undo);
+  });
+
+  // ---------- Нещодавно видалені ----------
+
+  let trashCount = 0;
+  async function loadTrashCount() {
+    if (!window.reader.libraryTrash || settings.guest) return;
+    try {
+      const n = (await window.reader.libraryTrash()).books.length;
+      if (n !== trashCount) (trashCount = n), (homeHtml = ""), render();
+    } catch {
+      /* offline: the link waits */
+    }
+  }
+  async function restoreBook(path) {
+    try {
+      await window.reader.libraryRestoreBook(path);
+    } catch (err) {
+      return showNotice(err instanceof TypeError ? "Немає з'єднання: повернути книжку можна лише онлайн." : `Не вдалося повернути: ${err.message}`, false);
+    }
+    trashCount = Math.max(0, trashCount - 1);
+    lib = await window.Library.data(true);
+    homeHtml = "";
+    render();
+    toast("Книжку повернуто");
+  }
+  async function openTrash() {
+    const box = $("#trash-list");
+    box.innerHTML = `<li class="m">Завантажую…</li>`;
+    $("#trash-dialog").showModal();
+    let books = [];
+    try {
+      books = (await window.reader.libraryTrash()).books;
+    } catch (err) {
+      box.innerHTML = `<li class="m">${esc(err.message)}</li>`;
+      return;
+    }
+    trashCount = books.length;
+    const left = (until) => Math.max(1, Math.ceil((until - Date.now()) / DAY));
+    box.innerHTML = books.length
+      ? books.map((b) => `<li><span class="row-text"><span class="t">${esc(b.title)}</span><span class="m">${esc(b.authors[0] || "")}${b.authors[0] ? " · " : ""}ще ${left(b.until)} ${plural(left(b.until), "день", "дні", "днів")}</span></span>
+          <button type="button" class="link" data-restore="${esc(b.path)}">Повернути</button></li>`).join("")
+      : `<li class="m">Порожньо.</li>`;
+  }
+  $("#trash-list").addEventListener("click", async (e) => {
+    const el = e.target.closest("[data-restore]");
+    if (!el) return;
+    el.disabled = true;
+    await restoreBook(el.dataset.restore);
+    el.closest("li").remove();
+    if (!$("#trash-list li")) $("#trash-list").innerHTML = `<li class="m">Порожньо.</li>`;
   });
 
   // A long press on a cover opens its menu; with a mouse, a right click does.

@@ -849,3 +849,11 @@ html:not(.touch) .tile:hover .tile-more, .tile-more:focus-visible { display: fle
 #book-menu.confirm .bm-confirm { display: flex; }
 .bm-confirm p { margin: 0; color: var(--muted); }
 .danger-fill { background: #c0392b; color: #fff; border: none; border-radius: 8px; padding: 10px 14px; font-size: 15px; cursor: pointer; }
+.home-trash { margin: 8px 0 0; text-align: center; }
+#shell .home-trash .link { font-size: 13px; color: var(--muted); }
+#trash-list { list-style: none; padding: 0; margin: 10px 0; display: flex; flex-direction: column; gap: 4px; max-height: 50vh; overflow-y: auto; }
+#trash-list li { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--line); }
+#trash-list .t { font-family: Georgia, serif; }
+#trash-list .m { color: var(--muted); font-size: 12px; }
+#trash-list .link { background: none; border: none; color: var(--accent); cursor: pointer; font-size: 14px; }
+#notice button.notice-link { background: none; border: none; padding: 0; color: var(--accent); cursor: pointer; font: inherit; }

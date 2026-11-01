@@ -273,16 +273,22 @@
       <p id="bm-author" class="share-book"></p>
       <div class="bm-list">
         <button value="about" id="bm-about">Про книжку</button>
-        <button value="share" id="bm-share">Дати почитати</button>
+        <button value="share" id="bm-share" hidden>Дати почитати</button>
         <button value="edit" id="bm-edit">Назва й автор</button>
         <button value="aside" id="bm-aside">Прибрати з головної</button>
-        <button type="button" id="bm-delete" class="danger">Видалити книжку</button>
-      </div>
-      <div class="bm-confirm">
-        <p>Файл, місце в книжці й нотатки до неї зникнуть назавжди.</p>
-        <button value="delete" class="danger-fill">Так, видалити</button>
+        <button value="delete" id="bm-delete" class="danger">Видалити</button>
       </div>
       <menu><button value="cancel" formnovalidate>Скасувати</button></menu>
+    </form>
+  </dialog>
+
+  <!-- «Нещодавно видалені»: deleted books wait here 30 days before they go for good. -->
+  <dialog id="trash-dialog">
+    <form method="dialog">
+      <h2 tabindex="-1" autofocus>Нещодавно видалені</h2>
+      <small>Книжки зберігаються тут 30 днів, потім видаляються назавжди.</small>
+      <ul id="trash-list"></ul>
+      <menu><button value="close">Готово</button></menu>
     </form>
   </dialog>
 

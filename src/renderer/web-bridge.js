@@ -411,6 +411,8 @@
       const s = (await localSettings()) || {};
       if (s.lastBook === name) patchLocalSettings({ lastBook: null });
     },
+    libraryTrash: () => api("GET", "/api/trash").then((r) => r.json()),
+    libraryRestoreBook: (name) => api("POST", "/api/trash/restore", { path: name }).then((r) => r.json()),
     libraryUpdateBook: (name, patch) => api("PATCH", `/api/books/${encodeURIComponent(name)}`, patch).then((r) => r.json()),
     getSettings: async () => {
       let settings;
