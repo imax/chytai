@@ -241,7 +241,7 @@ class Mcp {
       {
         name: "add_books",
         title: "Додати книжки",
-        description: `Add books to the reader's shelf, one or many (up to ${BOOKS_A_CALL} per call). Give each book an id from search_books, or a title and author: we look it up in the catalog. A book we cannot find comes back as not_found with candidates; call again with the right id, or with create_if_missing: true when the book is really missing from the catalog. A book already on the shelf is left as it is (use update_book to change it).`,
+        description: `Add books to the reader's shelf, one or many (up to ${BOOKS_A_CALL} per call). Give each book an id from search_books, or a title and author: we look it up in the catalog. A book we cannot find comes back as not_found with candidates; call again with the right id, or with create_if_missing: true when the book is really missing from the catalog. A book already on the shelf is left as it is (use update_book to change it). Give the reader shelf_url from the answer, so they can see the books there.`,
         inputSchema: {
           type: "object",
           properties: {
@@ -389,7 +389,11 @@ class Mcp {
         this.notifyOwner(`Чат: ${res.created.length} нових книжок`, [`${reader.name} (@${reader.username}) додав(ла) через чат книжки, яких не було в каталозі:`, "", ...res.created.slice(0, 100).map((b) => `• ${b.title}${b.author ? ` — ${b.author}` : ""}  ${this.origin}${this.store.href(b.id)}`), "", `Полиця читача: ${this.origin}/@${reader.username}`].join("\n"));
     }
     this.log(`mcp: @${reader.username} add_books: ${rows.length} added (${res.created.length} new), ${results.length - rows.length} not`);
-    return { added: results.filter((r) => r?.result?.startsWith("added")).length, results, shelf_url: `${this.origin}/@${reader.username}` };
+    // «Усі» on a shelf goes by the year read, so wanted books sit at its very end, under «Без дати»: Max
+    // (2026-11-01) opened his shelf after a chat added 6 to «Хочу прочитати», didn't see them and thought
+    // nothing was saved. So the chat gets the link straight to that tab.
+    const want = rows.length && rows.every(({ row }) => row.status === "want") ? "#want" : "";
+    return { added: results.filter((r) => r?.result?.startsWith("added")).length, results, shelf_url: `${this.origin}/@${reader.username}${want}` };
   }
 
   update_book(reader, { id, status, now, rating, year, note }) {
