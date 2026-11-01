@@ -524,7 +524,11 @@
     if (el.dataset.menu) return bookMenu(el.dataset.menu);
     if (el.dataset.aside) return setAside(el.dataset.aside);
     if (el.dataset.open != null) return openBook(el.dataset.open);
-    if (el.dataset.tab) return show(el.dataset.tab);
+    if (el.dataset.tab) {
+      // The «Мої книжки» tab always shows all your books: a filter typed earlier goes (Max, 2026-11-01).
+      if (el.dataset.tab === "home" && el.closest("#tabbar") && homeFilter) (homeFilter = ""), (homeHtml = "");
+      return show(el.dataset.tab);
+    }
     if (el.dataset.note != null) {
       const note = $("#all-notes-body").notes?.[Number(el.dataset.note)];
       if (note) openNoteInBook(note.book, note);
