@@ -160,7 +160,7 @@ g.note-ul .comment-mark { fill: #e07a2e; fill-opacity: 1; stroke: none; font: bo
 }
 /* Hidden stays in the layout (invisible) so it fades out and its size is known before it shows. */
 #sel-toolbar.hidden { display: flex !important; visibility: hidden; opacity: 0; pointer-events: none; transform: translate(var(--shift), 6px) scale(0.97); transition: opacity 0.12s ease, transform 0.12s ease, visibility 0s linear 0.12s; }
-#sel-toolbar button { background: none; border: none; color: #fff; padding: 5px 10px; border-radius: 6px; cursor: pointer; font-size: 13px; }
+#sel-toolbar button { white-space: nowrap; background: none; border: none; color: #fff; padding: 5px 10px; border-radius: 6px; cursor: pointer; font-size: 13px; }
 #sel-toolbar button:hover { background: rgba(255, 255, 255, 0.15); }
 #sel-toolbar button:active { background: rgba(255, 255, 255, 0.22); }
 /* Without a network only "Зберегти" works; explanations need Claude. */

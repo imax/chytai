@@ -1479,7 +1479,7 @@ function renderNotes() {
     return;
   }
   if (!notes.length) {
-    box.innerHTML = `<div class="panel-empty">Нотаток ще немає. Виділіть текст і натисніть «Зберегти».</div>`;
+    box.innerHTML = `<div class="panel-empty">Нотаток ще немає. Виділіть текст і натисніть «В нотатки».</div>`;
     return;
   }
   // Newest on top, like the explanations.
@@ -1492,12 +1492,18 @@ function renderNotes() {
       <textarea class="note-comment" rows="1" placeholder="Додати думку…"></textarea>
       <div class="meta"><span class="where"></span>
         <span class="actions">
+          <button class="link explain">Пояснити</button>
           <button class="link go">Перейти</button>
           <button class="link delete">Видалити</button>
         </span>
       </div>`;
     card.querySelector(".quote").textContent = note.text;
     card.querySelector(".where").textContent = [note.chapter, noteDate(note.createdAt)].filter(Boolean).join(" · ");
+    // «Пояснити» right from the note (Max, 2026-11-01): the same explanation as for a selection.
+    card.querySelector(".explain").onclick = async () => {
+      if (settings.free) return showNotice("Пояснення працюють після входу. Це безкоштовно, потрібна лише пошта.", false);
+      startExplanation({ cfiRange: note.cfi, text: note.text, context: await noteContext(note) });
+    };
     const go = card.querySelector(".go");
     if (noteReachable(note)) go.onclick = () => goToNote(note);
     else (go.disabled = true), (go.title = "Ця нотатка з іншого вигляду PDF");
@@ -1527,6 +1533,27 @@ function renderNotes() {
     box.appendChild(card);
   }
   requestAnimationFrame(() => box.querySelectorAll(".note-comment").forEach(fitComment));
+}
+
+// The passage around a note, for its explanation: from the chapter the note is in when the book can give it,
+// otherwise the note's own text only.
+async function noteContext(note) {
+  let ctx = { selection: note.text, before: "", after: "" };
+  try {
+    if (book && rendition && String(note.cfi || "").startsWith("epubcfi")) {
+      let range = rendition.getRange(note.cfi);
+      if (!range) {
+        const section = book.spine.get(note.cfi);
+        const el = section && (await section.load(book.load.bind(book)));
+        const doc = el?.ownerDocument || el;
+        if (doc) range = new ePub.CFI(note.cfi).toRange(doc);
+      }
+      if (range) ctx = { ...extractContext(range.startContainer.ownerDocument, range), selection: note.text };
+    }
+  } catch {
+    /* the note's text alone will do */
+  }
+  return { ...ctx, chapter: note.chapter || "", bookTitle: current.title, author: current.author };
 }
 
 // Grow the comment field with its text; a hidden panel measures 0, so it is fitted again when shown.

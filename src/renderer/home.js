@@ -370,7 +370,7 @@
     const all = Object.entries(notes)
       .flatMap(([p, list]) => list.map((n) => ({ ...n, book: p.replace(/#reflow$/, "") })))
       .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
-    if (!all.length) return (box.innerHTML = `<div class="lib-empty">Нотаток ще немає. Виділіть уривок у книжці й натисніть «Зберегти».</div>`);
+    if (!all.length) return (box.innerHTML = `<div class="lib-empty">Нотаток ще немає. Виділіть уривок у книжці й натисніть «В нотатки».</div>`);
     const books = new Set(all.map((n) => n.book)).size;
     box.innerHTML = `<p class="view-hint">${all.length} ${plural(all.length, "нотатка", "нотатки", "нотаток")} у ${books} ${books === 1 ? "книжці" : "книжках"}</p>` +
       all.map((n, i) => {
