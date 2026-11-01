@@ -2778,6 +2778,16 @@ function clubRow(t, { book = true } = {}) {
   return `<a class="ctopic${t.official ? " pinned" : ""}${news ? " unread" : ""}" href="${attr(t.href)}${t.unread ? "#unread" : ""}"><span class="t"><b>${esc(t.title)}</b>${t.spoiler ? ` <span class="tag spoil-tag">спойлери</span>` : ""}</span>${book && t.book ? `<span class="bk">${cover(t.book, "xs")}<span>${esc(t.book.title)}</span></span>` : ""}<span class="m">${news}${meta}</span></a>`;
 }
 
+// Reactions under an answer: the ones given (with a count; the reader's own marked), and «🙂+» opening the five.
+// Plain forms work without the script; app.js sends them in the background.
+const REACTS = ["👍", "❤️", "😂", "😮", "😢"];
+function reactBar(postId, list, user) {
+  const form = (emoji, inner, cls, title = "") => `<form method="post" action="/api/club/posts/${attr(postId)}/react" class="react-form"><input type="hidden" name="emoji" value="${attr(emoji)}"><button class="${cls}"${title ? ` title="${attr(title)}"` : ""}${user ? "" : " disabled"}>${inner}</button></form>`;
+  const given = list.map((x) => form(x.emoji, `${x.emoji} <span>${x.n}</span>`, `react${x.mine ? " mine" : ""}`, x.who.join(", ")));
+  const add = user ? `<details class="react-add"><summary title="Реакція">🙂+</summary><div class="react-pick">${REACTS.map((e) => form(e, e, "react-one")).join("")}</div></details>` : "";
+  return given.length || add ? `<div class="reacts" data-post="${attr(postId)}">${given.join("")}${add}</div>` : "";
+}
+
 function clubPage({ user, pinned = [], rest = [] }) {
   const add = user ? `<a class="btn primary" href="/club/new">+ Нова тема</a>` : `<a class="btn primary" rel="nofollow" href="/login?next=${encodeURIComponent("/club/new")}">+ Нова тема</a>`;
   const body = `
@@ -2817,7 +2827,7 @@ ${pageHead({ crumbs: `<a href="/club">Клуб Chytai</a>`, title: "Нова т�
 
 // A topic: what its author wrote, then the answers, oldest first. `hide`: spoilers this reader has not read, under
 // a blur until «Показати» (remembered in the browser for this topic).
-function clubTopicPage({ user, owner = false, topic: t, posts, hide = false, watching = false, seenAt = "", links = {}, error = "" }) {
+function clubTopicPage({ user, owner = false, topic: t, posts, hide = false, watching = false, reacts = {}, seenAt = "", links = {}, error = "" }) {
   const id = attr(t.id);
   const mine = user && (t.reader.id === user.id || owner);
   const who = (r) => `<a href="${attr(r.href)}"><b>${esc(r.name)}</b></a>`;
@@ -2825,7 +2835,7 @@ function clubTopicPage({ user, owner = false, topic: t, posts, hide = false, wat
   // Answers by others since the reader last looked: a mark on each, and #unread at the first one.
   const firstNew = seenAt && user ? posts.find((p) => p.created > seenAt && p.reader.id !== user.id)?.id : null;
   const isNew = (p) => seenAt && user && p.created > seenAt && p.reader.id !== user.id;
-  const post = (p) => `${p.id === firstNew ? `<span id="unread"></span>` : ""}<div class="cmt${isNew(p) ? " new" : ""}" id="p-${attr(p.id)}"><p class="who">${who(p.reader)} · ${when({ updated: p.created })}${reply(p.reader)}${user && (p.reader.id === user.id || owner) ? ` · <button class="text-link small muted" form="del-${attr(p.id)}">видалити</button><form method="post" action="/api/club/posts/${attr(p.id)}/delete" id="del-${attr(p.id)}" onsubmit="return confirm('Видалити відповідь?')"></form>` : ""}</p><div class="txt">${clubText(p.text, links)}</div></div>`;
+  const post = (p) => `${p.id === firstNew ? `<span id="unread"></span>` : ""}<div class="cmt${isNew(p) ? " new" : ""}" id="p-${attr(p.id)}"><p class="who">${who(p.reader)} · ${when({ updated: p.created })}${reply(p.reader)}${user && (p.reader.id === user.id || owner) ? ` · <button class="text-link small muted" form="del-${attr(p.id)}">видалити</button><form method="post" action="/api/club/posts/${attr(p.id)}/delete" id="del-${attr(p.id)}" onsubmit="return confirm('Видалити відповідь?')"></form>` : ""}</p><div class="txt">${clubText(p.text, links)}</div>${reactBar(p.id, reacts[p.id] || [], user)}</div>`;
   const form = user
     ? `<form method="post" action="/api/club/${id}/posts" class="cmt-form" id="reply"><textarea name="text" rows="3" maxlength="2000" required placeholder="Ваша відповідь" aria-label="Відповідь"></textarea>${error ? `<p class="error small">${esc(error)}</p>` : ""}<div><button class="btn primary">Відповісти</button></div></form><form method="post" action="/api/club/${id}/watch" class="watch"><label><input type="checkbox" name="on" value="1"${watching ? " checked" : ""} onchange="this.form.submit()"> Сповіщати про відповіді на пошту</label><noscript><button class="text-link small">Зберегти</button></noscript></form>`
     : ""; // a guest gets the site's «Доєднатися» band at the bottom, which brings them back here (Max, 2026-11-01)
