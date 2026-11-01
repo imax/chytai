@@ -2767,9 +2767,8 @@ function clubText(text, links = {}, { tags = true } = {}) {
     }
   }
   out += esc(t.slice(at));
-  // The books named, as small cards under the text.
-  const cards = books.length ? `<div class="cbooks">${books.map((b) => `<a href="${attr(b.href)}">${cover(b, "xs")}<span><b>${esc(b.title)}</b>${b.author ? `<span class="by">${esc(byline(b.author))}</span>` : ""}</span></a>`).join("")}</div>` : "";
-  return out.split(/\n\s*\n/).map((p) => `<p>${p.replace(/\n/g, "<br>")}</p>`).join("") + cards;
+  // A named book is a link only, no card under the text (Max, 2026-11-01).
+  return out.split(/\n\s*\n/).map((p) => `<p>${p.replace(/\n/g, "<br>")}</p>`).join("");
 }
 const answers = (n) => count(n, "відповідь", "відповіді", "відповідей");
 // A talk in a list: its title (with «спойлери» and the book), who started it, how many answers, when the last.
