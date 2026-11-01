@@ -168,15 +168,16 @@
   const hue = (t) => [...String(t || "")].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 0) % 360;
   const isReading = (b) => !b.finished && b.pct != null && b.pct >= 1 && b.pct < 99;
   const isNewBook = (b) => !b.finished && !b.started && !(b.pct > 0);
-  const status = (b) =>
-    b.finished ? `<span class="r-st done">Прочитано</span>` : b.pct > 0 ? `<span class="r-st">${b.pct}%</span>` : `<span class="r-st new">Не почато</span>`;
+  // Progress sits on the cover itself: a thin bar while reading, a small mark when finished. A line of text
+  // under each cover took height and said little (Max).
+  const mark = (b) => (b.finished ? `<span class="r-done" title="Прочитано">✓</span>` : b.pct > 0 ? `<span class="r-bar" title="${b.pct}%"><span style="width:${Math.max(b.pct, 3)}%"></span></span>` : "");
   const statusText = (b) => (b.finished ? "прочитано" : b.pct > 0 ? `${b.pct}%` : "не почато");
   // A cover: the picture when there is one, the site's typographic stand-in under it otherwise.
   const rcover = (b, url = window.reader.coverUrl?.(b)) => `<span class="r-cover" style="--h:${hue(b.title)}" lang="${esc(b.language || "uk")}">
       <span class="r-cover-t">${esc(b.title)}</span><span class="r-cover-a">${esc((b.authors || [b.author])[0] || "")}</span>
       ${url ? `<img src="${esc(url)}" alt="" loading="lazy" onerror="this.remove()" />` : ""}</span>`;
   const more = (b) => (settings.guest ? "" : `<span class="r-more" role="button" tabindex="0" data-menu="${esc(b.path)}" title="Ще" aria-label="Ще"><i></i><i></i><i></i></span>`);
-  const card = (b, foot, menu = true) => `<button class="r-card" data-open="${esc(b.path)}">${rcover(b)}${menu ? more(b) : ""}
+  const card = (b, foot, menu = true, cls = "") => `<button class="r-card${cls}" data-open="${esc(b.path)}">${rcover(b)}${menu ? more(b) : ""}
       <span class="r-t">${esc(b.title)}</span><span class="r-a">${esc(author(b))}</span>${foot}</button>`;
   const head = (title, aside = "", plain = false) => `<div class="r-sec-head${plain ? " plain" : ""}"><h2>${title}</h2>${aside}</div>`;
   const tabs = (list, active, attr) => `<div class="r-tabs">${list.map(([k, label, n]) => `<button class="${k === active ? "on" : ""}" ${attr}="${k}">${label}${n != null ? ` <i>${n}</i>` : ""}</button>`).join("")}</div>`;
@@ -194,6 +195,7 @@
   function renderHome() {
     if (!lib) return; // the skeleton stays until the library arrives
     $("#r-avatar").textContent = (settings.user || "Ч").trim()[0].toUpperCase();
+    $(".r-add-btn").hidden = !!settings.guest;
     const html = homeQuery.trim() ? searchHtml(norm(homeQuery)) : homePageHtml();
     // The library comes twice (the saved copy, then the server's) and again when the app comes back to the
     // front: drawing the same covers anew made them flicker, so an unchanged screen is left alone.
@@ -218,11 +220,14 @@
     }
     const rest = books.filter((b) => b !== cur);
     const groups = { all: rest, reading: rest.filter(isReading), new: rest.filter(isNewBook), done: rest.filter((b) => b.finished) };
-    const shown = groups[homeFilter] || rest;
-    const plus = settings.guest ? "" : `<button class="r-card r-plus" data-act="add"><span class="r-plus-box"><b>+</b><span class="wide">Завантажити свою</span><span class="narrow">Свою</span><small class="wide">EPUB, PDF, MOBI</small></span></button>`;
+    // Every book is drawn once and a filter only hides cards: drawing the grid anew on each click reloaded
+    // all the covers, which flickered on a slow connection (Max).
+    const gcls = (b) => ["reading", "new", "done"].filter((k) => groups[k].includes(b)).map((k) => ` g-${k}`).join("");
+    const empty = (k) => (groups[k].length ? "" : `<p class="r-empty g-${k}">Тут поки порожньо.</p>`);
+    const plus = settings.guest || books.length ? "" : `<button class="r-card r-plus" data-act="add"><span class="r-plus-box"><b>+</b><span>Додати книжку</span><small>EPUB, PDF, MOBI</small></span></button>`;
     html += `<section>${head(`Мої книжки · ${books.length}`, books.length ? tabs([["all", "Усі", groups.all.length], ["reading", "Читаю", groups.reading.length], ["new", "Не почато", groups.new.length], ["done", "Прочитані", groups.done.length]], homeFilter, "data-filter") : "")}
-      <div class="r-grid">${shown.map((b) => card(b, status(b))).join("")}${homeFilter === "all" || !books.length ? plus : ""}</div>
-      ${!shown.length && homeFilter !== "all" ? `<p class="r-empty">Тут поки порожньо.</p>` : ""}
+      <div class="r-filtered" data-show="${homeFilter}"><div class="r-grid">${rest.map((b) => card(b, mark(b), true, gcls(b))).join("")}${plus}</div>
+      ${empty("reading")}${empty("new")}${empty("done")}</div>
       ${trashCount ? `<p class="r-trash"><button class="r-link" data-act="trash">Нещодавно видалені · ${trashCount} →</button></p>` : ""}</section>`;
     const reading = (club?.reading || []).slice(0, 8);
     if (reading.length)
@@ -231,9 +236,10 @@
           <span class="r-t">${esc(b.title)}</span><span class="r-a">${esc(b.reader.name)}</span></a>`).join("")}</div></section>`;
     const free = lib.free || [];
     if (free.length && !settings.guest) {
-      const byGroup = { new: [...free].sort((x, y) => y.order - x.order).slice(0, 16), kids: free.filter((b) => b.group === "Для дітей"), classics: free.filter((b) => /класика/i.test(b.group)), all: free };
+      const newest = new Set([...free].sort((x, y) => y.order - x.order).slice(0, 16));
+      const fcls = (b) => (newest.has(b) ? " g-new" : "") + (b.group === "Для дітей" ? " g-kids" : "") + (/класика/i.test(b.group) ? " g-classics" : "");
       html += `<section>${head(`Вільна полиця · ${free.length} <span class="r-sub">Можна читати безкоштовно</span>`, tabs([["new", "Нові"], ["kids", "Для дітей"], ["classics", "Класика"], ["all", "Усі"]], freeTab, "data-free-tab"))}
-        <div class="r-grid">${byGroup[freeTab].map((b) => card(b, "", false)).join("")}</div></section>`;
+        <div class="r-filtered" data-show="${freeTab}"><div class="r-grid">${[...newest, ...free.filter((b) => !newest.has(b))].map((b) => card(b, "", false, fcls(b))).join("")}</div></div></section>`;
     }
     return html;
   }
@@ -270,9 +276,16 @@
   }
   $("#home").addEventListener("click", (e) => {
     const f = e.target.closest("[data-filter]");
-    if (f) return (homeFilter = f.dataset.filter), renderHome();
     const t = e.target.closest("[data-free-tab]");
-    if (t) return (freeTab = t.dataset.freeTab), renderHome();
+    if (!f && !t) return;
+    if (f) homeFilter = f.dataset.filter;
+    else freeTab = t.dataset.freeTab;
+    // Only the cards' visibility changes; the page's HTML is remembered as if drawn anew, so the next
+    // render with the same books leaves the covers alone.
+    const tab = f || t;
+    for (const b of tab.parentElement.children) b.classList.toggle("on", b === tab);
+    tab.closest("section").querySelector(".r-filtered").dataset.show = f ? homeFilter : freeTab;
+    homeHtml = homeQuery.trim() ? homeHtml : homePageHtml();
   });
 
   // The avatar's menu: a popover under it on a computer, a sheet from the bottom on a phone.
