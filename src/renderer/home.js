@@ -157,6 +157,7 @@
   // Головна (Max, 2026-11-01, like a Kindle home screen): just your books with their covers, the one added or
   // opened last first. Everything else (the free shelf, adding books, new arrivals) is on «Пошук».
   let homeFilter = "";
+  let homeHtml = "";
   const lastTouched = (b) => Math.max(b.openedAt || 0, b.addedAt || 0);
   const tile = (b) => `<button class="tile" data-open="${esc(b.path)}">
       ${cover(b, "fill")}
@@ -177,8 +178,13 @@
     const shown = q ? books.filter((b) => matches(b, q)) : books;
     const field = books.length > 12 ? `<input id="home-filter" type="search" placeholder="Шукати" value="${esc(homeFilter)}" autocomplete="off" />` : "";
     const keepFocus = document.activeElement?.id === "home-filter";
-    $("#home-body").innerHTML = `${field}<div class="tiles">${shown.map(tile).join("")}</div>
+    const html = `${field}<div class="tiles">${shown.map(tile).join("")}</div>
       ${q && !shown.length ? `<p class="m">Нічого не знайшлося. <button class="link" data-tab="discover">Пошукати в «Пошуку»</button></p>` : ""}`;
+    // The library comes twice (the saved copy, then the server's) and again when the app comes back to the
+    // front: drawing the same covers anew made them flicker, so an unchanged screen is left alone.
+    if (html === homeHtml) return;
+    homeHtml = html;
+    $("#home-body").innerHTML = html;
     if (keepFocus) {
       const f = $("#home-filter");
       f.focus();
@@ -194,6 +200,7 @@
   // ---------- Пошук ----------
 
   let discQuery = "";
+  let discHtml = "";
   function renderDiscover() {
     const box = $("#disc-body");
     if (!lib) return (box.innerHTML = `<p class="home-wait"><span class="spinner"></span>Завантажую…</p>`);
@@ -227,6 +234,8 @@
         <div class="shelf">${list.map((b) => `<button class="shelf-book" data-open="${esc(b.path)}">${cover(b, "mid")}<span class="t">${esc(b.title)}</span><span class="m ellipsis">${esc(b.authors[0] || "")}</span></button>`).join("")}</div>`).join("")}
     </section>`;
     html += `<p class="m disc-site">Більше книжок і де їх узяти: <a href="https://chytai.org.ua" target="_blank" rel="noopener">chytai.org.ua</a></p>`;
+    if (html === discHtml) return;
+    discHtml = html;
     box.innerHTML = html;
   }
   $("#disc-search").addEventListener("input", (e) => {
