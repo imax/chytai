@@ -17,12 +17,12 @@ class PdfView {
   static REFLOW_VERSION = REFLOW_VERSION;
 
   // Text-mode conversion: returns { epub: ArrayBuffer } or throws Error("NO_TEXT") for scans.
-  static async reflow(data, onProgress) {
+  static async reflow(data, onProgress, fallbackTitle = "") {
     const task = pdfjsLib.getDocument({ data: new Uint8Array(data.slice(0)) });
     try {
       const doc = await task.promise;
       const { info } = await doc.getMetadata().catch(() => ({ info: {} }));
-      const meta = { title: clean(info?.Title) || "", author: clean(info?.Author), language: clean(info?.Language).slice(0, 5) };
+      const meta = { title: clean(info?.Title) || fallbackTitle, author: clean(info?.Author), language: clean(info?.Language).slice(0, 5) };
       return await pdfToEpub(doc, meta, onProgress);
     } finally {
       task.destroy();

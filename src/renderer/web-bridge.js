@@ -291,12 +291,43 @@
   const BOOK_FILE = /\.(epub|pdf|mobi|azw3?|prc)$/i;
   const KINDLE_FILE = /\.(mobi|azw3?|prc)$/i;
   const ACCEPT = ".epub,.pdf,.mobi,.azw3,.azw,.prc,application/epub+zip,application/pdf,application/x-mobipocket-ebook";
-  // Kindle files (MOBI, AZW3) become EPUB here, before upload, so the server and the reader see only EPUB.
-  async function asUpload(file) {
-    if (!KINDLE_FILE.test(file.name)) return { name: file.name, body: file };
-    const { mobiToEpub } = await import("./mobi-epub.js");
-    const { data } = await mobiToEpub(file);
-    return { name: file.name.replace(/\.[^.]+$/, ".epub"), body: data };
+  const bareName = (name) => name.replace(/\.[^.]+$/, "").replace(/[_-]+/g, " ").trim();
+  // The title inside an EPUB, for the notice after adding it.
+  async function epubTitle(blob) {
+    try {
+      const zip = await JSZip.loadAsync(blob);
+      const container = await zip.file("META-INF/container.xml")?.async("string");
+      const opf = container && /full-path="([^"]+)"/.exec(container)?.[1];
+      const xml = opf && (await zip.file(opf)?.async("string"));
+      const t = xml && /<dc:title[^>]*>([^<]+)</.exec(xml)?.[1];
+      return t ? new DOMParser().parseFromString(`<x>${t}</x>`, "text/xml").documentElement.textContent.trim() : "";
+    } catch {
+      return "";
+    }
+  }
+  // Every book is an EPUB on the server (Max, 2026-11-01): Kindle files (MOBI, AZW3) and text PDFs become EPUB
+  // here, before upload. Only a scanned PDF without text goes up as it is and opens as pages.
+  async function asUpload(file, progress) {
+    const epubName = file.name.replace(/\.[^.]+$/, ".epub");
+    if (KINDLE_FILE.test(file.name)) {
+      progress?.(`Перетворюю «${file.name}» на EPUB…`);
+      const { mobiToEpub } = await import("./mobi-epub.js");
+      const { data, title } = await mobiToEpub(file);
+      return { name: epubName, body: data, title };
+    }
+    if (/\.pdf$/i.test(file.name)) {
+      while (!window.PdfView) await new Promise((r) => setTimeout(r, 50));
+      progress?.(`Готую текст «${file.name}»…`);
+      try {
+        const epub = await window.PdfView.reflow(await file.arrayBuffer(), (n, total) => progress?.(`Готую текст «${file.name}»… ${n} / ${total}`), bareName(file.name));
+        const body = new Blob([epub], { type: "application/epub+zip" });
+        return { name: epubName, body, title: await epubTitle(body) };
+      } catch (err) {
+        if (err.message !== "NO_TEXT") console.warn("PDF to EPUB failed, uploading the PDF", err);
+        return { name: file.name, body: file, title: bareName(file.name) };
+      }
+    }
+    return { name: file.name, body: file, title: (await epubTitle(file)) || bareName(file.name) };
   }
 
   async function uploadAndOpen(file) {
@@ -305,7 +336,8 @@
     }
     if (typeof showNotice === "function") showNotice(`Завантажую «${file.name}» на сервер…`, true);
     try {
-      const { name, body } = await asUpload(file);
+      const { name, body } = await asUpload(file, (t) => typeof showNotice === "function" && showNotice(t, true));
+      if (typeof showNotice === "function") showNotice(`Завантажую «${file.name}» на сервер…`, true);
       const res = await api("PUT", `/api/books/${encodeURIComponent(name)}`, body);
       const { path } = await res.json();
       await openServerBook(path);
@@ -340,23 +372,38 @@
     const skipped = files.filter((f) => !BOOK_FILE.test(f.name)).map((f) => f.name);
     const books = files.filter((f) => BOOK_FILE.test(f.name));
     const failed = [];
+    const done = []; // { path, title }
     for (const [i, file] of books.entries()) {
-      notice(`Завантажую «${file.name}»${books.length > 1 ? ` (${i + 1} з ${books.length})` : ""}…`, true);
+      const of = books.length > 1 ? ` (${i + 1} з ${books.length})` : "";
+      notice(`Завантажую «${file.name}»${of}…`, true);
       try {
-        const { name, body } = await asUpload(file);
-        await api("PUT", `/api/books/${encodeURIComponent(name)}`, body);
+        const { name, body, title } = await asUpload(file, (t) => notice(`${t}${of}`, true));
+        const res = await api("PUT", `/api/books/${encodeURIComponent(name)}`, body);
+        done.push({ path: (await res.json()).path, title });
       } catch (err) {
         if (err.message === "login") return false;
         failed.push(`${file.name}: ${err.message}`);
       }
     }
-    const added = books.length - failed.length;
+    const added = done.length;
+    // The book just added by its title, with a button to open it (Max, 2026-11-01).
     const parts = [
-      added ? `Додано ${added === 1 ? "книжку" : `книжок: ${added}`}.` : "",
+      added === 1 ? `Додано «${done[0].title}».` : added ? `Додано книжок: ${added}.` : "",
       failed.length ? `Не вдалося: ${failed.join("; ")}.` : "",
       skipped.length ? `Пропущено (підтримуються EPUB, PDF і MOBI): ${skipped.join(", ")}.` : "",
     ].filter(Boolean);
     if (parts.length) notice(parts.join(" "), false);
+    const text = document.querySelector("#notice .notice-text");
+    if (added && text) {
+      const open = document.createElement("button");
+      open.className = "link notice-link";
+      open.textContent = "Відкрити";
+      open.onclick = () => {
+        document.getElementById("notice").classList.add("hidden");
+        openServerBook(done[done.length - 1].path);
+      };
+      text.append(" ", open);
+    }
     return added > 0;
   }
 

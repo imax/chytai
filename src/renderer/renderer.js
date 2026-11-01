@@ -242,18 +242,12 @@ async function openBook(payload) {
   closeBook();
   hideSelToolbar();
   $("#empty").classList.add("hidden");
-  const isPdf = /\.pdf$/i.test(payload.name);
-  $("#btn-pdf-mode").classList.toggle("hidden", !isPdf);
-  if (isPdf) {
-    $("#btn-pdf-mode").textContent = settings.pdfMode === "reflow" ? "Оригінал PDF" : "Як книжка";
-    if (settings.pdfMode === "reflow") {
-      const epub = await reflowPdf(payload);
-      if (epub) {
-        const position = payload.carryPage ? await reflowHrefForPage(epub, payload.carryPage) : payload.reflowPosition;
-        return openEpub({ ...payload, data: epub, position }, { posKey: `${payload.path}#reflow`, source: payload });
-      }
-    }
-    return openPdf(payload.carryPage ? { ...payload, position: `pdf:${payload.carryPage}` } : payload);
+  // A PDF is read as a book (Max, 2026-11-01: no «Оригінал PDF» switch any more). New uploads already come as
+  // EPUB; an older PDF is converted here once and kept. A scan without text opens as pages.
+  if (/\.pdf$/i.test(payload.name)) {
+    const epub = await reflowPdf(payload);
+    if (epub) return openEpub({ ...payload, data: epub, position: payload.reflowPosition }, { posKey: `${payload.path}#reflow`, source: payload });
+    return openPdf(payload);
   }
   return openEpub(payload, { posKey: payload.path, source: payload });
 }
@@ -271,7 +265,8 @@ async function reflowPdf(payload) {
     return epub;
   } catch (err) {
     const scan = err.message === "NO_TEXT";
-    showNotice(scan ? "У цьому PDF немає тексту (схоже на скан), тому відкриваю оригінал." : `Не вдалося перекласти PDF, відкриваю оригінал.\n${err.message}`, false);
+    if (!scan) showNotice(`Не вдалося перетворити PDF на текст, відкриваю сторінки.\n${err.message}`, false);
+    else $("#notice").classList.add("hidden");
     return null;
   }
 }
@@ -1578,50 +1573,6 @@ $("#btn-notes").onclick = () => (notesTabShown() ? showPanel(false) : showPanel(
 
 $("#btn-open").onclick = () => window.reader.chooseBook();
 $("#btn-open-empty").onclick = () => window.reader.chooseBook();
-$("#btn-pdf-mode").onclick = async () => {
-  if (!current?.source) return;
-  // Carry the current PDF page over to the other view.
-  const carryPage = pdfView ? pdfView.page : currentReflowPage();
-  settings = await window.reader.setSettings({ pdfMode: settings.pdfMode === "reflow" ? "original" : "reflow" });
-  const latest = await window.reader.getSettings();
-  openBook({
-    ...current.source,
-    position: latest.positions[current.path] || null,
-    reflowPosition: latest.positions[`${current.path}#reflow`] || null,
-    carryPage,
-  });
-};
-
-// Reflowed PDFs carry id="page-N" on the first block of each PDF page; find the one we're on.
-function currentReflowPage() {
-  try {
-    const loc = rendition?.currentLocation();
-    const contents = rendition?.getContents()[0];
-    const range = loc?.start?.cfi && contents?.range(loc.start.cfi);
-    let el = range?.startContainer;
-    el = el?.nodeType === 1 ? el : el?.parentElement;
-    while (el && el.tagName !== "BODY") {
-      for (let sib = el; sib; sib = sib.previousElementSibling) {
-        const m = /^page-(\d+)$/.exec(sib.id || "");
-        if (m) return Number(m[1]);
-      }
-      el = el.parentElement;
-    }
-  } catch (err) {
-    console.warn("could not map position to a PDF page", err);
-  }
-  return null;
-}
-
-async function reflowHrefForPage(epub, page) {
-  try {
-    const zip = await JSZip.loadAsync(epub.slice(0));
-    const map = JSON.parse(await zip.file("OEBPS/pagemap.json").async("string"));
-    return map[page] || null;
-  } catch {
-    return null; // older cached conversion without a page map
-  }
-}
 $("#btn-toc").onclick = () => $("#toc").classList.toggle("hidden");
 // A click anywhere else puts the contents away (taps inside the page close it through toggleChrome).
 document.addEventListener("click", (e) => {
