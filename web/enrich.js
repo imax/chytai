@@ -40,6 +40,7 @@ const GENRE_OF = [
   ["війна", /\bwar\b|military/i],
   ["психологія", /psycholog/i],
   ["філософія", /philosoph/i],
+  ["мистецтво", /^art\b|\barts\b|painting|photography|architecture|graphic design|^music|motion pictures/i],
   ["наука", /^(?!.*fiction).*(science|physics|biology|mathematics|neuroscien|evolution)/i],
   ["здоров'я", /\bhealth\b|nutrition|medicine|fitness/i],
   ["подорожі", /travel/i],
