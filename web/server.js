@@ -112,7 +112,7 @@ if (pendingSources.length && bg.background)
     for (const id of pendingSources) {
       while (refreshing) await refreshing;
       await refreshShelves(true, id);
-      if (id === "chytai-free" && store.shelf(id)) store.db.set("free:seed", freeSeed);
+      if (id === "chytai-free" && store.shelf(id)) store.db.set("free:seed", freeSeed), mailFreeAdded();
     }
   }, 30000).unref();
 // Ukrainian titles of foreign books (wikidata.js), weekly; the first time a minute after start.
@@ -871,6 +871,16 @@ const withCovers = (l) => ({ ...l, covers: lists.covers(l.id) });
 // «Клуб Chytai» (club.js): the forum at /club; the comments under lists are part of it.
 const { Club, mentionsIn } = require("./club");
 const club = new Club(store, (id) => pub(auth.reader(id)), lists);
+// A wanted book the free-shelf workflow put on «Вільна полиця» mails the owner once (Max, 2026-11-01: «додавати і
+// слати мені імейл»), after the deploy that brought it.
+function mailFreeAdded() {
+  const done = new Set(JSON.parse(store.db.get("free:mailed") || "[]"));
+  for (const f of FREE.filter((x) => x.wanted && !done.has(x.name))) {
+    done.add(f.name);
+    notifyOwner(`На Вільній полиці: ${f.title}`, [`На Вільну полицю Читалки додано «${f.title}» (${f.authors}): цю книжку хочуть прочитати читачі, а її текст уже в суспільному надбанні.`, "", `Сторінка: ${SITE}/free-book/${encodeURIComponent(f.name)}`, `Звідки файл: ${f.source}`, "", `Прибрати: напиши Claude, файл free/${f.name}.`].join("\n"));
+  }
+  store.db.set("free:mailed", JSON.stringify([...done]));
+}
 // Wanted books already out of copyright (freebooks.js): once a day, /admin/free, and the owner's list when he has it on.
 const freeBooks = new (require("./freebooks").FreeBooks)({ store, lists, who: (id) => pub(auth.reader(id)), ownerId: OWNER_ID, log: console.log });
 bg.register("freeBooks", freeBooks, { run: true });
@@ -2333,6 +2343,8 @@ app.get("/admin/catalog", owner, (req, res) => {
     ],
   }));
 });
+// The wanted free books the free-shelf workflow (.github/workflows/free-shelf.yml) can take into the reader as they are.
+app.get("/free-ready.json", (req, res) => res.json(freeBooks.ready()));
 app.get("/admin/free", owner, (req, res) => res.send(pages.freeBooksPage({ user: req.user, st: freeBooks.state(), running: freeBooks.running, list: freeBooks.list(), claude: `/claude/${claudeKey()}/free` })));
 app.post("/admin/free", owner, (req, res) => {
   if (req.body?.list !== undefined) freeBooks.setList(req.body.list === "1");

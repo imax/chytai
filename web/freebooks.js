@@ -112,18 +112,18 @@ class FreeBooks {
     return { orig, translators, kind };
   }
 
-  // People by Wikidata id: { died, born, soviet, executed, uk } (uk: wrote in Ukrainian), kept 30 days.
+  // People by Wikidata id: { died, born, soviet, executed, uk, en } (uk, en: wrote in Ukrainian, in English), kept 30 days.
   async people(qids) {
     const cache = JSON.parse(this.db.get("free:people") || "{}");
-    const stale = qids.filter((q) => !cache[q] || Date.now() - cache[q].at > 30 * DAY);
+    const stale = qids.filter((q) => !cache[q] || cache[q].v !== 2 || Date.now() - cache[q].at > 30 * DAY);
     for (let i = 0; i < stale.length; i += 50) {
       const batch = stale.slice(i, i + 50);
       try {
-        const rows = await sparql(`SELECT ?a (MAX(YEAR(?d)) AS ?died) (MIN(YEAR(?b)) AS ?born) (SAMPLE(?sov_) AS ?sov) (SAMPLE(?ex_) AS ?ex) (SAMPLE(?uk_) AS ?uk) WHERE { VALUES ?a { ${batch.map((q) => `wd:${q}`).join(" ")} } OPTIONAL { ?a wdt:P570 ?d } OPTIONAL { ?a wdt:P569 ?b } OPTIONAL { ?a wdt:P27 ?sov_ FILTER(?sov_ IN (${USSR})) } OPTIONAL { ?a wdt:P1196 ?ex_ FILTER(?ex_ = wd:Q8454) } OPTIONAL { ?a wdt:P1412 ?uk_ FILTER(?uk_ = wd:Q8798) } } GROUP BY ?a`, this.fetchImpl);
-        for (const q of batch) cache[q] = { at: Date.now(), died: 0, born: 0 };
+        const rows = await sparql(`SELECT ?a (MAX(YEAR(?d)) AS ?died) (MIN(YEAR(?b)) AS ?born) (SAMPLE(?sov_) AS ?sov) (SAMPLE(?ex_) AS ?ex) (SAMPLE(?uk_) AS ?uk) (SAMPLE(?en_) AS ?en) WHERE { VALUES ?a { ${batch.map((q) => `wd:${q}`).join(" ")} } OPTIONAL { ?a wdt:P570 ?d } OPTIONAL { ?a wdt:P569 ?b } OPTIONAL { ?a wdt:P27 ?sov_ FILTER(?sov_ IN (${USSR})) } OPTIONAL { ?a wdt:P1196 ?ex_ FILTER(?ex_ = wd:Q8454) } OPTIONAL { ?a wdt:P1412 ?uk_ FILTER(?uk_ = wd:Q8798) } OPTIONAL { ?a wdt:P1412 ?en_ FILTER(?en_ = wd:Q1860) } } GROUP BY ?a`, this.fetchImpl);
+        for (const q of batch) cache[q] = { at: Date.now(), v: 2, died: 0, born: 0 };
         for (const r of rows) {
           const q = r.a.value.split("/").pop();
-          cache[q] = { at: Date.now(), died: Number(r.died?.value) || 0, born: Number(r.born?.value) || 0, ...(r.sov ? { soviet: true } : {}), ...(r.ex ? { executed: true } : {}), ...(r.uk ? { uk: true } : {}) };
+          cache[q] = { at: Date.now(), v: 2, died: Number(r.died?.value) || 0, born: Number(r.born?.value) || 0, ...(r.sov ? { soviet: true } : {}), ...(r.ex ? { executed: true } : {}), ...(r.uk ? { uk: true } : {}), ...(r.en ? { en: true } : {}) };
         }
       } catch (e) {
         this.log(`free: people: ${e.cause?.code || e.message}`);
@@ -245,7 +245,7 @@ class FreeBooks {
         // nobody calls it a translation.
         const ukText = CYR.test(w.book.title) && (f.kind === "ukrainian" || (f.kind !== "translation" && as.every((a) => people[a.qid].uk)));
         const check = as.some((a) => people[a.qid].soviet && (people[a.qid].executed || (people[a.qid].died >= 1930 && people[a.qid].died <= 1953)));
-        items.push({ id: w.book.id, title: w.book.title, author: w.book.author, href: w.book.href, readers: w.readers, died, freeFrom: died + 71, born: Math.min(...as.map((a) => people[a.qid].born || 9999)), ukText, check, orig: ukText ? "" : f.orig, translators: ukText ? [] : f.translators, inReader: inReader.get(norm(w.book.title)) || (f.orig && inReader.get(norm(f.orig))) || "" });
+        items.push({ id: w.book.id, title: w.book.title, author: w.book.author, href: w.book.href, readers: w.readers, died, freeFrom: died + 71, born: Math.min(...as.map((a) => people[a.qid].born || 9999)), ukText, check, en: as.every((a) => people[a.qid].en), orig: ukText ? "" : f.orig, translators: ukText ? [] : f.translators, inReader: inReader.get(norm(w.book.title)) || (f.orig && inReader.get(norm(f.orig))) || "" });
       }
       // Translators of the free originals: is the Ukrainian text free too?
       const tr = await this.translators([...new Set(items.flatMap((x) => x.translators))]);
@@ -257,6 +257,7 @@ class FreeBooks {
         const surname = (x.author.split(/[,;]/)[0].trim().split(" ").pop() || "").replace(/[^\p{L}-]/gu, "");
         const latinSurname = (s.book(x.id)?.authorOrig || s.authors?.byName(x.author.split(/[,;]/)[0].trim())?.other || "").split(/[,;]/)[0].trim().split(" ").pop() || surname;
         x.sources = await this.sources(x.id, { title: x.title, orig: x.orig, author: x.author, surname: x.ukText ? surname : latinSurname, ukText: x.ukText });
+        if (!x.ukText) x.authorOrig = s.book(x.id)?.authorOrig || s.authors?.byName(x.author.split(/[,;]/)[0].trim())?.other || "";
       }
       items.sort((a, b) => b.readers - a.readers || a.died - b.died);
       const st = { at: new Date().toISOString(), last, wanted: works.length, unknown, items };
@@ -267,6 +268,35 @@ class FreeBooks {
     } finally {
       this.running = false;
     }
+  }
+
+  // Free wanted books with a ready file the reader's «Вільна полиця» can take as it is (Max, 2026-11-01: «додавати і
+  // слати мені імейл»): the author's own Ukrainian text from uk.wikisource, or an English author's original from
+  // Standard Ebooks (first) or Gutenberg. Never a translation: its translator's rights are another term
+  // (a Gutenberg «Metamorphosis» is a 2002 translation). Not the ones to check for a rehabilitation, nor the ones
+  // the reader has. A GitHub workflow (free-shelf.yml) takes these files into free/ every day.
+  ready(st = this.state()) {
+    if (!st) return [];
+    const out = [];
+    for (const x of st.items) {
+      if (x.died > st.last || x.check || x.inReader) continue;
+      const src = x.sources || [];
+      const ws = src.find((s) => s.site === "Вікіджерела");
+      const se = src.find((s) => s.site === "Standard Ebooks");
+      const pg = src.find((s) => s.site === "Gutenberg");
+      let file = null;
+      if (x.ukText && ws) file = { site: ws.site, page: ws.url, epub: `https://ws-export.wmcloud.org/?format=epub-3&lang=uk&page=${encodeURIComponent(ws.title)}`, title: x.title, authors: x.author, lang: "uk" };
+      else if (!x.ukText && x.en && x.orig && (se || pg)) {
+        const [, a, b] = /\/ebooks\/([^/]+)\/([^/]+)$/.exec(se?.url || "") || [];
+        file = se && a ? { site: se.site, page: se.url, epub: `${se.url}/downloads/${a}_${b}.epub?source=download` } : { site: pg.site, page: pg.url, epub: `${pg.url}.epub3.images` };
+        Object.assign(file, { title: x.orig, authors: x.authorOrig || x.author, lang: "en" });
+      }
+      if (!file) continue;
+      const surname = (file.authors.split(/[,;]/)[0].trim().split(" ").pop() || "").replace(/[^\p{L}-]/gu, "");
+      const name = `${slugify(surname)}-${slugify(file.title.split(/[:(]/)[0])}`.slice(0, 60).replace(/-+$/, "");
+      out.push({ id: x.id, href: x.href, readers: x.readers, died: x.died, name: `${name}.epub`, ...file });
+    }
+    return out;
   }
 
   // The line under a book in the owner's list.

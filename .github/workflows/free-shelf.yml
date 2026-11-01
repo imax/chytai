@@ -1,0 +1,40 @@
+# Wanted books out of copyright go to the reader's «Вільна полиця» by themselves (Max, 2026-11-01: «додавати і
+# слати мені імейл»): scripts/free-shelf.py takes the ready files the site lists (/free-ready.json) into free/,
+# then both apps deploy; the site mails Max about each new book after its deploy.
+# A push made with GITHUB_TOKEN starts no other workflow, so the deploys are started by hand here.
+name: Free shelf
+
+on:
+  schedule:
+    - cron: "0 4 * * *" # 07:00 Kyiv, clear of the Friday digest
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: write
+
+concurrency: free-shelf
+
+jobs:
+  add:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - id: add
+        run: |
+          python3 scripts/free-shelf.py > added.txt
+          cat added.txt
+          echo "n=$(grep -c . added.txt || true)" >> "$GITHUB_OUTPUT"
+      - if: steps.add.outputs.n != '0'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add free web/seed/free.json web/public/free-covers
+          git commit -m "Вільна полиця: $(paste -sd ', ' added.txt) (wanted by readers, free-shelf.yml)"
+          git pull --rebase origin main
+          git push origin HEAD:main
+          gh workflow run deploy.yml --ref main
+          gh workflow run web.yml --ref main
+        env:
+          GH_TOKEN: ${{ github.token }}
