@@ -762,7 +762,7 @@ function mine(book, entry, user, now = false, readUrl = "") {
 }
 
 // «Де взяти»: every edition's shop (with its format, price and stock, the one place prices are shown),
-// other links (Укрліб's free text of a classic, ukrlib.js), and the libraries that hold the book (filled in by
+// other links (Укрліб's free text of a classic, ukrlib.js, or a hand-picked free text, openlinks.js), and the libraries that hold the book (filled in by
 // app.js from /api/libraries).
 function where(book, ukrlib = null, sluhay = null) {
   const seen = new Set();
@@ -771,7 +771,8 @@ function where(book, ukrlib = null, sluhay = null) {
   // In stock first, then the publisher's own over a shop reselling it (Старий Лев sells partners' books).
   const rank = (e) => (e.status === "є" ? 0 : e.status === "передзамовлення" ? 1 : 2) * 4 + (e.edition ? 2 : 0) + (e.format === "e-book" ? 1 : 0) + (e.format === "аудіо" ? 1 : 0);
   const eds = [...(book.editions || []), ...free].filter((e) => !seen.has(e.links[0].url) && seen.add(e.links[0].url)).sort((a, b) => rank(a) - rank(b));
-  const links = [...(book.links || []), ...(ukrlib ? [ukrlib] : [])].filter((l) => !seen.has(l.url));
+  // A free text (Укрліб, openlinks.js) before the shops abroad.
+  const links = [...(ukrlib ? [ukrlib] : []), ...(book.links || [])].filter((l) => !seen.has(l.url));
   // Only where it can be had (Max, 2026-10-20: «показувати там де є, а не там де немає»); the shops
   // that are out of it fold into one quiet line, each named once.
   const gone = (e) => e.status === "немає";
