@@ -781,7 +781,7 @@ g.ai-star rect.star-hit { fill: #000; fill-opacity: 0; stroke: none; }
 g.ai-star text.star { fill: var(--accent); fill-opacity: 1; font: bold 18px Georgia, serif; }
 
 /* ---------- Redesign 2026-11-01: Головна = your books as covers, «Пошук» for the rest ---------- */
-#tabbar #side-reading, #tabbar .side-head, #side-settings, #shell-top, #home-settings { display: none !important; }
+#tabbar #side-reading, #tabbar .side-head, #shell-top { display: none !important; }
 #shell-views { top: 0 !important; }
 .cover.fill { width: 100%; height: auto; aspect-ratio: 2 / 3; }
 .cover.fill .cover-t { font-size: 13px; }
@@ -859,3 +859,5 @@ html:not(.touch) .tile:hover .tile-more, .tile-more:focus-visible { display: fle
 #notice button.notice-link { background: none; border: none; padding: 0; color: var(--accent); cursor: pointer; font: inherit; }
 .home-hero { -webkit-touch-callout: none; }
 @media (min-width: 761px) { .home-hero { max-width: 640px; } }
+#shell .tile-done { font-size: 12px; color: var(--accent); }
+#shell .tile-done::before { content: "✓ "; }

@@ -1138,7 +1138,7 @@ api.get("/library", async (req, res) => {
     const progress = aside ? null : u.progress?.[name];
     const custom = customs.get(customCoverKey(name));
     return {
-      ...b, dir: undefined, path: name, cloud: false, openedAt, aside,
+      ...b, dir: undefined, path: name, cloud: false, openedAt, aside, finished: !!u.finished?.[name],
       started: !aside && !!(positions[name] || positions[`${name}#reflow`]),
       pct: progress ? progress.pct : null,
       chapter: progress?.chapter || "",
@@ -1167,7 +1167,7 @@ api.get("/library", async (req, res) => {
         return {
           ...b, path: name, cloud: false, free: true, group: m.group || "", order: m.order ?? 1e6,
           title: m.title || b.title, authors: m.authors?.length ? m.authors : b.authors, year: m.year || b.year,
-          openedAt: aside ? 0 : u.opened?.[name] || 0, aside,
+          openedAt: aside ? 0 : u.opened?.[name] || 0, aside, finished: !!u.finished?.[name],
           started: !aside && !!positions[name], pct: aside || !progress ? null : progress.pct, chapter: (!aside && progress?.chapter) || "",
           addedAt: 0, addedBy: "", coverAt: freeCover(name) ? Math.round(fs.statSync(freeCover(name)).mtimeMs) : 0, seen: true,
         };
@@ -1185,7 +1185,7 @@ api.get("/library", async (req, res) => {
       if (!openedAt && !positions[name]) continue;
       const m = prot.meta(name);
       list.push({
-        ...b, title: m.title || b.title, authors: m.authors?.length ? m.authors : b.authors, path: name, cloud: false, protected: true, openedAt, aside,
+        ...b, title: m.title || b.title, authors: m.authors?.length ? m.authors : b.authors, path: name, cloud: false, protected: true, openedAt, aside, finished: !!u.finished?.[name],
         started: !aside && !!positions[name], pct: aside || !progress ? null : progress.pct, chapter: (!aside && progress?.chapter) || "",
         addedAt: 0, addedBy: "", coverAt: 0, seen: true,
       });
@@ -1380,6 +1380,27 @@ api.post("/library/aside", (req, res) => {
   res.json({ ok: true });
 });
 
+// «Позначити прочитаною» (Max, 2026-11-01): the book shows as read on Головна, and on the site's shelf it
+// becomes «Прочитано» (an account with a site key; a guest's mark stays here). Unmarking only clears it here.
+api.post("/library/finished", (req, res) => {
+  const u = req.guest ? guestState(req.guest) : userState(req.acct);
+  const name = safeBookName(req.body?.path);
+  if (!name) return res.status(400).json({ error: "bad request" });
+  if (req.body?.done === false) delete u.finished?.[name];
+  else {
+    (u.finished ??= {})[name] = Date.now();
+    if (!req.guest && !req.share && state.accounts[req.acct]?.key) {
+      const info = freeShelf.find((f) => f.name === name) || prot.meta(name) || req.lib?.meta?.bookMeta?.[name] || {};
+      const book = { name, title: info.title || "", authors: Array.isArray(info.authors) ? info.authors : info.author ? [info.author] : [] };
+      fetch(`${WEB_URL}/api/reader-read`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: req.acct, key: state.accounts[req.acct].key, book }), signal: AbortSignal.timeout(20000) })
+        .then((r) => r.ok || console.error(`reader-read ${req.acct}: ${r.status}`))
+        .catch((err) => console.error(`reader-read ${req.acct}:`, err.message));
+    }
+  }
+  if (!req.guest || req.share) saveState();
+  res.json({ ok: true });
+});
+
 // "Хочу прочитати": each reader's own list of books to get; the home screen shows when one arrives.
 const clean = (v, max) => String(v ?? "").replace(/\s+/g, " ").trim().slice(0, max);
 api.get("/wish", (req, res) => res.json({ wish: req.guest ? [] : userState(req.acct).wish || [] }));
@@ -1499,7 +1520,7 @@ function forgetBook(lib, acct, name) {
   for (const key of ["added", "bookMeta", "trash"]) delete lib.meta[key]?.[name];
   const u = state.users[acct];
   if (u) {
-    for (const key of ["positions", "progress", "opened", "setAside", "seen", "notes"]) {
+    for (const key of ["positions", "progress", "opened", "setAside", "seen", "notes", "finished"]) {
       delete u[key]?.[name];
       delete u[key]?.[`${name}#reflow`];
     }

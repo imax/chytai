@@ -19,8 +19,6 @@
   const isOpen = () => !$("#shell").classList.contains("hidden");
 
   function show(next = tab) {
-    // The third tab is the settings dialog for now (Max, 2026-11-01).
-    if (next === "settings") return openSettings();
     if (next !== "library") beforeSearch = null;
     tab = next;
     $("#shell").classList.remove("hidden");
@@ -163,7 +161,7 @@
   const tile = (b) => `<button class="tile" data-open="${esc(b.path)}">
       ${cover(b, "fill")}${settings.guest ? "" : `<span class="tile-more" role="button" data-menu="${esc(b.path)}" title="Ще" aria-label="Ще">⋯</span>`}
       <span class="t">${esc(b.title)}</span><span class="m ellipsis">${esc(author(b))}</span>
-      ${b.pct != null && b.pct > 0 && b.pct < 99 ? `<span class="tile-progress">${bar(b.pct, "thin")}<span class="m">${b.pct}%</span></span>` : ""}
+      ${b.finished ? `<span class="tile-done m">Прочитано</span>` : b.pct != null && b.pct > 0 && b.pct < 99 ? `<span class="tile-progress">${bar(b.pct, "thin")}<span class="m">${b.pct}%</span></span>` : ""}
     </button>`;
   const matches = (b, q) => norm(`${b.title} ${b.authors.join(" ")}`).includes(q);
 
@@ -182,7 +180,7 @@
     const field = books.length > 12 ? `<input id="home-filter" type="search" placeholder="Шукати" value="${esc(homeFilter)}" autocomplete="off" />` : "";
     const keepFocus = document.activeElement?.id === "home-filter";
     // The book on top is a big card with its button, as on the old home screen (Max, 2026-11-01); the rest are covers.
-    const top = !q && shown[0];
+    const top = !q && (shown.find((b) => !b.finished) || shown[0]);
     const hero = top ? `<button class="hero home-hero" data-open="${esc(top.path)}">
         ${cover(top, "big")}
         <span class="hero-text">
@@ -191,12 +189,12 @@
           <span class="m">${esc(author(top))}</span>
           <span class="hero-foot">
             ${top.chapter ? `<span class="m ellipsis">${esc(top.chapter)}</span>` : ""}
-            ${top.pct != null && top.pct > 0 ? bar(top.pct) : ""}
-            <span class="hero-row"><span class="m">${top.pct != null && top.pct > 0 ? `${top.pct}%` : ""}</span><span class="pill">${top.pct > 0 ? "Продовжити" : "Читати"}</span></span>
+            ${top.pct != null ? bar(top.pct) : ""}
+            <span class="hero-row"><span class="m">${top.pct != null ? `${top.pct}%` : ""}</span><span class="pill">Читати</span></span>
           </span>
         </span>
       </button>` : "";
-    const html = `${field}${hero}<div class="tiles">${(top ? shown.slice(1) : shown).map(tile).join("")}</div>
+    const html = `${field}${hero}<div class="tiles">${shown.filter((b) => b !== top).map(tile).join("")}</div>
       ${q && !shown.length ? `<p class="m">Нічого не знайшлося. <button class="link" data-tab="discover">Пошукати в «Пошуку»</button></p>` : ""}
       ${trashCount && !q ? `<p class="home-trash"><button class="link" data-act="trash">Нещодавно видалені · ${trashCount}</button></p>` : ""}`;
     // The library comes twice (the saved copy, then the server's) and again when the app comes back to the
@@ -237,7 +235,7 @@
     let html = "";
     if (!settings.guest) html += `<button class="add-card" data-act="add">
         <span class="add-plus">+</span>
-        <span class="row-text"><span class="t">Додати свої книжки</span><span class="m">EPUB або PDF з ${matchMedia("(pointer: coarse)").matches ? "телефона" : "комп'ютера"}</span></span>
+        <span class="row-text"><span class="t">Додати свої книжки</span><span class="m">EPUB, PDF або MOBI з ${matchMedia("(pointer: coarse)").matches ? "телефона" : "комп'ютера"}</span></span>
       </button>`;
     const fresh = arrivals();
     if (fresh.length) html += `<section class="home-sec"><div class="sec-head"><span>Нові надходження</span></div>
@@ -515,6 +513,8 @@
     // Your own file is deleted; a book from the free shelf or a publisher just leaves the home screen.
     $("#bm-aside").hidden = own;
     $("#bm-delete").hidden = !(own && window.reader.libraryDeleteBook);
+    $("#bm-finished").hidden = !window.reader.libraryFinished;
+    $("#bm-finished").textContent = b.finished ? "Позначити непрочитаною" : "Позначити прочитаною";
     d.returnValue = "";
     d.showModal();
   }
@@ -530,6 +530,17 @@
     if (act === "share") return window.Library.shareBook(b.path);
     if (act === "edit") return window.Library.editBook(b.path);
     if (act === "aside") return setAside(b.path);
+    if (act === "finished") {
+      b.finished = !b.finished;
+      homeHtml = "";
+      render();
+      return window.reader.libraryFinished(b.path, b.finished).catch(() => {
+        b.finished = !b.finished;
+        homeHtml = "";
+        render();
+        showNotice("Немає з'єднання: позначити книжку можна лише онлайн.", false);
+      });
+    }
     if (act !== "delete") return;
     try {
       await window.reader.libraryDeleteBook(b.path);
@@ -671,7 +682,7 @@
   // Single keys on a keyboard: Esc back to the book, 1 2 3 for the tabs, / to search, T for the contents, − + for the
   // font, ? for the list. Never while typing or with a dialog open; guests have no home screen.
   // Matched by the physical key, so they work the same with the Ukrainian layout on.
-  const TAB_KEYS = { Digit1: "home", Digit2: "discover", Digit3: "settings" };
+  const TAB_KEYS = { Digit1: "home", Digit2: "discover" };
   function key(e) {
     if (e.metaKey || e.ctrlKey || e.altKey || e.repeat) return;
     if (e.target?.closest?.("input, textarea, select, [contenteditable]")) return;

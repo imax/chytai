@@ -526,30 +526,51 @@ app.post("/api/reader-library", (req, res) => {
   });
   res.json({ ok: true, books: books.length });
 });
+// The catalog book for a file in someone's reader: by the title the reader sent or the one it listed earlier.
+function readerCatalogBook(id, sentBook) {
+  const name = String(sentBook?.name || "").slice(0, 300);
+  if (!name) return { error: "book" };
+  const sent = sentBook.title ? { name, title: String(sentBook.title).slice(0, 300), authors: (Array.isArray(sentBook.authors) ? sentBook.authors : []).map(String).join("; ") } : null;
+  const file = store.db.prepare("SELECT name, title, authors FROM reader_files WHERE reader = ? AND name = ?").get(id, name) || FREE.find((f) => f.name === name) || sent;
+  if (!file?.title) return { skipped: "unknown" };
+  const queries = [...new Set([file.title, file.title.split(/[.:(]/)[0].trim()])].filter((q) => q.length > 1);
+  const hit = queries.flatMap((q) => store.search(q, { limit: 10, alias: false })).find((h) => fileFor([file], store.bookPage(h.book.id)));
+  if (!hit) return { skipped: "not in catalog" };
+  return { bookId: store.canonical(hit.book.id) };
+}
+const readerKeyOk = (id, key) => {
+  const want = auth.reader(id) && readerKey(id);
+  return !!want && key.length === want.length && require("crypto").timingSafeEqual(Buffer.from(key), Buffer.from(want));
+};
 // A book read in the reader for a few minutes (server/index.js noteReadingNow, once a day): it goes on «Читаю
 // зараз» and, unless it was already, the shelf status «Читаю». Not when the reader turned this off in
 // /settings, and not for a book already «Прочитано» (a look back into it is not a re-read).
 app.post("/api/reader-now", (req, res) => {
   const id = String(req.body?.id || "");
-  const key = String(req.body?.key || "");
-  const want = auth.reader(id) && readerKey(id);
-  if (!want || key.length !== want.length || !require("crypto").timingSafeEqual(Buffer.from(key), Buffer.from(want))) return res.status(403).json({ error: "key" });
+  if (!readerKeyOk(id, String(req.body?.key || ""))) return res.status(403).json({ error: "key" });
   if (!auth.reader(id).autonow) return res.json({ ok: true, skipped: "off" });
-  const name = String(req.body?.book?.name || "").slice(0, 300);
-  if (!name) return res.status(400).json({ error: "book" });
-  const sent = req.body.book.title ? { name, title: String(req.body.book.title).slice(0, 300), authors: (Array.isArray(req.body.book.authors) ? req.body.book.authors : []).map(String).join("; ") } : null;
-  const file = store.db.prepare("SELECT name, title, authors FROM reader_files WHERE reader = ? AND name = ?").get(id, name) || FREE.find((f) => f.name === name) || sent;
-  if (!file?.title) return res.json({ ok: true, skipped: "unknown" });
-  const queries = [...new Set([file.title, file.title.split(/[.:(]/)[0].trim()])].filter((q) => q.length > 1);
-  const hit = queries.flatMap((q) => store.search(q, { limit: 10, alias: false })).find((h) => fileFor([file], store.bookPage(h.book.id)));
-  if (!hit) return res.json({ ok: true, skipped: "not in catalog" });
-  const bookId = store.canonical(hit.book.id);
+  const { bookId, error, skipped } = readerCatalogBook(id, req.body?.book);
+  if (error) return res.status(400).json({ error });
+  if (skipped) return res.json({ ok: true, skipped });
   const e = store.entry(id, bookId);
   if (e?.status === "read") return res.json({ ok: true, skipped: "read" });
   if (nowIds(id).has(bookId)) return res.json({ ok: true, already: true });
   if (e?.status !== "reading") store.setEntry(id, bookId, { status: "reading" });
   putNow(id, bookId);
   res.json({ ok: true, now: bookId });
+});
+// «Позначити прочитаною» in the reader (Max, 2026-11-01): the book is «Прочитано» on the shelf here too,
+// this year unless a year was set, and leaves «Читаю зараз».
+app.post("/api/reader-read", (req, res) => {
+  const id = String(req.body?.id || "");
+  if (!readerKeyOk(id, String(req.body?.key || ""))) return res.status(403).json({ error: "key" });
+  const { bookId, error, skipped } = readerCatalogBook(id, req.body?.book);
+  if (error) return res.status(400).json({ error });
+  if (skipped) return res.json({ ok: true, skipped });
+  const e = store.entry(id, bookId);
+  if (e?.status !== "read") store.setEntry(id, bookId, { status: "read", kids: false, year: e?.year || new Date().getFullYear() });
+  dropNow(id, bookId);
+  res.json({ ok: true, read: bookId });
 });
 // Chapters of publishers' protected books read in the reader (server/reads.js), for the publishers' reports.
 // Signed with the account's key; the owner's key also sends the whole protected shelf (shelf: true).

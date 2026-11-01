@@ -288,13 +288,25 @@
     emit("book:open", payload);
   }
 
+  const BOOK_FILE = /\.(epub|pdf|mobi|azw3?|prc)$/i;
+  const KINDLE_FILE = /\.(mobi|azw3?|prc)$/i;
+  const ACCEPT = ".epub,.pdf,.mobi,.azw3,.azw,.prc,application/epub+zip,application/pdf,application/x-mobipocket-ebook";
+  // Kindle files (MOBI, AZW3) become EPUB here, before upload, so the server and the reader see only EPUB.
+  async function asUpload(file) {
+    if (!KINDLE_FILE.test(file.name)) return { name: file.name, body: file };
+    const { mobiToEpub } = await import("./mobi-epub.js");
+    const { data } = await mobiToEpub(file);
+    return { name: file.name.replace(/\.[^.]+$/, ".epub"), body: data };
+  }
+
   async function uploadAndOpen(file) {
-    if (!/\.(epub|pdf)$/i.test(file.name)) {
-      return emit("book:error", "На телефоні підтримуються EPUB і PDF. Інші формати спершу відкрийте на Mac, він конвертує їх через Calibre.");
+    if (!BOOK_FILE.test(file.name)) {
+      return emit("book:error", "Підтримуються EPUB, PDF і MOBI (AZW3).");
     }
     if (typeof showNotice === "function") showNotice(`Завантажую «${file.name}» на сервер…`, true);
     try {
-      const res = await api("PUT", `/api/books/${encodeURIComponent(file.name)}`, file);
+      const { name, body } = await asUpload(file);
+      const res = await api("PUT", `/api/books/${encodeURIComponent(name)}`, body);
       const { path } = await res.json();
       await openServerBook(path);
     } catch (err) {
@@ -305,7 +317,7 @@
   function pickFile() {
     const input = document.createElement("input");
     input.type = "file";
-    input.accept = ".epub,.pdf,application/epub+zip,application/pdf";
+    input.accept = ACCEPT;
     input.onchange = () => input.files[0] && uploadAndOpen(input.files[0]);
     input.click();
   }
@@ -316,7 +328,7 @@
       const input = document.createElement("input");
       input.type = "file";
       input.multiple = true;
-      input.accept = ".epub,.pdf,application/epub+zip,application/pdf";
+      input.accept = ACCEPT;
       input.onchange = () => resolve([...input.files]);
       input.oncancel = () => resolve([]);
       input.click();
@@ -325,13 +337,14 @@
 
   async function uploadAll(files) {
     const notice = (text, busy) => typeof showNotice === "function" && showNotice(text, busy);
-    const skipped = files.filter((f) => !/\.(epub|pdf)$/i.test(f.name)).map((f) => f.name);
-    const books = files.filter((f) => /\.(epub|pdf)$/i.test(f.name));
+    const skipped = files.filter((f) => !BOOK_FILE.test(f.name)).map((f) => f.name);
+    const books = files.filter((f) => BOOK_FILE.test(f.name));
     const failed = [];
     for (const [i, file] of books.entries()) {
       notice(`Завантажую «${file.name}»${books.length > 1 ? ` (${i + 1} з ${books.length})` : ""}…`, true);
       try {
-        await api("PUT", `/api/books/${encodeURIComponent(file.name)}`, file);
+        const { name, body } = await asUpload(file);
+        await api("PUT", `/api/books/${encodeURIComponent(name)}`, body);
       } catch (err) {
         if (err.message === "login") return false;
         failed.push(`${file.name}: ${err.message}`);
@@ -341,7 +354,7 @@
     const parts = [
       added ? `Додано ${added === 1 ? "книжку" : `книжок: ${added}`}.` : "",
       failed.length ? `Не вдалося: ${failed.join("; ")}.` : "",
-      skipped.length ? `Пропущено (підтримуються лише EPUB і PDF): ${skipped.join(", ")}.` : "",
+      skipped.length ? `Пропущено (підтримуються EPUB, PDF і MOBI): ${skipped.join(", ")}.` : "",
     ].filter(Boolean);
     if (parts.length) notice(parts.join(" "), false);
     return added > 0;
@@ -542,6 +555,7 @@
       const s = (await localSettings()) || {};
       if (s.lastBook === name) patchLocalSettings({ lastBook: null });
     },
+    libraryFinished: (name, done) => api("POST", "/api/library/finished", { path: name, done }),
     librarySeen: (paths) => api("POST", "/api/library/seen", { paths }).catch(() => {}),
     wishList: async () => {
       try {
@@ -661,7 +675,7 @@
   const libAdd = document.getElementById("lib-add");
   if (libAdd) {
     libAdd.textContent = "Додати книжки…";
-    libAdd.title = "Завантажити EPUB або PDF (можна кілька за раз)";
+    libAdd.title = "Завантажити EPUB, PDF або MOBI (можна кілька за раз)";
   }
   // The Mac app's «Оновити» rescans folders and its «Відкрити» opens a file from the disk; on the web there are no
   // folders, and books come in through «Додати книжки…» on Головна.
