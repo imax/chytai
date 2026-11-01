@@ -7,7 +7,7 @@
   const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ESC[c]);
   const DAY = 864e5;
   const ARRIVALS_DAYS = 30;
-  const TABS = { home: "#home", discover: "#discover", library: "#library", notes: "#all-notes", wish: "#wish" };
+  const TABS = { home: "#home", discover: "#discover", club: "#club", library: "#library", notes: "#all-notes", wish: "#wish" };
 
   let tab = "home";
   let lib = null; // the library list (library-view.js)
@@ -51,6 +51,7 @@
       loadTrashCount(),
       Promise.resolve(window.reader.notesAll?.()).then((n) => (notes = n || {})).catch(() => {}),
       Promise.resolve(window.reader.wishList?.()).then((w) => (wish = w || [])).catch(() => {}),
+      loadClub(),
     ])
       .catch((err) => {
         if (!lib) $("#home-body").innerHTML = `<div class="lib-empty">${esc(err.message)}</div>`;
@@ -134,11 +135,13 @@
     renderBadge();
     if (tab === "home") renderHome();
     else if (tab === "discover") renderDiscover();
+    else if (tab === "club") renderClub();
     else if (tab === "notes") renderNotes();
     else if (tab === "wish") renderWish();
   }
 
   function renderBadge() {
+    if ($("#club-dot")) clubDot();
 
     // Sidebar «Читаю» (wide screens): the books in progress, the one read last first.
     const inProgress = (lib?.books || [])
@@ -218,6 +221,64 @@
 
   let discQuery = "";
   let discHtml = "";
+  // ---------- Клуб: what others read now, and the Club's talks (Max, 2026-11-01) ----------
+
+  let club = null; // the site's /api/club-feed
+  let clubAt = 0;
+  let clubHtml = "";
+  let clubFailed = false;
+  const CLUB_SEEN = "chytai.clubSeen";
+  const clubSeen = () => {
+    try {
+      return localStorage.getItem(CLUB_SEEN) || "";
+    } catch {
+      return "";
+    }
+  };
+  const newestTalk = () => (club?.talks || []).reduce((m, t) => (t.active > m ? t.active : m), "");
+  function loadClub() {
+    if (settings.guest || !window.reader.clubFeed || Date.now() - clubAt < 60 * 1000) return Promise.resolve(false);
+    clubAt = Date.now();
+    return window.reader.clubFeed().then((d) => ((club = d), true)).catch(() => ((clubFailed = true), true));
+  }
+  // A dot on the tab when something was said in the Club since the tab was last open.
+  function clubDot() {
+    const newest = newestTalk();
+    if (tab === "club" && newest) {
+      try {
+        localStorage.setItem(CLUB_SEEN, newest);
+      } catch {
+        /* private mode */
+      }
+    }
+    const seen = clubSeen();
+    $("#club-dot").classList.toggle("hidden", !newest || tab === "club" || (!!seen && newest <= seen));
+  }
+  const ago = (iso) => (iso ? when(new Date(iso).getTime()) : "");
+  function renderClub() {
+    clubDot();
+    let html;
+    if (!club) html = `<p class="m">${!clubFailed ? "Завантажую…" : "Не вдалося завантажити Клуб. Перевірте з'єднання."}</p>`;
+    else {
+      const seen = clubSeen();
+      const reading = club.reading || [];
+      html = reading.length
+        ? `<section class="home-sec"><div class="sec-head"><span>Зараз читають</span></div>
+          <div class="shelf">${reading.map((b) => `<a class="shelf-book" href="${esc(b.href)}" target="_blank" rel="noopener">
+            <span class="cover mid" style="--hue:${[...b.title].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 0) % 360}"><span class="cover-t">${esc(b.title)}</span><span class="cover-a">${esc(b.author)}</span>${b.cover ? `<img src="${esc(b.cover)}" alt="" loading="lazy" onerror="this.remove()" />` : ""}</span>
+            <span class="t">${esc(b.title)}</span><span class="m ellipsis">${esc(b.reader.name)}</span></a>`).join("")}</div></section>`
+        : "";
+      html += `<section class="home-sec"><div class="sec-head"><span>Обговорення</span><a class="site-link" href="${esc(club.newTopic)}" target="_blank" rel="noopener">Нова тема ↗</a></div>
+        <div class="club-talks">${(club.talks || []).map((t) => `<a class="club-talk${seen && t.active > seen ? " fresh" : ""}" href="${esc(t.href)}" target="_blank" rel="noopener">
+            <span class="row-text"><span class="t">${t.official ? "📌 " : ""}${esc(t.title)}</span>
+            <span class="m">${[t.by, t.replies ? `${t.replies} ${plural(t.replies, "відповідь", "відповіді", "відповідей")}` : "", ago(t.active), t.spoiler ? "спойлери" : ""].filter(Boolean).map(esc).join(" · ")}</span></span>
+          </a>`).join("") || `<p class="m">Тем ще немає.</p>`}</div>
+        <a class="site-link" href="${esc(club.club)}" target="_blank" rel="noopener">Увесь Клуб на сайті ↗</a></section>`;
+    }
+    if (html !== clubHtml) $("#club-body").innerHTML = clubHtml = html;
+    if (tab === "club") loadClub().then((fresh) => fresh && tab === "club" && renderClub());
+  }
+
   function renderDiscover() {
     const box = $("#disc-body");
     if (!lib) return (box.innerHTML = `<p class="home-wait"><span class="spinner"></span>Завантажую…</p>`);
@@ -682,7 +743,7 @@
   // Single keys on a keyboard: Esc back to the book, 1 2 3 for the tabs, / to search, T for the contents, − + for the
   // font, ? for the list. Never while typing or with a dialog open; guests have no home screen.
   // Matched by the physical key, so they work the same with the Ukrainian layout on.
-  const TAB_KEYS = { Digit1: "home", Digit2: "discover" };
+  const TAB_KEYS = { Digit1: "home", Digit2: "discover", Digit3: "club" };
   function key(e) {
     if (e.metaKey || e.ctrlKey || e.altKey || e.repeat) return;
     if (e.target?.closest?.("input, textarea, select, [contenteditable]")) return;

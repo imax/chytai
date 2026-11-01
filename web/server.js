@@ -1258,6 +1258,28 @@ app.post("/mention-mail/unsubscribe/:id/:token", (req, res) => mentionMailSwitch
 // The readers a Club text names, for linking them: username -> their page.
 const mentioned = (...texts) => Object.fromEntries(texts.flatMap((t) => mentionsIn(t)).map((u) => [u, pub(auth.byUsername(u))]).filter(([, r]) => r).map(([u, r]) => [u, r.href]));
 
+// The reader's «Клуб» tab (Max, 2026-11-01): what other readers are reading now and the Club's latest talks.
+// Public data only: readers' «Читаю зараз» (not noindex readers, no given-up or Russian-language books) and
+// topics with their spoiler flag; the reader shows them and links here.
+let clubFeedCache = { at: 0, json: null };
+app.get("/api/club-feed", (req, res) => {
+  if (Date.now() - clubFeedCache.at > 60 * 1000) {
+    const abs = (u) => (!u ? "" : /^https?:/.test(u) ? u : `${SITE}${u}`);
+    const seen = new Set();
+    const reading = auth
+      .readers()
+      .filter((r) => !r.noindex)
+      .flatMap((r) => nowFor(r.id).books.map((n) => ({ n, r })))
+      .sort((a, b) => (a.n.since < b.n.since ? 1 : -1))
+      .filter(({ n }) => !seen.has(n.id) && seen.add(n.id))
+      .slice(0, 18)
+      .map(({ n, r }) => ({ title: n.book.title, author: n.book.author || "", cover: abs(n.book.cover), href: abs(store.href(n.id)), reader: { name: r.name, href: `${SITE}/@${r.username}` }, since: n.since }));
+    const { pinned, rest } = club.index(30);
+    const talk = (t) => ({ kind: t.kind, title: t.title, href: abs(t.href), by: t.reader?.name || t.by || "", replies: t.replies, active: t.active, spoiler: !!t.spoiler, official: !!t.official, book: t.book ? { title: t.book.title, href: abs(store.href(t.book.id)), cover: abs(t.book.cover) } : null });
+    clubFeedCache = { at: Date.now(), json: { reading, talks: [...pinned.slice(0, 2), ...rest.slice(0, 15)].map(talk), club: `${SITE}/club`, newTopic: `${SITE}/club/new` } };
+  }
+  res.set("Cache-Control", "public, max-age=60").json(clubFeedCache.json);
+});
 app.get("/club", (req, res) => {
   const { pinned, rest } = club.index();
   res.send(pages.clubPage({ user: req.user, pinned: club.mark(req.user?.id, pinned), rest: club.mark(req.user?.id, rest) }));
