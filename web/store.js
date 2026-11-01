@@ -140,7 +140,7 @@ const digits = (t) => t.replace(NUM_RE, (_, a, b) => String(NUMS[a] + (b && NUMS
 const ntitle = (s) => digits(norm(s));
 // Separators left at the end of a title: «Diary of Samuel Pepys -», «Назва:».
 const DANGLING = /[\s\-‐‑–—:;,/|]+$/u;
-const EDITABLE = ["title", "author", "blurb", "cover", "language", "aliases", "genre", "published", "ebook"]; // ebook: the book.ua item «Де взяти» shows
+const EDITABLE = ["title", "author", "blurb", "cover", "language", "aliases", "genre", "published", "pages", "ebook"]; // pages: Max 2026-11-01; ebook: the book.ua item «Де взяти» shows
 // A short name as typed in search: «DCC», «Л.О.Т.Р.» and «lotr» are one key.
 const aliasKey = (s) => String(s || "").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, "");
 // The first letters of a name of three or more words, as readers shorten it: «Dungeon Crawler Carl» → dcc,
@@ -2027,7 +2027,7 @@ class Store {
     // The owner's hand edits (/admin/book/:id) win over the catalogs and outlive their refreshes.
     const fix = edited && this.edits()[id];
     if (fix) {
-      for (const k of EDITABLE) if (fix[k]) out[k] = fix[k];
+      for (const k of EDITABLE) if (fix[k]) out[k] = k === "pages" ? Number(fix[k]) : fix[k];
       // The owner's «Основний жанр» is the book's only genre (Max 2026-10-26: «Кав'ярня «Пряний гарбузик»» kept «любовні романи» next to it).
       if (fix.genre) out.tags = [fix.genre, ...(out.tags || []).filter((t) => t !== fix.genre && !OUR_GENRES.has(t))];
       if (fix.blurb) out.blurbSource = "";
@@ -2102,7 +2102,7 @@ class Store {
     const fix = {};
     for (const k of EDITABLE) {
       const v = k === "blurb" ? String(patch[k] ?? "").replace(/\r\n?/g, "\n").trim() : String(patch[k] ?? "").replace(/\s+/g, " ").trim();
-      if (v && !(k === "genre" && !OUR_GENRES.has(v)) && !(k === "published" && !/^-?\d{1,4}$/.test(v))) fix[k] = v;
+      if (v && !(k === "genre" && !OUR_GENRES.has(v)) && !(k === "published" && !/^-?\d{1,4}$/.test(v)) && !(k === "pages" && !/^[1-9]\d{0,4}$/.test(v))) fix[k] = v;
     }
     if (Object.keys(fix).length) all[id] = fix;
     else delete all[id];

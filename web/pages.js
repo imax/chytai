@@ -1068,6 +1068,7 @@ function bookEditPage({ book, raw, user, coverError = "" }) {
 ${coverError ? `<p class="error">Сайт не віддав нам картинку (${esc(coverError)}), тож поки вона береться з нього. Можна зберегти її собі й натиснути «Завантажити файл».</p>` : ""}
       <div id="covers" class="cover-picks" hidden></div>
       ${field("published", "Рік", "Рік першого видання")}
+      ${field("pages", "Сторінок", "Скільки сторінок у паперовому виданні")}
       ${ebookPick(book)}
       ${field("aliases", "Інші назви для пошуку", "Через кому, як люди скорочують: DCC, ГП")}
       <label>Основний жанр <select name="genre">${[["", `як у каталозі${require("./store").mainGenres(raw.tags).length ? ` (${require("./store").mainGenres(raw.tags).join(", ")})` : ""}`], ...GENRES.map((g) => [g, cap(g)])].map(([v, t]) => `<option value="${attr(v)}" ${(fix.genre || "") === v ? "selected" : ""}>${esc(t)}</option>`).join("")}</select></label>
