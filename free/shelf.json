@@ -395,6 +395,96 @@
     "license": "CC BY-NC-SA 3.0 (licence page in the EPUB), author's own EPUB from rifters.com/real/Blindsight.htm"
   },
   {
+    "name": "orwell-down-and-out.epub",
+    "title": "Down and Out in Paris and London",
+    "authors": [
+      "George Orwell"
+    ],
+    "group": "Англійською",
+    "volume": "Public domain in Ukraine/EU (Orwell †1950), not in the US: the file is on the server's volume only (DATA_DIR/free), never in this repo. Text from Project Gutenberg Australia"
+  },
+  {
+    "name": "orwell-burmese-days.epub",
+    "title": "Burmese Days",
+    "authors": [
+      "George Orwell"
+    ],
+    "group": "Англійською",
+    "volume": "Public domain in Ukraine/EU (Orwell †1950), not in the US: the file is on the server's volume only (DATA_DIR/free), never in this repo. Text from Project Gutenberg Australia"
+  },
+  {
+    "name": "orwell-clergymans-daughter.epub",
+    "title": "A Clergyman's Daughter",
+    "authors": [
+      "George Orwell"
+    ],
+    "group": "Англійською",
+    "volume": "Public domain in Ukraine/EU (Orwell †1950), not in the US: the file is on the server's volume only (DATA_DIR/free), never in this repo. Text from Project Gutenberg Australia"
+  },
+  {
+    "name": "orwell-keep-the-aspidistra-flying.epub",
+    "title": "Keep the Aspidistra Flying",
+    "authors": [
+      "George Orwell"
+    ],
+    "group": "Англійською",
+    "volume": "Public domain in Ukraine/EU (Orwell †1950), not in the US: the file is on the server's volume only (DATA_DIR/free), never in this repo. Text from Project Gutenberg Australia"
+  },
+  {
+    "name": "orwell-road-to-wigan-pier.epub",
+    "title": "The Road to Wigan Pier",
+    "authors": [
+      "George Orwell"
+    ],
+    "group": "Англійською",
+    "volume": "Public domain in Ukraine/EU (Orwell †1950), not in the US: the file is on the server's volume only (DATA_DIR/free), never in this repo. Text from Project Gutenberg Australia (Wigan Pier: Faded Page)"
+  },
+  {
+    "name": "orwell-homage-to-catalonia.epub",
+    "title": "Homage to Catalonia",
+    "authors": [
+      "George Orwell"
+    ],
+    "group": "Англійською",
+    "volume": "Public domain in Ukraine/EU (Orwell †1950), not in the US: the file is on the server's volume only (DATA_DIR/free), never in this repo. Text from Project Gutenberg Australia"
+  },
+  {
+    "name": "orwell-coming-up-for-air.epub",
+    "title": "Coming Up for Air",
+    "authors": [
+      "George Orwell"
+    ],
+    "group": "Англійською",
+    "volume": "Public domain in Ukraine/EU (Orwell †1950), not in the US: the file is on the server's volume only (DATA_DIR/free), never in this repo. Text from Project Gutenberg Australia"
+  },
+  {
+    "name": "orwell-animal-farm.epub",
+    "title": "Animal Farm",
+    "authors": [
+      "George Orwell"
+    ],
+    "group": "Англійською",
+    "volume": "Public domain in Ukraine/EU (Orwell †1950), not in the US: the file is on the server's volume only (DATA_DIR/free), never in this repo. Text from Project Gutenberg Australia"
+  },
+  {
+    "name": "orwell-1984.epub",
+    "title": "Nineteen Eighty-Four",
+    "authors": [
+      "George Orwell"
+    ],
+    "group": "Англійською",
+    "volume": "Public domain in Ukraine/EU (Orwell †1950), not in the US: the file is on the server's volume only (DATA_DIR/free), never in this repo. Text from Project Gutenberg Australia"
+  },
+  {
+    "name": "orwell-fifty-essays.epub",
+    "title": "Fifty Orwell Essays",
+    "authors": [
+      "George Orwell"
+    ],
+    "group": "Англійською",
+    "volume": "Public domain in Ukraine/EU (Orwell †1950), not in the US: the file is on the server's volume only (DATA_DIR/free), never in this repo. Text from Project Gutenberg Australia"
+  },
+  {
     "name": "doyle-lost-world.epub",
     "title": "The Lost World",
     "authors": [
