@@ -209,7 +209,7 @@
     const cur = nowBook(books);
     let html = "";
     if (cur) {
-      const where = [cur.parts ? `розділ ${cur.part} з ${cur.parts}` : cur.chapter].filter(Boolean).map(esc).join("");
+      const where = [cur.chapter || (cur.parts ? `розділ ${cur.part} з ${cur.parts}` : "")].filter(Boolean).map(esc).join("");
       html += `<section class="r-now">${head("Читаю зараз", "", true)}
         <div class="r-now-row"><button class="r-now-cover" data-open="${esc(cur.path)}">${rcover(cur)}</button>
           <div class="r-now-text"><h3 class="r-now-t">${esc(cur.title)}</h3><p class="r-now-a">${esc(author(cur))}</p>

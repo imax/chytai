@@ -958,7 +958,7 @@ body[data-theme="dark"] .r-cover { filter: brightness(.9); box-shadow: 0 0 0 1px
 .r-now-a { margin: 6px 0 0; font-size: 17px; color: var(--r-ink2); }
 .r-progress { max-width: 560px; height: 3px; margin-top: 18px; background: var(--r-track); }
 .r-progress span { display: block; height: 100%; background: var(--r-bar); }
-.r-now-meta { margin: 8px 0 16px; font-size: 13px; color: var(--r-ink2); }
+.r-now-meta { margin: 8px 0 16px; font-size: 13px; color: var(--r-ink2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .r-now-meta b { font-weight: 500; color: var(--r-ink); }
 .r-pill { border: none; border-radius: 999px; background: var(--r-ochre); color: var(--r-btn); font-weight: 500; font-size: 15px; padding: 11px 26px; cursor: pointer; text-align: center !important; }
 .r-pill:hover { background: var(--r-ochre-h); }
