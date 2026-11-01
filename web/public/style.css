@@ -1185,3 +1185,21 @@ aside .side-lists + .label, aside p + .label, aside dialog + .label { margin-top
 .react-own { display: flex; align-items: center; margin-left: 2px; padding-left: 4px; border-left: 1px solid var(--rule); }
 .react-own input { width: 3.2em; border: 0; background: none; font-size: 16px; padding: 2px 4px; outline: none; }
 .react-own .react-one { font-size: 14px; color: var(--muted); }
+/* The homepage block about the reader (2026-11-01): text and a button on the left, a page with an explanation on the right. */
+.reader-band .rb { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); gap: 48px; align-items: center; }
+.reader-band h3 { font: 600 28px/1.2 var(--serif); }
+.reader-band .rb-text > p { margin-top: 10px; font-size: 16px; line-height: 1.5; color: var(--text); max-width: 34em; }
+.reader-band .rb-acts { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px; margin-top: 22px !important; }
+.reader-band .rb-page { margin: 0; padding: 24px 26px; border: 1px solid var(--rule); border-radius: 6px; background: color-mix(in srgb, var(--paper) 60%, #fff); box-shadow: 0 10px 30px rgba(var(--shadow), 0.07); }
+.reader-band .rb-src { font-size: 12px; color: var(--muted); letter-spacing: 0.02em; }
+.reader-band .rb-line { font: 19px/1.55 var(--serif); margin-top: 10px; color: var(--ink); }
+.reader-band mark { background: color-mix(in srgb, var(--accent) 22%, transparent); color: inherit; border-radius: 3px; padding: 0 2px; }
+.reader-band .rb-explain { margin-top: 16px; padding: 12px 14px; border-left: 3px solid var(--accent); background: color-mix(in srgb, var(--accent) 7%, transparent); font-size: 14px; line-height: 1.45; color: var(--text); }
+.reader-band .rb-explain b { display: block; font: 600 11px/1.4 var(--sans); text-transform: uppercase; letter-spacing: 0.12em; color: var(--accent); margin-bottom: 4px; }
+@media (prefers-color-scheme: dark) { .reader-band .rb-page { background: #211f1b; } }
+@media (max-width: 760px) {
+  .reader-band .rb { grid-template-columns: minmax(0, 1fr); gap: 24px; }
+  .reader-band h3 { font-size: 24px; }
+  .reader-band .rb-page { padding: 18px; }
+  .reader-band .rb-line { font-size: 17px; }
+}

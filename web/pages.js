@@ -1327,6 +1327,26 @@ function yearHead(year, rows) {
   return `<h2 class="year" data-year="${year ?? ""}">${year || "Без дати"} <span>${books(n)}</span></h2>`;
 }
 
+// ---- the homepage block about the reader (Max, 2026-11-01: «додамо на головну блок про нашу читалку») ----
+// Shows the killer feature, the explanation, on a page of free classics, not the reader's own screens: those are
+// being redesigned. Guests also get the demo (the free shelf as a guest has no explanations).
+const READER = "https://app.chytai.org.ua";
+function readerBand(user) {
+  return `<section class="block reader-band" data-block="reader">${label("Читалка Chytai")}
+<div class="rb">
+  <div class="rb-text">
+    <h3>Читалка, яка пояснює</h3>
+    <p>Виділи незрозуміле слово чи абзац, і вона пояснить. Свої EPUB і PDF або безкоштовна класика.</p>
+    <p class="rb-acts"><a class="btn primary" href="${READER}/">Відкрити Читалку</a>${user ? "" : `<a class="text-link" href="${READER}/demo">Спробувати без реєстрації</a>`}</p>
+  </div>
+  <figure class="rb-page" aria-hidden="true">
+    <p class="rb-src">Михайло Коцюбинський · Тіні забутих предків</p>
+    <p class="rb-line">Іван був дев'ятнадцятою дитиною в <mark>гуцульській</mark> родині Палійчуків. Двадцятою і останньою була Анничка.</p>
+    <div class="rb-explain"><b>Пояснення</b><span>Гуцули: українські горяни Карпат зі своїм говором, одягом і звичаями.</span></div>
+  </figure>
+</div></section>`;
+}
+
 // ---- the homepage «Що почитати» (Max, 2026-10-28: tried at /new, then «робимо її головною») ----
 // Shelves by what a reader is after, not by counters; the chips (?f=) narrow every shelf at once.
 // #live and #browse: search as you type replaces the shelves (app.js).
@@ -1357,6 +1377,7 @@ ${picks.length ? `<section class="block" data-block="picks">${label("Читач�
 ${row("Для вас", forWhy, forYou)}
 ${!f && editorials.length ? `<section class="block editorials" data-block="editorials">${label("Добірки Chytai", `<a href="/lists">усі списки</a>`)}<div class="lgrid">${editorials.map(listCard).join("")}</div></section>` : ""}
 ${!f && club.length ? `<section class="block" data-block="club">${label("Обговорюють зараз", `<a href="/club">Клуб Chytai</a>`)}<div class="club-topics">${club.map((t) => clubRow(t)).join("")}</div></section>` : ""}
+${!f ? readerBand(user) : ""}
 ${row("Дочитують до кінця", "ніхто не покинув", finish, (w) => `дочитали ${w.s.finished}`)}
 ${row("Українські автори", "", ua)}
 ${row("Коротке", "до 250 сторінок", short, (w) => `${w.pages} с.`)}
