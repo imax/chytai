@@ -32,6 +32,7 @@ const GENRE_OF = [
   ["трилери", /thriller|suspense/i],
   ["любовні романи", /romance|love stories/i],
   ["поезія", /poetry|poems/i],
+  ["гумор", /humou?r|satire|comic fiction|humorous/i],
   ["класика", /classic/i],
   ["художня", /^(?!.*non-?fiction).*\bfiction\b|\bnovels?\b/i],
   ["біографії", /biograph|memoir|diaries|diarists/i],

@@ -1257,7 +1257,7 @@ const READ_FILTERS = {
   fiction: ["Художнє", (b) => mainGenres(b.tags).some((g) => FICTION.has(g))],
   nonfiction: ["Нон-фікшн", (b) => { const g = mainGenres(b.tags); return g.length && !g.some((x) => FICTION.has(x)); }],
 };
-const FICTION = new Set(["художня", "фантастика", "фентезі", "детективи", "трилери", "жахи", "любовні романи", "класика", "поезія", "комікси", "підліткові"]);
+const FICTION = new Set(["художня", "фантастика", "фентезі", "детективи", "трилери", "жахи", "любовні романи", "класика", "поезія", "гумор", "комікси", "підліткові"]);
 let readCache = null;
 // Pages of a book, or of its original or translation when the catalog doesn't say.
 const pagesOf = (b) => b.pages || [...(store.translations?.get(store.canonical(b.id)) || [])].map((id) => store.book(id)?.pages).find((n) => n > 0) || 0;

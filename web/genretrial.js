@@ -11,7 +11,7 @@ const MODEL = "claude-haiku-5-5";
 const SIZE = 200;
 const PARALLEL = 4;
 const PARALLEL_ALL = 8;
-const PROMPT = 4; // the SYSTEM version below; bump it with every change
+const PROMPT = 5; // the SYSTEM version below; bump it with every change
 const PRICE = { input: 0.1 / 1e6, output: 0.5 / 1e6, cacheRead: 0.01 / 1e6, cacheWrite: 0.125 / 1e6 }; // $ per token, Haiku 5.5
 const costOf = (u) => (u.input_tokens || 0) * PRICE.input + (u.cache_read_input_tokens || 0) * PRICE.cacheRead + (u.cache_creation_input_tokens || 0) * PRICE.cacheWrite + (u.output_tokens || 0) * PRICE.output;
 
@@ -25,9 +25,14 @@ For the book given, pick the one genre that fits it best. Add a second one only 
 - A literary classic is «класика», not «любовні романи».
 - «любовні романи» is only for books where the love story is the point (romance, a romantic comedy); a comic novel or a novel with a wedding or an engagement in its plot is not one.
 - «гроші» is only for non-fiction about money, finance and economics, never for a novel.
-- Comic and humorous fiction (Wodehouse, Pratchett, Jerome K. Jerome, Douglas Adams) has no genre of its own here: give it the genre of what it otherwise is («класика», «фентезі», «фантастика», «дитячі»…) or «художня».
+- «гумор» is for books whose point is to make the reader laugh: comic novels and stories (Wodehouse, Pratchett, Jerome K. Jerome, Douglas Adams, Остап Вишня), satire, humorous essays and verse. It comes first, with a second genre only when the book is clearly that too (Pratchett: «гумор», «фентезі»). A funny children's book stays «дитячі»; a book with only some funny scenes is not «гумор».
 - «фантастика» (science fiction) and «фентезі» (magic, myth) never go together: pick the one the book is; the Witcher is «фентезі».
 - Children's and teen books are «дитячі» or «підліткові» whatever else they are; a classic read at school is not a children's book.`;
+
+// A book that may be humour: its description, shop shelves or author say so.
+const FUNNY = /гумор|сатир|комеді|кумедн|смішн|уморит|humou?r|satir|comedy|comic novel|funny/i;
+const FUNNY_AUTHORS = /Вудгауз|Wodehouse|Пратчетт|Pratchett|Джером|Jerome K|Вишня|Адамс Дуґлас|Дуґлас Адамс|Douglas Adams|Гашек|Hašek|Твен|Twain|Таунсенд|Townsend|Кінні|Kinney/i;
+const funny = (b) => !!b && (FUNNY.test(`${b.title} ${b.blurb || ""} ${(b.tags || []).join(" ")}`) || FUNNY_AUTHORS.test(`${b.author || ""} ${b.authorOrig || ""}`));
 
 class GenreTrial {
   constructor({ store, social, db, apiKey, genres, log = () => {} }) {
@@ -123,6 +128,10 @@ class GenreTrial {
     // 2026-10-30: Wodehouse's «Неперевершений Дживс» as «Любовні романи», Pratchett as «Гроші»): those
     // answers are asked again, the rest stay.
     const redo = new Set(this.db.prepare("SELECT id FROM ai_genre WHERE prompt < 4 AND (genres LIKE '%гроші%' OR genres LIKE '%любовні романи%')").all().map((r) => r.id));
+    // «гумор» came with prompt 5 (Max 2026-11-01 «Гумор так»): books whose description, shelves or author
+    // hint at humour are asked again once, not the whole catalog.
+    const humour = !this.db.get("genre:humour") && this.db.prepare("SELECT id FROM ai_genre WHERE prompt < 5").all().map((r) => r.id).filter((id) => funny(this.store.book(id, { edited: false })));
+    for (const id of humour || []) redo.add(id);
     const todo = [...this.store.workIds()].filter((id) => !have.has(id) || redo.has(id)).map((id) => this.store.book(id)).filter((b) => b && !isRussian(b));
     const st = { cost: 0, errors: 0, ...this.allState(), at: new Date().toISOString(), prompt: PROMPT, total: todo.length, done: 0, finished: null, stopped: null };
     const save = () => this.db.set("genreall", JSON.stringify(st));
@@ -153,6 +162,7 @@ class GenreTrial {
       this.allRunning = false;
       if (st.done) this.store.indexSearch();
     }
+    if (humour && !this.stopAll) this.db.set("genre:humour", new Date().toISOString());
     return todo.length > 0; // nothing to ask: no reload of the site, no line on /admin/jobs
   }
 
