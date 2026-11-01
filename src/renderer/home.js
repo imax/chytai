@@ -175,7 +175,7 @@
     }
     const q = norm(homeFilter);
     const shown = q ? books.filter((b) => matches(b, q)) : books;
-    const field = books.length > 12 ? `<input id="home-filter" type="search" placeholder="Знайти серед моїх книжок" value="${esc(homeFilter)}" autocomplete="off" />` : "";
+    const field = books.length > 12 ? `<input id="home-filter" type="search" placeholder="Шукати" value="${esc(homeFilter)}" autocomplete="off" />` : "";
     const keepFocus = document.activeElement?.id === "home-filter";
     $("#home-body").innerHTML = `${field}<div class="tiles">${shown.map(tile).join("")}</div>
       ${q && !shown.length ? `<p class="m">Нічого не знайшлося. <button class="link" data-tab="discover">Пошукати в «Пошуку»</button></p>` : ""}`;
