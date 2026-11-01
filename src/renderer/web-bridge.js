@@ -405,6 +405,12 @@
     shares: (name) => api("GET", `/api/shares?path=${encodeURIComponent(name)}`).then((r) => r.json()),
     shareBook: (name, who) => api("POST", "/api/shares", { path: name, for: who }).then((r) => r.json()),
     unshare: (token) => api("DELETE", `/api/shares/${encodeURIComponent(token)}`).then((r) => r.json()),
+    libraryDeleteBook: async (name) => {
+      await api("DELETE", `/api/books/${encodeURIComponent(name)}`);
+      idb("books", "readwrite", (s) => s.delete(name)).catch(() => {});
+      const s = (await localSettings()) || {};
+      if (s.lastBook === name) patchLocalSettings({ lastBook: null });
+    },
     libraryUpdateBook: (name, patch) => api("PATCH", `/api/books/${encodeURIComponent(name)}`, patch).then((r) => r.json()),
     getSettings: async () => {
       let settings;

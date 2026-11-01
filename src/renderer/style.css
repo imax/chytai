@@ -829,3 +829,23 @@ g.ai-star text.star { fill: var(--accent); fill-opacity: 1; font: bold 18px Geor
 .panel-tabs .tab.active { background: none; padding-left: 0; font-weight: 600; cursor: default; }
 /* The free shelf links to its page on the site (Max, 2026-11-01). */
 #shell .sec-head a { color: var(--accent); font-weight: 400; text-decoration: none; }
+
+/* A book's menu on Головна. */
+.tile { position: relative; -webkit-touch-callout: none; }
+.tile-more {
+  position: absolute; top: 6px; right: 6px; width: 28px; height: 28px; border-radius: 14px; display: none;
+  align-items: center; justify-content: center; background: rgba(0, 0, 0, 0.55); color: #fff; font-size: 18px; line-height: 1;
+}
+html:not(.touch) .tile:hover .tile-more, .tile-more:focus-visible { display: flex; }
+.tile-more:hover { background: rgba(0, 0, 0, 0.75); }
+#book-menu .share-book { margin-top: -6px; font-weight: 400; color: var(--muted); }
+.bm-list, .bm-confirm { display: flex; flex-direction: column; gap: 2px; margin: 4px 0 8px; }
+.bm-list button { text-align: left; background: none; border: none; border-radius: 8px; padding: 10px 8px; font-size: 15px; color: var(--fg); cursor: pointer; }
+.bm-list button:hover { background: var(--accent-soft); }
+.bm-list button[hidden] { display: none; }
+#book-menu .danger { color: #c0392b; }
+.bm-confirm { display: none; gap: 10px; }
+#book-menu.confirm .bm-list { display: none; }
+#book-menu.confirm .bm-confirm { display: flex; }
+.bm-confirm p { margin: 0; color: var(--muted); }
+.danger-fill { background: #c0392b; color: #fff; border: none; border-radius: 8px; padding: 10px 14px; font-size: 15px; cursor: pointer; }

@@ -195,6 +195,8 @@
 
   window.Library = {
     data: fetchData,
+    editBook,
+    shareBook,
     render: () => data && render(),
     // The tab was opened: draw what is known at once, then ask the server for the latest.
     shown: () => {

@@ -266,6 +266,26 @@
     </form>
   </dialog>
 
+  <!-- A book's menu on Головна (Max, 2026-11-01): ⋯ on a cover with a mouse, a long press on a phone. -->
+  <dialog id="book-menu">
+    <form method="dialog">
+      <h2 tabindex="-1" autofocus id="bm-title"></h2>
+      <p id="bm-author" class="share-book"></p>
+      <div class="bm-list">
+        <button value="about" id="bm-about">Про книжку</button>
+        <button value="share" id="bm-share">Дати почитати</button>
+        <button value="edit" id="bm-edit">Назва й автор</button>
+        <button value="aside" id="bm-aside">Прибрати з головної</button>
+        <button type="button" id="bm-delete" class="danger">Видалити книжку</button>
+      </div>
+      <div class="bm-confirm">
+        <p>Файл, місце в книжці й нотатки до неї зникнуть назавжди.</p>
+        <button value="delete" class="danger-fill">Так, видалити</button>
+      </div>
+      <menu><button value="cancel" formnovalidate>Скасувати</button></menu>
+    </form>
+  </dialog>
+
   <dialog id="book-edit">
     <form method="dialog" id="book-edit-form">
       <h2 tabindex="-1" autofocus>Книжка</h2>

@@ -605,6 +605,19 @@ app.get("/free-book/:name", (req, res) => {
   res.redirect(hit ? store.href(hit.book.id) : `/search?q=${encodeURIComponent(f.title)}`);
 });
 
+// «Про книжку» in the reader's book menu (Max, 2026-11-01, like Kindle's «About this book»): the book's page here
+// when the catalog has it, otherwise /add with its title, so the reader can bring it in.
+app.get("/reader-book", (req, res) => {
+  const title = String(req.query.title || "").trim().slice(0, 300);
+  const authors = String(req.query.author || "").trim().slice(0, 300);
+  if (!title) return res.redirect("/");
+  const file = [{ title, authors }];
+  const queries = [...new Set([title, title.split(/[.:(]/)[0].trim()])].filter((q) => q.length > 1);
+  const hit = queries.flatMap((q) => store.search(q, { limit: 10, alias: false })).find((h) => fileFor(file, store.bookPage(h.book.id)));
+  if (hit) return res.redirect(store.href(hit.book.id));
+  res.redirect(`/add?text=${encodeURIComponent(authors ? `${title} — ${authors.split(/[,;]/)[0].trim()}` : title)}`);
+});
+
 // The reader asks once a day which of its accounts are gone (deleted here), to delete their books too.
 app.post("/api/readers-gone", (req, res) => {
   const ids = (Array.isArray(req.body?.ids) ? req.body.ids : []).map(String).slice(0, 10000);

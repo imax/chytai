@@ -160,7 +160,7 @@
   let homeHtml = "";
   const lastTouched = (b) => Math.max(b.openedAt || 0, b.addedAt || 0);
   const tile = (b) => `<button class="tile" data-open="${esc(b.path)}">
-      ${cover(b, "fill")}
+      ${cover(b, "fill")}${settings.guest ? "" : `<span class="tile-more" role="button" data-menu="${esc(b.path)}" title="Ще" aria-label="Ще">⋯</span>`}
       <span class="t">${esc(b.title)}</span><span class="m ellipsis">${esc(author(b))}</span>
       ${b.pct != null && b.pct > 0 && b.pct < 99 ? `<span class="tile-progress">${bar(b.pct, "thin")}<span class="m">${b.pct}%</span></span>` : ""}
     </button>`;
@@ -441,8 +441,9 @@
   }
 
   $("#shell").addEventListener("click", async (e) => {
-    const el = e.target.closest("[data-aside], [data-open], [data-tab], [data-act], [data-note], [data-unwish]");
+    const el = e.target.closest("[data-menu], [data-aside], [data-open], [data-tab], [data-act], [data-note], [data-unwish]");
     if (!el) return;
+    if (el.dataset.menu) return bookMenu(el.dataset.menu);
     if (el.dataset.aside) return setAside(el.dataset.aside);
     if (el.dataset.open != null) return openBook(el.dataset.open);
     if (el.dataset.tab) return show(el.dataset.tab);
@@ -477,6 +478,78 @@
     render();
     window.Library.render?.();
   }
+
+  // ---------- A book's menu: lend it, fix its title, put it away, delete it ----------
+
+  let menuBook = null;
+  function bookMenu(path) {
+    const b = lib?.books.find((x) => x.path === path);
+    if (!b || settings.guest) return;
+    menuBook = b;
+    const own = !b.free && !b.protected;
+    const d = $("#book-menu");
+    d.classList.remove("confirm");
+    $("#bm-title").textContent = b.title;
+    $("#bm-author").textContent = b.authors.join(", ");
+    $("#bm-share").hidden = !(own && window.reader.shareBook);
+    $("#bm-edit").hidden = !(own && window.reader.libraryUpdateBook);
+    // Your own file is deleted; a book from the free shelf or a publisher just leaves the home screen.
+    $("#bm-aside").hidden = own;
+    $("#bm-delete").hidden = !(own && window.reader.libraryDeleteBook);
+    d.returnValue = "";
+    d.showModal();
+  }
+  $("#bm-delete").onclick = () => $("#book-menu").classList.add("confirm");
+  $("#book-menu").addEventListener("close", async () => {
+    const b = menuBook;
+    menuBook = null;
+    const act = $("#book-menu").returnValue;
+    if (!b) return;
+    if (act === "about") {
+      const q = new URLSearchParams({ title: b.title, author: b.authors.join(", ") });
+      return window.open(`https://chytai.org.ua/reader-book?${q}`, "_blank", "noopener");
+    }
+    if (act === "share") return window.Library.shareBook(b.path);
+    if (act === "edit") return window.Library.editBook(b.path);
+    if (act === "aside") return setAside(b.path);
+    if (act !== "delete") return;
+    try {
+      await window.reader.libraryDeleteBook(b.path);
+    } catch (err) {
+      return showNotice(err instanceof TypeError ? "Немає з'єднання: видалити книжку можна лише онлайн." : `Не вдалося видалити: ${err.message}`, false);
+    }
+    if (current?.path === b.path) closeBook?.();
+    lib.books = lib.books.filter((x) => x.path !== b.path);
+    if (lib.lastBook === b.path) lib.lastBook = null;
+    toast("Книжку видалено");
+    render();
+    window.Library.render?.();
+  });
+
+  // A long press on a cover opens its menu; with a mouse, a right click does.
+  let tilePress = null;
+  let tilePressed = false;
+  $("#shell").addEventListener("touchstart", (e) => {
+    const t = e.target.closest(".tile");
+    if (!t || settings.guest) return;
+    tilePressed = false;
+    tilePress = setTimeout(() => {
+      tilePressed = true;
+      bookMenu(t.dataset.open);
+    }, 500);
+  }, { passive: true });
+  for (const type of ["touchend", "touchmove", "touchcancel"]) $("#shell").addEventListener(type, () => clearTimeout(tilePress), { passive: true });
+  $("#shell").addEventListener("click", (e) => {
+    if (!tilePressed || !e.target.closest(".tile")) return;
+    tilePressed = false;
+    e.stopImmediatePropagation();
+  }, true);
+  $("#shell").addEventListener("contextmenu", (e) => {
+    const t = e.target.closest(".tile");
+    if (!t || settings.guest) return;
+    e.preventDefault();
+    bookMenu(t.dataset.open);
+  });
 
   // A long press on a phone shows the ×; the tap that ends the press does not open the book.
   let pressTimer = null;
