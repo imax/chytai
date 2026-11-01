@@ -205,7 +205,7 @@
       box.innerHTML = (mine.length ? `<section class="home-sec"><div class="sec-head"><span>У моїх книжках</span></div><div class="tiles">${mine.map(tile).join("")}</div></section>` : "") +
         (freeHits.length ? `<section class="home-sec"><div class="sec-head"><span>На вільній полиці</span></div><div class="tiles">${freeHits.map(tile).join("")}</div></section>` : "") +
         (!mine.length && !freeHits.length ? `<p class="m disc-none">Нічого не знайшлося.</p>` : "") +
-        `<p class="m disc-site">Шукати серед усіх книжок на <a href="https://chytai.org.ua/search?q=${encodeURIComponent(discQuery)}" target="_blank" rel="noopener">chytai.org.ua</a></p>`;
+        `<p class="m disc-site">Шукати на <a href="https://chytai.org.ua/search?q=${encodeURIComponent(discQuery)}" target="_blank" rel="noopener">chytai.org.ua</a></p>`;
       return;
     }
     let html = "";
@@ -222,7 +222,7 @@
       groups.get(b.group).push(b);
     }
     if (free.length) html += `<section class="home-sec"><div class="sec-head"><span>Вільна полиця · ${free.length}</span></div>
-      <p class="m disc-hint">Книжки, які можна читати безкоштовно й законно.</p>
+      <p class="m disc-hint">Книжки, які можна читати безкоштовно.</p>
       ${[...groups].map(([group, list]) => `${group ? `<div class="free-group m">${esc(group)}</div>` : ""}
         <div class="shelf">${list.map((b) => `<button class="shelf-book" data-open="${esc(b.path)}">${cover(b, "mid")}<span class="t">${esc(b.title)}</span><span class="m ellipsis">${esc(b.authors[0] || "")}</span></button>`).join("")}</div>`).join("")}
     </section>`;
