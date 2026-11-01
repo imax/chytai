@@ -265,7 +265,12 @@ const ldOf = (html) =>
 const isPromo = (title) => /безкоштовн\S*\s+фрагмент|\((ознайомч\S*\s+)?(фрагмент|уривок)\)\s*$|[–—-]\s*безкоштовно\s*$|пробний тест/iu.test(String(title || ""));
 // A language aid, not a book to read (Max, 2026-11-01, «2000 найкорисніших німецьких слів і висловів»: «Це треба
 // видалити»). Left out when the shelves are loaded, like a promo.
-const isLangAid = (title) => /^2000 найкорисніших німецьких слів і висловів$/iu.test(String(title || "").trim());
+// Max chose to drop them all: phrasebooks, «2000 слів» word lists, «100 000 слів» and other bilingual dictionaries,
+// school, spelling and other language dictionaries. Books named «словник» that are read («Хозарський словник»,
+// «Словник загублених слів», «Словник війни») don't match.
+const LANG_AID =
+  /розмовник|\d[\d\s]*(тис\.?\s*)?(слів|термінів)|слів і (вислов|вираз)|(-україн\S*|україн\S*-\S+|англ\S*|німец\S*|польськ\S*|франц\S*|італ\S*)\s+(\S+\s+)?словник|словник\S*[- ]довідник|(орфографічн|орфоепічн|правописн|пунктуаційн|паронім|омонім|синонім|фразеологічн|тематичн|астрономічн|професійної)\S*\s+(\S+\s+)?словник|словник (паронім|омонім|синонім|професій)|словникові диктанти|English Vocabulary/iu;
+const isLangAid = (title) => LANG_AID.test(String(title || ""));
 const alt = (a, title) => ((a = a.replace(/\s+by\s+(\p{Lu}[\p{L}.'’-]*\s*)+$/u, "").trim()) === title ? "" : a);
 const names = (v) => [].concat(v || []).map((x) => ent(x.name || x).trim()).filter(Boolean).join(", ");
 function ldBookPage(src, brands) {
