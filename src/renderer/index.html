@@ -114,6 +114,11 @@
           <input id="disc-search" type="search" placeholder="Назва чи автор" autocomplete="off" />
           <div id="disc-body"></div>
         </section>
+        <!-- «Клуб» (Max, 2026-11-01): what other readers are reading now and the Club's talks, from the site. -->
+        <section id="club" class="view hidden">
+          <h1 class="view-title">Клуб Chytai</h1>
+          <div id="club-body"></div>
+        </section>
         <div id="library" class="view hidden">
           <div class="lib-top">
             <div>
@@ -159,6 +164,10 @@
         <button data-tab="discover">
           <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.6-3.6"/></svg>
           <span class="label">Пошук</span>
+        </button>
+        <button data-tab="club">
+          <span class="icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20.5l1.4-4.9A8 8 0 1 1 21 12z"/></svg><span class="badge dot hidden" id="club-dot"></span></span>
+          <span class="label">Клуб</span>
         </button>
       </div>
       <div class="side-head wide-only">Читаю</div>
@@ -324,7 +333,7 @@
     <form method="dialog">
       <h2 tabindex="-1" autofocus>Клавіші</h2>
       <dl class="keys">
-        <dt><kbd>1</kbd> <kbd>2</kbd></dt><dd>Мої книжки, Пошук</dd>
+        <dt><kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd></dt><dd>Мої книжки, Пошук, Клуб</dd>
         <dt><kbd>/</kbd></dt><dd>Пошук: у книжці, а на головній — у бібліотеці</dd>
         <dt><kbd>Esc</kbd></dt><dd>Повернутися до книжки</dd>
         <dt><kbd>←</kbd> <kbd>→</kbd> <kbd>Пробіл</kbd></dt><dd>Гортати сторінки (і коліщатком миші)</dd>

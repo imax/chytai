@@ -861,3 +861,16 @@ html:not(.touch) .tile:hover .tile-more, .tile-more:focus-visible { display: fle
 @media (min-width: 761px) { .home-hero { max-width: 640px; } }
 #shell .tile-done { font-size: 12px; color: var(--accent); }
 #shell .tile-done::before { content: "✓ "; }
+/* «Клуб» tab. */
+#tabbar .badge.dot { min-width: 0; width: 9px; height: 9px; padding: 0; left: 18px; top: -1px; }
+@media (min-width: 761px) { #tabbar .badge.dot { order: 1; } }
+.club-talks { display: flex; flex-direction: column; }
+.club-talk { display: flex; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--line); color: inherit; text-decoration: none; }
+.club-talk .row-text { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+#shell .club-talk .t { font-size: 15px; line-height: 1.3; }
+.club-talk.fresh .t { font-weight: 600; }
+.club-talk.fresh .t::before { content: ""; display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); margin: 0 6px 2px 0; }
+#club a.shelf-book { text-decoration: none; }
+#club .home-sec + .home-sec { margin-top: 24px; }
+#club .home-sec > .site-link { margin-top: 6px; }
+#club .site-link { color: var(--accent); text-decoration: none; font-size: 13px; font-weight: 500; }

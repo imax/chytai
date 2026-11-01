@@ -225,8 +225,8 @@
       ta.setSelectionRange(ta.value.length, ta.value.length);
     }
   });
-  // «@» and «#» in a Club text: who or which book, picked from a short list under the field (Max, 2026-11-01).
-  for (const ta of document.querySelectorAll(".cmt-form textarea, .club-form textarea, #topic-edit textarea")) {
+  // «@» and «#» in a comment (not a topic's title or text, Max 2026-11-01): who or which book, picked from a short list under the field (Max, 2026-11-01).
+  for (const ta of document.querySelectorAll(".cmt-form textarea")) {
     const box = document.createElement("div");
     box.className = "ac-list";
     box.hidden = true;

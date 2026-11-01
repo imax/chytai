@@ -1401,6 +1401,21 @@ api.post("/library/finished", (req, res) => {
   res.json({ ok: true });
 });
 
+// The «Клуб» tab (Max, 2026-11-01): the site's /api/club-feed (what others read now, the Club's talks), kept a minute.
+let clubFeed = { at: 0, data: null };
+api.get("/club", async (req, res) => {
+  if (Date.now() - clubFeed.at > 60 * 1000 || !clubFeed.data) {
+    try {
+      const r = await fetch(`${WEB_URL}/api/club-feed`, { signal: AbortSignal.timeout(10000) });
+      if (!r.ok) throw new Error(`site ${r.status}`);
+      clubFeed = { at: Date.now(), data: await r.json() };
+    } catch (err) {
+      if (!clubFeed.data) return res.status(502).json({ error: err.message });
+    }
+  }
+  res.json(clubFeed.data);
+});
+
 // "Хочу прочитати": each reader's own list of books to get; the home screen shows when one arrives.
 const clean = (v, max) => String(v ?? "").replace(/\s+/g, " ").trim().slice(0, max);
 api.get("/wish", (req, res) => res.json({ wish: req.guest ? [] : userState(req.acct).wish || [] }));

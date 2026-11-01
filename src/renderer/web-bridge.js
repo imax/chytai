@@ -602,6 +602,7 @@
       const s = (await localSettings()) || {};
       if (s.lastBook === name) patchLocalSettings({ lastBook: null });
     },
+    clubFeed: async () => (await api("GET", "/api/club")).json(),
     libraryFinished: (name, done) => api("POST", "/api/library/finished", { path: name, done }),
     librarySeen: (paths) => api("POST", "/api/library/seen", { paths }).catch(() => {}),
     wishList: async () => {

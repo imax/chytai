@@ -1270,6 +1270,28 @@ const mentioned = (...texts) => ({
   ),
 });
 
+// The reader's «Клуб» tab (Max, 2026-11-01): what other readers are reading now and the Club's latest talks.
+// Public data only: readers' «Читаю зараз» (not noindex readers, no given-up or Russian-language books) and
+// topics with their spoiler flag; the reader shows them and links here.
+let clubFeedCache = { at: 0, json: null };
+app.get("/api/club-feed", (req, res) => {
+  if (Date.now() - clubFeedCache.at > 60 * 1000) {
+    const abs = (u) => (!u ? "" : /^https?:/.test(u) ? u : `${SITE}${u}`);
+    const seen = new Set();
+    const reading = auth
+      .readers()
+      .filter((r) => !r.noindex)
+      .flatMap((r) => nowFor(r.id).books.map((n) => ({ n, r })))
+      .sort((a, b) => (a.n.since < b.n.since ? 1 : -1))
+      .filter(({ n }) => !seen.has(n.id) && seen.add(n.id))
+      .slice(0, 18)
+      .map(({ n, r }) => ({ title: n.book.title, author: n.book.author || "", cover: abs(n.book.cover), href: abs(store.href(n.id)), reader: { name: r.name, href: `${SITE}/@${r.username}` }, since: n.since }));
+    const { pinned, rest } = club.index(30);
+    const talk = (t) => ({ kind: t.kind, title: t.title, href: abs(t.href), by: t.reader?.name || t.by || "", replies: t.replies, active: t.active, spoiler: !!t.spoiler, official: !!t.official, book: t.book ? { title: t.book.title, href: abs(store.href(t.book.id)), cover: abs(t.book.cover) } : null });
+    clubFeedCache = { at: Date.now(), json: { reading, talks: [...pinned.slice(0, 2), ...rest.slice(0, 15)].map(talk), club: `${SITE}/club`, newTopic: `${SITE}/club/new` } };
+  }
+  res.set("Cache-Control", "public, max-age=60").json(clubFeedCache.json);
+});
 app.get("/club", (req, res) => {
   const { pinned, rest } = club.index();
   res.send(pages.clubPage({ user: req.user, pinned: club.mark(req.user?.id, pinned), rest: club.mark(req.user?.id, rest) }));
@@ -1296,8 +1318,7 @@ app.post("/api/club", signed, (req, res) => {
   if (auth.tooMany(`club:${req.user.id}`, 5)) return res.redirect(303, `/club/new?error=${encodeURIComponent("Забагато нових тем за годину.")}`);
   const t = club.create(req.user.id, { title: req.body.title, text: req.body.text, book: req.body.book, spoiler: req.body.spoiler === "1", official: req.owner && req.body.official === "1" });
   if (!t) return res.redirect(303, `/club/new?error=${encodeURIComponent(String(req.body.title || "").trim() ? "На сьогодні досить нових тем." : "Потрібна назва.")}`);
-  const mailed = mentionMails(req, t.text, { where: `у темі «${t.title}»`, href: t.href });
-  if (!req.owner && !mailed.has(OWNER_ID)) notifyOwner(`Нова тема в Клубі: ${t.title}`, [`${req.user.name} (${SITE}/@${req.user.username}):`, "", t.title, t.text.slice(0, 1000), "", `${SITE}${t.href}`].join("\n"));
+  if (!req.owner) notifyOwner(`Нова тема в Клубі: ${t.title}`, [`${req.user.name} (${SITE}/@${req.user.username}):`, "", t.title, t.text.slice(0, 1000), "", `${SITE}${t.href}`].join("\n"));
   res.redirect(303, t.href);
 });
 const clubTopic = (req, res, next) => {
@@ -1324,7 +1345,7 @@ app.get("/club/:key{/:rest}", (req, res, next) => {
   // Spoilers stay hidden from a reader who has not read the book; its author sees their own topic as it is.
   const read = !!(t.book && req.user && ["read"].includes(store.entry(req.user.id, t.book.id)?.status));
   const hide = t.spoiler && !read && req.user?.id !== t.reader.id;
-  res.send(pages.clubTopicPage({ user: req.user, owner: req.owner, topic: t, posts, hide, watching: !!req.user && club.watching(req.user.id, t.id), seenAt, links: mentioned(t.text, ...posts.map((p) => p.text)), error: String(req.query.error || "").slice(0, 200) }));
+  res.send(pages.clubTopicPage({ user: req.user, owner: req.owner, topic: t, posts, hide, watching: !!req.user && club.watching(req.user.id, t.id), seenAt, links: mentioned(...posts.map((p) => p.text)), error: String(req.query.error || "").slice(0, 200) }));
 });
 app.post("/api/club/:id", signed, clubTopic, myTopic, (req, res) => {
   const t = club.edit(req.topic.id, { title: req.body.title, text: req.body.text, book: req.body.book ?? "", spoiler: req.body.spoiler === "1", official: req.owner ? req.body.official === "1" : undefined });

@@ -2742,13 +2742,15 @@ ${user ? `<dialog id="new-list"><div class="dlg-head"><h2>Новий списо�
 // A Club text: paragraphs, line breaks, links made clickable (nofollow), and «@username» linked to the reader
 // when there is one (`links`: username -> page).
 const CLUB_TOKEN = /(https?:\/\/[^\s<>"]+[^\s<>".,;:!?)»])|(^|[^\w@.])@([a-z0-9][a-z0-9_.-]{1,30}[a-z0-9])|(^|[^\w&#/])#([a-z0-9][a-z0-9-]{1,80})/gi;
-function clubText(text, links = {}) {
+function clubText(text, links = {}, { tags = true } = {}) {
   let out = "";
   let at = 0;
   const t = String(text || "");
   const books = [];
   const book = (b) => (books.includes(b) || books.push(b), `<a class="at" href="${attr(b.href)}">«${esc(b.title)}»</a>`);
+  // A topic's own text takes no @ or # (Max, 2026-11-01: only in comments), links only.
   for (const m of t.matchAll(CLUB_TOKEN)) {
+    if (!tags && !m[1]) continue;
     out += esc(t.slice(at, m.index));
     at = m.index + m[0].length;
     if (m[1]) {
@@ -2799,7 +2801,6 @@ const bookPick = (book) => `<div class="book-pick" data-book-pick>
 const topicFields = ({ t = null, book = null, owner = false }) => `
     <label>Назва<input name="title" maxlength="120" required value="${attr(t?.title || "")}" placeholder="${book ? `Напр. «${esc(book.title)}»: як вам фінал?` : "Напр. Хто йде на Книжковий Арсенал?"}"></label>
     <label>Текст<textarea name="text" rows="7" maxlength="4000" placeholder="Про що хочете поговорити?">${esc(t?.text || "")}</textarea></label>
-    <p class="hint small muted">@ім'я — покликати читача, # — згадати книжку.</p>
     <div class="field"><span class="small">Про книжку <span class="muted">· необов'язково</span></span>${bookPick(book)}</div>
     <label class="check"><span><input type="checkbox" name="spoiler" value="1"${t?.spoiler ? " checked" : ""}> Містить спойлери</span><span class="hint">Сховаємо від тих, хто книжку ще не прочитав.</span></label>
     ${owner ? `<label class="check"><span><input type="checkbox" name="official" value="1"${t?.official ? " checked" : ""}> Від Chytai: угорі Клубу</span></label>` : ""}`;
@@ -2829,7 +2830,7 @@ function clubTopicPage({ user, owner = false, topic: t, posts, hide = false, wat
   const form = user
     ? `<form method="post" action="/api/club/${id}/posts" class="cmt-form" id="reply"><textarea name="text" rows="3" maxlength="2000" required placeholder="Ваша відповідь" aria-label="Відповідь"></textarea>${error ? `<p class="error small">${esc(error)}</p>` : ""}<div><button class="btn primary">Відповісти</button></div></form><form method="post" action="/api/club/${id}/watch" class="watch"><label><input type="checkbox" name="on" value="1"${watching ? " checked" : ""} onchange="this.form.submit()"> Сповіщати про відповіді на пошту</label><noscript><button class="text-link small">Зберегти</button></noscript></form>`
     : `<p class="small" id="reply"><a class="text-link" rel="nofollow" href="/login?next=${attr(encodeURIComponent(`${t.href}#reply`))}">Увійдіть</a>, щоб відповісти.</p>`;
-  const talk = `<div class="op">${t.text ? `<div class="txt">${clubText(t.text, links)}</div>` : ""}</div>
+  const talk = `<div class="op">${t.text ? `<div class="txt">${clubText(t.text, {}, { tags: false })}</div>` : ""}</div>
 <section class="club-posts">${label(posts.length ? answers(posts.length) : "Відповіді")}${posts.length ? posts.map(post).join("") : `<p class="muted small">Відповідей ще немає.</p>`}${form}</section>`;
   // Max's words (2026-11-01); once per topic: the browser remembers it was opened.
   const gate = `<div class="spoil-gate"><p class="g-t">Увага: топік містить спойлери</p><p class="muted small">В цьому топіку можуть бути спойлери${t.book ? ` про книжку «${esc(t.book.title)}»` : ""}.</p><button type="button" class="btn" data-unspoil>Відкрити топік</button></div>`;
