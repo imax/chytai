@@ -1641,12 +1641,18 @@ window.reader.onShowSettings(openSettings);
 window.reader.onBookConverting((name) => showNotice(`Конвертую «${name}» через Calibre…`, true));
 window.reader.onBookError((message) => showNotice(message, false));
 
+// A finished notice goes away by itself after a few seconds, longer for a longer text (Max, 2026-11-01:
+// no «Закрити» button); a tap on it hides it at once. A busy one stays until the next notice.
+let noticeTimer = 0;
 function showNotice(text, busy) {
   const box = $("#notice");
   box.querySelector(".notice-text").textContent = text;
   box.classList.toggle("busy", busy);
   box.classList.remove("hidden");
+  clearTimeout(noticeTimer);
+  if (!busy) noticeTimer = setTimeout(() => box.classList.add("hidden"), Math.min(12000, 4000 + 40 * text.length));
 }
+$("#notice").addEventListener("click", (e) => !e.target.closest("a, button") && !$("#notice").classList.contains("busy") && $("#notice").classList.add("hidden"));
 // A link at the end of the notice shown last («Увійти», «Завантажити EPUB»); the next notice drops it.
 function noticeLink(href, label) {
   const a = document.createElement("a");

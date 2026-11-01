@@ -861,6 +861,3 @@ html:not(.touch) .tile:hover .tile-more, .tile-more:focus-visible { display: fle
 @media (min-width: 761px) { .home-hero { max-width: 640px; } }
 #shell .tile-done { font-size: 12px; color: var(--accent); }
 #shell .tile-done::before { content: "✓ "; }
-/* The notice closes with a quiet ×, so an action next to it («Відкрити», «Повернути») is the only word (Max). */
-#notice .notice-close { flex: none; width: 28px; height: 28px; border: none; border-radius: 50%; background: none; color: var(--muted); font-size: 22px; line-height: 1; padding: 0; cursor: pointer; }
-#notice .notice-close:hover { background: var(--accent-soft); }
