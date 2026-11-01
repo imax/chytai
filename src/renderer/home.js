@@ -7,7 +7,7 @@
   const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ESC[c]);
   const DAY = 864e5;
   const ARRIVALS_DAYS = 30;
-  const TABS = { home: "#home", library: "#library", notes: "#all-notes", wish: "#wish" };
+  const TABS = { home: "#home", discover: "#discover", library: "#library", notes: "#all-notes", wish: "#wish" };
 
   let tab = "home";
   let lib = null; // the library list (library-view.js)
@@ -19,6 +19,8 @@
   const isOpen = () => !$("#shell").classList.contains("hidden");
 
   function show(next = tab) {
+    // The third tab is the settings dialog for now (Max, 2026-11-01).
+    if (next === "settings") return openSettings();
     if (next !== "library") beforeSearch = null;
     tab = next;
     $("#shell").classList.remove("hidden");
@@ -132,16 +134,13 @@
   function render() {
     renderBadge();
     if (tab === "home") renderHome();
+    else if (tab === "discover") renderDiscover();
     else if (tab === "notes") renderNotes();
     else if (tab === "wish") renderWish();
   }
 
   function renderBadge() {
-    const n = lib ? lib.books.filter(isNew).length : 0;
-    $("#tab-badge").textContent = n;
-    $("#tab-badge").classList.toggle("hidden", !n);
-    const notesCount = Object.values(notes || {}).reduce((sum, list) => sum + list.length, 0);
-    $("#tab-notes-count").textContent = notesCount || "";
+
     // Sidebar «Читаю» (wide screens): the books in progress, the one read last first.
     const inProgress = (lib?.books || [])
       .filter((b) => b.openedAt && (b.pct == null ? b.started : reading(b)))
@@ -155,7 +154,87 @@
     $(".side-head").classList.toggle("hidden", !inProgress.length);
   }
 
+  // Головна (Max, 2026-11-01, like a Kindle home screen): just your books with their covers, the one added or
+  // opened last first. Everything else (the free shelf, adding books, new arrivals) is on «Пошук».
+  let homeFilter = "";
+  const lastTouched = (b) => Math.max(b.openedAt || 0, b.addedAt || 0);
+  const tile = (b) => `<button class="tile" data-open="${esc(b.path)}">
+      ${cover(b, "fill")}
+      <span class="t">${esc(b.title)}</span><span class="m ellipsis">${esc(author(b))}</span>
+      ${b.pct != null && b.pct > 0 && b.pct < 99 ? `<span class="tile-progress">${bar(b.pct, "thin")}<span class="m">${b.pct}%</span></span>` : ""}
+    </button>`;
+  const matches = (b, q) => norm(`${b.title} ${b.authors.join(" ")}`).includes(q);
+
   function renderHome() {
+    if (!lib) return; // the skeleton stays until the library arrives
+    const books = [...lib.books].sort((x, y) => lastTouched(y) - lastTouched(x));
+    if (!books.length) {
+      $("#home-body").innerHTML = `<div class="home-empty"><p>Тут будуть ваші книжки.</p>
+        <button class="pill" data-tab="discover">Знайти книжку</button></div>`;
+      return;
+    }
+    const q = norm(homeFilter);
+    const shown = q ? books.filter((b) => matches(b, q)) : books;
+    const field = books.length > 12 ? `<input id="home-filter" type="search" placeholder="Знайти серед моїх книжок" value="${esc(homeFilter)}" autocomplete="off" />` : "";
+    const keepFocus = document.activeElement?.id === "home-filter";
+    $("#home-body").innerHTML = `${field}<div class="tiles">${shown.map(tile).join("")}</div>
+      ${q && !shown.length ? `<p class="m">Нічого не знайшлося. <button class="link" data-tab="discover">Пошукати в «Пошуку»</button></p>` : ""}`;
+    if (keepFocus) {
+      const f = $("#home-filter");
+      f.focus();
+      f.setSelectionRange(f.value.length, f.value.length);
+    }
+  }
+  $("#home-body").addEventListener("input", (e) => {
+    if (e.target.id !== "home-filter") return;
+    homeFilter = e.target.value;
+    renderHome();
+  });
+
+  // ---------- Пошук ----------
+
+  let discQuery = "";
+  function renderDiscover() {
+    const box = $("#disc-body");
+    if (!lib) return (box.innerHTML = `<p class="home-wait"><span class="spinner"></span>Завантажую…</p>`);
+    const free = lib.free || [];
+    const q = norm(discQuery);
+    if (q) {
+      const mine = lib.books.filter((b) => matches(b, q));
+      const freeHits = free.filter((b) => matches(b, q) && !lib.books.some((x) => x.path === b.path));
+      box.innerHTML = (mine.length ? `<section class="home-sec"><div class="sec-head"><span>У моїх книжках</span></div><div class="tiles">${mine.map(tile).join("")}</div></section>` : "") +
+        (freeHits.length ? `<section class="home-sec"><div class="sec-head"><span>На вільній полиці</span></div><div class="tiles">${freeHits.map(tile).join("")}</div></section>` : "") +
+        (!mine.length && !freeHits.length ? `<p class="m disc-none">Нічого не знайшлося.</p>` : "") +
+        `<p class="m disc-site">Шукати серед усіх книжок на <a href="https://chytai.org.ua/search?q=${encodeURIComponent(discQuery)}" target="_blank" rel="noopener">chytai.org.ua</a></p>`;
+      return;
+    }
+    let html = "";
+    if (!settings.guest) html += `<button class="add-card" data-act="add">
+        <span class="add-plus">+</span>
+        <span class="row-text"><span class="t">Додати свої книжки</span><span class="m">EPUB або PDF з ${matchMedia("(pointer: coarse)").matches ? "телефона" : "комп'ютера"}</span></span>
+      </button>`;
+    const fresh = arrivals();
+    if (fresh.length) html += `<section class="home-sec"><div class="sec-head"><span>Нові надходження</span></div>
+      <div class="shelf">${fresh.map((b) => `<button class="shelf-book" data-open="${esc(b.path)}">${cover(b, "mid")}<span class="t">${esc(b.title)}</span><span class="m ellipsis">${esc(b.authors[0] || "")}</span></button>`).join("")}</div></section>`;
+    const groups = new Map();
+    for (const b of free) {
+      if (!groups.has(b.group)) groups.set(b.group, []);
+      groups.get(b.group).push(b);
+    }
+    if (free.length) html += `<section class="home-sec"><div class="sec-head"><span>Вільна полиця · ${free.length}</span></div>
+      <p class="m disc-hint">Книжки, які можна читати безкоштовно й законно.</p>
+      ${[...groups].map(([group, list]) => `${group ? `<div class="free-group m">${esc(group)}</div>` : ""}
+        <div class="shelf">${list.map((b) => `<button class="shelf-book" data-open="${esc(b.path)}">${cover(b, "mid")}<span class="t">${esc(b.title)}</span><span class="m ellipsis">${esc(b.authors[0] || "")}</span></button>`).join("")}</div>`).join("")}
+    </section>`;
+    html += `<p class="m disc-site">Більше книжок і де їх узяти: <a href="https://chytai.org.ua" target="_blank" rel="noopener">chytai.org.ua</a></p>`;
+    box.innerHTML = html;
+  }
+  $("#disc-search").addEventListener("input", (e) => {
+    discQuery = e.target.value;
+    renderDiscover();
+  });
+
+  function renderHomeOld() {
     if (!lib) return; // the skeleton stays until the library arrives
     const books = lib.books;
     const byPath = new Map(books.map((b) => [b.path, b]));
@@ -433,7 +512,7 @@
   // Single keys on a keyboard: Esc back to the book, 1 2 3 for the tabs, / to search, T for the contents, − + for the
   // font, ? for the list. Never while typing or with a dialog open; guests have no home screen.
   // Matched by the physical key, so they work the same with the Ukrainian layout on.
-  const TAB_KEYS = { Digit1: "home", Digit2: "library", Digit3: "notes" };
+  const TAB_KEYS = { Digit1: "home", Digit2: "discover", Digit3: "settings" };
   function key(e) {
     if (e.metaKey || e.ctrlKey || e.altKey || e.repeat) return;
     if (e.target?.closest?.("input, textarea, select, [contenteditable]")) return;
