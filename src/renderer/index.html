@@ -11,6 +11,8 @@
   <link rel="apple-touch-icon" href="icon.png" />
   <link rel="icon" href="icon.png" />
   <link rel="stylesheet" href="../../node_modules/pdfjs-dist/web/pdf_viewer.css" />
+  <link rel="stylesheet" href="../../node_modules/@fontsource-variable/source-serif-4/opsz.css" />
+  <link rel="stylesheet" href="../../node_modules/@fontsource-variable/onest/wght.css" />
   <link rel="stylesheet" href="style.css" />
 </head>
 <body data-theme="light">
@@ -92,11 +94,24 @@
       </div>
       <div id="shell-views">
         <section id="home" class="view">
-          <header class="home-head narrow-only">
-            <div class="brand"><img src="icon.png" alt="" /><span>Chytai</span></div>
-            <button id="home-settings" class="round" title="Налаштування">⚙</button>
+          <!-- Design «3a» from Claude Design (Max, 2026-11-01): one page in the site's style. A header with the
+               logo, one search over your books and the free shelf, and your avatar with its menu. -->
+          <header class="r-head">
+            <div class="r-logo">Chytai<span>читай більше</span></div>
+            <label class="r-search r-search-top"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.6-3.6"/></svg>
+              <input class="r-q" type="search" placeholder="Назва чи автор: у ваших книжках і на вільній полиці" autocomplete="off" /></label>
+            <button class="r-add-btn" type="button" data-act="add" title="Додати свою книжку: EPUB, PDF, MOBI" aria-label="Додати книжку"><b>+</b><span>Додати книжку</span></button>
+            <button id="r-avatar" class="r-avatar" type="button" aria-haspopup="menu" aria-label="Меню"></button>
           </header>
-          <h1 class="view-title wide-only">Мої книжки</h1>
+          <div id="r-menu" class="r-menu hidden" role="menu">
+            <div class="r-menu-me"><b id="r-me-name"></b><small id="r-me-user"></small></div>
+            <button type="button" data-r="settings">Налаштування</button>
+            <a id="r-me-page" href="https://chytai.org.ua" target="_blank" rel="noopener">Моя сторінка на Chytai <i>↗</i></a>
+            <a href="https://chytai.org.ua/club" target="_blank" rel="noopener">Обговорення <i>↗</i></a>
+            <button type="button" data-r="logout" class="r-menu-out">Вийти</button>
+          </div>
+          <label class="r-search r-search-phone"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.6-3.6"/></svg>
+            <input class="r-q" type="search" placeholder="Назва чи автор" autocomplete="off" /></label>
           <div id="home-body">
             <div class="skeleton" aria-hidden="true">
               <div class="sk-line"></div>
@@ -271,14 +286,15 @@
   <!-- A book's menu on Головна (Max, 2026-11-01): ⋯ on a cover with a mouse, a long press on a phone. -->
   <dialog id="book-menu">
     <form method="dialog">
-      <h2 tabindex="-1" autofocus id="bm-title"></h2>
-      <p id="bm-author" class="share-book"></p>
+      <span class="bm-handle" aria-hidden="true"></span>
+      <div class="bm-head"><span id="bm-cover"></span><div><h2 tabindex="-1" autofocus id="bm-title"></h2>
+      <p id="bm-author" class="share-book"></p></div></div>
       <div class="bm-list">
         <button value="finished" id="bm-finished">Позначити прочитаною</button>
         <button value="about" id="bm-about">Про книжку</button>
         <button value="share" id="bm-share" hidden>Дати почитати</button>
         <button value="edit" id="bm-edit">Назва й автор</button>
-        <button value="aside" id="bm-aside">Прибрати з моїх книжок</button>
+        <button value="aside" id="bm-aside" class="danger">Видалити</button>
         <button value="delete" id="bm-delete" class="danger">Видалити</button>
       </div>
       <menu><button value="cancel" formnovalidate>Скасувати</button></menu>
@@ -288,8 +304,9 @@
   <!-- «Нещодавно видалені»: deleted books wait here 30 days before they go for good. -->
   <dialog id="trash-dialog">
     <form method="dialog">
+      <button value="close" class="r-back">← Мої книжки</button>
       <h2 tabindex="-1" autofocus>Нещодавно видалені</h2>
-      <small>Книжки зберігаються тут 30 днів, потім видаляються назавжди.</small>
+      <small>Книжки зберігаються 30 днів разом з прогресом і нотатками, потім видаляються назавжди.</small>
       <ul id="trash-list"></ul>
       <menu><button value="close">Готово</button></menu>
     </form>
