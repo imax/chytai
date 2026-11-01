@@ -208,6 +208,7 @@
       throw err;
     }
     setOffline(false);
+    if (res.status === 304) return res; // the copy on the device is current (openServerBook)
     if (res.status === 401) {
       location.href = "/login";
       throw new Error("login");
@@ -260,7 +261,10 @@
     let payload;
     try {
       await sync(); // positions saved here first, so the server's answer is the latest one
-      const res = await api("GET", `/api/book?path=${encodeURIComponent(name)}`);
+      // The copy kept on the device is used when the server's file is the same (its ETag): opening a book
+      // downloaded the whole file every time, seconds on a slow connection (Max, 2026-11-01).
+      const saved = await idb("books", "readonly", (s) => s.get(name)).catch(() => null);
+      const res = await api("GET", `/api/book?path=${encodeURIComponent(name)}`, undefined, { headers: saved?.etag ? { "If-None-Match": saved.etag } : {} });
       const position = decodeURIComponent(res.headers.get("X-Book-Position") || "") || null;
       const reflowPosition = decodeURIComponent(res.headers.get("X-Book-Reflow-Position") || "") || null;
       // A publisher's book: read chapter by chapter from the server, never kept on the device.
@@ -269,12 +273,17 @@
         patchLocalSettings({ lastBook: name });
         return emit("book:open", { path: name, name, url: new URL(info.base, location.href).href, preview: info.preview, position, reflowPosition });
       }
-      const data = await res.arrayBuffer();
+      const fresh = res.status !== 304;
+      const data = fresh ? await res.arrayBuffer() : saved.data;
       // A guest's place lives in the server's memory only; after a restart (or once they sign in) the one
       // kept on this device carries on.
       const kept = position || reflowPosition ? null : (await kvGet("here").catch(() => null)) || {};
       payload = { path: name, name, data, position: position || kept?.[name] || null, reflowPosition: reflowPosition || kept?.[`${name}#reflow`] || null };
-      idb("books", "readwrite", (s) => s.put({ data, savedAt: Date.now() }, name)).catch(() => {});
+      // A copy taken now: the PDF viewer takes the buffer itself, and the database is written a moment later.
+      if (fresh) {
+        const copy = { data: data.slice(0), savedAt: Date.now(), etag: res.headers.get("ETag") || "" };
+        idb("books", "readwrite", (s) => s.put(copy, name)).catch(() => {});
+      }
     } catch (err) {
       if (err.message === "login") return;
       if (!isNetworkError(err)) return emit("book:error", `Не вдалося відкрити книжку: ${err.message}`);
@@ -604,6 +613,21 @@
       if (s.lastBook === name) patchLocalSettings({ lastBook: null });
     },
     clubFeed: async () => (await api("GET", "/api/club")).json(),
+    // «Про книжку»: the site's short summary, kept on the device. `cachedOnly` reads the device copy alone;
+    // without it the network is asked first and the device copy is the fallback (null when there is none).
+    bookAbout: async (b, cachedOnly = false) => {
+      const key = `about:${b.path}`;
+      const kept = await kvGet(key);
+      if (cachedOnly) return kept || null;
+      try {
+        const q = new URLSearchParams({ title: b.title, author: (b.authors || []).join(", ") });
+        const data = await (await api("GET", `/api/about?${q}`)).json();
+        kvSet(key, { ...data, at: Date.now() });
+        return data;
+      } catch {
+        return kept || null;
+      }
+    },
     uploadFiles: (files) => uploadAll(files),
     libraryFinished: (name, done) => api("POST", "/api/library/finished", { path: name, done }),
     librarySeen: (paths) => api("POST", "/api/library/seen", { paths }).catch(() => {}),
