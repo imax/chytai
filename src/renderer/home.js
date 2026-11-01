@@ -181,7 +181,22 @@
     const shown = q ? books.filter((b) => matches(b, q)) : books;
     const field = books.length > 12 ? `<input id="home-filter" type="search" placeholder="Шукати" value="${esc(homeFilter)}" autocomplete="off" />` : "";
     const keepFocus = document.activeElement?.id === "home-filter";
-    const html = `${field}<div class="tiles">${shown.map(tile).join("")}</div>
+    // The book on top is a big card with its button, as on the old home screen (Max, 2026-11-01); the rest are covers.
+    const top = !q && shown[0];
+    const hero = top ? `<button class="hero home-hero" data-open="${esc(top.path)}">
+        ${cover(top, "big")}
+        <span class="hero-text">
+          ${top.openedAt ? `<span class="kicker">читаю зараз</span>` : ""}
+          <span class="t">${esc(top.title)}</span>
+          <span class="m">${esc(author(top))}</span>
+          <span class="hero-foot">
+            ${top.chapter ? `<span class="m ellipsis">${esc(top.chapter)}</span>` : ""}
+            ${top.pct != null && top.pct > 0 ? bar(top.pct) : ""}
+            <span class="hero-row"><span class="m">${top.pct != null && top.pct > 0 ? `${top.pct}%` : ""}</span><span class="pill">${top.pct > 0 ? "Продовжити" : "Читати"}</span></span>
+          </span>
+        </span>
+      </button>` : "";
+    const html = `${field}${hero}<div class="tiles">${(top ? shown.slice(1) : shown).map(tile).join("")}</div>
       ${q && !shown.length ? `<p class="m">Нічого не знайшлося. <button class="link" data-tab="discover">Пошукати в «Пошуку»</button></p>` : ""}
       ${trashCount && !q ? `<p class="home-trash"><button class="link" data-act="trash">Нещодавно видалені · ${trashCount}</button></p>` : ""}`;
     // The library comes twice (the saved copy, then the server's) and again when the app comes back to the
@@ -592,7 +607,7 @@
   let tilePress = null;
   let tilePressed = false;
   $("#shell").addEventListener("touchstart", (e) => {
-    const t = e.target.closest(".tile");
+    const t = e.target.closest(".tile, .home-hero");
     if (!t || settings.guest) return;
     tilePressed = false;
     tilePress = setTimeout(() => {
@@ -602,12 +617,12 @@
   }, { passive: true });
   for (const type of ["touchend", "touchmove", "touchcancel"]) $("#shell").addEventListener(type, () => clearTimeout(tilePress), { passive: true });
   $("#shell").addEventListener("click", (e) => {
-    if (!tilePressed || !e.target.closest(".tile")) return;
+    if (!tilePressed || !e.target.closest(".tile, .home-hero")) return;
     tilePressed = false;
     e.stopImmediatePropagation();
   }, true);
   $("#shell").addEventListener("contextmenu", (e) => {
-    const t = e.target.closest(".tile");
+    const t = e.target.closest(".tile, .home-hero");
     if (!t || settings.guest) return;
     e.preventDefault();
     bookMenu(t.dataset.open);
