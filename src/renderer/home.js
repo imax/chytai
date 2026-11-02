@@ -19,6 +19,7 @@
   const isOpen = () => !$("#shell").classList.contains("hidden");
 
   function show(next = tab) {
+    if (next === "library") next = "home"; // the old «Бібліотека» page is gone; Мої книжки has it all (Max, 2026-11-02)
     if (next !== "library") beforeSearch = null;
     tab = next;
     $("#shell").classList.remove("hidden");
@@ -1186,7 +1187,7 @@
     $("#settings").close();
     $("#keys").showModal();
   };
-  window.reader.onShowLibrary(() => (isOpen() && current ? hide() : show("library")));
+  window.reader.onShowLibrary(() => $("#btn-library").click()); // ⌘L: Мої книжки, as «←» in the book
   window.reader.onBookOpen(() => hide());
   // A note saved or removed in the book shows up here next time.
   document.addEventListener("visibilitychange", () => document.visibilityState === "visible" && isOpen() && tab !== "library" && load());
