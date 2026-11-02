@@ -176,7 +176,10 @@
       .register("/sw.js")
       .then((reg) => {
         const swap = () => reg.waiting?.postMessage("skipWaiting");
-        const whenIdle = () => (document.hidden || typeof current === "undefined" || !current) && swap();
+        // Only while the page is hidden. «No book open» was not enough: the check runs when the app comes
+        // back to the front, and a new version found a few seconds later took over while a book was still
+        // loading, so its text showed for a second and the page reloaded to white (Max, 2026-11-02).
+        const whenIdle = () => document.hidden && swap();
         reg.addEventListener("updatefound", () => reg.installing?.addEventListener("statechange", whenIdle));
         // The browser looks for a new sw.js only on a navigation, and the app never navigates: the
         // page lives for days. So the check is made whenever the app goes to the background or comes
@@ -188,10 +191,14 @@
       })
       .catch((err) => console.warn("service worker", err));
     let hadController = !!navigator.serviceWorker.controller;
+    let reloadWhenHidden = false;
+    const reloadNow = () => (streams.size ? (reloadWhenHidden = true) : location.reload());
     navigator.serviceWorker.addEventListener("controllerchange", () => {
-      if (hadController && !streams.size) location.reload();
+      // The new version takes over with a reload, never in front of the reader's eyes.
+      if (hadController) document.hidden ? reloadNow() : (reloadWhenHidden = true);
       hadController = true;
     });
+    document.addEventListener("visibilitychange", () => document.hidden && reloadWhenHidden && reloadNow());
   }
 
   async function api(method, url, body, opts = {}) {
