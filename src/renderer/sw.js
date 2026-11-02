@@ -7,6 +7,10 @@
 const VERSION = "__VERSION__";
 const ASSETS = __ASSETS__;
 const CACHE = `chytai-${VERSION}`;
+// Covers live in their own cache that outlives a new version: each cover is fetched once and then comes
+// from the device, offline too (Max, 2026-11-01: the covers loaded again and again). Their addresses carry
+// the book's date, so a changed cover is a new address.
+const COVERS = "chytai-covers";
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
@@ -28,7 +32,7 @@ self.addEventListener("install", (event) => {
 self.addEventListener("message", (event) => event.data === "skipWaiting" && self.skipWaiting());
 self.addEventListener("activate", (event) => {
   event.waitUntil((async () => {
-    for (const key of await caches.keys()) if (key !== CACHE) await caches.delete(key);
+    for (const key of await caches.keys()) if (key !== CACHE && key !== COVERS) await caches.delete(key);
   })());
 });
 
@@ -39,6 +43,20 @@ self.addEventListener("fetch", (event) => {
   if (req.method !== "GET") return;
   const url = new URL(req.url);
   if (url.origin !== location.origin) return;
+  if (url.pathname === "/api/cover") {
+    event.respondWith(
+      (async () => {
+        const cache = await caches.open(COVERS);
+        const hit = await cache.match(req);
+        if (hit) return hit;
+        const res = await fetch(req);
+        // «No cover» is kept too, or a book without one was asked about on every visit.
+        if (res.ok || res.status === 404) cache.put(req, res.clone()).catch(() => {});
+        return res;
+      })(),
+    );
+    return;
+  }
   // /free/<file> (a free book from the site) is the server's: it copies the book, then redirects.
   if (url.pathname.startsWith("/api/") || url.pathname.startsWith("/free/") || url.pathname === "/sw.js" || /^\/(login|logout|demo|admin)$/.test(url.pathname)) return;
 
