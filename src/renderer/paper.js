@@ -17,7 +17,7 @@
   let showText = false; // the attached photo's text is open to select from
   let adding = false; // the «+ Нотатка» form is open
   let openChat = null; // the question unfolded in the list
-  let ideas = []; // questions the AI suggests asking next (v3)
+  let idea = ""; // the question the AI suggests asking next, shown as the field's placeholder (v3)
   let ideasKey = "";
 
   const where = (b, p = b.page) => [p ? `стор. ${p}` : "", b.chapter].filter(Boolean).join(" · ");
@@ -122,7 +122,7 @@
       openChat = null;
       notes = [];
       chats = [];
-      ideas = [];
+      idea = "";
       ideasKey = "";
       load(b);
     }
@@ -143,18 +143,14 @@
     if (key === ideasKey) return;
     ideasKey = key;
     try {
-      const list = await window.reader.paperSuggest(b.path);
-      if (book?.path !== b.path || ideasKey !== key) return;
-      ideas = list;
-      if (!document.activeElement?.closest?.(".pp")) window.Shell.rerender();
-      else drawIdeas();
+      const q = await window.reader.paperSuggest(b.path);
+      if (book?.path !== b.path || ideasKey !== key || !q) return;
+      idea = q;
+      const f = $("#pp-q");
+      if (f) f.placeholder = idea;
     } catch {}
   }
-  const ideasHtml = () => ideas.map((q, i) => `<button type="button" class="pp-idea" data-idea="${i}">${esc(q)}</button>`).join("");
-  function drawIdeas() {
-    const box = $(".pp-ideas");
-    if (box) box.innerHTML = ideasHtml();
-  }
+  const PLACEHOLDER = "Що хочете спитати про книжку?";
 
   const svgMic = `<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>`;
   const svgCam = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>`;
@@ -178,24 +174,29 @@
         <button type="button" class="pp-mini" data-pp="about"><span class="pp-mini-c">${window.Shell.rcover(b)}</span><span class="pp-mini-x"><b>${esc(b.title)}</b><small>${esc([b.authors.join(", "), b.page ? `стор. ${b.page}` : ""].filter(Boolean).join(" · "))}</small></span></button>
         <span class="r-more pp-more" role="button" tabindex="0" data-menu="${esc(b.path)}" title="Ще" aria-label="Ще"><i></i><i></i><i></i></span></div>
       <form class="pp-ask" data-pp-ask>
-        <textarea id="pp-q" rows="4" placeholder="Що хочете спитати про книжку?" enterkeyhint="send">${esc(draft)}</textarea>
+        <textarea id="pp-q" rows="4" placeholder="${esc(idea || PLACEHOLDER)}" enterkeyhint="send">${esc(draft)}</textarea>
         ${att}
         <div class="pp-ask-row"><button type="button" class="pp-tool" data-pp="img" title="Фото чи скріншот" aria-label="Фото чи скріншот">${svgCam}</button>
           <button type="button" class="pp-tool${listening ? " on" : ""}" data-pp="mic" title="Надиктувати" aria-label="Надиктувати">${svgMic}</button>
           <span class="pp-ask-sp"></span>
           <button type="button" class="r-pill-line pp-tonote" data-pp="tonote">В нотатки</button>
-          <button type="submit" class="r-pill">Запитати</button></div>
+          <button type="button" class="r-pill" data-pp="ask">Запитати</button></div>
       </form>
-      <div class="pp-ideas">${ideasHtml()}</div>
       ${sortedChats.length ? `<section class="pp-chats"><div class="r-sec-head"><h2>Запитання · ${chats.length}</h2></div>
         ${sortedChats.map((c) => {
           const last = c.turns[c.turns.length - 1] || {};
-          const on = openChat === c.id;
+          const live = conv?.chat === c ? conv : null;
+          const on = openChat === c.id || !!live;
+          const fq = (q) => `<div class="pp-chat-fq">${esc(q)}</div>`;
+          const pending = live && (live.busy || live.error)
+            ? `${live.q && (c.turns.length || c.sel) ? fq(live.q) : ""}<div class="pp-chat-a answer pp-live">${live.error ? `<div class="error">${esc(live.error)}</div>` : live.text ? md(live.text) : `<span class="dots"><i></i><i></i><i></i></span>`}</div>`
+            : "";
           return `<div class="pp-chat${on ? " open" : ""}" data-chat="${esc(c.id)}">
-            <div class="pp-chat-q">${c.img ? `<img class="pp-chat-img" src="${c.img}" alt="" />` : ""}${esc(c.sel ? (c.img ? c.sel : `«${c.sel}»`) : c.turns[0]?.q || "")}</div>
-            ${on ? c.turns.map((t, i) => `${i || c.sel ? (t.q ? `<div class="pp-chat-fq">${esc(t.q)}</div>` : "") : ""}<div class="pp-chat-a answer">${md(t.a)}</div>`).join("")
+            <div class="pp-chat-q">${c.img ? `<img class="pp-chat-img" src="${c.img}" alt="" />` : ""}${esc(c.sel ? (c.img ? c.sel : `«${c.sel}»`) : c.turns[0]?.q || live?.q || "")}</div>
+            ${on ? c.turns.map((t, i) => `${(i || c.sel) && t.q ? fq(t.q) : ""}<div class="pp-chat-a answer">${md(t.a)}</div>`).join("") + pending
               : `<div class="pp-chat-a short">${esc(String(last.a || "").replace(/[*_#>`]/g, "").slice(0, 400))}</div>`}
-            <div class="pp-note-m">${esc([c.page ? `стор. ${c.page}` : "", when(c.at)].filter(Boolean).join(" · "))}${on ? `<button type="button" class="r-link pp-more-q" data-pp-more="${esc(c.id)}">Уточнити</button><button type="button" class="r-link" data-pp-delchat="${esc(c.id)}">Видалити</button>` : ""}</div></div>`;
+            <div class="pp-note-m">${esc([c.page ? `стор. ${c.page}` : "", when(c.at)].filter(Boolean).join(" · "))}${on && c.turns.length ? `<button type="button" class="r-link pp-more-q" data-pp-savechat="${esc(c.id)}">В нотатки</button><button type="button" class="r-link" data-pp-delchat="${esc(c.id)}">Видалити</button>` : ""}</div>
+            ${on && c.turns.length && !live?.busy ? `<form class="pp-fq" data-pp-fq="${esc(c.id)}"><input id="pp-fq" type="text" autocomplete="off" enterkeyhint="send" placeholder="Уточнити…" /><button type="submit" aria-label="Надіслати">↑</button></form>` : ""}</div>`;
         }).join("")}</section>` : ""}
       <section class="pp-notes"><div class="r-sec-head"><h2>Нотатки${notes.length ? ` · ${notes.length}` : ""}</h2><button type="button" class="pp-addnote" data-pp="note">+ Нотатка</button></div>
         ${adding ? `<form class="pp-noteform" data-pp-form><textarea id="pp-note" rows="3" placeholder="Думка, цитата або що перечитати"></textarea>
@@ -223,6 +224,14 @@
       e.preventDefault();
       return askFromField();
     }
+    if (e.target.matches("[data-pp-fq]")) {
+      e.preventDefault();
+      const q = $("#pp-fq").value.trim();
+      const c = chats.find((x) => x.id === e.target.dataset.ppFq);
+      if (!q || !c || conv?.busy) return;
+      if (conv?.chat !== c) conv = { chat: c, book, text: "", busy: false, reqId: null };
+      return turn(q);
+    }
     if (!e.target.matches("[data-pp-form]")) return;
     e.preventDefault();
     const text = $("#pp-note").value.trim();
@@ -242,9 +251,10 @@
     listening?.stop();
     const q = $("#pp-q").value.trim();
     if (scan?.busy) return showNotice("Зачекайте, текст з фото ще розпізнається.", false);
-    if (!q && !scan?.text) return $("#pp-q").focus();
+    // An empty field asks the suggested question from the placeholder.
+    if (!q && !scan?.text && !idea) return $("#pp-q").focus();
     const page = scan?.page || book.page || 0;
-    ask({ question: q || "Поясни, що відбувається на цій сторінці.", pageText: scan?.text || "", page });
+    ask({ question: q || (scan?.text ? "" : idea) || "Поясни, що відбувається на цій сторінці.", pageText: scan?.text || "", page });
     $("#pp-q").value = "";
     scan = null;
     showText = false;
@@ -453,23 +463,33 @@
     if (delChat) {
       const id = delChat.dataset.ppDelchat;
       chats = chats.filter((c) => c.id !== id);
+      if (conv?.chat.id === id) {
+        if (conv.busy) window.reader.abort(conv.reqId);
+        conv = null;
+      }
+      if (openChat === id) openChat = null;
       window.Shell.rerender();
       return window.reader.paperChatDelete(book.path, id).catch(() => {});
     }
-    const more = e.target.closest("[data-pp-more]");
-    if (more) {
-      const c = chats.find((x) => x.id === more.dataset.ppMore);
-      return c && resume(c);
+    const save = e.target.closest("[data-pp-savechat]");
+    if (save) {
+      const c = chats.find((x) => x.id === save.dataset.ppSavechat);
+      const last = c?.turns[c.turns.length - 1];
+      if (!last) return;
+      const n = await addNote({ text: c.sel && !c.img ? c.sel : c.turns[0]?.q || c.sel || "Питання", comment: last.a, quote: !!c.sel && !c.img, page: c.page });
+      if (n) redraw(), showNotice("Збережено в нотатки", false);
+      return;
     }
-    const idea = e.target.closest("[data-idea]");
-    if (idea) return ask({ question: ideas[Number(idea.dataset.idea)], page: book.page });
     const chat = e.target.closest("[data-chat]");
     if (chat && !e.target.closest("a, button") && !getSelection().toString() && (!chat.classList.contains("open") || e.target.closest(".pp-chat-q"))) {
       openChat = openChat === chat.dataset.chat ? null : chat.dataset.chat;
+      if (conv?.chat.id === chat.dataset.chat && !conv.busy) conv = null;
+      else if (conv && !conv.busy && conv.chat.id !== openChat) conv = null;
       return window.Shell.rerender();
     }
     const act = e.target.closest("[data-pp]")?.dataset.pp;
     if (!act) return;
+    if (act === "ask") return askFromField();
     if (act === "img") return attach();
     if (act === "mic") return mic();
     if (act === "tonote") return fieldToNote();
@@ -490,52 +510,50 @@
     }
   });
 
-  // ---------- Запитати / Пояснити: one card, like the reader's; every question and answer is kept ----------
+  // ---------- Запитати / Пояснити: the answer right on the page (v3, Max: no card, there's no text it'd cover) ----------
+  // The question goes to the top of «Запитання», open, and the answer streams into it; every one is kept.
 
-  let conv = null;
+  // Redraws the page and puts the cursor back where it was (a phone would otherwise drop the keyboard).
+  function redraw() {
+    const a = document.activeElement;
+    const id = a?.id === "pp-q" || a?.id === "pp-fq" ? a.id : null;
+    const fq = $("#pp-fq")?.value || "";
+    const [s0, s1] = id ? [a.selectionStart, a.selectionEnd] : [];
+    window.Shell.rerender();
+    if ($("#pp-fq") && fq) $("#pp-fq").value = fq;
+    const el = id && $(`#${id}`);
+    if (el) {
+      el.focus({ preventScroll: true });
+      try {
+        el.setSelectionRange(s0, s1);
+      } catch {}
+    }
+  }
+
+  let conv = null; // the question being answered: { chat, book, q, text, busy, error, reqId, context }
   function ask({ selection = "", before = "", after = "", question = "", pageText = "", page = book.page, image = "", img = "" }) {
     const b = book;
+    if (conv?.busy) window.reader.abort(conv.reqId);
+    chats = chats.filter((c) => c.turns.length); // a question that failed is let go
     const sel = selection || (image ? "Обведене на фото" : "");
-    conv = { chat: { id: `c${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`, turns: [], messages: null, sel, img, page: page || 0, at: Date.now() }, book: b, text: "", busy: false, reqId: null };
+    const chat = { id: `c${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`, turns: [], messages: null, sel, img, page: page || 0, at: Date.now() };
+    chats = [...chats, chat];
+    openChat = chat.id;
+    conv = { chat, book: b, text: "", busy: false, reqId: null };
     conv.context = { paper: true, bookTitle: b.title, author: b.authors.join(", "), page: page || 0, chapter: b.chapter || "", selection, before, after, pageText, ...(image ? { image } : {}) };
-    showCard(sel ? "Пояснення" : "Запитання", page);
     turn(question || null);
-  }
-  // «Уточнити» on a kept question: the card again, with its talk so far.
-  function resume(c) {
-    conv = { chat: c, book, text: "", busy: false, reqId: null };
-    showCard(c.sel ? "Пояснення" : "Запитання", c.page);
-    for (const [i, t] of c.turns.entries()) {
-      if (t.q && (i || !c.sel)) $("#pa-thread").insertAdjacentHTML("beforeend", `<div class="pa-question"><span>Ваше питання</span>${esc(t.q)}</div>`);
-      $("#pa-thread").insertAdjacentHTML("beforeend", `<div class="answer">${md(t.a)}</div>`);
-    }
-    setTimeout(() => $("#pa-q").focus(), 50);
-  }
-  function showCard(title, page) {
-    const c = conv.chat;
-    $("#pa-title").textContent = title;
-    $("#pa-where").textContent = [conv.book.title.split(/[.:]\s/)[0], page ? `стор. ${page}` : ""].filter(Boolean).join(" · ");
-    $("#pa-thread").innerHTML = c.img ? `<img class="pa-img" src="${c.img}" alt="" />` : c.sel ? `<blockquote class="pa-quote">«${esc(c.sel)}»</blockquote>` : "";
-    $("#pa-save").hidden = !c.turns.length;
-    $("#pa-q").value = "";
-    $("#pa-q").placeholder = "Уточнити питання…";
-    $("#paper-ask").showModal();
+    $(".pp-chats")?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
   function turn(question) {
     const c = conv;
     c.q = question || "";
-    if (question) $("#pa-thread").insertAdjacentHTML("beforeend", `<div class="pa-question"><span>Ваше питання</span>${esc(question)}</div>`);
-    const el = document.createElement("div");
-    el.className = "answer streaming";
-    el.innerHTML = `<span class="dots"><i></i><i></i><i></i></span>`;
-    $("#pa-thread").appendChild(el);
-    c.el = el;
     c.text = "";
+    c.error = null;
     c.busy = true;
-    $("#pa-q").disabled = true;
     const request = c.chat.messages ? { messages: [...c.chat.messages, { role: "user", content: question }] } : { context: { ...c.context, question: question || undefined } };
     c.reqId = `${c.chat.id}-${Date.now()}`;
+    redraw();
     window.reader.explain(c.reqId, request);
   }
 
@@ -544,54 +562,35 @@
     if (!c || c.reqId !== reqId) return;
     if (ev.type === "text") {
       c.text += ev.text;
-      c.el.innerHTML = md(c.text);
+      const el = book === c.book && $(".pp-live");
+      if (el) el.innerHTML = md(c.text);
       return;
     }
     c.busy = false;
-    c.el.classList.remove("streaming");
-    $("#pa-q").disabled = false;
     if (ev.type === "done") {
-      if (!c.text) return (c.el.innerHTML = "<em>Порожня відповідь.</em>");
-      // Kept at once: the question, the answer, and the talk so far for «Уточнити».
-      const ch = c.chat;
-      ch.messages = ev.messages;
-      ch.turns = [...ch.turns, { q: c.q, a: c.text }];
-      ch.at = Date.now();
-      if (c.book === book && !chats.includes(ch)) chats = [...chats, ch];
-      window.reader.paperChatSave(c.book.path, ch).then(() => c.book === book && loadIdeas(book)).catch(() => {});
-      $("#pa-save").hidden = false;
+      if (!c.text) c.error = "Порожня відповідь.";
+      else {
+        // Kept at once: the question, the answer, and the talk so far for «Уточнити».
+        const ch = c.chat;
+        ch.messages = ev.messages;
+        ch.turns = [...ch.turns, { q: c.q, a: c.text }];
+        ch.at = Date.now();
+        window.reader.paperChatSave(c.book.path, ch).then(() => c.book === book && loadIdeas(book)).catch(() => {});
+      }
     } else if (ev.type === "aborted") {
-      if (!c.text) c.el.innerHTML = "<em>Зупинено.</em>";
+      if (!c.text) c.error = "Зупинено.";
     } else if (ev.type === "error") {
-      c.el.innerHTML = `<div class="error">${esc(ev.message)}</div>`;
+      c.error = ev.message || "Не вдалося отримати відповідь.";
     }
+    if (book === c.book) redraw();
   });
 
-  $("#pa-form").addEventListener("submit", (e) => {
-    e.preventDefault();
-    const q = $("#pa-q").value.trim();
-    if (!q || !conv || conv.busy) return;
-    $("#pa-q").value = "";
-    turn(q);
-  });
-  $("#pa-close").onclick = () => $("#paper-ask").close();
-  $("#paper-ask").addEventListener("click", (e) => e.target === $("#paper-ask") && $("#paper-ask").close());
-  $("#paper-ask").addEventListener("close", () => {
-    if (conv?.busy) window.reader.abort(conv.reqId);
-    if (conv?.chat.turns.length && conv.book === book) openChat = conv.chat.id;
-    conv = null;
-    window.Shell.rerender();
-  });
-  // «В нотатки»: the passage (or the question) with the last answer as its comment.
-  $("#pa-save").onclick = async () => {
-    const c = conv;
-    const last = c?.chat.turns[c.chat.turns.length - 1];
-    if (!last) return;
-    $("#pa-save").hidden = true;
-    const n = await addNote({ text: c.chat.sel || last.q || c.chat.turns[0]?.q || "Питання", comment: last.a, quote: !!c.chat.sel, page: c.chat.page });
-    if (n) showNotice("Збережено в нотатки", false);
-    else $("#pa-save").hidden = false;
-  };
+  // «Читаю зараз» on the site: while the page is open and in use, a ping a minute; the server counts the minutes.
+  let busyAt = 0;
+  for (const ev of ["pointerdown", "keydown", "scroll", "input"]) addEventListener(ev, () => (busyAt = Date.now()), { passive: true, capture: true });
+  setInterval(() => {
+    if (book && $(".pp") && document.visibilityState === "visible" && Date.now() - busyAt < 5 * 60 * 1000) window.reader.paperSeen(book.path);
+  }, 60 * 1000);
 
   window.Paper = { pageHtml, add, coverPhoto, current: () => book };
 })();

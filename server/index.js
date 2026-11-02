@@ -1140,7 +1140,8 @@ function noteReadingNow(acct, name) {
   const day = statsDay(t);
   if (r.told === day || t - r.from < NOW_AFTER) return;
   r.told = day;
-  const info = freeShelf.find((f) => f.name === name) || prot.meta(name) || {};
+  const pb = paper.NAME.test(name) ? userState(acct).paper?.[name] : null;
+  const info = pb ? { title: pb.title, author: pb.author } : freeShelf.find((f) => f.name === name) || prot.meta(name) || {};
   const book = { name, title: info.title || "", authors: Array.isArray(info.authors) ? info.authors : info.author ? [info.author] : [] };
   fetch(`${WEB_URL}/api/reader-now`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: acct, key: state.accounts[acct].key, book }), signal: AbortSignal.timeout(20000) })
     .then((res) => res.ok || console.error(`reader-now ${acct}: ${res.status}`))
@@ -1814,6 +1815,13 @@ api.patch("/paper/:name", guestsCannot("У демо-режимі паперов�
   if (page !== undefined) recordReading(req.acct);
   saveState();
   res.json(paper.listEntry(req.params.name, p, u));
+});
+// A paper book's page open and in use (pinged each minute while the reader does something on it): a few
+// minutes of it put the book on «Читаю зараз» on the site, as reading an e-book does (Max 2026-11-02).
+api.post("/paper/:name/seen", guestsCannot("У демо-режимі паперових книжок немає."), (req, res) => {
+  if (!userState(req.acct).paper?.[req.params.name]) return res.status(404).json({ error: "Книжки немає." });
+  noteReadingNow(req.acct, req.params.name);
+  res.json({ ok: true });
 });
 // Questions about a paper book with their answers (v2, Max: «треба щоб питання зберігалися»), kept with the
 // talk so far so «Уточнити» can go on: u.paperChats[name] = [{ id, turns: [{ q, a }], messages, sel, page, at }].

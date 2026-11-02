@@ -50,14 +50,14 @@ async function readPage(apiKey, image, mediaType) {
 // three short ones in Ukrainian, about where the reader is, or following on from the last question.
 async function suggest(apiKey, { title, author, page, last }) {
   const prompt = `A reader is reading a printed copy of «${title}»${author ? ` by ${author}` : ""}${page ? `, now around page ${page}` : ""}.
-${last ? `Their last question about it was: «${last.q}»\nThe answer began: «${last.a.slice(0, 600)}»\nSuggest three short follow-up questions they might want to ask next.` : "Suggest three short questions they might want to ask about the book at this point: context, characters, ideas, words or history a reader often wonders about."}
-Each question in Ukrainian, at most 9 words, natural and specific to this book, no spoilers beyond where they are. Answer with JSON only: ["…", "…", "…"]. If you don't know the book, make them general but useful.`;
+${last ? `Their last question about it was: «${last.q}»\nThe answer began: «${last.a.slice(0, 600)}»\nSuggest one short follow-up question they might want to ask next.` : "Suggest one short question they might want to ask about the book at this point: context, characters, ideas, words or history a reader often wonders about."}
+The question in Ukrainian, at most 9 words, natural and specific to this book, no spoilers beyond where they are. Answer with JSON only: ["…"]. If you don't know the book, make it general but useful.`;
   const r = await ask(apiKey, COVER_MODEL, prompt);
   let list = [];
   try {
     list = JSON.parse(r.text.match(/\[[\s\S]*\]/)?.[0] || "[]");
   } catch {}
-  return { questions: list.filter((q) => typeof q === "string" && q.trim()).slice(0, 3).map((q) => q.trim().slice(0, 120)), usage: r.usage, model: r.model };
+  return { questions: list.filter((q) => typeof q === "string" && q.trim()).slice(0, 1).map((q) => q.trim().slice(0, 120)), usage: r.usage, model: r.model };
 }
 
 // A paper book's kept talk without the photo in it: the picture is several hundred KB and is not kept.
