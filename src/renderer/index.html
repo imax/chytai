@@ -361,6 +361,12 @@
   </dialog>
   <!-- Paper books (paper.js): what a cover photo found, and the question/explanation card. -->
   <dialog id="paper-found"><div id="pf-body"></div></dialog>
+  <!-- Marking a photo of a paper book's page (v3): circle or underline with a finger, the AI explains what's marked. -->
+  <dialog id="paper-mark">
+    <div class="pm-head"><button type="button" id="pm-cancel" class="r-link">Скасувати</button><span>Обведіть, що пояснити</span><button type="button" id="pm-clear" class="r-link">Очистити</button></div>
+    <div class="pm-stage"><div class="pm-pic"><img id="pm-img" alt="" /><canvas id="pm-canvas"></canvas></div></div>
+    <div class="pm-foot"><button type="button" id="pm-skip" class="r-pill-line">Без позначок</button><button type="button" id="pm-go" class="r-pill">Пояснити обведене</button></div>
+  </dialog>
   <dialog id="paper-ask">
     <div class="pa-head"><h2 id="pa-title">Запитання</h2><button type="button" id="pa-save" class="pa-save" hidden>В нотатки</button><button type="button" id="pa-close" class="pp-x" aria-label="Закрити">×</button></div>
     <p id="pa-where" class="pa-where"></p>

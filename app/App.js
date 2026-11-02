@@ -151,7 +151,8 @@ function Reader() {
         contentInsetAdjustmentBehavior="never"
         // Lets the reader tell the app from Safari (renderer.js checks for ChytaiApp). «/camera»: this build
         // has the camera permission in Info.plist (paper books, 2026-11-02); without it iOS closes the app.
-        applicationNameForUserAgent="ChytaiApp/camera"
+        // «/mic»: and the microphone and speech recognition ones (dictating a question).
+        applicationNameForUserAgent="ChytaiApp/camera/mic"
         allowsBackForwardNavigationGestures
         allowsInlineMediaPlayback
         // No sharedCookiesEnabled: with it, the login cookie set on the POST /login redirect reaches

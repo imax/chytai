@@ -881,14 +881,14 @@ html:not(.touch) .tile:hover .tile-more, .tile-more:focus-visible { display: fle
    Serif 4 + Onest, rules; the reader's own accent is ochre. Turn 4 adds the dark theme, the book menu,
    «Нещодавно видалені». Everything below overrides the older home screen.
    =================================================================================================== */
-#shell, #book-menu, #trash-dialog, #about-dialog, #notice, #paper-found, #paper-ask {
+#shell, #book-menu, #trash-dialog, #about-dialog, #notice, #paper-found, #paper-ask, #paper-mark {
   --r-paper: #f7f4ee; --r-menu: #fbf9f5; --r-ink: #1b1a17; --r-ink2: #6b675f; --r-ink3: #8a857b; --r-rule: #e4dfd5;
   --r-head: #1b1a17; --r-sline: #c9c3b6; --r-dash: #b9b2a3; --r-ochre: #9a6418; --r-ochre-h: #7f5212; --r-bar: #b5803a;
   --r-track: #e4dfd5; --r-btn: #ffffff; --r-red: #a63a2a; --r-toast: #1b1a17; --r-toast-fg: #f7f4ee; --r-toast-btn: #e2b26b;
   --r-serif: "Source Serif 4 Variable", "Source Serif 4", Georgia, serif;
   --r-sans: "Onest Variable", Onest, -apple-system, BlinkMacSystemFont, sans-serif;
 }
-body[data-theme="dark"] #shell, body[data-theme="dark"] #book-menu, body[data-theme="dark"] #trash-dialog, body[data-theme="dark"] #about-dialog, body[data-theme="dark"] #notice, body[data-theme="dark"] #paper-found, body[data-theme="dark"] #paper-ask {
+body[data-theme="dark"] #shell, body[data-theme="dark"] #book-menu, body[data-theme="dark"] #trash-dialog, body[data-theme="dark"] #about-dialog, body[data-theme="dark"] #notice, body[data-theme="dark"] #paper-found, body[data-theme="dark"] #paper-ask, body[data-theme="dark"] #paper-mark {
   --r-paper: #1a1916; --r-menu: #24221e; --r-ink: #ece6da; --r-ink2: #a39d91; --r-ink3: #8a847a; --r-rule: #2f2c27;
   --r-head: #8a847a; --r-sline: #4a463f; --r-dash: #5a554c; --r-ochre: #d9a35a; --r-ochre-h: #e6b674; --r-bar: #c98f3f;
   --r-track: #36332d; --r-btn: #1a1916; --r-red: #e07a68; --r-toast: #ece6da; --r-toast-fg: #1a1916; --r-toast-btn: #9a6418;
@@ -1732,7 +1732,7 @@ a.r-frow:hover .r-frow-go.plain { color: var(--r-ochre); }
 .pp-mini-x small { font-size: 12px; color: var(--r-ink2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .pp-ask { display: flex; flex-direction: column; gap: 12px; border: 1px solid var(--r-sline); border-radius: 14px; background: var(--r-btn); padding: 14px 14px 12px; }
 .pp-ask:focus-within { border-color: var(--r-ochre); }
-#pp-q { border: none; outline: none; resize: none; background: transparent; color: var(--r-ink); font: 18px/1.4 var(--r-serif); padding: 0; min-height: 52px; field-sizing: content; max-height: 40vh; }
+#pp-q { border: none; outline: none; resize: none; background: transparent; color: var(--r-ink); font: 18px/1.4 var(--r-serif); padding: 0; min-height: 112px; field-sizing: content; max-height: 40vh; }
 #pp-q::placeholder { color: var(--r-ink3); }
 .pp-ask-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .pp-ask-row .r-pill { padding: 10px 22px; }
@@ -1760,3 +1760,34 @@ a.r-frow:hover .r-frow-go.plain { color: var(--r-ochre); }
 @media (min-width: 761px) {
   .pp-bar { margin-top: 0; }
 }
+
+/* v3 (Max 2026-11-02): marks on a photo, dictation, «В нотатки», suggested questions. */
+.pp-ask-row { justify-content: flex-start; gap: 6px; }
+.pp-ask-sp { flex: 1; }
+.pp-tool { width: 40px; height: 40px; flex: none; display: inline-flex; align-items: center; justify-content: center; border: 1px solid transparent; border-radius: 50%; background: none; color: var(--r-ink2); cursor: pointer; padding: 0; }
+.pp-tool svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.6; }
+.pp-tool:hover { color: var(--r-ochre); }
+.pp-tool.on { color: #fff; background: var(--r-red); animation: pp-pulse 1.4s ease-in-out infinite; }
+@keyframes pp-pulse { 50% { box-shadow: 0 0 0 6px rgba(166, 58, 42, .18); } }
+.pp-ask-row .pp-tonote { padding: 9px 14px; font-size: 14px; }
+.pp-ideas { display: flex; flex-wrap: wrap; gap: 8px; margin-top: -8px; }
+.pp-ideas:empty { display: none; }
+.pp-idea { border: 1px solid var(--r-sline); border-radius: 999px; background: none; color: var(--r-ink); font: 14px/1.3 var(--r-sans); padding: 7px 13px; text-align: left; cursor: pointer; }
+.pp-idea:hover { border-color: var(--r-ochre); color: var(--r-ochre); }
+.pp-chat-img { float: right; width: 40px; height: 54px; object-fit: cover; border-radius: 4px; margin: 2px 0 4px 12px; }
+.pp-chat::after { content: ""; display: block; clear: both; }
+.pa-img { display: block; max-width: 100%; max-height: 38vh; margin: 4px auto 14px; border-radius: 8px; }
+#paper-mark { position: fixed; inset: 0; width: 100vw; height: 100dvh; max-width: none; max-height: none; margin: 0; padding: 0; border: none; background: #111; color: #f2efe8; font-family: var(--r-sans); }
+#paper-mark[open] { display: flex; flex-direction: column; }
+#paper-mark::backdrop { background: #111; }
+.pm-head, .pm-foot { flex: none; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 16px; }
+.pm-head { padding-top: calc(env(safe-area-inset-top) + 12px); font-size: 14px; color: #c9c3b6; }
+.pm-head .r-link { outline: none; color: #f2efe8; font-size: 15px; background: none; border: none; cursor: pointer; padding: 6px 0; text-decoration: none; }
+.pm-head #pm-clear[hidden] { visibility: hidden; display: inline; }
+.pm-stage { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; padding: 0 12px; overflow: hidden; }
+.pm-pic { position: relative; line-height: 0; }
+#pm-img { display: block; max-width: calc(100vw - 24px); max-height: calc(100dvh - 150px - env(safe-area-inset-top) - env(safe-area-inset-bottom)); user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+#pm-canvas { position: absolute; inset: 0; touch-action: none; cursor: crosshair; }
+.pm-foot { padding-bottom: calc(env(safe-area-inset-bottom) + 14px); justify-content: center; }
+.pm-foot .r-pill-line { color: #f2efe8; border-color: #6b675f; background: none; }
+.pm-foot .r-pill:disabled { opacity: .45; }

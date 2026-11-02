@@ -678,6 +678,7 @@
     paperChats: async (name) => (await (await api("GET", `/api/paper/${encodeURIComponent(name)}/chats`)).json()).chats,
     paperChatSave: (name, chat) => api("PUT", `/api/paper/${encodeURIComponent(name)}/chats/${encodeURIComponent(chat.id)}`, chat),
     paperChatDelete: (name, id) => api("DELETE", `/api/paper/${encodeURIComponent(name)}/chats/${encodeURIComponent(id)}`),
+    paperSuggest: async (name) => (await (await api("POST", `/api/paper/${encodeURIComponent(name)}/suggest`, {})).json()).questions || [],
     paperScan: async (kind, blob) => (await api("POST", `/api/paper/scan?kind=${kind}`, blob)).json(),
     catalogFind: async (q) => (await api("GET", `/api/find?${new URLSearchParams({ q })}`)).json(),
     libraryFinished: (name, done) => api("POST", "/api/library/finished", { path: name, done }),

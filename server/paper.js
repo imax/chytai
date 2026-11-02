@@ -18,11 +18,8 @@ Answer with the text only, no comments.`;
 
 async function ask(apiKey, model, prompt, image, mediaType) {
   const client = new Anthropic({ apiKey });
-  const msg = await client.messages.create({
-    model,
-    max_tokens: 4000,
-    messages: [{ role: "user", content: [{ type: "image", source: { type: "base64", media_type: mediaType, data: image.toString("base64") } }, { type: "text", text: prompt }] }],
-  });
+  const content = image ? [{ type: "image", source: { type: "base64", media_type: mediaType, data: image.toString("base64") } }, { type: "text", text: prompt }] : prompt;
+  const msg = await client.messages.create({ model, max_tokens: 4000, messages: [{ role: "user", content }] });
   return { text: msg.content.filter((b) => b.type === "text").map((b) => b.text).join("").trim(), usage: msg.usage, model: msg.model };
 }
 
@@ -49,6 +46,26 @@ async function readPage(apiKey, image, mediaType) {
   return { text: text.trim().slice(0, 20000), page, usage: r.usage, model: r.model };
 }
 
+// Questions to ask (v3, Max: «можна придумувати питання, знаючи назву книжки… або follow-up до попереднього»):
+// three short ones in Ukrainian, about where the reader is, or following on from the last question.
+async function suggest(apiKey, { title, author, page, last }) {
+  const prompt = `A reader is reading a printed copy of «${title}»${author ? ` by ${author}` : ""}${page ? `, now around page ${page}` : ""}.
+${last ? `Their last question about it was: «${last.q}»\nThe answer began: «${last.a.slice(0, 600)}»\nSuggest three short follow-up questions they might want to ask next.` : "Suggest three short questions they might want to ask about the book at this point: context, characters, ideas, words or history a reader often wonders about."}
+Each question in Ukrainian, at most 9 words, natural and specific to this book, no spoilers beyond where they are. Answer with JSON only: ["…", "…", "…"]. If you don't know the book, make them general but useful.`;
+  const r = await ask(apiKey, COVER_MODEL, prompt);
+  let list = [];
+  try {
+    list = JSON.parse(r.text.match(/\[[\s\S]*\]/)?.[0] || "[]");
+  } catch {}
+  return { questions: list.filter((q) => typeof q === "string" && q.trim()).slice(0, 3).map((q) => q.trim().slice(0, 120)), usage: r.usage, model: r.model };
+}
+
+// A paper book's kept talk without the photo in it: the picture is several hundred KB and is not kept.
+function stripImages(messages) {
+  if (!Array.isArray(messages)) return null;
+  return messages.map((m) => (Array.isArray(m?.content) ? { ...m, content: m.content.map((b) => (b?.type === "image" ? { type: "text", text: "[Фото сторінки з позначками читача]" } : b)) } : m));
+}
+
 // What the library shows for a paper book of this reader.
 function listEntry(name, p, u) {
   const aside = !!u.setAside?.[name];
@@ -62,4 +79,4 @@ function listEntry(name, p, u) {
   };
 }
 
-module.exports = { NAME, readCover, readPage, listEntry, COVER_MODEL, PAGE_MODEL };
+module.exports = { NAME, readCover, readPage, suggest, stripImages, listEntry, COVER_MODEL, PAGE_MODEL };

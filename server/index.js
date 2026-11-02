@@ -1825,12 +1825,14 @@ api.get("/paper/:name/chats", guestsCannot("У демо-режимі папер�
 api.put("/paper/:name/chats/:id", guestsCannot("У демо-режимі паперових книжок немає."), (req, res) => {
   const u = userState(req.acct);
   if (!u.paper?.[req.params.name]) return res.status(404).json({ error: "Книжки немає." });
-  const { turns, messages, sel, page, at } = req.body || {};
+  const { turns, messages, sel, page, at, img } = req.body || {};
   if (!/^[a-z0-9]{4,40}$/.test(req.params.id) || !Array.isArray(turns) || !turns.length) return res.status(400).json({ error: "bad request" });
   const chat = {
     id: req.params.id,
     turns: turns.slice(-50).map((t) => ({ q: String(t?.q || "").slice(0, 4000), a: String(t?.a || "").slice(0, 20000) })),
-    messages: Array.isArray(messages) ? messages : null,
+    messages: paper.stripImages(messages),
+    // A small picture of the marked page (v3), shown with the question.
+    img: typeof img === "string" && /^data:image\/jpeg;base64,[A-Za-z0-9+/=]+$/.test(img) && img.length < 120 * 1024 ? img : "",
     sel: typeof sel === "string" ? sel.slice(0, 4000) : "",
     page: intOr(page, 20000) || 0,
     at: Number.isFinite(at) ? at : Date.now(),
@@ -1845,6 +1847,30 @@ api.put("/paper/:name/chats/:id", guestsCannot("У демо-режимі пап�
   (u.opened ??= {})[req.params.name] = Date.now();
   saveState();
   res.json({ ok: true });
+});
+// Questions to ask next (v3): from the book and the page, or following on from the last question. Kept a day.
+const suggestCache = new Map();
+api.post("/paper/:name/suggest", guestsCannot("У демо-режимі паперових книжок немає."), async (req, res) => {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  const u = userState(req.acct);
+  const p = u.paper?.[req.params.name];
+  if (!p || !apiKey) return res.json({ questions: [] });
+  const chats = u.paperChats?.[req.params.name] || [];
+  const lastChat = [...chats].sort((x, y) => (y.at || 0) - (x.at || 0))[0];
+  const turn = lastChat?.turns?.[lastChat.turns.length - 1];
+  const last = turn ? { q: turn.q || lastChat.sel || "", a: turn.a || "" } : null;
+  const key = `${req.acct}\t${req.params.name}\t${p.page || 0}\t${lastChat?.id || ""}\t${lastChat?.turns?.length || 0}`;
+  const hit = suggestCache.get(key);
+  if (hit && Date.now() - hit.at < 86400000) return res.json({ questions: hit.questions });
+  try {
+    const r = await paper.suggest(apiKey, { title: p.title, author: p.author, page: p.page, last });
+    recordExplain(req, { model: r.model, usage: r.usage });
+    if (suggestCache.size > 5000) suggestCache.clear();
+    suggestCache.set(key, { at: Date.now(), questions: r.questions });
+    res.json({ questions: r.questions });
+  } catch (err) {
+    res.json({ questions: [], error: describeError(err) });
+  }
 });
 api.delete("/paper/:name/chats/:id", guestsCannot("У демо-режимі паперових книжок немає."), (req, res) => {
   const u = userState(req.acct);
@@ -1885,6 +1911,9 @@ api.post("/paper/scan", guestsCannot("У демо-режимі фото не р�
 api.post("/explain", async (req, res) => {
   const request = req.body?.request;
   if (!request || typeof request !== "object") return res.status(400).json({ error: "bad request" });
+  // A photo of a paper book's page with the reader's marks (v3): accounts only, one picture of a few MB at most.
+  if (request.context?.image != null && (req.guest || typeof request.context.image !== "string" || request.context.image.length > 4 * 1024 * 1024 || !/^[A-Za-z0-9+/=]+$/.test(request.context.image)))
+    return res.status(400).json({ error: "Фото не підходить." });
   res.setHeader("Content-Type", "application/x-ndjson; charset=utf-8");
   res.setHeader("Cache-Control", "no-cache, no-transform");
   res.setHeader("X-Accel-Buffering", "no");

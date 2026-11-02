@@ -69,6 +69,11 @@ function paperMessage(ctx, mode) {
   if (ctx.bookTitle) parts.push(`<book>${ctx.bookTitle}${ctx.author ? ` by ${ctx.author}` : ""}</book>`);
   const where = [ctx.page ? `page ${ctx.page}${ctx.pages ? ` of ${ctx.pages}` : ""}` : "", ctx.chapter ? `chapter «${ctx.chapter}»` : ""].filter(Boolean).join(", ");
   parts.push(`The reader is reading a printed copy of this book, not in the app${where ? `, and is at ${where} as far as the app knows (from their last photo of a page; they may have read on)` : ""}. If the question says where they are, trust that instead. Rely on what you know about the book. Never reveal plot, twists or conclusions that come after where they are${where ? "" : " (if you can't tell how far they are, ask or avoid spoilers altogether)"}; if the question can't be answered without them, say so and offer to answer once they've read on. If you don't know this book well, say so in one line and answer from general knowledge.`);
+  if (ctx.image) {
+    parts.push("The reader photographed the page and marked passages on it by hand (circled, underlined or struck through, in red). Explain each marked passage in the order it appears: start each with its words quoted in bold, then the explanation. If they marked several, keep each one short. If a question is given below, answer it about the marked passages.");
+    if (ctx.question) parts.push(`The reader's question: ${ctx.question}`);
+    return { role: "user", content: [{ type: "image", source: { type: "base64", media_type: "image/jpeg", data: ctx.image } }, { type: "text", text: parts.join("\n\n") }] };
+  }
   if (ctx.pageText && !ctx.selection) parts.push(`The reader attached a photo of the page they are on; its text, transcribed (it may have small recognition errors):\n<page_text>\n${ctx.pageText}\n</page_text>`);
   if (ctx.selection) {
     if (ctx.before) parts.push(`<context_before>\n${ctx.before}\n</context_before>`);

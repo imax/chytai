@@ -17,6 +17,8 @@
   let showText = false; // the attached photo's text is open to select from
   let adding = false; // the «+ Нотатка» form is open
   let openChat = null; // the question unfolded in the list
+  let ideas = []; // questions the AI suggests asking next (v3)
+  let ideasKey = "";
 
   const where = (b, p = b.page) => [p ? `стор. ${p}` : "", b.chapter].filter(Boolean).join(" · ");
 
@@ -120,6 +122,8 @@
       openChat = null;
       notes = [];
       chats = [];
+      ideas = [];
+      ideasKey = "";
       load(b);
     }
     book = b;
@@ -130,8 +134,29 @@
     if (n) notes = n;
     if (c) chats = c;
     window.Shell.rerender();
+    loadIdeas(b);
+  }
+  // Suggested questions: from the book and the page, or following on from the last question asked.
+  async function loadIdeas(b) {
+    const last = [...chats].sort((x, y) => (y.at || 0) - (x.at || 0))[0];
+    const key = `${b.path}|${b.page || 0}|${last?.id || ""}|${last?.turns.length || 0}`;
+    if (key === ideasKey) return;
+    ideasKey = key;
+    try {
+      const list = await window.reader.paperSuggest(b.path);
+      if (book?.path !== b.path || ideasKey !== key) return;
+      ideas = list;
+      if (!document.activeElement?.closest?.(".pp")) window.Shell.rerender();
+      else drawIdeas();
+    } catch {}
+  }
+  const ideasHtml = () => ideas.map((q, i) => `<button type="button" class="pp-idea" data-idea="${i}">${esc(q)}</button>`).join("");
+  function drawIdeas() {
+    const box = $(".pp-ideas");
+    if (box) box.innerHTML = ideasHtml();
   }
 
+  const svgMic = `<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>`;
   const svgCam = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>`;
   function pageHtml(b) {
     open(b);
@@ -153,17 +178,21 @@
         <button type="button" class="pp-mini" data-pp="about"><span class="pp-mini-c">${window.Shell.rcover(b)}</span><span class="pp-mini-x"><b>${esc(b.title)}</b><small>${esc([b.authors.join(", "), b.page ? `стор. ${b.page}` : ""].filter(Boolean).join(" · "))}</small></span></button>
         <span class="r-more pp-more" role="button" tabindex="0" data-menu="${esc(b.path)}" title="Ще" aria-label="Ще"><i></i><i></i><i></i></span></div>
       <form class="pp-ask" data-pp-ask>
-        <textarea id="pp-q" rows="2" placeholder="Що хочете спитати про книжку?" enterkeyhint="send">${esc(draft)}</textarea>
+        <textarea id="pp-q" rows="4" placeholder="Що хочете спитати про книжку?" enterkeyhint="send">${esc(draft)}</textarea>
         ${att}
-        <div class="pp-ask-row"><button type="button" class="pp-img" data-pp="img">${svgCam}<span>Фото чи скріншот</span></button>
+        <div class="pp-ask-row"><button type="button" class="pp-tool" data-pp="img" title="Фото чи скріншот" aria-label="Фото чи скріншот">${svgCam}</button>
+          <button type="button" class="pp-tool${listening ? " on" : ""}" data-pp="mic" title="Надиктувати" aria-label="Надиктувати">${svgMic}</button>
+          <span class="pp-ask-sp"></span>
+          <button type="button" class="r-pill-line pp-tonote" data-pp="tonote">В нотатки</button>
           <button type="submit" class="r-pill">Запитати</button></div>
       </form>
+      <div class="pp-ideas">${ideasHtml()}</div>
       ${sortedChats.length ? `<section class="pp-chats"><div class="r-sec-head"><h2>Запитання · ${chats.length}</h2></div>
         ${sortedChats.map((c) => {
           const last = c.turns[c.turns.length - 1] || {};
           const on = openChat === c.id;
           return `<div class="pp-chat${on ? " open" : ""}" data-chat="${esc(c.id)}">
-            <div class="pp-chat-q">${esc(c.sel ? `«${c.sel}»` : c.turns[0]?.q || "")}</div>
+            <div class="pp-chat-q">${c.img ? `<img class="pp-chat-img" src="${c.img}" alt="" />` : ""}${esc(c.sel ? (c.img ? c.sel : `«${c.sel}»`) : c.turns[0]?.q || "")}</div>
             ${on ? c.turns.map((t, i) => `${i || c.sel ? (t.q ? `<div class="pp-chat-fq">${esc(t.q)}</div>` : "") : ""}<div class="pp-chat-a answer">${md(t.a)}</div>`).join("")
               : `<div class="pp-chat-a short">${esc(String(last.a || "").replace(/[*_#>`]/g, "").slice(0, 400))}</div>`}
             <div class="pp-note-m">${esc([c.page ? `стор. ${c.page}` : "", when(c.at)].filter(Boolean).join(" · "))}${on ? `<button type="button" class="r-link pp-more-q" data-pp-more="${esc(c.id)}">Уточнити</button><button type="button" class="r-link" data-pp-delchat="${esc(c.id)}">Видалити</button>` : ""}</div></div>`;
@@ -210,6 +239,7 @@
   });
 
   function askFromField() {
+    listening?.stop();
     const q = $("#pp-q").value.trim();
     if (scan?.busy) return showNotice("Зачекайте, текст з фото ще розпізнається.", false);
     if (!q && !scan?.text) return $("#pp-q").focus();
@@ -243,6 +273,17 @@
     const b = book;
     const small = await shrink(file);
     const thumb = URL.createObjectURL(small);
+    // First the marks: whatever is circled or underlined gets explained at once.
+    const marked = await mark(thumb);
+    if (marked === null) return URL.revokeObjectURL(thumb);
+    if (marked) {
+      const q = $("#pp-q")?.value.trim() || "";
+      if ($("#pp-q")) $("#pp-q").value = "";
+      ask({ image: marked.data, img: marked.small, question: q, page: book.page });
+      // The page number still comes from the photo, quietly.
+      window.reader.paperScan("page", small).then((r) => book === b && seenPage(r.page)).catch(() => {});
+      return;
+    }
     scan = { busy: true, thumb };
     window.Shell.rerender();
     try {
@@ -260,6 +301,131 @@
       showNotice(offline(err, "розпізнати фото"), false);
     }
     window.Shell.rerender();
+  }
+
+  // ---------- Marking the photo (v3, Max: «обвести кружечком… і щоб він зразу пояснював обведене») ----------
+
+  // Resolves to { data, small } with the marks drawn in, false for «Без позначок», null for «Скасувати».
+  function mark(url) {
+    return new Promise((resolve) => {
+      const d = $("#paper-mark");
+      const img = $("#pm-img");
+      const cv = $("#pm-canvas");
+      const strokes = [];
+      let cur = null;
+      const fit = () => {
+        const r = img.getBoundingClientRect();
+        cv.width = Math.round(r.width * devicePixelRatio);
+        cv.height = Math.round(r.height * devicePixelRatio);
+        cv.style.width = `${r.width}px`;
+        cv.style.height = `${r.height}px`;
+        draw();
+      };
+      const draw = (ctx = cv.getContext("2d"), w = cv.width, h = cv.height, onPhoto = false) => {
+        if (!onPhoto) ctx.clearRect(0, 0, w, h);
+        ctx.strokeStyle = "rgba(214, 40, 30, .85)";
+        ctx.lineWidth = Math.max(3, w / 160);
+        ctx.lineCap = ctx.lineJoin = "round";
+        for (const s of strokes) {
+          ctx.beginPath();
+          s.forEach(([x, y], i) => (i ? ctx.lineTo(x * w, y * h) : ctx.moveTo(x * w, y * h)));
+          ctx.stroke();
+        }
+        $("#pm-go").disabled = !strokes.length;
+        $("#pm-clear").hidden = !strokes.length;
+      };
+      const at = (e) => {
+        const r = cv.getBoundingClientRect();
+        return [(e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height];
+      };
+      cv.onpointerdown = (e) => {
+        e.preventDefault();
+        cv.setPointerCapture(e.pointerId);
+        cur = [at(e)];
+        strokes.push(cur);
+        draw();
+      };
+      cv.onpointermove = (e) => cur && (cur.push(at(e)), draw());
+      cv.onpointerup = cv.onpointercancel = () => (cur = null);
+      $("#pm-clear").onclick = () => ((strokes.length = 0), draw());
+      const done = (v) => {
+        removeEventListener("resize", fit);
+        d.onclose = null;
+        d.close();
+        resolve(v);
+      };
+      $("#pm-cancel").onclick = () => done(null);
+      d.onclose = () => resolve(null);
+      $("#pm-skip").onclick = () => done(false);
+      $("#pm-go").onclick = async () => {
+        // The photo with the marks on it, as the model sees it, and a small copy for the list.
+        const c = document.createElement("canvas");
+        c.width = img.naturalWidth;
+        c.height = img.naturalHeight;
+        const ctx = c.getContext("2d");
+        ctx.drawImage(img, 0, 0);
+        draw(ctx, c.width, c.height, true);
+        const data = c.toDataURL("image/jpeg", 0.85).split(",")[1];
+        const k = 240 / Math.max(c.width, c.height);
+        const t = document.createElement("canvas");
+        t.width = Math.round(c.width * k);
+        t.height = Math.round(c.height * k);
+        t.getContext("2d").drawImage(c, 0, 0, t.width, t.height);
+        done({ data, small: t.toDataURL("image/jpeg", 0.7) });
+      };
+      img.onload = () => fit();
+      img.src = url;
+      addEventListener("resize", fit);
+      $("#pm-go").disabled = true;
+      $("#pm-clear").hidden = true;
+      d.showModal();
+      if (img.complete && img.naturalWidth) fit();
+    });
+  }
+
+  // ---------- Dictation (v3): the browser's speech recognition into the question field ----------
+
+  const Speech = window.SpeechRecognition || window.webkitSpeechRecognition;
+  // An iPhone app built without the microphone permission would close on it (see OLD_APP).
+  const MIC_OK = !!Speech && (!/ChytaiApp/.test(navigator.userAgent) || /ChytaiApp\/camera\/mic/.test(navigator.userAgent));
+  let listening = null;
+  function mic() {
+    if (listening) return listening.stop();
+    if (!MIC_OK) return showNotice("Тут диктувати можна мікрофоном на клавіатурі.", false), $("#pp-q")?.focus();
+    const field = $("#pp-q");
+    const start = field.value.trim() ? `${field.value.trim()} ` : "";
+    const rec = new Speech();
+    rec.lang = "uk-UA";
+    rec.interimResults = true;
+    rec.continuous = true;
+    rec.onresult = (e) => {
+      const text = [...e.results].map((r) => r[0].transcript).join(" ").replace(/\s+/g, " ").trim();
+      if ($("#pp-q")) $("#pp-q").value = start + text;
+    };
+    rec.onerror = (e) => e.error !== "no-speech" && e.error !== "aborted" && showNotice(e.error === "not-allowed" ? "Немає доступу до мікрофона." : "Не вдалося розпізнати мовлення.", false);
+    rec.onend = () => {
+      listening = null;
+      $('[data-pp="mic"]')?.classList.remove("on");
+    };
+    try {
+      rec.start();
+      listening = rec;
+      $('[data-pp="mic"]')?.classList.add("on");
+    } catch {
+      showNotice("Не вдалося увімкнути мікрофон.", false);
+    }
+  }
+
+  // «В нотатки» under the field: what was typed or said, as a note on the page you're on.
+  async function fieldToNote() {
+    const text = $("#pp-q").value.trim();
+    if (!text) return $("#pp-q").focus();
+    listening?.stop();
+    const n = await addNote({ text, page: scan?.page || book.page });
+    if (!n) return;
+    $("#pp-q").value = "";
+    window.Shell.rerender();
+    showNotice("Збережено в нотатки", false);
   }
 
   // The selection in the photo's text, with a little of what is around it for context.
@@ -295,6 +461,8 @@
       const c = chats.find((x) => x.id === more.dataset.ppMore);
       return c && resume(c);
     }
+    const idea = e.target.closest("[data-idea]");
+    if (idea) return ask({ question: ideas[Number(idea.dataset.idea)], page: book.page });
     const chat = e.target.closest("[data-chat]");
     if (chat && !e.target.closest("a, button") && !getSelection().toString() && (!chat.classList.contains("open") || e.target.closest(".pp-chat-q"))) {
       openChat = openChat === chat.dataset.chat ? null : chat.dataset.chat;
@@ -303,6 +471,8 @@
     const act = e.target.closest("[data-pp]")?.dataset.pp;
     if (!act) return;
     if (act === "img") return attach();
+    if (act === "mic") return mic();
+    if (act === "tonote") return fieldToNote();
     if (act === "unattach") return (scan = null), (showText = false), window.Shell.rerender();
     if (act === "text") return (showText = !showText), window.Shell.rerender();
     if (act === "about") return window.Shell.showAbout(book);
@@ -323,11 +493,12 @@
   // ---------- Запитати / Пояснити: one card, like the reader's; every question and answer is kept ----------
 
   let conv = null;
-  function ask({ selection = "", before = "", after = "", question = "", pageText = "", page = book.page }) {
+  function ask({ selection = "", before = "", after = "", question = "", pageText = "", page = book.page, image = "", img = "" }) {
     const b = book;
-    conv = { chat: { id: `c${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`, turns: [], messages: null, sel: selection, page: page || 0, at: Date.now() }, book: b, text: "", busy: false, reqId: null };
-    conv.context = { paper: true, bookTitle: b.title, author: b.authors.join(", "), page: page || 0, chapter: b.chapter || "", selection, before, after, pageText };
-    showCard(selection ? "Пояснення" : "Запитання", page);
+    const sel = selection || (image ? "Обведене на фото" : "");
+    conv = { chat: { id: `c${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`, turns: [], messages: null, sel, img, page: page || 0, at: Date.now() }, book: b, text: "", busy: false, reqId: null };
+    conv.context = { paper: true, bookTitle: b.title, author: b.authors.join(", "), page: page || 0, chapter: b.chapter || "", selection, before, after, pageText, ...(image ? { image } : {}) };
+    showCard(sel ? "Пояснення" : "Запитання", page);
     turn(question || null);
   }
   // «Уточнити» on a kept question: the card again, with its talk so far.
@@ -344,7 +515,7 @@
     const c = conv.chat;
     $("#pa-title").textContent = title;
     $("#pa-where").textContent = [conv.book.title.split(/[.:]\s/)[0], page ? `стор. ${page}` : ""].filter(Boolean).join(" · ");
-    $("#pa-thread").innerHTML = c.sel ? `<blockquote class="pa-quote">«${esc(c.sel)}»</blockquote>` : "";
+    $("#pa-thread").innerHTML = c.img ? `<img class="pa-img" src="${c.img}" alt="" />` : c.sel ? `<blockquote class="pa-quote">«${esc(c.sel)}»</blockquote>` : "";
     $("#pa-save").hidden = !c.turns.length;
     $("#pa-q").value = "";
     $("#pa-q").placeholder = "Уточнити питання…";
@@ -387,7 +558,7 @@
       ch.turns = [...ch.turns, { q: c.q, a: c.text }];
       ch.at = Date.now();
       if (c.book === book && !chats.includes(ch)) chats = [...chats, ch];
-      window.reader.paperChatSave(c.book.path, ch).catch(() => {});
+      window.reader.paperChatSave(c.book.path, ch).then(() => c.book === book && loadIdeas(book)).catch(() => {});
       $("#pa-save").hidden = false;
     } else if (ev.type === "aborted") {
       if (!c.text) c.el.innerHTML = "<em>Зупинено.</em>";
