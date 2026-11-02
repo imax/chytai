@@ -80,11 +80,17 @@
   const kvSet = (key, value) => idb("kv", "readwrite", (s) => s.put(value, key)).catch(() => {});
 
   let offline = false;
+  let offlineSayTimer = 0;
+  let offlineSaid = false;
   function setOffline(value) {
     if (offline === value) return;
     offline = value;
     document.body.classList.toggle("offline", value);
-    if (typeof toast === "function") toast(value ? "Немає з'єднання: читаємо з пристрою" : "З'єднання відновлено");
+    // A weak connection drops one request and passes the next: the notices flickered over the text. Say
+    // «no connection» only when it lasts a few seconds, and «restored» only after that was said.
+    clearTimeout(offlineSayTimer);
+    if (value) offlineSayTimer = setTimeout(() => offline && ((offlineSaid = true), typeof toast === "function" && toast("Немає з'єднання: читаємо з пристрою")), 5000);
+    else if (offlineSaid) (offlineSaid = false), typeof toast === "function" && toast("З'єднання відновлено");
     if (!value) sync();
   }
   // Settings as last seen, with the changes made here; the server's copy catches up through the queue.
@@ -264,7 +270,20 @@
     else window.addEventListener("load", go, { once: true });
   }
 
+  // On a slow connection a tapped book gave no sign for seconds (Max, 2026-11-02): a busy notice after a
+  // moment, gone once the book opens or fails.
+  const OPENING = "Відкриваю книжку…";
   async function openServerBook(name) {
+    const slow = setTimeout(() => typeof showNotice === "function" && showNotice(OPENING, true), 400);
+    try {
+      return await openServerBookNow(name);
+    } finally {
+      clearTimeout(slow);
+      const box = document.getElementById("notice");
+      if (box?.querySelector(".notice-text")?.textContent === OPENING) box.classList.add("hidden");
+    }
+  }
+  async function openServerBookNow(name) {
     let payload;
     try {
       await sync(); // positions saved here first, so the server's answer is the latest one
