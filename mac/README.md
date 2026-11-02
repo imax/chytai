@@ -16,6 +16,6 @@ npm run dist          # dist/Chytai-1.0.0.dmg, universal (Apple Silicon і Intel
 Підпис і нотаризація потрібні, щоб DMG із сайту відкривався без попереджень:
 
 - у Keychain має бути сертифікат «Developer ID Application» (Xcode → Settings → Accounts → Manage Certificates → + → Developer ID Application);
-- для нотаризації перед `npm run dist` задати `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD` (appleid.apple.com → Паролі для застосунків) і `APPLE_TEAM_ID`.
+- нотаризація вмикається сама, якщо перед `npm run dist` задати `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD` (appleid.apple.com → Паролі для застосунків) і `APPLE_TEAM_ID`.
 
 Без них збірка теж вийде, але macOS попередить, що розробника не перевірено.

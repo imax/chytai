@@ -22,7 +22,6 @@
       "category": "public.app-category.books",
       "icon": "icon.png",
       "hardenedRuntime": true,
-      "notarize": true,
       "target": [{ "target": "dmg", "arch": ["universal"] }]
     },
     "dmg": {
