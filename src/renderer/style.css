@@ -1363,15 +1363,13 @@ a.r-frow:hover .r-frow-go.plain { color: var(--r-ochre); }
   /* The page: a running head on top, the chapter and percentage at the bottom over a fade. */
   body.reading #toolbar { display: none !important; }
   body.reading #layout { top: 0; }
-  #running-head { top: calc(14px + env(safe-area-inset-top)); left: 24px; right: 24px; font: 400 10px/1.2 var(--m-sans); letter-spacing: .14em; color: var(--m-ink3); }
-  #viewer { inset: calc(40px + env(safe-area-inset-top)) 14px 0 14px; }
-  body.m-paged #viewer { bottom: calc(40px + env(safe-area-inset-bottom)); }
+  /* No running head (Max, 2026-11-02): the title is in the top bar a tap away; two more lines of the book. */
+  #running-head { display: none; }
+  #viewer { inset: calc(12px + env(safe-area-inset-top)) 14px calc(26px + env(safe-area-inset-bottom)) 14px; }
   #status {
-    left: 0; right: 0; bottom: 0; z-index: 3; padding: 30px 20px calc(14px + env(safe-area-inset-bottom));
-    font: 400 12px/1.2 var(--m-sans); color: var(--m-ink3); gap: 16px;
-    background: linear-gradient(color-mix(in srgb, var(--m-paper) 0%, transparent), var(--m-paper) 55%);
+    left: 0; right: 0; bottom: 0; z-index: 3; padding: 6px 20px calc(6px + env(safe-area-inset-bottom));
+    font: 400 11px/14px var(--m-sans); color: var(--m-ink3); gap: 16px; background: var(--m-paper);
   }
-  body.m-paged #status { background: var(--m-paper); padding-top: 12px; }
   body.reading.chrome-shown #status, body.reading:has(#sel-toolbar:not(.hidden)) #status, body.reading:has(#m-findbar:not(.hidden)) #status { visibility: hidden; }
   #btn-back { font: 500 15px var(--m-sans); background: var(--m-paper); color: var(--m-ink); border: 1px solid var(--m-head); border-radius: 999px; box-shadow: none; bottom: calc(56px + env(safe-area-inset-bottom)); }
 
