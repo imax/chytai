@@ -7,13 +7,20 @@ const THEMES = {
   sepia: { body: { background: "#f6efe0", color: "#3b2f1e" } },
   dark: { body: { background: "#1e1e20", color: "#dcdcdc" }, a: { color: "#8ab4f8" } },
 };
+// Phone, turn 9 (Claude Design, 2026-11-02): paper, ink and ochre like Мої книжки; the book text in the dark
+// theme a little dimmer than the interface. Selection and the passage open in a sheet get the design's colours.
+const THEMES_PHONE = {
+  light: { body: { background: "#f7f4ee", color: "#1b1a17" }, "::selection": { background: "#e9d3a3" } },
+  sepia: { body: { background: "#f2e8d5", color: "#3a3024" }, "::selection": { background: "#e3cc9c" } },
+  dark: { body: { background: "#1a1916", color: "#d9d2c5" }, a: { color: "#d9a35a" }, "::selection": { background: "#5a4526" } },
+};
 const DARK_QUERY = window.matchMedia("(prefers-color-scheme: dark)");
 const resolvedTheme = () => {
   const theme = settings?.theme || "auto";
   return theme === "auto" ? (DARK_QUERY.matches ? "dark" : "light") : THEMES[theme] ? theme : "light";
 };
 const themeCss = (name) =>
-  Object.entries(THEMES[name])
+  Object.entries((matchMedia("(max-width: 760px)").matches ? THEMES_PHONE : THEMES)[name])
     .map(([sel, rules]) => `${sel}{${Object.entries(rules).map(([k, v]) => `${k}:${v}`).join(";")}}`)
     .join("\n");
 
@@ -32,6 +39,13 @@ const FONT_CSS = ["wght.css", "wght-italic.css"].map(
 // Book text a bit larger than browser default, closer to the Kindle apps at 100%.
 const BASE_SCALE = 1.2;
 const HIGHLIGHT_STYLE = { fill: "#ffd54a", "fill-opacity": "0.35", "mix-blend-mode": "multiply" };
+// Phone: the passage whose explanation is open in the sheet (turn 9): a see-through ochre over the text.
+const highlightStyle = () =>
+  !matchMedia("(max-width: 760px)").matches
+    ? HIGHLIGHT_STYLE
+    : document.body.dataset.theme === "dark"
+      ? { fill: "#d9a35a", "fill-opacity": "0.24" }
+      : { fill: "#cd9646", "fill-opacity": "0.3" };
 
 // On a phone the explanations panel is a sheet over the page, so it starts hidden and opens with the first explanation.
 if (matchMedia("(max-width: 760px)").matches) document.body.classList.add("panel-hidden");
@@ -296,9 +310,7 @@ async function openEpub(payload, { posKey, source }) {
     allowScriptedContent: true,
   });
   followFontLoad(rendition);
-  rendition.themes.default({
-    "::selection": { background: "rgba(255, 200, 0, 0.45)" },
-  });
+  if (!PHONE.matches) rendition.themes.default({ "::selection": { background: "rgba(255, 200, 0, 0.45)" } });
   rendition.hooks.content.register(styleContents);
   rendition.hooks.content.register((contents) => contents.on("linkClicked", rememberReturn));
   if (current.protected) rendition.hooks.content.register(limitCopy);
@@ -369,6 +381,7 @@ async function openEpub(payload, { posKey, source }) {
   $("#book-title").textContent = current.author ? `${current.title} · ${current.author}` : current.title;
   $("#running-head").textContent = current.title;
   document.title = current.title;
+  window.PhoneRead?.bookOpened();
 
   const nav = await book.loaded.navigation;
   renderToc(nav.toc);
@@ -381,7 +394,7 @@ async function openEpub(payload, { posKey, source }) {
     const location = rendition?.currentLocation();
     updateProgress(location);
     if (current && location?.start) window.reader.savePosition(current.posKey, location.start.cfi, readingProgress(location));
-    addTocPages(book);
+    addTocPages(book).then(() => window.PhoneRead?.ticks());
   });
 }
 
@@ -505,17 +518,23 @@ function toggleChrome(show = !document.body.classList.contains("chrome-shown")) 
   if (!document.body.classList.contains("reading")) return;
   document.body.classList.toggle("chrome-shown", show);
   if (!show) $("#toc").classList.add("hidden");
+  window.PhoneRead?.chrome(show);
 }
 
 // Escape hatch: when a chapter never renders (a broken book, a WebKit quirk), taps inside the page
 // never reach us and the toolbar could not be brought back. The running head at the top and the
 // bare page area outside the chapter frames still get taps, so a tap there shows the toolbar.
 $("#running-head").addEventListener("click", () => toggleChrome(true));
-const panelOverPage = () => PHONE.matches && !document.body.classList.contains("panel-hidden");
+const panelOverPage = () => PHONE.matches && (!document.body.classList.contains("panel-hidden") || !!window.PhoneRead?.sheetOpen());
 $("#viewer").addEventListener("click", (e) => {
-  if (panelOverPage()) return showPanel(false);
+  if (panelOverPage()) return closeSheets();
   if (e.target.tagName !== "IFRAME") toggleChrome();
 });
+
+function closeSheets() {
+  window.PhoneRead?.closeSheet();
+  if (!document.body.classList.contains("panel-hidden")) showPanel(false);
+}
 
 // Original-layout PDFs scroll instead of paging, so any tap in the middle band toggles the toolbar.
 $("#pdf-container").addEventListener("click", (e) => {
@@ -543,6 +562,7 @@ async function openPdf(payload) {
     onPageChange: (page, total) => {
       window.reader.savePosition(current.posKey, `pdf:${page}`, { pct: Math.round((page / total) * 100), chapter: "" });
       $("#progress-label").textContent = `${page} / ${total}`;
+      window.PhoneRead?.pdfPage(page, total);
       hideSelToolbar();
     },
   });
@@ -555,6 +575,7 @@ async function openPdf(payload) {
   $("#running-head").textContent = current.title;
   $("#chapter-label").textContent = "";
   document.title = current.title;
+  window.PhoneRead?.bookOpened();
   const toc = await pdfView.toc();
   renderToc(toc);
   $("#btn-toc").disabled = !toc.length;
@@ -687,6 +708,7 @@ function chapterNumber(spineIndex) {
 
 function updateProgress(location) {
   if (!location?.start) return;
+  window.PhoneRead?.progress(location);
   $("#chapter-label").textContent = chapterTitle(location.start.href, location.start.cfi);
   if (book.locations.length() && !current?.preview) {
     $("#progress-label").textContent = `${Math.round(book.locations.percentageFromCfi(location.start.cfi) * 100)}%`;
@@ -738,7 +760,7 @@ function onTouchEnd(e) {
     dx < 0 ? rendition?.next() : rendition?.prev();
   } else if (ms < 400 && Math.abs(dx) < 12 && Math.abs(dy) < 12 && !e.target?.closest?.("a")) {
     // On a phone a tap on the page puts the open panel away first (Max, 2026-11-01).
-    if (panelOverPage()) return showPanel(false);
+    if (panelOverPage()) return closeSheets();
     tapToPage(t, e.view);
   }
 }
@@ -935,6 +957,7 @@ function startExplanation(selection, { mode = "explain" } = {}) {
   card.dataset.id = id;
   const quote = selection.context.selection;
   card.innerHTML = `
+    <div class="where"></div>
     <blockquote class="quote"></blockquote>
     <div class="thread"></div>
     <div class="meta"><span class="model"></span>
@@ -944,7 +967,8 @@ function startExplanation(selection, { mode = "explain" } = {}) {
         <button class="link retry hidden">Ще раз</button>
       </span>
     </div>
-    <form class="followup"><input type="text" placeholder="Уточнити питання…" /></form>`;
+    <button type="button" class="link forget hidden">Очистити розмову</button>
+    <form class="followup"><input type="text" placeholder="Уточнити питання…" enterkeyhint="send" /><button type="submit" class="ask" aria-label="Запитати"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5M6 11l6-6 6 6"/></svg></button></form>`;
   card.querySelector(".quote").textContent = quote.length > 280 ? quote.slice(0, 280) + "…" : quote;
   $("#cards").prepend(card);
   // The new card is at the top; bring it into view even if the list was scrolled down.
@@ -954,6 +978,9 @@ function startExplanation(selection, { mode = "explain" } = {}) {
   conversations.set(id, conv);
 
   highlightConv(conv);
+  window.PhoneRead?.convStarted(conv);
+  card.querySelector(".forget").onclick = () => forgetConv(conv);
+  card.querySelector(".followup input").oninput = (e) => card.querySelector(".followup").classList.toggle("filled", !!e.target.value.trim());
 
   card.querySelector(".stop").onclick = () => window.reader.abort(conv.reqId);
   card.querySelector(".more").onclick = () => {
@@ -974,7 +1001,9 @@ function startExplanation(selection, { mode = "explain" } = {}) {
     const q = input.value.trim();
     if (!q || conv.busy) return;
     input.value = "";
+    card.querySelector(".followup").classList.remove("filled");
     runTurn(conv, q);
+    window.PhoneRead?.sheetFull();
   };
 
   if (mode === "translate") card.querySelector(".followup input").placeholder = "Запитати про переклад…";
@@ -1033,6 +1062,7 @@ window.reader.onAiEvent((reqId, ev) => {
   el.classList.remove("streaming");
   if (ev.type === "done") {
     conv.messages = ev.messages;
+    conv.card.querySelector(".forget").classList.remove("hidden");
     // One "more detail" per card: after it, the follow-up field is the way to ask further.
     if (conv.mode !== "translate" && conv.lastQuestion !== "Детальніше") conv.card.querySelector(".more").classList.remove("hidden");
     conv.card.querySelector(".model").textContent = (conv.mode === "translate" ? "Переклад · " : "") + modelLabel(ev.model) + (ev.truncated ? " · обрізано" : "");
@@ -1117,7 +1147,7 @@ function highlightConv(conv) {
   for (const other of conversations.values()) if (other !== conv && other.marked === "yellow") starConv(other);
   try {
     unhighlightConv(conv);
-    rendition.annotations.highlight(conv.cfiRange, { id: conv.id }, () => showMarkToolbar(conv), "ai-hl", HIGHLIGHT_STYLE);
+    rendition.annotations.highlight(conv.cfiRange, { id: conv.id }, () => showMarkToolbar(conv), "ai-hl", highlightStyle());
     conv.marked = "yellow";
   } catch {
     /* highlighting is cosmetic */
@@ -1168,7 +1198,7 @@ function showMarkToolbar(conv) {
   } catch {
     /* fall back to opening the card */
   }
-  if (!range) return openConvCard(conv);
+  if (!range || PHONE.matches) return openConvCard(conv);
   pendingMark = conv;
   markShownAt = Date.now();
   const bar = $("#sel-toolbar");
@@ -1179,6 +1209,7 @@ function showMarkToolbar(conv) {
 
 function openConvCard(conv) {
   showPanel(true, "cards");
+  window.PhoneRead?.showConv(conv);
   conv.card.scrollIntoView({ behavior: "smooth", block: "nearest" });
   flash(conv.card);
 }
@@ -1186,6 +1217,7 @@ function openConvCard(conv) {
 function showPanel(show, tab) {
   document.body.classList.toggle("panel-hidden", !show);
   if (tab) showTab(tab);
+  window.PhoneRead?.panelShown(show);
   if (!show) starConvs();
   // epub.js needs a resize to reflow pages after the layout changes width.
   setTimeout(resizeView, 220);
@@ -1199,6 +1231,16 @@ function clearExplanations() {
 }
 
 $("#btn-clear").onclick = clearExplanations;
+
+// Phone: «Очистити розмову» at the end of one explanation removes it and its mark in the text.
+function forgetConv(conv) {
+  if (conv.busy) window.reader.abort(conv.reqId);
+  unhighlightConv(conv);
+  conversations.delete(conv.id);
+  conv.card.remove();
+  showPanel(false);
+  renderNotes();
+}
 
 // ---------- Notes: passages saved with "Зберегти", per reader and per book ----------
 
@@ -1297,6 +1339,8 @@ function decorateNoteMarks() {
 const SVG_NS = "http://www.w3.org/2000/svg";
 function drawBars(mark) {
   const g = mark.element;
+  // Phone (turn 9): a note is a soft fill behind its lines (CSS on the line rects), no bars.
+  if (PHONE.matches) return g.classList.add("m-fill");
   const rects = [...g.querySelectorAll("rect")]
     .map((r) => ({ x: +r.getAttribute("x"), y: +r.getAttribute("y"), w: +r.getAttribute("width"), h: +r.getAttribute("height") }))
     .filter((r) => r.w > 0 && r.h > 0);
@@ -1349,6 +1393,18 @@ function drawStar(mark) {
   g.replaceChildren();
   const last = rects.at(-1);
   if (!last) return;
+  if (PHONE.matches) {
+    // Phone (turn 9): an explained passage gets a dotted ochre underline; its lines, a little taller, take the tap.
+    for (const r of rects) {
+      const hit = document.createElementNS(SVG_NS, "rect");
+      for (const [k, v] of Object.entries({ class: "star-hit", x: r.x, y: r.y - 4, width: r.w, height: r.h + 10 })) hit.setAttribute(k, v);
+      const line = document.createElementNS(SVG_NS, "line");
+      const y = r.y + r.h + 3;
+      for (const [k, v] of Object.entries({ class: "dots-ul", x1: r.x, x2: r.x + r.w, y1: y, y2: y })) line.setAttribute(k, v);
+      g.append(hit, line);
+    }
+    return;
+  }
   const el = (tag, attrs) => {
     const e = document.createElementNS(SVG_NS, tag);
     for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v);
@@ -1493,6 +1549,7 @@ function noteDate(ms) {
 function renderNotes() {
   const box = $("#notes");
   box.innerHTML = "";
+  window.PhoneRead?.notesCount();
   if (!current) {
     box.innerHTML = `<div class="panel-empty">Відкрийте книжку, щоб побачити її нотатки.</div>`;
     return;
@@ -1501,6 +1558,7 @@ function renderNotes() {
     box.innerHTML = `<div class="panel-empty">Нотаток ще немає. Виділіть текст і натисніть «В нотатки».</div>`;
     return;
   }
+  if (PHONE.matches && window.PhoneRead) return window.PhoneRead.renderNotes(box);
   // Newest on top, like the explanations.
   for (const note of [...notes].reverse()) {
     const card = document.createElement("article");
