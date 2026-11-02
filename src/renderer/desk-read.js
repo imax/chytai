@@ -166,6 +166,7 @@
     b.onclick = () => {
       const d = b.dataset.d;
       if (d === "look") return look();
+      if (d === "full") return fullscreen();
       if (d === "search") return searchOpen ? window.BookSearch?.close() : window.BookSearch?.open();
       if (d === "toc") return tocOpen ? window.PhoneRead?.closeSheet() : window.PhoneRead?.openSheet("toc");
       if (d === "notes") {
@@ -174,6 +175,22 @@
       }
     };
   }
+
+  // On the whole screen, without the browser's tabs and toolbar (Max, 2026-11-02). Esc or the button leaves it.
+  const canFull = !!document.fullscreenEnabled;
+  document.documentElement.classList.toggle("can-full", canFull);
+  function fullscreen() {
+    if (!canFull) return;
+    if (document.fullscreenElement) document.exitFullscreen?.().catch(() => {});
+    else document.documentElement.requestFullscreen?.().catch(() => {});
+  }
+  document.addEventListener("fullscreenchange", () => {
+    const on = !!document.fullscreenElement;
+    body.classList.toggle("d-full", on);
+    const b = $('.m-dnav [data-d="full"]');
+    b.title = on ? "Вийти з повного екрана (F)" : "На весь екран (F)";
+    b.setAttribute("aria-label", on ? "Вийти з повного екрана" : "На весь екран");
+  });
 
   // ---------- An explanation opens next to the text (10d) ----------
   // «Esc» in the panel's head for the first few explanations.
@@ -329,6 +346,7 @@
       const b = bar.querySelector(`[data-action="${pick}"]`);
       if (b && !b.hidden) return e.preventDefault(), b.click();
     }
+    if (code === "KeyF") return e.preventDefault(), fullscreen();
     if (code === "KeyT" && !pdfView) {
       e.preventDefault();
       return tocOpen ? window.PhoneRead?.closeSheet() : window.PhoneRead?.openSheet("toc");
