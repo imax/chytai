@@ -1773,8 +1773,9 @@ api.post("/explain", async (req, res) => {
       apiKey,
       model: request.mode === "translate" ? shared.translateModel : shared.model,
       language: shared.language,
-      style: me.explainStyle,
-      customStyle: me.customStyle,
+      // «Стиль пояснень» is gone (Max, 2026-11-02: nobody used it); «простіше» or «коротше» goes in the question.
+      style: "default",
+      customStyle: "",
       request,
       signal: controller.signal,
       onText: (text) => send({ type: "text", text }),

@@ -109,9 +109,6 @@ function openSettings() {
   $("#set-model").value = settings.model;
   $("#set-margins").value = settings.margins || "normal";
   $("#set-language").value = settings.language;
-  $("#set-style").value = settings.explainStyle || "default";
-  $("#set-custom-style").value = settings.customStyle || "";
-  $("#custom-style-row").hidden = $("#set-style").value !== "custom";
   $("#set-font").value = settings.font;
   $("#set-page-taps").value = settings.pageTaps ? "taps" : "scroll";
   $("#set-desk-scroll").value = settings.deskScroll ? "scroll" : "pages";
@@ -124,8 +121,6 @@ $("#settings").addEventListener("close", async () => {
     theme: $("#set-theme").value,
     model: $("#set-model").value,
     language: $("#set-language").value.trim() || "українська",
-    explainStyle: $("#set-style").value,
-    customStyle: $("#set-custom-style").value.trim(),
     font: $("#set-font").value,
     margins: $("#set-margins").value,
     pageTaps: $("#set-page-taps").value === "taps",
@@ -144,10 +139,6 @@ $("#settings").addEventListener("close", async () => {
   if (marginsChanged) resizeView();
   if (fontChanged) applyTypography(true);
 });
-$("#set-style").onchange = () => {
-  $("#custom-style-row").hidden = $("#set-style").value !== "custom";
-  if (!$("#custom-style-row").hidden) $("#set-custom-style").focus();
-};
 $("#btn-logout").onclick = () => window.reader.logout?.();
 $("#btn-admin").onclick = () => (location.href = "/admin");
 $("#btn-print").onclick = () => printBook();
