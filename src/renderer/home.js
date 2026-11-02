@@ -862,6 +862,8 @@
     } else d.style.left = d.style.top = "";
     // «Дати почитати» is hidden for now (Max, 2026-11-01).
     $("#bm-edit").hidden = !(own && window.reader.libraryUpdateBook);
+    // A PDF added before uploads became EPUB (2026-11-01): it opens slowly, so it can become one now.
+    $("#bm-epub").hidden = !(own && /\.pdf$/i.test(b.path) && window.reader.libraryPdfToEpub);
     // Your own file is deleted; a book from the free shelf or a publisher just leaves the home screen.
     $("#bm-aside").hidden = own;
     $("#bm-delete").hidden = !(own && window.reader.libraryDeleteBook);
@@ -916,6 +918,7 @@
     if (act === "share") return window.Library.shareBook(b.path);
     if (act === "edit") return window.Library.editBook(b.path);
     if (act === "aside") return setAside(b.path);
+    if (act === "epub") return pdfToEpub(b);
     if (act === "finished") {
       b.finished = !b.finished;
       homeHtml = "";
@@ -948,6 +951,21 @@
     undo.onclick = () => restoreBook(b.path).then(() => $("#notice").classList.add("hidden"));
     $("#notice .notice-text").append(" ", undo);
   });
+
+  async function pdfToEpub(b) {
+    showNotice(`Перетворюю «${b.title}» на EPUB…`, true);
+    try {
+      if (current?.path === b.path) closeBook?.();
+      await window.reader.libraryPdfToEpub(b.path, (n, total) => showNotice(`Перетворюю «${b.title}» на EPUB… ${n} / ${total}`, true));
+    } catch (err) {
+      const text = err.message === "NO_TEXT" ? "Це скан без тексту, тож він лишається PDF." : err instanceof TypeError ? "Немає з'єднання: перетворити книжку можна лише онлайн." : `Не вдалося перетворити: ${err.message}`;
+      return showNotice(text, false);
+    }
+    showNotice(`«${b.title}» тепер EPUB. PDF у «Нещодавно видалених».`, false);
+    trashCount++;
+    homeHtml = "";
+    refresh();
+  }
 
   // ---------- Нещодавно видалені ----------
 

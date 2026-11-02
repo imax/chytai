@@ -506,6 +506,22 @@
       const s = (await localSettings()) || {};
       if (s.lastBook === name) patchLocalSettings({ lastBook: null });
     },
+    // An old PDF of your own becomes an EPUB: the text version already made for reading it «як книжку», or made now.
+    libraryPdfToEpub: async (name, progress) => {
+      await sync();
+      while (!window.PdfView) await new Promise((r) => setTimeout(r, 50));
+      const version = window.PdfView.REFLOW_VERSION;
+      let epub = await window.reader.reflowGet(name, version);
+      if (!epub) {
+        const pdf = await (await api("GET", `/api/book?path=${encodeURIComponent(name)}`)).arrayBuffer();
+        epub = await window.PdfView.reflow(pdf, progress, bareName(name));
+      }
+      const { path } = await (await api("POST", `/api/books/${encodeURIComponent(name)}/epub`, new Blob([epub]))).json();
+      idb("books", "readwrite", (s) => s.delete(name)).catch(() => {});
+      const s = (await localSettings()) || {};
+      if (s.lastBook === name) patchLocalSettings({ lastBook: path });
+      return path;
+    },
     libraryTrash: () => api("GET", "/api/trash").then((r) => r.json()),
     libraryForgetBook: (name) => api("POST", "/api/trash/forget", { path: name }),
     libraryRestoreBook: (name) => api("POST", "/api/trash/restore", { path: name }).then((r) => r.json()),

@@ -1573,6 +1573,7 @@ api.patch("/books/:name", guestsCannot("У демо-режимі не можна
 api.delete("/books/:name", guestsCannot("У демо-режимі не можна видаляти книжки."));
 api.post("/trash/restore", guestsCannot("У демо-режимі нема видалених книжок."));
 api.post("/trash/forget", guestsCannot("У демо-режимі нема видалених книжок."));
+api.post("/books/:name/epub", guestsCannot("У демо-режимі книжки не змінюються."));
 api.put("/reflow", guestsCannot("У демо-режимі конвертація PDF не зберігається."));
 api.get("/reflow", (req, res, next) => (req.guest ? res.status(204).end() : next()));
 
@@ -1597,6 +1598,46 @@ api.put("/books/:name", express.raw({ type: () => true, limit: MAX_UPLOAD }), as
   warmCovers(req.lib, [name]);
   tellSite(req.acct);
   res.json({ path: name });
+});
+
+// A PDF added before every upload became an EPUB (2026-11-01) becomes one now (Max, 2026-11-02, «Одіссея»):
+// the browser sends the text version it reads «як книжку» (pdf-reflow.js), so the place and the notes made
+// there move to the EPUB unchanged. The PDF goes to «Нещодавно видалені».
+api.post("/books/:name/epub", express.raw({ type: () => true, limit: MAX_UPLOAD }), (req, res) => {
+  const name = safeBookName(req.params.name);
+  if (!name || !/\.pdf$/i.test(name) || !fs.existsSync(bookFile(req.lib, name))) return res.status(404).json({ error: "Книжки немає на сервері." });
+  if (!req.body?.length) return res.status(400).json({ error: "Порожній файл." });
+  let epub = name.replace(/\.pdf$/i, ".epub");
+  if (fs.existsSync(bookFile(req.lib, epub))) epub = name.replace(/\.pdf$/i, " (з PDF).epub");
+  if (!safeBookName(epub)) return res.status(400).json({ error: "Не вдалося назвати файл." });
+  fs.writeFileSync(bookFile(req.lib, epub), req.body);
+  const meta = req.lib.meta;
+  for (const key of ["added", "bookMeta"]) if (meta[key]?.[name]) meta[key][epub] = meta[key][name];
+  const u = userState(req.acct);
+  const from = `${name}#reflow`;
+  if (u.positions?.[from]) u.positions[epub] = u.positions[from];
+  for (const key of ["progress", "opened", "finished", "seen", "fontSizes"]) if (u[key]?.[name] !== undefined) u[key][epub] = u[key][name];
+  const notes = u.notes?.[name] || [];
+  const moved = notes.filter((n) => n.posKey === from);
+  if (moved.length) {
+    u.notes[epub] = [...(u.notes[epub] || []), ...moved.map((n) => ({ ...n, posKey: epub }))];
+    u.notes[name] = notes.filter((n) => n.posKey !== from);
+    if (!u.notes[name].length) delete u.notes[name];
+  }
+  if (u.lastBook === name) u.lastBook = epub;
+  const key = customCoverKey(name);
+  if (fs.existsSync(req.lib.covers)) {
+    for (const f of fs.readdirSync(req.lib.covers)) {
+      if (f.split(".")[0] === key) fs.copyFileSync(path.join(req.lib.covers, f), path.join(req.lib.covers, customCoverKey(epub) + f.slice(key.length)));
+    }
+  }
+  fs.mkdirSync(path.dirname(trashFile(req.lib, name)), { recursive: true });
+  fs.renameSync(bookFile(req.lib, name), trashFile(req.lib, name));
+  (meta.trash ??= {})[name] = { at: Date.now() };
+  saveState();
+  warmCovers(req.lib, [epub]);
+  tellSite(req.acct);
+  res.json({ path: epub });
 });
 
 // Title and author as the library should show them: PATCH /api/books/<name> { title, authors }.
