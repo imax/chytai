@@ -211,8 +211,10 @@
     $("#shell").dataset.page = page;
     panel(false);
     if (was !== page) {
-      // A phone's «back» (and Esc) on «Додати книжку» comes back to your books.
-      if (push && page === "add" && history.state?.rp !== "add") history.pushState({ rp: "add" }, "");
+      // A browser's «back» (and Esc) on «Додати книжку» comes back to your books. Not in the iPhone app: its web
+      // view turns a swipe from the screen's edge into back/forward, and a swipe closing the panel near the right
+      // edge went «forward» to this entry, so the panel jumped back open (Max, 2026-11-02).
+      if (push && page === "add" && history.state?.rp !== "add" && !document.documentElement.classList.contains("in-app")) history.pushState({ rp: "add" }, "");
       $("#home").scrollTop = 0;
       homeHtml = "";
     }
