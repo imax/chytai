@@ -298,17 +298,11 @@
   });
 
   // ---------- The caption under the text ----------
-  // A spread has a caption under each page: «Розділ … 12» and «13 … з 140» (10k).
+  // Page mode: one caption, the chapter and «стор. 109 з 185» (Max, 2026-11-02: a caption under each page of a
+  // spread had too many numbers).
   function relocated(location, p) {
-    if (!desk()) return;
-    const status = $("#status");
-    if (!body.classList.contains("d-spread") || !p) return status.classList.remove("d-two");
-    const end = window.PhoneRead?.pageOf(location.end?.cfi);
-    const right = end && end.page > p.page ? end.page : p.page + 1;
-    status.classList.add("d-two");
-    const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
-    $("#chapter-label").innerHTML = `<span>${esc(chapterTitle(location.start.href, location.start.cfi))}</span><span>${p.page}</span>`;
-    $("#progress-label").innerHTML = `<span>${Math.min(right, p.total)}</span><span>з ${p.total}</span>`;
+    if (!desk() || scrolled() || !p) return;
+    $("#progress-label").textContent = `стор. ${p.page} з ${p.total}`;
   }
 
   // ---------- Keys (Клавіші) ----------

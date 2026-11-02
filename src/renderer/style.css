@@ -1623,9 +1623,6 @@ a.r-frow:hover .r-frow-go.plain { color: var(--r-ochre); }
     padding: 0 0 18px; font: 400 12px/1 var(--m-sans); color: var(--m-ink3); background: none; visibility: visible !important;
   }
   body.d-paged #status { left: max(48px, calc(50% - var(--d-vw) / 2 + 48px)); right: max(48px, calc(50% - var(--d-vw) / 2 + 48px)); bottom: 24px; padding: 0; }
-  #status.d-two { gap: 96px; }
-  #status.d-two > span { flex: 1; display: flex; justify-content: space-between; gap: 12px; min-width: 0; }
-  #status.d-two > span > span:first-child { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   /* The fade under the caption, across the whole text area (scroll mode). */
   body.reading:not(.d-paged) #reader::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 44px; z-index: 2; pointer-events: none; background: linear-gradient(rgba(247, 244, 238, 0), var(--m-paper) 55%); }
   body[data-theme="sepia"].reading:not(.d-paged) #reader::after { background: linear-gradient(rgba(242, 232, 213, 0), var(--m-paper) 55%); }
