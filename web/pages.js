@@ -321,8 +321,13 @@ const nowLine = (now) => (now?.books.length ? `<p class="now-line"><span class="
 // One line of the activity feed. `wide` is the /community layout (who first, then the book).
 // A line for several volumes of a series (social.feed folds them) is named by the series: «Dungeon Crawler
 // Carl · серія, 8 книг».
-function feedRow({ reader, book, entry: e, series = null }, { wide = false, followed = null } = {}) {
+function feedRow({ reader, book, entry: e, series = null, shelf = null }, { wide = false, followed = null } = {}) {
   const t = when(e);
+  // A shelf brought in one go (social.feed `shelves`): «190 книжок на полиці» and a few of its covers.
+  if (shelf) return `<article class="feed-row shelf-row${wide ? " wide" : ""}${followed?.has(reader.id) ? " followed" : ""}" data-rating="">
+  <div><span class="who"><a href="${attr(reader.href)}"><b>${esc(reader.name)}</b></a> · полиця${t ? ` · ${esc(t)}` : ""}</span><a class="title" href="${attr(reader.href)}">${books(shelf.n)} на полиці</a>
+  <p class="shelf-covers">${shelf.books.map((b) => `<a href="${attr(b.href)}" title="${attr(b.title)}">${cover(b, "feed")}</a>`).join("")}</p></div>
+</article>`;
   const who = `<span class="who"><a href="${attr(reader.href)}"><b>${esc(reader.name)}</b></a> ${did(e)}${t ? ` · ${esc(t)}` : ""}</span>`;
   const title = `<a class="title" href="${attr(book.href)}">${esc(series ? series.name : book.title)}${series ? ` <span class="badge">серія · ${books(series.books.length)}</span>` : ""}</a>`;
   return `<article class="feed-row${wide ? " wide" : ""}${e.note ? " noted" : ""}${followed?.has(reader.id) ? " followed" : ""}" data-rating="${e.rating ?? ""}">

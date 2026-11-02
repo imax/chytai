@@ -66,6 +66,9 @@ CREATE INDEX IF NOT EXISTS job_runs_started ON job_runs (started);
 CREATE INDEX IF NOT EXISTS job_runs_job ON job_runs (job, started);
 -- When a reader set or changed a rating (draw.js, Max 2026-10-28): entries.updated moves on any change.
 CREATE TABLE IF NOT EXISTS rated (reader TEXT NOT NULL, book TEXT NOT NULL, rating REAL NOT NULL, at TEXT NOT NULL, how TEXT NOT NULL);
+-- A shelf brought in one go (an import of 10 books or more): one line «N книжок на полиці» in the /community feed
+-- (Max, 2026-11-02), as the imported entries themselves are dated by when they were read and sit deep in it.
+CREATE TABLE IF NOT EXISTS shelf_imports (reader TEXT NOT NULL, at TEXT NOT NULL, n INTEGER NOT NULL, source TEXT NOT NULL);
 CREATE INDEX IF NOT EXISTS rated_at ON rated (at);
 CREATE TABLE IF NOT EXISTS draws (week TEXT PRIMARY KEY, data TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS book_queue (id TEXT PRIMARY KEY, source TEXT NOT NULL, added TEXT NOT NULL, done TEXT, steps TEXT NOT NULL DEFAULT '{}', cost REAL NOT NULL DEFAULT 0);

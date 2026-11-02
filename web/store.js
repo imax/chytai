@@ -43,6 +43,7 @@ const slugify = (s) =>
     .replace(/^-|-$/g, "")
     .slice(0, 60) || "book";
 const OWNER = "owner"; // the reader id of the owner (Max): the only reader before accounts, so old rows are his
+const SHELF_IMPORT = 10; // an import of this many books or more is one «shelf» line in the /community feed
 // Books in Russian stay on the shelf of the reader who added them and nowhere else: not in search,
 // author pages, feeds, picks or recommendations (Max, 2026-10-20: «не показувати книжки рос в пошуку.
 // Навіть якщо хтось її додав. Тільки на сторінці цього читача»). The catalog's language word wins,
@@ -2298,6 +2299,7 @@ class Store {
         cur ? result.updated++ : result.added++;
       }
     });
+    if (result.added >= SHELF_IMPORT) this.db.prepare("INSERT INTO shelf_imports (reader, at, n, source) VALUES (?, ?, ?, ?)").run(reader, now, result.added, source);
     if (rows.some((r) => r.cycle)) this.linkCycles();
     if (result.created.length) {
       this._works = null;
@@ -2331,6 +2333,28 @@ class Store {
     if (!(year < 2000)) return false;
     const ids = [this.canonical(id), ...(this.translations?.get(this.canonical(id)) || [])];
     return ids.some((x) => Math.abs((Number(this.book(x)?.published) || 0) - year) <= 1);
+  }
+
+  // Imports of 10 books or more, newest first: [{ reader, at, n, source }] (social.feed's «shelf» lines).
+  shelfImports(limit = 50) {
+    return this.db.prepare("SELECT * FROM shelf_imports ORDER BY at DESC LIMIT ?").all(limit);
+  }
+
+  // Imports before shelf_imports existed (once, meta `fix:shelfimports`): a reader who confirmed an import
+  // (steps «saved») and whose shelf has 10 or more entries dated before that day brought a shelf then.
+  backfillShelfImports() {
+    if (this.db.get("fix:shelfimports")) return null;
+    const done = new Set(this.db.prepare("SELECT reader FROM shelf_imports").all().map((r) => r.reader));
+    const found = [];
+    for (const { reader, at } of this.db.prepare("SELECT reader, at FROM steps WHERE step = 'saved'").all()) {
+      if (done.has(reader)) continue;
+      const n = Object.values(this.entriesOf(reader)).filter((e) => (e.updated || e.added || "") < at.slice(0, 10)).length;
+      if (n < SHELF_IMPORT) continue;
+      this.db.prepare("INSERT INTO shelf_imports (reader, at, n, source) VALUES (?, ?, ?, ?)").run(reader, at, n, "backfill");
+      found.push({ reader, at, n });
+    }
+    this.db.set("fix:shelfimports", JSON.stringify({ at: new Date().toISOString(), found }));
+    return found;
   }
 
   // Such years already saved go (once, meta `fix:readyear` keeps what changed).

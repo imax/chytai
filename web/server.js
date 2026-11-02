@@ -944,6 +944,8 @@ bg.register("advice", advice, { want: false, sweep: false, redo: false }, ["queu
 if (bg.background) setTimeout(() => {
   const fixed = store.dropPublishedYears();
   if (fixed) console.log(`read years that were publication years: ${fixed.length} dropped`);
+  const shelves = store.backfillShelfImports();
+  if (shelves) console.log(`shelf imports found before the table: ${shelves.length}`);
   const st = genreTrial.allState();
   if (st && !st.stopped) genreTrial.runAll().catch((e) => console.log(`genreall: ${e.message}`));
   // Originals and languages (Max 2026-10-23 «включаємо і те і те»): the first run starts by itself, a cut one goes on.
@@ -1007,7 +1009,7 @@ app.get("/readers", (req, res) => res.redirect(301, "/community"));
 app.get("/community", (req, res) => {
   const readers = readerList();
   const all = social.all();
-  res.send(pages.readersPage({ user: req.user, feed: social.feed({ limit: 40 }), readers, followed: followed(req), totals: { readers: readers.length, books: readers.reduce((s, r) => s + r.count, 0), notes: all.filter((x) => x.entry.note).length } }));
+  res.send(pages.readersPage({ user: req.user, feed: social.feed({ limit: 40, shelves: true }), readers, followed: followed(req), totals: { readers: readers.length, books: readers.reduce((s, r) => s + r.count, 0), notes: all.filter((x) => x.entry.note).length } }));
 });
 
 // «Стежити» / «Стежу» on a reader's page: follow or unfollow them, then back to where it was pressed.
