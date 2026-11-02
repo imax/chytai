@@ -509,7 +509,7 @@ ${myLists ? listsDialog(book, myLists) : ""}`;
 const ADMIN_TABS = [
   ["Огляд", [["/admin", "Огляд"]]],
   ["Трафік", [["/admin/traffic", "Трафік"]]],
-  ["Читачі", [["/admin/readers", "Усі читачі"], ["/admin/activity", "Що роблять"], ["/admin/comments", "Коментарі"], ["/admin/digest", "Лист"], ["/admin/publishers", "Видавцям"]]],
+  ["Читачі", [["/admin/readers", "Усі читачі"], ["/admin/activity", "Що роблять"], ["/admin/reader", "Читалка"], ["/admin/comments", "Коментарі"], ["/admin/digest", "Лист"], ["/admin/publishers", "Видавцям"]]],
   ["Каталог", [["/admin/catalog", "Каталог"]], /^\/admin\/(catalog|shelves|overviews|dupes|translations|volumes|russian|ukfind|readeat|free|ai\/|book\/|reviews)|-trial$/],
   ["Система", [["/admin/jobs", "Задачі"], ["/admin/speed", "Швидкість"]]],
 ];

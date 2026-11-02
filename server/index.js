@@ -20,7 +20,7 @@ const JSZip = require("jszip");
 const library = require("../src/library");
 const { isRussian } = require("./language");
 const { checkUpload } = require("./content");
-const { adminPage, cost } = require("./admin");
+const { cost } = require("./admin");
 const { createProtected } = require("./protected");
 
 const ROOT = path.join(__dirname, "..");
@@ -299,7 +299,7 @@ async function collectStats() {
     .map(([id, u]) => {
       const lastSeen = Math.max(0, state.accounts[id]?.seen || 0, ...Object.values(u.opened || {}));
       const started = new Set(Object.keys(u.positions || {}).map((p) => p.replace(/#reflow$/, ""))).size;
-      return { id, name: accountName(id), username: state.accounts[id]?.username || "", off: !!state.accounts[id]?.off, owner: id === OWNER_ID, cost30: costOf(id), readToday: minutesOf(id, today), readWeek: minutesOf(id, weekAgo), read30: minutesOf(id, monthAgo), books: countBooks(id), today: sumUser(id, today), week: sumUser(id, weekAgo), total: sumUser(id), started, lastSeen, lastBook: u.lastBook, activeWeek: lastSeen > Date.now() - 7 * 86400000 };
+      return { id, name: accountName(id), username: state.accounts[id]?.username || "", off: !!state.accounts[id]?.off, owner: id === OWNER_ID, cost30: costOf(id), readToday: minutesOf(id, today), readWeek: minutesOf(id, weekAgo), read30: minutesOf(id, monthAgo), books: countBooks(id), today: sumUser(id, today), week: sumUser(id, weekAgo), total: sumUser(id), started, lastSeen, lastBook: u.lastBook, lastOpened: u.opened?.[u.lastBook] || 0, activeWeek: lastSeen > Date.now() - 7 * 86400000 };
     })
     .sort((a, b) => b.lastSeen - a.lastSeen);
 
@@ -908,6 +908,33 @@ app.get("/s/:token", (req, res) => {
   res.redirect("/");
 });
 
+// The reader's stats live in the site's admin (chytai.org.ua/admin/reader; Max, 2026-11-02). The site asks for
+// them with the owner's reader key (the HMAC it gave this reader at sign-in), so no new secret is needed.
+const siteOwnerOk = (req) => {
+  const want = state.accounts[OWNER_ID]?.key;
+  const key = String(req.get("x-reader-key") || "");
+  return !!want && key.length === want.length && crypto.timingSafeEqual(Buffer.from(key), Buffer.from(want));
+};
+app.get("/api/site-admin", async (req, res, next) => {
+  if (!siteOwnerOk(req)) return res.status(403).json({ error: "key" });
+  try {
+    res.json(await collectStats());
+  } catch (err) {
+    next(err);
+  }
+});
+// Switch the reader off (or on again) for one account: { id, off: true | false }.
+app.post("/api/site-admin/off", express.json(), (req, res) => {
+  if (!siteOwnerOk(req)) return res.status(403).json({ error: "key" });
+  const id = String(req.body?.id || "");
+  if (!ACCOUNT_ID.test(id) || id === OWNER_ID) return res.status(400).json({ error: "id" });
+  const a = (state.accounts[id] ??= {});
+  if (req.body.off) a.off = Date.now();
+  else delete a.off;
+  saveState();
+  res.json({ ok: true, off: !!a.off });
+});
+
 app.use((req, res, next) => {
   const acct = currentAccount(req);
   const share = acct ? null : currentShare(req);
@@ -934,30 +961,9 @@ app.use((req, res, next) => {
 });
 
 const guestsCannot = (message) => (req, res, next) => (req.guest ? res.status(403).json({ error: message }) : next());
-const ownerOnly = (req, res, next) => (req.owner ? next() : res.status(403).json({ error: "Це може лише Макс." }));
 
-// The dashboard is the owner's.
-app.get("/admin", async (req, res, next) => {
-  if (!req.owner) return res.redirect("/");
-  try {
-    res.type("html").send(adminPage(await collectStats()));
-  } catch (err) {
-    next(err);
-  }
-});
-
-// Switch the reader off (or on again) for one account: POST /admin/off { id, off: "1" | "" }.
-app.post("/admin/off", express.urlencoded({ extended: false }), (req, res) => {
-  if (!req.owner) return res.redirect("/");
-  const id = String(req.body.id || "");
-  if (ACCOUNT_ID.test(id) && id !== OWNER_ID) {
-    const a = (state.accounts[id] ??= {});
-    if (req.body.off) a.off = Date.now();
-    else delete a.off;
-    saveState();
-  }
-  res.redirect("/admin#readers");
-});
+// The dashboard moved to the site's admin (Max, 2026-11-02).
+app.get("/admin", (_req, res) => res.redirect(`${WEB_URL}/admin/reader`));
 
 // Static renderer: index.html at /, its scripts next to it, node_modules at /node_modules
 // (so the renderer's ../../node_modules/… paths resolve, as they do under file:// in Electron).
@@ -971,14 +977,6 @@ const api = express.Router();
 api.use(express.json({ limit: "20mb" }));
 
 api.get("/settings", (req, res) => res.json(settingsFor(req)));
-
-api.get("/admin", ownerOnly, async (req, res, next) => {
-  try {
-    res.json(await collectStats());
-  } catch (err) {
-    next(err);
-  }
-});
 
 api.patch("/settings", (req, res) => {
   const u = req.guest ? guestState(req.guest) : userState(req.acct);

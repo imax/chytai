@@ -28,7 +28,7 @@ const readeat = require("./readeat");
 const findCovers = require("./findcovers");
 const { BookPage, isUrl } = require("./bookpage");
 const { UkFinder } = require("./ukfind");
-const { Admin, adminPage, activityPage, catalogBlock, shelvesPage, readersPage, overviewsPage, speedPage, jobsPage, BOT, human } = require("./admin");
+const { Admin, readerAppPage, adminPage, activityPage, catalogBlock, shelvesPage, readersPage, overviewsPage, speedPage, jobsPage, BOT, human } = require("./admin");
 const { Mcp } = require("./mcp");
 const { Reviews } = require("./reviews");
 const { Advice } = require("./advice");
@@ -2616,6 +2616,35 @@ app.get("/admin/speed", owner, (req, res) => res.send(speedPage({ user: req.user
 app.get("/admin/traffic", owner, (req, res) => res.send(adminPage({ user: req.user, stats: admin.stats(), taps: admin.taps(), gsc: gsc.data(), gscOn: gsc.configured(), layout: pages.layout, page: "traffic" })));
 app.get("/admin/stats", owner, (req, res) => res.redirect(301, "/admin/traffic"));
 app.get("/admin/overviews", owner, (req, res) => res.send(overviewsPage({ user: req.user, list: advice.overviewList().map((r) => ({ ...r, complaints: r.down ? advice.complaintsOf(r.book.id) : [] })), stats: advice.overviewStats(), who: (id) => (id && id !== "auto" ? pub(auth.reader(id)) : null), layout: pages.layout })));
+// The reader's numbers (server/index.js /api/site-admin), asked for with the owner's reader key.
+const readerAdmin = async (path, body) => {
+  const r = await fetch(`${READER_URL}/api/site-admin${path}`, { method: body ? "POST" : "GET", headers: { "x-reader-key": readerKey("owner"), ...(body ? { "Content-Type": "application/json" } : {}) }, body: body ? JSON.stringify(body) : undefined, signal: AbortSignal.timeout(15000) });
+  if (!r.ok) throw new Error(r.status === 403 ? "key" : `HTTP ${r.status}`);
+  return r.json();
+};
+app.get("/admin/reader", owner, async (req, res) => {
+  let s = null;
+  let error = "";
+  try {
+    s = await readerAdmin("");
+  } catch (err) {
+    error = err.message;
+  }
+  const book = (id, name) => {
+    const file = store.db.prepare("SELECT title FROM reader_files WHERE reader = ? AND name = ?").get(id, name) || FREE.find((f) => f.name === name);
+    const hit = file ? readerCatalogBook(id, { name }) : {};
+    return { title: file?.title || "", href: hit.bookId ? store.href(hit.bookId) : "" };
+  };
+  res.send(readerAppPage({ user: req.user, s, error, book, layout: pages.layout }));
+});
+app.post("/admin/reader/off", owner, async (req, res) => {
+  try {
+    await readerAdmin("/off", { id: String(req.body?.id || ""), off: !!req.body?.off });
+  } catch (err) {
+    console.error("reader off:", err.message);
+  }
+  res.redirect("/admin/reader#readers");
+});
 app.get("/admin/readers", owner, (req, res) => res.send(readersPage({ user: req.user, stats: admin.stats(), layout: pages.layout, q: req.query.q, min: Number(req.query.books) || 0, sort: String(req.query.sort || "created"), page: req.query.page })));
 // What the readers do on the site, in time order (Max, 2026-10-30), with the books' titles for book addresses.
 app.get("/admin/activity", owner, (req, res) => {

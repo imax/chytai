@@ -1189,3 +1189,7 @@ aside .side-lists + .label, aside p + .label, aside dialog + .label { margin-top
 .react-own { display: flex; align-items: center; margin-left: 2px; padding-left: 4px; border-left: 1px solid var(--rule); }
 .react-own input { width: 3.2em; border: 0; background: none; font-size: 16px; padding: 2px 4px; outline: none; }
 .react-own .react-one { font-size: 14px; color: var(--muted); }
+.admin table.reader-app .book { text-align: left; white-space: normal; min-width: 14em; }
+.admin .reader-cost { margin-top: 40px; }
+.admin .reader-cost summary { cursor: pointer; color: var(--muted); font-size: 14px; }
+.admin td form { margin: 0; }

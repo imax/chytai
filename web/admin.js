@@ -1302,4 +1302,69 @@ ${recent ? `<div class="tbl"><table>
   return layout({ title: "Фонові задачі · Адмінка", user, path: "/admin", body });
 }
 
-module.exports = { BOT, human, Admin, mailLinks, adminPage, activityPage, catalogBlock, shelvesPage, readersPage, overviewsPage, speedPage, jobsPage, dayOf, weekOf, sectionOf };
+// /admin/reader «Читалка»: the reader's own numbers (app.chytai.org.ua, server/index.js collectStats), fetched by
+// the site with the owner's reader key (Max, 2026-11-02: the reader's old /admin moved here).
+function readerAppPage({ user, s, error = "", book = () => null, layout }) {
+  const usd = (v) => (v == null ? "—" : v > 0 && v < 0.01 ? "<$0,01" : `$${v.toFixed(2).replace(".", ",")}`);
+  const mins = (m) => (m < 120 ? `${fmtN(m)} хв` : `${fmtN(Math.round(m / 60))} год`);
+  const ago = (ts) => {
+    if (!ts) return "—";
+    const min = Math.round((Date.now() - ts) / 60000);
+    if (min < 2) return "щойно";
+    if (min < 60) return `${min} хв тому`;
+    const h = Math.round(min / 60);
+    return h < 36 ? `${h} год тому` : `${Math.round(h / 24)} дн тому`;
+  };
+  if (!s) {
+    const body = `<section class="admin"><section class="page-head"><div><h1>Читалка</h1></div></section><p class="muted">Читалка не віддала числа: ${esc(error)}.${error === "key" ? " Відкрий Читалку й увійди ще раз, тоді сайт отримає ключ." : ""}</p></section>`;
+    return layout({ title: "Читалка · Адмінка", user, path: "/admin", body });
+  }
+  const sum = (xs, f) => xs.reduce((a, x) => (a == null || f(x) == null ? null : a + f(x)), 0);
+  const cost30 = sum(s.days.slice(0, 30), (d) => d.cost);
+  const costAll = sum(s.models, (m) => m.cost);
+  const week = s.users.filter((u) => u.activeWeek).length;
+  const readWeek = s.users.reduce((a, u) => a + (u.readWeek || 0), 0);
+  const tiles = `<div class="stats four">
+${tile(fmtN(week), "читали за 7 днів", `з ${fmtN(s.users.length)}, хто входив`)}
+${tile(mins(readWeek), "читання за 7 днів", `${fmtN(s.users.filter((u) => u.readWeek >= 15).length)} читачів по 15+ хв`)}
+${tile(fmtN(s.totals.week), "пояснень за 7 днів", `${fmtN(s.totals.today)} сьогодні, ${fmtN(s.totals.all)} усього`)}
+${tile(usd(cost30), "Claude за 30 днів", costAll != null ? `${usd(costAll)} з ${short(s.since)}` : "")}
+</div>`;
+  const off = (u) => (u.owner ? "" : `<form method="post" action="/admin/reader/off"><input type="hidden" name="id" value="${esc(u.id)}">${u.off ? `<button class="btn small">Увімкнути</button>` : `<input type="hidden" name="off" value="1"><button class="btn small danger">Вимкнути</button>`}</form>`);
+  const who = (u) => `${u.username ? `<a href="/@${esc(u.username)}">${esc(u.name || u.username)}</a>` : esc(u.name || u.id)}${u.off ? ` <span class="muted">вимкнено</span>` : ""}`;
+  // The last book opened: the catalog page when the site knows the file (server.js readerCatalogBook), else its title.
+  const last = (u) => {
+    if (!u.lastBook) return `<span class="muted">—</span>`;
+    const b = book(u.id, u.lastBook);
+    const title = b.title || u.lastBook.split("/").pop().replace(/\.(epub|pdf|fb2|mobi|azw3?)$/i, "");
+    return `${b.href ? `<a href="${esc(b.href)}">${esc(title)}</a>` : esc(title)}${u.lastOpened ? ` <span class="muted">${ago(u.lastOpened)}</span>` : ""}`;
+  };
+  // Only those who opened something (Max: «не показувати тих, хто нічого не читає»).
+  const users = s.users.filter((u) => u.lastBook || u.read30 || u.total);
+  const idle = s.users.length - users.length;
+  const readers = users.length ? `<div class="tbl"><table class="reader-app">
+<thead><tr><th>Читач</th><th class="book">Читає</th><th>Хв сьогодні</th><th>За 7 днів</th><th>За 30</th><th>Пояснень за 7 днів</th><th>Claude за 30 днів</th><th></th></tr></thead>
+<tbody>${users.map((u) => `<tr${u.owner ? ' class="owner"' : ""}><th>${who(u)}</th><td class="book">${last(u)}</td><td>${n(u.readToday)}</td><td>${n(u.readWeek)}</td><td>${n(u.read30)}</td><td>${n(u.week)}</td><td>${u.cost30 ? usd(u.cost30) : n(0)}</td><td>${off(u)}</td></tr>`).join("")}</tbody></table></div>
+<p class="muted small">${idle ? `Ще ${fmtN(idle)} входили, але нічого не відкрили. ` : ""}Хвилини — час між перегортаннями, якщо пауза коротша за 5 хв. Ліміту пояснень немає, лише запобіжник ${fmtN(s.accountCap)} на день. «Вимкнути» закриває Читалку, сайт лишається.</p>` : `<p class="muted">Ще ніхто нічого не відкрив.</p>`;
+  const days = s.days.slice(0, 30);
+  const daysTbl = days.length ? `<div class="tbl"><table>
+<thead><tr><th>День</th><th>Пояснень</th><th>Читачі</th><th>Гості</th><th>Токенів на вході</th><th>На виході</th><th>Claude</th></tr></thead>
+<tbody>${days.map((d) => `<tr><th>${short(d.day)}</th><td>${n(d.explains)}</td><td>${n(d.family)}</td><td>${n(d.guests)}</td><td>${fmtN(d.input + d.cacheRead + d.cacheWrite)}</td><td>${fmtN(d.output)}</td><td>${usd(d.cost)}</td></tr>`).join("")}</tbody></table></div>` : `<p class="muted">Пояснень ще не було.</p>`;
+  const models = s.models.length ? `<div class="tbl"><table>
+<thead><tr><th>Модель</th><th>Запитів</th><th>Токенів на вході</th><th>На виході</th><th>Claude</th></tr></thead>
+<tbody>${s.models.map((m) => `<tr><th>${esc(m.model.replace(/^claude-/, ""))}</th><td>${fmtN(m.requests)}</td><td>${fmtN(m.input + m.cacheRead + m.cacheWrite)}</td><td>${fmtN(m.output)}</td><td>${usd(m.cost)}</td></tr>`).join("")}</tbody></table></div>` : "";
+  const body = `<section class="admin">
+<section class="page-head"><div><h1>Читалка</h1><p class="sub">app.chytai.org.ua: хто читає, скільки хвилин і що коштують пояснення Claude. Гостей сьогодні ${fmtN(s.guestsToday)}, у них ${fmtN(s.guestExplainsToday)} з ${fmtN(s.guestTotalLimit)} пояснень.</p></div></section>
+${tiles}
+<h2 id="readers">Читачі</h2>
+${readers}
+<details class="reader-cost"><summary>Вартість по днях і моделях</summary>
+${daysTbl}
+${models}
+<p class="muted small">Вартість приблизна, за тарифами API без знижок; вхідні токени разом з кешем.</p>
+</details>
+</section>`;
+  return layout({ title: "Читалка · Адмінка", user, path: "/admin", body });
+}
+
+module.exports = { readerAppPage, BOT, human, Admin, mailLinks, adminPage, activityPage, catalogBlock, shelvesPage, readersPage, overviewsPage, speedPage, jobsPage, dayOf, weekOf, sectionOf };
