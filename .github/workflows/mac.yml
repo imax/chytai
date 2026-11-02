@@ -1,0 +1,44 @@
+# The Mac app (mac/): builds the universal DMG on a macOS runner and publishes it as the GitHub Release
+# mac-v<version> with the asset Chytai.dmg; https://chytai.org.ua/mac points at releases/latest/download/Chytai.dmg.
+# A new release goes out only when mac/package.json's version is new, so bump it for a new build.
+# Not signed for now (Max, 2026-11-02): ad-hoc signature, people allow it once in System Settings.
+# Signing later: a Developer ID cert as CSC_LINK/CSC_KEY_PASSWORD secrets plus APPLE_API_KEY* for notarization.
+name: Mac app
+
+on:
+  push:
+    branches: [main]
+    paths: ["mac/**", ".github/workflows/mac.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  dmg:
+    runs-on: macos-latest
+    timeout-minutes: 30
+    concurrency: mac-dmg
+    steps:
+      - uses: actions/checkout@v4
+      - id: v
+        run: |
+          v=$(node -p 'require("./mac/package.json").version')
+          echo "tag=mac-v$v" >> "$GITHUB_OUTPUT"
+          if gh release view "mac-v$v" >/dev/null 2>&1; then echo "exists=1" >> "$GITHUB_OUTPUT"; fi
+        env:
+          GH_TOKEN: ${{ github.token }}
+      - if: steps.v.outputs.exists != '1'
+        uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - if: steps.v.outputs.exists != '1'
+        working-directory: mac
+        run: |
+          npm ci
+          npx electron-builder --mac dmg --universal --publish never
+      - if: steps.v.outputs.exists != '1'
+        run: |
+          ls -la mac/dist
+          gh release create "${{ steps.v.outputs.tag }}" mac/dist/Chytai.dmg --title "Chytai для Mac ${{ steps.v.outputs.tag }}" --notes "Читалка Chytai для Mac (Apple Silicon і Intel). Завантаження: https://chytai.org.ua/mac" --latest
+        env:
+          GH_TOKEN: ${{ github.token }}

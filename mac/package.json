@@ -22,11 +22,12 @@
       "category": "public.app-category.books",
       "icon": "icon.png",
       "hardenedRuntime": true,
+      "identity": "-",
       "target": [{ "target": "dmg", "arch": ["universal"] }]
     },
     "dmg": {
       "title": "Chytai",
-      "artifactName": "Chytai-${version}.dmg"
+      "artifactName": "Chytai.dmg"
     }
   }
 }
