@@ -2,9 +2,12 @@
    chapterTitle, toggleChrome, showPanel, addNote, openConvCard, startExplanation, noteContext, goToNote, noteReachable,
    notesStore, unmarkNote, redrawNote, renderNotes, showNotice, fitComment, scrolled, reopenBook, applyTheme, resizeView,
    applyTypography, setFont, bookFontSize, closeSheets, rememberReturn */
-// The reading screen on a phone, turn 9 from Claude Design (2026-11-02). Desktop keeps its toolbar and panel.
-// Two bars around the text (tap in the middle shows them), one sheet look for the explanation, notes,
+// The reading screen, turn 9 (phone) and turn 10 (computer) from Claude Design (2026-11-02).
+// Phone: two bars around the text (tap in the middle shows them), one sheet look for the explanation, notes,
 // contents and «Вигляд», the selection bar at the bottom, search over the whole screen.
+// Computer: the same bars, contents and notes; the sheet becomes a panel on the right, the contents a panel on
+// the left, «Вигляд» a small window under «Аа». What only a computer does (the mouse, keys, the panels' places)
+// is in desk-read.js.
 (function () {
   const on = () => PHONE.matches;
   const body = document.body;
@@ -35,6 +38,8 @@
     if (p) introBars();
     // Pages mode: the caption says the page rather than the percentage (9k).
     if (on() && p && !scrolled()) queueMicrotask(() => ($("#progress-label").textContent = `стор. ${p.page} з ${p.total}`));
+    // After renderer.js has filled the caption for this page.
+    if (!on()) queueMicrotask(() => (tocFollow(), window.DeskRead?.relocated(location, p)));
   }
   function pdfPage(page, total) {
     $("#m-bottom").classList.remove("no-pos");
@@ -136,6 +141,7 @@
   }
   function notesCount() {
     $("#m-ncount").textContent = notes.length || "";
+    $("#m-dncount").textContent = notes.length || "";
   }
 
   // ---------- The sheet: contents and «Вигляд» ----------
@@ -143,6 +149,7 @@
   let sheetKind = null;
   const sheetOpen = () => !!sheetKind;
   function openSheet(kind) {
+    if (!on()) return kind === "look" ? window.DeskRead?.look(true) : openToc();
     if (!body.classList.contains("panel-hidden")) showPanel(false);
     sheetKind = kind;
     sheet.dataset.kind = kind;
@@ -161,8 +168,21 @@
     if (kind === "toc") requestAnimationFrame(() => $("#ms-body .cur")?.scrollIntoView({ block: "center" }));
   }
   function closeSheet() {
+    const was = sheetKind;
     sheetKind = null;
     sheet.classList.add("hidden");
+    if (was && !on()) window.DeskRead?.tocShown(false);
+  }
+  // Computer: the contents stay open on the left while the reader goes from chapter to chapter (10g).
+  function openToc() {
+    sheetKind = "toc";
+    sheet.dataset.kind = "toc";
+    $("#ms-title").textContent = "Зміст";
+    $("#ms-sub").textContent = [current?.title, current?.author].filter(Boolean).join(" · ");
+    renderToc();
+    sheet.classList.remove("hidden");
+    window.DeskRead?.tocShown(true);
+    requestAnimationFrame(() => $("#ms-body .cur")?.scrollIntoView({ block: "center" }));
   }
   $("#ms-close").onclick = closeSheet;
 
@@ -212,10 +232,18 @@
       : `<p class="m-empty">У цієї книжки немає змісту.</p>`;
     for (const li of $("#ms-body").querySelectorAll(".mt-row")) {
       li.onclick = () => {
-        closeSheet();
+        if (on()) closeSheet();
         links[li.dataset.i].click();
       };
     }
+  }
+  // The open contents follow the reader: «ви тут» moves with the page.
+  function tocFollow() {
+    if (sheetKind !== "toc" || on()) return;
+    const box = $("#ms-body");
+    const top = box.scrollTop;
+    renderToc();
+    box.scrollTop = top;
   }
 
   // «Вигляд»: every change applies to the text at once, no «Зберегти» (turn 9).
@@ -224,14 +252,20 @@
     normal: '<path d="M4 4v16M20 4v16M8 7h8M8 11h8M8 15h8"/>',
     wide: '<path d="M4 4v16M20 4v16M10 8h4M10 12h4M10 16h4"/>',
   };
+  // The column on a computer (10i): three lines, short to long.
+  const COLUMN_ICONS = { narrow: '<path d="M8 7h8M8 12h8M8 17h8"/>', normal: '<path d="M5 7h14M5 12h14M5 17h14"/>', wide: '<path d="M2 7h20M2 12h20M2 17h20"/>' };
+  function lookBox() {
+    return on() ? $("#ms-body") : $("#ml-body");
+  }
   function renderLook() {
+    const desk = !on();
     const theme = settings.theme || "auto";
     const font = settings.font || "literata";
     const margins = settings.margins || "normal";
     const px = Math.round((16 * BASE_SCALE * bookFontSize()) / 100);
     const seg = (key, items, value) =>
       `<div class="m-seg" data-key="${key}">${items.map(([v, label, style]) => `<button type="button" data-v="${v}"${v === value ? ' class="on"' : ""}${style ? ` style="${style}"` : ""}>${label}</button>`).join("")}</div>`;
-    $("#ms-body").innerHTML = `
+    lookBox().innerHTML = `
       <div class="ml">
         <div class="m-seg m-size"><button type="button" data-size="-10" aria-label="Менший шрифт">А</button><span>${px}</span><button type="button" data-size="10" aria-label="Більший шрифт">А</button></div>
         <div class="m-themes">${[
@@ -244,47 +278,55 @@
           .join("")}</div>
         <div class="m-grp">Шрифт</div>
         ${seg("font", [["literata", "Literata", "font-family:'Literata Variable',Literata,Georgia,serif"], ["georgia", "Georgia", "font-family:Georgia,serif"], ["publisher", "Видавця"]], font)}
-        <div class="m-two">
-          <div><div class="m-grp">Поля</div>${seg("margins", Object.entries(MARGIN_ICONS).map(([v, d]) => [v, `<svg viewBox="0 0 24 24" aria-label="${{ narrow: "Вузькі", normal: "Звичайні", wide: "Широкі" }[v]}">${d}</svg>`]), margins)}</div>
-          <div><div class="m-grp">Гортання</div>${seg("mode", [["scroll", "Прокрутка"], ["pages", "Сторінки"]], settings.pageTaps ? "pages" : "scroll")}</div>
+        <div class="m-two">${
+          desk
+            ? `<div><div class="m-grp">Колонка</div>${seg("column", Object.entries(COLUMN_ICONS).map(([v, d]) => [v, `<svg viewBox="0 0 24 24" aria-label="${{ narrow: "Вузька", normal: "Звичайна", wide: "Широка" }[v]}">${d}</svg>`]), settings.column || "normal")}</div>
+          <div><div class="m-grp">Гортання</div>${seg("mode", [["scroll", "Прокрутка"], ["pages", "Розворот"]], settings.deskScroll ? "scroll" : "pages")}</div>`
+            : `<div><div class="m-grp">Поля</div>${seg("margins", Object.entries(MARGIN_ICONS).map(([v, d]) => [v, `<svg viewBox="0 0 24 24" aria-label="${{ narrow: "Вузькі", normal: "Звичайні", wide: "Широкі" }[v]}">${d}</svg>`]), margins)}</div>
+          <div><div class="m-grp">Гортання</div>${seg("mode", [["scroll", "Прокрутка"], ["pages", "Сторінки"]], settings.pageTaps ? "pages" : "scroll")}</div>`
+        }
         </div>
       </div>`;
-    const box = $("#ms-body");
+    const box = lookBox();
     for (const b of box.querySelectorAll("[data-size]")) b.onclick = async () => (await setFont(Number(b.dataset.size)), renderLook());
     for (const b of box.querySelectorAll(".m-themes button")) b.onclick = () => applyLook({ theme: b.dataset.theme });
     for (const b of box.querySelectorAll(".m-seg[data-key] button")) {
       b.onclick = () => {
         const key = b.parentElement.dataset.key;
-        applyLook(key === "mode" ? { pageTaps: b.dataset.v === "pages" } : { [key]: b.dataset.v });
+        applyLook(key === "mode" ? (desk ? { deskScroll: b.dataset.v === "scroll" } : { pageTaps: b.dataset.v === "pages" }) : { [key]: b.dataset.v });
       };
     }
   }
   async function applyLook(patch) {
     const fontChanged = patch.font && patch.font !== settings.font;
     const marginsChanged = patch.margins && patch.margins !== (settings.margins || "normal");
+    const columnChanged = patch.column && patch.column !== (settings.column || "normal");
     const wasScrolled = scrolled();
     settings = await window.reader.setSettings(patch);
     if (wasScrolled !== scrolled()) {
-      closeSheet();
+      if (on()) closeSheet();
+      else renderLook();
+      body.classList.toggle("m-paged", !scrolled());
       return reopenBook();
     }
     body.dataset.margins = settings.margins || "normal";
     applyTheme();
     if (marginsChanged) resizeView();
+    if (columnChanged) window.DeskRead?.columnChanged();
     if (fontChanged) applyTypography(true);
-    if (sheetKind === "look") renderLook();
+    if (sheetKind === "look" || !on()) renderLook();
   }
 
   // ---------- Explanations and notes: #panel as the same sheet ----------
   const panel = $("#panel");
   let shownConv = null;
   function panelShown(show) {
-    if (!on()) return;
-    if (show) closeSheet();
+    if (show && on()) closeSheet();
     const notesTab = !$("#notes").classList.contains("hidden");
     panel.classList.toggle("m-notes", notesTab);
-    if (show && notesTab) setPanelTop(true);
+    if (show && notesTab && on()) setPanelTop(true);
     syncPanelHead();
+    window.DeskRead?.panelShown(show);
   }
   function setPanelTop(full) {
     panel.classList.toggle("full", full);
@@ -309,16 +351,15 @@
   // One explanation at a time in the sheet; the others wait behind their marks in the text.
   function showConv(conv) {
     shownConv = conv;
-    if (!on()) return;
     for (const c of conversations.values()) c.card.classList.toggle("m-off", c !== conv);
     syncPanelHead();
   }
   function convStarted(conv) {
     showConv(conv);
-    if (!on()) return;
     const where = conv.card.querySelector(".where");
     const p = String(conv.cfiRange).startsWith("epubcfi") ? pageOf(conv.cfiRange) : null;
     where.textContent = [conv.context.chapter, p && `стор. ${p.page}`].filter(Boolean).join(" · ");
+    if (!on()) return window.DeskRead?.convStarted(conv);
     setPanelTop(false);
     revealAbove(conv.cfiRange);
   }
@@ -352,9 +393,14 @@
     const order = (n) => (String(n.cfi).startsWith("epubcfi") ? pageOf(n.cfi)?.page ?? 1e9 : Number(String(n.cfi).split(":")[1]) || 1e9);
     const all = [...notes].sort((a, b) => order(a) - order(b) || a.createdAt - b.createdAt);
     const inChapter = all.filter((n) => here && n.chapter === here);
+    const explained = (n) => [...conversations.values()].some((c) => c.cfiRange === n.cfi);
+    const withConv = on() ? [] : all.filter(explained);
     if (notesFilter === "chapter" && !here) notesFilter = "all";
-    const list = notesFilter === "chapter" ? inChapter : all;
-    box.innerHTML = `<div class="mn-tabs"><button type="button" data-f="all"${notesFilter === "all" ? ' class="on"' : ""}>Уся книжка <span>${all.length}</span></button><button type="button" data-f="chapter"${notesFilter === "chapter" ? ' class="on"' : ""}>Цей розділ <span>${inChapter.length}</span></button></div>`;
+    if (notesFilter === "conv" && (on() || !withConv.length)) notesFilter = "all";
+    const list = notesFilter === "chapter" ? inChapter : notesFilter === "conv" ? withConv : all;
+    // A computer has room for a third tab: notes with an explanation (10f).
+    const tab = (f, label, n) => `<button type="button" data-f="${f}"${notesFilter === f ? ' class="on"' : ""}>${label} <span>${n}</span></button>`;
+    box.innerHTML = `<div class="mn-tabs">${tab("all", "Уся книжка", all.length)}${tab("chapter", "Цей розділ", inChapter.length)}${withConv.length ? tab("conv", "З поясненням", withConv.length) : ""}</div>`;
     for (const b of box.querySelectorAll(".mn-tabs button")) b.onclick = () => ((notesFilter = b.dataset.f), renderNotesPhone(box));
     if (!list.length) {
       box.insertAdjacentHTML("beforeend", `<p class="m-empty">${notes.length ? "У цьому розділі нотаток немає." : "Нотаток ще немає. Виділіть текст і натисніть «В нотатки»."}</p>`);
@@ -377,7 +423,7 @@
       el.innerHTML = `
         <div class="mn-q"><span></span></div>
         <textarea class="note-comment" rows="1" placeholder="Додати думку…"></textarea>
-        <div class="mn-acts"><span class="mn-p">${p ? `стор. ${p.page}` : ""}</span>
+        <div class="mn-acts"><span class="mn-p">${p ? `стор. ${p.page}` : ""}<span class="mn-here"> · на екрані</span></span>
           <button type="button" class="explain${conv ? " has" : ""}">${conv ? "Пояснення" : "Пояснити"}</button>
           <button type="button" class="go">Перейти</button>
           <button type="button" class="more" aria-label="Ще">···</button>
@@ -442,10 +488,11 @@
 
   // Leaving the book (home screen) puts the sheets away.
   new MutationObserver(() => body.classList.contains("library-open") && closeSheet()).observe(body, { attributes: true, attributeFilter: ["class"] });
-  PHONE.addEventListener("change", () => !on() && closeSheet());
+  PHONE.addEventListener("change", () => (closeSheet(), $("#mlook").classList.add("hidden")));
 
   window.PhoneRead = {
     progress, pdfPage, ticks, bookOpened, chrome, notesCount, sheetOpen, closeSheet, panelShown, showConv, convStarted, sheetFull,
-    renderNotes: renderNotesPhone, findShown, findClosed,
+    renderNotes: renderNotesPhone, findShown, findClosed, renderLook, openSheet, pageOf, tocFollow,
+    sheetKind: () => sheetKind, shownConv: () => shownConv,
   };
 })();

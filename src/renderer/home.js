@@ -1143,7 +1143,7 @@
   // Matched by the physical key, so they work the same with the Ukrainian layout on.
   const TAB_KEYS = {}; // one page since design «3a» (Max, 2026-11-01)
   function key(e) {
-    if (e.metaKey || e.ctrlKey || e.altKey || e.repeat) return;
+    if (e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey || e.repeat) return; // desk-read.js took it
     if (e.target?.closest?.("input, textarea, select, [contenteditable]")) return;
     if (document.querySelector("dialog[open]")) return;
     const guest = document.body.classList.contains("guest");

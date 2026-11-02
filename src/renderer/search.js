@@ -2,7 +2,6 @@
 // ⌘F: full-text search across the open book (EPUB, reflowed PDF or original PDF).
 (function () {
   const MAX_RESULTS = 500;
-  const SEARCH_HL = { fill: "#ff9f1a", "fill-opacity": "0.45", "mix-blend-mode": "multiply" };
   const state = { query: "", results: [], index: -1, token: 0, highlighted: null, groups: [] };
   // Phone (turn 9): the search covers the screen, results grouped by chapter, three per group until «Ще N →».
   const phone = () => PHONE.matches;
@@ -19,16 +18,47 @@
     if (!book && !pdfView) return;
     box.classList.remove("hidden");
     window.PhoneRead?.findClosed();
+    window.DeskRead?.searchShown(true);
     input.focus();
     input.select();
   }
 
   function close() {
     state.token++;
+    const was = !box.classList.contains("hidden");
     box.classList.add("hidden");
     window.PhoneRead?.findClosed();
+    if (was) window.DeskRead?.searchShown(false);
     clearHighlight();
+    unmarkAll();
     pdfView?.clearMatches();
+  }
+
+  // Computer (10h): every match in the text gets a light fill, the current one a stronger one.
+  let marked = [];
+  const ALL_HL = () => (document.body.dataset.theme === "dark" ? { fill: "#d9a35a", "fill-opacity": "0.22" } : { fill: "#e6b860", "fill-opacity": "0.32" });
+  function markAll() {
+    unmarkAll();
+    if (phone() || !rendition) return;
+    for (const r of state.results.slice(0, 300)) {
+      if (!r.cfi) continue;
+      try {
+        rendition.annotations.highlight(r.cfi, {}, null, "search-all", ALL_HL());
+        marked.push(r.cfi);
+      } catch {
+        /* cosmetic */
+      }
+    }
+  }
+  function unmarkAll() {
+    for (const cfi of marked) {
+      try {
+        rendition?.annotations.remove(cfi, "highlight");
+      } catch {
+        /* already gone */
+      }
+    }
+    marked = [];
   }
 
   function clearHighlight() {
@@ -40,12 +70,24 @@
       }
     }
     state.highlighted = null;
+    // The match that was current goes back to the light fill.
+    if (state.restore && rendition && !phone()) {
+      try {
+        rendition.annotations.highlight(state.restore, {}, null, "search-all", ALL_HL());
+        marked.push(state.restore);
+      } catch {
+        /* cosmetic */
+      }
+    }
+    state.restore = null;
   }
 
   function renderCount(done) {
     const n = state.results.length;
     const g = state.groups.length;
     $("#search-sum").textContent = !state.query || (!n && !done) ? "" : !n ? "Немає збігів" : `${n}${n >= MAX_RESULTS ? "+" : ""} ${plural(n, "збіг", "збіги", "збігів")} у ${g} ${plural(g, "розділі", "розділах", "розділах")}${done ? "" : "…"}`;
+    // Computer (10h): «1 з 12 · у 3 розділах», with ↑ ↓ beside it.
+    if (!phone() && n) $("#search-sum").innerHTML = `<b>${state.index >= 0 ? `${state.index + 1} з ` : ""}${n}${n >= MAX_RESULTS ? "+" : ""}</b>${state.index >= 0 ? "" : ` ${plural(n, "збіг", "збіги", "збігів")}`} · у ${g} ${plural(g, "розділі", "розділах", "розділах")}${done ? "" : "…"}`;
     if (!state.query) count.textContent = "";
     else if (!n) count.textContent = done ? "немає збігів" : "шукаю…";
     else count.textContent = `${state.index >= 0 ? state.index + 1 + " з " : ""}${n}${n >= MAX_RESULTS ? "+" : ""}${done ? "" : "…"}`;
@@ -102,6 +144,7 @@
     state.groups = [];
     list.innerHTML = "";
     clearHighlight();
+    unmarkAll();
     if (!query || query.length < 2) return renderCount(true);
     renderCount(false);
 
@@ -135,7 +178,10 @@
         await new Promise((r) => setTimeout(r, 0)); // keep the UI responsive on big books
       }
     }
-    if (!cancelled()) renderCount(true);
+    if (!cancelled()) {
+      renderCount(true);
+      markAll();
+    }
   }
 
   async function go(i) {
@@ -159,8 +205,18 @@
     } else if (rendition && r.cfi) {
       clearHighlight();
       await rendition.display(r.cfi);
+      // The all-matches fill sits under the current one: take this match's out while it is current.
+      if (marked.includes(r.cfi)) {
+        try {
+          rendition.annotations.remove(r.cfi, "highlight");
+        } catch {
+          /* gone */
+        }
+        marked = marked.filter((c) => c !== r.cfi);
+        state.restore = r.cfi;
+      }
       try {
-        rendition.annotations.highlight(r.cfi, {}, null, "search-hl", phone() ? { fill: document.body.dataset.theme === "dark" ? "#d9a35a" : "#e1aa3c", "fill-opacity": document.body.dataset.theme === "dark" ? "0.3" : "0.38" } : SEARCH_HL);
+        rendition.annotations.highlight(r.cfi, {}, null, "search-hl", { fill: document.body.dataset.theme === "dark" ? "#d9a35a" : "#e1aa3c", "fill-opacity": document.body.dataset.theme === "dark" ? "0.3" : "0.38" });
         state.highlighted = r.cfi;
       } catch {
         /* cosmetic */
@@ -183,6 +239,8 @@
     }
   });
   $("#search-next").onclick = () => go(state.index + 1);
+  $("#search-down").onclick = () => go(state.index + 1);
+  $("#search-up").onclick = () => go(state.index - 1);
   $("#search-prev").onclick = () => go(state.index - 1);
   $("#search-close").onclick = close;
   $("#search-cancel").onclick = close;

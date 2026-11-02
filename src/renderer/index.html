@@ -59,7 +59,7 @@
           <button id="search-close" title="Закрити (Esc)">✕</button>
           <button id="search-cancel" type="button">Скасувати</button>
         </div>
-        <div id="search-sum"></div>
+        <div id="search-row"><span id="search-sum"></span><span class="sr-nav"><button id="search-up" type="button" title="Попередній (⇧Enter)" aria-label="Попередній збіг"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 15 6-6 6 6"/></svg></button><button id="search-down" type="button" title="Наступний (Enter)" aria-label="Наступний збіг"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button></span></div>
         <ol id="search-results"></ol>
       </div>
       <button id="prev" class="pager" title="Попередня сторінка (←)">‹</button>
@@ -74,9 +74,16 @@
          at the bottom (chapter, pages, a slider, Зміст / Нотатки / Вигляд); one sheet for the contents and
          «Вигляд». Explanations and notes keep #panel, styled as the same sheet. phone-read.js wires it. -->
     <div id="m-top" class="m-chrome">
-      <button id="m-back" type="button" aria-label="Мої книжки"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 5-7 7 7 7"/></svg></button>
+      <button id="m-back" type="button" aria-label="Мої книжки"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 5-7 7 7 7"/></svg><span class="m-dl">Мої книжки</span></button>
       <div class="m-ttl"><b id="m-title"></b><small id="m-author"></small></div>
       <button id="m-search" type="button" aria-label="Пошук у книжці"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.6-3.6"/></svg></button>
+      <!-- Computer (turn 10): the actions are in the header on the right, with their names. -->
+      <nav class="m-dnav">
+        <button type="button" data-d="search" class="m-dsearch" title="Пошук у книжці (⌘F)" aria-label="Пошук у книжці"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4 4"/></svg></button>
+        <button type="button" data-d="toc" title="Зміст (T)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6h11M9 12h11M9 18h11"/><circle cx="4.5" cy="6" r=".9"/><circle cx="4.5" cy="12" r=".9"/><circle cx="4.5" cy="18" r=".9"/></svg>Зміст</button>
+        <button type="button" data-d="notes"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 4h12v16l-6-4-6 4z"/></svg>Нотатки <i id="m-dncount"></i></button>
+        <button type="button" data-d="look" class="m-daa" title="Вигляд" aria-label="Вигляд">Аа</button>
+      </nav>
     </div>
     <div id="m-bottom" class="m-chrome">
       <div class="m-row"><span id="m-chapter"></span><span id="m-pages"></span></div>
@@ -106,8 +113,11 @@
       </div>
       <div id="ms-body"></div>
     </section>
+    <!-- «Вигляд» on a computer: a small window under «Аа» (turn 10). -->
+    <section id="mlook" class="hidden" aria-label="Вигляд"><div id="ml-body"></div></section>
 
     <aside id="panel">
+      <span id="panel-grip" aria-hidden="true"></span>
       <div class="panel-head">
         <span class="grabber mobile-only" aria-hidden="true"></span>
         <span class="panel-tabs" role="tablist">
@@ -116,6 +126,7 @@
         </span>
         <h2 id="ps-title" class="ps-title"></h2>
         <button id="ps-action" type="button" class="ps-action hidden">В нотатки</button>
+        <kbd id="ps-esc" class="hidden">Esc</kbd>
         <span class="panel-actions">
           <button id="btn-clear" class="link" title="Очистити">Очистити</button>
           <button id="btn-panel-close" class="link mobile-only" title="Сховати панель" aria-label="Закрити"><span>Сховати</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
@@ -257,9 +268,9 @@
   </div>
 
   <div id="sel-toolbar" class="hidden">
-    <button data-action="explain">Пояснити<small>Потрібен інтернет</small></button>
-    <button data-action="note">В нотатки</button>
-    <button data-action="translate">Переклад</button>
+    <button data-action="explain">Пояснити<kbd>E</kbd><small>Потрібен інтернет</small></button>
+    <button data-action="note">В нотатки<kbd>N</kbd></button>
+    <button data-action="translate">Переклад<kbd>T</kbd></button>
     <button data-action="open" data-mark>Пояснення</button>
     <button data-action="mark-note" data-mark>В нотатки</button>
   </div>
@@ -417,10 +428,12 @@
       <dl class="keys">
         <dt><kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd></dt><dd>Мої книжки, Пошук, Клуб</dd>
         <dt><kbd>/</kbd></dt><dd>Пошук: у книжці, а на головній — у бібліотеці</dd>
-        <dt><kbd>Esc</kbd></dt><dd>Повернутися до книжки</dd>
+        <dt><kbd>Esc</kbd></dt><dd>Зняти виділення, закрити віконце чи панель; на головній — повернутися до книжки</dd>
         <dt><kbd>←</kbd> <kbd>→</kbd> <kbd>Пробіл</kbd></dt><dd>Гортати сторінки (і коліщатком миші)</dd>
-        <dt><kbd>T</kbd></dt><dd>Зміст</dd>
-        <dt><kbd>−</kbd> <kbd>+</kbd></dt><dd>Менший і більший шрифт</dd>
+        <dt><kbd>E</kbd> <kbd>N</kbd></dt><dd>Пояснити виділене, в нотатки</dd>
+        <dt><kbd>T</kbd></dt><dd>Зміст, а з виділенням — переклад</dd>
+        <dt><kbd>⌘F</kbd></dt><dd>Пошук у книжці</dd>
+        <dt><kbd>⌘+</kbd> <kbd>⌘−</kbd></dt><dd>Більший і менший шрифт</dd>
         <dt><kbd>⌘E</kbd></dt><dd>Панель пояснень</dd>
         <dt><kbd>⌘O</kbd></dt><dd>Відкрити книжку з диска</dd>
         <dt><kbd>⌘,</kbd></dt><dd>Налаштування</dd>
@@ -441,6 +454,7 @@
   <script src="renderer.js"></script>
   <script src="search.js"></script>
   <script src="phone-read.js"></script>
+  <script src="desk-read.js"></script>
   <script src="library-view.js"></script>
   <script src="home.js"></script>
   <script src="paper.js"></script>

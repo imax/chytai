@@ -7,8 +7,9 @@ const THEMES = {
   sepia: { body: { background: "#f6efe0", color: "#3b2f1e" } },
   dark: { body: { background: "#1e1e20", color: "#dcdcdc" }, a: { color: "#8ab4f8" } },
 };
-// Phone, turn 9 (Claude Design, 2026-11-02): paper, ink and ochre like Мої книжки; the book text in the dark
-// theme a little dimmer than the interface. Selection and the passage open in a sheet get the design's colours.
+// Turn 9 on a phone, turn 10 on a computer (Claude Design, 2026-11-02): paper, ink and ochre like Мої книжки; the
+// book text in the dark theme a little dimmer than the interface. Selection and the passage open in a sheet or the
+// panel get the design's colours.
 const THEMES_PHONE = {
   light: { body: { background: "#f7f4ee", color: "#1b1a17" }, "::selection": { background: "#e9d3a3" } },
   sepia: { body: { background: "#f2e8d5", color: "#3a3024" }, "::selection": { background: "#e3cc9c" } },
@@ -20,7 +21,7 @@ const resolvedTheme = () => {
   return theme === "auto" ? (DARK_QUERY.matches ? "dark" : "light") : THEMES[theme] ? theme : "light";
 };
 const themeCss = (name) =>
-  Object.entries((matchMedia("(max-width: 760px)").matches ? THEMES_PHONE : THEMES)[name])
+  Object.entries(THEMES_PHONE[name])
     .map(([sel, rules]) => `${sel}{${Object.entries(rules).map(([k, v]) => `${k}:${v}`).join(";")}}`)
     .join("\n");
 
@@ -36,19 +37,15 @@ const FONTS = {
 const FONT_CSS = ["wght.css", "wght-italic.css"].map(
   (f) => new URL(`../../node_modules/@fontsource-variable/literata/${f}`, location.href).href
 );
-// Book text a bit larger than browser default, closer to the Kindle apps at 100%.
-const BASE_SCALE = 1.2;
-const HIGHLIGHT_STYLE = { fill: "#ffd54a", "fill-opacity": "0.35", "mix-blend-mode": "multiply" };
-// Phone: the passage whose explanation is open in the sheet (turn 9): a see-through ochre over the text.
+// Book text a bit larger than browser default, closer to the Kindle apps at 100%: 19px on a phone, 21px on a
+// computer (turn 10).
+const BASE_SCALE = matchMedia("(max-width: 760px)").matches ? 1.2 : 1.3125;
+// The passage whose explanation is open in the sheet or the panel (turns 9, 10): a see-through ochre over the text.
 const highlightStyle = () =>
-  !matchMedia("(max-width: 760px)").matches
-    ? HIGHLIGHT_STYLE
-    : document.body.dataset.theme === "dark"
-      ? { fill: "#d9a35a", "fill-opacity": "0.24" }
-      : { fill: "#cd9646", "fill-opacity": "0.3" };
+  document.body.dataset.theme === "dark" ? { fill: "#d9a35a", "fill-opacity": "0.24" } : { fill: "#cd9646", "fill-opacity": "0.3" };
 
-// On a phone the explanations panel is a sheet over the page, so it starts hidden and opens with the first explanation.
-if (matchMedia("(max-width: 760px)").matches) document.body.classList.add("panel-hidden");
+// The explanations panel opens with the first explanation (a sheet on a phone, the right panel on a computer).
+document.body.classList.add("panel-hidden");
 let touchStart = null;
 const PHONE = matchMedia("(max-width: 760px)");
 // Touch screens wider than a phone (iPad): desktop layout, but finger-sized controls and the
@@ -177,9 +174,15 @@ async function reopenBook() {
   openBook({ ...current.source, position: latest.positions[current.posKey] || null, reflowPosition: latest.positions[current.posKey] || null });
 }
 
-// A little tighter on a phone, where every line counts.
+// A little tighter on a phone, where every line counts; 21/34 on a computer (turn 10).
 function lineHeight() {
-  return PHONE.matches ? 1.6 : 1.7;
+  return PHONE.matches ? 1.6 : 1.62;
+}
+
+// The text column on a computer (turn 10, «Колонка» in «Вигляд»): narrow, normal or wide.
+const COLUMNS = { narrow: 560, normal: 640, wide: 760 };
+function columnWidth() {
+  return COLUMNS[settings.column] || COLUMNS.normal;
 }
 
 // Kindle-like typography: book font replaced, justified text with hyphenation, calm line spacing.
@@ -197,7 +200,7 @@ function typographyCss() {
     pre, code, kbd, samp { font-family: ui-monospace, Menlo, monospace !important; }
     /* epub.js pads a scrolled page by 1/12 of its width; use the same side space as page mode instead. */
     ${scrolled() ? "body { padding-left: 14px !important; padding-right: 14px !important; }" : ""}
-    ${scrolled() && !PHONE.matches ? "body { max-width: 680px !important; margin-left: auto !important; margin-right: auto !important; }" : ""}`;
+    ${scrolled() && !PHONE.matches ? `body { max-width: ${columnWidth() + 28}px !important; margin-left: auto !important; margin-right: auto !important; }` : ""}`;
 }
 
 function styleContents(contents) {
@@ -292,16 +295,17 @@ async function openEpub(payload, { posKey, source }) {
   bookShown = true;
   syncAppProtection();
 
+  window.DeskRead?.layout(false); // the column and the spread for this mode, before the first layout
   rendition = book.renderTo("viewer", {
     width: "100%",
     height: "100%",
-    ...(scrolled() ? { flow: "scrolled", manager: "continuous" } : { flow: "paginated", spread: "auto", minSpreadWidth: 960 }),
+    // A computer turns a spread of two 440px pages, 96px apart, once the window has room for it (turn 10, 10k).
+    ...(scrolled() ? { flow: "scrolled", manager: "continuous" } : PHONE.matches ? { flow: "paginated", spread: "auto", minSpreadWidth: 960 } : { flow: "paginated", spread: "auto", minSpreadWidth: 1000, gap: 96 }),
     // WebKit (iOS Safari) does not run our touch/selection listeners inside an iframe sandboxed
     // without allow-scripts, so allow scripts and strip the book's own ones in stripScripts.
     allowScriptedContent: true,
   });
   followFontLoad(rendition);
-  if (!PHONE.matches) rendition.themes.default({ "::selection": { background: "rgba(255, 200, 0, 0.45)" } });
   rendition.hooks.content.register(styleContents);
   rendition.hooks.content.register((contents) => contents.on("linkClicked", rememberReturn));
   if (current.protected) rendition.hooks.content.register(limitCopy);
@@ -313,7 +317,8 @@ async function openEpub(payload, { posKey, source }) {
   rendition.on("keyup", onKey);
   rendition.hooks.content.register((contents) => contents.document.addEventListener("wheel", onWheel, { passive: true }));
   // Keys pressed while the page has focus reach only the book's frame; pass them on.
-  rendition.on("keydown", (e) => (onPrintKey(e), e.defaultPrevented || window.Shell?.key(e)));
+  rendition.on("keydown", (e) => (onPrintKey(e), e.defaultPrevented || window.DeskRead?.key(e), e.defaultPrevented || window.Shell?.key(e)));
+  window.DeskRead?.watchFrames(rendition);
   rendition.on("click", (e) => {
     // A plain click inside the page clears the selection. Touch taps are handled in onTouchEnd:
     // iOS Safari does not deliver clicks on plain text to the iframe's document listener.
@@ -498,7 +503,7 @@ $("#btn-back").onclick = () => {
 
 function syncReading() {
   if (document.body.classList.contains("library-open")) hideSelToolbar(); // the bar has no book to act on there
-  const reading = PHONE.matches && !!(rendition || pdfView) && !document.body.classList.contains("library-open");
+  const reading = !!(rendition || pdfView) && !document.body.classList.contains("library-open");
   if (reading === document.body.classList.contains("reading")) return;
   document.body.classList.toggle("reading", reading);
   document.body.classList.remove("chrome-shown");
@@ -681,7 +686,8 @@ function onRelocated(location) {
   updateProgress(location);
   // While scrolling, a selection may move off screen and back; its toolbar is pinned at the bottom anyway.
   if (!scrolled()) hideSelToolbar();
-  toggleChrome(false);
+  // On a computer the mouse shows and hides the header (desk-read.js); a relayout must not take it away.
+  if (!window.DeskRead?.mouseChrome()) toggleChrome(false);
 }
 
 // How far into the book and which chapter, for the home screen; nothing until the locations index exists.
@@ -854,9 +860,11 @@ function showSelToolbar(range, frame) {
     bar.style.left = `${r.left + r.width / 2}px`;
     return;
   }
-  const above = frame.top + rect.top - bar.offsetHeight - 8;
-  const left = frame.left + rect.left + rect.width / 2 - bar.offsetWidth / 2;
-  const top = Math.max(48, above < 48 ? frame.top + rect.bottom + 8 : above);
+  // Over the start of the selection, ~10px above the line; under its end when there is no room (turn 10, 10c).
+  const first = range.getClientRects()[0] || rect;
+  const above = frame.top + first.top - bar.offsetHeight - 10;
+  const left = frame.left + first.left + Math.min(first.width, 200) / 2 - bar.offsetWidth / 2;
+  const top = Math.max(8, above < 8 ? frame.top + rect.bottom + 10 : above);
   bar.style.top = `${top}px`;
   bar.style.left = `${Math.min(Math.max(8, left), window.innerWidth - bar.offsetWidth - 8)}px`;
 }
@@ -884,7 +892,7 @@ function hideSelToolbar() {
 
 $("#sel-toolbar").addEventListener("mousedown", (e) => e.preventDefault());
 $("#sel-toolbar").addEventListener("click", (e) => {
-  const action = e.target.dataset.action;
+  const action = e.target.closest("[data-action]")?.dataset.action;
   if (!action) return;
   if ($("#sel-toolbar").classList.contains("mark")) return onMarkAction(action);
   if (!pendingSelection) return;
@@ -1190,7 +1198,8 @@ function showMarkToolbar(conv) {
   } catch {
     /* fall back to opening the card */
   }
-  if (!range || PHONE.matches) return openConvCard(conv);
+  // A click on a mark opens it in the sheet or the panel (turns 9, 10).
+  if (!range || PHONE.matches || !TOUCH.matches) return openConvCard(conv);
   pendingMark = conv;
   markShownAt = Date.now();
   const bar = $("#sel-toolbar");
@@ -1329,54 +1338,12 @@ function decorateNoteMarks() {
 }
 
 const SVG_NS = "http://www.w3.org/2000/svg";
+// Turns 9 and 10: a note is a soft fill behind its lines (CSS on the line rects).
 function drawBars(mark) {
-  const g = mark.element;
-  // Phone (turn 9): a note is a soft fill behind its lines (CSS on the line rects), no bars.
-  if (PHONE.matches) return g.classList.add("m-fill");
-  const rects = [...g.querySelectorAll("rect")]
-    .map((r) => ({ x: +r.getAttribute("x"), y: +r.getAttribute("y"), w: +r.getAttribute("width"), h: +r.getAttribute("height") }))
-    .filter((r) => r.w > 0 && r.h > 0);
-  // A passage that runs onto the next page continues in the next column: the text jumps back up.
-  const cols = [];
-  for (const r of rects) {
-    const col = cols.at(-1);
-    if (col && r.y >= col.at(-1).y - 2) col.push(r);
-    else cols.push([r]);
-  }
-  const add = (tag, attrs) => {
-    const el = document.createElementNS(SVG_NS, tag);
-    for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, v);
-    g.appendChild(el);
-    return el;
-  };
-  // The same note always wobbles the same way, so a relayout doesn't redraw it differently.
-  let seed = [...String(mark.data?.note || "")].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7);
-  const rand = () => ((seed = (seed * 1103515245 + 12345) >>> 0) / 2 ** 32) - 0.5;
-  // A short part of a paragraph (up to three lines) is underlined by hand under the exact words;
-  // whole paragraphs and longer passages get the bars, which read more calmly than many lines of ink.
-  const lines = new Set(rects.map((r) => Math.round(r.y))).size;
-  const comment = notes.find((n) => n.id === mark.data?.note)?.comment || "";
-  if (rects.length) drawCommentMark(add, rects.at(-1), !!comment);
-  if (lines <= 3 && !coversWholeParagraphs(mark.range)) {
-    for (const r of rects) {
-      const y = r.y + r.h - 1;
-      add("path", { class: "bar under", d: `M${r.x + rand()},${y + rand() * 1.5}` + wobbleAcross(r.x, r.x + r.w, y, rand) });
-    }
-    return;
-  }
-  for (const col of cols) {
-    const top = Math.min(...col.map((r) => r.y)) + 1;
-    const bottom = Math.max(...col.map((r) => r.y + r.h)) - 1;
-    const left = Math.min(...col.map((r) => r.x)) - 8;
-    const right = Math.max(...col.map((r) => r.x + r.w)) + 8;
-    // Left: hooks in at the top, then runs down; right: runs down and hooks in at the bottom.
-    add("path", { class: "bar", d: `M${left + 7},${top - 2 + rand() * 2} Q${left + 1},${top - 1} ${left},${top + 6}` + wobble(left, top + 6, bottom, rand) });
-    add("path", { class: "bar", d: `M${right + rand() * 2},${top}` + wobble(right, top, bottom - 6, rand) + ` Q${right + 1},${bottom + 1} ${right - 7},${bottom + 2 + rand() * 2}` });
-  }
+  mark.element.classList.add("m-fill");
 }
 
-// An explanation put away: only an asterisk after its last word, and only the asterisk takes a tap
-// (marks-pane hit-tests the group's own boxes, so the line rects go and a small clear square stays).
+// An explanation put away: a dotted underline under its lines, which take a tap or a click.
 function drawStar(mark) {
   const g = mark.element;
   const rects = [...g.querySelectorAll("rect")]
@@ -1385,84 +1352,21 @@ function drawStar(mark) {
   g.replaceChildren();
   const last = rects.at(-1);
   if (!last) return;
-  if (PHONE.matches) {
-    // Phone (turn 9): an explained passage gets a dotted ochre underline; its lines, a little taller, take the tap.
-    for (const r of rects) {
-      const hit = document.createElementNS(SVG_NS, "rect");
-      for (const [k, v] of Object.entries({ class: "star-hit", x: r.x, y: r.y - 4, width: r.w, height: r.h + 10 })) hit.setAttribute(k, v);
-      const line = document.createElementNS(SVG_NS, "line");
-      const y = r.y + r.h + 3;
-      for (const [k, v] of Object.entries({ class: "dots-ul", x1: r.x, x2: r.x + r.w, y1: y, y2: y })) line.setAttribute(k, v);
-      g.append(hit, line);
-    }
-    return;
+  // Turns 9 and 10: an explained passage gets a dotted ochre underline; its lines, a little taller, take the tap.
+  for (const r of rects) {
+    const hit = document.createElementNS(SVG_NS, "rect");
+    for (const [k, v] of Object.entries({ class: "star-hit", x: r.x, y: r.y - 4, width: r.w, height: r.h + 10 })) hit.setAttribute(k, v);
+    const line = document.createElementNS(SVG_NS, "line");
+    const y = r.y + r.h + 3;
+    for (const [k, v] of Object.entries({ class: "dots-ul", x1: r.x, x2: r.x + r.w, y1: y, y2: y })) line.setAttribute(k, v);
+    g.append(hit, line);
   }
-  const el = (tag, attrs) => {
-    const e = document.createElementNS(SVG_NS, tag);
-    for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v);
-    return g.appendChild(e);
-  };
-  el("rect", { class: "star-hit", x: last.x + last.w - 6, y: last.y - 6, width: 26, height: 26 });
-  el("text", { class: "star", x: last.x + last.w + 1, y: last.y + 1, "dominant-baseline": "hanging" }).textContent = "*";
-}
-
-// A note with a comment gets a small asterisk after its last word; tapping the passage shows it.
-function drawCommentMark(add, last, commented) {
-  if (!commented) return;
-  add("text", { class: "comment-mark", x: last.x + last.w + 1, y: last.y + 2, "dominant-baseline": "hanging" }).textContent = "*";
 }
 
 // Redraw a note's marks after its comment appeared or went away.
 function redrawNote(note) {
   const views = rendition?.views();
   for (const view of views?.all ? views.all() : views || []) view.underlines?.[note.cfi]?.mark.render();
-}
-
-// A horizontal pencil stroke from x1 to x2 near y.
-function wobbleAcross(x1, x2, y, rand) {
-  const steps = Math.max(1, Math.round((x2 - x1) / 40));
-  let d = "";
-  for (let i = 1; i <= steps; i++) {
-    const x = x1 + ((x2 - x1) * i) / steps;
-    d += ` Q${x - (x2 - x1) / steps / 2},${y + rand() * 2.2} ${x},${y + rand() * 1.2}`;
-  }
-  return d;
-}
-
-function blockOf(node) {
-  return (node?.nodeType === 1 ? node : node?.parentElement)?.closest("p, li, blockquote, h1, h2, h3, h4, h5, h6, div, dd, dt, td");
-}
-
-// True when the range starts at the beginning of a paragraph and ends at the end of one.
-function coversWholeParagraphs(range) {
-  if (!range) return true;
-  const doc = range.startContainer.ownerDocument;
-  const gap = (from, to) => {
-    if (!from || !to) return "";
-    const r = doc.createRange();
-    r.setStart(...from);
-    r.setEnd(...to);
-    return r.toString().trim();
-  };
-  const first = blockOf(range.startContainer);
-  const last = blockOf(range.endContainer);
-  if (!first || !last) return true;
-  const end = [range.endContainer, range.endOffset];
-  // iOS often ends a paragraph selection at the very start of the next one.
-  const endsWhole = !gap(end, [last, last.childNodes.length]) || (last !== first && !gap([last, 0], end));
-  return !gap([first, 0], [range.startContainer, range.startOffset]) && endsWhole;
-}
-
-// A vertical pencil stroke from y1 to y2 near x: it drifts a little side to side.
-function wobble(x, y1, y2, rand) {
-  const steps = Math.max(1, Math.round((y2 - y1) / 28));
-  let d = "";
-  for (let i = 1; i <= steps; i++) {
-    const y = y1 + ((y2 - y1) * i) / steps;
-    const cy = y - (y2 - y1) / steps / 2;
-    d += ` Q${x + rand() * 3},${cy} ${x + (i === steps ? 0 : rand() * 1.6)},${y}`;
-  }
-  return d;
 }
 
 function unmarkNote(note) {
@@ -1534,10 +1438,6 @@ function goToNote(note) {
   if (PHONE.matches) showPanel(false);
 }
 
-function noteDate(ms) {
-  return new Date(ms).toLocaleDateString("uk-UA", { day: "numeric", month: "short" });
-}
-
 function renderNotes() {
   const box = $("#notes");
   box.innerHTML = "";
@@ -1550,58 +1450,8 @@ function renderNotes() {
     box.innerHTML = `<div class="panel-empty">Нотаток ще немає. Виділіть текст і натисніть «В нотатки».</div>`;
     return;
   }
-  if (PHONE.matches && window.PhoneRead) return window.PhoneRead.renderNotes(box);
-  // Newest on top, like the explanations.
-  for (const note of [...notes].reverse()) {
-    const card = document.createElement("article");
-    card.className = "card note";
-    card.dataset.id = note.id;
-    card.innerHTML = `
-      <blockquote class="quote"></blockquote>
-      <textarea class="note-comment" rows="1" placeholder="Додати думку…"></textarea>
-      <div class="meta"><span class="where"></span>
-        <span class="actions">
-          <button class="link explain">Пояснити</button>
-          <button class="link go">Перейти</button>
-          <button class="link delete">Видалити</button>
-        </span>
-      </div>`;
-    card.querySelector(".quote").textContent = note.text;
-    card.querySelector(".where").textContent = [note.chapter, noteDate(note.createdAt)].filter(Boolean).join(" · ");
-    // «Пояснити» right from the note (Max, 2026-11-01): the same explanation as for a selection.
-    card.querySelector(".explain").onclick = async () => {
-      if (settings.free) return showNotice("Пояснення працюють після входу. Це безкоштовно, потрібна лише пошта.", false);
-      startExplanation({ cfiRange: note.cfi, text: note.text, context: await noteContext(note) });
-    };
-    const go = card.querySelector(".go");
-    if (noteReachable(note)) go.onclick = () => goToNote(note);
-    else (go.disabled = true), (go.title = "Ця нотатка з іншого вигляду PDF");
-    card.querySelector(".delete").onclick = async () => {
-      try {
-        await notesStore.notesDelete(current.path, note.id);
-      } catch (err) {
-        if (err.message !== "login") showNotice(`Не вдалося видалити нотатку: ${err.message}`, false);
-        return;
-      }
-      notes = notes.filter((n) => n.id !== note.id);
-      unmarkNote(note);
-      renderNotes();
-    };
-    const comment = card.querySelector(".note-comment");
-    comment.value = note.comment || "";
-    comment.oninput = () => fitComment(comment);
-    comment.onchange = async () => {
-      note.comment = comment.value.trim();
-      redrawNote(note);
-      try {
-        await notesStore.notesUpdate(current.path, note.id, { comment: note.comment });
-      } catch (err) {
-        if (err.message !== "login") showNotice(`Не вдалося зберегти думку: ${err.message}`, false);
-      }
-    };
-    box.appendChild(card);
-  }
-  requestAnimationFrame(() => box.querySelectorAll(".note-comment").forEach(fitComment));
+  // One list on a phone and a computer (turns 9, 10): grouped by chapter, with tabs (phone-read.js).
+  window.PhoneRead.renderNotes(box);
 }
 
 // The passage around a note, for its explanation: from the chapter the note is in when the book can give it,
