@@ -184,9 +184,18 @@
     if (document.fullscreenElement) document.exitFullscreen?.().catch(() => {});
     else document.documentElement.requestFullscreen?.().catch(() => {});
   }
+  // The browser leaves full screen on Esc before the page sees the key, so Esc could not close a panel there
+  // (Max, 2026-11-02). Chrome lets a full-screen page keep Esc (holding it still leaves); then Esc closes
+  // what is open first, and only an Esc that closes nothing leaves full screen (escFull).
+  let escLocked = false;
   document.addEventListener("fullscreenchange", () => {
     const on = !!document.fullscreenElement;
     body.classList.toggle("d-full", on);
+    // Where the browser keeps Esc for itself (Safari, Firefox), the «Esc» hint is hidden while full screen.
+    body.classList.add("d-esc-lost");
+    if (on && navigator.keyboard?.lock)
+      navigator.keyboard.lock(["Escape"]).then(() => (escLocked = !!document.fullscreenElement) && body.classList.remove("d-esc-lost"), () => {});
+    if (!on) (escLocked = false), body.classList.remove("d-esc-lost"), navigator.keyboard?.unlock?.();
     const b = $('.m-dnav [data-d="full"]');
     b.title = on ? "Вийти з повного екрана (F)" : "На весь екран (F)";
     b.setAttribute("aria-label", on ? "Вийти з повного екрана" : "На весь екран");
@@ -325,7 +334,7 @@
       if (selection) act = clearSelection;
       else if (!$("#mlook").classList.contains("hidden")) act = () => look(false);
       // An answer still being written stops first (Max, 2026-11-01; onKey); the next Esc closes the panel.
-      else if (busy) return;
+      else if (busy) return e.preventDefault();
       else if (searchOpen) act = () => window.BookSearch?.close();
       else if (panelOpen()) act = () => showPanel(false);
       else if (tocOpen) act = () => window.PhoneRead?.closeSheet();
@@ -352,6 +361,15 @@
     hideSelToolbar();
   }
   document.addEventListener("keydown", key);
+  addEventListener("keydown", escFull);
+
+  // Runs after every other key handler: an Esc nobody used leaves full screen.
+  function escFull(e) {
+    if (e.key !== "Escape" || e.defaultPrevented || !escLocked || !document.fullscreenElement) return;
+    if (document.querySelector("dialog[open]")) return; // the dialog closes first
+    e.preventDefault();
+    document.exitFullscreen?.().catch(() => {});
+  }
 
   // A computer turned into a phone-sized window (or back): the panels go.
   PHONE.addEventListener("change", () => {
@@ -363,7 +381,7 @@
   if (desk()) layout(false);
 
   window.DeskRead = {
-    layout, tocShown, panelShown, searchShown, convStarted, relocated, look, key, watchFrames, mouseChrome: () => desk() && !TOUCH.matches,
+    layout, tocShown, panelShown, searchShown, convStarted, relocated, look, key, watchFrames, escFull, mouseChrome: () => desk() && !TOUCH.matches,
     columnChanged: () => (layout(), scrolled() && applyTypography(false)),
   };
 })();

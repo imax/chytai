@@ -317,7 +317,7 @@ async function openEpub(payload, { posKey, source }) {
   rendition.on("keyup", onKey);
   rendition.hooks.content.register((contents) => contents.document.addEventListener("wheel", onWheel, { passive: true }));
   // Keys pressed while the page has focus reach only the book's frame; pass them on.
-  rendition.on("keydown", (e) => (onPrintKey(e), e.defaultPrevented || window.DeskRead?.key(e), e.defaultPrevented || window.Shell?.key(e)));
+  rendition.on("keydown", (e) => (onPrintKey(e), e.defaultPrevented || window.DeskRead?.key(e), e.defaultPrevented || window.Shell?.key(e), window.DeskRead?.escFull(e)));
   window.DeskRead?.watchFrames(rendition);
   rendition.on("click", (e) => {
     // A plain click inside the page clears the selection. Touch taps are handled in onTouchEnd:

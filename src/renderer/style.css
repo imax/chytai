@@ -1723,6 +1723,7 @@ a.r-frow:hover .r-frow-go.plain { color: var(--r-ochre); }
   #panel-grip { display: block; position: absolute; left: -4px; top: 0; bottom: 0; width: 8px; cursor: col-resize; z-index: 2; }
   #panel .panel-head { height: 56px; flex: none; gap: 12px; padding: 0 12px 0 24px; touch-action: auto; }
   #panel .panel-head .grabber { display: none; }
+  body.d-full.d-esc-lost #ps-esc { display: none; }
   #ps-esc:not(.hidden) { display: inline-block; min-width: 0; font: 400 11px/1.4 var(--m-sans); color: var(--m-ink3); background: none; border: 1px solid var(--m-seg); border-radius: 4px; padding: 1px 5px; }
   .m-x, #btn-panel-close { width: 36px; height: 36px; }
   #panel #cards { flex: 1; min-height: 0; overflow-y: auto; }

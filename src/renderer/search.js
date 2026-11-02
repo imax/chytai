@@ -231,6 +231,7 @@
   });
   input.addEventListener("keydown", (e) => {
     if (e.key === "Escape") {
+      e.preventDefault();
       close();
     } else if (e.key === "Enter") {
       e.preventDefault();
