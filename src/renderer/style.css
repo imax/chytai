@@ -1718,3 +1718,45 @@ a.r-frow:hover .r-frow-go.plain { color: var(--r-ochre); }
 }
 .r-found > .r-fpaper { grid-column: 1 / -1; margin: 0; font-size: 13px; color: var(--r-ink2); }
 .pp-scan-acts > .r-pill-line, .pp-acts > .r-pill-line { text-align: center !important; }
+
+/* Paper book page v2 (Max, 2026-11-02): a slim bar with the book, the question field first, then the kept
+   questions and the notes. No big cover, no «Я на сторінці». */
+.pp { gap: 26px; }
+.pp-bar { gap: 8px; margin-bottom: -10px; }
+.pp-mini { flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; border: none; background: none; padding: 0; color: var(--r-ink); text-align: left; cursor: pointer; }
+.pp-mini-c { width: 26px; flex: none; }
+.pp-mini-c .r-cover { box-shadow: none; }
+.pp-mini-c .r-cover-t, .pp-mini-c .r-cover-a { display: none; }
+.pp-mini-x { display: flex; flex-direction: column; min-width: 0; }
+.pp-mini-x b { font: 600 16px/1.25 var(--r-serif); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pp-mini-x small { font-size: 12px; color: var(--r-ink2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pp-ask { display: flex; flex-direction: column; gap: 12px; border: 1px solid var(--r-sline); border-radius: 14px; background: var(--r-btn); padding: 14px 14px 12px; }
+.pp-ask:focus-within { border-color: var(--r-ochre); }
+#pp-q { border: none; outline: none; resize: none; background: transparent; color: var(--r-ink); font: 18px/1.4 var(--r-serif); padding: 0; min-height: 52px; field-sizing: content; max-height: 40vh; }
+#pp-q::placeholder { color: var(--r-ink3); }
+.pp-ask-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.pp-ask-row .r-pill { padding: 10px 22px; }
+.pp-img { display: inline-flex; align-items: center; gap: 8px; border: none; background: none; color: var(--r-ink2); font: 500 14px var(--r-sans); padding: 6px 0; cursor: pointer; }
+.pp-img svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.6; }
+.pp-img:hover { color: var(--r-ochre); }
+.pp-att { display: flex; align-items: center; gap: 10px; padding: 8px; border-radius: 10px; background: var(--r-paper); font-size: 13px; color: var(--r-ink2); }
+.pp-att img { width: 36px; height: 48px; object-fit: cover; border-radius: 4px; flex: none; }
+.pp-att-t { flex: 1; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.pp-att .r-link { font-size: 13px; color: var(--r-ochre); text-decoration: none; }
+.pp-ask .pp-scan { border: none; padding: 4px 2px 0; background: none; }
+.pp-chats .r-sec-head, .pp-notes .r-sec-head { margin-bottom: 4px; }
+.pp-chat { padding: 14px 0; border-bottom: 1px solid var(--r-rule); cursor: pointer; }
+.pp-chat:last-child { border-bottom: none; }
+.pp-chat-q { font: 17px/1.35 var(--r-serif); }
+.pp-chat-a { margin-top: 6px; font-size: 14.5px; line-height: 1.55; }
+.pp-chat-a.short { color: var(--r-ink2); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.pp-chat.open { cursor: default; }
+.pp-chat.open .pp-chat-q { cursor: pointer; }
+.pp-chat-a.answer p { margin: 0 0 8px; }
+.pp-chat-a.answer strong { font-weight: 600; }
+.pp-chat-fq { margin-top: 12px; font: italic 15px/1.4 var(--r-serif); color: var(--r-ink2); }
+.pp-chat .pp-note-m { margin-top: 8px; }
+.pp-chat .pp-more-q { color: var(--r-ochre); }
+@media (min-width: 761px) {
+  .pp-bar { margin-top: 0; }
+}

@@ -675,6 +675,9 @@
     // Paper books (paper.js, server/paper.js).
     paperAdd: async (info) => (await api("POST", "/api/paper", info)).json(),
     paperUpdate: async (name, patch) => (await api("PATCH", `/api/paper/${encodeURIComponent(name)}`, patch)).json(),
+    paperChats: async (name) => (await (await api("GET", `/api/paper/${encodeURIComponent(name)}/chats`)).json()).chats,
+    paperChatSave: (name, chat) => api("PUT", `/api/paper/${encodeURIComponent(name)}/chats/${encodeURIComponent(chat.id)}`, chat),
+    paperChatDelete: (name, id) => api("DELETE", `/api/paper/${encodeURIComponent(name)}/chats/${encodeURIComponent(id)}`),
     paperScan: async (kind, blob) => (await api("POST", `/api/paper/scan?kind=${kind}`, blob)).json(),
     catalogFind: async (q) => (await api("GET", `/api/find?${new URLSearchParams({ q })}`)).json(),
     libraryFinished: (name, done) => api("POST", "/api/library/finished", { path: name, done }),

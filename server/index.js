@@ -1815,13 +1815,51 @@ api.patch("/paper/:name", guestsCannot("У демо-режимі паперов�
   saveState();
   res.json(paper.listEntry(req.params.name, p, u));
 });
+// Questions about a paper book with their answers (v2, Max: «треба щоб питання зберігалися»), kept with the
+// talk so far so «Уточнити» can go on: u.paperChats[name] = [{ id, turns: [{ q, a }], messages, sel, page, at }].
+const CHATS_MAX = 300;
+const CHAT_BYTES = 200 * 1024;
+api.get("/paper/:name/chats", guestsCannot("У демо-режимі паперових книжок немає."), (req, res) => {
+  res.json({ chats: userState(req.acct).paperChats?.[req.params.name] || [] });
+});
+api.put("/paper/:name/chats/:id", guestsCannot("У демо-режимі паперових книжок немає."), (req, res) => {
+  const u = userState(req.acct);
+  if (!u.paper?.[req.params.name]) return res.status(404).json({ error: "Книжки немає." });
+  const { turns, messages, sel, page, at } = req.body || {};
+  if (!/^[a-z0-9]{4,40}$/.test(req.params.id) || !Array.isArray(turns) || !turns.length) return res.status(400).json({ error: "bad request" });
+  const chat = {
+    id: req.params.id,
+    turns: turns.slice(-50).map((t) => ({ q: String(t?.q || "").slice(0, 4000), a: String(t?.a || "").slice(0, 20000) })),
+    messages: Array.isArray(messages) ? messages : null,
+    sel: typeof sel === "string" ? sel.slice(0, 4000) : "",
+    page: intOr(page, 20000) || 0,
+    at: Number.isFinite(at) ? at : Date.now(),
+  };
+  // A long talk keeps its turns for reading, but no longer goes on from where it was.
+  if (JSON.stringify(chat.messages || "").length > CHAT_BYTES) chat.messages = null;
+  const list = ((u.paperChats ??= {})[req.params.name] ??= []);
+  const i = list.findIndex((c) => c.id === chat.id);
+  if (i >= 0) list[i] = chat;
+  else list.push(chat);
+  if (list.length > CHATS_MAX) list.splice(0, list.length - CHATS_MAX);
+  (u.opened ??= {})[req.params.name] = Date.now();
+  saveState();
+  res.json({ ok: true });
+});
+api.delete("/paper/:name/chats/:id", guestsCannot("У демо-режимі паперових книжок немає."), (req, res) => {
+  const u = userState(req.acct);
+  const list = u.paperChats?.[req.params.name];
+  if (list) u.paperChats[req.params.name] = list.filter((c) => c.id !== req.params.id);
+  saveState();
+  res.json({ ok: true });
+});
 // A paper book has no file to keep in «Нещодавно видалені»: it goes with its notes.
 api.delete("/paper/:name", guestsCannot("У демо-режимі паперових книжок немає."), (req, res) => {
   const u = userState(req.acct);
   const name = req.params.name;
   if (!u.paper?.[name]) return res.status(404).json({ error: "Книжки немає." });
   delete u.paper[name];
-  for (const key of ["positions", "progress", "opened", "setAside", "seen", "notes", "finished"]) delete u[key]?.[name];
+  for (const key of ["positions", "progress", "opened", "setAside", "seen", "notes", "finished", "paperChats"]) delete u[key]?.[name];
   saveState();
   res.json({ ok: true });
 });

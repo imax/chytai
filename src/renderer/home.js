@@ -165,7 +165,8 @@
   const lastTouched = (b) => Math.max(b.openedAt || 0, b.addedAt || 0);
   const matches = (b, q) => norm(`${b.title} ${b.authors.join(" ")}`).includes(q);
   const hue = (t) => [...String(t || "")].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 0) % 360;
-  const isReading = (b) => !b.finished && b.pct != null && b.pct >= 1 && b.pct < 99;
+  // A paper book has no percentage (v2: no «Я на сторінці»): opened and not finished is being read.
+  const isReading = (b) => !b.finished && (b.paper ? !!b.openedAt : b.pct != null && b.pct >= 1 && b.pct < 99);
   const isNewBook = (b) => !b.finished && !b.started && !(b.pct > 0);
   // Progress sits on the cover itself: a thin bar while reading, a small mark when finished. A line of text
   // under each cover took height and said little (Max).
@@ -284,14 +285,13 @@
     const cur = nowBook(books);
     let html = "";
     if (cur?.paper) {
-      const meta = [cur.page ? `<b>стор. ${cur.page}</b>${cur.pages ? ` з ${cur.pages}` : ""}` : "", esc(cur.chapter)].filter(Boolean).join(" · ");
+      const meta = [esc(author(cur)), cur.page ? `стор. ${cur.page}` : ""].filter(Boolean).join(" · ");
       html += `<section class="r-now">${head("Читаю зараз", "", true)}
         <div class="r-now-row"><button class="r-now-cover" data-open="${esc(cur.path)}">${rcover(cur)}</button>
           <div class="r-now-text"><span class="pp-tag">Паперова</span><h3 class="r-now-t">${esc(cur.title)}</h3>
-            <div class="r-progress"><span style="width:${cur.pct || 0}%"></span></div>
             <p class="r-now-meta">${meta}</p>
-            <button class="r-pill r-wide" data-open="${esc(cur.path)}">Відкрити</button></div></div>
-        <button class="r-pill r-narrow" data-open="${esc(cur.path)}">Відкрити</button></section>`;
+            <button class="r-pill r-wide" data-open="${esc(cur.path)}">Запитати про книжку</button></div></div>
+        <button class="r-pill r-narrow" data-open="${esc(cur.path)}">Запитати про книжку</button></section>`;
     } else if (cur) {
       const where = [cur.chapter || (cur.parts ? `розділ ${cur.part} з ${cur.parts}` : "")].filter(Boolean).map(esc).join("");
       html += `<section class="r-now">${head("Читаю зараз", "", true)}
@@ -860,6 +860,8 @@
     window.reader.paperUpdate(path, {}).catch(() => {});
     if (page === "paper") page = "home"; // another paper book: draw anew
     setPage("paper");
+    // Straight to the question on a computer; a phone's keyboard would cover the page at once.
+    if (!matchMedia("(pointer: coarse)").matches) setTimeout(() => $("#pp-q")?.focus(), 50);
   }
   // «Читаю паперову» on a catalog book.
   function paperFromCatalog(i) {
