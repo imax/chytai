@@ -155,6 +155,7 @@ function Reader() {
         applicationNameForUserAgent="ChytaiApp/camera/mic"
         allowsBackForwardNavigationGestures
         allowsInlineMediaPlayback
+        mediaCapturePermissionGrantType="grant"
         // No sharedCookiesEnabled: with it, the login cookie set on the POST /login redirect reaches
         // page navigations but not the page's own fetch() calls, so /api answers 401, the page sends
         // itself back to /login, which redirects to / again, and the first build showed a white
