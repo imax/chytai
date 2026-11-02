@@ -72,8 +72,9 @@ function stars(r, { num = true } = {}) {
 // Sizes: xl 200×300, lg 120×180, md 64×96, sm 52×78, xs 40×60, feed 48×72, card (the grid's width).
 // Open Library's cover server often fails the first request for a picture it has not cached
 // (Max saw «Фундація» without its cover, 2026-10-22), so a failed picture is asked twice more
-// before the block stays.
-const COVER_ERR = "var r=+(this.dataset.r||0);if(r<2){this.dataset.r=r+1;var s=this.src.split('?')[0];setTimeout(()=>{this.src=s+'?r='+(r+1)},1500*(r+1))}else this.remove()";
+// before the block stays. While it waits the picture is hidden: Safari draws its «?» icon over the block
+// (Max saw it on «The Design of Everyday Things», 2026-11-02); a retry that loads shows it again.
+const COVER_ERR = "this.style.visibility='hidden';this.onload=function(){this.style.visibility=''};var r=+(this.dataset.r||0);if(r<2){this.dataset.r=r+1;var s=this.src.split('?')[0];setTimeout(()=>{this.src=s+'?r='+(r+1)},1500*(r+1))}else this.remove()";
 // Below the book page's own cover a small copy is shown (thumbs.js): the width shown, in px.
 const SHOWN = { lg: 120, card: 120, md: 64, sm: 52, feed: 48, xs: 40 };
 let thumb = (src) => src;
