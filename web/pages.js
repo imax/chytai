@@ -323,9 +323,10 @@ const nowLine = (now) => (now?.books.length ? `<p class="now-line"><span class="
 // Carl · серія, 8 книг».
 function feedRow({ reader, book, entry: e, series = null, shelf = null }, { wide = false, followed = null } = {}) {
   const t = when(e);
-  // A shelf brought in one go (social.feed `shelves`): «190 книжок на полиці» and a few of its covers.
+  // A shelf brought in one go (social.feed `shelves`): «Oleksandr додав 190 книжок · вчора» and a few of its
+  // covers, in the look of the other lines (Max, 2026-11-02: no heading, «додав» as the action).
   if (shelf) return `<article class="feed-row shelf-row${wide ? " wide" : ""}${followed?.has(reader.id) ? " followed" : ""}" data-rating="">
-  <div><span class="who"><a href="${attr(reader.href)}"><b>${esc(reader.name)}</b></a> · полиця${t ? ` · ${esc(t)}` : ""}</span><a class="title" href="${attr(reader.href)}">${books(shelf.n)} на полиці</a>
+  <div><span class="who"><a href="${attr(reader.href)}"><b>${esc(reader.name)}</b></a> додав <a href="${attr(reader.href)}">${books(shelf.n)}</a>${t ? ` · ${esc(t)}` : ""}</span>
   <p class="shelf-covers">${shelf.books.map((b) => `<a href="${attr(b.href)}" title="${attr(b.title)}">${cover(b, "feed")}</a>`).join("")}</p></div>
 </article>`;
   const who = `<span class="who"><a href="${attr(reader.href)}"><b>${esc(reader.name)}</b></a> ${did(e)}${t ? ` · ${esc(t)}` : ""}</span>`;
