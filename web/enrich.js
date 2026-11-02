@@ -474,6 +474,16 @@ async function searchGoogle(q, key, { fetchImpl = fetchV6, limit = 5 } = {}) {
 async function searchCovers(book, { googleKey = "", fetchImpl = fetch } = {}) {
   const q = [mainTitle(book.title), firstAuthor(book.author)].filter(Boolean).join(" ");
   const out = [];
+  // Readeat first: it sells the Ukrainian editions, which Open Library and Google mostly don't know (Max,
+  // 2026-11-02: nothing found for Наш Формат's «Берлінський щоденник»). By ISBN, then by title and author.
+  try {
+    const readeat = require("./readeat");
+    const isbns = [book.isbn, ...(book.isbns || [])].map((i) => String(i || "").replace(/[^0-9Xx]/g, "")).filter((i) => i.length >= 10);
+    let hits = [];
+    for (const i of isbns.slice(0, 2)) if (!hits.length) hits = await readeat.search(i, { fetchImpl });
+    if (!hits.length) hits = (await readeat.search(q, { fetchImpl })).filter((h) => readeat.same(book, h));
+    for (const h of hits.slice(0, 6)) if (h.cover) out.push({ src: h.cover, title: h.title, author: h.author, from: "Readeat" });
+  } catch {}
   for (const b of await searchOpenLibrary(q, { fetchImpl, limit: 8 })) if (b.cover) out.push({ src: b.cover, title: b.title, author: b.author, from: "Open Library" });
   if (googleKey) {
     try {
