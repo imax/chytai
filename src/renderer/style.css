@@ -1392,6 +1392,7 @@ a.r-frow:hover .r-frow-go.plain { color: var(--r-ochre); }
   #m-chapter { font: 500 14px var(--m-sans); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
   #m-pages { flex: none; font: 400 12px var(--m-sans); color: var(--m-ink2); font-variant-numeric: tabular-nums; }
   .m-slider { position: relative; height: 20px; }
+  #m-bottom.no-pos .m-slider, #m-bottom.no-pos #m-pages { visibility: hidden; }
   .m-track { position: absolute; left: 0; right: 0; top: 50%; height: 3px; margin-top: -1.5px; background: var(--m-rule); border-radius: 2px; }
   #m-fill { position: absolute; left: 0; top: 0; bottom: 0; width: 0; background: var(--m-bar); border-radius: 2px; }
   #m-ticks i { position: absolute; top: -3px; width: 1px; height: 9px; background: var(--m-seg); }

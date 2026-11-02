@@ -14,7 +14,7 @@
   // ---------- Pages ----------
   // A page is a ~1600-character chunk of the locations index, as on the contents (the same on every screen).
   function pageOf(cfi) {
-    const n = book?.locations?.length?.();
+    const n = book?.locationsReady && book.locations.length();
     if (!n || !cfi || current?.preview) return null;
     try {
       return { page: book.locations.locationFromCfi(cfi) + 1, total: n, pct: Math.round(book.locations.percentageFromCfi(cfi) * 100) };
@@ -30,10 +30,14 @@
     const p = pageOf(cfi);
     $("#m-pages").textContent = p ? `стор. ${p.page} з ${p.total} · ${p.pct}%` : "";
     if (p && !dragging) setSlider(p.pct / 100);
+    // Until the page index is built the place is unknown: no slider at 0 % in the middle of a book.
+    $("#m-bottom").classList.toggle("no-pos", !p);
+    if (p) introBars();
     // Pages mode: the caption says the page rather than the percentage (9k).
     if (on() && p && !scrolled()) queueMicrotask(() => ($("#progress-label").textContent = `стор. ${p.page} з ${p.total}`));
   }
   function pdfPage(page, total) {
+    $("#m-bottom").classList.remove("no-pos");
     $("#m-pages").textContent = `стор. ${page} з ${total}`;
     if (!dragging) setSlider((page - 1) / Math.max(1, total - 1));
   }
@@ -80,22 +84,27 @@
   });
 
   // ---------- Bars ----------
-  const seenBooks = new Set();
   function bookOpened() {
     $("#m-title").textContent = current?.title || "";
     $("#m-author").textContent = current?.author || "";
     $("#m-ticks").innerHTML = "";
     $("#m-pages").textContent = "";
     setSlider(0);
+    $("#m-bottom").classList.add("no-pos");
     closeSheet();
     body.classList.toggle("m-paged", !scrolled());
-    // The first time a book is opened here, the bars show for a moment so the reader knows they exist.
-    if (on() && current && !seenBooks.has(current.path)) {
-      seenBooks.add(current.path);
-      setTimeout(() => toggleChrome(true), 400);
-      const shownAt = Date.now();
-      setTimeout(() => body.classList.contains("chrome-shown") && Date.now() - shownAt < 4000 && !sheetOpen() && toggleChrome(false), 3000);
+  }
+  // The very first book read on this device shows the bars for a moment, so the reader knows they exist;
+  // only once the place in the book is known (Max, 2026-11-02: the slider showed 0 % for a second).
+  function introBars() {
+    try {
+      if (!on() || localStorage.getItem("barsShown")) return;
+      localStorage.setItem("barsShown", "1");
+    } catch {
+      return;
     }
+    toggleChrome(true);
+    setTimeout(() => body.classList.contains("chrome-shown") && !sheetOpen() && toggleChrome(false), 2500);
   }
   function chrome(show) {
     if (show) $("#m-findbar").classList.add("hidden");

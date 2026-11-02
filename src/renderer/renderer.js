@@ -382,6 +382,7 @@ async function openEpub(payload, { posKey, source }) {
 
   // Page-accurate progress needs the locations index; build it in the background.
   book.locations.generate(1600).then(() => {
+    book.locationsReady = true; // before this, length() counts only the chapters done so far
     const location = rendition?.currentLocation();
     updateProgress(location);
     if (current && location?.start) window.reader.savePosition(current.posKey, location.start.cfi, readingProgress(location));
