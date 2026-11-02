@@ -342,7 +342,19 @@ async function openEpub(payload, { posKey, source }) {
     if (rendition === mine && !mine.location?.start) mine.display(payload.position || undefined);
   });
 
-  await rendition.display(payload.position || undefined);
+  // display() lays the page out again once the book's fonts are in (followFontLoad); the first layout
+  // flashed for a moment before it (Max, 2026-11-02). The page shows when the second one is done, or
+  // after a second and a half if the fonts are slow.
+  const viewer = $("#viewer");
+  viewer.style.opacity = "0";
+  const reveal = () => (viewer.style.opacity = "");
+  const revealLate = setTimeout(reveal, 1500);
+  try {
+    await rendition.display(payload.position || undefined);
+  } finally {
+    clearTimeout(revealLate);
+    reveal();
+  }
   // The reading area may have been measured before the layout settled (first load, toolbar
   // hiding on a phone); a re-measure now re-renders only if the size actually changed.
   requestAnimationFrame(resizeView);
