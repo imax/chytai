@@ -1795,7 +1795,8 @@ a.r-frow:hover .r-frow-go.plain { color: var(--r-ochre); }
 .pp-fq:focus-within { border-color: var(--r-ochre); }
 .pp-fq input { flex: 1; min-width: 0; border: none; outline: none; background: transparent; color: var(--r-ink); font: 16px var(--r-serif); padding: 10px 0; }
 .pp-fq input::placeholder { color: var(--r-ink3); }
-.pp-fq button { width: 32px; height: 32px; flex: none; border: none; border-radius: 50%; background: var(--r-track); color: var(--r-ink2); font-size: 16px; cursor: pointer; }
+.pp-fq button { width: 32px; height: 32px; flex: none; display: inline-flex; align-items: center; justify-content: center; padding: 0; border: none; border-radius: 50%; background: var(--r-track); color: var(--r-ink2); cursor: pointer; }
+.pp-fq button svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .pp-fq:focus-within button { background: var(--r-ochre); color: var(--r-btn); }
 /* A long title (a paper book's full catalog name) stays within three lines next to the cover. */
 .r-now-t { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; }
