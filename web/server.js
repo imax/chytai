@@ -618,15 +618,17 @@ function fileFor(files, book) {
 
 // A free book's page here by its file name in the reader: the QR on the last page the reader prints
 // (Max, 2026-10-26: «qr код має вести на сайт каталога»). Not found: a search for its title.
-app.get("/free-book/:name", (req, res) => {
-  const f = FREE.find((x) => x.name === req.params.name);
-  if (!f) return res.redirect("/");
-  // The file's title can be longer than the catalog's («Лис Микита. Коли ще звірі говорили»): try its first part too.
+// The file's title can be longer than the catalog's («Лис Микита. Коли ще звірі говорили»): try its first part too.
+function freeBookHref(f) {
   const queries = [...new Set([f.title, f.title.split(/[.:(]/)[0].trim()])].filter((q) => q.length > 1);
   const hit = queries
     .flatMap((q) => store.search(q, { limit: 10, alias: false }))
     .find((h) => freeFileFor(store.bookPage(h.book.id))?.name === f.name);
-  res.redirect(hit ? store.href(hit.book.id) : `/search?q=${encodeURIComponent(f.title)}`);
+  return hit ? store.href(hit.book.id) : `/search?q=${encodeURIComponent(f.title)}`;
+}
+app.get("/free-book/:name", (req, res) => {
+  const f = FREE.find((x) => x.name === req.params.name);
+  res.redirect(f ? freeBookHref(f) : "/");
 });
 
 // «Про книжку» in the reader's book menu (Max, 2026-11-01, like Kindle's «About this book»): the book's page here
@@ -941,7 +943,7 @@ function mailFreeAdded() {
   const done = new Set(JSON.parse(store.db.get("free:mailed") || "[]"));
   for (const f of FREE.filter((x) => x.wanted && !done.has(x.name))) {
     done.add(f.name);
-    notifyOwner(`На Вільній полиці: ${f.title}`, [`На Вільну полицю Читалки додано «${f.title}» (${f.authors}): цю книжку хочуть прочитати читачі, а її текст уже в суспільному надбанні.`, "", `Сторінка: ${SITE}/free-book/${encodeURIComponent(f.name)}`, `Звідки файл: ${f.source}`, "", `Прибрати: напиши Claude, файл free/${f.name}.`].join("\n"));
+    notifyOwner(`На Вільній полиці: ${f.title}`, [`На Вільну полицю Читалки додано «${f.title}» (${f.authors}): цю книжку хочуть прочитати читачі, а її текст уже в суспільному надбанні.`, "", `Сторінка: ${SITE}${freeBookHref(f)}`, `Звідки файл: ${f.source}`, "", `Прибрати: напиши Claude, файл free/${f.name}.`].join("\n"));
   }
   store.db.set("free:mailed", JSON.stringify([...done]));
 }
