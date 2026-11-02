@@ -429,22 +429,44 @@
     e.stopImmediatePropagation();
     panel(false);
   }, true);
-  let swipe = null;
+  // The page follows the finger (Max 2026-11-02: a swipe only bounced the page down and then the panel jumped
+  // open): a sideways drag moves it, and on release it settles open or closed.
+  const PANEL_W = 318;
+  let drag = null;
   $("#shell").addEventListener("touchstart", (e) => {
     const x = e.touches[0].clientX;
     const open = $("#shell").classList.contains("panel-open");
-    swipe = phone() && isOpen() && (open || (document.documentElement.classList.contains("in-app") && x < 24)) ? { x, y: e.touches[0].clientY, open } : null;
+    drag = phone() && isOpen() && !document.querySelector("dialog[open]") && (open || (document.documentElement.classList.contains("in-app") && x < 24))
+      ? { x, y: e.touches[0].clientY, open, dir: null, pos: open ? PANEL_W : 0, t: Date.now() }
+      : null;
   }, { passive: true });
-  $("#shell").addEventListener("touchend", (e) => {
-    if (!swipe) return;
-    const dx = e.changedTouches[0].clientX - swipe.x;
-    const dy = Math.abs(e.changedTouches[0].clientY - swipe.y);
-    if (dy < Math.abs(dx)) {
-      if (!swipe.open && dx > 50) panel(true);
-      if (swipe.open && dx < -50) panel(false);
+  $("#shell").addEventListener("touchmove", (e) => {
+    if (!drag) return;
+    const dx = e.touches[0].clientX - drag.x;
+    const dy = e.touches[0].clientY - drag.y;
+    if (!drag.dir) {
+      if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
+      drag.dir = Math.abs(dx) > Math.abs(dy) ? "h" : "v";
+      if (drag.dir === "v") return (drag = null);
+      $("#shell").classList.add("panel-drag");
     }
-    swipe = null;
-  }, { passive: true });
+    e.preventDefault();
+    drag.pos = Math.max(0, Math.min(PANEL_W, (drag.open ? PANEL_W : 0) + dx));
+    $("#shell-main").style.transform = `translateX(${drag.pos}px)`;
+  }, { passive: false });
+  const endDrag = () => {
+    if (!drag) return;
+    const d = drag;
+    drag = null;
+    if (d.dir !== "h") return;
+    const fast = Date.now() - d.t < 250;
+    const open = fast ? (d.open ? d.pos > PANEL_W - 40 : d.pos > 40) : d.pos > PANEL_W / 2;
+    $("#shell").classList.remove("panel-drag");
+    $("#shell-main").style.transform = "";
+    panel(open);
+  };
+  $("#shell").addEventListener("touchend", endDrag, { passive: true });
+  $("#shell").addEventListener("touchcancel", endDrag, { passive: true });
 
   // A file dropped anywhere on the page is added to your books; while one is dragged over, the page says so.
   let dragDepth = 0;

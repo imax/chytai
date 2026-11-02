@@ -1178,7 +1178,7 @@ body[data-theme="dark"] #shell, body[data-theme="dark"] #book-menu, body[data-th
 .r-panel-btn svg, .r-back svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
 #shell .r-add-btn { width: 40px; height: 40px; padding: 0; margin: -8px -4px -8px auto; border: 1.5px solid var(--r-ochre); border-radius: 50%; justify-content: center; background: none; color: var(--r-ochre); }
 #shell .r-add-btn svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; }
-#shell .r-add-btn:hover { background: var(--r-ochre); color: var(--r-btn); }
+@media (hover: hover) { #shell .r-add-btn:hover { background: var(--r-ochre); color: var(--r-btn); } }
 .r-head-add h1 { margin: 0; font: 600 22px/1 var(--r-serif); }
 #shell .r-head-add, #shell[data-page="add"] .r-head:not(.r-head-add) { display: none; }
 #shell[data-page="add"] .r-head-add { display: flex; }
@@ -1280,7 +1280,7 @@ a.r-frow:hover .r-frow-go.plain { color: var(--r-ochre); }
 /* Phone: the panel under the page, which slides aside. */
 @media (max-width: 760px) {
   #r-panel { width: 318px; gap: 22px; padding: calc(env(safe-area-inset-top) + 18px) 20px calc(env(safe-area-inset-bottom) + 24px); border-right: none; visibility: hidden; transition: visibility 0s .28s; }
-  #shell.panel-open #r-panel { visibility: visible; transition-delay: 0s; }
+  #shell.panel-open #r-panel, #shell.panel-drag #r-panel { visibility: visible; transition-delay: 0s; }
   #r-panel .r-panel-logo, .r-psearch kbd { display: none; }
   .r-psearch { height: 46px; padding: 0 14px; }
   .r-psearch input { font: 17px var(--r-serif); }
@@ -1294,7 +1294,9 @@ a.r-frow:hover .r-frow-go.plain { color: var(--r-ochre); }
   .r-pava { width: 32px; height: 32px; line-height: 32px; }
   .r-pme-t b { font-size: 14px; }
   #shell #shell-main { background: var(--r-paper); z-index: 1; transition: transform .28s cubic-bezier(.2, .8, .2, 1), border-radius .28s; }
-  #shell.panel-open #shell-main { transform: translateX(318px); border-radius: 14px 0 0 14px; overflow: hidden; box-shadow: -10px 0 30px rgba(27, 26, 23, .16); }
+  #shell.panel-open #shell-main { transform: translateX(318px); }
+  #shell.panel-open #shell-main, #shell.panel-drag #shell-main { border-radius: 14px 0 0 14px; overflow: hidden; box-shadow: -10px 0 30px rgba(27, 26, 23, .16); }
+  #shell.panel-drag #shell-main { transition: none; }
   .r-head { gap: 12px; padding: calc(env(safe-area-inset-top) + 14px) 20px 12px; }
   .r-logo { font-size: 22px; }
   #shell #home-body { padding: 22px 20px 40px; gap: 22px; }
