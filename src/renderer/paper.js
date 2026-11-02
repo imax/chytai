@@ -410,7 +410,8 @@
           s.forEach(([x, y], i) => (i ? ctx.lineTo(x * w, y * h) : ctx.moveTo(x * w, y * h)));
           ctx.stroke();
         }
-        $("#pm-go").disabled = !strokes.length;
+        // One button (Max): with marks it explains them, without it just attaches the page.
+        $("#pm-go").textContent = strokes.length ? "Пояснити обведене" : "Далі";
         $("#pm-clear").hidden = !strokes.length;
       };
       const at = (e) => {
@@ -440,8 +441,8 @@
         resolve("retake");
       };
       d.onclose = () => resolve(null);
-      $("#pm-skip").onclick = () => done(false);
       $("#pm-go").onclick = async () => {
+        if (!strokes.length) return done(false);
         // The photo with the marks on it, as the model sees it, and a small copy for the list.
         const c = document.createElement("canvas");
         c.width = img.naturalWidth;
@@ -460,7 +461,7 @@
       img.onload = () => fit();
       img.src = url;
       addEventListener("resize", fit);
-      $("#pm-go").disabled = true;
+      $("#pm-go").textContent = "Далі";
       $("#pm-clear").hidden = true;
       if (!d.open) d.showModal();
       if (img.complete && img.naturalWidth) fit();
