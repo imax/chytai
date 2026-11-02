@@ -25,8 +25,16 @@
   const area = () => window.innerWidth - (tocOpen ? TOC_W : 0) - (rightOpen() ? pw : 0);
 
   let resizeTimer = 0;
+  let keepCfi = null;
+  let anchor = null;
+  let frames = null; // the book's rendition (watchFrames)
   function layout(reflow = true) {
     if (!desk()) return;
+    // Read the place before the classes below change the page width (see the timer at the end).
+    if (reflow && !keepCfi && !scrolled()) {
+      const start = frames?.currentLocation?.()?.start?.cfi || null;
+      keepCfi = anchor && anchor.shown === start ? anchor.cfi : start;
+    }
     body.style.setProperty("--d-pw", `${pw}px`);
     body.style.setProperty("--d-col", `${columnWidth()}px`);
     body.classList.toggle("d-toc", tocOpen);
@@ -39,8 +47,19 @@
     syncButtons();
     if (!reflow) return;
     // The text moves along with the panel (200 ms); epub.js lays the pages out again once it has.
+    // epub.js loses the place when the page width changes (a page or more back, Max 2026-11-02), so the
+    // first word on screen before the change is shown again after it.
+    // Pages break in other places at the new width, so opening and closing a panel would drift back a
+    // little each time; while the reader has not turned a page, the place from before the first change wins.
     clearTimeout(resizeTimer);
-    resizeTimer = setTimeout(resizeView, 230);
+    resizeTimer = setTimeout(async () => {
+      resizeView();
+      const cfi = keepCfi;
+      keepCfi = null;
+      if (!cfi || !frames?.manager) return;
+      await frames.display(cfi).catch(() => {});
+      anchor = { cfi, shown: frames.currentLocation?.()?.start?.cfi };
+    }, 230);
   }
   window.addEventListener("resize", () => desk() && layout(false));
 
@@ -140,7 +159,6 @@
   // In full screen the mouse pointer hides too once the mouse rests (Max, 2026-11-02). The book's frames get
   // the same class, since the pointer over a frame follows the frame's own styles.
   let cursorTimer = 0;
-  let frames = null;
   function noCursor(on) {
     body.classList.toggle("d-nocursor", on);
     for (const c of frames?.getContents?.() || []) c.document?.documentElement.classList.toggle("d-nocursor", on);
