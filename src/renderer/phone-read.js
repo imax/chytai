@@ -1,7 +1,7 @@
 /* global $, ePub, book, rendition, pdfView, current, settings, notes, conversations, PHONE, BASE_SCALE,
    chapterTitle, toggleChrome, showPanel, addNote, openConvCard, startExplanation, noteContext, goToNote, noteReachable,
    notesStore, unmarkNote, redrawNote, renderNotes, showNotice, fitComment, scrolled, reopenBook, applyTheme, resizeView,
-   applyTypography, setFont, bookFontSize, closeSheets */
+   applyTypography, setFont, bookFontSize, closeSheets, rememberReturn */
 // The reading screen on a phone, turn 9 from Claude Design (2026-11-02). Desktop keeps its toolbar and panel.
 // Two bars around the text (tap in the middle shows them), one sheet look for the explanation, notes,
 // contents and «Вигляд», the selection bar at the bottom, search over the whole screen.
@@ -67,20 +67,30 @@
     const bubble = $("#m-bubble");
     if (pdfView) {
       bubble.textContent = `стор. ${Math.round(f * (pdfView.viewer.pagesCount - 1)) + 1}`;
-    } else if (book?.locations?.length()) {
+    } else if (book?.locationsReady) {
+      // A long chapter needs more than its name: the page and the percentage too (Max, 2026-11-02).
+      const n = book.locations.length();
       const cfi = book.locations.cfiFromPercentage(f);
       const section = book.spine.get(new ePub.CFI(cfi).spinePos);
-      bubble.textContent = (section && chapterTitle(section.href)) || `${Math.round(f * 100)}%`;
+      const name = section && chapterTitle(section.href);
+      bubble.innerHTML = `${name ? `<b>${esc(name)}</b>` : ""}<span>стор. ${Math.round(f * (n - 1)) + 1} · ${Math.round(f * 100)}%</span>`;
     } else return;
-    bubble.style.left = `${f * 100}%`;
     bubble.classList.remove("hidden");
+    const W = range.offsetWidth;
+    const w = bubble.offsetWidth;
+    bubble.style.left = `${Math.min(W - w / 2, Math.max(w / 2, f * W))}px`;
   });
   range.addEventListener("change", () => {
     const f = range.value / 1000;
     $("#m-bubble").classList.add("hidden");
     dragging = false;
     if (pdfView) pdfView.viewer.currentPageNumber = Math.round(f * (pdfView.viewer.pagesCount - 1)) + 1;
-    else if (rendition && book?.locations?.length()) rendition.display(book.locations.cfiFromPercentage(f)).then(() => toggleChrome(true));
+    else if (rendition && book?.locationsReady) {
+      // A jump with the slider is easy to make by accident: «← Назад» returns, as after a footnote.
+      // Several jumps in a row keep the way back to where the reader was before the first one.
+      if ($("#btn-back").classList.contains("hidden")) rememberReturn();
+      rendition.display(book.locations.cfiFromPercentage(f)).then(() => toggleChrome(true));
+    }
   });
 
   // ---------- Bars ----------
