@@ -359,6 +359,14 @@
       <p class="ab-foot"><a id="ab-link" target="_blank" rel="noopener"></a><button value="close" class="r-pill">Закрити</button></p>
     </form>
   </dialog>
+  <!-- Paper books (paper.js): what a cover photo found, and the question/explanation card. -->
+  <dialog id="paper-found"><div id="pf-body"></div></dialog>
+  <dialog id="paper-ask">
+    <div class="pa-head"><h2 id="pa-title">Запитання</h2><button type="button" id="pa-save" class="pa-save" hidden>В нотатки</button><button type="button" id="pa-close" class="pp-x" aria-label="Закрити">×</button></div>
+    <p id="pa-where" class="pa-where"></p>
+    <div id="pa-thread"></div>
+    <form id="pa-form"><input id="pa-q" type="text" autocomplete="off" enterkeyhint="send" /><button type="submit" aria-label="Надіслати">↑</button></form>
+  </dialog>
   <dialog id="trash-dialog">
     <form method="dialog">
       <button value="close" class="r-back">← Мої книжки</button>
@@ -435,6 +443,7 @@
   <script src="phone-read.js"></script>
   <script src="library-view.js"></script>
   <script src="home.js"></script>
+  <script src="paper.js"></script>
   <script type="module" src="pdf-view.js"></script>
 </body>
 </html>

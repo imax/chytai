@@ -62,7 +62,27 @@ Give only the translation: no explanation, commentary, notes or alternatives aft
 The reader may ask follow-up questions about the translation; answer them briefly in ${language}.`;
 }
 
+// A paper book (2026-11-02): no text around a selection, only the book and the page the reader is on. The
+// selection, when there is one, comes from a photo of the page.
+function paperMessage(ctx, mode) {
+  const parts = [];
+  if (ctx.bookTitle) parts.push(`<book>${ctx.bookTitle}${ctx.author ? ` by ${ctx.author}` : ""}</book>`);
+  const where = [ctx.page ? `page ${ctx.page}${ctx.pages ? ` of ${ctx.pages}` : ""}` : "", ctx.chapter ? `chapter «${ctx.chapter}»` : ""].filter(Boolean).join(", ");
+  parts.push(`The reader is reading a printed copy of this book, not in the app${where ? `, and is now at ${where}` : ""}. Rely on what you know about the book. Never reveal plot, twists or conclusions that come after this point${where ? "" : " (if you can't tell how far they are, avoid spoilers altogether)"}; if the question can't be answered without them, say so and offer to answer once they've read on. If you don't know this book well, say so in one line and answer from general knowledge.`);
+  if (ctx.selection) {
+    if (ctx.before) parts.push(`<context_before>\n${ctx.before}\n</context_before>`);
+    parts.push(`<selection>\n${ctx.selection}\n</selection>`);
+    if (ctx.after) parts.push(`<context_after>\n${ctx.after}\n</context_after>`);
+    parts.push("The text was transcribed from a photo of the page, so it may have small recognition errors.");
+    parts.push(mode === "translate" ? "Translate the selection." : ctx.question ? `The reader's question about the selection: ${ctx.question}` : "Explain the selection.");
+  } else {
+    parts.push(`The reader's question: ${ctx.question || "What should I keep in mind at this point of the book?"}`);
+  }
+  return { role: "user", content: parts.join("\n\n") };
+}
+
 function firstMessage(ctx, mode) {
+  if (ctx.paper) return paperMessage(ctx, mode);
   const parts = [];
   if (ctx.bookTitle) parts.push(`<book>${ctx.bookTitle}${ctx.author ? ` by ${ctx.author}` : ""}</book>`);
   if (ctx.chapter) parts.push(`<chapter>${ctx.chapter}</chapter>`);

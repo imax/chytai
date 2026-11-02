@@ -22,6 +22,7 @@ const { isRussian } = require("./language");
 const { checkUpload } = require("./content");
 const { cost } = require("./admin");
 const { createProtected } = require("./protected");
+const paper = require("./paper");
 
 const ROOT = path.join(__dirname, "..");
 loadDotEnv(path.join(ROOT, ".env"));
@@ -1051,6 +1052,8 @@ api.post("/notes", (req, res) => {
     chapter: typeof chapter === "string" ? chapter.slice(0, 200) : "",
     comment: "",
     createdAt: Date.now(),
+    // A quote from a paper book's page photo (paper.js), drawn as a quote among the notes.
+    ...(req.body.quote === true ? { quote: true } : {}),
   };
   list.push(note);
   if (!req.guest || req.share) saveState();
@@ -1174,6 +1177,7 @@ const OWNER_LIB = libOf(OWNER_ID);
 // Book names are the file names inside a library's folder; a name is never allowed to escape it.
 function safeBookName(name) {
   const base = path.basename(String(name || "")).normalize("NFC");
+  if (paper.NAME.test(base)) return base;
   if (!base || base.startsWith(".") || !BOOK_EXT.test(base)) return null;
   return base;
 }
@@ -1269,6 +1273,7 @@ api.get("/library", async (req, res) => {
       });
     }
   }
+  if (!req.guest) for (const [name, p] of Object.entries(u.paper || {})) list.push(paper.listEntry(name, p, u));
   res.json({ folders: [], books: list, free, lastBook: u.lastBook || (req.guest ? guestBooks(req)[0]?.name : null) || null });
 });
 
@@ -1480,7 +1485,7 @@ api.post("/library/finished", (req, res) => {
   else {
     (u.finished ??= {})[name] = Date.now();
     if (!req.guest && !req.share && state.accounts[req.acct]?.key) {
-      const info = freeShelf.find((f) => f.name === name) || prot.meta(name) || req.lib?.meta?.bookMeta?.[name] || {};
+      const info = freeShelf.find((f) => f.name === name) || prot.meta(name) || req.lib?.meta?.bookMeta?.[name] || u.paper?.[name] || {};
       const book = { name, title: info.title || "", authors: Array.isArray(info.authors) ? info.authors : info.author ? [info.author] : [] };
       fetch(`${WEB_URL}/api/reader-read`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: req.acct, key: state.accounts[req.acct].key, book }), signal: AbortSignal.timeout(20000) })
         .then((r) => r.ok || console.error(`reader-read ${req.acct}: ${r.status}`))
@@ -1769,6 +1774,76 @@ api.put("/reflow", express.raw({ type: () => true, limit: MAX_UPLOAD }), (req, r
 });
 
 // Streams an explanation as newline-delimited JSON events, the same events the Electron renderer gets.
+// ---------- Paper books (Max, 2026-11-02): see server/paper.js ----------
+const PAPER_MAX = 200;
+const intOr = (v, max) => (Number.isInteger(v) && v >= 0 && v <= max ? v : undefined);
+api.post("/paper", guestsCannot("У демо-режимі не можна додавати книжки."), (req, res) => {
+  const u = userState(req.acct);
+  const title = clean(req.body?.title, 300);
+  if (!title) return res.status(400).json({ error: "Немає назви." });
+  u.paper ??= {};
+  if (Object.keys(u.paper).length >= PAPER_MAX) return res.status(400).json({ error: "Забагато паперових книжок." });
+  const href = typeof req.body?.href === "string" && /^https:\/\/chytai\.org\.ua\//.test(req.body.href) ? req.body.href.slice(0, 500) : "";
+  // The same book from the catalog twice is the one already there.
+  const same = Object.entries(u.paper).find(([, p]) => (href && p.href === href) || (!href && p.title === title));
+  if (same) {
+    if (u.setAside) delete u.setAside[same[0]];
+    (u.opened ??= {})[same[0]] = Date.now();
+    saveState();
+    return res.json({ path: same[0] });
+  }
+  const name = `paper-${crypto.randomBytes(5).toString("hex")}.paper`;
+  const cover = typeof req.body?.cover === "string" && /^https:\/\//.test(req.body.cover) ? req.body.cover.slice(0, 1000) : "";
+  u.paper[name] = { title, author: clean(req.body?.author, 300), cover, href, pages: intOr(req.body?.pages, 20000) || 0, page: 0, chapter: "", addedAt: Date.now() };
+  (u.opened ??= {})[name] = Date.now();
+  saveState();
+  res.json({ path: name });
+});
+api.patch("/paper/:name", guestsCannot("У демо-режимі паперових книжок немає."), (req, res) => {
+  const u = userState(req.acct);
+  const p = u.paper?.[req.params.name];
+  if (!p) return res.status(404).json({ error: "Книжки немає." });
+  const { page, pages, chapter, title, author } = req.body || {};
+  if (intOr(page, 20000) !== undefined) p.page = page;
+  if (intOr(pages, 20000) !== undefined) p.pages = pages;
+  if (typeof chapter === "string") p.chapter = chapter.trim().slice(0, 200);
+  if (typeof title === "string" && title.trim()) p.title = clean(title, 300);
+  if (typeof author === "string") p.author = clean(author, 300);
+  (u.opened ??= {})[req.params.name] = Date.now();
+  if (u.setAside) delete u.setAside[req.params.name];
+  if (page !== undefined) recordReading(req.acct);
+  saveState();
+  res.json(paper.listEntry(req.params.name, p, u));
+});
+// A paper book has no file to keep in «Нещодавно видалені»: it goes with its notes.
+api.delete("/paper/:name", guestsCannot("У демо-режимі паперових книжок немає."), (req, res) => {
+  const u = userState(req.acct);
+  const name = req.params.name;
+  if (!u.paper?.[name]) return res.status(404).json({ error: "Книжки немає." });
+  delete u.paper[name];
+  for (const key of ["positions", "progress", "opened", "setAside", "seen", "notes", "finished"]) delete u[key]?.[name];
+  saveState();
+  res.json({ ok: true });
+});
+// A photo of a cover (?kind=cover) or of a page (?kind=page), JPEG or PNG, read by Claude. The photo is not kept.
+api.post("/paper/scan", guestsCannot("У демо-режимі фото не розпізнаються."), express.raw({ type: () => true, limit: "8mb" }), async (req, res) => {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) return res.status(500).json({ error: "На сервері не налаштовано ключ Claude API." });
+  const kind = req.query.kind === "page" ? "page" : "cover";
+  const type = String(req.headers["content-type"] || "");
+  const mediaType = /png/.test(type) ? "image/png" : /webp/.test(type) ? "image/webp" : "image/jpeg";
+  if (!Buffer.isBuffer(req.body) || req.body.length < 1000) return res.status(400).json({ error: "Немає фото." });
+  if (!req.owner && (state.stats?.days?.[statsDay()]?.users?.[req.acct] || 0) >= ACCOUNT_DAILY_CAP) return res.status(429).json({ error: "На сьогодні запитів забагато. Завтра все запрацює знову." });
+  try {
+    const r = kind === "page" ? await paper.readPage(apiKey, req.body, mediaType) : await paper.readCover(apiKey, req.body, mediaType);
+    const { usage, model, ...out } = r;
+    recordExplain(req, { model, usage });
+    res.json(out);
+  } catch (err) {
+    res.status(502).json({ error: describeError(err) });
+  }
+});
+
 api.post("/explain", async (req, res) => {
   const request = req.body?.request;
   if (!request || typeof request !== "object") return res.status(400).json({ error: "bad request" });

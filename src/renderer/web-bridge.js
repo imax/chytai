@@ -630,7 +630,7 @@
       }
     },
     // ---------- Home screen ----------
-    coverUrl: (b) => (b.ext === "epub" || b.coverAt ? `/api/cover?path=${encodeURIComponent(b.path)}&v=${b.mtime || 0}-${b.coverAt || 0}` : null),
+    coverUrl: (b) => (b.paper ? b.coverSrc || null : b.ext === "epub" || b.coverAt ? `/api/cover?path=${encodeURIComponent(b.path)}&v=${b.mtime || 0}-${b.coverAt || 0}` : null),
     notesAll: async () => {
       try {
         await sync();
@@ -672,6 +672,10 @@
     },
     uploadFiles: (files) => uploadAll(files),
     libraryTake: (name) => api("POST", "/api/library/take", { path: name }),
+    // Paper books (paper.js, server/paper.js).
+    paperAdd: async (info) => (await api("POST", "/api/paper", info)).json(),
+    paperUpdate: async (name, patch) => (await api("PATCH", `/api/paper/${encodeURIComponent(name)}`, patch)).json(),
+    paperScan: async (kind, blob) => (await api("POST", `/api/paper/scan?kind=${kind}`, blob)).json(),
     catalogFind: async (q) => (await api("GET", `/api/find?${new URLSearchParams({ q })}`)).json(),
     libraryFinished: (name, done) => api("POST", "/api/library/finished", { path: name, done }),
     librarySeen: (paths) => api("POST", "/api/library/seen", { paths }).catch(() => {}),
