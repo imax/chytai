@@ -94,24 +94,24 @@
       </div>
       <div id="shell-views">
         <section id="home" class="view">
-          <!-- Design «3a» from Claude Design (Max, 2026-11-01): one page in the site's style. A header with the
-               logo, one search over your books and the free shelf, and your avatar with its menu. -->
+          <!-- Design v2 from Claude Design (Max, 2026-11-02, turns 7 and 8): a panel on the left (always open on a
+               computer, by the button on a phone) with search in your books, the sections and the books opened
+               lately; the page is «Мої книжки» or «Додати книжку». On a phone the header has the panel button,
+               the logo and «+»; on «Додати книжку» a way back and the title. A computer has no header. -->
           <header class="r-head">
+            <button class="r-panel-btn" type="button" data-act="panel" aria-label="Панель"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="M9 4v16"/></svg></button>
             <div class="r-logo">Chytai<span>читай більше</span></div>
-            <label class="r-search r-search-top"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.6-3.6"/></svg>
-              <input class="r-q" type="search" placeholder="Назва чи автор: у ваших книжках і на вільній полиці" autocomplete="off" /></label>
-            <button class="r-add-btn" type="button" data-act="add" title="Додати свою книжку: EPUB, PDF, MOBI" aria-label="Додати книжку"><b>+</b><span>Додати книжку</span></button>
-            <button id="r-avatar" class="r-avatar" type="button" aria-haspopup="menu" aria-label="Меню"></button>
+            <button class="r-add-btn" type="button" data-page="add" title="Додати книжку" aria-label="Додати книжку"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>
           </header>
-          <div id="r-menu" class="r-menu hidden" role="menu">
-            <div class="r-menu-me"><b id="r-me-name"></b><small id="r-me-user"></small></div>
-            <button type="button" data-r="settings">Налаштування</button>
-            <a id="r-me-page" href="https://chytai.org.ua" target="_blank" rel="noopener">Моя сторінка на Chytai <i>↗</i></a>
-            <a href="https://chytai.org.ua/club" target="_blank" rel="noopener">Обговорення <i>↗</i></a>
-            <button type="button" data-r="logout" class="r-menu-out">Вийти</button>
+          <header class="r-head r-head-add">
+            <button class="r-back" type="button" data-page="home" aria-label="Назад"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 5-7 7 7 7"/></svg></button>
+            <h1>Додати книжку</h1>
+          </header>
+          <div class="r-add-top">
+            <h1>Додати книжку</h1>
+            <label class="r-search r-add-search"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.6-3.6"/></svg>
+              <input id="r-aq" type="search" placeholder="Назва, автор або ISBN" autocomplete="off" enterkeyhint="search" /></label>
           </div>
-          <label class="r-search r-search-phone"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.6-3.6"/></svg>
-            <input class="r-q" type="search" placeholder="Назва чи автор" autocomplete="off" /></label>
           <div id="home-body">
             <div class="skeleton" aria-hidden="true">
               <div class="sk-line"></div>
@@ -169,6 +169,21 @@
         </section>
       </div>
     </div>
+    <aside id="r-panel" aria-label="Панель">
+      <div class="r-logo r-panel-logo">Chytai<span>читай більше</span></div>
+      <label class="r-psearch"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.6-3.6"/></svg>
+        <input id="r-pq" type="search" placeholder="У моїх книжках" autocomplete="off" /><kbd>/</kbd></label>
+      <div id="r-pfound" class="hidden"></div>
+      <nav class="r-pnav">
+        <button type="button" data-page="home">Мої книжки<i id="r-n-books"></i></button>
+        <button type="button" data-page="add" class="r-pnav-add">Додати книжку<i>+</i></button>
+        <button type="button" data-act="trash" id="r-pnav-trash" hidden>Нещодавно видалені<i id="r-n-trash"></i></button>
+      </nav>
+      <section class="r-precent hidden"><h3>Нещодавно відкриті</h3><div id="r-recent"></div></section>
+      <div class="r-pspace"></div>
+      <a class="r-pfeedback" href="https://chytai.org.ua/club" target="_blank" rel="noopener">Залишити фідбек ↗</a>
+      <button type="button" class="r-pme" data-act="settings"><span class="r-pava" id="r-avatar"></span><span class="r-pme-t"><b id="r-me-name"></b><small>Налаштування</small></span><i>›</i></button>
+    </aside>
     <nav id="tabbar">
       <div class="side-brand wide-only"><img src="icon.png" alt="" /><span>Chytai</span></div>
       <div class="side-tabs">

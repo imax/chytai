@@ -1246,12 +1246,12 @@ api.get("/library", async (req, res) => {
           title: m.title || b.title, authors: m.authors?.length ? m.authors : b.authors, year: m.year || b.year,
           openedAt: aside ? 0 : u.opened?.[name] || 0, aside, finished: !!u.finished?.[name],
           started: !aside && !!positions[name], pct: aside || !progress ? null : progress.pct, chapter: (!aside && progress?.chapter) || "", part: progress?.part || 0, parts: progress?.parts || 0,
-          addedAt: 0, addedBy: "", coverAt: freeCover(name) ? Math.round(fs.statSync(freeCover(name)).mtimeMs) : 0, seen: true,
+          addedAt: u.taken?.[name] || 0, addedBy: "", coverAt: freeCover(name) ? Math.round(fs.statSync(freeCover(name)).mtimeMs) : 0, seen: true,
         };
       })
       .filter((b) => !own.has(b.path))
       .sort((x, y) => x.order - y.order || x.title.localeCompare(y.title, "uk"));
-    list.push(...free.filter((b) => b.openedAt || b.started));
+    list.push(...free.filter((b) => b.openedAt || b.started || (b.addedAt && !b.aside)));
     // A publisher's book shows among the reader's own once opened (from its page on the site).
     const pub = (await library.scan([prot.dir], path.join(DATA_DIR, "protected-cache.json")).catch(() => [])).filter((b) => !own.has(path.basename(b.path)));
     for (const b of pub) {
@@ -1457,6 +1457,18 @@ api.post("/library/aside", (req, res) => {
   res.json({ ok: true });
 });
 
+// «Додати» on a free-shelf book (design v2, Max 2026-11-02): it joins your books without being opened.
+api.post("/library/take", (req, res) => {
+  if (req.guest) return res.status(403).json({ error: "Гість не може додавати книжки." });
+  const u = userState(req.acct);
+  const name = safeBookName(req.body?.path);
+  if (!name) return res.status(400).json({ error: "bad request" });
+  (u.taken ??= {})[name] = Date.now();
+  if (u.setAside) delete u.setAside[name];
+  saveState();
+  res.json({ ok: true });
+});
+
 // «Позначити прочитаною» (Max, 2026-11-01): the book shows as read on Головна, and on the site's shelf it
 // becomes «Прочитано» (an account with a site key; a guest's mark stays here). Unmarking only clears it here.
 api.post("/library/finished", (req, res) => {
@@ -1514,6 +1526,25 @@ api.get("/about", async (req, res) => {
     res.json(data);
   } catch (err) {
     if (hit) return res.json(hit.data);
+    res.status(502).json({ error: err.message });
+  }
+});
+
+// «Додати книжку»: the site's catalog for what was typed (/api/reader-find), kept ten minutes.
+const findCache = new Map();
+api.get("/find", async (req, res) => {
+  const q = clean(req.query.q, 100);
+  if (q.length < 2) return res.json({ books: [] });
+  const hit = findCache.get(q);
+  if (hit && Date.now() - hit.at < 600 * 1000) return res.json(hit.data);
+  try {
+    const r = await fetch(`${WEB_URL}/api/reader-find?${new URLSearchParams({ q })}`, { signal: AbortSignal.timeout(8000) });
+    if (!r.ok) throw new Error(`site ${r.status}`);
+    const data = await r.json();
+    if (findCache.size > 2000) findCache.clear();
+    findCache.set(q, { at: Date.now(), data });
+    res.json(data);
+  } catch (err) {
     res.status(502).json({ error: err.message });
   }
 });

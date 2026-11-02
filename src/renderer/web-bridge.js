@@ -655,6 +655,8 @@
       }
     },
     uploadFiles: (files) => uploadAll(files),
+    libraryTake: (name) => api("POST", "/api/library/take", { path: name }),
+    catalogFind: async (q) => (await api("GET", `/api/find?${new URLSearchParams({ q })}`)).json(),
     libraryFinished: (name, done) => api("POST", "/api/library/finished", { path: name, done }),
     librarySeen: (paths) => api("POST", "/api/library/seen", { paths }).catch(() => {}),
     wishList: async () => {

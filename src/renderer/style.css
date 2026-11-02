@@ -1119,3 +1119,202 @@ body[data-theme="dark"] .r-pill { font-weight: 600; }
   .r-sec-head { flex-wrap: wrap; row-gap: 10px; }
   .r-sec-head .r-tabs { flex-basis: 100%; }
 }
+
+/* ===================================================================================================
+   Design v2 (Claude Design turns 7 and 8, Max 2026-11-02): a panel on the left and two pages, «Мої книжки»
+   and «Додати книжку». The panel is always open on a computer; on a phone the page slides aside to show it.
+   =================================================================================================== */
+#shell, #book-menu, #trash-dialog, #about-dialog, #notice {
+  --r-panel: #efebe3; --r-pline: #d6d0c4; --r-pact: #e4ddcf; --r-chip: #ebe5d8; --r-strip: #c98f3f; --r-link: #4a463f;
+  --r-cshadow: 0 6px 14px -8px rgba(27, 26, 23, .45);
+}
+body[data-theme="dark"] #shell, body[data-theme="dark"] #book-menu, body[data-theme="dark"] #trash-dialog, body[data-theme="dark"] #about-dialog, body[data-theme="dark"] #notice {
+  --r-panel: #22201c; --r-pline: #3a362f; --r-pact: #2e2b25; --r-chip: #2e2b25; --r-link: #a39d91;
+}
+
+/* Panel */
+#r-panel { position: absolute; top: 0; bottom: 0; left: 0; width: 260px; box-sizing: border-box; display: flex; flex-direction: column; gap: 18px;
+  padding: calc(env(safe-area-inset-top) + 26px) 22px 20px; overflow-y: auto; background: var(--r-panel); border-right: 1px solid var(--r-pline);
+  color: var(--r-ink); font-family: var(--r-sans); }
+#r-panel .r-panel-logo { font-size: 22px; padding-bottom: 6px; }
+#r-panel .r-panel-logo span { font-size: 10px; }
+.r-psearch { display: flex; align-items: center; gap: 10px; flex: none; padding: 0 12px; height: 38px; border-radius: 10px; background: var(--r-paper); cursor: text; }
+.r-psearch svg { width: 15px; height: 15px; flex: none; fill: none; stroke: var(--r-ink2); stroke-width: 1.7; }
+.r-psearch input { flex: 1; min-width: 0; border: none; outline: none; background: none; color: var(--r-ink); font: 15px var(--r-sans); padding: 0; }
+.r-psearch input::placeholder { color: var(--r-ink2); }
+.r-psearch input::-webkit-search-cancel-button { filter: grayscale(1) opacity(.6); }
+.r-psearch kbd { font: 11px var(--r-sans); color: var(--r-ink2); border: 1px solid var(--r-pline); border-radius: 4px; padding: 1px 5px; }
+.r-pnav { display: flex; flex-direction: column; gap: 2px; margin: 0 -10px; padding-bottom: 18px; border-bottom: 1px solid var(--r-pline); }
+.r-pnav button { display: flex; justify-content: space-between; align-items: center; padding: 8px 10px; border: none; border-radius: 8px; background: none; color: var(--r-ink); font: 15px var(--r-sans); cursor: pointer; }
+.r-pnav button:hover { background: var(--r-pact); }
+.r-pnav button.on { background: var(--r-pact); color: var(--r-ochre); font-weight: 500; }
+.r-pnav button[hidden] { display: none; }
+.r-pnav i { font-style: normal; font-size: 13px; color: var(--r-ink2); min-width: 24px; text-align: right; font-weight: 400; }
+.r-pnav .r-pnav-add i { color: var(--r-ochre); font-size: 18px; font-weight: 300; line-height: 1; }
+#r-panel.searching .r-pnav, #r-panel.searching .r-precent { display: none; }
+.r-precent h3 { margin: 0 0 8px; font: 500 11px var(--r-sans); text-transform: uppercase; letter-spacing: .14em; color: var(--r-ochre); }
+#r-recent, #r-pfound { display: flex; flex-direction: column; }
+.r-prow { display: grid; grid-template-columns: 22px 1fr auto; align-items: center; gap: 10px; padding: 4px 0; border: none; background: none; color: var(--r-ink); font: 13px var(--r-sans); cursor: pointer; text-align: left; }
+.r-prow .r-cover { width: 22px; border-radius: 1px; box-shadow: none; }
+.r-prow .r-cover-t, .r-prow .r-cover-a { display: none; }
+.r-prow-t { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.r-prow-p { font-size: 12px; color: var(--r-ink2); }
+.r-prow:hover .r-prow-t { color: var(--r-ochre); }
+.r-pnone { margin: 0; font-size: 13px; color: var(--r-ink2); }
+.r-pspace { flex: 1; }
+.r-pfeedback { padding-top: 16px; border-top: 1px solid var(--r-pline); font-size: 13px; color: var(--r-link); text-decoration: none; }
+.r-pfeedback:hover { color: var(--r-ochre); }
+.r-pme { display: grid; grid-template-columns: 30px 1fr auto; align-items: center; gap: 10px; padding: 0; border: none; background: none; color: var(--r-ink); cursor: pointer; text-align: left; }
+.r-pava { width: 30px; height: 30px; border-radius: 50%; background: var(--r-ink); color: var(--r-paper); font: 600 14px/30px var(--r-sans); text-align: center; }
+.r-pme-t { display: flex; flex-direction: column; min-width: 0; }
+.r-pme-t b { font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.r-pme-t small { font-size: 12px; color: var(--r-ink2); }
+.r-pme i { font-style: normal; color: var(--r-ink2); font-size: 18px; }
+.r-pme:hover small { color: var(--r-ochre); }
+
+/* Header (phone): panel button, logo, «+»; on «Додати книжку» back and the title. */
+.r-head { gap: 14px; }
+.r-panel-btn, .r-back { width: 40px; height: 40px; flex: none; margin: -8px 0 -8px -10px; border: none; background: none; padding: 0; display: flex; align-items: center; justify-content: center; color: var(--r-ink); cursor: pointer; }
+.r-panel-btn svg, .r-back svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+#shell .r-add-btn { width: 40px; height: 40px; padding: 0; margin: -8px -4px -8px auto; border: 1.5px solid var(--r-ochre); border-radius: 50%; justify-content: center; background: none; color: var(--r-ochre); }
+#shell .r-add-btn svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; }
+#shell .r-add-btn:hover { background: var(--r-ochre); color: var(--r-btn); }
+.r-head-add h1 { margin: 0; font: 600 22px/1 var(--r-serif); }
+#shell .r-head-add, #shell[data-page="add"] .r-head:not(.r-head-add) { display: none; }
+#shell[data-page="add"] .r-head-add { display: flex; }
+
+/* «Додати книжку»: its title (computer) and search sit above the page's body, which is drawn anew. */
+.r-add-top { display: none; }
+#shell[data-page="add"] .r-add-top { display: block; padding: 22px 20px 0; }
+.r-add-top h1 { display: none; margin: 0 0 30px; font: 600 32px/1.1 var(--r-serif); letter-spacing: -0.01em; }
+.r-add-search { border-bottom-color: var(--r-ink); padding: 8px 0 10px; }
+.r-add-search input { font-size: 19px; }
+
+/* Мої книжки */
+.r-cover { box-shadow: var(--r-cshadow); }
+.r-bar { aspect-ratio: auto; top: auto; bottom: 0; height: 3px; }
+.r-card .r-bar { top: 0; bottom: auto; aspect-ratio: 2 / 3; height: auto; }
+.r-bar::before { display: none; }
+.r-bar span { height: 3px; background: var(--r-strip); }
+.r-mine .r-sec-head { justify-content: flex-start; gap: 24px; }
+.r-grid .r-t, .r-grid .r-a { display: none; }
+.r-card .r-cover { margin-bottom: 0; }
+.r-now-row { align-items: center; }
+
+/* Add page parts */
+.r-add-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 30px; }
+.r-file .r-sec-head, .r-where .r-sec-head { margin-bottom: 14px; }
+.r-drop { border: 1px dashed #b5a98f; border-radius: 10px; padding: 18px; display: flex; flex-direction: column; align-items: flex-start; gap: 12px; }
+#shell.r-drag .r-drop { border-color: var(--r-ochre); background: var(--r-pact); }
+.r-drop-t { margin: 0; font: 20px var(--r-serif); }
+.r-pick { display: inline-flex; align-items: center; gap: 10px; padding: 10px 22px 10px 18px; font-size: 15px; }
+.r-pick svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.r-pick:hover { border-color: var(--r-ochre); color: var(--r-ochre); }
+.r-chips { display: flex; gap: 6px; }
+.r-chips span { background: var(--r-chip); border-radius: 4px; padding: 3px 7px; font-size: 12px; font-weight: 500; }
+.r-drop-note { margin: 0; font-size: 13px; line-height: 1.55; color: var(--r-ink2); }
+.r-dt { display: none; }
+.r-sub-phone { margin: -6px 0 14px; font-size: 13px; color: var(--r-ink2); }
+.r-free .r-aside-link { background: none; border: none; padding: 0; cursor: pointer; font-family: inherit; color: var(--r-ink); }
+.r-strip { display: flex; gap: 12px; overflow-x: auto; scrollbar-width: none; margin-right: -20px; padding: 0 20px 14px 0; }
+.r-strip::-webkit-scrollbar { display: none; }
+.r-strip .r-card { flex: none; width: 78px; }
+.r-where-row { display: flex; justify-content: space-between; align-items: baseline; padding: 12px 0; border-bottom: 1px solid var(--r-rule); color: var(--r-ink); text-decoration: none; font-size: 16px; }
+.r-where-row:last-child { border-bottom: none; }
+.r-where-row small { font-size: 12px; color: var(--r-ink2); }
+.r-where-row.soon span { color: var(--r-ink2); }
+a.r-where-row:hover small { color: var(--r-ochre); }
+
+/* Search results on «Додати книжку» */
+.r-found { display: grid; grid-template-columns: minmax(0, 1fr); gap: 26px; }
+.r-fgroup .r-sec-head { margin-bottom: 8px; }
+.r-frows { display: flex; flex-direction: column; }
+.r-frow { display: grid; grid-template-columns: 36px 1fr auto; align-items: center; gap: 12px; padding: 7px 0; color: inherit; text-decoration: none; }
+.r-frow .r-cover, .r-frow-c .r-cover { width: 36px; box-shadow: none; }
+.r-frow .r-cover-t, .r-frow .r-cover-a { display: none; }
+.r-frow-c { padding: 0; border: none; background: none; cursor: pointer; }
+.r-frow-x { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.r-frow-t { font: 17px/1.25 var(--r-serif); overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.r-frow-a { font-size: 12px; color: var(--r-ink2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.r-frow-go { border: none; background: none; padding: 6px 0 6px 8px; color: var(--r-ochre); font: 500 13px var(--r-sans); cursor: pointer; white-space: nowrap; }
+.r-frow-go:hover { color: var(--r-ochre-h); }
+.r-frow-go.done { color: var(--r-ink2); font-weight: 400; }
+.r-frow-go.plain { color: var(--r-ink); font-weight: 400; }
+a.r-frow:hover .r-frow-go.plain { color: var(--r-ochre); }
+.r-more-link { margin-top: 6px; border: none; background: none; padding: 0; color: var(--r-link); font: 13px var(--r-sans); cursor: pointer; }
+.r-fnote { margin: 8px 0 0; font-size: 12px; color: var(--r-ink2); }
+.r-fnote .r-link { color: var(--r-ink2); }
+
+/* Computer: the panel stays, no header. */
+@media (min-width: 761px) {
+  #shell #shell-main { left: 260px !important; }
+  #shell .r-head, #shell[data-page="add"] .r-head-add { display: none; }
+  #shell #home-body { padding: 32px 48px 40px; max-width: none; gap: 30px; }
+  #shell[data-page="add"] .r-add-top { padding: 32px 48px 0; }
+  #shell[data-page="add"] #home-body { padding-top: 28px; }
+  .r-add-top h1 { display: block; }
+  .r-add-search { max-width: 640px; }
+  .r-now-row { grid-template-columns: 112px 1fr; gap: 24px; }
+  .r-now-t { font-size: 32px; }
+  .r-progress { max-width: 360px; margin-top: 14px; }
+  .r-now-meta { margin: 8px 0 14px; }
+  .r-grid { grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 20px 18px; }
+  .r-dt { display: inline; }
+  .r-ph { display: none; }
+  p.r-dt { display: block; }
+  .r-add-grid { grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); gap: 30px 40px; grid-template-areas: "file where" "free free"; }
+  .r-file { grid-area: file; }
+  .r-where { grid-area: where; }
+  .r-free { grid-area: free; }
+  .r-drop { padding: 30px 24px 24px; gap: 14px; }
+  .r-sub-phone { display: none; }
+  .r-strip { display: grid; grid-template-columns: repeat(9, minmax(0, 1fr)); gap: 16px; overflow: visible; margin: 0; padding: 0; }
+  .r-strip .r-card { width: auto; }
+  .r-strip .r-card:nth-child(n + 10) { display: none; }
+  .r-free-grid { grid-template-columns: repeat(9, minmax(0, 1fr)); }
+  .r-found { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 40px; align-items: start; }
+  .r-found > .r-empty { grid-column: 1 / -1; }
+  .r-fgroup .r-sec-head { padding-top: 14px; }
+}
+
+/* Phone: the panel under the page, which slides aside. */
+@media (max-width: 760px) {
+  #r-panel { width: 318px; gap: 22px; padding: calc(env(safe-area-inset-top) + 18px) 20px calc(env(safe-area-inset-bottom) + 24px); border-right: none; visibility: hidden; transition: visibility 0s .28s; }
+  #shell.panel-open #r-panel { visibility: visible; transition-delay: 0s; }
+  #r-panel .r-panel-logo, .r-psearch kbd { display: none; }
+  .r-psearch { height: 46px; padding: 0 14px; }
+  .r-psearch input { font: 17px var(--r-serif); }
+  .r-pnav { margin: 0; gap: 0; }
+  .r-pnav button { padding: 11px 0; font-size: 18px; border-radius: 0; }
+  .r-pnav button:hover, .r-pnav button.on { background: none; }
+  .r-prow { grid-template-columns: 26px 1fr auto; gap: 12px; padding: 5px 0; font-size: 15px; }
+  .r-prow .r-cover { width: 26px; }
+  .r-pfeedback { font-size: 14px; }
+  .r-pme { grid-template-columns: 32px 1fr auto; }
+  .r-pava { width: 32px; height: 32px; line-height: 32px; }
+  .r-pme-t b { font-size: 14px; }
+  #shell #shell-main { background: var(--r-paper); z-index: 1; transition: transform .28s cubic-bezier(.2, .8, .2, 1), border-radius .28s; }
+  #shell.panel-open #shell-main { transform: translateX(318px); border-radius: 14px 0 0 14px; overflow: hidden; box-shadow: -10px 0 30px rgba(27, 26, 23, .16); }
+  .r-head { gap: 12px; padding: calc(env(safe-area-inset-top) + 14px) 20px 12px; }
+  .r-logo { font-size: 22px; }
+  #shell #home-body { padding: 22px 20px 40px; gap: 22px; }
+  #shell[data-page="add"] #home-body { padding-top: 26px; }
+  .r-now-row { grid-template-columns: 84px 1fr; gap: 16px; align-items: end; }
+  .r-now-t { font-size: 24px; line-height: 1.1; }
+  .r-grid { gap: 12px 10px; }
+  .r-mine .r-sec-head { gap: 10px; }
+  .r-tabs { font-size: 14px; gap: 18px; }
+  .r-tabs button.on { border-bottom-width: 1.5px; }
+  .r-free .r-sub { display: none; }
+}
+@media (prefers-reduced-motion: reduce) { #shell #shell-main { transition: none; } }
+/* Covers on a phone's browser: a long press opens the book's menu, not the browser's picture menu. */
+.r-cover, .r-cover img { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; -webkit-user-drag: none; }
+.r-strip .r-t, .r-strip .r-a { display: none; }
+@media (min-width: 761px) and (max-width: 1100px) {
+  .r-strip { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+  .r-strip .r-card:nth-child(n + 7) { display: none; }
+  .r-free-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+  .r-found { grid-template-columns: minmax(0, 1fr); gap: 26px; }
+  .r-add-grid { grid-template-columns: minmax(0, 1fr); grid-template-areas: "file" "where" "free"; }
+}

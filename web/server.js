@@ -666,6 +666,20 @@ app.get("/api/reader-about", (req, res) => {
   res.json({ found: true, title: b.title, author: b.author || "", year: b.published || null, blurb, cover: abs(b.cover), href: `${SITE}${store.href(hit.book.id)}` });
 });
 
+// «Додати книжку» in the reader (design v2, Max 2026-11-02): books of the catalog for what was typed, each with its
+// page here, where the shops and e-book links are. A bought file is then added in the reader.
+app.get("/api/reader-find", (req, res) => {
+  const q = String(req.query.q || "").trim().slice(0, 100);
+  res.setHeader("Cache-Control", "public, max-age=600");
+  if (q.length < 2) return res.json({ books: [] });
+  const abs = (u) => (!u ? "" : /^https?:/.test(u) ? u : `${SITE}${u}`);
+  const books = store.search(q, { limit: 12 }).map((h) => {
+    const b = store.book(h.book.id) || h.book;
+    return { title: b.title, author: b.author || "", year: b.published || null, cover: abs(b.cover), href: `${SITE}${store.href(h.book.id)}` };
+  });
+  res.json({ books });
+});
+
 // The reader asks once a day which of its accounts are gone (deleted here), to delete their books too.
 app.post("/api/readers-gone", (req, res) => {
   const ids = (Array.isArray(req.body?.ids) ? req.body.ids : []).map(String).slice(0, 10000);
