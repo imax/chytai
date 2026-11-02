@@ -880,14 +880,14 @@ html:not(.touch) .tile:hover .tile-more, .tile-more:focus-visible { display: fle
    Serif 4 + Onest, rules; the reader's own accent is ochre. Turn 4 adds the dark theme, the book menu,
    «Нещодавно видалені». Everything below overrides the older home screen.
    =================================================================================================== */
-#shell, #book-menu, #trash-dialog, #about-dialog, #notice {
+#shell, #book-menu, #trash-dialog, #notice {
   --r-paper: #f7f4ee; --r-menu: #fbf9f5; --r-ink: #1b1a17; --r-ink2: #6b675f; --r-ink3: #8a857b; --r-rule: #e4dfd5;
   --r-head: #1b1a17; --r-sline: #c9c3b6; --r-dash: #b9b2a3; --r-ochre: #9a6418; --r-ochre-h: #7f5212; --r-bar: #b5803a;
   --r-track: #e4dfd5; --r-btn: #ffffff; --r-red: #a63a2a; --r-toast: #1b1a17; --r-toast-fg: #f7f4ee; --r-toast-btn: #e2b26b;
   --r-serif: "Source Serif 4 Variable", "Source Serif 4", Georgia, serif;
   --r-sans: "Onest Variable", Onest, -apple-system, BlinkMacSystemFont, sans-serif;
 }
-body[data-theme="dark"] #shell, body[data-theme="dark"] #book-menu, body[data-theme="dark"] #trash-dialog, body[data-theme="dark"] #about-dialog, body[data-theme="dark"] #notice {
+body[data-theme="dark"] #shell, body[data-theme="dark"] #book-menu, body[data-theme="dark"] #trash-dialog, body[data-theme="dark"] #notice {
   --r-paper: #1a1916; --r-menu: #24221e; --r-ink: #ece6da; --r-ink2: #a39d91; --r-ink3: #8a847a; --r-rule: #2f2c27;
   --r-head: #8a847a; --r-sline: #4a463f; --r-dash: #5a554c; --r-ochre: #d9a35a; --r-ochre-h: #e6b674; --r-bar: #c98f3f;
   --r-track: #36332d; --r-btn: #1a1916; --r-red: #e07a68; --r-toast: #ece6da; --r-toast-fg: #1a1916; --r-toast-btn: #9a6418;
@@ -1028,16 +1028,6 @@ body[data-theme="dark"] .r-pill { font-weight: 600; }
 
 /* Нещодавно видалені */
 #trash-dialog { background: var(--r-paper); color: var(--r-ink); font-family: var(--r-sans); border: none; border-radius: 8px; width: min(760px, calc(100vw - 32px)); padding: 28px 32px; }
-#about-dialog { background: var(--r-paper); color: var(--r-ink); font-family: var(--r-sans); border: none; border-radius: 8px; width: min(560px, calc(100vw - 32px)); max-height: 85vh; padding: 28px 32px; box-sizing: border-box; }
-#about-dialog::backdrop { background: rgba(27, 26, 23, .45); }
-.ab-head { display: grid; grid-template-columns: 72px 1fr; gap: 18px; align-items: end; padding-bottom: 18px; border-bottom: 1px solid var(--r-ink); }
-#about-dialog h2 { margin: 0; font: 400 26px/1.15 var(--r-serif); }
-#ab-author { margin: 6px 0 0; font-size: 14px; color: var(--r-ink2); }
-#ab-body { padding: 16px 0 4px; font: 16px/1.55 var(--r-serif); }
-#ab-body p { margin: 0 0 12px; }
-#ab-body .muted { color: var(--r-ink2); font: 14px var(--r-sans); }
-.ab-foot { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin: 8px 0 0; font-size: 14px; }
-.ab-foot a { color: var(--r-ink); text-underline-offset: 3px; }
 #trash-dialog .r-back { background: none; border: none; padding: 0; color: var(--r-ink2); font-size: 15px; cursor: pointer; }
 #trash-dialog h2 { font: 400 40px/1.1 var(--r-serif); margin: 18px 0 10px; }
 #trash-dialog small { display: block; font-size: 15px; color: var(--r-ink2); line-height: 1.5; padding-bottom: 20px; border-bottom: 1px solid var(--r-ink); }
@@ -1103,7 +1093,6 @@ body[data-theme="dark"] .r-pill { font-weight: 600; }
   #book-menu:not(.pop) menu { display: block; margin: 16px 0 0; padding: 0; }
   #book-menu:not(.pop) menu button { width: 100%; border: 1px solid var(--r-ink); border-radius: 999px; background: none; color: var(--r-ink); padding: 13px; font: 500 15px var(--r-sans); text-align: center; }
   #trash-dialog { padding: 20px; }
-  #about-dialog { margin: auto 0 0; width: 100vw; max-width: 100vw; border-radius: 14px 14px 0 0; padding: 20px 20px calc(env(safe-area-inset-bottom) + 16px); }
   #trash-dialog h2 { font-size: 28px; }
   #trash-list li { flex-wrap: wrap; gap: 10px 14px; }
   #trash-list .row-text { flex-basis: calc(100% - 60px); }

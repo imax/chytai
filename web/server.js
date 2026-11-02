@@ -629,36 +629,15 @@ app.get("/free-book/:name", (req, res) => {
 
 // «Про книжку» in the reader's book menu (Max, 2026-11-01, like Kindle's «About this book»): the book's page here
 // when the catalog has it, otherwise /add with its title, so the reader can bring it in.
-function readerBookHit(title, authors) {
-  const queries = [...new Set([title, title.split(/[.:(]/)[0].trim()])].filter((q) => q.length > 1);
-  return queries.flatMap((q) => store.search(q, { limit: 10, alias: false })).find((h) => fileFor([{ title, authors }], store.bookPage(h.book.id))) || null;
-}
-const readerAddHref = (title, authors) => `/add?text=${encodeURIComponent(authors ? `${title} — ${authors.split(/[,;]/)[0].trim()}` : title)}`;
 app.get("/reader-book", (req, res) => {
   const title = String(req.query.title || "").trim().slice(0, 300);
   const authors = String(req.query.author || "").trim().slice(0, 300);
   if (!title) return res.redirect("/");
-  const hit = readerBookHit(title, authors);
-  res.redirect(hit ? store.href(hit.book.id) : readerAddHref(title, authors));
-});
-// The same as data for the reader's «Про книжку» (Max, 2026-11-01: a short summary kept on the device, so it
-// shows offline too): the book's page, year and the start of its description, whole sentences up to ~600 characters.
-app.get("/api/reader-about", (req, res) => {
-  const title = String(req.query.title || "").trim().slice(0, 300);
-  const authors = String(req.query.author || "").trim().slice(0, 300);
-  if (!title) return res.status(400).json({ error: "title" });
-  res.setHeader("Cache-Control", "public, max-age=3600");
-  const hit = readerBookHit(title, authors);
-  if (!hit) return res.json({ found: false, add: `${SITE}${readerAddHref(title, authors)}` });
-  const b = store.book(hit.book.id);
-  let blurb = "";
-  for (const p of String(b.blurb || "").split(/\n\n+/)) {
-    if (blurb && blurb.length + p.length > 600) break;
-    blurb += (blurb ? "\n\n" : "") + p;
-  }
-  if (blurb.length > 900) blurb = blurb.slice(0, 900).replace(/[^.!?…]*$/, "") || blurb.slice(0, 900) + "…";
-  const abs = (u) => (!u ? "" : /^https?:/.test(u) ? u : `${SITE}${u}`);
-  res.json({ found: true, title: b.title, author: b.author || "", year: b.published || null, blurb, cover: abs(b.cover), href: `${SITE}${store.href(hit.book.id)}` });
+  const file = [{ title, authors }];
+  const queries = [...new Set([title, title.split(/[.:(]/)[0].trim()])].filter((q) => q.length > 1);
+  const hit = queries.flatMap((q) => store.search(q, { limit: 10, alias: false })).find((h) => fileFor(file, store.bookPage(h.book.id)));
+  if (hit) return res.redirect(store.href(hit.book.id));
+  res.redirect(`/add?text=${encodeURIComponent(authors ? `${title} — ${authors.split(/[,;]/)[0].trim()}` : title)}`);
 });
 
 // The reader asks once a day which of its accounts are gone (deleted here), to delete their books too.

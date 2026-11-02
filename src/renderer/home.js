@@ -206,7 +206,6 @@
 
   function homePageHtml() {
     const books = myBooks();
-    if (!settings.guest) setTimeout(() => fetchAboutAhead(books), 3000);
     const cur = nowBook(books);
     let html = "";
     if (cur) {
@@ -694,49 +693,15 @@
     d.returnValue = "";
     d.showModal();
   }
-  // «Про книжку»: the device's copy at once, then the network's when it answers.
-  async function showAbout(b) {
-    const d = $("#about-dialog");
-    $("#ab-cover").innerHTML = rcover(b);
-    $("#ab-title").textContent = b.title;
-    $("#ab-author").textContent = author(b);
-    const link = $("#ab-link");
-    const fill = (a) => {
-      if (!a) {
-        $("#ab-body").innerHTML = `<p class="muted">${navigator.onLine ? "Завантажую…" : "Немає з'єднання, а опис цієї книжки ще не збережено."}</p>`;
-        link.hidden = true;
-        return;
-      }
-      $("#ab-author").textContent = [author(b), a.year].filter(Boolean).join(" · ");
-      $("#ab-body").innerHTML = a.found
-        ? a.blurb ? a.blurb.split(/\n\n+/).map((p) => `<p>${esc(p)}</p>`).join("") : `<p class="muted">Опису поки немає.</p>`
-        : `<p class="muted">Цієї книжки ще немає в каталозі Chytai.</p>`;
-      link.hidden = false;
-      link.href = a.found ? a.href : a.add;
-      link.textContent = a.found ? "Сторінка книжки на Chytai ↗" : "Додати на Chytai ↗";
-    };
-    fill(await window.reader.bookAbout?.(b, true));
-    d.showModal();
-    const fresh = await window.reader.bookAbout?.(b);
-    if (fresh && d.open) fill(fresh);
-    else if (!fresh && d.open && $("#ab-body").textContent === "Завантажую…") $("#ab-body").innerHTML = `<p class="muted">Не вдалося завантажити опис.</p>`;
-  }
-  // The books being read get their summaries ahead, so «Про книжку» works offline for them.
-  let aboutAhead = false;
-  function fetchAboutAhead(books) {
-    if (aboutAhead || !window.reader.bookAbout || !navigator.onLine) return;
-    aboutAhead = true;
-    const list = books.filter((b) => b.pct > 0 && !b.finished).slice(0, 12);
-    (async () => {
-      for (const b of list) if (!(await window.reader.bookAbout(b, true))) await window.reader.bookAbout(b);
-    })();
-  }
   $("#book-menu").addEventListener("close", async () => {
     const b = menuBook;
     menuBook = null;
     const act = $("#book-menu").returnValue;
     if (!b) return;
-    if (act === "about") return showAbout(b);
+    if (act === "about") {
+      const q = new URLSearchParams({ title: b.title, author: b.authors.join(", ") });
+      return window.open(`https://chytai.org.ua/reader-book?${q}`, "_blank", "noopener");
+    }
     if (act === "share") return window.Library.shareBook(b.path);
     if (act === "edit") return window.Library.editBook(b.path);
     if (act === "aside") return setAside(b.path);

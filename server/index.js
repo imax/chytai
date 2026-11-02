@@ -1420,29 +1420,6 @@ api.get("/club", async (req, res) => {
 
 // "Хочу прочитати": each reader's own list of books to get; the home screen shows when one arrives.
 const clean = (v, max) => String(v ?? "").replace(/\s+/g, " ").trim().slice(0, max);
-// «Про книжку» in the book menu: the site's short summary of the book (/api/reader-about), kept here for a day
-// and on the device by the page (web-bridge.js), so it opens offline too.
-const aboutCache = new Map();
-api.get("/about", async (req, res) => {
-  const title = clean(req.query.title, 300);
-  const author = clean(req.query.author, 300);
-  if (!title) return res.status(400).json({ error: "title" });
-  const key = `${title}\n${author}`;
-  const hit = aboutCache.get(key);
-  if (hit && Date.now() - hit.at < 24 * 3600 * 1000) return res.json(hit.data);
-  try {
-    const r = await fetch(`${WEB_URL}/api/reader-about?${new URLSearchParams({ title, author })}`, { signal: AbortSignal.timeout(10000) });
-    if (!r.ok) throw new Error(`site ${r.status}`);
-    const data = await r.json();
-    if (aboutCache.size > 5000) aboutCache.clear();
-    aboutCache.set(key, { at: Date.now(), data });
-    res.json(data);
-  } catch (err) {
-    if (hit) return res.json(hit.data);
-    res.status(502).json({ error: err.message });
-  }
-});
-
 api.get("/wish", (req, res) => res.json({ wish: req.guest ? [] : userState(req.acct).wish || [] }));
 api.post("/wish", guestsCannot("У демо-режимі список бажаного недоступний."), (req, res) => {
   const title = clean(req.body?.title, 300);
