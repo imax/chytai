@@ -605,7 +605,8 @@ const TESTIMONIALS = [
 // The words are Max's; he writes the copy himself.
 function landingPage(req) {
   const signIn = signInUrl(req);
-  const demo = GUEST_ENABLED && demoBooks().length;
+  // The Mac app in place of the demo link (Max, 2026-11-02); not inside the Mac or iPhone app.
+  const mac = !/Chytai(Mac|App)\//.test(req.get("user-agent") || "");
   return `<!doctype html>
 <html lang="uk"><head><meta charset="utf-8"><title>Chytai · читалка</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -658,7 +659,7 @@ function landingPage(req) {
     <div class="desk"><i></i><img src="/landing-desk.jpg" alt="Читалка Chytai на комп'ютері: пояснення виділеного речення"></div>
     <div class="phone"><img src="/landing-phone.jpg" alt="Читалка Chytai на телефоні: пояснення виділеного рядка"></div>
   </section>
-  <div class="acts"><a class="btn" href="${esc(signIn)}">Увійти</a>${demo ? `<a class="demo" href="/demo">Подивитися демо</a>` : ""}</div>
+  <div class="acts"><a class="btn" href="${esc(signIn)}">Увійти</a>${mac ? `<a class="demo" href="https://chytai.org.ua/mac">Версія для Mac</a>` : ""}</div>
   ${TESTIMONIALS.length ? `<section class="quotes"><h2>Відгуки</h2><ul>${TESTIMONIALS.map((q) => `<li><blockquote><p>${esc(q.text)}</p>${q.author ? `<cite>— ${esc(q.author)}</cite>` : ""}</blockquote></li>`).join("")}</ul></section>` : ""}
   <footer>Частина <a href="https://chytai.org.ua">chytai.org.ua</a></footer>
 </div></body></html>`;

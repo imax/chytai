@@ -2170,6 +2170,17 @@ function consentPage({ user, client, host, fields }) {
 }
 
 // Max (2026-10-20): any new outside service that sees readers' data (mail, hosting, fonts, analytics, AI) must be added here.
+// /mac: the Mac app (mac/ in the repo, DMG from GitHub Releases). Not signed yet (Max, 2026-11-02), hence the first-open step.
+function macPage({ user }) {
+  return layout({ title: "Chytai для Mac", user, path: "/mac", canonical: "/mac", description: "Читалка Chytai для Mac: ті самі книжки, нотатки й акаунт, що в браузері й на телефоні.", body: `<section class="auth prose"><h1>Chytai для Mac</h1>
+<p>Та сама Читалка, що в браузері, окремим вікном: ваш акаунт, книжки й нотатки. Книжки, які ви вже відкривали, читаються й без інтернету.</p>
+<p><a class="btn primary" href="https://github.com/imax/chytai/releases/latest/download/Chytai.dmg">Завантажити для Mac</a></p>
+<p class="small muted">Apple Silicon і Intel, macOS 12 і новіші.</p>
+<h2>Перше відкриття</h2>
+<p>Перетягніть Chytai у «Програми» і відкрийте. macOS скаже, що не може перевірити розробника: натисніть «Готово», відкрийте Системні параметри → Приватність і безпека, внизу «Усе одно відкрити». Це один раз.</p>
+</section>` });
+}
+
 function privacyPage({ user }) {
   return layout({ title: "Приватність", user, path: "/privacy", canonical: "/privacy", description: "Що Chytai.org.ua зберігає про читачів, хто це бачить і як усе видалити.", body: `<section class="auth prose"><h1>Приватність</h1>
 <p>Chytai.org.ua це проєкт для тих, хто любить читати.</p>
@@ -2975,6 +2986,6 @@ module.exports = {
   outsideResults,
   addPage, addReviewPage, addFindResults, addPageResult, ukFindPage,
   layout, bookPage, bookEditPage, russianPage, editPage, libraryPage, readersPage, readPage, genrePage, genreTrialPage, langTrialPage, origTrialPage, overviewTrialPage, ukTrialPage, catalogAdminPage, aiPassPage, publishersPage, publisherPage, publisherFavouritesPage, searchPage, searchResults, authorPage,
-  loginPage, codePage, signupPage, settingsPage, privacyPage, updatesPage, drawPage, DRAW_PATH, messagePage, digestPage, followMailPage, wantMailPage, importPage, importPreviewPage, importDonePage,
+  loginPage, codePage, signupPage, settingsPage, privacyPage, macPage, updatesPage, drawPage, DRAW_PATH, messagePage, digestPage, followMailPage, wantMailPage, importPage, importPreviewPage, importDonePage,
   GENRES, esc, byline, STATUS, COPY, inline, isUk, setTitleLinks, setAuthorLinks, setThumbs, setStats, setReadersWithNote,
 };

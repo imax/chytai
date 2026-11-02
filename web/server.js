@@ -697,6 +697,8 @@ app.get(pages.DRAW_PATH, (req, res) => {
 app.post(`${pages.DRAW_PATH}/join`, signed, (req, res) => (draw.setJoined(req.user.id, true), res.redirect(pages.DRAW_PATH)));
 app.post(`${pages.DRAW_PATH}/leave`, signed, (req, res) => (draw.setJoined(req.user.id, false), res.redirect(pages.DRAW_PATH)));
 app.get("/reader", (_req, res) => res.redirect(302, `${READER_URL}/`)); // shortcut to the reader (Max 2026-10-22)
+// The Mac app (mac/ in the repo); its DMG lives in GitHub Releases (.github/workflows/mac.yml).
+app.get("/mac", (req, res) => res.send(pages.macPage({ user: req.user })));
 
 // ---- settings: name, username, e-mail, deleting the account ----
 
