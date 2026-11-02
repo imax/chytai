@@ -527,9 +527,14 @@ function startGuest(req, res) {
 
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
 
+// «Увійти»: the site's sign-in, which comes back here with a ticket. The app opens every address that is
+// not the reader's in Safari, so there the sign-in goes through /app-login instead (below).
+const siteSignIn = (req, code) => `${WEB_URL}/reader-login?back=${encodeURIComponent(`${req.protocol}://${req.get("host")}`)}${code ? `&app=${code}` : ""}`;
+const signInUrl = (req) => (inApp(req) ? "/app-login" : siteSignIn(req));
+
 // opts.button { href, label } replaces «Увійти» (and the demo link) for someone already signed in.
 function loginPage(req, error, opts = {}) {
-  const signIn = `${WEB_URL}/reader-login?back=${encodeURIComponent(`${req.protocol}://${req.get("host")}`)}`;
+  const signIn = signInUrl(req);
   return `<!doctype html>
 <html lang="uk"><head><meta charset="utf-8"><title>Chytai</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -555,6 +560,42 @@ function loginPage(req, error, opts = {}) {
 </form></body></html>`;
 }
 
+const smallPage = (body) => `<!doctype html>
+<html lang="uk"><head><meta charset="utf-8"><title>Chytai</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<link rel="icon" href="/icon.png">
+<style>
+  :root { color-scheme: light dark; }
+  body { margin: 0; min-height: 100vh; display: grid; place-items: center; font: 16px/1.5 -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif; background: #f6efe0; color: #3b2f1e; }
+  @media (prefers-color-scheme: dark) { body { background: #1e1e20; color: #e6e6e6; } main { background: #2a2a2d; } }
+  main { box-sizing: border-box; width: min(360px, 90vw); padding: 28px 24px; border-radius: 16px; background: rgba(255,255,255,0.5); box-shadow: 0 8px 30px rgba(0,0,0,0.12); }
+  h1 { margin: 0 0 8px; font-size: 22px; } p { margin: 0 0 18px; opacity: 0.8; }
+  .btn { display: block; box-sizing: border-box; width: 100%; padding: 11px; font: inherit; font-weight: 600; text-align: center; text-decoration: none; color: #fff; background: #b7791f; border: none; border-radius: 8px; }
+</style></head><body><main>${body}</main></body></html>`;
+
+// In the app, while the reader signs in on the site in Safari.
+function appWaitPage(url) {
+  return smallPage(`<h1>Вхід</h1><p>Увійдіть на chytai.org.ua у Safari і поверніться сюди.</p>
+<a class="btn" id="go" href="${esc(url)}">Відкрити сайт</a>
+<script>
+  function check() {
+    if (document.hidden) return;
+    fetch("/api/app-login", { method: "POST", credentials: "same-origin" }).then(function (r) { return r.json(); }).then(function (r) {
+      if (r.ok) location.replace(r.next || "/");
+    }).catch(function () {});
+  }
+  document.addEventListener("visibilitychange", check);
+  setInterval(check, 2000);
+  setTimeout(function () { location.href = document.getElementById("go").href; }, 300);
+</script>`);
+}
+
+// In Safari, once the site sent the reader back for the app.
+function appDonePage(a) {
+  return smallPage(`<h1>Готово</h1><p>Ви увійшли${a.name ? ` як ${esc(a.name)}` : ""}. Поверніться в додаток Chytai.</p>
+<a class="btn" href="chytai://">Відкрити додаток</a>`);
+}
+
 // Readers' words on the landing (Max, 2026-10-23). Add one more { text, author } to show it; author may be left out.
 const TESTIMONIALS = [
   { text: "AI нотатки і пояснення — афігенна фіча, і навіть елементарний зміст по книжці значно зручніше чим ті читалки що я дивився", author: "Микола Я" },
@@ -563,7 +604,7 @@ const TESTIMONIALS = [
 // The first thing someone not signed in sees (Max, 2026-10-22): what the reader is, then «Увійти».
 // The words are Max's; he writes the copy himself.
 function landingPage(req) {
-  const signIn = `${WEB_URL}/reader-login?back=${encodeURIComponent(`${req.protocol}://${req.get("host")}`)}`;
+  const signIn = signInUrl(req);
   const demo = GUEST_ENABLED && demoBooks().length;
   return `<!doctype html>
 <html lang="uk"><head><meta charset="utf-8"><title>Chytai · читалка</title>
@@ -707,8 +748,36 @@ app.get("/login", (req, res) => {
   if (currentAccount(req)) return res.redirect(safeNext(req.query.next) || "/");
   if (safeNext(req.query.next)) res.setHeader("Set-Cookie", cookieHeader(req, NEXT_COOKIE, safeNext(req.query.next), 1 / 96));
   // «Увійти» from inside the reader (a free book's guest): straight to the site, no landing on the way.
-  if (req.query.go) return res.redirect(`${WEB_URL}/reader-login?back=${encodeURIComponent(`${req.protocol}://${req.get("host")}`)}`);
+  if (req.query.go) return res.redirect(signInUrl(req));
   res.type("html").send(landingPage(req));
+});
+// Signing in inside the iPhone app (2026-11-02: a reader's «Увійти» in the app kept ending on the site). The app
+// opens chytai.org.ua in Safari, so the site's sign-in and the cookie it ends with stayed in Safari and the app
+// was never signed in. Now the app's page keeps a one-time code in its own cookie and sends it along to the
+// site; /auth, opened in Safari with that code, leaves the account under it, and the app's page, polling
+// /api/app-login, picks it up and gets its own cookie. Works with the builds already installed: no app update.
+const APP_LOGIN_COOKIE = "reader_app_login";
+const APP_CODE = /^[a-f0-9]{32}$/;
+const appLogins = new Map(); // code -> { id, expires }, until the app picks it up
+app.get("/app-login", (req, res) => {
+  if (!inApp(req)) return res.redirect(signInUrl(req));
+  if (currentAccount(req)) return res.redirect(safeNext(parseCookies(req)[NEXT_COOKIE]) || "/");
+  const code = crypto.randomBytes(16).toString("hex");
+  res.setHeader("Set-Cookie", cookieHeader(req, APP_LOGIN_COOKIE, code, 1 / 48));
+  res.setHeader("Cache-Control", "no-store");
+  res.type("html").send(appWaitPage(siteSignIn(req, code)));
+});
+app.post("/api/app-login", (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  const code = String(parseCookies(req)[APP_LOGIN_COOKIE] || "");
+  const got = APP_CODE.test(code) && appLogins.get(code);
+  if (!got || got.expires < Date.now()) return res.json({ ok: false });
+  appLogins.delete(code);
+  setLoginCookie(req, res, got.id);
+  res.append("Set-Cookie", cookieHeader(req, APP_LOGIN_COOKIE, "", 0));
+  const next = safeNext(parseCookies(req)[NEXT_COOKIE]);
+  if (next) res.append("Set-Cookie", cookieHeader(req, NEXT_COOKIE, "", 0));
+  res.json({ ok: true, next: next || "/" });
 });
 // Back from the site with a ticket (web/server.js /reader-login).
 app.get("/auth", async (req, res) => {
@@ -727,6 +796,14 @@ app.get("/auth", async (req, res) => {
   if (/^[a-f0-9]{64}$/.test(String(who.key || ""))) a.key = who.key;
   saveState();
   tellSite(who.id);
+  // Signed in in Safari for the app: the account waits under the app's code, and Safari only says to go back.
+  const code = String(req.query.app || "");
+  if (APP_CODE.test(code)) {
+    for (const [c, v] of appLogins) if (v.expires < Date.now()) appLogins.delete(c);
+    appLogins.set(code, { id: who.id, expires: Date.now() + 15 * 60000 });
+    console.log(`reader sign-in @${a.username} (app)`);
+    return res.type("html").send(appDonePage(a));
+  }
   console.log(`reader sign-in @${a.username}`);
   setLoginCookie(req, res, who.id);
   const next = safeNext(parseCookies(req)[NEXT_COOKIE]);

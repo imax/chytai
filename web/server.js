@@ -504,7 +504,9 @@ app.get("/reader-login", signed, (req, res) => {
   for (const [t, v] of readerTickets) if (v.expires < Date.now()) readerTickets.delete(t);
   const ticket = require("crypto").randomBytes(16).toString("hex");
   readerTickets.set(ticket, { id: req.user.id, expires: Date.now() + 120000 });
-  res.redirect(`${origin}/auth?ticket=${ticket}`);
+  // The iPhone app signs in through Safari: its one-time code goes back with the ticket (reader /app-login).
+  const app = /^[a-f0-9]{32}$/.test(String(req.query.app || "")) ? `&app=${req.query.app}` : "";
+  res.redirect(`${origin}/auth?ticket=${ticket}${app}`);
 });
 app.post("/api/reader-ticket", (req, res) => {
   const t = readerTickets.get(String(req.body?.ticket || ""));
