@@ -125,6 +125,7 @@
     if (!desk() || TOUCH.matches || !reading()) return;
     if (Math.abs(x - pointer.x) + Math.abs(y - pointer.y) < 3) return; // a twitch, or the page moving under a still mouse
     pointer = { x, y };
+    cursorSoon();
     if (pinned()) return clearTimeout(hideTimer);
     if (inText(x, y)) {
       if (body.classList.contains("chrome-shown")) hideSoon(250);
@@ -136,8 +137,29 @@
   document.addEventListener("mousemove", (e) => moved(e.clientX, e.clientY), { passive: true });
   document.addEventListener("mouseleave", () => desk() && reading() && hideSoon(600));
   for (const bar of [$("#m-top"), $("#m-bottom")]) bar.addEventListener("mouseleave", () => desk() && hideSoon(2000));
+  // In full screen the mouse pointer hides too once the mouse rests (Max, 2026-11-02). The book's frames get
+  // the same class, since the pointer over a frame follows the frame's own styles.
+  let cursorTimer = 0;
+  let frames = null;
+  function noCursor(on) {
+    body.classList.toggle("d-nocursor", on);
+    for (const c of frames?.getContents?.() || []) c.document?.documentElement.classList.toggle("d-nocursor", on);
+  }
+  function cursorSoon() {
+    clearTimeout(cursorTimer);
+    if (body.classList.contains("d-nocursor")) noCursor(false);
+    if (document.fullscreenElement) cursorTimer = setTimeout(() => document.fullscreenElement && reading() && !pinned() && noCursor(true), 2500);
+  }
+  document.addEventListener("fullscreenchange", cursorSoon);
   // Moves over the page reach only its frame; epub.js passes them on with the frame's coordinates.
   function watchFrames(r) {
+    frames = r;
+    r.hooks.content.register((c) => {
+      const st = c.document.createElement("style");
+      st.textContent = "html.d-nocursor, html.d-nocursor * { cursor: none !important; }";
+      c.document.head.appendChild(st);
+      c.document.documentElement.classList.toggle("d-nocursor", body.classList.contains("d-nocursor"));
+    });
     r.on("mousemove", (e) => {
       const frame = e.view?.frameElement?.getBoundingClientRect();
       if (frame) moved(e.clientX + frame.left, e.clientY + frame.top);
