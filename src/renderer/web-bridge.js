@@ -755,7 +755,8 @@
     if (!(e.metaKey || e.ctrlKey)) return;
     const k = e.key.toLowerCase();
     if (k === "o") (e.preventDefault(), pickFile());
-    else if (k === "l") (e.preventDefault(), emit("ui:library"));
+    // ⌘L stays the browser's address bar; only the Mac app uses it for Мої книжки (Max, 2026-11-02).
+    else if (k === "l" && document.documentElement.classList.contains("mac-app")) (e.preventDefault(), emit("ui:library"));
     else if (k === "e") (e.preventDefault(), emit("ui:toggle-panel"));
     else if (k === ",") (e.preventDefault(), emit("ui:settings"));
     else if (k === "f") (e.preventDefault(), emit("ui:find", "open"));
