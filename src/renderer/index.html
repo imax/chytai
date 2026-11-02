@@ -48,12 +48,16 @@
       <div id="running-head"></div>
       <div id="search" class="hidden">
         <div class="search-bar">
-          <input id="search-input" type="search" placeholder="Пошук у книжці" autocomplete="off" />
+          <svg class="search-mag" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.6-3.6"/></svg>
+          <input id="search-input" type="search" placeholder="Пошук у книжці" autocomplete="off" enterkeyhint="search" />
+          <button id="search-clear" type="button" aria-label="Стерти">×</button>
           <span id="search-count"></span>
           <button id="search-prev" title="Попередній (⇧⌘G)">‹</button>
           <button id="search-next" title="Наступний (⌘G)">›</button>
           <button id="search-close" title="Закрити (Esc)">✕</button>
+          <button id="search-cancel" type="button">Скасувати</button>
         </div>
+        <div id="search-sum"></div>
         <ol id="search-results"></ol>
       </div>
       <button id="prev" class="pager" title="Попередня сторінка (←)">‹</button>
@@ -64,6 +68,43 @@
       <footer id="status"><span id="chapter-label"></span><span id="progress-label"></span></footer>
     </section>
 
+    <!-- Phone reading screen, turn 9 from Claude Design (2026-11-02): a bar on top (back, title, search) and one
+         at the bottom (chapter, pages, a slider, Зміст / Нотатки / Вигляд); one sheet for the contents and
+         «Вигляд». Explanations and notes keep #panel, styled as the same sheet. phone-read.js wires it. -->
+    <div id="m-top" class="m-chrome">
+      <button id="m-back" type="button" aria-label="Мої книжки"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 5-7 7 7 7"/></svg></button>
+      <div class="m-ttl"><b id="m-title"></b><small id="m-author"></small></div>
+      <button id="m-search" type="button" aria-label="Пошук у книжці"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.6-3.6"/></svg></button>
+    </div>
+    <div id="m-bottom" class="m-chrome">
+      <div class="m-row"><span id="m-chapter"></span><span id="m-pages"></span></div>
+      <div class="m-slider">
+        <div class="m-track"><i id="m-fill"></i><span id="m-ticks"></span></div>
+        <input id="m-range" type="range" min="0" max="1000" step="1" value="0" aria-label="Місце в книжці" />
+        <span id="m-bubble" class="hidden"></span>
+      </div>
+      <nav class="m-nav">
+        <button type="button" data-m="toc"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6h11M9 12h11M9 18h11"/><circle cx="4.5" cy="6" r=".6"/><circle cx="4.5" cy="12" r=".6"/><circle cx="4.5" cy="18" r=".6"/></svg>Зміст</button>
+        <button type="button" data-m="notes"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 3.5h11v17l-5.5-3.8-5.5 3.8z"/></svg><span>Нотатки <i id="m-ncount"></i></span></button>
+        <button type="button" data-m="look"><span class="m-aa" aria-hidden="true">Аа</span>Вигляд</button>
+      </nav>
+    </div>
+    <div id="m-findbar" class="m-chrome hidden">
+      <button type="button" id="m-find-prev" aria-label="Попередній збіг">‹</button>
+      <span id="m-find-n"></span>
+      <button type="button" id="m-find-next" aria-label="Наступний збіг">›</button>
+      <button type="button" id="m-find-list" class="m-link">Список</button>
+      <button type="button" id="m-find-x" class="m-x" aria-label="Закрити пошук"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+    </div>
+    <section id="msheet" class="m-sheet hidden" aria-modal="false">
+      <div class="ms-head">
+        <span class="ms-grab" aria-hidden="true"></span>
+        <div class="ms-t"><h2 id="ms-title"></h2><small id="ms-sub"></small></div>
+        <button type="button" class="m-x" id="ms-close" aria-label="Закрити"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+      </div>
+      <div id="ms-body"></div>
+    </section>
+
     <aside id="panel">
       <div class="panel-head">
         <span class="grabber mobile-only" aria-hidden="true"></span>
@@ -71,9 +112,11 @@
           <button class="tab active" data-tab="cards" role="tab">Пояснення</button>
           <button class="tab" data-tab="notes" role="tab">Нотатки</button>
         </span>
+        <h2 id="ps-title" class="ps-title"></h2>
+        <button id="ps-action" type="button" class="ps-action hidden">В нотатки</button>
         <span class="panel-actions">
           <button id="btn-clear" class="link" title="Очистити">Очистити</button>
-          <button id="btn-panel-close" class="link mobile-only" title="Сховати панель">Сховати</button>
+          <button id="btn-panel-close" class="link mobile-only" title="Сховати панель" aria-label="Закрити"><span>Сховати</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
         </span>
       </div>
       <div id="cards">
@@ -212,7 +255,7 @@
   </div>
 
   <div id="sel-toolbar" class="hidden">
-    <button data-action="explain">Пояснити</button>
+    <button data-action="explain">Пояснити<small>Потрібен інтернет</small></button>
     <button data-action="note">В нотатки</button>
     <button data-action="translate">Переклад</button>
     <button data-action="open" data-mark>Пояснення</button>
@@ -398,6 +441,7 @@
   <script src="context.js"></script>
   <script src="renderer.js"></script>
   <script src="search.js"></script>
+  <script src="phone-read.js"></script>
   <script src="library-view.js"></script>
   <script src="home.js"></script>
   <script type="module" src="pdf-view.js"></script>
