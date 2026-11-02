@@ -1727,6 +1727,9 @@ a.r-frow:hover .r-frow-go.plain { color: var(--r-ochre); }
   body.d-nocursor, body.d-nocursor * { cursor: none !important; }
   #ps-esc:not(.hidden) { display: inline-block; min-width: 0; font: 400 11px/1.4 var(--m-sans); color: var(--m-ink3); background: none; border: 1px solid var(--m-seg); border-radius: 4px; padding: 1px 5px; }
   .m-x, #btn-panel-close { width: 36px; height: 36px; }
+  /* A × on the panel: in full screen Esc may belong to the browser (Max, 2026-11-02). */
+  #panel #btn-panel-close.mobile-only { display: grid !important; color: var(--m-ink3); }
+  #panel #btn-panel-close:hover { color: var(--m-ink); }
   #panel #cards { flex: 1; min-height: 0; overflow-y: auto; }
   #cards .card { gap: 14px; padding: 18px 24px 0; }
   #cards .where:not(:empty) { display: block; margin-bottom: 0; }
