@@ -652,10 +652,7 @@ app.get("/api/reader-about", (req, res) => {
   if (!hit) return res.json({ found: false, add: `${SITE}${readerAddHref(title, authors)}` });
   const b = store.book(hit.book.id);
   let blurb = "";
-  // A shop's sentence about its own app or link («Слухайте книгу в аудіоформаті у застосунку АБУК за цим посиланням») goes.
-  const AD = /посиланн|застосунк|аудіоформат/i;
-  const clean = (p) => p.split(/(?<=[.!?…])\s+/).filter((t) => !AD.test(t)).join(" ").trim();
-  for (const p of String(b.blurb || "").split(/\n\n+/).map(clean).filter(Boolean)) {
+  for (const p of String(b.blurb || "").split(/\n\n+/)) {
     if (blurb && blurb.length + p.length > 600) break;
     blurb += (blurb ? "\n\n" : "") + p;
   }
