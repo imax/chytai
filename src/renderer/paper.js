@@ -177,9 +177,8 @@
         <textarea id="pp-q" rows="4" placeholder="${esc(idea || PLACEHOLDER)}" enterkeyhint="send">${esc(draft)}</textarea>
         ${att}
         <div class="pp-ask-row"><button type="button" class="pp-tool" data-pp="img" title="Фото чи скріншот" aria-label="Фото чи скріншот">${svgCam}</button>
-          <button type="button" class="pp-tool${listening ? " on" : ""}" data-pp="mic" title="Надиктувати" aria-label="Надиктувати">${svgMic}</button>
+          <button type="button" class="pp-tool${listening?.field === "pp-q" ? " on" : ""}" data-pp="mic" title="Надиктувати" aria-label="Надиктувати">${svgMic}</button>
           <span class="pp-ask-sp"></span>
-          <button type="button" class="r-pill-line pp-tonote" data-pp="tonote">В нотатки</button>
           <button type="button" class="r-pill" data-pp="ask">Запитати</button></div>
       </form>
       ${sortedChats.length ? `<section class="pp-chats"><div class="r-sec-head"><h2>Запитання · ${chats.length}</h2></div>
@@ -200,7 +199,7 @@
         }).join("")}</section>` : ""}
       <section class="pp-notes"><div class="r-sec-head"><h2>Нотатки${notes.length ? ` · ${notes.length}` : ""}</h2><button type="button" class="pp-addnote" data-pp="note">+ Нотатка</button></div>
         ${adding ? `<form class="pp-noteform" data-pp-form><textarea id="pp-note" rows="3" placeholder="Думка, цитата або що перечитати"></textarea>
-          <div><button type="submit" class="r-pill">Зберегти</button><button type="button" class="r-link" data-pp="note-cancel">Скасувати</button></div></form>` : ""}
+          <div><button type="button" class="pp-tool${listening?.field === "pp-note" ? " on" : ""}" data-pp="mic-note" title="Надиктувати" aria-label="Надиктувати">${svgMic}</button><button type="submit" class="r-pill">Зберегти</button><button type="button" class="r-link" data-pp="note-cancel">Скасувати</button></div></form>` : ""}
         ${sortedNotes.length ? sortedNotes.map((n) => `<div class="pp-note${n.quote ? " q" : ""}"><div class="pp-note-t">${esc(n.text)}</div>
           ${n.comment ? `<div class="pp-note-c">${md(n.comment)}</div>` : ""}
           <div class="pp-note-m">${esc(n.chapter || "")}<button type="button" class="r-link" data-pp-del="${esc(n.id)}">Видалити</button></div></div>`).join("")
@@ -234,6 +233,7 @@
     }
     if (!e.target.matches("[data-pp-form]")) return;
     e.preventDefault();
+    listening?.stop();
     const text = $("#pp-note").value.trim();
     if (!text) return;
     await addNote({ text });
@@ -399,10 +399,15 @@
   // An iPhone app built without the microphone permission would close on it (see OLD_APP).
   const MIC_OK = !!Speech && (!/ChytaiApp/.test(navigator.userAgent) || /ChytaiApp\/camera\/mic/.test(navigator.userAgent));
   let listening = null;
-  function mic() {
-    if (listening) return listening.stop();
-    if (!MIC_OK) return showNotice("Тут диктувати можна мікрофоном на клавіатурі.", false), $("#pp-q")?.focus();
-    const field = $("#pp-q");
+  // Into the question field, or into the «+ Нотатка» form (a voice note, Max: «додати голосову заметку»).
+  function mic(id = "pp-q") {
+    if (listening) {
+      const was = listening.field;
+      listening.stop();
+      if (was === id) return;
+    }
+    if (!MIC_OK) return showNotice("Тут диктувати можна мікрофоном на клавіатурі.", false), $(`#${id}`)?.focus();
+    const field = $(`#${id}`);
     const start = field.value.trim() ? `${field.value.trim()} ` : "";
     const rec = new Speech();
     rec.lang = "uk-UA";
@@ -410,32 +415,23 @@
     rec.continuous = true;
     rec.onresult = (e) => {
       const text = [...e.results].map((r) => r[0].transcript).join(" ").replace(/\s+/g, " ").trim();
-      if ($("#pp-q")) $("#pp-q").value = start + text;
+      if ($(`#${id}`)) $(`#${id}`).value = start + text;
     };
     rec.onerror = (e) => e.error !== "no-speech" && e.error !== "aborted" && showNotice(e.error === "not-allowed" ? "Немає доступу до мікрофона." : "Не вдалося розпізнати мовлення.", false);
     rec.onend = () => {
+      if (listening !== rec) return;
       listening = null;
-      $('[data-pp="mic"]')?.classList.remove("on");
+      document.querySelectorAll(".pp-tool.on").forEach((b) => b.classList.remove("on"));
     };
     try {
       rec.start();
+      rec.field = id;
       listening = rec;
-      $('[data-pp="mic"]')?.classList.add("on");
+      document.querySelectorAll(".pp-tool.on").forEach((b) => b.classList.remove("on"));
+      $(`[data-pp="${id === "pp-q" ? "mic" : "mic-note"}"]`)?.classList.add("on");
     } catch {
       showNotice("Не вдалося увімкнути мікрофон.", false);
     }
-  }
-
-  // «В нотатки» under the field: what was typed or said, as a note on the page you're on.
-  async function fieldToNote() {
-    const text = $("#pp-q").value.trim();
-    if (!text) return $("#pp-q").focus();
-    listening?.stop();
-    const n = await addNote({ text, page: scan?.page || book.page });
-    if (!n) return;
-    $("#pp-q").value = "";
-    window.Shell.rerender();
-    showNotice("Збережено в нотатки", false);
   }
 
   // The selection in the photo's text, with a little of what is around it for context.
@@ -492,12 +488,12 @@
     if (act === "ask") return askFromField();
     if (act === "img") return attach();
     if (act === "mic") return mic();
-    if (act === "tonote") return fieldToNote();
+    if (act === "mic-note") return mic("pp-note");
     if (act === "unattach") return (scan = null), (showText = false), window.Shell.rerender();
     if (act === "text") return (showText = !showText), window.Shell.rerender();
     if (act === "about") return window.Shell.showAbout(book);
     if (act === "note") return (adding = true), window.Shell.rerender(), setTimeout(() => $("#pp-note")?.focus(), 30);
-    if (act === "note-cancel") return (adding = false), window.Shell.rerender();
+    if (act === "note-cancel") return listening?.stop(), (adding = false), window.Shell.rerender();
     if (act === "explain" || act === "quote") {
       const s = selected();
       if (!s) return showNotice("Спершу виділіть шматок тексту.", false);

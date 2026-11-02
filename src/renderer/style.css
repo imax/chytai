@@ -1769,7 +1769,7 @@ a.r-frow:hover .r-frow-go.plain { color: var(--r-ochre); }
 .pp-tool:hover { color: var(--r-ochre); }
 .pp-tool.on { color: #fff; background: var(--r-red); animation: pp-pulse 1.4s ease-in-out infinite; }
 @keyframes pp-pulse { 50% { box-shadow: 0 0 0 6px rgba(166, 58, 42, .18); } }
-.pp-ask-row .pp-tonote { padding: 9px 14px; font-size: 14px; }
+
 .pp-chat-img { float: right; width: 40px; height: 54px; object-fit: cover; border-radius: 4px; margin: 2px 0 4px 12px; }
 .pp-chat::after { content: ""; display: block; clear: both; }
 .pa-img { display: block; max-width: 100%; max-height: 38vh; margin: 4px auto 14px; border-radius: 8px; }
