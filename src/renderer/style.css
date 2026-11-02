@@ -1808,3 +1808,4 @@ a.r-frow:hover .r-frow-go.plain { color: var(--r-ochre); }
 .pm-lib { width: 76px; border: none; background: none; color: #f2efe8; font: 15px var(--r-sans); padding: 8px 0; text-align: left; cursor: pointer; }
 .pm-shot { width: 68px; height: 68px; flex: none; border-radius: 50%; border: 4px solid #f2efe8; background: #f2efe8; box-shadow: inset 0 0 0 3px #111; cursor: pointer; padding: 0; }
 .pm-shot:active { transform: scale(.94); }
+#pm-go { min-width: 240px; }
