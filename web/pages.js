@@ -76,15 +76,16 @@ function stars(r, { num = true } = {}) {
 // (Max saw it on «The Design of Everyday Things», 2026-11-02); a retry that loads shows it again.
 const COVER_ERR = "this.style.visibility='hidden';this.onload=function(){this.style.visibility=''};var r=+(this.dataset.r||0);if(r<2){this.dataset.r=r+1;var s=this.src.split('?')[0];setTimeout(()=>{this.src=s+'?r='+(r+1)},1500*(r+1))}else this.remove()";
 // Below the book page's own cover a small copy is shown (thumbs.js): the width shown, in px.
-const SHOWN = { lg: 120, card: 120, md: 64, sm: 52, feed: 48, xs: 40 };
+// The book page's big cover (xl, 200 px) too since 2026-11-02 (Max: «ага давай»): a shop's picture changing or
+// going away no longer breaks it, and the page stops loading 100–300 KB from someone else's site.
+const SHOWN = { xl: 200, lg: 120, card: 120, md: 64, sm: 52, feed: 48, xs: 40 };
 let thumb = (src) => src;
 const setThumbs = (fn) => (thumb = fn);
 function cover(book, size = "md") {
   const hue = [...String(book.title)].reduce((a, c) => (a * 31 + c.charCodeAt(0)) % 360, 7);
   const ph = `<span class="ph${String(book.title).length > 40 ? " long" : ""}"><span>${esc(book.title)}</span></span>`;
-  // The book page's big cover is the original, except a PNG: that may be a product shot on a transparent
-  // field, so it gets the trimmed copy too (thumbs.js; Max, 2026-10-28).
-  const src = SHOWN[size] ? thumb(book.cover, SHOWN[size]) : /\.png(\?|$)/i.test(book.cover || "") ? thumb(book.cover, 240) : book.cover;
+  // A PNG may be a product shot on a transparent field: thumbs.js trims it (Max, 2026-10-28).
+  const src = SHOWN[size] ? thumb(book.cover, SHOWN[size]) : book.cover;
   return `<span class="cover ${size}" style="--h:${hue}">${ph}${book.cover ? `<img src="${attr(src)}" alt=""${size === "xl" ? ' fetchpriority="high"' : ' loading="lazy"'} onerror="${COVER_ERR}">` : ""}</span>`;
 }
 
