@@ -69,8 +69,8 @@ class Mcp {
   // deps: store, auth, pages; site(req) the public origin; notifyOwner(subject, text); details({ ids }) fetches
   // covers and details of new books; putNow / dropNow(reader, id) put a book on «Читаю зараз» or take it off;
   // isNow(reader, id) says whether it is there.
-  constructor({ store, auth, pages, site, notifyOwner, details, putNow, dropNow, isNow, log = console.log }) {
-    Object.assign(this, { store, auth, pages, site, notifyOwner, details, putNow, dropNow, isNow, log });
+  constructor({ store, auth, pages, site, notifyOwner, details, putNow, dropNow, isNow, findCovers = () => {}, log = console.log }) {
+    Object.assign(this, { store, auth, pages, site, notifyOwner, details, putNow, dropNow, isNow, findCovers, log });
     this.db = store.db;
     this.db.exec(SCHEMA);
     this.metaCache = new Map(); // client metadata document URL -> { at, client }
@@ -214,13 +214,19 @@ class Mcp {
     return n;
   }
 
+  // The shelved books still without a cover (findcovers.js, in the background).
+  covers(ids) {
+    const bare = ids.filter((id) => id && !this.store.book(id)?.cover);
+    if (bare.length) this.findCovers(bare);
+  }
+
   // ---- the MCP side ----
 
   tools() {
     const status = { type: "string", enum: STATUSES, description: "read = прочитано, reading = читаю (the «Читаю» shelf, can hold many books), want = хочу прочитати, abandoned = покинуто" };
     // «Читаю зараз» is not a status: it is the book(s) the reader shows under their name (a chat said «додав як
     // читаю зараз» after setting only status reading, Max 2026-10-27).
-    const now = { type: "boolean", description: "«Читаю зараз»: also show the book under the reader's name on their profile. Set true when the reader says they are reading it now or just started it (status becomes reading); false takes it off «Читаю зараз»." };
+    const now = { type: "boolean", description: "«Читаю зараз»: also show the book under the reader's name on their profile. Set true when the reader says they are reading it now or just started it (status becomes reading); false takes it off «Читаю зараз». A book that becomes reading goes on «Читаю зараз» too unless now is false." };
     const rating = { type: "number", minimum: 1, maximum: 5, description: "1 to 5 stars, halves allowed. Only when the reader said it; never guess." };
     const year = { type: "integer", minimum: 1900, maximum: 2100, description: "Year the reader finished reading the book, only if the reader said it. Never the year the book was published." };
     return [
@@ -365,7 +371,8 @@ class Mcp {
       const year = status === "read" && Number.isInteger(Number(x.year)) && x.year >= 1900 && x.year <= thisYear ? Number(x.year) : null;
       // A book with no id yet is the one to make (importEntries makes it; findWork found nothing).
       if (id) taken.add(id);
-      rows.push({ i, out, now: x.now === true, row: { id, title, author, status, rating, year, note: String(x.note || "").trim().slice(0, 2000) } });
+      // As in update_book: a new «Читаю» book is the one the reader is on now, unless now: false.
+      rows.push({ i, out, now: x.now === true || (x.now === undefined && status === "reading"), row: { id, title, author, status, rating, year, note: String(x.note || "").trim().slice(0, 2000) } });
       results.push(null);
     }
     // A few books are news (the reader just finished one); a long list is the past and goes in quietly, dated
@@ -378,11 +385,13 @@ class Mcp {
       const id = row.id || made.get(`${row.title}|${row.author}`)?.id || this.store.findWork(row);
       const b = id && this.store.book(id);
       if (b && ["read", "want", "abandoned"].includes(row.status)) this.dropNow(reader.id, b.id);
-      if (b && put) this.putNow(reader.id, b.id);
+      if (b && put && (!quiet || books[i].now === true)) this.putNow(reader.id, b.id);
       // Said plainly, so the chat doesn't tell the reader it worked when it didn't.
       results[i] = b ? { ...out, result: row.id ? "added" : "added_new_to_catalog", book: this.bookOut(b, reader.id) } : { ...out, result: "error", error: "the book could not be added; nothing changed" };
     }
     this.used(reader.id, "books", rows.length);
+    // Books from a shop's catalog that came without a picture: looked up now, not in the nightly pass.
+    this.covers(rows.map(({ row }) => row.id).filter(Boolean));
     if (res.created.length) {
       this.details({ ids: res.created.map((b) => b.id) });
       if (reader.id !== "owner")
@@ -418,9 +427,14 @@ class Mcp {
       if (this.used(reader.id, "books") >= BOOKS_A_DAY) throw new Error(`daily limit of ${BOOKS_A_DAY} new books reached; try tomorrow`);
       this.used(reader.id, "books", 1);
     }
+    const was = this.store.entry(reader.id, bookId)?.status;
     if (Object.keys(patch).length && !this.store.setEntry(reader.id, bookId, patch)) throw new Error("the shelf was not changed");
-    if (now === true) this.putNow(reader.id, bookId);
+    // A book the chat moves to «Читаю» is the one the reader just started, so it goes on «Читаю зараз» too,
+    // unless the chat says now: false. Chats keep setting only the status (Max 2026-10-27, and again 2026-11-02
+    // with «Берлінський щоденник»: «Додай як читаю зараз», and it landed on «Читаю» only).
+    if (now === true || (now === undefined && patch.status === "reading" && was !== "reading")) this.putNow(reader.id, bookId);
     else if (["read", "want", "abandoned"].includes(patch.status) || now === false) this.dropNow(reader.id, bookId);
+    this.covers([bookId]);
     return { book: this.bookOut(this.store.book(bookId), reader.id, { full: true }) };
   }
 

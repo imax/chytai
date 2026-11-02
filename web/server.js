@@ -751,7 +751,7 @@ app.post("/settings/delete", signed, (req, res) => {
 });
 
 // ---- Chytai in a chat: the MCP server at /mcp and its OAuth (mcp.js) ----
-const mcp = new Mcp({ store, auth, pages, site: (req) => site(req), notifyOwner, details, putNow: (reader, id) => putNow(reader, id), dropNow: (reader, id) => dropNow(reader, id), isNow: (reader, id) => nowIds(reader).has(store.canonical(id)) });
+const mcp = new Mcp({ store, auth, pages, site: (req) => site(req), notifyOwner, details, putNow: (reader, id) => putNow(reader, id), dropNow: (reader, id) => dropNow(reader, id), isNow: (reader, id) => nowIds(reader).has(store.canonical(id)), findCovers: (ids) => findCovers.shelved(store, { ids, keep: keepCover, log: console.log }).catch((e) => console.error("covers failed:", e)) });
 mcp.routes(app, { signed });
 
 // ---- adding books: /add (one page with every way in), and imports from elsewhere ----

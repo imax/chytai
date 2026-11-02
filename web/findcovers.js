@@ -96,4 +96,35 @@ async function find(store, { ids, keep, max = DAILY, log = () => {}, fetchImpl =
   return { asked, found };
 }
 
-module.exports = { find, wanting, goodreads, openLibrary };
+// A book from a shop's catalog that a reader just put on a shelf (mcp.js), when the shop gave no picture (MEGOGO's
+// record of Наш Формат's «Берлінський щоденник», Max 2026-11-02: «було б класно щоб обкладинка швидше
+// зʼявлялась»). Readeat's Ukrainian edition first, then Open Library by ISBN. The picture is kept here and goes in
+// as an edit, so the next catalog refresh doesn't take it away. The readers' own books go through find() above.
+async function shelved(store, { ids, keep, log = () => {}, fetchImpl = fetch, pause = 1500 } = {}) {
+  const wait = () => new Promise((ok) => setTimeout(ok, pause));
+  const readeat = require("./readeat");
+  let found = 0;
+  for (const id of [...new Set(ids.map((i) => store.canonical(i)))]) {
+    const b = store.book(id);
+    if (!b || b.cover || store.lib.books[id] || isRussian(b)) continue; // own books: find()
+    if (Date.now() - Number(store.db.get(`covers:${id}`) || 0) < MONTH || !take(store)) continue;
+    store.db.set(`covers:${id}`, String(Date.now()));
+    const isbns = [...new Set([b.isbn, ...(b.isbns || [])].map(cleanIsbn).filter((x) => x.length === 10 || x.length === 13))].slice(0, 3);
+    try {
+      let from = (await readeat.findBook({ title: b.title, author: b.author, isbns }, { fetchImpl, pause }))?.cover || "";
+      if (!from && isbns.length) from = await openLibrary(isbns, fetchImpl, wait);
+      if (!from) continue;
+      const k = keep ? await keep(from) : { url: from };
+      if (k.error) continue;
+      if (store.book(id)?.cover) continue; // someone set one meanwhile
+      store.editBook(id, { ...(store.edits()[id] || {}), cover: k.url });
+      found++;
+      log(`covers: ${id} got a cover from ${from}`);
+    } catch (e) {
+      log(`covers: ${id}: ${e.name === "TimeoutError" ? "timeout" : e.cause?.code || e.message}`);
+    }
+  }
+  return { found };
+}
+
+module.exports = { find, shelved, wanting, goodreads, openLibrary };
