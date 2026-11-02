@@ -19,7 +19,13 @@
   // ---------- Photos ----------
 
   // The camera on a phone, a file chooser on a computer.
+  // An iPhone app built before 2026-11-02 has no camera permission, and iOS closes it on the camera.
+  const OLD_APP = /ChytaiApp/.test(navigator.userAgent) && !/ChytaiApp\/camera/.test(navigator.userAgent);
   function pickPhoto() {
+    if (OLD_APP) {
+      showNotice("Фото в цій версії аппки поки не працює. Відкрийте app.chytai.org.ua у Safari або дочекайтеся оновлення.", false);
+      return Promise.resolve(null);
+    }
     return new Promise((resolve) => {
       const input = document.createElement("input");
       input.type = "file";

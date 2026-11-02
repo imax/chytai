@@ -16,6 +16,8 @@
         "ITSAppUsesNonExemptEncryption": false,
         "CFBundleAllowMixedLocalizations": true,
         "CFBundleDevelopmentRegion": "uk",
+        "NSCameraUsageDescription": "Chytai фотографує обкладинку чи сторінку паперової книжки, щоб знайти книжку й розпізнати текст.",
+        "NSPhotoLibraryUsageDescription": "Chytai бере з галереї фото обкладинки чи сторінки паперової книжки, щоб розпізнати текст.",
         "WKAppBoundDomains": [
           "chytai.fly.dev",
           "chytai.org.ua"

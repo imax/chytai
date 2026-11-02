@@ -149,8 +149,9 @@ function Reader() {
         // The page extends under the status bar and the home indicator; the reader's CSS already
         // uses env(safe-area-inset-*) for its toolbar and margins, exactly as in Safari.
         contentInsetAdjustmentBehavior="never"
-        // Lets the reader tell the app from Safari (renderer.js checks for ChytaiApp).
-        applicationNameForUserAgent="ChytaiApp"
+        // Lets the reader tell the app from Safari (renderer.js checks for ChytaiApp). «/camera»: this build
+        // has the camera permission in Info.plist (paper books, 2026-11-02); without it iOS closes the app.
+        applicationNameForUserAgent="ChytaiApp/camera"
         allowsBackForwardNavigationGestures
         allowsInlineMediaPlayback
         // No sharedCookiesEnabled: with it, the login cookie set on the POST /login redirect reaches
