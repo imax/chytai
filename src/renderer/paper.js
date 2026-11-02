@@ -278,13 +278,21 @@
 
   // «Фото чи скріншот»: the page's text goes with the next question; it can also be opened to select from.
   async function attach() {
-    const file = await pickPhoto();
-    if (!file) return;
+    // On a phone our own camera (Max: iOS's «Use Photo / Retake» and then the marks were two screens for one
+    // thing): shoot, and the marks come right after on the same screen, with «Перезняти» there.
+    const cam = CAM_OK && matchMedia("(pointer: coarse)").matches;
+    let file, small, thumb, marked;
+    for (;;) {
+      file = cam ? await camera() : await pickPhoto();
+      if (!file) return;
+      small = await shrink(file);
+      thumb = URL.createObjectURL(small);
+      // First the marks: whatever is circled or underlined gets explained at once.
+      marked = await mark(thumb, cam);
+      if (marked !== "retake") break;
+      URL.revokeObjectURL(thumb);
+    }
     const b = book;
-    const small = await shrink(file);
-    const thumb = URL.createObjectURL(small);
-    // First the marks: whatever is circled or underlined gets explained at once.
-    const marked = await mark(thumb);
     if (marked === null) return URL.revokeObjectURL(thumb);
     if (marked) {
       const q = $("#pp-q")?.value.trim() || "";
@@ -315,10 +323,71 @@
 
   // ---------- Marking the photo (v3, Max: «обвести кружечком… і щоб він зразу пояснював обведене») ----------
 
-  // Resolves to { data, small } with the marks drawn in, false for «Без позначок», null for «Скасувати».
-  function mark(url) {
+  // The camera, on the same full-screen sheet as the marks. Resolves to the picture (a Blob or, from «Галерея»,
+  // a File), or null. Where the camera can't be had, the system's photo picker instead.
+  const CAM_OK = !!navigator.mediaDevices?.getUserMedia && !OLD_APP;
+  let stream = null;
+  function stopCam() {
+    stream?.getTracks().forEach((t) => t.stop());
+    stream = null;
+    $("#pm-video").srcObject = null;
+  }
+  function camera() {
     return new Promise((resolve) => {
       const d = $("#paper-mark");
+      const v = $("#pm-video");
+      let over = false;
+      const done = (f, close) => {
+        if (over) return;
+        over = true;
+        stopCam();
+        d.onclose = null;
+        if (close && d.open) d.close();
+        resolve(f);
+      };
+      d.dataset.mode = "cam";
+      $("#pm-shot").hidden = false;
+      $("#pm-hint").textContent = "Сфотографуйте сторінку";
+      $("#pm-cancel").textContent = "Скасувати";
+      $("#pm-cancel").onclick = () => done(null, true);
+      d.onclose = () => done(null);
+      $("#pm-lib").onclick = async () => {
+        const f = await pickPhoto();
+        if (f) done(f);
+      };
+      $("#pm-shot").onclick = () => {
+        if (!v.videoWidth) return;
+        const c = document.createElement("canvas");
+        c.width = v.videoWidth;
+        c.height = v.videoHeight;
+        c.getContext("2d").drawImage(v, 0, 0);
+        c.toBlob((blob) => blob && done(blob), "image/jpeg", 0.9);
+      };
+      if (!d.open) d.showModal();
+      navigator.mediaDevices
+        .getUserMedia({ video: { facingMode: { ideal: "environment" }, width: { ideal: 1920 }, height: { ideal: 1440 } }, audio: false })
+        .then((s) => {
+          if (over) return s.getTracks().forEach((t) => t.stop());
+          stream = s;
+          v.srcObject = s;
+          v.play().catch(() => {});
+        })
+        .catch(() => {
+          // No camera here, or no permission: «Галерея» (the system's picker) still works.
+          $("#pm-hint").textContent = "Камера недоступна";
+          $("#pm-shot").hidden = true;
+        });
+    });
+  }
+
+  // Resolves to { data, small } with the marks drawn in, false for «Без позначок», null for «Скасувати»,
+  // "retake" for «Перезняти» (after our camera; the sheet stays open for it).
+  function mark(url, retake = false) {
+    return new Promise((resolve) => {
+      const d = $("#paper-mark");
+      d.dataset.mode = "mark";
+      $("#pm-hint").textContent = "Обведіть, що пояснити";
+      $("#pm-cancel").textContent = retake ? "Перезняти" : "Скасувати";
       const img = $("#pm-img");
       const cv = $("#pm-canvas");
       const strokes = [];
@@ -364,7 +433,12 @@
         d.close();
         resolve(v);
       };
-      $("#pm-cancel").onclick = () => done(null);
+      $("#pm-cancel").onclick = () => {
+        if (!retake) return done(null);
+        removeEventListener("resize", fit);
+        d.onclose = null;
+        resolve("retake");
+      };
       d.onclose = () => resolve(null);
       $("#pm-skip").onclick = () => done(false);
       $("#pm-go").onclick = async () => {
@@ -388,7 +462,7 @@
       addEventListener("resize", fit);
       $("#pm-go").disabled = true;
       $("#pm-clear").hidden = true;
-      d.showModal();
+      if (!d.open) d.showModal();
       if (img.complete && img.naturalWidth) fit();
     });
   }
