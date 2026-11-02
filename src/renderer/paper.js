@@ -297,7 +297,7 @@
     if (marked) {
       const q = $("#pp-q")?.value.trim() || "";
       if ($("#pp-q")) $("#pp-q").value = "";
-      ask({ image: marked.data, img: marked.small, question: q, page: book.page });
+      ask({ image: marked.data, img: marked.small, marked: marked.marked, question: q, page: book.page });
       // The page number still comes from the photo, quietly.
       window.reader.paperScan("page", small).then((r) => book === b && seenPage(r.page)).catch(() => {});
       return;
@@ -411,7 +411,7 @@
           ctx.stroke();
         }
         // One button (Max): with marks it explains them, without it just attaches the page.
-        $("#pm-go").textContent = strokes.length ? "Пояснити обведене" : "Далі";
+        $("#pm-go").textContent = strokes.length ? "Пояснити обведене" : "Пояснити";
         $("#pm-clear").hidden = !strokes.length;
       };
       const at = (e) => {
@@ -442,7 +442,6 @@
       };
       d.onclose = () => resolve(null);
       $("#pm-go").onclick = async () => {
-        if (!strokes.length) return done(false);
         // The photo with the marks on it, as the model sees it, and a small copy for the list.
         const c = document.createElement("canvas");
         c.width = img.naturalWidth;
@@ -456,12 +455,12 @@
         t.width = Math.round(c.width * k);
         t.height = Math.round(c.height * k);
         t.getContext("2d").drawImage(c, 0, 0, t.width, t.height);
-        done({ data, small: t.toDataURL("image/jpeg", 0.7) });
+        done({ data, small: t.toDataURL("image/jpeg", 0.7), marked: strokes.length > 0 });
       };
       img.onload = () => fit();
       img.src = url;
       addEventListener("resize", fit);
-      $("#pm-go").textContent = "Далі";
+      $("#pm-go").textContent = "Пояснити";
       $("#pm-clear").hidden = true;
       if (!d.open) d.showModal();
       if (img.complete && img.naturalWidth) fit();
@@ -602,16 +601,16 @@
   }
 
   let conv = null; // the question being answered: { chat, book, q, text, busy, error, reqId, context }
-  function ask({ selection = "", before = "", after = "", question = "", pageText = "", page = book.page, image = "", img = "" }) {
+  function ask({ selection = "", before = "", after = "", question = "", pageText = "", page = book.page, image = "", img = "", marked = true }) {
     const b = book;
     if (conv?.busy) window.reader.abort(conv.reqId);
     chats = chats.filter((c) => c.turns.length); // a question that failed is let go
-    const sel = selection || (image ? "Обведене на фото" : "");
+    const sel = selection || (image ? (marked ? "Обведене на фото" : question ? "" : "Сторінка з фото") : "");
     const chat = { id: `c${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`, turns: [], messages: null, sel, img, page: page || 0, at: Date.now() };
     chats = [...chats, chat];
     openChat = chat.id;
     conv = { chat, book: b, text: "", busy: false, reqId: null };
-    conv.context = { paper: true, bookTitle: b.title, author: b.authors.join(", "), page: page || 0, chapter: b.chapter || "", selection, before, after, pageText, ...(image ? { image } : {}) };
+    conv.context = { paper: true, bookTitle: b.title, author: b.authors.join(", "), page: page || 0, chapter: b.chapter || "", selection, before, after, pageText, ...(image ? { image, marked } : {}) };
     turn(question || null);
     $(".pp-chats")?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
