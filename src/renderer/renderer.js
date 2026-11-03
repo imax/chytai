@@ -1388,6 +1388,7 @@ function listCards() {
   $("#panel-empty").classList.toggle("hidden", cards.length > 0);
   for (const conv of conversations.values()) syncConvActs(conv);
   $("#q-head").innerHTML = `Запитання${cards.length ? ` · ${cards.length}` : ""}`;
+  window.PhoneRead?.notesCount();
   window.PhoneRead?.syncPanelHead?.();
 }
 $("#cards-more").onclick = () => ((cardsAll = true), listCards());

@@ -142,8 +142,10 @@
   }
   function notesCount() {
     syncPanelHead();
-    $("#m-ncount").textContent = notes.length || "";
-    $("#m-dncount").textContent = notes.length || "";
+    // The «Нотатки» button counts everything in its panel: notes and questions (Max 2026-11-03).
+    const n = notes.length + document.querySelectorAll("#cards .card").length;
+    $("#m-ncount").textContent = n || "";
+    $("#m-dncount").textContent = n || "";
   }
 
   // ---------- The sheet: contents and «Вигляд» ----------
