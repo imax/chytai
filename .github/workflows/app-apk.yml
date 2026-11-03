@@ -1,0 +1,49 @@
+# A test APK of the Android app, built right here on the GitHub runner (it has the Android SDK),
+# without EAS or Google Play. Signed with the debug key, so it is for installing by hand only.
+# The APK goes to the release «android-test»; its link stays the same from build to build:
+# https://github.com/imax/chytai/releases/download/android-test/chytai.apk
+name: App APK (Android test)
+
+on:
+  push:
+    branches: [main]
+    paths: ["app/**", "!app/README.md", ".github/workflows/app-apk.yml"]
+  workflow_dispatch:
+
+concurrency: app-apk
+
+permissions:
+  contents: write
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: gradle/actions/setup-gradle@v4
+      - run: npm ci --no-audit --no-fund
+      - run: npx expo prebuild --platform android --no-install
+        env:
+          CI: 1
+      # arm64 only: every phone that runs Android 13 has it, and the build is four times shorter.
+      - run: ./gradlew assembleRelease --no-daemon -PreactNativeArchitectures=arm64-v8a
+        working-directory: app/android
+      - run: cp android/app/build/outputs/apk/release/app-release.apk chytai.apk
+      - name: Publish to the android-test release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view android-test >/dev/null 2>&1 || gh release create android-test --prerelease --title "Android: тестова збірка" --notes "Тестовий APK Читалки для Android. Ставиться вручну, не з Google Play."
+          gh release upload android-test chytai.apk --clobber
