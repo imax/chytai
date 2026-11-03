@@ -1247,12 +1247,12 @@ app.post("/api/lists/comments/:cid/edit", signed, (req, res) => {
   if (lists.editComment(c.id, req.body.text)) mentionMails(req, req.body.text, { where: `під списком «${l.title}»`, href: `${l.href}#c-${c.id}`, before: c.text });
   res.redirect(303, `${l.href}#c-${c.id}`);
 });
-// One's own words go; the list's author and the owner take any away.
+// Only the owner takes words away for now (Max, 2026-11-03: readers don't delete theirs or others').
 app.post("/api/lists/comments/:cid/delete", signed, (req, res) => {
   const c = lists.comment(req.params.cid);
   const l = c && lists.get(c.list);
   if (!c || !l) return res.redirect(303, req.get("referer") || "/lists");
-  if (c.reader !== req.user.id && l.reader.id !== req.user.id && !req.owner) return res.status(403).send(pages.messagePage({ title: "Це не ваш коментар", text: "", user: req.user }));
+  if (!req.owner) return res.status(403).send(pages.messagePage({ title: "Це не ваш коментар", text: "", user: req.user }));
   lists.dropComment(c.id);
   res.redirect(303, req.body.back === "admin" ? "/admin/comments" : `${l.href}#club`);
 });
@@ -1409,7 +1409,7 @@ app.post("/api/club/:id", signed, clubTopic, myTopic, (req, res) => {
   const t = club.edit(req.topic.id, { title: req.body.title, text: req.body.text, book: req.body.book ?? "", spoiler: req.body.spoiler === "1", official: req.owner ? req.body.official === "1" : undefined });
   res.redirect(303, t.href);
 });
-app.post("/api/club/:id/delete", signed, clubTopic, myTopic, (req, res) => (club.remove(req.topic.id), res.redirect(303, req.body?.back === "admin" ? "/admin/comments" : "/club")));
+app.post("/api/club/:id/delete", signed, owner, clubTopic, (req, res) => (club.remove(req.topic.id), res.redirect(303, req.body?.back === "admin" ? "/admin/comments" : "/club")));
 app.post("/api/club/:id/posts", signed, clubTopic, (req, res) => {
   const t = req.topic;
   const back = (err, pid = "") => res.redirect(303, `${t.href}${err ? `?error=${encodeURIComponent(err)}` : ""}#${pid ? `p-${pid}` : "reply"}`);
@@ -1442,12 +1442,12 @@ app.post("/api/club/posts/:pid/edit", signed, (req, res) => {
   if (club.editPost(p.id, req.body.text)) mentionMails(req, req.body.text, { where: `у темі «${t.title}»`, href: `${t.href}#p-${p.id}`, before: p.text });
   res.redirect(303, `${t.href}#p-${p.id}`);
 });
-// One's own words go; the owner takes any away.
+// Only the owner takes an answer away for now (Max, 2026-11-03).
 app.post("/api/club/posts/:pid/delete", signed, (req, res) => {
   const p = club.post(req.params.pid);
   const t = p && club.topic(p.topic);
   if (!p || !t) return res.redirect(303, "/club");
-  if (p.reader !== req.user.id && !req.owner) return res.status(403).send(pages.messagePage({ title: "Це не ваш коментар", text: "", user: req.user }));
+  if (!req.owner) return res.status(403).send(pages.messagePage({ title: "Це не ваш коментар", text: "", user: req.user }));
   club.dropPost(p.id);
   res.redirect(303, req.body?.back === "admin" ? "/admin/comments" : `${t.href}#reply`);
 });
