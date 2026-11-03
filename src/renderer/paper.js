@@ -16,6 +16,7 @@
   let scan = null; // { text, page, thumb } from the photo attached to the next question, or { busy, thumb }
   let showText = false; // the attached photo's text is open to select from
   let adding = false; // the «+ Нотатка» form is open
+  let editing = null; // the note being edited
   let openChat = null; // the question unfolded in the list
   let allChats = false; // «Запитання» shows only the last few until «Показати всі» (Max 2026-11-03: long to scroll to notes)
   const CHATS_SHOWN = 3;
@@ -121,6 +122,7 @@
     if (book?.path !== b.path) {
       scan = null;
       showText = adding = false;
+      editing = null;
       openChat = null;
       allChats = false;
       notes = [];
@@ -206,9 +208,12 @@
       <section class="pp-notes"><div class="r-sec-head"><h2>Нотатки${notes.length ? ` · ${notes.length}` : ""}</h2><button type="button" class="pp-addnote" data-pp="note">+ Нотатка</button></div>
         ${adding ? `<form class="pp-ask pp-noteform" data-pp-form><textarea id="pp-note" rows="3" placeholder="Думка, цитата або що перечитати"></textarea>
           <div class="pp-ask-row"><button type="button" class="pp-tool${listening?.field === "pp-note" ? " on" : ""}" data-pp="mic-note" title="Надиктувати" aria-label="Надиктувати">${svgMic}</button><span class="pp-ask-sp"></span><button type="submit" class="r-pill">Зберегти</button></div></form>` : ""}
-        ${sortedNotes.length ? sortedNotes.map((n) => `<div class="pp-note${n.quote ? " q" : ""}"><div class="pp-note-t">${esc(n.text)}</div>
+        ${sortedNotes.length ? sortedNotes.map((n) => editing === n.id
+          ? `<form class="pp-ask pp-noteform" data-pp-edit="${esc(n.id)}"><textarea id="pp-note-edit" rows="3">${esc(n.text)}</textarea>
+            <div class="pp-ask-row"><button type="button" class="r-link" data-pp="cancel-edit">Скасувати</button><span class="pp-ask-sp"></span><button type="submit" class="r-pill">Зберегти</button></div></form>`
+          : `<div class="pp-note${n.quote ? " q" : ""}"><div class="pp-note-t">${esc(n.text)}</div>
           ${n.comment ? `<div class="pp-note-c">${md(n.comment)}</div>` : ""}
-          <div class="pp-note-m">${esc(n.chapter || "")}<button type="button" class="r-link" data-pp-del="${esc(n.id)}">Видалити</button></div></div>`).join("")
+          <div class="pp-note-m">${esc(n.chapter || "")}<button type="button" class="r-link" data-pp-edit-note="${esc(n.id)}">Редагувати</button><button type="button" class="r-link" data-pp-del="${esc(n.id)}">Видалити</button></div></div>`).join("")
           : adding ? "" : `<p class="r-empty">Тут будуть ваші думки й цитати.</p>`}</section>
       <button type="button" class="pp-row" data-pp="about"><span>Про книжку</span><span>›</span></button>
     </div>`;
@@ -236,6 +241,17 @@
       if (!q || !c || lives.get(c.id)?.busy) return;
       if (!lives.has(c.id)) lives.set(c.id, { chat: c, book, text: "", busy: false, reqId: null });
       return turn(lives.get(c.id), q);
+    }
+    if (e.target.matches("[data-pp-edit]")) {
+      e.preventDefault();
+      const id = e.target.dataset.ppEdit;
+      const text = $("#pp-note-edit").value.trim();
+      const note = notes.find((n) => n.id === id);
+      editing = null;
+      if (!text || !note || text === note.text) return window.Shell.rerender();
+      note.text = text;
+      window.Shell.rerender();
+      return window.reader.notesUpdate(book.path, id, { text }).catch((err) => showNotice(`Не вдалося зберегти: ${err.message}`, false));
     }
     if (!e.target.matches("[data-pp-form]")) return;
     e.preventDefault();
@@ -556,6 +572,15 @@
       window.Shell.rerender();
       return window.reader.notesDelete(book.path, id).catch(() => {});
     }
+    const edit = e.target.closest("[data-pp-edit-note]");
+    if (edit) {
+      editing = edit.dataset.ppEditNote;
+      window.Shell.rerender();
+      const f = $("#pp-note-edit");
+      f?.focus();
+      f?.setSelectionRange(f.value.length, f.value.length);
+      return;
+    }
     const delChat = e.target.closest("[data-pp-delchat]");
     if (delChat) {
       const id = delChat.dataset.ppDelchat;
@@ -591,6 +616,10 @@
     if (act === "unattach") return (scan = null), (showText = false), window.Shell.rerender();
     if (act === "text") return (showText = !showText), window.Shell.rerender();
     if (act === "about") return window.Shell.showAbout(book);
+    if (act === "cancel-edit") {
+      editing = null;
+      return window.Shell.rerender();
+    }
     if (act === "allq") {
       allChats = !allChats;
       return window.Shell.rerender();

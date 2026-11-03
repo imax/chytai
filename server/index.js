@@ -1074,6 +1074,8 @@ api.patch("/notes/:id", (req, res) => {
   const note = list.find((n) => n.id === req.params.id);
   if (!note) return res.status(404).json({ error: "Нотатки немає." });
   if (typeof req.body?.comment === "string") note.comment = req.body.comment.slice(0, NOTE_TEXT_MAX);
+  // A paper book's note is the reader's own words, so its text can be edited too (Max 2026-11-03).
+  if (paper.NAME.test(String(req.query.path || "")) && typeof req.body?.text === "string" && req.body.text.trim()) note.text = req.body.text.trim().slice(0, NOTE_TEXT_MAX);
   if (!req.guest || req.share) saveState();
   res.json({ note });
 });
