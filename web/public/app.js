@@ -215,6 +215,17 @@
       box.classList.add("open");
       try { localStorage.setItem("spoil:" + box.dataset.spoil, "1"); } catch {}
     }
+    // «змінити» / «Скасувати» under one's own words in the Club.
+    const ed = e.target.closest("[data-edit], [data-edit-cancel]");
+    if (ed) {
+      const box = ed.closest(".cmt");
+      const f = box.querySelector(".cmt-edit");
+      const on = ed.hasAttribute("data-edit");
+      box.querySelector(".txt").hidden = on;
+      f.hidden = !on;
+      if (on) { const ta = f.querySelector("textarea"); ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); }
+      else f.reset();
+    }
     const re = e.target.closest("[data-reply]");
     if (re) {
       const ta = $("#reply textarea");

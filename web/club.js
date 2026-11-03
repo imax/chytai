@@ -71,6 +71,8 @@ class Club {
       this.db.exec("ALTER TABLE club_topics ADD COLUMN slug TEXT NOT NULL DEFAULT ''");
       for (const r of this.db.prepare("SELECT id, title FROM club_topics ORDER BY created").all()) this.db.prepare("UPDATE club_topics SET slug = ? WHERE id = ?").run(this.newSlug(r.title), r.id);
     }
+    // An answer its author changed (Hennadii K, 2026-11-03: «зараз можна лише видалити»): when, shown as «змінено».
+    if (!this.db.prepare("PRAGMA table_info(club_posts)").all().some((c) => c.name === "edited")) this.db.exec("ALTER TABLE club_posts ADD COLUMN edited TEXT NOT NULL DEFAULT ''");
     this.db.exec("CREATE UNIQUE INDEX IF NOT EXISTS club_topics_slug ON club_topics (slug) WHERE slug != ''");
     // Topics from before the letters (2026-11-01): their authors and those who answered follow them too.
     this.db.exec("INSERT OR IGNORE INTO club_watch (reader, topic, on_) SELECT reader, id, 1 FROM club_topics; INSERT OR IGNORE INTO club_watch (reader, topic, on_) SELECT DISTINCT reader, topic, 1 FROM club_posts;");
@@ -252,6 +254,17 @@ class Club {
     }
     for (const k in out) out[k].sort((a, b) => rank(a.emoji) - rank(b.emoji));
     return out;
+  }
+  // The author's new words for an answer; false when there are none.
+  editPost(id, text) {
+    const p = this.post(id);
+    text = clean(text, POST_MAX);
+    if (!p || !text) return false;
+    if (text !== p.text) {
+      this.db.prepare("UPDATE club_posts SET text = ?, edited = ? WHERE id = ?").run(text, now(), p.id);
+      this.tag(p.topic, text);
+    }
+    return true;
   }
   dropPost(id) {
     this.db.prepare("DELETE FROM club_posts WHERE id = ?").run(String(id));

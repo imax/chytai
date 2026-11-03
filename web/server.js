@@ -1238,6 +1238,15 @@ app.post("/api/lists/:id/comments", signed, (req, res) => {
   if (id && !req.owner && !mailed.has(OWNER_ID)) notifyOwner(`Коментар у Клубі: ${l.title}`, [`${req.user.name} (${SITE}/@${req.user.username}) під списком «${l.title}»:`, "", String(req.body.text).trim().slice(0, 1000), "", `${SITE}${l.href}#club`, `Усі коментарі: ${SITE}/admin/comments`].join("\n"));
   back("");
 });
+// One's own words change (only the author's: nobody edits another's words).
+app.post("/api/lists/comments/:cid/edit", signed, (req, res) => {
+  const c = lists.comment(req.params.cid);
+  const l = c && lists.get(c.list);
+  if (!c || !l) return res.redirect(303, "/lists");
+  if (c.reader !== req.user.id) return res.status(403).send(pages.messagePage({ title: "Це не ваш коментар", text: "", user: req.user }));
+  if (lists.editComment(c.id, req.body.text)) mentionMails(req, req.body.text, { where: `під списком «${l.title}»`, href: `${l.href}#c-${c.id}`, before: c.text });
+  res.redirect(303, `${l.href}#c-${c.id}`);
+});
 // One's own words go; the list's author and the owner take any away.
 app.post("/api/lists/comments/:cid/delete", signed, (req, res) => {
   const c = lists.comment(req.params.cid);
@@ -1250,9 +1259,11 @@ app.post("/api/lists/comments/:cid/delete", signed, (req, res) => {
 // ---- «Клуб Chytai» (club.js): /club, its topics and replies ----
 // «@username» in a Club text mails that reader (Max, 2026-11-01: «тегаєш Марінку, і їй приходить імейл»): not oneself,
 // not a reader who switched these letters off, at most 5 a hour from one reader to another.
-function mentionMails(req, text, { where, href }) {
+// `before`: the words as they were (an edit), whose readers already got their letter.
+function mentionMails(req, text, { where, href, before = "" }) {
   const mailed = new Set();
-  for (const u of mentionsIn(text).slice(0, 10)) {
+  const had = new Set(mentionsIn(before));
+  for (const u of mentionsIn(text).filter((u) => !had.has(u)).slice(0, 10)) {
     const r = auth.byUsername(u);
     if (!r || r.id === req.user.id || !r.email || r.mention_mail === 0 || auth.tooMany(`mention:${req.user.id}:${r.id}`, 5)) continue;
     const off = `${SITE}/mention-mail/unsubscribe/${encodeURIComponent(r.id)}/${digest.token(r.id)}`;
@@ -1422,6 +1433,15 @@ app.post("/api/club/posts/:pid/react", signed, (req, res) => {
 });
 // «Сповіщати про відповіді» in a topic.
 app.post("/api/club/:id/watch", signed, clubTopic, (req, res) => (club.setWatch(req.user.id, req.topic.id, req.body.on === "1"), res.redirect(303, `${req.topic.href}#reply`)));
+// One's own answer changes (only the author's).
+app.post("/api/club/posts/:pid/edit", signed, (req, res) => {
+  const p = club.post(req.params.pid);
+  const t = p && club.topic(p.topic);
+  if (!p || !t) return res.redirect(303, "/club");
+  if (p.reader !== req.user.id) return res.status(403).send(pages.messagePage({ title: "Це не ваш коментар", text: "", user: req.user }));
+  if (club.editPost(p.id, req.body.text)) mentionMails(req, req.body.text, { where: `у темі «${t.title}»`, href: `${t.href}#p-${p.id}`, before: p.text });
+  res.redirect(303, `${t.href}#p-${p.id}`);
+});
 // One's own words go; the owner takes any away.
 app.post("/api/club/posts/:pid/delete", signed, (req, res) => {
   const p = club.post(req.params.pid);

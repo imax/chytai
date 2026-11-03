@@ -867,6 +867,8 @@ form.inline button:not(.btn) { background: none; border: 0; padding: 0; cursor: 
 .cmt .who b { color: var(--ink); font-weight: 500; }
 .cmt .txt { font: 17px/1.5 var(--serif); color: var(--text); margin-top: 4px; overflow-wrap: anywhere; }
 .cmt-form { margin-top: 18px; display: flex; flex-direction: column; gap: 10px; max-width: 640px; }
+.cmt-edit[hidden], .cmt .txt[hidden] { display: none; }
+.cmt-edit { margin-top: 8px; }
 .cmt-form textarea { width: 100%; min-height: 84px; padding: 12px; border: 1px solid var(--under); border-radius: 6px; background: transparent; font: 16px/1.5 var(--serif); }
 .list-image { margin-top: 18px; }
 .editorials { margin-top: 44px; }
