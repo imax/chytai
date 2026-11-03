@@ -170,11 +170,12 @@
               <input id="r-aq" type="search" placeholder="Назва, автор або ISBN" autocomplete="off" enterkeyhint="search" /></label>
           </div>
           <div id="home-body">
-            <div class="skeleton" aria-hidden="true">
-              <div class="sk-line"></div>
-              <div class="sk-card"><div class="sk-cover"></div><div class="sk-lines"><div></div><div></div><div class="sk-grow"></div><div class="sk-bar"></div></div></div>
-              <div class="sk-line"></div>
-              <div class="sk-shelf"><div></div><div></div><div></div><div></div></div>
+            <!-- While the library loads (Max 2026-11-03): the home page's own shape, covers shimmering. -->
+            <div class="skeleton r-skel" aria-hidden="true">
+              <section class="r-now"><div class="r-sec-head plain"><h2>Читаю зараз</h2></div>
+                <div class="r-now-row"><i class="sk-c"></i><div class="sk-t"><i></i><i></i></div></div><i class="sk-p"></i></section>
+              <section class="r-mine"><div class="r-sec-head"><h2>Мої книжки</h2></div>
+                <div class="r-grid"><i class="sk-c"></i><i class="sk-c"></i><i class="sk-c"></i><i class="sk-c"></i><i class="sk-c"></i><i class="sk-c"></i><i class="sk-c"></i><i class="sk-c"></i></div></section>
             </div>
             <p id="home-wait" class="home-wait hidden"><span class="spinner"></span>Бібліотека прокидається, ще кілька секунд…</p>
           </div>

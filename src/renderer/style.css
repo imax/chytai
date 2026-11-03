@@ -2045,3 +2045,20 @@ a.r-frow:hover .r-frow-go.plain { color: var(--r-ochre); }
 
 @keyframes r-slide-r { from { transform: translateX(40%); opacity: .4; } to { transform: none; opacity: 1; } }
 @keyframes r-slide-l { from { transform: translateX(-40%); opacity: .4; } to { transform: none; opacity: 1; } }
+
+/* Loading home (Max 2026-11-03): the page's shape with covers shimmering, instead of grey boxes. */
+.r-skel { display: block; animation: none; }
+.r-skel div, .r-skel section { background: none; border-radius: 0; }
+.r-skel i { display: block; background: linear-gradient(100deg, var(--r-rule) 30%, color-mix(in srgb, var(--r-ochre) 14%, var(--r-paper)) 50%, var(--r-rule) 70%); background-size: 300% 100%; animation: r-shimmer 1.6s ease-in-out infinite; border-radius: 2px; }
+.r-skel .sk-c { aspect-ratio: 2 / 3; }
+.r-skel .r-grid .sk-c:nth-child(2n) { animation-delay: .15s; } .r-skel .r-grid .sk-c:nth-child(3n) { animation-delay: .3s; }
+.r-skel .sk-t { display: flex; flex-direction: column; gap: 10px; }
+.r-skel .sk-t i { height: 18px; width: 80%; border-radius: 4px; }
+.r-skel .sk-t i + i { height: 12px; width: 45%; }
+.r-skel .sk-t { align-self: center; }
+.r-skel .sk-p { height: 46px; border-radius: 999px; margin: 18px 0 28px; }
+.r-skel .r-now-row { align-items: center; }
+.r-skel .r-sec-head h2 { opacity: .55; }
+@keyframes r-shimmer { from { background-position: 100% 0; } to { background-position: 0 0; } }
+@media (prefers-reduced-motion: reduce) { .r-skel i { animation: none; } }
+@media (min-width: 761px) { .r-skel .sk-p { display: none; } .r-skel .r-now { margin-bottom: 28px; } }
