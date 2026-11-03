@@ -25,7 +25,9 @@
   --shadow: 27, 26, 23;
   --serif: "Source Serif 4", Georgia, serif;
   --sans: Onest, -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif;
-  color-scheme: light;
+  /* «light dark», not «light»: Chrome on Android with «Darken websites» repaints a light-only page by itself,
+     and its repaint lost «Зберегти» on the shelf form (Max's Zenfone, 2026-11-03). Our own dark theme is below. */
+  color-scheme: light dark;
 }
 @media (prefers-color-scheme: dark) {
   :root {

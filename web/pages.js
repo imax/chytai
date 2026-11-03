@@ -116,6 +116,7 @@ function layout({ title, body, user, path = "", description = "", q = "", home =
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
 <title>${esc(title ? `${title} · Chytai` : "Chytai · читай більше")}</title>
 ${description ? `<meta name="description" content="${attr(description.slice(0, 200))}">` : ""}
 ${noindex || NOINDEX.has(path) ? `<meta name="robots" content="noindex">` : ""}
