@@ -817,7 +817,9 @@
 
   $("#shell").addEventListener("click", async (e) => {
     const el = e.target.closest("[data-menu], [data-aside], [data-open], [data-tab], [data-act], [data-note], [data-unwish], [data-page], [data-take], [data-paper-add]");
-    if (!el) return;
+    // #shell itself carries data-page (the page shown): a tap on anything else, the search field in the phone's
+    // panel too, came here as «Мої книжки» and closed the panel, so search did nothing on a phone (Max, 2026-11-03).
+    if (!el || el.id === "shell") return;
     if (el.dataset.menu) return bookMenu(el.dataset.menu, el);
     if (el.dataset.aside) return setAside(el.dataset.aside);
     if (el.dataset.take) return takeBook(el.dataset.take, el);
