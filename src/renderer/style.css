@@ -1545,7 +1545,6 @@ a.r-frow:hover .r-frow-go.plain { color: var(--r-ochre); }
   .mn-p { flex: 1; color: var(--m-ink3); }
   .mn-acts button { background: none; border: none; padding: 4px 0; font: inherit; color: var(--m-ochre); cursor: pointer; }
   .mn-acts .explain.has { text-decoration: underline dotted var(--m-bar); text-decoration-thickness: 1.5px; text-underline-offset: 4px; }
-  .mn-acts .more { color: var(--m-ink2); letter-spacing: .1em; }
   .mn-acts .delete { color: #a63a2a; }
   .mn-acts button:disabled { color: var(--m-ink3); }
 

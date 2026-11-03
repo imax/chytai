@@ -426,8 +426,7 @@
         <div class="mn-acts"><span class="mn-p">${p ? `стор. ${p.page}` : ""}<span class="mn-here"> · на екрані</span></span>
           <button type="button" class="explain${conv ? " has" : ""}">${conv ? "Пояснення" : "Пояснити"}</button>
           <button type="button" class="go">Перейти</button>
-          <button type="button" class="more" aria-label="Ще">···</button>
-          <button type="button" class="delete hidden">Видалити</button></div>`;
+          <button type="button" class="delete">Видалити</button></div>`;
       el.querySelector(".mn-q span").textContent = note.text;
       el.querySelector(".explain").onclick = async () => {
         if (conv) return openConvCard(conv);
@@ -437,10 +436,6 @@
       const go = el.querySelector(".go");
       if (noteReachable(note)) go.onclick = () => goToNote(note);
       else go.disabled = true;
-      el.querySelector(".more").onclick = () => {
-        el.querySelector(".more").classList.add("hidden");
-        el.querySelector(".delete").classList.remove("hidden");
-      };
       el.querySelector(".delete").onclick = async () => {
         try {
           await notesStore.notesDelete(current.path, note.id);
