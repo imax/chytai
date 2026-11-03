@@ -386,12 +386,12 @@
     }, 320);
   }
 
-  // Notes (9f): tabs for the whole book and this chapter, grouped by chapter, no cards.
+  // Notes (9f): tabs for the whole book and this chapter, newest first under chapter headings, no cards.
   let notesFilter = "all";
   function renderNotesPhone(box) {
     const here = $("#chapter-label").textContent.trim();
-    const order = (n) => (String(n.cfi).startsWith("epubcfi") ? pageOf(n.cfi)?.page ?? 1e9 : Number(String(n.cfi).split(":")[1]) || 1e9);
-    const all = [...notes].sort((a, b) => order(a) - order(b) || a.createdAt - b.createdAt);
+    // Newest first (Max); a chapter heading repeats when notes from two chapters alternate.
+    const all = [...notes].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
     const inChapter = all.filter((n) => here && n.chapter === here);
     const explained = (n) => [...conversations.values()].some((c) => c.cfiRange === n.cfi);
     const withConv = on() ? [] : all.filter(explained);
