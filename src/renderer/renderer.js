@@ -837,7 +837,8 @@ function handleSelection(range, cfiRange, ctx, frame) {
   bar.querySelector('[data-action="translate"]').hidden = isUkrainian(pendingSelection.text);
   const quote = pendingSelection.text.replace(/\s+/g, " ");
   bar.querySelector(".st-quote").textContent = quote.length > 300 ? quote.slice(0, 300) + "…" : quote;
-  setAskField("");
+  // A new selection starts with an empty field; moving the ends of the one on screen keeps what is written.
+  if (bar.classList.contains("hidden")) setAskField("");
   showSelToolbar(range, frame);
 }
 
