@@ -184,7 +184,7 @@
       ${sortedChats.length ? `<section class="pp-chats"><div class="r-sec-head"><h2>Запитання · ${chats.length}</h2></div>
         ${sortedChats.map((c) => {
           const last = c.turns[c.turns.length - 1] || {};
-          const live = conv?.chat === c ? conv : null;
+          const live = lives.get(c.id) || null;
           const on = openChat === c.id || !!live;
           const fq = (q) => `<div class="pp-chat-fq">${esc(q)}</div>`;
           const pending = live && (live.busy || live.error)
@@ -195,7 +195,7 @@
             ${on ? c.turns.map((t, i) => `${(i || c.sel) && t.q ? fq(t.q) : ""}<div class="pp-chat-a answer">${md(t.a)}</div>`).join("") + pending
               : `<div class="pp-chat-a short">${esc(String(last.a || "").replace(/[*_#>`]/g, "").slice(0, 400))}</div>`}
             <div class="pp-note-m">${esc([c.page ? `стор. ${c.page}` : "", when(c.at)].filter(Boolean).join(" · "))}${on && c.turns.length ? `<button type="button" class="r-link pp-more-q" data-pp-savechat="${esc(c.id)}">В нотатки</button><button type="button" class="r-link" data-pp-delchat="${esc(c.id)}">Видалити</button>` : ""}</div>
-            ${on && c.turns.length && !live?.busy ? `<form class="pp-fq" data-pp-fq="${esc(c.id)}"><input id="pp-fq" type="text" autocomplete="off" enterkeyhint="send" placeholder="Уточнити…" /><button type="submit" aria-label="Надіслати"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5M6 11l6-6 6 6"/></svg></button></form>` : ""}</div>`;
+            ${on && c.turns.length && !live?.busy ? `<form class="pp-fq" data-pp-fq="${esc(c.id)}"><input class="pp-fq-in" type="text" autocomplete="off" enterkeyhint="send" placeholder="Уточнити…" /><button type="submit" aria-label="Надіслати"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5M6 11l6-6 6 6"/></svg></button></form>` : ""}</div>`;
         }).join("")}</section>` : ""}
       <section class="pp-notes"><div class="r-sec-head"><h2>Нотатки${notes.length ? ` · ${notes.length}` : ""}</h2><button type="button" class="pp-addnote" data-pp="note">+ Нотатка</button></div>
         ${adding ? `<form class="pp-noteform" data-pp-form><textarea id="pp-note" rows="3" placeholder="Думка, цитата або що перечитати"></textarea>
@@ -225,11 +225,11 @@
     }
     if (e.target.matches("[data-pp-fq]")) {
       e.preventDefault();
-      const q = $("#pp-fq").value.trim();
+      const q = e.target.querySelector("input").value.trim();
       const c = chats.find((x) => x.id === e.target.dataset.ppFq);
-      if (!q || !c || conv?.busy) return;
-      if (conv?.chat !== c) conv = { chat: c, book, text: "", busy: false, reqId: null };
-      return turn(q);
+      if (!q || !c || lives.get(c.id)?.busy) return;
+      if (!lives.has(c.id)) lives.set(c.id, { chat: c, book, text: "", busy: false, reqId: null });
+      return turn(lives.get(c.id), q);
     }
     if (!e.target.matches("[data-pp-form]")) return;
     e.preventDefault();
@@ -533,10 +533,8 @@
     if (delChat) {
       const id = delChat.dataset.ppDelchat;
       chats = chats.filter((c) => c.id !== id);
-      if (conv?.chat.id === id) {
-        if (conv.busy) window.reader.abort(conv.reqId);
-        conv = null;
-      }
+      if (lives.get(id)?.busy) window.reader.abort(lives.get(id).reqId);
+      lives.delete(id);
       if (openChat === id) openChat = null;
       window.Shell.rerender();
       return window.reader.paperChatDelete(book.path, id).catch(() => {});
@@ -553,8 +551,8 @@
     const chat = e.target.closest("[data-chat]");
     if (chat && !e.target.closest("a, button") && !getSelection().toString() && (!chat.classList.contains("open") || e.target.closest(".pp-chat-q"))) {
       openChat = openChat === chat.dataset.chat ? null : chat.dataset.chat;
-      if (conv?.chat.id === chat.dataset.chat && !conv.busy) conv = null;
-      else if (conv && !conv.busy && conv.chat.id !== openChat) conv = null;
+      // Folding an answered question lets it go from the live ones; one still being answered stays open.
+      for (const [id, l] of lives) if (!l.busy && id !== openChat) lives.delete(id);
       return window.Shell.rerender();
     }
     const act = e.target.closest("[data-pp]")?.dataset.pp;
@@ -586,12 +584,13 @@
   // Redraws the page and puts the cursor back where it was (a phone would otherwise drop the keyboard).
   function redraw() {
     const a = document.activeElement;
-    const id = a?.id === "pp-q" || a?.id === "pp-fq" ? a.id : null;
-    const fq = $("#pp-fq")?.value || "";
-    const [s0, s1] = id ? [a.selectionStart, a.selectionEnd] : [];
+    // The question field keeps its text by itself (pageHtml); the follow-up fields by their chat.
+    const drafts = new Map([...document.querySelectorAll(".pp-fq")].map((f) => [f.dataset.ppFq, f.querySelector("input").value]));
+    const sel = a?.id === "pp-q" ? "#pp-q" : a?.classList?.contains("pp-fq-in") ? `[data-pp-fq="${a.closest(".pp-fq").dataset.ppFq}"] input` : null;
+    const [s0, s1] = sel ? [a.selectionStart, a.selectionEnd] : [];
     window.Shell.rerender();
-    if ($("#pp-fq") && fq) $("#pp-fq").value = fq;
-    const el = id && $(`#${id}`);
+    for (const f of document.querySelectorAll(".pp-fq")) if (drafts.get(f.dataset.ppFq)) f.querySelector("input").value = drafts.get(f.dataset.ppFq);
+    const el = sel && document.querySelector(sel);
     if (el) {
       el.focus({ preventScroll: true });
       try {
@@ -600,23 +599,25 @@
     }
   }
 
-  let conv = null; // the question being answered: { chat, book, q, text, busy, error, reqId, context }
+  // Questions being answered, or just answered and still unfolded, by chat id: { chat, book, q, text, busy,
+  // error, reqId, context }. Several can be answered at once (Max: a new question used to drop the one before).
+  const lives = new Map();
   function ask({ selection = "", before = "", after = "", question = "", pageText = "", page = book.page, image = "", img = "", marked = true }) {
     const b = book;
-    if (conv?.busy) window.reader.abort(conv.reqId);
-    chats = chats.filter((c) => c.turns.length); // a question that failed is let go
+    chats = chats.filter((c) => c.turns.length || lives.get(c.id)?.busy); // a question that failed is let go
+    for (const [id, l] of lives) if (!l.busy) lives.delete(id);
     const sel = selection || (image ? (marked ? "Обведене на фото" : question ? "" : "Сторінка з фото") : "");
     const chat = { id: `c${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`, turns: [], messages: null, sel, img, page: page || 0, at: Date.now() };
     chats = [...chats, chat];
     openChat = chat.id;
-    conv = { chat, book: b, text: "", busy: false, reqId: null };
+    const conv = { chat, book: b, text: "", busy: false, reqId: null };
+    lives.set(chat.id, conv);
     conv.context = { paper: true, bookTitle: b.title, author: b.authors.join(", "), page: page || 0, chapter: b.chapter || "", selection, before, after, pageText, ...(image ? { image, marked } : {}) };
-    turn(question || null);
+    turn(conv, question || null);
     $(".pp-chats")?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
-  function turn(question) {
-    const c = conv;
+  function turn(c, question) {
     c.q = question || "";
     c.text = "";
     c.error = null;
@@ -628,11 +629,11 @@
   }
 
   window.reader.onAiEvent((reqId, ev) => {
-    const c = conv;
-    if (!c || c.reqId !== reqId) return;
+    const c = [...lives.values()].find((l) => l.reqId === reqId);
+    if (!c) return;
     if (ev.type === "text") {
       c.text += ev.text;
-      const el = book === c.book && $(".pp-live");
+      const el = book === c.book && document.querySelector(`[data-chat="${c.chat.id}"] .pp-live`);
       if (el) el.innerHTML = md(c.text);
       return;
     }
@@ -644,7 +645,7 @@
         const ch = c.chat;
         ch.messages = ev.messages;
         ch.turns = [...ch.turns, { q: c.q, a: c.text }];
-        ch.at = Date.now();
+        // ch.at stays the time it was asked: the list doesn't reshuffle while answers come in.
         window.reader.paperChatSave(c.book.path, ch).then(() => c.book === book && loadIdeas(book)).catch(() => {});
       }
     } else if (ev.type === "aborted") {
