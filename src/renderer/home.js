@@ -291,8 +291,8 @@
         <div class="r-now-row"><button class="r-now-cover" data-open="${esc(cur.path)}">${rcover(cur)}</button>
           <div class="r-now-text"><span class="pp-tag">Паперова</span><h3 class="r-now-t">${esc(cur.title)}</h3>
             <p class="r-now-meta">${meta}</p>
-            <button class="r-pill r-wide" data-open="${esc(cur.path)}">Запитати про книжку</button></div></div>
-        <button class="r-pill r-narrow" data-open="${esc(cur.path)}">Запитати про книжку</button></section>`;
+            <button class="r-pill r-wide" data-open="${esc(cur.path)}">Продовжити читання</button></div></div>
+        <button class="r-pill r-narrow" data-open="${esc(cur.path)}">Продовжити читання</button></section>`;
     } else if (cur) {
       const where = [cur.chapter || (cur.parts ? `розділ ${cur.part} з ${cur.parts}` : "")].filter(Boolean).map(esc).join("");
       html += `<section class="r-now">${head("Читаю зараз", "", true)}
