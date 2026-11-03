@@ -18,9 +18,10 @@ self.addEventListener("install", (event) => {
       const cache = await caches.open(CACHE);
       // One asset at a time rather than cache.addAll: one missing file must not keep the reader from
       // working offline, and the fonts alone are a few dozen requests.
-      // The page itself only when it came as it is: signed out, / is a redirect to /login, and a
-      // redirected answer served to a navigation fails («Увійти» then showed a network error).
-      const add = (url) => (url === "/" ? fetch(url).then((res) => res.ok && !res.redirected && cache.put(url, res)) : cache.add(url));
+      // Only answers that came as they are: signed out, the server redirects every reader file to /login,
+      // and cache.add kept that login page as style.css and renderer.js (a fresh Android app showed the
+      // reader without styles). A redirected page served to a navigation fails too.
+      const add = (url) => fetch(url).then((res) => res.ok && !res.redirected && cache.put(url, res));
       await Promise.all(ASSETS.map((url) => add(url).catch((err) => console.warn("sw: not cached", url, err))));
     })(),
   );
@@ -86,7 +87,7 @@ self.addEventListener("fetch", (event) => {
       const hit = await cache.match(req, { ignoreSearch: true });
       if (hit) return hit;
       const res = await fetch(req);
-      if (res.ok && (res.type === "basic" || res.type === "default")) cache.put(req, res.clone()).catch(() => {});
+      if (res.ok && !res.redirected && (res.type === "basic" || res.type === "default")) cache.put(req, res.clone()).catch(() => {});
       return res;
     })(),
   );
