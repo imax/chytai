@@ -60,6 +60,18 @@ The question in Ukrainian, at most 9 words, natural and specific to this book, n
   return { questions: list.filter((q) => typeof q === "string" && q.trim()).slice(0, 1).map((q) => q.trim().slice(0, 120)), usage: r.usage, model: r.model };
 }
 
+// Dictated text, tidied (Max 2026-11-03: «Згадую Роман зачарована гора Томаса» should read «Згадую роман
+// «Зачарована гора» Томаса…»): punctuation, capitals, book titles in «», misheard words, nothing added.
+async function tidy(apiKey, { title, author, text }) {
+  const prompt = `A reader dictated this by voice while reading a printed copy of «${title}»${author ? ` by ${author}` : ""}. Speech recognition gave raw words without punctuation, sometimes with misheard words:
+<dictation>${text}</dictation>
+Rewrite it as the reader meant it: add punctuation and sentence capitals, put titles of books and works in «» with capitals as usual in Ukrainian (a word like «роман» before a title is not a name), fix obviously misheard words and names. Keep the reader's words, order and language; don't add, explain or shorten anything. Answer with the text only.`;
+  const r = await ask(apiKey, COVER_MODEL, prompt);
+  let out = r.text.replace(/^<dictation>|<\/dictation>$/g, "").trim();
+  if (!out || out.length > text.length * 1.6 + 20) out = text;
+  return { text: out, usage: r.usage, model: r.model };
+}
+
 // A paper book's kept talk without the photo in it: the picture is several hundred KB and is not kept.
 function stripImages(messages) {
   if (!Array.isArray(messages)) return null;
@@ -79,4 +91,4 @@ function listEntry(name, p, u) {
   };
 }
 
-module.exports = { NAME, readCover, readPage, suggest, stripImages, listEntry, COVER_MODEL, PAGE_MODEL };
+module.exports = { NAME, readCover, readPage, suggest, tidy, stripImages, listEntry, COVER_MODEL, PAGE_MODEL };

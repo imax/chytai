@@ -1947,6 +1947,20 @@ api.post("/paper/:name/suggest", guestsCannot("У демо-режимі папе
     res.json({ questions: [], error: describeError(err) });
   }
 });
+// Dictation tidied into sentences (Max 2026-11-03).
+api.post("/paper/:name/tidy", guestsCannot("У демо-режимі паперових книжок немає."), async (req, res) => {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  const p = userState(req.acct).paper?.[req.params.name];
+  const text = String(req.body?.text || "").trim().slice(0, 3000);
+  if (!p || !apiKey || !text) return res.json({ text });
+  try {
+    const r = await paper.tidy(apiKey, { title: p.title, author: p.author, text });
+    recordExplain(req, { model: r.model, usage: r.usage });
+    res.json({ text: r.text });
+  } catch (err) {
+    res.json({ text, error: describeError(err) });
+  }
+});
 api.delete("/paper/:name/chats/:id", guestsCannot("У демо-режимі паперових книжок немає."), (req, res) => {
   const u = userState(req.acct);
   const list = u.paperChats?.[req.params.name];

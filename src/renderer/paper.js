@@ -17,6 +17,8 @@
   let showText = false; // the attached photo's text is open to select from
   let adding = false; // the «+ Нотатка» form is open
   let openChat = null; // the question unfolded in the list
+  let allChats = false; // «Запитання» shows only the last few until «Показати всі» (Max 2026-11-03: long to scroll to notes)
+  const CHATS_SHOWN = 3;
   let idea = ""; // the question the AI suggests asking next, shown as the field's placeholder (v3)
   let ideasKey = "";
 
@@ -120,6 +122,7 @@
       scan = null;
       showText = adding = false;
       openChat = null;
+      allChats = false;
       notes = [];
       chats = [];
       idea = "";
@@ -168,7 +171,10 @@
           <div class="pp-scan-acts"><button type="button" class="r-pill" data-pp="explain">Пояснити</button><button type="button" class="r-pill-line" data-pp="quote">В нотатки</button></div></div>`;
     }
     const sortedNotes = [...notes].sort((x, y) => (y.createdAt || 0) - (x.createdAt || 0));
-    const sortedChats = [...chats].sort((x, y) => (y.at || 0) - (x.at || 0));
+    const allSorted = [...chats].sort((x, y) => (y.at || 0) - (x.at || 0));
+    const sortedChats = allChats ? allSorted : allSorted.filter((c, i) => i < CHATS_SHOWN || c.id === openChat || lives.has(c.id));
+    const moreChats = allSorted.length > CHATS_SHOWN
+      ? `<button type="button" class="pp-allq" data-pp="allq">${allChats ? "Згорнути" : `Показати всі ${allSorted.length}`}</button>` : "";
     return `<div class="pp">
       <div class="pp-bar"><button class="r-back" type="button" data-page="home" aria-label="Назад"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 5-7 7 7 7"/></svg></button>
         <button type="button" class="pp-mini" data-pp="about"><span class="pp-mini-c">${window.Shell.rcover(b)}</span><span class="pp-mini-x"><b>${esc(b.title)}</b><small>${esc([b.authors.join(", "), b.page ? `стор. ${b.page}` : ""].filter(Boolean).join(" · "))}</small></span></button>
@@ -196,7 +202,7 @@
               : `<div class="pp-chat-a short">${esc(String(last.a || "").replace(/[*_#>`]/g, "").slice(0, 400))}</div>`}
             <div class="pp-note-m">${esc([c.page ? `стор. ${c.page}` : "", when(c.at)].filter(Boolean).join(" · "))}${on && c.turns.length ? `<button type="button" class="r-link pp-more-q" data-pp-savechat="${esc(c.id)}">В нотатки</button><button type="button" class="r-link" data-pp-delchat="${esc(c.id)}">Видалити</button>` : ""}</div>
             ${on && c.turns.length && !live?.busy ? `<form class="pp-fq" data-pp-fq="${esc(c.id)}"><input class="pp-fq-in" type="text" autocomplete="off" enterkeyhint="send" placeholder="Уточнити…" /><button type="submit" aria-label="Надіслати"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5M6 11l6-6 6 6"/></svg></button></form>` : ""}</div>`;
-        }).join("")}</section>` : ""}
+        }).join("")}${moreChats}</section>` : ""}
       <section class="pp-notes"><div class="r-sec-head"><h2>Нотатки${notes.length ? ` · ${notes.length}` : ""}</h2><button type="button" class="pp-addnote" data-pp="note">+ Нотатка</button></div>
         ${adding ? `<form class="pp-ask pp-noteform" data-pp-form><textarea id="pp-note" rows="3" placeholder="Думка, цитата або що перечитати"></textarea>
           <div class="pp-ask-row"><button type="button" class="pp-tool${listening?.field === "pp-note" ? " on" : ""}" data-pp="mic-note" title="Надиктувати" aria-label="Надиктувати">${svgMic}</button><span class="pp-ask-sp"></span><button type="submit" class="r-pill">Зберегти</button></div></form>` : ""}
@@ -487,15 +493,18 @@
     rec.lang = "uk-UA";
     rec.interimResults = true;
     rec.continuous = true;
-    rec.onresult = (e) => {
-      const text = [...e.results].map((r) => r[0].transcript).join(" ").replace(/\s+/g, " ").trim();
-      if ($(`#${id}`)) $(`#${id}`).value = start + text;
-    };
     rec.onerror = (e) => e.error !== "no-speech" && e.error !== "aborted" && showNotice(e.error === "not-allowed" ? "Немає доступу до мікрофона." : "Не вдалося розпізнати мовлення.", false);
+    let said = "";
+    rec.onresult = (e) => {
+      said = [...e.results].map((r) => r[0].transcript).join(" ").replace(/\s+/g, " ").trim();
+      if ($(`#${id}`)) $(`#${id}`).value = start + said;
+    };
     rec.onend = () => {
-      if (listening !== rec) return;
-      listening = null;
-      document.querySelectorAll(".pp-tool.on").forEach((b) => b.classList.remove("on"));
+      if (listening === rec) {
+        listening = null;
+        document.querySelectorAll(".pp-tool.on").forEach((b) => b.classList.remove("on"));
+      }
+      tidyDictation(id, start, said);
     };
     try {
       rec.start();
@@ -506,6 +515,24 @@
     } catch {
       showNotice("Не вдалося увімкнути мікрофон.", false);
     }
+  }
+
+  // Recognised words become sentences (Max 2026-11-03): punctuation, capitals, «titles», misheard words. The
+  // field changes only if nobody typed in it meanwhile.
+  async function tidyDictation(id, start, said) {
+    const field = $(`#${id}`);
+    if (!said || !book || !field || said.split(" ").length < 2) return;
+    const name = book.path;
+    field.classList.add("pp-tidying");
+    let text = said;
+    try {
+      text = await window.reader.paperTidy(name, said);
+    } catch {
+      /* the words as heard will do */
+    }
+    const now = $(`#${id}`);
+    now?.classList.remove("pp-tidying");
+    if (now && book?.path === name && now.value === start + said) now.value = start + text;
   }
 
   // The selection in the photo's text, with a little of what is around it for context.
@@ -564,6 +591,10 @@
     if (act === "unattach") return (scan = null), (showText = false), window.Shell.rerender();
     if (act === "text") return (showText = !showText), window.Shell.rerender();
     if (act === "about") return window.Shell.showAbout(book);
+    if (act === "allq") {
+      allChats = !allChats;
+      return window.Shell.rerender();
+    }
     if (act === "note") {
       if (adding) return listening?.stop(), (adding = false), window.Shell.rerender();
       return (adding = true), window.Shell.rerender(), setTimeout(() => $("#pp-note")?.focus(), 30);

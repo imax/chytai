@@ -1965,6 +1965,8 @@ a.r-frow:hover .r-frow-go.plain { color: var(--r-ochre); }
 .pp-ask .pp-scan { border: none; padding: 4px 2px 0; background: none; }
 .pp-chats .r-sec-head, .pp-notes .r-sec-head { margin-bottom: 4px; }
 .pp-chat { padding: 14px 0; border-bottom: 1px solid var(--r-rule); cursor: pointer; }
+.pp-allq { display: block; width: 100%; margin: 4px 0 0; padding: 14px 0; border: none; background: none; color: var(--r-ochre); font: 500 15px var(--r-sans); text-align: left; cursor: pointer; }
+.pp-tidying { opacity: .55; transition: opacity .2s; }
 .pp-chat:last-child { border-bottom: none; }
 .pp-chat-q { font: 17px/1.35 var(--r-serif); }
 .pp-chat-a { margin-top: 6px; font-size: 14.5px; line-height: 1.55; }
