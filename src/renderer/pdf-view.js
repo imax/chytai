@@ -7,7 +7,9 @@ import { pdfToEpub, REFLOW_VERSION } from "./pdf-reflow.js";
 globalThis.pdfjsLib = pdfjsLib;
 pdfjsLib.GlobalWorkerOptions.workerSrc = new URL("../../node_modules/pdfjs-dist/legacy/build/pdf.worker.mjs", import.meta.url).href;
 
-const viewerLib = import("../../node_modules/pdfjs-dist/legacy/web/pdf_viewer.mjs");
+// Loaded only when a PDF opens: it uses the RegExp «v» flag (Chrome 112+), and an older Android
+// WebView failed to parse it on every start, though most readers never open a PDF.
+let viewerLib = null;
 
 const NEARBY_PAGES = 1; // pages on each side used as context for an explanation
 const BEFORE_CHARS = 2000;
@@ -32,7 +34,7 @@ class PdfView {
   }
 
   static async open(container, data, { position, onPageChange }) {
-    const { EventBus, PDFFindController, PDFLinkService, PDFViewer } = await viewerLib;
+    const { EventBus, PDFFindController, PDFLinkService, PDFViewer } = await (viewerLib ??= import("../../node_modules/pdfjs-dist/legacy/web/pdf_viewer.mjs"));
     const view = new PdfView();
     view.container = container;
     view.eventBus = new EventBus();
