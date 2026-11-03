@@ -1314,6 +1314,7 @@ async function loadChats() {
   }
   // The panel shows one explanation at a time: the newest kept one, until another is opened.
   if (none) window.PhoneRead?.showConv([...conversations.values()].pop());
+  showPendingChat();
 }
 
 // ---------- Notes: passages saved with "Зберегти", per reader and per book ----------
@@ -1493,6 +1494,22 @@ function openNoteInBook(path, note) {
   if (current?.path === path && (rendition || pdfView)) return goToNote(note);
   pendingJump = { path, note };
   window.reader.openPath(path);
+}
+// A kept explanation picked elsewhere (search): open its book, go to the passage and open its card.
+let pendingChat = null; // { path, id }
+function openChatInBook(path, id) {
+  pendingChat = { path, id };
+  if (current?.path === path && (rendition || pdfView)) return showPendingChat();
+  window.reader.openPath(path);
+}
+function showPendingChat() {
+  if (!pendingChat || pendingChat.path !== current?.path) return;
+  const conv = [...conversations.values()].find((c) => c.sid === pendingChat.id);
+  if (!conv) return;
+  pendingChat = null;
+  goToNote({ cfi: conv.cfiRange });
+  highlightConv(conv);
+  openConvCard(conv);
 }
 function jumpIfPending() {
   if (!pendingJump || pendingJump.path !== current?.path) return;
