@@ -523,12 +523,21 @@
   // open): a sideways drag moves it, and on release it settles open or closed.
   const PANEL_W = 318;
   let drag = null;
+  // In the app a swipe from the right edge opens «Додати книжку», and on it one from the left edge comes back
+  // (Max 2026-11-03).
+  const EDGE = 24;
   $("#shell").addEventListener("touchstart", (e) => {
     const x = e.touches[0].clientX;
     const open = $("#shell").classList.contains("panel-open");
-    drag = phone() && isOpen() && !document.querySelector("dialog[open]") && (open || (document.documentElement.classList.contains("in-app") && x < 24))
-      ? { x, y: e.touches[0].clientY, open, dir: null, pos: open ? PANEL_W : 0, t: Date.now() }
+    const app = document.documentElement.classList.contains("in-app");
+    const ok = phone() && isOpen() && !document.querySelector("dialog[open]");
+    const kind = !ok ? null
+      : open ? "panel"
+      : app && page === "add" && x < EDGE ? "back"
+      : app && x < EDGE ? "panel"
+      : app && page === "home" && !settings.guest && x > innerWidth - EDGE ? "add"
       : null;
+    drag = kind ? { kind, x, y: e.touches[0].clientY, open, dir: null, pos: open ? PANEL_W : 0, t: Date.now() } : null;
   }, { passive: true });
   $("#shell").addEventListener("touchmove", (e) => {
     if (!drag) return;
@@ -538,9 +547,14 @@
       if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
       drag.dir = Math.abs(dx) > Math.abs(dy) ? "h" : "v";
       if (drag.dir === "v") return (drag = null);
-      $("#shell").classList.add("panel-drag");
+      $("#shell").classList.add(drag.kind === "panel" ? "panel-drag" : "page-drag");
     }
     e.preventDefault();
+    if (drag.kind !== "panel") {
+      drag.pos = drag.kind === "add" ? Math.min(0, dx) : Math.max(0, dx);
+      $("#shell-main").style.transform = `translateX(${drag.pos}px)`;
+      return;
+    }
     drag.pos = Math.max(0, Math.min(PANEL_W, (drag.open ? PANEL_W : 0) + dx));
     $("#shell-main").style.transform = `translateX(${drag.pos}px)`;
   }, { passive: false });
@@ -550,6 +564,20 @@
     drag = null;
     if (d.dir !== "h") return;
     const fast = Date.now() - d.t < 250;
+    if (d.kind !== "panel") {
+      const go = Math.abs(d.pos) > (fast ? 30 : innerWidth / 3);
+      $("#shell").classList.remove("page-drag");
+      $("#shell-main").style.transform = "";
+      if (!go) return;
+      if (d.kind === "add") setPage("add");
+      else backHome();
+      const main = $("#shell-main");
+      main.classList.remove("slide-from-right", "slide-from-left");
+      void main.offsetWidth;
+      main.classList.add(d.kind === "add" ? "slide-from-right" : "slide-from-left");
+      main.addEventListener("animationend", () => main.classList.remove("slide-from-right", "slide-from-left"), { once: true });
+      return;
+    }
     const open = fast ? (d.open ? d.pos > PANEL_W - 40 : d.pos > 40) : d.pos > PANEL_W / 2;
     $("#shell").classList.remove("panel-drag");
     $("#shell-main").style.transform = "";
