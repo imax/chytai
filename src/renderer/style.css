@@ -2145,7 +2145,7 @@ html body.offline #sel-toolbar:not(.mark) [data-action="translate"] { color: var
 #ask-book .st-go { border: none; border-radius: 999px; padding: 9px 20px; background: var(--m-ochre); color: var(--m-on-fg); font: 500 15px var(--m-sans); cursor: pointer; }
 body.offline #ask-book .st-go { background: var(--m-off); color: var(--m-ink3); }
 #panel #cards #panel-empty { margin: 4px 20px 0; padding: 0; font: 400 13px/1.5 var(--m-sans); color: var(--m-ink3); text-align: left; }
-#panel #cards #panel-empty.hidden, #panel #cards .card.c-more { display: none; }
+#panel #cards #panel-empty.hidden, #panel #cards .card.c-more, #panel #cards .card.m-off.c-more { display: none; }
 #cards-more { align-self: flex-start; margin: 12px 20px 24px; padding: 0; border: none; background: none; font: 400 14px var(--m-sans); color: var(--m-ochre); cursor: pointer; }
 #cards-more.hidden { display: none; }
 

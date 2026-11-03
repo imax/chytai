@@ -1376,7 +1376,13 @@ let cardsAll = false;
 function listCards() {
   const cards = [...$("#cards").querySelectorAll(".card")];
   let folded = 0;
+  let open = null;
   for (const c of cards) {
+    // One question open at a time, as on a paper book's page; any other open one folds (Max 2026-11-03: he saw ~10).
+    if (!c.classList.contains("m-off")) {
+      if (!open) open = c;
+      else c.classList.add("m-off");
+    }
     const off = c.classList.contains("m-off");
     if (off) folded++;
     c.classList.toggle("c-more", !cardsAll && off && folded > 3);
