@@ -1,11 +1,13 @@
 // PDF support on top of pdf.js: continuous pages with a selectable text layer.
-import * as pdfjsLib from "../../node_modules/pdfjs-dist/build/pdf.mjs";
+// The legacy build: the regular one needs Iterator helpers (Chrome 122+), and an older Android
+// WebView threw «Iterator is not defined» on every page load.
+import * as pdfjsLib from "../../node_modules/pdfjs-dist/legacy/build/pdf.mjs";
 import { pdfToEpub, REFLOW_VERSION } from "./pdf-reflow.js";
 
 globalThis.pdfjsLib = pdfjsLib;
-pdfjsLib.GlobalWorkerOptions.workerSrc = new URL("../../node_modules/pdfjs-dist/build/pdf.worker.mjs", import.meta.url).href;
+pdfjsLib.GlobalWorkerOptions.workerSrc = new URL("../../node_modules/pdfjs-dist/legacy/build/pdf.worker.mjs", import.meta.url).href;
 
-const viewerLib = import("../../node_modules/pdfjs-dist/web/pdf_viewer.mjs");
+const viewerLib = import("../../node_modules/pdfjs-dist/legacy/web/pdf_viewer.mjs");
 
 const NEARBY_PAGES = 1; // pages on each side used as context for an explanation
 const BEFORE_CHARS = 2000;
