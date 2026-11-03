@@ -901,5 +901,35 @@
     "group": "Англійською",
     "wanted": true,
     "source": "https://standardebooks.org/ebooks/bram-stoker/dracula"
+  },
+  {
+    "name": "myrnyi-khiba-revut-voly-yak-yasla-povni.epub",
+    "title": "Хіба ревуть воли, як ясла повні?",
+    "authors": [
+      "Панас Мирний"
+    ],
+    "group": "Українська класика",
+    "wanted": true,
+    "source": "https://uk.wikisource.org/wiki/%D0%A5%D1%96%D0%B1%D0%B0_%D1%80%D0%B5%D0%B2%D1%83%D1%82%D1%8C_%D0%B2%D0%BE%D0%BB%D0%B8%2C_%D1%8F%D0%BA_%D1%8F%D1%81%D0%BB%D0%B0_%D0%BF%D0%BE%D0%B2%D0%BD%D1%96%3F"
+  },
+  {
+    "name": "ford-my-life-and-work.epub",
+    "title": "My Life and Work",
+    "authors": [
+      "Henry Ford"
+    ],
+    "group": "Англійською",
+    "wanted": true,
+    "source": "https://www.gutenberg.org/ebooks/7213"
+  },
+  {
+    "name": "shaw-pygmalion.epub",
+    "title": "Pygmalion",
+    "authors": [
+      "George Bernard Shaw"
+    ],
+    "group": "Англійською",
+    "wanted": true,
+    "source": "https://standardebooks.org/ebooks/george-bernard-shaw/pygmalion"
   }
 ]
