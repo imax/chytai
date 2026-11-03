@@ -585,6 +585,9 @@
     const note = form.querySelector("textarea[name=note]");
     const plain = "Кілька слів про книжку";
     status.addEventListener("change", () => (note.placeholder = status.value === "abandoned" ? note.dataset.why : plain));
+    // «Читаю зараз» belongs to «Читаю» only: it hides as soon as another status is picked (Max, 2026-11-03).
+    const now = form.parentElement.querySelector(".now-line");
+    if (now) status.addEventListener("change", () => (now.hidden = status.value !== "reading"));
   }
 
   // An empty «Рік» («без дати») would start its arrows from the minimum (1940), so this year becomes

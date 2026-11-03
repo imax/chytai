@@ -16,8 +16,10 @@
   --text: #3d3a33; /* notes and descriptions */
   --rule: #e4dfd5; /* between rows */
   --under: #c9c3b6; /* link underlines */
-  --accent: oklch(46% 0.09 155);
-  --accent-hover: oklch(40% 0.09 155);
+  /* Hex, not oklch: a phone browser without oklch (Chrome before 111, old Android WebViews) dropped the colour,
+     and «Зберегти» became dark text on the dark page (Max, 2026-11-03). */
+  --accent: #266741;
+  --accent-hover: #115531;
   --on-accent: #fff;
   --danger: #a33a2c;
   --shadow: 27, 26, 23;
@@ -28,7 +30,7 @@
 @media (prefers-color-scheme: dark) {
   :root {
     --paper: #1a1916; --ink: #ece8df; --muted: #a29d92; --text: #d3cec3; --rule: #34312b; --under: #57534a;
-    --accent: oklch(74% 0.09 155); --accent-hover: oklch(80% 0.09 155); --on-accent: #10140f; --danger: #e0806f; --shadow: 0, 0, 0;
+    --accent: #7cbc92; --accent-hover: #8ecfa5; --on-accent: #10140f; --danger: #e0806f; --shadow: 0, 0, 0;
     color-scheme: dark;
   }
 }
@@ -760,11 +762,11 @@ form.inline button:not(.btn) { background: none; border: 0; padding: 0; cursor: 
 .author-join { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
 .author-join input { flex: 1; min-width: 0; font: inherit; padding: 4px 6px; border: 1px solid var(--rule); background: var(--paper); color: inherit; }
 /* The owner's «Позначити як переклад»: blue, so it is not taken for a reader's button (Max, 2026-10-21). */
-.btn.pair-btn { background: oklch(93% 0.04 260); border-color: oklch(78% 0.08 260); color: oklch(38% 0.12 260); }
-.btn.pair-btn:hover { background: oklch(88% 0.06 260); color: oklch(30% 0.12 260); }
+.btn.pair-btn { background: #d9e9ff; border-color: #9ab9eb; color: #173f81; }
+.btn.pair-btn:hover { background: #c1d9ff; color: #012868; }
 @media (prefers-color-scheme: dark) {
-  .btn.pair-btn { background: oklch(32% 0.06 260); border-color: oklch(48% 0.08 260); color: oklch(88% 0.05 260); }
-  .btn.pair-btn:hover { background: oklch(38% 0.07 260); color: oklch(94% 0.04 260); }
+  .btn.pair-btn { background: #203351; border-color: #425e8b; color: #c5d9f9; }
+  .btn.pair-btn:hover { background: #2c4267; color: #dcecff; }
 }
 /* The other-language page of a book: the original under a Ukrainian edition and back (2026-10-21). */
 .twins { display: flex; flex-wrap: wrap; gap: 10px 22px; margin-top: 12px; }
