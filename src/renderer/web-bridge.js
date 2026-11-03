@@ -110,6 +110,14 @@
     await kvSet("here", { ...((await kvGet("here")) || {}), [path]: cfi });
   }
 
+  // Positions waiting for the server (see flushPositions), edited one at a time.
+  let queueChain = Promise.resolve();
+  const editQueued = (fn) => (queueChain = queueChain.then(async () => {
+    const positions = (await kvGet("positions")) || {};
+    if (fn(positions) !== false) await kvSet("positions", positions);
+  }).catch(() => {}));
+  const samePos = (a, b) => (typeof a === "string" ? a : a?.cfi) === (typeof b === "string" ? b : b?.cfi);
+  const unqueuePosition = (path, pos) => editQueued((positions) => (samePos(positions[path], pos) ? delete positions[path] : false));
   const enqueue = (item) => idb("queue", "readwrite", (s) => s.add(item)).catch(() => {});
   const noteIds = new Map(); // id given here while offline -> id the server gave it once synced
   const serverNoteId = (id) => noteIds.get(id) || id;
@@ -122,8 +130,7 @@
         const positions = (await kvGet("positions")) || {};
         for (const [path, pos] of Object.entries(positions)) {
           await api("PUT", "/api/position", typeof pos === "string" ? { path, cfi: pos } : { path, ...pos });
-          delete positions[path];
-          await kvSet("positions", positions);
+          await unqueuePosition(path, pos);
         }
         for (;;) {
           const [keys, items] = await Promise.all([idb("queue", "readonly", (s) => s.getAllKeys()), idb("queue", "readonly", (s) => s.getAll())]);
@@ -239,6 +246,10 @@
   }
 
   // Reading positions change on every page turn; batch them a little.
+  // Every position also waits in IndexedDB («positions», one per book, the latest wins) until the server has
+  // it, and opening a book sends what waits first. Without this, the last page turns before closing the app
+  // were lost: iOS suspends the app before the request sent on «hidden» is through, and the book opened a
+  // page or two back (Max 2026-11-03).
   const pendingPositions = new Map();
   let positionTimer = null;
   function flushPositions(keepalive) {
@@ -252,12 +263,12 @@
         credentials: "same-origin",
         keepalive,
       })
-        .then(() => setOffline(false))
-        .catch(async () => {
-          // No network: the position waits in IndexedDB (one per book, the latest wins) for the next sync.
-          setOffline(true);
-          await kvSet("positions", { ...((await kvGet("positions")) || {}), [path]: pos });
-        });
+        .then((res) => {
+          setOffline(false);
+          if (res.ok) unqueuePosition(path, pos);
+        })
+        // No network: the position waits for the next sync.
+        .catch(() => setOffline(true));
     }
     pendingPositions.clear();
   }
@@ -450,6 +461,7 @@
     // progress: { pct, chapter } when the reader knows them, for the home screen.
     savePosition: (bookPath, cfi, progress) => {
       pendingPositions.set(bookPath, { cfi, ...progress });
+      editQueued((positions) => void (positions[bookPath] = { cfi, ...progress }));
       clearTimeout(positionTimer);
       positionTimer = setTimeout(() => flushPositions(false), 600);
     },
