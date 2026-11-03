@@ -1,6 +1,6 @@
 /* global $, ePub, book, rendition, pdfView, current, settings, notes, conversations, PHONE, BASE_SCALE,
    chapterTitle, toggleChrome, showPanel, addNote, openConvCard, startExplanation, noteContext, goToNote, noteReachable,
-   notesStore, unmarkNote, redrawNote, renderNotes, showNotice, fitComment, scrolled, reopenBook, applyTheme, resizeView,
+   notesStore, isMine, noteTarget, unmarkNote, redrawNote, renderNotes, showNotice, fitComment, scrolled, reopenBook, applyTheme, resizeView,
    applyTypography, setFont, bookFontSize, closeSheets, rememberReturn */
 // The reading screen, turn 9 (phone) and turn 10 (computer) from Claude Design (2026-11-02).
 // Phone: two bars around the text (tap in the middle shows them), one sheet look for the explanation, notes,
@@ -334,7 +334,7 @@
     body.style.setProperty("--panel-top", full ? "52px" : "47%");
   }
   function syncPanelHead() {
-    $("#ps-title").textContent = ""; // the book's title is already on the page (Max 2026-11-03)
+    $("#ps-title").textContent = "Пояснення і нотатки"; // Max 2026-11-03; the nav button stays «Нотатки»
     $("#notes-head").textContent = `Нотатки${notes.length ? ` · ${notes.length}` : ""}`;
     $("#ps-action").classList.add("hidden");
   }
@@ -422,9 +422,10 @@
         box.appendChild(group);
       }
       const conv = [...conversations.values()].find((c) => c.cfiRange === note.cfi);
-      const p = String(note.cfi).startsWith("epubcfi") ? pageOf(note.cfi) : null;
+      const mine = isMine(note);
+      const p = String(noteTarget(note)).startsWith("epubcfi") ? pageOf(noteTarget(note)) : null;
       const el = document.createElement("article");
-      el.className = "mn note";
+      el.className = mine ? "mn note mine" : "mn note";
       el.dataset.id = note.id;
       el.innerHTML = `
         <div class="mn-q"><span></span></div>
@@ -454,9 +455,20 @@
         renderNotes();
       };
       const comment = el.querySelector(".note-comment");
-      comment.value = note.comment || "";
+      comment.value = mine ? note.text : note.comment || "";
       comment.oninput = () => fitComment(comment);
-      comment.onchange = async () => {
+      // A note in the reader's own words: the field is the note itself.
+      if (mine) comment.onchange = async () => {
+        const text = comment.value.trim();
+        if (!text) return (comment.value = note.text), fitComment(comment);
+        note.text = text;
+        try {
+          await notesStore.notesUpdate(current.path, note.id, { text });
+        } catch (err) {
+          if (err.message !== "login") showNotice(`Не вдалося зберегти нотатку: ${err.message}`, false);
+        }
+      };
+      else comment.onchange = async () => {
         note.comment = comment.value.trim();
         redrawNote(note);
         try {

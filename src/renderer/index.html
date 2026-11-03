@@ -144,7 +144,12 @@
         <div id="panel-empty" class="panel-empty">Можна також виділити текст у книжці.</div>
         <button type="button" id="cards-more" class="link hidden"></button>
       </div>
-      <h3 id="notes-head" class="m-sec">Нотатки</h3>
+      <!-- «Нотатки»: the reader's own thoughts can be added here too, as on a paper book's page (Max 2026-11-03). -->
+      <div class="m-sec m-sec-row"><h3 id="notes-head">Нотатки</h3><button type="button" id="note-add" class="link">+ Нотатка</button></div>
+      <form id="note-form" class="ask-form hidden" autocomplete="off">
+        <textarea id="nf-text" rows="3" placeholder="Думка, цитата або що перечитати" aria-label="Нотатка"></textarea>
+        <div class="st-row"><button type="button" class="pp-tool nf-mic" title="Надиктувати" aria-label="Надиктувати"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></button><span class="st-sp"></span><button type="submit" class="st-go">Зберегти</button></div>
+      </form>
       <div id="notes"></div>
       </div>
     </aside>

@@ -1064,7 +1064,7 @@ function makeConv({ cfiRange, context, mode, sid: keptId }) {
         <button class="link retry hidden">Ще раз</button>
       </span>
     </div>
-    <div class="c-acts"><span class="where"></span><button type="button" class="link c-note hidden">В нотатки</button><button type="button" class="link c-go">До тексту</button><button type="button" class="link forget hidden">Видалити</button></div>
+    <div class="c-acts"><span class="where"></span><button type="button" class="link c-note hidden">В нотатки</button><button type="button" class="link forget hidden">Видалити</button></div>
     <form class="followup"><input type="text" placeholder="Уточнити…" enterkeyhint="send" /><button type="submit" class="ask" aria-label="Запитати"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5M6 11l6-6 6 6"/></svg></button></form>`;
   card.querySelector(".quote").textContent = quote.length > 280 ? quote.slice(0, 280) + "…" : quote;
   if (!quote) card.classList.add("c-book"); // a question about the book, no passage
@@ -1083,7 +1083,12 @@ function makeConv({ cfiRange, context, mode, sid: keptId }) {
     openConvCard(conv);
     highlightConv(conv);
   });
-  card.querySelector(".c-go").onclick = () => goToConv(conv);
+  // The chapter · page line takes you to the passage (Max 2026-11-03: no «До тексту» button).
+  card.querySelector(".c-acts .where").onclick = (e) => {
+    if (!e.currentTarget.classList.contains("c-go")) return;
+    e.stopPropagation();
+    goToConv(conv);
+  };
   card.querySelector(".c-note").onclick = () =>
     addNote({ cfiRange: conv.cfiRange, text: conv.context.selection, context: conv.context }).then(() => syncConvActs(conv));
   syncConvActs(conv);
@@ -1391,7 +1396,7 @@ function syncConvActs(conv) {
   const card = conv.card;
   const saved = notes.some((n) => n.cfi === conv.cfiRange);
   card.querySelector(".c-note").classList.toggle("hidden", !conv.context.selection || saved || !String(conv.cfiRange).startsWith("epubcfi"));
-  card.querySelector(".c-go").classList.toggle("hidden", !conv.cfiRange || !String(conv.cfiRange).startsWith("epubcfi") || !rendition);
+  card.querySelector(".c-acts .where").classList.toggle("c-go", !(!conv.cfiRange || !String(conv.cfiRange).startsWith("epubcfi") || !rendition));
 }
 
 // To the passage (or the page a book question was asked on); a phone puts the list away to show it.
@@ -1464,6 +1469,31 @@ $("#ask-book").addEventListener("submit", (e) => {
 $("#ab-q").addEventListener("keydown", (e) => {
   if (e.key === "Enter" && !e.shiftKey && !e.isComposing) e.preventDefault(), $("#ask-book").requestSubmit();
 });
+// «+ Нотатка»: a thought of the reader's own, kept at the page on screen.
+function noteForm(open) {
+  const form = $("#note-form");
+  if (!open) window.Dictation.field() === "nf-text" && window.Dictation.stop();
+  form.classList.toggle("hidden", !open);
+  if (open) setTimeout(() => $("#nf-text").focus(), 30);
+}
+$("#note-add").onclick = () => noteForm($("#note-form").classList.contains("hidden"));
+$("#note-form .nf-mic").onclick = () => window.Dictation.toggle("nf-text", "#note-form .nf-mic", dictationTidy);
+$("#note-form").onsubmit = async (e) => {
+  e.preventDefault();
+  const text = $("#nf-text").value.trim();
+  if (!text || !current) return;
+  const at = rendition?.currentLocation?.()?.start?.cfi || "";
+  const note = { cfi: `mine:${Date.now().toString(36)}:${at}`, posKey: current.posKey, text, chapter: $("#chapter-label")?.textContent.trim() || "" };
+  try {
+    const saved = await notesStore.notesAdd(current.path, note);
+    if (!notes.some((n) => n.id === saved.id)) notes.push(saved);
+    $("#nf-text").value = "";
+    noteForm(false);
+    renderNotes();
+  } catch (err) {
+    if (err.message !== "login") showNotice(`Не вдалося зберегти нотатку: ${err.message}`, false);
+  }
+};
 $("#ask-book .ab-mic").onclick = () => window.Dictation.toggle("ab-q", "#ask-book .ab-mic", dictationTidy);
 
 // ---------- Kept explanations (Max 2026-11-03: saved like a paper book's questions) ----------
@@ -1585,8 +1615,13 @@ function noteReachable(note) {
   return !!rendition && (note.posKey || current.path) === current.posKey;
 }
 
+// A note in the reader's own words («+ Нотатка», 2026-11-03) has no passage: its cfi is «mine:<id>:<the page's cfi>»,
+// unique so that two thoughts on one page stay two notes, and nothing is drawn in the text for it.
+const isMine = (note) => String(note?.cfi || "").startsWith("mine:");
+const noteTarget = (note) => (isMine(note) ? note.cfi.split(":").slice(2).join(":") : note.cfi);
+
 function markNote(note) {
-  if (!rendition || !noteReachable(note)) return;
+  if (!rendition || !noteReachable(note) || isMine(note)) return;
   try {
     rendition.annotations.underline(note.cfi, { note: note.id }, () => openNote(note.id), "note-ul");
     decorateNoteMarks();
@@ -1730,8 +1765,8 @@ function goToNote(note) {
   if (note.cfi.startsWith("pdf:")) {
     const page = Number(note.cfi.split(":")[1]);
     if (pdfView && page) pdfView.viewer.currentPageNumber = page;
-  } else {
-    rendition?.display(note.cfi);
+  } else if (noteTarget(note)) {
+    rendition?.display(noteTarget(note));
   }
   if (PHONE.matches) showPanel(false);
 }

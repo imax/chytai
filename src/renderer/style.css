@@ -2199,7 +2199,7 @@ html body #sel-toolbar:not(.mark) .st-row .st-sp { flex: 1 1 4px; }
 html body #sel-toolbar:not(.mark) .st-row .st-link + .st-link { margin-left: 2px; }
 html body #sel-toolbar:not(.mark) .st-row .st-go { padding: 11px 22px; }
 /* One panel like a paper book's page (Max 2026-11-03): the field and «Запитання» on top, «Нотатки» under them,
-   one scroll. The head has no title: the book's name is already on the screen behind it. */
+   one scroll. The head says «Пояснення і нotatки». */
 #panel .panel-head .panel-tabs { display: none !important; }
 #panel .panel-head .ps-title { display: block; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 #panel #panel-body { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; display: flex; flex-direction: column; }
@@ -2212,6 +2212,30 @@ html body #panel #panel-body #cards, html body #panel #panel-body #notes { flex:
 #panel #q-head { margin-top: 16px; }
 #panel #notes { padding-bottom: calc(28px + env(safe-area-inset-bottom)); }
 @media (min-width: 761px) { #panel .m-sec { margin-left: 24px; margin-right: 24px; } }
-html body #panel .panel-head { border-bottom: none; }
-@media (max-width: 760px) { html body #panel .panel-head { padding-top: 12px; padding-bottom: 0; min-height: 40px; } }
-@media (min-width: 761px) { html body #panel .panel-head { height: 48px; } }
+#panel #cards .c-acts .where.c-go { cursor: pointer; }
+#panel #cards .c-acts .where.c-go:hover { color: var(--m-ink); }
+/* «+ Нотатка» (Max 2026-11-03): the same form as the question field above it. */
+#panel .m-sec-row { display: flex; align-items: baseline; justify-content: space-between; }
+#panel .m-sec-row h3 { margin: 0; font: inherit; letter-spacing: inherit; color: inherit; }
+#panel #note-add { padding: 0; border: none; background: none; font: 500 14px var(--m-sans); letter-spacing: 0; text-transform: none; color: var(--m-ochre); cursor: pointer; }
+#note-form {
+  display: flex; flex-direction: column; gap: 4px; margin: 14px 20px 6px; padding: 10px 12px 6px 14px; border: 1px solid var(--m-ochre);
+  border-radius: 14px; background: var(--m-card); font-family: var(--m-sans);
+}
+#note-form.hidden { display: none; }
+#nf-text {
+  width: 100%; min-height: 72px; max-height: 40vh; field-sizing: content; resize: none; border: none; outline: none; padding: 4px 0;
+  background: transparent; color: var(--m-ink); font: 400 17px/1.35 var(--m-serif);
+}
+#nf-text::placeholder { color: var(--m-ink3); }
+#note-form .st-row { display: flex; align-items: center; margin-left: -8px; }
+#note-form .st-sp { flex: 1; }
+#note-form .pp-tool { width: 40px; height: 40px; display: inline-flex; align-items: center; justify-content: center; border: none; border-radius: 50%; background: none; color: var(--m-ink2); padding: 0; cursor: pointer; }
+#note-form .pp-tool svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; }
+#note-form .pp-tool.on { color: #fff; background: var(--m-red); animation: pp-pulse 1.4s ease-in-out infinite; }
+#note-form .st-go { border: none; border-radius: 999px; padding: 9px 20px; background: var(--m-ochre); color: var(--m-on-fg); font: 500 15px var(--m-sans); cursor: pointer; }
+@media (min-width: 761px) { #note-form { margin-left: 24px; margin-right: 24px; } }
+/* A note in the reader's own words: the words themselves, editable, with no passage behind them. */
+#notes .mn.mine .mn-q { display: none; }
+#notes .mn.mine .note-comment { font: 400 17px/1.4 var(--m-serif); color: var(--m-ink); }
+#notes .mn.mine .explain { display: none; }
