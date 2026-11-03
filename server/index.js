@@ -23,6 +23,7 @@ const { checkUpload } = require("./content");
 const { cost } = require("./admin");
 const { createProtected } = require("./protected");
 const paper = require("./paper");
+const { searchReader } = require("./search");
 
 const ROOT = path.join(__dirname, "..");
 loadDotEnv(path.join(ROOT, ".env"));
@@ -1035,6 +1036,13 @@ api.get("/notes", (req, res) => {
 api.get("/notes/all", (req, res) => {
   const u = req.guest ? guestState(req.guest) : userState(req.acct);
   res.json({ books: u.notes || {} });
+});
+
+// The panel's search goes past titles: the reader's notes and talks with Claude (server/search.js).
+api.get("/search", (req, res) => {
+  const q = String(req.query.q || "").slice(0, 200);
+  const u = req.guest ? guestState(req.guest) : userState(req.acct);
+  res.json({ hits: searchReader(u, q) });
 });
 
 api.post("/notes", (req, res) => {

@@ -1162,6 +1162,19 @@ body[data-theme="dark"] #shell, body[data-theme="dark"] #book-menu, body[data-th
 .r-prow-p { font-size: 12px; color: var(--r-ink2); }
 .r-prow:hover .r-prow-t { color: var(--r-ochre); }
 .r-pnone { margin: 0; font-size: 13px; color: var(--r-ink2); }
+/* Search past the titles: notes and explanations, each with its book and a piece of text (2026-11-03). */
+#r-pfound { gap: 2px; }
+.r-phead { margin: 14px 0 4px; font: 600 11px var(--r-sans); letter-spacing: .06em; text-transform: uppercase; color: var(--r-ink2); }
+.r-phead:first-child { margin-top: 0; }
+.r-phit { display: flex; flex-direction: column; gap: 3px; padding: 8px 0; border: none; border-bottom: 1px solid var(--r-pline); background: none; color: var(--r-ink); text-align: left; cursor: pointer; }
+.r-phit:last-child, .r-phit:has(+ .r-phead) { border-bottom: none; }
+.r-phit-b { font: 12px var(--r-sans); color: var(--r-ink2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.r-phit-q { font: italic 13px/1.4 var(--r-serif); color: var(--r-ink2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.r-phit-t { font: 13px/1.45 var(--r-serif); display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
+.r-phit-t.quote::before { content: "«"; }
+.r-phit-t.quote::after { content: "»"; }
+.r-phit mark { background: rgba(225, 170, 60, .35); color: inherit; border-radius: 2px; padding: 0 1px; }
+.r-phit:hover .r-phit-b { color: var(--r-ochre); }
 .r-pspace { flex: 1; }
 .r-pfeedback { padding-top: 16px; border-top: 1px solid var(--r-pline); font-size: 13px; color: var(--r-link); text-decoration: none; }
 .r-pfeedback:hover { color: var(--r-ochre); }
@@ -1290,6 +1303,9 @@ a.r-frow:hover .r-frow-go.plain { color: var(--r-ochre); }
   .r-pnav button:hover, .r-pnav button.on { background: none; }
   .r-prow { grid-template-columns: 26px 1fr auto; gap: 12px; padding: 5px 0; font-size: 15px; }
   .r-prow .r-cover { width: 26px; }
+  .r-phit-b { font-size: 13px; }
+  .r-phit-q { font-size: 15px; }
+  .r-phit-t { font-size: 15px; }
   .r-pfeedback { font-size: 14px; }
   .r-pme { grid-template-columns: 32px 1fr auto; }
   .r-pava { width: 32px; height: 32px; line-height: 32px; }

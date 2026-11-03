@@ -244,7 +244,9 @@
     let html = "";
     if (q) {
       const hits = books.filter((b) => matches(b, q)).slice(0, 30);
-      html = hits.length ? hits.map(prow).join("") : `<p class="r-pnone">Нічого не знайшлося.</p>`;
+      const more = deepHtml(q, books);
+      html = hits.length || more ? (more && hits.length ? `<h3 class="r-phead">Книжки</h3>` : "") + hits.map(prow).join("") + more
+        : deep.q === q || deep.offline || q.length < 2 || !window.reader.searchMine ? `<p class="r-pnone">Нічого не знайшлося.</p>` : "";
     }
     const recent = books.filter((b) => b.openedAt).sort((x, y) => y.openedAt - x.openedAt).slice(0, 4);
     const all = `${html}\u0000${recent.map(prow).join("")}\u0000${books.length}|${trashCount}|${page}|${settings.user}`;
@@ -261,6 +263,70 @@
     $("#r-avatar").textContent = (settings.user || "Ч").trim()[0].toUpperCase();
     $("#r-me-name").textContent = settings.user || "";
   }
+  // Past the titles (Max, 2026-11-03): the query is also looked for in your notes, their thoughts and your talks
+  // with Claude (GET /api/search, server/search.js). A hit shows its book, a piece of text and opens at its place.
+  let deep = { q: "", hits: [], offline: false };
+  let deepTimer = 0;
+  function askDeep() {
+    clearTimeout(deepTimer);
+    const q = norm($("#r-pq").value);
+    if (!q || q.length < 2 || !window.reader.searchMine) return;
+    deepTimer = setTimeout(async () => {
+      try {
+        const hits = await window.reader.searchMine($("#r-pq").value.trim());
+        if (norm($("#r-pq").value) !== q) return;
+        deep = { q, hits: hits || [], offline: !hits };
+      } catch {
+        deep = { q, hits: [], offline: true };
+      }
+      renderPanel();
+    }, 250);
+  }
+  const KINDS = { note: "Нотатки", chat: "Пояснення", paperChat: "Пояснення" };
+  function markWords(text, q) {
+    const ws = [...new Set(q.split(" ").filter((w) => w.length >= 2))];
+    let out = esc(text);
+    for (const w of ws.sort((x, y) => y.length - x.length)) out = out.replace(new RegExp(esc(w).replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi"), (m) => `\u0001${m}\u0002`);
+    return out.replace(/\u0001/g, "<mark>").replace(/\u0002/g, "</mark>");
+  }
+  function deepHtml(q, books) {
+    if (deep.q !== q || !deep.hits.length) return "";
+    const byPath = new Map(books.map((b) => [b.path, b]));
+    let html = "";
+    for (const label of [...new Set(Object.values(KINDS))]) {
+      const rows = deep.hits.filter((h) => KINDS[h.kind] === label && byPath.has(h.book));
+      if (!rows.length) continue;
+      html += `<h3 class="r-phead">${label}</h3>` + rows.map((h) => {
+        const b = byPath.get(h.book);
+        const i = deep.hits.indexOf(h);
+        const said = h.kind !== "note" && (h.field === "a" || h.field === "q") && h.quote ? `<span class="r-phit-q">${esc(h.quote)}</span>` : "";
+        return `<button type="button" class="r-phit" data-hit="${i}"><span class="r-phit-b">${esc(b.title)}${h.where ? ` · ${esc(h.where)}` : ""}</span>${said}<span class="r-phit-t${h.field === "text" || h.field === "sel" ? " quote" : ""}">${markWords(h.text, q)}</span></button>`;
+      }).join("");
+    }
+    return html;
+  }
+  function openHit(i) {
+    const h = deep.hits[i];
+    if (!h) return;
+    panel(false);
+    if (h.kind === "paperChat") {
+      openBook(h.book);
+      // The question comes unfolded once the book's talks are there.
+      let tries = 0;
+      const unfold = () => {
+        const el = document.querySelector(`.pp-chat[data-chat="${CSS.escape(h.id)}"]`);
+        if (!el) return ++tries < 30 && setTimeout(unfold, 100);
+        if (!el.classList.contains("open")) el.querySelector(".pp-chat-q")?.click();
+        setTimeout(() => document.querySelector(`.pp-chat[data-chat="${CSS.escape(h.id)}"]`)?.scrollIntoView({ block: "start", behavior: "smooth" }), 50);
+      };
+      return unfold();
+    }
+    if (h.kind === "chat" && typeof window.openChatInBook === "function") return window.openChatInBook(h.book, h.id);
+    if (h.kind === "note" && lib.books.find((b) => b.path === h.book)?.paper) return openBook(h.book);
+    if (h.cfi) return openNoteInBook(h.book, { id: h.id, cfi: h.cfi, posKey: h.posKey });
+    openBook(h.book);
+  }
+
   const prow = (b) => `<button type="button" class="r-prow" data-open="${esc(b.path)}">${rcover(b)}<span class="r-prow-t">${esc(b.title)}</span><span class="r-prow-p">${b.finished ? "✓" : b.paper ? (b.page ? `стор. ${b.page}` : "") : b.pct != null ? `${b.pct}%` : ""}</span></button>`;
 
   function renderHome() {
@@ -408,7 +474,7 @@
     if ($("#r-aq").value) ($("#r-aq").value = ""), $("#r-aq").dispatchEvent(new Event("input"));
     else backHome();
   });
-  $("#r-pq").addEventListener("input", renderPanel);
+  $("#r-pq").addEventListener("input", () => (renderPanel(), askDeep()));
   $("#r-pq").addEventListener("keydown", (e) => {
     if (e.key === "Escape") e.preventDefault(), ($("#r-pq").value = ""), renderPanel(), $("#r-pq").blur(), panel(false);
     if (e.key === "Enter") $("#r-pfound [data-open]")?.click();
@@ -816,7 +882,7 @@
   }
 
   $("#shell").addEventListener("click", async (e) => {
-    const el = e.target.closest("[data-menu], [data-aside], [data-open], [data-tab], [data-act], [data-note], [data-unwish], [data-page], [data-take], [data-paper-add]");
+    const el = e.target.closest("[data-menu], [data-aside], [data-hit], [data-open], [data-tab], [data-act], [data-note], [data-unwish], [data-page], [data-take], [data-paper-add]");
     // #shell itself carries data-page (the page shown): a tap on anything else, the search field in the phone's
     // panel too, came here as «Мої книжки» and closed the panel, so search did nothing on a phone (Max, 2026-11-03).
     if (!el || el.id === "shell") return;
@@ -825,6 +891,7 @@
     if (el.dataset.take) return takeBook(el.dataset.take, el);
     if (el.dataset.paperAdd != null) return paperFromCatalog(Number(el.dataset.paperAdd));
     if (el.dataset.page) return el.dataset.page === "home" && page !== "home" ? backHome() : setPage(el.dataset.page);
+    if (el.dataset.hit != null) return openHit(Number(el.dataset.hit));
     if (el.dataset.open != null) return panel(false), openBook(el.dataset.open);
     if (el.dataset.tab) {
       // The «Мої книжки» tab always shows all your books: a filter typed earlier goes (Max, 2026-11-01).
