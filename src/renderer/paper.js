@@ -198,8 +198,8 @@
             ${on && c.turns.length && !live?.busy ? `<form class="pp-fq" data-pp-fq="${esc(c.id)}"><input class="pp-fq-in" type="text" autocomplete="off" enterkeyhint="send" placeholder="Уточнити…" /><button type="submit" aria-label="Надіслати"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5M6 11l6-6 6 6"/></svg></button></form>` : ""}</div>`;
         }).join("")}</section>` : ""}
       <section class="pp-notes"><div class="r-sec-head"><h2>Нотатки${notes.length ? ` · ${notes.length}` : ""}</h2><button type="button" class="pp-addnote" data-pp="note">+ Нотатка</button></div>
-        ${adding ? `<form class="pp-noteform" data-pp-form><textarea id="pp-note" rows="3" placeholder="Думка, цитата або що перечитати"></textarea>
-          <div><button type="button" class="pp-tool${listening?.field === "pp-note" ? " on" : ""}" data-pp="mic-note" title="Надиктувати" aria-label="Надиктувати">${svgMic}</button><button type="submit" class="r-pill">Зберегти</button><button type="button" class="r-link" data-pp="note-cancel">Скасувати</button></div></form>` : ""}
+        ${adding ? `<form class="pp-ask pp-noteform" data-pp-form><textarea id="pp-note" rows="3" placeholder="Думка, цитата або що перечитати"></textarea>
+          <div class="pp-ask-row"><button type="button" class="pp-tool${listening?.field === "pp-note" ? " on" : ""}" data-pp="mic-note" title="Надиктувати" aria-label="Надиктувати">${svgMic}</button><span class="pp-ask-sp"></span><button type="submit" class="r-pill">Зберегти</button></div></form>` : ""}
         ${sortedNotes.length ? sortedNotes.map((n) => `<div class="pp-note${n.quote ? " q" : ""}"><div class="pp-note-t">${esc(n.text)}</div>
           ${n.comment ? `<div class="pp-note-c">${md(n.comment)}</div>` : ""}
           <div class="pp-note-m">${esc(n.chapter || "")}<button type="button" class="r-link" data-pp-del="${esc(n.id)}">Видалити</button></div></div>`).join("")
@@ -564,7 +564,10 @@
     if (act === "unattach") return (scan = null), (showText = false), window.Shell.rerender();
     if (act === "text") return (showText = !showText), window.Shell.rerender();
     if (act === "about") return window.Shell.showAbout(book);
-    if (act === "note") return (adding = true), window.Shell.rerender(), setTimeout(() => $("#pp-note")?.focus(), 30);
+    if (act === "note") {
+      if (adding) return listening?.stop(), (adding = false), window.Shell.rerender();
+      return (adding = true), window.Shell.rerender(), setTimeout(() => $("#pp-note")?.focus(), 30);
+    }
     if (act === "note-cancel") return listening?.stop(), (adding = false), window.Shell.rerender();
     if (act === "explain" || act === "quote") {
       const s = selected();
