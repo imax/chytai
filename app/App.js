@@ -17,7 +17,10 @@ import * as Updates from 'expo-updates';
 import { WebView } from 'react-native-webview';
 
 export const READER_URL = 'https://chytai.fly.dev';
-const READER_HOST = new URL(READER_URL).host;
+// The reader's own addresses: chytai.fly.dev, and app.chytai.org.ua, where the server sends a request
+// it does not see as the app's (on Android the very first one can go out before the WebView adds
+// ChytaiApp to the user agent). Both stay inside the app.
+const READER_HOSTS = new Set([new URL(READER_URL).host, 'app.chytai.org.ua']);
 
 // The reader's own background colours (style.css), so the native area behind the page matches
 // while it loads and the splash screen does not flash white on the dark theme.
@@ -128,7 +131,7 @@ function Reader() {
     if (request.isTopFrame === false) return true;
     let host = '';
     try { host = new URL(request.url).host; } catch { return true; }
-    if (host === READER_HOST || request.url.startsWith('about:') || request.url.startsWith('blob:')) return true;
+    if (READER_HOSTS.has(host) || request.url.startsWith('about:') || request.url.startsWith('blob:')) return true;
     Linking.openURL(request.url).catch(() => {});
     return false;
   }, []);
