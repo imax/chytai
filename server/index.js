@@ -1439,7 +1439,9 @@ function customCover(lib, name) {
 api.get("/cover", async (req, res) => {
   const name = safeBookName(req.query.path);
   const demo = req.guest ? guestBooks(req).find((d) => d.name === name) : null;
-  const file = req.guest ? demo && path.join(demo.dir, demo.name) : readerFile(req.lib, name);
+  let file = req.guest ? demo && path.join(demo.dir, demo.name) : readerFile(req.lib, name);
+  // A book in «Нещодавно видалені» keeps its cover there.
+  if (file && !fs.existsSync(file) && !req.guest && req.lib.meta.trash?.[name]) file = trashFile(req.lib, name);
   if (!file || !fs.existsSync(file)) return res.status(404).end();
   const custom = !req.guest && (customCover(req.lib, name) || ([FREE_DIR, FREE_VOLUME_DIR].some((d) => file.startsWith(d + path.sep)) && freeCover(name)));
   if (custom) {
@@ -1760,7 +1762,11 @@ api.get("/trash", async (req, res) => {
   const books = names.map((n) => {
     const b = scanned.find((x) => path.basename(x.path) === n) || { title: n.replace(/\.[^.]+$/, ""), authors: [] };
     const m = meta[n];
-    return { path: n, title: m?.title || b.title, authors: m?.authors?.length ? m.authors : b.authors || [], deletedAt: trash[n].at, until: trash[n].at + TRASH_DAYS * 864e5 };
+    const custom = customCover(req.lib, n);
+    return {
+      path: n, title: m?.title || b.title, authors: m?.authors?.length ? m.authors : b.authors || [], deletedAt: trash[n].at, until: trash[n].at + TRASH_DAYS * 864e5,
+      ext: path.extname(n).slice(1).toLowerCase(), mtime: b.mtime || 0, coverAt: custom ? Math.round(fs.statSync(custom).mtimeMs) : 0,
+    };
   }).sort((x, y) => y.deletedAt - x.deletedAt);
   res.json({ books, days: TRASH_DAYS });
 });

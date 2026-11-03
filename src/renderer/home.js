@@ -1119,9 +1119,8 @@
     trashCount = books.length;
     const left = (until) => Math.max(1, Math.ceil((until - Date.now()) / DAY));
     box.innerHTML = books.length
-      ? books.map((b) => `<li>${rcover(b, null)}<span class="row-text"><span class="t">${esc(b.title)}</span><span class="m">${esc(b.authors[0] || "")}${b.authors[0] ? " · " : ""}ще ${left(b.until)} ${plural(left(b.until), "день", "дні", "днів")}</span></span>
-          <button type="button" class="r-pill-line" data-restore="${esc(b.path)}">Відновити</button>
-          <button type="button" class="r-forget" data-forget="${esc(b.path)}">Видалити назавжди</button></li>`).join("")
+      ? books.map((b) => `<li>${rcover(b)}<span class="row-text"><span class="t">${esc(b.title)}</span><span class="m">${esc(b.authors[0] || "")}${b.authors[0] ? " · " : ""}ще ${left(b.until)} ${plural(left(b.until), "день", "дні", "днів")}</span>
+          <span class="tr-acts"><button type="button" class="tr-restore" data-restore="${esc(b.path)}">Відновити</button><button type="button" class="r-forget" data-forget="${esc(b.path)}">Видалити назавжди</button></span></span></li>`).join("")
       : `<li class="m">Порожньо.</li>`;
   }
   $("#trash-list").addEventListener("click", async (e) => {
