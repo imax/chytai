@@ -1114,7 +1114,9 @@ aside .side-lists + .label, aside p + .label, aside dialog + .label { margin-top
 .ctopic .t b { font: 600 18px/1.3 var(--serif); }
 .ctopic:hover .t b { color: var(--accent); }
 .ctopic .m { grid-column: 1; font-size: 13px; color: var(--muted); }
-.ctopic .bk { grid-column: 2; grid-row: 1 / span 2; display: flex; align-items: center; gap: 10px; max-width: 220px; font-size: 13px; color: var(--muted); }
+/* The book sits in a fixed column, cover at the same x and top in every row (Max, 2026-11-03: «not aligned»). */
+.ctopic .bk { grid-column: 2; grid-row: 1 / span 2; align-self: start; display: flex; align-items: flex-start; gap: 10px; width: 200px; font-size: 13px; line-height: 1.35; color: var(--muted); }
+.ctopic .bk > span:last-child { padding-top: 2px; }
 .ctopic .bk > span:last-child { overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
 .ctopic.pinned .t b::before { content: "📌 "; font-size: 14px; }
 .spoil-tag { display: inline-block; padding: 1px 8px; border-radius: 10px; background: var(--rule); color: var(--muted); font: 500 12px/1.6 var(--sans); vertical-align: 2px; }
@@ -1148,7 +1150,7 @@ aside .side-lists + .label, aside p + .label, aside dialog + .label { margin-top
 .form p.hint { margin-top: -8px; }
 @media (max-width: 760px) {
   .ctopic { grid-template-columns: minmax(0, 1fr); }
-  .ctopic .bk { grid-column: 1; grid-row: auto; max-width: none; }
+  .ctopic .bk { grid-column: 1; grid-row: auto; width: auto; align-items: center; }
   .topic-head h1 { font-size: 28px; }
   .op .txt { font-size: 17px; }
   .spoil-gate { top: 20px; padding: 20px; }
