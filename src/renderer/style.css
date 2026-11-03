@@ -2187,7 +2187,7 @@ body.offline #ask-book .st-go { background: var(--m-off); color: var(--m-ink3); 
   #panel #cards .card { padding: 16px 24px 18px; gap: 10px; }
   #panel #cards .card .followup { margin: 4px 0 0; padding: 0; }
 }
-/* The bottom bar has four buttons since «Запитати» (Max 2026-11-03: it wrapped to two rows). */
+/* The bottom bar keeps three buttons (Max 2026-11-03); the «Аа» rules below stay for the top bar on a phone. */
 #m-look { flex: none; width: 40px; height: 40px; display: grid; place-items: center; padding: 0; border: none; background: none; color: var(--m-ink); cursor: pointer; }
 #m-look .m-aa { font: 400 20px/22px var(--m-serif); }
 @media (min-width: 761px) { #m-top #m-look { display: none; } }
