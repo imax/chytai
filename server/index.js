@@ -234,7 +234,7 @@ function trimGuestRequest(request) {
   };
   if (request.context) {
     const c = request.context;
-    request.context = { ...c, before: cut(c.before, true), selection: cut(c.selection), after: cut(c.after), question: c.question && cut(c.question) };
+    request.context = { ...c, before: cut(c.before, true), selection: cut(c.selection), after: cut(c.after), page: c.page && cut(c.page), question: c.question && cut(c.question) };
   }
   if (Array.isArray(request.messages) && request.messages.length > GUEST_MAX_TURNS) {
     request.messages = [request.messages[0], ...request.messages.slice(-(GUEST_MAX_TURNS - 1))];
@@ -1963,6 +1963,19 @@ api.post("/paper/:name/tidy", guestsCannot("У демо-режимі папер�
   if (!p || !apiKey || !text) return res.json({ text });
   try {
     const r = await paper.tidy(apiKey, { title: p.title, author: p.author, text });
+    recordExplain(req, { model: r.model, usage: r.usage });
+    res.json({ text: r.text });
+  } catch (err) {
+    res.json({ text, error: describeError(err) });
+  }
+});
+// The same for an e-book's question field (2026-11-03): the reader's page sends the book's title and author.
+api.post("/tidy", guestsCannot("У демо-режимі диктування не доопрацьовується."), async (req, res) => {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  const text = String(req.body?.text || "").trim().slice(0, 3000);
+  if (!apiKey || !text) return res.json({ text });
+  try {
+    const r = await paper.tidy(apiKey, { title: String(req.body?.title || "").slice(0, 300), author: String(req.body?.author || "").slice(0, 200), text, ebook: true });
     recordExplain(req, { model: r.model, usage: r.usage });
     res.json({ text: r.text });
   } catch (err) {

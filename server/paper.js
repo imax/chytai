@@ -62,8 +62,8 @@ The question in Ukrainian, at most 9 words, natural and specific to this book, n
 
 // Dictated text, tidied (Max 2026-11-03: «Згадую Роман зачарована гора Томаса» should read «Згадую роман
 // «Зачарована гора» Томаса…»): punctuation, capitals, book titles in «», misheard words, nothing added.
-async function tidy(apiKey, { title, author, text }) {
-  const prompt = `A reader dictated this by voice while reading a printed copy of «${title}»${author ? ` by ${author}` : ""}. Speech recognition gave raw words without punctuation, sometimes with misheard words:
+async function tidy(apiKey, { title, author, text, ebook = false }) {
+  const prompt = `A reader dictated this by voice while reading ${ebook ? "" : "a printed copy of "}«${title}»${author ? ` by ${author}` : ""}. Speech recognition gave raw words without punctuation, sometimes with misheard words:
 <dictation>${text}</dictation>
 Rewrite it as the reader meant it: add punctuation and sentence capitals, put titles of books and works in «» with capitals as usual in Ukrainian (a word like «роман» before a title is not a name), fix obviously misheard words and names. Keep the reader's words, order and language; don't add, explain or shorten anything. Answer with the text only.`;
   const r = await ask(apiKey, COVER_MODEL, prompt);

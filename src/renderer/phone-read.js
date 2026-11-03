@@ -136,6 +136,7 @@
     b.onclick = () => {
       toggleChrome(false);
       if (b.dataset.m === "notes") return showPanel(true, "notes");
+      if (b.dataset.m === "ask") return openAsk();
       openSheet(b.dataset.m);
     };
   }
@@ -336,10 +337,9 @@
     const notesTab = !$("#notes").classList.contains("hidden");
     const title = $("#ps-title");
     if (notesTab) title.innerHTML = `Нотатки <span>${notes.length || ""}</span>`;
-    else title.textContent = shownConv?.mode === "translate" ? "Переклад" : "Пояснення";
-    const act = $("#ps-action");
-    const saved = shownConv && notes.some((n) => n.cfi === shownConv.cfiRange);
-    act.classList.toggle("hidden", notesTab || !shownConv || saved);
+    else title.innerHTML = `Запитання <span>${conversations.size || ""}</span>`;
+    // «В нотатки» is on each question now (2026-11-03).
+    $("#ps-action").classList.add("hidden");
   }
   $("#ps-action").onclick = () => {
     const conv = shownConv;
@@ -349,17 +349,26 @@
   for (const b of document.querySelectorAll("#panel .tab")) b.addEventListener("click", () => panelShown(true));
 
   // One explanation at a time in the sheet; the others wait behind their marks in the text.
+  // «Запитання» (2026-11-03): the open question in full, the others folded under it (renderer.js listCards).
   function showConv(conv) {
     shownConv = conv;
     for (const c of conversations.values()) c.card.classList.toggle("m-off", c !== conv);
+    // The open one goes to the top of the list, under the field.
+    if (conv && conv.card.previousElementSibling !== $("#ask-book")) $("#ask-book").after(conv.card);
+    listCards();
     syncPanelHead();
   }
   function convStarted(conv) {
     showConv(conv);
     const where = conv.card.querySelector(".where");
     const p = String(conv.cfiRange).startsWith("epubcfi") ? pageOf(conv.cfiRange) : null;
-    where.textContent = [conv.context.chapter, p && `стор. ${p.page}`].filter(Boolean).join(" · ");
+    where.textContent = [conv.context.chapter, p && `стор. ${p.page}`, "щойно"].filter(Boolean).join(" · ");
+    // A question about a passage: the list scrolls to it, past the field. One about the book stays at the top.
+    const box = $("#cards");
+    if (conv.context.selection) requestAnimationFrame(() => (box.scrollTop += conv.card.getBoundingClientRect().top - box.getBoundingClientRect().top));
+    else box.scrollTop = 0;
     if (!on()) return window.DeskRead?.convStarted(conv);
+    if (!conv.context.selection) return setPanelTop(true);
     setPanelTop(false);
     revealAbove(conv.cfiRange);
   }
@@ -488,6 +497,6 @@
   window.PhoneRead = {
     progress, pdfPage, ticks, bookOpened, chrome, notesCount, sheetOpen, closeSheet, panelShown, showConv, convStarted, sheetFull,
     renderNotes: renderNotesPhone, findShown, findClosed, renderLook, openSheet, pageOf, tocFollow,
-    sheetKind: () => sheetKind, shownConv: () => shownConv,
+    sheetKind: () => sheetKind, shownConv: () => shownConv, syncPanelHead,
   };
 })();

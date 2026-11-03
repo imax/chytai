@@ -185,7 +185,7 @@
         <textarea id="pp-q" rows="4" placeholder="${esc(idea || PLACEHOLDER)}" enterkeyhint="send">${esc(draft)}</textarea>
         ${att}
         <div class="pp-ask-row"><button type="button" class="pp-tool" data-pp="img" title="Фото чи скріншот" aria-label="Фото чи скріншот">${svgCam}</button>
-          <button type="button" class="pp-tool${listening?.field === "pp-q" ? " on" : ""}" data-pp="mic" title="Надиктувати" aria-label="Надиктувати">${svgMic}</button>
+          <button type="button" class="pp-tool${window.Dictation.field() === "pp-q" ? " on" : ""}" data-pp="mic" title="Надиктувати" aria-label="Надиктувати">${svgMic}</button>
           <span class="pp-ask-sp"></span>
           <button type="button" class="r-pill" data-pp="ask">Запитати</button></div>
       </form>
@@ -207,7 +207,7 @@
         }).join("")}${moreChats}</section>` : ""}
       <section class="pp-notes"><div class="r-sec-head"><h2>Нотатки${notes.length ? ` · ${notes.length}` : ""}</h2><button type="button" class="pp-addnote" data-pp="note">+ Нотатка</button></div>
         ${adding ? `<form class="pp-ask pp-noteform" data-pp-form><textarea id="pp-note" rows="3" placeholder="Думка, цитата або що перечитати"></textarea>
-          <div class="pp-ask-row"><button type="button" class="pp-tool${listening?.field === "pp-note" ? " on" : ""}" data-pp="mic-note" title="Надиктувати" aria-label="Надиктувати">${svgMic}</button><span class="pp-ask-sp"></span><button type="submit" class="r-pill">Зберегти</button></div></form>` : ""}
+          <div class="pp-ask-row"><button type="button" class="pp-tool${window.Dictation.field() === "pp-note" ? " on" : ""}" data-pp="mic-note" title="Надиктувати" aria-label="Надиктувати">${svgMic}</button><span class="pp-ask-sp"></span><button type="submit" class="r-pill">Зберегти</button></div></form>` : ""}
         ${sortedNotes.length ? sortedNotes.map((n) => editing === n.id
           ? `<form class="pp-ask pp-noteform" data-pp-edit="${esc(n.id)}"><textarea id="pp-note-edit" rows="3">${esc(n.text)}</textarea>
             <div class="pp-ask-row"><button type="button" class="r-link" data-pp="cancel-edit">Скасувати</button><span class="pp-ask-sp"></span><button type="submit" class="r-pill">Зберегти</button></div></form>`
@@ -255,7 +255,7 @@
     }
     if (!e.target.matches("[data-pp-form]")) return;
     e.preventDefault();
-    listening?.stop();
+    window.Dictation.stop();
     const text = $("#pp-note").value.trim();
     if (!text) return;
     await addNote({ text });
@@ -270,7 +270,7 @@
   });
 
   function askFromField() {
-    listening?.stop();
+    window.Dictation.stop();
     const q = $("#pp-q").value.trim();
     if (scan?.busy) return showNotice("Зачекайте, текст з фото ще розпізнається.", false);
     // An empty field asks the suggested question from the placeholder.
@@ -489,66 +489,12 @@
     });
   }
 
-  // ---------- Dictation (v3): the browser's speech recognition into the question field ----------
+  // ---------- Dictation (v3): dictation.js, tidied with the paper book's title ----------
 
-  const Speech = window.SpeechRecognition || window.webkitSpeechRecognition;
-  // An iPhone app built without the microphone permission would close on it (see OLD_APP).
-  const MIC_OK = !!Speech && (!/ChytaiApp/.test(navigator.userAgent) || /ChytaiApp\/camera\/mic/.test(navigator.userAgent));
-  let listening = null;
   // Into the question field, or into the «+ Нотатка» form (a voice note, Max: «додати голосову заметку»).
   function mic(id = "pp-q") {
-    if (listening) {
-      const was = listening.field;
-      listening.stop();
-      if (was === id) return;
-    }
-    if (!MIC_OK) return showNotice("Тут диктувати можна мікрофоном на клавіатурі.", false), $(`#${id}`)?.focus();
-    const field = $(`#${id}`);
-    const start = field.value.trim() ? `${field.value.trim()} ` : "";
-    const rec = new Speech();
-    rec.lang = "uk-UA";
-    rec.interimResults = true;
-    rec.continuous = true;
-    rec.onerror = (e) => e.error !== "no-speech" && e.error !== "aborted" && showNotice(e.error === "not-allowed" ? "Немає доступу до мікрофона." : "Не вдалося розпізнати мовлення.", false);
-    let said = "";
-    rec.onresult = (e) => {
-      said = [...e.results].map((r) => r[0].transcript).join(" ").replace(/\s+/g, " ").trim();
-      if ($(`#${id}`)) $(`#${id}`).value = start + said;
-    };
-    rec.onend = () => {
-      if (listening === rec) {
-        listening = null;
-        document.querySelectorAll(".pp-tool.on").forEach((b) => b.classList.remove("on"));
-      }
-      tidyDictation(id, start, said);
-    };
-    try {
-      rec.start();
-      rec.field = id;
-      listening = rec;
-      document.querySelectorAll(".pp-tool.on").forEach((b) => b.classList.remove("on"));
-      $(`[data-pp="${id === "pp-q" ? "mic" : "mic-note"}"]`)?.classList.add("on");
-    } catch {
-      showNotice("Не вдалося увімкнути мікрофон.", false);
-    }
-  }
-
-  // Recognised words become sentences (Max 2026-11-03): punctuation, capitals, «titles», misheard words. The
-  // field changes only if nobody typed in it meanwhile.
-  async function tidyDictation(id, start, said) {
-    const field = $(`#${id}`);
-    if (!said || !book || !field || said.split(" ").length < 2) return;
-    const name = book.path;
-    field.classList.add("pp-tidying");
-    let text = said;
-    try {
-      text = await window.reader.paperTidy(name, said);
-    } catch {
-      /* the words as heard will do */
-    }
-    const now = $(`#${id}`);
-    now?.classList.remove("pp-tidying");
-    if (now && book?.path === name && now.value === start + said) now.value = start + text;
+    const name = book?.path;
+    window.Dictation.toggle(id, `[data-pp="${id === "pp-q" ? "mic" : "mic-note"}"]`, (said) => (name && book?.path === name ? window.reader.paperTidy(name, said) : said));
   }
 
   // The selection in the photo's text, with a little of what is around it for context.
@@ -625,10 +571,10 @@
       return window.Shell.rerender();
     }
     if (act === "note") {
-      if (adding) return listening?.stop(), (adding = false), window.Shell.rerender();
+      if (adding) return window.Dictation.stop(), (adding = false), window.Shell.rerender();
       return (adding = true), window.Shell.rerender(), setTimeout(() => $("#pp-note")?.focus(), 30);
     }
-    if (act === "note-cancel") return listening?.stop(), (adding = false), window.Shell.rerender();
+    if (act === "note-cancel") return window.Dictation.stop(), (adding = false), window.Shell.rerender();
     if (act === "explain" || act === "quote") {
       const s = selected();
       if (!s) return showNotice("Спершу виділіть шматок тексту.", false);

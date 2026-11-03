@@ -2062,3 +2062,128 @@ a.r-frow:hover .r-frow-go.plain { color: var(--r-ochre); }
 @keyframes r-shimmer { from { background-position: 100% 0; } to { background-position: 0 0; } }
 @media (prefers-reduced-motion: reduce) { .r-skel i { animation: none; } }
 @media (min-width: 761px) { .r-skel .sk-p { display: none; } .r-skel .r-now { margin-bottom: 28px; } }
+/* ===================================================================================================
+   Questions in an e-book (2026-11-03, like a paper book): a selection opens a card with the passage, a question
+   field, the mic, «Переклад», «В нотатки» and «Пояснити» (with a question: «Запитати»). The tap on an
+   explanation's yellow keeps its small menu (.mark). The panel is the list «Запитання», see below.
+   =================================================================================================== */
+body { --m-card: #ffffff; --m-sline: #c9c3b6; --m-red: #a63a2a; }
+body[data-theme="sepia"] { --m-card: #fbf6ea; --m-sline: #cdbd9e; }
+body[data-theme="dark"] { --m-card: #24221e; --m-sline: #4a463f; --m-red: #e07a68; }
+#sel-toolbar.mark .st-quote, #sel-toolbar.mark #st-q, #sel-toolbar.mark .st-row { display: none !important; }
+html body #sel-toolbar:not(.mark) {
+  flex-direction: column; align-items: stretch; gap: 6px; padding: 12px 12px 8px 16px; border: 1px solid var(--m-sline); border-radius: 16px;
+  background: var(--m-card); color: var(--m-ink); box-shadow: 0 -10px 34px -12px rgba(27, 26, 23, .35); font-family: var(--m-sans);
+}
+html body #sel-toolbar:not(.mark):focus-within { border-color: var(--m-ochre); }
+html body #sel-toolbar:not(.mark) .st-quote, html body #sel-toolbar:not(.mark) .st-row { display: flex; }
+html body #sel-toolbar:not(.mark) #st-q { display: block; }
+#sel-toolbar .st-quote {
+  display: -webkit-box !important; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; margin: 0 4px 2px 0; padding-left: 10px;
+  border-left: 2px solid var(--m-bar); font: italic 400 15px/1.35 var(--m-serif); color: var(--m-quote);
+}
+#sel-toolbar #st-q {
+  width: 100%; min-height: 28px; max-height: 30vh; field-sizing: content; resize: none; border: none; outline: none; padding: 4px 0;
+  background: transparent; color: var(--m-ink); font: 400 17px/1.35 var(--m-serif);
+}
+#sel-toolbar #st-q:focus { min-height: 52px; }
+#sel-toolbar #st-q::placeholder { color: var(--m-ink3); }
+#sel-toolbar .st-row { align-items: center; gap: 2px; margin-left: -8px; }
+#sel-toolbar .st-sp { flex: 1; }
+html body #sel-toolbar:not(.mark) .st-row button {
+  flex: none; display: inline-flex; flex-direction: row; align-items: center; gap: 6px; width: auto; min-width: 0; margin: 0;
+  border: none; border-radius: 999px; background: none; box-shadow: none; color: var(--m-ink2); font: 400 15px var(--m-sans); padding: 9px 9px; cursor: pointer;
+}
+html body #sel-toolbar:not(.mark) .st-row button:hover { background: none; color: var(--m-ochre); }
+html body #sel-toolbar:not(.mark) .st-row button[hidden] { display: none; }
+html body #sel-toolbar:not(.mark) .st-row .pp-tool { width: 40px; height: 40px; padding: 0; justify-content: center; }
+#sel-toolbar .pp-tool svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; }
+html body #sel-toolbar:not(.mark) .st-row .pp-tool.on { color: #fff; background: var(--m-red); animation: pp-pulse 1.4s ease-in-out infinite; }
+html body #sel-toolbar:not(.mark) .st-row .st-go { padding: 10px 22px; background: var(--m-ochre); color: var(--m-on-fg); font-weight: 500; }
+html body #sel-toolbar:not(.mark) .st-row .st-go:hover { background: var(--m-ochre); color: var(--m-on-fg); filter: brightness(.94); }
+#sel-toolbar .st-row kbd { display: none; }
+#sel-toolbar .st-go small { display: none; }
+html body.offline #sel-toolbar:not(.mark) .st-go { background: var(--m-off); color: var(--m-ink3); flex-direction: column; gap: 0; padding: 5px 16px; }
+html body.offline #sel-toolbar:not(.mark) .st-go small { display: block; font: 400 11px var(--m-sans); }
+html body.offline #sel-toolbar:not(.mark) [data-action="translate"] { color: var(--m-ink3); }
+/* Phone: across the bottom, over the keyboard while a question is typed. */
+@media (max-width: 760px) {
+  html body #sel-toolbar:not(.mark), html body #sel-toolbar.hidden:not(.mark) {
+    top: auto; left: 10px; right: 10px; bottom: calc(10px + max(var(--kb, 0px), env(safe-area-inset-bottom))); --shift: 0px;
+  }
+  html body #sel-toolbar:not(.mark) { transform: none; transition: transform .2s ease-out, opacity .2s ease-out, bottom .15s ease-out; }
+  html body #sel-toolbar.hidden:not(.mark) { transform: translateY(24px); }
+}
+/* Computer: under the selection (renderer.js places it); an iPad: at the bottom of the text, in the middle. */
+@media (min-width: 761px) {
+  html:not(.touch) body #sel-toolbar:not(.mark) { width: 440px; transform: none; box-shadow: 0 18px 40px -16px rgba(27, 26, 23, .45); }
+  html:not(.touch) body #sel-toolbar:not(.mark) .st-row kbd { display: inline; padding: 0; border: none; background: none; box-shadow: none; font: 400 11px var(--m-sans); color: var(--m-ink3); }
+  html:not(.touch) body #sel-toolbar:not(.mark) .st-go kbd { color: #f0e2c2; }
+  html:not(.touch) body #sel-toolbar.asking:not(.mark) kbd { display: none; }
+  html.touch body #sel-toolbar:not(.mark), html.touch body #sel-toolbar.hidden:not(.mark) { top: auto; right: auto; left: 50%; width: 520px; bottom: calc(24px + var(--kb, 0px)); }
+  html.touch body #sel-toolbar:not(.mark) { transform: translate(-50%, 0); }
+  html.touch body #sel-toolbar.hidden:not(.mark) { transform: translate(-50%, 12px); }
+}
+
+/* «Запитання»: the field for a question about the book, then the questions, the open one in full on top, the
+   others folded to the passage (or the question) and the start of the answer. */
+#ask-book {
+  display: flex; flex-direction: column; gap: 4px; margin: 14px 20px 6px; padding: 10px 12px 6px 14px; border: 1px solid var(--m-sline);
+  border-radius: 14px; background: var(--m-card); font-family: var(--m-sans);
+}
+#ask-book:focus-within { border-color: var(--m-ochre); }
+#ab-q {
+  width: 100%; min-height: 28px; max-height: 30vh; field-sizing: content; resize: none; border: none; outline: none; padding: 4px 0;
+  background: transparent; color: var(--m-ink); font: 400 17px/1.35 var(--m-serif);
+}
+#ab-q::placeholder { color: var(--m-ink3); }
+#ask-book .st-row { display: flex; align-items: center; margin-left: -8px; }
+#ask-book .st-sp { flex: 1; }
+#ask-book .pp-tool { width: 40px; height: 40px; display: inline-flex; align-items: center; justify-content: center; border: none; border-radius: 50%; background: none; color: var(--m-ink2); padding: 0; cursor: pointer; }
+#ask-book .pp-tool svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; }
+#ask-book .pp-tool.on { color: #fff; background: var(--m-red); animation: pp-pulse 1.4s ease-in-out infinite; }
+#ask-book .st-go { border: none; border-radius: 999px; padding: 9px 20px; background: var(--m-ochre); color: var(--m-on-fg); font: 500 15px var(--m-sans); cursor: pointer; }
+body.offline #ask-book .st-go { background: var(--m-off); color: var(--m-ink3); }
+#panel #cards #panel-empty { margin: 4px 20px 0; padding: 0; font: 400 13px/1.5 var(--m-sans); color: var(--m-ink3); text-align: left; }
+#panel #cards #panel-empty.hidden, #panel #cards .card.c-more { display: none; }
+#cards-more { align-self: flex-start; margin: 12px 20px 24px; padding: 0; border: none; background: none; font: 400 14px var(--m-sans); color: var(--m-ochre); cursor: pointer; }
+#cards-more.hidden { display: none; }
+
+#panel #cards .card { flex: none; display: flex; gap: 8px; padding: 14px 20px 16px; border-bottom: 1px solid var(--m-rule); }
+#panel #cards .card .quote { padding-left: 10px; border-left: 2px solid var(--m-bar); font: italic 400 15px/1.4 var(--m-serif); color: var(--m-quote); }
+#panel #cards .card .quote::before, #panel #cards .card .quote::after { content: none; }
+#panel #cards .card.c-book .quote { display: none; }
+#panel #cards .thread > .question { margin: 10px 0 0; padding: 0; border: none; font: italic 400 16px/1.4 var(--m-serif); color: var(--m-ink2); }
+#panel #cards .thread > .question::before { content: none; }
+#panel #cards .thread > .question:first-child { margin: 0; font: 400 18px/1.35 var(--m-serif); font-style: normal; color: var(--m-ink); }
+#panel #cards .thread > .question + .answer { margin-top: 6px; }
+#panel #cards .thread > .answer:first-child { margin-top: 2px; }
+#panel #cards .card .meta { margin: 0; }
+#panel #cards .c-acts { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 14px; margin-top: 2px; font: 400 12px/1.5 var(--m-sans); color: var(--m-ink3); }
+#panel #cards .c-acts .where { display: inline; margin: 0; font: inherit; color: inherit; }
+#panel #cards .c-acts .where:empty { display: none; }
+#panel #cards .c-acts .link { padding: 0; border: none; background: none; font: 400 13px var(--m-sans); color: var(--m-ink3); cursor: pointer; }
+#panel #cards .c-acts .c-note { color: var(--m-ochre); }
+#panel #cards .c-acts .forget:hover { color: var(--m-red); }
+#panel #cards .c-acts .link.hidden { display: none; }
+#panel #cards .card .followup { position: static; margin: 4px 0 0; padding: 0; border: none; background: none; }
+#panel.full #cards .card .followup, #panel #cards .card:has(.question) .followup { border-top: none; }
+#panel #cards .card .followup input { font-size: 16px; }
+/* Folded: the passage (or the question), the start of the answer, where and when. */
+#panel #cards .card.m-off { display: flex; cursor: pointer; padding-bottom: 14px; }
+#panel #cards .card.m-off .quote { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+#panel #cards .card.m-off.c-book .quote, #panel #cards .card.m-off .meta, #panel #cards .card.m-off .followup,
+#panel #cards .card.m-off .c-acts .link, #panel #cards .card.m-off .thread > .answer ~ *, #panel #cards .card.m-off .thread > .question ~ .question,
+#panel #cards .card.m-off:not(.c-book) .thread > .question { display: none; }
+#panel #cards .card.m-off .thread > .question:first-child { font-size: 17px; }
+#panel #cards .card.m-off .answer { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; color: var(--m-ink2); font-size: 14.5px; line-height: 1.5; }
+#panel #cards .card.m-off .answer > * { display: inline; margin: 0; }
+#panel #cards .card.m-off .answer > * + *::before { content: " "; }
+@media (hover: hover) { #panel #cards .card.m-off:hover .quote, #panel #cards .card.m-off:hover .thread > .question { color: var(--m-ochre); } }
+@media (min-width: 761px) {
+  #ask-book { margin: 18px 24px 6px; }
+  #panel #cards #panel-empty { margin: 4px 24px 0; }
+  #cards-more { margin: 12px 24px 24px; }
+  #panel #cards .card { padding: 16px 24px 18px; gap: 10px; }
+  #panel #cards .card .followup { margin: 4px 0 0; padding: 0; }
+}

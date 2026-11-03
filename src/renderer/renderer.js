@@ -248,7 +248,7 @@ async function openBook(payload) {
   // Explanations belong to the book they were asked in; reopening the same book (PDF view switch) keeps them.
   if (payload.path !== current?.path) clearExplanations();
   closeBook();
-  hideSelToolbar();
+  hideSelToolbar(true);
   $("#empty").classList.add("hidden");
   // A PDF is read as a book (Max, 2026-11-01: no «Оригінал PDF» switch any more). New uploads already come as
   // EPUB; an older PDF is converted here once and kept. A scan without text opens as pages.
@@ -503,7 +503,7 @@ $("#btn-back").onclick = () => {
 // While a book is on screen the toolbar is hidden; a tap in the middle of the page shows it.
 
 function syncReading() {
-  if (document.body.classList.contains("library-open")) hideSelToolbar(); // the bar has no book to act on there
+  if (document.body.classList.contains("library-open")) hideSelToolbar(true); // the bar has no book to act on there
   const reading = !!(rendition || pdfView) && !document.body.classList.contains("library-open");
   if (reading === document.body.classList.contains("reading")) return;
   document.body.classList.toggle("reading", reading);
@@ -835,8 +835,64 @@ function handleSelection(range, cfiRange, ctx, frame) {
   const bar = $("#sel-toolbar");
   bar.classList.remove("mark");
   bar.querySelector('[data-action="translate"]').hidden = isUkrainian(pendingSelection.text);
+  const quote = pendingSelection.text.replace(/\s+/g, " ");
+  bar.querySelector(".st-quote").textContent = quote.length > 300 ? quote.slice(0, 300) + "…" : quote;
+  setAskField("");
   showSelToolbar(range, frame);
 }
+
+// The selection's question field: «Пояснити» asks for an explanation, a question turns it into «Запитати».
+function setAskField(text) {
+  const field = $("#st-q");
+  field.value = text;
+  syncAskField();
+}
+function syncAskField() {
+  const has = !!$("#st-q").value.trim();
+  const bar = $("#sel-toolbar");
+  bar.classList.toggle("asking", has);
+  bar.querySelector('[data-action="explain"] span').textContent = has ? "Запитати" : "Пояснити";
+}
+$("#st-q").addEventListener("input", syncAskField);
+$("#st-q").addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && !e.shiftKey && !e.isComposing) {
+    e.preventDefault();
+    $("#sel-toolbar [data-action=explain]").click();
+  } else if (e.key === "Escape") {
+    e.preventDefault();
+    hideSelToolbar(true);
+  }
+});
+// Typing a question takes the focus out of the book, and the browser may drop the selection there; the passage
+// stays marked while the question is written.
+let askMark = "";
+$("#st-q").addEventListener("focus", () => {
+  const cfi = pendingSelection?.cfiRange;
+  if (!rendition || !cfi || !String(cfi).startsWith("epubcfi") || askMark === cfi) return;
+  dropAskMark();
+  try {
+    rendition.annotations.highlight(cfi, {}, () => {}, "st-hl", highlightStyle());
+    askMark = cfi;
+    for (const c of rendition.getContents()) c.window.getSelection()?.removeAllRanges();
+  } catch {
+    /* cosmetic */
+  }
+});
+function dropAskMark() {
+  if (!askMark) return;
+  try {
+    rendition?.annotations.remove(askMark, "highlight");
+  } catch {
+    /* ignore */
+  }
+  askMark = "";
+}
+// The phone's keyboard covers the bottom of the screen: the card rides above it.
+window.visualViewport?.addEventListener("resize", () => {
+  const vv = window.visualViewport;
+  const kb = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+  document.body.style.setProperty("--kb", `${Math.round(kb)}px`);
+});
 
 // No «Переклад» in Ukrainian books (Max, 2026-10-26): the book says so, or the text has і/ї/є/ґ.
 function isUkrainian(text) {
@@ -862,11 +918,21 @@ function showSelToolbar(range, frame) {
     bar.style.left = `${r.left + r.width / 2}px`;
     return;
   }
-  // Over the start of the selection, ~10px above the line; under its end when there is no room (turn 10, 10c).
+  // The yellow's menu: over the start of the passage, ~10px above the line; under its end when there is no room
+  // (turn 10, 10c). The question card (2026-11-03): under the selection, so it stays in sight; over it when the
+  // card does not fit below.
   const first = range.getClientRects()[0] || rect;
-  const above = frame.top + first.top - bar.offsetHeight - 10;
-  const left = frame.left + first.left + Math.min(first.width, 200) / 2 - bar.offsetWidth / 2;
-  const top = Math.max(8, above < 8 ? frame.top + rect.bottom + 10 : above);
+  let top, left;
+  if (bar.classList.contains("mark")) {
+    const above = frame.top + first.top - bar.offsetHeight - 10;
+    left = frame.left + first.left + Math.min(first.width, 200) / 2 - bar.offsetWidth / 2;
+    top = Math.max(8, above < 8 ? frame.top + rect.bottom + 10 : above);
+  } else {
+    const below = frame.top + rect.bottom + 12;
+    const above = frame.top + rect.top - bar.offsetHeight - 12;
+    left = frame.left + first.left;
+    top = below + bar.offsetHeight <= window.innerHeight - 8 ? below : Math.max(8, above);
+  }
   bar.style.top = `${top}px`;
   bar.style.left = `${Math.min(Math.max(8, left), window.innerWidth - bar.offsetWidth - 8)}px`;
 }
@@ -885,33 +951,51 @@ function watchFirstPage() {
 }
 
 let selGoneTimer = 0;
-function hideSelToolbar() {
+// force: the book closed or the reader said so (Esc, a question sent); otherwise a question being written or
+// dictated keeps the card, though the selection it came from is gone.
+function hideSelToolbar(force) {
   const bar = $("#sel-toolbar");
   // The tap that opened the yellow's menu also looks like a click that clears the selection.
   if (bar.classList.contains("mark") && Date.now() - markShownAt < 400) return;
+  if (force !== true && !bar.classList.contains("hidden") && !bar.classList.contains("mark") && (document.activeElement === $("#st-q") || window.Dictation?.field() === "st-q")) return;
+  if (window.Dictation?.field() === "st-q") window.Dictation.stop();
+  if (document.activeElement === $("#st-q")) $("#st-q").blur();
   bar.classList.add("hidden");
+  dropAskMark();
 }
 
-$("#sel-toolbar").addEventListener("mousedown", (e) => e.preventDefault());
+// A click on the card keeps the selection in the book; the question field takes the focus as usual.
+$("#sel-toolbar").addEventListener("mousedown", (e) => e.target.closest("textarea") || e.preventDefault());
 $("#sel-toolbar").addEventListener("click", (e) => {
   const action = e.target.closest("[data-action]")?.dataset.action;
   if (!action) return;
   if ($("#sel-toolbar").classList.contains("mark")) return onMarkAction(action);
   if (!pendingSelection) return;
+  if (action === "mic") return window.Dictation.toggle("st-q", "#sel-toolbar .st-mic", dictationTidy);
   const snapshot = pendingSelection;
+  const question = $("#st-q").value.trim();
   // A free book read without an account: explanations and notes come with one (they cost Max tokens).
   if (settings.free) {
     hideSelToolbar();
     showNotice("Пояснення, питання і нотатки працюють після входу. Це безкоштовно, потрібна лише пошта.", false);
     return noticeLink(settings.free.signIn, "Увійти");
   }
-  if (action === "note") {
-    addNote(snapshot);
-  } else {
-    startExplanation(snapshot, { mode: action === "translate" ? "translate" : "explain" });
+  hideSelToolbar(true);
+  try {
+    for (const c of rendition?.getContents?.() || []) c.window.getSelection()?.removeAllRanges();
+  } catch {
+    /* ignore */
   }
-  hideSelToolbar();
+  if (action === "note") {
+    // A question written but kept as a note: it becomes the note's thought.
+    addNote({ ...snapshot, comment: question });
+  } else {
+    startExplanation(snapshot, { mode: action === "translate" ? "translate" : "explain", question: action === "translate" ? "" : question });
+  }
 });
+
+// Dictated words tidied with this book's title (dictation.js).
+const dictationTidy = (said) => (window.reader.tidy && current && !settings.free ? window.reader.tidy(current.title, current.author, said) : said);
 
 function onMarkAction(action) {
   const conv = pendingMark;
@@ -939,14 +1023,14 @@ function modelLabel(model) {
 }
 
 // «Пояснити» explains on the main model; «Переклад» only translates, on the cheaper one.
-function startExplanation(selection, { mode = "explain" } = {}) {
+function startExplanation(selection, { mode = "explain", question = "" } = {}) {
   showPanel(true, "cards");
-  $("#panel-empty")?.remove();
 
-  // Same selection already explained: just bring that card into view.
-  for (const conv of conversations.values()) {
+  // Same selection already explained: just bring that card into view. A question about it is a new one.
+  for (const conv of question ? [] : conversations.values()) {
     if ((conv.cfiRange === selection.cfiRange || conv.context.selection === selection.context.selection) && conv.mode === mode) {
       highlightConv(conv);
+      window.PhoneRead?.showConv(conv);
       conv.card.scrollIntoView({ behavior: "smooth", block: "nearest" });
       flash(conv.card);
       return conv.card;
@@ -958,7 +1042,7 @@ function startExplanation(selection, { mode = "explain" } = {}) {
   $("#cards").scrollTop = 0;
   highlightConv(conv);
   window.PhoneRead?.convStarted(conv);
-  runTurn(conv, null);
+  runTurn(conv, question || null);
   return conv.card;
 }
 
@@ -970,7 +1054,6 @@ function makeConv({ cfiRange, context, mode, sid: keptId }) {
   card.dataset.id = id;
   const quote = context.selection || "";
   card.innerHTML = `
-    <div class="where"></div>
     <blockquote class="quote"></blockquote>
     <div class="thread"></div>
     <div class="meta"><span class="model"></span>
@@ -980,10 +1063,11 @@ function makeConv({ cfiRange, context, mode, sid: keptId }) {
         <button class="link retry hidden">Ще раз</button>
       </span>
     </div>
-    <button type="button" class="link forget hidden">Очистити розмову</button>
-    <form class="followup"><input type="text" placeholder="Уточнити питання…" enterkeyhint="send" /><button type="submit" class="ask" aria-label="Запитати"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5M6 11l6-6 6 6"/></svg></button></form>`;
+    <div class="c-acts"><span class="where"></span><button type="button" class="link c-note hidden">В нотатки</button><button type="button" class="link c-go">До тексту</button><button type="button" class="link forget hidden">Видалити</button></div>
+    <form class="followup"><input type="text" placeholder="Уточнити…" enterkeyhint="send" /><button type="submit" class="ask" aria-label="Запитати"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5M6 11l6-6 6 6"/></svg></button></form>`;
   card.querySelector(".quote").textContent = quote.length > 280 ? quote.slice(0, 280) + "…" : quote;
-  $("#cards").prepend(card);
+  if (!quote) card.classList.add("c-book"); // a question about the book, no passage
+  $("#ask-book").after(card);
 
   // sid: the id it is kept under on the server; turns: [{ q, a }] answered so far.
   const sid = keptId || `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
@@ -991,6 +1075,18 @@ function makeConv({ cfiRange, context, mode, sid: keptId }) {
   conversations.set(id, conv);
 
   card.querySelector(".forget").onclick = () => forgetConv(conv);
+  // «Запитання» (2026-11-03): a folded question opens in its place; «До тексту» goes to its passage (or the page
+  // it was asked on), «В нотатки» keeps the passage.
+  card.addEventListener("click", (e) => {
+    if (!card.classList.contains("m-off") || e.target.closest("button, a, input, form")) return;
+    openConvCard(conv);
+    highlightConv(conv);
+  });
+  card.querySelector(".c-go").onclick = () => goToConv(conv);
+  card.querySelector(".c-note").onclick = () =>
+    addNote({ cfiRange: conv.cfiRange, text: conv.context.selection, context: conv.context }).then(() => syncConvActs(conv));
+  syncConvActs(conv);
+  queueMicrotask(listCards);
   card.querySelector(".followup input").oninput = (e) => card.querySelector(".followup").classList.toggle("filled", !!e.target.value.trim());
 
   card.querySelector(".stop").onclick = () => window.reader.abort(conv.reqId);
@@ -1159,6 +1255,7 @@ function flash(card) {
 // footnote: a tap on it opens the explanation again (Max, 2026-10-27: «прибирати автоматично, але залишати
 // asterisk як типу сноску»). A tap on the yellow offers the explanation, a note or removing it.
 function highlightConv(conv) {
+  if (!conv.context.selection || !String(conv.cfiRange).startsWith("epubcfi")) return;
   for (const other of conversations.values()) if (other !== conv && other.marked === "yellow") starConv(other);
   try {
     unhighlightConv(conv);
@@ -1171,6 +1268,7 @@ function highlightConv(conv) {
 
 function starConv(conv) {
   unhighlightConv(conv);
+  if (!conv.context.selection || !String(conv.cfiRange).startsWith("epubcfi")) return;
   // A note on the very same words already marks them (and shares the annotation's key).
   if (notes.some((n) => n.cfi === conv.cfiRange)) return;
   try {
@@ -1243,7 +1341,9 @@ function clearExplanations() {
   for (const conv of conversations.values()) if (conv.busy) window.reader.abort(conv.reqId);
   unhighlightConvs();
   conversations.clear();
-  $("#cards").innerHTML = `<div id="panel-empty" class="panel-empty">Виділіть текст у книжці, щоб отримати пояснення в контексті.</div>`;
+  for (const c of $("#cards").querySelectorAll(".card")) c.remove();
+  cardsAll = false;
+  listCards();
 }
 
 // «Очистити» in the panel: the book's kept explanations go too.
@@ -1259,9 +1359,110 @@ function forgetConv(conv) {
   conversations.delete(conv.id);
   conv.card.remove();
   if (current && conv.turns.length) window.reader.chatDelete?.(current.path, conv.sid).catch(() => {});
-  showPanel(false);
+  listCards();
   renderNotes();
 }
+
+// ---------- «Запитання»: the list in the panel (2026-11-03, like a paper book's questions) ----------
+
+// The open question on top of the others, then the last three folded and «Показати всі N» for the rest.
+let cardsAll = false;
+function listCards() {
+  const cards = [...$("#cards").querySelectorAll(".card")];
+  let folded = 0;
+  for (const c of cards) {
+    const off = c.classList.contains("m-off");
+    if (off) folded++;
+    c.classList.toggle("c-more", !cardsAll && off && folded > 3);
+  }
+  const more = $("#cards-more");
+  const hidden = cards.filter((c) => c.classList.contains("c-more")).length;
+  more.textContent = `Показати всі ${cards.length}`;
+  more.classList.toggle("hidden", !hidden);
+  $("#panel-empty").classList.toggle("hidden", cards.length > 0);
+  for (const conv of conversations.values()) syncConvActs(conv);
+  window.PhoneRead?.syncPanelHead?.();
+}
+$("#cards-more").onclick = () => ((cardsAll = true), listCards());
+
+function syncConvActs(conv) {
+  const card = conv.card;
+  const saved = notes.some((n) => n.cfi === conv.cfiRange);
+  card.querySelector(".c-note").classList.toggle("hidden", !conv.context.selection || saved || !String(conv.cfiRange).startsWith("epubcfi"));
+  card.querySelector(".c-go").classList.toggle("hidden", !conv.cfiRange || !String(conv.cfiRange).startsWith("epubcfi") || !rendition);
+}
+
+// To the passage (or the page a book question was asked on); a phone puts the list away to show it.
+function goToConv(conv) {
+  if (!rendition || !String(conv.cfiRange).startsWith("epubcfi")) return;
+  if (PHONE.matches) showPanel(false);
+  rememberReturn();
+  rendition.display(conv.cfiRange).then(() => highlightConv(conv)).catch(() => {});
+}
+
+// What is on the screen and just before it, for a question about the book.
+function pageContext() {
+  try {
+    const loc = rendition?.currentLocation?.();
+    if (!loc?.start) return {};
+    const contents = rendition.getContents().find((c) => c.sectionIndex === loc.start.index) || rendition.getContents()[0];
+    const doc = contents.document;
+    const a = rendition.getRange(loc.start.cfi);
+    let b = null;
+    try {
+      b = loc.end?.index === loc.start.index ? rendition.getRange(loc.end.cfi) : null;
+    } catch {
+      /* the end is in another chapter */
+    }
+    const r = doc.createRange();
+    r.setStart(a.startContainer, a.startOffset);
+    if (b) r.setEnd(b.endContainer, b.endOffset);
+    else r.setEnd(doc.body, doc.body.childNodes.length);
+    const ctx = extractContext(doc, r);
+    return { page: ctx.selection.replace(/[ \t]+/g, " ").replace(/\s*\n\s*/g, "\n").trim().slice(0, 5000), before: ctx.before };
+  } catch {
+    return {};
+  }
+}
+
+// «Запитати» (the bottom bar on a phone, the header or Q on a computer): the list, its field ready.
+function openAsk() {
+  if (!current) return;
+  showPanel(true, "cards");
+  window.PhoneRead?.sheetFull();
+  $("#cards").scrollTop = 0;
+  setTimeout(() => $("#ab-q").focus(), PHONE.matches ? 0 : 60);
+}
+
+function askBook(question) {
+  if (!current || !question) return;
+  if (settings.free) {
+    showNotice("Пояснення, питання і нотатки працюють після входу. Це безкоштовно, потрібна лише пошта.", false);
+    return noticeLink(settings.free.signIn, "Увійти");
+  }
+  const loc = rendition?.currentLocation?.();
+  const cfiRange = loc?.start?.cfi || (pdfView ? `pdf:${pdfView.viewer.currentPageNumber}` : "");
+  const chapter = $("#chapter-label").textContent.trim();
+  const conv = makeConv({ cfiRange, context: { selection: "", ...pageContext(), chapter, bookTitle: current.title, author: current.author }, mode: "explain" });
+  window.PhoneRead?.convStarted(conv);
+  runTurn(conv, question);
+  listCards();
+}
+
+$("#ask-book").addEventListener("submit", (e) => {
+  e.preventDefault();
+  const field = $("#ab-q");
+  const q = field.value.trim();
+  if (!q) return field.focus();
+  if (window.Dictation?.field() === "ab-q") window.Dictation.stop();
+  field.value = "";
+  field.blur();
+  askBook(q);
+});
+$("#ab-q").addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && !e.shiftKey && !e.isComposing) e.preventDefault(), $("#ask-book").requestSubmit();
+});
+$("#ask-book .ab-mic").onclick = () => window.Dictation.toggle("ab-q", "#ask-book .ab-mic", dictationTidy);
 
 // ---------- Kept explanations (Max 2026-11-03: saved like a paper book's questions) ----------
 
@@ -1293,7 +1494,7 @@ async function loadChats() {
   const kept = list.filter((c) => !have.has(c.id) && reachable(c)).sort((a, b) => (a.at || 0) - (b.at || 0));
   if (!kept.length) return;
   const none = !have.size;
-  $("#panel-empty")?.remove();
+
   for (const c of kept) {
     const conv = makeConv({ cfiRange: c.cfi, context: { selection: c.sel, chapter: c.chapter, bookTitle: current.title, author: current.author }, mode: c.mode, sid: c.id });
     conv.turns = c.turns || [];
@@ -1314,6 +1515,7 @@ async function loadChats() {
   }
   // The panel shows one explanation at a time: the newest kept one, until another is opened.
   if (none) window.PhoneRead?.showConv([...conversations.values()].pop());
+  listCards();
   showPendingChat();
 }
 
@@ -1468,6 +1670,10 @@ async function addNote(selection) {
   }
   try {
     const saved = await notesStore.notesAdd(current.path, note);
+    if (selection.comment && !saved.comment) {
+      saved.comment = selection.comment;
+      await notesStore.notesUpdate(current.path, saved.id, { comment: saved.comment }).catch(() => {});
+    }
     if (!notes.some((n) => n.id === saved.id)) {
       notes.push(saved);
       markNote(saved);
@@ -1532,6 +1738,7 @@ function renderNotes() {
   const box = $("#notes");
   box.innerHTML = "";
   window.PhoneRead?.notesCount();
+  for (const conv of conversations.values()) syncConvActs(conv);
   if (!current) {
     box.innerHTML = `<div class="panel-empty">Відкрийте книжку, щоб побачити її нотатки.</div>`;
     return;

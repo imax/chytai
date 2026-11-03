@@ -68,6 +68,7 @@
     on("toc", tocOpen);
     on("search", searchOpen);
     on("notes", panelOpen() && !$("#notes").classList.contains("hidden"));
+    on("ask", panelOpen() && $("#notes").classList.contains("hidden"));
     on("look", !$("#mlook").classList.contains("hidden"));
   }
 
@@ -209,6 +210,10 @@
       if (d === "full") return fullscreen();
       if (d === "search") return searchOpen ? window.BookSearch?.close() : window.BookSearch?.open();
       if (d === "toc") return tocOpen ? window.PhoneRead?.closeSheet() : window.PhoneRead?.openSheet("toc");
+      if (d === "ask") {
+        const shown = panelOpen() && $("#notes").classList.contains("hidden");
+        return shown ? showPanel(false) : openAsk();
+      }
       if (d === "notes") {
         const shown = panelOpen() && !$("#notes").classList.contains("hidden");
         return showPanel(!shown, shown ? undefined : "notes");
@@ -389,6 +394,7 @@
       const b = bar.querySelector(`[data-action="${pick}"]`);
       if (b && !b.hidden) return e.preventDefault(), b.click();
     }
+    if (code === "KeyQ") return e.preventDefault(), openAsk();
     if (code === "KeyF") return e.preventDefault(), fullscreen();
     if (code === "KeyT" && !pdfView) {
       e.preventDefault();

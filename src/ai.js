@@ -88,8 +88,22 @@ function paperMessage(ctx, mode) {
   return { role: "user", content: parts.join("\n\n") };
 }
 
+// A question about the book without a selection (2026-11-03, «Запитати» in the reader): the page on screen and
+// what is just before it; nothing after it, so no spoilers.
+function bookQuestion(ctx) {
+  const parts = [];
+  if (ctx.bookTitle) parts.push(`<book>${ctx.bookTitle}${ctx.author ? ` by ${ctx.author}` : ""}</book>`);
+  if (ctx.chapter) parts.push(`<chapter>${ctx.chapter}</chapter>`);
+  if (ctx.before) parts.push(`<context_before>\n${ctx.before}\n</context_before>`);
+  if (ctx.page) parts.push(`<on_screen>\n${ctx.page}\n</on_screen>`);
+  parts.push(`The reader is reading this book in the app${ctx.page ? "; the text on their screen right now is in <on_screen>, and what comes just before it in <context_before>" : ""}. They ask a question about the book, not about a selected passage. Answer it from this place in the book and from what you know of the book. Never reveal plot, twists or conclusions that come after this point; if the question can't be answered without them, say so and offer to answer once they've read on.`);
+  parts.push(`The reader's question: ${ctx.question || "What should I keep in mind at this point of the book?"}`);
+  return { role: "user", content: parts.join("\n\n") };
+}
+
 function firstMessage(ctx, mode) {
   if (ctx.paper) return paperMessage(ctx, mode);
+  if (!ctx.selection && mode !== "translate") return bookQuestion(ctx);
   const parts = [];
   if (ctx.bookTitle) parts.push(`<book>${ctx.bookTitle}${ctx.author ? ` by ${ctx.author}` : ""}</book>`);
   if (ctx.chapter) parts.push(`<chapter>${ctx.chapter}</chapter>`);
