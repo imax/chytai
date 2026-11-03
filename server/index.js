@@ -939,6 +939,14 @@ app.post("/api/site-admin/off", express.json(), (req, res) => {
   res.json({ ok: true, off: !!a.off });
 });
 
+// The reader's scripts, styles and fonts need no account (the code is public on GitHub anyway): the
+// service worker fetches them for the offline copy, and in the Android app its requests came without
+// the sign-in cookie, so it got the /login page back as style.css and the reader showed unstyled.
+// Only the page itself (/) stays behind the sign-in below.
+const publicRenderer = express.static(path.join(ROOT, "src", "renderer"), { index: false });
+app.use("/node_modules", express.static(path.join(ROOT, "node_modules"), { index: false, maxAge: "7d" }));
+app.use((req, res, next) => (req.path === "/index.html" ? next() : publicRenderer(req, res, next)));
+
 app.use((req, res, next) => {
   const acct = currentAccount(req);
   const share = acct ? null : currentShare(req);
@@ -972,8 +980,6 @@ app.get("/admin", (_req, res) => res.redirect(`${WEB_URL}/admin/reader`));
 // Static renderer: index.html at /, its scripts next to it, node_modules at /node_modules
 // (so the renderer's ../../node_modules/… paths resolve, as they do under file:// in Electron).
 app.get("/", (_req, res) => res.sendFile(path.join(ROOT, "src", "renderer", "index.html")));
-app.use("/node_modules", express.static(path.join(ROOT, "node_modules"), { index: false, maxAge: "7d" }));
-app.use(express.static(path.join(ROOT, "src", "renderer"), { index: false }));
 
 // ---------- API ----------
 
