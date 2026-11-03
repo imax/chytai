@@ -428,19 +428,23 @@ app.post("/login/signup", (req, res) => {
   const error = name.error || username.error;
   if (error) return res.status(400).send(pages.signupPage({ next, ticket: req.body.ticket, email, name: req.body.name, username: req.body.username, error }));
   if (auth.byEmail(email)) return signIn(req, res, auth.byEmail(email), next);
-  const reader = auth.createReader({ email, name: name.name, username: username.username });
-  admin.event(req, null, "login", "signup");
-  admin.log(reader.id, "signup", next || "");
-  auth.useTicket(req.body.ticket);
+  const reader = newReader(req, { email, name: name.name, username: username.username, ticket: req.body.ticket, next });
   admin.came(reader.id, cookies(req).chytai_came);
   res.append("Set-Cookie", `chytai_came=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax`);
-  console.log(`new reader @${reader.username}`);
-  welcomeMail.newReader(reader);
   // Someone who came from the reader goes straight back to it; the welcome page is about the site.
   // So does one who signed up to save a book (/do/…): the book is saved and they are back on its page.
   // And one who signed up to answer in the Club: back to the topic (Max, 2026-11-01).
   signIn(req, res, reader, next.startsWith("/reader-login") || next.startsWith("/oauth/authorize") || next.startsWith("/do/") || next.startsWith("/club/") ? next : `/welcome${next ? `?next=${encodeURIComponent(next)}` : ""}`);
 });
+function newReader(req, { email, name, username, ticket, next }) {
+  const reader = auth.createReader({ email, name, username });
+  admin.event(req, null, "login", "signup");
+  admin.log(reader.id, "signup", next || "");
+  auth.useTicket(ticket);
+  console.log(`new reader @${reader.username}`);
+  welcomeMail.newReader(reader);
+  return reader;
+}
 // Someone who signed up from a book's or an author's page sees that book (or the author's best-read three) first,
 // to save in one tap (usability review 2026-10-28, Max: «окремий флоу якщо людина прийшла на сторінку книжки або автора»).
 app.get("/welcome", signed, (req, res) => {
@@ -495,15 +499,59 @@ const READER_URL = (process.env.READER_URL || READER_ORIGINS[0]).replace(/\/$/, 
 // has (POST /api/reader-library). The key is an HMAC with the site's own secret, kept in the database.
 const readerSecret = () => store.db.get("reader:secret") || (store.db.set("reader:secret", require("crypto").randomBytes(32).toString("hex")), store.db.get("reader:secret"));
 const readerKey = (id) => require("crypto").createHmac("sha256", readerSecret()).update(`reader:${id}`).digest("hex");
+const readerTicket = (id) => {
+  for (const [t, v] of readerTickets) if (v.expires < Date.now()) readerTickets.delete(t);
+  const ticket = require("crypto").randomBytes(16).toString("hex");
+  readerTickets.set(ticket, { id, expires: Date.now() + 120000 });
+  return ticket;
+};
+// Signing in on the reader's own landing (design «11a», Max 2026-11-03): the page there asks for the e-mail
+// and the code itself, here, so it never leaves the reader (the phone apps open the site in a browser).
+// The same codes and limits as /login; the answer is a reader ticket, or for a new address a signup ticket
+// and then one more step with the name. Only the reader's addresses may call these from a browser.
+const readerCors = (req, res, next) => {
+  const origin = req.get("origin");
+  if (origin && !READER_ORIGINS.includes(origin)) return res.status(403).json({ error: "Невідома адреса читалки." });
+  if (origin) res.set({ "Access-Control-Allow-Origin": origin, "Access-Control-Allow-Methods": "POST", "Access-Control-Allow-Headers": "Content-Type", "Access-Control-Max-Age": "86400", Vary: "Origin" });
+  if (req.method === "OPTIONS") return res.sendStatus(204);
+  res.set("Cache-Control", "no-store");
+  next();
+};
+app.options("/api/reader-login/:step", readerCors);
+app.post("/api/reader-login/email", readerCors, async (req, res) => {
+  const { email, error } = auth.checkEmail(req.body?.email);
+  if (error) return res.status(400).json({ error });
+  const r = await auth.sendCode(email, req.ip);
+  if (r.error) return res.status(429).json({ error: r.error });
+  admin.event(req, null, "login", "page:reader");
+  admin.event(req, null, "login", "email");
+  res.json({ ok: true, email });
+});
+app.post("/api/reader-login/code", readerCors, (req, res) => {
+  const { email, error } = auth.checkEmail(req.body?.email);
+  if (error) return res.status(400).json({ error });
+  const r = auth.verify(email, req.body?.code);
+  if (r.error) return res.status(400).json({ error: r.error });
+  admin.event(req, null, "login", r.reader ? "code:known" : "code:new");
+  if (!r.reader) return res.json({ signup: r.ticket });
+  admin.log(r.reader.id, "login", "/reader-login");
+  res.json({ ticket: readerTicket(r.reader.id) });
+});
+app.post("/api/reader-login/signup", readerCors, (req, res) => {
+  const email = auth.ticketEmail(req.body?.signup);
+  if (!email) return res.status(400).json({ error: "Час вийшов. Запросіть код ще раз." });
+  const name = auth.checkName(req.body?.name);
+  if (name.error) return res.status(400).json({ error: name.error });
+  const reader = auth.byEmail(email) || newReader(req, { email, name: name.name, username: auth.suggestUsername(name.name, slugify), ticket: req.body.signup, next: "/reader-login" });
+  res.json({ ticket: readerTicket(reader.id) });
+});
 app.get("/reader-login", signed, (req, res) => {
   let origin = "";
   try {
     origin = new URL(String(req.query.back || "")).origin;
   } catch {}
   if (!READER_ORIGINS.includes(origin)) return res.status(400).send(pages.messagePage({ title: "Невідома адреса читалки", text: "Відкрийте читалку ще раз і натисніть «Увійти».", user: req.user }));
-  for (const [t, v] of readerTickets) if (v.expires < Date.now()) readerTickets.delete(t);
-  const ticket = require("crypto").randomBytes(16).toString("hex");
-  readerTickets.set(ticket, { id: req.user.id, expires: Date.now() + 120000 });
+  const ticket = readerTicket(req.user.id);
   // The iPhone app signs in through Safari: its one-time code goes back with the ticket (reader /app-login).
   const app = /^[a-f0-9]{32}$/.test(String(req.query.app || "")) ? `&app=${req.query.app}` : "";
   res.redirect(`${origin}/auth?ticket=${ticket}${app}`);
