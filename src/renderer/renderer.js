@@ -1040,7 +1040,7 @@ function startExplanation(selection, { mode = "explain", question = "" } = {}) {
 
   const conv = makeConv({ cfiRange: selection.cfiRange, context: selection.context, mode });
   // The new card is at the top; bring it into view even if the list was scrolled down.
-  $("#cards").scrollTop = 0;
+  $("#panel-body").scrollTop = 0;
   highlightConv(conv);
   window.PhoneRead?.convStarted(conv);
   runTurn(conv, question || null);
@@ -1068,7 +1068,7 @@ function makeConv({ cfiRange, context, mode, sid: keptId }) {
     <form class="followup"><input type="text" placeholder="Уточнити…" enterkeyhint="send" /><button type="submit" class="ask" aria-label="Запитати"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5M6 11l6-6 6 6"/></svg></button></form>`;
   card.querySelector(".quote").textContent = quote.length > 280 ? quote.slice(0, 280) + "…" : quote;
   if (!quote) card.classList.add("c-book"); // a question about the book, no passage
-  $("#ask-book").after(card);
+  $("#q-head").after(card);
 
   // sid: the id it is kept under on the server; turns: [{ q, a }] answered so far.
   const sid = keptId || `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
@@ -1382,6 +1382,7 @@ function listCards() {
   more.classList.toggle("hidden", !hidden);
   $("#panel-empty").classList.toggle("hidden", cards.length > 0);
   for (const conv of conversations.values()) syncConvActs(conv);
+  $("#q-head").innerHTML = `Запитання${cards.length ? ` · ${cards.length}` : ""}`;
   window.PhoneRead?.syncPanelHead?.();
 }
 $("#cards-more").onclick = () => ((cardsAll = true), listCards());
@@ -1431,7 +1432,7 @@ function openAsk() {
   if (!current) return;
   showPanel(true, "cards");
   window.PhoneRead?.sheetFull();
-  $("#cards").scrollTop = 0;
+  $("#panel-body").scrollTop = 0;
   setTimeout(() => $("#ab-q").focus(), PHONE.matches ? 0 : 60);
 }
 
@@ -1550,17 +1551,17 @@ const notesStore = window.reader.notesList
 
 let notes = []; // notes of the open book, oldest first
 
+// One panel like a paper book's page (Max 2026-11-03): the question field and «Запитання» on top, «Нотатки» under
+// them. A «tab» is now where the panel is scrolled to: the top, or the notes (a note opened from the text).
+let lastTab = "cards";
+const panelTab = () => "cards";
 function showTab(tab) {
-  for (const b of document.querySelectorAll("#panel .tab")) b.classList.toggle("active", b.dataset.tab === tab);
-  $("#cards").classList.toggle("hidden", tab !== "cards");
-  $("#notes").classList.toggle("hidden", tab !== "notes");
-  if (tab !== "cards") starConvs();
-  $("#btn-clear").classList.toggle("hidden", tab !== "cards");
-  if (tab === "notes") requestAnimationFrame(() => document.querySelectorAll(".note-comment").forEach(fitComment));
+  lastTab = tab;
+  $("#btn-clear").classList.add("hidden");
+  requestAnimationFrame(() => document.querySelectorAll(".note-comment").forEach(fitComment));
 }
-for (const b of document.querySelectorAll("#panel .tab")) b.onclick = () => showTab(b.dataset.tab);
 
-const notesTabShown = () => !document.body.classList.contains("panel-hidden") && !$("#notes").classList.contains("hidden");
+const notesTabShown = () => !document.body.classList.contains("panel-hidden") && lastTab === "notes";
 
 async function loadNotes() {
   const path = current?.path;

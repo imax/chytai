@@ -80,7 +80,6 @@
       <!-- Computer (turn 10): the actions are in the header on the right, with their names. -->
       <nav class="m-dnav">
         <button type="button" data-d="search" class="m-dsearch" title="Пошук у книжці (⌘F)" aria-label="Пошук у книжці"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4 4"/></svg></button>
-        <button type="button" data-d="ask" title="Запитати (Q)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 5.5h15v10h-9l-4.5 3.5v-3.5h-1.5z"/></svg>Запитати</button>
         <button type="button" data-d="toc" title="Зміст (T)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6h11M9 12h11M9 18h11"/><circle cx="4.5" cy="6" r=".9"/><circle cx="4.5" cy="12" r=".9"/><circle cx="4.5" cy="18" r=".9"/></svg>Зміст</button>
         <button type="button" data-d="notes"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 4h12v16l-6-4-6 4z"/></svg>Нотатки <i id="m-dncount"></i></button>
         <button type="button" data-d="look" class="m-daa" title="Вигляд" aria-label="Вигляд">Аа</button>
@@ -95,7 +94,6 @@
         <span id="m-bubble" class="hidden"></span>
       </div>
       <nav class="m-nav">
-        <button type="button" data-m="ask"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 5.5h15v10h-9l-4.5 3.5v-3.5h-1.5z"/></svg>Запитати</button>
         <button type="button" data-m="toc"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6h11M9 12h11M9 18h11"/><circle cx="4.5" cy="6" r=".6"/><circle cx="4.5" cy="12" r=".6"/><circle cx="4.5" cy="18" r=".6"/></svg>Зміст</button>
         <button type="button" data-m="notes"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 3.5h11v17l-5.5-3.8-5.5 3.8z"/></svg><span>Нотатки <i id="m-ncount"></i></span></button>
         <button type="button" data-m="look"><span class="m-aa" aria-hidden="true">Аа</span>Вигляд</button>
@@ -135,16 +133,20 @@
           <button id="btn-panel-close" class="link mobile-only" title="Сховати панель" aria-label="Закрити"><span>Сховати</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
         </span>
       </div>
+      <div id="panel-body">
       <div id="cards">
         <!-- «Запитання» (2026-11-03, like a paper book): a question about the book, then the questions asked. -->
         <form id="ask-book" autocomplete="off">
           <textarea id="ab-q" rows="1" placeholder="Запитати про книжку…" enterkeyhint="send" aria-label="Питання про книжку"></textarea>
           <div class="st-row"><button type="button" class="pp-tool ab-mic" title="Надиктувати" aria-label="Надиктувати"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></button><span class="st-sp"></span><button type="submit" class="st-go">Запитати</button></div>
         </form>
-        <div id="panel-empty" class="panel-empty">Або виділіть текст у книжці, щоб запитати про нього.</div>
+        <h3 id="q-head" class="m-sec">Запитання</h3>
+        <div id="panel-empty" class="panel-empty">Можна також виділити текст у книжці.</div>
         <button type="button" id="cards-more" class="link hidden"></button>
       </div>
-      <div id="notes" class="hidden"></div>
+      <h3 id="notes-head" class="m-sec">Нотатки</h3>
+      <div id="notes"></div>
+      </div>
     </aside>
   </main>
 

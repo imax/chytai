@@ -67,8 +67,7 @@
     const on = (d, v) => $(`.m-dnav [data-d="${d}"]`)?.classList.toggle("on", v);
     on("toc", tocOpen);
     on("search", searchOpen);
-    on("notes", panelOpen() && !$("#notes").classList.contains("hidden"));
-    on("ask", panelOpen() && $("#notes").classList.contains("hidden"));
+    on("notes", panelOpen());
     on("look", !$("#mlook").classList.contains("hidden"));
   }
 
@@ -86,7 +85,7 @@
     if (!desk()) return;
     if (show && searchOpen) window.BookSearch?.close();
     if (show && tocOpen && area() < 680) window.PhoneRead?.closeSheet();
-    $("#ps-esc").classList.toggle("hidden", !show || !escHint || !$("#notes").classList.contains("hidden"));
+    $("#ps-esc").classList.toggle("hidden", !show || !escHint);
     layout();
   }
   function searchShown(show) {
@@ -210,14 +209,7 @@
       if (d === "full") return fullscreen();
       if (d === "search") return searchOpen ? window.BookSearch?.close() : window.BookSearch?.open();
       if (d === "toc") return tocOpen ? window.PhoneRead?.closeSheet() : window.PhoneRead?.openSheet("toc");
-      if (d === "ask") {
-        const shown = panelOpen() && $("#notes").classList.contains("hidden");
-        return shown ? showPanel(false) : openAsk();
-      }
-      if (d === "notes") {
-        const shown = panelOpen() && !$("#notes").classList.contains("hidden");
-        return showPanel(!shown, shown ? undefined : "notes");
-      }
+      if (d === "notes") return panelOpen() ? showPanel(false) : showPanel(true, panelTab());
     };
   }
 

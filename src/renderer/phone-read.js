@@ -135,12 +135,13 @@
   for (const b of document.querySelectorAll(".m-nav button")) {
     b.onclick = () => {
       toggleChrome(false);
-      if (b.dataset.m === "notes") return showPanel(true, "notes");
-      if (b.dataset.m === "ask") return openAsk();
+      // «Нотатки» opens the panel with both tabs, «Запитання» and «Нотатки», on the one last used (Max 2026-11-03).
+      if (b.dataset.m === "notes") return showPanel(true, panelTab());
       openSheet(b.dataset.m);
     };
   }
   function notesCount() {
+    syncPanelHead();
     $("#m-ncount").textContent = notes.length || "";
     $("#m-dncount").textContent = notes.length || "";
   }
@@ -323,8 +324,7 @@
   let shownConv = null;
   function panelShown(show) {
     if (show && on()) closeSheet();
-    const notesTab = !$("#notes").classList.contains("hidden");
-    panel.classList.toggle("m-notes", notesTab);
+    const notesTab = panelTab() === "notes";
     if (show && notesTab && on()) setPanelTop(true);
     syncPanelHead();
     window.DeskRead?.panelShown(show);
@@ -334,11 +334,8 @@
     body.style.setProperty("--panel-top", full ? "52px" : "47%");
   }
   function syncPanelHead() {
-    const notesTab = !$("#notes").classList.contains("hidden");
-    const title = $("#ps-title");
-    if (notesTab) title.innerHTML = `Нотатки <span>${notes.length || ""}</span>`;
-    else title.innerHTML = `Запитання <span>${conversations.size || ""}</span>`;
-    // «В нотатки» is on each question now (2026-11-03).
+    $("#ps-title").textContent = ""; // the book's title is already on the page (Max 2026-11-03)
+    $("#notes-head").textContent = `Нотатки${notes.length ? ` · ${notes.length}` : ""}`;
     $("#ps-action").classList.add("hidden");
   }
   $("#ps-action").onclick = () => {
@@ -354,7 +351,7 @@
     shownConv = conv;
     for (const c of conversations.values()) c.card.classList.toggle("m-off", c !== conv);
     // The open one goes to the top of the list, under the field.
-    if (conv && conv.card.previousElementSibling !== $("#ask-book")) $("#ask-book").after(conv.card);
+    if (conv && conv.card.previousElementSibling !== $("#q-head")) $("#q-head").after(conv.card);
     listCards();
     syncPanelHead();
   }
@@ -364,7 +361,7 @@
     const p = String(conv.cfiRange).startsWith("epubcfi") ? pageOf(conv.cfiRange) : null;
     where.textContent = [conv.context.chapter, p && `стор. ${p.page}`, "щойно"].filter(Boolean).join(" · ");
     // A question about a passage: the list scrolls to it, past the field. One about the book stays at the top.
-    const box = $("#cards");
+    const box = $("#panel-body");
     if (conv.context.selection) requestAnimationFrame(() => (box.scrollTop += conv.card.getBoundingClientRect().top - box.getBoundingClientRect().top));
     else box.scrollTop = 0;
     if (!on()) return window.DeskRead?.convStarted(conv);

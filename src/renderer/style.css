@@ -2187,3 +2187,31 @@ body.offline #ask-book .st-go { background: var(--m-off); color: var(--m-ink3); 
   #panel #cards .card { padding: 16px 24px 18px; gap: 10px; }
   #panel #cards .card .followup { margin: 4px 0 0; padding: 0; }
 }
+/* The bottom bar has four buttons since «Запитати» (Max 2026-11-03: it wrapped to two rows). */
+#m-look { flex: none; width: 40px; height: 40px; display: grid; place-items: center; padding: 0; border: none; background: none; color: var(--m-ink); cursor: pointer; }
+#m-look .m-aa { font: 400 20px/22px var(--m-serif); }
+@media (min-width: 761px) { #m-top #m-look { display: none; } }
+/* The card's row never squeezes «Пояснити»: the links give way first (Max 2026-11-03, iPhone). */
+html body #sel-toolbar:not(.mark) .st-row .st-link { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; padding: 9px 7px; }
+html body #sel-toolbar:not(.mark) .st-row .pp-tool { flex: none; }
+html body #sel-toolbar:not(.mark) .st-row .st-go { flex: none; min-width: max-content; padding: 11px 24px; font-size: 16px; }
+html body #sel-toolbar:not(.mark) .st-row .st-sp { flex: 1 1 4px; }
+html body #sel-toolbar:not(.mark) .st-row .st-link + .st-link { margin-left: 2px; }
+html body #sel-toolbar:not(.mark) .st-row .st-go { padding: 11px 22px; }
+/* One panel like a paper book's page (Max 2026-11-03): the field and «Запитання» on top, «Нотатки» under them,
+   one scroll. The head has no title: the book's name is already on the screen behind it. */
+#panel .panel-head .panel-tabs { display: none !important; }
+#panel .panel-head .ps-title { display: block; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#panel #panel-body { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; display: flex; flex-direction: column; }
+html body #panel #panel-body #cards, html body #panel #panel-body #notes { flex: none; overflow: visible; min-height: 0; }
+#panel #panel-body #cards.hidden, #panel #panel-body #notes.hidden { display: flex; }
+#panel .m-sec {
+  margin: 22px 20px 0; padding-top: 14px; border-top: 1px solid var(--m-head);
+  font: 500 12px/1.3 var(--m-sans); text-transform: uppercase; letter-spacing: .14em; color: var(--m-ochre);
+}
+#panel #q-head { margin-top: 16px; }
+#panel #notes { padding-bottom: calc(28px + env(safe-area-inset-bottom)); }
+@media (min-width: 761px) { #panel .m-sec { margin-left: 24px; margin-right: 24px; } }
+html body #panel .panel-head { border-bottom: none; }
+@media (max-width: 760px) { html body #panel .panel-head { padding-top: 12px; padding-bottom: 0; min-height: 40px; } }
+@media (min-width: 761px) { html body #panel .panel-head { height: 48px; } }
