@@ -481,7 +481,7 @@ function bookPage({ club = [], ukrlib = null, sluhay = null, inGenre = null, fre
       ${first.entry.note ? quote(first, book.id) : ""}
       ${(first.entry.note ? rest : readers).length ? `<div class="others">${(first.entry.note ? rest : readers).map((r) => readerLine(r, book.id)).join("")}</div>` : ""}
     </section>` : ""}
-    ${ru ? "" : club.length ? `<section class="block" data-block="club">${label("Клуб Chytai", `<a rel="nofollow" href="/club/new?book=${attr(encodeURIComponent(book.id))}">нова тема</a>`)}<div class="club-topics">${club.map((t) => clubRow(t, { book: false })).join("")}</div></section>` : `<section class="block" data-block="club">${label("Клуб Chytai")}<p class="club-start">Тем ще немає. <a class="text-link" rel="nofollow" href="/club/new?book=${attr(encodeURIComponent(book.id))}">Обговорити в Клубі</a></p></section>`}
+    ${ru ? "" : club.length ? `<section class="block" data-block="club">${label("Клуб Chytai")}<div class="club-topics">${club.map((t) => clubRow(t, { book: false })).join("")}</div></section>` : `<section class="block" data-block="club">${label("Клуб Chytai")}<p class="club-start">Тем ще немає. <a class="text-link" rel="nofollow" href="/club/new?book=${attr(encodeURIComponent(book.id))}">Обговорити в Клубі</a></p></section>`}
     ${lists.length ? `<section class="block" data-block="lists">${label("У списках", `<a href="/lists">усі списки</a>`)}<div class="lists">${lists.map(listLine).join("")}</div></section>` : ""}
     ${adviceBlock(book, advice)}
     ${SHOW_REVIEWS && (writings.length || user) ? `<section class="block" id="writings">
