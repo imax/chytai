@@ -152,7 +152,8 @@ function userState(name) {
 }
 
 function settingsFor(req) {
-  const { notes, ...u } = req.guest ? guestState(req.guest) : userState(req.acct);
+  // Notes and kept explanations come by their own calls; they would make every settings answer heavy.
+  const { notes, chats, paperChats, ...u } = req.guest ? guestState(req.guest) : userState(req.acct);
   const demo = req.guest ? guestBooks(req) : null;
   return {
     ...SHARED_DEFAULTS,
@@ -1078,6 +1079,57 @@ api.delete("/notes/:id", (req, res) => {
   res.json({ ok: true });
 });
 
+// Explanations and answers asked in a book, kept (Max 2026-11-03: «так само зберігати пояснення і відповіді
+// для звичайних електронних», as for paper books): u.chats[book] = [{ id, cfi, posKey, mode, sel, chapter,
+// turns: [{ q, a }], messages, model, at }]. Reopening the book brings the cards and the marks back; follow-ups
+// go on from the kept talk. A guest's live only as long as the guest's session, like the guest's notes.
+const BOOK_CHATS_MAX = 500;
+function chatsOf(req, bookPath) {
+  const u = req.guest ? guestState(req.guest) : userState(req.acct);
+  u.chats ??= {};
+  return { u, list: (u.chats[bookPath] ??= []) };
+}
+api.get("/chats", (req, res) => {
+  const u = req.guest ? guestState(req.guest) : userState(req.acct);
+  res.json({ chats: u.chats?.[String(req.query.path || "")] || [] });
+});
+api.put("/chats/:id", (req, res) => {
+  const { path: bookPath, cfi, posKey, mode, sel, chapter, turns, messages, model, at } = req.body || {};
+  if (typeof bookPath !== "string" || !bookPath || typeof cfi !== "string" || !cfi || !/^[A-Za-z0-9_-]{4,40}$/.test(req.params.id) || !Array.isArray(turns) || !turns.length) {
+    return res.status(400).json({ error: "bad request" });
+  }
+  const chat = {
+    id: req.params.id,
+    cfi: cfi.slice(0, 2000),
+    posKey: typeof posKey === "string" ? posKey.slice(0, 2000) : bookPath,
+    mode: mode === "translate" ? "translate" : "explain",
+    sel: typeof sel === "string" ? sel.slice(0, 4000) : "",
+    chapter: typeof chapter === "string" ? chapter.slice(0, 200) : "",
+    turns: turns.slice(-50).map((t) => ({ q: String(t?.q || "").slice(0, 4000), a: String(t?.a || "").slice(0, 20000) })),
+    messages: Array.isArray(messages) ? messages : null,
+    model: typeof model === "string" ? model.slice(0, 80) : "",
+    at: Number.isFinite(at) ? at : Date.now(),
+  };
+  // A long talk keeps its turns for reading, but no longer goes on from where it was.
+  if (JSON.stringify(chat.messages || "").length > CHAT_BYTES) chat.messages = null;
+  const { list } = chatsOf(req, bookPath);
+  const i = list.findIndex((c) => c.id === chat.id);
+  if (i >= 0) list[i] = chat;
+  else list.push(chat);
+  if (list.length > BOOK_CHATS_MAX) list.splice(0, list.length - BOOK_CHATS_MAX);
+  if (!req.guest || req.share) saveState();
+  res.json({ ok: true });
+});
+// One explanation («Очистити розмову»), or with no id every one in the book (the panel's «Очистити»).
+api.delete(["/chats/:id", "/chats"], (req, res) => {
+  const bookPath = String(req.query.path || "");
+  const { u, list } = chatsOf(req, bookPath);
+  u.chats[bookPath] = req.params.id ? list.filter((c) => c.id !== req.params.id) : [];
+  if (!u.chats[bookPath].length) delete u.chats[bookPath];
+  if (!req.guest || req.share) saveState();
+  res.json({ ok: true });
+});
+
 // An account deleted on the site takes its books, notes and positions with it (the site's privacy page
 // promises that). Once a day the reader asks the site which of its accounts are gone. If the site says
 // most of them are, something is wrong there, and nothing is deleted.
@@ -1629,6 +1681,13 @@ api.post("/books/:name/epub", express.raw({ type: () => true, limit: MAX_UPLOAD 
     u.notes[epub] = [...(u.notes[epub] || []), ...moved.map((n) => ({ ...n, posKey: epub }))];
     u.notes[name] = notes.filter((n) => n.posKey !== from);
     if (!u.notes[name].length) delete u.notes[name];
+  }
+  const chats = u.chats?.[name] || [];
+  const movedChats = chats.filter((c) => c.posKey === from);
+  if (movedChats.length) {
+    u.chats[epub] = [...(u.chats[epub] || []), ...movedChats.map((c) => ({ ...c, posKey: epub }))];
+    u.chats[name] = chats.filter((c) => c.posKey !== from);
+    if (!u.chats[name].length) delete u.chats[name];
   }
   if (u.lastBook === name) u.lastBook = epub;
   const key = customCoverKey(name);

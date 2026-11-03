@@ -367,6 +367,7 @@ async function openEpub(payload, { posKey, source }) {
   // hiding on a phone); a re-measure now re-renders only if the size actually changed.
   requestAnimationFrame(resizeView);
   loadNotes();
+  loadChats();
   watchFirstPage();
   jumpIfPending();
 
@@ -577,6 +578,7 @@ async function openPdf(payload) {
   renderToc(toc);
   $("#btn-toc").disabled = !toc.length;
   loadNotes();
+  loadChats();
   jumpIfPending();
 }
 
@@ -951,11 +953,22 @@ function startExplanation(selection, { mode = "explain" } = {}) {
     }
   }
 
+  const conv = makeConv({ cfiRange: selection.cfiRange, context: selection.context, mode });
+  // The new card is at the top; bring it into view even if the list was scrolled down.
+  $("#cards").scrollTop = 0;
+  highlightConv(conv);
+  window.PhoneRead?.convStarted(conv);
+  runTurn(conv, null);
+  return conv.card;
+}
+
+// A card in the panel with its talk. New ones and kept ones (reopening the book) are made the same way.
+function makeConv({ cfiRange, context, mode, sid: keptId }) {
   const id = `r${++reqCounter}`;
   const card = document.createElement("article");
   card.className = mode === "translate" ? "card translation" : "card";
   card.dataset.id = id;
-  const quote = selection.context.selection;
+  const quote = context.selection || "";
   card.innerHTML = `
     <div class="where"></div>
     <blockquote class="quote"></blockquote>
@@ -971,14 +984,12 @@ function startExplanation(selection, { mode = "explain" } = {}) {
     <form class="followup"><input type="text" placeholder="Уточнити питання…" enterkeyhint="send" /><button type="submit" class="ask" aria-label="Запитати"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5M6 11l6-6 6 6"/></svg></button></form>`;
   card.querySelector(".quote").textContent = quote.length > 280 ? quote.slice(0, 280) + "…" : quote;
   $("#cards").prepend(card);
-  // The new card is at the top; bring it into view even if the list was scrolled down.
-  $("#cards").scrollTop = 0;
 
-  const conv = { id, card, mode, cfiRange: selection.cfiRange, context: selection.context, messages: null, busy: false };
+  // sid: the id it is kept under on the server; turns: [{ q, a }] answered so far.
+  const sid = keptId || `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
+  const conv = { id, sid, card, mode, cfiRange, context, messages: null, turns: [], at: Date.now(), busy: false };
   conversations.set(id, conv);
 
-  highlightConv(conv);
-  window.PhoneRead?.convStarted(conv);
   card.querySelector(".forget").onclick = () => forgetConv(conv);
   card.querySelector(".followup input").oninput = (e) => card.querySelector(".followup").classList.toggle("filled", !!e.target.value.trim());
 
@@ -1007,8 +1018,7 @@ function startExplanation(selection, { mode = "explain" } = {}) {
   };
 
   if (mode === "translate") card.querySelector(".followup input").placeholder = "Запитати про переклад…";
-  runTurn(conv, null);
-  return card;
+  return conv;
 }
 
 function runTurn(conv, question) {
@@ -1062,6 +1072,11 @@ window.reader.onAiEvent((reqId, ev) => {
   el.classList.remove("streaming");
   if (ev.type === "done") {
     conv.messages = ev.messages;
+    if (conv.text) {
+      conv.turns.push({ q: conv.lastQuestion || "", a: conv.text });
+      conv.model = ev.model || "";
+      saveConv(conv);
+    }
     conv.card.querySelector(".forget").classList.remove("hidden");
     // One "more detail" per card: after it, the follow-up field is the way to ask further.
     if (conv.mode !== "translate" && conv.lastQuestion !== "Детальніше") conv.card.querySelector(".more").classList.remove("hidden");
@@ -1231,7 +1246,11 @@ function clearExplanations() {
   $("#cards").innerHTML = `<div id="panel-empty" class="panel-empty">Виділіть текст у книжці, щоб отримати пояснення в контексті.</div>`;
 }
 
-$("#btn-clear").onclick = clearExplanations;
+// «Очистити» in the panel: the book's kept explanations go too.
+$("#btn-clear").onclick = () => {
+  if (current && window.reader.chatsClear) window.reader.chatsClear(current.path).catch(() => {});
+  clearExplanations();
+};
 
 // Phone: «Очистити розмову» at the end of one explanation removes it and its mark in the text.
 function forgetConv(conv) {
@@ -1239,8 +1258,62 @@ function forgetConv(conv) {
   unhighlightConv(conv);
   conversations.delete(conv.id);
   conv.card.remove();
+  if (current && conv.turns.length) window.reader.chatDelete?.(current.path, conv.sid).catch(() => {});
   showPanel(false);
   renderNotes();
+}
+
+// ---------- Kept explanations (Max 2026-11-03: saved like a paper book's questions) ----------
+
+// Every answered turn keeps the card on the server, with the talk so far for follow-ups after a reopen.
+function saveConv(conv) {
+  if (!current || !window.reader.chatSave) return;
+  conv.at = Date.now();
+  window.reader
+    .chatSave(current.path, {
+      id: conv.sid, cfi: conv.cfiRange, posKey: current.posKey, mode: conv.mode, sel: conv.context.selection || "",
+      chapter: conv.context.chapter || "", turns: conv.turns, messages: conv.messages, model: conv.model || "", at: conv.at,
+    })
+    .catch(() => {});
+}
+
+// Reopening the book: the kept cards come back (newest on top) and their passages get the asterisk.
+async function loadChats() {
+  const path = current?.path;
+  if (!path || !window.reader.chatsList) return;
+  let list;
+  try {
+    list = await window.reader.chatsList(path);
+  } catch {
+    return;
+  }
+  if (current?.path !== path || !list?.length) return;
+  const have = new Set([...conversations.values()].map((c) => c.sid));
+  const reachable = (c) => (c.cfi.startsWith("pdf:") ? !!pdfView : !!rendition && (c.posKey || path) === current.posKey);
+  const kept = list.filter((c) => !have.has(c.id) && reachable(c)).sort((a, b) => (a.at || 0) - (b.at || 0));
+  if (!kept.length) return;
+  const none = !have.size;
+  $("#panel-empty")?.remove();
+  for (const c of kept) {
+    const conv = makeConv({ cfiRange: c.cfi, context: { selection: c.sel, chapter: c.chapter, bookTitle: current.title, author: current.author }, mode: c.mode, sid: c.id });
+    conv.turns = c.turns || [];
+    conv.messages = c.messages || null;
+    conv.model = c.model || "";
+    conv.at = c.at || 0;
+    const thread = conv.card.querySelector(".thread");
+    conv.turns.forEach((t) => {
+      if (t.q) thread.insertAdjacentHTML("beforeend", `<div class="question"></div>`), (thread.lastElementChild.textContent = t.q);
+      thread.insertAdjacentHTML("beforeend", `<div class="answer">${md(t.a)}</div>`);
+    });
+    conv.card.querySelector(".where").textContent = [c.chapter, c.at ? new Date(c.at).toLocaleDateString("uk-UA", { day: "numeric", month: "long" }) : ""].filter(Boolean).join(" · ");
+    conv.card.querySelector(".forget").classList.remove("hidden");
+    if (conv.mode !== "translate" && !conv.turns.some((t) => t.q === "Детальніше")) conv.card.querySelector(".more").classList.remove("hidden");
+    conv.card.querySelector(".model").textContent = (conv.mode === "translate" ? "Переклад · " : "") + modelLabel(conv.model);
+    conv.card.classList.add("m-off"); // a phone shows one explanation at a time
+    if (!c.cfi.startsWith("pdf:")) starConv(conv);
+  }
+  // The panel shows one explanation at a time: the newest kept one, until another is opened.
+  if (none) window.PhoneRead?.showConv([...conversations.values()].pop());
 }
 
 // ---------- Notes: passages saved with "Зберегти", per reader and per book ----------

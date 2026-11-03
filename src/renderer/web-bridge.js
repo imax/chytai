@@ -572,6 +572,11 @@
         return patchLocalSettings(rest);
       }
     },
+    // Kept explanations of a book (server only: without a connection they simply aren't kept this time).
+    chatsList: async (bookPath) => (await (await api("GET", `/api/chats?path=${encodeURIComponent(bookPath)}`)).json()).chats || [],
+    chatSave: (bookPath, chat) => api("PUT", `/api/chats/${encodeURIComponent(chat.id)}`, { ...chat, path: bookPath }),
+    chatDelete: (bookPath, id) => api("DELETE", `/api/chats/${encodeURIComponent(id)}?path=${encodeURIComponent(bookPath)}`),
+    chatsClear: (bookPath) => api("DELETE", `/api/chats?path=${encodeURIComponent(bookPath)}`),
     notesList: async (bookPath) => {
       try {
         await sync();
