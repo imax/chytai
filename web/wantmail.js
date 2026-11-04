@@ -123,7 +123,18 @@ class WantMail {
       ...(books.length > shown.length ? [`І ще ${books.length - shown.length}: ${site}/@${reader.username}`, ``] : []),
       `Відписатися від цих листів: ${off}`,
     ];
-    return { to: reader.email, subject, text: require("./admin").mailLinks(text.join("\n"), site, "want"), headers: { "List-Unsubscribe": `<${off}>`, "List-Unsubscribe-Post": "List-Unsubscribe=One-Click" } };
+    const M = require("./mailhtml");
+    const html = M.letter({
+      site,
+      title: subject,
+      section: "Хочу прочитати",
+      heading: M.esc(one ? "Книжка з вашого «Хочу прочитати» тепер є" : "Книжки з вашого «Хочу прочитати» тепер є"),
+      body:
+        shown.map((x) => M.book({ ...x.book, href: x.news.find((n) => n.href)?.href || x.book.href, note: x.news.map((n) => M.esc(this.line(n, x.id))).join("<br>") }, site)).join("") +
+        (books.length > shown.length ? `<p style="font-size:14px;color:#6b675f;margin:16px 0 0">І ще ${books.length - shown.length} на <a href="${site}/@${M.esc(reader.username)}" style="color:#6b675f">вашій полиці</a></p>` : ""),
+      off: { href: off, text: "Не надсилати таких листів" },
+    });
+    return { to: reader.email, subject, text: require("./admin").mailLinks(text.join("\n"), site, "want"), html: require("./admin").mailLinks(html, site, "want", true), headers: { "List-Unsubscribe": `<${off}>`, "List-Unsubscribe-Post": "List-Unsubscribe=One-Click" } };
   }
 
   recipients() {
@@ -148,7 +159,7 @@ class WantMail {
           out.readers++;
           if (d.books.length) {
             const l = this.render(r, d.books);
-            await this.auth.send(l.to, l.subject, l.text, { headers: l.headers });
+            await this.auth.send(l.to, l.subject, l.text, { html: l.html, headers: l.headers });
             out.sent++;
             this.log(`want mail @${r.username}: «${l.subject}»`);
           }
