@@ -616,8 +616,13 @@
       const c = chats.find((x) => x.id === save.dataset.ppSavechat);
       const last = c?.turns[c.turns.length - 1];
       if (!last) return;
-      const n = await addNote({ text: c.sel && !c.img ? c.sel : c.turns[0]?.q || c.sel || "Питання", comment: last.a, quote: !!c.sel && !c.img, page: c.page });
-      if (n) redraw(), showNotice("Збережено в нотатки", false);
+      // Only the book's words, without the explanation: it stays in «Запитання» anyway (Max, 2026-11-04).
+      // A selection is its own quote; for marks on a photo the answer starts each passage with its words in bold.
+      const quotes = c.sel && !c.img ? [c.sel] : marksQuoted(c.turns[0]?.a || "");
+      let n;
+      if (quotes.length) for (const q of quotes) n = (await addNote({ text: q, quote: true, page: c.page })) || n;
+      else n = await addNote({ text: c.turns[0]?.q || c.sel || "Питання", comment: last.a, page: c.page });
+      if (n) redraw(), showNotice(quotes.length > 1 ? `Збережено ${quotes.length} цитати` : "Збережено в нотатки", false);
       return;
     }
     const retry = e.target.closest("[data-pp-retry]");
@@ -667,6 +672,12 @@
       showNotice("Збережено в нотатки", false);
     }
   });
+
+  // The passages a marked photo's answer quotes, each at the start of its own paragraph as **«…»** (not the
+  // bold words inside the explanation's bullets).
+  function marksQuoted(text) {
+    return [...text.matchAll(/^\*\*[«"“„]([^\n]+?)[»"”“]\*\*/gm)].map((m) => m[1].trim()).filter((q) => q.split(/\s+/).length >= 3);
+  }
 
   // ---------- Запитати / Пояснити: the answer right on the page (v3, Max: no card, there's no text it'd cover) ----------
   // The question goes to the top of «Запитання», open, and the answer streams into it; every one is kept.
