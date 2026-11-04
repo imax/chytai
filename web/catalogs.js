@@ -278,7 +278,8 @@ const LANG_AID =
 const isLangAid = (title) => LANG_AID.test(String(title || ""));
 // A shop's set of several books («Комплект книг «Хроніки Дюни» / Дюна — 8 книг»), not a book to read (Max, 2026-11-04:
 // «ми ж не магазин… це стосується конкретної книжки, а не подарункових бандлів»). Left out when the shelves are loaded.
-const isBundle = (it) => !!it.bundle || /^\s*комплект/iu.test(String(it.title || ""));
+// The word stands anywhere: «Відьмак. Комплект з 3 томів», «Нордичний комплект. …» («комплектування» is another word).
+const isBundle = (it) => !!it.bundle || /(^|[^\p{L}])комплект(?!\p{L})/iu.test(String(it.title || ""));
 // Erotica and dark romance, not for a site teens and 10-year-olds read (Max, 2026-11-04, «Хтива Даяна»: «не сильно
 // хотів мати адалт-контент… не хочу кожного питати, чи вам виповнилось 18»). Left out when the shelves are loaded,
 // like a promo, so new imports of these are skipped too. By author (they write nothing else), KSD's genre «Дарк
