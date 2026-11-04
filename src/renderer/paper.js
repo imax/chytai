@@ -17,6 +17,7 @@
   let showText = false; // the attached photo's text is open to select from
   let adding = false; // the «+ Нотатка» form is open
   let editing = null; // the note being edited
+  let photo = null; // { data, small, marked, thumb, page }: the photo attached to the question field, sent with «Пояснити»/«Запитати»
   let noteDraft = ""; // its text, kept across redraws (an answer streaming in redraws the page)
   let notePage = 0; // the page the text from a photo came from
   let noteBusy = false; // the text of a photo for the note is being read
@@ -123,7 +124,7 @@
 
   function open(b) {
     if (book?.path !== b.path) {
-      scan = null;
+      scan = photo = null;
       showText = adding = false;
       editing = null;
       openChat = null;
@@ -166,7 +167,10 @@
     open(b);
     const draft = $("#pp-q")?.value || "";
     let att = "";
-    if (scan) {
+    if (photo) {
+      att = `<div class="pp-att"><img src="${photo.thumb}" alt="" /><span class="pp-att-t"><b>${photo.marked ? "Обведене на фото" : "Фото сторінки"}</b></span>
+        <button type="button" class="pp-x" data-pp="unphoto" aria-label="Прибрати фото">×</button></div>`;
+    } else if (scan) {
       att = `<div class="pp-att">${scan.thumb ? `<img src="${scan.thumb}" alt="" />` : ""}
         <span class="pp-att-t">${scan.busy ? `<span class="spinner"></span>Розпізнаю текст…` : `${scan.page ? `Стор. ${scan.page}` : "Сторінка"} з фото · <button type="button" class="r-link" data-pp="text">${showText ? "Сховати текст" : "Показати текст"}</button>`}</span>
         <button type="button" class="pp-x" data-pp="unattach" aria-label="Прибрати фото">×</button></div>`;
@@ -190,7 +194,7 @@
         <div class="pp-ask-row"><button type="button" class="pp-tool" data-pp="img" title="Фото чи скріншот" aria-label="Фото чи скріншот">${svgCam}</button>
           <button type="button" class="pp-tool${window.Dictation.field() === "pp-q" ? " on" : ""}" data-pp="mic" title="Надиктувати" aria-label="Надиктувати">${svgMic}</button>
           <span class="pp-ask-sp"></span>
-          <button type="button" class="r-pill" data-pp="ask">Запитати</button></div>
+          <button type="button" class="r-pill" data-pp="ask">${photo && !draft.trim() ? "Пояснити" : "Запитати"}</button></div>
       </form>
       ${sortedChats.length ? `<section class="pp-chats"><div class="r-sec-head"><h2>Запитання · ${chats.length}</h2></div>
         ${sortedChats.map((c) => {
@@ -199,7 +203,7 @@
           const on = openChat === c.id || !!live;
           const fq = (q) => `<div class="pp-chat-fq">${esc(q)}</div>`;
           const pending = live && (live.busy || live.error)
-            ? `${live.q && (c.turns.length || c.sel) ? fq(live.q) : ""}<div class="pp-chat-a answer pp-live">${live.error ? `<div class="error">${esc(live.error)}</div>` : live.text ? md(live.text) : `<span class="dots"><i></i><i></i><i></i></span>`}</div>`
+            ? `${live.q && (c.turns.length || c.sel) ? fq(live.q) : ""}<div class="pp-chat-a answer pp-live">${live.error ? `<div class="error">${esc(live.error)} <button type="button" class="r-link pp-retry" data-pp-retry="${esc(c.id)}">Спробувати ще раз</button></div>` : live.text ? md(live.text) : `<span class="dots"><i></i><i></i><i></i></span>`}</div>`
             : "";
           return `<div class="pp-chat${on ? " open" : ""}" data-chat="${esc(c.id)}">
             <div class="pp-chat-q">${c.img ? `<img class="pp-chat-img" src="${c.img}" alt="" />` : ""}${esc(c.sel ? (c.img ? c.sel : `«${c.sel}»`) : c.turns[0]?.q || live?.q || "")}</div>
@@ -270,6 +274,12 @@
     window.Shell.rerender();
   });
   document.addEventListener("input", (e) => e.target.id === "pp-note" && (noteDraft = e.target.value));
+  // With a photo in the field: «Пояснити» while the field is empty, «Запитати» once there is a question.
+  document.addEventListener("input", (e) => {
+    if (e.target.id !== "pp-q" || !photo) return;
+    const btn = $('[data-pp="ask"]');
+    if (btn) btn.textContent = e.target.value.trim() ? "Запитати" : "Пояснити";
+  });
   // Enter sends the question on a computer; on a phone Enter is a new line and «Запитати» sends.
   document.addEventListener("keydown", (e) => {
     if (e.target.id !== "pp-q" || e.key !== "Enter" || e.shiftKey || matchMedia("(pointer: coarse)").matches) return;
@@ -281,6 +291,13 @@
     window.Dictation.stop();
     const q = $("#pp-q").value.trim();
     if (scan?.busy) return showNotice("Зачекайте, текст з фото ще розпізнається.", false);
+    if (photo) {
+      const p = photo;
+      photo = null;
+      $("#pp-q").value = "";
+      ask({ image: p.data, img: p.small, marked: p.marked, question: q, page: book.page });
+      return URL.revokeObjectURL(p.thumb);
+    }
     // An empty field asks the suggested question from the placeholder.
     if (!q && !scan?.text && !idea) return $("#pp-q").focus();
     const page = scan?.page || book.page || 0;
@@ -333,9 +350,11 @@
     const { small, thumb, marked } = shot;
     const b = book;
     if (marked) {
-      const q = $("#pp-q")?.value.trim() || "";
-      if ($("#pp-q")) $("#pp-q").value = "";
-      ask({ image: marked.data, img: marked.small, marked: marked.marked, question: q, page: book.page });
+      // Into the field, like a file in a chat (Max): a question or a comment can go with it, or none.
+      if (photo) URL.revokeObjectURL(photo.thumb);
+      photo = { data: marked.data, small: marked.small, marked: marked.marked, thumb };
+      redraw();
+      $("#pp-q")?.focus({ preventScroll: true });
       // The page number still comes from the photo, quietly.
       window.reader.paperScan("page", small).then((r) => book === b && seenPage(r.page)).catch(() => {});
       return;
@@ -449,7 +468,7 @@
 
   // Resolves to { data, small } with the marks drawn in, false for «Без позначок», null for «Скасувати»,
   // "retake" for «Перезняти» (after our camera; the sheet stays open for it).
-  function mark(url, retake = false, words = { hint: "Обведіть, що пояснити", go: ["Пояснити", "Пояснити обведене"] }) {
+  function mark(url, retake = false, words = { hint: "Обведіть, що пояснити", go: ["Готово", "Готово"] }) {
     return new Promise((resolve) => {
       const d = $("#paper-mark");
       d.dataset.mode = "mark";
@@ -477,7 +496,7 @@
           s.forEach(([x, y], i) => (i ? ctx.lineTo(x * w, y * h) : ctx.moveTo(x * w, y * h)));
           ctx.stroke();
         }
-        // One button (Max): with marks it explains them, without it just attaches the page.
+        // One button: the photo, with or without marks, goes into the question field.
         $("#pm-go").textContent = words.go[strokes.length ? 1 : 0];
         $("#pm-clear").hidden = !strokes.length;
       };
@@ -527,8 +546,8 @@
       img.onload = () => fit();
       img.src = url;
       addEventListener("resize", fit);
-      $("#pm-go").textContent = words.go[0];
       $("#pm-clear").hidden = true;
+      $("#pm-go").textContent = words.go[0];
       if (!d.open) d.showModal();
       if (img.complete && img.naturalWidth) fit();
     });
@@ -591,6 +610,11 @@
       if (n) redraw(), showNotice("Збережено в нотатки", false);
       return;
     }
+    const retry = e.target.closest("[data-pp-retry]");
+    if (retry) {
+      const l = lives.get(retry.dataset.ppRetry);
+      return l && !l.busy && turn(l, l.q || null);
+    }
     const chat = e.target.closest("[data-chat]");
     if (chat && !e.target.closest("a, button") && !getSelection().toString() && (!chat.classList.contains("open") || e.target.closest(".pp-chat-q"))) {
       openChat = openChat === chat.dataset.chat ? null : chat.dataset.chat;
@@ -605,6 +629,7 @@
     if (act === "mic") return mic();
     if (act === "mic-note") return mic("pp-note");
     if (act === "img-note") return noteFromPhoto();
+    if (act === "unphoto") return photo && URL.revokeObjectURL(photo.thumb), (photo = null), redraw();
     if (act === "unattach") return (scan = null), (showText = false), window.Shell.rerender();
     if (act === "text") return (showText = !showText), window.Shell.rerender();
     if (act === "about") return window.Shell.showAbout(book);

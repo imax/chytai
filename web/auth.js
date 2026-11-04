@@ -12,6 +12,7 @@
 //   - the owner (reader id "owner", Max) existed before accounts: WEB_LOGIN_TOKEN's magic link still
 //     signs in as the owner, and the cookie it set before accounts keeps working, so nothing logs him out.
 const crypto = require("crypto");
+const { guessGender } = require("./gender");
 
 const CODE_TTL = 10 * 60 * 1000;
 const CODE_TRIES = 5;
@@ -73,10 +74,16 @@ class Auth {
     return v;
   }
 
+  // Max fixes a reader's gender on /admin/readers: "f", "m" or "" (the name doesn't say).
+  setGender(id, gender) {
+    if (!["f", "m", ""].includes(gender)) return;
+    this.db.prepare("UPDATE readers SET gender = ?, gender_set = 1 WHERE id = ?").run(gender, id);
+  }
+
   // The owner's row, made on the first start with accounts; the name and username come from the env.
   ensureOwner({ id, name, username }) {
     if (this.reader(id)) return this.reader(id);
-    this.db.prepare("INSERT INTO readers (id, email, username, name, created) VALUES (?, NULL, ?, ?, ?)").run(id, username, name, now());
+    this.db.prepare("INSERT INTO readers (id, email, username, name, created, gender) VALUES (?, NULL, ?, ?, ?, ?)").run(id, username, name, now(), guessGender(name));
     return this.reader(id);
   }
 
@@ -110,7 +117,7 @@ class Auth {
 
   createReader({ email, username, name }) {
     const id = crypto.randomBytes(8).toString("hex");
-    this.db.prepare("INSERT INTO readers (id, email, username, name, created, seen) VALUES (?, ?, ?, ?, ?, ?)").run(id, email, username, name, now(), now());
+    this.db.prepare("INSERT INTO readers (id, email, username, name, created, seen, gender) VALUES (?, ?, ?, ?, ?, ?, ?)").run(id, email, username, name, now(), now(), guessGender(name));
     return this.reader(id);
   }
   updateReader(id, patch) {
@@ -118,6 +125,7 @@ class Auth {
     if (!r) return null;
     const next = { ...r, ...patch };
     this.db.prepare("UPDATE readers SET email = ?, username = ?, name = ? WHERE id = ?").run(next.email, next.username, next.name, id);
+    if (next.name !== r.name && !r.gender_set) this.db.prepare("UPDATE readers SET gender = ? WHERE id = ?").run(guessGender(next.name), id);
     return this.reader(id);
   }
   // Everything of theirs goes: entries, subscriptions, sessions, follows both ways, the row.
@@ -315,6 +323,7 @@ class Auth {
   // A letter through Resend (plain text, with an HTML version, extra headers and attachments
   // ([{ filename, content: base64 }]) when given); without the key it goes to the log instead.
   async send(to, subject, text, { html = "", headers = null, attachments = null } = {}) {
+    if (testAddress(to)) return this.log(`[mail] test address, not sent: to ${to}: ${subject}\n${text}`);
     if (!this.resendKey) {
       this.log(`[mail] no RESEND_API_KEY: to ${to}: ${subject}\n${text}`);
       return;
@@ -328,6 +337,8 @@ class Auth {
   }
   // Up to 100 letters in one Resend call ({ to, subject, text, html, headers } each), for the weekly letter.
   async sendBatch(letters) {
+    for (const l of letters) if (testAddress(l.to)) this.log(`[mail] test address, not sent: to ${l.to}: ${l.subject}`);
+    letters = letters.filter((l) => !testAddress(l.to));
     if (!letters.length) return;
     if (!this.resendKey) {
       for (const l of letters) this.log(`[mail] no RESEND_API_KEY: to ${l.to}: ${l.subject}`);
@@ -342,4 +353,10 @@ class Auth {
   }
 }
 
-module.exports = { NOW_MAX, Auth, USERNAME, RESERVED };
+// Reserved test domains (RFC 2606/6761) never get real mail: Resend bounced and delayed our own testing's
+// login codes (Max 2026-11-04). The letter goes to the log instead.
+function testAddress(to) {
+  return /@(?:[^@\s]+\.)?(?:invalid|test|example|localhost)$|@example\.(?:com|net|org)$/i.test(String(to || "").trim());
+}
+
+module.exports = { NOW_MAX, Auth, testAddress, USERNAME, RESERVED };

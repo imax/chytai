@@ -246,7 +246,9 @@
       } catch {
         /* not json */
       }
-      throw new Error(message);
+      const e = new Error(message);
+      e.status = res.status;
+      throw e;
     }
     return res;
   }
@@ -743,26 +745,45 @@
       const controller = new AbortController();
       streams.set(id, controller);
       const send = (payload) => emit("ai:event", id, payload);
+      const started = Date.now();
+      let got = false;
       try {
-        const res = await api("POST", "/api/explain", { request }, { signal: controller.signal });
-        const reader = res.body.getReader();
-        const decoder = new TextDecoder();
-        let buf = "";
-        for (;;) {
-          const { value, done } = await reader.read();
-          if (done) break;
-          buf += decoder.decode(value, { stream: true });
-          let nl;
-          while ((nl = buf.indexOf("\n")) >= 0) {
-            const line = buf.slice(0, nl).trim();
-            buf = buf.slice(nl + 1);
-            if (line) send(JSON.parse(line));
+        for (let attempt = 0; ; attempt++) {
+          try {
+            const res = await api("POST", "/api/explain", { request }, { signal: controller.signal });
+            const reader = res.body.getReader();
+            const decoder = new TextDecoder();
+            let buf = "";
+            for (;;) {
+              const { value, done } = await reader.read();
+              if (done) break;
+              buf += decoder.decode(value, { stream: true });
+              let nl;
+              while ((nl = buf.indexOf("\n")) >= 0) {
+                const line = buf.slice(0, nl).trim();
+                buf = buf.slice(nl + 1);
+                if (line) (got = true), send(JSON.parse(line));
+              }
+            }
+            if (buf.trim()) send(JSON.parse(buf));
+            return;
+          } catch (err) {
+            if (controller.signal.aborted) return send({ type: "aborted" });
+            if (err.message === "login") return;
+            // A deploy restarts the server for about a minute and cuts what is under way (Max, 2026-11-04: a photo
+            // question failed with «no internet» on a good connection). Ask again while nothing has come yet.
+            const passing = isNetworkError(err) || [502, 503, 504].includes(err.status);
+            if (passing && !got && navigator.onLine !== false && Date.now() - started < 100000) {
+              await new Promise((r) => setTimeout(r, Math.min(2000 * 2 ** attempt, 15000)));
+              if (controller.signal.aborted) return send({ type: "aborted" });
+              continue;
+            }
+            const message = !passing ? err.message
+              : navigator.onLine === false ? "Немає з'єднання з інтернетом. Книжку можна читати далі, а пояснення з'являться, коли мережа повернеться."
+              : "Сервер не відповів. Спробуйте ще раз.";
+            return send({ type: "error", message, retry: passing });
           }
         }
-        if (buf.trim()) send(JSON.parse(buf));
-      } catch (err) {
-        if (controller.signal.aborted) send({ type: "aborted" });
-        else if (err.message !== "login") send({ type: "error", message: isNetworkError(err) ? "Немає з'єднання з інтернетом. Книжку можна читати далі, а пояснення з'являться, коли мережа повернеться." : err.message });
       } finally {
         streams.delete(id);
       }
