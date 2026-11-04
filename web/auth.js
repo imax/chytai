@@ -323,6 +323,7 @@ class Auth {
   // A letter through Resend (plain text, with an HTML version, extra headers and attachments
   // ([{ filename, content: base64 }]) when given); without the key it goes to the log instead.
   async send(to, subject, text, { html = "", headers = null, attachments = null } = {}) {
+    if (testAddress(to)) return this.log(`[mail] test address, not sent: to ${to}: ${subject}\n${text}`);
     if (!this.resendKey) {
       this.log(`[mail] no RESEND_API_KEY: to ${to}: ${subject}\n${text}`);
       return;
@@ -336,6 +337,8 @@ class Auth {
   }
   // Up to 100 letters in one Resend call ({ to, subject, text, html, headers } each), for the weekly letter.
   async sendBatch(letters) {
+    for (const l of letters) if (testAddress(l.to)) this.log(`[mail] test address, not sent: to ${l.to}: ${l.subject}`);
+    letters = letters.filter((l) => !testAddress(l.to));
     if (!letters.length) return;
     if (!this.resendKey) {
       for (const l of letters) this.log(`[mail] no RESEND_API_KEY: to ${l.to}: ${l.subject}`);
@@ -350,4 +353,10 @@ class Auth {
   }
 }
 
-module.exports = { NOW_MAX, Auth, USERNAME, RESERVED };
+// Reserved test domains (RFC 2606/6761) never get real mail: Resend bounced and delayed our own testing's
+// login codes (Max 2026-11-04). The letter goes to the log instead.
+function testAddress(to) {
+  return /@(?:[^@\s]+\.)?(?:invalid|test|example|localhost)$|@example\.(?:com|net|org)$/i.test(String(to || "").trim());
+}
+
+module.exports = { NOW_MAX, Auth, testAddress, USERNAME, RESERVED };
