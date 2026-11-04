@@ -20,3 +20,7 @@
 Сайт пише Максу в Telegram (web/telegram.js). Токен від @BotFather лише на сайті:
 `fly secrets set TELEGRAM_BOT_TOKEN=… -a chytai-web`
 Чат, куди писати, бот запам'ятовує сам: перший, хто надіслав йому /start (meta `telegram:chat`). Щоб перепідключити, можна задати `TELEGRAM_CHAT_ID` або стерти `telegram:chat` у базі. Новий токен міняє адресу вебхука, сайт ставить її сам при старті.
+
+Читалка (Fly app `chytai`) з тим самим токеном перевіряє сайт кожні 5 хвилин і пише, коли він не відповідає:
+`fly secrets set TELEGRAM_BOT_TOKEN=… -a chytai`
+Чат їй передає сайт сам.

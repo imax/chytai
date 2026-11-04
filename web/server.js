@@ -3341,12 +3341,15 @@ if (bg.ROLE === "jobs") console.log(`Chytai jobs ready (library: ${store.file})`
 // and so does its coming back. Checked by one process only (the jobs one, or the only one).
 if (bg.ROLE !== "web" && telegram.on() && DOMAIN) {
   let misses = 0;
+  let chatSent = false;
   setInterval(async () => {
     let ok = false;
     try {
       ok = (await fetch(`${READER_URL}/`, { signal: AbortSignal.timeout(20000), redirect: "manual" })).status < 500;
     } catch {}
     misses = ok ? 0 : misses + 1;
+    // The reader watches the site in turn: it needs the linked chat, sent while both are up.
+    if (ok && !chatSent && telegram.chat()) chatSent = await readerAdmin("/telegram", { chat: telegram.chat() }).then(() => true, () => false);
     const down = store.db.get("telegram:reader-down");
     if (misses === 2 && !down) {
       store.db.set("telegram:reader-down", new Date().toISOString());

@@ -1094,6 +1094,41 @@ app.post("/api/site-admin/off", express.json(), (req, res) => {
   res.json({ ok: true, off: !!a.off });
 });
 
+// The site's watchman (Max, 2026-11-04: «а у нас зараз немає такої перевірки?»): every 5 minutes the reader opens
+// chytai.org.ua; two misses in a row go to the owner's Telegram bot, and so does the site coming back. The site
+// checks the reader the same way (web/telegram.js), so each watches the other. TELEGRAM_BOT_TOKEN in this app's
+// secrets; the chat is the one the site linked, sent here by the site with the owner's key.
+app.post("/api/site-admin/telegram", express.json(), (req, res) => {
+  if (!siteOwnerOk(req)) return res.status(403).json({ error: "key" });
+  const chat = String(req.body?.chat || "");
+  if (!/^-?\d{1,20}$/.test(chat)) return res.status(400).json({ error: "chat" });
+  if (state.telegramChat !== chat) (state.telegramChat = chat), saveState();
+  res.json({ ok: true, token: !!process.env.TELEGRAM_BOT_TOKEN });
+});
+function telegram(text) {
+  const token = process.env.TELEGRAM_BOT_TOKEN;
+  if (!token || !state.telegramChat) return;
+  fetch(`https://api.telegram.org/bot${token}/sendMessage`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ chat_id: state.telegramChat, text, disable_web_page_preview: true }), signal: AbortSignal.timeout(15000) }).catch((e) => console.error(`telegram: ${e.message}`));
+}
+if (process.env.TELEGRAM_BOT_TOKEN && process.env.FLY_APP_NAME) {
+  let misses = 0;
+  let downSince = 0;
+  setInterval(async () => {
+    let ok = false;
+    try {
+      ok = (await fetch(`${WEB_URL}/`, { signal: AbortSignal.timeout(20000), headers: { "User-Agent": "ChytaiReaderWatch" } })).status < 500;
+    } catch {}
+    misses = ok ? 0 : misses + 1;
+    if (misses === 2 && !downSince) {
+      downSince = Date.now() - 5 * 60000;
+      telegram(`Сайт не відповідає: ${WEB_URL}`);
+    } else if (ok && downSince) {
+      telegram(`Сайт знову працює (не відповідав з ${new Date(downSince).toLocaleTimeString("uk-UA", { timeZone: "Europe/Kyiv", hour: "2-digit", minute: "2-digit" })}).`);
+      downSince = 0;
+    }
+  }, 5 * 60000).unref();
+}
+
 // The reader's scripts, styles and fonts need no account (the code is public on GitHub anyway): the
 // service worker fetches them for the offline copy, and in the Android app its requests came without
 // the sign-in cookie, so it got the /login page back as style.css and the reader showed unstyled.

@@ -65,4 +65,4 @@ function update(u) {
   return send("Це приватний бот.", id);
 }
 
-module.exports = { on, init, send, sendOnce, setWebhook, update, hookPath };
+module.exports = { on, init, send, sendOnce, setWebhook, update, hookPath, chat };
