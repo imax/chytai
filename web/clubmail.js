@@ -9,10 +9,12 @@ const GAP = 20 * 3600 * 1000; // between two such letters
 const FRESH = 7 * DAY; // a topic answered later than this after it began is not news any more
 const HOURS = [9, 21]; // Kyiv time
 const BATCH = 100; // Resend's batch limit
+// Off: the letters go to the owner alone, once per topic, to see them in his mail first (Max decides).
+const ON = false;
 
 class ClubMail {
-  constructor({ store, auth, club, digest, site, log = console.log }) {
-    Object.assign(this, { store, auth, club, digest, site, log });
+  constructor({ store, auth, club, digest, site, ownerId = "owner", log = console.log }) {
+    Object.assign(this, { store, auth, club, digest, site, ownerId, log });
     const db = store.db;
     db.exec("CREATE TABLE IF NOT EXISTS club_announce (topic TEXT PRIMARY KEY, queued TEXT NOT NULL, sent TEXT, n INTEGER)");
     if (!db.prepare("PRAGMA table_info(readers)").all().some((c) => c.name === "topic_mail")) db.exec("ALTER TABLE readers ADD COLUMN topic_mail INTEGER NOT NULL DEFAULT 1");
@@ -53,7 +55,7 @@ class ClubMail {
     const text = String(t.text || "").trim().replace(/\n{3,}/g, "\n\n");
     const cut = text.length > 700 ? `${text.slice(0, 700).replace(/\s+\S*$/, "")}…` : text;
     const body = [
-      `Нова тема в Клубі Chytai від ${t.reader.name}. Там уже відповідають.`,
+      `Нова тема в Клубі Chytai від ${t.reader.name}.`,
       "",
       `«${t.title}»`,
       ...(t.book ? [`Книжка: «${t.book.title}»${t.book.author ? `, ${t.book.author}` : ""}`] : []),
@@ -70,9 +72,25 @@ class ClubMail {
     return { to: reader.email, subject: `Клуб Chytai: ${t.title}`, text: mailLinks(body, this.site, "club-topic"), headers: { "List-Unsubscribe": `<${off}>`, "List-Unsubscribe-Post": "List-Unsubscribe=One-Click" } };
   }
 
+  // While ON is false: each queued topic's letter, once, to the owner alone.
+  async preview() {
+    const owner = this.auth.reader(this.ownerId);
+    if (!owner?.email) return "немає пошти власника";
+    for (const q of this.store.db.prepare("SELECT topic FROM club_announce WHERE sent IS NULL ORDER BY queued").all()) {
+      const key = `clubmail:preview:${q.topic}`;
+      const t = this.club.topic(q.topic);
+      if (!t || this.store.db.get(key)) continue;
+      this.store.db.set(key, new Date().toISOString());
+      await this.auth.sendBatch([this.letter(t, owner)]);
+      this.log(`club topic mail preview: «${t.title}» → owner (${this.recipients(t).length} would get it)`);
+    }
+    return "лише власнику";
+  }
+
   // Sends the oldest queued topic if it is time. `force` skips the hours and the daily gap (owner test).
   async run({ now = new Date(), force = false } = {}) {
     const db = this.store.db;
+    if (!ON) return this.preview();
     const h = Number(now.toLocaleString("en-US", { timeZone: "Europe/Kyiv", hour: "numeric", hour12: false })) % 24;
     if (!force && (h < HOURS[0] || h >= HOURS[1])) return "не та година";
     const last = db.prepare("SELECT MAX(sent) AS s FROM club_announce WHERE sent IS NOT NULL AND sent <> 'before'").get().s;
