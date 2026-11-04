@@ -1017,7 +1017,7 @@ function healthBlock({ day = null, jobs = { n: 0, failed: [] }, reader = true })
 ${line(!slow, p ? `Сайт сьогодні: 95% сторінок за ${s(p.p95)}, повільніше 2 с — ${fmtN(p.slow * 100, 1)}%. <a href="/admin/speed">Швидкість</a>` : `Сайт сьогодні: сторінок ще не рахували. <a href="/admin/speed">Швидкість</a>`)}
 ${line(stall < 30, `Сервер стояв сьогодні ${stall} с.`)}
 ${line(!jobs.failed.length, `Фонові задачі за добу: ${fmtN(jobs.n)} запусків${jobs.failed.length ? `, з помилкою ${jobs.failed.map(esc).join(", ")}` : ", без помилок"}. <a href="/admin/jobs">Задачі</a>`)}
-${line(reader, reader ? "Читалка відповідає." : "Читалка не відповіла сайту.")}
+${line(reader, reader ? "Читалка працює: app.chytai.org.ua відповів сайту за кілька секунд." : "Читалка не відповіла: app.chytai.org.ua може лежати.")}
 </ul>`;
 }
 
