@@ -9,6 +9,24 @@
   const MIC_OK = !!Speech && (!/ChytaiApp/.test(navigator.userAgent) || /ChytaiApp\/camera\/mic/.test(navigator.userAgent));
   let listening = null;
 
+  // Off for real (Max, 2026-11-04: after a note the iPhone still showed the microphone as in a call). stop() lets
+  // the last words through; if the recognizer hasn't ended a moment later, abort() releases the microphone.
+  function end(rec, now = false) {
+    if (!rec || rec.over) return;
+    rec.over = true;
+    clearInterval(rec.watch);
+    try {
+      now ? rec.abort() : rec.stop();
+    } catch {}
+    if (!now) setTimeout(() => {
+      if (!rec.ended) try { rec.abort(); } catch {}
+    }, 1500);
+  }
+  // Leaving the app or the page ends it at once.
+  const leave = () => listening && end(listening, true);
+  document.addEventListener("visibilitychange", () => document.visibilityState === "hidden" && leave());
+  addEventListener("pagehide", leave);
+
   const lit = (on) => {
     document.querySelectorAll(".pp-tool.on").forEach((b) => b.classList.remove("on"));
     if (on) $(on)?.classList.add("on");
@@ -19,7 +37,7 @@
   function toggle(id, button, tidy) {
     if (listening) {
       const was = listening.field;
-      listening.stop();
+      end(listening);
       if (was === id) return;
     }
     if (!MIC_OK) return showNotice("Тут диктувати можна мікрофоном на клавіатурі.", false), $(`#${id}`)?.focus();
@@ -32,12 +50,16 @@
     rec.continuous = true;
     rec.onerror = (e) => e.error !== "no-speech" && e.error !== "aborted" && showNotice(e.error === "not-allowed" ? "Немає доступу до мікрофона." : "Не вдалося розпізнати мовлення.", false);
     let said = "";
+    let heardAt = Date.now();
     rec.onresult = (e) => {
+      heardAt = Date.now();
       said = [...e.results].map((r) => r[0].transcript).join(" ").replace(/\s+/g, " ").trim();
       const f = $(`#${id}`);
       if (f) (f.value = start + said), f.dispatchEvent(new Event("input", { bubbles: true }));
     };
     rec.onend = () => {
+      rec.ended = true;
+      clearInterval(rec.watch);
       if (listening === rec) (listening = null), lit(null);
       tidyField(id, start, said, tidy);
     };
@@ -45,6 +67,8 @@
       rec.start();
       rec.field = id;
       listening = rec;
+      // It stops by itself when its field is gone (the form closed, another page) or after 15 s of silence.
+      rec.watch = setInterval(() => (!$(`#${id}`) || Date.now() - heardAt > 15000) && end(rec), 1000);
       lit(button);
     } catch {
       showNotice("Не вдалося увімкнути мікрофон.", false);
@@ -69,7 +93,7 @@
 
   window.Dictation = {
     toggle,
-    stop: () => listening?.stop(),
+    stop: () => end(listening),
     field: () => listening?.field || "",
   };
 })();
