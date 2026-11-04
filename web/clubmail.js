@@ -10,7 +10,7 @@ const FRESH = 7 * DAY; // a topic answered later than this after it began is not
 const HOURS = [9, 21]; // Kyiv time
 const BATCH = 100; // Resend's batch limit
 // Off: the letters go to the owner alone, once per topic, to see them in his mail first (Max decides).
-const ON = false;
+const ON = true; // Max OK 2026-11-04
 // Plain text, or the Friday letter's look as well (Max picks after seeing both, 2026-11-04).
 const HTML = true;
 
@@ -93,7 +93,7 @@ class ClubMail {
   ${body}
   <div style="margin:26px 0 0"><a href="${esc(href)}" style="display:inline-block;background:#266741;color:#fff;text-decoration:none;font-size:15px;font-weight:500;padding:11px 20px;border-radius:999px">Долучитися до обговорення</a></div>
   <div style="border-top:1px solid #1b1a17;margin-top:36px;padding-top:14px;font-size:12px;line-height:1.6;color:#6b675f">
-    Лист приходить, коли в Клубі зʼявляється нова тема з відповідями, не частіше ніж раз на день.<br>
+    Ви отримуєте ці листи як читач chytai.org.ua<br>
     <a href="${esc(off)}" style="color:#6b675f">Не надсилати листів про нові теми</a> · <a href="${site}/settings/mail" style="color:#6b675f">Налаштування</a> · <a href="${site}" style="color:#6b675f">chytai.org.ua</a>
   </div>
 </div></body></html>`;
