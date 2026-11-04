@@ -1106,7 +1106,8 @@ const wantMail = new (require("./wantmail").WantMail)({ store, auth, digest, sit
 if (bg.background) wantMail.schedule();
 // Publishers' reading reports (reports.js, Max 2026-10-30): a letter with CSV on the 1st, 10:00 Kyiv, for last month.
 const reports = new (require("./reports").Reports)({ db: store.db, auth, ownerEmail: () => process.env.WEB_NOTIFY_EMAIL || auth.reader(OWNER_ID)?.email || "" });
-if (bg.background) reports.schedule();
+// The monthly letters are off (Max, 2026-11-04: «воно не пішло»); the reading counts still gather.
+// if (bg.background) reports.schedule();
 // The welcome letter right after sign-up (welcome-mail.js), while the owner has it switched on.
 const welcomeMail = new WelcomeMail({ store, auth, site: SITE, ownerId: OWNER_ID });
 pages.setReadersWithNote((id) => readersOf(id).find((r) => r.entry.note) || null);
