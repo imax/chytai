@@ -271,6 +271,14 @@ const isPromo = (title) => /безкоштовн\S*\s+фрагмент|\((озн
 const LANG_AID =
   /розмовник|\d[\d\s]*(тис\.?\s*)?(слів|термінів)|слів і (вислов|вираз)|(-україн\S*|україн\S*-\S+|англ\S*|німец\S*|польськ\S*|франц\S*|італ\S*)\s+(\S+\s+)?словник|словник\S*[- ]довідник|(орфографічн|орфоепічн|правописн|пунктуаційн|паронім|омонім|синонім|фразеологічн|тематичн|астрономічн|професійної)\S*\s+(\S+\s+)?словник|словник (паронім|омонім|синонім|професій)|словникові диктанти|English Vocabulary/iu;
 const isLangAid = (title) => LANG_AID.test(String(title || ""));
+// Erotica and dark romance, not for a site teens and 10-year-olds read (Max, 2026-11-04, «Хтива Даяна»: «не сильно
+// хотів мати адалт-контент… не хочу кожного питати, чи вам виповнилось 18»). Left out when the shelves are loaded,
+// like a promo, so new imports of these are skipped too. By author (they write nothing else), KSD's genre «Дарк
+// романи» and «dark romance» in the blurb; shops' «18+» is no sign (abuk puts it on King, Zhadan, Zabuzhko), and
+// ordinary romance with sex scenes stays (Max kept «Любовні романи», 2026-11-01).
+const ADULT_AUTHOR =
+  /Шана Фесті|Джен Бессер|Еріка (Л\.|Леонард) Джеймс|Сьєрра Сімоне|Пенелопа Скай|Пенелопа Дуглас|Кора Райлі|Джоді Еллен Малпас|Морган Бріджес|Моронова|RuNyx|Х\. Д\. Карлтон|Ніккі Сент-Кроу|Дж\. С\. Вонда|Ріна Кент|Ана Хван|Гарпер Л\. Вудз|Жасмін Мас|Каміла Грін|Лі Ріверс|Скарлетт Сент-Клер|Джилліан Андерсон/u;
+const isAdult = (it) => ADULT_AUTHOR.test(String(it?.author || "")) || [].concat(it?.genres || []).includes("Дарк романи") || /dark romance|дарк[- ]?роман/iu.test(String(it?.blurb || ""));
 const alt = (a, title) => ((a = a.replace(/\s+by\s+(\p{Lu}[\p{L}.'’-]*\s*)+$/u, "").trim()) === title ? "" : a);
 const names = (v) => [].concat(v || []).map((x) => ent(x.name || x).trim()).filter(Boolean).join(", ");
 function ldBookPage(src, brands) {
@@ -1230,4 +1238,4 @@ async function refresh({ store, log = console.log, fetchImpl, only }) {
   return { ok: true, errors, counts };
 }
 
-module.exports = { isPromo, isLangAid, bookuaTiles, bookuaProducts, SOURCES, fetchSource, buildShelves, refresh, volumeOf, ent, about, pageProducts, ldBookPage };
+module.exports = { isPromo, isLangAid, isAdult, bookuaTiles, bookuaProducts, SOURCES, fetchSource, buildShelves, refresh, volumeOf, ent, about, pageProducts, ldBookPage };
