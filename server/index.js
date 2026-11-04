@@ -564,16 +564,55 @@ function parseCookies(req) {
 
 // The signed-in account's id, or null. Max's cookie from the family password still counts as his account,
 // so his phone and the app stay signed in through the change.
+//
+// Sessions (security review 2026-11-04, Max OK): the cookie is `<account>.<session>.<signature>`, and the session
+// must still be in state.sessions (kept by a hash of its id). So «Вийти» ends it for real, and the site's «Вийти на
+// всіх пристроях» (or a deleted account) ends all of an account's sessions through /api/site-signout. A cookie
+// from before (`<account>.<signature>`, no session) still works once and is swapped for a session cookie on the
+// way (req.upgradeSession), unless the account was signed out everywhere since (accounts[id].legacyOff).
+const sessionHash = (sid) => crypto.createHash("sha256").update(`reader-session:${sid}`).digest("hex");
+const safeEqual = (a, b) => a.length === b.length && crypto.timingSafeEqual(Buffer.from(a), Buffer.from(b));
 function currentAccount(req) {
   const cookies = parseCookies(req);
   const raw = cookies[COOKIE];
-  const i = raw ? raw.lastIndexOf(".") : -1;
-  if (i < 0) return cookies[OLD_COOKIE] && cookies[OLD_COOKIE] === `${OWNER_LEGACY_NAME}.${sign(OWNER_LEGACY_NAME)}` ? OWNER_ID : null;
-  const id = raw.slice(0, i);
-  const sig = raw.slice(i + 1);
-  const expected = sign(`acct:${id}`);
-  if (!ACCOUNT_ID.test(id) || sig.length !== expected.length || !crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected))) return null;
+  const parts = raw ? raw.split(".") : [];
+  if (parts.length < 2) {
+    if (!(cookies[OLD_COOKIE] && cookies[OLD_COOKIE] === `${OWNER_LEGACY_NAME}.${sign(OWNER_LEGACY_NAME)}`) || state.accounts[OWNER_ID]?.legacyOff) return null;
+    req.upgradeSession = OWNER_ID;
+    return OWNER_ID;
+  }
+  const id = parts[0];
+  if (!ACCOUNT_ID.test(id)) return null;
+  if (parts.length === 3) {
+    const sid = parts[1];
+    if (!/^[a-f0-9]{32}$/.test(sid) || !safeEqual(parts[2], sign(`sess:${id}:${sid}`))) return null;
+    const sess = state.sessions?.[sessionHash(sid)];
+    if (!sess || sess.acct !== id) return null;
+    // When it was last used, to forget the ones nobody used for a year; written to disk with the next save.
+    if (Date.now() - (sess.seen || 0) > 86400000) sess.seen = Date.now();
+    return id;
+  }
+  if (parts.length !== 2 || !safeEqual(parts[1], sign(`acct:${id}`)) || state.accounts[id]?.legacyOff) return null;
+  req.upgradeSession = id;
   return id;
+}
+function newSession(id) {
+  const sid = crypto.randomBytes(16).toString("hex");
+  state.sessions ??= {};
+  const now = Date.now();
+  for (const [h, x] of Object.entries(state.sessions)) if (now - (x.seen || x.at || 0) > COOKIE_DAYS * 86400000) delete state.sessions[h];
+  state.sessions[sessionHash(sid)] = { acct: id, at: now, seen: now };
+  saveState();
+  return `${id}.${sid}.${sign(`sess:${id}:${sid}`)}`;
+}
+function endSession(req) {
+  const parts = String(parseCookies(req)[COOKIE] || "").split(".");
+  if (parts.length === 3 && state.sessions?.[sessionHash(parts[1])]) delete state.sessions[sessionHash(parts[1])], saveState();
+}
+function endAllSessions(id) {
+  for (const [h, x] of Object.entries(state.sessions || {})) if (x.acct === id) delete state.sessions[h];
+  (state.accounts[id] ??= {}).legacyOff = Date.now();
+  saveState();
 }
 
 const accountName = (id) => state.accounts[id]?.name || (id === OWNER_ID ? OWNER_LEGACY_NAME : "Читач");
@@ -585,7 +624,7 @@ function cookieHeader(req, cookie, value, days) {
 
 function setLoginCookie(req, res, id) {
   // Signing in ends any guest session on this device, and the family password's old cookie.
-  res.setHeader("Set-Cookie", [cookieHeader(req, COOKIE, `${id}.${sign(`acct:${id}`)}`, COOKIE_DAYS), cookieHeader(req, GUEST_COOKIE, "", 0), cookieHeader(req, OLD_COOKIE, "", 0)]);
+  res.setHeader("Set-Cookie", [cookieHeader(req, COOKIE, newSession(id), COOKIE_DAYS), cookieHeader(req, GUEST_COOKIE, "", 0), cookieHeader(req, OLD_COOKIE, "", 0)]);
 }
 
 // Trades the site's one-time ticket for the account: { id, name, username }.
@@ -904,6 +943,7 @@ app.get("/auth", async (req, res) => {
   res.redirect(next || "/");
 });
 app.post("/logout", (req, res) => {
+  endSession(req);
   res.setHeader("Set-Cookie", [cookieHeader(req, COOKIE, "", 0), cookieHeader(req, GUEST_COOKIE, "", 0), cookieHeader(req, OLD_COOKIE, "", 0), cookieHeader(req, SHARE_COOKIE, "", 0), cookieHeader(req, FREE_COOKIE, "", 0)]);
   res.redirect("/login");
 });
@@ -995,6 +1035,17 @@ app.get("/s/:token", (req, res) => {
   res.redirect("/");
 });
 
+// The site's «Вийти на всіх пристроях», or a deleted account: every reader session of the account ends.
+// Signed with that account's key (the HMAC the site gave the reader at sign-in).
+app.post("/api/site-signout", express.json(), (req, res) => {
+  const id = String(req.body?.id || "");
+  const want = state.accounts[id]?.key;
+  if (!ACCOUNT_ID.test(id) || !want || !safeEqual(String(req.body?.key || ""), want)) return res.status(403).json({ error: "key" });
+  endAllSessions(id);
+  console.log(`reader: all sessions of ${id} ended`);
+  res.json({ ok: true });
+});
+
 // The reader's stats live in the site's admin (chytai.org.ua/admin/reader; Max, 2026-11-02). The site asks for
 // them with the owner's reader key (the HMAC it gave this reader at sign-in), so no new secret is needed.
 const siteOwnerOk = (req) => {
@@ -1043,6 +1094,8 @@ app.use((req, res, next) => {
     if (req.path.startsWith("/api/")) return res.status(403).json({ error: "Читалку для цього акаунта вимкнено." });
     return res.status(403).type("html").send(loginPage(req, "Читалку для цього акаунта вимкнено. Якщо це помилка, напишіть Максові."));
   }
+  // Only on the page itself, so the many calls a page makes at once don't each start a session.
+  if (acct && req.upgradeSession === acct && req.method === "GET" && req.path === "/") res.append("Set-Cookie", [cookieHeader(req, COOKIE, newSession(acct), COOKIE_DAYS), cookieHeader(req, OLD_COOKIE, "", 0)]);
   req.acct = acct || null;
   req.owner = acct === OWNER_ID;
   req.user = acct ? accountName(acct) : "Гість";

@@ -805,12 +805,27 @@ app.post("/settings/mail", signed, (req, res) => {
   wantMail.setEnabled(req.user.id, !!req.body.want_mail);
   res.redirect("/settings/mail?saved=1");
 });
+// «Вийти на всіх пристроях» (security review 2026-11-04, Max OK): every session here ends, this one too, and the
+// reader is asked to end the account's sessions there.
+function readerSignOut(id) {
+  fetch(`${READER_URL}/api/site-signout`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, key: readerKey(id) }), signal: AbortSignal.timeout(10000) })
+    .then((r) => r.status !== 200 && r.status !== 403 && console.log(`reader signout ${id}: ${r.status}`))
+    .catch((e) => console.log(`reader signout ${id}: ${e.message}`));
+}
+app.post("/settings/signout", signed, (req, res) => {
+  auth.signOutEverywhere(req.user.id);
+  readerSignOut(req.user.id);
+  admin.log(req.user.id, "do", "/settings/signout", "");
+  res.setHeader("Set-Cookie", auth.cookie("", { clear: true, secure: secure(req) }));
+  res.redirect(303, "/login");
+});
 app.post("/settings/delete", signed, (req, res) => {
   if (req.owner) return res.status(400).send(pages.messagePage({ title: "Власника не видаляємо", text: "Для цього є інший шлях.", user: req.user }));
   if (req.body.confirm !== req.user.username) return res.status(400).send(pages.settingsPage({ user: req.user, values: req.user, error: "Щоб видалити акаунт, впишіть своє ім'я для адреси." }));
   lists.forgetReader(req.user.id);
   club.forgetReader(req.user.id);
   mcp.forgetReader(req.user.id);
+  readerSignOut(req.user.id);
   auth.deleteReader(req.user.id);
   store.forgetReader(req.user.id);
   res.setHeader("Set-Cookie", auth.cookie("", { clear: true, secure: secure(req) }));
@@ -1273,6 +1288,8 @@ app.post("/api/lists/:id/publish", signed, myList, (req, res) => {
 const published = (req, l) => !req.owner && notifyOwner(`Новий список: ${l.title}`, [`${req.user.name} (${SITE}/@${req.user.username}) опублікував(ла) список «${l.title}».`, "", `${SITE}${l.href}`].join("\n"));
 // The picture on top of a list, from the author's computer: kept here, made no wider than 1600 px.
 app.post("/api/lists/:id/image", signed, myList, express.raw({ type: "image/*", limit: "15mb" }), async (req, res) => {
+  // 20 pictures a day per reader: each one stays on the disk (security review 2026-11-04).
+  if (!req.owner && auth.tooMany(`list-image:${req.user.id}`, 20, 24 * 3600 * 1000)) return res.status(429).json({ error: "Забагато картинок за день. Спробуйте завтра." });
   const ext = COVER_TYPES[String(req.get("content-type") || "").split(";")[0].trim()];
   if (!ext || !Buffer.isBuffer(req.body) || req.body.length < 500) return res.status(400).json({ error: "Потрібна картинка: jpg, png або webp." });
   const hash = require("crypto").createHash("sha1").update(req.body).digest("hex").slice(0, 20);
