@@ -1457,6 +1457,29 @@ ${tile(usd(cost30), "Claude за 30 днів", costAll != null ? `${usd(costAll)
 <thead><tr><th>Читач</th><th class="book">Читає</th><th>Хв сьогодні</th><th>За 7 днів</th><th>За 30</th><th>Пояснень за 7 днів</th><th>Claude за 30 днів</th><th></th></tr></thead>
 <tbody>${users.map((u) => `<tr${u.owner ? ' class="owner"' : ""}><th>${who(u)}</th><td class="book">${last(u)}</td><td>${n(u.readToday)}</td><td>${n(u.readWeek)}</td><td>${n(u.read30)}</td><td>${n(u.week)}</td><td>${u.cost30 ? usd(u.cost30) : n(0)}</td><td>${off(u)}</td></tr>`).join("")}</tbody></table></div>
 <p class="muted small">${idle ? `Ще ${fmtN(idle)} входили, але нічого не відкрили. ` : ""}Хвилини — час, коли книжка відкрита на екрані й читач щось робив за останні 3 хв (до 4 листопада рахували паузи між перегортаннями). Ліміту пояснень немає, лише запобіжник ${fmtN(s.accountCap)} на день. «Вимкнути» закриває Читалку, сайт лишається.</p>` : `<p class="muted">Ще ніхто нічого не відкрив.</p>`;
+  // Books by minutes read in 30 days (Max, 2026-11-04): the same book in several libraries is one row when the
+  // site knows it from the catalog.
+  const titleOf = (r) => {
+    const b = r.paper ? {} : book(r.id, r.book);
+    return { title: r.title || b.title || r.book.split("/").pop().replace(/\.(epub|pdf|fb2|mobi|azw3?)$/i, ""), href: b.href || "" };
+  };
+  const byBook = new Map();
+  for (const r of s.reading || []) {
+    const t = titleOf(r);
+    const key = t.href || `${r.paper ? "paper" : "file"}:${t.title.toLowerCase()}`;
+    const g = byBook.get(key) || { ...t, paper: r.paper, today: 0, week: 0, month: 0, readers: [] };
+    g.today += r.today;
+    g.week += r.week;
+    g.month += r.month;
+    g.readers.push(r);
+    byBook.set(key, g);
+  }
+  const top = [...byBook.values()].sort((a, b) => b.month - a.month).slice(0, 40);
+  const reader = (r) => `${r.username ? `<a href="/@${esc(r.username)}">${esc(r.name || r.username)}</a>` : esc(r.name || r.id)} <span class="muted">${fmtN(r.month)}</span>`;
+  const booksTbl = top.length ? `<div class="tbl"><table class="reader-app">
+<thead><tr><th class="book">Книжка</th><th class="who">Хто читав, хв</th><th>Хв сьогодні</th><th>За 7 днів</th><th>За 30</th></tr></thead>
+<tbody>${top.map((g) => `<tr><th class="book">${g.href ? `<a href="${esc(g.href)}">${esc(g.title)}</a>` : esc(g.title)}${g.paper ? ` <span class="muted">паперова</span>` : ""}</th><td class="who">${g.readers.sort((a, b) => b.month - a.month).map(reader).join(", ")}</td><td>${n(g.today)}</td><td>${n(g.week)}</td><td>${n(g.month)}</td></tr>`).join("")}</tbody></table></div>
+<p class="muted small">За останні 30 днів, від 4 листопада. Паперова книжка — час на її сторінці в Читалці, не саме читання.</p>` : `<p class="muted">Ще ніхто не читав: рахуємо з 4 листопада.</p>`;
   const days = s.days.slice(0, 30);
   const daysTbl = days.length ? `<div class="tbl"><table>
 <thead><tr><th>День</th><th>Пояснень</th><th>Токенів на вході</th><th>На виході</th><th>Claude</th></tr></thead>
@@ -1469,6 +1492,8 @@ ${tile(usd(cost30), "Claude за 30 днів", costAll != null ? `${usd(costAll)
 ${tiles}
 <h2 id="readers">Читачі</h2>
 ${readers}
+<h2 id="books">Книжки</h2>
+${booksTbl}
 <details class="reader-cost"><summary>Вартість по днях і моделях</summary>
 ${daysTbl}
 ${models}
