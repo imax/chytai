@@ -49,6 +49,7 @@ const SECTIONS = [
   ["genres", "Жанри", (p) => p === "/genres" || p.startsWith("/genre/")],
   ["other", "Інше", () => true],
 ];
+const SECTION_GROUP = { club: "community", lists: "community", account: "me" };
 const sectionOf = (p) => SECTIONS.find(([, , is]) => is(p))[0];
 
 // Where visitors come from (Max, 2026-10-24: «звідки приходять»). An arrival is a page opened from another site,
@@ -569,8 +570,10 @@ class Admin {
     const week7 = addDays(now, -6), month = addDays(now, -27);
     const sum = {};
     for (const r of rows) {
-      const key = SECTION_NAMES[r.section] ? r.section : "other"; // a section since removed (Популярне) counts as «Інше»
-      const x = (sum[key] ||= { id: key, name: SECTION_NAMES[key], today: 0, week: 0, month: 0 });
+      // About ten rows (Max, 2026-11-04): Клуб and Списки go with Спільнота, sign-in and settings with one's own
+      // shelf; a section since removed (Популярне) counts as «Інше».
+      const key = SECTION_GROUP[r.section] || (SECTION_NAMES[r.section] ? r.section : "other");
+      const x = (sum[key] ||= { id: key, name: key === "me" ? "Своя полиця й акаунт" : SECTION_NAMES[key], today: 0, week: 0, month: 0 });
       if (r.day === now) x.today += r.views;
       if (r.day >= week7) x.week += r.views;
       if (r.day >= month) x.month += r.views;
