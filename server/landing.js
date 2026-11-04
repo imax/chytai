@@ -1,7 +1,8 @@
 // The reader's landing (Max, 2026-11-04): one compact screen. What it is, signing in or up right here (e-mail,
 // code, a name for a new address: the same steps as in the phone apps, through the site's /api/reader-login/*),
 // and the real reader at work: a looping recording of selecting a word, the explanation, «В нотатки».
-// The recordings are build/landing-{desk,phone}.mp4 (made with Playwright from a local reader). Copy is Max's.
+// The phone recording is build/landing-phone.mp4; the computer is a still frame, landing-desk-poster.jpg (Max
+// 2026-11-04: two moving pictures at once were too much); both made with Playwright from a local reader. Copy is Max's.
 
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
 const mark = `<b class="wm">Chytai</b>`;
@@ -67,7 +68,7 @@ ${font("source-serif-4/opsz.css")}${font("onest/wght.css")}
   .win { margin-left: 110px; border: 1px solid var(--frame); border-radius: 12px; overflow: hidden; background: var(--paper); box-shadow: 0 30px 70px -34px rgba(27,26,23,.5); }
   .win i { display: flex; gap: 6px; height: 26px; align-items: center; padding: 0 12px; border-bottom: 1px solid #e4dfd5; background: #efeae1; }
   .win i b { width: 9px; height: 9px; border-radius: 50%; background: #d6d0c4; }
-  .win video { display: block; width: 100%; aspect-ratio: 8 / 5; object-fit: cover; }
+  .win video, .win img { display: block; width: 100%; aspect-ratio: 8 / 5; object-fit: cover; }
   .phone { position: absolute; left: 0; bottom: 0; width: 200px; padding: 7px; border-radius: 34px; background: #1b1a17; box-shadow: 0 30px 60px -24px rgba(27,26,23,.6); }
   .phone video { display: block; width: 100%; aspect-ratio: 390 / 844; object-fit: cover; border-radius: 27px; background: var(--paper); }
 
@@ -128,7 +129,7 @@ ${font("source-serif-4/opsz.css")}${font("onest/wght.css")}
     </div>
   </div>
   <div class="stage">
-    <div class="win"><i><b></b><b></b><b></b></i>${video("desk", "Читалка на комп'ютері: виділене слово, пояснення, нотатка")}</div>
+    <div class="win"><i><b></b><b></b><b></b></i><img src="/landing-desk-poster.jpg" alt="Читалка на комп'ютері: виділене слово, пояснення, нотатка" /></div>
     <div class="phone">${video("phone", "Читалка на телефоні: виділене слово, пояснення, нотатка")}</div>
   </div>
 </main>
