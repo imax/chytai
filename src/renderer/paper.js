@@ -18,6 +18,7 @@
   let adding = false; // the «+ Нотатка» form is open
   let editing = null; // the note being edited
   let photo = null; // { data, small, marked, thumb, page }: the photo attached to the question field, sent with «Пояснити»/«Запитати»
+  let noteQuote = false; // the note being written is a quote from the book, not the reader's own thought (Max 2026-11-04)
   let noteDraft = ""; // its text, kept across redraws (an answer streaming in redraws the page)
   let notePage = 0; // the page the text from a photo came from
   let noteBusy = false; // the text of a photo for the note is being read
@@ -216,7 +217,7 @@
         ${adding ? `<form class="pp-ask pp-noteform" data-pp-form><textarea id="pp-note" rows="3" placeholder="Думка, цитата або що перечитати">${esc(noteDraft)}</textarea>
           ${noteBusy ? `<div class="pp-note-busy"><span class="spinner"></span>Розпізнаю текст…</div>` : ""}
           <div class="pp-ask-row"><button type="button" class="pp-tool" data-pp="img-note" title="Текст з фото чи скріншота" aria-label="Текст з фото чи скріншота">${svgCam}</button>
-            <button type="button" class="pp-tool${window.Dictation.field() === "pp-note" ? " on" : ""}" data-pp="mic-note" title="Надиктувати" aria-label="Надиктувати">${svgMic}</button><span class="pp-ask-sp"></span><button type="submit" class="r-pill">Зберегти</button></div></form>` : ""}
+            <button type="button" class="pp-tool${window.Dictation.field() === "pp-note" ? " on" : ""}" data-pp="mic-note" title="Надиктувати" aria-label="Надиктувати">${svgMic}</button><button type="button" class="pp-qt${noteQuote ? " on" : ""}" data-pp="quote-toggle" aria-pressed="${noteQuote}" title="Цитата з книжки">«Цитата»</button><span class="pp-ask-sp"></span><button type="submit" class="r-pill">Зберегти</button></div></form>` : ""}
         ${sortedNotes.length ? sortedNotes.map((n) => editing === n.id
           ? `<form class="pp-ask pp-noteform" data-pp-edit="${esc(n.id)}"><textarea id="pp-note-edit" rows="3">${esc(n.text)}</textarea>
             <div class="pp-ask-row"><label class="pp-page-in">стор. <input id="pp-note-page" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="5" value="${esc((n.chapter || "").match(/\d+/)?.[0] || "")}" /></label><span class="pp-ask-sp"></span><button type="button" class="r-link" data-pp="cancel-edit">Скасувати</button><button type="submit" class="r-pill">Зберегти</button></div></form>`
@@ -268,10 +269,13 @@
     if (!e.target.matches("[data-pp-form]")) return;
     e.preventDefault();
     window.Dictation.stop();
-    const text = $("#pp-note").value.trim();
+    let text = $("#pp-note").value.trim();
+    // A quote is drawn with its own «», so the reader's own ones go.
+    if (noteQuote) text = text.replace(/^[«"“„]\s*([\s\S]*?)\s*[»"”“]$/, "$1").trim();
     if (!text) return;
-    await addNote({ text, page: notePage || book.page });
+    await addNote({ text, page: notePage || book.page, quote: noteQuote });
     adding = false;
+    noteQuote = false;
     noteDraft = "";
     notePage = 0;
     window.Shell.rerender();
@@ -405,6 +409,8 @@
       seenPage(r.page);
       if (!r.text) showNotice(marked ? "Не вдалося прочитати обведене." : "На фото не знайшлося тексту.", false);
       else {
+        // Text off a photo into an empty note is the book's words: a quote.
+        if (!noteDraft.trim()) noteQuote = true;
         noteDraft = (noteDraft.trim() ? `${noteDraft.trim()}\n\n` : "") + r.text;
         if (r.page) notePage = r.page;
       }
@@ -644,6 +650,12 @@
     if (act === "mic") return mic();
     if (act === "mic-note") return mic("pp-note");
     if (act === "img-note") return noteFromPhoto();
+    if (act === "quote-toggle") {
+      noteQuote = !noteQuote;
+      e.target.closest("[data-pp]").classList.toggle("on", noteQuote);
+      e.target.closest("[data-pp]").setAttribute("aria-pressed", noteQuote);
+      return $("#pp-note")?.focus({ preventScroll: true });
+    }
     if (act === "unphoto") return photo && URL.revokeObjectURL(photo.thumb), (photo = null), redraw();
     if (act === "unattach") return (scan = null), (showText = false), window.Shell.rerender();
     if (act === "text") return (showText = !showText), window.Shell.rerender();
@@ -657,7 +669,7 @@
       return window.Shell.rerender();
     }
     if (act === "note") {
-      if (adding) return window.Dictation.stop(), (adding = false), (noteDraft = ""), (notePage = 0), window.Shell.rerender();
+      if (adding) return window.Dictation.stop(), (adding = false), (noteDraft = ""), (notePage = 0), (noteQuote = false), window.Shell.rerender();
       return (adding = true), window.Shell.rerender(), setTimeout(() => $("#pp-note")?.focus(), 30);
     }
     if (act === "note-cancel") return window.Dictation.stop(), (adding = false), window.Shell.rerender();

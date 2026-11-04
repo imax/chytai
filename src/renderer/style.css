@@ -2299,3 +2299,9 @@ html body .r-list .r-t, html body .r-list .r-a { display: block; grid-column: 2;
 .pp-noteform[data-pp-edit] .pp-ask-row { gap: 10px; }
 .pp-noteform[data-pp-edit] .pp-page-in input { width: 3.6em; }
 .pp-noteform[data-pp-edit] .r-link[data-pp="cancel-edit"] { text-decoration: none; color: var(--r-ink3); }
+/* «Цитата» in the note form: the note is the book's words (Max 2026-11-04). */
+.pp-qt { flex: none; height: 32px; padding: 0 12px; border: 1px solid var(--r-sline); border-radius: 999px; background: none; color: var(--r-ink3); font: italic 15px/1 var(--r-serif); cursor: pointer; }
+.pp-qt.on { border-color: #e2c48f; background: color-mix(in srgb, #e2c48f 28%, transparent); color: var(--r-ink); }
+.pp-noteform[data-pp-form] .pp-ask-row { gap: 4px; min-width: 0; }
+.pp-noteform[data-pp-form] .pp-qt { margin-left: 4px; }
+.pp-noteform .pp-ask-row .r-pill { flex: none; }
