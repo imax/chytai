@@ -1163,7 +1163,9 @@ async function followMail(follower, target) {
     `Це єдиний лист про цього читача. Не хочете таких листів: ${off}`,
     `Інші налаштування: ${SITE}/settings`,
   ].join("\n");
-  await auth.send(target.email, subject, require("./admin").mailLinks(text, SITE, "follow"), { headers: { "List-Unsubscribe": `<${off}>`, "List-Unsubscribe-Post": "List-Unsubscribe=One-Click" } });
+  const M = require("./mailhtml");
+  const html = M.letter({ site: SITE, title: subject, heading: `${M.esc(follower.name)} тепер стежить за вашою полицею`, body: M.paras("Ваші оцінки й нотатки будуть у них першими в стрічці.", { serif: false }), button: { text: `Що читає ${follower.name}`, href: `${SITE}${follower.href}` }, off: { href: off, text: "Не надсилати таких листів" } });
+  await auth.send(target.email, subject, require("./admin").mailLinks(text, SITE, "follow"), { html: require("./admin").mailLinks(html, SITE, "follow", true), headers: { "List-Unsubscribe": `<${off}>`, "List-Unsubscribe-Post": "List-Unsubscribe=One-Click" } });
   console.log(`follow mail: @${follower.username} → @${target.username}`);
 }
 const followMailSwitch = (req, res, on) => {
@@ -1355,8 +1357,10 @@ function mentionMails(req, text, { where, href, before = "" }) {
     if (!r || r.id === req.user.id || !r.email || r.mention_mail === 0 || auth.tooMany(`mention:${req.user.id}:${r.id}`, 5)) continue;
     const off = `${SITE}/mention-mail/unsubscribe/${encodeURIComponent(r.id)}/${digest.token(r.id)}`;
     const body = [`${req.user.name} (chytai.org.ua/@${req.user.username}) згадав(ла) вас у Клубі Chytai ${where}:`, "", String(text).trim().slice(0, 600), "", `Відповісти: ${SITE}${href}`, "", `Не хочете таких листів: ${off}`].join("\n");
+    const M = require("./mailhtml");
+    const html = M.letter({ site: SITE, title: "Вас згадали в Клубі Chytai", section: "Клуб", kicker: `<b style="color:#1b1a17;font-weight:500">${M.esc(req.user.name)}</b> згадав(ла) вас ${M.esc(where)}`, body: M.quote(String(text).trim().slice(0, 600)), button: { text: "Відповісти", href: `${SITE}${href}` }, off: { href: off, text: "Не надсилати листів про згадки" } });
     auth
-      .send(r.email, `${req.user.name} згадав(ла) вас у Клубі Chytai`, require("./admin").mailLinks(body, SITE, "mention"), { headers: { "List-Unsubscribe": `<${off}>`, "List-Unsubscribe-Post": "List-Unsubscribe=One-Click" } })
+      .send(r.email, `${req.user.name} згадав(ла) вас у Клубі Chytai`, require("./admin").mailLinks(body, SITE, "mention"), { html: require("./admin").mailLinks(html, SITE, "mention", true), headers: { "List-Unsubscribe": `<${off}>`, "List-Unsubscribe-Post": "List-Unsubscribe=One-Click" } })
       .then(() => console.log(`mention mail: @${req.user.username} → @${r.username}`))
       .catch((e) => console.log(`mention mail to @${r.username} failed: ${e.message}`));
     mailed.add(r.id);
@@ -1372,8 +1376,10 @@ function replyMails(req, t, postId, text, skip = new Set()) {
     if (!r || r.id === req.user.id || skip.has(r.id) || !r.email || r.club_mail === 0) continue;
     const off = `${SITE}/club-mail/unwatch/${encodeURIComponent(t.id)}/${encodeURIComponent(r.id)}/${digest.token(r.id)}`;
     const body = [`${req.user.name} (chytai.org.ua/@${req.user.username}) у темі «${t.title}»:`, "", String(text).trim().slice(0, 1500), "", `Відповісти: ${SITE}${t.href}#p-${postId}`, "", `Не стежити за цією темою: ${off}`, `Усі листи Клубу: ${SITE}/settings/mail`].join("\n");
+    const M = require("./mailhtml");
+    const html = M.letter({ site: SITE, title: t.title, section: "Клуб", kicker: `Нова відповідь від <b style="color:#1b1a17;font-weight:500">${M.esc(req.user.name)}</b> у темі`, heading: `<a href="${M.esc(SITE + t.href)}" style="color:#1b1a17;text-decoration:none">${M.esc(t.title)}</a>`, body: M.quote(String(text).trim().slice(0, 1500)), button: { text: "Відповісти", href: `${SITE}${t.href}#p-${postId}` }, off: { href: off, text: "Не стежити за цією темою" } });
     auth
-      .send(r.email, `Клуб Chytai: ${t.title}`, require("./admin").mailLinks(body, SITE, "club"), { headers: { "List-Unsubscribe": `<${off}>`, "List-Unsubscribe-Post": "List-Unsubscribe=One-Click" } })
+      .send(r.email, `Клуб Chytai: ${t.title}`, require("./admin").mailLinks(body, SITE, "club"), { html: require("./admin").mailLinks(html, SITE, "club", true), headers: { "List-Unsubscribe": `<${off}>`, "List-Unsubscribe-Post": "List-Unsubscribe=One-Click" } })
       .then(() => console.log(`club mail: «${t.title}» → @${r.username}`))
       .catch((e) => console.log(`club mail to @${r.username} failed: ${e.message}`));
     mailed.add(r.id);

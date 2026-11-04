@@ -317,7 +317,10 @@ class Auth {
   async mail(email, code) {
     const subject = `${code} — код для входу в Chytai`;
     const text = `Ваш код для входу на chytai.org.ua: ${code}\n\nВін діє 10 хвилин. Якщо ви не просили код, просто не зважайте на цей лист.`;
-    return this.send(email, subject, text);
+    const M = require("./mailhtml");
+    const site = "https://chytai.org.ua";
+    const html = M.letter({ site, title: subject, heading: "Код для входу", body: `<div style="font-family:${M.SERIF};font-size:40px;letter-spacing:.12em;margin:20px 0 0;color:#1b1a17">${M.esc(code)}</div>${M.paras("Він діє 10 хвилин. Якщо ви не просили код, просто не зважайте на цей лист.", { serif: false })}`, footer: "" });
+    return this.send(email, subject, text, { html });
   }
 
   // A letter through Resend (plain text, with an HTML version, extra headers and attachments
