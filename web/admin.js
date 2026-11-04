@@ -1039,15 +1039,15 @@ function healthBlock({ day = null, jobs = { n: 0, failed: [] }, reader = true })
   const p = day?.page;
   const stall = Math.round((day?.stall?.sum || 0) / 1000);
   const slow = p && (p.p95 > 1000 || p.slow > 0.02);
-  // Only what is wrong, each with where to look; one «Усе гаразд» when nothing is (Max, 2026-11-04).
-  const bad = [
-    slow && `Сайт повільний: 95% сторінок за ${s(p.p95)}, повільніше 2 с — ${fmtN(p.slow * 100, 1)}%. <a href="/admin/speed">Швидкість</a>`,
-    stall >= 30 && `Сервер стояв сьогодні ${stall} с. <a href="/admin/speed">Швидкість</a>`,
-    jobs.failed.length && `Фонові задачі з помилкою за добу: ${jobs.failed.map(esc).join(", ")}. <a href="/admin/jobs">Задачі</a>`,
-    !reader && `Читалка не відповіла сайту: app.chytai.org.ua може лежати. <a href="https://app.chytai.org.ua/">Відкрити</a>`,
-  ].filter(Boolean);
+  // Every row always; a row that needs a look turns red and says what and where (Max, 2026-11-04).
+  const rows = [
+    [!slow, p ? `Сайт швидкий: 95% сторінок за ${s(p.p95)}.` : "Сайт: сторінок сьогодні ще не рахували.", p ? `Сайт повільний: 95% сторінок за ${s(p.p95)}, повільніше 2 с — ${fmtN(p.slow * 100, 1)}%. <a href="/admin/speed">Швидкість</a>` : ""],
+    [stall < 30, "Сервер не стояв.", `Сервер стояв сьогодні ${stall} с. <a href="/admin/speed">Швидкість</a>`],
+    [!jobs.failed.length, `Фонові задачі без помилок (${fmtN(jobs.n)} за добу).`, `Фонові задачі з помилкою за добу: ${jobs.failed.map(esc).join(", ")}. <a href="/admin/jobs">Задачі</a>`],
+    [reader, "Читалка працює.", `Читалка не відповіла сайту: app.chytai.org.ua може лежати. <a href="https://app.chytai.org.ua/">Відкрити</a>`],
+  ];
   return `<h2>Performance</h2>
-<ul class="health">${bad.length ? bad.map((x) => `<li class="bad">${x}</li>`).join("") : `<li class="ok">Усе гаразд: сайт швидкий, сервер не стояв, задачі без помилок, Читалка працює.</li>`}</ul>`;
+<ul class="health">${rows.map(([ok, good, bad]) => `<li class="${ok ? "ok" : "bad"}">${ok ? good : bad}</li>`).join("")}</ul>`;
 }
 
 // /admin/overviews: every overview with readers' 🤩/🙂/🙁, the complained-about ones on top.
