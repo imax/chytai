@@ -17,6 +17,7 @@ const CODE_TTL = 10 * 60 * 1000;
 const CODE_TRIES = 5;
 const PER_EMAIL_HOUR = 5;
 const PER_IP_HOUR = 20;
+const FAILS_DAY = 20;
 const SESSION_DAYS = 365;
 
 // Usernames: Latin lowercase, digits, dot or underscore, 3–30 characters, not starting or ending with
@@ -37,7 +38,6 @@ class Auth {
     this.from = from;
     this.resendKey = resendKey;
     this.log = log;
-    this.sent = new Map(); // email or ip -> [timestamps]
     // Signs tickets (a verified e-mail that has no reader yet); kept in meta so restarts keep them valid.
     this.ticketKey = db.get("ticket_key") || (db.set("ticket_key", crypto.randomBytes(32).toString("hex")), db.get("ticket_key"));
     this.cache = new Map(); // session hash -> reader id
@@ -238,12 +238,15 @@ class Auth {
 
   // ---- sign-in codes ----
 
-  tooMany(key, limit) {
+  // Counted in the database (login_limits), not in memory: a deploy used to forget every count (security review
+  // 2026-11-04). Keys are hashes, no addresses stored. `add: false` only looks.
+  tooMany(key, limit, windowMs = 3600 * 1000, { add = true } = {}) {
     const t = Date.now();
-    const list = (this.sent.get(key) || []).filter((x) => t - x < 3600 * 1000);
-    this.sent.set(key, list);
-    if (list.length >= limit) return true;
-    list.push(t);
+    const k = sha(`limit:${key}`);
+    this.db.prepare("DELETE FROM login_limits WHERE at < ?").run(t - 24 * 3600 * 1000);
+    const n = this.db.prepare("SELECT COUNT(*) AS n FROM login_limits WHERE key = ? AND at >= ?").get(k, t - windowMs).n;
+    if (n >= limit) return true;
+    if (add) this.db.prepare("INSERT INTO login_limits (key, at) VALUES (?, ?)").run(k, t);
     return false;
   }
 
@@ -266,6 +269,9 @@ class Auth {
 
   // Check the code. Returns { reader } for a known address, { ticket } for a new one, or { error }.
   verify(email, code) {
+    // A wrong code a day per address at most FAILS_DAY times, whatever new codes were asked for: six digits
+    // can't be guessed in that many tries.
+    if (this.tooMany(`fail:${email}`, FAILS_DAY, 24 * 3600 * 1000, { add: false })) return { error: "Забагато невдалих спроб. Спробуйте завтра." };
     const key = sha(`code:${email}`);
     const rows = this.db.prepare("SELECT hash, tries FROM login_codes WHERE key = ? AND expires >= ?").all(key, Date.now());
     if (!rows.length) return { error: "Код застарів. Запросіть новий." };
@@ -273,8 +279,9 @@ class Auth {
     this.db.prepare("UPDATE login_codes SET tries = tries + 1 WHERE key = ?").run(key);
     rows.splice(0, rows.length, ...rows.filter((r) => r.tries < CODE_TRIES));
     const hash = sha(`${email}:${String(code).replace(/\D/g, "")}`);
-    if (!rows.some((r) => r.hash === hash)) return { error: "Код не підходить." };
+    if (!rows.some((r) => r.hash === hash)) return this.tooMany(`fail:${email}`, FAILS_DAY, 24 * 3600 * 1000), { error: "Код не підходить." };
     this.db.prepare("DELETE FROM login_codes WHERE key = ?").run(key);
+    this.db.prepare("DELETE FROM login_limits WHERE key = ?").run(sha(`limit:fail:${email}`));
     const reader = this.byEmail(email);
     if (reader) return { reader };
     const body = Buffer.from(JSON.stringify({ email, expires: Date.now() + CODE_TTL })).toString("base64url");
