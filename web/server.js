@@ -2767,6 +2767,12 @@ app.post("/admin/reader/off", owner, async (req, res) => {
 });
 app.get("/admin/readers", owner, (req, res) => res.send(readersPage({ user: req.user, stats: admin.stats(), layout: pages.layout, q: req.query.q, min: Number(req.query.books) || 0, sort: String(req.query.sort || "created"), page: req.query.page })));
 // What the readers do on the site, in time order (Max, 2026-10-30), with the books' titles for book addresses.
+// Стать on /admin/readers (gender.js): Max's fix stays, a later change of name doesn't guess over it.
+app.post("/admin/readers/gender", owner, (req, res) => {
+  auth.setGender(String(req.body.id || ""), String(req.body.gender ?? ""));
+  const back = req.get("referer") || "";
+  res.redirect(303, /^https?:\/\/[^/]+\/admin\/readers(\?|$)/.test(back) ? back.replace(/^https?:\/\/[^/]+/, "") : "/admin/readers");
+});
 app.get("/admin/activity", owner, (req, res) => {
   const who = req.query.reader ? auth.byUsername(String(req.query.reader)) : null;
   const readers = new Map(auth.readers().map((r) => [r.id, r]));
