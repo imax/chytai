@@ -325,20 +325,49 @@ function trimAccountRequest(request) {
   return request;
 }
 
-// Reading time per account (Max, 2026-10-29: «кількість хвилин … не анонім, з юзером. Бо токени»): every saved
-// position is a page turned, so the gap since the previous one, if under five minutes, is time spent reading.
-// A longer gap starts a new sitting and counts nothing. Seconds per day per account, in the same day records.
-const READ_GAP = 5 * 60 * 1000;
-const lastTurn = new Map(); // account -> time of its last saved position, in memory only
-function recordReading(acct) {
+// Reading time (Max, 2026-11-04: «трекати кількість хвилин, які люди проводять в читалці»; before that, since
+// 2026-10-29, the gaps between page turns). The reader page counts the seconds a book is on screen, the tab is
+// visible and the reader did something in the last few minutes (reading-time.js), and sends them about once a
+// minute: POST /api/reading { books: { name: seconds } }. Kept per day: readSec[account] in total and
+// readBooks[account][book]. Accounts only, as for explanations; guests and shared links are not counted.
+const READ_GAP = 5 * 60 * 1000; // a pause this long ends a sitting (noteReadingNow)
+const lastReading = new Map(); // account -> time of its last report, in memory only
+function recordReading(acct, books) {
   const now = Date.now();
-  const gap = now - (lastTurn.get(acct) || 0);
-  lastTurn.set(acct, now);
-  if (gap >= READ_GAP) return;
+  // No more than the time since the previous report (two devices at once, or a page that sends too much).
+  const since = lastReading.has(acct) ? (now - lastReading.get(acct)) / 1000 + 10 : 600;
+  lastReading.set(acct, now);
+  let budget = Math.min(600, since);
   const day = statsDay(now);
   const stats = (state.stats ??= { since: day, days: {} });
   const d = (stats.days[day] ??= { explains: 0, users: {}, guests: 0, models: {} });
-  (d.readSec ??= {})[acct] = (d.readSec[acct] || 0) + Math.round(gap / 1000);
+  for (const [name, sec] of Object.entries(books)) {
+    const add = Math.round(Math.min(budget, sec));
+    if (!(add > 0)) continue;
+    budget -= add;
+    (d.readSec ??= {})[acct] = (d.readSec[acct] || 0) + add;
+    const mine = ((d.readBooks ??= {})[acct] ??= {});
+    mine[name] = (mine[name] || 0) + add;
+  }
+}
+
+// Minutes per reader and book over the last 30 days, for the admin page (newest reading first).
+function readingByBook(days, dayKeys, today, weekAgo, monthAgo) {
+  const rows = new Map();
+  for (const day of dayKeys.filter((k) => k >= monthAgo)) {
+    for (const [acct, books] of Object.entries(days[day].readBooks || {})) {
+      for (const [name, sec] of Object.entries(books)) {
+        const r = rows.get(`${acct}\n${name}`) || { id: acct, name: accountName(acct), username: state.accounts[acct]?.username || "", book: name, ...bookInfo(acct, name), today: 0, week: 0, month: 0, last: day };
+        r.month += sec;
+        if (day >= weekAgo) r.week += sec;
+        if (day === today) r.today += sec;
+        if (day > r.last) r.last = day;
+        rows.set(`${acct}\n${name}`, r);
+      }
+    }
+  }
+  const min = (sec) => Math.round(sec / 60);
+  return [...rows.values()].map((r) => ({ ...r, today: min(r.today), week: min(r.week), month: min(r.month) })).filter((r) => r.month > 0).sort((a, b) => b.month - a.month);
 }
 
 async function collectStats() {
@@ -405,6 +434,7 @@ async function collectStats() {
     guestTotalLimit: GUEST_TOTAL_LIMIT,
     accountCap: ACCOUNT_DAILY_CAP,
     wishes: wishStats(library),
+    reading: readingByBook(stats.days, dayKeys, today, weekAgo, monthAgo),
   };
 }
 
@@ -1056,6 +1086,19 @@ api.patch("/settings", (req, res) => {
   res.json(settingsFor(req));
 });
 
+// Seconds of reading since the last report, per book (reading-time.js; sendBeacon sends text/plain).
+api.post("/reading", express.text({ limit: "16kb" }), (req, res) => {
+  let body = req.body;
+  if (typeof body === "string") try { body = JSON.parse(body); } catch { body = null; }
+  const books = body?.books;
+  if (!books || typeof books !== "object" || Array.isArray(books)) return res.status(400).json({ error: "bad request" });
+  if (req.guest) return res.json({ ok: true });
+  const clean = {};
+  for (const [name, sec] of Object.entries(books).slice(0, 20)) if (name && name.length <= 500 && Number.isFinite(sec) && sec > 0) clean[name.replace(/#reflow$/, "")] = (clean[name.replace(/#reflow$/, "")] || 0) + Math.min(sec, 600);
+  recordReading(req.acct, clean);
+  saveState();
+  res.json({ ok: true });
+});
 api.put("/position", (req, res) => {
   const { path: bookPath, cfi, pct, chapter, part, parts } = req.body || {};
   if (typeof bookPath !== "string" || typeof cfi !== "string") return res.status(400).json({ error: "bad request" });
@@ -1064,7 +1107,6 @@ api.put("/position", (req, res) => {
   u.positions ??= {};
   u.positions[bookPath] = cfi;
   (u.opened ??= {})[name] = Date.now();
-  if (!req.guest) recordReading(req.acct);
   if (!req.guest && !req.share) noteReadingNow(req.acct, name);
   if (u.setAside) delete u.setAside[name];
   // How far in and which chapter, for the home screen: the position itself is a CFI it cannot read.
@@ -1250,6 +1292,12 @@ function tellSite(id) {
 // читалки»): a book read here for a few minutes goes to the site once a day; the site puts it on «Читаю зараз»
 // unless the account turned that off in its settings there or already has the book as «Прочитано».
 const NOW_AFTER = 3 * 60 * 1000;
+// What the reader knows of a book without opening it: paper books, the free shelf, publishers' books.
+function bookInfo(acct, name) {
+  const pb = paper.NAME.test(name) ? state.users[acct]?.paper?.[name] : null;
+  const info = pb ? { title: pb.title, author: pb.author } : freeShelf.find((f) => f.name === name) || prot.meta(name) || {};
+  return { title: info.title || "", authors: Array.isArray(info.authors) ? info.authors : info.author ? [info.author] : [], paper: !!pb };
+}
 const readingSince = new Map(); // "acct\tbook" -> { from, last, told: day }
 function noteReadingNow(acct, name) {
   if (!state.accounts[acct]?.key || !name) return;
@@ -1262,9 +1310,8 @@ function noteReadingNow(acct, name) {
   const day = statsDay(t);
   if (r.told === day || t - r.from < NOW_AFTER) return;
   r.told = day;
-  const pb = paper.NAME.test(name) ? userState(acct).paper?.[name] : null;
-  const info = pb ? { title: pb.title, author: pb.author } : freeShelf.find((f) => f.name === name) || prot.meta(name) || {};
-  const book = { name, title: info.title || "", authors: Array.isArray(info.authors) ? info.authors : info.author ? [info.author] : [] };
+  const info = bookInfo(acct, name);
+  const book = { name, title: info.title, authors: info.authors };
   fetch(`${WEB_URL}/api/reader-now`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: acct, key: state.accounts[acct].key, book }), signal: AbortSignal.timeout(20000) })
     .then((res) => res.ok || console.error(`reader-now ${acct}: ${res.status}`))
     .catch((err) => console.error(`reader-now ${acct}:`, err.message));
@@ -1987,7 +2034,6 @@ api.patch("/paper/:name", guestsCannot("Без входу паперових к�
   if (typeof author === "string") p.author = clean(author, 300);
   (u.opened ??= {})[req.params.name] = Date.now();
   if (u.setAside) delete u.setAside[req.params.name];
-  if (page !== undefined) recordReading(req.acct);
   saveState();
   res.json(paper.listEntry(req.params.name, p, u));
 });

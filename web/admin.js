@@ -1456,16 +1456,16 @@ ${tile(usd(cost30), "Claude за 30 днів", costAll != null ? `${usd(costAll)
   const readers = users.length ? `<div class="tbl"><table class="reader-app">
 <thead><tr><th>Читач</th><th class="book">Читає</th><th>Хв сьогодні</th><th>За 7 днів</th><th>За 30</th><th>Пояснень за 7 днів</th><th>Claude за 30 днів</th><th></th></tr></thead>
 <tbody>${users.map((u) => `<tr${u.owner ? ' class="owner"' : ""}><th>${who(u)}</th><td class="book">${last(u)}</td><td>${n(u.readToday)}</td><td>${n(u.readWeek)}</td><td>${n(u.read30)}</td><td>${n(u.week)}</td><td>${u.cost30 ? usd(u.cost30) : n(0)}</td><td>${off(u)}</td></tr>`).join("")}</tbody></table></div>
-<p class="muted small">${idle ? `Ще ${fmtN(idle)} входили, але нічого не відкрили. ` : ""}Хвилини — час між перегортаннями, якщо пауза коротша за 5 хв. Ліміту пояснень немає, лише запобіжник ${fmtN(s.accountCap)} на день. «Вимкнути» закриває Читалку, сайт лишається.</p>` : `<p class="muted">Ще ніхто нічого не відкрив.</p>`;
+<p class="muted small">${idle ? `Ще ${fmtN(idle)} входили, але нічого не відкрили. ` : ""}Хвилини — час, коли книжка відкрита на екрані й читач щось робив за останні 3 хв (до 4 листопада рахували паузи між перегортаннями). Ліміту пояснень немає, лише запобіжник ${fmtN(s.accountCap)} на день. «Вимкнути» закриває Читалку, сайт лишається.</p>` : `<p class="muted">Ще ніхто нічого не відкрив.</p>`;
   const days = s.days.slice(0, 30);
   const daysTbl = days.length ? `<div class="tbl"><table>
-<thead><tr><th>День</th><th>Пояснень</th><th>Читачі</th><th>Гості</th><th>Токенів на вході</th><th>На виході</th><th>Claude</th></tr></thead>
-<tbody>${days.map((d) => `<tr><th>${short(d.day)}</th><td>${n(d.explains)}</td><td>${n(d.family)}</td><td>${n(d.guests)}</td><td>${fmtN(d.input + d.cacheRead + d.cacheWrite)}</td><td>${fmtN(d.output)}</td><td>${usd(d.cost)}</td></tr>`).join("")}</tbody></table></div>` : `<p class="muted">Пояснень ще не було.</p>`;
+<thead><tr><th>День</th><th>Пояснень</th><th>Токенів на вході</th><th>На виході</th><th>Claude</th></tr></thead>
+<tbody>${days.map((d) => `<tr><th>${short(d.day)}</th><td>${n(d.explains)}</td><td>${fmtN(d.input + d.cacheRead + d.cacheWrite)}</td><td>${fmtN(d.output)}</td><td>${usd(d.cost)}</td></tr>`).join("")}</tbody></table></div>` : `<p class="muted">Пояснень ще не було.</p>`;
   const models = s.models.length ? `<div class="tbl"><table>
 <thead><tr><th>Модель</th><th>Запитів</th><th>Токенів на вході</th><th>На виході</th><th>Claude</th></tr></thead>
 <tbody>${s.models.map((m) => `<tr><th>${esc(m.model.replace(/^claude-/, ""))}</th><td>${fmtN(m.requests)}</td><td>${fmtN(m.input + m.cacheRead + m.cacheWrite)}</td><td>${fmtN(m.output)}</td><td>${usd(m.cost)}</td></tr>`).join("")}</tbody></table></div>` : "";
   const body = `<section class="admin">
-<section class="page-head"><div><h1>Читалка</h1><p class="sub">app.chytai.org.ua: хто читає, скільки хвилин і що коштують пояснення Claude. Гостей сьогодні ${fmtN(s.guestsToday)}, у них ${fmtN(s.guestExplainsToday)} з ${fmtN(s.guestTotalLimit)} пояснень.</p></div></section>
+<section class="page-head"><div><h1>Читалка</h1><p class="sub">app.chytai.org.ua: хто читає, скільки хвилин і що коштують пояснення Claude.</p></div></section>
 ${tiles}
 <h2 id="readers">Читачі</h2>
 ${readers}

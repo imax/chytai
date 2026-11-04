@@ -294,6 +294,8 @@ async function openEpub(payload, { posKey, source }) {
   rendition.on("rendered", () => decorateNoteMarks());
   rendition.on("keyup", onKey);
   rendition.hooks.content.register((contents) => contents.document.addEventListener("wheel", onWheel, { passive: true }));
+  // Taps, keys and scrolls inside the book's frame are signs of reading too (reading-time.js).
+  rendition.hooks.content.register((contents) => { for (const ev of ["pointerdown", "keydown", "wheel", "touchstart"]) contents.document.addEventListener(ev, () => window.ReadingTime?.poke(), { passive: true }); });
   // Keys pressed while the page has focus reach only the book's frame; pass them on.
   rendition.on("keydown", (e) => (onPrintKey(e), e.defaultPrevented || window.DeskRead?.key(e), e.defaultPrevented || window.Shell?.key(e), window.DeskRead?.escFull(e)));
   window.DeskRead?.watchFrames(rendition);

@@ -466,6 +466,7 @@
     openPath: (target) => (target instanceof File ? uploadAndOpen(target) : openServerBook(target)),
     // progress: { pct, chapter } when the reader knows them, for the home screen.
     savePosition: (bookPath, cfi, progress) => {
+      window.ReadingTime?.poke(); // a page turned
       pendingPositions.set(bookPath, { cfi, ...progress });
       editQueued((positions) => void (positions[bookPath] = { cfi, ...progress }));
       clearTimeout(positionTimer);
