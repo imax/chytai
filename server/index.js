@@ -387,7 +387,11 @@ async function collectStats() {
     .map(([id, u]) => {
       const lastSeen = Math.max(0, state.accounts[id]?.seen || 0, ...Object.values(u.opened || {}));
       const started = new Set(Object.keys(u.positions || {}).map((p) => p.replace(/#reflow$/, ""))).size;
-      return { id, name: accountName(id), username: state.accounts[id]?.username || "", off: !!state.accounts[id]?.off, owner: id === OWNER_ID, cost30: costOf(id), readToday: minutesOf(id, today), readWeek: minutesOf(id, weekAgo), read30: minutesOf(id, monthAgo), books: countBooks(id), today: sumUser(id, today), week: sumUser(id, weekAgo), total: sumUser(id), started, lastSeen, lastBook: u.lastBook, lastOpened: u.opened?.[u.lastBook] || 0, activeWeek: lastSeen > Date.now() - 7 * 86400000 };
+      // Notes saved (Max, 2026-11-04: another sign the reader is really used), counted from their createdAt.
+      const made = Object.values(u.notes || {}).flat().map((nt) => nt.createdAt || 0);
+      const notesToday = made.filter((t) => t && statsDay(t) === today).length;
+      const notesWeek = made.filter((t) => t && statsDay(t) >= weekAgo).length;
+      return { id, notesToday, notesWeek, notesTotal: made.length, name: accountName(id), username: state.accounts[id]?.username || "", off: !!state.accounts[id]?.off, owner: id === OWNER_ID, cost30: costOf(id), readToday: minutesOf(id, today), readWeek: minutesOf(id, weekAgo), read30: minutesOf(id, monthAgo), books: countBooks(id), today: sumUser(id, today), week: sumUser(id, weekAgo), total: sumUser(id), started, lastSeen, lastBook: u.lastBook, lastOpened: u.opened?.[u.lastBook] || 0, activeWeek: lastSeen > Date.now() - 7 * 86400000 };
     })
     .sort((a, b) => b.lastSeen - a.lastSeen);
 
@@ -425,6 +429,7 @@ async function collectStats() {
     timeZone: STATS_TZ,
     since: stats.since,
     totals: { today: sumAll(today), week: sumAll(weekAgo), all: sumAll() },
+    notes: { today: users.reduce((a, x) => a + x.notesToday, 0), week: users.reduce((a, x) => a + x.notesWeek, 0), all: users.reduce((a, x) => a + x.notesTotal, 0) },
     users,
     books,
     days,

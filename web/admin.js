@@ -569,7 +569,8 @@ class Admin {
     const week7 = addDays(now, -6), month = addDays(now, -27);
     const sum = {};
     for (const r of rows) {
-      const x = (sum[r.section] ||= { id: r.section, name: SECTION_NAMES[r.section] || r.section, today: 0, week: 0, month: 0 });
+      const key = SECTION_NAMES[r.section] ? r.section : "other"; // a section since removed (Популярне) counts as «Інше»
+      const x = (sum[key] ||= { id: key, name: SECTION_NAMES[key], today: 0, week: 0, month: 0 });
       if (r.day === now) x.today += r.views;
       if (r.day >= week7) x.week += r.views;
       if (r.day >= month) x.month += r.views;
@@ -1463,16 +1464,17 @@ ${recent ? `<div class="tbl"><table>
 
 // The reader's four numbers for the Огляд dashboard (server/index.js collectStats via /api/site-admin).
 function readerTiles(s) {
-  if (!s) return [tile("·", "у Читалці за 7 днів", "Читалка не відповіла"), tile("·", "читання за 7 днів"), tile("·", "пояснень за 7 днів"), tile("·", "Claude за 30 днів")].join("");
+  if (!s) return [tile("·", "читання в Читалці за 7 днів", "Читалка не відповіла"), tile("·", "пояснень за 7 днів"), tile("·", "нотаток за 7 днів"), tile("·", "Claude за 30 днів")].join("");
   const usd = (v) => (v == null ? "—" : `$${v.toFixed(2).replace(".", ",")}`);
   const mins = (m) => (m < 120 ? `${fmtN(m)} хв` : `${fmtN(Math.round(m / 60))} год`);
   const sum = (xs, f) => xs.reduce((a, x) => (a == null || f(x) == null ? null : a + f(x)), 0);
   const cost30 = sum(s.days.slice(0, 30), (d) => d.cost);
   const readWeek = s.users.reduce((a, u) => a + (u.readWeek || 0), 0);
   return [
-    tile(fmtN(s.users.filter((u) => u.activeWeek).length), "у Читалці за 7 днів", `з ${fmtN(s.users.length)}, хто входив`),
-    tile(mins(readWeek), "читання за 7 днів", `${fmtN(s.users.filter((u) => u.readWeek >= 15).length)} читачів по 15+ хв`),
+    // Who read and how long in one tile, so notes fit in the row (Max, 2026-11-04).
+    tile(mins(readWeek), "читання в Читалці за 7 днів", `${fmtN(s.users.filter((u) => u.activeWeek).length)} читачів з ${fmtN(s.users.length)}, ${fmtN(s.users.filter((u) => u.readWeek >= 15).length)} по 15+ хв`),
     tile(fmtN(s.totals.week), "пояснень за 7 днів", `${fmtN(s.totals.today)} сьогодні`),
+    s.notes ? tile(fmtN(s.notes.week), "нотаток за 7 днів", `${fmtN(s.notes.today)} сьогодні, ${fmtN(s.notes.all)} усього`) : "",
     tile(usd(cost30), "Claude за 30 днів", "приблизно, за тарифами API"),
   ].join("");
 }
@@ -1504,11 +1506,11 @@ function readerAppPage({ user, s, error = "", book = () => null, layout }) {
     return `${b.href ? `<a href="${esc(b.href)}">${esc(title)}</a>` : esc(title)}${u.lastOpened ? ` <span class="muted">${ago(u.lastOpened)}</span>` : ""}`;
   };
   // Only those who opened something (Max: «не показувати тих, хто нічого не читає»).
-  const users = s.users.filter((u) => u.lastBook || u.read30 || u.total);
+  const users = s.users.filter((u) => u.lastBook || u.read30 || u.total || u.notesTotal);
   const idle = s.users.length - users.length;
   const readers = users.length ? `<div class="tbl"><table class="reader-app">
-<thead><tr><th>Читач</th><th class="book">Читає</th><th>Хв сьогодні</th><th>За 7 днів</th><th>За 30</th><th>Пояснень за 7 днів</th><th>Claude за 30 днів</th><th></th></tr></thead>
-<tbody>${users.map((u) => `<tr${u.owner ? ' class="owner"' : ""}><th>${who(u)}</th><td class="book">${last(u)}</td><td>${n(u.readToday)}</td><td>${n(u.readWeek)}</td><td>${n(u.read30)}</td><td>${n(u.week)}</td><td>${u.cost30 ? usd(u.cost30) : n(0)}</td><td>${off(u)}</td></tr>`).join("")}</tbody></table></div>
+<thead><tr><th>Читач</th><th class="book">Читає</th><th>Хв сьогодні</th><th>За 7 днів</th><th>За 30</th><th>Пояснень за 7 днів</th><th>Нотаток за 7 днів</th><th>Claude за 30 днів</th><th></th></tr></thead>
+<tbody>${users.map((u) => `<tr${u.owner ? ' class="owner"' : ""}><th>${who(u)}</th><td class="book">${last(u)}</td><td>${n(u.readToday)}</td><td>${n(u.readWeek)}</td><td>${n(u.read30)}</td><td>${n(u.week)}</td><td>${n(u.notesWeek)}</td><td>${u.cost30 ? usd(u.cost30) : n(0)}</td><td>${off(u)}</td></tr>`).join("")}</tbody></table></div>
 <p class="muted small">${idle ? `Ще ${fmtN(idle)} входили, але нічого не відкрили. ` : ""}Хвилини — час, коли книжка відкрита на екрані й читач щось робив за останні 3 хв (до 4 листопада рахували паузи між перегортаннями). Ліміту пояснень немає, лише запобіжник ${fmtN(s.accountCap)} на день. «Вимкнути» закриває Читалку, сайт лишається.</p>` : `<p class="muted">Ще ніхто нічого не відкрив.</p>`;
   // Books by minutes read in 30 days (Max, 2026-11-04): the same book in several libraries is one row when the
   // site knows it from the catalog.
