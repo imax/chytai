@@ -552,9 +552,7 @@ app.get("/reader-login", signed, (req, res) => {
   } catch {}
   if (!READER_ORIGINS.includes(origin)) return res.status(400).send(pages.messagePage({ title: "Невідома адреса читалки", text: "Відкрийте читалку ще раз і натисніть «Увійти».", user: req.user }));
   const ticket = readerTicket(req.user.id);
-  // The iPhone app signs in through Safari: its one-time code goes back with the ticket (reader /app-login).
-  const app = /^[a-f0-9]{32}$/.test(String(req.query.app || "")) ? `&app=${req.query.app}` : "";
-  res.redirect(`${origin}/auth?ticket=${ticket}${app}`);
+  res.redirect(`${origin}/auth?ticket=${ticket}`);
 });
 app.post("/api/reader-ticket", (req, res) => {
   const t = readerTickets.get(String(req.body?.ticket || ""));

@@ -2,7 +2,7 @@
 // layout(). The look is Max's Claude Design handoff of 2026-10-20 («Chytai.org.ua веб-дизайн», direction
 // 2b and screens 3a–3h): paper, Source Serif 4 for titles and notes, Onest for the rest, a green accent.
 // Readers first: lists show what readers made of a book; shops, prices and formats are on the book page.
-const { marked } = require("marked");
+const { marked, Marked } = require("marked");
 const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
@@ -20,6 +20,19 @@ const NOINDEX = new Set(["/search", "/login", "/settings", "/welcome", "/me", "/
 
 const esc = (s) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 const attr = esc;
+// Markdown that readers (notes, lists) or Claude wrote: any HTML in it shows as text, and a link or picture
+// goes only to http(s), mail or our own pages, so nobody's words can run a script in another reader's
+// browser (security review 2026-11-04: a note with <img onerror> ran on every page that showed it).
+// Max's own files (updates.md, draw.md) still go through plain `marked`.
+const SAFE_HREF = /^(https?:\/\/|mailto:|\/(?!\/)|#)/i;
+const ugc = new Marked({
+  walkTokens(t) {
+    if ((t.type === "link" || t.type === "image") && !SAFE_HREF.test(String(t.href || "").trim())) t.href = "#";
+  },
+  renderer: {
+    html: (t) => esc(t.text),
+  },
+});
 const plural = (n, one, few, many) => (n % 10 === 1 && n % 100 !== 11 ? one : n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20) ? few : many);
 const count = (n, one, few, many) => `${n} ${plural(n, one, few, many)}`;
 const uk = (n) => String(n).replace(".", ",");
@@ -195,7 +208,7 @@ function byline(author) {
 // A note's first paragraph as inline HTML.
 function inline(md) {
   const first = md.split(/\n\s*\n/)[0];
-  return marked.parseInline(first).replace(/<a href="http/g, '<a target="_blank" rel="noopener" href="http');
+  return ugc.parseInline(first).replace(/<a href="http/g, '<a target="_blank" rel="noopener" href="http');
 }
 const noteOf = (e, id) => (e.note ? inline(titleLinks(e.note, e.via ? e.via.id : id)) : "");
 
@@ -538,7 +551,7 @@ const SHOW_REVIEWS = false;
 // «AI-рекомендація» (advice.js): Claude's take on the book for this reader, by their own shelf, on a click.
 // A guest sees why to sign in, a reader with an empty shelf why to add books, a kept answer shows at once.
 function adviceHtml(a) {
-  return `<div class="advice-text">${marked.parse(a.text).replace(/<a href="http/g, '<a target="_blank" rel="noopener" href="http')}</div>
+  return `<div class="advice-text">${ugc.parse(a.text).replace(/<a href="http/g, '<a target="_blank" rel="noopener" href="http')}</div>
 <p class="small muted">Claude, за вашою полицею · ${writingDate(a.created.slice(0, 10))} · <button class="text-link small" data-ask="advice" data-again>Спитати ще раз</button></p>`;
 }
 // The per-reader «AI-рекомендація» came off the page the same day (Max, 2026-10-23: «AI-рекомендація
@@ -570,7 +583,7 @@ function overviewHtml(o, user, vote = null, { folded = false } = {}) {
   // The 🤩 🙂 🙁 faces of 2026-10-23 came off on 2026-10-25 (Max: «давай приберемо і Як вам цей опис?»); the
   // votes table and API stay. Only the owner's «Оновити» remains under the text.
   const votes = user?.owner ? `<span class="advice-acts"> · <button class="text-link small" data-ask="overview" data-again>Оновити</button></span>` : "";
-  return `<div class="advice-text${folded ? " folded" : ""}">${marked.parse(o.text).replace(/<a href="http/g, '<a target="_blank" rel="noopener" href="http')}</div>
+  return `<div class="advice-text${folded ? " folded" : ""}">${ugc.parse(o.text).replace(/<a href="http/g, '<a target="_blank" rel="noopener" href="http')}</div>
 ${folded ? `<p class="advice-more"><button class="text-link" data-unfold>Читати далі</button></p>` : ""}<p class="small muted">Claude, за відгуками в інтернеті · ${writingDate(o.created.slice(0, 10))}${votes}</p>`;
 }
 // «Про книжку»: the publisher's or shop's description, the Ukrainian edition line and the «Додати» form.
@@ -697,7 +710,7 @@ function twins(book, list = book.twins || book.translations || []) {
 function quote({ name, href, entry: e, now }, id) {
   const long = stripMd(e.note).length > 280;
   const what = [now ? "читає зараз" : "", e.status && !now ? VERB[e.status] + (e.status === "read" && e.year ? ` у ${e.year}` : "") : "", e.copy ? COPY[e.copy].toLowerCase() : "", e.kids ? "для дітей" : "", e.via ? `як «${e.via.title}»` : ""].filter(Boolean).join(", ");
-  return `<blockquote class="big-quote${long ? " long" : ""}">${marked.parse(titleLinks(e.note, e.via ? e.via.id : id)).replace(/<a href="http/g, '<a target="_blank" rel="noopener" href="http')}</blockquote>
+  return `<blockquote class="big-quote${long ? " long" : ""}">${ugc.parse(titleLinks(e.note, e.via ? e.via.id : id)).replace(/<a href="http/g, '<a target="_blank" rel="noopener" href="http')}</blockquote>
 <p class="said">— <a href="${attr(href)}"><b>${esc(name)}</b></a>${e.rating != null ? ` ${stars(e.rating)}` : ""}${what ? `, ${esc(what)}` : ""}</p>`;
 }
 // Every other reader: name, what they did, their note if any.
@@ -2609,7 +2622,7 @@ function listHero(list, items) {
   return `<div class="lhero" aria-hidden="true"><div class="fan">${order.map((i) => { const off = i - (n - 1) / 2; return `<span class="fc" style="--off:${off};--abs:${Math.abs(off)};order:${i}">${cover(books[i], "lg")}</span>`; }).join("")}</div></div>`;
 }
 // An intro of a few paragraphs: Markdown inside each, a single line break kept.
-const paragraphs = (md) => md.split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean).map((p) => `<p>${marked.parseInline(p).replace(/<a href="http/g, '<a target="_blank" rel="noopener" href="http').replace(/\n/g, "<br>")}</p>`).join("");
+const paragraphs = (md) => md.split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean).map((p) => `<p>${ugc.parseInline(p).replace(/<a href="http/g, '<a target="_blank" rel="noopener" href="http').replace(/\n/g, "<br>")}</p>`).join("");
 // «змінити» under one's own words: this form in place of the text until «Зберегти» or «Скасувати» (app.js).
 const cmtEdit = (action, text) => `<form method="post" action="${attr(action)}" class="cmt-form cmt-edit" hidden><textarea name="text" rows="3" maxlength="2000" required aria-label="Текст">${esc(text)}</textarea><div><button class="btn primary small">Зберегти</button> <button type="button" class="text-link small" data-edit-cancel>Скасувати</button></div></form>`;
 // «Клуб Chytai» under a list: what readers said, oldest first; plain text, links not made clickable.

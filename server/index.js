@@ -533,7 +533,7 @@ const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<
 
 // «Увійти»: the site's sign-in, which comes back here with a ticket. The app opens every address that is
 // not the reader's in Safari, so there the sign-in goes through /app-login instead (below).
-const siteSignIn = (req, code) => `${WEB_URL}/reader-login?back=${encodeURIComponent(`${req.protocol}://${req.get("host")}`)}${code ? `&app=${code}` : ""}`;
+const siteSignIn = (req) => `${WEB_URL}/reader-login?back=${encodeURIComponent(`${req.protocol}://${req.get("host")}`)}`;
 // Since 2026-11-04 the landing signs in on the page itself, so «Увійти» is just /login.
 const signInUrl = (req) => (inApp(req) ? "/app-login" : "/login");
 
@@ -665,12 +665,6 @@ function appSignInPage() {
 </script>`);
 }
 
-// In Safari, once the site sent the reader back for the app.
-function appDonePage(a) {
-  return smallPage(`<h1>Готово</h1><p>Ви увійшли${a.name ? ` як ${esc(a.name)}` : ""}. Поверніться в додаток Chytai.</p>
-<a class="btn" href="chytai://">Відкрити додаток</a>`);
-}
-
 // Readers' words on the landing (Max, 2026-10-23). Add one more { text, author } to show it; author may be left out.
 const TESTIMONIALS = [
   { text: "AI нотатки і пояснення — афігенна фіча, і навіть елементарний зміст по книжці значно зручніше чим ті читалки що я дивився", author: "Микола Я" },
@@ -771,31 +765,15 @@ app.get("/login", (req, res) => {
   if (String(req.get("referer") || "").startsWith(WEB_URL)) return res.redirect(siteSignIn(req));
   res.type("html").send(landingPage(req));
 });
-// Signing in inside the iPhone app (2026-11-02: a reader's «Увійти» in the app kept ending on the site). The app
-// opens chytai.org.ua in Safari, so the site's sign-in and the cookie it ends with stayed in Safari and the app
-// was never signed in. Now the app's page keeps a one-time code in its own cookie and sends it along to the
-// site; /auth, opened in Safari with that code, leaves the account under it, and the app's page, polling
-// /api/app-login, picks it up and gets its own cookie. Works with the builds already installed: no app update.
-const APP_LOGIN_COOKIE = "reader_app_login";
-const APP_CODE = /^[a-f0-9]{32}$/;
-const appLogins = new Map(); // code -> { id, expires }, until the app picks it up
+// The phone apps sign in on their own page (appSignInPage, 2026-11-04). The Safari round trip of 2026-11-02
+// (/auth?app=<code>, then the app picked the account up from /api/app-login) is gone: the code came in the
+// link, so anyone could send a signed-in reader a link with their own code and pick up that reader's account
+// (security review 2026-11-04).
 app.get("/app-login", (req, res) => {
   if (!inApp(req)) return res.redirect(signInUrl(req));
   if (currentAccount(req)) return res.redirect(safeNext(parseCookies(req)[NEXT_COOKIE]) || "/");
   res.setHeader("Cache-Control", "no-store");
   res.type("html").send(appSignInPage());
-});
-app.post("/api/app-login", (req, res) => {
-  res.setHeader("Cache-Control", "no-store");
-  const code = String(parseCookies(req)[APP_LOGIN_COOKIE] || "");
-  const got = APP_CODE.test(code) && appLogins.get(code);
-  if (!got || got.expires < Date.now()) return res.json({ ok: false });
-  appLogins.delete(code);
-  setLoginCookie(req, res, got.id);
-  res.append("Set-Cookie", cookieHeader(req, APP_LOGIN_COOKIE, "", 0));
-  const next = safeNext(parseCookies(req)[NEXT_COOKIE]);
-  if (next) res.append("Set-Cookie", cookieHeader(req, NEXT_COOKIE, "", 0));
-  res.json({ ok: true, next: next || "/" });
 });
 // Back from the site with a ticket (web/server.js /reader-login).
 app.get("/auth", async (req, res) => {
@@ -814,14 +792,6 @@ app.get("/auth", async (req, res) => {
   if (/^[a-f0-9]{64}$/.test(String(who.key || ""))) a.key = who.key;
   saveState();
   tellSite(who.id);
-  // Signed in in Safari for the app: the account waits under the app's code, and Safari only says to go back.
-  const code = String(req.query.app || "");
-  if (APP_CODE.test(code)) {
-    for (const [c, v] of appLogins) if (v.expires < Date.now()) appLogins.delete(c);
-    appLogins.set(code, { id: who.id, expires: Date.now() + 15 * 60000 });
-    console.log(`reader sign-in @${a.username} (app)`);
-    return res.type("html").send(appDonePage(a));
-  }
   console.log(`reader sign-in @${a.username}`);
   setLoginCookie(req, res, who.id);
   const next = safeNext(parseCookies(req)[NEXT_COOKIE]);
