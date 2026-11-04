@@ -49,7 +49,7 @@ const SECTIONS = [
   ["genres", "Жанри", (p) => p === "/genres" || p.startsWith("/genre/")],
   ["other", "Інше", () => true],
 ];
-const SECTION_GROUP = { lists: "community" };
+const SECTION_GROUP = { lists: "other" };
 const sectionOf = (p) => SECTIONS.find(([, , is]) => is(p))[0];
 
 // Where visitors come from (Max, 2026-10-24: «звідки приходять»). An arrival is a page opened from another site,
@@ -570,7 +570,7 @@ class Admin {
     const week7 = addDays(now, -6), month = addDays(now, -27);
     const sum = {};
     for (const r of rows) {
-      // Fewer rows (Max, 2026-11-04; Клуб and Вхід stay their own): Списки go with Спільнота; a section since
+      // Fewer rows (Max, 2026-11-04; Клуб, Вхід and Пошук stay their own): Списки go to «Інше», as does a section since
       // removed (Популярне) counts as «Інше».
       const key = SECTION_GROUP[r.section] || (SECTION_NAMES[r.section] ? r.section : "other");
       const x = (sum[key] ||= { id: key, name: SECTION_NAMES[key], today: 0, week: 0, month: 0 });
