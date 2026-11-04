@@ -47,7 +47,10 @@ class ClubMail {
 
   recipients(topic) {
     const inside = new Set([topic.reader.id, ...this.club.watchers(topic.id), ...this.club.posts(topic.id).map((p) => p.reader.id)]);
-    return this.auth.readers().filter((r) => r.email && r.digest !== 0 && r.topic_mail !== 0 && !inside.has(r.id));
+    // Not those who signed up today: they have just had the welcome letter (Max, 2026-11-04).
+    const today = new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Kyiv" });
+    const joinedToday = (r) => r.created && new Date(r.created).toLocaleDateString("sv-SE", { timeZone: "Europe/Kyiv" }) === today;
+    return this.auth.readers().filter((r) => r.email && r.digest !== 0 && r.topic_mail !== 0 && !inside.has(r.id) && !joinedToday(r));
   }
 
   // The letter for a reader: { to, subject, text, headers }.
