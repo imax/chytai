@@ -669,6 +669,7 @@ dialog .form { margin-top: 18px; }
 .admin .grouped .ref span { margin-left: 6px; }
 .admin .stats + p.small { margin-top: 8px; }
 .admin .stats.four { grid-template-columns: repeat(4, 1fr); }
+.admin .stats.dash { grid-template-columns: repeat(5, 1fr); }
 .admin .stat { background: var(--paper); padding: 18px 20px; }
 .admin .stat b { display: block; font: 400 40px/1 var(--serif); letter-spacing: -0.02em; }
 .admin.speed .stats { grid-template-columns: repeat(2, 1fr); }
@@ -708,7 +709,7 @@ dialog .form { margin-top: 18px; }
 .admin .pct.partial { opacity: 0.5; }
 .admin .cohorts td.pct { min-width: 60px; }
 @media (max-width: 640px) {
-  .admin .stats, .admin .stats.four { grid-template-columns: repeat(2, 1fr); }
+  .admin .stats, .admin .stats.four, .admin .stats.dash { grid-template-columns: repeat(2, 1fr); }
   .admin .stats > :first-child:nth-last-child(3) { grid-column: span 2; }
   .admin .stat b { font-size: 32px; }
   /* Phone (Max, 2026-10-28): small type, the first column wraps so the numbers stay on screen. */

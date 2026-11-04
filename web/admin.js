@@ -631,12 +631,10 @@ const sumGsc = (rows) => {
 };
 const pathOf = (u) => { try { const x = new URL(u); return decodeURIComponent(x.pathname + x.search); } catch { return u; } };
 
-// The four traffic numbers for the Огляд dashboard (Max, 2026-11-04: one dashboard, the other pages only details).
+// The traffic numbers for the Огляд dashboard: sign-ups and Google (visits and new people dropped, Max 2026-11-04: «мало що мені каже») (Max, 2026-11-04: one dashboard, the other pages only details).
 function trafficTiles(s, g, gscOn) {
   const a = s.arrivals;
   const hasG = !!g?.days;
-  const short7 = !a.since || a.since > addDays(s.now, -6);
-  const since = a.since ? short(a.since) : "сьогодні";
   const all = a.sources.reduce((t, x) => ({ month: t.month + x.month, fresh: t.fresh + x.monthNew, week: t.week + x.week }), { month: 0, fresh: 0, week: 0 });
   const signups = s.weeks.filter((w) => w.week >= weekOf(addDays(s.now, -27))).reduce((t, w) => t + w.signups, 0);
   let gNow = null, gBefore = null;
@@ -647,9 +645,7 @@ function trafficTiles(s, g, gscOn) {
   }
   const change = (x, y) => (y ? `${x >= y ? "+" : "−"}${Math.round((100 * Math.abs(x - y)) / y)}% до попередніх 28 днів` : "");
   return [
-    tile(fmtN(all.month), "відвідувань за 28 днів", short7 ? `з ${since}` : `${fmtN(all.week)} за 7 днів`),
-    tile(fmtN(all.fresh), "нових людей", all.month ? `${Math.round((100 * all.fresh) / all.month)}% відвідувань` : ""),
-    tile(fmtN(signups), "реєстрацій за 28 днів", all.fresh ? `${fmtN((100 * signups) / all.fresh, 1)}% нових людей` : ""),
+    tile(fmtN(signups), "реєстрацій за 28 днів", `з ${fmtN(all.fresh)} нових людей`),
     hasG ? tile(fmtN(gNow.clicks), "кліків з Google", gBefore ? change(gNow.clicks, gBefore.clicks) : `${fmtN(gNow.impressions)} показів · позиція ${fmtN(gNow.position, 1)}`) : tile("·", "кліків з Google", gscOn ? "ще завантажується" : "не підключено"),
   ].join("");
 }
@@ -993,7 +989,7 @@ ${s.cohorts.length ? `<div class="tbl"><table class="cohorts">
     : // One dashboard for everything (Max, 2026-11-04): key numbers, is the site fine, what readers did in a day.
       `<section class="admin overview">
 <section class="page-head"><div><h1>Огляд</h1><p class="sub">Станом на ${short(s.now)}. Деталі — у вкладках.</p></div></section>
-<div class="stats four dash">${linkFirst(siteTiles, "/admin/retention")}${linkFirst(trafficTiles(s, gsc, gscOn), "/admin/traffic")}${linkFirst(readerTiles(reader), "/admin/reader")}</div>
+<div class="stats dash">${linkFirst(siteTiles, "/admin/retention")}${linkFirst(trafficTiles(s, gsc, gscOn), "/admin/traffic")}${linkFirst(readerTiles(reader), "/admin/reader")}</div>
 
 ${health}
 
