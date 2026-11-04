@@ -2064,8 +2064,7 @@ a.r-frow:hover .r-frow-go.plain { color: var(--r-ochre); }
 @keyframes r-shimmer { from { background-position: 100% 0; } to { background-position: 0 0; } }
 @media (prefers-reduced-motion: reduce) { .r-skel i { animation: none; } }
 @media (min-width: 761px) { .r-skel .sk-p { display: none; } .r-skel .r-now { margin-bottom: 28px; } }
-/* ===================================================================================================
-   Questions in an e-book (2026-11-03, like a paper book): a selection opens a card with the passage, a question
+/* ============================================================================================   Questions in an e-book (2026-11-03, like a paper book): a selection opens a card with the passage, a question
    field, the mic, «Переклад», «В нотатки» and «Пояснити» (with a question: «Запитати»). The tap on an
    explanation's yellow keeps its small menu (.mark). The panel is the list «Запитання», see below.
    =================================================================================================== */
@@ -2241,3 +2240,6 @@ html body #panel #panel-body #cards, html body #panel #panel-body #notes { flex:
 #notes .mn.mine .mn-q { display: none; }
 #notes .mn.mine .note-comment { font: 400 17px/1.4 var(--m-serif); color: var(--m-ink); }
 #notes .mn.mine .explain { display: none; }
+=======
+.pp-note-busy { display: flex; align-items: center; gap: 8px; color: var(--r-ink3); font: 14px/1.3 var(--r-sans); }
+.pp-note-busy .spinner { width: 14px; height: 14px; border: 2px solid var(--r-sline); border-top-color: var(--r-ink2, var(--accent)); border-radius: 50%; animation: spin 0.8s linear infinite; }

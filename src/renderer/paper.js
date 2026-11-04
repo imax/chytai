@@ -17,6 +17,9 @@
   let showText = false; // the attached photo's text is open to select from
   let adding = false; // the «+ Нотатка» form is open
   let editing = null; // the note being edited
+  let noteDraft = ""; // its text, kept across redraws (an answer streaming in redraws the page)
+  let notePage = 0; // the page the text from a photo came from
+  let noteBusy = false; // the text of a photo for the note is being read
   let openChat = null; // the question unfolded in the list
   let allChats = false; // «Запитання» shows only the last few until «Показати всі» (Max 2026-11-03: long to scroll to notes)
   const CHATS_SHOWN = 3;
@@ -206,8 +209,10 @@
             ${on && c.turns.length && !live?.busy ? `<form class="pp-fq" data-pp-fq="${esc(c.id)}"><input class="pp-fq-in" type="text" autocomplete="off" enterkeyhint="send" placeholder="Уточнити…" /><button type="submit" aria-label="Надіслати"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5M6 11l6-6 6 6"/></svg></button></form>` : ""}</div>`;
         }).join("")}${moreChats}</section>` : ""}
       <section class="pp-notes"><div class="r-sec-head"><h2>Нотатки${notes.length ? ` · ${notes.length}` : ""}</h2><button type="button" class="pp-addnote" data-pp="note">+ Нотатка</button></div>
-        ${adding ? `<form class="pp-ask pp-noteform" data-pp-form><textarea id="pp-note" rows="3" placeholder="Думка, цитата або що перечитати"></textarea>
-          <div class="pp-ask-row"><button type="button" class="pp-tool${window.Dictation.field() === "pp-note" ? " on" : ""}" data-pp="mic-note" title="Надиктувати" aria-label="Надиктувати">${svgMic}</button><span class="pp-ask-sp"></span><button type="submit" class="r-pill">Зберегти</button></div></form>` : ""}
+        ${adding ? `<form class="pp-ask pp-noteform" data-pp-form><textarea id="pp-note" rows="3" placeholder="Думка, цитата або що перечитати">${esc(noteDraft)}</textarea>
+          ${noteBusy ? `<div class="pp-note-busy"><span class="spinner"></span>Розпізнаю текст…</div>` : ""}
+          <div class="pp-ask-row"><button type="button" class="pp-tool" data-pp="img-note" title="Текст з фото чи скріншота" aria-label="Текст з фото чи скріншота">${svgCam}</button>
+            <button type="button" class="pp-tool${window.Dictation.field() === "pp-note" ? " on" : ""}" data-pp="mic-note" title="Надиктувати" aria-label="Надиктувати">${svgMic}</button><span class="pp-ask-sp"></span><button type="submit" class="r-pill">Зберегти</button></div></form>` : ""}
         ${sortedNotes.length ? sortedNotes.map((n) => editing === n.id
           ? `<form class="pp-ask pp-noteform" data-pp-edit="${esc(n.id)}"><textarea id="pp-note-edit" rows="3">${esc(n.text)}</textarea>
             <div class="pp-ask-row"><button type="button" class="r-link" data-pp="cancel-edit">Скасувати</button><span class="pp-ask-sp"></span><button type="submit" class="r-pill">Зберегти</button></div></form>`
@@ -258,10 +263,13 @@
     window.Dictation.stop();
     const text = $("#pp-note").value.trim();
     if (!text) return;
-    await addNote({ text });
+    await addNote({ text, page: notePage || book.page });
     adding = false;
+    noteDraft = "";
+    notePage = 0;
     window.Shell.rerender();
   });
+  document.addEventListener("input", (e) => e.target.id === "pp-note" && (noteDraft = e.target.value));
   // Enter sends the question on a computer; on a phone Enter is a new line and «Запитати» sends.
   document.addEventListener("keydown", (e) => {
     if (e.target.id !== "pp-q" || e.key !== "Enter" || e.shiftKey || matchMedia("(pointer: coarse)").matches) return;
@@ -299,23 +307,31 @@
   }
 
   // «Фото чи скріншот»: the page's text goes with the next question; it can also be opened to select from.
-  async function attach() {
+  // A photo and the reader's marks on it: { small, thumb, marked } (marked as mark() gives it), or null.
+  async function shoot(words) {
     // On a phone our own camera (Max: iOS's «Use Photo / Retake» and then the marks were two screens for one
     // thing): shoot, and the marks come right after on the same screen, with «Перезняти» there.
     const cam = CAM_OK && matchMedia("(pointer: coarse)").matches;
     let file, small, thumb, marked;
     for (;;) {
       file = cam ? await camera() : await pickPhoto();
-      if (!file) return;
+      if (!file) return null;
       small = await shrink(file);
       thumb = URL.createObjectURL(small);
-      // First the marks: whatever is circled or underlined gets explained at once.
-      marked = await mark(thumb, cam);
+      marked = await mark(thumb, cam, words);
       if (marked !== "retake") break;
       URL.revokeObjectURL(thumb);
     }
+    if (marked === null) return URL.revokeObjectURL(thumb), null;
+    return { small, thumb, marked };
+  }
+
+  async function attach() {
+    // First the marks: whatever is circled or underlined gets explained at once.
+    const shot = await shoot();
+    if (!shot) return;
+    const { small, thumb, marked } = shot;
     const b = book;
-    if (marked === null) return URL.revokeObjectURL(thumb);
     if (marked) {
       const q = $("#pp-q")?.value.trim() || "";
       if ($("#pp-q")) $("#pp-q").value = "";
@@ -341,6 +357,35 @@
       showNotice(offline(err, "розпізнати фото"), false);
     }
     window.Shell.rerender();
+  }
+
+  // The note's text from a photo (Max, 2026-11-04): what is circled, or the whole page, goes into the «+ Нотатка» form.
+  async function noteFromPhoto() {
+    window.Dictation.stop();
+    const shot = await shoot({ hint: "Обведіть, що взяти в нотатку", go: ["Взяти весь текст", "Взяти обведене"] });
+    if (!shot) return;
+    URL.revokeObjectURL(shot.thumb);
+    const b = book;
+    noteBusy = true;
+    redraw();
+    try {
+      const marked = shot.marked?.marked;
+      const pic = marked ? await (await fetch(`data:image/jpeg;base64,${shot.marked.data}`)).blob() : shot.small;
+      const r = await window.reader.paperScan(marked ? "marked" : "page", pic);
+      if (book !== b) return;
+      seenPage(r.page);
+      if (!r.text) showNotice(marked ? "Не вдалося прочитати обведене." : "На фото не знайшлося тексту.", false);
+      else {
+        noteDraft = (noteDraft.trim() ? `${noteDraft.trim()}\n\n` : "") + r.text;
+        if (r.page) notePage = r.page;
+      }
+    } catch (err) {
+      showNotice(offline(err, "розпізнати фото"), false);
+    }
+    noteBusy = false;
+    if (book !== b) return;
+    adding = true;
+    redraw();
   }
 
   // ---------- Marking the photo (v3, Max: «обвести кружечком… і щоб він зразу пояснював обведене») ----------
@@ -404,11 +449,11 @@
 
   // Resolves to { data, small } with the marks drawn in, false for «Без позначок», null for «Скасувати»,
   // "retake" for «Перезняти» (after our camera; the sheet stays open for it).
-  function mark(url, retake = false) {
+  function mark(url, retake = false, words = { hint: "Обведіть, що пояснити", go: ["Пояснити", "Пояснити обведене"] }) {
     return new Promise((resolve) => {
       const d = $("#paper-mark");
       d.dataset.mode = "mark";
-      $("#pm-hint").textContent = "Обведіть, що пояснити";
+      $("#pm-hint").textContent = words.hint;
       $("#pm-cancel").textContent = retake ? "Перезняти" : "Скасувати";
       const img = $("#pm-img");
       const cv = $("#pm-canvas");
@@ -433,7 +478,7 @@
           ctx.stroke();
         }
         // One button (Max): with marks it explains them, without it just attaches the page.
-        $("#pm-go").textContent = strokes.length ? "Пояснити обведене" : "Пояснити";
+        $("#pm-go").textContent = words.go[strokes.length ? 1 : 0];
         $("#pm-clear").hidden = !strokes.length;
       };
       const at = (e) => {
@@ -482,7 +527,7 @@
       img.onload = () => fit();
       img.src = url;
       addEventListener("resize", fit);
-      $("#pm-go").textContent = "Пояснити";
+      $("#pm-go").textContent = words.go[0];
       $("#pm-clear").hidden = true;
       if (!d.open) d.showModal();
       if (img.complete && img.naturalWidth) fit();
@@ -559,6 +604,7 @@
     if (act === "img") return attach();
     if (act === "mic") return mic();
     if (act === "mic-note") return mic("pp-note");
+    if (act === "img-note") return noteFromPhoto();
     if (act === "unattach") return (scan = null), (showText = false), window.Shell.rerender();
     if (act === "text") return (showText = !showText), window.Shell.rerender();
     if (act === "about") return window.Shell.showAbout(book);
@@ -571,7 +617,7 @@
       return window.Shell.rerender();
     }
     if (act === "note") {
-      if (adding) return window.Dictation.stop(), (adding = false), window.Shell.rerender();
+      if (adding) return window.Dictation.stop(), (adding = false), (noteDraft = ""), (notePage = 0), window.Shell.rerender();
       return (adding = true), window.Shell.rerender(), setTimeout(() => $("#pp-note")?.focus(), 30);
     }
     if (act === "note-cancel") return window.Dictation.stop(), (adding = false), window.Shell.rerender();

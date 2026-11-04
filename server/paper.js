@@ -16,6 +16,13 @@ const PAGE_PROMPT = `This is a photo of a page (or two facing pages) of a printe
 - If a page number is printed, put it on the first line as "PAGE: <number>" (the first page's, for two pages); otherwise leave that line out.
 Answer with the text only, no comments.`;
 
+// The text the reader marked on the photo (Max, 2026-11-04: circle it and it becomes a note).
+const MARKED_PROMPT = `This is a photo of a page of a printed book. The reader marked part of it with red strokes: circled, underlined, bracketed or crossed along the margin.
+Transcribe exactly as printed only the text the marks point to, in reading order, keeping its language and spelling. A circle takes what is inside it; an underline the underlined words (the whole sentence if most of it is underlined); a mark in the margin the lines beside it.
+- Join words hyphenated across line breaks; keep paragraphs, separated by a blank line.
+- If a page number is printed, put it on the first line as "PAGE: <number>"; otherwise leave that line out.
+Answer with the text only, no comments. If nothing readable is marked, answer with nothing.`;
+
 async function ask(apiKey, model, prompt, image, mediaType) {
   const client = new Anthropic({ apiKey });
   const content = image ? [{ type: "image", source: { type: "base64", media_type: mediaType, data: image.toString("base64") } }, { type: "text", text: prompt }] : prompt;
@@ -34,8 +41,8 @@ async function readCover(apiKey, image, mediaType) {
   return { ...out, usage: r.usage, model: r.model };
 }
 
-async function readPage(apiKey, image, mediaType) {
-  const r = await ask(apiKey, PAGE_MODEL, PAGE_PROMPT, image, mediaType);
+async function readPage(apiKey, image, mediaType, marked = false) {
+  const r = await ask(apiKey, PAGE_MODEL, marked ? MARKED_PROMPT : PAGE_PROMPT, image, mediaType);
   let text = r.text;
   let page = null;
   const m = text.match(/^PAGE:\s*(\d{1,5})\s*\n?/);

@@ -2006,17 +2006,17 @@ api.delete("/paper/:name", guestsCannot("У демо-режимі паперов
   saveState();
   res.json({ ok: true });
 });
-// A photo of a cover (?kind=cover) or of a page (?kind=page), JPEG or PNG, read by Claude. The photo is not kept.
+// A photo of a cover (?kind=cover), of a page (?kind=page) or of the text marked on it (?kind=marked), JPEG or PNG, read by Claude. The photo is not kept.
 api.post("/paper/scan", guestsCannot("У демо-режимі фото не розпізнаються."), express.raw({ type: () => true, limit: "8mb" }), async (req, res) => {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) return res.status(500).json({ error: "На сервері не налаштовано ключ Claude API." });
-  const kind = req.query.kind === "page" ? "page" : "cover";
+  const kind = ["page", "marked"].includes(req.query.kind) ? req.query.kind : "cover";
   const type = String(req.headers["content-type"] || "");
   const mediaType = /png/.test(type) ? "image/png" : /webp/.test(type) ? "image/webp" : "image/jpeg";
   if (!Buffer.isBuffer(req.body) || req.body.length < 1000) return res.status(400).json({ error: "Немає фото." });
   if (!req.owner && (state.stats?.days?.[statsDay()]?.users?.[req.acct] || 0) >= ACCOUNT_DAILY_CAP) return res.status(429).json({ error: "На сьогодні запитів забагато. Завтра все запрацює знову." });
   try {
-    const r = kind === "page" ? await paper.readPage(apiKey, req.body, mediaType) : await paper.readCover(apiKey, req.body, mediaType);
+    const r = kind !== "cover" ? await paper.readPage(apiKey, req.body, mediaType, kind === "marked") : await paper.readCover(apiKey, req.body, mediaType);
     const { usage, model, ...out } = r;
     recordExplain(req, { model, usage });
     res.json(out);
