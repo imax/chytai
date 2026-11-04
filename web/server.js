@@ -739,6 +739,12 @@ app.get("/api/reader-find", (req, res) => {
   res.json({ books });
 });
 
+// A letter to the owner from the reader (its daily Claude budget ran out, 2026-11-04), signed with the owner's reader key.
+app.post("/api/reader-alert", (req, res) => {
+  if (!readerKeyOk(OWNER_ID, String(req.body?.key || ""))) return res.status(403).json({ error: "key" });
+  notifyOwner(String(req.body?.subject || "Chytai: Читалка").slice(0, 150), String(req.body?.text || "").slice(0, 3000));
+  res.json({ ok: true });
+});
 // The reader asks once a day which of its accounts are gone (deleted here), to delete their books too.
 app.post("/api/readers-gone", (req, res) => {
   const ids = (Array.isArray(req.body?.ids) ? req.body.ids : []).map(String).slice(0, 10000);

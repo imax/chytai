@@ -72,7 +72,7 @@ const FREE_DIR = path.join(ROOT, "free");
 // For books free here but still protected in the US, where GitHub is (Orwell, Max 2026-10-30).
 const FREE_VOLUME_DIR = path.join(DATA_DIR, "free");
 const FREE_CACHE = path.join(DATA_DIR, "free-cache.json");
-const MAX_UPLOAD = "300mb";
+const MAX_UPLOAD = "300mb"; // the owner's limit; readers have UPLOAD_MAX below
 // Days in the usage stats (/admin) are counted in this time zone, and kept for this long.
 const STATS_TZ = process.env.STATS_TZ || "Europe/Kyiv";
 const STATS_KEEP_DAYS = 400;
@@ -255,9 +255,11 @@ function recordExplain(req, { model, usage }) {
   if (req.guest) d.guests++;
   else d.users[req.acct] = (d.users[req.acct] || 0) + 1;
   // What each account costs, for /admin: dollars at list prices, as the day's model rows count them.
-  if (!req.guest) {
-    const c = cost(model || "?", { input: usage?.input_tokens || 0, output: usage?.output_tokens || 0, cacheRead: usage?.cache_read_input_tokens || 0, cacheWrite: usage?.cache_creation_input_tokens || 0 });
-    if (c != null) (d.userCost ??= {})[req.acct] = (d.userCost[req.acct] || 0) + c;
+  // And the whole day's, guests included, for the daily budget below.
+  const c = cost(model || "?", { input: usage?.input_tokens || 0, output: usage?.output_tokens || 0, cacheRead: usage?.cache_read_input_tokens || 0, cacheWrite: usage?.cache_creation_input_tokens || 0 });
+  if (c != null) {
+    d.cost = (d.cost || 0) + c;
+    if (!req.guest) (d.userCost ??= {})[req.acct] = (d.userCost[req.acct] || 0) + c;
   }
   const m = (d.models[model || "?"] ??= { requests: 0, input: 0, output: 0, cacheRead: 0, cacheWrite: 0 });
   m.requests++;
@@ -268,6 +270,59 @@ function recordExplain(req, { model, usage }) {
   const cutoff = statsDay(Date.now() - STATS_KEEP_DAYS * 86400000);
   for (const old of Object.keys(stats.days)) if (old < cutoff) delete stats.days[old];
   saveState();
+}
+
+// Daily budget for Claude (security review 2026-11-04, Max OK): sign-up is open, so a script with a few
+// mailboxes could run explanations all night. Each account gets ACCOUNT_COST_CAP dollars a day (list prices),
+// everyone together DAILY_COST_CAP; the owner is never stopped. When the whole day's budget runs out the owner
+// gets one letter (through the site, signed with his reader key).
+const DAILY_COST_CAP = Number(process.env.DAILY_COST_CAP) || 40;
+const ACCOUNT_COST_CAP = Number(process.env.ACCOUNT_COST_CAP) || 5;
+function aiBudgetDenied(req) {
+  if (req.owner) return null;
+  const day = statsDay();
+  const d = state.stats?.days?.[day];
+  if (!d) return null;
+  if ((d.cost || 0) >= DAILY_COST_CAP) {
+    if (d.capMailed !== day) {
+      d.capMailed = day;
+      saveState();
+      alertOwner("Chytai: денний бюджет на Claude вичерпано", `За ${day} пояснення в Читалці коштували $${(d.cost || 0).toFixed(2)} (стеля $${DAILY_COST_CAP}). До кінця дня читачі пояснень не отримують, ти отримуєш. Хто скільки витратив: ${WEB_URL}/admin/reader. Стелю міняє DAILY_COST_CAP у секретах Fly (app chytai).`);
+    }
+    return "Пояснення на сьогодні тимчасово недоступні. Завтра все запрацює знову.";
+  }
+  if (!req.guest && (d.userCost?.[req.acct] || 0) >= ACCOUNT_COST_CAP) return "На сьогодні запитів забагато. Завтра все запрацює знову; якщо це помилка, напишіть Максові.";
+  return null;
+}
+function alertOwner(subject, text) {
+  const key = state.accounts[OWNER_ID]?.key;
+  console.log(`alert: ${subject}`);
+  if (!key) return;
+  fetch(`${WEB_URL}/api/reader-alert`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: OWNER_ID, key, subject, text }), signal: AbortSignal.timeout(10000) }).catch((e) => console.error(`alert: ${e.message}`));
+}
+// The text sent to Claude, cut to what the reader's page ever sends (2 000 characters before a selection, 1 000
+// after, a screen of text): a hand-made request could carry megabytes, and Opus is paid per word.
+const ACCOUNT_FIELD_MAX = 12000;
+const ACCOUNT_MESSAGE_MAX = 20000;
+const ACCOUNT_TURNS_MAX = 40;
+function trimAccountRequest(request) {
+  const cut = (v, max) => (typeof v === "string" && v.length > max ? v.slice(0, max) : v);
+  if (request.context && typeof request.context === "object") {
+    const c = { ...request.context };
+    for (const k of Object.keys(c)) if (k !== "image") c[k] = cut(c[k], ACCOUNT_FIELD_MAX);
+    request.context = c;
+  }
+  if (Array.isArray(request.messages)) {
+    let m = request.messages;
+    if (m.length > ACCOUNT_TURNS_MAX) m = [m[0], ...m.slice(-(ACCOUNT_TURNS_MAX - 1))];
+    request.messages = m.map((x) => {
+      if (!x || typeof x !== "object") return x;
+      if (typeof x.content === "string") return { ...x, content: cut(x.content, ACCOUNT_MESSAGE_MAX) };
+      if (Array.isArray(x.content)) return { ...x, content: x.content.map((b) => (b && b.type === "text" ? { ...b, text: cut(b.text, ACCOUNT_MESSAGE_MAX) } : b)) };
+      return x;
+    });
+  }
+  return request;
 }
 
 // Reading time per account (Max, 2026-10-29: «кількість хвилин … не анонім, з юзером. Бо токени»): every saved
@@ -1653,7 +1708,47 @@ api.put("/reflow", guestsCannot("Без входу конвертація PDF н
 api.get("/reflow", (req, res, next) => (req.guest ? res.status(204).end() : next()));
 
 // Upload: PUT /api/books/<file name> with the raw file as the body.
-api.put("/books/:name", express.raw({ type: () => true, limit: MAX_UPLOAD }), async (req, res) => {
+// Uploads (security review 2026-11-04, Max OK): a file is read whole into memory on a 512 MB machine with a
+// 3 GB disk, so one account could bring the reader down for everyone. Now a reader's file is at most 100 MB,
+// their library (books, trash, PDF text versions) at most 1 GB, two uploads run at a time, and none starts
+// when the disk would have under 300 MB left. The owner keeps the old 300 MB and no quota.
+const UPLOAD_MAX = 100 * 1024 * 1024;
+const ACCOUNT_QUOTA = 1024 * 1024 * 1024;
+const DISK_RESERVE = 300 * 1024 * 1024;
+let uploadsRunning = 0;
+function dirSize(dir) {
+  let n = 0;
+  for (const e of fs.readdirSync(dir, { withFileTypes: true, recursive: true })) {
+    if (e.isFile()) n += fs.statSync(path.join(e.parentPath ?? e.path, e.name)).size;
+  }
+  return n;
+}
+const mb = (n) => Math.round(n / 1048576);
+const uploadGuard = (req, res, next) => {
+  const len = Number(req.get("content-length")) || 0;
+  if (!req.owner) {
+    if (len > UPLOAD_MAX) return res.status(413).json({ error: `Файл завеликий: до ${mb(UPLOAD_MAX)} МБ.` });
+    const root = path.join(ACCOUNTS_DIR, req.acct);
+    const used = fs.existsSync(root) ? dirSize(root) : 0;
+    if (used + len > ACCOUNT_QUOTA) return res.status(413).json({ error: `У бібліотеці вже ${mb(used)} МБ із ${mb(ACCOUNT_QUOTA)}. Видаліть щось і очистіть «Нещодавно видалені».` });
+  }
+  try {
+    const st = fs.statfsSync(DATA_DIR);
+    if (st.bavail * st.bsize - len < DISK_RESERVE) {
+      console.log(`upload refused: disk nearly full (${mb(st.bavail * st.bsize)} MB free)`);
+      return res.status(507).json({ error: "На сервері закінчується місце. Спробуйте пізніше, ми вже знаємо." });
+    }
+  } catch {}
+  if (uploadsRunning >= 2) return res.status(429).json({ error: "Зараз завантажується інша книжка. Спробуйте за хвилину." });
+  uploadsRunning++;
+  let done = false;
+  const release = () => done || ((done = true), uploadsRunning--);
+  res.on("finish", release);
+  res.on("close", release);
+  next();
+};
+const uploadBody = (req, res, next) => express.raw({ type: () => true, limit: req.owner ? MAX_UPLOAD : UPLOAD_MAX })(req, res, (err) => (err ? res.status(err.status || 400).json({ error: err.type === "entity.too.large" ? `Файл завеликий: до ${mb(UPLOAD_MAX)} МБ.` : "Файл не дійшов. Спробуйте ще раз." }) : next()));
+api.put("/books/:name", uploadGuard, uploadBody, async (req, res) => {
   const name = safeBookName(req.params.name);
   if (!name) return res.status(400).json({ error: "Підтримуються лише EPUB і PDF." });
   if (!req.body?.length) return res.status(400).json({ error: "Порожній файл." });
@@ -1678,7 +1773,7 @@ api.put("/books/:name", express.raw({ type: () => true, limit: MAX_UPLOAD }), as
 // A PDF added before every upload became an EPUB (2026-11-01) becomes one now (Max, 2026-11-02, «Одіссея»):
 // the browser sends the text version it reads «як книжку» (pdf-reflow.js), so the place and the notes made
 // there move to the EPUB unchanged. The PDF goes to «Нещодавно видалені».
-api.post("/books/:name/epub", express.raw({ type: () => true, limit: MAX_UPLOAD }), (req, res) => {
+api.post("/books/:name/epub", uploadGuard, uploadBody, (req, res) => {
   const name = safeBookName(req.params.name);
   if (!name || !/\.pdf$/i.test(name) || !fs.existsSync(bookFile(req.lib, name))) return res.status(404).json({ error: "Книжки немає на сервері." });
   if (!req.body?.length) return res.status(400).json({ error: "Порожній файл." });
@@ -1844,7 +1939,7 @@ api.get("/reflow", (req, res) => {
   }
 });
 
-api.put("/reflow", express.raw({ type: () => true, limit: MAX_UPLOAD }), (req, res) => {
+api.put("/reflow", uploadGuard, uploadBody, (req, res) => {
   const name = safeBookName(req.query.path);
   try {
     fs.writeFileSync(reflowFile(req.lib, name, String(req.query.version || "")), req.body);
@@ -1937,8 +2032,12 @@ api.put("/paper/:name/chats/:id", guestsCannot("Без входу паперов
   res.json({ ok: true });
 });
 // Questions to ask next (v3): from the book and the page, or following on from the last question. Kept a day.
+const aiBudget = (req, res, next) => {
+  const denied = aiBudgetDenied(req);
+  return denied ? res.status(429).json({ error: denied }) : next();
+};
 const suggestCache = new Map();
-api.post("/paper/:name/suggest", guestsCannot("Без входу паперових книжок немає."), async (req, res) => {
+api.post("/paper/:name/suggest", guestsCannot("Без входу паперових книжок немає."), aiBudget, async (req, res) => {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   const u = userState(req.acct);
   const p = u.paper?.[req.params.name];
@@ -1961,7 +2060,7 @@ api.post("/paper/:name/suggest", guestsCannot("Без входу паперов�
   }
 });
 // Dictation tidied into sentences (Max 2026-11-03).
-api.post("/paper/:name/tidy", guestsCannot("Без входу паперових книжок немає."), async (req, res) => {
+api.post("/paper/:name/tidy", guestsCannot("Без входу паперових книжок немає."), aiBudget, async (req, res) => {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   const p = userState(req.acct).paper?.[req.params.name];
   const text = String(req.body?.text || "").trim().slice(0, 3000);
@@ -1975,7 +2074,7 @@ api.post("/paper/:name/tidy", guestsCannot("Без входу паперових
   }
 });
 // The same for an e-book's question field (2026-11-03): the reader's page sends the book's title and author.
-api.post("/tidy", guestsCannot("Без входу диктування не доопрацьовується."), async (req, res) => {
+api.post("/tidy", guestsCannot("Без входу диктування не доопрацьовується."), aiBudget, async (req, res) => {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   const text = String(req.body?.text || "").trim().slice(0, 3000);
   if (!apiKey || !text) return res.json({ text });
@@ -2005,7 +2104,7 @@ api.delete("/paper/:name", guestsCannot("Без входу паперових к
   res.json({ ok: true });
 });
 // A photo of a cover (?kind=cover), of a page (?kind=page) or of the text marked on it (?kind=marked), JPEG or PNG, read by Claude. The photo is not kept.
-api.post("/paper/scan", guestsCannot("Без входу фото не розпізнаються."), express.raw({ type: () => true, limit: "8mb" }), async (req, res) => {
+api.post("/paper/scan", guestsCannot("Без входу фото не розпізнаються."), aiBudget, express.raw({ type: () => true, limit: "8mb" }), async (req, res) => {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) return res.status(500).json({ error: "На сервері не налаштовано ключ Claude API." });
   const kind = ["page", "marked"].includes(req.query.kind) ? req.query.kind : "cover";
@@ -2044,6 +2143,12 @@ api.post("/explain", async (req, res) => {
     send({ type: "error", message: "На сьогодні пояснень забагато, це схоже на автоматичні запити. Завтра все запрацює знову; якщо це помилка, напишіть Максові." });
     return res.end();
   }
+  const denied = aiBudgetDenied(req);
+  if (denied) {
+    send({ type: "error", message: denied });
+    return res.end();
+  }
+  if (!req.guest && !req.owner) trimAccountRequest(request);
   if (req.share) {
     const usage = shareUsage(req.share);
     if (usage.n >= SHARE_EXPLAIN_LIMIT) {

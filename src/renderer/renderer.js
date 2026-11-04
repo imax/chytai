@@ -713,11 +713,15 @@ function limitCopy(contents) {
 }
 
 // Books never get to run code: drop <script> elements and inline on* handlers before rendering.
+// A book's own code never runs: scripts and event attributes go, and so (security review 2026-11-04) do frames
+// and embeds (an <iframe srcdoc> runs as this page), <base> and <meta http-equiv>, and javascript: in any spelling
+// (browsers skip tabs and line breaks inside the scheme).
+const BOOK_DROP = new Set(["script", "iframe", "frame", "frameset", "object", "embed", "applet", "base", "portal"]);
 function stripScripts(doc) {
   for (const el of [...doc.querySelectorAll("*")]) {
-    if (el.localName === "script") { el.remove(); continue; }
+    if (BOOK_DROP.has(el.localName) || (el.localName === "meta" && el.hasAttribute("http-equiv"))) { el.remove(); continue; }
     for (const attr of [...el.attributes]) {
-      if (/^on/i.test(attr.name) || /^\s*javascript:/i.test(attr.value)) el.removeAttribute(attr.name);
+      if (/^on/i.test(attr.name) || attr.name === "srcdoc" || /^(javascript|vbscript):/i.test(attr.value.replace(/[\s\u0000-\u001f]+/g, ""))) el.removeAttribute(attr.name);
     }
   }
 }
