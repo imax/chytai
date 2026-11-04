@@ -682,6 +682,16 @@ function landingPage(req) {
 const app = express();
 app.set("trust proxy", true);
 app.disable("x-powered-by");
+// The visitor's address is the one Fly saw (Fly-Client-IP, set by Fly's proxy): with "trust proxy" alone
+// req.ip was the first X-Forwarded-For entry, which the visitor writes, so per-address limits (sign-in codes,
+// guests' explanations) could be dodged by sending a new one each time (security review 2026-11-04).
+// And a few headers every page should carry: HTTPS only, no framing by other sites, no type guessing.
+app.use((req, res, next) => {
+  const fly = req.get("fly-client-ip");
+  if (fly) Object.defineProperty(req, "ip", { value: fly, configurable: true });
+  res.set({ "Strict-Transport-Security": "max-age=31536000", "X-Frame-Options": "SAMEORIGIN", "X-Content-Type-Options": "nosniff" });
+  next();
+});
 
 // The reader's address is app.chytai.org.ua (2026-10-22; read.chytai.org.ua for its first hour). Browsers
 // on chytai.fly.dev and read. go there; the iPhone app (ChytaiApp in its user agent) stays on
