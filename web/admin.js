@@ -104,13 +104,17 @@ function sourceOf(referer, query, ownHosts) {
 }
 // Links of a letter back to the site carry utm_source=email and the letter's name, so «Звідки приходять» shows
 // what each letter brings («Пошта», «кампанія: digest»; Max, 2026-10-29). Unsubscribing and settings stay bare.
+// Only inside href="…" of the HTML letter: an address the reader sees (link text, the plain-text letter) stays
+// clean (Max, 2026-11-04: «нашо ми показуємо ці ugly utm мітки?»).
 function mailLinks(s, site, campaign, html = false) {
+  if (!html) return String(s);
   const re = new RegExp(`${site.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(/[^"'\\s<>]*)?`, "g");
-  return String(s).replace(re, (url) => {
+  const tag = (url) => {
     if (/\/(unsubscribe|resubscribe|settings)(\/|$|\?)/.test(url)) return url;
     const [base, hash = ""] = url.split("#");
-    return `${base}${base.includes("?") ? (html ? "&amp;" : "&") : "?"}utm_source=email${html ? "&amp;" : "&"}utm_campaign=${campaign}${hash ? `#${hash}` : ""}`;
-  });
+    return `${base}${base.includes("?") ? "&amp;" : "?"}utm_source=email&amp;utm_campaign=${campaign}${hash ? `#${hash}` : ""}`;
+  };
+  return String(s).replace(/(href=")([^"]*)"/g, (_, h, url) => `${h}${url.replace(re, tag)}"`);
 }
 const ARRIVAL_DAYS = 28;
 const SECTION_NAMES = Object.fromEntries(SECTIONS.map(([id, name]) => [id, name]));
