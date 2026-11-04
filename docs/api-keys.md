@@ -14,3 +14,9 @@
 Ключа Anthropic **немає** в GitHub Actions secrets (там лише FLY_API_TOKEN, FLY_API_TOKEN_WEB, EXPO_TOKEN, ASC_API_KEY_P8) і в iOS-застосунку (app/ — лише WebView).
 
 `fly secrets set` сам перезапускає машини застосунку, окремий деплой не потрібен. family-ea не чіпати.
+
+## Telegram-бот сповіщень (`TELEGRAM_BOT_TOKEN`)
+
+Сайт пише Максу в Telegram (web/telegram.js). Токен від @BotFather лише на сайті:
+`fly secrets set TELEGRAM_BOT_TOKEN=… -a chytai-web`
+Чат, куди писати, бот запам'ятовує сам: перший, хто надіслав йому /start (meta `telegram:chat`). Щоб перепідключити, можна задати `TELEGRAM_CHAT_ID` або стерти `telegram:chat` у базі. Новий токен міняє адресу вебхука, сайт ставить її сам при старті.

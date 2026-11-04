@@ -27,7 +27,11 @@ function remember(job, how, t0, ok, r) {
   const ms = Date.now() - t0;
   if (!runsDb || (ok && (r == null || r === false || r === 0) && ms < 2000)) return;
   try {
-    runsDb.prepare("INSERT INTO job_runs (job, how, started, ms, ok, note) VALUES (?, ?, ?, ?, ?, ?)").run(job, how || "", new Date(t0).toISOString(), ms, !ok || r?.ok === false ? 0 : r?.errors?.length ? 2 : 1, ok ? summary(r) : String(r?.message || r).slice(0, 300));
+    const state = !ok || r?.ok === false ? 0 : r?.errors?.length ? 2 : 1;
+    const note = ok ? summary(r) : String(r?.message || r).slice(0, 300);
+    runsDb.prepare("INSERT INTO job_runs (job, how, started, ms, ok, note) VALUES (?, ?, ?, ?, ?, ?)").run(job, how || "", new Date(t0).toISOString(), ms, state, note);
+    // A failed job to the owner's Telegram, once in six hours per job (telegram.js).
+    if (state === 0) require("./telegram").sendOnce(`job:${job}`, 6, `Фонова задача впала: ${job}\n${note}`);
     if (Date.now() - pruned > 3600 * 1000) {
       pruned = Date.now();
       runsDb.prepare("DELETE FROM job_runs WHERE started < ?").run(new Date(Date.now() - 30 * 24 * 3600 * 1000).toISOString());

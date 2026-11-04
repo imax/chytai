@@ -62,6 +62,8 @@ function loadDotEnv(file) {
 }
 
 const store = new Store(DATA_DIR);
+const telegram = require("./telegram"); // messages to the owner in Telegram (telegram.js)
+telegram.init(store.db);
 const auth = new Auth(store.db, { ownerToken: TOKEN, resendKey: process.env.RESEND_API_KEY || "", from: process.env.WEB_MAIL_FROM || `Chytai <code@${DOMAIN || "chytai.org.ua"}>` });
 auth.ensureOwner({ id: OWNER_ID, name: OWNER, username: OWNER_USERNAME });
 const admin = new Admin(store.db, { ownerId: OWNER_ID }); // the owner's statistics (/admin): visits and page views
@@ -157,6 +159,7 @@ app.use((req, res, next) => {
 });
 app.use(express.urlencoded({ extended: false, limit: "1mb" }));
 app.use(express.json({ limit: "1mb" }));
+if (telegram.on()) app.post(telegram.hookPath(), (req, res) => (telegram.update(req.body), res.sendStatus(200)));
 app.use(require("compression")()); // pages are 50–150 KB of HTML; gzip cuts that about five times
 // A page that took over two seconds, and a main loop that stood still for over one, go to the log (a new reader
 // waited ~30 s for search and their shelf on 2026-10-24, and nothing told us where): `fly logs | grep slow`.
@@ -455,10 +458,31 @@ function newReader(req, { email, name, username, ticket, next, came }) {
   came = came || admin.cameFrom(cookies(req).chytai_came);
   admin.came(reader.id, came);
   admin.log(reader.id, "signup", next || "", came.source === "Напряму" ? "" : [came.source, came.ref].filter(Boolean).join(" · "));
+  signupWave();
   auth.useTicket(ticket);
   console.log(`new reader @${reader.username}`);
   welcomeMail.newReader(reader);
   return reader;
+}
+// A wave of sign-ups (5 or more in an hour) goes to the owner's Telegram with where they came from, at most once
+// in three hours (Max, 2026-11-04, after the dev.ua article: «як я можу дізнаватись про таке, не … рефрешити адмінку»).
+function signupWave() {
+  try {
+    const rows = store.db.prepare("SELECT came FROM readers WHERE created >= ? AND id != ?").all(new Date(Date.now() - 3600000).toISOString(), OWNER_ID);
+    if (rows.length < 5) return;
+    const by = {};
+    for (const r of rows) {
+      let src = "Напряму";
+      try {
+        src = JSON.parse(r.came || "null")?.source || src;
+      } catch {}
+      by[src] = (by[src] || 0) + 1;
+    }
+    const from = Object.entries(by).sort((a, b) => b[1] - a[1]).map(([k, n]) => `${k} ×${n}`).join(", ");
+    telegram.sendOnce("signups", 3, `Хвиля реєстрацій: ${rows.length} за годину.\nЗвідки: ${from}\n\n${SITE}/admin/activity`);
+  } catch (e) {
+    console.error("signup wave:", e.message);
+  }
 }
 // Someone who signed up from a book's or an author's page sees that book (or the author's best-read three) first,
 // to save in one tap (usability review 2026-10-28, Max: «окремий флоу якщо людина прийшла на сторінку книжки або автора»).
@@ -1010,6 +1034,7 @@ const visible = (s) => store.visible(s);
 const site = (req) => (DOMAIN ? `https://${DOMAIN}` : `${req.protocol}://${req.get("host")}`);
 const SITE = DOMAIN ? `https://${DOMAIN}` : `http://localhost:${PORT}`;
 function notifyOwner(subject, text) {
+  telegram.send(`${subject}\n\n${text}`);
   const to = process.env.WEB_NOTIFY_EMAIL || auth.reader(OWNER_ID)?.email;
   if (!to) return console.log(`[notify] no owner e-mail: ${subject}`);
   auth.send(to, subject, text).catch((e) => console.error(`[notify] ${subject}: ${e.message}`));
@@ -3303,6 +3328,7 @@ app.post("/api/subscribe/:id", signed, (req, res) => {
 if (bg.serving) {
   const server = app.listen(PORT, () => {
     console.log(`Chytai web on http://localhost:${PORT}  (library: ${store.file})${bg.ROLE === "web" ? ", the jobs in their own process" : ""}`);
+    telegram.setWebhook(SITE);
     watchdog();
   });
   // main.js has a fresh web process answering: finish what is in flight and go.
@@ -3311,6 +3337,26 @@ if (bg.serving) {
 // The jobs process ends itself to read fresh data only when the overview queue is empty too (or capped for today).
 bg.startJobs({ idle: () => !advice.queue.size || advice.capped, db: store.db });
 if (bg.ROLE === "jobs") console.log(`Chytai jobs ready (library: ${store.file})`);
+// The reader app (another Fly app) not answering twice in a row, five minutes apart, goes to the owner's Telegram,
+// and so does its coming back. Checked by one process only (the jobs one, or the only one).
+if (bg.ROLE !== "web" && telegram.on() && DOMAIN) {
+  let misses = 0;
+  setInterval(async () => {
+    let ok = false;
+    try {
+      ok = (await fetch(`${READER_URL}/`, { signal: AbortSignal.timeout(20000), redirect: "manual" })).status < 500;
+    } catch {}
+    misses = ok ? 0 : misses + 1;
+    const down = store.db.get("telegram:reader-down");
+    if (misses === 2 && !down) {
+      store.db.set("telegram:reader-down", new Date().toISOString());
+      telegram.send(`Читалка не відповідає: ${READER_URL}`);
+    } else if (ok && down) {
+      store.db.set("telegram:reader-down", "");
+      telegram.send(`Читалка знову працює (лежала з ${new Date(down).toLocaleTimeString("uk-UA", { timeZone: "Europe/Kyiv", hour: "2-digit", minute: "2-digit" })}).`);
+    }
+  }, 5 * 60000).unref();
+}
 
 // A process stuck in a CPU loop answers nothing but stays up (2026-10-21: an hour down). A thread beside it
 // watches a heartbeat the main loop writes every 5 s and kills the process after 60 s of silence, so Fly
