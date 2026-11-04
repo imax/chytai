@@ -40,7 +40,6 @@ ${font("source-serif-4/opsz.css")}${font("onest/wght.css")}
   main { flex: 1; display: grid; grid-template-columns: 400px minmax(0, 1fr); gap: 56px; align-items: center; padding: 24px 48px; max-width: 1360px; width: 100%; margin: 0 auto; }
   .side { display: flex; flex-direction: column; gap: 26px; }
   h1 { font-family: var(--serif); font-weight: 600; font-size: 50px; line-height: 1.04; letter-spacing: -.01em; text-wrap: balance; }
-  .lead.formats { margin-top: 6px; }
   .lead { margin-top: 14px; font-size: 17px; line-height: 1.6; color: var(--ink2); text-wrap: pretty; }
 
   form { display: flex; flex-direction: column; gap: 10px; }
@@ -58,6 +57,7 @@ ${font("source-serif-4/opsz.css")}${font("onest/wght.css")}
   .done { font-size: 15px; }
 
   .more { display: flex; flex-direction: column; gap: 18px; }
+  .own { margin: 0; font-size: 15px; line-height: 1.55; color: var(--ink2); text-wrap: pretty; }
   .apps { display: flex; gap: 20px; font-size: 14px; }
   .apps a { color: var(--ink2); border-bottom: 1px solid var(--under); padding-bottom: 2px; }
   figure { margin: 0; padding-left: 14px; border-left: 2px solid var(--under); }
@@ -104,7 +104,6 @@ ${font("source-serif-4/opsz.css")}${font("onest/wght.css")}
     <div class="intro">
       <h1>Читалка з AI‑поясненнями</h1>
       <p class="lead">Виділіть незрозуміле слово, назву чи складне місце, і AI пояснить його в контексті книжки.</p>
-      <p class="lead formats">Магазину немає: читайте свої файли (EPUB, PDF, MOBI, AZW3) або безкоштовні книжки з нашої полиці.</p>
     </div>
     <div id="signin" data-web="${esc(webUrl)}">
       <form id="f-email" novalidate>
@@ -127,6 +126,7 @@ ${font("source-serif-4/opsz.css")}${font("onest/wght.css")}
     </div>
     <div class="more">
       ${q ? `<figure><blockquote>«${esc(q.text)}»</blockquote>${q.author ? `<figcaption>— ${esc(q.author)}</figcaption>` : ""}</figure>` : ""}
+      <p class="own">Можна завантажувати свої книжки у форматах EPUB, MOBI, PDF або брати з Вільної полиці.</p>
       ${apps.length ? `<div class="apps">${apps.join("")}</div>` : ""}
     </div>
   </div>
