@@ -1004,7 +1004,7 @@ ${activity}
   return layout({ title: traffic ? "Трафік · Адмінка" : page === "retention" ? "Утримання · Адмінка" : "Адмінка", user, path: "/admin", body });
 }
 
-// «Чи все гаразд» on Огляд: today's speed (speed.js), the background jobs of the last day (job_runs) and whether
+// «Performance» on Огляд (Max named it): today's speed (speed.js), the background jobs of the last day (job_runs) and whether
 // the reader answered. A line turns red only when something needs a look.
 function healthBlock({ day = null, jobs = { n: 0, failed: [] }, reader = true }) {
   const s = (ms) => `${String(ms / 1000).replace(".", ",")} с`;
@@ -1012,7 +1012,7 @@ function healthBlock({ day = null, jobs = { n: 0, failed: [] }, reader = true })
   const stall = Math.round((day?.stall?.sum || 0) / 1000);
   const slow = p && (p.p95 > 1000 || p.slow > 0.02);
   const line = (ok, html) => `<li class="${ok ? "ok" : "bad"}">${html}</li>`;
-  return `<h2>Чи все гаразд</h2>
+  return `<h2>Performance</h2>
 <ul class="health">
 ${line(!slow, p ? `Сайт сьогодні: 95% сторінок за ${s(p.p95)}, повільніше 2 с — ${fmtN(p.slow * 100, 1)}%. <a href="/admin/speed">Швидкість</a>` : `Сайт сьогодні: сторінок ще не рахували. <a href="/admin/speed">Швидкість</a>`)}
 ${line(stall < 30, `Сервер стояв сьогодні ${stall} с.`)}
