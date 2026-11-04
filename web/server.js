@@ -2743,6 +2743,29 @@ app.get("/admin/activity", owner, (req, res) => {
     const id = store.resolve(slug);
     return id ? store.book(store.canonical(id))?.title || "" : "";
   };
+  // Titles for the addresses in the log: books, Club topics (by address or id; a post by its id; a new topic by
+  // who made it and when), lists, authors, genres.
+  const topicBy = (reader, at) => {
+    const t = new Date(at).getTime();
+    const row = store.db.prepare("SELECT id FROM club_topics WHERE reader = ? AND created BETWEEN ? AND ? ORDER BY created DESC LIMIT 1").get(reader, new Date(t - 60000).toISOString(), new Date(t + 60000).toISOString());
+    return row ? club.topic(row.id) : null;
+  };
+  const names = {
+    book: title,
+    topic: (key) => club.bySlug(key) || club.topic(key),
+    postTopic: (pid) => {
+      const p = club.post(pid);
+      return p ? club.topic(p.topic) : null;
+    },
+    topicBy,
+    list: (id) => lists.get(id),
+    listBySlug: (username, slug) => {
+      const r = auth.byUsername(username);
+      return r ? lists.bySlug(r.id, slug) : null;
+    },
+    author: (slug) => store.authors?.bySlug.get(slug)?.name || "",
+    genre: (slug) => store.genreBySlug(slug),
+  };
   const days = who ? 60 : 7;
   const rows = admin.activity({ reader: who?.id || null, days });
   // Before the log began (30.10) the page shows what the database already knows: sign-ups, and changes to
@@ -2761,7 +2784,7 @@ app.get("/admin/activity", owner, (req, res) => {
   }
   for (const h of hours.values()) rows.push({ at: h.at, reader: h.reader, kind: "shelf", what: String(h.ids.length), extra: h.ids.slice(0, 3).join(" ") });
   rows.sort((a, b) => b.at.localeCompare(a.at));
-  res.send(activityPage({ user: req.user, rows, readers, books, title, who, layout: pages.layout }));
+  res.send(activityPage({ user: req.user, rows, readers, books, names, who, layout: pages.layout }));
 });
 app.get("/admin.json", owner, (req, res) => res.json(admin.stats()));
 // One Google Books request with the server's key, for the owner to see what Google answers from here.
