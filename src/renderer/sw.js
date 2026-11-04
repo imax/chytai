@@ -7,6 +7,10 @@
 const VERSION = "__VERSION__";
 const ASSETS = __ASSETS__;
 const CACHE = `chytai-${VERSION}`;
+// Covers live in their own cache that outlives a new version: each cover is fetched once and then comes
+// from the device, offline too (Max, 2026-11-01: the covers loaded again and again). Their addresses carry
+// the book's date, so a changed cover is a new address.
+const COVERS = "chytai-covers";
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
@@ -14,9 +18,10 @@ self.addEventListener("install", (event) => {
       const cache = await caches.open(CACHE);
       // One asset at a time rather than cache.addAll: one missing file must not keep the reader from
       // working offline, and the fonts alone are a few dozen requests.
-      // The page itself only when it came as it is: signed out, / is a redirect to /login, and a
-      // redirected answer served to a navigation fails («Увійти» then showed a network error).
-      const add = (url) => (url === "/" ? fetch(url).then((res) => res.ok && !res.redirected && cache.put(url, res)) : cache.add(url));
+      // Only answers that came as they are: signed out, the server redirects every reader file to /login,
+      // and cache.add kept that login page as style.css and renderer.js (a fresh Android app showed the
+      // reader without styles). A redirected page served to a navigation fails too.
+      const add = (url) => fetch(url).then((res) => res.ok && !res.redirected && cache.put(url, res));
       await Promise.all(ASSETS.map((url) => add(url).catch((err) => console.warn("sw: not cached", url, err))));
     })(),
   );
@@ -28,7 +33,7 @@ self.addEventListener("install", (event) => {
 self.addEventListener("message", (event) => event.data === "skipWaiting" && self.skipWaiting());
 self.addEventListener("activate", (event) => {
   event.waitUntil((async () => {
-    for (const key of await caches.keys()) if (key !== CACHE) await caches.delete(key);
+    for (const key of await caches.keys()) if (key !== CACHE && key !== COVERS) await caches.delete(key);
   })());
 });
 
@@ -39,6 +44,20 @@ self.addEventListener("fetch", (event) => {
   if (req.method !== "GET") return;
   const url = new URL(req.url);
   if (url.origin !== location.origin) return;
+  if (url.pathname === "/api/cover") {
+    event.respondWith(
+      (async () => {
+        const cache = await caches.open(COVERS);
+        const hit = await cache.match(req);
+        if (hit) return hit;
+        const res = await fetch(req);
+        // «No cover» is kept too, or a book without one was asked about on every visit.
+        if (res.ok || res.status === 404) cache.put(req, res.clone()).catch(() => {});
+        return res;
+      })(),
+    );
+    return;
+  }
   // /free/<file> (a free book from the site) is the server's: it copies the book, then redirects.
   if (url.pathname.startsWith("/api/") || url.pathname.startsWith("/free/") || url.pathname === "/sw.js" || /^\/(login|logout|demo|admin)$/.test(url.pathname)) return;
 
@@ -68,7 +87,7 @@ self.addEventListener("fetch", (event) => {
       const hit = await cache.match(req, { ignoreSearch: true });
       if (hit) return hit;
       const res = await fetch(req);
-      if (res.ok && (res.type === "basic" || res.type === "default")) cache.put(req, res.clone()).catch(() => {});
+      if (res.ok && !res.redirected && (res.type === "basic" || res.type === "default")) cache.put(req, res.clone()).catch(() => {});
       return res;
     })(),
   );

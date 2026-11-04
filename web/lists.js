@@ -50,6 +50,7 @@ class Lists {
     this.db.exec(SCHEMA);
     for (const [col, def] of [["image", "TEXT NOT NULL DEFAULT ''"], ["editorial", "INTEGER NOT NULL DEFAULT 0"], ["source", "TEXT NOT NULL DEFAULT ''"], ["draft", "INTEGER NOT NULL DEFAULT 0"]])
       if (!this.db.prepare("PRAGMA table_info(lists)").all().some((c) => c.name === col)) this.db.exec(`ALTER TABLE lists ADD COLUMN ${col} ${def}`);
+    if (!this.db.prepare("PRAGMA table_info(list_comments)").all().some((c) => c.name === "edited")) this.db.exec("ALTER TABLE list_comments ADD COLUMN edited TEXT NOT NULL DEFAULT ''");
   }
 
   // A list as the pages see it: its author, address and how many books and saves it has.
@@ -122,6 +123,14 @@ class Lists {
     const id = crypto.randomBytes(6).toString("hex");
     this.db.prepare("INSERT INTO list_comments (id, list, reader, text, created) VALUES (?, ?, ?, ?, ?)").run(id, listId, readerId, text, new Date().toISOString());
     return id;
+  }
+  // The author's new words; false when there are none.
+  editComment(id, text) {
+    const c = this.comment(id);
+    text = String(text || "").replace(/\r/g, "").replace(/\n{3,}/g, "\n\n").trim().slice(0, COMMENT_MAX);
+    if (!c || !text) return false;
+    if (text !== c.text) this.db.prepare("UPDATE list_comments SET text = ?, edited = ? WHERE id = ?").run(text, new Date().toISOString(), c.id);
+    return true;
   }
   dropComment(id) {
     this.db.prepare("DELETE FROM list_comments WHERE id = ?").run(String(id));

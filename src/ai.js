@@ -62,7 +62,48 @@ Give only the translation: no explanation, commentary, notes or alternatives aft
 The reader may ask follow-up questions about the translation; answer them briefly in ${language}.`;
 }
 
+// A paper book (2026-11-02): no text around a selection, only the book and the page the reader is on. The
+// selection, when there is one, comes from a photo of the page.
+function paperMessage(ctx, mode) {
+  const parts = [];
+  if (ctx.bookTitle) parts.push(`<book>${ctx.bookTitle}${ctx.author ? ` by ${ctx.author}` : ""}</book>`);
+  const where = [ctx.page ? `page ${ctx.page}${ctx.pages ? ` of ${ctx.pages}` : ""}` : "", ctx.chapter ? `chapter «${ctx.chapter}»` : ""].filter(Boolean).join(", ");
+  parts.push(`The reader is reading a printed copy of this book, not in the app${where ? `, and is at ${where} as far as the app knows (from their last photo of a page; they may have read on)` : ""}. If the question says where they are, trust that instead. Rely on what you know about the book. Never reveal plot, twists or conclusions that come after where they are${where ? "" : " (if you can't tell how far they are, ask or avoid spoilers altogether)"}; if the question can't be answered without them, say so and offer to answer once they've read on. If you don't know this book well, say so in one line and answer from general knowledge.`);
+  if (ctx.image) {
+    if (ctx.marked) parts.push("The reader photographed the page and marked passages on it by hand (circled, underlined or struck through, in red). Explain each marked passage in the order it appears: start each with its words quoted in bold, then the explanation. If they marked several, keep each one short. If a question is given below, answer it about the marked passages.");
+    else parts.push("The reader photographed the page they are on. If a question is given below, answer it about this page. Otherwise explain briefly what matters on this page and what a reader could miss: words, names, references, historical or cultural context. Don't retell the page.");
+    if (ctx.question) parts.push(`The reader's question: ${ctx.question}`);
+    return { role: "user", content: [{ type: "image", source: { type: "base64", media_type: "image/jpeg", data: ctx.image } }, { type: "text", text: parts.join("\n\n") }] };
+  }
+  if (ctx.pageText && !ctx.selection) parts.push(`The reader attached a photo of the page they are on; its text, transcribed (it may have small recognition errors):\n<page_text>\n${ctx.pageText}\n</page_text>`);
+  if (ctx.selection) {
+    if (ctx.before) parts.push(`<context_before>\n${ctx.before}\n</context_before>`);
+    parts.push(`<selection>\n${ctx.selection}\n</selection>`);
+    if (ctx.after) parts.push(`<context_after>\n${ctx.after}\n</context_after>`);
+    parts.push("The text was transcribed from a photo of the page, so it may have small recognition errors.");
+    parts.push(mode === "translate" ? "Translate the selection." : ctx.question ? `The reader's question about the selection: ${ctx.question}` : "Explain the selection.");
+  } else {
+    parts.push(`The reader's question: ${ctx.question || "What should I keep in mind at this point of the book?"}`);
+  }
+  return { role: "user", content: parts.join("\n\n") };
+}
+
+// A question about the book without a selection (2026-11-03, «Запитати» in the reader): the page on screen and
+// what is just before it; nothing after it, so no spoilers.
+function bookQuestion(ctx) {
+  const parts = [];
+  if (ctx.bookTitle) parts.push(`<book>${ctx.bookTitle}${ctx.author ? ` by ${ctx.author}` : ""}</book>`);
+  if (ctx.chapter) parts.push(`<chapter>${ctx.chapter}</chapter>`);
+  if (ctx.before) parts.push(`<context_before>\n${ctx.before}\n</context_before>`);
+  if (ctx.page) parts.push(`<on_screen>\n${ctx.page}\n</on_screen>`);
+  parts.push(`The reader is reading this book in the app${ctx.page ? "; the text on their screen right now is in <on_screen>, and what comes just before it in <context_before>" : ""}. They ask a question about the book, not about a selected passage. Answer it from this place in the book and from what you know of the book. Never reveal plot, twists or conclusions that come after this point; if the question can't be answered without them, say so and offer to answer once they've read on.`);
+  parts.push(`The reader's question: ${ctx.question || "What should I keep in mind at this point of the book?"}`);
+  return { role: "user", content: parts.join("\n\n") };
+}
+
 function firstMessage(ctx, mode) {
+  if (ctx.paper) return paperMessage(ctx, mode);
+  if (!ctx.selection && mode !== "translate") return bookQuestion(ctx);
   const parts = [];
   if (ctx.bookTitle) parts.push(`<book>${ctx.bookTitle}${ctx.author ? ` by ${ctx.author}` : ""}</book>`);
   if (ctx.chapter) parts.push(`<chapter>${ctx.chapter}</chapter>`);

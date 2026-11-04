@@ -2,7 +2,7 @@
 // layout(). The look is Max's Claude Design handoff of 2026-10-20 («Chytai.org.ua веб-дизайн», direction
 // 2b and screens 3a–3h): paper, Source Serif 4 for titles and notes, Onest for the rest, a green accent.
 // Readers first: lists show what readers made of a book; shops, prices and formats are on the book page.
-const { marked } = require("marked");
+const { marked, Marked } = require("marked");
 const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
@@ -20,6 +20,19 @@ const NOINDEX = new Set(["/search", "/login", "/settings", "/welcome", "/me", "/
 
 const esc = (s) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 const attr = esc;
+// Markdown that readers (notes, lists) or Claude wrote: any HTML in it shows as text, and a link or picture
+// goes only to http(s), mail or our own pages, so nobody's words can run a script in another reader's
+// browser (security review 2026-11-04: a note with <img onerror> ran on every page that showed it).
+// Max's own files (updates.md, draw.md) still go through plain `marked`.
+const SAFE_HREF = /^(https?:\/\/|mailto:|\/(?!\/)|#)/i;
+const ugc = new Marked({
+  walkTokens(t) {
+    if ((t.type === "link" || t.type === "image") && !SAFE_HREF.test(String(t.href || "").trim())) t.href = "#";
+  },
+  renderer: {
+    html: (t) => esc(t.text),
+  },
+});
 const plural = (n, one, few, many) => (n % 10 === 1 && n % 100 !== 11 ? one : n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20) ? few : many);
 const count = (n, one, few, many) => `${n} ${plural(n, one, few, many)}`;
 const uk = (n) => String(n).replace(".", ",");
@@ -72,18 +85,20 @@ function stars(r, { num = true } = {}) {
 // Sizes: xl 200×300, lg 120×180, md 64×96, sm 52×78, xs 40×60, feed 48×72, card (the grid's width).
 // Open Library's cover server often fails the first request for a picture it has not cached
 // (Max saw «Фундація» without its cover, 2026-10-22), so a failed picture is asked twice more
-// before the block stays.
-const COVER_ERR = "var r=+(this.dataset.r||0);if(r<2){this.dataset.r=r+1;var s=this.src.split('?')[0];setTimeout(()=>{this.src=s+'?r='+(r+1)},1500*(r+1))}else this.remove()";
+// before the block stays. While it waits the picture is hidden: Safari draws its «?» icon over the block
+// (Max saw it on «The Design of Everyday Things», 2026-11-02); a retry that loads shows it again.
+const COVER_ERR = "this.style.visibility='hidden';this.onload=function(){this.style.visibility=''};var r=+(this.dataset.r||0);if(r<2){this.dataset.r=r+1;var s=this.src.split('?')[0];setTimeout(()=>{this.src=s+'?r='+(r+1)},1500*(r+1))}else this.remove()";
 // Below the book page's own cover a small copy is shown (thumbs.js): the width shown, in px.
-const SHOWN = { lg: 120, card: 120, md: 64, sm: 52, feed: 48, xs: 40 };
+// The book page's big cover (xl, 200 px) too since 2026-11-02 (Max: «ага давай»): a shop's picture changing or
+// going away no longer breaks it, and the page stops loading 100–300 KB from someone else's site.
+const SHOWN = { xl: 200, lg: 120, card: 120, md: 64, sm: 52, feed: 48, xs: 40 };
 let thumb = (src) => src;
 const setThumbs = (fn) => (thumb = fn);
 function cover(book, size = "md") {
   const hue = [...String(book.title)].reduce((a, c) => (a * 31 + c.charCodeAt(0)) % 360, 7);
   const ph = `<span class="ph${String(book.title).length > 40 ? " long" : ""}"><span>${esc(book.title)}</span></span>`;
-  // The book page's big cover is the original, except a PNG: that may be a product shot on a transparent
-  // field, so it gets the trimmed copy too (thumbs.js; Max, 2026-10-28).
-  const src = SHOWN[size] ? thumb(book.cover, SHOWN[size]) : /\.png(\?|$)/i.test(book.cover || "") ? thumb(book.cover, 240) : book.cover;
+  // A PNG may be a product shot on a transparent field: thumbs.js trims it (Max, 2026-10-28).
+  const src = SHOWN[size] ? thumb(book.cover, SHOWN[size]) : book.cover;
   return `<span class="cover ${size}" style="--h:${hue}">${ph}${book.cover ? `<img src="${attr(src)}" alt=""${size === "xl" ? ' fetchpriority="high"' : ' loading="lazy"'} onerror="${COVER_ERR}">` : ""}</span>`;
 }
 
@@ -114,6 +129,7 @@ function layout({ title, body, user, path = "", description = "", q = "", home =
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
 <title>${esc(title ? `${title} · Chytai` : "Chytai · читай більше")}</title>
 ${description ? `<meta name="description" content="${attr(description.slice(0, 200))}">` : ""}
 ${noindex || NOINDEX.has(path) ? `<meta name="robots" content="noindex">` : ""}
@@ -192,7 +208,7 @@ function byline(author) {
 // A note's first paragraph as inline HTML.
 function inline(md) {
   const first = md.split(/\n\s*\n/)[0];
-  return marked.parseInline(first).replace(/<a href="http/g, '<a target="_blank" rel="noopener" href="http');
+  return ugc.parseInline(first).replace(/<a href="http/g, '<a target="_blank" rel="noopener" href="http');
 }
 const noteOf = (e, id) => (e.note ? inline(titleLinks(e.note, e.via ? e.via.id : id)) : "");
 
@@ -321,8 +337,15 @@ const nowLine = (now) => (now?.books.length ? `<p class="now-line"><span class="
 // One line of the activity feed. `wide` is the /community layout (who first, then the book).
 // A line for several volumes of a series (social.feed folds them) is named by the series: «Dungeon Crawler
 // Carl · серія, 8 книг».
-function feedRow({ reader, book, entry: e, series = null }, { wide = false, followed = null } = {}) {
+function feedRow({ reader, book, entry: e, series = null, shelf = null }, { wide = false, followed = null } = {}) {
   const t = when(e);
+  // A shelf brought in one go (social.feed `shelves`): «Oleksandr додав 190 книжок · вчора» and a few of its
+  // covers, in the look of the other lines (Max, 2026-11-02: no heading, «додав» as the action), and after them a
+  // tile «+185 →» to the shelf, as tapping the name is not obvious.
+  if (shelf) return `<article class="feed-row shelf-row${wide ? " wide" : ""}${followed?.has(reader.id) ? " followed" : ""}" data-rating="">
+  <div><span class="who"><a href="${attr(reader.href)}"><b>${esc(reader.name)}</b></a> додав <a href="${attr(reader.href)}">${books(shelf.n)}</a>${t ? ` · ${esc(t)}` : ""}</span>
+  <p class="shelf-covers">${shelf.books.map((b) => `<a href="${attr(b.href)}" title="${attr(b.title)}">${cover(b, "feed")}</a>`).join("")}${shelf.n > shelf.books.length ? `<a class="cover feed shelf-more" href="${attr(reader.href)}" aria-label="Уся полиця"><span>+${shelf.n - shelf.books.length}</span><span>→</span></a>` : ""}</p></div>
+</article>`;
   const who = `<span class="who"><a href="${attr(reader.href)}"><b>${esc(reader.name)}</b></a> ${did(e)}${t ? ` · ${esc(t)}` : ""}</span>`;
   const title = `<a class="title" href="${attr(book.href)}">${esc(series ? series.name : book.title)}${series ? ` <span class="badge">серія · ${books(series.books.length)}</span>` : ""}</a>`;
   return `<article class="feed-row${wide ? " wide" : ""}${e.note ? " noted" : ""}${followed?.has(reader.id) ? " followed" : ""}" data-rating="${e.rating ?? ""}">
@@ -471,7 +494,7 @@ function bookPage({ club = [], ukrlib = null, sluhay = null, inGenre = null, fre
       ${first.entry.note ? quote(first, book.id) : ""}
       ${(first.entry.note ? rest : readers).length ? `<div class="others">${(first.entry.note ? rest : readers).map((r) => readerLine(r, book.id)).join("")}</div>` : ""}
     </section>` : ""}
-    ${ru ? "" : club.length ? `<section class="block" data-block="club">${label("Клуб Chytai", `<a rel="nofollow" href="/club/new?book=${attr(encodeURIComponent(book.id))}">нова тема</a>`)}<div class="club-topics">${club.map((t) => clubRow(t, { book: false })).join("")}</div></section>` : `<section class="block" data-block="club">${label("Клуб Chytai")}<p class="club-start">Тем ще немає. <a class="text-link" rel="nofollow" href="/club/new?book=${attr(encodeURIComponent(book.id))}">Обговорити в Клубі</a></p></section>`}
+    ${ru ? "" : club.length ? `<section class="block" data-block="club">${label("Клуб Chytai")}<div class="club-topics">${club.map((t) => clubRow(t, { book: false })).join("")}</div></section>` : `<section class="block" data-block="club">${label("Клуб Chytai")}<p class="club-start">Тем ще немає. <a class="text-link" rel="nofollow" href="/club/new?book=${attr(encodeURIComponent(book.id))}">Обговорити в Клубі</a></p></section>`}
     ${lists.length ? `<section class="block" data-block="lists">${label("У списках", `<a href="/lists">усі списки</a>`)}<div class="lists">${lists.map(listLine).join("")}</div></section>` : ""}
     ${adviceBlock(book, advice)}
     ${SHOW_REVIEWS && (writings.length || user) ? `<section class="block" id="writings">
@@ -502,7 +525,7 @@ ${myLists ? listsDialog(book, myLists) : ""}`;
 const ADMIN_TABS = [
   ["Огляд", [["/admin", "Огляд"]]],
   ["Трафік", [["/admin/traffic", "Трафік"]]],
-  ["Читачі", [["/admin/readers", "Усі читачі"], ["/admin/activity", "Що роблять"], ["/admin/comments", "Коментарі"], ["/admin/digest", "Лист"], ["/admin/publishers", "Видавцям"]]],
+  ["Читачі", [["/admin/readers", "Усі читачі"], ["/admin/activity", "Що роблять"], ["/admin/reader", "Читалка"], ["/admin/comments", "Коментарі"], ["/admin/digest", "Лист"], ["/admin/publishers", "Видавцям"]]],
   ["Каталог", [["/admin/catalog", "Каталог"]], /^\/admin\/(catalog|shelves|overviews|dupes|translations|volumes|russian|ukfind|readeat|free|ai\/|book\/|reviews)|-trial$/],
   ["Система", [["/admin/jobs", "Задачі"], ["/admin/speed", "Швидкість"]]],
 ];
@@ -528,7 +551,7 @@ const SHOW_REVIEWS = false;
 // «AI-рекомендація» (advice.js): Claude's take on the book for this reader, by their own shelf, on a click.
 // A guest sees why to sign in, a reader with an empty shelf why to add books, a kept answer shows at once.
 function adviceHtml(a) {
-  return `<div class="advice-text">${marked.parse(a.text).replace(/<a href="http/g, '<a target="_blank" rel="noopener" href="http')}</div>
+  return `<div class="advice-text">${ugc.parse(a.text).replace(/<a href="http/g, '<a target="_blank" rel="noopener" href="http')}</div>
 <p class="small muted">Claude, за вашою полицею · ${writingDate(a.created.slice(0, 10))} · <button class="text-link small" data-ask="advice" data-again>Спитати ще раз</button></p>`;
 }
 // The per-reader «AI-рекомендація» came off the page the same day (Max, 2026-10-23: «AI-рекомендація
@@ -560,7 +583,7 @@ function overviewHtml(o, user, vote = null, { folded = false } = {}) {
   // The 🤩 🙂 🙁 faces of 2026-10-23 came off on 2026-10-25 (Max: «давай приберемо і Як вам цей опис?»); the
   // votes table and API stay. Only the owner's «Оновити» remains under the text.
   const votes = user?.owner ? `<span class="advice-acts"> · <button class="text-link small" data-ask="overview" data-again>Оновити</button></span>` : "";
-  return `<div class="advice-text${folded ? " folded" : ""}">${marked.parse(o.text).replace(/<a href="http/g, '<a target="_blank" rel="noopener" href="http')}</div>
+  return `<div class="advice-text${folded ? " folded" : ""}">${ugc.parse(o.text).replace(/<a href="http/g, '<a target="_blank" rel="noopener" href="http')}</div>
 ${folded ? `<p class="advice-more"><button class="text-link" data-unfold>Читати далі</button></p>` : ""}<p class="small muted">Claude, за відгуками в інтернеті · ${writingDate(o.created.slice(0, 10))}${votes}</p>`;
 }
 // «Про книжку»: the publisher's or shop's description, the Ukrainian edition line and the «Додати» form.
@@ -679,7 +702,7 @@ ${trial.rows?.length ? `<table class="readers"><tr><th>Книжка</th><th>На
 // A title with no letters («1984») is in the alphabet of its author's name.
 const cyrBook = (b) => CYR.test(/\p{L}/u.test(b.title || "") ? b.title : b.author || "");
 const twinLabel = (book, t) => (cyrBook(book) && !cyrBook(t) ? "Оригінал" : !cyrBook(book) && cyrBook(t) ? "Українською" : "Інше видання");
-function twins(book, list = book.translations || []) {
+function twins(book, list = book.twins || book.translations || []) {
   return list.length ? `<div class="twins" data-block="twins">${list.map((t) => `<a class="twin" href="${attr(t.href)}">${cover(t, "xs")}<span><span class="twin-label">${twinLabel(book, t)}</span><b>${esc(t.title)}</b></span></a>`).join("")}</div>` : "";
 }
 
@@ -687,7 +710,7 @@ function twins(book, list = book.translations || []) {
 function quote({ name, href, entry: e, now }, id) {
   const long = stripMd(e.note).length > 280;
   const what = [now ? "читає зараз" : "", e.status && !now ? VERB[e.status] + (e.status === "read" && e.year ? ` у ${e.year}` : "") : "", e.copy ? COPY[e.copy].toLowerCase() : "", e.kids ? "для дітей" : "", e.via ? `як «${e.via.title}»` : ""].filter(Boolean).join(", ");
-  return `<blockquote class="big-quote${long ? " long" : ""}">${marked.parse(titleLinks(e.note, e.via ? e.via.id : id)).replace(/<a href="http/g, '<a target="_blank" rel="noopener" href="http')}</blockquote>
+  return `<blockquote class="big-quote${long ? " long" : ""}">${ugc.parse(titleLinks(e.note, e.via ? e.via.id : id)).replace(/<a href="http/g, '<a target="_blank" rel="noopener" href="http')}</blockquote>
 <p class="said">— <a href="${attr(href)}"><b>${esc(name)}</b></a>${e.rating != null ? ` ${stars(e.rating)}` : ""}${what ? `, ${esc(what)}` : ""}</p>`;
 }
 // Every other reader: name, what they did, their note if any.
@@ -1068,6 +1091,7 @@ function bookEditPage({ book, raw, user, coverError = "" }) {
 ${coverError ? `<p class="error">Сайт не віддав нам картинку (${esc(coverError)}), тож поки вона береться з нього. Можна зберегти її собі й натиснути «Завантажити файл».</p>` : ""}
       <div id="covers" class="cover-picks" hidden></div>
       ${field("published", "Рік", "Рік першого видання")}
+      ${field("pages", "Сторінок", "Скільки сторінок у паперовому виданні")}
       ${ebookPick(book)}
       ${field("aliases", "Інші назви для пошуку", "Через кому, як люди скорочують: DCC, ГП")}
       <label>Основний жанр <select name="genre">${[["", `як у каталозі${require("./store").mainGenres(raw.tags).length ? ` (${require("./store").mainGenres(raw.tags).join(", ")})` : ""}`], ...GENRES.map((g) => [g, cap(g)])].map(([v, t]) => `<option value="${attr(v)}" ${(fix.genre || "") === v ? "selected" : ""}>${esc(t)}</option>`).join("")}</select></label>
@@ -2068,6 +2092,11 @@ function settingsPage({ user, values, error = "", suggested = "", saved = false 
   <label class="check"><span><input type="checkbox" name="autonow" value="1"${user.autonow === 0 ? "" : " checked"}> Книжка, яку читаю в Читалці, стає «Читаю зараз»</span></label>
   <div class="actions"><button class="btn">Зберегти</button></div>
 </form>
+<form method="post" action="/settings/signout" class="form import-box" id="signout">
+  <h2>Вихід</h2>
+  <p class="muted small">Сайт і Читалка попросять увійти знову на всіх пристроях.</p>
+  <div class="actions"><button class="btn">Вийти на всіх пристроях</button></div>
+</form>
 ${user.owner ? "" : `<form method="post" action="/settings/delete" class="form danger-zone" onsubmit="return confirm('Видалити акаунт разом з усіма книжками, оцінками й нотатками?')">
   <h2>Видалити акаунт</h2>
   <p class="muted small">Зітре всі ваші книжки, оцінки, нотатки й підписки. Назад не повернути.</p>
@@ -2162,6 +2191,17 @@ function consentPage({ user, client, host, fields }) {
 }
 
 // Max (2026-10-20): any new outside service that sees readers' data (mail, hosting, fonts, analytics, AI) must be added here.
+// /mac: the Mac app (mac/ in the repo, DMG from GitHub Releases). Not signed yet (Max, 2026-11-02), hence the first-open step.
+function macPage({ user }) {
+  return layout({ title: "Chytai для Mac", user, path: "/mac", canonical: "/mac", description: "Читалка Chytai для Mac: ті самі книжки, нотатки й акаунт, що в браузері й на телефоні.", body: `<section class="auth prose"><h1>Chytai для Mac</h1>
+<p>Та сама Читалка, що в браузері, окремим вікном: ваш акаунт, книжки й нотатки. Книжки, які ви вже відкривали, читаються й без інтернету.</p>
+<p><a class="btn primary" href="https://github.com/imax/chytai/releases/latest/download/Chytai.dmg">Завантажити для Mac</a></p>
+<p class="small muted">Apple Silicon і Intel, macOS 12 і новіші.</p>
+<h2>Перше відкриття</h2>
+<p>Перетягніть Chytai у «Програми» і відкрийте. macOS скаже, що не може перевірити розробника: натисніть «Готово», відкрийте Системні параметри → Приватність і безпека, внизу «Усе одно відкрити». Це один раз.</p>
+</section>` });
+}
+
 function privacyPage({ user }) {
   return layout({ title: "Приватність", user, path: "/privacy", canonical: "/privacy", description: "Що Chytai.org.ua зберігає про читачів, хто це бачить і як усе видалити.", body: `<section class="auth prose"><h1>Приватність</h1>
 <p>Chytai.org.ua це проєкт для тих, хто любить читати.</p>
@@ -2587,10 +2627,13 @@ function listHero(list, items) {
   return `<div class="lhero" aria-hidden="true"><div class="fan">${order.map((i) => { const off = i - (n - 1) / 2; return `<span class="fc" style="--off:${off};--abs:${Math.abs(off)};order:${i}">${cover(books[i], "lg")}</span>`; }).join("")}</div></div>`;
 }
 // An intro of a few paragraphs: Markdown inside each, a single line break kept.
-const paragraphs = (md) => md.split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean).map((p) => `<p>${marked.parseInline(p).replace(/<a href="http/g, '<a target="_blank" rel="noopener" href="http').replace(/\n/g, "<br>")}</p>`).join("");
+const paragraphs = (md) => md.split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean).map((p) => `<p>${ugc.parseInline(p).replace(/<a href="http/g, '<a target="_blank" rel="noopener" href="http').replace(/\n/g, "<br>")}</p>`).join("");
+// «змінити» under one's own words: this form in place of the text until «Зберегти» or «Скасувати» (app.js).
+const cmtEdit = (action, text) => `<form method="post" action="${attr(action)}" class="cmt-form cmt-edit" hidden><textarea name="text" rows="3" maxlength="2000" required aria-label="Текст">${esc(text)}</textarea><div><button class="btn primary small">Зберегти</button> <button type="button" class="text-link small" data-edit-cancel>Скасувати</button></div></form>`;
 // «Клуб Chytai» under a list: what readers said, oldest first; plain text, links not made clickable.
 function listClub({ list, comments, user, own, owner, error, links = {} }) {
-  const item = (c) => `<div class="cmt" id="c-${attr(c.id)}"><p class="who"><a href="${attr(c.reader.href)}"><b>${esc(c.reader.name)}</b></a> · ${when({ updated: c.created })}${user && (c.reader.id === user.id || own || owner) ? ` · <button class="text-link small muted" form="del-${attr(c.id)}">видалити</button>` : ""}</p><div class="txt">${clubText(c.text, links)}</div>${user && (c.reader.id === user.id || own || owner) ? `<form method="post" action="/api/lists/comments/${attr(c.id)}/delete" id="del-${attr(c.id)}" onsubmit="return confirm('Видалити коментар?')"></form>` : ""}</div>`;
+  const can = () => owner; // «видалити»: only the owner for now (Max, 2026-11-03)
+  const item = (c) => `<div class="cmt" id="c-${attr(c.id)}"><p class="who"><a href="${attr(c.reader.href)}"><b>${esc(c.reader.name)}</b></a> · ${when({ updated: c.created })}${c.edited ? ` · змінено` : ""}${user && c.reader.id === user.id ? ` · <button type="button" class="text-link small muted" data-edit>змінити</button>` : ""}${can(c) ? ` · <button class="text-link small muted" form="del-${attr(c.id)}">видалити</button>` : ""}</p><div class="txt">${clubText(c.text, links)}</div>${user && c.reader.id === user.id ? cmtEdit(`/api/lists/comments/${c.id}/edit`, c.text) : ""}${can(c) ? `<form method="post" action="/api/lists/comments/${attr(c.id)}/delete" id="del-${attr(c.id)}" onsubmit="return confirm('Видалити коментар?')"></form>` : ""}</div>`;
   const form = user
     ? `<form method="post" action="/api/lists/${attr(encodeURIComponent(list.id))}/comments" class="cmt-form"><textarea name="text" rows="3" maxlength="2000" required placeholder="${comments.length ? "Що думаєте про цей список або яку книжку додали б?" : "Що думаєте про цей список або яку книжку додали б?"}" aria-label="Коментар"></textarea>${error ? `<p class="error small">${esc(error)}</p>` : ""}<div><button class="btn primary">Додати коментар</button></div></form>`
     : `<p class="small"><a class="text-link" rel="nofollow" href="/login?next=${attr(encodeURIComponent(`${list.href}#club`))}">Увійдіть</a>, щоб додати коментар.</p>`;
@@ -2782,6 +2825,7 @@ function clubRow(t, { book = true } = {}) {
 // Plain forms work without the script; app.js sends them in the background.
 // Reactions are hidden from readers for now, only the owner sees them (Max, 2026-11-01: «я ще подумаю над дизайном»).
 const { REACTS, REACT_KINDS } = require("./club");
+// Not shown anywhere for now (Max, 2026-11-03: «повернемось до цієї ідеї пізніше»); the data stays.
 function reactBar(postId, list, user) {
   const form = (emoji, inner, cls, title = "") => `<form method="post" action="/api/club/posts/${attr(postId)}/react" class="react-form"><input type="hidden" name="emoji" value="${attr(emoji)}"><button class="${cls}"${title ? ` title="${attr(title)}"` : ""}${user ? "" : " disabled"}>${inner}</button></form>`;
   const given = list.map((x) => form(x.emoji, `${x.emoji} <span>${x.n}</span>`, `react${x.mine ? " mine" : ""}`, x.who.join(", ")));
@@ -2837,7 +2881,7 @@ function clubTopicPage({ user, owner = false, topic: t, posts, hide = false, wat
   // Answers by others since the reader last looked: a mark on each, and #unread at the first one.
   const firstNew = seenAt && user ? posts.find((p) => p.created > seenAt && p.reader.id !== user.id)?.id : null;
   const isNew = (p) => seenAt && user && p.created > seenAt && p.reader.id !== user.id;
-  const post = (p) => `${p.id === firstNew ? `<span id="unread"></span>` : ""}<div class="cmt${isNew(p) ? " new" : ""}" id="p-${attr(p.id)}"><p class="who">${who(p.reader)} · ${when({ updated: p.created })}${reply(p.reader)}${user && (p.reader.id === user.id || owner) ? ` · <button class="text-link small muted" form="del-${attr(p.id)}">видалити</button><form method="post" action="/api/club/posts/${attr(p.id)}/delete" id="del-${attr(p.id)}" onsubmit="return confirm('Видалити відповідь?')"></form>` : ""}</p><div class="txt">${clubText(p.text, links)}</div>${owner ? reactBar(p.id, reacts[p.id] || [], user) : ""}</div>`;
+  const post = (p) => `${p.id === firstNew ? `<span id="unread"></span>` : ""}<div class="cmt${isNew(p) ? " new" : ""}" id="p-${attr(p.id)}"><p class="who">${who(p.reader)} · ${when({ updated: p.created })}${p.edited ? ` · змінено` : ""}${reply(p.reader)}${user && p.reader.id === user.id ? ` · <button type="button" class="text-link small muted" data-edit>змінити</button>` : ""}${owner ? ` · <button class="text-link small muted" form="del-${attr(p.id)}">видалити</button><form method="post" action="/api/club/posts/${attr(p.id)}/delete" id="del-${attr(p.id)}" onsubmit="return confirm('Видалити відповідь?')"></form>` : ""}</p><div class="txt">${clubText(p.text, links)}</div>${user && p.reader.id === user.id ? cmtEdit(`/api/club/posts/${p.id}/edit`, p.text) : ""}</div>`;
   const form = user
     ? `<form method="post" action="/api/club/${id}/posts" class="cmt-form" id="reply"><textarea name="text" rows="3" maxlength="2000" required placeholder="Ваша відповідь" aria-label="Відповідь"></textarea>${error ? `<p class="error small">${esc(error)}</p>` : ""}<div><button class="btn primary">Відповісти</button></div></form><form method="post" action="/api/club/${id}/watch" class="watch"><label><input type="checkbox" name="on" value="1"${watching ? " checked" : ""} onchange="this.form.submit()"> Сповіщати про відповіді на пошту</label><noscript><button class="text-link small">Зберегти</button></noscript></form>`
     : ""; // a guest gets the site's «Доєднатися» band at the bottom, which brings them back here (Max, 2026-11-01)
@@ -2848,7 +2892,7 @@ function clubTopicPage({ user, owner = false, topic: t, posts, hide = false, wat
   const edit = mine
     ? `<dialog id="topic-edit"><div class="dlg-head"><h2>Тема</h2><button type="button" class="dlg-x" data-close aria-label="Закрити">×</button></div>
   <form method="post" action="/api/club/${id}" class="form">${topicFields({ t, book: t.book, owner })}<div class="actions"><button class="btn primary">Зберегти</button></div></form>
-  <form method="post" action="/api/club/${id}/delete" class="form" onsubmit="return confirm('Видалити тему разом з відповідями?')"><div class="actions"><button class="btn danger small">Видалити тему</button></div></form>
+  ${owner ? `<form method="post" action="/api/club/${id}/delete" class="form" onsubmit="return confirm('Видалити тему разом з відповідями?')"><div class="actions"><button class="btn danger small">Видалити тему</button></div></form>` : ""}
 </dialog>`
     : "";
   const body = `
@@ -2967,6 +3011,6 @@ module.exports = {
   outsideResults,
   addPage, addReviewPage, addFindResults, addPageResult, ukFindPage,
   layout, bookPage, bookEditPage, russianPage, editPage, libraryPage, readersPage, readPage, genrePage, genreTrialPage, langTrialPage, origTrialPage, overviewTrialPage, ukTrialPage, catalogAdminPage, aiPassPage, publishersPage, publisherPage, publisherFavouritesPage, searchPage, searchResults, authorPage,
-  loginPage, codePage, signupPage, settingsPage, privacyPage, updatesPage, drawPage, DRAW_PATH, messagePage, digestPage, followMailPage, wantMailPage, importPage, importPreviewPage, importDonePage,
+  loginPage, codePage, signupPage, settingsPage, privacyPage, macPage, updatesPage, drawPage, DRAW_PATH, messagePage, digestPage, followMailPage, wantMailPage, importPage, importPreviewPage, importDonePage,
   GENRES, esc, byline, STATUS, COPY, inline, isUk, setTitleLinks, setAuthorLinks, setThumbs, setStats, setReadersWithNote,
 };

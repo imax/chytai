@@ -215,6 +215,17 @@
       box.classList.add("open");
       try { localStorage.setItem("spoil:" + box.dataset.spoil, "1"); } catch {}
     }
+    // «змінити» / «Скасувати» under one's own words in the Club.
+    const ed = e.target.closest("[data-edit], [data-edit-cancel]");
+    if (ed) {
+      const box = ed.closest(".cmt");
+      const f = box.querySelector(".cmt-edit");
+      const on = ed.hasAttribute("data-edit");
+      box.querySelector(".txt").hidden = on;
+      f.hidden = !on;
+      if (on) { const ta = f.querySelector("textarea"); ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); }
+      else f.reset();
+    }
     const re = e.target.closest("[data-reply]");
     if (re) {
       const ta = $("#reply textarea");
@@ -261,7 +272,7 @@
         if (!list || token !== t) return;
         items = t.kind === "@"
           ? list.map((r) => ({ put: "@" + r.username, html: `<b>${escH(r.name)}</b> <span class="muted">@${escH(r.username)}</span>` }))
-          : list.filter((b) => b.slug).map((b) => ({ put: "#" + b.slug, html: `${b.cover ? `<span class="cover xs"><img src="${escH(b.cover)}" alt=""></span>` : ""}<span><b>${escH(b.title)}</b> <span class="muted">${escH(b.author)}</span></span>` }));
+          : list.filter((b) => b.slug).map((b) => ({ put: "#" + b.slug, html: `${b.cover ? `<span class="cover xs"><img src="${escH(b.cover)}" alt="" onerror="this.remove()"></span>` : ""}<span><b>${escH(b.title)}</b> <span class="muted">${escH(b.author)}</span></span>` }));
         on = 0;
         draw();
       }, 150);
@@ -322,7 +333,7 @@
       picked.hidden = !b;
       q.hidden = !!b;
       hits.innerHTML = "";
-      if (b) picked.innerHTML = `${b.cover ? `<span class="cover xs"><img src="${esc(b.cover)}" alt=""></span>` : ""}<span><b>${esc(b.title)}</b><span class="by">${esc(b.author)}</span></span><button type="button" class="text-link small muted" data-unpick>прибрати</button>`;
+      if (b) picked.innerHTML = `${b.cover ? `<span class="cover xs"><img src="${esc(b.cover)}" alt="" onerror="this.remove()"></span>` : ""}<span><b>${esc(b.title)}</b><span class="by">${esc(b.author)}</span></span><button type="button" class="text-link small muted" data-unpick>прибрати</button>`;
       else (q.value = ""), q.focus();
     };
     pick.addEventListener("click", (e) => {
@@ -338,7 +349,7 @@
         ctrl = new AbortController();
         const list = await fetch(`/api/club/books?${new URLSearchParams({ q: q.value })}`, { signal: ctrl.signal }).then((r) => r.json()).catch(() => null);
         if (!list) return;
-        hits.innerHTML = list.map((b) => `<button type="button" class="hit" data-hit="${esc(JSON.stringify(b))}">${b.cover ? `<span class="cover xs"><img src="${esc(b.cover)}" alt=""></span>` : `<span class="cover xs"></span>`}<span><b>${esc(b.title)}</b><span class="by">${esc(b.author)}</span></span></button>`).join("");
+        hits.innerHTML = list.map((b) => `<button type="button" class="hit" data-hit="${esc(JSON.stringify(b))}">${b.cover ? `<span class="cover xs"><img src="${esc(b.cover)}" alt="" onerror="this.remove()"></span>` : `<span class="cover xs"></span>`}<span><b>${esc(b.title)}</b><span class="by">${esc(b.author)}</span></span></button>`).join("");
       }, 200);
     });
     q.addEventListener("keydown", (e) => e.key === "Enter" && e.preventDefault());
@@ -585,6 +596,9 @@
     const note = form.querySelector("textarea[name=note]");
     const plain = "Кілька слів про книжку";
     status.addEventListener("change", () => (note.placeholder = status.value === "abandoned" ? note.dataset.why : plain));
+    // «Читаю зараз» belongs to «Читаю» only: it hides as soon as another status is picked (Max, 2026-11-03).
+    const now = form.parentElement.querySelector(".now-line");
+    if (now) status.addEventListener("change", () => (now.hidden = status.value !== "reading"));
   }
 
   // An empty «Рік» («без дати») would start its arrows from the minimum (1940), so this year becomes

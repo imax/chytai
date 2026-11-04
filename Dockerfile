@@ -10,7 +10,7 @@ RUN npm ci --omit=dev --no-audit --no-fund
 
 COPY src ./src
 COPY server ./server
-COPY build/icon.png build/landing-desk.jpg build/landing-phone.jpg ./build/
+COPY build/icon.png build/landing-desk.mp4 build/landing-phone.mp4 build/landing-desk-poster.jpg build/landing-phone-poster.jpg ./build/
 COPY demo ./demo
 COPY free ./free
 

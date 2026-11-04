@@ -19,6 +19,7 @@
   const isOpen = () => !$("#shell").classList.contains("hidden");
 
   function show(next = tab) {
+    if (next === "library") next = "home"; // the old «Бібліотека» page is gone; Мої книжки has it all (Max, 2026-11-02)
     if (next !== "library") beforeSearch = null;
     tab = next;
     $("#shell").classList.remove("hidden");
@@ -159,44 +160,185 @@
   // ---------- Мої книжки: design «3a» from Claude Design (Max, 2026-11-01) ----------
   // One page: «Читаю зараз», your books with filters and a «+» tile, what others read now, the free shelf.
   // A query in the search field replaces it with results from your books and the free shelf.
-  let homeQuery = "";
   let homeFilter = "all"; // all | reading | new | done
   let freeTab = "new"; // new | kids | classics | all
   let homeHtml = "";
   const lastTouched = (b) => Math.max(b.openedAt || 0, b.addedAt || 0);
   const matches = (b, q) => norm(`${b.title} ${b.authors.join(" ")}`).includes(q);
   const hue = (t) => [...String(t || "")].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 0) % 360;
-  const isReading = (b) => !b.finished && b.pct != null && b.pct >= 1 && b.pct < 99;
+  // A paper book has no percentage (v2: no «Я на сторінці»): opened and not finished is being read.
+  const isReading = (b) => !b.finished && (b.paper ? !!b.openedAt : b.pct != null && b.pct >= 1 && b.pct < 99);
   const isNewBook = (b) => !b.finished && !b.started && !(b.pct > 0);
   // Progress sits on the cover itself: a thin bar while reading, a small mark when finished. A line of text
   // under each cover took height and said little (Max).
-  const mark = (b) => (b.finished ? `<span class="r-done" title="Прочитано">✓</span>` : b.pct > 0 ? `<span class="r-bar" title="${b.pct}%"><span style="width:${Math.max(b.pct, 3)}%"></span></span>` : "");
+  // Design v2: a 3px strip at the cover's foot, full for a book read to the end.
+  const mark = (b) => (b.finished || b.pct > 0 ? `<span class="r-bar" title="${b.finished ? "Прочитано" : `${b.pct}%`}"><span style="width:${b.finished ? 100 : Math.max(b.pct, 3)}%"></span></span>` : "");
   const statusText = (b) => (b.finished ? "прочитано" : b.pct > 0 ? `${b.pct}%` : "не почато");
   // A cover: the picture when there is one, the site's typographic stand-in under it otherwise.
   const rcover = (b, url = window.reader.coverUrl?.(b)) => `<span class="r-cover" style="--h:${hue(b.title)}" lang="${esc(b.language || "uk")}">
       <span class="r-cover-t">${esc(b.title)}</span><span class="r-cover-a">${esc((b.authors || [b.author])[0] || "")}</span>
-      ${url ? `<img src="${esc(url)}" alt="" loading="lazy" onerror="this.remove()" />` : ""}</span>`;
+      ${url ? `<img src="${esc(url)}" alt="" loading="lazy" draggable="false" onerror="this.remove()" />` : ""}</span>`;
   const more = (b) => (settings.guest ? "" : `<span class="r-more" role="button" tabindex="0" data-menu="${esc(b.path)}" title="Ще" aria-label="Ще"><i></i><i></i><i></i></span>`);
-  const card = (b, foot, menu = true, cls = "") => `<button class="r-card${cls}" data-open="${esc(b.path)}">${rcover(b)}${menu ? more(b) : ""}
+  const card = (b, foot, menu = true, cls = "") => `<button class="r-card${cls}" data-open="${esc(b.path)}">${rcover(b)}${b.paper ? `<span class="pp-ctag">Паперова</span>` : ""}${menu ? more(b) : ""}
       <span class="r-t">${esc(b.title)}</span><span class="r-a">${esc(author(b))}</span>${foot}</button>`;
   const head = (title, aside = "", plain = false) => `<div class="r-sec-head${plain ? " plain" : ""}"><h2>${title}</h2>${aside}</div>`;
   const tabs = (list, active, attr) => `<div class="r-tabs">${list.map(([k, label, n]) => `<button class="${k === active ? "on" : ""}" ${attr}="${k}">${label}${n != null ? ` <i>${n}</i>` : ""}</button>`).join("")}</div>`;
 
   function myBooks() {
-    return lib.books.filter((b) => !(b.aside && (b.free || b.protected))).sort((x, y) => lastTouched(y) - lastTouched(x));
+    return lib.books.filter((b) => !(b.aside && (b.free || b.protected || b.paper))).sort((x, y) => lastTouched(y) - lastTouched(x));
   }
   // The book you are reading now: the one opened last, if it is between 1% and 99%.
   function nowBook(books) {
     const last = books.find((b) => b.path === lib.lastBook);
-    if (last && isReading(last)) return last;
+    const paperNow = books.filter((b) => b.paper && b.openedAt && isReading(b)).sort((x, y) => y.openedAt - x.openedAt)[0];
+    if (last && isReading(last) && !(paperNow && paperNow.openedAt > (last.openedAt || 0))) return last;
     return books.filter((b) => b.openedAt && isReading(b)).sort((x, y) => y.openedAt - x.openedAt)[0] || null;
   }
 
+  // ---------- Design v2 (Claude Design turns 7 and 8, Max 2026-11-02): a panel and two pages ----------
+  // The panel: search in your books, Мої книжки / Додати книжку / Нещодавно видалені, the books opened lately,
+  // feedback and your settings. Always open on a computer; on a phone the header's button (or, in the app, a
+  // swipe from the left edge) slides the page aside to show it. Safari keeps that edge for «back».
+  let page = "home"; // home | add | paper
+  let paperPath = null; // the paper book on «paper» (paper.js)
+  let addQuery = "";
+  let freeAll = false;
+  const found = new Map(); // query -> { books } | { error } | "…" while asked
+  const more6 = new Set(); // groups opened with «Ще N →»
+  let panelHtml = "";
+  const phone = () => matchMedia("(max-width: 760px)").matches;
+
+  function setPage(next, { push = true } = {}) {
+    if (next === "add" && settings.guest) return;
+    const was = page;
+    page = next;
+    $("#shell").dataset.page = page;
+    panel(false);
+    if (was !== page) {
+      // A browser's «back» (and Esc) on «Додати книжку» comes back to your books. Not in the iPhone app: its web
+      // view turns a swipe from the screen's edge into back/forward, and a swipe closing the panel near the right
+      // edge went «forward» to this entry, so the panel jumped back open (Max, 2026-11-02).
+      if (push && page !== "home" && history.state?.rp !== page && !document.documentElement.classList.contains("in-app")) history[history.state?.rp ? "replaceState" : "pushState"]({ rp: page }, "");
+      $("#home").scrollTop = 0;
+      homeHtml = "";
+    }
+    if (tab !== "home") show("home");
+    else renderHome();
+  }
+  addEventListener("popstate", () => page !== "home" && history.state?.rp !== page && setPage("home", { push: false }));
+  function backHome() {
+    if (history.state?.rp === page) history.back();
+    else setPage("home");
+  }
+
+  function panel(open = !$("#shell").classList.contains("panel-open")) {
+    if (open && !phone()) open = false;
+    $("#shell").classList.toggle("panel-open", open);
+    if (!open && document.activeElement?.id === "r-pq" && phone()) document.activeElement.blur();
+  }
+
+  function renderPanel() {
+    const books = myBooks();
+    const q = norm($("#r-pq").value);
+    $("#r-panel").classList.toggle("searching", !!q);
+    let html = "";
+    if (q) {
+      const hits = books.filter((b) => matches(b, q)).slice(0, 30);
+      const more = deepHtml(q, books);
+      html = hits.length || more ? (more && hits.length ? `<h3 class="r-phead">Книжки</h3>` : "") + hits.map(prow).join("") + more
+        : deep.q === q || deep.offline || q.length < 2 || !window.reader.searchMine ? `<p class="r-pnone">Нічого не знайшлося.</p>` : "";
+    }
+    const recent = books.filter((b) => b.openedAt).sort((x, y) => y.openedAt - x.openedAt).slice(0, 4);
+    const all = `${html}\u0000${recent.map(prow).join("")}\u0000${books.length}|${trashCount}|${page}|${settings.user}`;
+    if (all === panelHtml) return;
+    panelHtml = all;
+    $("#r-pfound").innerHTML = html;
+    $("#r-pfound").classList.toggle("hidden", !q);
+    $("#r-recent").innerHTML = recent.map(prow).join("");
+    $(".r-precent").classList.toggle("hidden", !recent.length);
+    $("#r-n-books").textContent = books.length || "";
+    $("#r-pnav-trash").hidden = !trashCount;
+    $("#r-n-trash").textContent = trashCount || "";
+    for (const b of document.querySelectorAll(".r-pnav [data-page]")) b.classList.toggle("on", b.dataset.page === page);
+    $("#r-avatar").textContent = (settings.user || "Ч").trim()[0].toUpperCase();
+    $("#r-me-name").textContent = settings.user || "";
+  }
+  // Past the titles (Max, 2026-11-03): the query is also looked for in your notes, their thoughts and your talks
+  // with Claude (GET /api/search, server/search.js). A hit shows its book, a piece of text and opens at its place.
+  let deep = { q: "", hits: [], offline: false };
+  let deepTimer = 0;
+  function askDeep() {
+    clearTimeout(deepTimer);
+    const q = norm($("#r-pq").value);
+    if (!q || q.length < 2 || !window.reader.searchMine) return;
+    deepTimer = setTimeout(async () => {
+      try {
+        const hits = await window.reader.searchMine($("#r-pq").value.trim());
+        if (norm($("#r-pq").value) !== q) return;
+        deep = { q, hits: hits || [], offline: !hits };
+      } catch {
+        deep = { q, hits: [], offline: true };
+      }
+      renderPanel();
+    }, 250);
+  }
+  const KINDS = { note: "Нотатки", chat: "Пояснення", paperChat: "Пояснення" };
+  function markWords(text, q) {
+    const ws = [...new Set(q.split(" ").filter((w) => w.length >= 2))];
+    let out = esc(text);
+    for (const w of ws.sort((x, y) => y.length - x.length)) out = out.replace(new RegExp(esc(w).replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi"), (m) => `\u0001${m}\u0002`);
+    return out.replace(/\u0001/g, "<mark>").replace(/\u0002/g, "</mark>");
+  }
+  function deepHtml(q, books) {
+    if (deep.q !== q || !deep.hits.length) return "";
+    const byPath = new Map(books.map((b) => [b.path, b]));
+    let html = "";
+    for (const label of [...new Set(Object.values(KINDS))]) {
+      const rows = deep.hits.filter((h) => KINDS[h.kind] === label && byPath.has(h.book));
+      if (!rows.length) continue;
+      html += `<h3 class="r-phead">${label}</h3>` + rows.map((h) => {
+        const b = byPath.get(h.book);
+        const i = deep.hits.indexOf(h);
+        const said = h.kind !== "note" && (h.field === "a" || h.field === "q") && h.quote ? `<span class="r-phit-q">${esc(h.quote)}</span>` : "";
+        return `<button type="button" class="r-phit" data-hit="${i}"><span class="r-phit-b">${esc(b.title)}${h.where ? ` · ${esc(h.where)}` : ""}</span>${said}<span class="r-phit-t${h.field === "text" || h.field === "sel" ? " quote" : ""}">${markWords(h.text, q)}</span></button>`;
+      }).join("");
+    }
+    return html;
+  }
+  function openHit(i) {
+    const h = deep.hits[i];
+    if (!h) return;
+    panel(false);
+    if (h.kind === "paperChat") {
+      openBook(h.book);
+      // The question comes unfolded once the book's talks are there.
+      let tries = 0;
+      const unfold = () => {
+        const el = document.querySelector(`.pp-chat[data-chat="${CSS.escape(h.id)}"]`);
+        if (!el) return ++tries < 30 && setTimeout(unfold, 100);
+        if (!el.classList.contains("open")) el.querySelector(".pp-chat-q")?.click();
+        setTimeout(() => document.querySelector(`.pp-chat[data-chat="${CSS.escape(h.id)}"]`)?.scrollIntoView({ block: "start", behavior: "smooth" }), 50);
+      };
+      return unfold();
+    }
+    if (h.kind === "chat" && typeof window.openChatInBook === "function") return window.openChatInBook(h.book, h.id);
+    if (h.kind === "note" && lib.books.find((b) => b.path === h.book)?.paper) return openBook(h.book);
+    if (h.cfi) return openNoteInBook(h.book, { id: h.id, cfi: h.cfi, posKey: h.posKey });
+    openBook(h.book);
+  }
+
+  const prow = (b) => `<button type="button" class="r-prow" data-open="${esc(b.path)}">${rcover(b)}<span class="r-prow-t">${esc(b.title)}</span><span class="r-prow-p">${b.finished ? "✓" : b.paper ? (b.page ? `стор. ${b.page}` : "") : b.pct != null ? `${b.pct}%` : ""}</span></button>`;
+
   function renderHome() {
     if (!lib) return; // the skeleton stays until the library arrives
-    $("#r-avatar").textContent = (settings.user || "Ч").trim()[0].toUpperCase();
+    $("#shell").dataset.page = page;
     $(".r-add-btn").hidden = !!settings.guest;
-    const html = homeQuery.trim() ? searchHtml(norm(homeQuery)) : homePageHtml();
+    renderPanel();
+    // Typing the page or a note on a paper book's page: the library arriving again must not redraw it under the finger.
+    if (page === "paper" && document.activeElement?.closest?.(".pp") && homeHtml) return;
+    const pb = page === "paper" && lib.books.find((b) => b.path === paperPath);
+    if (page === "paper" && !pb) page = "home";
+    const html = pb ? window.Paper.pageHtml(pb) : page === "add" ? addPageHtml() : homePageHtml();
     // The library comes twice (the saved copy, then the server's) and again when the app comes back to the
     // front: drawing the same covers anew made them flicker, so an unchanged screen is left alone.
     if (html === homeHtml) return;
@@ -206,75 +348,156 @@
 
   function homePageHtml() {
     const books = myBooks();
+    if (!settings.guest) setTimeout(() => fetchAboutAhead(books), 3000);
     const cur = nowBook(books);
     let html = "";
-    if (cur) {
+    if (cur?.paper) {
+      const meta = [esc(author(cur)), cur.page ? `стор. ${cur.page}` : ""].filter(Boolean).join(" · ");
+      html += `<section class="r-now">${head("Читаю зараз", "", true)}
+        <div class="r-now-row"><button class="r-now-cover" data-open="${esc(cur.path)}">${rcover(cur)}</button>
+          <div class="r-now-text"><span class="pp-tag">Паперова</span><h3 class="r-now-t">${esc(cur.title)}</h3>
+            <p class="r-now-meta">${meta}</p>
+            <button class="r-pill r-wide" data-open="${esc(cur.path)}">Продовжити читання</button></div></div>
+        <button class="r-pill r-narrow" data-open="${esc(cur.path)}">Продовжити читання</button></section>`;
+    } else if (cur) {
       const where = [cur.chapter || (cur.parts ? `розділ ${cur.part} з ${cur.parts}` : "")].filter(Boolean).map(esc).join("");
       html += `<section class="r-now">${head("Читаю зараз", "", true)}
         <div class="r-now-row"><button class="r-now-cover" data-open="${esc(cur.path)}">${rcover(cur)}</button>
-          <div class="r-now-text"><h3 class="r-now-t">${esc(cur.title)}</h3><p class="r-now-a">${esc(author(cur))}</p>
+          <div class="r-now-text"><h3 class="r-now-t">${esc(cur.title)}</h3>
             <div class="r-progress"><span style="width:${cur.pct}%"></span></div>
             <p class="r-now-meta"><b>${cur.pct}%</b>${where ? ` · ${where}` : ""}</p>
             <button class="r-pill r-wide" data-open="${esc(cur.path)}">Продовжити читання</button></div></div>
         <button class="r-pill r-narrow" data-open="${esc(cur.path)}">Продовжити читання</button></section>`;
     }
     const rest = books.filter((b) => b !== cur);
-    const groups = { all: rest, reading: rest.filter(isReading), new: rest.filter(isNewBook), done: rest.filter((b) => b.finished) };
+    const groups = { all: rest, reading: rest.filter(isReading), new: rest.filter(isNewBook), done: rest.filter((b) => b.finished), paper: rest.filter((b) => b.paper) };
     // Every book is drawn once and a filter only hides cards: drawing the grid anew on each click reloaded
     // all the covers, which flickered on a slow connection (Max).
-    const gcls = (b) => ["reading", "new", "done"].filter((k) => groups[k].includes(b)).map((k) => ` g-${k}`).join("");
+    const gcls = (b) => ["reading", "new", "done", "paper"].filter((k) => groups[k].includes(b)).map((k) => ` g-${k}`).join("");
     const empty = (k) => (groups[k].length ? "" : `<p class="r-empty g-${k}">Тут поки порожньо.</p>`);
-    const plus = settings.guest || books.length ? "" : `<button class="r-card r-plus" data-act="add"><span class="r-plus-box"><b>+</b><span>Додати книжку</span><small>EPUB, PDF, MOBI</small></span></button>`;
-    html += `<section>${head(`Мої книжки · ${books.length}`, books.length ? tabs([["all", "Усі", groups.all.length], ["reading", "Читаю", groups.reading.length], ["new", "Не почато", groups.new.length], ["done", "Прочитані", groups.done.length]], homeFilter, "data-filter") : "")}
+    const plus = settings.guest || books.length ? "" : `<button class="r-card r-plus" data-page="add"><span class="r-plus-box"><b>+</b><span>Додати книжку</span><small>EPUB, PDF, MOBI</small></span></button>`;
+    html += `<section class="r-mine">${head(`Мої книжки · ${books.length}`, books.length ? tabs([["all", "Усі", groups.all.length], ["reading", "Читаю", groups.reading.length], ["new", "Не почато", groups.new.length], ["done", "Прочитані", groups.done.length], ...(groups.paper.length ? [["paper", "Паперові", groups.paper.length]] : [])], homeFilter, "data-filter") : "", !cur)}
       <div class="r-filtered" data-show="${homeFilter}"><div class="r-grid">${rest.map((b) => card(b, mark(b), true, gcls(b))).join("")}${plus}</div>
-      ${empty("reading")}${empty("new")}${empty("done")}</div>
-      ${trashCount ? `<p class="r-trash"><button class="r-link" data-act="trash">Нещодавно видалені · ${trashCount} →</button></p>` : ""}</section>`;
-    const reading = (club?.reading || []).slice(0, 8);
-    if (reading.length)
-      html += `<section>${head("Зараз читають", `<a class="r-aside-link" href="${esc(club.club)}" target="_blank" rel="noopener">Обговорення на Chytai ↗</a>`)}
-        <div class="r-grid r-others">${reading.map((b) => `<a class="r-card" href="${esc(b.href)}" target="_blank" rel="noopener">${rcover({ title: b.title, authors: [b.author] }, b.cover)}
-          <span class="r-t">${esc(b.title)}</span><span class="r-a">${esc(b.reader.name)}</span></a>`).join("")}</div></section>`;
+      ${empty("reading")}${empty("new")}${empty("done")}${empty("paper")}</div></section>`;
+    return html;
+  }
+
+  // «Додати книжку»: a file of your own, the free shelf, and what the search finds there and in the catalog.
+  function addPageHtml() {
+    const q = norm(addQuery);
+    return q ? addFoundHtml(q) : addStartHtml();
+  }
+
+  const freeOf = () => (lib.free || []).concat(lib.books.filter((b) => b.free));
+  function addStartHtml() {
     const free = lib.free || [];
-    if (free.length && !settings.guest) {
-      const newest = new Set([...free].sort((x, y) => y.order - x.order).slice(0, 16));
-      const fcls = (b) => (newest.has(b) ? " g-new" : "") + (b.group === "Для дітей" ? " g-kids" : "") + (/класика/i.test(b.group) ? " g-classics" : "");
-      html += `<section>${head(`Вільна полиця · ${free.length} <span class="r-sub">Можна читати безкоштовно</span>`, tabs([["new", "Нові"], ["kids", "Для дітей"], ["classics", "Класика"], ["all", "Усі"]], freeTab, "data-free-tab"))}
-        <div class="r-filtered" data-show="${freeTab}"><div class="r-grid">${[...newest, ...free.filter((b) => !newest.has(b))].map((b) => card(b, "", false, fcls(b))).join("")}</div></div></section>`;
+    const newest = [...free].sort((x, y) => y.order - x.order);
+    let freeHtml = "";
+    if (free.length) {
+      const fcls = (b) => (newest.indexOf(b) < 16 ? " g-new" : "") + (b.group === "Для дітей" ? " g-kids" : "") + (/класика/i.test(b.group) ? " g-classics" : "");
+      freeHtml = `<section class="r-free">${head(`Вільна полиця · ${free.length} <span class="r-sub">Можна читати безкоштовно</span>`, freeAll ? tabs([["new", "Нові"], ["kids", "Для дітей"], ["classics", "Класика"], ["all", "Усі"]], freeTab, "data-free-tab") : `<button class="r-aside-link" data-act="free-all">Усі →</button>`)}
+        <p class="r-sub-phone">Можна читати безкоштовно</p>
+        ${freeAll
+          ? `<div class="r-filtered" data-show="${freeTab}"><div class="r-grid r-free-grid">${newest.map((b) => card(b, "", false, fcls(b))).join("")}</div></div>`
+          : `<div class="r-strip">${newest.slice(0, 18).map((b) => card(b, "", false)).join("")}</div>`}</section>`;
     }
-    return html;
+    return `<div class="r-add-grid">
+      <section class="r-file">${head(`Файл з <span class="r-ph">телефона</span><span class="r-dt">комп'ютера</span>`, "", true)}
+        <div class="r-drop"><p class="r-drop-t r-dt">Перетягніть файл сюди</p>
+          <button class="r-pill-line r-pick" data-act="add"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V5M7 10l5-5 5 5M5 20h14"/></svg><span class="r-dt">або вибрати файл</span><span class="r-ph">Вибрати файл</span></button>
+          <div class="r-chips"><span>EPUB</span><span>PDF</span><span>MOBI</span></div>
+          <p class="r-drop-note">MOBI і PDF з текстом перетворюються на EPUB, щоб працювали пояснення й нотатки. Скани лишаються PDF.</p></div></section>
+      <section class="r-paper">${head("Паперова книжка", "", true)}
+        <p class="r-drop-note">Читаєте на папері? Додайте книжку пошуком вище або за фото обкладинки. Пояснення й нотатки до неї будуть тут, і ШІ знатиме, на якій ви сторінці.</p>
+        <button class="r-pill-line r-pick" data-act="cover-photo"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg><span>Сфотографувати обкладинку</span></button></section>
+      ${freeHtml}
+      <section class="r-where">${head("Де ще шукаємо", "", true)}
+        <a class="r-where-row" href="https://chytai.org.ua" target="_blank" rel="noopener"><span>Каталог Chytai</span><small>де купити ↗</small></a>
+        <div class="r-where-row soon"><span>Project Gutenberg</span><small>незабаром</small></div>
+        <div class="r-where-row soon"><span>Yakaboo та інші книгарні</span><small>незабаром</small></div></section>
+    </div>`;
   }
 
-  function searchHtml(q) {
-    const mine = myBooks().filter((b) => matches(b, q));
-    const own = new Set(mine.map((b) => b.path));
-    const free = (lib.free || []).filter((b) => !own.has(b.path) && matches(b, q));
-    const action = (b) => (b.finished || b.pct >= 99 ? "Перечитати" : b.pct > 0 ? "Продовжити" : "Почати");
+  function addFoundHtml(q) {
+    const mine = new Set(lib.books.map((b) => b.path));
+    const free = freeOf().filter((b, i, a) => a.findIndex((x) => x.path === b.path) === i && matches(b, q));
+    const cat = found.get(q);
+    const group = (key, title, rows, extra = "") => {
+      const open = more6.has(key);
+      const shown = open ? rows : rows.slice(0, 3);
+      return `<section class="r-fgroup">${head(title, "", false)}<div class="r-frows">${shown.join("")}</div>
+        ${rows.length > shown.length ? `<button class="r-more-link" data-more="${key}">Ще ${rows.length - shown.length} →</button>` : ""}${extra}</section>`;
+    };
+    const freeRows = free.map((b) => `<div class="r-frow">${`<button class="r-frow-c" data-open="${esc(b.path)}">${rcover(b)}</button>`}
+      <span class="r-frow-x"><span class="r-frow-t">${esc(b.title)}</span><span class="r-frow-a">${esc(author(b))}</span></span>
+      ${mine.has(b.path) ? `<button class="r-frow-go done" data-open="${esc(b.path)}">У моїх</button>` : `<button class="r-frow-go" data-take="${esc(b.path)}">Додати</button>`}</div>`);
     let html = "";
-    if (mine.length)
-      html += `<section>${head(`У моїх книжках · ${mine.length}`, "", true)}<div class="r-rows">${mine.map((b) => `<button class="r-row" data-open="${esc(b.path)}">${rcover(b)}
-        <span class="r-row-t">${esc(b.title)}</span><span class="r-row-a">${esc(author(b))}</span><span class="r-row-go">${action(b)}</span></button>`).join("")}</div></section>`;
-    if (free.length)
-      html += `<section>${head(`На вільній полиці · ${free.length}`)}<div class="r-grid">${free.map((b) => card(b, `<span class="r-add">+ До моїх книжок</span>`, false)).join("")}</div></section>`;
-    if (!mine.length && !free.length) html += `<p class="r-empty">Нічого не знайшлося.</p>`;
-    html += `<p class="r-foot">Немає потрібної? ${settings.guest ? "" : `<button class="r-link" data-act="add">Завантажте свій файл</button>: EPUB, PDF або MOBI. `}<a class="r-link" href="https://chytai.org.ua/search?q=${encodeURIComponent(homeQuery.trim())}" target="_blank" rel="noopener">Шукати на chytai.org.ua ↗</a></p>`;
-    return html;
+    if (free.length) html += group("free", `Вільна полиця · ${free.length}`, freeRows);
+    if (cat === "…" || cat == null) html += `<section class="r-fgroup">${head("Каталог Chytai", "", false)}<p class="r-empty">Шукаю…</p></section>`;
+    else if (cat.error) html += `<section class="r-fgroup">${head("Каталог Chytai", "", false)}<p class="r-empty">${navigator.onLine ? "Каталог зараз не відповідає." : "Немає з'єднання."}</p></section>`;
+    else if (cat.books.length) {
+      const paperOf = new Map(lib.books.filter((b) => b.paper && !b.aside && b.href).map((b) => [b.href, b.path]));
+      const rows = cat.books.map((b, i) => `<div class="r-frow r-frow-cat"><a class="r-frow-c" href="${esc(b.href)}" target="_blank" rel="noopener">${rcover({ title: b.title, authors: [b.author] }, b.cover || null)}</a>
+        <a class="r-frow-x" href="${esc(b.href)}" target="_blank" rel="noopener"><span class="r-frow-t">${esc(b.title)}</span><span class="r-frow-a">${esc([b.author, b.year].filter(Boolean).join(" · "))}</span></a>
+        <span class="r-frow-two">${paperOf.has(b.href) ? `<button class="r-frow-go done" data-open="${esc(paperOf.get(b.href))}">Паперова в моїх</button>` : `<button class="r-frow-go" data-paper-add="${i}">Читаю паперову</button>`}
+          <a class="r-frow-go plain" href="${esc(b.href)}" target="_blank" rel="noopener">Де взяти ↗</a></span></div>`);
+      html += group("cat", `Каталог Chytai · ${cat.books.length}`, rows, `<p class="r-fnote">Купили електронну? <button class="r-link" data-act="add">Додайте файл</button>, і вона буде тут.</p>`);
+    }
+    if (!free.length && cat && cat !== "…" && !cat.error && !cat.books.length)
+      html += `<p class="r-empty">Нічого не знайшлося. <a class="r-link" href="https://chytai.org.ua/search?q=${encodeURIComponent(addQuery.trim())}" target="_blank" rel="noopener">Шукати на chytai.org.ua ↗</a></p>`;
+    html += `<p class="r-fnote r-fpaper">Читаєте на папері, а книжки нема? <button class="r-link" data-act="cover-photo">Сфотографуйте обкладинку</button></p>`;
+    return `<div class="r-found">${html}</div>`;
   }
 
-  // The search field: in the header on a computer, at the top of the page on a phone; both hold the same text.
-  let searchTimer = 0;
-  for (const field of document.querySelectorAll(".r-q"))
-    field.addEventListener("input", () => {
-      homeQuery = field.value;
-      for (const f of document.querySelectorAll(".r-q")) if (f !== field) f.value = field.value;
-      clearTimeout(searchTimer);
-      searchTimer = setTimeout(renderHome, 150);
-    });
-  function clearSearch() {
-    homeQuery = "";
-    for (const f of document.querySelectorAll(".r-q")) f.value = "";
+  let addTimer = 0;
+  $("#r-aq").addEventListener("input", () => {
+    addQuery = $("#r-aq").value;
+    more6.clear();
+    clearTimeout(addTimer);
+    addTimer = setTimeout(() => {
+      const q = norm(addQuery);
+      renderHome();
+      if (q.length < 2 || found.has(q) || !window.reader.catalogFind) return q.length < 2 && q && (found.set(q, { books: [] }), renderHome());
+      found.set(q, "…");
+      window.reader.catalogFind(addQuery.trim())
+        .then((d) => found.set(q, { books: d.books || [] }))
+        .catch(() => found.delete(q) || found.set(q, { error: true }))
+        .finally(() => {
+          if (found.get(q)?.error) setTimeout(() => found.get(q)?.error && found.delete(q), 30000);
+          if (page === "add" && norm(addQuery) === q) renderHome();
+        });
+    }, 200);
+  });
+  $("#r-aq").addEventListener("keydown", (e) => {
+    if (e.key !== "Escape") return;
+    e.preventDefault();
+    if ($("#r-aq").value) ($("#r-aq").value = ""), $("#r-aq").dispatchEvent(new Event("input"));
+    else backHome();
+  });
+  $("#r-pq").addEventListener("input", () => (renderPanel(), askDeep()));
+  $("#r-pq").addEventListener("keydown", (e) => {
+    if (e.key === "Escape") e.preventDefault(), ($("#r-pq").value = ""), renderPanel(), $("#r-pq").blur(), panel(false);
+    if (e.key === "Enter") $("#r-pfound [data-open]")?.click();
+  });
+  // «Додати» on a free-shelf book: it joins your books and the button says so.
+  async function takeBook(path, btn) {
+    btn.disabled = true;
+    try {
+      await window.reader.libraryTake(path);
+    } catch (err) {
+      btn.disabled = false;
+      return showNotice(err instanceof TypeError ? "Немає з'єднання: додати книжку можна лише онлайн." : err.message, false);
+    }
+    const b = (lib.free || []).find((x) => x.path === path);
+    if (b && !lib.books.some((x) => x.path === path)) lib.books.push({ ...b, addedAt: Date.now(), aside: false });
     homeHtml = "";
+    renderHome();
+    window.Library.data(true).then((d) => ((lib = d), renderHome())).catch(() => {});
   }
+
   $("#home").addEventListener("click", (e) => {
+    const m = e.target.closest("[data-more]");
+    if (m) return more6.add(m.dataset.more), renderHome();
     const f = e.target.closest("[data-filter]");
     const t = e.target.closest("[data-free-tab]");
     if (!f && !t) return;
@@ -285,35 +508,93 @@
     const tab = f || t;
     for (const b of tab.parentElement.children) b.classList.toggle("on", b === tab);
     tab.closest("section").querySelector(".r-filtered").dataset.show = f ? homeFilter : freeTab;
-    homeHtml = homeQuery.trim() ? homeHtml : homePageHtml();
+    homeHtml = page === "add" ? addPageHtml() : homePageHtml();
   });
 
-  // The avatar's menu: a popover under it on a computer, a sheet from the bottom on a phone.
-  const menuBox = $("#r-menu");
-  function toggleMenu(open = menuBox.classList.contains("hidden")) {
-    menuBox.classList.toggle("hidden", !open);
-    $("#r-avatar").classList.toggle("open", open);
-    if (open) {
-      $("#r-me-name").textContent = settings.user || "";
-      $("#r-me-user").textContent = settings.username ? `@${settings.username}` : "";
-      $("#r-me-page").href = settings.username ? `https://chytai.org.ua/@${settings.username}` : "https://chytai.org.ua";
-      $("#r-me-page").hidden = !settings.username;
-      menuBox.querySelector("[data-r=settings]").hidden = !!settings.guest;
+  // The phone's panel: a tap on the page beside it closes it; in the app a swipe from the left edge opens it
+  // and one to the left closes it.
+  $("#shell-main").addEventListener("click", (e) => {
+    if (!$("#shell").classList.contains("panel-open")) return;
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    panel(false);
+  }, true);
+  // The page follows the finger (Max 2026-11-02: a swipe only bounced the page down and then the panel jumped
+  // open): a sideways drag moves it, and on release it settles open or closed.
+  const PANEL_W = 318;
+  let drag = null;
+  // In the app a swipe from the right edge opens «Додати книжку», and on it one from the left edge comes back
+  // (Max 2026-11-03).
+  const EDGE = 24;
+  $("#shell").addEventListener("touchstart", (e) => {
+    const x = e.touches[0].clientX;
+    const open = $("#shell").classList.contains("panel-open");
+    const app = document.documentElement.classList.contains("in-app");
+    const ok = phone() && isOpen() && !document.querySelector("dialog[open]");
+    const kind = !ok ? null
+      : open ? "panel"
+      : app && page === "add" && x < EDGE ? "back"
+      : app && x < EDGE ? "panel"
+      : app && page === "home" && !settings.guest && x > innerWidth - EDGE ? "add"
+      : null;
+    drag = kind ? { kind, x, y: e.touches[0].clientY, open, dir: null, pos: open ? PANEL_W : 0, t: Date.now() } : null;
+  }, { passive: true });
+  $("#shell").addEventListener("touchmove", (e) => {
+    if (!drag) return;
+    const dx = e.touches[0].clientX - drag.x;
+    const dy = e.touches[0].clientY - drag.y;
+    if (!drag.dir) {
+      if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
+      drag.dir = Math.abs(dx) > Math.abs(dy) ? "h" : "v";
+      if (drag.dir === "v") return (drag = null);
+      $("#shell").classList.add(drag.kind === "panel" ? "panel-drag" : "page-drag");
     }
-  }
-  $("#r-avatar").onclick = (e) => (e.stopPropagation(), toggleMenu());
-  menuBox.addEventListener("click", (e) => {
-    const r = e.target.closest("[data-r]")?.dataset.r;
-    toggleMenu(false);
-    if (r === "settings") openSettings();
-    if (r === "logout") window.reader.logout?.();
-  });
-  document.addEventListener("click", (e) => !menuBox.classList.contains("hidden") && !e.target.closest("#r-menu") && toggleMenu(false));
-  document.addEventListener("keydown", (e) => e.key === "Escape" && !menuBox.classList.contains("hidden") && toggleMenu(false));
+    e.preventDefault();
+    if (drag.kind !== "panel") {
+      drag.pos = drag.kind === "add" ? Math.min(0, dx) : Math.max(0, dx);
+      $("#shell-main").style.transform = `translateX(${drag.pos}px)`;
+      return;
+    }
+    drag.pos = Math.max(0, Math.min(PANEL_W, (drag.open ? PANEL_W : 0) + dx));
+    $("#shell-main").style.transform = `translateX(${drag.pos}px)`;
+  }, { passive: false });
+  const endDrag = () => {
+    if (!drag) return;
+    const d = drag;
+    drag = null;
+    if (d.dir !== "h") return;
+    const fast = Date.now() - d.t < 250;
+    if (d.kind !== "panel") {
+      const go = Math.abs(d.pos) > (fast ? 30 : innerWidth / 3);
+      $("#shell").classList.remove("page-drag");
+      $("#shell-main").style.transform = "";
+      if (!go) return;
+      if (d.kind === "add") setPage("add");
+      else backHome();
+      const main = $("#shell-main");
+      main.classList.remove("slide-from-right", "slide-from-left");
+      void main.offsetWidth;
+      main.classList.add(d.kind === "add" ? "slide-from-right" : "slide-from-left");
+      main.addEventListener("animationend", () => main.classList.remove("slide-from-right", "slide-from-left"), { once: true });
+      return;
+    }
+    const open = fast ? (d.open ? d.pos > PANEL_W - 40 : d.pos > 40) : d.pos > PANEL_W / 2;
+    $("#shell").classList.remove("panel-drag");
+    $("#shell-main").style.transform = "";
+    panel(open);
+  };
+  $("#shell").addEventListener("touchend", endDrag, { passive: true });
+  $("#shell").addEventListener("touchcancel", endDrag, { passive: true });
 
-  // A file dropped anywhere on the page is added to your books.
-  $("#shell").addEventListener("dragover", (e) => !settings.guest && e.dataTransfer?.types?.includes("Files") && e.preventDefault());
+  // A file dropped anywhere on the page is added to your books; while one is dragged over, the page says so.
+  let dragDepth = 0;
+  const dragging = (e) => !settings.guest && e.dataTransfer?.types?.includes("Files");
+  $("#shell").addEventListener("dragenter", (e) => dragging(e) && (dragDepth++, $("#shell").classList.add("r-drag")));
+  $("#shell").addEventListener("dragleave", (e) => dragging(e) && --dragDepth <= 0 && ((dragDepth = 0), $("#shell").classList.remove("r-drag")));
+  $("#shell").addEventListener("dragover", (e) => dragging(e) && e.preventDefault());
   $("#shell").addEventListener("drop", async (e) => {
+    dragDepth = 0;
+    $("#shell").classList.remove("r-drag");
     if (settings.guest || !e.dataTransfer?.files?.length) return;
     e.preventDefault();
     if (await window.reader.uploadFiles?.([...e.dataTransfer.files])) (homeHtml = ""), window.Library.data(true).then((d) => ((lib = d), render()));
@@ -614,6 +895,14 @@
   function openBook(path) {
     const b = lib?.books.find((x) => x.path === path) || lib?.free?.find((x) => x.path === path);
     if (b) b.seen = true;
+    // Back from the book is your books, not the page it was found on.
+    if (page === "add") {
+      page = "home";
+      homeHtml = "";
+      if (history.state?.rp === "add") history.replaceState(null, "");
+      setTimeout(renderHome, 400);
+    }
+    if (b?.paper) return openPaper(path);
     // The book already on screen just comes back; any other one opens.
     if (current?.path === path) return hide();
     if (b?.unavailable) return showNotice("Немає з'єднання, а ця книжка ще не збережена на пристрої.", false);
@@ -621,11 +910,17 @@
   }
 
   $("#shell").addEventListener("click", async (e) => {
-    const el = e.target.closest("[data-menu], [data-aside], [data-open], [data-tab], [data-act], [data-note], [data-unwish]");
-    if (!el) return;
+    const el = e.target.closest("[data-menu], [data-aside], [data-hit], [data-open], [data-tab], [data-act], [data-note], [data-unwish], [data-page], [data-take], [data-paper-add]");
+    // #shell itself carries data-page (the page shown): a tap on anything else, the search field in the phone's
+    // panel too, came here as «Мої книжки» and closed the panel, so search did nothing on a phone (Max, 2026-11-03).
+    if (!el || el.id === "shell") return;
     if (el.dataset.menu) return bookMenu(el.dataset.menu, el);
     if (el.dataset.aside) return setAside(el.dataset.aside);
-    if (el.dataset.open != null) return openBook(el.dataset.open);
+    if (el.dataset.take) return takeBook(el.dataset.take, el);
+    if (el.dataset.paperAdd != null) return paperFromCatalog(Number(el.dataset.paperAdd));
+    if (el.dataset.page) return el.dataset.page === "home" && page !== "home" ? backHome() : setPage(el.dataset.page);
+    if (el.dataset.hit != null) return openHit(Number(el.dataset.hit));
+    if (el.dataset.open != null) return panel(false), openBook(el.dataset.open);
     if (el.dataset.tab) {
       // The «Мої книжки» tab always shows all your books: a filter typed earlier goes (Max, 2026-11-01).
       return show(el.dataset.tab);
@@ -645,9 +940,32 @@
       return;
     }
     if (el.dataset.act === "add") return $("#lib-add").click();
-    if (el.dataset.act === "trash") return openTrash();
+    if (el.dataset.act === "trash") return panel(false), openTrash();
+    if (el.dataset.act === "panel") return panel();
+    if (el.dataset.act === "settings") return panel(false), openSettings();
+    if (el.dataset.act === "cover-photo") return window.Paper.coverPhoto();
+    if (el.dataset.act === "free-all") return (freeAll = true), renderHome();
     if (el.dataset.act === "seen") markSeen();
   });
+
+  // A paper book opens as a page of Мої книжки (paper.js).
+  function openPaper(path) {
+    const b = lib?.books.find((x) => x.path === path);
+    if (!b) return;
+    if (b.aside) Object.assign(b, { aside: false });
+    b.openedAt = Date.now();
+    paperPath = path;
+    window.reader.paperUpdate(path, {}).catch(() => {});
+    if (page === "paper") page = "home"; // another paper book: draw anew
+    setPage("paper");
+    // Straight to the question on a computer; a phone's keyboard would cover the page at once.
+    if (!matchMedia("(pointer: coarse)").matches) setTimeout(() => $("#pp-q")?.focus(), 50);
+  }
+  // «Читаю паперову» on a catalog book.
+  function paperFromCatalog(i) {
+    const b = found.get(norm(addQuery))?.books?.[i];
+    if (b) window.Paper.add({ title: b.title, author: b.author, cover: b.cover || "", href: b.href });
+  }
 
   // The book stops counting as one you read (for you only; notes and the place in it stay) until you open it again.
   async function setAside(path) {
@@ -659,6 +977,7 @@
     const b = lib?.books.find((x) => x.path === path);
     if (b) Object.assign(b, { aside: true, started: false, pct: null, chapter: "", openedAt: 0 });
     if (lib?.lastBook === path) lib.lastBook = null;
+    if (page === "paper" && paperPath === path) backHome();
     render();
     window.Library.render?.();
   }
@@ -671,7 +990,7 @@
     const b = lib?.books.find((x) => x.path === path);
     if (!b || settings.guest) return;
     menuBook = b;
-    const own = !b.free && !b.protected;
+    const own = !b.free && !b.protected && !b.paper;
     const d = $("#book-menu");
     $("#bm-title").textContent = b.title;
     $("#bm-author").textContent = [author(b), statusText(b)].filter(Boolean).join(" · ");
@@ -685,6 +1004,8 @@
     } else d.style.left = d.style.top = "";
     // «Дати почитати» is hidden for now (Max, 2026-11-01).
     $("#bm-edit").hidden = !(own && window.reader.libraryUpdateBook);
+    // A PDF added before uploads became EPUB (2026-11-01): it opens slowly, so it can become one now.
+    $("#bm-epub").hidden = !(own && /\.pdf$/i.test(b.path) && window.reader.libraryPdfToEpub);
     // Your own file is deleted; a book from the free shelf or a publisher just leaves the home screen.
     $("#bm-aside").hidden = own;
     $("#bm-delete").hidden = !(own && window.reader.libraryDeleteBook);
@@ -693,18 +1014,53 @@
     d.returnValue = "";
     d.showModal();
   }
+  // «Про книжку»: the device's copy at once, then the network's when it answers.
+  async function showAbout(b) {
+    const d = $("#about-dialog");
+    $("#ab-cover").innerHTML = rcover(b);
+    $("#ab-title").textContent = b.title;
+    $("#ab-author").textContent = author(b);
+    const link = $("#ab-link");
+    const fill = (a) => {
+      if (!a) {
+        $("#ab-body").innerHTML = `<p class="muted">${navigator.onLine ? "Завантажую…" : "Немає з'єднання, а опис цієї книжки ще не збережено."}</p>`;
+        link.hidden = true;
+        return;
+      }
+      $("#ab-author").textContent = [author(b), a.year].filter(Boolean).join(" · ");
+      $("#ab-body").innerHTML = a.found
+        ? a.blurb ? a.blurb.split(/\n\n+/).map((p) => `<p>${esc(p)}</p>`).join("") : `<p class="muted">Опису поки немає.</p>`
+        : `<p class="muted">Цієї книжки ще немає в каталозі Chytai.</p>`;
+      link.hidden = false;
+      link.href = a.found ? a.href : a.add;
+      link.textContent = a.found ? "Сторінка книжки на Chytai ↗" : "Додати на Chytai ↗";
+    };
+    fill(await window.reader.bookAbout?.(b, true));
+    d.showModal();
+    const fresh = await window.reader.bookAbout?.(b);
+    if (fresh && d.open) fill(fresh);
+    else if (!fresh && d.open && $("#ab-body").textContent === "Завантажую…") $("#ab-body").innerHTML = `<p class="muted">Не вдалося завантажити опис.</p>`;
+  }
+  // The books being read get their summaries ahead, so «Про книжку» works offline for them.
+  let aboutAhead = false;
+  function fetchAboutAhead(books) {
+    if (aboutAhead || !window.reader.bookAbout || !navigator.onLine) return;
+    aboutAhead = true;
+    const list = books.filter((b) => b.pct > 0 && !b.finished).slice(0, 12);
+    (async () => {
+      for (const b of list) if (!(await window.reader.bookAbout(b, true))) await window.reader.bookAbout(b);
+    })();
+  }
   $("#book-menu").addEventListener("close", async () => {
     const b = menuBook;
     menuBook = null;
     const act = $("#book-menu").returnValue;
     if (!b) return;
-    if (act === "about") {
-      const q = new URLSearchParams({ title: b.title, author: b.authors.join(", ") });
-      return window.open(`https://chytai.org.ua/reader-book?${q}`, "_blank", "noopener");
-    }
+    if (act === "about") return showAbout(b);
     if (act === "share") return window.Library.shareBook(b.path);
     if (act === "edit") return window.Library.editBook(b.path);
     if (act === "aside") return setAside(b.path);
+    if (act === "epub") return pdfToEpub(b);
     if (act === "finished") {
       b.finished = !b.finished;
       homeHtml = "";
@@ -737,6 +1093,21 @@
     undo.onclick = () => restoreBook(b.path).then(() => $("#notice").classList.add("hidden"));
     $("#notice .notice-text").append(" ", undo);
   });
+
+  async function pdfToEpub(b) {
+    showNotice(`Перетворюю «${b.title}» на EPUB…`, true);
+    try {
+      if (current?.path === b.path) closeBook?.();
+      await window.reader.libraryPdfToEpub(b.path, (n, total) => showNotice(`Перетворюю «${b.title}» на EPUB… ${n} / ${total}`, true));
+    } catch (err) {
+      const text = err.message === "NO_TEXT" ? "Це скан без тексту, тож він лишається PDF." : err instanceof TypeError ? "Немає з'єднання: перетворити книжку можна лише онлайн." : `Не вдалося перетворити: ${err.message}`;
+      return showNotice(text, false);
+    }
+    showNotice(`«${b.title}» тепер EPUB. PDF у «Нещодавно видалених».`, false);
+    trashCount++;
+    homeHtml = "";
+    refresh();
+  }
 
   // ---------- Нещодавно видалені ----------
 
@@ -776,9 +1147,8 @@
     trashCount = books.length;
     const left = (until) => Math.max(1, Math.ceil((until - Date.now()) / DAY));
     box.innerHTML = books.length
-      ? books.map((b) => `<li>${rcover(b, null)}<span class="row-text"><span class="t">${esc(b.title)}</span><span class="m">${esc(b.authors[0] || "")}${b.authors[0] ? " · " : ""}ще ${left(b.until)} ${plural(left(b.until), "день", "дні", "днів")}</span></span>
-          <button type="button" class="r-pill-line" data-restore="${esc(b.path)}">Відновити</button>
-          <button type="button" class="r-forget" data-forget="${esc(b.path)}">Видалити назавжди</button></li>`).join("")
+      ? books.map((b) => `<li>${rcover(b)}<span class="row-text"><span class="t">${esc(b.title)}</span><span class="m">${esc(b.authors[0] || "")}${b.authors[0] ? " · " : ""}ще ${left(b.until)} ${plural(left(b.until), "день", "дні", "днів")}</span>
+          <span class="tr-acts"><button type="button" class="tr-restore" data-restore="${esc(b.path)}">Відновити</button><button type="button" class="r-forget" data-forget="${esc(b.path)}">Видалити назавжди</button></span></span></li>`).join("")
       : `<li class="m">Порожньо.</li>`;
   }
   $("#trash-list").addEventListener("click", async (e) => {
@@ -870,23 +1240,25 @@
   // Matched by the physical key, so they work the same with the Ukrainian layout on.
   const TAB_KEYS = {}; // one page since design «3a» (Max, 2026-11-01)
   function key(e) {
-    if (e.metaKey || e.ctrlKey || e.altKey || e.repeat) return;
+    if (e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey || e.repeat) return; // desk-read.js took it
     if (e.target?.closest?.("input, textarea, select, [contenteditable]")) return;
     if (document.querySelector("dialog[open]")) return;
     const guest = document.body.classList.contains("guest");
     const reading = !isOpen() && current;
     let act = null;
     const code = e.code;
-    if (e.key === "Escape" && current && isOpen()) act = hide;
+    if (e.key === "Escape" && isOpen() && $("#shell").classList.contains("panel-open")) act = () => panel(false);
+    else if (e.key === "Escape" && isOpen() && page !== "home") act = backHome;
+    else if (e.key === "Escape" && current && isOpen()) act = hide;
     else if (TAB_KEYS[code] && !e.shiftKey && !guest) act = () => show(TAB_KEYS[code]);
     else if (code === "Slash" && !e.shiftKey) {
       act = reading
         ? () => window.BookSearch?.open()
         : () => {
-            const field = getComputedStyle($("#shell-top")).display !== "none" ? $("#top-search") : $("#lib-search");
-            searchLibrary();
-            field.focus();
-            field.select();
+            if (tab !== "home") show("home");
+            panel(true);
+            $("#r-pq").focus();
+            $("#r-pq").select();
           };
     } else if (code === "Slash" && e.shiftKey) act = () => $("#keys").showModal();
     else if (reading && code === "KeyT" && !$("#btn-toc").disabled) act = () => $("#btn-toc").click();
@@ -911,7 +1283,7 @@
     $("#settings").close();
     $("#keys").showModal();
   };
-  window.reader.onShowLibrary(() => (isOpen() && current ? hide() : show("library")));
+  window.reader.onShowLibrary(() => $("#btn-library").click()); // ⌘L: Мої книжки, as «←» in the book
   window.reader.onBookOpen(() => hide());
   // A note saved or removed in the book shows up here next time.
   document.addEventListener("visibilitychange", () => document.visibilityState === "visible" && isOpen() && tab !== "library" && load());
@@ -923,7 +1295,11 @@
     render();
   }
 
-  window.Shell = { show, hide, isNew, arrivals, markSeen, refresh, key, cover, when, setAside };
+  window.Shell = {
+    show, hide, isNew, arrivals, markSeen, refresh, key, cover, when, setAside, rcover, showAbout, openPaper,
+    rerender: () => ((homeHtml = ""), renderHome()),
+    reload: async () => ((lib = await window.Library.data(true)), (homeHtml = "")),
+  };
 
   // The family starts here; a guest has one book, which the bridge opens straight away.
   settingsReady

@@ -43,6 +43,7 @@ const slugify = (s) =>
     .replace(/^-|-$/g, "")
     .slice(0, 60) || "book";
 const OWNER = "owner"; // the reader id of the owner (Max): the only reader before accounts, so old rows are his
+const SHELF_IMPORT = 10; // an import of this many books or more is one «shelf» line in the /community feed
 // Books in Russian stay on the shelf of the reader who added them and nowhere else: not in search,
 // author pages, feeds, picks or recommendations (Max, 2026-10-20: «не показувати книжки рос в пошуку.
 // Навіть якщо хтось її додав. Тільки на сторінці цього читача»). The catalog's language word wins,
@@ -140,7 +141,7 @@ const digits = (t) => t.replace(NUM_RE, (_, a, b) => String(NUMS[a] + (b && NUMS
 const ntitle = (s) => digits(norm(s));
 // Separators left at the end of a title: «Diary of Samuel Pepys -», «Назва:».
 const DANGLING = /[\s\-‐‑–—:;,/|]+$/u;
-const EDITABLE = ["title", "author", "blurb", "cover", "language", "aliases", "genre", "published", "ebook"]; // ebook: the book.ua item «Де взяти» shows
+const EDITABLE = ["title", "author", "blurb", "cover", "language", "aliases", "genre", "published", "pages", "ebook"]; // pages: Max 2026-11-01; ebook: the book.ua item «Де взяти» shows
 // A short name as typed in search: «DCC», «Л.О.Т.Р.» and «lotr» are one key.
 const aliasKey = (s) => String(s || "").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, "");
 // The first letters of a name of three or more words, as readers shorten it: «Dungeon Crawler Carl» → dcc,
@@ -230,6 +231,10 @@ const workName = (t) =>
 const VOL_ORD = "перший|перша|другий|друга|третій|третя|четвертий|четверта|п[’']ятий|п[’']ята|шостий|шоста|сьомий|сьома|восьмий|восьма|дев[’']ятий|десятий";
 const VOL_N = `(?:\\d+|[IVX]+\\b|${VOL_ORD})`;
 const VOL_TAIL = new RegExp(`[\\s,.:;–—-]*[(\\[]?\\s*(?:(?:том|томи|т\\.|частина|vol\\.?|volume)\\s*${VOL_N}(?:\\s*(?:[-–—,]|і|та|й)\\s*${VOL_N})*|(?:у|в)\\s+\\d+(?:-?(?:х|ти|ох|ми))?\\s+(?:томах|т\\.|частинах))\\s*[)\\]]?\\s*$`, "iu");
+// «Атлант розправив плечі. Частина друга. Або — Або» is a part of «Атлант розправив плечі»: the rest of the title
+// starts with a volume word and number, a name of its own may follow.
+const VOL_HEAD = new RegExp(`^[\\s,.:;–—-]*[(\\[]?\\s*(?:том|томи|т\\.|частина|ч\\.|книга|кн\\.|vol\\.?|volume|part)\\s*${VOL_N}(?![\\p{L}\\d])`, "iu");
+const volTitle = (title, whole) => VOL_HEAD.test(String(title).slice(String(whole).length));
 const volumeWork = (t) => {
   const s = String(t || "").replace(PROMO, "");
   if (!VOL_TAIL.test(s)) return "";
@@ -440,11 +445,11 @@ class Store {
       .sort((a, b) => order.indexOf(a.id) - order.indexOf(b.id));
     const byId = new Map(shelves.map((s) => [s.id, s]));
     // Names saved before a catalog's entities were decoded («Neurosurgeon&#x27;s Journey») are decoded here.
-    const { ent, isPromo } = require("./catalogs");
+    const { ent, isPromo, isLangAid } = require("./catalogs");
     for (const r of this.db.prepare("SELECT shelf, data, first_seen FROM items ORDER BY shelf, ord").all()) {
       const it = JSON.parse(r.data);
       it.seen = r.first_seen; // newest first in a shelf's «Нове»
-      if (isPromo(it.title)) continue;
+      if (isPromo(it.title) || isLangAid(it.title)) continue;
       for (const k of ["title", "altTitle", "author", "series", "translator", "publisher"]) if (typeof it[k] === "string" && it[k].includes("&")) it[k] = ent(it[k]);
       byId.get(r.shelf)?.items.push(it);
     }
@@ -2027,7 +2032,7 @@ class Store {
     // The owner's hand edits (/admin/book/:id) win over the catalogs and outlive their refreshes.
     const fix = edited && this.edits()[id];
     if (fix) {
-      for (const k of EDITABLE) if (fix[k]) out[k] = fix[k];
+      for (const k of EDITABLE) if (fix[k]) out[k] = k === "pages" ? Number(fix[k]) : fix[k];
       // The owner's «Основний жанр» is the book's only genre (Max 2026-10-26: «Кав'ярня «Пряний гарбузик»» kept «любовні романи» next to it).
       if (fix.genre) out.tags = [fix.genre, ...(out.tags || []).filter((t) => t !== fix.genre && !OUR_GENRES.has(t))];
       if (fix.blurb) out.blurbSource = "";
@@ -2102,7 +2107,7 @@ class Store {
     const fix = {};
     for (const k of EDITABLE) {
       const v = k === "blurb" ? String(patch[k] ?? "").replace(/\r\n?/g, "\n").trim() : String(patch[k] ?? "").replace(/\s+/g, " ").trim();
-      if (v && !(k === "genre" && !OUR_GENRES.has(v)) && !(k === "published" && !/^-?\d{1,4}$/.test(v))) fix[k] = v;
+      if (v && !(k === "genre" && !OUR_GENRES.has(v)) && !(k === "published" && !/^-?\d{1,4}$/.test(v)) && !(k === "pages" && !/^[1-9]\d{0,4}$/.test(v))) fix[k] = v;
     }
     if (Object.keys(fix).length) all[id] = fix;
     else delete all[id];
@@ -2132,7 +2137,13 @@ class Store {
     const inCatalog = translations?.length || (b?.editions || []).some((e) => norm(e.title) === norm(uk) || /[а-яіїєґ]/i.test(e.title));
     // The original Haiku named, while no catalog has it (aiOrigs).
     const o = b && !translations.length && /[а-яіїєґ]/i.test(b.title || "") && this.aiOrigs().get(b.id);
-    return b && { ...b, translations, ukTitle: inCatalog ? "" : uk, origTitle: o?.title || "", origAuthor: o?.title ? o.author : "", cycle: this.cycleOf(b.id) };
+    // The page lists one book per language (Max, 2026-11-01, Atlas Shrugged: three «Українською» too many): a part of
+    // a book already listed («Атлант розправив плечі. Частина друга. Або — Або» under «Атлант розправив плечі») is in
+    // the series block, and a Russian edition is not shown on a page in another language. The links stay for the rest.
+    const ru = (t) => isRussian(this.book(t.id, { edited: false, borrow: false }) || t);
+    const partOf = (t, o) => o !== t && norm(t.title).startsWith(norm(o.title) + " ") && volTitle(t.title, o.title);
+    const twins = (translations || []).filter((t) => (isRussian(b) || !ru(t)) && !translations.some((o) => partOf(t, o)));
+    return b && { ...b, translations, twins, ukTitle: inCatalog ? "" : uk, origTitle: o?.title || "", origAuthor: o?.title ? o.author : "", cycle: this.cycleOf(b.id) };
   }
 
   // A shop's description is cleaned (catalogs.about) once, not on every page that shows the book: a book page
@@ -2288,6 +2299,7 @@ class Store {
         cur ? result.updated++ : result.added++;
       }
     });
+    if (result.added >= SHELF_IMPORT) this.db.prepare("INSERT INTO shelf_imports (reader, at, n, source) VALUES (?, ?, ?, ?)").run(reader, now, result.added, source);
     if (rows.some((r) => r.cycle)) this.linkCycles();
     if (result.created.length) {
       this._works = null;
@@ -2321,6 +2333,28 @@ class Store {
     if (!(year < 2000)) return false;
     const ids = [this.canonical(id), ...(this.translations?.get(this.canonical(id)) || [])];
     return ids.some((x) => Math.abs((Number(this.book(x)?.published) || 0) - year) <= 1);
+  }
+
+  // Imports of 10 books or more, newest first: [{ reader, at, n, source }] (social.feed's «shelf» lines).
+  shelfImports(limit = 50) {
+    return this.db.prepare("SELECT * FROM shelf_imports ORDER BY at DESC LIMIT ?").all(limit);
+  }
+
+  // Imports before shelf_imports existed (once, meta `fix:shelfimports`): a reader who confirmed an import
+  // (steps «saved») and whose shelf has 10 or more entries dated before that day brought a shelf then.
+  backfillShelfImports() {
+    if (this.db.get("fix:shelfimports")) return null;
+    const done = new Set(this.db.prepare("SELECT reader FROM shelf_imports").all().map((r) => r.reader));
+    const found = [];
+    for (const { reader, at } of this.db.prepare("SELECT reader, at FROM steps WHERE step = 'saved'").all()) {
+      if (done.has(reader)) continue;
+      const n = Object.values(this.entriesOf(reader)).filter((e) => (e.updated || e.added || "") < at.slice(0, 10)).length;
+      if (n < SHELF_IMPORT) continue;
+      this.db.prepare("INSERT INTO shelf_imports (reader, at, n, source) VALUES (?, ?, ?, ?)").run(reader, at, n, "backfill");
+      found.push({ reader, at, n });
+    }
+    this.db.set("fix:shelfimports", JSON.stringify({ at: new Date().toISOString(), found }));
+    return found;
   }
 
   // Such years already saved go (once, meta `fix:readyear` keeps what changed).

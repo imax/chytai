@@ -20,8 +20,11 @@ const JSZip = require("jszip");
 const library = require("../src/library");
 const { isRussian } = require("./language");
 const { checkUpload } = require("./content");
-const { adminPage, cost } = require("./admin");
+const { cost } = require("./admin");
 const { createProtected } = require("./protected");
+const paper = require("./paper");
+const { searchReader } = require("./search");
+const { landingPage: renderLanding } = require("./landing");
 
 const ROOT = path.join(__dirname, "..");
 loadDotEnv(path.join(ROOT, ".env"));
@@ -69,7 +72,7 @@ const FREE_DIR = path.join(ROOT, "free");
 // For books free here but still protected in the US, where GitHub is (Orwell, Max 2026-10-30).
 const FREE_VOLUME_DIR = path.join(DATA_DIR, "free");
 const FREE_CACHE = path.join(DATA_DIR, "free-cache.json");
-const MAX_UPLOAD = "300mb";
+const MAX_UPLOAD = "300mb"; // the owner's limit; readers have UPLOAD_MAX below
 // Days in the usage stats (/admin) are counted in this time zone, and kept for this long.
 const STATS_TZ = process.env.STATS_TZ || "Europe/Kyiv";
 const STATS_KEEP_DAYS = 400;
@@ -98,7 +101,7 @@ function loadDotEnv(file) {
 
 // Explanations on Opus, «Переклад» (translation only) on the cheaper model (Max, 2026-10-26).
 const SHARED_DEFAULTS = { model: "claude-opus-5-5", translateModel: "claude-sonnet-5-5", language: "українська" };
-const USER_DEFAULTS = { pageTaps: false, deskScroll: false, font: "literata", margins: "normal", pdfMode: "reflow", fontSizes: {}, theme: "auto", explainStyle: "default", customStyle: "", lastBook: null, positions: {} };
+const USER_DEFAULTS = { pageTaps: false, deskScroll: false, font: "literata", margins: "normal", column: "normal", pdfMode: "reflow", fontSizes: {}, theme: "auto", explainStyle: "default", customStyle: "", lastBook: null, positions: {} };
 const SHARED_KEYS = new Set(Object.keys(SHARED_DEFAULTS));
 const USER_KEYS = new Set(Object.keys(USER_DEFAULTS));
 
@@ -151,7 +154,8 @@ function userState(name) {
 }
 
 function settingsFor(req) {
-  const { notes, ...u } = req.guest ? guestState(req.guest) : userState(req.acct);
+  // Notes and kept explanations come by their own calls; they would make every settings answer heavy.
+  const { notes, chats, paperChats, ...u } = req.guest ? guestState(req.guest) : userState(req.acct);
   const demo = req.guest ? guestBooks(req) : null;
   return {
     ...SHARED_DEFAULTS,
@@ -213,7 +217,7 @@ function guestExplainAllowed(req) {
   const ip = req.ip || "";
   if (usage.total >= GUEST_TOTAL_LIMIT) return "Демо на сьогодні вичерпало свій ліміт пояснень. Спробуйте завтра або увійдіть зі своїм паролем.";
   if ((usage.guests[req.guest] || 0) >= GUEST_LIMIT || (usage.ips[ip] || 0) >= GUEST_LIMIT * 3) {
-    return `У демо-режимі доступно до ${GUEST_LIMIT} пояснень на день, і вони вже використані. Увійдіть, щоб читати без обмежень.`;
+    return `Без входу доступно до ${GUEST_LIMIT} пояснень на день, і вони вже використані. Увійдіть, щоб читати без обмежень.`;
   }
   usage.total++;
   usage.guests[req.guest] = (usage.guests[req.guest] || 0) + 1;
@@ -231,7 +235,7 @@ function trimGuestRequest(request) {
   };
   if (request.context) {
     const c = request.context;
-    request.context = { ...c, before: cut(c.before, true), selection: cut(c.selection), after: cut(c.after), question: c.question && cut(c.question) };
+    request.context = { ...c, before: cut(c.before, true), selection: cut(c.selection), after: cut(c.after), page: c.page && cut(c.page), question: c.question && cut(c.question) };
   }
   if (Array.isArray(request.messages) && request.messages.length > GUEST_MAX_TURNS) {
     request.messages = [request.messages[0], ...request.messages.slice(-(GUEST_MAX_TURNS - 1))];
@@ -251,9 +255,11 @@ function recordExplain(req, { model, usage }) {
   if (req.guest) d.guests++;
   else d.users[req.acct] = (d.users[req.acct] || 0) + 1;
   // What each account costs, for /admin: dollars at list prices, as the day's model rows count them.
-  if (!req.guest) {
-    const c = cost(model || "?", { input: usage?.input_tokens || 0, output: usage?.output_tokens || 0, cacheRead: usage?.cache_read_input_tokens || 0, cacheWrite: usage?.cache_creation_input_tokens || 0 });
-    if (c != null) (d.userCost ??= {})[req.acct] = (d.userCost[req.acct] || 0) + c;
+  // And the whole day's, guests included, for the daily budget below.
+  const c = cost(model || "?", { input: usage?.input_tokens || 0, output: usage?.output_tokens || 0, cacheRead: usage?.cache_read_input_tokens || 0, cacheWrite: usage?.cache_creation_input_tokens || 0 });
+  if (c != null) {
+    d.cost = (d.cost || 0) + c;
+    if (!req.guest) (d.userCost ??= {})[req.acct] = (d.userCost[req.acct] || 0) + c;
   }
   const m = (d.models[model || "?"] ??= { requests: 0, input: 0, output: 0, cacheRead: 0, cacheWrite: 0 });
   m.requests++;
@@ -266,20 +272,102 @@ function recordExplain(req, { model, usage }) {
   saveState();
 }
 
-// Reading time per account (Max, 2026-10-29: «кількість хвилин … не анонім, з юзером. Бо токени»): every saved
-// position is a page turned, so the gap since the previous one, if under five minutes, is time spent reading.
-// A longer gap starts a new sitting and counts nothing. Seconds per day per account, in the same day records.
-const READ_GAP = 5 * 60 * 1000;
-const lastTurn = new Map(); // account -> time of its last saved position, in memory only
-function recordReading(acct) {
+// Daily budget for Claude (security review 2026-11-04, Max OK): sign-up is open, so a script with a few
+// mailboxes could run explanations all night. Each account gets ACCOUNT_COST_CAP dollars a day (list prices),
+// everyone together DAILY_COST_CAP; the owner is never stopped. When the whole day's budget runs out the owner
+// gets one letter (through the site, signed with his reader key).
+const DAILY_COST_CAP = Number(process.env.DAILY_COST_CAP) || 40;
+const ACCOUNT_COST_CAP = Number(process.env.ACCOUNT_COST_CAP) || 5;
+function aiBudgetDenied(req) {
+  if (req.owner) return null;
+  const day = statsDay();
+  const d = state.stats?.days?.[day];
+  if (!d) return null;
+  if ((d.cost || 0) >= DAILY_COST_CAP) {
+    if (d.capMailed !== day) {
+      d.capMailed = day;
+      saveState();
+      alertOwner("Chytai: денний бюджет на Claude вичерпано", `За ${day} пояснення в Читалці коштували $${(d.cost || 0).toFixed(2)} (стеля $${DAILY_COST_CAP}). До кінця дня читачі пояснень не отримують, ти отримуєш. Хто скільки витратив: ${WEB_URL}/admin/reader. Стелю міняє DAILY_COST_CAP у секретах Fly (app chytai).`);
+    }
+    return "Пояснення на сьогодні тимчасово недоступні. Завтра все запрацює знову.";
+  }
+  if (!req.guest && (d.userCost?.[req.acct] || 0) >= ACCOUNT_COST_CAP) return "На сьогодні запитів забагато. Завтра все запрацює знову; якщо це помилка, напишіть Максові.";
+  return null;
+}
+function alertOwner(subject, text) {
+  const key = state.accounts[OWNER_ID]?.key;
+  console.log(`alert: ${subject}`);
+  if (!key) return;
+  fetch(`${WEB_URL}/api/reader-alert`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: OWNER_ID, key, subject, text }), signal: AbortSignal.timeout(10000) }).catch((e) => console.error(`alert: ${e.message}`));
+}
+// The text sent to Claude, cut to what the reader's page ever sends (2 000 characters before a selection, 1 000
+// after, a screen of text): a hand-made request could carry megabytes, and Opus is paid per word.
+const ACCOUNT_FIELD_MAX = 12000;
+const ACCOUNT_MESSAGE_MAX = 20000;
+const ACCOUNT_TURNS_MAX = 40;
+function trimAccountRequest(request) {
+  const cut = (v, max) => (typeof v === "string" && v.length > max ? v.slice(0, max) : v);
+  if (request.context && typeof request.context === "object") {
+    const c = { ...request.context };
+    for (const k of Object.keys(c)) if (k !== "image") c[k] = cut(c[k], ACCOUNT_FIELD_MAX);
+    request.context = c;
+  }
+  if (Array.isArray(request.messages)) {
+    let m = request.messages;
+    if (m.length > ACCOUNT_TURNS_MAX) m = [m[0], ...m.slice(-(ACCOUNT_TURNS_MAX - 1))];
+    request.messages = m.map((x) => {
+      if (!x || typeof x !== "object") return x;
+      if (typeof x.content === "string") return { ...x, content: cut(x.content, ACCOUNT_MESSAGE_MAX) };
+      if (Array.isArray(x.content)) return { ...x, content: x.content.map((b) => (b && b.type === "text" ? { ...b, text: cut(b.text, ACCOUNT_MESSAGE_MAX) } : b)) };
+      return x;
+    });
+  }
+  return request;
+}
+
+// Reading time (Max, 2026-11-04: «трекати кількість хвилин, які люди проводять в читалці»; before that, since
+// 2026-10-29, the gaps between page turns). The reader page counts the seconds a book is on screen, the tab is
+// visible and the reader did something in the last few minutes (reading-time.js), and sends them about once a
+// minute: POST /api/reading { books: { name: seconds } }. Kept per day: readSec[account] in total and
+// readBooks[account][book]. Accounts only, as for explanations; guests and shared links are not counted.
+const READ_GAP = 5 * 60 * 1000; // a pause this long ends a sitting (noteReadingNow)
+const lastReading = new Map(); // account -> time of its last report, in memory only
+function recordReading(acct, books) {
   const now = Date.now();
-  const gap = now - (lastTurn.get(acct) || 0);
-  lastTurn.set(acct, now);
-  if (gap >= READ_GAP) return;
+  // No more than the time since the previous report (two devices at once, or a page that sends too much).
+  const since = lastReading.has(acct) ? (now - lastReading.get(acct)) / 1000 + 10 : 600;
+  lastReading.set(acct, now);
+  let budget = Math.min(600, since);
   const day = statsDay(now);
   const stats = (state.stats ??= { since: day, days: {} });
   const d = (stats.days[day] ??= { explains: 0, users: {}, guests: 0, models: {} });
-  (d.readSec ??= {})[acct] = (d.readSec[acct] || 0) + Math.round(gap / 1000);
+  for (const [name, sec] of Object.entries(books)) {
+    const add = Math.round(Math.min(budget, sec));
+    if (!(add > 0)) continue;
+    budget -= add;
+    (d.readSec ??= {})[acct] = (d.readSec[acct] || 0) + add;
+    const mine = ((d.readBooks ??= {})[acct] ??= {});
+    mine[name] = (mine[name] || 0) + add;
+  }
+}
+
+// Minutes per reader and book over the last 30 days, for the admin page (newest reading first).
+function readingByBook(days, dayKeys, today, weekAgo, monthAgo) {
+  const rows = new Map();
+  for (const day of dayKeys.filter((k) => k >= monthAgo)) {
+    for (const [acct, books] of Object.entries(days[day].readBooks || {})) {
+      for (const [name, sec] of Object.entries(books)) {
+        const r = rows.get(`${acct}\n${name}`) || { id: acct, name: accountName(acct), username: state.accounts[acct]?.username || "", book: name, ...bookInfo(acct, name), today: 0, week: 0, month: 0, last: day };
+        r.month += sec;
+        if (day >= weekAgo) r.week += sec;
+        if (day === today) r.today += sec;
+        if (day > r.last) r.last = day;
+        rows.set(`${acct}\n${name}`, r);
+      }
+    }
+  }
+  const min = (sec) => Math.round(sec / 60);
+  return [...rows.values()].map((r) => ({ ...r, today: min(r.today), week: min(r.week), month: min(r.month) })).filter((r) => r.month > 0).sort((a, b) => b.month - a.month);
 }
 
 async function collectStats() {
@@ -299,7 +387,7 @@ async function collectStats() {
     .map(([id, u]) => {
       const lastSeen = Math.max(0, state.accounts[id]?.seen || 0, ...Object.values(u.opened || {}));
       const started = new Set(Object.keys(u.positions || {}).map((p) => p.replace(/#reflow$/, ""))).size;
-      return { id, name: accountName(id), username: state.accounts[id]?.username || "", off: !!state.accounts[id]?.off, owner: id === OWNER_ID, cost30: costOf(id), readToday: minutesOf(id, today), readWeek: minutesOf(id, weekAgo), read30: minutesOf(id, monthAgo), books: countBooks(id), today: sumUser(id, today), week: sumUser(id, weekAgo), total: sumUser(id), started, lastSeen, lastBook: u.lastBook, activeWeek: lastSeen > Date.now() - 7 * 86400000 };
+      return { id, name: accountName(id), username: state.accounts[id]?.username || "", off: !!state.accounts[id]?.off, owner: id === OWNER_ID, cost30: costOf(id), readToday: minutesOf(id, today), readWeek: minutesOf(id, weekAgo), read30: minutesOf(id, monthAgo), books: countBooks(id), today: sumUser(id, today), week: sumUser(id, weekAgo), total: sumUser(id), started, lastSeen, lastBook: u.lastBook, lastOpened: u.opened?.[u.lastBook] || 0, activeWeek: lastSeen > Date.now() - 7 * 86400000 };
     })
     .sort((a, b) => b.lastSeen - a.lastSeen);
 
@@ -346,6 +434,7 @@ async function collectStats() {
     guestTotalLimit: GUEST_TOTAL_LIMIT,
     accountCap: ACCOUNT_DAILY_CAP,
     wishes: wishStats(library),
+    reading: readingByBook(stats.days, dayKeys, today, weekAgo, monthAgo),
   };
 }
 
@@ -475,16 +564,55 @@ function parseCookies(req) {
 
 // The signed-in account's id, or null. Max's cookie from the family password still counts as his account,
 // so his phone and the app stay signed in through the change.
+//
+// Sessions (security review 2026-11-04, Max OK): the cookie is `<account>.<session>.<signature>`, and the session
+// must still be in state.sessions (kept by a hash of its id). So «Вийти» ends it for real, and the site's «Вийти на
+// всіх пристроях» (or a deleted account) ends all of an account's sessions through /api/site-signout. A cookie
+// from before (`<account>.<signature>`, no session) still works once and is swapped for a session cookie on the
+// way (req.upgradeSession), unless the account was signed out everywhere since (accounts[id].legacyOff).
+const sessionHash = (sid) => crypto.createHash("sha256").update(`reader-session:${sid}`).digest("hex");
+const safeEqual = (a, b) => a.length === b.length && crypto.timingSafeEqual(Buffer.from(a), Buffer.from(b));
 function currentAccount(req) {
   const cookies = parseCookies(req);
   const raw = cookies[COOKIE];
-  const i = raw ? raw.lastIndexOf(".") : -1;
-  if (i < 0) return cookies[OLD_COOKIE] && cookies[OLD_COOKIE] === `${OWNER_LEGACY_NAME}.${sign(OWNER_LEGACY_NAME)}` ? OWNER_ID : null;
-  const id = raw.slice(0, i);
-  const sig = raw.slice(i + 1);
-  const expected = sign(`acct:${id}`);
-  if (!ACCOUNT_ID.test(id) || sig.length !== expected.length || !crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected))) return null;
+  const parts = raw ? raw.split(".") : [];
+  if (parts.length < 2) {
+    if (!(cookies[OLD_COOKIE] && cookies[OLD_COOKIE] === `${OWNER_LEGACY_NAME}.${sign(OWNER_LEGACY_NAME)}`) || state.accounts[OWNER_ID]?.legacyOff) return null;
+    req.upgradeSession = OWNER_ID;
+    return OWNER_ID;
+  }
+  const id = parts[0];
+  if (!ACCOUNT_ID.test(id)) return null;
+  if (parts.length === 3) {
+    const sid = parts[1];
+    if (!/^[a-f0-9]{32}$/.test(sid) || !safeEqual(parts[2], sign(`sess:${id}:${sid}`))) return null;
+    const sess = state.sessions?.[sessionHash(sid)];
+    if (!sess || sess.acct !== id) return null;
+    // When it was last used, to forget the ones nobody used for a year; written to disk with the next save.
+    if (Date.now() - (sess.seen || 0) > 86400000) sess.seen = Date.now();
+    return id;
+  }
+  if (parts.length !== 2 || !safeEqual(parts[1], sign(`acct:${id}`)) || state.accounts[id]?.legacyOff) return null;
+  req.upgradeSession = id;
   return id;
+}
+function newSession(id) {
+  const sid = crypto.randomBytes(16).toString("hex");
+  state.sessions ??= {};
+  const now = Date.now();
+  for (const [h, x] of Object.entries(state.sessions)) if (now - (x.seen || x.at || 0) > COOKIE_DAYS * 86400000) delete state.sessions[h];
+  state.sessions[sessionHash(sid)] = { acct: id, at: now, seen: now };
+  saveState();
+  return `${id}.${sid}.${sign(`sess:${id}:${sid}`)}`;
+}
+function endSession(req) {
+  const parts = String(parseCookies(req)[COOKIE] || "").split(".");
+  if (parts.length === 3 && state.sessions?.[sessionHash(parts[1])]) delete state.sessions[sessionHash(parts[1])], saveState();
+}
+function endAllSessions(id) {
+  for (const [h, x] of Object.entries(state.sessions || {})) if (x.acct === id) delete state.sessions[h];
+  (state.accounts[id] ??= {}).legacyOff = Date.now();
+  saveState();
 }
 
 const accountName = (id) => state.accounts[id]?.name || (id === OWNER_ID ? OWNER_LEGACY_NAME : "Читач");
@@ -496,7 +624,7 @@ function cookieHeader(req, cookie, value, days) {
 
 function setLoginCookie(req, res, id) {
   // Signing in ends any guest session on this device, and the family password's old cookie.
-  res.setHeader("Set-Cookie", [cookieHeader(req, COOKIE, `${id}.${sign(`acct:${id}`)}`, COOKIE_DAYS), cookieHeader(req, GUEST_COOKIE, "", 0), cookieHeader(req, OLD_COOKIE, "", 0)]);
+  res.setHeader("Set-Cookie", [cookieHeader(req, COOKIE, newSession(id), COOKIE_DAYS), cookieHeader(req, GUEST_COOKIE, "", 0), cookieHeader(req, OLD_COOKIE, "", 0)]);
 }
 
 // Trades the site's one-time ticket for the account: { id, name, username }.
@@ -527,9 +655,15 @@ function startGuest(req, res) {
 
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
 
+// «Увійти»: the site's sign-in, which comes back here with a ticket. The app opens every address that is
+// not the reader's in Safari, so there the sign-in goes through /app-login instead (below).
+const siteSignIn = (req) => `${WEB_URL}/reader-login?back=${encodeURIComponent(`${req.protocol}://${req.get("host")}`)}`;
+// Since 2026-11-04 the landing signs in on the page itself, so «Увійти» is just /login.
+const signInUrl = (req) => (inApp(req) ? "/app-login" : "/login");
+
 // opts.button { href, label } replaces «Увійти» (and the demo link) for someone already signed in.
 function loginPage(req, error, opts = {}) {
-  const signIn = `${WEB_URL}/reader-login?back=${encodeURIComponent(`${req.protocol}://${req.get("host")}`)}`;
+  const signIn = signInUrl(req);
   return `<!doctype html>
 <html lang="uk"><head><meta charset="utf-8"><title>Chytai</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -551,8 +685,118 @@ function loginPage(req, error, opts = {}) {
   <h1>Chytai</h1><p>Читалка з поясненнями від Claude</p>
   ${error ? `<div class="err">${esc(error)}</div>` : ""}
   ${opts.button ? `<a class="btn" href="${esc(opts.button.href)}">${esc(opts.button.label)}</a>` : `<a class="btn" href="${esc(signIn)}">Увійти</a>`}
-  ${!opts.button && GUEST_ENABLED && demoBooks().length ? `<p class="demo">Або <a href="/demo">подивитися демо</a> з однією книжкою.</p>` : ""}
 </form></body></html>`;
+}
+
+const smallPage = (body) => `<!doctype html>
+<html lang="uk"><head><meta charset="utf-8"><title>Chytai</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<link rel="icon" href="/icon.png">
+<style>
+  :root { color-scheme: light dark; }
+  body { margin: 0; min-height: 100vh; display: grid; place-items: center; font: 16px/1.5 -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif; background: #f6efe0; color: #3b2f1e; }
+  main { box-sizing: border-box; width: min(360px, 90vw); padding: 28px 24px; border-radius: 16px; background: rgba(255,255,255,0.5); box-shadow: 0 8px 30px rgba(0,0,0,0.12); }
+  @media (prefers-color-scheme: dark) { body { background: #1e1e20; color: #e6e6e6; } main { background: #2a2a2d; } }
+  h1 { margin: 0 0 8px; font-size: 22px; } p { margin: 0 0 18px; opacity: 0.8; }
+  .btn { display: block; box-sizing: border-box; width: 100%; padding: 11px; font: inherit; font-weight: 600; text-align: center; text-decoration: none; color: #fff; background: #b7791f; border: none; border-radius: 8px; }
+</style></head><body><main>${body}</main></body></html>`;
+
+// Signing in inside the iPhone and Android apps (Max, 2026-11-04): the e-mail, the code and, for a new
+// address, the name, right here, no Safari. The page calls the site's /api/reader-login/* (the same codes and
+// limits as chytai.org.ua/login) and gets a ticket for /auth. One account with the site; a new reader gets a
+// username made from the name and only meets it on the site.
+function appSignInPage() {
+  return smallPage(`<h1>Chytai</h1><p>Читалка з поясненнями від Claude</p>
+<div id="signin" data-web="${esc(WEB_URL)}">
+  <form id="f-email" novalidate>
+    <input type="email" name="email" enterkeyhint="send" required autocomplete="email" inputmode="email" autocapitalize="off" placeholder="Ваша пошта">
+    <p class="err" role="alert"></p>
+    <button class="btn" type="submit">Отримати код</button>
+    <p class="note">Пароля немає: код для входу прийде на пошту. Акаунт спільний з chytai.org.ua.</p>
+  </form>
+  <form id="f-code" hidden>
+    <p class="lab">Код надіслали на <b class="shown"></b></p>
+    <input class="code" name="code" enterkeyhint="go" required inputmode="numeric" autocomplete="one-time-code" pattern="[0-9 ]*" maxlength="7" placeholder="······">
+    <p class="err" role="alert"></p>
+    <button class="btn" type="submit">Увійти</button>
+    <p class="note">Лист іде до хвилини, перевірте й «Спам». <a href="#" data-back>Інша пошта</a></p>
+  </form>
+  <form id="f-name" hidden>
+    <p class="lab">Ви тут уперше. Як вас звати?</p>
+    <input name="name" enterkeyhint="done" required maxlength="60" autocomplete="name" placeholder="Ім'я">
+    <p class="err" role="alert"></p>
+    <button class="btn" type="submit">Готово</button>
+  </form>
+  <p class="note" id="f-done" hidden>Відкриваю ваші книжки…</p>
+</div>
+<style>
+  input { box-sizing: border-box; width: 100%; padding: 11px 12px; margin: 0 0 12px; font: inherit; color: inherit; background: rgba(255,255,255,0.8); border: 1px solid rgba(59,47,30,0.25); border-radius: 8px; }
+  @media (prefers-color-scheme: dark) { input { background: #1e1e20; border-color: rgba(255,255,255,0.2); } }
+  input.code { font-size: 22px; letter-spacing: .3em; text-align: center; font-variant-numeric: tabular-nums; }
+  .btn:disabled { opacity: .6; }
+  .lab { margin: 0 0 10px; opacity: 1; }
+  .err { margin: -4px 0 10px; color: #c0392b; opacity: 1; } .err:empty { display: none; }
+  .note { margin: 12px 0 0; font-size: 14px; opacity: .65; }
+  .note a { color: #b7791f; font-weight: 600; }
+</style>
+<script>
+(function () {
+  var web = document.getElementById("signin").dataset.web;
+  var forms = { email: document.getElementById("f-email"), code: document.getElementById("f-code"), name: document.getElementById("f-name") };
+  var done = document.getElementById("f-done");
+  var email = "", signup = "";
+  // Enter sends the step, whatever the browser does by itself (a reader on an iPhone, 2026-11-04: Enter after the
+  // e-mail did nothing). While a step is on its way the button is off, and Enter waits too.
+  Object.keys(forms).forEach(function (k) {
+    var f = forms[k];
+    f.querySelector("input").addEventListener("keydown", function (e) {
+      if (e.key !== "Enter" || e.isComposing) return;
+      e.preventDefault();
+      if (!f.querySelector("button").disabled) f.dispatchEvent(new Event("submit", { cancelable: true }));
+    });
+  });
+  var DOWN = "Сайт chytai.org.ua зараз не відповідає. Спробуйте ще раз за хвилину.";
+  function show(step) {
+    Object.keys(forms).forEach(function (k) { forms[k].hidden = k !== step; forms[k].querySelector(".err").textContent = ""; });
+    done.hidden = step !== "in";
+    if (forms[step]) setTimeout(function () { forms[step].querySelector("input").focus(); }, 0);
+  }
+  function call(form, what, body) {
+    var err = form.querySelector(".err"), btn = form.querySelector("button");
+    err.textContent = ""; btn.disabled = true; var label = btn.textContent; btn.textContent = "Хвилинку…";
+    return fetch(web + "/api/reader-login/" + what, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) })
+      .then(function (res) { return res.json().catch(function () { return {}; }).then(function (d) { if (!res.ok || d.error) throw new Error(d.error || DOWN); return d; }); })
+      .catch(function (e) { err.textContent = e instanceof TypeError ? DOWN : e.message; return null; })
+      .then(function (d) { btn.disabled = false; btn.textContent = label; return d; });
+  }
+  function enter(ticket) { show("in"); location.href = "/auth?ticket=" + encodeURIComponent(ticket); }
+  forms.email.addEventListener("submit", function (e) {
+    e.preventDefault();
+    var input = forms.email.elements.email;
+    if (!input.value.trim() || !input.checkValidity()) { forms.email.querySelector(".err").textContent = "Вкажіть пошту, наприклад olena@ukr.net."; return; }
+    call(forms.email, "email", { email: input.value }).then(function (r) {
+      if (!r) return;
+      email = r.email || input.value.trim();
+      forms.code.querySelector(".shown").textContent = email;
+      forms.code.elements.code.value = "";
+      show("code");
+    });
+  });
+  forms.code.addEventListener("submit", function (e) {
+    e.preventDefault();
+    call(forms.code, "code", { email: email, code: forms.code.elements.code.value }).then(function (r) {
+      if (!r) return;
+      if (r.ticket) return enter(r.ticket);
+      signup = r.signup; show("name");
+    });
+  });
+  forms.name.addEventListener("submit", function (e) {
+    e.preventDefault();
+    call(forms.name, "signup", { signup: signup, name: forms.name.elements.name.value }).then(function (r) { if (r && r.ticket) enter(r.ticket); });
+  });
+  forms.code.querySelector("[data-back]").addEventListener("click", function (e) { e.preventDefault(); show("email"); });
+})();
+</script>`);
 }
 
 // Readers' words on the landing (Max, 2026-10-23). Add one more { text, author } to show it; author may be left out.
@@ -560,67 +804,11 @@ const TESTIMONIALS = [
   { text: "AI нотатки і пояснення — афігенна фіча, і навіть елементарний зміст по книжці значно зручніше чим ті читалки що я дивився", author: "Микола Я" },
 ];
 
-// The first thing someone not signed in sees (Max, 2026-10-22): what the reader is, then «Увійти».
-// The words are Max's; he writes the copy himself.
+// The first thing someone not signed in sees (Max, 2026-11-04): one screen, signing in right there (server/landing.js).
+// The Mac and Android links are not shown inside the apps.
 function landingPage(req) {
-  const signIn = `${WEB_URL}/reader-login?back=${encodeURIComponent(`${req.protocol}://${req.get("host")}`)}`;
-  const demo = GUEST_ENABLED && demoBooks().length;
-  return `<!doctype html>
-<html lang="uk"><head><meta charset="utf-8"><title>Chytai · читалка</title>
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="description" content="Читалка з AI-explainer. Спроба пере-придумати зручний інтерфейс для читання онлайн.">
-<link rel="icon" href="/icon.png"><link rel="apple-touch-icon" href="/icon.png">
-<style>
-  :root { color-scheme: light dark; --bg: #f6efe0; --fg: #3b2f1e; --muted: rgba(59,47,30,0.65); --accent: #b7791f; }
-  @media (prefers-color-scheme: dark) { :root { --bg: #1e1e20; --fg: #e6e6e6; --muted: rgba(230,230,230,0.65); } }
-  * { box-sizing: border-box; }
-  body { margin: 0; font: 17px/1.55 -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif; background: var(--bg); color: var(--fg); }
-  .wrap { max-width: 980px; margin: 0 auto; padding: 0 20px; }
-  header { display: flex; align-items: center; gap: 10px; padding: 18px 0; }
-  header img { width: 34px; height: 34px; border-radius: 8px; }
-  header b { font-size: 20px; } header a.in { margin-left: auto; color: var(--accent); font-weight: 600; text-decoration: none; }
-  .hero { padding: 30px 0 8px; max-width: 640px; }
-  h1 { font-size: 40px; line-height: 1.15; margin: 0 0 14px; letter-spacing: -0.01em; }
-  .lead { font-size: 19px; color: var(--muted); margin: 0 0 26px; }
-  .acts { padding: 0 0 30px; display: flex; flex-wrap: wrap; gap: 12px 18px; align-items: center; }
-  .btn { display: inline-block; padding: 13px 28px; font-weight: 600; text-decoration: none; color: #fff; background: var(--accent); border-radius: 10px; }
-  .acts a.demo { color: var(--accent); font-weight: 600; }
-  .shots { position: relative; padding: 0 0 30px; }
-  .desk { margin-right: 120px; border-radius: 10px; overflow: hidden; box-shadow: 0 20px 50px rgba(0,0,0,0.18); border: 1px solid rgba(0,0,0,0.12); background: #fff; }
-  .desk i { display: block; height: 26px; background: #e9e6df; border-bottom: 1px solid rgba(0,0,0,0.08); }
-  .phone { position: absolute; right: 0; bottom: 20px; width: 230px; border-radius: 30px; overflow: hidden; box-shadow: 0 20px 50px rgba(0,0,0,0.25); border: 8px solid #1d1d1f; }
-  .shots img { display: block; width: 100%; }
-  .quotes { padding: 10px 0 20px; }
-  .quotes h2 { margin: 0 0 14px; font-size: 13px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
-  .quotes ul { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; }
-  .quotes blockquote { margin: 0; height: 100%; padding: 20px 22px; border-left: 3px solid var(--accent); border-radius: 4px 12px 12px 4px; background: rgba(255,255,255,0.55); font-size: 18px; }
-  @media (prefers-color-scheme: dark) { .quotes blockquote { background: #2a2a2d; } }
-  .quotes blockquote p { margin: 0; } .quotes blockquote p::before { content: "«"; } .quotes blockquote p::after { content: "»"; }
-  .quotes cite { display: block; margin-top: 10px; font-size: 15px; font-style: normal; color: var(--muted); }
-  footer { padding: 24px 0 40px; color: var(--muted); font-size: 14px; } footer a { color: inherit; }
-  @media (max-width: 760px) {
-    .hero { padding-top: 10px; }
-    .desk { display: none; }
-    .phone { position: static; margin: 0 auto; width: min(300px, 100%); }
-    h1 { font-size: 30px; }
-  }
-</style></head>
-<body><div class="wrap">
-  <header><img src="/icon.png" alt=""><b>Chytai</b><a class="in" href="${esc(signIn)}">Увійти</a></header>
-  <section class="hero">
-    <div>
-      <h1>Читалка з AI-explainer</h1>
-      <p class="lead">Спроба пере-придумати зручний інтерфейс для читання онлайн.</p>
-    </div>
-  </section>
-  <section class="shots">
-    <div class="desk"><i></i><img src="/landing-desk.jpg" alt="Читалка Chytai на комп'ютері: пояснення виділеного речення"></div>
-    <div class="phone"><img src="/landing-phone.jpg" alt="Читалка Chytai на телефоні: пояснення виділеного рядка"></div>
-  </section>
-  <div class="acts"><a class="btn" href="${esc(signIn)}">Увійти</a>${demo ? `<a class="demo" href="/demo">Подивитися демо</a>` : ""}</div>
-  ${TESTIMONIALS.length ? `<section class="quotes"><h2>Відгуки</h2><ul>${TESTIMONIALS.map((q) => `<li><blockquote><p>${esc(q.text)}</p>${q.author ? `<cite>— ${esc(q.author)}</cite>` : ""}</blockquote></li>`).join("")}</ul></section>` : ""}
-  <footer>Частина <a href="https://chytai.org.ua">chytai.org.ua</a></footer>
-</div></body></html>`;
+  const inside = /Chytai(Mac|App)\//.test(req.get("user-agent") || "");
+  return renderLanding({ webUrl: WEB_URL, mac: !inside, android: !inside, testimonials: TESTIMONIALS });
 }
 
 // ---------- App ----------
@@ -628,6 +816,16 @@ function landingPage(req) {
 const app = express();
 app.set("trust proxy", true);
 app.disable("x-powered-by");
+// The visitor's address is the one Fly saw (Fly-Client-IP, set by Fly's proxy): with "trust proxy" alone
+// req.ip was the first X-Forwarded-For entry, which the visitor writes, so per-address limits (sign-in codes,
+// guests' explanations) could be dodged by sending a new one each time (security review 2026-11-04).
+// And a few headers every page should carry: HTTPS only, no framing by other sites, no type guessing.
+app.use((req, res, next) => {
+  const fly = req.get("fly-client-ip");
+  if (fly) Object.defineProperty(req, "ip", { value: fly, configurable: true });
+  res.set({ "Strict-Transport-Security": "max-age=31536000", "X-Frame-Options": "SAMEORIGIN", "X-Content-Type-Options": "nosniff" });
+  next();
+});
 
 // The reader's address is app.chytai.org.ua (2026-10-22; read.chytai.org.ua for its first hour). Browsers
 // on chytai.fly.dev and read. go there; the iPhone app (ChytaiApp in its user agent) stays on
@@ -643,7 +841,7 @@ app.use((req, res, next) => {
 
 // Public: icon and manifest, so the phone can show them before login.
 app.get("/icon.png", (_req, res) => res.sendFile(path.join(ROOT, "build", "icon.png")));
-for (const f of ["landing-desk.jpg", "landing-phone.jpg"]) app.get(`/${f}`, (_req, res) => res.sendFile(path.join(ROOT, "build", f), { maxAge: "7d" }));
+for (const f of ["landing-desk.mp4", "landing-phone.mp4", "landing-desk-poster.jpg", "landing-phone-poster.jpg"]) app.get(`/${f}`, (_req, res) => res.sendFile(path.join(ROOT, "build", f), { maxAge: "7d" }));
 app.get("/manifest.webmanifest", (_req, res) => {
   res.type("application/manifest+json").json({
     name: "Chytai",
@@ -675,10 +873,10 @@ const serviceWorker = (() => {
     "marked/lib/marked.umd.js",
     "dompurify/dist/purify.min.js",
     "qrcode-generator/dist/qrcode.js",
-    "pdfjs-dist/build/pdf.mjs",
-    "pdfjs-dist/build/pdf.worker.mjs",
-    "pdfjs-dist/web/pdf_viewer.mjs",
-    "pdfjs-dist/web/pdf_viewer.css",
+    "pdfjs-dist/legacy/build/pdf.mjs",
+    "pdfjs-dist/legacy/build/pdf.worker.mjs",
+    "pdfjs-dist/legacy/web/pdf_viewer.mjs",
+    "pdfjs-dist/legacy/web/pdf_viewer.css",
     ...fontCss,
     ...fontFiles,
   ];
@@ -706,9 +904,20 @@ const safeNext = (v) => (/^\/(?!\/)/.test(String(v || "")) ? String(v).slice(0, 
 app.get("/login", (req, res) => {
   if (currentAccount(req)) return res.redirect(safeNext(req.query.next) || "/");
   if (safeNext(req.query.next)) res.setHeader("Set-Cookie", cookieHeader(req, NEXT_COOKIE, safeNext(req.query.next), 1 / 96));
-  // «Увійти» from inside the reader (a free book's guest): straight to the site, no landing on the way.
-  if (req.query.go) return res.redirect(`${WEB_URL}/reader-login?back=${encodeURIComponent(`${req.protocol}://${req.get("host")}`)}`);
+  if (inApp(req)) return res.set("Cache-Control", "no-store").type("html").send(appSignInPage());
+  // From the site («Читати» on a book): whoever is signed in there comes in without a code.
+  if (String(req.get("referer") || "").startsWith(WEB_URL)) return res.redirect(siteSignIn(req));
   res.type("html").send(landingPage(req));
+});
+// The phone apps sign in on their own page (appSignInPage, 2026-11-04). The Safari round trip of 2026-11-02
+// (/auth?app=<code>, then the app picked the account up from /api/app-login) is gone: the code came in the
+// link, so anyone could send a signed-in reader a link with their own code and pick up that reader's account
+// (security review 2026-11-04).
+app.get("/app-login", (req, res) => {
+  if (!inApp(req)) return res.redirect(signInUrl(req));
+  if (currentAccount(req)) return res.redirect(safeNext(parseCookies(req)[NEXT_COOKIE]) || "/");
+  res.setHeader("Cache-Control", "no-store");
+  res.type("html").send(appSignInPage());
 });
 // Back from the site with a ticket (web/server.js /reader-login).
 app.get("/auth", async (req, res) => {
@@ -734,18 +943,13 @@ app.get("/auth", async (req, res) => {
   res.redirect(next || "/");
 });
 app.post("/logout", (req, res) => {
+  endSession(req);
   res.setHeader("Set-Cookie", [cookieHeader(req, COOKIE, "", 0), cookieHeader(req, GUEST_COOKIE, "", 0), cookieHeader(req, OLD_COOKIE, "", 0), cookieHeader(req, SHARE_COOKIE, "", 0), cookieHeader(req, FREE_COOKIE, "", 0)]);
   res.redirect("/login");
 });
 
-// /demo opens the reader as a guest: one demo book, no uploads, a daily cap on explanations.
-app.get("/demo", (req, res) => {
-  if (currentAccount(req)) return res.redirect("/");
-  if (!GUEST_ENABLED || !demoBooks().length) return res.redirect("/login");
-  if (!currentGuest(req)) startGuest(req, res);
-  res.append("Set-Cookie", cookieHeader(req, FREE_COOKIE, "", 0)); // the demo, not a free book read before
-  res.redirect("/");
-});
+// /demo is gone (Max, 2026-11-04: «не потрібен зараз, коли є реєстрація»); old links go to sign-in.
+app.get("/demo", (req, res) => res.redirect(currentAccount(req) ? "/" : "/login"));
 
 // /free/<file> opens a book of the free shelf from the site. Without an account it opens as a guest who
 // sees only that book and gets no explanations (svoloshyn, Max 2026-10-26: a child reading «Лис Микита» needs
@@ -831,6 +1035,52 @@ app.get("/s/:token", (req, res) => {
   res.redirect("/");
 });
 
+// The site's «Вийти на всіх пристроях», or a deleted account: every reader session of the account ends.
+// Signed with that account's key (the HMAC the site gave the reader at sign-in).
+app.post("/api/site-signout", express.json(), (req, res) => {
+  const id = String(req.body?.id || "");
+  const want = state.accounts[id]?.key;
+  if (!ACCOUNT_ID.test(id) || !want || !safeEqual(String(req.body?.key || ""), want)) return res.status(403).json({ error: "key" });
+  endAllSessions(id);
+  console.log(`reader: all sessions of ${id} ended`);
+  res.json({ ok: true });
+});
+
+// The reader's stats live in the site's admin (chytai.org.ua/admin/reader; Max, 2026-11-02). The site asks for
+// them with the owner's reader key (the HMAC it gave this reader at sign-in), so no new secret is needed.
+const siteOwnerOk = (req) => {
+  const want = state.accounts[OWNER_ID]?.key;
+  const key = String(req.get("x-reader-key") || "");
+  return !!want && key.length === want.length && crypto.timingSafeEqual(Buffer.from(key), Buffer.from(want));
+};
+app.get("/api/site-admin", async (req, res, next) => {
+  if (!siteOwnerOk(req)) return res.status(403).json({ error: "key" });
+  try {
+    res.json(await collectStats());
+  } catch (err) {
+    next(err);
+  }
+});
+// Switch the reader off (or on again) for one account: { id, off: true | false }.
+app.post("/api/site-admin/off", express.json(), (req, res) => {
+  if (!siteOwnerOk(req)) return res.status(403).json({ error: "key" });
+  const id = String(req.body?.id || "");
+  if (!ACCOUNT_ID.test(id) || id === OWNER_ID) return res.status(400).json({ error: "id" });
+  const a = (state.accounts[id] ??= {});
+  if (req.body.off) a.off = Date.now();
+  else delete a.off;
+  saveState();
+  res.json({ ok: true, off: !!a.off });
+});
+
+// The reader's scripts, styles and fonts need no account (the code is public on GitHub anyway): the
+// service worker fetches them for the offline copy, and in the Android app its requests came without
+// the sign-in cookie, so it got the /login page back as style.css and the reader showed unstyled.
+// Only the page itself (/) stays behind the sign-in below.
+const publicRenderer = express.static(path.join(ROOT, "src", "renderer"), { index: false });
+app.use("/node_modules", express.static(path.join(ROOT, "node_modules"), { index: false, maxAge: "7d" }));
+app.use((req, res, next) => (req.path === "/index.html" ? next() : publicRenderer(req, res, next)));
+
 app.use((req, res, next) => {
   const acct = currentAccount(req);
   const share = acct ? null : currentShare(req);
@@ -844,6 +1094,8 @@ app.use((req, res, next) => {
     if (req.path.startsWith("/api/")) return res.status(403).json({ error: "Читалку для цього акаунта вимкнено." });
     return res.status(403).type("html").send(loginPage(req, "Читалку для цього акаунта вимкнено. Якщо це помилка, напишіть Максові."));
   }
+  // Only on the page itself, so the many calls a page makes at once don't each start a session.
+  if (acct && req.upgradeSession === acct && req.method === "GET" && req.path === "/") res.append("Set-Cookie", [cookieHeader(req, COOKIE, newSession(acct), COOKIE_DAYS), cookieHeader(req, OLD_COOKIE, "", 0)]);
   req.acct = acct || null;
   req.owner = acct === OWNER_ID;
   req.user = acct ? accountName(acct) : "Гість";
@@ -857,36 +1109,13 @@ app.use((req, res, next) => {
 });
 
 const guestsCannot = (message) => (req, res, next) => (req.guest ? res.status(403).json({ error: message }) : next());
-const ownerOnly = (req, res, next) => (req.owner ? next() : res.status(403).json({ error: "Це може лише Макс." }));
 
-// The dashboard is the owner's.
-app.get("/admin", async (req, res, next) => {
-  if (!req.owner) return res.redirect("/");
-  try {
-    res.type("html").send(adminPage(await collectStats()));
-  } catch (err) {
-    next(err);
-  }
-});
-
-// Switch the reader off (or on again) for one account: POST /admin/off { id, off: "1" | "" }.
-app.post("/admin/off", express.urlencoded({ extended: false }), (req, res) => {
-  if (!req.owner) return res.redirect("/");
-  const id = String(req.body.id || "");
-  if (ACCOUNT_ID.test(id) && id !== OWNER_ID) {
-    const a = (state.accounts[id] ??= {});
-    if (req.body.off) a.off = Date.now();
-    else delete a.off;
-    saveState();
-  }
-  res.redirect("/admin#readers");
-});
+// The dashboard moved to the site's admin (Max, 2026-11-02).
+app.get("/admin", (_req, res) => res.redirect(`${WEB_URL}/admin/reader`));
 
 // Static renderer: index.html at /, its scripts next to it, node_modules at /node_modules
 // (so the renderer's ../../node_modules/… paths resolve, as they do under file:// in Electron).
 app.get("/", (_req, res) => res.sendFile(path.join(ROOT, "src", "renderer", "index.html")));
-app.use("/node_modules", express.static(path.join(ROOT, "node_modules"), { index: false, maxAge: "7d" }));
-app.use(express.static(path.join(ROOT, "src", "renderer"), { index: false }));
 
 // ---------- API ----------
 
@@ -894,14 +1123,6 @@ const api = express.Router();
 api.use(express.json({ limit: "20mb" }));
 
 api.get("/settings", (req, res) => res.json(settingsFor(req)));
-
-api.get("/admin", ownerOnly, async (req, res, next) => {
-  try {
-    res.json(await collectStats());
-  } catch (err) {
-    next(err);
-  }
-});
 
 api.patch("/settings", (req, res) => {
   const u = req.guest ? guestState(req.guest) : userState(req.acct);
@@ -918,6 +1139,19 @@ api.patch("/settings", (req, res) => {
   res.json(settingsFor(req));
 });
 
+// Seconds of reading since the last report, per book (reading-time.js; sendBeacon sends text/plain).
+api.post("/reading", express.text({ limit: "16kb" }), (req, res) => {
+  let body = req.body;
+  if (typeof body === "string") try { body = JSON.parse(body); } catch { body = null; }
+  const books = body?.books;
+  if (!books || typeof books !== "object" || Array.isArray(books)) return res.status(400).json({ error: "bad request" });
+  if (req.guest) return res.json({ ok: true });
+  const clean = {};
+  for (const [name, sec] of Object.entries(books).slice(0, 20)) if (name && name.length <= 500 && Number.isFinite(sec) && sec > 0) clean[name.replace(/#reflow$/, "")] = (clean[name.replace(/#reflow$/, "")] || 0) + Math.min(sec, 600);
+  recordReading(req.acct, clean);
+  saveState();
+  res.json({ ok: true });
+});
 api.put("/position", (req, res) => {
   const { path: bookPath, cfi, pct, chapter, part, parts } = req.body || {};
   if (typeof bookPath !== "string" || typeof cfi !== "string") return res.status(400).json({ error: "bad request" });
@@ -926,7 +1160,6 @@ api.put("/position", (req, res) => {
   u.positions ??= {};
   u.positions[bookPath] = cfi;
   (u.opened ??= {})[name] = Date.now();
-  if (!req.guest) recordReading(req.acct);
   if (!req.guest && !req.share) noteReadingNow(req.acct, name);
   if (u.setAside) delete u.setAside[name];
   // How far in and which chapter, for the home screen: the position itself is a CFI it cannot read.
@@ -959,6 +1192,13 @@ api.get("/notes/all", (req, res) => {
   res.json({ books: u.notes || {} });
 });
 
+// The panel's search goes past titles: the reader's notes and talks with Claude (server/search.js).
+api.get("/search", (req, res) => {
+  const q = String(req.query.q || "").slice(0, 200);
+  const u = req.guest ? guestState(req.guest) : userState(req.acct);
+  res.json({ hits: searchReader(u, q) });
+});
+
 api.post("/notes", (req, res) => {
   const { path: bookPath, cfi, posKey, text, chapter } = req.body || {};
   if (typeof bookPath !== "string" || typeof cfi !== "string" || typeof text !== "string" || !text.trim()) {
@@ -975,6 +1215,8 @@ api.post("/notes", (req, res) => {
     chapter: typeof chapter === "string" ? chapter.slice(0, 200) : "",
     comment: "",
     createdAt: Date.now(),
+    // A quote from a paper book's page photo (paper.js), drawn as a quote among the notes.
+    ...(req.body.quote === true ? { quote: true } : {}),
   };
   list.push(note);
   if (!req.guest || req.share) saveState();
@@ -986,6 +1228,9 @@ api.patch("/notes/:id", (req, res) => {
   const note = list.find((n) => n.id === req.params.id);
   if (!note) return res.status(404).json({ error: "Нотатки немає." });
   if (typeof req.body?.comment === "string") note.comment = req.body.comment.slice(0, NOTE_TEXT_MAX);
+  // A paper book's note is the reader's own words, so its text can be edited too (Max 2026-11-03).
+  // So is a note an e-book reader wrote with «+ Нотатка» (cfi «mine:…», 2026-11-03).
+  if ((paper.NAME.test(String(req.query.path || "")) || String(note.cfi).startsWith("mine:")) && typeof req.body?.text === "string" && req.body.text.trim()) note.text = req.body.text.trim().slice(0, NOTE_TEXT_MAX);
   if (!req.guest || req.share) saveState();
   res.json({ note });
 });
@@ -995,6 +1240,57 @@ api.delete("/notes/:id", (req, res) => {
   const { u, list } = notesOf(req, bookPath);
   u.notes[bookPath] = list.filter((n) => n.id !== req.params.id);
   if (!u.notes[bookPath].length) delete u.notes[bookPath];
+  if (!req.guest || req.share) saveState();
+  res.json({ ok: true });
+});
+
+// Explanations and answers asked in a book, kept (Max 2026-11-03: «так само зберігати пояснення і відповіді
+// для звичайних електронних», as for paper books): u.chats[book] = [{ id, cfi, posKey, mode, sel, chapter,
+// turns: [{ q, a }], messages, model, at }]. Reopening the book brings the cards and the marks back; follow-ups
+// go on from the kept talk. A guest's live only as long as the guest's session, like the guest's notes.
+const BOOK_CHATS_MAX = 500;
+function chatsOf(req, bookPath) {
+  const u = req.guest ? guestState(req.guest) : userState(req.acct);
+  u.chats ??= {};
+  return { u, list: (u.chats[bookPath] ??= []) };
+}
+api.get("/chats", (req, res) => {
+  const u = req.guest ? guestState(req.guest) : userState(req.acct);
+  res.json({ chats: u.chats?.[String(req.query.path || "")] || [] });
+});
+api.put("/chats/:id", (req, res) => {
+  const { path: bookPath, cfi, posKey, mode, sel, chapter, turns, messages, model, at } = req.body || {};
+  if (typeof bookPath !== "string" || !bookPath || typeof cfi !== "string" || !cfi || !/^[A-Za-z0-9_-]{4,40}$/.test(req.params.id) || !Array.isArray(turns) || !turns.length) {
+    return res.status(400).json({ error: "bad request" });
+  }
+  const chat = {
+    id: req.params.id,
+    cfi: cfi.slice(0, 2000),
+    posKey: typeof posKey === "string" ? posKey.slice(0, 2000) : bookPath,
+    mode: mode === "translate" ? "translate" : "explain",
+    sel: typeof sel === "string" ? sel.slice(0, 4000) : "",
+    chapter: typeof chapter === "string" ? chapter.slice(0, 200) : "",
+    turns: turns.slice(-50).map((t) => ({ q: String(t?.q || "").slice(0, 4000), a: String(t?.a || "").slice(0, 20000) })),
+    messages: Array.isArray(messages) ? messages : null,
+    model: typeof model === "string" ? model.slice(0, 80) : "",
+    at: Number.isFinite(at) ? at : Date.now(),
+  };
+  // A long talk keeps its turns for reading, but no longer goes on from where it was.
+  if (JSON.stringify(chat.messages || "").length > CHAT_BYTES) chat.messages = null;
+  const { list } = chatsOf(req, bookPath);
+  const i = list.findIndex((c) => c.id === chat.id);
+  if (i >= 0) list[i] = chat;
+  else list.push(chat);
+  if (list.length > BOOK_CHATS_MAX) list.splice(0, list.length - BOOK_CHATS_MAX);
+  if (!req.guest || req.share) saveState();
+  res.json({ ok: true });
+});
+// One explanation («Очистити розмову»), or with no id every one in the book (the panel's «Очистити»).
+api.delete(["/chats/:id", "/chats"], (req, res) => {
+  const bookPath = String(req.query.path || "");
+  const { u, list } = chatsOf(req, bookPath);
+  u.chats[bookPath] = req.params.id ? list.filter((c) => c.id !== req.params.id) : [];
+  if (!u.chats[bookPath].length) delete u.chats[bookPath];
   if (!req.guest || req.share) saveState();
   res.json({ ok: true });
 });
@@ -1049,6 +1345,12 @@ function tellSite(id) {
 // читалки»): a book read here for a few minutes goes to the site once a day; the site puts it on «Читаю зараз»
 // unless the account turned that off in its settings there or already has the book as «Прочитано».
 const NOW_AFTER = 3 * 60 * 1000;
+// What the reader knows of a book without opening it: paper books, the free shelf, publishers' books.
+function bookInfo(acct, name) {
+  const pb = paper.NAME.test(name) ? state.users[acct]?.paper?.[name] : null;
+  const info = pb ? { title: pb.title, author: pb.author } : freeShelf.find((f) => f.name === name) || prot.meta(name) || {};
+  return { title: info.title || "", authors: Array.isArray(info.authors) ? info.authors : info.author ? [info.author] : [], paper: !!pb };
+}
 const readingSince = new Map(); // "acct\tbook" -> { from, last, told: day }
 function noteReadingNow(acct, name) {
   if (!state.accounts[acct]?.key || !name) return;
@@ -1061,8 +1363,8 @@ function noteReadingNow(acct, name) {
   const day = statsDay(t);
   if (r.told === day || t - r.from < NOW_AFTER) return;
   r.told = day;
-  const info = freeShelf.find((f) => f.name === name) || prot.meta(name) || {};
-  const book = { name, title: info.title || "", authors: Array.isArray(info.authors) ? info.authors : info.author ? [info.author] : [] };
+  const info = bookInfo(acct, name);
+  const book = { name, title: info.title, authors: info.authors };
   fetch(`${WEB_URL}/api/reader-now`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: acct, key: state.accounts[acct].key, book }), signal: AbortSignal.timeout(20000) })
     .then((res) => res.ok || console.error(`reader-now ${acct}: ${res.status}`))
     .catch((err) => console.error(`reader-now ${acct}:`, err.message));
@@ -1098,6 +1400,7 @@ const OWNER_LIB = libOf(OWNER_ID);
 // Book names are the file names inside a library's folder; a name is never allowed to escape it.
 function safeBookName(name) {
   const base = path.basename(String(name || "")).normalize("NFC");
+  if (paper.NAME.test(base)) return base;
   if (!base || base.startsWith(".") || !BOOK_EXT.test(base)) return null;
   return base;
 }
@@ -1171,12 +1474,12 @@ api.get("/library", async (req, res) => {
           title: m.title || b.title, authors: m.authors?.length ? m.authors : b.authors, year: m.year || b.year,
           openedAt: aside ? 0 : u.opened?.[name] || 0, aside, finished: !!u.finished?.[name],
           started: !aside && !!positions[name], pct: aside || !progress ? null : progress.pct, chapter: (!aside && progress?.chapter) || "", part: progress?.part || 0, parts: progress?.parts || 0,
-          addedAt: 0, addedBy: "", coverAt: freeCover(name) ? Math.round(fs.statSync(freeCover(name)).mtimeMs) : 0, seen: true,
+          addedAt: u.taken?.[name] || 0, addedBy: "", coverAt: freeCover(name) ? Math.round(fs.statSync(freeCover(name)).mtimeMs) : 0, seen: true,
         };
       })
       .filter((b) => !own.has(b.path))
       .sort((x, y) => x.order - y.order || x.title.localeCompare(y.title, "uk"));
-    list.push(...free.filter((b) => b.openedAt || b.started));
+    list.push(...free.filter((b) => b.openedAt || b.started || (b.addedAt && !b.aside)));
     // A publisher's book shows among the reader's own once opened (from its page on the site).
     const pub = (await library.scan([prot.dir], path.join(DATA_DIR, "protected-cache.json")).catch(() => [])).filter((b) => !own.has(path.basename(b.path)));
     for (const b of pub) {
@@ -1193,6 +1496,7 @@ api.get("/library", async (req, res) => {
       });
     }
   }
+  if (!req.guest) for (const [name, p] of Object.entries(u.paper || {})) list.push(paper.listEntry(name, p, u));
   res.json({ folders: [], books: list, free, lastBook: u.lastBook || (req.guest ? guestBooks(req)[0]?.name : null) || null });
 });
 
@@ -1297,7 +1601,9 @@ function customCover(lib, name) {
 api.get("/cover", async (req, res) => {
   const name = safeBookName(req.query.path);
   const demo = req.guest ? guestBooks(req).find((d) => d.name === name) : null;
-  const file = req.guest ? demo && path.join(demo.dir, demo.name) : readerFile(req.lib, name);
+  let file = req.guest ? demo && path.join(demo.dir, demo.name) : readerFile(req.lib, name);
+  // A book in «Нещодавно видалені» keeps its cover there.
+  if (file && !fs.existsSync(file) && !req.guest && req.lib.meta.trash?.[name]) file = trashFile(req.lib, name);
   if (!file || !fs.existsSync(file)) return res.status(404).end();
   const custom = !req.guest && (customCover(req.lib, name) || ([FREE_DIR, FREE_VOLUME_DIR].some((d) => file.startsWith(d + path.sep)) && freeCover(name)));
   if (custom) {
@@ -1318,7 +1624,7 @@ api.get("/cover", async (req, res) => {
 });
 
 // Set a book's cover by hand: PUT /api/cover?path=<book> with a JPEG, PNG or WebP image as the body.
-api.put("/cover", guestsCannot("У демо-режимі не можна змінювати обкладинки."), express.raw({ type: () => true, limit: "5mb" }), (req, res) => {
+api.put("/cover", guestsCannot("Без входу не можна змінювати обкладинки."), express.raw({ type: () => true, limit: "5mb" }), (req, res) => {
   const name = safeBookName(req.query.path);
   if (!name || !fs.existsSync(bookFile(req.lib, name))) return res.status(404).json({ error: "Книжки немає на сервері." });
   const b = req.body;
@@ -1382,6 +1688,18 @@ api.post("/library/aside", (req, res) => {
   res.json({ ok: true });
 });
 
+// «Додати» on a free-shelf book (design v2, Max 2026-11-02): it joins your books without being opened.
+api.post("/library/take", (req, res) => {
+  if (req.guest) return res.status(403).json({ error: "Гість не може додавати книжки." });
+  const u = userState(req.acct);
+  const name = safeBookName(req.body?.path);
+  if (!name) return res.status(400).json({ error: "bad request" });
+  (u.taken ??= {})[name] = Date.now();
+  if (u.setAside) delete u.setAside[name];
+  saveState();
+  res.json({ ok: true });
+});
+
 // «Позначити прочитаною» (Max, 2026-11-01): the book shows as read on Головна, and on the site's shelf it
 // becomes «Прочитано» (an account with a site key; a guest's mark stays here). Unmarking only clears it here.
 api.post("/library/finished", (req, res) => {
@@ -1392,7 +1710,7 @@ api.post("/library/finished", (req, res) => {
   else {
     (u.finished ??= {})[name] = Date.now();
     if (!req.guest && !req.share && state.accounts[req.acct]?.key) {
-      const info = freeShelf.find((f) => f.name === name) || prot.meta(name) || req.lib?.meta?.bookMeta?.[name] || {};
+      const info = freeShelf.find((f) => f.name === name) || prot.meta(name) || req.lib?.meta?.bookMeta?.[name] || u.paper?.[name] || {};
       const book = { name, title: info.title || "", authors: Array.isArray(info.authors) ? info.authors : info.author ? [info.author] : [] };
       fetch(`${WEB_URL}/api/reader-read`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: req.acct, key: state.accounts[req.acct].key, book }), signal: AbortSignal.timeout(20000) })
         .then((r) => r.ok || console.error(`reader-read ${req.acct}: ${r.status}`))
@@ -1420,8 +1738,50 @@ api.get("/club", async (req, res) => {
 
 // "Хочу прочитати": each reader's own list of books to get; the home screen shows when one arrives.
 const clean = (v, max) => String(v ?? "").replace(/\s+/g, " ").trim().slice(0, max);
+// «Про книжку» in the book menu: the site's short summary of the book (/api/reader-about), kept here for a day
+// and on the device by the page (web-bridge.js), so it opens offline too.
+const aboutCache = new Map();
+api.get("/about", async (req, res) => {
+  const title = clean(req.query.title, 300);
+  const author = clean(req.query.author, 300);
+  if (!title) return res.status(400).json({ error: "title" });
+  const key = `${title}\n${author}`;
+  const hit = aboutCache.get(key);
+  if (hit && Date.now() - hit.at < 24 * 3600 * 1000) return res.json(hit.data);
+  try {
+    const r = await fetch(`${WEB_URL}/api/reader-about?${new URLSearchParams({ title, author })}`, { signal: AbortSignal.timeout(10000) });
+    if (!r.ok) throw new Error(`site ${r.status}`);
+    const data = await r.json();
+    if (aboutCache.size > 5000) aboutCache.clear();
+    aboutCache.set(key, { at: Date.now(), data });
+    res.json(data);
+  } catch (err) {
+    if (hit) return res.json(hit.data);
+    res.status(502).json({ error: err.message });
+  }
+});
+
+// «Додати книжку»: the site's catalog for what was typed (/api/reader-find), kept ten minutes.
+const findCache = new Map();
+api.get("/find", async (req, res) => {
+  const q = clean(req.query.q, 100);
+  if (q.length < 2) return res.json({ books: [] });
+  const hit = findCache.get(q);
+  if (hit && Date.now() - hit.at < 600 * 1000) return res.json(hit.data);
+  try {
+    const r = await fetch(`${WEB_URL}/api/reader-find?${new URLSearchParams({ q })}`, { signal: AbortSignal.timeout(8000) });
+    if (!r.ok) throw new Error(`site ${r.status}`);
+    const data = await r.json();
+    if (findCache.size > 2000) findCache.clear();
+    findCache.set(q, { at: Date.now(), data });
+    res.json(data);
+  } catch (err) {
+    res.status(502).json({ error: err.message });
+  }
+});
+
 api.get("/wish", (req, res) => res.json({ wish: req.guest ? [] : userState(req.acct).wish || [] }));
-api.post("/wish", guestsCannot("У демо-режимі список бажаного недоступний."), (req, res) => {
+api.post("/wish", guestsCannot("Без входу список бажаного недоступний."), (req, res) => {
   const title = clean(req.body?.title, 300);
   if (!title) return res.status(400).json({ error: "Вкажіть назву." });
   const u = userState(req.acct);
@@ -1430,7 +1790,7 @@ api.post("/wish", guestsCannot("У демо-режимі список бажан
   saveState();
   res.json({ item, wish: u.wish });
 });
-api.delete("/wish/:id", guestsCannot("У демо-режимі список бажаного недоступний."), (req, res) => {
+api.delete("/wish/:id", guestsCannot("Без входу список бажаного недоступний."), (req, res) => {
   const u = userState(req.acct);
   u.wish = (u.wish || []).filter((w) => w.id !== req.params.id);
   saveState();
@@ -1438,16 +1798,57 @@ api.delete("/wish/:id", guestsCannot("У демо-режимі список ба
 });
 
 // Guests read the demo book and nothing else: no uploads, no edits, no shared caches.
-api.put("/books/:name", guestsCannot("У демо-режимі не можна додавати книжки. Увійдіть, щоб завантажити свою."));
-api.patch("/books/:name", guestsCannot("У демо-режимі не можна редагувати книжки."));
-api.delete("/books/:name", guestsCannot("У демо-режимі не можна видаляти книжки."));
-api.post("/trash/restore", guestsCannot("У демо-режимі нема видалених книжок."));
-api.post("/trash/forget", guestsCannot("У демо-режимі нема видалених книжок."));
-api.put("/reflow", guestsCannot("У демо-режимі конвертація PDF не зберігається."));
+api.put("/books/:name", guestsCannot("Без входу не можна додавати книжки. Увійдіть, щоб завантажити свою."));
+api.patch("/books/:name", guestsCannot("Без входу не можна редагувати книжки."));
+api.delete("/books/:name", guestsCannot("Без входу не можна видаляти книжки."));
+api.post("/trash/restore", guestsCannot("Без входу нема видалених книжок."));
+api.post("/trash/forget", guestsCannot("Без входу нема видалених книжок."));
+api.post("/books/:name/epub", guestsCannot("Без входу книжки не змінюються."));
+api.put("/reflow", guestsCannot("Без входу конвертація PDF не зберігається."));
 api.get("/reflow", (req, res, next) => (req.guest ? res.status(204).end() : next()));
 
 // Upload: PUT /api/books/<file name> with the raw file as the body.
-api.put("/books/:name", express.raw({ type: () => true, limit: MAX_UPLOAD }), async (req, res) => {
+// Uploads (security review 2026-11-04, Max OK): a file is read whole into memory on a 512 MB machine with a
+// 3 GB disk, so one account could bring the reader down for everyone. Now a reader's file is at most 100 MB,
+// their library (books, trash, PDF text versions) at most 1 GB, two uploads run at a time, and none starts
+// when the disk would have under 300 MB left. The owner keeps the old 300 MB and no quota.
+const UPLOAD_MAX = 100 * 1024 * 1024;
+const ACCOUNT_QUOTA = 1024 * 1024 * 1024;
+const DISK_RESERVE = 300 * 1024 * 1024;
+let uploadsRunning = 0;
+function dirSize(dir) {
+  let n = 0;
+  for (const e of fs.readdirSync(dir, { withFileTypes: true, recursive: true })) {
+    if (e.isFile()) n += fs.statSync(path.join(e.parentPath ?? e.path, e.name)).size;
+  }
+  return n;
+}
+const mb = (n) => Math.round(n / 1048576);
+const uploadGuard = (req, res, next) => {
+  const len = Number(req.get("content-length")) || 0;
+  if (!req.owner) {
+    if (len > UPLOAD_MAX) return res.status(413).json({ error: `Файл завеликий: до ${mb(UPLOAD_MAX)} МБ.` });
+    const root = path.join(ACCOUNTS_DIR, req.acct);
+    const used = fs.existsSync(root) ? dirSize(root) : 0;
+    if (used + len > ACCOUNT_QUOTA) return res.status(413).json({ error: `У бібліотеці вже ${mb(used)} МБ із ${mb(ACCOUNT_QUOTA)}. Видаліть щось і очистіть «Нещодавно видалені».` });
+  }
+  try {
+    const st = fs.statfsSync(DATA_DIR);
+    if (st.bavail * st.bsize - len < DISK_RESERVE) {
+      console.log(`upload refused: disk nearly full (${mb(st.bavail * st.bsize)} MB free)`);
+      return res.status(507).json({ error: "На сервері закінчується місце. Спробуйте пізніше, ми вже знаємо." });
+    }
+  } catch {}
+  if (uploadsRunning >= 2) return res.status(429).json({ error: "Зараз завантажується інша книжка. Спробуйте за хвилину." });
+  uploadsRunning++;
+  let done = false;
+  const release = () => done || ((done = true), uploadsRunning--);
+  res.on("finish", release);
+  res.on("close", release);
+  next();
+};
+const uploadBody = (req, res, next) => express.raw({ type: () => true, limit: req.owner ? MAX_UPLOAD : UPLOAD_MAX })(req, res, (err) => (err ? res.status(err.status || 400).json({ error: err.type === "entity.too.large" ? `Файл завеликий: до ${mb(UPLOAD_MAX)} МБ.` : "Файл не дійшов. Спробуйте ще раз." }) : next()));
+api.put("/books/:name", uploadGuard, uploadBody, async (req, res) => {
   const name = safeBookName(req.params.name);
   if (!name) return res.status(400).json({ error: "Підтримуються лише EPUB і PDF." });
   if (!req.body?.length) return res.status(400).json({ error: "Порожній файл." });
@@ -1467,6 +1868,53 @@ api.put("/books/:name", express.raw({ type: () => true, limit: MAX_UPLOAD }), as
   warmCovers(req.lib, [name]);
   tellSite(req.acct);
   res.json({ path: name });
+});
+
+// A PDF added before every upload became an EPUB (2026-11-01) becomes one now (Max, 2026-11-02, «Одіссея»):
+// the browser sends the text version it reads «як книжку» (pdf-reflow.js), so the place and the notes made
+// there move to the EPUB unchanged. The PDF goes to «Нещодавно видалені».
+api.post("/books/:name/epub", uploadGuard, uploadBody, (req, res) => {
+  const name = safeBookName(req.params.name);
+  if (!name || !/\.pdf$/i.test(name) || !fs.existsSync(bookFile(req.lib, name))) return res.status(404).json({ error: "Книжки немає на сервері." });
+  if (!req.body?.length) return res.status(400).json({ error: "Порожній файл." });
+  let epub = name.replace(/\.pdf$/i, ".epub");
+  if (fs.existsSync(bookFile(req.lib, epub))) epub = name.replace(/\.pdf$/i, " (з PDF).epub");
+  if (!safeBookName(epub)) return res.status(400).json({ error: "Не вдалося назвати файл." });
+  fs.writeFileSync(bookFile(req.lib, epub), req.body);
+  const meta = req.lib.meta;
+  for (const key of ["added", "bookMeta"]) if (meta[key]?.[name]) meta[key][epub] = meta[key][name];
+  const u = userState(req.acct);
+  const from = `${name}#reflow`;
+  if (u.positions?.[from]) u.positions[epub] = u.positions[from];
+  for (const key of ["progress", "opened", "finished", "seen", "fontSizes"]) if (u[key]?.[name] !== undefined) u[key][epub] = u[key][name];
+  const notes = u.notes?.[name] || [];
+  const moved = notes.filter((n) => n.posKey === from);
+  if (moved.length) {
+    u.notes[epub] = [...(u.notes[epub] || []), ...moved.map((n) => ({ ...n, posKey: epub }))];
+    u.notes[name] = notes.filter((n) => n.posKey !== from);
+    if (!u.notes[name].length) delete u.notes[name];
+  }
+  const chats = u.chats?.[name] || [];
+  const movedChats = chats.filter((c) => c.posKey === from);
+  if (movedChats.length) {
+    u.chats[epub] = [...(u.chats[epub] || []), ...movedChats.map((c) => ({ ...c, posKey: epub }))];
+    u.chats[name] = chats.filter((c) => c.posKey !== from);
+    if (!u.chats[name].length) delete u.chats[name];
+  }
+  if (u.lastBook === name) u.lastBook = epub;
+  const key = customCoverKey(name);
+  if (fs.existsSync(req.lib.covers)) {
+    for (const f of fs.readdirSync(req.lib.covers)) {
+      if (f.split(".")[0] === key) fs.copyFileSync(path.join(req.lib.covers, f), path.join(req.lib.covers, customCoverKey(epub) + f.slice(key.length)));
+    }
+  }
+  fs.mkdirSync(path.dirname(trashFile(req.lib, name)), { recursive: true });
+  fs.renameSync(bookFile(req.lib, name), trashFile(req.lib, name));
+  (meta.trash ??= {})[name] = { at: Date.now() };
+  saveState();
+  warmCovers(req.lib, [epub]);
+  tellSite(req.acct);
+  res.json({ path: epub });
 });
 
 // Title and author as the library should show them: PATCH /api/books/<name> { title, authors }.
@@ -1516,7 +1964,11 @@ api.get("/trash", async (req, res) => {
   const books = names.map((n) => {
     const b = scanned.find((x) => path.basename(x.path) === n) || { title: n.replace(/\.[^.]+$/, ""), authors: [] };
     const m = meta[n];
-    return { path: n, title: m?.title || b.title, authors: m?.authors?.length ? m.authors : b.authors || [], deletedAt: trash[n].at, until: trash[n].at + TRASH_DAYS * 864e5 };
+    const custom = customCover(req.lib, n);
+    return {
+      path: n, title: m?.title || b.title, authors: m?.authors?.length ? m.authors : b.authors || [], deletedAt: trash[n].at, until: trash[n].at + TRASH_DAYS * 864e5,
+      ext: path.extname(n).slice(1).toLowerCase(), mtime: b.mtime || 0, coverAt: custom ? Math.round(fs.statSync(custom).mtimeMs) : 0,
+    };
   }).sort((x, y) => y.deletedAt - x.deletedAt);
   res.json({ books, days: TRASH_DAYS });
 });
@@ -1587,7 +2039,7 @@ api.get("/reflow", (req, res) => {
   }
 });
 
-api.put("/reflow", express.raw({ type: () => true, limit: MAX_UPLOAD }), (req, res) => {
+api.put("/reflow", uploadGuard, uploadBody, (req, res) => {
   const name = safeBookName(req.query.path);
   try {
     fs.writeFileSync(reflowFile(req.lib, name, String(req.query.version || "")), req.body);
@@ -1598,9 +2050,183 @@ api.put("/reflow", express.raw({ type: () => true, limit: MAX_UPLOAD }), (req, r
 });
 
 // Streams an explanation as newline-delimited JSON events, the same events the Electron renderer gets.
+// ---------- Paper books (Max, 2026-11-02): see server/paper.js ----------
+const PAPER_MAX = 200;
+const intOr = (v, max) => (Number.isInteger(v) && v >= 0 && v <= max ? v : undefined);
+api.post("/paper", guestsCannot("Без входу не можна додавати книжки."), (req, res) => {
+  const u = userState(req.acct);
+  const title = clean(req.body?.title, 300);
+  if (!title) return res.status(400).json({ error: "Немає назви." });
+  u.paper ??= {};
+  if (Object.keys(u.paper).length >= PAPER_MAX) return res.status(400).json({ error: "Забагато паперових книжок." });
+  const href = typeof req.body?.href === "string" && /^https:\/\/chytai\.org\.ua\//.test(req.body.href) ? req.body.href.slice(0, 500) : "";
+  // The same book from the catalog twice is the one already there.
+  const same = Object.entries(u.paper).find(([, p]) => (href && p.href === href) || (!href && p.title === title));
+  if (same) {
+    if (u.setAside) delete u.setAside[same[0]];
+    (u.opened ??= {})[same[0]] = Date.now();
+    saveState();
+    return res.json({ path: same[0] });
+  }
+  const name = `paper-${crypto.randomBytes(5).toString("hex")}.paper`;
+  const cover = typeof req.body?.cover === "string" && /^https:\/\//.test(req.body.cover) ? req.body.cover.slice(0, 1000) : "";
+  u.paper[name] = { title, author: clean(req.body?.author, 300), cover, href, pages: intOr(req.body?.pages, 20000) || 0, page: 0, chapter: "", addedAt: Date.now() };
+  (u.opened ??= {})[name] = Date.now();
+  saveState();
+  res.json({ path: name });
+});
+api.patch("/paper/:name", guestsCannot("Без входу паперових книжок немає."), (req, res) => {
+  const u = userState(req.acct);
+  const p = u.paper?.[req.params.name];
+  if (!p) return res.status(404).json({ error: "Книжки немає." });
+  const { page, pages, chapter, title, author } = req.body || {};
+  if (intOr(page, 20000) !== undefined) p.page = page;
+  if (intOr(pages, 20000) !== undefined) p.pages = pages;
+  if (typeof chapter === "string") p.chapter = chapter.trim().slice(0, 200);
+  if (typeof title === "string" && title.trim()) p.title = clean(title, 300);
+  if (typeof author === "string") p.author = clean(author, 300);
+  (u.opened ??= {})[req.params.name] = Date.now();
+  if (u.setAside) delete u.setAside[req.params.name];
+  saveState();
+  res.json(paper.listEntry(req.params.name, p, u));
+});
+// A paper book's page open and in use (pinged each minute while the reader does something on it): a few
+// minutes of it put the book on «Читаю зараз» on the site, as reading an e-book does (Max 2026-11-02).
+api.post("/paper/:name/seen", guestsCannot("Без входу паперових книжок немає."), (req, res) => {
+  if (!userState(req.acct).paper?.[req.params.name]) return res.status(404).json({ error: "Книжки немає." });
+  noteReadingNow(req.acct, req.params.name);
+  res.json({ ok: true });
+});
+// Questions about a paper book with their answers (v2, Max: «треба щоб питання зберігалися»), kept with the
+// talk so far so «Уточнити» can go on: u.paperChats[name] = [{ id, turns: [{ q, a }], messages, sel, page, at }].
+const CHATS_MAX = 300;
+const CHAT_BYTES = 200 * 1024;
+api.get("/paper/:name/chats", guestsCannot("Без входу паперових книжок немає."), (req, res) => {
+  res.json({ chats: userState(req.acct).paperChats?.[req.params.name] || [] });
+});
+api.put("/paper/:name/chats/:id", guestsCannot("Без входу паперових книжок немає."), (req, res) => {
+  const u = userState(req.acct);
+  if (!u.paper?.[req.params.name]) return res.status(404).json({ error: "Книжки немає." });
+  const { turns, messages, sel, page, at, img } = req.body || {};
+  if (!/^[a-z0-9]{4,40}$/.test(req.params.id) || !Array.isArray(turns) || !turns.length) return res.status(400).json({ error: "bad request" });
+  const chat = {
+    id: req.params.id,
+    turns: turns.slice(-50).map((t) => ({ q: String(t?.q || "").slice(0, 4000), a: String(t?.a || "").slice(0, 20000) })),
+    messages: paper.stripImages(messages),
+    // A small picture of the marked page (v3), shown with the question.
+    img: typeof img === "string" && /^data:image\/jpeg;base64,[A-Za-z0-9+/=]+$/.test(img) && img.length < 120 * 1024 ? img : "",
+    sel: typeof sel === "string" ? sel.slice(0, 4000) : "",
+    page: intOr(page, 20000) || 0,
+    at: Number.isFinite(at) ? at : Date.now(),
+  };
+  // A long talk keeps its turns for reading, but no longer goes on from where it was.
+  if (JSON.stringify(chat.messages || "").length > CHAT_BYTES) chat.messages = null;
+  const list = ((u.paperChats ??= {})[req.params.name] ??= []);
+  const i = list.findIndex((c) => c.id === chat.id);
+  if (i >= 0) list[i] = chat;
+  else list.push(chat);
+  if (list.length > CHATS_MAX) list.splice(0, list.length - CHATS_MAX);
+  (u.opened ??= {})[req.params.name] = Date.now();
+  saveState();
+  res.json({ ok: true });
+});
+// Questions to ask next (v3): from the book and the page, or following on from the last question. Kept a day.
+const aiBudget = (req, res, next) => {
+  const denied = aiBudgetDenied(req);
+  return denied ? res.status(429).json({ error: denied }) : next();
+};
+const suggestCache = new Map();
+api.post("/paper/:name/suggest", guestsCannot("Без входу паперових книжок немає."), aiBudget, async (req, res) => {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  const u = userState(req.acct);
+  const p = u.paper?.[req.params.name];
+  if (!p || !apiKey) return res.json({ questions: [] });
+  const chats = u.paperChats?.[req.params.name] || [];
+  const lastChat = [...chats].sort((x, y) => (y.at || 0) - (x.at || 0))[0];
+  const turn = lastChat?.turns?.[lastChat.turns.length - 1];
+  const last = turn ? { q: turn.q || lastChat.sel || "", a: turn.a || "" } : null;
+  const key = `${req.acct}\t${req.params.name}\t${p.page || 0}\t${lastChat?.id || ""}\t${lastChat?.turns?.length || 0}`;
+  const hit = suggestCache.get(key);
+  if (hit && Date.now() - hit.at < 86400000) return res.json({ questions: hit.questions });
+  try {
+    const r = await paper.suggest(apiKey, { title: p.title, author: p.author, page: p.page, last });
+    recordExplain(req, { model: r.model, usage: r.usage });
+    if (suggestCache.size > 5000) suggestCache.clear();
+    suggestCache.set(key, { at: Date.now(), questions: r.questions });
+    res.json({ questions: r.questions });
+  } catch (err) {
+    res.json({ questions: [], error: describeError(err) });
+  }
+});
+// Dictation tidied into sentences (Max 2026-11-03).
+api.post("/paper/:name/tidy", guestsCannot("Без входу паперових книжок немає."), aiBudget, async (req, res) => {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  const p = userState(req.acct).paper?.[req.params.name];
+  const text = String(req.body?.text || "").trim().slice(0, 3000);
+  if (!p || !apiKey || !text) return res.json({ text });
+  try {
+    const r = await paper.tidy(apiKey, { title: p.title, author: p.author, text });
+    recordExplain(req, { model: r.model, usage: r.usage });
+    res.json({ text: r.text });
+  } catch (err) {
+    res.json({ text, error: describeError(err) });
+  }
+});
+// The same for an e-book's question field (2026-11-03): the reader's page sends the book's title and author.
+api.post("/tidy", guestsCannot("Без входу диктування не доопрацьовується."), aiBudget, async (req, res) => {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  const text = String(req.body?.text || "").trim().slice(0, 3000);
+  if (!apiKey || !text) return res.json({ text });
+  try {
+    const r = await paper.tidy(apiKey, { title: String(req.body?.title || "").slice(0, 300), author: String(req.body?.author || "").slice(0, 200), text, ebook: true });
+    recordExplain(req, { model: r.model, usage: r.usage });
+    res.json({ text: r.text });
+  } catch (err) {
+    res.json({ text, error: describeError(err) });
+  }
+});
+api.delete("/paper/:name/chats/:id", guestsCannot("Без входу паперових книжок немає."), (req, res) => {
+  const u = userState(req.acct);
+  const list = u.paperChats?.[req.params.name];
+  if (list) u.paperChats[req.params.name] = list.filter((c) => c.id !== req.params.id);
+  saveState();
+  res.json({ ok: true });
+});
+// A paper book has no file to keep in «Нещодавно видалені»: it goes with its notes.
+api.delete("/paper/:name", guestsCannot("Без входу паперових книжок немає."), (req, res) => {
+  const u = userState(req.acct);
+  const name = req.params.name;
+  if (!u.paper?.[name]) return res.status(404).json({ error: "Книжки немає." });
+  delete u.paper[name];
+  for (const key of ["positions", "progress", "opened", "setAside", "seen", "notes", "finished", "paperChats"]) delete u[key]?.[name];
+  saveState();
+  res.json({ ok: true });
+});
+// A photo of a cover (?kind=cover), of a page (?kind=page) or of the text marked on it (?kind=marked), JPEG or PNG, read by Claude. The photo is not kept.
+api.post("/paper/scan", guestsCannot("Без входу фото не розпізнаються."), aiBudget, express.raw({ type: () => true, limit: "8mb" }), async (req, res) => {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) return res.status(500).json({ error: "На сервері не налаштовано ключ Claude API." });
+  const kind = ["page", "marked"].includes(req.query.kind) ? req.query.kind : "cover";
+  const type = String(req.headers["content-type"] || "");
+  const mediaType = /png/.test(type) ? "image/png" : /webp/.test(type) ? "image/webp" : "image/jpeg";
+  if (!Buffer.isBuffer(req.body) || req.body.length < 1000) return res.status(400).json({ error: "Немає фото." });
+  if (!req.owner && (state.stats?.days?.[statsDay()]?.users?.[req.acct] || 0) >= ACCOUNT_DAILY_CAP) return res.status(429).json({ error: "На сьогодні запитів забагато. Завтра все запрацює знову." });
+  try {
+    const r = kind !== "cover" ? await paper.readPage(apiKey, req.body, mediaType, kind === "marked") : await paper.readCover(apiKey, req.body, mediaType);
+    const { usage, model, ...out } = r;
+    recordExplain(req, { model, usage });
+    res.json(out);
+  } catch (err) {
+    res.status(502).json({ error: describeError(err) });
+  }
+});
+
 api.post("/explain", async (req, res) => {
   const request = req.body?.request;
   if (!request || typeof request !== "object") return res.status(400).json({ error: "bad request" });
+  // A photo of a paper book's page with the reader's marks (v3): accounts only, one picture of a few MB at most.
+  if (request.context?.image != null && (req.guest || typeof request.context.image !== "string" || request.context.image.length > 4 * 1024 * 1024 || !/^[A-Za-z0-9+/=]+$/.test(request.context.image)))
+    return res.status(400).json({ error: "Фото не підходить." });
   res.setHeader("Content-Type", "application/x-ndjson; charset=utf-8");
   res.setHeader("Cache-Control", "no-cache, no-transform");
   res.setHeader("X-Accel-Buffering", "no");
@@ -1616,6 +2242,12 @@ api.post("/explain", async (req, res) => {
     send({ type: "error", message: "На сьогодні пояснень забагато, це схоже на автоматичні запити. Завтра все запрацює знову; якщо це помилка, напишіть Максові." });
     return res.end();
   }
+  const denied = aiBudgetDenied(req);
+  if (denied) {
+    send({ type: "error", message: denied });
+    return res.end();
+  }
+  if (!req.guest && !req.owner) trimAccountRequest(request);
   if (req.share) {
     const usage = shareUsage(req.share);
     if (usage.n >= SHARE_EXPLAIN_LIMIT) {
@@ -1643,8 +2275,9 @@ api.post("/explain", async (req, res) => {
       apiKey,
       model: request.mode === "translate" ? shared.translateModel : shared.model,
       language: shared.language,
-      style: me.explainStyle,
-      customStyle: me.customStyle,
+      // «Стиль пояснень» is gone (Max, 2026-11-02: nobody used it); «простіше» or «коротше» goes in the question.
+      style: "default",
+      customStyle: "",
       request,
       signal: controller.signal,
       onText: (text) => send({ type: "text", text }),

@@ -80,11 +80,17 @@
   const kvSet = (key, value) => idb("kv", "readwrite", (s) => s.put(value, key)).catch(() => {});
 
   let offline = false;
+  let offlineSayTimer = 0;
+  let offlineSaid = false;
   function setOffline(value) {
     if (offline === value) return;
     offline = value;
     document.body.classList.toggle("offline", value);
-    if (typeof toast === "function") toast(value ? "Немає з'єднання: читаємо з пристрою" : "З'єднання відновлено");
+    // A weak connection drops one request and passes the next: the notices flickered over the text. Say
+    // «no connection» only when it lasts a few seconds, and «restored» only after that was said.
+    clearTimeout(offlineSayTimer);
+    if (value) offlineSayTimer = setTimeout(() => offline && ((offlineSaid = true), typeof toast === "function" && toast("Немає з'єднання: читаємо з пристрою")), 5000);
+    else if (offlineSaid) (offlineSaid = false), typeof toast === "function" && toast("З'єднання відновлено");
     if (!value) sync();
   }
   // Settings as last seen, with the changes made here; the server's copy catches up through the queue.
@@ -104,6 +110,14 @@
     await kvSet("here", { ...((await kvGet("here")) || {}), [path]: cfi });
   }
 
+  // Positions waiting for the server (see flushPositions), edited one at a time.
+  let queueChain = Promise.resolve();
+  const editQueued = (fn) => (queueChain = queueChain.then(async () => {
+    const positions = (await kvGet("positions")) || {};
+    if (fn(positions) !== false) await kvSet("positions", positions);
+  }).catch(() => {}));
+  const samePos = (a, b) => (typeof a === "string" ? a : a?.cfi) === (typeof b === "string" ? b : b?.cfi);
+  const unqueuePosition = (path, pos) => editQueued((positions) => (samePos(positions[path], pos) ? delete positions[path] : false));
   const enqueue = (item) => idb("queue", "readwrite", (s) => s.add(item)).catch(() => {});
   const noteIds = new Map(); // id given here while offline -> id the server gave it once synced
   const serverNoteId = (id) => noteIds.get(id) || id;
@@ -116,8 +130,7 @@
         const positions = (await kvGet("positions")) || {};
         for (const [path, pos] of Object.entries(positions)) {
           await api("PUT", "/api/position", typeof pos === "string" ? { path, cfi: pos } : { path, ...pos });
-          delete positions[path];
-          await kvSet("positions", positions);
+          await unqueuePosition(path, pos);
         }
         for (;;) {
           const [keys, items] = await Promise.all([idb("queue", "readonly", (s) => s.getAllKeys()), idb("queue", "readonly", (s) => s.getAll())]);
@@ -176,7 +189,10 @@
       .register("/sw.js")
       .then((reg) => {
         const swap = () => reg.waiting?.postMessage("skipWaiting");
-        const whenIdle = () => (document.hidden || typeof current === "undefined" || !current) && swap();
+        // Only while the page is hidden. «No book open» was not enough: the check runs when the app comes
+        // back to the front, and a new version found a few seconds later took over while a book was still
+        // loading, so its text showed for a second and the page reloaded to white (Max, 2026-11-02).
+        const whenIdle = () => document.hidden && swap();
         reg.addEventListener("updatefound", () => reg.installing?.addEventListener("statechange", whenIdle));
         // The browser looks for a new sw.js only on a navigation, and the app never navigates: the
         // page lives for days. So the check is made whenever the app goes to the background or comes
@@ -184,14 +200,24 @@
         const check = () => reg.update().catch(() => {});
         document.addEventListener("visibilitychange", () => (check(), whenIdle()));
         window.addEventListener("online", check);
+        // A version found earlier and still waiting takes over as the page opens, before anything is read: a
+        // browser tab or the Mac app is seldom hidden, so a reload kept the old reader for days (Max, 2026-11-04:
+        // no phone search and the old «Залишити фідбек» on app.chytai.org.ua).
+        if (reg.waiting && navigator.serviceWorker.controller) (swapAtStart = true), swap();
         whenIdle();
       })
       .catch((err) => console.warn("service worker", err));
     let hadController = !!navigator.serviceWorker.controller;
+    let swapAtStart = false;
+    let reloadWhenHidden = false;
+    const reloadNow = () => (streams.size ? (reloadWhenHidden = true) : location.reload());
     navigator.serviceWorker.addEventListener("controllerchange", () => {
-      if (hadController && !streams.size) location.reload();
+      // The new version takes over with a reload, never in front of the reader's eyes.
+      if (hadController && swapAtStart) return location.reload();
+      if (hadController) document.hidden ? reloadNow() : (reloadWhenHidden = true);
       hadController = true;
     });
+    document.addEventListener("visibilitychange", () => document.hidden && reloadWhenHidden && reloadNow());
   }
 
   async function api(method, url, body, opts = {}) {
@@ -208,6 +234,7 @@
       throw err;
     }
     setOffline(false);
+    if (res.status === 304) return res; // the copy on the device is current (openServerBook)
     if (res.status === 401) {
       location.href = "/login";
       throw new Error("login");
@@ -225,6 +252,10 @@
   }
 
   // Reading positions change on every page turn; batch them a little.
+  // Every position also waits in IndexedDB («positions», one per book, the latest wins) until the server has
+  // it, and opening a book sends what waits first. Without this, the last page turns before closing the app
+  // were lost: iOS suspends the app before the request sent on «hidden» is through, and the book opened a
+  // page or two back (Max 2026-11-03).
   const pendingPositions = new Map();
   let positionTimer = null;
   function flushPositions(keepalive) {
@@ -238,12 +269,12 @@
         credentials: "same-origin",
         keepalive,
       })
-        .then(() => setOffline(false))
-        .catch(async () => {
-          // No network: the position waits in IndexedDB (one per book, the latest wins) for the next sync.
-          setOffline(true);
-          await kvSet("positions", { ...((await kvGet("positions")) || {}), [path]: pos });
-        });
+        .then((res) => {
+          setOffline(false);
+          if (res.ok) unqueuePosition(path, pos);
+        })
+        // No network: the position waits for the next sync.
+        .catch(() => setOffline(true));
     }
     pendingPositions.clear();
   }
@@ -256,11 +287,27 @@
     else window.addEventListener("load", go, { once: true });
   }
 
+  // On a slow connection a tapped book gave no sign for seconds (Max, 2026-11-02): a busy notice after a
+  // moment, gone once the book opens or fails.
+  const OPENING = "Відкриваю книжку…";
   async function openServerBook(name) {
+    const slow = setTimeout(() => typeof showNotice === "function" && showNotice(OPENING, true), 400);
+    try {
+      return await openServerBookNow(name);
+    } finally {
+      clearTimeout(slow);
+      const box = document.getElementById("notice");
+      if (box?.querySelector(".notice-text")?.textContent === OPENING) box.classList.add("hidden");
+    }
+  }
+  async function openServerBookNow(name) {
     let payload;
     try {
       await sync(); // positions saved here first, so the server's answer is the latest one
-      const res = await api("GET", `/api/book?path=${encodeURIComponent(name)}`);
+      // The copy kept on the device is used when the server's file is the same (its ETag): opening a book
+      // downloaded the whole file every time, seconds on a slow connection (Max, 2026-11-01).
+      const saved = await idb("books", "readonly", (s) => s.get(name)).catch(() => null);
+      const res = await api("GET", `/api/book?path=${encodeURIComponent(name)}`, undefined, { headers: saved?.etag ? { "If-None-Match": saved.etag } : {} });
       const position = decodeURIComponent(res.headers.get("X-Book-Position") || "") || null;
       const reflowPosition = decodeURIComponent(res.headers.get("X-Book-Reflow-Position") || "") || null;
       // A publisher's book: read chapter by chapter from the server, never kept on the device.
@@ -269,12 +316,17 @@
         patchLocalSettings({ lastBook: name });
         return emit("book:open", { path: name, name, url: new URL(info.base, location.href).href, preview: info.preview, position, reflowPosition });
       }
-      const data = await res.arrayBuffer();
+      const fresh = res.status !== 304;
+      const data = fresh ? await res.arrayBuffer() : saved.data;
       // A guest's place lives in the server's memory only; after a restart (or once they sign in) the one
       // kept on this device carries on.
       const kept = position || reflowPosition ? null : (await kvGet("here").catch(() => null)) || {};
       payload = { path: name, name, data, position: position || kept?.[name] || null, reflowPosition: reflowPosition || kept?.[`${name}#reflow`] || null };
-      idb("books", "readwrite", (s) => s.put({ data, savedAt: Date.now() }, name)).catch(() => {});
+      // A copy taken now: the PDF viewer takes the buffer itself, and the database is written a moment later.
+      if (fresh) {
+        const copy = { data: data.slice(0), savedAt: Date.now(), etag: res.headers.get("ETag") || "" };
+        idb("books", "readwrite", (s) => s.put(copy, name)).catch(() => {});
+      }
     } catch (err) {
       if (err.message === "login") return;
       if (!isNetworkError(err)) return emit("book:error", `Не вдалося відкрити книжку: ${err.message}`);
@@ -414,7 +466,9 @@
     openPath: (target) => (target instanceof File ? uploadAndOpen(target) : openServerBook(target)),
     // progress: { pct, chapter } when the reader knows them, for the home screen.
     savePosition: (bookPath, cfi, progress) => {
+      window.ReadingTime?.poke(); // a page turned
       pendingPositions.set(bookPath, { cfi, ...progress });
+      editQueued((positions) => void (positions[bookPath] = { cfi, ...progress }));
       clearTimeout(positionTimer);
       positionTimer = setTimeout(() => flushPositions(false), 600);
     },
@@ -471,6 +525,22 @@
       const s = (await localSettings()) || {};
       if (s.lastBook === name) patchLocalSettings({ lastBook: null });
     },
+    // An old PDF of your own becomes an EPUB: the text version already made for reading it «як книжку», or made now.
+    libraryPdfToEpub: async (name, progress) => {
+      await sync();
+      while (!window.PdfView) await new Promise((r) => setTimeout(r, 50));
+      const version = window.PdfView.REFLOW_VERSION;
+      let epub = await window.reader.reflowGet(name, version);
+      if (!epub) {
+        const pdf = await (await api("GET", `/api/book?path=${encodeURIComponent(name)}`)).arrayBuffer();
+        epub = await window.PdfView.reflow(pdf, progress, bareName(name));
+      }
+      const { path } = await (await api("POST", `/api/books/${encodeURIComponent(name)}/epub`, new Blob([epub]))).json();
+      idb("books", "readwrite", (s) => s.delete(name)).catch(() => {});
+      const s = (await localSettings()) || {};
+      if (s.lastBook === name) patchLocalSettings({ lastBook: path });
+      return path;
+    },
     libraryTrash: () => api("GET", "/api/trash").then((r) => r.json()),
     libraryForgetBook: (name) => api("POST", "/api/trash/forget", { path: name }),
     libraryRestoreBook: (name) => api("POST", "/api/trash/restore", { path: name }).then((r) => r.json()),
@@ -521,6 +591,11 @@
         return patchLocalSettings(rest);
       }
     },
+    // Kept explanations of a book (server only: without a connection they simply aren't kept this time).
+    chatsList: async (bookPath) => (await (await api("GET", `/api/chats?path=${encodeURIComponent(bookPath)}`)).json()).chats || [],
+    chatSave: (bookPath, chat) => api("PUT", `/api/chats/${encodeURIComponent(chat.id)}`, { ...chat, path: bookPath }),
+    chatDelete: (bookPath, id) => api("DELETE", `/api/chats/${encodeURIComponent(id)}?path=${encodeURIComponent(bookPath)}`),
+    chatsClear: (bookPath) => api("DELETE", `/api/chats?path=${encodeURIComponent(bookPath)}`),
     notesList: async (bookPath) => {
       try {
         await sync();
@@ -579,7 +654,7 @@
       }
     },
     // ---------- Home screen ----------
-    coverUrl: (b) => (b.ext === "epub" || b.coverAt ? `/api/cover?path=${encodeURIComponent(b.path)}&v=${b.mtime || 0}-${b.coverAt || 0}` : null),
+    coverUrl: (b) => (b.paper ? b.coverSrc || null : b.ext === "epub" || b.coverAt ? `/api/cover?path=${encodeURIComponent(b.path)}&v=${b.mtime || 0}-${b.coverAt || 0}` : null),
     notesAll: async () => {
       try {
         await sync();
@@ -604,7 +679,44 @@
       if (s.lastBook === name) patchLocalSettings({ lastBook: null });
     },
     clubFeed: async () => (await api("GET", "/api/club")).json(),
+    // «Про книжку»: the site's short summary, kept on the device. `cachedOnly` reads the device copy alone;
+    // without it the network is asked first and the device copy is the fallback (null when there is none).
+    bookAbout: async (b, cachedOnly = false) => {
+      const key = `about:${b.path}`;
+      const kept = await kvGet(key);
+      if (cachedOnly) return kept || null;
+      try {
+        const q = new URLSearchParams({ title: b.title, author: (b.authors || []).join(", ") });
+        const data = await (await api("GET", `/api/about?${q}`)).json();
+        kvSet(key, { ...data, at: Date.now() });
+        return data;
+      } catch {
+        return kept || null;
+      }
+    },
     uploadFiles: (files) => uploadAll(files),
+    libraryTake: (name) => api("POST", "/api/library/take", { path: name }),
+    // Paper books (paper.js, server/paper.js).
+    paperAdd: async (info) => (await api("POST", "/api/paper", info)).json(),
+    paperUpdate: async (name, patch) => (await api("PATCH", `/api/paper/${encodeURIComponent(name)}`, patch)).json(),
+    // The panel's search in notes and talks with Claude; null offline (only the titles are searched then).
+    searchMine: async (q) => {
+      try {
+        return (await (await api("GET", `/api/search?q=${encodeURIComponent(q)}`)).json()).hits;
+      } catch (err) {
+        if (isNetworkError(err)) return null;
+        throw err;
+      }
+    },
+    paperChats: async (name) => (await (await api("GET", `/api/paper/${encodeURIComponent(name)}/chats`)).json()).chats,
+    paperChatSave: (name, chat) => api("PUT", `/api/paper/${encodeURIComponent(name)}/chats/${encodeURIComponent(chat.id)}`, chat),
+    paperChatDelete: (name, id) => api("DELETE", `/api/paper/${encodeURIComponent(name)}/chats/${encodeURIComponent(id)}`),
+    paperTidy: async (name, text) => (await (await api("POST", `/api/paper/${encodeURIComponent(name)}/tidy`, { text })).json()).text || text,
+    tidy: async (title, author, text) => (await (await api("POST", "/api/tidy", { title, author, text })).json()).text || text,
+    paperSuggest: async (name) => (await (await api("POST", `/api/paper/${encodeURIComponent(name)}/suggest`, {})).json()).questions?.[0] || "",
+    paperSeen: (name) => api("POST", `/api/paper/${encodeURIComponent(name)}/seen`, {}).catch(() => {}),
+    paperScan: async (kind, blob) => (await api("POST", `/api/paper/scan?kind=${kind}`, blob)).json(),
+    catalogFind: async (q) => (await api("GET", `/api/find?${new URLSearchParams({ q })}`)).json(),
     libraryFinished: (name, done) => api("POST", "/api/library/finished", { path: name, done }),
     librarySeen: (paths) => api("POST", "/api/library/seen", { paths }).catch(() => {}),
     wishList: async () => {
@@ -678,7 +790,8 @@
     if (!(e.metaKey || e.ctrlKey)) return;
     const k = e.key.toLowerCase();
     if (k === "o") (e.preventDefault(), pickFile());
-    else if (k === "l") (e.preventDefault(), emit("ui:library"));
+    // ⌘L stays the browser's address bar; only the Mac app uses it for Мої книжки (Max, 2026-11-02).
+    else if (k === "l" && document.documentElement.classList.contains("mac-app")) (e.preventDefault(), emit("ui:library"));
     else if (k === "e") (e.preventDefault(), emit("ui:toggle-panel"));
     else if (k === ",") (e.preventDefault(), emit("ui:settings"));
     else if (k === "f") (e.preventDefault(), emit("ui:find", "open"));
@@ -689,7 +802,7 @@
   function enterGuestMode(settings) {
     document.body.classList.add("guest");
     const logout = document.getElementById("btn-logout");
-    if (logout) (logout.textContent = settings.share || settings.free ? "Вийти" : "Вийти з демо"), (logout.title = "Повернутися на сторінку входу");
+    if (logout) (logout.textContent = "Вийти"), (logout.title = "Повернутися на сторінку входу");
     const { limit = 0, used = 0 } = settings.guestLimit || {};
     const left = Math.max(0, limit - used);
     setTimeout(() => {

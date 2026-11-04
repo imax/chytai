@@ -7,13 +7,21 @@ const THEMES = {
   sepia: { body: { background: "#f6efe0", color: "#3b2f1e" } },
   dark: { body: { background: "#1e1e20", color: "#dcdcdc" }, a: { color: "#8ab4f8" } },
 };
+// Turn 9 on a phone, turn 10 on a computer (Claude Design, 2026-11-02): paper, ink and ochre like Мої книжки; the
+// book text in the dark theme a little dimmer than the interface. Selection and the passage open in a sheet or the
+// panel get the design's colours.
+const THEMES_PHONE = {
+  light: { body: { background: "#f7f4ee", color: "#1b1a17" }, "::selection": { background: "#e9d3a3" } },
+  sepia: { body: { background: "#f2e8d5", color: "#3a3024" }, "::selection": { background: "#e3cc9c" } },
+  dark: { body: { background: "#1a1916", color: "#d9d2c5" }, a: { color: "#d9a35a" }, "::selection": { background: "#5a4526" } },
+};
 const DARK_QUERY = window.matchMedia("(prefers-color-scheme: dark)");
 const resolvedTheme = () => {
   const theme = settings?.theme || "auto";
   return theme === "auto" ? (DARK_QUERY.matches ? "dark" : "light") : THEMES[theme] ? theme : "light";
 };
 const themeCss = (name) =>
-  Object.entries(THEMES[name])
+  Object.entries(THEMES_PHONE[name])
     .map(([sel, rules]) => `${sel}{${Object.entries(rules).map(([k, v]) => `${k}:${v}`).join(";")}}`)
     .join("\n");
 
@@ -29,12 +37,15 @@ const FONTS = {
 const FONT_CSS = ["wght.css", "wght-italic.css"].map(
   (f) => new URL(`../../node_modules/@fontsource-variable/literata/${f}`, location.href).href
 );
-// Book text a bit larger than browser default, closer to the Kindle apps at 100%.
-const BASE_SCALE = 1.2;
-const HIGHLIGHT_STYLE = { fill: "#ffd54a", "fill-opacity": "0.35", "mix-blend-mode": "multiply" };
+// Book text a bit larger than browser default, closer to the Kindle apps at 100%: 19px on a phone, 21px on a
+// computer (turn 10).
+const BASE_SCALE = matchMedia("(max-width: 760px)").matches ? 1.2 : 1.3125;
+// The passage whose explanation is open in the sheet or the panel (turns 9, 10): a see-through ochre over the text.
+const highlightStyle = () =>
+  document.body.dataset.theme === "dark" ? { fill: "#d9a35a", "fill-opacity": "0.24" } : { fill: "#cd9646", "fill-opacity": "0.3" };
 
-// On a phone the explanations panel is a sheet over the page, so it starts hidden and opens with the first explanation.
-if (matchMedia("(max-width: 760px)").matches) document.body.classList.add("panel-hidden");
+// The explanations panel opens with the first explanation (a sheet on a phone, the right panel on a computer).
+document.body.classList.add("panel-hidden");
 let touchStart = null;
 const PHONE = matchMedia("(max-width: 760px)");
 // Touch screens wider than a phone (iPad): desktop layout, but finger-sized controls and the
@@ -84,7 +95,6 @@ async function loadSettings() {
 }
 
 function openSettings() {
-  if (settings.web && !settings.guest) fillDemoBooks();
   $("#set-key").value = "";
   $("#key-hint").textContent = settings.apiKeyFromEnv
     ? "Використовується ключ зі змінної середовища ANTHROPIC_API_KEY."
@@ -95,9 +105,6 @@ function openSettings() {
   $("#set-model").value = settings.model;
   $("#set-margins").value = settings.margins || "normal";
   $("#set-language").value = settings.language;
-  $("#set-style").value = settings.explainStyle || "default";
-  $("#set-custom-style").value = settings.customStyle || "";
-  $("#custom-style-row").hidden = $("#set-style").value !== "custom";
   $("#set-font").value = settings.font;
   $("#set-page-taps").value = settings.pageTaps ? "taps" : "scroll";
   $("#set-desk-scroll").value = settings.deskScroll ? "scroll" : "pages";
@@ -110,8 +117,6 @@ $("#settings").addEventListener("close", async () => {
     theme: $("#set-theme").value,
     model: $("#set-model").value,
     language: $("#set-language").value.trim() || "українська",
-    explainStyle: $("#set-style").value,
-    customStyle: $("#set-custom-style").value.trim(),
     font: $("#set-font").value,
     margins: $("#set-margins").value,
     pageTaps: $("#set-page-taps").value === "taps",
@@ -119,7 +124,6 @@ $("#settings").addEventListener("close", async () => {
   };
   const key = $("#set-key").value.trim();
   if (key) patch.apiKey = key;
-  if (settings.web && !settings.guest && $("#set-demo-book").options.length) patch.demoBook = $("#set-demo-book").value;
   const fontChanged = patch.font !== settings.font;
   const marginsChanged = patch.margins !== (settings.margins || "normal");
   const wasScrolled = scrolled();
@@ -130,34 +134,10 @@ $("#settings").addEventListener("close", async () => {
   if (marginsChanged) resizeView();
   if (fontChanged) applyTypography(true);
 });
-$("#set-style").onchange = () => {
-  $("#custom-style-row").hidden = $("#set-style").value !== "custom";
-  if (!$("#custom-style-row").hidden) $("#set-custom-style").focus();
-};
 $("#btn-logout").onclick = () => window.reader.logout?.();
 $("#btn-admin").onclick = () => (location.href = "/admin");
 $("#btn-print").onclick = () => printBook();
 $("#btn-search").onclick = () => window.BookSearch?.open();
-
-// Family members choose which library book guests see in the demo (web only).
-async function fillDemoBooks() {
-  const select = $("#set-demo-book");
-  const builtIn = settings.demoDefault ? `Вбудована (${settings.demoDefault.replace(/\.(epub|pdf)$/i, "")})` : "Немає вбудованої";
-  select.innerHTML = `<option value="">${builtIn}</option>`;
-  try {
-    const { books } = await window.reader.libraryList();
-    for (const b of [...books].sort((x, y) => x.title.localeCompare(y.title, "uk"))) {
-      const opt = document.createElement("option");
-      opt.value = b.path;
-      opt.textContent = `${b.title}${b.authors[0] ? ` — ${b.authors[0]}` : ""}`;
-      select.append(opt);
-    }
-  } catch {
-    /* the library is optional here */
-  }
-  select.value = settings.demoBook || "";
-  if (select.value !== (settings.demoBook || "")) select.value = "";
-}
 
 // On a phone the book scrolls as one continuous column unless page turns were chosen in settings;
 // on a computer it turns pages unless continuous scrolling was chosen.
@@ -172,9 +152,15 @@ async function reopenBook() {
   openBook({ ...current.source, position: latest.positions[current.posKey] || null, reflowPosition: latest.positions[current.posKey] || null });
 }
 
-// A little tighter on a phone, where every line counts.
+// A little tighter on a phone, where every line counts; 21/34 on a computer (turn 10).
 function lineHeight() {
-  return PHONE.matches ? 1.6 : 1.7;
+  return PHONE.matches ? 1.6 : 1.62;
+}
+
+// The text column on a computer (turn 10, «Колонка» in «Вигляд»): narrow, normal or wide.
+const COLUMNS = { narrow: 560, normal: 640, wide: 760 };
+function columnWidth() {
+  return COLUMNS[settings.column] || COLUMNS.normal;
 }
 
 // Kindle-like typography: book font replaced, justified text with hyphenation, calm line spacing.
@@ -192,7 +178,7 @@ function typographyCss() {
     pre, code, kbd, samp { font-family: ui-monospace, Menlo, monospace !important; }
     /* epub.js pads a scrolled page by 1/12 of its width; use the same side space as page mode instead. */
     ${scrolled() ? "body { padding-left: 14px !important; padding-right: 14px !important; }" : ""}
-    ${scrolled() && !PHONE.matches ? "body { max-width: 680px !important; margin-left: auto !important; margin-right: auto !important; }" : ""}`;
+    ${scrolled() && !PHONE.matches ? `body { max-width: ${columnWidth() + 28}px !important; margin-left: auto !important; margin-right: auto !important; }` : ""}`;
 }
 
 function styleContents(contents) {
@@ -240,7 +226,7 @@ async function openBook(payload) {
   // Explanations belong to the book they were asked in; reopening the same book (PDF view switch) keeps them.
   if (payload.path !== current?.path) clearExplanations();
   closeBook();
-  hideSelToolbar();
+  hideSelToolbar(true);
   $("#empty").classList.add("hidden");
   // A PDF is read as a book (Max, 2026-11-01: no «Оригінал PDF» switch any more). New uploads already come as
   // EPUB; an older PDF is converted here once and kept. A scan without text opens as pages.
@@ -287,18 +273,17 @@ async function openEpub(payload, { posKey, source }) {
   bookShown = true;
   syncAppProtection();
 
+  window.DeskRead?.layout(false); // the column and the spread for this mode, before the first layout
   rendition = book.renderTo("viewer", {
     width: "100%",
     height: "100%",
-    ...(scrolled() ? { flow: "scrolled", manager: "continuous" } : { flow: "paginated", spread: "auto", minSpreadWidth: 960 }),
+    // A computer turns a spread of two 440px pages, 96px apart, once the window has room for it (turn 10, 10k).
+    ...(scrolled() ? { flow: "scrolled", manager: "continuous" } : PHONE.matches ? { flow: "paginated", spread: "auto", minSpreadWidth: 960 } : { flow: "paginated", spread: "auto", minSpreadWidth: 1000, gap: 96 }),
     // WebKit (iOS Safari) does not run our touch/selection listeners inside an iframe sandboxed
     // without allow-scripts, so allow scripts and strip the book's own ones in stripScripts.
     allowScriptedContent: true,
   });
   followFontLoad(rendition);
-  rendition.themes.default({
-    "::selection": { background: "rgba(255, 200, 0, 0.45)" },
-  });
   rendition.hooks.content.register(styleContents);
   rendition.hooks.content.register((contents) => contents.on("linkClicked", rememberReturn));
   if (current.protected) rendition.hooks.content.register(limitCopy);
@@ -309,8 +294,11 @@ async function openEpub(payload, { posKey, source }) {
   rendition.on("rendered", () => decorateNoteMarks());
   rendition.on("keyup", onKey);
   rendition.hooks.content.register((contents) => contents.document.addEventListener("wheel", onWheel, { passive: true }));
+  // Taps, keys and scrolls inside the book's frame are signs of reading too (reading-time.js).
+  rendition.hooks.content.register((contents) => { for (const ev of ["pointerdown", "keydown", "wheel", "touchstart"]) contents.document.addEventListener(ev, () => window.ReadingTime?.poke(), { passive: true }); });
   // Keys pressed while the page has focus reach only the book's frame; pass them on.
-  rendition.on("keydown", (e) => (onPrintKey(e), e.defaultPrevented || window.Shell?.key(e)));
+  rendition.on("keydown", (e) => (onPrintKey(e), e.defaultPrevented || window.DeskRead?.key(e), e.defaultPrevented || window.Shell?.key(e), window.DeskRead?.escFull(e)));
+  window.DeskRead?.watchFrames(rendition);
   rendition.on("click", (e) => {
     // A plain click inside the page clears the selection. Touch taps are handled in onTouchEnd:
     // iOS Safari does not deliver clicks on plain text to the iframe's document listener.
@@ -342,11 +330,24 @@ async function openEpub(payload, { posKey, source }) {
     if (rendition === mine && !mine.location?.start) mine.display(payload.position || undefined);
   });
 
-  await rendition.display(payload.position || undefined);
+  // display() lays the page out again once the book's fonts are in (followFontLoad); the first layout
+  // flashed for a moment before it (Max, 2026-11-02). The page shows when the second one is done, or
+  // after a second and a half if the fonts are slow.
+  const viewer = $("#viewer");
+  viewer.style.opacity = "0";
+  const reveal = () => (viewer.style.opacity = "");
+  const revealLate = setTimeout(reveal, 1500);
+  try {
+    await rendition.display(payload.position || undefined);
+  } finally {
+    clearTimeout(revealLate);
+    reveal();
+  }
   // The reading area may have been measured before the layout settled (first load, toolbar
   // hiding on a phone); a re-measure now re-renders only if the size actually changed.
   requestAnimationFrame(resizeView);
   loadNotes();
+  loadChats();
   watchFirstPage();
   jumpIfPending();
 
@@ -357,6 +358,7 @@ async function openEpub(payload, { posKey, source }) {
   $("#book-title").textContent = current.author ? `${current.title} · ${current.author}` : current.title;
   $("#running-head").textContent = current.title;
   document.title = current.title;
+  window.PhoneRead?.bookOpened();
 
   const nav = await book.loaded.navigation;
   renderToc(nav.toc);
@@ -366,10 +368,11 @@ async function openEpub(payload, { posKey, source }) {
 
   // Page-accurate progress needs the locations index; build it in the background.
   book.locations.generate(1600).then(() => {
+    book.locationsReady = true; // before this, length() counts only the chapters done so far
     const location = rendition?.currentLocation();
     updateProgress(location);
     if (current && location?.start) window.reader.savePosition(current.posKey, location.start.cfi, readingProgress(location));
-    addTocPages(book);
+    addTocPages(book).then(() => window.PhoneRead?.ticks());
   });
 }
 
@@ -480,8 +483,8 @@ $("#btn-back").onclick = () => {
 // While a book is on screen the toolbar is hidden; a tap in the middle of the page shows it.
 
 function syncReading() {
-  if (document.body.classList.contains("library-open")) hideSelToolbar(); // the bar has no book to act on there
-  const reading = PHONE.matches && !!(rendition || pdfView) && !document.body.classList.contains("library-open");
+  if (document.body.classList.contains("library-open")) hideSelToolbar(true); // the bar has no book to act on there
+  const reading = !!(rendition || pdfView) && !document.body.classList.contains("library-open");
   if (reading === document.body.classList.contains("reading")) return;
   document.body.classList.toggle("reading", reading);
   document.body.classList.remove("chrome-shown");
@@ -493,17 +496,23 @@ function toggleChrome(show = !document.body.classList.contains("chrome-shown")) 
   if (!document.body.classList.contains("reading")) return;
   document.body.classList.toggle("chrome-shown", show);
   if (!show) $("#toc").classList.add("hidden");
+  window.PhoneRead?.chrome(show);
 }
 
 // Escape hatch: when a chapter never renders (a broken book, a WebKit quirk), taps inside the page
 // never reach us and the toolbar could not be brought back. The running head at the top and the
 // bare page area outside the chapter frames still get taps, so a tap there shows the toolbar.
 $("#running-head").addEventListener("click", () => toggleChrome(true));
-const panelOverPage = () => PHONE.matches && !document.body.classList.contains("panel-hidden");
+const panelOverPage = () => PHONE.matches && (!document.body.classList.contains("panel-hidden") || !!window.PhoneRead?.sheetOpen());
 $("#viewer").addEventListener("click", (e) => {
-  if (panelOverPage()) return showPanel(false);
+  if (panelOverPage()) return closeSheets();
   if (e.target.tagName !== "IFRAME") toggleChrome();
 });
+
+function closeSheets() {
+  window.PhoneRead?.closeSheet();
+  if (!document.body.classList.contains("panel-hidden")) showPanel(false);
+}
 
 // Original-layout PDFs scroll instead of paging, so any tap in the middle band toggles the toolbar.
 $("#pdf-container").addEventListener("click", (e) => {
@@ -531,6 +540,7 @@ async function openPdf(payload) {
     onPageChange: (page, total) => {
       window.reader.savePosition(current.posKey, `pdf:${page}`, { pct: Math.round((page / total) * 100), chapter: "" });
       $("#progress-label").textContent = `${page} / ${total}`;
+      window.PhoneRead?.pdfPage(page, total);
       hideSelToolbar();
     },
   });
@@ -543,10 +553,12 @@ async function openPdf(payload) {
   $("#running-head").textContent = current.title;
   $("#chapter-label").textContent = "";
   document.title = current.title;
+  window.PhoneRead?.bookOpened();
   const toc = await pdfView.toc();
   renderToc(toc);
   $("#btn-toc").disabled = !toc.length;
   loadNotes();
+  loadChats();
   jumpIfPending();
 }
 
@@ -656,7 +668,8 @@ function onRelocated(location) {
   updateProgress(location);
   // While scrolling, a selection may move off screen and back; its toolbar is pinned at the bottom anyway.
   if (!scrolled()) hideSelToolbar();
-  toggleChrome(false);
+  // On a computer the mouse shows and hides the header (desk-read.js); a relayout must not take it away.
+  if (!window.DeskRead?.mouseChrome()) toggleChrome(false);
 }
 
 // How far into the book and which chapter, for the home screen; nothing until the locations index exists.
@@ -675,6 +688,7 @@ function chapterNumber(spineIndex) {
 
 function updateProgress(location) {
   if (!location?.start) return;
+  window.PhoneRead?.progress(location);
   $("#chapter-label").textContent = chapterTitle(location.start.href, location.start.cfi);
   if (book.locations.length() && !current?.preview) {
     $("#progress-label").textContent = `${Math.round(book.locations.percentageFromCfi(location.start.cfi) * 100)}%`;
@@ -701,11 +715,15 @@ function limitCopy(contents) {
 }
 
 // Books never get to run code: drop <script> elements and inline on* handlers before rendering.
+// A book's own code never runs: scripts and event attributes go, and so (security review 2026-11-04) do frames
+// and embeds (an <iframe srcdoc> runs as this page), <base> and <meta http-equiv>, and javascript: in any spelling
+// (browsers skip tabs and line breaks inside the scheme).
+const BOOK_DROP = new Set(["script", "iframe", "frame", "frameset", "object", "embed", "applet", "base", "portal"]);
 function stripScripts(doc) {
   for (const el of [...doc.querySelectorAll("*")]) {
-    if (el.localName === "script") { el.remove(); continue; }
+    if (BOOK_DROP.has(el.localName) || (el.localName === "meta" && el.hasAttribute("http-equiv"))) { el.remove(); continue; }
     for (const attr of [...el.attributes]) {
-      if (/^on/i.test(attr.name) || /^\s*javascript:/i.test(attr.value)) el.removeAttribute(attr.name);
+      if (/^on/i.test(attr.name) || attr.name === "srcdoc" || /^(javascript|vbscript):/i.test(attr.value.replace(/[\s\u0000-\u001f]+/g, ""))) el.removeAttribute(attr.name);
     }
   }
 }
@@ -726,7 +744,7 @@ function onTouchEnd(e) {
     dx < 0 ? rendition?.next() : rendition?.prev();
   } else if (ms < 400 && Math.abs(dx) < 12 && Math.abs(dy) < 12 && !e.target?.closest?.("a")) {
     // On a phone a tap on the page puts the open panel away first (Max, 2026-11-01).
-    if (panelOverPage()) return showPanel(false);
+    if (panelOverPage()) return closeSheets();
     tapToPage(t, e.view);
   }
 }
@@ -801,8 +819,65 @@ function handleSelection(range, cfiRange, ctx, frame) {
   const bar = $("#sel-toolbar");
   bar.classList.remove("mark");
   bar.querySelector('[data-action="translate"]').hidden = isUkrainian(pendingSelection.text);
+  const quote = pendingSelection.text.replace(/\s+/g, " ");
+  bar.querySelector(".st-quote").textContent = quote.length > 300 ? quote.slice(0, 300) + "…" : quote;
+  // A new selection starts with an empty field; moving the ends of the one on screen keeps what is written.
+  if (bar.classList.contains("hidden")) setAskField("");
   showSelToolbar(range, frame);
 }
+
+// The selection's question field: «Пояснити» asks for an explanation, a question turns it into «Запитати».
+function setAskField(text) {
+  const field = $("#st-q");
+  field.value = text;
+  syncAskField();
+}
+function syncAskField() {
+  const has = !!$("#st-q").value.trim();
+  const bar = $("#sel-toolbar");
+  bar.classList.toggle("asking", has);
+  bar.querySelector('[data-action="explain"] span').textContent = has ? "Запитати" : "Пояснити";
+}
+$("#st-q").addEventListener("input", syncAskField);
+$("#st-q").addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && !e.shiftKey && !e.isComposing) {
+    e.preventDefault();
+    $("#sel-toolbar [data-action=explain]").click();
+  } else if (e.key === "Escape") {
+    e.preventDefault();
+    hideSelToolbar(true);
+  }
+});
+// Typing a question takes the focus out of the book, and the browser may drop the selection there; the passage
+// stays marked while the question is written.
+let askMark = "";
+$("#st-q").addEventListener("focus", () => {
+  const cfi = pendingSelection?.cfiRange;
+  if (!rendition || !cfi || !String(cfi).startsWith("epubcfi") || askMark === cfi) return;
+  dropAskMark();
+  try {
+    rendition.annotations.highlight(cfi, {}, () => {}, "st-hl", highlightStyle());
+    askMark = cfi;
+    for (const c of rendition.getContents()) c.window.getSelection()?.removeAllRanges();
+  } catch {
+    /* cosmetic */
+  }
+});
+function dropAskMark() {
+  if (!askMark) return;
+  try {
+    rendition?.annotations.remove(askMark, "highlight");
+  } catch {
+    /* ignore */
+  }
+  askMark = "";
+}
+// The phone's keyboard covers the bottom of the screen: the card rides above it.
+window.visualViewport?.addEventListener("resize", () => {
+  const vv = window.visualViewport;
+  const kb = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+  document.body.style.setProperty("--kb", `${Math.round(kb)}px`);
+});
 
 // No «Переклад» in Ukrainian books (Max, 2026-10-26): the book says so, or the text has і/ї/є/ґ.
 function isUkrainian(text) {
@@ -828,9 +903,21 @@ function showSelToolbar(range, frame) {
     bar.style.left = `${r.left + r.width / 2}px`;
     return;
   }
-  const above = frame.top + rect.top - bar.offsetHeight - 8;
-  const left = frame.left + rect.left + rect.width / 2 - bar.offsetWidth / 2;
-  const top = Math.max(48, above < 48 ? frame.top + rect.bottom + 8 : above);
+  // The yellow's menu: over the start of the passage, ~10px above the line; under its end when there is no room
+  // (turn 10, 10c). The question card (2026-11-03): under the selection, so it stays in sight; over it when the
+  // card does not fit below.
+  const first = range.getClientRects()[0] || rect;
+  let top, left;
+  if (bar.classList.contains("mark")) {
+    const above = frame.top + first.top - bar.offsetHeight - 10;
+    left = frame.left + first.left + Math.min(first.width, 200) / 2 - bar.offsetWidth / 2;
+    top = Math.max(8, above < 8 ? frame.top + rect.bottom + 10 : above);
+  } else {
+    const below = frame.top + rect.bottom + 12;
+    const above = frame.top + rect.top - bar.offsetHeight - 12;
+    left = frame.left + first.left;
+    top = below + bar.offsetHeight <= window.innerHeight - 8 ? below : Math.max(8, above);
+  }
   bar.style.top = `${top}px`;
   bar.style.left = `${Math.min(Math.max(8, left), window.innerWidth - bar.offsetWidth - 8)}px`;
 }
@@ -849,33 +936,51 @@ function watchFirstPage() {
 }
 
 let selGoneTimer = 0;
-function hideSelToolbar() {
+// force: the book closed or the reader said so (Esc, a question sent); otherwise a question being written or
+// dictated keeps the card, though the selection it came from is gone.
+function hideSelToolbar(force) {
   const bar = $("#sel-toolbar");
   // The tap that opened the yellow's menu also looks like a click that clears the selection.
   if (bar.classList.contains("mark") && Date.now() - markShownAt < 400) return;
+  if (force !== true && !bar.classList.contains("hidden") && !bar.classList.contains("mark") && (document.activeElement === $("#st-q") || window.Dictation?.field() === "st-q")) return;
+  if (window.Dictation?.field() === "st-q") window.Dictation.stop();
+  if (document.activeElement === $("#st-q")) $("#st-q").blur();
   bar.classList.add("hidden");
+  dropAskMark();
 }
 
-$("#sel-toolbar").addEventListener("mousedown", (e) => e.preventDefault());
+// A click on the card keeps the selection in the book; the question field takes the focus as usual.
+$("#sel-toolbar").addEventListener("mousedown", (e) => e.target.closest("textarea") || e.preventDefault());
 $("#sel-toolbar").addEventListener("click", (e) => {
-  const action = e.target.dataset.action;
+  const action = e.target.closest("[data-action]")?.dataset.action;
   if (!action) return;
   if ($("#sel-toolbar").classList.contains("mark")) return onMarkAction(action);
   if (!pendingSelection) return;
+  if (action === "mic") return window.Dictation.toggle("st-q", "#sel-toolbar .st-mic", dictationTidy);
   const snapshot = pendingSelection;
+  const question = $("#st-q").value.trim();
   // A free book read without an account: explanations and notes come with one (they cost Max tokens).
   if (settings.free) {
     hideSelToolbar();
     showNotice("Пояснення, питання і нотатки працюють після входу. Це безкоштовно, потрібна лише пошта.", false);
     return noticeLink(settings.free.signIn, "Увійти");
   }
-  if (action === "note") {
-    addNote(snapshot);
-  } else {
-    startExplanation(snapshot, { mode: action === "translate" ? "translate" : "explain" });
+  hideSelToolbar(true);
+  try {
+    for (const c of rendition?.getContents?.() || []) c.window.getSelection()?.removeAllRanges();
+  } catch {
+    /* ignore */
   }
-  hideSelToolbar();
+  if (action === "note") {
+    // A question written but kept as a note: it becomes the note's thought.
+    addNote({ ...snapshot, comment: question });
+  } else {
+    startExplanation(snapshot, { mode: action === "translate" ? "translate" : "explain", question: action === "translate" ? "" : question });
+  }
 });
+
+// Dictated words tidied with this book's title (dictation.js).
+const dictationTidy = (said) => (window.reader.tidy && current && !settings.free ? window.reader.tidy(current.title, current.author, said) : said);
 
 function onMarkAction(action) {
   const conv = pendingMark;
@@ -903,25 +1008,36 @@ function modelLabel(model) {
 }
 
 // «Пояснити» explains on the main model; «Переклад» only translates, on the cheaper one.
-function startExplanation(selection, { mode = "explain" } = {}) {
+function startExplanation(selection, { mode = "explain", question = "" } = {}) {
   showPanel(true, "cards");
-  $("#panel-empty")?.remove();
 
-  // Same selection already explained: just bring that card into view.
-  for (const conv of conversations.values()) {
+  // Same selection already explained: just bring that card into view. A question about it is a new one.
+  for (const conv of question ? [] : conversations.values()) {
     if ((conv.cfiRange === selection.cfiRange || conv.context.selection === selection.context.selection) && conv.mode === mode) {
       highlightConv(conv);
+      window.PhoneRead?.showConv(conv);
       conv.card.scrollIntoView({ behavior: "smooth", block: "nearest" });
       flash(conv.card);
       return conv.card;
     }
   }
 
+  const conv = makeConv({ cfiRange: selection.cfiRange, context: selection.context, mode });
+  // The new card is at the top; bring it into view even if the list was scrolled down.
+  $("#panel-body").scrollTop = 0;
+  highlightConv(conv);
+  window.PhoneRead?.convStarted(conv);
+  runTurn(conv, question || null);
+  return conv.card;
+}
+
+// A card in the panel with its talk. New ones and kept ones (reopening the book) are made the same way.
+function makeConv({ cfiRange, context, mode, sid: keptId }) {
   const id = `r${++reqCounter}`;
   const card = document.createElement("article");
   card.className = mode === "translate" ? "card translation" : "card";
   card.dataset.id = id;
-  const quote = selection.context.selection;
+  const quote = context.selection || "";
   card.innerHTML = `
     <blockquote class="quote"></blockquote>
     <div class="thread"></div>
@@ -932,16 +1048,36 @@ function startExplanation(selection, { mode = "explain" } = {}) {
         <button class="link retry hidden">Ще раз</button>
       </span>
     </div>
-    <form class="followup"><input type="text" placeholder="Уточнити питання…" /></form>`;
+    <div class="c-acts"><span class="where"></span><button type="button" class="link c-note hidden">В нотатки</button><button type="button" class="link forget hidden">Видалити</button></div>
+    <form class="followup"><input type="text" placeholder="Уточнити…" enterkeyhint="send" /><button type="submit" class="ask" aria-label="Запитати"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5M6 11l6-6 6 6"/></svg></button></form>`;
   card.querySelector(".quote").textContent = quote.length > 280 ? quote.slice(0, 280) + "…" : quote;
-  $("#cards").prepend(card);
-  // The new card is at the top; bring it into view even if the list was scrolled down.
-  $("#cards").scrollTop = 0;
+  if (!quote) card.classList.add("c-book"); // a question about the book, no passage
+  $("#q-head").after(card);
 
-  const conv = { id, card, mode, cfiRange: selection.cfiRange, context: selection.context, messages: null, busy: false };
+  // sid: the id it is kept under on the server; turns: [{ q, a }] answered so far.
+  const sid = keptId || `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
+  const conv = { id, sid, card, mode, cfiRange, context, messages: null, turns: [], at: Date.now(), busy: false };
   conversations.set(id, conv);
 
-  highlightConv(conv);
+  card.querySelector(".forget").onclick = () => forgetConv(conv);
+  // «Запитання» (2026-11-03): a folded question opens in its place; «До тексту» goes to its passage (or the page
+  // it was asked on), «В нотатки» keeps the passage.
+  card.addEventListener("click", (e) => {
+    if (!card.classList.contains("m-off") || e.target.closest("button, a, input, form")) return;
+    openConvCard(conv);
+    highlightConv(conv);
+  });
+  // The chapter · page line takes you to the passage (Max 2026-11-03: no «До тексту» button).
+  card.querySelector(".c-acts .where").onclick = (e) => {
+    if (!e.currentTarget.classList.contains("c-go")) return;
+    e.stopPropagation();
+    goToConv(conv);
+  };
+  card.querySelector(".c-note").onclick = () =>
+    addNote({ cfiRange: conv.cfiRange, text: conv.context.selection, context: conv.context }).then(() => syncConvActs(conv));
+  syncConvActs(conv);
+  queueMicrotask(listCards);
+  card.querySelector(".followup input").oninput = (e) => card.querySelector(".followup").classList.toggle("filled", !!e.target.value.trim());
 
   card.querySelector(".stop").onclick = () => window.reader.abort(conv.reqId);
   card.querySelector(".more").onclick = () => {
@@ -962,12 +1098,13 @@ function startExplanation(selection, { mode = "explain" } = {}) {
     const q = input.value.trim();
     if (!q || conv.busy) return;
     input.value = "";
+    card.querySelector(".followup").classList.remove("filled");
     runTurn(conv, q);
+    window.PhoneRead?.sheetFull();
   };
 
   if (mode === "translate") card.querySelector(".followup input").placeholder = "Запитати про переклад…";
-  runTurn(conv, null);
-  return card;
+  return conv;
 }
 
 function runTurn(conv, question) {
@@ -1021,6 +1158,12 @@ window.reader.onAiEvent((reqId, ev) => {
   el.classList.remove("streaming");
   if (ev.type === "done") {
     conv.messages = ev.messages;
+    if (conv.text) {
+      conv.turns.push({ q: conv.lastQuestion || "", a: conv.text });
+      conv.model = ev.model || "";
+      saveConv(conv);
+    }
+    conv.card.querySelector(".forget").classList.remove("hidden");
     // One "more detail" per card: after it, the follow-up field is the way to ask further.
     if (conv.mode !== "translate" && conv.lastQuestion !== "Детальніше") conv.card.querySelector(".more").classList.remove("hidden");
     conv.card.querySelector(".model").textContent = (conv.mode === "translate" ? "Переклад · " : "") + modelLabel(ev.model) + (ev.truncated ? " · обрізано" : "");
@@ -1102,10 +1245,11 @@ function flash(card) {
 // footnote: a tap on it opens the explanation again (Max, 2026-10-27: «прибирати автоматично, але залишати
 // asterisk як типу сноску»). A tap on the yellow offers the explanation, a note or removing it.
 function highlightConv(conv) {
+  if (!conv.context.selection || !String(conv.cfiRange).startsWith("epubcfi")) return;
   for (const other of conversations.values()) if (other !== conv && other.marked === "yellow") starConv(other);
   try {
     unhighlightConv(conv);
-    rendition.annotations.highlight(conv.cfiRange, { id: conv.id }, () => showMarkToolbar(conv), "ai-hl", HIGHLIGHT_STYLE);
+    rendition.annotations.highlight(conv.cfiRange, { id: conv.id }, () => showMarkToolbar(conv), "ai-hl", highlightStyle());
     conv.marked = "yellow";
   } catch {
     /* highlighting is cosmetic */
@@ -1114,6 +1258,7 @@ function highlightConv(conv) {
 
 function starConv(conv) {
   unhighlightConv(conv);
+  if (!conv.context.selection || !String(conv.cfiRange).startsWith("epubcfi")) return;
   // A note on the very same words already marks them (and shares the annotation's key).
   if (notes.some((n) => n.cfi === conv.cfiRange)) return;
   try {
@@ -1156,7 +1301,8 @@ function showMarkToolbar(conv) {
   } catch {
     /* fall back to opening the card */
   }
-  if (!range) return openConvCard(conv);
+  // A click on a mark opens it in the sheet or the panel (turns 9, 10).
+  if (!range || PHONE.matches || !TOUCH.matches) return openConvCard(conv);
   pendingMark = conv;
   markShownAt = Date.now();
   const bar = $("#sel-toolbar");
@@ -1167,6 +1313,7 @@ function showMarkToolbar(conv) {
 
 function openConvCard(conv) {
   showPanel(true, "cards");
+  window.PhoneRead?.showConv(conv);
   conv.card.scrollIntoView({ behavior: "smooth", block: "nearest" });
   flash(conv.card);
 }
@@ -1174,6 +1321,7 @@ function openConvCard(conv) {
 function showPanel(show, tab) {
   document.body.classList.toggle("panel-hidden", !show);
   if (tab) showTab(tab);
+  window.PhoneRead?.panelShown(show);
   if (!show) starConvs();
   // epub.js needs a resize to reflow pages after the layout changes width.
   setTimeout(resizeView, 220);
@@ -1183,10 +1331,216 @@ function clearExplanations() {
   for (const conv of conversations.values()) if (conv.busy) window.reader.abort(conv.reqId);
   unhighlightConvs();
   conversations.clear();
-  $("#cards").innerHTML = `<div id="panel-empty" class="panel-empty">Виділіть текст у книжці, щоб отримати пояснення в контексті.</div>`;
+  for (const c of $("#cards").querySelectorAll(".card")) c.remove();
+  cardsAll = false;
+  listCards();
 }
 
-$("#btn-clear").onclick = clearExplanations;
+// «Очистити» in the panel: the book's kept explanations go too.
+$("#btn-clear").onclick = () => {
+  if (current && window.reader.chatsClear) window.reader.chatsClear(current.path).catch(() => {});
+  clearExplanations();
+};
+
+// Phone: «Очистити розмову» at the end of one explanation removes it and its mark in the text.
+function forgetConv(conv) {
+  if (conv.busy) window.reader.abort(conv.reqId);
+  unhighlightConv(conv);
+  conversations.delete(conv.id);
+  conv.card.remove();
+  if (current && conv.turns.length) window.reader.chatDelete?.(current.path, conv.sid).catch(() => {});
+  listCards();
+  renderNotes();
+}
+
+// ---------- «Запитання»: the list in the panel (2026-11-03, like a paper book's questions) ----------
+
+// The open question on top of the others, then the last three folded and «Показати всі N» for the rest.
+let cardsAll = false;
+function listCards() {
+  const cards = [...$("#cards").querySelectorAll(".card")];
+  let folded = 0;
+  let open = null;
+  for (const c of cards) {
+    // One question open at a time, as on a paper book's page; any other open one folds (Max 2026-11-03: he saw ~10).
+    if (!c.classList.contains("m-off")) {
+      if (!open) open = c;
+      else c.classList.add("m-off");
+    }
+    const off = c.classList.contains("m-off");
+    if (off) folded++;
+    c.classList.toggle("c-more", !cardsAll && off && folded > 3);
+  }
+  const more = $("#cards-more");
+  const hidden = cards.filter((c) => c.classList.contains("c-more")).length;
+  more.textContent = `Показати всі ${cards.length}`;
+  more.classList.toggle("hidden", !hidden);
+  $("#panel-empty").classList.toggle("hidden", cards.length > 0);
+  for (const conv of conversations.values()) syncConvActs(conv);
+  $("#q-head").innerHTML = `Запитання${cards.length ? ` · ${cards.length}` : ""}`;
+  window.PhoneRead?.notesCount();
+  window.PhoneRead?.syncPanelHead?.();
+}
+$("#cards-more").onclick = () => ((cardsAll = true), listCards());
+
+function syncConvActs(conv) {
+  const card = conv.card;
+  const saved = notes.some((n) => n.cfi === conv.cfiRange);
+  card.querySelector(".c-note").classList.toggle("hidden", !conv.context.selection || saved || !String(conv.cfiRange).startsWith("epubcfi"));
+  card.querySelector(".c-acts .where").classList.toggle("c-go", !(!conv.cfiRange || !String(conv.cfiRange).startsWith("epubcfi") || !rendition));
+}
+
+// To the passage (or the page a book question was asked on); a phone puts the list away to show it.
+function goToConv(conv) {
+  if (!rendition || !String(conv.cfiRange).startsWith("epubcfi")) return;
+  if (PHONE.matches) showPanel(false);
+  rememberReturn();
+  rendition.display(conv.cfiRange).then(() => highlightConv(conv)).catch(() => {});
+}
+
+// What is on the screen and just before it, for a question about the book.
+function pageContext() {
+  try {
+    const loc = rendition?.currentLocation?.();
+    if (!loc?.start) return {};
+    const contents = rendition.getContents().find((c) => c.sectionIndex === loc.start.index) || rendition.getContents()[0];
+    const doc = contents.document;
+    const a = rendition.getRange(loc.start.cfi);
+    let b = null;
+    try {
+      b = loc.end?.index === loc.start.index ? rendition.getRange(loc.end.cfi) : null;
+    } catch {
+      /* the end is in another chapter */
+    }
+    const r = doc.createRange();
+    r.setStart(a.startContainer, a.startOffset);
+    if (b) r.setEnd(b.endContainer, b.endOffset);
+    else r.setEnd(doc.body, doc.body.childNodes.length);
+    const ctx = extractContext(doc, r);
+    return { page: ctx.selection.replace(/[ \t]+/g, " ").replace(/\s*\n\s*/g, "\n").trim().slice(0, 5000), before: ctx.before };
+  } catch {
+    return {};
+  }
+}
+
+// «Запитати» (the bottom bar on a phone, the header or Q on a computer): the list, its field ready.
+function openAsk() {
+  if (!current) return;
+  showPanel(true, "cards");
+  window.PhoneRead?.sheetFull();
+  $("#panel-body").scrollTop = 0;
+  setTimeout(() => $("#ab-q").focus(), PHONE.matches ? 0 : 60);
+}
+
+function askBook(question) {
+  if (!current || !question) return;
+  if (settings.free) {
+    showNotice("Пояснення, питання і нотатки працюють після входу. Це безкоштовно, потрібна лише пошта.", false);
+    return noticeLink(settings.free.signIn, "Увійти");
+  }
+  const loc = rendition?.currentLocation?.();
+  const cfiRange = loc?.start?.cfi || (pdfView ? `pdf:${pdfView.viewer.currentPageNumber}` : "");
+  const chapter = $("#chapter-label").textContent.trim();
+  const conv = makeConv({ cfiRange, context: { selection: "", ...pageContext(), chapter, bookTitle: current.title, author: current.author }, mode: "explain" });
+  window.PhoneRead?.convStarted(conv);
+  runTurn(conv, question);
+  listCards();
+}
+
+$("#ask-book").addEventListener("submit", (e) => {
+  e.preventDefault();
+  const field = $("#ab-q");
+  const q = field.value.trim();
+  if (!q) return field.focus();
+  if (window.Dictation?.field() === "ab-q") window.Dictation.stop();
+  field.value = "";
+  field.blur();
+  askBook(q);
+});
+$("#ab-q").addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && !e.shiftKey && !e.isComposing) e.preventDefault(), $("#ask-book").requestSubmit();
+});
+// «+ Нотатка»: a thought of the reader's own, kept at the page on screen.
+function noteForm(open) {
+  const form = $("#note-form");
+  if (!open) window.Dictation.field() === "nf-text" && window.Dictation.stop();
+  form.classList.toggle("hidden", !open);
+  if (open) setTimeout(() => $("#nf-text").focus(), 30);
+}
+$("#note-add").onclick = () => noteForm($("#note-form").classList.contains("hidden"));
+$("#note-form .nf-mic").onclick = () => window.Dictation.toggle("nf-text", "#note-form .nf-mic", dictationTidy);
+$("#note-form").onsubmit = async (e) => {
+  e.preventDefault();
+  const text = $("#nf-text").value.trim();
+  if (!text || !current) return;
+  const at = rendition?.currentLocation?.()?.start?.cfi || "";
+  const note = { cfi: `mine:${Date.now().toString(36)}:${at}`, posKey: current.posKey, text, chapter: $("#chapter-label")?.textContent.trim() || "" };
+  try {
+    const saved = await notesStore.notesAdd(current.path, note);
+    if (!notes.some((n) => n.id === saved.id)) notes.push(saved);
+    $("#nf-text").value = "";
+    noteForm(false);
+    renderNotes();
+  } catch (err) {
+    if (err.message !== "login") showNotice(`Не вдалося зберегти нотатку: ${err.message}`, false);
+  }
+};
+$("#ask-book .ab-mic").onclick = () => window.Dictation.toggle("ab-q", "#ask-book .ab-mic", dictationTidy);
+
+// ---------- Kept explanations (Max 2026-11-03: saved like a paper book's questions) ----------
+
+// Every answered turn keeps the card on the server, with the talk so far for follow-ups after a reopen.
+function saveConv(conv) {
+  if (!current || !window.reader.chatSave) return;
+  conv.at = Date.now();
+  window.reader
+    .chatSave(current.path, {
+      id: conv.sid, cfi: conv.cfiRange, posKey: current.posKey, mode: conv.mode, sel: conv.context.selection || "",
+      chapter: conv.context.chapter || "", turns: conv.turns, messages: conv.messages, model: conv.model || "", at: conv.at,
+    })
+    .catch(() => {});
+}
+
+// Reopening the book: the kept cards come back (newest on top) and their passages get the asterisk.
+async function loadChats() {
+  const path = current?.path;
+  if (!path || !window.reader.chatsList) return;
+  let list;
+  try {
+    list = await window.reader.chatsList(path);
+  } catch {
+    return;
+  }
+  if (current?.path !== path || !list?.length) return;
+  const have = new Set([...conversations.values()].map((c) => c.sid));
+  const reachable = (c) => (c.cfi.startsWith("pdf:") ? !!pdfView : !!rendition && (c.posKey || path) === current.posKey);
+  const kept = list.filter((c) => !have.has(c.id) && reachable(c)).sort((a, b) => (a.at || 0) - (b.at || 0));
+  if (!kept.length) return;
+  const none = !have.size;
+
+  for (const c of kept) {
+    const conv = makeConv({ cfiRange: c.cfi, context: { selection: c.sel, chapter: c.chapter, bookTitle: current.title, author: current.author }, mode: c.mode, sid: c.id });
+    conv.turns = c.turns || [];
+    conv.messages = c.messages || null;
+    conv.model = c.model || "";
+    conv.at = c.at || 0;
+    const thread = conv.card.querySelector(".thread");
+    conv.turns.forEach((t) => {
+      if (t.q) thread.insertAdjacentHTML("beforeend", `<div class="question"></div>`), (thread.lastElementChild.textContent = t.q);
+      thread.insertAdjacentHTML("beforeend", `<div class="answer">${md(t.a)}</div>`);
+    });
+    conv.card.querySelector(".where").textContent = [c.chapter, c.at ? new Date(c.at).toLocaleDateString("uk-UA", { day: "numeric", month: "long" }) : ""].filter(Boolean).join(" · ");
+    conv.card.querySelector(".forget").classList.remove("hidden");
+    if (conv.mode !== "translate" && !conv.turns.some((t) => t.q === "Детальніше")) conv.card.querySelector(".more").classList.remove("hidden");
+    conv.card.querySelector(".model").textContent = (conv.mode === "translate" ? "Переклад · " : "") + modelLabel(conv.model);
+    conv.card.classList.add("m-off"); // a phone shows one explanation at a time
+    if (!c.cfi.startsWith("pdf:")) starConv(conv);
+  }
+  // The panel shows one explanation at a time: the newest kept one, until another is opened.
+  if (none) window.PhoneRead?.showConv([...conversations.values()].pop());
+  listCards();
+  showPendingChat();
+}
 
 // ---------- Notes: passages saved with "Зберегти", per reader and per book ----------
 
@@ -1218,17 +1572,17 @@ const notesStore = window.reader.notesList
 
 let notes = []; // notes of the open book, oldest first
 
+// One panel like a paper book's page (Max 2026-11-03): the question field and «Запитання» on top, «Нотатки» under
+// them. A «tab» is now where the panel is scrolled to: the top, or the notes (a note opened from the text).
+let lastTab = "cards";
+const panelTab = () => "cards";
 function showTab(tab) {
-  for (const b of document.querySelectorAll("#panel .tab")) b.classList.toggle("active", b.dataset.tab === tab);
-  $("#cards").classList.toggle("hidden", tab !== "cards");
-  $("#notes").classList.toggle("hidden", tab !== "notes");
-  if (tab !== "cards") starConvs();
-  $("#btn-clear").classList.toggle("hidden", tab !== "cards");
-  if (tab === "notes") requestAnimationFrame(() => document.querySelectorAll(".note-comment").forEach(fitComment));
+  lastTab = tab;
+  $("#btn-clear").classList.add("hidden");
+  requestAnimationFrame(() => document.querySelectorAll(".note-comment").forEach(fitComment));
 }
-for (const b of document.querySelectorAll("#panel .tab")) b.onclick = () => showTab(b.dataset.tab);
 
-const notesTabShown = () => !document.body.classList.contains("panel-hidden") && !$("#notes").classList.contains("hidden");
+const notesTabShown = () => !document.body.classList.contains("panel-hidden") && lastTab === "notes";
 
 async function loadNotes() {
   const path = current?.path;
@@ -1252,8 +1606,13 @@ function noteReachable(note) {
   return !!rendition && (note.posKey || current.path) === current.posKey;
 }
 
+// A note in the reader's own words («+ Нотатка», 2026-11-03) has no passage: its cfi is «mine:<id>:<the page's cfi>»,
+// unique so that two thoughts on one page stay two notes, and nothing is drawn in the text for it.
+const isMine = (note) => String(note?.cfi || "").startsWith("mine:");
+const noteTarget = (note) => (isMine(note) ? note.cfi.split(":").slice(2).join(":") : note.cfi);
+
 function markNote(note) {
-  if (!rendition || !noteReachable(note)) return;
+  if (!rendition || !noteReachable(note) || isMine(note)) return;
   try {
     rendition.annotations.underline(note.cfi, { note: note.id }, () => openNote(note.id), "note-ul");
     decorateNoteMarks();
@@ -1283,52 +1642,12 @@ function decorateNoteMarks() {
 }
 
 const SVG_NS = "http://www.w3.org/2000/svg";
+// Turns 9 and 10: a note is a soft fill behind its lines (CSS on the line rects).
 function drawBars(mark) {
-  const g = mark.element;
-  const rects = [...g.querySelectorAll("rect")]
-    .map((r) => ({ x: +r.getAttribute("x"), y: +r.getAttribute("y"), w: +r.getAttribute("width"), h: +r.getAttribute("height") }))
-    .filter((r) => r.w > 0 && r.h > 0);
-  // A passage that runs onto the next page continues in the next column: the text jumps back up.
-  const cols = [];
-  for (const r of rects) {
-    const col = cols.at(-1);
-    if (col && r.y >= col.at(-1).y - 2) col.push(r);
-    else cols.push([r]);
-  }
-  const add = (tag, attrs) => {
-    const el = document.createElementNS(SVG_NS, tag);
-    for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, v);
-    g.appendChild(el);
-    return el;
-  };
-  // The same note always wobbles the same way, so a relayout doesn't redraw it differently.
-  let seed = [...String(mark.data?.note || "")].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7);
-  const rand = () => ((seed = (seed * 1103515245 + 12345) >>> 0) / 2 ** 32) - 0.5;
-  // A short part of a paragraph (up to three lines) is underlined by hand under the exact words;
-  // whole paragraphs and longer passages get the bars, which read more calmly than many lines of ink.
-  const lines = new Set(rects.map((r) => Math.round(r.y))).size;
-  const comment = notes.find((n) => n.id === mark.data?.note)?.comment || "";
-  if (rects.length) drawCommentMark(add, rects.at(-1), !!comment);
-  if (lines <= 3 && !coversWholeParagraphs(mark.range)) {
-    for (const r of rects) {
-      const y = r.y + r.h - 1;
-      add("path", { class: "bar under", d: `M${r.x + rand()},${y + rand() * 1.5}` + wobbleAcross(r.x, r.x + r.w, y, rand) });
-    }
-    return;
-  }
-  for (const col of cols) {
-    const top = Math.min(...col.map((r) => r.y)) + 1;
-    const bottom = Math.max(...col.map((r) => r.y + r.h)) - 1;
-    const left = Math.min(...col.map((r) => r.x)) - 8;
-    const right = Math.max(...col.map((r) => r.x + r.w)) + 8;
-    // Left: hooks in at the top, then runs down; right: runs down and hooks in at the bottom.
-    add("path", { class: "bar", d: `M${left + 7},${top - 2 + rand() * 2} Q${left + 1},${top - 1} ${left},${top + 6}` + wobble(left, top + 6, bottom, rand) });
-    add("path", { class: "bar", d: `M${right + rand() * 2},${top}` + wobble(right, top, bottom - 6, rand) + ` Q${right + 1},${bottom + 1} ${right - 7},${bottom + 2 + rand() * 2}` });
-  }
+  mark.element.classList.add("m-fill");
 }
 
-// An explanation put away: only an asterisk after its last word, and only the asterisk takes a tap
-// (marks-pane hit-tests the group's own boxes, so the line rects go and a small clear square stays).
+// An explanation put away: a dotted underline under its lines, which take a tap or a click.
 function drawStar(mark) {
   const g = mark.element;
   const rects = [...g.querySelectorAll("rect")]
@@ -1337,72 +1656,21 @@ function drawStar(mark) {
   g.replaceChildren();
   const last = rects.at(-1);
   if (!last) return;
-  const el = (tag, attrs) => {
-    const e = document.createElementNS(SVG_NS, tag);
-    for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v);
-    return g.appendChild(e);
-  };
-  el("rect", { class: "star-hit", x: last.x + last.w - 6, y: last.y - 6, width: 26, height: 26 });
-  el("text", { class: "star", x: last.x + last.w + 1, y: last.y + 1, "dominant-baseline": "hanging" }).textContent = "*";
-}
-
-// A note with a comment gets a small asterisk after its last word; tapping the passage shows it.
-function drawCommentMark(add, last, commented) {
-  if (!commented) return;
-  add("text", { class: "comment-mark", x: last.x + last.w + 1, y: last.y + 2, "dominant-baseline": "hanging" }).textContent = "*";
+  // Turns 9 and 10: an explained passage gets a dotted ochre underline; its lines, a little taller, take the tap.
+  for (const r of rects) {
+    const hit = document.createElementNS(SVG_NS, "rect");
+    for (const [k, v] of Object.entries({ class: "star-hit", x: r.x, y: r.y - 4, width: r.w, height: r.h + 10 })) hit.setAttribute(k, v);
+    const line = document.createElementNS(SVG_NS, "line");
+    const y = r.y + r.h + 3;
+    for (const [k, v] of Object.entries({ class: "dots-ul", x1: r.x, x2: r.x + r.w, y1: y, y2: y })) line.setAttribute(k, v);
+    g.append(hit, line);
+  }
 }
 
 // Redraw a note's marks after its comment appeared or went away.
 function redrawNote(note) {
   const views = rendition?.views();
   for (const view of views?.all ? views.all() : views || []) view.underlines?.[note.cfi]?.mark.render();
-}
-
-// A horizontal pencil stroke from x1 to x2 near y.
-function wobbleAcross(x1, x2, y, rand) {
-  const steps = Math.max(1, Math.round((x2 - x1) / 40));
-  let d = "";
-  for (let i = 1; i <= steps; i++) {
-    const x = x1 + ((x2 - x1) * i) / steps;
-    d += ` Q${x - (x2 - x1) / steps / 2},${y + rand() * 2.2} ${x},${y + rand() * 1.2}`;
-  }
-  return d;
-}
-
-function blockOf(node) {
-  return (node?.nodeType === 1 ? node : node?.parentElement)?.closest("p, li, blockquote, h1, h2, h3, h4, h5, h6, div, dd, dt, td");
-}
-
-// True when the range starts at the beginning of a paragraph and ends at the end of one.
-function coversWholeParagraphs(range) {
-  if (!range) return true;
-  const doc = range.startContainer.ownerDocument;
-  const gap = (from, to) => {
-    if (!from || !to) return "";
-    const r = doc.createRange();
-    r.setStart(...from);
-    r.setEnd(...to);
-    return r.toString().trim();
-  };
-  const first = blockOf(range.startContainer);
-  const last = blockOf(range.endContainer);
-  if (!first || !last) return true;
-  const end = [range.endContainer, range.endOffset];
-  // iOS often ends a paragraph selection at the very start of the next one.
-  const endsWhole = !gap(end, [last, last.childNodes.length]) || (last !== first && !gap([last, 0], end));
-  return !gap([first, 0], [range.startContainer, range.startOffset]) && endsWhole;
-}
-
-// A vertical pencil stroke from y1 to y2 near x: it drifts a little side to side.
-function wobble(x, y1, y2, rand) {
-  const steps = Math.max(1, Math.round((y2 - y1) / 28));
-  let d = "";
-  for (let i = 1; i <= steps; i++) {
-    const y = y1 + ((y2 - y1) * i) / steps;
-    const cy = y - (y2 - y1) / steps / 2;
-    d += ` Q${x + rand() * 3},${cy} ${x + (i === steps ? 0 : rand() * 1.6)},${y}`;
-  }
-  return d;
 }
 
 function unmarkNote(note) {
@@ -1430,6 +1698,10 @@ async function addNote(selection) {
   }
   try {
     const saved = await notesStore.notesAdd(current.path, note);
+    if (selection.comment && !saved.comment) {
+      saved.comment = selection.comment;
+      await notesStore.notesUpdate(current.path, saved.id, { comment: saved.comment }).catch(() => {});
+    }
     if (!notes.some((n) => n.id === saved.id)) {
       notes.push(saved);
       markNote(saved);
@@ -1457,6 +1729,22 @@ function openNoteInBook(path, note) {
   pendingJump = { path, note };
   window.reader.openPath(path);
 }
+// A kept explanation picked elsewhere (search): open its book, go to the passage and open its card.
+let pendingChat = null; // { path, id }
+function openChatInBook(path, id) {
+  pendingChat = { path, id };
+  if (current?.path === path && (rendition || pdfView)) return showPendingChat();
+  window.reader.openPath(path);
+}
+function showPendingChat() {
+  if (!pendingChat || pendingChat.path !== current?.path) return;
+  const conv = [...conversations.values()].find((c) => c.sid === pendingChat.id);
+  if (!conv) return;
+  pendingChat = null;
+  goToNote({ cfi: conv.cfiRange });
+  highlightConv(conv);
+  openConvCard(conv);
+}
 function jumpIfPending() {
   if (!pendingJump || pendingJump.path !== current?.path) return;
   const { note } = pendingJump;
@@ -1468,19 +1756,17 @@ function goToNote(note) {
   if (note.cfi.startsWith("pdf:")) {
     const page = Number(note.cfi.split(":")[1]);
     if (pdfView && page) pdfView.viewer.currentPageNumber = page;
-  } else {
-    rendition?.display(note.cfi);
+  } else if (noteTarget(note)) {
+    rendition?.display(noteTarget(note));
   }
   if (PHONE.matches) showPanel(false);
-}
-
-function noteDate(ms) {
-  return new Date(ms).toLocaleDateString("uk-UA", { day: "numeric", month: "short" });
 }
 
 function renderNotes() {
   const box = $("#notes");
   box.innerHTML = "";
+  window.PhoneRead?.notesCount();
+  for (const conv of conversations.values()) syncConvActs(conv);
   if (!current) {
     box.innerHTML = `<div class="panel-empty">Відкрийте книжку, щоб побачити її нотатки.</div>`;
     return;
@@ -1489,57 +1775,8 @@ function renderNotes() {
     box.innerHTML = `<div class="panel-empty">Нотаток ще немає. Виділіть текст і натисніть «В нотатки».</div>`;
     return;
   }
-  // Newest on top, like the explanations.
-  for (const note of [...notes].reverse()) {
-    const card = document.createElement("article");
-    card.className = "card note";
-    card.dataset.id = note.id;
-    card.innerHTML = `
-      <blockquote class="quote"></blockquote>
-      <textarea class="note-comment" rows="1" placeholder="Додати думку…"></textarea>
-      <div class="meta"><span class="where"></span>
-        <span class="actions">
-          <button class="link explain">Пояснити</button>
-          <button class="link go">Перейти</button>
-          <button class="link delete">Видалити</button>
-        </span>
-      </div>`;
-    card.querySelector(".quote").textContent = note.text;
-    card.querySelector(".where").textContent = [note.chapter, noteDate(note.createdAt)].filter(Boolean).join(" · ");
-    // «Пояснити» right from the note (Max, 2026-11-01): the same explanation as for a selection.
-    card.querySelector(".explain").onclick = async () => {
-      if (settings.free) return showNotice("Пояснення працюють після входу. Це безкоштовно, потрібна лише пошта.", false);
-      startExplanation({ cfiRange: note.cfi, text: note.text, context: await noteContext(note) });
-    };
-    const go = card.querySelector(".go");
-    if (noteReachable(note)) go.onclick = () => goToNote(note);
-    else (go.disabled = true), (go.title = "Ця нотатка з іншого вигляду PDF");
-    card.querySelector(".delete").onclick = async () => {
-      try {
-        await notesStore.notesDelete(current.path, note.id);
-      } catch (err) {
-        if (err.message !== "login") showNotice(`Не вдалося видалити нотатку: ${err.message}`, false);
-        return;
-      }
-      notes = notes.filter((n) => n.id !== note.id);
-      unmarkNote(note);
-      renderNotes();
-    };
-    const comment = card.querySelector(".note-comment");
-    comment.value = note.comment || "";
-    comment.oninput = () => fitComment(comment);
-    comment.onchange = async () => {
-      note.comment = comment.value.trim();
-      redrawNote(note);
-      try {
-        await notesStore.notesUpdate(current.path, note.id, { comment: note.comment });
-      } catch (err) {
-        if (err.message !== "login") showNotice(`Не вдалося зберегти думку: ${err.message}`, false);
-      }
-    };
-    box.appendChild(card);
-  }
-  requestAnimationFrame(() => box.querySelectorAll(".note-comment").forEach(fitComment));
+  // One list on a phone and a computer (turns 9, 10): grouped by chapter, with tabs (phone-read.js).
+  window.PhoneRead.renderNotes(box);
 }
 
 // The passage around a note, for its explanation: from the chapter the note is in when the book can give it,

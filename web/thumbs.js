@@ -11,7 +11,7 @@ const fs = require("fs");
 const path = require("path");
 const { execFile } = require("child_process");
 
-const WIDTHS = [128, 240, 480]; // twice the width shown: md/sm/xs/feed are ≤64 px, lg and the grid's cards ≤120, a PNG cover on the book page 200 (240 there)
+const WIDTHS = [128, 240, 480]; // twice the width shown: md/sm/xs/feed are ≤64 px, lg and the grid's cards ≤120, the book page's cover 200 (480 there)
 const BUDGET = 250 * 1024 * 1024; // the copies together; the oldest go beyond it (made again when asked)
 const PARALLEL = 3; // pictures made at once; the rest wait their turn
 const QUEUE = 40; // beyond this many waiting the browser goes to the original at once
@@ -140,7 +140,7 @@ class Thumbs {
     let made = 0;
     for (const src of new Set(srcs)) {
       if (!src || this.url(src, 1) === src) continue;
-      const file = path.join(this.dir, String(w), `${crypto.createHash("sha1").update(src).digest("hex")}.webp`);
+      const file = path.join(this.dir, String(w), `${crypto.createHash("sha1").update(keyOf(src)).digest("hex")}.webp`);
       if (fs.existsSync(file) || Date.now() - (this.failed.get(src) || 0) < 3600 * 1000) continue;
       if (await this.make(src, w, file)) made++;
       await new Promise((ok) => setTimeout(ok, 300));

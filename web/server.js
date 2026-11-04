@@ -28,7 +28,7 @@ const readeat = require("./readeat");
 const findCovers = require("./findcovers");
 const { BookPage, isUrl } = require("./bookpage");
 const { UkFinder } = require("./ukfind");
-const { Admin, adminPage, activityPage, catalogBlock, shelvesPage, readersPage, overviewsPage, speedPage, jobsPage, BOT, human } = require("./admin");
+const { Admin, readerAppPage, adminPage, activityPage, catalogBlock, shelvesPage, readersPage, overviewsPage, speedPage, jobsPage, BOT, human } = require("./admin");
 const { Mcp } = require("./mcp");
 const { Reviews } = require("./reviews");
 const { Advice } = require("./advice");
@@ -141,6 +141,17 @@ pages.setAuthorLinks((name) => store.authors?.byName(name)?.href || null);
 
 const app = express();
 app.set("trust proxy", true);
+app.disable("x-powered-by");
+// The visitor's address is the one Fly saw (Fly-Client-IP, set by Fly's proxy): with "trust proxy" alone
+// req.ip was the first X-Forwarded-For entry, which the visitor writes, so per-address limits (sign-in codes,
+// guests' explanations) could be dodged by sending a new one each time (security review 2026-11-04).
+// And a few headers every page should carry: HTTPS only, no framing by other sites, no type guessing.
+app.use((req, res, next) => {
+  const fly = req.get("fly-client-ip");
+  if (fly) Object.defineProperty(req, "ip", { value: fly, configurable: true });
+  res.set({ "Strict-Transport-Security": "max-age=31536000", "X-Frame-Options": "SAMEORIGIN", "X-Content-Type-Options": "nosniff" });
+  next();
+});
 app.use(express.urlencoded({ extended: false, limit: "1mb" }));
 app.use(express.json({ limit: "1mb" }));
 app.use(require("compression")()); // pages are 50–150 KB of HTML; gzip cuts that about five times
@@ -428,19 +439,23 @@ app.post("/login/signup", (req, res) => {
   const error = name.error || username.error;
   if (error) return res.status(400).send(pages.signupPage({ next, ticket: req.body.ticket, email, name: req.body.name, username: req.body.username, error }));
   if (auth.byEmail(email)) return signIn(req, res, auth.byEmail(email), next);
-  const reader = auth.createReader({ email, name: name.name, username: username.username });
-  admin.event(req, null, "login", "signup");
-  admin.log(reader.id, "signup", next || "");
-  auth.useTicket(req.body.ticket);
+  const reader = newReader(req, { email, name: name.name, username: username.username, ticket: req.body.ticket, next });
   admin.came(reader.id, cookies(req).chytai_came);
   res.append("Set-Cookie", `chytai_came=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax`);
-  console.log(`new reader @${reader.username}`);
-  welcomeMail.newReader(reader);
   // Someone who came from the reader goes straight back to it; the welcome page is about the site.
   // So does one who signed up to save a book (/do/…): the book is saved and they are back on its page.
   // And one who signed up to answer in the Club: back to the topic (Max, 2026-11-01).
   signIn(req, res, reader, next.startsWith("/reader-login") || next.startsWith("/oauth/authorize") || next.startsWith("/do/") || next.startsWith("/club/") ? next : `/welcome${next ? `?next=${encodeURIComponent(next)}` : ""}`);
 });
+function newReader(req, { email, name, username, ticket, next }) {
+  const reader = auth.createReader({ email, name, username });
+  admin.event(req, null, "login", "signup");
+  admin.log(reader.id, "signup", next || "");
+  auth.useTicket(ticket);
+  console.log(`new reader @${reader.username}`);
+  welcomeMail.newReader(reader);
+  return reader;
+}
 // Someone who signed up from a book's or an author's page sees that book (or the author's best-read three) first,
 // to save in one tap (usability review 2026-10-28, Max: «окремий флоу якщо людина прийшла на сторінку книжки або автора»).
 app.get("/welcome", signed, (req, res) => {
@@ -495,15 +510,59 @@ const READER_URL = (process.env.READER_URL || READER_ORIGINS[0]).replace(/\/$/, 
 // has (POST /api/reader-library). The key is an HMAC with the site's own secret, kept in the database.
 const readerSecret = () => store.db.get("reader:secret") || (store.db.set("reader:secret", require("crypto").randomBytes(32).toString("hex")), store.db.get("reader:secret"));
 const readerKey = (id) => require("crypto").createHmac("sha256", readerSecret()).update(`reader:${id}`).digest("hex");
+const readerTicket = (id) => {
+  for (const [t, v] of readerTickets) if (v.expires < Date.now()) readerTickets.delete(t);
+  const ticket = require("crypto").randomBytes(16).toString("hex");
+  readerTickets.set(ticket, { id, expires: Date.now() + 120000 });
+  return ticket;
+};
+// Signing in on the reader's own landing (design «11a», Max 2026-11-03): the page there asks for the e-mail
+// and the code itself, here, so it never leaves the reader (the phone apps open the site in a browser).
+// The same codes and limits as /login; the answer is a reader ticket, or for a new address a signup ticket
+// and then one more step with the name. Only the reader's addresses may call these from a browser.
+const readerCors = (req, res, next) => {
+  const origin = req.get("origin");
+  if (origin && !READER_ORIGINS.includes(origin)) return res.status(403).json({ error: "Невідома адреса читалки." });
+  if (origin) res.set({ "Access-Control-Allow-Origin": origin, "Access-Control-Allow-Methods": "POST", "Access-Control-Allow-Headers": "Content-Type", "Access-Control-Max-Age": "86400", Vary: "Origin" });
+  if (req.method === "OPTIONS") return res.sendStatus(204);
+  res.set("Cache-Control", "no-store");
+  next();
+};
+app.options("/api/reader-login/:step", readerCors);
+app.post("/api/reader-login/email", readerCors, async (req, res) => {
+  const { email, error } = auth.checkEmail(req.body?.email);
+  if (error) return res.status(400).json({ error });
+  const r = await auth.sendCode(email, req.ip);
+  if (r.error) return res.status(429).json({ error: r.error });
+  admin.event(req, null, "login", "page:reader");
+  admin.event(req, null, "login", "email");
+  res.json({ ok: true, email });
+});
+app.post("/api/reader-login/code", readerCors, (req, res) => {
+  const { email, error } = auth.checkEmail(req.body?.email);
+  if (error) return res.status(400).json({ error });
+  const r = auth.verify(email, req.body?.code);
+  if (r.error) return res.status(400).json({ error: r.error });
+  admin.event(req, null, "login", r.reader ? "code:known" : "code:new");
+  if (!r.reader) return res.json({ signup: r.ticket });
+  admin.log(r.reader.id, "login", "/reader-login");
+  res.json({ ticket: readerTicket(r.reader.id) });
+});
+app.post("/api/reader-login/signup", readerCors, (req, res) => {
+  const email = auth.ticketEmail(req.body?.signup);
+  if (!email) return res.status(400).json({ error: "Час вийшов. Запросіть код ще раз." });
+  const name = auth.checkName(req.body?.name);
+  if (name.error) return res.status(400).json({ error: name.error });
+  const reader = auth.byEmail(email) || newReader(req, { email, name: name.name, username: auth.suggestUsername(name.name, slugify), ticket: req.body.signup, next: "/reader-login" });
+  res.json({ ticket: readerTicket(reader.id) });
+});
 app.get("/reader-login", signed, (req, res) => {
   let origin = "";
   try {
     origin = new URL(String(req.query.back || "")).origin;
   } catch {}
   if (!READER_ORIGINS.includes(origin)) return res.status(400).send(pages.messagePage({ title: "Невідома адреса читалки", text: "Відкрийте читалку ще раз і натисніть «Увійти».", user: req.user }));
-  for (const [t, v] of readerTickets) if (v.expires < Date.now()) readerTickets.delete(t);
-  const ticket = require("crypto").randomBytes(16).toString("hex");
-  readerTickets.set(ticket, { id: req.user.id, expires: Date.now() + 120000 });
+  const ticket = readerTicket(req.user.id);
   res.redirect(`${origin}/auth?ticket=${ticket}`);
 });
 app.post("/api/reader-ticket", (req, res) => {
@@ -616,30 +675,76 @@ function fileFor(files, book) {
 
 // A free book's page here by its file name in the reader: the QR on the last page the reader prints
 // (Max, 2026-10-26: «qr код має вести на сайт каталога»). Not found: a search for its title.
-app.get("/free-book/:name", (req, res) => {
-  const f = FREE.find((x) => x.name === req.params.name);
-  if (!f) return res.redirect("/");
-  // The file's title can be longer than the catalog's («Лис Микита. Коли ще звірі говорили»): try its first part too.
+// The file's title can be longer than the catalog's («Лис Микита. Коли ще звірі говорили»): try its first part too.
+function freeBookHref(f) {
   const queries = [...new Set([f.title, f.title.split(/[.:(]/)[0].trim()])].filter((q) => q.length > 1);
   const hit = queries
     .flatMap((q) => store.search(q, { limit: 10, alias: false }))
     .find((h) => freeFileFor(store.bookPage(h.book.id))?.name === f.name);
-  res.redirect(hit ? store.href(hit.book.id) : `/search?q=${encodeURIComponent(f.title)}`);
+  return hit ? store.href(hit.book.id) : `/search?q=${encodeURIComponent(f.title)}`;
+}
+app.get("/free-book/:name", (req, res) => {
+  const f = FREE.find((x) => x.name === req.params.name);
+  res.redirect(f ? freeBookHref(f) : "/");
 });
 
 // «Про книжку» in the reader's book menu (Max, 2026-11-01, like Kindle's «About this book»): the book's page here
 // when the catalog has it, otherwise /add with its title, so the reader can bring it in.
+function readerBookHit(title, authors) {
+  const queries = [...new Set([title, title.split(/[.:(]/)[0].trim()])].filter((q) => q.length > 1);
+  return queries.flatMap((q) => store.search(q, { limit: 10, alias: false })).find((h) => fileFor([{ title, authors }], store.bookPage(h.book.id))) || null;
+}
+const readerAddHref = (title, authors) => `/add?text=${encodeURIComponent(authors ? `${title} — ${authors.split(/[,;]/)[0].trim()}` : title)}`;
 app.get("/reader-book", (req, res) => {
   const title = String(req.query.title || "").trim().slice(0, 300);
   const authors = String(req.query.author || "").trim().slice(0, 300);
   if (!title) return res.redirect("/");
-  const file = [{ title, authors }];
-  const queries = [...new Set([title, title.split(/[.:(]/)[0].trim()])].filter((q) => q.length > 1);
-  const hit = queries.flatMap((q) => store.search(q, { limit: 10, alias: false })).find((h) => fileFor(file, store.bookPage(h.book.id)));
-  if (hit) return res.redirect(store.href(hit.book.id));
-  res.redirect(`/add?text=${encodeURIComponent(authors ? `${title} — ${authors.split(/[,;]/)[0].trim()}` : title)}`);
+  const hit = readerBookHit(title, authors);
+  res.redirect(hit ? store.href(hit.book.id) : readerAddHref(title, authors));
+});
+// The same as data for the reader's «Про книжку» (Max, 2026-11-01: a short summary kept on the device, so it
+// shows offline too): the book's page, year and the start of its description, whole sentences up to ~600 characters.
+app.get("/api/reader-about", (req, res) => {
+  const title = String(req.query.title || "").trim().slice(0, 300);
+  const authors = String(req.query.author || "").trim().slice(0, 300);
+  if (!title) return res.status(400).json({ error: "title" });
+  res.setHeader("Cache-Control", "public, max-age=3600");
+  const hit = readerBookHit(title, authors);
+  if (!hit) return res.json({ found: false, add: `${SITE}${readerAddHref(title, authors)}` });
+  const b = store.book(hit.book.id);
+  let blurb = "";
+  // A shop's sentence about its own app or link («Слухайте книгу в аудіоформаті у застосунку АБУК за цим посиланням») goes.
+  const AD = /посиланн|застосунк|аудіоформат/i;
+  const clean = (p) => p.split(/(?<=[.!?…])\s+/).filter((t) => !AD.test(t)).join(" ").trim();
+  for (const p of String(b.blurb || "").split(/\n\n+/).map(clean).filter(Boolean)) {
+    if (blurb && blurb.length + p.length > 600) break;
+    blurb += (blurb ? "\n\n" : "") + p;
+  }
+  if (blurb.length > 900) blurb = blurb.slice(0, 900).replace(/[^.!?…]*$/, "") || blurb.slice(0, 900) + "…";
+  const abs = (u) => (!u ? "" : /^https?:/.test(u) ? u : `${SITE}${u}`);
+  res.json({ found: true, title: b.title, author: b.author || "", year: b.published || null, blurb, cover: abs(b.cover), href: `${SITE}${store.href(hit.book.id)}` });
 });
 
+// «Додати книжку» in the reader (design v2, Max 2026-11-02): books of the catalog for what was typed, each with its
+// page here, where the shops and e-book links are. A bought file is then added in the reader.
+app.get("/api/reader-find", (req, res) => {
+  const q = String(req.query.q || "").trim().slice(0, 100);
+  res.setHeader("Cache-Control", "public, max-age=600");
+  if (q.length < 2) return res.json({ books: [] });
+  const abs = (u) => (!u ? "" : /^https?:/.test(u) ? u : `${SITE}${u}`);
+  const books = store.search(q, { limit: 12 }).map((h) => {
+    const b = store.book(h.book.id) || h.book;
+    return { title: b.title, author: b.author || "", year: b.published || null, cover: abs(b.cover), href: `${SITE}${store.href(h.book.id)}` };
+  });
+  res.json({ books });
+});
+
+// A letter to the owner from the reader (its daily Claude budget ran out, 2026-11-04), signed with the owner's reader key.
+app.post("/api/reader-alert", (req, res) => {
+  if (!readerKeyOk(OWNER_ID, String(req.body?.key || ""))) return res.status(403).json({ error: "key" });
+  notifyOwner(String(req.body?.subject || "Chytai: Читалка").slice(0, 150), String(req.body?.text || "").slice(0, 3000));
+  res.json({ ok: true });
+});
 // The reader asks once a day which of its accounts are gone (deleted here), to delete their books too.
 app.post("/api/readers-gone", (req, res) => {
   const ids = (Array.isArray(req.body?.ids) ? req.body.ids : []).map(String).slice(0, 10000);
@@ -657,6 +762,10 @@ app.get(pages.DRAW_PATH, (req, res) => {
 app.post(`${pages.DRAW_PATH}/join`, signed, (req, res) => (draw.setJoined(req.user.id, true), res.redirect(pages.DRAW_PATH)));
 app.post(`${pages.DRAW_PATH}/leave`, signed, (req, res) => (draw.setJoined(req.user.id, false), res.redirect(pages.DRAW_PATH)));
 app.get("/reader", (_req, res) => res.redirect(302, `${READER_URL}/`)); // shortcut to the reader (Max 2026-10-22)
+// The Mac app (mac/ in the repo); its DMG lives in GitHub Releases (.github/workflows/mac.yml).
+app.get("/mac", (req, res) => res.send(pages.macPage({ user: req.user })));
+// The Android app as a test APK from GitHub (Max, 2026-11-04), until it is in Google Play. Same link for every build.
+app.get("/android", (_req, res) => res.redirect(302, "https://github.com/imax/chytai/releases/download/android-test/chytai.apk"));
 
 // ---- settings: name, username, e-mail, deleting the account ----
 
@@ -696,12 +805,27 @@ app.post("/settings/mail", signed, (req, res) => {
   wantMail.setEnabled(req.user.id, !!req.body.want_mail);
   res.redirect("/settings/mail?saved=1");
 });
+// «Вийти на всіх пристроях» (security review 2026-11-04, Max OK): every session here ends, this one too, and the
+// reader is asked to end the account's sessions there.
+function readerSignOut(id) {
+  fetch(`${READER_URL}/api/site-signout`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, key: readerKey(id) }), signal: AbortSignal.timeout(10000) })
+    .then((r) => r.status !== 200 && r.status !== 403 && console.log(`reader signout ${id}: ${r.status}`))
+    .catch((e) => console.log(`reader signout ${id}: ${e.message}`));
+}
+app.post("/settings/signout", signed, (req, res) => {
+  auth.signOutEverywhere(req.user.id);
+  readerSignOut(req.user.id);
+  admin.log(req.user.id, "do", "/settings/signout", "");
+  res.setHeader("Set-Cookie", auth.cookie("", { clear: true, secure: secure(req) }));
+  res.redirect(303, "/login");
+});
 app.post("/settings/delete", signed, (req, res) => {
   if (req.owner) return res.status(400).send(pages.messagePage({ title: "Власника не видаляємо", text: "Для цього є інший шлях.", user: req.user }));
   if (req.body.confirm !== req.user.username) return res.status(400).send(pages.settingsPage({ user: req.user, values: req.user, error: "Щоб видалити акаунт, впишіть своє ім'я для адреси." }));
   lists.forgetReader(req.user.id);
   club.forgetReader(req.user.id);
   mcp.forgetReader(req.user.id);
+  readerSignOut(req.user.id);
   auth.deleteReader(req.user.id);
   store.forgetReader(req.user.id);
   res.setHeader("Set-Cookie", auth.cookie("", { clear: true, secure: secure(req) }));
@@ -709,7 +833,7 @@ app.post("/settings/delete", signed, (req, res) => {
 });
 
 // ---- Chytai in a chat: the MCP server at /mcp and its OAuth (mcp.js) ----
-const mcp = new Mcp({ store, auth, pages, site: (req) => site(req), notifyOwner, details, putNow: (reader, id) => putNow(reader, id), dropNow: (reader, id) => dropNow(reader, id), isNow: (reader, id) => nowIds(reader).has(store.canonical(id)) });
+const mcp = new Mcp({ store, auth, pages, site: (req) => site(req), notifyOwner, details, putNow: (reader, id) => putNow(reader, id), dropNow: (reader, id) => dropNow(reader, id), isNow: (reader, id) => nowIds(reader).has(store.canonical(id)), findCovers: (ids) => findCovers.shelved(store, { ids, keep: keepCover, log: console.log }).catch((e) => console.error("covers failed:", e)) });
 mcp.routes(app, { signed });
 
 // ---- adding books: /add (one page with every way in), and imports from elsewhere ----
@@ -899,7 +1023,7 @@ function mailFreeAdded() {
   const done = new Set(JSON.parse(store.db.get("free:mailed") || "[]"));
   for (const f of FREE.filter((x) => x.wanted && !done.has(x.name))) {
     done.add(f.name);
-    notifyOwner(`На Вільній полиці: ${f.title}`, [`На Вільну полицю Читалки додано «${f.title}» (${f.authors}): цю книжку хочуть прочитати читачі, а її текст уже в суспільному надбанні.`, "", `Сторінка: ${SITE}/free-book/${encodeURIComponent(f.name)}`, `Звідки файл: ${f.source}`, "", `Прибрати: напиши Claude, файл free/${f.name}.`].join("\n"));
+    notifyOwner(`На Вільній полиці: ${f.title}`, [`На Вільну полицю Читалки додано «${f.title}» (${f.authors}): цю книжку хочуть прочитати читачі, а її текст уже в суспільному надбанні.`, "", `Сторінка: ${SITE}${freeBookHref(f)}`, `Звідки файл: ${f.source}`, "", `Прибрати: напиши Claude, файл free/${f.name}.`].join("\n"));
   }
   store.db.set("free:mailed", JSON.stringify([...done]));
 }
@@ -944,6 +1068,8 @@ bg.register("advice", advice, { want: false, sweep: false, redo: false }, ["queu
 if (bg.background) setTimeout(() => {
   const fixed = store.dropPublishedYears();
   if (fixed) console.log(`read years that were publication years: ${fixed.length} dropped`);
+  const shelves = store.backfillShelfImports();
+  if (shelves) console.log(`shelf imports found before the table: ${shelves.length}`);
   const st = genreTrial.allState();
   if (st && !st.stopped) genreTrial.runAll().catch((e) => console.log(`genreall: ${e.message}`));
   // Originals and languages (Max 2026-10-23 «включаємо і те і те»): the first run starts by itself, a cut one goes on.
@@ -1007,7 +1133,7 @@ app.get("/readers", (req, res) => res.redirect(301, "/community"));
 app.get("/community", (req, res) => {
   const readers = readerList();
   const all = social.all();
-  res.send(pages.readersPage({ user: req.user, feed: social.feed({ limit: 40 }), readers, followed: followed(req), totals: { readers: readers.length, books: readers.reduce((s, r) => s + r.count, 0), notes: all.filter((x) => x.entry.note).length } }));
+  res.send(pages.readersPage({ user: req.user, feed: social.feed({ limit: 40, shelves: true }), readers, followed: followed(req), totals: { readers: readers.length, books: readers.reduce((s, r) => s + r.count, 0), notes: all.filter((x) => x.entry.note).length } }));
 });
 
 // «Стежити» / «Стежу» on a reader's page: follow or unfollow them, then back to where it was pressed.
@@ -1162,6 +1288,8 @@ app.post("/api/lists/:id/publish", signed, myList, (req, res) => {
 const published = (req, l) => !req.owner && notifyOwner(`Новий список: ${l.title}`, [`${req.user.name} (${SITE}/@${req.user.username}) опублікував(ла) список «${l.title}».`, "", `${SITE}${l.href}`].join("\n"));
 // The picture on top of a list, from the author's computer: kept here, made no wider than 1600 px.
 app.post("/api/lists/:id/image", signed, myList, express.raw({ type: "image/*", limit: "15mb" }), async (req, res) => {
+  // 20 pictures a day per reader: each one stays on the disk (security review 2026-11-04).
+  if (!req.owner && auth.tooMany(`list-image:${req.user.id}`, 20, 24 * 3600 * 1000)) return res.status(429).json({ error: "Забагато картинок за день. Спробуйте завтра." });
   const ext = COVER_TYPES[String(req.get("content-type") || "").split(";")[0].trim()];
   if (!ext || !Buffer.isBuffer(req.body) || req.body.length < 500) return res.status(400).json({ error: "Потрібна картинка: jpg, png або webp." });
   const hash = require("crypto").createHash("sha1").update(req.body).digest("hex").slice(0, 20);
@@ -1192,21 +1320,32 @@ app.post("/api/lists/:id/comments", signed, (req, res) => {
   if (id && !req.owner && !mailed.has(OWNER_ID)) notifyOwner(`Коментар у Клубі: ${l.title}`, [`${req.user.name} (${SITE}/@${req.user.username}) під списком «${l.title}»:`, "", String(req.body.text).trim().slice(0, 1000), "", `${SITE}${l.href}#club`, `Усі коментарі: ${SITE}/admin/comments`].join("\n"));
   back("");
 });
-// One's own words go; the list's author and the owner take any away.
+// One's own words change (only the author's: nobody edits another's words).
+app.post("/api/lists/comments/:cid/edit", signed, (req, res) => {
+  const c = lists.comment(req.params.cid);
+  const l = c && lists.get(c.list);
+  if (!c || !l) return res.redirect(303, "/lists");
+  if (c.reader !== req.user.id) return res.status(403).send(pages.messagePage({ title: "Це не ваш коментар", text: "", user: req.user }));
+  if (lists.editComment(c.id, req.body.text)) mentionMails(req, req.body.text, { where: `під списком «${l.title}»`, href: `${l.href}#c-${c.id}`, before: c.text });
+  res.redirect(303, `${l.href}#c-${c.id}`);
+});
+// Only the owner takes words away for now (Max, 2026-11-03: readers don't delete theirs or others').
 app.post("/api/lists/comments/:cid/delete", signed, (req, res) => {
   const c = lists.comment(req.params.cid);
   const l = c && lists.get(c.list);
   if (!c || !l) return res.redirect(303, req.get("referer") || "/lists");
-  if (c.reader !== req.user.id && l.reader.id !== req.user.id && !req.owner) return res.status(403).send(pages.messagePage({ title: "Це не ваш коментар", text: "", user: req.user }));
+  if (!req.owner) return res.status(403).send(pages.messagePage({ title: "Це не ваш коментар", text: "", user: req.user }));
   lists.dropComment(c.id);
   res.redirect(303, req.body.back === "admin" ? "/admin/comments" : `${l.href}#club`);
 });
 // ---- «Клуб Chytai» (club.js): /club, its topics and replies ----
 // «@username» in a Club text mails that reader (Max, 2026-11-01: «тегаєш Марінку, і їй приходить імейл»): not oneself,
 // not a reader who switched these letters off, at most 5 a hour from one reader to another.
-function mentionMails(req, text, { where, href }) {
+// `before`: the words as they were (an edit), whose readers already got their letter.
+function mentionMails(req, text, { where, href, before = "" }) {
   const mailed = new Set();
-  for (const u of mentionsIn(text).slice(0, 10)) {
+  const had = new Set(mentionsIn(before));
+  for (const u of mentionsIn(text).filter((u) => !had.has(u)).slice(0, 10)) {
     const r = auth.byUsername(u);
     if (!r || r.id === req.user.id || !r.email || r.mention_mail === 0 || auth.tooMany(`mention:${req.user.id}:${r.id}`, 5)) continue;
     const off = `${SITE}/mention-mail/unsubscribe/${encodeURIComponent(r.id)}/${digest.token(r.id)}`;
@@ -1352,7 +1491,7 @@ app.post("/api/club/:id", signed, clubTopic, myTopic, (req, res) => {
   const t = club.edit(req.topic.id, { title: req.body.title, text: req.body.text, book: req.body.book ?? "", spoiler: req.body.spoiler === "1", official: req.owner ? req.body.official === "1" : undefined });
   res.redirect(303, t.href);
 });
-app.post("/api/club/:id/delete", signed, clubTopic, myTopic, (req, res) => (club.remove(req.topic.id), res.redirect(303, req.body?.back === "admin" ? "/admin/comments" : "/club")));
+app.post("/api/club/:id/delete", signed, owner, clubTopic, (req, res) => (club.remove(req.topic.id), res.redirect(303, req.body?.back === "admin" ? "/admin/comments" : "/club")));
 app.post("/api/club/:id/posts", signed, clubTopic, (req, res) => {
   const t = req.topic;
   const back = (err, pid = "") => res.redirect(303, `${t.href}${err ? `?error=${encodeURIComponent(err)}` : ""}#${pid ? `p-${pid}` : "reply"}`);
@@ -1376,12 +1515,21 @@ app.post("/api/club/posts/:pid/react", signed, (req, res) => {
 });
 // «Сповіщати про відповіді» in a topic.
 app.post("/api/club/:id/watch", signed, clubTopic, (req, res) => (club.setWatch(req.user.id, req.topic.id, req.body.on === "1"), res.redirect(303, `${req.topic.href}#reply`)));
-// One's own words go; the owner takes any away.
+// One's own answer changes (only the author's).
+app.post("/api/club/posts/:pid/edit", signed, (req, res) => {
+  const p = club.post(req.params.pid);
+  const t = p && club.topic(p.topic);
+  if (!p || !t) return res.redirect(303, "/club");
+  if (p.reader !== req.user.id) return res.status(403).send(pages.messagePage({ title: "Це не ваш коментар", text: "", user: req.user }));
+  if (club.editPost(p.id, req.body.text)) mentionMails(req, req.body.text, { where: `у темі «${t.title}»`, href: `${t.href}#p-${p.id}`, before: p.text });
+  res.redirect(303, `${t.href}#p-${p.id}`);
+});
+// Only the owner takes an answer away for now (Max, 2026-11-03).
 app.post("/api/club/posts/:pid/delete", signed, (req, res) => {
   const p = club.post(req.params.pid);
   const t = p && club.topic(p.topic);
   if (!p || !t) return res.redirect(303, "/club");
-  if (p.reader !== req.user.id && !req.owner) return res.status(403).send(pages.messagePage({ title: "Це не ваш коментар", text: "", user: req.user }));
+  if (!req.owner) return res.status(403).send(pages.messagePage({ title: "Це не ваш коментар", text: "", user: req.user }));
   club.dropPost(p.id);
   res.redirect(303, req.body?.back === "admin" ? "/admin/comments" : `${t.href}#reply`);
 });
@@ -2588,6 +2736,35 @@ app.get("/admin/speed", owner, (req, res) => res.send(speedPage({ user: req.user
 app.get("/admin/traffic", owner, (req, res) => res.send(adminPage({ user: req.user, stats: admin.stats(), taps: admin.taps(), gsc: gsc.data(), gscOn: gsc.configured(), layout: pages.layout, page: "traffic" })));
 app.get("/admin/stats", owner, (req, res) => res.redirect(301, "/admin/traffic"));
 app.get("/admin/overviews", owner, (req, res) => res.send(overviewsPage({ user: req.user, list: advice.overviewList().map((r) => ({ ...r, complaints: r.down ? advice.complaintsOf(r.book.id) : [] })), stats: advice.overviewStats(), who: (id) => (id && id !== "auto" ? pub(auth.reader(id)) : null), layout: pages.layout })));
+// The reader's numbers (server/index.js /api/site-admin), asked for with the owner's reader key.
+const readerAdmin = async (path, body) => {
+  const r = await fetch(`${READER_URL}/api/site-admin${path}`, { method: body ? "POST" : "GET", headers: { "x-reader-key": readerKey("owner"), ...(body ? { "Content-Type": "application/json" } : {}) }, body: body ? JSON.stringify(body) : undefined, signal: AbortSignal.timeout(15000) });
+  if (!r.ok) throw new Error(r.status === 403 ? "key" : `HTTP ${r.status}`);
+  return r.json();
+};
+app.get("/admin/reader", owner, async (req, res) => {
+  let s = null;
+  let error = "";
+  try {
+    s = await readerAdmin("");
+  } catch (err) {
+    error = err.message;
+  }
+  const book = (id, name) => {
+    const file = store.db.prepare("SELECT title FROM reader_files WHERE reader = ? AND name = ?").get(id, name) || FREE.find((f) => f.name === name);
+    const hit = file ? readerCatalogBook(id, { name }) : {};
+    return { title: file?.title || "", href: hit.bookId ? store.href(hit.bookId) : "" };
+  };
+  res.send(readerAppPage({ user: req.user, s, error, book, layout: pages.layout }));
+});
+app.post("/admin/reader/off", owner, async (req, res) => {
+  try {
+    await readerAdmin("/off", { id: String(req.body?.id || ""), off: !!req.body?.off });
+  } catch (err) {
+    console.error("reader off:", err.message);
+  }
+  res.redirect("/admin/reader#readers");
+});
 app.get("/admin/readers", owner, (req, res) => res.send(readersPage({ user: req.user, stats: admin.stats(), layout: pages.layout, q: req.query.q, min: Number(req.query.books) || 0, sort: String(req.query.sort || "created"), page: req.query.page })));
 // What the readers do on the site, in time order (Max, 2026-10-30), with the books' titles for book addresses.
 app.get("/admin/activity", owner, (req, res) => {
@@ -2597,6 +2774,29 @@ app.get("/admin/activity", owner, (req, res) => {
   const title = (slug) => {
     const id = store.resolve(slug);
     return id ? store.book(store.canonical(id))?.title || "" : "";
+  };
+  // Titles for the addresses in the log: books, Club topics (by address or id; a post by its id; a new topic by
+  // who made it and when), lists, authors, genres.
+  const topicBy = (reader, at) => {
+    const t = new Date(at).getTime();
+    const row = store.db.prepare("SELECT id FROM club_topics WHERE reader = ? AND created BETWEEN ? AND ? ORDER BY created DESC LIMIT 1").get(reader, new Date(t - 60000).toISOString(), new Date(t + 60000).toISOString());
+    return row ? club.topic(row.id) : null;
+  };
+  const names = {
+    book: title,
+    topic: (key) => club.bySlug(key) || club.topic(key),
+    postTopic: (pid) => {
+      const p = club.post(pid);
+      return p ? club.topic(p.topic) : null;
+    },
+    topicBy,
+    list: (id) => lists.get(id),
+    listBySlug: (username, slug) => {
+      const r = auth.byUsername(username);
+      return r ? lists.bySlug(r.id, slug) : null;
+    },
+    author: (slug) => store.authors?.bySlug.get(slug)?.name || "",
+    genre: (slug) => store.genreBySlug(slug),
   };
   const days = who ? 60 : 7;
   const rows = admin.activity({ reader: who?.id || null, days });
@@ -2616,7 +2816,7 @@ app.get("/admin/activity", owner, (req, res) => {
   }
   for (const h of hours.values()) rows.push({ at: h.at, reader: h.reader, kind: "shelf", what: String(h.ids.length), extra: h.ids.slice(0, 3).join(" ") });
   rows.sort((a, b) => b.at.localeCompare(a.at));
-  res.send(activityPage({ user: req.user, rows, readers, books, title, who, layout: pages.layout }));
+  res.send(activityPage({ user: req.user, rows, readers, books, names, who, layout: pages.layout }));
 });
 app.get("/admin.json", owner, (req, res) => res.json(admin.stats()));
 // One Google Books request with the server's key, for the owner to see what Google answers from here.

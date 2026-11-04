@@ -10,7 +10,7 @@
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="apple-touch-icon" href="icon.png" />
   <link rel="icon" href="icon.png" />
-  <link rel="stylesheet" href="../../node_modules/pdfjs-dist/web/pdf_viewer.css" />
+  <link rel="stylesheet" href="../../node_modules/pdfjs-dist/legacy/web/pdf_viewer.css" />
   <link rel="stylesheet" href="../../node_modules/@fontsource-variable/source-serif-4/opsz.css" />
   <link rel="stylesheet" href="../../node_modules/@fontsource-variable/onest/wght.css" />
   <link rel="stylesheet" href="style.css" />
@@ -18,7 +18,7 @@
 <body data-theme="light">
   <header id="toolbar">
     <div class="group">
-      <button id="btn-library" title="Мої книжки (⌘L)">Мої книжки</button>
+      <button id="btn-library" title="Мої книжки">Мої книжки</button>
       <button id="btn-open" title="Відкрити книжку (⌘O)">Відкрити</button>
       <button id="btn-toc" title="Зміст (T)" disabled>Зміст</button>
     </div>
@@ -48,12 +48,18 @@
       <div id="running-head"></div>
       <div id="search" class="hidden">
         <div class="search-bar">
-          <input id="search-input" type="search" placeholder="Пошук у книжці" autocomplete="off" />
+          <span class="search-field">
+          <svg class="search-mag" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.6-3.6"/></svg>
+          <input id="search-input" type="search" placeholder="Пошук у книжці" autocomplete="off" enterkeyhint="search" />
+          <button id="search-clear" type="button" aria-label="Стерти">×</button>
+          </span>
           <span id="search-count"></span>
           <button id="search-prev" title="Попередній (⇧⌘G)">‹</button>
           <button id="search-next" title="Наступний (⌘G)">›</button>
           <button id="search-close" title="Закрити (Esc)">✕</button>
+          <button id="search-cancel" type="button">Скасувати</button>
         </div>
+        <div id="search-row"><span id="search-sum"></span><span class="sr-nav"><button id="search-up" type="button" title="Попередній (⇧Enter)" aria-label="Попередній збіг"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 15 6-6 6 6"/></svg></button><button id="search-down" type="button" title="Наступний (Enter)" aria-label="Наступний збіг"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button></span></div>
         <ol id="search-results"></ol>
       </div>
       <button id="prev" class="pager" title="Попередня сторінка (←)">‹</button>
@@ -64,22 +70,88 @@
       <footer id="status"><span id="chapter-label"></span><span id="progress-label"></span></footer>
     </section>
 
+    <!-- Phone reading screen, turn 9 from Claude Design (2026-11-02): a bar on top (back, title, search) and one
+         at the bottom (chapter, pages, a slider, Зміст / Нотатки / Вигляд); one sheet for the contents and
+         «Вигляд». Explanations and notes keep #panel, styled as the same sheet. phone-read.js wires it. -->
+    <div id="m-top" class="m-chrome">
+      <button id="m-back" type="button" aria-label="Мої книжки"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 5-7 7 7 7"/></svg><span class="m-dl">Мої книжки</span></button>
+      <div class="m-ttl"><b id="m-title"></b><small id="m-author"></small></div>
+      <button id="m-search" type="button" aria-label="Пошук у книжці"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.6-3.6"/></svg></button>
+      <!-- Computer (turn 10): the actions are in the header on the right, with their names. -->
+      <nav class="m-dnav">
+        <button type="button" data-d="search" class="m-dsearch" title="Пошук у книжці (⌘F)" aria-label="Пошук у книжці"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4 4"/></svg></button>
+        <button type="button" data-d="toc" title="Зміст (T)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6h11M9 12h11M9 18h11"/><circle cx="4.5" cy="6" r=".9"/><circle cx="4.5" cy="12" r=".9"/><circle cx="4.5" cy="18" r=".9"/></svg>Зміст</button>
+        <button type="button" data-d="notes"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 4h12v16l-6-4-6 4z"/></svg>Нотатки <i id="m-dncount"></i></button>
+        <button type="button" data-d="look" class="m-daa" title="Вигляд" aria-label="Вигляд">Аа</button>
+        <button type="button" data-d="full" class="m-dfull" title="На весь екран (F)" aria-label="На весь екран"><svg viewBox="0 0 24 24" aria-hidden="true"><path class="fs-in" d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/><path class="fs-out" d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/></svg></button>
+      </nav>
+    </div>
+    <div id="m-bottom" class="m-chrome">
+      <div class="m-row"><span id="m-chapter"></span><span id="m-pages"></span></div>
+      <div class="m-slider">
+        <div class="m-track"><i id="m-fill"></i><span id="m-ticks"></span></div>
+        <input id="m-range" type="range" min="0" max="1000" step="1" value="0" aria-label="Місце в книжці" />
+        <span id="m-bubble" class="hidden"></span>
+      </div>
+      <nav class="m-nav">
+        <button type="button" data-m="toc"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6h11M9 12h11M9 18h11"/><circle cx="4.5" cy="6" r=".6"/><circle cx="4.5" cy="12" r=".6"/><circle cx="4.5" cy="18" r=".6"/></svg>Зміст</button>
+        <button type="button" data-m="notes"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 3.5h11v17l-5.5-3.8-5.5 3.8z"/></svg><span>Нотатки <i id="m-ncount"></i></span></button>
+        <button type="button" data-m="look"><span class="m-aa" aria-hidden="true">Аа</span>Вигляд</button>
+      </nav>
+    </div>
+    <div id="m-findbar" class="m-chrome hidden">
+      <button type="button" id="m-find-prev" aria-label="Попередній збіг">‹</button>
+      <span id="m-find-n"></span>
+      <button type="button" id="m-find-next" aria-label="Наступний збіг">›</button>
+      <button type="button" id="m-find-list" class="m-link">Список</button>
+      <button type="button" id="m-find-x" class="m-x" aria-label="Закрити пошук"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+    </div>
+    <section id="msheet" class="m-sheet hidden" aria-modal="false">
+      <div class="ms-head">
+        <span class="ms-grab" aria-hidden="true"></span>
+        <div class="ms-t"><h2 id="ms-title"></h2><small id="ms-sub"></small></div>
+        <button type="button" class="m-x" id="ms-close" aria-label="Закрити"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+      </div>
+      <div id="ms-body"></div>
+    </section>
+    <!-- «Вигляд» on a computer: a small window under «Аа» (turn 10). -->
+    <section id="mlook" class="hidden" aria-label="Вигляд"><div id="ml-body"></div></section>
+
     <aside id="panel">
+      <span id="panel-grip" aria-hidden="true"></span>
       <div class="panel-head">
         <span class="grabber mobile-only" aria-hidden="true"></span>
         <span class="panel-tabs" role="tablist">
-          <button class="tab active" data-tab="cards" role="tab">Пояснення</button>
+          <button class="tab active" data-tab="cards" role="tab">Запитання</button>
           <button class="tab" data-tab="notes" role="tab">Нотатки</button>
         </span>
+        <h2 id="ps-title" class="ps-title"></h2>
+        <button id="ps-action" type="button" class="ps-action hidden">В нотатки</button>
+        <kbd id="ps-esc" class="hidden">Esc</kbd>
         <span class="panel-actions">
           <button id="btn-clear" class="link" title="Очистити">Очистити</button>
-          <button id="btn-panel-close" class="link mobile-only" title="Сховати панель">Сховати</button>
+          <button id="btn-panel-close" class="link mobile-only" title="Сховати панель" aria-label="Закрити"><span>Сховати</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
         </span>
       </div>
+      <div id="panel-body">
       <div id="cards">
-        <div id="panel-empty" class="panel-empty">Виділіть текст у книжці, щоб отримати пояснення в контексті.</div>
+        <!-- «Запитання» (2026-11-03, like a paper book): a question about the book, then the questions asked. -->
+        <form id="ask-book" autocomplete="off">
+          <textarea id="ab-q" rows="1" placeholder="Запитати про книжку…" enterkeyhint="send" aria-label="Питання про книжку"></textarea>
+          <div class="st-row"><button type="button" class="pp-tool ab-mic" title="Надиктувати" aria-label="Надиктувати"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></button><span class="st-sp"></span><button type="submit" class="st-go">Запитати</button></div>
+        </form>
+        <h3 id="q-head" class="m-sec">Запитання</h3>
+        <div id="panel-empty" class="panel-empty">Можна також виділити текст у книжці.</div>
+        <button type="button" id="cards-more" class="link hidden"></button>
       </div>
-      <div id="notes" class="hidden"></div>
+      <!-- «Нотатки»: the reader's own thoughts can be added here too, as on a paper book's page (Max 2026-11-03). -->
+      <div class="m-sec m-sec-row"><h3 id="notes-head">Нотатки</h3><button type="button" id="note-add" class="link">+ Нотатка</button></div>
+      <form id="note-form" class="ask-form hidden" autocomplete="off">
+        <textarea id="nf-text" rows="3" placeholder="Думка, цитата або що перечитати" aria-label="Нотатка"></textarea>
+        <div class="st-row"><button type="button" class="pp-tool nf-mic" title="Надиктувати" aria-label="Надиктувати"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></button><span class="st-sp"></span><button type="submit" class="st-go">Зберегти</button></div>
+      </form>
+      <div id="notes"></div>
+      </div>
     </aside>
   </main>
 
@@ -94,30 +166,31 @@
       </div>
       <div id="shell-views">
         <section id="home" class="view">
-          <!-- Design «3a» from Claude Design (Max, 2026-11-01): one page in the site's style. A header with the
-               logo, one search over your books and the free shelf, and your avatar with its menu. -->
+          <!-- Design v2 from Claude Design (Max, 2026-11-02, turns 7 and 8): a panel on the left (always open on a
+               computer, by the button on a phone) with search in your books, the sections and the books opened
+               lately; the page is «Мої книжки» or «Додати книжку». On a phone the header has the panel button,
+               the logo and «+»; on «Додати книжку» a way back and the title. A computer has no header. -->
           <header class="r-head">
+            <button class="r-panel-btn" type="button" data-act="panel" aria-label="Панель"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="M9 4v16"/></svg></button>
             <div class="r-logo">Chytai<span>читай більше</span></div>
-            <label class="r-search r-search-top"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.6-3.6"/></svg>
-              <input class="r-q" type="search" placeholder="Назва чи автор: у ваших книжках і на вільній полиці" autocomplete="off" /></label>
-            <button class="r-add-btn" type="button" data-act="add" title="Додати свою книжку: EPUB, PDF, MOBI" aria-label="Додати книжку"><b>+</b><span>Додати книжку</span></button>
-            <button id="r-avatar" class="r-avatar" type="button" aria-haspopup="menu" aria-label="Меню"></button>
+            <button class="r-add-btn" type="button" data-page="add" title="Додати книжку" aria-label="Додати книжку"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>
           </header>
-          <div id="r-menu" class="r-menu hidden" role="menu">
-            <div class="r-menu-me"><b id="r-me-name"></b><small id="r-me-user"></small></div>
-            <button type="button" data-r="settings">Налаштування</button>
-            <a id="r-me-page" href="https://chytai.org.ua" target="_blank" rel="noopener">Моя сторінка на Chytai <i>↗</i></a>
-            <a href="https://chytai.org.ua/club" target="_blank" rel="noopener">Обговорення <i>↗</i></a>
-            <button type="button" data-r="logout" class="r-menu-out">Вийти</button>
+          <header class="r-head r-head-add">
+            <button class="r-back" type="button" data-page="home" aria-label="Назад"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 5-7 7 7 7"/></svg></button>
+            <h1>Додати книжку</h1>
+          </header>
+          <div class="r-add-top">
+            <h1>Додати книжку</h1>
+            <label class="r-search r-add-search"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.6-3.6"/></svg>
+              <input id="r-aq" type="search" placeholder="Назва, автор або ISBN" autocomplete="off" enterkeyhint="search" /></label>
           </div>
-          <label class="r-search r-search-phone"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.6-3.6"/></svg>
-            <input class="r-q" type="search" placeholder="Назва чи автор" autocomplete="off" /></label>
           <div id="home-body">
-            <div class="skeleton" aria-hidden="true">
-              <div class="sk-line"></div>
-              <div class="sk-card"><div class="sk-cover"></div><div class="sk-lines"><div></div><div></div><div class="sk-grow"></div><div class="sk-bar"></div></div></div>
-              <div class="sk-line"></div>
-              <div class="sk-shelf"><div></div><div></div><div></div><div></div></div>
+            <!-- While the library loads (Max 2026-11-03): the home page's own shape, covers shimmering. -->
+            <div class="skeleton r-skel" aria-hidden="true">
+              <section class="r-now"><div class="r-sec-head plain"><h2>Читаю зараз</h2></div>
+                <div class="r-now-row"><i class="sk-c"></i><div class="sk-t"><i></i><i></i></div></div><i class="sk-p"></i></section>
+              <section class="r-mine"><div class="r-sec-head"><h2>Мої книжки</h2></div>
+                <div class="r-grid"><i class="sk-c"></i><i class="sk-c"></i><i class="sk-c"></i><i class="sk-c"></i><i class="sk-c"></i><i class="sk-c"></i><i class="sk-c"></i><i class="sk-c"></i></div></section>
             </div>
             <p id="home-wait" class="home-wait hidden"><span class="spinner"></span>Бібліотека прокидається, ще кілька секунд…</p>
           </div>
@@ -169,6 +242,21 @@
         </section>
       </div>
     </div>
+    <aside id="r-panel" aria-label="Панель">
+      <div class="r-logo r-panel-logo">Chytai<span>читай більше</span></div>
+      <label class="r-psearch"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.6-3.6"/></svg>
+        <input id="r-pq" type="search" placeholder="Пошук" autocomplete="off" /><kbd>/</kbd></label>
+      <div id="r-pfound" class="hidden"></div>
+      <nav class="r-pnav">
+        <button type="button" data-page="home">Мої книжки<i id="r-n-books"></i></button>
+        <button type="button" data-page="add" class="r-pnav-add">Додати книжку<i>+</i></button>
+        <button type="button" data-act="trash" id="r-pnav-trash" hidden>Нещодавно видалені<i id="r-n-trash"></i></button>
+      </nav>
+      <section class="r-precent hidden"><h3>Нещодавно відкриті</h3><div id="r-recent"></div></section>
+      <div class="r-pspace"></div>
+      <a class="r-pfeedback" href="https://chytai.org.ua/club" target="_blank" rel="noopener">Клуб Chytai ↗</a>
+      <button type="button" class="r-pme" data-act="settings"><span class="r-pava" id="r-avatar"></span><span class="r-pme-t"><b id="r-me-name"></b><small>Налаштування</small></span><i>›</i></button>
+    </aside>
     <nav id="tabbar">
       <div class="side-brand wide-only"><img src="icon.png" alt="" /><span>Chytai</span></div>
       <div class="side-tabs">
@@ -196,10 +284,18 @@
     <span class="notice-text"></span>
   </div>
 
+  <!-- A selection (2026-11-03, like a paper book's question field): the passage, a question about it, the mic,
+       «Переклад», «В нотатки» and «Пояснити», which turns into «Запитати» once there is a question. -->
   <div id="sel-toolbar" class="hidden">
-    <button data-action="explain">Пояснити</button>
-    <button data-action="note">В нотатки</button>
-    <button data-action="translate">Переклад</button>
+    <div class="st-quote"></div>
+    <textarea id="st-q" rows="1" placeholder="Запитати про це…" enterkeyhint="send" aria-label="Питання про виділене"></textarea>
+    <div class="st-row">
+      <button type="button" class="pp-tool st-mic" data-action="mic" title="Надиктувати" aria-label="Надиктувати"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></button>
+      <button type="button" class="st-link" data-action="translate">Переклад<kbd>T</kbd></button>
+      <button type="button" class="st-link" data-action="note">В нотатки<kbd>N</kbd></button>
+      <span class="st-sp"></span>
+      <button type="button" class="st-go" data-action="explain"><span>Пояснити</span><kbd>E</kbd><small>Потрібен інтернет</small></button>
+    </div>
     <button data-action="open" data-mark>Пояснення</button>
     <button data-action="mark-note" data-mark>В нотатки</button>
   </div>
@@ -209,18 +305,6 @@
   <dialog id="settings">
     <form method="dialog" id="settings-form">
       <h2 tabindex="-1" autofocus>Налаштування</h2>
-      <label>Стиль пояснень
-        <select id="set-style">
-          <option value="default">Звичайний</option>
-          <option value="adhd">i-have-adhd</option>
-          <option value="brief">Коротко: 1–3 речення</option>
-          <option value="simple">Простими словами</option>
-          <option value="custom">Свій стиль…</option>
-        </select>
-      </label>
-      <label id="custom-style-row" hidden>Як пояснювати
-        <textarea id="set-custom-style" rows="4" maxlength="1500" placeholder="Наприклад: спершу одне речення суті, далі 2–3 пункти; без вступів; приклади з життя."></textarea>
-      </label>
       <label class="desktop-only app-only">Ключ Claude API
         <input type="password" id="set-key" placeholder="sk-ant-…" autocomplete="off" />
         <small id="key-hint"></small>
@@ -242,10 +326,6 @@
           <option value="dark">Темна</option>
           <option value="sepia">Сепія</option>
         </select>
-      </label>
-      <label class="demo-setting">Книжка для демо-режиму
-        <select id="set-demo-book"></select>
-        <small>Гості за посиланням /demo бачать лише цю книжку, без завантажень і з денним лімітом пояснень.</small>
       </label>
       <label>Шрифт книжки
         <select id="set-font">
@@ -294,6 +374,7 @@
         <button value="about" id="bm-about">Про книжку</button>
         <button value="share" id="bm-share" hidden>Дати почитати</button>
         <button value="edit" id="bm-edit">Назва й автор</button>
+        <button value="epub" id="bm-epub" hidden>Перетворити на EPUB</button>
         <button value="aside" id="bm-aside" class="danger">Видалити</button>
         <button value="delete" id="bm-delete" class="danger">Видалити</button>
       </div>
@@ -302,13 +383,28 @@
   </dialog>
 
   <!-- «Нещодавно видалені»: deleted books wait here 30 days before they go for good. -->
+  <!-- «Про книжку» (Max, 2026-11-01): the site's short summary, kept on the device for offline. -->
+  <dialog id="about-dialog">
+    <form method="dialog">
+      <div class="ab-head"><span id="ab-cover"></span><div><h2 id="ab-title"></h2><p id="ab-author"></p></div></div>
+      <div id="ab-body"></div>
+      <p class="ab-foot"><a id="ab-link" target="_blank" rel="noopener"></a><button value="close" class="r-pill">Закрити</button></p>
+    </form>
+  </dialog>
+  <!-- Paper books (paper.js): what a cover photo found, and the question/explanation card. -->
+  <dialog id="paper-found"><div id="pf-body"></div></dialog>
+  <!-- Marking a photo of a paper book's page (v3): circle or underline with a finger, the AI explains what's marked. -->
+  <dialog id="paper-mark">
+    <div class="pm-head"><button type="button" id="pm-cancel" class="r-link">Скасувати</button><span id="pm-hint">Обведіть, що пояснити</span><button type="button" id="pm-clear" class="r-link">Очистити</button></div>
+    <div class="pm-stage"><video id="pm-video" playsinline muted autoplay></video><div class="pm-pic"><img id="pm-img" alt="" /><canvas id="pm-canvas"></canvas></div></div>
+    <div class="pm-foot pm-foot-mark"><button type="button" id="pm-go" class="r-pill">Далі</button></div>
+    <div class="pm-foot pm-foot-cam"><button type="button" id="pm-lib" class="pm-lib">Галерея</button><button type="button" id="pm-shot" class="pm-shot" aria-label="Зняти"></button><span class="pm-lib"></span></div>
+  </dialog>
   <dialog id="trash-dialog">
     <form method="dialog">
-      <button value="close" class="r-back">← Мої книжки</button>
-      <h2 tabindex="-1" autofocus>Нещодавно видалені</h2>
+      <div class="tr-head"><h2 tabindex="-1" autofocus>Нещодавно видалені</h2><button value="close" class="tr-done">Готово</button></div>
       <small>Книжки зберігаються 30 днів разом з прогресом і нотатками, потім видаляються назавжди.</small>
       <ul id="trash-list"></ul>
-      <menu><button value="close">Готово</button></menu>
     </form>
   </dialog>
 
@@ -352,10 +448,13 @@
       <dl class="keys">
         <dt><kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd></dt><dd>Мої книжки, Пошук, Клуб</dd>
         <dt><kbd>/</kbd></dt><dd>Пошук: у книжці, а на головній — у бібліотеці</dd>
-        <dt><kbd>Esc</kbd></dt><dd>Повернутися до книжки</dd>
+        <dt><kbd>Esc</kbd></dt><dd>Зняти виділення, закрити віконце чи панель; на головній — повернутися до книжки</dd>
         <dt><kbd>←</kbd> <kbd>→</kbd> <kbd>Пробіл</kbd></dt><dd>Гортати сторінки (і коліщатком миші)</dd>
-        <dt><kbd>T</kbd></dt><dd>Зміст</dd>
-        <dt><kbd>−</kbd> <kbd>+</kbd></dt><dd>Менший і більший шрифт</dd>
+        <dt><kbd>E</kbd> <kbd>N</kbd></dt><dd>Пояснити виділене, в нотатки</dd>
+        <dt><kbd>T</kbd></dt><dd>Зміст, а з виділенням — переклад</dd>
+        <dt><kbd>⌘F</kbd></dt><dd>Пошук у книжці</dd>
+        <dt><kbd>F</kbd></dt><dd>На весь екран</dd>
+        <dt><kbd>⌘+</kbd> <kbd>⌘−</kbd></dt><dd>Більший і менший шрифт</dd>
         <dt><kbd>⌘E</kbd></dt><dd>Панель пояснень</dd>
         <dt><kbd>⌘O</kbd></dt><dd>Відкрити книжку з диска</dd>
         <dt><kbd>⌘,</kbd></dt><dd>Налаштування</dd>
@@ -373,10 +472,15 @@
   <script src="web-bridge.js"></script>
   <script src="motion.js"></script>
   <script src="context.js"></script>
+  <script src="dictation.js"></script>
   <script src="renderer.js"></script>
   <script src="search.js"></script>
+  <script src="phone-read.js"></script>
+  <script src="desk-read.js"></script>
   <script src="library-view.js"></script>
   <script src="home.js"></script>
+  <script src="paper.js"></script>
+  <script src="reading-time.js"></script>
   <script type="module" src="pdf-view.js"></script>
 </body>
 </html>

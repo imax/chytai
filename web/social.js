@@ -79,8 +79,19 @@ class Social {
   // The feed: the newest changes first (entries carry `updated` since 2026-10-20), then the imported
   // ones by year and the reader's own order. `books` limits it to a set of works, `notes` to entries with
   // a note, `min` to ratings from that up, `readers` to a set of reader ids (whom one follows).
-  feed({ limit = 6, books = null, notes = false, min = 0, readers = null, perReader = 0 } = {}) {
+  // `shelves` (only /community) adds a line for each shelf brought in one go (store.shelfImports): its
+  // entries are dated by when they were read, so a new reader with 190 books was nowhere near the top
+  // (Max, 2026-11-02, @stefanovskyi). One line, «N книжок на полиці», with a few of their best rated books.
+  feed({ limit = 6, books = null, notes = false, min = 0, readers = null, perReader = 0, shelves = false } = {}) {
     const items = this.all().filter(({ reader, id, entry: e }) => (!readers || readers.has(reader.id)) && (!books || books.has(id)) && (!notes || e.note) && (!min || (e.rating ?? 0) >= min));
+    // One line a reader, at their newest import; it says how many books the shelf has now.
+    const had = new Set();
+    if (shelves) for (const s of this.store.shelfImports()) {
+      const reader = !had.has(s.reader) && this.who(s.reader);
+      if (!reader || (readers && !readers.has(reader.id))) continue;
+      had.add(s.reader);
+      items.push({ reader, shelf: { n: Object.keys(this.store.entriesOf(s.reader)).length }, entry: { updated: s.at } });
+    }
     const at = (e) => e.updated || e.added || "";
     items.sort((a, b) => (at(b.entry) > at(a.entry) ? 1 : at(b.entry) < at(a.entry) ? -1 : 0) || (b.entry.year ?? 0) - (a.entry.year ?? 0) || (a.entry.order ?? 0) - (b.entry.order ?? 0));
     const out = [];
@@ -90,6 +101,11 @@ class Social {
     // is, says the series' name and how many books, and shows the volume with a note, else the first.
     const groups = new Map(); // reader|series|status|year -> the line
     for (const it of items) {
+      if (it.shelf) {
+        const books = this.shelfBooks(it.reader.id);
+        if (books.length) out.push({ ...it, book: books[0], shelf: { ...it.shelf, books } });
+        continue;
+      }
       const ser = this.store.seriesOf(it.id);
       const gk = ser && `${it.reader.id}|${ser.key}|${it.entry.status || ""}|${it.entry.year ?? ""}`;
       const g = gk && groups.get(gk);
@@ -113,6 +129,19 @@ class Social {
       else foldSeries(line);
     }
     return out.slice(0, limit);
+  }
+
+  // A few books to show for a reader's shelf: the best rated, then the newest, with a cover.
+  shelfBooks(rid, n = 5) {
+    const rows = this.all().filter((x) => x.reader.id === rid && x.entry.status !== "want");
+    rows.sort((a, b) => (b.entry.rating ?? 0) - (a.entry.rating ?? 0) || ((b.entry.updated || "") > (a.entry.updated || "") ? 1 : -1));
+    const out = [];
+    for (const { id } of rows) {
+      const book = this.store.book(id);
+      if (book?.cover && !out.some((b) => b.id === book.id)) out.push(book);
+      if (out.length >= n) break;
+    }
+    return out;
   }
 
   // «Книжка навмання»: books someone rated 4,5 or more and wrote about, a different order every time.

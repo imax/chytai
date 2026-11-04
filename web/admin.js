@@ -1032,76 +1032,187 @@ ${problemsBlock(notFound, jsErrors)}
   return layout({ title: "Швидкість · Адмінка", user, path: "/admin", body });
 }
 
-// /admin/activity (Max, 2026-10-30): what the readers did on the site, newest first, a day at a time, one block
-// for each run of one reader's steps. A reader's name filters the page to them (60 days).
+// /admin/activity (Max, 2026-10-30; made readable 2026-11-04: «прикольна сторінка, але важко читати»): what the
+// readers did on the site, newest first, a day at a time, one block for each run of one reader's steps. Every
+// address becomes words (a book's, a topic's, a list's title), pages opened one after another make one grey line
+// without repeats, the page a form sends back to after a step is not counted again, and several saves of one
+// book's mark are one line. A reader's name filters the page to them (60 days).
 const STATUS_WORDS = { want: "«Хочу прочитати»", read: "«Прочитано»", reading: "«Читаю»", abandoned: "«Покинуто»" };
-function activityPage({ user, rows, readers, books, title, who = null, layout }) {
+const COPY_WORDS = { paper: "паперова", ebook: "електронна", audio: "аудіо", seeking: "шукаю" };
+function activityPage({ user, rows, readers, books, names, who = null, layout }) {
   const KYIV = { timeZone: "Europe/Kyiv" };
   const dayOfIso = (iso) => new Date(iso).toLocaleDateString("sv-SE", KYIV);
   const time = (iso) => new Date(iso).toLocaleTimeString("uk-UA", { ...KYIV, hour: "2-digit", minute: "2-digit" });
   const dayName = (d) => new Date(`${d}T12:00`).toLocaleDateString("uk-UA", { weekday: "long", day: "numeric", month: "long" });
-  const bookLink = (slug, fallback = "книжку") => {
-    const t = title(slug);
-    return `<a href="/book/${esc(encodeURIComponent(slug))}">${t ? `«${esc(t)}»` : esc(fallback === "книжку" ? slug : fallback)}</a>`;
+  const byName = new Map([...readers.values()].map((r) => [r.username, r]));
+  // A long title is cut at its subtitle: «Нікого немає в лісі. Історії про…» → «Нікого немає в лісі».
+  const short = (t) => {
+    t = String(t || "");
+    if (t.length <= 42) return t;
+    const m = /^(.{8,}?)(?:\. |: | — | \()/.exec(t);
+    return m && m[1].length <= 60 ? m[1] : t.slice(0, 42).replace(/\s+\S*$/, "") + "…";
   };
-  const page = (url) => {
-    const [p, q = ""] = url.split("?");
+  const q = (t, href) => `<a href="${esc(href)}">«${esc(short(t))}»</a>`;
+  const book = (slug) => {
+    const t = names.book(slug);
+    return t ? q(t, `/book/${encodeURIComponent(slug)}`) : `<a href="/book/${esc(encodeURIComponent(slug))}">книжку</a>`;
+  };
+  const someone = (u) => {
+    const r = byName.get(u);
+    return `<a href="/@${esc(u)}">${r ? esc(r.name) : `@${esc(u)}`}</a>`;
+  };
+  // A page opened → { key, html }: the key says which pages are the same (a book's page and the reader's own
+  // page of it are one; the reader's /me and /@self are one), html is how it reads after «відкрив».
+  const page = (url, self) => {
+    const [p, query = ""] = url.split("?");
     const parts = p.split("/").filter(Boolean);
-    if (p === "/") return `головну${q ? ` <span class="muted">${esc(q)}</span>` : ""}`;
-    const NAMED = { "/me": "свою полицю", "/welcome": "«Ласкаво просимо»", "/community": "спільноту", "/add": "«Додати книжки»", "/settings": "налаштування", "/lists": "списки", "/updates": "«Що нового»" };
-    if (NAMED[p]) return `<a href="${esc(p)}">${NAMED[p]}</a>${q ? ` <span class="muted">${esc(q)}</span>` : ""}`;
-    if (parts[0] === "book" && parts[1]) return bookLink(parts[1]);
-    if (parts[0] === "author" && parts[1]) return `автора <a href="${esc(p)}">${esc(parts[1])}</a>`;
-    if (p.startsWith("/@")) return `полицю <a href="${esc(p)}">${esc(parts[0])}</a>${parts[1] ? ` <span class="muted">/${esc(parts.slice(1).join("/"))}</span>` : ""}`;
-    if (parts[0] === "genre") return `жанр <a href="${esc(p)}">${esc(parts[1] || "")}</a>`;
-    if (parts[0] === "list" || parts[0] === "lists") return `<a href="${esc(p)}">${parts[0] === "lists" ? "списки" : "список"}</a>`;
-    if (parts[0] === "publishers") return `<a href="${esc(p)}">${parts[1] ? `видавництво ${esc(parts[1])}` : "видавництва"}</a>`;
-    return `<a href="${esc(url)}">${esc(url)}</a>`;
+    const mail = /utm_source=email/.test(query) ? ` <span class="muted small">з листа</span>` : "";
+    const one = (key, html) => ({ key, html: html + mail });
+    const NAMED = { "/": "головну", "/community": "спільноту", "/add": "«Додати книжки»", "/lists": "списки", "/updates": "«Що нового»", "/club": "Клуб", "/club/new": "нову тему в Клубі", "/welcome": "«Ласкаво просимо»", "/about": "«Про нас»", "/privacy": "приватність", "/publishers": "видавництва", "/me/now": "«Читаю зараз»", "/genres": "жанри" };
+    if (NAMED[p]) return one(p, `<a href="${esc(p)}">${NAMED[p]}</a>`);
+    if ((parts[0] === "book" || (parts[0] === "me" && parts[1] === "book")) && parts.at(-1) && parts.length <= 3) return one(`book:${parts.at(-1)}`, book(parts.at(-1)));
+    if (p === "/me" || parts[0] === "me" || p === `/@${self}`) return one("me", `<a href="/@${esc(self)}">свою полицю</a>`);
+    if (parts[0] === "settings") return one("settings", "налаштування");
+    if (parts[0] === "import") return one("import", "імпорт книжок");
+    if (parts[0] === "club" && parts[1]) {
+      const t = names.topic(parts[1]);
+      return one(p, t ? `тему ${q(t.title, t.href)}` : `<a href="${esc(p)}">тему в Клубі</a>`);
+    }
+    if (p.startsWith("/@")) {
+      const u = parts[0].slice(1);
+      if (parts[1] === "list" && parts[2]) {
+        const l = names.listBySlug(u, parts[2]);
+        return one(p, l ? `список ${q(l.title, l.href)}` : `<a href="${esc(p)}">список</a>`);
+      }
+      return one(`@${u}`, u === self ? `<a href="${esc(p)}">свою полицю</a>` : `полицю ${someone(u)}`);
+    }
+    if (parts[0] === "author" && parts[1]) return one(p, `автора <a href="${esc(p)}">${esc(names.author(parts[1]) || parts[1])}</a>`);
+    if (parts[0] === "genre" && parts[1]) return one(p, `жанр <a href="${esc(p)}">${esc(names.genre(parts[1]) || parts[1])}</a>`);
+    if (parts[0] === "publishers" && parts[1]) return one(p, `видавництво <a href="${esc(p)}">${esc(parts[1])}</a>`);
+    return one(p, `<a href="${esc(p)}">${esc(p.length > 40 ? p.slice(0, 40) + "…" : p)}</a>`);
   };
-  const line = (r) => {
-    const extra = Object.fromEntries(r.extra.split(" ").filter((x) => x.includes("=")).map((x) => x.split("=")));
+  // A step that changed something → { key, html } or, for a book's mark, { key, mark } to be joined with the
+  // marks of the same book next to it.
+  const act = (r) => {
+    const kv = Object.fromEntries(r.extra.split(" ").filter((x) => x.includes("=")).map((x) => x.split("=")));
+    const parts = r.what.split("/").filter(Boolean);
+    const [a, b, c, d] = parts[0] === "api" ? parts.slice(1) : [parts[0], parts[1], parts[2], parts[3]];
+    const topic = (id) => names.topic(id);
+    const inTopic = (t) => (t ? ` у темі ${q(t.title, t.href)}` : "");
+    const list = (id) => names.list(id);
+    const ofList = (l) => (l ? ` ${q(l.title, l.href)}` : "");
     switch (r.kind) {
       case "signup":
-        return `<b>зареєструвався</b>`;
+        return { html: `<b>зареєструвався</b>` };
       case "login":
-        return `увійшов`;
+        return { key: "login", html: "увійшов" };
       case "shelf": {
         const n = Number(r.what) || 0;
-        const some = r.extra.split(" ").filter(Boolean).map((id) => bookLink(id)).join(", ");
-        return n === 1 ? `змінив на полиці ${some}` : `змінив на полиці ${n} книжок: ${some}${n > 3 ? " …" : ""}`;
+        const some = r.extra.split(" ").filter(Boolean).map(book).join(", ");
+        return { html: n === 1 ? `змінив на полиці ${some}` : `змінив на полиці ${n} книжок: ${some}${n > 3 ? " …" : ""}` };
       }
-      case "view":
-        return `відкрив ${page(r.what)}`;
       case "search":
-        return `шукав <a href="/search?q=${esc(encodeURIComponent(r.what))}"><b>«${esc(r.what)}»</b></a> ${r.extra === "0" ? `<span class="error">нічого не знайшлось</span>` : `<span class="muted">знайшлось ${esc(r.extra)}</span>`}`;
+        return { html: `шукав <a href="/search?q=${esc(encodeURIComponent(r.what))}"><b>«${esc(r.what)}»</b></a> ${r.extra === "0" ? `<span class="error">нічого не знайшлось</span>` : `<span class="muted">знайшлось ${esc(r.extra)}</span>`}` };
       case "tap":
-        return r.what.startsWith("out:") ? `перейшов на ${esc(r.what.slice(4))} <span class="muted">${esc(BLOCK_NAMES[r.extra] || r.extra)}</span>` : r.what === "go:read" ? "відкрив безкоштовну книжку в Читалці" : r.what === "go:epub" ? "завантажив EPUB" : r.what === "reader-app" ? "пішов у Читалку" : esc(r.what);
-      case "do": {
-        const parts = r.what.split("/").filter(Boolean);
-        if (parts[1] === "entry" && parts[2]) {
-          if (parts[3] === "remove") return `прибрав з полиці ${bookLink(parts[2])}`;
-          const what = [extra.status ? STATUS_WORDS[extra.status] || extra.status : "", extra.rating ? `оцінка ${esc(extra.rating)}` : "", extra.kids === "1" ? "на дитячу полицю" : "", r.extra.includes("з нотаткою") ? "з нотаткою" : ""].filter(Boolean).join(", ");
-          return `позначив ${bookLink(parts[2])}${what ? `: ${what}` : ""}`;
-        }
-        if (parts[1] === "now" && parts[2]) return `«Читаю зараз»: ${bookLink(parts[2])}`;
-        if (parts[1] === "follow" && parts[2]) return `стежить за <a href="/@${esc(parts[2])}">@${esc(parts[2])}</a>`;
-        if (parts[0] === "me" && parts[1] === "book") return `змінив ${bookLink(parts[2] || "")} ${r.extra ? `<span class="muted">${esc(r.extra)}</span>` : ""}`;
-        return `${esc(r.what)} ${r.extra ? `<span class="muted">${esc(r.extra)}</span>` : ""}`;
-      }
+        if (r.what.startsWith("out:")) return { html: `перейшов на ${esc(r.what.slice(4))}${BLOCK_NAMES[r.extra] && r.extra !== "-" ? ` <span class="muted">з блоку «${esc(BLOCK_NAMES[r.extra])}»</span>` : ""}` };
+        if (r.what === "reader-app") return { key: "reader", html: "пішов у Читалку" };
+        return { html: r.what === "go:read" ? "відкрив безкоштовну книжку в Читалці" : r.what === "go:epub" ? "завантажив EPUB" : esc(r.what) };
+      case "reader":
+        return { key: "reader", html: "пішов у Читалку" };
+      case "do":
+        break;
       default:
-        return `${esc(r.kind)} ${esc(r.what)}`;
+        return { html: `${esc(r.kind)} ${esc(r.what)}` };
     }
+    if (a === "entry" && b) {
+      if (c === "remove") return { html: `прибрав з полиці ${book(b)}` };
+      return { key: `entry:${b}`, slug: b, mark: { status: kv.status, rating: kv.rating, copy: kv.copy, kids: kv.kids, note: r.extra.includes("з нотаткою") } };
+    }
+    if (a === "now" && b) return { html: `«Читаю зараз»: ${book(b)}` };
+    if (a === "follow" && b) return { html: `натиснув «Стежити» на полиці ${someone(b)}` };
+    if (a === "club" && !b) {
+      const t = names.topicBy(r.reader, r.at);
+      return { html: `<b>створив тему</b>${t ? ` ${q(t.title, t.href)}` : " в Клубі"}` };
+    }
+    if (a === "club" && b === "posts") {
+      const t = names.postTopic(c);
+      return { html: { react: "поставив реакцію", edit: "виправив свою відповідь", delete: "видалив свою відповідь" }[d] ? `${{ react: "поставив реакцію", edit: "виправив свою відповідь", delete: "видалив свою відповідь" }[d]}${inTopic(t)}` : `щось зробив у Клубі` };
+    }
+    if (a === "club" && b) {
+      const t = topic(b);
+      if (c === "posts") return { html: `<b>написав</b>${inTopic(t) || " у Клубі"}` };
+      if (c === "watch") return { html: `${kv.on === "0" ? "перестав стежити" : "стежить"} за темою${t ? ` ${q(t.title, t.href)}` : ""}` };
+      if (c === "delete") return { html: `видалив тему${t ? ` ${q(t.title, t.href)}` : ""}` };
+      return { html: `змінив тему${t ? ` ${q(t.title, t.href)}` : ""}` };
+    }
+    if (a === "lists" && !b) return { html: `<b>створив список</b>` };
+    if (a === "lists" && b === "comments") return { html: c && d === "delete" ? "видалив коментар до списку" : "виправив коментар до списку" };
+    if (a === "lists" && b) {
+      const l = list(b);
+      const LIST = { save: "зберіг собі список", publish: "<b>опублікував список</b>", comments: "<b>прокоментував список</b>", add: "додав книжку до списку", remove: "прибрав книжку зі списку", why: "написав, чому книжка в списку", move: "переставив книжки в списку", image: "змінив обкладинку списку", delete: "видалив список" };
+      return { key: `list:${b}:${c || ""}`, html: `${LIST[c] || "змінив список"}${ofList(l)}` };
+    }
+    if (a === "book" && !b) return { html: "додав книжку вручну" };
+    if (a === "book" && c === "uk-hint") return { html: `підказав український переклад ${book(b)}` };
+    if (a === "advice" && b) return { html: `спитав «Чи варто читати» про ${book(b)}` };
+    if (a === "overview" && b) return { html: c === "vote" ? `оцінив огляд ${book(b)}` : `попросив огляд ${book(b)}` };
+    if (a === "reviews") return { html: b === "remove" ? "прибрав відгук" : "додав відгук з інтернету" };
+    if (a === "subscribe") return { html: "підписався на полицю" };
+    if (a === "series-volume") return { html: "відкрив том серії" };
+    if (parts[0] === "import") return { key: `import:${b}:${c || ""}`, html: b === "list" ? (c === "apply" ? "<b>додав книжки зі списку</b>" : "вставив список книжок") : c === "apply" ? `<b>імпортував книжки з ${esc(b === "goodreads" ? "Goodreads" : b)}</b>` : `завантажив файл з ${esc(b === "goodreads" ? "Goodreads" : b)}` };
+    if (parts[0] === "settings") return { key: "settings", html: `змінив налаштування${{ books: " полиці", mail: " листів", reader: " Читалки" }[b] || ""}` };
+    return { html: `<span class="muted">${esc(r.what)}</span>` };
   };
-  // Pages opened one after another make one line: «відкрив A, B, C і ще 4».
-  const merge = (list) => {
+  const markHtml = (e) => {
+    const m = e.mark;
+    const bits = [m.status ? STATUS_WORDS[m.status] || esc(m.status) : "", m.rating && m.rating !== "none" ? `★ ${esc(m.rating)}` : "", COPY_WORDS[m.copy] || "", m.kids === "1" ? "на дитячу полицю" : "", m.note ? "з нотаткою" : ""].filter(Boolean);
+    return `позначив ${book(e.slug)}${bits.length ? `: ${bits.join(", ")}` : ""}`;
+  };
+  // One reader's run, oldest first in, newest first out: [{ at, views: [...] } | { at, html }].
+  const steps = (rows, self) => {
     const out = [];
-    for (const r of list) {
+    let lastPage = null, lastDo = 0;
+    for (let r of [...rows].reverse()) {
       const last = out[out.length - 1];
-      if (r.kind === "view" && last?.pages) last.pages.push(r.what), (last.at = r.at);
-      else out.push(r.kind === "view" ? { at: r.at, pages: [r.what] } : r);
+      if (r.kind === "do") lastDo = Date.parse(r.at);
+      if (r.kind === "view") {
+        if (r.what.startsWith("/reader-login")) r = { ...r, kind: "reader" };
+        else {
+          const pg = page(r.what, self);
+          // A reload, or the page a form sent back to (opened within seconds of the step) are not counted.
+          if (pg.key === lastPage || Date.parse(r.at) - lastDo < 4000) {
+            lastPage = pg.key;
+            continue;
+          }
+          lastPage = pg.key;
+          if (last?.views) {
+            last.at = r.at;
+            if (!last.views.some((v) => v.key === pg.key)) last.views.push(pg);
+          } else out.push({ at: r.at, views: [pg] });
+          continue;
+        }
+      }
+      const e = act(r);
+      e.at = r.at;
+      // The same step again next to itself (a mark saved in three goes, two taps on «Читалка») is one line.
+      const prev = [...out].reverse().find((x) => !x.views);
+      const near = prev && (last === prev || (last?.views && last.views.length === 1 && e.slug && last.views[0].key === `book:${e.slug}`));
+      if (e.key && near && prev.key === e.key) {
+        prev.at = e.at;
+        if (e.mark) for (const [k, v] of Object.entries(e.mark)) if (v) prev.mark[k] = v;
+        if (last !== prev) out.pop(); // the book's page between two saves of its mark
+        continue;
+      }
+      out.push(e);
     }
-    for (const r of out) if (r.pages) r.pages.reverse();
-    return out;
+    return out.reverse();
+  };
+  const show = (s) => {
+    if (s.views) {
+      const v = s.views;
+      return `<li class="seen"><span class="at">${time(s.at)}</span><span>відкрив ${v.slice(0, 4).map((x) => x.html).join(", ")}${v.length > 4 ? ` і ще ${v.length - 4}` : ""}</span></li>`;
+    }
+    return `<li><span class="at">${time(s.at)}</span><span>${s.mark ? markHtml(s) : s.html}</span></li>`;
   };
   const days = new Map();
   for (const r of rows) {
@@ -1120,15 +1231,15 @@ function activityPage({ user, rows, readers, books, title, who = null, layout })
     return `<a href="/admin/activity?reader=${esc(encodeURIComponent(rd.username))}"><b>${esc(rd.name)}</b></a> <a class="muted" href="/@${esc(rd.username)}">@${esc(rd.username)}</a>${rd.created > weekAgo ? ` <span class="new">новий</span>` : ""} <span class="muted small">· ${n ? `${n} ${n % 10 === 1 && n % 100 !== 11 ? "книжка" : n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20) ? "книжки" : "книжок"}` : "без книжок"}</span>`;
   };
   const body = `<section class="admin activity">
-<section class="page-head"><div>${who ? `<p class="crumbs"><a href="/admin/activity">Усі читачі</a></p>` : ""}<h1>${who ? esc(who.name) : "Що роблять читачі"}</h1><p class="sub">${who ? `Усе, що @${esc(who.username)} робив на сайті за 60 днів, новіше зверху.` : "Дії зареєстрованих читачів за 7 днів, новіше зверху: сторінки, пошуки, позначки, переходи в магазини. Гостей і тебе тут немає. До 30 жовтня видно лише реєстрації й зміни на полицях."}</p></div></section>
+<section class="page-head"><div>${who ? `<p class="crumbs"><a href="/admin/activity">Усі читачі</a></p>` : ""}<h1>${who ? esc(who.name) : "Що роблять читачі"}</h1><p class="sub">${who ? `Усе, що @${esc(who.username)} робив на сайті за 60 днів, новіше зверху.` : "Що робили зареєстровані читачі за 7 днів, новіше зверху. Сірим — які сторінки відкривали. Гостей і тебе тут немає."}</p></div></section>
 ${days.size ? [...days].map(([d, runs]) => `<h2>${esc(dayName(d))}</h2>
 ${runs.map((run) => {
-    const lis = merge(run.rows).map((r) => `<li><span class="muted small">${time(r.at)}</span> ${r.pages ? `відкрив ${r.pages.slice(0, 5).map(page).join(", ")}${r.pages.length > 5 ? ` <span class="muted">і ще ${r.pages.length - 5}</span>` : ""}` : line(r)}</li>`);
+    const lis = steps(run.rows, readers.get(run.reader)?.username || "").map(show);
     const more = lis.length > 10 ? `<li><details><summary class="muted">ще ${lis.length - 8}</summary><ol class="act-lines">${lis.slice(8).join("")}</ol></details></li>` : "";
     return `<div class="act-run"><p class="act-who">${head(run.reader)}</p><ol class="act-lines">${(more ? lis.slice(0, 8) : lis).join("")}${more}</ol></div>`;
   }).join("")}`).join("") : `<p class="muted">Поки нічого.</p>`}
 </section>
-<style>.activity .act-run{margin:0 0 18px}.activity .act-who{margin:0 0 4px}.activity .act-lines{list-style:none;margin:0;padding:0 0 0 14px;border-left:2px solid var(--line,#e4dfd5)}.activity .act-lines li{padding:2px 0;font-size:15px}.activity .act-lines .muted.small{display:inline-block;width:3.2em}.activity .error{color:#b3261e}.activity details summary{cursor:pointer;list-style:none}.activity details .act-lines{border:0;padding:0}.activity .new{font-size:12px;color:#1f7a4d;border:1px solid currentColor;border-radius:999px;padding:0 7px}</style>`;
+<style>.activity .act-run{margin:0 0 18px}.activity .act-who{margin:0 0 4px}.activity .act-lines{list-style:none;margin:0;padding:0 0 0 14px;border-left:2px solid var(--line,#e4dfd5)}.activity .act-lines li{display:flex;gap:10px;padding:3px 0;font-size:15px;line-height:1.4}.activity .act-lines .at{flex:none;width:2.8em;color:var(--muted,#8a8478);font-size:14px}.activity .act-lines li.seen{color:var(--muted,#8a8478);font-size:14px}.activity .act-lines li.seen a{color:inherit}.activity .error{color:#b3261e}.activity details summary{cursor:pointer;list-style:none}.activity details .act-lines{border:0;padding:0}.activity .new{font-size:12px;color:#1f7a4d;border:1px solid currentColor;border-radius:999px;padding:0 7px}</style>`;
   return layout({ title: "Що роблять читачі · Адмінка", user, path: "/admin", body });
 }
 
@@ -1302,4 +1413,94 @@ ${recent ? `<div class="tbl"><table>
   return layout({ title: "Фонові задачі · Адмінка", user, path: "/admin", body });
 }
 
-module.exports = { BOT, human, Admin, mailLinks, adminPage, activityPage, catalogBlock, shelvesPage, readersPage, overviewsPage, speedPage, jobsPage, dayOf, weekOf, sectionOf };
+// /admin/reader «Читалка»: the reader's own numbers (app.chytai.org.ua, server/index.js collectStats), fetched by
+// the site with the owner's reader key (Max, 2026-11-02: the reader's old /admin moved here).
+function readerAppPage({ user, s, error = "", book = () => null, layout }) {
+  const usd = (v) => (v == null ? "—" : v > 0 && v < 0.01 ? "<$0,01" : `$${v.toFixed(2).replace(".", ",")}`);
+  const mins = (m) => (m < 120 ? `${fmtN(m)} хв` : `${fmtN(Math.round(m / 60))} год`);
+  const ago = (ts) => {
+    if (!ts) return "—";
+    const min = Math.round((Date.now() - ts) / 60000);
+    if (min < 2) return "щойно";
+    if (min < 60) return `${min} хв тому`;
+    const h = Math.round(min / 60);
+    return h < 36 ? `${h} год тому` : `${Math.round(h / 24)} дн тому`;
+  };
+  if (!s) {
+    const body = `<section class="admin"><section class="page-head"><div><h1>Читалка</h1></div></section><p class="muted">Читалка не віддала числа: ${esc(error)}.${error === "key" ? " Відкрий Читалку й увійди ще раз, тоді сайт отримає ключ." : ""}</p></section>`;
+    return layout({ title: "Читалка · Адмінка", user, path: "/admin", body });
+  }
+  const sum = (xs, f) => xs.reduce((a, x) => (a == null || f(x) == null ? null : a + f(x)), 0);
+  const cost30 = sum(s.days.slice(0, 30), (d) => d.cost);
+  const costAll = sum(s.models, (m) => m.cost);
+  const week = s.users.filter((u) => u.activeWeek).length;
+  const readWeek = s.users.reduce((a, u) => a + (u.readWeek || 0), 0);
+  const tiles = `<div class="stats four">
+${tile(fmtN(week), "читали за 7 днів", `з ${fmtN(s.users.length)}, хто входив`)}
+${tile(mins(readWeek), "читання за 7 днів", `${fmtN(s.users.filter((u) => u.readWeek >= 15).length)} читачів по 15+ хв`)}
+${tile(fmtN(s.totals.week), "пояснень за 7 днів", `${fmtN(s.totals.today)} сьогодні, ${fmtN(s.totals.all)} усього`)}
+${tile(usd(cost30), "Claude за 30 днів", costAll != null ? `${usd(costAll)} з ${short(s.since)}` : "")}
+</div>`;
+  const off = (u) => (u.owner ? "" : `<form method="post" action="/admin/reader/off"><input type="hidden" name="id" value="${esc(u.id)}">${u.off ? `<button class="btn small">Увімкнути</button>` : `<input type="hidden" name="off" value="1"><button class="btn small danger">Вимкнути</button>`}</form>`);
+  const who = (u) => `${u.username ? `<a href="/@${esc(u.username)}">${esc(u.name || u.username)}</a>` : esc(u.name || u.id)}${u.off ? ` <span class="muted">вимкнено</span>` : ""}`;
+  // The last book opened: the catalog page when the site knows the file (server.js readerCatalogBook), else its title.
+  const last = (u) => {
+    if (!u.lastBook) return `<span class="muted">—</span>`;
+    const b = book(u.id, u.lastBook);
+    const title = b.title || u.lastBook.split("/").pop().replace(/\.(epub|pdf|fb2|mobi|azw3?)$/i, "");
+    return `${b.href ? `<a href="${esc(b.href)}">${esc(title)}</a>` : esc(title)}${u.lastOpened ? ` <span class="muted">${ago(u.lastOpened)}</span>` : ""}`;
+  };
+  // Only those who opened something (Max: «не показувати тих, хто нічого не читає»).
+  const users = s.users.filter((u) => u.lastBook || u.read30 || u.total);
+  const idle = s.users.length - users.length;
+  const readers = users.length ? `<div class="tbl"><table class="reader-app">
+<thead><tr><th>Читач</th><th class="book">Читає</th><th>Хв сьогодні</th><th>За 7 днів</th><th>За 30</th><th>Пояснень за 7 днів</th><th>Claude за 30 днів</th><th></th></tr></thead>
+<tbody>${users.map((u) => `<tr${u.owner ? ' class="owner"' : ""}><th>${who(u)}</th><td class="book">${last(u)}</td><td>${n(u.readToday)}</td><td>${n(u.readWeek)}</td><td>${n(u.read30)}</td><td>${n(u.week)}</td><td>${u.cost30 ? usd(u.cost30) : n(0)}</td><td>${off(u)}</td></tr>`).join("")}</tbody></table></div>
+<p class="muted small">${idle ? `Ще ${fmtN(idle)} входили, але нічого не відкрили. ` : ""}Хвилини — час, коли книжка відкрита на екрані й читач щось робив за останні 3 хв (до 4 листопада рахували паузи між перегортаннями). Ліміту пояснень немає, лише запобіжник ${fmtN(s.accountCap)} на день. «Вимкнути» закриває Читалку, сайт лишається.</p>` : `<p class="muted">Ще ніхто нічого не відкрив.</p>`;
+  // Books by minutes read in 30 days (Max, 2026-11-04): the same book in several libraries is one row when the
+  // site knows it from the catalog.
+  const titleOf = (r) => {
+    const b = r.paper ? {} : book(r.id, r.book);
+    return { title: r.title || b.title || r.book.split("/").pop().replace(/\.(epub|pdf|fb2|mobi|azw3?)$/i, ""), href: b.href || "" };
+  };
+  const byBook = new Map();
+  for (const r of s.reading || []) {
+    const t = titleOf(r);
+    const key = t.href || `${r.paper ? "paper" : "file"}:${t.title.toLowerCase()}`;
+    const g = byBook.get(key) || { ...t, paper: r.paper, today: 0, week: 0, month: 0, readers: [] };
+    g.today += r.today;
+    g.week += r.week;
+    g.month += r.month;
+    g.readers.push(r);
+    byBook.set(key, g);
+  }
+  const top = [...byBook.values()].sort((a, b) => b.month - a.month).slice(0, 40);
+  const reader = (r) => `${r.username ? `<a href="/@${esc(r.username)}">${esc(r.name || r.username)}</a>` : esc(r.name || r.id)} <span class="muted">${fmtN(r.month)}</span>`;
+  const booksTbl = top.length ? `<div class="tbl"><table class="reader-app">
+<thead><tr><th class="book">Книжка</th><th class="who">Хто читав, хв</th><th>Хв сьогодні</th><th>За 7 днів</th><th>За 30</th></tr></thead>
+<tbody>${top.map((g) => `<tr><th class="book">${g.href ? `<a href="${esc(g.href)}">${esc(g.title)}</a>` : esc(g.title)}${g.paper ? ` <span class="muted">паперова</span>` : ""}</th><td class="who">${g.readers.sort((a, b) => b.month - a.month).map(reader).join(", ")}</td><td>${n(g.today)}</td><td>${n(g.week)}</td><td>${n(g.month)}</td></tr>`).join("")}</tbody></table></div>
+<p class="muted small">За останні 30 днів, від 4 листопада. Паперова книжка — час на її сторінці в Читалці, не саме читання.</p>` : `<p class="muted">Ще ніхто не читав: рахуємо з 4 листопада.</p>`;
+  const days = s.days.slice(0, 30);
+  const daysTbl = days.length ? `<div class="tbl"><table>
+<thead><tr><th>День</th><th>Пояснень</th><th>Токенів на вході</th><th>На виході</th><th>Claude</th></tr></thead>
+<tbody>${days.map((d) => `<tr><th>${short(d.day)}</th><td>${n(d.explains)}</td><td>${fmtN(d.input + d.cacheRead + d.cacheWrite)}</td><td>${fmtN(d.output)}</td><td>${usd(d.cost)}</td></tr>`).join("")}</tbody></table></div>` : `<p class="muted">Пояснень ще не було.</p>`;
+  const models = s.models.length ? `<div class="tbl"><table>
+<thead><tr><th>Модель</th><th>Запитів</th><th>Токенів на вході</th><th>На виході</th><th>Claude</th></tr></thead>
+<tbody>${s.models.map((m) => `<tr><th>${esc(m.model.replace(/^claude-/, ""))}</th><td>${fmtN(m.requests)}</td><td>${fmtN(m.input + m.cacheRead + m.cacheWrite)}</td><td>${fmtN(m.output)}</td><td>${usd(m.cost)}</td></tr>`).join("")}</tbody></table></div>` : "";
+  const body = `<section class="admin">
+<section class="page-head"><div><h1>Читалка</h1><p class="sub">app.chytai.org.ua: хто читає, скільки хвилин і що коштують пояснення Claude.</p></div></section>
+${tiles}
+<h2 id="readers">Читачі</h2>
+${readers}
+<h2 id="books">Книжки</h2>
+${booksTbl}
+<details class="reader-cost"><summary>Вартість по днях і моделях</summary>
+${daysTbl}
+${models}
+<p class="muted small">Вартість приблизна, за тарифами API без знижок; вхідні токени разом з кешем.</p>
+</details>
+</section>`;
+  return layout({ title: "Читалка · Адмінка", user, path: "/admin", body });
+}
+
+module.exports = { readerAppPage, BOT, human, Admin, mailLinks, adminPage, activityPage, catalogBlock, shelvesPage, readersPage, overviewsPage, speedPage, jobsPage, dayOf, weekOf, sectionOf };

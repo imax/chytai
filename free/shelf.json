@@ -851,5 +851,85 @@
     ],
     "group": "З дозволу автора",
     "permission": "Derek Sivers, email to Max 2026-10-24: «You are welcome to use the English original text» (not public domain)"
+  },
+  {
+    "name": "milton-paradise-lost.epub",
+    "title": "Paradise Lost",
+    "authors": [
+      "John Milton"
+    ],
+    "group": "Англійською",
+    "wanted": true,
+    "source": "https://standardebooks.org/ebooks/john-milton/paradise-lost"
+  },
+  {
+    "name": "franklin-the-autobiography-of-benjamin-franklin.epub",
+    "title": "The Autobiography of Benjamin Franklin",
+    "authors": [
+      "Benjamin Franklin"
+    ],
+    "group": "Англійською",
+    "wanted": true,
+    "source": "https://standardebooks.org/ebooks/benjamin-franklin/the-autobiography-of-benjamin-franklin"
+  },
+  {
+    "name": "dickens-david-copperfield.epub",
+    "title": "David Copperfield",
+    "authors": [
+      "Charles Dickens"
+    ],
+    "group": "Англійською",
+    "wanted": true,
+    "source": "https://standardebooks.org/ebooks/charles-dickens/david-copperfield"
+  },
+  {
+    "name": "dickens-oliver-twist.epub",
+    "title": "Oliver Twist",
+    "authors": [
+      "Charles Dickens"
+    ],
+    "group": "Англійською",
+    "wanted": true,
+    "source": "https://standardebooks.org/ebooks/charles-dickens/oliver-twist"
+  },
+  {
+    "name": "stoker-dracula.epub",
+    "title": "Dracula",
+    "authors": [
+      "Bram Stoker"
+    ],
+    "group": "Англійською",
+    "wanted": true,
+    "source": "https://standardebooks.org/ebooks/bram-stoker/dracula"
+  },
+  {
+    "name": "myrnyi-khiba-revut-voly-yak-yasla-povni.epub",
+    "title": "Хіба ревуть воли, як ясла повні?",
+    "authors": [
+      "Панас Мирний"
+    ],
+    "group": "Українська класика",
+    "wanted": true,
+    "source": "https://uk.wikisource.org/wiki/%D0%A5%D1%96%D0%B1%D0%B0_%D1%80%D0%B5%D0%B2%D1%83%D1%82%D1%8C_%D0%B2%D0%BE%D0%BB%D0%B8%2C_%D1%8F%D0%BA_%D1%8F%D1%81%D0%BB%D0%B0_%D0%BF%D0%BE%D0%B2%D0%BD%D1%96%3F"
+  },
+  {
+    "name": "ford-my-life-and-work.epub",
+    "title": "My Life and Work",
+    "authors": [
+      "Henry Ford"
+    ],
+    "group": "Англійською",
+    "wanted": true,
+    "source": "https://www.gutenberg.org/ebooks/7213"
+  },
+  {
+    "name": "shaw-pygmalion.epub",
+    "title": "Pygmalion",
+    "authors": [
+      "George Bernard Shaw"
+    ],
+    "group": "Англійською",
+    "wanted": true,
+    "source": "https://standardebooks.org/ebooks/george-bernard-shaw/pygmalion"
   }
 ]
