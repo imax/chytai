@@ -17,8 +17,13 @@
 const uah = (n) => (n ? `${Math.round(n)} ₴` : "");
 // WooCommerce leaves HTML entities in names («Ми &#8211; Легіон»), MEGOGO Books hex ones («П&#x27;ятий ризик»).
 // Pages built on the Лабораторія/Наш Формат engine encode them twice («&amp;laquo;»).
-const NAMED = { nbsp: " ", ndash: "–", mdash: "—", laquo: "«", raquo: "»", rsquo: "’", lsquo: "‘", ldquo: "“", rdquo: "”", hellip: "…", quot: '"', apos: "'", amp: "&" };
-const ent1 = (s) => s.replace(/&#(\d+);/g, (_, n) => String.fromCodePoint(n)).replace(/&#x([0-9a-f]+);/gi, (_, n) => String.fromCodePoint(parseInt(n, 16))).replace(/&([a-z]+);/g, (m, n) => NAMED[n] ?? m);
+const NAMED = { nbsp: " ", ndash: "–", mdash: "—", laquo: "«", raquo: "»", rsquo: "’", lsquo: "‘", ldquo: "“", rdquo: "”", hellip: "…", quot: '"', apos: "'", amp: "&",
+  // and the rest shops leave in descriptions (Max 2026-11-04: «&bull; в описі» on «Дюна» from КСД)
+  bull: "•", middot: "·", shy: "", thinsp: " ", ensp: " ", emsp: " ", bdquo: "„", sbquo: "‚", minus: "−", times: "×", deg: "°", prime: "′", Prime: "″", acute: "´", not: "¬", ordm: "º", ordf: "ª", reg: "®", copy: "©", trade: "™", euro: "€", pound: "£", sect: "§", para: "¶", frac12: "½", frac14: "¼", frac34: "¾", lt: "<", gt: ">",
+  aacute: "á", agrave: "à", acirc: "â", auml: "ä", atilde: "ã", aring: "å", aelig: "æ", ccedil: "ç", eacute: "é", egrave: "è", ecirc: "ê", euml: "ë", iacute: "í", igrave: "ì", icirc: "î", iuml: "ï", ntilde: "ñ", oacute: "ó", ograve: "ò", ocirc: "ô", ouml: "ö", otilde: "õ", oslash: "ø", oelig: "œ", uacute: "ú", ugrave: "ù", ucirc: "û", uuml: "ü", yacute: "ý", yuml: "ÿ", szlig: "ß", scaron: "š", zcaron: "ž", ccaron: "č",
+  Aacute: "Á", Eacute: "É", Oacute: "Ó", Uacute: "Ú", Auml: "Ä", Ouml: "Ö", Uuml: "Ü", Ccedil: "Ç", Scaron: "Š", Zcaron: "Ž", Ccaron: "Č",
+  alpha: "α", beta: "β", gamma: "γ", delta: "δ", epsilon: "ε", iota: "ι", kappa: "κ", lambda: "λ", mu: "μ", pi: "π", sigma: "σ", sigmaf: "ς", tau: "τ", omega: "ω" };
+const ent1 = (s) => s.replace(/&#(\d+);/g, (_, n) => String.fromCodePoint(n)).replace(/&#x([0-9a-f]+);/gi, (_, n) => String.fromCodePoint(parseInt(n, 16))).replace(/&([a-z][a-z0-9]*);/gi, (m, n) => NAMED[n] ?? NAMED[n.toLowerCase()] ?? m);
 const ent = (s) => ent1(ent1(String(s || "")));
 const text = (h) => ent(String(h || "").replace(/<[^>]+>/g, " ").replace(/&nbsp;/g, " ").replace(/&#8217;|&rsquo;/g, "’")).replace(/\s+/g, " ").trim();
 // A book's description for its page (Max, 2026-10-20: «Про книжку» showed shop copy cut mid-word).
@@ -560,7 +565,7 @@ const ksdAsk = async (fetchImpl, query, variables) => {
 // екранізовано…»): those lines are left out when there is text after them.
 const ksdAbout = (h) => {
   const lines = String(h || "").split(/<br\s*\/?>|\r?\n/i);
-  const rest = lines.filter((l) => !/^\s*(<[^>]+>\s*)*•/.test(l));
+  const rest = lines.filter((l) => !/^\s*(<[^>]+>\s*)*(•|&bull;|&#8226;)/.test(l));
   return about(text(rest.join(" ")).length > 80 ? rest.join("<br>") : h);
 };
 async function ksdProducts(src, { fetchImpl = fetch, log = () => {}, previous = new Map(), checkpoint = () => {}, fresh = new Set() }) {

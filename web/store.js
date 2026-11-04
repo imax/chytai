@@ -125,6 +125,12 @@ const blurbOf = (h) => {
   }
   return b;
 };
+// КСД opens a description with bullets on the printing («• Подарункове видання, збільшений формат», «• Карта
+// світу Дюни»): they go when a description is left after them (catalogs.ksdAbout does it for new records).
+const ksdBlurb = (b) => {
+  const rest = b.split(/\n+/).filter((l) => !/^\s*•/.test(l));
+  return rest.join(" ").length > 80 ? rest.join("\n\n") : b;
+};
 // Letters search takes as one (Max 2026-10-30: «Проект Аве Марія» found nothing, the book is «Проєкт…»): the index
 // keeps a folded copy of each title, and the query is folded before it is looked up.
 const fold = (s) => String(s || "").replace(/є/g, "е").replace(/Є/g, "Е").replace(/ґ/g, "г").replace(/Ґ/g, "Г");
@@ -2166,7 +2172,7 @@ class Store {
   // builds every edition of itself and every book in its blocks, and on 2026-10-25 that cleaning was a third of
   // what a crawler's book page cost.
   fromShelfItem(shelf, it) {
-    return { id: it.id, title: it.title, author: it.author, altTitle: it.altTitle || "", cover: it.cover, tags: it.genres || [], links: [{ label: shelf.name, url: it.url }], source: shelf.id, shelf: shelf.id, blurb: blurbOf(it.blurb), price: it.price, status: it.status, expected: it.expected || "", language: shopLanguage(it), edition: it.edition || "", isbn: it.isbn || "", volume: it.volume || 0, bundle: !!it.bundle, format: it.format || (shelf.kind === "free" ? "e-book" : shelf.kind === "audio" ? "аудіо" : "папір"), narrator: it.narrator || "", duration: it.duration || "", subscription: !!it.subscription, adapted: !!it.adapted, issued: /^\d{4}$/.test(it.year || "") ? it.year : "" };
+    return { id: it.id, title: it.title, author: it.author, altTitle: it.altTitle || "", cover: it.cover, tags: it.genres || [], links: [{ label: shelf.name, url: it.url }], source: shelf.id, shelf: shelf.id, blurb: shelf.id === "ksd" ? ksdBlurb(blurbOf(it.blurb)) : blurbOf(it.blurb), price: it.price, status: it.status, expected: it.expected || "", language: shopLanguage(it), edition: it.edition || "", isbn: it.isbn || "", volume: it.volume || 0, bundle: !!it.bundle, format: it.format || (shelf.kind === "free" ? "e-book" : shelf.kind === "audio" ? "аудіо" : "папір"), narrator: it.narrator || "", duration: it.duration || "", subscription: !!it.subscription, adapted: !!it.adapted, issued: /^\d{4}$/.test(it.year || "") ? it.year : "" };
   }
 
   addBook({ title, author, cover, links, source = "manual", ...more }) {
