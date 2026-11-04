@@ -1085,5 +1085,15 @@
     ],
     "wanted": true,
     "source": "https://standardebooks.org/ebooks/george-bernard-shaw/pygmalion"
+  },
+  {
+    "name": "chambers-the-king-in-yellow.epub",
+    "title": "The King in Yellow",
+    "authors": "Robert W. Chambers",
+    "tags": [
+      "Англійською"
+    ],
+    "wanted": true,
+    "source": "https://standardebooks.org/ebooks/robert-w-chambers/the-king-in-yellow"
   }
 ]
