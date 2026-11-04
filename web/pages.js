@@ -1365,7 +1365,7 @@ function readerBand() {
   </div>
   <a class="rb-shot" href="${READER}/" tabindex="-1" aria-hidden="true"><picture>
     <source media="(max-width: 760px)" srcset="/reader-odyssey-phone.jpg" width="720" height="960">
-    <img src="/reader-odyssey-desk.jpg" width="1200" height="750" loading="lazy" decoding="async" alt="">
+    <img src="/reader-odyssey-desk2.jpg" width="1200" height="750" loading="lazy" decoding="async" alt="">
   </picture></a>
 </div></section>`;
 }
