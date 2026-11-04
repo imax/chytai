@@ -200,14 +200,20 @@
         const check = () => reg.update().catch(() => {});
         document.addEventListener("visibilitychange", () => (check(), whenIdle()));
         window.addEventListener("online", check);
+        // A version found earlier and still waiting takes over as the page opens, before anything is read: a
+        // browser tab or the Mac app is seldom hidden, so a reload kept the old reader for days (Max, 2026-11-04:
+        // no phone search and the old «Залишити фідбек» on app.chytai.org.ua).
+        if (reg.waiting && navigator.serviceWorker.controller) (swapAtStart = true), swap();
         whenIdle();
       })
       .catch((err) => console.warn("service worker", err));
     let hadController = !!navigator.serviceWorker.controller;
+    let swapAtStart = false;
     let reloadWhenHidden = false;
     const reloadNow = () => (streams.size ? (reloadWhenHidden = true) : location.reload());
     navigator.serviceWorker.addEventListener("controllerchange", () => {
       // The new version takes over with a reload, never in front of the reader's eyes.
+      if (hadController && swapAtStart) return location.reload();
       if (hadController) document.hidden ? reloadNow() : (reloadWhenHidden = true);
       hadController = true;
     });
