@@ -21,7 +21,7 @@ self.addEventListener("install", (event) => {
       // Only answers that came as they are: signed out, the server redirects every reader file to /login,
       // and cache.add kept that login page as style.css and renderer.js (a fresh Android app showed the
       // reader without styles). A redirected page served to a navigation fails too.
-      const add = (url) => fetch(url).then((res) => res.ok && !res.redirected && cache.put(url, res));
+      const add = (url) => fetch(url).then((res) => res.ok && !res.redirected && !res.headers.get("X-Chytai-Landing") && cache.put(url, res));
       await Promise.all(ASSETS.map((url) => add(url).catch((err) => console.warn("sw: not cached", url, err))));
     })(),
   );
@@ -72,9 +72,10 @@ self.addEventListener("fetch", (event) => {
       (async () => {
         const cache = await caches.open(CACHE);
         const hit = await cache.match("/");
-        if (hit && !hit.redirected) return hit;
+        if (hit && !hit.redirected && !hit.headers.get("X-Chytai-Landing")) return hit;
         const res = await fetch(req);
-        if (res.ok && url.pathname === "/" && !res.redirected) cache.put("/", res.clone()).catch(() => {});
+        // Signed out, / is the landing (server/index.js signedOutPage), never the reader's page to keep.
+        if (res.ok && url.pathname === "/" && !res.redirected && !res.headers.get("X-Chytai-Landing")) cache.put("/", res.clone()).catch(() => {});
         return res;
       })(),
     );

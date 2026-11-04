@@ -902,13 +902,19 @@ app.get("/sw.js", (_req, res) => {
 // Where to go after signing in (a book from «Читати» on the site), kept in a cookie for the round trip.
 const NEXT_COOKIE = "reader_next";
 const safeNext = (v) => (/^\/(?!\/)/.test(String(v || "")) ? String(v).slice(0, 500) : "");
-app.get("/login", (req, res) => {
-  if (currentAccount(req)) return res.redirect(safeNext(req.query.next) || "/");
+// Signed out: the landing with signing in, at / itself (Max 2026-11-04: «чому не на головній?») and at /login.
+// It is marked so the service worker never keeps it as the reader's page (sw.js).
+function signedOutPage(req, res) {
   if (safeNext(req.query.next)) res.setHeader("Set-Cookie", cookieHeader(req, NEXT_COOKIE, safeNext(req.query.next), 1 / 96));
-  if (inApp(req)) return res.set("Cache-Control", "no-store").type("html").send(appSignInPage());
+  res.set({ "Cache-Control": "no-store", "X-Chytai-Landing": "1" });
+  if (inApp(req)) return res.type("html").send(appSignInPage());
   // From the site («Читати» on a book): whoever is signed in there comes in without a code.
   if (String(req.get("referer") || "").startsWith(WEB_URL)) return res.redirect(siteSignIn(req));
   res.type("html").send(landingPage(req));
+}
+app.get("/login", (req, res) => {
+  if (currentAccount(req)) return res.redirect(safeNext(req.query.next) || "/");
+  signedOutPage(req, res);
 });
 // The phone apps sign in on their own page (appSignInPage, 2026-11-04). The Safari round trip of 2026-11-02
 // (/auth?app=<code>, then the app picked the account up from /api/app-login) is gone: the code came in the
@@ -1088,7 +1094,8 @@ app.use((req, res, next) => {
   const guest = acct ? null : share ? `share:${share.token}` : currentGuest(req);
   if (!acct && !guest) {
     if (req.path.startsWith("/api/")) return res.status(401).json({ error: "login" });
-    return res.redirect(req.originalUrl === "/" ? "/login" : `/login?next=${encodeURIComponent(req.originalUrl)}`);
+    if (req.path === "/" && req.method === "GET") return signedOutPage(req, res);
+    return res.redirect(`/login?next=${encodeURIComponent(req.originalUrl)}`);
   }
   // Max can switch the reader off for one account (/admin); the site stays theirs.
   if (acct && state.accounts[acct]?.off) {
