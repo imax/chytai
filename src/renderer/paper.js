@@ -362,7 +362,7 @@
   // The note's text from a photo (Max, 2026-11-04): what is circled, or the whole page, goes into the «+ Нотатка» form.
   async function noteFromPhoto() {
     window.Dictation.stop();
-    const shot = await shoot({ hint: "Обведіть, що взяти в нотатку", go: ["Взяти весь текст", "Взяти обведене"] });
+    const shot = await shoot({ hint: "Обведіть, що зберегти", go: ["Взяти весь текст", "Взяти обведене"] });
     if (!shot) return;
     URL.revokeObjectURL(shot.thumb);
     const b = book;
