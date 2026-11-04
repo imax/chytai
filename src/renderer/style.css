@@ -2292,3 +2292,10 @@ html body .r-list .r-t, html body .r-list .r-a { display: block; grid-column: 2;
 .r-lhead button.on { color: var(--r-ink); }
 .r-lhead button.on::after { content: " ↓"; }
 .r-lhead button:hover { color: var(--r-ochre); }
+/* A note's page, changed while editing it (Max 2026-11-04). */
+.pp-page-in { display: inline-flex; align-items: center; gap: 6px; font: 14px/1 var(--r-sans); color: var(--r-ink3); }
+.pp-page-in input { width: 4.5em; box-sizing: border-box; border: 1px solid var(--r-sline); border-radius: 8px; background: transparent; color: var(--r-ink); font: 15px/1.2 var(--r-sans); padding: 6px 8px; text-align: center; }
+.pp-noteform .pp-ask-row .r-link[data-pp="cancel-edit"] { margin-right: 4px; }
+.pp-noteform[data-pp-edit] .pp-ask-row { gap: 10px; }
+.pp-noteform[data-pp-edit] .pp-page-in input { width: 3.6em; }
+.pp-noteform[data-pp-edit] .r-link[data-pp="cancel-edit"] { text-decoration: none; color: var(--r-ink3); }

@@ -168,7 +168,7 @@
     const draft = $("#pp-q")?.value || "";
     let att = "";
     if (photo) {
-      att = `<div class="pp-att"><img src="${photo.thumb}" alt="" /><span class="pp-att-t"><b>${photo.marked ? "Обведене на фото" : "Фото сторінки"}</b></span>
+      att = `<div class="pp-att"><img src="${photo.thumb}" alt="" /><span class="pp-att-t"><b>${photo.marked ? "Обведене на фото" : "Фото сторінки"}</b>${photo.page ? ` · стор. ${photo.page}` : ""}</span>
         <button type="button" class="pp-x" data-pp="unphoto" aria-label="Прибрати фото">×</button></div>`;
     } else if (scan) {
       att = `<div class="pp-att">${scan.thumb ? `<img src="${scan.thumb}" alt="" />` : ""}
@@ -219,7 +219,7 @@
             <button type="button" class="pp-tool${window.Dictation.field() === "pp-note" ? " on" : ""}" data-pp="mic-note" title="Надиктувати" aria-label="Надиктувати">${svgMic}</button><span class="pp-ask-sp"></span><button type="submit" class="r-pill">Зберегти</button></div></form>` : ""}
         ${sortedNotes.length ? sortedNotes.map((n) => editing === n.id
           ? `<form class="pp-ask pp-noteform" data-pp-edit="${esc(n.id)}"><textarea id="pp-note-edit" rows="3">${esc(n.text)}</textarea>
-            <div class="pp-ask-row"><button type="button" class="r-link" data-pp="cancel-edit">Скасувати</button><span class="pp-ask-sp"></span><button type="submit" class="r-pill">Зберегти</button></div></form>`
+            <div class="pp-ask-row"><label class="pp-page-in">стор. <input id="pp-note-page" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="5" value="${esc((n.chapter || "").match(/\d+/)?.[0] || "")}" /></label><span class="pp-ask-sp"></span><button type="button" class="r-link" data-pp="cancel-edit">Скасувати</button><button type="submit" class="r-pill">Зберегти</button></div></form>`
           : `<div class="pp-note${n.quote ? " q" : ""}"><div class="pp-note-t">${esc(n.text)}</div>
           ${n.comment ? `<div class="pp-note-c">${md(n.comment)}</div>` : ""}
           <div class="pp-note-m">${esc(n.chapter || "")}<button type="button" class="r-link" data-pp-edit-note="${esc(n.id)}">Редагувати</button><button type="button" class="r-link" data-pp-del="${esc(n.id)}">Видалити</button></div></div>`).join("")
@@ -255,12 +255,15 @@
       e.preventDefault();
       const id = e.target.dataset.ppEdit;
       const text = $("#pp-note-edit").value.trim();
+      const page = Number($("#pp-note-page")?.value.replace(/\D/g, "") || 0);
       const note = notes.find((n) => n.id === id);
       editing = null;
-      if (!text || !note || text === note.text) return window.Shell.rerender();
+      const chapter = page > 0 ? `стор. ${page}` : "";
+      if (!text || !note || (text === note.text && chapter === (note.chapter || ""))) return window.Shell.rerender();
       note.text = text;
+      note.chapter = chapter;
       window.Shell.rerender();
-      return window.reader.notesUpdate(book.path, id, { text }).catch((err) => showNotice(`Не вдалося зберегти: ${err.message}`, false));
+      return window.reader.notesUpdate(book.path, id, { text, page, chapter }).catch((err) => showNotice(`Не вдалося зберегти: ${err.message}`, false));
     }
     if (!e.target.matches("[data-pp-form]")) return;
     e.preventDefault();
@@ -295,7 +298,7 @@
       const p = photo;
       photo = null;
       $("#pp-q").value = "";
-      ask({ image: p.data, img: p.small, marked: p.marked, question: q, page: book.page });
+      ask({ image: p.data, img: p.small, marked: p.marked, question: q, page: p.page || book.page });
       return URL.revokeObjectURL(p.thumb);
     }
     // An empty field asks the suggested question from the placeholder.
@@ -356,7 +359,14 @@
       redraw();
       $("#pp-q")?.focus({ preventScroll: true });
       // The page number still comes from the photo, quietly.
-      window.reader.paperScan("page", small).then((r) => book === b && seenPage(r.page)).catch(() => {});
+      // Only the number: quick, and the question asked after it knows the page.
+      const ph = photo;
+      window.reader.paperScan("pagenum", small).then((r) => {
+        if (!r.page || book !== b) return;
+        ph.page = r.page;
+        seenPage(r.page);
+        if (photo === ph) redraw();
+      }).catch(() => {});
       return;
     }
     scan = { busy: true, thumb };

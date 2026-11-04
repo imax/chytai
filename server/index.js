@@ -1253,6 +1253,11 @@ api.patch("/notes/:id", (req, res) => {
   // A paper book's note is the reader's own words, so its text can be edited too (Max 2026-11-03).
   // So is a note an e-book reader wrote with «+ Нотатка» (cfi «mine:…», 2026-11-03).
   if ((paper.NAME.test(String(req.query.path || "")) || String(note.cfi).startsWith("mine:")) && typeof req.body?.text === "string" && req.body.text.trim()) note.text = req.body.text.trim().slice(0, NOTE_TEXT_MAX);
+  // And its page (Max 2026-11-04: the page it was added on is usually right, not always).
+  if (paper.NAME.test(String(req.query.path || "")) && req.body?.page !== undefined) {
+    const n = Math.floor(Number(req.body.page));
+    note.chapter = n > 0 && n < 100000 ? `стор. ${n}` : "";
+  }
   if (!req.guest || req.share) saveState();
   res.json({ note });
 });
@@ -2228,13 +2233,13 @@ api.delete("/paper/:name", guestsCannot("Без входу паперових к
 api.post("/paper/scan", guestsCannot("Без входу фото не розпізнаються."), aiBudget, express.raw({ type: () => true, limit: "8mb" }), async (req, res) => {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) return res.status(500).json({ error: "На сервері не налаштовано ключ Claude API." });
-  const kind = ["page", "marked"].includes(req.query.kind) ? req.query.kind : "cover";
+  const kind = ["page", "marked", "pagenum"].includes(req.query.kind) ? req.query.kind : "cover";
   const type = String(req.headers["content-type"] || "");
   const mediaType = /png/.test(type) ? "image/png" : /webp/.test(type) ? "image/webp" : "image/jpeg";
   if (!Buffer.isBuffer(req.body) || req.body.length < 1000) return res.status(400).json({ error: "Немає фото." });
   if (!req.owner && (state.stats?.days?.[statsDay()]?.users?.[req.acct] || 0) >= ACCOUNT_DAILY_CAP) return res.status(429).json({ error: "На сьогодні запитів забагато. Завтра все запрацює знову." });
   try {
-    const r = kind !== "cover" ? await paper.readPage(apiKey, req.body, mediaType, kind === "marked") : await paper.readCover(apiKey, req.body, mediaType);
+    const r = kind === "pagenum" ? await paper.readPageNumber(apiKey, req.body, mediaType) : kind !== "cover" ? await paper.readPage(apiKey, req.body, mediaType, kind === "marked") : await paper.readCover(apiKey, req.body, mediaType);
     const { usage, model, ...out } = r;
     recordExplain(req, { model, usage });
     res.json(out);

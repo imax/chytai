@@ -23,10 +23,13 @@ Transcribe exactly as printed only the text the marks point to, in reading order
 - If a page number is printed, put it on the first line as "PAGE: <number>"; otherwise leave that line out.
 Answer with the text only, no comments. If nothing readable is marked, answer with nothing.`;
 
-async function ask(apiKey, model, prompt, image, mediaType) {
+// Only the page number (2026-11-04: transcribing the whole page for it was slow and its number got lost).
+const PAGENUM_PROMPT = `This is a photo of a printed book, one page or two facing pages, maybe at an angle. Find the printed page number (in a corner, at the top or bottom of the page; for two pages, the right-hand page's). Answer with the number only, digits, nothing else. If no page number is visible, answer "none".`;
+
+async function ask(apiKey, model, prompt, image, mediaType, maxTokens = 4000) {
   const client = new Anthropic({ apiKey });
   const content = image ? [{ type: "image", source: { type: "base64", media_type: mediaType, data: image.toString("base64") } }, { type: "text", text: prompt }] : prompt;
-  const msg = await client.messages.create({ model, max_tokens: 4000, messages: [{ role: "user", content }] });
+  const msg = await client.messages.create({ model, max_tokens: maxTokens, messages: [{ role: "user", content }] });
   return { text: msg.content.filter((b) => b.type === "text").map((b) => b.text).join("").trim(), usage: msg.usage, model: msg.model };
 }
 
@@ -45,12 +48,18 @@ async function readPage(apiKey, image, mediaType, marked = false) {
   const r = await ask(apiKey, PAGE_MODEL, marked ? MARKED_PROMPT : PAGE_PROMPT, image, mediaType);
   let text = r.text;
   let page = null;
-  const m = text.match(/^PAGE:\s*(\d{1,5})\s*\n?/);
+  const m = text.match(/^\s*PAGE:\s*(\d{1,5})[^\n]*\n?/);
   if (m) {
     page = Number(m[1]);
     text = text.slice(m[0].length);
   }
   return { text: text.trim().slice(0, 20000), page, usage: r.usage, model: r.model };
+}
+
+async function readPageNumber(apiKey, image, mediaType) {
+  const r = await ask(apiKey, PAGE_MODEL, PAGENUM_PROMPT, image, mediaType, 20);
+  const n = Number(r.text.match(/\d{1,5}/)?.[0] || 0);
+  return { page: n > 0 ? n : null, usage: r.usage, model: r.model };
 }
 
 // Questions to ask (v3, Max: «можна придумувати питання, знаючи назву книжки… або follow-up до попереднього»):
@@ -98,4 +107,4 @@ function listEntry(name, p, u) {
   };
 }
 
-module.exports = { NAME, readCover, readPage, suggest, tidy, stripImages, listEntry, COVER_MODEL, PAGE_MODEL };
+module.exports = { NAME, readCover, readPage, readPageNumber, suggest, tidy, stripImages, listEntry, COVER_MODEL, PAGE_MODEL };
