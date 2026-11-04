@@ -216,7 +216,7 @@ function guestExplainAllowed(req) {
   const ip = req.ip || "";
   if (usage.total >= GUEST_TOTAL_LIMIT) return "Демо на сьогодні вичерпало свій ліміт пояснень. Спробуйте завтра або увійдіть зі своїм паролем.";
   if ((usage.guests[req.guest] || 0) >= GUEST_LIMIT || (usage.ips[ip] || 0) >= GUEST_LIMIT * 3) {
-    return `У демо-режимі доступно до ${GUEST_LIMIT} пояснень на день, і вони вже використані. Увійдіть, щоб читати без обмежень.`;
+    return `Без входу доступно до ${GUEST_LIMIT} пояснень на день, і вони вже використані. Увійдіть, щоб читати без обмежень.`;
   }
   usage.total++;
   usage.guests[req.guest] = (usage.guests[req.guest] || 0) + 1;
@@ -559,7 +559,6 @@ function loginPage(req, error, opts = {}) {
   <h1>Chytai</h1><p>Читалка з поясненнями від Claude</p>
   ${error ? `<div class="err">${esc(error)}</div>` : ""}
   ${opts.button ? `<a class="btn" href="${esc(opts.button.href)}">${esc(opts.button.label)}</a>` : `<a class="btn" href="${esc(signIn)}">Увійти</a>`}
-  ${!opts.button && GUEST_ENABLED && demoBooks().length ? `<p class="demo">Або <a href="/demo">подивитися демо</a> з однією книжкою.</p>` : ""}
 </form></body></html>`;
 }
 
@@ -581,7 +580,6 @@ const smallPage = (body) => `<!doctype html>
 // limits as chytai.org.ua/login) and gets a ticket for /auth. One account with the site; a new reader gets a
 // username made from the name and only meets it on the site.
 function appSignInPage() {
-  const demo = GUEST_ENABLED && demoBooks().length;
   return smallPage(`<h1>Chytai</h1><p>Читалка з поясненнями від Claude</p>
 <div id="signin" data-web="${esc(WEB_URL)}">
   <form id="f-email" novalidate>
@@ -605,7 +603,6 @@ function appSignInPage() {
   </form>
   <p class="note" id="f-done" hidden>Відкриваю ваші книжки…</p>
 </div>
-${demo ? `<p class="demo">Або <a href="/demo">подивитися демо</a> з однією книжкою.</p>` : ""}
 <style>
   input { box-sizing: border-box; width: 100%; padding: 11px 12px; margin: 0 0 12px; font: inherit; color: inherit; background: rgba(255,255,255,0.8); border: 1px solid rgba(59,47,30,0.25); border-radius: 8px; }
   @media (prefers-color-scheme: dark) { input { background: #1e1e20; border-color: rgba(255,255,255,0.2); } }
@@ -614,8 +611,7 @@ ${demo ? `<p class="demo">Або <a href="/demo">подивитися демо</
   .lab { margin: 0 0 10px; opacity: 1; }
   .err { margin: -4px 0 10px; color: #c0392b; opacity: 1; } .err:empty { display: none; }
   .note { margin: 12px 0 0; font-size: 14px; opacity: .65; }
-  .note a, .demo a { color: #b7791f; font-weight: 600; }
-  .demo { margin: 18px 0 0; text-align: center; font-size: 14px; }
+  .note a { color: #b7791f; font-weight: 600; }
 </style>
 <script>
 (function () {
@@ -892,14 +888,8 @@ app.post("/logout", (req, res) => {
   res.redirect("/login");
 });
 
-// /demo opens the reader as a guest: one demo book, no uploads, a daily cap on explanations.
-app.get("/demo", (req, res) => {
-  if (currentAccount(req)) return res.redirect("/");
-  if (!GUEST_ENABLED || !demoBooks().length) return res.redirect("/login");
-  if (!currentGuest(req)) startGuest(req, res);
-  res.append("Set-Cookie", cookieHeader(req, FREE_COOKIE, "", 0)); // the demo, not a free book read before
-  res.redirect("/");
-});
+// /demo is gone (Max, 2026-11-04: «не потрібен зараз, коли є реєстрація»); old links go to sign-in.
+app.get("/demo", (req, res) => res.redirect(currentAccount(req) ? "/" : "/login"));
 
 // /free/<file> opens a book of the free shelf from the site. Without an account it opens as a guest who
 // sees only that book and gets no explanations (svoloshyn, Max 2026-10-26: a child reading «Лис Микита» needs
@@ -1544,7 +1534,7 @@ api.get("/cover", async (req, res) => {
 });
 
 // Set a book's cover by hand: PUT /api/cover?path=<book> with a JPEG, PNG or WebP image as the body.
-api.put("/cover", guestsCannot("У демо-режимі не можна змінювати обкладинки."), express.raw({ type: () => true, limit: "5mb" }), (req, res) => {
+api.put("/cover", guestsCannot("Без входу не можна змінювати обкладинки."), express.raw({ type: () => true, limit: "5mb" }), (req, res) => {
   const name = safeBookName(req.query.path);
   if (!name || !fs.existsSync(bookFile(req.lib, name))) return res.status(404).json({ error: "Книжки немає на сервері." });
   const b = req.body;
@@ -1701,7 +1691,7 @@ api.get("/find", async (req, res) => {
 });
 
 api.get("/wish", (req, res) => res.json({ wish: req.guest ? [] : userState(req.acct).wish || [] }));
-api.post("/wish", guestsCannot("У демо-режимі список бажаного недоступний."), (req, res) => {
+api.post("/wish", guestsCannot("Без входу список бажаного недоступний."), (req, res) => {
   const title = clean(req.body?.title, 300);
   if (!title) return res.status(400).json({ error: "Вкажіть назву." });
   const u = userState(req.acct);
@@ -1710,7 +1700,7 @@ api.post("/wish", guestsCannot("У демо-режимі список бажан
   saveState();
   res.json({ item, wish: u.wish });
 });
-api.delete("/wish/:id", guestsCannot("У демо-режимі список бажаного недоступний."), (req, res) => {
+api.delete("/wish/:id", guestsCannot("Без входу список бажаного недоступний."), (req, res) => {
   const u = userState(req.acct);
   u.wish = (u.wish || []).filter((w) => w.id !== req.params.id);
   saveState();
@@ -1718,13 +1708,13 @@ api.delete("/wish/:id", guestsCannot("У демо-режимі список ба
 });
 
 // Guests read the demo book and nothing else: no uploads, no edits, no shared caches.
-api.put("/books/:name", guestsCannot("У демо-режимі не можна додавати книжки. Увійдіть, щоб завантажити свою."));
-api.patch("/books/:name", guestsCannot("У демо-режимі не можна редагувати книжки."));
-api.delete("/books/:name", guestsCannot("У демо-режимі не можна видаляти книжки."));
-api.post("/trash/restore", guestsCannot("У демо-режимі нема видалених книжок."));
-api.post("/trash/forget", guestsCannot("У демо-режимі нема видалених книжок."));
-api.post("/books/:name/epub", guestsCannot("У демо-режимі книжки не змінюються."));
-api.put("/reflow", guestsCannot("У демо-режимі конвертація PDF не зберігається."));
+api.put("/books/:name", guestsCannot("Без входу не можна додавати книжки. Увійдіть, щоб завантажити свою."));
+api.patch("/books/:name", guestsCannot("Без входу не можна редагувати книжки."));
+api.delete("/books/:name", guestsCannot("Без входу не можна видаляти книжки."));
+api.post("/trash/restore", guestsCannot("Без входу нема видалених книжок."));
+api.post("/trash/forget", guestsCannot("Без входу нема видалених книжок."));
+api.post("/books/:name/epub", guestsCannot("Без входу книжки не змінюються."));
+api.put("/reflow", guestsCannot("Без входу конвертація PDF не зберігається."));
 api.get("/reflow", (req, res, next) => (req.guest ? res.status(204).end() : next()));
 
 // Upload: PUT /api/books/<file name> with the raw file as the body.
@@ -1933,7 +1923,7 @@ api.put("/reflow", express.raw({ type: () => true, limit: MAX_UPLOAD }), (req, r
 // ---------- Paper books (Max, 2026-11-02): see server/paper.js ----------
 const PAPER_MAX = 200;
 const intOr = (v, max) => (Number.isInteger(v) && v >= 0 && v <= max ? v : undefined);
-api.post("/paper", guestsCannot("У демо-режимі не можна додавати книжки."), (req, res) => {
+api.post("/paper", guestsCannot("Без входу не можна додавати книжки."), (req, res) => {
   const u = userState(req.acct);
   const title = clean(req.body?.title, 300);
   if (!title) return res.status(400).json({ error: "Немає назви." });
@@ -1955,7 +1945,7 @@ api.post("/paper", guestsCannot("У демо-режимі не можна дод
   saveState();
   res.json({ path: name });
 });
-api.patch("/paper/:name", guestsCannot("У демо-режимі паперових книжок немає."), (req, res) => {
+api.patch("/paper/:name", guestsCannot("Без входу паперових книжок немає."), (req, res) => {
   const u = userState(req.acct);
   const p = u.paper?.[req.params.name];
   if (!p) return res.status(404).json({ error: "Книжки немає." });
@@ -1973,7 +1963,7 @@ api.patch("/paper/:name", guestsCannot("У демо-режимі паперов�
 });
 // A paper book's page open and in use (pinged each minute while the reader does something on it): a few
 // minutes of it put the book on «Читаю зараз» on the site, as reading an e-book does (Max 2026-11-02).
-api.post("/paper/:name/seen", guestsCannot("У демо-режимі паперових книжок немає."), (req, res) => {
+api.post("/paper/:name/seen", guestsCannot("Без входу паперових книжок немає."), (req, res) => {
   if (!userState(req.acct).paper?.[req.params.name]) return res.status(404).json({ error: "Книжки немає." });
   noteReadingNow(req.acct, req.params.name);
   res.json({ ok: true });
@@ -1982,10 +1972,10 @@ api.post("/paper/:name/seen", guestsCannot("У демо-режимі папер�
 // talk so far so «Уточнити» can go on: u.paperChats[name] = [{ id, turns: [{ q, a }], messages, sel, page, at }].
 const CHATS_MAX = 300;
 const CHAT_BYTES = 200 * 1024;
-api.get("/paper/:name/chats", guestsCannot("У демо-режимі паперових книжок немає."), (req, res) => {
+api.get("/paper/:name/chats", guestsCannot("Без входу паперових книжок немає."), (req, res) => {
   res.json({ chats: userState(req.acct).paperChats?.[req.params.name] || [] });
 });
-api.put("/paper/:name/chats/:id", guestsCannot("У демо-режимі паперових книжок немає."), (req, res) => {
+api.put("/paper/:name/chats/:id", guestsCannot("Без входу паперових книжок немає."), (req, res) => {
   const u = userState(req.acct);
   if (!u.paper?.[req.params.name]) return res.status(404).json({ error: "Книжки немає." });
   const { turns, messages, sel, page, at, img } = req.body || {};
@@ -2013,7 +2003,7 @@ api.put("/paper/:name/chats/:id", guestsCannot("У демо-режимі пап�
 });
 // Questions to ask next (v3): from the book and the page, or following on from the last question. Kept a day.
 const suggestCache = new Map();
-api.post("/paper/:name/suggest", guestsCannot("У демо-режимі паперових книжок немає."), async (req, res) => {
+api.post("/paper/:name/suggest", guestsCannot("Без входу паперових книжок немає."), async (req, res) => {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   const u = userState(req.acct);
   const p = u.paper?.[req.params.name];
@@ -2036,7 +2026,7 @@ api.post("/paper/:name/suggest", guestsCannot("У демо-режимі папе
   }
 });
 // Dictation tidied into sentences (Max 2026-11-03).
-api.post("/paper/:name/tidy", guestsCannot("У демо-режимі паперових книжок немає."), async (req, res) => {
+api.post("/paper/:name/tidy", guestsCannot("Без входу паперових книжок немає."), async (req, res) => {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   const p = userState(req.acct).paper?.[req.params.name];
   const text = String(req.body?.text || "").trim().slice(0, 3000);
@@ -2050,7 +2040,7 @@ api.post("/paper/:name/tidy", guestsCannot("У демо-режимі папер�
   }
 });
 // The same for an e-book's question field (2026-11-03): the reader's page sends the book's title and author.
-api.post("/tidy", guestsCannot("У демо-режимі диктування не доопрацьовується."), async (req, res) => {
+api.post("/tidy", guestsCannot("Без входу диктування не доопрацьовується."), async (req, res) => {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   const text = String(req.body?.text || "").trim().slice(0, 3000);
   if (!apiKey || !text) return res.json({ text });
@@ -2062,7 +2052,7 @@ api.post("/tidy", guestsCannot("У демо-режимі диктування н
     res.json({ text, error: describeError(err) });
   }
 });
-api.delete("/paper/:name/chats/:id", guestsCannot("У демо-режимі паперових книжок немає."), (req, res) => {
+api.delete("/paper/:name/chats/:id", guestsCannot("Без входу паперових книжок немає."), (req, res) => {
   const u = userState(req.acct);
   const list = u.paperChats?.[req.params.name];
   if (list) u.paperChats[req.params.name] = list.filter((c) => c.id !== req.params.id);
@@ -2070,7 +2060,7 @@ api.delete("/paper/:name/chats/:id", guestsCannot("У демо-режимі па
   res.json({ ok: true });
 });
 // A paper book has no file to keep in «Нещодавно видалені»: it goes with its notes.
-api.delete("/paper/:name", guestsCannot("У демо-режимі паперових книжок немає."), (req, res) => {
+api.delete("/paper/:name", guestsCannot("Без входу паперових книжок немає."), (req, res) => {
   const u = userState(req.acct);
   const name = req.params.name;
   if (!u.paper?.[name]) return res.status(404).json({ error: "Книжки немає." });
@@ -2080,7 +2070,7 @@ api.delete("/paper/:name", guestsCannot("У демо-режимі паперов
   res.json({ ok: true });
 });
 // A photo of a cover (?kind=cover), of a page (?kind=page) or of the text marked on it (?kind=marked), JPEG or PNG, read by Claude. The photo is not kept.
-api.post("/paper/scan", guestsCannot("У демо-режимі фото не розпізнаються."), express.raw({ type: () => true, limit: "8mb" }), async (req, res) => {
+api.post("/paper/scan", guestsCannot("Без входу фото не розпізнаються."), express.raw({ type: () => true, limit: "8mb" }), async (req, res) => {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) return res.status(500).json({ error: "На сервері не налаштовано ключ Claude API." });
   const kind = ["page", "marked"].includes(req.query.kind) ? req.query.kind : "cover";

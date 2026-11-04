@@ -795,7 +795,7 @@
   function enterGuestMode(settings) {
     document.body.classList.add("guest");
     const logout = document.getElementById("btn-logout");
-    if (logout) (logout.textContent = settings.share || settings.free ? "Вийти" : "Вийти з демо"), (logout.title = "Повернутися на сторінку входу");
+    if (logout) (logout.textContent = "Вийти"), (logout.title = "Повернутися на сторінку входу");
     const { limit = 0, used = 0 } = settings.guestLimit || {};
     const left = Math.max(0, limit - used);
     setTimeout(() => {
