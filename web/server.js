@@ -33,6 +33,7 @@ const { Mcp } = require("./mcp");
 const { Reviews } = require("./reviews");
 const { Advice } = require("./advice");
 const { Lists } = require("./lists");
+const { ClubMail } = require("./clubmail");
 const bg = require("./jobs"); // background jobs in their own process (main.js, jobs.js)
 
 const ROOT = path.join(__dirname, "..");
@@ -795,13 +796,14 @@ app.post("/settings", signed, (req, res) => {
 });
 // The letters' tab: the weekly letter and the «стежить за вами» letter, each on or off.
 app.get("/settings/mail", signed, (req, res) => {
-  res.send(pages.mailSettingsPage({ user: req.user, values: { digest: digest.enabled(req.user.id), follow_mail: auth.followMailEnabled(req.user.id), mention_mail: auth.mentionMailEnabled(req.user.id), club_mail: auth.clubMailEnabled(req.user.id), want_mail: wantMail.enabled(req.user.id) }, saved: !!req.query.saved }));
+  res.send(pages.mailSettingsPage({ user: req.user, values: { digest: digest.enabled(req.user.id), follow_mail: auth.followMailEnabled(req.user.id), mention_mail: auth.mentionMailEnabled(req.user.id), club_mail: auth.clubMailEnabled(req.user.id), topic_mail: clubMail.enabled(req.user.id), want_mail: wantMail.enabled(req.user.id) }, saved: !!req.query.saved }));
 });
 app.post("/settings/mail", signed, (req, res) => {
   digest.setEnabled(req.user.id, !!req.body.digest);
   auth.setFollowMail(req.user.id, !!req.body.follow_mail);
   auth.setMentionMail(req.user.id, !!req.body.mention_mail);
   auth.setClubMail(req.user.id, !!req.body.club_mail);
+  clubMail.setEnabled(req.user.id, !!req.body.topic_mail);
   wantMail.setEnabled(req.user.id, !!req.body.want_mail);
   res.redirect("/settings/mail?saved=1");
 });
@@ -1095,6 +1097,9 @@ pages.setStats((id) => social.stats(id));
 // The weekly letter (digest.js): Friday 9:00 Kyiv, to every reader who has not switched it off (Max,
 // 2026-10-20: «Включаємо на всіх»); WEB_DIGEST_TO=owner limits it to the owner again.
 const digest = new Digest({ store, auth, social, lists, club, libraries, site: SITE, ownerId: OWNER_ID, to: process.env.WEB_DIGEST_TO === "owner" ? "owner" : "all" });
+// A letter to every reader about a new Club topic once someone answers it (clubmail.js, Max 2026-11-04).
+const clubMail = new ClubMail({ store, auth, club, digest, site: SITE });
+bg.every("club-topic-mail", 5 * 60 * 1000, () => clubMail.run(), { db: store.db, first: 3 * 60 * 1000 });
 if (bg.background) digest.schedule();
 // «Книжка з вашого «Хочу прочитати» тепер є» (wantmail.js): once a day, a letter of its own (Max, 2026-10-25).
 const wantMail = new (require("./wantmail").WantMail)({ store, auth, digest, site: SITE, ownerId: OWNER_ID, to: process.env.WEB_WANTMAIL_TO === "owner" ? "owner" : "all" });
@@ -1384,6 +1389,16 @@ const clubUnwatch = (req, res) => {
   if (req.method === "POST" && !req.body?.page) return res.type("text").send("OK");
   res.send(pages.messagePage({ title: "Більше не надсилатимемо листів про цю тему", text: `«${t.title}». Увімкнути знову можна галочкою в темі.`, user: req.user }));
 };
+// The new-topic letter's «не надсилати»: those letters only.
+const topicMailOff = (req, res) => {
+  const reader = auth.reader(req.params.reader);
+  if (!reader || !digest.check(reader.id, req.params.token)) return res.status(404).send(pages.messagePage({ title: "Посилання не підходить", text: "Вимкнути листи можна в налаштуваннях.", user: req.user }));
+  clubMail.setEnabled(reader.id, false);
+  if (req.method === "POST" && !req.body?.page) return res.type("text").send("OK");
+  res.send(pages.messagePage({ title: "Більше не надсилатимемо листів про нові теми Клубу", text: "Увімкнути знову можна в налаштуваннях листів.", user: req.user }));
+};
+app.get("/club-mail/topics/off/:reader/:token", topicMailOff);
+app.post("/club-mail/topics/off/:reader/:token", topicMailOff);
 app.get("/club-mail/unwatch/:topic/:reader/:token", clubUnwatch);
 app.post("/club-mail/unwatch/:topic/:reader/:token", clubUnwatch);
 const mentionMailSwitch = (req, res, on) => {
@@ -1498,6 +1513,7 @@ app.post("/api/club/:id/posts", signed, clubTopic, (req, res) => {
   if (auth.tooMany(`club-posts:${req.user.id}`, 20)) return back("Забагато за годину. Спробуйте трохи згодом.");
   const id = club.addPost(t.id, req.user.id, req.body.text);
   if (id) club.seen(req.user.id, t.id);
+  if (id) clubMail.answered(t, req.user.id);
   if (!id) return back(String(req.body.text || "").trim() ? "На сьогодні досить, завтра можна знову." : "");
   // Readers who got a letter about it (a mention or «відповідь у темі»); the owner among them gets no second one (Max, 2026-11-01).
   const mailed = replyMails(req, t, id, req.body.text, mentionMails(req, req.body.text, { where: `у темі «${t.title}»`, href: `${t.href}#p-${id}` }));
