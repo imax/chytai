@@ -17,7 +17,7 @@ const CODE_TTL = 10 * 60 * 1000;
 const CODE_TRIES = 5;
 const PER_EMAIL_HOUR = 5;
 const PER_IP_HOUR = 20;
-const FAILS_DAY = 20;
+const FAILS_DAY = 5; // Max, 2026-11-04: «20 забагато… далі хай пишуть мені в саппорт»
 const SESSION_DAYS = 365;
 
 // Usernames: Latin lowercase, digits, dot or underscore, 3–30 characters, not starting or ending with
@@ -271,7 +271,7 @@ class Auth {
   verify(email, code) {
     // A wrong code a day per address at most FAILS_DAY times, whatever new codes were asked for: six digits
     // can't be guessed in that many tries.
-    if (this.tooMany(`fail:${email}`, FAILS_DAY, 24 * 3600 * 1000, { add: false })) return { error: "Забагато невдалих спроб. Спробуйте завтра." };
+    if (this.tooMany(`fail:${email}`, FAILS_DAY, 24 * 3600 * 1000, { add: false })) return { error: "Забагато невдалих спроб. Напишіть нам: ischenko@gmail.com." };
     const key = sha(`code:${email}`);
     const rows = this.db.prepare("SELECT hash, tries FROM login_codes WHERE key = ? AND expires >= ?").all(key, Date.now());
     if (!rows.length) return { error: "Код застарів. Запросіть новий." };
