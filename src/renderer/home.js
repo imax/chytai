@@ -172,7 +172,9 @@
   // Progress sits on the cover itself: a thin bar while reading, a small mark when finished. A line of text
   // under each cover took height and said little (Max).
   // Design v2: a 3px strip at the cover's foot, full for a book read to the end.
-  const mark = (b) => (b.finished || b.pct > 0 ? `<span class="r-bar" title="${b.finished ? "Прочитано" : `${b.pct}%`}"><span style="width:${b.finished ? 100 : Math.max(b.pct, 3)}%"></span></span>` : "");
+  // Finished (Max 2026-11-04: the full strip was too quiet): a «Прочитана» label on the cover, like «Паперова».
+  const doneMark = () => `<span class="r-done-tag">Прочитана</span>`;
+  const mark = (b) => b.finished ? doneMark() : (b.pct > 0 ? `<span class="r-bar" title="${b.finished ? "Прочитано" : `${b.pct}%`}"><span style="width:${b.finished ? 100 : Math.max(b.pct, 3)}%"></span></span>` : "");
   const statusText = (b) => (b.finished ? "прочитано" : b.pct > 0 ? `${b.pct}%` : "не почато");
   // A cover: the picture when there is one, the site's typographic stand-in under it otherwise.
   const rcover = (b, url = window.reader.coverUrl?.(b)) => `<span class="r-cover" style="--h:${hue(b.title)}" lang="${esc(b.language || "uk")}">

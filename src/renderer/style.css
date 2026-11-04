@@ -2245,3 +2245,7 @@ html body #panel #panel-body #cards, html body #panel #panel-body #notes { flex:
 /* A photo attached to the question field, like a file in a chat (Max 2026-11-04). */
 .pp-att .pp-att-t b { font-weight: 600; color: var(--r-ink); }
 .pp-live .error .pp-retry { padding: 0; margin: 0; border: none; background: none; font: inherit; color: var(--r-ochre); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+
+/* «Прочитана» on a cover in Мої книжки (Max 2026-11-04): a label like «Паперова». */
+.r-done-tag { position: absolute; left: 6px; top: 0; margin-top: calc((100% * 1.5) - 26px); font: 600 9px/1 var(--r-sans); letter-spacing: .1em; text-transform: uppercase; padding: 4px 5px; border-radius: 3px; background: var(--r-ochre); color: #fff; pointer-events: none; }
+.pp-ctag ~ .r-done-tag { margin-top: calc((100% * 1.5) - 48px); }
