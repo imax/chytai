@@ -215,10 +215,13 @@ const EDITION = /[\s:.,]*(?:[(\[]\s*)?(\d+-?[а-яі]{1,3}\s+(видання|в�
 // word or an edition note at its end. A bracket with a number or a volume word stays («(том 2)», «(1984)»),
 // unless it is an edition («(2-ге видання)»); volumes never fold into one book.
 // A shop's promo prefix is not part of the name either: «Акція (−10%): Пісня Ахілла» (Max, 2026-10-22).
+// КСД sells a new jacket as a title: «Дюна + нова суперобкладинка», «Керрі + суперобкладинка» (Max, 2026-11-04).
+const JACKET = /\s*\+\s*(нова\s+)?(супер|кіно)?обкладинк[аи]\s*$/iu;
 const PROMO = /^\s*(акція|знижка|розпродаж|суперціна|спецціна)(?=[\s(:])[^:]{0,20}:\s*/iu;
 const workName = (t) =>
   String(t || "")
     .replace(PROMO, "")
+    .replace(JACKET, "")
     .replace(/\s*\(([^()]*)\)/g, (m, inner) => (/\d|том|книга|частина|част\./i.test(inner) && !/видання|вид\./i.test(inner) ? m : ""))
     .replace(GENRE, "")
     .replace(EDITION, "")
@@ -1447,6 +1450,7 @@ class Store {
     const byTitle = new Map(); // normalized title -> [{ id, author }], exact titles first, then titles without the author's name
     const byUrl = new Map();
     const byWords = new Map();
+    const byPair = new Map(); // title|original title -> library books, for titles too short to trust alone («Дюна» / Dune)
     const byIsbn = new Map(); // a library book's ISBN (a Goodreads import keeps it; Books.md links to Amazon by ISBN-10)
     const pageKey = (u) => String(u || "").replace(/^https?:\/\/(www\.)?/, "").replace(/[?#].*$/, "").replace(/\/+$/, "");
     const words = (t) => norm(String(t || "").split(/[:.(]/)[0]).split(" ").filter((w) => w.length >= 3).sort().join(" ");
@@ -1467,6 +1471,10 @@ class Store {
         if (!l.some((x) => x.id === b.id)) l.push({ id: b.id, author: b.author || "", title: b.title, exact });
       };
       for (const t of [b.title, b.altTitle]) if (norm(t).length >= 6) addTitle(norm(t), true);
+      if (norm(b.title) && norm(b.altTitle)) {
+        const k = `${norm(b.title)}|${norm(b.altTitle)}`;
+        (byPair.get(k) || byPair.set(k, []).get(k)).push(b);
+      }
       for (const t of [own.title, b.title]) if (norm(bare(t, b.author)).length >= 6) addTitle(bare(t, b.author), false);
       for (const l of b.links || []) if (pageKey(l.url).includes("/")) byUrl.set(pageKey(l.url), b.id);
       for (const i of isbnsOf(own)) byIsbn.set(i, b.id);
@@ -1504,6 +1512,12 @@ class Store {
         const b = found.find((x) => x.exact) || found[0];
         if (b) return b.id;
       }
+      // A short title («Дюна», under 6 letters) is the book when the original title and the author agree too:
+      // КСД's «Дюна» (Dune, Френк Герберт) is a reader's «Дюна» (Dune, Frank Herbert) (Max, 2026-11-04).
+      if (norm(it.altTitle)) {
+        const b = (byPair.get(`${norm(workName(it.title))}|${norm(it.altTitle)}`) || []).find((x) => ok(x.id) && norm(x.author) && sameAuthor(x.author, it.author));
+        if (b) return b.id;
+      }
       // A shop that puts the series first («Нові Темні Віки. Колонія», Абук) sells the reader's «Колонія»:
       // the part after the series, as an exact title by the same author (Max, 2026-10-23: no covers on Кідрук).
       const tail = /^[^.:]{3,}[.:]\s+(.{3,})$/.exec(String(it.title || ""))?.[1];
@@ -1530,7 +1544,9 @@ class Store {
     for (const g of new Set(groupOf.values())) {
       // A group can list an item twice after merges (a stale group joined again); counted twice, the work's
       // own item was hidden as its shelf's second edition and the work left search («Тигролови», 2026-10-28).
-      const sorted = [...new Set(g)].sort((a, b) => (a.item.edition ? 1 : 0) - (b.item.edition ? 1 : 0) || FMT(a.item.format) - FMT(b.item.format) || (PICK[a.item.status] ?? 9) - (PICK[b.item.status] ?? 9) || a.item.id.localeCompare(b.item.id, "en", { numeric: true }));
+      // A new jacket («Керрі + суперобкладинка») is never the work's own page while the plain edition is there.
+      const jacket = (it) => (JACKET.test(it.title || "") ? 1 : 0);
+      const sorted = [...new Set(g)].sort((a, b) => (a.item.edition ? 1 : 0) - (b.item.edition ? 1 : 0) || jacket(a.item) - jacket(b.item) || FMT(a.item.format) - FMT(b.item.format) || (PICK[a.item.status] ?? 9) - (PICK[b.item.status] ?? 9) || a.item.id.localeCompare(b.item.id, "en", { numeric: true }));
       const canonical = g.map((si) => bookOf(si.item)).find(Boolean) || sorted[0].item.id;
       this.editions.set(canonical, sorted);
       const perShelf = new Set();
