@@ -1403,13 +1403,11 @@ ${!f && club.length ? `<section class="block" data-block="club">${label("Обг�
 ${!f ? readerBand() : ""}
 ${row("Дочитують до кінця", "ніхто не покинув", finish, (w) => `дочитали ${w.s.finished}`)}
 ${row("Українські автори", "", ua)}
-${row("Коротке", "до 250 сторінок", short, (w) => `${w.pages} с.`)}
 ${row("Найбільше хочуть прочитати", "", wanted, (x) => `${x.n} ${plural(x.n, "хоче", "хочуть", "хочуть")}`)}
 ${row("Безкоштовно", "класика в Читалці", free.map((b) => ({ book: b })))}
-${row("Нове у видавництвах", `<a href="/publishers">усі видавництва</a>`, fresh, (x) => esc(x.shelf.name))}
 ${!f && genres.length ? `<section class="block" data-block="genres">${label("Жанри")}<div class="gtiles">${genres.map((x) => `<a class="gtile" href="/genre/${attr(genreSlug(x.g))}">${x.top ? cover(x.top, "xs") : ""}<span><b>${esc(cap(x.g))}</b><span class="muted">${books(x.n)}</span></span></a>`).join("")}</div></section>` : ""}
 </div>`;
-  return layout({ title: "", body, user, path: "/", home: true, canonical: "/", description: "Що почитати далі: книжки з оцінками й нотатками читачів і новинки українських видавництв.", jsonld: { "@context": "https://schema.org", "@type": "WebSite", name: "Chytai", url: ORIGIN, image: `${ORIGIN}/icon.png`, inLanguage: "uk", potentialAction: { "@type": "SearchAction", target: { "@type": "EntryPoint", urlTemplate: `${ORIGIN}/search?q={q}` }, "query-input": "required name=q" } } });
+  return layout({ title: "", body, user, path: "/", home: true, canonical: "/", description: "Що почитати далі: книжки з оцінками й нотатками читачів.", jsonld: { "@context": "https://schema.org", "@type": "WebSite", name: "Chytai", url: ORIGIN, image: `${ORIGIN}/icon.png`, inLanguage: "uk", potentialAction: { "@type": "SearchAction", target: { "@type": "EntryPoint", urlTemplate: `${ORIGIN}/search?q={q}` }, "query-input": "required name=q" } } });
 }
 
 // ---- /admin/genres-trial: our genres next to Haiku's for 200 books (genretrial.js) ----
