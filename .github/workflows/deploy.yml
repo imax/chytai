@@ -16,6 +16,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      # Smoke test first (Max, 2026-11-04): a missing file or a reader that does not start stops the deploy.
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci --omit=dev --ignore-scripts --no-audit --no-fund
+      - run: scripts/smoke-reader.sh
       - uses: superfly/flyctl-actions/setup-flyctl@master
       # Built here on the GitHub runner, not on Fly's Depot builder, which kept deploys waiting for minutes and
       # failed one on 2026-10-29 (Max: «треба дивитися чому вони так тормозять»); Fly's builder is the fallback.

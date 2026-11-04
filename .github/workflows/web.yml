@@ -7,18 +7,33 @@ name: Deploy web
 on:
   push:
     branches: [main]
-    paths: ["web/**", "package.json", "package-lock.json", ".github/workflows/web.yml", "scripts/perf-check.sh"]
+    paths: ["web/**", "package.json", "package-lock.json", ".github/workflows/web.yml", "scripts/perf-check.sh", "scripts/smoke-test.sh"]
   workflow_dispatch:
 
 jobs:
   # Several threads push small fixes minutes apart (Max, 2026-10-22: «деплой йде довше ніж наступний фікс
   # зробити»): a push waits 30 quiet seconds, and a newer push cancels the waiting one, so a burst of
   # commits goes out as one deploy of the newest. (2 minutes until 2026-10-22: too long next to a one-minute deploy.)
+  # The smoke test (scripts/smoke-test.sh, Max 2026-11-04) runs here too: it takes about as long as the quiet
+  # wait did, and a page that breaks stops the deploy before it reaches readers. With the repo secret
+  # CHYTAI_BACKUP_KEY (the backup age key's text) it runs on last night's scrubbed test copy of the database,
+  # without it on an empty one.
   settle:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     concurrency: { group: web-settle, cancel-in-progress: true }
     steps:
-      - run: sleep 30
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci --omit=dev --ignore-scripts --no-audit --no-fund
+      - run: sudo apt-get install -y age >/dev/null
+      - name: Smoke test
+        env:
+          KEY: ${{ secrets.CHYTAI_BACKUP_KEY }}
+        run: |
+          if [ -n "$KEY" ]; then printf '%s\n' "$KEY" > "$RUNNER_TEMP/age.key"; export CHYTAI_BACKUP_KEY="$RUNNER_TEMP/age.key"; fi
+          scripts/smoke-test.sh
   deploy:
     needs: settle
     runs-on: ubuntu-latest

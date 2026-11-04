@@ -127,6 +127,39 @@ class Admin {
     this.seenDay = "";
     // The funnel counts readers who signed up from the day the steps started being kept.
     if (!db.get("steps:since")) db.set("steps:since", new Date().toISOString());
+    this.dropCrawler();
+  }
+
+  // Once (Max, 2026-11-04: «почистимо статистику по ботах в попередні дні»): until human() learned the Sec-Fetch
+  // headers, a crawler with a browser's user agent came in as a new guest «Напряму» on one book or author page
+  // after another (25–26.10 and 30–31.10 by thousands, ~100 a day between). Its arrivals go, and the same number
+  // comes off that day's guest views, section views and guest arrivals; the 404s it made on 30.10 go too.
+  // A person who opened a book's link with no referrer on those days goes with it (6–40 a day since the fix).
+  // meta `fix:crawler` keeps what was taken off. 20–22.10 stay as they are: nothing tells the crawler apart there.
+  dropCrawler() {
+    const db = this.db;
+    if (db.get("fix:crawler")) return;
+    try {
+      db.tx(() => {
+        if (db.get("fix:crawler")) return;
+        // 31.10 it also went through shops' links (/go/), publishers and genres.
+        const bot = `source = 'Напряму' AND visits = fresh AND ((day BETWEEN '2026-10-24' AND '2026-10-31' AND (landing LIKE '/book/%' OR landing LIKE '/author/%')) OR (day = '2026-10-31' AND (landing LIKE '/go/%' OR landing LIKE '/publishers/%' OR landing LIKE '/genre/%')))`;
+        const rows = db.prepare(`SELECT day, landing, visits FROM arrivals WHERE ${bot}`).all();
+        const views = db.prepare("UPDATE views SET guests = max(0, guests - 1) WHERE day = ?");
+        const section = db.prepare("UPDATE section_views SET views = max(0, views - 1) WHERE day = ? AND section = ?");
+        const arrive = db.prepare("UPDATE guest_steps SET n = max(0, n - 1) WHERE day = ? AND step = 'arrive' AND search = 0");
+        const days = {};
+        for (const r of rows) {
+          for (let i = 0; i < r.visits; i++) views.run(r.day), section.run(r.day, sectionOf(r.landing.split("?")[0])), arrive.run(r.day);
+          days[r.day] = (days[r.day] || 0) + r.visits;
+        }
+        db.prepare(`DELETE FROM arrivals WHERE ${bot}`).run();
+        const e404 = db.prepare("DELETE FROM events WHERE name = '404' AND day = '2026-10-30' AND guest = 1").run().changes;
+        db.set("fix:crawler", JSON.stringify({ at: new Date().toISOString(), days, e404 }));
+      });
+    } catch (e) {
+      console.log(`admin: could not drop the crawler's views: ${e.message}`);
+    }
   }
 
   // A page opened: remember the reader's day and count the view. Cheap: one insert per reader a day,
