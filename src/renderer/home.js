@@ -165,6 +165,16 @@
   let homeView = (() => { try { return localStorage.getItem("chytai-home-view") === "list" ? "list" : "grid"; } catch { return "grid"; } })();
   const viewIcon = { grid: `<svg viewBox="0 0 18 18" aria-hidden="true"><rect x="2" y="2" width="5.5" height="6" rx="1"/><rect x="10.5" y="2" width="5.5" height="6" rx="1"/><rect x="2" y="10" width="5.5" height="6" rx="1"/><rect x="10.5" y="10" width="5.5" height="6" rx="1"/></svg>`, list: `<svg viewBox="0 0 18 18" aria-hidden="true"><rect x="2" y="2.5" width="3.5" height="4.5" rx=".8"/><rect x="2" y="11" width="3.5" height="4.5" rx=".8"/><path d="M8 4.75h8M8 13.25h8"/></svg>` };
   const viewSwitch = () => `<span class="r-view">${["grid", "list"].map((v) => `<button type="button" class="${v === homeView ? "on" : ""}" data-view="${v}" title="${v === "grid" ? "Обкладинки" : "Список"}" aria-label="${v === "grid" ? "Обкладинки" : "Список"}">${viewIcon[v]}</button>`).join("")}</span>`;
+  // On a computer the list has columns, sorted by a click on their heading (Max 2026-11-04).
+  let homeSort = (() => { try { return localStorage.getItem("chytai-home-sort") || "opened"; } catch { return "opened"; } })();
+  const fmt = (b) => (b.paper ? "Паперова" : (/\.([a-z0-9]+)$/i.exec(b.path)?.[1] || "").toUpperCase());
+  const sorters = {
+    opened: (x, y) => lastTouched(y) - lastTouched(x),
+    title: (x, y) => x.title.localeCompare(y.title, "uk"),
+    format: (x, y) => fmt(x).localeCompare(fmt(y)) || lastTouched(y) - lastTouched(x),
+  };
+  const listHead = () => `<div class="r-lhead">${[["title", "Назва"], ["opened", "Відкривали"], ["format", "Формат"]].map(([k, label]) => `<button type="button" class="${k === homeSort ? "on" : ""}" data-sort="${k}">${label}</button>`).join("")}</div>`;
+  const rowCols = (b) => `<span class="r-lc r-lc-o">${b.openedAt ? when(b.openedAt) : "—"}</span><span class="r-lc r-lc-f">${esc(fmt(b))}</span>`;
   const rowStatus = (b) => `<span class="r-st${b.finished ? " done" : ""}">${b.finished ? "Прочитана" : b.paper ? "Паперова" : b.pct > 0 ? `${b.pct}%` : ""}</span>`;
   let freeTab = "new"; // new | kids | classics | all
   let homeHtml = "";
@@ -384,7 +394,7 @@
     const empty = (k) => (groups[k].length ? "" : `<p class="r-empty g-${k}">Тут поки порожньо.</p>`);
     const plus = settings.guest || books.length ? "" : `<button class="r-card r-plus" data-page="add"><span class="r-plus-box"><b>+</b><span>Додати книжку</span><small>EPUB, PDF, MOBI</small></span></button>`;
     html += `<section class="r-mine">${head(`Мої книжки · ${books.length}`, books.length ? tabs([["all", "Усі", groups.all.length], ["reading", "Читаю", groups.reading.length], ["new", "Не почато", groups.new.length], ["done", "Прочитані", groups.done.length], ...(groups.paper.length ? [["paper", "Паперові", groups.paper.length]] : [])], homeFilter, "data-filter") + viewSwitch() : "", !cur)}
-      <div class="r-filtered" data-show="${homeFilter}"><div class="r-grid${homeView === "list" ? " r-list" : ""}">${rest.map((b) => card(b, homeView === "list" ? rowStatus(b) : mark(b), true, gcls(b))).join("")}${plus}</div>
+      <div class="r-filtered" data-show="${homeFilter}"><div class="r-grid${homeView === "list" ? " r-list" : ""}">${homeView === "list" && rest.length ? listHead() : ""}${(homeView === "list" ? [...rest].sort(sorters[homeSort] || sorters.opened) : rest).map((b) => card(b, homeView === "list" ? rowCols(b) + rowStatus(b) : mark(b), true, gcls(b))).join("")}${plus}</div>
       ${empty("reading")}${empty("new")}${empty("done")}${empty("paper")}</div></section>`;
     return html;
   }
@@ -505,6 +515,12 @@
   $("#home").addEventListener("click", (e) => {
     const m = e.target.closest("[data-more]");
     if (m) return more6.add(m.dataset.more), renderHome();
+    const so = e.target.closest("[data-sort]");
+    if (so) {
+      homeSort = so.dataset.sort;
+      try { localStorage.setItem("chytai-home-sort", homeSort); } catch {}
+      return renderHome();
+    }
     const v = e.target.closest("[data-view]");
     if (v) {
       homeView = v.dataset.view;
