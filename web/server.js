@@ -1063,9 +1063,16 @@ bg.register("ukTrial", ukTrial, { run: false });
 for (const p of aiPasses.values()) bg.register(`pass:${p.key}`, p, { run: false, runAll: true });
 // New books' checks right after they come in (newbooks.js), a batch every few minutes; not while the catalogs
 // are being refreshed (the refresh queues its own new books when it ends).
-const newBooks = new (require("./newbooks").NewBooks)({ store, db: store.db, details, lang: langTrial, genre: genreTrial, orig: origTrial, passes: [...aiPasses.values()], keepCovers: keepOlCovers, warm: (covers) => thumbs.warm(covers), busy: () => !!refreshing, log: console.log });
+const newBooks = new (require("./newbooks").NewBooks)({ store, db: store.db, details, lang: langTrial, genre: genreTrial, orig: origTrial, passes: [...aiPasses.values()], keepCovers: keepOlCovers, warm: (covers) => thumbs.warm(covers), authors: (ids) => authors.lookupNew(store, ids, { log: console.log }), busy: () => !!refreshing, log: console.log });
 bg.register("newBooks", newBooks, { run: true });
 bg.every("newbooks", 3 * 60 * 1000, () => newBooks.run(), { db: store.db, first: 3 * 60 * 1000 });
+// The books of the last week that went through the queue before it looked up authors (2026-11-04,
+// Alastair Reynolds): their names once, at the start; names already asked are skipped.
+if (bg.background)
+  setTimeout(() => {
+    const ids = store.db.prepare("SELECT id FROM book_queue WHERE added >= ?").all(new Date(Date.now() - 8 * 86400000).toISOString()).map((r) => r.id);
+    authors.lookupNew(store, ids, { log: console.log }).then((n) => n && bg.changed("authors"), (e) => console.error("authors (new) failed:", e));
+  }, 90 * 1000).unref();
 // Automatic overviews (advice.want/sweep/redo and their queue) are made in the jobs process; a reader's own
 // «Чи варто читати?» is answered here.
 bg.register("advice", advice, { want: false, sweep: false, redo: false }, ["queued", "capped"], { mirror: false, quiet: ["want"] });

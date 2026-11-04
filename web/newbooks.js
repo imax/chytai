@@ -9,7 +9,8 @@
 //   3. genres and the original of a translation (Haiku);
 //   4. the catalog passes already applied on the whole catalog (dupes, not-books, covers, years…), only
 //      for these books;
-//   5. an Open Library cover kept here, and the small copies made.
+//   5. a new author's name looked up on Wikidata (authors.lookupNew), for the author page;
+//   6. an Open Library cover kept here, and the small copies made.
 // Each step's answer is kept per book for /admin/jobs. The Haiku steps wait for their whole-catalog run to
 // have finished, like the six-hour schedule, which stays to catch what this missed.
 const { isRussian } = require("./store");
@@ -20,8 +21,8 @@ const DAILY = 1500; // books a day at most: a new catalog of thousands goes over
 const KEEP = 30 * 24 * 3600 * 1000;
 
 class NewBooks {
-  constructor({ store, db, details, lang, genre, orig, passes = [], keepCovers, warm, busy = () => false, log = console.log }) {
-    Object.assign(this, { store, db, details, lang, genre, orig, passes, keepCovers, warm, busy, log });
+  constructor({ store, db, details, lang, genre, orig, passes = [], keepCovers, warm, authors, busy = () => false, log = console.log }) {
+    Object.assign(this, { store, db, details, lang, genre, orig, passes, keepCovers, warm, authors, busy, log });
     this.running = false;
   }
 
@@ -97,6 +98,15 @@ class NewBooks {
           out.errors++;
         }
       if (Object.keys(passes).length) out.passes = Object.entries(passes).map(([k, v]) => `${k}: ${v}`).join("; ");
+      // A new author's Wikidata person (photo, bio, works on the author page), not a week later.
+      if (this.authors)
+        try {
+          const n = await this.authors([...ids].filter((id) => !isRussian(store.book(id))));
+          if (n) out.authors = n;
+        } catch (e) {
+          out.errors++;
+          this.log(`new books: authors: ${e.message}`);
+        }
       try {
         const kept = await this.keepCovers([...ids]);
         if (kept) out.covers = kept;
@@ -117,8 +127,8 @@ class NewBooks {
     }
     out.cost = Math.round(out.cost * 10000) / 10000;
     // The site reloads (jobs.js) only when something it shows may have changed.
-    out.changed = !!(out.haiku || out.covers || out.passes || own.length);
-    out.note = [`книжок ${out.books}`, `Haiku ${out.haiku}`, out.ru ? `російських ${out.ru}` : "", out.covers ? `обкладинок ${out.covers}` : "", out.passes || "", `$${out.cost}`, out.errors ? `помилок ${out.errors}` : ""].filter(Boolean).join(", ");
+    out.changed = !!(out.haiku || out.covers || out.passes || out.authors || own.length);
+    out.note = [`книжок ${out.books}`, `Haiku ${out.haiku}`, out.ru ? `російських ${out.ru}` : "", out.covers ? `обкладинок ${out.covers}` : "", out.authors ? `авторів з Вікіданих ${out.authors}` : "", out.passes || "", `$${out.cost}`, out.errors ? `помилок ${out.errors}` : ""].filter(Boolean).join(", ");
     this.log(`new books: ${out.books} checked, ${out.haiku} Haiku answers, ${out.ru} Russian, $${out.cost}${out.errors ? `, ${out.errors} errors` : ""}`);
     return out;
   }

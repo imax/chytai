@@ -45,8 +45,55 @@ async function refresh(store, { fetchImpl = fetch, log = () => {} } = {}) {
   const at = Number(store.db.get("authors:checked") || 0);
   if ((Date.now() - at < 7 * DAY && store.db.get("authors:v") === VERSION) || refresh.running) return false;
   refresh.running = true;
-  const works = allWorks(store);
-  const names = [...new Set(works.flatMap((b) => splitAuthors(b.author)))];
+  try {
+    const works = allWorks(store);
+    const names = [...new Set(works.flatMap((b) => splitAuthors(b.author)))];
+    const { found, errors, lastError, batches } = await lookup(store, names, works, fetchImpl);
+    const line = `${new Date().toISOString()}: ${Object.keys(found).length} of ${names.length} names found on Wikidata${errors ? `, ${errors} batches failed (${lastError})` : ""}`;
+    log(`authors: ${line}`);
+    store.db.set("authors:log", line);
+    if (errors > batches / 2) return false; // try again at the next round (every 6 hours) instead of in a week
+    store.db.set("authors:checked", String(Date.now()));
+    store.db.set("authors:v", VERSION);
+    store.db.set("authors:wd", JSON.stringify(found));
+    store.db.set("authors:tried", "{}");
+    store.linkTranslations(); // rebuilds the author index too
+    return true;
+  } finally {
+    refresh.running = false;
+  }
+}
+
+// The names of new books, at once (Max 2026-11-04: a reader's 3 Alastair Reynolds books gave a page with no
+// photo, bio or works, as the weekly refresh hadn't seen the name yet). The new books' queue asks for the
+// names Wikidata wasn't asked about; a name it doesn't know waits for the weekly refresh (meta
+// `authors:tried`). Returns how many names were found.
+async function lookupNew(store, ids, { fetchImpl = fetch, log = () => {} } = {}) {
+  if (refresh.running) return 0;
+  const wd = JSON.parse(store.db.get("authors:wd") || "{}");
+  const tried = JSON.parse(store.db.get("authors:tried") || "{}");
+  const works = [...new Set(ids)].map((id) => ({ id, author: authorOf(store, id) })).filter((w) => w.author);
+  const names = [...new Set(works.flatMap((w) => splitAuthors(w.author)))].filter((n) => !wd[n] && !tried[n]);
+  if (!names.length) return 0;
+  const { found, errors, lastError } = await lookup(store, names, works, fetchImpl);
+  if (errors) log(`authors: new names: ${errors} batches failed (${lastError})`);
+  // Read again: the weekly refresh may have written while Wikidata answered.
+  const now = { ...JSON.parse(store.db.get("authors:wd") || "{}"), ...found };
+  const t = JSON.parse(store.db.get("authors:tried") || "{}");
+  if (!errors) for (const n of names) if (!found[n]) t[n] = Date.now();
+  store.db.set("authors:tried", JSON.stringify(t));
+  const n = Object.keys(found).length;
+  if (n) {
+    store.db.set("authors:wd", JSON.stringify(now));
+    store.linkTranslations(); // rebuilds the author index too
+    log(`authors: new names: ${n} of ${names.length} found (${Object.keys(found).join(", ")})`);
+  }
+  return n;
+}
+
+// Names -> { found: { name: person }, errors, lastError, batches }: by name, then writers by name, then by the
+// original title of their book.
+async function lookup(store, names, works, fetchImpl) {
   const found = {};
   let errors = 0;
   let lastError = "";
@@ -85,11 +132,12 @@ async function refresh(store, { fetchImpl = fetch, log = () => {} } = {}) {
   // A spelling Wikidata doesn't know («Майкл Льюїс») is found by its book's original title instead:
   // «The Fifth Risk» on Wikidata names its author (Max, 2026-10-20: the page showed one book).
   const byTitle = new Map(); // original title -> names
+  const asked = new Set(names);
   for (const w of works) {
     const orig = altOf(store, w.id);
     if (!orig || CYR.test(orig)) continue;
     const ns = splitAuthors(w.author);
-    if (ns.length !== 1 || found[ns[0]]) continue;
+    if (ns.length !== 1 || found[ns[0]] || !asked.has(ns[0])) continue;
     byTitle.set(orig, [...new Set([...(byTitle.get(orig) || []), ns[0]])]);
   }
   const titles = [...byTitle.keys()];
@@ -109,17 +157,8 @@ async function refresh(store, { fetchImpl = fetch, log = () => {} } = {}) {
       lastError = e.cause?.code || e.message;
     }
   }
-  const line = `${new Date().toISOString()}: ${Object.keys(found).length} of ${names.length} names found on Wikidata${errors ? `, ${errors} batches failed (${lastError})` : ""}`;
-  log(`authors: ${line}`);
-  store.db.set("authors:log", line);
-  refresh.running = false;
   const batches = Math.ceil(names.length / 30) + Math.ceil(rest.length / 30) + Math.ceil(titles.length / 30);
-  if (errors > batches / 2) return false; // try again at the next round (every 6 hours) instead of in a week
-  store.db.set("authors:checked", String(Date.now()));
-  store.db.set("authors:v", VERSION);
-  store.db.set("authors:wd", JSON.stringify(found));
-  store.linkTranslations(); // rebuilds the author index too
-  return true;
+  return { found, errors, lastError, batches };
 }
 
 // Works of every kind we know, as { id, author } only (the libraries and each shelf's works; editions
@@ -411,4 +450,4 @@ function findKnown(store, q, limit = 5) {
     .map((w) => ({ qid: w.qid, uk: w.uk, year: w.year, author: w.author.name, href: w.author.href, books: matchWorks(store, w.author, [w])[0].books.map((b) => b.id) }));
 }
 
-module.exports = { shortBio, sparql, refresh, build, wikidataWorks, about, aboutNow, matchWorks, splitAuthors, allWorks, ownerJoins, knownWorks, findKnown };
+module.exports = { shortBio, sparql, refresh, lookupNew, build, wikidataWorks, about, aboutNow, matchWorks, splitAuthors, allWorks, ownerJoins, knownWorks, findKnown };
