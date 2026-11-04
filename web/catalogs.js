@@ -276,6 +276,9 @@ const isPromo = (title) => /безкоштовн\S*\s+фрагмент|\((озн
 const LANG_AID =
   /розмовник|\d[\d\s]*(тис\.?\s*)?(слів|термінів)|слів і (вислов|вираз)|(-україн\S*|україн\S*-\S+|англ\S*|німец\S*|польськ\S*|франц\S*|італ\S*)\s+(\S+\s+)?словник|словник\S*[- ]довідник|(орфографічн|орфоепічн|правописн|пунктуаційн|паронім|омонім|синонім|фразеологічн|тематичн|астрономічн|професійної)\S*\s+(\S+\s+)?словник|словник (паронім|омонім|синонім|професій)|словникові диктанти|English Vocabulary/iu;
 const isLangAid = (title) => LANG_AID.test(String(title || ""));
+// A shop's set of several books («Комплект книг «Хроніки Дюни» / Дюна — 8 книг»), not a book to read (Max, 2026-11-04:
+// «ми ж не магазин… це стосується конкретної книжки, а не подарункових бандлів»). Left out when the shelves are loaded.
+const isBundle = (it) => !!it.bundle || /^\s*комплект/iu.test(String(it.title || ""));
 // Erotica and dark romance, not for a site teens and 10-year-olds read (Max, 2026-11-04, «Хтива Даяна»: «не сильно
 // хотів мати адалт-контент… не хочу кожного питати, чи вам виповнилось 18»). Left out when the shelves are loaded,
 // like a promo, so new imports of these are skipped too. By author (they write nothing else), KSD's genre «Дарк
@@ -1243,4 +1246,4 @@ async function refresh({ store, log = console.log, fetchImpl, only }) {
   return { ok: true, errors, counts };
 }
 
-module.exports = { isPromo, isLangAid, isAdult, bookuaTiles, bookuaProducts, SOURCES, fetchSource, buildShelves, refresh, volumeOf, ent, about, pageProducts, ldBookPage };
+module.exports = { isPromo, isLangAid, isBundle, isAdult, bookuaTiles, bookuaProducts, SOURCES, fetchSource, buildShelves, refresh, volumeOf, ent, about, pageProducts, ldBookPage };

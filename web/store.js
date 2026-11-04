@@ -454,11 +454,11 @@ class Store {
       .sort((a, b) => order.indexOf(a.id) - order.indexOf(b.id));
     const byId = new Map(shelves.map((s) => [s.id, s]));
     // Names saved before a catalog's entities were decoded («Neurosurgeon&#x27;s Journey») are decoded here.
-    const { ent, isPromo, isLangAid, isAdult } = require("./catalogs");
+    const { ent, isPromo, isLangAid, isAdult, isBundle } = require("./catalogs");
     for (const r of this.db.prepare("SELECT shelf, data, first_seen FROM items ORDER BY shelf, ord").all()) {
       const it = JSON.parse(r.data);
       it.seen = r.first_seen; // newest first in a shelf's «Нове»
-      if (isPromo(it.title) || isLangAid(it.title) || isAdult(it)) continue;
+      if (isPromo(it.title) || isLangAid(it.title) || isAdult(it) || isBundle(it)) continue;
       for (const k of ["title", "altTitle", "author", "series", "translator", "publisher"]) if (typeof it[k] === "string" && it[k].includes("&")) it[k] = ent(it[k]);
       byId.get(r.shelf)?.items.push(it);
     }
