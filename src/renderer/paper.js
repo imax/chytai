@@ -224,13 +224,13 @@
         ${adding ? `<form class="pp-ask pp-noteform" data-pp-form><textarea id="pp-note" rows="3" placeholder="Думка, цитата або що перечитати">${esc(noteDraft)}</textarea>
           ${noteBusy ? `<div class="pp-note-busy"><span class="spinner"></span>Розпізнаю текст…</div>` : ""}
           <div class="pp-ask-row"><button type="button" class="pp-tool" data-pp="img-note" title="Текст з фото чи скріншота" aria-label="Текст з фото чи скріншота">${svgCam}</button>
-            <button type="button" class="pp-tool${window.Dictation.field() === "pp-note" ? " on" : ""}" data-pp="mic-note" title="Надиктувати" aria-label="Надиктувати">${svgMic}</button><button type="button" class="pp-qt${noteQuote ? " on" : ""}" data-pp="quote-toggle" aria-pressed="${noteQuote}" title="Цитата з книжки">«Цитата»</button><span class="pp-ask-sp"></span><button type="submit" class="r-pill">Зберегти</button></div></form>` : ""}
+            <button type="button" class="pp-tool${window.Dictation.field() === "pp-note" ? " on" : ""}" data-pp="mic-note" title="Надиктувати" aria-label="Надиктувати">${svgMic}</button><span class="pp-ask-sp"></span><button type="submit" class="r-pill">Зберегти</button></div></form>` : ""}
         ${sortedNotes.length ? sortedNotes.map((n) => editing === n.id
           ? `<form class="pp-ask pp-noteform" data-pp-edit="${esc(n.id)}"><textarea id="pp-note-edit" rows="3">${esc(n.text)}</textarea>
             <div class="pp-ask-row"><label class="pp-page-in">стор. <input id="pp-note-page" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="5" value="${esc((n.chapter || "").match(/\d+/)?.[0] || "")}" /></label><span class="pp-ask-sp"></span><button type="button" class="r-link" data-pp="cancel-edit">Скасувати</button><button type="submit" class="r-pill">Зберегти</button></div></form>`
           : `<div class="pp-note${n.quote ? " q" : ""}"><div class="pp-note-t">${esc(n.text)}</div>
           ${n.comment ? `<div class="pp-note-c">${md(n.comment)}</div>` : ""}
-          <div class="pp-note-m">${esc(n.chapter || "")}<button type="button" class="r-link" data-pp-edit-note="${esc(n.id)}">Редагувати</button><button type="button" class="r-link" data-pp-del="${esc(n.id)}">Видалити</button></div></div>`).join("")
+          <div class="pp-note-m">${esc(n.chapter || "")}<button type="button" class="r-link" data-pp-quote="${esc(n.id)}">${n.quote ? "Не цитата" : "Цитата"}</button><button type="button" class="r-link" data-pp-edit-note="${esc(n.id)}">Редагувати</button><button type="button" class="r-link" data-pp-del="${esc(n.id)}">Видалити</button></div></div>`).join("")
           : adding ? "" : `<p class="r-empty">Тут будуть ваші думки й цитати.</p>`}</section>
       <button type="button" class="pp-row" data-pp="about"><span>Про книжку</span><span>›</span></button>
     </div>`;
@@ -608,6 +608,18 @@
       window.Shell.rerender();
       return window.reader.notesDelete(book.path, id).catch(() => {});
     }
+    // «Цитата» / «Не цитата» among a note's actions (Max 2026-11-04: not a switch in the new note's form).
+    const q = e.target.closest("[data-pp-quote]");
+    if (q) {
+      const n = notes.find((x) => x.id === q.dataset.ppQuote);
+      if (!n) return;
+      const quote = !n.quote;
+      // A quote is drawn with its own «», so the reader's own ones go.
+      const text = quote ? n.text.replace(/^[«"“„]\s*([\s\S]*?)\s*[»"”“]$/, "$1").trim() || n.text : n.text;
+      notes = notes.map((x) => (x.id === n.id ? { ...x, quote, text } : x));
+      window.Shell.rerender();
+      return window.reader.notesUpdate(book.path, n.id, { quote, ...(text !== n.text ? { text } : {}) }).catch((err) => showNotice(offline(err, "зберегти нотатку"), false));
+    }
     const edit = e.target.closest("[data-pp-edit-note]");
     if (edit) {
       editing = edit.dataset.ppEditNote;
@@ -660,12 +672,6 @@
     if (act === "mic") return mic();
     if (act === "mic-note") return mic("pp-note");
     if (act === "img-note") return noteFromPhoto();
-    if (act === "quote-toggle") {
-      noteQuote = !noteQuote;
-      e.target.closest("[data-pp]").classList.toggle("on", noteQuote);
-      e.target.closest("[data-pp]").setAttribute("aria-pressed", noteQuote);
-      return $("#pp-note")?.focus({ preventScroll: true });
-    }
     if (act === "unphoto") return photo && URL.revokeObjectURL(photo.thumb), (photo = null), redraw();
     if (act === "unattach") return (scan = null), (showText = false), window.Shell.rerender();
     if (act === "text") return (showText = !showText), window.Shell.rerender();

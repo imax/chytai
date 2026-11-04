@@ -1288,6 +1288,11 @@ api.patch("/notes/:id", (req, res) => {
   // A paper book's note is the reader's own words, so its text can be edited too (Max 2026-11-03).
   // So is a note an e-book reader wrote with «+ Нотатка» (cfi «mine:…», 2026-11-03).
   if ((paper.NAME.test(String(req.query.path || "")) || String(note.cfi).startsWith("mine:")) && typeof req.body?.text === "string" && req.body.text.trim()) note.text = req.body.text.trim().slice(0, NOTE_TEXT_MAX);
+  // «Цитата» / «Не цитата» on a paper book's note (Max 2026-11-04).
+  if (paper.NAME.test(String(req.query.path || "")) && typeof req.body?.quote === "boolean") {
+    if (req.body.quote) note.quote = true;
+    else delete note.quote;
+  }
   // And its page (Max 2026-11-04: the page it was added on is usually right, not always).
   if (paper.NAME.test(String(req.query.path || "")) && req.body?.page !== undefined) {
     const n = Math.floor(Number(req.body.page));
