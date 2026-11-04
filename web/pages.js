@@ -525,7 +525,7 @@ ${myLists ? listsDialog(book, myLists) : ""}`;
 const ADMIN_TABS = [
   ["Огляд", [["/admin", "Огляд"]], /^\/admin\/activity$/],
   ["Трафік", [["/admin/traffic", "Трафік"]]],
-  ["Читачі", [["/admin/readers", "Усі читачі"], ["/admin/retention", "Утримання"], ["/admin/reader", "Читалка"], ["/admin/comments", "Коментарі"], ["/admin/digest", "Лист"], ["/admin/publishers", "Видавцям"]]],
+  ["Читачі", [["/admin/readers", "Усі читачі"], ["/admin/retention", "Утримання"], ["/admin/reader", "Читалка"], ["/admin/comments", "Коментарі"], ["/admin/digest", "Дайджест"]]],
   ["Каталог", [["/admin/catalog", "Каталог"]], /^\/admin\/(catalog|shelves|overviews|dupes|translations|volumes|russian|ukfind|readeat|free|ai\/|book\/|reviews)|-trial$/],
   ["Система", [["/admin/jobs", "Задачі"], ["/admin/speed", "Швидкість"]]],
 ];
@@ -2579,7 +2579,7 @@ function letterEditorPage({ user, editorial: e, weekend = {}, weekends = [], err
   const iso = (s) => day(new Date(s));
   const aud = e?.audience || "all";
   const body = `
-${pageHead({ kicker: "Щотижневий лист", title: "Твій текст у листі", sub: `Стоїть на початку листа, над тим, що сталося на полицях читача. Піде з листом у п’ятницю, ${day(next)}, о ${at}, і більше не повториться.` })}
+${pageHead({ kicker: "Дайджест", title: "Твій текст у листі", sub: `Стоїть на початку листа, над тим, що сталося на полицях читача. Піде з листом у п’ятницю, ${day(next)}, о ${at}, і більше не повториться.` })}
 <form method="post" action="/admin/digest" class="form">
   ${errorLine(error)}${saved ? `<p class="saved">Збережено.</p>` : ""}
   <label>Тема листа<input type="text" name="subject" value="${attr(e?.subject || "")}" maxlength="120" placeholder="Як порожньо, тема складається сама з новин полиць"></label>
@@ -2594,7 +2594,7 @@ ${pageHead({ kicker: "Щотижневий лист", title: "Твій текс�
   <p class="muted small">Щоб нічого не додавати до листа, зітри текст і збережи.</p>
 </form>
 ${sent.length ? `<section class="form"><h2>Уже надіслані</h2>${sent.map((x) => `<details><summary>${iso(x.sent)}${x.subject ? ` · ${esc(x.subject)}` : ""} · ${x.readers} ${x.readers % 10 === 1 && x.readers % 100 !== 11 ? "читачу" : "читачам"}</summary><p class="muted small" style="white-space:pre-wrap">${esc(x.text)}</p></details>`).join("")}</section>` : ""}`;
-  return layout({ title: "Текст у листі", body, user, path: "/admin", noindex: true });
+  return layout({ title: "Дайджест · Адмінка", body, user, path: "/admin", noindex: true });
 }
 
 function messagePage({ title, text, user }) {
