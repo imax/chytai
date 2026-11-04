@@ -1400,11 +1400,11 @@ ${picks.length ? `<section class="block" data-block="picks">${label("Читач�
 ${row("Для вас", forWhy, forYou)}
 ${!f && editorials.length ? `<section class="block editorials" data-block="editorials">${label("Добірки Chytai", `<a href="/lists">усі списки</a>`)}<div class="lgrid">${editorials.map(listCard).join("")}</div></section>` : ""}
 ${!f && club.length ? `<section class="block" data-block="club">${label("Обговорюють зараз", `<a href="/club">Клуб Chytai</a>`)}<div class="club-topics">${club.map((t) => clubRow(t)).join("")}</div></section>` : ""}
-${!f ? readerBand() : ""}
 ${row("Дочитують до кінця", "ніхто не покинув", finish, (w) => `дочитали ${w.s.finished}`)}
 ${row("Українські автори", "", ua)}
 ${row("Найбільше хочуть прочитати", "", wanted, (x) => `${x.n} ${plural(x.n, "хоче", "хочуть", "хочуть")}`)}
 ${row("Безкоштовно", "класика в Читалці", free.map((b) => ({ book: b })))}
+${!f ? readerBand() : ""}
 </div>`;
   return layout({ title: "", body, user, path: "/", home: true, canonical: "/", description: "Що почитати далі: книжки з оцінками й нотатками читачів.", jsonld: { "@context": "https://schema.org", "@type": "WebSite", name: "Chytai", url: ORIGIN, image: `${ORIGIN}/icon.png`, inLanguage: "uk", potentialAction: { "@type": "SearchAction", target: { "@type": "EntryPoint", urlTemplate: `${ORIGIN}/search?q={q}` }, "query-input": "required name=q" } } });
 }
