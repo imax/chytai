@@ -805,10 +805,11 @@ const TESTIMONIALS = [
 ];
 
 // The first thing someone not signed in sees (Max, 2026-11-04): one screen, signing in right there (server/landing.js).
-// The Mac and Android links are not shown inside the apps.
+// The Mac link is not shown inside the apps. Android is hidden for now: the app is still raw (Max, 2026-11-04);
+// /android on the site still works.
 function landingPage(req) {
   const inside = /Chytai(Mac|App)\//.test(req.get("user-agent") || "");
-  return renderLanding({ webUrl: WEB_URL, mac: !inside, android: !inside, testimonials: TESTIMONIALS });
+  return renderLanding({ webUrl: WEB_URL, mac: !inside, android: false, testimonials: TESTIMONIALS });
 }
 
 // ---------- App ----------
