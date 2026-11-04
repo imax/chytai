@@ -992,7 +992,7 @@ ${s.cohorts.length ? `<div class="tbl"><table class="cohorts">
     : // One dashboard for everything (Max, 2026-11-04): key numbers, is the site fine, what readers did in a day.
       `<section class="admin overview">
 <section class="page-head"><div><h1>Огляд</h1><p class="sub">Станом на ${short(s.now)}. Деталі — у вкладках.</p></div></section>
-<div class="stats dash">${linkFirst(siteTiles, "/admin/retention")}${linkFirst(trafficTiles(s, gsc, gscOn), "/admin/traffic")}${linkFirst(readerTiles(reader), "/admin/reader")}</div>
+<div class="stats dash">${linkFirst(siteTiles, "/admin/readers")}${linkFirst(trafficTiles(s, gsc, gscOn), "/admin/traffic")}${linkFirst(readerTiles(reader), "/admin/reader")}</div>
 
 ${health}
 
