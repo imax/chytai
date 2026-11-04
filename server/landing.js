@@ -126,7 +126,7 @@ ${font("source-serif-4/opsz.css")}${font("onest/wght.css")}
     </div>
     <div class="more">
       ${q ? `<figure><blockquote>«${esc(q.text)}»</blockquote>${q.author ? `<figcaption>— ${esc(q.author)}</figcaption>` : ""}</figure>` : ""}
-      <p class="own">Можна завантажувати свої книжки у форматах EPUB, MOBI, PDF або брати з Вільної полиці.</p>
+      <p class="own">Завантажуйте вже куплені книжки в форматах EPUB, PDF, MOBI або читайте безкоштовні з Вільної полиці.</p>
       ${apps.length ? `<div class="apps">${apps.join("")}</div>` : ""}
     </div>
   </div>
