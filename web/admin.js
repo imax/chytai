@@ -304,13 +304,34 @@ class Admin {
     return this.db.prepare("SELECT prop, SUM(CASE WHEN guest = 1 THEN n ELSE 0 END) AS guests, SUM(CASE WHEN guest = 0 THEN n ELSE 0 END) AS readers, SUM(n) AS n FROM events WHERE name = ? AND day >= ? GROUP BY prop ORDER BY n DESC").all(name, since);
   }
 
-  // A new reader: keep where they first came from (the chytai_came cookie, else «Напряму»).
-  came(readerId, cookie) {
+  // Where a new reader first came from: the site's chytai_came cookie, else «Напряму».
+  cameFrom(cookie) {
     let c = null;
     try {
       c = JSON.parse(cookie || "null");
     } catch {}
-    const came = c && typeof c === "object" ? { source: clean(c.source, 60), ref: clean(c.ref, 200), landing: clean(c.landing, 120), day: clean(c.day, 10) } : { source: "Напряму", ref: "", landing: "", day: today() };
+    return c && typeof c === "object" && c.source ? { source: clean(c.source, 60), ref: clean(c.ref, 200), landing: clean(c.landing, 120), day: clean(c.day, 10) } : { source: "Напряму", ref: "", landing: "", day: today() };
+  }
+  // The same for someone who signed up on the reader's own landing or in the phone apps (Max, 2026-11-04: the
+  // burst from dev.ua all read «Напряму»): the page sends the address it was opened from and its own address
+  // (for utm_*), kept by the page from the first visit. A referrer from the site itself is the site's block.
+  cameFromReader(body, { app = false, ownHosts = new Set() } = {}) {
+    const c = body && typeof body === "object" ? body : {};
+    let url = null;
+    try {
+      url = new URL(String(c.url || ""));
+    } catch {}
+    const query = url ? Object.fromEntries(url.searchParams) : {};
+    const landing = clean((url ? url.host + url.pathname : "") || (app ? "додаток" : ""), 120);
+    const from = sourceOf(String(c.ref || ""), query, ownHosts);
+    const day = /^\d{4}-\d{2}-\d{2}$/.test(c.day || "") ? c.day : today();
+    if (!from) return { source: "Сайт Chytai", ref: sourceOf(String(c.ref || ""), {}, new Set())?.ref || "", landing, day };
+    if (from.source === "Напряму" && app) return { source: "Додаток", ref: "", landing, day };
+    return { ...from, landing, day };
+  }
+  // A new reader: keep where they first came from (cameFrom/cameFromReader).
+  came(readerId, came) {
+    if (typeof came === "string" || !came) came = this.cameFrom(came);
     try {
       this.db.prepare("UPDATE readers SET came = ? WHERE id = ?").run(JSON.stringify(came), readerId);
     } catch (e) {
@@ -1145,8 +1166,12 @@ function activityPage({ user, rows, readers, books, names, who = null, embed = f
     const list = (id) => names.list(id);
     const ofList = (l) => (l ? ` ${q(l.title, l.href)}` : "");
     switch (r.kind) {
-      case "signup":
-        return { html: `<b>зареєструвався</b>` };
+      case "signup": {
+        // «з dev.ua» (Max, 2026-11-04: «зберігати референс на реєстраціях … щоб ми розуміли, що відбувається»).
+        const [src, ref] = r.extra.split(" · ");
+        const from = src ? ` <span class="muted">з ${ref && !/\s/.test(ref) ? `<a href="https://${esc(ref)}" rel="noreferrer">${esc(src)}</a>` : esc(src)}</span>` : "";
+        return { html: `<b>зареєструвався</b>${from}` };
+      }
       case "login":
         return { key: "login", html: "увійшов" };
       case "shelf": {

@@ -747,6 +747,15 @@ function appSignInPage() {
 <script>
 (function () {
   var web = document.getElementById("signin").dataset.web;
+  // Where this person first came from (kept 30 days from the first visit), sent with the sign-up so the site
+  // knows it was dev.ua and not «Напряму» (Max, 2026-11-04).
+  var came = { ref: document.referrer, url: location.href };
+  if (came.ref.indexOf(location.origin + "/") === 0) came.ref = "";
+  try {
+    var kept = JSON.parse(localStorage.getItem("chytai_came") || "null");
+    if (kept && kept.day && Date.now() - Date.parse(kept.day) < 30 * 864e5) came = kept;
+    else if (came.ref || /[?&]utm_source=/.test(location.search)) { came.day = new Date().toISOString().slice(0, 10); localStorage.setItem("chytai_came", JSON.stringify(came)); }
+  } catch (e) {}
   var forms = { email: document.getElementById("f-email"), code: document.getElementById("f-code"), name: document.getElementById("f-name") };
   var done = document.getElementById("f-done");
   var email = "", signup = "";
@@ -797,7 +806,7 @@ function appSignInPage() {
   });
   forms.name.addEventListener("submit", function (e) {
     e.preventDefault();
-    call(forms.name, "signup", { signup: signup, name: forms.name.elements.name.value }).then(function (r) { if (r && r.ticket) enter(r.ticket); });
+    call(forms.name, "signup", { signup: signup, name: forms.name.elements.name.value, came: came }).then(function (r) { if (r && r.ticket) enter(r.ticket); });
   });
   forms.code.querySelector("[data-back]").addEventListener("click", function (e) { e.preventDefault(); show("email"); });
 })();

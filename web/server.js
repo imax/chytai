@@ -46,6 +46,8 @@ const OWNER = process.env.WEB_OWNER || "Макс І";
 const OWNER_USERNAME = process.env.WEB_OWNER_USERNAME || "maxua";
 const OLD_READER = `/reader/${process.env.WEB_OWNER_SLUG || "max"}`; // the owner's page before usernames
 const DOMAIN = process.env.WEB_DOMAIN || ""; // e.g. chytai.org.ua; set once DNS points here
+// The site's own addresses: a referrer from one of them is not an arrival.
+const siteHosts = (req) => new Set([req.hostname || "", DOMAIN, DOMAIN && `www.${DOMAIN}`, `${process.env.FLY_APP_NAME}.fly.dev`, "localhost"].filter(Boolean));
 const COOKIE = "chytai_web";
 
 function loadDotEnv(file) {
@@ -383,7 +385,7 @@ app.use((req, res, next) => {
       } catch {}
       admin.log(req.user.id, "do", url, bits.join(" "));
     });
-  admin.arrive(req, res, req.user?.id, { cookies: cookies(req), ownHosts: new Set([host, DOMAIN, `www.${DOMAIN}`, `${process.env.FLY_APP_NAME}.fly.dev`, "localhost"].filter(Boolean)), secure: secure(req) });
+  admin.arrive(req, res, req.user?.id, { cookies: cookies(req), ownHosts: siteHosts(req), secure: secure(req) });
   next();
 });
 const signed = (req, res, next) => (req.user ? next() : res.redirect(`/login?next=${encodeURIComponent(req.originalUrl)}`));
@@ -441,17 +443,18 @@ app.post("/login/signup", (req, res) => {
   if (error) return res.status(400).send(pages.signupPage({ next, ticket: req.body.ticket, email, name: req.body.name, username: req.body.username, error }));
   if (auth.byEmail(email)) return signIn(req, res, auth.byEmail(email), next);
   const reader = newReader(req, { email, name: name.name, username: username.username, ticket: req.body.ticket, next });
-  admin.came(reader.id, cookies(req).chytai_came);
   res.append("Set-Cookie", `chytai_came=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax`);
   // Someone who came from the reader goes straight back to it; the welcome page is about the site.
   // So does one who signed up to save a book (/do/…): the book is saved and they are back on its page.
   // And one who signed up to answer in the Club: back to the topic (Max, 2026-11-01).
   signIn(req, res, reader, next.startsWith("/reader-login") || next.startsWith("/oauth/authorize") || next.startsWith("/do/") || next.startsWith("/club/") ? next : `/welcome${next ? `?next=${encodeURIComponent(next)}` : ""}`);
 });
-function newReader(req, { email, name, username, ticket, next }) {
+function newReader(req, { email, name, username, ticket, next, came }) {
   const reader = auth.createReader({ email, name, username });
   admin.event(req, null, "login", "signup");
-  admin.log(reader.id, "signup", next || "");
+  came = came || admin.cameFrom(cookies(req).chytai_came);
+  admin.came(reader.id, came);
+  admin.log(reader.id, "signup", next || "", came.source === "Напряму" ? "" : [came.source, came.ref].filter(Boolean).join(" · "));
   auth.useTicket(ticket);
   console.log(`new reader @${reader.username}`);
   welcomeMail.newReader(reader);
@@ -554,7 +557,8 @@ app.post("/api/reader-login/signup", readerCors, (req, res) => {
   if (!email) return res.status(400).json({ error: "Час вийшов. Запросіть код ще раз." });
   const name = auth.checkName(req.body?.name);
   if (name.error) return res.status(400).json({ error: name.error });
-  const reader = auth.byEmail(email) || newReader(req, { email, name: name.name, username: auth.suggestUsername(name.name, slugify), ticket: req.body.signup, next: "/reader-login" });
+  const came = admin.cameFromReader(req.body.came, { app: /ChytaiApp/.test(req.get("user-agent") || ""), ownHosts: siteHosts(req) });
+  const reader = auth.byEmail(email) || newReader(req, { email, name: name.name, username: auth.suggestUsername(name.name, slugify), ticket: req.body.signup, next: "/reader-login", came });
   res.json({ ticket: readerTicket(reader.id) });
 });
 app.get("/reader-login", signed, (req, res) => {
