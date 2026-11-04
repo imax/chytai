@@ -41,9 +41,13 @@ const SECTIONS = [
   ["popular", "Популярне", (p) => p === "/popular"],
   ["publishers", "Видавництва", (p) => p === "/publishers" || p.startsWith("/publishers/") || p.startsWith("/shelf/")],
   ["community", "Спільнота", (p) => p === "/community" || p === "/readers"],
+  ["lists", "Списки", (p) => p === "/lists" || /^\/@[^/]+\/list\//.test(p)],
   ["shelf", "Полиці читачів", (p) => p.startsWith("/@") || p.startsWith("/reader/")],
   ["me", "Своя полиця", (p) => p === "/me" || p.startsWith("/me/") || p === "/add" || p.startsWith("/import")],
   ["account", "Вхід і налаштування", (p) => p.startsWith("/login") || p === "/welcome" || p === "/logout" || p.startsWith("/settings") || p === "/reader-login"],
+  // Club, lists (above) and genres had no rows of their own and went to «Інше» (Max, 2026-11-04).
+  ["club", "Клуб", (p) => p === "/club" || p.startsWith("/club/")],
+  ["genres", "Жанри", (p) => p === "/genres" || p.startsWith("/genre/")],
   ["other", "Інше", () => true],
 ];
 const sectionOf = (p) => SECTIONS.find(([, , is]) => is(p))[0];
@@ -920,6 +924,7 @@ function shelvesPage({ user, catalog, layout }) {
 }
 
 // One table of tiles on Огляд (Max, 2026-11-04): the first number of each row of four leads to its details.
+// «Перегляди за розділами» sits on Огляд, before the activity (Max, 2026-11-04).
 const linkFirst = (html, href) => html.replace("<b>", `<b><a href="${href}">`).replace("</b>", "</a></b>");
 
 function adminPage({ user, stats: s, gsc = null, gscOn = false, taps = null, login = null, reader = null, health = "", activity = "", layout, page = "main" }) {
@@ -957,11 +962,6 @@ ${trafficBody(s, gsc, gscOn)}
 
 ${tapsBlock(taps)}
 
-<h2>Перегляди за розділами</h2>
-<p class="muted small">Скільки сторінок кожного розділу відкрили (читачі й гості разом, без ботів). Рахується з ${s.sections.length ? "22 жовтня" : "сьогодні"}; які саме сторінки, не зберігаємо.</p>
-${s.sections.length ? `<div class="tbl"><table class="sections">
-<thead><tr><th>Розділ</th><th>Сьогодні</th><th>7 днів</th><th>28 днів</th></tr></thead>
-<tbody>${s.sections.map((x) => `<tr><th>${x.name}</th><td>${n(x.today)}</td><td>${n(x.week)}</td><td>${n(x.month)}</td></tr>`).join("")}</tbody></table></div>` : `<p class="muted">Поки нічого не нарахувалось.</p>`}
 
 </section>`
     : page === "retention"
@@ -992,6 +992,12 @@ ${s.cohorts.length ? `<div class="tbl"><table class="cohorts">
 <div class="stats dash">${linkFirst(siteTiles, "/admin/retention")}${linkFirst(trafficTiles(s, gsc, gscOn), "/admin/traffic")}${linkFirst(readerTiles(reader), "/admin/reader")}</div>
 
 ${health}
+
+<h2>Перегляди за розділами</h2>
+<p class="muted small">Скільки сторінок кожного розділу відкрили (читачі й гості разом, без ботів). Рахується з ${s.sections.length ? "22 жовтня" : "сьогодні"}; які саме сторінки, не зберігаємо.</p>
+${s.sections.length ? `<div class="tbl"><table class="sections">
+<thead><tr><th>Розділ</th><th>Сьогодні</th><th>7 днів</th><th>28 днів</th></tr></thead>
+<tbody>${s.sections.map((x) => `<tr><th>${x.name}</th><td>${n(x.today)}</td><td>${n(x.week)}</td><td>${n(x.month)}</td></tr>`).join("")}</tbody></table></div>` : `<p class="muted">Поки нічого не нарахувалось.</p>`}
 
 ${activity}
 </section>`;
