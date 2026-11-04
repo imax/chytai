@@ -749,6 +749,8 @@ app.post(`${pages.DRAW_PATH}/leave`, signed, (req, res) => (draw.setJoined(req.u
 app.get("/reader", (_req, res) => res.redirect(302, `${READER_URL}/`)); // shortcut to the reader (Max 2026-10-22)
 // The Mac app (mac/ in the repo); its DMG lives in GitHub Releases (.github/workflows/mac.yml).
 app.get("/mac", (req, res) => res.send(pages.macPage({ user: req.user })));
+// The Android app as a test APK from GitHub (Max, 2026-11-04), until it is in Google Play. Same link for every build.
+app.get("/android", (_req, res) => res.redirect(302, "https://github.com/imax/chytai/releases/download/android-test/chytai.apk"));
 
 // ---- settings: name, username, e-mail, deleting the account ----
 
