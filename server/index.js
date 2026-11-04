@@ -24,6 +24,7 @@ const { cost } = require("./admin");
 const { createProtected } = require("./protected");
 const paper = require("./paper");
 const { searchReader } = require("./search");
+const { landingPage: renderLanding } = require("./landing");
 
 const ROOT = path.join(__dirname, "..");
 loadDotEnv(path.join(ROOT, ".env"));
@@ -533,7 +534,8 @@ const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<
 // «Увійти»: the site's sign-in, which comes back here with a ticket. The app opens every address that is
 // not the reader's in Safari, so there the sign-in goes through /app-login instead (below).
 const siteSignIn = (req, code) => `${WEB_URL}/reader-login?back=${encodeURIComponent(`${req.protocol}://${req.get("host")}`)}${code ? `&app=${code}` : ""}`;
-const signInUrl = (req) => (inApp(req) ? "/app-login" : siteSignIn(req));
+// Since 2026-11-04 the landing signs in on the page itself, so «Увійти» is just /login.
+const signInUrl = (req) => (inApp(req) ? "/app-login" : "/login");
 
 // opts.button { href, label } replaces «Увійти» (and the demo link) for someone already signed in.
 function loginPage(req, error, opts = {}) {
@@ -674,68 +676,11 @@ const TESTIMONIALS = [
   { text: "AI нотатки і пояснення — афігенна фіча, і навіть елементарний зміст по книжці значно зручніше чим ті читалки що я дивився", author: "Микола Я" },
 ];
 
-// The first thing someone not signed in sees (Max, 2026-10-22): what the reader is, then «Увійти».
-// The words are Max's; he writes the copy himself.
+// The first thing someone not signed in sees (Max, 2026-11-04): one screen, signing in right there (server/landing.js).
+// The Mac and Android links are not shown inside the apps.
 function landingPage(req) {
-  const signIn = signInUrl(req);
-  // The Mac app in place of the demo link (Max, 2026-11-02); not inside the Mac or iPhone app.
-  const mac = !/Chytai(Mac|App)\//.test(req.get("user-agent") || "");
-  return `<!doctype html>
-<html lang="uk"><head><meta charset="utf-8"><title>Chytai · читалка</title>
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="description" content="Читалка з AI-explainer. Спроба пере-придумати зручний інтерфейс для читання онлайн.">
-<link rel="icon" href="/icon.png"><link rel="apple-touch-icon" href="/icon.png">
-<style>
-  :root { color-scheme: light dark; --bg: #f6efe0; --fg: #3b2f1e; --muted: rgba(59,47,30,0.65); --accent: #b7791f; }
-  @media (prefers-color-scheme: dark) { :root { --bg: #1e1e20; --fg: #e6e6e6; --muted: rgba(230,230,230,0.65); } }
-  * { box-sizing: border-box; }
-  body { margin: 0; font: 17px/1.55 -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif; background: var(--bg); color: var(--fg); }
-  .wrap { max-width: 980px; margin: 0 auto; padding: 0 20px; }
-  header { display: flex; align-items: center; gap: 10px; padding: 18px 0; }
-  header img { width: 34px; height: 34px; border-radius: 8px; }
-  header b { font-size: 20px; } header a.in { margin-left: auto; color: var(--accent); font-weight: 600; text-decoration: none; }
-  .hero { padding: 30px 0 8px; max-width: 640px; }
-  h1 { font-size: 40px; line-height: 1.15; margin: 0 0 14px; letter-spacing: -0.01em; }
-  .lead { font-size: 19px; color: var(--muted); margin: 0 0 26px; }
-  .acts { padding: 0 0 30px; display: flex; flex-wrap: wrap; gap: 12px 18px; align-items: center; }
-  .btn { display: inline-block; padding: 13px 28px; font-weight: 600; text-decoration: none; color: #fff; background: var(--accent); border-radius: 10px; }
-  .acts a.demo { color: var(--accent); font-weight: 600; }
-  .shots { position: relative; padding: 0 0 30px; }
-  .desk { margin-right: 120px; border-radius: 10px; overflow: hidden; box-shadow: 0 20px 50px rgba(0,0,0,0.18); border: 1px solid rgba(0,0,0,0.12); background: #fff; }
-  .desk i { display: block; height: 26px; background: #e9e6df; border-bottom: 1px solid rgba(0,0,0,0.08); }
-  .phone { position: absolute; right: 0; bottom: 20px; width: 230px; border-radius: 30px; overflow: hidden; box-shadow: 0 20px 50px rgba(0,0,0,0.25); border: 8px solid #1d1d1f; }
-  .shots img { display: block; width: 100%; }
-  .quotes { padding: 10px 0 20px; }
-  .quotes h2 { margin: 0 0 14px; font-size: 13px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
-  .quotes ul { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; }
-  .quotes blockquote { margin: 0; height: 100%; padding: 20px 22px; border-left: 3px solid var(--accent); border-radius: 4px 12px 12px 4px; background: rgba(255,255,255,0.55); font-size: 18px; }
-  @media (prefers-color-scheme: dark) { .quotes blockquote { background: #2a2a2d; } }
-  .quotes blockquote p { margin: 0; } .quotes blockquote p::before { content: "«"; } .quotes blockquote p::after { content: "»"; }
-  .quotes cite { display: block; margin-top: 10px; font-size: 15px; font-style: normal; color: var(--muted); }
-  footer { padding: 24px 0 40px; color: var(--muted); font-size: 14px; } footer a { color: inherit; }
-  @media (max-width: 760px) {
-    .hero { padding-top: 10px; }
-    .desk { display: none; }
-    .phone { position: static; margin: 0 auto; width: min(300px, 100%); }
-    h1 { font-size: 30px; }
-  }
-</style></head>
-<body><div class="wrap">
-  <header><img src="/icon.png" alt=""><b>Chytai</b><a class="in" href="${esc(signIn)}">Увійти</a></header>
-  <section class="hero">
-    <div>
-      <h1>Читалка з AI-explainer</h1>
-      <p class="lead">Спроба пере-придумати зручний інтерфейс для читання онлайн.</p>
-    </div>
-  </section>
-  <section class="shots">
-    <div class="desk"><i></i><img src="/landing-desk.jpg" alt="Читалка Chytai на комп'ютері: пояснення виділеного речення"></div>
-    <div class="phone"><img src="/landing-phone.jpg" alt="Читалка Chytai на телефоні: пояснення виділеного рядка"></div>
-  </section>
-  <div class="acts"><a class="btn" href="${esc(signIn)}">Увійти</a>${mac ? `<a class="demo" href="https://chytai.org.ua/mac">Версія для Mac</a>` : ""}</div>
-  ${TESTIMONIALS.length ? `<section class="quotes"><h2>Відгуки</h2><ul>${TESTIMONIALS.map((q) => `<li><blockquote><p>${esc(q.text)}</p>${q.author ? `<cite>— ${esc(q.author)}</cite>` : ""}</blockquote></li>`).join("")}</ul></section>` : ""}
-  <footer>Частина <a href="https://chytai.org.ua">chytai.org.ua</a></footer>
-</div></body></html>`;
+  const inside = /Chytai(Mac|App)\//.test(req.get("user-agent") || "");
+  return renderLanding({ webUrl: WEB_URL, mac: !inside, android: !inside, testimonials: TESTIMONIALS });
 }
 
 // ---------- App ----------
@@ -758,7 +703,7 @@ app.use((req, res, next) => {
 
 // Public: icon and manifest, so the phone can show them before login.
 app.get("/icon.png", (_req, res) => res.sendFile(path.join(ROOT, "build", "icon.png")));
-for (const f of ["landing-desk.jpg", "landing-phone.jpg"]) app.get(`/${f}`, (_req, res) => res.sendFile(path.join(ROOT, "build", f), { maxAge: "7d" }));
+for (const f of ["landing-desk.mp4", "landing-phone.mp4", "landing-desk-poster.jpg", "landing-phone-poster.jpg"]) app.get(`/${f}`, (_req, res) => res.sendFile(path.join(ROOT, "build", f), { maxAge: "7d" }));
 app.get("/manifest.webmanifest", (_req, res) => {
   res.type("application/manifest+json").json({
     name: "Chytai",
@@ -821,9 +766,9 @@ const safeNext = (v) => (/^\/(?!\/)/.test(String(v || "")) ? String(v).slice(0, 
 app.get("/login", (req, res) => {
   if (currentAccount(req)) return res.redirect(safeNext(req.query.next) || "/");
   if (safeNext(req.query.next)) res.setHeader("Set-Cookie", cookieHeader(req, NEXT_COOKIE, safeNext(req.query.next), 1 / 96));
-  // «Увійти» from inside the reader (a free book's guest): straight to the site, no landing on the way.
   if (inApp(req)) return res.set("Cache-Control", "no-store").type("html").send(appSignInPage());
-  if (req.query.go) return res.redirect(signInUrl(req));
+  // From the site («Читати» on a book): whoever is signed in there comes in without a code.
+  if (String(req.get("referer") || "").startsWith(WEB_URL)) return res.redirect(siteSignIn(req));
   res.type("html").send(landingPage(req));
 });
 // Signing in inside the iPhone app (2026-11-02: a reader's «Увійти» in the app kept ending on the site). The app
