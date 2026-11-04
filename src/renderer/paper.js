@@ -50,6 +50,8 @@
       input.click();
     });
   }
+  // iOS keeps a canvas's pixels until it is collected; a zero size lets them go now.
+  const free = (...cs) => cs.forEach((c) => c && (c.width = c.height = 0));
   // A phone's photo is several megabytes; 1600 pixels on the long side is plenty to read a page.
   async function shrink(file, max = 1600) {
     try {
@@ -59,7 +61,12 @@
       c.width = Math.round(img.width * k);
       c.height = Math.round(img.height * k);
       c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
-      return await new Promise((r) => c.toBlob(r, "image/jpeg", 0.85));
+      // A 12-megapixel photo is ~48 MB decoded; an iPhone's page is killed for memory if a few of them wait for
+      // the garbage collector (Max 2026-11-04, «сторінку вивантажено»). Freed at once, and the canvas with it.
+      img.close();
+      const blob = await new Promise((r) => c.toBlob(r, "image/jpeg", 0.85));
+      free(c);
+      return blob;
     } catch {
       return file;
     }
@@ -463,7 +470,7 @@
         c.width = v.videoWidth;
         c.height = v.videoHeight;
         c.getContext("2d").drawImage(v, 0, 0);
-        c.toBlob((blob) => blob && done(blob), "image/jpeg", 0.9);
+        c.toBlob((blob) => (free(c), blob && done(blob)), "image/jpeg", 0.9);
       };
       if (!d.open) d.showModal();
       navigator.mediaDevices
@@ -534,6 +541,7 @@
         removeEventListener("resize", fit);
         d.onclose = null;
         d.close();
+        img.removeAttribute("src"); // the decoded photo goes too
         resolve(v);
       };
       $("#pm-cancel").onclick = () => {
@@ -557,7 +565,9 @@
         t.width = Math.round(c.width * k);
         t.height = Math.round(c.height * k);
         t.getContext("2d").drawImage(c, 0, 0, t.width, t.height);
-        done({ data, small: t.toDataURL("image/jpeg", 0.7), marked: strokes.length > 0 });
+        const small = t.toDataURL("image/jpeg", 0.7);
+        free(c, t, cv);
+        done({ data, small, marked: strokes.length > 0 });
       };
       img.onload = () => fit();
       img.src = url;
