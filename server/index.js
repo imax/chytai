@@ -570,26 +570,100 @@ const smallPage = (body) => `<!doctype html>
 <style>
   :root { color-scheme: light dark; }
   body { margin: 0; min-height: 100vh; display: grid; place-items: center; font: 16px/1.5 -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif; background: #f6efe0; color: #3b2f1e; }
-  @media (prefers-color-scheme: dark) { body { background: #1e1e20; color: #e6e6e6; } main { background: #2a2a2d; } }
   main { box-sizing: border-box; width: min(360px, 90vw); padding: 28px 24px; border-radius: 16px; background: rgba(255,255,255,0.5); box-shadow: 0 8px 30px rgba(0,0,0,0.12); }
+  @media (prefers-color-scheme: dark) { body { background: #1e1e20; color: #e6e6e6; } main { background: #2a2a2d; } }
   h1 { margin: 0 0 8px; font-size: 22px; } p { margin: 0 0 18px; opacity: 0.8; }
   .btn { display: block; box-sizing: border-box; width: 100%; padding: 11px; font: inherit; font-weight: 600; text-align: center; text-decoration: none; color: #fff; background: #b7791f; border: none; border-radius: 8px; }
 </style></head><body><main>${body}</main></body></html>`;
 
-// In the app, while the reader signs in on the site in Safari.
-function appWaitPage(url) {
-  return smallPage(`<h1>Вхід</h1><p>Увійдіть на chytai.org.ua у Safari і поверніться сюди.</p>
-<a class="btn" id="go" href="${esc(url)}">Відкрити сайт</a>
+// Signing in inside the iPhone and Android apps (Max, 2026-11-04): the e-mail, the code and, for a new
+// address, the name, right here, no Safari. The page calls the site's /api/reader-login/* (the same codes and
+// limits as chytai.org.ua/login) and gets a ticket for /auth. One account with the site; a new reader gets a
+// username made from the name and only meets it on the site.
+function appSignInPage() {
+  const demo = GUEST_ENABLED && demoBooks().length;
+  return smallPage(`<h1>Chytai</h1><p>Читалка з поясненнями від Claude</p>
+<div id="signin" data-web="${esc(WEB_URL)}">
+  <form id="f-email" novalidate>
+    <input type="email" name="email" required autocomplete="email" inputmode="email" autocapitalize="off" placeholder="Ваша пошта">
+    <p class="err" role="alert"></p>
+    <button class="btn" type="submit">Отримати код</button>
+    <p class="note">Пароля немає: код для входу прийде на пошту. Акаунт спільний з chytai.org.ua.</p>
+  </form>
+  <form id="f-code" hidden>
+    <p class="lab">Код надіслали на <b class="shown"></b></p>
+    <input class="code" name="code" required inputmode="numeric" autocomplete="one-time-code" pattern="[0-9 ]*" maxlength="7" placeholder="······">
+    <p class="err" role="alert"></p>
+    <button class="btn" type="submit">Увійти</button>
+    <p class="note">Лист іде до хвилини, перевірте й «Спам». <a href="#" data-back>Інша пошта</a></p>
+  </form>
+  <form id="f-name" hidden>
+    <p class="lab">Ви тут уперше. Як вас звати?</p>
+    <input name="name" required maxlength="60" autocomplete="name" placeholder="Ім'я">
+    <p class="err" role="alert"></p>
+    <button class="btn" type="submit">Готово</button>
+  </form>
+  <p class="note" id="f-done" hidden>Відкриваю ваші книжки…</p>
+</div>
+${demo ? `<p class="demo">Або <a href="/demo">подивитися демо</a> з однією книжкою.</p>` : ""}
+<style>
+  input { box-sizing: border-box; width: 100%; padding: 11px 12px; margin: 0 0 12px; font: inherit; color: inherit; background: rgba(255,255,255,0.8); border: 1px solid rgba(59,47,30,0.25); border-radius: 8px; }
+  @media (prefers-color-scheme: dark) { input { background: #1e1e20; border-color: rgba(255,255,255,0.2); } }
+  input.code { font-size: 22px; letter-spacing: .3em; text-align: center; font-variant-numeric: tabular-nums; }
+  .btn:disabled { opacity: .6; }
+  .lab { margin: 0 0 10px; opacity: 1; }
+  .err { margin: -4px 0 10px; color: #c0392b; opacity: 1; } .err:empty { display: none; }
+  .note { margin: 12px 0 0; font-size: 14px; opacity: .65; }
+  .note a, .demo a { color: #b7791f; font-weight: 600; }
+  .demo { margin: 18px 0 0; text-align: center; font-size: 14px; }
+</style>
 <script>
-  function check() {
-    if (document.hidden) return;
-    fetch("/api/app-login", { method: "POST", credentials: "same-origin" }).then(function (r) { return r.json(); }).then(function (r) {
-      if (r.ok) location.replace(r.next || "/");
-    }).catch(function () {});
+(function () {
+  var web = document.getElementById("signin").dataset.web;
+  var forms = { email: document.getElementById("f-email"), code: document.getElementById("f-code"), name: document.getElementById("f-name") };
+  var done = document.getElementById("f-done");
+  var email = "", signup = "";
+  var DOWN = "Сайт chytai.org.ua зараз не відповідає. Спробуйте ще раз за хвилину.";
+  function show(step) {
+    Object.keys(forms).forEach(function (k) { forms[k].hidden = k !== step; forms[k].querySelector(".err").textContent = ""; });
+    done.hidden = step !== "in";
+    if (forms[step]) setTimeout(function () { forms[step].querySelector("input").focus(); }, 0);
   }
-  document.addEventListener("visibilitychange", check);
-  setInterval(check, 2000);
-  setTimeout(function () { location.href = document.getElementById("go").href; }, 300);
+  function call(form, what, body) {
+    var err = form.querySelector(".err"), btn = form.querySelector("button");
+    err.textContent = ""; btn.disabled = true;
+    return fetch(web + "/api/reader-login/" + what, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) })
+      .then(function (res) { return res.json().catch(function () { return {}; }).then(function (d) { if (!res.ok || d.error) throw new Error(d.error || DOWN); return d; }); })
+      .catch(function (e) { err.textContent = e instanceof TypeError ? DOWN : e.message; return null; })
+      .then(function (d) { btn.disabled = false; return d; });
+  }
+  function enter(ticket) { show("in"); location.href = "/auth?ticket=" + encodeURIComponent(ticket); }
+  forms.email.addEventListener("submit", function (e) {
+    e.preventDefault();
+    var input = forms.email.elements.email;
+    if (!input.value.trim() || !input.checkValidity()) { forms.email.querySelector(".err").textContent = "Вкажіть пошту, наприклад olena@ukr.net."; return; }
+    call(forms.email, "email", { email: input.value }).then(function (r) {
+      if (!r) return;
+      email = r.email || input.value.trim();
+      forms.code.querySelector(".shown").textContent = email;
+      forms.code.elements.code.value = "";
+      show("code");
+    });
+  });
+  forms.code.addEventListener("submit", function (e) {
+    e.preventDefault();
+    call(forms.code, "code", { email: email, code: forms.code.elements.code.value }).then(function (r) {
+      if (!r) return;
+      if (r.ticket) return enter(r.ticket);
+      signup = r.signup; show("name");
+    });
+  });
+  forms.name.addEventListener("submit", function (e) {
+    e.preventDefault();
+    call(forms.name, "signup", { signup: signup, name: forms.name.elements.name.value }).then(function (r) { if (r && r.ticket) enter(r.ticket); });
+  });
+  forms.code.querySelector("[data-back]").addEventListener("click", function (e) { e.preventDefault(); show("email"); });
+})();
 </script>`);
 }
 
@@ -752,6 +826,7 @@ app.get("/login", (req, res) => {
   if (currentAccount(req)) return res.redirect(safeNext(req.query.next) || "/");
   if (safeNext(req.query.next)) res.setHeader("Set-Cookie", cookieHeader(req, NEXT_COOKIE, safeNext(req.query.next), 1 / 96));
   // «Увійти» from inside the reader (a free book's guest): straight to the site, no landing on the way.
+  if (inApp(req)) return res.set("Cache-Control", "no-store").type("html").send(appSignInPage());
   if (req.query.go) return res.redirect(signInUrl(req));
   res.type("html").send(landingPage(req));
 });
@@ -766,10 +841,8 @@ const appLogins = new Map(); // code -> { id, expires }, until the app picks it 
 app.get("/app-login", (req, res) => {
   if (!inApp(req)) return res.redirect(signInUrl(req));
   if (currentAccount(req)) return res.redirect(safeNext(parseCookies(req)[NEXT_COOKIE]) || "/");
-  const code = crypto.randomBytes(16).toString("hex");
-  res.setHeader("Set-Cookie", cookieHeader(req, APP_LOGIN_COOKIE, code, 1 / 48));
   res.setHeader("Cache-Control", "no-store");
-  res.type("html").send(appWaitPage(siteSignIn(req, code)));
+  res.type("html").send(appSignInPage());
 });
 app.post("/api/app-login", (req, res) => {
   res.setHeader("Cache-Control", "no-store");
