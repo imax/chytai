@@ -1351,7 +1351,7 @@ function yearHead(year, rows) {
 }
 
 // ---- the homepage block about the reader (Max, 2026-11-01; revived 2026-11-04 once the reader's new landing was live) ----
-// Same words as app.chytai.org.ua's landing, and the same real screenshot of the reader («Тіні забутих предків»,
+// Same words as app.chytai.org.ua's landing, and the same real screenshot of the reader (Emily Wilson's «Odyssey»,
 // an explained word): the computer one on wide screens, a crop of the phone one on phones. Leads to the reader.
 const READER = "https://app.chytai.org.ua";
 function readerBand() {
