@@ -161,6 +161,11 @@
   // One page: «Читаю зараз», your books with filters and a «+» tile, what others read now, the free shelf.
   // A query in the search field replaces it with results from your books and the free shelf.
   let homeFilter = "all"; // all | reading | new | done
+  // Мої книжки as covers or as a list (Max 2026-11-04: a label on the cover hides part of the title).
+  let homeView = (() => { try { return localStorage.getItem("chytai-home-view") === "list" ? "list" : "grid"; } catch { return "grid"; } })();
+  const viewIcon = { grid: `<svg viewBox="0 0 18 18" aria-hidden="true"><rect x="2" y="2" width="5.5" height="6" rx="1"/><rect x="10.5" y="2" width="5.5" height="6" rx="1"/><rect x="2" y="10" width="5.5" height="6" rx="1"/><rect x="10.5" y="10" width="5.5" height="6" rx="1"/></svg>`, list: `<svg viewBox="0 0 18 18" aria-hidden="true"><rect x="2" y="2.5" width="3.5" height="4.5" rx=".8"/><rect x="2" y="11" width="3.5" height="4.5" rx=".8"/><path d="M8 4.75h8M8 13.25h8"/></svg>` };
+  const viewSwitch = () => `<span class="r-view">${["grid", "list"].map((v) => `<button type="button" class="${v === homeView ? "on" : ""}" data-view="${v}" title="${v === "grid" ? "Обкладинки" : "Список"}" aria-label="${v === "grid" ? "Обкладинки" : "Список"}">${viewIcon[v]}</button>`).join("")}</span>`;
+  const rowStatus = (b) => `<span class="r-st${b.finished ? " done" : ""}">${b.finished ? "Прочитана" : b.paper ? "Паперова" : b.pct > 0 ? `${b.pct}%` : ""}</span>`;
   let freeTab = "new"; // new | kids | classics | all
   let homeHtml = "";
   const lastTouched = (b) => Math.max(b.openedAt || 0, b.addedAt || 0);
@@ -378,8 +383,8 @@
     const gcls = (b) => ["reading", "new", "done", "paper"].filter((k) => groups[k].includes(b)).map((k) => ` g-${k}`).join("");
     const empty = (k) => (groups[k].length ? "" : `<p class="r-empty g-${k}">Тут поки порожньо.</p>`);
     const plus = settings.guest || books.length ? "" : `<button class="r-card r-plus" data-page="add"><span class="r-plus-box"><b>+</b><span>Додати книжку</span><small>EPUB, PDF, MOBI</small></span></button>`;
-    html += `<section class="r-mine">${head(`Мої книжки · ${books.length}`, books.length ? tabs([["all", "Усі", groups.all.length], ["reading", "Читаю", groups.reading.length], ["new", "Не почато", groups.new.length], ["done", "Прочитані", groups.done.length], ...(groups.paper.length ? [["paper", "Паперові", groups.paper.length]] : [])], homeFilter, "data-filter") : "", !cur)}
-      <div class="r-filtered" data-show="${homeFilter}"><div class="r-grid">${rest.map((b) => card(b, mark(b), true, gcls(b))).join("")}${plus}</div>
+    html += `<section class="r-mine">${head(`Мої книжки · ${books.length}`, books.length ? tabs([["all", "Усі", groups.all.length], ["reading", "Читаю", groups.reading.length], ["new", "Не почато", groups.new.length], ["done", "Прочитані", groups.done.length], ...(groups.paper.length ? [["paper", "Паперові", groups.paper.length]] : [])], homeFilter, "data-filter") + viewSwitch() : "", !cur)}
+      <div class="r-filtered" data-show="${homeFilter}"><div class="r-grid${homeView === "list" ? " r-list" : ""}">${rest.map((b) => card(b, homeView === "list" ? rowStatus(b) : mark(b), true, gcls(b))).join("")}${plus}</div>
       ${empty("reading")}${empty("new")}${empty("done")}${empty("paper")}</div></section>`;
     return html;
   }
@@ -500,6 +505,12 @@
   $("#home").addEventListener("click", (e) => {
     const m = e.target.closest("[data-more]");
     if (m) return more6.add(m.dataset.more), renderHome();
+    const v = e.target.closest("[data-view]");
+    if (v) {
+      homeView = v.dataset.view;
+      try { localStorage.setItem("chytai-home-view", homeView); } catch {}
+      return renderHome();
+    }
     const f = e.target.closest("[data-filter]");
     const t = e.target.closest("[data-free-tab]");
     if (!f && !t) return;
