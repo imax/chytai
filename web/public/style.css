@@ -1214,3 +1214,4 @@ aside .side-lists + .label, aside p + .label, aside dialog + .label { margin-top
 .admin .health a { color: var(--muted); margin-left: 6px; }
 .admin.overview .activity h3 { margin: 22px 0 8px; font-size: 16px; }
 .admin.overview .activity > p.small a { color: var(--muted); }
+.admin.overview .activity h2 + .act-run { margin-top: 12px; }

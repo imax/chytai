@@ -1272,7 +1272,7 @@ function activityPage({ user, rows, readers, books, names, who = null, embed = f
     const n = books.get(id) || 0;
     return `<a href="/admin/activity?reader=${esc(encodeURIComponent(rd.username))}"><b>${esc(rd.name)}</b></a> <a class="muted" href="/@${esc(rd.username)}">@${esc(rd.username)}</a>${rd.created > weekAgo ? ` <span class="new">новий</span>` : ""} <span class="muted small">· ${n ? `${n} ${n % 10 === 1 && n % 100 !== 11 ? "книжка" : n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20) ? "книжки" : "книжок"}` : "без книжок"}</span>`;
   };
-  const stream = `${days.size ? [...days].map(([d, runs]) => `<h${embed ? 3 : 2}>${esc(dayName(d))}</h${embed ? 3 : 2}>
+  const stream = `${days.size ? [...days].map(([d, runs]) => `${embed ? (d === dayOfIso(new Date().toISOString()) ? "" : `<h3>Вчора</h3>`) : `<h2>${esc(dayName(d))}</h2>`}
 ${runs.map((run) => {
     const rd = readers.get(run.reader);
     const lis = steps(run.rows, rd?.username || "", rd?.gender).map((s) => show(s, rd?.gender));
@@ -1282,7 +1282,7 @@ ${runs.map((run) => {
 `;
   const style = `<style>.activity .act-run{margin:0 0 18px}.activity .act-who{margin:0 0 4px}.activity .act-lines{list-style:none;margin:0;padding:0 0 0 14px;border-left:2px solid var(--line,#e4dfd5)}.activity .act-lines li{display:flex;gap:10px;padding:3px 0;font-size:15px;line-height:1.4}.activity .act-lines .at{flex:none;width:2.8em;color:var(--muted,#8a8478);font-size:14px}.activity .act-lines li.seen{color:var(--muted,#8a8478);font-size:14px}.activity .act-lines li.seen a{color:inherit}.activity .error{color:#b3261e}.activity details summary{cursor:pointer;list-style:none}.activity details .act-lines{border:0;padding:0}.activity .new{font-size:12px;color:#1f7a4d;border:1px solid currentColor;border-radius:999px;padding:0 7px}</style>`;
   // On Огляд: the last 24 hours only, with a link to the whole week (Max, 2026-11-04).
-  if (embed) return `<section class="activity"><h2>Що робили читачі за добу</h2>${stream}<p class="small"><a href="/admin/activity">Усе за 7 днів</a></p></section>${style}`;
+  if (embed) return `<section class="activity"><h2>Активність за останні 24 години</h2>${stream}<p class="small"><a href="/admin/activity">Усе за 7 днів</a></p></section>${style}`;
   const body = `<section class="admin activity">
 <section class="page-head"><div>${who ? `<p class="crumbs"><a href="/admin/activity">Усі читачі</a></p>` : ""}<h1>${who ? esc(who.name) : "Що роблять читачі"}</h1><p class="sub">${who ? `Усе, що @${esc(who.username)} робив на сайті за 60 днів, новіше зверху.` : "Що робили зареєстровані читачі за 7 днів, новіше зверху. Сірим — які сторінки відкривали. Гостей і тебе тут немає."}</p></div></section>
 ${stream}
