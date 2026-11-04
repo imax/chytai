@@ -40,6 +40,7 @@ ${font("source-serif-4/opsz.css")}${font("onest/wght.css")}
   main { flex: 1; display: grid; grid-template-columns: 400px minmax(0, 1fr); gap: 56px; align-items: center; padding: 24px 48px; max-width: 1360px; width: 100%; margin: 0 auto; }
   .side { display: flex; flex-direction: column; gap: 26px; }
   h1 { font-family: var(--serif); font-weight: 600; font-size: 50px; line-height: 1.04; letter-spacing: -.01em; text-wrap: balance; }
+  .lead.formats { margin-top: 6px; }
   .lead { margin-top: 14px; font-size: 17px; line-height: 1.6; color: var(--ink2); text-wrap: pretty; }
 
   form { display: flex; flex-direction: column; gap: 10px; }
@@ -103,6 +104,7 @@ ${font("source-serif-4/opsz.css")}${font("onest/wght.css")}
     <div class="intro">
       <h1>Читалка з AI‑поясненнями</h1>
       <p class="lead">Виділіть незрозуміле слово, назву чи складне місце, і AI пояснить його в контексті книжки.</p>
+      <p class="lead formats">Магазину немає: читайте свої файли (EPUB, PDF, MOBI, AZW3) або безкоштовні книжки з нашої полиці.</p>
     </div>
     <div id="signin" data-web="${esc(webUrl)}">
       <form id="f-email" novalidate>
