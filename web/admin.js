@@ -923,6 +923,9 @@ function shelvesPage({ user, catalog, layout }) {
   return layout({ title: "Полиці · Адмінка", user, path: "/admin", body: catalogBlock(catalog, true) });
 }
 
+// One table of tiles on Огляд (Max, 2026-11-04): the first number of each row of four leads to its details.
+const linkFirst = (html, href) => html.replace("<b>", `<b><a href="${href}">`).replace("</b>", "</a></b>");
+
 function adminPage({ user, stats: s, gsc = null, gscOn = false, taps = null, login = null, reader = null, health = "", activity = "", layout, page = "main" }) {
   const traffic = page === "traffic";
   const t = s.totals;
@@ -990,12 +993,7 @@ ${s.cohorts.length ? `<div class="tbl"><table class="cohorts">
     : // One dashboard for everything (Max, 2026-11-04): key numbers, is the site fine, what readers did in a day.
       `<section class="admin overview">
 <section class="page-head"><div><h1>Огляд</h1><p class="sub">Станом на ${short(s.now)}. Деталі — у вкладках.</p></div></section>
-<p class="dash-row"><a href="/admin/retention">Читачі</a></p>
-<div class="stats four">${siteTiles}</div>
-<p class="dash-row"><a href="/admin/traffic">Трафік</a></p>
-<div class="stats four">${trafficTiles(s, gsc, gscOn)}</div>
-<p class="dash-row"><a href="/admin/reader">Читалка</a></p>
-<div class="stats four">${readerTiles(reader)}</div>
+<div class="stats four dash">${linkFirst(siteTiles, "/admin/retention")}${linkFirst(trafficTiles(s, gsc, gscOn), "/admin/traffic")}${linkFirst(readerTiles(reader), "/admin/reader")}</div>
 
 ${health}
 
@@ -1011,14 +1009,15 @@ function healthBlock({ day = null, jobs = { n: 0, failed: [] }, reader = true })
   const p = day?.page;
   const stall = Math.round((day?.stall?.sum || 0) / 1000);
   const slow = p && (p.p95 > 1000 || p.slow > 0.02);
-  const line = (ok, html) => `<li class="${ok ? "ok" : "bad"}">${html}</li>`;
+  // Only what is wrong, each with where to look; one «Усе гаразд» when nothing is (Max, 2026-11-04).
+  const bad = [
+    slow && `Сайт повільний: 95% сторінок за ${s(p.p95)}, повільніше 2 с — ${fmtN(p.slow * 100, 1)}%. <a href="/admin/speed">Швидкість</a>`,
+    stall >= 30 && `Сервер стояв сьогодні ${stall} с. <a href="/admin/speed">Швидкість</a>`,
+    jobs.failed.length && `Фонові задачі з помилкою за добу: ${jobs.failed.map(esc).join(", ")}. <a href="/admin/jobs">Задачі</a>`,
+    !reader && `Читалка не відповіла сайту: app.chytai.org.ua може лежати. <a href="https://app.chytai.org.ua/">Відкрити</a>`,
+  ].filter(Boolean);
   return `<h2>Performance</h2>
-<ul class="health">
-${line(!slow, p ? `Сайт сьогодні: 95% сторінок за ${s(p.p95)}, повільніше 2 с — ${fmtN(p.slow * 100, 1)}%. <a href="/admin/speed">Швидкість</a>` : `Сайт сьогодні: сторінок ще не рахували. <a href="/admin/speed">Швидкість</a>`)}
-${line(stall < 30, `Сервер стояв сьогодні ${stall} с.`)}
-${line(!jobs.failed.length, `Фонові задачі за добу: ${fmtN(jobs.n)} запусків${jobs.failed.length ? `, з помилкою ${jobs.failed.map(esc).join(", ")}` : ", без помилок"}. <a href="/admin/jobs">Задачі</a>`)}
-${line(reader, reader ? "Читалка працює: app.chytai.org.ua відповів сайту за кілька секунд." : "Читалка не відповіла: app.chytai.org.ua може лежати.")}
-</ul>`;
+<ul class="health">${bad.length ? bad.map((x) => `<li class="bad">${x}</li>`).join("") : `<li class="ok">Усе гаразд: сайт швидкий, сервер не стояв, задачі без помилок, Читалка працює.</li>`}</ul>`;
 }
 
 // /admin/overviews: every overview with readers' 🤩/🙂/🙁, the complained-about ones on top.

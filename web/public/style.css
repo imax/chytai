@@ -1202,10 +1202,8 @@ aside .side-lists + .label, aside p + .label, aside dialog + .label { margin-top
 .admin .reader-cost { margin-top: 40px; }
 .admin .reader-cost summary { cursor: pointer; color: var(--muted); font-size: 14px; }
 .admin td form { margin: 0; }
-.admin .dash-row { margin: 28px 0 8px; font-size: 13px; letter-spacing: 0.04em; }
-.admin .dash-row a { color: var(--muted); text-decoration: none; }
-.admin .dash-row a:hover { color: var(--ink); }
-.admin .dash-row a::after { content: " →"; }
+.admin .stats.dash b a { color: inherit; text-decoration: underline; text-decoration-color: var(--under); text-decoration-thickness: 1px; text-underline-offset: 6px; }
+.admin .stats.dash b a:hover { text-decoration-color: var(--ink); }
 .admin .health { list-style: none; padding: 0; margin: 0 0 8px; }
 .admin .health li { padding: 6px 0 6px 22px; position: relative; }
 .admin .health li::before { content: "✓"; position: absolute; left: 0; color: var(--accent); }
