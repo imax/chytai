@@ -28,7 +28,7 @@ const readeat = require("./readeat");
 const findCovers = require("./findcovers");
 const { BookPage, isUrl } = require("./bookpage");
 const { UkFinder } = require("./ukfind");
-const { Admin, readerAppPage, adminPage, activityPage, catalogBlock, shelvesPage, readersPage, overviewsPage, speedPage, jobsPage, BOT, human } = require("./admin");
+const { Admin, readerAppPage, healthBlock, adminPage, activityPage, catalogBlock, shelvesPage, readersPage, overviewsPage, speedPage, jobsPage, BOT, human } = require("./admin");
 const { Mcp } = require("./mcp");
 const { Reviews } = require("./reviews");
 const { Advice } = require("./advice");
@@ -2718,7 +2718,16 @@ app.post("/admin/genres-trial", owner, (req, res) => {
   genreTrial.run().catch((e) => console.log(`genretrial: ${e.message}`));
   res.redirect(303, "/admin/genres-trial");
 });
-app.get("/admin", owner, (req, res) => res.send(adminPage({ user: req.user, stats: admin.stats(), login: admin.events("login"), overviews: advice.overviewStats(), catalog: store.catalogStats(), layout: pages.layout })));
+app.get("/admin", owner, async (req, res) => {
+  const reader = await readerStats();
+  const since = new Date(Date.now() - 86400000).toISOString();
+  const runs = store.db.prepare("SELECT job, ok FROM job_runs WHERE started >= ?").all(since);
+  const failed = [...new Set(runs.filter((r) => r.ok === 0).map((r) => r.job))];
+  const health = healthBlock({ day: speed.days(1).get(require("./admin").dayOf(new Date())) || null, jobs: { n: runs.length, failed }, reader: !!reader });
+  const activity = activityPage({ ...activityFor(null, 1), embed: true });
+  res.send(adminPage({ user: req.user, stats: admin.stats(), gsc: gsc.data(), gscOn: gsc.configured(), reader, health, activity, layout: pages.layout }));
+});
+app.get("/admin/retention", owner, (req, res) => res.send(adminPage({ user: req.user, stats: admin.stats(), login: admin.events("login"), layout: pages.layout, page: "retention" })));
 app.get("/admin/shelves", owner, (req, res) => res.send(shelvesPage({ user: req.user, catalog: store.catalogStats(), layout: pages.layout })));
 // How long pages take (speed.js): the server's time for every page, and the reader's browser's own, which app.js
 // sends once a page has loaded (two numbers and whether it is a phone).
@@ -2764,6 +2773,18 @@ const readerAdmin = async (path, body) => {
   if (!r.ok) throw new Error(r.status === 403 ? "key" : `HTTP ${r.status}`);
   return r.json();
 };
+// Огляд shows the reader's numbers from a copy at most five minutes old, and never waits long for them.
+let readerCache = { at: 0, s: null };
+async function readerStats() {
+  if (Date.now() - readerCache.at < 5 * 60000) return readerCache.s;
+  try {
+    readerCache = { at: Date.now(), s: await readerAdmin("") };
+  } catch (err) {
+    console.error("reader stats:", err.message);
+    readerCache = { at: Date.now() - 4 * 60000, s: null }; // try again in a minute
+  }
+  return readerCache.s;
+}
 app.get("/admin/reader", owner, async (req, res) => {
   let s = null;
   let error = "";
@@ -2795,8 +2816,8 @@ app.post("/admin/readers/gender", owner, (req, res) => {
   const back = req.get("referer") || "";
   res.redirect(303, /^https?:\/\/[^/]+\/admin\/readers(\?|$)/.test(back) ? back.replace(/^https?:\/\/[^/]+/, "") : "/admin/readers");
 });
-app.get("/admin/activity", owner, (req, res) => {
-  const who = req.query.reader ? auth.byUsername(String(req.query.reader)) : null;
+// What readers did (reader_log), for /admin/activity and, the last day of it, for Огляд.
+function activityFor(who, days) {
   const readers = new Map(auth.readers().map((r) => [r.id, r]));
   const books = new Map(store.db.prepare("SELECT reader, COUNT(*) AS n FROM entries GROUP BY reader").all().map((r) => [r.reader, r.n]));
   const title = (slug) => {
@@ -2826,7 +2847,6 @@ app.get("/admin/activity", owner, (req, res) => {
     author: (slug) => store.authors?.bySlug.get(slug)?.name || "",
     genre: (slug) => store.genreBySlug(slug),
   };
-  const days = who ? 60 : 7;
   const rows = admin.activity({ reader: who?.id || null, days });
   // Before the log began (30.10) the page shows what the database already knows: sign-ups, and changes to
   // shelves gathered by the hour (an import is one line, not hundreds).
@@ -2844,7 +2864,11 @@ app.get("/admin/activity", owner, (req, res) => {
   }
   for (const h of hours.values()) rows.push({ at: h.at, reader: h.reader, kind: "shelf", what: String(h.ids.length), extra: h.ids.slice(0, 3).join(" ") });
   rows.sort((a, b) => b.at.localeCompare(a.at));
-  res.send(activityPage({ user: req.user, rows, readers, books, names, who, layout: pages.layout }));
+  return { rows, readers, books, names, who };
+}
+app.get("/admin/activity", owner, (req, res) => {
+  const who = req.query.reader ? auth.byUsername(String(req.query.reader)) : null;
+  res.send(activityPage({ user: req.user, ...activityFor(who, who ? 60 : 7), layout: pages.layout }));
 });
 app.get("/admin.json", owner, (req, res) => res.json(admin.stats()));
 // One Google Books request with the server's key, for the owner to see what Google answers from here.

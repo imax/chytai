@@ -523,9 +523,9 @@ ${myLists ? listsDialog(book, myLists) : ""}`;
 // One row (Max, 2026-10-28): the open tab's pages sit right after the tabs, «Трафік» is a tab of its own.
 // The catalog's queues (dupes, volumes, translations…) open from /admin/catalog, not from the menu.
 const ADMIN_TABS = [
-  ["Огляд", [["/admin", "Огляд"]]],
+  ["Огляд", [["/admin", "Огляд"]], /^\/admin\/activity$/],
   ["Трафік", [["/admin/traffic", "Трафік"]]],
-  ["Читачі", [["/admin/readers", "Усі читачі"], ["/admin/activity", "Що роблять"], ["/admin/reader", "Читалка"], ["/admin/comments", "Коментарі"], ["/admin/digest", "Лист"], ["/admin/publishers", "Видавцям"]]],
+  ["Читачі", [["/admin/readers", "Усі читачі"], ["/admin/retention", "Утримання"], ["/admin/reader", "Читалка"], ["/admin/comments", "Коментарі"], ["/admin/digest", "Лист"], ["/admin/publishers", "Видавцям"]]],
   ["Каталог", [["/admin/catalog", "Каталог"]], /^\/admin\/(catalog|shelves|overviews|dupes|translations|volumes|russian|ukfind|readeat|free|ai\/|book\/|reviews)|-trial$/],
   ["Система", [["/admin/jobs", "Задачі"], ["/admin/speed", "Швидкість"]]],
 ];

@@ -631,14 +631,13 @@ const sumGsc = (rows) => {
 };
 const pathOf = (u) => { try { const x = new URL(u); return decodeURIComponent(x.pathname + x.search); } catch { return u; } };
 
-function trafficBody(s, g, gscOn) {
+// The four traffic numbers for the Огляд dashboard (Max, 2026-11-04: one dashboard, the other pages only details).
+function trafficTiles(s, g, gscOn) {
   const a = s.arrivals;
   const hasG = !!g?.days;
-  const short7 = !a.since || a.since > addDays(s.now, -6); // under a week of data: 7 and 28 days are the same
+  const short7 = !a.since || a.since > addDays(s.now, -6);
   const since = a.since ? short(a.since) : "сьогодні";
-
-  // The four numbers.
-  const all = a.sources.reduce((t, x) => ({ month: t.month + x.month, fresh: t.fresh + x.monthNew, week: t.week + x.week, signups: t.signups + x.signups }), { month: 0, fresh: 0, week: 0, signups: 0 });
+  const all = a.sources.reduce((t, x) => ({ month: t.month + x.month, fresh: t.fresh + x.monthNew, week: t.week + x.week }), { month: 0, fresh: 0, week: 0 });
   const signups = s.weeks.filter((w) => w.week >= weekOf(addDays(s.now, -27))).reduce((t, w) => t + w.signups, 0);
   let gNow = null, gBefore = null;
   if (hasG) {
@@ -647,13 +646,19 @@ function trafficBody(s, g, gscOn) {
     gBefore = before.length >= 20 ? sumGsc(before) : null;
   }
   const change = (x, y) => (y ? `${x >= y ? "+" : "−"}${Math.round((100 * Math.abs(x - y)) / y)}% до попередніх 28 днів` : "");
-  const tiles = `<div class="stats four">
-${tile(fmtN(all.month), "відвідувань", short7 ? `з ${since}` : `${fmtN(all.week)} за 7 днів`)}
-${tile(fmtN(all.fresh), "нових людей", all.month ? `${Math.round((100 * all.fresh) / all.month)}% відвідувань` : "")}
-${tile(fmtN(signups), "реєстрацій", all.fresh ? `${fmtN((100 * signups) / all.fresh, 1)}% нових людей` : "")}
-${hasG ? tile(fmtN(gNow.clicks), "кліків з Google", gBefore ? change(gNow.clicks, gBefore.clicks) : `${fmtN(gNow.impressions)} показів · позиція ${fmtN(gNow.position, 1)}`) : tile("·", "кліків з Google", gscOn ? "ще завантажується" : "не підключено")}
-</div>
-<p class="muted small">Відвідування й нові люди за 28 днів (рахуємо з ${since}): відвідування — прихід з іншого сайту або початок візиту, нові — ті, хто раніше не був. Google — за ${hasG ? `${short(g.from)} – ${short(g.to)}, його дані відстають на 2–3 дні` : "28 днів"}.</p>`;
+  return [
+    tile(fmtN(all.month), "відвідувань за 28 днів", short7 ? `з ${since}` : `${fmtN(all.week)} за 7 днів`),
+    tile(fmtN(all.fresh), "нових людей", all.month ? `${Math.round((100 * all.fresh) / all.month)}% відвідувань` : ""),
+    tile(fmtN(signups), "реєстрацій за 28 днів", all.fresh ? `${fmtN((100 * signups) / all.fresh, 1)}% нових людей` : ""),
+    hasG ? tile(fmtN(gNow.clicks), "кліків з Google", gBefore ? change(gNow.clicks, gBefore.clicks) : `${fmtN(gNow.impressions)} показів · позиція ${fmtN(gNow.position, 1)}`) : tile("·", "кліків з Google", gscOn ? "ще завантажується" : "не підключено"),
+  ].join("");
+}
+
+function trafficBody(s, g, gscOn) {
+  const a = s.arrivals;
+  const hasG = !!g?.days;
+  const short7 = !a.since || a.since > addDays(s.now, -6); // under a week of data: 7 and 28 days are the same
+  const since = a.since ? short(a.since) : "сьогодні";
 
   // Sources by kind, each with its sources, and the exact addresses under a source when the site passed them.
   const refsOf = (src) => a.refs.filter((r) => r.source === src).slice(0, 5);
@@ -725,9 +730,7 @@ ${hasG ? tile(fmtN(gNow.clicks), "кліків з Google", gBefore ? change(gNow
 <tbody>${pageRows}</tbody></table></div>
 <p class="muted small">«З пошуку й AI» — наш лічильник: приходи з усіх пошуковиків і AI-чатів за 28 днів. Крапка — Google сторінку не показував.</p>` : "";
 
-  return `${tiles}
-
-<h2 id="sources">Звідки приходять</h2>
+  return `<h2 id="sources">Звідки приходять</h2>
 ${sources}
 
 <h2>По тижнях</h2>
@@ -920,18 +923,15 @@ function shelvesPage({ user, catalog, layout }) {
   return layout({ title: "Полиці · Адмінка", user, path: "/admin", body: catalogBlock(catalog, true) });
 }
 
-function adminPage({ user, stats: s, overviews: o = null, catalog = null, gsc = null, gscOn = false, taps = null, login = null, layout, page = "main" }) {
+function adminPage({ user, stats: s, gsc = null, gscOn = false, taps = null, login = null, reader = null, health = "", activity = "", layout, page = "main" }) {
   const traffic = page === "traffic";
   const t = s.totals;
-  const tiles = [
+  const siteTiles = [
     tile(t.readers, "читачів", `+${t.signupsWeek} за тиждень, +${t.signupsMonth} за місяць`),
     tile(t.activeWeek, "активних за 7 днів", `${t.returningWeek} повернулись, ${t.activeToday} сьогодні`),
-    tile(t.activeMonth, "активних за 28 днів", t.readers ? `${Math.round((100 * t.activeMonth) / t.readers)}% усіх читачів` : ""),
     tile(t.entries, "книжок на полицях", `+${t.entriesWeek} за тиждень · ${t.want} у «хочу прочитати»`),
-    tile(t.ratings, "оцінок", `${t.notes} нотаток`),
-    tile(t.follows, "стежень", `${t.digestOn} підписані на лист, ${t.digestOff} відписались`),
+    tile(t.ratings, "оцінок", `${t.notes} нотаток · ${t.follows} стежень`),
   ].join("");
-
   // Newest week on top in both tables (Max, 2026-10-20: «свіжі зверху», «починаємо з цього тижня»).
   const weekRows = [...s.weeks]
     .reverse()
@@ -949,7 +949,7 @@ function adminPage({ user, stats: s, overviews: o = null, catalog = null, gsc = 
     .map((c) => `<tr><th>${weekLabel(c.week)}</th><td>${c.size}</td>${c.later.map(pct).join("")}</tr>`)
     .join("");
 
-  // /admin is about readers and retention, /admin/traffic about where visitors come from (Max, 2026-10-24).
+  // /admin is the one dashboard, /admin/retention the readers' tables, /admin/traffic where visitors come from.
   const body = traffic
     ? `<section class="admin">
 <section class="page-head"><div><h1>Трафік</h1></div></section>
@@ -965,9 +965,9 @@ ${s.sections.length ? `<div class="tbl"><table class="sections">
 <tbody>${s.sections.map((x) => `<tr><th>${x.name}</th><td>${n(x.today)}</td><td>${n(x.week)}</td><td>${n(x.month)}</td></tr>`).join("")}</tbody></table></div>` : `<p class="muted">Поки нічого не нарахувалось.</p>`}
 
 </section>`
-    : `<section class="admin">
-<section class="page-head"><div><h1>Огляд</h1><p class="sub">Станом на ${short(s.now)}. Активний читач — той, хто відкрив сайт або щось зробив на полиці того дня. Перегляди рахуються з ${s.totals.viewsSince ? short(s.totals.viewsSince) : "сьогодні"}; раніше за активність правлять входи й зміни на полиці.</p></div></section>
-<div class="stats">${tiles}</div>
+    : page === "retention"
+    ? `<section class="admin">
+<section class="page-head"><div><h1>Утримання</h1><p class="sub">Хто доходить до полиці й повертається. Активний читач — той, хто відкрив сайт або щось зробив на полиці того дня.</p></div></section>
 
 ${funnelBlock(s.funnel)}
 
@@ -985,9 +985,40 @@ ${s.cohorts.length ? `<div class="tbl"><table class="cohorts">
 <thead><tr><th>Зареєструвались</th><th>Читачів</th>${s.later.map((k) => `<th>+${k} тиж.</th>`).join("")}</tr></thead>
 <tbody>${cohortRows}</tbody></table></div>` : `<p class="muted">Поки нема жодної когорти.</p>`}
 
-<p class="muted small">Сесій (пристроїв, що залишились увійшовши): ${t.sessions}.</p>
+<p class="muted small">Сесій (пристроїв, що залишились увійшовши): ${t.sessions}. Лист: ${t.digestOn} підписані, ${t.digestOff} відписались.</p>
+</section>`
+    : // One dashboard for everything (Max, 2026-11-04): key numbers, is the site fine, what readers did in a day.
+      `<section class="admin overview">
+<section class="page-head"><div><h1>Огляд</h1><p class="sub">Станом на ${short(s.now)}. Деталі — у вкладках.</p></div></section>
+<p class="dash-row"><a href="/admin/retention">Читачі</a></p>
+<div class="stats four">${siteTiles}</div>
+<p class="dash-row"><a href="/admin/traffic">Трафік</a></p>
+<div class="stats four">${trafficTiles(s, gsc, gscOn)}</div>
+<p class="dash-row"><a href="/admin/reader">Читалка</a></p>
+<div class="stats four">${readerTiles(reader)}</div>
+
+${health}
+
+${activity}
 </section>`;
-  return layout({ title: traffic ? "Трафік · Адмінка" : "Адмінка", user, path: "/admin", body });
+  return layout({ title: traffic ? "Трафік · Адмінка" : page === "retention" ? "Утримання · Адмінка" : "Адмінка", user, path: "/admin", body });
+}
+
+// «Чи все гаразд» on Огляд: today's speed (speed.js), the background jobs of the last day (job_runs) and whether
+// the reader answered. A line turns red only when something needs a look.
+function healthBlock({ day = null, jobs = { n: 0, failed: [] }, reader = true }) {
+  const s = (ms) => `${String(ms / 1000).replace(".", ",")} с`;
+  const p = day?.page;
+  const stall = Math.round((day?.stall?.sum || 0) / 1000);
+  const slow = p && (p.p95 > 1000 || p.slow > 0.02);
+  const line = (ok, html) => `<li class="${ok ? "ok" : "bad"}">${html}</li>`;
+  return `<h2>Чи все гаразд</h2>
+<ul class="health">
+${line(!slow, p ? `Сайт сьогодні: 95% сторінок за ${s(p.p95)}, повільніше 2 с — ${fmtN(p.slow * 100, 1)}%. <a href="/admin/speed">Швидкість</a>` : `Сайт сьогодні: сторінок ще не рахували. <a href="/admin/speed">Швидкість</a>`)}
+${line(stall < 30, `Сервер стояв сьогодні ${stall} с.`)}
+${line(!jobs.failed.length, `Фонові задачі за добу: ${fmtN(jobs.n)} запусків${jobs.failed.length ? `, з помилкою ${jobs.failed.map(esc).join(", ")}` : ", без помилок"}. <a href="/admin/jobs">Задачі</a>`)}
+${line(reader, reader ? "Читалка відповідає." : "Читалка не відповіла сайту.")}
+</ul>`;
 }
 
 // /admin/overviews: every overview with readers' 🤩/🙂/🙁, the complained-about ones on top.
@@ -1047,7 +1078,7 @@ ${problemsBlock(notFound, jsErrors)}
 // book's mark are one line. A reader's name filters the page to them (60 days).
 const STATUS_WORDS = { want: "«Хочу прочитати»", read: "«Прочитано»", reading: "«Читаю»", abandoned: "«Покинуто»" };
 const COPY_WORDS = { paper: "паперова", ebook: "електронна", audio: "аудіо", seeking: "шукаю" };
-function activityPage({ user, rows, readers, books, names, who = null, layout }) {
+function activityPage({ user, rows, readers, books, names, who = null, embed = false, layout }) {
   const KYIV = { timeZone: "Europe/Kyiv" };
   const dayOfIso = (iso) => new Date(iso).toLocaleDateString("sv-SE", KYIV);
   const time = (iso) => new Date(iso).toLocaleTimeString("uk-UA", { ...KYIV, hour: "2-digit", minute: "2-digit" });
@@ -1241,17 +1272,22 @@ function activityPage({ user, rows, readers, books, names, who = null, layout })
     const n = books.get(id) || 0;
     return `<a href="/admin/activity?reader=${esc(encodeURIComponent(rd.username))}"><b>${esc(rd.name)}</b></a> <a class="muted" href="/@${esc(rd.username)}">@${esc(rd.username)}</a>${rd.created > weekAgo ? ` <span class="new">новий</span>` : ""} <span class="muted small">· ${n ? `${n} ${n % 10 === 1 && n % 100 !== 11 ? "книжка" : n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20) ? "книжки" : "книжок"}` : "без книжок"}</span>`;
   };
-  const body = `<section class="admin activity">
-<section class="page-head"><div>${who ? `<p class="crumbs"><a href="/admin/activity">Усі читачі</a></p>` : ""}<h1>${who ? esc(who.name) : "Що роблять читачі"}</h1><p class="sub">${who ? `Усе, що @${esc(who.username)} робив на сайті за 60 днів, новіше зверху.` : "Що робили зареєстровані читачі за 7 днів, новіше зверху. Сірим — які сторінки відкривали. Гостей і тебе тут немає."}</p></div></section>
-${days.size ? [...days].map(([d, runs]) => `<h2>${esc(dayName(d))}</h2>
+  const stream = `${days.size ? [...days].map(([d, runs]) => `<h${embed ? 3 : 2}>${esc(dayName(d))}</h${embed ? 3 : 2}>
 ${runs.map((run) => {
     const rd = readers.get(run.reader);
     const lis = steps(run.rows, rd?.username || "", rd?.gender).map((s) => show(s, rd?.gender));
     const more = lis.length > 10 ? `<li><details><summary class="muted">ще ${lis.length - 8}</summary><ol class="act-lines">${lis.slice(8).join("")}</ol></details></li>` : "";
     return `<div class="act-run"><p class="act-who">${head(run.reader)}</p><ol class="act-lines">${(more ? lis.slice(0, 8) : lis).join("")}${more}</ol></div>`;
   }).join("")}`).join("") : `<p class="muted">Поки нічого.</p>`}
+`;
+  const style = `<style>.activity .act-run{margin:0 0 18px}.activity .act-who{margin:0 0 4px}.activity .act-lines{list-style:none;margin:0;padding:0 0 0 14px;border-left:2px solid var(--line,#e4dfd5)}.activity .act-lines li{display:flex;gap:10px;padding:3px 0;font-size:15px;line-height:1.4}.activity .act-lines .at{flex:none;width:2.8em;color:var(--muted,#8a8478);font-size:14px}.activity .act-lines li.seen{color:var(--muted,#8a8478);font-size:14px}.activity .act-lines li.seen a{color:inherit}.activity .error{color:#b3261e}.activity details summary{cursor:pointer;list-style:none}.activity details .act-lines{border:0;padding:0}.activity .new{font-size:12px;color:#1f7a4d;border:1px solid currentColor;border-radius:999px;padding:0 7px}</style>`;
+  // On Огляд: the last 24 hours only, with a link to the whole week (Max, 2026-11-04).
+  if (embed) return `<section class="activity"><h2>Що робили читачі за добу</h2>${stream}<p class="small"><a href="/admin/activity">Усе за 7 днів</a></p></section>${style}`;
+  const body = `<section class="admin activity">
+<section class="page-head"><div>${who ? `<p class="crumbs"><a href="/admin/activity">Усі читачі</a></p>` : ""}<h1>${who ? esc(who.name) : "Що роблять читачі"}</h1><p class="sub">${who ? `Усе, що @${esc(who.username)} робив на сайті за 60 днів, новіше зверху.` : "Що робили зареєстровані читачі за 7 днів, новіше зверху. Сірим — які сторінки відкривали. Гостей і тебе тут немає."}</p></div></section>
+${stream}
 </section>
-<style>.activity .act-run{margin:0 0 18px}.activity .act-who{margin:0 0 4px}.activity .act-lines{list-style:none;margin:0;padding:0 0 0 14px;border-left:2px solid var(--line,#e4dfd5)}.activity .act-lines li{display:flex;gap:10px;padding:3px 0;font-size:15px;line-height:1.4}.activity .act-lines .at{flex:none;width:2.8em;color:var(--muted,#8a8478);font-size:14px}.activity .act-lines li.seen{color:var(--muted,#8a8478);font-size:14px}.activity .act-lines li.seen a{color:inherit}.activity .error{color:#b3261e}.activity details summary{cursor:pointer;list-style:none}.activity details .act-lines{border:0;padding:0}.activity .new{font-size:12px;color:#1f7a4d;border:1px solid currentColor;border-radius:999px;padding:0 7px}</style>`;
+${style}`;
   return layout({ title: "Що роблять читачі · Адмінка", user, path: "/admin", body });
 }
 
@@ -1425,6 +1461,22 @@ ${recent ? `<div class="tbl"><table>
   return layout({ title: "Фонові задачі · Адмінка", user, path: "/admin", body });
 }
 
+// The reader's four numbers for the Огляд dashboard (server/index.js collectStats via /api/site-admin).
+function readerTiles(s) {
+  if (!s) return [tile("·", "у Читалці за 7 днів", "Читалка не відповіла"), tile("·", "читання за 7 днів"), tile("·", "пояснень за 7 днів"), tile("·", "Claude за 30 днів")].join("");
+  const usd = (v) => (v == null ? "—" : `$${v.toFixed(2).replace(".", ",")}`);
+  const mins = (m) => (m < 120 ? `${fmtN(m)} хв` : `${fmtN(Math.round(m / 60))} год`);
+  const sum = (xs, f) => xs.reduce((a, x) => (a == null || f(x) == null ? null : a + f(x)), 0);
+  const cost30 = sum(s.days.slice(0, 30), (d) => d.cost);
+  const readWeek = s.users.reduce((a, u) => a + (u.readWeek || 0), 0);
+  return [
+    tile(fmtN(s.users.filter((u) => u.activeWeek).length), "у Читалці за 7 днів", `з ${fmtN(s.users.length)}, хто входив`),
+    tile(mins(readWeek), "читання за 7 днів", `${fmtN(s.users.filter((u) => u.readWeek >= 15).length)} читачів по 15+ хв`),
+    tile(fmtN(s.totals.week), "пояснень за 7 днів", `${fmtN(s.totals.today)} сьогодні`),
+    tile(usd(cost30), "Claude за 30 днів", "приблизно, за тарифами API"),
+  ].join("");
+}
+
 // /admin/reader «Читалка»: the reader's own numbers (app.chytai.org.ua, server/index.js collectStats), fetched by
 // the site with the owner's reader key (Max, 2026-11-02: the reader's old /admin moved here).
 function readerAppPage({ user, s, error = "", book = () => null, layout }) {
@@ -1442,17 +1494,6 @@ function readerAppPage({ user, s, error = "", book = () => null, layout }) {
     const body = `<section class="admin"><section class="page-head"><div><h1>Читалка</h1></div></section><p class="muted">Читалка не віддала числа: ${esc(error)}.${error === "key" ? " Відкрий Читалку й увійди ще раз, тоді сайт отримає ключ." : ""}</p></section>`;
     return layout({ title: "Читалка · Адмінка", user, path: "/admin", body });
   }
-  const sum = (xs, f) => xs.reduce((a, x) => (a == null || f(x) == null ? null : a + f(x)), 0);
-  const cost30 = sum(s.days.slice(0, 30), (d) => d.cost);
-  const costAll = sum(s.models, (m) => m.cost);
-  const week = s.users.filter((u) => u.activeWeek).length;
-  const readWeek = s.users.reduce((a, u) => a + (u.readWeek || 0), 0);
-  const tiles = `<div class="stats four">
-${tile(fmtN(week), "читали за 7 днів", `з ${fmtN(s.users.length)}, хто входив`)}
-${tile(mins(readWeek), "читання за 7 днів", `${fmtN(s.users.filter((u) => u.readWeek >= 15).length)} читачів по 15+ хв`)}
-${tile(fmtN(s.totals.week), "пояснень за 7 днів", `${fmtN(s.totals.today)} сьогодні, ${fmtN(s.totals.all)} усього`)}
-${tile(usd(cost30), "Claude за 30 днів", costAll != null ? `${usd(costAll)} з ${short(s.since)}` : "")}
-</div>`;
   const off = (u) => (u.owner ? "" : `<form method="post" action="/admin/reader/off"><input type="hidden" name="id" value="${esc(u.id)}">${u.off ? `<button class="btn small">Увімкнути</button>` : `<input type="hidden" name="off" value="1"><button class="btn small danger">Вимкнути</button>`}</form>`);
   const who = (u) => `${u.username ? `<a href="/@${esc(u.username)}">${esc(u.name || u.username)}</a>` : esc(u.name || u.id)}${u.off ? ` <span class="muted">вимкнено</span>` : ""}`;
   // The last book opened: the catalog page when the site knows the file (server.js readerCatalogBook), else its title.
@@ -1500,8 +1541,7 @@ ${tile(usd(cost30), "Claude за 30 днів", costAll != null ? `${usd(costAll)
 <thead><tr><th>Модель</th><th>Запитів</th><th>Токенів на вході</th><th>На виході</th><th>Claude</th></tr></thead>
 <tbody>${s.models.map((m) => `<tr><th>${esc(m.model.replace(/^claude-/, ""))}</th><td>${fmtN(m.requests)}</td><td>${fmtN(m.input + m.cacheRead + m.cacheWrite)}</td><td>${fmtN(m.output)}</td><td>${usd(m.cost)}</td></tr>`).join("")}</tbody></table></div>` : "";
   const body = `<section class="admin">
-<section class="page-head"><div><h1>Читалка</h1><p class="sub">app.chytai.org.ua: хто читає, скільки хвилин і що коштують пояснення Claude.</p></div></section>
-${tiles}
+<section class="page-head"><div><h1>Читалка</h1><p class="sub">app.chytai.org.ua: хто читає, скільки хвилин і що коштують пояснення Claude. Головні числа — на Огляді.</p></div></section>
 <h2 id="readers">Читачі</h2>
 ${readers}
 <h2 id="books">Книжки</h2>
@@ -1515,4 +1555,4 @@ ${models}
   return layout({ title: "Читалка · Адмінка", user, path: "/admin", body });
 }
 
-module.exports = { readerAppPage, BOT, human, Admin, mailLinks, adminPage, activityPage, catalogBlock, shelvesPage, readersPage, overviewsPage, speedPage, jobsPage, dayOf, weekOf, sectionOf };
+module.exports = { readerAppPage, healthBlock, BOT, human, Admin, mailLinks, adminPage, activityPage, catalogBlock, shelvesPage, readersPage, overviewsPage, speedPage, jobsPage, dayOf, weekOf, sectionOf };
