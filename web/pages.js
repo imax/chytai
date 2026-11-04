@@ -1364,8 +1364,8 @@ function readerBand() {
     <p class="rb-acts"><a class="btn primary" href="${READER}/">Відкрити Читалку</a></p>
   </div>
   <a class="rb-shot" href="${READER}/" tabindex="-1" aria-hidden="true"><picture>
-    <source media="(max-width: 760px)" srcset="/reader-phone.jpg" width="720" height="960">
-    <img src="/reader-desk.jpg" width="1200" height="750" loading="lazy" decoding="async" alt="">
+    <source media="(max-width: 760px)" srcset="/reader-odyssey-phone.jpg" width="720" height="960">
+    <img src="/reader-odyssey-desk.jpg" width="1200" height="750" loading="lazy" decoding="async" alt="">
   </picture></a>
 </div></section>`;
 }
