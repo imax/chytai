@@ -105,19 +105,19 @@ ${font("source-serif-4/opsz.css")}${font("onest/wght.css")}
     </div>
     <div id="signin" data-web="${esc(webUrl)}">
       <form id="f-email" novalidate>
-        <div class="row"><input type="email" name="email" required autocomplete="email" inputmode="email" autocapitalize="off" placeholder="Ваша пошта" aria-label="Пошта"><button type="submit">Отримати код</button></div>
+        <div class="row"><input type="email" name="email" enterkeyhint="send" required autocomplete="email" inputmode="email" autocapitalize="off" placeholder="Ваша пошта" aria-label="Пошта"><button type="submit">Отримати код</button></div>
         <p class="err" role="alert"></p>
         <p class="note">Пароля немає: код для входу прийде на пошту. Акаунт спільний з ${mark}.org.ua.</p>
       </form>
       <form id="f-code" hidden>
         <p class="lab">Код надіслали на <b class="shown"></b></p>
-        <div class="row"><input class="code" name="code" required inputmode="numeric" autocomplete="one-time-code" pattern="[0-9 ]*" maxlength="7" placeholder="······" aria-label="Код"><button type="submit">Увійти</button></div>
+        <div class="row"><input class="code" name="code" enterkeyhint="go" required inputmode="numeric" autocomplete="one-time-code" pattern="[0-9 ]*" maxlength="7" placeholder="······" aria-label="Код"><button type="submit">Увійти</button></div>
         <p class="err" role="alert"></p>
         <p class="note">Лист іде до хвилини, перевірте й «Спам». <a href="#" data-back>Інша пошта</a></p>
       </form>
       <form id="f-name" hidden>
         <p class="lab">Ви тут уперше. Як вас звати?</p>
-        <div class="row"><input name="name" required maxlength="60" autocomplete="name" placeholder="Ім'я" aria-label="Ім'я"><button type="submit">Готово</button></div>
+        <div class="row"><input name="name" enterkeyhint="done" required maxlength="60" autocomplete="name" placeholder="Ім'я" aria-label="Ім'я"><button type="submit">Готово</button></div>
         <p class="err" role="alert"></p>
       </form>
       <p class="done" id="f-done" hidden>Відкриваю ваші книжки…</p>
@@ -149,6 +149,16 @@ ${font("source-serif-4/opsz.css")}${font("onest/wght.css")}
   var forms = { email: document.getElementById("f-email"), code: document.getElementById("f-code"), name: document.getElementById("f-name") };
   var done = document.getElementById("f-done");
   var email = "", signup = "";
+  // Enter sends the step, whatever the browser does by itself (a reader on an iPhone, 2026-11-04: Enter after the
+  // e-mail did nothing). While a step is on its way the button is off, and Enter waits too.
+  Object.keys(forms).forEach(function (k) {
+    var f = forms[k];
+    f.querySelector("input").addEventListener("keydown", function (e) {
+      if (e.key !== "Enter" || e.isComposing) return;
+      e.preventDefault();
+      if (!f.querySelector("button").disabled) f.dispatchEvent(new Event("submit", { cancelable: true }));
+    });
+  });
   var DOWN = "Сайт chytai.org.ua зараз не відповідає. Спробуйте ще раз за хвилину.";
   function show(step) {
     Object.keys(forms).forEach(function (k) { forms[k].hidden = k !== step; forms[k].querySelector(".err").textContent = ""; });
@@ -157,11 +167,11 @@ ${font("source-serif-4/opsz.css")}${font("onest/wght.css")}
   }
   function call(form, what, body) {
     var err = form.querySelector(".err"), btn = form.querySelector("button");
-    err.textContent = ""; btn.disabled = true;
+    err.textContent = ""; btn.disabled = true; var label = btn.textContent; btn.textContent = "Хвилинку…";
     return fetch(web + "/api/reader-login/" + what, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) })
       .then(function (res) { return res.json().catch(function () { return {}; }).then(function (d) { if (!res.ok || d.error) throw new Error(d.error || DOWN); return d; }); })
       .catch(function (e) { err.textContent = e instanceof TypeError ? DOWN : e.message; return null; })
-      .then(function (d) { btn.disabled = false; return d; });
+      .then(function (d) { btn.disabled = false; btn.textContent = label; return d; });
   }
   function enter(ticket) { show("in"); location.href = "/auth?ticket=" + encodeURIComponent(ticket); }
   forms.email.addEventListener("submit", function (e) {
