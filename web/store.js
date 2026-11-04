@@ -2176,8 +2176,9 @@ class Store {
   }
 
   addBook({ title, author, cover, links, source = "manual", ...more }) {
-    let id = slugify(title);
-    while (this.book(id)) id += "-2";
+    const base = slugify(title);
+    let id = base;
+    for (let n = 2; this.book(id); n++) id = `${base}-${n}`;
     this.lib.books[id] = { id, title: title.trim(), author: (author || "").trim(), cover: cover || "", tags: [], links: links || [], source, ...more };
     this.writeBook(id);
     this._works = null;
@@ -2255,10 +2256,17 @@ class Store {
   workForTitle(title) {
     const key = norm(title);
     if (key.length < 4) return null;
+    // A reader's own book under the title by someone else (a Goodreads «1984» credited to its reteller, Michael
+    // Dean) does not make the title ambiguous when the catalog's books under it are all by one author (Max,
+    // 2026-11-04: a bare «1984» in Roman's list became a new book four times over). For a title without Latin
+    // letters («1984») the Ukrainian edition goes first: the list is a Ukrainian reader's.
+    const latin = /[a-z]/i.test(title);
     const one = (ids) => {
-      const books = ids.map((id) => this.book(id)).filter(Boolean);
+      let books = ids.map((id) => this.book(id)).filter(Boolean);
+      const solid = books.filter((b) => this.shelfItems.has(b.id) || this.lib.books[b.id]?.source === "books.md");
+      if (solid.length && solid.every((b) => sameAuthor(b.author || "", solid[0].author || ""))) books = books.filter((b) => solid.includes(b) || sameAuthor(b.author || "", solid[0].author || ""));
       if (!books.length || !books.every((b) => sameAuthor(b.author || "", books[0].author || ""))) return null;
-      const rank = (b) => (norm(b.title) === key ? 0 : 2) + (b.author ? 0 : 1);
+      const rank = (b) => (norm(b.title) === key ? 0 : 2) + (b.author ? 0 : 1) + (!latin && !/\p{Script=Cyrillic}/u.test(b.author || "") ? 0.5 : 0);
       return this.canonical(books.reduce((best, b) => (rank(b) < rank(best) ? b : best)).id);
     };
     const titled = this.worksTitled(title);
@@ -2285,7 +2293,9 @@ class Store {
     for (const t of variants) {
       const found = byTitle.get(t) || [];
       const byAuthor = found.filter((w) => alike(w.author));
-      if (byAuthor.length) return byAuthor[0].id;
+      // The edition in the alphabet the author was named in: «1984 — Джордж Орвелл» is the Ukrainian book.
+      const cyr = (a) => /\p{Script=Cyrillic}/u.test(a || "");
+      if (byAuthor.length) return (byAuthor.find((w) => cyr(w.author) === cyr(author)) || byAuthor[0]).id;
       if (found.length === 1 && t === ntitle(title) && (t.includes(" ") || t.length >= 8) && (!norm(author) || !names(found[0].author).length)) return found[0].id;
     }
     return null;
@@ -2304,8 +2314,9 @@ class Store {
         let id = r.id && this.book(r.id) ? this.canonical(r.id) : null;
         if (id && r.cycle && this.lib.books[id] && !this.lib.books[id].cycle) (this.lib.books[id].cycle = r.cycle), this.writeBook(id);
         if (!id) {
-          id = slugify(r.title);
-          while (this.book(id)) id += "-2";
+          const base = slugify(r.title);
+          id = base;
+          for (let n = 2; this.book(id); n++) id = `${base}-${n}`; // «1984-3», not «1984-2-2»
           this.lib.books[id] = { id, title: r.title.trim(), author: (r.author || "").trim(), cover: "", tags: [], links: [], source, ...(r.isbns?.length ? { isbns: r.isbns } : {}), ...(r.cover ? { cover: r.cover } : {}), ...(r.ol ? { ol: r.ol } : {}), ...(r.published ? { published: r.published } : {}), ...(r.blurb ? { blurb: r.blurb, blurbSource: r.blurbSource || "" } : {}), ...(r.pages ? { pages: r.pages } : {}), ...(r.links?.length ? { links: r.links } : {}), ...(r.goodreadsId ? { goodreads: r.goodreadsId } : {}), ...(r.cycle ? { cycle: r.cycle } : {}), ...(r.appleId ? { apple: r.appleId } : {}) };
           this.writeBook(id);
           result.created.push(this.lib.books[id]);
