@@ -1098,7 +1098,7 @@ pages.setStats((id) => social.stats(id));
 // 2026-10-20: «Включаємо на всіх»); WEB_DIGEST_TO=owner limits it to the owner again.
 const digest = new Digest({ store, auth, social, lists, club, libraries, site: SITE, ownerId: OWNER_ID, to: process.env.WEB_DIGEST_TO === "owner" ? "owner" : "all" });
 // A letter to every reader about a new Club topic once someone answers it (clubmail.js, Max 2026-11-04).
-const clubMail = new ClubMail({ store, auth, club, digest, site: SITE });
+const clubMail = new ClubMail({ store, auth, club, digest, site: SITE, ownerId: OWNER_ID });
 bg.every("club-topic-mail", 5 * 60 * 1000, () => clubMail.run(), { db: store.db, first: 3 * 60 * 1000 });
 if (bg.background) digest.schedule();
 // «Книжка з вашого «Хочу прочитати» тепер є» (wantmail.js): once a day, a letter of its own (Max, 2026-10-25).
