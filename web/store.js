@@ -2012,6 +2012,14 @@ class Store {
     // Only to hide: a «uk» answer leaves the word guesses as they are, since Haiku called a few Russian
     // titles Ukrainian («День бульдозериста», trial v2), and a Russian book shown is worse than one hidden.
     if (lang === "ru") out.language = lang;
+    // A book picked in search from Wikidata has Wikidata's Ukrainian name of the work for its title, which says nothing
+    // of a Ukrainian edition (Max 2026-11-05: «Кривавий меридіан» shown as «Українською», no shop has it). A work
+    // written in another language (its Wikidata title, or Haiku's «translation» answer) is not called Ukrainian.
+    if (own && b.source === "search" && !out.language && !(b.links || []).some((l) => l.label === "Google Books")) {
+      const qid = (b.links || []).map((l) => /wikidata\.org\/wiki\/(Q\d+)$/.exec(l.url || "")?.[1]).find(Boolean);
+      const orig = qid ? require("./authors").workOrig(this, qid) : "";
+      if (qid && ((orig && !/[а-яіїєґ]/i.test(orig)) || this.aiOrigs().get(id)?.kind === "translation")) out.ukLabel = true;
+    }
     const ai = edited && this.aiGenres().get(id);
     if (ai?.length) out.tags = [...ai, ...out.tags.filter((t) => !OUR_GENRES.has(t))];
     // A year before 1800 on a reader's book is Open Library's or an import's noise far more often than a real

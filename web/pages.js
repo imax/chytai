@@ -61,6 +61,7 @@ const OWN_SOURCES = new Set(["manual", "goodreads", "apple-books", "office", "li
 function isUk(book) {
   const lang = String(book.language || "").toLowerCase();
   if (lang) return /^(uk|укр)/.test(lang);
+  if (book.ukLabel) return false; // a foreign work under its Wikidata Ukrainian name (store.book)
   const text = `${book.title || ""} ${book.author || ""}`;
   if (!CYR.test(text)) return false;
   if (UK_ONLY.test(text)) return true;

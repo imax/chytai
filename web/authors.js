@@ -432,11 +432,13 @@ function knownWorks(store) {
       list = withUk(JSON.parse(value).works || []).filter((w) => CYR.test(w.uk || ""));
     } catch {}
     const by = list.length ? new Set(fold(norm(author.name)).split(" ")) : null;
-    for (const w of list) works.push({ qid: w.qid, uk: w.uk, year: w.year, sl: w.sl || 0, author, words: new Set(fold(norm(w.uk)).split(" ")), by });
+    for (const w of list) works.push({ qid: w.qid, uk: w.uk, orig: w.orig || "", year: w.year, sl: w.sl || 0, author, words: new Set(fold(norm(w.uk)).split(" ")), by });
   }
-  known = { at: Date.now(), of: store.authors, works };
+  known = { at: Date.now(), of: store.authors, works, byQid: new Map(works.map((w) => [w.qid, w])) };
   return works;
 }
+// A work's title in its own language (Wikidata P1476), by its Wikidata id: «Blood Meridian» for Q1060426.
+const workOrig = (store, qid) => (knownWorks(store), known.byQid?.get(qid)?.orig || "");
 // The known works a query names: every word of it starts a word of the Ukrainian title or of the author's name, and
 // at least one is in the title. The best known first, each with our books of it: [{ qid, uk, year, author, href, books: [ids] }].
 function findKnown(store, q, limit = 5) {
@@ -450,4 +452,4 @@ function findKnown(store, q, limit = 5) {
     .map((w) => ({ qid: w.qid, uk: w.uk, year: w.year, author: w.author.name, href: w.author.href, books: matchWorks(store, w.author, [w])[0].books.map((b) => b.id) }));
 }
 
-module.exports = { shortBio, sparql, refresh, lookupNew, build, wikidataWorks, about, aboutNow, matchWorks, splitAuthors, allWorks, ownerJoins, knownWorks, findKnown };
+module.exports = { shortBio, sparql, refresh, lookupNew, build, wikidataWorks, about, aboutNow, matchWorks, splitAuthors, allWorks, ownerJoins, knownWorks, findKnown, workOrig };

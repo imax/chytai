@@ -23,7 +23,8 @@ const GOOGLE = "https://www.googleapis.com/books/v1/volumes";
 // Google's categories, so a book a reader added gets neighbours before anyone rates it (Max, 2026-10-23).
 const GENRE_OF = [
   ["дитячі", /juvenile|children'?s (fiction|literature|stories|books)|picture books/i],
-  ["підліткові", /young adult|teen/i],
+  // Only books for teens: «Teenage boys -- Fiction» is what a novel is about (Blood Meridian, Max 2026-11-05).
+  ["підліткові", /young adult|\bteen(age)? (fiction|literature|readers)/i],
   ["комікси", /comic|graphic novel/i],
   ["фентезі", /fantasy/i],
   ["фантастика", /science[ -]fiction|sci-fi|dystopia/i],
@@ -52,7 +53,14 @@ const GENRE_OF = [
   ["суспільство", /sociology|social science|political science|politics|economics/i],
 ];
 // Subjects are many and noisy: a genre counts when one of the first twenty says so.
-const genresOf = (subjects) => GENRE_OF.filter(([, re]) => (subjects || []).slice(0, 20).some((x) => re.test(String(x)))).map(([g]) => g).slice(0, 3);
+// A novel's «… -- History -- 19th century» is its setting, not a history book (Blood Meridian showed «Історія»,
+// Max 2026-11-05): a book the subjects call fiction gets no non-fiction genre.
+const NONFICTION = new Set(["біографії", "історія", "психологія", "філософія", "мистецтво", "наука", "здоров'я", "подорожі", "саморозвиток", "бізнес", "менеджмент", "гроші", "розробка", "суспільство"]);
+const genresOf = (subjects) => {
+  const first = (subjects || []).slice(0, 20).map(String);
+  const fiction = first.some((x) => /^(?!.*non-?fiction).*\b(fiction|novels?)\b/i.test(x));
+  return GENRE_OF.filter(([g, re]) => !(fiction && NONFICTION.has(g)) && first.some((x) => re.test(x))).map(([g]) => g).slice(0, 3);
+};
 // Bumped when a source is added or fixed, so every book is asked again: the per-book memory is enrich:<GEN>:<id>.
 const GEN = 7; // 7: Project Gutenberg links (2026-10-30), 3: genres, 4: a genre list for every reader, «фентезі» apart from «фантастика», 5: genres through the original, 6: recent editions' covers, Ukrainian covers from Google (2026-10-23)
 
