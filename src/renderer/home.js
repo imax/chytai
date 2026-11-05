@@ -178,6 +178,8 @@
   const rowStatus = (b) => `<span class="r-st${b.finished ? " done" : ""}">${b.finished ? "Прочитана" : b.paper ? "Паперова" : b.pct > 0 ? `${b.pct}%` : ""}</span>`;
   let freeTab = "new"; // new | kids | classics | all
   let homeHtml = "";
+  const kept = new Map(); // page -> { html, f }: the page left, as it was drawn
+  let drawn = { page: "", html: "" }; // what #home-body shows now
   const lastTouched = (b) => Math.max(b.openedAt || 0, b.addedAt || 0);
   const matches = (b, q) => norm(`${b.title} ${b.authors.join(" ")}`).includes(q);
   const hue = (t) => [...String(t || "")].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 0) % 360;
@@ -369,7 +371,20 @@
     // front: drawing the same covers anew made them flicker, so an unchanged screen is left alone.
     if (html === homeHtml) return;
     homeHtml = html;
-    $("#home-body").innerHTML = html;
+    // Going to «Додати книжку» and back drew every cover anew: each one showed its typographic stand-in for a
+    // moment before the picture came (Max 2026-11-05, «подьоргування»). The page left is kept as it was and put
+    // back when it comes back unchanged.
+    const body = $("#home-body");
+    if (drawn.html && drawn.page !== "paper" && body.firstChild) {
+      const f = document.createDocumentFragment();
+      f.append(...body.childNodes);
+      kept.set(drawn.page, { html: drawn.html, f });
+    }
+    const k = kept.get(page);
+    if (k && k.html === html) body.append(k.f);
+    else body.innerHTML = html;
+    kept.delete(page);
+    drawn = { page, html };
   }
 
   function homePageHtml() {
@@ -548,6 +563,7 @@
     for (const b of tab.parentElement.children) b.classList.toggle("on", b === tab);
     tab.closest("section").querySelector(".r-filtered").dataset.show = f ? homeFilter : freeTab;
     homeHtml = page === "add" ? addPageHtml() : homePageHtml();
+    drawn.html = homeHtml;
   });
 
   // The phone's panel: a tap on the page beside it closes it; in the app a swipe from the left edge opens it
@@ -612,6 +628,8 @@
       else backHome();
       const main = $("#shell-main");
       main.classList.remove("slide-from-right", "slide-from-left");
+      // The new page comes on from beside the one the finger moved, so nothing jumps back at the start.
+      main.style.setProperty("--slide-from", `${d.kind === "add" ? innerWidth + d.pos : d.pos - innerWidth}px`);
       void main.offsetWidth;
       main.classList.add(d.kind === "add" ? "slide-from-right" : "slide-from-left");
       main.addEventListener("animationend", () => main.classList.remove("slide-from-right", "slide-from-left"), { once: true });
