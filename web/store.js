@@ -2089,7 +2089,9 @@ class Store {
     if (!ours.some((g) => g !== "художня")) {
       for (const t of this.translations?.get(id) || []) {
         const tb = this.lib.books[t] || this.shelfItems.get(t)?.item || this.seedBooks.find((x) => x.id === t);
-        ours = [...new Set([...ours, ...ourGenres([...(tb?.tags || tb?.genres || []), ...(this.editions.get(t) || []).flatMap(({ item }) => item.genres || [])])])];
+        // Haiku's genres of the translation before its guessed ones (an original made by addOriginals showed the
+        // Open Library guess «Підліткові · Історія» of «Кривавий меридіан» until its own turn in the queue).
+        ours = [...new Set([...ours, ...ourGenres([...(this.aiGenres().get(t) || tb?.tags || tb?.genres || []), ...(this.editions.get(t) || []).flatMap(({ item }) => item.genres || [])])])];
       }
     }
     // A classic is not genre romance, whatever its subjects say (Max 2026-10-23: «Лоліта» was «Любовні романи»).
