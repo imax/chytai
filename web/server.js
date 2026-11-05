@@ -3043,13 +3043,14 @@ if (bg.ROLE !== "web" && !store.db.get("overview:uk:swept")) {
     }
   }, 60000);
 }
-// The originals of the books readers picked in search before store.addOriginals ran in the queue (Max 2026-11-05:
-// «Кривавий меридіан»), once, in the jobs process. Readers' other translated books wait for Max's word.
-if (bg.ROLE !== "web" && !store.db.get("originals:search")) {
+// The originals of readers' translated books from before store.addOriginals ran in the queue, once, in the jobs
+// process: first the search picks («Кривавий меридіан»), then all the rest (Max 2026-11-05 «Так давай», ~95 books).
+if (bg.ROLE !== "web" && !store.db.get("originals:all")) {
   setTimeout(() => {
     store.db.set("originals:search", new Date().toISOString());
-    const made = store.addOriginals(Object.values(store.lib.books).filter((b) => b.source === "search").map((b) => b.id));
-    console.log(`originals of search picks: ${made.join(", ") || "none"}`);
+    store.db.set("originals:all", new Date().toISOString());
+    const made = store.addOriginals(Object.keys(store.lib.books));
+    console.log(`originals of readers' books: ${made.length}: ${made.join(", ") || "none"}`);
     if (made.length) bg.changed("books");
   }, 90000);
 }
