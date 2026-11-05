@@ -656,7 +656,7 @@
       }
     },
     // ---------- Home screen ----------
-    coverUrl: (b) => (b.paper ? b.coverSrc || null : b.ext === "epub" || b.coverAt ? `/api/cover?path=${encodeURIComponent(b.path)}&v=${b.mtime || 0}-${b.coverAt || 0}` : null),
+    coverUrl: (b) => (b.paper ? b.coverSrc || null : b.ext === "epub" || b.coverAt ? `/api/cover?path=${encodeURIComponent(b.path)}&v=${b.mtime || 0}-${b.coverAt || 0}-s` : null),
     notesAll: async () => {
       try {
         await sync();

@@ -589,7 +589,9 @@
     under.dataset.page = target;
     under.setAttribute("aria-hidden", "true");
     under.inert = true;
-    const views = $("#shell-views").cloneNode(true);
+    // Only «Мої книжки» / «Додати книжку» is copied, not every other view with its pictures (memory on iPhone).
+    const views = $("#shell-views").cloneNode(false);
+    views.append($("#home").cloneNode(true));
     const body = views.querySelector("#home-body");
     body.textContent = "";
     for (const el of views.querySelectorAll("[id]")) if (el !== body && el.id !== "home") el.removeAttribute("id");

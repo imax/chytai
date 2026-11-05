@@ -1749,11 +1749,57 @@ async function coverFile(file) {
   return cached;
 }
 
+// What the reader shows is a small copy: a book's own cover is often 1400×2100 or more, about 12 MB once an
+// iPhone decodes it, and a shelf of thirty covers was enough for iOS to unload the app's page for memory (Max
+// 2026-11-05). 400 pixels wide is sharp on a phone's 3× screen and on a computer's grid. Made once, kept beside.
+const THUMB_W = 400;
+let sharp = null;
+try {
+  sharp = require("sharp");
+  sharp.cache(false);
+  sharp.concurrency(1);
+} catch (err) {
+  console.warn("sharp", err.message);
+}
+const thumbJobs = new Map();
+async function thumbFile(src) {
+  if (!sharp) return null;
+  const st = fs.statSync(src);
+  const key = crypto.createHash("sha1").update(`${src}:${st.size}:${st.mtimeMs}:${THUMB_W}`).digest("hex").slice(0, 16);
+  const out = path.join(COVER_DIR, `t-${key}.webp`);
+  if (fs.existsSync(out)) return fs.statSync(out).size ? out : null;
+  if (!thumbJobs.has(out)) {
+    thumbJobs.set(out, (async () => {
+      fs.mkdirSync(COVER_DIR, { recursive: true });
+      try {
+        const buf = await sharp(src, { limitInputPixels: 60_000_000 }).rotate().resize({ width: THUMB_W, withoutEnlargement: true }).webp({ quality: 80 }).toBuffer();
+        fs.writeFileSync(out, buf);
+        return out;
+      } catch (err) {
+        console.warn("thumb", path.basename(src), err.message);
+        fs.writeFileSync(out, ""); // a picture sharp cannot read is sent as it is from now on
+        return null;
+      } finally {
+        thumbJobs.delete(out);
+      }
+    })());
+  }
+  return thumbJobs.get(out);
+}
+async function sendCover(res, file, type) {
+  res.setHeader("Cache-Control", "private, max-age=2592000, immutable");
+  const thumb = await thumbFile(file).catch(() => null);
+  if (thumb) return res.type("image/webp").sendFile(thumb);
+  res.type(type).sendFile(file);
+}
+
 // Covers are taken out of the books ahead of time (at start and on upload), so nobody waits for the first one.
 async function warmCovers(lib, names) {
   for (const name of names) {
     try {
-      if (/\.epub$/i.test(name)) await coverFile(bookFile(lib, name));
+      if (!/\.epub$/i.test(name)) continue;
+      const cached = await coverFile(bookFile(lib, name));
+      if (!cached.endsWith(".none")) await thumbFile(path.join(COVER_DIR, cached));
     } catch (err) {
       console.warn("cover", name, err.message);
     }
@@ -1777,18 +1823,14 @@ api.get("/cover", async (req, res) => {
   if (file && !fs.existsSync(file) && !req.guest && req.lib.meta.trash?.[name]) file = trashFile(req.lib, name);
   if (!file || !fs.existsSync(file)) return res.status(404).end();
   const custom = !req.guest && (customCover(req.lib, name) || ([FREE_DIR, FREE_VOLUME_DIR].some((d) => file.startsWith(d + path.sep)) && freeCover(name)));
-  if (custom) {
-    res.setHeader("Cache-Control", "private, max-age=2592000, immutable");
-    return res.type(COVER_TYPES[path.extname(custom).slice(1)]).sendFile(custom);
-  }
+  if (custom) return sendCover(res, custom, COVER_TYPES[path.extname(custom).slice(1)]);
   if (!/\.epub$/i.test(file)) return res.status(404).end();
   try {
     const cached = await coverFile(file);
     const ext = path.extname(cached).slice(1);
     if (ext === "none") return res.status(404).end();
     // The URL carries the file's date, so a replaced book gets a new address.
-    res.setHeader("Cache-Control", "private, max-age=2592000, immutable");
-    res.type(COVER_TYPES[ext]).sendFile(path.join(COVER_DIR, cached));
+    await sendCover(res, path.join(COVER_DIR, cached), COVER_TYPES[ext]);
   } catch {
     res.status(404).end();
   }

@@ -25,7 +25,8 @@
     "jszip": "^3.10.1",
     "marked": "^18.1.1",
     "pdfjs-dist": "^6.4.299",
-    "qrcode-generator": "^2.0.4"
+    "qrcode-generator": "^2.0.4",
+    "sharp": "^0.34.5"
   },
   "devDependencies": {
     "electron": "^44.7.0",

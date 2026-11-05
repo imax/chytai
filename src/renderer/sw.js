@@ -34,6 +34,9 @@ self.addEventListener("message", (event) => event.data === "skipWaiting" && self
 self.addEventListener("activate", (event) => {
   event.waitUntil((async () => {
     for (const key of await caches.keys()) if (key !== CACHE && key !== COVERS) await caches.delete(key);
+    // Full-size covers from before the small copies (2026-11-05): their addresses end without «-s».
+    const covers = await caches.open(COVERS);
+    for (const r of await covers.keys()) if (!/-s$/.test(new URL(r.url).searchParams.get("v") || "")) await covers.delete(r);
   })());
 });
 
