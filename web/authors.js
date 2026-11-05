@@ -9,7 +9,7 @@ const ENDPOINT = "https://query.wikidata.org/sparql";
 const HEADERS = { "User-Agent": "Chytai/1.0 (https://chytai.org.ua; author pages)", Accept: "application/sparql-results+json" };
 const DAY = 86400000;
 // Bumped when the lookup learns something new, so it runs again without waiting out the week.
-const VERSION = "3"; // 3: Ukrainian citizenship (ua), writers with no works on Wikidata (2026-10-23)
+const VERSION = "4"; // 3: Ukrainian citizenship (ua), writers with no works on Wikidata (2026-10-23); 4: by title only a like name (2026-11-05)
 
 const norm = (s) => String(s || "").toLowerCase().replace(/^(the|a)\s+/, "").replace(/[’'ʼ`]/g, "").replace(/[^\p{L}\p{N}]+/gu, " ").trim();
 const CYR = /[а-яіїєґ]/i;
@@ -23,6 +23,23 @@ const forms = (name) => {
 
 // Citizens of Ukraine or the Ukrainian SSR (P27) are «ua»: their name is Ukrainian on every book.
 const UA = `OPTIONAL { ?a wdt:P27 ?ua_ FILTER(?ua_ IN (wd:Q212, wd:Q133356)) }`;
+// Does our spelling sound like the person's name? Some name of ours and of theirs start alike: the same first
+// letter (or both a vowel) and the same first two consonants, Cyrillic read as Latin («Б. Е. Періс» ~ «B. A. Paris»,
+// «Мітч Елбом» ~ «Mitch Albom»). Loose on purpose: it only guards the lookup by a book's title, where «Anathema»
+// by Keri Lake was taken for Kuprin's «Анафема» (Max, 2026-11-05).
+const LAT = { а: "a", б: "b", в: "v", г: "h", ґ: "g", д: "d", е: "e", є: "e", ж: "z", з: "z", и: "i", і: "i", ї: "i", й: "i", к: "k", л: "l", м: "m", н: "n", о: "o", п: "p", р: "r", с: "s", т: "t", у: "u", ф: "f", х: "h", ц: "c", ч: "c", ш: "s", щ: "s", ь: "", ю: "iu", я: "ia", ы: "i", э: "e", ё: "e", ъ: "" };
+const sounds = (s) =>
+  String(s || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f'’ʼ`]/g, "")
+    .replace(/дж/g, "j").replace(/тч/g, "ч").replace(/./g, (c) => LAT[c] ?? c)
+    .replace(/sch|sh/g, "s").replace(/tch|ch/g, "c").replace(/zh/g, "z").replace(/kh/g, "h").replace(/ph/g, "f").replace(/th/g, "t").replace(/ts|tz/g, "c")
+    .replace(/c(?=[eiy])/g, "s").replace(/ck|q|x|c/g, "k").replace(/w/g, "v").replace(/y/g, "i").replace(/g/g, "h").replace(/(.)\1+/g, "$1")
+    .split(/[^a-z]+/).filter((t) => t.length > 1);
+const VOWEL = /^[aeiou]/;
+const skeleton = (t) => t.replace(/[aeiou]/g, "").slice(0, 2);
+function sameName(name, p) {
+  const theirs = [...sounds(p.uk), ...sounds(p.en)];
+  return sounds(name).some((a) => theirs.some((b) => (a[0] === b[0] || (VOWEL.test(a) && VOWEL.test(b))) && skeleton(a) === skeleton(b)));
+}
 const person = (r) => ({ qid: r.a.value.split("/").pop(), uk: r.uk?.value || "", en: r.en?.value || "", ...(r.ua ? { ua: true } : {}) });
 
 async function sparql(query, fetchImpl) {
@@ -149,8 +166,10 @@ async function lookup(store, names, works, fetchImpl) {
       for (const t of batch) {
         const people = rows.filter((r) => r.t.value === t);
         if (people.length !== 1) continue; // two books of that title by different people: can't tell
-        const r = people[0];
-        for (const name of byTitle.get(t)) if (!found[name]) found[name] = person(r);
+        const p = person(people[0]);
+        // A book of the same title by someone else («Anathema»: Keri Lake's, and Kuprin's «Анафема»): only a
+        // person whose name sounds like ours.
+        for (const name of byTitle.get(t)) if (!found[name] && sameName(name, p)) found[name] = p;
       }
     } catch (e) {
       errors++;
@@ -452,4 +471,4 @@ function findKnown(store, q, limit = 5) {
     .map((w) => ({ qid: w.qid, uk: w.uk, year: w.year, author: w.author.name, href: w.author.href, books: matchWorks(store, w.author, [w])[0].books.map((b) => b.id) }));
 }
 
-module.exports = { shortBio, sparql, refresh, lookupNew, build, wikidataWorks, about, aboutNow, matchWorks, splitAuthors, allWorks, ownerJoins, knownWorks, findKnown, workOrig };
+module.exports = { VERSION, sameName, shortBio, sparql, refresh, lookupNew, build, wikidataWorks, about, aboutNow, matchWorks, splitAuthors, allWorks, ownerJoins, knownWorks, findKnown, workOrig };

@@ -1123,6 +1123,10 @@ if (bg.background)
     const ids = store.db.prepare("SELECT id FROM book_queue WHERE added >= ?").all(new Date(Date.now() - 8 * 86400000).toISOString()).map((r) => r.id);
     authors.lookupNew(store, ids, { log: console.log }).then((n) => n && bg.changed("authors"), (e) => console.error("authors (new) failed:", e));
   }, 90 * 1000).unref();
+// A lookup that learned something (authors.VERSION; 2026-11-05, Keri Lake taken for Kuprin) runs again two
+// minutes after the start, not when the six-hour schedule next comes round.
+if (bg.background && store.db.get("authors:v") !== authors.VERSION)
+  setTimeout(() => refreshAuthors().then((done) => done && bg.changed("authors")), 120 * 1000).unref();
 // Automatic overviews (advice.want/sweep/redo and their queue) are made in the jobs process; a reader's own
 // «Чи варто читати?» is answered here.
 bg.register("advice", advice, { want: false, sweep: false, redo: false }, ["queued", "capped"], { mirror: false, quiet: ["want"] });
