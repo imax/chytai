@@ -34,6 +34,7 @@
   }
 
   function hide() {
+    fromBook = false;
     $("#shell").classList.add("hidden");
     document.body.classList.remove("library-open");
   }
@@ -227,6 +228,7 @@
 
   function setPage(next, { push = true } = {}) {
     if (next === "add" && settings.guest) return;
+    fromBook = false;
     const was = page;
     page = next;
     $("#shell").dataset.page = page;
@@ -248,8 +250,22 @@
     else setPage("home");
   }
 
+  // In an e-book (phone app) a swipe from the left edge opens the panel too, as on a paper book (Max 2026-11-05):
+  // your books show behind it, and putting the panel away without picking anything goes back to the book.
+  let fromBook = false;
+  function panelFromBook() {
+    if (!phone() || isOpen() || settings.guest) return;
+    if (page !== "home") setPage("home", { push: false });
+    show("home");
+    panel(true);
+    fromBook = true;
+  }
   function panel(open = !$("#shell").classList.contains("panel-open")) {
     if (open && !phone()) open = false;
+    if (!open && fromBook && current) {
+      $("#shell").classList.remove("panel-open");
+      return hide();
+    }
     $("#shell").classList.toggle("panel-open", open);
     if (!open && document.activeElement?.id === "r-pq" && phone()) document.activeElement.blur();
   }
@@ -1355,7 +1371,7 @@
   }
 
   window.Shell = {
-    show, hide, isNew, arrivals, markSeen, refresh, key, cover, when, setAside, rcover, showAbout, openPaper, aboutBlock, loadAbout,
+    show, hide, panelFromBook, isNew, arrivals, markSeen, refresh, key, cover, when, setAside, rcover, showAbout, openPaper, aboutBlock, loadAbout,
     book: (path) => lib?.books.find((b) => b.path === path) || null,
     rerender: () => ((homeHtml = ""), renderHome()),
     reload: async () => ((lib = await window.Library.data(true)), (homeHtml = "")),

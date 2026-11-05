@@ -736,7 +736,9 @@ function onTouchEnd(e) {
   const dx = t.screenX - touchStart.x;
   const dy = t.screenY - touchStart.y;
   const ms = Date.now() - touchStart.t;
+  const fromEdge = touchStart.x < EDGE_SWIPE;
   touchStart = null;
+  if (edgeSwipe(fromEdge, dx, dy, ms)) return;
   if (Math.abs(dx) >= 12 || Math.abs(dy) >= 12) fontPlace = null;
   const sel = rendition?.getContents()[0]?.window.getSelection();
   if (sel && !sel.isCollapsed) return;
@@ -747,6 +749,30 @@ function onTouchEnd(e) {
     if (panelOverPage()) return closeSheets();
     tapToPage(t, e.view);
   }
+}
+
+// In the phone app a swipe to the right from the screen's left edge opens the panel with your books, as it does on
+// a paper book (Max 2026-11-05). Safari keeps that edge for «back».
+const EDGE_SWIPE = 24;
+function edgeSwipe(fromEdge, dx, dy, ms) {
+  if (!IN_APP || !PHONE.matches || !fromEdge || ms > 800 || dx < 50 || Math.abs(dx) < 2 * Math.abs(dy)) return false;
+  if (document.body.classList.contains("library-open") || panelOverPage() || document.querySelector("dialog[open]")) return false;
+  window.Shell?.panelFromBook();
+  return true;
+}
+// Outside the book's frame (its margins, a PDF) the touches reach this page.
+{
+  let start = null;
+  addEventListener("touchstart", (e) => {
+    const t = e.touches[0];
+    start = e.target.closest?.("#shell") ? null : { x: t.clientX, y: t.clientY, t: Date.now() };
+  }, { passive: true });
+  addEventListener("touchend", (e) => {
+    if (!start) return;
+    const t = e.changedTouches[0];
+    edgeSwipe(start.x < EDGE_SWIPE, t.clientX - start.x, t.clientY - start.y, Date.now() - start.t);
+    start = null;
+  }, { passive: true });
 }
 
 // The iframe is as wide as the whole chapter (one column per page), so translate the touch
