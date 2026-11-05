@@ -51,18 +51,43 @@ const ERROR_REPORTER = `
   true;
 `;
 
+// Android: tells the shell the page's env(safe-area-inset-top/bottom), once the page has a body.
+const INSETS_REPORTER = `
+  (function () {
+    var measure = function () {
+      try {
+        var d = document.createElement('div');
+        d.style.cssText = 'position:fixed;left:0;top:0;width:0;visibility:hidden;height:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)';
+        document.body.appendChild(d);
+        var cs = getComputedStyle(d);
+        var top = parseFloat(cs.height) || 0, bottom = parseFloat(cs.paddingBottom) || 0;
+        d.remove();
+        window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'insets', top: top, bottom: bottom }));
+      } catch (e) {}
+    };
+    var later = function () { setTimeout(measure, 50); };
+    if (document.body) later(); else document.addEventListener('DOMContentLoaded', later);
+    window.addEventListener('resize', later);
+  })();
+  true;
+`;
 
-// Android draws the app under the status and navigation bars, and its WebView does not pass those
-// insets to the page's env(safe-area-inset-*), so there the native side keeps the page clear of
-// them. On iOS the page extends under the bars and its CSS handles the insets, as in Safari.
+
+// Android draws the app under the status and navigation bars. A recent Android WebView passes those
+// insets to the page's env(safe-area-inset-*), and the reader's CSS keeps clear of them as on iOS; with
+// the native padding as well the gaps were doubled (Max, 2026-11-05: tall margins in the side menu).
+// An older WebView passes zeros, so the page reports what it sees (INSETS_REPORTER) and only then does
+// the native side keep the page clear of the bars. On iOS the page always handles the insets itself.
 export default function App() {
   // The strips above and below the page follow the phone's light or dark mode, like the splash screen.
   const dark = useColorScheme() === 'dark';
+  const [pad, setPad] = useState(false);
+  const onInsets = useCallback((top, bottom) => setPad(!(top > 0 || bottom > 0)), []);
   return (
     <SafeAreaProvider>
       {Platform.OS === 'android' ? (
-        <SafeAreaView style={[styles.root, dark && { backgroundColor: DARK_BG }]} edges={['top', 'bottom', 'left', 'right']}>
-          <Reader />
+        <SafeAreaView style={[styles.root, dark && { backgroundColor: DARK_BG }]} edges={pad ? ['top', 'bottom', 'left', 'right'] : []}>
+          <Reader onInsets={onInsets} />
         </SafeAreaView>
       ) : (
         <Reader />
@@ -78,7 +103,7 @@ export default function App() {
 const setProtected = (on) =>
   (on ? ScreenCapture.preventScreenCaptureAsync('book') : ScreenCapture.allowScreenCaptureAsync('book')).catch(() => {});
 
-function Reader() {
+function Reader({ onInsets }) {
   const webview = useRef(null);
   const canGoBack = useRef(false);
   const [failed, setFailed] = useState(null);
@@ -218,13 +243,14 @@ function Reader() {
         // fonts on the phone) only for the "app-bound" domains listed in app.json (WKAppBoundDomains) and
         // only with this set. Books and notes are kept in IndexedDB by the page itself. Needs a new build.
         limitsNavigationsToAppBoundDomains
-        injectedJavaScriptBeforeContentLoaded={ERROR_REPORTER}
+        injectedJavaScriptBeforeContentLoaded={Platform.OS === 'android' ? ERROR_REPORTER + INSETS_REPORTER : ERROR_REPORTER}
         onMessage={(e) => {
           try {
             const msg = JSON.parse(e.nativeEvent.data);
             if (msg.type === 'error') setPageError(String(msg.text).slice(0, 400));
             if (msg.type === 'protect') setProtected(!!msg.on);
             if (msg.type === 'speech') speech(msg.action);
+            if (msg.type === 'insets') onInsets?.(msg.top, msg.bottom);
           } catch { /* not ours */ }
         }}
         onNavigationStateChange={(nav) => { canGoBack.current = nav.canGoBack; }}
