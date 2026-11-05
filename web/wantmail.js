@@ -8,6 +8,7 @@
 // no shop links: the letter points at the book page. One letter a day at most, with every book in it.
 // Switch: readers.want_mail (/settings/mail), one-click unsubscribe with the digest's signed token.
 const { isRussian, shopLanguage } = require("./store");
+const CYR = /[а-яіїєґ]/i;
 
 const SEND_HOUR = 10; // Kyiv time, after the night's catalog refresh
 const MAX_BOOKS = 10;
@@ -101,9 +102,11 @@ class WantMail {
     this.store.db.tx(() => state.forEach(([id, kinds]) => up.run(readerId, id, JSON.stringify(kinds), at)));
   }
 
+  // Plain words (Max, 2026-11-05: «трошки косноязико вийшло»): the free file of a translated book is its English
+  // original, said as «англійською», not by the English title in the middle of a Ukrainian line.
   line({ kind, shelf, item, work }, id) {
-    const other = work !== id ? ` «${item.title}»` : "";
-    if (kind === "free") return `можна читати безкоштовно в Читалці${other}`;
+    const other = work !== id && CYR.test(item.title) ? ` «${item.title}»` : "";
+    if (kind === "free") return work !== id && !CYR.test(item.title) ? "безкоштовно в Читалці, англійською" : "безкоштовно в Читалці";
     if (kind === "uk" && item.status === "анонс") return `анонсували українською${other} (${shelf.name}${item.expected ? `, орієнтовно ${item.expected.toLowerCase()}` : ""})`;
     if (kind === "uk") return `є українською${other} (${shelf.name}${item.status === "передзамовлення" ? ", передзамовлення" : ""})`;
     return `${item.format === "аудіо" ? "є аудіокнига" : "є в продажу"}${other} (${shelf.name})`;
@@ -114,7 +117,8 @@ class WantMail {
     const shown = books.slice(0, MAX_BOOKS);
     const one = books.length === 1 && books[0];
     const k = one && one.news[0].kind;
-    const subject = one ? `«${one.book.title}» ${k === "free" ? "тепер можна читати безкоштовно" : k === "uk" ? (one.news[0].item.status === "анонс" ? "виходить українською" : "тепер є українською") : "тепер є в продажу"}` : `Книжки з вашого «Хочу прочитати» тепер є (${books.length})`;
+    const english = one && k === "free" && one.news[0].work !== one.id && !CYR.test(one.news[0].item.title);
+    const subject = one ? `«${one.book.title}» ${k === "free" ? `можна читати безкоштовно${english ? " англійською" : ""}` : k === "uk" ? (one.news[0].item.status === "анонс" ? "виходить українською" : "тепер є українською") : "тепер є в продажу"}` : `Книжки з вашого «Хочу прочитати» вже є (${books.length})`;
     const off = this.unsubscribeUrl(reader.id);
     const text = [
       one ? `Книжка з вашого «Хочу прочитати» на Chytai:` : `Книжки з вашого «Хочу прочитати» на Chytai:`,
@@ -128,10 +132,11 @@ class WantMail {
       site,
       title: subject,
       section: "Хочу прочитати",
-      heading: M.esc(one ? "Книжка з вашого «Хочу прочитати» тепер є" : "Книжки з вашого «Хочу прочитати» тепер є"),
+      heading: M.esc(one ? subject : "Книжки з вашого «Хочу прочитати» вже є"),
       body:
-        shown.map((x) => M.book({ ...x.book, href: x.news.find((n) => n.href)?.href || x.book.href, note: x.news.map((n) => M.esc(this.line(n, x.id))).join("<br>") }, site)).join("") +
+        shown.map((x) => M.book({ ...x.book, href: x.news.find((n) => n.href)?.href || x.book.href, note: one && k === "free" ? (english ? "англійський оригінал" : "") : x.news.map((n) => M.esc(this.line(n, x.id))).join("<br>") }, site)).join("") +
         (books.length > shown.length ? `<p style="font-size:14px;color:#6b675f;margin:16px 0 0">І ще ${books.length - shown.length} на <a href="${site}/@${M.esc(reader.username)}" style="color:#6b675f">вашій полиці</a></p>` : ""),
+      button: one && k === "free" && one.news[0].item.url ? { text: "Читати в Читалці", href: one.news[0].item.url } : null,
       off: { href: off, text: "Не надсилати таких листів" },
     });
     return { to: reader.email, subject, text: require("./admin").mailLinks(text.join("\n"), site, "want"), html: require("./admin").mailLinks(html, site, "want", true), headers: { "List-Unsubscribe": `<${off}>`, "List-Unsubscribe-Post": "List-Unsubscribe=One-Click" } };
