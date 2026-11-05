@@ -34,7 +34,6 @@
   }
 
   function hide() {
-    fromBook = false;
     $("#shell").classList.add("hidden");
     document.body.classList.remove("library-open");
   }
@@ -228,7 +227,6 @@
 
   function setPage(next, { push = true } = {}) {
     if (next === "add" && settings.guest) return;
-    fromBook = false;
     const was = page;
     page = next;
     $("#shell").dataset.page = page;
@@ -251,21 +249,16 @@
   }
 
   // In an e-book (phone app) a swipe from the left edge opens the panel too, as on a paper book (Max 2026-11-05):
-  // your books show behind it, and putting the panel away without picking anything goes back to the book.
-  let fromBook = false;
+  // your books show behind it, as on a paper book. Putting the panel away leaves you on your books: going back to
+  // the book there made a tap on another cover behind the panel reopen the same book (Max 2026-11-05).
   function panelFromBook() {
     if (!phone() || isOpen() || settings.guest) return;
     if (page !== "home") setPage("home", { push: false });
     show("home");
     panel(true);
-    fromBook = true;
   }
   function panel(open = !$("#shell").classList.contains("panel-open")) {
     if (open && !phone()) open = false;
-    if (!open && fromBook && current) {
-      $("#shell").classList.remove("panel-open");
-      return hide();
-    }
     $("#shell").classList.toggle("panel-open", open);
     if (!open && document.activeElement?.id === "r-pq" && phone()) document.activeElement.blur();
   }
