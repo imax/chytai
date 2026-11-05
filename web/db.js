@@ -108,14 +108,8 @@ function open(dataDir) {
   if (!db.prepare("PRAGMA table_info(readers)").all().some((c) => c.name === "came")) db.exec("ALTER TABLE readers ADD COLUMN came TEXT");
   // «Беру участь» in the weekly draw (draw.js, Max 2026-10-28): when the reader joined, null if not.
   if (!db.prepare("PRAGMA table_info(readers)").all().some((c) => c.name === "draw")) db.exec("ALTER TABLE readers ADD COLUMN draw TEXT");
-  // The reader's gender guessed from the name (gender.js, Max 2026-11-04): "f", "m", "" unknown, NULL not guessed
-  // yet; gender_set = 1 when Max fixed it on /admin/readers, so a new name doesn't guess over him.
-  if (!db.prepare("PRAGMA table_info(readers)").all().some((c) => c.name === "gender")) db.exec("ALTER TABLE readers ADD COLUMN gender TEXT; ALTER TABLE readers ADD COLUMN gender_set INTEGER NOT NULL DEFAULT 0");
-  {
-    const { guessGender } = require("./gender");
-    const set = db.prepare("UPDATE readers SET gender = ? WHERE id = ?");
-    for (const r of db.prepare("SELECT id, name FROM readers WHERE gender IS NULL").all()) set.run(guessGender(r.name), r.id);
-  }
+  // Gender guessed from the name (04.11) is gone: Max 2026-11-05 found hidden tracking creepy; the data is deleted.
+  if (db.prepare("PRAGMA table_info(readers)").all().some((c) => c.name === "gender")) db.exec("ALTER TABLE readers DROP COLUMN gender; ALTER TABLE readers DROP COLUMN gender_set");
   // «Дитяча полиця» (Max, 2026-10-23): a book the reader keeps for their children, out of their own taste.
   if (!db.prepare("PRAGMA table_info(entries)").all().some((c) => c.name === "kids")) db.exec("ALTER TABLE entries ADD COLUMN kids INTEGER NOT NULL DEFAULT 0");
   // A work may have several addresses (an old one redirects to the current): the table once made id

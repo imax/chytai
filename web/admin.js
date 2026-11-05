@@ -7,7 +7,6 @@
 // shelf changes and follows, so the cohorts have some history from day one.
 // Days and weeks are Kyiv time (TZ=Europe/Kyiv on Fly); a week starts on Monday.
 const { esc } = require("./pages");
-const { past } = require("./gender");
 
 const BOT = /bot|crawl|spider|slurp|curl|wget|python|java\b|go-http|headless|preview|monitor|uptime|fetch|scan|facebookexternalhit|whatsapp|telegram/i;
 // A person's browser, as far as the headers tell: no robot's name, an Accept-Language, and the Sec-Fetch-* headers
@@ -569,8 +568,6 @@ class Admin {
           username: r.username,
           owner: r.id === this.ownerId,
           email: !!r.email,
-          gender: r.gender || "",
-          genderSet: !!r.gender_set,
           created: dayOf(r.created),
           at: r.created,
           last: days[days.length - 1] || null,
@@ -894,14 +891,10 @@ function guestSteps(g) {
 const cameCell = (c) => (c ? `${esc(c.source)}${c.ref && c.ref.includes("/") ? ` <a class="muted" href="https://${esc(c.ref)}" target="_blank" rel="noopener noreferrer" title="${esc(c.ref)}">↗</a>` : ""}` : `<span class="muted">—</span>`);
 
 const READER_HEAD = `<th>Читач</th><th>Зареєструвався</th><th>Востаннє</th><th>Днів</th><th>Книжок</th><th>Звідки</th><th>Лист</th>`;
-// Стать (gender.js): guessed from the name, Max fixes it here; a guess is grey, his choice is not.
-const GENDERS = [["f", "ж"], ["m", "ч"], ["", "?"]];
-const genderCell = (r) => `<form method="post" action="/admin/readers/gender" class="gender${r.genderSet ? "" : " guessed"}" title="${r.genderSet ? "Виправлено вручну" : "Вгадано за іменем"}"><input type="hidden" name="id" value="${esc(r.id)}"><select name="gender" aria-label="Стать" onchange="this.form.submit()">${GENDERS.map(([k, l]) => `<option value="${k}"${r.gender === k ? " selected" : ""}>${l}</option>`).join("")}</select><noscript><button>OK</button></noscript></form>`;
 const readerRow = (r) => `<tr${r.owner ? ' class="owner"' : ""}>
   <th><a href="/@${esc(r.username)}">${esc(r.name)}</a> <span class="muted">@${esc(r.username)}</span></th>
   <td>${short(r.created)}</td><td>${short(r.last)}</td><td>${n(r.days)}</td><td>${n(r.books)}</td><td>${cameCell(r.came)}</td>
   <td>${r.digest ? "так" : r.email ? "ні" : `<span class="muted">без пошти</span>`}</td>
-  <td>${genderCell(r)}</td>
 </tr>`;
 
 // /admin/readers: everyone, with a search by name or username, a books filter, sorting and pages of
@@ -926,11 +919,10 @@ function readersPage({ user, stats: s, layout, q = "", min = 0, sort = "created"
 <p class="filter">${filters}${q ? ` · знайдено ${all.length} <a href="${url({ query: "" })}">скинути пошук</a>` : ""}</p>
 ${pager}
 ${shown.length ? `<div class="tbl"><table class="readers">
-<thead><tr><th>Читач</th>${col("created", "Зареєструвався")}${col("last", "Востаннє")}${col("days", "Днів")}${col("books", "Книжок")}<th>Звідки</th><th>Лист</th><th title="Вгадано за іменем; сірим — ще не перевірено">Стать</th></tr></thead>
+<thead><tr><th>Читач</th>${col("created", "Зареєструвався")}${col("last", "Востаннє")}${col("days", "Днів")}${col("books", "Книжок")}<th>Звідки</th><th>Лист</th></tr></thead>
 <tbody>${shown.map(readerRow).join("")}</tbody></table></div>` : `<p class="muted">Нікого не знайдено.</p>`}
 ${pager}
-</section>
-<style>.readers form.gender{margin:0}.readers form.gender select{font:inherit;font-size:14px;padding:1px 2px;border:1px solid var(--line,#e4dfd5);border-radius:6px;background:transparent;color:inherit}.readers form.gender.guessed select{color:var(--muted,#8a8478)}</style>`;
+</section>`;
   return layout({ title: "Читачі · Адмінка", user, path: "/admin", body });
 }
 
@@ -1268,15 +1260,16 @@ function activityPage({ user, rows, readers, books, names, who = null, embed = f
     if (parts[0] === "settings") return { key: "settings", html: `змінив налаштування${{ books: " полиці", mail: " листів", reader: " Читалки" }[b] || ""}` };
     return { html: `<span class="muted">${esc(r.what)}</span>` };
   };
-  // The verb a line starts with, in the reader's gender (gender.js): «зареєструвалась», «відкрила».
-  const lead = (html, g) => html.replace(/^(<b>)?([а-яіїєґ']+)/, (_, b = "", w) => b + past(w, g));
+  // The verb a line starts with, neutral: we don't know or guess anyone's gender (Max 2026-11-05). «відкрив(ла)».
+  const past = (w) => (/вся$/.test(w) ? `${w}(лась)` : /(в|шов|зберіг)$/.test(w) ? `${w}(ла)` : w);
+  const lead = (html) => html.replace(/^(<b>)?([а-яіїєґ']+)/, (_, b = "", w) => b + past(w));
   const markHtml = (e) => {
     const m = e.mark;
     const bits = [m.status ? STATUS_WORDS[m.status] || esc(m.status) : "", m.rating && m.rating !== "none" ? `★ ${esc(m.rating)}` : "", COPY_WORDS[m.copy] || "", m.kids === "1" ? "на дитячу полицю" : "", m.note ? "з нотаткою" : ""].filter(Boolean);
     return `позначив ${book(e.slug)}${bits.length ? `: ${bits.join(", ")}` : ""}`;
   };
   // One reader's run, oldest first in, newest first out: [{ at, views: [...] } | { at, html }].
-  const steps = (rows, self, g) => {
+  const steps = (rows, self) => {
     const out = [];
     let lastPage = null, lastDo = 0;
     for (let r of [...rows].reverse()) {
@@ -1300,7 +1293,7 @@ function activityPage({ user, rows, readers, books, names, who = null, embed = f
         }
       }
       const e = act(r);
-      if (e.html) e.html = lead(e.html, g);
+      if (e.html) e.html = lead(e.html);
       e.at = r.at;
       // The same step again next to itself (a mark saved in three goes, two taps on «Читалка») is one line.
       const prev = [...out].reverse().find((x) => !x.views);
@@ -1315,12 +1308,12 @@ function activityPage({ user, rows, readers, books, names, who = null, embed = f
     }
     return out.reverse();
   };
-  const show = (s, g) => {
+  const show = (s) => {
     if (s.views) {
       const v = s.views;
-      return `<li class="seen"><span class="at">${time(s.at)}</span><span>${past("відкрив", g)} ${v.slice(0, 4).map((x) => x.html).join(", ")}${v.length > 4 ? ` і ще ${v.length - 4}` : ""}</span></li>`;
+      return `<li class="seen"><span class="at">${time(s.at)}</span><span>${past("відкрив")} ${v.slice(0, 4).map((x) => x.html).join(", ")}${v.length > 4 ? ` і ще ${v.length - 4}` : ""}</span></li>`;
     }
-    return `<li><span class="at">${time(s.at)}</span><span>${s.mark ? lead(markHtml(s), g) : s.html}</span></li>`;
+    return `<li><span class="at">${time(s.at)}</span><span>${s.mark ? lead(markHtml(s)) : s.html}</span></li>`;
   };
   const days = new Map();
   for (const r of rows) {
@@ -1341,7 +1334,7 @@ function activityPage({ user, rows, readers, books, names, who = null, embed = f
   const stream = `${days.size ? [...days].map(([d, runs]) => `${embed ? (d === dayOfIso(new Date().toISOString()) ? "" : `<h3>Вчора</h3>`) : `<h2>${esc(dayName(d))}</h2>`}
 ${runs.map((run) => {
     const rd = readers.get(run.reader);
-    const lis = steps(run.rows, rd?.username || "", rd?.gender).map((s) => show(s, rd?.gender));
+    const lis = steps(run.rows, rd?.username || "").map(show);
     const more = lis.length > 10 ? `<li><details><summary class="muted">ще ${lis.length - 8}</summary><ol class="act-lines">${lis.slice(8).join("")}</ol></details></li>` : "";
     return `<div class="act-run"><p class="act-who">${head(run.reader)}</p><ol class="act-lines">${(more ? lis.slice(0, 8) : lis).join("")}${more}</ol></div>`;
   }).join("")}`).join("") : `<p class="muted">Поки нічого.</p>`}
