@@ -2183,17 +2183,49 @@ class Store {
     return { id: it.id, title: it.title, author: it.author, altTitle: it.altTitle || "", cover: it.cover, tags: it.genres || [], links: [{ label: shelf.name, url: it.url }], source: shelf.id, shelf: shelf.id, blurb: shelf.id === "ksd" ? ksdBlurb(blurbOf(it.blurb)) : blurbOf(it.blurb), price: it.price, status: it.status, expected: it.expected || "", language: shopLanguage(it), edition: it.edition || "", isbn: it.isbn || "", volume: it.volume || 0, bundle: !!it.bundle, format: it.format || (shelf.kind === "free" ? "e-book" : shelf.kind === "audio" ? "аудіо" : "папір"), narrator: it.narrator || "", duration: it.duration || "", subscription: !!it.subscription, adapted: !!it.adapted, issued: /^\d{4}$/.test(it.year || "") ? it.year : "" };
   }
 
-  addBook({ title, author, cover, links, source = "manual", ...more }) {
+  addBook({ title, author, cover, links, source = "manual", ...more }, { index = true } = {}) {
     const base = slugify(title);
     let id = base;
     for (let n = 2; this.book(id); n++) id = `${base}-${n}`;
     this.lib.books[id] = { id, title: title.trim(), author: (author || "").trim(), cover: cover || "", tags: [], links: links || [], source, ...more };
     this.writeBook(id);
     this._works = null;
-    this.indexSlugs();
-    this.indexSearch();
+    if (index) this.indexSlugs(), this.indexSearch();
     this.queueBooks([id], source);
     return this.lib.books[id];
+  }
+
+  // The original of a reader's translated book, a book of its own when no catalog has it (Max 2026-11-05: «чи в нас
+  // з'явиться автоматична оригінальна версія» of «Кривавий меридіан»). Its title and author come from Haiku's
+  // answer (ai_orig, Latin titles only, never Russian) or, for a foreign work picked in search from Wikidata, from
+  // its original title and the author's English name on Wikidata. It is paired as the translation's original
+  // (linkTranslations), and its own checks (Open Library details, cover, genres) come through the queue.
+  addOriginals(ids) {
+    const wd = JSON.parse(this.db.get("authors:wd") || "{}");
+    const enOf = new Map(Object.values(wd).filter((a) => a.uk && a.en && !/[а-яіїєґ]/i.test(a.en)).map((a) => [norm(a.uk), a.en]));
+    const made = [];
+    for (const x of new Set(ids)) {
+      const id = this.canonical(x);
+      const own = this.lib.books[id];
+      if (!own || own.source === "original" || this.translations?.get(id)?.size) continue;
+      const b = this.book(id);
+      if (!b || isRussian(b) || !/[а-яіїєґ]/i.test(b.title || "")) continue;
+      const ai = this.aiOrigs().get(id);
+      let title = ai?.kind === "translation" ? ai.title : "";
+      let author = title ? ai.author : "";
+      if (!title && b.ukLabel && b.altTitle && !/[а-яіїєґ]/i.test(b.altTitle)) {
+        title = b.altTitle;
+        author = String(b.author || "").split(/\s*,\s*/).map((n) => enOf.get(norm(n)) || "").filter(Boolean).join(", ");
+      }
+      if (!title || !author || /[а-яіїєґ]/i.test(`${title} ${author}`)) continue;
+      // A catalog has it after all: pairing is linkTranslations' work. The translation itself, found by its
+      // original title (altTitle), is no such book.
+      const had = this.findWork({ title, author });
+      if (had && this.canonical(had) !== id) continue;
+      made.push(this.addBook({ title, author, cover: "", links: [], source: "original", of: id, ...(b.published ? { published: b.published } : {}) }, { index: false }).id);
+    }
+    if (made.length) this.indexSlugs(), this.indexSearch(), this.linkTranslations();
+    return made;
   }
 
   // New books wait in `book_queue` for their checks in the jobs process (newbooks.js): every way a book comes
