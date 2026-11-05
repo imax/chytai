@@ -2285,8 +2285,51 @@ api.post("/paper/:name/seen", guestsCannot("Без входу паперових
 // talk so far so «Уточнити» can go on: u.paperChats[name] = [{ id, turns: [{ q, a }], messages, sel, page, at }].
 const CHATS_MAX = 300;
 const CHAT_BYTES = 200 * 1024;
+// The small picture of a question's page lives in a file of its own, not in state.json, which is written
+// whole on every change (Max 2026-11-05): accounts/<id>/paper-img/<book hex>-<chat id>.jpg.
+const PAPER_IMG = /^data:image\/jpeg;base64,([A-Za-z0-9+/=]+)$/;
+const paperImgFile = (acct, name, id) => path.join(ACCOUNTS_DIR, acct, "paper-img", `${name.slice(6, 16)}-${id}.jpg`);
+function savePaperImg(acct, name, id, img) {
+  const m = typeof img === "string" && img.length < 120 * 1024 && PAPER_IMG.exec(img);
+  if (!m) return false;
+  const file = paperImgFile(acct, name, id);
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, Buffer.from(m[1], "base64"));
+  return true;
+}
+function dropPaperImgs(acct, name, chats) {
+  for (const c of chats || []) if (c?.imgFile) fs.rmSync(paperImgFile(acct, name, c.id), { force: true });
+}
+// Once: the pictures kept inside state.json before move out into files.
+{
+  let moved = 0;
+  for (const [acct, u] of Object.entries(state.users || {})) {
+    if (!ACCOUNT_ID.test(acct)) continue;
+    for (const [name, list] of Object.entries(u.paperChats || {})) {
+      if (!paper.NAME.test(name)) continue;
+      for (const c of list || []) {
+        if (!c?.img) continue;
+        try {
+          if (savePaperImg(acct, name, c.id, c.img)) (c.imgFile = true), moved++;
+          delete c.img;
+        } catch (err) {
+          console.error("paper img move:", err.message);
+        }
+      }
+    }
+  }
+  if (moved) console.log(`paper: ${moved} pictures moved out of state.json`), saveState();
+}
 api.get("/paper/:name/chats", guestsCannot("Без входу паперових книжок немає."), (req, res) => {
-  res.json({ chats: userState(req.acct).paperChats?.[req.params.name] || [] });
+  const list = userState(req.acct).paperChats?.[req.params.name] || [];
+  const url = (c) => `/api/paper/${encodeURIComponent(req.params.name)}/chats/${c.id}/img`;
+  res.json({ chats: list.map(({ imgFile, ...c }) => ({ ...c, img: imgFile ? url(c) : c.img || "" })) });
+});
+api.get("/paper/:name/chats/:id/img", guestsCannot("Без входу паперових книжок немає."), (req, res) => {
+  const c = userState(req.acct).paperChats?.[req.params.name]?.find((x) => x.id === req.params.id);
+  if (!c?.imgFile) return res.status(404).end();
+  res.setHeader("Cache-Control", "private, max-age=31536000, immutable");
+  res.sendFile(paperImgFile(req.acct, req.params.name, c.id), (err) => err && !res.headersSent && res.status(404).end());
 });
 api.put("/paper/:name/chats/:id", guestsCannot("Без входу паперових книжок немає."), (req, res) => {
   const u = userState(req.acct);
@@ -2297,8 +2340,6 @@ api.put("/paper/:name/chats/:id", guestsCannot("Без входу паперов
     id: req.params.id,
     turns: turns.slice(-50).map((t) => ({ q: String(t?.q || "").slice(0, 4000), a: String(t?.a || "").slice(0, 20000) })),
     messages: paper.stripImages(messages),
-    // A small picture of the marked page (v3), shown with the question.
-    img: typeof img === "string" && /^data:image\/jpeg;base64,[A-Za-z0-9+/=]+$/.test(img) && img.length < 120 * 1024 ? img : "",
     sel: typeof sel === "string" ? sel.slice(0, 4000) : "",
     page: intOr(page, 20000) || 0,
     at: Number.isFinite(at) ? at : Date.now(),
@@ -2307,9 +2348,16 @@ api.put("/paper/:name/chats/:id", guestsCannot("Без входу паперов
   if (JSON.stringify(chat.messages || "").length > CHAT_BYTES) chat.messages = null;
   const list = ((u.paperChats ??= {})[req.params.name] ??= []);
   const i = list.findIndex((c) => c.id === chat.id);
+  // A small picture of the marked page (v3), shown with the question: a new one comes as a data URL,
+  // a kept one comes back as its address and stays as it is.
+  try {
+    if (savePaperImg(req.acct, req.params.name, chat.id, img) || list[i]?.imgFile) chat.imgFile = true;
+  } catch (err) {
+    console.error("paper img:", err.message);
+  }
   if (i >= 0) list[i] = chat;
   else list.push(chat);
-  if (list.length > CHATS_MAX) list.splice(0, list.length - CHATS_MAX);
+  if (list.length > CHATS_MAX) dropPaperImgs(req.acct, req.params.name, list.splice(0, list.length - CHATS_MAX));
   (u.opened ??= {})[req.params.name] = Date.now();
   saveState();
   res.json({ ok: true });
@@ -2372,7 +2420,10 @@ api.post("/tidy", guestsCannot("Без входу диктування не до
 api.delete("/paper/:name/chats/:id", guestsCannot("Без входу паперових книжок немає."), (req, res) => {
   const u = userState(req.acct);
   const list = u.paperChats?.[req.params.name];
-  if (list) u.paperChats[req.params.name] = list.filter((c) => c.id !== req.params.id);
+  if (list) {
+    dropPaperImgs(req.acct, req.params.name, list.filter((c) => c.id === req.params.id));
+    u.paperChats[req.params.name] = list.filter((c) => c.id !== req.params.id);
+  }
   saveState();
   res.json({ ok: true });
 });
@@ -2382,6 +2433,7 @@ api.delete("/paper/:name", guestsCannot("Без входу паперових к
   const name = req.params.name;
   if (!u.paper?.[name]) return res.status(404).json({ error: "Книжки немає." });
   delete u.paper[name];
+  dropPaperImgs(req.acct, name, u.paperChats?.[name]);
   for (const key of ["positions", "progress", "opened", "setAside", "seen", "notes", "finished", "paperChats"]) delete u[key]?.[name];
   saveState();
   res.json({ ok: true });
