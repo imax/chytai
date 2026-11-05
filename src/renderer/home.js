@@ -578,6 +578,74 @@
   // open): a sideways drag moves it, and on release it settles open or closed.
   const PANEL_W = 318;
   let drag = null;
+  // Going between «Мої книжки» and «Додати книжку» on a phone (Max 2026-11-05: the page jerked): the other page
+  // is laid beside this one and both move together, under the finger or on a tap of «+» / «‹», so the new page
+  // is already there when the old one leaves. It is the page as it was left (kept), or drawn fresh the first time.
+  function underPage(target) {
+    const k = kept.get(target);
+    const html = k?.html || (target === "add" ? addPageHtml() : homePageHtml());
+    const under = document.createElement("div");
+    under.id = "shell-under";
+    under.dataset.page = target;
+    under.setAttribute("aria-hidden", "true");
+    under.inert = true;
+    const views = $("#shell-views").cloneNode(true);
+    const body = views.querySelector("#home-body");
+    body.textContent = "";
+    for (const el of views.querySelectorAll("[id]")) if (el !== body && el.id !== "home") el.removeAttribute("id");
+    if (k?.html === html) body.append(k.f);
+    else body.innerHTML = html;
+    kept.delete(target);
+    under.append(views);
+    $("#shell-main").after(under);
+    $("#shell").classList.add("page-drag");
+    return { under, body, html, target };
+  }
+  function movePages(pos, kind) {
+    const w = innerWidth;
+    $("#shell-main").style.transform = pos ? `translateX(${pos}px)` : "";
+    $("#shell-under").style.transform = `translateX(${kind === "add" ? w + pos : pos - w}px)`;
+  }
+  function settlePages(kind, pos, go, u) {
+    const main = $("#shell-main");
+    const under = u.under;
+    const w = innerWidth;
+    const end = go ? (kind === "add" ? -w : w) : 0;
+    const left = Math.abs(end - pos) / w;
+    const ms = Math.round(140 + 160 * left);
+    for (const el of [main, under]) el.style.transition = `transform ${ms}ms cubic-bezier(.2, .8, .2, 1)`;
+    void main.offsetWidth;
+    movePages(end, kind);
+    let done = false;
+    const finish = () => {
+      if (done) return;
+      done = true;
+      // The page beside goes back to being kept; on «go» it is put in place at once, the same nodes.
+      const f = document.createDocumentFragment();
+      f.append(...u.body.childNodes);
+      kept.set(u.target, { html: u.html, f });
+      if (go) {
+        const back = u.target === "home" && history.state?.rp === page;
+        setPage(u.target, { push: u.target !== "home" });
+        if (back) history.back();
+      }
+      for (const el of [main, under]) el.style.transition = "";
+      main.style.transform = "";
+      under.remove();
+      requestAnimationFrame(() => $("#shell").classList.remove("page-drag"));
+    };
+    main.addEventListener("transitionend", (e) => e.target === main && finish(), { once: false });
+    setTimeout(finish, ms + 80);
+  }
+  function slidePage(target) {
+    if (!phone() || matchMedia("(prefers-reduced-motion: reduce)").matches || $("#shell").classList.contains("panel-open")) return false;
+    const u = underPage(target);
+    const kind = target === "add" ? "add" : "back";
+    movePages(0, kind);
+    settlePages(kind, 0, true, u);
+    return true;
+  }
+
   // In the app a swipe from the right edge opens «Додати книжку», and on it one from the left edge comes back
   // (Max 2026-11-03).
   const EDGE = 24;
@@ -607,7 +675,8 @@
     e.preventDefault();
     if (drag.kind !== "panel") {
       drag.pos = drag.kind === "add" ? Math.min(0, dx) : Math.max(0, dx);
-      $("#shell-main").style.transform = `translateX(${drag.pos}px)`;
+      if (!drag.under) drag.under = underPage(drag.kind === "add" ? "add" : "home");
+      movePages(drag.pos, drag.kind);
       return;
     }
     drag.pos = Math.max(0, Math.min(PANEL_W, (drag.open ? PANEL_W : 0) + dx));
@@ -621,18 +690,8 @@
     const fast = Date.now() - d.t < 250;
     if (d.kind !== "panel") {
       const go = Math.abs(d.pos) > (fast ? 30 : innerWidth / 3);
-      $("#shell").classList.remove("page-drag");
-      $("#shell-main").style.transform = "";
-      if (!go) return;
-      if (d.kind === "add") setPage("add");
-      else backHome();
-      const main = $("#shell-main");
-      main.classList.remove("slide-from-right", "slide-from-left");
-      // The new page comes on from beside the one the finger moved, so nothing jumps back at the start.
-      main.style.setProperty("--slide-from", `${d.kind === "add" ? innerWidth + d.pos : d.pos - innerWidth}px`);
-      void main.offsetWidth;
-      main.classList.add(d.kind === "add" ? "slide-from-right" : "slide-from-left");
-      main.addEventListener("animationend", () => main.classList.remove("slide-from-right", "slide-from-left"), { once: true });
+      if (d.under) settlePages(d.kind, d.pos, go, d.under);
+      else $("#shell").classList.remove("page-drag"), ($("#shell-main").style.transform = "");
       return;
     }
     const open = fast ? (d.open ? d.pos > PANEL_W - 40 : d.pos > 40) : d.pos > PANEL_W / 2;
@@ -975,7 +1034,11 @@
     if (el.dataset.aside) return setAside(el.dataset.aside);
     if (el.dataset.take) return takeBook(el.dataset.take, el);
     if (el.dataset.paperAdd != null) return paperFromCatalog(Number(el.dataset.paperAdd));
-    if (el.dataset.page) return el.dataset.page === "home" && page !== "home" ? backHome() : setPage(el.dataset.page);
+    if (el.dataset.page) {
+      const to = el.dataset.page;
+      if (el.closest(".r-head") && to !== page && (to === "add" || (to === "home" && page === "add")) && !(to === "add" && settings.guest) && slidePage(to)) return;
+      return to === "home" && page !== "home" ? backHome() : setPage(to);
+    }
     if (el.dataset.hit != null) return openHit(Number(el.dataset.hit));
     if (el.dataset.open != null) return panel(false), openBook(el.dataset.open);
     if (el.dataset.tab) {

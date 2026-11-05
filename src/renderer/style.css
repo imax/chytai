@@ -1327,6 +1327,16 @@ a.r-frow:hover .r-frow-go.plain { color: var(--r-ochre); }
   #shell.page-drag #shell-main { transition: none; }
   #shell-main.slide-from-right { animation: r-slide-r .26s cubic-bezier(.2, .8, .2, 1); }
   #shell-main.slide-from-left { animation: r-slide-l .26s cubic-bezier(.2, .8, .2, 1); }
+  /* The page beside, while going between «Мої книжки» and «Додати книжку» (home.js underPage). */
+  #shell-under { position: absolute; inset: 0; z-index: 2; background: var(--r-paper); overflow: hidden; pointer-events: none; }
+  #shell #shell-under[data-page] #home-body { padding: 22px 20px 40px; gap: 22px; }
+  #shell #shell-under[data-page="add"] #home-body { padding-top: 26px; }
+  #shell-under[data-page="home"] .r-head:not(.r-head-add) { display: flex !important; }
+  #shell-under[data-page="home"] .r-head-add, #shell-under[data-page="home"] .r-add-top { display: none !important; }
+  #shell-under[data-page="add"] .r-head:not(.r-head-add) { display: none !important; }
+  #shell-under[data-page="add"] .r-head-add { display: flex !important; }
+  #shell-under[data-page="add"] .r-add-top { display: block !important; padding: 22px 20px 0; }
+  .r-head button { -webkit-tap-highlight-color: transparent; }
   .r-head { gap: 12px; padding: calc(env(safe-area-inset-top) + 14px) 20px 12px; }
   .r-logo { font-size: 22px; }
   #shell #home-body { padding: 22px 20px 40px; gap: 22px; }
