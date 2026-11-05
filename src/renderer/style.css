@@ -2172,7 +2172,7 @@ body.offline #ask-book .st-go { background: var(--m-off); color: var(--m-ink3); 
 #panel #cards .card.m-off { display: flex; cursor: pointer; padding-bottom: 14px; }
 #panel #cards .card.m-off .quote { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 #panel #cards .card.m-off.c-book .quote, #panel #cards .card.m-off .meta, #panel #cards .card.m-off .followup,
-#panel #cards .card.m-off .c-acts .link, #panel #cards .card.m-off .thread > .answer ~ *, #panel #cards .card.m-off .thread > .question ~ .question,
+#panel #cards .card.m-off .c-acts .link:not(.forget), #panel #cards .card.m-off .thread > .answer ~ *, #panel #cards .card.m-off .thread > .question ~ .question,
 #panel #cards .card.m-off:not(.c-book) .thread > .question { display: none; }
 #panel #cards .card.m-off .thread > .question:first-child { font-size: 17px; }
 #panel #cards .card.m-off .answer { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; color: var(--m-ink2); font-size: 14.5px; line-height: 1.5; }
@@ -2209,7 +2209,7 @@ html body #panel #panel-body #cards, html body #panel #panel-body #notes { flex:
   font: 500 12px/1.3 var(--m-sans); text-transform: uppercase; letter-spacing: .14em; color: var(--m-ochre);
 }
 #panel #q-head { margin-top: 16px; }
-#panel #notes { padding-bottom: calc(28px + env(safe-area-inset-bottom)); }
+#panel #about-book { padding-bottom: calc(28px + env(safe-area-inset-bottom)); }
 @media (min-width: 761px) { #panel .m-sec { margin-left: 24px; margin-right: 24px; } }
 #panel #cards .c-acts .where.c-go { cursor: pointer; }
 #panel #cards .c-acts .where.c-go:hover { color: var(--m-ink); }
@@ -2300,3 +2300,19 @@ html body .r-list .r-t, html body .r-list .r-a { display: block; grid-column: 2;
 .pp-noteform[data-pp-edit] .pp-page-in input { width: 3.6em; }
 .pp-noteform[data-pp-edit] .r-link[data-pp="cancel-edit"] { text-decoration: none; color: var(--r-ink3); }
 .pp-noteform .pp-ask-row .r-pill { flex: none; }
+
+/* «Про книжку» unfolding in place (Max 2026-11-05): the end of a paper book's page and of an e-book's panel. */
+.ab-block .ab-chev { display: inline-block; transition: transform .2s; }
+.ab-block.open .ab-chev { transform: rotate(90deg); }
+.ab-block .pp-row { width: 100%; }
+.ab-inline { padding: 0 0 18px; font-size: 15px; line-height: 1.55; }
+.ab-inline p { margin: 0 0 10px; }
+.ab-inline .ab-meta { color: var(--r-ink2); font-size: 13px; }
+.ab-inline .muted { color: var(--r-ink3); }
+.ab-inline .ab-site { color: var(--r-ochre); font-size: 14px; text-decoration: none; }
+#panel #about-book { margin: 18px 20px 0; font-family: var(--m-sans); color: var(--m-ink); }
+@media (min-width: 761px) { #panel #about-book { margin-left: 24px; margin-right: 24px; } }
+#panel #about-book .pp-row { display: flex; justify-content: space-between; border: none; border-top: 1px solid var(--m-rule); background: none; color: var(--m-ink); font: 500 15px var(--m-sans); padding: 14px 0; cursor: pointer; }
+#panel #about-book .ab-meta { color: var(--m-ink2); }
+#panel #about-book .muted { color: var(--m-ink3); }
+#panel #about-book .ab-site { color: var(--m-ochre); }
