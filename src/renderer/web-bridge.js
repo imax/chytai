@@ -221,6 +221,7 @@
   }
 
   async function api(method, url, body, opts = {}) {
+    const given = body;
     const headers = {};
     if (body !== undefined && !(body instanceof Blob || body instanceof ArrayBuffer)) {
       headers["Content-Type"] = "application/json";
@@ -235,6 +236,12 @@
     }
     setOffline(false);
     if (res.status === 304) return res; // the copy on the device is current (openServerBook)
+    // The Android app on a cold start: its first requests can go out without the sign-in cookie (Max,
+    // 2026-11-05: the sign-in page, gone after a restart). One more try a moment later before signing in.
+    if (res.status === 401 && !opts.retried && /ChytaiApp/.test(navigator.userAgent) && /Android/.test(navigator.userAgent)) {
+      await new Promise((r) => setTimeout(r, 1000));
+      return api(method, url, given, { ...opts, retried: true });
+    }
     if (res.status === 401) {
       location.href = "/login";
       throw new Error("login");

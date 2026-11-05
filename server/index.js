@@ -771,6 +771,14 @@ function appSignInPage() {
 <script>
 (function () {
   var web = document.getElementById("signin").dataset.web;
+  // The Android app sometimes opens here although signed in: on a cold start its first requests can go out
+  // without the sign-in cookie, and a restart was enough (Max, 2026-11-05). A moment later the cookie is there,
+  // so this page asks once more and goes to the books if the server now sees the account.
+  if (/Android/.test(navigator.userAgent)) setTimeout(function () {
+    fetch("/app-login", { redirect: "manual", credentials: "same-origin", cache: "no-store" })
+      .then(function (r) { if (r.type === "opaqueredirect" && !email) location.replace("/"); })
+      .catch(function () {});
+  }, 1200);
   // Where this person first came from (kept 30 days from the first visit), sent with the sign-up so the site
   // knows it was dev.ua and not «Напряму» (Max, 2026-11-04).
   var came = { ref: document.referrer, url: location.href };
