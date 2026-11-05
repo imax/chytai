@@ -109,7 +109,34 @@ function openSettings() {
   $("#set-page-taps").value = settings.pageTaps ? "taps" : "scroll";
   $("#set-desk-scroll").value = settings.deskScroll ? "scroll" : "pages";
   $("#settings").showModal();
+  showOpds();
 }
+
+// The address of the reader's OPDS catalog, for an e-ink reader (server/opds.js).
+async function showOpds(make) {
+  const box = $("#opds-set");
+  if (!box || settings.guest || !document.body.classList.contains("web")) return box && (box.hidden = true);
+  try {
+    const res = await fetch("/api/opds", { method: make ? "POST" : "GET", credentials: "same-origin" });
+    const { url } = await res.json();
+    $("#opds-url").value = url || "";
+    $("#opds-copy").textContent = url ? "Копіювати" : "Створити";
+    $("#opds-new").hidden = !url;
+    return url;
+  } catch {
+    box.hidden = true;
+  }
+}
+$("#opds-copy").onclick = async () => {
+  const url = $("#opds-url").value || (await showOpds(true));
+  if (!url) return;
+  $("#opds-url").select();
+  try {
+    await navigator.clipboard.writeText(url);
+    $("#opds-copy").textContent = "Скопійовано";
+  } catch {}
+};
+$("#opds-new").onclick = () => showOpds(true);
 
 $("#settings").addEventListener("close", async () => {
   if ($("#settings").returnValue !== "save") return;

@@ -116,6 +116,7 @@ try {
 }
 state.accounts ??= {};
 state.libs ??= {};
+state.opds ??= {}; // token -> { acct, created, used, downloads }: the address of an account's OPDS catalog (server/opds.js)
 state.shares ??= {}; // token -> { acct, book, for, created, expires, device, off, opened, usage: { day, n }, reader: { positions, … } }
 
 // 2026-10-22: from names under one family password to accounts. The names were tests (Max), except his
@@ -1137,6 +1138,86 @@ const publicRenderer = express.static(path.join(ROOT, "src", "renderer"), { inde
 app.use("/node_modules", express.static(path.join(ROOT, "node_modules"), { index: false, maxAge: "7d" }));
 app.use((req, res, next) => (req.path === "/index.html" ? next() : publicRenderer(req, res, next)));
 
+// ---------- OPDS: a reader's books on an e-ink reader (Max, XT-Ink with CrossPoint, 2026-11-05) ----------
+// The device keeps a catalog address; the secret token in it stands for the account (no cookie, no
+// e-mail code there). Only the reader's own EPUBs and free-shelf books they took: a PDF or a publisher's
+// book stays in the reader. A new address in the settings turns the old one off.
+const opds = require("./opds");
+const opdsAcct = (token) => {
+  const o = /^[A-Za-z0-9_-]{20,64}$/.test(token || "") ? state.opds[token] : null;
+  return o && !state.accounts[o.acct]?.off ? o : null;
+};
+async function opdsBooks(acct) {
+  const lib = libOf(acct);
+  const u = userState(acct);
+  const added = lib.meta.added || {};
+  const books = (await scanLibrary(lib))
+    .filter((b) => b.ext === "epub")
+    .map((b) => {
+      const name = path.relative(lib.dir, b.path);
+      return { name, file: b.path, title: b.title, authors: b.authors, at: u.opened?.[name] || added[name]?.at || b.mtime || 0 };
+    });
+  const own = new Set(books.map((b) => b.name));
+  const shelf = new Map(freeShelf.map((f) => [f.name, f]));
+  const free = await library.scan([FREE_DIR, FREE_VOLUME_DIR].filter((d) => fs.existsSync(d)), FREE_CACHE).catch(() => []);
+  for (const b of free) {
+    const name = path.basename(b.path);
+    if (own.has(name) || !/\.epub$/i.test(name) || notYet(name) || !(u.opened?.[name] || u.taken?.[name] || u.positions?.[name])) continue;
+    const m = shelf.get(name) || {};
+    books.push({ name, file: b.path, title: m.title || b.title, authors: m.authors?.length ? m.authors : b.authors, at: u.opened?.[name] || u.taken?.[name] || 0, free: true });
+  }
+  for (const b of books) b.id = customCoverKey(b.name);
+  return books.sort((x, y) => y.at - x.at || x.title.localeCompare(y.title, "uk"));
+}
+// The cover's file and type, if the device can show it (JPEG or PNG).
+async function opdsCover(acct, b) {
+  const custom = b.free ? freeCover(b.name) : customCover(libOf(acct), b.name);
+  if (custom) return /\.(jpe?g|png)$/i.test(custom) ? { file: custom, type: COVER_TYPES[path.extname(custom).slice(1).toLowerCase()] } : null;
+  try {
+    const cached = await coverFile(b.file);
+    const ext = path.extname(cached).slice(1);
+    return ["jpg", "jpeg", "png"].includes(ext) ? { file: path.join(COVER_DIR, cached), type: COVER_TYPES[ext] } : null;
+  } catch {
+    return null;
+  }
+}
+app.get("/opds/:token", async (req, res, next) => {
+  const o = opdsAcct(req.params.token);
+  if (!o) return res.status(404).type("text").send("Адреса каталогу застаріла. Нову можна взяти в налаштуваннях Читалки.");
+  try {
+    const q = String(req.query.q || "").trim().slice(0, 100);
+    const all = await opdsBooks(o.acct);
+    const books = q ? opds.search(all, q) : all;
+    const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+    const shown = books.slice((page - 1) * opds.PAGE, page * opds.PAGE);
+    for (const b of shown) b.cover = (await opdsCover(o.acct, b))?.type || "";
+    if (Date.now() - (o.used || 0) > 3600e3) console.log("opds feed", o.acct, all.length, "books");
+    o.used = Date.now();
+    saveState();
+    res.type(opds.FEED).send(opds.feed({ base: `/opds/${req.params.token}`, books, page, q, updated: all[0]?.at }));
+  } catch (err) {
+    next(err);
+  }
+});
+app.get("/opds/:token/cover/:id", async (req, res) => {
+  const o = opdsAcct(req.params.token);
+  const b = o && (await opdsBooks(o.acct)).find((x) => x.id === req.params.id);
+  const cover = b && (await opdsCover(o.acct, b));
+  if (!cover) return res.status(404).end();
+  res.setHeader("Cache-Control", "private, max-age=86400");
+  res.type(cover.type).sendFile(cover.file);
+});
+app.get("/opds/:token/book/:file", async (req, res) => {
+  const o = opdsAcct(req.params.token);
+  const id = req.params.file.replace(/\.epub$/i, "");
+  const b = o && (await opdsBooks(o.acct)).find((x) => x.id === id);
+  if (!b || !fs.existsSync(b.file)) return res.status(404).end();
+  o.downloads = (o.downloads || 0) + 1;
+  saveState();
+  console.log("opds download", o.acct, b.name);
+  res.type("application/epub+zip").sendFile(b.file);
+});
+
 app.use((req, res, next) => {
   const acct = currentAccount(req);
   const share = acct ? null : currentShare(req);
@@ -1705,6 +1786,19 @@ api.put("/cover", guestsCannot("Без входу не можна змінюва
   for (const f of fs.readdirSync(dir)) if (f.startsWith(`${key}.`)) fs.unlinkSync(path.join(dir, f));
   fs.writeFileSync(path.join(dir, `${key}.${ext}`), b);
   res.json({ path: name, coverAt: Date.now() });
+});
+
+// The address of the reader's OPDS catalog: GET /api/opds { url }, POST /api/opds makes a new one (the old stops).
+const opdsUrl = (req, token) => (token ? `${READER_DOMAIN ? `https://${READER_DOMAIN}` : `${req.protocol}://${req.get("host")}`}/opds/${token}` : null);
+const myOpds = (req) => Object.keys(state.opds).find((t) => state.opds[t].acct === req.acct);
+api.get("/opds", guestsCannot("Без входу каталогу немає."), (req, res) => res.json({ url: opdsUrl(req, myOpds(req)) }));
+api.post("/opds", guestsCannot("Без входу каталогу немає."), (req, res) => {
+  for (const t of Object.keys(state.opds)) if (state.opds[t].acct === req.acct) delete state.opds[t];
+  const token = crypto.randomBytes(18).toString("base64url");
+  state.opds[token] = { acct: req.acct, created: Date.now() };
+  saveState();
+  console.log("opds address", req.acct);
+  res.json({ url: opdsUrl(req, token) });
 });
 
 // Links to one book: GET /api/shares?path=<book>, POST /api/shares { path, for }, DELETE /api/shares/<token>.
