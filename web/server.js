@@ -3043,6 +3043,17 @@ if (bg.ROLE !== "web" && !store.db.get("overview:uk:swept")) {
     }
   }, 60000);
 }
+// The originals of readers' translated books from before store.addOriginals ran in the queue, once, in the jobs
+// process: first the search picks («Кривавий меридіан»), then all the rest (Max 2026-11-05 «Так давай», ~95 books).
+if (bg.ROLE !== "web" && !store.db.get("originals:all")) {
+  setTimeout(() => {
+    store.db.set("originals:search", new Date().toISOString());
+    store.db.set("originals:all", new Date().toISOString());
+    const made = store.addOriginals(Object.keys(store.lib.books));
+    console.log(`originals of readers' books: ${made.length}: ${made.join(", ") || "none"}`);
+    if (made.length) bg.changed("books");
+  }, 90000);
+}
 // Editorial lists written by Claude for the owner (seed/editorial.json), made once each in the web process
 // (Max, 2026-10-28: «візьмемо номер 2, тільки додай книжку якої не вистачає»). A book the catalog lacks
 // comes in from its store page (cover, annotation), else from the fields given there.

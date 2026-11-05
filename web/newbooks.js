@@ -83,6 +83,14 @@ class NewBooks {
         out.cost += cost;
       }
       if (origs) store.linkTranslations();
+      // The original of a translation no catalog has becomes a book (store.addOriginals; Max 2026-11-05).
+      try {
+        const made = store.addOriginals([...ids]);
+        if (made.length) out.originals = made.length;
+      } catch (e) {
+        out.errors++;
+        this.log(`new books: originals: ${e.message}`);
+      }
       if (out.haiku) store.indexSearch();
       // The passes answer about groups of books (dupes) as much as about one, so their result is the batch's.
       const passes = {};
@@ -127,8 +135,8 @@ class NewBooks {
     }
     out.cost = Math.round(out.cost * 10000) / 10000;
     // The site reloads (jobs.js) only when something it shows may have changed.
-    out.changed = !!(out.haiku || out.covers || out.passes || out.authors || own.length);
-    out.note = [`книжок ${out.books}`, `Haiku ${out.haiku}`, out.ru ? `російських ${out.ru}` : "", out.covers ? `обкладинок ${out.covers}` : "", out.authors ? `авторів з Вікіданих ${out.authors}` : "", out.passes || "", `$${out.cost}`, out.errors ? `помилок ${out.errors}` : ""].filter(Boolean).join(", ");
+    out.changed = !!(out.originals || out.haiku || out.covers || out.passes || out.authors || own.length);
+    out.note = [`книжок ${out.books}`, `Haiku ${out.haiku}`, out.ru ? `російських ${out.ru}` : "", out.covers ? `обкладинок ${out.covers}` : "", out.originals ? `оригіналів ${out.originals}` : "", out.authors ? `авторів з Вікіданих ${out.authors}` : "", out.passes || "", `$${out.cost}`, out.errors ? `помилок ${out.errors}` : ""].filter(Boolean).join(", ");
     this.log(`new books: ${out.books} checked, ${out.haiku} Haiku answers, ${out.ru} Russian, $${out.cost}${out.errors ? `, ${out.errors} errors` : ""}`);
     return out;
   }
