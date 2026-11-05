@@ -1059,7 +1059,11 @@ ${activity}
 
 // «Performance» on Огляд (Max named it): today's speed (speed.js), the background jobs of the last day (job_runs) and whether
 // the reader answered. A line turns red only when something needs a look.
-function healthBlock({ day = null, jobs = { n: 0, failed: [] }, reader = true }) {
+function healthBlock({ day = null, jobs = { n: 0, failed: [] }, reader = true, errors = [], mail = null }) {
+  const PLACE = { site: "сайт", jobs: "фон", reader: "Читалка" };
+  const errN = errors.reduce((n, e) => n + e.n, 0);
+  // What failed, the most frequent first (errors.js keeps them; the same go to Telegram once an hour).
+  const errList = errors.length ? `<ul class="small muted">${errors.slice(0, 5).map((e) => `<li>${PLACE[e.place] || esc(e.place)}: ${esc(e.msg.slice(0, 160))}${e.url ? ` <span class="muted">(${esc(e.url)})</span>` : ""}${e.n > 1 ? ` × ${e.n}` : ""}</li>`).join("")}</ul>` : "";
   const s = (ms) => `${String(ms / 1000).replace(".", ",")} с`;
   const p = day?.page;
   const stall = Math.round((day?.stall?.sum || 0) / 1000);
@@ -1070,6 +1074,8 @@ function healthBlock({ day = null, jobs = { n: 0, failed: [] }, reader = true })
     [stall < 30, "Сервер не стояв.", `Сервер стояв сьогодні ${stall} с. <a href="/admin/speed">Швидкість</a>`],
     [!jobs.failed.length, `Фонові задачі без помилок (${fmtN(jobs.n)} за добу).`, `Фонові задачі з помилкою за добу: ${jobs.failed.map(esc).join(", ")}. <a href="/admin/jobs">Задачі</a>`],
     [reader, "Читалка працює.", `Читалка не відповіла сайту: app.chytai.org.ua може лежати. <a href="https://app.chytai.org.ua/">Відкрити</a>`],
+    [!errN, "Помилок за добу не було.", `Помилки за добу: ${errN}.${errList}`],
+    ...(mail ? [mail] : []),
   ];
   return `<h2>Performance</h2>
 <ul class="health">${rows.map(([ok, good, bad]) => `<li class="${ok ? "ok" : "bad"}">${ok ? good : bad}</li>`).join("")}</ul>`;

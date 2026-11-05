@@ -64,7 +64,15 @@ function loadDotEnv(file) {
 const store = new Store(DATA_DIR);
 const telegram = require("./telegram"); // messages to the owner in Telegram (telegram.js)
 telegram.init(store.db);
+const errors = require("./errors"); // pages that failed and crashes: kept for /admin, sent to Telegram (errors.js)
+errors.init(store.db);
+errors.watchProcess(bg.ROLE === "jobs" ? "jobs" : "site");
+const { MailGuard } = require("./mailguard");
 const auth = new Auth(store.db, { ownerToken: TOKEN, resendKey: process.env.RESEND_API_KEY || "", from: process.env.WEB_MAIL_FROM || `Chytai <code@${DOMAIN || "chytai.org.ua"}>` });
+// Letters that bounced or were marked as spam (Resend's webhook): those addresses get no more (mailguard.js).
+const mailGuard = new MailGuard(store.db, { usernameOf: (email) => auth.byEmail(email)?.username || null });
+auth.guard = mailGuard;
+const mailHealth = () => mailGuard.health();
 auth.ensureOwner({ id: OWNER_ID, name: OWNER, username: OWNER_USERNAME });
 const admin = new Admin(store.db, { ownerId: OWNER_ID }); // the owner's statistics (/admin): visits and page views
 const speed = new (require("./speed").Speed)({ db: store.db, today: () => require("./admin").dayOf(new Date()) }); // /admin/speed
@@ -156,6 +164,18 @@ app.use((req, res, next) => {
   if (fly) Object.defineProperty(req, "ip", { value: fly, configurable: true });
   res.set({ "Strict-Transport-Security": "max-age=31536000", "X-Frame-Options": "SAMEORIGIN", "X-Content-Type-Options": "nosniff" });
   next();
+});
+// Resend's webhook (mailguard.js): the raw body, for its signature.
+app.post("/api/resend/webhook", express.raw({ type: "*/*", limit: "256kb" }), (req, res) => {
+  if (!mailGuard.on()) return res.sendStatus(404);
+  const raw = Buffer.isBuffer(req.body) ? req.body.toString("utf8") : "";
+  if (!mailGuard.verify(req.headers, raw)) return res.sendStatus(401);
+  try {
+    mailGuard.event(JSON.parse(raw));
+  } catch (e) {
+    errors.record("site", e, "POST /api/resend/webhook");
+  }
+  res.sendStatus(200);
 });
 app.use(express.urlencoded({ extended: false, limit: "1mb" }));
 app.use(express.json({ limit: "1mb" }));
@@ -771,6 +791,8 @@ app.get("/api/reader-find", (req, res) => {
 // A letter to the owner from the reader (its daily Claude budget ran out, 2026-11-04), signed with the owner's reader key.
 app.post("/api/reader-alert", (req, res) => {
   if (!readerKeyOk(OWNER_ID, String(req.body?.key || ""))) return res.status(403).json({ error: "key" });
+  // An error a reader ran into in the reader app: kept with the site's (errors.js), not mailed.
+  if (req.body?.error) return errors.record("reader", { message: String(req.body.error).slice(0, 500), stack: String(req.body.stack || "").slice(0, 1500) }, String(req.body.url || "").slice(0, 220)), res.json({ ok: true });
   notifyOwner(String(req.body?.subject || "Chytai: Читалка").slice(0, 150), String(req.body?.text || "").slice(0, 3000));
   res.json({ ok: true });
 });
@@ -2760,7 +2782,7 @@ app.get("/admin", owner, async (req, res) => {
   const since = new Date(Date.now() - 86400000).toISOString();
   const runs = store.db.prepare("SELECT job, ok FROM job_runs WHERE started >= ?").all(since);
   const failed = [...new Set(runs.filter((r) => r.ok === 0).map((r) => r.job))];
-  const health = healthBlock({ day: speed.days(1).get(require("./admin").dayOf(new Date())) || null, jobs: { n: runs.length, failed }, reader: !!reader });
+  const health = healthBlock({ day: speed.days(1).get(require("./admin").dayOf(new Date())) || null, jobs: { n: runs.length, failed }, reader: !!reader, errors: errors.lastDay(), mail: mailHealth() });
   const activity = activityPage({ ...activityFor(null, 1), embed: true });
   res.send(adminPage({ user: req.user, stats: admin.stats(), gsc: gsc.data(), gscOn: gsc.configured(), reader, health, activity, layout: pages.layout }));
 });
@@ -3329,6 +3351,9 @@ app.post("/api/subscribe/:id", signed, (req, res) => {
   if (store.toggleSubscription(req.user.id, req.params.id) === null) return res.status(404).send("Немає такої полиці");
   res.redirect(req.get("referer") || "/");
 });
+
+// Anything a page threw: the reader sees a short apology, the owner the error (errors.js).
+app.use(errors.handler("site", (status, req) => pages.messagePage({ title: status >= 500 ? "Щось зламалося" : "Помилка в запиті", text: status >= 500 ? "Ми вже знаємо і полагодимо. Спробуйте ще раз трохи згодом." : "", user: req.user })));
 
 if (bg.serving) {
   const server = app.listen(PORT, () => {

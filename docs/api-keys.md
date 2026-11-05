@@ -24,3 +24,7 @@
 Читалка (Fly app `chytai`) з тим самим токеном перевіряє сайт кожні 5 хвилин і пише, коли він не відповідає:
 `fly secrets set TELEGRAM_BOT_TOKEN=… -a chytai`
 Чат їй передає сайт сам.
+
+## Вебхук Resend (`RESEND_WEBHOOK_SECRET`)
+
+Signing secret вебхука Resend (Resend → Webhooks), лише на сайті: `fly secrets set RESEND_WEBHOOK_SECRET=whsec_… -a chytai-web`. Без нього сайт не дізнається про недоставлені листи й скарги на спам (web/mailguard.js, README «Пошта і помилки»). Новий секрет з'являється, якщо вебхук у Resend створити заново.

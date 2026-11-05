@@ -86,6 +86,17 @@ fly machine restart -a chytai-web
 
 Або зі знімка Fly: `fly volumes snapshots list <vol>` і `fly volumes create web_data --snapshot-id <id> -a chytai-web`.
 
+### Пошта і помилки
+
+Листи (коди входу, щотижневий лист, сповіщення) йдуть через Resend. Щоб адреси, куди пошта не доходить, і скарги «це спам» не псували репутацію акаунта (а з нею й коди входу), Resend повідомляє про них сайт:
+
+1. Resend → Webhooks → Add endpoint: `https://chytai.org.ua/api/resend/webhook`, події `email.bounced` і `email.complained`.
+2. Скопіювати Signing secret (`whsec_…`) і `fly secrets set RESEND_WEBHOOK_SECRET=whsec_… -a chytai-web`.
+
+Адресі, що не існує, сайт 90 днів нічого не шле, а на сторінці входу каже, що пошта туди не доходить. Адресі зі скаргою шле тільки коди входу. Про кожну скаргу й про добу з 10+ недоставленими пише в Telegram (`web/mailguard.js`).
+
+Помилки сайту, фонових задач і Читалки (сторінка впала з 500, процес упав, код входу не надіслався) зберігаються 30 днів, видні в /admin («Performance») і приходять у Telegram не частіше разу на годину для однієї помилки (`web/errors.js`).
+
 ### Тестова копія бази сайту
 
 Тим самим запуском робиться копія бази сайту для тестів: справжні емейли замінено на `<id читача>@test.invalid`, сесії, коди входу, токени MCP і секрети з `meta` вирізано (`scripts/test-db-scrub.py`). Вона зашифрована тим самим ключем і лежить файлом у релізі [`test-db`](https://github.com/imax/chytai/releases/tag/test-db), щоночі новий. Узяти її в `data/web/` (стара база збережеться поруч як `chytai.db.bak-…`):

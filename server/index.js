@@ -295,6 +295,29 @@ function aiBudgetDenied(req) {
   if (!req.guest && (d.userCost?.[req.acct] || 0) >= ACCOUNT_COST_CAP) return "На сьогодні запитів забагато. Завтра все запрацює знову; якщо це помилка, напишіть Максові.";
   return null;
 }
+// An error a reader ran into goes to the site, which keeps it for /admin and tells the owner in Telegram (web/errors.js,
+// risk review 2026-11-05). The same message at most once in 10 minutes from here; a crash waits for it to leave.
+const errorSent = new Map();
+function reportError(err, url = "") {
+  const key = state.accounts?.[OWNER_ID]?.key;
+  const msg = String(err?.message || err || "без опису").slice(0, 500);
+  const sig = msg.replace(/\d+/g, "N").slice(0, 120);
+  if (!key || Date.now() - (errorSent.get(sig) || 0) < 10 * 60000) return Promise.resolve();
+  errorSent.set(sig, Date.now());
+  const stack = String(err?.stack || "").split("\n").slice(1, 6).map((l) => l.trim()).join("\n");
+  return fetch(`${WEB_URL}/api/reader-alert`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: OWNER_ID, key, error: msg, stack, url }), signal: AbortSignal.timeout(5000) }).catch((e) => console.error(`error report: ${e.message}`));
+}
+{
+  let dying = false;
+  const die = (err) => {
+    console.error(err);
+    if (dying) process.exit(1);
+    dying = true;
+    Promise.race([reportError(err instanceof Error ? err : new Error(String(err)), "процес упав"), new Promise((r) => setTimeout(r, 3000))]).finally(() => process.exit(1));
+  };
+  process.on("uncaughtException", die);
+  process.on("unhandledRejection", die);
+}
 function alertOwner(subject, text) {
   const key = state.accounts[OWNER_ID]?.key;
   console.log(`alert: ${subject}`);
@@ -2464,8 +2487,10 @@ function describeError(err) {
 
 app.use("/api", api);
 
-app.use((err, _req, res, _next) => {
+app.use((err, req, res, _next) => {
   console.error(err);
+  if (!(err.status >= 400 && err.status < 500)) reportError(err, `${req.method} ${String(req.originalUrl || "").split("?")[0].slice(0, 200)}`);
+  if (res.headersSent) return res.end();
   res.status(err.status || 500).json({ error: err.message || "server error" });
 });
 

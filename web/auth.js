@@ -38,6 +38,7 @@ class Auth {
     this.from = from;
     this.resendKey = resendKey;
     this.log = log;
+    this.guard = null; // MailGuard (mailguard.js): addresses that bounced or marked us as spam get no letters
     // Signs tickets (a verified e-mail that has no reader yet); kept in meta so restarts keep them valid.
     this.ticketKey = db.get("ticket_key") || (db.set("ticket_key", crypto.randomBytes(32).toString("hex")), db.get("ticket_key"));
     this.cache = new Map(); // session hash -> reader id
@@ -253,6 +254,7 @@ class Auth {
   // Make a code for the address and mail it. Returns { ok } or { error }.
   async sendCode(email, ip) {
     if (this.tooMany(`ip:${ip}`, PER_IP_HOUR) || this.tooMany(`email:${email}`, PER_EMAIL_HOUR)) return { error: "Забагато спроб. Спробуйте за годину." };
+    if (this.guard && !this.guard.allowed(email, { code: true })) return { error: "Пошта на цю адресу не доходить. Перевірте адресу." };
     const code = String(crypto.randomInt(0, 1000000)).padStart(6, "0");
     const hash = sha(`${email}:${code}`);
     this.db.prepare("DELETE FROM login_codes WHERE expires < ?").run(Date.now());
@@ -261,6 +263,9 @@ class Auth {
       await this.mail(email, code);
     } catch (e) {
       this.log(`mail to ${email} failed: ${e.message}`);
+      // Nobody can sign in while this lasts: the owner hears (once an hour). A refused address (400, 422) is the
+      // visitor's typo, not ours.
+      if (!/^Resend 4(00|22)\b/.test(e.message)) require("./errors").record("site", new Error(`код входу не надіслався: ${e.message}`), "POST /login");
       this.db.prepare("DELETE FROM login_codes WHERE hash = ?").run(hash);
       return { error: "Не вдалося надіслати лист. Спробуйте ще раз трохи згодом." };
     }
@@ -312,13 +317,14 @@ class Auth {
     const M = require("./mailhtml");
     const site = "https://chytai.org.ua";
     const html = M.letter({ site, title: subject, heading: "Код для входу", body: `<div style="font-family:${M.SERIF};font-size:40px;letter-spacing:.12em;margin:20px 0 0;color:#1b1a17">${M.esc(code)}</div>${M.paras("Він діє 10 хвилин. Якщо ви не просили код, просто не зважайте на цей лист.", { serif: false })}`, footer: "" });
-    return this.send(email, subject, text, { html });
+    return this.send(email, subject, text, { html, code: true });
   }
 
   // A letter through Resend (plain text, with an HTML version, extra headers and attachments
   // ([{ filename, content: base64 }]) when given); without the key it goes to the log instead.
-  async send(to, subject, text, { html = "", headers = null, attachments = null } = {}) {
+  async send(to, subject, text, { html = "", headers = null, attachments = null, code = false } = {}) {
     if (testAddress(to)) return this.log(`[mail] test address, not sent: to ${to}: ${subject}\n${text}`);
+    if (this.guard && !this.guard.allowed(to, { code })) return this.log(`[mail] ${this.guard.blocked(to)}, not sent: ${subject}`);
     if (!this.resendKey) {
       this.log(`[mail] no RESEND_API_KEY: to ${to}: ${subject}\n${text}`);
       return;
@@ -333,7 +339,7 @@ class Auth {
   // Up to 100 letters in one Resend call ({ to, subject, text, html, headers } each), for the weekly letter.
   async sendBatch(letters) {
     for (const l of letters) if (testAddress(l.to)) this.log(`[mail] test address, not sent: to ${l.to}: ${l.subject}`);
-    letters = letters.filter((l) => !testAddress(l.to));
+    letters = letters.filter((l) => !testAddress(l.to) && (!this.guard || this.guard.allowed(l.to)));
     if (!letters.length) return;
     if (!this.resendKey) {
       for (const l of letters) this.log(`[mail] no RESEND_API_KEY: to ${l.to}: ${l.subject}`);
