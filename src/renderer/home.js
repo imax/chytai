@@ -492,6 +492,7 @@
     else backHome();
   });
   $("#r-pq").addEventListener("input", () => (renderPanel(), askDeep()));
+  $("#r-pq-clear").onclick = () => (($("#r-pq").value = ""), renderPanel(), askDeep(), $("#r-pq").focus());
   $("#r-pq").addEventListener("keydown", (e) => {
     if (e.key === "Escape") e.preventDefault(), ($("#r-pq").value = ""), renderPanel(), $("#r-pq").blur(), panel(false);
     if (e.key === "Enter") $("#r-pfound [data-open]")?.click();

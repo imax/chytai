@@ -1147,7 +1147,9 @@ body[data-theme="dark"] #shell, body[data-theme="dark"] #book-menu, body[data-th
 .r-psearch svg { width: 15px; height: 15px; flex: none; fill: none; stroke: var(--r-ink2); stroke-width: 1.7; }
 .r-psearch input { flex: 1; min-width: 0; border: none; outline: none; background: none; color: var(--r-ink); font: 15px var(--r-sans); padding: 0; }
 .r-psearch input::placeholder { color: var(--r-ink2); }
-.r-psearch input::-webkit-search-cancel-button { filter: grayscale(1) opacity(.6); }
+.r-psearch input::-webkit-search-cancel-button { display: none; -webkit-appearance: none; }
+#r-pq-clear { flex: none; border: none; background: none; padding: 4px 2px; font: 20px/1 var(--r-sans); color: var(--r-ink3); cursor: pointer; }
+.r-psearch input:placeholder-shown ~ #r-pq-clear, .r-psearch input:not(:placeholder-shown) ~ kbd { display: none; }
 .r-psearch kbd { font: 11px var(--r-sans); color: var(--r-ink2); border: 1px solid var(--r-pline); border-radius: 4px; padding: 1px 5px; }
 .r-pnav { display: flex; flex-direction: column; gap: 2px; margin: 0 -10px; padding-bottom: 18px; border-bottom: 1px solid var(--r-pline); }
 .r-pnav button { display: flex; justify-content: space-between; align-items: center; padding: 8px 10px; border: none; border-radius: 8px; background: none; color: var(--r-ink); font: 15px var(--r-sans); cursor: pointer; }
