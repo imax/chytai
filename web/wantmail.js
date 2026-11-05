@@ -8,6 +8,7 @@
 // no shop links: the letter points at the book page. One letter a day at most, with every book in it.
 // Switch: readers.want_mail (/settings/mail), one-click unsubscribe with the digest's signed token.
 const { isRussian, shopLanguage } = require("./store");
+const CYR = /[а-яіїєґ]/i;
 
 const SEND_HOUR = 10; // Kyiv time, after the night's catalog refresh
 const MAX_BOOKS = 10;
@@ -101,25 +102,40 @@ class WantMail {
     this.store.db.tx(() => state.forEach(([id, kinds]) => up.run(readerId, id, JSON.stringify(kinds), at)));
   }
 
+  // Plain sentences (Max, 2026-11-05: «Книжка з вашого «Хочу прочитати» тепер є» read like a calque, «можна читати…»
+  // started small). A free file of a translated book is its English original: the letter shows that book, the one
+  // the reader can open, and says it is the original («можна читати тільки The King in Yellow»).
   line({ kind, shelf, item, work }, id) {
-    const other = work !== id ? ` «${item.title}»` : "";
-    if (kind === "free") return `можна читати безкоштовно в Читалці${other}`;
-    if (kind === "uk" && item.status === "анонс") return `анонсували українською${other} (${shelf.name}${item.expected ? `, орієнтовно ${item.expected.toLowerCase()}` : ""})`;
-    if (kind === "uk") return `є українською${other} (${shelf.name}${item.status === "передзамовлення" ? ", передзамовлення" : ""})`;
-    return `${item.format === "аудіо" ? "є аудіокнига" : "є в продажу"}${other} (${shelf.name})`;
+    const other = work !== id && CYR.test(item.title) ? ` «${item.title}»` : "";
+    if (kind === "free") return work !== id && !CYR.test(item.title) ? "Оригінал книжки з вашого «Хочу прочитати». Є на Вільній полиці." : "Є на Вільній полиці.";
+    if (kind === "uk" && item.status === "анонс") return `Анонсували українською${other}: ${shelf.name}${item.expected ? `, орієнтовно ${item.expected.toLowerCase()}` : ""}.`;
+    if (kind === "uk") return `Вийшла українською${other}: ${shelf.name}${item.status === "передзамовлення" ? ", передзамовлення" : ""}.`;
+    return `${item.format === "аудіо" ? "Вийшла аудіокнига" : "Вже в продажу"}${other}: ${shelf.name}.`;
+  }
+
+  // The book a news item is about: the English original for its free file, else the wanted book.
+  shownBook(x) {
+    const free = x.news.find((n) => n.kind === "free" && n.work !== x.id && !CYR.test(n.item.title));
+    const b = free && this.store.book(free.work);
+    return b ? { ...b, href: b.href } : { ...x.book, href: x.news.find((n) => n.href)?.href || x.book.href };
   }
 
   render(reader, books) {
     const site = this.site;
     const shown = books.slice(0, MAX_BOOKS);
     const one = books.length === 1 && books[0];
-    const k = one && one.news[0].kind;
-    const subject = one ? `«${one.book.title}» ${k === "free" ? "тепер можна читати безкоштовно" : k === "uk" ? (one.news[0].item.status === "анонс" ? "виходить українською" : "тепер є українською") : "тепер є в продажу"}` : `Книжки з вашого «Хочу прочитати» тепер є (${books.length})`;
+    const n0 = one && one.news[0];
+    const k = n0 && n0.kind;
+    const title = one && this.shownBook(one).title;
+    const subject = one ? `«${title}» ${k === "free" ? "є на Вільній полиці" : k === "uk" ? (n0.item.status === "анонс" ? "виходить українською" : "вийшла українською") : n0.item.format === "аудіо" ? "вийшла аудіокнигою" : "вже в продажу"}` : `Новини з вашого «Хочу прочитати»: ${books.length} ${books.length < 5 ? "книжки" : "книжок"}`;
     const off = this.unsubscribeUrl(reader.id);
     const text = [
-      one ? `Книжка з вашого «Хочу прочитати» на Chytai:` : `Книжки з вашого «Хочу прочитати» на Chytai:`,
+      one ? subject : `Новини з вашого «Хочу прочитати» на Chytai:`,
       ``,
-      ...shown.flatMap((x) => [`${x.book.title}${x.book.author ? ` — ${x.book.author}` : ""}`, ...x.news.map((n) => `  ${this.line(n, x.id)}`), `  ${site}${x.news.find((n) => n.href)?.href || x.book.href}`, ``]),
+      ...shown.flatMap((x) => {
+        const b = this.shownBook(x);
+        return [`${b.title}${b.author ? ` — ${b.author}` : ""}`, ...x.news.map((n) => `  ${this.line(n, x.id)}`), `  ${site}${b.href}`, ``];
+      }),
       ...(books.length > shown.length ? [`І ще ${books.length - shown.length}: ${site}/@${reader.username}`, ``] : []),
       `Відписатися від цих листів: ${off}`,
     ];
@@ -128,10 +144,11 @@ class WantMail {
       site,
       title: subject,
       section: "Хочу прочитати",
-      heading: M.esc(one ? "Книжка з вашого «Хочу прочитати» тепер є" : "Книжки з вашого «Хочу прочитати» тепер є"),
+      heading: M.esc(one ? subject : "Новини з вашого «Хочу прочитати»"),
       body:
-        shown.map((x) => M.book({ ...x.book, href: x.news.find((n) => n.href)?.href || x.book.href, note: x.news.map((n) => M.esc(this.line(n, x.id))).join("<br>") }, site)).join("") +
+        shown.map((x) => M.book({ ...this.shownBook(x), note: one && k === "free" ? M.esc(this.line(n0, x.id).replace(/\s*Є на Вільній полиці\.$/, "")) : x.news.map((n) => M.esc(this.line(n, x.id))).join("<br>") }, site)).join("") +
         (books.length > shown.length ? `<p style="font-size:14px;color:#6b675f;margin:16px 0 0">І ще ${books.length - shown.length} на <a href="${site}/@${M.esc(reader.username)}" style="color:#6b675f">вашій полиці</a></p>` : ""),
+      button: one && k === "free" && n0.item.url ? { text: "Читати в Читалці", href: n0.item.url } : null,
       off: { href: off, text: "Не надсилати таких листів" },
     });
     return { to: reader.email, subject, text: require("./admin").mailLinks(text.join("\n"), site, "want"), html: require("./admin").mailLinks(html, site, "want", true), headers: { "List-Unsubscribe": `<${off}>`, "List-Unsubscribe-Post": "List-Unsubscribe=One-Click" } };
