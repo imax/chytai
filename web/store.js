@@ -1868,6 +1868,8 @@ class Store {
     const db = this.db;
     this.lib = { books: {} };
     this.entries = new Map(); // reader id -> { book id -> entry }
+    this.readerV = new Map(); // reader id -> how many times their entries changed (social.js)
+    this.loadV = (this.loadV || 0) + 1; // everything read again: social.js counts everyone again
     this.subs = new Map(); // reader id -> [shelf id]
     for (const r of db.prepare("SELECT id, data FROM books").all()) this.lib.books[r.id] = JSON.parse(r.data);
     for (const r of db.prepare("SELECT * FROM entries").all()) this.entriesOf(r.reader)[r.book] = { status: r.status, year: r.year, rating: r.rating, note: r.note, copy: r.copy, order: r.ord, ...(r.added ? { added: r.added } : {}), ...(r.updated ? { updated: r.updated } : {}), ...(r.kids ? { kids: true } : {}) };
@@ -1886,6 +1888,7 @@ class Store {
   // A reader who is gone (deleted account): their rows are already deleted by auth.js.
   forgetReader(reader) {
     this.entriesV = (this.entriesV || 0) + 1;
+    this.readerV.set(reader, (this.readerV.get(reader) || 0) + 1);
     this.entries.delete(reader);
     this.subs.delete(reader);
     this.db.prepare("DELETE FROM rated WHERE reader = ?").run(reader);
@@ -1893,6 +1896,7 @@ class Store {
 
   writeEntry(reader, id, e) {
     this.entriesV = (this.entriesV || 0) + 1; // social.js keeps what it counts from the entries until this changes
+    this.readerV.set(reader, (this.readerV.get(reader) || 0) + 1); // and counts again only this reader's
     if (!e) return this.db.prepare("DELETE FROM entries WHERE reader = ? AND book = ?").run(reader, id);
     this.db
       .prepare("INSERT INTO entries (reader, book, status, rating, year, note, copy, ord, added, updated, kids) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (reader, book) DO UPDATE SET status = excluded.status, rating = excluded.rating, year = excluded.year, note = excluded.note, copy = excluded.copy, ord = excluded.ord, added = excluded.added, updated = excluded.updated, kids = excluded.kids")

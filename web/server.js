@@ -65,6 +65,7 @@ const store = new Store(DATA_DIR);
 const telegram = require("./telegram"); // messages to the owner in Telegram (telegram.js)
 telegram.init(store.db);
 const errors = require("./errors"); // pages that failed and crashes: kept for /admin, sent to Telegram (errors.js)
+const storage = require("./storage"); // disk and memory: a row on /admin, Telegram near a limit (storage.js)
 errors.init(store.db);
 errors.watchProcess(bg.ROLE === "jobs" ? "jobs" : "site");
 const { MailGuard } = require("./mailguard");
@@ -1061,6 +1062,8 @@ function notifyOwner(subject, text) {
   if (!to) return console.log(`[notify] no owner e-mail: ${subject}`);
   auth.send(to, subject, text).catch((e) => console.error(`[notify] ${subject}: ${e.message}`));
 }
+// The site's disk and memory near their limit (storage.js); the jobs process watches its own memory.
+storage.watch(() => (bg.ROLE === "jobs" ? storage.problems({ ...storage.now(DATA_DIR), diskTotal: 0 }, "Сайт, фонові задачі") : storage.problems(storage.now(DATA_DIR, ["chytai.db"]), "Сайт")), notifyOwner);
 const librariesFor = (req) => libraries.LIBRARIES.filter((l) => req.owner || !l.draft);
 // What readers do with books (social.js): ratings, the feed, «книжка навмання», recommendations.
 const social = new Social(store, (id) => pub(auth.reader(id)));
@@ -2782,7 +2785,7 @@ app.get("/admin", owner, async (req, res) => {
   const since = new Date(Date.now() - 86400000).toISOString();
   const runs = store.db.prepare("SELECT job, ok FROM job_runs WHERE started >= ?").all(since);
   const failed = [...new Set(runs.filter((r) => r.ok === 0).map((r) => r.job))];
-  const health = healthBlock({ day: speed.days(1).get(require("./admin").dayOf(new Date())) || null, jobs: { n: runs.length, failed }, reader: !!reader, errors: errors.lastDay(), mail: mailHealth() });
+  const health = healthBlock({ day: speed.days(1).get(require("./admin").dayOf(new Date())) || null, jobs: { n: runs.length, failed }, reader: !!reader, errors: errors.lastDay(), mail: mailHealth(), storage: { site: storage.now(DATA_DIR, ["chytai.db"]), reader: reader?.storage || null } });
   const activity = activityPage({ ...activityFor(null, 1), embed: true });
   res.send(adminPage({ user: req.user, stats: admin.stats(), gsc: gsc.data(), gscOn: gsc.configured(), reader, health, activity, layout: pages.layout }));
 });

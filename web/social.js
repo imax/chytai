@@ -54,14 +54,33 @@ class Social {
   all() {
     const had = this.fresh("_all");
     if (had) return had;
-    const out = this.keep("_all", []);
+    // Between full counts (every five minutes, as the comment above says, or after the store was read again) only
+    // the readers whose entries changed are counted again: each count looks every book up in the catalog, which
+    // took ~0.1 s with 200 readers and grows with every shelf (scaling review, 2026-11-05).
+    const prev = this._rows;
+    const full = !prev || prev.loadV !== this.store.loadV || Date.now() - prev.at > 5 * 60 * 1000;
+    const rows = full ? { at: Date.now(), loadV: this.store.loadV, by: new Map(), v: new Map() } : prev;
     for (const [rid, entries] of this.store.entries) {
+      const v = this.store.readerV.get(rid) || 0;
+      if (!full && rows.by.has(rid) && rows.v.get(rid) === v) continue;
       const reader = this.who(rid);
-      if (!reader) continue;
+      const list = [];
       // A reader who rated nothing yet is in the feed too (Max 2026-10-30; from 2026-10-26 they were left out).
-      for (const [id, e] of Object.entries(entries)) if ((e.status || e.rating != null) && e.status !== "abandoned" && !e.kids && !isRussian(this.store.book(id))) out.push({ reader, id, entry: e });
+      if (reader) for (const [id, e] of Object.entries(entries)) if ((e.status || e.rating != null) && e.status !== "abandoned" && !e.kids && !isRussian(this.store.book(id))) list.push({ reader, id, entry: e });
+      rows.by.set(rid, list);
+      rows.v.set(rid, v);
     }
-    return out;
+    for (const rid of rows.by.keys()) if (!this.store.entries.has(rid)) rows.by.delete(rid), rows.v.delete(rid);
+    this._rows = rows;
+    const out = [];
+    for (const rid of this.store.entries.keys()) for (const x of rows.by.get(rid) || []) out.push(x);
+    return this.keep("_all", out);
+  }
+
+  // One reader's rows of all().
+  of(rid) {
+    this.all();
+    return this._rows.by.get(rid) || [];
   }
 
   // A book across readers: the mean rating, how many rated it, want it and have it at all; how many
@@ -83,6 +102,10 @@ class Social {
   // entries are dated by when they were read, so a new reader with 190 books was nowhere near the top
   // (Max, 2026-11-02, @stefanovskyi). One line, «N книжок на полиці», with a few of their best rated books.
   feed({ limit = 6, books = null, notes = false, min = 0, readers = null, perReader = 0, shelves = false } = {}) {
+    // The whole site's feed (/community) is kept like all(); one for some books or readers is counted each time.
+    const memo = !books && !readers && `_feed:${limit}:${notes}:${min}:${perReader}:${shelves}`;
+    const kept = memo && this.fresh(memo);
+    if (kept) return kept;
     const items = this.all().filter(({ reader, id, entry: e }) => (!readers || readers.has(reader.id)) && (!books || books.has(id)) && (!notes || e.note) && (!min || (e.rating ?? 0) >= min));
     // One line a reader, at their newest import; it says how many books the shelf has now.
     const had = new Set();
@@ -128,12 +151,12 @@ class Social {
       if (line.series.books.length < 2) delete line.series;
       else foldSeries(line);
     }
-    return out.slice(0, limit);
+    return memo ? this.keep(memo, out.slice(0, limit)) : out.slice(0, limit);
   }
 
   // A few books to show for a reader's shelf: the best rated, then the newest, with a cover.
   shelfBooks(rid, n = 5) {
-    const rows = this.all().filter((x) => x.reader.id === rid && x.entry.status !== "want");
+    const rows = this.of(rid).filter((x) => x.entry.status !== "want");
     rows.sort((a, b) => (b.entry.rating ?? 0) - (a.entry.rating ?? 0) || ((b.entry.updated || "") > (a.entry.updated || "") ? 1 : -1));
     const out = [];
     for (const { id } of rows) {

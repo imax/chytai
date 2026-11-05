@@ -23,6 +23,7 @@ const { checkUpload } = require("./content");
 const { cost } = require("./admin");
 const { createProtected } = require("./protected");
 const paper = require("./paper");
+const storage = require("./storage");
 const { searchReader } = require("./search");
 const { landingPage: renderLanding } = require("./landing");
 
@@ -108,11 +109,19 @@ const USER_KEYS = new Set(Object.keys(USER_DEFAULTS));
 // state.users and state.libs are keyed by account id; state.accounts[id] = { name, username, since, seen, off }.
 // state.shared holds the model settings and, being the owner's from before accounts, his library's
 // bookMeta and added; other libraries keep theirs in state.libs[id].
+// Since 2026-11-05 all of it lives in DATA_DIR/reader.db (server/db.js): the small part in memory, written row by
+// row when it changes; notes, kept explanations and paper-book questions only in the database. The first start
+// with it reads state.json once and moves everything over (at the end of this file, before listen).
+const store = require("./db").open(DATA_DIR);
 let state = { shared: {}, users: {}, guestUsage: {} };
-try {
-  state = { shared: {}, users: {}, guestUsage: {}, ...JSON.parse(fs.readFileSync(STATE_FILE, "utf8")) };
-} catch {
-  /* first start */
+if (store.migrated()) {
+  state = { shared: {}, users: {}, guestUsage: {}, ...store.loadState() };
+} else {
+  try {
+    state = { shared: {}, users: {}, guestUsage: {}, ...JSON.parse(fs.readFileSync(STATE_FILE, "utf8")) };
+  } catch {
+    /* first start */
+  }
 }
 state.accounts ??= {};
 state.libs ??= {};
@@ -139,14 +148,60 @@ if (!state.themeAuto) {
   state.themeAuto = true;
 }
 
+// Writes what changed since the last save (server/db.js persist), a moment after the last change.
 let saveTimer = null;
 function saveState() {
   clearTimeout(saveTimer);
-  saveTimer = setTimeout(() => {
-    const tmp = `${STATE_FILE}.tmp`;
-    fs.writeFileSync(tmp, JSON.stringify(state, null, 2));
-    fs.renameSync(tmp, STATE_FILE);
-  }, 200);
+  saveTimer = setTimeout(flushState, 200);
+}
+function flushState() {
+  clearTimeout(saveTimer);
+  saveTimer = null;
+  if (!store.migrated()) return; // before the move from state.json nothing is written (migrateState writes it all)
+  store.persist(state);
+}
+// A deploy stops the machine: what changed in the last moment is written first.
+for (const sig of ["SIGTERM", "SIGINT"]) {
+  process.on(sig, () => {
+    try {
+      flushState();
+    } catch (err) {
+      console.error("save on exit:", err.message);
+    }
+    process.exit(0);
+  });
+}
+
+// Notes, kept explanations and paper-book questions (kind "notes" | "chats" | "paperChats") of whoever asks, per
+// book: an account's in the database, a guest's (and a shared link's) in memory with the guest, as before.
+function bookItems(req, kind, book) {
+  if (req.guest) return guestState(req.guest)[kind]?.[book] || [];
+  return store.items.list(req.acct, kind, book);
+}
+function saveBookItems(req, kind, book, list) {
+  if (req.guest) {
+    const u = guestState(req.guest);
+    u[kind] ??= {};
+    if (list.length) u[kind][book] = list;
+    else delete u[kind][book];
+    if (req.share) saveState();
+    return;
+  }
+  store.items.save(req.acct, kind, book, list);
+}
+// One note or talk added or replaced by its id; at most `max` in the book, the oldest go.
+function putBookItem(req, kind, book, item, max = 0) {
+  if (!req.guest) return store.items.put(req.acct, kind, book, item, max);
+  const list = [...bookItems(req, kind, book)];
+  const i = list.findIndex((x) => x.id === item.id);
+  if (i >= 0) list[i] = item;
+  else list.push(item);
+  if (max && list.length > max) list.splice(0, list.length - max);
+  saveBookItems(req, kind, book, list);
+}
+function allBookItems(req, kind) {
+  if (req.guest) return guestState(req.guest)[kind] || {};
+  return store.items.books(req.acct, kind);
 }
 
 function userState(name) {
@@ -406,13 +461,15 @@ async function collectStats() {
   const minutesOf = (id, from) => Math.round(dayKeys.filter((k) => !from || k >= from).reduce((a, k) => a + (stats.days[k].readSec?.[id] || 0), 0) / 60);
   const costOf = (id) => dayKeys.filter((k) => k >= monthAgo).reduce((a, k) => a + (stats.days[k].userCost?.[id] || 0), 0);
   const ids = [...new Set([...Object.keys(state.users), ...Object.keys(state.accounts)])].filter((id) => ACCOUNT_ID.test(id));
+  const noteTimes = new Map();
+  for (const r of store.items.noteTimes()) (noteTimes.get(r.acct) || noteTimes.set(r.acct, []).get(r.acct)).push(Number(r.at) || 0);
   const users = ids
     .map((id) => [id, state.users[id] || {}])
     .map(([id, u]) => {
       const lastSeen = Math.max(0, state.accounts[id]?.seen || 0, ...Object.values(u.opened || {}));
       const started = new Set(Object.keys(u.positions || {}).map((p) => p.replace(/#reflow$/, ""))).size;
       // Notes saved (Max, 2026-11-04: another sign the reader is really used), counted from their createdAt.
-      const made = Object.values(u.notes || {}).flat().map((nt) => nt.createdAt || 0);
+      const made = noteTimes.get(id) || [];
       const notesToday = made.filter((t) => t && statsDay(t) === today).length;
       const notesWeek = made.filter((t) => t && statsDay(t) >= weekAgo).length;
       return { id, notesToday, notesWeek, notesTotal: made.length, name: accountName(id), username: state.accounts[id]?.username || "", off: !!state.accounts[id]?.off, owner: id === OWNER_ID, cost30: costOf(id), readToday: minutesOf(id, today), readWeek: minutesOf(id, weekAgo), read30: minutesOf(id, monthAgo), books: countBooks(id), today: sumUser(id, today), week: sumUser(id, weekAgo), total: sumUser(id), started, lastSeen, lastBook: u.lastBook, lastOpened: u.opened?.[u.lastBook] || 0, activeWeek: lastSeen > Date.now() - 7 * 86400000 };
@@ -458,6 +515,8 @@ async function collectStats() {
     books,
     days,
     models,
+    // Disk, memory and the database of the reader's machine, for the site's Performance block (storage.js).
+    storage: storage.now(DATA_DIR, ["reader.db"]),
     guestsToday: Object.keys(gu.guests).length,
     guestExplainsToday: gu.total,
     guestTotalLimit: GUEST_TOTAL_LIMIT,
@@ -1343,29 +1402,21 @@ api.put("/position", (req, res) => {
 
 const NOTE_TEXT_MAX = 4000;
 
-function notesOf(req, bookPath) {
-  const u = req.guest ? guestState(req.guest) : userState(req.acct);
-  u.notes ??= {};
-  return { u, list: (u.notes[bookPath] ??= []) };
-}
-
 api.get("/notes", (req, res) => {
-  const bookPath = String(req.query.path || "");
-  const u = req.guest ? guestState(req.guest) : userState(req.acct);
-  res.json({ notes: u.notes?.[bookPath] || [] });
+  res.json({ notes: bookItems(req, "notes", String(req.query.path || "")) });
 });
 
 // Every note of this reader, for the home screen's Нотатки: { "<book>": [note, …] }.
 api.get("/notes/all", (req, res) => {
-  const u = req.guest ? guestState(req.guest) : userState(req.acct);
-  res.json({ books: u.notes || {} });
+  res.json({ books: allBookItems(req, "notes") });
 });
 
 // The panel's search goes past titles: the reader's notes and talks with Claude (server/search.js).
 api.get("/search", (req, res) => {
   const q = String(req.query.q || "").slice(0, 200);
   const u = req.guest ? guestState(req.guest) : userState(req.acct);
-  res.json({ hits: searchReader(u, q) });
+  const mine = Object.fromEntries(store.KINDS.map((k) => [k, allBookItems(req, k)]));
+  res.json({ hits: searchReader({ ...u, ...mine }, q) });
 });
 
 api.post("/notes", (req, res) => {
@@ -1373,8 +1424,7 @@ api.post("/notes", (req, res) => {
   if (typeof bookPath !== "string" || typeof cfi !== "string" || typeof text !== "string" || !text.trim()) {
     return res.status(400).json({ error: "bad request" });
   }
-  const { list } = notesOf(req, bookPath);
-  const existing = list.find((n) => n.cfi === cfi);
+  const existing = bookItems(req, "notes", bookPath).find((n) => n.cfi === cfi);
   if (existing) return res.json({ note: existing });
   const note = {
     id: crypto.randomBytes(6).toString("hex"),
@@ -1387,13 +1437,13 @@ api.post("/notes", (req, res) => {
     // A quote from a paper book's page photo (paper.js), drawn as a quote among the notes.
     ...(req.body.quote === true ? { quote: true } : {}),
   };
-  list.push(note);
-  if (!req.guest || req.share) saveState();
+  putBookItem(req, "notes", bookPath, note);
   res.json({ note });
 });
 
 api.patch("/notes/:id", (req, res) => {
-  const { list } = notesOf(req, String(req.query.path || ""));
+  const bookPath = String(req.query.path || "");
+  const list = bookItems(req, "notes", bookPath);
   const note = list.find((n) => n.id === req.params.id);
   if (!note) return res.status(404).json({ error: "Нотатки немає." });
   if (typeof req.body?.comment === "string") note.comment = req.body.comment.slice(0, NOTE_TEXT_MAX);
@@ -1410,16 +1460,13 @@ api.patch("/notes/:id", (req, res) => {
     const n = Math.floor(Number(req.body.page));
     note.chapter = n > 0 && n < 100000 ? `стор. ${n}` : "";
   }
-  if (!req.guest || req.share) saveState();
+  saveBookItems(req, "notes", bookPath, list);
   res.json({ note });
 });
 
 api.delete("/notes/:id", (req, res) => {
   const bookPath = String(req.query.path || "");
-  const { u, list } = notesOf(req, bookPath);
-  u.notes[bookPath] = list.filter((n) => n.id !== req.params.id);
-  if (!u.notes[bookPath].length) delete u.notes[bookPath];
-  if (!req.guest || req.share) saveState();
+  saveBookItems(req, "notes", bookPath, bookItems(req, "notes", bookPath).filter((n) => n.id !== req.params.id));
   res.json({ ok: true });
 });
 
@@ -1428,14 +1475,8 @@ api.delete("/notes/:id", (req, res) => {
 // turns: [{ q, a }], messages, model, at }]. Reopening the book brings the cards and the marks back; follow-ups
 // go on from the kept talk. A guest's live only as long as the guest's session, like the guest's notes.
 const BOOK_CHATS_MAX = 500;
-function chatsOf(req, bookPath) {
-  const u = req.guest ? guestState(req.guest) : userState(req.acct);
-  u.chats ??= {};
-  return { u, list: (u.chats[bookPath] ??= []) };
-}
 api.get("/chats", (req, res) => {
-  const u = req.guest ? guestState(req.guest) : userState(req.acct);
-  res.json({ chats: u.chats?.[String(req.query.path || "")] || [] });
+  res.json({ chats: bookItems(req, "chats", String(req.query.path || "")) });
 });
 api.put("/chats/:id", (req, res) => {
   const { path: bookPath, cfi, posKey, mode, sel, chapter, turns, messages, model, at } = req.body || {};
@@ -1456,21 +1497,13 @@ api.put("/chats/:id", (req, res) => {
   };
   // A long talk keeps its turns for reading, but no longer goes on from where it was.
   if (JSON.stringify(chat.messages || "").length > CHAT_BYTES) chat.messages = null;
-  const { list } = chatsOf(req, bookPath);
-  const i = list.findIndex((c) => c.id === chat.id);
-  if (i >= 0) list[i] = chat;
-  else list.push(chat);
-  if (list.length > BOOK_CHATS_MAX) list.splice(0, list.length - BOOK_CHATS_MAX);
-  if (!req.guest || req.share) saveState();
+  putBookItem(req, "chats", bookPath, chat, BOOK_CHATS_MAX);
   res.json({ ok: true });
 });
 // One explanation («Очистити розмову»), or with no id every one in the book (the panel's «Очистити»).
 api.delete(["/chats/:id", "/chats"], (req, res) => {
   const bookPath = String(req.query.path || "");
-  const { u, list } = chatsOf(req, bookPath);
-  u.chats[bookPath] = req.params.id ? list.filter((c) => c.id !== req.params.id) : [];
-  if (!u.chats[bookPath].length) delete u.chats[bookPath];
-  if (!req.guest || req.share) saveState();
+  saveBookItems(req, "chats", bookPath, req.params.id ? bookItems(req, "chats", bookPath).filter((c) => c.id !== req.params.id) : []);
   res.json({ ok: true });
 });
 
@@ -1490,6 +1523,7 @@ async function dropDeletedAccounts() {
       delete state.accounts[id];
       delete state.users[id];
       delete state.libs[id];
+      store.items.dropAccount(id);
       for (const [t, sh] of Object.entries(state.shares)) if (sh.acct === id) delete state.shares[t];
       libs.delete(id);
       console.log(`account ${id} deleted on the site: its reader data is gone too`);
@@ -2046,8 +2080,10 @@ api.get("/reflow", (req, res, next) => (req.guest ? res.status(204).end() : next
 // 3 GB disk, so one account could bring the reader down for everyone. Now a reader's file is at most 100 MB,
 // their library (books, trash, PDF text versions) at most 1 GB, two uploads run at a time, and none starts
 // when the disk would have under 300 MB left. The owner keeps the old 300 MB and no quota.
+// 2026-11-05 (scaling review, Max OK): a library at most 300 MB, since all readers share one 3 GB disk; a file
+// someone already uploaded is kept once (store.writeBook), so a popular book costs the disk only once.
 const UPLOAD_MAX = 100 * 1024 * 1024;
-const ACCOUNT_QUOTA = 1024 * 1024 * 1024;
+const ACCOUNT_QUOTA = 300 * 1024 * 1024;
 const DISK_RESERVE = 300 * 1024 * 1024;
 let uploadsRunning = 0;
 function dirSize(dir) {
@@ -2094,7 +2130,7 @@ api.put("/books/:name", uploadGuard, uploadBody, async (req, res) => {
     console.log("upload refused", name, req.user, check.reason);
     return res.status(400).json({ error: "Схоже, це порнографія чи еротика, тому Chytai не додав книжку до бібліотеки. Якщо це помилка, напишіть Максові." });
   }
-  fs.writeFileSync(bookFile(req.lib, name), req.body);
+  store.writeBook(bookFile(req.lib, name), req.body);
   // The same file again while its old copy waits in the trash: the new one stays, the old one goes.
   if (req.lib.meta.trash?.[name]) fs.rmSync(trashFile(req.lib, name), { force: true }), delete req.lib.meta.trash[name];
   (req.lib.meta.added ??= {})[name] = { by: req.acct, at: Date.now() };
@@ -2114,26 +2150,19 @@ api.post("/books/:name/epub", uploadGuard, uploadBody, (req, res) => {
   let epub = name.replace(/\.pdf$/i, ".epub");
   if (fs.existsSync(bookFile(req.lib, epub))) epub = name.replace(/\.pdf$/i, " (з PDF).epub");
   if (!safeBookName(epub)) return res.status(400).json({ error: "Не вдалося назвати файл." });
-  fs.writeFileSync(bookFile(req.lib, epub), req.body);
+  store.writeBook(bookFile(req.lib, epub), req.body);
   const meta = req.lib.meta;
   for (const key of ["added", "bookMeta"]) if (meta[key]?.[name]) meta[key][epub] = meta[key][name];
   const u = userState(req.acct);
   const from = `${name}#reflow`;
   if (u.positions?.[from]) u.positions[epub] = u.positions[from];
   for (const key of ["progress", "opened", "finished", "seen", "fontSizes"]) if (u[key]?.[name] !== undefined) u[key][epub] = u[key][name];
-  const notes = u.notes?.[name] || [];
-  const moved = notes.filter((n) => n.posKey === from);
-  if (moved.length) {
-    u.notes[epub] = [...(u.notes[epub] || []), ...moved.map((n) => ({ ...n, posKey: epub }))];
-    u.notes[name] = notes.filter((n) => n.posKey !== from);
-    if (!u.notes[name].length) delete u.notes[name];
-  }
-  const chats = u.chats?.[name] || [];
-  const movedChats = chats.filter((c) => c.posKey === from);
-  if (movedChats.length) {
-    u.chats[epub] = [...(u.chats[epub] || []), ...movedChats.map((c) => ({ ...c, posKey: epub }))];
-    u.chats[name] = chats.filter((c) => c.posKey !== from);
-    if (!u.chats[name].length) delete u.chats[name];
+  for (const kind of ["notes", "chats"]) {
+    const list = bookItems(req, kind, name);
+    const moved = list.filter((n) => n.posKey === from);
+    if (!moved.length) continue;
+    saveBookItems(req, kind, epub, [...bookItems(req, kind, epub), ...moved.map((n) => ({ ...n, posKey: epub }))]);
+    saveBookItems(req, kind, name, list.filter((n) => n.posKey !== from));
   }
   if (u.lastBook === name) u.lastBook = epub;
   const key = customCoverKey(name);
@@ -2238,6 +2267,8 @@ function forgetBook(lib, acct, name) {
     }
     if (u.lastBook === name) delete u.lastBook;
   }
+  store.items.dropBook(acct, "notes", name);
+  store.items.dropBook(acct, "notes", `${name}#reflow`);
   for (const [t, sh] of Object.entries(state.shares)) if (sh.acct === acct && sh.book === name) delete state.shares[t];
   const key = customCoverKey(name);
   if (fs.existsSync(lib.covers)) for (const f of fs.readdirSync(lib.covers)) if (f.split(".")[0] === key) fs.rmSync(path.join(lib.covers, f), { force: true });
@@ -2371,12 +2402,12 @@ function dropPaperImgs(acct, name, chats) {
   if (moved) console.log(`paper: ${moved} pictures moved out of state.json`), saveState();
 }
 api.get("/paper/:name/chats", guestsCannot("Без входу паперових книжок немає."), (req, res) => {
-  const list = userState(req.acct).paperChats?.[req.params.name] || [];
+  const list = bookItems(req, "paperChats", req.params.name);
   const url = (c) => `/api/paper/${encodeURIComponent(req.params.name)}/chats/${c.id}/img`;
   res.json({ chats: list.map(({ imgFile, ...c }) => ({ ...c, img: imgFile ? url(c) : c.img || "" })) });
 });
 api.get("/paper/:name/chats/:id/img", guestsCannot("Без входу паперових книжок немає."), (req, res) => {
-  const c = userState(req.acct).paperChats?.[req.params.name]?.find((x) => x.id === req.params.id);
+  const c = bookItems(req, "paperChats", req.params.name).find((x) => x.id === req.params.id);
   if (!c?.imgFile) return res.status(404).end();
   res.setHeader("Cache-Control", "private, max-age=31536000, immutable");
   res.sendFile(paperImgFile(req.acct, req.params.name, c.id), (err) => err && !res.headersSent && res.status(404).end());
@@ -2396,7 +2427,7 @@ api.put("/paper/:name/chats/:id", guestsCannot("Без входу паперов
   };
   // A long talk keeps its turns for reading, but no longer goes on from where it was.
   if (JSON.stringify(chat.messages || "").length > CHAT_BYTES) chat.messages = null;
-  const list = ((u.paperChats ??= {})[req.params.name] ??= []);
+  const list = bookItems(req, "paperChats", req.params.name);
   const i = list.findIndex((c) => c.id === chat.id);
   // A small picture of the marked page (v3), shown with the question: a new one comes as a data URL,
   // a kept one comes back as its address and stays as it is.
@@ -2408,6 +2439,7 @@ api.put("/paper/:name/chats/:id", guestsCannot("Без входу паперов
   if (i >= 0) list[i] = chat;
   else list.push(chat);
   if (list.length > CHATS_MAX) dropPaperImgs(req.acct, req.params.name, list.splice(0, list.length - CHATS_MAX));
+  saveBookItems(req, "paperChats", req.params.name, list);
   (u.opened ??= {})[req.params.name] = Date.now();
   saveState();
   res.json({ ok: true });
@@ -2423,7 +2455,7 @@ api.post("/paper/:name/suggest", guestsCannot("Без входу паперов�
   const u = userState(req.acct);
   const p = u.paper?.[req.params.name];
   if (!p || !apiKey) return res.json({ questions: [] });
-  const chats = u.paperChats?.[req.params.name] || [];
+  const chats = bookItems(req, "paperChats", req.params.name);
   const lastChat = [...chats].sort((x, y) => (y.at || 0) - (x.at || 0))[0];
   const turn = lastChat?.turns?.[lastChat.turns.length - 1];
   const last = turn ? { q: turn.q || lastChat.sel || "", a: turn.a || "" } : null;
@@ -2468,13 +2500,9 @@ api.post("/tidy", guestsCannot("Без входу диктування не до
   }
 });
 api.delete("/paper/:name/chats/:id", guestsCannot("Без входу паперових книжок немає."), (req, res) => {
-  const u = userState(req.acct);
-  const list = u.paperChats?.[req.params.name];
-  if (list) {
-    dropPaperImgs(req.acct, req.params.name, list.filter((c) => c.id === req.params.id));
-    u.paperChats[req.params.name] = list.filter((c) => c.id !== req.params.id);
-  }
-  saveState();
+  const list = bookItems(req, "paperChats", req.params.name);
+  dropPaperImgs(req.acct, req.params.name, list.filter((c) => c.id === req.params.id));
+  saveBookItems(req, "paperChats", req.params.name, list.filter((c) => c.id !== req.params.id));
   res.json({ ok: true });
 });
 // A paper book has no file to keep in «Нещодавно видалені»: it goes with its notes.
@@ -2483,8 +2511,9 @@ api.delete("/paper/:name", guestsCannot("Без входу паперових к
   const name = req.params.name;
   if (!u.paper?.[name]) return res.status(404).json({ error: "Книжки немає." });
   delete u.paper[name];
-  dropPaperImgs(req.acct, name, u.paperChats?.[name]);
-  for (const key of ["positions", "progress", "opened", "setAside", "seen", "notes", "finished", "paperChats"]) delete u[key]?.[name];
+  dropPaperImgs(req.acct, name, bookItems(req, "paperChats", name));
+  for (const kind of ["notes", "paperChats"]) store.items.dropBook(req.acct, kind, name);
+  for (const key of ["positions", "progress", "opened", "setAside", "seen", "finished"]) delete u[key]?.[name];
   saveState();
   res.json({ ok: true });
 });
@@ -2595,6 +2624,17 @@ app.use((err, req, res, _next) => {
   if (res.headersSent) return res.end();
   res.status(err.status || 500).json({ error: err.message || "server error" });
 });
+
+// The reader's disk and memory near their limit: a message to the owner (storage.js), checked while it runs.
+storage.watch(() => storage.problems(storage.now(DATA_DIR, ["reader.db"]), "Читалка"), (subject, text) => alertOwner(subject, text));
+
+// Once: state.json into reader.db (server/db.js). Here at the end, after every one-time fix above ran on the
+// state as read from the file (the paper-book pictures moved out, 2026-11-05), and before any request.
+if (!store.migrated()) {
+  const t = Date.now();
+  store.migrate(state);
+  console.log(`state.json moved into reader.db in ${Date.now() - t} ms`);
+}
 
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`Chytai web on http://0.0.0.0:${PORT}, books in ${BOOKS_DIR}`);

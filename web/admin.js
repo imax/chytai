@@ -1059,7 +1059,7 @@ ${activity}
 
 // «Performance» on Огляд (Max named it): today's speed (speed.js), the background jobs of the last day (job_runs) and whether
 // the reader answered. A line turns red only when something needs a look.
-function healthBlock({ day = null, jobs = { n: 0, failed: [] }, reader = true, errors = [], mail = null }) {
+function healthBlock({ day = null, jobs = { n: 0, failed: [] }, reader = true, errors = [], mail = null, storage = null }) {
   const PLACE = { site: "сайт", jobs: "фон", reader: "Читалка" };
   const errN = errors.reduce((n, e) => n + e.n, 0);
   // What failed, the most frequent first (errors.js keeps them; the same go to Telegram once an hour).
@@ -1076,9 +1076,20 @@ function healthBlock({ day = null, jobs = { n: 0, failed: [] }, reader = true, e
     [reader, "Читалка працює.", `Читалка не відповіла сайту: app.chytai.org.ua може лежати. <a href="https://app.chytai.org.ua/">Відкрити</a>`],
     [!errN, "Помилок за добу не було.", `Помилки за добу: ${errN}.${errList}`],
     ...(mail ? [mail] : []),
+    ...(storage ? [storageRow(storage)] : []),
   ];
   return `<h2>Performance</h2>
 <ul class="health">${rows.map(([ok, good, bad]) => `<li class="${ok ? "ok" : "bad"}">${ok ? good : bad}</li>`).join("")}</ul>`;
+}
+
+// Disk and memory of both machines (storage.js, scaling review 2026-11-05): one row, red near a limit.
+function storageRow({ site, reader }) {
+  const { problems } = require("./storage");
+  const bad = [...problems(site, "Сайт"), ...problems(reader, "Читалка")];
+  const pct = (s) => (s?.diskTotal ? `${Math.round((1 - s.diskFree / s.diskTotal) * 100)}%` : "?");
+  const mb = (n) => `${Math.round((n || 0) / 1048576)} МБ`;
+  const good = `Місця й пам'яті досить. Диск: сайт ${pct(site)}, Читалка ${reader ? pct(reader) : "?"}. Пам'ять: сайт ${mb(site?.rss)}, Читалка ${reader ? mb(reader.rss) : "?"}.`;
+  return [!bad.length, good, `Закінчується місце чи пам'ять: ${bad.map(esc).join("; ")}.`];
 }
 
 // /admin/overviews: every overview with readers' 🤩/🙂/🙁, the complained-about ones on top.
