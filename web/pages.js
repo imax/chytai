@@ -542,7 +542,7 @@ function joinBand(back) {
     <p class="kicker">Chytai</p>
     <p class="join-title">Проєкт для тих, хто любить книжки</p>
     <p class="join-text">Спільнота людей, каталоги українських видавництв, пошук і рекомендації, читалка, яка пояснює й перекладає.</p>
-    <p class="join-links"><a href="/publishers">📚 Видавництва</a><a href="/community">👥 Спільнота</a><a href="/">🔍 Пошук</a><a href="https://app.chytai.org.ua">📖 Читалка</a></p>
+    <p class="join-links"><a href="/">🔍 Пошук</a><a href="/club">💬 Клуб</a><a href="https://app.chytai.org.ua">📖 Читалка</a></p>
   </div>
   <a class="btn primary" rel="nofollow" href="${attr(back ? `/login?next=${encodeURIComponent(back)}` : "/login")}">Доєднатися</a>
 </section>`;
