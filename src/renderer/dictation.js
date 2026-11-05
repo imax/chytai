@@ -4,7 +4,32 @@
 /* global showNotice */
 (() => {
   const $ = (s) => document.querySelector(s);
-  const Speech = window.SpeechRecognition || window.webkitSpeechRecognition;
+  // The Android app (1.4.0, «/speech» in its user agent): its WebView has no working recognizer, so the
+  // shell's own (App.js, NativeSpeech) listens; its events come to window.__chytaiSpeech.
+  const NATIVE = /ChytaiApp\/\S*\/speech/.test(navigator.userAgent);
+  class NativeSpeech {
+    start() {
+      if (!window.ReactNativeWebView) throw new Error("no shell");
+      NativeSpeech.now = this;
+      this.done = [];
+      this.part = "";
+      window.ReactNativeWebView.postMessage(JSON.stringify({ type: "speech", action: "start" }));
+    }
+    stop() { window.ReactNativeWebView?.postMessage(JSON.stringify({ type: "speech", action: "stop" })); }
+    abort() { window.ReactNativeWebView?.postMessage(JSON.stringify({ type: "speech", action: "abort" })); }
+  }
+  // Android sends each pause's words as their own final result; the page wants all of them so far.
+  window.__chytaiSpeech = (ev) => {
+    const rec = NativeSpeech.now;
+    if (!rec) return;
+    if (ev.type === "result") {
+      if (ev.isFinal) ev.text && rec.done.push(ev.text), (rec.part = "");
+      else rec.part = ev.text;
+      rec.onresult?.({ results: [...rec.done, rec.part].filter(Boolean).map((t) => [{ transcript: t }]) });
+    } else if (ev.type === "error") rec.onerror?.({ error: ev.error });
+    else if (ev.type === "end") (NativeSpeech.now = null), rec.onend?.();
+  };
+  const Speech = NATIVE ? NativeSpeech : window.SpeechRecognition || window.webkitSpeechRecognition;
   // An iPhone app built without the microphone permission would close on it.
   const MIC_OK = !!Speech && (!/ChytaiApp/.test(navigator.userAgent) || /ChytaiApp\/camera\/mic/.test(navigator.userAgent));
   let listening = null;

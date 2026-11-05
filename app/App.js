@@ -16,6 +16,11 @@ import * as SplashScreen from 'expo-splash-screen';
 import * as Updates from 'expo-updates';
 import { WebView } from 'react-native-webview';
 
+// Android's WebView has no working speech recognition, so the page's dictation (dictation.js) asks the
+// shell, which uses the phone's own recognizer (Google). Android only; iOS keeps Safari's own. Native
+// module: the app needs a new build (1.4.0), so this OTA never reaches a build without it.
+const NativeSpeech = Platform.OS === 'android' ? require('expo-speech-recognition').ExpoSpeechRecognitionModule : null;
+
 export const READER_URL = 'https://chytai.fly.dev';
 // The reader's own addresses: chytai.fly.dev, and app.chytai.org.ua, where the server sends a request
 // it does not see as the app's (on Android the very first one can go out before the WebView adds
@@ -112,6 +117,34 @@ function Reader() {
     if (ready || failed) SplashScreen.hideAsync().catch(() => {});
   }, [ready, failed]);
 
+  // Dictation for the page on Android: its start/stop/abort come in onMessage, events go back to
+  // window.__chytaiSpeech (dictation.js turns them into what the Web Speech API would send).
+  const toPage = useCallback((ev) => {
+    webview.current?.injectJavaScript(`window.__chytaiSpeech && window.__chytaiSpeech(${JSON.stringify(ev)}); true;`);
+  }, []);
+  useEffect(() => {
+    if (!NativeSpeech) return;
+    const subs = [
+      NativeSpeech.addListener('result', (e) => toPage({ type: 'result', isFinal: !!e.isFinal, text: e.results?.[0]?.transcript || '' })),
+      NativeSpeech.addListener('error', (e) => toPage({ type: 'error', error: e.error })),
+      NativeSpeech.addListener('end', () => toPage({ type: 'end' })),
+    ];
+    return () => subs.forEach((s) => s.remove());
+  }, [toPage]);
+  const speech = useCallback(async (action) => {
+    if (!NativeSpeech) return;
+    try {
+      if (action === 'stop') return NativeSpeech.stop();
+      if (action === 'abort') return NativeSpeech.abort();
+      const perm = await NativeSpeech.requestPermissionsAsync();
+      if (!perm.granted) return toPage({ type: 'error', error: 'not-allowed' }), toPage({ type: 'end' });
+      NativeSpeech.start({ lang: 'uk-UA', interimResults: true, continuous: true, addsPunctuation: true });
+    } catch {
+      toPage({ type: 'error', error: 'service-not-allowed' });
+      toPage({ type: 'end' });
+    }
+  }, [toPage]);
+
   // Android's back button goes back in the reader, and leaves the app only from its first page.
   useEffect(() => {
     if (Platform.OS !== 'android') return;
@@ -155,7 +188,8 @@ function Reader() {
         // Lets the reader tell the app from Safari (renderer.js checks for ChytaiApp). «/camera»: this build
         // has the camera permission in Info.plist (paper books, 2026-11-02); without it iOS closes the app.
         // «/mic»: and the microphone and speech recognition ones (dictating a question).
-        applicationNameForUserAgent="ChytaiApp/camera/mic"
+        // «/speech» (Android, 1.4.0): dictation goes through the shell's recognizer, see NativeSpeech.
+        applicationNameForUserAgent={Platform.OS === 'android' ? 'ChytaiApp/camera/mic/speech' : 'ChytaiApp/camera/mic'}
         allowsBackForwardNavigationGestures
         allowsInlineMediaPlayback
         mediaCapturePermissionGrantType="grant"
@@ -190,6 +224,7 @@ function Reader() {
             const msg = JSON.parse(e.nativeEvent.data);
             if (msg.type === 'error') setPageError(String(msg.text).slice(0, 400));
             if (msg.type === 'protect') setProtected(!!msg.on);
+            if (msg.type === 'speech') speech(msg.action);
           } catch { /* not ours */ }
         }}
         onNavigationStateChange={(nav) => { canGoBack.current = nav.canGoBack; }}
