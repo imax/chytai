@@ -1,5 +1,6 @@
 // Runs ON a Fly machine (sent there by .github/workflows/backup.yml): packs a data directory into one
-// .tar.gz. SQLite files are copied with VACUUM INTO, so the copy is consistent even while the app writes;
+// .tar.gz. SQLite files (the site's web/chytai.db, the reader's reader.db since 2026-11-05) are copied with VACUUM INTO,
+// so the copy is consistent even while the app writes;
 // everything else is taken as is.
 //   node backup-snapshot.js <data dir> <out.tar.gz> [exclude ...]
 // Plain Node 22 (node:sqlite) and tar, both already in the app images.
