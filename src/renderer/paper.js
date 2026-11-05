@@ -27,6 +27,7 @@
   const CHATS_SHOWN = 3;
   let idea = ""; // the question the AI suggests asking next, shown as the field's placeholder (v3)
   let ideasKey = "";
+  let aboutOpen = false; // «Про книжку» at the end is unfolded (Max 2026-11-05: in place, no dialog)
 
   const where = (b, p = b.page) => [p ? `стор. ${p}` : "", b.chapter].filter(Boolean).join(" · ");
 
@@ -141,6 +142,7 @@
       chats = [];
       idea = "";
       ideasKey = "";
+      aboutOpen = false;
       load(b);
     }
     book = b;
@@ -217,7 +219,7 @@
             <div class="pp-chat-q">${c.img ? `<img class="pp-chat-img" src="${c.img}" alt="" />` : ""}${esc(c.sel ? (c.img ? c.sel : `«${c.sel}»`) : c.turns[0]?.q || live?.q || "")}</div>
             ${on ? c.turns.map((t, i) => `${(i || c.sel) && t.q ? fq(t.q) : ""}<div class="pp-chat-a answer">${md(t.a)}</div>`).join("") + pending
               : `<div class="pp-chat-a short">${esc(String(last.a || "").replace(/[*_#>`]/g, "").slice(0, 400))}</div>`}
-            <div class="pp-note-m">${esc([c.page ? `стор. ${c.page}` : "", when(c.at)].filter(Boolean).join(" · "))}${on && c.turns.length ? `<button type="button" class="r-link pp-more-q" data-pp-savechat="${esc(c.id)}">В нотатки</button><button type="button" class="r-link" data-pp-delchat="${esc(c.id)}">Видалити</button>` : ""}</div>
+            <div class="pp-note-m">${esc([c.page ? `стор. ${c.page}` : "", when(c.at)].filter(Boolean).join(" · "))}${on && c.turns.length ? `<button type="button" class="r-link pp-more-q" data-pp-savechat="${esc(c.id)}">В нотатки</button>` : ""}<button type="button" class="r-link" data-pp-delchat="${esc(c.id)}">Видалити</button></div>
             ${on && c.turns.length && !live?.busy ? `<form class="pp-fq" data-pp-fq="${esc(c.id)}"><input class="pp-fq-in" type="text" autocomplete="off" enterkeyhint="send" placeholder="Уточнити…" /><button type="submit" aria-label="Надіслати"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5M6 11l6-6 6 6"/></svg></button></form>` : ""}</div>`;
         }).join("")}${moreChats}</section>` : ""}
       <section class="pp-notes"><div class="r-sec-head"><h2>Нотатки${notes.length ? ` · ${notes.length}` : ""}</h2><button type="button" class="pp-addnote" data-pp="note">+ Нотатка</button></div>
@@ -232,7 +234,7 @@
           ${n.comment ? `<div class="pp-note-c">${md(n.comment)}</div>` : ""}
           <div class="pp-note-m">${esc(n.chapter || "")}<button type="button" class="r-link" data-pp-quote="${esc(n.id)}">${n.quote ? "Не цитата" : "Цитата"}</button><button type="button" class="r-link" data-pp-edit-note="${esc(n.id)}">Редагувати</button><button type="button" class="r-link" data-pp-del="${esc(n.id)}">Видалити</button></div></div>`).join("")
           : adding ? "" : `<p class="r-empty">Тут будуть ваші думки й цитати.</p>`}</section>
-      <button type="button" class="pp-row" data-pp="about"><span>Про книжку</span><span>›</span></button>
+      ${window.Shell.aboutBlock(b, aboutOpen)}
     </div>`;
   }
   const when = (t) => (t ? new Date(t).toLocaleDateString("uk-UA", { day: "numeric", month: "long" }) : "");
@@ -599,8 +601,16 @@
     return { selection: text, before: at > 0 ? all.slice(Math.max(0, at - 1500), at) : "", after: at >= 0 ? all.slice(at + text.length, at + text.length + 800) : "" };
   }
 
+  // The cover at the top unfolds it too and brings it into view.
+  function openAbout(scroll) {
+    aboutOpen = scroll ? true : !aboutOpen;
+    window.Shell.rerender();
+    if (aboutOpen) window.Shell.loadAbout(book, () => aboutOpen && window.Shell.rerender());
+    if (scroll) document.querySelector(".pp .ab-block")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
   document.addEventListener("click", async (e) => {
     if (!book || !e.target.closest(".pp")) return;
+    if (e.target.closest("[data-about-toggle]")) return openAbout(false);
     const del = e.target.closest("[data-pp-del]");
     if (del) {
       const id = del.dataset.ppDel;
@@ -675,7 +685,7 @@
     if (act === "unphoto") return photo && URL.revokeObjectURL(photo.thumb), (photo = null), redraw();
     if (act === "unattach") return (scan = null), (showText = false), window.Shell.rerender();
     if (act === "text") return (showText = !showText), window.Shell.rerender();
-    if (act === "about") return window.Shell.showAbout(book);
+    if (act === "about") return openAbout(true);
     if (act === "cancel-edit") {
       editing = null;
       return window.Shell.rerender();

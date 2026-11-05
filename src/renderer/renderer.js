@@ -1762,7 +1762,29 @@ function goToNote(note) {
   if (PHONE.matches) showPanel(false);
 }
 
+// «Про книжку» at the end of the panel, as on a paper book's page (Max 2026-11-05).
+let aboutOpen = "";
+function aboutBook() {
+  if (!current || current.preview) return null;
+  return window.Shell?.book?.(current.path) || { path: current.path, title: current.title, authors: current.author ? [current.author] : [] };
+}
+function renderAbout() {
+  const b = aboutBook();
+  $("#about-book").innerHTML = b && window.Shell?.aboutBlock ? window.Shell.aboutBlock(b, aboutOpen === b.path) : "";
+}
+$("#about-book").addEventListener("click", (e) => {
+  const b = aboutBook();
+  if (!b || !e.target.closest("[data-about-toggle]")) return;
+  aboutOpen = aboutOpen === b.path ? "" : b.path;
+  renderAbout();
+  if (aboutOpen) {
+    window.Shell.loadAbout(b, () => aboutOpen === b.path && renderAbout());
+    $("#about-book").scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }
+});
+
 function renderNotes() {
+  renderAbout();
   const box = $("#notes");
   box.innerHTML = "";
   window.PhoneRead?.notesCount();

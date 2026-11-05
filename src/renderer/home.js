@@ -1070,6 +1070,35 @@
     if (fresh && d.open) fill(fresh);
     else if (!fresh && d.open && $("#ab-body").textContent === "Завантажую…") $("#ab-body").innerHTML = `<p class="muted">Не вдалося завантажити опис.</p>`;
   }
+  // «Про книжку» as a block at the end of a book's panel that unfolds in place, like the questions and
+  // notes above it (Max 2026-11-05: no separate dialog). Same block for paper and e-books.
+  const aboutKept = new Map(); // path → the summary, once loaded
+  function aboutBlock(b, open) {
+    const a = b && aboutKept.get(b.path);
+    let body = "";
+    if (open) {
+      if (a?.failed) body = `<p class="muted">Не вдалося завантажити опис.</p>`;
+      else if (!a) body = `<p class="muted">${navigator.onLine ? "Завантажую…" : "Немає з'єднання, а опис цієї книжки ще не збережено."}</p>`;
+      else {
+        const meta = [author(b), a.year].filter(Boolean).join(" · ");
+        body = `${meta ? `<p class="ab-meta">${esc(meta)}</p>` : ""}${a.found
+          ? a.blurb ? a.blurb.split(/\n\n+/).map((p) => `<p>${esc(p)}</p>`).join("") : `<p class="muted">Опису поки немає.</p>`
+          : `<p class="muted">Цієї книжки ще немає в каталозі Chytai.</p>`}
+          <a class="ab-site" href="${esc(a.found ? a.href : a.add)}" target="_blank" rel="noopener">${a.found ? "Сторінка книжки на Chytai ↗" : "Додати на Chytai ↗"}</a>`;
+      }
+    }
+    return `<section class="ab-block${open ? " open" : ""}"><button type="button" class="pp-row" data-about-toggle><span>Про книжку</span><span class="ab-chev">›</span></button>${open ? `<div class="ab-inline">${body}</div>` : ""}</section>`;
+  }
+  // Loads the summary (the kept copy first, then a fresh one) and calls done after each that arrives.
+  async function loadAbout(b, done) {
+    if (!b || !window.reader.bookAbout) return;
+    const kept = aboutKept.get(b.path) || (await window.reader.bookAbout(b, true));
+    if (kept) aboutKept.set(b.path, kept), done();
+    const fresh = await window.reader.bookAbout(b);
+    if (fresh) aboutKept.set(b.path, fresh);
+    else if (!kept) aboutKept.set(b.path, { found: false, failed: true });
+    done();
+  }
   // The books being read get their summaries ahead, so «Про книжку» works offline for them.
   let aboutAhead = false;
   function fetchAboutAhead(books) {
@@ -1325,7 +1354,8 @@
   }
 
   window.Shell = {
-    show, hide, isNew, arrivals, markSeen, refresh, key, cover, when, setAside, rcover, showAbout, openPaper,
+    show, hide, isNew, arrivals, markSeen, refresh, key, cover, when, setAside, rcover, showAbout, openPaper, aboutBlock, loadAbout,
+    book: (path) => lib?.books.find((b) => b.path === path) || null,
     rerender: () => ((homeHtml = ""), renderHome()),
     reload: async () => ((lib = await window.Library.data(true)), (homeHtml = "")),
   };
