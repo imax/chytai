@@ -2,7 +2,7 @@
 // when a book (or a paper book's page) is on screen, the page is visible and the reader did something in the
 // last few minutes: a page turn, a tap, a key, a scroll, a selection. The seconds go to the server about once
 // a minute and when the page hides, per book (POST /api/reading); the server keeps them per reader, book and
-// day for the admin page (server/index.js recordReading). Nobody sees them in the reader.
+// day for the admin page (server/index.js recordReading) and for the reader's own «Цей тиждень» (GET /api/week).
 (() => {
   const IDLE = 3 * 60 * 1000; // no sign of life this long: the reader stepped away
   const TICK = 5000;

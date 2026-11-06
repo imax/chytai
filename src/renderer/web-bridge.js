@@ -708,6 +708,15 @@
     // Paper books (paper.js, server/paper.js).
     paperAdd: async (info) => (await api("POST", "/api/paper", info)).json(),
     paperUpdate: async (name, patch) => (await api("PATCH", `/api/paper/${encodeURIComponent(name)}`, patch)).json(),
+    // «Цей тиждень»: your minutes (GET /api/week); null offline.
+    readingWeek: async () => {
+      try {
+        return await (await api("GET", "/api/week")).json();
+      } catch (err) {
+        if (isNetworkError(err)) return null;
+        throw err;
+      }
+    },
     // The panel's search in notes and talks with Claude; null offline (only the titles are searched then).
     searchMine: async (q) => {
       try {

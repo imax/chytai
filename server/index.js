@@ -1402,6 +1402,34 @@ api.put("/position", (req, res) => {
 
 const NOTE_TEXT_MAX = 4000;
 
+// «Цей тиждень» (Max 2026-11-06): your own minutes, never anyone else's. Seconds per day of this week (Monday
+// first, Kyiv time), per book this week, and the totals of the last 8 weeks for the page behind the panel's block.
+// No streaks and no nudges: it only counts. ~56 day lookups, nothing stored.
+api.get("/week", (req, res) => {
+  if (req.guest) return res.json({ days: [], books: [], weeks: [] });
+  const days = state.stats?.days || {};
+  const today = statsDay();
+  const noon = (d) => Date.parse(`${d}T12:00:00Z`);
+  const monday = noon(today) - ((new Date(noon(today)).getUTCDay() + 6) % 7) * 86400000;
+  const key = (t) => new Date(t).toISOString().slice(0, 10);
+  const secOf = (t) => days[key(t)]?.readSec?.[req.acct] || 0;
+  const week = [...Array(7)].map((_, i) => secOf(monday + i * 86400000));
+  const books = new Map();
+  for (let i = 0; i < 7; i++) {
+    for (const [name, sec] of Object.entries(days[key(monday + i * 86400000)]?.readBooks?.[req.acct] || {})) books.set(name, (books.get(name) || 0) + sec);
+  }
+  const weeks = [...Array(8)].map((_, w) => {
+    const from = monday - w * 7 * 86400000;
+    return { from: key(from), sec: [...Array(7)].reduce((a, _, i) => a + secOf(from + i * 86400000), 0) };
+  });
+  res.json({
+    today: (new Date(noon(today)).getUTCDay() + 6) % 7,
+    days: week,
+    books: [...books].sort((a, b) => b[1] - a[1]).map(([name, sec]) => ({ name, sec, ...bookInfo(req.acct, name) })),
+    weeks,
+  });
+});
+
 api.get("/notes", (req, res) => {
   res.json({ notes: bookItems(req, "notes", String(req.query.path || "")) });
 });

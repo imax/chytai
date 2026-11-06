@@ -218,7 +218,7 @@
   // The panel: search in your books, Мої книжки / Додати книжку / Нещодавно видалені, the books opened lately,
   // feedback and your settings. Always open on a computer; on a phone the header's button (or, in the app, a
   // swipe from the left edge) slides the page aside to show it. Safari keeps that edge for «back».
-  let page = "home"; // home | add | paper
+  let page = "home"; // home | add | paper | week
   let paperPath = null; // the paper book on «paper» (paper.js)
   let addQuery = "";
   let freeAll = false;
@@ -277,13 +277,17 @@
         : deep.q === q || deep.offline || q.length < 2 || !window.reader.searchMine ? `<p class="r-pnone">Нічого не знайшлося.</p>` : "";
     }
     const recent = books.filter((b) => b.openedAt).sort((x, y) => y.openedAt - x.openedAt).slice(0, 4);
-    const all = `${html}\u0000${recent.map(prow).join("")}\u0000${books.length}|${trashCount}|${page}|${settings.user}`;
+    const wk = weekPanelHtml();
+    const all = `${html}\u0000${recent.map(prow).join("")}\u0000${wk}\u0000${books.length}|${trashCount}|${page}|${settings.user}`;
     if (all === panelHtml) return;
     panelHtml = all;
     $("#r-pfound").innerHTML = html;
     $("#r-pfound").classList.toggle("hidden", !q);
     $("#r-recent").innerHTML = recent.map(prow).join("");
     $(".r-precent").classList.toggle("hidden", !recent.length);
+    $("#r-pweek").innerHTML = wk;
+    $("#r-pweek").classList.toggle("hidden", !wk);
+    $("#r-pweek").classList.toggle("on", page === "week");
     $("#r-n-books").textContent = books.length || "";
     $("#r-pnav-trash").hidden = !trashCount;
     $("#r-n-trash").textContent = trashCount || "";
@@ -357,6 +361,62 @@
 
   const prow = (b) => `<button type="button" class="r-prow" data-open="${esc(b.path)}">${rcover(b)}<span class="r-prow-t">${esc(b.title)}</span><span class="r-prow-p">${b.finished ? "✓" : b.paper ? (b.page ? `стор. ${b.page}` : "") : b.pct != null ? `${b.pct}%` : ""}</span></button>`;
 
+  // «Цей тиждень» (Max 2026-11-06): a small block in the panel with your minutes this week, and a page behind it
+  // with the books and the weeks before. Only counts: no streaks, no nudges, nobody else sees it. Hidden in a week
+  // with no reading. Asked again at most once a minute, when your books are drawn (coming back from a book too).
+  let week = null;
+  let weekAt = 0;
+  function loadWeek() {
+    if (settings.guest || !window.reader.readingWeek || Date.now() - weekAt < 60000) return;
+    weekAt = Date.now();
+    window.reader.readingWeek().then((w) => {
+      if (!w || JSON.stringify(w) === JSON.stringify(week)) return;
+      week = w;
+      panelHtml = "";
+      renderPanel();
+      if (page === "week") renderHome();
+    }).catch(() => {});
+  }
+  const DAYS = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Нд"];
+  function dur(sec) {
+    const m = Math.round(sec / 60);
+    if (m < 60) return `${m} хв`;
+    return m % 60 ? `${Math.floor(m / 60)} год ${m % 60} хв` : `${Math.floor(m / 60)} год`;
+  }
+  const weekSum = (w) => (w?.days || []).reduce((a, s) => a + s, 0);
+  function weekBars(w) {
+    const top = Math.max(...w.days, 1);
+    return `<span class="r-wbars">${w.days.map((s, i) => `<span class="r-wday${i > w.today ? " later" : ""}${i === w.today ? " now" : ""}"><span class="r-wcol"><span style="height:${s >= 30 ? Math.max(8, Math.round((s / top) * 100)) : 0}%"></span></span><small>${DAYS[i]}</small></span>`).join("")}</span>`;
+  }
+  function weekPanelHtml() {
+    const sum = weekSum(week);
+    if (sum < 60) return "";
+    return `<h3>Цей тиждень</h3><span class="r-pweek-row"><b>${dur(sum)}</b>${weekBars(week)}</span>`;
+  }
+  function weekPageHtml() {
+    const sum = weekSum(week);
+    const prev = week?.weeks?.[1]?.sec || 0;
+    const byPath = new Map((lib?.books || []).map((b) => [b.path, b]));
+    const books = (week?.books || []).filter((b) => b.sec >= 30).map((b) => {
+      const mine = byPath.get(b.name);
+      const title = mine?.title || b.title || b.name.replace(/\.[a-z0-9]+$/i, "");
+      return `<li>${mine ? `<button data-open="${esc(b.name)}">${esc(title)}</button>` : `<span>${esc(title)}</span>`}<i>${dur(b.sec)}</i></li>`;
+    }).join("");
+    const label = (from) => {
+      const d = (t) => new Date(t).toLocaleDateString("uk-UA", { day: "numeric", month: "short", timeZone: "UTC" });
+      const t = Date.parse(`${from}T12:00:00Z`);
+      const e = t + 6 * 86400000;
+      return new Date(t).getUTCMonth() === new Date(e).getUTCMonth() ? `${new Date(t).getUTCDate()}–${d(e)}` : `${d(t)} – ${d(e)}`;
+    };
+    const past = (week?.weeks || []).slice(1).filter((w) => w.sec >= 60);
+    const top = Math.max(sum, ...past.map((w) => w.sec), 1);
+    return `<section class="r-week">${head("Цей тиждень", "", true)}
+      ${sum < 60 ? `<p class="r-empty">Цього тижня ще не читали.</p>` : `<div class="r-week-top"><div><div class="r-week-num">${dur(sum)}</div>${prev >= 60 ? `<p class="r-week-prev">Минулого тижня ${dur(prev)}</p>` : ""}</div>${weekBars(week)}</div>
+      ${books ? `<ul class="r-week-books">${books}</ul>` : ""}`}</section>
+      ${past.length ? `<section class="r-weeks">${head("Попередні тижні", "")}
+        <ul>${past.map((w) => `<li><span>${label(w.from)}</span><span class="r-weeks-bar"><span style="width:${Math.round((w.sec / top) * 100)}%"></span></span><i>${dur(w.sec)}</i></li>`).join("")}</ul></section>` : ""}`;
+  }
+
   function renderHome() {
     if (!lib) return; // the skeleton stays until the library arrives
     $("#shell").dataset.page = page;
@@ -366,7 +426,8 @@
     if (page === "paper" && document.activeElement?.closest?.(".pp") && homeHtml) return;
     const pb = page === "paper" && lib.books.find((b) => b.path === paperPath);
     if (page === "paper" && !pb) page = "home";
-    const html = pb ? window.Paper.pageHtml(pb) : page === "add" ? addPageHtml() : homePageHtml();
+    loadWeek();
+    const html = pb ? window.Paper.pageHtml(pb) : page === "add" ? addPageHtml() : page === "week" ? weekPageHtml() : homePageHtml();
     // The library comes twice (the saved copy, then the server's) and again when the app comes back to the
     // front: drawing the same covers anew made them flicker, so an unchanged screen is left alone.
     if (html === homeHtml) return;
