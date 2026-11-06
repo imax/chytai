@@ -1164,22 +1164,38 @@ body[data-theme="dark"] #shell, body[data-theme="dark"] #book-menu, body[data-th
 .r-pnav .r-pnav-add i { color: var(--r-ochre); font-size: 18px; font-weight: 300; line-height: 1; }
 #r-panel.searching .r-pnav, #r-panel.searching .r-precent { display: none; }
 .r-precent h3, .r-pweek h3 { margin: 0 0 8px; font: 500 11px var(--r-sans); text-transform: uppercase; letter-spacing: .14em; color: var(--r-ochre); }
-/* «Цей тиждень» (2026-11-06): minutes, days, last week and the books, all in the panel. */
-.r-pweek { flex: none; }
+/* «Цей тиждень» (2026-11-06): the panel's block and the page behind it. */
+.r-pweek { display: block; flex: none; margin: 0 -10px; padding: 10px; border: none; border-radius: 8px; background: none; color: var(--r-ink); font-family: var(--r-sans); text-align: left; cursor: pointer; }
 .r-pweek.hidden { display: none; }
+.r-pweek:hover, .r-pweek.on { background: var(--r-pact); }
 #r-panel.searching .r-pweek { display: none; }
 .r-pweek-row { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; }
 .r-pweek-row b { font: 400 20px/1 var(--r-serif); white-space: nowrap; }
 .r-wbars { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; width: 84px; height: 26px; }
-.r-wbars small { display: none; }
-.r-wday { display: flex; flex-direction: column; min-width: 0; }
-.r-wcol { flex: 1; width: 100%; display: flex; align-items: flex-end; border-bottom: 1px solid var(--r-pline); }
+.r-pweek .r-wbars small { display: none; }
+.r-wday { display: flex; flex-direction: column; align-items: center; gap: 6px; min-width: 0; }
+.r-wcol { flex: 1; width: 100%; display: flex; align-items: flex-end; border-bottom: 1px solid var(--r-rule); }
 .r-wcol span { display: block; width: 100%; background: var(--r-bar); border-radius: 2px 2px 0 0; }
-.r-pweek-prev { margin: 6px 0 0; font-size: 12px; color: var(--r-ink2); }
-.r-pweek-books { display: flex; flex-direction: column; margin-top: 8px; }
-.r-pweek-b { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; padding: 4px 0; border: none; background: none; color: var(--r-ink); font: 13px var(--r-sans); text-align: left; }
-button.r-pweek-b { cursor: pointer; }
-button.r-pweek-b:hover .r-prow-t { color: var(--r-ochre); }
+.r-wday small { font-size: 12px; color: var(--r-ink2); }
+.r-wday.later small { opacity: .5; }
+.r-wday.now small { color: var(--r-ink); font-weight: 500; }
+.r-week-top { display: flex; align-items: flex-end; justify-content: space-between; gap: 32px; max-width: 640px; }
+.r-week-num { font: 400 44px/1 var(--r-serif); letter-spacing: -.015em; white-space: nowrap; }
+.r-week-prev { margin: 8px 0 0; font-size: 13px; color: var(--r-ink2); }
+.r-week .r-wbars { width: 280px; height: 96px; gap: 8px; }
+.r-week .r-wcol { max-width: 22px; }
+.r-week-books { margin: 28px 0 0; padding: 0; list-style: none; max-width: 640px; font-size: 14px; }
+.r-week-books li { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 9px 0; border-bottom: 1px solid var(--r-rule); }
+.r-week-books li:first-child { border-top: 1px solid var(--r-rule); }
+.r-week-books button, .r-week-books span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 0; border: none; background: none; color: var(--r-ink); font: inherit; text-align: left; cursor: pointer; }
+.r-week-books span { cursor: default; }
+.r-week-books button:hover { color: var(--r-ochre); }
+.r-week-books i { font-style: normal; color: var(--r-ink2); white-space: nowrap; }
+@media (max-width: 760px) {
+  .r-week-num { font-size: 32px; }
+  .r-week-top { gap: 16px; }
+  .r-week .r-wbars { width: 150px; height: 64px; gap: 4px; }
+}
 #r-recent, #r-pfound { display: flex; flex-direction: column; }
 .r-prow { display: grid; grid-template-columns: 22px 1fr auto; align-items: center; gap: 10px; padding: 4px 0; border: none; background: none; color: var(--r-ink); font: 13px var(--r-sans); cursor: pointer; text-align: left; }
 .r-prow .r-cover { width: 22px; border-radius: 1px; box-shadow: none; }
