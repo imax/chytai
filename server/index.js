@@ -1438,7 +1438,7 @@ api.post("/notes", (req, res) => {
     ...(req.body.quote === true ? { quote: true } : {}),
   };
   putBookItem(req, "notes", bookPath, note);
-  if (note.quote && !req.guest) tellQuotes(req.acct, bookPath);
+  if (!req.guest && (note.quote || !paper.NAME.test(bookPath))) tellQuotes(req.acct, bookPath);
   res.json({ note });
 });
 
@@ -1557,13 +1557,15 @@ function tellSite(id) {
   }, 2000));
 }
 
-// A paper book's notes marked «Цитата» go to the site, which shows one of them at random on the book's page
-// (Max, 2026-11-06). Only the quoted words and the page; the whole list of the book each time, so a quote
-// unmarked, edited or deleted (or the book gone) is gone there too. Sent a moment after the last change.
+// Quotes go to the site, which shows one of them at random on the book's page (Max, 2026-11-06): a paper book's
+// notes marked «Цитата», and an e-book's saved passages («Зберегти»; not a note the reader wrote, cfi «mine:»).
+// Only the quoted words and the page; the whole list of the book each time, so a quote unmarked, edited or
+// deleted (or the book gone) is gone there too. Sent a moment after the last change.
 const quoteTimers = new Map();
 const QUOTE_PAGE = /^стор\. (\d+)/;
-function tellQuotes(acct, name) {
-  if (!acct || !paper.NAME.test(name) || !state.accounts[acct]?.key) return;
+function tellQuotes(acct, bookPath) {
+  const name = String(bookPath || "").replace(/#reflow$/, "");
+  if (!acct || !name || !state.accounts[acct]?.key) return;
   const k = `${acct}\t${name}`;
   clearTimeout(quoteTimers.get(k));
   quoteTimers.set(k, setTimeout(() => {
@@ -1571,19 +1573,30 @@ function tellQuotes(acct, name) {
     sendQuotes(acct, name).catch((err) => console.error(`reader-quotes ${acct}:`, err.message));
   }, 2000));
 }
+function quotesOf(acct, name) {
+  if (paper.NAME.test(name)) {
+    if (!state.users[acct]?.paper?.[name]) return [];
+    return store.items.list(acct, "notes", name).filter((n) => n.quote && n.text).map((n) => ({ id: n.id, text: n.text, page: Number(QUOTE_PAGE.exec(n.chapter || "")?.[1]) || 0 }));
+  }
+  return [name, `${name}#reflow`].flatMap((b) => store.items.list(acct, "notes", b)).filter((n) => n.text && !String(n.cfi).startsWith("mine:")).map((n) => ({ id: n.id, text: n.text, page: 0 }));
+}
 async function sendQuotes(acct, name) {
-  const pb = state.users[acct]?.paper?.[name];
-  const quotes = pb ? store.items.list(acct, "notes", name).filter((n) => n.quote && n.text).map((n) => ({ id: n.id, text: n.text, page: Number(QUOTE_PAGE.exec(n.chapter || "")?.[1]) || 0 })) : [];
-  const book = { name, title: pb?.title || "", authors: pb?.author ? [pb.author] : [], href: pb?.href || "" };
-  const res = await fetch(`${WEB_URL}/api/reader-quotes`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: acct, key: state.accounts[acct].key, book, quotes }), signal: AbortSignal.timeout(20000) });
+  const pb = paper.NAME.test(name) ? state.users[acct]?.paper?.[name] : null;
+  const info = bookInfo(acct, name);
+  const book = { name, title: info.title, authors: info.authors, href: pb?.href || "" };
+  const res = await fetch(`${WEB_URL}/api/reader-quotes`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: acct, key: state.accounts[acct].key, book, quotes: quotesOf(acct, name) }), signal: AbortSignal.timeout(20000) });
   if (!res.ok) throw new Error(`${res.status}`);
 }
-// The quotes marked before this went to the site, once.
+// The quotes kept before this went to the site, once (2: e-books' saved passages too).
 setTimeout(async () => {
-  if (store.meta.get("quotes:sent")) return;
+  if (store.meta.get("quotes:sent2")) return;
   try {
-    for (const { acct, book } of store.quoteBooks()) if (state.accounts[acct]?.key) await sendQuotes(acct, book);
-    store.meta.set("quotes:sent", new Date().toISOString());
+    const books = new Set(store.quoteBooks().map(({ acct, book }) => `${acct}\t${book.replace(/#reflow$/, "")}`));
+    for (const k of books) {
+      const [acct, name] = k.split("\t");
+      if (state.accounts[acct]?.key) await sendQuotes(acct, name);
+    }
+    store.meta.set("quotes:sent2", new Date().toISOString());
   } catch (err) {
     console.error("reader-quotes (all):", err.message);
   }
@@ -2304,6 +2317,7 @@ function forgetBook(lib, acct, name) {
   }
   store.items.dropBook(acct, "notes", name);
   store.items.dropBook(acct, "notes", `${name}#reflow`);
+  tellQuotes(acct, name);
   for (const [t, sh] of Object.entries(state.shares)) if (sh.acct === acct && sh.book === name) delete state.shares[t];
   const key = customCoverKey(name);
   if (fs.existsSync(lib.covers)) for (const f of fs.readdirSync(lib.covers)) if (f.split(".")[0] === key) fs.rmSync(path.join(lib.covers, f), { force: true });

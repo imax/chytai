@@ -652,9 +652,10 @@ const readerKeyOk = (id, key) => {
   const want = auth.reader(id) && readerKey(id);
   return !!want && key.length === want.length && require("crypto").timingSafeEqual(Buffer.from(key), Buffer.from(want));
 };
-// A paper book's notes marked «Цитата» in the reader (server/index.js tellQuotes), the whole list of that book each
-// time: one of them, at random, is on the book's page (Max, 2026-11-06). Only the quoted words and the page.
-// The book: its page here when it was added from the catalog, else found by its title.
+// Quotes from the reader (server/index.js tellQuotes): a paper book's notes marked «Цитата» and an e-book's saved
+// passages, the whole list of that book each time; one of them, at random, is on the book's page (Max, 2026-11-06).
+// Only the quoted words and the page. The book: a paper book's page here when it was added from the catalog,
+// else by the file the reader listed (reader_files) or the title it sent.
 const QUOTE_MIN = 20;
 const QUOTE_MAX = 600;
 app.post("/api/reader-quotes", (req, res) => {
@@ -662,7 +663,7 @@ app.post("/api/reader-quotes", (req, res) => {
   if (!readerKeyOk(id, String(req.body?.key || ""))) return res.status(403).json({ error: "key" });
   const sent = req.body?.book || {};
   const name = String(sent.name || "");
-  if (!/^paper-[a-f0-9]{6,20}\.paper$/.test(name)) return res.status(400).json({ error: "book" });
+  if (!name || name.length > 300) return res.status(400).json({ error: "book" });
   const quotes = (Array.isArray(req.body?.quotes) ? req.body.quotes : [])
     .slice(0, 500)
     .map((q) => ({ id: String(q?.id || "").slice(0, 40), text: String(q?.text || "").replace(/\s+/g, " ").trim().replace(/^[«"„“]+|[»"”]+$/g, "").trim(), page: Math.max(0, Math.min(99999, Math.floor(Number(q?.page)) || 0)) }))
