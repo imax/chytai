@@ -31,7 +31,9 @@ function walk(dir, rel = "") {
 walk(src);
 
 // Two passes: an --exclude would also drop the snapshots if they went in with the same command.
-const tarFile = out.replace(/\.gz$/, "");
+// The tar is built in this run's own folder and moved to <out> whole at the end: two runs at once (a retry while
+// the cut-off first one still runs, 2026-11-06) shared /tmp/backup.tar and left a copy with the database alone.
+const tarFile = path.join(tmp, "..", `${path.basename(tmp)}.tar`);
 // The app keeps writing meanwhile (readers in the morning, 2026-11-05: «tar: .: file changed as we read it»
 // failed the night's reader backup). GNU tar then exits with 1, which only means «something changed while
 // read»: each file still went in whole (the app writes its JSON to a new file and renames it), and the
@@ -49,5 +51,6 @@ try {
 }
 execFileSync("tar", ["rf", tarFile, "-C", tmp, "."]);
 execFileSync("gzip", ["-f", tarFile]);
+fs.renameSync(`${tarFile}.gz`, out);
 fs.rmSync(tmp, { recursive: true, force: true });
 console.log(`${out} ${fs.statSync(out).size} bytes`);
