@@ -507,6 +507,7 @@ dialog .form { margin-top: 18px; }
   .book-top .cover.xl { width: 150px; }
   .book-main h1 { font-size: 34px; }
   .big-quote { font-size: 22px; }
+  .book-quote blockquote { font-size: 19px; }
   .row { gap: 16px; }
   .row h3 { font-size: 18px; }
   .row-act { align-self: flex-start; }
@@ -990,6 +991,9 @@ aside .side-lists + .label, aside p + .label, aside dialog + .label { margin-top
 .author-grid h3 { overflow-wrap: anywhere; hyphens: auto; }
 .author-grid .meta { white-space: nowrap; overflow: hidden; }
 .quotes { display: grid; gap: 22px; }
+.book-quote { margin: 0; }
+.book-quote blockquote { font: italic 21px/1.45 var(--serif); color: var(--text); text-wrap: pretty; }
+.book-quote figcaption { font-size: 13px; color: var(--muted); margin-top: 10px; }
 .quotes blockquote { margin: 0; font: 18px/1.45 var(--serif); color: var(--ink); display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
 .quotes figcaption { font-size: 13px; color: var(--muted); margin-top: 6px; }
 .quotes figcaption a { color: var(--ink); }

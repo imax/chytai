@@ -1438,6 +1438,7 @@ api.post("/notes", (req, res) => {
     ...(req.body.quote === true ? { quote: true } : {}),
   };
   putBookItem(req, "notes", bookPath, note);
+  if (note.quote && !req.guest) tellQuotes(req.acct, bookPath);
   res.json({ note });
 });
 
@@ -1461,12 +1462,14 @@ api.patch("/notes/:id", (req, res) => {
     note.chapter = n > 0 && n < 100000 ? `стор. ${n}` : "";
   }
   saveBookItems(req, "notes", bookPath, list);
+  if (!req.guest) tellQuotes(req.acct, bookPath);
   res.json({ note });
 });
 
 api.delete("/notes/:id", (req, res) => {
   const bookPath = String(req.query.path || "");
   saveBookItems(req, "notes", bookPath, bookItems(req, "notes", bookPath).filter((n) => n.id !== req.params.id));
+  if (!req.guest) tellQuotes(req.acct, bookPath);
   res.json({ ok: true });
 });
 
@@ -1553,6 +1556,38 @@ function tellSite(id) {
     }
   }, 2000));
 }
+
+// A paper book's notes marked «Цитата» go to the site, which shows one of them at random on the book's page
+// (Max, 2026-11-06). Only the quoted words and the page; the whole list of the book each time, so a quote
+// unmarked, edited or deleted (or the book gone) is gone there too. Sent a moment after the last change.
+const quoteTimers = new Map();
+const QUOTE_PAGE = /^стор\. (\d+)/;
+function tellQuotes(acct, name) {
+  if (!acct || !paper.NAME.test(name) || !state.accounts[acct]?.key) return;
+  const k = `${acct}\t${name}`;
+  clearTimeout(quoteTimers.get(k));
+  quoteTimers.set(k, setTimeout(() => {
+    quoteTimers.delete(k);
+    sendQuotes(acct, name).catch((err) => console.error(`reader-quotes ${acct}:`, err.message));
+  }, 2000));
+}
+async function sendQuotes(acct, name) {
+  const pb = state.users[acct]?.paper?.[name];
+  const quotes = pb ? store.items.list(acct, "notes", name).filter((n) => n.quote && n.text).map((n) => ({ id: n.id, text: n.text, page: Number(QUOTE_PAGE.exec(n.chapter || "")?.[1]) || 0 })) : [];
+  const book = { name, title: pb?.title || "", authors: pb?.author ? [pb.author] : [], href: pb?.href || "" };
+  const res = await fetch(`${WEB_URL}/api/reader-quotes`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: acct, key: state.accounts[acct].key, book, quotes }), signal: AbortSignal.timeout(20000) });
+  if (!res.ok) throw new Error(`${res.status}`);
+}
+// The quotes marked before this went to the site, once.
+setTimeout(async () => {
+  if (store.meta.get("quotes:sent")) return;
+  try {
+    for (const { acct, book } of store.quoteBooks()) if (state.accounts[acct]?.key) await sendQuotes(acct, book);
+    store.meta.set("quotes:sent", new Date().toISOString());
+  } catch (err) {
+    console.error("reader-quotes (all):", err.message);
+  }
+}, 90 * 1000).unref();
 
 // «Читаю зараз» on the site follows the reader (Max, 2026-11-01: «Автоматом встановлювати Читаю зараз з
 // читалки»): a book read here for a few minutes goes to the site once a day; the site puts it on «Читаю зараз»
@@ -2353,6 +2388,7 @@ api.patch("/paper/:name", guestsCannot("Без входу паперових к�
   (u.opened ??= {})[req.params.name] = Date.now();
   if (u.setAside) delete u.setAside[req.params.name];
   saveState();
+  if (typeof title === "string" || typeof author === "string") tellQuotes(req.acct, req.params.name);
   res.json(paper.listEntry(req.params.name, p, u));
 });
 // A paper book's page open and in use (pinged each minute while the reader does something on it): a few
@@ -2515,6 +2551,7 @@ api.delete("/paper/:name", guestsCannot("Без входу паперових к
   for (const kind of ["notes", "paperChats"]) store.items.dropBook(req.acct, kind, name);
   for (const key of ["positions", "progress", "opened", "setAside", "seen", "finished"]) delete u[key]?.[name];
   saveState();
+  tellQuotes(req.acct, name);
   res.json({ ok: true });
 });
 // A photo of a cover (?kind=cover), of a page (?kind=page) or of the text marked on it (?kind=marked), JPEG or PNG, read by Claude. The photo is not kept.

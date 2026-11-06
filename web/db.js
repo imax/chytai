@@ -50,6 +50,8 @@ CREATE INDEX IF NOT EXISTS login_codes_key ON login_codes (key);
 CREATE TABLE IF NOT EXISTS login_limits (key TEXT NOT NULL, at INTEGER NOT NULL);
 CREATE INDEX IF NOT EXISTS login_limits_key ON login_limits (key, at);
 CREATE TABLE IF NOT EXISTS reader_files (reader TEXT NOT NULL, name TEXT NOT NULL, title TEXT NOT NULL, authors TEXT NOT NULL DEFAULT '', PRIMARY KEY (reader, name));
+CREATE TABLE IF NOT EXISTS reader_quotes (reader TEXT NOT NULL, name TEXT NOT NULL, id TEXT NOT NULL, book TEXT NOT NULL, text TEXT NOT NULL, page INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (reader, name, id));
+CREATE INDEX IF NOT EXISTS reader_quotes_book ON reader_quotes (book);
 CREATE TABLE IF NOT EXISTS visits (day TEXT NOT NULL, reader TEXT NOT NULL, PRIMARY KEY (day, reader));
 CREATE TABLE IF NOT EXISTS views (day TEXT PRIMARY KEY, readers INTEGER NOT NULL DEFAULT 0, guests INTEGER NOT NULL DEFAULT 0);
 CREATE TABLE IF NOT EXISTS section_views (day TEXT NOT NULL, section TEXT NOT NULL, views INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (day, section));

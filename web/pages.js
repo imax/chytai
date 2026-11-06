@@ -455,7 +455,7 @@ function authorBlock(a) {
 </section>`;
 }
 
-function bookPage({ club = [], ukrlib = null, sluhay = null, inGenre = null, fresh = null, pick = null, awards = [], authorInfo = null, lists = [], myLists = null, book, entry, now = false, user, shelf, inLibrary = new Map(), readers = [], also = [], alsoTitle = "Читали це, сподобалось і це", writings = [], reviewError = "", editionError = "", ukAsk = null, readUrl = "", freeRead = false, freeFile = false, advice = null, overview = null, overviewVote = null }) {
+function bookPage({ club = [], ukrlib = null, sluhay = null, inGenre = null, fresh = null, pick = null, awards = [], authorInfo = null, lists = [], myLists = null, book, entry, now = false, user, shelf, inLibrary = new Map(), readers = [], also = [], alsoTitle = "Читали це, сподобалось і це", writings = [], reviewError = "", editionError = "", ukAsk = null, readUrl = "", freeRead = false, freeFile = false, advice = null, overview = null, overviewVote = null, bookQuote = null }) {
   const s = statsOf(book.id);
   // A book in Russian stays on its reader's shelf, and its page shows no «Про книжку» and no side blocks
   // (Max 2026-10-23): nothing that would lead people to it or on from it.
@@ -495,6 +495,7 @@ function bookPage({ club = [], ukrlib = null, sluhay = null, inGenre = null, fre
       ${first.entry.note ? quote(first, book.id) : ""}
       ${(first.entry.note ? rest : readers).length ? `<div class="others">${(first.entry.note ? rest : readers).map((r) => readerLine(r, book.id)).join("")}</div>` : ""}
     </section>` : ""}
+    ${bookQuote && !ru ? `<section class="block" data-block="quote">${label("Цитата")}<figure class="book-quote"><blockquote>«${esc(bookQuote.text)}»</blockquote>${bookQuote.page ? `<figcaption>стор. ${bookQuote.page}</figcaption>` : ""}</figure></section>` : ""}
     ${ru ? "" : club.length ? `<section class="block" data-block="club">${label("Клуб Chytai")}<div class="club-topics">${club.map((t) => clubRow(t, { book: false })).join("")}</div></section>` : `<section class="block" data-block="club">${label("Клуб Chytai")}<p class="club-start">Тем ще немає. <a class="text-link" rel="nofollow" href="/club/new?book=${attr(encodeURIComponent(book.id))}">Обговорити в Клубі</a></p></section>`}
     ${lists.length ? `<section class="block" data-block="lists">${label("У списках", `<a href="/lists">усі списки</a>`)}<div class="lists">${lists.map(listLine).join("")}</div></section>` : ""}
     ${adviceBlock(book, advice)}

@@ -247,6 +247,9 @@ function open(dataDir) {
     db,
     KINDS,
     migrated: () => !!q.metaGet.get("migrated")?.value,
+    meta: { get: (k) => q.metaGet.get(k)?.value ?? null, set: (k, v) => q.metaSet.run(k, String(v)) },
+    // Paper books with at least one note marked «Цитата», for sending them all to the site once.
+    quoteBooks: () => db.prepare("SELECT DISTINCT acct, book FROM items WHERE kind = 'notes' AND book LIKE 'paper-%' AND json_extract(value, '$.quote') = 1").all(),
     loadState,
     persist,
     migrate,

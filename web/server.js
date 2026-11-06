@@ -652,6 +652,46 @@ const readerKeyOk = (id, key) => {
   const want = auth.reader(id) && readerKey(id);
   return !!want && key.length === want.length && require("crypto").timingSafeEqual(Buffer.from(key), Buffer.from(want));
 };
+// A paper book's notes marked «Цитата» in the reader (server/index.js tellQuotes), the whole list of that book each
+// time: one of them, at random, is on the book's page (Max, 2026-11-06). Only the quoted words and the page.
+// The book: its page here when it was added from the catalog, else found by its title.
+const QUOTE_MIN = 20;
+const QUOTE_MAX = 600;
+app.post("/api/reader-quotes", (req, res) => {
+  const id = String(req.body?.id || "");
+  if (!readerKeyOk(id, String(req.body?.key || ""))) return res.status(403).json({ error: "key" });
+  const sent = req.body?.book || {};
+  const name = String(sent.name || "");
+  if (!/^paper-[a-f0-9]{6,20}\.paper$/.test(name)) return res.status(400).json({ error: "book" });
+  const quotes = (Array.isArray(req.body?.quotes) ? req.body.quotes : [])
+    .slice(0, 500)
+    .map((q) => ({ id: String(q?.id || "").slice(0, 40), text: String(q?.text || "").replace(/\s+/g, " ").trim().replace(/^[«"„“]+|[»"”]+$/g, "").trim(), page: Math.max(0, Math.min(99999, Math.floor(Number(q?.page)) || 0)) }))
+    .filter((q) => q.id && q.text.length >= QUOTE_MIN && q.text.length <= QUOTE_MAX);
+  let bookId = null;
+  if (quotes.length) {
+    const m = /^https:\/\/chytai\.org\.ua\/book\/([^/?#]+)/.exec(String(sent.href || ""));
+    const byHref = m && store.resolve(decodeURIComponent(m[1]));
+    bookId = byHref ? store.canonical(byHref) : readerCatalogBook(id, { name, title: sent.title, authors: sent.authors }).bookId || null;
+  }
+  const before = new Set(store.db.prepare("SELECT id FROM reader_quotes WHERE reader = ? AND name = ?").all(id, name).map((r) => r.id));
+  store.db.tx(() => {
+    store.db.prepare("DELETE FROM reader_quotes WHERE reader = ? AND name = ?").run(id, name);
+    if (!bookId) return;
+    const add = store.db.prepare("INSERT OR IGNORE INTO reader_quotes (reader, name, id, book, text, page) VALUES (?, ?, ?, ?, ?, ?)");
+    for (const q of quotes) add.run(id, name, q.id, bookId, q.text, q.page);
+  });
+  // A reader's words on a public page: the owner hears of each new one (UGC alerts).
+  const fresh = bookId ? quotes.filter((q) => !before.has(q.id)) : [];
+  const r = auth.reader(id);
+  if (fresh.length && id !== OWNER_ID && r) {
+    const b = store.book(bookId);
+    notifyOwner(`Нова цитата: ${b?.title || sent.title}`, [`${r.name} (${SITE}/@${r.username}) позначив(ла) як цитату в Читалці:`, "", ...fresh.slice(0, 5).map((q) => `«${q.text}»${q.page ? ` (стор. ${q.page})` : ""}`), "", `Книжка: ${SITE}${store.href(bookId)}`].join("\n"));
+  }
+  res.json({ ok: true, book: bookId, quotes: bookId ? quotes.length : 0 });
+});
+// One of the book's quotes, different on every view; nothing when it has none.
+const randomQuote = (book) => store.db.prepare("SELECT text, page FROM reader_quotes WHERE book = ? ORDER BY random() LIMIT 1").get(store.canonical(book.id)) || null;
+
 // A book read in the reader for a few minutes (server/index.js noteReadingNow, once a day): it goes on «Читаю
 // зараз» and, unless it was already, the shelf status «Читаю». Not when the reader turned this off in
 // /settings, and not for a book already «Прочитано» (a look back into it is not a re-read).
@@ -2259,7 +2299,7 @@ app.get("/book/:id", (req, res) => {
   const free = !file && freeFileFor(book);
   const alsoBooks = alsoFor(req, book.id);
   const myLists = req.user ? lists.of(req.user.id).map((l) => ({ id: l.id, title: l.title, count: l.count, has: lists.has(l.id, book.id) })) : null;
-  res.send(pages.bookPage({ ukrlib: openLinks.linkFor(store, book) || ukrlib.linkFor(book), sluhay: SLUHAY_PUBLIC || req.owner ? sluhay.linkFor(book) : null, ...(SHOW_AUTHOR_ABOUT ? authorAbout(book) : {}), ...discovery(req, book, alsoBooks.also), lists: lists.withBook(book.id).map(withCovers), myLists, club: club.mark(req.user?.id, club.ofBook(book.id)), freeRead: !!free, freeFile: !!free && !free.readerOnly, book, entry: store.sharedEntry(req.user?.id, book.id), now: !!req.user && nowIds(req.user.id).has(store.canonical(book.id)), user: req.user, readUrl: file ? `${READER_URL}/?open=${encodeURIComponent(file.name)}` : free ? `${READER_URL}/free/${encodeURIComponent(free.name)}` : "", shelf: book.shelf && (req.owner || !isDraft(book.shelf)) ? store.shelf(book.shelf) : null, inLibrary: inLibraryMap(req), readers: readersOf(book.id), ...alsoBooks, writings: reviews.of(book.id), reviewError: String(req.query.review_error || "").slice(0, 300), editionError: String(req.query.edition_error || "").slice(0, 300), ukAsk: ukAskFor(req, book) || (req.user && req.query.edition_error ? "ask" : null), advice: advice.state(req.user, book.id), overview: linkedOverview(book), overviewVote: advice.voteOf(book.id, req.user?.id) }));
+  res.send(pages.bookPage({ ukrlib: openLinks.linkFor(store, book) || ukrlib.linkFor(book), sluhay: SLUHAY_PUBLIC || req.owner ? sluhay.linkFor(book) : null, ...(SHOW_AUTHOR_ABOUT ? authorAbout(book) : {}), ...discovery(req, book, alsoBooks.also), lists: lists.withBook(book.id).map(withCovers), myLists, club: club.mark(req.user?.id, club.ofBook(book.id)), freeRead: !!free, freeFile: !!free && !free.readerOnly, book, entry: store.sharedEntry(req.user?.id, book.id), now: !!req.user && nowIds(req.user.id).has(store.canonical(book.id)), user: req.user, readUrl: file ? `${READER_URL}/?open=${encodeURIComponent(file.name)}` : free ? `${READER_URL}/free/${encodeURIComponent(free.name)}` : "", shelf: book.shelf && (req.owner || !isDraft(book.shelf)) ? store.shelf(book.shelf) : null, inLibrary: inLibraryMap(req), readers: readersOf(book.id), ...alsoBooks, writings: reviews.of(book.id), reviewError: String(req.query.review_error || "").slice(0, 300), editionError: String(req.query.edition_error || "").slice(0, 300), ukAsk: ukAskFor(req, book) || (req.user && req.query.edition_error ? "ask" : null), advice: advice.state(req.user, book.id), overview: linkedOverview(book), overviewVote: advice.voteOf(book.id, req.user?.id), bookQuote: randomQuote(book) }));
 });
 
 // A translation and its original in one list are one card (Max, 2026-10-25: two rows «трохи плутає»; 2026-10-26: the same
