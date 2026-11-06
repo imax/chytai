@@ -42,7 +42,8 @@ try {
   execFileSync("tar", [
     "cf", tarFile, "--warning=no-file-changed", "--warning=no-file-removed",
     "--exclude=*.db", "--exclude=*.db-wal", "--exclude=*.db-shm",
-    ...excludes.map((e) => `--exclude=./${e}`),
+    // A pattern with «*» (e.g. «*.epub») goes to tar as it is; a plain name is a folder at the top.
+    ...excludes.map((e) => (e.includes("*") ? `--exclude=${e}` : `--exclude=./${e}`)),
     "-C", src, ".",
   ]);
 } catch (e) {

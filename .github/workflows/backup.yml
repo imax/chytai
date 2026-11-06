@@ -41,7 +41,9 @@ jobs:
           - app: chytai
             token: FLY_API_TOKEN
             url: https://chytai.fly.dev
-            exclude: "reflow" # rebuilt from the books on demand
+            # Not the readers' book files (Max, 2026-11-06: «це ж не наші книжки»): their notes, places and settings are in
+            # reader.db; the files are in Fly's daily volume snapshots (30 days). reflow is rebuilt from the books on demand.
+            exclude: "reflow *.epub *.pdf */reflow"
     env:
       APP: ${{ matrix.app }}
       FLY_API_TOKEN: ${{ secrets[matrix.token] }}
