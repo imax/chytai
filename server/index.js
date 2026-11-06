@@ -1403,8 +1403,8 @@ api.put("/position", (req, res) => {
 const NOTE_TEXT_MAX = 4000;
 
 // «Цей тиждень» (Max 2026-11-06): your own minutes, never anyone else's. Seconds per day of this week (Monday
-// first, Kyiv time), per book this week, and the totals of the last 8 weeks for the page behind the panel's block.
-// No streaks and no nudges: it only counts. ~56 day lookups, nothing stored.
+// first, Kyiv time), per book this week, and last week's total for the page behind the panel's block.
+// No streaks and no nudges: it only counts. 14 day lookups, nothing stored.
 api.get("/week", (req, res) => {
   if (req.guest) return res.json({ days: [], books: [], weeks: [] });
   const days = state.stats?.days || {};
@@ -1418,7 +1418,7 @@ api.get("/week", (req, res) => {
   for (let i = 0; i < 7; i++) {
     for (const [name, sec] of Object.entries(days[key(monday + i * 86400000)]?.readBooks?.[req.acct] || {})) books.set(name, (books.get(name) || 0) + sec);
   }
-  const weeks = [...Array(8)].map((_, w) => {
+  const weeks = [...Array(2)].map((_, w) => {
     const from = monday - w * 7 * 86400000;
     return { from: key(from), sec: [...Array(7)].reduce((a, _, i) => a + secOf(from + i * 86400000), 0) };
   });

@@ -1184,24 +1184,17 @@ body[data-theme="dark"] #shell, body[data-theme="dark"] #book-menu, body[data-th
 .r-week-prev { margin: 8px 0 0; font-size: 13px; color: var(--r-ink2); }
 .r-week .r-wbars { width: 280px; height: 96px; gap: 8px; }
 .r-week .r-wcol { max-width: 22px; }
-.r-week-books, .r-weeks ul { margin: 28px 0 0; padding: 0; list-style: none; max-width: 640px; font-size: 14px; }
-.r-week-books li, .r-weeks li { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 9px 0; border-bottom: 1px solid var(--r-rule); }
-.r-week-books li:first-child, .r-weeks li:first-child { border-top: 1px solid var(--r-rule); }
+.r-week-books { margin: 28px 0 0; padding: 0; list-style: none; max-width: 640px; font-size: 14px; }
+.r-week-books li { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 9px 0; border-bottom: 1px solid var(--r-rule); }
+.r-week-books li:first-child { border-top: 1px solid var(--r-rule); }
 .r-week-books button, .r-week-books span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 0; border: none; background: none; color: var(--r-ink); font: inherit; text-align: left; cursor: pointer; }
 .r-week-books span { cursor: default; }
 .r-week-books button:hover { color: var(--r-ochre); }
-.r-week-books i, .r-weeks i { font-style: normal; color: var(--r-ink2); white-space: nowrap; }
-.r-weeks ul { margin-top: 0; }
-.r-weeks li > span:first-child { flex: none; width: 140px; white-space: nowrap; }
-.r-weeks-bar { flex: 1; height: 6px; border-radius: 3px; background: var(--r-track); overflow: hidden; }
-.r-weeks-bar span { display: block; height: 100%; background: var(--r-bar); }
-.r-weeks i { flex: none; width: 92px; text-align: right; }
+.r-week-books i { font-style: normal; color: var(--r-ink2); white-space: nowrap; }
 @media (max-width: 760px) {
   .r-week-num { font-size: 32px; }
   .r-week-top { gap: 16px; }
   .r-week .r-wbars { width: 150px; height: 64px; gap: 4px; }
-  .r-weeks li > span:first-child { width: 110px; font-size: 13px; }
-  .r-weeks i { width: 80px; }
 }
 #r-recent, #r-pfound { display: flex; flex-direction: column; }
 .r-prow { display: grid; grid-template-columns: 22px 1fr auto; align-items: center; gap: 10px; padding: 4px 0; border: none; background: none; color: var(--r-ink); font: 13px var(--r-sans); cursor: pointer; text-align: left; }

@@ -362,7 +362,7 @@
   const prow = (b) => `<button type="button" class="r-prow" data-open="${esc(b.path)}">${rcover(b)}<span class="r-prow-t">${esc(b.title)}</span><span class="r-prow-p">${b.finished ? "✓" : b.paper ? (b.page ? `стор. ${b.page}` : "") : b.pct != null ? `${b.pct}%` : ""}</span></button>`;
 
   // «Цей тиждень» (Max 2026-11-06): a small block in the panel with your minutes this week, and a page behind it
-  // with the books and the weeks before. Only counts: no streaks, no nudges, nobody else sees it. Hidden in a week
+  // with the days and the books. Only counts: no streaks, no nudges, nobody else sees it. Hidden in a week
   // with no reading. Asked again at most once a minute, when your books are drawn (coming back from a book too).
   let week = null;
   let weekAt = 0;
@@ -402,19 +402,9 @@
       const title = mine?.title || b.title || b.name.replace(/\.[a-z0-9]+$/i, "");
       return `<li>${mine ? `<button data-open="${esc(b.name)}">${esc(title)}</button>` : `<span>${esc(title)}</span>`}<i>${dur(b.sec)}</i></li>`;
     }).join("");
-    const label = (from) => {
-      const d = (t) => new Date(t).toLocaleDateString("uk-UA", { day: "numeric", month: "short", timeZone: "UTC" });
-      const t = Date.parse(`${from}T12:00:00Z`);
-      const e = t + 6 * 86400000;
-      return new Date(t).getUTCMonth() === new Date(e).getUTCMonth() ? `${new Date(t).getUTCDate()}–${d(e)}` : `${d(t)} – ${d(e)}`;
-    };
-    const past = (week?.weeks || []).slice(1).filter((w) => w.sec >= 60);
-    const top = Math.max(sum, ...past.map((w) => w.sec), 1);
     return `<section class="r-week">${head("Цей тиждень", "", true)}
       ${sum < 60 ? `<p class="r-empty">Цього тижня ще не читали.</p>` : `<div class="r-week-top"><div><div class="r-week-num">${dur(sum)}</div>${prev >= 60 ? `<p class="r-week-prev">Минулого тижня ${dur(prev)}</p>` : ""}</div>${weekBars(week)}</div>
-      ${books ? `<ul class="r-week-books">${books}</ul>` : ""}`}</section>
-      ${past.length ? `<section class="r-weeks">${head("Попередні тижні", "")}
-        <ul>${past.map((w) => `<li><span>${label(w.from)}</span><span class="r-weeks-bar"><span style="width:${Math.round((w.sec / top) * 100)}%"></span></span><i>${dur(w.sec)}</i></li>`).join("")}</ul></section>` : ""}`;
+      ${books ? `<ul class="r-week-books">${books}</ul>` : ""}`}</section>`;
   }
 
   function renderHome() {
