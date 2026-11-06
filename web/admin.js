@@ -1476,7 +1476,7 @@ function jobsPage({ user, layout, o, queue, book = () => null, href = () => "#",
     return new Date(now.getTime() + (t - k)).toISOString();
   };
   const letter = (what, often, last, next) => `<tr><th>${what}<small>${often}</small></th><td>${kyiv(last?.started)}</td><td>${last?.finished ? dur(Date.parse(last.finished) - Date.parse(last.started)) : last ? "іде" : ""}</td><td class="res">${last ? `${last.errors?.length ? `<span class="bad">✗</span> помилок ${last.errors.length}: ${esc(String(last.errors[0]?.message || last.errors[0]).slice(0, 120))}, ` : `<span class="ok">✓</span> `}надіслано ${last.sent || 0}` : ""}</td><td></td><td>${ago(next)}</td></tr>`;
-  plans.push(letter("Щотижневий лист", "щоп'ятниці о 9:00", digest, nextAt(5, 9)));
+  plans.push(letter("Щотижневий лист", "щоп'ятниці о 10:00", digest, nextAt(5, 10)));
   plans.push(letter("Лист «з вашого «Хочу» тепер є»", "щодня о 10:00", wantMail, nextAt(null, 10)));
 
   const planned = Object.values(PLANS).flatMap((p) => p.jobs);

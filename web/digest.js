@@ -1,5 +1,5 @@
 // The weekly letter (Max, 2026-10-20: «weekly email digest, щоб повертати користувачів на сайт»; proposal in
-// /mnt/project-files/chytai-digest/proposal.md). Every Friday at 9:00 Kyiv time each reader with an e-mail
+// /mnt/project-files/chytai-digest/proposal.md). Every Friday at 10:00 Kyiv time each reader with an e-mail
 // gets one letter about their own shelves since the last one: what the readers they follow did, what is new
 // on the publisher shelves they subscribe to, which of their «хочу прочитати» books turned up in a library or
 // a catalog, a nudge about a book they have been reading for weeks, and one reader's note about a book they
@@ -21,7 +21,7 @@ const { isRussian } = require("./store");
 
 const DAY = 86400000;
 const SEND_DAY = 5; // Friday
-const SEND_HOUR = 9; // Kyiv time (TZ=Europe/Kyiv on Fly; the check uses local time)
+const SEND_HOUR = 10; // Kyiv time (TZ=Europe/Kyiv on Fly; the check uses local time); 9:00 until 2026-11-06, Max moved it to 10:00
 // One-off later starts, minutes after SEND_HOUR (Max, 2026-10-29: «завтра затримаємо розсилку на півгодини»,
 // to have time for his text).
 const LATER = { "2026-10-30": 30 };
@@ -542,7 +542,7 @@ class Digest {
     return this.running;
   }
 
-  // Friday 9:00 Kyiv time: checked every ten minutes (the machine is always on since 2026-10-20), once a day.
+  // Friday 10:00 Kyiv time: checked every ten minutes (the machine is always on since 2026-10-20), once a day.
   schedule() {
     const tick = () => {
       const t = kyiv(new Date());
@@ -558,7 +558,7 @@ class Digest {
   }
 }
 
-// «9:00», or the later start set for that Kyiv day (2026-10-30 → «9:30»), for the /admin/letter form.
+// «10:00», or the later start set for that Kyiv day (2026-10-30 → «9:30» back when it was 9:00), for the /admin/letter form.
 const sendTime = (day) => { const m = SEND_HOUR * 60 + (LATER[day] || 0); return `${Math.floor(m / 60)}:${String(m % 60).padStart(2, "0")}`; };
 
 module.exports = { Digest, AUDIENCES, sendTime };

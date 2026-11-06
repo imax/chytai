@@ -1,6 +1,6 @@
 // The weekly draw (Max, 2026-10-28: «кожен тиждень розіграємо сертифікат 500 гривень на Якабу серед тих, хто
 // поставив оцінку хоча б одній книжці»). Plan: the «Щотижневий розіграш» doc. A week runs Friday 00:00 to
-// Thursday 23:59 Kyiv, so the Friday 9:00 letter can name the winner; the first week starts on START (a
+// Thursday 23:59 Kyiv, so the Friday 10:00 letter can name the winner; the first week starts on START (a
 // Monday) and is shorter. A reader takes part after pressing «Беру участь» (readers.draw, which is also the
 // agreement to the rules) and rating at least one book that week (the `rated` log: entries.updated moves on
 // any change). One chance per person however many books: more chances for more stars would bring stars for

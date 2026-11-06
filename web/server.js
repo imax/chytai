@@ -1159,7 +1159,7 @@ const gsc = bg.register("gsc", require("./gsc").create(store.db), { run: false }
 bg.every("gsc", 24 * 3600 * 1000, () => gsc.run(), { db: store.db, first: 5 * 60 * 1000 });
 bg.every("overviews", 24 * 3600 * 1000, () => advice.sweep(), { db: store.db });
 pages.setStats((id) => social.stats(id));
-// The weekly letter (digest.js): Friday 9:00 Kyiv, to every reader who has not switched it off (Max,
+// The weekly letter (digest.js): Friday 10:00 Kyiv, to every reader who has not switched it off (Max,
 // 2026-10-20: «Включаємо на всіх»); WEB_DIGEST_TO=owner limits it to the owner again.
 const digest = new Digest({ store, auth, social, lists, club, libraries, site: SITE, ownerId: OWNER_ID, to: process.env.WEB_DIGEST_TO === "owner" ? "owner" : "all" });
 // A letter to every reader about a new Club topic once someone answers it (clubmail.js, Max 2026-11-04).
@@ -2562,7 +2562,7 @@ app.post("/admin/digest", owner, (req, res) => {
   if (error) return letterPage(req, res, error, { book: req.body.book, note: req.body.book_note });
   res.redirect(303, req.body.preview ? "/digest/preview" : "/admin/digest?saved=1");
 });
-// The next Friday 9:00 Kyiv the letter goes out, for the form's «піде …» line (today, until the run has been).
+// The next Friday 10:00 Kyiv the letter goes out, for the form's «піде …» line (today, until the run has been).
 function nextFriday() {
   const t = new Date(new Date().toLocaleString("en-US", { timeZone: "Europe/Kyiv" }));
   const today = `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, "0")}-${String(t.getDate()).padStart(2, "0")}`;

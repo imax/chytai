@@ -193,12 +193,14 @@ class WantMail {
     return this.running;
   }
 
-  // Once a day from 10:00 Kyiv, checked every ten minutes; not while the Friday letter is going out.
+  // Once a day from 10:00 Kyiv, checked every ten minutes; Fridays only after the weekly letter has gone out.
   schedule() {
     const tick = () => {
       const db = this.store.db;
       const today = dayKyiv(new Date());
-      if (kyiv(new Date()).getHours() < SEND_HOUR || db.get("wantmail:lastRun") === today || db.get("digest:running")) return;
+      const now = kyiv(new Date());
+      // Fridays the weekly letter goes first (both start at 10:00 since 2026-11-06), so the two never send at once.
+      if (now.getHours() < SEND_HOUR || db.get("wantmail:lastRun") === today || db.get("digest:running") || (now.getDay() === 5 && db.get("digest:lastRun") !== today)) return;
       db.set("wantmail:lastRun", today);
       this.run().catch((e) => this.log(`want mail run failed: ${e.message}`));
     };
