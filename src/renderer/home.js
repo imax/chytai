@@ -198,7 +198,7 @@
       <span class="r-cover-t">${esc(b.title)}</span><span class="r-cover-a">${esc((b.authors || [b.author])[0] || "")}</span>
       ${url ? `<img src="${esc(url)}" alt="" loading="lazy" draggable="false" onerror="this.remove()" />` : ""}</span>`;
   const more = (b) => (settings.guest ? "" : `<span class="r-more" role="button" tabindex="0" data-menu="${esc(b.path)}" title="Ще" aria-label="Ще"><i></i><i></i><i></i></span>`);
-  const card = (b, foot, menu = true, cls = "") => `<button class="r-card${cls}" data-open="${esc(b.path)}">${rcover(b)}${b.paper ? `<span class="pp-ctag">Паперова</span>` : ""}${menu ? more(b) : ""}
+  const card = (b, foot, menu = true, cls = "") => `<button class="r-card${cls}" data-open="${esc(b.path)}">${rcover(b)}${b.paper && !b.finished ? `<span class="pp-ctag">Паперова</span>` : ""}${menu ? more(b) : ""}
       <span class="r-t">${esc(b.title)}</span><span class="r-a">${esc(author(b))}</span>${foot}</button>`;
   const head = (title, aside = "", plain = false) => `<div class="r-sec-head${plain ? " plain" : ""}"><h2>${title}</h2>${aside}</div>`;
   const tabs = (list, active, attr) => `<div class="r-tabs">${list.map(([k, label, n]) => `<button class="${k === active ? "on" : ""}" ${attr}="${k}">${label}${n != null ? ` <i>${n}</i>` : ""}</button>`).join("")}</div>`;
