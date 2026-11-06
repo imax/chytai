@@ -359,6 +359,10 @@ function pageDetails(parse) {
 const isbnIn = (s) => ((s || "").match(/97[89][\d\s\-–]{10,16}/) || [""])[0].replace(/\D/g, "");
 // «ТІРЦА» -> «Тірца»: Комора writes titles in capitals.
 const unshout = (s) => (s === s.toUpperCase() && /\p{Lu}{3}/u.test(s) ? s.charAt(0) + s.slice(1).toLowerCase() : s);
+// The short description is a teaser on some shops (Комора cuts it mid-word with «…», Max 2026-11-06:
+// «Вони б і мухи не скривдили» showed one line): then the full description is used.
+const teaser = (s) => /(…|\.\.\.)$/.test(s.trim()) && !/[.!?»"]\s*(…|\.\.\.)$/.test(s.trim());
+const wooBlurb = (p) => (p.blurb && !(teaser(p.blurb) && (p.desc || "").length > p.blurb.length) ? p.blurb : p.desc || p.blurb || "");
 const wooBook = (src, p, extra = {}) => ({
   id: `${src.id}-${p.id}`,
   title: p.title,
@@ -374,7 +378,7 @@ const wooBook = (src, p, extra = {}) => ({
   status: !p.inStock ? "немає" : /передзамовлення/i.test(p.title + p.categories.join()) ? "передзамовлення" : "є",
   isNew: false,
   genres: p.categories.filter((c) => !/передзамовлення|розпродаж|акції|новинки|без категорії|комплекти|серії/i.test(c)),
-  blurb: about(p.blurb || p.desc),
+  blurb: wooBlurb(p),
   language: "українська",
   ...extra,
 });
