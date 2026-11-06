@@ -1095,5 +1095,15 @@
     ],
     "wanted": true,
     "source": "https://standardebooks.org/ebooks/robert-w-chambers/the-king-in-yellow"
+  },
+  {
+    "name": "twain-the-innocents-abroad.epub",
+    "title": "The Innocents Abroad",
+    "authors": "Mark Twain",
+    "tags": [
+      "Англійською"
+    ],
+    "wanted": true,
+    "source": "https://standardebooks.org/ebooks/mark-twain/the-innocents-abroad"
   }
 ]
