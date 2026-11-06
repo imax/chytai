@@ -1896,6 +1896,94 @@ async function warmCovers(lib, names) {
   }
 }
 
+// Cleaning up after the caches (Max 2026-11-06: «будь-яку кількість місця можна забити, якщо ніколи не робити
+// прибирання»). COVER_DIR had grown to 560 MB of the 3 GB volume: covers of books deleted or replaced, and small
+// copies of covers that changed (the repo's free-shelf covers get a new date with every deploy). Once a day it keeps
+// what some book or picture still on the disk would ask for and removes the rest, if untouched for a day (a cover
+// being made right now is never caught). A wrongly removed one would only be taken out of its book again.
+// The «як книжка» copies of PDFs (reflow/) have the reader's version in their name, so they go after 60 days
+// unread instead (GET /reflow marks one as read).
+const REFLOW_DAYS = 60;
+function sweepCaches() {
+  const t0 = Date.now();
+  const keep = new Set();
+  const coverKey = (file, st) => crypto.createHash("sha1").update(`${file}:${st.size}:${st.mtimeMs}`).digest("hex").slice(0, 16);
+  const thumbKey = (file, st) => crypto.createHash("sha1").update(`${file}:${st.size}:${st.mtimeMs}:${THUMB_W}`).digest("hex").slice(0, 16);
+  const walk = (dir) => {
+    let entries;
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const e of entries) {
+      const file = path.join(dir, e.name);
+      if (e.isDirectory()) {
+        if (file !== REFLOW_DIR && e.name !== "reflow" && e.name !== "node_modules") walk(file);
+        continue;
+      }
+      if (dir === COVER_DIR) continue;
+      let st;
+      try {
+        st = fs.statSync(file);
+      } catch {
+        continue;
+      }
+      if (/\.epub$/i.test(e.name)) keep.add(coverKey(file, st));
+      else if (/\.(jpe?g|png|gif|webp)$/i.test(e.name)) keep.add(`t-${thumbKey(file, st)}`);
+    }
+  };
+  for (const dir of [DATA_DIR, FREE_DIR, ...DEMO_DIRS]) walk(dir);
+  // The covers taken out of the books that stay, and their small copies.
+  let names = [];
+  try {
+    names = fs.readdirSync(COVER_DIR, { withFileTypes: true }).filter((e) => e.isFile()).map((e) => e.name);
+  } catch {}
+  for (const n of names) {
+    if (n.startsWith("t-") || !keep.has(n.split(".")[0])) continue;
+    try {
+      keep.add(`t-${thumbKey(path.join(COVER_DIR, n), fs.statSync(path.join(COVER_DIR, n)))}`);
+    } catch {}
+  }
+  const dayAgo = Date.now() - 864e5;
+  let n = 0, bytes = 0;
+  const drop = (file, st) => {
+    try {
+      fs.rmSync(file, { force: true });
+      n++, (bytes += st.size);
+    } catch {}
+  };
+  for (const name of names) {
+    if (keep.has(name.split(".")[0])) continue;
+    const file = path.join(COVER_DIR, name);
+    try {
+      const st = fs.statSync(file);
+      if (st.mtimeMs < dayAgo) drop(file, st);
+    } catch {}
+  }
+  const reflowOld = Date.now() - REFLOW_DAYS * 864e5;
+  let accounts = [];
+  try {
+    accounts = fs.readdirSync(ACCOUNTS_DIR);
+  } catch {}
+  for (const dir of [REFLOW_DIR, ...accounts.map((id) => path.join(ACCOUNTS_DIR, id, "reflow"))]) {
+    let files = [];
+    try {
+      files = fs.readdirSync(dir);
+    } catch {}
+    for (const f of files) {
+      try {
+        const st = fs.statSync(path.join(dir, f));
+        if (st.isFile() && st.mtimeMs < reflowOld) drop(path.join(dir, f), st);
+      } catch {}
+    }
+  }
+  console.log(`caches: ${n} files removed, ${(bytes / 1e6).toFixed(1)} MB, ${Date.now() - t0} ms`);
+  return { n, bytes };
+}
+setTimeout(sweepCaches, 10 * 60 * 1000).unref();
+setInterval(sweepCaches, 24 * 3600 * 1000).unref();
+
 // A cover set by hand for a book in a library (PDFs have none of their own), kept by the book's name.
 const customCoverKey = (name) => crypto.createHash("sha1").update(name).digest("hex").slice(0, 16);
 function customCover(lib, name) {
@@ -2347,6 +2435,8 @@ api.get("/reflow", (req, res) => {
   try {
     const file = reflowFile(req.lib, name, String(req.query.version || ""));
     if (!fs.existsSync(file)) return res.status(204).end();
+    const now = new Date();
+    fs.utimes(file, now, now, () => {}); // read: sweepCaches keeps it another 60 days
     res.type("application/epub+zip").sendFile(file);
   } catch {
     res.status(404).end();
