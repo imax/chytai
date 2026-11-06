@@ -1,5 +1,5 @@
 // The weekly letter (Max, 2026-10-20: «weekly email digest, щоб повертати користувачів на сайт»; proposal in
-// /mnt/project-files/chytai-digest/proposal.md). Every Friday at 10:00 Kyiv time each reader with an e-mail
+// /mnt/project-files/chytai-digest/proposal.md). Every Friday at 9:30 Kyiv time each reader with an e-mail
 // gets one letter about their own shelves since the last one: what the readers they follow did, what is new
 // on the publisher shelves they subscribe to, which of their «хочу прочитати» books turned up in a library or
 // a catalog, a nudge about a book they have been reading for weeks, and one reader's note about a book they
@@ -21,8 +21,8 @@ const { isRussian } = require("./store");
 
 const DAY = 86400000;
 const SEND_DAY = 5; // Friday
-const SEND_HOUR = 10; // Kyiv time (TZ=Europe/Kyiv on Fly; the check uses local time); 9:00 until 2026-11-06, Max moved it to 10:00
-// One-off later starts, minutes after SEND_HOUR (Max, 2026-10-29: «завтра затримаємо розсилку на півгодини»,
+const SEND_AT = 9 * 60 + 30; // 9:30 Kyiv, minutes after midnight (TZ=Europe/Kyiv on Fly; the check uses local time); 9:00 until 2026-11-06, then Max chose 9:30
+// One-off later starts, minutes after SEND_AT (Max, 2026-10-29: «завтра затримаємо розсилку на півгодини»,
 // to have time for his text).
 const LATER = { "2026-10-30": 30 };
 const READING_WEEKS = 3; // «Ви зараз читаєте» after this long
@@ -542,14 +542,14 @@ class Digest {
     return this.running;
   }
 
-  // Friday 10:00 Kyiv time: checked every ten minutes (the machine is always on since 2026-10-20), once a day.
+  // Friday 9:30 Kyiv time: checked every ten minutes (the machine is always on since 2026-10-20), once a day.
   schedule() {
     const tick = () => {
       const t = kyiv(new Date());
       const today = dayKyiv(new Date());
       // A run cut off by a restart goes on where it stopped.
       if (this.store.db.get("digest:running") === today && !this.running) return void this.run().catch((e) => this.log(`digest run failed: ${e.message}`));
-      if (t.getDay() !== SEND_DAY || t.getHours() * 60 + t.getMinutes() < SEND_HOUR * 60 + (LATER[today] || 0) || this.store.db.get("digest:lastRun") === today) return;
+      if (t.getDay() !== SEND_DAY || t.getHours() * 60 + t.getMinutes() < SEND_AT + (LATER[today] || 0) || this.store.db.get("digest:lastRun") === today) return;
       this.store.db.set("digest:lastRun", today);
       this.run().catch((e) => this.log(`digest run failed: ${e.message}`));
     };
@@ -558,7 +558,7 @@ class Digest {
   }
 }
 
-// «10:00», or the later start set for that Kyiv day (2026-10-30 → «9:30» back when it was 9:00), for the /admin/letter form.
-const sendTime = (day) => { const m = SEND_HOUR * 60 + (LATER[day] || 0); return `${Math.floor(m / 60)}:${String(m % 60).padStart(2, "0")}`; };
+// «9:30», or the later start set for that Kyiv day (LATER), for the /admin/letter form.
+const sendTime = (day) => { const m = SEND_AT + (LATER[day] || 0); return `${Math.floor(m / 60)}:${String(m % 60).padStart(2, "0")}`; };
 
 module.exports = { Digest, AUDIENCES, sendTime };

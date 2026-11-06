@@ -1468,15 +1468,15 @@ function jobsPage({ user, layout, o, queue, book = () => null, href = () => "#",
     return `<tr><th>${esc(plan.what)}<small>${plan.note || often(p.ms)} · перевірка ${kyiv(p.last)}</small></th><td>${r ? kyiv(r.started) : "—"}</td><td>${r ? dur(r.ms) : ""}</td><td class="res">${result(r)}</td><td>${seven(countOf(plan.jobs))}</td><td>${next ? ago(next) : "після старту"}</td></tr>`;
   });
   // The letters keep their own schedule and their last run in meta (digest.js, wantmail.js).
-  const nextAt = (dayOfWeek, hour) => {
+  const nextAt = (dayOfWeek, hour, minute = 0) => {
     const k = new Date(now.toLocaleString("en-US", { timeZone: "Europe/Kyiv" }));
     const t = new Date(k);
-    t.setHours(hour, 0, 0, 0);
+    t.setHours(hour, minute, 0, 0);
     while ((dayOfWeek != null && t.getDay() !== dayOfWeek) || t <= k) t.setDate(t.getDate() + 1);
     return new Date(now.getTime() + (t - k)).toISOString();
   };
   const letter = (what, often, last, next) => `<tr><th>${what}<small>${often}</small></th><td>${kyiv(last?.started)}</td><td>${last?.finished ? dur(Date.parse(last.finished) - Date.parse(last.started)) : last ? "іде" : ""}</td><td class="res">${last ? `${last.errors?.length ? `<span class="bad">✗</span> помилок ${last.errors.length}: ${esc(String(last.errors[0]?.message || last.errors[0]).slice(0, 120))}, ` : `<span class="ok">✓</span> `}надіслано ${last.sent || 0}` : ""}</td><td></td><td>${ago(next)}</td></tr>`;
-  plans.push(letter("Щотижневий лист", "щоп'ятниці о 10:00", digest, nextAt(5, 10)));
+  plans.push(letter("Щотижневий лист", "щоп'ятниці о 9:30", digest, nextAt(5, 9, 30)));
   plans.push(letter("Лист «з вашого «Хочу» тепер є»", "щодня о 10:00", wantMail, nextAt(null, 10)));
 
   const planned = Object.values(PLANS).flatMap((p) => p.jobs);

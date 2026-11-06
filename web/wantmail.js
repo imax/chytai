@@ -199,7 +199,7 @@ class WantMail {
       const db = this.store.db;
       const today = dayKyiv(new Date());
       const now = kyiv(new Date());
-      // Fridays the weekly letter goes first (both start at 10:00 since 2026-11-06), so the two never send at once.
+      // Fridays the weekly letter goes first (it starts at 9:30 and may run long), so the two never send at once.
       if (now.getHours() < SEND_HOUR || db.get("wantmail:lastRun") === today || db.get("digest:running") || (now.getDay() === 5 && db.get("digest:lastRun") !== today)) return;
       db.set("wantmail:lastRun", today);
       this.run().catch((e) => this.log(`want mail run failed: ${e.message}`));
