@@ -285,8 +285,9 @@
     $("#r-pfound").classList.toggle("hidden", !q);
     $("#r-recent").innerHTML = recent.map(prow).join("");
     $(".r-precent").classList.toggle("hidden", !recent.length);
-    $("#r-pweek").innerHTML = wk;
-    $("#r-pweek").classList.toggle("hidden", !wk);
+    // An older page (an app's saved copy) may have no such block: it must not stop the rest from drawing.
+    const pw = $("#r-pweek");
+    if (pw) pw.innerHTML = wk, pw.classList.toggle("hidden", !wk);
     $("#r-n-books").textContent = books.length || "";
     $("#r-pnav-trash").hidden = !trashCount;
     $("#r-n-trash").textContent = trashCount || "";
@@ -426,7 +427,8 @@
       kept.set(drawn.page, { html: drawn.html, f });
     }
     const k = kept.get(page);
-    if (k && k.html === html) body.append(k.f);
+    // replaceChildren, not append: coming back from a paper book its page is still in the body (Max 2026-11-06).
+    if (k && k.html === html) body.replaceChildren(k.f);
     else body.innerHTML = html;
     kept.delete(page);
     drawn = { page, html };
