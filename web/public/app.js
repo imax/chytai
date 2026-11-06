@@ -355,6 +355,48 @@
     q.addEventListener("keydown", (e) => e.key === "Enter" && e.preventDefault());
   }
 
+  // «З нею рекомендують» in the review form: the same search, several books (data-books-pick = how many).
+  for (const pick of document.querySelectorAll("[data-books-pick]")) {
+    const max = Number(pick.dataset.booksPick) || 3;
+    const ids = $('input[name="recs"]', pick), q = $(".pick-q", pick), hits = $(".pick-hits", pick), list = $(".picks", pick);
+    const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+    const sync = () => {
+      const all = [...list.children].map((x) => x.dataset.id);
+      ids.value = JSON.stringify(all);
+      q.hidden = all.length >= max;
+      hits.innerHTML = "";
+      q.value = "";
+    };
+    pick.addEventListener("click", (e) => {
+      const un = e.target.closest("[data-unpick]");
+      if (un) return un.closest(".picked").remove(), sync(), q.focus();
+      const h = e.target.closest("[data-hit]");
+      if (!h) return;
+      const b = JSON.parse(h.dataset.hit);
+      if (![...list.children].some((x) => x.dataset.id === b.id)) {
+        const row = document.createElement("div");
+        row.className = "picked";
+        row.dataset.id = b.id;
+        row.innerHTML = `${b.cover ? `<span class="cover xs"><img src="${esc(b.cover)}" alt="" onerror="this.remove()"></span>` : `<span class="cover xs"></span>`}<span><b>${esc(b.title)}</b><span class="by">${esc(b.author)}</span></span><button type="button" class="text-link small muted" data-unpick>прибрати</button>`;
+        list.append(row);
+      }
+      sync();
+      if (!q.hidden) q.focus();
+    });
+    let timer, ctrl;
+    q.addEventListener("input", () => {
+      clearTimeout(timer);
+      timer = setTimeout(async () => {
+        ctrl?.abort();
+        ctrl = new AbortController();
+        const found = await fetch(`/api/club/books?${new URLSearchParams({ q: q.value })}`, { signal: ctrl.signal }).then((r) => r.json()).catch(() => null);
+        if (!found) return;
+        hits.innerHTML = found.map((b) => `<button type="button" class="hit" data-hit="${esc(JSON.stringify(b))}">${b.cover ? `<span class="cover xs"><img src="${esc(b.cover)}" alt="" onerror="this.remove()"></span>` : `<span class="cover xs"></span>`}<span><b>${esc(b.title)}</b><span class="by">${esc(b.author)}</span></span></button>`).join("");
+      }, 200);
+    });
+    q.addEventListener("keydown", (e) => e.key === "Enter" && e.preventDefault());
+  }
+
   // «Поділитися» on a list's page: the phone's own share sheet, else the address goes to the clipboard.
   document.addEventListener("click", async (e) => {
     const b = e.target.closest("[data-share]");

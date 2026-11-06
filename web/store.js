@@ -318,7 +318,7 @@ function sameAuthor(a, b) {
 const RANK = { read: 3, abandoned: 2.5, reading: 2, want: 1, "": 0 };
 function mergeEntries(a, b) {
   const pick = (x, y) => (x !== "" && x != null ? x : y);
-  return { ...b, ...a, status: (RANK[a.status] ?? 0) >= (RANK[b.status] ?? 0) ? a.status : b.status, rating: Math.max(a.rating ?? -1, b.rating ?? -1) < 0 ? null : Math.max(a.rating ?? 0, b.rating ?? 0), year: pick(a.year, b.year), note: (a.note || "").length >= (b.note || "").length ? a.note || "" : b.note, copy: pick(a.copy, b.copy), order: Math.min(a.order ?? 1e9, b.order ?? 1e9), ...(a.kids || b.kids ? { kids: true } : {}) };
+  return { ...b, ...a, status: (RANK[a.status] ?? 0) >= (RANK[b.status] ?? 0) ? a.status : b.status, rating: Math.max(a.rating ?? -1, b.rating ?? -1) < 0 ? null : Math.max(a.rating ?? 0, b.rating ?? 0), year: pick(a.year, b.year), note: (a.note || "").length >= (b.note || "").length ? a.note || "" : b.note, ...((a.recs || b.recs) ? { recs: [...new Set([...(a.recs || []), ...(b.recs || [])])].slice(0, 3) } : {}), copy: pick(a.copy, b.copy), order: Math.min(a.order ?? 1e9, b.order ?? 1e9), ...(a.kids || b.kids ? { kids: true } : {}) };
 }
 
 // One series inside another of the same name (Wikidata's «Foundation Trilogy» inside «Foundation», a
@@ -857,6 +857,14 @@ class Store {
       if (e && (all || e.status !== "abandoned" || e.rating != null || e.note)) out.push({ reader, entry: e });
     }
     return out.sort((a, b) => (b.entry.note?.length || 0) - (a.entry.note?.length || 0) || (b.entry.rating ?? -1) - (a.entry.rating ?? -1));
+  }
+
+  // «З нею рекомендують»: an entry's books to read next, as books (merged ids followed, gone ones and
+  // Russian ones dropped, never the book itself). Entries live in memory, so this is a few lookups.
+  recBooks(entry, self = "") {
+    const own = self && this.canonical(self);
+    const seen = new Set();
+    return (entry?.recs || []).map((id) => this.canonical(id)).filter((id) => id !== own && !seen.has(id) && seen.add(id)).map((id) => this.book(id)).filter((b) => b && !isRussian(b));
   }
 
   // Works that look like one book twice (Max, 2026-10-21: «давай ще шукати дублі»): the same author's
@@ -1872,7 +1880,7 @@ class Store {
     this.loadV = (this.loadV || 0) + 1; // everything read again: social.js counts everyone again
     this.subs = new Map(); // reader id -> [shelf id]
     for (const r of db.prepare("SELECT id, data FROM books").all()) this.lib.books[r.id] = JSON.parse(r.data);
-    for (const r of db.prepare("SELECT * FROM entries").all()) this.entriesOf(r.reader)[r.book] = { status: r.status, year: r.year, rating: r.rating, note: r.note, copy: r.copy, order: r.ord, ...(r.added ? { added: r.added } : {}), ...(r.updated ? { updated: r.updated } : {}), ...(r.kids ? { kids: true } : {}) };
+    for (const r of db.prepare("SELECT * FROM entries").all()) this.entriesOf(r.reader)[r.book] = { status: r.status, year: r.year, rating: r.rating, note: r.note, copy: r.copy, order: r.ord, ...(r.added ? { added: r.added } : {}), ...(r.updated ? { updated: r.updated } : {}), ...(r.kids ? { kids: true } : {}), ...(r.recs ? { recs: JSON.parse(r.recs) } : {}) };
     for (const r of db.prepare("SELECT reader, shelf FROM subscriptions").all()) this.subscriptions(r.reader).push(r.shelf);
   }
 
@@ -1899,8 +1907,8 @@ class Store {
     this.readerV.set(reader, (this.readerV.get(reader) || 0) + 1); // and counts again only this reader's
     if (!e) return this.db.prepare("DELETE FROM entries WHERE reader = ? AND book = ?").run(reader, id);
     this.db
-      .prepare("INSERT INTO entries (reader, book, status, rating, year, note, copy, ord, added, updated, kids) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (reader, book) DO UPDATE SET status = excluded.status, rating = excluded.rating, year = excluded.year, note = excluded.note, copy = excluded.copy, ord = excluded.ord, added = excluded.added, updated = excluded.updated, kids = excluded.kids")
-      .run(reader, id, e.status || "", e.rating ?? null, e.year ?? null, e.note || "", e.copy || "", e.order ?? null, e.added || null, e.updated || null, e.kids ? 1 : 0);
+      .prepare("INSERT INTO entries (reader, book, status, rating, year, note, copy, ord, added, updated, kids, recs) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (reader, book) DO UPDATE SET status = excluded.status, rating = excluded.rating, year = excluded.year, note = excluded.note, copy = excluded.copy, ord = excluded.ord, added = excluded.added, updated = excluded.updated, kids = excluded.kids, recs = excluded.recs")
+      .run(reader, id, e.status || "", e.rating ?? null, e.year ?? null, e.note || "", e.copy || "", e.order ?? null, e.added || null, e.updated || null, e.kids ? 1 : 0, e.recs?.length ? JSON.stringify(e.recs) : "");
   }
 
   // A book another process made (the site, while this is the jobs process): read its row.
@@ -2460,6 +2468,7 @@ class Store {
     const next = { ...cur, ...patch, updated: new Date().toISOString() };
     if (next.rating === "" || next.rating === undefined) next.rating = cur.rating ?? null;
     if (!next.kids) delete next.kids;
+    if (!next.recs?.length) delete next.recs;
     entries[id] = next;
     this.writeEntry(reader, id, next);
     if (next.rating != null && next.rating !== (cur.rating ?? null)) this.logRating(reader, id, next.rating, next.updated, "site");

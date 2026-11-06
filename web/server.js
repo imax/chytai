@@ -1051,7 +1051,7 @@ const readersOf = (id) =>
     .readersOf(id)
     .map(({ reader, entry }) => ({ reader: pub(auth.reader(reader)), entry }))
     .filter((r) => r.reader)
-    .map(({ reader, entry }) => ({ name: reader.name, href: reader.href, entry, now: nowIds(reader.id).has(entry.via ? store.canonical(entry.via.id) : store.canonical(id)) }));
+    .map(({ reader, entry }) => ({ name: reader.name, href: reader.href, entry, recs: store.recBooks(entry, id), now: nowIds(reader.id).has(entry.via ? store.canonical(entry.via.id) : store.canonical(id)) }));
 const visible = (s) => store.visible(s);
 // Letters to the owner (WEB_NOTIFY_EMAIL, else the e-mail he signs in with), sent in the background.
 const site = (req) => (DOMAIN ? `https://${DOMAIN}` : `${req.protocol}://${req.get("host")}`);
@@ -1697,7 +1697,7 @@ app.get("/me/book/:id", signed, (req, res) => {
   // status and year).
   const c = store.cycleOf(book.id);
   const series = c && c.items.length > 1 ? { name: c.name, total: c.items.length, checked: "series" in req.query || (!!entry && c.items.some((v) => v.id && v.id !== book.id && ((e) => e && e.status === entry.status && (e.year ?? null) === (entry.year ?? null))(store.entry(req.user.id, v.id)))) } : null;
-  res.send(pages.editPage({ book, entry, user: req.user, series, now: nowIds(req.user.id).has(store.canonical(book.id)) }));
+  res.send(pages.editPage({ book, entry, user: req.user, series, recs: store.recBooks(entry, book.id), now: nowIds(req.user.id).has(store.canonical(book.id)) }));
 });
 
 // A volume in a book page's series list that no catalog has: a click makes its page (a book of the reader's
@@ -2437,6 +2437,16 @@ app.post("/api/entry/:id", signed, (req, res) => {
   if ("year" in b) patch.year = b.year ? Number(b.year) : null;
   if ("copy" in b) patch.copy = ["paper", "ebook", "seeking"].includes(b.copy) ? b.copy : "";
   if ("note" in b) patch.note = String(b.note).trim();
+  // «З нею рекомендують» (Max, 2026-11-06): up to three books to read next, as a JSON list of ids.
+  if ("recs" in b) {
+    let ids = [];
+    try {
+      ids = JSON.parse(String(b.recs || "[]"));
+    } catch {}
+    const self = store.canonical(store.resolve(req.params.id) || req.params.id);
+    patch.recs = [...new Set((Array.isArray(ids) ? ids : []).map((x) => store.canonical(String(x))).filter((x) => x !== self && store.book(x)))].slice(0, 3);
+  }
+  const before = store.entry(req.user.id, req.params.id)?.recs || [];
   // The «⋯» menu: kids=1 puts the book on «Дитяча полиця» (no other status), kids=0 takes it back.
   if ("kids" in b) {
     patch.kids = b.kids === "1";
@@ -2444,6 +2454,8 @@ app.post("/api/entry/:id", signed, (req, res) => {
   }
   const e = store.setEntry(req.user.id, req.params.id, patch);
   if (!e) return res.status(404).send("Немає такої книжки");
+  const fresh = (e.recs || []).filter((x) => !before.includes(x));
+  if (fresh.length && !req.owner) notifyOwner(`З нею рекомендують: ${store.book(req.params.id)?.title || req.params.id}`, [`${req.user.name} (${SITE}/@${req.user.username}) радить після «${store.book(req.params.id)?.title}» читати:`, "", ...fresh.map((x) => `• ${store.book(x).title}${store.book(x).author ? ` — ${store.book(x).author}` : ""}  ${SITE}${store.href(x)}`), "", `Книжка: ${SITE}${store.href(req.params.id)}`].join("\n"));
   // «Уся серія»: the same on every volume (the note stays here); volumes we only knew of get a book and
   // their details. No overview for each of them: one book's worth of AI, not eight.
   if (b.series === "1") {

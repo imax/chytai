@@ -455,6 +455,21 @@ function authorBlock(a) {
 </section>`;
 }
 
+// «З нею рекомендують» (Max, 2026-11-06): the books readers of this one say to read next, the most named
+// first, each with who said so. `readers[].recs` are books already (server.readersOf).
+function recsBlock(readers) {
+  const by = new Map();
+  for (const r of readers) for (const b of r.recs || []) {
+    const x = by.get(b.id) || by.set(b.id, { book: b, who: [] }).get(b.id);
+    x.who.push(r);
+  }
+  if (!by.size) return "";
+  const list = [...by.values()].sort((a, b) => b.who.length - a.who.length).slice(0, 6);
+  const who = (w) => (w.length === 1 ? `радить <a href="${attr(w[0].href)}">${esc(w[0].name)}</a>` : `радять ${w.length} ${plural(w.length, "читач", "читачі", "читачів")}`);
+  const row = ({ book: b, who: w }) => `<div class="mini"><a href="${attr(b.href)}">${cover(b, "sm")}</a><span><a href="${attr(b.href)}"><b>${esc(b.title)}</b></a>${b.author ? `<span class="by">${esc(byline(b.author))}</span>` : ""}<span class="meta">${who(w)}</span></span></div>`;
+  return `<section class="block" data-block="recs">${label("З нею рекомендують")}<div class="minis recs-next">${list.map(row).join("")}</div></section>`;
+}
+
 function bookPage({ club = [], ukrlib = null, sluhay = null, inGenre = null, fresh = null, pick = null, awards = [], authorInfo = null, lists = [], myLists = null, book, entry, now = false, user, shelf, inLibrary = new Map(), readers = [], also = [], alsoTitle = "Читали це, сподобалось і це", writings = [], reviewError = "", editionError = "", ukAsk = null, readUrl = "", freeRead = false, freeFile = false, advice = null, overview = null, overviewVote = null }) {
   const s = statsOf(book.id);
   // A book in Russian stays on its reader's shelf, and its page shows no «Про книжку» and no side blocks
@@ -495,6 +510,7 @@ function bookPage({ club = [], ukrlib = null, sluhay = null, inGenre = null, fre
       ${first.entry.note ? quote(first, book.id) : ""}
       ${(first.entry.note ? rest : readers).length ? `<div class="others">${(first.entry.note ? rest : readers).map((r) => readerLine(r, book.id)).join("")}</div>` : ""}
     </section>` : ""}
+    ${ru ? "" : recsBlock(readers)}
     ${ru ? "" : club.length ? `<section class="block" data-block="club">${label("Клуб Chytai")}<div class="club-topics">${club.map((t) => clubRow(t, { book: false })).join("")}</div></section>` : `<section class="block" data-block="club">${label("Клуб Chytai")}<p class="club-start">Тем ще немає. <a class="text-link" rel="nofollow" href="/club/new?book=${attr(encodeURIComponent(book.id))}">Обговорити в Клубі</a></p></section>`}
     ${lists.length ? `<section class="block" data-block="lists">${label("У списках", `<a href="/lists">усі списки</a>`)}<div class="lists">${lists.map(listLine).join("")}</div></section>` : ""}
     ${adviceBlock(book, advice)}
@@ -1019,7 +1035,7 @@ ${decideScript}`;
 }
 
 // /me/book/:id: the one place to edit a book in your library.
-function editPage({ book, entry, user, series = null, now = false }) {
+function editPage({ book, entry, user, series = null, now = false, recs = [] }) {
   // «Читаю зараз» for a book being read: it left the book page's buttons on 2026-10-30, so it is here (and on /me/now).
   const nowForm = entry?.status === "reading" ? `<form method="post" action="/api/now/${attr(encodeURIComponent(book.id))}" class="now-line"><input type="hidden" name="back" value="1"><label class="check"><span><input type="checkbox"${now ? " checked" : ""} onchange="this.form.submit()"> Читаю зараз · показувати на моїй сторінці</span></label></form>` : "";
   const body = `
@@ -1029,7 +1045,7 @@ function editPage({ book, entry, user, series = null, now = false }) {
     <p class="crumbs"><a href="/me">Моя полиця</a></p>
     <h1><a href="${attr(book.href)}">${esc(book.title)}</a></h1>
     ${book.author ? `<p class="book-by">${esc(book.author)}</p>` : ""}
-    ${entryForm(book, entry, series)}
+    ${entryForm(book, entry, series, recs)}
     ${nowForm}
   </div>
 </article>`;
@@ -1143,7 +1159,7 @@ const WHY = "Чому не пішла, якщо хочеться";
 // `series` ({ name, total, checked }): the book is a volume of a series, and «Уся серія» puts the status,
 // rating and year on every volume (Max, 2026-10-23); checked when the reader's shelf already shows the
 // series as one row, or when they came by «Прочитано · всю серію».
-function entryForm(book, entry, series = null) {
+function entryForm(book, entry, series = null, recs = []) {
   const e = entry || { status: series?.checked ? "read" : "", rating: null, year: series?.checked ? new Date().getFullYear() : "", copy: "", note: "" };
   const ratings = [5, 4.5, 4, 3.5, 3, 2.5, 2, 1.5, 1];
   return `
@@ -1174,6 +1190,7 @@ function entryForm(book, entry, series = null) {
     <option value="seeking" ${e.copy === "seeking" ? "selected" : ""}>Шукаю на папері</option>
   </select></label>
   <label>Нотатка <textarea name="note" rows="5" placeholder="${e.status === "abandoned" ? WHY : "Кілька слів про книжку"}" data-why="${WHY}">${esc(e.note || "")}</textarea></label>
+  <div class="field"><span class="small">З нею рекомендують <span class="muted">· що читати далі, до 3 книжок</span></span>${booksPick(recs)}</div>
   <div class="actions">
     ${entry ? `<button type="submit" class="btn danger" formaction="/api/entry/${encodeURIComponent(book.id)}/remove" formnovalidate>Прибрати з полиці</button>` : ""}
     <span class="grow"></span>
@@ -2867,6 +2884,14 @@ ${rest.length ? `<div class="club-topics">${rest.map((t) => clubRow(t)).join("")
   return layout({ title: "Клуб Chytai", body, user, path: "/club", canonical: "/club", description: "Клуб Chytai: читачі говорять про книжки, які читають." });
 }
 
+// «З нею рекомендують» in the review form (Max, 2026-11-06): the same picker, for up to three books.
+const pickedRow = (b) => `<div class="picked" data-id="${attr(b.id)}">${cover(b, "xs")}<span><b>${esc(b.title)}</b>${b.author ? `<span class="by">${esc(byline(b.author))}</span>` : ""}</span><button type="button" class="text-link small muted" data-unpick>прибрати</button></div>`;
+const booksPick = (list) => `<div class="book-pick" data-books-pick="3">
+  <input type="hidden" name="recs" value="${attr(JSON.stringify(list.map((b) => b.id)))}">
+  <div class="picks">${list.map(pickedRow).join("")}</div>
+  <input type="search" class="pick-q" placeholder="Назва або автор"${list.length >= 3 ? " hidden" : ""} autocomplete="off" aria-label="Книжка, яку радите далі">
+  <div class="pick-hits"></div>
+</div>`;
 // The book a topic is about: a picker (search as you type, /api/club/books) with the chosen one shown.
 const bookPick = (book) => `<div class="book-pick" data-book-pick>
   <input type="hidden" name="book" value="${attr(book?.id || "")}">
