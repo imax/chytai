@@ -28,11 +28,34 @@ function wanting(store, ids) {
   });
 }
 
-async function goodreads(id, fetchImpl) {
+// The words of a title or a name, for comparing: «The Lord of the Rings (…, #1)» -> "the lord of the rings".
+const words = (s) =>
+  String(s || "")
+    .replace(/&amp;/g, "&").replace(/&#39;|&apos;|&#x27;/g, "'").replace(/&quot;/g, '"')
+    .normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+// Is the Goodreads page the reader's book? Its title or its author's surname must be on the page's title
+// (Max, 2026-11-06: an import's made-up Book Ids gave «10x Org» and six more books Tolkien's and Rowling's covers).
+function samePage(book, page) {
+  const on = ` ${words(page)} `;
+  const title = words(String(book.title || "").split(/[:(]|\.\s/)[0]);
+  const surname = words(String(book.author || "").split(/,|\band\b|&/)[0]).split(" ").filter((w) => w.length >= 3).pop() || "";
+  return (title.length >= 2 && on.includes(` ${title} `)) || (!!surname && on.includes(` ${surname} `));
+}
+
+// goodreads(id, fetchImpl, book) -> the cover's address, "" when the page has none, null when the page is another book's.
+async function goodreads(id, fetchImpl, book) {
   const r = await fetchImpl(`https://www.goodreads.com/book/show/${encodeURIComponent(id)}`, { headers: HEADERS, signal: AbortSignal.timeout(20000) });
   if (r.status === 404) return "";
   if (r.status !== 200) throw Object.assign(new Error(`Goodreads HTTP ${r.status}`), { stop: true });
-  const m = (await r.text()).match(/<meta property="og:image" content="([^"]+)"/);
+  const html = await r.text();
+  if (book) {
+    // A page without a book's title on it (a check page, a changed layout) proves nothing either way.
+    const og = html.match(/<meta property="og:title" content="([^"]*)"/)?.[1];
+    if (!og) return "";
+    if (!samePage(book, `${og} ${html.match(/<title[^>]*>([^<]*)<\/title>/)?.[1] || ""}`)) return null;
+  }
+  const m = html.match(/<meta property="og:image" content="([^"]+)"/);
   return m && GR_COVER.test(m[1]) ? m[1] : "";
 }
 
@@ -71,8 +94,16 @@ async function find(store, { ids, keep, max = DAILY, log = () => {}, fetchImpl =
       let cover = "";
       let from = "";
       if (b.goodreads) {
-        from = await goodreads(b.goodreads, fetchImpl);
+        from = await goodreads(b.goodreads, fetchImpl, b);
         await wait();
+        if (from === null) {
+          // Not this book's id: it and the row's ISBNs are not to be trusted, so the book stays bare.
+          log(`covers: ${b.id} «${b.title}»: Goodreads ${b.goodreads} is another book`);
+          store.updateBook(b.id, { goodreads: "", goodreadsWrong: b.goodreads, isbns: [], isbnsWrong: b.isbns || [] });
+          store.db.set(`covers:${b.id}`, String(Date.now()));
+          asked++;
+          continue;
+        }
         if (from) {
           const k = keep ? await keep(from) : { url: from };
           if (!k.error) cover = k.url;
@@ -94,6 +125,37 @@ async function find(store, { ids, keep, max = DAILY, log = () => {}, fetchImpl =
   if (books.length) log(`covers ${line}`);
   if (asked) store.db.set("covers:log", line);
   return { asked, found };
+}
+
+// The Goodreads covers taken before samePage() was there, each checked once, the newest books first (a
+// made-up Book Id on an import, Max 2026-11-06). A page of another book takes the cover, the id and the
+// row's ISBNs off the book (kept aside as goodreadsWrong/isbnsWrong). Same pace and daily cap as find().
+async function recheck(store, { max = DAILY, log = () => {}, fetchImpl = fetch, pause = 3000 } = {}) {
+  const wait = () => new Promise((ok) => setTimeout(ok, pause));
+  const books = Object.values(store.lib.books)
+    .filter((b) => OWN.has(b.source) && b.goodreads && b.cover && b.coverFrom && /media-amazon|goodreads|gr-assets/.test(b.coverFrom) && !store.db.get(`grcheck:${b.id}`))
+    .reverse()
+    .slice(0, max);
+  let asked = 0;
+  let wrong = 0;
+  for (const b of books) {
+    if (!take(store)) break;
+    try {
+      const from = await goodreads(b.goodreads, fetchImpl, b);
+      await wait();
+      asked++;
+      store.db.set(`grcheck:${b.id}`, String(Date.now()));
+      if (from !== null) continue;
+      log(`covers: ${b.id} «${b.title}»: Goodreads ${b.goodreads} is another book, cover taken off`);
+      store.updateBook(b.id, { cover: "", coverFrom: "", coverKept: "", goodreads: "", goodreadsWrong: b.goodreads, isbns: [], isbnsWrong: b.isbns || [] });
+      wrong++;
+    } catch (e) {
+      log(`covers: recheck stopped at ${b.id}: ${e.name === "TimeoutError" ? "timeout" : e.cause?.code || e.message}`);
+      if (e.stop) break;
+    }
+  }
+  if (books.length) log(`covers: rechecked ${asked} Goodreads covers of ${books.length}, ${wrong} wrong`);
+  return { asked, wrong };
 }
 
 // A book from a shop's catalog that a reader just put on a shelf (mcp.js), when the shop gave no picture (MEGOGO's
@@ -127,4 +189,4 @@ async function shelved(store, { ids, keep, log = () => {}, fetchImpl = fetch, pa
   return { found };
 }
 
-module.exports = { find, shelved, wanting, goodreads, openLibrary };
+module.exports = { find, shelved, recheck, wanting, goodreads, openLibrary, samePage };

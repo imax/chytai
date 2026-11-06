@@ -369,6 +369,9 @@ bg.every("ol-covers", 3 * 3600 * 1000, () => keepOpenLibraryCovers(), { db: stor
 // The readers' books still without a cover, a few hundred a day (findcovers.js); new books go through the queue.
 const findMissingCovers = bg.fn("covers", async () => (await coversPass())?.found > 0, true);
 bg.every("covers", 6 * 3600 * 1000, () => findMissingCovers(), { db: store.db, first: 20 * 60 * 1000 });
+// Goodreads covers taken before the page was checked against the book (findcovers.js recheck), newest first.
+const recheckCovers = bg.fn("covers-recheck", async () => (await findCovers.recheck(store, { log: console.log }))?.wrong > 0, true);
+bg.every("covers-recheck", 24 * 3600 * 1000, () => recheckCovers(), { db: store.db, first: 2 * 60 * 1000 });
 // Covers set by hand before we kept them: fetched once after a start, in the background.
 setTimeout(async () => {
   for (const [id, fix] of Object.entries(store.edits())) {
