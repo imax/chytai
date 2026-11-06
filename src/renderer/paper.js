@@ -311,7 +311,7 @@
       const p = photo;
       photo = null;
       $("#pp-q").value = "";
-      ask({ image: p.data, img: p.small, marked: p.marked, question: q, page: p.page || book.page });
+      ask({ image: p.data, img: p.small, marked: p.marked, question: q, page: p.page || book.page, pageP: p.page ? null : p.pageP });
       return URL.revokeObjectURL(p.thumb);
     }
     // An empty field asks the suggested question from the placeholder.
@@ -374,12 +374,15 @@
       // The page number still comes from the photo, quietly.
       // Only the number: quick, and the question asked after it knows the page.
       const ph = photo;
-      window.reader.paperScan("pagenum", small).then((r) => {
-        if (!r.page || book !== b) return;
+      // Kept as a promise too: «Пояснити» pressed before the number is in waits for it (Max 2026-11-06: the
+      // answer showed the page of the photo before).
+      ph.pageP = window.reader.paperScan("pagenum", small).then((r) => {
+        if (!r.page || book !== b) return 0;
         ph.page = r.page;
         seenPage(r.page);
         if (photo === ph) redraw();
-      }).catch(() => {});
+        return r.page;
+      }).catch(() => 0);
       return;
     }
     scan = { busy: true, thumb };
@@ -741,7 +744,7 @@
   // Questions being answered, or just answered and still unfolded, by chat id: { chat, book, q, text, busy,
   // error, reqId, context }. Several can be answered at once (Max: a new question used to drop the one before).
   const lives = new Map();
-  function ask({ selection = "", before = "", after = "", question = "", pageText = "", page = book.page, image = "", img = "", marked = true }) {
+  function ask({ selection = "", before = "", after = "", question = "", pageText = "", page = book.page, image = "", img = "", marked = true, pageP = null }) {
     const b = book;
     chats = chats.filter((c) => c.turns.length || lives.get(c.id)?.busy); // a question that failed is let go
     for (const [id, l] of lives) if (!l.busy) lives.delete(id);
@@ -752,7 +755,15 @@
     const conv = { chat, book: b, text: "", busy: false, reqId: null };
     lives.set(chat.id, conv);
     conv.context = { paper: true, bookTitle: b.title, author: b.authors.join(", "), page: page || 0, chapter: b.chapter || "", selection, before, after, pageText, ...(image ? { image, marked } : {}) };
-    turn(conv, question || null);
+    if (pageP) {
+      // The photo's page number is still being read: the question shows at once, and goes once it is in (a few s).
+      Object.assign(conv, { q: question || "", text: "", error: null, busy: true });
+      redraw();
+      Promise.race([pageP, new Promise((r) => setTimeout(() => r(0), 8000))]).then((n) => {
+        if (n) chat.page = conv.context.page = n;
+        turn(conv, question || null);
+      });
+    } else turn(conv, question || null);
     $(".pp-chats")?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
