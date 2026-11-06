@@ -19,6 +19,9 @@ const shuffle = (a) => {
 
 // A feed line that stands for several volumes: the volume with a note (else the first) is the line's book
 // and entry, with the mean rating of the volumes rated, rounded to a half.
+// The day in Kyiv of an ISO time or date: the readers' evening is the next day in UTC.
+const kyivDay = (t) => (t.length === 10 ? t : new Date(t).toLocaleDateString("sv-SE", { timeZone: "Europe/Kyiv" }));
+
 function foldSeries(line) {
   const books = line.series.books.sort((a, b) => a.n - b.n);
   const rep = books.find((x) => x.entry.note) || books[0];
@@ -109,13 +112,20 @@ class Social {
     const items = this.all().filter(({ reader, id, entry: e }) => (!readers || readers.has(reader.id)) && (!books || books.has(id)) && (!notes || e.note) && (!min || (e.rating ?? 0) >= min));
     // One line a reader, at their newest import; it says how many books the shelf has now.
     const had = new Set();
+    const imports = new Map(); // reader id -> [{ day, till }] of their imports, whose rows the shelf line stands for
     if (shelves) for (const s of this.store.shelfImports()) {
+      const till = new Date(Date.parse(s.at) + 30 * 60 * 1000).toISOString(); // fixes right after it are the same act
+      (imports.get(s.reader) || imports.set(s.reader, []).get(s.reader)).push({ day: s.at.slice(0, 10), till });
       const reader = !had.has(s.reader) && this.who(s.reader);
       if (!reader || (readers && !readers.has(reader.id))) continue;
       had.add(s.reader);
       items.push({ reader, shelf: { n: Object.keys(this.store.entriesOf(s.reader)).length }, entry: { updated: s.at } });
     }
     const at = (e) => e.updated || e.added || "";
+    // A book an import put on the shelf is in its line, not a line of its own: a Goodreads «to-read» shelf made
+    // the same day is dated today, and 43 «хоче прочитати» lines of one reader filled /community (Max,
+    // 2026-11-06, @omordach), and one more he marked read a minute later. A row with a note, or changed later, stays.
+    const imported = (rid, e) => !e.note && (imports.get(rid) || []).some((s) => e.added === s.day && at(e) <= s.till);
     items.sort((a, b) => (at(b.entry) > at(a.entry) ? 1 : at(b.entry) < at(a.entry) ? -1 : 0) || (b.entry.year ?? 0) - (a.entry.year ?? 0) || (a.entry.order ?? 0) - (b.entry.order ?? 0));
     const out = [];
     const per = new Map(); // reader id -> rows taken, for `perReader`
@@ -123,10 +133,21 @@ class Social {
     // eight volumes read in a summer are one event, not eight): the line stands where the newest of them
     // is, says the series' name and how many books, and shows the volume with a note, else the first.
     const groups = new Map(); // reader|series|status|year -> the line
+    // A reader's «Хочу прочитати» of one day are one line, «хоче прочитати 6 книжок», with their covers (only
+    // /community): wishes are not news one by one.
+    const wants = new Map(); // reader|day -> the line
     for (const it of items) {
       if (it.shelf) {
         const books = this.shelfBooks(it.reader.id);
         if (books.length) out.push({ ...it, book: books[0], shelf: { ...it.shelf, books } });
+        continue;
+      }
+      if (shelves && imported(it.reader.id, it.entry)) continue;
+      const wk = shelves && it.entry.status === "want" && !it.entry.note && !this.store.seriesOf(it.id) && `${it.reader.id}|${kyivDay(at(it.entry))}`;
+      const w = wk && wants.get(wk);
+      if (w) {
+        const book = this.store.book(it.id);
+        if (book) w.wants.push(book);
         continue;
       }
       const ser = this.store.seriesOf(it.id);
@@ -142,11 +163,16 @@ class Social {
       if (!book) continue;
       const line = { ...it, book, ...(ser ? { series: { name: ser.name, books: [{ book, entry: it.entry, n: ser.n }] } } : {}) };
       if (gk) groups.set(gk, line);
+      if (wk) wants.set(wk, Object.assign(line, { wants: [book] }));
       out.push(line);
       per.set(it.reader.id, (per.get(it.reader.id) || 0) + 1);
       if (out.length >= limit * 3) break;
     }
     for (const line of out) {
+      if (line.wants) {
+        if (line.wants.length > 1) line.shelf = { n: line.wants.length, books: line.wants.slice(0, 5), want: true };
+        delete line.wants;
+      }
       if (!line.series) continue;
       if (line.series.books.length < 2) delete line.series;
       else foldSeries(line);
@@ -156,8 +182,10 @@ class Social {
 
   // A few books to show for a reader's shelf: the best rated, then the newest, with a cover.
   shelfBooks(rid, n = 5) {
-    const rows = this.of(rid).filter((x) => x.entry.status !== "want");
-    rows.sort((a, b) => (b.entry.rating ?? 0) - (a.entry.rating ?? 0) || ((b.entry.updated || "") > (a.entry.updated || "") ? 1 : -1));
+    // «Хочу прочитати» last: a shelf of wishes still shows its covers, not one book and «+43» (@omordach, 2026-11-06).
+    const rows = [...this.of(rid)];
+    const wish = (x) => (x.entry.status === "want" ? 1 : 0);
+    rows.sort((a, b) => wish(a) - wish(b) || (b.entry.rating ?? 0) - (a.entry.rating ?? 0) || ((b.entry.updated || "") > (a.entry.updated || "") ? 1 : -1));
     const out = [];
     for (const { id } of rows) {
       const book = this.store.book(id);
