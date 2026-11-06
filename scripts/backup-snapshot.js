@@ -42,8 +42,12 @@ try {
   execFileSync("tar", [
     "cf", tarFile, "--warning=no-file-changed", "--warning=no-file-removed",
     "--exclude=*.db", "--exclude=*.db-wal", "--exclude=*.db-shm",
-    // A pattern with «*» (e.g. «*.epub») goes to tar as it is; a plain name is a folder at the top.
-    ...excludes.map((e) => (e.includes("*") ? `--exclude=${e}` : `--exclude=./${e}`)),
+    // A pattern with «*» (e.g. «*.epub») goes to tar as it is, anywhere in the tree; a plain name is a folder at
+    // the top; a path with «*» and «/» (e.g. «covers/*.*») is from the top, and its «*» stays inside one folder.
+    ...excludes.flatMap((e) =>
+      !e.includes("*") ? [`--exclude=./${e}`]
+      : e.includes("/") && !e.startsWith("*/") ? ["--no-wildcards-match-slash", `--exclude=./${e}`, "--wildcards-match-slash"]
+      : [`--exclude=${e}`]),
     "-C", src, ".",
   ]);
 } catch (e) {

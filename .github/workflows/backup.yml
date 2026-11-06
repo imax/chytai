@@ -42,8 +42,9 @@ jobs:
             token: FLY_API_TOKEN
             url: https://chytai.fly.dev
             # Not the readers' book files (Max, 2026-11-06: «це ж не наші книжки»): their notes, places and settings are in
-            # reader.db; the files are in Fly's daily volume snapshots (30 days). reflow is rebuilt from the books on demand.
-            exclude: "reflow *.epub *.pdf */reflow"
+            # reader.db; the files are in Fly's daily volume snapshots (30 days). reflow is rebuilt from the books on demand,
+            # and so are the covers taken out of the books (covers/*.*, 560 MB); readers' own covers in covers/custom stay.
+            exclude: "reflow *.epub *.pdf */reflow covers/*.*"
     env:
       APP: ${{ matrix.app }}
       FLY_API_TOKEN: ${{ secrets[matrix.token] }}
@@ -66,7 +67,7 @@ jobs:
             # Packing the reader's books takes minutes now (2026-11-06): a 120 s cut left the first run going on the
             # machine, and the retry's copy came out with the database alone. Give it time.
             timeout 900 flyctl ssh console -a "$APP" --machine "$id" \
-              -C "sh -c 'echo $script | base64 -d > /tmp/backup-snapshot.js && rm -f /tmp/backup.tar.gz && node /tmp/backup-snapshot.js /data /tmp/backup.tar.gz ${{ matrix.exclude }}'" \
+              -C "sh -c 'set -f; echo $script | base64 -d > /tmp/backup-snapshot.js && rm -f /tmp/backup.tar.gz && node /tmp/backup-snapshot.js /data /tmp/backup.tar.gz ${{ matrix.exclude }}'" \
               && timeout 600 flyctl ssh sftp get /tmp/backup.tar.gz backup.tar.gz -a "$APP" --machine "$id" \
               && break
             rm -f backup.tar.gz; echo "retrying"; sleep 10
