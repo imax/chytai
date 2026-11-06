@@ -77,6 +77,10 @@ jobs:
         run: |
           mkdir check && tar xzf backup.tar.gz -C check
           du -sh check; find check -type f | sed 's|^check/||' | sort | head -50
+          # What takes the room: by kind of file and the biggest ones (names of accounts' books are not printed).
+          find check -type f -printf '%s\t%f\n' | awk -F'\t' '{n=split($2,a,"."); e=(n>1?a[n]:"(none)"); s[e]+=$1; c[e]++} END {for (e in s) printf "%8.1f MB %6d .%s\n", s[e]/1e6, c[e], e}' | sort -rn | head -15
+          find check -type f -printf '%s\t%P\n' | sort -rn | head -15 | awk -F'\t' '{sub(/[^\/]*$/, "…", $2); printf "%8.1f MB %s\n", $1/1e6, $2}'
+          du -m --max-depth=2 check | sort -rn | head -10
           # A copy with the database alone (the reader's on 2026-11-05 and 11-06) is not a backup.
           n=$(find check -type f | wc -l); echo "$n files"
           [ "$n" -ge 10 ] || { echo "::error::only $n files in the copy"; exit 1; }
