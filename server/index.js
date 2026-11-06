@@ -1405,6 +1405,7 @@ const NOTE_TEXT_MAX = 4000;
 // «Цей тиждень» (Max 2026-11-06): your own minutes, never anyone else's. Seconds per day of this week (Monday
 // first, Kyiv time), per book this week, and last week's total for the page behind the panel's block.
 // No streaks and no nudges: it only counts. 14 day lookups, nothing stored.
+const READ_EXACT_FROM = "2026-11-04";
 api.get("/week", (req, res) => {
   if (req.guest) return res.json({ days: [], books: [], weeks: [] });
   const days = state.stats?.days || {};
@@ -1412,10 +1413,13 @@ api.get("/week", (req, res) => {
   const noon = (d) => Date.parse(`${d}T12:00:00Z`);
   const monday = noon(today) - ((new Date(noon(today)).getUTCDay() + 6) % 7) * 86400000;
   const key = (t) => new Date(t).toISOString().slice(0, 10);
-  const secOf = (t) => days[key(t)]?.readSec?.[req.acct] || 0;
+  // Before 2026-11-04 minutes were guessed from the gaps between page turns, in total only, with no books:
+  // those days would make the week bigger than its books (Max 2026-11-06), so they are left out.
+  const secOf = (t) => (key(t) >= READ_EXACT_FROM ? days[key(t)]?.readSec?.[req.acct] || 0 : 0);
   const week = [...Array(7)].map((_, i) => secOf(monday + i * 86400000));
   const books = new Map();
   for (let i = 0; i < 7; i++) {
+    if (key(monday + i * 86400000) < READ_EXACT_FROM) continue;
     for (const [name, sec] of Object.entries(days[key(monday + i * 86400000)]?.readBooks?.[req.acct] || {})) books.set(name, (books.get(name) || 0) + sec);
   }
   const weeks = [...Array(2)].map((_, w) => {
