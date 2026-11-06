@@ -147,8 +147,22 @@
     }
     book = b;
   }
+  // On a slow connection the page looked empty for seconds while the notes and answers came (Max 2026-11-06):
+  // the busy notice the books show while opening, until they are here.
+  const LOADING = "Завантажую нотатки…";
+  let loading = false;
   async function load(b) {
-    const [n, c] = await Promise.all([window.reader.notesList(b.path).catch(() => null), window.reader.paperChats(b.path).catch(() => null)]);
+    loading = true;
+    const slow = setTimeout(() => loading && book?.path === b.path && showNotice(LOADING, true), 300);
+    let n, c;
+    try {
+      [n, c] = await Promise.all([window.reader.notesList(b.path).catch(() => null), window.reader.paperChats(b.path).catch(() => null)]);
+    } finally {
+      clearTimeout(slow);
+      const box = document.getElementById("notice");
+      if (book?.path === b.path || !book) loading = false;
+      if (box?.querySelector(".notice-text")?.textContent === LOADING) box.classList.add("hidden");
+    }
     if (book?.path !== b.path) return;
     if (n) notes = n;
     if (c) chats = c;
@@ -233,7 +247,7 @@
           : `<div class="pp-note${n.quote ? " q" : ""}"><div class="pp-note-t">${esc(n.text)}</div>
           ${n.comment ? `<div class="pp-note-c">${md(n.comment)}</div>` : ""}
           <div class="pp-note-m">${esc(n.chapter || "")}<button type="button" class="r-link" data-pp-quote="${esc(n.id)}">${n.quote ? "Не цитата" : "Цитата"}</button><button type="button" class="r-link" data-pp-edit-note="${esc(n.id)}">Редагувати</button><button type="button" class="r-link" data-pp-del="${esc(n.id)}">Видалити</button></div></div>`).join("")
-          : adding ? "" : `<p class="r-empty">Тут будуть ваші думки й цитати.</p>`}</section>
+          : adding || loading ? "" : `<p class="r-empty">Тут будуть ваші думки й цитати.</p>`}</section>
       ${window.Shell.aboutBlock(b, aboutOpen)}
     </div>`;
   }
