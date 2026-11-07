@@ -194,7 +194,7 @@ main:has(> .admin-nav) { padding-top: 24px; }
 .split { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 56px; align-items: start; }
 .split.wide-aside { grid-template-columns: minmax(0, 1fr) 320px; }
 .split > aside > .label { margin-top: 0; }
-.split > aside > * + .label, aside .minis + .label, aside .numbers + .label { margin-top: 40px; }
+.split > aside > * + .label, aside .minis + .label, aside .numbers + .label, .split > aside > [data-block] + [data-block] { margin-top: 40px; }
 .block { margin-bottom: 44px; }
 .block > .label { margin-bottom: 20px; }
 
