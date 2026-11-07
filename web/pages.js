@@ -2692,7 +2692,7 @@ function listPage({ list, items, user, own = false, owner = false, saved = false
   const share = list.draft ? `<form method="post" action="/api/lists/${id}/publish" class="inline"><button class="btn primary">Опублікувати</button></form>` : `<button type="button" class="btn" data-share="${attr(ORIGIN + list.href)}" data-title="${attr(list.title)}">Поділитися</button>`;
   // The author's tools under the books and the search to add one stay hidden until «Редагувати» (Max, 2026-10-28:
   // «ці actions сховаємо в edit menu»); the mode survives the reload after each move or save, per tab.
-  const tools = own ? `<button type="button" class="btn" id="list-edit-toggle" aria-pressed="false">Редагувати</button><button type="button" class="btn list-edit-only" data-open="list-edit">Назва й опис</button>` : "";
+  const tools = own ? `<button type="button" class="btn" id="list-edit-toggle" aria-pressed="false">Редагувати</button><button type="button" class="btn list-edit-only" data-open="list-edit">Назва й опис</button>` : owner && !list.editorial && !list.draft ? `<form method="post" action="/api/lists/${id}/home" class="inline"><input type="hidden" name="on" value="${list.home ? "" : "1"}"><button class="btn">${list.home ? "Прибрати з головної" : "На головну"}</button></form>` : "";
   const updated = when({ updated: list.updated });
   const rows = items
     .map((x, i) => {

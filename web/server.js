@@ -1395,6 +1395,13 @@ app.post("/api/lists/:id", signed, myList, (req, res) => {
   if (req.list.draft && !l.draft) published(req, l);
   res.redirect(303, l.href);
 });
+// The owner puts a reader's list on the homepage or takes it off.
+app.post("/api/lists/:id/home", signed, (req, res) => {
+  const l = lists.get(req.params.id);
+  if (!req.owner || !l) return res.status(404).send(pages.messagePage({ title: "Немає такого списку", text: "", user: req.user }));
+  lists.setHome(l.id, req.body.on === "1");
+  res.redirect(303, l.href);
+});
 app.post("/api/lists/:id/publish", signed, myList, (req, res) => {
   const l = lists.edit(req.list.id, { draft: false });
   if (req.list.draft) published(req, l);
@@ -1904,7 +1911,7 @@ app.get("/", (req, res) => {
   const free = freeShelf ? visible(freeShelf).filter((it) => it.cover).map((it) => store.book(it.id)).filter((b) => b && ok(b)).sort((a, b) => /[а-яіїєґ]/i.test(b.title) - /[а-яіїєґ]/i.test(a.title)).slice(0, 6) : [];
   const wanted = social.popular().want.map((x) => ({ ...x, book: ukWork(x.book) })).filter((x) => ok(x.book)).slice(0, 6);
   const genres = readGenres();
-  const editorials = lists.editorials().slice(0, 4).map(withCovers); // four: two rows of two on a phone (Max, 2026-10-30)
+  const editorials = lists.homeLists().slice(0, 4).map(withCovers); // four: two rows of two on a phone (Max, 2026-10-30)
   // «Для тебе» only from the reader's own shelf (a reader who rated nothing saw «схожі на те, що тобі сподобалось»
   // built from random books; reader's report, 2026-10-28): their fives, else what they want to read, else none.
   const shelf = req.user ? store.library(req.user.id) : [];

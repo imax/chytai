@@ -48,7 +48,7 @@ class Lists {
     this.db = store.db;
     this.who = who;
     this.db.exec(SCHEMA);
-    for (const [col, def] of [["image", "TEXT NOT NULL DEFAULT ''"], ["editorial", "INTEGER NOT NULL DEFAULT 0"], ["source", "TEXT NOT NULL DEFAULT ''"], ["draft", "INTEGER NOT NULL DEFAULT 0"]])
+    for (const [col, def] of [["image", "TEXT NOT NULL DEFAULT ''"], ["editorial", "INTEGER NOT NULL DEFAULT 0"], ["source", "TEXT NOT NULL DEFAULT ''"], ["draft", "INTEGER NOT NULL DEFAULT 0"], ["home", "TEXT NOT NULL DEFAULT ''"]])
       if (!this.db.prepare("PRAGMA table_info(lists)").all().some((c) => c.name === col)) this.db.exec(`ALTER TABLE lists ADD COLUMN ${col} ${def}`);
     if (!this.db.prepare("PRAGMA table_info(list_comments)").all().some((c) => c.name === "edited")) this.db.exec("ALTER TABLE list_comments ADD COLUMN edited TEXT NOT NULL DEFAULT ''");
   }
@@ -102,9 +102,18 @@ class Lists {
   setImage(id, url) {
     this.db.prepare("UPDATE lists SET image = ? WHERE id = ?").run(/^\/covers\/[\w.-]+$/.test(url || "") ? url : "", id);
   }
-  // «Добірки Chytai» on the homepage: the owner's editorial lists with books, the newest first.
+  // The owner's editorial lists with books, the newest first.
   editorials() {
     return this.db.prepare("SELECT * FROM lists WHERE editorial = 1 AND draft = 0 ORDER BY created DESC").all().map((r) => this.view(r)).filter((l) => l && l.count);
+  }
+  // A reader's list the owner puts on the homepage, under its author's name (Max, 2026-11-07: @daryna's
+  // «Сучасна фантастика»). `home` is when it was put there; "" is not there.
+  setHome(id, on) {
+    this.db.prepare("UPDATE lists SET home = ? WHERE id = ?").run(on ? new Date().toISOString() : "", id);
+  }
+  // «Добірки Chytai» on the homepage: editorial lists and readers' lists put there, the newest (or newest put) first.
+  homeLists() {
+    return this.db.prepare("SELECT * FROM lists WHERE (editorial = 1 OR home != '') AND draft = 0 ORDER BY max(created, home) DESC").all().map((r) => this.view(r)).filter((l) => l && l.count);
   }
 
   // ---- «Клуб Chytai» ----
