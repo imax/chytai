@@ -147,6 +147,10 @@ const digits = (t) => t.replace(NUM_RE, (_, a, b) => String(NUMS[a] + (b && NUMS
 const ntitle = (s) => digits(norm(s));
 // Separators left at the end of a title: «Diary of Samuel Pepys -», «Назва:».
 const DANGLING = /[\s\-‐‑–—:;,/|]+$/u;
+// indexSearch(): rows per transaction, and the jobs' pause between them (ms) so the site's writes get the lock.
+const SEARCH_BATCH = 500;
+const SEARCH_PAUSE = 150;
+const pause = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
 const EDITABLE = ["title", "author", "blurb", "cover", "language", "aliases", "genre", "published", "pages", "ebook"]; // pages: Max 2026-11-01; ebook: the book.ua item «Де взяти» shows
 // A short name as typed in search: «DCC», «Л.О.Т.Р.» and «lotr» are one key.
 const aliasKey = (s) => String(s || "").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, "");
@@ -1072,39 +1076,89 @@ class Store {
     this.aiGenres().set(id, genres);
   }
 
+  // The search index, made anew: dropped and made again, not emptied (a damaged FTS index kept rows a DELETE could
+  // not clear, so search pointed words at other books, 2026-10-28). The site and the jobs are two processes on one
+  // database, and the site writes on every page (visits, sessions): one long transaction here kept it waiting.
+  // 2026-11-07: after a 685-book import the jobs rebuilt the index again and again, each time 5–7 s under the
+  // write lock, and the site stood still 89 s that day. So the rows are worked out first, outside any lock, go
+  // into new tables in short transactions (the jobs pause between them, so the site's writes slip in), and the
+  // new tables take the old ones' names in one short last transaction. Search answers from the old index meanwhile.
   indexSearch() {
-    const ids = this.workIds();
+    const genres = new Map(); // our genre -> the works with it, for /genre/<slug>
+    const rows = [];
+    for (const id of this.workIds()) {
+      const r = this.searchRow(id);
+      if (!r) continue;
+      for (const g of r.genres) (genres.get(g) || genres.set(g, []).get(g)).push(id);
+      rows.push(r);
+    }
     const db = this.db;
+    const next = `_next_${process.env.CHYTAI_ROLE || "one"}`; // one build at a time per process (it is synchronous)
+    const tables = (sfx) => `DROP TABLE IF EXISTS search_vocab${sfx}; DROP TABLE IF EXISTS search${sfx}; DROP TABLE IF EXISTS search_tri${sfx};`;
+    db.tx(() => db.exec(`${tables(next)}
+      CREATE VIRTUAL TABLE search${next} USING fts5 (id UNINDEXED, title, alt, author, series, extra, tokenize = 'unicode61 remove_diacritics 2');
+      CREATE VIRTUAL TABLE search_tri${next} USING fts5 (id UNINDEXED, text, tokenize = 'trigram');`));
+    const add = db.prepare(`INSERT INTO search${next} (id, title, alt, author, series, extra) VALUES (?, ?, ?, ?, ?, ?)`);
+    const tri = db.prepare(`INSERT INTO search_tri${next} (id, text) VALUES (?, ?)`);
+    const jobs = process.env.CHYTAI_ROLE === "jobs";
+    for (let i = 0; i < rows.length; i += SEARCH_BATCH) {
+      db.tx(() => {
+        for (const r of rows.slice(i, i + SEARCH_BATCH)) add.run(...r.search), tri.run(...r.tri);
+      });
+      if (jobs) pause(SEARCH_PAUSE);
+    }
+    db.tx(() => db.exec(`${tables("")}
+      ALTER TABLE search${next} RENAME TO search; ALTER TABLE search_tri${next} RENAME TO search_tri;
+      CREATE VIRTUAL TABLE search_vocab USING fts5vocab (search, 'row');`));
+    this.genreIdx = genres;
+    this.vocab = null; // the typo search reloads the word list
+    this.sounds = null;
+    this.aliasIdx = null;
+  }
+
+  // A few books' rows only (an edit, a book added by hand, an import): a whole rebuild held the site 1.5–5 s for each
+  // edit in /admin (2026-11-07). ids may be editions or gone: their work's row is made again, theirs dropped.
+  indexBooks(ids) {
+    const works = this.workIds();
+    const db = this.db;
+    const del = db.prepare("DELETE FROM search WHERE id = ?");
+    const delTri = db.prepare("DELETE FROM search_tri WHERE id = ?");
+    const add = db.prepare("INSERT INTO search (id, title, alt, author, series, extra) VALUES (?, ?, ?, ?, ?, ?)");
+    const tri = db.prepare("INSERT INTO search_tri (id, text) VALUES (?, ?)");
+    const all = new Set(ids.flatMap((id) => [id, this.canonical(id)]));
+    const rows = [...all].map((id) => [id, works.has(id) && this.searchRow(id)]);
     db.tx(() => {
-      // Dropped and made again, not emptied: a damaged FTS index kept rows a DELETE could not clear, so search
-      // pointed words at other books («Ліна Костенко» gave «Друзі, коханки…») and missed «Тигролови» (2026-10-28).
-      db.exec(`DROP TABLE IF EXISTS search_vocab; DROP TABLE IF EXISTS search; DROP TABLE IF EXISTS search_tri;
-        CREATE VIRTUAL TABLE search USING fts5 (id UNINDEXED, title, alt, author, series, extra, tokenize = 'unicode61 remove_diacritics 2');
-        CREATE VIRTUAL TABLE search_vocab USING fts5vocab (search, 'row');
-        CREATE VIRTUAL TABLE search_tri USING fts5 (id UNINDEXED, text, tokenize = 'trigram');`);
-      this.vocab = null; // the typo search reloads the word list
-      this.sounds = null;
-      this.aliasIdx = null;
-      const add = db.prepare("INSERT INTO search (id, title, alt, author, series, extra) VALUES (?, ?, ?, ?, ?, ?)");
-      const tri = db.prepare("INSERT INTO search_tri (id, text) VALUES (?, ?)");
-      const genres = new Map(); // our genre -> the works with it, for /genre/<slug>
-      this.genreIdx = genres;
-      for (const id of ids) {
-        const b = this.book(id);
-        if (!b) continue;
-        if (!isRussian(b)) for (const g of mainGenres(b.tags)) (genres.get(g) || genres.set(g, []).get(g)).push(id);
-        const uk = this.ukTitles?.[id];
-        const extra = [...(b.editions || []).map((e) => [e.title, e.altTitle, e.author, e.isbn].filter(Boolean).join(" ")), uk ? `${uk.uk} ${uk.ukAuthor}` : "", ...isbnsOf(b)].join(" ");
-        // The series' own name too («Dungeon Crawler Carl» finds every volume), and the owner's other names.
-        const c = this.cycles?.get(id) && this.cycleInfo.get(this.cycles.get(id).key);
-        const series = [...new Set([b.series?.name, c?.name, c?.uk].filter(Boolean))].join(" ");
-        const all = [b.title, b.altTitle, b.author, b.authorOrig, series, extra, b.aliases].filter(Boolean).join(" ");
-        const folded = fold(all) !== all ? fold(all) : "";
-        add.run(id, b.title || "", b.altTitle || "", [b.author, b.authorOrig].filter(Boolean).join(" "), series, [extra, b.aliases, folded].filter(Boolean).join(" "));
-        const text = [b.title, b.altTitle, b.author, b.authorOrig, series, uk?.uk].filter(Boolean).join(" · ");
-        tri.run(id, fold(text) !== text ? `${text} · ${fold(text)}` : text);
+      for (const [id, r] of rows) {
+        del.run(id), delTri.run(id);
+        if (r) add.run(...r.search), tri.run(...r.tri);
       }
     });
+    if (this.genreIdx) {
+      for (const list of this.genreIdx.values()) for (let k = list.length - 1; k >= 0; k--) if (all.has(list[k])) list.splice(k, 1);
+      for (const [id, r] of rows) if (r) for (const g of r.genres) (this.genreIdx.get(g) || this.genreIdx.set(g, []).get(g)).push(id);
+    }
+    this.vocab = null;
+    this.sounds = null;
+    this.aliasIdx = null;
+  }
+
+  // One work's search rows and genres, or null.
+  searchRow(id) {
+    const b = this.book(id);
+    if (!b) return null;
+    const uk = this.ukTitles?.[id];
+    const extra = [...(b.editions || []).map((e) => [e.title, e.altTitle, e.author, e.isbn].filter(Boolean).join(" ")), uk ? `${uk.uk} ${uk.ukAuthor}` : "", ...isbnsOf(b)].join(" ");
+    // The series' own name too («Dungeon Crawler Carl» finds every volume), and the owner's other names.
+    const c = this.cycles?.get(id) && this.cycleInfo.get(this.cycles.get(id).key);
+    const series = [...new Set([b.series?.name, c?.name, c?.uk].filter(Boolean))].join(" ");
+    const all = [b.title, b.altTitle, b.author, b.authorOrig, series, extra, b.aliases].filter(Boolean).join(" ");
+    const folded = fold(all) !== all ? fold(all) : "";
+    const text = [b.title, b.altTitle, b.author, b.authorOrig, series, uk?.uk].filter(Boolean).join(" · ");
+    return {
+      genres: isRussian(b) ? [] : mainGenres(b.tags),
+      search: [id, b.title || "", b.altTitle || "", [b.author, b.authorOrig].filter(Boolean).join(" "), series, [extra, b.aliases, folded].filter(Boolean).join(" ")],
+      tri: [id, fold(text) !== text ? `${text} · ${fold(text)}` : text],
+    };
   }
 
   // A typo («лялки», «легйон»): each word the index does not know is replaced by the indexed words
@@ -2151,7 +2205,7 @@ class Store {
     this.db.set("edits", JSON.stringify(all));
     this._edits = all;
     this._works = null;
-    this.indexSearch();
+    this.indexBooks([id]);
     return this.book(id);
   }
 
@@ -2197,7 +2251,7 @@ class Store {
     this.lib.books[id] = { id, title: title.trim(), author: (author || "").trim(), cover: cover || "", tags: [], links: links || [], source, ...more };
     this.writeBook(id);
     this._works = null;
-    if (index) this.indexSlugs(), this.indexSearch();
+    if (index) this.indexSlugs(), this.indexBooks([id]);
     this.queueBooks([id], source);
     return this.lib.books[id];
   }
@@ -2231,7 +2285,7 @@ class Store {
       if (had && this.canonical(had) !== id) continue;
       made.push(this.addBook({ title, author, cover: "", links: [], source: "original", of: id, ...(b.published ? { published: b.published } : {}) }, { index: false }).id);
     }
-    if (made.length) this.indexSlugs(), this.indexSearch(), this.linkTranslations();
+    if (made.length) this.indexSlugs(), this.indexBooks(made), this.linkTranslations();
     return made;
   }
 
@@ -2403,7 +2457,7 @@ class Store {
     if (result.created.length) {
       this._works = null;
       this.indexSlugs();
-      this.indexSearch();
+      this.indexBooks(result.created.map((b) => b.id));
       this.queueBooks(result.created.map((b) => b.id), source);
     }
     return result;
