@@ -305,6 +305,9 @@ app.get("/t/:w/:sig/:src", (req, res) => thumbs.serve(req, res).catch(() => res.
 // A list's picture for social networks, made of its covers (listimage.js).
 const listImage = new (require("./listimage").ListImage)({ dir: COVERS, thumbs, log: console.log });
 bg.every("thumbs-prune", 24 * 3600 * 1000, () => thumbs.prune(), { db: store.db, first: 30 * 60 * 1000 });
+// The search index is kept by changed rows (store.indexSearch); once a night it is made anew, which also clears
+// whatever a damaged FTS index may keep (2026-10-28).
+bg.every("search-full", 24 * 3600 * 1000, () => store.indexSearch({ full: true }), { db: store.db, first: 40 * 60 * 1000 });
 bg.every("thumbs-warm", 6 * 3600 * 1000, async () => {
   const covers = () => [...store.entries.values()].flatMap((es) => Object.keys(es)).map((id) => store.book(id)?.cover);
   await thumbs.sweep(covers());

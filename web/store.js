@@ -150,6 +150,7 @@ const DANGLING = /[\s\-‐‑–—:;,/|]+$/u;
 // indexSearch(): rows per transaction, and the jobs' pause between them (ms) so the site's writes get the lock.
 const SEARCH_BATCH = 500;
 const SEARCH_PAUSE = 150;
+const SEARCH_FULL_ABOVE = 3000; // more changed rows than this in one pass: the whole index is made anew instead
 const pause = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
 const EDITABLE = ["title", "author", "blurb", "cover", "language", "aliases", "genre", "published", "pages", "ebook"]; // pages: Max 2026-11-01; ebook: the book.ua item «Де взяти» shows
 // A short name as typed in search: «DCC», «Л.О.Т.Р.» and «lotr» are one key.
@@ -1076,14 +1077,20 @@ class Store {
     this.aiGenres().set(id, genres);
   }
 
-  // The search index, made anew: dropped and made again, not emptied (a damaged FTS index kept rows a DELETE could
+  // The search index after books changed: only the rows that differ are written (Max, 2026-11-07: «як часто нам
+  // потрібно перебудовувати індекс?»). Every job that changed books used to drop and make the whole index again,
+  // ~19k works, several times an hour and dozens of times after a big import; now each pass works the rows out
+  // (book() for every work, no lock), compares them with what the index holds, and writes the few that changed.
+  // The full rebuild (full: true) runs once a night from the jobs and when the index is missing.
+  //
+  // The full rebuild: dropped and made again, not emptied (a damaged FTS index kept rows a DELETE could
   // not clear, so search pointed words at other books, 2026-10-28). The site and the jobs are two processes on one
   // database, and the site writes on every page (visits, sessions): one long transaction here kept it waiting.
   // 2026-11-07: after a 685-book import the jobs rebuilt the index again and again, each time 5–7 s under the
   // write lock, and the site stood still 89 s that day. So the rows are worked out first, outside any lock, go
   // into new tables in short transactions (the jobs pause between them, so the site's writes slip in), and the
   // new tables take the old ones' names in one short last transaction. Search answers from the old index meanwhile.
-  indexSearch() {
+  indexSearch({ full = false } = {}) {
     const genres = new Map(); // our genre -> the works with it, for /genre/<slug>
     const rows = [];
     for (const id of this.workIds()) {
@@ -1092,6 +1099,11 @@ class Store {
       for (const g of r.genres) (genres.get(g) || genres.set(g, []).get(g)).push(id);
       rows.push(r);
     }
+    this.genreIdx = genres;
+    this.vocab = null; // the typo search reloads the word list
+    this.sounds = null;
+    this.aliasIdx = null;
+    if (!full && this.updateSearch(rows)) return;
     const db = this.db;
     const next = `_next_${process.env.CHYTAI_ROLE || "one"}`; // one build at a time per process (it is synchronous)
     const tables = (sfx) => `DROP TABLE IF EXISTS search_vocab${sfx}; DROP TABLE IF EXISTS search${sfx}; DROP TABLE IF EXISTS search_tri${sfx};`;
@@ -1114,6 +1126,58 @@ class Store {
     this.vocab = null; // the typo search reloads the word list
     this.sounds = null;
     this.aliasIdx = null;
+  }
+
+  // What the index holds against what it should: rows of works that are gone are dropped, changed or new ones
+  // written, in short transactions like the full build. False when there is no index to compare (a full build then).
+  updateSearch(rows) {
+    const db = this.db;
+    let have, haveTri;
+    try {
+      have = db.prepare("SELECT rowid, id, title, alt, author, series, extra FROM search").all();
+      haveTri = db.prepare("SELECT rowid, id, text FROM search_tri").all();
+    } catch {
+      return false;
+    }
+    if (!have.length && rows.length) return false;
+    // id -> { key: the row as text (null when the id has several rows: it is written anew), rowids }
+    const index = (list) => {
+      const m = new Map();
+      for (const { rowid, ...r } of list) {
+        const x = m.get(r.id);
+        if (x) (x.key = null), x.rowids.push(rowid);
+        else m.set(r.id, { key: JSON.stringify(Object.values(r)), rowids: [rowid] });
+      }
+      return m;
+    };
+    const old = index(have);
+    const oldTri = index(haveTri);
+    const want = new Set();
+    const ops = []; // [id, row or null]
+    for (const r of rows) {
+      const id = r.search[0];
+      want.add(id);
+      if (old.get(id)?.key !== JSON.stringify(r.search) || oldTri.get(id)?.key !== JSON.stringify(r.tri)) ops.push([id, r]);
+    }
+    for (const id of new Set([...old.keys(), ...oldTri.keys()])) if (!want.has(id)) ops.push([id, null]);
+    if (!ops.length) return true;
+    if (ops.length > SEARCH_FULL_ABOVE) return false;
+    const del = db.prepare("DELETE FROM search WHERE rowid = ?");
+    const delTri = db.prepare("DELETE FROM search_tri WHERE rowid = ?");
+    const add = db.prepare("INSERT INTO search (id, title, alt, author, series, extra) VALUES (?, ?, ?, ?, ?, ?)");
+    const tri = db.prepare("INSERT INTO search_tri (id, text) VALUES (?, ?)");
+    const jobs = process.env.CHYTAI_ROLE === "jobs";
+    for (let i = 0; i < ops.length; i += SEARCH_BATCH) {
+      db.tx(() => {
+        for (const [id, r] of ops.slice(i, i + SEARCH_BATCH)) {
+          for (const rowid of old.get(id)?.rowids || []) del.run(rowid);
+          for (const rowid of oldTri.get(id)?.rowids || []) delTri.run(rowid);
+          if (r) add.run(...r.search), tri.run(...r.tri);
+        }
+      });
+      if (jobs && i + SEARCH_BATCH < ops.length) pause(SEARCH_PAUSE);
+    }
+    return true;
   }
 
   // A few books' rows only (an edit, a book added by hand, an import): a whole rebuild held the site 1.5–5 s for each
