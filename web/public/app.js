@@ -619,10 +619,10 @@ document.addEventListener("click", async (e) => {
   const kind = button.dataset.ask;
   const body = block.querySelector(".advice-body");
   const was = body.innerHTML;
-  // The wait is long (a web search takes 15–40 s), so the line changes every few seconds (Max, 2026-10-23).
+  // The wait is long (a web search takes 15–40 s), so the line changes every few seconds (Max, 2026-10-23); in the first person (Max, 2026-11-07).
   const steps = kind === "overview"
-    ? ["Claude шукає відгуки в інтернеті…", "Читає, що пишуть читачі…", "Дивиться рецензії…", "Збирає, в чому сходяться думки…", "Пише коротко своїми словами…", "Ще трохи…"]
-    : ["Claude читає вашу полицю…", "Порівнює з тим, що ви читали…", "Пише…", "Ще трохи…"];
+    ? ["Шукаю відгуки в інтернеті…", "Читаю, що пишуть читачі…", "Дивлюсь рецензії…", "Збираю, в чому сходяться думки…", "Пишу коротко своїми словами…", "Ще трохи…"]
+    : ["Читаю вашу полицю…", "Порівнюю з тим, що ви читали…", "Пишу…", "Ще трохи…"];
   let step = 0;
   body.innerHTML = `<p class="advice-wait">${steps[0]}</p>`;
   const ticker = setInterval(() => {

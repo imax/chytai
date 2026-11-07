@@ -418,7 +418,7 @@ function bookLd(book, shelf, s, readers) {
 function ukLine(book, state) {
   const line = book.ukTitle ? `Українською: «${esc(book.ukTitle)}», у каталогах поки немає` : "Українського перекладу в каталогах поки немає";
   // The search takes a minute or so: the page looks again by itself, staying at this block.
-  if (state === "searching") return `${line} · шукаємо…<script>setTimeout(() => location.reload(), 20000)</script>`;
+  if (state === "searching") return `${line} · шукаю…<script>setTimeout(() => location.reload(), 20000)</script>`;
   return state ? `${line} · <button type="button" class="text-link small" onclick="var f=document.getElementById('uk');f.hidden=!f.hidden;if(!f.hidden)f.querySelector('input').select()">Додати</button>` : line;
 }
 function ukForm(book, state, error) {
