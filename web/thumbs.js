@@ -22,8 +22,11 @@ const keyOf = (src) => (/\.png(\?|$)/i.test(src) ? `trim ${src}` : src);
 const run = (cmd, args) => new Promise((ok, fail) => execFile("nice", ["-n", "10", cmd, ...args], { timeout: 20000 }, (e, out, err) => (e ? fail(new Error(String(err || e.message).trim().split("\n")[0])) : ok(String(out)))));
 
 class Thumbs {
-  constructor({ db, dir, log = console.log, isBot = () => false }) {
+  constructor({ db, dir, log = console.log, isBot = () => false, onBlank = () => {} }) {
     this.isBot = isBot;
+    this.onBlank = onBlank;
+    this.db = db;
+    this.blanks = new Set(); // stand-ins found since the start: 404, so the page shows its coloured block
     this.dir = path.join(dir, "t");
     this.log = log;
     let key = db.get("thumbs:key");
@@ -58,6 +61,7 @@ class Thumbs {
     if (!WIDTHS.includes(w) || !src || req.params.sig !== this.sign(w, src)) return res.status(404).end();
     const file = path.join(this.dir, String(w), `${crypto.createHash("sha1").update(keyOf(src)).digest("hex")}.webp`);
     const send = () => res.set("Cache-Control", "public, max-age=31536000, immutable").type("image/webp").sendFile(file);
+    if (this.blanks.has(src)) return res.status(404).end();
     if (fs.existsSync(file)) return send();
     const away = () => res.set("Cache-Control", "public, max-age=3600").redirect(302, src);
     // A robot is not worth making one for (2026-10-25: a crawler's pages stood the site still): it gets the original.
@@ -65,12 +69,13 @@ class Thumbs {
     if (this.waiting.length >= QUEUE && !this.made.has(file)) return away();
     const ok = await (this.made.get(file) || this.make(src, w, file));
     if (ok) send();
+    else if (this.blanks.has(src)) res.status(404).end();
     else away();
   }
 
   make(src, w, file) {
     const p = this.turn(() => this.build(src, w, file))
-      .catch((e) => (this.log(`thumbs: ${src.slice(0, 100)}: ${e.message}`), this.failed.set(src, Date.now()), false))
+      .catch((e) => (this.log(`thumbs: ${src.slice(0, 100)}: ${e.message}`), e.blank ? this.drop(src) : this.failed.set(src, Date.now()), false))
       .finally(() => this.made.delete(file));
     this.made.set(file, p);
     return p;
@@ -102,6 +107,7 @@ class Thumbs {
     const out = `${file}.${process.pid}.tmp.webp`;
     const cut = [`${file}.${process.pid}.a.v`, `${file}.${process.pid}.c.v`, `${file}.${process.pid}.f.v`];
     try {
+      if (await this.blank(input, `${file}.${process.pid}.s.csv`)) throw Object.assign(new Error("заглушка замість обкладинки"), { blank: true });
       if (keyOf(src) !== src) input = (await this.trim(input, cut).catch((e) => (this.log(`thumbs: trim ${src.slice(0, 100)}: ${e.message}`), null))) || input;
       // --size Wx>: that width, the height kept in proportion, never larger than the original; at a lower
       // priority than the pages (it runs beside the site, on the same processor).
@@ -111,6 +117,52 @@ class Thumbs {
     } finally {
       for (const f of [tmp, out, ...cut]) if (f) fs.rmSync(f, { force: true });
     }
+  }
+
+  // Is the picture a shop's «no cover» stand-in? Google Books' «image not available» is light grey letters on
+  // white (nothing darker than 170, no colour); Amazon's «No image available» is 60×40. A real cover has
+  // colour or something dark on it, and is bigger than a stamp.
+  async blank(input, csv) {
+    try {
+      const [w, h] = await Promise.all(["width", "height"].map(async (f) => Number((await run("vipsheader", ["-f", f, input])).trim())));
+      if (w * h < 4000) return true;
+      await run("vips", ["stats", input, csv]);
+      const rows = fs.readFileSync(csv, "utf8").trim().split("\n").map((l) => l.trim().split(/\s+/).map(Number));
+      const means = rows.slice(1, 4).map((r) => r[4]);
+      const colourless = means.length < 3 || Math.max(...means) - Math.min(...means) < 1.5;
+      return colourless && rows[0][0] >= 150;
+    } catch {
+      return false;
+    } finally {
+      fs.rmSync(csv, { force: true });
+    }
+  }
+
+  // A stand-in: its small copies go, and the books that show it lose it (server.js onBlank).
+  drop(src) {
+    this.blanks.add(src);
+    for (const w of WIDTHS) fs.rmSync(path.join(this.dir, String(w), `${crypto.createHash("sha1").update(keyOf(src)).digest("hex")}.webp`), { force: true });
+    try {
+      this.onBlank(src);
+    } catch (e) {
+      this.log(`thumbs: blank ${src.slice(0, 100)}: ${e.message}`);
+    }
+  }
+
+  // The small copies made before blank() was there, each looked at once (one pass, then a mark in meta).
+  async sweep(srcs) {
+    if (this.db.get("thumbs:blanksweep")) return 0;
+    let found = 0;
+    for (const src of new Set(srcs)) {
+      if (!src || this.url(src, 1) === src) continue;
+      const file = path.join(this.dir, String(WIDTHS[0]), `${crypto.createHash("sha1").update(keyOf(src)).digest("hex")}.webp`);
+      if (!fs.existsSync(file)) continue;
+      if (await this.blank(file, `${file}.${process.pid}.s.csv`)) this.log(`thumbs: ${src.slice(0, 100)}: заглушка замість обкладинки`), this.drop(src), found++;
+      await new Promise((ok) => setTimeout(ok, 20));
+    }
+    this.db.set("thumbs:blanksweep", new Date().toISOString());
+    if (found) this.log(`thumbs: ${found} stand-ins taken off`);
+    return found;
   }
 
   // A picture with an alpha band, cut to where it isn't (nearly) transparent and flattened on white; null if

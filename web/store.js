@@ -2138,6 +2138,7 @@ class Store {
   // An empty field goes back to what the catalog says.
   editBook(id, patch) {
     id = this.canonical(id);
+    if (patch.cover && this.isBlankCover(patch.cover)) patch = { ...patch, cover: "" };
     this._edits = null; // the other process (the site or the jobs) may have changed them since
     const all = { ...this.edits() };
     const fix = {};
@@ -2249,7 +2250,26 @@ class Store {
     this.entriesV = (this.entriesV || 0) + 1;
   }
 
+  // A shop's «no picture» stand-in taken for a cover (Google Books' «image not available», Amazon's 60×40 «No
+  // image»; @daryna's import 2026-11-07): thumbs.js spots it, and it is never set as a cover again.
+  isBlankCover(src) {
+    return !!src && !!this.db.get(`blankcover:${src}`);
+  }
+  dropBlankCover(src) {
+    if (!src) return 0;
+    this.db.set(`blankcover:${src}`, String(Date.now()));
+    let n = 0;
+    for (const row of this.db.prepare("SELECT id, data FROM books").all()) {
+      const b = JSON.parse(row.data);
+      if (b.cover === src || b.coverFrom === src) this.updateBook(row.id, { cover: "", coverFrom: "", coverKept: "" }), n++;
+    }
+    this._edits = null;
+    for (const [id, e] of Object.entries(this.edits())) if (e.cover === src) this.editBook(id, { ...e, cover: "" }), n++;
+    return n;
+  }
+
   updateBook(id, patch) {
+    if ((patch.cover && this.isBlankCover(patch.cover)) || (patch.coverFrom && this.isBlankCover(patch.coverFrom))) patch = { ...patch, cover: "", coverFrom: "", coverKept: "" };
     // The row as it is now: the site and the jobs (jobs.js) are two processes, each with its own copy.
     const row = this.db.prepare("SELECT data FROM books WHERE id = ?").get(id);
     if (row) this.lib.books[id] = JSON.parse(row.data);

@@ -299,13 +299,17 @@ const COVERS = path.join(DATA_DIR, "covers");
 fs.mkdirSync(COVERS, { recursive: true });
 app.use("/covers", express.static(COVERS, { maxAge: "1y", immutable: true }));
 // Small copies of the covers on shelves and lists (thumbs.js).
-const thumbs = new (require("./thumbs").Thumbs)({ db: store.db, dir: COVERS, log: console.log, isBot: (req) => BOT.test(req.headers["user-agent"] || "") });
+const thumbs = new (require("./thumbs").Thumbs)({ db: store.db, dir: COVERS, log: console.log, isBot: (req) => BOT.test(req.headers["user-agent"] || ""), onBlank: (src) => console.log(`covers: stand-in ${src.slice(0, 100)} taken off ${store.dropBlankCover(src)} books`) });
 pages.setThumbs((src, shown) => thumbs.url(src, shown));
 app.get("/t/:w/:sig/:src", (req, res) => thumbs.serve(req, res).catch(() => res.status(500).end()));
 // A list's picture for social networks, made of its covers (listimage.js).
 const listImage = new (require("./listimage").ListImage)({ dir: COVERS, thumbs, log: console.log });
 bg.every("thumbs-prune", 24 * 3600 * 1000, () => thumbs.prune(), { db: store.db, first: 30 * 60 * 1000 });
-bg.every("thumbs-warm", 6 * 3600 * 1000, () => thumbs.warm([...store.entries.values()].flatMap((es) => Object.keys(es)).map((id) => store.book(id)?.cover)), { db: store.db, first: 20 * 60 * 1000 });
+bg.every("thumbs-warm", 6 * 3600 * 1000, async () => {
+  const covers = () => [...store.entries.values()].flatMap((es) => Object.keys(es)).map((id) => store.book(id)?.cover);
+  await thumbs.sweep(covers());
+  return thumbs.warm(covers());
+}, { db: store.db, first: 20 * 60 * 1000 });
 const COVER_TYPES = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp", "image/gif": "gif", "image/avif": "avif" };
 // A picture's address -> { url: our own /covers/<hash>.<ext> } or, when it can't be fetched, { url: the
 // address itself, error }.
