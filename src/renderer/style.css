@@ -280,6 +280,7 @@ button.lib-book:hover .lib-edit { display: flex; }
 .lib-li { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 64px; padding: 8px 4px 8px 14px; border: none; border-bottom: 1px solid var(--line); background: transparent; color: inherit; text-align: left; }
 .lib-li:active { background: var(--accent-soft); }
 .lib-li.unavailable { opacity: 0.45; }
+.r-card.unavailable, .r-prow.unavailable { opacity: 0.45; } /* offline, and not kept on this device (home.js) */
 /* Phone: a row slides left to show what can be done with the book (Max, 2026-10-28). */
 .lib-swipe { position: relative; overflow: hidden; }
 .lib-swipe > .lib-li { position: relative; z-index: 1; background: var(--bg); transition: transform 0.2s var(--ease-out); touch-action: pan-y; }

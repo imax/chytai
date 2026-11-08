@@ -411,15 +411,24 @@ function trimAccountRequest(request) {
 // readBooks[account][book]. Accounts only, as for explanations; guests and shared links are not counted.
 const READ_GAP = 5 * 60 * 1000; // a pause this long ends a sitting (noteReadingNow)
 const lastReading = new Map(); // account -> time of its last report, in memory only
-function recordReading(acct, books) {
+// `at` (2026-11-08, offline reading): the start of an earlier hour whose seconds the page kept (read offline, or
+// the app closed before they went). They count under that hour's day: at most an hour per report and
+// READ_DAY_MAX a day, apart from the live budget below.
+const READ_DAY_MAX = 16 * 3600;
+function recordReading(acct, books, at) {
   const now = Date.now();
-  // No more than the time since the previous report (two devices at once, or a page that sends too much).
-  const since = lastReading.has(acct) ? (now - lastReading.get(acct)) / 1000 + 10 : 600;
-  lastReading.set(acct, now);
-  let budget = Math.min(600, since);
-  const day = statsDay(now);
+  const past = at && at < now - 60 * 1000 && at > now - 14 * 86400000;
+  let budget;
+  if (!past) {
+    // No more than the time since the previous report (two devices at once, or a page that sends too much).
+    const since = lastReading.has(acct) ? (now - lastReading.get(acct)) / 1000 + 10 : 600;
+    lastReading.set(acct, now);
+    budget = Math.min(600, since);
+  }
+  const day = statsDay(past ? at : now);
   const stats = (state.stats ??= { since: day, days: {} });
   const d = (stats.days[day] ??= { explains: 0, users: {}, guests: 0, models: {} });
+  if (past) budget = Math.max(0, Math.min(3600, READ_DAY_MAX - (d.readSec?.[acct] || 0)));
   for (const [name, sec] of Object.entries(books)) {
     const add = Math.round(Math.min(budget, sec));
     if (!(add > 0)) continue;
@@ -1387,8 +1396,8 @@ api.post("/reading", express.text({ limit: "16kb" }), (req, res) => {
   if (!books || typeof books !== "object" || Array.isArray(books)) return res.status(400).json({ error: "bad request" });
   if (req.guest) return res.json({ ok: true });
   const clean = {};
-  for (const [name, sec] of Object.entries(books).slice(0, 20)) if (name && name.length <= 500 && Number.isFinite(sec) && sec > 0) clean[name.replace(/#reflow$/, "")] = (clean[name.replace(/#reflow$/, "")] || 0) + Math.min(sec, 600);
-  recordReading(req.acct, clean);
+  for (const [name, sec] of Object.entries(books).slice(0, 20)) if (name && name.length <= 500 && Number.isFinite(sec) && sec > 0) clean[name.replace(/#reflow$/, "")] = (clean[name.replace(/#reflow$/, "")] || 0) + Math.min(sec, body.at ? 3600 : 600);
+  recordReading(req.acct, clean, Number(body.at) || 0);
   saveState();
   res.json({ ok: true });
 });
@@ -1810,6 +1819,9 @@ api.get("/book", (req, res) => {
   const demo = req.guest ? guestBooks(req).find((d) => d.name === name) : null;
   const file = req.guest ? demo && path.join(demo.dir, demo.name) : readerFile(req.lib, name);
   if (!file || !fs.existsSync(file)) return res.status(404).json({ error: "Книжки немає на сервері." });
+  // keep=1: the page fetches a book in progress onto the device for offline reading (web-bridge.js keepOnDevice).
+  // Just the file: the book is not marked as opened, and a publisher's book is never kept on a device.
+  if (req.query.keep) return file.startsWith(prot.dir + path.sep) ? res.status(204).end() : res.sendFile(file);
   const u = req.guest ? guestState(req.guest) : userState(req.acct);
   u.lastBook = name;
   (u.opened ??= {})[name] = Date.now();

@@ -468,6 +468,60 @@
     return added > 0;
   }
 
+  // Books for the road (Max, 2026-11-08: «офлайн режим»). With the library just loaded online, the books being
+  // read now are fetched onto the device too, so they open without a network even when the last pages were read
+  // on another device. And the copies kept here stay bounded: books gone from the library are dropped, and of
+  // the rest only the most recently opened stay, within KEEP_BOOKS and KEEP_BYTES (storage hygiene, 2026-11-06).
+  const PREFETCH = 3; // books in progress fetched ahead
+  const PREFETCH_MAX_BYTES = 40 * 1024 * 1024; // a bigger file is kept only once it is opened
+  const KEEP_BOOKS = 20;
+  const KEEP_BYTES = 300 * 1024 * 1024;
+  let keeping = false;
+  async function keepOnDevice(lib, onDevice) {
+    if (keeping || !(await dbReady)) return;
+    keeping = true;
+    try {
+      // A free book taken from the shelf is in both lists.
+      const all = [...new Map([...(lib.free || []), ...(lib.books || [])].map((b) => [b.path, b])).values()];
+      const recent = all.filter((b) => b.openedAt).sort((a, b) => b.openedAt - a.openedAt);
+      // What stays: the last book always, then the most recently opened while within the limits.
+      const keep = new Set();
+      let bytes = 0;
+      for (const b of recent) {
+        if (keep.size >= KEEP_BOOKS || (keep.size && bytes + (b.size || 0) > KEEP_BYTES)) break;
+        keep.add(b.path);
+        bytes += b.size || 0;
+      }
+      const lastBook = (await localSettings())?.lastBook || lib.lastBook;
+      if (all.some((b) => b.path === lastBook)) keep.add(lastBook);
+      for (const key of onDevice) {
+        const path = String(key).replace(/#reflow@.*$/, "");
+        if (!keep.has(path)) await idb("books", "readwrite", (s) => s.delete(key)).catch(() => {});
+      }
+      // Books in progress not yet here, newest first. Not on a connection that asks to save data.
+      const conn = navigator.connection;
+      if (conn?.saveData || /(^|-)2g$/.test(conn?.effectiveType || "")) return;
+      const wanted = recent
+        .filter((b) => b.started && !b.finished && !b.aside && /^(epub|pdf)$/.test(b.ext) && keep.has(b.path) && (b.size || 0) <= PREFETCH_MAX_BYTES)
+        .slice(0, PREFETCH)
+        .filter((b) => !onDevice.has(b.path));
+      for (const b of wanted) {
+        // keep=1: only the file, without marking the book as opened (server/index.js /api/book).
+        const res = await fetch(`/api/book?path=${encodeURIComponent(b.path)}&keep=1`, { credentials: "same-origin" });
+        if (!res.ok || !/epub|pdf|octet/.test(res.headers.get("Content-Type") || "")) continue;
+        const data = await res.arrayBuffer();
+        await idb("books", "readwrite", (s) => s.put({ data, savedAt: Date.now(), etag: res.headers.get("ETag") || "" }, b.path)).catch(() => {});
+      }
+      // Asked once the device holds books: browsers may otherwise clear them when space runs low. Chrome and Safari
+      // decide silently; Firefox would ask with a prompt, so not there.
+      if (!/Firefox/.test(navigator.userAgent)) navigator.storage?.persist?.().catch(() => {});
+    } catch (err) {
+      if (!isNetworkError(err)) console.warn("keep books", err);
+    } finally {
+      keeping = false;
+    }
+  }
+
   window.reader = {
     chooseBook: () => pickFile(),
     // Drag & drop and the file picker hand over a File; library entries hand over a name.
@@ -504,6 +558,7 @@
         await sync();
         const lib = await (await api("GET", "/api/library")).json();
         kvSet("library", lib);
+        afterLoad(() => setTimeout(() => keepOnDevice(lib, onDevice), 4000));
         return { ...lib, books: lib.books.map((b) => ({ ...b, onDevice: onDevice.has(b.path) })), free: (lib.free || []).map((b) => ({ ...b, onDevice: onDevice.has(b.path) })) };
       } catch (err) {
         if (!isNetworkError(err)) throw err;
@@ -514,7 +569,7 @@
         return {
           ...lib,
           lastBook: s.lastBook || lib.lastBook,
-          books: lib.books.map((b) => ({ ...b, onDevice: onDevice.has(b.path), unavailable: !onDevice.has(b.path), started: b.started || (!b.aside && (!!s.positions?.[b.path] || !!s.positions?.[`${b.path}#reflow`])) })),
+          books: lib.books.map((b) => ({ ...b, onDevice: onDevice.has(b.path), unavailable: !b.paper && !onDevice.has(b.path), started: b.started || (!b.aside && (!!s.positions?.[b.path] || !!s.positions?.[`${b.path}#reflow`])) })),
           free: (lib.free || []).map((b) => ({ ...b, onDevice: onDevice.has(b.path), unavailable: !onDevice.has(b.path) })),
         };
       }
