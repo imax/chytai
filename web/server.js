@@ -1583,6 +1583,25 @@ const { Articles } = require("./articles");
 const articlePages = require("./articlepages");
 const articles = new Articles({ store, who: (id) => pub(auth.reader(id)), apiKey: process.env.ANTHROPIC_API_KEY || "", log: console.log });
 const wantsJson = (req) => /json/.test(req.get("accept") || "") || req.is("application/json");
+// Once (Max, 2026-11-08: «перенеси ті есе»): the essays that were books come back as the owner's articles, fetched by
+// the web process a little after start. Each address is tried until it is in; then meta remembers it.
+const SEED_ARTICLES = [{ url: "https://www.econlib.org/library/Essays/hykKnw.html", author: "Friedrich A. Hayek" }];
+if (bg.serving) {
+  setTimeout(async () => {
+    for (const s of SEED_ARTICLES) {
+      const key = `articles:seed:${s.url}`;
+      if (store.db.get(key)) continue;
+      try {
+        const { article } = await articles.add(OWNER_ID, s.url, { owner: true });
+        if (s.author) store.db.prepare("UPDATE articles SET author = ? WHERE id = ? AND author = ''").run(s.author, article.id);
+        store.db.set(key, article.slug);
+        console.log(`[articles] seeded ${article.slug}`);
+      } catch (e) {
+        console.log(`[articles] seed ${s.url}: ${e.message}`);
+      }
+    }
+  }, 30000).unref();
+}
 app.get("/articles", (req, res) => {
   admin.event(req, req.user?.id, "articles", "list");
   res.send(articlePages.indexPage({ user: req.user, owner: req.owner, list: articles.list({ readerId: req.user?.id, owner: req.owner }), later: articles.later(req.user?.id), blocked: req.owner ? articles.blocked() : [], error: String(req.query.error || "").slice(0, 300), url: String(req.query.url || "").slice(0, 1000), hlCount: articles.highlightCount(req.user?.id) }));
