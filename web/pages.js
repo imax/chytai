@@ -121,7 +121,7 @@ function layout({ title, body, user, path = "", description = "", q = "", home =
     // «Статті» is Max's experiment for now (2026-11-08: «сховаємо Статті з топ меню»): in the menu for him only, the pages stay open by link.
     ...(user?.owner ? [`<a href="/articles"${on(path === "/articles")}>Статті</a>`] : []),
     // «Попросити книжку» (2026-11-08): an experiment, for the owner and the readers he let in; the number is new talks.
-    ...(user && askNav(user) !== null ? [`<a href="/asks"${on(path === "/asks")}>Прохання${askNav(user) ? ` <span class="news">${askNav(user)}</span>` : ""}</a>`] : []),
+    ...(user && askNav(user) !== null ? [`<a href="/asks"${on(path === "/asks")}>Чат${askNav(user) ? ` <span class="news">${askNav(user)}</span>` : ""}</a>`] : []),
     // Settings live on one's own shelf, not in the menu (Max, 2026-10-20).
     // Adding books is a page of its own in the menu, not something hidden in the profile (Max, 2026-10-22).
     ...(user ? [`<a href="/add"${on(path === "/add")}>Додати книжки</a>`] : []),
@@ -3029,9 +3029,9 @@ function asksPage({ user, talks }) {
     return `<a class="ctopic${t.fresh ? " unread" : ""}" href="/asks/@${attr(t.other.username)}"><span class="t"><b>${esc(t.other.name)}</b></span>${t.book ? `<span class="bk">${cover(t.book, "xs")}<span>${esc(t.book.title)}</span></span>` : ""}<span class="m">${t.fresh ? `<span class="news">нове</span> · ` : ""}${l.reader === user.id ? "ви: " : ""}${what} · ${when({ updated: t.active })}</span></a>`;
   };
   const body = `
-${pageHead({ title: "Прохання", lead: "Розмови про книжки, які ви просите." })}
+${pageHead({ title: "Чат", lead: "Розмови з читачами про книжки." })}
 ${talks.length ? `<div class="club-topics">${talks.map(row).join("")}</div>` : `<p class="muted">Розмов ще немає.</p>`}`;
-  return layout({ title: "Прохання", body, user, path: "/asks", noindex: true });
+  return layout({ title: "Чат", body, user, path: "/asks", noindex: true });
 }
 function askTalkPage({ user, other, msgs, readerUrl, error = "", book = null, canAsk = false }) {
   const who = (r) => `<a href="${attr(r.href)}"><b>${esc(r.name)}</b></a>`;
@@ -3062,7 +3062,7 @@ function askTalkPage({ user, other, msgs, readerUrl, error = "", book = null, ca
   <div class="ask-bar"><span class="small muted">${esc(other.name)} отримає лист</span><button class="btn primary small">Надіслати</button></div>
 </form>`;
   const body = `
-${pageHead({ crumbs: `<a href="/asks">Прохання</a>`, title: esc(other.name), sub: `<a href="${attr(other.href)}">полиця</a> · <span class="muted">@${esc(other.username)}</span>` })}
+${pageHead({ crumbs: `<a href="/asks">Чат</a>`, title: esc(other.name), sub: `<a href="${attr(other.href)}">полиця</a> · <span class="muted">@${esc(other.username)}</span>` })}
 <section class="ask-talk">
 ${msgs.map(msg).join("")}
 ${form}
