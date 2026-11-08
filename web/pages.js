@@ -119,7 +119,8 @@ function layout({ title, body, user, path = "", description = "", q = "", home =
     ...NAV.map(([href, name, is]) => `<a href="${href}"${on(is(path))}>${name}</a>`),
     // «Клуб» in the top menu, second after «Читачі» (Max, 2026-11-01).
     `<a href="/club"${on(path === "/club")}>Клуб</a>`,
-    `<a href="/articles"${on(path === "/articles")}>Статті</a>`,
+    // «Статті» is Max's experiment for now (2026-11-08: «сховаємо Статті з топ меню»): in the menu for him only, the pages stay open by link.
+    ...(user?.owner ? [`<a href="/articles"${on(path === "/articles")}>Статті</a>`] : []),
     // Settings live on one's own shelf, not in the menu (Max, 2026-10-20).
     // Adding books is a page of its own in the menu, not something hidden in the profile (Max, 2026-10-22).
     ...(user ? [`<a href="/add"${on(path === "/add")}>Додати книжки</a>`] : []),

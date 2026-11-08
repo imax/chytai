@@ -229,7 +229,7 @@
   const phone = () => matchMedia("(max-width: 760px)").matches;
 
   function setPage(next, { push = true } = {}) {
-    if ((next === "add" || next === "articles") && settings.guest) return;
+    if ((next === "add" && settings.guest) || (next === "articles" && !settings.owner)) return;
     const was = page;
     page = next;
     $("#shell").dataset.page = page;
@@ -292,7 +292,8 @@
     if (pw) pw.innerHTML = wk, pw.classList.toggle("hidden", !wk), pw.classList.toggle("on", page === "week");
     $("#r-n-books").textContent = books.length || "";
     $("#r-pnav-trash").hidden = !trashCount;
-    $(".r-pnav-arts").hidden = !!settings.guest || !window.reader.articlesList;
+    // Max's experiment for now (2026-11-08), like «Статті» in the site's menu: his account only.
+    $(".r-pnav-arts").hidden = !settings.owner || !window.reader.articlesList;
     $("#r-n-trash").textContent = trashCount || "";
     for (const b of document.querySelectorAll(".r-pnav [data-page]")) b.classList.toggle("on", b.dataset.page === page);
     $("#r-avatar").textContent = (settings.user || "Ч").trim()[0].toUpperCase();
