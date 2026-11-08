@@ -363,6 +363,7 @@ class Store {
     this.file = path.join(dataDir, "chytai.db");
     this.db = open(dataDir);
     this.seedBooks = readJson(path.join(SEED, "books.json"));
+    this.readerV = new Map(); // importOld() on an empty database already writes entries (load() starts it again)
     this.importOld();
     this.load();
     this.loadShelves();
@@ -418,6 +419,9 @@ class Store {
   moveToArticles() {
     const db = this.db;
     if (db.get("moved_to_articles")) return;
+    // A fresh database (the smoke test without its copy) has no lists or queue yet: nothing to move.
+    const has = (t) => !!db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?").get(t);
+    if (!has("list_items") || !has("book_queue")) return;
     const ids = ["cognitive-mercantilism", "social-volition-as-artificial-intelligence", "the-use-of-knowledge-in-society", "courage-under-fire"];
     const kept = {};
     db.tx(() => {
