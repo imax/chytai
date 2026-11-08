@@ -1858,7 +1858,7 @@ async function articleFor(acct, slug) {
   if (kept && Date.now() - kept.at < ARTICLE_TEXT_MS) return kept.a;
   const a = await siteArticles(acct, { op: "get", slug });
   articleText.delete(slug);
-  articleText.set(slug, { at: Date.now(), a: { slug, title: a.title, author: a.author, source: a.source, url: a.url, dek: a.dek, blocks: a.blocks || [] } });
+  articleText.set(slug, { at: Date.now(), a: { slug, title: a.title, author: a.author, source: a.source, url: a.url, dek: a.dek, blocks: a.blocks || [], more: a.more || [] } });
   while (articleText.size > ARTICLE_TEXT_MAX) articleText.delete(articleText.keys().next().value);
   return articleText.get(slug).a;
 }
@@ -1884,6 +1884,8 @@ api.get("/articles/:slug", articleRoute(async (req) => {
   return { ...rest, blocks: (blocks || []).length };
 }));
 api.post("/articles/:slug/later", articleRoute((req) => siteArticles(req.acct, { op: "later", slug: slugOf(req), on: !!req.body?.on })));
+api.post("/articles/:slug/drop", articleRoute((req) => siteArticles(req.acct, { op: "drop", slug: slugOf(req) })));
+api.post("/articles/:slug/undrop", articleRoute((req) => siteArticles(req.acct, { op: "undrop", slug: slugOf(req), later: !!req.body?.later })));
 api.post("/articles/:slug/read", articleRoute((req) => siteArticles(req.acct, { op: "read", slug: slugOf(req), block: req.body?.block })));
 api.post("/articles/:slug/explain", articleRoute((req) => siteArticles(req.acct, { op: "explain", slug: slugOf(req), block: req.body?.block, quote: String(req.body?.quote || "").slice(0, 2000) })));
 api.post("/articles/:slug/highlight", articleRoute((req) => siteArticles(req.acct, { op: "highlight", slug: slugOf(req), block: req.body?.block, quote: String(req.body?.quote || "").slice(0, 2000), note: typeof req.body?.note === "string" ? req.body.note.slice(0, 3000) : null })));
@@ -1896,6 +1898,20 @@ const xmlEsc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;",
 // The site's HTML as XHTML: void <br>, and named entities other than XML's own as characters' numbers.
 const NAMED = { nbsp: 160, shy: 173, mdash: 8212, ndash: 8211, hellip: 8230, laquo: 171, raquo: 187, lsquo: 8216, rsquo: 8217, ldquo: 8220, rdquo: 8221, copy: 169, middot: 183 };
 const xhtmlOf = (h) => String(h).replace(/&(?!#?\w+;)/g, "&amp;").replace(/<br\s*\/?>/gi, "<br/>").replace(/&([a-z]+);/gi, (m, n) => (["amp", "lt", "gt", "quot", "apos"].includes(n) ? m : NAMED[n] ? `&#${NAMED[n]};` : `&amp;${n};`));
+const MORE_KIND = { essay: "есе", article: "стаття", book: "книжка", paper: "дослідження", speech: "промова" };
+// «Ще почитати» at the end of an article, as on the site (web/articlepages.js moreHtml), no data-block, so it is no
+// part of the text for notes and explanations. What is in «Статті» opens here (data-article, renderer.js); a page
+// from outside opens in the browser, and «+ Додати» brings it in (data-add); a book opens its page on the site.
+function articleMoreXhtml(more) {
+  if (!more?.length) return "";
+  const item = (it) => {
+    const href = it.slug ? `https://chytai.org.ua/articles/${encodeURIComponent(it.slug)}` : it.book || it.url || `https://www.google.com/search?q=${encodeURIComponent(`"${it.title}" ${it.author || ""}`.trim())}`;
+    const meta = [it.author, MORE_KIND[it.kind], it.book ? "є в каталозі" : it.slug ? "є в Статтях" : "", it.from === "text" ? "згадано в тексті" : "радить ШІ"].filter(Boolean).map(xmlEsc).join(" · ");
+    const add = it.url && !it.slug && it.kind !== "book" ? ` <a class="m-add" href="${xmlEsc(it.url)}" data-add="${xmlEsc(it.url)}">+ Додати</a>` : "";
+    return `<li><a class="t" href="${xmlEsc(href)}"${it.slug ? ` data-article="${xmlEsc(it.slug)}"` : ""}>${xmlEsc(it.title)}${it.slug ? "" : " ↗"}</a>${add}<span class="m">${meta}</span>${it.why ? `<span class="why">${xmlEsc(it.why)}</span>` : ""}</li>`;
+  };
+  return `<section class="a-more"><h2>Ще почитати</h2><ul>${more.map(item).join("")}</ul></section>`;
+}
 const plain = (h) => String(h).replace(/<[^>]+>/g, "").replace(/&nbsp;/g, " ").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').trim();
 function articleEntry(a, entry) {
   const lang = /[а-яіїєґ]/i.test(a.title + (a.blocks[0]?.h || "")) ? "uk" : "en";
@@ -1916,9 +1932,10 @@ function articleEntry(a, entry) {
     const body = a.blocks.map((b, i) => `<${b.t} id="p${i + 1}" data-block="${i}">${xhtmlOf(b.h)}</${b.t}>`).join("\n");
     const by = [a.author, a.source].filter(Boolean).map(xmlEsc).join(" · ");
     return ["application/xhtml+xml", `<?xml version="1.0" encoding="UTF-8"?><html xmlns="http://www.w3.org/1999/xhtml" xml:lang="${lang}" lang="${lang}"><head><title>${xmlEsc(a.title)}</title>
-<style>a{color:inherit}.a-by{margin:0 0 2em;font-style:italic;opacity:.75}.a-dek{font-size:1.05em;opacity:.85}.a-src{margin-top:3em;font-size:.85em;opacity:.7}pre{white-space:pre-wrap}</style></head>
+<style>a{color:inherit}.a-by{margin:0 0 2em;font-style:italic;opacity:.75}.a-dek{font-size:1.05em;opacity:.85}.a-src{margin-top:3em;font-size:.85em;opacity:.7}pre{white-space:pre-wrap}.a-more{margin-top:3em;padding-top:1em;border-top:1px solid currentColor}.a-more h2{margin:0 0 .6em}.a-more ul{list-style:none;margin:0;padding:0}.a-more li{margin:0 0 1.1em}.a-more .t{font-weight:600;text-decoration:none}.a-more .m-add{margin-left:.5em;font-size:.85em;white-space:nowrap}.a-more .m,.a-more .why{display:block;font-size:.85em;opacity:.7;text-indent:0}.a-more .why{opacity:.85}</style></head>
 <body><h1 id="top">${xmlEsc(a.title)}</h1>${a.dek ? `<p class="a-dek">${xmlEsc(a.dek)}</p>` : ""}${by ? `<p class="a-by">${by}</p>` : ""}
 ${body}
+${articleMoreXhtml(a.more)}
 <p class="a-src">Оригінал: <a href="${xmlEsc(a.url)}">${xmlEsc(a.url)}</a></p></body></html>`];
   }
   return null;

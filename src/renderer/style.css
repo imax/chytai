@@ -2396,6 +2396,8 @@ html body .r-list .r-t, html body .r-list .r-a { display: block; grid-column: 2;
 @media (hover: hover) { .r-art:hover b { color: var(--r-ochre); } }
 .r-art-later { flex: none; width: 40px; height: 40px; margin-top: 8px; border: none; background: none; padding: 0; display: flex; align-items: center; justify-content: center; color: var(--r-ink2); cursor: pointer; }
 .r-art-later svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linejoin: round; }
+.r-art-list .r-more { position: static; flex: none; display: flex; width: 28px; height: 40px; margin: 8px 0 0 -6px; background: none; border-radius: 0; }
+.r-art-list .r-more i { background: var(--r-ink3); }
 .r-art-later.on { color: var(--r-ochre); }
 .r-art-later.on svg { fill: currentColor; }
 .r-art-site { display: inline-block; font: 13px var(--r-sans); color: var(--r-link); text-decoration: none; }

@@ -47,6 +47,8 @@ CREATE UNIQUE INDEX IF NOT EXISTS article_notes_key ON article_notes (article, b
 CREATE INDEX IF NOT EXISTS article_notes_day ON article_notes (created);
 CREATE TABLE IF NOT EXISTS article_asks (note TEXT NOT NULL, reader TEXT NOT NULL, at TEXT NOT NULL, PRIMARY KEY (note, reader));
 CREATE TABLE IF NOT EXISTS article_later (reader TEXT NOT NULL, article TEXT NOT NULL, at TEXT NOT NULL, PRIMARY KEY (reader, article));
+-- An article a reader took off their list in the reader (Max, 2026-11-08): it stays on the site for everyone else.
+CREATE TABLE IF NOT EXISTS article_gone (reader TEXT NOT NULL, article TEXT NOT NULL, at TEXT NOT NULL, PRIMARY KEY (reader, article));
 CREATE TABLE IF NOT EXISTS article_reads (reader TEXT NOT NULL, article TEXT NOT NULL, block INTEGER NOT NULL, blocks INTEGER NOT NULL, at TEXT NOT NULL, PRIMARY KEY (reader, article));
 CREATE TABLE IF NOT EXISTS article_highlights (
   id TEXT PRIMARY KEY, reader TEXT NOT NULL, article TEXT NOT NULL, block INTEGER NOT NULL, quote TEXT NOT NULL, key TEXT NOT NULL, at TEXT NOT NULL,
@@ -316,8 +318,11 @@ class Articles {
       read: readerId ? this.db.prepare("SELECT block, blocks FROM article_reads WHERE reader = ? AND article = ?").get(readerId, r.id) || null : null,
     };
   }
-  list({ readerId = null, owner = false, limit = 300 } = {}) {
-    return this.db.prepare(`SELECT * FROM articles ${owner ? "" : "WHERE hidden = 0"} ORDER BY created DESC LIMIT ?`).all(limit).map((r) => this.row(r, readerId));
+  // gone: leave out what this reader took off their list in the reader (drop below).
+  list({ readerId = null, owner = false, limit = 300, gone = false } = {}) {
+    const where = [owner ? "" : "hidden = 0", gone && readerId ? "id NOT IN (SELECT article FROM article_gone WHERE reader = ?)" : ""].filter(Boolean);
+    const args = gone && readerId ? [readerId, limit] : [limit];
+    return this.db.prepare(`SELECT * FROM articles ${where.length ? `WHERE ${where.join(" AND ")}` : ""} ORDER BY created DESC LIMIT ?`).all(...args).map((r) => this.row(r, readerId));
   }
   later(readerId) {
     if (!readerId) return [];
@@ -416,6 +421,17 @@ class Articles {
     if (this.db.prepare("DELETE FROM article_later WHERE reader = ? AND article = ?").run(readerId, id).changes) return false;
     this.db.prepare("INSERT INTO article_later (reader, article, at) VALUES (?, ?, ?)").run(readerId, id, now());
     return true;
+  }
+  // «Видалити» in the reader: the article leaves this reader's list (and «Прочитати пізніше»), nothing else changes.
+  // Says whether it was in «Прочитати пізніше», so that «Скасувати» puts it back there.
+  drop(readerId, id) {
+    const later = this.db.prepare("DELETE FROM article_later WHERE reader = ? AND article = ?").run(readerId, id).changes > 0;
+    this.db.prepare("INSERT OR REPLACE INTO article_gone (reader, article, at) VALUES (?, ?, ?)").run(readerId, id, now());
+    return { later };
+  }
+  undrop(readerId, id, later = false) {
+    this.db.prepare("DELETE FROM article_gone WHERE reader = ? AND article = ?").run(readerId, id);
+    if (later) this.db.prepare("INSERT OR IGNORE INTO article_later (reader, article, at) VALUES (?, ?, ?)").run(readerId, id, now());
   }
   progress(readerId, id, block, blocks) {
     this.db.prepare("INSERT INTO article_reads (reader, article, block, blocks, at) VALUES (?, ?, ?, ?, ?) ON CONFLICT (reader, article) DO UPDATE SET block = excluded.block, blocks = excluded.blocks, at = excluded.at").run(readerId, id, block, blocks, now());
@@ -647,7 +663,7 @@ class Articles {
   remove(id) {
     id = String(id);
     this.db.prepare("DELETE FROM article_asks WHERE note IN (SELECT id FROM article_notes WHERE article = ?)").run(id);
-    for (const t of ["article_notes", "article_later", "article_reads", "article_highlights"]) this.db.prepare(`DELETE FROM ${t} WHERE article = ?`).run(id);
+    for (const t of ["article_notes", "article_later", "article_gone", "article_reads", "article_highlights"]) this.db.prepare(`DELETE FROM ${t} WHERE article = ?`).run(id);
     return this.db.prepare("DELETE FROM articles WHERE id = ?").run(id).changes > 0;
   }
   removeNote(id) {
@@ -669,7 +685,7 @@ class Articles {
   }
   // A reader leaves: the articles they added stay (they are everyone's now), their queue, progress and asks go.
   forgetReader(readerId) {
-    for (const t of ["article_later", "article_reads", "article_asks", "article_highlights"]) this.db.prepare(`DELETE FROM ${t} WHERE reader = ?`).run(readerId);
+    for (const t of ["article_later", "article_gone", "article_reads", "article_asks", "article_highlights"]) this.db.prepare(`DELETE FROM ${t} WHERE reader = ?`).run(readerId);
   }
 }
 // Kyiv's offset from UTC right now, as «+02:00» or «+03:00».

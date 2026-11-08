@@ -1787,19 +1787,23 @@ app.post("/api/reader-articles", async (req, res) => {
   try {
     if (b.op === "list") {
       admin.event(req, id, "articles", "reader:list");
-      return res.json({ later: articles.later(id).map(light), all: articles.list({ readerId: id, owner: req.owner, limit: READER_ARTICLE_LIST }).map(light) });
+      return res.json({ later: articles.later(id).map(light), all: articles.list({ readerId: id, owner: req.owner, limit: READER_ARTICLE_LIST, gone: true }).map(light) });
     }
     if (b.op === "get") {
       const a = articles.bySlug(b.slug, { readerId: id, owner: req.owner });
       if (!a) return res.status(404).json({ error: "Статтю не знайдено." });
       if (b.open) admin.event(req, id, "articles", "reader:open");
+      if (a.more === null) articles.makeMore(a.id); // as on the site: an older article gets its list for the next time
       const explanations = Object.values(a.notesBy).flat().map((n) => ({ id: n.id, block: n.block, quote: n.quote, text: n.text, model: n.model, at: n.created }));
       const others = Object.values(a.readerNotes || {}).flat().map((n) => ({ id: n.id, block: n.block, quote: n.quote, note: n.note, by: n.by?.name || "", at: n.noted }));
-      return res.json({ ...light(a), url: a.url, dek: a.dek, published: a.published, blocks: a.blocks, explanations, highlights: a.highlights, others });
+      // «Ще почитати» with whole addresses: the reader links a catalog book to the site.
+      const more = (a.more || []).map((it) => ({ title: it.title, author: it.author, kind: it.kind, why: it.why, from: it.from, url: it.url, slug: it.ours ? it.href.split("/").pop() : undefined, book: it.book ? `${SITE}${it.book}` : undefined }));
+      return res.json({ ...light(a), url: a.url, dek: a.dek, published: a.published, blocks: a.blocks, explanations, highlights: a.highlights, others, more });
     }
     if (b.op === "add") {
       const { article: a, existed } = await articles.add(id, String(b.url || "").trim().slice(0, 2000), { owner: req.owner });
       admin.event(req, id, "articles", existed ? "reader:add:existed" : "reader:add");
+      articles.undrop(id, a.id);
       if (!articles.later(id).some((x) => x.id === a.id)) articles.toggleLater(id, a.id);
       if (!existed && !req.owner) telegram.send(`Нова стаття: ${a.title}\n\n${req.user.name} (${SITE}/@${req.user.username}) додав(ла) з Читалки статтю «${a.title}»${a.author ? `, ${a.author}` : ""} (${a.source}, ${a.minutes} хв).\n\n${SITE}${a.href}\nОригінал: ${a.url}`, undefined, [[{ text: "Сховати", data: `ah:${a.id}` }, { text: `Заборонити @${req.user.username}`, data: `ab:${id}` }]]);
       return res.json({ slug: a.slug });
@@ -1810,6 +1814,14 @@ app.post("/api/reader-articles", async (req, res) => {
       const now = !!articles.later(id).find((x) => x.id === a.id);
       if (now !== !!b.on) articles.toggleLater(id, a.id);
       return res.json({ later: !!b.on });
+    }
+    if (b.op === "drop" || b.op === "undrop") {
+      const a = articles.bySlug(b.slug, { owner: req.owner });
+      if (!a) return res.status(404).json({ error: "Статтю не знайдено." });
+      admin.event(req, id, "articles", `reader:${b.op}`);
+      if (b.op === "drop") return res.json(articles.drop(id, a.id));
+      articles.undrop(id, a.id, !!b.later);
+      return res.json({ ok: true });
     }
     if (b.op === "read") {
       const a = articles.bySlug(b.slug, { owner: req.owner });

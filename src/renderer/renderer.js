@@ -317,6 +317,16 @@ async function openEpub(payload, { posKey, source }) {
   followFontLoad(rendition);
   rendition.hooks.content.register(styleContents);
   rendition.hooks.content.register((contents) => contents.on("linkClicked", rememberReturn));
+  // «Ще почитати» at an article's end (server/index.js articleMoreXhtml): ours opens here, «+ Додати» brings one in.
+  if (current.path.startsWith("article:")) rendition.hooks.content.register((contents) => contents.document.addEventListener("click", (e) => {
+    const a = e.target.closest?.("a[data-article], a[data-add]");
+    if (!a) return;
+    e.preventDefault();
+    e.stopPropagation();
+    if (a.dataset.article) return window.reader.openPath(`article:${a.dataset.article}`);
+    a.textContent = "Додаю…";
+    window.reader.articleAdd(a.dataset.add).then(({ slug }) => window.reader.openPath(`article:${slug}`), (err) => ((a.textContent = "+ Додати"), showNotice?.(err instanceof TypeError ? "Немає з'єднання." : err.message, false)));
+  }, true));
   if (current.protected) rendition.hooks.content.register(limitCopy);
   rendition.themes.fontSize(`${bookFontSize() * BASE_SCALE}%`);
 

@@ -430,7 +430,8 @@
     const pct = a.read && a.read.blocks ? Math.round(((a.read.block + 1) / a.read.blocks) * 100) : 0;
     const meta = [a.author, a.source, `${a.minutes} хв`].filter(Boolean).map(esc).join(" · ");
     return `<li><button type="button" class="r-art" data-article="${esc(a.slug)}"><b>${esc(a.title)}</b><small>${meta}${pct >= 95 ? " · прочитано" : pct > 3 ? ` · ${pct}%` : ""}</small></button>
-      <button type="button" class="r-art-later${a.later ? " on" : ""}" data-later="${esc(a.slug)}" title="${a.later ? "Прибрати з «Прочитати пізніше»" : "Прочитати пізніше"}" aria-label="Прочитати пізніше"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 3.5h11v17l-5.5-3.8-5.5 3.8z"/></svg></button></li>`;
+      <button type="button" class="r-art-later${a.later ? " on" : ""}" data-later="${esc(a.slug)}" title="${a.later ? "Прибрати з «Прочитати пізніше»" : "Прочитати пізніше"}" aria-label="Прочитати пізніше"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 3.5h11v17l-5.5-3.8-5.5 3.8z"/></svg></button>
+      <span class="r-more" role="button" tabindex="0" data-art-menu="${esc(a.slug)}" title="Ще" aria-label="Ще"><i></i><i></i><i></i></span></li>`;
   }
   function articlesPageHtml() {
     const form = `<form class="r-art-add"><input type="url" name="url" placeholder="Посилання на статтю" autocomplete="off" enterkeyhint="go" required /><button type="submit" class="pill">Додати</button></form>`;
@@ -462,6 +463,52 @@
       btn.disabled = false;
       btn.textContent = "Додати";
     }
+  }
+  // «Видалити» an article (Max, 2026-11-08): the same menu as a book's, with one item. It leaves only this reader's
+  // list; on the site it stays for everyone. No question first, like books: the notice has «Скасувати».
+  function artMenu(slug, at) {
+    const a = arts && [...(arts.later || []), ...(arts.all || [])].find((x) => x.slug === slug);
+    if (!a) return;
+    menuBook = { article: a, title: a.title };
+    const d = $("#book-menu");
+    $("#bm-title").textContent = a.title;
+    $("#bm-author").textContent = [a.author, a.source].filter(Boolean).join(" · ");
+    $("#bm-cover").innerHTML = rcover({ title: a.title, author: a.author }, "");
+    const pop = matchMedia("(min-width: 761px)").matches;
+    d.classList.toggle("pop", pop);
+    if (pop) {
+      const r = at.getBoundingClientRect();
+      d.style.left = `${Math.max(12, Math.min(innerWidth - 232, r.right - 220))}px`;
+      d.style.top = `${Math.min(innerHeight - 160, r.bottom + 6)}px`;
+    } else d.style.left = d.style.top = "";
+    for (const b of d.querySelectorAll(".bm-list button")) b.hidden = b.id !== "bm-delete";
+    d.returnValue = "";
+    d.showModal();
+  }
+  async function dropArticle(a) {
+    const keep = arts;
+    const out = (l) => l.filter((x) => x.slug !== a.slug);
+    arts = { ...arts, later: out(arts.later), all: out(arts.all) };
+    if (current?.path === `article:${a.slug}`) closeBook?.();
+    renderHome();
+    let was;
+    try {
+      was = await window.reader.articleDrop(a.slug);
+    } catch (err) {
+      arts = keep;
+      renderHome();
+      return showNotice(err instanceof TypeError ? "Немає з'єднання: видалити статтю можна лише онлайн." : `Не вдалося видалити: ${err.message}`, false);
+    }
+    showNotice(`«${a.title}» видалено`, false);
+    const undo = document.createElement("button");
+    undo.className = "link notice-link";
+    undo.textContent = "Скасувати";
+    undo.onclick = () => window.reader.articleUndrop(a.slug, !!was?.later).then(() => {
+      $("#notice").classList.add("hidden");
+      arts = null;
+      loadArticles();
+    }, () => showNotice("Немає з'єднання.", false));
+    $("#notice .notice-text").append(" ", undo);
   }
   async function toggleLater(slug, el) {
     const on = !el.classList.contains("on");
@@ -1164,12 +1211,13 @@
   }
 
   $("#shell").addEventListener("click", async (e) => {
-    const el = e.target.closest("[data-menu], [data-aside], [data-hit], [data-open], [data-tab], [data-act], [data-note], [data-unwish], [data-page], [data-take], [data-paper-add], [data-article], [data-later]");
+    const el = e.target.closest("[data-menu], [data-aside], [data-hit], [data-open], [data-tab], [data-act], [data-note], [data-unwish], [data-page], [data-take], [data-paper-add], [data-article], [data-later], [data-art-menu]");
     // #shell itself carries data-page (the page shown): a tap on anything else, the search field in the phone's
     // panel too, came here as «Мої книжки» and closed the panel, so search did nothing on a phone (Max, 2026-11-03).
     if (!el || el.id === "shell") return;
     if (el.dataset.article) return panel(false), window.reader.openPath(`article:${el.dataset.article}`);
     if (el.dataset.later) return toggleLater(el.dataset.later, el);
+    if (el.dataset.artMenu) return artMenu(el.dataset.artMenu, el);
     if (el.dataset.menu) return bookMenu(el.dataset.menu, el);
     if (el.dataset.aside) return setAside(el.dataset.aside);
     if (el.dataset.take) return takeBook(el.dataset.take, el);
@@ -1251,6 +1299,7 @@
     const b = lib?.books.find((x) => x.path === path);
     if (!b || settings.guest) return;
     menuBook = b;
+    for (const x of document.querySelectorAll("#book-menu .bm-list button")) x.hidden = x.id === "bm-share"; // artMenu hides the rest
     const own = !b.free && !b.protected && !b.paper;
     const d = $("#book-menu");
     $("#bm-title").textContent = b.title;
@@ -1346,6 +1395,7 @@
     menuBook = null;
     const act = $("#book-menu").returnValue;
     if (!b) return;
+    if (b.article) return act === "delete" && dropArticle(b.article);
     if (act === "about") return showAbout(b);
     if (act === "share") return window.Library.shareBook(b.path);
     if (act === "edit") return window.Library.editBook(b.path);

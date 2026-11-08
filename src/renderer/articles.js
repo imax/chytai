@@ -199,4 +199,6 @@
   R.articlesList = () => call("GET", "/api/articles");
   R.articleAdd = (url) => call("POST", "/api/articles", { url });
   R.articleLater = (slug, on) => call("POST", `/api/articles/${encodeURIComponent(slug)}/later`, { on });
+  R.articleDrop = (slug) => call("POST", `/api/articles/${encodeURIComponent(slug)}/drop`);
+  R.articleUndrop = (slug, later) => call("POST", `/api/articles/${encodeURIComponent(slug)}/undrop`, { later });
 })();
