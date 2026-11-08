@@ -1886,25 +1886,34 @@ const askTalkPage = (req, res, other, error = "") => {
   admin.event(req, req.user.id, "asks", "talk");
   res.send(pages.askTalkPage({ user: req.user, other, msgs: view, readerUrl: READER_URL, error, book: askBook(String(req.query.book || "")), canAsk: !!req.owner }));
 };
-app.get("/asks", signed, (req, res) => {
+// The first days' addresses (/asks, before Max named it «Чат») lead to the chat.
+app.get(/^\/asks(\/.*)?$/, (req, res) => res.redirect(301, req.originalUrl.replace(/^\/asks/, "/chat")));
+app.get("/chat", signed, (req, res) => {
   if (!askCan(req.user)) return askNo(req, res);
   const talks = asks.talksOf(req.user.id).map((t) => ({ ...t, other: pub(auth.reader(t.other)), book: t.last?.book ? askBook(t.last.book) : null })).filter((t) => t.other);
   admin.event(req, req.user.id, "asks", "list");
   res.send(pages.asksPage({ user: req.user, talks }));
 });
-app.get("/asks/@:username", signed, (req, res) => {
+app.get("/chat/@:username", signed, (req, res) => {
   const other = askOther(req, res);
   if (other) askTalkPage(req, res, other);
 });
-// One letter per talk until the reader opens it, so a quick back-and-forth is not ten letters.
-function askMail(t, from, to, what) {
-  const seen = asks.seenAt(to.id, t.id);
-  if (asks.msgs(t.id).filter((m) => m.reader === from.id && m.created > seen).length > 1 || !to.email) return;
-  auth.send(to.email, `${from.name}: ${what}`, [`${from.name} (@${from.username}) пише вам на Chytai: ${what}.`, "", `Відповісти: ${SITE}/asks/@${from.username}`].join("\n")).catch((e) => console.error(`[asks] mail: ${e.message}`));
+// A letter for every message (Max, 2026-11-08: the second message brought no letter, and the first had no text),
+// in the site's letter shell: who writes, their words, the book asked for, and a button back into the chat.
+function chatMail(from, to, { text = "", book = null, shared = false }) {
+  if (!to.email) return;
+  const M = require("./mailhtml");
+  const back = `${SITE}/chat/@${from.username}`;
+  const subject = shared ? `«${book.title}» тепер у вашій Читалці` : `${from.name} пише вам у Чаті Chytai`;
+  const heading = shared ? `${M.esc(from.name)} поділився(-лася) книжкою` : `${M.esc(from.name)} пише вам`;
+  const plain = [shared ? `${from.name} (@${from.username}) поділився(-лася) книжкою «${book.title}»: вона вже у вашій Читалці.` : `${from.name} (@${from.username}) пише вам у Чаті Chytai:`, "", text.trim(), book && !shared ? `Книжка: «${book.title}»${book.author ? `, ${book.author}` : ""} ${SITE}${book.href}` : "", "", `Відповісти: ${back}`].filter((l, i, a) => l || a[i - 1]).join("\n");
+  const body = (text.trim() ? M.quote(text.trim()) : "") + (book ? M.book({ ...book, author: String(book.author || "").split(/,\s*/).slice(0, 2).join(", ") }, SITE) : "");
+  const html = M.letter({ site: SITE, title: subject, section: "Чат", heading, body, button: shared ? { text: "Читати", href: `${READER_URL}/` } : { text: "Відповісти", href: back }, footer: "Цей лист прийшов, бо вам написали в Чаті chytai.org.ua" });
+  auth.send(to.email, subject, require("./admin").mailLinks(plain, SITE, "chat"), { html: require("./admin").mailLinks(html, SITE, "chat", true) }).catch((e) => console.error(`[chat] mail: ${e.message}`));
 }
 // The owner hears of what others do here (UGC), not of his own messages.
 const askAlert = (from, to, text) => !from.owner && telegram.send(`Попросити книжку\n\n${text}\n\n${SITE}/@${from.username} → ${SITE}/@${to.username}`);
-app.post("/api/asks/@:username", signed, (req, res) => {
+app.post("/api/chat/@:username", signed, (req, res) => {
   const other = askOther(req, res);
   if (!other) return;
   const book = req.owner ? askBook(String(req.body.book || "")) : null;
@@ -1912,9 +1921,9 @@ app.post("/api/asks/@:username", signed, (req, res) => {
   const r = asks.post(t.id, req.user.id, { text: req.body.text, book: book ? store.canonical(book.id) : "", kind: book ? "ask" : "" });
   if (r.error) return askTalkPage(req, res, other, r.error);
   admin.event(req, req.user.id, "asks", book ? "ask" : "message");
-  askMail(t, req.user, other, book ? `просить «${book.title}»` : "нове повідомлення");
+  chatMail(req.user, other, { text: String(req.body.text || ""), book });
   askAlert(req.user, other, `${req.user.name} пише ${other.name}: «${String(req.body.text || "").trim().slice(0, 300)}»`);
-  res.redirect(303, `/asks/@${other.username}#m-${r.id}`);
+  res.redirect(303, `/chat/@${other.username}#m-${r.id}`);
 });
 // «Поділитися»: the asked one's file of the book goes into the asker's reader. «Завантажити й поділитися» sends the
 // file itself (app.js, the raw body with ?name=): it goes into both readers.
@@ -1925,7 +1934,7 @@ const askShare = async (req, res, upload) => {
   const other = pub(auth.reader(m.reader));
   const book = askBook(m.book);
   if (!other || !book) return askNo(req, res, "Немає такого прохання");
-  const back = (error) => (upload ? res.status(error ? 400 : 200).json(error ? { error } : { go: `/asks/@${other.username}` }) : error ? askTalkPage(req, res, other, error) : res.redirect(303, `/asks/@${other.username}`));
+  const back = (error) => (upload ? res.status(error ? 400 : 200).json(error ? { error } : { go: `/chat/@${other.username}` }) : error ? askTalkPage(req, res, other, error) : res.redirect(303, `/chat/@${other.username}`));
   if (m.answer) return back("");
   let file;
   try {
@@ -1945,12 +1954,12 @@ const askShare = async (req, res, upload) => {
   asks.answered(m.id, "give");
   asks.post(t.id, req.user.id, { book: m.book, kind: "gave", file });
   admin.event(req, req.user.id, "asks", upload ? "upload" : "share");
-  askMail(t, req.user, other, `«${book.title}» тепер у вашій Читалці`);
+  chatMail(req.user, other, { book, shared: true });
   askAlert(req.user, other, `«${book.title}» від ${req.user.name} тепер у Читалці ${other.name}${upload ? " (новий файл)" : ""}.`);
   back("");
 };
-app.post("/api/asks/m/:id/share", signed, (req, res) => askShare(req, res, false));
-app.post("/api/asks/m/:id/upload", signed, express.raw({ type: () => true, limit: "100mb" }), (req, res) => askShare(req, res, true));
+app.post("/api/chat/m/:id/share", signed, (req, res) => askShare(req, res, false));
+app.post("/api/chat/m/:id/upload", signed, express.raw({ type: () => true, limit: "100mb" }), (req, res) => askShare(req, res, true));
 app.get("/club", (req, res) => {
   const { pinned, rest } = club.index();
   res.send(pages.clubPage({ user: req.user, pinned: club.mark(req.user?.id, pinned), rest: club.mark(req.user?.id, rest) }));
