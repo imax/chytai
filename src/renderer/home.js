@@ -402,7 +402,9 @@
     const byPath = new Map((lib?.books || []).map((b) => [b.path, b]));
     const books = (week?.books || []).filter((b) => b.sec >= 30).map((b) => {
       const mine = byPath.get(b.name);
-      const title = mine?.title || b.title || b.name.replace(/\.[a-z0-9]+$/i, "");
+      // An article (articles.js) is counted as «article:<slug>»: its title from the list, else the slug in words.
+      const art = b.name.startsWith("article:") && b.name.slice(8);
+      const title = mine?.title || b.title || (art ? [...(arts?.later || []), ...(arts?.all || [])].find((a) => a.slug === art)?.title || art.replace(/-/g, " ") : b.name.replace(/\.[a-z0-9]+$/i, ""));
       return `<li>${mine ? `<button data-open="${esc(b.name)}">${esc(title)}</button>` : `<span>${esc(title)}</span>`}<i>${dur(b.sec)}</i></li>`;
     }).join("");
     return `<section class="r-week">${head("Цей тиждень", "", true)}
