@@ -1206,6 +1206,40 @@ app.post("/api/site-admin/off", express.json(), (req, res) => {
   res.json({ ok: true, off: !!a.off });
 });
 
+// «Попросити книжку» (site's asks.js, Max 2026-11-08: «він просто додає її в читалку … і вона автоматом з'являється
+// в моїй читалці»): the site, asked by the owner of the file, puts their book into another account's library: the
+// same file (a hard link through store.writeBook), its corrected title and author and its own cover.
+app.post("/api/site-admin/give", express.json(), (req, res) => {
+  if (!siteOwnerOk(req)) return res.status(403).json({ error: "key" });
+  const from = String(req.body?.from || "");
+  const to = String(req.body?.to || "");
+  const name = safeBookName(String(req.body?.name || ""));
+  if (!ACCOUNT_ID.test(from) || !ACCOUNT_ID.test(to) || from === to || !name) return res.status(400).json({ error: "args" });
+  if (state.accounts[to]?.off) return res.status(403).json({ error: "off" });
+  const src = libOf(from);
+  const dst = libOf(to);
+  const file = bookFile(src, name);
+  if (!fs.existsSync(file)) return res.status(404).json({ error: "book" });
+  if (!fs.existsSync(bookFile(dst, name))) {
+    fs.mkdirSync(dst.dir, { recursive: true });
+    store.writeBook(bookFile(dst, name), fs.readFileSync(file));
+  }
+  if (dst.meta.trash?.[name]) fs.rmSync(trashFile(dst, name), { force: true }), delete dst.meta.trash[name];
+  if (src.meta.bookMeta?.[name]) (dst.meta.bookMeta ??= {})[name] = { ...src.meta.bookMeta[name] };
+  (dst.meta.added ??= {})[name] = { by: from, at: Date.now(), gift: true };
+  const key = customCoverKey(name);
+  if (fs.existsSync(src.covers)) {
+    for (const f of fs.readdirSync(src.covers)) {
+      if (f.split(".")[0] === key) fs.mkdirSync(dst.covers, { recursive: true }), fs.copyFileSync(path.join(src.covers, f), path.join(dst.covers, f));
+    }
+  }
+  saveState();
+  warmCovers(dst, [name]);
+  tellSite(to);
+  console.log(`give: ${from} → ${to}: ${name}`);
+  res.json({ ok: true, name });
+});
+
 // The site's watchman (Max, 2026-11-04: «а у нас зараз немає такої перевірки?»): every 5 minutes the reader opens
 // chytai.org.ua; two misses in a row go to the owner's Telegram bot, and so does the site coming back. The site
 // checks the reader the same way (web/telegram.js), so each watches the other. TELEGRAM_BOT_TOKEN in this app's
