@@ -1365,8 +1365,7 @@ function libraryRows(reader) {
 // ?rest: the rest of a long list, which app.js fetches after the page opens (pages.twoParts); not a page for search.
 const restPart = (req, res) => ("rest" in req.query ? (res.set("X-Robots-Tag", "noindex"), "rest") : "");
 app.get("/me", signed, (req, res) => res.redirect(req.user.href));
-// «Попросити книжку» on another reader's shelf: the button when both are let in; the owner also lets readers in here.
-const askState = (req, reader) => (req.user && req.user.id !== reader.id ? { can: asks.allowed(req.user.id) && asks.allowed(reader.id), owner: !!req.owner, on: asks.allowed(reader.id) } : null);
+// «Попросити книжку» on another reader's shelf: for the owner only for now (Max, 2026-11-08).
 app.get("/@:username", (req, res) => {
   const reader = pub(auth.byUsername(req.params.username));
   if (!reader) return res.status(404).send(pages.messagePage({ title: "Немає такого читача", text: "", user: req.user }));
@@ -1378,7 +1377,7 @@ app.get("/@:username", (req, res) => {
   const theirLists = lists.of(reader.id).filter((l) => own || (l.count && !l.draft));
   const part = restPart(req, res);
   if (own) return res.send(pages.libraryPage({ part, clubTopics: club.mark(req.user.id, club.of(reader.id, 5)), lists: theirLists, savedLists: lists.savedBy(reader.id), rows, user: req.user, reader: req.user, own: true, follows, now: nowFor(reader.id, { own: true }) }));
-  res.send(pages.libraryPage({ part, clubTopics: club.of(reader.id, 5), lists: theirLists, rows, user: req.user, reader, ask: askState(req, reader), now: nowFor(reader.id), mineIds: req.user && req.user.id !== reader.id ? store.inLibrary(req.user.id) : null, mineDirect: req.user ? new Set(Object.keys(store.entriesOf(req.user.id))) : null, following: auth.follows(req.user?.id, reader.id), follows }));
+  res.send(pages.libraryPage({ part, clubTopics: club.of(reader.id, 5), lists: theirLists, rows, user: req.user, reader, ask: !!req.owner, now: nowFor(reader.id), mineIds: req.user && req.user.id !== reader.id ? store.inLibrary(req.user.id) : null, mineDirect: req.user ? new Set(Object.keys(store.entriesOf(req.user.id))) : null, following: auth.follows(req.user?.id, reader.id), follows }));
 });
 // ---- «Списки» (lists.js): /@<username>/list/<slug>, /lists, and what the author does with a list ----
 app.get("/@:username/list/:slug", (req, res) => {
@@ -1854,13 +1853,22 @@ app.post("/api/reader-articles", async (req, res) => {
     fail(e);
   }
 });
-// ---- «Попросити книжку» (asks.js; Max, 2026-11-08): a talk of two readers with buttons under a request ----
-// Only the owner and the readers he lets in (on their shelf: «Пустити до «Попросити книжку»») see any of it.
+// ---- «Попросити книжку» (asks.js; Max, 2026-11-08): a talk of two readers with one button under a request ----
+// For now only the owner starts a talk («давай тільки мені спочатку»); the reader he asks answers in it. Under a
+// request for a book the asked one has one button: «Поділитися» when the book is in their reader, else
+// «Завантажити й поділитися»: the file goes into their reader and the asker's at once. The rest is words.
 const { Asks } = require("./asks");
 const asks = new Asks(store, OWNER_ID);
-pages.setAskNav((u) => (asks.allowed(u.id) ? asks.unread(u.id) : null));
-const askOk = (req, res, next) => (req.user && asks.allowed(req.user.id) ? next() : res.status(404).send(pages.messagePage({ title: "Немає такої сторінки", text: "", user: req.user })));
+const askCan = (u) => !!u && (u.id === OWNER_ID || asks.hasTalks(u.id));
+pages.setAskNav((u) => (askCan(u) ? asks.unread(u.id) : null));
+const askNo = (req, res, title = "Немає такої сторінки") => res.status(404).send(pages.messagePage({ title, text: "", user: req.user }));
 const askBook = (id) => (id && store.book(id) ? store.bookPage(store.canonical(id)) : null);
+// The other reader of a talk the signed-in one may open: the owner any reader, others only one they talk with.
+const askOther = (req, res) => {
+  const other = pub(auth.byUsername(req.params.username));
+  if (!other || other.id === req.user.id || (!req.owner && !asks.talkOf(req.user.id, other.id))) return askNo(req, res, "Немає такої розмови"), null;
+  return other;
+};
 const askTalkPage = (req, res, other, error = "") => {
   const t = asks.talkOf(req.user.id, other.id);
   const msgs = t ? asks.msgs(t.id) : [];
@@ -1868,107 +1876,78 @@ const askTalkPage = (req, res, other, error = "") => {
   const who = (id) => (id === req.user.id ? req.user : other);
   const view = msgs.map((m) => {
     const book = askBook(m.book);
-    // Under a request to me, still unanswered: my files of that book in the reader, for «Додати в Читалку».
-    const mine = m.kind === "ask" && !m.answer && m.reader !== req.user.id;
-    return { ...m, from: who(m.reader), book, file: m.kind === "gave" ? m.file : "", files: mine && book ? [readerFileFor(req.user.id, book)].filter(Boolean) : [], answerable: mine };
+    // A request to me, not yet shared: is that book in my reader?
+    const mine = m.kind === "ask" && !m.answer && m.reader !== req.user.id && !!book;
+    return { ...m, from: who(m.reader), book, answerable: mine, hasFile: mine && !!readerFileFor(req.user.id, book) };
   });
   admin.event(req, req.user.id, "asks", "talk");
-  res.send(pages.askTalkPage({ user: req.user, other, msgs: view, blocked: asks.blocked(req.user.id, other.id), readerUrl: READER_URL, error, book: askBook(String(req.query.book || "")) }));
+  res.send(pages.askTalkPage({ user: req.user, other, msgs: view, readerUrl: READER_URL, error, book: askBook(String(req.query.book || "")), canAsk: !!req.owner }));
 };
-const askOther = (req, res) => {
-  const other = pub(auth.byUsername(req.params.username));
-  if (!other || other.id === req.user.id || !asks.allowed(other.id)) {
-    res.status(404).send(pages.messagePage({ title: "Немає такого читача", text: "", user: req.user }));
-    return null;
-  }
-  return other;
-};
-app.get("/asks", signed, askOk, (req, res) => {
+app.get("/asks", signed, (req, res) => {
+  if (!askCan(req.user)) return askNo(req, res);
   const talks = asks.talksOf(req.user.id).map((t) => ({ ...t, other: pub(auth.reader(t.other)), book: t.last?.book ? askBook(t.last.book) : null })).filter((t) => t.other);
   admin.event(req, req.user.id, "asks", "list");
   res.send(pages.asksPage({ user: req.user, talks }));
 });
-app.get("/asks/@:username", signed, askOk, (req, res) => {
+app.get("/asks/@:username", signed, (req, res) => {
   const other = askOther(req, res);
   if (other) askTalkPage(req, res, other);
 });
 // One letter per talk until the reader opens it, so a quick back-and-forth is not ten letters.
 function askMail(t, from, to, what) {
-  const seen = asks.db.prepare("SELECT at FROM ask_seen WHERE reader = ? AND talk = ?").get(to.id, t.id)?.at || "";
-  const before = asks.msgs(t.id).filter((m) => m.reader === from.id && m.created > seen).length;
-  if (before > 1 || !to.email) return;
+  const seen = asks.seenAt(to.id, t.id);
+  if (asks.msgs(t.id).filter((m) => m.reader === from.id && m.created > seen).length > 1 || !to.email) return;
   auth.send(to.email, `${from.name}: ${what}`, [`${from.name} (@${from.username}) пише вам на Chytai: ${what}.`, "", `Відповісти: ${SITE}/asks/@${from.username}`].join("\n")).catch((e) => console.error(`[asks] mail: ${e.message}`));
 }
-const askAlert = (from, to, text) => !from.owner && telegram.send(`Попросити книжку\n\n${text}\n\n${SITE}/@${from.username} → ${SITE}/@${to.username}`, undefined, [[{ text: `Заборонити @${from.username}`, data: `qb:${from.id}` }]]);
-app.post("/api/asks/@:username", signed, askOk, (req, res) => {
+// The owner hears of what others do here (UGC), not of his own messages.
+const askAlert = (from, to, text) => !from.owner && telegram.send(`Попросити книжку\n\n${text}\n\n${SITE}/@${from.username} → ${SITE}/@${to.username}`);
+app.post("/api/asks/@:username", signed, (req, res) => {
   const other = askOther(req, res);
   if (!other) return;
-  if (asks.blocked(other.id, req.user.id)) return askTalkPage(req, res, other, "Цей читач не приймає повідомлень від вас.");
-  const book = askBook(String(req.body.book || ""));
+  const book = req.owner ? askBook(String(req.body.book || "")) : null;
   const t = asks.talkOf(req.user.id, other.id, { make: true });
-  const fresh = asks.msgs(t.id).length === 0;
   const r = asks.post(t.id, req.user.id, { text: req.body.text, book: book ? store.canonical(book.id) : "", kind: book ? "ask" : "" });
   if (r.error) return askTalkPage(req, res, other, r.error);
   admin.event(req, req.user.id, "asks", book ? "ask" : "message");
   askMail(t, req.user, other, book ? `просить «${book.title}»` : "нове повідомлення");
-  if (book) askAlert(req.user, other, `${req.user.name} просить у ${other.name} «${book.title}»${String(req.body.text || "").trim() ? `:\n«${String(req.body.text).trim().slice(0, 300)}»` : ""}`);
-  else if (fresh) askAlert(req.user, other, `${req.user.name} пише ${other.name} (нова розмова).`);
+  askAlert(req.user, other, `${req.user.name} пише ${other.name}: «${String(req.body.text || "").trim().slice(0, 300)}»`);
   res.redirect(303, `/asks/@${other.username}#m-${r.id}`);
 });
-// The asked one's answer to a request: give (the file goes to the asker's reader), paper or no.
-app.post("/api/asks/m/:id/answer", signed, askOk, async (req, res) => {
+// «Поділитися»: the asked one's file of the book goes into the asker's reader. «Завантажити й поділитися» sends the
+// file itself (app.js, the raw body with ?name=): it goes into both readers.
+const askShare = async (req, res, upload) => {
   const m = asks.msg(req.params.id);
   const t = m && asks.talk(m.talk);
-  if (!t || m.kind !== "ask" || m.reader === req.user.id || ![t.a, t.b].includes(req.user.id)) return res.status(404).send(pages.messagePage({ title: "Немає такого прохання", text: "", user: req.user }));
+  if (!t || m.kind !== "ask" || m.reader === req.user.id || ![t.a, t.b].includes(req.user.id)) return askNo(req, res, "Немає такого прохання");
   const other = pub(auth.reader(m.reader));
   const book = askBook(m.book);
-  const how = String(req.body.how || "");
-  if (!other || !["give", "paper", "no"].includes(how)) return res.redirect(303, `/asks/@${other?.username || ""}`);
-  if (m.answer) return res.redirect(303, `/asks/@${other.username}#m-${m.id}`);
-  let file = "";
-  if (how === "give") {
-    const f = book && readerFileFor(req.user.id, book);
-    if (!f) return askTalkPage(req, res, other, "Цієї книжки немає у вашій Читалці. Додайте її туди й натисніть ще раз.");
-    try {
-      await readerAdmin("/give", { from: req.user.id, to: other.id, name: f.name });
-      file = f.name;
-    } catch (e) {
-      console.error(`[asks] give: ${e.message}`);
-      return askTalkPage(req, res, other, "Не вдалося додати книжку. Спробуйте ще раз за хвилину.");
+  if (!other || !book) return askNo(req, res, "Немає такого прохання");
+  const back = (error) => (upload ? res.status(error ? 400 : 200).json(error ? { error } : { go: `/asks/@${other.username}` }) : error ? askTalkPage(req, res, other, error) : res.redirect(303, `/asks/@${other.username}`));
+  if (m.answer) return back("");
+  let file;
+  try {
+    if (upload) {
+      const name = String(req.query.name || "").replace(/[\\/]/g, "").slice(0, 200);
+      if (!/\.(epub|pdf)$/i.test(name) || !req.body?.length) return back("Потрібен файл EPUB або PDF.");
+      file = (await readerAdmin(`/give-file?${new URLSearchParams({ from: req.user.id, to: other.id, name })}`, req.body, "application/octet-stream")).name;
+    } else {
+      const f = readerFileFor(req.user.id, book);
+      if (!f) return back("Цієї книжки немає у вашій Читалці.");
+      file = (await readerAdmin("/give", { from: req.user.id, to: other.id, name: f.name })).name;
     }
+  } catch (e) {
+    console.error(`[asks] share: ${e.message}`);
+    return back(e.reader || "Не вдалося поділитися. Спробуйте ще раз за хвилину.");
   }
-  asks.answered(m.id, how);
-  const r = asks.post(t.id, req.user.id, { text: req.body.text, book: m.book, kind: how === "give" ? "gave" : how, file });
-  const said = { give: "додав(ла) у вашу Читалку", paper: "позичить паперову", no: "не може дати" }[how];
-  admin.event(req, req.user.id, "asks", how);
-  askMail(t, req.user, other, `${said} «${book?.title || "книжку"}»`);
-  askAlert(req.user, other, `${req.user.name} → ${other.name}: ${{ give: "додав(ла) в Читалку", paper: "позичить паперову", no: "не може дати" }[how]} «${book?.title || ""}»`);
-  res.redirect(303, `/asks/@${other.username}#m-${r.id || m.id}`);
-});
-app.post("/api/asks/@:username/block", signed, askOk, (req, res) => {
-  const other = askOther(req, res);
-  if (!other) return;
-  const on = req.body.on === "1";
-  asks.block(req.user.id, other.id, on);
-  admin.event(req, req.user.id, "asks", on ? "block" : "unblock");
-  if (on) notifyOwner("Попросити книжку: блок", `${req.user.name} (${SITE}/@${req.user.username}) заблокував(ла) ${other.name} (${SITE}/@${other.username}).`);
-  res.redirect(303, `/asks/@${other.username}`);
-});
-app.post("/api/asks/@:username/report", signed, askOk, (req, res) => {
-  const other = askOther(req, res);
-  if (!other) return;
-  admin.event(req, req.user.id, "asks", "report");
-  telegram.send(`Скарга в «Попросити книжку»\n\n${req.user.name} (${SITE}/@${req.user.username}) скаржиться на ${other.name} (${SITE}/@${other.username}).${String(req.body.text || "").trim() ? `\n«${String(req.body.text).trim().slice(0, 500)}»` : ""}`, undefined, [[{ text: `Заборонити @${other.username}`, data: `qb:${other.id}` }]]);
-  res.send(pages.messagePage({ title: "Дякуємо", text: "Скаргу отримали, подивимось.", user: req.user }));
-});
-// The owner lets a reader in (or out) from their shelf.
-app.post("/api/asks/@:username/allow", owner, (req, res) => {
-  const r = pub(auth.byUsername(req.params.username));
-  if (!r) return res.status(404).end();
-  asks.allow(r.id, req.body.on === "1");
-  res.redirect(303, r.href);
-});
-telegram.onAction("qb", (id) => (asks.allow(id, false), `@${auth.reader(id)?.username || id} більше не бачить «Попросити книжку».`));
+  asks.answered(m.id, "give");
+  asks.post(t.id, req.user.id, { book: m.book, kind: "gave", file });
+  admin.event(req, req.user.id, "asks", upload ? "upload" : "share");
+  askMail(t, req.user, other, `«${book.title}» тепер у вашій Читалці`);
+  askAlert(req.user, other, `«${book.title}» від ${req.user.name} тепер у Читалці ${other.name}${upload ? " (новий файл)" : ""}.`);
+  back("");
+};
+app.post("/api/asks/m/:id/share", signed, (req, res) => askShare(req, res, false));
+app.post("/api/asks/m/:id/upload", signed, express.raw({ type: () => true, limit: "100mb" }), (req, res) => askShare(req, res, true));
 app.get("/club", (req, res) => {
   const { pinned, rest } = club.index();
   res.send(pages.clubPage({ user: req.user, pinned: club.mark(req.user?.id, pinned), rest: club.mark(req.user?.id, rest) }));
@@ -3286,9 +3265,14 @@ app.get("/admin/traffic", owner, (req, res) => res.send(adminPage({ user: req.us
 app.get("/admin/stats", owner, (req, res) => res.redirect(301, "/admin/traffic"));
 app.get("/admin/overviews", owner, (req, res) => res.send(overviewsPage({ user: req.user, list: advice.overviewList().map((r) => ({ ...r, complaints: r.down ? advice.complaintsOf(r.book.id) : [] })), stats: advice.overviewStats(), who: (id) => (id && id !== "auto" ? pub(auth.reader(id)) : null), layout: pages.layout })));
 // The reader's numbers (server/index.js /api/site-admin), asked for with the owner's reader key.
-const readerAdmin = async (path, body) => {
-  const r = await fetch(`${READER_URL}/api/site-admin${path}`, { method: body ? "POST" : "GET", headers: { "x-reader-key": readerKey("owner"), ...(body ? { "Content-Type": "application/json" } : {}) }, body: body ? JSON.stringify(body) : undefined, signal: AbortSignal.timeout(15000) });
-  if (!r.ok) throw new Error(r.status === 403 ? "key" : `HTTP ${r.status}`);
+// A raw body (a Buffer with its type) goes as it is: a book file for «Попросити книжку».
+const readerAdmin = async (path, body, type = "") => {
+  const r = await fetch(`${READER_URL}/api/site-admin${path}`, { method: body ? "POST" : "GET", headers: { "x-reader-key": readerKey("owner"), ...(body ? { "Content-Type": type || "application/json" } : {}) }, body: body ? (type ? body : JSON.stringify(body)) : undefined, signal: AbortSignal.timeout(type ? 120000 : 15000) });
+  if (!r.ok) {
+    const err = new Error(r.status === 403 ? "key" : `HTTP ${r.status}`);
+    if (r.status === 400) err.reader = (await r.json().catch(() => ({}))).error || ""; // the reader's own words: a Russian book, too big…
+    throw err;
+  }
   return r.json();
 };
 // Огляд shows the reader's numbers from a copy at most five minutes old, and never waits long for them.

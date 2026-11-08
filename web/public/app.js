@@ -345,6 +345,23 @@
     e.preventDefault();
     f.requestSubmit();
   });
+  // «Завантажити й поділитися» (Попросити книжку, 2026-11-08): the chosen file goes up as it is, then the talk reloads.
+  for (const f of document.querySelectorAll("[data-ask-upload]")) {
+    const input = $('input[type="file"]', f), label = $("label", f), err = $(".error", f);
+    input.addEventListener("change", async () => {
+      const file = input.files[0];
+      if (!file) return;
+      const was = label.firstChild.textContent;
+      label.firstChild.textContent = "Завантажуємо…";
+      err.hidden = true;
+      const r = await fetch(`${f.dataset.askUpload}?${new URLSearchParams({ name: file.name })}`, { method: "POST", headers: { "Content-Type": "application/octet-stream" }, body: file }).then((r) => r.json()).catch(() => ({ error: "Файл не дійшов. Спробуйте ще раз." }));
+      if (r.go) return location.assign(r.go);
+      label.firstChild.textContent = was;
+      err.textContent = r.error || "Не вдалося.";
+      err.hidden = false;
+      input.value = "";
+    });
+  }
   for (const pick of document.querySelectorAll("[data-book-pick]")) {
     const id = $('input[name="book"]', pick), q = $(".pick-q", pick), hits = $(".pick-hits", pick), picked = $(".picked", pick);
     const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
