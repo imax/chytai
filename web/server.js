@@ -1737,7 +1737,7 @@ app.post("/api/articles/block", owner, (req, res) => {
 telegram.onAction("ah", (id) => (articles.setHidden(id, true) ? `Сховано: ${articles.byId(id)?.title || id}` : "Такої статті вже немає."));
 telegram.onAction("ab", (id) => (articles.ban(id, true), `@${auth.reader(id)?.username || id} більше не додає статті й нотатки.`));
 telegram.onAction("an", (id) => (articles.clearNote(id) ? "Нотатку прибрано." : "Такої нотатки вже немає."));
-// «Статті» in the reader (Max, 2026-11-08: «щоб читати прямо в ній, без epub»): the reader's server asks here for
+// «Статті» in the reader (Max, 2026-11-08: «щоб читати прямо в ній, без epub»; docs/decisions.md): the reader's server asks here for
 // the reader's list and an article's text, and passes on explanations, highlights, notes and the place read, all
 // in the same tables as on this site, so nothing needs syncing. One route, with the reader's key like the others.
 const READER_ARTICLE_LIST = 60;
