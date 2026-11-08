@@ -222,6 +222,7 @@
   let paperPath = null; // the paper book on «paper» (paper.js)
   let addQuery = "";
   let freeAll = false;
+  let yakOpen = false;
   const found = new Map(); // query -> { books } | { error } | "…" while asked
   const more6 = new Set(); // groups opened with «Ще N →»
   let panelHtml = "";
@@ -507,8 +508,20 @@
       <section class="r-where">${head("Де ще шукаємо", "", true)}
         <a class="r-where-row" href="https://chytai.org.ua" target="_blank" rel="noopener"><span>Каталог Chytai</span><small>де купити ↗</small></a>
         <div class="r-where-row soon"><span>Project Gutenberg</span><small>незабаром</small></div>
-        <div class="r-where-row soon"><span>Yakaboo та інші книгарні</span><small>незабаром</small></div></section>
+        <button class="r-where-row r-yak-row" data-act="yakaboo" aria-expanded="${yakOpen}"><span>Куплені на Yakaboo</span><small>${yakOpen ? "згорнути" : "як додати"}</small></button>
+        ${yakOpen ? yakabooHtml() : ""}
+        <div class="r-where-row soon"><span>Інші книгарні</span><small>незабаром</small></div></section>
     </div>`;
+  }
+
+  // Books bought on Yakaboo (Max 2026-11-08): no API, but «Мої книги» there gives each e-book as a file.
+  // Books the publisher keeps to Yakaboo's own app have no buttons and can't be brought here.
+  function yakabooHtml() {
+    return `<ol class="r-yak">
+      <li>Відкрийте <a href="https://www.yakaboo.ua/ua/my-account/library" target="_blank" rel="noopener">«Мої книги» на Yakaboo ↗</a></li>
+      <li>Наведіть на книжку і натисніть <b>epub</b>.<img src="img/yakaboo-epub.png" width="272" height="148" alt="Кнопки epub, fb2, mobi, pdf під книжкою на Yakaboo" loading="lazy"></li>
+      <li><button class="r-link" data-act="add">Додайте файл сюди</button>. Можна кілька одразу.</li></ol>
+      <p class="r-drop-note">Книжки «лише в застосунку Yakaboo» скачати не можна.</p>`;
   }
 
   function addFoundHtml(q) {
@@ -1119,6 +1132,7 @@
     if (el.dataset.act === "settings") return panel(false), openSettings();
     if (el.dataset.act === "cover-photo") return window.Paper.coverPhoto();
     if (el.dataset.act === "free-all") return (freeAll = true), renderHome();
+    if (el.dataset.act === "yakaboo") return (yakOpen = !yakOpen), renderHome();
     if (el.dataset.act === "seen") markSeen();
   });
 

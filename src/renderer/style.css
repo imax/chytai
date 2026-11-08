@@ -1280,6 +1280,13 @@ body[data-theme="dark"] #shell, body[data-theme="dark"] #book-menu, body[data-th
 .r-where-row small { font-size: 12px; color: var(--r-ink2); }
 .r-where-row.soon span { color: var(--r-ink2); }
 a.r-where-row:hover small { color: var(--r-ochre); }
+button.r-where-row { width: 100%; background: none; border: none; border-bottom: 1px solid var(--r-rule); font-family: inherit; text-align: left; cursor: pointer; }
+button.r-where-row:hover small { color: var(--r-ochre); }
+.r-yak { margin: 4px 0 8px; padding-left: 20px; font-size: 14px; line-height: 1.5; }
+.r-yak li { margin-bottom: 8px; }
+.r-yak a, .r-yak .r-link { color: var(--r-link); }
+.r-yak img { display: block; width: 100%; max-width: 272px; height: auto; margin: 8px 0 2px; border-radius: 8px; border: 1px solid var(--r-rule); }
+.r-yak + .r-drop-note { margin-bottom: 8px; }
 
 /* Search results on «Додати книжку» */
 .r-found { display: grid; grid-template-columns: minmax(0, 1fr); gap: 26px; }
