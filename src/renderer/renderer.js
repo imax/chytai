@@ -180,8 +180,10 @@ async function reopenBook() {
 }
 
 // A little tighter on a phone, where every line counts; 21/34 on a computer (turn 10).
+// «Інтервал» in «Вигляд» (Max 2026-11-08): tight, normal or loose lines.
+const SPACING = { tight: [1.4, 1.45], normal: [1.6, 1.62], loose: [1.85, 1.9] };
 function lineHeight() {
-  return PHONE.matches ? 1.6 : 1.62;
+  return (SPACING[settings.spacing] || SPACING.normal)[PHONE.matches ? 0 : 1];
 }
 
 // The text column on a computer (turn 10, «Колонка» in «Вигляд»): narrow, normal or wide.

@@ -258,6 +258,8 @@
   };
   // The column on a computer (10i): three lines, short to long.
   const COLUMN_ICONS = { narrow: '<path d="M8 7h8M8 12h8M8 17h8"/>', normal: '<path d="M5 7h14M5 12h14M5 17h14"/>', wide: '<path d="M2 7h20M2 12h20M2 17h20"/>' };
+  // Line spacing: three lines, close to far apart.
+  const SPACING_ICONS = { tight: '<path d="M4 8h16M4 12h16M4 16h16"/>', normal: '<path d="M4 6h16M4 12h16M4 18h16"/>', loose: '<path d="M4 4h16M4 12h16M4 20h16"/>' };
   function lookBox() {
     return on() ? $("#ms-body") : $("#ml-body");
   }
@@ -282,6 +284,8 @@
           .join("")}</div>
         <div class="m-grp">Шрифт</div>
         ${seg("font", [["literata", "Literata", "font-family:'Literata Variable',Literata,Georgia,serif"], ["georgia", "Georgia", "font-family:Georgia,serif"], ["publisher", "Видавця"]], font)}
+        <div class="m-grp">Інтервал</div>
+        ${seg("spacing", Object.entries(SPACING_ICONS).map(([v, d]) => [v, `<svg viewBox="0 0 24 24" aria-label="${{ tight: "Щільний", normal: "Звичайний", loose: "Вільний" }[v]}">${d}</svg>`]), settings.spacing || "normal")}
         <div class="m-two">${
           desk
             ? `<div><div class="m-grp">Колонка</div>${seg("column", Object.entries(COLUMN_ICONS).map(([v, d]) => [v, `<svg viewBox="0 0 24 24" aria-label="${{ narrow: "Вузька", normal: "Звичайна", wide: "Широка" }[v]}">${d}</svg>`]), settings.column || "normal")}</div>
@@ -305,6 +309,7 @@
     const fontChanged = patch.font && patch.font !== settings.font;
     const marginsChanged = patch.margins && patch.margins !== (settings.margins || "normal");
     const columnChanged = patch.column && patch.column !== (settings.column || "normal");
+    const spacingChanged = patch.spacing && patch.spacing !== (settings.spacing || "normal");
     const wasScrolled = scrolled();
     settings = await window.reader.setSettings(patch);
     if (wasScrolled !== scrolled()) {
@@ -317,7 +322,7 @@
     applyTheme();
     if (marginsChanged) resizeView();
     if (columnChanged) window.DeskRead?.columnChanged();
-    if (fontChanged) applyTypography(true);
+    if (fontChanged || spacingChanged) applyTypography(true);
     if (sheetKind === "look" || !on()) renderLook();
   }
 

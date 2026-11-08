@@ -102,7 +102,7 @@ function loadDotEnv(file) {
 
 // Explanations on Opus, «Переклад» (translation only) on the cheaper model (Max, 2026-10-26).
 const SHARED_DEFAULTS = { model: "claude-opus-5-5", translateModel: "claude-sonnet-5-5", language: "українська" };
-const USER_DEFAULTS = { pageTaps: false, deskScroll: false, font: "literata", margins: "normal", column: "normal", pdfMode: "reflow", fontSizes: {}, theme: "auto", explainStyle: "default", customStyle: "", lastBook: null, positions: {} };
+const USER_DEFAULTS = { pageTaps: false, deskScroll: false, font: "literata", margins: "normal", spacing: "normal", column: "normal", pdfMode: "reflow", fontSizes: {}, theme: "auto", explainStyle: "default", customStyle: "", lastBook: null, positions: {} };
 const SHARED_KEYS = new Set(Object.keys(SHARED_DEFAULTS));
 const USER_KEYS = new Set(Object.keys(USER_DEFAULTS));
 

@@ -28,6 +28,7 @@ const DEFAULT_SETTINGS = {
   pageTaps: false, // phone only: page turns instead of continuous scrolling
   font: "literata",
   margins: "normal", // narrow | normal | wide
+  spacing: "normal", // line spacing: tight | normal | loose
   pdfMode: "reflow", // "reflow" (як книжка) or "original"
   fontSizes: {}, // book path -> font size in %, only for books where it was changed
   theme: "auto",
