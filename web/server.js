@@ -1737,6 +1737,74 @@ app.post("/api/articles/block", owner, (req, res) => {
 telegram.onAction("ah", (id) => (articles.setHidden(id, true) ? `Сховано: ${articles.byId(id)?.title || id}` : "Такої статті вже немає."));
 telegram.onAction("ab", (id) => (articles.ban(id, true), `@${auth.reader(id)?.username || id} більше не додає статті й нотатки.`));
 telegram.onAction("an", (id) => (articles.clearNote(id) ? "Нотатку прибрано." : "Такої нотатки вже немає."));
+// «Статті» in the reader (Max, 2026-11-08: «щоб читати прямо в ній, без epub»): the reader's server asks here for
+// the reader's list and an article's text, and passes on explanations, highlights, notes and the place read, all
+// in the same tables as on this site, so nothing needs syncing. One route, with the reader's key like the others.
+const READER_ARTICLE_LIST = 60;
+app.post("/api/reader-articles", async (req, res) => {
+  const id = String(req.body?.id || "");
+  if (!readerKeyOk(id, String(req.body?.key || ""))) return res.status(403).json({ error: "key" });
+  req.user = auth.reader(id);
+  req.owner = id === OWNER_ID;
+  const b = req.body || {};
+  const fail = (e) => res.json({ error: /^[А-ЯІЇЄҐ]/.test(e.message) ? e.message : "Не вдалося." });
+  const light = (a) => ({ slug: a.slug, title: a.title, author: a.author, source: a.source, minutes: a.minutes, later: a.later, read: a.read, created: a.created, topics: a.topics });
+  try {
+    if (b.op === "list") {
+      admin.event(req, id, "articles", "reader:list");
+      return res.json({ later: articles.later(id).map(light), all: articles.list({ readerId: id, owner: req.owner, limit: READER_ARTICLE_LIST }).map(light) });
+    }
+    if (b.op === "get") {
+      const a = articles.bySlug(b.slug, { readerId: id, owner: req.owner });
+      if (!a) return res.status(404).json({ error: "Статтю не знайдено." });
+      if (b.open) admin.event(req, id, "articles", "reader:open");
+      const explanations = Object.values(a.notesBy).flat().map((n) => ({ id: n.id, block: n.block, quote: n.quote, text: n.text, model: n.model, at: n.created }));
+      const others = Object.values(a.readerNotes || {}).flat().map((n) => ({ id: n.id, block: n.block, quote: n.quote, note: n.note, by: n.by?.name || "", at: n.noted }));
+      return res.json({ ...light(a), url: a.url, dek: a.dek, published: a.published, blocks: a.blocks, explanations, highlights: a.highlights, others });
+    }
+    if (b.op === "add") {
+      const { article: a, existed } = await articles.add(id, String(b.url || "").trim().slice(0, 2000), { owner: req.owner });
+      admin.event(req, id, "articles", existed ? "reader:add:existed" : "reader:add");
+      if (!articles.later(id).some((x) => x.id === a.id)) articles.toggleLater(id, a.id);
+      if (!existed && !req.owner) telegram.send(`Нова стаття: ${a.title}\n\n${req.user.name} (${SITE}/@${req.user.username}) додав(ла) з Читалки статтю «${a.title}»${a.author ? `, ${a.author}` : ""} (${a.source}, ${a.minutes} хв).\n\n${SITE}${a.href}\nОригінал: ${a.url}`, undefined, [[{ text: "Сховати", data: `ah:${a.id}` }, { text: `Заборонити @${req.user.username}`, data: `ab:${id}` }]]);
+      return res.json({ slug: a.slug });
+    }
+    if (b.op === "later") {
+      const a = articles.bySlug(b.slug, { owner: req.owner });
+      if (!a) return res.status(404).json({ error: "Статтю не знайдено." });
+      const now = !!articles.later(id).find((x) => x.id === a.id);
+      if (now !== !!b.on) articles.toggleLater(id, a.id);
+      return res.json({ later: !!b.on });
+    }
+    if (b.op === "read") {
+      const a = articles.bySlug(b.slug, { owner: req.owner });
+      const block = Number(b.block);
+      if (a && Number.isInteger(block) && block >= 0 && block < a.blocks.length) articles.progress(id, a.id, block, a.blocks.length);
+      return res.json({ ok: true });
+    }
+    if (b.op === "explain") {
+      const { note, reused } = await articles.explain(id, b.slug, b.block, b.quote, { owner: req.owner });
+      admin.event(req, id, "articles", reused ? "reader:explain:kept" : "reader:explain");
+      return res.json({ id: note.id, block: note.block, quote: note.quote, text: note.text, model: note.model, at: note.created });
+    }
+    if (b.op === "highlight") {
+      const h = articles.highlight(id, b.slug, b.block, b.quote, { owner: req.owner, note: typeof b.note === "string" ? b.note : null });
+      admin.event(req, id, "articles", h.note ? "reader:highlight:note" : "reader:highlight");
+      if (h.fresh) noteAlert(req, h);
+      return res.json(h);
+    }
+    if (b.op === "note") {
+      const h = articles.setNote(id, b.hid, b.note, { owner: req.owner });
+      if (h?.fresh) admin.event(req, id, "articles", "reader:highlight:note"), noteAlert(req, h);
+      return res.json(h || { error: "Виділення не знайдено." });
+    }
+    if (b.op === "unhighlight") return res.json({ ok: articles.unhighlight(id, b.hid) });
+    res.status(400).json({ error: "op" });
+  } catch (e) {
+    console.log(`[articles] reader ${b.op}: ${e.message}`);
+    fail(e);
+  }
+});
 app.get("/club", (req, res) => {
   const { pinned, rest } = club.index();
   res.send(pages.clubPage({ user: req.user, pinned: club.mark(req.user?.id, pinned), rest: club.mark(req.user?.id, rest) }));

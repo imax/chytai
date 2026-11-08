@@ -229,7 +229,7 @@
   const phone = () => matchMedia("(max-width: 760px)").matches;
 
   function setPage(next, { push = true } = {}) {
-    if (next === "add" && settings.guest) return;
+    if ((next === "add" || next === "articles") && settings.guest) return;
     const was = page;
     page = next;
     $("#shell").dataset.page = page;
@@ -241,6 +241,7 @@
       if (push && page !== "home" && history.state?.rp !== page && !document.documentElement.classList.contains("in-app")) history[history.state?.rp ? "replaceState" : "pushState"]({ rp: page }, "");
       $("#home").scrollTop = 0;
       homeHtml = "";
+      if (page === "articles") loadArticles();
     }
     if (tab !== "home") show("home");
     else renderHome();
@@ -291,6 +292,7 @@
     if (pw) pw.innerHTML = wk, pw.classList.toggle("hidden", !wk), pw.classList.toggle("on", page === "week");
     $("#r-n-books").textContent = books.length || "";
     $("#r-pnav-trash").hidden = !trashCount;
+    $(".r-pnav-arts").hidden = !!settings.guest || !window.reader.articlesList;
     $("#r-n-trash").textContent = trashCount || "";
     for (const b of document.querySelectorAll(".r-pnav [data-page]")) b.classList.toggle("on", b.dataset.page === page);
     $("#r-avatar").textContent = (settings.user || "Ч").trim()[0].toUpperCase();
@@ -408,6 +410,68 @@
       ${books ? `<ul class="r-week-books">${books}</ul>` : ""}`}</section>`;
   }
 
+  // ---------- «Статті» (Max, 2026-11-08): the site's articles, read here like a book (articles.js) ----------
+  // Your «Прочитати пізніше» first, then the newest on the site; a link adds one. The list comes each time the page
+  // opens (a few dozen titles), nothing is kept on the device.
+  let arts = null; // { later, all } | { error }
+  let artsBusy = false;
+  function loadArticles() {
+    if (artsBusy || !window.reader.articlesList) return;
+    artsBusy = true;
+    window.reader.articlesList()
+      .then((d) => (arts = d))
+      .catch((err) => (arts = { error: err instanceof TypeError ? "Немає з'єднання: статті відкриваються лише онлайн." : err.message }))
+      .finally(() => ((artsBusy = false), page === "articles" && renderHome()));
+  }
+  function artRow(a) {
+    const pct = a.read && a.read.blocks ? Math.round(((a.read.block + 1) / a.read.blocks) * 100) : 0;
+    const meta = [a.author, a.source, `${a.minutes} хв`].filter(Boolean).map(esc).join(" · ");
+    return `<li><button type="button" class="r-art" data-article="${esc(a.slug)}"><b>${esc(a.title)}</b><small>${meta}${pct >= 95 ? " · прочитано" : pct > 3 ? ` · ${pct}%` : ""}</small></button>
+      <button type="button" class="r-art-later${a.later ? " on" : ""}" data-later="${esc(a.slug)}" title="${a.later ? "Прибрати з «Прочитати пізніше»" : "Прочитати пізніше"}" aria-label="Прочитати пізніше"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 3.5h11v17l-5.5-3.8-5.5 3.8z"/></svg></button></li>`;
+  }
+  function articlesPageHtml() {
+    const form = `<form class="r-art-add"><input type="url" name="url" placeholder="Посилання на статтю" autocomplete="off" enterkeyhint="go" required /><button type="submit" class="pill">Додати</button></form>`;
+    if (!arts) return `<section class="r-arts"><h1 class="r-arts-h">Статті</h1>${form}<p class="r-empty"><span class="spinner"></span></p></section>`;
+    if (arts.error) return `<section class="r-arts"><h1 class="r-arts-h">Статті</h1>${form}<p class="r-empty">${esc(arts.error)}</p></section>`;
+    const later = new Set(arts.later.map((a) => a.slug));
+    const rest = arts.all.filter((a) => !later.has(a.slug));
+    return `<section class="r-arts"><h1 class="r-arts-h">Статті</h1>${form}
+      ${arts.later.length ? `${head("Прочитати пізніше", "", true)}<ul class="r-art-list">${arts.later.map(artRow).join("")}</ul>` : ""}
+      ${rest.length ? `${head(arts.later.length ? "Ще на сайті" : "Нові", "", true)}<ul class="r-art-list">${rest.map(artRow).join("")}</ul>` : ""}
+      <a class="r-art-site" href="https://chytai.org.ua/articles" target="_blank" rel="noopener">Статті на сайті ↗</a></section>`;
+  }
+  async function addArticle(form) {
+    const input = form.querySelector("input");
+    const url = input.value.trim();
+    if (!url) return;
+    const btn = form.querySelector("button");
+    btn.disabled = true;
+    btn.textContent = "Додаю…";
+    try {
+      const { slug } = await window.reader.articleAdd(url);
+      input.value = "";
+      arts = null;
+      loadArticles();
+      window.reader.openPath(`article:${slug}`);
+    } catch (err) {
+      showNotice(err instanceof TypeError ? "Немає з'єднання." : err.message, false);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "Додати";
+    }
+  }
+  async function toggleLater(slug, el) {
+    const on = !el.classList.contains("on");
+    el.classList.toggle("on", on);
+    try {
+      await window.reader.articleLater(slug, on);
+      loadArticles();
+    } catch (err) {
+      el.classList.toggle("on", !on);
+      showNotice(err.message, false);
+    }
+  }
+
   function renderHome() {
     if (!lib) return; // the skeleton stays until the library arrives
     $("#shell").dataset.page = page;
@@ -418,7 +482,10 @@
     const pb = page === "paper" && lib.books.find((b) => b.path === paperPath);
     if (page === "paper" && !pb) page = "home";
     loadWeek();
-    const html = pb ? window.Paper.pageHtml(pb) : page === "add" ? addPageHtml() : page === "week" ? weekPageHtml() : homePageHtml();
+    if (page === "articles" && !arts) loadArticles();
+    const ha = $(".r-head-add h1");
+    if (ha) ha.textContent = page === "articles" ? "Статті" : "Додати книжку";
+    const html = pb ? window.Paper.pageHtml(pb) : page === "add" ? addPageHtml() : page === "week" ? weekPageHtml() : page === "articles" ? articlesPageHtml() : homePageHtml();
     // The library comes twice (the saved copy, then the server's) and again when the app comes back to the
     // front: drawing the same covers anew made them flicker, so an unchanged screen is left alone.
     if (html === homeHtml) return;
@@ -1057,6 +1124,7 @@
 
   // Both the «Хочу прочитати» view and the wide home screen have a field for it.
   $("#shell").addEventListener("submit", async (e) => {
+    if (e.target.matches(".r-art-add")) return e.preventDefault(), addArticle(e.target);
     if (!e.target.matches(".wish-form")) return;
     e.preventDefault();
     const input = e.target.querySelector("input");
@@ -1093,10 +1161,12 @@
   }
 
   $("#shell").addEventListener("click", async (e) => {
-    const el = e.target.closest("[data-menu], [data-aside], [data-hit], [data-open], [data-tab], [data-act], [data-note], [data-unwish], [data-page], [data-take], [data-paper-add]");
+    const el = e.target.closest("[data-menu], [data-aside], [data-hit], [data-open], [data-tab], [data-act], [data-note], [data-unwish], [data-page], [data-take], [data-paper-add], [data-article], [data-later]");
     // #shell itself carries data-page (the page shown): a tap on anything else, the search field in the phone's
     // panel too, came here as «Мої книжки» and closed the panel, so search did nothing on a phone (Max, 2026-11-03).
     if (!el || el.id === "shell") return;
+    if (el.dataset.article) return panel(false), window.reader.openPath(`article:${el.dataset.article}`);
+    if (el.dataset.later) return toggleLater(el.dataset.later, el);
     if (el.dataset.menu) return bookMenu(el.dataset.menu, el);
     if (el.dataset.aside) return setAside(el.dataset.aside);
     if (el.dataset.take) return takeBook(el.dataset.take, el);

@@ -298,8 +298,10 @@ async function openEpub(payload, { posKey, source }) {
   // contents entry, a saved position) was measured in the book's own styles and landed elsewhere
   // once line height and font changed.
   book.spine.hooks.content.register((doc) => styleContents({ document: doc }));
-  current = { path: payload.path, posKey, source, title: payload.name.replace(/\.[^.]+$/, ""), author: "", protected: !!payload.url, preview: !!payload.preview };
+  // An article (articles.js) comes from the server like a publisher's book, but it is no publisher's: copy and print as usual.
+  current = { path: payload.path, posKey, source, title: payload.article ? payload.name : payload.name.replace(/\.[^.]+$/, ""), author: "", protected: !!payload.url && !payload.article, preview: !!payload.preview, article: payload.article || null };
   bookShown = true;
+  document.body.classList.toggle("reading-article", !!current.article);
   syncAppProtection();
 
   window.DeskRead?.layout(false); // the column and the spread for this mode, before the first layout
@@ -472,6 +474,7 @@ function resizeView() {
 }
 
 function closeBook() {
+  document.body.classList.remove("reading-article");
   $("#btn-print").classList.add("hidden");
   $("#btn-search").classList.add("hidden");
   // A failure while tearing down the previous book must never block opening the next one.
@@ -1107,6 +1110,7 @@ function makeConv({ cfiRange, context, mode, sid: keptId }) {
     <form class="followup"><input type="text" placeholder="Уточнити…" enterkeyhint="send" /><button type="submit" class="ask" aria-label="Запитати"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5M6 11l6-6 6 6"/></svg></button></form>`;
   card.querySelector(".quote").textContent = quote.length > 280 ? quote.slice(0, 280) + "…" : quote;
   if (!quote) card.classList.add("c-book"); // a question about the book, no passage
+  if (current?.article) card.classList.add("c-article"); // the site's explanation: no follow-ups, kept for everyone
   $("#q-head").after(card);
 
   // sid: the id it is kept under on the server; turns: [{ q, a }] answered so far.
@@ -1179,6 +1183,8 @@ function runTurn(conv, question) {
   let request;
   if (!conv.messages) {
     request = { context: { ...conv.context, question: question || undefined }, mode: conv.mode };
+    // An article's explanation is the site's (articles.js): it needs the passage's place to find its paragraph.
+    if (current?.article) Object.assign(request, { article: current.article, cfi: conv.cfiRange });
   } else {
     request = { messages: [...conv.messages, { role: "user", content: question }], mode: conv.mode };
   }
