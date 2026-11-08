@@ -1372,3 +1372,14 @@ mark.hl { background: color-mix(in srgb, var(--accent) 16%, transparent); color:
 .ask-book .by { display: block; font-size: 13px; color: var(--muted); }
 .ask-answer { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 12px; }
 .ask-talk { max-width: 680px; }
+.ask-compose { margin-top: 22px; display: flex; flex-direction: column; gap: 10px; padding: 14px 16px 12px; border: 1px solid var(--under); border-radius: 10px; }
+.ask-compose:focus-within { border-color: var(--ink); }
+.ask-compose textarea { width: 100%; min-height: 72px; padding: 0; border: 0; background: transparent; resize: none; outline: 0; font: 17px/1.5 var(--serif); color: var(--ink); }
+.ask-compose textarea::placeholder { color: var(--muted); opacity: 1; }
+.ask-compose .ask-bar { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding-top: 10px; border-top: 1px solid var(--rule); }
+.ask-addbook summary { list-style: none; cursor: pointer; width: max-content; }
+.ask-addbook summary::-webkit-details-marker { display: none; }
+.ask-addbook[open] summary { display: none; }
+.ask-addbook .pick-q { padding: 8px 12px; border: 1px solid var(--under); border-radius: 4px; background: transparent; color: var(--ink); font-size: 15px; }
+.ask-addbook .pick-q:focus { outline: 0; border-color: var(--ink); }
+.ask-compose .error { color: var(--danger); }
