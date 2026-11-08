@@ -50,7 +50,7 @@ function indexPage({ user, list }) {
 <section class="page-head a-head">
   <div>
     <h1>Статті</h1>
-    <p class="lead">Есе й довгі тексти. Читаються тут же.</p>
+    <p class="lead">Есе й довгі тексти.</p>
   </div>
   <div class="head-act">${add}</div>
 </section>
