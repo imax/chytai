@@ -1309,7 +1309,7 @@ function libraryPage({ ask = null, part = "", clubTopics = [], lists = [], saved
   const listsHead = label(own ? "Мої списки" : "Списки", own ? `<button type="button" class="text-link" data-open="new-list">+ новий</button>` : "");
   const topLists = lists.length || savedLists.length || own ? `<div class="top-lists">${listsHead}${lists.length || savedLists.length ? "" : `<p class="small muted">Складіть список книжок, щоб поділитися ним.</p>`}<div class="lchips">${[...lists.map((l) => [l, listMeta(l, { by: false })]), ...savedLists.map((l) => [l, `${esc(l.reader.name)} · ${books(l.count)}`])].map(([l, m]) => `<a href="${attr(l.href)}"><b>${esc(l.title)}</b><span>${m}</span></a>`).join("")}</div></div>` : "";
   const body = `
-${pageHead({ crumbs: own ? "" : `<a href="/community">Читачі</a> / ${esc(reader.name)}`, kicker: own ? "Моя полиця" : "Полиця читача", title: esc(reader.name), sub, extra: nowBlock(now, { own }), action: own ? `<div class="acts own-acts"><a class="btn primary" href="/add">+ Додати книжки</a><a class="text-link small" href="/mcp">або голосом чи текстом у Claude чи ChatGPT</a></div>` : user?.id === reader.id ? "" : `<div class="acts">${followButton(reader, following, user)}${ask?.can ? `<a class="btn" href="/asks/@${attr(reader.username)}">Попросити книжку</a>` : ""}${ask?.owner ? `<form method="post" action="/api/asks/@${attr(reader.username)}/allow" class="inline"><input type="hidden" name="on" value="${ask.on ? "" : "1"}"><button class="text-link small muted">${ask.on ? "прибрати з «Попросити книжку»" : "пустити до «Попросити книжку»"}</button></form>` : ""}</div>` })}
+${pageHead({ crumbs: own ? "" : `<a href="/community">Читачі</a> / ${esc(reader.name)}`, kicker: own ? "Моя полиця" : "Полиця читача", title: esc(reader.name), sub, extra: nowBlock(now, { own }), action: own ? `<div class="acts own-acts"><a class="btn primary" href="/add">+ Додати книжки</a><a class="text-link small" href="/mcp">або голосом чи текстом у Claude чи ChatGPT</a></div>` : user?.id === reader.id ? "" : `<div class="acts">${followButton(reader, following, user)}${ask ? `<a class="btn" href="/asks/@${attr(reader.username)}">Попросити книжку</a>` : ""}</div>` })}
 <div class="split">
   <div>
     ${topLists}
@@ -3025,49 +3025,42 @@ const setAskNav = (fn) => (askNav = fn);
 function asksPage({ user, talks }) {
   const row = (t) => {
     const l = t.last || {};
-    const what = { ask: "просить книжку", gave: "додано в Читалку", paper: "позичить паперову", no: "не може дати" }[l.kind] || esc(String(l.text || "").slice(0, 90));
+    const what = l.kind === "gave" ? "книжка в Читалці" : esc(String(l.text || "").slice(0, 90)) || "просить книжку";
     return `<a class="ctopic${t.fresh ? " unread" : ""}" href="/asks/@${attr(t.other.username)}"><span class="t"><b>${esc(t.other.name)}</b></span>${t.book ? `<span class="bk">${cover(t.book, "xs")}<span>${esc(t.book.title)}</span></span>` : ""}<span class="m">${t.fresh ? `<span class="news">нове</span> · ` : ""}${l.reader === user.id ? "ви: " : ""}${what} · ${when({ updated: t.active })}</span></a>`;
   };
   const body = `
-${pageHead({ title: "Прохання", lead: "Попросіть книжку на полиці іншого читача." })}
+${pageHead({ title: "Прохання", lead: "Розмови про книжки, які ви просите." })}
 ${talks.length ? `<div class="club-topics">${talks.map(row).join("")}</div>` : `<p class="muted">Розмов ще немає.</p>`}`;
   return layout({ title: "Прохання", body, user, path: "/asks", noindex: true });
 }
-function askTalkPage({ user, other, msgs, blocked, readerUrl, error = "", book = null }) {
+function askTalkPage({ user, other, msgs, readerUrl, error = "", book = null, canAsk = false }) {
   const who = (r) => `<a href="${attr(r.href)}"><b>${esc(r.name)}</b></a>`;
-  const said = { gave: "додано у вашу Читалку", paper: "позичить паперову", no: "не може дати" };
   const bookLink = (b) => (b ? `<a class="ask-book" href="${attr(b.href)}">${cover(b, "xs")}<span><b>${esc(b.title)}</b>${b.author ? `<span class="by">${esc(byline(b.author))}</span>` : ""}</span></a>` : "");
-  const answer = (m) => {
-    if (!m.answerable) return "";
-    const give = m.files.length
-      ? `<button class="btn primary small" name="how" value="give">Додати в Читалку</button>`
-      : `<span class="small muted">У вашій Читалці цієї книжки немає. <a href="${attr(readerUrl)}/" target="_blank" rel="noopener">Додайте</a> її, і тут з'явиться «Додати в Читалку».</span>`;
-    return `<form method="post" action="/api/asks/m/${attr(m.id)}/answer" class="ask-answer">${give}<button class="btn small" name="how" value="paper">Позичу паперову</button><button class="btn small" name="how" value="no">Не можу</button></form>`;
-  };
+  // The one button under a request to me (Max, 2026-11-08): share my file, or upload one and share it at once.
+  const answer = (m) =>
+    !m.answerable
+      ? ""
+      : m.hasFile
+        ? `<form method="post" action="/api/asks/m/${attr(m.id)}/share" class="ask-answer"><button class="btn primary small">Поділитися</button><span class="small muted">книжка з вашої Читалки з'явиться в Читалці ${esc(m.from.name)}</span></form>`
+        : `<form class="ask-answer" data-ask-upload="/api/asks/m/${attr(m.id)}/upload"><label class="btn primary small">Завантажити й поділитися<input type="file" accept=".epub,.pdf" hidden></label><span class="small muted">файл з'явиться у вашій Читалці й у Читалці ${esc(m.from.name)}</span><p class="error small" hidden></p></form>`;
   const msg = (m) => {
     const mine = m.reader === user.id;
     const head = `<p class="who">${who(m.from)} · ${when({ updated: m.created })}</p>`;
-    if (m.kind === "ask") return `<div class="cmt ask-msg" id="m-${attr(m.id)}">${head}<p class="ask-what">${mine ? "Ви просите" : "Просить"}</p>${bookLink(m.book)}${m.text ? `<div class="txt">${clubText(m.text)}</div>` : ""}${answer(m)}</div>`;
-    if (said[m.kind]) {
-      const open = m.kind === "gave" && !mine && m.file ? ` <a class="btn small" href="${attr(`${readerUrl}/?open=${encodeURIComponent(m.file)}`)}">Читати</a>` : "";
-      return `<div class="cmt ask-reply" id="m-${attr(m.id)}">${head}<p class="ask-what">${mine ? { gave: "Ви додали в Читалку", paper: "Ви позичите паперову", no: "Ви не можете дати" }[m.kind] : cap(said[m.kind])}: «${esc(m.book?.title || "книжку")}»${open}</p>${m.text ? `<div class="txt">${clubText(m.text)}</div>` : ""}</div>`;
+    if (m.kind === "ask") return `<div class="cmt ask-msg" id="m-${attr(m.id)}">${head}${m.text ? `<div class="txt">${clubText(m.text)}</div>` : ""}${bookLink(m.book)}${answer(m)}</div>`;
+    if (m.kind === "gave") {
+      const open = !mine && m.file ? ` <a class="btn small" href="${attr(`${readerUrl}/?open=${encodeURIComponent(m.file)}`)}">Читати</a>` : "";
+      return `<div class="cmt ask-reply" id="m-${attr(m.id)}">${head}<p class="ask-what">«${esc(m.book?.title || "Книжка")}» тепер у ${mine ? `Читалці ${esc(other.name)}` : "вашій Читалці"}${open}</p></div>`;
     }
     return `<div class="cmt" id="m-${attr(m.id)}">${head}<div class="txt">${clubText(m.text)}</div></div>`;
   };
-  const form = blocked
-    ? `<p class="muted small">Ви заблокували цього читача.</p>`
-    : `<form method="post" action="/api/asks/@${attr(other.username)}" class="cmt-form" id="write">
-  <div class="field"><span class="small">Книжка <span class="muted">· щоб попросити</span></span>${bookPick(book)}</div>
-  <textarea name="text" rows="3" maxlength="2000" placeholder="Повідомлення" aria-label="Повідомлення"></textarea>
+  const form = `<form method="post" action="/api/asks/@${attr(other.username)}" class="cmt-form" id="write">
+  <textarea name="text" rows="3" maxlength="2000" required placeholder="${canAsk && !msgs.length ? "Привіт! Може, є в тебе…" : "Повідомлення"}" aria-label="Повідомлення"></textarea>
+  ${canAsk ? `<div class="field"><span class="small">Книжка <span class="muted">· необов'язково</span></span>${bookPick(book)}</div>` : ""}
   ${error ? `<p class="error small">${esc(error)}</p>` : ""}<div><button class="btn primary">Надіслати</button></div></form>`;
-  const tools = `<details class="more-acts drop ask-tools"><summary class="text-link small muted">ще</summary><div class="more-menu">
-  <form method="post" action="/api/asks/@${attr(other.username)}/block"><input type="hidden" name="on" value="${blocked ? "" : "1"}"><button class="text-link">${blocked ? "Розблокувати" : "Заблокувати"}</button></form>
-  <form method="post" action="/api/asks/@${attr(other.username)}/report" onsubmit="const t=prompt('Що сталося?');if(t===null)return false;this.text.value=t"><input type="hidden" name="text"><button class="text-link">Поскаржитись</button></form>
-</div></details>`;
   const body = `
-${pageHead({ crumbs: `<a href="/asks">Прохання</a>`, title: esc(other.name), sub: `<a href="${attr(other.href)}">полиця</a> · <span class="muted">@${esc(other.username)}</span>`, action: tools })}
+${pageHead({ crumbs: `<a href="/asks">Прохання</a>`, title: esc(other.name), sub: `<a href="${attr(other.href)}">полиця</a> · <span class="muted">@${esc(other.username)}</span>` })}
 <section class="ask-talk">
-${msgs.length ? msgs.map(msg).join("") : `<p class="muted small">Попросіть книжку, навіть якщо її немає на полиці: ${esc(other.name)} відповість.</p>`}
+${msgs.map(msg).join("")}
 ${form}
 </section>`;
   return layout({ title: other.name, body, user, path: "/asks", noindex: true });

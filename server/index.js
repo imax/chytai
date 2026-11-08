@@ -1209,17 +1209,11 @@ app.post("/api/site-admin/off", express.json(), (req, res) => {
 // «Попросити книжку» (site's asks.js, Max 2026-11-08: «він просто додає її в читалку … і вона автоматом з'являється
 // в моїй читалці»): the site, asked by the owner of the file, puts their book into another account's library: the
 // same file (a hard link through store.writeBook), its corrected title and author and its own cover.
-app.post("/api/site-admin/give", express.json(), (req, res) => {
-  if (!siteOwnerOk(req)) return res.status(403).json({ error: "key" });
-  const from = String(req.body?.from || "");
-  const to = String(req.body?.to || "");
-  const name = safeBookName(String(req.body?.name || ""));
-  if (!ACCOUNT_ID.test(from) || !ACCOUNT_ID.test(to) || from === to || !name) return res.status(400).json({ error: "args" });
-  if (state.accounts[to]?.off) return res.status(403).json({ error: "off" });
+function giveBook(from, to, name) {
   const src = libOf(from);
   const dst = libOf(to);
   const file = bookFile(src, name);
-  if (!fs.existsSync(file)) return res.status(404).json({ error: "book" });
+  if (!fs.existsSync(file)) return false;
   if (!fs.existsSync(bookFile(dst, name))) {
     fs.mkdirSync(dst.dir, { recursive: true });
     store.writeBook(bookFile(dst, name), fs.readFileSync(file));
@@ -1237,7 +1231,43 @@ app.post("/api/site-admin/give", express.json(), (req, res) => {
   warmCovers(dst, [name]);
   tellSite(to);
   console.log(`give: ${from} → ${to}: ${name}`);
-  res.json({ ok: true, name });
+  return true;
+}
+const giveArgs = (q) => {
+  const from = String(q?.from || "");
+  const to = String(q?.to || "");
+  const name = safeBookName(String(q?.name || ""));
+  return ACCOUNT_ID.test(from) && ACCOUNT_ID.test(to) && from !== to && name && !state.accounts[to]?.off && !state.accounts[from]?.off ? { from, to, name } : null;
+};
+app.post("/api/site-admin/give", express.json(), (req, res) => {
+  if (!siteOwnerOk(req)) return res.status(403).json({ error: "key" });
+  const g = giveArgs(req.body);
+  if (!g) return res.status(400).json({ error: "args" });
+  if (!giveBook(g.from, g.to, g.name)) return res.status(404).json({ error: "book" });
+  res.json({ ok: true, name: g.name });
+});
+// «Завантажити й поділитися»: the file the asked one chose on the site, under the same rules as an upload here
+// (size, language, no pornography), goes into their library and then the asker's.
+app.post("/api/site-admin/give-file", express.raw({ type: () => true, limit: 100 * 1024 * 1024 }), async (req, res) => {
+  if (!siteOwnerOk(req)) return res.status(403).json({ error: "key" });
+  const g = giveArgs(req.query);
+  if (!g) return res.status(400).json({ error: "Підтримуються лише EPUB і PDF." });
+  if (!req.body?.length) return res.status(400).json({ error: "Порожній файл." });
+  const lib = libOf(g.from);
+  if (!fs.existsSync(bookFile(lib, g.name))) {
+    const lang = await bookLanguage(g.name, req.body);
+    if (lang === "ru") return res.status(400).json({ error: "Книжки російською мовою в Chytai не завантажуються." });
+    if (lang === "other") return res.status(400).json({ error: "Поки що Chytai читає книжки українською та англійською." });
+    if ((await checkUpload(g.name, req.body)).blocked) return res.status(400).json({ error: "Схоже, це порнографія чи еротика, тому Chytai не додав книжку." });
+    fs.mkdirSync(lib.dir, { recursive: true });
+    store.writeBook(bookFile(lib, g.name), req.body);
+    (lib.meta.added ??= {})[g.name] = { by: g.from, at: Date.now() };
+    saveState();
+    warmCovers(lib, [g.name]);
+    tellSite(g.from);
+  }
+  giveBook(g.from, g.to, g.name);
+  res.json({ ok: true, name: g.name });
 });
 
 // The site's watchman (Max, 2026-11-04: «а у нас зараз немає такої перевірки?»): every 5 minutes the reader opens
