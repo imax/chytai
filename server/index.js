@@ -1173,6 +1173,24 @@ app.get("/api/site-admin", async (req, res, next) => {
     next(err);
   }
 });
+// One day's numbers for the site's morning report in Telegram (web/dailyreport.js), per account so the site can
+// leave out the owner and test accounts: seconds read, explanations, notes saved, and the books read with titles.
+app.get("/api/site-admin/day", (req, res) => {
+  if (!siteOwnerOk(req)) return res.status(403).json({ error: "key" });
+  const day = /^\d{4}-\d{2}-\d{2}$/.test(String(req.query.day || "")) ? String(req.query.day) : statsDay(Date.now() - 86400000);
+  const d = state.stats?.days?.[day] || {};
+  const notes = {};
+  for (const r of store.items.noteTimes()) if (Number(r.at) && statsDay(Number(r.at)) === day) notes[r.acct] = (notes[r.acct] || 0) + 1;
+  const books = new Map(); // title -> { account: seconds }
+  for (const [acct, list] of Object.entries(d.readBooks || {})) {
+    for (const [name, sec] of Object.entries(list)) {
+      const title = bookInfo(acct, name).title || name.replace(/\.[^.]+$/, "");
+      const b = books.get(title) || books.set(title, {}).get(title);
+      b[acct] = (b[acct] || 0) + sec;
+    }
+  }
+  res.json({ day, readSec: d.readSec || {}, explains: d.users || {}, notes, cost: d.cost || 0, books: [...books].map(([title, sec]) => ({ title, sec })) });
+});
 // Switch the reader off (or on again) for one account: { id, off: true | false }.
 app.post("/api/site-admin/off", express.json(), (req, res) => {
   if (!siteOwnerOk(req)) return res.status(403).json({ error: "key" });
