@@ -1585,7 +1585,14 @@ const articles = new Articles({ store, who: (id) => pub(auth.reader(id)), apiKey
 const wantsJson = (req) => /json/.test(req.get("accept") || "") || req.is("application/json");
 // Once (Max, 2026-11-08: «перенеси ті есе»): the essays that were books come back as the owner's articles, fetched by
 // the web process a little after start. Each address is tried until it is in; then meta remembers it.
-const SEED_ARTICLES = [{ url: "https://www.econlib.org/library/Essays/hykKnw.html", author: "Friedrich A. Hayek" }];
+const SEED_ARTICLES = [
+  { url: "https://www.econlib.org/library/Essays/hykKnw.html", author: "Friedrich A. Hayek" },
+  { url: "https://kevinkelly.substack.com/p/better-than-free", author: "Kevin Kelly" },
+  { url: "https://danwang.co/2025-letter/", author: "Dan Wang" },
+  { url: "https://www.experimental-history.com/p/stop-eating-lady-gagas-oreos", author: "Adam Mastroianni" },
+  { url: "https://visakanv.substack.com/p/are-you-serious", author: "Visakan Veerasamy" },
+  { url: "https://www.orwellfoundation.com/the-orwell-foundation/orwell/essays-and-other-works/why-i-write/", author: "George Orwell" },
+];
 if (bg.serving) {
   setTimeout(async () => {
     for (const s of SEED_ARTICLES) {
@@ -1593,7 +1600,7 @@ if (bg.serving) {
       if (store.db.get(key)) continue;
       try {
         const { article } = await articles.add(OWNER_ID, s.url, { owner: true });
-        if (s.author) store.db.prepare("UPDATE articles SET author = ? WHERE id = ? AND author = ''").run(s.author, article.id);
+        if (s.author) store.db.prepare("UPDATE articles SET author = ? WHERE id = ?").run(s.author, article.id);
         store.db.set(key, article.slug);
         console.log(`[articles] seeded ${article.slug}`);
       } catch (e) {
