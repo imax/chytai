@@ -1313,7 +1313,7 @@ ${pageHead({ crumbs: own ? "" : `<a href="/community">Читачі</a> / ${esc(r
   <div>
     ${topLists}
     <div class="tabs-bar">
-      <div class="tabs" data-filter="status">${tabs.map(([k, l, n]) => `<button type="button" class="tab${k === "" ? " on" : ""}" data-v="${k}">${l} <span>${n}</span></button>`).join("")}</div>
+      <div class="tabs" data-filter="status" data-param="shelf">${tabs.map(([k, l, n]) => `<a class="tab${k === "" ? " on" : ""}" href="/@${attr(reader.username)}${k ? `?shelf=${k}` : ""}" data-v="${k}">${l} <span>${n}</span></a>`).join("")}</div>
     </div>
     <div class="shelf-tools">
       <input type="search" id="q" placeholder="шукати на полиці: назва, автор, нотатка" autocomplete="off">

@@ -111,13 +111,33 @@
     genre?.addEventListener("change", again);
     sort?.addEventListener("change", resort);
     for (const group of $$(".tabs[data-filter]")) {
-      group.addEventListener("click", (e) => {
-        const tab = e.target.closest(".tab");
-        if (!tab) return;
+      // Tabs with data-param are links (?shelf=read): back and forward in the browser and a shared link
+      // show the same tab (Max, 2026-11-08).
+      const param = group.dataset.param;
+      const pick = (v, push) => {
+        const tab = $$(".tab", group).find((c) => c.dataset.v === v) || $(".tab", group);
         $$(".tab", group).forEach((c) => c.classList.toggle("on", c === tab));
         filters[group.dataset.filter] = tab.dataset.v;
+        if (push && param) {
+          const u = new URL(location.href);
+          u.hash = "";
+          if (tab.dataset.v) u.searchParams.set(param, tab.dataset.v);
+          else u.searchParams.delete(param);
+          history.pushState(null, "", u);
+        }
         again();
+      };
+      group.addEventListener("click", (e) => {
+        const tab = e.target.closest(".tab");
+        if (!tab || e.metaKey || e.ctrlKey || e.shiftKey) return;
+        e.preventDefault();
+        pick(tab.dataset.v, true);
       });
+      if (param) {
+        addEventListener("popstate", () => pick(new URL(location.href).searchParams.get(param) || "", false));
+        const start = new URL(location.href).searchParams.get(param);
+        if (start) pick(start, false);
+      }
     }
     if (location.hash === "#want" || location.hash === "#kids") $(`.tab[data-v=${location.hash.slice(1)}]`)?.click();
     // A link to one row (/@maxua#book) must find it even past the first rows, and under «Дитяча полиця» if it is there.

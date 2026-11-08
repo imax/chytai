@@ -155,6 +155,7 @@ main:has(> .admin-nav) { padding-top: 24px; }
 /* ---- tabs (text switches under a label or a rule) ---- */
 .tabs { display: flex; flex-wrap: wrap; gap: 6px 22px; }
 .tab { background: none; border: 0; padding: 0 0 2px; cursor: pointer; color: var(--muted); font-size: 14px; border-bottom: 1px solid transparent; }
+a.tab { text-decoration: none; }
 .label .tab { font-size: 13px; }
 .tab span { color: var(--muted); }
 .tab:hover { color: var(--accent); }
