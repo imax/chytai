@@ -1256,7 +1256,7 @@ app.get("/readers", (req, res) => res.redirect(301, "/community"));
 app.get("/community", (req, res) => {
   const readers = readerList();
   const all = social.all();
-  res.send(pages.readersPage({ user: req.user, feed: social.feed({ limit: 40, shelves: true }), readers, followed: followed(req), totals: { readers: readers.length, books: readers.reduce((s, r) => s + r.count, 0), notes: all.filter((x) => x.entry.note).length } }));
+  res.send(pages.readersPage({ user: req.user, club: club.mark(req.user?.id, club.index(20).rest.slice(0, 3)), feed: social.feed({ limit: 40, shelves: true }), readers, followed: followed(req), totals: { readers: readers.length, books: readers.reduce((s, r) => s + r.count, 0), notes: all.filter((x) => x.entry.note).length } }));
 });
 
 // «Стежити» / «Стежу» on a reader's page: follow or unfollow them, then back to where it was pressed.

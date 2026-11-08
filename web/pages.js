@@ -108,8 +108,9 @@ const label = (text, aside = "") => `<div class="label"><h2>${text}</h2>${aside 
 
 // The owner's «Адмінка» is in the footer again, not the menu (Max, 2026-11-01).
 // The logo is the way home (Max, 2026-10-20: «для чого Відкрити в навбар?»).
+// «Клуб» left the menu for a block on «Читачі» (Max, 2026-11-08: «давай спробуємо»); /club itself stays.
 const NAV = [
-  ["/community", "Читачі", (p) => p === "/community" || p === "/@"],
+  ["/community", "Читачі", (p) => p === "/community" || p === "/@" || p === "/club"],
 ];
 
 // `wide`: the image is a wide picture (a list's), shown big in a shared link.
@@ -117,8 +118,6 @@ function layout({ title, body, user, path = "", description = "", q = "", home =
   const on = (p) => (p ? ' class="on"' : "");
   const nav = [
     ...NAV.map(([href, name, is]) => `<a href="${href}"${on(is(path))}>${name}</a>`),
-    // «Клуб» in the top menu, second after «Читачі» (Max, 2026-11-01).
-    `<a href="/club"${on(path === "/club")}>Клуб</a>`,
     // «Статті» is Max's experiment for now (2026-11-08: «сховаємо Статті з топ меню»): in the menu for him only, the pages stay open by link.
     ...(user?.owner ? [`<a href="/articles"${on(path === "/articles")}>Статті</a>`] : []),
     // Settings live on one's own shelf, not in the menu (Max, 2026-10-20).
@@ -1636,13 +1635,14 @@ ${parts.first}
 // so it names its book unless that is the one being read (Max, 2026-10-23).
 const noteAbout = (r) => (!r.noteBook || r.now?.books.some((n) => n.id === r.noteBook.id) ? "" : `<span class="note-book">${esc(r.noteBook.title)}:</span> `);
 
-function readersPage({ user, feed, readers, totals, followed = new Set() }) {
+function readersPage({ user, feed, readers, totals, followed = new Set(), club = [] }) {
   // A reader who follows someone gets a fourth filter: only those readers.
   const tabs = [["", "усе"], ...(followed.size ? [["followed", "за ким стежу"]] : []), ["notes", "з нотатками"], ["top", "оцінки 4,5+"]];
   const body = `
 ${pageHead({ kicker: "Спільнота", title: "Що читають інші", sub: `${count(totals.readers, "читач", "читачі", "читачів")} · ${books(totals.books)} на полицях · ${count(totals.notes, "нотатка", "нотатки", "нотаток")}`, action: user ? "" : `<a class="btn primary" href="/login">Завести полицю</a>` })}
 <div class="split wide-aside">
   <section>
+    ${club.length ? `<section class="block" data-block="club">${label("Обговорюють", `<a href="/club">усі теми</a> · <a rel="nofollow" href="/club/new">+ нова тема</a>`)}<div class="club-topics">${club.map((t) => clubRow(t)).join("")}</div></section>` : ""}
     ${label("Стрічка", `<span class="tabs" data-feed-filter>${tabs.map(([v, t]) => `<button type="button" class="tab${v ? "" : " on"}" data-v="${v}">${t}</button>`).join("")}</span>`)}
     ${feedList(feed, { wide: true, followed })}
   </section>
