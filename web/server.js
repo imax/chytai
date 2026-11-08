@@ -2392,6 +2392,8 @@ for (const what of ["read", "epub"]) {
 }
 app.get("/book/:id", (req, res) => {
   const id = store.resolve(req.params.id);
+  // An essay that moved to «Статті» (store.moveToArticles) keeps its old address.
+  if (!id && articles.bySlug(req.params.id)) return res.redirect(301, `/articles/${encodeURIComponent(req.params.id)}`);
   if (!id) return res.status(404).send(pages.messagePage({ title: "Немає такої книжки", text: "", user: req.user }));
   // One address per work: an id, an edition id or an old slug redirects to the canonical one.
   // For a day only: addresses move as works part and merge, and a browser keeps a bare 301 forever.

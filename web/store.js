@@ -387,6 +387,7 @@ class Store {
       });
       if (fs.existsSync(file)) fs.renameSync(file, `${file}.migrated`);
     }
+    this.moveToArticles();
     // The shelves: the seed, or the newer copy a refresh wrote under dataDir before the database.
     const seedShelves = readJson(path.join(SEED, "shelves.json"));
     if (!db.get("baseline")) db.set("baseline", seedShelves.baseline || seedShelves.fetched);
@@ -409,6 +410,28 @@ class Store {
       db.set("shelves_imported", new Date().toISOString());
       for (const f of ["shelves.json", "catalog-seen.json"]) if (fs.existsSync(path.join(this.dir, f))) fs.renameSync(path.join(this.dir, f), path.join(this.dir, `${f}.migrated`));
     }
+  }
+
+  // Essays live in «Статті» now, not among books (Max, 2026-11-08: «прибирай»): their book rows, shelf entries,
+  // list rows and queue rows go once, before anything is derived, so both processes start without them. What was
+  // removed stays in meta `moved_to_articles` to put back by hand; /book/<slug> sends to /articles/<slug>.
+  moveToArticles() {
+    const db = this.db;
+    if (db.get("moved_to_articles")) return;
+    const ids = ["cognitive-mercantilism", "social-volition-as-artificial-intelligence", "the-use-of-knowledge-in-society", "courage-under-fire"];
+    const kept = {};
+    db.tx(() => {
+      for (const id of ids) {
+        kept[id] = {
+          book: db.prepare("SELECT data FROM books WHERE id = ?").get(id)?.data || null,
+          entries: db.prepare("SELECT * FROM entries WHERE book = ?").all(id),
+          lists: db.prepare("SELECT * FROM list_items WHERE book = ?").all(id),
+        };
+        for (const t of ["entries", "list_items"]) db.prepare(`DELETE FROM ${t} WHERE book = ?`).run(id);
+        for (const t of ["books", "book_queue"]) db.prepare(`DELETE FROM ${t} WHERE id = ?`).run(id);
+      }
+      db.set("moved_to_articles", JSON.stringify({ at: new Date().toISOString(), kept }));
+    });
   }
 
   get baseline() {
