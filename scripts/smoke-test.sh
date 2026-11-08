@@ -58,6 +58,8 @@ check /publishers 200
 check /updates 200
 check /lists 200
 check /club 200
+check /articles 200
+check /articles/no-such-article 404
 check /login 200
 check /privacy 200
 check "/search?q=%D0%BB%D0%B5%D0%BC" 200

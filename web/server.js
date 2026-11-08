@@ -928,6 +928,7 @@ app.post("/settings/delete", signed, (req, res) => {
   if (req.body.confirm !== req.user.username) return res.status(400).send(pages.settingsPage({ user: req.user, values: req.user, error: "Щоб видалити акаунт, впишіть своє ім'я для адреси." }));
   lists.forgetReader(req.user.id);
   club.forgetReader(req.user.id);
+  articles.forgetReader(req.user.id);
   mcp.forgetReader(req.user.id);
   readerSignOut(req.user.id);
   auth.deleteReader(req.user.id);
@@ -1577,14 +1578,90 @@ app.get("/api/club-feed", (req, res) => {
   }
   res.set("Cache-Control", "public, max-age=60").json(clubFeedCache.json);
 });
-// «Статті» (articles.js, Max 2026-11-08): essays read on the site. MOCKUP data in DATA_DIR/web/articles.
-const articles = new (require("./articles").Articles)(DATA_DIR);
-app.get("/articles", (req, res) => res.send(require("./articles").indexPage({ user: req.user, list: articles.all() })));
-app.get("/articles/:slug", (req, res, next) => {
-  const a = articles.get(req.params.slug);
-  if (!a) return next();
-  res.send(require("./articles").articlePage({ user: req.user, a, next: articles.all().filter((x) => x.slug !== a.slug).slice(0, 3), open: Number(req.query.open ?? -1) }));
+// «Статті» (articles.js, articlepages.js; Max 2026-11-08): essays read on the site, readers' explanations in the margin.
+const { Articles } = require("./articles");
+const articlePages = require("./articlepages");
+const articles = new Articles({ store, who: (id) => pub(auth.reader(id)), apiKey: process.env.ANTHROPIC_API_KEY || "", log: console.log });
+const wantsJson = (req) => /json/.test(req.get("accept") || "") || req.is("application/json");
+app.get("/articles", (req, res) => {
+  admin.event(req, req.user?.id, "articles", "list");
+  res.send(articlePages.indexPage({ user: req.user, owner: req.owner, list: articles.list({ readerId: req.user?.id, owner: req.owner }), later: articles.later(req.user?.id), blocked: req.owner ? articles.blocked() : [], error: String(req.query.error || "").slice(0, 300), url: String(req.query.url || "").slice(0, 1000) }));
 });
+app.get("/articles/:slug", (req, res, next) => {
+  const a = articles.bySlug(req.params.slug, { readerId: req.user?.id, owner: req.owner });
+  if (!a) return next();
+  admin.event(req, req.user?.id, "articles", "open");
+  res.send(articlePages.articlePage({ user: req.user, owner: req.owner, a, next: articles.next(a, req.user?.id), by: a.by, banned: articles.banned().includes(a.reader) }));
+});
+// A new article: fetched and cleaned now (a few seconds), then its page. The owner hears about it in Telegram, with
+// «Сховати» under the message, and by mail (a reader's new thing, like lists and comments).
+app.post("/api/articles", signed, async (req, res) => {
+  const raw = String(req.body.url || "").trim().slice(0, 2000);
+  try {
+    const { article: a, existed } = await articles.add(req.user.id, raw, { owner: req.owner });
+    admin.event(req, req.user.id, "articles", existed ? "add:existed" : "add");
+    if (!existed && !req.owner) {
+      const text = [`${req.user.name} (${SITE}/@${req.user.username}) додав(ла) статтю «${a.title}»${a.author ? `, ${a.author}` : ""} (${a.source}, ${a.minutes} хв).`, "", `${SITE}${a.href}`, `Оригінал: ${a.url}`].join("\n");
+      telegram.send(`Нова стаття: ${a.title}\n\n${text}`, undefined, [[{ text: "Сховати", data: `ah:${a.id}` }, { text: `Заборонити @${req.user.username}`, data: `ab:${req.user.id}` }]]);
+      const to = process.env.WEB_NOTIFY_EMAIL || auth.reader(OWNER_ID)?.email;
+      if (to) auth.send(to, `Нова стаття: ${a.title}`, text).catch((e) => console.error(`[notify] article: ${e.message}`));
+    }
+    res.redirect(303, a.href);
+  } catch (e) {
+    console.log(`[articles] add ${raw}: ${e.message}`);
+    admin.event(req, req.user.id, "articles", "add:failed");
+    res.redirect(303, `/articles?error=${encodeURIComponent(e.message)}&url=${encodeURIComponent(raw)}`);
+  }
+});
+app.post("/api/articles/:slug/later", signed, (req, res) => {
+  const a = articles.bySlug(req.params.slug, { owner: req.owner });
+  if (!a) return res.status(404).json({ error: "Статтю не знайдено." });
+  const later = articles.toggleLater(req.user.id, a.id);
+  if (later) admin.event(req, req.user.id, "articles", "later");
+  wantsJson(req) ? res.json({ later }) : res.redirect(303, a.href);
+});
+app.post("/api/articles/:slug/read", signed, (req, res) => {
+  const a = articles.bySlug(req.params.slug, { owner: req.owner });
+  const block = Number(req.body.block), blocks = Number(req.body.blocks);
+  if (a && Number.isInteger(block) && block >= 0 && block < a.blocks.length) articles.progress(req.user.id, a.id, block, a.blocks.length || blocks);
+  res.sendStatus(204);
+});
+// «Пояснити»: kept for everyone; the same words in the same paragraph come back without a new AI call.
+app.post("/api/articles/:slug/explain", signed, async (req, res) => {
+  try {
+    const { note, reused } = await articles.explain(req.user.id, req.params.slug, req.body.block, req.body.quote, { owner: req.owner });
+    admin.event(req, req.user.id, "articles", reused ? "explain:kept" : "explain");
+    const a = articles.bySlug(req.params.slug, { readerId: req.user.id, owner: req.owner });
+    res.json({ note: note.id, html: articlePages.blockHtml(a, note.block, { owner: req.owner }) });
+  } catch (e) {
+    console.log(`[articles] explain ${req.params.slug}: ${e.message}`);
+    res.json({ error: /^[А-ЯІЇЄҐ]/.test(e.message) ? e.message : "Пояснення не вийшло. Спробуйте ще раз." });
+  }
+});
+// The owner's tools: hide (and back), delete, drop an explanation, stop a reader adding, block a site.
+app.post("/api/articles/:id/hide", owner, (req, res) => {
+  articles.setHidden(req.params.id, !!req.body.hidden);
+  res.redirect(303, articles.byId(req.params.id)?.href || "/articles");
+});
+app.post("/api/articles/:id/delete", owner, (req, res) => {
+  articles.remove(req.params.id);
+  res.redirect(303, "/articles");
+});
+app.post("/api/articles/notes/:id/delete", owner, (req, res) => {
+  const n = articles.note(req.params.id);
+  articles.removeNote(req.params.id);
+  res.redirect(303, (n && articles.byId(n.article)?.href) || "/articles");
+});
+app.post("/api/articles/ban", owner, (req, res) => {
+  articles.ban(String(req.body.reader || ""), !req.body.off);
+  res.redirect(303, String(req.body.back || "").startsWith("/articles/") ? req.body.back : "/articles");
+});
+app.post("/api/articles/block", owner, (req, res) => {
+  articles.block(req.body.domain, !req.body.off);
+  res.redirect(303, String(req.body.back || "").startsWith("/articles/") ? req.body.back : "/articles");
+});
+telegram.onAction("ah", (id) => (articles.setHidden(id, true) ? `Сховано: ${articles.byId(id)?.title || id}` : "Такої статті вже немає."));
+telegram.onAction("ab", (id) => (articles.ban(id, true), `@${auth.reader(id)?.username || id} більше не додає статті.`));
 app.get("/club", (req, res) => {
   const { pinned, rest } = club.index();
   res.send(pages.clubPage({ user: req.user, pinned: club.mark(req.user?.id, pinned), rest: club.mark(req.user?.id, rest) }));

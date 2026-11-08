@@ -208,6 +208,8 @@ function byline(author) {
 }
 
 // A note's first paragraph as inline HTML.
+// Markdown from AI or readers as safe HTML, links opening in a new tab.
+const mdHtml = (md) => ugc.parse(String(md || "")).replace(/<a href="http/g, '<a target="_blank" rel="noopener" href="http');
 function inline(md) {
   const first = md.split(/\n\s*\n/)[0];
   return ugc.parseInline(first).replace(/<a href="http/g, '<a target="_blank" rel="noopener" href="http');
@@ -3036,5 +3038,5 @@ module.exports = {
   addPage, addReviewPage, addFindResults, addPageResult, ukFindPage,
   layout, bookPage, bookEditPage, russianPage, editPage, libraryPage, readersPage, readPage, genrePage, genreTrialPage, langTrialPage, origTrialPage, overviewTrialPage, ukTrialPage, catalogAdminPage, aiPassPage, publishersPage, publisherPage, publisherFavouritesPage, searchPage, searchResults, authorPage,
   loginPage, codePage, signupPage, settingsPage, privacyPage, macPage, updatesPage, drawPage, DRAW_PATH, messagePage, digestPage, followMailPage, wantMailPage, importPage, importPreviewPage, importDonePage,
-  GENRES, esc, byline, STATUS, COPY, inline, isUk, setTitleLinks, setAuthorLinks, setThumbs, setStats, setReadersWithNote,
+  GENRES, esc, mdHtml, byline, STATUS, COPY, inline, isUk, setTitleLinks, setAuthorLinks, setThumbs, setStats, setReadersWithNote,
 };

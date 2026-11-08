@@ -26,12 +26,13 @@ function call(method, body) {
     return d.result;
   });
 }
-// Plain text, cut to Telegram's limit. Never throws.
-function send(text, to = chat()) {
+// Plain text, cut to Telegram's limit, with optional buttons under it ([[{ text, data }]]). Never throws.
+function send(text, to = chat(), buttons = null) {
   if (!TOKEN || !to) return Promise.resolve(false);
   text = String(text || "").trim();
   if (text.length > 4000) text = text.slice(0, 3990) + "…";
-  return call("sendMessage", { chat_id: to, text, disable_web_page_preview: true })
+  const markup = buttons ? { reply_markup: { inline_keyboard: buttons.map((row) => row.map((b) => ({ text: b.text, callback_data: b.data }))) } } : {};
+  return call("sendMessage", { chat_id: to, text, disable_web_page_preview: true, ...markup })
     .then(() => true)
     .catch((e) => (console.error(`[telegram] ${e.message}`), false));
 }
@@ -47,12 +48,31 @@ function sendOnce(key, hours, text) {
 // The site tells Telegram where to post updates (on every start: cheap, and survives a changed address).
 function setWebhook(site) {
   if (!TOKEN || !/^https:/.test(site)) return;
-  call("setWebhook", { url: `${site}${hookPath()}`, allowed_updates: ["message"] })
+  call("setWebhook", { url: `${site}${hookPath()}`, allowed_updates: ["message", "callback_query"] })
     .then(() => console.log("[telegram] webhook set"))
     .catch((e) => console.error(`[telegram] webhook: ${e.message}`));
 }
+// A button under a message (e.g. «Сховати» under a new article): `prefix:arg` in its data goes to the handler of
+// that prefix, which answers with a short line shown in Telegram. Only from the linked chat.
+const actions = new Map();
+const onAction = (prefix, fn) => actions.set(prefix, fn);
+async function pressed(q) {
+  const from = String(q.message?.chat?.id || q.from?.id || "");
+  let answer = "Не вийшло.";
+  if (from && from === chat()) {
+    const [prefix, ...rest] = String(q.data || "").split(":");
+    const fn = actions.get(prefix);
+    try {
+      if (fn) answer = (await fn(rest.join(":"))) || "Готово.";
+    } catch (e) {
+      answer = e.message;
+    }
+  }
+  return call("answerCallbackQuery", { callback_query_id: q.id, text: answer.slice(0, 190) }).catch((e) => console.error(`[telegram] answer: ${e.message}`));
+}
 // An update from Telegram: /start links the first chat; the linked chat gets a short help, others a refusal.
 function update(u) {
+  if (u?.callback_query) return pressed(u.callback_query);
   const m = u?.message;
   if (!m?.chat?.id || m.chat.type !== "private") return;
   const id = String(m.chat.id);
@@ -65,4 +85,4 @@ function update(u) {
   return send("Це приватний бот.", id);
 }
 
-module.exports = { on, init, send, sendOnce, setWebhook, update, hookPath, chat };
+module.exports = { on, init, send, onAction, sendOnce, setWebhook, update, hookPath, chat };

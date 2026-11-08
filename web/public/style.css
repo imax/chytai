@@ -1245,7 +1245,7 @@ aside .side-lists + .label, aside p + .label, aside dialog + .label { margin-top
 .arow .t, .arow .dek, .arow .m { grid-column: 1; margin: 0; }
 .arow .t b { font: 600 20px/1.3 var(--serif); }
 .arow .t:hover b { color: var(--accent); }
-.arow .dek { font: italic 16px/1.4 var(--serif); color: var(--text); }
+.arow .dek { font: italic 16px/1.4 var(--serif); color: var(--text); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .arow .m { font-size: 13px; color: var(--muted); }
 .arow .m .topic { color: var(--accent); }
 .arow .later { grid-column: 2; grid-row: 1 / span 3; align-self: center; font: 13px var(--sans); color: var(--muted); background: none; border: 1px solid var(--rule); border-radius: 999px; padding: 6px 12px; cursor: pointer; white-space: nowrap; }
@@ -1278,7 +1278,20 @@ mark.ex:hover { background: color-mix(in srgb, var(--accent) 10%, transparent); 
 .anote { padding-left: 14px; border-left: 2px solid color-mix(in srgb, var(--accent) 45%, transparent); font-size: 14px; line-height: 1.5; }
 .anote p { margin: 0; }
 .anote .nq { font: italic 14px/1.4 var(--serif); color: var(--accent); margin-bottom: 3px; }
-.anote .nt { color: var(--text); }
+.anote .nt { color: var(--text); cursor: pointer; display: -webkit-box; -webkit-line-clamp: 8; -webkit-box-orient: vertical; overflow: hidden; }
+.anote.full .nt, .anote.wait .nt { display: block; overflow: visible; }
+.anote .nt p { margin: 0 0 0.5em; }
+.anote .nt p:last-child { margin-bottom: 0; }
+.anote.wait .nt { color: var(--muted); font-style: italic; }
+.anote.err .nt { color: var(--danger); font-style: normal; }
+.anote.flash { background: color-mix(in srgb, var(--accent) 12%, transparent); transition: background 0.4s; }
+.anote form.inline, .a-tools form.inline, .a-owner form.inline { display: inline; }
+.a-tools { display: flex; flex-wrap: wrap; gap: 4px 14px; align-items: baseline; margin-top: 16px; padding-top: 10px; border-top: 1px dashed var(--rule); }
+.a-tools .danger, .text-link.danger { color: var(--danger); }
+.a-err { margin: 10px 0 0; max-width: 420px; }
+.a-wait { margin: 10px 0 0; }
+.a-owner { margin-top: 40px; }
+.arow a.later { text-decoration: none; }
 .anote .nm { margin-top: 4px; font-size: 12px; color: var(--muted); }
 .anote .nm a { color: var(--muted); text-decoration: underline; text-decoration-color: var(--under); text-underline-offset: 3px; }
 .essay-foot { max-width: var(--col); margin: 28px 0 48px; padding-top: 14px; border-top: 1px solid var(--rule); font-size: 14px; color: var(--muted); }
@@ -1307,3 +1320,4 @@ mark.ex:hover { background: color-mix(in srgb, var(--accent) 10%, transparent); 
   .arow-b .anote { padding-left: 0; border-left: 0; }
   .arow .later { grid-column: 1; grid-row: auto; justify-self: start; margin-top: 6px; }
 }
+.anote .nm .text-link { font-size: 12px; color: var(--muted); }
