@@ -1577,6 +1577,14 @@ app.get("/api/club-feed", (req, res) => {
   }
   res.set("Cache-Control", "public, max-age=60").json(clubFeedCache.json);
 });
+// «Статті» (articles.js, Max 2026-11-08): essays read on the site. MOCKUP data in DATA_DIR/web/articles.
+const articles = new (require("./articles").Articles)(DATA_DIR);
+app.get("/articles", (req, res) => res.send(require("./articles").indexPage({ user: req.user, list: articles.all() })));
+app.get("/articles/:slug", (req, res, next) => {
+  const a = articles.get(req.params.slug);
+  if (!a) return next();
+  res.send(require("./articles").articlePage({ user: req.user, a, next: articles.all().filter((x) => x.slug !== a.slug).slice(0, 3), open: Number(req.query.open ?? -1) }));
+});
 app.get("/club", (req, res) => {
   const { pinned, rest } = club.index();
   res.send(pages.clubPage({ user: req.user, pinned: club.mark(req.user?.id, pinned), rest: club.mark(req.user?.id, rest) }));
