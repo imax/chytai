@@ -3053,10 +3053,14 @@ function askTalkPage({ user, other, msgs, readerUrl, error = "", book = null, ca
     }
     return `<div class="cmt" id="m-${attr(m.id)}">${head}<div class="txt">${clubText(m.text)}</div></div>`;
   };
-  const form = `<form method="post" action="/api/asks/@${attr(other.username)}" class="cmt-form" id="write">
+  // The composer (Max, 2026-11-08: «нормально дизайн для форми чата»): one framed box, the text on top, «+ книжка»
+  // and «Надіслати» in a row under it; the book picker opens from «+ книжка».
+  const form = `<form method="post" action="/api/asks/@${attr(other.username)}" class="ask-compose" id="write">
   <textarea name="text" rows="3" maxlength="2000" required placeholder="${canAsk && !msgs.length ? "Привіт! Може, є в тебе…" : "Повідомлення"}" aria-label="Повідомлення"></textarea>
-  ${canAsk ? `<div class="field"><span class="small">Книжка <span class="muted">· необов'язково</span></span>${bookPick(book)}</div>` : ""}
-  ${error ? `<p class="error small">${esc(error)}</p>` : ""}<div><button class="btn primary">Надіслати</button></div></form>`;
+  ${canAsk ? `<details class="ask-addbook"${book ? " open" : ""}><summary class="text-link small">+ книжка</summary>${bookPick(book)}</details>` : ""}
+  ${error ? `<p class="error small">${esc(error)}</p>` : ""}
+  <div class="ask-bar"><span class="small muted">${esc(other.name)} отримає лист</span><button class="btn primary small">Надіслати</button></div>
+</form>`;
   const body = `
 ${pageHead({ crumbs: `<a href="/asks">Прохання</a>`, title: esc(other.name), sub: `<a href="${attr(other.href)}">полиця</a> · <span class="muted">@${esc(other.username)}</span>` })}
 <section class="ask-talk">
