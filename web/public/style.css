@@ -1364,3 +1364,11 @@ mark.hl { background: color-mix(in srgb, var(--accent) 16%, transparent); color:
   .arow .later { grid-column: 1; grid-row: auto; justify-self: start; margin-top: 6px; }
 }
 .anote .nm .text-link { font-size: 12px; color: var(--muted); }
+/* «Попросити книжку» (2026-11-08) */
+.ask-what { font-size: 14px; color: var(--muted); margin-top: 6px; }
+.ask-reply .ask-what { color: var(--ink); font-size: 16px; }
+.ask-book { display: flex; gap: 12px; align-items: center; margin-top: 8px; }
+.ask-book b { display: block; font: 600 16px/1.3 var(--serif); color: var(--ink); }
+.ask-book .by { display: block; font-size: 13px; color: var(--muted); }
+.ask-answer { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 12px; }
+.ask-talk { max-width: 680px; }

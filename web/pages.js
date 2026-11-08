@@ -120,6 +120,8 @@ function layout({ title, body, user, path = "", description = "", q = "", home =
     ...NAV.map(([href, name, is]) => `<a href="${href}"${on(is(path))}>${name}</a>`),
     // «Статті» is Max's experiment for now (2026-11-08: «сховаємо Статті з топ меню»): in the menu for him only, the pages stay open by link.
     ...(user?.owner ? [`<a href="/articles"${on(path === "/articles")}>Статті</a>`] : []),
+    // «Попросити книжку» (2026-11-08): an experiment, for the owner and the readers he let in; the number is new talks.
+    ...(user && askNav(user) !== null ? [`<a href="/asks"${on(path === "/asks")}>Прохання${askNav(user) ? ` <span class="news">${askNav(user)}</span>` : ""}</a>`] : []),
     // Settings live on one's own shelf, not in the menu (Max, 2026-10-20).
     // Adding books is a page of its own in the menu, not something hidden in the profile (Max, 2026-10-22).
     ...(user ? [`<a href="/add"${on(path === "/add")}>Додати книжки</a>`] : []),
@@ -1258,7 +1260,7 @@ function twoParts(items, n, part) {
   return { first: html(items.slice(0, cut)), rest: cut < items.length ? ` data-rest="${items.length - cut}"` : "" };
 }
 
-function libraryPage({ part = "", clubTopics = [], lists = [], savedLists = [], rows, user, reader, own = false, mineIds = null, mineDirect = null, following = false, follows = { followers: [], following: [] }, now = null }) {
+function libraryPage({ ask = null, part = "", clubTopics = [], lists = [], savedLists = [], rows, user, reader, own = false, mineIds = null, mineDirect = null, following = false, follows = { followers: [], following: [] }, now = null }) {
   const year = new Date().getFullYear();
   // Stars in the row only for the reader's own entry of this very book (not one reached through a
   // translation or a series, where a rating would land on another book).
@@ -1307,7 +1309,7 @@ function libraryPage({ part = "", clubTopics = [], lists = [], savedLists = [], 
   const listsHead = label(own ? "Мої списки" : "Списки", own ? `<button type="button" class="text-link" data-open="new-list">+ новий</button>` : "");
   const topLists = lists.length || savedLists.length || own ? `<div class="top-lists">${listsHead}${lists.length || savedLists.length ? "" : `<p class="small muted">Складіть список книжок, щоб поділитися ним.</p>`}<div class="lchips">${[...lists.map((l) => [l, listMeta(l, { by: false })]), ...savedLists.map((l) => [l, `${esc(l.reader.name)} · ${books(l.count)}`])].map(([l, m]) => `<a href="${attr(l.href)}"><b>${esc(l.title)}</b><span>${m}</span></a>`).join("")}</div></div>` : "";
   const body = `
-${pageHead({ crumbs: own ? "" : `<a href="/community">Читачі</a> / ${esc(reader.name)}`, kicker: own ? "Моя полиця" : "Полиця читача", title: esc(reader.name), sub, extra: nowBlock(now, { own }), action: own ? `<div class="acts own-acts"><a class="btn primary" href="/add">+ Додати книжки</a><a class="text-link small" href="/mcp">або голосом чи текстом у Claude чи ChatGPT</a></div>` : user?.id === reader.id ? "" : followButton(reader, following, user) })}
+${pageHead({ crumbs: own ? "" : `<a href="/community">Читачі</a> / ${esc(reader.name)}`, kicker: own ? "Моя полиця" : "Полиця читача", title: esc(reader.name), sub, extra: nowBlock(now, { own }), action: own ? `<div class="acts own-acts"><a class="btn primary" href="/add">+ Додати книжки</a><a class="text-link small" href="/mcp">або голосом чи текстом у Claude чи ChatGPT</a></div>` : user?.id === reader.id ? "" : `<div class="acts">${followButton(reader, following, user)}${ask?.can ? `<a class="btn" href="/asks/@${attr(reader.username)}">Попросити книжку</a>` : ""}${ask?.owner ? `<form method="post" action="/api/asks/@${attr(reader.username)}/allow" class="inline"><input type="hidden" name="on" value="${ask.on ? "" : "1"}"><button class="text-link small muted">${ask.on ? "прибрати з «Попросити книжку»" : "пустити до «Попросити книжку»"}</button></form>` : ""}</div>` })}
 <div class="split">
   <div>
     ${topLists}
@@ -3017,7 +3019,62 @@ ${running ? `<script>setTimeout(() => location.reload(), 10000)</script>` : ""}`
   return layout({ title: "Вільні книжки", body, user, path: "/admin" });
 }
 
+// ---- «Попросити книжку» (server.js, asks.js; Max, 2026-11-08): the reader's talks and one talk ----
+let askNav = () => null;
+const setAskNav = (fn) => (askNav = fn);
+function asksPage({ user, talks }) {
+  const row = (t) => {
+    const l = t.last || {};
+    const what = { ask: "просить книжку", gave: "додано в Читалку", paper: "позичить паперову", no: "не може дати" }[l.kind] || esc(String(l.text || "").slice(0, 90));
+    return `<a class="ctopic${t.fresh ? " unread" : ""}" href="/asks/@${attr(t.other.username)}"><span class="t"><b>${esc(t.other.name)}</b></span>${t.book ? `<span class="bk">${cover(t.book, "xs")}<span>${esc(t.book.title)}</span></span>` : ""}<span class="m">${t.fresh ? `<span class="news">нове</span> · ` : ""}${l.reader === user.id ? "ви: " : ""}${what} · ${when({ updated: t.active })}</span></a>`;
+  };
+  const body = `
+${pageHead({ title: "Прохання", lead: "Попросіть книжку на полиці іншого читача." })}
+${talks.length ? `<div class="club-topics">${talks.map(row).join("")}</div>` : `<p class="muted">Розмов ще немає.</p>`}`;
+  return layout({ title: "Прохання", body, user, path: "/asks", noindex: true });
+}
+function askTalkPage({ user, other, msgs, blocked, readerUrl, error = "", book = null }) {
+  const who = (r) => `<a href="${attr(r.href)}"><b>${esc(r.name)}</b></a>`;
+  const said = { gave: "додано у вашу Читалку", paper: "позичить паперову", no: "не може дати" };
+  const bookLink = (b) => (b ? `<a class="ask-book" href="${attr(b.href)}">${cover(b, "xs")}<span><b>${esc(b.title)}</b>${b.author ? `<span class="by">${esc(byline(b.author))}</span>` : ""}</span></a>` : "");
+  const answer = (m) => {
+    if (!m.answerable) return "";
+    const give = m.files.length
+      ? `<button class="btn primary small" name="how" value="give">Додати в Читалку</button>`
+      : `<span class="small muted">У вашій Читалці цієї книжки немає. <a href="${attr(readerUrl)}/" target="_blank" rel="noopener">Додайте</a> її, і тут з'явиться «Додати в Читалку».</span>`;
+    return `<form method="post" action="/api/asks/m/${attr(m.id)}/answer" class="ask-answer">${give}<button class="btn small" name="how" value="paper">Позичу паперову</button><button class="btn small" name="how" value="no">Не можу</button></form>`;
+  };
+  const msg = (m) => {
+    const mine = m.reader === user.id;
+    const head = `<p class="who">${who(m.from)} · ${when({ updated: m.created })}</p>`;
+    if (m.kind === "ask") return `<div class="cmt ask-msg" id="m-${attr(m.id)}">${head}<p class="ask-what">${mine ? "Ви просите" : "Просить"}</p>${bookLink(m.book)}${m.text ? `<div class="txt">${clubText(m.text)}</div>` : ""}${answer(m)}</div>`;
+    if (said[m.kind]) {
+      const open = m.kind === "gave" && !mine && m.file ? ` <a class="btn small" href="${attr(`${readerUrl}/?open=${encodeURIComponent(m.file)}`)}">Читати</a>` : "";
+      return `<div class="cmt ask-reply" id="m-${attr(m.id)}">${head}<p class="ask-what">${mine ? { gave: "Ви додали в Читалку", paper: "Ви позичите паперову", no: "Ви не можете дати" }[m.kind] : cap(said[m.kind])}: «${esc(m.book?.title || "книжку")}»${open}</p>${m.text ? `<div class="txt">${clubText(m.text)}</div>` : ""}</div>`;
+    }
+    return `<div class="cmt" id="m-${attr(m.id)}">${head}<div class="txt">${clubText(m.text)}</div></div>`;
+  };
+  const form = blocked
+    ? `<p class="muted small">Ви заблокували цього читача.</p>`
+    : `<form method="post" action="/api/asks/@${attr(other.username)}" class="cmt-form" id="write">
+  <div class="field"><span class="small">Книжка <span class="muted">· щоб попросити</span></span>${bookPick(book)}</div>
+  <textarea name="text" rows="3" maxlength="2000" placeholder="Повідомлення" aria-label="Повідомлення"></textarea>
+  ${error ? `<p class="error small">${esc(error)}</p>` : ""}<div><button class="btn primary">Надіслати</button></div></form>`;
+  const tools = `<details class="more-acts drop ask-tools"><summary class="text-link small muted">ще</summary><div class="more-menu">
+  <form method="post" action="/api/asks/@${attr(other.username)}/block"><input type="hidden" name="on" value="${blocked ? "" : "1"}"><button class="text-link">${blocked ? "Розблокувати" : "Заблокувати"}</button></form>
+  <form method="post" action="/api/asks/@${attr(other.username)}/report" onsubmit="const t=prompt('Що сталося?');if(t===null)return false;this.text.value=t"><input type="hidden" name="text"><button class="text-link">Поскаржитись</button></form>
+</div></details>`;
+  const body = `
+${pageHead({ crumbs: `<a href="/asks">Прохання</a>`, title: esc(other.name), sub: `<a href="${attr(other.href)}">полиця</a> · <span class="muted">@${esc(other.username)}</span>`, action: tools })}
+<section class="ask-talk">
+${msgs.length ? msgs.map(msg).join("") : `<p class="muted small">Попросіть книжку, навіть якщо її немає на полиці: ${esc(other.name)} відповість.</p>`}
+${form}
+</section>`;
+  return layout({ title: other.name, body, user, path: "/asks", noindex: true });
+}
+
 module.exports = {
+  asksPage, askTalkPage, setAskNav,
   commentsAdminPage,
   clubPage, clubNewPage, clubTopicPage,
   publisherReportsPage,
