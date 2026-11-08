@@ -55,7 +55,8 @@ function siteDay(db, day, ownerId) {
     visits: arrivals.visits || 0,
     newPeople: arrivals.fresh || 0,
     // entries.added is a Kyiv day; an import keeps the dates from Goodreads, so imports are counted apart.
-    books: all("SELECT reader FROM entries WHERE added = ?", day).filter(real).length,
+    // A reader who imported that day: their books count under the import only (an import may date them that day).
+    books: all("SELECT reader FROM entries WHERE added = ?", day).filter((r) => real(r) && !imports.some((i) => i.reader === r.reader)).length,
     imported: imports.reduce((s, r) => s + r.n, 0),
     ratings: count("SELECT reader, at FROM rated WHERE at BETWEEN ? AND ?"),
     lists: count("SELECT reader, created AS at FROM lists WHERE created BETWEEN ? AND ?"),
@@ -68,14 +69,17 @@ function siteDay(db, day, ownerId) {
 }
 
 // The reader app's day (server/index.js GET /api/site-admin/day): per account, so the site leaves out its own skip list.
-function readerDay(r, skip) {
+function readerDay(r, skip, titleOf = () => "") {
   if (!r) return null;
   const keep = (m = {}) => Object.entries(m).filter(([id]) => !skip.has(id));
   const sum = (m) => keep(m).reduce((s, [, n]) => s + n, 0);
-  const books = (r.books || [])
-    .map((b) => ({ title: b.title, sec: sum(b.sec) }))
-    .filter((b) => b.title && b.sec >= 60)
-    .sort((a, b) => b.sec - a.sec);
+  const byTitle = {};
+  for (const b of r.books || []) {
+    if (skip.has(b.acct)) continue;
+    const title = titleOf(b.acct, b.name) || b.title || b.name.replace(/\.[^.]+$/, "").replace(/[_-]+/g, " ");
+    byTitle[title] = (byTitle[title] || 0) + b.sec;
+  }
+  const books = Object.entries(byTitle).map(([title, sec]) => ({ title, sec })).filter((b) => b.sec >= 60).sort((a, b) => b.sec - a.sec);
   return {
     readers: keep(r.readSec).filter(([, s]) => s >= 60).length,
     minutes: Math.round(sum(r.readSec) / 60),
@@ -92,8 +96,8 @@ function text(day, s, rd, site) {
   const from = s.from.map(([k, v]) => `${k} ${v}`).join(", ");
   lines.push(`Нові читачі: ${s.signups}${from ? ` (${from})` : ""}`);
   lines.push(`Заходили: ${s.came}, з них повернулися ${s.back}`);
-  lines.push(`Відвідин: ${n(s.visits)}, нових людей ${n(s.newPeople)}`);
-  lines.push(`На полиці: +${n(s.books)}${s.imported ? ` (імпорт ${n(s.imported)})` : ""}${s.ratings ? `, оцінок ${s.ratings}` : ""}`);
+  lines.push(`Візитів на сайт: ${n(s.visits)}, з них уперше ${n(s.newPeople)}`);
+  lines.push(`На полиці: +${n(s.books)}${s.imported ? `, з імпорту ще ${n(s.imported)}` : ""}${s.ratings ? `, оцінок ${s.ratings}` : ""}`);
   const ugc = [s.lists && `списків ${s.lists}`, s.comments && `коментарів ${s.comments}`, s.club && `у клубі ${s.club}`, s.searches && `пошуків ${s.searches}`].filter(Boolean);
   if (ugc.length) lines.push(ugc.join(", ").replace(/^./, (c) => c.toUpperCase()));
   lines.push("");
@@ -116,7 +120,14 @@ async function build({ db, day, ownerId, site, reader }) {
   } catch (e) {
     console.error(`daily report: reader ${e.message}`);
   }
-  return text(day, s, readerDay(r, s.skip), site);
+  const titleOf = (acct, name) => {
+    try {
+      return db.prepare("SELECT title FROM reader_files WHERE reader = ? AND name = ?").get(acct, name)?.title || "";
+    } catch {
+      return "";
+    }
+  };
+  return text(day, s, readerDay(r, s.skip, titleOf), site);
 }
 
 // In the jobs process: a look every 10 minutes; the day is sent once (meta `dailyreport:lastRun`).

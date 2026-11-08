@@ -1181,15 +1181,9 @@ app.get("/api/site-admin/day", (req, res) => {
   const d = state.stats?.days?.[day] || {};
   const notes = {};
   for (const r of store.items.noteTimes()) if (Number(r.at) && statsDay(Number(r.at)) === day) notes[r.acct] = (notes[r.acct] || 0) + 1;
-  const books = new Map(); // title -> { account: seconds }
-  for (const [acct, list] of Object.entries(d.readBooks || {})) {
-    for (const [name, sec] of Object.entries(list)) {
-      const title = bookInfo(acct, name).title || name.replace(/\.[^.]+$/, "");
-      const b = books.get(title) || books.set(title, {}).get(title);
-      b[acct] = (b[acct] || 0) + sec;
-    }
-  }
-  res.json({ day, readSec: d.readSec || {}, explains: d.users || {}, notes, cost: d.cost || 0, books: [...books].map(([title, sec]) => ({ title, sec })) });
+  const books = []; // one row per account and book; the site puts its own titles on readers' files (reader_files)
+  for (const [acct, list] of Object.entries(d.readBooks || {})) for (const [name, sec] of Object.entries(list)) books.push({ acct, name, title: bookInfo(acct, name).title || "", sec });
+  res.json({ day, readSec: d.readSec || {}, explains: d.users || {}, notes, cost: d.cost || 0, books });
 });
 // Switch the reader off (or on again) for one account: { id, off: true | false }.
 app.post("/api/site-admin/off", express.json(), (req, res) => {
