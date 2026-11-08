@@ -1585,12 +1585,20 @@ const articles = new Articles({ store, who: (id) => pub(auth.reader(id)), apiKey
 const wantsJson = (req) => /json/.test(req.get("accept") || "") || req.is("application/json");
 app.get("/articles", (req, res) => {
   admin.event(req, req.user?.id, "articles", "list");
-  res.send(articlePages.indexPage({ user: req.user, owner: req.owner, list: articles.list({ readerId: req.user?.id, owner: req.owner }), later: articles.later(req.user?.id), blocked: req.owner ? articles.blocked() : [], error: String(req.query.error || "").slice(0, 300), url: String(req.query.url || "").slice(0, 1000) }));
+  res.send(articlePages.indexPage({ user: req.user, owner: req.owner, list: articles.list({ readerId: req.user?.id, owner: req.owner }), later: articles.later(req.user?.id), blocked: req.owner ? articles.blocked() : [], error: String(req.query.error || "").slice(0, 300), url: String(req.query.url || "").slice(0, 1000), hlCount: articles.highlightCount(req.user?.id) }));
+});
+// The reader's highlights across articles (before /articles/:slug; «highlights» is never an article's slug).
+app.get("/articles/highlights", (req, res) => {
+  if (!req.user) return res.redirect(`/login?next=${encodeURIComponent("/articles/highlights")}`);
+  admin.event(req, req.user.id, "articles", "highlights");
+  res.send(articlePages.highlightsPage({ user: req.user, list: articles.myHighlights(req.user.id) }));
 });
 app.get("/articles/:slug", (req, res, next) => {
   const a = articles.bySlug(req.params.slug, { readerId: req.user?.id, owner: req.owner });
   if (!a) return next();
   admin.event(req, req.user?.id, "articles", "open");
+  // An article from before «Ще почитати» gets its list on the first view, for the next one.
+  if (a.more === null) articles.makeMore(a.id);
   res.send(articlePages.articlePage({ user: req.user, owner: req.owner, a, next: articles.next(a, req.user?.id), by: a.by, banned: articles.banned().includes(a.reader) }));
 });
 // A new article: fetched and cleaned now (a few seconds), then its page. The owner hears about it in Telegram, with
@@ -1619,6 +1627,46 @@ app.post("/api/articles/:slug/later", signed, (req, res) => {
   const later = articles.toggleLater(req.user.id, a.id);
   if (later) admin.event(req, req.user.id, "articles", "later");
   wantsJson(req) ? res.json({ later }) : res.redirect(303, a.href);
+});
+// «Зберегти»: the reader's own highlight, never shown to anyone else.
+app.post("/api/articles/:slug/highlight", signed, (req, res) => {
+  try {
+    const h = articles.highlight(req.user.id, req.params.slug, req.body.block, req.body.quote, { owner: req.owner, note: typeof req.body.note === "string" ? req.body.note : null });
+    admin.event(req, req.user.id, "articles", h.note ? "highlight:note" : "highlight");
+    if (h.fresh) noteAlert(req, h);
+    res.json(h);
+  } catch (e) {
+    res.json({ error: /^[А-ЯІЇЄҐ]/.test(e.message) ? e.message : "Не вдалося зберегти." });
+  }
+});
+app.post("/api/articles/highlights/:id/note", signed, (req, res) => {
+  try {
+    const h = articles.setNote(req.user.id, req.params.id, req.body.note, { owner: req.owner });
+    if (h?.fresh) admin.event(req, req.user.id, "articles", "highlight:note"), noteAlert(req, h);
+    res.json(h || { error: "Виділення не знайдено." });
+  } catch (e) {
+    res.json({ error: /^[А-ЯІЇЄҐ]/.test(e.message) ? e.message : "Не вдалося зберегти." });
+  }
+});
+// A reader's public note on an article is theirs to write and everyone's to read: the owner hears about each new
+// or changed one in Telegram, with «Прибрати» under it, and can take it down on the page.
+function noteAlert(req, h) {
+  if (req.owner) return;
+  const n = articles.noteById(h.id);
+  if (!n) return;
+  const text = [`${req.user.name} (${SITE}/@${req.user.username}) написав(ла) нотатку до статті «${n.title}»:`, "", `«${n.quote.slice(0, 300)}»`, "", n.note, "", `${SITE}/articles/${n.slug}#p${n.block + 1}`].join("\n");
+  telegram.send(`Нова нотатка в Статтях\n\n${text}`, undefined, [[{ text: "Прибрати", data: `an:${n.id}` }, { text: `Заборонити @${req.user.username}`, data: `ab:${req.user.id}` }]]);
+}
+app.post("/api/articles/highlights/:id/clear", owner, (req, res) => {
+  const n = articles.noteById(req.params.id);
+  articles.clearNote(req.params.id);
+  res.redirect(303, n ? `/articles/${n.slug}#p${n.block + 1}` : "/articles");
+});
+app.post("/api/articles/highlights/:id/delete", signed, (req, res) => res.json({ ok: articles.unhighlight(req.user.id, req.params.id) }));
+// The owner asks Claude for «Ще почитати» again (one call; the old list stays until the new one is made).
+app.post("/api/articles/:id/more", owner, (req, res) => {
+  articles.makeMore(req.params.id, { again: true });
+  res.redirect(303, articles.byId(req.params.id)?.href || "/articles");
 });
 app.post("/api/articles/:slug/read", signed, (req, res) => {
   const a = articles.bySlug(req.params.slug, { owner: req.owner });
@@ -1661,7 +1709,8 @@ app.post("/api/articles/block", owner, (req, res) => {
   res.redirect(303, String(req.body.back || "").startsWith("/articles/") ? req.body.back : "/articles");
 });
 telegram.onAction("ah", (id) => (articles.setHidden(id, true) ? `Сховано: ${articles.byId(id)?.title || id}` : "Такої статті вже немає."));
-telegram.onAction("ab", (id) => (articles.ban(id, true), `@${auth.reader(id)?.username || id} більше не додає статті.`));
+telegram.onAction("ab", (id) => (articles.ban(id, true), `@${auth.reader(id)?.username || id} більше не додає статті й нотатки.`));
+telegram.onAction("an", (id) => (articles.clearNote(id) ? "Нотатку прибрано." : "Такої нотатки вже немає."));
 app.get("/club", (req, res) => {
   const { pinned, rest } = club.index();
   res.send(pages.clubPage({ user: req.user, pinned: club.mark(req.user?.id, pinned), rest: club.mark(req.user?.id, rest) }));

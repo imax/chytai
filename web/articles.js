@@ -25,6 +25,11 @@ const MIN_WORDS = 250;
 const MAX_WORDS = 40000;
 const MAX_BYTES = 4 * 1024 * 1024;
 const QUOTE_MAX = 600;
+const HIGHLIGHT_MAX = 2000; // a whole paragraph fits
+const HIGHLIGHTS_PER_ARTICLE = 300; // per reader
+const NOTE_MAX = 2000; // the reader's own words on a highlight (Max: «якраз вчора про це думав»)
+const NOTES_A_DAY = 50; // public notes a reader writes a day; the owner has no limit
+const MORE_MODEL = process.env.ARTICLE_MORE_MODEL || EXPLAIN_MODEL;
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS articles (
@@ -43,6 +48,12 @@ CREATE INDEX IF NOT EXISTS article_notes_day ON article_notes (created);
 CREATE TABLE IF NOT EXISTS article_asks (note TEXT NOT NULL, reader TEXT NOT NULL, at TEXT NOT NULL, PRIMARY KEY (note, reader));
 CREATE TABLE IF NOT EXISTS article_later (reader TEXT NOT NULL, article TEXT NOT NULL, at TEXT NOT NULL, PRIMARY KEY (reader, article));
 CREATE TABLE IF NOT EXISTS article_reads (reader TEXT NOT NULL, article TEXT NOT NULL, block INTEGER NOT NULL, blocks INTEGER NOT NULL, at TEXT NOT NULL, PRIMARY KEY (reader, article));
+CREATE TABLE IF NOT EXISTS article_highlights (
+  id TEXT PRIMARY KEY, reader TEXT NOT NULL, article TEXT NOT NULL, block INTEGER NOT NULL, quote TEXT NOT NULL, key TEXT NOT NULL, at TEXT NOT NULL,
+  note TEXT NOT NULL DEFAULT '', noted TEXT NOT NULL DEFAULT ''
+);
+CREATE UNIQUE INDEX IF NOT EXISTS article_highlights_key ON article_highlights (reader, article, block, key);
+CREATE INDEX IF NOT EXISTS article_highlights_reader ON article_highlights (reader, at);
 `;
 
 const now = () => new Date().toISOString();
@@ -248,6 +259,34 @@ Use the surrounding text to resolve who "he", "it" or "this" refers to and to st
 
 Keep it short, like a note from a well-read friend in the margin: a plain word needs one or two sentences, most phrases and sentences two to four. Never pad. Start with the explanation itself: no preamble, no heading, don't repeat the selection. Plain text, bold for a key term at most, no lists. If you are unsure about a fact, say so in one line rather than guessing.`;
 
+// «Ще почитати»: what the text names and builds on first, then what is worth reading after it.
+const MORE_SYSTEM = `You suggest what to read next after an essay or article. The reader reads essays for work and to think, not for fun, and wants a short list of things truly worth their time.
+
+Give 3 to 6 items, best first:
+- First, works the text itself names or builds on (essays, articles, books, papers, speeches) that are worth reading in full. Skip passing mentions and news links. If the work is in <links>, use that exact address.
+- Then, if fewer than three came from the text, your own picks: the classic or best piece that this text answers, extends or argues with. Only real works you are sure exist, by the right author.
+Never list the text itself.
+
+Fields:
+- title: as published, in its original language.
+- author: the author's name as usually written, or empty.
+- kind: essay, article, book, paper or speech.
+- from: "text" if the text names it, "ai" if it is your pick.
+- url: for a work from <links>, that address. For your pick, only an address you are certain of and that will last (the author's own site, the journal, a well-known archive); otherwise empty. Never guess an address.
+- why: in Ukrainian, one short clause of at most 12 words on why read it after this text. Plain words, no «ця стаття».`;
+
+const norm = (x) => String(x || "").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+// A catalog book is the one suggested when its title (or original title) holds the suggested one and the author's
+// surname is there too: «The Wealth of Nations», Adam Smith → «Дослідження про природу… багатства народів» (An Inquiry
+// Into The Nature And Causes Of The Wealth Of Nations by Adam Smith). Anything less sure gets no link.
+function sameBook(book, title, author) {
+  const names = norm(`${book.title} ${book.altTitle || ""}`);
+  const t = norm(title);
+  const titleOk = norm(book.title) === t || norm(book.altTitle) === t || (t.length >= 10 && ` ${names} `.includes(` ${t} `));
+  const surname = norm(author).split(" ").pop();
+  return titleOk && (!surname || ` ${norm(`${book.author} ${book.altTitle || ""}`)} `.includes(` ${surname} `));
+}
+
 class Articles {
   // `who(readerId)`: the public reader or null.
   constructor({ store, who, apiKey = "", log = console.log }) {
@@ -257,6 +296,12 @@ class Articles {
     this.log = log;
     this.client = apiKey ? new (require("@anthropic-ai/sdk"))({ apiKey }) : null;
     this.db.exec(SCHEMA);
+    // «Ще почитати» (2026-11-08): null while not made yet.
+    if (!this.db.prepare("PRAGMA table_info(articles)").all().some((c) => c.name === "more")) this.db.exec("ALTER TABLE articles ADD COLUMN more TEXT");
+    const hc = this.db.prepare("PRAGMA table_info(article_highlights)").all().map((c) => c.name);
+    if (!hc.includes("note")) this.db.exec("ALTER TABLE article_highlights ADD COLUMN note TEXT NOT NULL DEFAULT ''");
+    if (!hc.includes("noted")) this.db.exec("ALTER TABLE article_highlights ADD COLUMN noted TEXT NOT NULL DEFAULT ''");
+    this.making = new Set();
   }
 
   // ---- reading ----
@@ -285,6 +330,9 @@ class Articles {
     a.blocks = JSON.parse(r.blocks);
     a.notesBy = {};
     for (const n of this.db.prepare("SELECT n.*, (SELECT COUNT(*) FROM article_asks k WHERE k.note = n.id) asked FROM article_notes n WHERE article = ? ORDER BY block, created").all(r.id)) (a.notesBy[n.block] ||= []).push(n);
+    a.highlights = this.highlights(readerId, r.id);
+    a.readerNotes = this.publicNotes(r.id, readerId);
+    a.more = this.moreOf(r);
     return a;
   }
   note(id) {
@@ -339,12 +387,13 @@ class Articles {
     if (p.words > MAX_WORDS) throw new Error("Це надто довгий текст для статті: схоже, це вже книжка.");
     const { slugify } = require("./store");
     const base = slugify(p.title).slice(0, 80).replace(/-+$/, "") || "stattia";
-    let slug = base;
-    for (let i = 2; this.db.prepare("SELECT 1 FROM articles WHERE slug = ?").get(slug); i++) slug = `${base}-${i}`;
+    let slug = base === "highlights" ? "highlights-2" : base; // /articles/highlights is the reader's own page
+    for (let i = 2; this.db.prepare("SELECT 1 FROM articles WHERE slug = ?").get(slug); i++) slug = `${base}-${i + (base === "highlights" ? 1 : 0)}`;
     const id = newId();
     this.db.prepare("INSERT INTO articles (id, slug, url, title, dek, author, source, published, words, blocks, reader, created) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
       .run(id, slug, final, p.title, p.dek, p.author, p.source, p.published, p.words, JSON.stringify(p.blocks), readerId, now());
     this.topics(id).catch((e) => this.log(`[articles] topics ${slug}: ${e.message}`));
+    this.makeMore(id);
     return { article: this.byId(id), existed: false };
   }
   // One or two topics from the fixed list, by Haiku from the title, dek and opening.
@@ -429,6 +478,165 @@ class Articles {
     return { note: this.note(note.id), reused, article: r };
   }
 
+  // ---- highlights (Max, 2026-11-08: «ще хочу highlights, щоб зберегти найбільш цікаві думки»): the reader's own, never shown to others ----
+  highlights(readerId, articleId) {
+    if (!readerId) return [];
+    return this.db.prepare("SELECT id, block, quote, note, at FROM article_highlights WHERE reader = ? AND article = ? ORDER BY block, at").all(readerId, articleId);
+  }
+  highlight(readerId, slug, block, quote, { owner = false, note = null } = {}) {
+    const r = this.db.prepare("SELECT id, blocks, hidden FROM articles WHERE slug = ?").get(String(slug));
+    if (!r || (r.hidden && !owner)) throw new Error("Статтю не знайдено.");
+    block = Number(block);
+    if (!Number.isInteger(block) || block < 0 || block >= JSON.parse(r.blocks).length) throw new Error("Не той абзац.");
+    quote = oneLine(quote, HIGHLIGHT_MAX);
+    const key = keyOf(quote);
+    if (key.length < 2) throw new Error("Виділіть слово чи речення.");
+    if (this.db.prepare("SELECT COUNT(*) n FROM article_highlights WHERE reader = ? AND article = ?").get(readerId, r.id).n >= HIGHLIGHTS_PER_ARTICLE) throw new Error("Тут уже забагато виділень.");
+    this.db.prepare("INSERT OR IGNORE INTO article_highlights (id, reader, article, block, quote, key, at) VALUES (?, ?, ?, ?, ?, ?, ?)").run(newId(), readerId, r.id, block, quote, key, now());
+    const h = this.db.prepare("SELECT id, block, quote, note, at FROM article_highlights WHERE reader = ? AND article = ? AND block = ? AND key = ?").get(readerId, r.id, block, key);
+    return note == null ? h : this.setNote(readerId, h.id, note, { owner });
+  }
+  // A note is public (Max, 2026-11-08: «нотатка публічна теж, як і пояснення»): everyone sees it in the margin with
+  // the reader's name. `fresh` says the text is new or changed, for the owner's alert.
+  setNote(readerId, id, note, { owner = false } = {}) {
+    const was = this.db.prepare("SELECT note FROM article_highlights WHERE reader = ? AND id = ?").get(readerId, String(id));
+    if (!was) return null;
+    note = String(note || "").trim().slice(0, NOTE_MAX);
+    if (note && note !== was.note && !owner) {
+      if (this.banned().includes(readerId)) throw new Error("Нотатки вам поки не можна.");
+      const since = new Date(Date.now() - 86400000).toISOString();
+      if (this.db.prepare("SELECT COUNT(*) n FROM article_highlights WHERE reader = ? AND note != '' AND noted > ?").get(readerId, since).n >= NOTES_A_DAY) throw new Error("На сьогодні нотаток досить. Завтра можна знову.");
+    }
+    if (note !== was.note) this.db.prepare("UPDATE article_highlights SET note = ?, noted = ? WHERE reader = ? AND id = ?").run(note, note ? now() : "", readerId, String(id));
+    const h = this.db.prepare("SELECT id, block, quote, note, at FROM article_highlights WHERE reader = ? AND id = ?").get(readerId, String(id));
+    return { ...h, fresh: !!note && note !== was.note };
+  }
+  // Everyone's notes on an article, but the viewer's own (their page draws those itself, to edit).
+  publicNotes(articleId, exceptReader = null) {
+    const out = {};
+    for (const n of this.db.prepare("SELECT id, reader, block, quote, note, noted FROM article_highlights WHERE article = ? AND note != '' AND reader != ? ORDER BY block, noted").all(articleId, exceptReader || "")) {
+      const by = this.who(n.reader);
+      if (by) (out[n.block] ||= []).push({ ...n, by });
+    }
+    return out;
+  }
+  noteById(id) {
+    const n = this.db.prepare("SELECT h.*, a.slug, a.title FROM article_highlights h JOIN articles a ON a.id = h.article WHERE h.id = ?").get(String(id));
+    return n || null;
+  }
+  // The owner takes a note down; the reader's highlight stays.
+  clearNote(id) {
+    return this.db.prepare("UPDATE article_highlights SET note = '', noted = '' WHERE id = ?").run(String(id)).changes > 0;
+  }
+  unhighlight(readerId, id) {
+    return this.db.prepare("DELETE FROM article_highlights WHERE reader = ? AND id = ?").run(readerId, String(id)).changes > 0;
+  }
+  // Every article the reader marked something in, the last marked first, each with its highlights in text order.
+  myHighlights(readerId) {
+    if (!readerId) return [];
+    const rows = this.db.prepare("SELECT a.*, MAX(h.at) last FROM article_highlights h JOIN articles a ON a.id = h.article WHERE h.reader = ? AND a.hidden = 0 GROUP BY a.id ORDER BY last DESC").all(readerId);
+    return rows.map((r) => ({ ...this.row(r, readerId), highlights: this.highlights(readerId, r.id) }));
+  }
+  highlightCount(readerId) {
+    return readerId ? this.db.prepare("SELECT COUNT(*) n FROM article_highlights h JOIN articles a ON a.id = h.article WHERE h.reader = ? AND a.hidden = 0").get(readerId).n : 0;
+  }
+
+  // ---- «Ще почитати» (Max, 2026-11-08: «на основі статті, можливо що вона згадує або що пропонує ШІ») ----
+  // Made once per article, when it is added (or on its first view, for older ones). An item that is in «Статті»
+  // already links there; a book from the catalog to its page; else the original, checked to open when it was made.
+  moreOf(r) {
+    if (r.more == null) return null;
+    let items = [];
+    try {
+      items = JSON.parse(r.more);
+    } catch {}
+    return items.map((it) => {
+      const ours = (it.url && this.db.prepare("SELECT slug FROM articles WHERE url = ? AND hidden = 0").get(cleanUrl(it.url) || "")) || (it.kind !== "book" && this.db.prepare("SELECT slug FROM articles WHERE lower(title) = lower(?) AND hidden = 0").get(it.title)) || null;
+      return ours ? { ...it, href: `/articles/${ours.slug}`, ours: true } : it;
+    });
+  }
+  // In the background; the page shows the block from the next view on.
+  makeMore(id, { again = false } = {}) {
+    if (!this.client || this.making.has(id)) return;
+    const r = this.db.prepare("SELECT * FROM articles WHERE id = ?").get(id);
+    if (!r || (r.more != null && !again)) return;
+    this.making.add(id);
+    this.more(r)
+      .then((items) => this.db.prepare("UPDATE articles SET more = ? WHERE id = ?").run(JSON.stringify(items), id))
+      .catch((e) => this.log(`[articles] more ${r.slug}: ${e.message}`))
+      .finally(() => this.making.delete(id));
+  }
+  async more(r) {
+    const blocks = JSON.parse(r.blocks);
+    // The links the text gives, with their words: what it mentions comes with a real address.
+    const links = new Map();
+    for (const b of blocks) for (const m of b.h.matchAll(/<a href="([^"]+)"[^>]*>(.*?)<\/a>/g)) {
+      const href = unesc(m[1]);
+      const words = unesc(m[2].replace(/<[^>]+>/g, "")).trim();
+      if (words && hostOf(href) && !links.has(href)) links.set(href, words);
+    }
+    let text = blocks.map((b) => (b.t === "h2" || b.t === "h3" ? `## ${blockText(b)}` : blockText(b))).join("\n\n");
+    const words = text.split(/\s+/);
+    if (words.length > 12000) text = `${words.slice(0, 12000).join(" ")}\n\n[…]`;
+    const content = [
+      `<essay>${r.title}${r.author ? ` by ${r.author}` : ""}${r.source ? ` (${r.source})` : ""}</essay>`,
+      links.size ? `<links>\n${[...links].slice(0, 80).map(([h, w]) => `${w} — ${h}`).join("\n")}\n</links>` : "",
+      `<text>\n${text}\n</text>`,
+    ].filter(Boolean).join("\n\n");
+    const schema = {
+      type: "object",
+      additionalProperties: false,
+      required: ["items"],
+      properties: {
+        items: {
+          type: "array",
+          items: {
+            type: "object",
+            additionalProperties: false,
+            required: ["title", "author", "kind", "from", "url", "why"],
+            properties: {
+              title: { type: "string" },
+              author: { type: "string" },
+              kind: { type: "string", enum: ["essay", "article", "book", "paper", "speech"] },
+              from: { type: "string", enum: ["text", "ai"] },
+              url: { type: "string" },
+              why: { type: "string" },
+            },
+          },
+        },
+      },
+    };
+    const msg = await this.client.messages.create({
+      model: MORE_MODEL,
+      max_tokens: 4000,
+      system: MORE_SYSTEM,
+      messages: [{ role: "user", content }],
+      output_config: { effort: "low", format: { type: "json_schema", schema } },
+    });
+    if (msg.stop_reason === "refusal") return [];
+    const raw = msg.content.filter((b) => b.type === "text").map((b) => b.text).join("");
+    const items = (JSON.parse(raw).items || []).slice(0, 6);
+    const own = cleanUrl(r.url);
+    const out = [];
+    for (const it of items) {
+      const item = { title: oneLine(it.title, 200), author: oneLine(it.author, 120), kind: it.kind, from: it.from === "text" ? "text" : "ai", why: oneLine(it.why, 200), url: "" };
+      if (!item.title || out.some((x) => x.title.toLowerCase() === item.title.toLowerCase())) continue;
+      const url = cleanUrl(it.url);
+      if (url && url !== own) {
+        // An address from the text's own links is trusted; one the model gave must open now.
+        const fromText = [...links.keys()].some((h) => cleanUrl(h) === url);
+        const ours = this.db.prepare("SELECT 1 FROM articles WHERE url = ?").get(url);
+        item.url = fromText || ours || (await safeFetch(url).then(() => true, () => false)) ? url : "";
+      }
+      if (item.kind === "book") {
+        const hit = this.store.search(`${item.title} ${item.author}`, { limit: 3 })?.find((h) => h.book && sameBook(h.book, item.title, item.author));
+        if (hit) item.book = this.store.href(hit.book.id);
+      }
+      out.push(item);
+    }
+    return out;
+  }
+
   // ---- the owner's tools ----
   byId(id) {
     return this.row(this.db.prepare("SELECT * FROM articles WHERE id = ?").get(String(id)));
@@ -439,7 +647,7 @@ class Articles {
   remove(id) {
     id = String(id);
     this.db.prepare("DELETE FROM article_asks WHERE note IN (SELECT id FROM article_notes WHERE article = ?)").run(id);
-    for (const t of ["article_notes", "article_later", "article_reads"]) this.db.prepare(`DELETE FROM ${t} WHERE article = ?`).run(id);
+    for (const t of ["article_notes", "article_later", "article_reads", "article_highlights"]) this.db.prepare(`DELETE FROM ${t} WHERE article = ?`).run(id);
     return this.db.prepare("DELETE FROM articles WHERE id = ?").run(id).changes > 0;
   }
   removeNote(id) {
@@ -461,7 +669,7 @@ class Articles {
   }
   // A reader leaves: the articles they added stay (they are everyone's now), their queue, progress and asks go.
   forgetReader(readerId) {
-    for (const t of ["article_later", "article_reads", "article_asks"]) this.db.prepare(`DELETE FROM ${t} WHERE reader = ?`).run(readerId);
+    for (const t of ["article_later", "article_reads", "article_asks", "article_highlights"]) this.db.prepare(`DELETE FROM ${t} WHERE reader = ?`).run(readerId);
   }
 }
 // Kyiv's offset from UTC right now, as «+02:00» or «+03:00».

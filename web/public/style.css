@@ -1301,6 +1301,45 @@ mark.ex:hover { background: color-mix(in srgb, var(--accent) 10%, transparent); 
 .sel-bubble button, .sel-bubble a, .sel-bubble span { font: 500 14px var(--sans); color: var(--paper); background: none; border: 0; padding: 7px 12px; border-radius: 7px; cursor: pointer; text-decoration: none; }
 .sel-bubble button:hover, .sel-bubble a:hover { background: color-mix(in srgb, var(--paper) 18%, transparent); }
 .sel-bubble span { opacity: 0.6; cursor: default; }
+/* Highlights (the reader's own) and «Ще почитати» */
+mark.hl { background: color-mix(in srgb, var(--accent) 16%, transparent); color: inherit; border-radius: 2px; cursor: pointer; box-decoration-break: clone; -webkit-box-decoration-break: clone; }
+.sel-bubble [hidden] { display: none; }
+.anote.mine, .anote.reader { border-left-color: color-mix(in srgb, var(--ink) 55%, transparent); }
+.anote.mine { cursor: pointer; }
+.anote.mine .nq, .anote.reader .nq { color: var(--ink); }
+.anote.reader .nt { color: var(--ink); }
+.anote.mine .nt { color: var(--ink); white-space: pre-line; }
+.anote.edit { cursor: default; }
+.anote.reader .nt { white-space: pre-line; }
+.anote.edit textarea { display: block; width: 100%; box-sizing: border-box; margin: 6px 0 8px; font: 14px/1.45 var(--sans); color: var(--ink); background: var(--paper); border: 1px solid var(--rule); border-radius: 8px; padding: 8px 10px; resize: vertical; }
+.anote.edit textarea:focus { outline: none; border-color: var(--ink); }
+.anote.edit .nb { display: flex; gap: 12px; align-items: center; }
+.hls .hn { margin: 6px 0 0; font: 15px/1.5 var(--sans); color: var(--text); white-space: pre-line; }
+.a-hl-err { font: 13px var(--sans); color: var(--danger); margin: -0.6em 0 1em; }
+.a-hl-count { text-decoration: none; }
+.a-hl-count:hover { color: var(--accent); }
+.a-mine { margin: 10px 0 0; font-size: 14px; }
+.a-mine a { color: var(--accent); text-decoration: none; }
+.a-hls, .a-more { max-width: 640px; margin: 0 0 40px; }
+.hls { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
+.hls li { padding-left: 14px; border-left: 3px solid color-mix(in srgb, var(--accent) 35%, transparent); font: 17px/1.5 var(--serif); }
+.hls a { color: var(--ink); text-decoration: none; }
+.hls a:hover { color: var(--accent); }
+.a-hl-art { margin-bottom: 36px; max-width: 720px; }
+.a-hl-art .label h2 a { color: inherit; text-decoration: none; }
+.a-hl-art .m { margin: -6px 0 14px; }
+.more { list-style: none; margin: 0 0 12px; padding: 0; }
+.more li { padding: 14px 0; border-bottom: 1px solid var(--rule); }
+.more li:first-child { padding-top: 4px; }
+.more .t { font: 600 19px/1.3 var(--serif); color: var(--ink); text-decoration: none; }
+.more .t:hover { color: var(--accent); }
+.more .t .out { font: 13px var(--sans); color: var(--muted); font-weight: 400; }
+.more .m { margin: 4px 0 0; font-size: 13px; color: var(--muted); }
+.more .why { margin: 4px 0 0; font: italic 16px/1.4 var(--serif); color: var(--text); }
+.more form.inline { display: inline; margin-left: 10px; }
+.more .m-add { font: 12px var(--sans); color: var(--muted); background: none; border: 1px solid var(--rule); border-radius: 999px; padding: 3px 10px; cursor: pointer; vertical-align: 2px; }
+.more .m-add:hover { border-color: var(--ink); color: var(--ink); }
+.a-more > form.inline { display: inline; }
 @media (max-width: 1080px) {
   .essay { --col: minmax(0, 1fr); --side: 260px; }
   .arow-b { gap: 0 36px; }
