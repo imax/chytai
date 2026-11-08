@@ -263,7 +263,7 @@ Keep it short, like a note from a well-read friend in the margin: a plain word n
 const MORE_SYSTEM = `You suggest what to read next after an essay or article. The reader reads essays for work and to think, not for fun, and wants a short list of things truly worth their time.
 
 Give 3 to 6 items, best first:
-- First, works the text itself names or builds on (essays, articles, books, papers, speeches) that are worth reading in full. Skip passing mentions and news links. If the work is in <links>, use that exact address.
+- First, works the text itself names or builds on (essays, articles, books, papers, speeches) that are worth reading in full. Skip passing mentions, news links, and encyclopedia or dictionary pages (Wikipedia and the like): name the work behind the idea instead, if there is one. If the work is in <links>, use that exact address.
 - Then, if fewer than three came from the text, your own picks: the classic or best piece that this text answers, extends or argues with. Only real works you are sure exist, by the right author.
 Never list the text itself.
 
