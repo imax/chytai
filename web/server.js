@@ -1288,6 +1288,9 @@ function readerList() {
 
 const followed = (req) => new Set(auth.following(req.user?.id));
 app.get("/readers", (req, res) => res.redirect(301, "/community"));
+// The readers' Telegram group via our own address, so letters link only to chytai.org.ua (Resend Insights:
+// «Ensure link URLs match sending domain», 2026-11-08).
+app.get("/telegram", (req, res) => res.redirect(302, require("./digest").TELEGRAM));
 app.get("/community", (req, res) => {
   const readers = readerList();
   const all = social.all();

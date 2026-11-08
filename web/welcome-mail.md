@@ -19,4 +19,4 @@ https://chytai.org.ua/community
 Макс
 Chytai.org.ua
 
-P.S. У нас є [група в телеграм](https://t.me/+dUhn-l9grTQ4NDky), приєднуйся!
+P.S. У нас є [група в телеграм]({site}/telegram), приєднуйся!
