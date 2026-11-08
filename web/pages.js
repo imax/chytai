@@ -1993,7 +1993,7 @@ const DO_WHAT = { want: "буде у вашому «Хочу прочитати�
 // Step one: the e-mail. The same page signs in and signs up; nobody has to know which they are doing.
 // Many take «Хочу прочитати» for «sign up and read it here» (Max, 2026-10-26), so the card says plainly that we
 // don't have the book itself, unless it is on the free shelf.
-function loginPage({ next = "", email = "", error = "", book = null, what = "", free = false }) {
+function loginPage({ next = "", email = "", error = "", book = null, what = "", free = false, google = false }) {
   return authLayout({
     title: book ? "Зберегти книжку" : "Вхід у Chytai",
     before: book ? `<div class="login-book">${cover(book, "sm")}<p><b>${esc(book.title)}</b><br>одразу після входу ${DO_WHAT[what] || DO_WHAT.want}</p></div>${free || what !== "want" ? "" : `<p class="want-why">Самої книжки тут немає: Chytai — сайт про книжки. Напишемо, коли вона зʼявиться в продажу чи безкоштовно.</p>`}` : "",
@@ -2003,9 +2003,11 @@ function loginPage({ next = "", email = "", error = "", book = null, what = "", 
   ${hidden("next", next)}${errorLine(error)}
   <label>Пошта для входу або реєстрації<input type="email" name="email" value="${attr(email)}" required autofocus autocomplete="email" inputmode="email"></label>
   <div class="actions"><button class="btn primary">Отримати код</button></div>
-</form>`,
+</form>${google ? `<p class="auth-or">або</p><a class="btn google" href="/login/google${next ? `?next=${encodeURIComponent(next)}` : ""}">${GOOGLE_G}Увійти через Google</a>` : ""}`,
   });
 }
+// Google's «G», as their sign-in button guidelines ask.
+const GOOGLE_G = `<svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>`;
 
 // Step two: the code from the letter.
 function codePage({ next = "", email, error = "" }) {
@@ -2253,6 +2255,7 @@ function privacyPage({ user }) {
 <li><strong>Fly.io</strong> — сервери у Франкфурті (Німеччина), там лежить база сайту і книжки з читалки.</li>
 <li><strong>Anthropic</strong> (Claude) — коли в читалці ви просите пояснити чи перекласти уривок, сам уривок і трохи тексту навколо йдуть в Anthropic, щоб Claude відповів. Для блоку «Що кажуть про книжку» на сторінці книжки туди йдуть лише назва, автор і опис книжки. Вашої пошти, імені й полиці Anthropic не отримує.</li>
 <li><strong>Resend</strong> — листи від code@chytai.org.ua.</li>
+<li><strong>Google</strong> — якщо ви входите через Google: Google повідомляє нам вашу пошту й ім'я і знає, що ви увійшли в Chytai. Нічого іншого з вашого акаунта ми не беремо, і скриптів Google на наших сторінках немає.</li>
 <li><strong>Telegram</strong> — сповіщення власнику сайту: ім’я й нікнейм читача та те, що він створив на сайті (список, коментар, книжку). Вашої пошти там немає.</li>
 <li><strong>Claude, ChatGPT чи інший AI-чат</strong>, якщо ви самі підключили його до Chytai в <a class="text-link" href="/settings/chats">налаштуваннях</a>. Тоді чат бачить вашу полицю (книжки, оцінки, нотатки) і може додавати на неї книжки, коли ви його про це просите. Що далі відбувається з розмовою, вирішують правила того чату. Відключити його можна будь-коли.</li>
 <li><strong>Google Fonts</strong> — шрифти сайту. Ваш браузер завантажує їх з серверів Google, тож Google бачить вашу IP-адресу, як і на більшості сайтів.</li>

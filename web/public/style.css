@@ -445,6 +445,9 @@ aside .small.muted { margin-top: -8px; margin-bottom: 14px; }
 .auth h1 { font: 400 52px/1.02 var(--serif); letter-spacing: -0.02em; }
 .auth .lead { font: 19px/1.45 var(--serif); color: var(--text); margin-top: 16px; }
 .auth > .small { margin-top: 18px; }
+.auth-or { margin: 22px 0 12px; font-size: 13px; color: var(--muted); }
+.btn.google { display: inline-flex; align-items: center; gap: 10px; }
+.btn.google:hover svg { background: #fff; border-radius: 50%; }
 .book-top.edit { margin-bottom: 0; }
 .book-top.edit h1 { font-size: 36px; }
 dialog { border: 1px solid var(--ink); border-radius: 4px; padding: 8px 28px 28px; width: min(540px, 92vw); background: var(--paper); color: var(--ink); box-shadow: 0 24px 60px -20px rgba(var(--shadow), 0.5); }

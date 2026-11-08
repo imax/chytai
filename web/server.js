@@ -62,6 +62,7 @@ function loadDotEnv(file) {
 }
 
 const store = new Store(DATA_DIR);
+const google = require("./google"); // «Увійти через Google», site only (google.js)
 const telegram = require("./telegram"); // messages to the owner in Telegram (telegram.js)
 telegram.init(store.db);
 const errors = require("./errors"); // pages that failed and crashes: kept for /admin, sent to Telegram (errors.js)
@@ -433,6 +434,9 @@ app.get("/refresh-status", (req, res) => {
   res.json({ running: !!r.refreshRunning, ...(r.refreshRunning && { log: r.log }), last: r.last, shelvesFetched: store.shelvesFetched, refreshedAt: store.shelvesRefreshedAt, authors: store.db.get("authors:log"), enrich: store.db.get("enrich:log"), memoryMb: Object.fromEntries(Object.entries(process.memoryUsage()).map(([k, v]) => [k, Math.round(v / 1048576)])), nextAfter: new Date((r.lastRefresh || 0) + REFRESH_MS).toISOString(), jobs: bg.ROLE });
 });
 
+// The login page, with «Увійти через Google» when it is set up and the browser is not one of our apps.
+const loginPage = (req, o) => pages.loginPage({ ...o, google: google.on(req.get("user-agent") || "") });
+
 // Sign in or sign up, the same door: an e-mail, a code, and for a new address a name and a username.
 app.get("/login", (req, res) => {
   if (req.user) return res.redirect(safeNext(req.query.next) || "/me");
@@ -445,21 +449,21 @@ app.get("/login", (req, res) => {
   // The way in, step by step (admin «Вхід»): the page opened, and for what (a book's button, the reader, the menu).
   // With a referrer only: crawlers that walk the «Увійти» links send none.
   if (req.headers.referer) admin.event(req, null, "login", `page:${m ? m[1] : next.startsWith("/reader-login") || next.startsWith("/oauth") ? "reader" : next ? `from:${require("./admin").sectionOf(next.split("?")[0])}` : "menu"}`);
-  res.send(pages.loginPage({ next, book, what: m?.[1], free: !!freeFileFor(book) }));
+  res.send(loginPage(req, { next, book, what: m?.[1], free: !!freeFileFor(book) }));
 });
 app.post("/login", async (req, res) => {
   const next = safeNext(req.body.next);
   const { email, error } = auth.checkEmail(req.body.email);
-  if (error) return res.status(400).send(pages.loginPage({ next, email: req.body.email, error }));
+  if (error) return res.status(400).send(loginPage(req, { next, email: req.body.email, error }));
   const r = await auth.sendCode(email, req.ip);
-  if (r.error) return res.status(429).send(pages.loginPage({ next, email, error: r.error }));
+  if (r.error) return res.status(429).send(loginPage(req, { next, email, error: r.error }));
   admin.event(req, null, "login", "email");
   res.send(pages.codePage({ next, email }));
 });
 app.post("/login/code", (req, res) => {
   const next = safeNext(req.body.next);
   const { email, error } = auth.checkEmail(req.body.email);
-  if (error) return res.status(400).send(pages.loginPage({ next, error }));
+  if (error) return res.status(400).send(loginPage(req, { next, error }));
   const r = auth.verify(email, req.body.code);
   if (r.error) return res.status(400).send(pages.codePage({ next, email, error: r.error }));
   admin.event(req, null, "login", r.reader ? "code:known" : "code:new");
@@ -469,23 +473,25 @@ app.post("/login/code", (req, res) => {
 // The last step for a new reader: who they are on the site.
 app.post("/login/signup", (req, res) => {
   const next = safeNext(req.body.next);
-  const email = auth.ticketEmail(req.body.ticket);
-  if (!email) return res.status(400).send(pages.loginPage({ next, error: "Час вийшов. Запросіть код ще раз." }));
+  const t = auth.ticketData(req.body.ticket);
+  const email = t?.email;
+  if (!email) return res.status(400).send(loginPage(req, { next, error: "Час вийшов. Запросіть код ще раз." }));
   const name = auth.checkName(req.body.name);
   const username = auth.checkUsername(req.body.username || (name.name && auth.suggestUsername(name.name, slugify)));
   const error = name.error || username.error;
   if (error) return res.status(400).send(pages.signupPage({ next, ticket: req.body.ticket, email, name: req.body.name, username: req.body.username, error }));
   if (auth.byEmail(email)) return signIn(req, res, auth.byEmail(email), next);
-  const reader = newReader(req, { email, name: name.name, username: username.username, ticket: req.body.ticket, next });
+  const reader = newReader(req, { email, name: name.name, username: username.username, ticket: req.body.ticket, next, via: t.via });
   res.append("Set-Cookie", `chytai_came=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax`);
   // Someone who came from the reader goes straight back to it; the welcome page is about the site.
   // So does one who signed up to save a book (/do/…): the book is saved and they are back on its page.
   // And one who signed up to answer in the Club: back to the topic (Max, 2026-11-01).
   signIn(req, res, reader, next.startsWith("/reader-login") || next.startsWith("/oauth/authorize") || next.startsWith("/do/") || next.startsWith("/club/") ? next : `/welcome${next ? `?next=${encodeURIComponent(next)}` : ""}`);
 });
-function newReader(req, { email, name, username, ticket, next, came }) {
+function newReader(req, { email, name, username, ticket, next, came, via = "" }) {
   const reader = auth.createReader({ email, name, username });
   admin.event(req, null, "login", "signup");
+  if (via) admin.event(req, null, "login", `${via}:signup`);
   came = came || admin.cameFrom(cookies(req).chytai_came);
   admin.came(reader.id, came);
   admin.log(reader.id, "signup", next || "", came.source === "Напряму" ? "" : [came.source, came.ref].filter(Boolean).join(" · "));
@@ -495,6 +501,35 @@ function newReader(req, { email, name, username, ticket, next, came }) {
   welcomeMail.newReader(reader);
   return reader;
 }
+// «Увійти через Google» (google.js): off to Google, then back here with a code. A known address signs in; a new one
+// gets the usual last step (name, page address) with the name from Google filled in. Counted in admin «Вхід».
+const googleBack = () => `${SITE}/login/google/back`;
+app.get("/login/google", (req, res) => {
+  if (!google.on(req.get("user-agent") || "")) return res.redirect("/login");
+  const { url, cookie } = google.start({ next: safeNext(req.query.next), redirectUri: googleBack(), key: auth.ticketKey });
+  admin.event(req, null, "login", "google:start");
+  res.append("Set-Cookie", `chytai_google=${cookie}; Path=/login/google; Max-Age=600; HttpOnly; SameSite=Lax${secure(req) ? "; Secure" : ""}`);
+  res.redirect(url);
+});
+app.get("/login/google/back", async (req, res) => {
+  res.append("Set-Cookie", `chytai_google=; Path=/login/google; Max-Age=0; HttpOnly; SameSite=Lax`);
+  const st = google.checkState(cookies(req).chytai_google, req.query.state, auth.ticketKey);
+  // Cancelled at Google, or the page sat too long: back to the usual login, nothing to explain.
+  if (!st || !req.query.code) return res.send(loginPage(req, { next: st?.next || "", error: req.query.error || !st ? "Вхід через Google не вдався. Спробуйте ще раз або увійдіть поштою." : "" }));
+  let g;
+  try {
+    g = await google.finish({ code: req.query.code, redirectUri: googleBack() });
+  } catch (e) {
+    require("./errors").record("site", e, "GET /login/google/back");
+    return res.send(loginPage(req, { next: st.next, error: "Вхід через Google не вдався. Спробуйте ще раз або увійдіть поштою." }));
+  }
+  if (g.error) return res.send(loginPage(req, { next: st.next, error: g.error }));
+  const known = auth.byEmail(g.email);
+  admin.event(req, null, "login", known ? "google:known" : "google:new");
+  if (known) return admin.log(known.id, "login", `${st.next || ""} google`.trim()), signIn(req, res, known, st.next);
+  res.send(pages.signupPage({ next: st.next, ticket: auth.ticketFor(g.email, "google"), email: g.email, name: g.name, username: "" }));
+});
+
 // A wave of sign-ups (5 or more in an hour) goes to the owner's Telegram with where they came from, at most once
 // in three hours (Max, 2026-11-04, after the dev.ua article: «як я можу дізнаватись про таке, не … рефрешити адмінку»).
 function signupWave() {

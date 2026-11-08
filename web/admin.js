@@ -849,7 +849,7 @@ function loginBlock(ev) {
   if (!ev) return "";
   const by = Object.fromEntries(ev.map((r) => [r.prop, r.n]));
   const opened = ev.filter((r) => r.prop.startsWith("page:")).reduce((a, r) => a + r.n, 0);
-  if (!opened && !by.email) return `<h2>Вхід</h2>\n<p class="muted small">Рахуємо з сьогодні, поки порожньо.</p>`;
+  if (!opened && !by.email && !by["google:start"]) return `<h2>Вхід</h2>\n<p class="muted small">Рахуємо з сьогодні, поки порожньо.</p>`;
   const WHY = { "page:want": "«Хочу прочитати»", "page:read": "«Прочитано»", "page:now": "«Читаю зараз»", "page:kids": "дитяча полиця", "page:menu": "«Увійти» в меню", "page:reader": "з Читалки" };
   const whyName = (k) => WHY[k] || (k.startsWith("page:from:") ? `«Доєднатися» чи посилання: ${(SECTION_NAMES[k.slice(10)] || k.slice(10)).toLowerCase()}` : k.slice(5));
   const why = ev.filter((r) => r.prop.startsWith("page:")).map((r) => `${whyName(r.prop)} ${n(r.n)}`).join(", ");
@@ -860,6 +860,7 @@ function loginBlock(ev) {
 <tr><th>Ввели пошту</th><td>${n(by.email)}${of(by.email)}</td><td></td></tr>
 <tr><th>Ввели код</th><td>${n((by["code:known"] || 0) + (by["code:new"] || 0))}${of((by["code:known"] || 0) + (by["code:new"] || 0))}</td><td class="muted small">знайомих ${n(by["code:known"])}, нових ${n(by["code:new"])}</td></tr>
 <tr><th>Зареєструвались</th><td>${n(by.signup)}${of(by.signup)}</td><td></td></tr>
+${by["google:start"] ? `<tr><th>Через Google</th><td>${n(by["google:start"])}</td><td class="muted small">повернулись ${n((by["google:known"] || 0) + (by["google:new"] || 0))} (знайомих ${n(by["google:known"])}, нових ${n(by["google:new"])}), зареєструвались ${n(by["google:signup"])}</td></tr>` : ""}
 </tbody></table></div>
 <p class="muted small">За 30 днів. Відсоток — від тих, хто відкрив сторінку входу.</p>`;
 }

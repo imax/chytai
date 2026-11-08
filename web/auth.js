@@ -289,21 +289,28 @@ class Auth {
     this.db.prepare("DELETE FROM login_limits WHERE key = ?").run(sha(`limit:fail:${email}`));
     const reader = this.byEmail(email);
     if (reader) return { reader };
-    const body = Buffer.from(JSON.stringify({ email, expires: Date.now() + CODE_TTL })).toString("base64url");
-    return { ticket: `${body}.${this.signTicket(body)}` };
+    return { ticket: this.ticketFor(email) };
+  }
+  // A signed ticket for a confirmed address that has no reader yet; `via` says how it was confirmed (google).
+  ticketFor(email, via = "") {
+    const body = Buffer.from(JSON.stringify({ email, expires: Date.now() + CODE_TTL, ...(via ? { via } : {}) })).toString("base64url");
+    return `${body}.${this.signTicket(body)}`;
   }
   signTicket(body) {
     return crypto.createHmac("sha256", this.ticketKey).update(body).digest("base64url");
   }
   // The e-mail a ticket stands for, while it lasts.
   ticketEmail(ticket) {
+    return this.ticketData(ticket)?.email || null;
+  }
+  ticketData(ticket) {
     const [body, sig] = String(ticket || "").split(".");
     if (!body || !sig) return null;
     const want = Buffer.from(this.signTicket(body));
     if (want.length !== Buffer.from(sig).length || !crypto.timingSafeEqual(want, Buffer.from(sig))) return null;
     try {
       const t = JSON.parse(Buffer.from(body, "base64url").toString());
-      return t.expires >= Date.now() ? t.email : null;
+      return t.expires >= Date.now() && t.email ? t : null;
     } catch {
       return null;
     }
