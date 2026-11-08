@@ -40,8 +40,16 @@
     return text;
   }
 
+  // The selected text with a line break between blocks: range.toString() glued the last word of one verse line
+  // to the first of the next («livein», Max 2026-11-08).
+  function rangeText(range) {
+    const frag = range.cloneContents();
+    for (const el of frag.querySelectorAll(`${BLOCKS}, div, br`)) el.after(frag.ownerDocument.createTextNode("\n"));
+    return frag.textContent.replace(/[ \t]*\n\s*/g, "\n").trim();
+  }
+
   function extractContext(doc, range) {
-    const selection = (range.toString() || "").trim();
+    const selection = rangeText(range);
     const blocks = textBlocks(doc);
     let startIdx = blockIndexOf(blocks, range.startContainer);
     let endIdx = blockIndexOf(blocks, range.endContainer);
@@ -77,5 +85,6 @@
   }
 
   global.extractContext = extractContext;
-  if (typeof module !== "undefined") module.exports = { extractContext };
+  global.rangeText = rangeText;
+  if (typeof module !== "undefined") module.exports = { extractContext, rangeText };
 })(typeof window !== "undefined" ? window : globalThis);

@@ -868,7 +868,7 @@ function onSelected(cfiRange, contents) {
   const sel = contents.window.getSelection();
   if (!sel || sel.isCollapsed || !sel.rangeCount) return;
   const range = sel.getRangeAt(0);
-  const text = range.toString().trim();
+  const text = rangeText(range);
   if (!text) return;
 
   const ctx = extractContext(contents.document, range);
@@ -881,7 +881,7 @@ function onSelected(cfiRange, contents) {
 function handleSelection(range, cfiRange, ctx, frame) {
   pendingSelection = {
     cfiRange,
-    text: range.toString().trim(),
+    text: rangeText(range),
     context: { ...ctx, bookTitle: current.title, author: current.author },
   };
   const bar = $("#sel-toolbar");
