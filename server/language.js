@@ -71,6 +71,37 @@ async function pdfSample(buffer) {
   return { text, metaLang: "" };
 }
 
+// Chytai reads books in Ukrainian and English only (Max 2026-11-08: explanations cost tokens). The language of a
+// book: "uk", "ru", "en", "other", or "" when its text says too little (a scan) and it is let in.
+const EN_WORDS = new Set("the and of to a in is that it was he i you his her with for as had not but be on at they she".split(" "));
+const OTHER_SCRIPT = /[\u0370-\u03ff\u0590-\u05ff\u0600-\u06ff\u0900-\u0dff\u0e00-\u0e7f\u3040-\u30ff\u4e00-\u9fff\uac00-\ud7af]/g;
+function languageOf(text, metaLang = "") {
+  const meta = (metaLang || "").toLowerCase().slice(0, 2);
+  const cyr = (text.match(CYRILLIC) || []).length;
+  const latin = (text.match(LATIN) || []).length;
+  const other = (text.match(OTHER_SCRIPT) || []).length;
+  if (other >= MIN_LETTERS && other > cyr + latin) return "other";
+  if (cyr >= MIN_LETTERS && cyr >= latin) {
+    if (OTHER_CYRILLIC.includes(meta)) return "other";
+    return verdictFromText(text, metaLang) ? "ru" : "uk";
+  }
+  if (latin >= MIN_LETTERS) {
+    const words = text.toLowerCase().match(/[a-z\u00c0-\u024f']+/g) || [];
+    const en = words.filter((w) => EN_WORDS.has(w)).length;
+    return words.length && en / words.length >= 0.08 ? "en" : "other";
+  }
+  if (meta === "ru") return "ru";
+  return "";
+}
+async function bookLanguage(name, buffer) {
+  try {
+    const { text, metaLang } = /\.pdf$/i.test(name) ? await pdfSample(buffer) : await epubSample(buffer);
+    return languageOf(text, metaLang);
+  } catch {
+    return "";
+  }
+}
+
 // true when the book reads as Russian; false when it does not or cannot be read at all.
 async function isRussian(name, buffer) {
   try {
@@ -81,4 +112,4 @@ async function isRussian(name, buffer) {
   }
 }
 
-module.exports = { isRussian, verdictFromText, langFromText, epubSample, stripTags };
+module.exports = { isRussian, bookLanguage, languageOf, verdictFromText, langFromText, epubSample, stripTags };

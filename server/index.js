@@ -18,7 +18,7 @@ const path = require("path");
 const { explain } = require("../src/ai");
 const JSZip = require("jszip");
 const library = require("../src/library");
-const { isRussian } = require("./language");
+const { bookLanguage } = require("./language");
 const { checkUpload } = require("./content");
 const { cost } = require("./admin");
 const { createProtected } = require("./protected");
@@ -2315,7 +2315,13 @@ api.put("/books/:name", uploadGuard, uploadBody, async (req, res) => {
   if (!name) return res.status(400).json({ error: "Підтримуються лише EPUB і PDF." });
   if (!req.body?.length) return res.status(400).json({ error: "Порожній файл." });
   // Chytai does not take books in Russian: the file is refused, not kept.
-  if (await isRussian(name, req.body)) return res.status(400).json({ error: "Книжки російською мовою в Chytai не завантажуються." });
+  const lang = await bookLanguage(name, req.body);
+  if (lang === "ru") return res.status(400).json({ error: "Книжки російською мовою в Chytai не завантажуються." });
+  // Nor other languages for now (Max 2026-11-08): explanations cost tokens.
+  if (lang === "other") {
+    console.log("upload refused (language)", name, req.user);
+    return res.status(400).json({ error: "Поки що Chytai читає книжки українською та англійською." });
+  }
   // Nor pornography (the family library was shared with a child; the rule stays for everyone).
   const check = await checkUpload(name, req.body);
   if (check.blocked) {
