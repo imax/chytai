@@ -1285,7 +1285,12 @@ button.r-where-row:hover small { color: var(--r-ochre); }
 .r-yak { margin: 4px 0 8px; padding-left: 20px; font-size: 14px; line-height: 1.5; }
 .r-yak li { margin-bottom: 8px; }
 .r-yak a, .r-yak .r-link { color: var(--r-link); }
-.r-yak img { display: block; width: 100%; max-width: 272px; height: auto; margin: 8px 0 2px; border-radius: 8px; border: 1px solid var(--r-rule); }
+.r-yak-card { display: flex; flex-direction: column; gap: 2px; max-width: 240px; margin: 8px 0 2px; padding: 12px 14px 14px; border: 1px solid var(--r-rule); border-radius: 8px; background: var(--r-menu); }
+.r-yak-t { font: 16px/1.25 var(--r-serif); }
+.r-yak-a { font-size: 12px; color: var(--r-ink2); }
+.r-yak-f { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 10px; }
+.r-yak-f b, .r-yak-f i { font: 500 13px/1 var(--r-sans); text-align: center; padding: 8px 0; border-radius: 999px; border: 1px solid var(--r-sline); color: var(--r-ink2); }
+.r-yak-f b { background: var(--r-ochre); border-color: var(--r-ochre); color: var(--r-paper); }
 .r-yak + .r-drop-note { margin-bottom: 8px; }
 
 /* Search results on «Додати книжку» */

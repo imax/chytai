@@ -519,7 +519,7 @@
   function yakabooHtml() {
     return `<ol class="r-yak">
       <li>Відкрийте <a href="https://www.yakaboo.ua/ua/my-account/library" target="_blank" rel="noopener">«Мої книги» на Yakaboo ↗</a></li>
-      <li>Наведіть на книжку і натисніть <b>epub</b>.<img src="img/yakaboo-epub.png" width="272" height="148" alt="Кнопки epub, fb2, mobi, pdf під книжкою на Yakaboo" loading="lazy"></li>
+      <li>Наведіть на книжку і натисніть <b>epub</b>.<span class="r-yak-card" aria-hidden="true"><span class="r-yak-t">Тигролови</span><span class="r-yak-a">Іван Багряний</span><span class="r-yak-f"><b>epub</b><i>fb2</i><i>mobi</i><i>pdf</i></span></span></li>
       <li><button class="r-link" data-act="add">Додайте файл сюди</button>. Можна кілька одразу.</li></ol>
       <p class="r-drop-note">Книжки «лише в застосунку Yakaboo» скачати не можна.</p>`;
   }
