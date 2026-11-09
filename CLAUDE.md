@@ -5,6 +5,9 @@ https://app.chytai.org.ua (`server/` + `src/`, Fly app `chytai`). `app/` is the 
 app. The owner is Max; he writes Ukrainian, and every word a reader sees is Ukrainian, short, one plain clause.
 The repo is public: never commit secrets, keys or `data/`.
 
+Keep this file up to date (Max, 2026-11-09): when you add a way of working, a tool, an endpoint or a rule that the
+next thread should know, change this file in the same commit. Short recipes, not history.
+
 ## Ship
 
 - Push straight to `main`, no pull requests. `web.yml` deploys `web/**` to chytai-web, `deploy.yml` the rest to the
