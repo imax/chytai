@@ -1420,7 +1420,7 @@ app.get("/@:username", (req, res) => {
   const theirLists = lists.of(reader.id).filter((l) => own || (l.count && !l.draft));
   const part = restPart(req, res);
   if (own) return res.send(pages.libraryPage({ part, clubTopics: club.mark(req.user.id, club.of(reader.id, 5)), lists: theirLists, savedLists: lists.savedBy(reader.id), rows, user: req.user, reader: req.user, own: true, follows, now: nowFor(reader.id, { own: true }) }));
-  res.send(pages.libraryPage({ part, clubTopics: club.of(reader.id, 5), lists: theirLists, rows, user: req.user, reader, ask: !!req.owner, now: nowFor(reader.id), mineIds: req.user && req.user.id !== reader.id ? store.inLibrary(req.user.id) : null, mineDirect: req.user ? new Set(Object.keys(store.entriesOf(req.user.id))) : null, following: auth.follows(req.user?.id, reader.id), follows }));
+  res.send(pages.libraryPage({ part, clubTopics: club.of(reader.id, 5), lists: theirLists, rows, user: req.user, reader, ask: CHAT_ON && !!req.owner, now: nowFor(reader.id), mineIds: req.user && req.user.id !== reader.id ? store.inLibrary(req.user.id) : null, mineDirect: req.user ? new Set(Object.keys(store.entriesOf(req.user.id))) : null, following: auth.follows(req.user?.id, reader.id), follows }));
 });
 // ---- «Списки» (lists.js): /@<username>/list/<slug>, /lists, and what the author does with a list ----
 app.get("/@:username/list/:slug", (req, res) => {
@@ -1905,9 +1905,13 @@ app.post("/api/reader-articles", async (req, res) => {
 // «Завантажити й поділитися»: the file goes into their reader and the asker's at once. The rest is words.
 const { Asks } = require("./asks");
 const asks = new Asks(store, OWNER_ID);
-const askCan = (u) => !!u && (u.id === OWNER_ID || asks.hasTalks(u.id));
+// Hidden for everyone, Max too (Max, 2026-11-09: «Чат поки сховаємо для всіх»): no menu item, no shelf button, and
+// /chat, /asks, /api/chat answer 404. Code and talks are kept: set CHAT_ON = true to bring it back.
+const CHAT_ON = false;
+const askCan = (u) => CHAT_ON && !!u && (u.id === OWNER_ID || asks.hasTalks(u.id));
 pages.setAskNav((u) => (askCan(u) ? asks.unread(u.id) : null));
 const askNo = (req, res, title = "Немає такої сторінки") => res.status(404).send(pages.messagePage({ title, text: "", user: req.user }));
+if (!CHAT_ON) app.use((req, res, next) => (/^\/(chat|asks|api\/chat)(\/|$)/.test(req.path) ? askNo(req, res) : next()));
 const askBook = (id) => (id && store.book(id) ? store.bookPage(store.canonical(id)) : null);
 // The other reader of a talk the signed-in one may open: the owner any reader, others only one they talk with.
 const askOther = (req, res) => {
