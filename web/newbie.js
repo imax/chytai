@@ -14,7 +14,7 @@ function subjectOf(books) {
 
 // `books`: [{ title, author, cover, href, slug }]. `link(path)` turns a site path into a tracked URL.
 function compose({ site, reader, books, link = (p) => site + p }) {
-  const star = (slug, n) => `<a href="${M.esc(link(`/do/rate/${encodeURIComponent(slug)}/${n}`))}" title="${n} з 5" style="color:#c9c2b4;text-decoration:none;font-size:24px;line-height:1;padding:0 3px">★</a>`;
+  const star = (slug, n) => `<a href="${M.esc(link(`/do/rate/${encodeURIComponent(slug)}/${n}`))}" title="${n} з 5" style="color:#8f887b;text-decoration:none;font-size:24px;line-height:1;padding:0 3px">★</a>`;
   const rows = books.map((b) => M.book({ ...b, note: `<div style="margin-top:6px;white-space:nowrap">${[1, 2, 3, 4, 5].map((n) => star(b.slug, n)).join("")}</div>` }, site)).join("");
   const subject = subjectOf(books);
   const html = M.letter({

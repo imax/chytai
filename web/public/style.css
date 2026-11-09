@@ -738,7 +738,8 @@ dialog .form { margin-top: 18px; }
   .welcome { grid-template-columns: 1fr; gap: 28px; padding: 8px 0 48px; }
   .welcome h1 { font-size: 38px; }
   .welcome .lead { margin-bottom: 0; }
-  .welcome-intro .acts { display: none; }
+  .welcome-intro .acts { margin-top: 24px; }
+  .welcome-intro:has(.acts) ~ .welcome-end { display: none; }
   .welcome-steps li { grid-template-columns: 48px minmax(0, 1fr); padding: 18px 0; }
   .welcome-steps .n { font-size: 22px; }
   .welcome-steps h3 { font-size: 19px; }
@@ -1384,9 +1385,27 @@ mark.hl { background: color-mix(in srgb, var(--accent) 16%, transparent); color:
 .ask-addbook .pick-q:focus { outline: 0; border-color: var(--ink); }
 .ask-compose .error { color: var(--danger); }
 /* /start: rate three books (pages.startPage) */
-.start-count { display: flex; align-items: baseline; gap: 6px; margin: 0 0 8px; color: var(--muted); }
-.start-count b { color: var(--ink, inherit); font-size: 20px; }
-.start-count .btn { margin-left: 12px; }
-.start-count .btn[hidden] { display: none; }
-.start .hit .rate { margin-left: auto; }
+.start { --star-off: #8f887b; max-width: 760px; }
+.start .rate-stars button:not(.on):not(.half) { color: var(--star-off); }
+.start .list-hits .hit { display: grid; grid-template-columns: auto 1fr auto; gap: 0 20px; align-items: center; padding: 16px 0; }
+.start .list-hits .hit .rate { margin: 0; }
+.start-bar { display: flex; align-items: center; gap: 16px; min-height: 48px; padding-bottom: 14px; border-bottom: 1px solid var(--ink); color: var(--muted); }
+.start-n { display: flex; flex-direction: column; gap: 6px; }
+.start-n b { color: var(--ink); font-weight: 600; }
+.start-dots { display: flex; gap: 6px; }
+.start-dots i { width: 8px; height: 8px; border-radius: 50%; border: 1.4px solid var(--star-off); box-sizing: border-box; }
+.start-dots i.on { background: var(--accent); border-color: var(--accent); }
+.start-bar .btn { margin-left: auto; }
+.start-bar .btn.off { background: var(--rule); border-color: var(--rule); color: var(--star-off); pointer-events: none; }
+.start-again { font: 600 13px/1.2 var(--sans, inherit); letter-spacing: .12em; text-transform: uppercase; color: var(--accent); margin: 28px 0 0; }
+@media (max-width: 760px) {
+  /* Stars under the author; the count and the button in a bar stuck to the bottom (design review 2026-11-09). */
+  .start .list-hits .hit { grid-template-columns: auto 1fr; gap: 0 16px; }
+  .start .list-hits .hit .cover, .start .list-hits .hit > a:first-child { grid-row: span 2; }
+  .start .list-hits .hit .rate { grid-column: 2; justify-content: flex-start; margin: 4px 0 0 -3px; }
+  .start .rate-stars button { padding: 8px 9px 8px 3px; font-size: 24px; }
+  .start-bar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; margin: 0; padding: 12px 16px calc(12px + env(safe-area-inset-bottom)); background: color-mix(in srgb, var(--paper) 96%, transparent); backdrop-filter: blur(6px); border-top: 1px solid var(--ink); border-bottom: 0; }
+  .start:has(.start-bar) { padding-bottom: 110px; }
+  .start .grid.six { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 28px 16px; }
+}
 .start-more { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-top: 20px; }

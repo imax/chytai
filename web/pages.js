@@ -2082,14 +2082,16 @@ function welcomePage({ user, next = "", from = null }) {
 // Max 2026-11-09: «попросити його оцінити хоча б три книжки»). Three ratings bring «Для вас» right here.
 // Each star is saved in the background (app.js rateLine); the day-2 letter links here with one star already set.
 const START_GOAL = 3;
+// «Медитації для смертних», not «Медитації для смертних. Чотири тижні…» (the design review, 2026-11-09).
+const shortTitle = (t) => String(t || "").split(/\s*[.:]\s+/)[0] || t;
 function startPage({ user, books, rated, forYou = [], next = "" }) {
   const done = rated >= START_GOAL;
   const row = ({ book, entry }) => `<div class="hit">${cover(book, "sm")}<span><b><a href="${attr(book.href)}">${esc(book.title)}</a></b>${book.author ? `<span class="by">${esc(byline(book.author))}</span>` : ""}</span>${rateLine(book.id, "", { year: false, rating: entry?.rating ?? null, status: "read" })}</div>`;
   const body = `
 ${pageHead({ kicker: "Перші кроки", title: forYou.length ? "Що читати далі" : "Оцініть три книжки", lead: forYou.length ? "Підібрали за вашими оцінками. Що більше оцінок, то точніше." : "Які з них ви читали? За оцінками підберемо, що читати далі." })}
 <section class="start" data-start data-goal="${START_GOAL}" data-rated="${rated}">
-  ${forYou.length ? `<section class="block read-row" id="for-you">${label("Для вас")}<div class="grid six">${forYou.map((x) => card(x.book, { avg: x.avg })).join("")}</div></section>` : ""}
-  <p class="start-count">${forYou.length ? "Оцініть ще" : `Оцінено <b data-start-n>${Math.min(rated, START_GOAL)}</b> з ${START_GOAL}`}<a class="btn primary" href="/start?for=1${next ? `&amp;next=${attr(encodeURIComponent(next))}` : ""}#for-you" data-start-done${done && !forYou.length ? "" : " hidden"}>Що читати далі</a></p>
+  ${forYou.length ? `<section class="block read-row" id="for-you">${label("Для вас")}<div class="grid six">${forYou.map((x) => card({ ...x.book, title: shortTitle(x.book.title) }, { avg: x.avg })).join("")}</div></section>` : ""}
+  ${forYou.length ? `<h2 class="start-again">Оцініть ще</h2>` : `<div class="start-bar"><span class="start-n"><span>Оцінено <b data-start-n>${Math.min(rated, START_GOAL)} з ${START_GOAL}</b></span><span class="start-dots" aria-hidden="true">${Array.from({ length: START_GOAL }, (_, i) => `<i${i < rated ? ' class="on"' : ""}></i>`).join("")}</span></span><a class="btn primary${done ? "" : " off"}" href="/start?for=1${next ? `&amp;next=${attr(encodeURIComponent(next))}` : ""}#for-you" data-start-done${done ? "" : ' aria-disabled="true" tabindex="-1"'}>Що читати далі</a></div>`}
   <div class="list-hits">${books.map(row).join("")}</div>
   <p class="start-more"><a class="btn" href="/start${next ? `?next=${attr(encodeURIComponent(next))}` : ""}">Інші книжки</a><span class="muted small">або <a class="text-link" href="/add">знайдіть свою</a></span></p>
   ${next ? `<p><a class="text-link" href="${attr(next)}">${next.startsWith("/reader-login") ? "До Читалки" : "Далі"} →</a></p>` : ""}

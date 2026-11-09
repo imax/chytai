@@ -624,9 +624,12 @@
     if (start) {
       const k = Number(start.dataset.rated) + 1;
       start.dataset.rated = k;
+      const goal = Number(start.dataset.goal);
       const out = start.querySelector("[data-start-n]");
-      if (out) out.textContent = Math.min(k, Number(start.dataset.goal));
-      if (k >= Number(start.dataset.goal)) start.querySelector("[data-start-done]")?.removeAttribute("hidden");
+      if (out) out.textContent = `${Math.min(k, goal)} з ${goal}`;
+      start.querySelectorAll(".start-dots i").forEach((d, i) => d.classList.toggle("on", i < k));
+      const go = start.querySelector("[data-start-done]");
+      if (go && k >= goal) go.classList.remove("off"), go.removeAttribute("aria-disabled"), go.removeAttribute("tabindex");
     }
     box.classList.add("rated");
     saveRate(box, "rating", n);
