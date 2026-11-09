@@ -2951,19 +2951,27 @@ function startBooks(req) {
   const mine = store.entriesOf(req.user.id);
   return { out: startList(req), rated: Object.values(mine).filter((e) => e.rating != null).length };
 }
-function startList(req) {
+function startList(req, n = 12) {
+  // The pool: the top 100 books readers here have read (Max, 2026-11-09: «не топ-3, а топ-100»), Ukrainian
+  // editions with covers. The reader's own rated ones from it stay on top; the rest is a fresh random handful
+  // on every visit, so «Інші книжки» is just the page again.
   const seen = new Set();
-  const out = [];
+  const rated = [];
+  const rest = [];
   for (const x of social.popular().known) {
     const book = bookFor(req, ukWork(x.book), false);
     if (!book?.cover || isRussian(book) || seen.has(book.id)) continue;
     seen.add(book.id);
     const entry = store.entry(req.user.id, book.id) || store.entry(req.user.id, x.book.id);
-    if (entry && entry.rating == null) continue; // on the shelf already, without a rating: not asked again
-    out.push({ book, entry });
-    if (out.length >= 15) break;
+    if (entry?.rating != null) rated.push({ book, entry });
+    else if (!entry) rest.push({ book, entry: null }); // on the shelf without a rating: not asked
+    if (seen.size >= 100) break;
   }
-  return out;
+  for (let i = rest.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [rest[i], rest[j]] = [rest[j], rest[i]];
+  }
+  return [...rated, ...rest.slice(0, n)];
 }
 // The day-2 letter (newbie.js): the same books as /start, the ones not on the shelf yet.
 const newbieMail = new (require("./newbie").NewbieMail)({
@@ -2982,7 +2990,10 @@ app.get("/start", signed, (req, res) => {
     const liked = shelf.filter((r) => r.rating >= 4);
     const seeds = (liked.length ? liked : shelf).sort((a, b) => b.rating - a.rating).slice(0, 5).map((r) => r.book.id);
     const own = new Map(Object.entries(store.entriesOf(req.user.id)));
-    forYou = social.similar(seeds, { limit: 6, skip: own, own }).map((x) => ({ ...x, book: ukWork(x.book) })).filter((x) => x.book && !store.sharedEntry(req.user.id, x.book.id));
+    const fit = (list) => list.map((x) => ({ ...x, book: ukWork(x.book) })).filter((x) => x.book && !isRussian(x.book) && !store.sharedEntry(req.user.id, x.book.id));
+    forYou = fit(social.similar(seeds, { limit: 6, skip: own, own }));
+    // Too few tags on those books for «схожі»: the best rated books here instead, so the page never ends empty.
+    if (forYou.length < 3) forYou = [...forYou, ...fit(social.popular().top).filter((x) => !forYou.some((y) => y.book.id === x.book.id))].slice(0, 6);
   }
   admin.log(req.user.id, "view", "/start", String(rated));
   res.send(pages.startPage({ user: req.user, books: out, rated, forYou, next: safeNext(req.query.next) }));

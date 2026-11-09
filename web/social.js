@@ -282,8 +282,8 @@ class Social {
       // Books already up there are left out, so the month shows what else is moving.
       month: take(rows, (w) => w.month.size, 2, (w) => w.month.size, { fresh: true }),
       top: take(rows, top, 0.01, (w) => w.rated),
-      // The books most readers have read: what a newcomer is likeliest to know, for /start.
-      known: take(rows, (w) => w.read?.size || 0, 2, (w) => w.read?.size || 0, { max: 40 }),
+      // The books most readers have read, the top 100 or so: /start draws a different handful from them for each newcomer.
+      known: take(rows, (w) => w.read?.size || 0, 1, (w) => w.read?.size || 0, { max: 120 }),
     };
     this.pop = { at: Date.now(), out };
     return out;

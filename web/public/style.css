@@ -1389,3 +1389,4 @@ mark.hl { background: color-mix(in srgb, var(--accent) 16%, transparent); color:
 .start-count .btn { margin-left: 12px; }
 .start-count .btn[hidden] { display: none; }
 .start .hit .rate { margin-left: auto; }
+.start-more { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-top: 20px; }

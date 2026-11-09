@@ -2088,10 +2088,10 @@ function startPage({ user, books, rated, forYou = [], next = "" }) {
   const body = `
 ${pageHead({ kicker: "Перші кроки", title: forYou.length ? "Що читати далі" : "Оцініть три книжки", lead: forYou.length ? "Підібрали за вашими оцінками. Що більше оцінок, то точніше." : "Які з них ви читали? За оцінками підберемо, що читати далі." })}
 <section class="start" data-start data-goal="${START_GOAL}" data-rated="${rated}">
-  ${forYou.length ? `<section class="block read-row" id="for-you">${label("Для вас", "схожі на те, що вам сподобалось")}<div class="grid six">${forYou.map((x) => card(x.book, { avg: x.avg })).join("")}</div></section>` : ""}
-  <p class="start-count">${forYou.length ? "Оцініть ще" : `Оцінено <b data-start-n>${Math.min(rated, START_GOAL)}</b> з ${START_GOAL}`}<a class="btn primary" href="/start${next ? `?next=${attr(encodeURIComponent(next))}` : ""}#for-you" data-start-done${done && !forYou.length ? "" : " hidden"}>Що читати далі</a></p>
+  ${forYou.length ? `<section class="block read-row" id="for-you">${label("Для вас")}<div class="grid six">${forYou.map((x) => card(x.book, { avg: x.avg })).join("")}</div></section>` : ""}
+  <p class="start-count">${forYou.length ? "Оцініть ще" : `Оцінено <b data-start-n>${Math.min(rated, START_GOAL)}</b> з ${START_GOAL}`}<a class="btn primary" href="/start?for=1${next ? `&amp;next=${attr(encodeURIComponent(next))}` : ""}#for-you" data-start-done${done && !forYou.length ? "" : " hidden"}>Що читати далі</a></p>
   <div class="list-hits">${books.map(row).join("")}</div>
-  <p class="muted small">Немає знайомих? <a class="text-link" href="/add">Знайдіть свою книжку</a></p>
+  <p class="start-more"><a class="btn" href="/start${next ? `?next=${attr(encodeURIComponent(next))}` : ""}">Інші книжки</a><span class="muted small">або <a class="text-link" href="/add">знайдіть свою</a></span></p>
   ${next ? `<p><a class="text-link" href="${attr(next)}">${next.startsWith("/reader-login") ? "До Читалки" : "Далі"} →</a></p>` : ""}
 </section>`;
   return layout({ title: "Оцініть три книжки", body, user, path: "/start" });
