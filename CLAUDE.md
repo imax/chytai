@@ -48,9 +48,12 @@ curl -s https://app.chytai.org.ua/agent/sql -H "$H" -H 'content-type: applicatio
 
 ## After a push: watch the rollout
 
-Note the deploy's time. When the Actions run is green, check `/agent/health?since=<that time>` and the 5xx count
-for new errors. Then schedule yourself a wake-up in about an hour and look again. A new error that came with your
-change: fix it at once, or revert and say so. Outages are fixed or reverted without asking.
+Both deploy workflows have a `watch` job (`scripts/rollout-watch.sh`): 15 minutes after a deploy it looks for errors
+that were not seen in the week before; one seen twice sends the previous image back and a line to Max's Telegram,
+and the run fails. The commit stays on main: fix it and push again.
+
+Beyond that, when the Actions run is green, check `/agent/health?since=<deploy time>` yourself, and for a risky change
+schedule a wake-up in about an hour and look again. Outages are fixed or reverted without asking.
 
 ## Feature flags (`web/flags.js`)
 

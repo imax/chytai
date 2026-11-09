@@ -38,6 +38,9 @@ jobs:
     needs: settle
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    outputs:
+      image: ${{ steps.before.outputs.image }}
+      since: ${{ steps.before.outputs.since }}
     # One deploy at a time; a newer one waiting replaces an older one waiting (never one mid-deploy).
     concurrency: deploy-web
     steps:
@@ -45,7 +48,9 @@ jobs:
       - uses: superfly/flyctl-actions/setup-flyctl@master
       # The image running now, to go back to if the post-release check below fails.
       - id: before
-        run: echo "image=$(flyctl machine list -a chytai-web --json | jq -r '.[0].config.image // empty')" >> "$GITHUB_OUTPUT"
+        run: |
+          echo "image=$(flyctl machine list -a chytai-web --json | jq -r '.[0].config.image // empty')" >> "$GITHUB_OUTPUT"
+          echo "since=$(date -u +%FT%T.000Z)" >> "$GITHUB_OUTPUT"
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN_WEB }}
       # The data volume at 3 GB at least (2026-10-28, Max OK: 1 GB was filling ~40 MB a day with kept covers).
@@ -81,3 +86,19 @@ jobs:
       # The domain (Max, 2026-10-19): chytai.org.ua serves the site; www and chytai-web.fly.dev redirect to it.
       - run: |
           for u in https://chytai.org.ua/ https://www.chytai.org.ua/ https://chytai-web.fly.dev/; do curl -sS -o /dev/null -w "$u: %{http_code} %{redirect_url}\n" "$u" || true; done
+  # The rollout watch (scripts/rollout-watch.sh, Max 2026-11-09): 15 minutes after a good deploy, new errors seen
+  # twice send the previous image back and a line to Telegram. Its own job, so it holds up no deploy; a newer
+  # deploy cancels it.
+  watch:
+    needs: deploy
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    concurrency: { group: web-watch, cancel-in-progress: true }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+      - run: scripts/rollout-watch.sh chytai-web "${{ needs.deploy.outputs.since }}" "${{ needs.deploy.outputs.image }}"
+        env:
+          SHA: ${{ github.sha }}
+          SITE_TOKEN: ${{ secrets.FLY_API_TOKEN_WEB }}
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN_WEB }}

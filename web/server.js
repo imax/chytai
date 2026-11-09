@@ -232,6 +232,14 @@ app.get("/agent/health", agentOk, async (req, res) => {
 });
 // Read-only SQL on the live database: GET ?q= or POST { q }. Answers { rows, more, ms } or { error }.
 app.all("/agent/sql", agentOk, async (req, res) => res.json(await agentSql(req.body?.q || req.query.q)));
+// A line to Max's Telegram (the rollout watch in web.yml / deploy.yml, a thread that rolled back): at most 10 an hour.
+let agentNotes = [];
+app.post("/agent/notify", agentOk, async (req, res) => {
+  agentNotes = agentNotes.filter((t) => Date.now() - t < 3600000);
+  if (agentNotes.length >= 10) return res.status(429).json({ error: "10 an hour already" });
+  agentNotes.push(Date.now());
+  res.json({ sent: await telegram.send(String(req.body?.text || "").slice(0, 1500)) });
+});
 // Flags (flags.js): GET lists them; POST { name, who: off|owner|test, note } switches one. «all» is Max's, on /admin/jobs.
 app.get("/agent/flags", agentOk, (req, res) => res.json(flags.list()));
 app.post("/agent/flags", agentOk, (req, res) => {
