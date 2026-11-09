@@ -70,7 +70,7 @@ const storage = require("./storage"); // disk and memory: a row on /admin, Teleg
 errors.init(store.db);
 errors.watchProcess(bg.ROLE === "jobs" ? "jobs" : "site");
 const { MailGuard } = require("./mailguard");
-const auth = new Auth(store.db, { ownerToken: TOKEN, resendKey: process.env.RESEND_API_KEY || "", from: process.env.WEB_MAIL_FROM || `Chytai <code@${DOMAIN || "chytai.org.ua"}>` });
+const auth = new Auth(store.db, { ownerToken: TOKEN, resendKey: process.env.RESEND_API_KEY || "", from: process.env.WEB_MAIL_FROM || `Chytai <hello@${DOMAIN || "chytai.org.ua"}>` });
 // Letters that bounced or were marked as spam (Resend's webhook): those addresses get no more (mailguard.js).
 const mailGuard = new MailGuard(store.db, { usernameOf: (email) => auth.byEmail(email)?.username || null });
 auth.guard = mailGuard;
