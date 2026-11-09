@@ -15,6 +15,9 @@ COPY build/icon.png build/landing-desk.mp4 build/landing-phone.mp4 build/landing
 COPY demo ./demo
 COPY free ./free
 
+# The commit, for /agent/health (deploy.yml passes it).
+ARG GIT_SHA=""
+ENV GIT_SHA=$GIT_SHA
 ENV PORT=8080 DATA_DIR=/data
 EXPOSE 8080
 CMD ["node", "server/index.js"]

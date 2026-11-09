@@ -7,7 +7,7 @@ name: Deploy web
 on:
   push:
     branches: [main]
-    paths: ["web/**", "package.json", "package-lock.json", ".github/workflows/web.yml", "scripts/perf-check.sh", "scripts/smoke-test.sh"]
+    paths: ["web/**", "server/agent.js", "package.json", "package-lock.json", ".github/workflows/web.yml", "scripts/perf-check.sh", "scripts/smoke-test.sh"]
   workflow_dispatch:
 
 jobs:
@@ -61,7 +61,7 @@ jobs:
       # the connection after the build ("unexpected EOF") or hangs after the push (16 minutes on 2026-10-21,
       # holding up every deploy queued behind it): each try gets 5 minutes.
       - run: |
-          deploy() { timeout 300 flyctl deploy . -a chytai-web -c web/fly.toml --dockerfile web/Dockerfile "$@"; }
+          deploy() { timeout 300 flyctl deploy . -a chytai-web -c web/fly.toml --dockerfile web/Dockerfile --build-arg GIT_SHA=${{ github.sha }} "$@"; }
           deploy --local-only || { echo "retrying on Fly's Depot builder"; deploy --remote-only; } || { echo "retrying on Fly's own builder"; deploy --remote-only --depot=false; }
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN_WEB }}

@@ -79,6 +79,7 @@ const { MailLog } = require("./maillog");
 const mailLog = new MailLog(store.db);
 auth.mailLog = mailLog;
 const mailHealth = () => mailGuard.health();
+const flags = new (require("./flags").Flags)(store.db, { testAddress: require("./auth").testAddress }); // feature flags (flags.js)
 auth.ensureOwner({ id: OWNER_ID, name: OWNER, username: OWNER_USERNAME });
 const admin = new Admin(store.db, { ownerId: OWNER_ID }); // the owner's statistics (/admin): visits and page views
 const speed = new (require("./speed").Speed)({ db: store.db, today: () => require("./admin").dayOf(new Date()) }); // /admin/speed
@@ -186,6 +187,62 @@ app.post("/api/resend/webhook", express.raw({ type: "*/*", limit: "256kb" }), (r
 app.use(express.urlencoded({ extended: false, limit: "1mb" }));
 app.use(express.json({ limit: "1mb" }));
 if (telegram.on()) app.post(telegram.hookPath(), (req, res) => (telegram.update(req.body), res.sendStatus(200)));
+// ---- Threads see production, read only (Max, 2026-11-09; server/agent.js, CLAUDE.md «Прод») ----
+// Before the visit counting below, so a thread's calls are not readers' visits. The key is a Fly token that can see
+// chytai-web (a thread's FLY_API_TOKEN). Nothing here writes to the database but the flags a thread may switch
+// for Max and the test accounts.
+const agentApi = require("../server/agent");
+const agentOk = agentApi.guard("chytai-web");
+const agentSql = agentApi.sqlRunner(path.join(DATA_DIR, "chytai.db"), { deny: ["sessions\\b", "login_codes", "login_limits", "oauth_tokens", "oauth_clients"] });
+const STARTED = new Date().toISOString();
+app.use("/agent", (req, res, next) => (res.set("Cache-Control", "no-store"), next()));
+// «Чи все гаразд?»: what is running, errors (since=ISO for a deploy's own), the day's speed and stalls, jobs, mail,
+// storage, flags. ?reader=1 adds the reader's own numbers (asked from it, up to 15 s).
+app.get("/agent/health", agentOk, async (req, res) => {
+  const since = /^\d{4}-\d{2}-\d{2}/.test(String(req.query.since || "")) ? new Date(String(req.query.since)).toISOString() : new Date(Date.now() - 86400000).toISOString();
+  const day = require("./admin").dayOf(new Date());
+  const today = speed.days(1).get(day) || {};
+  const short = Object.fromEntries(Object.entries(today).map(([k, v]) => [k, { n: v.n, median: v.median, p95: v.p95, slowShare: Math.round(v.slow * 1000) / 1000, ...(k === "stall" ? { totalMs: v.sum } : {}) }]));
+  const runs = store.db.prepare("SELECT job, how, started, ms, ok, note FROM job_runs WHERE started >= ? ORDER BY started DESC").all(new Date(Date.now() - 86400000).toISOString());
+  const out = {
+    now: new Date().toISOString(),
+    commit: process.env.GIT_SHA || "",
+    image: process.env.FLY_IMAGE_REF || "",
+    machine: process.env.FLY_MACHINE_ID || "",
+    started: STARTED,
+    memoryMb: Math.round(process.memoryUsage().rss / 1048576),
+    errorsSince: since,
+    errors: store.db.prepare("SELECT place, msg, MAX(url) AS url, COUNT(*) AS n, MIN(at) AS first, MAX(at) AS last, MAX(stack) AS stack FROM errors WHERE at >= ? GROUP BY place, msg ORDER BY last DESC LIMIT 30").all(since),
+    speedToday: { day, ...short },
+    jobs: { runs: runs.length, failed: runs.filter((r) => r.ok === 0).slice(0, 10), last: runs.slice(0, 10) },
+    mail: mailHealth(),
+    storage: storage.now(DATA_DIR, ["chytai.db"]),
+    signups24h: store.db.prepare("SELECT COUNT(*) AS n FROM readers WHERE created >= ?").get(new Date(Date.now() - 86400000).toISOString()).n,
+    flags: flags.list(),
+  };
+  if (req.query.reader) {
+    try {
+      const r = await readerAdmin("");
+      out.reader = { ok: true, storage: r.storage || null, keys: Object.keys(r) };
+    } catch (e) {
+      out.reader = { ok: false, error: e.message };
+    }
+  }
+  res.json(out);
+});
+// Read-only SQL on the live database: GET ?q= or POST { q }. Answers { rows, more, ms } or { error }.
+app.all("/agent/sql", agentOk, async (req, res) => res.json(await agentSql(req.body?.q || req.query.q)));
+// Flags (flags.js): GET lists them; POST { name, who: off|owner|test, note } switches one. «all» is Max's, on /admin/jobs.
+app.get("/agent/flags", agentOk, (req, res) => res.json(flags.list()));
+app.post("/agent/flags", agentOk, (req, res) => {
+  const { name, who, note } = req.body || {};
+  if (who === "all") return res.status(403).json({ error: "for everyone only Max switches it, on /admin/jobs" });
+  try {
+    res.json(flags.set(String(name || ""), String(who || ""), "thread", note));
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
+});
 app.use(require("compression")()); // pages are 50–150 KB of HTML; gzip cuts that about five times
 // A page that took over two seconds, and a main loop that stood still for over one, go to the log (a new reader
 // waited ~30 s for search and their shelf on 2026-10-24, and nothing told us where): `fly logs | grep slow`.
@@ -1420,7 +1477,7 @@ app.get("/@:username", (req, res) => {
   const theirLists = lists.of(reader.id).filter((l) => own || (l.count && !l.draft));
   const part = restPart(req, res);
   if (own) return res.send(pages.libraryPage({ part, clubTopics: club.mark(req.user.id, club.of(reader.id, 5)), lists: theirLists, savedLists: lists.savedBy(reader.id), rows, user: req.user, reader: req.user, own: true, follows, now: nowFor(reader.id, { own: true }) }));
-  res.send(pages.libraryPage({ part, clubTopics: club.of(reader.id, 5), lists: theirLists, rows, user: req.user, reader, ask: CHAT_ON && !!req.owner, now: nowFor(reader.id), mineIds: req.user && req.user.id !== reader.id ? store.inLibrary(req.user.id) : null, mineDirect: req.user ? new Set(Object.keys(store.entriesOf(req.user.id))) : null, following: auth.follows(req.user?.id, reader.id), follows }));
+  res.send(pages.libraryPage({ part, clubTopics: club.of(reader.id, 5), lists: theirLists, rows, user: req.user, reader, ask: !!req.owner && flags.on("chat", req.user), now: nowFor(reader.id), mineIds: req.user && req.user.id !== reader.id ? store.inLibrary(req.user.id) : null, mineDirect: req.user ? new Set(Object.keys(store.entriesOf(req.user.id))) : null, following: auth.follows(req.user?.id, reader.id), follows }));
 });
 // ---- «Списки» (lists.js): /@<username>/list/<slug>, /lists, and what the author does with a list ----
 app.get("/@:username/list/:slug", (req, res) => {
@@ -1906,12 +1963,12 @@ app.post("/api/reader-articles", async (req, res) => {
 const { Asks } = require("./asks");
 const asks = new Asks(store, OWNER_ID);
 // Hidden for everyone, Max too (Max, 2026-11-09: «Чат поки сховаємо для всіх»): no menu item, no shelf button, and
-// /chat, /asks, /api/chat answer 404. Code and talks are kept: set CHAT_ON = true to bring it back.
-const CHAT_ON = false;
-const askCan = (u) => CHAT_ON && !!u && (u.id === OWNER_ID || asks.hasTalks(u.id));
+// /chat, /asks, /api/chat answer 404. Code and talks are kept. Since 2026-11-09 it is the flag `chat` (flags.js), off:
+// switched on /admin/jobs, no deploy needed.
+const askCan = (u) => flags.on("chat", u) && !!u && (u.id === OWNER_ID || asks.hasTalks(u.id));
 pages.setAskNav((u) => (askCan(u) ? asks.unread(u.id) : null));
 const askNo = (req, res, title = "Немає такої сторінки") => res.status(404).send(pages.messagePage({ title, text: "", user: req.user }));
-if (!CHAT_ON) app.use((req, res, next) => (/^\/(chat|asks|api\/chat)(\/|$)/.test(req.path) ? askNo(req, res) : next()));
+app.use((req, res, next) => (/^\/(chat|asks|api\/chat)(\/|$)/.test(req.path) && !flags.on("chat", req.user) ? askNo(req, res) : next()));
 const askBook = (id) => (id && store.book(id) ? store.bookPage(store.canonical(id)) : null);
 // The other reader of a talk the signed-in one may open: the owner any reader, others only one they talk with.
 const askOther = (req, res) => {
@@ -3367,7 +3424,15 @@ app.post("/api/speed", (req, res) => {
   }
   res.status(204).end();
 });
-app.get("/admin/jobs", owner, (req, res) => res.send(jobsPage({ user: req.user, layout: pages.layout, o: bg.overview(store.db), queue: newBooks.overview(), book: (id) => store.book(id), href: (id) => store.href(id), digest: JSON.parse(store.db.get("digest:last") || "null"), wantMail: JSON.parse(store.db.get("wantmail:last") || "null") })));
+app.get("/admin/jobs", owner, (req, res) => res.send(jobsPage({ user: req.user, layout: pages.layout, o: bg.overview(store.db), queue: newBooks.overview(), book: (id) => store.book(id), href: (id) => store.href(id), digest: JSON.parse(store.db.get("digest:last") || "null"), wantMail: JSON.parse(store.db.get("wantmail:last") || "null"), flags: flags.list() })));
+app.post("/admin/flags", owner, (req, res) => {
+  try {
+    flags.set(String(req.body?.name || ""), String(req.body?.who || ""), "owner");
+  } catch (e) {
+    console.log(`flags: ${e.message}`);
+  }
+  res.redirect(303, "/admin/jobs#flags");
+});
 // Why a work is not found (owner, plain JSON): its canonical id, whether it is a work, its index row, what search returns.
 app.get("/admin/debug/search", owner, (req, res) => {
   const id = store.slugs.get(String(req.query.id || "")) || String(req.query.id || "");

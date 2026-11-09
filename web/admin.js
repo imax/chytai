@@ -1444,7 +1444,7 @@ const FROM = { catalog: "каталог", manual: "вручну", goodreads: "Go
 const STEPS = { lang: "мова", genre: "жанри", orig: "переклад?", details: "деталі" };
 const ANSWERS = { uk: "українська", ru: "російська", en: "англійська", other: "інша", unknown: "не знає", translation: "так", ukrainian: "ні, українська" };
 
-function jobsPage({ user, layout, o, queue, book = () => null, href = () => "#", digest, wantMail, now = new Date() }) {
+function jobsPage({ user, layout, o, queue, book = () => null, href = () => "#", digest, wantMail, flags = [], now = new Date() }) {
   const esc = (t) => String(t ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
   const kyiv = (iso, day = true) => {
     if (!iso) return "—";
@@ -1529,6 +1529,13 @@ ${q.latest.length ? `<div class="tbl"><table>
 <tbody>${q.latest.map((r) => `<tr><th><a href="${href(r.id)}">${esc(book(r.id)?.title || r.id)}</a></th><td class="muted">${FROM[r.source] || esc(r.source)}</td><td>${kyiv(r.added)}</td><td>${kyiv(r.done)}</td><td class="res">${found(r.steps)}</td></tr>`).join("")}</tbody></table></div>` : ""}
 `;
 
+  // Feature flags (flags.js): who sees a thing that went live behind one. «Усі» only from here.
+  const WHO = [["off", "вимкнено"], ["owner", "лише я"], ["test", "я й тестові"], ["all", "усі"]];
+  const flagsBlock = flags.length ? `<h2 id="flags">Прапорці</h2>
+<p class="muted small">Нове виходить на сайт вимкненим або лише для тебе. Глянув, і вмикаєш усім тут, без деплою.</p>
+<div class="tbl"><table>
+<thead><tr><th>Що</th><th>Кому видно</th><th>Змінено</th></tr></thead>
+<tbody>${flags.map((f) => `<tr><th>${esc(f.what || f.name)}<small>${esc(f.name)}</small></th><td><form method="post" action="/admin/flags" class="inline"><input type="hidden" name="name" value="${esc(f.name)}"><select name="who" onchange="this.form.submit()">${WHO.map(([v, l]) => `<option value="${v}"${v === f.who ? " selected" : ""}>${l}</option>`).join("")}</select></form></td><td class="muted">${f.at ? `${kyiv(f.at)}${f.by === "thread" ? ", тред" : ""}` : "—"}</td></tr>`).join("")}</tbody></table></div>` : "";
   const body = `<section class="admin jobs">
 <section class="page-head"><div><h1>Фонові задачі</h1><p class="sub">Окремий процес поруч із сайтом: оновлює полиці, питає Haiku й Claude, шле листи. Сайт від нього не гальмує, а коли задача змінила книжки, сайт сам перечитує дані. Час київський, записи за 30 днів.</p></div></section>
 <div class="stats four">
@@ -1538,6 +1545,7 @@ ${q.latest.length ? `<div class="tbl"><table>
   <div class="stat"><b>${week.n}${week.failed ? ` / <span class="bad">${week.failed} ✗</span>` : ""}</b>запусків за 7 днів${week.failed ? ", з них невдалих" : ""}</div>
 </div>
 
+${flagsBlock}
 ${queueBlock}
 <h2>За розкладом</h2>
 <div class="tbl"><table>

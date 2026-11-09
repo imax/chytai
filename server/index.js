@@ -943,6 +943,18 @@ app.use((req, res, next) => {
   next();
 });
 
+// Threads see the reader's production, read only (Max, 2026-11-09; server/agent.js, CLAUDE.md «Прод»): who holds a
+// Fly token that can see this app. Its errors are on the site's /agent/health (they go there via /api/reader-alert).
+{
+  const agent = require("./agent");
+  const ok = agent.guard(process.env.FLY_APP_NAME || "chytai");
+  const sql = agent.sqlRunner(path.join(DATA_DIR, "reader.db"));
+  const started = new Date().toISOString();
+  app.use("/agent", (req, res, next) => (res.set("Cache-Control", "no-store"), next()));
+  app.get("/agent/health", ok, (req, res) => res.json({ now: new Date().toISOString(), commit: process.env.GIT_SHA || "", image: process.env.FLY_IMAGE_REF || "", started, memoryMb: Math.round(process.memoryUsage().rss / 1048576), storage: storage.now(DATA_DIR, ["reader.db"]), accounts: Object.keys(state.accounts || {}).length }));
+  app.all("/agent/sql", ok, express.json(), async (req, res) => res.json(await sql(req.body?.q || req.query.q)));
+}
+
 // The reader's address is app.chytai.org.ua (2026-10-22; read.chytai.org.ua for its first hour). Browsers
 // on chytai.fly.dev and read. go there; the iPhone app (ChytaiApp in its user agent) stays on
 // chytai.fly.dev until it is rebuilt, as does /sw.js, so a service worker installed there can still update itself.

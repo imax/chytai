@@ -10,6 +10,11 @@ COPY package.json package-lock.json ./
 RUN npm ci --omit=dev --no-audit --no-fund
 
 COPY web ./web
+# The read-only production view for threads (server/agent.js), shared with the reader.
+COPY server/agent.js ./server/agent.js
+# The commit, for /agent/health (web.yml passes it).
+ARG GIT_SHA=""
+ENV GIT_SHA=$GIT_SHA
 COPY build/icon.png ./build/icon.png
 
 ENV PORT=8080 DATA_DIR=/data
