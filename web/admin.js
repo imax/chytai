@@ -1047,6 +1047,8 @@ ${s.cohorts.length ? `<div class="tbl"><table class="cohorts">
 
 ${health}
 
+${activity}
+
 ${mail}
 
 <h2>Перегляди за розділами</h2>
@@ -1054,8 +1056,6 @@ ${mail}
 ${s.sections.length ? `<div class="tbl"><table class="sections">
 <thead><tr><th>Розділ</th><th>Сьогодні</th><th>7 днів</th><th>28 днів</th></tr></thead>
 <tbody>${s.sections.map((x) => `<tr><th>${x.name}</th><td>${n(x.today)}</td><td>${n(x.week)}</td><td>${n(x.month)}</td></tr>`).join("")}</tbody></table></div>` : `<p class="muted">Поки нічого не нарахувалось.</p>`}
-
-${activity}
 </section>`;
   return layout({ title: traffic ? "Трафік · Адмінка" : page === "retention" ? "Утримання · Адмінка" : "Адмінка", user, path: "/admin", body });
 }
