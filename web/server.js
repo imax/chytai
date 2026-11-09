@@ -2356,7 +2356,7 @@ app.get("/", (req, res) => {
     forWhy = "схожі на те, що ви хочете прочитати";
   }
   const own = req.user ? new Map(Object.entries(store.entriesOf(req.user.id))) : new Set();
-  const forYou = req.user && seeds.length ? social.similar(seeds.map((s) => s.id), { limit: 6, skip: own, own }).map((x) => ({ ...x, book: ukWork(x.book) })).filter((x) => ok(x.book) && !store.sharedEntry(req.user.id, x.book.id)) : [];
+  const forYou = req.user && seeds.length ? social.forReader(req.user.id, seeds.map((s) => s.id), { limit: 6, skip: own, own, popular: false }).map((x) => ({ ...x, book: ukWork(x.book) })).filter((x) => ok(x.book) && !store.sharedEntry(req.user.id, x.book.id)) : [];
   // (Nothing from the reader's own shelf, in any language: Max had read «The War of the Worlds» and got «Війна світів», 2026-10-30.)
   // New in the publishers: one fresh book from each of six shelves, the ones the reader follows first.
   const fresh = f
@@ -2991,9 +2991,8 @@ app.get("/start", signed, (req, res) => {
     const seeds = (liked.length ? liked : shelf).sort((a, b) => b.rating - a.rating).slice(0, 5).map((r) => r.book.id);
     const own = new Map(Object.entries(store.entriesOf(req.user.id)));
     const fit = (list) => list.map((x) => ({ ...x, book: ukWork(x.book) })).filter((x) => x.book && !isRussian(x.book) && !store.sharedEntry(req.user.id, x.book.id));
-    forYou = fit(social.similar(seeds, { limit: 6, skip: own, own }));
-    // Too few tags on those books for «схожі»: the best rated books here instead, so the page never ends empty.
-    if (forYou.length < 3) forYou = [...forYou, ...fit(social.popular().top).filter((x) => !forYou.some((y) => y.book.id === x.book.id))].slice(0, 6);
+    // What readers with a shelf like theirs liked (recs.js), topped up with genres and the best rated here (never empty).
+    forYou = fit(social.forReader(req.user.id, seeds, { limit: 12, skip: own, own })).slice(0, 6);
   }
   admin.log(req.user.id, "view", "/start", String(rated));
   res.send(pages.startPage({ user: req.user, books: out, rated, forYou, next: safeNext(req.query.next) }));

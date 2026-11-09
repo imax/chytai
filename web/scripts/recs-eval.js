@@ -51,6 +51,8 @@ for (const [rid, entries] of orig) {
     lists['hyb' + a] = [...sc].filter(([w]) => !own.has(w) && !Object.keys(rest).some((id) => recs.work(id) === w)).map(([w, v]) => [w, v + a * popS(w)]).sort((x, y) => y[1] - x[1]).slice(0, N).map(([w]) => w);
   }
   const cf = lists.cf;
+  lists.inter = [];
+  for (let i = 0; lists.inter.length < N && i < N; i++) for (const id of [cf[i], lists.tags[i]]) if (id && !lists.inter.includes(id) && lists.inter.length < N) lists.inter.push(id);
   lists.mix = [...cf, ...lists.tags.filter((id) => !cf.includes(id)), ...lists.pop].slice(0, N);
   for (const [k, l] of Object.entries(lists)) {
     const hits = new Set(l.map((id) => recs.work(id)).filter((w) => heldW.has(w))).size;

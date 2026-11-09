@@ -7,6 +7,7 @@
 
 // Tags that say nothing about what a book is like.
 const { isRussian, mainGenres, slugify } = require("./store");
+const { Recs } = require("./recs");
 const PLAIN = new Set(["українською"]);
 const tagsOf = (b) => (b?.tags || []).filter((t) => !PLAIN.has(t));
 const shuffle = (a) => {
@@ -36,6 +37,8 @@ class Social {
   constructor(store, who) {
     this.store = store;
     this.who = who;
+    // Collaborative filtering (recs.js, 2026-11-09): «хто любив ці книжки, любив і ці», no LLM.
+    this.recs = new Recs(store, { ok: (rid) => !!who(rid), skipBook: isRussian });
   }
 
   // Every entry of every reader that has something to say (a status or a rating): [{ reader, id, entry }].
@@ -401,6 +404,23 @@ class Social {
     return this.bySeries(out, ids, { row: book, own }).filter((x) => x.book && !skip.has(x.book.id)).slice(0, limit);
   }
 
+  // «Для вас» / «Для тебе» (2026-11-09): the books readers with a shelf like this one liked (recs.js), one per
+  // series; when that gives too few (a new reader, rare books), books sharing the genres of `seeds`, then
+  // the best rated here. Rows like similar(): { book, avg }.
+  forReader(readerId, seeds = [], { limit = 6, skip = new Set(), own = null, popular = true } = {}) {
+    const liked = this.liked();
+    const row = (id) => ({ book: this.store.book(id), avg: liked.get(id)?.avg ?? null });
+    const has = (id) => skip.has(id) || skip.has(this.store.canonical(id));
+    let out = this.bySeries(this.recs.forReader(readerId, { limit: limit * 3, skip: new Set(skip.keys()) }).map((x) => row(x.id)), [], { row: (id, x) => ({ ...x, ...row(id) }), own })
+      .filter((x) => x.book && !has(x.book.id));
+    const add = (list) => {
+      for (const x of list) if (out.length < limit && x.book && !has(x.book.id) && !out.some((y) => y.book.id === x.book.id)) out.push(x);
+    };
+    if (out.length < limit && seeds.length) add(this.similar(seeds, { limit: limit * 2, skip, own }));
+    if (out.length < limit && popular) add(this.popular().top);
+    return out.slice(0, limit);
+  }
+
   // Three books to start recommendations from: the reader's own latest fives, or for a guest (or a
   // reader without fives) three random well rated books with tags.
   seeds(readerId) {
@@ -418,6 +438,14 @@ class Social {
   // «Читали це, сподобалось і це»: what the readers who liked these books rated 4,5 or more, most
   // shared first; topped up with similar books.
   alsoLiked(ids, { limit = 4, skip = new Set() } = {}) {
+    // Collaborative filtering first (recs.js, 2026-11-09); the count below fills what it leaves.
+    const cf = this.bySeries(this.recs.forBooks(ids, { limit: limit * 3, skip }).map((x) => x.id), ids).filter((id) => !skip.has(id) && this.store.book(id)).slice(0, limit);
+    if (cf.length >= limit) return cf.map((id) => this.store.book(id));
+    skip = new Set([...skip, ...cf]);
+    const rest = this.alsoLikedOld(ids, { limit: limit - cf.length, skip });
+    return [...cf.map((id) => this.store.book(id)), ...rest];
+  }
+  alsoLikedOld(ids, { limit = 4, skip = new Set() } = {}) {
     const fans = new Set(this.all().filter(({ id, entry: e }) => ids.includes(id) && (e.rating ?? 0) >= 4).map((x) => x.reader.id));
     // Each fan who loved a book counts; so does every tag it shares with these books (with few readers
     // yet, a lone reader's fives would otherwise come up at random).
