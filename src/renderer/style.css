@@ -193,7 +193,8 @@ dialog label input[type="text"], dialog label input[type="password"], dialog lab
 dialog label textarea { resize: vertical; font: inherit; font-weight: 400; color: inherit; }
 dialog label.check { font-weight: 400; }
 dialog label[hidden] { display: none; }
-body.web #opds-set { display: block !important; }
+/* Hidden for now (Max 2026-11-09): the model and language of explanations, and the OPDS address. */
+.shared-setting, #opds-set, body.web #opds-set { display: none !important; }
 .opds-row { display: flex; gap: 8px; margin-top: 6px; }
 .opds-row input { flex: 1; min-width: 0; margin: 0 !important; font-size: 13px; }
 .opds-row button { border: 1px solid var(--line); border-radius: 8px; padding: 6px 12px; background: transparent; color: inherit; cursor: pointer; white-space: nowrap; }
