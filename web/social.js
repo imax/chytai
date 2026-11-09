@@ -253,6 +253,7 @@ class Social {
       if (e.status === "reading") w.reading.add(reader.id);
       if (e.status === "want") w.want.add(reader.id);
       if (e.rating != null) (w.sum += e.rating), w.rated++;
+      if (e.status === "read" || e.rating != null) (w.read ||= new Set()).add(reader.id);
       if ((e.updated || e.added || "") >= cutoff) w.month.add(reader.id);
     }
     // The member to show: one with a Ukrainian title first, then the one most readers have.
@@ -262,14 +263,14 @@ class Social {
     };
     const rows = [...works.values()];
     const taken = new Set();
-    const take = (list, score, min, extra, { fresh = false } = {}) => {
+    const take = (list, score, min, extra, { fresh = false, max = limit } = {}) => {
       const out = [];
       for (const w of list.filter((w) => score(w) >= min).sort((a, b) => score(b) - score(a) || b.all.size - a.all.size)) {
         const book = shown(w);
         if (!book || isRussian(book) || (fresh && taken.has(book.id))) continue;
         taken.add(book.id);
         out.push({ book, avg: w.rated ? Math.round((w.sum / w.rated) * 10) / 10 : null, rated: w.rated, n: extra(w) });
-        if (out.length >= limit) break;
+        if (out.length >= max) break;
       }
       return out;
     };
@@ -281,6 +282,8 @@ class Social {
       // Books already up there are left out, so the month shows what else is moving.
       month: take(rows, (w) => w.month.size, 2, (w) => w.month.size, { fresh: true }),
       top: take(rows, top, 0.01, (w) => w.rated),
+      // The books most readers have read: what a newcomer is likeliest to know, for /start.
+      known: take(rows, (w) => w.read?.size || 0, 2, (w) => w.read?.size || 0, { max: 40 }),
     };
     this.pop = { at: Date.now(), out };
     return out;

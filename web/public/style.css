@@ -1383,3 +1383,9 @@ mark.hl { background: color-mix(in srgb, var(--accent) 16%, transparent); color:
 .ask-addbook .pick-q { padding: 8px 12px; border: 1px solid var(--under); border-radius: 4px; background: transparent; color: var(--ink); font-size: 15px; }
 .ask-addbook .pick-q:focus { outline: 0; border-color: var(--ink); }
 .ask-compose .error { color: var(--danger); }
+/* /start: rate three books (pages.startPage) */
+.start-count { display: flex; align-items: baseline; gap: 6px; margin: 0 0 8px; color: var(--muted); }
+.start-count b { color: var(--ink, inherit); font-size: 20px; }
+.start-count .btn { margin-left: 12px; }
+.start-count .btn[hidden] { display: none; }
+.start .hit .rate { margin-left: auto; }

@@ -598,7 +598,7 @@
   const saveRate = async (box, field, value) => {
     box.classList.add("saving");
     try {
-      const r = await fetch(`/api/entry/${encodeURIComponent(box.dataset.id)}`, { method: "POST", body: new URLSearchParams({ [field]: value, back: "1" }), credentials: "same-origin" });
+      const r = await fetch(`/api/entry/${encodeURIComponent(box.dataset.id)}`, { method: "POST", body: new URLSearchParams({ [field]: value, ...(box.dataset.status ? { status: box.dataset.status } : {}), back: "1" }), credentials: "same-origin" });
       if (!r.ok) throw new Error(r.status);
       box.classList.remove("failed");
     } catch {
@@ -618,6 +618,15 @@
     for (const b of box.querySelectorAll(".rate-stars button")) {
       b.classList.toggle("on", Number(b.dataset.r) <= n);
       b.classList.toggle("half", Number(b.dataset.r) === n + 0.5);
+    }
+    // /start (pages.startPage): the count of rated books, and «Що читати далі» once there are enough.
+    const start = !box.classList.contains("rated") && box.closest("[data-start]");
+    if (start) {
+      const k = Number(start.dataset.rated) + 1;
+      start.dataset.rated = k;
+      const out = start.querySelector("[data-start-n]");
+      if (out) out.textContent = Math.min(k, Number(start.dataset.goal));
+      if (k >= Number(start.dataset.goal)) start.querySelector("[data-start-done]")?.removeAttribute("hidden");
     }
     box.classList.add("rated");
     saveRate(box, "rating", n);

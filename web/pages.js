@@ -236,8 +236,8 @@ const myStatus = (e) => `<span class="muted small">${esc(e.status ? STATUS[e.sta
 // stars and the year right in the row, so it needs no trip to one's own shelf (Olena's feedback, 2026-10-23).
 // app.js builds the same after the button; each tap is saved in the background.
 const rateYears = () => Array.from({ length: 10 }, (_, i) => new Date().getFullYear() - i);
-const rateLine = (id, label = "прочитано") =>
-  `<span class="rate" data-id="${attr(id)}"><span class="muted small">${label}</span><span class="rate-stars" role="group" aria-label="Оцінка">${[1, 2, 3, 4, 5].map((n) => `<button type="button" data-r="${n}" title="${n} з 5">★</button>`).join("")}</span><select class="rate-year" aria-label="Рік"><option value="">рік?</option>${rateYears().map((y) => `<option>${y}</option>`).join("")}</select></span>`;
+const rateLine = (id, label = "прочитано", { year = true, rating = null, status = "" } = {}) =>
+  `<span class="rate${rating != null ? " rated" : ""}" data-id="${attr(id)}"${rating != null ? ` data-rating="${rating}"` : ""}${status ? ` data-status="${attr(status)}"` : ""}>${label ? `<span class="muted small">${label}</span>` : ""}<span class="rate-stars" role="group" aria-label="Оцінка">${[1, 2, 3, 4, 5].map((n) => `<button type="button" data-r="${n}" title="${n} з 5"${rating != null && n <= rating ? ' class="on"' : rating != null && n === rating + 0.5 ? ' class="half"' : ""}>★</button>`).join("")}</span>${year ? `<select class="rate-year" aria-label="Рік"><option value="">рік?</option>${rateYears().map((y) => `<option>${y}</option>`).join("")}</select>` : ""}</span>`;
 const markButtons = (book, user) => `<span class="marks">${wantButton(book, user)}${wantButton(book, user, { label: "Прочитано", status: "read" })}</span>`;
 
 // The status, rating and copy of an entry as one quiet line: «★★★★★ 5 · прочитано · на папері».
@@ -2075,6 +2075,24 @@ function welcomePage({ user, next = "", from = null }) {
   return layout({ title: "Вітаємо", body, user, path: "/welcome" });
 }
 
+// /start: a newcomer rates books they have read, from the ones most readers here have read (onboarding,
+// Max 2026-11-09: «попросити його оцінити хоча б три книжки»). Three ratings bring «Для вас» right here.
+// Each star is saved in the background (app.js rateLine); the day-2 letter links here with one star already set.
+const START_GOAL = 3;
+function startPage({ user, books, rated, forYou = [] }) {
+  const done = rated >= START_GOAL;
+  const row = ({ book, entry }) => `<div class="hit">${cover(book, "sm")}<span><b><a href="${attr(book.href)}">${esc(book.title)}</a></b>${book.author ? `<span class="by">${esc(byline(book.author))}</span>` : ""}</span>${rateLine(book.id, "", { year: false, rating: entry?.rating ?? null, status: "read" })}</div>`;
+  const body = `
+${pageHead({ kicker: "Перші кроки", title: forYou.length ? "Що читати далі" : "Оцініть три книжки", lead: forYou.length ? "Підібрали за вашими оцінками. Що більше оцінок, то точніше." : "Які з них ви читали? За оцінками підберемо, що читати далі." })}
+<section class="start" data-start data-goal="${START_GOAL}" data-rated="${rated}">
+  ${forYou.length ? `<section class="block read-row" id="for-you">${label("Для вас", "схожі на те, що вам сподобалось")}<div class="grid six">${forYou.map((x) => card(x.book, { avg: x.avg })).join("")}</div></section>` : ""}
+  <p class="start-count">${forYou.length ? "Оцініть ще" : `Оцінено <b data-start-n>${Math.min(rated, START_GOAL)}</b> з ${START_GOAL}`}<a class="btn primary" href="/start#for-you" data-start-done${done && !forYou.length ? "" : " hidden"}>Що читати далі</a></p>
+  <div class="list-hits">${books.map(row).join("")}</div>
+  <p class="muted small">Немає знайомих? <a class="text-link" href="/add">Знайдіть свою книжку</a></p>
+</section>`;
+  return layout({ title: "Оцініть три книжки", body, user, path: "/start" });
+}
+
 // /me/now: the status itself. The book in it, the shelf's other «Читаю» books, or none.
 function nowPage({ user, now, candidates }) {
   const row = (book, on, meta = "") => `<label class="now-pick">${cover(book, "xs")}<span><b>${esc(book.title)}</b>${book.author ? `<span class="by">${esc(byline(book.author))}</span>` : ""}${meta ? `<span class="meta">${meta}</span>` : ""}</span><input type="radio" name="book" value="${attr(book.id)}"${on ? " checked" : ""}></label>`;
@@ -3093,6 +3111,7 @@ module.exports = {
   translationsPage,
   decidedList,
   welcomePage,
+  startPage,
   outsideResults,
   addPage, addReviewPage, addFindResults, addPageResult, ukFindPage,
   layout, bookPage, bookEditPage, russianPage, editPage, libraryPage, readersPage, readPage, genrePage, genreTrialPage, langTrialPage, origTrialPage, overviewTrialPage, ukTrialPage, catalogAdminPage, aiPassPage, publishersPage, publisherPage, publisherFavouritesPage, searchPage, searchResults, authorPage,

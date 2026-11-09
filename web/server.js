@@ -2924,6 +2924,47 @@ app.post("/api/entry/:id", signed, (req, res) => {
 
 // What a guest tapped before signing in (pages.guestDo): done once they are in, then back to the book. Only a
 // book not on the shelf yet is touched, so a link followed by someone else's hand changes nothing they have.
+// /start (pages.startPage): books most readers here have read, Ukrainian editions with covers; the reader's own
+// rated ones first. Three ratings (four stars and up as seeds, else any) bring «Для вас» on top.
+function startBooks(req) {
+  const mine = store.entriesOf(req.user.id);
+  const seen = new Set();
+  const out = [];
+  for (const x of social.popular().known) {
+    const book = bookFor(req, ukWork(x.book), false);
+    if (!book?.cover || isRussian(book) || seen.has(book.id)) continue;
+    seen.add(book.id);
+    const entry = store.entry(req.user.id, book.id) || store.entry(req.user.id, x.book.id);
+    if (entry && entry.rating == null) continue; // on the shelf already, without a rating: not asked again
+    out.push({ book, entry });
+    if (out.length >= 15) break;
+  }
+  return { out, rated: Object.values(mine).filter((e) => e.rating != null).length };
+}
+app.get("/start", signed, (req, res) => {
+  const { out, rated } = startBooks(req);
+  let forYou = [];
+  if (rated >= 3) {
+    const shelf = store.library(req.user.id).filter((r) => r.rating != null && !r.kids && r.book);
+    const liked = shelf.filter((r) => r.rating >= 4);
+    const seeds = (liked.length ? liked : shelf).sort((a, b) => b.rating - a.rating).slice(0, 5).map((r) => r.book.id);
+    const own = new Map(Object.entries(store.entriesOf(req.user.id)));
+    forYou = social.similar(seeds, { limit: 6, skip: own, own }).map((x) => ({ ...x, book: ukWork(x.book) })).filter((x) => x.book && !store.sharedEntry(req.user.id, x.book.id));
+  }
+  admin.log(req.user.id, "view", "/start", String(rated));
+  res.send(pages.startPage({ user: req.user, books: out, rated, forYou }));
+});
+// One star in the day-2 letter (newbie.js): the book read with that rating, then /start with the rest.
+app.get("/do/rate/:id/:n", signed, (req, res) => {
+  const id = store.canonical(store.resolve(req.params.id) || "");
+  const n = Math.max(1, Math.min(5, Math.round(Number(req.params.n)) || 0));
+  if (id && store.book(id) && n) {
+    const e = store.entry(req.user.id, id);
+    store.setEntry(req.user.id, id, { rating: n, ...(e?.status ? {} : { status: "read" }) });
+    advice.want(id);
+  }
+  res.redirect(safeNext(req.query.next) || "/start");
+});
 app.get("/do/:what/:id", signed, (req, res) => {
   const id = store.canonical(store.resolve(req.params.id) || "");
   if (!id || !store.book(id)) return res.redirect("/me");
