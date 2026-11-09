@@ -43,7 +43,10 @@ curl -s https://app.chytai.org.ua/agent/sql -H "$H" -H 'content-type: applicatio
 
 - SQL is SELECT / WITH / EXPLAIN only, on a read-only connection in a worker: 5 s, 500 rows, one at a time, 300 a day
   per app. E-mails and secret-looking values come back masked. Never print the token.
-- The reader's errors are recorded by the site (`errors` table, `place = 'reader'`), so the site's health shows them.
+- Errors live in the site's `errors` table (30 days): site 500s and crashes (`site`, `jobs`), the reader's server
+  (`reader`), and script errors from readers' browsers in the reader app (`reader`, message starts «[браузер]»,
+  extension noise dropped; `src/renderer/web-bridge.js` → `/api/client-error`). Each new one goes to Max's Telegram
+  once an hour. Script errors on the site's own pages are only counted (`events`, `name = 'js'`, /admin/speed).
 - Fly itself, same token: `https://api.fly.io/graphql` (machines, releases),
   `https://api.fly.io/prometheus/personal/api/v1/query_range` (`fly_app_http_responses_count` by status,
   `fly_instance_cpu`, memory), `https://api.fly.io/api/v1/apps/chytai-web/logs` (only the last ~100 lines).

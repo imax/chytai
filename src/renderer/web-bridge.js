@@ -5,6 +5,28 @@
   if (typeof window.reader?.getSettings === "function") return;
   document.body.classList.add("web");
 
+  // Script errors a reader runs into (Max, 2026-11-09: the reader's page is most of our code, and its errors went
+  // nowhere): a few per page go to the server, which drops browser-extension noise and passes the rest to the
+  // site's error list and Max's Telegram (server/index.js /api/client-error). Message, file:line and a short stack.
+  {
+    let sent = 0;
+    const post = (message, stack) => {
+      if (!message || sent++ >= 5) return;
+      const body = JSON.stringify({ message: String(message).slice(0, 300), stack: String(stack || "").slice(0, 1200), page: location.pathname.slice(0, 100), phone: matchMedia("(max-width: 700px)").matches });
+      try {
+        if (!navigator.sendBeacon?.("/api/client-error", new Blob([body], { type: "application/json" }))) fetch("/api/client-error", { method: "POST", headers: { "Content-Type": "application/json" }, body, keepalive: true }).catch(() => {});
+      } catch {}
+    };
+    addEventListener("error", (e) => {
+      if (!e.message) return; // a picture or a script that did not load: not a script error
+      post(`${e.message} (${String(e.filename || "").split("/").pop().split("?")[0]}:${e.lineno || 0})`, e.error?.stack);
+    });
+    addEventListener("unhandledrejection", (e) => {
+      const r = e.reason;
+      post(r instanceof Error ? `${r.name}: ${r.message}` : `Unhandled rejection: ${String(r)}`, r?.stack);
+    });
+  }
+
   // pdf.js 6 uses the new Map "upsert" methods; older mobile browsers don't have them yet.
   for (const proto of [Map.prototype, WeakMap.prototype]) {
     proto.getOrInsert ??= function (key, value) {

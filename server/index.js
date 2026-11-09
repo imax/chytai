@@ -373,6 +373,26 @@ function reportError(err, url = "") {
   process.on("uncaughtException", die);
   process.on("unhandledRejection", die);
 }
+// Script errors from readers' browsers (web-bridge.js; Max, 2026-11-09). Extension noise and the network's own
+// failures are dropped; the rest goes the way of server errors (reportError: the site's list, Telegram once an hour),
+// marked «[браузер]». At most 20 from one address and 200 in all an hour, so a broken page can't flood anything.
+const CLIENT_NOISE = /^Script error\.?|chrome-extension:|moz-extension:|safari-(web-)?extension:|chrome\.storage|__gCrWeb|webkit\.messageHandlers|ResizeObserver loop|AbortError|The operation was aborted|Failed to fetch|Load failed|NetworkError|network error|Network request failed|cancelled|Non-Error promise rejection captured/i;
+let clientErrors = { hour: 0, all: 0, by: new Map() };
+function clientError(req, res) {
+  res.status(204).end();
+  const b = req.body || {};
+  const msg = String(b.message || "").slice(0, 300);
+  if (!msg || CLIENT_NOISE.test(msg) || CLIENT_NOISE.test(String(b.stack || ""))) return;
+  const hour = Math.floor(Date.now() / 3600000);
+  if (clientErrors.hour !== hour) clientErrors = { hour, all: 0, by: new Map() };
+  const n = (clientErrors.by.get(req.ip) || 0) + 1;
+  clientErrors.by.set(req.ip, n);
+  if (n > 20 || ++clientErrors.all > 200) return;
+  const err = new Error(`[браузер] ${msg}`);
+  err.stack = `${err.message}\n${String(b.stack || "").split("\n").filter((l) => !l.includes(msg)).slice(0, 5).join("\n")}`;
+  console.error(`client error: ${msg}`);
+  reportError(err, `${String(b.page || "").slice(0, 100)} · ${b.phone ? "телефон" : "комп'ютер"} · ${String(req.get("user-agent") || "").replace(/\s*\(.*?\)\s*/g, " ").slice(0, 80)}`);
+}
 function alertOwner(subject, text) {
   const key = state.accounts[OWNER_ID]?.key;
   console.log(`alert: ${subject}`);
@@ -966,6 +986,8 @@ app.use((req, res, next) => {
   }
   next();
 });
+
+app.post("/api/client-error", express.json({ limit: "8kb", type: () => true }), clientError);
 
 // Public: icon and manifest, so the phone can show them before login.
 app.get("/icon.png", (_req, res) => res.sendFile(path.join(ROOT, "build", "icon.png")));
