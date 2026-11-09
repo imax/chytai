@@ -205,6 +205,8 @@ class Admin {
     if (!human(req) || /prefetch|prerender/i.test(req.headers["sec-purpose"] || req.headers.purpose || "")) return;
     try {
       const referer = req.headers.referer || req.headers.referrer || "";
+      // The way back from «Увійти через Google» is not an arrival from Google.
+      if (/^https?:\/\/accounts\.google\.[a-z.]+(\/|$)/i.test(referer)) return;
       const from = sourceOf(referer, req.query, ownHosts);
       const set = [];
       const tail = `; Path=/; HttpOnly; SameSite=Lax${secure ? "; Secure" : ""}`;
@@ -1233,10 +1235,11 @@ function activityPage({ user, rows, readers, books, names, who = null, embed = f
       case "signup": {
         // «з dev.ua» (Max, 2026-11-04: «зберігати референс на реєстраціях … щоб ми розуміли, що відбувається»).
         // «через Google» (2026-11-09) rides at the end of extra.
-        const google = / ?·? ?через Google$/.test(r.extra);
-        const [src, ref] = r.extra.replace(/ ?·? ?через Google$/, "").split(" · ");
+        // «через Google» is not shown here: the «Через Google» row on /admin/retention is enough (Max, 2026-11-09,
+        // «решта більше заважає»). «з Google» with accounts.google.com was only the way back from Google's sign-in.
+        const [src, ref] = /^accounts\.google\./.test(r.extra.split(" · ")[1] || "") ? [] : r.extra.replace(/ ?·? ?через Google$/, "").split(" · ");
         const from = src ? ` <span class="muted">з ${ref && !/\s/.test(ref) ? `<a href="https://${esc(ref)}" rel="noreferrer">${esc(src)}</a>` : esc(src)}</span>` : "";
-        return { html: `<b>зареєструвався</b>${google ? ` <span class="muted">через Google</span>` : ""}${from}` };
+        return { html: `<b>зареєструвався</b>${from}` };
       }
       case "login":
         return { key: "login", html: "увійшов" };
