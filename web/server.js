@@ -2212,6 +2212,11 @@ app.post("/api/lists/:id/why", signed, myList, (req, res) => {
   lists.setWhy(req.list.id, id, req.body.why);
   res.redirect(303, `${req.list.href}#${encodeURIComponent(id)}`);
 });
+app.post("/api/lists/:id/section", signed, myList, (req, res) => {
+  const id = bookParam(req);
+  lists.setSection(req.list.id, id, req.body.section, req.body.note);
+  res.redirect(303, `${req.list.href}#${encodeURIComponent(id)}`);
+});
 app.post("/api/lists/:id/move", signed, myList, (req, res) => {
   const id = bookParam(req);
   lists.move(req.list.id, id, Number(req.body.dir));
@@ -3749,7 +3754,7 @@ async function seedEditorials() {
           id = store.addBook({ title: b.title, author: b.author, cover: row.cover, links: row.link ? [row.link] : [], source: "tip", ...(row.isbns.length ? { isbns: row.isbns } : {}), ...(row.blurb ? { blurb: row.blurb, blurbSource: row.blurbSource } : {}), pages: row.pages || b.pages || null, published: row.published || b.published || null }).id;
         }
       }
-      if (id) ids.push([id, b.why || ""]);
+      if (id) ids.push([id, b.why || "", b.section || "", b.sectionNote || ""]);
       else console.log(`editorial ${e.key}: no book ${b.id || b.title}`);
     }
     // An earlier editorial list this one takes the place of (Max, 2026-10-28: the MEGOGO vote's 35 instead of Diia's 15).
@@ -3757,7 +3762,7 @@ async function seedEditorials() {
     if (old) lists.remove(old.id);
     // `draft`: only the owner sees it until «Опублікувати» (Max, 2026-11-01: «В статусі драфт, поки нічого не публікуємо»).
     const l = lists.create(OWNER_ID, { title: e.title, note: e.note, draft: !!e.draft });
-    for (const [id, why] of ids) lists.add(l.id, id, why);
+    for (const [id, why, section, sectionNote] of ids) lists.add(l.id, id, why), section && lists.setSection(l.id, id, section, sectionNote);
     lists.edit(l.id, { editorial: true, source: e.source });
     console.log(`editorial ${e.key}: ${l.href}, ${ids.length} books`);
   }

@@ -81,6 +81,8 @@ so Max sees it on the real site. He switches it to everyone on `/admin/jobs` (bl
 
 - Add an entry to `web/seed/editorial.json` (`key`, `title`, `note`, `books` as `{id, why}`; `"draft": true`). The web
   process makes it once under Max's account (`/@maxua/list/<slug>`); a draft only Max sees, he presses «Опублікувати».
+  A book may carry `section` / `sectionNote`: a heading over it and the books after it. To rework a made list, add a new
+  key with `"replaces": "<old title>"` (same title keeps the URL; the old list is removed).
 - Find work ids on the test DB with `store.search()` / `store.resolve()`; a book the catalog lacks goes in as
   `{title, author, page}` (a store page) and is added from it. Prefer Ukrainian editions, no Russian authors.
 - Check it locally signed in as `owner@test.invalid`, screenshot, show Max.

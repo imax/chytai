@@ -31,6 +31,7 @@ const TITLE_MAX = 100;
 // a picture on top and an intro of a few paragraphs.
 const NOTE_MAX = 4000;
 const WHY_MAX = 300;
+const SECTION_MAX = 100;
 const ITEMS_MAX = 300;
 // «Клуб Chytai» (Max, 2026-10-27): readers' words under a list, signed-in readers only, no likes and no
 // replies; the list's author sees the new ones in the Friday letter.
@@ -50,6 +51,9 @@ class Lists {
     this.db.exec(SCHEMA);
     for (const [col, def] of [["image", "TEXT NOT NULL DEFAULT ''"], ["editorial", "INTEGER NOT NULL DEFAULT 0"], ["source", "TEXT NOT NULL DEFAULT ''"], ["draft", "INTEGER NOT NULL DEFAULT 0"], ["home", "TEXT NOT NULL DEFAULT ''"]])
       if (!this.db.prepare("PRAGMA table_info(lists)").all().some((c) => c.name === col)) this.db.exec(`ALTER TABLE lists ADD COLUMN ${col} ${def}`);
+    // A section heading over a book and the books after it (Max, 2026-11-09: «секції, щоб довгий список побити на розділи»).
+    for (const [col, def] of [["section", "TEXT NOT NULL DEFAULT ''"], ["section_note", "TEXT NOT NULL DEFAULT ''"]])
+      if (!this.db.prepare("PRAGMA table_info(list_items)").all().some((c) => c.name === col)) this.db.exec(`ALTER TABLE list_items ADD COLUMN ${col} ${def}`);
     if (!this.db.prepare("PRAGMA table_info(list_comments)").all().some((c) => c.name === "edited")) this.db.exec("ALTER TABLE list_comments ADD COLUMN edited TEXT NOT NULL DEFAULT ''");
   }
 
@@ -173,12 +177,12 @@ class Lists {
   items(listId, { own = false } = {}) {
     const out = [];
     const seen = new Set();
-    for (const r of this.db.prepare("SELECT book, why, added FROM list_items WHERE list = ? ORDER BY ord, added").all(listId)) {
+    for (const r of this.db.prepare("SELECT book, why, added, section, section_note FROM list_items WHERE list = ? ORDER BY ord, added").all(listId)) {
       const id = this.store.canonical(r.book);
       const book = this.store.book(id);
       if (!book || seen.has(id) || (!own && isRussian(book))) continue;
       seen.add(id);
-      out.push({ id, book, why: r.why, added: r.added });
+      out.push({ id, book, why: r.why, added: r.added, section: r.section, sectionNote: r.section_note });
     }
     return out;
   }
@@ -212,6 +216,13 @@ class Lists {
   }
   setWhy(listId, bookId, why) {
     for (const b of this.rowsOf(listId, bookId)) this.db.prepare("UPDATE list_items SET why = ? WHERE list = ? AND book = ?").run(String(why || "").trim().slice(0, WHY_MAX), listId, b);
+    this.touch(listId);
+  }
+  // A section starts at this book (an empty title takes it away); it moves with the book.
+  setSection(listId, bookId, title, note = "") {
+    title = String(title || "").replace(/\s+/g, " ").trim().slice(0, SECTION_MAX);
+    note = title ? String(note || "").trim().slice(0, WHY_MAX) : "";
+    for (const b of this.rowsOf(listId, bookId)) this.db.prepare("UPDATE list_items SET section = ?, section_note = ? WHERE list = ? AND book = ?").run(title, note, listId, b);
     this.touch(listId);
   }
   // One place up (-1) or down (+1).

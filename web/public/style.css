@@ -893,6 +893,11 @@ form.inline button:not(.btn) { background: none; border: 0; padding: 0; cursor: 
 .lrow .by { color: var(--muted); font-size: 14px; margin-top: 2px; }
 .lrow .meta { font-size: 13px; color: var(--muted); margin-top: 6px; }
 .lrow .why { font: italic 17px/1.45 var(--serif); margin-top: 10px; }
+.lsec { margin-top: 40px; padding-bottom: 6px; border-bottom: 1px solid var(--ink); }
+.lsec:first-child { margin-top: 0; }
+.lsec h2 { font: 600 26px/1.2 var(--serif); }
+.lsec p { font: 17px/1.5 var(--serif); color: var(--text); margin-top: 6px; max-width: 38em; }
+.why-edit input { width: 100%; padding: 8px 10px; border: 1px solid var(--under); border-radius: 4px; background: transparent; font: 16px/1.45 var(--serif); }
 .lrow:target { background: linear-gradient(90deg, transparent, color-mix(in oklab, var(--accent) 10%, transparent), transparent); }
 .list-tools { display: flex; flex-wrap: wrap; gap: 6px 16px; align-items: baseline; margin-top: 10px; }
 .list-tools button[disabled] { opacity: 0.3; cursor: default; }

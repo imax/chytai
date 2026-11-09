@@ -2736,10 +2736,12 @@ function listPage({ list, items, user, own = false, owner = false, saved = false
       <form method="post" action="/api/lists/${id}/move" class="inline"><input type="hidden" name="book" value="${attr(x.id)}"><input type="hidden" name="dir" value="-1"><button class="text-link small" title="Вище"${i ? "" : " disabled"}>↑</button></form>
       <form method="post" action="/api/lists/${id}/move" class="inline"><input type="hidden" name="book" value="${attr(x.id)}"><input type="hidden" name="dir" value="1"><button class="text-link small" title="Нижче"${i < items.length - 1 ? "" : " disabled"}>↓</button></form>
       <details class="why-edit"><summary class="text-link small">${x.why ? "змінити рядок" : "+ чому вона тут"}</summary><form method="post" action="/api/lists/${id}/why"><input type="hidden" name="book" value="${attr(x.id)}"><textarea name="why" rows="2" maxlength="300" placeholder="Один-два рядки: чому ця книжка в списку">${esc(x.why)}</textarea><button class="btn small">Зберегти</button></form></details>
+      <details class="why-edit"><summary class="text-link small">${x.section ? "змінити розділ" : "+ розділ звідси"}</summary><form method="post" action="/api/lists/${id}/section"><input type="hidden" name="book" value="${attr(x.id)}"><input name="section" maxlength="100" value="${attr(x.section)}" placeholder="Назва розділу (порожня прибирає його)"><textarea name="note" rows="2" maxlength="300" placeholder="Кілька слів про розділ (необов'язково)">${esc(x.sectionNote)}</textarea><button class="btn small">Зберегти</button></form></details>
       <form method="post" action="/api/lists/${id}/remove" class="inline"><input type="hidden" name="book" value="${attr(x.id)}"><button class="text-link small muted">прибрати</button></form>
     </div>`
         : "";
-      return `<article class="lrow" id="${attr(x.id)}"><span class="n">${i + 1}</span><a class="cover-link" href="${attr(b.href)}">${cover(b, "md")}</a><div class="row-body">
+      const head = x.section ? `<header class="lsec"><h2>${esc(x.section)}</h2>${x.sectionNote ? `<p>${inline(x.sectionNote)}</p>` : ""}</header>` : "";
+      return `${head}<article class="lrow" id="${attr(x.id)}"><span class="n">${i + 1}</span><a class="cover-link" href="${attr(b.href)}">${cover(b, "md")}</a><div class="row-body">
     <h3><a href="${attr(b.href)}">${esc(b.title)}</a></h3>
     ${b.author ? `<p class="by">${authorLinks(b.author)}</p>` : ""}
     ${readersMeta(x.id) || x.free ? `<p class="meta">${[readersMeta(x.id), x.free ? `<a class="text-link" href="/go/read/${attr((b.href || "").split("/").pop())}">є в Читалці</a>` : ""].filter(Boolean).join(" · ")}</p>` : ""}
