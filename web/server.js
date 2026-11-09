@@ -498,7 +498,7 @@ function newReader(req, { email, name, username, ticket, next, came, via = "" })
   if (via) admin.event(req, null, "login", `${via}:signup`);
   came = came || admin.cameFrom(cookies(req).chytai_came);
   admin.came(reader.id, came);
-  admin.log(reader.id, "signup", next || "", came.source === "Напряму" ? "" : [came.source, came.ref].filter(Boolean).join(" · "));
+  admin.log(reader.id, "signup", next || "", [came.source === "Напряму" ? "" : [came.source, came.ref].filter(Boolean).join(" · "), via === "google" ? "через Google" : ""].filter(Boolean).join(" · "));
   signupWave();
   auth.useTicket(ticket);
   console.log(`new reader @${reader.username}`);

@@ -1232,9 +1232,11 @@ function activityPage({ user, rows, readers, books, names, who = null, embed = f
     switch (r.kind) {
       case "signup": {
         // «з dev.ua» (Max, 2026-11-04: «зберігати референс на реєстраціях … щоб ми розуміли, що відбувається»).
-        const [src, ref] = r.extra.split(" · ");
+        // «через Google» (2026-11-09) rides at the end of extra.
+        const google = / ?·? ?через Google$/.test(r.extra);
+        const [src, ref] = r.extra.replace(/ ?·? ?через Google$/, "").split(" · ");
         const from = src ? ` <span class="muted">з ${ref && !/\s/.test(ref) ? `<a href="https://${esc(ref)}" rel="noreferrer">${esc(src)}</a>` : esc(src)}</span>` : "";
-        return { html: `<b>зареєструвався</b>${from}` };
+        return { html: `<b>зареєструвався</b>${google ? ` <span class="muted">через Google</span>` : ""}${from}` };
       }
       case "login":
         return { key: "login", html: "увійшов" };
