@@ -172,11 +172,13 @@ class WantMail {
       const out = { started: now.toISOString(), sent: 0, readers: 0, errors: [] };
       for (const r of this.recipients()) {
         try {
+          // Two optional letters today already (maillog.js): this one waits, its state unsaved, for tomorrow.
+          if (this.auth.mailLog && !this.auth.mailLog.room(r.id, now)) continue;
           const d = this.build(r.id, { now });
           out.readers++;
           if (d.books.length) {
             const l = this.render(r, d.books);
-            await this.auth.send(l.to, l.subject, l.text, { html: l.html, headers: l.headers });
+            await this.auth.send(l.to, l.subject, l.text, { html: l.html, headers: l.headers, kind: "want" });
             out.sent++;
             this.log(`want mail @${r.username}: «${l.subject}»`);
           }
@@ -193,14 +195,14 @@ class WantMail {
     return this.running;
   }
 
-  // Once a day from 10:00 Kyiv, checked every ten minutes; Fridays only after the weekly letter has gone out.
+  // Once a day from 10:00 Kyiv, checked every ten minutes. Not on Fridays: that day only the weekly letter goes
+  // (Max, 2026-11-09), and Saturday's letter has everything since Thursday.
   schedule() {
     const tick = () => {
       const db = this.store.db;
       const today = dayKyiv(new Date());
       const now = kyiv(new Date());
-      // Fridays the weekly letter goes first (it starts at 9:30 and may run long), so the two never send at once.
-      if (now.getHours() < SEND_HOUR || db.get("wantmail:lastRun") === today || db.get("digest:running") || (now.getDay() === 5 && db.get("digest:lastRun") !== today)) return;
+      if (now.getHours() < SEND_HOUR || now.getDay() === 5 || db.get("wantmail:lastRun") === today || db.get("digest:running")) return;
       db.set("wantmail:lastRun", today);
       this.run().catch((e) => this.log(`want mail run failed: ${e.message}`));
     };

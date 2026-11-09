@@ -452,7 +452,7 @@ class Digest {
     if (!dry) this.record(reader.id, now, p.state);
     if (!p.letter) return { sent: false, reason: p.reason };
     const l = p.letter;
-    await this.auth.send(l.to, l.subject, l.text, { html: l.html, headers: l.headers });
+    await this.auth.send(l.to, l.subject, l.text, { html: l.html, headers: l.headers, kind: dry ? "test" : "digest" });
     return { sent: true, subject: l.subject };
   }
 
@@ -503,7 +503,7 @@ class Digest {
       for (let i = 0; i < ready.length; i += 100) {
         const chunk = ready.slice(i, i + 100);
         try {
-          await this.auth.sendBatch(chunk.map((x) => x.p.letter));
+          await this.auth.sendBatch(chunk.map((x) => x.p.letter), { kind: "digest" });
           chunk.forEach(sent);
         } catch (e) {
           // The batch call failed as a whole: one by one, so one bad address does not cost everyone their letter.
@@ -511,7 +511,7 @@ class Digest {
           for (const x of chunk) {
             try {
               const l = x.p.letter;
-              await this.auth.send(l.to, l.subject, l.text, { html: l.html, headers: l.headers });
+              await this.auth.send(l.to, l.subject, l.text, { html: l.html, headers: l.headers, kind: "digest" });
               sent(x);
             } catch (e2) {
               out.errors.push(`@${x.r.username}: ${e2.message}`);

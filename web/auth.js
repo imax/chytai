@@ -324,12 +324,12 @@ class Auth {
     const M = require("./mailhtml");
     const site = "https://chytai.org.ua";
     const html = M.letter({ site, title: subject, heading: "Код для входу", body: `<div style="font-family:${M.SERIF};font-size:40px;letter-spacing:.12em;margin:20px 0 0;color:#1b1a17">${M.esc(code)}</div>${M.paras("Він діє 10 хвилин. Якщо ви не просили код, просто не зважайте на цей лист.", { serif: false })}`, footer: "" });
-    return this.send(email, subject, text, { html, code: true });
+    return this.send(email, subject, text, { html, code: true, kind: "code" });
   }
 
   // A letter through Resend (plain text, with an HTML version, extra headers and attachments
   // ([{ filename, content: base64 }]) when given); without the key it goes to the log instead.
-  async send(to, subject, text, { html = "", headers = null, attachments = null, code = false } = {}) {
+  async send(to, subject, text, { html = "", headers = null, attachments = null, code = false, kind = "" } = {}) {
     if (testAddress(to)) return this.log(`[mail] test address, not sent: to ${to}: ${subject}\n${text}`);
     if (this.guard && !this.guard.allowed(to, { code })) return this.log(`[mail] ${this.guard.blocked(to)}, not sent: ${subject}`);
     if (!this.resendKey) {
@@ -342,9 +342,19 @@ class Auth {
       body: JSON.stringify({ from: this.from, to: [to], subject, text, ...(html ? { html } : {}), ...(headers ? { headers } : {}), ...(attachments ? { attachments } : {}) }),
     });
     if (!res.ok) throw new Error(`Resend ${res.status}: ${(await res.text()).slice(0, 200)}`);
+    this.logSent(kind, [to]);
+  }
+  // The mail log (maillog.js): which kind went to which reader. Never stops a letter.
+  logSent(kind, addresses) {
+    if (kind === "test") return; // the owner's own test letters
+    try {
+      this.mailLog?.sent(kind, addresses.map((a) => this.byEmail(a)?.id || null));
+    } catch (e) {
+      this.log(`[mail] log: ${e.message}`);
+    }
   }
   // Up to 100 letters in one Resend call ({ to, subject, text, html, headers } each), for the weekly letter.
-  async sendBatch(letters) {
+  async sendBatch(letters, { kind = "" } = {}) {
     for (const l of letters) if (testAddress(l.to)) this.log(`[mail] test address, not sent: to ${l.to}: ${l.subject}`);
     letters = letters.filter((l) => !testAddress(l.to) && (!this.guard || this.guard.allowed(l.to)));
     if (!letters.length) return;
@@ -358,6 +368,7 @@ class Auth {
       body: JSON.stringify(letters.map((l) => ({ from: this.from, to: [l.to], subject: l.subject, text: l.text, ...(l.html ? { html: l.html } : {}), ...(l.headers ? { headers: l.headers } : {}) }))),
     });
     if (!res.ok) throw new Error(`Resend batch ${res.status}: ${(await res.text()).slice(0, 200)}`);
+    this.logSent(kind, letters.map((l) => l.to));
   }
 }
 

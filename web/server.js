@@ -74,6 +74,10 @@ const auth = new Auth(store.db, { ownerToken: TOKEN, resendKey: process.env.RESE
 // Letters that bounced or were marked as spam (Resend's webhook): those addresses get no more (mailguard.js).
 const mailGuard = new MailGuard(store.db, { usernameOf: (email) => auth.byEmail(email)?.username || null });
 auth.guard = mailGuard;
+// Every letter by kind, and readers switching kinds off: the «Листи» block on /admin and the daily cap (maillog.js).
+const { MailLog } = require("./maillog");
+const mailLog = new MailLog(store.db);
+auth.mailLog = mailLog;
 const mailHealth = () => mailGuard.health();
 auth.ensureOwner({ id: OWNER_ID, name: OWNER, username: OWNER_USERNAME });
 const admin = new Admin(store.db, { ownerId: OWNER_ID }); // the owner's statistics (/admin): visits and page views
@@ -936,6 +940,10 @@ app.get("/settings/mail", signed, (req, res) => {
   res.send(pages.mailSettingsPage({ user: req.user, values: { digest: digest.enabled(req.user.id), follow_mail: auth.followMailEnabled(req.user.id), mention_mail: auth.mentionMailEnabled(req.user.id), club_mail: auth.clubMailEnabled(req.user.id), topic_mail: clubMail.enabled(req.user.id), want_mail: wantMail.enabled(req.user.id) }, saved: !!req.query.saved }));
 });
 app.post("/settings/mail", signed, (req, res) => {
+  const r = req.user, b = req.body;
+  const was = { digest: digest.enabled(r.id), follow: auth.followMailEnabled(r.id), mention: auth.mentionMailEnabled(r.id), club: auth.clubMailEnabled(r.id), "club-topic": clubMail.enabled(r.id), want: wantMail.enabled(r.id) };
+  const now = { digest: !!b.digest, follow: !!b.follow_mail, mention: !!b.mention_mail, club: !!b.club_mail, "club-topic": !!b.topic_mail, want: !!b.want_mail };
+  for (const k of Object.keys(was)) mailLog.switched(k, r.id, was[k], now[k]);
   digest.setEnabled(req.user.id, !!req.body.digest);
   auth.setFollowMail(req.user.id, !!req.body.follow_mail);
   auth.setMentionMail(req.user.id, !!req.body.mention_mail);
@@ -1147,7 +1155,7 @@ function notifyOwner(subject, text) {
   telegram.send(`${subject}\n\n${text}`);
   const to = process.env.WEB_NOTIFY_EMAIL || auth.reader(OWNER_ID)?.email;
   if (!to) return console.log(`[notify] no owner e-mail: ${subject}`);
-  auth.send(to, subject, text).catch((e) => console.error(`[notify] ${subject}: ${e.message}`));
+  auth.send(to, subject, text, { kind: "owner" }).catch((e) => console.error(`[notify] ${subject}: ${e.message}`));
 }
 // The site's disk and memory near their limit (storage.js); the jobs process watches its own memory.
 storage.watch(() => (bg.ROLE === "jobs" ? storage.problems({ ...storage.now(DATA_DIR), diskTotal: 0 }, "Сайт, фонові задачі") : storage.problems(storage.now(DATA_DIR, ["chytai.db"]), "Сайт")), notifyOwner);
@@ -1321,12 +1329,13 @@ async function followMail(follower, target) {
   ].join("\n");
   const M = require("./mailhtml");
   const html = M.letter({ site: SITE, title: subject, heading: `${M.esc(follower.name)} тепер стежить за вашою полицею`, body: M.paras("Ваші оцінки й нотатки будуть у них першими в стрічці.", { serif: false }), button: { text: `Що читає ${follower.name}`, href: `${SITE}${follower.href}` }, off: { href: off, text: "Не надсилати таких листів" } });
-  await auth.send(target.email, subject, require("./admin").mailLinks(text, SITE, "follow"), { html: require("./admin").mailLinks(html, SITE, "follow", true), headers: { "List-Unsubscribe": `<${off}>`, "List-Unsubscribe-Post": "List-Unsubscribe=One-Click" } });
+  await auth.send(target.email, subject, require("./admin").mailLinks(text, SITE, "follow"), { kind: "follow", html: require("./admin").mailLinks(html, SITE, "follow", true), headers: { "List-Unsubscribe": `<${off}>`, "List-Unsubscribe-Post": "List-Unsubscribe=One-Click" } });
   console.log(`follow mail: @${follower.username} → @${target.username}`);
 }
 const followMailSwitch = (req, res, on) => {
   const reader = auth.reader(req.params.id);
   if (!reader || !digest.check(reader.id, req.params.token)) return res.status(404).send(pages.messagePage({ title: "Посилання не підходить", text: "Вимкнути листи можна в налаштуваннях.", user: req.user }));
+  mailLog.switched("follow", reader.id, auth.followMailEnabled(reader.id), on);
   auth.setFollowMail(reader.id, on);
   if (req.method === "POST" && !req.body.page) return res.type("text").send("OK");
   res.send(pages.followMailPage({ on, action: `/follow-mail/${on ? "unsubscribe" : "resubscribe"}/${encodeURIComponent(reader.id)}/${req.params.token}`, user: req.user }));
@@ -1337,6 +1346,7 @@ app.post("/follow-mail/resubscribe/:id/:token", (req, res) => followMailSwitch(r
 const wantMailSwitch = (req, res, on) => {
   const reader = auth.reader(req.params.id);
   if (!reader || !digest.check(reader.id, req.params.token)) return res.status(404).send(pages.messagePage({ title: "Посилання не підходить", text: "Вимкнути листи можна в налаштуваннях.", user: req.user }));
+  mailLog.switched("want", reader.id, wantMail.enabled(reader.id), on);
   wantMail.setEnabled(reader.id, on);
   if (req.method === "POST" && !req.body.page) return res.type("text").send("OK");
   res.send(pages.wantMailPage({ on, action: `/want-mail/${on ? "unsubscribe" : "resubscribe"}/${encodeURIComponent(reader.id)}/${req.params.token}`, user: req.user }));
@@ -1524,7 +1534,7 @@ function mentionMails(req, text, { where, href, before = "" }) {
     const M = require("./mailhtml");
     const html = M.letter({ site: SITE, title: "Вас згадали в Клубі Chytai", section: "Клуб", kicker: `<b style="color:#1b1a17;font-weight:500">${M.esc(req.user.name)}</b> згадав(ла) вас ${M.esc(where)}`, body: M.quote(String(text).trim().slice(0, 600)), button: { text: "Відповісти", href: `${SITE}${href}` }, off: { href: off, text: "Не надсилати листів про згадки" } });
     auth
-      .send(r.email, `${req.user.name} згадав(ла) вас у Клубі Chytai`, require("./admin").mailLinks(body, SITE, "mention"), { html: require("./admin").mailLinks(html, SITE, "mention", true), headers: { "List-Unsubscribe": `<${off}>`, "List-Unsubscribe-Post": "List-Unsubscribe=One-Click" } })
+      .send(r.email, `${req.user.name} згадав(ла) вас у Клубі Chytai`, require("./admin").mailLinks(body, SITE, "mention"), { kind: "mention", html: require("./admin").mailLinks(html, SITE, "mention", true), headers: { "List-Unsubscribe": `<${off}>`, "List-Unsubscribe-Post": "List-Unsubscribe=One-Click" } })
       .then(() => console.log(`mention mail: @${req.user.username} → @${r.username}`))
       .catch((e) => console.log(`mention mail to @${r.username} failed: ${e.message}`));
     mailed.add(r.id);
@@ -1543,7 +1553,7 @@ function replyMails(req, t, postId, text, skip = new Set()) {
     const M = require("./mailhtml");
     const html = M.letter({ site: SITE, title: t.title, section: "Клуб", kicker: `Нова відповідь від <b style="color:#1b1a17;font-weight:500">${M.esc(req.user.name)}</b> у темі`, heading: `<a href="${M.esc(SITE + t.href)}" style="color:#1b1a17;text-decoration:none">${M.esc(t.title)}</a>`, body: M.quote(String(text).trim().slice(0, 1500)), button: { text: "Відповісти", href: `${SITE}${t.href}#p-${postId}` }, off: { href: off, text: "Не стежити за цією темою" } });
     auth
-      .send(r.email, `Клуб Chytai: ${t.title}`, require("./admin").mailLinks(body, SITE, "club"), { html: require("./admin").mailLinks(html, SITE, "club", true), headers: { "List-Unsubscribe": `<${off}>`, "List-Unsubscribe-Post": "List-Unsubscribe=One-Click" } })
+      .send(r.email, `Клуб Chytai: ${t.title}`, require("./admin").mailLinks(body, SITE, "club"), { kind: "club", html: require("./admin").mailLinks(html, SITE, "club", true), headers: { "List-Unsubscribe": `<${off}>`, "List-Unsubscribe-Post": "List-Unsubscribe=One-Click" } })
       .then(() => console.log(`club mail: «${t.title}» → @${r.username}`))
       .catch((e) => console.log(`club mail to @${r.username} failed: ${e.message}`));
     mailed.add(r.id);
@@ -1555,6 +1565,7 @@ const clubUnwatch = (req, res) => {
   const reader = auth.reader(req.params.reader);
   const t = club.topic(req.params.topic);
   if (!reader || !t || !digest.check(reader.id, req.params.token)) return res.status(404).send(pages.messagePage({ title: "Посилання не підходить", text: "Вимкнути листи можна в налаштуваннях.", user: req.user }));
+  mailLog.switched("club", reader.id, club.watching(reader.id, t.id), false);
   club.setWatch(reader.id, t.id, false);
   if (req.method === "POST" && !req.body?.page) return res.type("text").send("OK");
   res.send(pages.messagePage({ title: "Більше не надсилатимемо листів про цю тему", text: `«${t.title}». Увімкнути знову можна галочкою в темі.`, user: req.user }));
@@ -1563,6 +1574,7 @@ const clubUnwatch = (req, res) => {
 const topicMailOff = (req, res) => {
   const reader = auth.reader(req.params.reader);
   if (!reader || !digest.check(reader.id, req.params.token)) return res.status(404).send(pages.messagePage({ title: "Посилання не підходить", text: "Вимкнути листи можна в налаштуваннях.", user: req.user }));
+  mailLog.switched("club-topic", reader.id, clubMail.enabled(reader.id), false);
   clubMail.setEnabled(reader.id, false);
   if (req.method === "POST" && !req.body?.page) return res.type("text").send("OK");
   res.send(pages.messagePage({ title: "Більше не надсилатимемо листів про нові теми Клубу", text: "Увімкнути знову можна в налаштуваннях листів.", user: req.user }));
@@ -1574,6 +1586,7 @@ app.post("/club-mail/unwatch/:topic/:reader/:token", clubUnwatch);
 const mentionMailSwitch = (req, res, on) => {
   const reader = auth.reader(req.params.id);
   if (!reader || !digest.check(reader.id, req.params.token)) return res.status(404).send(pages.messagePage({ title: "Посилання не підходить", text: "Вимкнути листи можна в налаштуваннях.", user: req.user }));
+  mailLog.switched("mention", reader.id, auth.mentionMailEnabled(reader.id), on);
   auth.setMentionMail(reader.id, on);
   if (req.method === "POST" && !req.body.page) return res.type("text").send("OK");
   res.send(pages.messagePage({ title: on ? "Листи про згадки знову ввімкнено" : "Більше не надсилатимемо листів про згадки", text: "Змінити можна в налаштуваннях листів.", user: req.user }));
@@ -1677,7 +1690,7 @@ app.post("/api/articles", signed, async (req, res) => {
       const text = [`${req.user.name} (${SITE}/@${req.user.username}) додав(ла) статтю «${a.title}»${a.author ? `, ${a.author}` : ""} (${a.source}, ${a.minutes} хв).`, "", `${SITE}${a.href}`, `Оригінал: ${a.url}`].join("\n");
       telegram.send(`Нова стаття: ${a.title}\n\n${text}`, undefined, [[{ text: "Сховати", data: `ah:${a.id}` }, { text: `Заборонити @${req.user.username}`, data: `ab:${req.user.id}` }]]);
       const to = process.env.WEB_NOTIFY_EMAIL || auth.reader(OWNER_ID)?.email;
-      if (to) auth.send(to, `Нова стаття: ${a.title}`, text).catch((e) => console.error(`[notify] article: ${e.message}`));
+      if (to) auth.send(to, `Нова стаття: ${a.title}`, text, { kind: "owner" }).catch((e) => console.error(`[notify] article: ${e.message}`));
     }
     res.redirect(303, a.href);
   } catch (e) {
@@ -1909,7 +1922,7 @@ function chatMail(from, to, { text = "", book = null, shared = false }) {
   const plain = [shared ? `${from.name} (@${from.username}) поділився(-лася) книжкою «${book.title}»: вона вже у вашій Читалці.` : `${from.name} (@${from.username}) пише вам у Чаті Chytai:`, "", text.trim(), book && !shared ? `Книжка: «${book.title}»${book.author ? `, ${book.author}` : ""} ${SITE}${book.href}` : "", "", `Відповісти: ${back}`].filter((l, i, a) => l || a[i - 1]).join("\n");
   const body = (text.trim() ? M.quote(text.trim()) : "") + (book ? M.book({ ...book, author: String(book.author || "").split(/,\s*/).slice(0, 2).join(", ") }, SITE) : "");
   const html = M.letter({ site: SITE, title: subject, section: "Чат", heading, body, button: shared ? { text: "Читати", href: `${READER_URL}/` } : { text: "Відповісти", href: back }, footer: "Цей лист прийшов, бо вам написали в Чаті chytai.org.ua" });
-  auth.send(to.email, subject, require("./admin").mailLinks(plain, SITE, "chat"), { html: require("./admin").mailLinks(html, SITE, "chat", true) }).catch((e) => console.error(`[chat] mail: ${e.message}`));
+  auth.send(to.email, subject, require("./admin").mailLinks(plain, SITE, "chat"), { kind: "chat", html: require("./admin").mailLinks(html, SITE, "chat", true) }).catch((e) => console.error(`[chat] mail: ${e.message}`));
 }
 // The owner hears of what others do here (UGC), not of his own messages.
 const askAlert = (from, to, text) => !from.owner && telegram.send(`Попросити книжку\n\n${text}\n\n${SITE}/@${from.username} → ${SITE}/@${to.username}`);
@@ -2957,6 +2970,7 @@ app.post("/api/refresh", owner, async (req, res) => {
 const unsubscribe = (req, res, on) => {
   const reader = auth.reader(req.params.id);
   if (!reader || !digest.check(reader.id, req.params.token)) return res.status(404).send(pages.messagePage({ title: "Посилання не підходить", text: "Вимкнути листи можна в налаштуваннях.", user: req.user }));
+  mailLog.switched("digest", reader.id, digest.enabled(reader.id), on);
   digest.setEnabled(reader.id, on);
   if (req.method === "POST" && !req.body.page) return res.type("text").send("OK");
   res.send(pages.digestPage({ on, action: `/digest/${on ? "unsubscribe" : "resubscribe"}/${encodeURIComponent(reader.id)}/${req.params.token}`, user: req.user }));
@@ -3234,7 +3248,7 @@ app.get("/admin", owner, async (req, res) => {
   const failed = [...new Set(runs.filter((r) => r.ok === 0).map((r) => r.job))];
   const health = healthBlock({ day: speed.days(1).get(require("./admin").dayOf(new Date())) || null, jobs: { n: runs.length, failed }, reader: !!reader, errors: errors.lastDay(), mail: mailHealth(), storage: { site: storage.now(DATA_DIR, ["chytai.db"]), reader: reader?.storage || null } });
   const activity = activityPage({ ...activityFor(null, 1), embed: true });
-  res.send(adminPage({ user: req.user, stats: admin.stats(), gsc: gsc.data(), gscOn: gsc.configured(), reader, health, activity, layout: pages.layout }));
+  res.send(adminPage({ user: req.user, stats: admin.stats(), gsc: gsc.data(), gscOn: gsc.configured(), reader, health, mail: require("./admin").mailBlock(mailLog.stats(7)), activity, layout: pages.layout }));
 });
 app.get("/admin/retention", owner, (req, res) => res.send(adminPage({ user: req.user, stats: admin.stats(), login: admin.events("login"), layout: pages.layout, page: "retention" })));
 app.get("/admin/shelves", owner, (req, res) => res.send(shelvesPage({ user: req.user, catalog: store.catalogStats(), layout: pages.layout })));

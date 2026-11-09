@@ -143,7 +143,7 @@ ${rows.length > 1 ? `<tr style="font-weight:600">${td("Разом")}${td(num(tot
 
   async send(name, m, to) {
     const l = this.letter(name, m);
-    await this.auth.send(to, l.subject, l.text, { html: l.html, attachments: [{ filename: l.filename, content: Buffer.from(l.csv).toString("base64") }] });
+    await this.auth.send(to, l.subject, l.text, { html: l.html, kind: "report", attachments: [{ filename: l.filename, content: Buffer.from(l.csv).toString("base64") }] });
     return l;
   }
 

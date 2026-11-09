@@ -51,22 +51,15 @@ class WelcomeMail {
         return `<p style="font-size:16px;line-height:1.55;color:#3d3a33;margin:0 0 16px">${marked.parseInline(fill(p, true)).replace(/<a /g, '<a style="color:#1b1a17" ').replace(/\n/g, "<br>")}</p>`;
       })
       .join("\n  ");
-    const html = `<!doctype html><html lang="uk"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="color-scheme" content="light"><title>${esc(subject)}</title></head>
-<body style="margin:0;background:#f7f4ee;color:#1b1a17;font-family:Onest,-apple-system,BlinkMacSystemFont,'Helvetica Neue',Arial,sans-serif;-webkit-font-smoothing:antialiased">
-<div style="max-width:560px;margin:0 auto;padding:32px 20px 40px">
-  <div style="font-weight:600;font-size:15px;margin-bottom:26px"><a href="${this.site}" style="color:#1b1a17;text-decoration:none">Chytai</a></div>
-  ${body}
-  <div style="border-top:1px solid #1b1a17;margin-top:30px;padding-top:14px;font-size:12px;line-height:1.6;color:#6b675f">
-    <a href="${this.site}/settings/mail" style="color:#6b675f">Налаштування</a> · <a href="${this.site}" style="color:#6b675f">chytai.org.ua</a>: читай більше
-  </div>
-</div></body></html>`;
+    // The site's letter shell (mailhtml.js), as every other letter.
+    const html = require("./mailhtml").letter({ site: this.site, title: subject, body: `<div style="margin-top:26px">${body}</div>`, footer: "", motto: ": читай більше" });
     const { mailLinks } = require("./admin");
     return { subject, text: mailLinks(text, this.site, "welcome"), html: mailLinks(html, this.site, "welcome", true) };
   }
 
   async sendTo(reader, { record = false } = {}) {
     const letter = this.render(reader);
-    await this.auth.send(reader.email, letter.subject, letter.text, { html: letter.html });
+    await this.auth.send(reader.email, letter.subject, letter.text, { html: letter.html, kind: record ? "welcome" : "test" });
     if (record) this.markSent(reader.id);
     return letter;
   }
