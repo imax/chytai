@@ -2051,6 +2051,9 @@ function pickRow({ book, entry }, back) {
 
 // `from`: the book (or the author's three) the reader came from, each with «Хочу прочитати» and «Прочитано» in one tap.
 function welcomePage({ user, next = "", from = null }) {
+  // From the reader (/reader-login): «Пізніше» says where it goes.
+  const later = next.startsWith("/reader-login") ? "До Читалки" : "Пізніше";
+  const start = `/start${next ? `?next=${attr(encodeURIComponent(next))}` : ""}`;
   const mark = `<b class="wordmark">Chytai</b>`;
   const came = from ? `<div class="welcome-from">
     <h2>${from.author ? `${esc(from.author.name)}: з чого почати` : "Книжка, з якої ви прийшли"}</h2>
@@ -2062,7 +2065,7 @@ function welcomePage({ user, next = "", from = null }) {
   <div class="welcome-intro">
     <h1>Вітаємо в ${mark}!</h1>
     <p class="lead">${mark} це проєкт для тих, хто любить книжки. Спільнота людей, каталоги українських видавництв, пошук і рекомендації.</p>
-    ${came || `<div class="acts"><a class="btn primary" href="/add">Додати книжки</a><a class="text-link" href="${attr(next || "/")}">Пізніше</a></div>`}
+    ${came || `<div class="acts"><a class="btn primary" href="${start}">Оцінити три книжки</a><a class="text-link" href="${attr(next || "/")}">${later}</a></div>`}
   </div>
   <ol class="welcome-steps">
     ${step("01", "Зберіть свою полицю", "Діліться своїми книжками, оцінками й нотатками.", "/add", "Додати книжки")}
@@ -2070,7 +2073,7 @@ function welcomePage({ user, next = "", from = null }) {
     ${step("03", "Знаходьте нові книжки для себе", "Пошук по каталогах українських видавництв, полицях читачів та офлайн бібліотеках.", "/", "Пошук")}
     ${step("04", "Читалка, яка пояснює складні місця", "У браузері й на iPhone (поки бета).", "https://app.chytai.org.ua/", "Читалка", true)}
   </ol>
-  <div class="welcome-end"><a class="btn primary" href="/add">Додати книжки</a><a class="text-link" href="${attr(next || "/")}">Пізніше</a></div>
+  <div class="welcome-end"><a class="btn primary" href="${start}">Оцінити три книжки</a><a class="text-link" href="${attr(next || "/")}">${later}</a></div>
 </section>`;
   return layout({ title: "Вітаємо", body, user, path: "/welcome" });
 }
@@ -2079,16 +2082,17 @@ function welcomePage({ user, next = "", from = null }) {
 // Max 2026-11-09: «попросити його оцінити хоча б три книжки»). Three ratings bring «Для вас» right here.
 // Each star is saved in the background (app.js rateLine); the day-2 letter links here with one star already set.
 const START_GOAL = 3;
-function startPage({ user, books, rated, forYou = [] }) {
+function startPage({ user, books, rated, forYou = [], next = "" }) {
   const done = rated >= START_GOAL;
   const row = ({ book, entry }) => `<div class="hit">${cover(book, "sm")}<span><b><a href="${attr(book.href)}">${esc(book.title)}</a></b>${book.author ? `<span class="by">${esc(byline(book.author))}</span>` : ""}</span>${rateLine(book.id, "", { year: false, rating: entry?.rating ?? null, status: "read" })}</div>`;
   const body = `
 ${pageHead({ kicker: "Перші кроки", title: forYou.length ? "Що читати далі" : "Оцініть три книжки", lead: forYou.length ? "Підібрали за вашими оцінками. Що більше оцінок, то точніше." : "Які з них ви читали? За оцінками підберемо, що читати далі." })}
 <section class="start" data-start data-goal="${START_GOAL}" data-rated="${rated}">
   ${forYou.length ? `<section class="block read-row" id="for-you">${label("Для вас", "схожі на те, що вам сподобалось")}<div class="grid six">${forYou.map((x) => card(x.book, { avg: x.avg })).join("")}</div></section>` : ""}
-  <p class="start-count">${forYou.length ? "Оцініть ще" : `Оцінено <b data-start-n>${Math.min(rated, START_GOAL)}</b> з ${START_GOAL}`}<a class="btn primary" href="/start#for-you" data-start-done${done && !forYou.length ? "" : " hidden"}>Що читати далі</a></p>
+  <p class="start-count">${forYou.length ? "Оцініть ще" : `Оцінено <b data-start-n>${Math.min(rated, START_GOAL)}</b> з ${START_GOAL}`}<a class="btn primary" href="/start${next ? `?next=${attr(encodeURIComponent(next))}` : ""}#for-you" data-start-done${done && !forYou.length ? "" : " hidden"}>Що читати далі</a></p>
   <div class="list-hits">${books.map(row).join("")}</div>
   <p class="muted small">Немає знайомих? <a class="text-link" href="/add">Знайдіть свою книжку</a></p>
+  ${next ? `<p><a class="text-link" href="${attr(next)}">${next.startsWith("/reader-login") ? "До Читалки" : "Далі"} →</a></p>` : ""}
 </section>`;
   return layout({ title: "Оцініть три книжки", body, user, path: "/start" });
 }

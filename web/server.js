@@ -487,10 +487,11 @@ app.post("/login/signup", (req, res) => {
   if (auth.byEmail(email)) return signIn(req, res, auth.byEmail(email), next);
   const reader = newReader(req, { email, name: name.name, username: username.username, ticket: req.body.ticket, next, via: t.via });
   res.append("Set-Cookie", `chytai_came=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax`);
-  // Someone who came from the reader goes straight back to it; the welcome page is about the site.
+  // Someone who came from the reader sees the welcome page too, «Пізніше» takes them on to the reader (Max,
+  // 2026-11-09: «хто нам забороняє пустити їх на той же флоу?»).
   // So does one who signed up to save a book (/do/…): the book is saved and they are back on its page.
   // And one who signed up to answer in the Club: back to the topic (Max, 2026-11-01).
-  signIn(req, res, reader, next.startsWith("/reader-login") || next.startsWith("/oauth/authorize") || next.startsWith("/do/") || next.startsWith("/club/") ? next : `/welcome${next ? `?next=${encodeURIComponent(next)}` : ""}`);
+  signIn(req, res, reader, next.startsWith("/oauth/authorize") || next.startsWith("/do/") || next.startsWith("/club/") ? next : `/welcome${next ? `?next=${encodeURIComponent(next)}` : ""}`);
 });
 function newReader(req, { email, name, username, ticket, next, came, via = "" }) {
   const reader = auth.createReader({ email, name, username });
@@ -661,8 +662,28 @@ app.post("/api/reader-login/signup", readerCors, (req, res) => {
   const name = auth.checkName(req.body?.name);
   if (name.error) return res.status(400).json({ error: name.error });
   const came = admin.cameFromReader(req.body.came, { app: /ChytaiApp/.test(req.get("user-agent") || ""), ownHosts: siteHosts(req) });
-  const reader = auth.byEmail(email) || newReader(req, { email, name: name.name, username: auth.suggestUsername(name.name, slugify), ticket: req.body.signup, next: "/reader-login", came });
-  res.json({ ticket: readerTicket(reader.id) });
+  const known = auth.byEmail(email);
+  const reader = known || newReader(req, { email, name: name.name, username: auth.suggestUsername(name.name, slugify), ticket: req.body.signup, next: "/reader-login", came });
+  // A new reader in a browser goes through the site's /welcome first (signed in there by a one-time link), then on
+  // to the reader by its «Пізніше». The phone and Mac apps keep their own way: a site page there would leave the app.
+  const origin = req.get("origin");
+  const app = /ChytaiApp|Electron/.test(req.get("user-agent") || "");
+  const welcome = !known && origin && READER_ORIGINS.includes(origin) && !app ? `${SITE}/login/once/${onceTicket(reader.id, `/welcome?next=${encodeURIComponent(`/reader-login?back=${origin}`)}`)}` : undefined;
+  res.json({ ticket: readerTicket(reader.id), welcome });
+});
+// One-time site sign-in for a reader who just signed up in the reader (/api/reader-login/signup): a minute, once.
+const onceTickets = new Map(); // ticket -> { id, next, expires }
+function onceTicket(id, next) {
+  for (const [k, v] of onceTickets) if (v.expires < Date.now()) onceTickets.delete(k);
+  const t = require("crypto").randomBytes(24).toString("base64url");
+  onceTickets.set(t, { id, next, expires: Date.now() + 60 * 1000 });
+  return t;
+}
+app.get("/login/once/:t", (req, res) => {
+  const v = onceTickets.get(req.params.t);
+  onceTickets.delete(req.params.t);
+  if (!v || v.expires < Date.now() || !auth.reader(v.id)) return res.redirect("/login");
+  signIn(req, res, auth.reader(v.id), v.next);
 });
 app.get("/reader-login", signed, (req, res) => {
   let origin = "";
@@ -2928,6 +2949,9 @@ app.post("/api/entry/:id", signed, (req, res) => {
 // rated ones first. Three ratings (four stars and up as seeds, else any) bring «Для вас» on top.
 function startBooks(req) {
   const mine = store.entriesOf(req.user.id);
+  return { out: startList(req), rated: Object.values(mine).filter((e) => e.rating != null).length };
+}
+function startList(req) {
   const seen = new Set();
   const out = [];
   for (const x of social.popular().known) {
@@ -2939,8 +2963,17 @@ function startBooks(req) {
     out.push({ book, entry });
     if (out.length >= 15) break;
   }
-  return { out, rated: Object.values(mine).filter((e) => e.rating != null).length };
+  return out;
 }
+// The day-2 letter (newbie.js): the same books as /start, the ones not on the shelf yet.
+const newbieMail = new (require("./newbie").NewbieMail)({
+  store,
+  auth,
+  site: SITE,
+  books: (reader) => startList({ user: reader, owner: false }).filter((x) => !x.entry).map((x) => ({ title: x.book.title, author: x.book.author ? pages.byline(x.book.author) : "", cover: x.book.cover, href: x.book.href, slug: (x.book.href || "").split("/").pop() || x.book.id })),
+  rated: (id) => Object.values(store.entriesOf(id)).filter((e) => e.rating != null).length,
+});
+if (bg.background) newbieMail.schedule();
 app.get("/start", signed, (req, res) => {
   const { out, rated } = startBooks(req);
   let forYou = [];
@@ -2952,7 +2985,7 @@ app.get("/start", signed, (req, res) => {
     forYou = social.similar(seeds, { limit: 6, skip: own, own }).map((x) => ({ ...x, book: ukWork(x.book) })).filter((x) => x.book && !store.sharedEntry(req.user.id, x.book.id));
   }
   admin.log(req.user.id, "view", "/start", String(rated));
-  res.send(pages.startPage({ user: req.user, books: out, rated, forYou }));
+  res.send(pages.startPage({ user: req.user, books: out, rated, forYou, next: safeNext(req.query.next) }));
 });
 // One star in the day-2 letter (newbie.js): the book read with that rating, then /start with the rest.
 app.get("/do/rate/:id/:n", signed, (req, res) => {
@@ -3080,6 +3113,13 @@ function nextFriday() {
 }
 // The owner looks at the welcome letter (as their own, or ?reader=<username>'s), mails it to themselves and
 // switches it on or off for new readers.
+// The day-2 letter as a reader would get it (newbie.js): ?reader=<username>, else the owner.
+app.get("/newbie-mail/preview", owner, (req, res) => {
+  const r = (req.query.reader && auth.byUsername?.(String(req.query.reader))) || req.user;
+  const l = newbieMail.render(r);
+  if (!l) return res.type("text").send("Замало книжок для листа.");
+  res.send(req.query.text ? `<pre>${pages.esc(l.text)}</pre>` : l.html);
+});
 app.get("/welcome-mail/preview", owner, (req, res) => {
   const reader = req.query.reader ? auth.byUsername(req.query.reader) : auth.reader(req.user.id);
   if (!reader) return res.status(404).send("Немає такого читача");

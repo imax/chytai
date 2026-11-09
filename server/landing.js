@@ -217,7 +217,10 @@ ${font("source-serif-4/opsz.css")}${font("onest/wght.css")}
   });
   forms.name.addEventListener("submit", function (e) {
     e.preventDefault();
-    call(forms.name, "signup", { signup: signup, name: forms.name.elements.name.value, came: came }).then(function (r) { if (r && r.ticket) enter(r.ticket); });
+    call(forms.name, "signup", { signup: signup, name: forms.name.elements.name.value, came: came }).then(function (r) {
+      // A new reader sees the site's welcome first, then comes back here by its «Пізніше» (Max, 2026-11-09).
+      if (r && r.welcome) { show("in"); location.href = r.welcome; } else if (r && r.ticket) enter(r.ticket);
+    });
   });
   forms.code.querySelector("[data-back]").addEventListener("click", function (e) { e.preventDefault(); show("email"); });
 })();
