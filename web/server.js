@@ -508,6 +508,15 @@ app.get("/login/google", (req, res) => {
   if (!google.on(req.get("user-agent") || "")) return res.redirect("/login");
   const { url, cookie } = google.start({ next: safeNext(req.query.next), redirectUri: googleBack(), key: auth.ticketKey });
   admin.event(req, null, "login", "google:start");
+  // From the reader's landing: where the person first came from, so the sign-up keeps its source (cameFromReader).
+  if (req.query.came && !cookies(req).chytai_came) {
+    let c = null;
+    try {
+      c = JSON.parse(String(req.query.came).slice(0, 2000));
+    } catch {}
+    const came = c && admin.cameFromReader(c, { ownHosts: siteHosts(req) });
+    if (came && came.source !== "Напряму") res.append("Set-Cookie", `chytai_came=${encodeURIComponent(JSON.stringify(came))}; Path=/; Max-Age=${30 * 86400}; HttpOnly; SameSite=Lax${secure(req) ? "; Secure" : ""}`);
+  }
   res.append("Set-Cookie", `chytai_google=${cookie}; Path=/login/google; Max-Age=600; HttpOnly; SameSite=Lax${secure(req) ? "; Secure" : ""}`);
   res.redirect(url);
 });

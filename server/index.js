@@ -923,7 +923,8 @@ const TESTIMONIALS = [
 // /android on the site still works.
 function landingPage(req) {
   const inside = /Chytai(Mac|App)\//.test(req.get("user-agent") || "");
-  return renderLanding({ webUrl: WEB_URL, mac: !inside, android: false, testimonials: TESTIMONIALS });
+  // Google refuses sign-in inside an app's embedded browser, so the button is for real browsers only.
+  return renderLanding({ webUrl: WEB_URL, mac: !inside, android: false, google: !inside && !/; wv\)/.test(req.get("user-agent") || ""), testimonials: TESTIMONIALS });
 }
 
 // ---------- App ----------
