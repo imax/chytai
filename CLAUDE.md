@@ -49,8 +49,10 @@ curl -s https://app.chytai.org.ua/agent/sql -H "$H" -H 'content-type: applicatio
 ## After a push: watch the rollout
 
 Both deploy workflows have a `watch` job (`scripts/rollout-watch.sh`): 15 minutes after a deploy it looks for errors
-that were not seen in the week before; one seen twice sends the previous image back and a line to Max's Telegram,
-and the run fails. The commit stays on main: fix it and push again.
+that were not seen in the week before; one seen twice sends a line to Max's Telegram and the
+run fails. It does not roll back by default (Max: threads pushing and a watch reverting could chase each other, and an
+error need not come from the deploy): the thread that pushed looks, then fixes or reverts its own commit. For a risky
+change put `[rollback-on-errors]` in the commit message: then the watch sends the previous image back itself.
 
 Beyond that, when the Actions run is green, check `/agent/health?since=<deploy time>` yourself, and for a risky change
 schedule a wake-up in about an hour and look again. Outages are fixed or reverted without asking.

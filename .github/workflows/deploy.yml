@@ -39,7 +39,8 @@ jobs:
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
   # The rollout watch (scripts/rollout-watch.sh, Max 2026-11-09): 15 minutes after the deploy, new reader errors
-  # (the site keeps them) seen twice send the previous image back and a line to Telegram. A newer deploy cancels it.
+  # (the site keeps them) seen twice send a line to Telegram; rollback only
+  # on [rollback-on-errors] in the commit message or ROLLOUT_ROLLBACK=always. A newer deploy cancels it.
   watch:
     needs: deploy
     runs-on: ubuntu-latest
@@ -51,5 +52,6 @@ jobs:
       - run: scripts/rollout-watch.sh chytai "${{ needs.deploy.outputs.since }}" "${{ needs.deploy.outputs.image }}"
         env:
           SHA: ${{ github.sha }}
+          ROLLBACK: ${{ (contains(github.event.head_commit.message, '[rollback-on-errors]') || vars.ROLLOUT_ROLLBACK == 'always') && '1' || '' }}
           SITE_TOKEN: ${{ secrets.FLY_API_TOKEN_WEB }}
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}

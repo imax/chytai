@@ -87,7 +87,8 @@ jobs:
       - run: |
           for u in https://chytai.org.ua/ https://www.chytai.org.ua/ https://chytai-web.fly.dev/; do curl -sS -o /dev/null -w "$u: %{http_code} %{redirect_url}\n" "$u" || true; done
   # The rollout watch (scripts/rollout-watch.sh, Max 2026-11-09): 15 minutes after a good deploy, new errors seen
-  # twice send the previous image back and a line to Telegram. Its own job, so it holds up no deploy; a newer
+  # twice send a line to Telegram. Rollback
+  # only on [rollback-on-errors] in the commit message or repo variable ROLLOUT_ROLLBACK=always (Max 2026-11-09). Its own job, so it holds up no deploy; a newer
   # deploy cancels it.
   watch:
     needs: deploy
@@ -100,5 +101,6 @@ jobs:
       - run: scripts/rollout-watch.sh chytai-web "${{ needs.deploy.outputs.since }}" "${{ needs.deploy.outputs.image }}"
         env:
           SHA: ${{ github.sha }}
+          ROLLBACK: ${{ (contains(github.event.head_commit.message, '[rollback-on-errors]') || vars.ROLLOUT_ROLLBACK == 'always') && '1' || '' }}
           SITE_TOKEN: ${{ secrets.FLY_API_TOKEN_WEB }}
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN_WEB }}

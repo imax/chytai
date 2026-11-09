@@ -1,13 +1,16 @@
 #!/usr/bin/env bash
 # The rollout watch (Max, 2026-11-09, from Amp's talk: «ship it, then check in a while whether errors went up»):
 # some minutes after a deploy, asks the site for errors recorded since the deploy that it had not seen in the week
-# before. A new error seen at least twice: the previous image goes back, Max gets a line in Telegram, and the run
-# fails (the commit stays on main to be fixed). A newer deploy since then: nothing to do (its own watch runs).
+# before. A new error seen at least twice: a line to Max's Telegram and the run fails. No rollback by default (Max:
+# threads pushing and a watch rolling back could chase each other, and an error need not come from the deploy).
+# Rollback is an option: the commit message has [rollback-on-errors] (a thread unsure of a risky change), or the
+# repo variable ROLLOUT_ROLLBACK is "always". Then the image from before the deploy goes back.
+# A newer deploy since then: nothing to do (its own watch runs).
 # web.yml and deploy.yml run it as a separate job after the deploy, so it holds up no deploy.
 #
-# Usage: scripts/rollout-watch.sh <app: chytai-web | chytai> <deploy start, ISO> <image before, may be empty>
+# Usage: scripts/rollout-watch.sh <app: chytai-web | chytai> <deploy start, ISO> [image before]
 # Env: SHA (the commit deployed), SITE_TOKEN (a Fly token that sees chytai-web: the site's /agent/* endpoints),
-#      FLY_API_TOKEN (deploy token of <app>, for the rollback), WAIT (seconds, default 900), DRY=1 (only look).
+#      FLY_API_TOKEN (deploy token of <app>: the reader's health, a rollback), ROLLBACK=1 (roll back), WAIT (seconds, default 900), DRY=1 (only look).
 set -u
 APP=$1 SINCE=$2 BEFORE=${3:-}
 SITE=${SITE:-https://chytai.org.ua}
@@ -28,21 +31,22 @@ if ! echo "$ans" | jq -e '.rows' >/dev/null 2>&1; then echo "::warning::errors q
 echo "new errors since $SINCE:"; echo "$ans" | jq -r '.rows[] | "  \(.n)× [\(.place)] \(.msg) \(.url)"'
 bad=$(echo "$ans" | jq '[.rows[] | select(.n >= 2)] | length')
 [ "$bad" = 0 ] && { echo "no new error seen twice: the rollout is fine"; exit 0; }
-[ -n "${DRY:-}" ] && { echo "DRY: would roll back and tell Max"; exit 1; }
+[ -n "${DRY:-}" ] && { echo "DRY: would tell Max"; exit 1; }
 
 text="$NAME: після деплою ${SHA:0:7} нові помилки:
 $(echo "$ans" | jq -r '.rows[:3][] | "\(.n)× \(.msg | .[0:150])"')"
-if [ -n "$BEFORE" ]; then
+if [ -n "${ROLLBACK:-}" ] && [ -n "$BEFORE" ]; then
   echo "rolling back to $BEFORE"
   if flyctl deploy -a "$APP" $CONFIG --image "$BEFORE"; then text="$text
 
-Відкотив до попередньої версії. Коміт лишився в main, треба полагодити."
+Відкотив до попередньої версії (так просив коміт). Коміт лишився в main."
   else text="$text
 
 Відкотити не вдалося, глянь Actions."; fi
 else text="$text
 
-Попередньої версії не знайшов, не відкочував."; fi
+Не відкочував. Тред, що це запушив, має глянути: полагодити чи відкотити."
+fi
 curl -s -m 30 "$SITE/agent/notify" -H "Authorization: $SITE_TOKEN" -H 'content-type: application/json' -d "$(jq -n --arg t "$text" '{text: $t}')" || true
 echo
 exit 1
