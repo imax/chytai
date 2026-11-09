@@ -23,7 +23,8 @@ function book(b, site) {
 }
 
 // The whole letter. `body` is HTML; `button` { text, href }; `off` the one-click «не надсилати» link and its words.
-function letter({ site, title, section = "", kicker = "", heading = "", body = "", button = null, off = null, footer = "Ви отримуєте ці листи як читач chytai.org.ua" }) {
+// `motto`: words after the last footer link (the welcome letter's «: читай більше»).
+function letter({ site, title, section = "", kicker = "", heading = "", body = "", button = null, off = null, footer = "Ви отримуєте ці листи як читач chytai.org.ua", motto = "" }) {
   return `<!doctype html><html lang="uk"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="color-scheme" content="light"><title>${esc(title)}</title></head>
 <body style="margin:0;background:#f7f4ee;color:#1b1a17;font-family:Onest,-apple-system,BlinkMacSystemFont,'Helvetica Neue',Arial,sans-serif;-webkit-font-smoothing:antialiased">
 <div style="max-width:560px;margin:0 auto;padding:32px 20px 40px">
@@ -33,7 +34,7 @@ function letter({ site, title, section = "", kicker = "", heading = "", body = "
   ${body}
   ${button ? `<div style="margin:26px 0 0"><a href="${esc(button.href)}" style="display:inline-block;background:#266741;color:#fff;text-decoration:none;font-size:15px;font-weight:500;padding:11px 20px;border-radius:999px">${esc(button.text)}</a></div>` : ""}
   <div style="border-top:1px solid #1b1a17;margin-top:36px;padding-top:14px;font-size:12px;line-height:1.6;color:#6b675f">
-    ${footer ? `${esc(footer)}<br>` : ""}${off ? `<a href="${esc(off.href)}" style="color:#6b675f">${esc(off.text)}</a> · ` : ""}<a href="${site}/settings/mail" style="color:#6b675f">Налаштування</a> · <a href="${site}" style="color:#6b675f">chytai.org.ua</a>
+    ${footer ? `${esc(footer)}<br>` : ""}${off ? `<a href="${esc(off.href)}" style="color:#6b675f">${esc(off.text)}</a> · ` : ""}<a href="${site}/settings/mail" style="color:#6b675f">Налаштування</a> · <a href="${site}" style="color:#6b675f">chytai.org.ua</a>${motto ? esc(motto) : ""}
   </div>
 </div></body></html>`;
 }

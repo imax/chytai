@@ -981,7 +981,7 @@ function shelvesPage({ user, catalog, layout }) {
 // «Перегляди за розділами» sits on Огляд, before the activity (Max, 2026-11-04).
 const linkFirst = (html, href) => html.replace("<b>", `<b><a href="${href}">`).replace("</b>", "</a></b>");
 
-function adminPage({ user, stats: s, gsc = null, gscOn = false, taps = null, login = null, reader = null, health = "", activity = "", layout, page = "main" }) {
+function adminPage({ user, stats: s, gsc = null, gscOn = false, taps = null, login = null, reader = null, health = "", mail = "", activity = "", layout, page = "main" }) {
   const traffic = page === "traffic";
   const t = s.totals;
   const siteTiles = [
@@ -1047,6 +1047,8 @@ ${s.cohorts.length ? `<div class="tbl"><table class="cohorts">
 
 ${health}
 
+${mail}
+
 <h2>Перегляди за розділами</h2>
 <p class="muted small">Скільки сторінок кожного розділу відкрили (читачі й гості разом, без ботів). Рахується з ${s.sections.length ? "22 жовтня" : "сьогодні"}; які саме сторінки, не зберігаємо.</p>
 ${s.sections.length ? `<div class="tbl"><table class="sections">
@@ -1081,6 +1083,21 @@ function healthBlock({ day = null, jobs = { n: 0, failed: [] }, reader = true, e
   ];
   return `<h2>Performance</h2>
 <ul class="health">${rows.map(([ok, good, bad]) => `<li class="${ok ? "ok" : "bad"}">${ok ? good : bad}</li>`).join("")}</ul>`;
+}
+
+// «Листи» on Огляд (Max, 2026-11-09): each kind of letter in the last 7 days — how many went, how many visits
+// came from them (utm_campaign in «Звідки приходять») and how many readers switched that kind off.
+function mailBlock({ since, days, rows }) {
+  const n = (x) => (x ? fmtN(x) : `<span class="na">·</span>`);
+  const NO_LINKS = new Set(["code", "owner", "report"]);
+  const head = `<h2>Листи</h2>
+<p class="muted small">За ${days} днів: скільки надіслали, скільки разів з листа прийшли на сайт і скільки читачів вимкнули такі листи.${since ? "" : " Рахуємо з сьогодні."}</p>`;
+  if (!rows.length) return `${head}\n<p class="muted">Поки жодного листа.</p>`;
+  const tr = (r) => `<tr><th>${esc(r.name)}</th><td>${n(r.sent)}</td><td>${NO_LINKS.has(r.kind) ? `<span class="na">·</span>` : n(r.clicks)}</td><td>${n(r.off)}${r.back ? ` <span class="muted small">+${r.back} знову</span>` : ""}</td></tr>`;
+  return `${head}
+<div class="tbl"><table class="sections">
+<thead><tr><th>Лист</th><th>Надіслали</th><th>Прийшли</th><th>Вимкнули</th></tr></thead>
+<tbody>${rows.map(tr).join("")}</tbody></table></div>`;
 }
 
 // Disk and memory of both machines (storage.js, scaling review 2026-11-05): one row, red near a limit.
@@ -1633,4 +1650,4 @@ ${models}
   return layout({ title: "Читалка · Адмінка", user, path: "/admin", body });
 }
 
-module.exports = { readerAppPage, healthBlock, BOT, human, Admin, mailLinks, adminPage, activityPage, catalogBlock, shelvesPage, readersPage, overviewsPage, speedPage, jobsPage, dayOf, weekOf, sectionOf };
+module.exports = { readerAppPage, healthBlock, mailBlock, BOT, human, Admin, mailLinks, adminPage, activityPage, catalogBlock, shelvesPage, readersPage, overviewsPage, speedPage, jobsPage, dayOf, weekOf, sectionOf };

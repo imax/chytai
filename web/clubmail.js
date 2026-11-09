@@ -50,7 +50,9 @@ class ClubMail {
     // Not those who signed up today: they have just had the welcome letter (Max, 2026-11-04).
     const today = new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Kyiv" });
     const joinedToday = (r) => r.created && new Date(r.created).toLocaleDateString("sv-SE", { timeZone: "Europe/Kyiv" }) === today;
-    return this.auth.readers().filter((r) => r.email && r.digest !== 0 && r.topic_mail !== 0 && !inside.has(r.id) && !joinedToday(r));
+    // …nor those who had two optional letters today (maillog.js).
+    const room = (r) => !this.auth.mailLog || this.auth.mailLog.room(r.id);
+    return this.auth.readers().filter((r) => r.email && r.digest !== 0 && r.topic_mail !== 0 && !inside.has(r.id) && !joinedToday(r) && room(r));
   }
 
   // The letter for a reader: { to, subject, text, headers }.
@@ -80,26 +82,20 @@ class ClubMail {
 
   // The same letter in the Friday letter's look (digest.js): paper background, serif titles, the book's cover.
   html(t, cut, off) {
-    const esc = (x) => String(x ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
-    const site = this.site;
-    const href = `${site}${t.href}`;
-    const cover = t.book?.cover ? `<img src="${esc(t.book.cover.startsWith("/") ? site + t.book.cover : t.book.cover)}" width="44" height="64" alt="" style="width:44px;height:64px;object-fit:cover;border-radius:3px;display:block;background:#ded8cb">` : "";
-    const book = t.book ? `<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse:collapse;margin:18px 0 4px"><tr>${cover ? `<td style="vertical-align:top;width:44px">${cover}</td>` : ""}<td style="vertical-align:middle;padding-left:${cover ? 14 : 0}px"><a href="${esc(site + t.book.href)}" style="font-family:'Source Serif 4',Georgia,serif;font-size:16px;color:#1b1a17;text-decoration:none">«${esc(t.book.title)}»</a>${t.book.author ? `<div style="font-size:13px;color:#6b675f;margin-top:3px">${esc(t.book.author)}</div>` : ""}</td></tr></table>` : "";
-    const body = t.spoiler ? `<p style="font-size:15px;line-height:1.5;color:#6b675f;margin:18px 0 0">У темі можуть бути спойлери, тож текст тут не показуємо.</p>` : cut.split(/\n{2,}/).map((p) => `<p style="font-family:'Source Serif 4',Georgia,serif;font-size:16px;line-height:1.55;color:#3d3a33;margin:16px 0 0">${esc(p).replace(/\n/g, "<br>")}</p>`).join("");
-    return `<!doctype html><html lang="uk"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="color-scheme" content="light"><title>${esc(t.title)}</title></head>
-<body style="margin:0;background:#f7f4ee;color:#1b1a17;font-family:Onest,-apple-system,BlinkMacSystemFont,'Helvetica Neue',Arial,sans-serif;-webkit-font-smoothing:antialiased">
-<div style="max-width:560px;margin:0 auto;padding:32px 20px 40px">
-  <div style="font-weight:600;font-size:15px"><a href="${site}" style="color:#1b1a17;text-decoration:none">Chytai</a> <span style="color:#6b675f;font-weight:400;margin-left:10px">Клуб</span></div>
-  <div style="margin-top:24px;font-size:13px;color:#6b675f">Нова тема в Клубі Chytai від <b style="color:#1b1a17;font-weight:500">${esc(t.reader.name)}</b></div>
-  <h1 style="font-family:'Source Serif 4',Georgia,serif;font-weight:500;font-size:26px;line-height:1.25;margin:8px 0 0"><a href="${esc(href)}" style="color:#1b1a17;text-decoration:none">${esc(t.title)}</a></h1>
-  ${book}
-  ${body}
-  <div style="margin:26px 0 0"><a href="${esc(href)}" style="display:inline-block;background:#266741;color:#fff;text-decoration:none;font-size:15px;font-weight:500;padding:11px 20px;border-radius:999px">Долучитися до обговорення</a></div>
-  <div style="border-top:1px solid #1b1a17;margin-top:36px;padding-top:14px;font-size:12px;line-height:1.6;color:#6b675f">
-    Ви отримуєте ці листи як читач chytai.org.ua<br>
-    <a href="${esc(off)}" style="color:#6b675f">Не надсилати листів про нові теми</a> · <a href="${site}/settings/mail" style="color:#6b675f">Налаштування</a> · <a href="${site}" style="color:#6b675f">chytai.org.ua</a>
-  </div>
-</div></body></html>`;
+    const M = require("./mailhtml");
+    const href = `${this.site}${t.href}`;
+    const book = t.book ? M.book({ title: t.book.title, author: t.book.author, cover: t.book.cover, href: t.book.href }, this.site) : "";
+    const body = t.spoiler ? `<p style="font-size:15px;line-height:1.5;color:#6b675f;margin:18px 0 0">У темі можуть бути спойлери, тож текст тут не показуємо.</p>` : M.paras(cut);
+    return M.letter({
+      site: this.site,
+      title: t.title,
+      section: "Клуб",
+      kicker: `Нова тема в Клубі Chytai від <b style="color:#1b1a17;font-weight:500">${M.esc(t.reader.name)}</b>`,
+      heading: `<a href="${M.esc(href)}" style="color:#1b1a17;text-decoration:none">${M.esc(t.title)}</a>`,
+      body: book + body,
+      button: { text: "Долучитися до обговорення", href },
+      off: { href: off, text: "Не надсилати листів про нові теми" },
+    });
   }
 
   // While ON is false: each queued topic's letter, once, to the owner alone.
@@ -114,7 +110,7 @@ class ClubMail {
       // Both looks, for Max to pick (2026-11-04).
       const plain = this.letter(t, owner, { withHtml: false });
       const fancy = this.letter(t, owner, { withHtml: true });
-      await this.auth.sendBatch([{ ...plain, subject: `[текст] ${plain.subject}` }, { ...fancy, subject: `[як дайджест] ${fancy.subject}` }]);
+      await this.auth.sendBatch([{ ...plain, subject: `[текст] ${plain.subject}` }, { ...fancy, subject: `[як дайджест] ${fancy.subject}` }], { kind: "test" });
       this.log(`club topic mail preview: «${t.title}» → owner (${this.recipients(t).length} would get it)`);
     }
     return "лише власнику";
@@ -126,6 +122,8 @@ class ClubMail {
     if (!ON) return this.preview();
     const h = Number(now.toLocaleString("en-US", { timeZone: "Europe/Kyiv", hour: "numeric", hour12: false })) % 24;
     if (!force && (h < HOURS[0] || h >= HOURS[1])) return "не та година";
+    // Fridays belong to the weekly letter alone (Max, 2026-11-09): the topic waits for Saturday.
+    if (!force && new Date(now.toLocaleString("en-US", { timeZone: "Europe/Kyiv" })).getDay() === 5) return "п'ятниця: лише дайджест";
     const last = db.prepare("SELECT MAX(sent) AS s FROM club_announce WHERE sent IS NOT NULL AND sent <> 'before'").get().s;
     if (!force && last && now - Date.parse(last) < GAP) return "сьогодні вже був лист";
     for (const q of db.prepare("SELECT topic FROM club_announce WHERE sent IS NULL ORDER BY queued").all()) {
@@ -142,7 +140,7 @@ class ClubMail {
       for (let i = 0; i < to.length; i += BATCH) {
         const part = to.slice(i, i + BATCH);
         try {
-          await this.auth.sendBatch(part.map((r) => this.letter(t, r)));
+          await this.auth.sendBatch(part.map((r) => this.letter(t, r)), { kind: "club-topic" });
           n += part.length;
         } catch (e) {
           this.log(`club topic mail «${t.title}»: ${e.message}`);
