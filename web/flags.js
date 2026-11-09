@@ -14,6 +14,7 @@ const LABEL = { off: "вимкнено", owner: "лише Макс", test: "Ма
 // The flags the code knows about, with a few words for /admin. A new flag is added here.
 const KNOWN = {
   chat: "Чат між читачами (/chat, кнопка на полиці)",
+  "list-progress": "Скільки книжок зі списку ви прочитали",
 };
 
 class Flags {

@@ -17,6 +17,7 @@ class ListImage {
     this.thumbs = thumbs;
     this.log = log;
     this.made = new Map();
+    this.seen = new Map(); // file -> the day its time was last renewed
     fs.mkdirSync(this.dir, { recursive: true });
   }
 
@@ -30,9 +31,32 @@ class ListImage {
     covers = covers.filter(Boolean).slice(0, 5);
     if (!covers.length) return null;
     const out = path.join(this.dir, this.name(covers));
-    if (fs.existsSync(out)) return out;
+    if (fs.existsSync(out)) return this.used(out), out;
+    this.prune();
     if (!this.made.has(out)) this.made.set(out, this.make(covers, out).catch((e) => (this.log(`listimage: ${e.message}`), null)).finally(() => this.made.delete(out)));
     return this.made.get(out);
+  }
+
+  // A picture not asked for in 30 days goes (a list's covers change and leave the old one behind); a picture in
+  // use has its time renewed once a day.
+  used(file) {
+    const day = new Date().toISOString().slice(0, 10);
+    if (this.seen.get(file) === day) return;
+    this.seen.set(file, day);
+    const now = new Date();
+    fs.utimes(file, now, now, () => {});
+  }
+  prune() {
+    if (Date.now() - (this.pruned || 0) < 86400000) return;
+    this.pruned = Date.now();
+    for (const f of fs.readdirSync(this.dir)) {
+      const p = path.join(this.dir, f);
+      try {
+        if (Date.now() - fs.statSync(p).mtimeMs > 30 * 86400000) fs.unlinkSync(p);
+      } catch {
+        /* gone already */
+      }
+    }
   }
 
   async make(covers, out) {

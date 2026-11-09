@@ -898,6 +898,11 @@ form.inline button:not(.btn) { background: none; border: 0; padding: 0; cursor: 
 .lsec h2 { font: 600 26px/1.2 var(--serif); }
 .lsec p { font: 17px/1.5 var(--serif); color: var(--text); margin-top: 6px; max-width: 38em; }
 .why-edit input { width: 100%; padding: 8px 10px; border: 1px solid var(--under); border-radius: 4px; background: transparent; font: 16px/1.45 var(--serif); }
+.list-progress { margin-top: 16px; max-width: 26em; font-size: 15px; }
+.list-progress b { font-weight: 600; color: var(--ink); }
+.list-progress .track { display: block; height: 4px; margin-top: 8px; border-radius: 2px; background: var(--rule); overflow: hidden; }
+.list-progress .track span { display: block; height: 100%; background: var(--accent); }
+.lrow .meta .mine { color: var(--accent); font-weight: 500; }
 .lrow:target { background: linear-gradient(90deg, transparent, color-mix(in oklab, var(--accent) 10%, transparent), transparent); }
 .list-tools { display: flex; flex-wrap: wrap; gap: 6px 16px; align-items: baseline; margin-top: 10px; }
 .list-tools button[disabled] { opacity: 0.3; cursor: default; }

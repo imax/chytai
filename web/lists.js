@@ -256,7 +256,7 @@ class Lists {
 
   // A few covers for a list's card: its first books.
   covers(listId, n = 4) {
-    return this.items(listId).slice(0, n).map((x) => x.book);
+    return fanBooks(this.items(listId), n);
   }
   // Every published list with books in it (others see no empty ones or drafts): `popular` by saves, `new` by when made.
   all({ sort = "popular" } = {}) {
@@ -295,4 +295,19 @@ class Lists {
   }
 }
 
-module.exports = { Lists, EDITORIAL };
+// The books whose covers a list shows (its card, the fan on top, the picture for social networks): the first
+// book of each section, then the first of each author, then the rest in order (Max, 2026-11-09: four Fry
+// covers in a row «не дуже»).
+function fanBooks(items, n = 5) {
+  const all = items.filter((x) => x.book.cover);
+  const author = (b) => String(b.author || "").split(/[,;]/)[0].trim().toLowerCase();
+  const out = [];
+  const authors = new Set();
+  const take = (x) => out.length < n && !out.includes(x) && (out.push(x), authors.add(author(x.book)));
+  for (const x of all) if (x.section && !authors.has(author(x.book))) take(x);
+  for (const x of all) if (!authors.has(author(x.book))) take(x);
+  for (const x of all) take(x);
+  return out.sort((a, b) => all.indexOf(a) - all.indexOf(b)).map((x) => x.book);
+}
+
+module.exports = { Lists, EDITORIAL, fanBooks };

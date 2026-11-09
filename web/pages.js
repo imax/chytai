@@ -2677,7 +2677,7 @@ const firstWords = (t, n) => ((t = t.split(/\n\s*\n/)[0].replace(/\s+/g, " ").tr
 // its picture for social networks, listimage.js). Nothing for a list of fewer than three books with covers.
 function listHero(list, items) {
   if (list.image) return `<div class="lhero photo"><img src="${attr(list.image)}" alt="" fetchpriority="high"></div>`;
-  const books = items.map((x) => x.book).filter((b) => b.cover).slice(0, 5);
+  const books = require("./lists").fanBooks(items, 5);
   if (books.length < 3) return "";
   const n = books.length;
   const order = [...books.keys()].sort((a, b) => Math.abs(b - (n - 1) / 2) - Math.abs(a - (n - 1) / 2));
@@ -2715,7 +2715,7 @@ function listsDialog(book, mine) {
 
 // /@<username>/list/<slug>. The author sees the tools: the books' order, a line on each, the title and note,
 // adding books by search (`find`: the query and what it found).
-function listPage({ list, items, user, own = false, owner = false, saved = false, more = [], similar = [], find = null, og = "", comments = [], commentError = "", commentLinks = {} }) {
+function listPage({ list, items, progress = false, user, own = false, owner = false, saved = false, more = [], similar = [], find = null, og = "", comments = [], commentError = "", commentLinks = {} }) {
   const id = attr(encodeURIComponent(list.id));
   const save = own
     ? ""
@@ -2741,10 +2741,10 @@ function listPage({ list, items, user, own = false, owner = false, saved = false
     </div>`
         : "";
       const head = x.section ? `<header class="lsec"><h2>${esc(x.section)}</h2>${x.sectionNote ? `<p>${inline(x.sectionNote)}</p>` : ""}</header>` : "";
-      return `${head}<article class="lrow" id="${attr(x.id)}"><span class="n">${i + 1}</span><a class="cover-link" href="${attr(b.href)}">${cover(b, "md")}</a><div class="row-body">
+      return `${head}<article class="lrow${x.mine === "read" ? " done" : ""}" id="${attr(x.id)}"><span class="n">${i + 1}</span><a class="cover-link" href="${attr(b.href)}">${cover(b, "md")}</a><div class="row-body">
     <h3><a href="${attr(b.href)}">${esc(b.title)}</a></h3>
     ${b.author ? `<p class="by">${authorLinks(b.author)}</p>` : ""}
-    ${readersMeta(x.id) || x.free ? `<p class="meta">${[readersMeta(x.id), x.free ? `<a class="text-link" href="/go/read/${attr((b.href || "").split("/").pop())}">є в Читалці</a>` : ""].filter(Boolean).join(" · ")}</p>` : ""}
+    ${x.mine || readersMeta(x.id) || x.free ? `<p class="meta">${[x.mine ? `<span class="mine">✓ ${MY_STATUS[x.mine] || "На полиці"}</span>` : "", readersMeta(x.id), x.free ? `<a class="text-link" href="/go/read/${attr((b.href || "").split("/").pop())}">є в Читалці</a>` : ""].filter(Boolean).join(" · ")}</p>` : ""}
     ${x.why ? `<p class="why">${inline(x.why)}</p>` : ""}
     ${ownTools}
   </div></article>`;
@@ -2809,6 +2809,7 @@ ${listHero(list, items)}
   ${list.note ? `<div class="intro">${paragraphs(list.note)}</div>` : own ? `<p class="lead muted"><button type="button" class="text-link" data-open="list-edit">Додайте кілька слів про список</button></p>` : ""}
   ${list.source ? `<p class="small muted">Джерело: <a class="text-link" href="${attr(list.source)}" target="_blank" rel="noopener nofollow">${esc(host(list.source))}</a></p>` : ""}
   <p class="by-line">${list.editorial ? `<b>${esc(list.by)}</b>` : `<a href="${attr(list.reader.href)}"><b>${esc(list.reader.name)}</b></a>`}${updated ? ` · оновлено ${updated}` : ""}${list.saves ? ` · ${list.saves} ${plural(list.saves, "зберіг", "зберегли", "зберегли")}` : ""}</p>
+  ${progress && items.length ? listProgress(items) : ""}
   <div class="acts">${save}${share}${tools}</div>
 </section>
 ${adder}
@@ -2826,6 +2827,14 @@ ${edit}`;
   // An editorial list tells search engines it is a list of books, in order (Max, 2026-10-28: «в сайтмап і розмітку так»).
   const jsonld = list.editorial ? { "@context": "https://schema.org", "@type": "ItemList", name: list.title, url: ORIGIN + list.href, ...(list.note ? { description: firstWords(list.note, 300) } : {}), author: { "@type": "Organization", name: list.by, url: ORIGIN }, numberOfItems: items.length, itemListOrder: "https://schema.org/ItemListOrderAscending", itemListElement: items.map((x, i) => ({ "@type": "ListItem", position: i + 1, item: { "@type": "Book", name: x.book.title, url: ORIGIN + x.book.href, ...(x.book.author ? { author: { "@type": "Person", name: x.book.author } } : {}), ...(x.book.cover ? { image: abs(x.book.cover) } : {}) } })) } : null;
   return layout({ title: list.title, body, user, path: "/lists", canonical: list.href, noindex: !!list.reader.noindex && !list.editorial, description, image: abs(og || items.find((x) => x.book.cover)?.book.cover || ""), imageSize: og && !list.image ? [1200, 630] : null, wide: !!og, type: "article", jsonld });
+}
+
+// The reader's way through a list: how many read, a thin bar, and how many are being read now.
+function listProgress(items) {
+  const read = items.filter((x) => x.mine === "read").length;
+  const now = items.filter((x) => x.mine === "reading").length;
+  const pct = Math.round((read / items.length) * 100);
+  return `<div class="list-progress"><p>${read ? `Ви прочитали <b>${read} з ${items.length}</b>` : `Ви ще не читали жодної з ${items.length}`}${now ? ` · ${now} читаєте зараз` : ""}</p><span class="track"><span style="width:${pct}%"></span></span></div>`;
 }
 
 // /lists «Списки читачів»: popular, new, and the ones the reader saved.

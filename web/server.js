@@ -32,7 +32,7 @@ const { Admin, readerAppPage, healthBlock, adminPage, activityPage, catalogBlock
 const { Mcp } = require("./mcp");
 const { Reviews } = require("./reviews");
 const { Advice } = require("./advice");
-const { Lists } = require("./lists");
+const { Lists, fanBooks } = require("./lists");
 const { ClubMail } = require("./clubmail");
 const bg = require("./jobs"); // background jobs in their own process (main.js, jobs.js)
 
@@ -1495,7 +1495,9 @@ app.get("/@:username/list/:slug", (req, res) => {
   if (reader.username !== req.params.username) return res.redirect(301, list.href);
   const own = req.user?.id === reader.id;
   // Free-shelf books get a quiet «є в Читалці» in their row (usability review 2026-10-28: «Розстріляне відродження»).
-  const items = lists.items(list.id, { own }).map((x) => ({ ...x, free: !!freeFileFor(store.bookPage(x.id)) }));
+  // «Скільки з них я вже прочитав» (Max, 2026-11-09): the reader's own status in each row and a count on top.
+  const mine = req.user && flags.on("list-progress", req.user) ? store.inLibrary(req.user.id) : null;
+  const items = lists.items(list.id, { own }).map((x) => ({ ...x, free: !!freeFileFor(store.bookPage(x.id)), mine: mine?.get(x.id)?.status || "" }));
   const q = own ? String(req.query.add || "").trim().slice(0, 100) : "";
   const inList = own && q ? lists.ids(list.id) : null;
   const find = q ? { q, hits: searchHits(req, q).slice(0, 8).map((h) => ({ book: h.book, in: inList.has(store.canonical(h.book.id)) })) } : null;
@@ -1503,9 +1505,9 @@ app.get("/@:username/list/:slug", (req, res) => {
   const more = lists.of(reader.id).filter((l) => l.id !== list.id && (own || (l.count && !l.draft)) && (own || l.editorial === list.editorial)).slice(0, 5);
   const comments = lists.comments(list.id);
   const og = list.image ? list.image : ogCovers(items).length ? `/og/list/${encodeURIComponent(list.id)}.jpg?v=${listImage.name(ogCovers(items)).slice(0, 8)}` : "";
-  res.send(pages.listPage({ list: { ...list, count: items.length }, items, user: req.user, own, owner: req.owner, saved: lists.saved(req.user?.id, list.id), more, similar: lists.similar(list), find, og, comments, commentLinks: mentioned(...comments.map((c) => c.text)), commentError: String(req.query.comment_error || "").slice(0, 200) }));
+  res.send(pages.listPage({ list: { ...list, count: items.length }, items, progress: !!mine, user: req.user, own, owner: req.owner, saved: lists.saved(req.user?.id, list.id), more, similar: lists.similar(list), find, og, comments, commentLinks: mentioned(...comments.map((c) => c.text)), commentError: String(req.query.comment_error || "").slice(0, 200) }));
 });
-const ogCovers = (items) => items.map((x) => x.book.cover).filter(Boolean).slice(0, 5);
+const ogCovers = (items) => fanBooks(items, 5).map((b) => b.cover);
 // The picture a list's link shows in Telegram, Facebook and the rest: made of its first covers once, then kept.
 app.get("/og/list/:id.jpg", async (req, res) => {
   const l = lists.get(req.params.id);
