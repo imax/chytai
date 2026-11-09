@@ -77,6 +77,14 @@ so Max sees it on the real site. He switches it to everyone on `/admin/jobs` (bl
   `all` is only Max's.
 - When a flag has been on for everyone for a while, take it out of the code.
 
+## Editorial lists («Добірка Chytai»)
+
+- Add an entry to `web/seed/editorial.json` (`key`, `title`, `note`, `books` as `{id, why}`; `"draft": true`). The web
+  process makes it once under Max's account (`/@maxua/list/<slug>`); a draft only Max sees, he presses «Опублікувати».
+- Find work ids on the test DB with `store.search()` / `store.resolve()`; a book the catalog lacks goes in as
+  `{title, author, page}` (a store page) and is added from it. Prefer Ukrainian editions, no Russian authors.
+- Check it locally signed in as `owner@test.invalid`, screenshot, show Max.
+
 ## Standing rules (Max)
 
 - Never mass-regenerate AI content without Max's OK (daily auto cap 150). A new AI pass: trial of 200 on `/admin/*-trial` first.
