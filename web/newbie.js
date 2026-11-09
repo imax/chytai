@@ -4,15 +4,22 @@
 // shell with kind "newbie", so it is in the send log and counts toward the two-a-day cap (maillog.js).
 const M = require("./mailhtml");
 
-const SUBJECT = "Оцініть три книжки";
+const SUBJECT = "Що з цього ви читали?";
+// The subject names three of the letter's books, short titles only (Max 2026-11-09: «Оцініть три книжки» такий
+// собі сабж): «Дюна, Тигролови чи 1984?». Too few short ones: the plain question.
+function subjectOf(books) {
+  const short = books.map((b) => String(b.title || "").split(/[.:]/)[0].trim()).filter((t) => t && t.length <= 24).slice(0, 3);
+  return short.length === 3 ? `${short[0]}, ${short[1]} чи ${short[2]}?` : SUBJECT;
+}
 
 // `books`: [{ title, author, cover, href, slug }]. `link(path)` turns a site path into a tracked URL.
 function compose({ site, reader, books, link = (p) => site + p }) {
   const star = (slug, n) => `<a href="${M.esc(link(`/do/rate/${encodeURIComponent(slug)}/${n}`))}" title="${n} з 5" style="color:#c9c2b4;text-decoration:none;font-size:24px;line-height:1;padding:0 3px">★</a>`;
   const rows = books.map((b) => M.book({ ...b, note: `<div style="margin-top:6px;white-space:nowrap">${[1, 2, 3, 4, 5].map((n) => star(b.slug, n)).join("")}</div>` }, site)).join("");
+  const subject = subjectOf(books);
   const html = M.letter({
     site,
-    title: SUBJECT,
+    title: subject,
     heading: "Що з цього ви читали?",
     body: `${M.paras("Оцініть хоча б три, і ми підберемо, що читати далі.")}${rows}`,
     button: { text: "Більше книжок", href: link("/start") },
@@ -26,7 +33,7 @@ function compose({ site, reader, books, link = (p) => site + p }) {
     "",
     `Оцінити: ${link("/start")}`,
   ].join("\n");
-  return { subject: SUBJECT, html, text };
+  return { subject, html, text };
 }
 
 const SEND_HOUR = 10; // Kyiv, with the «Хочу» letters
