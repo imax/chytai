@@ -43,6 +43,9 @@ curl -s https://app.chytai.org.ua/agent/sql -H "$H" -H 'content-type: applicatio
 
 - SQL is SELECT / WITH / EXPLAIN only, on a read-only connection in a worker: 5 s, 500 rows, one at a time, 300 a day
   per app. E-mails and secret-looking values come back masked. Never print the token.
+- Robots: table `bots` (day, name, n, pages, ms, turned) per user agent; human pages in `views`. A crawler posing as a
+  browser shows as a flood of «Напряму» rows in `arrivals`, one landing each. Stats skip a guest address that opens
+  >8 pages without our cookies in 10 min (`admin.js crawler()`); clean a past flood once with `dropCrawler(key, where)`.
 - Errors live in the site's `errors` table (30 days): site 500s and crashes (`site`, `jobs`), the reader's server
   (`reader`), and script errors from readers' browsers in the reader app (`reader`, message starts «[браузер]»,
   extension noise dropped; `src/renderer/web-bridge.js` → `/api/client-error`). Each new one goes to Max's Telegram
