@@ -24,4 +24,9 @@ User-agent: AhrefsBot
 User-agent: MJ12bot
 Disallow: /
 
+# Took texts by the thousand a day without a reader's question behind it: Elevenlabs (voices), Keenable (Max, 2026-11-09).
+User-agent: ElevenlabsCrawler
+User-agent: KeenableBot
+Disallow: /
+
 Sitemap: https://chytai.org.ua/sitemap.xml

@@ -270,7 +270,7 @@ app.use((req, res, next) => {
     const ua = req.headers["user-agent"] || "";
     const page = req.method === "GET" && res.statusCode === 200 && /text\/html/.test(res.getHeader("Content-Type") || "") && !/^\/(api|admin|t)\//.test(req.path) && !("rest" in req.query);
     // A page asked for without a browser's headers is a robot too, whatever its user agent says (admin.js human()).
-    const isBot = BOT.test(ua) || (page && !human(req));
+    const isBot = BOT.test(ua) || (page && (!human(req) || !!req._crawler));
     if (page) speed.add(isBot ? "bot" : "page", ms);
     // A page people asked for and didn't find (a dead link from somewhere, an old address), for /admin/speed.
     // Only with a referrer: a person comes by a link (Google, another page), crawlers walking old addresses send none.

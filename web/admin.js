@@ -15,6 +15,7 @@ const BOT = /bot|crawl|spider|slurp|curl|wget|python|java\b|go-http|headless|pre
 const human = (req) => !BOT.test(req.headers["user-agent"] || "") && !!req.headers["accept-language"] && !!(req.headers["sec-fetch-mode"] || req.headers["sec-fetch-site"]);
 
 const DAY = 86400 * 1000;
+const BARE = 8; // guest pages without our cookies from one address in ten minutes, beyond which it is a robot
 const pad = (n) => String(n).padStart(2, "0");
 // YYYY-MM-DD of a moment, in the process's time zone.
 const dayOf = (t) => {
@@ -126,7 +127,8 @@ class Admin {
     this.seenDay = "";
     // The funnel counts readers who signed up from the day the steps started being kept.
     if (!db.get("steps:since")) db.set("steps:since", new Date().toISOString());
-    this.dropCrawler();
+    this.bare = new Map(); // address -> { n, since, until }: guests' pages that came without our cookies
+    this.dropCrawlers();
   }
 
   // Once (Max, 2026-11-04: «почистимо статистику по ботах в попередні дні»): until human() learned the Sec-Fetch
@@ -135,14 +137,19 @@ class Admin {
   // comes off that day's guest views, section views and guest arrivals; the 404s it made on 30.10 go too.
   // A person who opened a book's link with no referrer on those days goes with it (6–40 a day since the fix).
   // meta `fix:crawler` keeps what was taken off. 20–22.10 stay as they are: nothing tells the crawler apart there.
-  dropCrawler() {
+  // 31.10 it also went through shops' links (/go/), publishers and genres.
+  // Again on 7–8.11 (Max, 2026-11-09: «давай»): a crawler with every browser header, cookies thrown away, ~1000
+  // book and author pages «Напряму» against 5–20 a day; it began late on 7.11. Same rule, meta `fix:crawler-1108`.
+  dropCrawlers() {
+    this.dropCrawler("fix:crawler", `source = 'Напряму' AND visits = fresh AND ((day BETWEEN '2026-10-24' AND '2026-10-31' AND (landing LIKE '/book/%' OR landing LIKE '/author/%')) OR (day = '2026-10-31' AND (landing LIKE '/go/%' OR landing LIKE '/publishers/%' OR landing LIKE '/genre/%')))`, "2026-10-30");
+    this.dropCrawler("fix:crawler-1108", `source = 'Напряму' AND visits = fresh AND day BETWEEN '2026-11-07' AND '2026-11-08' AND (landing LIKE '/book/%' OR landing LIKE '/author/%')`);
+  }
+  dropCrawler(key, bot, day404) {
     const db = this.db;
-    if (db.get("fix:crawler")) return;
+    if (db.get(key)) return;
     try {
       db.tx(() => {
-        if (db.get("fix:crawler")) return;
-        // 31.10 it also went through shops' links (/go/), publishers and genres.
-        const bot = `source = 'Напряму' AND visits = fresh AND ((day BETWEEN '2026-10-24' AND '2026-10-31' AND (landing LIKE '/book/%' OR landing LIKE '/author/%')) OR (day = '2026-10-31' AND (landing LIKE '/go/%' OR landing LIKE '/publishers/%' OR landing LIKE '/genre/%')))`;
+        if (db.get(key)) return;
         const rows = db.prepare(`SELECT day, landing, visits FROM arrivals WHERE ${bot}`).all();
         const views = db.prepare("UPDATE views SET guests = max(0, guests - 1) WHERE day = ?");
         const section = db.prepare("UPDATE section_views SET views = max(0, views - 1) WHERE day = ? AND section = ?");
@@ -153,12 +160,35 @@ class Admin {
           days[r.day] = (days[r.day] || 0) + r.visits;
         }
         db.prepare(`DELETE FROM arrivals WHERE ${bot}`).run();
-        const e404 = db.prepare("DELETE FROM events WHERE name = '404' AND day = '2026-10-30' AND guest = 1").run().changes;
-        db.set("fix:crawler", JSON.stringify({ at: new Date().toISOString(), days, e404 }));
+        const e404 = day404 ? db.prepare("DELETE FROM events WHERE name = '404' AND day = ? AND guest = 1").run(day404).changes : 0;
+        db.set(key, JSON.stringify({ at: new Date().toISOString(), days, e404 }));
       });
     } catch (e) {
       console.log(`admin: could not drop the crawler's views: ${e.message}`);
     }
+  }
+
+  // A crawler that sends every header a browser does but throws our cookies away (2026-11-08: ~1000 «guest»
+  // views, each a new arrival «Напряму» on another book). A person's browser keeps chytai_here/chytai_seen after
+  // the first page, so more than BARE pages without them from one address in ten minutes is a robot; the address
+  // stays one for an hour after its last page. Only in memory, never written down; at most 5000 addresses.
+  crawler(req, readerId) {
+    if (readerId) return false;
+    if ("_crawler" in req) return req._crawler;
+    let bot = false;
+    if (req.ip && !/chytai_(here|seen)=/.test(req.headers.cookie || "")) {
+      const now = Date.now();
+      const x = this.bare.get(req.ip) || { n: 0, since: now, until: 0 };
+      if (now - x.since > 10 * 60 * 1000) (x.n = 0), (x.since = now);
+      x.n++;
+      if (x.n > BARE || x.until > now) x.until = now + 3600 * 1000;
+      bot = x.until > now;
+      if (bot && x.n === BARE + 1) console.log(`admin: pages without cookies from one address, counted as a robot (${String(req.headers["user-agent"] || "").slice(0, 80)})`);
+      this.bare.delete(req.ip);
+      this.bare.set(req.ip, x);
+      if (this.bare.size > 5000) this.bare.delete(this.bare.keys().next().value);
+    }
+    return (req._crawler = bot);
   }
 
   // A page opened: remember the reader's day and count the view. Cheap: one insert per reader a day,
@@ -169,7 +199,7 @@ class Admin {
     if (accept && !accept.includes("text/html")) return;
     const p = req.path || "";
     if (p.startsWith("/api/") || p === "/refresh-status" || p === "/admin" || p.startsWith("/admin/") || p.includes(".")) return;
-    if (!human(req)) return; // browsers always send Accept-Language, most crawlers with a browser's user agent don't (2026-10-26)
+    if (!human(req) || this.crawler(req, readerId)) return; // browsers always send Accept-Language, most crawlers with a browser's user agent don't (2026-10-26)
     const day = today();
     if (day !== this.seenDay) (this.seen = new Set()), (this.seenDay = day);
     try {
@@ -202,7 +232,7 @@ class Admin {
     if (accept && !accept.includes("text/html")) return;
     const p = req.path || "";
     if (p.startsWith("/api/") || p === "/refresh-status" || p === "/admin" || p.startsWith("/admin/") || p.includes(".") || p === "/mcp" || p.startsWith("/oauth/")) return;
-    if (!human(req) || /prefetch|prerender/i.test(req.headers["sec-purpose"] || req.headers.purpose || "")) return;
+    if (!human(req) || this.crawler(req, readerId) || /prefetch|prerender/i.test(req.headers["sec-purpose"] || req.headers.purpose || "")) return;
     try {
       const referer = req.headers.referer || req.headers.referrer || "";
       // The way back from «Увійти через Google» is not an arrival from Google.
