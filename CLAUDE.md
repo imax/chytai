@@ -104,7 +104,7 @@ so Max sees it on the real site. He switches it to everyone on `/admin/jobs` (bl
 - A product decision goes into `docs/decisions.md`; a reader-facing feature gets a one-line entry in `web/updates.md` («Що нового»).
 - Test on production only under a test account, never Max's. No mail to test domains.
 - «Статті» (web articles and essays) were taken out on 2026-11-10 and went to Max's blog («не ліпляться вони в
-  Читай»): don't bring them back, on the site or in the reader. Their tables stay in the site's DB until Max OKs a drop.
+  Читай»): don't bring them back, on the site or in the reader. Their tables were dropped (store.dropArticles); the export is in project files `chytai-articles-export/`.
 - Reader: how the text looks (theme, font, sizes, spacing, margins, column, page turns) is kept per device
   (`LOOK_KEYS` in `src/renderer/web-bridge.js`); the account's copy only starts a new device. A new look setting
   goes into that list.

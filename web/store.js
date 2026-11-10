@@ -389,6 +389,7 @@ class Store {
       if (fs.existsSync(file)) fs.renameSync(file, `${file}.migrated`);
     }
     this.moveToArticles();
+    this.dropArticles();
     // The shelves: the seed, or the newer copy a refresh wrote under dataDir before the database.
     const seedShelves = readJson(path.join(SEED, "shelves.json"));
     if (!db.get("baseline")) db.set("baseline", seedShelves.baseline || seedShelves.fetched);
@@ -416,6 +417,18 @@ class Store {
   // Essays are not books (Max, 2026-11-08: «прибирай»): their book rows, shelf entries, list rows and queue rows
   // went once, before anything is derived, so both processes start without them. What was removed stays in meta
   // `moved_to_articles` to put back by hand. «Статті», where they went, is gone too (Max, 2026-11-10).
+  // «Статті» are gone (Max, 2026-11-10: «Стерти», after the export in project files chytai-articles-export): their
+  // tables and the owner's seeding marks go once. Nightly backups and Fly snapshots still hold them for a while.
+  dropArticles() {
+    const db = this.db;
+    if (db.get("articles_dropped")) return;
+    db.tx(() => {
+      for (const t of ["article_asks", "article_notes", "article_later", "article_gone", "article_reads", "article_highlights", "articles"]) db.exec(`DROP TABLE IF EXISTS ${t}`);
+      db.prepare("DELETE FROM meta WHERE key LIKE 'articles:%'").run();
+      db.set("articles_dropped", new Date().toISOString());
+    });
+  }
+
   moveToArticles() {
     const db = this.db;
     if (db.get("moved_to_articles")) return;
