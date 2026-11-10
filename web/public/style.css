@@ -197,6 +197,7 @@ a.tab { text-decoration: none; }
 .split > aside > .label { margin-top: 0; }
 .split > aside > * + .label, aside .minis + .label, aside .numbers + .label, .split > aside > [data-block] + [data-block] { margin-top: 40px; }
 .block { margin-bottom: 44px; }
+.feed + .block { margin-top: 44px; }
 .block > .label { margin-bottom: 20px; }
 
 /* ---- book rows ---- */

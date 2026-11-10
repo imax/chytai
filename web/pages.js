@@ -1642,9 +1642,9 @@ function readersPage({ user, feed, readers, totals, followed = new Set(), club =
 ${pageHead({ kicker: "Спільнота", title: "Що читають інші", sub: `${count(totals.readers, "читач", "читачі", "читачів")} · ${books(totals.books)} на полицях · ${count(totals.notes, "нотатка", "нотатки", "нотаток")}`, action: user ? "" : `<a class="btn primary" href="/login">Завести полицю</a>` })}
 <div class="split wide-aside">
   <section>
-    ${club.length ? `<section class="block" data-block="club">${label("Обговорюють", `<a href="/club">усі теми</a> · <a rel="nofollow" href="/club/new">+ нова тема</a>`)}<div class="club-topics">${club.map((t) => clubRow(t)).join("")}</div></section>` : ""}
     ${label("Стрічка", `<span class="tabs" data-feed-filter>${tabs.map(([v, t]) => `<button type="button" class="tab${v ? "" : " on"}" data-v="${v}">${t}</button>`).join("")}</span>`)}
     ${feedList(feed, { wide: true, followed })}
+    ${club.length ? `<section class="block" data-block="club">${label("Обговорюють", `<a href="/club">усі теми</a> · <a rel="nofollow" href="/club/new">+ нова тема</a>`)}<div class="club-topics">${club.map((t) => clubRow(t)).join("")}</div></section>` : ""}
   </section>
   <aside>
     ${label("Читачі")}
