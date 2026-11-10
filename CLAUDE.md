@@ -1,8 +1,8 @@
 # Chytai: how to work here
 
 Chytai is a Ukrainian reading platform: the site https://chytai.org.ua (`web/`, Fly app `chytai-web`) and the reader
-https://app.chytai.org.ua (`server/` + `src/`, Fly app `chytai`). `app/` is the iOS WebView shell, `mac/` the Electron
-app. The owner is Max; he writes Ukrainian, and every word a reader sees is Ukrainian, short, one plain clause.
+https://app.chytai.org.ua (`server/` + `src/`, Fly app `chytai`). `app/` is the iOS WebView shell, `mac/` the Mac app (Swift
+over WKWebView, `mac/build.sh`; branch pushes get a `mac-beta` pre-release, see `mac/README.md`). The owner is Max; he writes Ukrainian, and every word a reader sees is Ukrainian, short, one plain clause.
 The repo is public: never commit secrets, keys or `data/`.
 
 Keep this file up to date (Max, 2026-11-09): when you add a way of working, a tool, an endpoint or a rule that the
