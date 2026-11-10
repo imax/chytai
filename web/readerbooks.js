@@ -175,7 +175,8 @@ class ReaderBooks {
       // «Seductive interaction design»), without a series note in brackets; the source's when the file shouts.
       const own = book.title.replace(/\s*[(\[][^)\]]*\b(book|series|vol\.?|volume|#|том|книга|серія)\b[^)\]]*[)\]]\s*$/iu, "").trim();
       const title = own === own.toUpperCase() ? hit.title : own;
-      const author = hit.author || book.author;
+      // The file's author, cleaned: Google may give «Korman Gordon» or the Russian «Светлана Алексиевич».
+      const author = book.author;
       if (dry) {
         made.push({ title, author, file: f.title, from: hit.from || "", cover: hit.cover || "" });
         continue;
