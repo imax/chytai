@@ -2627,7 +2627,31 @@ app.get("/author/:slug", async (req, res) => {
     .sort((a, b) => b.readers - a.readers || (b.avg ?? -1) - (a.avg ?? -1) || !!b.entry - !!a.entry || shown.has(a.book.id) - shown.has(b.book.id) || a.book.title.localeCompare(b.book.title, "uk"))
     .map((h) => ({ ...h, twins: store.translationsOf(h.book.id) }));
   foldTwins(hits, req);
-  for (const h of hits) h.series = store.seriesOf(h.book.id);
+  // The new author page (flag «author-page», Max 2026-11-10: «сторінки авторів можна покращити»).
+  const v2 = flags.on("author-page", req.user);
+  for (const h of hits) {
+    h.series = store.seriesOf(h.book.id);
+    // A shop's lone volume («Ритм війни. Хроніки Буресвітла. Книга 4») is in its original's series.
+    if (v2 && (!h.series || h.series.key.startsWith("shelf:"))) {
+      const t = (h.others || []).map((o) => store.seriesOf(o.id)).find((s) => s && !s.key.startsWith("shelf:"));
+      if (t) h.series = { ...t, name: h.series?.name && CYR_RE.test(h.book.title) ? store.cycleInfo.get(t.key)?.uk || t.name : t.name };
+    }
+  }
+  // A volume we have only in Ukrainian, untied to the original («Танок драконів»): its title is a Wikidata member's.
+  if (v2)
+    for (const h of hits.filter((h) => !h.series)) {
+      const t = norm(h.book.title);
+      for (const key of new Set(hits.map((x) => x.series?.key).filter(Boolean))) {
+        // Or another edition's title on this page before its first dot («Бенкет круків. Пісня льоду і полум'я. Книга 4»).
+        const ours = hits.filter((x) => x.series?.key === key).map((x) => ({ n: x.series.n, uk: x.book.title.split(/[.(:]/)[0] }));
+        const m = [...(store.cycleInfo.get(key)?.members || []), ...ours].find((m) => [m.uk, m.en].some((x) => norm(x).length >= 4 && (t === norm(x) || t.startsWith(norm(x) + " "))));
+        if (m) {
+          const s = hits.find((x) => x.series?.key === key).series;
+          h.series = { ...s, n: m.n };
+          break;
+        }
+      }
+    }
   // A shop edition Wikidata doesn't know («Ритм війни. Хроніки Буресвітла. Книга 4», alone in a series of
   // its own shop shelf) joins a series of the page whose name its title carries, at the number it gives.
   const size = new Map();
@@ -2635,9 +2659,28 @@ app.get("/author/:slug", async (req, res) => {
   const named = [...new Map(hits.filter((h) => h.series?.name && size.get(h.series.key) > 1).map((h) => [h.series.key, h.series])).values()];
   for (const h of hits.filter((h) => !h.series || size.get(h.series.key) === 1)) {
     const n = Number((h.book.title.match(/(?:книга|кн\.|том|book)\s*(\d+)/i) || [])[1]) || h.series?.n;
-    const s = n && named.find((x) => x.name.length >= 5 && h.book.title.toLowerCase().includes(x.name.toLowerCase()));
+    // By any of the series' names («Хроніки Буресвітла» when the page's lead volume is «The Stormlight Archive»).
+    const s = n && named.find((x) => [x.name, store.cycleInfo.get(x.key)?.uk, store.cycleInfo.get(x.key)?.name].some((nm) => nm && nm.length >= 5 && h.book.title.toLowerCase().includes(nm.toLowerCase())));
     if (s) h.series = { ...s, n };
     else if (!h.series && n > 1) h.series = { key: "", name: "", n }; // a later volume all the same: not where to start
+  }
+  // One tile per volume: two editions at one place in a series that nobody paired («Експансія. Кн. 1» and
+  // «Leviathan Wakes») are one book, the Ukrainian one shown; a whole-series entry («The Expanse») is no edition.
+  if (v2) {
+    const at = new Map();
+    for (const h of hits) if (h.series?.key) (at.get(`${h.series.key}|${h.series.n}`) || at.set(`${h.series.key}|${h.series.n}`, []).get(`${h.series.key}|${h.series.n}`)).push(h);
+    const gone = new Set();
+    for (const g of at.values()) {
+      if (g.length < 2) continue;
+      const lead = g.find((h) => CYR_RE.test(h.book.title)) || g[0];
+      for (const h of g) if (h !== lead) (lead.others = [...(lead.others || []), h.book, ...(h.others || [])]), gone.add(h), (lead.entry ||= h.entry), (lead.readers += h.readers);
+    }
+    for (let i = hits.length - 1; i >= 0; i--) if (gone.has(hits[i])) hits.splice(i, 1);
+    for (const h of hits)
+      if (h.series && h.others) {
+        const names = [h.series.name, store.cycleInfo.get(h.series.key)?.name, store.cycleInfo.get(h.series.key)?.uk].filter(Boolean).map(norm);
+        h.others = h.others.filter((o) => !names.includes(norm(o.title)));
+      }
   }
   const about = author.qid ? authors.aboutNow(store, author.qid, { log: console.log })?.person : null;
   // Who reads this author, and what else those readers rated highest.
@@ -2648,10 +2691,18 @@ app.get("/author/:slug", async (req, res) => {
     .filter((r) => r.reader)
     // What each reader gave this author's books, best first («Воно ★5, Сяйво ★4»), not their shelf's size (usability review #8).
     .map(({ reader, rows }) => ({ reader, count: rows.length, read: rows.filter((r) => r.status === "read").length, mine: rows.filter((r) => mineIds.has(store.canonical(r.id))).sort((x, y) => (y.rating ?? -1) - (x.rating ?? -1)).map((r) => ({ ...r, book: workFor(req, r.book) || r.book })) }));
-  const also = social.alsoLiked([...ids], { limit: 4, skip: ids }).filter((b) => !author.ids.includes(b.id));
+  // With one or two readers «також люблять» is one person's shelf, not a pattern: from three on.
+  const also = v2 && who.length < 3 ? [] : social.alsoLiked([...ids], { limit: 4, skip: ids }).filter((b) => !author.ids.includes(b.id));
+  // What the reader has: a later volume read means the earlier ones too (store.readLater).
+  const mine = v2 && req.user ? store.inLibrary(req.user.id) : null;
+  if (mine)
+    for (const h of hits) {
+      const own = [h.book.id, ...(h.others || []).map((o) => o.id)].map((id) => mine.get(id) || mine.get(store.canonical(id))).find(Boolean);
+      h.mine = own?.status || (h.series && [h.book.id, ...(h.others || []).map((o) => o.id)].some((id) => store.readLater(mine, id)) ? "read" : "");
+    }
   const pairing = req.user?.owner ? store.translationPairing(author) : null;
   const joins = req.user?.owner ? authors.ownerJoins(store).map((p, index) => ({ p, index })).filter(({ p }) => p.some((n) => author.names?.includes(n))).map(({ p, index }) => ({ names: p, index })) : null;
-  res.send(pages.authorPage({ author, about, works, hits, user: req.user, readers: who, also, pairing, joins }));
+  res.send(pages.authorPage({ author, about, works, hits, user: req.user, readers: who, also, pairing, joins, v2, members: (key) => store.cycleInfo.get(key)?.members || [] }));
 });
 
 // The owner joins two spellings of one person (Max, 2026-10-23: «як нам зєднувати авторів?»): on an author

@@ -1817,7 +1817,7 @@ function outsideResults({ q, user, books }) {
 // ---- /author/<slug> ----
 
 // The books we have, with what readers said; who reads them; then the works from Wikidata.
-function authorPage({ author, about = null, works, hits, user, readers = [], also = [], pairing = null, joins = null }) {
+function authorPage({ author, about = null, works, hits, user, readers = [], also = [], pairing = null, joins = null, v2 = false, members = () => [] }) {
   // The owner joins another spelling of this person (Max, 2026-10-23: «як нам зєднувати авторів?»).
   const joinBlock = joins
     ? `${label("Той самий автор")}<form method="post" action="/admin/authors/join" class="author-join"><input type="hidden" name="author" value="${attr(author.slug)}"><input name="other" placeholder="Посилання на автора або ім’я" required><button class="btn small">З’єднати</button></form>${joins
@@ -1839,7 +1839,8 @@ function authorPage({ author, about = null, works, hits, user, readers = [], als
   const sub = [`${books(hits.length)} на Chytai`, readers.length ? count(readers.length, "читач", "читачі", "читачів") : "", avg != null ? `середня оцінка <b>${uk(avg.toFixed(1))}</b>` : "", inUk && inUk < hits.length ? `${inUk} українською` : ""].filter(Boolean).join(" · ");
   const work = (w) => {
     const title = w.uk || w.en || w.orig;
-    const orig = [w.orig, w.en].find((t) => t && t !== title) || "";
+    // Wikidata's «title» comes in any language («Войната на Калибан»): the English name goes first.
+    const orig = (v2 ? [w.en, w.orig] : [w.orig, w.en]).find((t) => t && t !== title) || "";
     const b = w.books[0];
     return `<li${b ? "" : ' class="none"'}><span class="year">${w.year || ""}</span> ${b ? `<a href="${attr(b.href)}">${esc(title)}</a>` : esc(title)}${orig ? ` <span class="alt">${esc(orig)}</span>` : ""}${!b && !w.uk ? ` <span class="small muted">· у каталогах поки немає</span>` : ""}</li>`;
   };
@@ -1941,13 +1942,39 @@ document.addEventListener("submit", async (e) => {
         .filter((q) => q.top)
         .slice(0, 3)
     : [];
-  const tile = (h, extra = "") => card(h.book, { avg: h.avg ?? null, by: false, extra });
+  // The reader's own mark on each book (flag «author-page»): «✓ прочитано», «читаю», «хочу прочитати».
+  const mark = (h) => (v2 && h.mine ? `<p class="meta muted small">${h.mine === "read" ? "✓ " : ""}${esc(STATUS[h.mine].toLowerCase())}</p>` : "");
+  const tile = (h, extra = "") => card(h.book, { avg: h.avg ?? null, by: false, extra: extra + mark(h) });
+  // A series: how much of it the reader has read, and the volumes no catalog has yet.
+  const seriesNote = (g) => {
+    const total = g[0].series.total;
+    const read = new Set(g.filter((h) => h.mine === "read").map((h) => h.series.n)).size;
+    if (v2 && user && read) return `прочитано ${read} з ${Math.max(total, g.length)}`;
+    return total > g.length ? `${g.length} з ${total} у нас` : "";
+  };
+  const missing = (g) => {
+    if (!v2) return "";
+    const have = new Set(g.map((h) => h.series.n));
+    const cyr = CYR.test(g[0].book.title);
+    const gone = members(g[0].series.key).filter((m) => !have.has(m.n) && (m.uk || m.en));
+    return gone.length ? `<p class="muted small series-missing">Поки немає в каталогах: ${gone.map((m) => `${m.n}. ${esc((cyr && m.uk) || m.en || m.uk)}`).join(", ")}</p>` : "";
+  };
+  // «Гра престолів. Пісня льоду й полум'я. Книга 1» in the series «Пісня льоду та полум'я» is «Гра престолів».
+  const shortTitle = (title, name) => {
+    if (!v2) return inSeriesTitle(title, name);
+    const key = (x) => x.toLowerCase().replace(/[’'ʼ`]/g, "").replace(/\s+(й|і|та|и|and|&)\s+/g, " ").replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+    const parts = title.replace(/(?:книга|кн\.|том|book)\s*\d+/gi, "").split(/[.()]+/).map((x) => x.trim()).filter(Boolean);
+    const kept = parts.filter((x) => key(x) !== key(name || ""));
+    return kept.length && kept.join(". ").length >= 2 ? kept.join(". ") : title;
+  };
+  // «Ще 1 книжка» behind a button is a click for nothing: up to 18 show at once.
+  const cut = v2 && rest.length <= 18 ? 18 : 15;
   const shelf = !hits.length
     ? `<section class="block">${label("Книжки")}<p class="muted">Поки ні в каталогах, ні в читачів.</p></section>`
     : `${start.length ? `<section class="block">${label(many ? "З чого почати" : "Книжки", many ? (start === byFame ? "найвідоміші" : "найбільше читають") : "")}<div class="rows">${start.map(bigRow).join("")}</div></section>` : ""}
     ${quotes.length ? `<section class="block">${label("Що кажуть читачі")}<div class="quotes">${quotes.map(({ h, top }) => `<figure><blockquote>${noteOf(top.entry, h.book.id)}</blockquote><figcaption>— <a href="${attr(top.href)}"><b>${esc(top.name)}</b></a> про <a href="${attr(h.book.href)}">«${esc(h.book.title)}»</a></figcaption></figure>`).join("")}</div></section>` : ""}
-    ${series.map((g) => `<section class="block">${label(`Серія «${esc(g[0].series.name)}»`, g[0].series.total > g.length ? `${g.length} з ${g[0].series.total} у нас` : "")}<div class="grid five author-grid">${g.map((h) => tile({ ...h, book: { ...h.book, title: inSeriesTitle(h.book.title, h.series.name) } }, `<p class="meta">Книга ${h.series.n}</p>`)).join("")}</div></section>`).join("")}
-    ${rest.length ? `<section class="block">${label(start.length || series.length ? `Інші книжки · ${rest.length}` : `Книжки · ${rest.length}`, "спершу українською")}<div class="grid five author-grid">${rest.slice(0, 15).map((h) => tile(h)).join("")}</div>${rest.length > 15 ? `<details class="more-books"><summary class="btn">Ще ${books(rest.length - 15)}</summary><div class="grid five author-grid">${rest.slice(15).map((h) => tile(h)).join("")}</div></details>` : ""}</section>` : ""}`;
+    ${series.map((g) => `<section class="block">${label(`Серія «${esc(g[0].series.name)}»`, seriesNote(g))}<div class="grid five author-grid">${g.map((h) => tile({ ...h, book: { ...h.book, title: shortTitle(h.book.title, h.series.name) } }, `<p class="meta">Книга ${h.series.n}</p>`)).join("")}</div>${missing(g)}</section>`).join("")}
+    ${rest.length ? `<section class="block">${label(start.length || series.length ? `Інші книжки · ${rest.length}` : `Книжки · ${rest.length}`, "спершу українською")}<div class="grid five author-grid">${rest.slice(0, cut).map((h) => tile(h)).join("")}</div>${rest.length > cut ? `<details class="more-books"><summary class="btn">Ще ${books(rest.length - cut)}</summary><div class="grid five author-grid">${rest.slice(cut).map((h) => tile(h)).join("")}</div></details>` : ""}</section>` : ""}`;
   const body = `
 ${head}
 <div class="split">
@@ -1957,7 +1984,7 @@ ${head}
       ${label("Усі твори", author.qid ? `<a href="https://www.wikidata.org/wiki/${attr(author.qid)}" target="_blank" rel="noopener">Wikidata ↗</a>` : "")}
       <details class="works-all"${many ? "" : " open"}><summary>${count(works.length, "твір", "твори", "творів")}, ${works.filter((w) => w.books.length).length} з них у нас</summary><ul class="works">${works.map(work).join("")}</ul></details>
     </section>` : ""}
-    ${pairing && many ? `<section class="block">${label("Переклади", "лише власнику")}<div class="rows">${hits.filter((h) => !start.includes(h) && pair(h.book)).map((h) => `<div class="pair-line"><a href="${attr(h.book.href)}">${esc(h.book.title)}</a>${pair(h.book)}</div>`).join("")}</div></section>` : ""}
+    ${pairing && many && hits.some((h) => !start.includes(h) && pair(h.book)) ? `<section class="block">${label("Переклади", "лише власнику")}<div class="rows">${hits.filter((h) => !start.includes(h) && pair(h.book)).map((h) => `<div class="pair-line"><a href="${attr(h.book.href)}">${esc(h.book.title)}</a>${pair(h.book)}</div>`).join("")}</div></section>` : ""}
   </div>
   <aside>
     ${readers.length ? `${label("Хто читає")}<div class="others-list">${readers.map((r) => `<a href="${attr(r.reader.href)}"><b>${esc(r.reader.name)}</b><span>${r.mine?.length ? r.mine.slice(0, 2).map((e) => `${esc(e.book.title)}${e.rating != null ? ` ★${uk(String(e.rating))}` : ""}`).join(", ") + (r.mine.length > 2 ? ` і ще ${r.mine.length - 2}` : "") : `${books(r.count)}, ${count(r.read, "прочитана", "прочитані", "прочитаних")}`}</span></a>`).join("")}</div>` : ""}

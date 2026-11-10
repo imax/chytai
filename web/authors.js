@@ -9,7 +9,7 @@ const ENDPOINT = "https://query.wikidata.org/sparql";
 const HEADERS = { "User-Agent": "Chytai/1.0 (https://chytai.org.ua; author pages)", Accept: "application/sparql-results+json" };
 const DAY = 86400000;
 // Bumped when the lookup learns something new, so it runs again without waiting out the week.
-const VERSION = "4"; // 3: Ukrainian citizenship (ua), writers with no works on Wikidata (2026-10-23); 4: by title only a like name (2026-11-05)
+const VERSION = "5"; // 3: Ukrainian citizenship (ua), writers with no works on Wikidata (2026-10-23); 4: by title only a like name (2026-11-05); 5: pen names (2026-11-10)
 
 const norm = (s) => String(s || "").toLowerCase().replace(/^(the|a)\s+/, "").replace(/[’'ʼ`]/g, "").replace(/[^\p{L}\p{N}]+/gu, " ").trim();
 const CYR = /[а-яіїєґ]/i;
@@ -128,6 +128,23 @@ async function lookup(store, names, works, fetchImpl) {
       lastError = e.cause?.code || e.message;
     }
   }
+  // A pen name that is its own item (James S. A. Corey, two writers; Max 2026-11-10) wins over a person who has
+  // it only as an alias (Daniel Abraham): a collective pseudonym labelled with the name, with works. One
+  // person's pen name stays that person («Robert Galbraith» is on J. K. Rowling's page).
+  for (let i = 0; i < names.length; i += 30) {
+    const batch = names.slice(i, i + 30);
+    const values = batch.map((f) => `${JSON.stringify(f)}@uk ${JSON.stringify(f)}@en`).join(" ");
+    try {
+      const rows = await sparql(`SELECT ?name ?a (SAMPLE(?uk_) AS ?uk) (SAMPLE(?en_) AS ?en) WHERE { VALUES ?name { ${values} } VALUES ?kind { wd:Q16017119 } ?a rdfs:label ?name; wdt:P31 ?kind. FILTER EXISTS { ?w wdt:P50 ?a } OPTIONAL { ?a rdfs:label ?uk_ FILTER(lang(?uk_) = "uk") } OPTIONAL { ?a rdfs:label ?en_ FILTER(lang(?en_) = "en") } } GROUP BY ?name ?a`, fetchImpl);
+      for (const name of batch) {
+        const pens = rows.filter((r) => r.name.value === name);
+        if (new Set(pens.map((r) => r.a.value)).size === 1) found[name] = person(pens[0]);
+      }
+    } catch (e) {
+      errors++;
+      lastError = e.cause?.code || e.message;
+    }
+  }
   // A writer whose books Wikidata doesn't link to them («Max Kidruk», Max 2026-10-23): a person of that
   // name who is a writer, novelist, poet or author, when only one person fits.
   const rest = names.filter((n) => !found[n] && !CYR.test(n));
@@ -176,7 +193,7 @@ async function lookup(store, names, works, fetchImpl) {
       lastError = e.cause?.code || e.message;
     }
   }
-  const batches = Math.ceil(names.length / 30) + Math.ceil(rest.length / 30) + Math.ceil(titles.length / 30);
+  const batches = 2 * Math.ceil(names.length / 30) + Math.ceil(rest.length / 30) + Math.ceil(titles.length / 30);
   return { found, errors, lastError, batches };
 }
 
@@ -220,7 +237,11 @@ function build(store) {
   const groups = new Map(); // key -> { key, qid, names: Map(name -> count), ids: Set }
   const keyOfName = new Map();
   const works = allWorks(store);
-  const keyOf = (name) => (wd[name] ? `q:${wd[name].qid}` : `n:${norm(forms(name).sort()[0])}`);
+  // A spelling Wikidata wasn't asked about that differs from a known one only in dots and spaces
+  // («James S.A. Corey» and «James S. A. Corey», Max 2026-11-10: two pages of one author) is that person.
+  const qOfNorm = new Map();
+  for (const [n, p] of Object.entries(wd)) if (p?.qid && !qOfNorm.has(norm(n))) qOfNorm.set(norm(n), `q:${p.qid}`);
+  const keyOf = (name) => (wd[name] ? `q:${wd[name].qid}` : qOfNorm.get(norm(name)) || `n:${norm(forms(name).sort()[0])}`);
   const { isRussian } = require("./store");
   for (const b of works) {
     if (isRussian(store.book(b.id) || b)) continue; // not on author pages (Max, 2026-10-20)
