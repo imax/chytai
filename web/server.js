@@ -782,6 +782,16 @@ app.post("/api/reader-library", (req, res) => {
   });
   res.json({ ok: true, books: books.length });
 });
+// The feature flags (flags.js) on for one reader, for the reader app's page (server/index.js readerFlags):
+// POST { id, key } -> { flags: [name] }. So a new thing in the reader can go live for Max first, as on the site.
+app.post("/api/reader-flags", (req, res) => {
+  const id = String(req.body?.id || "");
+  const key = String(req.body?.key || "");
+  const r = auth.reader(id);
+  const want = r && readerKey(id);
+  if (!want || key.length !== want.length || !require("crypto").timingSafeEqual(Buffer.from(key), Buffer.from(want))) return res.status(403).json({ error: "key" });
+  res.json({ flags: flags.list().map((f) => f.name).filter((name) => flags.on(name, pub(r))) });
+});
 // The catalog book for a file in someone's reader: by the title the reader sent or the one it listed earlier.
 function readerCatalogBook(id, sentBook) {
   const name = String(sentBook?.name || "").slice(0, 300);

@@ -531,6 +531,9 @@
   const PREFETCH_MAX_BYTES = 40 * 1024 * 1024; // a bigger file is kept only once it is opened
   const KEEP_BOOKS = 20;
   const KEEP_BYTES = 300 * 1024 * 1024;
+  // Books saved by hand («Зберегти на телефон» in a book's menu, home.js): kept ahead of the recent ones and within
+  // the same limits, until the book is finished, set aside or gone from the library.
+  const pinnedList = async () => (await kvGet("pinned")) || [];
   let keeping = false;
   async function keepOnDevice(lib, onDevice) {
     if (keeping || !(await dbReady)) return;
@@ -539,10 +542,14 @@
       // A free book taken from the shelf is in both lists.
       const all = [...new Map([...(lib.free || []), ...(lib.books || [])].map((b) => [b.path, b])).values()];
       const recent = all.filter((b) => b.openedAt).sort((a, b) => b.openedAt - a.openedAt);
-      // What stays: the last book always, then the most recently opened while within the limits.
+      const byPath = new Map(all.map((b) => [b.path, b]));
+      const pinned = (await pinnedList()).filter((p) => byPath.has(p) && !byPath.get(p).finished && !byPath.get(p).aside);
+      await kvSet("pinned", pinned);
+      // What stays: the last book always, then the ones saved by hand, then the most recently opened while within the limits.
       const keep = new Set();
       let bytes = 0;
-      for (const b of recent) {
+      for (const b of [...pinned.map((p) => byPath.get(p)), ...recent]) {
+        if (keep.has(b.path)) continue;
         if (keep.size >= KEEP_BOOKS || (keep.size && bytes + (b.size || 0) > KEEP_BYTES)) break;
         keep.add(b.path);
         bytes += b.size || 0;
@@ -606,6 +613,21 @@
     reflowPut: (bookPath, version, data) => {
       idb("books", "readwrite", (s) => s.put({ data, savedAt: Date.now() }, `${bookPath}#reflow@${version}`)).catch(() => {});
       return api("PUT", `/api/reflow?path=${encodeURIComponent(bookPath)}&version=${encodeURIComponent(version)}`, new Blob([data])).catch(() => {});
+    },
+    // «Зберегти на телефон»: the file onto this device now, kept until the book is finished (keepOnDevice).
+    // Throws a TypeError without a network, and an Error with code "full" past the limits.
+    libraryKeep: async (path) => {
+      const lib = (await kvGet("library")) || {};
+      const all = [...(lib.free || []), ...(lib.books || [])];
+      const size = (p) => all.find((b) => b.path === p)?.size || 0;
+      const pinned = (await pinnedList()).filter((p) => p !== path && all.some((b) => b.path === p));
+      if (pinned.length + 1 > KEEP_BOOKS || pinned.reduce((n, p) => n + size(p), size(path)) > KEEP_BYTES) throw Object.assign(new Error("full"), { code: "full" });
+      const res = await api("GET", `/api/book?path=${encodeURIComponent(path)}&keep=1`);
+      if (!/epub|pdf|octet/.test(res.headers.get("Content-Type") || "")) throw new Error("Цю книжку не можна зберегти.");
+      const data = await res.arrayBuffer();
+      await idb("books", "readwrite", (s) => s.put({ data, savedAt: Date.now(), etag: res.headers.get("ETag") || "" }, path));
+      await kvSet("pinned", [...pinned, path]);
+      if (!/Firefox/.test(navigator.userAgent)) navigator.storage?.persist?.().catch(() => {});
     },
     libraryList: async () => {
       const onDevice = new Set((await idb("books", "readonly", (s) => s.getAllKeys()).catch(() => [])) || []);

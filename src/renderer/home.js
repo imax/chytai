@@ -1179,6 +1179,19 @@
 
   let menuBook = null;
   // On a phone a sheet from the bottom; with a mouse a small menu by the ⋯ or where the right click was.
+  // A phone (or a tablet) or a computer, for «на телефоні» and «Зберегти на телефон».
+  const deviceWords = () => (matchMedia("(pointer: coarse)").matches ? ["на телефоні", "на телефон"] : ["на комп'ютері", "на комп'ютер"]);
+  async function keepBook(b) {
+    const [onIt, toIt] = deviceWords();
+    showNotice("Зберігаю…", true);
+    try {
+      await window.reader.libraryKeep(b.path);
+      b.onDevice = true;
+      showNotice(`Збережено ${toIt}.`, false);
+    } catch (err) {
+      showNotice(err instanceof TypeError ? "Немає з'єднання: зберегти можна лише онлайн." : err.code === "full" ? `${onIt[0].toUpperCase()}${onIt.slice(1)} вже забагато книжок.` : `Не вдалося зберегти: ${err.message}`, false);
+    }
+  }
   function bookMenu(path, at = null) {
     const b = lib?.books.find((x) => x.path === path);
     if (!b || settings.guest) return;
@@ -1187,7 +1200,10 @@
     const own = !b.free && !b.protected && !b.paper;
     const d = $("#book-menu");
     $("#bm-title").textContent = b.title;
-    $("#bm-author").textContent = [author(b), statusText(b)].filter(Boolean).join(" · ");
+    // «На телефоні» / «Зберегти на телефон» (flag device-books, Max first): which books open without a network.
+    const keepable = settings.flags?.includes("device-books") && !!window.reader.libraryKeep && !b.paper && !b.protected && /^(epub|pdf)$/.test(b.ext || "");
+    const [onIt, toIt] = deviceWords();
+    $("#bm-author").textContent = [author(b), statusText(b), keepable && b.onDevice ? onIt : ""].filter(Boolean).join(" · ");
     $("#bm-cover").innerHTML = rcover(b);
     const pop = !!at && matchMedia("(min-width: 761px)").matches;
     d.classList.toggle("pop", pop);
@@ -1203,6 +1219,8 @@
     // Your own file is deleted; a book from the free shelf or a publisher just leaves the home screen.
     $("#bm-aside").hidden = own;
     $("#bm-delete").hidden = !(own && window.reader.libraryDeleteBook);
+    $("#bm-keep").hidden = !keepable || b.onDevice || b.unavailable;
+    $("#bm-keep").textContent = `Зберегти ${toIt}`;
     $("#bm-finished").hidden = !window.reader.libraryFinished;
     $("#bm-finished").textContent = b.finished ? "Позначити непрочитаною" : "Позначити прочитаною";
     d.returnValue = "";
@@ -1280,6 +1298,7 @@
     const act = $("#book-menu").returnValue;
     if (!b) return;
     if (act === "about") return showAbout(b);
+    if (act === "keep") return keepBook(b);
     if (act === "share") return window.Library.shareBook(b.path);
     if (act === "edit") return window.Library.editBook(b.path);
     if (act === "aside") return setAside(b.path);

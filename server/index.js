@@ -209,6 +209,27 @@ function userState(name) {
   return state.users[name];
 }
 
+// Feature flags from the site (web/flags.js, POST /api/reader-flags) for each account: what new things its page
+// shows (Max first, then everyone, switched on /admin/jobs without a deploy). A minute old at most; one entry per
+// account, so bounded by the accounts.
+const flagsKept = new Map(); // acct -> { list, at }
+function readerFlags(acct) {
+  const kept = flagsKept.get(acct);
+  const key = state.accounts[acct]?.key;
+  if (!key || (kept && Date.now() - kept.at < 60000)) return Promise.resolve(kept?.list || []);
+  if (kept) kept.at = Date.now(); // one question at a time
+  const asked = fetch(`${WEB_URL}/api/reader-flags`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: acct, key }), signal: AbortSignal.timeout(5000) })
+    .then((r) => (r.ok ? r.json() : null))
+    .catch(() => null)
+    .then((j) => {
+      const list = Array.isArray(j?.flags) ? j.flags.map(String) : kept?.list || [];
+      flagsKept.set(acct, { list, at: Date.now() });
+      return list;
+    });
+  // The first time the page waits a moment for the answer; later the copy kept here answers at once.
+  return kept ? Promise.resolve(kept.list) : Promise.race([asked, new Promise((r) => setTimeout(() => r([]), 1500))]);
+}
+
 function settingsFor(req) {
   // Notes and kept explanations come by their own calls; they would make every settings answer heavy.
   const { notes, chats, paperChats, ...u } = req.guest ? guestState(req.guest) : userState(req.acct);
@@ -222,6 +243,7 @@ function settingsFor(req) {
     user: req.user,
     username: (!req.guest && state.accounts[req.acct]?.username) || "",
     owner: !!req.owner,
+    flags: (!req.guest && flagsKept.get(req.acct)?.list) || [],
     hasApiKey: !!process.env.ANTHROPIC_API_KEY,
     apiKeyFromEnv: true,
     web: true,
@@ -1473,7 +1495,10 @@ app.get("/", (_req, res) => res.sendFile(path.join(ROOT, "src", "renderer", "ind
 const api = express.Router();
 api.use(express.json({ limit: "20mb" }));
 
-api.get("/settings", (req, res) => res.json(settingsFor(req)));
+api.get("/settings", async (req, res) => {
+  if (!req.guest) await readerFlags(req.acct);
+  res.json(settingsFor(req));
+});
 
 api.patch("/settings", (req, res) => {
   const u = req.guest ? guestState(req.guest) : userState(req.acct);
