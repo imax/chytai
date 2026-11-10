@@ -97,3 +97,6 @@ so Max sees it on the real site. He switches it to everyone on `/admin/jobs` (bl
 - Reuse existing designs and components; don't invent a new UI per page.
 - A product decision goes into `docs/decisions.md`; a reader-facing feature gets a one-line entry in `web/updates.md` («Що нового»).
 - Test on production only under a test account, never Max's. No mail to test domains.
+- Reader: how the text looks (theme, font, sizes, spacing, margins, column, page turns) is kept per device
+  (`LOOK_KEYS` in `src/renderer/web-bridge.js`); the account's copy only starts a new device. A new look setting
+  goes into that list.

@@ -125,6 +125,39 @@
     await kvSet("settings", cachedSettings);
     return cachedSettings;
   }
+  // How the text looks is kept on each device apart (Max, 2026-11-10: a bigger font on the Android phone
+  // made the iPhone's bigger too). The account's copy only starts a device that has none of its own yet,
+  // and still takes every change, so a new device opens with the latest choice. The rest stays shared.
+  const LOOK_KEYS = ["theme", "font", "fontSizes", "margins", "spacing", "column", "pageTaps", "deskScroll"];
+  const LOOK = "chytai-look";
+  const pickLook = (from) => Object.fromEntries(LOOK_KEYS.filter((k) => from?.[k] !== undefined).map((k) => [k, from[k]]));
+  function deviceLook() {
+    try {
+      return JSON.parse(localStorage.getItem(LOOK)) || null;
+    } catch {
+      return null;
+    }
+  }
+  function saveLook(look) {
+    // One font size per book whose size was changed; the oldest go once there are many.
+    const sizes = Object.entries(look.fontSizes || {});
+    if (sizes.length > 300) look = { ...look, fontSizes: Object.fromEntries(sizes.slice(-300)) };
+    try {
+      localStorage.setItem(LOOK, JSON.stringify(look));
+    } catch {}
+    return look;
+  }
+  // The settings as this device shows them: the account's, with this device's look on top.
+  function withLook(settings) {
+    if (!settings) return settings;
+    const look = deviceLook() || saveLook(pickLook(settings));
+    return { ...settings, ...look };
+  }
+  function changeLook(patch) {
+    const part = pickLook(patch);
+    if (Object.keys(part).length) saveLook({ ...(deviceLook() || {}), ...part });
+  }
+
   async function rememberPosition(path, cfi) {
     const s = (await localSettings()) || {};
     await patchLocalSettings({ positions: { ...(s.positions || {}), [path]: cfi } });
@@ -625,6 +658,8 @@
       idb("books", "readwrite", (s) => s.delete(name)).catch(() => {});
       const s = (await localSettings()) || {};
       if (s.lastBook === name) patchLocalSettings({ lastBook: path });
+      const look = deviceLook(); // the server moves the book's font size to the EPUB; so does the device
+      if (look?.fontSizes?.[name] !== undefined) saveLook({ ...look, fontSizes: { ...look.fontSizes, [path]: look.fontSizes[name] } });
       return path;
     },
     libraryTrash: () => api("GET", "/api/trash").then((r) => r.json()),
@@ -643,6 +678,7 @@
         settings = await localSettings();
         if (!settings) throw new Error("Немає з'єднання з сервером, а на цьому пристрої ще нічого не збережено.");
       }
+      settings = withLook(settings);
       // Electron reopens the last book after the window loads; here the bridge does it.
       if (!firstLoadDone) {
         firstLoadDone = true;
@@ -664,17 +700,18 @@
       return settings;
     },
     setSettings: async (patch) => {
+      changeLook(patch);
       try {
         await sync();
         const settings = await (await api("PATCH", "/api/settings", patch)).json();
         cachedSettings = settings;
         kvSet("settings", settings);
-        return settings;
+        return withLook(settings);
       } catch (err) {
         if (!isNetworkError(err)) throw err;
         const { apiKey, ...rest } = patch; // a key is never kept on the device
         await enqueue({ type: "settings", patch: rest });
-        return patchLocalSettings(rest);
+        return withLook(await patchLocalSettings(rest));
       }
     },
     // Kept explanations of a book (server only: without a connection they simply aren't kept this time).
