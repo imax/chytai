@@ -1470,7 +1470,7 @@ const PLANS = {
 const fits = (job, keys) => keys.some((k) => (k instanceof RegExp ? k.test(job) : k === job));
 
 // Where a new book came from (store.js source), for the queue on /admin/jobs.
-const FROM = { catalog: "каталог", manual: "вручну", goodreads: "Goodreads", "apple-books": "Apple Books", list: "список", chat: "чат", tip: "українське видання" };
+const FROM = { catalog: "каталог", manual: "вручну", goodreads: "Goodreads", "apple-books": "Apple Books", list: "список", chat: "чат", tip: "українське видання", reader: "Читалка", search: "пошук" };
 const STEPS = { lang: "мова", genre: "жанри", orig: "переклад?", details: "деталі" };
 const ANSWERS = { uk: "українська", ru: "російська", en: "англійська", other: "інша", unknown: "не знає", translation: "так", ukrainian: "ні, українська" };
 

@@ -95,6 +95,15 @@ so Max sees it on the real site. He switches it to everyone on `/admin/jobs` (bl
   `{title, author, page}` (a store page) and is added from it. Prefer Ukrainian editions, no Russian authors.
 - Check it locally signed in as `owner@test.invalid`, screenshot, show Max.
 
+## Readers' uploads become catalog books (`web/readerbooks.js`)
+
+- A file just uploaded to the reader (tellSite → `/api/reader-library`, with `lang`, `fromName`, `added`) that the
+  catalog lacks becomes a book (`source: "reader"`) when its metadata is clean, it is uk/en, not Russian, and Google
+  Books or Open Library confirm title + author. Behind the flag `reader-books`; caps 20/reader, 200/day.
+- Dry run over all files in readers' lists: `curl -s https://chytai.org.ua/agent/reader-books -H "$H"` (starts it;
+  ask again for the answer, `?again=1` to rerun). The real backfill is `POST /admin/reader-books` (owner), only
+  with Max's OK.
+
 ## Translation pairs
 
 - A Ukrainian book and its original are paired in `web/seed/matches.json`: `translations` (`[original, uk]`, slugs or

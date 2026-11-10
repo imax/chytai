@@ -1728,7 +1728,15 @@ function tellSite(id) {
   tellTimers.set(id, setTimeout(async () => {
     tellTimers.delete(id);
     try {
-      const books = (await scanLibrary(libOf(id))).map((b) => ({ name: path.basename(b.path), title: b.title || "", authors: b.authors || [] }));
+      // With each file's language, whether its title is only the file's name, and when it came: the site makes a
+      // page for a book just uploaded that its catalog lacks (web/readerbooks.js).
+      const lib = libOf(id);
+      const added = lib.meta.added || {};
+      const books = (await scanLibrary(lib)).map((b) => {
+        const name = path.basename(b.path);
+        const a = added[path.relative(lib.dir, b.path)] || added[name];
+        return { name, title: b.title || "", authors: b.authors || [], lang: b.lang || "", fromName: !!b.fromName && !b.edited, gift: !!a?.gift, added: a?.at || 0 };
+      });
       const res = await fetch(`${WEB_URL}/api/reader-library`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, key: state.accounts[id].key, books }), signal: AbortSignal.timeout(20000) });
       if (!res.ok) throw new Error(`reader-library ${res.status}`);
     } catch (err) {
@@ -2334,7 +2342,8 @@ api.get("/about", async (req, res) => {
   if (!title) return res.status(400).json({ error: "title" });
   const key = `${title}\n${author}`;
   const hit = aboutCache.get(key);
-  if (hit && Date.now() - hit.at < 24 * 3600 * 1000) return res.json(hit.data);
+  // «Not in the catalog» is kept ten minutes only: a book just uploaded gets its page there a moment later.
+  if (hit && Date.now() - hit.at < (hit.data?.found ? 24 * 3600 * 1000 : 10 * 60 * 1000)) return res.json(hit.data);
   try {
     const r = await fetch(`${WEB_URL}/api/reader-about?${new URLSearchParams({ title, author })}`, { signal: AbortSignal.timeout(10000) });
     if (!r.ok) throw new Error(`site ${r.status}`);

@@ -88,6 +88,8 @@ function open(dataDir) {
   // busy_timeout: the site and the background jobs (jobs.js) are two processes writing one database.
   db.exec("PRAGMA busy_timeout = 10000; PRAGMA journal_mode = WAL; PRAGMA synchronous = NORMAL;"); // the wait first: switching to WAL locks too
   db.exec(SCHEMA);
+  // A reader's file's language and whether its title is only the file's name (readerbooks.js, 2026-11-10).
+  if (!db.prepare("PRAGMA table_info(reader_files)").all().some((c) => c.name === "lang")) db.exec("ALTER TABLE reader_files ADD COLUMN lang TEXT NOT NULL DEFAULT ''; ALTER TABLE reader_files ADD COLUMN from_name INTEGER NOT NULL DEFAULT 0");
   // When an entry last changed, for the activity feed (added 2026-10-20; older rows have none).
   if (!db.prepare("PRAGMA table_info(entries)").all().some((c) => c.name === "updated")) db.exec("ALTER TABLE entries ADD COLUMN updated TEXT");
   // Whether a reader wants a letter when someone starts following them (Max, 2026-10-20); on by default.

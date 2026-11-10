@@ -11,6 +11,7 @@ const express = require("express");
 const fs = require("fs");
 const path = require("path");
 const { Store, OWNER: OWNER_ID, slugify, isRussian, norm, workName, mainGenres, sameAuthor } = require("./store");
+const { ReaderBooks, kindOnly } = require("./readerbooks");
 const { Auth } = require("./auth");
 const pages = require("./pages");
 const catalogs = require("./catalogs");
@@ -775,11 +776,15 @@ app.post("/api/reader-library", (req, res) => {
   const want = auth.reader(id) && readerKey(id);
   if (!want || key.length !== want.length || !require("crypto").timingSafeEqual(Buffer.from(key), Buffer.from(want))) return res.status(403).json({ error: "key" });
   const books = (Array.isArray(req.body?.books) ? req.body.books : []).slice(0, 5000);
+  const had = new Set(store.db.prepare("SELECT name FROM reader_files WHERE reader = ?").all(id).map((r) => r.name));
   store.db.tx(() => {
     store.db.prepare("DELETE FROM reader_files WHERE reader = ?").run(id);
-    const add = store.db.prepare("INSERT OR IGNORE INTO reader_files (reader, name, title, authors) VALUES (?, ?, ?, ?)");
-    for (const b of books) if (b?.name && b?.title) add.run(id, String(b.name).slice(0, 300), String(b.title).slice(0, 300), (Array.isArray(b.authors) ? b.authors : []).map(String).join("; ").slice(0, 300));
+    const add = store.db.prepare("INSERT OR IGNORE INTO reader_files (reader, name, title, authors, lang, from_name) VALUES (?, ?, ?, ?, ?, ?)");
+    for (const b of books) if (b?.name && b?.title) add.run(id, String(b.name).slice(0, 300), String(b.title).slice(0, 300), (Array.isArray(b.authors) ? b.authors : []).map(String).join("; ").slice(0, 300), String(b.lang || "").slice(0, 5), b.fromName ? 1 : 0);
   });
+  // A file just uploaded that the catalog lacks gets a page here (readerbooks.js), in the background.
+  const fresh = books.filter((b) => b?.name && b?.title && !had.has(String(b.name).slice(0, 300)));
+  if (fresh.length) readerBooks.take(id, fresh.map((b) => ({ name: String(b.name).slice(0, 300), title: String(b.title).slice(0, 300), authors: (Array.isArray(b.authors) ? b.authors : []).map((a) => String(a).slice(0, 150)).slice(0, 5), lang: String(b.lang || "").slice(0, 5), fromName: !!b.fromName, gift: !!b.gift, added: Number(b.added) || 0 })));
   res.json({ ok: true, books: books.length });
 });
 // The feature flags (flags.js) on for one reader, for the reader app's page (server/index.js readerFlags):
@@ -792,6 +797,38 @@ app.post("/api/reader-flags", (req, res) => {
   if (!want || key.length !== want.length || !require("crypto").timingSafeEqual(Buffer.from(key), Buffer.from(want))) return res.status(403).json({ error: "key" });
   res.json({ flags: flags.list().map((f) => f.name).filter((name) => flags.on(name, pub(r))) });
 });
+// Readers' uploads as books here (readerbooks.js): behind the flag `reader-books` for the uploader; the owner
+// hears of each batch (UGC alerts) with the reader's page.
+const readerBooks = new ReaderBooks({
+  store,
+  match: (f) => {
+    const hit = readerBookHit(f.title, (f.authors || []).join("; "));
+    return hit ? store.canonical(hit.book.id) : null;
+  },
+  search: async (q) => {
+    const wait = (ms) => new Promise((r) => setTimeout(() => r([]), ms));
+    const [google, ol] = await Promise.all([Promise.race([enrich.searchGoogle(q, process.env.GOOGLE_BOOKS_KEY || ""), wait(8000)]), Promise.race([enrich.searchOpenLibrary(q, { limit: 4 }), wait(8000)])]);
+    return [...google.map((b) => ({ ...b, from: "Google Books" })), ...ol.map((b) => ({ ...b, from: "Open Library" }))];
+  },
+  on: (id) => flags.on("reader-books", pub(auth.reader(id))),
+  made: (id, made) => {
+    details({ ids: made.map((b) => b.id) });
+    const r = auth.reader(id);
+    if (!r || id === OWNER_ID) return;
+    notifyOwner(`Книжки з Читалки: ${made.length === 1 ? made[0].title : `${made.length} нових`}`, [`${r.name} (${SITE}/@${r.username}) завантажив(ла) в Читалку, і ці книжки з’явилися на Chytai:`, "", ...made.map((b) => `• ${b.title}${b.author ? ` — ${b.author}` : ""}  ${SITE}${store.href(b.id)}${b.file !== b.title ? `  (у файлі: «${b.file}»)` : ""}`)].join("\n"));
+  },
+});
+// What readers' files already in their lists would become (readerbooks.js backfill): threads ask /agent (a dry run,
+// in the background; ask again for the answer), the owner makes them with POST /admin/reader-books (Max's OK first).
+let readerBooksDry = null;
+app.get("/agent/reader-books", agentOk, (req, res) => {
+  if (!readerBooksDry || (req.query.again && readerBooksDry.done)) {
+    readerBooksDry = { started: new Date().toISOString(), done: false };
+    readerBooks.backfill({ dry: true }).then((r) => Object.assign(readerBooksDry, r, { done: true }), (e) => Object.assign(readerBooksDry, { error: e.message, done: true }));
+  }
+  res.json(readerBooksDry);
+});
+app.post("/admin/reader-books", owner, async (req, res) => res.json(await readerBooks.backfill({ dry: false, reader: String(req.body?.reader || "") })));
 // The catalog book for a file in someone's reader: by the title the reader sent or the one it listed earlier.
 function readerCatalogBook(id, sentBook) {
   const name = String(sentBook?.name || "").slice(0, 300);
@@ -799,8 +836,7 @@ function readerCatalogBook(id, sentBook) {
   const sent = sentBook.title ? { name, title: String(sentBook.title).slice(0, 300), authors: (Array.isArray(sentBook.authors) ? sentBook.authors : []).map(String).join("; ") } : null;
   const file = store.db.prepare("SELECT name, title, authors FROM reader_files WHERE reader = ? AND name = ?").get(id, name) || FREE.find((f) => f.name === name) || sent;
   if (!file?.title) return { skipped: "unknown" };
-  const queries = [...new Set([file.title, file.title.split(/[.:(]/)[0].trim()])].filter((q) => q.length > 1);
-  const hit = queries.flatMap((q) => store.search(q, { limit: 10, alias: false })).find((h) => fileFor([file], store.bookPage(h.book.id)));
+  const hit = readerBookHit(file.title, file.authors || "");
   if (!hit) return { skipped: "not in catalog" };
   return { bookId: store.canonical(hit.book.id) };
 }
@@ -937,9 +973,28 @@ app.get("/free-book/:name", (req, res) => {
 
 // «Про книжку» in the reader's book menu (Max, 2026-11-01, like Kindle's «About this book»): the book's page here
 // when the catalog has it, otherwise /add with its title, so the reader can bring it in.
+// A title whose rest after «. » or «: » only says what kind of book it is («Надзахідне сонце. Повість і коротка
+// проза», Max 2026-11-10) is the book before it, when the author is the same; «Дюна. Месія Дюни» is not «Дюна».
 function readerBookHit(title, authors) {
-  const queries = [...new Set([title, title.split(/[.:(]/)[0].trim()])].filter((q) => q.length > 1);
-  return queries.flatMap((q) => store.search(q, { limit: 10, alias: false })).find((h) => fileFor([{ title, authors }], store.bookPage(h.book.id))) || null;
+  const find = (t) => {
+    const queries = [...new Set([t, t.split(/[.:(]/)[0].trim()])].filter((q) => q.length > 1);
+    // The catalog's title may go on after a colon («Thing Explainer: Complicated Stuff in Simple Words»): its part
+    // before the colon, when that is two words or more, is the file's title too.
+    const same = (b) => {
+      const head = String(b?.title || "").split(":")[0].trim();
+      return fileFor([{ title: t, authors }], b) || (b && head !== b.title && /\s/.test(head) && fileFor([{ title: t, authors }], { title: head, author: b.author }));
+    };
+    return queries.flatMap((q) => store.search(q, { limit: 10, alias: false })).find((h) => same(store.bookPage(h.book.id))) || null;
+  };
+  const kind = /^(.{2,}?)(?:\.\s+|:\s+)(.+)$/.exec(title);
+  const head = kind && authors && kindOnly(kind[2]) ? kind[1] : "";
+  const hit = find(title) || (head ? find(head) : null);
+  if (hit || !authors) return hit;
+  // The catalog's title is longer («Thing Explainer: Complicated Stuff in Simple Words» for the file's «Thing
+  // Explainer»): store.findWork by title and author. Not for «Дюна. Месія Дюни», which findWork would cut to «Дюна».
+  if (/\.\s/.test(title) && !head) return null;
+  const id = store.findWork({ title: head || title, author: authors.split(/\s*;\s*/).join(", ") });
+  return id ? { book: { id } } : null;
 }
 const readerAddHref = (title, authors) => `/add?text=${encodeURIComponent(authors ? `${title} — ${authors.split(/[,;]/)[0].trim()}` : title)}`;
 app.get("/reader-book", (req, res) => {
