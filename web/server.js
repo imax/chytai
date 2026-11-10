@@ -3570,6 +3570,18 @@ async function seedEditorials() {
       if (id) ids.push([id, b.why || "", b.section || "", b.sectionNote || ""]);
       else console.log(`editorial ${e.key}: no book ${b.id || b.title}`);
     }
+    // `append`: more books at the end of a list that is already out (Max, 2026-11-10: «Дітям» under «Грецька
+    // міфологія», which readers had saved by then); its saves and comments stay.
+    if (e.append) {
+      const l = lists.bySlug(OWNER_ID, slugify(e.append).slice(0, 60).replace(/-+$/, ""));
+      if (!l) {
+        console.log(`editorial ${e.key}: no list ${e.append}`);
+        continue;
+      }
+      for (const [id, why, section, sectionNote] of ids) lists.add(l.id, id, why) && section && lists.setSection(l.id, id, section, sectionNote);
+      console.log(`editorial ${e.key}: ${l.href}, +${ids.length} books`);
+      continue;
+    }
     // An earlier editorial list this one takes the place of (Max, 2026-10-28: the MEGOGO vote's 35 instead of Diia's 15).
     const old = e.replaces && lists.bySlug(OWNER_ID, slugify(e.replaces).slice(0, 60).replace(/-+$/, ""));
     if (old) lists.remove(old.id);
