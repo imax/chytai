@@ -608,7 +608,7 @@ class Store {
     // Every way of linking proposes a pair with its strength; the strongest are applied first, and an original
     // takes one Ukrainian book only (Max, 2026-10-25: «якщо вже є пара то інша книжка не може теж до неї парою
     // бути»), so a weaker guess (Haiku naming «The Adventures of Sherlock Holmes» for «Спілка рудих») drops out.
-    // The owner's own pairs always stand.
+    // The owner's own pairs and the hand pairs in matches.json always stand.
     const proposed = [];
     let tier = 0;
     const link = (a, b) => proposed.push([a, b, tier]);
@@ -682,11 +682,13 @@ class Store {
       const across = cyr(a) !== cyr(b) && !russian(a) && !russian(b);
       // Two Ukrainian books are not each other's translation («1984» and «1984. Колгосп тварин», Max 2026-10-29),
       // and a graphic novel or a retelling is not one either (Ларсене's «Дорога» after Маккарті, Max the same day).
-      if (t < 5 && ((cyr(a) && cyr(b) && !russian(a) && !russian(b)) || adapted.has(a) || adapted.has(b))) {
+      if (t < 4 && ((cyr(a) && cyr(b) && !russian(a) && !russian(b)) || adapted.has(a) || adapted.has(b))) {
         this.pairLog.dropped.push([a, b, t]);
         continue;
       }
-      if (across && t < 5 && !(fits(a, b) && fits(b, a))) {
+      // Hand pairs (matches.json, tier 4, and the owner's, tier 5) stand: a second Ukrainian translation under its
+      // own title, «Вовна» next to «Бункер. Ілюзія» for «Wool» (Max 2026-11-10: «це ж переклад»).
+      if (across && t < 4 && !(fits(a, b) && fits(b, a))) {
         this.pairLog.dropped.push([a, b, t]);
         continue;
       }

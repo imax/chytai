@@ -7,7 +7,7 @@
   "lobster-8110": "mickey7",
   "lobster-8109": "we-are-legion-bobiverse"
  },
- "different": [],
+ "different": [["bunker-iliuziia", "bookchef-184416"]],
  "authorNames": {
   "Артур Дойль": "Артур Конан Дойль"
  },
@@ -86,7 +86,8 @@
   [
    "the-expanse",
    "ekspansiia-kn-1-i-prokynetsia-leviafan"
-  ]
+  ],
+  ["wool-silo", "vovna"]
  ],
  "volumes": {
   "lobster-8109": 1,
