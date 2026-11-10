@@ -2026,9 +2026,11 @@ window.addEventListener("resize", () => hideSelToolbar());
 $("#pdf-container").addEventListener("mouseup", onPdfMouseUp);
 $("#pdf-container").addEventListener("scroll", () => hideSelToolbar(), { passive: true });
 
-// Drag & drop a book anywhere on the window.
+// Drag & drop a book anywhere on the window. A drop on the library is handled there (home.js), and only that:
+// this one used to open the first file of a batch too, uploading it twice (Max, 2026-11-10).
 document.addEventListener("dragover", (e) => e.preventDefault());
 document.addEventListener("drop", (e) => {
+  if (e.defaultPrevented) return;
   e.preventDefault();
   const file = [...e.dataTransfer.files].find((f) => BOOK_EXT.test(f.name));
   if (file) window.reader.openPath(window.reader.pathForFile(file));

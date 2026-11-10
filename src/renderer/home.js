@@ -782,7 +782,10 @@
     $("#shell").classList.remove("r-drag");
     if (settings.guest || !e.dataTransfer?.files?.length) return;
     e.preventDefault();
-    if (await window.reader.uploadFiles?.([...e.dataTransfer.files])) (homeHtml = ""), window.Library.data(true).then((d) => ((lib = d), render()));
+    const files = [...e.dataTransfer.files];
+    // One book opens; a batch stays here, with its progress in the notice (Max, 2026-11-10).
+    if (files.length === 1 && BOOK_EXT.test(files[0].name)) return window.reader.openPath(window.reader.pathForFile(files[0]));
+    if (await window.reader.uploadFiles?.(files)) (homeHtml = ""), window.Library.data(true).then((d) => ((lib = d), render()));
   });
 
   // ---------- Пошук ----------
