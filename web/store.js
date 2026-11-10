@@ -780,6 +780,13 @@ class Store {
     return list.find((x) => x.n > read && !had.has(x.n))?.id || null;
   }
 
+  // Has the reader read a later volume of this book's series (`mine` from inLibrary)? Then they have read this
+  // one too (Max, 2026-11-10: the whole Expanse read, «Leviathan Wakes» in a list counted as unread).
+  readLater(mine, id) {
+    const c = this.cycles?.get(this.canonical(id));
+    return !!c && this.cycleIds.get(c.key).some((x) => x.n > c.n && mine.get(x.id)?.status === "read");
+  }
+
   // A book's series in short, for a reader's shelf (pages.libraryPage folds the volumes a reader has into
   // one row): { key, name, n, total } or null. `total` counts the volumes we know of, ours or Wikidata's.
   seriesOf(id) {

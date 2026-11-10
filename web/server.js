@@ -1497,7 +1497,7 @@ app.get("/@:username/list/:slug", (req, res) => {
   // Free-shelf books get a quiet «є в Читалці» in their row (usability review 2026-10-28: «Розстріляне відродження»).
   // «Скільки з них я вже прочитав» (Max, 2026-11-09): the reader's own status in each row and a count on top.
   const mine = req.user && flags.on("list-progress", req.user) ? store.inLibrary(req.user.id) : null;
-  const items = lists.items(list.id, { own }).map((x) => ({ ...x, free: !!freeFileFor(store.bookPage(x.id)), mine: mine?.get(x.id)?.status || "" }));
+  const items = lists.items(list.id, { own }).map((x) => ({ ...x, free: !!freeFileFor(store.bookPage(x.id)), mine: mine?.get(x.id)?.status || (mine && store.readLater(mine, x.id) ? "read" : "") }));
   const q = own ? String(req.query.add || "").trim().slice(0, 100) : "";
   const inList = own && q ? lists.ids(list.id) : null;
   const find = q ? { q, hits: searchHits(req, q).slice(0, 8).map((h) => ({ book: h.book, in: inList.has(store.canonical(h.book.id)) })) } : null;
