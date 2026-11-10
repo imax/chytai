@@ -2224,7 +2224,7 @@ body.offline #ask-book .st-go { background: var(--m-off); color: var(--m-ink3); 
 #panel #cards .c-acts .where { display: inline; margin: 0; font: inherit; color: inherit; }
 #panel #cards .c-acts .where:empty { display: none; }
 #panel #cards .c-acts .link { padding: 0; border: none; background: none; font: 400 13px var(--m-sans); color: var(--m-ink3); cursor: pointer; }
-#panel #cards .c-acts .c-note { color: var(--m-ochre); }
+#panel #cards .c-acts .c-note, #panel #cards .c-acts .c-other { color: var(--m-ochre); }
 #panel #cards .c-acts .forget:hover { color: var(--m-red); }
 #panel #cards .c-acts .link.hidden { display: none; }
 #panel #cards .card .followup { position: static; margin: 4px 0 0; padding: 0; border: none; background: none; }

@@ -1202,7 +1202,7 @@ function makeConv({ cfiRange, context, mode, sid: keptId }) {
         <button class="link retry hidden">Ще раз</button>
       </span>
     </div>
-    <div class="c-acts"><span class="where"></span><button type="button" class="link c-note hidden">В нотатки</button><button type="button" class="link forget hidden">Видалити</button></div>
+    <div class="c-acts"><span class="where"></span><button type="button" class="link c-note hidden">В нотатки</button><button type="button" class="link c-other hidden"></button><button type="button" class="link forget hidden">Видалити</button></div>
     <form class="followup"><input type="text" placeholder="Уточнити…" enterkeyhint="send" /><button type="submit" class="ask" aria-label="Запитати"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5M6 11l6-6 6 6"/></svg></button></form>`;
   card.querySelector(".quote").textContent = quote.length > 280 ? quote.slice(0, 280) + "…" : quote;
   if (!quote) card.classList.add("c-book"); // a question about the book, no passage
@@ -1229,6 +1229,15 @@ function makeConv({ cfiRange, context, mode, sid: keptId }) {
   };
   card.querySelector(".c-note").onclick = () =>
     addNote({ cfiRange: conv.cfiRange, text: conv.context.selection, context: conv.context }).then(() => syncConvActs(conv));
+  // A translation can be explained and an explanation translated without selecting the passage again
+  // (Max, 2026-11-10); a card the passage already has just comes into view.
+  card.querySelector(".c-other").textContent = mode === "translate" ? "Пояснити" : "Переклад";
+  card.querySelector(".c-other").onclick = async (e) => {
+    e.stopPropagation();
+    // A card kept from an earlier visit has only its words; the text around them comes from the book again.
+    const context = conv.context.before === undefined ? await noteContext({ text: conv.context.selection, cfi: conv.cfiRange, chapter: conv.context.chapter }) : conv.context;
+    startExplanation({ cfiRange: conv.cfiRange, context }, { mode: conv.mode === "translate" ? "explain" : "translate" });
+  };
   syncConvActs(conv);
   queueMicrotask(listCards);
   card.querySelector(".followup input").oninput = (e) => card.querySelector(".followup").classList.toggle("filled", !!e.target.value.trim());
@@ -1541,6 +1550,7 @@ function syncConvActs(conv) {
   const card = conv.card;
   const saved = notes.some((n) => n.cfi === conv.cfiRange);
   card.querySelector(".c-note").classList.toggle("hidden", !conv.context.selection || saved || !String(conv.cfiRange).startsWith("epubcfi"));
+  card.querySelector(".c-other").classList.toggle("hidden", !conv.context.selection || (conv.mode !== "translate" && isUkrainian(conv.context.selection)));
   card.querySelector(".c-acts .where").classList.toggle("c-go", !(!conv.cfiRange || !String(conv.cfiRange).startsWith("epubcfi") || !rendition));
 }
 
