@@ -452,6 +452,7 @@ async function openEpub(payload, { posKey, source }) {
   // The reading area may have been measured before the layout settled (first load, toolbar
   // hiding on a phone); a re-measure now re-renders only if the size actually changed.
   requestAnimationFrame(resizeView);
+  setTimeout(() => showOnScreen(mine), 2500); // and holdPlace does it as the place settles after a jump
   loadNotes();
   loadChats();
   watchFirstPage();
@@ -528,6 +529,7 @@ function holdPlace(r, target, current) {
     if (stopped || !current() || rendition !== r || now - moved > 1500 || now - start > 10000) {
       events.forEach((e) => container.removeEventListener(e, stop));
       ["touchstart", "keydown"].forEach((e) => r.off(e, stop));
+      if (!stopped && current()) showOnScreen(r);
       return;
     }
     const view = r.manager.views.find(section);
@@ -542,6 +544,23 @@ function holdPlace(r, target, current) {
     requestAnimationFrame(tick);
   };
   requestAnimationFrame(tick);
+}
+
+// Scroll mode, iPhone: the text of a book showed for a moment as it opened and then the page stayed blank until
+// the reader scrolled (Max, 2026-11-10, «Одіссея»). While the place is still moving, epub.js can drop the frame of
+// a chapter it measured as off screen, and WebKit can leave a frame unpainted after a jump; a scroll fixes both,
+// since epub.js then shows every chapter on screen again. So once the place has settled, do what a scroll does:
+// show again a chapter on screen that has lost its frame, and move the page by a pixel and back.
+function showOnScreen(r) {
+  const m = r?.manager;
+  if (rendition !== r || !scrolled() || !m?.views || !m.container) return;
+  const box = m.container.getBoundingClientRect();
+  const views = m.views.all().filter((v) => m.isVisible(v, 0, 0, box));
+  if (!views.length || views.some((v) => !v.displayed)) m.q.enqueue(() => m.check());
+  const c = m.container;
+  const top = c.scrollTop;
+  c.scrollTop = top > 0 ? top - 1 : top + 1;
+  requestAnimationFrame(() => (c.scrollTop = top));
 }
 
 // epub.js throws from resize() until its stage exists (the book is still being parsed), and a

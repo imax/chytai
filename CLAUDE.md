@@ -24,6 +24,11 @@ next thread should know, change this file in the same commit. Short recipes, not
    is printed in the server log (no mail goes out locally).
 3. Go through the change itself, as a guest and as a reader: curl or Playwright (Chromium is preinstalled), phone
    (390 px) and desktop widths. Time anything that could be slow on this real-sized data.
+   For an iPhone-only reader bug add WebKit (closest to iOS, not the same):
+   `PLAYWRIGHT_BROWSERS_PATH=<scratch> npx -y playwright@1.63.0 install webkit && npx -y playwright@1.63.0 install-deps webkit`,
+   then `webkit.launch()` with that `PLAYWRIGHT_BROWSERS_PATH`. The reader alone: `READER_SECRET=x DATA_DIR=<dir>
+   ANTHROPIC_API_KEY=dummy node server/index.js`, a book in `<dir>/accounts/<16 hex>/books/`, cookie
+   `reader_acct=<id>.<base64url HMAC-SHA256("acct:<id>", READER_SECRET)>`, open `/?open=<file>`.
 4. `scripts/smoke-test.sh` (site), `scripts/smoke-reader.sh` (reader).
 5. Show Max what you checked: screenshots, the numbers, what you could not check.
 
