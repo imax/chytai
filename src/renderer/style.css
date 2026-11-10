@@ -2379,3 +2379,11 @@ html body .r-list .r-t, html body .r-list .r-a { display: block; grid-column: 2;
 #panel #about-book .muted { color: var(--m-ink3); }
 #panel #about-book .ab-site { color: var(--m-ochre); }
 
+
+/* The app is not a web page: menus, lists, panels and buttons can't be selected and give no iOS
+   Copy / Look Up menu (Max, 2026-11-10). What a reader may want to copy stays selectable: fields,
+   a PDF's text, explanations and answers, notes, a page's text from a photo. The book itself is an
+   iframe of its own, so this does not touch it. */
+body { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+input, textarea, select, [contenteditable], #pdf-container, .card, .answer, #notes, .note-quote, .note-comment-text,
+.mn-q, .pp-note-t, .pp-note-c, #about-book, .pp-scan-text { -webkit-user-select: text; user-select: text; -webkit-touch-callout: default; }

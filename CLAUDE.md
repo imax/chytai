@@ -114,3 +114,5 @@ so Max sees it on the real site. He switches it to everyone on `/admin/jobs` (bl
 - Reader: how the text looks (theme, font, sizes, spacing, margins, column, page turns) is kept per device
   (`LOOK_KEYS` in `src/renderer/web-bridge.js`); the account's copy only starts a new device. A new look setting
   goes into that list.
+- Reader: the app's own UI can't be selected (`body` has `user-select: none`, end of `src/renderer/style.css`). Text a
+  reader may copy (a new note, answer or field) goes into the list of selectable classes there.
