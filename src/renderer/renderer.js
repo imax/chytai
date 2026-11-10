@@ -418,7 +418,10 @@ function followFontLoad(r) {
     if (target && scrolled()) holdPlace(r, target, () => mine === seq);
     const fonts = r.getContents().map((c) => c.document.fonts);
     if (!target || fonts.every((f) => f.status === "loaded")) return;
-    await Promise.all(fonts.map((f) => f.ready));
+    // At most 3 s: a chapter's frame that scroll mode drops while its fonts load never gets its fonts.ready
+    // (Chromium keeps a removed frame's promise pending), and the opening of the book waited for it for ever:
+    // no contents, notes or page numbers («Одіссея» on Android, Max 2026-11-10).
+    await Promise.race([Promise.all(fonts.map((f) => f.ready)), new Promise((ok) => setTimeout(ok, 3000))]);
     if (mine === seq && rendition === r) await display(target);
   };
   for (const turn of ["next", "prev"]) {
