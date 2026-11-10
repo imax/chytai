@@ -2865,7 +2865,8 @@ const newbieMail = new (require("./newbie").NewbieMail)({
   books: (reader) => startList({ user: reader, owner: false }).filter((x) => !x.entry).map((x) => ({ title: x.book.title, author: x.book.author ? pages.byline(x.book.author) : "", cover: x.book.cover, href: x.book.href, slug: (x.book.href || "").split("/").pop() || x.book.id })),
   rated: (id) => Object.values(store.entriesOf(id)).filter((e) => e.rating != null).length,
 });
-if (bg.background) newbieMail.schedule();
+// Off since 2026-11-10 (Max: «зупинити зайві (маркетинг) імейли ... нехай самі повертаються на сайт»): /start stays.
+// if (bg.background) newbieMail.schedule();
 app.get("/start", signed, (req, res) => {
   const { out, rated } = startBooks(req);
   let forYou = [];
