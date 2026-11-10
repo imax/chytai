@@ -1,13 +1,14 @@
-# The Mac app (mac/): builds the universal DMG on a macOS runner and publishes it as the GitHub Release
-# mac-v<version> with the asset Chytai.dmg; https://chytai.org.ua/mac points at releases/latest/download/Chytai.dmg.
-# A new release goes out only when mac/package.json's version is new, so bump it for a new build.
+# The Mac app (mac/, Swift + WKWebView since 2.0): mac/build.sh builds the universal app and Chytai.dmg on a macOS
+# runner, the app opens the reader once (-selftest) to show it loads and its service worker works, and on main the
+# DMG goes out as the GitHub Release mac-v<version>; https://chytai.org.ua/mac points at
+# releases/latest/download/Chytai.dmg. A new release only when the version in mac/Info.plist is new, so bump it.
+# Any other branch gets the pre-release «mac-beta» (one, replaced each time) to try before release.
 # Not signed for now (Max, 2026-11-02): ad-hoc signature, people allow it once in System Settings.
-# Signing later: a Developer ID cert as CSC_LINK/CSC_KEY_PASSWORD secrets plus APPLE_API_KEY* for notarization.
 name: Mac app
 
 on:
   push:
-    branches: [main]
+    branches: [main, "claude/**"]
     paths: ["mac/**", ".github/workflows/mac.yml"]
   workflow_dispatch:
 
@@ -17,28 +18,36 @@ permissions:
 jobs:
   dmg:
     runs-on: macos-latest
-    timeout-minutes: 30
+    timeout-minutes: 20
     concurrency: mac-dmg
     steps:
       - uses: actions/checkout@v4
       - id: v
         run: |
-          v=$(node -p 'require("./mac/package.json").version')
+          v=$(/usr/libexec/PlistBuddy -c 'Print CFBundleShortVersionString' mac/Info.plist)
           echo "tag=mac-v$v" >> "$GITHUB_OUTPUT"
-          if gh release view "mac-v$v" >/dev/null 2>&1; then echo "exists=1" >> "$GITHUB_OUTPUT"; fi
+          if [ "$GITHUB_REF" != refs/heads/main ]; then echo "tag=mac-beta" >> "$GITHUB_OUTPUT"
+          elif gh release view "mac-v$v" >/dev/null 2>&1; then echo "exists=1" >> "$GITHUB_OUTPUT"; fi
         env:
           GH_TOKEN: ${{ github.token }}
       - if: steps.v.outputs.exists != '1'
-        uses: actions/setup-node@v4
-        with: { node-version: 22 }
+        run: mac/build.sh
       - if: steps.v.outputs.exists != '1'
-        working-directory: mac
+        name: Open the reader once
         run: |
-          npm ci
-          npx electron-builder --mac dmg --universal --publish never
-      - if: steps.v.outputs.exists != '1'
+          du -sh mac/build/Chytai.app mac/build/Chytai.dmg
+          out=$(mac/build/Chytai.app/Contents/MacOS/Chytai -selftest YES 2>/dev/null | grep '^selftest:' || true)
+          echo "$out"
+          echo "$out" | grep -q '"mac":true'
+          echo "$out" | grep -q '"swReady":true'
+      - if: steps.v.outputs.exists != '1' && github.ref != 'refs/heads/main'
         run: |
-          ls -la mac/dist
-          gh release create "${{ steps.v.outputs.tag }}" mac/dist/Chytai.dmg --title "Chytai для Mac ${{ steps.v.outputs.tag }}" --notes "Читалка Chytai для Mac (Apple Silicon і Intel). Завантаження: https://chytai.org.ua/mac" --latest
+          gh release delete mac-beta --cleanup-tag -y 2>/dev/null || true
+          gh release create mac-beta mac/build/Chytai.dmg --target "$GITHUB_SHA" --prerelease --latest=false --title "Chytai для Mac, тестова збірка" --notes "Тестова збірка з гілки ${GITHUB_REF_NAME}, ${GITHUB_SHA::7}."
+        env:
+          GH_TOKEN: ${{ github.token }}
+      - if: steps.v.outputs.exists != '1' && github.ref == 'refs/heads/main'
+        run: |
+          gh release create "${{ steps.v.outputs.tag }}" mac/build/Chytai.dmg --title "Chytai для Mac ${{ steps.v.outputs.tag }}" --notes "Читалка Chytai для Mac (Apple Silicon і Intel). Завантаження: https://chytai.org.ua/mac" --latest
         env:
           GH_TOKEN: ${{ github.token }}

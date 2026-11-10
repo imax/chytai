@@ -7,3 +7,4 @@ data/
 *.zip
 .backup-key
 .probe/
+mac/build/

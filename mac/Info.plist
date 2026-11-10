@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleName</key><string>Chytai</string>
+	<key>CFBundleDisplayName</key><string>Chytai</string>
+	<key>CFBundleExecutable</key><string>Chytai</string>
+	<key>CFBundleIdentifier</key><string>ua.org.chytai.reader</string>
+	<key>CFBundlePackageType</key><string>APPL</string>
+	<key>CFBundleShortVersionString</key><string>2.0.0</string>
+	<key>CFBundleVersion</key><string>2.0.0</string>
+	<key>CFBundleIconFile</key><string>icon</string>
+	<key>CFBundleDevelopmentRegion</key><string>uk</string>
+	<key>NSHumanReadableCopyright</key><string>Chytai</string>
+	<key>LSMinimumSystemVersion</key><string>12.0</string>
+	<key>LSApplicationCategoryType</key><string>public.app-category.books</string>
+	<key>NSHighResolutionCapable</key><true/>
+	<key>NSPrincipalClass</key><string>NSApplication</string>
+	<key>NSCameraUsageDescription</key><string>Щоб сфотографувати сторінку паперової книжки.</string>
+	<key>NSMicrophoneUsageDescription</key><string>Щоб надиктувати нотатку.</string>
+	<key>NSSpeechRecognitionUsageDescription</key><string>Щоб надиктувати нотатку.</string>
+	<key>NSAppTransportSecurity</key><dict><key>NSAllowsLocalNetworking</key><true/></dict>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key><string>ua.org.chytai.reader</string>
+			<key>CFBundleURLSchemes</key><array><string>chytai</string></array>
+		</dict>
+	</array>
+</dict>
+</plist>

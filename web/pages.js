@@ -2272,6 +2272,16 @@ function macPage({ user }) {
 </section>` });
 }
 
+// The way back into the Mac app after signing in through Google in the browser (Max, 2026-11-10): the browser asks
+// to open Chytai, the app takes the ticket to its window. The ticket lives two minutes, so the button is a second try.
+function macBackPage({ user, link }) {
+  return layout({ title: "Повертаємось у Chytai", user, noindex: true, body: `<section class="auth prose"><h1>Повертаємось у Chytai</h1>
+<p>Якщо браузер питає, дозвольте відкрити Chytai.</p>
+<p><a class="btn primary" href="${attr(link)}">Відкрити Chytai</a></p>
+<script>location.href = ${JSON.stringify(link).replace(/</g, "\\u003c")};</script>
+</section>` });
+}
+
 function privacyPage({ user }) {
   return layout({ title: "Приватність", user, path: "/privacy", canonical: "/privacy", description: "Що Chytai.org.ua зберігає про читачів, хто це бачить і як усе видалити.", body: `<section class="auth prose"><h1>Приватність</h1>
 <p>Chytai.org.ua це проєкт для тих, хто любить читати.</p>
@@ -3148,6 +3158,6 @@ module.exports = {
   outsideResults,
   addPage, addReviewPage, addFindResults, addPageResult, ukFindPage,
   layout, bookPage, bookEditPage, russianPage, editPage, libraryPage, readersPage, readPage, genrePage, genreTrialPage, langTrialPage, origTrialPage, overviewTrialPage, ukTrialPage, catalogAdminPage, aiPassPage, publishersPage, publisherPage, publisherFavouritesPage, searchPage, searchResults, authorPage,
-  loginPage, codePage, signupPage, settingsPage, privacyPage, macPage, updatesPage, drawPage, DRAW_PATH, messagePage, digestPage, followMailPage, wantMailPage, importPage, importPreviewPage, importDonePage,
+  loginPage, codePage, signupPage, settingsPage, privacyPage, macPage, macBackPage, updatesPage, drawPage, DRAW_PATH, messagePage, digestPage, followMailPage, wantMailPage, importPage, importPreviewPage, importDonePage,
   GENRES, esc, mdHtml, byline, STATUS, COPY, inline, isUk, setTitleLinks, setAuthorLinks, setThumbs, setStats, setReadersWithNote,
 };

@@ -757,6 +757,8 @@ app.get("/reader-login", signed, (req, res) => {
   } catch {}
   if (!READER_ORIGINS.includes(origin)) return res.status(400).send(pages.messagePage({ title: "Невідома адреса читалки", text: "Відкрийте читалку ще раз і натисніть «Увійти».", user: req.user }));
   const ticket = readerTicket(req.user.id);
+  // The Mac app sends Google sign-in to the browser (Google refuses it inside an app); it comes back by chytai://.
+  if (req.query.to === "mac") return res.set("Cache-Control", "no-store").send(pages.macBackPage({ user: req.user, link: `chytai://auth?ticket=${ticket}` }));
   res.redirect(`${origin}/auth?ticket=${ticket}`);
 });
 app.post("/api/reader-ticket", (req, res) => {
