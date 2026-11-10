@@ -1200,8 +1200,8 @@
     const own = !b.free && !b.protected && !b.paper;
     const d = $("#book-menu");
     $("#bm-title").textContent = b.title;
-    // «На телефоні» / «Зберегти на телефон» (flag device-books, Max first): which books open without a network.
-    const keepable = settings.flags?.includes("device-books") && !!window.reader.libraryKeep && !b.paper && !b.protected && /^(epub|pdf)$/.test(b.ext || "");
+    // «На телефоні» / «Зберегти на телефон» (Max, 2026-11-10, for everyone): which books open without a network.
+    const keepable = !!window.reader.libraryKeep && !b.paper && !b.protected && /^(epub|pdf)$/.test(b.ext || "");
     const [onIt, toIt] = deviceWords();
     $("#bm-author").textContent = [author(b), statusText(b), keepable && b.onDevice ? onIt : ""].filter(Boolean).join(" · ");
     $("#bm-cover").innerHTML = rcover(b);
