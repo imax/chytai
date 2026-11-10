@@ -757,6 +757,8 @@ app.get("/reader-login", signed, (req, res) => {
   } catch {}
   if (!READER_ORIGINS.includes(origin)) return res.status(400).send(pages.messagePage({ title: "Невідома адреса читалки", text: "Відкрийте читалку ще раз і натисніть «Увійти».", user: req.user }));
   const ticket = readerTicket(req.user.id);
+  // The Mac app sends Google sign-in to the browser (Google refuses it inside an app); it comes back by chytai://.
+  if (req.query.to === "mac") return res.set("Cache-Control", "no-store").send(pages.macBackPage({ user: req.user, link: `chytai://auth?ticket=${ticket}` }));
   res.redirect(`${origin}/auth?ticket=${ticket}`);
 });
 app.post("/api/reader-ticket", (req, res) => {
@@ -1036,13 +1038,14 @@ app.get("/settings/mail", signed, (req, res) => {
 });
 app.post("/settings/mail", signed, (req, res) => {
   const r = req.user, b = req.body;
-  const was = { digest: digest.enabled(r.id), follow: auth.followMailEnabled(r.id), mention: auth.mentionMailEnabled(r.id), club: auth.clubMailEnabled(r.id), want: wantMail.enabled(r.id) };
-  const now = { digest: !!b.digest, follow: !!b.follow_mail, mention: !!b.mention_mail, club: !!b.club_mail, want: !!b.want_mail };
+  const was = { digest: digest.enabled(r.id), follow: auth.followMailEnabled(r.id), mention: auth.mentionMailEnabled(r.id), club: auth.clubMailEnabled(r.id), "club-topic": clubMail.enabled(r.id), want: wantMail.enabled(r.id) };
+  const now = { digest: !!b.digest, follow: !!b.follow_mail, mention: !!b.mention_mail, club: !!b.club_mail, "club-topic": !!b.topic_mail, want: !!b.want_mail };
   for (const k of Object.keys(was)) mailLog.switched(k, r.id, was[k], now[k]);
   digest.setEnabled(req.user.id, !!req.body.digest);
   auth.setFollowMail(req.user.id, !!req.body.follow_mail);
   auth.setMentionMail(req.user.id, !!req.body.mention_mail);
   auth.setClubMail(req.user.id, !!req.body.club_mail);
+  clubMail.setEnabled(req.user.id, !!req.body.topic_mail);
   wantMail.setEnabled(req.user.id, !!req.body.want_mail);
   res.redirect("/settings/mail?saved=1");
 });
@@ -1352,8 +1355,7 @@ pages.setStats((id) => social.stats(id));
 const digest = new Digest({ store, auth, social, lists, club, libraries, site: SITE, ownerId: OWNER_ID, to: process.env.WEB_DIGEST_TO === "owner" ? "owner" : "all" });
 // A letter to every reader about a new Club topic once someone answers it (clubmail.js, Max 2026-11-04).
 const clubMail = new ClubMail({ store, auth, club, digest, site: SITE, ownerId: OWNER_ID });
-// Off since 2026-11-10 (Max: no extra marketing letters, only Friday's): the switch left /settings/mail too.
-// bg.every("club-topic-mail", 5 * 60 * 1000, () => clubMail.run(), { db: store.db, first: 3 * 60 * 1000 });
+bg.every("club-topic-mail", 5 * 60 * 1000, () => clubMail.run(), { db: store.db, first: 3 * 60 * 1000 });
 if (bg.background) digest.schedule();
 // «Книжка з вашого «Хочу прочитати» тепер є» (wantmail.js): once a day, a letter of its own (Max, 2026-10-25).
 const wantMail = new (require("./wantmail").WantMail)({ store, auth, digest, site: SITE, ownerId: OWNER_ID, to: process.env.WEB_WANTMAIL_TO === "owner" ? "owner" : "all" });
@@ -1902,7 +1904,7 @@ app.post("/api/club/:id/posts", signed, clubTopic, (req, res) => {
   if (auth.tooMany(`club-posts:${req.user.id}`, 20)) return back("Забагато за годину. Спробуйте трохи згодом.");
   const id = club.addPost(t.id, req.user.id, req.body.text);
   if (id) club.seen(req.user.id, t.id);
-  // if (id) clubMail.answered(t, req.user.id); // the letter is off (2026-11-10)
+  if (id) clubMail.answered(t, req.user.id);
   if (!id) return back(String(req.body.text || "").trim() ? "На сьогодні досить, завтра можна знову." : "");
   // Readers who got a letter about it (a mention or «відповідь у темі»); the owner among them gets no second one (Max, 2026-11-01).
   const mailed = replyMails(req, t, id, req.body.text, mentionMails(req, req.body.text, { where: `у темі «${t.title}»`, href: `${t.href}#p-${id}` }));
@@ -2865,8 +2867,7 @@ const newbieMail = new (require("./newbie").NewbieMail)({
   books: (reader) => startList({ user: reader, owner: false }).filter((x) => !x.entry).map((x) => ({ title: x.book.title, author: x.book.author ? pages.byline(x.book.author) : "", cover: x.book.cover, href: x.book.href, slug: (x.book.href || "").split("/").pop() || x.book.id })),
   rated: (id) => Object.values(store.entriesOf(id)).filter((e) => e.rating != null).length,
 });
-// Off since 2026-11-10 (Max: «зупинити зайві (маркетинг) імейли ... нехай самі повертаються на сайт»): /start stays.
-// if (bg.background) newbieMail.schedule();
+if (bg.background) newbieMail.schedule();
 app.get("/start", signed, (req, res) => {
   const { out, rated } = startBooks(req);
   let forYou = [];

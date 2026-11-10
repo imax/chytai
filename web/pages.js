@@ -2187,6 +2187,7 @@ function mailSettingsPage({ user, values, saved = false }) {
   ${user.email ? `<p class="muted small">Листи приходять на ${esc(user.email)}. <a class="text-link" href="/settings">Змінити пошту</a></p>` : `<p class="muted small">Пошти не вказано, тож листів не буде. <a class="text-link" href="/settings">Додати пошту</a></p>`}
   ${sw("digest", "Пʼятничний дайджест", "Новинки на сайті, полиці та видавництва, на які ви підписані.")}
   ${sw("follow_mail", "Новий читач стежить за вами", "Лист, коли хтось уперше почне стежити за вашою полицею.")}
+  ${sw("topic_mail", "Нові теми в Клубі", "Лист, коли в Клубі зʼявляється нова тема з відповідями. Не частіше ніж раз на день.")}
   ${sw("club_mail", "Відповіді в темах Клубу", "Лист на кожну відповідь у темах, які ви почали або де відповідали.")}
   ${sw("mention_mail", "Вас згадали в Клубі", "Лист, коли хтось напише @${esc(user.username)} у темі чи коментарі.")}
   ${sw("want_mail", "Книжка з «Хочу прочитати» тепер є", "Лист, коли книжка зі списку зʼявилась у продажу, українською чи безкоштовно в Читалці.")}
@@ -2268,6 +2269,16 @@ function macPage({ user }) {
 <p class="small muted">Apple Silicon і Intel, macOS 12 і новіші.</p>
 <h2>Перше відкриття</h2>
 <p>Перетягніть Chytai у «Програми» і відкрийте. macOS скаже, що не може перевірити розробника: натисніть «Готово», відкрийте Системні параметри → Приватність і безпека, внизу «Усе одно відкрити». Це один раз.</p>
+</section>` });
+}
+
+// The way back into the Mac app after signing in through Google in the browser (Max, 2026-11-10): the browser asks
+// to open Chytai, the app takes the ticket to its window. The ticket lives two minutes, so the button is a second try.
+function macBackPage({ user, link }) {
+  return layout({ title: "Повертаємось у Chytai", user, noindex: true, body: `<section class="auth prose"><h1>Повертаємось у Chytai</h1>
+<p>Якщо браузер питає, дозвольте відкрити Chytai.</p>
+<p><a class="btn primary" href="${attr(link)}">Відкрити Chytai</a></p>
+<script>location.href = ${JSON.stringify(link).replace(/</g, "\\u003c")};</script>
 </section>` });
 }
 
@@ -3147,6 +3158,6 @@ module.exports = {
   outsideResults,
   addPage, addReviewPage, addFindResults, addPageResult, ukFindPage,
   layout, bookPage, bookEditPage, russianPage, editPage, libraryPage, readersPage, readPage, genrePage, genreTrialPage, langTrialPage, origTrialPage, overviewTrialPage, ukTrialPage, catalogAdminPage, aiPassPage, publishersPage, publisherPage, publisherFavouritesPage, searchPage, searchResults, authorPage,
-  loginPage, codePage, signupPage, settingsPage, privacyPage, macPage, updatesPage, drawPage, DRAW_PATH, messagePage, digestPage, followMailPage, wantMailPage, importPage, importPreviewPage, importDonePage,
+  loginPage, codePage, signupPage, settingsPage, privacyPage, macPage, macBackPage, updatesPage, drawPage, DRAW_PATH, messagePage, digestPage, followMailPage, wantMailPage, importPage, importPreviewPage, importDonePage,
   GENRES, esc, mdHtml, byline, STATUS, COPY, inline, isUk, setTitleLinks, setAuthorLinks, setThumbs, setStats, setReadersWithNote,
 };

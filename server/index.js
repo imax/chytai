@@ -942,9 +942,12 @@ const TESTIMONIALS = [
 // The Mac link is not shown inside the apps. Android is hidden for now: the app is still raw (Max, 2026-11-04);
 // /android on the site still works.
 function landingPage(req) {
-  const inside = /Chytai(Mac|App)\//.test(req.get("user-agent") || "");
-  // Google refuses sign-in inside an app's embedded browser, so the button is for real browsers only.
-  return renderLanding({ webUrl: WEB_URL, mac: !inside, android: false, google: !inside && !/; wv\)/.test(req.get("user-agent") || ""), testimonials: TESTIMONIALS });
+  const ua = req.get("user-agent") || "";
+  const inside = /Chytai(Mac|App)\//.test(ua);
+  // Google refuses sign-in inside an app's embedded browser, so the button is for real browsers only, and for the
+  // Mac app from 2.0 (Swift), which opens it in the browser and gets the ticket back by chytai:// (mac/Chytai.swift).
+  const google = (!inside || /ChytaiMac\/([2-9]|\d\d)/.test(ua)) && !/; wv\)/.test(ua);
+  return renderLanding({ webUrl: WEB_URL, mac: !inside, android: false, google, testimonials: TESTIMONIALS });
 }
 
 // ---------- App ----------
