@@ -635,11 +635,16 @@ class Store {
     for (const [id, o] of this.aiOrigs())
       if (o.title) for (const [t, list] of [[2, byTitle], [1, byMain]]) for (const w of list.get(norm(o.title)) || []) if (names(w.author).some((n) => names(o.author).includes(n))) (tier = t), link(id, w.id);
     let pairs = [];
+    let apart = [];
     try {
-      pairs = readJson(path.join(SEED, "matches.json")).translations || [];
+      ({ translations: pairs = [], different: apart = [] } = readJson(path.join(SEED, "matches.json")));
     } catch {
       /* none */
     }
+    // Pairs said to be different books, by hand or by the owner, are never linked: «П’ять ночей із Фредді. Покручі»
+    // took the place of Kingfisher's «The Twisted Ones» by the same English title (2026-11-10).
+    const sid = (x) => this.canonical(this.slugs.get(x) || x);
+    const no = new Set([...apart, ...this.decisions().different].flatMap(([a, b]) => [`${sid(a)}|${sid(b)}`, `${sid(b)}|${sid(a)}`]));
     tier = 4;
     for (const [a, b] of pairs) link(this.slugs.get(a) || a, this.slugs.get(b) || b);
     tier = 5;
@@ -679,6 +684,10 @@ class Store {
       const a = x && this.canonical(x);
       const b = y && this.canonical(y);
       if (!a || !b || a === b || this.translations.get(a)?.has(b)) continue;
+      if (t < 5 && no.has(`${a}|${b}`)) {
+        this.pairLog.dropped.push([a, b, t]);
+        continue;
+      }
       const across = cyr(a) !== cyr(b) && !russian(a) && !russian(b);
       // Two Ukrainian books are not each other's translation («1984» and «1984. Колгосп тварин», Max 2026-10-29),
       // and a graphic novel or a retelling is not one either (Ларсене's «Дорога» after Маккарті, Max the same day).

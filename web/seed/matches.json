@@ -7,7 +7,7 @@
   "lobster-8110": "mickey7",
   "lobster-8109": "we-are-legion-bobiverse"
  },
- "different": [["bunker-iliuziia", "bookchef-184416"]],
+ "different": [["bunker-iliuziia", "bookchef-184416"], ["piat-nochei-iz-freddi-pokruchi", "the-twisted-ones"]],
  "authorNames": {
   "Артур Дойль": "Артур Конан Дойль"
  },
@@ -87,7 +87,33 @@
    "the-expanse",
    "ekspansiia-kn-1-i-prokynetsia-leviafan"
   ],
-  ["wool-silo", "vovna"]
+  ["wool-silo", "vovna"],
+  ["pride-and-prejudice", "hidnist-i-honor"],
+  ["on-tyranny-twenty-lessons-from-the-twentieth-century", "pro-tyraniiu-dvadtsiat-urokiv-khkh-stolittia"],
+  ["heart-of-darkness", "sertse-temriavy"],
+  ["heart-of-darkness", "sertse-moroku"],
+  ["the-twisted-ones", "te-shcho-tryvozhyt-mertsiv-knyha-1"],
+  ["strange-planet", "komiks-khymerna-planeta"],
+  ["nimona-2", "nimona"],
+  ["a-christmas-carol", "rizdviana-pisnia-v-prozi"],
+  ["a-christmas-carol", "rizdviana-pisnia"],
+  ["a-christmas-carol", "rizdviana-pisnia-u-prozi-a-christmas-carol-in-prose"],
+  ["alices-adventures-in-wonderland", "pryhody-alisy-v-dyvokrai"],
+  ["alices-adventures-in-wonderland", "alisa-v-dyvokrai"],
+  ["alices-adventures-in-wonderland", "alisyni-pryhody-u-dyvokrai"],
+  ["alices-adventures-in-wonderland", "alisyni-pryhody-u-dyvokrai-iliustratsii-artura-rekkhema"],
+  ["alices-adventures-in-wonderland", "alisa-v-dyvokrai-alices-adventures-in-wonderland"],
+  ["gullivers-travels", "mandry-gullivera"],
+  ["gullivers-travels", "mandry-do-riznykh-dalekykh-krain-svitu-lemiuelia-hullivera-s"],
+  ["the-adventures-of-tom-sawyer", "tom-soiier"],
+  ["white-fang", "bilyi-zub"],
+  ["white-fang", "bilyi-zub-white-fang"],
+  ["three-men-in-a-boat-jerome", "troie-v-odnomu-chovni-three-men-in-a-boat"],
+  ["three-men-in-a-boat-jerome", "troie-u-chovni-three-men-in-a-boat"],
+  ["samotnosc-w-sieci", "samotnist-u-merezhi"],
+  ["david-copperfield", "devid-koperfild-david-copperfield"],
+  ["pygmalion", "pihmalion-pygmalion"],
+  ["making-comics-storytelling-secrets-of-comics-manga-and-graph", "stvoryty-komiks-yak-rozpovidaty-istorii-v-komiksakh-manzi-ta"]
  ],
  "volumes": {
   "lobster-8109": 1,

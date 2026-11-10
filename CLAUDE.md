@@ -87,6 +87,12 @@ so Max sees it on the real site. He switches it to everyone on `/admin/jobs` (bl
   `{title, author, page}` (a store page) and is added from it. Prefer Ukrainian editions, no Russian authors.
 - Check it locally signed in as `owner@test.invalid`, screenshot, show Max.
 
+## Translation pairs
+
+- A Ukrainian book and its original are paired in `web/seed/matches.json`: `translations` (`[original, uk]`, slugs or
+  ids) always stand, even next to another Ukrainian translation; `different` pairs are never linked. Check with
+  `store.linkTranslations()` and `store.pairLog` (kept / dropped with tier) on the test DB.
+
 ## Standing rules (Max)
 
 - Never mass-regenerate AI content without Max's OK (daily auto cap 150). A new AI pass: trial of 200 on `/admin/*-trial` first.
