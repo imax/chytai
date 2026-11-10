@@ -44,6 +44,77 @@ const BASE_SCALE = matchMedia("(max-width: 760px)").matches ? 1.2 : 1.3125;
 const highlightStyle = () =>
   document.body.dataset.theme === "dark" ? { fill: "#d9a35a", "fill-opacity": "0.24" } : { fill: "#cd9646", "fill-opacity": "0.3" };
 
+// epub.js draws a mark from range.getClientRects(), which also gives the box of every block the range covers whole:
+// over verse with hanging lines that box filled the gaps and the indents, and the lines over it came out twice as
+// dark. Marks are drawn instead from the text alone: one rect per line, touching the next line, never overlapping.
+// Patched once on the marks' shared prototype, as soon as the first mark exists (marks-pane is not exported).
+let evenMarksDone = false;
+function evenMarks() {
+  if (evenMarksDone || !rendition) return;
+  const views = rendition.views();
+  const all = views?.all ? views.all() : views || [];
+  let mark = null;
+  for (const v of all) mark ||= Object.values(v.highlights || {})[0]?.mark || Object.values(v.underlines || {})[0]?.mark;
+  if (!mark) return;
+  let proto = Object.getPrototypeOf(mark);
+  while (proto && !Object.prototype.hasOwnProperty.call(proto, "filteredRanges")) proto = Object.getPrototypeOf(proto);
+  if (!proto) return;
+  const original = proto.filteredRanges;
+  proto.filteredRanges = function () {
+    try {
+      const lines = markLines(this.range, this.className !== "ai-star");
+      if (lines.length) return lines;
+    } catch {
+      /* fall back to epub.js's own boxes */
+    }
+    return original.call(this);
+  };
+  evenMarksDone = true;
+  for (const v of all) v.pane?.render();
+}
+function markLines(range, closeGaps) {
+  const doc = range.startContainer.ownerDocument;
+  const boxes = [];
+  const take = (r) => {
+    for (const b of r.getClientRects()) if (b.width > 0.5 && b.height > 0.5) boxes.push({ l: b.left, t: b.top, r: b.right, b: b.bottom });
+  };
+  const root = range.commonAncestorContainer;
+  if (root.nodeType === 3) take(range);
+  else {
+    const walk = doc.createTreeWalker(root, 4 /* NodeFilter.SHOW_TEXT */);
+    for (let n = walk.nextNode(); n; n = walk.nextNode()) {
+      if (!range.intersectsNode(n)) {
+        if (range.comparePoint(n, 0) > 0) break;
+        continue;
+      }
+      if (!n.nodeValue.trim()) continue;
+      const r = doc.createRange();
+      r.selectNodeContents(n);
+      if (n === range.startContainer) r.setStart(n, range.startOffset);
+      if (n === range.endContainer) r.setEnd(n, range.endOffset);
+      take(r);
+    }
+  }
+  // Pieces on one line (same height, close side by side, so not across a column gap) become one rect.
+  boxes.sort((a, b) => a.t - b.t || a.l - b.l);
+  const lines = [];
+  for (const x of boxes) {
+    const h = x.b - x.t;
+    const line = lines.find((y) => Math.min(y.b, x.b) - Math.max(y.t, x.t) > 0.5 * Math.min(h, y.b - y.t) && Math.max(x.l - y.r, y.l - x.r) < 1.5 * h);
+    if (!line) lines.push({ ...x });
+    else Object.assign(line, { l: Math.min(line.l, x.l), t: Math.min(line.t, x.t), r: Math.max(line.r, x.r), b: Math.max(line.b, x.b) });
+  }
+  // A narrow gap to the line below closes halfway from each side, so a passage reads as one even shape.
+  if (closeGaps)
+    for (const a of lines) {
+      let below = null;
+      for (const b of lines) if (b !== a && b.t >= a.b - 1 && Math.min(a.r, b.r) > Math.max(a.l, b.l) && (!below || b.t < below.t)) below = b;
+      const gap = below ? below.t - a.b : 0;
+      if (gap > 0 && gap < 0.8 * Math.min(a.b - a.t, below.b - below.t)) a.b = below.t = a.b + gap / 2;
+    }
+  return lines.map((x) => ({ left: x.l, top: x.t, width: x.r - x.l, height: x.b - x.t }));
+}
+
 // The explanations panel opens with the first explanation (a sheet on a phone, the right panel on a computer).
 document.body.classList.add("panel-hidden");
 let touchStart = null;
@@ -320,7 +391,13 @@ async function openEpub(payload, { posKey, source }) {
 
   rendition.on("selected", onSelected);
   rendition.on("relocated", onRelocated);
-  rendition.on("rendered", () => decorateNoteMarks());
+  const addMark = rendition.annotations.add.bind(rendition.annotations);
+  rendition.annotations.add = (...args) => {
+    const out = addMark(...args);
+    evenMarks();
+    return out;
+  };
+  rendition.on("rendered", () => (evenMarks(), decorateNoteMarks()));
   rendition.on("keyup", onKey);
   rendition.hooks.content.register((contents) => contents.document.addEventListener("wheel", onWheel, { passive: true }));
   // Taps, keys and scrolls inside the book's frame are signs of reading too (reading-time.js).
