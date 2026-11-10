@@ -629,7 +629,15 @@ class Store {
     const byTitle = new Map();
     for (const w of works) if (norm(w.title).length >= 4) (byTitle.get(norm(w.title)) || byTitle.set(norm(w.title), []).get(norm(w.title))).push(w);
     tier = 3;
-    for (const w of works) for (const o of byTitle.get(norm(w.altTitle)) || []) link(w.id, o.id); // the same work already shares one id
+    // A book's original title is another book's title, by the same author: «Свобода» by Юнґер named «Freedom»
+    // and took Franzen's, Несбьо's «Ніж» Hayward's «Knife» (Max, 2026-11-10). Names are compared across scripts,
+    // and through Wikidata for a pen name or a name in another alphabet («Стівен Кінг» ~ Richard Bachman, 川口俊和).
+    const { sameName } = require("./authors");
+    const wd = JSON.parse(this.db.get("authors:wd") || "{}");
+    const each = (a) => String(a || "").split(/\s*,\s*/).filter(Boolean);
+    const byOne = (x, y) => sameName(x, { uk: y, en: y }) || (wd[x] && (wd[x].qid === wd[y]?.qid || sameName(y, wd[x]))) || (wd[y] && sameName(x, wd[y]));
+    const sameHand = (a, b) => !a || !b || sameAuthor(a, b) || each(a).some((x) => each(b).some((y) => byOne(x, y)));
+    for (const w of works) for (const o of byTitle.get(norm(w.altTitle)) || []) if (sameHand(w.authorOrig || w.author, o.author) || sameHand(w.author, o.author)) link(w.id, o.id); // the same work already shares one id
     // A title with no letters, the same on both sides, by one author in two alphabets: Orwell's «1984» and Орвелл's.
     for (const [t, list] of byTitle) if (!/\p{L}/u.test(t)) for (const w of list) for (const o of list) if (w.id < o.id && sameAuthor(w.author || "", o.author || "") && /[а-яіїєґ]/i.test(w.author || "") !== /[а-яіїєґ]/i.test(o.author || "")) link(w.id, o.id);
     // A foreign book's Ukrainian title from Wikidata (wikidata.js): a book of that title by the same author. The exact

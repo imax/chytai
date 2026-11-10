@@ -12,6 +12,7 @@
   "Артур Дойль": "Артур Конан Дойль"
  },
  "edits": {
+  "wuthering-heights": {"author": "Emily Brontë"},
   "arhonavtyka": {"cover": "https://raw.githubusercontent.com/imax/chytai/main/web/seed/covers/arhonavtyka.jpg", "blurb": "Аполлоній Родоський, очільник Александрійської бібліотеки, створив масштабне полотно під назвою «Аргонавтика». Видавництво «Колесо життя» представило цей епос у перекладі Євгена Матковського, який зберіг автентичний ритм давньогрецького гекзаметра. Сюжет розгортається навколо морської експедиції Ясона та команди героїв, які вирушають до Колхіди за золотим руном. Шлях пролягає через невідомі землі, де на мандрівників чекають не лише фізичні перешкоди, а й складні внутрішні випробування. Окрім описів географічних відкриттів, значна увага приділяється почуттям героїв, які радикально змінюють хід подій. Це розповідь про взаємодію людей із волею богів, де кожне рішення має наслідки для майбутнього. Видання складається з двох частин: самої поеми та розлогих коментарів, що пояснюють античну логіку й етичні дилеми. Книга порушує питання лідерства та вірності обов’язку в зіткненні з міфологічним порядком. Детальний виклад фактів про побут і ритуали того часу робить читання ґрунтовним процесом."},
   "the-oresteia": {"cover": "https://raw.githubusercontent.com/imax/chytai/main/web/seed/covers/the-oresteia.jpg", "blurb": "First performed in 458BC, Aeschylus's trilogy of plays - known collectively as The Oresteia - remains perhaps the great masterpiece of Ancient tragic drama. Telling the bloody story of the House of Atreus, Aeschylus's tragedy stages an eternal debate about justice and revenge that remains relevant more than two millenia later. Now available in the Bloomsbury Revelations series in this classic and authoritative translation by Hugh Lloyd-Jones, this book contains the text of all three plays - Agamemnon, The Libation Bearers and The Eumenides - with extensive scholarly annotation throughout."},
   "taiemnyche-polum-ya-tsarytsi-loany": { "cover": "https://raw.githubusercontent.com/imax/chytai/main/web/seed/covers/taiemnyche-polum-ya-tsarytsi-loany.jpg" },
@@ -113,7 +114,9 @@
   ["samotnosc-w-sieci", "samotnist-u-merezhi"],
   ["david-copperfield", "devid-koperfild-david-copperfield"],
   ["pygmalion", "pihmalion-pygmalion"],
-  ["making-comics-storytelling-secrets-of-comics-manga-and-graph", "stvoryty-komiks-yak-rozpovidaty-istorii-v-komiksakh-manzi-ta"]
+  ["making-comics-storytelling-secrets-of-comics-manga-and-graph", "stvoryty-komiks-yak-rozpovidaty-istorii-v-komiksakh-manzi-ta"],
+  ["wuthering-heights", "buremna-vys"],
+  ["the-long-walk", "dovha-khoda-kinh"]
  ],
  "volumes": {
   "lobster-8109": 1,
