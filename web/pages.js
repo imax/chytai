@@ -1817,7 +1817,7 @@ function outsideResults({ q, user, books }) {
 // ---- /author/<slug> ----
 
 // The books we have, with what readers said; who reads them; then the works from Wikidata.
-function authorPage({ author, about = null, works, hits, user, readers = [], also = [], pairing = null, joins = null, v2 = false, members = () => [] }) {
+function authorPage({ author, about = null, works, hits, user, readers = [], also = [], pairing = null, joins = null, members = () => [] }) {
   // The owner joins another spelling of this person (Max, 2026-10-23: «як нам зєднувати авторів?»).
   const joinBlock = joins
     ? `${label("Той самий автор")}<form method="post" action="/admin/authors/join" class="author-join"><input type="hidden" name="author" value="${attr(author.slug)}"><input name="other" placeholder="Посилання на автора або ім’я" required><button class="btn small">З’єднати</button></form>${joins
@@ -1840,7 +1840,7 @@ function authorPage({ author, about = null, works, hits, user, readers = [], als
   const work = (w) => {
     const title = w.uk || w.en || w.orig;
     // Wikidata's «title» comes in any language («Войната на Калибан»): the English name goes first.
-    const orig = (v2 ? [w.en, w.orig] : [w.orig, w.en]).find((t) => t && t !== title) || "";
+    const orig = [w.en, w.orig].find((t) => t && t !== title) || "";
     const b = w.books[0];
     return `<li${b ? "" : ' class="none"'}><span class="year">${w.year || ""}</span> ${b ? `<a href="${attr(b.href)}">${esc(title)}</a>` : esc(title)}${orig ? ` <span class="alt">${esc(orig)}</span>` : ""}${!b && !w.uk ? ` <span class="small muted">· у каталогах поки немає</span>` : ""}</li>`;
   };
@@ -1942,18 +1942,17 @@ document.addEventListener("submit", async (e) => {
         .filter((q) => q.top)
         .slice(0, 3)
     : [];
-  // The reader's own mark on each book (flag «author-page»): «✓ прочитано», «читаю», «хочу прочитати».
-  const mark = (h) => (v2 && h.mine ? `<p class="meta muted small">${h.mine === "read" ? "✓ " : ""}${esc(STATUS[h.mine].toLowerCase())}</p>` : "");
+  // The reader's own mark on each book: «✓ прочитано», «читаю», «хочу прочитати».
+  const mark = (h) => (h.mine ? `<p class="meta muted small">${h.mine === "read" ? "✓ " : ""}${esc(STATUS[h.mine].toLowerCase())}</p>` : "");
   const tile = (h, extra = "") => card(h.book, { avg: h.avg ?? null, by: false, extra: extra + mark(h) });
   // A series: how much of it the reader has read, and the volumes no catalog has yet.
   const seriesNote = (g) => {
     const total = g[0].series.total;
     const read = new Set(g.filter((h) => h.mine === "read").map((h) => h.series.n)).size;
-    if (v2 && user && read) return `прочитано ${read} з ${Math.max(total, g.length)}`;
+    if (user && read) return `прочитано ${read} з ${Math.max(total, g.length)}`;
     return total > g.length ? `${g.length} з ${total} у нас` : "";
   };
   const missing = (g) => {
-    if (!v2) return "";
     const have = new Set(g.map((h) => h.series.n));
     const cyr = CYR.test(g[0].book.title);
     const gone = members(g[0].series.key).filter((m) => !have.has(m.n) && (m.uk || m.en));
@@ -1961,14 +1960,13 @@ document.addEventListener("submit", async (e) => {
   };
   // «Гра престолів. Пісня льоду й полум'я. Книга 1» in the series «Пісня льоду та полум'я» is «Гра престолів».
   const shortTitle = (title, name) => {
-    if (!v2) return inSeriesTitle(title, name);
     const key = (x) => x.toLowerCase().replace(/[’'ʼ`]/g, "").replace(/\s+(й|і|та|и|and|&)\s+/g, " ").replace(/[^\p{L}\p{N}]+/gu, " ").trim();
     const parts = title.replace(/(?:книга|кн\.|том|book)\s*\d+/gi, "").split(/[.()]+/).map((x) => x.trim()).filter(Boolean);
     const kept = parts.filter((x) => key(x) !== key(name || ""));
     return kept.length && kept.join(". ").length >= 2 ? kept.join(". ") : title;
   };
   // «Ще 1 книжка» behind a button is a click for nothing: up to 18 show at once.
-  const cut = v2 && rest.length <= 18 ? 18 : 15;
+  const cut = rest.length <= 18 ? 18 : 15;
   const shelf = !hits.length
     ? `<section class="block">${label("Книжки")}<p class="muted">Поки ні в каталогах, ні в читачів.</p></section>`
     : `${start.length ? `<section class="block">${label(many ? "З чого почати" : "Книжки", many ? (start === byFame ? "найвідоміші" : "найбільше читають") : "")}<div class="rows">${start.map(bigRow).join("")}</div></section>` : ""}
@@ -1995,13 +1993,6 @@ ${head}
   const ld = { "@context": "https://schema.org", "@type": "Person", name: author.name, url: ORIGIN + author.href, ...(author.other ? { alternateName: author.other } : {}), ...(author.qid ? { sameAs: `https://www.wikidata.org/wiki/${author.qid}` } : {}) };
   return layout({ title: author.name, body, user, path: "/author", canonical: author.href, description: `Книжки ${author.name} на Chytai: ${books(hits.length)}${inUk && inUk < hits.length ? `, ${inUk} українською` : ""}, оцінки й нотатки читачів, де взяти.`, jsonld: ld });
 }
-// «Ритм війни. Хроніки Буресвітла. Книга 4» under the series' own heading is «Ритм війни».
-const inSeriesTitle = (title, series) => {
-  const t = title.replace(/[.,:]?\s*(?:книга|кн\.|том|book)\s*\d+\s*$/i, "");
-  const i = series ? t.toLowerCase().indexOf(series.toLowerCase()) : -1;
-  const out = i > 0 ? t.slice(0, i).replace(/[\s.,:(—-]+$/, "") : t;
-  return out.length >= 2 ? out : title;
-};
 // The reader with the longest note on a book, for the author page.
 let readersWithNote = () => null;
 const setReadersWithNote = (fn) => (readersWithNote = fn);
