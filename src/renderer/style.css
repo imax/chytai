@@ -2379,33 +2379,3 @@ html body .r-list .r-t, html body .r-list .r-a { display: block; grid-column: 2;
 #panel #about-book .muted { color: var(--m-ink3); }
 #panel #about-book .ab-site { color: var(--m-ochre); }
 
-/* «Статті» (Max, 2026-11-08): the site's articles, read here like a book (articles.js). A page like «Додати книжку»:
-   back and the title on a phone, the title on top on a computer; a field for a link, then the lists. */
-#shell[data-page="articles"] .r-head:not(.r-head-add) { display: none; }
-#shell[data-page="articles"] .r-head-add { display: flex; }
-.r-arts { max-width: 680px; }
-.r-arts-h { display: none; margin: 0 0 24px; font: 600 32px/1.1 var(--r-serif); letter-spacing: -0.01em; }
-.r-art-add { display: flex; gap: 10px; align-items: center; margin: 0 0 30px; border-bottom: 1px solid var(--r-ink); padding: 4px 0 8px; }
-.r-art-add input { flex: 1; min-width: 0; border: none; background: none; padding: 4px 0; font: 17px var(--r-sans); color: var(--r-ink); outline: none; }
-.r-art-add input::placeholder { color: var(--r-ink2); }
-.r-art-add .pill { flex: none; }
-.r-art-list { list-style: none; margin: 0 0 30px; padding: 0; }
-.r-art-list li { display: flex; align-items: flex-start; gap: 8px; border-bottom: 1px solid var(--r-head); }
-.r-art { flex: 1; min-width: 0; display: block; text-align: left; border: none; background: none; padding: 12px 0; color: var(--r-ink); cursor: pointer; }
-.r-art b { display: block; font: 500 18px/1.3 var(--r-serif); }
-.r-art small { display: block; margin-top: 4px; font: 13px/1.4 var(--r-sans); color: var(--r-ink2); }
-@media (hover: hover) { .r-art:hover b { color: var(--r-ochre); } }
-.r-art-later { flex: none; width: 40px; height: 40px; margin-top: 8px; border: none; background: none; padding: 0; display: flex; align-items: center; justify-content: center; color: var(--r-ink2); cursor: pointer; }
-.r-art-later svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linejoin: round; }
-.r-art-list .r-more { position: static; flex: none; display: flex; width: 28px; height: 40px; margin: 8px 0 0 -6px; background: none; border-radius: 0; }
-.r-art-list .r-more i { background: var(--r-ink3); }
-.r-art-later.on { color: var(--r-ochre); }
-.r-art-later.on svg { fill: currentColor; }
-.r-art-site { display: inline-block; font: 13px var(--r-sans); color: var(--r-link); text-decoration: none; }
-/* In an article there is no question about the whole text, no note without a passage and no «Про книжку»: the site keeps only passages. */
-body.reading-article #ask-book, body.reading-article #note-add, body.reading-article #about-book { display: none !important; }
-.card.c-article .followup, .card.c-article .more, .card.c-article .forget { display: none !important; }
-@media (min-width: 761px) {
-  #shell[data-page="articles"] .r-head-add { display: none; }
-  .r-arts-h { display: block; }
-}

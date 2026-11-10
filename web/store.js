@@ -413,9 +413,9 @@ class Store {
     }
   }
 
-  // Essays live in «Статті» now, not among books (Max, 2026-11-08: «прибирай»): their book rows, shelf entries,
-  // list rows and queue rows go once, before anything is derived, so both processes start without them. What was
-  // removed stays in meta `moved_to_articles` to put back by hand; /book/<slug> sends to /articles/<slug>.
+  // Essays are not books (Max, 2026-11-08: «прибирай»): their book rows, shelf entries, list rows and queue rows
+  // went once, before anything is derived, so both processes start without them. What was removed stays in meta
+  // `moved_to_articles` to put back by hand. «Статті», where they went, is gone too (Max, 2026-11-10).
   moveToArticles() {
     const db = this.db;
     if (db.get("moved_to_articles")) return;

@@ -118,8 +118,6 @@ function layout({ title, body, user, path = "", description = "", q = "", home =
   const on = (p) => (p ? ' class="on"' : "");
   const nav = [
     ...NAV.map(([href, name, is]) => `<a href="${href}"${on(is(path))}>${name}</a>`),
-    // «Статті» is Max's experiment for now (2026-11-08: «сховаємо Статті з топ меню»): in the menu for him only, the pages stay open by link.
-    ...(user?.owner ? [`<a href="/articles"${on(path === "/articles")}>Статті</a>`] : []),
     // «Попросити книжку» (2026-11-08): an experiment, for the owner and the readers he let in; the number is new talks.
     ...(user && askNav(user) !== null ? [`<a href="/chat"${on(path === "/chat")}>Чат${askNav(user) ? ` <span class="news">${askNav(user)}</span>` : ""}</a>`] : []),
     // Settings live on one's own shelf, not in the menu (Max, 2026-10-20).
