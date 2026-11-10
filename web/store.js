@@ -736,9 +736,19 @@ class Store {
       if (!this.cycleInfo.has(key)) this.cycleInfo.set(key, { name: b.cycle.name, members: [] });
       set(b.id, key, b.cycle.n);
     }
+    // A shop's numbered series that Wikidata knows by that name is that series when a volume's title has the
+    // Wikidata title at its place («Експансія. Кн. 1. І прокинеться Левіафан»; Max 2026-11-10, The Expanse read
+    // in English): one key, so book 9 read in English counts for the Ukrainian set too.
+    const titled = (item, qid) => {
+      const m = wd.series?.[qid]?.members.find((x) => x.n === item.volume);
+      return !!m && [m.uk, m.en].some((t) => norm(t).length >= 4 && norm(item.title).includes(norm(t)));
+    };
     for (const ser of new Set(this.series?.values() || [])) {
-      for (const { item } of ser.items) if (!item.bundle) set(item.id, `shelf:${ser.head}`, item.volume);
-      if (!this.cycleInfo.has(`shelf:${ser.head}`)) this.cycleInfo.set(`shelf:${ser.head}`, { name: ser.name, members: [] });
+      const qid = byName.get(norm(ser.name));
+      const nest = qid && ser.items.some(({ item }) => titled(item, qid)) && (into.get(qid) || { to: qid, n: new Map() });
+      const key = nest ? nest.to : `shelf:${ser.head}`;
+      for (const { item } of ser.items) if (!item.bundle) set(item.id, key, (nest && nest.n.get(item.volume)) || item.volume);
+      if (!this.cycleInfo.has(key)) this.cycleInfo.set(key, { name: ser.name, members: [] });
     }
     for (const [id, c] of [...this.cycles]) for (const t of this.translations.get(id) || []) set(t, c.key, c.n);
     for (const [id, c] of this.cycles) (this.cycleIds.get(c.key) || this.cycleIds.set(c.key, []).get(c.key)).push({ n: c.n, id });
@@ -754,7 +764,9 @@ class Store {
 
   // The book to recommend in place of this one: itself unless it is a later volume of a series, then the
   // series' first book, or null when we don't have the first one (nobody starts a series at book six).
-  // For a reader who has some of it (`own`, canonical ids), the first volume they don't have yet.
+  // For a reader who has some of it (`own`, canonical ids), the first volume they don't have yet, after the
+  // last one they have read: who read book 9 has read 1 to 8 (Max, 2026-11-10, offered «Leviathan Wakes»
+  // after the whole of The Expanse).
   seriesStart(id, own = null) {
     id = this.canonical(id);
     const c = this.cycles?.get(id);
@@ -762,8 +774,10 @@ class Store {
     const list = this.cycleIds.get(c.key);
     if (list[0].n !== 1) return null;
     if (!own) return list[0].id;
-    const had = new Set(list.filter((x) => own.has(x.id)).map((x) => x.n));
-    return list.find((x) => !had.has(x.n))?.id || null;
+    const mine = list.filter((x) => own.has(x.id));
+    const had = new Set(mine.map((x) => x.n));
+    const read = Math.max(0, ...mine.filter((x) => own.get?.(x.id)?.status === "read").map((x) => x.n));
+    return list.find((x) => x.n > read && !had.has(x.n))?.id || null;
   }
 
   // A book's series in short, for a reader's shelf (pages.libraryPage folds the volumes a reader has into
@@ -812,11 +826,12 @@ class Store {
     const c = this.cycles?.get(this.canonical(id));
     if (!c) return null;
     const info = this.cycleInfo.get(c.key) || { name: "", members: [] };
-    const ours = new Map();
-    for (const x of this.cycleIds.get(c.key)) if (!ours.has(x.n)) ours.set(x.n, x.id);
-    const ns = [...new Set([...info.members.map((m) => m.n), ...ours.keys()])].sort((a, b) => a - b);
-    // A volume we don't have is named in the language of the book the page is about.
+    // A volume we don't have is named in the language of the book the page is about; of two we have at one
+    // place (a Ukrainian shop's set and the English books, one series since 2026-11-10), the one in that language.
     const cyr = /[а-яіїєґ]/i.test(this.book(id)?.title || "");
+    const ours = new Map();
+    for (const x of this.cycleIds.get(c.key)) if (!ours.has(x.n) || (/[а-яіїєґ]/i.test(this.book(ours.get(x.n))?.title || "") !== cyr && /[а-яіїєґ]/i.test(this.book(x.id)?.title || "") === cyr)) ours.set(x.n, x.id);
+    const ns = [...new Set([...info.members.map((m) => m.n), ...ours.keys()])].sort((a, b) => a - b);
     const items = ns.map((n) => {
       const id = ours.get(n);
       const b = id && this.book(id);

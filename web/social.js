@@ -413,8 +413,10 @@ class Social {
     const has = (id) => skip.has(id) || skip.has(this.store.canonical(id));
     let out = this.bySeries(this.recs.forReader(readerId, { limit: limit * 3, skip: new Set(skip.keys()) }).map((x) => row(x.id)), [], { row: (id, x) => ({ ...x, ...row(id) }), own })
       .filter((x) => x.book && !has(x.book.id));
+    // Nor a volume before one they have read (the top rated here go round bySeries).
+    const passed = (id) => own && this.store.cycleKey(id) && this.store.seriesStart(id, own) !== this.store.canonical(id);
     const add = (list) => {
-      for (const x of list) if (out.length < limit && x.book && !has(x.book.id) && !out.some((y) => y.book.id === x.book.id)) out.push(x);
+      for (const x of list) if (out.length < limit && x.book && !has(x.book.id) && !passed(x.book.id) && !out.some((y) => y.book.id === x.book.id)) out.push(x);
     };
     if (out.length < limit && seeds.length) add(this.similar(seeds, { limit: limit * 2, skip, own }));
     if (out.length < limit && popular) add(this.popular().top);

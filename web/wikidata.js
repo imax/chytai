@@ -7,9 +7,18 @@
 const ENDPOINT = "https://query.wikidata.org/sparql";
 const HEADERS = { "User-Agent": "Chytai/1.0 (https://chytai.org.ua; translations lookup)", Accept: "application/sparql-results+json" };
 const WEEK = 7 * 86400000;
+// The way series are asked for: a new one asks again at once, not a week later (2: spaced initials, 2026-11-10).
+const SERIES_V = "2";
 
 const norm = (s) => String(s || "").toLowerCase().replace(/^(the|a)\s+/, "").replace(/[^\p{L}\p{N}]+/gu, " ").trim();
-const firstAuthor = (a) => String(a || "").split(/\s+and\s+|\s*[,&]\s*/)[0].replace(/\s+/g, " ").trim();
+// Initials spaced the way Wikidata labels them: «James S.A. Corey» is «James S. A. Corey» there (the whole of The
+// Expanse went without a series, Max 2026-11-10), «J.R.R. Tolkien» is «J. R. R. Tolkien».
+const firstAuthor = (a) =>
+  String(a || "")
+    .split(/\s+and\s+|\s*[,&]\s*/)[0]
+    .replace(/(\p{Lu})\.(?=\p{Lu})/gu, "$1. ")
+    .replace(/\s+/g, " ")
+    .trim();
 // «Wool (Silo)» -> «Wool», «Children of Time: …» -> «Children of Time»
 const mainTitle = (t) => String(t || "").replace(/\s*\(.*?\)\s*/g, " ").split(/[:]/)[0].trim();
 const isForeign = (t) => /[a-z]/i.test(t) && !/[а-яіїєґ]/i.test(t);
@@ -176,9 +185,10 @@ async function seriesOf(books, { fetchImpl = fetch, log = () => {} } = {}) {
 async function refreshUk(store, opts = {}) {
   const at = Number(store.db.get("wikidata:at") || 0);
   if (Date.now() - at < WEEK) {
-    if (store.db.get("wikidata:series")) return false;
+    if (store.db.get("wikidata:series") && store.db.get("wikidata:series:v") === SERIES_V) return false;
     // The series came a few days after the titles (2026-10-23): asked once now, then with them weekly.
     store.db.set("wikidata:series", JSON.stringify(await seriesOf([...store.seedBooks, ...Object.values(store.lib.books)], opts)));
+    store.db.set("wikidata:series:v", SERIES_V);
     store.linkTranslations();
     return true;
   }
@@ -187,6 +197,7 @@ async function refreshUk(store, opts = {}) {
   const found = await ukTitles(books, opts);
   store.db.set("wikidata:uk", JSON.stringify(found));
   store.db.set("wikidata:series", JSON.stringify(await seriesOf(books, opts)));
+  store.db.set("wikidata:series:v", SERIES_V);
   store.linkTranslations();
   store.indexSearch();
   return true;
