@@ -1110,7 +1110,7 @@ const asker = new Ask(store, {
 if (bg.ROLE !== "jobs") setInterval(() => asker.cleanup(), 24 * 3600 * 1000).unref();
 const askOn = (req) => flags.on("ask", req.user);
 // What others asked, with the first covers of each answer.
-const askOthers = (req) => asker.recent(10).map((o) => ({ ...o, books: o.ids.map((id) => store.book(id) && workFor(req, store.book(id))).filter(Boolean) }));
+const askOthers = (req) => asker.recent(20).map((o) => ({ ...o, books: o.ids.map((id) => store.book(id) && workFor(req, store.book(id))).filter(Boolean) }));
 app.get("/ask", (req, res, next) => {
   if (!askOn(req)) return next();
   admin.log(req.user?.id || "", "view", "/ask");

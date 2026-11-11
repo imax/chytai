@@ -3152,13 +3152,14 @@ function askForm(text = "", error = "") {
 }
 // others: answers already made, newest first, as { id, text, books } (ask.js recent()): ideas to click, no new tokens.
 function askPage({ user, text = "", error = "", others = [] }) {
-  const short = (t) => ((t = t.replace(/\s+/g, " ").trim()).length > 160 ? `${t.slice(0, 157).replace(/\s+\S*$/, "")}…` : t);
+  // One or two lines each, no covers: there may be dozens (Max, 2026-11-11: «буде полотно»).
+  const short = (t) => ((t = t.replace(/\s+/g, " ").trim()).length > 120 ? `${t.slice(0, 117).replace(/\s+\S*$/, "")}…` : t);
   const body = `<section class="list-head ask-head">
   <h1>Що почитати далі?</h1>
   <p class="lead">Напишіть, що вам сподобалось. Порадимо книжки з каталогу.</p>
 </section>
 ${askForm(text, error)}
-${others.length ? `<section class="ask-others">${label("Що питають інші")}${others.map((o) => `<a class="ask-other" href="/ask/${attr(o.id)}"><span class="q">${esc(short(o.text))}</span><span class="covers">${o.books.slice(0, 4).map((b) => cover(b, "xs")).join("")}</span></a>`).join("")}</section>` : ""}`;
+${others.length ? `<section class="ask-others">${label("Що питають інші")}${others.map((o) => `<a class="ask-other" href="/ask/${attr(o.id)}"><span class="q">${esc(short(o.text))}</span><span class="n">${books(o.books.length)}</span></a>`).join("")}</section>` : ""}`;
   return layout({ title: "Що почитати далі?", body, user, path: "/ask", canonical: "/ask", description: "Напишіть, що вам сподобалось, і Chytai порадить книжки." });
 }
 // ask: the row from ask.js; items: [{ id, book, why, series, mine }]; canAsk: the field is open to this visitor.
