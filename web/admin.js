@@ -1671,6 +1671,14 @@ function readerAppPage({ user, s, error = "", book = () => null, layout }) {
 <thead><tr><th class="book">Книжка</th><th class="who">Хто читав, хв</th><th>Хв сьогодні</th><th>За 7 днів</th><th>За 30</th></tr></thead>
 <tbody>${top.map((g) => `<tr><th class="book">${g.href ? `<a href="${esc(g.href)}">${esc(g.title)}</a>` : esc(g.title)}${g.paper ? ` <span class="muted">паперова</span>` : ""}</th><td class="who">${g.readers.sort((a, b) => b.month - a.month).map(reader).join(", ")}</td><td>${n(g.today)}</td><td>${n(g.week)}</td><td>${n(g.month)}</td></tr>`).join("")}</tbody></table></div>
 <p class="muted small">За останні 30 днів, від 4 листопада. Паперова книжка — час на її сторінці в Читалці, не саме читання.</p>` : `<p class="muted">Ще ніхто не читав: рахуємо з 4 листопада.</p>`;
+  // Reading without a network (Max, 2026-11-11), from 11 November: by device, then who read offline.
+  const DEV = { "iphone-app": "iPhone, застосунок", "android-app": "Android, застосунок", "mac-app": "Mac, застосунок", app: "Застосунок", "iphone-browser": "iPhone, браузер", "android-browser": "Android, браузер", "desktop-browser": "Компʼютер, браузер" };
+  const offDevs = s.offline?.devices || [];
+  const offWho = s.offline?.readers || [];
+  const offlineTbl = offDevs.length ? `<div class="tbl"><table>
+<thead><tr><th>Пристрій</th><th>Читали, хв</th><th>Без мережі, хв</th><th>Відкрили без мережі</th><th>Не було на пристрої</th></tr></thead>
+<tbody>${offDevs.map((r) => `<tr><th>${esc(DEV[r.dev] || r.dev)}</th><td>${n(r.read)}</td><td>${n(r.off)}</td><td>${n(r.opened)}</td><td>${n(r.missing)}</td></tr>`).join("")}</tbody></table></div>
+<p class="muted small">За 30 днів, рахуємо з 11 листопада. ${offWho.length ? `Без мережі читали: ${offWho.map((r) => `${r.username ? `<a href="/@${esc(r.username)}">${esc(r.name || r.username)}</a>` : esc(r.name || r.id)} <span class="muted">${fmtN(r.off)} хв</span>`).join(", ")}.` : "Без мережі ще ніхто не читав."}</p>` : `<p class="muted">Рахуємо з 11 листопада.</p>`;
   const days = s.days.slice(0, 30);
   const daysTbl = days.length ? `<div class="tbl"><table>
 <thead><tr><th>День</th><th>Пояснень</th><th>Токенів на вході</th><th>На виході</th><th>Claude</th></tr></thead>
@@ -1684,6 +1692,8 @@ function readerAppPage({ user, s, error = "", book = () => null, layout }) {
 ${readers}
 <h2 id="books">Книжки</h2>
 ${booksTbl}
+<h2 id="offline">Без мережі</h2>
+${offlineTbl}
 <details class="reader-cost"><summary>Вартість по днях і моделях</summary>
 ${daysTbl}
 ${models}

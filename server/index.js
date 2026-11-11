@@ -457,7 +457,19 @@ const lastReading = new Map(); // account -> time of its last report, in memory 
 // the app closed before they went). They count under that hour's day: at most an hour per report and
 // READ_DAY_MAX a day, apart from the live budget below.
 const READ_DAY_MAX = 16 * 3600;
-function recordReading(acct, books, at) {
+// Which device a report came from, for reading without a network (Max, 2026-11-11): the apps say so in their
+// user agent (ChytaiApp on the phones, ChytaiMac), the rest is a browser on a phone or a computer.
+function deviceOf(ua = "") {
+  const ios = /iPhone|iPad|iPod/.test(ua);
+  const android = /Android/.test(ua);
+  if (/ChytaiApp/.test(ua)) return ios ? "iphone-app" : android ? "android-app" : "app";
+  if (/ChytaiMac/.test(ua)) return "mac-app";
+  return ios ? "iphone-browser" : android ? "android-browser" : "desktop-browser";
+}
+// off: { sec, opened, missing } from the page (reading-time.js): seconds of `books` read offline, books opened from
+// the device's copy, books that were not on the device. Kept per day by device (readDev for all reading, offDev,
+// offOpen, offMiss) and per account (offSec).
+function recordReading(acct, books, at, dev = "desktop-browser", off = null) {
   const now = Date.now();
   const past = at && at < now - 60 * 1000 && at > now - 14 * 86400000;
   let budget;
@@ -471,14 +483,44 @@ function recordReading(acct, books, at) {
   const stats = (state.stats ??= { since: day, days: {} });
   const d = (stats.days[day] ??= { explains: 0, users: {}, guests: 0, models: {} });
   if (past) budget = Math.max(0, Math.min(3600, READ_DAY_MAX - (d.readSec?.[acct] || 0)));
+  let added = 0;
   for (const [name, sec] of Object.entries(books)) {
     const add = Math.round(Math.min(budget, sec));
     if (!(add > 0)) continue;
     budget -= add;
+    added += add;
     (d.readSec ??= {})[acct] = (d.readSec[acct] || 0) + add;
     const mine = ((d.readBooks ??= {})[acct] ??= {});
     mine[name] = (mine[name] || 0) + add;
   }
+  const bump = (field, key, n) => n > 0 && ((d[field] ??= {})[key] = (d[field][key] || 0) + n);
+  bump("readDev", dev, added);
+  const offSec = Math.round(Math.min(added, Number(off?.sec) || 0));
+  bump("offDev", dev, offSec);
+  bump("offSec", acct, offSec);
+  bump("offOpen", dev, Math.min(50, Math.round(Number(off?.opened) || 0)));
+  bump("offMiss", dev, Math.min(50, Math.round(Number(off?.missing) || 0)));
+}
+
+// Reading without a network over the last 30 days, for the admin page: by device, and who did it.
+function offlineStats(days, dayKeys, monthAgo) {
+  const dev = new Map();
+  const who = new Map();
+  for (const day of dayKeys.filter((k) => k >= monthAgo)) {
+    const d = days[day];
+    for (const [field, col] of [["readDev", "read"], ["offDev", "off"], ["offOpen", "opened"], ["offMiss", "missing"]]) {
+      for (const [k, n] of Object.entries(d[field] || {})) {
+        const r = dev.get(k) || dev.set(k, { dev: k, read: 0, off: 0, opened: 0, missing: 0 }).get(k);
+        r[col] += n;
+      }
+    }
+    for (const [acct, sec] of Object.entries(d.offSec || {})) who.set(acct, (who.get(acct) || 0) + sec);
+  }
+  const min = (sec) => Math.round(sec / 60);
+  return {
+    devices: [...dev.values()].map((r) => ({ ...r, read: min(r.read), off: min(r.off) })).sort((a, b) => b.read - a.read),
+    readers: [...who].map(([id, sec]) => ({ id, name: accountName(id), username: state.accounts[id]?.username || "", off: min(sec) })).filter((r) => r.off > 0).sort((a, b) => b.off - a.off),
+  };
 }
 
 // Minutes per reader and book over the last 30 days, for the admin page (newest reading first).
@@ -574,6 +616,7 @@ async function collectStats() {
     accountCap: ACCOUNT_DAILY_CAP,
     wishes: wishStats(library),
     reading: readingByBook(stats.days, dayKeys, today, weekAgo, monthAgo),
+    offline: offlineStats(stats.days, dayKeys, monthAgo),
   };
 }
 
@@ -1524,7 +1567,7 @@ api.post("/reading", express.text({ limit: "16kb" }), (req, res) => {
   if (req.guest) return res.json({ ok: true });
   const clean = {};
   for (const [name, sec] of Object.entries(books).slice(0, 20)) if (name && name.length <= 500 && Number.isFinite(sec) && sec > 0) clean[name.replace(/#reflow$/, "")] = (clean[name.replace(/#reflow$/, "")] || 0) + Math.min(sec, body.at ? 3600 : 600);
-  recordReading(req.acct, clean, Number(body.at) || 0);
+  recordReading(req.acct, clean, Number(body.at) || 0, deviceOf(req.get("user-agent")), body.off && typeof body.off === "object" ? body.off : null);
   saveState();
   res.json({ ok: true });
 });

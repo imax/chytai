@@ -396,6 +396,7 @@
       if (!isNetworkError(err)) return emit("book:error", `Не вдалося відкрити книжку: ${err.message}`);
       // No network: the copy kept on this device, at the position last saved here.
       const saved = await idb("books", "readonly", (s) => s.get(name)).catch(() => null);
+      window.ReadingTime?.offlineOpen(saved ? "opened" : "missing");
       if (!saved) return emit("book:error", "Немає з'єднання, а цієї книжки ще немає на пристрої. Книжка зберігається на пристрій, коли її відкривають онлайн.");
       const positions = (await localSettings())?.positions || {};
       payload = { path: name, name, data: saved.data, position: positions[name] || null, reflowPosition: positions[`${name}#reflow`] || null };

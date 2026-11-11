@@ -1093,7 +1093,7 @@
     if (b?.paper) return openPaper(path);
     // The book already on screen just comes back; any other one opens.
     if (current?.path === path) return hide();
-    if (b?.unavailable) return showNotice("Немає з'єднання, а ця книжка ще не збережена на пристрої.", false);
+    if (b?.unavailable) return window.ReadingTime?.offlineOpen("missing"), showNotice("Немає з'єднання, а ця книжка ще не збережена на пристрої.", false);
     window.reader.openPath(path);
   }
 
