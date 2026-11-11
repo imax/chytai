@@ -1,5 +1,5 @@
 {
- "_": "Hand-confirmed links that the automatic matching misses or gets wrong. same: catalog item id -> library book id. different: pairs the matcher must not join. authorNames: an author spelling -> the name shown. edits: slug -> {title, author, …}, put once into the owner's hand edits. merges: [keep, dup] works (ids or /book/ slugs) folded into one, put once into the owner's /admin/dupes decisions (undo there). volumes: item id -> volume number, for series whose titles carry no numbering. translations: pairs of works (ids or /book/ slugs) where one translates the other. covers: work (id or /book/ slug) -> the cover to show, when the edition picked for the work has a worse one.",
+ "_": "Hand-confirmed links that the automatic matching misses or gets wrong. same: catalog item id -> library book id. different: pairs the matcher must not join. authorNames: an author spelling -> the name shown. edits: slug -> {title, author, …}, put once into the owner's hand edits. merges: [keep, dup] works (ids or /book/ slugs) folded into one, put once into the owner's /admin/dupes decisions (undo there). volumes: item id -> volume number, for series whose titles carry no numbering. translations: pairs of works (ids or /book/ slugs) where one translates the other. covers: work (id or /book/ slug) -> the cover to show, when the edition picked for the work has a worse one. series: [{name, uk, books: [ids or /book/ slugs, in order]}], a series set by hand; it wins over Wikidata and Goodreads.",
  "same": {
   "bookchef-089006": "liudyna-rozumna-istoriia-liudstva-vid-mynuloho-do-maibutnoho",
   "abuk-610": "liudyna-rozumna-istoriia-liudstva-vid-mynuloho-do-maibutnoho",
@@ -71,7 +71,8 @@
   ["1984-orvell", "1984-2-2-2"],
   ["1984", "1984-2"],
   ["edem-lem", "edem"],
-  ["tonkoe-yskusstvo-pofyhyzma-paradoksalnyi-sposob-zhyt-schastl-2", "tonkoe-yskusstvo-pofyhyzma-paradoksalnyi-sposob-zhyt-schastl"]
+  ["tonkoe-yskusstvo-pofyhyzma-paradoksalnyi-sposob-zhyt-schastl-2", "tonkoe-yskusstvo-pofyhyzma-paradoksalnyi-sposob-zhyt-schastl"],
+  ["wool-silo", "wool-omnibus"]
  ],
  "translations": [
   ["animal-farm-orvell", "kolhosp-tvaryn-kazka"],
@@ -116,7 +117,11 @@
   ["pygmalion", "pihmalion-pygmalion"],
   ["making-comics-storytelling-secrets-of-comics-manga-and-graph", "stvoryty-komiks-yak-rozpovidaty-istorii-v-komiksakh-manzi-ta"],
   ["wuthering-heights", "buremna-vys"],
-  ["the-long-walk", "dovha-khoda-kinh"]
+  ["the-long-walk", "dovha-khoda-kinh"],
+  ["shift", "bookchef-023343"]
+ ],
+ "series": [
+  {"name": "Silo", "uk": "Бункер", "books": ["wool-silo", "shift", "dust"]}
  ],
  "volumes": {
   "lobster-8109": 1,

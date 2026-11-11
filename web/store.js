@@ -750,6 +750,22 @@ class Store {
       id = this.canonical(id);
       if (n > 0 && !this.cycles.has(id)) this.cycles.set(id, { key, n });
     };
+    // Series set by hand, matches.json «series»: [{ name, uk, books: [ids or /book/ slugs, in order] }] (Max,
+    // 2026-11-11: Hugh Howey's Wool, Shift, Dust; Goodreads called book 1 «Wool» and book 2 «Silo»). They win.
+    let hand = [];
+    try {
+      hand = readJson(path.join(SEED, "matches.json")).series || [];
+    } catch {
+      /* none */
+    }
+    for (const h of hand) {
+      const key = `hand:${norm(h.name)}`;
+      this.cycleInfo.set(key, { name: h.name, uk: h.uk || "", members: [] });
+      h.books.forEach((b, i) => {
+        const id = this.workId(b);
+        if (id) set(id, key, i + 1);
+      });
+    }
     const byName = new Map();
     for (const [qid, s] of Object.entries(wd.series || {})) {
       this.cycleInfo.set(qid, s);

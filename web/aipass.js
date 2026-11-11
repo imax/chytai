@@ -9,13 +9,18 @@ const Anthropic = require("@anthropic-ai/sdk");
 
 const MODEL = "claude-haiku-5-5";
 const PRICE = { input: 0.1 / 1e6, output: 0.5 / 1e6, cacheRead: 0.01 / 1e6, cacheWrite: 0.125 / 1e6 }; // $ per token, Haiku 5.5
-const costOf = (u) => (u.input_tokens || 0) * PRICE.input + (u.cache_read_input_tokens || 0) * PRICE.cacheRead + (u.cache_creation_input_tokens || 0) * PRICE.cacheWrite + (u.output_tokens || 0) * PRICE.output;
+// A pass that writes for readers (author notes) may ask Sonnet instead: def.model, priced here.
+const PRICES = { [MODEL]: PRICE, "claude-sonnet-5-5": { input: 2 / 1e6, output: 10 / 1e6, cacheRead: 0.1 / 1e6, cacheWrite: 2.5 / 1e6 } };
+const costOf = (u, model = MODEL) => {
+  const p = PRICES[model] || PRICE;
+  return (u.input_tokens || 0) * p.input + (u.cache_read_input_tokens || 0) * p.cacheRead + (u.cache_creation_input_tokens || 0) * p.cacheWrite + (u.output_tokens || 0) * p.output;
+};
 
 class AiPass {
   // def: { key, name, what, prompt, system, schema, size, candidates(), facts(s) -> string | content blocks,
   //        item(s, answer) -> { id, title, author, before, after, diff, thumb? }, finish?(st) }
   constructor(def, { db, apiKey, log = () => {} }) {
-    Object.assign(this, { size: 200, parallel: 4, prompt: 1, maxTokens: 1024 }, def);
+    Object.assign(this, { size: 200, parallel: 4, prompt: 1, maxTokens: 1024, model: MODEL }, def);
     this.db = db;
     this.log = log;
     this.client = apiKey ? new Anthropic({ apiKey }) : null;
@@ -41,9 +46,9 @@ class AiPass {
   }
 
   async ask(s) {
-    const content = this.facts(s);
+    const content = await this.facts(s);
     const message = await this.client.messages.create({
-      model: MODEL,
+      model: this.model,
       max_tokens: this.maxTokens,
       // The same system prompt for every book of a pass: cached, so a run of hundreds pays for it once per 5 minutes.
       system: [{ type: "text", text: this.system, cache_control: { type: "ephemeral" } }],
@@ -62,7 +67,7 @@ class AiPass {
     let st;
     try {
       const { subjects, pool } = this.pick();
-      st = { prompt: this.prompt, key: require("crypto").randomBytes(12).toString("hex"), at: new Date().toISOString(), model: MODEL, pool, total: subjects.length, done: 0, cost: 0, items: [], errors: 0 };
+      st = { prompt: this.prompt, key: require("crypto").randomBytes(12).toString("hex"), at: new Date().toISOString(), model: this.model, pool, total: subjects.length, done: 0, cost: 0, items: [], errors: 0 };
       const save = () => this.db.set(`aipass:${this.key}`, JSON.stringify(st));
       save();
       let next = 0;
@@ -71,7 +76,7 @@ class AiPass {
           const s = subjects[next++];
           try {
             const { answer, usage } = await this.ask(s);
-            st.cost += costOf(usage);
+            st.cost += costOf(usage, this.model);
             st.items.push({ ...this.item(s, answer), answer });
           } catch (e) {
             st.errors++;
@@ -125,7 +130,7 @@ class AiPass {
         const s = todo[next++];
         try {
           const { answer, usage } = await this.ask(s);
-          st.cost += costOf(usage);
+          st.cost += costOf(usage, this.model);
           put.run(this.key, s.id, JSON.stringify(answer), this.prompt, new Date().toISOString());
         } catch (e) {
           st.errors++;
@@ -164,7 +169,7 @@ class AiPass {
     for (const s of todo) {
       try {
         const { answer, usage } = await this.ask(s);
-        out.cost += costOf(usage);
+        out.cost += costOf(usage, this.model);
         out.asked++;
         put.run(this.key, s.id, JSON.stringify(answer), this.prompt, new Date().toISOString());
         items.push({ s, answer, item: this.item(s, answer) });
@@ -180,8 +185,8 @@ class AiPass {
   // The results as plain text for the share link.
   text() {
     const st = this.state();
-    const line = (x) => `${x.diff ? "*" : " "} ${x.title}${x.author ? ` — ${x.author}` : ""} | зараз: ${x.before || "—"} | Haiku: ${x.error ? `помилка ${x.error}` : x.after || "—"}`;
-    return [`${this.name}: промпт v${st.prompt}, ${st.model}, ${st.at}: ${st.done} з ${st.total} (кандидатів ${st.pool}), $${(st.cost || 0).toFixed(3)}${st.finished ? "" : ", ще йде"}`, "* = Haiku пропонує зміну", "", ...st.items.map(line)].join("\n");
+    const line = (x) => `${x.diff ? "*" : " "} ${x.title}${x.author ? ` — ${x.author}` : ""} | зараз: ${x.before || "—"} | AI: ${x.error ? `помилка ${x.error}` : x.after || "—"}`;
+    return [`${this.name}: промпт v${st.prompt}, ${st.model}, ${st.at}: ${st.done} з ${st.total} (кандидатів ${st.pool}), $${(st.cost || 0).toFixed(3)}${st.finished ? "" : ", ще йде"}`, "* = AI пропонує зміну", "", ...st.items.map(line)].join("\n");
   }
 }
 

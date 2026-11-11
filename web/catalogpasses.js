@@ -35,6 +35,25 @@ function passes({ store, social, db, apiKey, log }) {
     return ids.map((id) => store.book(id)).filter((b) => b && !isRussian(b));
   };
   const book = (b) => ({ id: b.id, title: b.title, author: b.author || "" });
+  // An author's works as the author page sees them: an original and its translations are one, Ukrainian title
+  // first; box sets and workbooks left out. Most read first, at most 60.
+  const authorBooks = (a) => {
+    const seen = new Set();
+    const out = [];
+    for (const id of a.ids) {
+      const c = store.canonical(id);
+      if (seen.has(c)) continue;
+      const b = store.book(c);
+      if (!b || isRussian(b) || b.bundle || /комплект|workbook|робочий зошит/i.test(`${b.title} ${b.altTitle || ""}`)) continue;
+      const all = [b, ...store.translationsOf(c).map((t) => store.book(t.id)).filter(Boolean)];
+      for (const x of all) seen.add(store.canonical(x.id));
+      const uk = all.find((x) => CYR.test(x.title));
+      const orig = all.find((x) => !CYR.test(x.title));
+      const st = all.map((x) => social.stats(x.id)).find((x) => x.avg != null);
+      out.push({ id: (uk || b).id, uk: uk?.title || "", orig: orig?.title || "", year: b.published || "", series: all.map((x) => store.seriesOf(x.id)).find(Boolean) || null, readers: all.reduce((n, x) => n + store.readersOf(x.id).length, 0), avg: st ? Math.round(st.avg * 10) / 10 : null });
+    }
+    return out.sort((x, y) => y.readers - x.readers).slice(0, 60);
+  };
 
   const defs = [
     {
@@ -299,6 +318,50 @@ function passes({ store, social, db, apiKey, log }) {
       apply: (items) => {
         store.aiAnswersChanged("blurb");
         return items.filter((x) => x.answer.known === "yes" && x.answer.text).length;
+      },
+    },
+    {
+      // Max 2026-11-11 on Hugh Howey's page: «З чого почати» should be editorial, «запитувати у AI про що це автор
+      // ... його найбільш відомі твори і їх підсвічувати в першу чергу. Може навіть текстом». Sonnet writes a
+      // line on what the author is known for and picks up to three of OUR books to start with, a series from
+      // its first volume. Authors with three books or more and a reader.
+      key: "author-start",
+      name: "З чого почати (автори)",
+      model: "claude-sonnet-5-5",
+      prompt: 1,
+      maxTokens: 2048,
+      what: "Рядок про автора і 2–3 книжки, з яких почати, з поясненням чому, на сторінці автора.",
+      system: `You write the «З чого почати» (where to start) block on an author's page on Chytai, a Ukrainian book site. You get the author, a short bio when we have one, and the numbered list of this author's books in our catalog: the Ukrainian title and/or the original title, the series and the volume number when known, and how many of our readers have the book with their average rating.
+Write «about»: one or two plain sentences in Ukrainian, up to 30 words, on what this author is known for: the kind of books and the best-known works or series. Facts only, the level of an encyclopedia's first line: no praise, no adjectives like «геніальний», «культовий», «блискучий», no calls to read, no awards, sales or adaptations unless they are what the author is known for.
+Then «picks»: one to three books FROM THE LIST, by their number, in the order a newcomer should take them: the author's best-known and most acclaimed works first (by your knowledge of the author, not only by our readers' counts). A series is entered at its first volume: never pick a later volume when volume 1 is on the list, and pick at most one book per series. Skip box sets, omnibus editions of books also on the list, companions, workbooks and anthologies with other authors. The list may hold one book twice under different titles: pick it once. For each pick, «why»: a few Ukrainian words, up to 10, saying what the book is or why to start with it («перший роман трилогії про людей у підземному місті»), plain, no praise, no spoilers.
+Natural modern Ukrainian, Ukrainian spellings of names and titles (use the Ukrainian title when the list has one), no Russianisms, no English in brackets. Say «автор» unless you know the author is a woman («авторка»). Answer «unknown» with empty «about» and no picks when you don't know who this author is or what their books are: no block is far better than a wrong one.`,
+      schema: {
+        type: "object",
+        properties: {
+          known: { type: "string", enum: ["yes", "unknown"] },
+          about: { type: "string" },
+          picks: { type: "array", items: { type: "object", properties: { n: { type: "integer" }, why: { type: "string" } }, required: ["n", "why"], additionalProperties: false } },
+        },
+        required: ["known", "about", "picks"],
+        additionalProperties: false,
+      },
+      // Most read authors first: those pages are opened.
+      candidates: () =>
+        store.authors.list
+          .map((a) => ({ id: a.key, a, books: authorBooks(a) }))
+          .filter((s) => s.books.length >= 3 && s.books.some((b) => b.readers))
+          .sort((x, y) => y.books.reduce((n, b) => n + b.readers, 0) - x.books.reduce((n, b) => n + b.readers, 0)),
+      facts: async (s) => {
+        const about = s.a.qid ? await require("./authors").about(store, s.a.qid, { log }).catch(() => null) : null;
+        const bio = about?.person?.bio || about?.person?.desc || "";
+        const line = (b, i) => `${i + 1}. ${[b.uk && `«${b.uk}»`, b.orig && `original «${b.orig}»`].filter(Boolean).join(", ")}${b.series ? `; series «${b.series.name}», volume ${b.series.n}` : ""}${b.year ? `; ${b.year}` : ""}; readers here: ${b.readers}${b.avg != null ? `, average ${b.avg}` : ""}`;
+        return [`Author: ${s.a.name}${s.a.other ? ` (${s.a.other})` : ""}`, bio ? `Bio: ${clip(bio, 600)}` : "", "Our books:", ...s.books.map(line)].filter(Boolean).join("\n");
+      },
+      item: (s, a) => {
+        const title = (b) => b.uk || b.orig;
+        const now = [...s.books].filter((b) => b.readers).slice(0, 3).map(title);
+        const picks = (a?.picks || []).map((p) => s.books[p.n - 1] && `«${title(s.books[p.n - 1])}» — ${p.why}`).filter(Boolean);
+        return { id: s.id, title: s.a.name, author: "", before: `найбільше читають: ${now.join(", ")}`, after: !a ? "" : a.known === "yes" ? `${a.about} | ${picks.join("; ")}` : "не знає", diff: a?.known === "yes" && picks.length > 0, href: s.a.href };
       },
     },
   ];

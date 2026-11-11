@@ -832,6 +832,20 @@ app.get("/agent/reader-books", agentOk, (req, res) => {
 app.post("/admin/reader-books", owner, async (req, res) => res.json(await readerBooks.backfill({ dry: false, reader: String(req.body?.reader || "") })));
 // The same for a thread, once Max said yes in it (CLAUDE.md: no writes to production without his OK): { run: true }.
 app.post("/agent/reader-books", agentOk, async (req, res) => (req.body?.run === true ? res.json(await readerBooks.backfill({ dry: false })) : res.status(400).json({ error: "{ run: true }" })));
+// A catalog pass's trial (catalogpasses.js) started by a thread, as the owner's button on /admin/ai/<key> does: a sample
+// of `size` (200), nothing on the site changes. Only the trial: the whole catalog stays the owner's button.
+app.post("/agent/ai-trial", agentOk, (req, res) => {
+  const p = aiPasses.get(String(req.body?.key || ""));
+  if (!p) return res.status(404).json({ error: "no such pass", passes: [...aiPasses.keys()] });
+  if (p.running) return res.json({ running: true });
+  p.run().catch((e) => console.log(`aipass ${p.key}: ${e.message}`));
+  res.json({ started: true, size: p.size });
+});
+app.get("/agent/ai-trial", agentOk, (req, res) => {
+  const p = aiPasses.get(String(req.query.key || ""));
+  if (!p) return res.status(404).json({ error: "no such pass", passes: [...aiPasses.keys()] });
+  res.type("text/plain").send(p.state() ? p.text() : "ще не запускали");
+});
 // The catalog book for a file in someone's reader: by the title the reader sent or the one it listed earlier.
 function readerCatalogBook(id, sentBook) {
   const name = String(sentBook?.name || "").slice(0, 300);

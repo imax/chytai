@@ -109,6 +109,15 @@ so Max sees it on the real site. He switches it to everyone on `/admin/jobs` (bl
 - A Ukrainian book and its original are paired in `web/seed/matches.json`: `translations` (`[original, uk]`, slugs or
   ids) always stand, even next to another Ukrainian translation; `different` pairs are never linked. Check with
   `store.linkTranslations()` and `store.pairLog` (kept / dropped with tier) on the test DB.
+- A series the data gets wrong goes in `matches.json` `series`: `{name, uk, books: [ids or slugs in order]}`; it wins
+  over Wikidata and Goodreads (`store.linkCycles`). Two editions of one book: `merges` `[keep, dup]`.
+
+## AI passes over the catalog (`web/catalogpasses.js` on `web/aipass.js`)
+
+- A new pass is a def in `catalogpasses.js` (`model` may be `claude-sonnet-5-5` for text readers see). Trial first:
+  `curl -s https://chytai.org.ua/agent/ai-trial -H "$H" -H 'content-type: application/json' -d '{"key":"<key>"}'`
+  starts 200 (only with Max's OK in the thread), `GET /agent/ai-trial?key=<key>` gives the answers as text. Max looks
+  at `/admin/ai/<key>`; the whole catalog is his button there.
 
 ## Standing rules (Max)
 
