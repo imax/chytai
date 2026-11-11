@@ -3181,14 +3181,14 @@ function askAnswerPage({ user, ask, items, canAsk = false, owner = false }) {
   <blockquote class="ask-q">${askText(ask.text)}</blockquote>
   ${items.length ? `<ol class="ask-sum">${items.map((x, i) => `<li><a href="#b${i + 1}">${x.book.author ? `${esc(byline(x.book.author))}, ` : ""}«${esc(x.book.title)}»</a></li>`).join("")}</ol>` : ""}
   ${wait ? `<p class="ask-wait" id="ask-wait">Добираю книжки…</p>` : say ? `<p class="lead muted">${say}</p>` : ""}
-  ${wait ? "" : `<div class="acts">${items.length ? `<button type="button" class="btn" data-share="${attr(ORIGIN + href)}" data-title="Що почитати далі">Поділитися</button><button type="button" class="btn" id="ask-copy">Скопіювати список</button>` : ""}${canAsk ? `<a class="btn primary" href="/ask">Спитати своє</a>` : ""}</div>`}
+  ${wait ? "" : `<div class="acts ask-acts">${items.length ? `<button type="button" class="btn small" data-share="${attr(ORIGIN + href)}" data-title="Що почитати далі">Поділитися</button><button type="button" class="btn small" id="ask-copy">Скопіювати</button>` : ""}${canAsk ? `<a class="btn small primary" href="/ask">Спитати своє</a>` : ""}</div>`}
 </section>
 ${items.length ? `<section class="lrows">${rows}</section><p class="small muted ask-note">Порадив Claude (AI). Тут лише книжки, які є на Chytai.</p>` : ""}
 ${owner && !wait ? `<details class="small muted ask-note"><summary>Для вас: ${esc(ask.model)} · $${Number(ask.cost).toFixed(3)} · ${(ask.ms / 1000).toFixed(1)} с · переглядів ${ask.views}${ask.missed.length ? ` · немає в каталозі ${ask.missed.length}` : ""}</summary>${ask.missed.map((m) => `<p>${esc(m.title)}${m.author ? ` · ${esc(m.author)}` : ""}</p>`).join("")}</details>` : ""}
 ${items.length ? `<script>document.getElementById("ask-copy")?.addEventListener("click", async (e) => {
   // The list as plain lines with the answer's address, to paste into a post or a message.
   const lines = [...document.querySelectorAll(".ask-sum li")].map((li, i) => (i + 1) + ". " + li.textContent.trim());
-  try { await navigator.clipboard.writeText(lines.join("\\n") + "\\n\\n" + ${JSON.stringify(ORIGIN + href)}); e.target.textContent = "Скопійовано"; setTimeout(() => (e.target.textContent = "Скопіювати список"), 2000); } catch {}
+  try { await navigator.clipboard.writeText(lines.join("\\n") + "\\n\\n" + ${JSON.stringify(ORIGIN + href)}); e.target.textContent = "Скопійовано"; setTimeout(() => (e.target.textContent = "Скопіювати"), 2000); } catch {}
 });</script>` : ""}
 ${wait ? `<script>(() => { let n = 0; const go = async () => { const r = await fetch(${JSON.stringify(`/api${href}`)}).then((x) => x.json()).catch(() => ({})); if (r.status && r.status !== "wait") return location.reload(); if (++n === 15) document.getElementById("ask-wait").textContent = "Ще трохи…"; if (n < 90) setTimeout(go, 2000); }; setTimeout(go, 2500); })();</script>` : ""}`;
   const first = ask.text.replace(/\s+/g, " ").trim();
