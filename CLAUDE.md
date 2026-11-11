@@ -92,7 +92,8 @@ so Max sees it on the real site. He switches it to everyone on `/admin/jobs` (bl
   `all` is only Max's.
 - The reader has the same flags: its server asks the site (`POST /api/reader-flags`, a minute's cache per account) and
   puts the names that are on into `settings.flags`; the page checks `settings.flags?.includes("name")`.
-- When a flag has been on for everyone for a while, take it out of the code.
+- When a flag has been on for everyone for a while, take it out of the code and out of `KNOWN`: its stored row goes at
+  the next start. Only a flag in `KNOWN` can be set.
 
 ## Editorial lists («Добірка Chytai»)
 

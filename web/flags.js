@@ -26,6 +26,17 @@ class Flags {
     this.testAddress = testAddress;
     this.cache = null;
     this.at = 0;
+    this.tidy();
+  }
+  // A flag taken out of KNOWN (its thing went to everyone in code, or was dropped) leaves the store at the next start,
+  // so /admin/jobs does not keep a switch that does nothing.
+  tidy() {
+    const all = this.all();
+    const gone = Object.keys(all).filter((name) => !KNOWN[name]);
+    if (!gone.length) return;
+    for (const name of gone) delete all[name];
+    this.db.set("flags", JSON.stringify(all));
+    console.log(`[flags] dropped ${gone.join(", ")}: not in KNOWN`);
   }
   all() {
     if (!this.cache || Date.now() - this.at > 10000) {
@@ -50,7 +61,7 @@ class Flags {
     return w === "test" && !!user.email && this.testAddress(user.email);
   }
   set(name, who, by, note = "") {
-    if (!/^[a-z][a-z0-9-]{0,40}$/.test(name)) throw new Error("bad flag name");
+    if (!KNOWN[name]) throw new Error("unknown flag: add it to KNOWN in web/flags.js");
     if (!WHO.includes(who)) throw new Error(`who: ${WHO.join(" | ")}`);
     const all = { ...this.all() };
     all[name] = { who, at: new Date().toISOString(), by, note: String(note || all[name]?.note || "").slice(0, 200) };
@@ -60,11 +71,10 @@ class Flags {
     console.log(`[flags] ${name} → ${who} (${by})`);
     return all[name];
   }
-  // For /admin and /agent: every known flag and every set one.
+  // For /admin and /agent: every known flag.
   list() {
     const all = this.all();
-    const names = [...new Set([...Object.keys(KNOWN), ...Object.keys(all)])];
-    return names.map((name) => ({ name, what: KNOWN[name] || all[name]?.note || "", who: all[name]?.who || "off", label: LABEL[all[name]?.who || "off"], at: all[name]?.at || "", by: all[name]?.by || "" }));
+    return Object.keys(KNOWN).map((name) => ({ name, what: KNOWN[name], who: all[name]?.who || "off", label: LABEL[all[name]?.who || "off"], at: all[name]?.at || "", by: all[name]?.by || "" }));
   }
 }
 
