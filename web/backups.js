@@ -49,9 +49,9 @@ async function record(db, body = {}) {
   db.set(`backup:${app}`, JSON.stringify(r));
   if (r.ok) db.set(`backup:${app}:ok`, JSON.stringify(r));
   const name = APPS[app];
-  let text = "";
+  let text = ""; // a smaller copy is judged by bytes, not files: leaving out covers/t (2026-11-11) took 13 000 files
   if (!r.ok) text = `Бекап ${name} не вдався${r.failed.length ? `: ${r.failed.join(", ")}` : ""}.`;
-  else if (prev && (r.files < prev.files / 2 || r.bytes < prev.bytes / 2)) text = `Бекап ${name} підозріло малий: ${r.files} файлів, ${mb(r.bytes)} (попередній ${prev.files}, ${mb(prev.bytes)}).`;
+  else if (prev && r.bytes < prev.bytes / 2) text = `Бекап ${name} підозріло малий: ${r.files} файлів, ${mb(r.bytes)} (попередній ${prev.files}, ${mb(prev.bytes)}).`;
   else if (r.test === "failed") text = `Бекап ${name} є, але тестова копія бази не вийшла: треди тестують на вчорашній.`;
   else if (!r.restored) text = `Бекап ${name} є, але відновити його для перевірки не вдалося.`;
   if (text) await telegram.send(`${text}\n${r.run || ACTIONS}`);
