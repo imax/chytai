@@ -6,6 +6,8 @@
 # to the log. Any database already there is kept as chytai.db.bak-<date>.
 #   scripts/fetch-test-db.sh [data dir]
 # The age key: $CHYTAI_BACKUP_KEY, or the project files, or .backup-key in the repo (Max's Mac).
+# The covers (~140 MB, made weekly apart from the database since 2026-11-11) come too, once: not again while
+# data/web/covers already holds some, nor with CHYTAI_TEST_COVERS=0 (the smoke test); =1 fetches them anew.
 set -e
 cd "$(dirname "$0")/.."
 data=${1:-data}
@@ -28,4 +30,14 @@ if [ -f "$data/web/chytai.db" ]; then mv "$data/web/chytai.db" "$data/web/chytai
 rm -f "$data/web/chytai.db-wal" "$data/web/chytai.db-shm"
 mv "$tmp/x/web/chytai.db" "$data/web/chytai.db"
 if [ -d "$tmp/x/web/covers" ]; then mkdir -p "$data/web/covers" && cp -R "$tmp/x/web/covers/." "$data/web/covers/"; fi
+have=$(find "$data/web/covers" -maxdepth 1 -type f 2>/dev/null | wc -l)
+if [ "${CHYTAI_TEST_COVERS:-}" != 0 ] && { [ "$have" -lt 100 ] || [ "${CHYTAI_TEST_COVERS:-}" = 1 ]; }; then
+  if curl -fsSL -o "$tmp/covers.tar.gz.age" "${url%/*}/chytai-web-covers.tar.gz.age"; then
+    rm -rf "$tmp/x" "$tmp/test.tar.gz"
+    age -d -i "$key" "$tmp/covers.tar.gz.age" | { mkdir -p "$data/web/covers" && tar xzf - -C "$data/web/covers"; }
+    echo "covers: $(find "$data/web/covers" -maxdepth 1 -type f | wc -l)"
+  else
+    echo "no covers copy yet (made on Sundays): the pages show coloured blocks" >&2
+  fi
+fi
 python3 -c "import sqlite3,sys; d=sqlite3.connect(sys.argv[1]); print(sys.argv[1], 'made', d.execute(\"select value from meta where key='testdb:made'\").fetchone()[0], {t: d.execute(f'select count(*) from {t}').fetchone()[0] for t in ['readers','entries','books','items']})" "$data/web/chytai.db"

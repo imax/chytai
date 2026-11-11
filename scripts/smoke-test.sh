@@ -19,6 +19,7 @@ LOG="$DIR/server.log"
 JAR="$DIR/cookies"
 fail=0
 
+export CHYTAI_TEST_COVERS=0 # the pages are checked, not their pictures
 if command -v age >/dev/null; then scripts/fetch-test-db.sh "$DIR/data" >/dev/null 2>&1 || echo "smoke: no test copy ($(scripts/fetch-test-db.sh "$DIR/data" 2>&1 | tail -1))"; fi
 mkdir -p "$DIR/data/web"
 if [ -s data/web/chytai.db ] && [ ! -s "$DIR/data/web/chytai.db" ]; then cp data/web/chytai.db "$DIR/data/web/"; fi

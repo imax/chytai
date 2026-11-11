@@ -4,9 +4,10 @@
 # CHYTAI_BACKUP_KEY), checks it is byte for byte the copy taken on the machine, unpacks it and starts the app on it,
 # the way a real restore would:
 #   chytai-web: web/server.js (CHYTAI_ROLE=web: no jobs, mail or Telegram) opens its main pages and Max's profile;
-#   chytai:     server/index.js reads its accounts back (a reader's /api/settings comes with their username).
+#   chytai:     server/index.js reads its accounts back (a reader's /api/settings comes with their username);
+#   chytai-web-covers (weekly): every file is a picture.
 # Prints only counts, never names or addresses (the Actions log is public). Outbound calls go nowhere (WEB_URL).
-# Usage: scripts/backup-restore-check.sh <chytai-web | chytai> <file.tar.gz.age> <the backup.tar.gz taken>
+# Usage: scripts/backup-restore-check.sh <chytai-web | chytai | chytai-web-covers> <file.tar.gz.age> <the backup.tar.gz taken>
 # Env: CHYTAI_BACKUP_KEY (path of the age key file). Run from the repo root after npm ci.
 set -u
 APP=$1 AGE=$2 ORIG=$3
@@ -39,7 +40,24 @@ get() { # <path> [cookie] → body in $DIR/page, fails unless 200
   echo "ok   $1"
 }
 
-if [ "$APP" = chytai-web ]; then
+if [ "$APP" = chytai-web-covers ]; then
+  # Pictures only: every file is a JPEG, PNG, WebP, GIF or AVIF by its first bytes, none empty.
+  node --no-warnings -e '
+    const fs = require("fs"), path = require("path");
+    const dir = process.argv[1]; let n = 0, bad = 0;
+    for (const f of fs.readdirSync(dir, { recursive: true })) {
+      const p = path.join(dir, f);
+      if (!fs.statSync(p).isFile()) continue;
+      const b = fs.readFileSync(p).subarray(0, 12);
+      const pic = (b[0] === 0xff && b[1] === 0xd8) || b.subarray(1, 4).toString() === "PNG" || b.subarray(8, 12).toString() === "WEBP" || b.subarray(0, 3).toString() === "GIF" || b.subarray(4, 12).toString().startsWith("ftypavi");
+      n++; if (!pic) bad++;
+    }
+    console.log(`covers in the copy: ${n}, not pictures: ${bad}`);
+    process.exit(n >= 10 && bad === 0 ? 0 : 1);
+  ' "$DIR/data" || die "the covers are not all pictures"
+  echo "restore check: fine"
+  exit 0
+elif [ "$APP" = chytai-web ]; then
   [ -s "$DIR/data/web/chytai.db" ] || die "no web/chytai.db in the copy"
   CHYTAI_ROLE=web PORT=$PORT DATA_DIR="$DIR/data" node web/server.js >"$DIR/log" 2>&1 &
   pid=$!

@@ -8,11 +8,16 @@
 # decrypted with the private key from the repo secret CHYTAI_BACKUP_KEY, the app started on it), and each job tells
 # the site how it went (POST /agent/backup, web/backups.js): a failure goes to Max's Telegram at once, and a day
 # with no good copy by noon Kyiv too (Max, 2026-11-11, after a night's backup was lost and nobody knew).
+# The site's own covers (web/covers, ~140 MB that seldom change) go apart, once a week on Sunday night, so the nightly
+# copy stays the size of the database (Max, 2026-11-11: «поки у нас маленький сайт і база, то і бекап теж має бути
+# маленьким, а ці великі штуки винесемо окремо»). The small copies (covers/t) and list pictures (covers/og) are made
+# again by the site and are not kept at all.
 name: Backup
 
 on:
   schedule:
-    - cron: "30 0 * * *" # 03:30 Kyiv
+    - cron: "30 0 * * *" # 03:30 Kyiv: the site's database and the reader
+    - cron: "0 1 * * 0" # Sunday 04:00 Kyiv: the site's covers
   workflow_dispatch:
   # A change to the backup itself runs it once, so it is tested right away.
   push:
@@ -31,28 +36,46 @@ env:
   AGE_RECIPIENT: age1hv4fyt42a9wjuhh4dtkrdjle8xz6tlk3t0duf2c5a2lqszwmtd6q9q0pfw
 
 jobs:
+  # Which copies this run takes: the nightly schedule the database and the reader, the Sunday one the covers,
+  # a push or «Run workflow» all three.
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      copies: ${{ steps.plan.outputs.copies }}
+    steps:
+      - id: plan
+        env:
+          SCHEDULE: ${{ github.event.schedule }}
+        run: |
+          # app: the name of the copy (artifact, report); fly: the Fly app; dir: what is packed; exclude: left out of it.
+          all='[
+            {"app": "chytai-web", "fly": "chytai-web", "token": "FLY_API_TOKEN_WEB", "url": "https://chytai.org.ua", "dir": "/data",
+             "exclude": "web/covers", "keep": 90},
+            {"app": "chytai", "fly": "chytai", "token": "FLY_API_TOKEN", "url": "https://chytai.fly.dev", "dir": "/data",
+             "exclude": "reflow *.epub *.pdf */reflow covers/*.*", "keep": 90},
+            {"app": "chytai-web-covers", "fly": "chytai-web", "token": "FLY_API_TOKEN_WEB", "url": "https://chytai.org.ua", "dir": "/data/web/covers",
+             "exclude": "t og", "keep": 35}
+          ]'
+          # The reader leaves out the readers' book files (Max, 2026-11-06: «це ж не наші книжки»): their notes, places and
+          # settings are in reader.db; the files are in Fly's daily volume snapshots (30 days). reflow is rebuilt from the
+          # books on demand, and so are the covers taken out of the books (covers/*.*, 560 MB); readers' own covers stay.
+          case "$SCHEDULE" in
+            "30 0 * * *") pick='map(select(.app != "chytai-web-covers"))' ;;
+            "0 1 * * 0") pick='map(select(.app == "chytai-web-covers"))' ;;
+            *) pick='.' ;;
+          esac
+          echo "copies=$(echo "$all" | jq -c "$pick")" >> "$GITHUB_OUTPUT"
   backup:
+    needs: plan
     runs-on: ubuntu-latest
     timeout-minutes: 40
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - app: chytai-web
-            token: FLY_API_TOKEN_WEB
-            url: https://chytai.org.ua
-            # Not the small copies of covers (covers/t, ~150 MB of 13 000 WebP, Max 2026-11-11 «330 МБ не забагато?»):
-            # a cache that thumbs.js makes again when a page asks. Our own covers (covers/*.jpg) stay.
-            exclude: "web/covers/t"
-          - app: chytai
-            token: FLY_API_TOKEN
-            url: https://chytai.fly.dev
-            # Not the readers' book files (Max, 2026-11-06: «це ж не наші книжки»): their notes, places and settings are in
-            # reader.db; the files are in Fly's daily volume snapshots (30 days). reflow is rebuilt from the books on demand,
-            # and so are the covers taken out of the books (covers/*.*, 560 MB); readers' own covers in covers/custom stay.
-            exclude: "reflow *.epub *.pdf */reflow covers/*.*"
+        include: ${{ fromJSON(needs.plan.outputs.copies) }}
     env:
       APP: ${{ matrix.app }}
+      FLY_APP: ${{ matrix.fly }}
       FLY_API_TOKEN: ${{ secrets[matrix.token] }}
     steps:
       - uses: actions/checkout@v4
@@ -64,23 +87,23 @@ jobs:
         id: snap
         run: |
           ( while true; do curl -s -o /dev/null "${{ matrix.url }}/" || true; sleep 5; done ) &
-          id=$(flyctl machine list -a "$APP" --json | jq -r '[.[] | select(.config.mounts | length > 0)][0].id')
+          id=$(flyctl machine list -a "$FLY_APP" --json | jq -r '[.[] | select(.config.mounts | length > 0)][0].id')
           echo "MACHINE=$id" >> "$GITHUB_ENV"
           script=$(base64 -w0 scripts/backup-snapshot.js)
           rm -f backup.tar.gz
           for i in 1 2 3; do
-            flyctl machine start "$id" -a "$APP" || true
-            flyctl machine wait "$id" -a "$APP" --state started --wait-timeout 60s || true
+            flyctl machine start "$id" -a "$FLY_APP" || true
+            flyctl machine wait "$id" -a "$FLY_APP" --state started --wait-timeout 60s || true
             # Packing the reader's books takes minutes now (2026-11-06): a 120 s cut left the first run going on the
             # machine, and the retry's copy came out with the database alone. Give it time.
-            timeout 900 flyctl ssh console -a "$APP" --machine "$id" \
-              -C "sh -c 'set -f; echo $script | base64 -d > /tmp/backup-snapshot.js && rm -f /tmp/backup.tar.gz && node /tmp/backup-snapshot.js /data /tmp/backup.tar.gz ${{ matrix.exclude }}'" \
-              && timeout 600 flyctl ssh sftp get /tmp/backup.tar.gz backup.tar.gz -a "$APP" --machine "$id" \
+            timeout 900 flyctl ssh console -a "$FLY_APP" --machine "$id" \
+              -C "sh -c 'set -f; echo $script | base64 -d > /tmp/backup-snapshot.js && rm -f /tmp/backup.tar.gz && node /tmp/backup-snapshot.js ${{ matrix.dir }} /tmp/backup.tar.gz ${{ matrix.exclude }}'" \
+              && timeout 600 flyctl ssh sftp get /tmp/backup.tar.gz backup.tar.gz -a "$FLY_APP" --machine "$id" \
               && break
             rm -f backup.tar.gz; echo "retrying"; sleep 10
           done
           test -s backup.tar.gz
-          timeout 120 flyctl ssh console -a "$APP" --machine "$id" -C "rm -f /tmp/backup.tar.gz /tmp/backup-snapshot.js" || true
+          timeout 120 flyctl ssh console -a "$FLY_APP" --machine "$id" -C "rm -f /tmp/backup.tar.gz /tmp/backup-snapshot.js" || true
       - name: Check the copy
         id: check
         run: |
@@ -126,7 +149,7 @@ jobs:
         with:
           name: ${{ env.NAME }}
           path: ${{ env.NAME }}.tar.gz.age
-          retention-days: 90
+          retention-days: ${{ matrix.keep }}
           compression-level: 0
       # The trial restore: the artifact as GitHub keeps it, back here, decrypted and started (see the top).
       - uses: actions/download-artifact@v4
@@ -147,31 +170,36 @@ jobs:
           CHYTAI_BACKUP_KEY="$RUNNER_TEMP/age.key" scripts/backup-restore-check.sh "$APP" "restored/$NAME.tar.gz.age" backup.tar.gz
           rm -f "$RUNNER_TEMP/age.key"
       # Made even when the restore check failed: the backup is kept by then, and threads test on this copy.
+      # The database every night; the covers (public pictures anyway, nothing to scrub) as their own asset weekly.
       - name: Test copy
         id: test
-        if: ${{ !cancelled() && matrix.app == 'chytai-web' && steps.check.outcome == 'success' }}
+        if: ${{ !cancelled() && (matrix.app == 'chytai-web' || matrix.app == 'chytai-web-covers') && steps.encrypt.outcome == 'success' }}
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          gh release view test-db >/dev/null 2>&1 || gh release create test-db --prerelease --latest=false \
+            --title "Тестова копія бази сайту" \
+            --notes "Очищена й зашифрована копія бази chytai-web для тестів, оновлюється щоночі; обкладинки окремо, щотижня. Без ключа нечитабельна. Як узяти: scripts/fetch-test-db.sh."
+          if [ "$APP" = chytai-web-covers ]; then
+            cp "$NAME.tar.gz.age" chytai-web-covers.tar.gz.age
+            gh release upload test-db chytai-web-covers.tar.gz.age --clobber
+            exit 0
+          fi
           mkdir -p test/web
           python3 scripts/test-db-scrub.py check/web/chytai.db test/web/chytai.db
-          if [ -d check/web/covers ]; then cp -r check/web/covers test/web/; fi
           tar czf test.tar.gz -C test .
           age -r "$AGE_RECIPIENT" -o chytai-web-test.tar.gz.age test.tar.gz
           ls -l chytai-web-test.tar.gz.age
-          gh release view test-db >/dev/null 2>&1 || gh release create test-db --prerelease --latest=false \
-            --title "Тестова копія бази сайту" \
-            --notes "Очищена й зашифрована копія бази chytai-web для тестів, оновлюється щоночі. Без ключа нечитабельна. Як узяти: scripts/fetch-test-db.sh."
           gh release upload test-db chytai-web-test.tar.gz.age --clobber
           rm -rf test test.tar.gz
       # Fly's own snapshots: show what exists and keep them 30 days (the default is 5).
       - name: Fly volume snapshots
-        if: always()
+        if: ${{ always() && matrix.dir == '/data' }}
         run: |
-          for vol in $(flyctl volumes list -a "$APP" --json | jq -r '.[].id'); do
-            flyctl volumes update "$vol" -a "$APP" --snapshot-retention 30 >/dev/null || echo "could not set retention on $vol"
-            flyctl volumes show "$vol" -a "$APP" || true
-            flyctl volumes snapshots list "$vol" -a "$APP" || true
+          for vol in $(flyctl volumes list -a "$FLY_APP" --json | jq -r '.[].id'); do
+            flyctl volumes update "$vol" -a "$FLY_APP" --snapshot-retention 30 >/dev/null || echo "could not set retention on $vol"
+            flyctl volumes show "$vol" -a "$FLY_APP" || true
+            flyctl volumes snapshots list "$vol" -a "$FLY_APP" || true
           done
       # How it went, to the site (web/backups.js): kept for /admin and the morning report, and a failure goes to
       # Max's Telegram. A cancelled run (a newer one replaced it) says nothing.
@@ -179,11 +207,12 @@ jobs:
         if: ${{ !cancelled() }}
         env:
           SITE_TOKEN: ${{ secrets.FLY_API_TOKEN_WEB }}
+          SHAPE: ${{ matrix.exclude }}
           STEPS: ${{ toJSON(steps) }}
           RUN: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
-          body=$(jq -n --argjson s "$STEPS" --arg app "$APP" --arg run "$RUN" --argjson files "${FILES:-0}" --argjson bytes "${BYTES:-0}" '{
-            app: $app, run: $run, files: $files, bytes: $bytes,
+          body=$(jq -n --argjson s "$STEPS" --arg app "$APP" --arg shape "$SHAPE" --arg run "$RUN" --argjson files "${FILES:-0}" --argjson bytes "${BYTES:-0}" '{
+            app: $app, shape: $shape, run: $run, files: $files, bytes: $bytes,
             ok: ($s.upload.outcome == "success"),
             restored: ($s.restore.outcome == "success"),
             test: ({success: "ok", failure: "failed"}[$s.test.outcome // ""] // "skipped"),

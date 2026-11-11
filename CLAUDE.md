@@ -73,8 +73,10 @@ schedule a wake-up in about an hour and look again. Outages are fixed or reverte
 
 ## Backups (`backup.yml`, `web/backups.js`)
 
-- Nightly 03:30 Kyiv: both apps' `/data`, encrypted with age, 90-day artifacts; the site's job also makes the
-  `test-db` release. Each job restores its copy on trial (`scripts/backup-restore-check.sh`: decrypt with the repo
+- Nightly 03:30 Kyiv: both apps' `/data` without the big parts, encrypted with age, 90-day artifacts; the site's
+  job also makes the `test-db` release. The site's own covers (`web/covers`, no `t/` cache) go apart on Sunday
+  (`chytai-web-covers`, 35 days; `test-db` asset `chytai-web-covers.tar.gz.age`, fetched once by `fetch-test-db.sh`).
+  A new big folder on a volume: leave it out of the nightly copy, or give it its own weekly copy. Each job restores its copy on trial (`scripts/backup-restore-check.sh`: decrypt with the repo
   secret `CHYTAI_BACKUP_KEY`, compare, start the app on it) and reports to `POST /agent/backup`.
 - A failure goes to Max's Telegram at once; no good copy by 12:00 Kyiv, one line that day. See it in
   `/agent/health` → `backups`, on /admin «Performance», in the morning report.
