@@ -1004,7 +1004,6 @@ aside .side-lists + .label, aside p + .label, aside dialog + .label { margin-top
 .author-head .bio { font: 17px/1.5 var(--serif); color: var(--text); margin-top: 10px; max-width: 640px; }
 .author-head .bio .text-link { font: 13px var(--sans); white-space: nowrap; }
 .author-note { font: 17px/1.5 var(--serif); color: var(--text); margin: 4px 0 14px; max-width: 640px; }
-.row.big .why { color: var(--text); }
 .grid.author-grid { gap: 28px 16px; }
 .author-grid h3 { overflow-wrap: anywhere; hyphens: auto; }
 .author-grid .meta { white-space: nowrap; overflow: hidden; }

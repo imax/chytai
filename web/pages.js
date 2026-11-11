@@ -1853,7 +1853,6 @@ function authorPage({ author, about = null, works, hits, user, readers = [], als
   <a class="cover-link" href="${attr(book.href)}">${cover(book, "lg")}</a>
   <div class="row-body">
     <h3><a href="${attr(book.href)}">${esc(book.title)}</a></h3>
-    ${hit.why ? `<p class="meta why">${esc(cap(hit.why))}</p>` : ""}
     ${hit.others?.length ? hit.others.map((o) => `<p class="orig">${twinLabel(book, o).toLowerCase()}: <a href="${attr(o.href)}">${esc(o.title)}</a></p>`).join("") : book.altTitle ? `<p class="orig">${esc(book.altTitle)}</p>` : ""}
     ${s.avg != null ? `<p class="meta">${stars(s.avg)}<span> · ${count(s.rated, "оцінка", "оцінки", "оцінок")}</span></p>` : ""}
     ${top ? `<p class="note">${noteOf(top.entry, book.id)}</p><p class="said">— <a href="${attr(top.href)}"><b>${esc(top.name)}</b></a>${top.entry.year ? `, ${top.entry.year}` : ""}</p>` : ""}
@@ -1940,7 +1939,7 @@ document.addEventListener("submit", async (e) => {
   const picked = (editorial?.picks || [])
     .map((p) => ({ p, h: hits.find((h) => [h.book.id, ...(h.others || []).map((o) => o.id), ...(h.twins || []).map((t) => t.id)].includes(p.id)) }))
     .filter((x, i, all) => x.h && all.findIndex((y) => y.h === x.h) === i)
-    .map(({ p, h }) => Object.assign(h, { why: p.why }));
+    .map(({ h }) => h); // no «why» line under the title (Max, 2026-11-11: «трохи бісить»)
   const start = picked.length ? (many ? picked : [...picked, ...hits.filter((h) => !picked.includes(h))]) : !many ? hits : byFame.length === 3 ? byFame : hits.filter((h) => h.readers && !(h.series?.n > 1)).sort((x, y) => isUk(y.book) - isUk(x.book)).slice(0, 3);
   const rest = many ? hits.filter((h) => !start.includes(h) && !inSeries.has(h)).sort((x, y) => !!y.readers - !!x.readers || isUk(y.book) - isUk(x.book)) : [];
   const quotes = many
