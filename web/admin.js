@@ -898,11 +898,26 @@ ${by["google:start"] ? `<tr><th>Через Google</th><td>${n(by["google:start"]
 }
 
 // Pages not found and script errors in readers' browsers, for /admin/speed.
+// Every error of the 30 days (errors.js month), grouped by message, the newest first; the stack under a click.
+function errorsBlock(rows = []) {
+  const PLACE = { site: "сайт", jobs: "фон", reader: "Читалка" };
+  const when = (iso) => `${short(dayOf(new Date(iso)))} ${new Date(iso).toLocaleTimeString("uk-UA", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Kyiv" })}`;
+  const what = (e) => {
+    const more = [e.url && `<code>${esc(e.url)}</code>`, e.stack && `<pre class="small">${esc(e.stack)}</pre>`].filter(Boolean).join("");
+    return more ? `<details><summary>${esc(e.msg)}</summary>${more}</details>` : esc(e.msg);
+  };
+  return `<h2 id="errors">Помилки за 30 днів</h2>
+${rows.length ? `<p class="muted small">Помилки сервера сайту, фонових задач і Читалки, а також скриптів у браузерах читачів у Читалці («[браузер]»). Однакові повідомлення в одному рядку; кожна нова приходить у Telegram раз на годину.</p>
+<div class="tbl"><table class="reader-app">
+<thead><tr><th>Востаннє</th><th>Де</th><th class="book">Помилка</th><th>Разів</th><th>Уперше</th></tr></thead>
+<tbody>${rows.map((e) => `<tr><th>${when(e.last)}</th><td>${PLACE[e.place] || esc(e.place)}</td><td class="book">${what(e)}</td><td>${n(e.n)}</td><td class="muted">${e.n > 1 ? when(e.first) : ""}</td></tr>`).join("")}</tbody></table></div>` : `<p class="muted">За 30 днів жодної.</p>`}`;
+}
+
 function problemsBlock(notFound = [], js = []) {
   const table = (rows, what) => `<div class="tbl"><table class="refs"><thead><tr><th>${what}</th><th>Гості</th><th>Читачі</th></tr></thead><tbody>${rows.slice(0, 25).map((r) => `<tr><td>${esc(r.prop)}</td><td>${n(r.guests)}</td><td>${n(r.readers)}</td></tr>`).join("")}</tbody></table></div>`;
   return `<h2>Не знайшли сторінку</h2>
 ${notFound.length ? `<p class="muted small">Адреси, що дали 404 людям (не роботам), за 30 днів.</p>\n${table(notFound, "Адреса")}` : `<p class="muted">Поки жодної.</p>`}
-<h2>Помилки в браузері</h2>
+<h2>Помилки скриптів на сайті</h2>
 ${js.length ? `<p class="muted small">Помилки JavaScript у читачів і гостей за 30 днів: розділ сайту, повідомлення, файл і рядок.</p>\n${table(js, "Помилка")}` : `<p class="muted">Поки жодної.</p>`}`;
 }
 
@@ -1109,7 +1124,7 @@ function healthBlock({ day = null, jobs = { n: 0, failed: [] }, reader = true, e
     [stall < 30, "Сервер не стояв.", `Сервер стояв сьогодні ${stall} с. <a href="/admin/speed">Швидкість</a>`],
     [!jobs.failed.length, `Фонові задачі без помилок (${fmtN(jobs.n)} за добу).`, `Фонові задачі з помилкою за добу: ${jobs.failed.map(esc).join(", ")}. <a href="/admin/jobs">Задачі</a>`],
     [reader, "Читалка працює.", `Читалка не відповіла сайту: app.chytai.org.ua може лежати. <a href="https://app.chytai.org.ua/">Відкрити</a>`],
-    [!errN, "Помилок за добу не було.", `Помилки за добу: ${errN}.${errList}`],
+    [!errN, `Помилок за добу не було. <a href="/admin/speed#errors">Усі помилки</a>`, `Помилки за добу: ${errN}. <a href="/admin/speed#errors">Усі помилки</a>${errList}`],
     // The phone unloaded the reader's page (server/index.js /api/page-gone): in the background it is iOS's own way and
     // the book opens again, so only an unload on screen turns the row red.
     ...(gone ? [goneRow(gone)] : []),
@@ -1176,7 +1191,7 @@ function overviewsPage({ user, list, stats: o, who, layout }) {
 }
 
 // /admin/speed (speed.js): how fast the site is, day by day.
-function speedPage({ user, days, bots = [], notFound = [], jsErrors = [], layout }) {
+function speedPage({ user, days, bots = [], notFound = [], jsErrors = [], errors = [], layout }) {
   const { EDGES } = require("./speed");
   const s = (ms) => (ms == null ? "" : ms === Infinity ? `> ${EDGES[EDGES.length - 1] / 1000} с` : `${String(ms / 1000).replace(".", ",")} с`);
   const pct = (x) => (x == null ? "" : `${String(Math.round(x * 1000) / 10).replace(".", ",")}%`);
@@ -1198,6 +1213,7 @@ ${bots.length ? `<p class="muted small">Усі запити роботів (ст
 <div class="tbl"><table>
 <thead><tr><th>Робот</th><th>Запитів</th><th>З них сторінок</th><th>Час сервера</th><th>503</th><th>Сьогодні</th></tr></thead>
 <tbody>${bots.map((r) => `<tr><th>${esc(r.name)}</th><td>${n(r.n)}</td><td>${n(r.pages)}</td><td>${n(Math.round(r.ms / 1000))} с</td><td>${n(r.turned)}</td><td>${n(r.today)}</td></tr>`).join("")}</tbody></table></div>` : `<p class="muted">Рахуємо з сьогодні.</p>`}
+${errorsBlock(errors)}
 ${problemsBlock(notFound, jsErrors)}
 </section>`;
   return layout({ title: "Швидкість · Адмінка", user, path: "/admin", body });

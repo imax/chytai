@@ -54,7 +54,8 @@ curl -s https://app.chytai.org.ua/agent/sql -H "$H" -H 'content-type: applicatio
 - Errors live in the site's `errors` table (30 days): site 500s and crashes (`site`, `jobs`), the reader's server
   (`reader`), and script errors from readers' browsers in the reader app (`reader`, message starts «[браузер]»,
   extension noise dropped; `src/renderer/web-bridge.js` → `/api/client-error`). Each new one goes to Max's Telegram
-  once an hour. Script errors on the site's own pages are only counted (`events`, `name = 'js'`, /admin/speed).
+  once an hour. All of them, grouped, on /admin/speed#errors (`errors.month()`); Огляд shows the last day's top 5.
+  Script errors on the site's own pages are only counted (`events`, `name = 'js'`, /admin/speed).
 - Pages the phone unloaded (iOS kills the WebView's page for memory, mostly in the background): the page keeps a note
   of itself in localStorage (`chytai:life`, web-bridge.js `life`), the next load reports it to the reader's
   `/api/page-gone` and reopens the book that was on screen. Rows in the reader's `state.stats.days[day].gone` (30 days);

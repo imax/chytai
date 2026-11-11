@@ -33,7 +33,7 @@ function record(place, err, url = "") {
     db.prepare("DELETE FROM errors WHERE at < ?").run(new Date(Date.now() - KEEP_DAYS * 86400000).toISOString());
     db.prepare("DELETE FROM errors WHERE rowid NOT IN (SELECT rowid FROM errors ORDER BY at DESC LIMIT ?)").run(KEEP_ROWS);
     const n = db.prepare("SELECT COUNT(*) AS n FROM errors WHERE place = ? AND msg = ? AND at >= ?").get(place, msg, new Date(Date.now() - 86400000).toISOString()).n;
-    return telegram.sendOnce(`error:${kind(place, msg)}`, 1, `Помилка ${PLACES[place] || place}: ${msg}${url ? `\n${url}` : ""}${n > 1 ? `\nЗа добу разів: ${n}` : ""}${stack ? `\n\n${stack.split("\n")[0]}` : ""}\n\nУсі помилки: https://chytai.org.ua/admin`);
+    return telegram.sendOnce(`error:${kind(place, msg)}`, 1, `Помилка ${PLACES[place] || place}: ${msg}${url ? `\n${url}` : ""}${n > 1 ? `\nЗа добу разів: ${n}` : ""}${stack ? `\n\n${stack.split("\n")[0]}` : ""}\n\nУсі помилки: https://chytai.org.ua/admin/speed#errors`);
   } catch (e) {
     console.error(`[error] could not record: ${e.message}`);
   }
@@ -44,6 +44,13 @@ function lastDay() {
   if (!db) return [];
   const since = new Date(Date.now() - 86400000).toISOString();
   return db.prepare("SELECT place, msg, MAX(url) AS url, COUNT(*) AS n, MAX(at) AS last FROM errors WHERE at >= ? GROUP BY place, msg ORDER BY n DESC, last DESC LIMIT 20").all(since);
+}
+
+// Every error of the 30 days kept, grouped by message, the newest first, for /admin/speed «Помилки» (Max, 2026-11-11:
+// «сторінка зі списком усіх помилок»): [{ place, msg, url, stack, n, first, last }].
+function month() {
+  if (!db) return [];
+  return db.prepare("SELECT place, msg, MAX(url) AS url, MAX(stack) AS stack, COUNT(*) AS n, MIN(at) AS first, MAX(at) AS last FROM errors GROUP BY place, msg ORDER BY last DESC LIMIT 200").all();
 }
 
 // An Express error handler: records 5xx (a bad request from the visitor, 4xx, is theirs, not ours) and answers.
@@ -73,4 +80,4 @@ function watchProcess(place) {
   process.on("unhandledRejection", (reason) => die(reason instanceof Error ? reason : new Error(`unhandled rejection: ${String(reason)}`)));
 }
 
-module.exports = { init, record, lastDay, handler, watchProcess, cleanUrl };
+module.exports = { init, record, lastDay, month, handler, watchProcess, cleanUrl };

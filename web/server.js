@@ -3497,7 +3497,7 @@ app.get("/admin/debug/search", owner, (req, res) => {
     raw: req.query.q ? store.db.prepare("SELECT id FROM search WHERE search MATCH ? LIMIT 10").all(`"${String(req.query.q).toLowerCase()}"*`) : null,
   });
 });
-app.get("/admin/speed", owner, (req, res) => res.send(speedPage({ user: req.user, days: speed.days(), bots: speed.bots(), notFound: admin.events("404"), jsErrors: admin.events("js"), layout: pages.layout })));
+app.get("/admin/speed", owner, (req, res) => res.send(speedPage({ user: req.user, days: speed.days(), bots: speed.bots(), notFound: admin.events("404"), jsErrors: admin.events("js"), errors: errors.month(), layout: pages.layout })));
 app.get("/admin/traffic", owner, (req, res) => res.send(adminPage({ user: req.user, stats: admin.stats(), taps: admin.taps(), gsc: gsc.data(), gscOn: gsc.configured(), layout: pages.layout, page: "traffic" })));
 app.get("/admin/stats", owner, (req, res) => res.redirect(301, "/admin/traffic"));
 app.get("/admin/overviews", owner, (req, res) => res.send(overviewsPage({ user: req.user, list: advice.overviewList().map((r) => ({ ...r, complaints: r.down ? advice.complaintsOf(r.book.id) : [] })), stats: advice.overviewStats(), who: (id) => (id && id !== "auto" ? pub(auth.reader(id)) : null), layout: pages.layout })));
