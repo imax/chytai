@@ -1310,6 +1310,8 @@ aside .side-lists + .label, aside p + .label, aside dialog + .label { margin-top
 .ask-acts .btn.small.primary { padding: 8px 16px; }
 .ask-sum a { color: var(--ink); text-decoration: none; }
 .ask-sum a:hover { text-decoration: underline; }
+.ask-sum .out { color: var(--muted); }
+.ask-out { margin-top: 18px; font: italic 17px/1.45 var(--serif); color: var(--muted); max-width: 720px; }
 .ask-form .hint { font-size: 13px; }
 .ask-others { margin-top: 48px; max-width: 720px; }
 .ask-other { display: flex; gap: 16px; align-items: baseline; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid var(--rule); color: var(--text); text-decoration: none; }

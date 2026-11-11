@@ -131,7 +131,8 @@ A flag only when Max asks for one, or when the change could break what readers u
 ## «Що почитати далі?» (`web/ask.js`, /ask)
 
 - A field on /ask (flag `ask`; guests too once on), Claude names 15 books, `Ask.match()` keeps the catalog's (store.findWork,
-  then search by title start + same author), Ukrainian edition, series start, one per author/series, up to 8.
+  then search by title start + same author), Ukrainian edition, series start, one per author/series, up to 7.
+  The plain list names 7: the catalog's books, then Claude's next ones Chytai lacks as text («Інших книжок … поки немає»).
   Each answer at /ask/<id>, open to anyone; same text again = kept answer. Unopened 180 days → deleted.
   The answer page shows a plain «Автор, «Назва»» list (copyable); /ask lists `asker.recent()` by `topic` (Claude names it in
   the same call; older rows get one from Opus at start, `asker.topics()`).

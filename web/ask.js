@@ -12,7 +12,7 @@ const MODEL = "claude-opus-5-5";
 const PRICE = { "claude-opus-5-5": [4, 20], "claude-sonnet-5-5": [2, 10], "claude-haiku-5-5": [0.1, 0.5] };
 const TEXT_MIN = 15;
 const TEXT_MAX = 1500;
-const SHOW = 8; // books on an answer
+const SHOW = 7; // books on an answer: the list names 7, the catalog's first (Max, 2026-11-11: «на 7 зупинився»)
 const GUEST_DAY = 3; // asks a day from one guest address
 const READER_DAY = 10; // asks a day from one reader
 const ALL_DAY = 200; // fresh answers a day, everyone together
@@ -93,7 +93,7 @@ class Ask {
     // Answers kept before match() knew to skip a book the question names lose it here too.
     const asked = fold(r.text);
     const items = JSON.parse(r.items || "[]").filter((x) => !named(asked, this.store.book(x.id)?.title, this.store.book(x.id)?.altTitle));
-    return { ...r, items, missed: JSON.parse(r.missed || "[]") };
+    return { ...r, items, missed: JSON.parse(r.missed || "[]").filter((m) => !named(asked, m.title)) };
   }
   // An answer was opened: kept for another half year from now.
   opened(id) {
@@ -178,7 +178,9 @@ class Ask {
     const extra = { input: 0, output: 0, cost: 0 };
     const rows = (books || []).map((b) => {
       const want = { uk: clean(b.title_uk, 200), ua: clean(b.author_uk, 200), en: clean(b.title, 200), ea: clean(b.author, 200) };
-      return { b, want, id: this.usable(this.find(want)) };
+      const found = this.find(want);
+      // Found but not one to show (Russian): not named at all, not even in the plain list.
+      return { b, want, id: this.usable(found), bad: !!found && !this.usable(found) };
     });
     // Only for a series: its line «why» fits any volume, a single book's line would describe a book we don't show.
     const lack = rows.filter((r) => !r.id && clean(r.b.series, 120)).map((r) => ({ r, own: this.authorBooks(r.want) })).filter((x) => x.own.length);
@@ -202,8 +204,8 @@ class Ask {
     const missed = [];
     const used = new Set();
     const authors = [];
-    for (const { b, want, id: found } of rows) {
-      if (named(asked, want.uk, want.en)) continue;
+    for (const { b, want, id: found, bad } of rows) {
+      if (bad || named(asked, want.uk, want.en)) continue;
       if (!found) {
         missed.push({ title: want.uk || want.en, author: want.ua || want.ea });
         continue;
@@ -217,8 +219,7 @@ class Ask {
       if (used.has(key) || used.has(id) || authors.some((a) => sameAuthor(a, s.book(id).author || ""))) continue;
       used.add(key).add(id);
       if (s.book(id).author) authors.push(s.book(id).author);
-      items.push({ id, why: clean(b.why, 300), series: clean(b.series, 120) });
-      if (items.length >= SHOW) break;
+      if (items.length < SHOW) items.push({ id, why: clean(b.why, 300), series: clean(b.series, 120) });
     }
     return { items, missed, extra };
   }
