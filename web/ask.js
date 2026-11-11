@@ -52,6 +52,14 @@ const OUT_SCHEMA = {
   required: ["intro", "books", "off"],
   additionalProperties: false,
 };
+// The second question: a recommended book we lack, and this author's books we have.
+const PICK = `Book recommendations were made for a reader, but our catalog lacks the exact books named. For each one, the books our catalog has by the same author are listed. Pick the listed book that serves that recommendation best: for a series, its first book if it is listed, else the earliest listed volume of the same series; for a book outside a series, another listed book by the author only if it would suit the same reader just as well. If no listed book fits, pick 0. Answer with JSON: {"picks": [{"rec": <recommendation number>, "book": <listed book number or 0>}]}.`;
+const PICK_SCHEMA = {
+  type: "object",
+  properties: { picks: { type: "array", items: { type: "object", properties: { rec: { type: "integer" }, book: { type: "integer" } }, required: ["rec", "book"], additionalProperties: false } } },
+  required: ["picks"],
+  additionalProperties: false,
+};
 const now = () => new Date().toISOString();
 const keyOf = (text) => norm(text).replace(/\s+/g, " ").trim();
 const hash = (s) => crypto.createHash("sha256").update(`ask:${s}`).digest("hex").slice(0, 24);
@@ -108,7 +116,8 @@ class Ask {
     const t = Date.now();
     try {
       const out = await this.claude(row.text);
-      const { items, missed } = this.match(out.books);
+      const { items, missed, extra } = await this.match(out.books, { model: out.model });
+      for (const k of ["input", "output", "cost"]) out[k] += extra[k];
       this.db
         .prepare("UPDATE ask_recs SET status = ?, intro = ?, items = ?, missed = ?, model = ?, input_tokens = ?, output_tokens = ?, cost = ?, ms = ? WHERE id = ?")
         .run(out.off ? "off" : items.length ? "done" : "none", clean(out.intro, 400), JSON.stringify(items), JSON.stringify(missed), out.model, out.input, out.output, out.cost, Date.now() - t, id);
@@ -122,43 +131,68 @@ class Ask {
     }
   }
 
-  // What Claude recommends for this text: { intro, books, off, model, input, output, cost }.
-  async claude(text, { model = MODEL } = {}) {
+  // One call that answers JSON in `schema`: { j, input, output, cost }.
+  async json(system, user, schema, model) {
     const res = await this.client.messages.create({
       model,
       max_tokens: 4000,
-      system: [{ type: "text", text: SYSTEM, cache_control: { type: "ephemeral" } }],
-      messages: [{ role: "user", content: text }],
+      system: [{ type: "text", text: system, cache_control: { type: "ephemeral" } }],
+      messages: [{ role: "user", content: user }],
       // Valid JSON every time (a «"» inside a title broke a hand-parsed answer); low effort: it is recall, not reasoning.
-      output_config: { effort: "low", format: { type: "json_schema", schema: OUT_SCHEMA } },
+      output_config: { effort: "low", format: { type: "json_schema", schema } },
     });
     if (res.stop_reason === "refusal") throw new Error(`refusal ${res.stop_details?.category || ""}`);
     const raw = res.content.map((c) => c.text || "").join("");
-    const j = JSON.parse(raw.slice(raw.indexOf("{"), raw.lastIndexOf("}") + 1));
     const u = res.usage || {};
     const [pi, po] = PRICE[model] || PRICE[MODEL];
     const input = (u.input_tokens || 0) + (u.cache_read_input_tokens || 0) + (u.cache_creation_input_tokens || 0);
-    return { intro: j.intro || "", books: Array.isArray(j.books) ? j.books.slice(0, 20) : [], off: !!j.off, model, input, output: u.output_tokens || 0, cost: (input * pi + (u.output_tokens || 0) * po) / 1e6 };
+    return { j: JSON.parse(raw.slice(raw.indexOf("{"), raw.lastIndexOf("}") + 1)), input, output: u.output_tokens || 0, cost: (input * pi + (u.output_tokens || 0) * po) / 1e6 };
   }
 
-  // Claude's books that our catalog has, as { id, why, series }, the Ukrainian edition, one per series and author;
-  // the rest as { title, author } in `missed` (the owner sees them, readers don't).
-  match(books) {
+  // What Claude recommends for this text: { intro, books, off, model, input, output, cost }.
+  async claude(text, { model = MODEL } = {}) {
+    const { j, input, output, cost } = await this.json(SYSTEM, text, OUT_SCHEMA, model);
+    return { intro: j.intro || "", books: Array.isArray(j.books) ? j.books.slice(0, 20) : [], off: !!j.off, model, input, output, cost };
+  }
+
+  // Claude's books that our catalog has, as { id, why, series }, the Ukrainian edition, one per series and author, in
+  // Claude's order; the rest as { title, author } in `missed` (the owner sees them, readers don't). A book we lack by
+  // an author we have (Несбьо's «Сніговик», Кеплер's «Ловець») gets a second, short question: which of this author's
+  // books here serves the same recommendation (the series' first book, usually). `extra`: what that question cost.
+  async match(books, { model = MODEL } = {}) {
     const s = this.store;
+    const extra = { input: 0, output: 0, cost: 0 };
+    const rows = (books || []).map((b) => {
+      const want = { uk: clean(b.title_uk, 200), ua: clean(b.author_uk, 200), en: clean(b.title, 200), ea: clean(b.author, 200) };
+      return { b, want, id: this.usable(this.find(want)) };
+    });
+    const lack = rows.filter((r) => !r.id).map((r) => ({ r, own: this.authorBooks(r.want) })).filter((x) => x.own.length);
+    if (lack.length && this.client) {
+      const list = lack
+        .map((x, i) => [`${i + 1}. «${x.r.want.uk || x.r.want.en}» by ${x.r.want.ua || x.r.want.ea}${x.r.b.series ? `, series «${x.r.b.series}»` : ""}. Why: ${x.r.b.why}`, "Our books by this author:", ...x.own.map((b, k) => `  ${k + 1}) ${b.title}`)].join("\n"))
+        .join("\n\n");
+      try {
+        const out = await this.json(PICK, list, PICK_SCHEMA, model);
+        for (const k of ["input", "output", "cost"]) extra[k] += out[k];
+        for (const p of out.j.picks || []) {
+          const x = lack[p.rec - 1];
+          const b = x && x.own[p.book - 1];
+          if (b && !x.r.id) x.r.id = this.usable(b.id);
+        }
+      } catch (e) {
+        this.log(`ask: second pass failed: ${e.message}`);
+      }
+    }
     const items = [];
     const missed = [];
     const used = new Set();
     const authors = [];
-    for (const b of books || []) {
-      const want = { uk: clean(b.title_uk, 200), ua: clean(b.author_uk, 200), en: clean(b.title, 200), ea: clean(b.author, 200) };
-      let id = this.find(want);
-      let book = id && this.ukWork(s.book(id));
-      if (book && isRussian(book)) book = null;
-      if (!book) {
+    for (const { b, want, id: found } of rows) {
+      if (!found) {
         missed.push({ title: want.uk || want.en, author: want.ua || want.ea });
         continue;
       }
-      id = s.canonical(book.id);
+      let id = found;
       // A later volume gives way to the series' first one, when we have it.
       const start = s.seriesStart(id);
       if (start && start !== id && s.book(start)) id = start;
@@ -169,7 +203,24 @@ class Ask {
       items.push({ id, why: clean(b.why, 300), series: clean(b.series, 120) });
       if (items.length >= SHOW) break;
     }
-    return { items, missed };
+    return { items, missed, extra };
+  }
+
+  // The Ukrainian edition's canonical id, or null for a book we can't show (none, Russian).
+  usable(id) {
+    const book = id && this.ukWork(this.store.book(id));
+    return book && !isRussian(book) ? this.store.canonical(book.id) : null;
+  }
+
+  // The books of this author that our catalog has (Ukrainian editions, at most 30), for the second question.
+  authorBooks({ ua, ea }) {
+    const s = this.store;
+    const au = (ua && s.authors?.byName(ua)) || (ea && s.authors?.byName(ea));
+    const ids = [...new Set((au?.ids || []).map((i) => this.usable(i)).filter(Boolean))];
+    const all = ids.map((id) => s.book(id)).filter((b) => b && b.title);
+    // An original next to Ukrainian editions is left out («Blood on Snow» beside «Кров на снігу»).
+    const cyr = all.filter((b) => /[а-яіїєґ]/i.test(b.title));
+    return (cyr.length ? cyr : all).slice(0, 30);
   }
 
   // The work in our catalog: by the Ukrainian title and author, then the original's; then a search that finds a
