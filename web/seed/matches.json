@@ -118,7 +118,8 @@
   ["making-comics-storytelling-secrets-of-comics-manga-and-graph", "stvoryty-komiks-yak-rozpovidaty-istorii-v-komiksakh-manzi-ta"],
   ["wuthering-heights", "buremna-vys"],
   ["the-long-walk", "dovha-khoda-kinh"],
-  ["shift", "bookchef-023343"]
+  ["shift", "bookchef-023343"],
+  ["the-stranger-2", "chuzhyi-kamiu"]
  ],
  "series": [
   {"name": "Silo", "uk": "Бункер", "books": ["wool-silo", "shift", "dust"]}

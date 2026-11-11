@@ -328,13 +328,13 @@ function passes({ store, social, db, apiKey, log }) {
       key: "author-start",
       name: "З чого почати (автори)",
       model: "claude-sonnet-5-5",
-      prompt: 1,
+      prompt: 2,
       maxTokens: 2048,
       what: "Рядок про автора і 2–3 книжки, з яких почати, з поясненням чому, на сторінці автора.",
       system: `You write the «З чого почати» (where to start) block on an author's page on Chytai, a Ukrainian book site. You get the author, a short bio when we have one, and the numbered list of this author's books in our catalog: the Ukrainian title and/or the original title, the series and the volume number when known, and how many of our readers have the book with their average rating.
 Write «about»: one or two plain sentences in Ukrainian, up to 30 words, on what this author is known for: the kind of books and the best-known works or series. Facts only, the level of an encyclopedia's first line: no praise, no adjectives like «геніальний», «культовий», «блискучий», no calls to read, no awards, sales or adaptations unless they are what the author is known for.
-Then «picks»: one to three books FROM THE LIST, by their number, in the order a newcomer should take them: the author's best-known and most acclaimed works first (by your knowledge of the author, not only by our readers' counts). A series is entered at its first volume: never pick a later volume when volume 1 is on the list, and pick at most one book per series. Skip box sets, omnibus editions of books also on the list, companions, workbooks and anthologies with other authors. The list may hold one book twice under different titles: pick it once. For each pick, «why»: a few Ukrainian words, up to 10, saying what the book is or why to start with it («перший роман трилогії про людей у підземному місті»), plain, no praise, no spoilers.
-Natural modern Ukrainian, Ukrainian spellings of names and titles (use the Ukrainian title when the list has one), no Russianisms, no English in brackets. Say «автор» unless you know the author is a woman («авторка»). Answer «unknown» with empty «about» and no picks when you don't know who this author is or what their books are: no block is far better than a wrong one.`,
+Then «picks»: one to three books FROM THE LIST, by their number, in the order a newcomer should take them: the author's best-known and most acclaimed works first (by your knowledge of the author, not only by our readers' counts). A series is entered at its first volume: never pick a later volume when volume 1 is on the list, and pick at most one book per series. Skip box sets, omnibus editions of books also on the list, companions, workbooks and anthologies with other authors. The list may hold one book twice under different titles (a translation and its original): pick it once, never both. For each pick, «why»: a few Ukrainian words, up to 8, saying what the book is or why to start with it («перший роман трилогії про людей у підземному місті»), plain, no praise, no spoilers.
+Natural modern Ukrainian, Ukrainian spellings of names and titles (use the Ukrainian title when the list has one), no Russianisms, no English in brackets. Say «автор» unless you know the author is a woman («авторка»). Many Ukrainian authors here are recent and you may know little about them: then write «about» from the bio and from what the list itself shows (the genre, the series), adding nothing you can't see there, and pick by our readers' counts. Answer «unknown» with empty «about» and no picks only when neither you nor the bio and list can say what this author writes: no block is far better than a wrong one.`,
       schema: {
         type: "object",
         properties: {
@@ -360,6 +360,8 @@ Natural modern Ukrainian, Ukrainian spellings of names and titles (use the Ukrai
       item: (s, a) => {
         const title = (b) => b.uk || b.orig;
         const now = [...s.books].filter((b) => b.readers).slice(0, 3).map(title);
+        // The numbers are this list's: the book's id goes into the answer, for the author page.
+        for (const p of a?.picks || []) p.id = s.books[p.n - 1]?.id || "";
         const picks = (a?.picks || []).map((p) => s.books[p.n - 1] && `«${title(s.books[p.n - 1])}» — ${p.why}`).filter(Boolean);
         return { id: s.id, title: s.a.name, author: "", before: `найбільше читають: ${now.join(", ")}`, after: !a ? "" : a.known === "yes" ? `${a.about} | ${picks.join("; ")}` : "не знає", diff: a?.known === "yes" && picks.length > 0, href: s.a.href };
       },

@@ -2816,13 +2816,17 @@ app.get("/author/:slug", async (req, res) => {
       for (const h of g) if (h !== lead) (lead.others = [...(lead.others || []), h.book, ...(h.others || [])]), gone.add(h), (lead.entry ||= h.entry), (lead.readers += h.readers);
     }
     for (let i = hits.length - 1; i >= 0; i--) if (gone.has(hits[i])) hits.splice(i, 1);
+    // Each edition once (two translations of Wool both brought the original), and not the whole series' own item.
     for (const h of hits)
-      if (h.series && h.others) {
-        const names = [h.series.name, store.cycleInfo.get(h.series.key)?.name, store.cycleInfo.get(h.series.key)?.uk].filter(Boolean).map(norm);
-        h.others = h.others.filter((o) => !names.includes(norm(o.title)));
+      if (h.others) {
+        const names = h.series ? [h.series.name, store.cycleInfo.get(h.series.key)?.name, store.cycleInfo.get(h.series.key)?.uk].filter(Boolean).map(norm) : [];
+        const seen = new Set([h.book.id]);
+        h.others = h.others.filter((o) => !seen.has(o.id) && seen.add(o.id) && !names.includes(norm(o.title)));
       }
   }
   const about = author.qid ? authors.aboutNow(store, author.qid, { log: console.log })?.person : null;
+  // «З чого почати» written by Sonnet (catalogpasses «author-start», Max 2026-11-11), behind the flag «author-start».
+  const editorial = flags.on("author-start", req.user) ? authorStart(author.key) : null;
   // Who reads this author, and what else those readers rated highest.
   const ids = new Set(hits.map((h) => h.book.id));
   const mineIds = new Set(hits.flatMap((h) => [h.book.id, ...(h.twins || []).map((t) => t.id)]).map((id) => store.canonical(id)));
@@ -2842,8 +2846,16 @@ app.get("/author/:slug", async (req, res) => {
     }
   const pairing = req.user?.owner ? store.translationPairing(author) : null;
   const joins = req.user?.owner ? authors.ownerJoins(store).map((p, index) => ({ p, index })).filter(({ p }) => p.some((n) => author.names?.includes(n))).map(({ p, index }) => ({ names: p, index })) : null;
-  res.send(pages.authorPage({ author, about, works, hits, user: req.user, readers: who, also, pairing, joins, members: (key) => store.cycleInfo.get(key)?.members || [] }));
+  res.send(pages.authorPage({ author, about, works, hits, user: req.user, readers: who, also, pairing, joins, editorial, members: (key) => store.cycleInfo.get(key)?.members || [] }));
 });
+
+// The stored answer of the «author-start» pass for an author (table ai_answer once applied; until then the trial's),
+// when it names at least one of our books.
+function authorStart(key) {
+  const row = store.db.prepare("SELECT answer FROM ai_answer WHERE pass = 'author-start' AND id = ?").get(key);
+  const a = row ? JSON.parse(row.answer) : aiPasses.get("author-start")?.state()?.items?.find((x) => x.id === key)?.answer;
+  return a?.known === "yes" && a.picks?.some((p) => p.id) ? a : null;
+}
 
 // The owner joins two spellings of one person (Max, 2026-10-23: «як нам зєднувати авторів?»): on an author
 // page, another author's address or name. Kept in meta `authors:join` as [name, name]; undone by index.
