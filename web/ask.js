@@ -256,9 +256,9 @@ class Ask {
       const hit = (s.search(title, { limit: 10 }) || []).map((x) => x.book || x).find((b) => b && b.author && sameAuthor(author, b.author) && norm(b.title).startsWith(norm(title)));
       if (hit) return hit.id;
     }
-    // The same words in another order, among the author's books: Claude recalls «Я змішаю твою кров з вугіллям», the
-    // catalog has «Я кров твою змішаю з вугіллям» (Max, 2026-11-11: «остання точно є»). Main titles only, 3+ words.
-    const bag = (t) => norm(String(t || "").split(/[:.(]/)[0]).split(" ").filter(Boolean).sort().join(" ");
+    // The same main words, among the author's books: «з» or «із», «в» or «у», another order (Claude wrote «Я змішаю
+    // твою кров з вугіллям», the catalog «… із вугіллям»). Words of 3+ letters, at least three of them.
+    const bag = (t) => norm(String(t || "").split(/[:.(]/)[0]).split(" ").filter((w) => w.length >= 3).sort().join(" ");
     for (const [title, author] of [[uk, ua || ea], [en, ea || ua]]) {
       const want = bag(title);
       if (!author || want.split(" ").length < 3) continue;
