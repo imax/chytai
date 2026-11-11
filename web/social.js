@@ -136,9 +136,17 @@ class Social {
     // eight volumes read in a summer are one event, not eight): the line stands where the newest of them
     // is, says the series' name and how many books, and shows the volume with a note, else the first.
     const groups = new Map(); // reader|series|status|year -> the line
-    // A reader's «Хочу прочитати» of one day are one line, «хоче прочитати 6 книжок», with their covers (only
-    // /community): wishes are not news one by one.
-    const wants = new Map(); // reader|day -> the line
+    // A reader's rows of one day with the same status are one line, «хоче прочитати 6 книжок», «прочитано 40
+    // книжок», with their covers (only /community): wishes are not news one by one (2026-11-06), nor forty books
+    // marked read one after another (@omordach went through his shelf by hand, 2026-11-11). Wishes fold from
+    // two, the rest from three; a row with a note or a rating stays its own line.
+    const dayKey = (it) => shelves && !it.shelf && !it.entry.note && it.entry.rating == null && !this.store.seriesOf(it.id) && `${it.reader.id}|${it.entry.status || ""}|${kyivDay(at(it.entry))}`;
+    const daySize = new Map();
+    if (shelves) for (const it of items) {
+      const k = dayKey(it);
+      if (k && !imported(it.reader.id, it.entry)) daySize.set(k, (daySize.get(k) || 0) + 1);
+    }
+    const wants = new Map(); // reader|status|day -> the line
     for (const it of items) {
       if (it.shelf) {
         const books = this.shelfBooks(it.reader.id);
@@ -146,7 +154,8 @@ class Social {
         continue;
       }
       if (shelves && imported(it.reader.id, it.entry)) continue;
-      const wk = shelves && it.entry.status === "want" && !it.entry.note && !this.store.seriesOf(it.id) && `${it.reader.id}|${kyivDay(at(it.entry))}`;
+      const dk = dayKey(it);
+      const wk = dk && daySize.get(dk) >= (it.entry.status === "want" ? 2 : 3) && dk;
       const w = wk && wants.get(wk);
       if (w) {
         const book = this.store.book(it.id);
@@ -173,7 +182,7 @@ class Social {
     }
     for (const line of out) {
       if (line.wants) {
-        if (line.wants.length > 1) line.shelf = { n: line.wants.length, books: line.wants.slice(0, 5), want: true };
+        if (line.wants.length > 1) line.shelf = { n: line.wants.length, books: line.wants.slice(0, 5), status: line.entry.status || "" };
         delete line.wants;
       }
       if (!line.series) continue;
