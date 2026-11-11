@@ -80,6 +80,7 @@ const { MailLog } = require("./maillog");
 const mailLog = new MailLog(store.db);
 auth.mailLog = mailLog;
 const mailHealth = () => mailGuard.health();
+const backups = require("./backups"); // are the nightly backups there (backup.yml reports to /agent/backup)
 const flags = new (require("./flags").Flags)(store.db, { testAddress: require("./auth").testAddress }); // feature flags (flags.js)
 auth.ensureOwner({ id: OWNER_ID, name: OWNER, username: OWNER_USERNAME });
 const admin = new Admin(store.db, { ownerId: OWNER_ID }); // the owner's statistics (/admin): visits and page views
@@ -220,6 +221,7 @@ app.get("/agent/health", agentOk, async (req, res) => {
     storage: storage.now(DATA_DIR, ["chytai.db"]),
     signups24h: store.db.prepare("SELECT COUNT(*) AS n FROM readers WHERE created >= ?").get(new Date(Date.now() - 86400000).toISOString()).n,
     flags: flags.list(),
+    backups: backups.state(store.db),
   };
   if (req.query.reader) {
     try {
@@ -240,6 +242,15 @@ app.post("/agent/notify", agentOk, async (req, res) => {
   if (agentNotes.length >= 10) return res.status(429).json({ error: "10 an hour already" });
   agentNotes.push(Date.now());
   res.json({ sent: await telegram.send(String(req.body?.text || "").slice(0, 1500)) });
+});
+// The nightly backup's report (backup.yml, every job at its end): kept for /admin, the morning report and the noon
+// check; a failure or a much smaller copy goes to Telegram at once (backups.js).
+app.post("/agent/backup", agentOk, async (req, res) => {
+  try {
+    res.json(await backups.record(store.db, req.body || {}));
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
 });
 // Flags (flags.js): GET lists them; POST { name, who: off|owner|test, note } switches one. «all» is Max's, on /admin/jobs.
 app.get("/agent/flags", agentOk, (req, res) => res.json(flags.list()));
@@ -3392,7 +3403,7 @@ app.get("/admin", owner, async (req, res) => {
   const since = new Date(Date.now() - 86400000).toISOString();
   const runs = store.db.prepare("SELECT job, ok FROM job_runs WHERE started >= ?").all(since);
   const failed = [...new Set(runs.filter((r) => r.ok === 0).map((r) => r.job))];
-  const health = healthBlock({ day: speed.days(1).get(require("./admin").dayOf(new Date())) || null, jobs: { n: runs.length, failed }, reader: !!reader, errors: errors.lastDay(), mail: mailHealth(), storage: { site: storage.now(DATA_DIR, ["chytai.db"]), reader: reader?.storage || null } });
+  const health = healthBlock({ day: speed.days(1).get(require("./admin").dayOf(new Date())) || null, jobs: { n: runs.length, failed }, reader: !!reader, errors: errors.lastDay(), mail: mailHealth(), backup: backups.row(store.db), storage: { site: storage.now(DATA_DIR, ["chytai.db"]), reader: reader?.storage || null } });
   const activity = activityPage({ ...activityFor(null, 1), embed: true });
   res.send(adminPage({ user: req.user, stats: admin.stats(), gsc: gsc.data(), gscOn: gsc.configured(), reader, health, mail: require("./admin").mailBlock(mailLog.stats(7)), activity, layout: pages.layout }));
 });
@@ -4028,6 +4039,8 @@ if (bg.ROLE !== "web" && telegram.on() && DOMAIN) {
 
 // Yesterday's numbers to the owner's Telegram every morning (dailyreport.js).
 if (bg.ROLE !== "web" && telegram.on() && DOMAIN) require("./dailyreport").schedule({ db: store.db, ownerId: OWNER_ID, site: SITE, reader: (day) => readerAdmin(`/day?day=${day}`) });
+// No good backup of the site or the reader by noon Kyiv: one line that day (backups.js).
+if (bg.ROLE !== "web" && telegram.on() && DOMAIN) backups.watch(store.db);
 
 // A process stuck in a CPU loop answers nothing but stays up (2026-10-21: an hour down). A thread beside it
 // watches a heartbeat the main loop writes every 5 s and kills the process after 60 s of silence, so Fly

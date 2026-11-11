@@ -71,6 +71,16 @@ change put `[rollback-on-errors]` in the commit message: then the watch sends th
 Beyond that, when the Actions run is green, check `/agent/health?since=<deploy time>` yourself, and for a risky change
 schedule a wake-up in about an hour and look again. Outages are fixed or reverted without asking.
 
+## Backups (`backup.yml`, `web/backups.js`)
+
+- Nightly 03:30 Kyiv: both apps' `/data`, encrypted with age, 90-day artifacts; the site's job also makes the
+  `test-db` release. Each job restores its copy on trial (`scripts/backup-restore-check.sh`: decrypt with the repo
+  secret `CHYTAI_BACKUP_KEY`, compare, start the app on it) and reports to `POST /agent/backup`.
+- A failure goes to Max's Telegram at once; no good copy by 12:00 Kyiv, one line that day. See it in
+  `/agent/health` → `backups`, on /admin «Performance», in the morning report.
+- A change to the workflow or these scripts runs it once on push. The MCP token cannot start or rerun it (403):
+  ask Max for «Run workflow» on Actions → Backup.
+
 ## Feature flags (`web/flags.js`)
 
 Something visible and new goes live behind a flag set to `owner` (Max only) or `test` (Max and the test accounts),

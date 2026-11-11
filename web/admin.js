@@ -1094,7 +1094,7 @@ ${s.sections.length ? `<div class="tbl"><table class="sections">
 
 // «Performance» on Огляд (Max named it): today's speed (speed.js), the background jobs of the last day (job_runs) and whether
 // the reader answered. A line turns red only when something needs a look.
-function healthBlock({ day = null, jobs = { n: 0, failed: [] }, reader = true, errors = [], mail = null, storage = null }) {
+function healthBlock({ day = null, jobs = { n: 0, failed: [] }, reader = true, errors = [], mail = null, backup = null, storage = null }) {
   const PLACE = { site: "сайт", jobs: "фон", reader: "Читалка" };
   const errN = errors.reduce((n, e) => n + e.n, 0);
   // What failed, the most frequent first (errors.js keeps them; the same go to Telegram once an hour).
@@ -1111,6 +1111,7 @@ function healthBlock({ day = null, jobs = { n: 0, failed: [] }, reader = true, e
     [reader, "Читалка працює.", `Читалка не відповіла сайту: app.chytai.org.ua може лежати. <a href="https://app.chytai.org.ua/">Відкрити</a>`],
     [!errN, "Помилок за добу не було.", `Помилки за добу: ${errN}.${errList}`],
     ...(mail ? [mail] : []),
+    ...(backup ? [backup] : []),
     ...(storage ? [storageRow(storage)] : []),
   ];
   return `<h2>Performance</h2>

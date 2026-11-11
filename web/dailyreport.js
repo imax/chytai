@@ -91,7 +91,7 @@ function readerDay(r, skip, titleOf = () => "") {
 }
 
 const n = (x) => x.toLocaleString("uk-UA");
-function text(day, s, rd, site) {
+function text(day, s, rd, site, backup = "") {
   const lines = [`Chytai за ${dayName(day)}`, ""];
   const from = s.from.map(([k, v]) => `${k} ${v}`).join(", ");
   lines.push(`Нові читачі: ${s.signups}${from ? ` (${from})` : ""}`);
@@ -108,6 +108,7 @@ function text(day, s, rd, site) {
   } else lines.push("Читалка не відповіла.");
   lines.push("");
   lines.push(s.errors || s.failed.length ? `Збої: помилок ${s.errors}${s.failed.length ? `, задачі впали: ${s.failed.join(", ")}` : ""}` : "Збоїв не було.");
+  if (backup) lines.push(backup);
   lines.push("", `${site}/admin`);
   return lines.join("\n");
 }
@@ -127,7 +128,11 @@ async function build({ db, day, ownerId, site, reader }) {
       return "";
     }
   };
-  return text(day, s, readerDay(r, s.skip, titleOf), site);
+  let backup = "";
+  try {
+    backup = require("./backups").line(db);
+  } catch {}
+  return text(day, s, readerDay(r, s.skip, titleOf), site, backup);
 }
 
 // In the jobs process: a look every 10 minutes; the day is sent once (meta `dailyreport:lastRun`).
