@@ -35,7 +35,8 @@ const read = (db, key) => {
 };
 
 // A report from the workflow: { app, ok, failed: [step], files, bytes, restored, test, run, shape }. `shape` names
-// what the copy leaves out; sizes are compared only between copies of one shape.
+// what the copy leaves out; sizes are compared only between copies of one shape, and only with one that restored
+// (2026-11-11 a copy of the covers came down as the site's: it is no measure for the next one).
 // Answers what was kept, and sends a line to Telegram when something is wrong.
 async function record(db, body = {}) {
   const app = String(body.app || "");
@@ -57,7 +58,7 @@ async function record(db, body = {}) {
   const name = APPS[app];
   let text = "";
   if (!r.ok) text = `Бекап ${name} не вдався${r.failed.length ? `: ${r.failed.join(", ")}` : ""}.`;
-  else if (prev && (prev.shape || "") === r.shape && r.bytes < prev.bytes / 2) text = `Бекап ${name} підозріло малий: ${r.files} файлів, ${mb(r.bytes)} (попередній ${prev.files}, ${mb(prev.bytes)}).`;
+  else if (prev?.restored && (prev.shape || "") === r.shape && r.bytes < prev.bytes / 2) text = `Бекап ${name} підозріло малий: ${r.files} файлів, ${mb(r.bytes)} (попередній ${prev.files}, ${mb(prev.bytes)}).`;
   else if (r.test === "failed") text = `Бекап ${name} є, але тестова копія бази не вийшла: треди тестують на вчорашній.`;
   else if (!r.restored) text = `Бекап ${name} є, але відновити його для перевірки не вдалося.`;
   if (text) await telegram.send(`${text}\n${r.run || ACTIONS}`);
