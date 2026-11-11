@@ -80,7 +80,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: superfly/flyctl-actions/setup-flyctl@master
-      - run: sudo apt-get install -y age >/dev/null
+      - run: scripts/install-age.sh
       # Each copy has its own files in /tmp: the site's database and its covers are taken from one machine, at the same
       # time on a push (2026-11-11 the two shared /tmp/backup.tar.gz, and the site's copy came down as the covers).
       # The machines sleep when nobody uses them (and /tmp goes with them), so ping the site while this runs

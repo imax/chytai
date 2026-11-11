@@ -27,12 +27,12 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: 22, cache: npm }
       - run: npm ci --omit=dev --ignore-scripts --no-audit --no-fund
-      - run: sudo apt-get install -y age >/dev/null
+      - run: scripts/install-age.sh || echo "::warning::no age, so the smoke test runs on an empty database"
       - name: Smoke test
         env:
           KEY: ${{ secrets.CHYTAI_BACKUP_KEY }}
         run: |
-          if [ -n "$KEY" ]; then printf '%s\n' "$KEY" > "$RUNNER_TEMP/age.key"; export CHYTAI_BACKUP_KEY="$RUNNER_TEMP/age.key"; fi
+          if [ -n "$KEY" ] && command -v age >/dev/null; then printf '%s\n' "$KEY" > "$RUNNER_TEMP/age.key"; export CHYTAI_BACKUP_KEY="$RUNNER_TEMP/age.key"; fi
           scripts/smoke-test.sh
   deploy:
     needs: settle

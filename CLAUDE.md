@@ -80,6 +80,8 @@ schedule a wake-up in about an hour and look again. Outages are fixed or reverte
   secret `CHYTAI_BACKUP_KEY`, compare, start the app on it) and reports to `POST /agent/backup`.
 - A failure goes to Max's Telegram at once; no good copy by 12:00 Kyiv, one line that day. See it in
   `/agent/health` → `backups`, on /admin «Performance», in the morning report.
+- Runners get age from its GitHub release (`scripts/install-age.sh`; Ubuntu's mirror failed the deploy twice on
+  2026-11-11). Without age the site's smoke test runs on an empty database.
 - A change to the workflow or these scripts runs it once on push. The MCP token cannot start or rerun it (403):
   ask Max for «Run workflow» on Actions → Backup.
 
