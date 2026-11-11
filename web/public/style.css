@@ -1305,3 +1305,14 @@ aside .side-lists + .label, aside p + .label, aside dialog + .label { margin-top
 .ask-wait { margin-top: 22px; font: italic 19px/1.4 var(--serif); color: var(--muted); }
 .ask-note { margin-top: 18px; max-width: 720px; }
 @media (max-width: 760px) { .ask-q { font-size: 17px; } .ask-form textarea { font-size: 17px; } }
+.ask-sum { margin: 18px 0 0; padding-left: 1.4em; font: 19px/1.55 var(--serif); max-width: 38em; }
+.ask-sum a { color: var(--ink); text-decoration: none; }
+.ask-sum a:hover { text-decoration: underline; }
+.ask-form .hint { font-size: 13px; }
+.ask-others { margin-top: 48px; max-width: 720px; }
+.ask-other { display: flex; gap: 16px; align-items: center; justify-content: space-between; padding: 14px 0; border-bottom: 1px solid var(--rule); color: var(--text); text-decoration: none; }
+.ask-other .q { font: italic 17px/1.45 var(--serif); }
+.ask-other:hover .q { color: var(--ink); }
+.ask-other .covers { display: flex; gap: 4px; flex: none; }
+.ask-link { margin-top: 12px; font-size: 15px; color: var(--muted); }
+@media (max-width: 760px) { .ask-sum { font-size: 17px; } .ask-other { flex-direction: column; align-items: flex-start; gap: 8px; } }

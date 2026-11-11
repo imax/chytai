@@ -1109,16 +1109,18 @@ const asker = new Ask(store, {
 });
 if (bg.ROLE !== "jobs") setInterval(() => asker.cleanup(), 24 * 3600 * 1000).unref();
 const askOn = (req) => flags.on("ask", req.user);
+// What others asked, with the first covers of each answer.
+const askOthers = (req) => asker.recent(10).map((o) => ({ ...o, books: o.ids.map((id) => store.book(id) && workFor(req, store.book(id))).filter(Boolean) }));
 app.get("/ask", (req, res, next) => {
   if (!askOn(req)) return next();
   admin.log(req.user?.id || "", "view", "/ask");
-  res.send(pages.askPage({ user: req.user }));
+  res.send(pages.askPage({ user: req.user, others: askOthers(req) }));
 });
 app.post("/ask", (req, res, next) => {
   if (!askOn(req)) return next();
   const text = String(req.body?.text || "");
   const r = asker.ask({ text, reader: req.user?.id || "", ip: req.ip || "", owner: !!req.owner });
-  if (r.error) return res.status(400).send(pages.askPage({ user: req.user, text, error: r.error }));
+  if (r.error) return res.status(400).send(pages.askPage({ user: req.user, text, error: r.error, others: askOthers(req) }));
   res.redirect(303, `/ask/${r.id}`);
 });
 app.get("/ask/:id", (req, res) => {
@@ -2368,7 +2370,7 @@ app.get("/", (req, res) => {
         .map((x) => ({ book: x.it, shelf: x.sh }));
   // Chosen and ranked by the Ukrainian edition; a reader who wants originals sees those in its place.
   const as = (list) => (req.user?.originals ? list.map((x) => ({ ...x, book: workFor(req, x.book) })) : list);
-  res.send(pages.readPage({ user: req.user, f, filters: READ_FILTERS, picks, finish: as(finish), ua, short: as(short), free, wanted: as(wanted), genres, editorials, forYou: as(forYou), forWhy, fresh, club: club.mark(req.user?.id, club.lively(3)) }));
+  res.send(pages.readPage({ user: req.user, f, filters: READ_FILTERS, picks, finish: as(finish), ua, short: as(short), free, wanted: as(wanted), genres, editorials, forYou: as(forYou), forWhy, fresh, club: club.mark(req.user?.id, club.lively(3)), ask: flags.on("ask", req.user) }));
 });
 
 app.get("/publishers", (req, res) => {

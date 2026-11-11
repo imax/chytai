@@ -249,6 +249,15 @@ class Ask {
     return this.db.prepare("DELETE FROM ask_recs WHERE seen < ?").run(before).changes;
   }
 
+  // Answers already made, newest first, one per text, for «Що питають інші» on /ask (Max, 2026-11-11: «для
+  // Inspirations поклікати … ми не витрачаємо токени на них»). [{ id, text, ids }]. A small table, one query.
+  recent(n = 10) {
+    return this.db
+      .prepare("SELECT id, text, items FROM ask_recs WHERE status = 'done' AND id IN (SELECT MAX(id) FROM ask_recs WHERE status = 'done' GROUP BY key) ORDER BY created DESC LIMIT ?")
+      .all(n)
+      .map((r) => ({ id: r.id, text: r.text, ids: JSON.parse(r.items || "[]").map((x) => x.id) }));
+  }
+
   // For the owner: how many asks, answers and dollars today and in all.
   stats() {
     const day = now().slice(0, 10);
