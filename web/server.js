@@ -811,8 +811,9 @@ const readerBooks = new ReaderBooks({
     return [...google.map((b) => ({ ...b, from: "Google Books" })), ...ol.map((b) => ({ ...b, from: "Open Library" }))];
   },
   on: (id) => flags.on("reader-books", pub(auth.reader(id))),
+  // No details() here: their lookup stalled the site's main loop (16 s for the 22-book backfill, 2026-11-11; ~3 s
+  // for one book). store.addBook queued them, and the jobs process fills them in a few minutes (newbooks.js).
   made: (id, made, { quiet = false } = {}) => {
-    details({ ids: made.map((b) => b.id) });
     const r = auth.reader(id);
     if (!r || id === OWNER_ID || quiet) return;
     notifyOwner(`Книжки з Читалки: ${made.length === 1 ? made[0].title : `${made.length} нових`}`, [`${r.name} (${SITE}/@${r.username}) завантажив(ла) в Читалку, і ці книжки з’явилися на Chytai:`, "", ...made.map((b) => `• ${b.title}${b.author ? ` — ${b.author}` : ""}  ${SITE}${store.href(b.id)}${b.file !== b.title ? `  (у файлі: «${b.file}»)` : ""}`)].join("\n"));
