@@ -27,6 +27,87 @@
     });
   }
 
+  // A page the phone unloaded (Max, 2026-11-11: «сторінку вивантажено (пам'ять)», not the first time). iOS kills the
+  // page's process for memory, mostly while the app waits in the background; the app (app/App.js) or Safari then
+  // loads it again from scratch, on the home screen. The page keeps a note of itself in localStorage (what is on
+  // screen, how much it holds); a load that finds the last note not closed by «pagehide» and is a reload (or came
+  // within a minute of a visible page) means the page before it died. Then the note goes to the server
+  // (/api/page-gone, admin «Вивантаження») and the book that was open opens again, at its saved place.
+  const life = (() => {
+    const KEY = "chytai:life";
+    let prev = null;
+    try {
+      prev = JSON.parse(localStorage.getItem(KEY) || "null");
+    } catch {}
+    const navType = performance.getEntriesByType?.("navigation")?.[0]?.type || "";
+    const born = Date.now();
+    let hiddenAt = document.visibilityState === "visible" ? 0 : born;
+    let books = 0;
+    const gone = !!prev && !prev.closed && (navType === "reload" || (prev.vis && born - prev.at < 60000));
+    // What is on screen and roughly how much memory it takes: decoded pictures (4 bytes a pixel), canvases (PDF
+    // pages), elements, chapter frames.
+    function snap() {
+      const s = { at: Date.now(), up: Math.round(performance.now() / 1000), vis: document.visibilityState === "visible", hid: hiddenAt ? Math.round((Date.now() - hiddenAt) / 1000) : 0, books };
+      try {
+        const b = window.readerNow?.();
+        const body = document.body.classList;
+        s.view = body.contains("library-open") ? `home:${document.querySelector("#tabbar button.active")?.dataset.tab || "home"}` : b ? (b.pdf ? "pdf" : "book") : "other";
+        if (b) (s.book = b.path), (s.shown = !body.contains("library-open"));
+        let px = 0;
+        let imgs = 0;
+        let nodes = document.getElementsByTagName("*").length;
+        const count = (doc) => {
+          for (const i of doc.images) if (i.complete && i.naturalWidth) (imgs++, (px += i.naturalWidth * i.naturalHeight));
+        };
+        count(document);
+        const frames = document.querySelectorAll("iframe");
+        for (const f of frames) {
+          try {
+            if (f.contentDocument) (count(f.contentDocument), (nodes += f.contentDocument.getElementsByTagName("*").length));
+          } catch {}
+        }
+        let canvas = 0;
+        for (const c of document.querySelectorAll("canvas")) canvas += c.width * c.height;
+        Object.assign(s, { imgs, imgMB: Math.round((px * 4) / 1048576), canvasMB: Math.round((canvas * 4) / 1048576), nodes, frames: frames.length });
+        if (performance.memory) s.heapMB = Math.round(performance.memory.usedJSHeapSize / 1048576);
+      } catch {}
+      return s;
+    }
+    // Closed once «pagehide» came: the «hidden» that follows it in Safari must not open the note again.
+    let closed = false;
+    const save = () => {
+      try {
+        localStorage.setItem(KEY, JSON.stringify({ ...snap(), closed, restored: restoredAt }));
+      } catch {}
+    };
+    // Only a book that was on screen (not one left under the home screen). A page that comes back right after it
+    // reopened a book is not reopened again: the same book could kill it again.
+    const restoredAt = gone && prev.book && prev.shown && !(prev.restored && born - prev.restored < 3 * 60000) ? born : 0;
+    addEventListener("pagehide", () => ((closed = true), save()));
+    addEventListener("pageshow", (e) => e.persisted && ((closed = false), save()));
+    document.addEventListener("visibilitychange", () => {
+      hiddenAt = document.visibilityState === "visible" ? 0 : Date.now();
+      save();
+    });
+    setInterval(() => document.visibilityState === "visible" && save(), 15000);
+    window.addEventListener("load", () => {
+      save();
+      if (!gone) return;
+      // The app says so itself too, with whether it was in the background (app/App.js, injected after the reload).
+      setTimeout(() => {
+        const body = JSON.stringify({ prev, nav: navType, app: window.__chytaiGone || null, restored: !!restoredAt, screen: { w: innerWidth, h: innerHeight, dpr: devicePixelRatio, mem: navigator.deviceMemory || 0 } });
+        try {
+          if (!navigator.sendBeacon?.("/api/page-gone", new Blob([body], { type: "application/json" }))) fetch("/api/page-gone", { method: "POST", headers: { "Content-Type": "application/json" }, body, keepalive: true }).catch(() => {});
+        } catch {}
+      }, 3000);
+    }, { once: true });
+    return {
+      setBooks: (n) => (books = n),
+      // The book to open again, once.
+      restore: () => (restoredAt ? prev.book : null),
+    };
+  })();
+
   // pdf.js 6 uses the new Map "upsert" methods; older mobile browsers don't have them yet.
   for (const proto of [Map.prototype, WeakMap.prototype]) {
     proto.getOrInsert ??= function (key, value) {
@@ -662,6 +743,7 @@
         await sync();
         const lib = await (await api("GET", "/api/library")).json();
         kvSet("library", lib);
+        life.setBooks((lib.books || []).length);
         afterLoad(() => setTimeout(() => keepOnDevice(lib, onDevice), 4000));
         // Answered after the page went on with the device's copy: the home screen asks again (home.js).
         if (late) window.dispatchEvent(new Event("chytai:fresh"));
@@ -759,6 +841,10 @@
         if (open) {
           history.replaceState(null, "", "/");
           afterLoad(() => openServerBook(open));
+        } else if (!settings.guest && life.restore()) {
+          // The phone unloaded the page while this book was open: back to it, at its saved place (life above).
+          const again = life.restore();
+          afterLoad(() => openServerBook(again));
         }
       }
       return settings;

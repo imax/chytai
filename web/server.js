@@ -3449,7 +3449,7 @@ app.get("/admin", owner, async (req, res) => {
   const since = new Date(Date.now() - 86400000).toISOString();
   const runs = store.db.prepare("SELECT job, ok FROM job_runs WHERE started >= ?").all(since);
   const failed = [...new Set(runs.filter((r) => r.ok === 0).map((r) => r.job))];
-  const health = healthBlock({ day: speed.days(1).get(require("./admin").dayOf(new Date())) || null, jobs: { n: runs.length, failed }, reader: !!reader, errors: errors.lastDay(), mail: mailHealth(), backup: backups.row(store.db), storage: { site: storage.now(DATA_DIR, ["chytai.db"]), reader: reader?.storage || null } });
+  const health = healthBlock({ day: speed.days(1).get(require("./admin").dayOf(new Date())) || null, jobs: { n: runs.length, failed }, reader: !!reader, errors: errors.lastDay(), mail: mailHealth(), backup: backups.row(store.db), storage: { site: storage.now(DATA_DIR, ["chytai.db"]), reader: reader?.storage || null }, gone: reader?.gone?.day || null });
   const activity = activityPage({ ...activityFor(null, 1), embed: true });
   res.send(adminPage({ user: req.user, stats: admin.stats(), gsc: gsc.data(), gscOn: gsc.configured(), reader, health, mail: require("./admin").mailBlock(mailLog.stats(7)), activity, layout: pages.layout }));
 });

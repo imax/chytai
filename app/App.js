@@ -8,7 +8,7 @@
 // Changes to the shell itself ship over the air with EAS Update, without an App Store review.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, BackHandler, Linking, Platform, Pressable, StyleSheet, Text, useColorScheme, View } from 'react-native';
+import { ActivityIndicator, AppState, BackHandler, Linking, Platform, Pressable, StyleSheet, Text, useColorScheme, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import * as ScreenCapture from 'expo-screen-capture';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
@@ -111,6 +111,25 @@ function Reader({ onInsets }) {
   const [pageError, setPageError] = useState(null);
   const [progress, setProgress] = useState(1); // 0..1 while a page loads, 1 when done
   const [shellNote, setShellNote] = useState(null);
+  // When iOS kills the page's process (memory), what the app was doing: told to the page after the reload, which
+  // reports it with its own note (web-bridge.js life → /api/page-gone) and opens the book it had on screen.
+  const activeAt = useRef(Date.now());
+  const gone = useRef(null);
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (s) => { if (s === 'active') activeAt.current = Date.now(); });
+    return () => sub.remove();
+  }, []);
+  const onGone = useCallback(() => {
+    const active = Math.round((Date.now() - activeAt.current) / 1000);
+    gone.current = { state: AppState.currentState, active };
+    // In the background this is iOS's own housekeeping and the page puts the book back: nothing to say. On screen
+    // a quiet line, no red banner (Max, 2026-11-11).
+    if (AppState.currentState === 'active' && active >= 3) {
+      setShellNote('сторінку перезавантажено: забракло памʼяті');
+      setTimeout(() => setShellNote(null), 4000);
+    }
+    webview.current?.reload();
+  }, []);
 
   // Which shell is running, and a foreground check for a newer one. expo-updates already checks
   // in the background and applies on the next launch; doing it here as well applies a fresh
@@ -256,11 +275,16 @@ function Reader({ onInsets }) {
         onNavigationStateChange={(nav) => { canGoBack.current = nav.canGoBack; }}
         onLoadStart={() => setProgress(0.05)}
         onLoadProgress={(e) => setProgress(e.nativeEvent.progress)}
-        onLoadEnd={() => { setReady(true); setProgress(1); }}
+        onLoadEnd={() => {
+          setReady(true);
+          setProgress(1);
+          if (gone.current) webview.current?.injectJavaScript(`window.__chytaiGone = ${JSON.stringify(gone.current)}; true;`);
+          gone.current = null;
+        }}
         onError={(e) => setFailed(e.nativeEvent.description || 'Не вдалося завантажити')}
-        // iOS kills the page's process when it runs out of memory and leaves a white screen
-        // behind; a reload is the only way back, and the banner says what happened.
-        onContentProcessDidTerminate={() => { setPageError('сторінку вивантажено (памʼять), перезавантажую'); webview.current?.reload(); }}
+        // iOS kills the page's process when it runs out of memory (mostly while the app is in the background) and
+        // leaves a white screen behind; a reload is the only way back (onGone).
+        onContentProcessDidTerminate={onGone}
         onHttpError={(e) => { if (e.nativeEvent.statusCode >= 500) setFailed(`Сервер відповів ${e.nativeEvent.statusCode}`); }}
       />
       {failed ? (

@@ -87,6 +87,9 @@ function readerDay(r, skip, titleOf = () => "") {
     notes: sum(r.notes),
     cost: r.cost || 0,
     top: books[0] || null,
+    // Pages the phones unloaded (server/index.js /api/page-gone), test accounts left out; guests count.
+    gone: (r.gone || []).filter((g) => !skip.has(g.acct)).length,
+    goneFront: (r.gone || []).filter((g) => !skip.has(g.acct) && !g.bg).length,
   };
 }
 
@@ -105,6 +108,7 @@ function text(day, s, rd, site, backup = "") {
     lines.push(`Читалка: читали ${rd.readers}, ${n(rd.minutes)} хв`);
     if (rd.top) lines.push(`Найбільше: «${rd.top.title}», ${Math.round(rd.top.sec / 60)} хв`);
     lines.push(`Пояснень ${rd.explains}, нотаток ${rd.notes}, Claude $${rd.cost.toFixed(2)}`);
+    if (rd.gone) lines.push(`Сторінку вивантажено: ${rd.gone}${rd.goneFront ? `, з них на екрані ${rd.goneFront}` : ", усі у фоні"}`);
   } else lines.push("Читалка не відповіла.");
   lines.push("");
   lines.push(s.errors || s.failed.length ? `Збої: помилок ${s.errors}${s.failed.length ? `, задачі впали: ${s.failed.join(", ")}` : ""}` : "Збоїв не було.");

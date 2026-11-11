@@ -193,11 +193,15 @@
     return `<div class="lib-cat wide-only">${arrivals}${blocks[0] ? `<div class="lib-cols">${blocks[0]}</div>` : ""}${latin}${other}</div>`;
   }
 
+  // The tab is hidden for good since Мої книжки took it over (home.js show), yet every book opened drew it again:
+  // all the books twice, a cover each, 160 KB of hidden page (2026-11-11, looking at iOS unloading the page).
+  const shown = () => !$("#library").classList.contains("hidden");
+
   window.Library = {
     data: fetchData,
     editBook,
     shareBook,
-    render: () => data && render(),
+    render: () => data && shown() && render(),
     // The tab was opened: draw what is known at once, then ask the server for the latest.
     shown: () => {
       if (data) render();
@@ -421,6 +425,6 @@
     data.lastBook = payload.path;
     const book = data.books.find((b) => b.path === payload.path);
     if (book) Object.assign(book, { started: true, cloud: false, seen: true, openedAt: Date.now() });
-    render();
+    if (shown()) render();
   });
 })();

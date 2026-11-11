@@ -55,6 +55,12 @@ curl -s https://app.chytai.org.ua/agent/sql -H "$H" -H 'content-type: applicatio
   (`reader`), and script errors from readers' browsers in the reader app (`reader`, message starts «[браузер]»,
   extension noise dropped; `src/renderer/web-bridge.js` → `/api/client-error`). Each new one goes to Max's Telegram
   once an hour. Script errors on the site's own pages are only counted (`events`, `name = 'js'`, /admin/speed).
+- Pages the phone unloaded (iOS kills the WebView's page for memory, mostly in the background): the page keeps a note
+  of itself in localStorage (`chytai:life`, web-bridge.js `life`), the next load reports it to the reader's
+  `/api/page-gone` and reopens the book that was on screen. Rows in the reader's `state.stats.days[day].gone` (30 days);
+  /admin/reader «Вивантаження», a row on Огляд (red only for unloads on screen), a line in the morning report. To see
+  memory on a phone width locally: Playwright WebKit, RSS of `WPEWebProcess`; kill it (`pkill -9 -x WPEWebProcess`)
+  to fake an unload.
 - Fly itself, same token: `https://api.fly.io/graphql` (machines, releases),
   `https://api.fly.io/prometheus/personal/api/v1/query_range` (`fly_app_http_responses_count` by status,
   `fly_instance_cpu`, memory), `https://api.fly.io/api/v1/apps/chytai-web/logs` (only the last ~100 lines).

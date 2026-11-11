@@ -617,6 +617,7 @@ async function collectStats() {
     wishes: wishStats(library),
     reading: readingByBook(stats.days, dayKeys, today, weekAgo, monthAgo),
     offline: offlineStats(stats.days, dayKeys, monthAgo),
+    gone: goneStats(stats.days, dayKeys, monthAgo),
   };
 }
 
@@ -1295,7 +1296,7 @@ app.get("/api/site-admin/day", (req, res) => {
   for (const r of store.items.noteTimes()) if (Number(r.at) && statsDay(Number(r.at)) === day) notes[r.acct] = (notes[r.acct] || 0) + 1;
   const books = []; // one row per account and book; the site puts its own titles on readers' files (reader_files)
   for (const [acct, list] of Object.entries(d.readBooks || {})) for (const [name, sec] of Object.entries(list)) books.push({ acct, name, title: bookInfo(acct, name).title || "", sec });
-  res.json({ day, readSec: d.readSec || {}, explains: d.users || {}, notes, cost: d.cost || 0, books });
+  res.json({ day, readSec: d.readSec || {}, explains: d.users || {}, notes, cost: d.cost || 0, books, gone: (d.gone || []).map((r) => ({ acct: r.acct, bg: r.bg })) });
 });
 // Switch the reader off (or on again) for one account: { id, off: true | false }.
 app.post("/api/site-admin/off", express.json(), (req, res) => {
@@ -1571,6 +1572,69 @@ api.post("/reading", express.text({ limit: "16kb" }), (req, res) => {
   saveState();
   res.json({ ok: true });
 });
+// The phone unloaded the reader's page (web-bridge.js life; Max, 2026-11-11: «сторінку вивантажено (пам'ять)»).
+// One row per unload in the day's stats, numbers only: what was on screen, how much the page held, whether the app
+// was in the background. At most 20 an hour from one account or guest, 300 a day in all.
+const goneSeen = new Map(); // who -> [hour, n]
+api.post("/page-gone", express.text({ type: () => true, limit: "8kb" }), (req, res) => {
+  res.status(204).end();
+  let b = req.body;
+  if (typeof b === "string") try { b = JSON.parse(b); } catch { b = null; }
+  if (!b || typeof b !== "object" || !b.prev || typeof b.prev !== "object") return;
+  const who = req.acct || "guest";
+  const hour = Math.floor(Date.now() / 3600000);
+  const seen = goneSeen.get(who);
+  const n = seen?.[0] === hour ? seen[1] + 1 : 1;
+  goneSeen.set(who, [hour, n]);
+  if (goneSeen.size > 1000) goneSeen.clear();
+  if (n > 20) return;
+  const d = ((state.stats ??= { since: statsDay(), days: {} }).days[statsDay()] ??= { explains: 0, users: {}, guests: 0, models: {} });
+  if ((d.gone ??= []).length >= 300) return;
+  const monthAgo = statsDay(Date.now() - 30 * 86400000); // rows older than the admin page shows go
+  for (const [k, old] of Object.entries(state.stats.days)) if (k < monthAgo && old.gone) delete old.gone;
+  const p = b.prev;
+  const num = (x, max = 1e6) => (Number.isFinite(Number(x)) ? Math.max(0, Math.min(max, Math.round(Number(x)))) : 0);
+  const str = (x, max = 40) => String(x ?? "").slice(0, max);
+  const app = b.app && typeof b.app === "object" ? b.app : null;
+  d.gone.push({
+    at: Date.now(),
+    acct: req.acct || "",
+    dev: deviceOf(req.get("user-agent")),
+    // In the background: the app says so (killed while not active, or noticed within 3 s of coming back), else
+    // the page was hidden when it last wrote its note.
+    bg: app ? app.state !== "active" || num(app.active, 1e7) < 3 : !p.vis,
+    view: str(p.view),
+    book: req.acct ? str(p.book, 300) : "",
+    books: num(p.books, 1e5),
+    up: num(p.up), // seconds the page had lived
+    hid: num(p.hid), // seconds it had been hidden
+    quiet: num((Date.now() - num(p.at, 1e13)) / 1000), // seconds since its last note
+    imgs: num(p.imgs, 1e5),
+    imgMB: num(p.imgMB, 1e5),
+    canvasMB: num(p.canvasMB, 1e5),
+    nodes: num(p.nodes, 1e7),
+    frames: num(p.frames, 1e3),
+    heapMB: num(p.heapMB, 1e5),
+    nav: str(b.nav, 12),
+    app: app ? `${str(app.state, 12)} ${num(app.active, 1e7)}` : "",
+    restored: !!b.restored,
+    dpr: Number(b.screen?.dpr) || 0,
+    mem: Number(b.screen?.mem) || 0,
+  });
+  console.log(`page gone: ${who} ${d.gone.at(-1).dev} ${d.gone.at(-1).view} bg=${d.gone.at(-1).bg}`);
+  saveState();
+});
+// The last 30 days' unloads for the admin page: per day and the newest rows.
+function goneStats(days, dayKeys, monthAgo) {
+  const rows = dayKeys.filter((k) => k >= monthAgo).flatMap((k) => days[k].gone || []);
+  const dayAgo = Date.now() - 86400000;
+  const last = rows.filter((r) => r.at > dayAgo);
+  return {
+    day: { n: last.length, bg: last.filter((r) => r.bg).length },
+    byDay: dayKeys.filter((k) => k >= monthAgo && days[k].gone?.length).map((day) => ({ day, n: days[day].gone.length, bg: days[day].gone.filter((r) => r.bg).length })),
+    rows: rows.sort((a, b) => b.at - a.at).slice(0, 60).map((r) => ({ ...r, name: r.acct ? accountName(r.acct) : "", username: r.acct ? state.accounts[r.acct]?.username || "" : "", title: r.acct && r.book ? bookInfo(r.acct, r.book).title || "" : "" })),
+  };
+}
 api.put("/position", (req, res) => {
   const { path: bookPath, cfi, pct, chapter, part, parts } = req.body || {};
   if (typeof bookPath !== "string" || typeof cfi !== "string") return res.status(400).json({ error: "bad request" });

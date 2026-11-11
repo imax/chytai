@@ -148,6 +148,8 @@ function syncAppProtection() {
   try { window.ReactNativeWebView?.postMessage(JSON.stringify({ type: "protect", on })); } catch {}
 }
 new MutationObserver(syncAppProtection).observe(document.body, { attributes: true, attributeFilter: ["class"] });
+// The book loaded now, for the page's note of itself (web-bridge.js life): reopened after the phone unloads the page.
+window.readerNow = () => (current && (rendition || pdfView) && !current.preview ? { path: current.path, pdf: !!current.pdf } : null);
 // Leaving the reader page (login, a site page) must not leave the block on behind it.
 addEventListener("pagehide", () => {
   bookShown = false;

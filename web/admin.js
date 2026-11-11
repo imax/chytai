@@ -1094,7 +1094,7 @@ ${s.sections.length ? `<div class="tbl"><table class="sections">
 
 // «Performance» on Огляд (Max named it): today's speed (speed.js), the background jobs of the last day (job_runs) and whether
 // the reader answered. A line turns red only when something needs a look.
-function healthBlock({ day = null, jobs = { n: 0, failed: [] }, reader = true, errors = [], mail = null, backup = null, storage = null }) {
+function healthBlock({ day = null, jobs = { n: 0, failed: [] }, reader = true, errors = [], mail = null, backup = null, storage = null, gone = null }) {
   const PLACE = { site: "сайт", jobs: "фон", reader: "Читалка" };
   const errN = errors.reduce((n, e) => n + e.n, 0);
   // What failed, the most frequent first (errors.js keeps them; the same go to Telegram once an hour).
@@ -1110,12 +1110,22 @@ function healthBlock({ day = null, jobs = { n: 0, failed: [] }, reader = true, e
     [!jobs.failed.length, `Фонові задачі без помилок (${fmtN(jobs.n)} за добу).`, `Фонові задачі з помилкою за добу: ${jobs.failed.map(esc).join(", ")}. <a href="/admin/jobs">Задачі</a>`],
     [reader, "Читалка працює.", `Читалка не відповіла сайту: app.chytai.org.ua може лежати. <a href="https://app.chytai.org.ua/">Відкрити</a>`],
     [!errN, "Помилок за добу не було.", `Помилки за добу: ${errN}.${errList}`],
+    // The phone unloaded the reader's page (server/index.js /api/page-gone): in the background it is iOS's own way and
+    // the book opens again, so only an unload on screen turns the row red.
+    ...(gone ? [goneRow(gone)] : []),
     ...(mail ? [mail] : []),
     ...(backup ? [backup] : []),
     ...(storage ? [storageRow(storage)] : []),
   ];
   return `<h2>Performance</h2>
 <ul class="health">${rows.map(([ok, good, bad]) => `<li class="${ok ? "ok" : "bad"}">${ok ? good : bad}</li>`).join("")}</ul>`;
+}
+
+function goneRow({ n, bg }) {
+  const link = `<a href="/admin/reader#gone">Читалка</a>`;
+  if (!n) return [true, "Телефони не вивантажували сторінку Читалки."];
+  const front = n - bg;
+  return [!front, `Телефони вивантажили сторінку Читалки у фоні: ${fmtN(n)} за добу. ${link}`, `Сторінку Читалки вивантажили на екрані: ${fmtN(front)} за добу${bg ? `, ще ${fmtN(bg)} у фоні` : ""}. ${link}`];
 }
 
 // «Листи» on Огляд (Max, 2026-11-09): each kind of letter in the last 7 days — how many went, how many visits
@@ -1682,6 +1692,24 @@ function readerAppPage({ user, s, error = "", book = () => null, layout }) {
 <thead><tr><th>Пристрій</th><th>Читали, хв</th><th>Без мережі, хв</th><th>Відкрили без мережі</th><th>Не було на пристрої</th></tr></thead>
 <tbody>${offDevs.map((r) => `<tr><th>${esc(DEV[r.dev] || r.dev)}</th><td>${n(r.read)}</td><td>${n(r.off)}</td><td>${n(r.opened)}</td><td>${n(r.missing)}</td></tr>`).join("")}</tbody></table></div>
 <p class="muted small">За 30 днів, рахуємо з 11 листопада. ${offWho.length ? `Без мережі читали: ${offWho.map((r) => `${r.username ? `<a href="/@${esc(r.username)}">${esc(r.name || r.username)}</a>` : esc(r.name || r.id)} <span class="muted">${fmtN(r.off)} хв</span>`).join(", ")}.` : "Без мережі ще ніхто не читав."}</p>` : `<p class="muted">Рахуємо з 11 листопада.</p>`;
+  // Pages the phone unloaded (Max, 2026-11-11: «сторінку вивантажено (пам'ять)»), from 11 November: the newest 60.
+  const VIEW = { "home:home": "Головна", "home:discover": "Відкрити", "home:notes": "Нотатки", "home:wish": "Хочу прочитати", "home:club": "Клуб", pdf: "PDF", book: "книжка", other: "інше" };
+  const gone = s.gone?.rows || [];
+  const dur = (sec) => (sec < 90 ? `${fmtN(sec)} с` : sec < 5400 ? `${fmtN(Math.round(sec / 60))} хв` : `${fmtN(Math.round(sec / 3600))} год`);
+  const goneWhere = (r) => {
+    if (!r.view.startsWith("home") && r.book) {
+      const b = book(r.acct, r.book);
+      const title = r.title || b.title || r.book.split("/").pop().replace(/\.(epub|pdf|fb2|mobi|azw3?)$/i, "");
+      return `${esc(VIEW[r.view] || r.view)}: ${b.href ? `<a href="${esc(b.href)}">${esc(title)}</a>` : esc(title)}`;
+    }
+    return esc(VIEW[r.view] || r.view || "—");
+  };
+  const goneWho = (r) => (r.acct ? (r.username ? `<a href="/@${esc(r.username)}">${esc(r.name || r.username)}</a>` : esc(r.name || r.acct)) : `<span class="muted">гість</span>`);
+  const held = (r) => [`картинки ${fmtN(r.imgMB)} МБ`, r.canvasMB ? `PDF ${fmtN(r.canvasMB)} МБ` : "", `${fmtN(r.nodes)} елементів`, `${fmtN(r.books)} книжок`, `жила ${dur(r.up)}`].filter(Boolean).join(", ");
+  const goneTbl = gone.length ? `<div class="tbl"><table class="reader-app">
+<thead><tr><th>Коли</th><th>Хто</th><th>Пристрій</th><th class="book">Що було на екрані</th><th>Де</th><th class="who">Що тримала сторінка</th></tr></thead>
+<tbody>${gone.map((r) => `<tr><th>${ago(r.at)}</th><td>${goneWho(r)}</td><td>${esc(DEV[r.dev] || r.dev)}</td><td class="book">${goneWhere(r)}${r.restored ? ` <span class="muted">відкрили знову</span>` : ""}</td><td>${r.bg ? `у фоні${r.hid ? ` ${dur(r.hid)}` : ""}` : `<b>на екрані</b>`}</td><td class="who">${held(r)}</td></tr>`).join("")}</tbody></table></div>
+<p class="muted small">За 30 днів: ${(s.gone.byDay || []).map((d) => `${short(d.day)} ${fmtN(d.n)}${d.bg ? ` (у фоні ${fmtN(d.bg)})` : ""}`).join(", ")}. Телефон вбиває сторінку, коли бракує пам'яті, найчастіше поки застосунок у фоні; тоді Читалка вантажиться наново й відкриває книжку, яка була на екрані. «На екрані» означає, що забагато тримала сама сторінка.</p>` : `<p class="muted">Ще жодного: рахуємо з 11 листопада.</p>`;
   const days = s.days.slice(0, 30);
   const daysTbl = days.length ? `<div class="tbl"><table>
 <thead><tr><th>День</th><th>Пояснень</th><th>Токенів на вході</th><th>На виході</th><th>Claude</th></tr></thead>
@@ -1697,6 +1725,8 @@ ${readers}
 ${booksTbl}
 <h2 id="offline">Без мережі</h2>
 ${offlineTbl}
+<h2 id="gone">Вивантаження</h2>
+${goneTbl}
 <details class="reader-cost"><summary>Вартість по днях і моделях</summary>
 ${daysTbl}
 ${models}
