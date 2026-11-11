@@ -3181,7 +3181,7 @@ function askAnswerPage({ user, ask, items, canAsk = false, owner = false }) {
   <blockquote class="ask-q">${askText(ask.text)}</blockquote>
   ${items.length ? `<ol class="ask-sum">${items.map((x, i) => `<li><a href="#b${i + 1}">${x.book.author ? `${esc(byline(x.book.author))}, ` : ""}«${esc(x.book.title)}»</a></li>`).join("")}</ol>` : ""}
   ${wait ? `<p class="ask-wait" id="ask-wait">Добираю книжки…</p>` : say ? `<p class="lead muted">${say}</p>` : ""}
-  ${wait ? "" : `<div class="acts ask-acts">${items.length ? `<button type="button" class="btn small" data-share="${attr(ORIGIN + href)}" data-title="Що почитати далі">Поділитися</button><button type="button" class="btn small" id="ask-copy">Скопіювати</button>` : ""}${canAsk ? `<a class="btn small primary" href="/ask">Спитати своє</a>` : ""}</div>`}
+  ${wait ? "" : `<div class="acts ask-acts">${items.length ? `<button type="button" class="btn small" data-share="${attr(ORIGIN + href)}" data-title="Що почитати далі">Поділитися</button><button type="button" class="btn small" id="ask-copy">Скопіювати</button>` : ""}${canAsk ? `<a class="btn small primary" href="/ask">Спитати ще</a>` : ""}</div>`}
 </section>
 ${items.length ? `<section class="lrows">${rows}</section><p class="small muted ask-note">Порадив Claude (AI). Тут лише книжки, які є на Chytai.</p>` : ""}
 ${owner && !wait ? `<details class="small muted ask-note"><summary>Для вас: ${esc(ask.model)} · $${Number(ask.cost).toFixed(3)} · ${(ask.ms / 1000).toFixed(1)} с · переглядів ${ask.views}${ask.missed.length ? ` · немає в каталозі ${ask.missed.length}` : ""}</summary>${ask.missed.map((m) => `<p>${esc(m.title)}${m.author ? ` · ${esc(m.author)}` : ""}</p>`).join("")}</details>` : ""}
