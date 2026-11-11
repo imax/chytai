@@ -137,6 +137,8 @@ A flag only when Max asks for one, or when the change could break what readers u
   `store.linkTranslations()` and `store.pairLog` (kept / dropped with tier) on the test DB.
 - A series the data gets wrong goes in `matches.json` `series`: `{name, uk, books: [ids or slugs in order]}`; it wins
   over Wikidata and Goodreads (`store.linkCycles`). Two editions of one book: `merges` `[keep, dup]`.
+- A shop's Ukrainian book whose original no catalog has: `matches.json` `originals` `{title, author, of, published}`;
+  the jobs process makes it once as a book (`store.seedOriginals`, meta `originals:seeded`) and pairs the two.
 
 ## AI passes over the catalog (`web/catalogpasses.js` on `web/aipass.js`)
 

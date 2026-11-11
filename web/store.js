@@ -2450,6 +2450,46 @@ class Store {
     return made;
   }
 
+  // The original of a shop's translation, asked for in chat (Max 2026-11-11: «/book/dovira зʼєднай з оригіналом»):
+  // addOriginals makes them only for readers' books. matches.json «originals» [{title, author, of, published}]:
+  // each made once as a book of its own (meta `originals:seeded`), then its checks come through the queue, and it is
+  // paired with the translation as the owner's pair, so it can be undone on /admin/dupes.
+  seedOriginals() {
+    let list = [];
+    try {
+      list = readJson(path.join(SEED, "matches.json")).originals || [];
+    } catch {
+      /* none */
+    }
+    let done;
+    try {
+      done = new Set(JSON.parse(this.db.get("originals:seeded") || "[]"));
+    } catch {
+      done = new Set();
+    }
+    const made = [];
+    const pairs = [];
+    for (const { title, author, of, published } of list) {
+      const key = `${of}|${title}`;
+      const uk = this.workId(of);
+      if (done.has(key) || !title || !author || !this.isWork(uk)) continue; // not in the catalogs yet: next start
+      done.add(key);
+      const had = this.findWork({ title, author });
+      if (had && this.canonical(had) !== uk) {
+        pairs.push([had, uk]);
+        continue;
+      }
+      const id = this.addBook({ title, author, cover: "", links: [], source: "original", of: uk, ...(published ? { published } : {}) }, { index: false }).id;
+      made.push(id);
+      pairs.push([id, uk]);
+    }
+    this.db.set("originals:seeded", JSON.stringify([...done]));
+    if (made.length) this.indexSlugs(), this.indexBooks(made);
+    for (const [a, b] of pairs) this.decideTranslation(a, b);
+    if (pairs.length) this.linkTranslations();
+    return { made, paired: pairs.length };
+  }
+
   // New books wait in `book_queue` for their checks in the jobs process (newbooks.js): every way a book comes
   // in, a reader's or a catalog's (Max, 2026-10-27: «можливо нам треба саме черга, а не просто розклад»).
   queueBooks(ids, source) {

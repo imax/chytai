@@ -3755,6 +3755,13 @@ if (bg.ROLE !== "web" && !store.db.get("originals:all")) {
     if (made.length) bg.changed("books");
   }, 90000);
 }
+// Originals of shops' translations written into matches.json «originals» (store.seedOriginals), in the jobs process.
+if (bg.ROLE !== "web") {
+  setTimeout(() => {
+    const { made, paired } = store.seedOriginals();
+    if (paired) console.log(`originals from matches.json: ${paired} paired, made ${made.join(", ") || "none"}`), bg.changed("books");
+  }, 90000);
+}
 // Editorial lists written by Claude for the owner (seed/editorial.json), made once each in the web process
 // (Max, 2026-10-28: «візьмемо номер 2, тільки додай книжку якої не вистачає»). A book the catalog lacks
 // comes in from its store page (cover, annotation), else from the fields given there.
