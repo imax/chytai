@@ -12,7 +12,10 @@ const MODEL = "claude-opus-5-5";
 const PRICE = { "claude-opus-5-5": [4, 20], "claude-sonnet-5-5": [2, 10], "claude-haiku-5-5": [0.1, 0.5] };
 const TEXT_MIN = 15;
 const TEXT_MAX = 1500;
-const SHOW = 7; // books on an answer: the list names 7, the catalog's first (Max, 2026-11-11: «на 7 зупинився»)
+// How many books an answer names: as many as fit this request, Claude says (Max, 2026-11-11: «стільки, скільки це має
+// сенс для конкретного запиту. Хоча б 3»), 3 to 10; answers kept before that name 7.
+const FIT_MIN = 3;
+const FIT_MAX = 10;
 const GUEST_DAY = 3; // asks a day from one guest address
 const READER_DAY = 10; // asks a day from one reader
 const ALL_DAY = 200; // fresh answers a day, everyone together
@@ -30,7 +33,7 @@ CREATE INDEX IF NOT EXISTS ask_recs_created ON ask_recs (created);`;
 const SYSTEM = `You are a well-read friend on Chytai, a Ukrainian site about books. Someone tells you, in their own words, what they have read and liked, and often what they would like next. Recommend books for them to read next.
 
 Answer with one JSON object and nothing else:
-{"topic": "...", "off": false, "books": [{"title_uk": "...", "author_uk": "...", "title": "...", "author": "...", "series": "...", "why": "..."}]}
+{"topic": "...", "off": false, "fit": 5, "books": [{"title_uk": "...", "author_uk": "...", "title": "...", "author": "...", "series": "...", "why": "..."}]}
 
 - books: 15 books, the best fit first. Each is a real, published book. Name the Ukrainian edition when there is one: title_uk and author_uk exactly as the Ukrainian edition prints them (for example «Чоловіки, які ненавидять жінок», «Стіг Ларссон»); empty strings when you are not sure a Ukrainian edition exists. title and author: the original title and the author's name in the original language.
 - Prefer books that have been published in Ukrainian. Ukrainian authors are welcome where they truly fit. Never a Russian author, and never a book that exists only in Russian.
@@ -39,6 +42,7 @@ Answer with one JSON object and nothing else:
 - Follow what they actually liked: if it is the people, the mood, the setting or the profession at the centre of it, find that, not just the genre.
 - why: one short sentence in Ukrainian, at most 18 words: what this book shares with what they liked or asked for, concretely. No spoilers, no praise words like «неймовірний», «must read», «шедевр».
 - topic: what this request is about, one level above it, in Ukrainian, 3 to 8 words, as a heading in a list of what other people asked: «Детективні цикли із судмедекспертами», «Грецька міфологія для дітей», «Для тих, хто любить Dungeon Crawler Carl». A noun phrase, no verb, no «Порада», no names of the person.
+- fit: how many of these books, counted from the top, you would really name to this person; the rest are spares. A narrow request (one rare kind of book, a small field) may have 3 or 4, a broad one up to 10. Only as many as truly fit.
 - If the text is not about books or reading at all, answer with an empty topic, no books and "off": true; otherwise "off" is false.`;
 
 const str = { type: "string" };
@@ -47,9 +51,10 @@ const OUT_SCHEMA = {
   properties: {
     topic: str,
     off: { type: "boolean" },
+    fit: { type: "integer" },
     books: { type: "array", items: { type: "object", properties: { title_uk: str, author_uk: str, title: str, author: str, series: str, why: str }, required: ["title_uk", "author_uk", "title", "author", "series", "why"], additionalProperties: false } },
   },
-  required: ["topic", "books", "off"],
+  required: ["topic", "books", "off", "fit"],
   additionalProperties: false,
 };
 // The second question: a recommended book we lack, and this author's books we have.
@@ -63,6 +68,7 @@ const PICK_SCHEMA = {
 const now = () => new Date().toISOString();
 const keyOf = (text) => norm(text).replace(/\s+/g, " ").trim();
 const hash = (s) => crypto.createHash("sha256").update(`ask:${s}`).digest("hex").slice(0, 24);
+const fitOf = (n) => Math.min(FIT_MAX, Math.max(FIT_MIN, Math.round(Number(n) || 7)));
 const clean = (s, n) => String(s || "").replace(/\s+/g, " ").trim().slice(0, n);
 // Letters and digits only, lower case, single spaces: to see a title inside the question.
 const fold = (s) => ` ${String(s || "").toLowerCase().replace(/[’'`ʼ]/g, "").replace(/[^\p{L}\p{N}]+/gu, " ").trim()} `;
@@ -80,6 +86,7 @@ class Ask {
     this.db.exec(SCHEMA);
     // «Що питають інші» shows a topic, not the question (Max, 2026-11-11: «піднятись на один рівень абстракції»).
     if (!this.db.prepare("SELECT 1 FROM pragma_table_info('ask_recs') WHERE name = 'topic'").get()) this.db.exec("ALTER TABLE ask_recs ADD COLUMN topic TEXT NOT NULL DEFAULT ''");
+    if (!this.db.prepare("SELECT 1 FROM pragma_table_info('ask_recs') WHERE name = 'fit'").get()) this.db.exec("ALTER TABLE ask_recs ADD COLUMN fit INTEGER NOT NULL DEFAULT 0");
     this.client = client || (apiKey ? new (require("@anthropic-ai/sdk"))({ apiKey }) : null);
     this.ukWork = ukWork;
     this.notify = notify;
@@ -93,7 +100,14 @@ class Ask {
     // Answers kept before match() knew to skip a book the question names lose it here too.
     const asked = fold(r.text);
     const items = JSON.parse(r.items || "[]").filter((x) => !named(asked, this.store.book(x.id)?.title, this.store.book(x.id)?.altTitle));
-    return { ...r, items, missed: JSON.parse(r.missed || "[]").filter((m) => !named(asked, m.title)) };
+    const missed = JSON.parse(r.missed || "[]").filter((m) => !named(asked, m.title));
+    // The answer names the first `fit` books in Claude's order: the catalog's get cards (at least 3 when we have them,
+    // from further down), the rest are the plain list's grey lines. Rows before ranks: the catalog's first, 7 in all.
+    const all = [...items.map((x, i) => ({ x, rank: x.rank ?? i })), ...missed.map((m, i) => ({ m, rank: m.rank ?? 100 + i }))].sort((a, b) => a.rank - b.rank);
+    const top = all.slice(0, r.fit ? fitOf(r.fit) : 7);
+    const cards = top.filter((e) => e.x).map((e) => e.x);
+    for (const e of all.slice(top.length)) if (e.x && cards.length < FIT_MIN) cards.push(e.x);
+    return { ...r, items: cards, more: top.filter((e) => e.m).map((e) => e.m), missed };
   }
   // An answer was opened: kept for another half year from now.
   opened(id) {
@@ -132,8 +146,8 @@ class Ask {
       const { items, missed, extra } = await this.match(out.books, { model: out.model, text: row.text });
       for (const k of ["input", "output", "cost"]) out[k] += extra[k];
       this.db
-        .prepare("UPDATE ask_recs SET status = ?, topic = ?, items = ?, missed = ?, model = ?, input_tokens = ?, output_tokens = ?, cost = ?, ms = ? WHERE id = ?")
-        .run(out.off ? "off" : items.length ? "done" : "none", clean(out.topic, 80).replace(/[.!]+$/, ""), JSON.stringify(items), JSON.stringify(missed), out.model, out.input, out.output, out.cost, Date.now() - t, id);
+        .prepare("UPDATE ask_recs SET status = ?, fit = ?, topic = ?, items = ?, missed = ?, model = ?, input_tokens = ?, output_tokens = ?, cost = ?, ms = ? WHERE id = ?")
+        .run(out.off ? "off" : items.length ? "done" : "none", out.fit, clean(out.topic, 80).replace(/[.!]+$/, ""), JSON.stringify(items), JSON.stringify(missed), out.model, out.input, out.output, out.cost, Date.now() - t, id);
       this.log(`ask ${id}: ${items.length} of ${(out.books || []).length} in the catalog, ${Date.now() - t} ms, $${out.cost.toFixed(3)}`);
       this.notify(this.get(id));
     } catch (e) {
@@ -165,7 +179,7 @@ class Ask {
   // What Claude recommends for this text: { topic, books, off, model, input, output, cost }.
   async claude(text, { model = MODEL } = {}) {
     const { j, input, output, cost } = await this.json(SYSTEM, text, OUT_SCHEMA, model);
-    return { topic: j.topic || "", books: Array.isArray(j.books) ? j.books.slice(0, 20) : [], off: !!j.off, model, input, output, cost };
+    return { topic: j.topic || "", books: Array.isArray(j.books) ? j.books.slice(0, 20) : [], off: !!j.off, fit: fitOf(j.fit), model, input, output, cost };
   }
 
   // Claude's books that our catalog has, as { id, why, series }, the Ukrainian edition, one per series and author, in
@@ -204,10 +218,11 @@ class Ask {
     const missed = [];
     const used = new Set();
     const authors = [];
+    let rank = 0; // the place in Claude's list among the books kept, to cut the answer at its fit
     for (const { b, want, id: found, bad } of rows) {
       if (bad || named(asked, want.uk, want.en)) continue;
       if (!found) {
-        missed.push({ title: want.uk || want.en, author: want.ua || want.ea });
+        missed.push({ title: want.uk || want.en, author: want.ua || want.ea, rank: rank++ });
         continue;
       }
       let id = found;
@@ -219,7 +234,7 @@ class Ask {
       if (used.has(key) || used.has(id) || authors.some((a) => sameAuthor(a, s.book(id).author || ""))) continue;
       used.add(key).add(id);
       if (s.book(id).author) authors.push(s.book(id).author);
-      if (items.length < SHOW) items.push({ id, why: clean(b.why, 300), series: clean(b.series, 120) });
+      if (items.length < FIT_MAX) items.push({ id, why: clean(b.why, 300), series: clean(b.series, 120), rank: rank++ });
     }
     return { items, missed, extra };
   }

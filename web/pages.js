@@ -3176,9 +3176,9 @@ function askAnswerPage({ user, ask, items, canAsk = false, owner = false }) {
     )
     .join("\n");
   const href = `/ask/${ask.id}`;
-  // The plain list names 7 books: the catalog's, then Claude's next ones that Chytai lacks, as text (Max, 2026-11-11:
-  // «список текстовий … і 5, і 6, і 7 книжок … в каталозі вже вибирати ті, що є»).
-  const more = items.length ? (ask.missed || []).slice(0, Math.max(0, 7 - items.length)) : [];
+  // The plain list: the catalog's books, then the ones Chytai lacks as grey text (Max, 2026-11-11: «список текстовий …
+  // в каталозі вже вибирати ті, що є»); how many is the answer's fit (Ask.get).
+  const more = items.length ? ask.more || [] : [];
   const count = items.length + more.length;
   const body = `<section class="list-head ask-head">
   <p class="kicker">${canAsk ? `<a href="/ask">Що почитати далі</a>` : "Що почитати далі"}${count ? ` · ${books(count)}` : ""}</p>
