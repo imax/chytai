@@ -53,7 +53,7 @@ const OUT_SCHEMA = {
   additionalProperties: false,
 };
 // The second question: a recommended book we lack, and this author's books we have.
-const PICK = `Book recommendations were made for a reader, but our catalog lacks the exact books named. For each one, the books our catalog has by the same author are listed. Pick the listed book that serves that recommendation best: for a series, its first book if it is listed, else the earliest listed volume of the same series; for a book outside a series, another listed book by the author only if it would suit the same reader just as well. If no listed book fits, pick 0. Answer with JSON: {"picks": [{"rec": <recommendation number>, "book": <listed book number or 0>}]}.`;
+const PICK = `Book series were recommended to a reader, but our catalog lacks the exact books named. For each one, the books our catalog has by the same author are listed. Pick the listed book to start that series with: its first book if it is listed, else the earliest listed volume of the same series. If no listed book belongs to that series, pick 0. Answer with JSON: {"picks": [{"rec": <recommendation number>, "book": <listed book number or 0>}]}.`;
 const PICK_SCHEMA = {
   type: "object",
   properties: { picks: { type: "array", items: { type: "object", properties: { rec: { type: "integer" }, book: { type: "integer" } }, required: ["rec", "book"], additionalProperties: false } } },
@@ -166,7 +166,8 @@ class Ask {
       const want = { uk: clean(b.title_uk, 200), ua: clean(b.author_uk, 200), en: clean(b.title, 200), ea: clean(b.author, 200) };
       return { b, want, id: this.usable(this.find(want)) };
     });
-    const lack = rows.filter((r) => !r.id).map((r) => ({ r, own: this.authorBooks(r.want) })).filter((x) => x.own.length);
+    // Only for a series: its line «why» fits any volume, a single book's line would describe a book we don't show.
+    const lack = rows.filter((r) => !r.id && clean(r.b.series, 120)).map((r) => ({ r, own: this.authorBooks(r.want) })).filter((x) => x.own.length);
     if (lack.length && this.client) {
       const list = lack
         .map((x, i) => [`${i + 1}. «${x.r.want.uk || x.r.want.en}» by ${x.r.want.ua || x.r.want.ea}${x.r.b.series ? `, series «${x.r.b.series}»` : ""}. Why: ${x.r.b.why}`, "Our books by this author:", ...x.own.map((b, k) => `  ${k + 1}) ${b.title}`)].join("\n"))
