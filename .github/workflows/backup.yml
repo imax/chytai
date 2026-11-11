@@ -109,6 +109,14 @@ jobs:
       # A test copy of the site's database for threads and the Mac (Max, 2026-10-25): real emails, sessions,
       # tokens and secrets taken out (scripts/test-db-scrub.py), encrypted with the same key and published as
       # the asset of the release "test-db", replaced every night. Fetch it with scripts/fetch-test-db.sh.
+      # The backup is kept before the test copy is made: a test copy that fails (2026-11-11, an address the
+      # scrub missed) must not cost the night's backup.
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.NAME }}
+          path: ${{ env.NAME }}.tar.gz.age
+          retention-days: 90
+          compression-level: 0
       - name: Test copy
         if: matrix.app == 'chytai-web'
         env:
@@ -125,12 +133,6 @@ jobs:
             --notes "Очищена й зашифрована копія бази chytai-web для тестів, оновлюється щоночі. Без ключа нечитабельна. Як узяти: scripts/fetch-test-db.sh."
           gh release upload test-db chytai-web-test.tar.gz.age --clobber
           rm -rf test test.tar.gz
-      - uses: actions/upload-artifact@v4
-        with:
-          name: ${{ env.NAME }}
-          path: ${{ env.NAME }}.tar.gz.age
-          retention-days: 90
-          compression-level: 0
       # Fly's own snapshots: show what exists and keep them 30 days (the default is 5).
       - name: Fly volume snapshots
         if: always()

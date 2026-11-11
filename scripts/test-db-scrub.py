@@ -17,7 +17,8 @@ tables = {t for (t,) in db.execute("select name from sqlite_master where type='t
 # claude:key, ticket_key, digest:secret, reader:secret and any later one named the same way.
 SECRET_META = re.compile(r"(^|[:_])(secret|key|token|password)s?$", re.I)
 
-for t in ["sessions", "login_codes", "oauth_clients", "oauth_grants", "oauth_tokens"]:
+# mail_blocked is nothing but addresses (bounces, complaints), keyed by the address: swapping them would collide.
+for t in ["sessions", "login_codes", "oauth_clients", "oauth_grants", "oauth_tokens", "mail_blocked"]:
     if t in tables:
         db.execute(f'delete from "{t}"')
 
@@ -49,9 +50,9 @@ for t in people:
         for (v,) in db.execute(f'select "{c}" from "{t}" where typeof("{c}") = \'text\''):
             for m in EMAIL.findall(v):
                 if not m.endswith("@test.invalid"):
-                    left.append(f"{t}.{c}: {m}")
+                    left.append(f"{t}.{c}")  # never the address itself: the Actions log is public
 if left:
-    print("addresses left:", *left[:20], sep="\n  ")
+    print("addresses left in:", *sorted(set(left))[:20], sep="\n  ")
     sys.exit(1)
 
 db.execute("vacuum")
