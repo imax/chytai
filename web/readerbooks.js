@@ -124,26 +124,28 @@ class ReaderBooks {
 
   // The files already in readers' lists (reader_files), for the owner: `dry` says what would be made, without it
   // they are made (Max's OK first: a one-off backfill of books uploaded before this existed). A file the reader has
-  // not described yet (no language: its reader has not synced since 2026-11-10) is guessed from its letters on a
+  // not described yet (no language: its reader has not synced since 2026-11-10) is guessed from its letters, on a
+  // real run too, so it makes what the dry run showed (Max OK'd 22 books from it on 2026-11-11); the new books'
+  // checks then ask Haiku the language of a doubtful one. Without the owner's letter per reader (`quiet`).
   // dry run and skipped on a real one.
   async backfill({ dry = true, reader = "" } = {}) {
     const rows = this.store.db.prepare(`SELECT reader, name, title, authors, lang, from_name FROM reader_files${reader ? " WHERE reader = ?" : ""}`).all(...(reader ? [reader] : []));
     const by = new Map();
     for (const r of rows) {
-      const lang = r.lang || (dry ? (/[ыэъё]/i.test(r.title) ? "ru" : /[а-яіїєґ]/i.test(r.title) ? "uk" : /[a-z]/i.test(r.title) ? "en" : "") : "");
+      const lang = r.lang || (/[ыэъё]/i.test(r.title) ? "ru" : /[а-яіїєґ]/i.test(r.title) ? "uk" : /[a-z]/i.test(r.title) ? "en" : "");
       if (!by.has(r.reader)) by.set(r.reader, []);
       by.get(r.reader).push({ name: r.name, title: r.title, authors: r.authors.split(";").map((a) => a.trim()).filter(Boolean), lang, fromName: !!r.from_name, guessed: !r.lang });
     }
     const out = { made: [], skipped: [] };
     for (const [id, files] of by) {
-      const r = await this.run(id, files, { dry, limits: false });
+      const r = await this.run(id, files, { dry, limits: false, quiet: true });
       out.made.push(...r.made.map((b) => ({ reader: id, title: b.title, author: b.author, file: b.file, from: b.from, id: b.id })));
       out.skipped.push(...r.skipped.map(([t, why]) => ({ reader: id, file: t, why })));
     }
     return out;
   }
 
-  async run(reader, files, { dry = false, limits = true } = {}) {
+  async run(reader, files, { dry = false, limits = true, quiet = false } = {}) {
     const made = [];
     const skipped = [];
     for (const f of files) {
@@ -201,7 +203,7 @@ class ReaderBooks {
     }
     if (dry) return { made, skipped };
     for (const [t, why] of skipped) this.log(`reader books: «${String(t).slice(0, 80)}» not added: ${why}`);
-    if (made.length) this.log(`reader books: ${made.length} new from a reader's uploads: ${made.map((b) => b.id).join(", ")}`), this.made(reader, made);
+    if (made.length) this.log(`reader books: ${made.length} new from a reader's uploads: ${made.map((b) => b.id).join(", ")}`), this.made(reader, made, { quiet });
     return { made, skipped };
   }
 }

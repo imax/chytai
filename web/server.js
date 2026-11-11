@@ -811,10 +811,10 @@ const readerBooks = new ReaderBooks({
     return [...google.map((b) => ({ ...b, from: "Google Books" })), ...ol.map((b) => ({ ...b, from: "Open Library" }))];
   },
   on: (id) => flags.on("reader-books", pub(auth.reader(id))),
-  made: (id, made) => {
+  made: (id, made, { quiet = false } = {}) => {
     details({ ids: made.map((b) => b.id) });
     const r = auth.reader(id);
-    if (!r || id === OWNER_ID) return;
+    if (!r || id === OWNER_ID || quiet) return;
     notifyOwner(`Книжки з Читалки: ${made.length === 1 ? made[0].title : `${made.length} нових`}`, [`${r.name} (${SITE}/@${r.username}) завантажив(ла) в Читалку, і ці книжки з’явилися на Chytai:`, "", ...made.map((b) => `• ${b.title}${b.author ? ` — ${b.author}` : ""}  ${SITE}${store.href(b.id)}${b.file !== b.title ? `  (у файлі: «${b.file}»)` : ""}`)].join("\n"));
   },
 });
@@ -829,6 +829,8 @@ app.get("/agent/reader-books", agentOk, (req, res) => {
   res.json(readerBooksDry);
 });
 app.post("/admin/reader-books", owner, async (req, res) => res.json(await readerBooks.backfill({ dry: false, reader: String(req.body?.reader || "") })));
+// The same for a thread, once Max said yes in it (CLAUDE.md: no writes to production without his OK): { run: true }.
+app.post("/agent/reader-books", agentOk, async (req, res) => (req.body?.run === true ? res.json(await readerBooks.backfill({ dry: false })) : res.status(400).json({ error: "{ run: true }" })));
 // The catalog book for a file in someone's reader: by the title the reader sent or the one it listed earlier.
 function readerCatalogBook(id, sentBook) {
   const name = String(sentBook?.name || "").slice(0, 300);

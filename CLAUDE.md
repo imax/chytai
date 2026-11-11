@@ -101,8 +101,8 @@ so Max sees it on the real site. He switches it to everyone on `/admin/jobs` (bl
   catalog lacks becomes a book (`source: "reader"`) when its metadata is clean, it is uk/en, not Russian, and Google
   Books or Open Library confirm title + author. Behind the flag `reader-books`; caps 20/reader, 200/day.
 - Dry run over all files in readers' lists: `curl -s https://chytai.org.ua/agent/reader-books -H "$H"` (starts it;
-  ask again for the answer, `?again=1` to rerun). The real backfill is `POST /admin/reader-books` (owner), only
-  with Max's OK.
+  ask again for the answer, `?again=1` to rerun). The real backfill is `POST /admin/reader-books` (owner) or
+  `POST /agent/reader-books` with `{"run":true}` (thread), only with Max's OK in the thread. Done once on 2026-11-11.
 
 ## Translation pairs
 
