@@ -89,7 +89,11 @@ class Ask {
 
   get(id) {
     const r = /^[a-z0-9]{6,16}$/.test(id || "") ? this.db.prepare("SELECT * FROM ask_recs WHERE id = ?").get(id) : null;
-    return r ? { ...r, items: JSON.parse(r.items || "[]"), missed: JSON.parse(r.missed || "[]") } : null;
+    if (!r) return null;
+    // Answers kept before match() knew to skip a book the question names lose it here too.
+    const asked = fold(r.text);
+    const items = JSON.parse(r.items || "[]").filter((x) => !named(asked, this.store.book(x.id)?.title, this.store.book(x.id)?.altTitle));
+    return { ...r, items, missed: JSON.parse(r.missed || "[]") };
   }
   // An answer was opened: kept for another half year from now.
   opened(id) {
