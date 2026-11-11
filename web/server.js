@@ -1108,6 +1108,7 @@ const asker = new Ask(store, {
   },
 });
 if (bg.ROLE !== "jobs") setInterval(() => asker.cleanup(), 24 * 3600 * 1000).unref();
+if (bg.ROLE !== "jobs") setTimeout(() => asker.topics().catch((e) => console.error("ask topics:", e.message)), 60000).unref();
 const askOn = (req) => flags.on("ask", req.user);
 // What others asked, with the first covers of each answer.
 const askOthers = (req) => asker.recent(20).map((o) => ({ ...o, books: o.ids.map((id) => store.book(id) && workFor(req, store.book(id))).filter(Boolean) }));
@@ -1147,7 +1148,7 @@ app.post("/agent/ask", agentOk, async (req, res) => {
     const out = await asker.claude(String(req.body?.text || "").slice(0, 1500), { model: /^claude-[a-z0-9-]+$/.test(req.body?.model || "") ? req.body.model : undefined });
     const m = await asker.match(out.books, { model: out.model });
     for (const k of ["input", "output", "cost"]) out[k] += m.extra[k];
-    res.json({ ms: Date.now() - t, model: out.model, cost: out.cost, input: out.input, output: out.output, intro: out.intro, off: out.off, items: m.items.map((x) => ({ ...x, title: store.book(x.id)?.title, author: store.book(x.id)?.author })), missed: m.missed, asked: out.books });
+    res.json({ ms: Date.now() - t, model: out.model, cost: out.cost, input: out.input, output: out.output, topic: out.topic, off: out.off, items: m.items.map((x) => ({ ...x, title: store.book(x.id)?.title, author: store.book(x.id)?.author })), missed: m.missed, asked: out.books });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }

@@ -9,7 +9,7 @@ const { isRussian, sameAuthor, norm } = require("./store");
 
 const MODEL = "claude-opus-5-5";
 // $ per token, for the owner's sums only (server/admin.js PRICES).
-const PRICE = { "claude-opus-5-5": [4, 20], "claude-sonnet-5-5": [2, 10] };
+const PRICE = { "claude-opus-5-5": [4, 20], "claude-sonnet-5-5": [2, 10], "claude-haiku-5-5": [0.1, 0.5] };
 const TEXT_MIN = 15;
 const TEXT_MAX = 1500;
 const SHOW = 8; // books on an answer
@@ -30,7 +30,7 @@ CREATE INDEX IF NOT EXISTS ask_recs_created ON ask_recs (created);`;
 const SYSTEM = `You are a well-read friend on Chytai, a Ukrainian site about books. Someone tells you, in their own words, what they have read and liked, and often what they would like next. Recommend books for them to read next.
 
 Answer with one JSON object and nothing else:
-{"intro": "...", "off": false, "books": [{"title_uk": "...", "author_uk": "...", "title": "...", "author": "...", "series": "...", "why": "..."}]}
+{"topic": "...", "off": false, "books": [{"title_uk": "...", "author_uk": "...", "title": "...", "author": "...", "series": "...", "why": "..."}]}
 
 - books: 15 books, the best fit first. Each is a real, published book. Name the Ukrainian edition when there is one: title_uk and author_uk exactly as the Ukrainian edition prints them (for example «Чоловіки, які ненавидять жінок», «Стіг Ларссон»); empty strings when you are not sure a Ukrainian edition exists. title and author: the original title and the author's name in the original language.
 - Prefer books that have been published in Ukrainian. Ukrainian authors are welcome where they truly fit. Never a Russian author, and never a book that exists only in Russian.
@@ -38,18 +38,18 @@ Answer with one JSON object and nothing else:
 - Never a book or a series they say they have already read, and at most one book by any one author.
 - Follow what they actually liked: if it is the people, the mood, the setting or the profession at the centre of it, find that, not just the genre.
 - why: one short sentence in Ukrainian, at most 18 words: what this book shares with what they liked or asked for, concretely. No spoilers, no praise words like «неймовірний», «must read», «шедевр».
-- intro: one short sentence in Ukrainian, addressed to the reader as «ви», on the thread that runs through the picks. No greeting, no «Ось», no exclamation.
-- If the text is not about books or reading at all, answer with an empty intro, no books and "off": true; otherwise "off" is false.`;
+- topic: what this request is about, one level above it, in Ukrainian, 3 to 8 words, as a heading in a list of what other people asked: «Детективні цикли із судмедекспертами», «Грецька міфологія для дітей», «Для тих, хто любить Dungeon Crawler Carl». A noun phrase, no verb, no «Порада», no names of the person.
+- If the text is not about books or reading at all, answer with an empty topic, no books and "off": true; otherwise "off" is false.`;
 
 const str = { type: "string" };
 const OUT_SCHEMA = {
   type: "object",
   properties: {
-    intro: str,
+    topic: str,
     off: { type: "boolean" },
     books: { type: "array", items: { type: "object", properties: { title_uk: str, author_uk: str, title: str, author: str, series: str, why: str }, required: ["title_uk", "author_uk", "title", "author", "series", "why"], additionalProperties: false } },
   },
-  required: ["intro", "books", "off"],
+  required: ["topic", "books", "off"],
   additionalProperties: false,
 };
 // The second question: a recommended book we lack, and this author's books we have.
@@ -71,6 +71,8 @@ class Ask {
     this.store = store;
     this.db = store.db;
     this.db.exec(SCHEMA);
+    // «Що питають інші» shows a topic, not the question (Max, 2026-11-11: «піднятись на один рівень абстракції»).
+    if (!this.db.prepare("SELECT 1 FROM pragma_table_info('ask_recs') WHERE name = 'topic'").get()) this.db.exec("ALTER TABLE ask_recs ADD COLUMN topic TEXT NOT NULL DEFAULT ''");
     this.client = client || (apiKey ? new (require("@anthropic-ai/sdk"))({ apiKey }) : null);
     this.ukWork = ukWork;
     this.notify = notify;
@@ -119,8 +121,8 @@ class Ask {
       const { items, missed, extra } = await this.match(out.books, { model: out.model });
       for (const k of ["input", "output", "cost"]) out[k] += extra[k];
       this.db
-        .prepare("UPDATE ask_recs SET status = ?, intro = ?, items = ?, missed = ?, model = ?, input_tokens = ?, output_tokens = ?, cost = ?, ms = ? WHERE id = ?")
-        .run(out.off ? "off" : items.length ? "done" : "none", clean(out.intro, 400), JSON.stringify(items), JSON.stringify(missed), out.model, out.input, out.output, out.cost, Date.now() - t, id);
+        .prepare("UPDATE ask_recs SET status = ?, topic = ?, items = ?, missed = ?, model = ?, input_tokens = ?, output_tokens = ?, cost = ?, ms = ? WHERE id = ?")
+        .run(out.off ? "off" : items.length ? "done" : "none", clean(out.topic, 80).replace(/[.!]+$/, ""), JSON.stringify(items), JSON.stringify(missed), out.model, out.input, out.output, out.cost, Date.now() - t, id);
       this.log(`ask ${id}: ${items.length} of ${(out.books || []).length} in the catalog, ${Date.now() - t} ms, $${out.cost.toFixed(3)}`);
       this.notify(this.get(id));
     } catch (e) {
@@ -149,10 +151,10 @@ class Ask {
     return { j: JSON.parse(raw.slice(raw.indexOf("{"), raw.lastIndexOf("}") + 1)), input, output: u.output_tokens || 0, cost: (input * pi + (u.output_tokens || 0) * po) / 1e6 };
   }
 
-  // What Claude recommends for this text: { intro, books, off, model, input, output, cost }.
+  // What Claude recommends for this text: { topic, books, off, model, input, output, cost }.
   async claude(text, { model = MODEL } = {}) {
     const { j, input, output, cost } = await this.json(SYSTEM, text, OUT_SCHEMA, model);
-    return { intro: j.intro || "", books: Array.isArray(j.books) ? j.books.slice(0, 20) : [], off: !!j.off, model, input, output, cost };
+    return { topic: j.topic || "", books: Array.isArray(j.books) ? j.books.slice(0, 20) : [], off: !!j.off, model, input, output, cost };
   }
 
   // Claude's books that our catalog has, as { id, why, series }, the Ukrainian edition, one per series and author, in
@@ -253,9 +255,25 @@ class Ask {
   // Inspirations поклікати … ми не витрачаємо токени на них»). [{ id, text, ids }]. A small table, one query.
   recent(n = 10) {
     return this.db
-      .prepare("SELECT id, text, items FROM ask_recs WHERE status = 'done' AND id IN (SELECT MAX(id) FROM ask_recs WHERE status = 'done' GROUP BY key) ORDER BY created DESC LIMIT ?")
+      .prepare("SELECT id, text, topic, items FROM ask_recs WHERE status = 'done' AND id IN (SELECT MAX(id) FROM ask_recs WHERE status = 'done' GROUP BY key) ORDER BY created DESC LIMIT ?")
       .all(n)
-      .map((r) => ({ id: r.id, text: r.text, ids: JSON.parse(r.items || "[]").map((x) => x.id) }));
+      .map((r) => ({ id: r.id, text: r.text, topic: r.topic, ids: JSON.parse(r.items || "[]").map((x) => x.id) }));
+  }
+
+  // Answers made before topics existed get one (Haiku, a line each; a few rows once, then nothing to do).
+  async topics() {
+    if (!this.client) return 0;
+    const rows = this.db.prepare("SELECT id, text FROM ask_recs WHERE status = 'done' AND topic = '' LIMIT 50").all();
+    for (const r of rows) {
+      try {
+        const sys = SYSTEM.split("\n").find((l) => l.startsWith("- topic:")).slice(2) + "\nAnswer with JSON {\"topic\": \"...\"}.";
+        const { j } = await this.json(sys, r.text, { type: "object", properties: { topic: str }, required: ["topic"], additionalProperties: false }, "claude-haiku-5-5");
+        this.db.prepare("UPDATE ask_recs SET topic = ? WHERE id = ?").run(clean(j.topic, 80).replace(/[.!]+$/, ""), r.id);
+      } catch (e) {
+        this.log(`ask topic ${r.id}: ${e.message}`);
+      }
+    }
+    return rows.length;
   }
 
   // For the owner: how many asks, answers and dollars today and in all.

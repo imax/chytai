@@ -3159,7 +3159,7 @@ function askPage({ user, text = "", error = "", others = [] }) {
   <p class="lead">Напишіть, що вам сподобалось. Порадимо книжки з каталогу.</p>
 </section>
 ${askForm(text, error)}
-${others.length ? `<section class="ask-others">${label("Що питають інші")}${others.map((o) => `<a class="ask-other" href="/ask/${attr(o.id)}"><span class="q">${esc(short(o.text))}</span><span class="n">${books(o.books.length)}</span></a>`).join("")}</section>` : ""}`;
+${others.length ? `<section class="ask-others">${label("Що питають інші")}${others.map((o) => `<a class="ask-other" href="/ask/${attr(o.id)}"><span class="q">${esc(o.topic || short(o.text))}</span></a>`).join("")}</section>` : ""}`;
   return layout({ title: "Що почитати далі?", body, user, path: "/ask", canonical: "/ask", description: "Напишіть, що вам сподобалось, і Chytai порадить книжки." });
 }
 // ask: the row from ask.js; items: [{ id, book, why, series, mine }]; canAsk: the field is open to this visitor.
@@ -3193,7 +3193,7 @@ ${items.length ? `<script>document.getElementById("ask-copy")?.addEventListener(
 });</script>` : ""}
 ${wait ? `<script>(() => { let n = 0; const go = async () => { const r = await fetch(${JSON.stringify(`/api${href}`)}).then((x) => x.json()).catch(() => ({})); if (r.status && r.status !== "wait") return location.reload(); if (++n === 15) document.getElementById("ask-wait").textContent = "Ще трохи…"; if (n < 90) setTimeout(go, 2000); }; setTimeout(go, 2500); })();</script>` : ""}`;
   const first = ask.text.replace(/\s+/g, " ").trim();
-  return layout({ title: "Що почитати далі", body, user, path: "/ask", canonical: href, noindex: true, description: [first.length > 160 ? `${first.slice(0, 157)}…` : first, items.length ? `${books(items.length)}: ${items.slice(0, 4).map((x) => x.book.title).join(", ")}` : ""].filter(Boolean).join(" "), image: abs(items.find((x) => x.book.cover)?.book.cover || ""), type: "article" });
+  return layout({ title: ask.topic || "Що почитати далі", body, user, path: "/ask", canonical: href, noindex: true, description: [first.length > 160 ? `${first.slice(0, 157)}…` : first, items.length ? `${books(items.length)}: ${items.slice(0, 4).map((x) => x.book.title).join(", ")}` : ""].filter(Boolean).join(" "), image: abs(items.find((x) => x.book.cover)?.book.cover || ""), type: "article" });
 }
 
 module.exports = {
