@@ -30,7 +30,7 @@ CREATE INDEX IF NOT EXISTS ask_recs_created ON ask_recs (created);`;
 const SYSTEM = `You are a well-read friend on Chytai, a Ukrainian site about books. Someone tells you, in their own words, what they have read and liked, and often what they would like next. Recommend books for them to read next.
 
 Answer with one JSON object and nothing else:
-{"intro": "...", "books": [{"title_uk": "...", "author_uk": "...", "title": "...", "author": "...", "series": "...", "why": "..."}]}
+{"intro": "...", "off": false, "books": [{"title_uk": "...", "author_uk": "...", "title": "...", "author": "...", "series": "...", "why": "..."}]}
 
 - books: 15 books, the best fit first. Each is a real, published book. Name the Ukrainian edition when there is one: title_uk and author_uk exactly as the Ukrainian edition prints them (for example «Чоловіки, які ненавидять жінок», «Стіг Ларссон»); empty strings when you are not sure a Ukrainian edition exists. title and author: the original title and the author's name in the original language.
 - Prefer books that have been published in Ukrainian. Ukrainian authors are welcome where they truly fit. Never a Russian author, and never a book that exists only in Russian.
@@ -39,8 +39,19 @@ Answer with one JSON object and nothing else:
 - Follow what they actually liked: if it is the people, the mood, the setting or the profession at the centre of it, find that, not just the genre.
 - why: one short sentence in Ukrainian, at most 18 words: what this book shares with what they liked or asked for, concretely. No spoilers, no praise words like «неймовірний», «must read», «шедевр».
 - intro: one short sentence in Ukrainian, addressed to the reader as «ви», on the thread that runs through the picks. No greeting, no «Ось», no exclamation.
-- If the text is not about books or reading at all, answer {"intro": "", "books": [], "off": true}.`;
+- If the text is not about books or reading at all, answer with an empty intro, no books and "off": true; otherwise "off" is false.`;
 
+const str = { type: "string" };
+const OUT_SCHEMA = {
+  type: "object",
+  properties: {
+    intro: str,
+    off: { type: "boolean" },
+    books: { type: "array", items: { type: "object", properties: { title_uk: str, author_uk: str, title: str, author: str, series: str, why: str }, required: ["title_uk", "author_uk", "title", "author", "series", "why"], additionalProperties: false } },
+  },
+  required: ["intro", "books", "off"],
+  additionalProperties: false,
+};
 const now = () => new Date().toISOString();
 const keyOf = (text) => norm(text).replace(/\s+/g, " ").trim();
 const hash = (s) => crypto.createHash("sha256").update(`ask:${s}`).digest("hex").slice(0, 24);
@@ -118,7 +129,10 @@ class Ask {
       max_tokens: 4000,
       system: [{ type: "text", text: SYSTEM, cache_control: { type: "ephemeral" } }],
       messages: [{ role: "user", content: text }],
+      // Valid JSON every time (a «"» inside a title broke a hand-parsed answer); low effort: it is recall, not reasoning.
+      output_config: { effort: "low", format: { type: "json_schema", schema: OUT_SCHEMA } },
     });
+    if (res.stop_reason === "refusal") throw new Error(`refusal ${res.stop_details?.category || ""}`);
     const raw = res.content.map((c) => c.text || "").join("");
     const j = JSON.parse(raw.slice(raw.indexOf("{"), raw.lastIndexOf("}") + 1));
     const u = res.usage || {};
