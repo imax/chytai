@@ -81,6 +81,8 @@ jobs:
       - uses: actions/checkout@v4
       - uses: superfly/flyctl-actions/setup-flyctl@master
       - run: sudo apt-get install -y age >/dev/null
+      # Each copy has its own files in /tmp: the site's database and its covers are taken from one machine, at the same
+      # time on a push (2026-11-11 the two shared /tmp/backup.tar.gz, and the site's copy came down as the covers).
       # The machines sleep when nobody uses them (and /tmp goes with them), so ping the site while this runs
       # and redo snapshot + download together if the machine stopped in between.
       - name: Snapshot on the machine
@@ -97,13 +99,13 @@ jobs:
             # Packing the reader's books takes minutes now (2026-11-06): a 120 s cut left the first run going on the
             # machine, and the retry's copy came out with the database alone. Give it time.
             timeout 900 flyctl ssh console -a "$FLY_APP" --machine "$id" \
-              -C "sh -c 'set -f; echo $script | base64 -d > /tmp/backup-snapshot.js && rm -f /tmp/backup.tar.gz && node /tmp/backup-snapshot.js ${{ matrix.dir }} /tmp/backup.tar.gz ${{ matrix.exclude }}'" \
-              && timeout 600 flyctl ssh sftp get /tmp/backup.tar.gz backup.tar.gz -a "$FLY_APP" --machine "$id" \
+              -C "sh -c 'set -f; echo $script | base64 -d > /tmp/backup-snapshot-$APP.js && rm -f /tmp/backup-$APP.tar.gz && node /tmp/backup-snapshot-$APP.js ${{ matrix.dir }} /tmp/backup-$APP.tar.gz ${{ matrix.exclude }}'" \
+              && timeout 600 flyctl ssh sftp get /tmp/backup-$APP.tar.gz backup.tar.gz -a "$FLY_APP" --machine "$id" \
               && break
             rm -f backup.tar.gz; echo "retrying"; sleep 10
           done
           test -s backup.tar.gz
-          timeout 120 flyctl ssh console -a "$FLY_APP" --machine "$id" -C "rm -f /tmp/backup.tar.gz /tmp/backup-snapshot.js" || true
+          timeout 120 flyctl ssh console -a "$FLY_APP" --machine "$id" -C "rm -f /tmp/backup-$APP.tar.gz /tmp/backup-snapshot-$APP.js" || true
       - name: Check the copy
         id: check
         run: |
@@ -116,6 +118,14 @@ jobs:
           # A copy with the database alone (the reader's on 2026-11-05 and 11-06) is not a backup.
           n=$(find check -type f | wc -l); echo "$n files"; echo "FILES=$n" >> "$GITHUB_ENV"
           [ "$n" -ge 10 ] || { echo "::error::only $n files in the copy"; exit 1; }
+          # And the copy is the one asked for: the database of the site, the reader's own.
+          case "$APP" in
+            chytai-web) want=check/web/chytai.db ;;
+            chytai) want=check/reader.db ;;
+            *) want= ;;
+          esac
+          [ -z "$want" ] || [ -s "$want" ] || { echo "::error::no ${want#check/} in the copy"; exit 1; }
+          [ "$APP" != chytai-web-covers ] || [ ! -e check/web ] || { echo "::error::the covers' copy holds the site"; exit 1; }
           python3 - <<'PY'
           import json, pathlib, sqlite3, sys
           ok = True
@@ -213,7 +223,7 @@ jobs:
         run: |
           body=$(jq -n --argjson s "$STEPS" --arg app "$APP" --arg shape "$SHAPE" --arg run "$RUN" --argjson files "${FILES:-0}" --argjson bytes "${BYTES:-0}" '{
             app: $app, shape: $shape, run: $run, files: $files, bytes: $bytes,
-            ok: ($s.upload.outcome == "success"),
+            ok: ($s.upload.outcome == "success" and $s.restore.outcome == "success"),
             restored: ($s.restore.outcome == "success"),
             test: ({success: "ok", failure: "failed"}[$s.test.outcome // ""] // "skipped"),
             failed: [$s | to_entries[] | select(.value.outcome == "failure") | .key]
