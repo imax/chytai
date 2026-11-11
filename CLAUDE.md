@@ -125,7 +125,7 @@ A flag only when Max asks for one, or when the change could break what readers u
   then search by title start + same author), Ukrainian edition, series start, one per author/series, up to 8.
   Each answer at /ask/<id>, open to anyone; same text again = kept answer. Unopened 180 days → deleted.
   The answer page shows a plain «Автор, «Назва»» list (copyable); /ask lists `asker.recent()` by `topic` (Claude names it in
-  the same call; older rows get one from Haiku at start, `asker.topics()`).
+  the same call; older rows get one from Opus at start, `asker.topics()`).
 - Try the prompt on production's catalog without keeping anything (30 a day):
   `curl -s https://chytai.org.ua/agent/ask -H "$H" -H 'content-type: application/json' -d '{"text":"…","model":"claude-sonnet-5-5"}'`.
 - Locally without a key: preload a fake `@anthropic-ai/sdk` (`node -r mock.js web/server.js`, ANTHROPIC_API_KEY=dummy).

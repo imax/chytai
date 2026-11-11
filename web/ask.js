@@ -260,14 +260,20 @@ class Ask {
       .map((r) => ({ id: r.id, text: r.text, topic: r.topic, ids: JSON.parse(r.items || "[]").map((x) => x.id) }));
   }
 
-  // Answers made before topics existed get one (Haiku, a line each; a few rows once, then nothing to do).
+  // Answers made before topics existed get one (Opus, a line each; a few rows once, then nothing to do). Haiku's
+  // first go read clumsily («Детективні та трилери серіали й цикли книг»): those rows are named again once
+  // (meta `ask:topics`).
   async topics() {
     if (!this.client) return 0;
-    const rows = this.db.prepare("SELECT id, text FROM ask_recs WHERE status = 'done' AND topic = '' LIMIT 50").all();
+    const again = !this.db.get("ask:topics");
+    const rows = this.db
+      .prepare("SELECT id, text FROM ask_recs WHERE status = 'done' AND (topic = '' OR (? AND created < '2026-11-11T13:00Z')) LIMIT 50")
+      .all(again ? 1 : 0);
+    if (again) this.db.set("ask:topics", "opus");
     for (const r of rows) {
       try {
         const sys = SYSTEM.split("\n").find((l) => l.startsWith("- topic:")).slice(2) + "\nAnswer with JSON {\"topic\": \"...\"}.";
-        const { j } = await this.json(sys, r.text, { type: "object", properties: { topic: str }, required: ["topic"], additionalProperties: false }, "claude-haiku-5-5");
+        const { j } = await this.json(sys, r.text, { type: "object", properties: { topic: str }, required: ["topic"], additionalProperties: false }, MODEL);
         this.db.prepare("UPDATE ask_recs SET topic = ? WHERE id = ?").run(clean(j.topic, 80).replace(/[.!]+$/, ""), r.id);
       } catch (e) {
         this.log(`ask topic ${r.id}: ${e.message}`);
