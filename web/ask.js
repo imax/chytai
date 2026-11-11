@@ -256,6 +256,16 @@ class Ask {
       const hit = (s.search(title, { limit: 10 }) || []).map((x) => x.book || x).find((b) => b && b.author && sameAuthor(author, b.author) && norm(b.title).startsWith(norm(title)));
       if (hit) return hit.id;
     }
+    // The same words in another order, among the author's books: Claude recalls «Я змішаю твою кров з вугіллям», the
+    // catalog has «Я кров твою змішаю з вугіллям» (Max, 2026-11-11: «остання точно є»). Main titles only, 3+ words.
+    const bag = (t) => norm(String(t || "").split(/[:.(]/)[0]).split(" ").filter(Boolean).sort().join(" ");
+    for (const [title, author] of [[uk, ua || ea], [en, ea || ua]]) {
+      const want = bag(title);
+      if (!author || want.split(" ").length < 3) continue;
+      const ids = s.authors?.byName(author)?.ids || [];
+      const hit = ids.find((id) => bag(s.book(id)?.title) === want);
+      if (hit) return hit;
+    }
     return null;
   }
 
