@@ -1,3 +1,4 @@
+// No longer used for links (Max, 2026-11-11: Укрліб out of «Де взяти»); sluhay.js uses its name helpers. Was:
 // «Укрліб» (ukrlib.com.ua) in «Де взяти»: a link to read the text online, on the pages of Ukrainian classics
 // whose authors died 70 full years ago (Max, 2026-10-27: «давай спробуємо», «Safe enough»). The site also
 // keeps modern translations, audio and texts of living authors with no word on rights, so only its Ukrainian

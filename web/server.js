@@ -1482,9 +1482,9 @@ const freeBooks = new (require("./freebooks").FreeBooks)({ store, lists, who: (i
 bg.register("freeBooks", freeBooks, { run: true });
 bg.every("free", 24 * 3600 * 1000, () => freeBooks.run(), { db: store.db, first: 10 * 60 * 1000 });
 const openLinks = require("./openlinks");
-const ukrlib = new (require("./ukrlib").Ukrlib)({ store, freeBooks, log: console.log });
-bg.register("ukrlib", ukrlib, { run: true });
-bg.every("ukrlib", 24 * 3600 * 1000, () => ukrlib.run(), { db: store.db, first: 25 * 60 * 1000 });
+// Укрліб is gone from «Де взяти» (Max, 2026-11-11: «УкрЛіб можна прибрати», the pages are full of ads): no more
+// links or daily matching; its stored copy goes too. ukrlib.js stays for the name helpers sluhay.js uses.
+store.db.exec("DELETE FROM meta WHERE key LIKE 'ukrlib:%'");
 // «Слухай»'s free audiobooks in «Де взяти» (sluhay.js); public since Max's «ок. Слухай +» (2026-10-29).
 const SLUHAY_PUBLIC = true;
 const sluhay = new (require("./sluhay").Sluhay)({ store, freeBooks, log: console.log });
@@ -2787,7 +2787,7 @@ app.get("/book/:id", (req, res) => {
   const free = !file && freeFileFor(book);
   const alsoBooks = alsoFor(req, book.id);
   const myLists = req.user ? lists.of(req.user.id).map((l) => ({ id: l.id, title: l.title, count: l.count, has: lists.has(l.id, book.id) })) : null;
-  res.send(pages.bookPage({ ukrlib: openLinks.linkFor(store, book) || ukrlib.linkFor(book), sluhay: SLUHAY_PUBLIC || req.owner ? sluhay.linkFor(book) : null, ...(SHOW_AUTHOR_ABOUT ? authorAbout(book) : {}), ...discovery(req, book, alsoBooks.also), lists: lists.withBook(book.id).map(withCovers), myLists, club: club.mark(req.user?.id, club.ofBook(book.id)), freeRead: !!free, freeFile: !!free && !free.readerOnly, book, entry: store.sharedEntry(req.user?.id, book.id), now: !!req.user && nowIds(req.user.id).has(store.canonical(book.id)), user: req.user, readUrl: file ? `${READER_URL}/?open=${encodeURIComponent(file.name)}` : free ? `${READER_URL}/free/${encodeURIComponent(free.name)}` : "", shelf: book.shelf && (req.owner || !isDraft(book.shelf)) ? store.shelf(book.shelf) : null, inLibrary: inLibraryMap(req), readers: readersOf(book.id), ...alsoBooks, writings: reviews.of(book.id), reviewError: String(req.query.review_error || "").slice(0, 300), editionError: String(req.query.edition_error || "").slice(0, 300), ukAsk: ukAskFor(req, book) || (req.user && req.query.edition_error ? "ask" : null), advice: advice.state(req.user, book.id), overview: linkedOverview(book), overviewVote: advice.voteOf(book.id, req.user?.id), bookQuote: randomQuote(book) }));
+  res.send(pages.bookPage({ ukrlib: openLinks.linkFor(store, book), sluhay: SLUHAY_PUBLIC || req.owner ? sluhay.linkFor(book) : null, ...(SHOW_AUTHOR_ABOUT ? authorAbout(book) : {}), ...discovery(req, book, alsoBooks.also), lists: lists.withBook(book.id).map(withCovers), myLists, club: club.mark(req.user?.id, club.ofBook(book.id)), freeRead: !!free, freeFile: !!free && !free.readerOnly, book, entry: store.sharedEntry(req.user?.id, book.id), now: !!req.user && nowIds(req.user.id).has(store.canonical(book.id)), user: req.user, readUrl: file ? `${READER_URL}/?open=${encodeURIComponent(file.name)}` : free ? `${READER_URL}/free/${encodeURIComponent(free.name)}` : "", shelf: book.shelf && (req.owner || !isDraft(book.shelf)) ? store.shelf(book.shelf) : null, inLibrary: inLibraryMap(req), readers: readersOf(book.id), ...alsoBooks, writings: reviews.of(book.id), reviewError: String(req.query.review_error || "").slice(0, 300), editionError: String(req.query.edition_error || "").slice(0, 300), ukAsk: ukAskFor(req, book) || (req.user && req.query.edition_error ? "ask" : null), advice: advice.state(req.user, book.id), overview: linkedOverview(book), overviewVote: advice.voteOf(book.id, req.user?.id), bookQuote: randomQuote(book) }));
 });
 
 // A translation and its original in one list are one card (Max, 2026-10-25: two rows «трохи плутає»; 2026-10-26: the same

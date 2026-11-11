@@ -1455,7 +1455,6 @@ const JOBS = {
   "advice.redo": "Відгуки в інтернеті: переробити за новим промптом",
   "gsc.run": "Google Search Console",
   "newBooks.run": "Нові книжки: перевірки",
-  "ukrlib.run": "Укрліб: лінки на класику",
 };
 const PASSES = { dupes: "Дублі", notbooks: "Не книжки", series: "Серії", year: "Рік прочитання", authors: "Автори", covers: "Обкладинки", mentions: "Згадки", blurb: "Опис" };
 const jobName = (job) => {
@@ -1475,7 +1474,6 @@ const PLANS = {
   "thumbs-prune": { what: "Прибрати зайві малі обкладинки", jobs: ["thumbs-prune"] },
   "covers-shrink": { what: "Зменшити завеликі обкладинки", jobs: ["covers-shrink"] },
   free: { what: "Вільні книжки з «Хочу прочитати»", jobs: ["freeBooks.run"] },
-  ukrlib: { what: "Укрліб: лінки на класику", note: "сайт читає один раз, з нашим каталогом звіряє щодня", jobs: ["ukrlib.run"] },
   aipasses: { what: "Haiku: нові книжки (жанри, мова, оригінали, дублі…)", jobs: ["genreTrial.runAll", "origTrial.runAll", "langTrial.runAll", /^pass:\w+\.runAll$/] },
   gsc: { what: "Google Search Console", jobs: ["gsc.run"] },
   overviews: { what: "Відгуки в інтернеті: книжки в чергу", jobs: ["advice.sweep"] },
