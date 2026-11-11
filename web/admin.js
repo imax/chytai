@@ -1112,7 +1112,7 @@ ${s.sections.length ? `<div class="tbl"><table class="sections">
 function healthBlock({ day = null, jobs = { n: 0, failed: [] }, reader = true, errors = [], mail = null, backup = null, storage = null, gone = null }) {
   const PLACE = { site: "сайт", jobs: "фон", reader: "Читалка" };
   const errN = errors.reduce((n, e) => n + e.n, 0);
-  // What failed, the most frequent first (errors.js keeps them; the same go to Telegram once an hour).
+  // What failed, the most frequent first (errors.js keeps them; the morning report counts yesterday's).
   const errList = errors.length ? `<ul class="small muted">${errors.slice(0, 5).map((e) => `<li>${PLACE[e.place] || esc(e.place)}: ${esc(e.msg.slice(0, 160))}${e.url ? ` <span class="muted">(${esc(e.url)})</span>` : ""}${e.n > 1 ? ` × ${e.n}` : ""}</li>`).join("")}</ul>` : "";
   const s = (ms) => `${String(ms / 1000).replace(".", ",")} с`;
   const p = day?.page;

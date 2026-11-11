@@ -6,6 +6,7 @@
 const { dayOf } = require("./admin");
 const { testAddress } = require("./auth");
 const telegram = require("./telegram");
+const errorsLib = require("./errors");
 
 const REPORT_HOUR = 8; // Kyiv; before the Friday letter (9:30) and wantmail (10:00)
 const DAY = 86400000;
@@ -63,9 +64,25 @@ function siteDay(db, day, ownerId) {
     comments: count("SELECT reader, created AS at FROM list_comments WHERE created BETWEEN ? AND ?"),
     club: count("SELECT reader, created AS at FROM club_posts WHERE created BETWEEN ? AND ?") + count("SELECT reader, created AS at FROM club_topics WHERE created BETWEEN ? AND ?"),
     searches: all("SELECT SUM(n) AS n FROM search_log WHERE day = ?", day)[0]?.n || 0,
-    errors: all("SELECT at FROM errors WHERE at BETWEEN ? AND ?", lo, hi).filter((r) => inDay(r.at)).length,
+    errors: dayErrors(all, lo, hi, inDay),
     failed: [...new Set(jobs.filter((r) => inDay(r.started)).map((r) => r.job))],
   };
+}
+
+// The day's errors (errors.js), grouped by kind; new = a kind the 30 days kept had not seen before that day. They no
+// longer go to Telegram one by one (Max, 2026-11-11): here they are counted, and the new ones named.
+function dayErrors(all, lo, hi, inDay) {
+  const rows = all("SELECT at, place, msg FROM errors WHERE at BETWEEN ? AND ?", lo, hi).filter((r) => inDay(r.at));
+  if (!rows.length) return { n: 0, groups: [] };
+  const first = rows.reduce((m, r) => (r.at < m ? r.at : m), rows[0].at);
+  const seen = new Set(all("SELECT DISTINCT place, msg FROM errors WHERE at < ?", first).map((r) => errorsLib.kind(r.place, r.msg)));
+  const groups = new Map();
+  for (const r of rows) {
+    const k = errorsLib.kind(r.place, r.msg);
+    const g = groups.get(k) || groups.set(k, { place: r.place, msg: r.msg, n: 0, fresh: !seen.has(k) }).get(k);
+    g.n++;
+  }
+  return { n: rows.length, groups: [...groups.values()].sort((a, b) => b.fresh - a.fresh || b.n - a.n) };
 }
 
 // The reader app's day (server/index.js GET /api/site-admin/day): per account, so the site leaves out its own skip list.
@@ -94,7 +111,7 @@ function readerDay(r, skip, titleOf = () => "") {
 }
 
 const n = (x) => x.toLocaleString("uk-UA");
-function text(day, s, rd, site, backup = "") {
+function text(day, s, rd, site, backup = "", triage = "") {
   const lines = [`Chytai за ${dayName(day)}`, ""];
   const from = s.from.map(([k, v]) => `${k} ${v}`).join(", ");
   lines.push(`Нові читачі: ${s.signups}${from ? ` (${from})` : ""}`);
@@ -111,7 +128,16 @@ function text(day, s, rd, site, backup = "") {
     if (rd.gone) lines.push(`Сторінку вивантажено: ${rd.gone}${rd.goneFront ? `, з них на екрані ${rd.goneFront}` : ", усі у фоні"}`);
   } else lines.push("Читалка не відповіла.");
   lines.push("");
-  lines.push(s.errors || s.failed.length ? `Збої: помилок ${s.errors}${s.failed.length ? `, задачі впали: ${s.failed.join(", ")}` : ""}` : "Збоїв не було.");
+  const e = s.errors, fresh = e.groups.filter((g) => g.fresh);
+  if (!e.n && !s.failed.length) lines.push("Збоїв не було.");
+  else {
+    lines.push(`Збої: помилок ${e.n}${e.n ? ` (видів ${e.groups.length}, нових ${fresh.length})` : ""}${s.failed.length ? `, задачі впали: ${s.failed.join(", ")}` : ""}`);
+    // The new kinds, a few: what to look at. Known ones are only counted.
+    for (const g of fresh.slice(0, 3)) lines.push(`• ${errorsLib.PLACES[g.place] || g.place}: ${g.msg.length > 100 ? `${g.msg.slice(0, 99)}…` : g.msg}${g.n > 1 ? ` ×${g.n}` : ""}`);
+    if (fresh.length > 3) lines.push(`• і ще нових ${fresh.length - 3}`);
+    if (e.n) lines.push(`${site}/admin/speed#errors`);
+  }
+  if (triage) lines.push(`Розбір помилок: ${triage}`);
   if (backup) lines.push(backup);
   lines.push("", `${site}/admin`);
   return lines.join("\n");
@@ -136,7 +162,15 @@ async function build({ db, day, ownerId, site, reader }) {
   try {
     backup = require("./backups").line(db);
   } catch {}
-  return text(day, s, readerDay(r, s.skip, titleOf), site, backup);
+  // The morning error review (POST /agent/triage) runs at 07:00: its note of the last 12 hours, or a word that it
+  // did not come although there were errors.
+  let triage = "";
+  try {
+    const t = JSON.parse(db.get("triage:last") || "null");
+    if (t && Date.now() - Date.parse(t.at) < 12 * 3600000) triage = t.text;
+    else if (s.errors.n) triage = "сьогодні не запускався.";
+  } catch {}
+  return text(day, s, readerDay(r, s.skip, titleOf), site, backup, triage);
 }
 
 // In the jobs process: a look every 10 minutes; the day is sent once (meta `dailyreport:lastRun`).

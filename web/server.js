@@ -66,7 +66,7 @@ const store = new Store(DATA_DIR);
 const google = require("./google"); // «Увійти через Google», site only (google.js)
 const telegram = require("./telegram"); // messages to the owner in Telegram (telegram.js)
 telegram.init(store.db);
-const errors = require("./errors"); // pages that failed and crashes: kept for /admin, sent to Telegram (errors.js)
+const errors = require("./errors"); // pages that failed and crashes: kept for /admin and the morning report (errors.js)
 const storage = require("./storage"); // disk and memory: a row on /admin, Telegram near a limit (storage.js)
 errors.init(store.db);
 errors.watchProcess(bg.ROLE === "jobs" ? "jobs" : "site");
@@ -242,6 +242,16 @@ app.post("/agent/notify", agentOk, async (req, res) => {
   if (agentNotes.length >= 10) return res.status(429).json({ error: "10 an hour already" });
   agentNotes.push(Date.now());
   res.json({ sent: await telegram.send(String(req.body?.text || "").slice(0, 1500)) });
+});
+// The morning error review (a scheduled Claude routine at 07:00 Kyiv, Max 2026-11-11: «розбирати їх»): GET gives its last
+// note { at, text } (the errors since `at` are the next run's), POST { text } keeps one plain line for the 08:00 report.
+app.get("/agent/triage", agentOk, (req, res) => res.json(JSON.parse(store.db.get("triage:last") || "null") || { at: null, text: "" }));
+app.post("/agent/triage", agentOk, (req, res) => {
+  const text = String(req.body?.text || "").replace(/\s+/g, " ").trim().slice(0, 600);
+  if (!text) return res.status(400).json({ error: "{ text }" });
+  const note = { at: new Date().toISOString(), text };
+  store.db.set("triage:last", JSON.stringify(note));
+  res.json(note);
 });
 // The nightly backup's report (backup.yml, every job at its end): kept for /admin, the morning report and the noon
 // check; a failure or a much smaller copy goes to Telegram at once (backups.js).
@@ -1121,7 +1131,7 @@ app.get("/api/reader-find", (req, res) => {
 app.post("/api/reader-alert", (req, res) => {
   if (!readerKeyOk(OWNER_ID, String(req.body?.key || ""))) return res.status(403).json({ error: "key" });
   // An error a reader ran into in the reader app: kept with the site's (errors.js), not mailed.
-  if (req.body?.error) return errors.record("reader", { message: String(req.body.error).slice(0, 500), stack: String(req.body.stack || "").slice(0, 1500) }, String(req.body.url || "").slice(0, 220)), res.json({ ok: true });
+  if (req.body?.error) return errors.record("reader", { message: String(req.body.error).slice(0, 500), frames: String(req.body.stack || "").slice(0, 1500) }, String(req.body.url || "").slice(0, 220)), res.json({ ok: true });
   notifyOwner(String(req.body?.subject || "Chytai: Читалка").slice(0, 150), String(req.body?.text || "").slice(0, 3000));
   res.json({ ok: true });
 });

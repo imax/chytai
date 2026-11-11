@@ -1,9 +1,9 @@
 // Errors readers ran into, for the owner (risk review 2026-11-05: «помилок сайту ніхто не бачить»). A page that
 // failed with a 500, a crash of the site or jobs process, an error in the reader app (it posts them to
-// /api/reader-alert): each is kept in the `errors` table (the last 30 days, at most 500 rows) and goes to the
-// owner's Telegram at most once an hour for the same message. /admin shows the last day's in its status block.
+// /api/reader-alert): each is kept in the `errors` table (the last 30 days, at most 500 rows). /admin shows the last
+// day's in its status block, /admin/speed#errors all of them, the morning report (dailyreport.js) yesterday's count and
+// the new ones. Nothing goes to Telegram one by one (Max, 2026-11-11: «я ж нічого не можу зробити» with a single error).
 // Never readers' e-mail addresses or the text they wrote: the message, the stack's top lines, the address asked for.
-const telegram = require("./telegram");
 
 let db = null;
 const KEEP_DAYS = 30;
@@ -12,19 +12,26 @@ const KEEP_ROWS = 500;
 function init(database) {
   db = database;
   db.exec("CREATE TABLE IF NOT EXISTS errors (at TEXT NOT NULL, place TEXT NOT NULL, msg TEXT NOT NULL, url TEXT NOT NULL DEFAULT '', stack TEXT NOT NULL DEFAULT '')");
+  // The once-an-hour marks of the Telegram alerts that were here before 2026-11-11.
+  try {
+    db.exec("DELETE FROM meta WHERE key LIKE 'telegram:once:error:%'");
+  } catch {}
 }
 
-// The same error with different ids or numbers in it counts as one (for Telegram's once an hour and /admin).
+// The same error with different ids or numbers in it counts as one (the morning report's «new», /admin).
 const kind = (place, msg) => `${place}:${String(msg).replace(/\d+/g, "N").slice(0, 120)}`;
 // An address with its query and long ids cut: what was asked for, not who asked.
 const cleanUrl = (url) => String(url || "").split("?")[0].slice(0, 200);
-const PLACES = { site: "на сайті", jobs: "у фонових задачах сайту", reader: "у Читалці" };
+const PLACES = { site: "сайт", jobs: "задачі", reader: "Читалка" };
 
 // place: "site" | "jobs" | "reader"; err: an Error or a message; url: "GET /path" or "".
+// err.frames instead of err.stack: lines that are only frames, kept as they are (the reader sends those: its
+// browser's frames are in epub.min.js under /node_modules/, which a server's stack leaves out as noise).
 function record(place, err, url = "") {
   const noMail = (t) => t.replace(/[^\s@<>"'`(),:;]+@[^\s@<>"'`(),:;]+\.[a-z]{2,}/gi, "…@…");
   const msg = noMail(String(err?.message || err || "без опису")).slice(0, 500);
-  const stack = String(err?.stack || "").split("\n").slice(1).map((l) => l.trim()).filter((l) => !/node_modules|node:internal/.test(l)).slice(0, 5).join("\n").slice(0, 1000);
+  const lines = err?.frames != null ? String(err.frames).split("\n") : String(err?.stack || "").split("\n").slice(1).filter((l) => !/node_modules|node:internal/.test(l));
+  const stack = noMail(lines.map((l) => l.trim()).filter(Boolean).slice(0, 5).join("\n")).slice(0, 1000);
   console.error(`[error] ${place} ${url} ${msg}${stack ? `\n${stack}` : ""}`);
   if (!db) return;
   try {
@@ -32,8 +39,6 @@ function record(place, err, url = "") {
     db.prepare("INSERT INTO errors (at, place, msg, url, stack) VALUES (?, ?, ?, ?, ?)").run(now, place, msg, url.slice(0, 220), stack);
     db.prepare("DELETE FROM errors WHERE at < ?").run(new Date(Date.now() - KEEP_DAYS * 86400000).toISOString());
     db.prepare("DELETE FROM errors WHERE rowid NOT IN (SELECT rowid FROM errors ORDER BY at DESC LIMIT ?)").run(KEEP_ROWS);
-    const n = db.prepare("SELECT COUNT(*) AS n FROM errors WHERE place = ? AND msg = ? AND at >= ?").get(place, msg, new Date(Date.now() - 86400000).toISOString()).n;
-    return telegram.sendOnce(`error:${kind(place, msg)}`, 1, `Помилка ${PLACES[place] || place}: ${msg}${url ? `\n${url}` : ""}${n > 1 ? `\nЗа добу разів: ${n}` : ""}${stack ? `\n\n${stack.split("\n")[0]}` : ""}\n\nУсі помилки: https://chytai.org.ua/admin/speed#errors`);
   } catch (e) {
     console.error(`[error] could not record: ${e.message}`);
   }
@@ -66,18 +71,15 @@ function handler(place, page) {
   };
 }
 
-// A crash of the whole process: recorded, sent, and then the process ends as Node would end it (main.js or Fly
-// starts it again). A second crash while the first is being sent ends it at once.
+// A crash of the whole process: recorded, and then the process ends as Node would end it (main.js or Fly starts it
+// again). A crash that keeps the site down reaches Telegram by the reader's check every 5 minutes.
 function watchProcess(place) {
-  let dying = false;
   const die = (err) => {
-    if (dying) process.exit(1);
-    dying = true;
-    const sent = record(place, err, "процес упав");
-    Promise.race([sent, new Promise((r) => setTimeout(r, 3000))]).finally(() => process.exit(1));
+    record(place, err, "процес упав");
+    process.exit(1);
   };
   process.on("uncaughtException", die);
   process.on("unhandledRejection", (reason) => die(reason instanceof Error ? reason : new Error(`unhandled rejection: ${String(reason)}`)));
 }
 
-module.exports = { init, record, lastDay, month, handler, watchProcess, cleanUrl };
+module.exports = { init, record, lastDay, month, handler, watchProcess, cleanUrl, kind, PLACES };

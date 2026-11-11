@@ -385,6 +385,17 @@ async function openEpub(payload, { posKey, source }) {
     // without allow-scripts, so allow scripts and strip the book's own ones in stripScripts.
     allowScriptedContent: true,
   });
+  // A place the book does not have (a link to a file outside its spine, a saved place from another edition of the
+  // file) made epub.js reject display() with «No Section Found», and most calls (a link tap is epub.js's own) don't
+  // wait for it: an unhandled error, and nothing else happened (Max's iPhone, 2026-11-11). Now such a jump just stays
+  // put; display() answers false, so the opening can fall back to the start.
+  const display = rendition.display.bind(rendition);
+  rendition.display = (target) =>
+    display(target).catch((err) => {
+      if (!/No Section Found/.test(err?.message || "")) throw err;
+      console.warn("no such place in the book", target);
+      return false;
+    });
   followFontLoad(rendition);
   rendition.hooks.content.register(styleContents);
   rendition.hooks.content.register((contents) => contents.on("linkClicked", rememberReturn));
@@ -446,7 +457,7 @@ async function openEpub(payload, { posKey, source }) {
   const reveal = () => (viewer.style.opacity = "");
   const revealLate = setTimeout(reveal, 1500);
   try {
-    await rendition.display(payload.position || undefined);
+    if ((await rendition.display(payload.position || undefined)) === false && payload.position) await rendition.display();
   } finally {
     clearTimeout(revealLate);
     reveal();

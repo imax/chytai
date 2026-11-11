@@ -7,7 +7,7 @@
 
   // Script errors a reader runs into (Max, 2026-11-09: the reader's page is most of our code, and its errors went
   // nowhere): a few per page go to the server, which drops browser-extension noise and passes the rest to the
-  // site's error list and Max's Telegram (server/index.js /api/client-error). Message, file:line and a short stack.
+  // site's error list (server/index.js /api/client-error). Message, file:line and a short stack.
   {
     let sent = 0;
     const post = (message, stack) => {
@@ -19,7 +19,8 @@
     };
     addEventListener("error", (e) => {
       if (!e.message) return; // a picture or a script that did not load: not a script error
-      post(`${e.message} (${String(e.filename || "").split("/").pop().split("?")[0]}:${e.lineno || 0})`, e.error?.stack);
+      // The column too: epub.min.js is one line, and WebKit's DOM errors may come without a stack.
+      post(`${e.message} (${String(e.filename || "").split("/").pop().split("?")[0]}:${e.lineno || 0}:${e.colno || 0})`, e.error?.stack);
     });
     addEventListener("unhandledrejection", (e) => {
       const r = e.reason;

@@ -53,8 +53,10 @@ curl -s https://app.chytai.org.ua/agent/sql -H "$H" -H 'content-type: applicatio
   >8 pages without our cookies in 10 min (`admin.js crawler()`); clean a past flood once with `dropCrawler(key, where)`.
 - Errors live in the site's `errors` table (30 days): site 500s and crashes (`site`, `jobs`), the reader's server
   (`reader`), and script errors from readers' browsers in the reader app (`reader`, message starts «[браузер]»,
-  extension noise dropped; `src/renderer/web-bridge.js` → `/api/client-error`). Each new one goes to Max's Telegram
-  once an hour. All of them, grouped, on /admin/speed#errors (`errors.month()`); Огляд shows the last day's top 5.
+  extension noise dropped; `src/renderer/web-bridge.js` → `/api/client-error`; the browser's frames come as `frames`,
+  kept whole). None goes to Telegram one by one (Max, 2026-11-11: he can't act on a single error); the morning report
+  counts yesterday's and names the new kinds. All of them, grouped, on /admin/speed#errors (`errors.month()`); Огляд
+  shows the last day's top 5. The morning error review (below) fixes them.
   Script errors on the site's own pages are only counted (`events`, `name = 'js'`, /admin/speed).
 - Pages the phone unloaded (iOS kills the WebView's page for memory, mostly in the background): the page keeps a note
   of itself in localStorage (`chytai:life`, web-bridge.js `life`), the next load reports it to the reader's
@@ -77,6 +79,20 @@ change put `[rollback-on-errors]` in the commit message: then the watch sends th
 
 Beyond that, when the Actions run is green, check `/agent/health?since=<deploy time>` yourself, and for a risky change
 schedule a wake-up in about an hour and look again. Outages are fixed or reverted without asking.
+
+## Morning error review (scheduled task «Розбір помилок Chytai», ~07:00 Kyiv daily)
+
+A fresh session each morning, before the 08:00 report (Max, 2026-11-11: «розбирати їх», not Telegram per error):
+
+1. `curl -s https://chytai.org.ua/agent/triage -H "$H"` → `at` of the last review; the errors since then:
+   `/agent/health?since=<at>` and `/agent/sql` on `errors` (stack, url, how often, first seen).
+2. Each kind: noise (an extension, a network drop, a bot) → widen the filter (`CLIENT_NOISE` in server/index.js) only
+   if it repeats; real → reproduce on the test DB / a local reader, fix, prove, push to main like any small fix (not
+   during the Friday digest). Big, risky or a product question → leave it for Max, one plain line why.
+3. Before 07:55 Kyiv, one short Ukrainian line for the report, even when there was nothing:
+   `curl -s https://chytai.org.ua/agent/triage -H "$H" -H 'content-type: application/json' -d '{"text":"нових 3: виправлено 2 (…), вам глянути 1: …"}'`.
+   The 08:00 report prints it as «Розбір помилок: …» (12 h old at most; errors and no note = «сьогодні не запускався»).
+4. Then watch your deploy as usual (`rollout-watch`), and keep this section current.
 
 ## Backups (`backup.yml`, `web/backups.js`)
 

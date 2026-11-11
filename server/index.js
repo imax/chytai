@@ -372,7 +372,7 @@ function aiBudgetDenied(req) {
   if (!req.guest && (d.userCost?.[req.acct] || 0) >= ACCOUNT_COST_CAP) return "На сьогодні запитів забагато. Завтра все запрацює знову; якщо це помилка, напишіть Максові.";
   return null;
 }
-// An error a reader ran into goes to the site, which keeps it for /admin and tells the owner in Telegram (web/errors.js,
+// An error a reader ran into goes to the site, which keeps it for /admin and the morning report (web/errors.js,
 // risk review 2026-11-05). The same message at most once in 10 minutes from here; a crash waits for it to leave.
 const errorSent = new Map();
 function reportError(err, url = "") {
@@ -396,7 +396,7 @@ function reportError(err, url = "") {
   process.on("unhandledRejection", die);
 }
 // Script errors from readers' browsers (web-bridge.js; Max, 2026-11-09). Extension noise and the network's own
-// failures are dropped; the rest goes the way of server errors (reportError: the site's list, Telegram once an hour),
+// failures are dropped; the rest goes the way of server errors (reportError: the site's list),
 // marked «[браузер]». At most 20 from one address and 200 in all an hour, so a broken page can't flood anything.
 const CLIENT_NOISE = /^Script error\.?|chrome-extension:|moz-extension:|safari-(web-)?extension:|chrome\.storage|__gCrWeb|webkit\.messageHandlers|ResizeObserver loop|AbortError|The operation was aborted|Failed to fetch|Load failed|NetworkError|network error|Network request failed|cancelled|Non-Error promise rejection captured/i;
 let clientErrors = { hour: 0, all: 0, by: new Map() };
