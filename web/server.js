@@ -413,6 +413,47 @@ function getV6(url, headers) {
     rq.end();
   });
 }
+// A shop's cover can be a print file (2026-11-11: 82 of 2 173 over 300 KB, up to 4.8 MB, 2000×2850 at q99) while the
+// biggest place shows it 200 px wide. A JPEG over SHRINK_OVER is made no bigger than 1000×1600 at q82 in place (the
+// name stays: pages already point at it; the small copies in covers/t are made from it). PNG stays: it may be a
+// shot on a transparent field that thumbs.js puts on white. Max, 2026-11-11: «чи можна зробити якийсь притомний ресайз».
+const SHRINK_OVER = 400 * 1024;
+async function shrinkCover(name) {
+  const file = path.join(COVERS, name);
+  try {
+    const st = fs.statSync(file);
+    if (!st.isFile() || st.size <= SHRINK_OVER) return 0;
+    const head = Buffer.alloc(2);
+    const fd = fs.openSync(file, "r");
+    fs.readSync(fd, head, 0, 2, 0);
+    fs.closeSync(fd);
+    if (head[0] !== 0xff || head[1] !== 0xd8) return 0;
+    const tmp = path.join(COVERS, `${name}.shrink.jpg`);
+    await new Promise((ok, fail) => require("child_process").execFile("nice", ["-n", "10", "vipsthumbnail", file, "--size", "1000x1600>", "-o", `${tmp}[Q=82,strip]`], { timeout: 30000 }, (e, _o, err) => (e ? fail(new Error(String(err || e.message).trim().split("\n")[0])) : ok())));
+    const size = fs.statSync(tmp).size;
+    // At least a fifth smaller: a cover already this size is not encoded again every day.
+    if (size >= 500 && size < st.size * 0.8) {
+      fs.renameSync(tmp, file);
+      return st.size - size;
+    }
+    fs.rmSync(tmp, { force: true });
+  } catch (e) {
+    console.log(`covers: shrink ${name}: ${e.message}`);
+    fs.rmSync(path.join(COVERS, `${name}.shrink.jpg`), { force: true });
+  }
+  return 0;
+}
+// Once a day: every big JPEG cover there is (the ones kept before this, and any that came in some other way).
+bg.every("covers-shrink", 24 * 3600 * 1000, async () => {
+  let n = 0, saved = 0;
+  for (const name of fs.readdirSync(COVERS)) {
+    if (!/^[0-9a-f]{20}\.(jpg|jpeg)$/.test(name)) continue;
+    const s = await shrinkCover(name);
+    if (s) (n++, (saved += s));
+  }
+  if (n) console.log(`covers: ${n} made smaller, ${Math.round(saved / 1048576)} MB freed`);
+  return n ? { note: `${n} обкладинок, −${Math.round(saved / 1048576)} МБ` } : null;
+}, { db: store.db, first: 25 * 60 * 1000 });
 async function keepCover(url) {
   if (!/^https?:\/\//i.test(url || "")) return { url };
   try {
@@ -430,6 +471,7 @@ async function keepCover(url) {
     if (buf.length < 500 || buf.length > 8e6) return { url, error: `розмір ${buf.length} байт` };
     const name = `${require("crypto").createHash("sha1").update(buf).digest("hex").slice(0, 20)}.${ext}`;
     fs.writeFileSync(path.join(COVERS, name), buf);
+    await shrinkCover(name);
     return { url: `/covers/${name}` };
   } catch (e) {
     console.error("cover not kept:", url, e.message, e.cause?.code || "");
