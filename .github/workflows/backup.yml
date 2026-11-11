@@ -4,6 +4,10 @@
 # below and kept as a workflow artifact for 90 days, off Fly. Fly's own daily volume snapshots are the second copy.
 # The private key is NOT in the repo: it is on Max's Mac (~/Projects/chytai/.backup-key) and in the project files.
 # Restore: see "Backups" in README.md.
+# Every night the copy is also restored on trial (scripts/backup-restore-check.sh: the artifact downloaded back,
+# decrypted with the private key from the repo secret CHYTAI_BACKUP_KEY, the app started on it), and each job tells
+# the site how it went (POST /agent/backup, web/backups.js): a failure goes to Max's Telegram at once, and a day
+# with no good copy by noon Kyiv too (Max, 2026-11-11, after a night's backup was lost and nobody knew).
 name: Backup
 
 on:
@@ -13,7 +17,7 @@ on:
   # A change to the backup itself runs it once, so it is tested right away.
   push:
     branches: [main]
-    paths: [".github/workflows/backup.yml", "scripts/backup-snapshot.js", "scripts/test-db-scrub.py"]
+    paths: [".github/workflows/backup.yml", "scripts/backup-snapshot.js", "scripts/test-db-scrub.py", "scripts/backup-restore-check.sh"]
 
 # contents: write for the test copy's release (below).
 permissions:
@@ -55,6 +59,7 @@ jobs:
       # The machines sleep when nobody uses them (and /tmp goes with them), so ping the site while this runs
       # and redo snapshot + download together if the machine stopped in between.
       - name: Snapshot on the machine
+        id: snap
         run: |
           ( while true; do curl -s -o /dev/null "${{ matrix.url }}/" || true; sleep 5; done ) &
           id=$(flyctl machine list -a "$APP" --json | jq -r '[.[] | select(.config.mounts | length > 0)][0].id')
@@ -75,6 +80,7 @@ jobs:
           test -s backup.tar.gz
           timeout 120 flyctl ssh console -a "$APP" --machine "$id" -C "rm -f /tmp/backup.tar.gz /tmp/backup-snapshot.js" || true
       - name: Check the copy
+        id: check
         run: |
           mkdir check && tar xzf backup.tar.gz -C check
           du -sh check; find check -type f | sed 's|^check/||' | sort | head -50
@@ -83,7 +89,7 @@ jobs:
           find check -type f -printf '%s\t%P\n' | sort -rn | head -15 | awk -F'\t' '{sub(/[^\/]*$/, "…", $2); printf "%8.1f MB %s\n", $1/1e6, $2}'
           du -m --max-depth=2 check | sort -rn | head -10
           # A copy with the database alone (the reader's on 2026-11-05 and 11-06) is not a backup.
-          n=$(find check -type f | wc -l); echo "$n files"
+          n=$(find check -type f | wc -l); echo "$n files"; echo "FILES=$n" >> "$GITHUB_ENV"
           [ "$n" -ge 10 ] || { echo "::error::only $n files in the copy"; exit 1; }
           python3 - <<'PY'
           import json, pathlib, sqlite3, sys
@@ -101,24 +107,47 @@ jobs:
           sys.exit(0 if ok else 1)
           PY
       - name: Encrypt
+        id: encrypt
         run: |
           name="$APP-$(date -u +%Y-%m-%d)"
           age -r "$AGE_RECIPIENT" -o "$name.tar.gz.age" backup.tar.gz
           ls -l "$name.tar.gz.age"
           echo "NAME=$name" >> "$GITHUB_ENV"
+          echo "BYTES=$(stat -c %s "$name.tar.gz.age")" >> "$GITHUB_ENV"
       # A test copy of the site's database for threads and the Mac (Max, 2026-10-25): real emails, sessions,
       # tokens and secrets taken out (scripts/test-db-scrub.py), encrypted with the same key and published as
       # the asset of the release "test-db", replaced every night. Fetch it with scripts/fetch-test-db.sh.
       # The backup is kept before the test copy is made: a test copy that fails (2026-11-11, an address the
       # scrub missed) must not cost the night's backup.
       - uses: actions/upload-artifact@v4
+        id: upload
         with:
           name: ${{ env.NAME }}
           path: ${{ env.NAME }}.tar.gz.age
           retention-days: 90
           compression-level: 0
+      # The trial restore: the artifact as GitHub keeps it, back here, decrypted and started (see the top).
+      - uses: actions/download-artifact@v4
+        id: download
+        with:
+          name: ${{ env.NAME }}
+          path: restored
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci --omit=dev --ignore-scripts --no-audit --no-fund
+      - name: Restore check
+        id: restore
+        timeout-minutes: 10
+        env:
+          KEY: ${{ secrets.CHYTAI_BACKUP_KEY }}
+        run: |
+          printf '%s\n' "$KEY" > "$RUNNER_TEMP/age.key"
+          CHYTAI_BACKUP_KEY="$RUNNER_TEMP/age.key" scripts/backup-restore-check.sh "$APP" "restored/$NAME.tar.gz.age" backup.tar.gz
+          rm -f "$RUNNER_TEMP/age.key"
+      # Made even when the restore check failed: the backup is kept by then, and threads test on this copy.
       - name: Test copy
-        if: matrix.app == 'chytai-web'
+        id: test
+        if: ${{ !cancelled() && matrix.app == 'chytai-web' && steps.check.outcome == 'success' }}
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -142,3 +171,22 @@ jobs:
             flyctl volumes show "$vol" -a "$APP" || true
             flyctl volumes snapshots list "$vol" -a "$APP" || true
           done
+      # How it went, to the site (web/backups.js): kept for /admin and the morning report, and a failure goes to
+      # Max's Telegram. A cancelled run (a newer one replaced it) says nothing.
+      - name: Tell the site
+        if: ${{ !cancelled() }}
+        env:
+          SITE_TOKEN: ${{ secrets.FLY_API_TOKEN_WEB }}
+          STEPS: ${{ toJSON(steps) }}
+          RUN: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          body=$(jq -n --argjson s "$STEPS" --arg app "$APP" --arg run "$RUN" --argjson files "${FILES:-0}" --argjson bytes "${BYTES:-0}" '{
+            app: $app, run: $run, files: $files, bytes: $bytes,
+            ok: ($s.upload.outcome == "success"),
+            restored: ($s.restore.outcome == "success"),
+            test: ({success: "ok", failure: "failed"}[$s.test.outcome // ""] // "skipped"),
+            failed: [$s | to_entries[] | select(.value.outcome == "failure") | .key]
+          }')
+          echo "$body" | jq -c 'del(.run)'
+          curl -sS --retry 4 --retry-all-errors -m 30 https://chytai.org.ua/agent/backup -H "Authorization: $SITE_TOKEN" \
+            -H 'content-type: application/json' -d "$body" | jq -c 'del(.kept.run)' || echo "::warning::the site did not take the report"
