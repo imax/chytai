@@ -131,6 +131,7 @@ class AiPass {
         try {
           const { answer, usage } = await this.ask(s);
           st.cost += costOf(usage, this.model);
+          this.item(s, answer); // item() may resolve the answer's numbers to ids (author-start), before it is kept
           put.run(this.key, s.id, JSON.stringify(answer), this.prompt, new Date().toISOString());
         } catch (e) {
           st.errors++;
@@ -171,8 +172,9 @@ class AiPass {
         const { answer, usage } = await this.ask(s);
         out.cost += costOf(usage, this.model);
         out.asked++;
+        const item = this.item(s, answer);
         put.run(this.key, s.id, JSON.stringify(answer), this.prompt, new Date().toISOString());
-        items.push({ s, answer, item: this.item(s, answer) });
+        items.push({ s, answer, item });
       } catch (e) {
         out.errors++;
         this.log(`aipass ${this.key} new: ${s.id}: ${e.message}`);

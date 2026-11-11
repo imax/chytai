@@ -126,7 +126,9 @@ so Max sees it on the real site. He switches it to everyone on `/admin/jobs` (bl
 - A new pass is a def in `catalogpasses.js` (`model` may be `claude-sonnet-5-5` for text readers see). Trial first:
   `curl -s https://chytai.org.ua/agent/ai-trial -H "$H" -H 'content-type: application/json' -d '{"key":"<key>"}'`
   starts 200 (only with Max's OK in the thread), `GET /agent/ai-trial?key=<key>` gives the answers as text. Max looks
-  at `/admin/ai/<key>`; the whole catalog is his button there.
+  at `/admin/ai/<key>`; the whole catalog is his button there, or `{"key":"<key>","all":true}` from a thread once he
+  said so in it (answers in table `ai_answer`, then `def.apply`; a live pass reruns every 6 h for new candidates).
+- «З чого почати» on author pages is the pass `author-start` (flag `author-start`); `server.js authorStart()` reads it.
 
 ## Standing rules (Max)
 

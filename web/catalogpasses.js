@@ -348,6 +348,7 @@ Natural modern Ukrainian, Ukrainian spellings of names and titles (use the Ukrai
       // Most read authors first: those pages are opened.
       candidates: () =>
         store.authors.list
+          .filter((a) => a.ids.length >= 3) // the books below are fewer than ids: a cheap cut first (2 s → less)
           .map((a) => ({ id: a.key, a, books: authorBooks(a) }))
           .filter((s) => s.books.length >= 3 && s.books.some((b) => b.readers))
           .sort((x, y) => y.books.reduce((n, b) => n + b.readers, 0) - x.books.reduce((n, b) => n + b.readers, 0)),
@@ -365,6 +366,8 @@ Natural modern Ukrainian, Ukrainian spellings of names and titles (use the Ukrai
         const picks = (a?.picks || []).map((p) => s.books[p.n - 1] && `«${title(s.books[p.n - 1])}» — ${p.why}`).filter(Boolean);
         return { id: s.id, title: s.a.name, author: "", before: `найбільше читають: ${now.join(", ")}`, after: !a ? "" : a.known === "yes" ? `${a.about} | ${picks.join("; ")}` : "не знає", diff: a?.known === "yes" && picks.length > 0, href: s.a.href };
       },
+      // The author page reads ai_answer itself (server.js authorStart), so applying only counts the blocks.
+      apply: (all) => all.filter((x) => x.answer?.known === "yes" && x.answer.picks?.some((p) => p.id)).length,
     },
   ];
   // Book subjects carry the book itself.

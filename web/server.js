@@ -837,7 +837,13 @@ app.post("/agent/reader-books", agentOk, async (req, res) => (req.body?.run === 
 app.post("/agent/ai-trial", agentOk, (req, res) => {
   const p = aiPasses.get(String(req.body?.key || ""));
   if (!p) return res.status(404).json({ error: "no such pass", passes: [...aiPasses.keys()] });
-  if (p.running) return res.json({ running: true });
+  if (p.running || p.allRunning) return res.json({ running: true });
+  // {"all": true}: the whole catalog, only after Max said so in the thread (as his button on /admin/ai/<key>).
+  if (req.body?.all) {
+    if (!p.apply) return res.status(400).json({ error: "this pass has no apply" });
+    p.runAll().catch((e) => console.log(`aipass ${p.key} all: ${e.message}`));
+    return res.json({ started: "all", candidates: p.candidates().length - p.answered().size });
+  }
   p.run().catch((e) => console.log(`aipass ${p.key}: ${e.message}`));
   res.json({ started: true, size: p.size });
 });
