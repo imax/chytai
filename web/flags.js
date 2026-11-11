@@ -13,6 +13,7 @@ const LABEL = { off: "вимкнено", owner: "лише Макс", test: "Ма
 
 // The flags the code knows about, with a few words for /admin. A new flag is added here.
 const KNOWN = {
+  ask: "Що почитати далі? Поле на /ask (самі відповіді за посиланням бачать усі)",
   chat: "Чат між читачами (/chat, кнопка на полиці)",
   "list-progress": "Скільки книжок зі списку ви прочитали",
   "reader-books": "Книжки, завантажені в Читалку, самі з’являються в каталозі",

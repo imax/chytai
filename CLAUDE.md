@@ -104,6 +104,15 @@ so Max sees it on the real site. He switches it to everyone on `/admin/jobs` (bl
   ask again for the answer, `?again=1` to rerun). The real backfill is `POST /admin/reader-books` (owner) or
   `POST /agent/reader-books` with `{"run":true}` (thread), only with Max's OK in the thread. Done once on 2026-11-11.
 
+## «Що почитати далі?» (`web/ask.js`, /ask)
+
+- A field on /ask (flag `ask`; guests too once on), Claude names 15 books, `Ask.match()` keeps the catalog's (store.findWork,
+  then search by title start + same author), Ukrainian edition, series start, one per author/series, up to 8.
+  Each answer at /ask/<id>, open to anyone; same text again = kept answer. Unopened 180 days → deleted.
+- Try the prompt on production's catalog without keeping anything (30 a day):
+  `curl -s https://chytai.org.ua/agent/ask -H "$H" -H 'content-type: application/json' -d '{"text":"…","model":"claude-sonnet-5-5"}'`.
+- Locally without a key: preload a fake `@anthropic-ai/sdk` (`node -r mock.js web/server.js`, ANTHROPIC_API_KEY=dummy).
+
 ## Translation pairs
 
 - A Ukrainian book and its original are paired in `web/seed/matches.json`: `translations` (`[original, uk]`, slugs or

@@ -3131,7 +3131,56 @@ ${form}
   return layout({ title: other.name, body, user, path: "/chat", noindex: true });
 }
 
+// ---- «Що почитати далі?» (ask.js, Max 2026-11-11): a field, and an answer with its own address ----
+const ASK_HINT = "Наприклад: класно зайшли цикли Тесс Ґеррітсен про Ріццолі й Саймона Бекетта про антрополога Гантера. Порадьте ще детективні серії.";
+const askText = (t) => t.split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean).map((p) => `<p>${esc(p).replace(/\n/g, "<br>")}</p>`).join("");
+function askForm(text = "", error = "") {
+  return `<form method="post" action="/ask" class="form ask-form" id="ask-form">
+  ${error ? `<p class="error">${esc(error)}</p>` : ""}
+  <textarea name="text" rows="6" minlength="15" maxlength="1500" required placeholder="${attr(ASK_HINT)}" aria-label="Що вам сподобалось">${esc(text)}</textarea>
+  <div class="actions"><button class="btn primary">Порадити</button></div>
+</form>
+<script>document.getElementById("ask-form").addEventListener("submit", (e) => { const b = e.target.querySelector("button"); b.disabled = true; b.textContent = "Добираю книжки…"; });</script>`;
+}
+function askPage({ user, text = "", error = "" }) {
+  const body = `<section class="list-head ask-head">
+  <h1>Що почитати далі?</h1>
+  <p class="lead">Напишіть, що вам сподобалось. Порадимо книжки з каталогу.</p>
+</section>
+${askForm(text, error)}`;
+  return layout({ title: "Що почитати далі?", body, user, path: "/ask", canonical: "/ask", description: "Напишіть, що вам сподобалось, і Chytai порадить книжки." });
+}
+// ask: the row from ask.js; items: [{ id, book, why, series, mine }]; canAsk: the field is open to this visitor.
+function askAnswerPage({ user, ask, items, canAsk = false, owner = false }) {
+  const wait = ask.status === "wait";
+  const say = { fail: "Не вдалося дібрати книжки. Спробуйте ще раз.", none: "У каталозі не знайшлося книжок для цієї поради.", off: "Тут радимо лише книжки. Напишіть, що читали і що сподобалось." }[ask.status];
+  const rows = items
+    .map(
+      (x, i) => `<article class="lrow${x.mine === "read" ? " done" : ""}"><span class="n">${i + 1}</span><a class="cover-link" href="${attr(x.book.href)}">${cover(x.book, "md")}</a><div class="row-body">
+    <h3><a href="${attr(x.book.href)}">${esc(x.book.title)}</a></h3>
+    ${x.book.author ? `<p class="by">${authorLinks(x.book.author)}</p>` : ""}
+    ${x.mine || x.series || readersMeta(x.id) ? `<p class="meta">${[x.mine ? `<span class="mine">✓ ${MY_STATUS[x.mine] || "На полиці"}</span>` : "", x.series ? `серія «${esc(x.series)}»` : "", readersMeta(x.id)].filter(Boolean).join(" · ")}</p>` : ""}
+    ${x.why ? `<p class="why">${esc(x.why)}</p>` : ""}
+  </div></article>`
+    )
+    .join("\n");
+  const href = `/ask/${ask.id}`;
+  const body = `<section class="list-head ask-head">
+  <p class="kicker">${canAsk ? `<a href="/ask">Що почитати далі</a>` : "Що почитати далі"}${items.length ? ` · ${books(items.length)}` : ""}</p>
+  <blockquote class="ask-q">${askText(ask.text)}</blockquote>
+  ${ask.intro && items.length ? `<div class="intro"><p>${esc(ask.intro)}</p></div>` : ""}
+  ${wait ? `<p class="ask-wait" id="ask-wait">Добираю книжки…</p>` : say ? `<p class="lead muted">${say}</p>` : ""}
+  ${wait ? "" : `<div class="acts">${items.length ? `<button type="button" class="btn${canAsk ? "" : " primary"}" data-share="${attr(ORIGIN + href)}" data-title="Що почитати далі">Поділитися</button>` : ""}${canAsk ? `<a class="btn primary" href="/ask">Спитати своє</a>` : ""}</div>`}
+</section>
+${items.length ? `<section class="lrows">${rows}</section><p class="small muted ask-note">Порадив Claude (AI). Тут лише книжки, які є на Chytai.</p>` : ""}
+${owner && !wait ? `<details class="small muted ask-note"><summary>Для вас: ${esc(ask.model)} · $${Number(ask.cost).toFixed(3)} · ${(ask.ms / 1000).toFixed(1)} с · переглядів ${ask.views}${ask.missed.length ? ` · немає в каталозі ${ask.missed.length}` : ""}</summary>${ask.missed.map((m) => `<p>${esc(m.title)}${m.author ? ` · ${esc(m.author)}` : ""}</p>`).join("")}</details>` : ""}
+${wait ? `<script>(() => { let n = 0; const go = async () => { const r = await fetch(${JSON.stringify(`/api${href}`)}).then((x) => x.json()).catch(() => ({})); if (r.status && r.status !== "wait") return location.reload(); if (++n === 15) document.getElementById("ask-wait").textContent = "Ще трохи…"; if (n < 90) setTimeout(go, 2000); }; setTimeout(go, 2500); })();</script>` : ""}`;
+  const first = ask.text.replace(/\s+/g, " ").trim();
+  return layout({ title: "Що почитати далі", body, user, path: "/ask", canonical: href, noindex: true, description: [first.length > 160 ? `${first.slice(0, 157)}…` : first, items.length ? `${books(items.length)}: ${items.slice(0, 4).map((x) => x.book.title).join(", ")}` : ""].filter(Boolean).join(" "), image: abs(items.find((x) => x.book.cover)?.book.cover || ""), type: "article" });
+}
+
 module.exports = {
+  askPage, askAnswerPage,
   asksPage, askTalkPage, setAskNav,
   commentsAdminPage,
   clubPage, clubNewPage, clubTopicPage,

@@ -1074,6 +1074,64 @@ app.post("/api/readers-gone", (req, res) => {
 
 app.get("/privacy", (req, res) => res.send(pages.privacyPage({ user: req.user })));
 app.get("/updates", (req, res) => res.send(pages.updatesPage({ user: req.user })));
+// ---- «Що почитати далі?» (ask.js, Max 2026-11-11): a field on /ask, open to guests too; each answer at /ask/<id>.
+// The field is behind the flag `ask`; an answer's own page is open to anyone with the link (Max asks for someone
+// and sends them the link).
+const { Ask } = require("./ask");
+const asker = new Ask(store, {
+  apiKey: process.env.ANTHROPIC_API_KEY || "",
+  ukWork: (b) => ukWork(b),
+  log: console.log,
+  // A new kind of thing readers write: the owner hears of each ask with its answer (not of his own).
+  notify: (r) => {
+    if (!r || r.reader === OWNER_ID) return;
+    const who = r.reader ? auth.reader(r.reader) : null;
+    const by = who ? `${who.name || who.username} (${SITE}/@${who.username})` : "Гість";
+    notifyOwner(`Порада: ${r.items.length} книжок`, [`${by} спитав(ла) на /ask:`, "", `«${r.text.slice(0, 600)}»`, "", ...r.items.map((x) => `• ${store.book(x.id)?.title || x.id}`), "", `${SITE}/ask/${r.id}`].join("\n"));
+  },
+});
+if (bg.ROLE !== "jobs") setInterval(() => asker.cleanup(), 24 * 3600 * 1000).unref();
+const askOn = (req) => flags.on("ask", req.user);
+app.get("/ask", (req, res, next) => {
+  if (!askOn(req)) return next();
+  admin.log(req.user?.id || "", "view", "/ask");
+  res.send(pages.askPage({ user: req.user }));
+});
+app.post("/ask", (req, res, next) => {
+  if (!askOn(req)) return next();
+  const text = String(req.body?.text || "");
+  const r = asker.ask({ text, reader: req.user?.id || "", ip: req.ip || "", owner: !!req.owner });
+  if (r.error) return res.status(400).send(pages.askPage({ user: req.user, text, error: r.error }));
+  res.redirect(303, `/ask/${r.id}`);
+});
+app.get("/ask/:id", (req, res) => {
+  const a = asker.get(req.params.id);
+  if (!a) return res.status(404).send(pages.messagePage({ title: "Немає такої поради", text: "", user: req.user }));
+  if (a.status === "wait" && Date.now() - Date.parse(a.created) > 5 * 60000) a.status = "fail";
+  if (!req.owner) asker.opened(a.id);
+  const items = a.items
+    .map((x) => ({ ...x, book: store.book(x.id) && workFor(req, store.book(x.id)), mine: req.user ? store.entry(req.user.id, x.id)?.status || "" : "" }))
+    .filter((x) => x.book);
+  res.send(pages.askAnswerPage({ user: req.user, ask: a, items, canAsk: askOn(req), owner: !!req.owner }));
+});
+app.get("/api/ask/:id", (req, res) => res.set("Cache-Control", "no-store").json({ status: asker.get(req.params.id)?.status || "" }));
+// A thread tries the prompt on production's catalog without keeping anything (the answer is only returned):
+// POST /agent/ask {"text": "...", "model": "claude-sonnet-5-5"}. 30 a day.
+let agentAsks = [];
+app.post("/agent/ask", agentOk, async (req, res) => {
+  agentAsks = agentAsks.filter((t) => Date.now() - t < 86400000);
+  if (agentAsks.length >= 30) return res.status(429).json({ error: "30 a day already" });
+  if (!asker.client) return res.status(503).json({ error: "no API key" });
+  agentAsks.push(Date.now());
+  const t = Date.now();
+  try {
+    const out = await asker.claude(String(req.body?.text || "").slice(0, 1500), { model: /^claude-[a-z0-9-]+$/.test(req.body?.model || "") ? req.body.model : undefined });
+    const m = asker.match(out.books);
+    res.json({ ms: Date.now() - t, model: out.model, cost: out.cost, input: out.input, output: out.output, intro: out.intro, off: out.off, items: m.items.map((x) => ({ ...x, title: store.book(x.id)?.title, author: store.book(x.id)?.author })), missed: m.missed, asked: out.books });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
 // The weekly draw (draw.js, Max 2026-10-28): the page with the rules, «Беру участь», and the reader's state.
 const draw = new (require("./draw").Draw)({ store, auth, ownerId: OWNER_ID });
 app.get(pages.DRAW_PATH, (req, res) => {

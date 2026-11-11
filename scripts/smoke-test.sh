@@ -60,6 +60,7 @@ check /lists 200
 check /club 200
 check /articles 404
 check /login 200
+check /ask/0000000000 404 # «Що почитати далі» (ask.js): the field is behind the flag `ask`, an unknown answer is 404
 check /privacy 200
 check "/search?q=%D0%BB%D0%B5%D0%BC" 200
 check /sitemap.xml 200

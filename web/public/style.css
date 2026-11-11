@@ -1292,3 +1292,14 @@ aside .side-lists + .label, aside p + .label, aside dialog + .label { margin-top
   .start .grid.six { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 28px 16px; }
 }
 .start-more { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-top: 20px; }
+
+/* «Що почитати далі?» (/ask, ask.js): the field, then the question as a quote over the books. */
+.ask-head, .ask-form { max-width: 720px; }
+.ask-form { margin-top: 8px; }
+.ask-form textarea { font-size: 19px; }
+.ask-q { margin: 6px 0 0; padding: 4px 0 4px 18px; border-left: 2px solid var(--accent); font: 19px/1.5 var(--serif); color: var(--text); max-width: 38em; }
+.ask-q p + p { margin-top: 10px; }
+.ask-head .intro p:first-child { font-size: 20px; }
+.ask-wait { margin-top: 22px; font: italic 19px/1.4 var(--serif); color: var(--muted); }
+.ask-note { margin-top: 18px; max-width: 720px; }
+@media (max-width: 760px) { .ask-q { font-size: 17px; } .ask-form textarea { font-size: 17px; } }
