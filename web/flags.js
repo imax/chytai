@@ -1,4 +1,5 @@
-// Feature flags (Max, 2026-11-09, from Amp's talk: a change goes live behind a flag that only Max sees, he tries it on
+// Feature flags (since 2026-11-11 only when Max asks or a change could break what readers use; else ship to all)
+// (Max, 2026-11-09, from Amp's talk: a change goes live behind a flag that only Max sees, he tries it on
 // the real site, and then it is switched on for everyone; instead of screenshots and an OK before a deploy).
 // Who sees a flagged thing:
 //   off   nobody

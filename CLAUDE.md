@@ -83,8 +83,10 @@ schedule a wake-up in about an hour and look again. Outages are fixed or reverte
 
 ## Feature flags (`web/flags.js`)
 
-Something visible and new goes live behind a flag set to `owner` (Max only) or `test` (Max and the test accounts),
-so Max sees it on the real site. He switches it to everyone on `/admin/jobs` (block «Прапорці»), with no deploy.
+By default a change ships to everyone, with no flag (Max, 2026-11-11: a small project, flags are friction for him).
+A flag only when Max asks for one, or when the change could break what readers use now. Then it goes live set to
+`owner` (Max only) or `test` (Max and the test accounts), and Max switches it to everyone on `/admin/jobs` (block
+«Прапорці»), with no deploy.
 
 - Add the flag to `KNOWN` in `web/flags.js` with a few Ukrainian words, and check it with `flags.on("name", req.user)`.
 - A thread may set `off` / `owner` / `test`:
@@ -92,7 +94,7 @@ so Max sees it on the real site. He switches it to everyone on `/admin/jobs` (bl
   `all` is only Max's.
 - The reader has the same flags: its server asks the site (`POST /api/reader-flags`, a minute's cache per account) and
   puts the names that are on into `settings.flags`; the page checks `settings.flags?.includes("name")`.
-- When a flag has been on for everyone for a while, take it out of the code and out of `KNOWN`: its stored row goes at
+- When a flag is on for everyone, soon take it out of the code and out of `KNOWN`: its stored row goes at
   the next start. Only a flag in `KNOWN` can be set.
 
 ## Editorial lists («Добірка Chytai»)
