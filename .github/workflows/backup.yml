@@ -41,7 +41,9 @@ jobs:
           - app: chytai-web
             token: FLY_API_TOKEN_WEB
             url: https://chytai.org.ua
-            exclude: ""
+            # Not the small copies of covers (covers/t, ~150 MB of 13 000 WebP, Max 2026-11-11 «330 МБ не забагато?»):
+            # a cache that thumbs.js makes again when a page asks. Our own covers (covers/*.jpg) stay.
+            exclude: "web/covers/t"
           - app: chytai
             token: FLY_API_TOKEN
             url: https://chytai.fly.dev
