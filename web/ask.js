@@ -35,7 +35,7 @@ Answer with one JSON object and nothing else:
 - books: 15 books, the best fit first. Each is a real, published book. Name the Ukrainian edition when there is one: title_uk and author_uk exactly as the Ukrainian edition prints them (for example «Чоловіки, які ненавидять жінок», «Стіг Ларссон»); empty strings when you are not sure a Ukrainian edition exists. title and author: the original title and the author's name in the original language.
 - Prefer books that have been published in Ukrainian. Ukrainian authors are welcome where they truly fit. Never a Russian author, and never a book that exists only in Russian.
 - When they ask for series, or loved a series, recommend series and name the first book of each (series: the series' name in Ukrainian, else in the original). A book outside a series: series is "".
-- Never a book or a series they say they have already read, and at most one book by any one author.
+- Never a book or a series they say they have already read, and never a book they name, even in another edition or retelling: they know it. At most one book by any one author.
 - Follow what they actually liked: if it is the people, the mood, the setting or the profession at the centre of it, find that, not just the genre.
 - why: one short sentence in Ukrainian, at most 18 words: what this book shares with what they liked or asked for, concretely. No spoilers, no praise words like «неймовірний», «must read», «шедевр».
 - topic: what this request is about, one level above it, in Ukrainian, 3 to 8 words, as a heading in a list of what other people asked: «Детективні цикли із судмедекспертами», «Грецька міфологія для дітей», «Для тих, хто любить Dungeon Crawler Carl». A noun phrase, no verb, no «Порада», no names of the person.
@@ -64,6 +64,13 @@ const now = () => new Date().toISOString();
 const keyOf = (text) => norm(text).replace(/\s+/g, " ").trim();
 const hash = (s) => crypto.createHash("sha256").update(`ask:${s}`).digest("hex").slice(0, 24);
 const clean = (s, n) => String(s || "").replace(/\s+/g, " ").trim().slice(0, n);
+// Letters and digits only, lower case, single spaces: to see a title inside the question.
+const fold = (s) => ` ${String(s || "").toLowerCase().replace(/[’'`ʼ]/g, "").replace(/[^\p{L}\p{N}]+/gu, " ").trim()} `;
+// Is this title named in the question? The whole title, or its part before «:» / «.», as words; short ones
+// («Вона», «Дюна») are too like plain words to tell. (Max, 2026-11-11: an answer about «The Wager або Endurance»
+// gave «Endurance».)
+const named = (asked, ...titles) =>
+  titles.some((t) => [t, String(t || "").split(/[:.(]/)[0]].some((x) => { const f = fold(x); return f.trim().length >= 5 && asked.includes(f); }));
 
 class Ask {
   // store: Store; ukWork(book): its Ukrainian edition; notify(row): a line to the owner about a new ask.
@@ -118,7 +125,7 @@ class Ask {
     const t = Date.now();
     try {
       const out = await this.claude(row.text);
-      const { items, missed, extra } = await this.match(out.books, { model: out.model });
+      const { items, missed, extra } = await this.match(out.books, { model: out.model, text: row.text });
       for (const k of ["input", "output", "cost"]) out[k] += extra[k];
       this.db
         .prepare("UPDATE ask_recs SET status = ?, topic = ?, items = ?, missed = ?, model = ?, input_tokens = ?, output_tokens = ?, cost = ?, ms = ? WHERE id = ?")
@@ -161,8 +168,9 @@ class Ask {
   // Claude's order; the rest as { title, author } in `missed` (the owner sees them, readers don't). A book we lack by
   // an author we have (Несбьо's «Сніговик», Кеплер's «Ловець») gets a second, short question: which of this author's
   // books here serves the same recommendation (the series' first book, usually). `extra`: what that question cost.
-  async match(books, { model = MODEL } = {}) {
+  async match(books, { model = MODEL, text = "" } = {}) {
     const s = this.store;
+    const asked = fold(text);
     const extra = { input: 0, output: 0, cost: 0 };
     const rows = (books || []).map((b) => {
       const want = { uk: clean(b.title_uk, 200), ua: clean(b.author_uk, 200), en: clean(b.title, 200), ea: clean(b.author, 200) };
@@ -191,6 +199,7 @@ class Ask {
     const used = new Set();
     const authors = [];
     for (const { b, want, id: found } of rows) {
+      if (named(asked, want.uk, want.en)) continue;
       if (!found) {
         missed.push({ title: want.uk || want.en, author: want.ua || want.ea });
         continue;
@@ -200,6 +209,7 @@ class Ask {
       const start = s.seriesStart(id);
       if (start && start !== id && s.book(start)) id = start;
       const key = s.cycleKey?.(id) || id;
+      if (named(asked, s.book(id).title, s.book(id).altTitle, s.book(found).title)) continue;
       if (used.has(key) || used.has(id) || authors.some((a) => sameAuthor(a, s.book(id).author || ""))) continue;
       used.add(key).add(id);
       if (s.book(id).author) authors.push(s.book(id).author);

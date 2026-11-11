@@ -1187,8 +1187,9 @@ app.post("/agent/ask", agentOk, async (req, res) => {
   agentAsks.push(Date.now());
   const t = Date.now();
   try {
-    const out = await asker.claude(String(req.body?.text || "").slice(0, 1500), { model: /^claude-[a-z0-9-]+$/.test(req.body?.model || "") ? req.body.model : undefined });
-    const m = await asker.match(out.books, { model: out.model });
+    const text = String(req.body?.text || "").slice(0, 1500);
+    const out = await asker.claude(text, { model: /^claude-[a-z0-9-]+$/.test(req.body?.model || "") ? req.body.model : undefined });
+    const m = await asker.match(out.books, { model: out.model, text });
     for (const k of ["input", "output", "cost"]) out[k] += m.extra[k];
     res.json({ ms: Date.now() - t, model: out.model, cost: out.cost, input: out.input, output: out.output, topic: out.topic, off: out.off, items: m.items.map((x) => ({ ...x, title: store.book(x.id)?.title, author: store.book(x.id)?.author })), missed: m.missed, asked: out.books });
   } catch (e) {
