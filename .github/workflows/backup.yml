@@ -117,7 +117,8 @@ jobs:
           du -m --max-depth=2 check | sort -rn | head -10
           # A copy with the database alone (the reader's on 2026-11-05 and 11-06) is not a backup.
           n=$(find check -type f | wc -l); echo "$n files"; echo "FILES=$n" >> "$GITHUB_ENV"
-          [ "$n" -ge 10 ] || { echo "::error::only $n files in the copy"; exit 1; }
+          # The reader's and the covers' hold many files (the reader's own covers), the site's a few beside its database.
+          [ "$APP" = chytai-web ] || [ "$n" -ge 10 ] || { echo "::error::only $n files in the copy"; exit 1; }
           # And the copy is the one asked for: the database of the site, the reader's own.
           case "$APP" in
             chytai-web) want=check/web/chytai.db ;;
