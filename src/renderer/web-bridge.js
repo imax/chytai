@@ -70,6 +70,18 @@
 
   const isNetworkError = (err) => err instanceof TypeError; // fetch() itself failed; HTTP errors are plain Errors
 
+  // A weak network answers late or never (the metro, a Wi-Fi that wants a sign-in), and a fetch() waits a minute
+  // or more before it fails (Max, 2026-11-11: grey placeholders, a book on the phone that would not open). Where
+  // the device already has a copy, the page waits SLOW for the server and then goes on with the copy, as offline;
+  // the request carries on in the background and the copy is refreshed when it answers.
+  // Once one request has not answered (the page is offline), the next ones wait only a moment.
+  const SLOW = 3000;
+  function inTime(promise, ms = offline ? 500 : SLOW) {
+    let timer;
+    const late = new Promise((_, reject) => (timer = setTimeout(() => (setOffline(true), reject(new TypeError("slow"))), ms)));
+    return Promise.race([promise, late]).finally(() => clearTimeout(timer));
+  }
+
   const dbReady = new Promise((resolve) => {
     let open;
     try {
@@ -289,6 +301,12 @@
       if (isNetworkError(err)) setOffline(true);
       throw err;
     }
+    // The server itself is down or restarting (Fly answers 502/503/504 then, not our JSON): the same as no network,
+    // so the copies on the device are used instead of «Bad Gateway».
+    if ([502, 503, 504].includes(res.status) && !/json/.test(res.headers.get("Content-Type") || "")) {
+      setOffline(true);
+      throw new TypeError(`server ${res.status}`);
+    }
     setOffline(false);
     if (res.status === 304) return res; // the copy on the device is current (openServerBook)
     // The Android app on a cold start: its first requests can go out without the sign-in cookie (Max,
@@ -366,12 +384,19 @@
   }
   async function openServerBookNow(name) {
     let payload;
-    try {
+    // The copy kept on the device is used when the server's file is the same (its ETag): opening a book
+    // downloaded the whole file every time, seconds on a slow connection (Max, 2026-11-01).
+    const saved = await idb("books", "readonly", (s) => s.get(name)).catch(() => null);
+    // With a copy here, a server that does not answer in time is not waited for (SLOW); the request is dropped.
+    const abort = new AbortController();
+    const asked = (async () => {
       await sync(); // positions saved here first, so the server's answer is the latest one
-      // The copy kept on the device is used when the server's file is the same (its ETag): opening a book
-      // downloaded the whole file every time, seconds on a slow connection (Max, 2026-11-01).
-      const saved = await idb("books", "readonly", (s) => s.get(name)).catch(() => null);
-      const res = await api("GET", `/api/book?path=${encodeURIComponent(name)}`, undefined, { headers: saved?.etag ? { "If-None-Match": saved.etag } : {} });
+      return api("GET", `/api/book?path=${encodeURIComponent(name)}`, undefined, { headers: saved?.etag ? { "If-None-Match": saved.etag } : {}, signal: abort.signal });
+    })();
+    asked.catch(() => {});
+    try {
+      // Without a copy the server gets longer to start answering (the download itself is not timed).
+      const res = await inTime(asked, saved ? undefined : 15000).catch((err) => (err.message === "slow" && abort.abort(), Promise.reject(err)));
       const position = decodeURIComponent(res.headers.get("X-Book-Position") || "") || null;
       const reflowPosition = decodeURIComponent(res.headers.get("X-Book-Reflow-Position") || "") || null;
       // A publisher's book: read chapter by chapter from the server, never kept on the device.
@@ -632,11 +657,19 @@
     },
     libraryList: async () => {
       const onDevice = new Set((await idb("books", "readonly", (s) => s.getAllKeys()).catch(() => [])) || []);
-      try {
+      let late = false;
+      const asked = (async () => {
         await sync();
         const lib = await (await api("GET", "/api/library")).json();
         kvSet("library", lib);
         afterLoad(() => setTimeout(() => keepOnDevice(lib, onDevice), 4000));
+        // Answered after the page went on with the device's copy: the home screen asks again (home.js).
+        if (late) window.dispatchEvent(new Event("chytai:fresh"));
+        return lib;
+      })();
+      asked.catch(() => {});
+      try {
+        const lib = (await kvGet("library")) ? await inTime(asked).catch((err) => ((late = err.message === "slow"), Promise.reject(err))) : await asked;
         return { ...lib, books: lib.books.map((b) => ({ ...b, onDevice: onDevice.has(b.path) })), free: (lib.free || []).map((b) => ({ ...b, onDevice: onDevice.has(b.path) })) };
       } catch (err) {
         if (!isNetworkError(err)) throw err;
@@ -691,11 +724,19 @@
     libraryUpdateBook: (name, patch) => api("PATCH", `/api/books/${encodeURIComponent(name)}`, patch).then((r) => r.json()),
     getSettings: async () => {
       let settings;
-      try {
+      const asked = (async () => {
         await sync();
-        settings = await (await api("GET", "/api/settings")).json();
-        cachedSettings = settings;
-        kvSet("settings", settings);
+        const fresh = await (await api("GET", "/api/settings")).json();
+        // Places read here since the request went out (it may have answered late) are newer than the server's.
+        const waiting = (await kvGet("positions")) || {};
+        for (const [p, pos] of Object.entries(waiting)) (fresh.positions ??= {})[p] = typeof pos === "string" ? pos : pos.cfi;
+        cachedSettings = fresh;
+        kvSet("settings", fresh);
+        return fresh;
+      })();
+      asked.catch(() => {});
+      try {
+        settings = (await localSettings()) ? await inTime(asked) : await asked;
       } catch (err) {
         if (!isNetworkError(err)) throw err;
         settings = await localSettings();

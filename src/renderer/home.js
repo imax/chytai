@@ -48,7 +48,9 @@
     clearTimeout(waitTimer);
     if (!lib) waitTimer = setTimeout(() => !lib && $("#home-wait").classList.remove("hidden"), 2500);
     loadingAll ??= Promise.all([
-      window.Library.data(true).then((d) => (lib = d)),
+      // The books are drawn once they are here, if the rest (notes, wishes, the club) is still on its way: on a
+      // weak network those may not answer for a long time (Max, 2026-11-11).
+      window.Library.data(true).then((d) => ((lib = d), setTimeout(() => loadingAll && render(), document.body.classList.contains("offline") ? 0 : 1000))),
       loadTrashCount(),
       Promise.resolve(window.reader.notesAll?.()).then((n) => (notes = n || {})).catch(() => {}),
       Promise.resolve(window.reader.wishList?.()).then((w) => (wish = w || [])).catch(() => {}),
@@ -1529,6 +1531,8 @@
   window.reader.onBookOpen(() => hide());
   // A note saved or removed in the book shows up here next time.
   document.addEventListener("visibilitychange", () => document.visibilityState === "visible" && isOpen() && tab !== "library" && load());
+  // The server answered late, after the home screen was drawn from the device's copy (web-bridge.js inTime).
+  window.addEventListener("chytai:fresh", () => isOpen() && tab !== "library" && load());
 
   // The library list changed (a rescan, an edit, a deletion): draw again from it.
   async function refresh() {
