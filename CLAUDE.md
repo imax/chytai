@@ -56,8 +56,10 @@ curl -s https://app.chytai.org.ua/agent/sql -H "$H" -H 'content-type: applicatio
   extension noise dropped; `src/renderer/web-bridge.js` → `/api/client-error`; the browser's frames come as `frames`,
   kept whole). None goes to Telegram one by one (Max, 2026-11-11: he can't act on a single error); the morning report
   counts yesterday's and names the new kinds. All of them, grouped, on /admin/speed#errors (`errors.month()`); Огляд
-  shows the last day's top 5. The morning error review (below) fixes them.
+  shows only the day's count (red from 20, `ERR_BURST`). The morning error review (below) fixes them.
   Script errors on the site's own pages are only counted (`events`, `name = 'js'`, /admin/speed).
+- /admin «Performance» (`healthBlock` in web/admin.js): a red line per problem with a link, everything fine in one line
+  of names. A new check is one `[ok, name, red line]` row there; no numbers when it is fine.
 - Pages the phone unloaded (iOS kills the WebView's page for memory, mostly in the background): the page keeps a note
   of itself in localStorage (`chytai:life`, web-bridge.js `life`), the next load reports it to the reader's
   `/api/page-gone` and reopens the book that was on screen. Rows in the reader's `state.stats.days[day].gone` (30 days);
