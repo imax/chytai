@@ -1124,18 +1124,17 @@ function healthBlock({ day = null, jobs = { n: 0, failed: [] }, reader = true, e
     [!errN, `Помилок за добу не було. <a href="/admin/speed#errors">Усі помилки</a>`, `Помилки за добу: ${errN}. <a href="/admin/speed#errors">Усі помилки</a>`],
     // The phone unloaded the reader's page (server/index.js /api/page-gone): in the background it is iOS's own way and
     // the book opens again, so only an unload on screen turns the row red.
-    ...(gone ? [goneRow(gone)] : []),
+    ...(gone?.n ? [goneRow(gone)] : []), // none: no row (Max, 2026-11-12)
     ...(mail ? [mail] : []),
     ...(backup ? [backup] : []),
     ...(storage ? [storageRow(storage)] : []),
-  ];
+  ].filter(Boolean);
   return `<h2>Performance</h2>
 <ul class="health">${rows.map(([ok, good, bad]) => `<li class="${ok ? "ok" : "bad"}">${ok ? good : bad}</li>`).join("")}</ul>`;
 }
 
 function goneRow({ n, bg }) {
   const link = `<a href="/admin/reader#gone">Читалка</a>`;
-  if (!n) return [true, "Телефони не вивантажували сторінку Читалки."];
   const front = n - bg;
   return [!front, `Телефони вивантажили сторінку Читалки у фоні: ${fmtN(n)} за добу. ${link}`, `Сторінку Читалки вивантажили на екрані: ${fmtN(front)} за добу${bg ? `, ще ${fmtN(bg)} у фоні` : ""}. ${link}`];
 }
@@ -1155,14 +1154,12 @@ function mailBlock({ since, days, rows }) {
 <tbody>${rows.map(tr).join("")}</tbody></table></div>`;
 }
 
-// Disk and memory of both machines (storage.js, scaling review 2026-11-05): one row, red near a limit.
+// Disk and memory of both machines (storage.js, scaling review 2026-11-05): a red row only near a limit; the numbers
+// go to the technical report (Max, 2026-11-12).
 function storageRow({ site, reader }) {
   const { problems } = require("./storage");
   const bad = [...problems(site, "Сайт"), ...problems(reader, "Читалка")];
-  const pct = (s) => (s?.diskTotal ? `${Math.round((1 - s.diskFree / s.diskTotal) * 100)}%` : "?");
-  const mb = (n) => `${Math.round((n || 0) / 1048576)} МБ`;
-  const good = `Місця й пам'яті досить. Диск: сайт ${pct(site)}, Читалка ${reader ? pct(reader) : "?"}. Пам'ять: сайт ${mb(site?.rss)}, Читалка ${reader ? mb(reader.rss) : "?"}.`;
-  return [!bad.length, good, `Закінчується місце чи пам'ять: ${bad.map(esc).join("; ")}.`];
+  return bad.length ? [false, "", `Закінчується місце чи пам'ять: ${bad.map(esc).join("; ")}.`] : null;
 }
 
 // /admin/overviews: every overview with readers' 🤩/🙂/🙁, the complained-about ones on top.

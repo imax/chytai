@@ -91,7 +91,7 @@ function row(db) {
       ? `бекап ${x.name} не вдався ${hhmm(x.last.at)}${x.last.failed?.length ? ` (${esc(x.last.failed.join(", "))})` : ""}`
       : `бекапу ${x.name} нема з ${x.ok ? hhmm(x.ok.at) : "початку"}`;
   const bads = bad.map(why).join("; ");
-  return [!bad.length, `Бекапи свіжі й відновлюються: ${s.map(one).join(", ")}.`, `${bads.replace(/^./, (c) => c.toUpperCase())}. <a href="${ACTIONS}">Actions</a>`];
+  return [!bad.length, "Бекапи: є.", `${bads.replace(/^./, (c) => c.toUpperCase())}. <a href="${ACTIONS}">Actions</a>`];
 }
 
 // The first line of the technical report: sent when the night's copies have reported, or at DEADLINE_HOUR without them.

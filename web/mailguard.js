@@ -85,7 +85,7 @@ class MailGuard {
     if (!SECRET) return [false, "", "Пошта: Resend не повідомляє сайт про недоставлені листи. Потрібен вебхук: README, розділ «Пошта»."];
     const b = this.count("bounce", 7);
     const c = this.count("complaint", 7);
-    return [c === 0 && this.count("bounce", 1) < BOUNCE_ALERT, `Пошта доходить: за тиждень недоставлених ${b}, скарг на спам ${c}.`, `Пошта: за тиждень недоставлених ${b}, скарг на спам ${c}. Таким адресам більше не пишемо.`];
+    return [c === 0 && this.count("bounce", 1) < BOUNCE_ALERT, `Пошта: ${c} скарг, ${b} bounce.`, `Пошта: за тиждень недоставлених ${b}, скарг на спам ${c}. Таким адресам більше не пишемо.`];
   }
 }
 

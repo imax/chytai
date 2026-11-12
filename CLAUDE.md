@@ -59,7 +59,7 @@ curl -s https://app.chytai.org.ua/agent/sql -H "$H" -H 'content-type: applicatio
   shows only the day's count with a link, no list. The morning error review (below) fixes them.
   Script errors on the site's own pages are only counted (`events`, `name = 'js'`, /admin/speed).
 - /admin «Performance» (`healthBlock` in web/admin.js): one bullet per check, red with a link when it needs a look. Keep
-  it so (Max, 2026-11-12, after it was folded into one sentence: «мені не подобається»); trim a row, don't merge rows.
+  it so (Max, 2026-11-12, after it was folded into one sentence: «мені не подобається»); trim a row, don't merge rows. Unloads and disk/memory show only when there is something (Max, 2026-11-12).
 - Pages the phone unloaded (iOS kills the WebView's page for memory, mostly in the background): the page keeps a note
   of itself in localStorage (`chytai:life`, web-bridge.js `life`), the next load reports it to the reader's
   `/api/page-gone` and reopens the book that was on screen. Rows in the reader's `state.stats.days[day].gone` (30 days);
