@@ -165,9 +165,51 @@ function storageLine(siteSt, readerSt) {
   return `${bad.length ? `Закінчується місце чи пам'ять: ${bad.join("; ")}. ` : ""}Диск: сайт ${pct(siteSt)}, Читалка ${pct(readerSt)}. Пам'ять: сайт ${mb(siteSt?.rss)}, Читалка ${mb(readerSt?.rss)}.`;
 }
 
+// Search health in one line (Max, 2026-11-12, after Google's clicks fell from ~75 to 1–4 a day on 9.11 and nothing
+// told him: «якщо у нас немає трафіку, він зник або навпаки неочікувано багато, щоб про це був якийсь рядок»).
+// Our own arrivals from Google for the day (same day, `arrivals`) and Google's own impressions for its latest day
+// (Search Console, meta `gsc`, two or three days behind), each next to the median of the 14 days before it.
+// Half the norm or less, or twice or more (on a norm of 10 or more), says «різко менше/більше».
+const median = (xs) => {
+  const s = xs.filter((x) => Number.isFinite(x)).sort((a, b) => a - b);
+  return s.length ? (s.length % 2 ? s[(s.length - 1) / 2] : (s[s.length / 2 - 1] + s[s.length / 2]) / 2) : null;
+};
+const off = (v, norm) => (norm >= 10 ? (v <= norm / 2 ? -1 : v >= norm * 2 ? 1 : 0) : 0);
+
+function searchDay(db, day) {
+  const { all } = span(db, day);
+  const from = addDays(day, -14);
+  const rows = all("SELECT day, SUM(visits) v FROM arrivals WHERE source = 'Google' AND day BETWEEN ? AND ? GROUP BY day", from, day);
+  const by = new Map(rows.map((r) => [r.day, r.v]));
+  const before = Array.from({ length: 14 }, (_, i) => by.get(addDays(day, i - 14)) || 0);
+  let g = null;
+  try {
+    g = JSON.parse(db.get("gsc") || "null");
+  } catch {}
+  const days = (g?.days || []).filter((d) => d.impressions != null);
+  const last = days[days.length - 1];
+  return {
+    visits: by.get(day) || 0,
+    visitsNorm: rows.length ? median(before) : null,
+    gsc: last ? { day: last.day, impressions: last.impressions, clicks: last.clicks, norm: median(days.slice(-15, -1).map((d) => d.impressions)) } : null,
+    error: (db.get("gsc:error") || "").trim(),
+  };
+}
+
+function searchLine(s) {
+  if (!s) return "";
+  const norm = (x) => (x != null ? ` (звично ${n(Math.round(x))})` : "");
+  const parts = [`переходів ${n(s.visits)}${norm(s.visitsNorm)}`];
+  if (s.gsc) parts.push(`показів ${n(s.gsc.impressions)} за ${toDate(s.gsc.day).toLocaleDateString("uk-UA", { day: "numeric", month: "numeric" })}${norm(s.gsc.norm)}`);
+  const dir = [off(s.visits, s.visitsNorm), s.gsc ? off(s.gsc.impressions, s.gsc.norm) : 0];
+  const head = dir.includes(-1) ? "Пошук Google, різко менше" : dir.includes(1) ? "Пошук Google, різко більше" : "Пошук Google";
+  const err = s.error ? ` Search Console не відповідає: ${s.error.slice(0, 80)}` : "";
+  return `${head}: ${parts.join(", ")}.${err}`;
+}
+
 // The technical report: t = techDay(), rd = readerDay() or null, backup = backups.line(), triage = today's note of the
-// morning review or "" (it has not come), storage = storageLine().
-function techText(day, t, rd, site, backup, triage, storage = "") {
+// morning review or "" (it has not come), storage = storageLine(), search = searchLine().
+function techText(day, t, rd, site, backup, triage, storage = "", search = "") {
   const lines = [`Chytai, техніка за ${dayName(day)}`, "", backup];
   const e = t.errors, fresh = e.groups.filter((g) => g.fresh);
   if (!e.n && !t.failed.length) lines.push("Збоїв не було.");
@@ -181,6 +223,7 @@ function techText(day, t, rd, site, backup, triage, storage = "") {
   if (rd?.gone) lines.push(`Сторінку вивантажено: ${rd.gone}${rd.goneFront ? `, з них на екрані ${rd.goneFront}` : ", усі у фоні"}`);
   if (!rd) lines.push("Читалка не відповіла.");
   if (storage) lines.push(storage);
+  if (search) lines.push(search);
   lines.push("", e.n ? `${site}/admin/speed#errors` : `${site}/admin`);
   return lines.join("\n");
 }
@@ -231,7 +274,7 @@ async function buildTech({ db, day, ownerId, site, reader, dataDir }) {
   try {
     siteSt = { ...storageLib.now(dataDir, ["chytai.db"]), rss: os.totalmem() - os.freemem() }; // the machine, both processes
   } catch {}
-  return techText(day, techDay(db, day), rd, site, backups.line(db), triageToday(db), storageLine(siteSt, rd?.storage));
+  return techText(day, techDay(db, day), rd, site, backups.line(db), triageToday(db), storageLine(siteSt, rd?.storage), searchLine(searchDay(db, day)));
 }
 
 // In the jobs process: a look every 10 minutes; each report goes once a day (meta `dailyreport:lastRun`,
@@ -264,4 +307,4 @@ function schedule(opts) {
   setTimeout(tick, 3 * 60000).unref();
 }
 
-module.exports = { build, buildTech, techReady, schedule, siteDay, techDay, readerDay, text, techText };
+module.exports = { build, buildTech, techReady, schedule, siteDay, techDay, readerDay, searchDay, searchLine, text, techText };
