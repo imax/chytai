@@ -3142,7 +3142,7 @@ ${form}
 const ASK_HINT = "Наприклад: класно зайшли цикли Тесс Ґеррітсен про Ріццолі й Саймона Бекетта про антрополога Гантера. Порадьте ще детективні серії.";
 const askText = (t) => t.split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean).map((p) => `<p>${esc(p).replace(/\n/g, "<br>")}</p>`).join("");
 function askForm(text = "", error = "", latest = "") {
-  // The newest question someone asked as the example, so the hint changes (Max, 2026-11-12: «зараз завжди один»).
+  // One of the 10 newest questions, at random, as the example (Max, 2026-11-12: «рандомно одне з 10 останніх»).
   const t = String(latest || "").replace(/\s+/g, " ").trim();
   const hint = t ? `Наприклад: ${t.length > 300 ? `${t.slice(0, 297).replace(/\s+\S*$/, "")}…` : t}` : ASK_HINT;
   return `<form method="post" action="/ask" class="form ask-form" id="ask-form">
@@ -3160,7 +3160,7 @@ function askPage({ user, text = "", error = "", others = [] }) {
   <h1>Що почитати далі?</h1>
   <p class="lead">Напишіть, що вам сподобалось. Порадимо книжки з каталогу.</p>
 </section>
-${askForm(text, error, others[0]?.text)}
+${askForm(text, error, others.slice(0, 10)[Math.floor(Math.random() * Math.min(10, others.length))]?.text)}
 ${others.length ? `<section class="ask-others">${label("Що питають інші")}${others.map((o) => `<a class="ask-other" href="/ask/${attr(o.id)}"><span class="q">${esc(o.topic || short(o.text))}</span></a>`).join("")}</section>` : ""}`;
   return layout({ title: "Що почитати далі?", body, user, path: "/ask", canonical: "/ask", description: "Напишіть, що вам сподобалось, і Chytai порадить книжки." });
 }
