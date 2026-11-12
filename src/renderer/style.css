@@ -2239,6 +2239,10 @@ body.offline #ask-book .st-go { background: var(--m-off); color: var(--m-ink3); 
 #panel #cards .card.m-off .thread > .question:first-child { font-size: 17px; }
 #panel #cards .card.m-off .answer { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; color: var(--m-ink2); font-size: 14.5px; line-height: 1.5; }
 #panel #cards .card.m-off .answer > * { display: inline; margin: 0; }
+/* iPhone Safari still painted the lines past the clamp on top of each other (a reader's screenshot, 2026-11-12):
+   everything inside goes inline, and the box is cut at two lines whatever the clamp does. */
+#panel #cards .card.m-off .answer * { display: inline !important; margin: 0; padding: 0; }
+#panel #cards .card.m-off .answer { max-height: 3em; flex: none; }
 #panel #cards .card.m-off .answer > * + *::before { content: " "; }
 @media (hover: hover) { #panel #cards .card.m-off:hover .quote, #panel #cards .card.m-off:hover .thread > .question { color: var(--m-ochre); } }
 @media (min-width: 761px) {
