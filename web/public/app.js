@@ -44,7 +44,7 @@
       if ((filters.status === "kids") !== (it.dataset.kids === "1") && it.dataset.kids !== undefined) return false;
       if (filters.status && filters.status !== "kids") {
         const v = filters.status;
-        if (v === "paper" || v === "seeking") { if (it.dataset.copy !== v) return false; }
+        if (v === "paper") { if (it.dataset.copy !== v) return false; }
         else if (v === "common") { if (it.dataset.common !== "1") return false; }
         else if (it.dataset.status !== v) return false;
       }

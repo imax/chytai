@@ -1219,7 +1219,7 @@ ${problemsBlock(notFound, jsErrors)}
 // without repeats, the page a form sends back to after a step is not counted again, and several saves of one
 // book's mark are one line. A reader's name filters the page to them (60 days).
 const STATUS_WORDS = { want: "«Хочу прочитати»", read: "«Прочитано»", reading: "«Читаю»", abandoned: "«Покинуто»" };
-const COPY_WORDS = { paper: "паперова", ebook: "електронна", audio: "аудіо", seeking: "шукаю" };
+const COPY_WORDS = { paper: "паперова", ebook: "електронна", audio: "аудіо" };
 function activityPage({ user, rows, readers, books, names, who = null, embed = false, layout }) {
   const KYIV = { timeZone: "Europe/Kyiv" };
   const dayOfIso = (iso) => new Date(iso).toLocaleDateString("sv-SE", KYIV);

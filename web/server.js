@@ -3058,7 +3058,7 @@ app.post("/api/entry/:id", signed, (req, res) => {
   if ("status" in b) patch.kids = b.status === "kids";
   if ("rating" in b) patch.rating = b.rating === "none" || b.rating === "" ? null : Math.max(0, Math.min(5, Number(b.rating)));
   if ("year" in b) patch.year = b.year ? Number(b.year) : null;
-  if ("copy" in b) patch.copy = ["paper", "ebook", "seeking"].includes(b.copy) ? b.copy : "";
+  if ("copy" in b) patch.copy = ["paper", "ebook"].includes(b.copy) ? b.copy : "";
   if ("note" in b) patch.note = String(b.note).trim();
   // The «⋯» menu: kids=1 puts the book on «Дитяча полиця» (no other status), kids=0 takes it back.
   if ("kids" in b) {
@@ -3174,7 +3174,7 @@ app.post("/api/book", signed, (req, res) => {
   const { title, author, cover, status, copy } = req.body;
   if (!title || !title.trim()) return res.status(400).send("Потрібна назва");
   const b = store.addBook({ title, author, cover: /^https?:\/\//.test(cover || "") ? cover : "" });
-  store.setEntry(req.user.id, b.id, { status: STATUSES.includes(status) ? status : "", copy: ["paper", "ebook", "seeking"].includes(copy) ? copy : "" });
+  store.setEntry(req.user.id, b.id, { status: STATUSES.includes(status) ? status : "", copy: ["paper", "ebook"].includes(copy) ? copy : "" });
   if (status === "want") advice.want(b.id);
   details({ ids: [b.id] });
   // A book typed in by hand may duplicate a catalog's or be junk: the owner gets a letter and sorts it out

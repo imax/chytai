@@ -43,7 +43,8 @@ const books = (n) => count(n, ...BOOKS);
 // reader's shelf, public like the other tabs (Max, 2026-10-22), but never reaches the feed, the letters, a
 // book's «У читачів» or its rating (social.js).
 const STATUS = { read: "Прочитано", reading: "Читаю", want: "Хочу прочитати", abandoned: "Покинуто" };
-const COPY = { paper: "На папері", ebook: "E-book", seeking: "Шукаю на папері" };
+// «Шукаю на папері» is gone with the exchange experiment (Max, 2026-11-12); no entry carried it.
+const COPY = { paper: "На папері", ebook: "E-book" };
 // What a reader did, as the feed says it: «Оля К. оцінка ★★★★», «Андрій читає».
 const VERB = { read: "прочитано", reading: "читає", want: "хоче прочитати", abandoned: "покинуто" };
 const GENRES = ["художня", "фантастика", "фентезі", "детективи", "трилери", "жахи", "любовні романи", "класика", "поезія", "гумор", "дитячі", "підліткові", "комікси", "бізнес", "компанії", "менеджмент", "продукт", "гроші", "розробка", "історія", "війна", "біографії", "наука", "психологія", "філософія", "мистецтво", "здоров'я", "подорожі", "саморозвиток", "суспільство"];
@@ -240,7 +241,7 @@ const markButtons = (book, user) => `<span class="marks">${wantButton(book, user
 
 // The status, rating and copy of an entry as one quiet line: «★★★★★ 5 · прочитано · на папері».
 function entryMeta(e) {
-  const bits = [e.status ? VERB[e.status] : "", e.copy ? COPY[e.copy].toLowerCase() : ""].filter(Boolean);
+  const bits = [e.status ? VERB[e.status] : "", e.copy ? (COPY[e.copy] || "").toLowerCase() : ""].filter(Boolean);
   return `${stars(e.rating)}${bits.length ? `<span>${e.rating != null ? " · " : ""}${esc(bits.join(" · "))}</span>` : ""}`;
 }
 
@@ -715,13 +716,13 @@ function twins(book, list = book.twins || book.translations || []) {
 // The first reader's note as the big quote: «— Макс І, прочитано у 2026, на папері».
 function quote({ name, href, entry: e, now }, id) {
   const long = stripMd(e.note).length > 280;
-  const what = [now ? "читає зараз" : "", e.status && !now ? VERB[e.status] + (e.status === "read" && e.year ? ` у ${e.year}` : "") : "", e.copy ? COPY[e.copy].toLowerCase() : "", e.kids ? "для дітей" : "", e.via ? `як «${e.via.title}»` : ""].filter(Boolean).join(", ");
+  const what = [now ? "читає зараз" : "", e.status && !now ? VERB[e.status] + (e.status === "read" && e.year ? ` у ${e.year}` : "") : "", e.copy ? (COPY[e.copy] || "").toLowerCase() : "", e.kids ? "для дітей" : "", e.via ? `як «${e.via.title}»` : ""].filter(Boolean).join(", ");
   return `<blockquote class="big-quote${long ? " long" : ""}">${ugc.parse(titleLinks(e.note, e.via ? e.via.id : id)).replace(/<a href="http/g, '<a target="_blank" rel="noopener" href="http')}</blockquote>
 <p class="said">— <a href="${attr(href)}"><b>${esc(name)}</b></a>${e.rating != null ? ` ${stars(e.rating)}` : ""}${what ? `, ${esc(what)}` : ""}</p>`;
 }
 // Every other reader: name, what they did, their note if any.
 function readerLine({ name, href, entry: e, now }, id) {
-  const what = [now ? "читає зараз" : "", e.status && !now ? VERB[e.status] + (e.status === "read" && e.year ? ` у ${e.year}` : "") : "", e.copy ? COPY[e.copy].toLowerCase() : "", e.kids ? "для дітей" : "", e.via ? `як «${e.via.title}»` : ""].filter(Boolean).join(" · ");
+  const what = [now ? "читає зараз" : "", e.status && !now ? VERB[e.status] + (e.status === "read" && e.year ? ` у ${e.year}` : "") : "", e.copy ? (COPY[e.copy] || "").toLowerCase() : "", e.kids ? "для дітей" : "", e.via ? `як «${e.via.title}»` : ""].filter(Boolean).join(" · ");
   return `<div class="reader-line"><a href="${attr(href)}"><b>${esc(name)}</b></a><span>${e.rating != null ? `${stars(e.rating)} ` : ""}<span class="muted">${esc(what)}</span>${e.note ? `<span class="note">${noteOf(e, id)}</span>` : ""}</span></div>`;
 }
 
@@ -766,7 +767,7 @@ function mine(book, entry, user, now = false, readUrl = "") {
     const items = [dropItem(book, user, "status", "reading", "Читаю"), dropItem(book, user, "status", "read", "Прочитано"), allOf, dropItem(book, user, "copy", "paper", "Є в мене, ще не читав"), dropItem(book, user, "status", "kids", "Дитяча полиця"), "<hr>", lists];
     return `<div class="acts" data-block="acts"><span class="want-split">${wantButton(book, user, { size: "", primary: true })}${drop(' aria-label="Інший статус" title="Інший статус" data-ev="status">▾', "btn primary", items)}</span>${read}</div>`;
   }
-  const what = entry.kids ? "Дитяча полиця" : entry.status ? STATUS[entry.status] : entry.copy ? COPY[entry.copy] : "У моїх книжках";
+  const what = entry.kids ? "Дитяча полиця" : entry.status ? STATUS[entry.status] : COPY[entry.copy] ? COPY[entry.copy] : "У моїх книжках";
   if (entry.via) return `<div class="acts" data-block="acts"><span class="have">✓ ${esc(what)} <span class="muted">як <a href="${attr(entry.via.href)}">${esc(entry.via.title)}</a></span></span>${read}</div>`;
   const cur = entry.kids ? "kids" : entry.status;
   const items = [
@@ -1174,9 +1175,8 @@ function entryForm(book, entry, series = null) {
   ${series ? `<label class="check"><span><input type="checkbox" name="series" value="1"${series.checked ? " checked" : ""}> Уся серія «${esc(series.name)}» · ${books(series.total)}</span><span class="hint">Статус, оцінка і рік стануть на всі томи, яких ще немає на полиці — додадуться. На полиці серія буде одним рядком; нотатка лишається на цій книжці.</span></label>` : ""}
   <label>Примірник <select name="copy">
     <option value="" ${!e.copy ? "selected" : ""}>не вказано</option>
-    <option value="paper" ${e.copy === "paper" ? "selected" : ""}>Є на папері</option>
-    <option value="ebook" ${e.copy === "ebook" ? "selected" : ""}>Є e-book</option>
-    <option value="seeking" ${e.copy === "seeking" ? "selected" : ""}>Шукаю на папері</option>
+    <option value="paper" ${e.copy === "paper" ? "selected" : ""}>На папері</option>
+    <option value="ebook" ${e.copy === "ebook" ? "selected" : ""}>E-book</option>
   </select></label>
   <label>Нотатка <textarea name="note" rows="5" placeholder="${e.status === "abandoned" ? WHY : "Кілька слів про книжку"}" data-why="${WHY}">${esc(e.note || "")}</textarea></label>
   <div class="actions">
@@ -1280,7 +1280,6 @@ function libraryPage({ ask = null, part = "", clubTopics = [], lists = [], saved
     ["want", own ? "Хочу прочитати" : "Хоче прочитати", mine.filter((r) => r.status === "want").length],
     ["abandoned", "Покинуто", mine.filter((r) => r.status === "abandoned").length],
     ["paper", "На папері", mine.filter((r) => r.copy === "paper").length],
-    ["seeking", "Шукаю", mine.filter((r) => r.copy === "seeking").length],
     ...(common.length ? [["common", "Спільні", common.length]] : []),
     ["kids", "Дитяча полиця", kids.length],
   ].filter(([k, , n]) => !k || n || (own && ["read", "reading", "want"].includes(k)));
@@ -2575,7 +2574,7 @@ function importPage({ user, source = "goodreads", error = "" }) {
 
 // Step two: every row of the file as it would land on the shelf, in three groups, each row with a tick.
 function importPreviewPage({ user, source = "goodreads", token, rows, counts, filename = "" }) {
-  const what = (r) => [r.status ? STATUS[r.status] : "", r.rating != null ? stars(r.rating) : "", r.year || "", r.progress > 0 && r.progress < 98 && r.status === "reading" ? `${r.progress}%` : "", r.copy ? COPY[r.copy].toLowerCase() : ""].filter(Boolean).join(" · ");
+  const what = (r) => [r.status ? STATUS[r.status] : "", r.rating != null ? stars(r.rating) : "", r.year || "", r.progress > 0 && r.progress < 98 && r.status === "reading" ? `${r.progress}%` : "", r.copy ? (COPY[r.copy] || "").toLowerCase() : ""].filter(Boolean).join(" · ");
   const line = (r, i) => `<label class="imp-row">
   <input type="checkbox" name="keep" value="${i}" checked>
   <span class="imp-body">
