@@ -768,7 +768,7 @@
     openChat = chat.id;
     const conv = { chat, book: b, text: "", busy: false, reqId: null };
     lives.set(chat.id, conv);
-    conv.context = { paper: true, bookTitle: b.title, author: b.authors.join(", "), page: page || 0, chapter: b.chapter || "", selection, before, after, pageText, ...(image ? { image, marked } : {}) };
+    conv.context = { paper: true, book: b.path, bookTitle: b.title, author: b.authors.join(", "), page: page || 0, chapter: b.chapter || "", selection, before, after, pageText, ...(image ? { image, marked } : {}) };
     if (pageP) {
       // The photo's page number is still being read: the question shows at once, and goes once it is in (a few s).
       Object.assign(conv, { q: question || "", text: "", error: null, busy: true });

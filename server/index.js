@@ -2443,23 +2443,30 @@ const clean = (v, max) => String(v ?? "").replace(/\s+/g, " ").trim().slice(0, m
 // «Про книжку» in the book menu: the site's short summary of the book (/api/reader-about), kept here for a day
 // and on the device by the page (web-bridge.js), so it opens offline too.
 const aboutCache = new Map();
-api.get("/about", async (req, res) => {
-  const title = clean(req.query.title, 300);
-  const author = clean(req.query.author, 300);
-  if (!title) return res.status(400).json({ error: "title" });
+async function siteAbout(title, author) {
   const key = `${title}\n${author}`;
   const hit = aboutCache.get(key);
   // «Not in the catalog» is kept ten minutes only: a book just uploaded gets its page there a moment later.
-  if (hit && Date.now() - hit.at < (hit.data?.found ? 24 * 3600 * 1000 : 10 * 60 * 1000)) return res.json(hit.data);
+  if (hit && Date.now() - hit.at < (hit.data?.found ? 24 * 3600 * 1000 : 10 * 60 * 1000)) return hit.data;
   try {
     const r = await fetch(`${WEB_URL}/api/reader-about?${new URLSearchParams({ title, author })}`, { signal: AbortSignal.timeout(10000) });
     if (!r.ok) throw new Error(`site ${r.status}`);
     const data = await r.json();
     if (aboutCache.size > 5000) aboutCache.clear();
     aboutCache.set(key, { at: Date.now(), data });
-    res.json(data);
+    return data;
   } catch (err) {
-    if (hit) return res.json(hit.data);
+    if (hit) return hit.data;
+    throw err;
+  }
+}
+api.get("/about", async (req, res) => {
+  const title = clean(req.query.title, 300);
+  const author = clean(req.query.author, 300);
+  if (!title) return res.status(400).json({ error: "title" });
+  try {
+    res.json(await siteAbout(title, author));
+  } catch (err) {
     res.status(502).json({ error: err.message });
   }
 });
@@ -2982,6 +2989,34 @@ api.post("/paper/scan", guestsCannot("Без входу фото не розпі
   }
 });
 
+// A question about a paper book knows more than its title (Max 2026-11-12: Opus said it didn't know Чех's «Пісня
+// відкритого шляху» and guessed): the catalog's description (the cover's blurb, /api/reader-about), and what the
+// reader has seen of the book so far: their earlier questions with the answers, and their notes and quotes.
+// Only for the first message of a question; «Уточнити» goes on with the same talk.
+const PAPER_EARLIER = 12;
+const PAPER_NOTES = 12;
+async function paperBackground(req, ctx) {
+  const u = userState(req.acct);
+  const name = paper.NAME.test(String(ctx.book || "")) && u.paper?.[ctx.book] ? ctx.book : Object.keys(u.paper || {}).find((n) => u.paper[n].title === ctx.bookTitle);
+  const p = name && u.paper[name];
+  if (!p) return {};
+  const cut = (v, max) => (String(v || "").length > max ? String(v).slice(0, max).replace(/\s+\S*$/, "") + "…" : String(v || ""));
+  const earlier = bookItems(req, "paperChats", name)
+    .filter((c) => c?.turns?.length)
+    .sort((a, b) => (a.at || 0) - (b.at || 0))
+    .flatMap((c) => c.turns.map((t, i) => ({ page: c.page || 0, q: cut(t.q || (i ? "" : c.sel), 300), a: cut(t.a, 700) })))
+    .filter((t) => t.a)
+    .slice(-PAPER_EARLIER);
+  const notes = bookItems(req, "notes", name)
+    .filter((n) => n?.text)
+    .sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0))
+    .slice(-PAPER_NOTES)
+    .map((n) => ({ page: Number(QUOTE_PAGE.exec(n.chapter || "")?.[1]) || 0, quote: !!n.quote, text: cut(n.text, 500) }));
+  // The site answers in a few ms; a slow one doesn't hold the question long.
+  const about = await Promise.race([siteAbout(p.title, p.author || "").catch(() => null), new Promise((r) => setTimeout(() => r(null), 3000))]);
+  return { about: about?.found ? cut(about.blurb, 1200) : "", earlier, notes };
+}
+
 api.post("/explain", async (req, res) => {
   const request = req.body?.request;
   if (!request || typeof request !== "object") return res.status(400).json({ error: "bad request" });
@@ -3009,6 +3044,13 @@ api.post("/explain", async (req, res) => {
     return res.end();
   }
   if (!req.guest && !req.owner) trimAccountRequest(request);
+  if (!req.guest && request.context?.paper && !request.messages) {
+    try {
+      Object.assign(request.context, await paperBackground(req, request.context));
+    } catch (err) {
+      console.error("paper background:", err.message);
+    }
+  }
   if (req.share) {
     const usage = shareUsage(req.share);
     if (usage.n >= SHARE_EXPLAIN_LIMIT) {

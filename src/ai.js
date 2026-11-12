@@ -68,7 +68,23 @@ function paperMessage(ctx, mode) {
   const parts = [];
   if (ctx.bookTitle) parts.push(`<book>${ctx.bookTitle}${ctx.author ? ` by ${ctx.author}` : ""}</book>`);
   const where = [ctx.page ? `page ${ctx.page}${ctx.pages ? ` of ${ctx.pages}` : ""}` : "", ctx.chapter ? `chapter «${ctx.chapter}»` : ""].filter(Boolean).join(", ");
-  parts.push(`The reader is reading a printed copy of this book, not in the app${where ? `, and is at ${where} as far as the app knows (from their last photo of a page; they may have read on)` : ""}. If the question says where they are, trust that instead. Rely on what you know about the book. Never reveal plot, twists or conclusions that come after where they are${where ? "" : " (if you can't tell how far they are, ask or avoid spoilers altogether)"}; if the question can't be answered without them, say so and offer to answer once they've read on. If you don't know this book well, say so in one line and answer from general knowledge.`);
+  // What the app knows besides the title (server/index.js paperBackground, 2026-11-12): the cover's blurb from
+  // the catalog, the reader's earlier questions with the answers, their notes and quotes.
+  const earlier = Array.isArray(ctx.earlier) ? ctx.earlier.filter((t) => t && t.a) : [];
+  const notes = Array.isArray(ctx.notes) ? ctx.notes.filter((n) => n && n.text) : [];
+  const pg = (n) => (n ? `p. ${n}` : "page unknown");
+  if (ctx.about) parts.push(`<about_book>\n${ctx.about}\n</about_book>`);
+  if (earlier.length) parts.push(`<earlier_questions>\n${earlier.map((t) => `[${pg(t.page)}] Q: ${t.q || "(photo of the page)"}\nA: ${t.a}`).join("\n\n")}\n</earlier_questions>`);
+  if (notes.length) parts.push(`<reader_notes>\n${notes.map((n) => `[${pg(n.page)}${n.quote ? ", quote from the book" : ", reader's note"}] ${n.text}`).join("\n\n")}\n</reader_notes>`);
+  const known = [
+    ctx.about ? "the publisher's description in <about_book> (what is printed on the cover: take it as true, but don't spell out what it only hints at about later events)" : "",
+    earlier.length ? "the reader's earlier questions about this book with your answers in <earlier_questions> (they show the places and people the reader has met so far; an answer there may be a guess, don't repeat a guess as a fact)" : "",
+    notes.length ? "the reader's notes and quotes from the book in <reader_notes>" : "",
+  ].filter(Boolean);
+  const knowing = known.length
+    ? `Rely on what you know about the book and on these: ${known.join("; ")}. Don't open with a disclaimer about how well you know the book; where an answer needs a fact you don't have, say so in a few words at that point.`
+    : "Rely on what you know about the book. If you don't know this book well, say so in one line and answer from general knowledge.";
+  parts.push(`The reader is reading a printed copy of this book, not in the app${where ? `, and is at ${where} as far as the app knows (from their last photo of a page; they may have read on)` : ""}. If the question says where they are, trust that instead. ${knowing} Never reveal plot, twists or conclusions that come after where they are${where ? "" : " (if you can't tell how far they are, ask or avoid spoilers altogether)"}; if the question can't be answered without them, say so and offer to answer once they've read on.`);
   if (ctx.image) {
     if (ctx.marked) parts.push("The reader photographed the page and marked passages on it by hand (circled, underlined or struck through, in red). Explain each marked passage in the order it appears: start each with its words quoted in bold, then the explanation. If they marked several, keep each one short. If a question is given below, answer it about the marked passages.");
     else parts.push("The reader photographed the page they are on. If a question is given below, answer it about this page. Otherwise explain briefly what matters on this page and what a reader could miss: words, names, references, historical or cultural context. Don't retell the page.");
