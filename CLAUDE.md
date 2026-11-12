@@ -91,8 +91,8 @@ technical report (below), so post it only after your fixes are pushed:
    `/agent/health?since=<at>` and `/agent/sql` on `errors` (stack, url, how often, first seen).
    `at` null: look at the last 24 h. Check `git log` first: an error from before yesterday's deploy may be fixed
    already (compare its last time with the Actions run's end); then it is only a line in the note. In SQL, strings take
-   single quotes (send the query from a file: `-d @q.json`). Backups showing `today: false` before ~10:00 Kyiv are
-   normal: GitHub starts the 03:30 schedule 6–7 hours late.
+   single quotes (send the query from a file: `-d @q.json`). Backups showing `today: false` early in the morning are
+   normal: GitHub starts the 00:17 schedule 5–7 hours late.
 2. Each kind: noise (an extension, a network drop, a bot) → widen the filter (`CLIENT_NOISE` in server/index.js) only
    if it repeats; real → reproduce on the test DB / a local reader, fix, prove, push to main like any small fix (not
    during the Friday digest). Big, risky or a product question → leave it for Max, one plain line why.
@@ -103,7 +103,7 @@ technical report (below), so post it only after your fixes are pushed:
 
 ## Backups (`backup.yml`, `web/backups.js`)
 
-- Nightly 03:30 Kyiv: both apps' `/data` without the big parts, encrypted with age, 90-day artifacts; the site's
+- Nightly, set for 00:17 Kyiv (GitHub starts it 5–7 h late): both apps' `/data` without the big parts, encrypted with age, 90-day artifacts; the site's
   job also makes the `test-db` release. The site's own covers (`web/covers`, no `t/` cache) go apart on Sunday
   (`chytai-web-covers`, 35 days; `test-db` asset `chytai-web-covers.tar.gz.age`, fetched once by `fetch-test-db.sh`).
   A new big folder on a volume: leave it out of the nightly copy, or give it its own weekly copy. Each job restores its copy on trial (`scripts/backup-restore-check.sh`: decrypt with the repo
@@ -120,7 +120,7 @@ technical report (below), so post it only after your fixes are pushed:
 - 08:00 Kyiv: readers only (sign-ups, visits, shelves, the reader's minutes and explanations). Nothing technical in it
   (Max, 2026-11-12).
 - Technical, once a day, when both nightly backups (site, reader) have reported today and the morning review posted
-  today's note; at 12:00 Kyiv at the latest, and then a missing copy is a failed one («не вдався», Max 2026-11-12):
+  today's note; at 10:00 Kyiv at the latest (`DEADLINE_HOUR`), and then a missing copy is a failed one («не вдався», Max 2026-11-12):
   backups, yesterday's errors and failed jobs, the review's note, pages the phones unloaded. Meta
   `techreport:lastRun`. Try either on the test DB: `require("./web/dailyreport").buildTech({ db, day, ownerId, site,
   reader })` with a fake `reader`.

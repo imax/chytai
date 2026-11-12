@@ -4,7 +4,7 @@
 //   app's minutes and explanations. Nothing technical (Max, 2026-11-12: «цей технічний звіт сюди не ліпити»).
 // - Technical (Max, 2026-11-12: «об'єднати його з бекапом… після того, як ми переконалися, що бекап пройшов успішно,
 //   пофіксили помилки»): once a day when the night's backups of the site and the reader have reported (backups.js)
-//   and the morning error review has left today's note (/agent/triage), whenever that is; at DEADLINE_HOUR (noon) at
+//   and the morning error review has left today's note (/agent/triage), whenever that is; at DEADLINE_HOUR (10:00) at
 //   the latest, saying what has not come. Backups, yesterday's errors and failed jobs, the review's note, unloads.
 // The owner and test addresses (auth.testAddress) are not counted. A few small queries over one day: no full scans
 // of entries or visits.

@@ -6,8 +6,8 @@
 // meta `backup:<app>` (the last report) and `backup:<app>:ok` (the last good one).
 // Telegram, few lines: a failed job says so at once; a copy much smaller than the night before says so. The day's
 // technical report (dailyreport.js) waits for the night's reports and goes at DEADLINE_HOUR at the latest, saying
-// which copy has not come (the run never started, or its report never came). GitHub starts the 03:30 run late on busy
-// nights (2026-11-11: 08:54 Kyiv), hence noon.
+// which copy has not come (the run never started, or its report never came). GitHub starts its schedule 5–7 hours late
+// (03:30 runs began 08:20–09:36 Kyiv, 2026-11-02…11), so the run is set for 00:17 and the deadline is 10:00.
 // The same state is a row of «Performance» on /admin, the first line of the technical report and `backups` in /agent/health.
 // Our own covers (web/covers, ~180 MB) are copied apart once a week (Max, 2026-11-11: «поки у нас маленький сайт і
 // база, то і бекап теж має бути маленьким, а ці великі штуки винесемо окремо»): fresh within WEEKLY_DAYS.
@@ -17,7 +17,7 @@ const APPS = { "chytai-web": "сайту", chytai: "Читалки", "chytai-web
 const SHORT = { "chytai-web": "сайт", chytai: "Читалка", "chytai-web-covers": "обкладинки" };
 const WEEKLY = new Set(["chytai-web-covers"]);
 const WEEKLY_DAYS = 8;
-const DEADLINE_HOUR = 12; // Kyiv
+const DEADLINE_HOUR = 10; // Kyiv (Max, 2026-11-12: «я б навіть 12 не чекав»)
 // The workflow's step ids (backup.yml), as Max reads them.
 const STEPS = { snap: "знімок на машині", check: "перевірка копії", encrypt: "шифрування", upload: "збереження в GitHub", download: "завантаження назад", restore: "пробне відновлення", test: "тестова копія" };
 const ACTIONS = "https://github.com/imax/chytai/actions/workflows/backup.yml";

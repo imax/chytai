@@ -16,7 +16,7 @@ name: Backup
 
 on:
   schedule:
-    - cron: "30 0 * * *" # 03:30 Kyiv: the site's database and the reader
+    - cron: "17 22 * * *" # 00:17 Kyiv (GitHub starts it 5–7 h late): the site's database and the reader
     - cron: "0 1 * * 0" # Sunday 04:00 Kyiv: the site's covers
   workflow_dispatch:
   # A change to the backup itself runs it once, so it is tested right away.
@@ -60,7 +60,7 @@ jobs:
           # settings are in reader.db; the files are in Fly's daily volume snapshots (30 days). reflow is rebuilt from the
           # books on demand, and so are the covers taken out of the books (covers/*.*, 560 MB); readers' own covers stay.
           case "$SCHEDULE" in
-            "30 0 * * *") pick='map(select(.app != "chytai-web-covers"))' ;;
+            "17 22 * * *") pick='map(select(.app != "chytai-web-covers"))' ;;
             "0 1 * * 0") pick='map(select(.app == "chytai-web-covers"))' ;;
             *) pick='.' ;;
           esac
