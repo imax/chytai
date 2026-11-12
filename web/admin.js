@@ -1621,15 +1621,16 @@ ${recent ? `<div class="tbl"><table>
 
 // The reader's four numbers for the Огляд dashboard (server/index.js collectStats via /api/site-admin).
 function readerTiles(s) {
-  if (!s) return [tile("·", "читання в Читалці за 7 днів", "Читалка не відповіла"), tile("·", "пояснень за 7 днів"), tile("·", "нотаток за 7 днів"), tile("·", "Claude за 30 днів")].join("");
+  if (!s) return [tile("·", "читачів у Читалці за 7 днів", "Читалка не відповіла"), tile("·", "пояснень за 7 днів"), tile("·", "нотаток за 7 днів"), tile("·", "Claude за 30 днів")].join("");
   const usd = (v) => (v == null ? "—" : `$${v.toFixed(2).replace(".", ",")}`);
   const mins = (m) => (m < 120 ? `${fmtN(m)} хв` : `${fmtN(Math.round(m / 60))} год`);
   const sum = (xs, f) => xs.reduce((a, x) => (a == null || f(x) == null ? null : a + f(x)), 0);
   const cost30 = sum(s.days.slice(0, 30), (d) => d.cost);
   const readWeek = s.users.reduce((a, u) => a + (u.readWeek || 0), 0);
   return [
-    // Who read and how long in one tile, so notes fit in the row (Max, 2026-11-04).
-    tile(mins(readWeek), "читання в Читалці за 7 днів", `${fmtN(s.users.filter((u) => u.activeWeek).length)} читачів з ${fmtN(s.users.length)}, ${fmtN(s.users.filter((u) => u.readWeek >= 15).length)} по 15+ хв`),
+    // Who read and how long in one tile, so notes fit in the row (Max, 2026-11-04); readers are the big number,
+    // the hours go below (Max, 2026-11-12: «там де 14 год поставимо читачів»).
+    tile(fmtN(s.users.filter((u) => u.activeWeek).length), "читачів у Читалці за 7 днів", `з ${fmtN(s.users.length)}, ${mins(readWeek)} читання, ${fmtN(s.users.filter((u) => u.readWeek >= 15).length)} по 15+ хв`),
     tile(fmtN(s.totals.week), "пояснень за 7 днів", `${fmtN(s.totals.today)} сьогодні`),
     s.notes ? tile(fmtN(s.notes.week), "нотаток за 7 днів", `${fmtN(s.notes.today)} сьогодні, ${fmtN(s.notes.all)} усього`) : "",
     tile(usd(cost30), "Claude за 30 днів", "приблизно, за тарифами API"),
