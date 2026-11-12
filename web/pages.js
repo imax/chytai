@@ -3141,10 +3141,13 @@ ${form}
 // ---- «Що почитати далі?» (ask.js, Max 2026-11-11): a field, and an answer with its own address ----
 const ASK_HINT = "Наприклад: класно зайшли цикли Тесс Ґеррітсен про Ріццолі й Саймона Бекетта про антрополога Гантера. Порадьте ще детективні серії.";
 const askText = (t) => t.split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean).map((p) => `<p>${esc(p).replace(/\n/g, "<br>")}</p>`).join("");
-function askForm(text = "", error = "") {
+function askForm(text = "", error = "", latest = "") {
+  // The newest question someone asked as the example, so the hint changes (Max, 2026-11-12: «зараз завжди один»).
+  const t = String(latest || "").replace(/\s+/g, " ").trim();
+  const hint = t ? `Наприклад: ${t.length > 300 ? `${t.slice(0, 297).replace(/\s+\S*$/, "")}…` : t}` : ASK_HINT;
   return `<form method="post" action="/ask" class="form ask-form" id="ask-form">
   ${error ? `<p class="error">${esc(error)}</p>` : ""}
-  <textarea name="text" rows="6" minlength="15" maxlength="1500" required placeholder="${attr(ASK_HINT)}" aria-label="Що вам сподобалось">${esc(text)}</textarea>
+  <textarea name="text" rows="6" minlength="15" maxlength="1500" required placeholder="${attr(hint)}" aria-label="Що вам сподобалось">${esc(text)}</textarea>
   <div class="actions"><button class="btn primary">Порадити</button><span class="hint">Питання й відповідь побачать інші.</span></div>
 </form>
 <script>document.getElementById("ask-form").addEventListener("submit", (e) => { const b = e.target.querySelector("button"); b.disabled = true; b.textContent = "Добираю книжки…"; });</script>`;
@@ -3157,7 +3160,7 @@ function askPage({ user, text = "", error = "", others = [] }) {
   <h1>Що почитати далі?</h1>
   <p class="lead">Напишіть, що вам сподобалось. Порадимо книжки з каталогу.</p>
 </section>
-${askForm(text, error)}
+${askForm(text, error, others[0]?.text)}
 ${others.length ? `<section class="ask-others">${label("Що питають інші")}${others.map((o) => `<a class="ask-other" href="/ask/${attr(o.id)}"><span class="q">${esc(o.topic || short(o.text))}</span></a>`).join("")}</section>` : ""}`;
   return layout({ title: "Що почитати далі?", body, user, path: "/ask", canonical: "/ask", description: "Напишіть, що вам сподобалось, і Chytai порадить книжки." });
 }
