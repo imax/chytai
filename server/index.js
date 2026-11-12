@@ -2964,6 +2964,7 @@ api.delete("/paper/:name", guestsCannot("Без входу паперових к
   if (!u.paper?.[name]) return res.status(404).json({ error: "Книжки немає." });
   delete u.paper[name];
   dropPaperImgs(req.acct, name, bookItems(req, "paperChats", name));
+  fs.rmSync(paperReadFile(req.acct, name), { force: true });
   for (const kind of ["notes", "paperChats"]) store.items.dropBook(req.acct, kind, name);
   for (const key of ["positions", "progress", "opened", "setAside", "seen", "finished"]) delete u[key]?.[name];
   saveState();
@@ -2988,6 +2989,55 @@ api.post("/paper/scan", guestsCannot("Без входу фото не розпі
     res.status(502).json({ error: describeError(err) });
   }
 });
+
+// What the reader has read of a paper book (Max 2026-11-12, «1 звучить краще»): every page photographed for a
+// question is transcribed (Sonnet) next to the answer, not before it, and folded into short notes on the book
+// (paper.updateStory). Kept in accounts/<id>/paper-read/<book hex>.json: { story, pages, last: [{ page, text }] }
+// with the last two pages' text, a few KB; gone with the book or the account. A page already in the notes is not
+// read again. One book's pages are read one after another.
+const paperReadFile = (acct, name) => path.join(ACCOUNTS_DIR, acct, "paper-read", `${name.slice(6, 16)}.json`);
+function paperRead(acct, name) {
+  try {
+    return JSON.parse(fs.readFileSync(paperReadFile(acct, name), "utf8"));
+  } catch {
+    return null;
+  }
+}
+const paperReading = new Map();
+function learnPage(req, name, page) {
+  const key = `${req.acct}\t${name}`;
+  const next = (paperReading.get(key) || Promise.resolve()).then(() => learnPageNow(req, name, page)).catch((err) => console.error("paper read:", err.message));
+  paperReading.set(key, next);
+  next.finally(() => paperReading.get(key) === next && paperReading.delete(key));
+  return next;
+}
+async function learnPageNow(req, name, { image, text, page }) {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  const p = userState(req.acct).paper?.[name];
+  if (!apiKey || !p || aiBudgetDenied(req)) return;
+  const kept = paperRead(req.acct, name) || { story: "", pages: [], last: [] };
+  if (page && kept.pages.includes(page)) return;
+  if (!text && image) {
+    const r = await paper.readPage(apiKey, Buffer.from(image, "base64"), "image/jpeg");
+    recordExplain(req, { model: r.model, usage: r.usage });
+    text = r.text;
+    page = page || r.page || 0;
+    if (page && kept.pages.includes(page)) return;
+  }
+  if (!text || text.length < 200) return;
+  const s = await paper.updateStory(apiKey, { title: p.title, author: p.author, story: kept.story, pages: kept.pages, page, text });
+  recordExplain(req, { model: s.model, usage: s.usage });
+  if (!s.text || !userState(req.acct).paper?.[name]) return;
+  const out = {
+    story: s.text,
+    pages: [...kept.pages, page].filter(Boolean).sort((a, b) => a - b).slice(-1000),
+    last: [...kept.last.filter((l) => !page || l.page !== page), { page: page || 0, text: text.slice(0, 6000), at: Date.now() }].slice(-2),
+    at: Date.now(),
+  };
+  const file = paperReadFile(req.acct, name);
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, JSON.stringify(out));
+}
 
 // A question about a paper book knows more than its title (Max 2026-11-12: Opus said it didn't know Чех's «Пісня
 // відкритого шляху» and guessed): the catalog's description (the cover's blurb, /api/reader-about), and what the
@@ -3014,7 +3064,18 @@ async function paperBackground(req, ctx) {
     .map((n) => ({ page: Number(QUOTE_PAGE.exec(n.chapter || "")?.[1]) || 0, quote: !!n.quote, text: cut(n.text, 500) }));
   // The site answers in a few ms; a slow one doesn't hold the question long.
   const about = await Promise.race([siteAbout(p.title, p.author || "").catch(() => null), new Promise((r) => setTimeout(() => r(null), 3000))]);
-  return { about: about?.found ? cut(about.blurb, 1200) : "", earlier, notes };
+  const read = paperRead(req.acct, name);
+  // The last page's own text, for a question without a photo (with one, the photo is the page).
+  const last = !ctx.image && !ctx.pageText ? read?.last?.[read.last.length - 1] : null;
+  return {
+    about: about?.found ? cut(about.blurb, 1200) : "",
+    earlier,
+    notes,
+    story: read?.story || "",
+    storyPages: read?.pages || [],
+    lastPage: last ? { page: last.page, text: last.text } : null,
+    name,
+  };
 }
 
 api.post("/explain", async (req, res) => {
@@ -3046,7 +3107,10 @@ api.post("/explain", async (req, res) => {
   if (!req.guest && !req.owner) trimAccountRequest(request);
   if (!req.guest && request.context?.paper && !request.messages) {
     try {
-      Object.assign(request.context, await paperBackground(req, request.context));
+      const { name, ...more } = await paperBackground(req, request.context);
+      // This question's page goes into what the reader has read, beside the answer.
+      if (name && (request.context.image || request.context.pageText)) learnPage(req, name, { image: request.context.image, text: request.context.pageText, page: Number(request.context.page) || 0 });
+      Object.assign(request.context, more);
     } catch (err) {
       console.error("paper background:", err.message);
     }

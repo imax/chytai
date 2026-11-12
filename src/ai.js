@@ -74,9 +74,14 @@ function paperMessage(ctx, mode) {
   const notes = Array.isArray(ctx.notes) ? ctx.notes.filter((n) => n && n.text) : [];
   const pg = (n) => (n ? `p. ${n}` : "page unknown");
   if (ctx.about) parts.push(`<about_book>\n${ctx.about}\n</about_book>`);
+  const storyPages = Array.isArray(ctx.storyPages) ? ctx.storyPages.filter(Number.isFinite) : [];
+  if (ctx.story) parts.push(`<read_so_far${storyPages.length ? ` pages="${storyPages.join(", ")}"` : ""}>\n${ctx.story}\n</read_so_far>`);
+  if (ctx.lastPage?.text) parts.push(`<last_photographed_page${ctx.lastPage.page ? ` page="${ctx.lastPage.page}"` : ""}>\n${ctx.lastPage.text}\n</last_photographed_page>`);
   if (earlier.length) parts.push(`<earlier_questions>\n${earlier.map((t) => `[${pg(t.page)}] Q: ${t.q || "(photo of the page)"}\nA: ${t.a}`).join("\n\n")}\n</earlier_questions>`);
   if (notes.length) parts.push(`<reader_notes>\n${notes.map((n) => `[${pg(n.page)}${n.quote ? ", quote from the book" : ", reader's note"}] ${n.text}`).join("\n\n")}\n</reader_notes>`);
   const known = [
+    ctx.story ? "the app's notes in <read_so_far>, made from the printed pages the reader photographed (the surest source on places, people and events up to there)" : "",
+    ctx.lastPage?.text ? "the text of the last page they photographed in <last_photographed_page> (transcribed, may have small errors)" : "",
     ctx.about ? "the publisher's description in <about_book> (what is printed on the cover: take it as true, but don't spell out what it only hints at about later events)" : "",
     earlier.length ? "the reader's earlier questions about this book with your answers in <earlier_questions> (they show the places and people the reader has met so far; an answer there may be a guess, don't repeat a guess as a fact)" : "",
     notes.length ? "the reader's notes and quotes from the book in <reader_notes>" : "",

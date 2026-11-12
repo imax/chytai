@@ -88,6 +88,29 @@ Rewrite it as the reader meant it: add punctuation and sentence capitals, put ti
   return { text: out, usage: r.usage, model: r.model };
 }
 
+// What the reader has read so far (Max 2026-11-12, after Opus didn't know Чех's «Пісня відкритого шляху»): each
+// page they photograph is transcribed and folded into short notes on the book: where and when, who is who, what
+// happened, by page. Only from the printed pages, so no spoilers and no guesses from what a model thinks it knows.
+const STORY_MAX = 3000;
+async function updateStory(apiKey, { title, author, story, pages, page, text }) {
+  const prompt = `You keep notes on a printed book a reader is reading: «${title}»${author ? ` by ${author}` : ""}. The notes are used later to answer their questions about it, so they hold only what the pages they have read say.
+
+${story ? `The notes so far (from pages ${pages.join(", ") || "unknown"}):\n<notes>\n${story}\n</notes>` : "There are no notes yet."}
+
+A page they have just read${page ? ` (page ${page})` : ""}, transcribed from a photo, so it may have small recognition errors:
+<page>
+${text}
+</page>
+
+Rewrite the notes so they include what this page adds. Write in Ukrainian, short plain lines under three headings:
+Де і коли: the place and time of the story so far, as the text gives them.
+Хто є хто: each named person (and what others call them), one line each: who they are, their relation to the narrator or others.
+Що сталося: the events so far in story order, one line each, with the page in brackets; merge and shorten older lines first.
+Only what the pages say: nothing from what you may know about this book, no guesses (if the text only suggests something, say «схоже»). Under ${STORY_MAX - 500} characters in all. Answer with the notes only.`;
+  const r = await ask(apiKey, PAGE_MODEL, prompt, null, null, 2500);
+  return { text: r.text.replace(/^<notes>|<\/notes>$/g, "").trim().slice(0, STORY_MAX), usage: r.usage, model: r.model };
+}
+
 // A paper book's kept talk without the photo in it: the picture is several hundred KB and is not kept.
 function stripImages(messages) {
   if (!Array.isArray(messages)) return null;
@@ -107,4 +130,4 @@ function listEntry(name, p, u) {
   };
 }
 
-module.exports = { NAME, readCover, readPage, readPageNumber, suggest, tidy, stripImages, listEntry, COVER_MODEL, PAGE_MODEL };
+module.exports = { NAME, readCover, readPage, readPageNumber, updateStory, suggest, tidy, stripImages, listEntry, COVER_MODEL, PAGE_MODEL };
