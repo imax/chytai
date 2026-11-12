@@ -19,12 +19,13 @@ CREATE INDEX IF NOT EXISTS threads_finds_posted ON threads_finds (posted);`;
 
 // Ukrainian, not Russian: a Russian letter (ы э ъ ё) or word drops it; a Ukrainian letter (і ї є ґ) or word is needed
 // («Порадьте книжку?» has no Ukrainian letter).
-// A request: «порад…», «підкаж…», «шукаю», «що почитати», «допоможіть» or a question mark, next to a book word.
+// A request: «порад…», «підкаж…», «шукаю», «що почитати», «допоможіть» or a question mark, next to a book word
+// («почитати» alone is not one: «цікаво почитати ваші думки» came up most on the first real run).
 function wanted(text) {
   const t = String(text || "").toLowerCase();
   if (/[ыэъё]/.test(t) || /(^|[^а-яіїєґ])(что|посоветуй\S*|какую|какой|почитать)(?![а-яіїєґ])/.test(t)) return false;
   if (!/[іїєґ]/.test(t) && !/порад|книжк|почитати|підкаж/.test(t)) return false;
-  const book = /книж|книг|почитати|прочитати|роман|автор|серії|серію|фентез|детектив|антиутоп|трилер|класик/.test(t);
+  const book = /книж|книг|роман|автор|серії|серію|фентез|детектив|антиутоп|трилер|класик|(що|щось) (б |би |ще )?(по)?читати/.test(t);
   const ask = /порад|підкаж|посовет|шукаю|що почитати|що б почитати|що ще почитати|допоможіть|поможіть|рекоменд|\?/.test(t);
   return book && ask;
 }
@@ -67,6 +68,8 @@ function create(db) {
     // Searches every query for posts of the last 3 days, keeps the new ones that ask for a book.
     async run() {
       db.prepare("DELETE FROM threads_finds WHERE posted < ?").run(new Date(Date.now() - KEEP_DAYS * DAY).toISOString());
+      // Posts kept under an older filter that no longer pass it, unless Max already marked them.
+      for (const r of db.prepare("SELECT id, text FROM threads_finds WHERE state = ''").all()) if (!wanted(r.text)) db.prepare("DELETE FROM threads_finds WHERE id = ?").run(r.id);
       const name = source();
       if (!name) return null;
       const since = Date.now() - 3 * DAY;
@@ -76,6 +79,7 @@ function create(db) {
         kept = new Set();
       let added = 0;
       const errors = [];
+      const per = {}; // query -> posts it returned, to see which phrases are worth a credit
       for (const q of QUERIES) {
         let posts;
         try {
@@ -84,6 +88,7 @@ function create(db) {
           errors.push(`${q}: ${e.message}`);
           continue;
         }
+        per[q] = posts.length;
         for (const p of posts) {
           seen.add(p.id);
           if (!p.url || !wanted(p.text)) continue;
@@ -93,7 +98,7 @@ function create(db) {
           added += add.run(p.id, p.url, p.author, p.text.slice(0, 2000), posted, now, q, p.replies).changes;
         }
       }
-      db.set("threads:last", JSON.stringify({ at: now, source: name, seen: seen.size, kept: kept.size, added, errors }));
+      db.set("threads:last", JSON.stringify({ at: now, source: name, seen: seen.size, kept: kept.size, added, errors, per }));
       if (errors.length === QUERIES.length) throw new Error(errors[0]);
       return added || null;
     },
