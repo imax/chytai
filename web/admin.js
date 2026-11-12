@@ -1118,7 +1118,7 @@ function healthBlock({ day = null, jobs = { n: 0, failed: [] }, reader = true, e
   // Every row always; a row that needs a look turns red and says what and where (Max, 2026-11-04).
   const rows = [
     [!slow, p ? `Сайт швидкий: 95% сторінок за ${s(p.p95)}.` : "Сайт: сторінок сьогодні ще не рахували.", p ? `Сайт повільний: 95% сторінок за ${s(p.p95)}, повільніше 2 с — ${fmtN(p.slow * 100, 1)}%. <a href="/admin/speed">Швидкість</a>` : ""],
-    [stall < 30, "Сервер не стояв.", `Сервер стояв сьогодні ${stall} с. <a href="/admin/speed">Швидкість</a>`],
+    [stall < 30, "Сервер: без зупинок.", `Сервер стояв сьогодні ${stall} с. <a href="/admin/speed">Швидкість</a>`],
     [!jobs.failed.length, `Фонові задачі без помилок (${fmtN(jobs.n)} за добу).`, `Фонові задачі з помилкою за добу: ${jobs.failed.map(esc).join(", ")}. <a href="/admin/jobs">Задачі</a>`],
     [reader, "Читалка працює.", `Читалка не відповіла сайту: app.chytai.org.ua може лежати. <a href="https://app.chytai.org.ua/">Відкрити</a>`],
     [!errN, `Помилок за добу не було. <a href="/admin/speed#errors">Усі помилки</a>`, `Помилки за добу: ${errN}. <a href="/admin/speed#errors">Усі помилки</a>`],
