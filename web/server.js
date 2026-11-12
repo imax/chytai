@@ -1168,7 +1168,8 @@ const askOthers = (req) => asker.recent(20).map((o) => ({ ...o, books: o.ids.map
 app.get("/ask", (req, res, next) => {
   if (!askOn(req)) return next();
   admin.log(req.user?.id || "", "view", "/ask");
-  res.send(pages.askPage({ user: req.user, others: askOthers(req) }));
+  // ?text= fills the field (/admin/threads «Спитати в /ask»); nothing is asked until the button.
+  res.send(pages.askPage({ user: req.user, text: String(req.query.text || "").slice(0, 2000), others: askOthers(req) }));
 });
 app.post("/ask", (req, res, next) => {
   if (!askOn(req)) return next();
@@ -1562,6 +1563,9 @@ if (bg.background) setTimeout(async () => console.log(`overview: ${await advice.
 // Google Search Console numbers for /admin/traffic, once a day (gsc.js).
 const gsc = bg.register("gsc", require("./gsc").create(store.db), { run: false });
 bg.every("gsc", 24 * 3600 * 1000, () => gsc.run(), { db: store.db, first: 5 * 60 * 1000 });
+// Fresh Threads posts asking for a book, for Max on /admin/threads (threadsfind.js); every 4 hours, with a key set.
+const threadsFind = bg.register("threads-find", require("./threadsfind").create(store.db), { run: false });
+bg.every("threads-find", 4 * 3600 * 1000, () => threadsFind.run(), { db: store.db, first: 6 * 60 * 1000 });
 bg.every("overviews", 24 * 3600 * 1000, () => advice.sweep(), { db: store.db });
 pages.setStats((id) => social.stats(id));
 // The weekly letter (digest.js): Friday 9:30 Kyiv, to every reader who has not switched it off (Max,
@@ -2179,6 +2183,11 @@ app.post("/admin/publishers", owner, async (req, res) => {
   }
   reports.setEmails(name, req.body?.emails);
   res.redirect(`/admin/publishers?month=${month}&saved=${encodeURIComponent(name)}`);
+});
+app.get("/admin/threads", owner, (req, res) => res.send(pages.threadsAdminPage({ user: req.user, rows: threadsFind.list(), last: threadsFind.last(), source: threadsFind.source(), all: req.query.all === "1" })));
+app.post("/admin/threads/:id", owner, (req, res) => {
+  threadsFind.mark(req.params.id, String(req.body?.state || ""));
+  res.redirect(303, req.body?.all ? "/admin/threads?all=1" : "/admin/threads");
 });
 app.get("/admin/comments", owner, (req, res) => res.send(pages.commentsAdminPage({ user: req.user, comments: lists.recentComments(), club: club.recent() })));
 app.post("/api/lists/:id/delete", signed, myList, (req, res) => (lists.remove(req.list.id), res.redirect(303, req.user.href)));

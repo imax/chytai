@@ -83,7 +83,7 @@ if [ $real = 1 ]; then
   code=$(grep -o "входу на [^:]*: [0-9]\{6\}" "$LOG" | tail -1 | grep -o "[0-9]\{6\}$")
   curl -s -c "$JAR" -b "$JAR" -o /dev/null -d "email=owner@test.invalid&code=$code" "$BASE/login/code"
   if grep -q chytai "$JAR" 2>/dev/null; then
-    for p in /@maxua /settings /add /admin /admin/traffic /admin/readers /admin/retention /admin/reader /admin/comments /admin/digest /admin/catalog /admin/jobs /admin/speed /admin/activity; do
+    for p in /@maxua /settings /add /admin /admin/traffic /admin/threads /admin/readers /admin/retention /admin/reader /admin/comments /admin/digest /admin/catalog /admin/jobs /admin/speed /admin/activity; do
       check "$p" 200 "$JAR"
     done
   else

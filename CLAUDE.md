@@ -176,6 +176,15 @@ A flag only when Max asks for one, or when the change could break what readers u
   `curl -s https://chytai.org.ua/agent/ask -H "$H" -H 'content-type: application/json' -d '{"text":"…","model":"claude-sonnet-5-5"}'`.
 - Locally without a key: preload a fake `@anthropic-ai/sdk` (`node -r mock.js web/server.js`, ANTHROPIC_API_KEY=dummy).
 
+## Threads posts asking for a book (`web/threadsfind.js`, /admin/threads)
+
+- Max looks at fresh Ukrainian Threads posts that ask for a book and answers some himself (Max, 2026-11-12: no
+  auto-replies, nothing posted from here, no AI). The jobs process searches `QUERIES` every 4 h, keeps what
+  `wanted()` passes (Ukrainian letters, a book word, a request), 30 days. «Спитати в /ask» opens `/ask?text=…`.
+- Source = whichever Fly secret is set: `THREADS_TOKEN` (Meta's keyword search; other people's posts only after
+  App Review) or `SOCIALFETCH_KEY` (socialfetch.dev, 1 credit a query: 6 queries × 6 runs a day). None = the page says so.
+- Try the filter: `node -e 'console.log(require("./web/threadsfind").wanted("Порадьте книжку?"))'`.
+
 ## Translation pairs
 
 - A Ukrainian book and its original are paired in `web/seed/matches.json`: `translations` (`[original, uk]`, slugs or

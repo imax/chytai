@@ -1464,6 +1464,7 @@ const JOBS = {
   "advice.sweep": "Відгуки в інтернеті: книжки в чергу",
   "advice.redo": "Відгуки в інтернеті: переробити за новим промптом",
   "gsc.run": "Google Search Console",
+  "threads-find.run": "Threads: пости, де питають порадити книжку",
   "newBooks.run": "Нові книжки: перевірки",
 };
 const PASSES = { dupes: "Дублі", notbooks: "Не книжки", series: "Серії", year: "Рік прочитання", authors: "Автори", covers: "Обкладинки", mentions: "Згадки", blurb: "Опис" };
@@ -1486,6 +1487,7 @@ const PLANS = {
   free: { what: "Вільні книжки з «Хочу прочитати»", jobs: ["freeBooks.run"] },
   aipasses: { what: "Haiku: нові книжки (жанри, мова, оригінали, дублі…)", jobs: ["genreTrial.runAll", "origTrial.runAll", "langTrial.runAll", /^pass:\w+\.runAll$/] },
   gsc: { what: "Google Search Console", jobs: ["gsc.run"] },
+  "threads-find": { what: "Threads: пости, де питають порадити книжку", note: "кожні 4 год, коли є ключ", jobs: ["threads-find.run"] },
   overviews: { what: "Відгуки в інтернеті: книжки в чергу", jobs: ["advice.sweep"] },
 };
 const fits = (job, keys) => keys.some((k) => (k instanceof RegExp ? k.test(job) : k === job));

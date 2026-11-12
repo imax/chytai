@@ -530,7 +530,7 @@ ${myLists ? listsDialog(book, myLists) : ""}`;
 // The catalog's queues (dupes, volumes, translations…) open from /admin/catalog, not from the menu.
 const ADMIN_TABS = [
   ["Огляд", [["/admin", "Огляд"]], /^\/admin\/activity$/],
-  ["Трафік", [["/admin/traffic", "Трафік"]]],
+  ["Трафік", [["/admin/traffic", "Трафік"], ["/admin/threads", "Threads"]]],
   ["Читачі", [["/admin/readers", "Усі читачі"], ["/admin/retention", "Утримання"], ["/admin/reader", "Читалка"], ["/admin/comments", "Коментарі"], ["/admin/digest", "Дайджест"]]],
   ["Каталог", [["/admin/catalog", "Каталог"]], /^\/admin\/(catalog|shelves|overviews|dupes|translations|volumes|russian|ukfind|readeat|free|ai\/|book\/|reviews)|-trial$/],
   ["Система", [["/admin/jobs", "Задачі"], ["/admin/speed", "Швидкість"]]],
@@ -3031,6 +3031,34 @@ ${rows.map((r) => `<div class="cmt">${r.html}</div>`).join("")}`;
   return layout({ title: "Клуб Chytai", body, user, path: "/admin", noindex: true });
 }
 
+// ---- /admin/threads: fresh Threads posts asking for a book (threadsfind.js) ----
+// Max looks at each, answers some himself; «Спитати в /ask» opens /ask with the post's text in the field.
+function threadsAdminPage({ user, rows, last, source, all }) {
+  const ago = (at) => {
+    const m = Math.max(0, Math.round((Date.now() - Date.parse(at)) / 60000));
+    return m < 60 ? `${m} хв тому` : m < 24 * 60 ? `${Math.round(m / 60)} год тому` : when({ updated: at });
+  };
+  const fresh = rows.filter((r) => !r.state);
+  const shown = all ? rows : fresh;
+  // The buttons sit in the row of links; their forms come after it (form="…"), as on /admin/comments.
+  const mark = (r, state, text) => `<button class="text-link small" form="tf-${attr(r.id)}-${state || "back"}">${text}</button>`;
+  const form = (r, state) => `<form method="post" action="/admin/threads/${attr(r.id)}" id="tf-${attr(r.id)}-${state || "back"}"><input type="hidden" name="state" value="${state}">${all ? `<input type="hidden" name="all" value="1">` : ""}</form>`;
+  const row = (r) => `<div class="cmt"${r.state ? ` style="opacity:.55"` : ""}><p class="who"><b>@${esc(r.author || "?")}</b> · ${ago(r.posted)}${r.replies != null ? ` · відповідей ${r.replies}` : ""}${r.state ? ` · ${r.state === "done" ? "відповів" : "пропущено"}` : ""}</p>
+<p class="txt">${esc(r.text).replace(/\n/g, "<br>")}</p>
+<p class="small" style="display:flex;gap:1em;flex-wrap:wrap;margin-top:6px"><a href="${attr(r.url)}" target="_blank" rel="noopener">Відкрити в Threads</a><a href="/ask?text=${attr(encodeURIComponent(r.text.slice(0, 1500)))}" target="_blank">Спитати в /ask</a>${r.state ? mark(r, "", "Повернути") : `${mark(r, "done", "Відповів")}${mark(r, "skip", "Пропустити")}`}</p>${r.state ? form(r, "") : form(r, "done") + form(r, "skip")}</div>`;
+  const status = !source
+    ? "Пошук не підключено: немає ключа THREADS_TOKEN чи SOCIALFETCH_KEY."
+    : last
+      ? `Пошук ${ago(last.at)}: переглянуто ${last.seen}, підходять ${last.kept}, нових ${last.added}.${last.errors?.length ? ` Помилки: ${esc(last.errors.join("; "))}` : ""}`
+      : "Пошук ще не запускався.";
+  const body = `
+${pageHead({ title: "Threads", sub: "Пости, де питають порадити книжку" })}
+<p class="small muted">${status}</p>
+<p class="small">${all ? `<a href="/admin/threads">Нові (${fresh.length})</a> · <b>Усі (${rows.length})</b>` : `<b>Нові (${fresh.length})</b> · <a href="/admin/threads?all=1">Усі (${rows.length})</a>`}</p>
+${shown.length ? shown.map(row).join("") : `<p class="muted">${all ? "Поки нічого не знайшлося." : "Нових немає."}</p>`}`;
+  return layout({ title: "Threads", body, user, path: "/admin", noindex: true });
+}
+
 // ---- /admin/publishers: the publishers' monthly reading reports (reports.js) ----
 
 function publisherReportsPage({ user, month, months, monthName, publishers, rows, sent, saved, tested }) {
@@ -3206,6 +3234,7 @@ module.exports = {
   askPage, askAnswerPage,
   asksPage, askTalkPage, setAskNav,
   commentsAdminPage,
+  threadsAdminPage,
   clubPage, clubNewPage, clubTopicPage,
   publisherReportsPage,
   freeBooksPage,
