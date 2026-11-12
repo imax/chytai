@@ -95,9 +95,10 @@ function row(db) {
 }
 
 // The first line of the technical report: sent when the night's copies have reported, or at DEADLINE_HOUR without them.
+// No good copy by DEADLINE_HOUR is a failed one (Max, 2026-11-12: «якщо до 12 немає бекапу значить бекап зробити не вдалося»).
 function line(db, now = new Date()) {
   const late = kyivHour(now) >= DEADLINE_HOUR;
-  const one = (x) => `${SHORT[x.app]} ${x.last && !x.last.ok && kyivDay(x.last.at) === kyivDay(now) ? "не вдався" : x.today ? "✓" : late ? "нема" : "ще нема"}`;
+  const one = (x) => `${SHORT[x.app]} ${x.today ? "✓" : (x.last && !x.last.ok && kyivDay(x.last.at) === kyivDay(now)) || late ? "не вдався" : "ще нема"}`;
   const s = state(db, now);
   const weekly = s.filter((x) => WEEKLY.has(x.app) && x.last && !x.fresh).map((x) => `${SHORT[x.app]} не оновлювались з ${x.ok ? hhmm(x.ok.at).split(" ")[0] : "початку"}`);
   const bad = s.some((x) => (!WEEKLY.has(x.app) && !x.today) || (x.last && !x.last.ok)) || weekly.length;

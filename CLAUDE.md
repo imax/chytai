@@ -120,7 +120,7 @@ technical report (below), so post it only after your fixes are pushed:
 - 08:00 Kyiv: readers only (sign-ups, visits, shelves, the reader's minutes and explanations). Nothing technical in it
   (Max, 2026-11-12).
 - Technical, once a day, when both nightly backups (site, reader) have reported today and the morning review posted
-  today's note; at 12:00 Kyiv at the latest, saying what has not come (that is also the «no backup by noon» signal):
+  today's note; at 12:00 Kyiv at the latest, and then a missing copy is a failed one («не вдався», Max 2026-11-12):
   backups, yesterday's errors and failed jobs, the review's note, pages the phones unloaded. Meta
   `techreport:lastRun`. Try either on the test DB: `require("./web/dailyreport").buildTech({ db, day, ownerId, site,
   reader })` with a fake `reader`.
