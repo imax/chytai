@@ -6,6 +6,7 @@
 // The same text asked again gets the kept answer, free. Answers nobody opened for half a year are dropped.
 const crypto = require("crypto");
 const { isRussian, sameAuthor, norm } = require("./store");
+const { confirm } = require("./readerbooks");
 
 const MODEL = "claude-opus-5-5";
 // $ per token, for the owner's sums only (server/admin.js PRICES).
@@ -16,6 +17,7 @@ const TEXT_MAX = 1500;
 // сенс для конкретного запиту. Хоча б 3»), 3 to 10; answers kept before that name 7.
 const FIT_MIN = 3;
 const FIT_MAX = 10;
+const ASKBOOKS_DAY = 50; // new catalog books from answers a day (fill)
 const GUEST_DAY = 3; // asks a day from one guest address
 const READER_DAY = 10; // asks a day from one reader
 const ALL_DAY = 200; // fresh answers a day, everyone together
@@ -80,8 +82,11 @@ const named = (asked, ...titles) =>
 
 class Ask {
   // store: Store; ukWork(book): its Ukrainian edition; notify(row): a line to the owner about a new ask.
-  constructor(store, { apiKey = "", ukWork = (b) => b, notify = () => {}, log = console.log, client = null } = {}) {
+  // search(q): Google Books and Open Library hits (readerbooks' confirm); bookua(q): book.ua's (catalogs.bookuaSearch);
+  // made(row, books): the owner hears of the books an answer added to the catalog.
+  constructor(store, { apiKey = "", ukWork = (b) => b, notify = () => {}, log = console.log, client = null, search = null, bookua = null, made = () => {} } = {}) {
     this.store = store;
+    Object.assign(this, { search, bookua, made });
     this.db = store.db;
     this.db.exec(SCHEMA);
     // «Що питають інші» shows a topic, not the question (Max, 2026-11-11: «піднятись на один рівень абстракції»).
@@ -150,6 +155,7 @@ class Ask {
         .run(out.off ? "off" : items.length ? "done" : "none", out.fit, clean(out.topic, 80).replace(/[.!]+$/, ""), JSON.stringify(items), JSON.stringify(missed), out.model, out.input, out.output, out.cost, Date.now() - t, id);
       this.log(`ask ${id}: ${items.length} of ${(out.books || []).length} in the catalog, ${Date.now() - t} ms, $${out.cost.toFixed(3)}`);
       this.notify(this.get(id));
+      await this.fill(id).catch((e) => this.log(`ask fill ${id}: ${e.message}`));
     } catch (e) {
       this.db.prepare("UPDATE ask_recs SET status = 'fail', ms = ? WHERE id = ?").run(Date.now() - t, id);
       throw e;
@@ -222,7 +228,8 @@ class Ask {
     for (const { b, want, id: found, bad } of rows) {
       if (bad || named(asked, want.uk, want.en)) continue;
       if (!found) {
-        missed.push({ title: want.uk || want.en, author: want.ua || want.ea, rank: rank++ });
+        // With both names, its line and its place: fill() may still find it a book (book.ua, Google Books).
+        missed.push({ title: want.uk || want.en, author: want.ua || want.ea, uk: want.uk, ua: want.ua, en: want.en, ea: want.ea, why: clean(b.why, 300), series: clean(b.series, 120), rank: rank++ });
         continue;
       }
       let id = found;
@@ -283,6 +290,88 @@ class Ask {
       if (hit) return hit;
     }
     return null;
+  }
+
+  // The books an answer names that the catalog lacks become books when a shop or a library knows them (Max, 2026-11-12:
+  // «може додавати в каталог книжки, які згадує ask?»): a Ukrainian title by book.ua (same title before a subtitle,
+  // the same author, a Ukrainian edition), else the original by Google Books or Open Library (readerbooks' confirm).
+  // Claude's Ukrainian title is often its own translation of a book never published in Ukrainian («Посмертно»
+  // Корнвелл): then `ukFound: false`, and the list shows the original. Only the books the answer names (its fit);
+  // a book found moves from the grey lines to the cards. At most ASKBOOKS_DAY new books a day. `dry`: says, keeps nothing.
+  async fill(id, { dry = false } = {}) {
+    const r = this.db.prepare("SELECT * FROM ask_recs WHERE id = ?").get(id);
+    if (!r || r.status !== "done" || (!this.search && !this.bookua)) return { made: [], found: [] };
+    const s = this.store;
+    const items = JSON.parse(r.items || "[]");
+    const missed = JSON.parse(r.missed || "[]");
+    const all = [...items.map((x, i) => ({ x, rank: x.rank ?? i })), ...missed.map((m, i) => ({ m, rank: m.rank ?? 100 + i }))].sort((a, b) => a.rank - b.rank);
+    const top = all.slice(0, r.fit ? fitOf(r.fit) : 7).filter((e) => e.m).map((e) => e.m);
+    const head = (t) => norm(String(t || "").split(/[:(]|\.\s|\s[-–—]\s/)[0]);
+    const made = [];
+    const found = [];
+    for (const m of top) {
+      const cyr = /[а-яіїєґ]/i.test(m.title || "");
+      const uk = m.uk ?? (cyr ? m.title : "");
+      const ua = m.ua ?? (cyr ? m.author : "");
+      const en = m.en ?? (cyr ? "" : m.title);
+      const ea = m.ea ?? (cyr ? "" : m.author);
+      let book = null;
+      let from = "";
+      if (uk && (ua || ea) && this.bookua) {
+        const hits = await this.bookua(String(uk).split(/[:(]|\.\s/)[0]).catch((e) => (this.log(`ask fill: book.ua: ${e.message}`), []));
+        const hit = hits.find((h) => head(h.title) === head(uk) && sameAuthor(ua || ea, h.author) && /українськ/i.test(h.language) && h.format !== "Аудіо");
+        if (hit) (book = { title: hit.title.replace(/^«([^»]+)»/, "$1"), author: hit.author, cover: /^https:\/\/i\.book\.ua\//.test(hit.cover) ? hit.cover : "", links: [{ label: "book.ua", url: hit.url }], language: "українська", ...(hit.isbn ? { isbns: [hit.isbn] } : {}), ...(hit.year ? { published: hit.year } : {}) }), (from = "book.ua");
+        else m.ukFound = false;
+      }
+      if (!book && en && ea && this.search) {
+        const hit = await confirm({ title: en, author: ea, language: "en" }, this.search).catch(() => null);
+        if (hit) {
+          const links = /^https:\/\/(books\.google\.[a-z.]+|play\.google\.com)\//.test(hit.google || "") ? [{ label: "Google Books", url: hit.google }] : [];
+          book = { title: en.split(": ")[0], author: ea, cover: /^https:\/\/(covers\.openlibrary\.org|books\.google\.[a-z.]+|books\.googleusercontent\.com)\//.test(hit.cover || "") ? hit.cover : "", links, language: "англійська", ...(hit.isbns?.length ? { isbns: hit.isbns.slice(0, 20) } : {}), ...(/^\/works\/OL\w+$/.test(hit.ol || "") ? { ol: hit.ol } : {}), ...(Number(hit.published) ? { published: Number(hit.published) } : {}) };
+          from = hit.from || "Google Books";
+        }
+      }
+      if (!book || isRussian(book)) continue;
+      let have = s.findWork({ title: book.title, author: book.author, isbns: book.isbns || [] });
+      if (!have) {
+        const c = this.addedToday();
+        if (c.n >= ASKBOOKS_DAY) break;
+        if (dry) {
+          made.push({ ...book, from, ask: id });
+          continue;
+        }
+        have = s.addBook({ ...book, source: "ask" }).id;
+        c.n++;
+        this.db.set("askbooks:count", JSON.stringify(c));
+        made.push({ ...s.book(have), from, ask: id });
+      }
+      const use = this.usable(have);
+      if (!use || items.some((x) => x.id === use || sameAuthor(s.book(x.id)?.author || "", s.book(use)?.author || ""))) continue;
+      found.push(use);
+      if (!dry) items.push({ id: use, why: m.why || "", series: m.series || "", rank: m.rank }), missed.splice(missed.indexOf(m), 1);
+    }
+    if (dry) return { made, found };
+    this.db.prepare("UPDATE ask_recs SET items = ?, missed = ? WHERE id = ?").run(JSON.stringify(items), JSON.stringify(missed), id);
+    if (made.length) this.log(`ask ${id}: ${made.length} new books from the answer: ${made.map((b) => b.id).join(", ")}`), this.made(this.get(id), made);
+    return { made, found };
+  }
+  // fill() over every answer kept (the answers before it shipped). dry: what it would add, nothing kept.
+  async backfill({ dry = true } = {}) {
+    const ids = this.db.prepare("SELECT id FROM ask_recs WHERE status = 'done' AND missed != '[]' ORDER BY created").all().map((r) => r.id);
+    const out = [];
+    for (const id of ids) {
+      const r = await this.fill(id, { dry }).catch((e) => ({ error: e.message, made: [], found: [] }));
+      out.push({ id, made: r.made.map((b) => ({ title: b.title, author: b.author, from: b.from, ...(b.id ? { id: b.id } : {}) })), found: r.found, ...(r.error ? { error: r.error } : {}) });
+    }
+    return { answers: ids.length, books: out.reduce((n, x) => n + x.made.length, 0), list: out };
+  }
+  addedToday() {
+    const day = now().slice(0, 10);
+    let c = {};
+    try {
+      c = JSON.parse(this.db.get("askbooks:count") || "{}");
+    } catch {}
+    return c.day === day ? c : { day, n: 0 };
   }
 
   // Answers nobody opened for half a year go (CLAUDE.md: nothing grows without bound).

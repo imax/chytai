@@ -1150,6 +1150,10 @@ app.get("/updates", (req, res) => res.send(pages.updatesPage({ user: req.user })
 const { Ask } = require("./ask");
 const asker = new Ask(store, {
   apiKey: process.env.ANTHROPIC_API_KEY || "",
+  search: (q) => readerBooks.search(q),
+  bookua: (q) => catalogs.bookuaSearch(q),
+  // Books an answer added to the catalog (Ask.fill): the owner hears of them, as of readers' uploads.
+  made: (r, made) => notifyOwner(`Книжки з поради: ${made.length === 1 ? made[0].title : `${made.length} нових`}`, [`Порада ${SITE}/ask/${r.id} назвала книжки, яких не було в каталозі; тепер вони є:`, "", ...made.map((b) => `• ${b.title}${b.author ? ` — ${b.author}` : ""}  ${SITE}${store.href(b.id)}  (${b.from})`)].join("\n")),
   ukWork: (b) => ukWork(b),
   log: console.log,
   // A new kind of thing readers write: the owner hears of each ask with its answer (not of his own).
@@ -1192,6 +1196,17 @@ app.get("/api/ask/:id", (req, res) => res.set("Cache-Control", "no-store").json(
 // A thread tries the prompt on production's catalog without keeping anything (the answer is only returned):
 // POST /agent/ask {"text": "...", "model": "claude-sonnet-5-5"}. 30 a day.
 let agentAsks = [];
+// Books the kept answers name that the catalog lacks (Ask.fill): GET is a dry run in the background (ask again for
+// the answer, ?again=1 to rerun); POST { run: true } adds them, only once Max said yes in the thread.
+let askBooksDry = null;
+app.get("/agent/ask-books", agentOk, (req, res) => {
+  if (!askBooksDry || (req.query.again && askBooksDry.done)) {
+    askBooksDry = { started: new Date().toISOString(), done: false };
+    asker.backfill({ dry: true }).then((r) => Object.assign(askBooksDry, r, { done: true }), (e) => Object.assign(askBooksDry, { error: e.message, done: true }));
+  }
+  res.json(askBooksDry);
+});
+app.post("/agent/ask-books", agentOk, async (req, res) => (req.body?.run === true ? res.json(await asker.backfill({ dry: false })) : res.status(400).json({ error: "{ run: true }" })));
 app.post("/agent/ask", agentOk, async (req, res) => {
   agentAsks = agentAsks.filter((t) => Date.now() - t < 86400000);
   if (agentAsks.length >= 30) return res.status(429).json({ error: "30 a day already" });

@@ -1251,4 +1251,25 @@ async function refresh({ store, log = console.log, fetchImpl, only }) {
   return { ok: true, errors, counts };
 }
 
-module.exports = { isPromo, isLangAid, isBundle, isAdult, bookuaTiles, bookuaProducts, SOURCES, fetchSource, buildShelves, refresh, volumeOf, ent, about, pageProducts, ldBookPage };
+// A title on book.ua by its public GraphQL search (api.book.ua), for /ask: a recommended Ukrainian book the catalog
+// lacks becomes a book when book.ua sells that edition (Max, 2026-11-12). One request a title; Ukrainian only.
+const BOOKUA_API = "https://api.book.ua/graphql";
+const BOOKUA_FIELDS = "name url_key image { url } custom_attributesV2 { items { code ... on AttributeSelectedOptions { selected_options { label } } ... on AttributeValue { value } } }";
+async function bookuaSearch(q, { fetchImpl = fetch, limit = 10, timeout = 10000 } = {}) {
+  const r = await fetchImpl(BOOKUA_API, {
+    method: "POST",
+    headers: { "content-type": "application/json", ...HEADERS },
+    body: JSON.stringify({ query: `{ products(search: ${JSON.stringify(String(q).slice(0, 120))}, pageSize: ${limit}) { items { ${BOOKUA_FIELDS} } } }` }),
+    signal: AbortSignal.timeout(timeout),
+  });
+  if (!r.ok) throw new Error(`book.ua ${r.status}`);
+  const j = await r.json();
+  if (j.errors?.length) throw new Error(`book.ua: ${j.errors[0].message}`);
+  return (j.data?.products?.items || []).map((p) => {
+    const a = {};
+    for (const x of p.custom_attributesV2?.items || []) a[x.code] = x.value ?? (x.selected_options || []).map((o) => o.label).join(", ");
+    return { title: text(p.name), author: text(a.author || ""), publisher: text(a.publisher || ""), isbn: String(a.isbn || "").replace(/[^\dX]/gi, ""), language: a.language || "", year: Number(a.year) || 0, format: a.format || "", cover: String(p.image?.url || ""), url: `https://book.ua/book/${p.url_key}` };
+  });
+}
+
+module.exports = { bookuaSearch, isPromo, isLangAid, isBundle, isAdult, bookuaTiles, bookuaProducts, SOURCES, fetchSource, buildShelves, refresh, volumeOf, ent, about, pageProducts, ldBookPage };

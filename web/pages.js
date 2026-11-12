@@ -3214,7 +3214,11 @@ function askAnswerPage({ user, ask, items, canAsk = false, owner = false }) {
   const body = `<section class="list-head ask-head">
   <p class="kicker">${canAsk ? `<a href="/ask">Що почитати далі</a>` : "Що почитати далі"}${count ? ` · ${books(count)}` : ""}</p>
   <blockquote class="ask-q">${askText(ask.text)}</blockquote>
-  ${items.length ? `<ol class="ask-sum">${items.map((x, i) => `<li><a href="#b${i + 1}">${x.book.author ? `${esc(byline(x.book.author))}, ` : ""}«${esc(x.book.title)}»</a></li>`).join("")}${more.map((m) => `<li class="out">${m.author ? `${esc(m.author)}, ` : ""}«${esc(String(m.title).split(": ")[0])}»</li>`).join("")}</ol>` : ""}
+  ${items.length ? `<ol class="ask-sum">${items.map((x, i) => `<li><a href="#b${i + 1}">${x.book.author ? `${esc(byline(x.book.author))}, ` : ""}«${esc(x.book.title)}»</a></li>`).join("")}${more.map((m) => {
+    // No Ukrainian edition anywhere (Ask.fill looked on book.ua): the original's name, not Claude's own translation.
+    const [t, a] = m.ukFound === false && m.en ? [m.en, m.ea || m.author] : [m.title, m.author];
+    return `<li class="out">${a ? `${esc(a)}, ` : ""}«${esc(String(t).split(": ")[0])}»</li>`;
+  }).join("")}</ol>` : ""}
   ${wait ? `<p class="ask-wait" id="ask-wait">Добираю книжки…</p>` : say ? `<p class="lead muted">${say}</p>` : ""}
   ${wait ? "" : `<div class="acts ask-acts">${items.length ? `<button type="button" class="btn small" data-share="${attr(ORIGIN + href)}" data-title="Що почитати далі">Поділитися</button><button type="button" class="btn small" id="ask-copy">Скопіювати</button>` : ""}${canAsk ? `<a class="btn small primary" href="/ask">Спитати ще</a>` : ""}</div>`}
 </section>
