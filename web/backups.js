@@ -4,10 +4,11 @@
 // .github/workflows/backup.yml ends every job (site, reader) with POST /agent/backup: what it took, whether the
 // copy came back from the encrypted artifact (scripts/backup-restore-check.sh) and which step failed. Kept here in
 // meta `backup:<app>` (the last report) and `backup:<app>:ok` (the last good one).
-// Telegram, few lines: a failed job says so at once; a copy much smaller than the night before says so; and when a
-// Kyiv day has no good copy of an app by DEADLINE_HOUR (the run never started, or its report never came), the jobs
-// process says that once that day. GitHub starts the 03:30 run late on busy nights (2026-11-11: 08:54 Kyiv), hence noon.
-// The same state is a row of «Performance» on /admin, a line of the morning report and `backups` in /agent/health.
+// Telegram, few lines: a failed job says so at once; a copy much smaller than the night before says so. The day's
+// technical report (dailyreport.js) waits for the night's reports and goes at DEADLINE_HOUR at the latest, saying
+// which copy has not come (the run never started, or its report never came). GitHub starts the 03:30 run late on busy
+// nights (2026-11-11: 08:54 Kyiv), hence noon.
+// The same state is a row of «Performance» on /admin, the first line of the technical report and `backups` in /agent/health.
 // Our own covers (web/covers, ~180 MB) are copied apart once a week (Max, 2026-11-11: «поки у нас маленький сайт і
 // база, то і бекап теж має бути маленьким, а ці великі штуки винесемо окремо»): fresh within WEEKLY_DAYS.
 const telegram = require("./telegram");
@@ -93,31 +94,14 @@ function row(db) {
   return [!bad.length, `Бекапи свіжі й відновлюються: ${s.map(one).join(", ")}.`, `${bads.replace(/^./, (c) => c.toUpperCase())}. <a href="${ACTIONS}">Actions</a>`];
 }
 
-// One line of the morning report (08:00 Kyiv, before the deadline: a late run is not a failure yet).
-function line(db) {
-  const one = (x) => `${SHORT[x.app]} ${x.last && !x.last.ok && kyivDay(x.last.at) === kyivDay(Date.now()) ? "не вдався" : x.today ? "✓" : "ще нема"}`;
-  const s = state(db);
+// The first line of the technical report: sent when the night's copies have reported, or at DEADLINE_HOUR without them.
+function line(db, now = new Date()) {
+  const late = kyivHour(now) >= DEADLINE_HOUR;
+  const one = (x) => `${SHORT[x.app]} ${x.last && !x.last.ok && kyivDay(x.last.at) === kyivDay(now) ? "не вдався" : x.today ? "✓" : late ? "нема" : "ще нема"}`;
+  const s = state(db, now);
   const weekly = s.filter((x) => WEEKLY.has(x.app) && x.last && !x.fresh).map((x) => `${SHORT[x.app]} не оновлювались з ${x.ok ? hhmm(x.ok.at).split(" ")[0] : "початку"}`);
-  return `Бекап за ніч: ${[...s.filter((x) => !WEEKLY.has(x.app)).map(one), ...weekly].join(", ")}`;
+  const bad = s.some((x) => (!WEEKLY.has(x.app) && !x.today) || (x.last && !x.last.ok)) || weekly.length;
+  return `Бекап за ніч: ${[...s.filter((x) => !WEEKLY.has(x.app)).map(one), ...weekly].join(", ")}${bad ? `\n${ACTIONS}` : ""}`;
 }
 
-// In the jobs process: from DEADLINE_HOUR, an app without a fresh good copy is said once that day.
-function watch(db) {
-  const tick = () => {
-    if (kyivHour() < DEADLINE_HOUR) return;
-    const late = state(db).filter((x) => !x.fresh && x.last); // an app that never reported is red on /admin, not here
-    if (!late.length) return;
-    const last = (x) => (x.ok ? hhmm(x.ok.at) : "ніколи");
-    const daily = late.filter((x) => !WEEKLY.has(x.app)), weekly = late.filter((x) => WEEKLY.has(x.app));
-    const lines = [
-      daily.length && `Сьогодні нема бекапу ${daily.map((x) => x.name).join(" і ")}: останній ${daily.map(last).join(" і ")}.`,
-      weekly.length && `Бекапу ${weekly.map((x) => x.name).join(" і ")} нема понад тиждень: останній ${weekly.map(last).join(" і ")}.`,
-    ].filter(Boolean);
-    const text = `${lines.join("\n")}\nЗапустити: ${ACTIONS} → Run workflow.`;
-    telegram.sendOnce(`backup-late:${kyivDay(Date.now())}`, 48, text);
-  };
-  setInterval(tick, 10 * 60000).unref();
-  setTimeout(tick, 2 * 60000).unref();
-}
-
-module.exports = { record, state, row, line, watch, DEADLINE_HOUR };
+module.exports = { record, state, row, line, DEADLINE_HOUR, WEEKLY };

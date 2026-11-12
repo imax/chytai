@@ -54,8 +54,8 @@ curl -s https://app.chytai.org.ua/agent/sql -H "$H" -H 'content-type: applicatio
 - Errors live in the site's `errors` table (30 days): site 500s and crashes (`site`, `jobs`), the reader's server
   (`reader`), and script errors from readers' browsers in the reader app (`reader`, message starts «[браузер]»,
   extension noise dropped; `src/renderer/web-bridge.js` → `/api/client-error`; the browser's frames come as `frames`,
-  kept whole). None goes to Telegram one by one (Max, 2026-11-11: he can't act on a single error); the morning report
-  counts yesterday's and names the new kinds. All of them, grouped, on /admin/speed#errors (`errors.month()`); Огляд
+  kept whole). None goes to Telegram one by one (Max, 2026-11-11: he can't act on a single error); the technical
+  report counts yesterday's and names the new kinds. All of them, grouped, on /admin/speed#errors (`errors.month()`); Огляд
   shows only the day's count (red from 20, `ERR_BURST`). The morning error review (below) fixes them.
   Script errors on the site's own pages are only counted (`events`, `name = 'js'`, /admin/speed).
 - /admin «Performance» (`healthBlock` in web/admin.js): a red line per problem with a link, everything fine in one line
@@ -63,7 +63,7 @@ curl -s https://app.chytai.org.ua/agent/sql -H "$H" -H 'content-type: applicatio
 - Pages the phone unloaded (iOS kills the WebView's page for memory, mostly in the background): the page keeps a note
   of itself in localStorage (`chytai:life`, web-bridge.js `life`), the next load reports it to the reader's
   `/api/page-gone` and reopens the book that was on screen. Rows in the reader's `state.stats.days[day].gone` (30 days);
-  /admin/reader «Вивантаження», a row on Огляд (red only for unloads on screen), a line in the morning report. To see
+  /admin/reader «Вивантаження», a row on Огляд (red only for unloads on screen), a line in the technical report. To see
   memory on a phone width locally: Playwright WebKit, RSS of `WPEWebProcess`; kill it (`pkill -9 -x WPEWebProcess`)
   to fake an unload.
 - Fly itself, same token: `https://api.fly.io/graphql` (machines, releases),
@@ -84,7 +84,8 @@ schedule a wake-up in about an hour and look again. Outages are fixed or reverte
 
 ## Morning error review (scheduled task «Розбір помилок Chytai», ~07:00 Kyiv daily)
 
-A fresh session each morning, before the 08:00 report (Max, 2026-11-11: «розбирати їх», not Telegram per error):
+A fresh session each morning (Max, 2026-11-11: «розбирати їх», not Telegram per error). Its note completes the day's
+technical report (below), so post it only after your fixes are pushed:
 
 1. `curl -s https://chytai.org.ua/agent/triage -H "$H"` → `at` of the last review; the errors since then:
    `/agent/health?since=<at>` and `/agent/sql` on `errors` (stack, url, how often, first seen).
@@ -95,9 +96,9 @@ A fresh session each morning, before the 08:00 report (Max, 2026-11-11: «роз
 2. Each kind: noise (an extension, a network drop, a bot) → widen the filter (`CLIENT_NOISE` in server/index.js) only
    if it repeats; real → reproduce on the test DB / a local reader, fix, prove, push to main like any small fix (not
    during the Friday digest). Big, risky or a product question → leave it for Max, one plain line why.
-3. Before 07:55 Kyiv, one short Ukrainian line for the report, even when there was nothing:
+3. One short Ukrainian line for the technical report, even when there was nothing:
    `curl -s https://chytai.org.ua/agent/triage -H "$H" -H 'content-type: application/json' -d '{"text":"нових 3: виправлено 2 (…), вам глянути 1: …"}'`.
-   The 08:00 report prints it as «Розбір помилок: …» (12 h old at most; errors and no note = «сьогодні не запускався»).
+   The report prints it as «Розбір помилок: …» (only a note of this Kyiv day; none = «сьогодні не запускався»).
 4. Then watch your deploy as usual (`rollout-watch`), and keep this section current.
 
 ## Backups (`backup.yml`, `web/backups.js`)
@@ -107,12 +108,22 @@ A fresh session each morning, before the 08:00 report (Max, 2026-11-11: «роз
   (`chytai-web-covers`, 35 days; `test-db` asset `chytai-web-covers.tar.gz.age`, fetched once by `fetch-test-db.sh`).
   A new big folder on a volume: leave it out of the nightly copy, or give it its own weekly copy. Each job restores its copy on trial (`scripts/backup-restore-check.sh`: decrypt with the repo
   secret `CHYTAI_BACKUP_KEY`, compare, start the app on it) and reports to `POST /agent/backup`.
-- A failure goes to Max's Telegram at once; no good copy by 12:00 Kyiv, one line that day. See it in
-  `/agent/health` → `backups`, on /admin «Performance», in the morning report.
+- A failure goes to Max's Telegram at once. See it in `/agent/health` → `backups`, on /admin «Performance», in the
+  technical report.
 - Runners get age from its GitHub release (`scripts/install-age.sh`; Ubuntu's mirror failed the deploy twice on
   2026-11-11). Without age the site's smoke test runs on an empty database.
 - A change to the workflow or these scripts runs it once on push. The MCP token cannot start or rerun it (403):
   ask Max for «Run workflow» on Actions → Backup.
+
+## Two Telegram reports (`web/dailyreport.js`, jobs process)
+
+- 08:00 Kyiv: readers only (sign-ups, visits, shelves, the reader's minutes and explanations). Nothing technical in it
+  (Max, 2026-11-12).
+- Technical, once a day, when both nightly backups (site, reader) have reported today and the morning review posted
+  today's note; at 12:00 Kyiv at the latest, saying what has not come (that is also the «no backup by noon» signal):
+  backups, yesterday's errors and failed jobs, the review's note, pages the phones unloaded. Meta
+  `techreport:lastRun`. Try either on the test DB: `require("./web/dailyreport").buildTech({ db, day, ownerId, site,
+  reader })` with a fake `reader`.
 
 ## Feature flags (`web/flags.js`)
 

@@ -1,7 +1,7 @@
 // Errors readers ran into, for the owner (risk review 2026-11-05: «помилок сайту ніхто не бачить»). A page that
 // failed with a 500, a crash of the site or jobs process, an error in the reader app (it posts them to
 // /api/reader-alert): each is kept in the `errors` table (the last 30 days, at most 500 rows). /admin shows the last
-// day's in its status block, /admin/speed#errors all of them, the morning report (dailyreport.js) yesterday's count and
+// day's in its status block, /admin/speed#errors all of them, the technical report (dailyreport.js) yesterday's count and
 // the new ones. Nothing goes to Telegram one by one (Max, 2026-11-11: «я ж нічого не можу зробити» with a single error).
 // Never readers' e-mail addresses or the text they wrote: the message, the stack's top lines, the address asked for.
 

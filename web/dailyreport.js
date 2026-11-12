@@ -1,12 +1,18 @@
-// The morning report in the owner's Telegram (Max, 2026-11-08: «хочу дейлі репорт в телеграм зранку, зі
-// статистикою за вчора»). Once a day after REPORT_HOUR Kyiv time, from the jobs process: yesterday's sign-ups and
-// where they came from, who came back, what readers added, the reader app's minutes and explanations, errors.
+// Two reports in the owner's Telegram, from the jobs process.
+// - Readers (Max, 2026-11-08: «хочу дейлі репорт в телеграм зранку, зі статистикою за вчора»): once a day after
+//   REPORT_HOUR Kyiv, yesterday's sign-ups and where they came from, who came back, what readers added, the reader
+//   app's minutes and explanations. Nothing technical (Max, 2026-11-12: «цей технічний звіт сюди не ліпити»).
+// - Technical (Max, 2026-11-12: «об'єднати його з бекапом… після того, як ми переконалися, що бекап пройшов успішно,
+//   пофіксили помилки»): once a day when the night's backups of the site and the reader have reported (backups.js)
+//   and the morning error review has left today's note (/agent/triage), whenever that is; at DEADLINE_HOUR (noon) at
+//   the latest, saying what has not come. Backups, yesterday's errors and failed jobs, the review's note, unloads.
 // The owner and test addresses (auth.testAddress) are not counted. A few small queries over one day: no full scans
 // of entries or visits.
 const { dayOf } = require("./admin");
 const { testAddress } = require("./auth");
 const telegram = require("./telegram");
 const errorsLib = require("./errors");
+const backups = require("./backups");
 
 const REPORT_HOUR = 8; // Kyiv; before the Friday letter (9:30) and wantmail (10:00)
 const DAY = 86400000;
@@ -15,20 +21,32 @@ const addDays = (day, n) => dayOf(toDate(day).getTime() + n * DAY);
 const WEEKDAY = ["нд", "пн", "вт", "ср", "чт", "пт", "сб"];
 const dayName = (day) => `${WEEKDAY[toDate(day).getDay()]}, ${toDate(day).toLocaleDateString("uk-UA", { day: "numeric", month: "long" })}`;
 
+// Times are kept in UTC: a window wide enough for any Kyiv day, then dayOf() picks the day's own.
+function span(db, day) {
+  return {
+    lo: new Date(toDate(day).getTime() - DAY).toISOString(),
+    hi: new Date(toDate(day).getTime() + DAY).toISOString(),
+    inDay: (iso) => !!iso && dayOf(iso) === day,
+    all: (sql, ...a) => {
+      try {
+        return db.prepare(sql).all(...a);
+      } catch {
+        return []; // a table a module makes on its own start may not be there yet
+      }
+    },
+  };
+}
+
+// The owner and test accounts: left out of every count.
+function skipped(db, ownerId) {
+  const readers = span(db, "2000-01-01").all("SELECT id, email, created, came FROM readers");
+  return { readers, skip: new Set([ownerId, ...readers.filter((r) => testAddress(r.email)).map((r) => r.id)]) };
+}
+
 // The site's numbers for one Kyiv day.
 function siteDay(db, day, ownerId) {
-  // Times are kept in UTC: a window wide enough for any Kyiv day, then dayOf() picks the day's own.
-  const lo = new Date(toDate(day).getTime() - DAY).toISOString(), hi = new Date(toDate(day).getTime() + DAY).toISOString();
-  const inDay = (iso) => !!iso && dayOf(iso) === day;
-  const all = (sql, ...a) => {
-    try {
-      return db.prepare(sql).all(...a);
-    } catch {
-      return []; // a table a module makes on its own start may not be there yet
-    }
-  };
-  const readers = all("SELECT id, email, created, came FROM readers");
-  const skip = new Set([ownerId, ...readers.filter((r) => testAddress(r.email)).map((r) => r.id)]);
+  const { lo, hi, inDay, all } = span(db, day);
+  const { readers, skip } = skipped(db, ownerId);
   const real = (r) => !skip.has(r.reader);
   const count = (sql) => all(sql, lo, hi).filter((r) => real(r) && inDay(r.at)).length;
 
@@ -46,7 +64,6 @@ function siteDay(db, day, ownerId) {
   const came = new Set([...all("SELECT reader FROM visits WHERE day = ?", day).filter(real).map((r) => r.reader), ...fresh.map((r) => r.id)]);
   const arrivals = all("SELECT SUM(visits) AS visits, SUM(fresh) AS fresh FROM arrivals WHERE day = ?", day)[0] || {};
   const imports = all("SELECT reader, at, n FROM shelf_imports WHERE at BETWEEN ? AND ?", lo, hi).filter((r) => real(r) && inDay(r.at));
-  const jobs = all("SELECT job FROM job_runs WHERE ok = 0 AND started BETWEEN ? AND ?", lo, hi);
   return {
     skip,
     signups: fresh.length,
@@ -64,13 +81,18 @@ function siteDay(db, day, ownerId) {
     comments: count("SELECT reader, created AS at FROM list_comments WHERE created BETWEEN ? AND ?"),
     club: count("SELECT reader, created AS at FROM club_posts WHERE created BETWEEN ? AND ?") + count("SELECT reader, created AS at FROM club_topics WHERE created BETWEEN ? AND ?"),
     searches: all("SELECT SUM(n) AS n FROM search_log WHERE day = ?", day)[0]?.n || 0,
-    errors: dayErrors(all, lo, hi, inDay),
-    failed: [...new Set(jobs.filter((r) => inDay(r.started)).map((r) => r.job))],
   };
 }
 
-// The day's errors (errors.js), grouped by kind; new = a kind the 30 days kept had not seen before that day. They no
-// longer go to Telegram one by one (Max, 2026-11-11): here they are counted, and the new ones named.
+// The technical side of one Kyiv day: errors (errors.js) and the jobs that failed.
+function techDay(db, day) {
+  const { lo, hi, inDay, all } = span(db, day);
+  const jobs = all("SELECT job, started FROM job_runs WHERE ok = 0 AND started BETWEEN ? AND ?", lo, hi);
+  return { errors: dayErrors(all, lo, hi, inDay), failed: [...new Set(jobs.filter((r) => inDay(r.started)).map((r) => r.job))] };
+}
+
+// The day's errors, grouped by kind; new = a kind the 30 days kept had not seen before that day. They do not go to
+// Telegram one by one (Max, 2026-11-11): the technical report counts them and names the new ones.
 function dayErrors(all, lo, hi, inDay) {
   const rows = all("SELECT at, place, msg FROM errors WHERE at BETWEEN ? AND ?", lo, hi).filter((r) => inDay(r.at));
   if (!rows.length) return { n: 0, groups: [] };
@@ -111,7 +133,7 @@ function readerDay(r, skip, titleOf = () => "") {
 }
 
 const n = (x) => x.toLocaleString("uk-UA");
-function text(day, s, rd, site, backup = "", triage = "") {
+function text(day, s, rd, site) {
   const lines = [`Chytai за ${dayName(day)}`, ""];
   const from = s.from.map(([k, v]) => `${k} ${v}`).join(", ");
   lines.push(`Нові читачі: ${s.signups}${from ? ` (${from})` : ""}`);
@@ -125,32 +147,42 @@ function text(day, s, rd, site, backup = "", triage = "") {
     lines.push(`Читалка: читали ${rd.readers}, ${n(rd.minutes)} хв`);
     if (rd.top) lines.push(`Найбільше: «${rd.top.title}», ${Math.round(rd.top.sec / 60)} хв`);
     lines.push(`Пояснень ${rd.explains}, нотаток ${rd.notes}, Claude $${rd.cost.toFixed(2)}`);
-    if (rd.gone) lines.push(`Сторінку вивантажено: ${rd.gone}${rd.goneFront ? `, з них на екрані ${rd.goneFront}` : ", усі у фоні"}`);
   } else lines.push("Читалка не відповіла.");
-  lines.push("");
-  const e = s.errors, fresh = e.groups.filter((g) => g.fresh);
-  if (!e.n && !s.failed.length) lines.push("Збоїв не було.");
-  else {
-    lines.push(`Збої: помилок ${e.n}${e.n ? ` (видів ${e.groups.length}, нових ${fresh.length})` : ""}${s.failed.length ? `, задачі впали: ${s.failed.join(", ")}` : ""}`);
-    // The new kinds, a few: what to look at. Known ones are only counted.
-    for (const g of fresh.slice(0, 3)) lines.push(`• ${errorsLib.PLACES[g.place] || g.place}: ${g.msg.length > 100 ? `${g.msg.slice(0, 99)}…` : g.msg}${g.n > 1 ? ` ×${g.n}` : ""}`);
-    if (fresh.length > 3) lines.push(`• і ще нових ${fresh.length - 3}`);
-    if (e.n) lines.push(`${site}/admin/speed#errors`);
-  }
-  if (triage) lines.push(`Розбір помилок: ${triage}`);
-  if (backup) lines.push(backup);
   lines.push("", `${site}/admin`);
   return lines.join("\n");
 }
 
-async function build({ db, day, ownerId, site, reader }) {
-  const s = siteDay(db, day, ownerId);
-  let r = null;
+// The technical report: t = techDay(), rd = readerDay() or null, backup = backups.line(), triage = today's note of the
+// morning review or "" (it has not come).
+function techText(day, t, rd, site, backup, triage) {
+  const lines = [`Chytai, техніка за ${dayName(day)}`, "", backup];
+  const e = t.errors, fresh = e.groups.filter((g) => g.fresh);
+  if (!e.n && !t.failed.length) lines.push("Збоїв не було.");
+  else {
+    lines.push(`Збої: помилок ${e.n}${e.n ? ` (видів ${e.groups.length}, нових ${fresh.length})` : ""}${t.failed.length ? `, задачі впали: ${t.failed.join(", ")}` : ""}`);
+    // The new kinds, a few: what to look at. Known ones are only counted.
+    for (const g of fresh.slice(0, 3)) lines.push(`• ${errorsLib.PLACES[g.place] || g.place}: ${g.msg.length > 100 ? `${g.msg.slice(0, 99)}…` : g.msg}${g.n > 1 ? ` ×${g.n}` : ""}`);
+    if (fresh.length > 3) lines.push(`• і ще нових ${fresh.length - 3}`);
+  }
+  lines.push(`Розбір помилок: ${triage || "сьогодні не запускався."}`);
+  if (rd?.gone) lines.push(`Сторінку вивантажено: ${rd.gone}${rd.goneFront ? `, з них на екрані ${rd.goneFront}` : ", усі у фоні"}`);
+  if (!rd) lines.push("Читалка не відповіла.");
+  lines.push("", e.n ? `${site}/admin/speed#errors` : `${site}/admin`);
+  return lines.join("\n");
+}
+
+async function readerOf(reader, day) {
   try {
-    r = await reader(day);
+    return await reader(day);
   } catch (e) {
     console.error(`daily report: reader ${e.message}`);
+    return null;
   }
+}
+
+async function build({ db, day, ownerId, site, reader }) {
+  const s = siteDay(db, day, ownerId);
+  const r = await readerOf(reader, day);
   const titleOf = (acct, name) => {
     try {
       return db.prepare("SELECT title FROM reader_files WHERE reader = ? AND name = ?").get(acct, name)?.title || "";
@@ -158,37 +190,60 @@ async function build({ db, day, ownerId, site, reader }) {
       return "";
     }
   };
-  let backup = "";
-  try {
-    backup = require("./backups").line(db);
-  } catch {}
-  // The morning error review (POST /agent/triage) runs at 07:00: its note of the last 12 hours, or a word that it
-  // did not come although there were errors.
-  let triage = "";
-  try {
-    const t = JSON.parse(db.get("triage:last") || "null");
-    if (t && Date.now() - Date.parse(t.at) < 12 * 3600000) triage = t.text;
-    else if (s.errors.n) triage = "сьогодні не запускався.";
-  } catch {}
-  return text(day, s, readerDay(r, s.skip, titleOf), site, backup, triage);
+  return text(day, s, readerDay(r, s.skip, titleOf), site);
 }
 
-// In the jobs process: a look every 10 minutes; the day is sent once (meta `dailyreport:lastRun`).
+// The morning review's note, if it came this Kyiv day.
+function triageToday(db, now = new Date()) {
+  try {
+    const t = JSON.parse(db.get("triage:last") || "null");
+    return t && dayOf(t.at) === dayOf(now) ? t.text : "";
+  } catch {
+    return "";
+  }
+}
+
+// Ready: today's run of every nightly backup has reported (good or not: a failure went to Telegram at once), and the
+// review has left today's note. From DEADLINE_HOUR the report goes anyway, with what is missing.
+function techReady(db, now = new Date()) {
+  const nightly = backups.state(db, now).filter((x) => !backups.WEEKLY.has(x.app));
+  const backed = nightly.every((x) => x.last && dayOf(x.last.at) === dayOf(now));
+  return (backed && !!triageToday(db, now)) || now.getHours() >= backups.DEADLINE_HOUR;
+}
+
+async function buildTech({ db, day, ownerId, site, reader }) {
+  const rd = readerDay(await readerOf(reader, day), skipped(db, ownerId).skip);
+  return techText(day, techDay(db, day), rd, site, backups.line(db), triageToday(db));
+}
+
+// In the jobs process: a look every 10 minutes; each report goes once a day (meta `dailyreport:lastRun`,
+// `techreport:lastRun`).
 function schedule(opts) {
   const { db } = opts;
   const tick = async () => {
+    if (!telegram.on() || !telegram.chat()) return;
     const now = new Date();
     const today = dayOf(now);
-    if (now.getHours() < REPORT_HOUR || db.get("dailyreport:lastRun") === today || !telegram.on() || !telegram.chat()) return;
-    db.set("dailyreport:lastRun", today);
-    try {
-      await telegram.send(await build({ ...opts, day: addDays(today, -1) }));
-    } catch (e) {
-      console.error(`daily report: ${e.message}`);
+    const day = addDays(today, -1);
+    if (now.getHours() >= REPORT_HOUR && db.get("dailyreport:lastRun") !== today) {
+      db.set("dailyreport:lastRun", today);
+      try {
+        await telegram.send(await build({ ...opts, day }));
+      } catch (e) {
+        console.error(`daily report: ${e.message}`);
+      }
+    }
+    if (db.get("techreport:lastRun") !== today && techReady(db, now)) {
+      db.set("techreport:lastRun", today);
+      try {
+        await telegram.send(await buildTech({ ...opts, day }));
+      } catch (e) {
+        console.error(`tech report: ${e.message}`);
+      }
     }
   };
   setInterval(tick, 10 * 60000).unref();
   setTimeout(tick, 3 * 60000).unref();
 }
 
-module.exports = { build, schedule, siteDay, readerDay, text };
+module.exports = { build, buildTech, techReady, schedule, siteDay, techDay, readerDay, text, techText };

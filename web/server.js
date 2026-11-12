@@ -243,8 +243,9 @@ app.post("/agent/notify", agentOk, async (req, res) => {
   agentNotes.push(Date.now());
   res.json({ sent: await telegram.send(String(req.body?.text || "").slice(0, 1500)) });
 });
-// The morning error review (a scheduled Claude routine at 07:00 Kyiv, Max 2026-11-11: «розбирати їх»): GET gives its last
-// note { at, text } (the errors since `at` are the next run's), POST { text } keeps one plain line for the 08:00 report.
+// The morning error review (a scheduled Claude routine, Max 2026-11-11: «розбирати їх»): GET gives its last note
+// { at, text } (the errors since `at` are the next run's), POST { text } keeps one plain line for the day's technical
+// report, which goes once this note and the night's backups are in (dailyreport.js).
 app.get("/agent/triage", agentOk, (req, res) => res.json(JSON.parse(store.db.get("triage:last") || "null") || { at: null, text: "" }));
 app.post("/agent/triage", agentOk, (req, res) => {
   const text = String(req.body?.text || "").replace(/\s+/g, " ").trim().slice(0, 600);
@@ -253,8 +254,8 @@ app.post("/agent/triage", agentOk, (req, res) => {
   store.db.set("triage:last", JSON.stringify(note));
   res.json(note);
 });
-// The nightly backup's report (backup.yml, every job at its end): kept for /admin, the morning report and the noon
-// check; a failure or a much smaller copy goes to Telegram at once (backups.js).
+// The nightly backup's report (backup.yml, every job at its end): kept for /admin and the technical report; a failure
+// or a much smaller copy goes to Telegram at once (backups.js).
 app.post("/agent/backup", agentOk, async (req, res) => {
   try {
     res.json(await backups.record(store.db, req.body || {}));
@@ -4100,10 +4101,9 @@ if (bg.ROLE !== "web" && telegram.on() && DOMAIN) {
   }, 5 * 60000).unref();
 }
 
-// Yesterday's numbers to the owner's Telegram every morning (dailyreport.js).
+// To the owner's Telegram: yesterday's readers at 08:00, and the technical report once the night's backups and the
+// morning error review are in, noon at the latest (dailyreport.js).
 if (bg.ROLE !== "web" && telegram.on() && DOMAIN) require("./dailyreport").schedule({ db: store.db, ownerId: OWNER_ID, site: SITE, reader: (day) => readerAdmin(`/day?day=${day}`) });
-// No good backup of the site or the reader by noon Kyiv: one line that day (backups.js).
-if (bg.ROLE !== "web" && telegram.on() && DOMAIN) backups.watch(store.db);
 
 // A process stuck in a CPU loop answers nothing but stays up (2026-10-21: an hour down). A thread beside it
 // watches a heartbeat the main loop writes every 5 s and kills the process after 60 s of silence, so Fly
