@@ -88,6 +88,10 @@ A fresh session each morning, before the 08:00 report (Max, 2026-11-11: «роз
 
 1. `curl -s https://chytai.org.ua/agent/triage -H "$H"` → `at` of the last review; the errors since then:
    `/agent/health?since=<at>` and `/agent/sql` on `errors` (stack, url, how often, first seen).
+   `at` null: look at the last 24 h. Check `git log` first: an error from before yesterday's deploy may be fixed
+   already (compare its last time with the Actions run's end); then it is only a line in the note. In SQL, strings take
+   single quotes (send the query from a file: `-d @q.json`). Backups showing `today: false` before ~10:00 Kyiv are
+   normal: GitHub starts the 03:30 schedule 6–7 hours late.
 2. Each kind: noise (an extension, a network drop, a bot) → widen the filter (`CLIENT_NOISE` in server/index.js) only
    if it repeats; real → reproduce on the test DB / a local reader, fix, prove, push to main like any small fix (not
    during the Friday digest). Big, risky or a product question → leave it for Max, one plain line why.
