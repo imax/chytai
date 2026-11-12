@@ -1107,42 +1107,37 @@ ${s.sections.length ? `<div class="tbl"><table class="sections">
   return layout({ title: traffic ? "Трафік · Адмінка" : page === "retention" ? "Утримання · Адмінка" : "Адмінка", user, path: "/admin", body });
 }
 
-// «Performance» on Огляд (Max named it): today's speed (speed.js), the background jobs of the last day (job_runs), the
-// reader, errors, unloads, mail, backups, disk and memory. What needs a look gets its own red line with a link; all that
-// is fine is one line of names (Max, 2026-11-11: «скоро в екран не буде поміщатися… зайве можна прибрати»).
-// Errors turn red only in a burst (ERR_BURST a day): the morning review fixes single ones (CLAUDE.md).
-const ERR_BURST = 20;
+// «Performance» on Огляд (Max named it): today's speed (speed.js), the background jobs of the last day (job_runs) and whether
+// the reader answered. A line turns red only when something needs a look.
 function healthBlock({ day = null, jobs = { n: 0, failed: [] }, reader = true, errors = [], mail = null, backup = null, storage = null, gone = null }) {
-  const errN = errors.reduce((n, e) => n + e.n, 0);
+  const errN = errors.reduce((n, e) => n + e.n, 0); // the list itself is on /admin/speed#errors (Max, 2026-11-12)
   const s = (ms) => `${String(ms / 1000).replace(".", ",")} с`;
   const p = day?.page;
   const stall = Math.round((day?.stall?.sum || 0) / 1000);
   const slow = p && (p.p95 > 1000 || p.slow > 0.02);
-  const speedLink = `<a href="/admin/speed">Швидкість</a>`;
-  const errLink = (t) => `<a href="/admin/speed#errors">${t}</a>`;
-  // [ok, name when fine, line when not]
+  // Every row always; a row that needs a look turns red and says what and where (Max, 2026-11-04).
   const rows = [
-    [!slow && stall < 30, "швидкість", [slow && `Сайт повільний: 95% сторінок за ${s(p.p95)}.`, stall >= 30 && `Сервер стояв сьогодні ${stall} с.`].filter(Boolean).join(" ") + ` ${speedLink}`],
-    [!jobs.failed.length, "фонові задачі", `Фонові задачі з помилкою: ${jobs.failed.map(esc).join(", ")}. <a href="/admin/jobs">Задачі</a>`],
-    [reader, "Читалка", `Читалка не відповідає. <a href="https://app.chytai.org.ua/">Відкрити</a>`],
-    [errN < ERR_BURST, errN ? `помилки${errLink(`${fmtN(errN)} за добу`)}` : "помилки", `Помилок за добу: ${fmtN(errN)}. ${errLink("Усі помилки")}`],
+    [!slow, p ? `Сайт швидкий: 95% сторінок за ${s(p.p95)}.` : "Сайт: сторінок сьогодні ще не рахували.", p ? `Сайт повільний: 95% сторінок за ${s(p.p95)}, повільніше 2 с — ${fmtN(p.slow * 100, 1)}%. <a href="/admin/speed">Швидкість</a>` : ""],
+    [stall < 30, "Сервер не стояв.", `Сервер стояв сьогодні ${stall} с. <a href="/admin/speed">Швидкість</a>`],
+    [!jobs.failed.length, `Фонові задачі без помилок (${fmtN(jobs.n)} за добу).`, `Фонові задачі з помилкою за добу: ${jobs.failed.map(esc).join(", ")}. <a href="/admin/jobs">Задачі</a>`],
+    [reader, "Читалка працює.", `Читалка не відповіла сайту: app.chytai.org.ua може лежати. <a href="https://app.chytai.org.ua/">Відкрити</a>`],
+    [!errN, `Помилок за добу не було. <a href="/admin/speed#errors">Усі помилки</a>`, `Помилки за добу: ${errN}. <a href="/admin/speed#errors">Усі помилки</a>`],
     // The phone unloaded the reader's page (server/index.js /api/page-gone): in the background it is iOS's own way and
-    // the book opens again, so only an unload on screen is red.
+    // the book opens again, so only an unload on screen turns the row red.
     ...(gone ? [goneRow(gone)] : []),
-    ...(mail ? [[mail[0], "пошта", mail[2]]] : []),
-    ...(backup ? [[backup[0], "бекапи", backup[2]]] : []),
+    ...(mail ? [mail] : []),
+    ...(backup ? [backup] : []),
     ...(storage ? [storageRow(storage)] : []),
   ];
-  const bad = rows.filter((r) => !r[0]).map((r) => `<li class="bad">${r[2]}</li>`);
-  const good = rows.filter((r) => r[0]).map((r) => r[1]);
-  const fine = good.length ? `<li class="ok">${bad.length ? "Решта гаразд" : "Усе гаразд"}: ${good.join(", ")}.</li>` : "";
   return `<h2>Performance</h2>
-<ul class="health">${bad.join("")}${fine}</ul>`;
+<ul class="health">${rows.map(([ok, good, bad]) => `<li class="${ok ? "ok" : "bad"}">${ok ? good : bad}</li>`).join("")}</ul>`;
 }
 
 function goneRow({ n, bg }) {
+  const link = `<a href="/admin/reader#gone">Читалка</a>`;
+  if (!n) return [true, "Телефони не вивантажували сторінку Читалки."];
   const front = n - bg;
-  return [!front, "вивантаження", `Сторінку Читалки вивантажили на екрані: ${fmtN(front)} за добу. <a href="/admin/reader#gone">Читалка</a>`];
+  return [!front, `Телефони вивантажили сторінку Читалки у фоні: ${fmtN(n)} за добу. ${link}`, `Сторінку Читалки вивантажили на екрані: ${fmtN(front)} за добу${bg ? `, ще ${fmtN(bg)} у фоні` : ""}. ${link}`];
 }
 
 // «Листи» on Огляд (Max, 2026-11-09): each kind of letter in the last 7 days — how many went, how many visits
@@ -1160,11 +1155,14 @@ function mailBlock({ since, days, rows }) {
 <tbody>${rows.map(tr).join("")}</tbody></table></div>`;
 }
 
-// Disk and memory of both machines (storage.js, scaling review 2026-11-05): red near a limit.
+// Disk and memory of both machines (storage.js, scaling review 2026-11-05): one row, red near a limit.
 function storageRow({ site, reader }) {
   const { problems } = require("./storage");
   const bad = [...problems(site, "Сайт"), ...problems(reader, "Читалка")];
-  return [!bad.length, "диск і пам'ять", `Закінчується місце чи пам'ять: ${bad.map(esc).join("; ")}.`];
+  const pct = (s) => (s?.diskTotal ? `${Math.round((1 - s.diskFree / s.diskTotal) * 100)}%` : "?");
+  const mb = (n) => `${Math.round((n || 0) / 1048576)} МБ`;
+  const good = `Місця й пам'яті досить. Диск: сайт ${pct(site)}, Читалка ${reader ? pct(reader) : "?"}. Пам'ять: сайт ${mb(site?.rss)}, Читалка ${reader ? mb(reader.rss) : "?"}.`;
+  return [!bad.length, good, `Закінчується місце чи пам'ять: ${bad.map(esc).join("; ")}.`];
 }
 
 // /admin/overviews: every overview with readers' 🤩/🙂/🙁, the complained-about ones on top.
