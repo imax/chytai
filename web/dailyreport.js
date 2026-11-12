@@ -13,6 +13,8 @@ const { testAddress } = require("./auth");
 const telegram = require("./telegram");
 const errorsLib = require("./errors");
 const backups = require("./backups");
+const os = require("os");
+const storageLib = require("./storage");
 
 const REPORT_HOUR = 8; // Kyiv; before the Friday letter (9:30) and wantmail (10:00)
 const DAY = 86400000;
@@ -129,6 +131,7 @@ function readerDay(r, skip, titleOf = () => "") {
     // Pages the phones unloaded (server/index.js /api/page-gone), test accounts left out; guests count.
     gone: (r.gone || []).filter((g) => !skip.has(g.acct)).length,
     goneFront: (r.gone || []).filter((g) => !skip.has(g.acct) && !g.bg).length,
+    storage: r.storage || null, // the reader machine's disk and memory (storage.js)
   };
 }
 
@@ -152,9 +155,19 @@ function text(day, s, rd, site) {
   return lines.join("\n");
 }
 
+// Disk and memory of both machines, now (Max, 2026-11-12: from /admin «Performance» into this report). The site's
+// memory is its whole machine (the web and jobs processes), the reader's its one process. Near a limit storage.js
+// has already told Telegram; here it is named first.
+function storageLine(siteSt, readerSt) {
+  const pct = (s) => (s?.diskTotal ? `${Math.round((1 - s.diskFree / s.diskTotal) * 100)}%` : "?");
+  const mb = (n) => (n ? `${Math.round(n / 1048576)} МБ` : "?");
+  const bad = [...storageLib.problems(siteSt, "сайт"), ...storageLib.problems(readerSt, "Читалка")];
+  return `${bad.length ? `Закінчується місце чи пам'ять: ${bad.join("; ")}. ` : ""}Диск: сайт ${pct(siteSt)}, Читалка ${pct(readerSt)}. Пам'ять: сайт ${mb(siteSt?.rss)}, Читалка ${mb(readerSt?.rss)}.`;
+}
+
 // The technical report: t = techDay(), rd = readerDay() or null, backup = backups.line(), triage = today's note of the
-// morning review or "" (it has not come).
-function techText(day, t, rd, site, backup, triage) {
+// morning review or "" (it has not come), storage = storageLine().
+function techText(day, t, rd, site, backup, triage, storage = "") {
   const lines = [`Chytai, техніка за ${dayName(day)}`, "", backup];
   const e = t.errors, fresh = e.groups.filter((g) => g.fresh);
   if (!e.n && !t.failed.length) lines.push("Збоїв не було.");
@@ -167,6 +180,7 @@ function techText(day, t, rd, site, backup, triage) {
   lines.push(`Розбір помилок: ${triage || "сьогодні не запускався."}`);
   if (rd?.gone) lines.push(`Сторінку вивантажено: ${rd.gone}${rd.goneFront ? `, з них на екрані ${rd.goneFront}` : ", усі у фоні"}`);
   if (!rd) lines.push("Читалка не відповіла.");
+  if (storage) lines.push(storage);
   lines.push("", e.n ? `${site}/admin/speed#errors` : `${site}/admin`);
   return lines.join("\n");
 }
@@ -211,9 +225,13 @@ function techReady(db, now = new Date()) {
   return (backed && !!triageToday(db, now)) || now.getHours() >= backups.DEADLINE_HOUR;
 }
 
-async function buildTech({ db, day, ownerId, site, reader }) {
+async function buildTech({ db, day, ownerId, site, reader, dataDir }) {
   const rd = readerDay(await readerOf(reader, day), skipped(db, ownerId).skip);
-  return techText(day, techDay(db, day), rd, site, backups.line(db), triageToday(db));
+  let siteSt = null;
+  try {
+    siteSt = { ...storageLib.now(dataDir, ["chytai.db"]), rss: os.totalmem() - os.freemem() }; // the machine, both processes
+  } catch {}
+  return techText(day, techDay(db, day), rd, site, backups.line(db), triageToday(db), storageLine(siteSt, rd?.storage));
 }
 
 // In the jobs process: a look every 10 minutes; each report goes once a day (meta `dailyreport:lastRun`,

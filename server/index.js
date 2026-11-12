@@ -1296,7 +1296,7 @@ app.get("/api/site-admin/day", (req, res) => {
   for (const r of store.items.noteTimes()) if (Number(r.at) && statsDay(Number(r.at)) === day) notes[r.acct] = (notes[r.acct] || 0) + 1;
   const books = []; // one row per account and book; the site puts its own titles on readers' files (reader_files)
   for (const [acct, list] of Object.entries(d.readBooks || {})) for (const [name, sec] of Object.entries(list)) books.push({ acct, name, title: bookInfo(acct, name).title || "", sec });
-  res.json({ day, readSec: d.readSec || {}, explains: d.users || {}, notes, cost: d.cost || 0, books, gone: (d.gone || []).map((r) => ({ acct: r.acct, bg: r.bg })) });
+  res.json({ day, readSec: d.readSec || {}, explains: d.users || {}, notes, cost: d.cost || 0, books, gone: (d.gone || []).map((r) => ({ acct: r.acct, bg: r.bg })), storage: storage.now(DATA_DIR, ["reader.db"]) });
 });
 // Switch the reader off (or on again) for one account: { id, off: true | false }.
 app.post("/api/site-admin/off", express.json(), (req, res) => {

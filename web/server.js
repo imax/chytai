@@ -4103,7 +4103,7 @@ if (bg.ROLE !== "web" && telegram.on() && DOMAIN) {
 
 // To the owner's Telegram: yesterday's readers at 08:00, and the technical report once the night's backups and the
 // morning error review are in, 10:00 Kyiv at the latest (dailyreport.js).
-if (bg.ROLE !== "web" && telegram.on() && DOMAIN) require("./dailyreport").schedule({ db: store.db, ownerId: OWNER_ID, site: SITE, reader: (day) => readerAdmin(`/day?day=${day}`) });
+if (bg.ROLE !== "web" && telegram.on() && DOMAIN) require("./dailyreport").schedule({ db: store.db, ownerId: OWNER_ID, site: SITE, dataDir: DATA_DIR, reader: (day) => readerAdmin(`/day?day=${day}`) });
 
 // A process stuck in a CPU loop answers nothing but stays up (2026-10-21: an hour down). A thread beside it
 // watches a heartbeat the main loop writes every 5 s and kills the process after 60 s of silence, so Fly
