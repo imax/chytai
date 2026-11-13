@@ -2659,41 +2659,70 @@ const lastFound = new Map();
 const { intent } = require("./intent");
 const smartOn = (req) => askOn(req) && flags.on("smart-search", req.user);
 // Examples in the homepage box, changing (Max, 2026-11-13: «приклади, які змінюються і показують, що можна запитати …
-// більш конкретно», then «попередні … пошукових запитів … і порад, які в нас вже в історії асків»): a request and a
-// search in turn. Requests: short ones readers asked on /ask (their answers are public; taking one opens the kept
-// answer at once), then a few of ours. Searches: the month's searches that found something, shown as what they found
-// (a book's title, an author's name), not as typed («becomin»), then what readers have now (social.starts).
-// Ten minutes' cache; built off the request path's hot loop (a few store.search calls).
+// більш конкретно», then from history, then the mix): of every 10, 4 requests, 4 books, 1 author, 1 genre or series,
+// things a reader could well type («приклади, які в теорії людина може написати», not an author one reader once
+// looked up). Requests: short ones readers asked on /ask (their answers are public; taking one opens the kept answer
+// at once), then a few of ours. Books, authors, genres: what most readers have now (social.starts' pool, ≥2 readers;
+// authors only from it; books from it first), and the month's searches made twice or more, shown as what they found (a book's title, a
+// series), not as typed («becomin»). Built in the background every 10 minutes (~1 s of searches, off the homepage).
 const ASK_EXAMPLES = ["щось як Мураками, але коротше", "детективи, схожі на Ріццолі й Айлс", "щось легке й смішне на вихідні", "щось як «Сапієнс», але про Україну"];
 const EXAMPLE_MAX = 34;
-let examplesAt = 0, examples = [];
-const foundAs = (q) => {
+const EXAMPLE_SLOTS = ["ask", "book", "ask", "book", "author", "ask", "book", "ask", "book", "kind"];
+let examples = [];
+const homeExamples = () => examples;
+const foundAs = (q, seriesNames) => {
   const nq = normQ(q);
-  if (nq.length < 3) return "";
-  const author = (store.authors?.list || []).find((a) => nameHas(a.name, nq) || (a.other && nameHas(a.other, nq)));
-  if (author) return author.name;
+  if (nq.length < 3) return null;
+  const series = seriesNames.find((n) => nameHas(n, nq));
+  if (series) return { kind: "kind", text: series };
   const hit = searchHits({}, q)[0];
-  return hit && nameHas(hit.book.title, nq) ? hit.book.title : "";
+  return hit && nameHas(hit.book.title, nq) ? { kind: "book", text: hit.book.title } : null;
 };
-const homeExamples = () => {
-  if (Date.now() - examplesAt < 10 * 60000) return examples;
+const buildExamples = () => {
   const fit = (t) => t && t.length <= EXAMPLE_MAX;
   const asked = asker
     .recent(80)
     .map((o) => o.text.replace(/\s+/g, " ").trim())
-    .filter((t) => t.length >= 12 && fit(t) && intent(t) === "ask");
-  const requests = [...new Set([...asked.slice(0, 6), ...ASK_EXAMPLES])];
-  const searched = admin
+    .filter((t) => t.length >= 12 && intent(t) === "ask");
+  const seriesNames = [...new Set([...store.series.values()].map((x) => x.name).filter(Boolean))];
+  const found = admin
     .searches(30)
-    .top.filter((r) => r.hits > 0)
-    .map((r) => foundAs(r.q));
-  const searches = [...new Set([...searched, ...social.starts().map((x) => x.text)].filter(fit))].slice(0, Math.max(6, requests.length));
-  examples = [];
-  for (let i = 0; i < Math.max(searches.length, requests.length); i++) examples.push(requests[i], searches[i]);
-  examples = examples.filter(Boolean);
-  examplesAt = Date.now();
-  return examples;
+    .top.filter((r) => r.hits > 0 && r.n >= 2)
+    .map((r) => foundAs(r.q, seriesNames))
+    .filter(Boolean);
+  social.starts();
+  const pool = social.startPool || {};
+  const of = (kind) => found.filter((x) => x.kind === kind).map((x) => x.text);
+  const texts = (list) => (list || []).map((x) => x.text);
+  const bins = {
+    ask: [...asked.slice(0, 8), ...ASK_EXAMPLES],
+    // Ukrainian titles first: a Latin one reads as someone else's search.
+    book: [...texts(pool.books), ...of("book")].sort((a, b) => !/[а-яіїєґ]/i.test(a) - !/[а-яіїєґ]/i.test(b)),
+    author: [...texts(pool.ua), ...texts(pool.other)],
+    kind: [...texts(pool.genres), ...of("kind")],
+  };
+  const seen = new Set();
+  for (const k in bins) bins[k] = bins[k].filter((t) => fit(t) && !seen.has(t.toLowerCase()) && seen.add(t.toLowerCase()));
+  const out = [];
+  // Two rounds of ten when there is enough of everything, else one.
+  for (const slot of [...EXAMPLE_SLOTS, ...EXAMPLE_SLOTS]) {
+    const t = bins[slot].shift();
+    if (t) out.push(t);
+    if (out.length === 10 && !(bins.ask.length >= 4 && bins.book.length >= 4 && bins.author.length && bins.kind.length)) break;
+  }
+  examples = out;
 };
+if (bg.ROLE !== "jobs") {
+  const run = () => {
+    try {
+      buildExamples();
+    } catch (e) {
+      console.error("home examples:", e.message);
+    }
+  };
+  setTimeout(run, 8000).unref();
+  setInterval(run, 10 * 60000).unref();
+}
 const askFor = (req, text, results) => (smartOn(req) && text && !req.query.plain ? { askText: text, askMode: intent(text, { answered: results.outside === false }) } : {});
 app.get("/search", (req, res) => {
   const full = String(req.query.q || "").trim().slice(0, 1500);
