@@ -59,11 +59,11 @@ curl -s https://app.chytai.org.ua/agent/sql -H "$H" -H 'content-type: applicatio
   shows only the day's count with a link, no list. The morning error review (below) fixes them.
   Script errors on the site's own pages are only counted (`events`, `name = 'js'`, /admin/speed).
 - /admin «Performance» (`healthBlock` in web/admin.js): one bullet per check, red with a link when it needs a look. Keep
-  it so (Max, 2026-11-12, after it was folded into one sentence: «мені не подобається»); trim a row, don't merge rows. Unloads and disk/memory show only when there is something (Max, 2026-11-12).
+  it so (Max, 2026-11-12, after it was folded into one sentence: «мені не подобається»); trim a row, don't merge rows.
 - Pages the phone unloaded (iOS kills the WebView's page for memory, mostly in the background): the page keeps a note
   of itself in localStorage (`chytai:life`, web-bridge.js `life`), the next load reports it to the reader's
   `/api/page-gone` and reopens the book that was on screen. Rows in the reader's `state.stats.days[day].gone` (30 days);
-  /admin/reader «Вивантаження», a row on Огляд (red only for unloads on screen), a line in the technical report. To see
+  /admin/reader «Вивантаження» and a line in the technical report (not on Огляд, Max 2026-11-13). To see
   memory on a phone width locally: Playwright WebKit, RSS of `WPEWebProcess`; kill it (`pkill -9 -x WPEWebProcess`)
   to fake an unload.
 - Fly itself, same token: `https://api.fly.io/graphql` (machines, releases),

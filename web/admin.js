@@ -1109,7 +1109,7 @@ ${s.sections.length ? `<div class="tbl"><table class="sections">
 
 // «Performance» on Огляд (Max named it): today's speed (speed.js), the background jobs of the last day (job_runs) and whether
 // the reader answered. A line turns red only when something needs a look.
-function healthBlock({ day = null, jobs = { n: 0, failed: [] }, reader = true, errors = [], mail = null, backup = null, storage = null, gone = null }) {
+function healthBlock({ day = null, jobs = { n: 0, failed: [] }, reader = true, errors = [], mail = null, backup = null, storage = null }) {
   const errN = errors.reduce((n, e) => n + e.n, 0); // the list itself is on /admin/speed#errors (Max, 2026-11-12)
   const s = (ms) => `${String(ms / 1000).replace(".", ",")} с`;
   const p = day?.page;
@@ -1122,21 +1122,13 @@ function healthBlock({ day = null, jobs = { n: 0, failed: [] }, reader = true, e
     [!jobs.failed.length, `Фонові задачі без помилок (${fmtN(jobs.n)} за добу).`, `Фонові задачі з помилкою за добу: ${jobs.failed.map(esc).join(", ")}. <a href="/admin/jobs">Задачі</a>`],
     [reader, "Читалка працює.", `Читалка не відповіла сайту: app.chytai.org.ua може лежати. <a href="https://app.chytai.org.ua/">Відкрити</a>`],
     [!errN, `Помилок за добу не було. <a href="/admin/speed#errors">Усі помилки</a>`, `Помилки за добу: ${errN}. <a href="/admin/speed#errors">Усі помилки</a>`],
-    // The phone unloaded the reader's page (server/index.js /api/page-gone): in the background it is iOS's own way and
-    // the book opens again, so only an unload on screen turns the row red.
-    ...(gone?.n ? [goneRow(gone)] : []), // none: no row (Max, 2026-11-12)
+    // Pages the phones unloaded are not here (Max, 2026-11-13): /admin/reader and the technical report have them.
     ...(mail ? [mail] : []),
     ...(backup ? [backup] : []),
     ...(storage ? [storageRow(storage)] : []),
   ].filter(Boolean);
   return `<h2>Performance</h2>
 <ul class="health">${rows.map(([ok, good, bad]) => `<li class="${ok ? "ok" : "bad"}">${ok ? good : bad}</li>`).join("")}</ul>`;
-}
-
-function goneRow({ n, bg }) {
-  const link = `<a href="/admin/reader#gone">Читалка</a>`;
-  const front = n - bg;
-  return [!front, `Телефони вивантажили сторінку Читалки у фоні: ${fmtN(n)} за добу. ${link}`, `Сторінку Читалки вивантажили на екрані: ${fmtN(front)} за добу${bg ? `, ще ${fmtN(bg)} у фоні` : ""}. ${link}`];
 }
 
 // «Листи» on Огляд (Max, 2026-11-09): each kind of letter in the last 7 days — how many went, how many visits
