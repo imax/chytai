@@ -1378,7 +1378,7 @@ function readerBand() {
 // ---- the homepage «Що почитати» (Max, 2026-10-28: tried at /new, then «робимо її головною») ----
 // Shelves by what a reader is after, not by counters; the chips (?f=) narrow every shelf at once.
 // #live and #browse: search as you type replaces the shelves (app.js).
-function readPage({ user, f, filters, picks, finish, ua, short, free, wanted, genres, editorials, forYou, forWhy, fresh, club = [], ask = false, smart = false }) {
+function readPage({ user, f, filters, picks, finish, ua, short, free, wanted, genres, editorials, forYou, forWhy, fresh, club = [], ask = false, smart = false, examples = [] }) {
   const q = (k) => (k ? `/?f=${k}` : "/");
   const chips = `<nav class="read-chips" data-block="chips">${[["", "Усе"], ...Object.entries(filters).map(([k, [n]]) => [k, n])].map(([k, n]) => (k === f ? `<span class="chip on">${n}</span>` : `<a class="chip" href="${attr(q(k))}">${n}</a>`)).join("")}</nav>`;
   const advice = (p) => `<article class="advice">
@@ -1396,7 +1396,7 @@ function readPage({ user, f, filters, picks, finish, ua, short, free, wanted, ge
   const body = `
 <section class="hero">
   <h1>Що почитати?</h1>
-  <form class="search-box big" action="/search" role="search">${smart ? bigBox("") : plainBox()}<span class="enter">Enter ↵</span>${smart ? askIn : ""}</form>
+  <form class="search-box big" action="/search" role="search">${smart ? bigBox("", false, examples) : plainBox()}<span class="enter">Enter ↵</span>${smart ? askIn : ""}</form>
   ${smart ? askHint : ask ? `<p class="ask-link">Або <a class="text-link" href="/ask">напишіть, що вам сподобалось</a>, і порадимо книжки.</p>` : ""}
   ${chips}
 </section>
@@ -1786,11 +1786,12 @@ ${smart ? askHint : ""}
 // The results in groups (books, authors, readers) with «схоже» on the side; also served alone by
 // /api/search for search as you type.
 // The homepage's box, also on /search: one line that grows when the words do (a request in one's own words, intent.js).
-const bigBox = (value, focus = false) => `<textarea name="q" rows="1" enterkeyhint="search" placeholder="назва, автор, жанр або видавництво" aria-label="Пошук або що хочеться прочитати" autocomplete="off" spellcheck="false"${focus ? " autofocus" : ""}>${esc(value)}</textarea>`;
+// examples: what the placeholder shows in turn (app.js), a search and a request alternately.
+const bigBox = (value, focus = false, examples = []) => `<textarea name="q" rows="1" enterkeyhint="search" placeholder="${attr(examples[0] || "Напишіть, що шукаєте або хочете почитати")}"${examples.length > 1 ? ` data-examples="${attr(JSON.stringify(examples))}"` : ""} aria-label="Напишіть, що шукаєте або хочете почитати" autocomplete="off" spellcheck="false"${focus ? " autofocus" : ""}>${esc(value)}</textarea>`;
 // Variant B (Max, 2026-11-13, canvas «Розумний пошук: варіанти»): when the words ask for books, «Порадити книжки ↵»
 // takes the place of «Enter ↵» in the field and the line under it offers «Шукати як назву» (app.js, body.asking).
 const askIn = `<button type="button" class="btn primary small ask-in" hidden><span class="wide-only">Порадити книжки ↵</span><span class="narrow-only">Порадити</span></button>`;
-const askHint = `<p class="ask-link"><span class="when-idle">Напишіть, що хочете почитати, порадимо книжки з каталогу.</span><span class="when-ask">Схоже на прохання: Enter попросить поради. <button type="button" class="text-link" data-plain>Шукати як назву</button></span></p>`;
+const askHint = `<p class="ask-link"><span class="when-ask">Схоже на прохання: Enter попросить поради. <button type="button" class="text-link" data-plain>Шукати як назву</button></span></p>`;
 // Without the flag `smart-search`: the plain one line, as before.
 const plainBox = (value = "", focus = false) => `<input type="search" name="q"${value ? ` value="${attr(value)}"` : ""} placeholder="назва, автор, жанр або видавництво" aria-label="Пошук" autocomplete="off"${focus ? " autofocus" : ""}>`;
 // askMode (intent.js): "ask" — the words ask for books and no book answers them: «Порадити книжки» comes first and

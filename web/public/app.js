@@ -490,6 +490,12 @@
     for (const b of $$("[data-plain]")) b.addEventListener("click", () => ((plain = true), (last = null), run(), input.focus()));
     if (big) input.addEventListener("input", () => (plain = false));
     const grow = () => ((input.style.height = "auto"), (input.style.height = `${input.scrollHeight}px`));
+    // The placeholder goes through the examples every 3 s while the box is empty.
+    const examples = big && input.dataset.examples ? JSON.parse(input.dataset.examples) : [];
+    if (examples.length > 1) {
+      let k = 0;
+      setInterval(() => !input.value && !document.hidden && (input.placeholder = examples[(k = (k + 1) % examples.length)]), 3000);
+    }
     if (big) {
       grow();
       input.addEventListener("input", grow);

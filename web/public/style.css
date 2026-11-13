@@ -283,7 +283,7 @@ h2.year span { font: 13px var(--sans); color: var(--muted); }
 .search-box.big { margin-top: 36px; border-bottom: 2px solid var(--ink); display: flex; align-items: baseline; gap: 16px; }
 .search-box.big input, .search-box.big textarea { flex: 1; min-width: 0; border: 0; background: transparent; outline: 0; font: 28px/1.3 var(--serif); padding: 0 0 12px; border-radius: 0; }
 .search-box.big textarea { resize: none; overflow: hidden; color: inherit; display: block; }
-.search-box.big textarea::placeholder { color: var(--muted); opacity: 1; }
+.search-box.big textarea::placeholder { color: var(--muted); opacity: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ask-go { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin: 20px 0 8px; }
 .ask-go-line { margin: 16px 0 0; }
 /* Variant B: the request's button in the field, the line under it says what Enter does (app.js body.asking). */
@@ -291,7 +291,9 @@ h2.year span { font: 13px var(--sans); color: var(--muted); }
 .ask-in .narrow-only, .ask-link .when-ask { display: none; }
 body.asking .search-box.big { border-bottom-color: var(--accent); }
 body.asking .search-box .ask-in { display: inline-block; }
-body.asking .search-box .enter, body.asking .ask-link .when-idle, body.asking .ask-go[data-primary] { display: none; }
+body.asking .search-box .enter, body.asking .ask-go[data-primary] { display: none; }
+/* The placeholder says the box takes both (Max, 2026-11-13); the line shows only for a request. */
+body:not(.asking) .ask-link:has(.when-ask) { display: none; }
 body.asking .ask-link .when-ask { display: inline; }
 .ask-link .text-link { font-size: inherit; }
 .ask-go-line + .found { margin-top: 4px; }

@@ -2448,7 +2448,7 @@ app.get("/", (req, res) => {
         .map((x) => ({ book: x.it, shelf: x.sh }));
   // Chosen and ranked by the Ukrainian edition; a reader who wants originals sees those in its place.
   const as = (list) => (req.user?.originals ? list.map((x) => ({ ...x, book: workFor(req, x.book) })) : list);
-  res.send(pages.readPage({ user: req.user, f, filters: READ_FILTERS, picks, finish: as(finish), ua, short: as(short), free, wanted: as(wanted), genres, editorials, forYou: as(forYou), forWhy, fresh, club: club.mark(req.user?.id, club.lively(3)), ask: flags.on("ask", req.user), smart: smartOn(req) }));
+  res.send(pages.readPage({ user: req.user, f, filters: READ_FILTERS, picks, finish: as(finish), ua, short: as(short), free, wanted: as(wanted), genres, editorials, forYou: as(forYou), forWhy, fresh, club: club.mark(req.user?.id, club.lively(3)), ask: flags.on("ask", req.user), smart: smartOn(req), examples: smartOn(req) ? homeExamples() : [] }));
 });
 
 app.get("/publishers", (req, res) => {
@@ -2641,6 +2641,25 @@ const lastFound = new Map();
 // Max, 2026-11-13). Nothing is asked of Claude until the reader presses it. The header's box stays a plain search.
 const { intent } = require("./intent");
 const smartOn = (req) => askOn(req) && flags.on("smart-search", req.user);
+// Examples in the homepage box, changing (Max, 2026-11-13: «приклади, які змінюються і показують, що можна запитати …
+// більш конкретно»): a search, then a request, in turn. Searches are what readers have now (social.starts: a genre,
+// a book, authors); requests are «щось схоже на «<that book>»» and a few of ours (not readers' own words from /ask:
+// they write about themselves). Ten minutes' cache.
+const ASK_EXAMPLES = ["щось як Мураками, але коротше", "детективи, схожі на Ріццолі й Айлс", "щось легке й смішне на вихідні", "щось як «Сапієнс», але про Україну"];
+let examplesAt = 0, examples = [];
+const homeExamples = () => {
+  if (Date.now() - examplesAt < 10 * 60000) return examples;
+  const starts = social.starts();
+  // The popular book, when its title is Ukrainian, becomes a request rather than a search.
+  const book = starts.find((x) => x.href?.startsWith("/book/") && /[а-яіїєґ]/i.test(x.text) && x.text.length <= 22)?.text;
+  const searches = starts.map((x) => x.text).filter((t) => t !== book);
+  const requests = [...(book ? [`щось схоже на «${book}»`] : []), ...ASK_EXAMPLES];
+  examples = [];
+  for (let i = 0; i < Math.max(searches.length, requests.length); i++) examples.push(requests[i], searches[i]);
+  examples = examples.filter(Boolean);
+  examplesAt = Date.now();
+  return examples;
+};
 const askFor = (req, text, results) => (smartOn(req) && text && !req.query.plain ? { askText: text, askMode: intent(text, { answered: results.outside === false }) } : {});
 app.get("/search", (req, res) => {
   const full = String(req.query.q || "").trim().slice(0, 1500);
