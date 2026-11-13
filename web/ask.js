@@ -35,9 +35,9 @@ CREATE INDEX IF NOT EXISTS ask_recs_created ON ask_recs (created);`;
 const SYSTEM = `You are a well-read friend on Chytai, a Ukrainian site about books. Someone tells you, in their own words, what they have read and liked, and often what they would like next. Recommend books for them to read next.
 
 Answer with one JSON object and nothing else:
-{"topic": "...", "off": false, "fit": 0, "books": [{"title_uk": "...", "author_uk": "...", "title": "...", "author": "...", "series": "...", "why": "..."}]}
+{"topic": "...", "off": false, "fit": 0, "books": [{"title_uk": "...", "author_uk": "...", "title": "...", "author": "...", "lang": "en", "series": "...", "why": "..."}]}
 
-- books: 15 books, the best fit first. Each is a real, published book. Name the Ukrainian edition when there is one: title_uk and author_uk exactly as the Ukrainian edition prints them (for example «Чоловіки, які ненавидять жінок», «Стіг Ларссон»); empty strings when you are not sure a Ukrainian edition exists. title and author: the original title and the author's name in the original language.
+- books: 15 books, the best fit first. Each is a real, published book. Name the Ukrainian edition when there is one: title_uk and author_uk exactly as the Ukrainian edition prints them (for example «Чоловіки, які ненавидять жінок», «Стіг Ларссон»); empty strings when you are not sure a Ukrainian edition exists. title and author: the original title and the author's name in the original language; lang: that original language as a two-letter code (en, it, fr, uk…).
 - Prefer books that have been published in Ukrainian. Ukrainian authors are welcome where they truly fit. Never a Russian author, and never a book that exists only in Russian.
 - When they ask for series, or loved a series, recommend series and name the first book of each (series: the series' name in Ukrainian, else in the original). A book outside a series: series is "".
 - Never a book or a series they say they have already read, and never a book they name, even in another edition or retelling: they know it. At most one book by any one author.
@@ -54,7 +54,7 @@ const OUT_SCHEMA = {
     topic: str,
     off: { type: "boolean" },
     fit: { type: "integer" },
-    books: { type: "array", items: { type: "object", properties: { title_uk: str, author_uk: str, title: str, author: str, series: str, why: str }, required: ["title_uk", "author_uk", "title", "author", "series", "why"], additionalProperties: false } },
+    books: { type: "array", items: { type: "object", properties: { title_uk: str, author_uk: str, title: str, author: str, lang: str, series: str, why: str }, required: ["title_uk", "author_uk", "title", "author", "lang", "series", "why"], additionalProperties: false } },
   },
   required: ["topic", "books", "off", "fit"],
   additionalProperties: false,
@@ -80,6 +80,13 @@ const fold = (s) => ` ${String(s || "").toLowerCase().replace(/[’'`ʼ]/g, "").
 const named = (asked, ...titles) =>
   titles.some((t) => [t, String(t || "").split(/[:.(]/)[0]].some((x) => { const f = fold(x); return f.trim().length >= 5 && asked.includes(f); }));
 
+// A Google Books / Open Library hit as a book to add: our title and author, its cover, link, ISBNs and year.
+function fromHit(hit, title, author) {
+  const links = /^https:\/\/(books\.google\.[a-z.]+|play\.google\.com)\//.test(hit.google || "") ? [{ label: "Google Books", url: hit.google }] : [];
+  const cover = /^https:\/\/(covers\.openlibrary\.org|books\.google\.[a-z.]+|books\.googleusercontent\.com)\//.test(hit.cover || "") ? hit.cover : "";
+  return { title, author, cover, links, ...(hit.isbns?.length ? { isbns: hit.isbns.slice(0, 20) } : {}), ...(/^\/works\/OL\w+$/.test(hit.ol || "") ? { ol: hit.ol } : {}), ...(Number(hit.published) ? { published: Number(hit.published) } : {}) };
+}
+
 class Ask {
   // store: Store; ukWork(book): its Ukrainian edition; notify(row): a line to the owner about a new ask.
   // search(q): Google Books and Open Library hits (readerbooks' confirm); bookua(q): book.ua's (catalogs.bookuaSearch);
@@ -92,6 +99,12 @@ class Ask {
     // «Що питають інші» shows a topic, not the question (Max, 2026-11-11: «піднятись на один рівень абстракції»).
     if (!this.db.prepare("SELECT 1 FROM pragma_table_info('ask_recs') WHERE name = 'topic'").get()) this.db.exec("ALTER TABLE ask_recs ADD COLUMN topic TEXT NOT NULL DEFAULT ''");
     if (!this.db.prepare("SELECT 1 FROM pragma_table_info('ask_recs') WHERE name = 'fit'").get()) this.db.exec("ALTER TABLE ask_recs ADD COLUMN fit INTEGER NOT NULL DEFAULT 0");
+    // Once (2026-11-13): Calvino's «Le città invisibili» came from an answer labelled English (Max: «англійською? ;))»).
+    if (!this.db.get("askbooks:fix-lang")) {
+      const b = store.lib?.books?.["le-citta-invisibili"];
+      if (b?.source === "ask" && b.language === "англійська") store.updateBook(b.id, { language: "італійська" });
+      this.db.set("askbooks:fix-lang", "1");
+    }
     this.client = client || (apiKey ? new (require("@anthropic-ai/sdk"))({ apiKey }) : null);
     this.ukWork = ukWork;
     this.notify = notify;
@@ -197,7 +210,7 @@ class Ask {
     const asked = fold(text);
     const extra = { input: 0, output: 0, cost: 0 };
     const rows = (books || []).map((b) => {
-      const want = { uk: clean(b.title_uk, 200), ua: clean(b.author_uk, 200), en: clean(b.title, 200), ea: clean(b.author, 200) };
+      const want = { uk: clean(b.title_uk, 200), ua: clean(b.author_uk, 200), en: clean(b.title, 200), ea: clean(b.author, 200), lang: clean(b.lang, 5).toLowerCase() };
       const found = this.find(want);
       // Found but not one to show (Russian): not named at all, not even in the plain list.
       return { b, want, id: this.usable(found), bad: !!found && !this.usable(found) };
@@ -229,7 +242,7 @@ class Ask {
       if (bad || named(asked, want.uk, want.en)) continue;
       if (!found) {
         // With both names, its line and its place: fill() may still find it a book (book.ua, Google Books).
-        missed.push({ title: want.uk || want.en, author: want.ua || want.ea, uk: want.uk, ua: want.ua, en: want.en, ea: want.ea, why: clean(b.why, 300), series: clean(b.series, 120), rank: rank++ });
+        missed.push({ title: want.uk || want.en, author: want.ua || want.ea, uk: want.uk, ua: want.ua, en: want.en, ea: want.ea, lang: want.lang, why: clean(b.why, 300), series: clean(b.series, 120), rank: rank++ });
         continue;
       }
       let id = found;
@@ -323,13 +336,17 @@ class Ask {
         if (hit) (book = { title: hit.title.replace(/^«([^»]+)»/, "$1"), author: hit.author, cover: /^https:\/\/i\.book\.ua\//.test(hit.cover) ? hit.cover : "", links: [{ label: "book.ua", url: hit.url }], language: "українська", ...(hit.isbn ? { isbns: [hit.isbn] } : {}), ...(hit.year ? { published: hit.year } : {}) }), (from = "book.ua");
         else m.ukFound = false;
       }
-      if (!book && en && ea && this.search) {
-        const hit = await confirm({ title: en, author: ea, language: "en" }, this.search).catch(() => null);
-        if (hit) {
-          const links = /^https:\/\/(books\.google\.[a-z.]+|play\.google\.com)\//.test(hit.google || "") ? [{ label: "Google Books", url: hit.google }] : [];
-          book = { title: en.split(": ")[0], author: ea, cover: /^https:\/\/(covers\.openlibrary\.org|books\.google\.[a-z.]+|books\.googleusercontent\.com)\//.test(hit.cover || "") ? hit.cover : "", links, language: "англійська", ...(hit.isbns?.length ? { isbns: hit.isbns.slice(0, 20) } : {}), ...(/^\/works\/OL\w+$/.test(hit.ol || "") ? { ol: hit.ol } : {}), ...(Number(hit.published) ? { published: Number(hit.published) } : {}) };
-          from = hit.from || "Google Books";
-        }
+      // A Ukrainian edition book.ua no longer sells (out of print) may still be in Google Books or Open Library.
+      if (!book && uk && (ua || ea) && this.search) {
+        const hit = await confirm({ title: uk, author: ua || ea, language: "українська" }, this.search).catch(() => null);
+        if (hit && /[а-яіїєґ]/i.test(hit.title)) (book = { ...fromHit(hit, uk.split(": ")[0], ua || hit.author), language: "українська" }), (from = hit.from || "Google Books");
+      }
+      // Else the original, only an English one (Max's choice, 2026-11-12: «Англійські + книгарня»): Calvino's
+      // «Le città invisibili» came in labelled English (2026-11-13). Claude names the original's language (`lang`);
+      // an answer from before that counts only with Google's word that the edition is English.
+      if (!book && en && ea && this.search && (m.lang || "en") === "en") {
+        const hit = await confirm({ title: en, author: ea, language: "англійська" }, this.search).catch(() => null);
+        if (hit && (m.lang === "en" || hit.language === "англійська")) (book = { ...fromHit(hit, en.split(": ")[0], ea), language: "англійська" }), (from = hit.from || "Google Books");
       }
       if (!book || isRussian(book)) continue;
       let have = s.findWork({ title: book.title, author: book.author, isbns: book.isbns || [] });

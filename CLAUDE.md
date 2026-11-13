@@ -173,8 +173,9 @@ A flag only when Max asks for one, or when the change could break what readers u
   The answer page shows a plain «Автор, «Назва»» list (copyable); /ask lists `asker.recent()` by `topic` (Claude names it in
   the same call; older rows get one from Opus at start, `asker.topics()`).
 - Books an answer names that the catalog lacks become books (`Ask.fill`, after each answer, source `ask`, 50 a day,
-  meta `askbooks:count`): book.ua's GraphQL search (`catalogs.bookuaSearch`) for a Ukrainian edition, else the original
-  by Google Books / Open Library (readerbooks `confirm`); found ones move from the grey lines to the cards, Max hears
+  meta `askbooks:count`): a Ukrainian edition by book.ua's GraphQL search (`catalogs.bookuaSearch`), then by Google
+  Books / Open Library (readerbooks `confirm`); else the original, only when it is English (Claude's `lang`; Calvino's
+  Italian came in as English, 2026-11-13); found ones move from the grey lines to the cards, Max hears
   of them. No Ukrainian edition found → the grey line shows the original title (`ukFound: false`). Over kept answers:
   `GET /agent/ask-books` (dry, ask again for the result), `POST {"run":true}` only with Max's OK in the thread.
 - Try the prompt on production's catalog without keeping anything (30 a day):
