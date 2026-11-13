@@ -29,6 +29,9 @@
   ["Charles Bukowski", "Чарльз Буковскі"]
  ],
  "merges": [
+  ["project-hail-mary", "hail-mary"],
+  ["foundation", "asimov-foundation"],
+  ["don-t-make-me-think", "dont-make-me-think-revisited-a-common-sense-approach-to-web-"],
   ["dovira", "dovira-diaz"],
   ["1984-kolhosp-tvaryn", "1984-kolhosp-tvaryn-ekskliuzyvne-vydannia"],
   ["zlet-i-padinnia-tretoho-raikhu-istoriia-natsystskoi-nimechch", "zlet-i-padinnia-tretoho-raikhu-istoriia-natsystskoi-nimechch-2"],
