@@ -1305,7 +1305,7 @@ function libraryPage({ ask = null, part = "", clubTopics = [], lists = [], saved
   // (Max, 2026-10-28: «Треба списки на Моє»).
   const listsHead = label(own ? "Мої списки" : "Списки", own ? `<button type="button" class="text-link" data-open="new-list">+ новий</button>` : "");
   // «Мої фаворити» (lists.js): offered once there are a few books rated 4.5+, made only on «Зібрати».
-  const fav = own && favOffer ? `<form method="post" action="/api/lists/favorites" class="fav-offer"><p><b>Зібрати «Мої фаворити»?</b> ${books(favOffer)} з вашою оцінкою 4,5 і вище. Нові додаватимуться самі.</p><p class="acts"><button class="btn small primary" name="yes" value="1">Зібрати</button><button class="btn small ghost" name="no" value="1">Не треба</button></p></form>` : "";
+  const fav = own && favOffer ? `<form method="post" action="/api/lists/favorites" class="fav-offer"><p><b>Зібрати «Мої фаворити»?</b> ${books(favOffer)} з вашою оцінкою 5. Нові додаватимуться самі.</p><p class="acts"><button class="btn small primary" name="yes" value="1">Зібрати</button><button class="btn small ghost" name="no" value="1">Не треба</button></p></form>` : "";
   const topLists = lists.length || savedLists.length || own ? `<div class="top-lists">${listsHead}${fav}${lists.length || savedLists.length || fav ? "" : `<p class="small muted">Складіть список книжок, щоб поділитися ним.</p>`}<div class="lchips">${[...lists.map((l) => [l, listMeta(l, { by: false })]), ...savedLists.map((l) => [l, `${esc(l.reader.name)} · ${books(l.count)}`])].map(([l, m]) => `<a href="${attr(l.href)}"><b>${esc(l.title)}</b><span>${m}</span></a>`).join("")}</div></div>` : "";
   const body = `
 ${pageHead({ crumbs: own ? "" : `<a href="/community">Читачі</a> / ${esc(reader.name)}`, kicker: own ? "Моя полиця" : "Полиця читача", title: esc(reader.name), sub, extra: nowBlock(now, { own }), action: own ? `<div class="acts own-acts"><a class="btn primary" href="/add">+ Додати книжки</a><a class="text-link small" href="/mcp">або голосом чи текстом у Claude чи ChatGPT</a></div>` : user?.id === reader.id ? "" : `<div class="acts">${followButton(reader, following, user)}${ask ? `<a class="btn" href="/chat/@${attr(reader.username)}">Чат</a>` : ""}</div>` })}
@@ -2852,7 +2852,7 @@ function listPage({ list, items, progress = false, user, own = false, owner = fa
     <label>Про список<textarea name="note" rows="8" maxlength="4000" placeholder="Для кого він і чому саме ці книжки. Можна кілька абзаців: між ними порожній рядок.">${esc(list.note)}</textarea></label>
     <label>Джерело<input name="source" type="url" maxlength="500" placeholder="https://… (необов'язково)" value="${attr(list.source || "")}"></label>
     <input type="hidden" name="dr_shown" value="1"><label class="check"><span><input type="checkbox" name="draft" value="1"${list.draft ? " checked" : ""}> Чернетка: бачите тільки ви</span></label>
-    ${list.fav ? `<input type="hidden" name="fav_shown" value="1"><label class="check"><span><input type="checkbox" name="fav" value="1"${list.fav === 1 ? " checked" : ""}> Додавати самі книжки з оцінкою 4,5 і вище</span></label>` : ""}
+    ${list.fav ? `<label>Додавати самі<select name="fav">${[["5", "книжки з оцінкою 5"], ["4.5", "книжки з оцінкою 4,5 і вище"], ["off", "не додавати"]].map(([v, t]) => `<option value="${v}"${(list.fav === 2 ? "off" : String(list.fav_min)) === v ? " selected" : ""}>${t}</option>`).join("")}</select></label>` : ""}
     ${owner ? `<input type="hidden" name="ed_shown" value="1"><label class="check"><span><input type="checkbox" name="editorial" value="1"${list.editorial ? " checked" : ""}> Добірка Chytai: від «Редакції Chytai», на головній</span></label>` : ""}
     <div class="actions"><button class="btn primary">Зберегти</button></div>
   </form>
@@ -2898,7 +2898,7 @@ ${listHero(list, items)}
   ${list.note ? `<div class="intro">${paragraphs(list.note)}</div>` : own ? `<p class="lead muted"><button type="button" class="text-link" data-open="list-edit">Додайте кілька слів про список</button></p>` : ""}
   ${list.source ? `<p class="small muted">Джерело: <a class="text-link" href="${attr(list.source)}" target="_blank" rel="noopener nofollow">${esc(host(list.source))}</a></p>` : ""}
   <p class="by-line">${list.editorial ? `<b>${esc(list.by)}</b>` : `<a href="${attr(list.reader.href)}"><b>${esc(list.reader.name)}</b></a>`}${updated ? ` · оновлено ${updated}` : ""}${list.saves ? ` · ${list.saves} ${plural(list.saves, "зберіг", "зберегли", "зберегли")}` : ""}</p>
-  ${own && list.fav === 1 ? `<p class="small muted">Книжки з вашою оцінкою 4,5 і вище додаються сюди самі.</p>` : ""}
+  ${own && list.fav === 1 ? `<p class="small muted">Книжки з вашою оцінкою ${list.fav_min >= 5 ? "5" : "4,5 і вище"} додаються сюди самі.</p>` : ""}
   ${progress && items.length ? listProgress(items) : ""}
   <div class="acts">${save}${share}${tools}</div>
 </section>

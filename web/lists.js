@@ -45,13 +45,14 @@ const EDITORIAL = "Редакція Chytai";
 // page, and it stays off /lists, the reader's page, «У списках», «Схожі списки», the homepage and the sitemap.
 
 // «Мої фаворити» (Max, 2026-11-13: «пропонувати створювати список … куди додавати автоматом книжки з такими високими
-// оцінками»): a reader with FAV_OFFER books rated FAV_MIN or more is offered, on their own shelf, a list of them. Only
-// when they press «Зібрати» is it made, as a draft like any new list; they publish it themselves. From then on a book
-// they rate FAV_MIN+ comes into it by itself (`auto` rows), one per series; one rated lower again leaves, unless the
-// reader wrote a line or a section on it. A book the reader took out by hand stays out (list_skips). The switch in
-// «Назва й опис» stops the filling (`fav` 2); «Не треба» or deleting the list stops the offer (fav_no).
+// оцінками»; then «а якщо тільки 5* … як опцію конфігурації списку»): a reader with FAV_OFFER books rated 5 is offered,
+// on their own shelf, a list of them. Only when they press «Зібрати» is it made, as a draft like any new list; they
+// publish it themselves. From then on a book they rate `fav_min` (5, or 4.5 and up, chosen in «Назва й опис») comes into
+// it by itself (`auto` rows), one per series; one rated lower again leaves, unless the reader wrote a line or a section
+// on it. A book the reader took out by hand stays out (list_skips). «Не додавати» there stops the filling (`fav` 2);
+// «Не треба» or deleting the list stops the offer (fav_no).
 const FAV_TITLE = "Мої фаворити";
-const FAV_MIN = 4.5;
+const FAV_MINS = [5, 4.5];
 const FAV_OFFER = 3;
 
 class Lists {
@@ -68,6 +69,7 @@ class Lists {
       if (!this.db.prepare("PRAGMA table_info(list_items)").all().some((c) => c.name === col)) this.db.exec(`ALTER TABLE list_items ADD COLUMN ${col} ${def}`);
     if (!this.db.prepare("PRAGMA table_info(list_comments)").all().some((c) => c.name === "edited")) this.db.exec("ALTER TABLE list_comments ADD COLUMN edited TEXT NOT NULL DEFAULT ''");
     if (!this.db.prepare("PRAGMA table_info(lists)").all().some((c) => c.name === "fav")) this.db.exec("ALTER TABLE lists ADD COLUMN fav INTEGER NOT NULL DEFAULT 0");
+    if (!this.db.prepare("PRAGMA table_info(lists)").all().some((c) => c.name === "fav_min")) this.db.exec("ALTER TABLE lists ADD COLUMN fav_min REAL NOT NULL DEFAULT 5");
     if (!this.db.prepare("PRAGMA table_info(list_items)").all().some((c) => c.name === "auto")) this.db.exec("ALTER TABLE list_items ADD COLUMN auto INTEGER NOT NULL DEFAULT 0");
     // A changed shelf brings the reader's «Мої фаворити» up to date once the change is done (an import is one pass).
     this.favQueue = new Set();
@@ -79,10 +81,10 @@ class Lists {
 
   // ---- «Мої фаворити» ----
   // The reader's books for it, best rated first (then the latest): one per series, its first such volume.
-  favBooks(readerId) {
+  favBooks(readerId, min = FAV_MINS[0]) {
     const rows = [];
     for (const [book, e] of Object.entries(this.store.entriesOf(readerId) || {})) {
-      if (!(e.rating >= FAV_MIN) || e.kids || e.status === "abandoned") continue;
+      if (!(e.rating >= min) || e.kids || e.status === "abandoned") continue;
       const id = this.store.canonical(book);
       const b = this.store.book(id);
       if (b && !isRussian(b)) rows.push({ id, rating: e.rating, at: e.updated || e.added || "", s: this.store.seriesOf(id) });
@@ -115,9 +117,9 @@ class Lists {
   }
   // Bring the list in line with the shelf; true when something changed.
   syncFav(readerId) {
-    const l = this.db.prepare("SELECT id FROM lists WHERE reader = ? AND fav = 1").get(readerId);
+    const l = this.db.prepare("SELECT id, fav_min FROM lists WHERE reader = ? AND fav = 1").get(readerId);
     if (!l) return false;
-    const want = this.favBooks(readerId);
+    const want = this.favBooks(readerId, l.fav_min);
     const wanted = new Set(want);
     const rows = this.db.prepare("SELECT book, auto, why, section FROM list_items WHERE list = ?").all(l.id);
     const has = new Set(rows.map((r) => this.store.canonical(r.book)));
@@ -184,10 +186,11 @@ class Lists {
     const dr = draft === undefined ? l.draft : !!draft;
     const src = source === undefined ? l.source : /^https?:\/\/[^\s"<>]+$/.test(String(source).trim()) ? String(source).trim().slice(0, 500) : "";
     this.db.prepare("UPDATE lists SET title = ?, note = ?, editorial = ?, source = ?, draft = ?, updated = ? WHERE id = ?").run(t, String(note ?? l.note).replace(/\r/g, "").trim().slice(0, NOTE_MAX), ed ? 1 : 0, src, dr ? 1 : 0, new Date().toISOString(), id);
-    // «Мої фаворити» filling itself (1) or not any more (2).
-    if (l.fav && fav !== undefined && (fav ? 1 : 2) !== l.fav) {
-      this.db.prepare("UPDATE lists SET fav = ? WHERE id = ?").run(fav ? 1 : 2, id);
-      if (fav) this.syncFav(l.reader.id);
+    // «Мої фаворити»: `fav` is the rating it fills itself from (5 or 4.5), or "off".
+    if (l.fav && fav !== undefined) {
+      const min = FAV_MINS.find((m) => String(m) === String(fav));
+      if (min) this.db.prepare("UPDATE lists SET fav = 1, fav_min = ? WHERE id = ?").run(min, id), this.syncFav(l.reader.id);
+      else this.db.prepare("UPDATE lists SET fav = 2 WHERE id = ?").run(id);
     }
     return this.get(id);
   }
@@ -405,4 +408,4 @@ function fanBooks(items, n = 5) {
   return out.sort((a, b) => all.indexOf(a) - all.indexOf(b)).map((x) => x.book);
 }
 
-module.exports = { Lists, EDITORIAL, fanBooks, FAV_MIN };
+module.exports = { Lists, EDITORIAL, fanBooks, FAV_MINS };

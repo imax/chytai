@@ -1792,7 +1792,7 @@ app.post("/api/lists/favorites", signed, (req, res) => {
 });
 // «Добірка Chytai» is the owner's switch (the form shows it only to him). «Чернетка» is the author's.
 app.post("/api/lists/:id", signed, myList, (req, res) => {
-  const l = lists.edit(req.list.id, { title: req.body.title, note: req.body.note, source: req.body.source ?? "", editorial: req.owner && req.body.ed_shown ? req.body.editorial === "1" : undefined, draft: req.body.dr_shown ? req.body.draft === "1" : undefined, fav: req.body.fav_shown ? req.body.fav === "1" : undefined });
+  const l = lists.edit(req.list.id, { title: req.body.title, note: req.body.note, source: req.body.source ?? "", editorial: req.owner && req.body.ed_shown ? req.body.editorial === "1" : undefined, draft: req.body.dr_shown ? req.body.draft === "1" : undefined, fav: req.body.fav });
   if (req.list.draft && !l.draft) published(req, l);
   res.redirect(303, l.href);
 });

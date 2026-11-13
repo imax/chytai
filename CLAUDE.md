@@ -196,8 +196,8 @@ A flag only when Max asks for one, or when the change could break what readers u
 
 ## «Мої фаворити» (`web/lists.js`, `syncFav`)
 
-- A reader with 3+ books rated 4.5+ sees «Зібрати «Мої фаворити»?» in «Мої списки» on their own shelf. «Зібрати» makes
-  a draft list of them (one per series, no Russian, no kids' shelf); `store.entryHooks` keeps it in step after every
+- A reader with 3+ books rated 5 sees «Зібрати «Мої фаворити»?» in «Мої списки» on their own shelf. «Зібрати» makes
+  a draft list of them (from 5; «Назва й опис» → «Додавати самі»: 5 / 4,5 і вище / не додавати, `lists.fav_min`), one per series, no Russian, no kids' shelf; `store.entryHooks` keeps it in step after every
   shelf change. Hand-removed books stay out (`list_skips`); a book with a line or section stays when its rating falls.
   Readers' publishing it mails Max like any list. Try: `lists.favBooks(id)`, `lists.syncFav(id)` on the test DB.
 
