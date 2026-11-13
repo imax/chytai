@@ -1144,6 +1144,7 @@ app.post("/api/readers-gone", (req, res) => {
 
 app.get("/privacy", (req, res) => res.send(pages.privacyPage({ user: req.user })));
 app.get("/updates", (req, res) => res.send(pages.updatesPage({ user: req.user })));
+app.get("/about", (req, res) => res.send(pages.aboutPage({ user: req.user })));
 // ---- «Що почитати далі?» (ask.js, Max 2026-11-11): a field on /ask, open to guests too; each answer at /ask/<id>.
 // The field is behind the flag `ask`; an answer's own page is open to anyone with the link (Max asks for someone
 // and sends them the link).
@@ -2696,7 +2697,7 @@ app.get("/sitemap.xml", (req, res) => {
   if (Date.now() - sitemap.at > 3600 * 1000) {
     const t0 = Date.now();
     const origin = `https://${DOMAIN || req.get("host")}`;
-    const urls = ["/", "/community", "/publishers", "/updates", "/privacy"];
+    const urls = ["/", "/community", "/publishers", "/about", "/updates", "/privacy"];
     for (const shelf of store.shelves) if (!shelf.draft && !shelf.joinOnly) urls.push(`/publishers/${encodeURIComponent(shelf.id)}`);
     const ru = new Set();
     for (const w of authors.allWorks(store)) {

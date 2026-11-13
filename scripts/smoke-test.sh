@@ -56,6 +56,7 @@ check() {
 check / 200
 check /community 200
 check /publishers 200
+check /about 200
 check /updates 200
 check /lists 200
 check /club 200

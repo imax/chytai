@@ -753,6 +753,10 @@ dialog .form { margin-top: 18px; }
 .updates a { color: var(--ink); text-decoration: underline; text-decoration-color: var(--under); text-underline-offset: 4px; }
 .updates h2 { font-size: 22px; }
 .updates li { margin-top: 6px; }
+.about > p { font: 19px/1.5 var(--serif); color: var(--text); margin-top: 14px; }
+.about h2 ~ p { font: 16px/1.6 var(--sans); color: inherit; margin-top: 12px; }
+.about a { color: var(--ink); text-decoration: underline; text-decoration-color: var(--under); text-underline-offset: 4px; }
+.about h2 { font-size: 22px; }
 .dupe { border: 1px solid var(--rule); padding: 4px 14px 10px; margin: 0 0 12px; max-width: 760px; }
 .dupe-row { display: flex; gap: 12px; align-items: center; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid var(--rule); }
 .dupe-row .btn, .dupe-foot .btn { flex: none; }

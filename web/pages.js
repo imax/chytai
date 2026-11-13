@@ -172,7 +172,7 @@ ${path === "/admin" && user?.owner ? adminNav() : ""}
 ${body}
 ${!user && JOIN_PATHS.has(path) ? joinBand(canonical) : ""}
 </main>
-<footer class="foot"><div class="bar"><span class="motto">Chytai.org.ua: читай більше.</span><a href="/updates">Що нового</a><a href="/privacy">Приватність</a><a href="mailto:ischenko@gmail.com">Написати нам</a>${user?.owner ? `<a href="/admin">Адмінка</a>` : ""}</div></footer>
+<footer class="foot"><div class="bar"><span class="motto">Chytai.org.ua: читай більше.</span><a href="/about">Про проєкт</a><a href="/updates">Що нового</a><a href="/privacy">Приватність</a><a href="mailto:ischenko@gmail.com">Написати нам</a>${user?.owner ? `<a href="/admin">Адмінка</a>` : ""}</div></footer>
 <script src="${ASSETS.js}"></script>
 </body>
 </html>`;
@@ -2342,6 +2342,18 @@ ${updatesCache.html}
 </section>` });
 }
 
+// «Про проєкт»: Max's text from his letter of 2026-11-13 (web/about.md, he edits it himself), then what the
+// site has and the contacts; the first link in the footer.
+let aboutCache = { mtime: 0, html: "" };
+function aboutPage({ user }) {
+  const file = path.join(__dirname, "about.md");
+  const mtime = fs.statSync(file).mtimeMs;
+  if (mtime !== aboutCache.mtime) aboutCache = { mtime, html: marked.parse(fs.readFileSync(file, "utf8").replace(/<!--[\s\S]*?-->/g, "")) };
+  return layout({ title: "Про проєкт", user, path: "/about", canonical: "/about", description: "Chytai.org.ua: проєкт для тих, хто любить книжки. Читай більше.", body: `<section class="auth prose about"><h1>Про проєкт</h1>
+${aboutCache.html}
+</section>` });
+}
+
 // ---- The weekly draw page (draw.js, Max 2026-10-28). The title, lead, steps and rules (draw.md) were
 // drafted from the plan at Max's ask (2026-10-28: «в тебе вже є нормально описано»).
 const DRAW_PATH = "/dfadsafas"; // temporary, unlisted (Max 2026-10-28)
@@ -3261,6 +3273,6 @@ module.exports = {
   outsideResults,
   addPage, addReviewPage, addFindResults, addPageResult, ukFindPage,
   layout, bookPage, bookEditPage, russianPage, editPage, libraryPage, readersPage, readPage, genrePage, genreTrialPage, langTrialPage, origTrialPage, overviewTrialPage, ukTrialPage, catalogAdminPage, aiPassPage, publishersPage, publisherPage, publisherFavouritesPage, searchPage, searchResults, authorPage,
-  loginPage, codePage, signupPage, settingsPage, privacyPage, macPage, macBackPage, updatesPage, drawPage, DRAW_PATH, messagePage, digestPage, followMailPage, wantMailPage, importPage, importPreviewPage, importDonePage,
+  loginPage, codePage, signupPage, settingsPage, privacyPage, macPage, macBackPage, updatesPage, aboutPage, drawPage, DRAW_PATH, messagePage, digestPage, followMailPage, wantMailPage, importPage, importPreviewPage, importDonePage,
   GENRES, esc, mdHtml, byline, STATUS, COPY, inline, isUk, setTitleLinks, setAuthorLinks, setThumbs, setStats, setReadersWithNote,
 };
