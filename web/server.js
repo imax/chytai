@@ -2449,7 +2449,7 @@ app.get("/", (req, res) => {
         .map((x) => ({ book: x.it, shelf: x.sh }));
   // Chosen and ranked by the Ukrainian edition; a reader who wants originals sees those in its place.
   const as = (list) => (req.user?.originals ? list.map((x) => ({ ...x, book: workFor(req, x.book) })) : list);
-  res.send(pages.readPage({ user: req.user, f, filters: READ_FILTERS, picks, finish: as(finish), ua, short: as(short), free, wanted: as(wanted), genres, editorials, forYou: as(forYou), forWhy, fresh, club: club.mark(req.user?.id, club.lively(3)), ask: flags.on("ask", req.user) }));
+  res.send(pages.readPage({ user: req.user, f, filters: READ_FILTERS, picks, finish: as(finish), ua, short: as(short), free, wanted: as(wanted), genres, editorials, forYou: as(forYou), forWhy, fresh, club: club.mark(req.user?.id, club.lively(3)), ask: flags.on("ask", req.user), smart: smartOn(req) }));
 });
 
 app.get("/publishers", (req, res) => {
@@ -2585,19 +2585,27 @@ const foundCount = (r) => r.hits.length + r.authors.length + r.readers.length + 
 // Search as you type asks for every pause in typing; only the query the reader stopped at is counted: the page
 // sends it to /api/searched (app.js), and the count of results is taken from here, from the last few queries.
 const lastFound = new Map();
+// The homepage's box (and /search, its results' own page) also takes a request in one's own words: words that ask for
+// a book («щось як Мураками…») and that no book answers put «Порадити книжки» (/ask) over the results (intent.js;
+// Max, 2026-11-13). Nothing is asked of Claude until the reader presses it. The header's box stays a plain search.
+const { intent } = require("./intent");
+const smartOn = (req) => askOn(req) && flags.on("smart-search", req.user);
+const askFor = (req, text, results) => (smartOn(req) && text ? { askText: text, askMode: intent(text, { answered: results.outside === false }) } : {});
 app.get("/search", (req, res) => {
-  const q = String(req.query.q || "").trim().slice(0, 100);
+  const full = String(req.query.q || "").trim().slice(0, 1500);
+  const q = full.slice(0, 100);
   const results = searchAll(req, q);
   if (q) admin.searched(req, req.user?.id, q, foundCount(results));
-  res.send(pages.searchPage({ q, user: req.user, results }));
+  res.send(pages.searchPage({ q, user: req.user, results: { ...results, ...askFor(req, full, results) }, smart: smartOn(req) }));
 });
 // The same results as an HTML fragment, for search as you type.
 app.get("/api/search", (req, res) => {
-  const q = String(req.query.q || "").trim().slice(0, 100);
+  const full = String(req.query.q || "").trim().slice(0, 1500);
+  const q = full.slice(0, 100);
   const results = searchAll(req, q);
   lastFound.delete(q), lastFound.set(q, foundCount(results));
   if (lastFound.size > 500) lastFound.delete(lastFound.keys().next().value);
-  res.set("Cache-Control", "no-store").send(pages.searchResults({ q, user: req.user, ...results }));
+  res.set("Cache-Control", "no-store").send(pages.searchResults({ q, user: req.user, ...results, ...(req.query.home ? askFor(req, full, results) : {}) }));
 });
 // Books that exist but are not on Chytai, for a search that found none here (pages.outsideResults; Max, 2026-10-30):
 // the known works of our authors (Wikidata), then Google Books and Open Library, five at most, none we have after all.

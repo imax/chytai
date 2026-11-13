@@ -1378,7 +1378,7 @@ function readerBand() {
 // ---- the homepage «Що почитати» (Max, 2026-10-28: tried at /new, then «робимо її головною») ----
 // Shelves by what a reader is after, not by counters; the chips (?f=) narrow every shelf at once.
 // #live and #browse: search as you type replaces the shelves (app.js).
-function readPage({ user, f, filters, picks, finish, ua, short, free, wanted, genres, editorials, forYou, forWhy, fresh, club = [], ask = false }) {
+function readPage({ user, f, filters, picks, finish, ua, short, free, wanted, genres, editorials, forYou, forWhy, fresh, club = [], ask = false, smart = false }) {
   const q = (k) => (k ? `/?f=${k}` : "/");
   const chips = `<nav class="read-chips" data-block="chips">${[["", "Усе"], ...Object.entries(filters).map(([k, [n]]) => [k, n])].map(([k, n]) => (k === f ? `<span class="chip on">${n}</span>` : `<a class="chip" href="${attr(q(k))}">${n}</a>`)).join("")}</nav>`;
   const advice = (p) => `<article class="advice">
@@ -1396,8 +1396,8 @@ function readPage({ user, f, filters, picks, finish, ua, short, free, wanted, ge
   const body = `
 <section class="hero">
   <h1>Що почитати?</h1>
-  <form class="search-box big" action="/search" role="search"><input type="search" name="q" placeholder="назва, автор, жанр або видавництво" aria-label="Пошук" autocomplete="off"><span class="enter">Enter ↵</span></form>
-  ${ask ? `<p class="ask-link">Або <a class="text-link" href="/ask">напишіть, що вам сподобалось</a>, і порадимо книжки.</p>` : ""}
+  <form class="search-box big" action="/search" role="search">${smart ? bigBox("") : plainBox()}<span class="enter">Enter ↵</span></form>
+  ${smart ? `<p class="ask-link">Можна й своїми словами: <button type="button" class="text-link" data-fill="щось як Мураками, але коротше">«щось як Мураками, але коротше»</button>.</p>` : ask ? `<p class="ask-link">Або <a class="text-link" href="/ask">напишіть, що вам сподобалось</a>, і порадимо книжки.</p>` : ""}
   ${chips}
 </section>
 <div id="live" data-block="search"></div>
@@ -1748,29 +1748,51 @@ ${parts.first}
 
 // ---- search (/search) ----
 
-function searchPage({ q, user, results }) {
+function searchPage({ q, user, results, smart = false }) {
   const body = `
-<form class="search-box big query" action="/search" role="search"><input type="search" name="q" value="${attr(q)}" placeholder="назва, автор, жанр або видавництво" aria-label="Пошук" autocomplete="off"${q ? "" : " autofocus"}><span class="enter">Enter ↵</span></form>
+<form class="search-box big query" action="/search" role="search">${smart ? bigBox(results.askText || q, !q) : plainBox(q, !q)}<span class="enter">Enter ↵</span></form>
 <div id="live" data-block="search">${searchResults({ q, user, ...results })}</div>`;
   return layout({ title: q ? `${q} · Пошук` : "Пошук", body, user, path: "/search", q });
 }
 
 // The results in groups (books, authors, readers) with «схоже» on the side; also served alone by
 // /api/search for search as you type.
-function searchResults({ q, user, hits = [], authors = [], readers = [], shelves = [], lists = [], similar = [], tag = "", outside = false }) {
+// The homepage's box, also on /search: one line that grows when the words do (a request in one's own words, intent.js).
+const bigBox = (value, focus = false) => `<textarea name="q" rows="1" enterkeyhint="search" placeholder="назва, автор, жанр або видавництво" aria-label="Пошук або що хочеться прочитати" autocomplete="off" spellcheck="false"${focus ? " autofocus" : ""}>${esc(value)}</textarea>`;
+// Without the flag `smart-search`: the plain one line, as before.
+const plainBox = (value = "", focus = false) => `<input type="search" name="q"${value ? ` value="${attr(value)}"` : ""} placeholder="назва, автор, жанр або видавництво" aria-label="Пошук" autocomplete="off"${focus ? " autofocus" : ""}>`;
+// askMode (intent.js): "ask" — the words ask for books and no book answers them: «Порадити книжки» comes first and
+// Enter presses it; "maybe" — many words no book answers: offered in one line under the results' count.
+// enter: Enter presses it (only for "ask"; a long title we lack is still a search).
+const askGo = (text, primary, enter = primary) =>
+  primary
+    ? `<form method="post" action="/ask" class="ask-go"${enter ? " data-primary" : ""} data-block="ask-go"><input type="hidden" name="text" value="${attr(text)}"><button class="btn primary">Порадити книжки</button><span class="small muted">Claude добере з каталогу</span></form>`
+    : `<form method="post" action="/ask" class="ask-go-line" data-block="ask-go"><input type="hidden" name="text" value="${attr(text)}"><span class="small muted">Це опис, а не назва?</span> <button class="text-link small">Порадити книжки</button></form>`;
+function searchResults({ q, user, hits = [], authors = [], readers = [], shelves = [], lists = [], similar = [], tag = "", outside = false, askText = "", askMode = "" }) {
   if (!q.trim()) return "";
   const n = hits.length + authors.length + readers.length + shelves.length + lists.length;
+  // A request: no Google, Open Library or «полиці» for it, only the button and what the catalog had for its words.
+  if (askMode === "ask") {
+    outside = false;
+    if (!n) return askGo(askText, true);
+  }
+  const askTop = askMode ? askGo(askText, askMode === "ask") : "";
   const addLink = user ? `<a class="text-link" href="/add?text=${attr(encodeURIComponent(q))}">Додати книжку, якої ще немає на Chytai</a>` : "";
   // No book on Chytai answers the query: the books that exist elsewhere, loaded after the page (outsideResults;
   // Max, 2026-10-30), in place of the «Додати» link.
   const elsewhere = `<div class="outside" data-src="/api/search/outside?${attr(new URLSearchParams({ q }).toString())}"></div>`;
   // Not a dead end (usability review 2026-10-28: «щось легке на вихідні» found nothing and left nothing to do):
   // the home page's shelves, for those who search for a mood rather than a title.
+  // Many words and nothing here at all: the button, big, but Enter doesn't press it; the books elsewhere under it.
+  if (!n && askTop) return `${askGo(askText, true, askMode === "ask")}${elsewhere}`;
   if (!n)
     return `${elsewhere}
 <p class="found muted">Шукаєте не книжку, а настрій? Почніть з полиць:</p>
 <nav class="read-chips">${[["/", "Що почитати"], ["/?f=short", "Коротке"], ["/?f=ua", "Українські автори"], ["/?f=fiction", "Художнє"], ["/?f=nonfiction", "Нон-фікшн"]].map(([h, t]) => `<a class="chip" href="${h}">${t}</a>`).join("")}</nav>`;
-  return `<p class="found">${count(n, "збіг", "збіги", "збігів")}${tag ? ` · жанр «${GENRES.includes(tag) ? `<a class="text-link" href="/genre/${attr(genreSlug(tag))}">${esc(tag)}</a>` : esc(tag)}»` : ""}</p>
+  if (askMode === "ask") return `${askTop}
+<p class="found">У каталозі за цими словами: ${count(n, "збіг", "збіги", "збігів")}</p>
+<div class="split"><div>${hits.length ? `<div class="rows">${hits.slice(0, 5).map((h) => bookRow(h.book, { meta: readersMeta(h.book.id), action: h.entry ? myStatus(h.entry) : "" })).join("")}</div>` : ""}</div><aside></aside></div>`;
+  return `${askMode === "maybe" ? askTop : ""}<p class="found">${count(n, "збіг", "збіги", "збігів")}${tag ? ` · жанр «${GENRES.includes(tag) ? `<a class="text-link" href="/genre/${attr(genreSlug(tag))}">${esc(tag)}</a>` : esc(tag)}»` : ""}</p>
 <div class="split">
   <div>
     ${shelves.length ? `<section class="block">${label(`Видавництва · ${shelves.length}`)}<div class="name-rows">${shelves.map((s) => `<a class="name-row" href="/publishers/${attr(s.shelf.id)}"><b>${esc(s.shelf.name)}</b><span>${[books(s.total), s.shelf.tagline ? esc(s.shelf.tagline) : ""].filter(Boolean).join(" · ")}</span></a>`).join("")}</div></section>` : ""}

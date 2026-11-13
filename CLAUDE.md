@@ -180,6 +180,10 @@ A flag only when Max asks for one, or when the change could break what readers u
 - Try the prompt on production's catalog without keeping anything (30 a day):
   `curl -s https://chytai.org.ua/agent/ask -H "$H" -H 'content-type: application/json' -d '{"text":"…","model":"claude-sonnet-5-5"}'`.
 - Locally without a key: preload a fake `@anthropic-ai/sdk` (`node -r mock.js web/server.js`, ANTHROPIC_API_KEY=dummy).
+- The homepage box (and /search) takes a request too (flag `smart-search`, `web/intent.js`, no model): cue words
+  (`CUES`) and no book has every word → «Порадити книжки» first, Enter presses it (POST /ask); many words and no book
+  → only a line. The box is a growing textarea; app.js sends `home=1` to `/api/search`. A missed request or a search
+  taken for one: add or drop a cue, try with `node -e 'console.log(require("./web/intent").intent("…"))'`.
 
 ## Threads posts asking for a book (`web/threadsfind.js`, /admin/threads)
 

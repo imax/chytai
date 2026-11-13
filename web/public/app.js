@@ -471,7 +471,16 @@
   };
   outside(document);
   const liveSearch = (box, live, browse) => {
-    const input = $("input", box);
+    const input = $("input, textarea", box);
+    // The homepage's box (a textarea, one line that grows) also takes a request in one's own words (intent.js):
+    // the results then start with «Порадити книжки», and Enter presses it.
+    const big = input.tagName === "TEXTAREA";
+    const grow = () => ((input.style.height = "auto"), (input.style.height = `${input.scrollHeight}px`));
+    if (big) {
+      grow();
+      input.addEventListener("input", grow);
+      input.addEventListener("keydown", (e) => e.key === "Enter" && !e.shiftKey && !e.isComposing && (e.preventDefault(), box.requestSubmit()));
+    }
     const onSearch = location.pathname === "/search";
     const home = { url: location.href, title: document.title };
     let timer, ctrl, pushed = false, last = onSearch ? input.value.trim() : "";
@@ -480,7 +489,8 @@
     let pending = "", logged = onSearch ? last : "", logTimer;
     const flush = () => {
       clearTimeout(logTimer);
-      if (pending && pending !== logged) navigator.sendBeacon?.("/api/searched", new URLSearchParams({ q: pending }));
+      // A request went to /ask (it keeps its own); only searches are counted here.
+      if (pending && pending !== logged && !$("[data-primary]", live)) navigator.sendBeacon?.("/api/searched", new URLSearchParams({ q: pending }));
       logged = pending || logged;
       pending = "";
     };
@@ -507,7 +517,7 @@
       if (!q) return (live.innerHTML = ""), show("");
       ctrl = new AbortController();
       try {
-        const r = await fetch(`/api/search?${new URLSearchParams({ q })}`, { signal: ctrl.signal });
+        const r = await fetch(`/api/search?${new URLSearchParams(big ? { q, home: 1 } : { q })}`, { signal: ctrl.signal });
         live.innerHTML = await r.text();
         outside(live);
         show(q);
@@ -528,7 +538,15 @@
         run();
       });
     input.addEventListener("input", () => (clearTimeout(timer), (timer = setTimeout(run, 180))));
-    box.addEventListener("submit", (e) => (e.preventDefault(), clearTimeout(timer), (last = null), run()));
+    box.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      clearTimeout(timer);
+      last = null;
+      await run();
+      $("form[data-primary]", live)?.requestSubmit();
+    });
+    // «Можна й своїми словами: «…»»: the example goes into the box.
+    for (const b of $$("[data-fill]")) b.addEventListener("click", () => ((input.value = b.dataset.fill), big && grow(), input.focus(), (last = null), run()));
     return { input, run: () => ((last = null), run()) };
   };
   const box = $("form.search-box");
@@ -544,6 +562,10 @@
     liveSearch(find, results, [...main.children].filter((el) => el !== results));
   }
 
+  document.addEventListener("submit", (e) => {
+    const b = e.target.matches?.(".ask-go, .ask-go-line") && e.target.querySelector("button");
+    if (b) setTimeout(() => ((b.disabled = true), (b.textContent = "Добираю книжки…")));
+  });
   // «Хочу прочитати», «Прочитано», «Стежити», «Підписатися» in a list: sent in the background and changed
   // in place, so the page doesn't jump to the top after the server's redirect (Max, 2026-10-20). Without
   // JS (or when the request fails) the form posts as before. The book page's own buttons still reload it.
