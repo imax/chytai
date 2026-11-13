@@ -500,6 +500,8 @@
       ex.className = "ex-line";
       ex.setAttribute("aria-hidden", "true");
       input.after(ex);
+      // The same size as what one types (phones force fields to 16px, against iPhone's zoom).
+      ex.style.fontSize = getComputedStyle(input).fontSize;
       let k = 0, held = false;
       const show = () => {
         ex.textContent = examples[k];

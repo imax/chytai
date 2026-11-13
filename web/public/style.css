@@ -514,7 +514,7 @@ dialog .form { margin-top: 18px; }
   .hero h1 { font-size: 40px; }
   .search-box.big { margin-top: 22px; }
   .search-box.big input, .search-box.big textarea { font-size: 21px; padding-bottom: 10px; }
-  .search-box.big .ex-line { font-size: 21px; max-width: 100%; }
+  .search-box.big .ex-line { max-width: 100%; }
   .ask-in .wide-only { display: none; }
   .ask-in .narrow-only { display: inline; }
   .search-box.query input, .search-box.query textarea { font-size: 28px; }
