@@ -1192,6 +1192,11 @@ app.get("/ask/:id", (req, res) => {
 });
 const askItems = (req, a) =>
   a.items.map((x) => ({ ...x, book: store.book(x.id) && workFor(req, store.book(x.id)), mine: req.user ? store.entry(req.user.id, x.id)?.status || "" : "" })).filter((x) => x.book);
+// Only Max deletes an answer (Max, 2026-11-13): gone from its page and «Що питають інші»; the same text asked again is a new answer.
+app.post("/ask/:id/delete", owner, (req, res) => {
+  asker.remove(req.params.id);
+  res.redirect(303, "/ask");
+});
 app.get("/api/ask/:id", (req, res) => res.set("Cache-Control", "no-store").json({ status: asker.get(req.params.id)?.status || "" }));
 // A thread tries the prompt on production's catalog without keeping anything (the answer is only returned):
 // POST /agent/ask {"text": "...", "model": "claude-sonnet-5-5"}. 30 a day.

@@ -3281,7 +3281,8 @@ function askAnswerPage({ user, ask, items, canAsk = false, owner = false }) {
     return `<li class="out">${a ? `${esc(a)}, ` : ""}«${esc(String(t).split(": ")[0])}»</li>`;
   }).join("")}</ol>` : ""}
   ${wait ? `<p class="ask-wait advice-wait" id="ask-wait">${ASK_STEPS[0]}</p>` : say ? `<p class="lead muted">${say}</p>` : ""}
-  ${wait ? "" : `<div class="acts ask-acts">${items.length ? `<button type="button" class="btn small" data-share="${attr(ORIGIN + href)}" data-title="Що почитати далі">Поділитися</button><button type="button" class="btn small" id="ask-copy">Скопіювати</button>` : ""}${canAsk ? `<a class="btn small primary" href="/ask">Спитати ще</a>` : ""}</div>`}
+  ${wait ? "" : `<div class="acts ask-acts">${items.length ? `<button type="button" class="btn small" data-share="${attr(ORIGIN + href)}" data-title="Що почитати далі">Поділитися</button><button type="button" class="btn small" id="ask-copy">Скопіювати</button>` : ""}${canAsk ? `<a class="btn small primary" href="/ask">Спитати ще</a>` : ""}${owner ? `<button class="btn small danger" form="ask-del">Видалити</button>` : ""}</div>`}
+  ${owner ? `<form method="post" action="${attr(href)}/delete" id="ask-del" onsubmit="return confirm('Видалити цю пораду?')"></form>` : ""}
 </section>
 ${items.length && !wait ? `<section class="lrows">${rows}</section>${more.length ? `<p class="ask-out">Інших книжок зі списку на Chytai поки немає.</p>` : ""}<p class="small muted ask-note">Порадив Claude (AI).</p>` : ""}
 ${owner && !wait ? `<details class="small muted ask-note"><summary>Для вас: ${esc(ask.model)} · $${Number(ask.cost).toFixed(3)} · ${(ask.ms / 1000).toFixed(1)} с · переглядів ${ask.views}${ask.missed.length ? ` · немає в каталозі ${ask.missed.length}` : ""}</summary>${ask.missed.map((m) => `<p>${esc(m.title)}${m.author ? ` · ${esc(m.author)}` : ""}</p>`).join("")}</details>` : ""}

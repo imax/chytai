@@ -127,6 +127,9 @@ class Ask {
     for (const e of all.slice(top.length)) if (e.x && cards.length < FIT_MIN) cards.push(e.x);
     return { ...r, items: cards, more: top.filter((e) => e.m).map((e) => e.m), missed };
   }
+  remove(id) {
+    return this.db.prepare("DELETE FROM ask_recs WHERE id = ?").run(String(id || "")).changes;
+  }
   // An answer was opened: kept for another half year from now.
   opened(id) {
     this.db.prepare("UPDATE ask_recs SET seen = ?, views = views + 1 WHERE id = ?").run(now(), id);

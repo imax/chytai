@@ -170,6 +170,7 @@ A flag only when Max asks for one, or when the change could break what readers u
   Claude also says `fit`: how many of its books truly fit (3–10). `Ask.get()` names the top `fit`: the catalog's as cards
   (at least 3 from further down when we have them), the rest as grey text in the plain list («Інших книжок … поки немає»).
   Each answer at /ask/<id>, open to anyone; same text again = kept answer. Unopened 180 days → deleted.
+  Max (owner only) deletes one with «Видалити» on its page (`POST /ask/<id>/delete`, `Ask.remove`).
   A restart (deploy) cuts answers off mid-call: at start `asker.resume()` reruns the last 10 minutes' `wait` / `fail`.
   The answer page shows a plain «Автор, «Назва»» list (copyable); /ask lists `asker.recent()` by `topic` (Claude names it in
   the same call; older rows get one from Opus at start, `asker.topics()`).
