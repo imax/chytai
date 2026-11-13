@@ -487,12 +487,20 @@ async function openEpub(payload, { posKey, source }) {
   $("#btn-search").classList.remove("hidden");
 
   // Page-accurate progress needs the locations index; build it in the background.
-  book.locations.generate(1600).then(() => {
+  // The reader may close the book or open another before it is done: closing destroys this book's
+  // locations under the running job (iPhone, «this._locations.length», 2026-11-12), so that failure
+  // is expected, and the result must not touch the next book.
+  const opened = book;
+  if (!opened) return;
+  opened.locations.generate(1600).then(() => {
+    if (book !== opened) return;
     book.locationsReady = true; // before this, length() counts only the chapters done so far
     const location = rendition?.currentLocation();
     updateProgress(location);
     if (current && location?.start) window.reader.savePosition(current.posKey, location.start.cfi, readingProgress(location));
     addTocPages(book).then(() => window.PhoneRead?.ticks());
+  }, (err) => {
+    if (book === opened) throw err;
   });
 }
 
