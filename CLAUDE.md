@@ -182,7 +182,11 @@ A flag only when Max asks for one, or when the change could break what readers u
 - Locally without a key: preload a fake `@anthropic-ai/sdk` (`node -r mock.js web/server.js`, ANTHROPIC_API_KEY=dummy).
 - The homepage box (and /search) takes a request too (flag `smart-search`, `web/intent.js`, no model): cue words
   (`CUES`) and no book has every word → «Порадити книжки» first, Enter presses it (POST /ask); many words and no book
-  → only a line. The box is a growing textarea; app.js sends `home=1` to `/api/search`. A missed request or a search
+  → only a line. Variant B (Max chose it on a design canvas): «Порадити книжки ↵» takes the place of «Enter ↵» in the
+  field (`body.asking`), the line under it offers «Шукати як назву» (`plain=1`). The box is a growing textarea; app.js
+  sends `home=1` to `/api/search`.
+- The answer streams (`Ask.run` → `json(…, onText)` → `partialBooks`): each catalog book is saved to `items` while
+  `status = 'wait'`, and the waiting page polls `/api/ask/<id>` (1.5 s) for `rows`. A broken stream falls back to one call. A missed request or a search
   taken for one: add or drop a cue, try with `node -e 'console.log(require("./web/intent").intent("…"))'`.
 
 ## Threads posts asking for a book (`web/threadsfind.js`, /admin/threads)

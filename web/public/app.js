@@ -475,6 +475,16 @@
     // The homepage's box (a textarea, one line that grows) also takes a request in one's own words (intent.js):
     // the results then start with «Порадити книжки», and Enter presses it.
     const big = input.tagName === "TEXTAREA";
+    // «Порадити книжки ↵» in the field and the line under it follow the results: a request puts body.asking on.
+    // «Шукати як назву» turns it off for these words (`plain`), until they change.
+    let plain = false;
+    const askIn = $(".ask-in", box);
+    // The button narrows the field: its height is measured again.
+    const asking = () => big && (document.body.classList.toggle("asking", !!$("form[data-primary]", live)), grow());
+    if (askIn) askIn.hidden = false;
+    askIn?.addEventListener("click", () => box.requestSubmit());
+    for (const b of $$("[data-plain]")) b.addEventListener("click", () => ((plain = true), (last = null), run(), input.focus()));
+    if (big) input.addEventListener("input", () => (plain = false));
     const grow = () => ((input.style.height = "auto"), (input.style.height = `${input.scrollHeight}px`));
     if (big) {
       grow();
@@ -517,8 +527,9 @@
       if (!q) return (live.innerHTML = ""), show("");
       ctrl = new AbortController();
       try {
-        const r = await fetch(`/api/search?${new URLSearchParams(big ? { q, home: 1 } : { q })}`, { signal: ctrl.signal });
+        const r = await fetch(`/api/search?${new URLSearchParams(big ? { q, home: 1, ...(plain ? { plain: 1 } : {}) } : { q })}`, { signal: ctrl.signal });
         live.innerHTML = await r.text();
+        asking();
         outside(live);
         show(q);
         clearTimeout(logTimer);
@@ -552,6 +563,7 @@
   const box = $("form.search-box");
   const live = $("#live");
   if (box && live) liveSearch(box, live, $$("#browse"));
+  if (box && live && $("textarea", box)) document.body.classList.toggle("asking", !!$("form[data-primary]", live));
   const find = $("header form.find");
   const main = $("main");
   if (find && main) {
@@ -565,6 +577,8 @@
   document.addEventListener("submit", (e) => {
     const b = e.target.matches?.(".ask-go, .ask-go-line") && e.target.querySelector("button");
     if (b) setTimeout(() => ((b.disabled = true), (b.textContent = "Добираю книжки…")));
+    const inField = e.target.matches?.("[data-primary]") && $(".ask-in");
+    if (inField) setTimeout(() => ((inField.disabled = true), (inField.textContent = "Добираю…")));
   });
   // «Хочу прочитати», «Прочитано», «Стежити», «Підписатися» in a list: sent in the background and changed
   // in place, so the page doesn't jump to the top after the server's redirect (Max, 2026-10-20). Without

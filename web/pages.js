@@ -1396,8 +1396,8 @@ function readPage({ user, f, filters, picks, finish, ua, short, free, wanted, ge
   const body = `
 <section class="hero">
   <h1>Що почитати?</h1>
-  <form class="search-box big" action="/search" role="search">${smart ? bigBox("") : plainBox()}<span class="enter">Enter ↵</span></form>
-  ${smart ? `<p class="ask-link">Можна й своїми словами: <button type="button" class="text-link" data-fill="щось як Мураками, але коротше">«щось як Мураками, але коротше»</button>.</p>` : ask ? `<p class="ask-link">Або <a class="text-link" href="/ask">напишіть, що вам сподобалось</a>, і порадимо книжки.</p>` : ""}
+  <form class="search-box big" action="/search" role="search">${smart ? bigBox("") : plainBox()}<span class="enter">Enter ↵</span>${smart ? askIn : ""}</form>
+  ${smart ? askHint : ask ? `<p class="ask-link">Або <a class="text-link" href="/ask">напишіть, що вам сподобалось</a>, і порадимо книжки.</p>` : ""}
   ${chips}
 </section>
 <div id="live" data-block="search"></div>
@@ -1750,7 +1750,8 @@ ${parts.first}
 
 function searchPage({ q, user, results, smart = false }) {
   const body = `
-<form class="search-box big query" action="/search" role="search">${smart ? bigBox(results.askText || q, !q) : plainBox(q, !q)}<span class="enter">Enter ↵</span></form>
+<form class="search-box big query" action="/search" role="search">${smart ? bigBox(results.askText || q, !q) : plainBox(q, !q)}<span class="enter">Enter ↵</span>${smart ? askIn : ""}</form>
+${smart ? askHint : ""}
 <div id="live" data-block="search">${searchResults({ q, user, ...results })}</div>`;
   return layout({ title: q ? `${q} · Пошук` : "Пошук", body, user, path: "/search", q });
 }
@@ -1759,6 +1760,10 @@ function searchPage({ q, user, results, smart = false }) {
 // /api/search for search as you type.
 // The homepage's box, also on /search: one line that grows when the words do (a request in one's own words, intent.js).
 const bigBox = (value, focus = false) => `<textarea name="q" rows="1" enterkeyhint="search" placeholder="назва, автор, жанр або видавництво" aria-label="Пошук або що хочеться прочитати" autocomplete="off" spellcheck="false"${focus ? " autofocus" : ""}>${esc(value)}</textarea>`;
+// Variant B (Max, 2026-11-13, canvas «Розумний пошук: варіанти»): when the words ask for books, «Порадити книжки ↵»
+// takes the place of «Enter ↵» in the field and the line under it offers «Шукати як назву» (app.js, body.asking).
+const askIn = `<button type="button" class="btn primary small ask-in" hidden><span class="wide-only">Порадити книжки ↵</span><span class="narrow-only">Порадити</span></button>`;
+const askHint = `<p class="ask-link"><span class="when-idle">Напишіть, що хочете почитати, порадимо книжки з каталогу.</span><span class="when-ask">Схоже на прохання: Enter попросить поради. <button type="button" class="text-link" data-plain>Шукати як назву</button></span></p>`;
 // Without the flag `smart-search`: the plain one line, as before.
 const plainBox = (value = "", focus = false) => `<input type="search" name="q"${value ? ` value="${attr(value)}"` : ""} placeholder="назва, автор, жанр або видавництво" aria-label="Пошук" autocomplete="off"${focus ? " autofocus" : ""}>`;
 // askMode (intent.js): "ask" — the words ask for books and no book answers them: «Порадити книжки» comes first and
@@ -3213,11 +3218,9 @@ ${askForm(text, error, others.slice(0, 10)[Math.floor(Math.random() * Math.min(1
 ${others.length ? `<section class="ask-others">${label("Що питають інші")}${others.map((o) => `<a class="ask-other" href="/ask/${attr(o.id)}"><span class="q">${esc(o.topic || short(o.text))}</span></a>`).join("")}</section>` : ""}`;
   return layout({ title: "Що почитати далі?", body, user, path: "/ask", canonical: "/ask", description: "Напишіть, що вам сподобалось, і Chytai порадить книжки." });
 }
-// ask: the row from ask.js; items: [{ id, book, why, series, mine }]; canAsk: the field is open to this visitor.
-function askAnswerPage({ user, ask, items, canAsk = false, owner = false }) {
-  const wait = ask.status === "wait";
-  const say = { fail: "Не вдалося дібрати книжки. Спробуйте ще раз.", none: "У каталозі не знайшлося книжок для цієї поради.", off: "Тут радимо лише книжки. Напишіть, що читали і що сподобалось." }[ask.status];
-  const rows = items
+// The answer's books as numbered rows; also served alone while the answer is still coming (/api/ask/<id>).
+function askRows(items) {
+  return items
     .map(
       (x, i) => `<article class="lrow${x.mine === "read" ? " done" : ""}" id="b${i + 1}"><span class="n">${i + 1}</span><a class="cover-link" href="${attr(x.book.href)}">${cover(x.book, "md")}</a><div class="row-body">
     <h3><a href="${attr(x.book.href)}">${esc(x.book.title)}</a></h3>
@@ -3227,6 +3230,12 @@ function askAnswerPage({ user, ask, items, canAsk = false, owner = false }) {
   </div></article>`
     )
     .join("\n");
+}
+// ask: the row from ask.js; items: [{ id, book, why, series, mine }]; canAsk: the field is open to this visitor.
+function askAnswerPage({ user, ask, items, canAsk = false, owner = false }) {
+  const wait = ask.status === "wait";
+  const say = { fail: "Не вдалося дібрати книжки. Спробуйте ще раз.", none: "У каталозі не знайшлося книжок для цієї поради.", off: "Тут радимо лише книжки. Напишіть, що читали і що сподобалось." }[ask.status];
+  const rows = askRows(items);
   const href = `/ask/${ask.id}`;
   // The plain list: the catalog's books, then the ones Chytai lacks as grey text (Max, 2026-11-11: «список текстовий …
   // в каталозі вже вибирати ті, що є»); how many is the answer's fit (Ask.get).
@@ -3235,28 +3244,29 @@ function askAnswerPage({ user, ask, items, canAsk = false, owner = false }) {
   const body = `<section class="list-head ask-head">
   <p class="kicker">${canAsk ? `<a href="/ask">Що почитати далі</a>` : "Що почитати далі"}${count ? ` · ${books(count)}` : ""}</p>
   <blockquote class="ask-q">${askText(ask.text)}</blockquote>
-  ${items.length ? `<ol class="ask-sum">${items.map((x, i) => `<li><a href="#b${i + 1}">${x.book.author ? `${esc(byline(x.book.author))}, ` : ""}«${esc(x.book.title)}»</a></li>`).join("")}${more.map((m) => {
+  ${items.length && !wait ? `<ol class="ask-sum">${items.map((x, i) => `<li><a href="#b${i + 1}">${x.book.author ? `${esc(byline(x.book.author))}, ` : ""}«${esc(x.book.title)}»</a></li>`).join("")}${more.map((m) => {
     // No Ukrainian edition anywhere (Ask.fill looked on book.ua): the original's name, not Claude's own translation.
     const [t, a] = m.ukFound === false && m.en ? [m.en, m.ea || m.author] : [m.title, m.author];
     return `<li class="out">${a ? `${esc(a)}, ` : ""}«${esc(String(t).split(": ")[0])}»</li>`;
   }).join("")}</ol>` : ""}
-  ${wait ? `<p class="ask-wait" id="ask-wait">Добираю книжки…</p>` : say ? `<p class="lead muted">${say}</p>` : ""}
+  ${wait ? `<p class="ask-wait" id="ask-wait">Добираю книжки з каталогу, зазвичай до півхвилини. Вони з’являтимуться тут по одній.</p>` : say ? `<p class="lead muted">${say}</p>` : ""}
   ${wait ? "" : `<div class="acts ask-acts">${items.length ? `<button type="button" class="btn small" data-share="${attr(ORIGIN + href)}" data-title="Що почитати далі">Поділитися</button><button type="button" class="btn small" id="ask-copy">Скопіювати</button>` : ""}${canAsk ? `<a class="btn small primary" href="/ask">Спитати ще</a>` : ""}</div>`}
 </section>
-${items.length ? `<section class="lrows">${rows}</section>${more.length ? `<p class="ask-out">Інших книжок зі списку на Chytai поки немає.</p>` : ""}<p class="small muted ask-note">Порадив Claude (AI).</p>` : ""}
+${wait ? `<section class="lrows" id="ask-rows">${rows}</section>` : ""}
+${items.length && !wait ? `<section class="lrows">${rows}</section>${more.length ? `<p class="ask-out">Інших книжок зі списку на Chytai поки немає.</p>` : ""}<p class="small muted ask-note">Порадив Claude (AI).</p>` : ""}
 ${owner && !wait ? `<details class="small muted ask-note"><summary>Для вас: ${esc(ask.model)} · $${Number(ask.cost).toFixed(3)} · ${(ask.ms / 1000).toFixed(1)} с · переглядів ${ask.views}${ask.missed.length ? ` · немає в каталозі ${ask.missed.length}` : ""}</summary>${ask.missed.map((m) => `<p>${esc(m.title)}${m.author ? ` · ${esc(m.author)}` : ""}</p>`).join("")}</details>` : ""}
 ${items.length ? `<script>document.getElementById("ask-copy")?.addEventListener("click", async (e) => {
   // The list as plain lines with the answer's address, to paste into a post or a message.
   const lines = [...document.querySelectorAll(".ask-sum li")].map((li, i) => (i + 1) + ". " + li.textContent.trim());
   try { await navigator.clipboard.writeText(lines.join("\\n") + "\\n\\n" + ${JSON.stringify(ORIGIN + href)}); e.target.textContent = "Скопійовано"; setTimeout(() => (e.target.textContent = "Скопіювати"), 2000); } catch {}
 });</script>` : ""}
-${wait ? `<script>(() => { let n = 0; const go = async () => { const r = await fetch(${JSON.stringify(`/api${href}`)}).then((x) => x.json()).catch(() => ({})); if (r.status && r.status !== "wait") return location.reload(); if (++n === 15) document.getElementById("ask-wait").textContent = "Ще трохи…"; if (n < 90) setTimeout(go, 2000); }; setTimeout(go, 2500); })();</script>` : ""}`;
+${wait ? `<script>(() => { let n = 0; const go = async () => { const r = await fetch(${JSON.stringify(`/api${href}`)}).then((x) => x.json()).catch(() => ({})); if (r.status && r.status !== "wait") return location.reload(); const box = document.getElementById("ask-rows"); if (r.rows != null && r.rows !== box.innerHTML) box.innerHTML = r.rows; if (++n === 20) document.getElementById("ask-wait").textContent = "Ще трохи…"; if (n < 120) setTimeout(go, 1500); }; setTimeout(go, 1500); })();</script>` : ""}`;
   const first = ask.text.replace(/\s+/g, " ").trim();
   return layout({ title: ask.topic || "Що почитати далі", body, user, path: "/ask", canonical: href, noindex: true, description: [first.length > 160 ? `${first.slice(0, 157)}…` : first, items.length ? `${books(items.length)}: ${items.slice(0, 4).map((x) => x.book.title).join(", ")}` : ""].filter(Boolean).join(" "), image: abs(items.find((x) => x.book.cover)?.book.cover || ""), type: "article" });
 }
 
 module.exports = {
-  askPage, askAnswerPage,
+  askPage, askAnswerPage, askRows,
   asksPage, askTalkPage, setAskNav,
   commentsAdminPage,
   threadsAdminPage,

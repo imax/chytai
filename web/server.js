@@ -1187,12 +1187,15 @@ app.get("/ask/:id", (req, res) => {
   if (!a) return res.status(404).send(pages.messagePage({ title: "Немає такої поради", text: "", user: req.user }));
   if (a.status === "wait" && Date.now() - Date.parse(a.created) > 5 * 60000) a.status = "fail";
   if (!req.owner) asker.opened(a.id);
-  const items = a.items
-    .map((x) => ({ ...x, book: store.book(x.id) && workFor(req, store.book(x.id)), mine: req.user ? store.entry(req.user.id, x.id)?.status || "" : "" }))
-    .filter((x) => x.book);
-  res.send(pages.askAnswerPage({ user: req.user, ask: a, items, canAsk: askOn(req), owner: !!req.owner }));
+  res.send(pages.askAnswerPage({ user: req.user, ask: a, items: askItems(req, a), canAsk: askOn(req), owner: !!req.owner }));
 });
-app.get("/api/ask/:id", (req, res) => res.set("Cache-Control", "no-store").json({ status: asker.get(req.params.id)?.status || "" }));
+const askItems = (req, a) =>
+  a.items.map((x) => ({ ...x, book: store.book(x.id) && workFor(req, store.book(x.id)), mine: req.user ? store.entry(req.user.id, x.id)?.status || "" : "" })).filter((x) => x.book);
+// The waiting page asks every 1.5 s: the status, and while it waits the books found so far (the answer streams, ask.js run()).
+app.get("/api/ask/:id", (req, res) => {
+  const a = asker.get(req.params.id);
+  res.set("Cache-Control", "no-store").json({ status: a?.status || "", ...(a?.status === "wait" ? { rows: pages.askRows(askItems(req, a)) } : {}) });
+});
 // A thread tries the prompt on production's catalog without keeping anything (the answer is only returned):
 // POST /agent/ask {"text": "...", "model": "claude-sonnet-5-5"}. 30 a day.
 let agentAsks = [];
@@ -2590,7 +2593,7 @@ const lastFound = new Map();
 // Max, 2026-11-13). Nothing is asked of Claude until the reader presses it. The header's box stays a plain search.
 const { intent } = require("./intent");
 const smartOn = (req) => askOn(req) && flags.on("smart-search", req.user);
-const askFor = (req, text, results) => (smartOn(req) && text ? { askText: text, askMode: intent(text, { answered: results.outside === false }) } : {});
+const askFor = (req, text, results) => (smartOn(req) && text && !req.query.plain ? { askText: text, askMode: intent(text, { answered: results.outside === false }) } : {});
 app.get("/search", (req, res) => {
   const full = String(req.query.q || "").trim().slice(0, 1500);
   const q = full.slice(0, 100);
