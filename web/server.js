@@ -1165,6 +1165,7 @@ const asker = new Ask(store, {
   },
 });
 if (bg.ROLE !== "jobs") setInterval(() => asker.cleanup(), 24 * 3600 * 1000).unref();
+if (bg.ROLE !== "jobs") setTimeout(() => asker.resume(), 3000).unref();
 if (bg.ROLE !== "jobs") setTimeout(() => asker.topics().catch((e) => console.error("ask topics:", e.message)), 60000).unref();
 const askOn = (req) => flags.on("ask", req.user);
 // What others asked, with the first covers of each answer.

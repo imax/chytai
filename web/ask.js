@@ -409,6 +409,19 @@ class Ask {
   // Answers made before topics existed get one (Opus, a line each; a few rows once, then nothing to do). Haiku's
   // first go read clumsily («Детективні та трилери серіали й цикли книг»): those rows are named again once
   // (meta `ask:topics`).
+  // After a restart (a deploy stops the machine mid-answer, 2026-11-13): answers asked in the last 10 minutes that a
+  // stop cut off ('wait', or 'fail' with no model) run again, so the waiting page, which keeps asking, gets its answer.
+  resume() {
+    if (!this.client) return 0;
+    const since = new Date(Date.now() - 10 * 60000).toISOString();
+    const rows = this.db.prepare("SELECT id FROM ask_recs WHERE created >= ? AND (status = 'wait' OR (status = 'fail' AND model = ''))").all(since);
+    for (const r of rows) {
+      this.db.prepare("UPDATE ask_recs SET status = 'wait' WHERE id = ?").run(r.id);
+      this.run(r.id).catch((e) => this.log(`ask ${r.id} again: ${e.message}`));
+    }
+    return rows.length;
+  }
+
   async topics() {
     if (!this.client) return 0;
     const again = !this.db.get("ask:topics");
