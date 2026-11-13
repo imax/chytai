@@ -2457,12 +2457,14 @@ app.get("/publishers", (req, res) => {
 // The publisher's books Chytai readers like most (Max, 2026-10-30: «з найвищими оцінками читачів … або у Хочу
 // прочитати»): a reader's 4–5 ★, «Хочу прочитати» or «Прочитано» is a vote for the book, a 1–2 ★ takes one back. A translation
 // counts its original's entries too (many readers imported the English edition from Goodreads).
+// One key for a book's editions and translations.
+const workKey = (id) => {
+  const c = store.canonical(id);
+  const tr = store.translations?.get(c);
+  return tr?.size ? [c, ...tr].sort()[0] : c;
+};
 function shelfFavourites(items, limit = Infinity) {
-  const key = (id) => {
-    const c = store.canonical(id);
-    const tr = store.translations?.get(c);
-    return tr?.size ? [c, ...tr].sort()[0] : c;
-  };
+  const key = workKey;
   const mine = new Map(); // work -> the shelf's item: a Ukrainian title with a cover first
   const rank = (it) => /[а-яіїєґ]/i.test(it.title) * 2 + !!it.cover;
   for (const it of items) {
@@ -2484,15 +2486,65 @@ function shelfFavourites(items, limit = Infinity) {
     .sort((a, b) => b.votes - a.votes || (b.avg ?? 0) - (a.avg ?? 0) || !!b.item.cover - !!a.item.cover)
     .slice(0, limit);
 }
+// Publishers whose books the same readers have («Схожі видавництва», Max liked it on the design canvas, 2026-11-13):
+// the cosine of the two shelves' readers, at least two in common. A publisher's own books only (Старий Лев sells
+// other publishers' too, `edition`). Counted for all shelves at once and kept an hour (~0.1 s on 64 shelves).
+let similarKept = { at: 0, map: new Map() };
+function similarShelves(shelf) {
+  if (Date.now() - similarKept.at > 60 * 60 * 1000) {
+    const shelvesOf = new Map(); // work -> shelf ids
+    for (const s of store.shelves) {
+      if (s.joinOnly || s.draft || s.kind === "free") continue;
+      for (const it of visible(s)) {
+        if (s.kind === "publisher" && it.edition) continue;
+        const k = workKey(it.id);
+        (shelvesOf.get(k) || shelvesOf.set(k, new Set()).get(k)).add(s.id);
+      }
+    }
+    const readers = new Map(); // shelf id -> reader ids
+    for (const { id, reader } of social.all()) for (const sid of shelvesOf.get(workKey(id)) || []) (readers.get(sid) || readers.set(sid, new Set()).get(sid)).add(reader.id);
+    const map = new Map();
+    for (const [a, ra] of readers) {
+      const near = [];
+      for (const [b, rb] of readers) {
+        if (a === b) continue;
+        let n = 0;
+        for (const r of ra.size < rb.size ? ra : rb) if ((ra.size < rb.size ? rb : ra).has(r)) n++;
+        if (n >= 2) near.push({ id: b, score: n / Math.sqrt(ra.size * rb.size) });
+      }
+      map.set(a, near.sort((x, y) => y.score - x.score).slice(0, 10).map((x) => x.id));
+    }
+    similarKept = { at: Date.now(), map };
+  }
+  return similarKept.map.get(shelf.id) || [];
+}
+// What readers do with a publisher's books, one line a book (the page showed «Мова-меч» six times in a row,
+// design review 2026-11-13): the newest act, a note first when there is one, and how many others.
+function feedByBook(rows, n) {
+  const by = new Map();
+  for (const r of rows) {
+    const k = r.series ? `s:${r.series.name}` : r.book.href;
+    (by.get(k) || by.set(k, []).get(k)).push(r);
+  }
+  return [...by.values()].slice(0, n).map((list) => {
+    const noted = list.findIndex((r) => r.entry.note);
+    if (noted > 0) list.unshift(...list.splice(noted, 1));
+    return list;
+  });
+}
+const SMALL_SHELF = 24; // up to this many books: all of them at once, no search or genres
 app.get("/publishers/:id", (req, res) => {
   const shelf = store.shelf(req.params.id);
   if (!shelf || shelf.joinOnly || (shelf.draft && !req.owner)) return res.status(404).send(pages.messagePage({ title: "Немає такого видавництва", text: "", user: req.user }));
   const items = visible(shelf);
-  const fresh = newest(items).slice(0, 6);
+  const small = items.length <= SMALL_SHELF;
+  const fresh = small ? [] : newest(items).slice(0, 6);
   const works = new Set(items.map((it) => store.canonical(it.id)));
   const liked = shelfFavourites(items);
-  const others = shelvesFor(req).filter((s) => s.id !== shelf.id).map((s) => ({ shelf: s, total: visible(s).length }));
-  res.send(pages.publisherPage({ part: restPart(req, res), shelf, subscribed: store.subscribed(req.user?.id, shelf.id), user: req.user, fresh, liked, feed: social.feed({ limit: 6, books: works }), others, visible }));
+  const mine = shelvesFor(req).filter((s) => s.id !== shelf.id);
+  const byId = new Map(mine.map((s) => [s.id, s]));
+  const similar = similarShelves(shelf).map((id) => byId.get(id)).filter(Boolean).slice(0, 5).map((s) => ({ shelf: s, total: visible(s).length }));
+  res.send(pages.publisherPage({ part: restPart(req, res), shelf, subscribed: store.subscribed(req.user?.id, shelf.id), user: req.user, fresh, liked, feed: feedByBook(social.feed({ limit: 16, books: works }), 6), similar, all: mine.length + 1, small, visible }));
 });
 app.get("/publishers/:id/favourites", (req, res) => {
   const shelf = store.shelf(req.params.id);

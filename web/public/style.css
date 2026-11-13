@@ -418,6 +418,20 @@ aside .small.muted { margin-top: -8px; margin-bottom: 14px; }
 .others-list a:first-child { padding-top: 0; }
 .others-list b { font: 600 17px var(--serif); }
 .others-list span { font-size: 12.5px; color: var(--muted); text-align: right; }
+/* A publisher's page (design review 2026-11-13): what a subscription gives, as a hint over the button and a line under
+   it once subscribed; genres four in sight and «ще N»; a small publisher's books across the page, readers under them. */
+.sub-act { position: relative; display: flex; flex-direction: column; align-items: flex-end; gap: 10px; max-width: 300px; }
+.sub-note { font-size: 13px; line-height: 1.45; color: var(--muted); text-align: right; }
+.sub-tip { display: none; position: absolute; top: calc(100% + 8px); right: 0; width: 280px; z-index: 5; padding: 10px 14px; border-radius: 6px; background: var(--ink); color: var(--paper); font-size: 13px; line-height: 1.4; }
+.sub-act:hover .sub-tip, .sub-act:focus-within .sub-tip { display: block; }
+.genres:not(.open) .more-g { display: none; }
+.genres.open .g-more { display: none; }
+.g-more { background: none; border: 0; padding: 0 0 2px; font-size: 14px; color: var(--ink); cursor: pointer; }
+.g-more:hover { color: var(--accent); }
+.g-more::after { content: " ▾"; }
+.grid.five.cat { gap: 32px 28px; }
+.pub-low { margin-top: 56px; }
+.pub-low > aside:only-child { grid-column: 1 / -1; max-width: 520px; }
 .found { color: var(--muted); font-size: 14px; margin: 16px 0 40px; }
 .search-box.query { margin-top: 0; max-width: 820px; }
 .search-box.query input, .search-box.query textarea { font-size: 40px; }
@@ -518,6 +532,18 @@ dialog .form { margin-top: 18px; }
   .pick .acts { margin-top: 8px; }
   .grid.six { gap: 18px 14px; }
   .shop-cols { grid-template-columns: minmax(0, 1fr); gap: 32px; }
+  /* A publisher's page on a phone: «Фаворити» and «Нове» one row that scrolls sideways, the catalog in three columns
+     (four cut the titles mid-word), genres one row that scrolls; the subscription line under the button, no hint. */
+  .grid.six.slide { display: flex; gap: 14px; overflow-x: auto; scrollbar-width: none; margin: 0 -20px; padding: 0 20px 6px; }
+  .grid.six.slide > .card { flex: none; width: 104px; }
+  #rows.grid.four, .grid.five.cat { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 22px 14px; }
+  .tabs.genres { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; margin-left: -20px; margin-right: -20px; padding: 0 20px 2px; }
+  .genres .tab { white-space: nowrap; }
+  .genres .more-g { display: inline-block !important; }
+  .genres .g-more { display: none; }
+  .sub-act { align-items: flex-start; max-width: none; }
+  .sub-note { text-align: left; }
+  .sub-tip { display: none !important; }
   .shop { padding: 0; border-left: 0; }
   .shop .tiny b, .shop .tiny .t-by { display: none; }
   .shop .grid.five { gap: 10px; }

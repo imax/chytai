@@ -48,7 +48,8 @@
         else if (v === "common") { if (it.dataset.common !== "1") return false; }
         else if (it.dataset.status !== v) return false;
       }
-      if (filters.genre && !(it.dataset.genre || "").split("|").includes(filters.genre)) return false;
+      if (filters.genre === "*new") { if (it.dataset.fresh !== "1") return false; } // a publisher's «Нові»
+      else if (filters.genre && !(it.dataset.genre || "").split("|").includes(filters.genre)) return false;
       if (filters.avail && it.dataset.avail !== filters.avail) return false;
       if (g && !(it.dataset.tags || "").split("|").includes(g)) return false;
       return true;
@@ -110,6 +111,9 @@
     q?.addEventListener("input", again);
     genre?.addEventListener("change", again);
     sort?.addEventListener("change", resort);
+    // A publisher's genres: four in sight, «ще N» opens the rest; «усі 129» over «Нове» picks «Нові» (2026-11-13).
+    for (const btn of $$(".g-more")) btn.addEventListener("click", () => btn.parentElement.classList.add("open"));
+    for (const a of $$("[data-pick]")) a.addEventListener("click", () => $$(".tabs[data-filter] .tab").find((t) => t.dataset.v === a.dataset.pick)?.click());
     for (const group of $$(".tabs[data-filter]")) {
       // Tabs with data-param are links (?shelf=read): back and forward in the browser and a shared link
       // show the same tab (Max, 2026-11-08).

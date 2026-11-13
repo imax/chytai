@@ -1691,58 +1691,85 @@ ${librariesBlock(libraries)}`;
 }
 
 // A book readers like, with its stars and how many want to read it.
-const favCard = (x) => card(x.item, { avg: x.avg, extra: x.want ? `<p class="meta pop-n">${count(x.want, "хоче", "хочуть", "хочуть")} прочитати</p>` : "" });
+const favCard = (x, more = "") => card(x.item, { avg: x.avg, extra: (x.want ? `<p class="meta pop-n">${count(x.want, "хоче", "хочуть", "хочуть")} прочитати</p>` : "") + more });
 
 // All of a publisher's books Chytai readers like (/publishers/:id/favourites, Max 2026-10-30).
 function publisherFavouritesPage({ shelf, user, liked }) {
   const body = `
 ${pageHead({ crumbs: `<a href="/publishers">Видавництва</a> / <a href="/publishers/${attr(shelf.id)}">${esc(shelf.name)}</a>`, kicker: esc(shelf.name), title: "Фаворити читачів Chytai", sub: books(liked.length) })}
 <section class="block">
-  ${liked.length ? `<div class="grid six">${liked.map(favCard).join("")}</div>` : `<p class="empty">Читачі ще не оцінили книжок цього видавництва.</p>`}
+  ${liked.length ? `<div class="grid six">${liked.map((x) => favCard(x)).join("")}</div>` : `<p class="empty">Читачі ще не оцінили книжок цього видавництва.</p>`}
 </section>`;
   return layout({ title: `Фаворити читачів · ${shelf.name}`, body, user, path: "/publishers", canonical: `/publishers/${encodeURIComponent(shelf.id)}/favourites`, description: `Книжки ${shelf.name}, які читачі Chytai оцінили найвище або хочуть прочитати.` });
 }
 
-function publisherPage({ shelf, subscribed, user, fresh, liked = [], feed, others, visible = (s) => s.items, part = "" }) {
+// What readers do with one of the publisher's books, one line a book (server.js feedByBook): two readers, then how
+// many more; the note, when there is one, is the first reader's.
+function bookFeedRow(list) {
+  const { book, series, entry: e } = list[0];
+  const who = (r, t) => `<span class="who"><a href="${attr(r.reader.href)}"><b>${esc(r.reader.name)}</b></a> ${did(r.entry)}${t ? ` · ${esc(t)}` : ""}</span>`;
+  const rest = list.length - 2;
+  return `<article class="feed-row${e.note ? " noted" : ""}" data-rating="${e.rating ?? ""}">
+  <a class="cover-link" href="${attr(book.href)}">${cover(book, "xs")}</a>
+  <div><a class="title" href="${attr(book.href)}">${esc(series ? series.name : book.title)}</a>${list.slice(0, 2).map((r, i) => who(r, i === 0 ? when(r.entry) : "")).join("")}${rest > 0 ? `<span class="who">і ще ${count(rest, "читач", "читачі", "читачів")}</span>` : ""}${e.note ? `<p class="note">${noteOf(e, book.id)}</p>` : ""}</div>
+</article>`;
+}
+
+// The publisher's button: what a subscription gives, as a hint before and one line after (Max, 2026-11-13).
+const SUB_GIVES = "Нові книжки прийдуть у п'ятничному листі й будуть першими в «Нове у видавництвах» на головній.";
+function publisherSubscribe(shelf, subscribed, user) {
+  if (subscribed && user) return `<div class="sub-act">${subscribeButton(shelf.id, true, user, true)}<p class="sub-note">${SUB_GIVES}</p></div>`;
+  return `<div class="sub-act">${subscribeButton(shelf.id, false, user, true)}<p class="sub-tip" role="tooltip">${SUB_GIVES}</p></div>`;
+}
+
+function publisherPage({ shelf, subscribed, user, fresh, liked = [], feed = [], similar = [], all = 0, small = false, visible = (s) => s.items, part = "" }) {
   const items = visible(shelf);
-  const parts = twoParts(items.map((it) => [card(it, { data: ` data-genre="${attr((it.genres || []).join("|"))}" data-avail="${attr(it.status || "")}" data-search="${attr([it.title, it.author, it.authorOrig, it.altTitle].join(" ").toLowerCase())}"` })]), FIRST.grid, part);
+  const parts = twoParts(items.map((it) => [card(it, { data: ` data-genre="${attr((it.genres || []).join("|"))}"${it.isNew ? ' data-fresh="1"' : ""} data-avail="${attr(it.status || "")}" data-search="${attr([it.title, it.author, it.authorOrig, it.altTitle].join(" ").toLowerCase())}"` })]), small ? Infinity : FIRST.grid, part);
   if (part === "rest") return parts;
+  const newCount = items.filter((it) => it.isNew).length;
   // Filter chips from the publisher's own categories: only those with a few books that don't cover the
   // whole shelf, and only when there are at least two («Повне зібрання творів Лесі Українки 1» is a series,
-  // not a genre; Комора's one real category alone filters nothing useful).
+  // not a genre; Комора's one real category alone filters nothing useful). «Нові» first; four genres in sight,
+  // the rest behind «ще N» (on a phone: one row that scrolls).
   let genres = [...items.flatMap((it) => it.genres || []).reduce((m, g) => m.set(g, (m.get(g) || 0) + 1), new Map())].filter(([, n]) => n >= 3 && n < items.length).sort((a, b) => b[1] - a[1]).slice(0, 10);
   if (genres.length < 2) genres = [];
+  const SHOWN = 4;
+  const chips = small || (!genres.length && !newCount) ? "" : `<div class="tabs wrap genres" data-filter="genre"><button type="button" class="tab on" data-v="">Усі <span>${items.length}</span></button>${newCount && newCount < items.length ? `<button type="button" class="tab" data-v="*new">Нові <span>${newCount}</span></button>` : ""}${genres.map(([g, n], i) => `<button type="button" class="tab${i >= SHOWN ? " more-g" : ""}" data-v="${attr(g)}">${esc(g)} <span>${n}</span></button>`).join("")}${genres.length > SHOWN ? `<button type="button" class="g-more">ще ${genres.length - SHOWN}</button>` : ""}</div>`;
   // No filter by stock («Є · Очікується · Передзамовлення · Немає»): the site is for readers, not shopping (Max, 2026-10-28).
-  const newCount = items.filter((it) => it.isNew).length;
-  const body = `
-${pageHead({ crumbs: `<a href="/publishers">Видавництва</a> / ${esc(shelf.name)}`, kicker: shelf.kind === "audio" ? "Аудіокнигарня" : "Видавництво", title: esc(shelf.name), lead: esc(shelf.tagline), sub: [books(items.length), newCount ? `${newCount} ${plural(newCount, "нова", "нові", "нових")}` : "", `<a href="${attr(shelf.url)}" target="_blank" rel="noopener">${esc(host(shelf.url))} ↗</a>`].filter(Boolean).join(" · "), action: subscribeButton(shelf.id, subscribed, user, true) })}
-${liked.length >= 3 ? `<section class="block" data-block="liked">
-  ${label("Фаворити читачів Chytai", liked.length > 6 ? `<a href="/publishers/${attr(shelf.id)}/favourites">усі ${liked.length}</a>` : "")}
-  <div class="grid six">${liked.slice(0, 6).map(favCard).join("")}</div>
-</section>` : ""}
-${fresh.length ? `<section class="block">
-  ${label("Нове")}
-  <div class="grid six">${fresh.map((it) => card(it)).join("")}</div>
-  <p class="end-note"><a class="text-link" href="#catalog">Увесь каталог →</a></p>
-</section>` : ""}
-<div class="split">
-  <section class="block" id="catalog">
-    ${label(`Каталог · ${items.length}`)}
-    <div class="shelf-tools">
+  // A book of another publisher that this one sells (Старий Лев's shop) says whose it is.
+  const whose = (x) => (shelf.kind === "publisher" && x.item.edition ? `<p class="meta muted">вид. ${esc(x.item.edition)}</p>` : "");
+  const catalog = `<section class="block" id="catalog">
+    ${label(small ? `Книжки · ${items.length}` : `Каталог · ${items.length}`)}
+    ${small ? "" : `<div class="shelf-tools">
       <input type="search" id="q" placeholder="назва або автор" autocomplete="off">
-    </div>
-    ${genres.length ? `<div class="tabs wrap" data-filter="genre"><button type="button" class="tab on" data-v="">Усі <span>${items.length}</span></button>${genres.map(([g, n]) => `<button type="button" class="tab" data-v="${attr(g)}">${esc(g)} <span>${n}</span></button>`).join("")}</div>` : ""}
-    <div class="grid four" id="rows"${parts.rest}>
+    </div>`}
+    ${chips}
+    <div class="grid ${small ? "five" : "four"} cat" id="rows"${parts.rest}>
 ${parts.first}
     </div>
     <p class="empty hidden" id="empty">Нічого не знайшлося.</p>
     <p class="more hidden"><button type="button" class="text-link" id="more">Показати ще <span></span> →</button></p>
-  </section>
+  </section>`;
+  const readers = feed.length ? `<div data-block="pub-feed">${label("Читачі про ці книжки")}<div class="feed">${feed.map(bookFeedRow).join("")}</div></div>` : "";
+  const near = `<div data-block="pub-similar">${label(similar.length ? "Схожі видавництва" : "Інші видавництва", `<a href="/publishers">усі ${all}</a>`)}${similar.length ? `<div class="others-list">${similar.map((o) => `<a href="/publishers/${attr(o.shelf.id)}"><b>${esc(o.shelf.name)}</b><span>${books(o.total)}</span></a>`).join("")}</div>` : ""}</div>`;
+  const body = `
+${pageHead({ crumbs: `<a href="/publishers">Видавництва</a> / ${esc(shelf.name)}`, kicker: shelf.kind === "audio" ? "Аудіокнигарня" : "Видавництво", title: esc(shelf.name), lead: esc(shelf.tagline), sub: [books(items.length), newCount ? `${newCount} ${plural(newCount, "нова", "нові", "нових")}` : "", `<a href="${attr(shelf.url)}" target="_blank" rel="noopener">${esc(host(shelf.url))} ↗</a>`].filter(Boolean).join(" · "), action: publisherSubscribe(shelf, subscribed, user) })}
+${liked.length >= 3 ? `<section class="block" data-block="liked">
+  ${label("Фаворити читачів Chytai", liked.length > 6 ? `<a href="/publishers/${attr(shelf.id)}/favourites">усі ${liked.length}</a>` : "")}
+  <div class="grid six slide">${liked.slice(0, 6).map((x) => favCard(x, whose(x))).join("")}</div>
+</section>` : ""}
+${fresh.length ? `<section class="block">
+  ${label("Нове", newCount > fresh.length ? `<a href="#catalog" data-pick="*new">усі ${newCount}</a>` : "")}
+  <div class="grid six slide">${fresh.map((it) => card(it)).join("")}</div>
+</section>` : ""}
+${small ? `${catalog}
+<div class="split pub-low">${readers ? `<section>${readers}</section>` : ""}<aside>${near}</aside></div>` : `<div class="split">
+  ${catalog}
   <aside>
-    ${feed.length ? `${label(`Читачі про книжки ${esc(shelf.name)}`)}${feedList(feed)}` : ""}
-    ${others.length ? `${label("Інші видавництва")}<div class="others-list">${others.map((o) => `<a href="/publishers/${attr(o.shelf.id)}"><b>${esc(o.shelf.name)}</b><span>${books(o.total)}</span></a>`).join("")}</div>` : ""}
+    ${readers}
+    ${near}
   </aside>
-</div>`;
+</div>`}`;
   return layout({ title: shelf.name, body, user, path: "/publishers", canonical: `/publishers/${encodeURIComponent(shelf.id)}`, description: `${shelf.tagline}. ${books(items.length)} на Chytai: оцінки й нотатки читачів, де взяти.`, jsonld: { "@context": "https://schema.org", "@type": "Organization", name: shelf.name, url: shelf.url, ...(shelf.tagline ? { description: shelf.tagline } : {}) } });
 }
 
