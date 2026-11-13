@@ -122,8 +122,9 @@ const woo = (p) => ({
   id: p.id,
   categories: (p.categories || []).map((c) => c.name),
   tags: (p.tags || []).map((t) => t.name),
-  price: Number(p.prices?.price || 0) / 100,
-  regularPrice: Number(p.prices?.regular_price || 0) / 100,
+  // Prices come in minor units: kopecks on most shops, whole hryvnias where the shop says 0 (Гуманітарка).
+  price: Number(p.prices?.price || 0) / 10 ** (p.prices?.currency_minor_unit ?? 2),
+  regularPrice: Number(p.prices?.regular_price || 0) / 10 ** (p.prices?.currency_minor_unit ?? 2),
   inStock: !!p.is_in_stock,
   purchasable: !!p.is_purchasable,
   url: p.permalink,
@@ -983,6 +984,51 @@ const SOURCES = [
       const rows = Object.fromEntries([...html.matchAll(/info-item-key">([\s\S]*?)<\/div>\s*<div class="single-page-info-item-value">([\s\S]*?)<\/div>/g)].map((m) => [text(m[1]).replace(/:$/, ""), text(m[2])]));
       return { author: rows["Автор"] || rows["Авторка"] || "", translator: rows["Переклад"] || "", isbn: isbnIn(rows["ISBN"]) };
     }),
+  },
+  // «Твоя підпільна гуманітарка» (Max, 2026-11-13): WooCommerce, about 10 books among merch, music albums, combos and
+  // damaged copies. The details are «key: value» lines in the short description; an e-book is its own product
+  // («… (електронна версія epub)») and becomes the paper book's edition.
+  {
+    id: "humanitarka",
+    kind: "publisher",
+    name: "Твоя підпільна гуманітарка",
+    tagline: "Українська гуманітаристика: мова, деколонізація, етнографія, поезія",
+    url: "https://humanitarka.com/",
+    api: "https://humanitarka.com/wp-json/wc/store/v1/products",
+    normalize: (p) => {
+      const rows = Object.fromEntries(
+        ent(String(p.short_description || "").replace(/<br\s*\/?>|<\/p>/gi, "\n").replace(/<[^>]+>/g, ""))
+          .split("\n")
+          .map((l) => l.match(/^\s*([^:]{2,40}):\s*(.+?)\s*$/))
+          .filter(Boolean)
+          .map((m) => [m[1].trim(), m[2].replace(/\.$/, "").trim()])
+      );
+      const pick = (re) => Object.entries(rows).find(([k]) => re.test(k))?.[1] || "";
+      const name = text(p.name);
+      const authors = pick(/^Автор(и|ка|ки)?$/).split(/\s*,\s*/).filter(Boolean);
+      // An anthology of many authors is its editor's book, as shops list it.
+      const editor = pick(/^Упорядни(к|ця)/) || (authors.length > 3 ? pick(/^Редактор(ка)?$/) : "");
+      return {
+        ...woo(p),
+        name,
+        title: name.replace(/\s*\(електронна версія[^)]*\)\s*$/i, "").trim(),
+        format: /\(електронна версія/i.test(name) ? "e-book" : "папір",
+        author: authors.length && authors.length <= 3 ? authors.join(", ") : editor || authors.slice(0, 3).join(", "),
+        translator: pick(/^Переклад/),
+        isbn: isbnIn(pick(/^ISBN/)),
+        year: (pick(/^Рік видання/).match(/\d{4}/) || [""])[0],
+        pages: (pick(/^Кількість сторінок/).match(/\d+/) || [""])[0],
+        blurb: "",
+        desc: about(p.description),
+      };
+    },
+    keep: (p) => !!p.isbn && !/пошкоджений примірник|комбо|\+/i.test(p.name) && !p.categories.some((c) => /мерч|музичні/i.test(c)),
+    // «Покуття» is one series in volumes with their own subtitles («Етнографічний нарис. Том 1», «Казки і небилиці. Том 3»).
+    toItem: (p) => {
+      const vol = p.categories.includes("Покуття") && Number((p.title.match(/Том\s+(\d+)/i) || [])[1]);
+      return wooBook({ id: "humanitarka" }, p, { format: p.format, year: p.year, pages: p.pages, genres: p.categories.filter((c) => c !== "Електронні книжки"), ...(vol ? { series: "Покуття", volume: vol } : {}) });
+    },
+    finish: joinEbooks,
   },
   {
     id: "nebo",
