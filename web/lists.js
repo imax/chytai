@@ -25,6 +25,8 @@ CREATE TABLE IF NOT EXISTS list_comments (
   id TEXT PRIMARY KEY, list TEXT NOT NULL, reader TEXT NOT NULL, text TEXT NOT NULL, created TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS list_comments_list ON list_comments (list, created);
+CREATE TABLE IF NOT EXISTS list_skips (list TEXT NOT NULL, book TEXT NOT NULL, PRIMARY KEY (list, book));
+CREATE TABLE IF NOT EXISTS fav_no (reader TEXT PRIMARY KEY, at TEXT NOT NULL);
 `;
 const TITLE_MAX = 100;
 // A list can be a small article (Max, 2026-10-27: «списки в контексті editorial … header image, якийсь опис»):
@@ -42,6 +44,16 @@ const EDITORIAL = "Редакція Chytai";
 // A draft (Max, 2026-10-28: «мій до публікації не готовий ще») is its author's alone: others get a 404 on its
 // page, and it stays off /lists, the reader's page, «У списках», «Схожі списки», the homepage and the sitemap.
 
+// «Мої фаворити» (Max, 2026-11-13: «пропонувати створювати список … куди додавати автоматом книжки з такими високими
+// оцінками»): a reader with FAV_OFFER books rated FAV_MIN or more is offered, on their own shelf, a list of them. Only
+// when they press «Зібрати» is it made, as a draft like any new list; they publish it themselves. From then on a book
+// they rate FAV_MIN+ comes into it by itself (`auto` rows), one per series; one rated lower again leaves, unless the
+// reader wrote a line or a section on it. A book the reader took out by hand stays out (list_skips). The switch in
+// «Назва й опис» stops the filling (`fav` 2); «Не треба» or deleting the list stops the offer (fav_no).
+const FAV_TITLE = "Мої фаворити";
+const FAV_MIN = 4.5;
+const FAV_OFFER = 3;
+
 class Lists {
   // `who(readerId)` is the public reader ({ name, username, href }) or null.
   constructor(store, who) {
@@ -55,6 +67,78 @@ class Lists {
     for (const [col, def] of [["section", "TEXT NOT NULL DEFAULT ''"], ["section_note", "TEXT NOT NULL DEFAULT ''"]])
       if (!this.db.prepare("PRAGMA table_info(list_items)").all().some((c) => c.name === col)) this.db.exec(`ALTER TABLE list_items ADD COLUMN ${col} ${def}`);
     if (!this.db.prepare("PRAGMA table_info(list_comments)").all().some((c) => c.name === "edited")) this.db.exec("ALTER TABLE list_comments ADD COLUMN edited TEXT NOT NULL DEFAULT ''");
+    if (!this.db.prepare("PRAGMA table_info(lists)").all().some((c) => c.name === "fav")) this.db.exec("ALTER TABLE lists ADD COLUMN fav INTEGER NOT NULL DEFAULT 0");
+    if (!this.db.prepare("PRAGMA table_info(list_items)").all().some((c) => c.name === "auto")) this.db.exec("ALTER TABLE list_items ADD COLUMN auto INTEGER NOT NULL DEFAULT 0");
+    // A changed shelf brings the reader's «Мої фаворити» up to date once the change is done (an import is one pass).
+    this.favQueue = new Set();
+    (store.entryHooks ||= []).push((reader) => {
+      if (!this.favQueue.size) setImmediate(() => { const q = [...this.favQueue]; this.favQueue.clear(); for (const r of q) this.syncFav(r); });
+      this.favQueue.add(reader);
+    });
+  }
+
+  // ---- «Мої фаворити» ----
+  // The reader's books for it, best rated first (then the latest): one per series, its first such volume.
+  favBooks(readerId) {
+    const rows = [];
+    for (const [book, e] of Object.entries(this.store.entriesOf(readerId) || {})) {
+      if (!(e.rating >= FAV_MIN) || e.kids || e.status === "abandoned") continue;
+      const id = this.store.canonical(book);
+      const b = this.store.book(id);
+      if (b && !isRussian(b)) rows.push({ id, rating: e.rating, at: e.updated || e.added || "", s: this.store.seriesOf(id) });
+    }
+    rows.sort((a, b) => b.rating - a.rating || (b.at > a.at ? 1 : b.at < a.at ? -1 : 0));
+    const first = new Map();
+    for (const r of rows) if (r.s && (!first.has(r.s.key) || r.s.n < first.get(r.s.key).s.n)) first.set(r.s.key, r);
+    const seen = new Set();
+    return rows.filter((r) => (!r.s || first.get(r.s.key) === r) && !seen.has(r.id) && seen.add(r.id)).map((r) => r.id);
+  }
+  favOf(readerId) {
+    return this.view(this.db.prepare("SELECT * FROM lists WHERE reader = ? AND fav > 0").get(readerId));
+  }
+  // How many books the offer would take, or 0 when there is nothing to offer.
+  favOffer(readerId) {
+    if (!readerId || this.db.prepare("SELECT 1 FROM lists WHERE reader = ? AND fav > 0").get(readerId) || this.db.prepare("SELECT 1 FROM fav_no WHERE reader = ?").get(readerId)) return 0;
+    const n = this.favBooks(readerId).length;
+    return n >= FAV_OFFER ? n : 0;
+  }
+  favNo(readerId) {
+    this.db.prepare("INSERT OR IGNORE INTO fav_no (reader, at) VALUES (?, ?)").run(readerId, new Date().toISOString());
+  }
+  makeFav(readerId) {
+    const had = this.favOf(readerId);
+    if (had) return had;
+    const l = this.create(readerId, { title: FAV_TITLE, draft: true });
+    this.db.prepare("UPDATE lists SET fav = 1 WHERE id = ?").run(l.id);
+    this.syncFav(readerId);
+    return this.get(l.id);
+  }
+  // Bring the list in line with the shelf; true when something changed.
+  syncFav(readerId) {
+    const l = this.db.prepare("SELECT id FROM lists WHERE reader = ? AND fav = 1").get(readerId);
+    if (!l) return false;
+    const want = this.favBooks(readerId);
+    const wanted = new Set(want);
+    const rows = this.db.prepare("SELECT book, auto, why, section FROM list_items WHERE list = ?").all(l.id);
+    const has = new Set(rows.map((r) => this.store.canonical(r.book)));
+    const series = new Set([...has].map((id) => this.store.seriesOf(id)?.key).filter(Boolean));
+    const skip = new Set(this.db.prepare("SELECT book FROM list_skips WHERE list = ?").all(l.id).map((r) => this.store.canonical(r.book)));
+    let changed = false;
+    for (const r of rows)
+      if (r.auto && !r.why && !r.section && !wanted.has(this.store.canonical(r.book))) {
+        this.db.prepare("DELETE FROM list_items WHERE list = ? AND book = ?").run(l.id, r.book);
+        changed = true;
+      }
+    for (const id of want) {
+      const s = this.store.seriesOf(id)?.key;
+      if (has.has(id) || skip.has(id) || (s && series.has(s))) continue;
+      if (!this.add(l.id, id)) break; // full
+      this.db.prepare("UPDATE list_items SET auto = 1 WHERE list = ? AND book = ?").run(l.id, id);
+      if (s) series.add(s);
+      changed = true;
+    }
+    if (changed) this.touch(l.id);
+    return changed;
   }
 
   // A list as the pages see it: its author, address and how many books and saves it has.
@@ -92,7 +176,7 @@ class Lists {
   }
   // `editorial` is the owner's to set (server.js); undefined leaves it (and `draft`) as it is.
   // `source`: where the list comes from, an address shown under the intro (Max, 2026-10-28: the Diia vote's page).
-  edit(id, { title, note, editorial, source, draft }) {
+  edit(id, { title, note, editorial, source, draft, fav }) {
     const l = this.get(id);
     if (!l) return null;
     const t = String(title ?? l.title).replace(/\s+/g, " ").trim().slice(0, TITLE_MAX) || l.title;
@@ -100,6 +184,11 @@ class Lists {
     const dr = draft === undefined ? l.draft : !!draft;
     const src = source === undefined ? l.source : /^https?:\/\/[^\s"<>]+$/.test(String(source).trim()) ? String(source).trim().slice(0, 500) : "";
     this.db.prepare("UPDATE lists SET title = ?, note = ?, editorial = ?, source = ?, draft = ?, updated = ? WHERE id = ?").run(t, String(note ?? l.note).replace(/\r/g, "").trim().slice(0, NOTE_MAX), ed ? 1 : 0, src, dr ? 1 : 0, new Date().toISOString(), id);
+    // «Мої фаворити» filling itself (1) or not any more (2).
+    if (l.fav && fav !== undefined && (fav ? 1 : 2) !== l.fav) {
+      this.db.prepare("UPDATE lists SET fav = ? WHERE id = ?").run(fav ? 1 : 2, id);
+      if (fav) this.syncFav(l.reader.id);
+    }
     return this.get(id);
   }
   // The picture on top: our own /covers/<name>, or "" for the one made of the list's covers.
@@ -161,8 +250,10 @@ class Lists {
       .filter((c) => c.reader && c.list);
   }
   remove(id) {
+    const l = this.db.prepare("SELECT reader, fav FROM lists WHERE id = ?").get(id);
+    if (l?.fav) this.favNo(l.reader); // a deleted «Мої фаворити» is not offered again
     this.db.tx(() => {
-      for (const [t, c] of [["list_items", "list"], ["list_saves", "list"], ["list_comments", "list"], ["lists", "id"]]) this.db.prepare(`DELETE FROM ${t} WHERE ${c} = ?`).run(id);
+      for (const [t, c] of [["list_items", "list"], ["list_saves", "list"], ["list_comments", "list"], ["list_skips", "list"], ["lists", "id"]]) this.db.prepare(`DELETE FROM ${t} WHERE ${c} = ?`).run(id);
     });
   }
   // Everything of a reader's goes with the account: their lists and the lists they saved.
@@ -170,6 +261,7 @@ class Lists {
     for (const l of this.db.prepare("SELECT id FROM lists WHERE reader = ?").all(readerId)) this.remove(l.id);
     this.db.prepare("DELETE FROM list_saves WHERE reader = ?").run(readerId);
     this.db.prepare("DELETE FROM list_comments WHERE reader = ?").run(readerId);
+    this.db.prepare("DELETE FROM fav_no WHERE reader = ?").run(readerId);
   }
 
   // The books of a list in its order: [{ id, book, why, added }]. Books we no longer know are left out,
@@ -177,12 +269,12 @@ class Lists {
   items(listId, { own = false } = {}) {
     const out = [];
     const seen = new Set();
-    for (const r of this.db.prepare("SELECT book, why, added, section, section_note FROM list_items WHERE list = ? ORDER BY ord, added").all(listId)) {
+    for (const r of this.db.prepare("SELECT book, why, added, section, section_note, auto FROM list_items WHERE list = ? ORDER BY ord, added").all(listId)) {
       const id = this.store.canonical(r.book);
       const book = this.store.book(id);
       if (!book || seen.has(id) || (!own && isRussian(book))) continue;
       seen.add(id);
-      out.push({ id, book, why: r.why, added: r.added, section: r.section, sectionNote: r.section_note });
+      out.push({ id, book, why: r.why, added: r.added, section: r.section, sectionNote: r.section_note, auto: !!r.auto });
     }
     return out;
   }
@@ -202,6 +294,7 @@ class Lists {
     if (this.db.prepare("SELECT COUNT(*) AS n FROM list_items WHERE list = ?").get(listId).n >= ITEMS_MAX) return false;
     const ord = (this.db.prepare("SELECT MAX(ord) AS m FROM list_items WHERE list = ?").get(listId).m ?? -1) + 1;
     this.db.prepare("INSERT INTO list_items (list, book, ord, why, added) VALUES (?, ?, ?, ?, ?)").run(listId, id, ord, String(why).trim().slice(0, WHY_MAX), new Date().toISOString());
+    this.db.prepare("DELETE FROM list_skips WHERE list = ? AND book = ?").run(listId, id);
     this.touch(listId);
     return true;
   }
@@ -210,8 +303,10 @@ class Lists {
     const id = this.store.canonical(bookId);
     return this.db.prepare("SELECT book FROM list_items WHERE list = ?").all(listId).filter((r) => this.store.canonical(r.book) === id).map((r) => r.book);
   }
+  // By the author's hand: «Мої фаворити» doesn't bring it back.
   drop(listId, bookId) {
     for (const b of this.rowsOf(listId, bookId)) this.db.prepare("DELETE FROM list_items WHERE list = ? AND book = ?").run(listId, b);
+    if (this.db.prepare("SELECT 1 FROM lists WHERE id = ? AND fav > 0").get(listId)) this.db.prepare("INSERT OR IGNORE INTO list_skips (list, book) VALUES (?, ?)").run(listId, this.store.canonical(bookId));
     this.touch(listId);
   }
   setWhy(listId, bookId, why) {
@@ -310,4 +405,4 @@ function fanBooks(items, n = 5) {
   return out.sort((a, b) => all.indexOf(a) - all.indexOf(b)).map((x) => x.book);
 }
 
-module.exports = { Lists, EDITORIAL, fanBooks };
+module.exports = { Lists, EDITORIAL, fanBooks, FAV_MIN };

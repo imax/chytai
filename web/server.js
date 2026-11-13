@@ -1724,7 +1724,7 @@ app.get("/@:username", (req, res) => {
   // The profile is the reader's own stats and books; recommendations live on other pages (Max, 2026-10-23).
   const theirLists = lists.of(reader.id).filter((l) => own || (l.count && !l.draft));
   const part = restPart(req, res);
-  if (own) return res.send(pages.libraryPage({ part, clubTopics: club.mark(req.user.id, club.of(reader.id, 5)), lists: theirLists, savedLists: lists.savedBy(reader.id), rows, user: req.user, reader: req.user, own: true, follows, now: nowFor(reader.id, { own: true }) }));
+  if (own) return res.send(pages.libraryPage({ part, favOffer: part ? 0 : lists.favOffer(reader.id), clubTopics: club.mark(req.user.id, club.of(reader.id, 5)), lists: theirLists, savedLists: lists.savedBy(reader.id), rows, user: req.user, reader: req.user, own: true, follows, now: nowFor(reader.id, { own: true }) }));
   res.send(pages.libraryPage({ part, clubTopics: club.of(reader.id, 5), lists: theirLists, rows, user: req.user, reader, ask: !!req.owner && flags.on("chat", req.user), now: nowFor(reader.id), mineIds: req.user && req.user.id !== reader.id ? store.inLibrary(req.user.id) : null, mineDirect: req.user ? new Set(Object.keys(store.entriesOf(req.user.id))) : null, following: auth.follows(req.user?.id, reader.id), follows }));
 });
 // ---- «Списки» (lists.js): /@<username>/list/<slug>, /lists, and what the author does with a list ----
@@ -1734,6 +1734,7 @@ app.get("/@:username/list/:slug", (req, res) => {
   if (!list || (list.draft && req.user?.id !== reader.id)) return res.status(404).send(pages.messagePage({ title: "Немає такого списку", text: "", user: req.user }));
   if (reader.username !== req.params.username) return res.redirect(301, list.href);
   const own = req.user?.id === reader.id;
+  if (own && list.fav === 1) lists.syncFav(reader.id); // already in step through the hook; this catches merged books
   // Free-shelf books get a quiet «є в Читалці» in their row (usability review 2026-10-28: «Розстріляне відродження»).
   // «Скільки з них я вже прочитав» (Max, 2026-11-09): the reader's own status in each row and a count on top.
   const mine = req.user && flags.on("list-progress", req.user) ? store.inLibrary(req.user.id) : null;
@@ -1745,7 +1746,7 @@ app.get("/@:username/list/:slug", (req, res) => {
   const more = lists.of(reader.id).filter((l) => l.id !== list.id && (own || (l.count && !l.draft)) && (own || l.editorial === list.editorial)).slice(0, 5);
   const comments = lists.comments(list.id);
   const og = list.image ? list.image : ogCovers(items).length ? `/og/list/${encodeURIComponent(list.id)}.jpg?v=${listImage.name(ogCovers(items)).slice(0, 8)}` : "";
-  res.send(pages.listPage({ list: { ...list, count: items.length }, items, progress: !!mine, user: req.user, own, owner: req.owner, saved: lists.saved(req.user?.id, list.id), more, similar: lists.similar(list), find, og, comments, commentLinks: mentioned(...comments.map((c) => c.text)), commentError: String(req.query.comment_error || "").slice(0, 200) }));
+  res.send(pages.listPage({ list: { ...list, count: items.length }, items, progress: !!mine && !(own && list.fav), user: req.user, own, owner: req.owner, saved: lists.saved(req.user?.id, list.id), more, similar: lists.similar(list), find, og, comments, commentLinks: mentioned(...comments.map((c) => c.text)), commentError: String(req.query.comment_error || "").slice(0, 200) }));
 });
 const ogCovers = (items) => fanBooks(items, 5).map((b) => b.cover);
 // The picture a list's link shows in Telegram, Facebook and the rest: made of its first covers once, then kept.
@@ -1783,9 +1784,15 @@ app.post("/api/lists", signed, (req, res) => {
   }
   res.redirect(303, l.href);
 });
+// «Мої фаворити» (lists.js): «Зібрати» makes the list and opens it; «Не треба» stops the offer.
+app.post("/api/lists/favorites", signed, (req, res) => {
+  if (req.body.no) return lists.favNo(req.user.id), res.redirect(303, req.user.href);
+  if (!lists.favOf(req.user.id) && !lists.favOffer(req.user.id)) return res.redirect(303, req.user.href);
+  res.redirect(303, lists.makeFav(req.user.id).href);
+});
 // «Добірка Chytai» is the owner's switch (the form shows it only to him). «Чернетка» is the author's.
 app.post("/api/lists/:id", signed, myList, (req, res) => {
-  const l = lists.edit(req.list.id, { title: req.body.title, note: req.body.note, source: req.body.source ?? "", editorial: req.owner && req.body.ed_shown ? req.body.editorial === "1" : undefined, draft: req.body.dr_shown ? req.body.draft === "1" : undefined });
+  const l = lists.edit(req.list.id, { title: req.body.title, note: req.body.note, source: req.body.source ?? "", editorial: req.owner && req.body.ed_shown ? req.body.editorial === "1" : undefined, draft: req.body.dr_shown ? req.body.draft === "1" : undefined, fav: req.body.fav_shown ? req.body.fav === "1" : undefined });
   if (req.list.draft && !l.draft) published(req, l);
   res.redirect(303, l.href);
 });

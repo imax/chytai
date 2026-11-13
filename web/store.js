@@ -2112,6 +2112,7 @@ class Store {
   writeEntry(reader, id, e) {
     this.entriesV = (this.entriesV || 0) + 1; // social.js keeps what it counts from the entries until this changes
     this.readerV.set(reader, (this.readerV.get(reader) || 0) + 1); // and counts again only this reader's
+    for (const f of this.entryHooks || []) f(reader); // lists.js: «Мої фаворити»
     if (!e) return this.db.prepare("DELETE FROM entries WHERE reader = ? AND book = ?").run(reader, id);
     this.db
       .prepare("INSERT INTO entries (reader, book, status, rating, year, note, copy, ord, added, updated, kids) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (reader, book) DO UPDATE SET status = excluded.status, rating = excluded.rating, year = excluded.year, note = excluded.note, copy = excluded.copy, ord = excluded.ord, added = excluded.added, updated = excluded.updated, kids = excluded.kids")
