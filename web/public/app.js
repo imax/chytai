@@ -490,11 +490,42 @@
     for (const b of $$("[data-plain]")) b.addEventListener("click", () => ((plain = true), (last = null), run(), input.focus()));
     if (big) input.addEventListener("input", () => (plain = false));
     const grow = () => ((input.style.height = "auto"), (input.style.height = `${input.scrollHeight}px`));
-    // The placeholder goes through the examples every 3 s while the box is empty.
+    // While the box is empty, examples come and go in it, a whole phrase at a time (Max, 2026-11-13, design F): a line
+    // over the field (.ex-line), not the placeholder, so it can fade and be tapped. A tap on it, or →, makes it the
+    // query; the mouse over it holds it.
     const examples = big && input.dataset.examples ? JSON.parse(input.dataset.examples) : [];
     if (examples.length > 1) {
-      let k = 0;
-      setInterval(() => !input.value && !document.hidden && (input.placeholder = examples[(k = (k + 1) % examples.length)]), 3000);
+      input.placeholder = "";
+      const ex = document.createElement("span");
+      ex.className = "ex-line";
+      ex.setAttribute("aria-hidden", "true");
+      input.after(ex);
+      let k = 0, held = false;
+      const show = () => {
+        ex.textContent = examples[k];
+        ex.className = "ex-line";
+        void ex.offsetWidth;
+        ex.classList.add("on");
+      };
+      const sync = () => (ex.hidden = !!input.value);
+      const take = () => {
+        input.value = examples[k];
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+        input.focus();
+        input.setSelectionRange(input.value.length, input.value.length);
+      };
+      show();
+      sync();
+      input.addEventListener("input", sync);
+      ex.addEventListener("click", take);
+      ex.addEventListener("mouseenter", () => (held = true));
+      ex.addEventListener("mouseleave", () => (held = false));
+      input.addEventListener("keydown", (e) => e.key === "ArrowRight" && !input.value && (e.preventDefault(), take()));
+      setInterval(() => {
+        if (input.value || document.hidden || held) return;
+        ex.classList.replace("on", "off");
+        setTimeout(() => ((k = (k + 1) % examples.length), show()), 380);
+      }, 4000);
     }
     if (big) {
       grow();

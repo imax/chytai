@@ -187,9 +187,11 @@ A flag only when Max asks for one, or when the change could break what readers u
   (`CUES`) and no book has every word → «Порадити книжки» first, Enter presses it (POST /ask); many words and no book
   → only a line. Variant B (Max chose it on a design canvas): «Порадити книжки ↵» takes the place of «Enter ↵» in the
   field (`body.asking`), the line under it offers «Шукати як назву» (`plain=1`). The box is a growing textarea; app.js
-  sends `home=1` to `/api/search`. Its placeholder turns through examples every 3 s, a request and a search in turn
-  (`homeExamples()` in server.js: `social.starts()` + `ASK_EXAMPLES`, 10 min cache). A new example must give
-  `intent() === "ask"` and fit a 360 px phone.
+  sends `home=1` to `/api/search`. While it is empty, examples fade in and lift away
+  every 4 s, a whole phrase (`.ex-line` over the field, app.js; Max chose design F): a tap on one, or →, makes it the
+  query. `homeExamples()` in server.js, 10 min cache: requests readers asked on /ask (short ones; same text = kept
+  answer at once) + `ASK_EXAMPLES`, and searches shown as what they found (`foundAs`: author or title, not the typed
+  fragment) + `social.starts()`. An example must fit a 360 px phone (`EXAMPLE_MAX`); ours must give `intent() === "ask"`.
 - While Claude answers (20–30 s), the waiting page shows one line that changes every 4.5 s (`ASK_STEPS` in pages.js, like
   the book page's overview), then the whole answer (Max 2026-11-13: not the books one by one). A missed request or a
   search taken for one: add or drop a cue, try with `node -e 'console.log(require("./web/intent").intent("…"))'`.

@@ -283,6 +283,13 @@ h2.year span { font: 13px var(--sans); color: var(--muted); }
 .search-box.big { margin-top: 36px; border-bottom: 2px solid var(--ink); display: flex; align-items: baseline; gap: 16px; }
 .search-box.big input, .search-box.big textarea { flex: 1; min-width: 0; border: 0; background: transparent; outline: 0; font: 28px/1.3 var(--serif); padding: 0 0 12px; border-radius: 0; }
 .search-box.big textarea { resize: none; overflow: hidden; color: inherit; display: block; }
+/* The examples over the empty box (app.js): a whole phrase fades in from a blur, holds, lifts away. */
+.search-box.big .ex-line { position: absolute; left: 0; top: 0; max-width: calc(100% - 110px); font: 28px/1.3 var(--serif); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; opacity: 0; filter: blur(6px); transform: translateY(6px); transition: opacity .6s ease-out, filter .6s ease-out, transform .6s ease-out, color .2s; }
+.search-box.big .ex-line.on { opacity: 1; filter: none; transform: none; }
+.search-box.big .ex-line.off { opacity: 0; filter: none; transform: translateY(-10px); transition-duration: .35s; transition-timing-function: ease-in; }
+.search-box.big .ex-line:hover { color: var(--ink); }
+.search-box.big .ex-line[hidden] { display: none; }
+@media (prefers-reduced-motion: reduce) { .search-box.big .ex-line, .search-box.big .ex-line.off { filter: none; transform: none; transition: opacity .2s; } }
 .search-box.big textarea::placeholder { color: var(--muted); opacity: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ask-go { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin: 20px 0 8px; }
 .ask-go-line { margin: 16px 0 0; }
@@ -507,6 +514,7 @@ dialog .form { margin-top: 18px; }
   .hero h1 { font-size: 40px; }
   .search-box.big { margin-top: 22px; }
   .search-box.big input, .search-box.big textarea { font-size: 21px; padding-bottom: 10px; }
+  .search-box.big .ex-line { font-size: 21px; max-width: 100%; }
   .ask-in .wide-only { display: none; }
   .ask-in .narrow-only { display: inline; }
   .search-box.query input, .search-box.query textarea { font-size: 28px; }

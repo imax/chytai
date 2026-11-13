@@ -2655,18 +2655,35 @@ const lastFound = new Map();
 const { intent } = require("./intent");
 const smartOn = (req) => askOn(req) && flags.on("smart-search", req.user);
 // Examples in the homepage box, changing (Max, 2026-11-13: «приклади, які змінюються і показують, що можна запитати …
-// більш конкретно»): a search, then a request, in turn. Searches are what readers have now (social.starts: a genre,
-// a book, authors); requests are «щось схоже на «<that book>»» and a few of ours (not readers' own words from /ask:
-// they write about themselves). Ten minutes' cache.
+// більш конкретно», then «попередні … пошукових запитів … і порад, які в нас вже в історії асків»): a request and a
+// search in turn. Requests: short ones readers asked on /ask (their answers are public; taking one opens the kept
+// answer at once), then a few of ours. Searches: the month's searches that found something, shown as what they found
+// (a book's title, an author's name), not as typed («becomin»), then what readers have now (social.starts).
+// Ten minutes' cache; built off the request path's hot loop (a few store.search calls).
 const ASK_EXAMPLES = ["щось як Мураками, але коротше", "детективи, схожі на Ріццолі й Айлс", "щось легке й смішне на вихідні", "щось як «Сапієнс», але про Україну"];
+const EXAMPLE_MAX = 34;
 let examplesAt = 0, examples = [];
+const foundAs = (q) => {
+  const nq = normQ(q);
+  if (nq.length < 3) return "";
+  const author = (store.authors?.list || []).find((a) => nameHas(a.name, nq) || (a.other && nameHas(a.other, nq)));
+  if (author) return author.name;
+  const hit = searchHits({}, q)[0];
+  return hit && nameHas(hit.book.title, nq) ? hit.book.title : "";
+};
 const homeExamples = () => {
   if (Date.now() - examplesAt < 10 * 60000) return examples;
-  const starts = social.starts();
-  // The popular book, when its title is Ukrainian, becomes a request rather than a search.
-  const book = starts.find((x) => x.href?.startsWith("/book/") && /[а-яіїєґ]/i.test(x.text) && x.text.length <= 22)?.text;
-  const searches = starts.map((x) => x.text).filter((t) => t !== book);
-  const requests = [...(book ? [`щось схоже на «${book}»`] : []), ...ASK_EXAMPLES];
+  const fit = (t) => t && t.length <= EXAMPLE_MAX;
+  const asked = asker
+    .recent(80)
+    .map((o) => o.text.replace(/\s+/g, " ").trim())
+    .filter((t) => t.length >= 12 && fit(t) && intent(t) === "ask");
+  const requests = [...new Set([...asked.slice(0, 6), ...ASK_EXAMPLES])];
+  const searched = admin
+    .searches(30)
+    .top.filter((r) => r.hits > 0)
+    .map((r) => foundAs(r.q));
+  const searches = [...new Set([...searched, ...social.starts().map((x) => x.text)].filter(fit))].slice(0, Math.max(6, requests.length));
   examples = [];
   for (let i = 0; i < Math.max(searches.length, requests.length); i++) examples.push(requests[i], searches[i]);
   examples = examples.filter(Boolean);
