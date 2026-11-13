@@ -2337,10 +2337,13 @@ app.get("/genre/:slug", (req, res) => {
 const READ_FILTERS = {
   short: ["Коротке", (b) => { const n = pagesOf(b); return n > 0 && n <= 250; }],
   ua: ["Українські автори", (b) => store.aiOrigs().get(b.id)?.kind === "ukrainian"],
-  fiction: ["Художнє", (b) => mainGenres(b.tags).some((g) => FICTION.has(g))],
-  nonfiction: ["Нон-фікшн", (b) => { const g = mainGenres(b.tags); return g.length && !g.some((x) => FICTION.has(x)); }],
+  // A novel about the war («Інтернат», only «війна» among the main genres) is fiction when the shop said «художня».
+  fiction: ["Художнє", (b) => { const g = mainGenres(b.tags); return g.some((x) => FICTION.has(x)) || ((b.tags || []).includes("художня") && !g.some((x) => NONFICTION.has(x))); }],
+  // Only books in a non-fiction genre: not children's tales, not war novels (both were in it, 2026-11-13).
+  nonfiction: ["Нон-фікшн", (b) => { const g = mainGenres(b.tags); return g.some((x) => NONFICTION.has(x)) && !g.some((x) => FICTION.has(x) || x === "дитячі"); }],
 };
 const FICTION = new Set(["художня", "фантастика", "фентезі", "детективи", "трилери", "жахи", "любовні романи", "класика", "поезія", "гумор", "комікси", "підліткові"]);
+const NONFICTION = new Set(["біографії", "історія", "психологія", "філософія", "мистецтво", "наука", "здоров'я", "подорожі", "саморозвиток", "бізнес", "менеджмент", "гроші", "розробка", "суспільство", "компанії", "продукт"]);
 let readCache = null;
 // Pages of a book, or of its original or translation when the catalog doesn't say.
 const pagesOf = (b) => b.pages || [...(store.translations?.get(store.canonical(b.id)) || [])].map((id) => store.book(id)?.pages).find((n) => n > 0) || 0;

@@ -815,6 +815,8 @@ document.addEventListener("keydown", (e) => {
         return d ? `guest:${d[1]}` : "login";
       }
       if (u.pathname.startsWith("/@")) return "reader";
+      // The homepage's chips: which one (Max, 2026-11-13: «подивитися уважно, що там, і щось додати чи прибрати»).
+      if (u.pathname === "/" && el.closest(".read-chips")) return `f:${clean(u.searchParams.get("f")) || "all"}`;
       return clean(u.pathname.split("/")[1]) || "home";
     }
     if (el.dataset.r) return "stars";
