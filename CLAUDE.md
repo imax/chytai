@@ -185,9 +185,9 @@ A flag only when Max asks for one, or when the change could break what readers u
   → only a line. Variant B (Max chose it on a design canvas): «Порадити книжки ↵» takes the place of «Enter ↵» in the
   field (`body.asking`), the line under it offers «Шукати як назву» (`plain=1`). The box is a growing textarea; app.js
   sends `home=1` to `/api/search`.
-- The answer streams (`Ask.run` → `json(…, onText)` → `partialBooks`): each catalog book is saved to `items` while
-  `status = 'wait'`, and the waiting page polls `/api/ask/<id>` (1.5 s) for `rows`. A broken stream falls back to one call. A missed request or a search
-  taken for one: add or drop a cue, try with `node -e 'console.log(require("./web/intent").intent("…"))'`.
+- While Claude answers (20–30 s), the waiting page shows one line that changes every 4.5 s (`ASK_STEPS` in pages.js, like
+  the book page's overview), then the whole answer (Max 2026-11-13: not the books one by one). A missed request or a
+  search taken for one: add or drop a cue, try with `node -e 'console.log(require("./web/intent").intent("…"))'`.
 
 ## Threads posts asking for a book (`web/threadsfind.js`, /admin/threads)
 

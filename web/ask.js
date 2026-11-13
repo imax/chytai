@@ -80,30 +80,6 @@ const fold = (s) => ` ${String(s || "").toLowerCase().replace(/[’'`ʼ]/g, "").
 const named = (asked, ...titles) =>
   titles.some((t) => [t, String(t || "").split(/[:.(]/)[0]].some((x) => { const f = fold(x); return f.trim().length >= 5 && asked.includes(f); }));
 
-// The answer as it streams: its `fit` (it comes before the books) and each book whose object has closed.
-function partialBooks(text) {
-  const fit = Number((/"fit"\s*:\s*(\d+)/.exec(text) || [])[1]) || 0;
-  const at = text.search(/"books"\s*:\s*\[/);
-  const books = [];
-  if (at < 0) return { fit, books };
-  let depth = 0, start = -1, str = false, esc = false;
-  for (let i = text.indexOf("[", at) + 1; i < text.length; i++) {
-    const c = text[i];
-    if (str) {
-      if (esc) esc = false;
-      else if (c === "\\") esc = true;
-      else if (c === '"') str = false;
-    } else if (c === '"') str = true;
-    else if (c === "{") depth++ === 0 && (start = i);
-    else if (c === "}" && --depth === 0) {
-      try {
-        books.push(JSON.parse(text.slice(start, i + 1)));
-      } catch {}
-    } else if (c === "]" && depth === 0) break;
-  }
-  return { fit, books };
-}
-
 class Ask {
   // store: Store; ukWork(book): its Ukrainian edition; notify(row): a line to the owner about a new ask.
   // search(q): Google Books and Open Library hits (readerbooks' confirm); bookua(q): book.ua's (catalogs.bookuaSearch);
@@ -171,20 +147,8 @@ class Ask {
     const row = this.get(id);
     const t = Date.now();
     try {
-      // The books come one by one as Claude names them (Max, 2026-11-13: «рекомендація це довго, 30 секунд … треба
-      // щось показувати»): each one the catalog has goes into `items` at once, and the waiting page shows it.
-      const cache = new Map();
-      let shown = 0;
-      const out = await this.claude(row.text, {
-        onBooks: (books, fit) => {
-          const { items } = this.matchNow(books, { text: row.text, cache });
-          const top = items.filter((x) => x.rank < fitOf(fit || FIT_MAX));
-          if (top.length === shown) return;
-          shown = top.length;
-          this.db.prepare("UPDATE ask_recs SET items = ? WHERE id = ? AND status = 'wait'").run(JSON.stringify(top), id);
-        },
-      });
-      const { items, missed, extra } = await this.match(out.books, { model: out.model, text: row.text, cache });
+      const out = await this.claude(row.text);
+      const { items, missed, extra } = await this.match(out.books, { model: out.model, text: row.text });
       for (const k of ["input", "output", "cost"]) out[k] += extra[k];
       this.db
         .prepare("UPDATE ask_recs SET status = ?, fit = ?, topic = ?, items = ?, missed = ?, model = ?, input_tokens = ?, output_tokens = ?, cost = ?, ms = ? WHERE id = ?")
@@ -201,36 +165,15 @@ class Ask {
   }
 
   // One call that answers JSON in `schema`: { j, input, output, cost }.
-  // onText(soFar): the answer's text as it comes (streamed); without it, one plain call.
-  async json(system, user, schema, model, onText = null) {
-    const params = {
+  async json(system, user, schema, model) {
+    const res = await this.client.messages.create({
       model,
       max_tokens: 4000,
       system: [{ type: "text", text: system, cache_control: { type: "ephemeral" } }],
       messages: [{ role: "user", content: user }],
       // Valid JSON every time (a «"» inside a title broke a hand-parsed answer); low effort: it is recall, not reasoning.
       output_config: { effort: "low", format: { type: "json_schema", schema } },
-    };
-    let res;
-    if (onText && this.client.messages.stream) {
-      // A stream that breaks falls back to the plain call: the books then come all at once, as before.
-      try {
-        const stream = this.client.messages.stream(params);
-        let soFar = "";
-        stream.on("text", (d) => {
-          soFar += d;
-          try {
-            onText(soFar);
-          } catch (e) {
-            this.log(`ask stream: ${e.message}`);
-          }
-        });
-        res = await stream.finalMessage();
-      } catch (e) {
-        this.log(`ask stream failed, asking again without it: ${e.message}`);
-      }
-    }
-    if (!res) res = await this.client.messages.create(params);
+    });
     if (res.stop_reason === "refusal") throw new Error(`refusal ${res.stop_details?.category || ""}`);
     const raw = res.content.map((c) => c.text || "").join("");
     const u = res.usage || {};
@@ -240,16 +183,8 @@ class Ask {
   }
 
   // What Claude recommends for this text: { topic, books, off, model, input, output, cost }.
-  // onBooks(books, fit): the books named so far, while the answer streams (partialBooks).
-  async claude(text, { model = MODEL, onBooks = null } = {}) {
-    let seen = 0;
-    const onText = onBooks
-      ? (soFar) => {
-          const p = partialBooks(soFar);
-          if (p.books.length > seen) (seen = p.books.length), onBooks(p.books, p.fit);
-        }
-      : null;
-    const { j, input, output, cost } = await this.json(SYSTEM, text, OUT_SCHEMA, model, onText);
+  async claude(text, { model = MODEL } = {}) {
+    const { j, input, output, cost } = await this.json(SYSTEM, text, OUT_SCHEMA, model);
     return { topic: j.topic || "", books: Array.isArray(j.books) ? j.books.slice(0, 20) : [], off: !!j.off, fit: fitOf(j.fit), model, input, output, cost };
   }
 
@@ -257,29 +192,16 @@ class Ask {
   // Claude's order; the rest as { title, author } in `missed` (the owner sees them, readers don't). A book we lack by
   // an author we have (Несбьо's «Сніговик», Кеплер's «Ловець») gets a second, short question: which of this author's
   // books here serves the same recommendation (the series' first book, usually). `extra`: what that question cost.
-  // The books found so far while the answer streams: the same choice as match(), without its second question to
-  // Claude (a series' first book we have under another name comes only with the full answer).
-  matchNow(books, { text = "", cache = new Map() } = {}) {
-    return this.pick(this.rows(books, cache), fold(text));
-  }
-  // Each recommended book with what the catalog has for it; `cache` keeps lookups across the streamed calls.
-  rows(books, cache = new Map()) {
-    return (books || []).map((b) => {
-      const want = { uk: clean(b.title_uk, 200), ua: clean(b.author_uk, 200), en: clean(b.title, 200), ea: clean(b.author, 200) };
-      const k = JSON.stringify(want);
-      if (!cache.has(k)) {
-        const found = this.find(want);
-        // Found but not one to show (Russian): not named at all, not even in the plain list.
-        cache.set(k, { id: this.usable(found), bad: !!found && !this.usable(found) });
-      }
-      return { b, want, ...cache.get(k) };
-    });
-  }
-  async match(books, { model = MODEL, text = "", cache = new Map() } = {}) {
+  async match(books, { model = MODEL, text = "" } = {}) {
     const s = this.store;
     const asked = fold(text);
     const extra = { input: 0, output: 0, cost: 0 };
-    const rows = this.rows(books, cache).map((r) => ({ ...r }));
+    const rows = (books || []).map((b) => {
+      const want = { uk: clean(b.title_uk, 200), ua: clean(b.author_uk, 200), en: clean(b.title, 200), ea: clean(b.author, 200) };
+      const found = this.find(want);
+      // Found but not one to show (Russian): not named at all, not even in the plain list.
+      return { b, want, id: this.usable(found), bad: !!found && !this.usable(found) };
+    });
     // Only for a series: its line «why» fits any volume, a single book's line would describe a book we don't show.
     const lack = rows.filter((r) => !r.id && clean(r.b.series, 120)).map((r) => ({ r, own: this.authorBooks(r.want) })).filter((x) => x.own.length);
     if (lack.length && this.client) {
@@ -298,12 +220,6 @@ class Ask {
         this.log(`ask: second pass failed: ${e.message}`);
       }
     }
-    return { ...this.pick(rows, asked), extra };
-  }
-
-  // Claude's order kept: the catalog's books (series start, one per series and author) and the rest as `missed`.
-  pick(rows, asked) {
-    const s = this.store;
     const items = [];
     const missed = [];
     const used = new Set();
@@ -327,7 +243,7 @@ class Ask {
       if (s.book(id).author) authors.push(s.book(id).author);
       if (items.length < FIT_MAX) items.push({ id, why: clean(b.why, 300), series: clean(b.series, 120), rank: rank++ });
     }
-    return { items, missed };
+    return { items, missed, extra };
   }
 
   // The Ukrainian edition's canonical id, or null for a book we can't show (none, Russian).

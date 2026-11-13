@@ -3193,6 +3193,9 @@ ${form}
 }
 
 // ---- «Що почитати далі?» (ask.js, Max 2026-11-11): a field, and an answer with its own address ----
+// The wait (20–30 s): one line that changes every few seconds, as under «Що кажуть про книжку» (Max, 2026-11-13:
+// «краще як для AI overview … змінюється просто підпис», not the books one by one).
+const ASK_STEPS = ["Читаю, що вам сподобалось…", "Згадую схожі книжки…", "Шукаю їх у каталозі…", "Відбираю ті, що пасують найбільше…", "Пишу, чому кожна…", "Ще трохи…"];
 const ASK_HINT = "Наприклад: класно зайшли цикли Тесс Ґеррітсен про Ріццолі й Саймона Бекетта про антрополога Гантера. Порадьте ще детективні серії.";
 const askText = (t) => t.split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean).map((p) => `<p>${esc(p).replace(/\n/g, "<br>")}</p>`).join("");
 function askForm(text = "", error = "", latest = "") {
@@ -3249,10 +3252,9 @@ function askAnswerPage({ user, ask, items, canAsk = false, owner = false }) {
     const [t, a] = m.ukFound === false && m.en ? [m.en, m.ea || m.author] : [m.title, m.author];
     return `<li class="out">${a ? `${esc(a)}, ` : ""}«${esc(String(t).split(": ")[0])}»</li>`;
   }).join("")}</ol>` : ""}
-  ${wait ? `<p class="ask-wait" id="ask-wait">Добираю книжки з каталогу, зазвичай до півхвилини. Вони з’являтимуться тут по одній.</p>` : say ? `<p class="lead muted">${say}</p>` : ""}
+  ${wait ? `<p class="ask-wait advice-wait" id="ask-wait">${ASK_STEPS[0]}</p>` : say ? `<p class="lead muted">${say}</p>` : ""}
   ${wait ? "" : `<div class="acts ask-acts">${items.length ? `<button type="button" class="btn small" data-share="${attr(ORIGIN + href)}" data-title="Що почитати далі">Поділитися</button><button type="button" class="btn small" id="ask-copy">Скопіювати</button>` : ""}${canAsk ? `<a class="btn small primary" href="/ask">Спитати ще</a>` : ""}</div>`}
 </section>
-${wait ? `<section class="lrows" id="ask-rows">${rows}</section>` : ""}
 ${items.length && !wait ? `<section class="lrows">${rows}</section>${more.length ? `<p class="ask-out">Інших книжок зі списку на Chytai поки немає.</p>` : ""}<p class="small muted ask-note">Порадив Claude (AI).</p>` : ""}
 ${owner && !wait ? `<details class="small muted ask-note"><summary>Для вас: ${esc(ask.model)} · $${Number(ask.cost).toFixed(3)} · ${(ask.ms / 1000).toFixed(1)} с · переглядів ${ask.views}${ask.missed.length ? ` · немає в каталозі ${ask.missed.length}` : ""}</summary>${ask.missed.map((m) => `<p>${esc(m.title)}${m.author ? ` · ${esc(m.author)}` : ""}</p>`).join("")}</details>` : ""}
 ${items.length ? `<script>document.getElementById("ask-copy")?.addEventListener("click", async (e) => {
@@ -3260,7 +3262,7 @@ ${items.length ? `<script>document.getElementById("ask-copy")?.addEventListener(
   const lines = [...document.querySelectorAll(".ask-sum li")].map((li, i) => (i + 1) + ". " + li.textContent.trim());
   try { await navigator.clipboard.writeText(lines.join("\\n") + "\\n\\n" + ${JSON.stringify(ORIGIN + href)}); e.target.textContent = "Скопійовано"; setTimeout(() => (e.target.textContent = "Скопіювати"), 2000); } catch {}
 });</script>` : ""}
-${wait ? `<script>(() => { let n = 0; const go = async () => { const r = await fetch(${JSON.stringify(`/api${href}`)}).then((x) => x.json()).catch(() => ({})); if (r.status && r.status !== "wait") return location.reload(); const box = document.getElementById("ask-rows"); if (r.rows != null && r.rows !== box.innerHTML) box.innerHTML = r.rows; if (++n === 20) document.getElementById("ask-wait").textContent = "Ще трохи…"; if (n < 120) setTimeout(go, 1500); }; setTimeout(go, 1500); })();</script>` : ""}`;
+${wait ? `<script>(() => { const steps = ${JSON.stringify(ASK_STEPS)}; const line = document.getElementById("ask-wait"); let n = 0, step = 0; const tick = setInterval(() => (line.textContent = steps[Math.min(++step, steps.length - 1)]), 4500); const go = async () => { const r = await fetch(${JSON.stringify(`/api${href}`)}).then((x) => x.json()).catch(() => ({})); if (r.status && r.status !== "wait") return clearInterval(tick), location.reload(); if (++n < 120) setTimeout(go, 1500); }; setTimeout(go, 1500); })();</script>` : ""}`;
   const first = ask.text.replace(/\s+/g, " ").trim();
   return layout({ title: ask.topic || "Що почитати далі", body, user, path: "/ask", canonical: href, noindex: true, description: [first.length > 160 ? `${first.slice(0, 157)}…` : first, items.length ? `${books(items.length)}: ${items.slice(0, 4).map((x) => x.book.title).join(", ")}` : ""].filter(Boolean).join(" "), image: abs(items.find((x) => x.book.cover)?.book.cover || ""), type: "article" });
 }

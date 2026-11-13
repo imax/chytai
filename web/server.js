@@ -1191,11 +1191,7 @@ app.get("/ask/:id", (req, res) => {
 });
 const askItems = (req, a) =>
   a.items.map((x) => ({ ...x, book: store.book(x.id) && workFor(req, store.book(x.id)), mine: req.user ? store.entry(req.user.id, x.id)?.status || "" : "" })).filter((x) => x.book);
-// The waiting page asks every 1.5 s: the status, and while it waits the books found so far (the answer streams, ask.js run()).
-app.get("/api/ask/:id", (req, res) => {
-  const a = asker.get(req.params.id);
-  res.set("Cache-Control", "no-store").json({ status: a?.status || "", ...(a?.status === "wait" ? { rows: pages.askRows(askItems(req, a)) } : {}) });
-});
+app.get("/api/ask/:id", (req, res) => res.set("Cache-Control", "no-store").json({ status: asker.get(req.params.id)?.status || "" }));
 // A thread tries the prompt on production's catalog without keeping anything (the answer is only returned):
 // POST /agent/ask {"text": "...", "model": "claude-sonnet-5-5"}. 30 a day.
 let agentAsks = [];
