@@ -1794,7 +1794,7 @@ const bigBox = (value, focus = false, examples = []) => `<textarea name="q" rows
 // Variant B (Max, 2026-11-13, canvas «Розумний пошук: варіанти»): when the words ask for books, «Порадити книжки ↵»
 // takes the place of «Enter ↵» in the field and the line under it offers «Шукати як назву» (app.js, body.asking).
 const askIn = `<button type="button" class="btn primary small ask-in" hidden><span class="wide-only">Порадити книжки ↵</span><span class="narrow-only">Порадити</span></button>`;
-const askHint = `<p class="ask-link"><span class="when-ask">Схоже на прохання: Enter попросить поради. <button type="button" class="text-link" data-plain>Шукати як назву</button></span></p>`;
+const askHint = `<p class="ask-link"><a class="when-idle text-link" href="/ask">Напишіть, що хочете почитати →</a><span class="when-ask">Схоже на прохання: Enter попросить поради. <button type="button" class="text-link" data-plain>Шукати як назву</button></span></p>`;
 // Without the flag `smart-search`: the plain one line, as before.
 const plainBox = (value = "", focus = false) => `<input type="search" name="q"${value ? ` value="${attr(value)}"` : ""} placeholder="назва, автор, жанр або видавництво" aria-label="Пошук" autocomplete="off"${focus ? " autofocus" : ""}>`;
 // askMode (intent.js): "ask" — the words ask for books and no book answers them: «Порадити книжки» comes first and

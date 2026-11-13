@@ -300,8 +300,9 @@ body.asking .search-box.big { border-bottom-color: var(--accent); }
 body.asking .search-box .ask-in { display: inline-block; }
 body.asking .search-box .enter, body.asking .ask-go[data-primary] { display: none; }
 /* The placeholder says the box takes both (Max, 2026-11-13); the line shows only for a request. */
-body:not(.asking) .ask-link:has(.when-ask) { display: none; }
+/* Not asking: the way to /ask (Max, 2026-11-13: «не вистачає посилання на ask»); asking: «Шукати як назву» in its place. */
 body.asking .ask-link .when-ask { display: inline; }
+body.asking .ask-link .when-idle { display: none; }
 .ask-link .text-link { font-size: inherit; }
 .ask-go-line + .found { margin-top: 4px; }
 .search-box .enter { font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); white-space: nowrap; }
