@@ -951,5 +951,15 @@
     "group": "Англійською",
     "wanted": true,
     "source": "https://standardebooks.org/ebooks/mark-twain/the-innocents-abroad"
+  },
+  {
+    "name": "chesterton-the-innocence-of-father-brown.epub",
+    "title": "The Innocence of Father Brown",
+    "authors": [
+      "G. K. Chesterton"
+    ],
+    "group": "Англійською",
+    "wanted": true,
+    "source": "https://standardebooks.org/ebooks/g-k-chesterton/the-innocence-of-father-brown"
   }
 ]
