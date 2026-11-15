@@ -2457,7 +2457,7 @@ function eventPage({ e, user, owner = false, books = [], stops = [], related = [
     location: online ? { "@type": "VirtualLocation", url: src || page } : { "@type": "Place", name: e.place || e.city, address: { "@type": "PostalAddress", addressLocality: e.city, addressCountry: "UA", ...(e.place ? { streetAddress: e.place } : {}) } },
     ...(e.sub ? { description: e.sub } : {}),
     ...(book?.cover ? { image: abs(book.cover) } : {}),
-    url: src || page,
+    url: page, // our page is the event's address for search; the organizer's link stays on the button
   };
   return layout({ title: e.title, body, user, path: "/calendar", canonical: C.eventPath(e), noindex: past || e.hidden, description: [when, [e.city, e.place].filter(Boolean).join(", "), e.sub].filter(Boolean).join(". ").slice(0, 300), image: book?.cover ? abs(book.cover) : "", jsonld });
 }
