@@ -197,6 +197,8 @@ A flag only when Max asks for one, or when the change could break what readers u
 - The homepage (2026-11-15, Max: «давай повернемо як було», then variant A on a design canvas): the search is plain again
   (h1 «Я шукаю»), and under the chips, on the unfiltered page, a block «Запитай Chytai» (`askBlock` in pages.js): a field
   that posts to /ask, and two answers others got with covers (`homeAsks` in server.js: of the 12 newest, at random).
+- Search with no book that has every word (`searchAll` `near`, 2026-11-15): «Може, ви шукали:» the books with most of the
+  words, a one-letter typo counting («після вільного шляху» → «Пісня відкритого шляху»); then no outside lookup.
 - Off since 2026-11-15, code kept: the homepage box (and /search) takes a request too (flag `smart-search`, `web/intent.js`, no model): cue words
   (`CUES`) and no book has every word → «Порадити книжки» first, Enter presses it (POST /ask); many words and no book
   → only a line. Variant B (Max chose it on a design canvas): «Порадити книжки ↵» takes the place of «Enter ↵» in the

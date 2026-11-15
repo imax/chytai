@@ -2683,7 +2683,34 @@ function searchAll(req, q) {
     return terms.every((t) => all.some((w) => w.startsWith(t)));
   };
   const outside = !tag && !named && !readersFound.length && !listsFound.length && !hits.some((h) => h.uk || answers(h.book));
-  return { hits, authors: authorsFound, readers: readersFound, shelves: shelvesFound, lists: listsFound, similar, tag, outside };
+  // Nothing has every word (Max, 2026-11-15: «після вільного шляху» for «Пісня відкритого шляху» found nothing): the
+  // books that have the most of them, a rarer word counting for more, under «Точно нічого. Може, ви шукали:».
+  let near = [];
+  if (!hits.length && !authorsFound.length && !readersFound.length && !shelvesFound.length && !listsFound.length && terms.length >= 2) {
+    const score = new Map();
+    for (const t of new Set(terms.filter((t) => t.length >= 3))) {
+      const found = searchHits(req, t).slice(0, 30);
+      for (const h of found) {
+        const s = score.get(h.book.id) || { h, n: 0 };
+        s.n += 1 + 1 / found.length;
+        score.set(h.book.id, s);
+      }
+    }
+    // Then each found book counts the words it has, a typo of one letter too («після» for «пісня»).
+    const close = (a, b) => {
+      if (Math.abs(a.length - b.length) > 1 || a.length < 4) return a === b;
+      let i = 0;
+      while (i < a.length && a[i] === b[i]) i++;
+      const [x, y] = [a.slice(i + 1), b.slice(i + 1)];
+      return x === y || a.slice(i) === y || a.slice(i + 1) === b.slice(i);
+    };
+    for (const s of score.values()) {
+      const all = [s.h.book.title, s.h.book.author].flatMap(words);
+      s.n += terms.filter((t) => all.some((w) => w.startsWith(t) || close(t, w))).length;
+    }
+    near = [...score.values()].sort((a, b) => b.n - a.n).slice(0, 5).map((s) => s.h);
+  }
+  return { hits, authors: authorsFound, readers: readersFound, shelves: shelvesFound, lists: listsFound, similar, tag, outside, near };
 }
 const folded = (s) => normQ(s).replace(/є/g, "е").replace(/ґ/g, "г").normalize("NFKD").replace(/\p{M}/gu, "");
 // How many things a search found, for the search log (admin.searched): books, authors, readers, shelves, lists.

@@ -61,6 +61,8 @@ function emit(feature, model, usage) {
 }
 
 function patch(proto) {
+  // A local fake SDK (CLAUDE.md: `node -r mock.js`) has plain objects: patching Object.prototype broke every header.
+  if (!proto || proto === Object.prototype || typeof proto.create !== "function") return;
   const create = proto.create;
   proto.create = function (params, ...rest) {
     const p = create.call(this, params, ...rest);

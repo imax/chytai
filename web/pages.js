@@ -1823,7 +1823,7 @@ const askGo = (text, primary, enter = primary) =>
   primary
     ? `<form method="post" action="/ask" class="ask-go"${enter ? " data-primary" : ""} data-block="ask-go"><input type="hidden" name="text" value="${attr(text)}"><button class="btn primary">Порадити книжки</button><span class="small muted">Claude добере з каталогу</span></form>`
     : `<form method="post" action="/ask" class="ask-go-line" data-block="ask-go"><input type="hidden" name="text" value="${attr(text)}"><span class="small muted">Це опис, а не назва?</span> <button class="text-link small">Порадити книжки</button></form>`;
-function searchResults({ q, user, hits = [], authors = [], readers = [], shelves = [], lists = [], similar = [], tag = "", outside = false, askText = "", askMode = "" }) {
+function searchResults({ q, user, hits = [], authors = [], readers = [], shelves = [], lists = [], similar = [], tag = "", outside = false, askText = "", askMode = "", near = [] }) {
   if (!q.trim()) return "";
   const n = hits.length + authors.length + readers.length + shelves.length + lists.length;
   // A request: no Google, Open Library or «полиці» for it, only the button and what the catalog had for its words.
@@ -1840,8 +1840,10 @@ function searchResults({ q, user, hits = [], authors = [], readers = [], shelves
   // the home page's shelves, for those who search for a mood rather than a title.
   // Many words and nothing here at all: the button, big, but Enter doesn't press it; the books elsewhere under it.
   if (!n && askTop) return `${askGo(askText, true, askMode === "ask")}${elsewhere}`;
+  // Nothing has every word: the books with most of them first (server.js searchAll `near`).
+  const nearRows = near.length ? `<p class="found">Точно за «${esc(q)}» нічого. Може, ви шукали:</p><div class="rows">${near.map((h) => bookRow(h.book, { meta: readersMeta(h.book.id), action: h.entry ? myStatus(h.entry) : "" })).join("")}</div>` : "";
   if (!n)
-    return `${elsewhere}
+    return `${nearRows || elsewhere}
 <p class="found muted">Шукаєте не книжку, а настрій? Почніть з полиць:</p>
 <nav class="read-chips">${[["/", "Що почитати"], ["/?f=short", "Коротке"], ["/?f=ua", "Українські автори"], ["/?f=fiction", "Художнє"], ["/?f=nonfiction", "Нон-фікшн"]].map(([h, t]) => `<a class="chip" href="${h}">${t}</a>`).join("")}</nav>`;
   if (askMode === "ask") return `${askTop}
