@@ -243,7 +243,7 @@ A flag only when Max asks for one, or when the change could break what readers u
   «Мої автори» by `?mine=<reader>.<key>` (`calKey`, HMAC with the reader secret; a calendar app has no cookie). The
   button offers webcal:// (Apple), Google Calendar's `?cid=`, and the plain address.
 - Table `cal_events` (id `{source}:{key}`, starts/ends `YYYY-MM-DD` Kyiv, time `HH:MM`, city as shown, «Онлайн»
-  for online; books/authors JSON found by name, no AI: `linkText`). Gone 30 days after it ends (`cleanup`).
+  for online; books/authors JSON found by name, no AI: `linkText`, a name's two words side by side, «Олександрою … книгарні» ≠ Олександр Книга). Gone 30 days after it ends (`cleanup`).
 - Sources: `web/seed/calendar.json` (kept in step at every start: festivals by a thread or Max); readers via
   /calendar/add (signed in, 5 a day, mails + Telegram Max; Max or the reader hides one with «сховати»; «Заповнити з
   посилання» = `POST /api/calendar/peek`, public addresses only); collectors call `calendar.upsert({ source, key, …,
@@ -256,7 +256,7 @@ A flag only when Max asks for one, or when the change could break what readers u
 - Telegram channels (`web/tgfeed.js`, source `tg`; Max 2026-11-15 chose our own account over scraping): the jobs process
   reads the channels in `web/seed/tgchannels.json` every hour and keeps their posts 90 days (table `tg_posts`, for more
   than events later). Through our own Telegram account (Fly secrets `TG_API_ID`, `TG_API_HASH`, `TG_SESSION`; Max makes
-  them on his computer with `node scripts/tg-login.js`, a QR code the phone scans; `--code` = by a code): it joins 3 new channels a run, mutes each (Max uses that number himself, 2026-11-15), and reads what is new. A
+  them on his computer with `node scripts/tg-login.js`, a QR code the phone scans; `--code` = by a code): it joins 7 new channels a run in the seed's order (Max's own first; the account has Premium), mutes each (Max uses that number himself, 2026-11-15), and reads what is new. A
   channel's @name by its title: `curl -s "https://chytai.org.ua/agent/tg-find?q=<words>" -H "$H"` (the account's search). No
   session, or Telegram refuses it: the public pages `t.me/s/<channel>`. A bot can't do this (it sees a channel only
   when the channel's admin adds it). Status: `curl -s https://chytai.org.ua/agent/tg -H "$H"`; run now:

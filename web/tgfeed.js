@@ -19,7 +19,7 @@
 const DAY = 86400000;
 const KEEP_DAYS = 90;
 const AI_DAY = 300; // Max 2026-11-15: «ліміт на haiku можна підняти» (~$0.0002 a call)
-const JOINS_PER_RUN = 3; // a new account joining many channels at once looks like spam to Telegram
+const JOINS_PER_RUN = 7; // in the seed's order (Max 2026-11-15: 5–7 an hour; the account has Premium). Too many at once looks like spam.
 const MODEL = "claude-haiku-5-5";
 const UA = "Mozilla/5.0 (compatible; Chytai/1.0; +https://chytai.org.ua)";
 const { parseWhen, kyivDay, addDays } = require("./calendar");

@@ -108,15 +108,22 @@ function linkText(store, text) {
   const t = String(text || "");
   if (!t || !store?.authors) return out;
   const words = t.toLowerCase().replace(/[’'ʼ`]/g, "").match(/[\p{L}-]+/gu) || [];
-  const starts = (stem) => stem.length >= 3 && words.some((w) => w.startsWith(stem));
-  const stem = (w) => (w.length >= 5 ? w.replace(/[аяоеєіиїйьую]$/, "") : w);
+  // A name in any case («Сари Маас», «Маас Сара»): its two words side by side (one word between for «Дж.»), each
+  // word starting with the name's stem. Apart they meant nothing: «Олександрою … у книгарні» was «Олександр Книга».
+  const stem = (w) => {
+    const s = w.length >= 4 ? w.replace(/[аяоеєіиїйьую]$/, "") : w;
+    return s.length >= 3 ? s : w;
+  };
+  const has = (w, s) => w.startsWith(s) || w.includes(`-${s}`); // «Петрова-Домонтовича»
+  const at = (i, s) => i < words.length && has(words[i], s);
+  const side = (fs, ls) => words.some((w, i) => (has(w, fs) && (at(i + 1, ls) || at(i + 2, ls))) || (has(w, ls) && at(i + 1, fs)));
   for (const a of store.authors.list) {
     const name = (a.uk || a.name || "").toLowerCase().replace(/[’'ʼ`]/g, "");
     if (!/[а-яіїєґ]/.test(name)) continue;
     const parts = name.split(/\s+/).filter((p) => p.length > 1 && !p.endsWith("."));
     if (parts.length < 2) continue;
-    const [first, last] = [parts[0], parts[parts.length - 1]];
-    if (starts(stem(last)) && starts(first.slice(0, Math.min(4, first.length)))) out.authors.push(a.slug);
+    const ls = stem(parts[parts.length - 1]);
+    if (ls.length >= 3 && side(parts[0].slice(0, 3), ls)) out.authors.push(a.slug);
   }
   const names = out.authors.map((s) => store.authors.bySlug.get(s)?.name).filter(Boolean);
   for (const m of t.matchAll(/«([^»]{2,120})»/g)) {
@@ -304,6 +311,18 @@ function create(db, store, { notify = () => {}, bookua = null, search = null, ma
         if (want.length || links.books.length > e.books.length) db.prepare("UPDATE cal_events SET books = ?, want = ? WHERE id = ?").run(JSON.stringify(links.books.slice(0, 6)), JSON.stringify(want), e.id);
       }
       setMeta("calbooks:rewant", new Date().toISOString());
+    }
+    // Once: the collectors' events get their names again by the stricter linkText (2026-11-15, «Олександр Книга»).
+    if (!dry && !meta("calendar:relink")) {
+      for (const e of db.prepare("SELECT * FROM cal_events WHERE source IN ('tg', 'chytomo', 'ye') AND (starts >= ? OR ends >= ?)").all(day, day).map(row)) {
+        const links = linkText(store, `${e.title} ${e.sub || ""}`);
+        for (const id of e.books) if (!links.books.includes(id)) links.books.push(id);
+        for (const id of links.books) for (const a of store.authors.list) if (a.ids.includes(id) && !links.authors.includes(a.slug)) links.authors.push(a.slug);
+        const want = wanted({ ...e, named: JSON.parse(e.want || "[]") }, e.title, links);
+        db.prepare("UPDATE cal_events SET books = ?, authors = ?, want = ? WHERE id = ?").run(JSON.stringify(links.books.slice(0, 6)), JSON.stringify(links.authors.slice(0, 6)), JSON.stringify(want), e.id);
+      }
+      setMeta("calendar:relink", new Date().toISOString());
+      fresh();
     }
     const rows = db.prepare("SELECT * FROM cal_events WHERE want != '[]' AND (starts >= ? OR ends >= ?)").all(day, day).map(row);
     for (const e of rows) {
