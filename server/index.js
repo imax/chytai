@@ -1061,9 +1061,10 @@ app.use((req, res, next) => {
   app.all("/agent/sql", ok, express.json(), async (req, res) => res.json(await sql(req.body?.q || req.query.q)));
   // «Словничок» (server/glossary.js): what is made and what runs; POST {"book":"<free-shelf file>"} makes one book's.
   app.get("/agent/glossary", ok, (req, res) => res.json(glossary.status()));
-  app.post("/agent/glossary", ok, express.json(), (req, res) => {
+  app.post("/agent/glossary", ok, express.json(), async (req, res) => {
     const book = safeBookName(req.body?.book);
     if (!book || !isFree(book)) return res.status(400).json({ error: "not a free-shelf book" });
+    if (req.body?.tidy) return res.json(await glossary.retidy(book, path.join(freeDir(book), book)));
     res.json({ started: glossary.start(book, path.join(freeDir(book), book)), ...glossary.status() });
   });
 }

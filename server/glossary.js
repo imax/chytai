@@ -55,6 +55,33 @@ function chunks(chapters) {
   return out.filter((t) => t.length > 200);
 }
 
+// Common words the model lists now and then although a teenager knows them; a sense they have in one sentence only
+// came out as their meaning everywhere («один — один раз»).
+const COMMON = new Set(["хіба", "тим", "ото", "лиш", "лише", "мов", "скоро", "отже", "таки", "куди", "один", "зараз", "тепер", "трохи"]);
+
+// What the model gave, tidied with the book's text: a name (capitalised in the middle of sentences: «Пугач — велика
+// сова»), a common word, or a meaning that only repeats the word goes.
+function clean(forms, chapters) {
+  const text = chapters.join(" ").normalize("NFD").replace(/[\u0300\u0301]/g, "").normalize("NFC");
+  const caps = {};
+  for (const m of text.matchAll(/(^|[^.!?…»"“”—–:\s]\s+)([\p{L}]+(?:['’ʼ-][\p{L}]+)*)/gu)) {
+    const k = key(m[2]);
+    if (!forms[k]) continue;
+    const c = (caps[k] ??= [0, 0]);
+    c[1]++;
+    if (m[2][0] !== m[2][0].toLowerCase()) c[0]++;
+  }
+  const out = {};
+  for (const [k, gloss] of Object.entries(forms)) {
+    const c = caps[k];
+    if (c && c[1] >= 2 && c[0] / c[1] > 0.6) continue;
+    if (COMMON.has(k)) continue;
+    if (key(gloss.split(/[\s,(]/)[0]) === k) continue;
+    out[k] = gloss;
+  }
+  return out;
+}
+
 function parse(answer) {
   const out = [];
   for (const line of String(answer || "").split("\n")) {
@@ -113,6 +140,18 @@ class Glossary {
     };
   }
   // Makes the book's glossary in the background; a second call for the same book while it runs does nothing.
+  // The kept list tidied again (clean() changed), with no model call.
+  async retidy(book, file) {
+    const data = this.get(book);
+    if (!data) return null;
+    const { chapters } = await epubParts(fs.readFileSync(file));
+    const forms = clean(data.forms, chapters);
+    const out = { ...data, forms, tidied: new Date().toISOString() };
+    const f = this.file(book);
+    fs.writeFileSync(`${f}.tmp`, JSON.stringify(out));
+    fs.renameSync(`${f}.tmp`, f);
+    return { before: Object.keys(data.forms).length, after: Object.keys(forms).length, dropped: Object.keys(data.forms).filter((k) => !forms[k]) };
+  }
   start(book, file) {
     if (this.running.get(book)?.done === false) return false;
     const run = { at: new Date().toISOString(), done: false, chunks: 0, of: 0 };
@@ -150,7 +189,7 @@ class Glossary {
     // The first meaning a form got stays: later chapters mostly repeat it.
     const forms = {};
     for (const a of answers) for (const [form, gloss] of parse(a)) forms[key(form)] ??= gloss;
-    const data = { book, model: MODEL, at: new Date().toISOString(), calls: parts.length, cost: Math.round(cost * 1000) / 1000, forms };
+    const data = { book, model: MODEL, at: new Date().toISOString(), calls: parts.length, cost: Math.round(cost * 1000) / 1000, forms: clean(forms, chapters) };
     fs.mkdirSync(this.dir, { recursive: true });
     const f = this.file(book);
     fs.writeFileSync(`${f}.tmp`, JSON.stringify(data));
@@ -161,4 +200,4 @@ class Glossary {
   }
 }
 
-module.exports = { Glossary, key, chunks, parse, PROMPT, MODEL };
+module.exports = { Glossary, key, chunks, parse, clean, PROMPT, MODEL };
