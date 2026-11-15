@@ -251,6 +251,12 @@ A flag only when Max asks for one, or when the change could break what readers u
   children's and unsorted as five lines each. Otherwise (and `?all=1`) the list (`calList`): one line an event (day,
   time, title, kind · where, a small cover), the rest behind «докладніше»; today and two weeks open, later months
   folded when the list is long.
+- Every event has its own page (Max 2026-11-15, design canvas EzYcx7zJcqfYf5Bi6XgDrX): `/calendar/<title slug>-<key>`
+  (`calendar.eventPath`, key = 8 hex of the id's sha1, so a corrected title redirects; `calendar.byKey`), `.ics` after
+  it = that event alone. `eventPage` in pages.js, the route in server.js (books with «Хочу прочитати», a tour's stops,
+  4 more events: same book/author, then same kind and city). Every title, row cover, the clubs shelf (one meeting),
+  the book page's «Подія:», the author's «Наживо» and `/calendar/go/<id>` (letters) lead there. The organizer's button
+  is named by its link (`calendar.linkKind`: form / tg / social / site).
 - Max's feedback (2026-11-15): an event by an author on one's shelf names that reader's own books by them
   (`shelfBooksFor`); one event in several cities or days (same title without its city, same link or post) is one row
   with a line per stop (`calendar.tours`), but under a city chip each stop is its own row; `?q=` searches title, words,

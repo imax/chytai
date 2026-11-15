@@ -2103,12 +2103,15 @@ const setReadersWithNote = (fn) => (readersWithNote = fn);
 // gives the plain list, one line an event, by weeks, the far months folded.
 
 const cal = () => require("./calendar");
-// «сторінка події ↗»: always the organizer's page; we sell nothing.
-const eventLink = (e, text = "сторінка події ↗") => (e.url ? `<a class="text-link" href="${attr(e.url)}" target="_blank" rel="noopener nofollow ugc">${text}</a>` : "");
+// The organizer's link, named by what it is (a sign-up form, a Telegram post, a site); we sell nothing.
+const ORG_LINK = { form: "Зареєструватися", tg: "Пост у Telegram", social: "Сторінка організатора", site: "Сайт організатора" };
+const orgText = (e) => ORG_LINK[cal().linkKind(e.url)] || "";
+const eventLink = (e) => (e.url ? `<a class="text-link" href="${attr(e.url)}" target="_blank" rel="noopener nofollow ugc">${orgText(e).toLowerCase()} ↗</a>` : "");
 // One event of a kind, for the line under a title.
 const KIND_ONE = { club: "Клуб", author: "Зустріч з автором", lecture: "Лекція", festival: "Фестиваль", kids: "Для дітей" };
 const KIND_ORDER = ["author", "club", "lecture", "festival", "kids"];
-const calTitle = (e) => (e.url ? `<a href="${attr(e.url)}" target="_blank" rel="noopener nofollow ugc">${esc(e.title)}</a>` : esc(e.title));
+// A title leads to the event's own page (calendar.eventPath).
+const calTitle = (e) => `<a href="${attr(cal().eventPath(e))}">${esc(e.title)}</a>`;
 // «Київ · Книгарня «Є»», or a tour's cities: «Ужгород, Львів, Чернівці, Одеса, Рівне».
 function calWhere(e) {
   if (e.stops?.length > 1) {
@@ -2132,7 +2135,7 @@ function calWhen(e, today) {
 function calLeft(e, today, size = "md") {
   const c = e.bookCards?.[0];
   const d = new Date(`${e.starts < today ? today : e.starts}T12:00:00Z`);
-  return c ? `<a class="cal-cv" href="${attr(c.href)}" tabindex="-1" aria-hidden="true">${cover(c, size)}</a>` : `<span class="cal-tile"><b>${d.getUTCDate()}</b>${esc(cal().MONTHS[d.getUTCMonth()].slice(0, 4))}</span>`;
+  return c ? `<a class="cal-cv" href="${attr(cal().eventPath(e))}" tabindex="-1" aria-hidden="true">${cover(c, size)}</a>` : `<span class="cal-tile"><b>${d.getUTCDate()}</b>${esc(cal().MONTHS[d.getUTCMonth()].slice(0, 4))}</span>`;
 }
 // One line of the list, the shape of the author cards: cover or day, «Чт 19, 18:30», the title, kind · where; the rest
 // (what it is about, a tour's stops, the books, the organizer's page, «сховати») behind «докладніше».
@@ -2248,7 +2251,7 @@ function calOverview(events, { user, owner, today, href, counts }) {
     };
     out.push(`<section class="cal-sec">${label("Книжкові клуби: що обговорюють", more("club"))}<div class="cal-shelf-row">${[...groups.values()]
       .slice(0, 16)
-      .map((g) => `<a class="cal-bk" href="${attr(href({ kind: "club", q: g.q }))}">${cover(g.book, "lg")}<span class="cal-bt">${esc(g.book.title)}</span><span class="cal-bm">${line(g)}</span></a>`)
+      .map((g) => `<a class="cal-bk" href="${attr(g.events.length === 1 ? cal().eventPath(g.events[0]) : href({ kind: "club", q: g.q }))}">${cover(g.book, "lg")}<span class="cal-bt">${esc(g.book.title)}</span><span class="cal-bm">${line(g)}</span></a>`)
       .join("")}</div></section>`);
   }
   // Lectures, children's events and the not yet sorted: short lists.
@@ -2369,11 +2372,93 @@ function calendarAddPage({ user, values = {}, error = "" }) {
 const authorEvents = (events) =>
   events.length
     ? `<section class="block" data-block="author-events">${label("Наживо", `<a href="/calendar">Усі події</a>`)}<div class="rows">${events
-        .map((e) => `<article class="row cal-mini"><div class="cal-date"><b>${new Date(`${e.starts}T12:00:00Z`).getUTCDate()}</b><span>${esc(cal().MONTHS[new Date(`${e.starts}T12:00:00Z`).getUTCMonth()].slice(0, 4))}</span></div><div class="row-body"><h3>${e.url ? `<a href="${attr(e.url)}" target="_blank" rel="noopener nofollow ugc">${esc(e.title)}</a>` : esc(e.title)}</h3><p class="meta">${[(e.ends ? esc(cal().shortWhen(e)) : esc(cal().shortWhen(e).split(",")[0])) + (e.time ? `, ${e.time}` : ""), esc(e.city), e.place ? esc(e.place) : ""].filter(Boolean).join(" · ")}</p></div></article>`)
+        .map((e) => `<article class="row cal-mini"><div class="cal-date"><b>${new Date(`${e.starts}T12:00:00Z`).getUTCDate()}</b><span>${esc(cal().MONTHS[new Date(`${e.starts}T12:00:00Z`).getUTCMonth()].slice(0, 4))}</span></div><div class="row-body"><h3><a href="${attr(cal().eventPath(e))}">${esc(e.title)}</a></h3><p class="meta">${[(e.ends ? esc(cal().shortWhen(e)) : esc(cal().shortWhen(e).split(",")[0])) + (e.time ? `, ${e.time}` : ""), esc(e.city), e.place ? esc(e.place) : ""].filter(Boolean).join(" · ")}</p></div></article>`)
         .join("")}</div></section>`
     : "";
 // One line on a book's page about the next event with it or its author.
-const eventLine = (e) => (e ? `<p class="awards cal-line" data-block="book-event"><span>Подія:</span> ${e.url ? `<a class="text-link" href="${attr(e.url)}" target="_blank" rel="noopener nofollow ugc">${esc(e.title)}</a>` : esc(e.title)}, ${esc(cal().shortWhen(e))}${e.city ? `, ${esc(e.city)}` : ""}</p>` : "");
+const eventLine = (e) => (e ? `<p class="awards cal-line" data-block="book-event"><span>Подія:</span> <a class="text-link" href="${attr(cal().eventPath(e))}">${esc(e.title)}</a>, ${esc(cal().shortWhen(e))}${e.city ? `, ${esc(e.city)}` : ""}</p>` : "");
+
+// An event's own page, /calendar/<title>-<key> (Max 2026-11-15, variant A of a design canvas: the shape of a book's
+// page). The book's cover or the day, the day and time, the title, where (with a map), what it is, the organizer's
+// link and «Додати в календар»; the books with «Хочу прочитати»; a tour's other stops; more events nearby.
+function eventPage({ e, user, owner = false, books = [], stops = [], related = [], relatedLabel = "", relatedHref = "/calendar", site = "" }) {
+  const C = cal();
+  const today = C.kyivDay();
+  const past = (e.ends || e.starts) < today;
+  const d = new Date(`${e.starts}T12:00:00Z`);
+  const days = Math.round((Date.parse(e.starts) - Date.parse(today)) / 86400000);
+  const soon = past ? "минула" : e.starts < today ? `триває до ${C.span({ starts: e.ends })}` : days === 0 ? "сьогодні" : days === 1 ? "завтра" : days < 7 ? `за ${days} ${days < 5 ? "дні" : "днів"}` : "";
+  const day = e.ends ? C.span(e) : C.dayName(e.starts);
+  const kind = C.KINDS.find((k) => k.key === e.kind);
+  const book = books[0]?.book;
+  const left = book ? `<a class="ev-cover" href="${attr(book.href)}" aria-label="${attr(book.title)}">${cover(book, "xl")}</a>` : `<span class="ev-cover cal-tile ev-tile"><b>${d.getUTCDate()}</b>${esc(C.MONTHS[d.getUTCMonth()].slice(0, 4))}</span>`;
+  const online = e.city === "Онлайн";
+  const map = !online && e.place && !/повідом|уточн|після реєстрац/i.test(e.place) ? ` · <a class="text-link" href="${attr(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent([e.place, e.city].filter(Boolean).join(", "))}`)}" target="_blank" rel="noopener" data-ev="ev-map">на мапі</a>` : "";
+  const where = [e.city, e.place].filter(Boolean).map(esc).join(" · ");
+  const page = `${site}${C.eventPath(e)}`;
+  const org = e.url ? `<a class="btn primary" href="${attr(e.url)}" target="_blank" rel="noopener nofollow ugc" data-ev="ev-organizer">${esc(orgText(e))} ↗</a>` : "";
+  // «Додати в календар»: the .ics file opens Apple's calendar, Google's has its own link.
+  const ics = C.eventPath(e) + ".ics";
+  const addCal = past ? "" : `<details class="ev-cal"><summary class="btn">Додати в календар</summary><p class="small"><a class="text-link" href="${attr(ics)}" data-ev="ev-ics">iPhone чи Mac</a> · <a class="text-link" href="${attr(C.googleLink(e, page))}" target="_blank" rel="noopener" data-ev="ev-google">Google</a> · <a class="text-link" href="${attr(ics)}" download data-ev="ev-ics-file">файл .ics</a></p></details>`;
+  const note = e.url ? (C.linkKind(e.url) === "form" ? "Реєстрація в організатора. Квитків не продаємо." : "Подробиці в організатора. Квитків не продаємо.") : "";
+  const hide = user && (owner || e.by === user.id) ? `<form method="post" action="/calendar/${attr(encodeURIComponent(e.id))}/hide" class="inline"><button class="text-link small muted">сховати</button></form>` : "";
+  const by = e.byReader ? `Додав(ла) <a class="text-link" href="${attr(e.byReader.href)}">${esc(e.byReader.name)}</a>` : "";
+  const foot = [by, hide].filter(Boolean).join(" · ");
+  const tour = stops.length > 1 ? `<section class="block" data-block="ev-stops">${label("Усі зустрічі")}<div class="cal-lns">${stops.map((s) => `<div class="ev-stop${s.id === e.id ? " on" : ""}"><b>${esc(C.shortWhen(s))}${s.time ? `, ${esc(s.time)}` : ""}</b> ${s.id === e.id ? `<span>${[s.city, s.place].filter(Boolean).map(esc).join(" · ")}</span>` : `<a href="${attr(C.eventPath(s))}">${[s.city, s.place].filter(Boolean).map(esc).join(" · ")}</a>`}</div>`).join("")}</div></section>` : "";
+  const bookRows = books.length
+    ? `<section class="block" data-block="ev-books">${label(books.length > 1 ? "Книжки" : "Книжка")}<div class="ev-books">${books
+        .map(({ book: b, entry }) => `<div class="ev-book">${`<a href="${attr(b.href)}" tabindex="-1" aria-hidden="true">${cover(b, "sm")}</a>`}<div><a class="ev-bt" href="${attr(b.href)}">${esc(b.title)}</a>${b.author ? `<p class="meta">${authorLinks(b.author)}</p>` : ""}</div>${entry ? myStatus(entry) : wantButton(b, user)}</div>`)
+        .join("")}</div></section>`
+    : e.authorLinks?.length
+      ? `<section class="block" data-block="ev-authors">${label(e.authorLinks.length > 1 ? "Автори" : "Автор")}<p>${e.authorLinks.map((a) => `<a class="text-link" href="${attr(a.href)}">${esc(a.name)}</a>`).join(", ")}</p></section>`
+      : "";
+  const more = related.length ? `<div data-block="ev-related">${label(esc(relatedLabel || "Ще події"), `<a href="${attr(relatedHref)}">усі</a>`)}<div class="cal-lns">${related.map((r) => calLine(r, { user, owner, today })).join("")}</div></div>` : "";
+  const body = `
+<div class="split ev-split">
+  <div>
+    <p class="crumbs"><a href="/calendar">Книжкові події</a>${kind ? ` · <a href="/calendar?kind=${attr(kind.key)}">${esc(kind.label)}</a>` : ""}</p>
+    <article class="ev-top">
+      ${left}
+      <div class="ev-head">
+        ${kind ? `<p class="kicker">${esc(kind.key === "club" ? "Книжковий клуб" : KIND_ONE[kind.key])}</p>` : ""}
+        <p class="ev-day">${esc(day.replace(/^./, (c) => c.toUpperCase()))}</p>
+        ${e.time || soon ? `<p class="ev-time">${[esc(e.time), esc(soon)].filter(Boolean).join(" · ")}</p>` : ""}
+      </div>
+      <div class="ev-main">
+        <h1>${esc(e.title)}</h1>
+        ${where ? `<p class="ev-where">${where}${map}</p>` : ""}
+        ${e.sub ? `<p class="ev-sub">${esc(e.sub)}</p>` : ""}
+        ${calShelfLine(e)}
+        ${past ? `<p class="ev-past muted">Ця подія вже минула. <a class="text-link" href="/calendar">Що попереду</a></p>` : org || addCal ? `<div class="ev-acts">${org}${addCal}</div>${note ? `<p class="small muted ev-note">${note}</p>` : ""}` : ""}
+        ${foot ? `<p class="small muted ev-foot">${foot}</p>` : ""}
+      </div>
+    </article>
+    ${tour}
+    ${bookRows}
+  </div>
+  <aside>${more}</aside>
+</div>`;
+  const when = `${C.dayName(e.starts)}${e.time ? `, ${e.time}` : ""}`;
+  // schema.org Event, for search: a time in Kyiv's offset that day.
+  const offset = (() => {
+    const p = new Intl.DateTimeFormat("en", { timeZone: "Europe/Kyiv", timeZoneName: "longOffset" }).formatToParts(new Date(`${e.starts}T12:00:00Z`)).find((x) => x.type === "timeZoneName")?.value || "GMT+02:00";
+    return p.replace("GMT", "") || "+00:00";
+  })();
+  const jsonld = {
+    "@context": "https://schema.org",
+    "@type": "Event",
+    name: e.title,
+    startDate: e.time ? `${e.starts}T${e.time}:00${offset}` : e.starts,
+    ...(e.ends ? { endDate: e.ends } : {}),
+    eventAttendanceMode: online ? "https://schema.org/OnlineEventAttendanceMode" : "https://schema.org/OfflineEventAttendanceMode",
+    eventStatus: "https://schema.org/EventScheduled",
+    location: online ? { "@type": "VirtualLocation", url: e.url || page } : { "@type": "Place", name: e.place || e.city, address: { "@type": "PostalAddress", addressLocality: e.city, addressCountry: "UA", ...(e.place ? { streetAddress: e.place } : {}) } },
+    ...(e.sub ? { description: e.sub } : {}),
+    ...(book?.cover ? { image: abs(book.cover) } : {}),
+    ...(e.url ? { url: e.url } : {}),
+  };
+  return layout({ title: e.title, body, user, path: "/calendar", canonical: C.eventPath(e), noindex: past || e.hidden, description: [when, [e.city, e.place].filter(Boolean).join(", "), e.sub].filter(Boolean).join(". ").slice(0, 300), image: book?.cover ? abs(book.cover) : "", jsonld });
+}
 
 // ---- sign in / sign up / settings ----
 
@@ -3622,7 +3707,7 @@ ${wait ? `<script>(() => { const steps = ${JSON.stringify(ASK_STEPS)}; const lin
 }
 
 module.exports = {
-  calendarPage, calendarAddPage,
+  calendarPage, calendarAddPage, eventPage,
   askPage, askAnswerPage, askRows,
   asksPage, askTalkPage, setAskNav,
   commentsAdminPage,

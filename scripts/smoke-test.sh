@@ -59,6 +59,10 @@ check /calendar 200
 check /calendar.ics 200
 check "/calendar?kind=club" 200
 check "/calendar?all=1" 200
+check /calendar/no-such-event-00000000 404
+# An event's own page and its .ics, the first one /calendar links to (the test copy may have none).
+ev=$(curl -s -m 20 "$BASE/calendar?all=1" | grep -o 'href="/calendar/[^"?/]*-[0-9a-f]\{8\}"' | head -1 | sed 's/^href="//; s/"$//')
+if [ -n "$ev" ]; then check "$ev" 200; check "$ev.ics" 200; fi
 check /publishers 200
 check /updates 200
 check /lists 200

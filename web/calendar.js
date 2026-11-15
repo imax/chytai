@@ -518,6 +518,17 @@ function create(db, store, { notify = () => {}, bookua = null, search = null, ma
     return n;
   }
 
+  // An event by the key at the end of its page's address (eventPath), hidden or past ones too (they go 30 days after).
+  // A few hundred rows, each id hashed once.
+  const keys = new Map();
+  function byKey(k) {
+    for (const { id } of db.prepare("SELECT id FROM cal_events").all()) {
+      if (!keys.has(id)) keys.set(id, eventKey(id));
+      if (keys.get(id) === k) return one(id);
+    }
+    return null;
+  }
+
   // The next events with this author or book (by an author of the book when none names it), soonest first.
   const forAuthor = (slug, n = 3) => upcoming().filter((e) => e.authors.includes(slug)).slice(0, n);
   function forBook(id, authorSlugs = [], n = 1) {
@@ -625,7 +636,7 @@ function create(db, store, { notify = () => {}, bookua = null, search = null, ma
   };
   const unsubscribeAll = (reader) => db.prepare("DELETE FROM cal_subs WHERE reader = ?").run(reader).changes;
 
-  return { upsert, setKinds, add, one, findSimilar, hide, cleanup, seed, upcoming, forAuthor, forBook, cities, fillBooks, chytomoRun, yeRun, yeLast: () => yeLast, peek, fresh, meta, setMeta, subs, subscribed, subscribe, unsubscribeAll };
+  return { upsert, setKinds, add, one, byKey, findSimilar, hide, cleanup, seed, upcoming, forAuthor, forBook, cities, fillBooks, chytomoRun, yeRun, yeLast: () => yeLast, peek, fresh, meta, setMeta, subs, subscribed, subscribe, unsubscribeAll };
 }
 
 // «Четвер, 19 листопада» and, within a week, «завтра» / «через 3 дні».
@@ -700,7 +711,7 @@ function ics(events, { name = "Книжкові події", site = "https://chy
     lines.push(`SUMMARY:${esc(e.title)}`);
     const where = e.city === "Онлайн" ? "Онлайн" : [e.place, e.city].filter(Boolean).join(", ");
     if (where) lines.push(`LOCATION:${esc(where)}`);
-    lines.push(`DESCRIPTION:${esc([e.sub, e.url ? `Сторінка події: ${e.url}` : "", `Усі події: ${site}/calendar`].filter(Boolean).join("\n"))}`);
+    lines.push(`DESCRIPTION:${esc([e.sub, e.url ? `Організатор: ${e.url}` : "", `На Chytai: ${site}${eventPath(e)}`].filter(Boolean).join("\n"))}`);
     if (e.url) lines.push(`URL:${e.url}`);
     lines.push("END:VEVENT");
   }
@@ -729,7 +740,32 @@ function subName(f) {
   return [kind?.label, f.city, f.mine ? "мої автори" : "", f.q ? `«${f.q}»` : ""].filter(Boolean).join(" · ") || "Усі події";
 }
 
+// An event's own page (Max 2026-11-15: a club on /calendar led to a filtered list): /calendar/<title>-<key>, the key
+// 8 hex of the id's hash, so the address stays when the title is corrected (the old one redirects).
+const eventKey = (id) => require("crypto").createHash("sha1").update(String(id)).digest("hex").slice(0, 8);
+const eventPath = (e) => `/calendar/${require("./store").slugify(tourTitle(e)).slice(0, 60).replace(/-+$/, "")}-${eventKey(e.id)}`;
+// What the organizer's link is, for its button: a sign-up form, a Telegram post, or a site.
+function linkKind(url) {
+  if (/^https?:\/\/(forms\.gle|docs\.google\.com\/forms|forms\.office\.com|[^/]*typeform\.com|[^/]*jotform\.com)/i.test(url || "")) return "form";
+  if (/^https?:\/\/(t\.me|telegram\.me)\//i.test(url || "")) return "tg";
+  if (/^https?:\/\/([^/]*\.)?(instagram\.com|facebook\.com|fb\.me)\//i.test(url || "")) return "social";
+  return url ? "site" : "";
+}
+// One event's Google Calendar link (the .ics file is /calendar/<…>.ics): a timed event lasts two hours.
+function googleLink(e, page = "") {
+  const d8 = (day) => day.replace(/-/g, "");
+  let dates;
+  if (e.time) {
+    const [h, m] = e.time.split(":").map(Number);
+    const endH = Math.min(h + 2, 23);
+    dates = `${d8(e.starts)}T${pad(h)}${pad(m)}00/${d8(e.starts)}T${pad(endH)}${pad(endH === 23 && h + 2 > 23 ? 59 : m)}00`;
+  } else dates = `${d8(e.starts)}/${d8(addDays(e.ends || e.starts, 1))}`;
+  const where = e.city === "Онлайн" ? "Онлайн" : [e.place, e.city].filter(Boolean).join(", ");
+  const p = new URLSearchParams({ action: "TEMPLATE", text: e.title, dates, ctz: "Europe/Kyiv", details: [e.sub, page].filter(Boolean).join("\n\n"), location: where });
+  return `https://calendar.google.com/calendar/render?${p}`;
+}
+
 const SHORT_DAYS = ["нд", "пн", "вт", "ср", "чт", "пт", "сб"];
 const shortWhen = (e) => `${SHORT_DAYS[new Date(`${e.starts}T12:00:00Z`).getUTCDay()]}, ${span(e)}`;
 
-module.exports = { create, KINDS, subKey, subParse, subName, SHORT_DAYS, tours, ics, parseWhen, linkText, readEvent, cleanTitle, findCity, kyivDay, addDays, dayName, dayAside, span, shortWhen, MONTHS };
+module.exports = { create, KINDS, eventKey, eventPath, linkKind, googleLink, tourTitle, subKey, subParse, subName, SHORT_DAYS, tours, ics, parseWhen, linkText, readEvent, cleanTitle, findCity, kyivDay, addDays, dayName, dayAside, span, shortWhen, MONTHS };

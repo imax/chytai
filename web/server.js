@@ -1701,8 +1701,13 @@ function homeEvents(req) {
     .sort((a, b) => rank(a.e) - rank(b.e) || a.i - b.i)
     .slice(0, 4)
     .sort((a, b) => a.i - b.i)
-    .map(({ e }) => ({ ...e, mine: isMine(e) ? shelfBooksFor(req, e, mineSet) : null, bookCards: e.books.map((id) => store.book(id) && workFor(req, store.book(id))).filter(Boolean).slice(0, 3), authorLinks: e.authors.map((s) => store.authors?.bySlug.get(s)).filter(Boolean).slice(0, 3) }));
+    .map(({ e }) => calCard(req, e, mineSet));
   return { events: pick, total: rows.length };
+}
+// An event as the pages show it: the reader's own books by its authors, its books as cards, its authors, who added it.
+function calCard(req, e, mineSet) {
+  const mine = !!mineSet && e.authors.some((a) => mineSet.has(a));
+  return { ...e, mine: mine ? shelfBooksFor(req, e, mineSet) : null, bookCards: e.books.map((id) => store.book(id) && workFor(req, store.book(id))).filter(Boolean).slice(0, 3), authorLinks: e.authors.map((s) => store.authors?.bySlug.get(s)).filter(Boolean).slice(0, 3), byReader: e.by ? pub(auth.reader(e.by)) : null };
 }
 bg.every("overviews", 24 * 3600 * 1000, () => advice.sweep(), { db: store.db });
 pages.setStats((id) => social.stats(id));
@@ -1771,7 +1776,7 @@ app.get("/calendar", (req, res) => {
   const counts = { all: rows.length };
   for (const e of rows) if (e.kind) counts[e.kind] = (counts[e.kind] || 0) + 1;
   const events = kind ? rows.filter((e) => e.kind === kind) : rows;
-  const withBooks = events.slice(0, 300).map((e) => ({ ...e, mine: isMine(e) ? shelfBooksFor(req, e, mineSet) : null, bookCards: e.books.map((id) => store.book(id) && workFor(req, store.book(id))).filter(Boolean).slice(0, 3), authorLinks: e.authors.map((s) => store.authors?.bySlug.get(s)).filter(Boolean).slice(0, 3), byReader: e.by ? pub(auth.reader(e.by)) : null }));
+  const withBooks = events.slice(0, 300).map((e) => calCard(req, e, mineSet));
   const choice = { kind, city, mine, q: query };
   res.send(pages.calendarPage({ user: req.user, events: withBooks, cities: calendar.cities(), city, mine, mineCount: mineSet ? all.filter(isMine).length : 0, owner: !!req.owner, query, kind, all: !!req.query.all, counts, total: rows.length, feed: calFeed(mine ? req.user.id : "", city, query, kind), subscribed: calendar.subscribed(req.user?.id, choice), subs: calendar.subs(req.user?.id).length }));
 });
@@ -1808,11 +1813,50 @@ app.get("/calendar/unsubscribe/:id/:token", (req, res) => {
   calendar.unsubscribeAll(reader.id);
   res.send(pages.messagePage({ title: "Події більше не приходитимуть", text: "Підписатися знову можна на сторінці подій, chytai.org.ua/calendar.", user: req.user }));
 });
-// An event's own page, by our address: letters link only to chytai.org.ua.
+// The Friday letter's links (letters link only to chytai.org.ua): the event's own page.
 app.get("/calendar/go/:id", (req, res) => {
   const e = calendar.one(req.params.id);
-  if (!e || !/^https?:\/\//.test(e.url || "")) return res.redirect(302, `/calendar${e ? `#${encodeURIComponent(e.id)}` : ""}`);
-  res.redirect(302, e.url);
+  res.redirect(302, e ? calendarLib.eventPath(e) : "/calendar");
+});
+// An event's own page, /calendar/<title>-<key> (Max 2026-11-15), and the same event as an .ics file for a phone's
+// calendar. A corrected title keeps the key: the old address redirects. Hidden: only Max and who added it.
+app.get(/^\/calendar\/(?:[^/]*-)?([0-9a-f]{8})(\.ics)?$/, (req, res) => {
+  const e = calendar.byKey(req.params[0]);
+  if (!e || (e.hidden && !(req.owner || (req.user && e.by === req.user.id)))) return res.status(404).send(pages.messagePage({ title: "Такої події немає", text: "Можливо, вона давно минула. Усі події на chytai.org.ua/calendar.", user: req.user }));
+  const path = calendarLib.eventPath(e);
+  if (req.params[1]) return res.set("Content-Type", "text/calendar; charset=utf-8").set("Content-Disposition", `inline; filename="chytai-${req.params[0]}.ics"`).set("Cache-Control", "public, max-age=1800").send(calendarLib.ics([e], { name: e.title, site: SITE }));
+  if (decodeURIComponent(req.path) !== path) return res.redirect(301, path);
+  const mineSet = req.user ? shelfAuthors(req.user.id) : null;
+  const card = calCard(req, e, mineSet);
+  // Its books with the reader's own status, «Хочу прочитати» when not on the shelf.
+  const entries = req.user ? store.entriesOf(req.user.id) : {};
+  const seen = new Set();
+  const books = e.books
+    .map((id) => store.book(id))
+    .filter(Boolean)
+    .map((b) => ({ book: workFor(req, b), entry: entries[b.id] || entries[store.canonical(b.id)] || null }))
+    .filter((x) => x.book && !seen.has(x.book.href) && seen.add(x.book.href))
+    .slice(0, 6);
+  // A tour: all its stops (the same title without the city, the same link).
+  const upcoming = calendar.upcoming();
+  const stops = calendarLib.tours(upcoming).find((g) => g.stops?.some((s) => s.id === e.id))?.stops || [];
+  // More: the same books or authors first, then the same kind in the same city, then the same city, two weeks on.
+  const skip = new Set([e.id, ...stops.map((s) => s.id)]);
+  const until = calendarLib.addDays(e.starts < calendarLib.kyivDay() ? calendarLib.kyivDay() : e.starts, 14);
+  const rank = (x) => (x.books.some((b) => e.books.includes(b)) || x.authors.some((a) => e.authors.includes(a)) ? 0 : x.city === e.city && x.kind === e.kind ? 1 : x.city === e.city ? 2 : 9);
+  const rel = calendarLib
+    .tours(upcoming.filter((x) => !skip.has(x.id) && x.starts <= until))
+    .map((x, i) => ({ x, i, r: rank(x) }))
+    .filter((o) => o.r < 9)
+    .sort((a, b) => a.r - b.r || a.i - b.i)
+    .slice(0, 4)
+    .sort((a, b) => a.i - b.i)
+    .map(({ x }) => calCard(req, x, mineSet));
+  const city = e.city || "";
+  const kindNow = rel.length && rel.every((x) => x.kind === e.kind) && e.kind;
+  const relatedLabel = city === "Онлайн" ? "Ще онлайн" : city ? `Ще події · ${city}` : "Ще події";
+  const relatedHref = `/calendar?${[kindNow ? `kind=${e.kind}` : "", city ? `city=${encodeURIComponent(city)}` : "", !kindNow ? "all=1" : ""].filter(Boolean).join("&")}`;
+  res.send(pages.eventPage({ e: card, user: req.user, owner: !!req.owner, books, stops, related: rel, relatedLabel, relatedHref, site: SITE }));
 });
 // The Friday letter's «Книжкові події» (digest.js): what the reader's subscriptions pick and starts within 9 days
 // (to the Sunday after the next letter), plus later ones added since their last letter. A tour is one row.
@@ -1849,7 +1893,7 @@ app.post("/calendar/add", signed, (req, res) => {
   if (r.error) return res.status(400).send(pages.calendarAddPage({ user: req.user, values: f, error: r.error }));
   // A new kind of thing readers write: Max hears of each one (CLAUDE.md).
   if (r.event && !req.owner) notifyOwner(`Нова подія: ${r.event.title}`, [`${req.user.name} (${SITE}/@${req.user.username}) додав(ла) подію в календар:`, "", r.event.title, `${r.event.starts}${r.event.time ? ` ${r.event.time}` : ""} · ${r.event.city}${r.event.place ? `, ${r.event.place}` : ""}`, r.event.url, "", `${SITE}/calendar`, "Сховати: кнопка «сховати» під подією на /calendar."].join("\n"));
-  res.redirect(303, `/calendar#${encodeURIComponent(r.id)}`);
+  res.redirect(303, calendarLib.eventPath(calendar.one(r.id) || { id: r.id, title: f.title || "" }));
 });
 // «Заповнити з посилання»: what the event's page says (calendar.peek), 30 a day per reader.
 const peeks = new Map();
@@ -3214,6 +3258,9 @@ app.get("/sitemap.xml", (req, res) => {
     // The Club (Max, 2026-11-01): its topics without spoilers, not those of a reader who keeps their pages out of search.
     urls.push("/club");
     for (const t of club.forSitemap()) if (!t.reader.noindex) urls.push(t.href);
+    // Book events (Max 2026-11-15): /calendar and each upcoming event's own page.
+    urls.push("/calendar");
+    for (const e of calendar.upcoming()) urls.push(calendarLib.eventPath(e));
     sitemap = { at: Date.now(), xml: `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls.map((u) => `<url><loc>${pages.esc(origin + u)}</loc></url>`).join("\n")}\n</urlset>\n` };
     console.log(`sitemap: ${urls.length} addresses in ${Date.now() - t0} ms`);
   }
