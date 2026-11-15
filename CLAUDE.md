@@ -237,9 +237,16 @@ A flag only when Max asks for one, or when the change could break what readers u
 
 ## «Книжкові події», /calendar (`web/calendar.js`)
 
-- Max's design A + D from a design canvas (2026-11-15): a list by days with city chips and «Мої автори» (authors on
-  one's shelf), «Наживо» on the author's page, one «Подія:» line on the book's page. No block on one's own shelf
-  (Max). An event links to the organizer's page; we sell no tickets.
+- Max's design A + D from a design canvas (2026-11-15): «Мої автори» (authors on one's shelf), «Наживо» on the
+  author's page, one «Подія:» line on the book's page. No block on one's own shelf (Max). An event links to the
+  organizer's page; we sell no tickets.
+- At ~120 events (clubs 4 in 5) the list by days was a dump (Max): design B «За типом» from a second canvas
+  (UwNH4YbYAYe9trVsSrwRGi). Kind chips with counts (`?kind=`, also in /calendar.ics), the city as one menu, a search.
+  No kind, words or «Мої автори» = an overview (`calOverview` in pages.js): author meetings as cards, festivals with
+  their days, clubs as a shelf of the books they discuss (one cover a book; it opens `?kind=club&q=<book>`), lectures,
+  children's and unsorted as five lines each. Otherwise (and `?all=1`) the list (`calList`): one line an event (day,
+  time, title, kind · where, a small cover), the rest behind «докладніше»; today and two weeks open, later months
+  folded when the list is long.
 - Max's feedback (2026-11-15): an event by an author on one's shelf names that reader's own books by them
   (`shelfBooksFor`); one event in several cities or days (same title without its city, same link or post) is one row
   with a line per stop (`calendar.tours`), but under a city chip each stop is its own row; `?q=` searches title, words,

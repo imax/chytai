@@ -699,4 +699,4 @@ function ics(events, { name = "Книжкові події", site = "https://chy
 const SHORT_DAYS = ["нд", "пн", "вт", "ср", "чт", "пт", "сб"];
 const shortWhen = (e) => `${SHORT_DAYS[new Date(`${e.starts}T12:00:00Z`).getUTCDay()]}, ${span(e)}`;
 
-module.exports = { create, KINDS, tours, ics, parseWhen, linkText, readEvent, cleanTitle, findCity, kyivDay, addDays, dayName, dayAside, span, shortWhen, MONTHS };
+module.exports = { create, KINDS, SHORT_DAYS, tours, ics, parseWhen, linkText, readEvent, cleanTitle, findCity, kyivDay, addDays, dayName, dayAside, span, shortWhen, MONTHS };

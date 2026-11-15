@@ -1744,17 +1744,22 @@ app.get("/calendar", (req, res) => {
   const query = String(req.query.q || "").trim().slice(0, 80);
   const words = norm(query).split(/\s+/).filter(Boolean);
   const hay = (e) => norm([e.title, e.sub, e.city, e.place, ...e.authors.map((a) => store.authors?.bySlug.get(a)?.name || ""), ...e.books.map((id) => store.book(id)?.title || "")].join(" "));
+  // ?kind= one kind of event (calendar.KINDS); no kind, no words and no «Мої автори» = the overview by kind (?all=1: the list).
+  const kind = require("./calendar").KINDS.some((k) => k.key === req.query.kind) ? req.query.kind : "";
   const picked = all.filter((e) => (!city || e.city === city) && (!mine || isMine(e)) && (!words.length || words.every((w) => hay(e).includes(w))));
   // One city: each of a tour's stops there stays a row of its own; otherwise a tour is one row (Max 2026-11-15).
-  const events = city ? picked : require("./calendar").tours(picked);
-  const withBooks = events.slice(0, 200).map((e) => ({ ...e, mine: isMine(e) ? shelfBooksFor(req, e, mineSet) : null, bookCards: e.books.map((id) => store.book(id) && workFor(req, store.book(id))).filter(Boolean).slice(0, 3), authorLinks: e.authors.map((s) => store.authors?.bySlug.get(s)).filter(Boolean).slice(0, 3), byReader: e.by ? pub(auth.reader(e.by)) : null }));
-  res.send(pages.calendarPage({ user: req.user, events: withBooks, cities: calendar.cities(), city, mine, mineCount: mineSet ? all.filter(isMine).length : 0, owner: !!req.owner, query, feed: calFeed(mine ? req.user.id : "", city, query) }));
+  const rows = city ? picked : require("./calendar").tours(picked);
+  const counts = { all: rows.length };
+  for (const e of rows) if (e.kind) counts[e.kind] = (counts[e.kind] || 0) + 1;
+  const events = kind ? rows.filter((e) => e.kind === kind) : rows;
+  const withBooks = events.slice(0, 300).map((e) => ({ ...e, mine: isMine(e) ? shelfBooksFor(req, e, mineSet) : null, bookCards: e.books.map((id) => store.book(id) && workFor(req, store.book(id))).filter(Boolean).slice(0, 3), authorLinks: e.authors.map((s) => store.authors?.bySlug.get(s)).filter(Boolean).slice(0, 3), byReader: e.by ? pub(auth.reader(e.by)) : null }));
+  res.send(pages.calendarPage({ user: req.user, events: withBooks, cities: calendar.cities(), city, mine, mineCount: mineSet ? all.filter(isMine).length : 0, owner: !!req.owner, query, kind, all: !!req.query.all, counts, total: rows.length, feed: calFeed(mine ? req.user.id : "", city, query, kind) }));
 });
 // «Підписатися» (Max 2026-11-15): the list as an iCalendar feed for a phone's calendar, with the same ?city= and ?q=;
 // «Мої автори» goes by ?mine=<reader>.<key> (a calendar app has no cookie), the key signed with the reader secret.
 const calKey = (id) => require("crypto").createHmac("sha256", readerSecret()).update(`cal:${id}`).digest("base64url").slice(0, 22);
-function calFeed(reader, city, query) {
-  const qs = [city ? `city=${encodeURIComponent(city)}` : "", reader ? `mine=${reader}.${calKey(reader)}` : "", query ? `q=${encodeURIComponent(query)}` : ""].filter(Boolean).join("&");
+function calFeed(reader, city, query, kind = "") {
+  const qs = [kind ? `kind=${kind}` : "", city ? `city=${encodeURIComponent(city)}` : "", reader ? `mine=${reader}.${calKey(reader)}` : "", query ? `q=${encodeURIComponent(query)}` : ""].filter(Boolean).join("&");
   return `${SITE}/calendar.ics${qs ? `?${qs}` : ""}`;
 }
 app.get("/calendar.ics", (req, res) => {
@@ -1765,8 +1770,9 @@ app.get("/calendar.ics", (req, res) => {
   const words = norm(String(req.query.q || "").slice(0, 80)).split(/\s+/).filter(Boolean);
   const mineSet = reader ? shelfAuthors(reader) : null;
   const hay = (e) => norm([e.title, e.sub, e.city, e.place, ...e.authors.map((a) => store.authors?.bySlug.get(a)?.name || ""), ...e.books.map((id) => store.book(id)?.title || "")].join(" "));
-  const events = calendar.upcoming().filter((e) => (!city || e.city === city) && (!mineSet || e.authors.some((a) => mineSet.has(a))) && (!words.length || words.every((w) => hay(e).includes(w))));
-  const name = ["Книжкові події", city, reader ? "мої автори" : "", req.query.q ? String(req.query.q).slice(0, 40) : ""].filter(Boolean).join(" · ");
+  const kind = require("./calendar").KINDS.find((k) => k.key === req.query.kind);
+  const events = calendar.upcoming().filter((e) => (!kind || e.kind === kind.key) && (!city || e.city === city) && (!mineSet || e.authors.some((a) => mineSet.has(a))) && (!words.length || words.every((w) => hay(e).includes(w))));
+  const name = ["Книжкові події", kind?.label, city, reader ? "мої автори" : "", req.query.q ? String(req.query.q).slice(0, 40) : ""].filter(Boolean).join(" · ");
   res.set("Content-Type", "text/calendar; charset=utf-8").set("Cache-Control", `${reader ? "private" : "public"}, max-age=1800`).send(require("./calendar").ics(events, { name, site: SITE }));
 });
 app.get("/calendar/add", signed, (req, res) => res.send(pages.calendarAddPage({ user: req.user })));
