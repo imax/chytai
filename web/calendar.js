@@ -56,6 +56,10 @@ const CITIES = [
   ["Кривий Ріг", /крив(ий|ому) ро?ріг|кривому розі/i],
 ];
 const ONLINE = /онлайн|online|zoom|youtube|трансляці/i;
+// Only Ukraine and online for now (Max 2026-11-15, a library in Galway): the collectors' Haiku says `abroad`, and
+// these cities are kept out whatever it says.
+const ABROAD = /^([ґг][оа]лвей|galway|дублін|корк|лондон|единбург|прага|брно|варшава|краків|вроцлав|гданськ|познань|люблін|лодзь|катовіце|ряшів|жешув|перемишль|берлін|мюнхен|гамбург|франкфурт|кельн|лейпциг|дрезден|відень|цюрих|женева|берн|базель|париж|ліон|брюссель|амстердам|роттердам|гаага|копенгаген|стокгольм|осло|гельсінкі|таллінн|тарту|рига|вільнюс|каунас|кишинів|бухарест|будапешт|братислава|кошице|любляна|загреб|рим|мілан|неаполь|мадрид|барселона|валенсія|лісабон|порту|афіни|тбілісі|батумі|анкара|стамбул|нью-йорк|чикаго|торонто|ванкувер|монреаль|вашингтон|лос-анджелес|сідней|мельбурн)$/i;
+const abroad = (city) => ABROAD.test(String(city || "").trim());
 const findCity = (text) => (ONLINE.test(text || "") ? "Онлайн" : CITIES.find(([, re]) => re.test(text || ""))?.[0] || "");
 
 // Today in Kyiv, «YYYY-MM-DD».
@@ -257,6 +261,11 @@ function create(db, store, { notify = () => {}, bookua = null, search = null, ma
   try {
     db.exec("ALTER TABLE cal_events ADD COLUMN link TEXT NOT NULL DEFAULT ''");
   } catch {}
+  // Events abroad that came in before the rule are hidden (Max 2026-11-15: Ukraine and online only).
+  try {
+    const hideRow = db.prepare("UPDATE cal_events SET hidden = 1 WHERE id = ?");
+    for (const r of db.prepare("SELECT id, city FROM cal_events WHERE hidden = 0 AND city != ''").all()) if (abroad(r.city)) hideRow.run(r.id);
+  } catch {}
   const meta = (k) => db.prepare("SELECT value FROM meta WHERE key = ?").get(k)?.value || "";
   const setMeta = (k, v) => db.prepare("INSERT INTO meta (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(k, v);
   const row = (r) => r && { ...r, books: JSON.parse(r.books || "[]"), authors: JSON.parse(r.authors || "[]"), hidden: !!r.hidden };
@@ -283,6 +292,7 @@ function create(db, store, { notify = () => {}, bookua = null, search = null, ma
     const title = clean(ev.title, 160);
     if (!title || !/^\d{4}-\d\d-\d\d$/.test(ev.starts || "")) return null;
     const city = clean(ev.city, 40) || findCity(`${ev.place || ""} ${title}`);
+    if (abroad(city)) ev = { ...ev, hidden: true };
     const links = ev.books || ev.authors ? { books: ev.books || [], authors: ev.authors || [] } : linkText(store, `${title} ${ev.sub || ""}`);
     const want = wanted(ev, title, links);
     const kind = KINDS.some((k) => k.key === ev.kind) ? ev.kind : "";
@@ -469,6 +479,7 @@ function create(db, store, { notify = () => {}, bookua = null, search = null, ma
     if (!/^https?:\/\/[^\s/]+\.[^\s]+$/i.test(url)) return { error: "Додайте посилання на сторінку події." };
     if (!/^\d{4}-\d\d-\d\d$/.test(f.starts || "") || f.starts < kyivDay() || f.starts > addDays(kyivDay(), 400)) return { error: "Вкажіть дату події, не з минулого." };
     if (!clean(f.city, 40)) return { error: "Вкажіть місто або «Онлайн»." };
+    if (abroad(f.city)) return { error: "Поки що тут лише події в Україні та онлайн." };
     const today = new Date().toISOString().slice(0, 10);
     if (!user.owner && db.prepare("SELECT count(*) n FROM cal_events WHERE by = ? AND added >= ?").get(user.id, today).n >= 5) return { error: "Сьогодні вже досить подій від вас. Завтра можна ще." };
     // The same link on the same day in another city is a tour's next stop, not the same event.
@@ -799,4 +810,4 @@ function googleLink(e, page = "") {
 const SHORT_DAYS = ["нд", "пн", "вт", "ср", "чт", "пт", "сб"];
 const shortWhen = (e) => `${SHORT_DAYS[new Date(`${e.starts}T12:00:00Z`).getUTCDay()]}, ${span(e)}`;
 
-module.exports = { create, KINDS, eventKey, eventPath, linkKind, sourceUrl, googleLink, tourTitle, subKey, subParse, subName, SHORT_DAYS, tours, ics, parseWhen, linkText, readEvent, cleanTitle, findCity, kyivDay, addDays, dayName, dayAside, span, shortWhen, MONTHS };
+module.exports = { create, KINDS, abroad, eventKey, eventPath, linkKind, sourceUrl, googleLink, tourTitle, subKey, subParse, subName, SHORT_DAYS, tours, ics, parseWhen, linkText, readEvent, cleanTitle, findCity, kyivDay, addDays, dayName, dayAside, span, shortWhen, MONTHS };

@@ -22,7 +22,7 @@ const AI_DAY = 300; // Max 2026-11-15: «ліміт на haiku можна під
 const JOINS_PER_RUN = 25; // a call, in the seed's order; Telegram's FLOOD_WAIT sets the real pace (Max 2026-11-15: «так швидко як дозволяє телеграм»).
 const MODEL = "claude-haiku-5-5";
 const UA = "Mozilla/5.0 (compatible; Chytai/1.0; +https://chytai.org.ua)";
-const { parseWhen, kyivDay, addDays } = require("./calendar");
+const { parseWhen, kyivDay, addDays, abroad } = require("./calendar");
 
 const SCHEMA = `CREATE TABLE IF NOT EXISTS tg_posts (
   channel TEXT NOT NULL, id INTEGER NOT NULL, at TEXT NOT NULL, text TEXT NOT NULL, links TEXT NOT NULL DEFAULT '[]',
@@ -117,7 +117,7 @@ function maybeEvent(text, today = kyivDay()) {
   const w = parseWhen(text, today);
   return !!w && (w.ends || w.starts) >= today && w.starts <= addDays(today, 183);
 }
-const SYSTEM = `You read posts from Ukrainian publishers' and bookstores' Telegram channels and pick out book events for a public calendar of book events in Ukraine (and Ukrainian events abroad).
+const SYSTEM = `You read posts from Ukrainian publishers' and bookstores' Telegram channels and pick out book events for a public calendar of book events in Ukraine and online.
 
 A book event is one people can come to or join online: a book presentation, a meeting or talk with an author, a reading, an autograph session, a book club meeting, a literary lecture or discussion, a literary festival, a book game night. Not an event: a new book, a sale or discount, a contest or giveaway, a grant or call for submissions, a deadline, a funeral, and things unrelated to books (yoga, concerts, economics talks with no book or author behind them, kids' crafts with no book).
 
@@ -126,7 +126,8 @@ Answer every book event in the post that takes place on or after today's date (a
 - sub: one plain Ukrainian line, at most 160 characters: what happens and who takes part (moderator, guests). No emoji, no hype.
 - starts: YYYY-MM-DD; ends: YYYY-MM-DD for a multi-day event, else "". A date without a year is the nearest one on or after the post's date.
 - time: HH:MM (24 h) or "".
-- city: the city in Ukrainian, nominative («Київ», «Львів», «Прага»); «Онлайн» if it is only online; "" if the post does not say.
+- city: the city in Ukrainian, nominative («Київ», «Львів», «Дрогобич»); «Онлайн» if it is only online; "" if the post does not say.
+- abroad: true when it takes place in person outside Ukraine (Warsaw, Prague, Galway…), else false. Online events are never abroad.
 - place: venue and address as the post gives them, at most 120 characters, or "".
 - url: the post's link to the event page or registration, only one of the links given; else "".
 - books: the books the event is about (presented, discussed, read), each with its title as written, without quotes, and its author's full name in Ukrainian; at most 4, the main ones; [] if no book is named.
@@ -149,12 +150,13 @@ const EVENT_SCHEMA = {
           ends: { type: "string" },
           time: { type: "string" },
           city: { type: "string" },
+          abroad: { type: "boolean" },
           place: { type: "string" },
           url: { type: "string" },
           books: { type: "array", items: { type: "object", properties: { title: { type: "string" }, author: { type: "string" } }, required: ["title", "author"], additionalProperties: false } },
           kind: { type: "string", enum: ["club", "author", "lecture", "festival", "kids", "other"] },
         },
-        required: ["title", "sub", "starts", "ends", "time", "city", "place", "url", "books", "kind"],
+        required: ["title", "sub", "starts", "ends", "time", "city", "abroad", "place", "url", "books", "kind"],
         additionalProperties: false,
       },
     },
@@ -539,7 +541,7 @@ function create(db, { calendar, apiKey = process.env.ANTHROPIC_API_KEY || "", cl
     const raw = res.content.map((b) => b.text || "").join("");
     const j = JSON.parse(raw.slice(raw.indexOf("{"), raw.lastIndexOf("}") + 1));
     const today = kyivDay();
-    return (j.events || []).filter((e) => /^\d{4}-\d\d-\d\d$/.test(e.starts) && (e.ends || e.starts) >= today && e.title).map(({ books, kind, ...e }) => ({ ...e, kind: kind === "other" ? "" : kind || "", named: (books || []).slice(0, 4), url: eventUrl(e.url, links, p.page || `https://t.me/${p.channel}/${p.id}`, p.page ? "" : p.channel) }));
+    return (j.events || []).filter((e) => /^\d{4}-\d\d-\d\d$/.test(e.starts) && (e.ends || e.starts) >= today && e.title && !e.abroad && !abroad(e.city)).map(({ books, kind, abroad: _a, ...e }) => ({ ...e, kind: kind === "other" ? "" : kind || "", named: (books || []).slice(0, 4), url: eventUrl(e.url, links, p.page || `https://t.me/${p.channel}/${p.id}`, p.page ? "" : p.channel) }));
   }
 
   // The events in posts not looked at yet (dry: the posts of the last `days` days, nothing kept, at most `max`

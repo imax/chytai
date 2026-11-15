@@ -276,6 +276,8 @@ A flag only when Max asks for one, or when the change could break what readers u
 - In a phone's calendar (a line at the page's foot): `/calendar.ics` is the list as an iCalendar feed with the same
   `?kind=` / `?city=` / `?q=`; «Мої автори» by `?mine=<reader>.<key>` (`calKey`, HMAC with the reader secret; a
   calendar app has no cookie). Links: webcal:// (Apple), Google Calendar's `?cid=`, and the plain address.
+- Only Ukraine and online (Max 2026-11-15): the collectors' Haiku answers `abroad` and those are dropped;
+  `calendar.abroad(city)` (list `ABROAD`) hides a foreign city at upsert and at start, and /calendar/add refuses it.
 - Table `cal_events` (id `{source}:{key}`, starts/ends `YYYY-MM-DD` Kyiv, time `HH:MM`, city as shown, «Онлайн»
   for online; books/authors JSON found by name, no AI: `linkText`, a name's two words side by side, «Олександрою … книгарні» ≠ Олександр Книга; never a Russian edition, `findBook`). Gone 30 days after it ends (`cleanup`).
 - Sources: `web/seed/calendar.json` (kept in step at every start: festivals by a thread or Max); readers via
