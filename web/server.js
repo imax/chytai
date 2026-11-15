@@ -1635,8 +1635,9 @@ bg.every("calendar-cleanup", 24 * 3600 * 1000, () => calendarJobs.cleanup(), { d
 bg.every("calendar-ye", 24 * 3600 * 1000, () => calendarJobs.ye(), { db: store.db, first: 15 * 60 * 1000 });
 // Telegram channels' posts (tgfeed.js): our own account through Telegram's API when TG_SESSION is set, else the
 // public t.me/s pages; every hour. Their events go to the calendar once meta tg:events is "on" (Max's OK).
-const tgFeed = bg.register("tg", require("./tgfeed").create(store.db, { calendar }), { run: false, events: false, find: false });
+const tgFeed = bg.register("tg", require("./tgfeed").create(store.db, { calendar }), { run: false, joinMore: false, events: false, find: false });
 bg.every("tg-feed", 3600 * 1000, () => tgFeed.run(), { db: store.db, first: 8 * 60 * 1000 });
+bg.every("tg-join", 10 * 60 * 1000, () => tgFeed.joinMore(), { db: store.db, first: 12 * 60 * 1000 });
 // Chytomo's calendar once a day (its articles through the same Haiku as Telegram posts), and the books events name
 // that the catalog lacks every hour (calendar.fillBooks; new books reload the web process).
 const calendarMore = bg.register(

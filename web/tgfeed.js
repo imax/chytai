@@ -19,7 +19,7 @@
 const DAY = 86400000;
 const KEEP_DAYS = 90;
 const AI_DAY = 300; // Max 2026-11-15: «ліміт на haiku можна підняти» (~$0.0002 a call)
-const JOINS_PER_RUN = 15; // in the seed's order (Max 2026-11-15: «можна й більше»; the account has Premium). Too many at once looks like spam.
+const JOINS_PER_RUN = 25; // a call, in the seed's order; Telegram's FLOOD_WAIT sets the real pace (Max 2026-11-15: «так швидко як дозволяє телеграм»).
 const MODEL = "claude-haiku-5-5";
 const UA = "Mozilla/5.0 (compatible; Chytai/1.0; +https://chytai.org.ua)";
 const { parseWhen, kyivDay, addDays } = require("./calendar");
@@ -186,7 +186,64 @@ function create(db, { calendar, apiKey = process.env.ANTHROPIC_API_KEY || "", cl
     return n;
   };
 
-  // Through our account: joins up to JOINS_PER_RUN channels it has not joined, then fetches what is new.
+  // Joins channels of `list` not joined yet, in order, as fast as Telegram lets it (Max 2026-11-15): when it says
+  // FLOOD_WAIT, the wait goes into meta tg:flood and nothing is joined till then. A channel that could not be joined
+  // (no such name, a closed one) is not tried again for a week (meta tg:nojoin).
+  async function joinSome(client, list, mine, out, mute) {
+    const { Api } = require("telegram");
+    if (Date.now() < Date.parse(meta("tg:flood") || 0)) return;
+    let nojoin = {};
+    try {
+      nojoin = JSON.parse(meta("tg:nojoin") || "{}");
+    } catch {}
+    let joins = 0;
+    for (const ch of list) {
+      if (mine.has(ch) || joins >= JOINS_PER_RUN || Date.now() - Date.parse(nojoin[ch] || 0) < 7 * DAY) continue;
+      joins++;
+      try {
+        const r = await client.invoke(new Api.channels.JoinChannel({ channel: ch }));
+        out.joined.push(ch);
+        const c = r.chats?.[0];
+        if (c) await mute(new Api.InputPeerChannel({ channelId: c.id, accessHash: c.accessHash })).catch((e) => out.errors.push(`mute ${ch}: ${e.errorMessage || e.message}`));
+      } catch (e) {
+        const msg = e.errorMessage || e.message || "";
+        if (/FLOOD/.test(msg)) {
+          const wait = +e.seconds || +(msg.match(/\d+/) || [])[0] || 600;
+          setMeta("tg:flood", new Date(Date.now() + (wait + 30) * 1000).toISOString());
+          out.errors.push(`join: Telegram asks to wait ${wait} s`);
+          break;
+        }
+        out.errors.push(`join ${ch}: ${msg}`);
+        nojoin[ch] = new Date().toISOString();
+      }
+    }
+    setMeta("tg:nojoin", JSON.stringify(nojoin));
+  }
+  // Between the hourly runs: only joins (every 10 minutes, jobs process), when Telegram's wait is over and some
+  // channel is left. → { joined, errors }.
+  async function joinMore() {
+    if (!accountSet() || Date.now() < Date.parse(meta("tg:flood") || 0)) return { joined: [], errors: [] };
+    const { Api } = require("telegram");
+    const out = { joined: [], errors: [] };
+    const client = await connect();
+    try {
+      const mine = new Map();
+      for (const d of await client.getDialogs({ limit: 500 })) {
+        const u = d.entity?.username?.toLowerCase();
+        if (d.isChannel && u) mine.set(u, d);
+      }
+      const list = channels();
+      if (list.every((ch) => mine.has(ch))) return out;
+      const mute = (peer) => client.invoke(new Api.account.UpdateNotifySettings({ peer: new Api.InputNotifyPeer({ peer }), settings: new Api.InputPeerNotifySettings({ muteUntil: 2147483647, silent: true }) }));
+      await joinSome(client, list, mine, out, mute);
+    } finally {
+      await client.destroy().catch(() => {});
+    }
+    if (out.joined.length) log(`tg: joined ${out.joined.join(", ")}`);
+    return out;
+  }
+
+  // Through our account: joins what it may (joinSome), then fetches what is new.
   async function viaAccount(list, out) {
     const { Api } = require("telegram");
     const client = await connect();
@@ -201,11 +258,6 @@ function create(db, { calendar, apiKey = process.env.ANTHROPIC_API_KEY || "", cl
       const seeded = new Set(list);
       out.own = [...mine].filter(([u, d]) => !seeded.has(u) && d.entity?.broadcast).map(([u]) => u);
       const all = [...list, ...out.own];
-      // A channel that could not be joined (no such name, a closed one) is not tried again for a week.
-      let nojoin = {};
-      try {
-        nojoin = JSON.parse(meta("tg:nojoin") || "{}");
-      } catch {}
       // Max uses this number himself (2026-11-15): every channel of ours is muted, the moment it is joined.
       const mute = (peer) => client.invoke(new Api.account.UpdateNotifySettings({ peer: new Api.InputNotifyPeer({ peer }), settings: new Api.InputPeerNotifySettings({ muteUntil: 2147483647, silent: true }) }));
       for (const ch of all) {
@@ -213,22 +265,7 @@ function create(db, { calendar, apiKey = process.env.ANTHROPIC_API_KEY || "", cl
         if (d && !(d.dialog?.notifySettings?.muteUntil > Date.now() / 1000))
           await mute(d.inputEntity).catch((e) => out.errors.push(`mute ${ch}: ${e.errorMessage || e.message}`));
       }
-      let joins = 0;
-      for (const ch of list) {
-        if (mine.has(ch) || joins >= JOINS_PER_RUN || Date.now() - Date.parse(nojoin[ch] || 0) < 7 * DAY) continue;
-        joins++;
-        try {
-          const r = await client.invoke(new Api.channels.JoinChannel({ channel: ch }));
-          out.joined.push(ch);
-          const c = r.chats?.[0];
-          if (c) await mute(new Api.InputPeerChannel({ channelId: c.id, accessHash: c.accessHash })).catch((e) => out.errors.push(`mute ${ch}: ${e.errorMessage || e.message}`));
-        } catch (e) {
-          out.errors.push(`join ${ch}: ${e.errorMessage || e.message}`);
-          if (/FLOOD/.test(e.errorMessage || "")) joins = JOINS_PER_RUN;
-          else nojoin[ch] = new Date().toISOString();
-        }
-      }
-      setMeta("tg:nojoin", JSON.stringify(nojoin));
+      await joinSome(client, list, mine, out, mute);
       // Only joined channels through the account (a name looked up each time would hit Telegram's limits); the
       // others through their pages until their turn to be joined comes.
       await viaPages(list.filter((ch) => !mine.has(ch)), out);
@@ -426,7 +463,7 @@ function create(db, { calendar, apiKey = process.env.ANTHROPIC_API_KEY || "", cl
     try {
       last = JSON.parse(meta("tg:last") || "null");
     } catch {}
-    return { account: accountSet(), events: meta("tg:events") || "off", channels: channels(), per, last, leads: leads() };
+    return { account: accountSet(), events: meta("tg:events") || "off", flood: meta("tg:flood") || null, channels: channels(), per, last, leads: leads() };
   }
 
   // Where the events we found come from besides Telegram (Max, 2026-11-15: «звертай увагу, звідки воно… щоб можна
@@ -477,7 +514,7 @@ function create(db, { calendar, apiKey = process.env.ANTHROPIC_API_KEY || "", cl
     }
   }
 
-  return { run, events, classify, status, maybeEvent, meta, setMeta, extract, find };
+  return { run, joinMore, events, classify, status, maybeEvent, meta, setMeta, extract, find };
 }
 
 module.exports = { create, parsePage, maybeEvent, fromMessage, channels, KEEP_DAYS };
