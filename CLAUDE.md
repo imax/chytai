@@ -350,6 +350,8 @@ A flag only when Max asks for one, or when the change could break what readers u
 - Think about performance and scale for every change; say when something is not optimal.
 - Reuse existing designs and components; don't invent a new UI per page.
 - A product decision goes into `docs/decisions.md`; a reader-facing feature gets a one-line entry in `web/updates.md` («Що нового»).
+  Before adding one, read that day's entries: related ones become one entry of one or two sentences with a link
+  (Max, 2026-11-15: five «Книжкові події» lines → one).
 - Test on production only under a test account, never Max's. No mail to test domains.
 - «Статті» (web articles and essays) were taken out on 2026-11-10 and went to Max's blog («не ліпляться вони в
   Читай»): don't bring them back, on the site or in the reader. Their tables were dropped (store.dropArticles); the export is in project files `chytai-articles-export/`.
