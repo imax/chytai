@@ -17,6 +17,7 @@
   let showText = false; // the attached photo's text is open to select from
   let adding = false; // the «+ Нотатка» form is open
   let editing = null; // the note being edited
+  let pageEditing = null; // the note whose page is being changed (a tap on «стор. N», Max 2026-11-15)
   let photo = null; // { data, small, marked, thumb, page }: the photo attached to the question field, sent with «Пояснити»/«Запитати»
   let noteQuote = false; // the note being written is a quote from the book, not the reader's own thought (Max 2026-11-04)
   let noteDraft = ""; // its text, kept across redraws (an answer streaming in redraws the page)
@@ -243,10 +244,12 @@
             <button type="button" class="pp-tool${window.Dictation.field() === "pp-note" ? " on" : ""}" data-pp="mic-note" title="Надиктувати" aria-label="Надиктувати">${svgMic}</button><span class="pp-ask-sp"></span><button type="submit" class="r-pill">Зберегти</button></div></form>` : ""}
         ${sortedNotes.length ? sortedNotes.map((n) => editing === n.id
           ? `<form class="pp-ask pp-noteform" data-pp-edit="${esc(n.id)}"><textarea id="pp-note-edit" rows="3">${esc(n.text)}</textarea>
-            <div class="pp-ask-row"><label class="pp-page-in">стор. <input id="pp-note-page" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="5" value="${esc((n.chapter || "").match(/\d+/)?.[0] || "")}" /></label><span class="pp-ask-sp"></span><button type="button" class="r-link" data-pp="cancel-edit">Скасувати</button><button type="submit" class="r-pill">Зберегти</button></div></form>`
+            <div class="pp-ask-row"><span class="pp-ask-sp"></span><button type="button" class="r-link" data-pp="cancel-edit">Скасувати</button><button type="submit" class="r-pill">Зберегти</button></div></form>`
           : `<div class="pp-note${n.quote ? " q" : ""}"><div class="pp-note-t">${esc(n.text)}</div>
           ${n.comment ? `<div class="pp-note-c">${md(n.comment)}</div>` : ""}
-          <div class="pp-note-m">${esc(n.chapter || "")}<button type="button" class="r-link" data-pp-quote="${esc(n.id)}">${n.quote ? "Не цитата" : "Цитата"}</button><button type="button" class="r-link" data-pp-edit-note="${esc(n.id)}">Редагувати</button><button type="button" class="r-link" data-pp-del="${esc(n.id)}">Видалити</button></div></div>`).join("")
+          <div class="pp-note-m">${pageEditing === n.id
+            ? `<form class="pp-pagef" data-pp-page="${esc(n.id)}"><label class="pp-page-in">стор. <input id="pp-page-edit" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="5" enterkeyhint="done" value="${esc((n.chapter || "").match(/\d+/)?.[0] || "")}" /></label></form>`
+            : `<button type="button" class="r-link pp-pg" data-pp-pg="${esc(n.id)}">${esc(n.chapter || "+ стор.")}</button>`}<button type="button" class="r-link" data-pp-quote="${esc(n.id)}">${n.quote ? "Не цитата" : "Цитата"}</button><button type="button" class="r-link" data-pp-edit-note="${esc(n.id)}">Редагувати</button><button type="button" class="r-link" data-pp-del="${esc(n.id)}">Видалити</button></div></div>`).join("")
           : adding || loading ? "" : `<p class="r-empty">Тут будуть ваші думки й цитати.</p>`}</section>
       ${window.Shell.aboutBlock(b, aboutOpen)}
     </div>`;
@@ -261,6 +264,24 @@
     const b = book;
     window.reader.paperUpdate(b.path, { page }).catch(() => {});
   }
+
+  // The page typed in place of «стор. N»: Enter or leaving the field keeps it, Esc leaves it as it was.
+  function savePage(keep = true) {
+    const id = pageEditing;
+    const input = $("#pp-page-edit");
+    if (!id || !input) return;
+    pageEditing = null;
+    const note = notes.find((n) => n.id === id);
+    const page = Number(input.value.replace(/\D/g, "") || 0);
+    const chapter = page > 0 ? `стор. ${page}` : "";
+    if (keep && note && chapter !== (note.chapter || "")) {
+      note.chapter = chapter;
+      window.reader.notesUpdate(book.path, id, { page, chapter }).catch((err) => showNotice(`Не вдалося зберегти: ${err.message}`, false));
+    }
+    window.Shell.rerender();
+  }
+  document.addEventListener("focusout", (e) => e.target.id === "pp-page-edit" && setTimeout(() => savePage(), 0));
+  document.addEventListener("keydown", (e) => e.target.id === "pp-page-edit" && e.key === "Escape" && (e.preventDefault(), savePage(false)));
 
   document.addEventListener("submit", async (e) => {
     if (e.target.matches("[data-pp-ask]")) {
@@ -279,15 +300,16 @@
       e.preventDefault();
       const id = e.target.dataset.ppEdit;
       const text = $("#pp-note-edit").value.trim();
-      const page = Number($("#pp-note-page")?.value.replace(/\D/g, "") || 0);
       const note = notes.find((n) => n.id === id);
       editing = null;
-      const chapter = page > 0 ? `стор. ${page}` : "";
-      if (!text || !note || (text === note.text && chapter === (note.chapter || ""))) return window.Shell.rerender();
+      if (!text || !note || text === note.text) return window.Shell.rerender();
       note.text = text;
-      note.chapter = chapter;
       window.Shell.rerender();
-      return window.reader.notesUpdate(book.path, id, { text, page, chapter }).catch((err) => showNotice(`Не вдалося зберегти: ${err.message}`, false));
+      return window.reader.notesUpdate(book.path, id, { text }).catch((err) => showNotice(`Не вдалося зберегти: ${err.message}`, false));
+    }
+    if (e.target.matches("[data-pp-page]")) {
+      e.preventDefault();
+      return savePage();
     }
     if (!e.target.matches("[data-pp-form]")) return;
     e.preventDefault();
@@ -646,6 +668,15 @@
       notes = notes.map((x) => (x.id === n.id ? { ...x, quote, text } : x));
       window.Shell.rerender();
       return window.reader.notesUpdate(book.path, n.id, { quote, ...(text !== n.text ? { text } : {}) }).catch((err) => showNotice(offline(err, "зберегти нотатку"), false));
+    }
+    const pg = e.target.closest("[data-pp-pg]");
+    if (pg) {
+      pageEditing = pg.dataset.ppPg;
+      window.Shell.rerender();
+      const f = $("#pp-page-edit");
+      f?.focus();
+      f?.select();
+      return;
     }
     const edit = e.target.closest("[data-pp-edit-note]");
     if (edit) {
