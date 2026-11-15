@@ -11,7 +11,7 @@ const express = require("express");
 const fs = require("fs");
 const path = require("path");
 const { Store, OWNER: OWNER_ID, slugify, isRussian, norm, workName, mainGenres, sameAuthor } = require("./store");
-const { ReaderBooks, kindOnly } = require("./readerbooks");
+const { ReaderBooks, kindOnly, FRESH: READER_FRESH } = require("./readerbooks");
 const { Auth } = require("./auth");
 const pages = require("./pages");
 const catalogs = require("./catalogs");
@@ -848,7 +848,13 @@ app.post("/api/reader-library", (req, res) => {
   });
   // A file just uploaded that the catalog lacks gets a page here (readerbooks.js), in the background.
   const fresh = books.filter((b) => b?.name && b?.title && !had.has(String(b.name).slice(0, 300)));
-  if (fresh.length) readerBooks.take(id, fresh.map((b) => ({ name: String(b.name).slice(0, 300), title: String(b.title).slice(0, 300), authors: (Array.isArray(b.authors) ? b.authors : []).map((a) => String(a).slice(0, 150)).slice(0, 5), lang: String(b.lang || "").slice(0, 5), fromName: !!b.fromName, gift: !!b.gift, added: Number(b.added) || 0 })));
+  if (fresh.length) {
+    const files = fresh.map((b) => ({ name: String(b.name).slice(0, 300), title: String(b.title).slice(0, 300), authors: (Array.isArray(b.authors) ? b.authors : []).map((a) => String(a).slice(0, 150)).slice(0, 5), lang: String(b.lang || "").slice(0, 5), fromName: !!b.fromName, gift: !!b.gift, added: Number(b.added) || 0 }));
+    const made = readerBooks.take(id, files);
+    // Max hears of every book a reader adds to the reader (2026-11-15: «хочу щоб бот мені писав коли хтось додає
+    // книжку в Читалку»), once readerbooks.js has looked at them, so the letter says which are new on the site.
+    Promise.resolve(made).then((r) => tellUploads(id, files, r?.made || []), (e) => console.error(`[uploads] ${e.message}`));
+  }
   res.json({ ok: true, books: books.length });
 });
 // The feature flags (flags.js) on for one reader, for the reader app's page (server/index.js readerFlags):
@@ -877,12 +883,32 @@ const readerBooks = new ReaderBooks({
   on: (id) => flags.on("reader-books", pub(auth.reader(id))),
   // No details() here: their lookup stalled the site's main loop (16 s for the 22-book backfill, 2026-11-11; ~3 s
   // for one book). store.addBook queued them, and the jobs process fills them in a few minutes (newbooks.js).
-  made: (id, made, { quiet = false } = {}) => {
-    const r = auth.reader(id);
-    if (!r || id === OWNER_ID || quiet) return;
-    notifyOwner(`Книжки з Читалки: ${made.length === 1 ? made[0].title : `${made.length} нових`}`, [`${r.name} (${SITE}/@${r.username}) завантажив(ла) в Читалку, і ці книжки з’явилися на Chytai:`, "", ...made.map((b) => `• ${b.title}${b.author ? ` — ${b.author}` : ""}  ${SITE}${store.href(b.id)}${b.file !== b.title ? `  (у файлі: «${b.file}»)` : ""}`)].join("\n"));
-  },
+  // The owner hears of new books with the upload itself (tellUploads below).
 });
+// One letter (and Telegram) per upload: who added what to the reader, each with its page here: the catalog's, a page
+// just made from the file (readerbooks.js), or none. Not for the owner's own files, nor books another reader gave
+// («Попросити книжку»), nor files uploaded more than two days ago (a first sync, a sign-in on a new device).
+// A file seen once is not told again for two days (deleted and put back, a re-sync).
+const toldUploads = new Map(); // `${reader}\n${name}` -> when
+function tellUploads(id, files, made, now = Date.now()) {
+  const r = auth.reader(id);
+  if (!r || id === OWNER_ID) return [];
+  for (const [k, at] of toldUploads) if (at < now - READER_FRESH) toldUploads.delete(k);
+  const news = files.filter((f) => !f.gift && Number(f.added) > now - READER_FRESH && !toldUploads.has(`${id}\n${f.name}`));
+  if (!news.length) return [];
+  for (const f of news) toldUploads.set(`${id}\n${f.name}`, now);
+  const line = (f) => {
+    const m = made.find((b) => b.file === f.title);
+    const author = f.authors?.length ? ` — ${f.authors.join(", ")}` : "";
+    if (m) return `• ${f.title}${author}\n  нова на Chytai: ${SITE}${store.href(m.id)}`;
+    const hit = readerBookHit(f.title, (f.authors || []).join("; "));
+    const book = hit && store.canonical(hit.book.id);
+    return `• ${f.title}${author}${book ? `\n  ${SITE}${store.href(book)}` : f.fromName ? "\n  (назва з імені файлу)" : "\n  (у каталозі немає)"}`;
+  };
+  const subject = news.length === 1 ? `Книжка в Читалці: ${news[0].title}` : `Книжки в Читалці: ${news.length}`;
+  notifyOwner(subject, [`${r.name} (${SITE}/@${r.username}) додав(ла) в Читалку:`, "", ...news.map(line)].join("\n"));
+  return news;
+}
 // What readers' files already in their lists would become (readerbooks.js backfill): threads ask /agent (a dry run,
 // in the background; ask again for the answer), the owner makes them with POST /admin/reader-books (Max's OK first).
 let readerBooksDry = null;

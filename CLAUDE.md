@@ -159,6 +159,9 @@ A flag only when Max asks for one, or when the change could break what readers u
 - A file just uploaded to the reader (tellSite → `/api/reader-library`, with `lang`, `fromName`, `added`) that the
   catalog lacks becomes a book (`source: "reader"`) when its metadata is clean, it is uk/en, not Russian, and Google
   Books or Open Library confirm title + author. Behind the flag `reader-books`; caps 20/reader, 200/day.
+- Every book a reader adds to the reader (uploaded <48 h ago, not a gift, not Max's own) sends Max one letter +
+  Telegram per sync: «Книжка в Читалці: …», the reader's /@username, title — author and the book's page here (from
+  the catalog, «нова на Chytai», or «у каталозі немає»). `tellUploads` in web/server.js, after readerBooks' lookup.
 - Dry run over all files in readers' lists: `curl -s https://chytai.org.ua/agent/reader-books -H "$H"` (starts it;
   ask again for the answer, `?again=1` to rerun). The real backfill is `POST /admin/reader-books` (owner) or
   `POST /agent/reader-books` with `{"run":true}` (thread), only with Max's OK in the thread. Done once on 2026-11-11.
