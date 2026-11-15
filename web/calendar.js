@@ -267,7 +267,8 @@ function create(db, store, { notify = () => {} } = {}) {
     if (!clean(f.city, 40)) return { error: "Вкажіть місто або «Онлайн»." };
     const today = new Date().toISOString().slice(0, 10);
     if (!user.owner && db.prepare("SELECT count(*) n FROM cal_events WHERE by = ? AND added >= ?").get(user.id, today).n >= 5) return { error: "Сьогодні вже досить подій від вас. Завтра можна ще." };
-    const dup = db.prepare("SELECT id FROM cal_events WHERE url = ? AND starts = ?").get(url, f.starts);
+    // The same link on the same day in another city is a tour's next stop, not the same event.
+    const dup = db.prepare("SELECT id FROM cal_events WHERE url = ? AND starts = ? AND city = ?").get(url, f.starts, clean(f.city, 40));
     if (dup) return { id: dup.id };
     const id = upsert({ source: "reader", key: require("crypto").randomBytes(5).toString("hex"), url, title, sub: f.sub, city: f.city, place: f.place, starts: f.starts, ends: f.ends, time: f.time, by: user.id });
     if (!id) return { error: "Не вийшло зберегти. Перевірте дату." };
@@ -428,7 +429,34 @@ function span(e) {
   const b = new Date(`${e.ends}T12:00:00Z`);
   return a.getUTCMonth() === b.getUTCMonth() ? `${a.getUTCDate()}–${b.getUTCDate()} ${MONTHS[b.getUTCMonth()]}` : `${a.getUTCDate()} ${MONTHS[a.getUTCMonth()]} – ${b.getUTCDate()} ${MONTHS[b.getUTCMonth()]}`;
 }
+// One event held in several cities or on several days (a publisher's tour, Max 2026-11-15: «щоб в стрічці не
+// повторювалось тричі»): the same title once its city is cut off («… в Ужгороді», «… у Львові») and the same link
+// (or the same post). → the events in order, each tour as its first stop with `stops` (all of them, itself too)
+// and the title without the city.
+const CITY_TAIL = /(?:\s+(?:в|у|ві)\s+(?:м\.\s*)?|\s*[,(–—-]\s*)([^\s«»,()]+(?:[\s-][^\s«»,()]+)?)\)?\s*$/;
+function tourTitle(e) {
+  const m = (e.title || "").match(CITY_TAIL);
+  return m && e.city && e.city !== "Онлайн" && findCity(m[1]) === e.city ? e.title.slice(0, m.index).trim() : e.title;
+}
+function tours(events) {
+  const groups = new Map();
+  const out = [];
+  for (const e of events) {
+    const title = tourTitle(e);
+    const key = `${title.toLowerCase()}|${e.url || e.id.replace(/-\d+$/, "")}`;
+    const g = groups.get(key);
+    if (g) {
+      g.stops.push(e);
+      continue;
+    }
+    const first = { ...e, stops: [e], tourTitle: title };
+    groups.set(key, first);
+    out.push(first);
+  }
+  return out.map((g) => (g.stops.length > 1 ? { ...g, title: g.tourTitle } : { ...g, stops: null }));
+}
+
 const SHORT_DAYS = ["нд", "пн", "вт", "ср", "чт", "пт", "сб"];
 const shortWhen = (e) => `${SHORT_DAYS[new Date(`${e.starts}T12:00:00Z`).getUTCDay()]}, ${span(e)}`;
 
-module.exports = { create, parseWhen, linkText, readEvent, cleanTitle, findCity, kyivDay, addDays, dayName, dayAside, span, shortWhen, MONTHS };
+module.exports = { create, tours, parseWhen, linkText, readEvent, cleanTitle, findCity, kyivDay, addDays, dayName, dayAside, span, shortWhen, MONTHS };

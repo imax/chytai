@@ -235,6 +235,10 @@ A flag only when Max asks for one, or when the change could break what readers u
 - Max's design A + D from a design canvas (2026-11-15): a list by days with city chips and «Мої автори» (authors on
   one's shelf), «Наживо» on the author's page, one «Подія:» line on the book's page. No block on one's own shelf
   (Max). An event links to the organizer's page; we sell no tickets.
+- Max's feedback (2026-11-15): an event by an author on one's shelf names that reader's own books by them
+  (`shelfBooksFor`); one event in several cities or days (same title without its city, same link or post) is one row
+  with a line per stop (`calendar.tours`), but under a city chip each stop is its own row; `?q=` searches title, words,
+  place, authors' names and books; «Звідки події» only on the whole list.
 - Table `cal_events` (id `{source}:{key}`, starts/ends `YYYY-MM-DD` Kyiv, time `HH:MM`, city as shown, «Онлайн»
   for online; books/authors JSON found by name, no AI: `linkText`). Gone 30 days after it ends (`cleanup`).
 - Sources: `web/seed/calendar.json` (kept in step at every start: festivals by a thread or Max); readers via

@@ -1636,15 +1636,35 @@ bg.every("tg-feed", 3600 * 1000, () => tgFeed.run(), { db: store.db, first: 8 * 
 // The authors of a book (slugs), for its page's line about an event.
 const bookAuthorSlugs = (book) => require("./authors").splitAuthors(book.author).map((n) => store.authors?.byName(n)?.slug).filter(Boolean);
 const bookEvent = (book) => calendar.forBook(store.canonical(book.id), bookAuthorSlugs(book))[0] || null;
-// The authors on a reader's shelf (not dropped), for «Мої автори» on /calendar.
+// The authors on a reader's shelf (not dropped), for «Мої автори» on /calendar: slug -> that reader's books by them,
+// read first, then reading, then wanted (Max 2026-11-15: show which book, he did not remember).
+const SHELF_ORDER = { read: 0, reading: 1, want: 2 };
 function shelfAuthors(reader) {
-  const out = new Set();
+  const out = new Map();
   for (const [id, e] of Object.entries(store.entriesOf(reader))) {
     if (e.status === "abandoned") continue;
     const b = store.book(id);
-    if (b) for (const s of bookAuthorSlugs(b)) out.add(s);
+    if (!b) continue;
+    for (const s of bookAuthorSlugs(b)) {
+      if (!out.has(s)) out.set(s, []);
+      out.get(s).push({ id, status: e.status, rating: e.rating });
+    }
   }
+  for (const list of out.values()) list.sort((a, b) => (SHELF_ORDER[a.status] ?? 3) - (SHELF_ORDER[b.status] ?? 3));
   return out;
+}
+// The reader's own books by an event's authors, two at most, for the line under it.
+function shelfBooksFor(req, e, mineSet) {
+  const seen = new Set();
+  const out = [];
+  for (const a of e.authors) for (const x of mineSet.get(a) || []) {
+    const b = store.book(x.id);
+    const w = b && workFor(req, b);
+    if (!w || seen.has(w.href)) continue;
+    seen.add(w.href);
+    out.push({ book: w, status: x.status, rating: x.rating });
+  }
+  return out.slice(0, 2);
 }
 bg.every("overviews", 24 * 3600 * 1000, () => advice.sweep(), { db: store.db });
 pages.setStats((id) => social.stats(id));
@@ -1701,9 +1721,15 @@ app.get("/calendar", (req, res) => {
   const isMine = (e) => !!mineSet && e.authors.some((a) => mineSet.has(a));
   const city = String(req.query.city || "").slice(0, 40);
   const mine = !!req.query.mine && !!req.user;
-  const events = all.filter((e) => (!city || e.city === city) && (!mine || isMine(e)));
-  const withBooks = events.slice(0, 200).map((e) => ({ ...e, mine: isMine(e), bookCards: e.books.map((id) => store.book(id) && workFor(req, store.book(id))).filter(Boolean).slice(0, 3), authorLinks: e.authors.map((s) => store.authors?.bySlug.get(s)).filter(Boolean).slice(0, 3), byReader: e.by ? pub(auth.reader(e.by)) : null }));
-  res.send(pages.calendarPage({ user: req.user, events: withBooks, cities: calendar.cities(), city, mine, mineCount: mineSet ? all.filter(isMine).length : 0, owner: !!req.owner }));
+  // ?q=: every word somewhere in the event, its authors' names or its books' titles.
+  const query = String(req.query.q || "").trim().slice(0, 80);
+  const words = norm(query).split(/\s+/).filter(Boolean);
+  const hay = (e) => norm([e.title, e.sub, e.city, e.place, ...e.authors.map((a) => store.authors?.bySlug.get(a)?.name || ""), ...e.books.map((id) => store.book(id)?.title || "")].join(" "));
+  const picked = all.filter((e) => (!city || e.city === city) && (!mine || isMine(e)) && (!words.length || words.every((w) => hay(e).includes(w))));
+  // One city: each of a tour's stops there stays a row of its own; otherwise a tour is one row (Max 2026-11-15).
+  const events = city ? picked : require("./calendar").tours(picked);
+  const withBooks = events.slice(0, 200).map((e) => ({ ...e, mine: isMine(e) ? shelfBooksFor(req, e, mineSet) : null, bookCards: e.books.map((id) => store.book(id) && workFor(req, store.book(id))).filter(Boolean).slice(0, 3), authorLinks: e.authors.map((s) => store.authors?.bySlug.get(s)).filter(Boolean).slice(0, 3), byReader: e.by ? pub(auth.reader(e.by)) : null }));
+  res.send(pages.calendarPage({ user: req.user, events: withBooks, cities: calendar.cities(), city, mine, mineCount: mineSet ? all.filter(isMine).length : 0, owner: !!req.owner, query }));
 });
 app.get("/calendar/add", signed, (req, res) => res.send(pages.calendarAddPage({ user: req.user })));
 app.post("/calendar/add", signed, (req, res) => {
@@ -1733,6 +1759,11 @@ app.post("/calendar/:id/hide", signed, (req, res) => {
   const e = calendar.one(req.params.id);
   if (!e || !(req.owner || e.by === req.user.id)) return res.status(403).send("Не можна.");
   calendar.hide(e.id);
+  // A tour's other stops come along (its row hides them all).
+  for (const id of [].concat(req.body?.also || []).slice(0, 30)) {
+    const o = calendar.one(String(id));
+    if (o && (req.owner || o.by === req.user.id)) calendar.hide(o.id);
+  }
   res.redirect(303, "/calendar");
 });
 // Книгарня «Є»'s calendar: GET is a dry run in the jobs process (ask again for the answer, ?again=1 to rerun);

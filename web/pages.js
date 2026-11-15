@@ -2100,23 +2100,28 @@ const eventLink = (e, text = "сторінка події ↗") => (e.url ? `<a 
 function calRow(e, { user, owner, today }) {
   const going = e.starts < today; // a festival that began before today and goes on
   const sub = [e.sub ? esc(e.sub) : "", e.ends ? (going ? `триває до ${esc(cal().span({ starts: e.ends }))}` : esc(cal().span(e))) : ""].filter(Boolean).join(" · ");
-  const where = [e.city, e.place].filter(Boolean).map(esc).join(" · ");
-  const time = !going && e.time ? e.time : "";
+  const tour = e.stops?.length > 1;
+  const where = tour ? "" : [e.city, e.place].filter(Boolean).map(esc).join(" · ");
+  const time = !tour && !going && e.time ? e.time : "";
+  // A tour: each city and day on its own line, the soonest first.
+  const stops = tour ? `<ul class="cal-stops">${e.stops.map((s) => `<li><b>${esc(cal().shortWhen(s))}${s.time ? ` · ${esc(s.time)}` : ""}</b> ${[s.city, s.place].filter(Boolean).map(esc).join(" · ")}</li>`).join("")}</ul>` : "";
   const books = e.bookCards?.length ? `<div class="cal-books">${e.bookCards.map((b) => `<a href="${attr(b.href)}">${cover(b, "xs")}<span>${esc(b.title)}</span></a>`).join("")}</div>` : e.authorLinks?.length ? `<p class="meta">${e.authorLinks.map((a) => `<a class="text-link" href="${attr(a.href)}">${esc(a.name)}</a>`).join(", ")}</p>` : "";
-  const hide = user && (owner || e.by === user.id) ? `<form method="post" action="/calendar/${attr(encodeURIComponent(e.id))}/hide" class="inline"><button class="text-link small muted">сховати</button></form>` : "";
+  const also = tour ? e.stops.slice(1).map((s) => `<input type="hidden" name="also" value="${attr(s.id)}">`).join("") : "";
+  const hide = user && (owner || e.by === user.id) ? `<form method="post" action="/calendar/${attr(encodeURIComponent(e.id))}/hide" class="inline">${also}<button class="text-link small muted">сховати</button></form>` : "";
   const by = e.byReader ? `від <a href="${attr(e.byReader.href)}">${esc(e.byReader.name)}</a>` : "";
   return `<article class="row cal-row" id="${attr(e.id)}">
   <div class="cal-time">${time}</div>
   <div class="row-body">
     <h3>${e.url ? `<a href="${attr(e.url)}" target="_blank" rel="noopener nofollow ugc">${esc(e.title)}</a>` : esc(e.title)}</h3>
     ${sub ? `<p class="by">${sub}</p>` : ""}
-    <p class="meta">${time ? `<b class="cal-t">${time} · </b>` : ""}${where}${where && e.url ? " · " : ""}${eventLink(e)}${by ? ` · ${by}` : ""}${hide ? ` · ${hide}` : ""}</p>
+    ${stops}
+    <p class="meta">${time ? `<b class="cal-t">${time} · </b>` : ""}${[where, eventLink(e), by, hide].filter(Boolean).join(" · ")}</p>
     ${books}
+    ${e.mine?.length ? `<p class="meta cal-shelf">${e.mine.map((x) => `<span class="mine">✓ ${MY_STATUS[x.status] || "На полиці"}</span> <a class="text-link" href="${attr(x.book.href)}">«${esc(x.book.title)}»</a>${x.rating != null ? ` ★${uk(String(x.rating))}` : ""}`).join(" · ")}</p>` : ""}
   </div>
-  ${e.mine ? `<span class="cal-mine">з вашої полиці</span>` : ""}
 </article>`;
 }
-function calendarPage({ user, events, cities, city = "", mine = false, mineCount = 0, owner = false }) {
+function calendarPage({ user, events, cities, city = "", mine = false, mineCount = 0, owner = false, query = "" }) {
   const { kyivDay, dayName, dayAside } = cal();
   const today = kyivDay();
   const days = new Map();
@@ -2124,15 +2129,19 @@ function calendarPage({ user, events, cities, city = "", mine = false, mineCount
     const d = e.starts < today ? today : e.starts;
     (days.get(d) || days.set(d, []).get(d)).push(e);
   }
-  const q = (c, m) => `/calendar${c || m ? `?${[c ? `city=${encodeURIComponent(c)}` : "", m ? "mine=1" : ""].filter(Boolean).join("&")}` : ""}`;
+  const q = (c, m) => `/calendar${c || m || query ? `?${[c ? `city=${encodeURIComponent(c)}` : "", m ? "mine=1" : "", query ? `q=${encodeURIComponent(query)}` : ""].filter(Boolean).join("&")}` : ""}`;
+  // The search keeps the city or «Мої автори» chosen, and the chips keep the words.
+  const find = `<form class="shelf-tools cal-find" action="/calendar" role="search">${city ? `<input type="hidden" name="city" value="${attr(city)}">` : ""}${mine ? `<input type="hidden" name="mine" value="1">` : ""}<input type="search" name="q" value="${attr(query)}" placeholder="автор, книжка, місто або місце" autocomplete="off" aria-label="Шукати подію"></form>`;
   const chip = (on, href, text, cls = "") => (on ? `<span class="chip on${cls}">${text}</span>` : `<a class="chip${cls}" href="${attr(href)}">${text}</a>`);
   const chips =
     cities.length > 1 || mineCount
-      ? `<nav class="read-chips cal-chips" data-block="cal-chips">${chip(!city && !mine, "/calendar", "Усі міста")}${user && mineCount ? chip(mine, q("", true), `Мої автори · ${mineCount}`, " cal-mine-chip") : ""}${cities.map((c) => chip(city === c && !mine, q(c), esc(c))).join("")}</nav>`
+      ? `<nav class="read-chips cal-chips" data-block="cal-chips">${chip(!city && !mine, q("", false), "Усі міста")}${user && mineCount ? chip(mine, q("", true), `Мої автори · ${mineCount}`, " cal-mine-chip") : ""}${cities.map((c) => chip(city === c && !mine, q(c), esc(c))).join("")}</nav>`
       : "";
   const list = days.size
     ? [...days].map(([d, list]) => `<section class="block cal-day">${label(esc(dayName(d)), dayAside(d, today))}<div class="rows">${list.map((e) => calRow(e, { user, owner, today })).join("")}</div></section>`).join("")
-    : `<p class="muted">${city || mine ? `Тут поки нічого. <a class="text-link" href="/calendar">Усі події</a>` : "Поки подій немає."}</p>`;
+    : `<p class="muted">${query ? `Нічого не знайшли за «${esc(query)}». <a class="text-link" href="/calendar">Усі події</a>` : city || mine ? `Тут поки нічого. <a class="text-link" href="/calendar">Усі події</a>` : "Поки подій немає."}</p>`;
+  // «Звідки події» only on the whole list (Max 2026-11-15: once is enough, not under every filter).
+  const whole = !city && !mine && !query;
   const body = `
 <section class="page-head">
   <div>
@@ -2141,14 +2150,15 @@ function calendarPage({ user, events, cities, city = "", mine = false, mineCount
   </div>
   <a class="btn" href="/calendar/add">Додати подію</a>
 </section>
+${find}
 ${chips}
 <div class="split">
   <div data-block="calendar">${list}</div>
-  <aside>
+  ${whole ? `<aside>
     ${label("Звідки події")}
     <p class="small cal-about">З афіш книгарень і фестивалів, від видавців і читачів. Ведемо на сторінку організатора, квитків не продаємо.</p>
     <p class="small"><a class="text-link" href="/calendar/add">Знаєте подію? Додайте</a></p>
-  </aside>
+  </aside>` : ""}
 </div>`;
   return layout({ title: "Книжкові події", body, user, path: "/calendar", canonical: "/calendar", description: "Презентації книжок, зустрічі з авторами, читання й фестивалі в Україні та онлайн." });
 }
