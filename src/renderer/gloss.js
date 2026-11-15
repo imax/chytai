@@ -1,0 +1,130 @@
+// «Словничок» (Max, 2026-11-15): in a free-shelf classic that has one (server/glossary.js), the old and dialect
+// words are underlined with dots, and a tap or a click on one shows its meaning in a small card over the word.
+// The underline is a CSS Custom Highlight: the book's DOM is not touched, so positions, notes and selections stay
+// as they were. Browsers without it (iOS before 17.2) get no underline and no card. Off in «Аа» → «Словничок».
+window.Gloss = (() => {
+  const key = (s) => String(s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").normalize("NFC").toLowerCase().replace(/['’`ʼ]/g, "ʼ");
+  // A word: letters, stress marks, apostrophes and hyphens inside it.
+  const WORD = /[\p{L}\p{M}]+(?:['’`ʼ-][\p{L}\p{M}]+)*/gu;
+  let forms = null; // key -> meaning, for the book on screen
+  let longest = 1; // words in the longest expression
+  let book = null;
+  const marked = new WeakMap(); // a chapter's document -> [{ range, text, gloss }]
+  const tip = document.getElementById("gloss-tip");
+  let shown = null; // { doc }
+
+  const enabled = () => !!forms && settings.gloss !== "off" && !!settings.flags?.includes("glossary");
+
+  // Called when a book opens; marks the chapters already on screen once the list is in.
+  async function load(name, contentsList) {
+    forms = null;
+    book = name;
+    hide();
+    if (!name || !(settings.glossaries || []).includes(name) || !settings.flags?.includes("glossary")) return;
+    try {
+      const res = await fetch(`/api/glossary?book=${encodeURIComponent(name)}`, { credentials: "same-origin" });
+      if (!res.ok || book !== name) return;
+      forms = (await res.json()).forms || {};
+      longest = Math.max(1, ...Object.keys(forms).map((k) => k.split(" ").length));
+    } catch {
+      return;
+    }
+    for (const c of contentsList() || []) mark(c);
+  }
+
+  function style(contents) {
+    const doc = contents.document;
+    let el = doc.getElementById("chytai-gloss");
+    if (!el) {
+      el = doc.createElement("style");
+      el.id = "chytai-gloss";
+      doc.head.appendChild(el);
+    }
+    const css = getComputedStyle(document.body);
+    const line = css.getPropertyValue("--m-bar").trim() || "#b5803a";
+    const hit = css.getPropertyValue("--m-hit").trim() || "#f0dca9";
+    el.textContent = `::highlight(gl){text-decoration:underline dotted ${line};text-decoration-thickness:2px;text-underline-offset:0.22em}::highlight(gl-on){background-color:${hit}}`;
+  }
+
+  function mark(contents) {
+    const doc = contents.document;
+    const win = contents.window;
+    if (!doc?.body) return;
+    win.CSS?.highlights?.delete("gl");
+    win.CSS?.highlights?.delete("gl-on");
+    marked.delete(doc);
+    if (!enabled() || !win.CSS?.highlights || !win.Highlight) return;
+    style(contents);
+    const found = [];
+    const walk = doc.createTreeWalker(doc.body, NodeFilter.SHOW_TEXT);
+    for (let node = walk.nextNode(); node; node = walk.nextNode()) {
+      const text = node.data;
+      if (text.length < 2) continue;
+      const words = [...text.matchAll(WORD)];
+      for (let i = 0; i < words.length; ) {
+        let took = 0;
+        // The longest expression first: «по всій Україні» before «всій».
+        for (let n = Math.min(longest, words.length - i); n >= 1 && !took; n--) {
+          const first = words[i];
+          const last = words[i + n - 1];
+          const span = text.slice(first.index, last.index + last[0].length);
+          if (n > 1 && /[^\s\p{L}\p{M}'’`ʼ-]/u.test(span)) continue; // only spaces between the words
+          const gloss = forms[key(span).replace(/\s+/g, " ")];
+          if (!gloss) continue;
+          const range = doc.createRange();
+          range.setStart(node, first.index);
+          range.setEnd(node, last.index + last[0].length);
+          found.push({ range, text: span.replace(/́/g, ""), gloss });
+          took = n;
+        }
+        i += took || 1;
+      }
+    }
+    marked.set(doc, found);
+    if (found.length) win.CSS.highlights.set("gl", new win.Highlight(...found.map((f) => f.range)));
+  }
+
+  // A tap or a click at (x, y) inside a chapter's frame: shows the card when it is on a marked word.
+  function tap(x, y, doc) {
+    const was = shown;
+    hide();
+    const list = doc && marked.get(doc);
+    if (!list?.length) return false;
+    const inside = (r) => [...r.getClientRects()].some((b) => x >= b.left - 3 && x <= b.right + 3 && y >= b.top - 4 && y <= b.bottom + 4);
+    const hit = list.find((f) => inside(f.range));
+    if (!hit) return !!was; // a tap that only put the card away does not turn the page
+    show(hit, doc);
+    return true;
+  }
+
+  function show(hit, doc) {
+    const win = doc.defaultView;
+    win.CSS.highlights.set("gl-on", new win.Highlight(hit.range));
+    tip.replaceChildren();
+    const b = document.createElement("b");
+    b.textContent = hit.text;
+    tip.append(b, ` — ${hit.gloss}`);
+    tip.classList.remove("hidden");
+    const frame = win.frameElement?.getBoundingClientRect() || { left: 0, top: 0 };
+    const r = hit.range.getClientRects()[0] || hit.range.getBoundingClientRect();
+    const w = tip.offsetWidth;
+    const h = tip.offsetHeight;
+    const left = Math.min(Math.max(8, frame.left + r.left + r.width / 2 - w / 2), innerWidth - w - 8);
+    const above = frame.top + r.top - h - 10;
+    tip.style.left = `${left}px`;
+    tip.style.top = `${above >= 8 ? above : frame.top + r.bottom + 10}px`;
+    shown = { doc };
+  }
+
+  function hide() {
+    if (!shown) return;
+    shown.doc.defaultView?.CSS?.highlights?.delete("gl-on");
+    shown = null;
+    tip.classList.add("hidden");
+  }
+
+  // A tap anywhere outside the book's frames (the bars, the margins) puts the card away.
+  addEventListener("pointerdown", (e) => !e.target.closest?.("#gloss-tip") && hide(), true);
+
+  return { load, mark, style: (c) => enabled() && marked.has(c.document) && style(c), tap, hide, has: () => !!forms };
+})();

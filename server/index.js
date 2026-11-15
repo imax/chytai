@@ -102,7 +102,7 @@ function loadDotEnv(file) {
 
 // Explanations on Opus, «Переклад» (translation only) on the cheaper model (Max, 2026-10-26).
 const SHARED_DEFAULTS = { model: "claude-opus-5-5", translateModel: "claude-sonnet-5-5", language: "українська" };
-const USER_DEFAULTS = { pageTaps: false, deskScroll: false, font: "literata", margins: "normal", spacing: "normal", column: "normal", pdfMode: "reflow", fontSizes: {}, theme: "auto", explainStyle: "default", customStyle: "", lastBook: null, positions: {} };
+const USER_DEFAULTS = { pageTaps: false, deskScroll: false, font: "literata", margins: "normal", spacing: "normal", column: "normal", pdfMode: "reflow", fontSizes: {}, theme: "auto", explainStyle: "default", customStyle: "", gloss: "on", lastBook: null, positions: {} };
 const SHARED_KEYS = new Set(Object.keys(SHARED_DEFAULTS));
 const USER_KEYS = new Set(Object.keys(USER_DEFAULTS));
 
@@ -213,6 +213,8 @@ function userState(name) {
 // shows (Max first, then everyone, switched on /admin/jobs without a deploy). A minute old at most; one entry per
 // account, so bounded by the accounts.
 const flagsKept = new Map(); // acct -> { list, at }
+// «Словничок» to the free shelf's classics (server/glossary.js; flag `glossary`).
+const glossary = new (require("./glossary").Glossary)({ dir: path.join(DATA_DIR, "glossary") });
 function readerFlags(acct) {
   const kept = flagsKept.get(acct);
   const key = state.accounts[acct]?.key;
@@ -256,6 +258,7 @@ function settingsFor(req) {
     ...(req.share ? { share: { from: accountName(req.share.acct), until: req.share.expires } } : {}),
     // Printing those gives the current chapter, not the whole book (renderer.js, «Print»).
     freeBooks: freeShelf.map((f) => f.name),
+    glossaries: glossary.books(),
     noFileBooks: freeShelf.filter((f) => !fileAllowed(f.name)).map((f) => f.name),
     // Publishers' books: no print, no copy beyond a quote (server/protected.js).
     protectedBooks: protectedNames(),
@@ -1056,6 +1059,13 @@ app.use((req, res, next) => {
   app.use("/agent", (req, res, next) => (res.set("Cache-Control", "no-store"), next()));
   app.get("/agent/health", ok, (req, res) => res.json({ now: new Date().toISOString(), commit: process.env.GIT_SHA || "", image: process.env.FLY_IMAGE_REF || "", started, memoryMb: Math.round(process.memoryUsage().rss / 1048576), storage: storage.now(DATA_DIR, ["reader.db"]), accounts: Object.keys(state.accounts || {}).length }));
   app.all("/agent/sql", ok, express.json(), async (req, res) => res.json(await sql(req.body?.q || req.query.q)));
+  // «Словничок» (server/glossary.js): what is made and what runs; POST {"book":"<free-shelf file>"} makes one book's.
+  app.get("/agent/glossary", ok, (req, res) => res.json(glossary.status()));
+  app.post("/agent/glossary", ok, express.json(), (req, res) => {
+    const book = safeBookName(req.body?.book);
+    if (!book || !isFree(book)) return res.status(400).json({ error: "not a free-shelf book" });
+    res.json({ started: glossary.start(book, path.join(freeDir(book), book)), ...glossary.status() });
+  });
 }
 
 // The reader's address is app.chytai.org.ua (2026-10-22; read.chytai.org.ua for its first hour). Browsers
@@ -2088,6 +2098,14 @@ api.get("/book", (req, res) => {
   // A publisher's book: never the file, only where to read it from.
   if (file.startsWith(prot.dir + path.sep)) return res.json({ ...prot.info(inApp(req)), base: `/api/pbook/${encodeURIComponent(name)}/` });
   res.sendFile(file);
+});
+
+// A free-shelf classic's «Словничок»: { form: meaning } (server/glossary.js); guests read these books too.
+api.get("/glossary", (req, res) => {
+  const name = safeBookName(req.query.book);
+  const g = name && isFree(name) && glossary.get(name);
+  if (!g) return res.status(404).json({ error: "Словничка немає." });
+  res.set("Cache-Control", "private, max-age=3600").json({ forms: g.forms });
 });
 
 // One entry of a publisher's book: GET /api/pbook/<book>/<path inside the EPUB>.

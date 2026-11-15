@@ -330,6 +330,7 @@ function styleContents(contents) {
     doc.head.appendChild(colors);
   }
   colors.textContent = themeCss(resolvedTheme());
+  window.Gloss?.style(contents);
   if (!doc.documentElement.lang) doc.documentElement.lang = book?.packaging?.metadata?.language || "en";
 }
 
@@ -418,6 +419,8 @@ async function openEpub(payload, { posKey, source }) {
     });
   followFontLoad(rendition);
   rendition.hooks.content.register(styleContents);
+  rendition.hooks.content.register((contents) => window.Gloss?.mark(contents));
+  window.Gloss?.load(payload.path, () => rendition?.getContents());
   rendition.hooks.content.register((contents) => contents.on("linkClicked", rememberReturn));
   if (current.protected) rendition.hooks.content.register(limitCopy);
   rendition.themes.fontSize(`${bookFontSize() * BASE_SCALE}%`);
@@ -439,6 +442,8 @@ async function openEpub(payload, { posKey, source }) {
   rendition.on("keydown", (e) => (onPrintKey(e), e.defaultPrevented || window.DeskRead?.key(e), e.defaultPrevented || window.Shell?.key(e), window.DeskRead?.escFull(e)));
   window.DeskRead?.watchFrames(rendition);
   rendition.on("click", (e) => {
+    // A click on a word of the «Словничок» shows its meaning (gloss.js); a touch tap comes through onTouchEnd.
+    if (!TOUCH.matches && e.view?.getSelection()?.isCollapsed !== false) window.Gloss?.tap(e.clientX, e.clientY, e.view?.document);
     // A plain click inside the page clears the selection. Touch taps are handled in onTouchEnd:
     // iOS Safari does not deliver clicks on plain text to the iframe's document listener.
     setTimeout(() => {
@@ -612,6 +617,7 @@ function resizeView() {
 }
 
 function closeBook() {
+  window.Gloss?.load(null);
   $("#btn-print").classList.add("hidden");
   $("#btn-search").classList.add("hidden");
   // A failure while tearing down the previous book must never block opening the next one.
@@ -837,6 +843,7 @@ function onRelocated(location) {
   updateProgress(location);
   // While scrolling, a selection may move off screen and back; its toolbar is pinned at the bottom anyway.
   if (!scrolled()) hideSelToolbar();
+  window.Gloss?.hide();
   // On a computer the mouse shows and hides the header (desk-read.js); a relayout must not take it away.
   if (!window.DeskRead?.mouseChrome()) toggleChrome(false);
 }
@@ -916,6 +923,7 @@ function onTouchEnd(e) {
   } else if (ms < 400 && Math.abs(dx) < 12 && Math.abs(dy) < 12 && !e.target?.closest?.("a")) {
     // On a phone a tap on the page puts the open panel away first (Max, 2026-11-01).
     if (panelOverPage()) return closeSheets();
+    if (window.Gloss?.tap(t.clientX, t.clientY, e.view?.document)) return;
     tapToPage(t, e.view);
   }
 }

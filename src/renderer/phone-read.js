@@ -294,6 +294,7 @@
           <div><div class="m-grp">Гортання</div>${seg("mode", [["scroll", "Прокрутка"], ["pages", "Сторінки"]], settings.pageTaps ? "pages" : "scroll")}</div>`
         }
         </div>
+        ${window.Gloss?.has() ? `<div class="m-grp">Словничок</div>${seg("gloss", [["on", "Підкреслювати"], ["off", "Ні"]], settings.gloss === "off" ? "off" : "on")}` : ""}
       </div>`;
     const box = lookBox();
     for (const b of box.querySelectorAll("[data-size]")) b.onclick = async () => (await setFont(Number(b.dataset.size)), renderLook());
@@ -320,6 +321,7 @@
     }
     body.dataset.margins = settings.margins || "normal";
     applyTheme();
+    if ("gloss" in patch) for (const c of rendition?.getContents() || []) window.Gloss?.mark(c);
     if (marginsChanged) resizeView();
     if (columnChanged) window.DeskRead?.columnChanged();
     if (fontChanged || spacingChanged) applyTypography(true);

@@ -222,7 +222,7 @@
   // How the text looks is kept on each device apart (Max, 2026-11-10: a bigger font on the Android phone
   // made the iPhone's bigger too). The account's copy only starts a device that has none of its own yet,
   // and still takes every change, so a new device opens with the latest choice. The rest stays shared.
-  const LOOK_KEYS = ["theme", "font", "fontSizes", "margins", "spacing", "column", "pageTaps", "deskScroll"];
+  const LOOK_KEYS = ["theme", "font", "fontSizes", "margins", "spacing", "column", "pageTaps", "deskScroll", "gloss"];
   const LOOK = "chytai-look";
   const pickLook = (from) => Object.fromEntries(LOOK_KEYS.filter((k) => from?.[k] !== undefined).map((k) => [k, from[k]]));
   function deviceLook() {

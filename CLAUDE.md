@@ -354,6 +354,16 @@ A flag only when Max asks for one, or when the change could break what readers u
   30 a day (meta `calbooks:count`), never Russian; Max hears of them (mail + Telegram). Dry run:
   `curl -s https://chytai.org.ua/agent/calendar-books -H "$H"`.
 
+## «Словничок» in the reader's classics (`server/glossary.js`, `src/renderer/gloss.js`)
+
+- A free-shelf book (`free/shelf.json`) gets once a list of old, dialect and historical words with a few words of
+  meaning (Sonnet, ~28 calls a novel; `DATA_DIR/glossary/<book>.json`). The page underlines them with a CSS Custom
+  Highlight (no DOM change: positions and notes stay) and a tap or click shows the meaning; «Аа» → «Словничок»
+  turns it off (`gloss`, per device). Flag `glossary`; guests have no flags, so it reaches them once the flag is gone.
+- Make one book's (only with Max's OK in the thread, one book at a time): `curl -s https://app.chytai.org.ua/agent/glossary
+  -H "$H" -H 'content-type: application/json' -d '{"book":"kulish-chorna-rada.epub"}'`; `GET` the same address
+  for what is made (forms, cost) and what runs. Locally without a key: put a JSON in `<DATA_DIR>/glossary/` by hand.
+
 ## Translation pairs
 
 - A Ukrainian book and its original are paired in `web/seed/matches.json`: `translations` (`[original, uk]`, slugs or
