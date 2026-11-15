@@ -159,6 +159,8 @@ A flag only when Max asks for one, or when the change could break what readers u
 - A file just uploaded to the reader (tellSite → `/api/reader-library`, with `lang`, `fromName`, `added`) that the
   catalog lacks becomes a book (`source: "reader"`) when its metadata is clean, it is uk/en, not Russian, and Google
   Books or Open Library confirm title + author. Behind the flag `reader-books`; caps 20/reader, 200/day.
+- An upload whose metadata has no author or a title that is only the file's name gets both from its first pages
+  (`titleFromPages` in server/index.js, one Haiku call, kept in `bookMeta` like a reader's correction, `fromPages`).
 - Every book a reader adds to the reader (uploaded <48 h ago, not a gift, not Max's own) sends Max one letter +
   Telegram per sync: «Книжка в Читалці: …», the reader's /@username, title — author and the book's page here (from
   the catalog, «нова на Chytai», or «у каталозі немає»). `tellUploads` in web/server.js, after readerBooks' lookup.

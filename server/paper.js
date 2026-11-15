@@ -62,6 +62,23 @@ async function readPageNumber(apiKey, image, mediaType) {
   return { page: n > 0 ? n : null, usage: r.usage, model: r.model };
 }
 
+// An uploaded book whose metadata says nothing useful (no author, or a title that is only the file's name, Max
+// 2026-11-15): its title and author as its first pages print them.
+async function readTitlePage(apiKey, text) {
+  const prompt = `This is the beginning of an e-book's text: cover, title page, copyright page and the first lines.
+What is the book's title and who is its author, as printed here? Keep the book's language and spelling; leave out series names, publisher and edition notes.
+Answer with JSON only: {"title": "...", "author": "..."}. Leave a field empty when the text does not say it.
+
+${text}`;
+  const r = await ask(apiKey, COVER_MODEL, prompt, null, null, 200);
+  let out = { title: "", author: "" };
+  try {
+    const j = JSON.parse(r.text.match(/\{[\s\S]*\}/)?.[0] || "{}");
+    out = { title: String(j.title || "").replace(/\s+/g, " ").trim().slice(0, 300), author: String(j.author || "").replace(/\s+/g, " ").trim().slice(0, 300) };
+  } catch {}
+  return { ...out, usage: r.usage, model: r.model };
+}
+
 // Questions to ask (v3, Max: «можна придумувати питання, знаючи назву книжки… або follow-up до попереднього»):
 // three short ones in Ukrainian, about where the reader is, or following on from the last question.
 async function suggest(apiKey, { title, author, page, last }) {
@@ -130,4 +147,4 @@ function listEntry(name, p, u) {
   };
 }
 
-module.exports = { NAME, readCover, readPage, readPageNumber, updateStory, suggest, tidy, stripImages, listEntry, COVER_MODEL, PAGE_MODEL };
+module.exports = { NAME, readCover, readTitlePage, readPage, readPageNumber, updateStory, suggest, tidy, stripImages, listEntry, COVER_MODEL, PAGE_MODEL };

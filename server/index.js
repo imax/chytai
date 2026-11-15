@@ -18,7 +18,7 @@ const path = require("path");
 const { explain } = require("../src/ai");
 const JSZip = require("jszip");
 const library = require("../src/library");
-const { bookLanguage } = require("./language");
+const { bookLanguage, epubSample } = require("./language");
 const { checkUpload } = require("./content");
 const { cost } = require("./admin");
 const { createProtected } = require("./protected");
@@ -325,13 +325,15 @@ function trimGuestRequest(request) {
 
 const statsDay = (ts = Date.now()) => new Date(ts).toLocaleDateString("sv-SE", { timeZone: STATS_TZ }); // YYYY-MM-DD
 
-function recordExplain(req, { model, usage }) {
+function recordExplain(req, { model, usage }, { count = true } = {}) {
   const day = statsDay();
   const stats = (state.stats ??= { since: day, days: {} });
   const d = (stats.days[day] ??= { explains: 0, users: {}, guests: 0, models: {} });
-  d.explains++;
-  if (req.guest) d.guests++;
-  else d.users[req.acct] = (d.users[req.acct] || 0) + 1;
+  if (count) {
+    d.explains++;
+    if (req.guest) d.guests++;
+    else d.users[req.acct] = (d.users[req.acct] || 0) + 1;
+  }
   // What each account costs, for /admin: dollars at list prices, as the day's model rows count them.
   // And the whole day's, guests included, for the daily budget below.
   const c = cost(model || "?", { input: usage?.input_tokens || 0, output: usage?.output_tokens || 0, cacheRead: usage?.cache_read_input_tokens || 0, cacheWrite: usage?.cache_creation_input_tokens || 0 });
@@ -2584,9 +2586,39 @@ api.put("/books/:name", uploadGuard, uploadBody, async (req, res) => {
   (req.lib.meta.added ??= {})[name] = { by: req.acct, at: Date.now() };
   saveState();
   warmCovers(req.lib, [name]);
-  tellSite(req.acct);
   res.json({ path: name });
+  titleFromPages(req, name).finally(() => tellSite(req.acct));
 });
+
+// A file whose metadata has no author, or a title that is only the file's name («8172 ua», «Object2026…»), is
+// not found in the catalog. Its first pages usually print both (Max 2026-11-15): Haiku reads them once, and what
+// it finds becomes the book's title and author, like a reader's own correction (bookMeta). Nothing else is asked.
+const squash = (s) => String(s || "").toLowerCase().replace(/\.[a-z0-9]{2,4}$/, "").replace(/[^\p{L}\p{N}]+/gu, "");
+async function titleFromPages(req, name) {
+  try {
+    const apiKey = process.env.ANTHROPIC_API_KEY;
+    if (!apiKey || req.lib.meta.bookMeta?.[name] || aiBudgetDenied(req)) return;
+    const b = (await scanLibrary(req.lib)).find((x) => path.basename(x.path) === name);
+    if (!b) return;
+    const t = squash(b.title);
+    const f = squash(name);
+    const named = b.fromName || !t || (t.length >= 3 && (f.startsWith(t) || t.startsWith(f))) || /^[\p{N}\s_-]+$/u.test(b.title);
+    const noAuthor = !b.authors?.length || b.authors.every((a) => /^(unknown|невідомо|неизвестно|автор)$/i.test(a.trim()));
+    if (!named && !noAuthor) return;
+    const { text } = await (/\.pdf$/i.test(name) ? Promise.resolve({ text: "" }) : epubSample(fs.readFileSync(bookFile(req.lib, name))));
+    const head = text.replace(/\s+/g, " ").trim().slice(0, 3000);
+    if (head.length < 40) return;
+    const r = await paper.readTitlePage(apiKey, head);
+    recordExplain(req, r, { count: false });
+    if (!r.title && !r.author) return;
+    if (req.lib.meta.bookMeta?.[name]) return; // the reader corrected it meanwhile
+    (req.lib.meta.bookMeta ??= {})[name] = { title: (named && r.title) || b.title, authors: r.author ? [r.author] : b.authors || [], fromPages: true };
+    saveState();
+    console.log(`title from pages: ${name} → ${r.title} / ${r.author}`);
+  } catch (err) {
+    console.error("title from pages:", name, err.message);
+  }
+}
 
 // A PDF added before every upload became an EPUB (2026-11-01) becomes one now (Max, 2026-11-02, «Одіссея»):
 // the browser sends the text version it reads «як книжку» (pdf-reflow.js), so the place and the notes made
