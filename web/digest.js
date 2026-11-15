@@ -18,6 +18,7 @@ const crypto = require("crypto");
 const { marked } = require("marked");
 const pages = require("./pages");
 const { isRussian } = require("./store");
+const { shortWhen } = require("./calendar");
 
 const DAY = 86400000;
 const SEND_DAY = 5; // Friday
@@ -29,6 +30,7 @@ const READING_WEEKS = 3; // «Ви зараз читаєте» after this long
 const MAX_FEED = 6;
 const MAX_NEW = 5;
 const MAX_UPDATES = 5;
+const MAX_EVENTS = 3; // «Книжкові події» rows (a reader's event subscriptions, calendar.js)
 const BUILD_AT_ONCE = 8; // readers whose letters are made side by side
 
 // Who gets Max's text (the others still get their letter when their shelves have news, without it).
@@ -62,13 +64,14 @@ function period(from, to) {
 const did = (status) => ({ read: "прочитано", reading: "читає зараз", want: "хоче прочитати" }[status] || "оцінка");
 
 class Digest {
-  constructor({ store, auth, social, lists = null, club = null, libraries, site, log = console.log, to = "owner", ownerId = "owner" }) {
+  constructor({ store, auth, social, lists = null, club = null, events = null, libraries, site, log = console.log, to = "owner", ownerId = "owner" }) {
     this.store = store;
     this.auth = auth;
     this.social = social;
     this.club = club; // «Клуб Chytai» (club.js): the week's liveliest topics
     this.lists = lists; // «Списки» (lists.js): new books in the lists a reader saved
     this.libraries = libraries;
+    this.events = events; // (readerId, sinceIso, now) => { events, names, href } | null: the events a reader subscribed to (server.js calForLetter)
     this.site = site; // https://chytai.org.ua
     this.log = log;
     this.to = to;
@@ -236,8 +239,12 @@ class Digest {
     const updates = this.siteNews(now);
     // «У Клубі цього тижня» (Max, 2026-11-01): the same for everyone; it does not make a letter on its own.
     const clubWeek = this.club ? this.club.week(new Date(now - 7 * DAY).toISOString()) : [];
-    const empty = !feed.length && !news.length && !listNews.length && !club.length;
-    return { clubWeek, club: club.slice(0, MAX_NEW), clubMore: Math.max(0, club.length - MAX_NEW), empty, state, since, now, site, updates, feed, feedMore: feedAll.length - feed.length, news, newsMore: fresh.filter((x) => x.book).length - news.length, lists: listNews, listsMore: listAll.length - listNews.length, want: [], reading, pick };
+    // 6. «Книжкові події» they subscribed to on /calendar (Max 2026-11-15: «кнопка підписатись і потім приходить
+    // імейл», like a publisher's): what starts within 9 days, and later ones added since the last letter.
+    const cal = this.events ? this.events(readerId, sinceIso, now) : null;
+    const events = cal ? cal.events.slice(0, MAX_EVENTS) : [];
+    const empty = !feed.length && !news.length && !listNews.length && !club.length && !events.length;
+    return { clubWeek, club: club.slice(0, MAX_NEW), clubMore: Math.max(0, club.length - MAX_NEW), empty, state, since, now, site, updates, feed, feedMore: feedAll.length - feed.length, news, newsMore: fresh.filter((x) => x.book).length - news.length, lists: listNews, listsMore: listAll.length - listNews.length, events, eventsMore: cal ? cal.events.length - events.length : 0, eventsHref: cal?.href || "/calendar", eventsFor: cal?.names || [], want: [], reading, pick };
   }
 
   // The site's week in numbers (Max, 2026-10-22: «скільки додалось читачів, скільки додалось книжок»): the last
@@ -315,8 +322,10 @@ class Digest {
       const n = d.club.length + d.clubMore;
       bits.push(`${count(n, "новий коментар", "нові коментарі", "нових коментарів")} у Клубі Chytai`);
     }
+    // Events come last in the subject and stay out of the lead (that one is about the shelves).
+    const subjectBits = d.events?.length ? [...bits, `${count(d.events.length + d.eventsMore, "книжкова подія", "книжкові події", "книжкових подій")} попереду`] : bits;
     // The subject takes the pieces that fit in about 90 characters, the first one always.
-    const auto = bits.map((b) => b.replace(/«([^»]+)»/g, (_, t) => `«${short(t)}»`)).reduce((acc, b) => (!acc ? b : `${acc}, ${b}`.length <= 90 ? `${acc}, ${b}` : acc), "");
+    const auto = subjectBits.map((b) => b.replace(/«([^»]+)»/g, (_, t) => `«${short(t)}»`)).reduce((acc, b) => (!acc ? b : `${acc}, ${b}`.length <= 90 ? `${acc}, ${b}` : acc), "");
     const subject = editorial?.subject || auto || `Chytai: тиждень ${when}`;
     const lead = bits.length ? `${bits.map((b, i) => (i ? b : b.charAt(0).toUpperCase() + b.slice(1))).join(", ")}.` : "";
 
@@ -361,6 +370,17 @@ class Digest {
       html.push(d.club.map((c) => `<div style="padding:12px 0;border-bottom:1px solid #e4dfd5"><div style="font-size:13px;color:#6b675f">${b(c.reader.name)} під списком «<a href="${attr(url(c.list.href))}#club" style="color:#1b1a17">${esc(c.list.title)}</a>»</div><div style="font-family:'Source Serif 4',Georgia,serif;font-size:15px;line-height:1.45;color:#3d3a33;margin-top:6px">${esc(c.text.length > 400 ? `${c.text.slice(0, 397)}…` : c.text).replace(/\n/g, "<br>")}</div></div>`).join(""));
       if (d.clubMore > 0) html.push(muted(`і ще ${count(d.clubMore, "коментар", "коментарі", "коментарів")}`));
       text.push("КЛУБ CHYTAI · ПІД ВАШИМИ СПИСКАМИ", ...d.club.map((c) => `• ${c.reader.name} під списком «${c.list.title}»:\n  ${c.text.replace(/\s+/g, " ").slice(0, 400)}\n  ${url(c.list.href)}#club`), ...(d.clubMore > 0 ? [`  …і ще ${d.clubMore}`] : []), "");
+    }
+    if (d.events?.length) {
+      const when = (e) => [shortWhen(e), e.time, [e.city, e.place].filter(Boolean).join(", ")].filter(Boolean).join(" · ");
+      const go = (e) => `${site}/calendar/go/${encodeURIComponent(e.id)}`;
+      const stops = (e) => (e.stops ? `ще ${count(e.stops.length - 1, "дата", "дати", "дат")}: ${e.stops.slice(1, 4).map((x) => `${x.city || ""} ${x.starts.slice(8)}.${x.starts.slice(5, 7)}`.trim()).join(", ")}${e.stops.length > 4 ? "…" : ""}` : "");
+      const off = `${site}/calendar/unsubscribe/${encodeURIComponent(reader.id)}/${this.token(reader.id)}`;
+      html.push(label("Книжкові події", ["усі події", url(d.eventsHref)]));
+      html.push(d.events.map((e) => `<div style="padding:12px 0;border-bottom:1px solid #e4dfd5"><div style="font-size:13px;color:#6b675f">${esc(when(e))}</div><a href="${attr(go(e))}" style="display:block;font-family:'Source Serif 4',Georgia,serif;font-size:17px;line-height:1.3;color:#1b1a17;text-decoration:none;margin-top:3px">${esc(e.title)}</a>${e.stops ? `<div style="font-size:13px;color:#6b675f;margin-top:3px">${esc(stops(e))}</div>` : ""}</div>`).join(""));
+      if (d.eventsMore > 0) html.push(muted(`і ще ${count(d.eventsMore, "подія", "події", "подій")} <a href="${attr(url(d.eventsHref))}" style="color:#6b675f">на сторінці подій</a>`));
+      html.push(muted(`Ви підписані: ${esc(d.eventsFor.join("; "))}. <a href="${attr(off)}" style="color:#6b675f">Відписатися від подій</a>`));
+      text.push("КНИЖКОВІ ПОДІЇ", ...d.events.map((e) => `• ${when(e)}\n  ${e.title}${e.stops ? `\n  ${stops(e)}` : ""}\n  ${go(e)}`), ...(d.eventsMore > 0 ? [`  …і ще ${d.eventsMore}: ${url(d.eventsHref)}`] : []), `Ви підписані: ${d.eventsFor.join("; ")}. Відписатися від подій: ${off}`, "");
     }
     if (d.clubWeek?.length) {
       html.push(label("У Клубі цього тижня", ["усі теми", `${site}/club`]));

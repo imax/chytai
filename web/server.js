@@ -1305,7 +1305,7 @@ app.post("/settings", signed, (req, res) => {
 });
 // The letters' tab: the weekly letter and the «стежить за вами» letter, each on or off.
 app.get("/settings/mail", signed, (req, res) => {
-  res.send(pages.mailSettingsPage({ user: req.user, values: { digest: digest.enabled(req.user.id), follow_mail: auth.followMailEnabled(req.user.id), mention_mail: auth.mentionMailEnabled(req.user.id), club_mail: auth.clubMailEnabled(req.user.id), topic_mail: clubMail.enabled(req.user.id), want_mail: wantMail.enabled(req.user.id) }, saved: !!req.query.saved }));
+  res.send(pages.mailSettingsPage({ user: req.user, values: { digest: digest.enabled(req.user.id), follow_mail: auth.followMailEnabled(req.user.id), mention_mail: auth.mentionMailEnabled(req.user.id), club_mail: auth.clubMailEnabled(req.user.id), topic_mail: clubMail.enabled(req.user.id), want_mail: wantMail.enabled(req.user.id) }, saved: !!req.query.saved, calSubs: calendar.subs(req.user.id).map((f) => ({ name: calendarLib.subName(f), href: calHref(f) })) }));
 });
 app.post("/settings/mail", signed, (req, res) => {
   const r = req.user, b = req.body;
@@ -1624,6 +1624,7 @@ bg.every("threads-find", 4 * 3600 * 1000, () => threadsFind.run(), { db: store.d
 
 // «Книжкові події» on /calendar (calendar.js, Max 2026-11-15). Seeds at every start; the jobs process cleans up
 // old events and, once switched on (meta calendar:ye), reads Книгарня «Є»'s calendar once a day.
+const calendarLib = require("./calendar");
 const calendar = require("./calendar").create(store.db, store, {
   bookua: (q) => catalogs.bookuaSearch(q),
   search: (q) => readerBooks.search(q),
@@ -1707,7 +1708,7 @@ bg.every("overviews", 24 * 3600 * 1000, () => advice.sweep(), { db: store.db });
 pages.setStats((id) => social.stats(id));
 // The weekly letter (digest.js): Friday 9:30 Kyiv, to every reader who has not switched it off (Max,
 // 2026-10-20: «Включаємо на всіх»); WEB_DIGEST_TO=owner limits it to the owner again.
-const digest = new Digest({ store, auth, social, lists, club, libraries, site: SITE, ownerId: OWNER_ID, to: process.env.WEB_DIGEST_TO === "owner" ? "owner" : "all" });
+const digest = new Digest({ store, auth, social, lists, club, libraries, events: calForLetter, site: SITE, ownerId: OWNER_ID, to: process.env.WEB_DIGEST_TO === "owner" ? "owner" : "all" });
 // A letter to every reader about a new Club topic once someone answers it (clubmail.js, Max 2026-11-04).
 const clubMail = new ClubMail({ store, auth, club, digest, site: SITE, ownerId: OWNER_ID });
 // Off since 2026-11-10 (Max: no extra marketing letters, only Friday's): the switch left /settings/mail too.
@@ -1761,7 +1762,7 @@ app.get("/calendar", (req, res) => {
   // ?q=: every word somewhere in the event, its authors' names or its books' titles.
   const query = String(req.query.q || "").trim().slice(0, 80);
   const words = norm(query).split(/\s+/).filter(Boolean);
-  const hay = (e) => norm([e.title, e.sub, e.city, e.place, ...e.authors.map((a) => store.authors?.bySlug.get(a)?.name || ""), ...e.books.map((id) => store.book(id)?.title || "")].join(" "));
+  const hay = calHay;
   // ?kind= one kind of event (calendar.KINDS); no kind, no words and no «Мої автори» = the overview by kind (?all=1: the list).
   const kind = require("./calendar").KINDS.some((k) => k.key === req.query.kind) ? req.query.kind : "";
   const picked = all.filter((e) => (!city || e.city === city) && (!mine || isMine(e)) && (!words.length || words.every((w) => hay(e).includes(w))));
@@ -1771,8 +1772,59 @@ app.get("/calendar", (req, res) => {
   for (const e of rows) if (e.kind) counts[e.kind] = (counts[e.kind] || 0) + 1;
   const events = kind ? rows.filter((e) => e.kind === kind) : rows;
   const withBooks = events.slice(0, 300).map((e) => ({ ...e, mine: isMine(e) ? shelfBooksFor(req, e, mineSet) : null, bookCards: e.books.map((id) => store.book(id) && workFor(req, store.book(id))).filter(Boolean).slice(0, 3), authorLinks: e.authors.map((s) => store.authors?.bySlug.get(s)).filter(Boolean).slice(0, 3), byReader: e.by ? pub(auth.reader(e.by)) : null }));
-  res.send(pages.calendarPage({ user: req.user, events: withBooks, cities: calendar.cities(), city, mine, mineCount: mineSet ? all.filter(isMine).length : 0, owner: !!req.owner, query, kind, all: !!req.query.all, counts, total: rows.length, feed: calFeed(mine ? req.user.id : "", city, query, kind) }));
+  const choice = { kind, city, mine, q: query };
+  res.send(pages.calendarPage({ user: req.user, events: withBooks, cities: calendar.cities(), city, mine, mineCount: mineSet ? all.filter(isMine).length : 0, owner: !!req.owner, query, kind, all: !!req.query.all, counts, total: rows.length, feed: calFeed(mine ? req.user.id : "", city, query, kind), subscribed: calendar.subscribed(req.user?.id, choice), subs: calendar.subs(req.user?.id).length }));
 });
+// Every word of ?q= somewhere in the event, its authors' names or its books' titles.
+function calHay(e) {
+  return norm([e.title, e.sub, e.city, e.place, ...e.authors.map((a) => store.authors?.bySlug.get(a)?.name || ""), ...e.books.map((id) => store.book(id)?.title || "")].join(" "));
+}
+// One choice on /calendar ({ kind, city, mine, q }; mine = the authors on `reader`'s shelf) as upcoming events:
+// the .ics feed and the Friday letter pick the way the page does.
+function calPick(f, reader = "", events = calendar.upcoming()) {
+  if (f.mine && !reader) return [];
+  const mineSet = f.mine ? shelfAuthors(reader) : null;
+  const words = norm(f.q || "").split(/\s+/).filter(Boolean);
+  return events.filter((e) => (!f.kind || e.kind === f.kind) && (!f.city || e.city === f.city) && (!mineSet || e.authors.some((a) => mineSet.has(a))) && (!words.length || words.every((w) => calHay(e).includes(w))));
+}
+const calHref = (f) => `/calendar${calendarLib.subKey(f) ? `?${calendarLib.subKey(f)}` : ""}`;
+// «Підписатися» by e-mail (Max 2026-11-15, like a publisher's): the page's choice goes into the Friday letter.
+// Turning one on switches that letter on too (a reader who asks for mail wants it).
+app.post("/calendar/subscribe", signed, (req, res) => {
+  const b = req.body || {};
+  const f = { kind: calendarLib.KINDS.some((k) => k.key === b.kind) ? b.kind : "", city: String(b.city || "").slice(0, 40), mine: !!b.mine, q: String(b.q || "").trim().slice(0, 80) };
+  const on = b.on === "1";
+  calendar.subscribe(req.user.id, f, on);
+  if (on && !digest.enabled(req.user.id)) {
+    mailLog.switched("digest", req.user.id, false, true);
+    digest.setEnabled(req.user.id, true);
+  }
+  res.redirect(303, calHref(f));
+});
+// The letter's «Відписатися від подій»: every event subscription of the reader, no sign-in (signed like the digest's).
+app.get("/calendar/unsubscribe/:id/:token", (req, res) => {
+  const reader = auth.reader(req.params.id);
+  if (!reader || !digest.check(reader.id, req.params.token)) return res.status(404).send(pages.messagePage({ title: "Посилання не підходить", text: "Відписатися можна на сторінці подій.", user: req.user }));
+  calendar.unsubscribeAll(reader.id);
+  res.send(pages.messagePage({ title: "Події більше не приходитимуть", text: "Підписатися знову можна на сторінці подій, chytai.org.ua/calendar.", user: req.user }));
+});
+// An event's own page, by our address: letters link only to chytai.org.ua.
+app.get("/calendar/go/:id", (req, res) => {
+  const e = calendar.one(req.params.id);
+  if (!e || !/^https?:\/\//.test(e.url || "")) return res.redirect(302, `/calendar${e ? `#${encodeURIComponent(e.id)}` : ""}`);
+  res.redirect(302, e.url);
+});
+// The Friday letter's «Книжкові події» (digest.js): what the reader's subscriptions pick and starts within 9 days
+// (to the Sunday after the next letter), plus later ones added since their last letter. A tour is one row.
+function calForLetter(reader, since, now = new Date()) {
+  const subs = calendar.subs(reader);
+  if (!subs.length) return null;
+  const until = calendarLib.addDays(calendarLib.kyivDay(now), 9);
+  const picked = new Map();
+  for (const f of subs) for (const e of calPick(f, reader)) if (e.starts <= until || (e.added || "") > since) picked.set(e.id, e);
+  const events = calendarLib.tours([...picked.values()].sort((a, b) => (a.starts + a.time < b.starts + b.time ? -1 : 1)));
+  return { events, names: subs.map(calendarLib.subName), href: subs.length === 1 ? calHref(subs[0]) : "/calendar?all=1" };
+}
 // «Підписатися» (Max 2026-11-15): the list as an iCalendar feed for a phone's calendar, with the same ?city= and ?q=;
 // «Мої автори» goes by ?mine=<reader>.<key> (a calendar app has no cookie), the key signed with the reader secret.
 const calKey = (id) => require("crypto").createHmac("sha256", readerSecret()).update(`cal:${id}`).digest("base64url").slice(0, 22);
@@ -1785,11 +1837,8 @@ app.get("/calendar.ics", (req, res) => {
   const reader = rid && key && key === calKey(rid) && auth.reader(rid) ? rid : "";
   if (req.query.mine && !reader) return res.status(404).send("Немає такого календаря.");
   const city = String(req.query.city || "").slice(0, 40);
-  const words = norm(String(req.query.q || "").slice(0, 80)).split(/\s+/).filter(Boolean);
-  const mineSet = reader ? shelfAuthors(reader) : null;
-  const hay = (e) => norm([e.title, e.sub, e.city, e.place, ...e.authors.map((a) => store.authors?.bySlug.get(a)?.name || ""), ...e.books.map((id) => store.book(id)?.title || "")].join(" "));
   const kind = require("./calendar").KINDS.find((k) => k.key === req.query.kind);
-  const events = calendar.upcoming().filter((e) => (!kind || e.kind === kind.key) && (!city || e.city === city) && (!mineSet || e.authors.some((a) => mineSet.has(a))) && (!words.length || words.every((w) => hay(e).includes(w))));
+  const events = calPick({ kind: kind?.key || "", city, mine: !!reader, q: String(req.query.q || "").slice(0, 80) }, reader);
   const name = ["Книжкові події", kind?.label, city, reader ? "мої автори" : "", req.query.q ? String(req.query.q).slice(0, 40) : ""].filter(Boolean).join(" · ");
   res.set("Content-Type", "text/calendar; charset=utf-8").set("Cache-Control", `${reader ? "private" : "public"}, max-age=1800`).send(require("./calendar").ics(events, { name, site: SITE }));
 });

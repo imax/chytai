@@ -2264,15 +2264,7 @@ function calOverview(events, { user, owner, today, href, counts }) {
   }
   return out.join("");
 }
-function calendarPage({ user, events, cities, city = "", mine = false, mineCount = 0, owner = false, query = "", feed = "", kind = "", all = false, counts = {}, total = 0 }) {
-  // «Підписатися»: the list as it is filtered now, in a phone's calendar (Apple's opens webcal://, Google's takes the address).
-  const subscribe = feed
-    ? drop(` data-ev="cal-subscribe">Підписатися <span class="caret">▾</span>`, "btn", [
-        `<a href="${attr(feed.replace(/^https?:/, "webcal:"))}" data-ev="cal-sub-apple">Календар iPhone чи Mac</a>`,
-        `<a href="${attr(`https://calendar.google.com/calendar/render?cid=${encodeURIComponent(feed.replace(/^https?:/, "webcal:"))}`)}" target="_blank" rel="noopener" data-ev="cal-sub-google">Google Календар</a>`,
-        `<a href="${attr(feed)}" data-ev="cal-sub-file">Адреса для інших календарів</a>`,
-      ])
-    : "";
+function calendarPage({ user, events, cities, city = "", mine = false, mineCount = 0, owner = false, query = "", feed = "", kind = "", all = false, counts = {}, total = 0, subscribed = false }) {
   const today = cal().kyivDay();
   // An address with today's choice, changed by `over` (kind, city, mine, q, all).
   const href = (over = {}) => {
@@ -2295,6 +2287,17 @@ function calendarPage({ user, events, cities, city = "", mine = false, mineCount
       : "";
   const mineChip = user && mineCount ? chip(mine, href({ mine: !mine }), `Мої автори · ${mineCount}`, " cal-mine-chip") : "";
   const tools = `<div class="cal-tools">${cityMenu}${mineChip}${find}</div>`;
+  // «Підписатися» (Max 2026-11-15, like a publisher's): the events of this choice come in the Friday letter. A guest
+  // signs in first and comes back here.
+  const hidden = (n, v) => (v ? `<input type="hidden" name="${n}" value="${attr(v)}">` : "");
+  const subscribe = !user
+    ? `<a class="btn" rel="nofollow" href="/login?next=${attr(encodeURIComponent(href()))}" data-ev="cal-subscribe">Підписатися</a>`
+    : `<form method="post" action="/calendar/subscribe" class="inline">${hidden("kind", kind)}${hidden("city", city)}${hidden("mine", mine ? "1" : "")}${hidden("q", query)}<input type="hidden" name="on" value="${subscribed ? "" : "1"}"><button class="btn" data-ev="${subscribed ? "cal-unsubscribe" : "cal-subscribe"}">${subscribed ? "✓ Підписано" : "Підписатися"}</button></form>`;
+  // The same choice in a phone's calendar (Apple's opens webcal://, Google's takes the address).
+  const webcal = feed.replace(/^https?:/, "webcal:");
+  const inCalendar = feed
+    ? `<p class="small cal-ics">У календар телефону: <a class="text-link" href="${attr(webcal)}" data-ev="cal-sub-apple">iPhone чи Mac</a> · <a class="text-link" href="${attr(`https://calendar.google.com/calendar/render?cid=${encodeURIComponent(webcal)}`)}" target="_blank" rel="noopener" data-ev="cal-sub-google">Google</a> · <a class="text-link" href="${attr(feed)}" data-ev="cal-sub-file">адреса для інших</a></p>`
+    : "";
   const body = events.length
     ? overview
       ? `${calOverview(events, { user, owner, today, href, counts })}<p class="cal-all"><a class="text-link" href="${attr(href({ all: true }))}">Усі ${total} подій за датою</a></p>`
@@ -2306,12 +2309,13 @@ function calendarPage({ user, events, cities, city = "", mine = false, mineCount
     <h1>Книжкові події</h1>
     <p class="lead">Зустрічі з авторами, клуби, лекції й фестивалі.</p>
   </div>
-  <div class="cal-acts">${subscribe}<a class="btn" href="/calendar/add">Додати подію</a></div>
+  <div class="cal-acts">${subscribe}<a class="btn" href="/calendar/add">Додати подію</a>${subscribed ? `<p class="small muted cal-subbed">Події${kind || city || mine || query ? " за цим вибором" : ""} прийдуть у пʼятничному листі.</p>` : ""}</div>
 </section>
 ${kinds}
 ${tools}
 <div data-block="calendar" class="cal-page">${body}</div>
-<p class="small cal-about">З афіш книгарень і фестивалів, від видавців і читачів. Ведемо на сторінку організатора, квитків не продаємо. <a class="text-link" href="/calendar/add">Знаєте подію? Додайте</a></p>`;
+<p class="small cal-about">З афіш книгарень і фестивалів, від видавців і читачів. Ведемо на сторінку організатора, квитків не продаємо. <a class="text-link" href="/calendar/add">Знаєте подію? Додайте</a></p>
+${inCalendar}`;
   return layout({ title: "Книжкові події", body: page, user, path: "/calendar", canonical: "/calendar", noindex: !overview, description: "Зустрічі з авторами, книжкові клуби, лекції й фестивалі в Україні та онлайн." });
 }
 function calendarAddPage({ user, values = {}, error = "" }) {
@@ -2556,12 +2560,13 @@ ${user.owner ? "" : `<form method="post" action="/settings/delete" class="form d
 const settingsTabs = (on) => `<nav class="tabs settings-tabs">${[["account", "/settings", "Акаунт"], ["mail", "/settings/mail", "Листи"], ["chats", "/settings/chats", "AI-чати"]].map(([k, href, l]) => (k === on ? `<span class="tab on">${l}</span>` : `<a class="tab" href="${href}">${l}</a>`)).join("")}</nav>`;
 
 // /settings/mail: every letter the site sends, the ones a reader can switch and the ones that come only when asked.
-function mailSettingsPage({ user, values, saved = false }) {
+function mailSettingsPage({ user, values, saved = false, calSubs = [] }) {
   const sw = (name, title, hint) => `<label class="check"><span><input type="checkbox" name="${name}" value="1"${values[name] ? " checked" : ""}> ${title}</span><span class="hint">${hint}</span></label>`;
   const form = `${settingsTabs("mail")}<form method="post" action="/settings/mail" class="form">
   ${saved ? `<p class="saved">Збережено.</p>` : ""}
   ${user.email ? `<p class="muted small">Листи приходять на ${esc(user.email)}. <a class="text-link" href="/settings">Змінити пошту</a></p>` : `<p class="muted small">Пошти не вказано, тож листів не буде. <a class="text-link" href="/settings">Додати пошту</a></p>`}
   ${sw("digest", "Пʼятничний дайджест", "Новинки на сайті, полиці та видавництва, на які ви підписані.")}
+  ${calSubs.length ? `<p class="muted small">У ньому й книжкові події: ${calSubs.map((s) => `<a class="text-link" href="${attr(s.href)}">${esc(s.name)}</a>`).join(" · ")}. Відписатися можна на сторінці подій.</p>` : ""}
   ${sw("follow_mail", "Новий читач стежить за вами", "Лист, коли хтось уперше почне стежити за вашою полицею.")}
   ${sw("club_mail", "Відповіді в темах Клубу", "Лист на кожну відповідь у темах, які ви почали або де відповідали.")}
   ${sw("mention_mail", "Вас згадали в Клубі", "Лист, коли хтось напише @${esc(user.username)} у темі чи коментарі.")}

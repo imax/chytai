@@ -613,7 +613,19 @@ function create(db, store, { notify = () => {}, bookua = null, search = null, ma
     return [...n].sort((a, b) => (a[0] === "Онлайн") - (b[0] === "Онлайн") || b[1] - a[1] || a[0].localeCompare(b[0], "uk")).map(([c]) => c);
   };
 
-  return { upsert, setKinds, add, one, findSimilar, hide, cleanup, seed, upcoming, forAuthor, forBook, cities, fillBooks, chytomoRun, yeRun, yeLast: () => yeLast, peek, fresh, meta, setMeta };
+  // «Підписатися» by e-mail (Max 2026-11-15, like a publisher's): a reader keeps the page's choice (kind, city,
+  // «Мої автори», words), and the Friday letter brings the events it picks (digest.js). A few a reader.
+  db.exec("CREATE TABLE IF NOT EXISTS cal_subs (reader TEXT NOT NULL, filter TEXT NOT NULL, added TEXT NOT NULL, PRIMARY KEY (reader, filter))");
+  const subs = (reader) => (reader ? db.prepare("SELECT filter FROM cal_subs WHERE reader = ? ORDER BY added").all(reader).map((r) => subParse(r.filter)) : []);
+  const subscribed = (reader, f) => !!reader && !!db.prepare("SELECT 1 FROM cal_subs WHERE reader = ? AND filter = ?").get(reader, subKey(f));
+  const subscribe = (reader, f, on) => {
+    if (!on) return db.prepare("DELETE FROM cal_subs WHERE reader = ? AND filter = ?").run(reader, subKey(f)).changes > 0;
+    if (db.prepare("SELECT COUNT(*) AS n FROM cal_subs WHERE reader = ?").get(reader).n >= MAX_SUBS) return false;
+    return db.prepare("INSERT OR IGNORE INTO cal_subs (reader, filter, added) VALUES (?, ?, ?)").run(reader, subKey(f), new Date().toISOString()).changes > 0;
+  };
+  const unsubscribeAll = (reader) => db.prepare("DELETE FROM cal_subs WHERE reader = ?").run(reader).changes;
+
+  return { upsert, setKinds, add, one, findSimilar, hide, cleanup, seed, upcoming, forAuthor, forBook, cities, fillBooks, chytomoRun, yeRun, yeLast: () => yeLast, peek, fresh, meta, setMeta, subs, subscribed, subscribe, unsubscribeAll };
 }
 
 // «Четвер, 19 листопада» and, within a week, «завтра» / «через 3 дні».
@@ -696,7 +708,28 @@ function ics(events, { name = "Книжкові події", site = "https://chy
   return lines.map(fold).join("\r\n") + "\r\n";
 }
 
+// A subscription's choice as one stored string, always in the same order: kind, city, mine, q.
+const MAX_SUBS = 10;
+function subKey({ kind = "", city = "", mine = false, q = "" } = {}) {
+  const p = new URLSearchParams();
+  if (kind) p.set("kind", String(kind).slice(0, 20));
+  if (city) p.set("city", String(city).slice(0, 40));
+  if (mine) p.set("mine", "1");
+  const words = String(q || "").replace(/\s+/g, " ").trim().slice(0, 80);
+  if (words) p.set("q", words);
+  return p.toString();
+}
+function subParse(s) {
+  const p = new URLSearchParams(s);
+  return { kind: p.get("kind") || "", city: p.get("city") || "", mine: p.get("mine") === "1", q: p.get("q") || "" };
+}
+// What a subscription picks, in a few words: «Книжкові клуби · Київ · мої автори · «Жадан»», or «Усі події».
+function subName(f) {
+  const kind = KINDS.find((k) => k.key === f.kind);
+  return [kind?.label, f.city, f.mine ? "мої автори" : "", f.q ? `«${f.q}»` : ""].filter(Boolean).join(" · ") || "Усі події";
+}
+
 const SHORT_DAYS = ["нд", "пн", "вт", "ср", "чт", "пт", "сб"];
 const shortWhen = (e) => `${SHORT_DAYS[new Date(`${e.starts}T12:00:00Z`).getUTCDay()]}, ${span(e)}`;
 
-module.exports = { create, KINDS, SHORT_DAYS, tours, ics, parseWhen, linkText, readEvent, cleanTitle, findCity, kyivDay, addDays, dayName, dayAside, span, shortWhen, MONTHS };
+module.exports = { create, KINDS, subKey, subParse, subName, SHORT_DAYS, tours, ics, parseWhen, linkText, readEvent, cleanTitle, findCity, kyivDay, addDays, dayName, dayAside, span, shortWhen, MONTHS };
