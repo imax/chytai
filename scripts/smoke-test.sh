@@ -45,7 +45,7 @@ check() {
   code=$(curl -s -o "$DIR/page" -w "%{http_code}" -m 20 ${jar:+-b "$jar"} "$BASE$path" || echo 000)
   if [ "$code" != "$want" ]; then
     echo "FAIL $path: HTTP $code, expected $want: $(head -c 300 "$DIR/page" | tr '\n' ' ')"; fail=1
-  elif [ "$code" = 200 ] && [[ "$path" != *.xml && "$path" != *.txt ]] && ! grep -qi "</html>" "$DIR/page"; then
+  elif [ "$code" = 200 ] && [[ "$path" != *.xml && "$path" != *.txt && "$path" != *.ics ]] && ! grep -qi "</html>" "$DIR/page"; then
     echo "FAIL $path: the page stops before </html>"; fail=1
   else
     echo "ok   $path $code"
