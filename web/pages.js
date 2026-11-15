@@ -112,6 +112,7 @@ const label = (text, aside = "") => `<div class="label"><h2>${text}</h2>${aside 
 // «Клуб» left the menu for a block on «Читачі» (Max, 2026-11-08: «давай спробуємо»); /club itself stays.
 const NAV = [
   ["/community", "Читачі", (p) => p === "/community" || p === "/@" || p === "/club"],
+  ["/calendar", "Події", (p) => p === "/calendar"],
 ];
 
 // `wide`: the image is a wide picture (a list's), shown big in a shared link.
@@ -460,7 +461,7 @@ function authorBlock(a) {
 </section>`;
 }
 
-function bookPage({ club = [], ukrlib = null, sluhay = null, inGenre = null, fresh = null, pick = null, awards = [], authorInfo = null, lists = [], myLists = null, book, entry, now = false, user, shelf, inLibrary = new Map(), readers = [], also = [], alsoTitle = "Читали це, сподобалось і це", writings = [], reviewError = "", editionError = "", ukAsk = null, readUrl = "", freeRead = false, freeFile = false, advice = null, overview = null, overviewVote = null, bookQuote = null }) {
+function bookPage({ club = [], ukrlib = null, sluhay = null, inGenre = null, fresh = null, pick = null, awards = [], authorInfo = null, lists = [], myLists = null, book, entry, now = false, user, shelf, inLibrary = new Map(), readers = [], also = [], alsoTitle = "Читали це, сподобалось і це", writings = [], reviewError = "", editionError = "", ukAsk = null, readUrl = "", freeRead = false, freeFile = false, advice = null, overview = null, overviewVote = null, bookQuote = null, event = null }) {
   const s = statsOf(book.id);
   // A book in Russian stays on its reader's shelf, and its page shows no «Про книжку» and no side blocks
   // (Max 2026-10-23): nothing that would lead people to it or on from it.
@@ -487,6 +488,7 @@ function bookPage({ club = [], ukrlib = null, sluhay = null, inGenre = null, fre
         ${sub ? `<p class="book-by" data-block="byline">${sub}</p>` : ""}
         ${score}
         ${awardsLine(awards)}
+        ${ru ? "" : eventLine(event)}
         ${twins(book)}
         ${!user && !freeRead ? "" : mine(book, entry, user, now, readUrl && freeRead ? goRead(book) : readUrl)}
         ${where(book, ukrlib, sluhay)}
@@ -1896,7 +1898,7 @@ function outsideResults({ q, user, books }) {
 // ---- /author/<slug> ----
 
 // The books we have, with what readers said; who reads them; then the works from Wikidata.
-function authorPage({ author, about = null, works, hits, user, readers = [], also = [], pairing = null, joins = null, editorial = null, members = () => [] }) {
+function authorPage({ author, about = null, works, hits, user, readers = [], also = [], pairing = null, joins = null, editorial = null, events = [], members = () => [] }) {
   // The owner joins another spelling of this person (Max, 2026-10-23: «як нам зєднувати авторів?»).
   const joinBlock = joins
     ? `${label("Той самий автор")}<form method="post" action="/admin/authors/join" class="author-join"><input type="hidden" name="author" value="${attr(author.slug)}"><input name="other" placeholder="Посилання на автора або ім’я" required><button class="btn small">З’єднати</button></form>${joins
@@ -2062,6 +2064,7 @@ document.addEventListener("submit", async (e) => {
 ${head}
 <div class="split">
   <div>
+    ${authorEvents(events)}
     ${shelf}
     ${works.length ? `<section class="block">
       ${label("Усі твори", author.qid ? `<a href="https://www.wikidata.org/wiki/${attr(author.qid)}" target="_blank" rel="noopener">Wikidata ↗</a>` : "")}
@@ -2081,6 +2084,125 @@ ${head}
 // The reader with the longest note on a book, for the author page.
 let readersWithNote = () => null;
 const setReadersWithNote = (fn) => (readersWithNote = fn);
+
+// ---- «Книжкові події», /calendar (calendar.js; Max 2026-11-15, design A + D from a design canvas) ----
+
+const cal = () => require("./calendar");
+// «сторінка події ↗»: always the organizer's page; we sell nothing.
+const eventLink = (e, text = "сторінка події ↗") => (e.url ? `<a class="text-link" href="${attr(e.url)}" target="_blank" rel="noopener nofollow ugc">${text}</a>` : "");
+function calRow(e, { user, owner, today }) {
+  const going = e.starts < today; // a festival that began before today and goes on
+  const sub = [e.sub ? esc(e.sub) : "", e.ends ? (going ? `триває до ${esc(cal().span({ starts: e.ends }))}` : esc(cal().span(e))) : ""].filter(Boolean).join(" · ");
+  const where = [e.city, e.place].filter(Boolean).map(esc).join(" · ");
+  const time = !going && e.time ? e.time : "";
+  const books = e.bookCards?.length ? `<div class="cal-books">${e.bookCards.map((b) => `<a href="${attr(b.href)}">${cover(b, "xs")}<span>${esc(b.title)}</span></a>`).join("")}</div>` : e.authorLinks?.length ? `<p class="meta">${e.authorLinks.map((a) => `<a class="text-link" href="${attr(a.href)}">${esc(a.name)}</a>`).join(", ")}</p>` : "";
+  const hide = user && (owner || e.by === user.id) ? `<form method="post" action="/calendar/${attr(encodeURIComponent(e.id))}/hide" class="inline"><button class="text-link small muted">сховати</button></form>` : "";
+  const by = e.byReader ? `від <a href="${attr(e.byReader.href)}">${esc(e.byReader.name)}</a>` : "";
+  return `<article class="row cal-row" id="${attr(e.id)}">
+  <div class="cal-time">${time}</div>
+  <div class="row-body">
+    <h3>${e.url ? `<a href="${attr(e.url)}" target="_blank" rel="noopener nofollow ugc">${esc(e.title)}</a>` : esc(e.title)}</h3>
+    ${sub ? `<p class="by">${sub}</p>` : ""}
+    <p class="meta">${time ? `<b class="cal-t">${time} · </b>` : ""}${where}${where && e.url ? " · " : ""}${eventLink(e)}${by ? ` · ${by}` : ""}${hide ? ` · ${hide}` : ""}</p>
+    ${books}
+  </div>
+  ${e.mine ? `<span class="cal-mine">з вашої полиці</span>` : ""}
+</article>`;
+}
+function calendarPage({ user, events, cities, city = "", mine = false, mineCount = 0, owner = false }) {
+  const { kyivDay, dayName, dayAside } = cal();
+  const today = kyivDay();
+  const days = new Map();
+  for (const e of events) {
+    const d = e.starts < today ? today : e.starts;
+    (days.get(d) || days.set(d, []).get(d)).push(e);
+  }
+  const q = (c, m) => `/calendar${c || m ? `?${[c ? `city=${encodeURIComponent(c)}` : "", m ? "mine=1" : ""].filter(Boolean).join("&")}` : ""}`;
+  const chip = (on, href, text, cls = "") => (on ? `<span class="chip on${cls}">${text}</span>` : `<a class="chip${cls}" href="${attr(href)}">${text}</a>`);
+  const chips =
+    cities.length > 1 || mineCount
+      ? `<nav class="read-chips cal-chips" data-block="cal-chips">${chip(!city && !mine, "/calendar", "Усі міста")}${user && mineCount ? chip(mine, q("", true), `Мої автори · ${mineCount}`, " cal-mine-chip") : ""}${cities.map((c) => chip(city === c && !mine, q(c), esc(c))).join("")}</nav>`
+      : "";
+  const list = days.size
+    ? [...days].map(([d, list]) => `<section class="block cal-day">${label(esc(dayName(d)), dayAside(d, today))}<div class="rows">${list.map((e) => calRow(e, { user, owner, today })).join("")}</div></section>`).join("")
+    : `<p class="muted">${city || mine ? `Тут поки нічого. <a class="text-link" href="/calendar">Усі події</a>` : "Поки подій немає."}</p>`;
+  const body = `
+<section class="page-head">
+  <div>
+    <h1>Книжкові події</h1>
+    <p class="lead">Презентації, читання, фестивалі. Де зустріти автора й книжку.</p>
+  </div>
+  <a class="btn" href="/calendar/add">Додати подію</a>
+</section>
+${chips}
+<div class="split">
+  <div data-block="calendar">${list}</div>
+  <aside>
+    ${label("Звідки події")}
+    <p class="small cal-about">З афіш книгарень і фестивалів, від видавців і читачів. Ведемо на сторінку організатора, квитків не продаємо.</p>
+    <p class="small"><a class="text-link" href="/calendar/add">Знаєте подію? Додайте</a></p>
+  </aside>
+</div>`;
+  return layout({ title: "Книжкові події", body, user, path: "/calendar", canonical: "/calendar", description: "Презентації книжок, зустрічі з авторами, читання й фестивалі в Україні та онлайн." });
+}
+function calendarAddPage({ user, values = {}, error = "" }) {
+  const v = (k) => attr(values[k] || "");
+  const today = cal().kyivDay();
+  const body = `
+<section class="page-head"><div><h1>Додати подію</h1><p class="lead">Презентація, читання, фестиваль. Лише про книжки.</p></div></section>
+<form method="post" action="/calendar/add" class="form cal-form prose">
+  ${errorLine(error)}
+  <label>Посилання на подію<input type="url" name="url" value="${v("url")}" required placeholder="https://" data-peek></label>
+  <p class="hint cal-peek" hidden></p>
+  <label>Назва<input type="text" name="title" value="${v("title")}" required maxlength="160"></label>
+  <div class="two">
+    <label>Дата<input type="date" name="starts" value="${v("starts")}" min="${today}" required></label>
+    <label>Час<input type="time" name="time" value="${v("time")}"></label>
+  </div>
+  <div class="two">
+    <label>Місто<input type="text" name="city" value="${v("city")}" required maxlength="40" list="cal-cities" placeholder="Київ або Онлайн"></label>
+    <label>Де саме<input type="text" name="place" value="${v("place")}" maxlength="120" placeholder="Книгарня, адреса"></label>
+  </div>
+  <datalist id="cal-cities">${["Онлайн", "Київ", "Львів", "Харків", "Одеса", "Дніпро", "Вінниця", "Рівне", "Тернопіль", "Івано-Франківськ", "Ужгород", "Чернівці", "Луцьк", "Житомир", "Полтава"].map((c) => `<option value="${c}">`).join("")}</datalist>
+  <label>Коротко, про що<input type="text" name="sub" value="${v("sub")}" maxlength="200"></label>
+  <label>Остання дата, якщо подія на кілька днів<input type="date" name="ends" value="${v("ends")}" min="${today}"></label>
+  <div class="actions"><button class="btn primary">Додати</button><span class="small muted">З’явиться одразу, з вашим ім’ям.</span></div>
+</form>
+<script>
+(() => {
+  const f = document.querySelector(".cal-form");
+  const url = f.querySelector("[data-peek]");
+  const note = f.querySelector(".cal-peek");
+  let last = "";
+  url.addEventListener("change", async () => {
+    const u = url.value.trim();
+    if (!/^https?:\\/\\/\\S+\\.\\S+/.test(u) || u === last) return;
+    last = u;
+    note.hidden = false;
+    note.textContent = "Читаю сторінку…";
+    try {
+      const r = await (await fetch("/api/calendar/peek", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ url: u }) })).json();
+      if (r.error) return (note.textContent = r.error);
+      const put = (name, val) => { const el = f.elements[name]; if (val && el && !el.value) el.value = val; };
+      put("title", r.title); put("starts", r.starts); put("ends", r.ends); put("time", r.time); put("city", r.city); put("place", r.place);
+      note.textContent = r.title || r.starts ? "Заповнили, що знайшли. Перевірте." : "Нічого не знайшли. Заповніть самі.";
+    } catch {
+      note.textContent = "Не вдалося прочитати. Заповніть самі.";
+    }
+  });
+})();
+</script>`;
+  return layout({ title: "Додати подію", body, user, path: "/calendar", noindex: true });
+}
+// «Наживо» on an author's page: the author's next events (calendar.forAuthor).
+const authorEvents = (events) =>
+  events.length
+    ? `<section class="block" data-block="author-events">${label("Наживо", `<a href="/calendar">Усі події</a>`)}<div class="rows">${events
+        .map((e) => `<article class="row cal-mini"><div class="cal-date"><b>${new Date(`${e.starts}T12:00:00Z`).getUTCDate()}</b><span>${esc(cal().MONTHS[new Date(`${e.starts}T12:00:00Z`).getUTCMonth()].slice(0, 4))}</span></div><div class="row-body"><h3>${e.url ? `<a href="${attr(e.url)}" target="_blank" rel="noopener nofollow ugc">${esc(e.title)}</a>` : esc(e.title)}</h3><p class="meta">${[(e.ends ? esc(cal().shortWhen(e)) : esc(cal().shortWhen(e).split(",")[0])) + (e.time ? `, ${e.time}` : ""), esc(e.city), e.place ? esc(e.place) : ""].filter(Boolean).join(" · ")}</p></div></article>`)
+        .join("")}</div></section>`
+    : "";
+// One line on a book's page about the next event with it or its author.
+const eventLine = (e) => (e ? `<p class="awards cal-line" data-block="book-event"><span>Подія:</span> ${e.url ? `<a class="text-link" href="${attr(e.url)}" target="_blank" rel="noopener nofollow ugc">${esc(e.title)}</a>` : esc(e.title)}, ${esc(cal().shortWhen(e))}${e.city ? `, ${esc(e.city)}` : ""}</p>` : "");
 
 // ---- sign in / sign up / settings ----
 
@@ -3322,6 +3444,7 @@ ${wait ? `<script>(() => { const steps = ${JSON.stringify(ASK_STEPS)}; const lin
 }
 
 module.exports = {
+  calendarPage, calendarAddPage,
   askPage, askAnswerPage, askRows,
   asksPage, askTalkPage, setAskNav,
   commentsAdminPage,

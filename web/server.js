@@ -1621,6 +1621,27 @@ bg.every("gsc", 24 * 3600 * 1000, () => gsc.run(), { db: store.db, first: 5 * 60
 // Fresh Threads posts asking for a book, for Max on /admin/threads (threadsfind.js); every 4 hours, with a key set.
 const threadsFind = bg.register("threads-find", require("./threadsfind").create(store.db), { run: false });
 bg.every("threads-find", 4 * 3600 * 1000, () => threadsFind.run(), { db: store.db, first: 6 * 60 * 1000 });
+
+// «Книжкові події» on /calendar (calendar.js, Max 2026-11-15). Seeds at every start; the jobs process cleans up
+// old events and, once switched on (meta calendar:ye), reads Книгарня «Є»'s calendar once a day.
+const calendar = require("./calendar").create(store.db, store);
+const calendarJobs = bg.register("calendar", { cleanup: () => calendar.cleanup(), ye: () => calendar.yeRun(), yeDry: () => calendar.yeRun({ dry: true }) }, { cleanup: false, ye: false, yeDry: false });
+if (bg.ROLE !== "web") setTimeout(() => calendar.seed(), 20 * 1000);
+bg.every("calendar-cleanup", 24 * 3600 * 1000, () => calendarJobs.cleanup(), { db: store.db, first: 5 * 60 * 1000 });
+bg.every("calendar-ye", 24 * 3600 * 1000, () => calendarJobs.ye(), { db: store.db, first: 15 * 60 * 1000 });
+// The authors of a book (slugs), for its page's line about an event.
+const bookAuthorSlugs = (book) => require("./authors").splitAuthors(book.author).map((n) => store.authors?.byName(n)?.slug).filter(Boolean);
+const bookEvent = (book) => calendar.forBook(store.canonical(book.id), bookAuthorSlugs(book))[0] || null;
+// The authors on a reader's shelf (not dropped), for «Мої автори» on /calendar.
+function shelfAuthors(reader) {
+  const out = new Set();
+  for (const [id, e] of Object.entries(store.entriesOf(reader))) {
+    if (e.status === "abandoned") continue;
+    const b = store.book(id);
+    if (b) for (const s of bookAuthorSlugs(b)) out.add(s);
+  }
+  return out;
+}
 bg.every("overviews", 24 * 3600 * 1000, () => advice.sweep(), { db: store.db });
 pages.setStats((id) => social.stats(id));
 // The weekly letter (digest.js): Friday 9:30 Kyiv, to every reader who has not switched it off (Max,
@@ -1669,6 +1690,62 @@ app.get("/readers", (req, res) => res.redirect(301, "/community"));
 // The readers' Telegram group via our own address, so letters link only to chytai.org.ua (Resend Insights:
 // «Ensure link URLs match sending domain», 2026-11-08).
 app.get("/telegram", (req, res) => res.redirect(302, require("./digest").TELEGRAM));
+// «Книжкові події» (calendar.js): the list by days, ?city= one city, ?mine=1 the authors on one's own shelf.
+app.get("/calendar", (req, res) => {
+  const all = calendar.upcoming();
+  const mineSet = req.user ? shelfAuthors(req.user.id) : null;
+  const isMine = (e) => !!mineSet && e.authors.some((a) => mineSet.has(a));
+  const city = String(req.query.city || "").slice(0, 40);
+  const mine = !!req.query.mine && !!req.user;
+  const events = all.filter((e) => (!city || e.city === city) && (!mine || isMine(e)));
+  const withBooks = events.slice(0, 200).map((e) => ({ ...e, mine: isMine(e), bookCards: e.books.map((id) => store.book(id) && workFor(req, store.book(id))).filter(Boolean).slice(0, 3), authorLinks: e.authors.map((s) => store.authors?.bySlug.get(s)).filter(Boolean).slice(0, 3), byReader: e.by ? pub(auth.reader(e.by)) : null }));
+  res.send(pages.calendarPage({ user: req.user, events: withBooks, cities: calendar.cities(), city, mine, mineCount: mineSet ? all.filter(isMine).length : 0, owner: !!req.owner }));
+});
+app.get("/calendar/add", signed, (req, res) => res.send(pages.calendarAddPage({ user: req.user })));
+app.post("/calendar/add", signed, (req, res) => {
+  const f = { title: req.body?.title, url: req.body?.url, starts: req.body?.starts, ends: req.body?.ends, time: req.body?.time, city: req.body?.city, place: req.body?.place, sub: req.body?.sub };
+  const r = calendar.add(req.user, f);
+  if (r.error) return res.status(400).send(pages.calendarAddPage({ user: req.user, values: f, error: r.error }));
+  // A new kind of thing readers write: Max hears of each one (CLAUDE.md).
+  if (r.event && !req.owner) notifyOwner(`Нова подія: ${r.event.title}`, [`${req.user.name} (${SITE}/@${req.user.username}) додав(ла) подію в календар:`, "", r.event.title, `${r.event.starts}${r.event.time ? ` ${r.event.time}` : ""} · ${r.event.city}${r.event.place ? `, ${r.event.place}` : ""}`, r.event.url, "", `${SITE}/calendar`, "Сховати: кнопка «сховати» під подією на /calendar."].join("\n"));
+  res.redirect(303, `/calendar#${encodeURIComponent(r.id)}`);
+});
+// «Заповнити з посилання»: what the event's page says (calendar.peek), 30 a day per reader.
+const peeks = new Map();
+app.post("/api/calendar/peek", signed, async (req, res) => {
+  const day = new Date().toISOString().slice(0, 10);
+  const k = `${day}:${req.user.id}`;
+  if ((peeks.get(k) || 0) >= 30) return res.status(429).json({ error: "Сьогодні вже досить." });
+  if (peeks.size > 5000) peeks.clear();
+  peeks.set(k, (peeks.get(k) || 0) + 1);
+  try {
+    res.json(await calendar.peek(String(req.body?.url || "").trim()));
+  } catch (e) {
+    res.json({ error: "Не вдалося прочитати цю сторінку. Заповніть самі." });
+  }
+});
+// Max, or the reader who added it, hides an event.
+app.post("/calendar/:id/hide", signed, (req, res) => {
+  const e = calendar.one(req.params.id);
+  if (!e || !(req.owner || e.by === req.user.id)) return res.status(403).send("Не можна.");
+  calendar.hide(e.id);
+  res.redirect(303, "/calendar");
+});
+// Книгарня «Є»'s calendar: GET is a dry run in the jobs process (ask again for the answer, ?again=1 to rerun);
+// POST {"on": true} / {"on": false} switches the daily run, only with Max's OK in the thread.
+let yeDry = null;
+app.get("/agent/calendar-ye", agentOk, (req, res) => {
+  if (!yeDry || (req.query.again && yeDry.done)) {
+    yeDry = { started: new Date().toISOString(), done: false };
+    calendarJobs.yeDry().then((r) => Object.assign(yeDry, r, { done: true }), (e) => Object.assign(yeDry, { error: e.message, done: true }));
+  }
+  res.json(yeDry);
+});
+app.post("/agent/calendar-ye", agentOk, (req, res) => {
+  if (typeof req.body?.on !== "boolean") return res.status(400).json({ error: '{"on": true|false}' });
+  calendar.setMeta("calendar:ye", req.body.on ? "on" : "off");
+  res.json({ on: req.body.on, last: JSON.parse(calendar.meta("calendar:ye:last") || "null") });
+});
 app.get("/community", (req, res) => {
   const readers = readerList();
   const all = social.all();
@@ -3028,7 +3105,7 @@ app.get("/book/:id", (req, res) => {
   const free = !file && freeFileFor(book);
   const alsoBooks = alsoFor(req, book.id);
   const myLists = req.user ? lists.of(req.user.id).map((l) => ({ id: l.id, title: l.title, count: l.count, has: lists.has(l.id, book.id) })) : null;
-  res.send(pages.bookPage({ ukrlib: openLinks.linkFor(store, book), sluhay: SLUHAY_PUBLIC || req.owner ? sluhay.linkFor(book) : null, ...(SHOW_AUTHOR_ABOUT ? authorAbout(book) : {}), ...discovery(req, book, alsoBooks.also), lists: lists.withBook(book.id).map(withCovers), myLists, club: club.mark(req.user?.id, club.ofBook(book.id)), freeRead: !!free, freeFile: !!free && !free.readerOnly, book, entry: store.sharedEntry(req.user?.id, book.id), now: !!req.user && nowIds(req.user.id).has(store.canonical(book.id)), user: req.user, readUrl: file ? `${READER_URL}/?open=${encodeURIComponent(file.name)}` : free ? `${READER_URL}/free/${encodeURIComponent(free.name)}` : "", shelf: book.shelf && (req.owner || !isDraft(book.shelf)) ? store.shelf(book.shelf) : null, inLibrary: inLibraryMap(req), readers: readersOf(book.id), ...alsoBooks, writings: reviews.of(book.id), reviewError: String(req.query.review_error || "").slice(0, 300), editionError: String(req.query.edition_error || "").slice(0, 300), ukAsk: ukAskFor(req, book) || (req.user && req.query.edition_error ? "ask" : null), advice: advice.state(req.user, book.id), overview: linkedOverview(book), overviewVote: advice.voteOf(book.id, req.user?.id), bookQuote: randomQuote(book) }));
+  res.send(pages.bookPage({ ukrlib: openLinks.linkFor(store, book), sluhay: SLUHAY_PUBLIC || req.owner ? sluhay.linkFor(book) : null, ...(SHOW_AUTHOR_ABOUT ? authorAbout(book) : {}), ...discovery(req, book, alsoBooks.also), lists: lists.withBook(book.id).map(withCovers), myLists, club: club.mark(req.user?.id, club.ofBook(book.id)), freeRead: !!free, freeFile: !!free && !free.readerOnly, book, entry: store.sharedEntry(req.user?.id, book.id), now: !!req.user && nowIds(req.user.id).has(store.canonical(book.id)), user: req.user, readUrl: file ? `${READER_URL}/?open=${encodeURIComponent(file.name)}` : free ? `${READER_URL}/free/${encodeURIComponent(free.name)}` : "", shelf: book.shelf && (req.owner || !isDraft(book.shelf)) ? store.shelf(book.shelf) : null, inLibrary: inLibraryMap(req), readers: readersOf(book.id), ...alsoBooks, writings: reviews.of(book.id), reviewError: String(req.query.review_error || "").slice(0, 300), editionError: String(req.query.edition_error || "").slice(0, 300), ukAsk: ukAskFor(req, book) || (req.user && req.query.edition_error ? "ask" : null), advice: advice.state(req.user, book.id), overview: linkedOverview(book), overviewVote: advice.voteOf(book.id, req.user?.id), bookQuote: randomQuote(book), event: bookEvent(book) }));
 });
 
 // A translation and its original in one list are one card (Max, 2026-10-25: two rows «трохи плутає»; 2026-10-26: the same
@@ -3150,7 +3227,7 @@ app.get("/author/:slug", async (req, res) => {
     }
   const pairing = req.user?.owner ? store.translationPairing(author) : null;
   const joins = req.user?.owner ? authors.ownerJoins(store).map((p, index) => ({ p, index })).filter(({ p }) => p.some((n) => author.names?.includes(n))).map(({ p, index }) => ({ names: p, index })) : null;
-  res.send(pages.authorPage({ author, about, works, hits, user: req.user, readers: who, also, pairing, joins, editorial, members: (key) => store.cycleInfo.get(key)?.members || [] }));
+  res.send(pages.authorPage({ author, about, works, hits, user: req.user, readers: who, also, pairing, joins, editorial, events: calendar.forAuthor(author.slug), members: (key) => store.cycleInfo.get(key)?.members || [] }));
 });
 
 // The stored answer of the «author-start» pass for an author (table ai_answer once applied; until then the trial's),

@@ -1413,3 +1413,38 @@ aside .side-lists + .label, aside p + .label, aside dialog + .label { margin-top
   .ask-recent .litem b { font-size: 16px; }
 }
 @media (max-width: 760px) { .ask-sum { font-size: 16px; } .ask-other { gap: 12px; } }
+
+/* ---- «Книжкові події», /calendar (calendar.js, 2026-11-15) ---- */
+.cal-chips { display: flex; flex-wrap: wrap; gap: 8px; margin: -16px 0 36px; }
+.cal-chips .cal-mine-chip { border-color: var(--accent); color: var(--accent); }
+.cal-chips .chip.on.cal-mine-chip { background: var(--accent); color: var(--on-accent); }
+.cal-day { margin-bottom: 40px; }
+.cal-day > .label { margin-bottom: 4px; }
+.cal-row { align-items: flex-start; }
+.cal-time { width: 64px; flex: none; font: 600 17px/1.5 var(--serif); }
+.cal-t { display: none; color: var(--ink); font-weight: 600; }
+.cal-row h3 a:hover { color: var(--accent); }
+.cal-books { display: flex; flex-wrap: wrap; gap: 8px 18px; margin-top: 12px; }
+.cal-books a { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--muted); }
+.cal-books a:hover span { color: var(--accent); }
+.cal-mine { flex: none; align-self: flex-start; font-size: 12px; color: var(--accent); border: 1px solid var(--accent); border-radius: 999px; padding: 2px 10px; white-space: nowrap; }
+.cal-about { color: var(--text); margin-bottom: 12px; }
+.cal-row .meta form.inline button { background: none; border: 0; padding: 0; cursor: pointer; }
+.cal-mini { gap: 18px; padding: 14px 0; }
+.cal-mini h3 { font-size: 19px; }
+.cal-mini .meta { margin-top: 2px; }
+.cal-date { flex: none; width: 52px; text-align: center; }
+.cal-date b { display: block; font: 400 30px/1 var(--serif); }
+.cal-date span { font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); }
+.cal-line a { color: var(--ink); }
+.cal-peek { margin-top: -6px; }
+@media (max-width: 760px) {
+  .cal-chips { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; margin: -8px -20px 28px; padding: 0 20px 2px; }
+  .cal-chips::-webkit-scrollbar { display: none; }
+  .cal-time { display: none; }
+  .cal-t { display: inline; }
+  .cal-row { flex-wrap: wrap; gap: 8px 14px; }
+  .cal-row .row-body { flex-basis: 100%; }
+  .cal-mine { order: -1; }
+  .cal-form .two { flex-direction: column; }
+}

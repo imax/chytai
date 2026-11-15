@@ -230,6 +230,22 @@ A flag only when Max asks for one, or when the change could break what readers u
   App Review) or `SOCIALFETCH_KEY` (socialfetch.dev, 1 credit a query: 6 queries × 6 runs a day). None = the page says so.
 - `meta threads:last` has `per` (posts each query returned: drop a phrase that brings nothing). Try the filter: `node -e 'console.log(require("./web/threadsfind").wanted("Порадьте книжку?"))'`.
 
+## «Книжкові події», /calendar (`web/calendar.js`)
+
+- Max's design A + D from a design canvas (2026-11-15): a list by days with city chips and «Мої автори» (authors on
+  one's shelf), «Наживо» on the author's page, one «Подія:» line on the book's page. No block on one's own shelf
+  (Max). An event links to the organizer's page; we sell no tickets.
+- Table `cal_events` (id `{source}:{key}`, starts/ends `YYYY-MM-DD` Kyiv, time `HH:MM`, city as shown, «Онлайн»
+  for online; books/authors JSON found by name, no AI: `linkText`). Gone 30 days after it ends (`cleanup`).
+- Sources: `web/seed/calendar.json` (kept in step at every start: festivals by a thread or Max); readers via
+  /calendar/add (signed in, 5 a day, mails + Telegram Max; Max or the reader hides one with «сховати»; «Заповнити з
+  посилання» = `POST /api/calendar/peek`, public addresses only); collectors call `calendar.upsert({ source, key, …,
+  hidden: true })` and `findSimilar()` against duplicates (the Telegram thread uses source `tg`).
+- Книгарня «Є» (`yeRun`, source `ye`): reads book-ye.com.ua/calendar/ daily in the jobs process, only once meta
+  `calendar:ye` is `on`. Dry run: `curl -s https://chytai.org.ua/agent/calendar-ye -H "$H"` (ask again for the
+  answer, `?again=1` reruns); switch: `POST /agent/calendar-ye {"on":true}`, only with Max's OK in the thread. The
+  cloud container gets 403 from Є, so look at its pages through the dry run.
+
 ## Translation pairs
 
 - A Ukrainian book and its original are paired in `web/seed/matches.json`: `translations` (`[original, uk]`, slugs or
