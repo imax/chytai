@@ -256,7 +256,10 @@ A flag only when Max asks for one, or when the change could break what readers u
   it = that event alone. `eventPage` in pages.js, the route in server.js (books with «Хочу прочитати», a tour's stops,
   4 more events: same book/author, then same kind and city). Every title, row cover, the clubs shelf (one meeting),
   the book page's «Подія:», the author's «Наживо» and `/calendar/go/<id>` (letters) lead there. The organizer's button
-  is named by its link (`calendar.linkKind`: form / tg / social / site).
+  is named by its link (`calendar.linkKind`: form / social / site / ye). Never a link to a Telegram post, on a page or
+  in the .ics (Max 2026-11-15: it tells we read channels): `calendar.sourceUrl` gives an event at «Є» its city's
+  afisha (`YE_CITY`, book-ye.com.ua/calendar/<city>/), the rest no button. Є's site is behind Cloudflare's human
+  check (our server, the container and Max's Chrome alike), and web search doesn't know a new event's page yet.
 - Max's feedback (2026-11-15): an event by an author on one's shelf names that reader's own books by them
   (`shelfBooksFor`); one event in several cities or days (same title without its city, same link or post) is one row
   with a line per stop (`calendar.tours`), but under a city chip each stop is its own row; `?q=` searches title, words,

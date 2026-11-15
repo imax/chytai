@@ -2104,10 +2104,10 @@ const setReadersWithNote = (fn) => (readersWithNote = fn);
 
 const cal = () => require("./calendar");
 // The organizer's link, named by what it is (a sign-up form, a Telegram post, a site); we sell nothing.
-const ORG_LINK = { form: "Зареєструватися", tg: "Пост у Telegram", social: "Сторінка організатора", site: "Сайт організатора" };
+const ORG_LINK = { form: "Зареєструватися", tg: "Пост у Telegram", social: "Сторінка організатора", site: "Сайт організатора", ye: "Афіша книгарні «Є»" };
 const orgText = (e) => ORG_LINK[cal().linkKind(cal().sourceUrl(e))] || "";
 // No link to a Telegram post (calendar.sourceUrl).
-const eventLink = (e) => (cal().sourceUrl(e) ? `<a class="text-link" href="${attr(cal().sourceUrl(e))}" target="_blank" rel="noopener nofollow ugc">${orgText(e).toLowerCase()} ↗</a>` : "");
+const eventLink = (e) => (cal().sourceUrl(e) ? `<a class="text-link" href="${attr(cal().sourceUrl(e))}" target="_blank" rel="noopener nofollow ugc">${orgText(e).replace(/^./, (c) => c.toLowerCase())} ↗</a>` : "");
 // One event of a kind, for the line under a title.
 const KIND_ONE = { club: "Клуб", author: "Зустріч з автором", lecture: "Лекція", festival: "Фестиваль", kids: "Для дітей" };
 const KIND_ORDER = ["author", "club", "lecture", "festival", "kids"];

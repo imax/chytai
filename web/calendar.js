@@ -750,11 +750,20 @@ function linkKind(url) {
   if (/^https?:\/\/(forms\.gle|docs\.google\.com\/forms|forms\.office\.com|[^/]*typeform\.com|[^/]*jotform\.com)/i.test(url || "")) return "form";
   if (/^https?:\/\/(t\.me|telegram\.me)\//i.test(url || "")) return "tg";
   if (/^https?:\/\/([^/]*\.)?(instagram\.com|facebook\.com|fb\.me)\//i.test(url || "")) return "social";
+  if (/^https?:\/\/book-ye\.com\.ua\/calendar\/[a-z-]+\/?$/i.test(url || "")) return "ye";
   return url ? "site" : "";
 }
-// The link readers see: none for a Telegram post (Max 2026-11-15: it tells we read channels, and the organizer has a
-// page somewhere; `findSource` looks for it).
-const sourceUrl = (e) => (linkKind(e?.url) === "tg" ? "" : e?.url || "");
+// Книгарня «Є»'s afisha by city (book-ye.com.ua/calendar/<city>/; slugs seen on their site 2026-11-15). Their site
+// lets no robot in (Cloudflare's check, even in Max's Chrome), so we can't find the event's own page there.
+const YE_CITY = { Київ: "kyyiv", Львів: "lviv", "Івано-Франківськ": "ivano-frankivsk", Чернігів: "chernihiv", Ужгород: "uzhhorod" };
+const isYe = (e) => /Книгарн[яіи]\s+[«"]?Є\b|[«"]Є[»"]/.test(`${e?.place || ""} ${e?.title || ""} ${e?.by || ""}`);
+// The link readers see. Never a Telegram post (Max 2026-11-15: it tells we read channels, and the organizer has a page
+// somewhere): an event at «Є» gets its city's afisha there, the rest no link.
+function sourceUrl(e) {
+  if (linkKind(e?.url) !== "tg") return e?.url || "";
+  const city = YE_CITY[e?.city];
+  return city && isYe(e) ? `https://book-ye.com.ua/calendar/${city}/` : "";
+}
 // One event's Google Calendar link (the .ics file is /calendar/<…>.ics): a timed event lasts two hours.
 function googleLink(e, page = "") {
   const d8 = (day) => day.replace(/-/g, "");
