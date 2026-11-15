@@ -19,7 +19,7 @@
 const DAY = 86400000;
 const KEEP_DAYS = 90;
 const AI_DAY = 300; // Max 2026-11-15: «ліміт на haiku можна підняти» (~$0.0002 a call)
-const JOINS_PER_RUN = 7; // in the seed's order (Max 2026-11-15: 5–7 an hour; the account has Premium). Too many at once looks like spam.
+const JOINS_PER_RUN = 15; // in the seed's order (Max 2026-11-15: «можна й більше»; the account has Premium). Too many at once looks like spam.
 const MODEL = "claude-haiku-5-5";
 const UA = "Mozilla/5.0 (compatible; Chytai/1.0; +https://chytai.org.ua)";
 const { parseWhen, kyivDay, addDays } = require("./calendar");
@@ -193,6 +193,10 @@ function create(db, { calendar, apiKey = process.env.ANTHROPIC_API_KEY || "", cl
         const u = d.entity?.username?.toLowerCase();
         if (d.isChannel && u) mine.set(u, d);
       }
+      // Channels someone joined by hand on the account's phone (Max, 2026-11-15) are read and muted too.
+      const seeded = new Set(list);
+      out.own = [...mine].filter(([u, d]) => !seeded.has(u) && d.entity?.broadcast).map(([u]) => u);
+      const all = [...list, ...out.own];
       // A channel that could not be joined (no such name, a closed one) is not tried again for a week.
       let nojoin = {};
       try {
@@ -200,7 +204,7 @@ function create(db, { calendar, apiKey = process.env.ANTHROPIC_API_KEY || "", cl
       } catch {}
       // Max uses this number himself (2026-11-15): every channel of ours is muted, the moment it is joined.
       const mute = (peer) => client.invoke(new Api.account.UpdateNotifySettings({ peer: new Api.InputNotifyPeer({ peer }), settings: new Api.InputPeerNotifySettings({ muteUntil: 2147483647, silent: true }) }));
-      for (const ch of list) {
+      for (const ch of all) {
         const d = mine.get(ch);
         if (d && !(d.dialog?.notifySettings?.muteUntil > Date.now() / 1000))
           await mute(d.inputEntity).catch((e) => out.errors.push(`mute ${ch}: ${e.errorMessage || e.message}`));
@@ -224,7 +228,7 @@ function create(db, { calendar, apiKey = process.env.ANTHROPIC_API_KEY || "", cl
       // Only joined channels through the account (a name looked up each time would hit Telegram's limits); the
       // others through their pages until their turn to be joined comes.
       await viaPages(list.filter((ch) => !mine.has(ch)), out);
-      for (const ch of list) {
+      for (const ch of all) {
         const d = mine.get(ch);
         if (!d) continue;
         const from = lastId(ch);
