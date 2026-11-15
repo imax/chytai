@@ -103,6 +103,12 @@ function parseWhen(text, today = kyivDay()) {
 // The authors (slugs) and books (work ids) an event's text names. An author: a Cyrillic name whose first name
 // and surname both start words of the text (surnames change their endings: «Макса Кідрука», «Жадана»). A book:
 // a title in «» quotes that the catalog has, by one of those authors when there are any.
+// A catalog book for a name in an event, never a Russian edition (the Ukrainian «Гаррі Поттер і Орден Фенікса», not
+// «Гарри Поттер и Орден Феникса»).
+function findBook(store, q) {
+  return store.findWork({ ...q, not: (id) => isRussian(store.book?.(id, { edited: false, borrow: false }) || {}) });
+}
+
 function linkText(store, text) {
   const out = { authors: [], books: [] };
   const t = String(text || "");
@@ -128,7 +134,7 @@ function linkText(store, text) {
   const names = out.authors.map((s) => store.authors.bySlug.get(s)?.name).filter(Boolean);
   for (const m of t.matchAll(/«([^»]{2,120})»/g)) {
     const title = m[1].trim();
-    const id = (names.length ? names.map((n) => store.findWork({ title, author: n })).find(Boolean) : null) || store.findWork({ title });
+    const id = (names.length ? names.map((n) => findBook(store, { title, author: n })).find(Boolean) : null) || findBook(store, { title });
     if (id && !out.books.includes(id)) out.books.push(id);
     if (out.books.length >= 4) break;
   }
@@ -304,7 +310,7 @@ function create(db, store, { notify = () => {}, bookua = null, search = null, ma
     const out = [];
     for (const b of named) {
       if (b.title.length < 2 || !b.author || out.some((x) => norm(x.title) === norm(b.title))) continue;
-      const id = store.findWork?.({ title: b.title, author: b.author });
+      const id = store.findWork ? findBook(store, { title: b.title, author: b.author }) : null;
       if (id) {
         if (!links.books.includes(id)) links.books.push(id);
       } else out.push(b);
@@ -352,7 +358,7 @@ function create(db, store, { notify = () => {}, bookua = null, search = null, ma
       const left = [];
       const books = [...e.books];
       for (const w of JSON.parse(e.want || "[]")) {
-        let id = store.findWork({ title: w.title, author: w.author });
+        let id = findBook(store, { title: w.title, author: w.author });
         if (!id) {
           if (count.n >= CALBOOKS_DAY) {
             left.push(w);

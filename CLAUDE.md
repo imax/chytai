@@ -246,7 +246,7 @@ A flag only when Max asks for one, or when the change could break what readers u
   «Мої автори» by `?mine=<reader>.<key>` (`calKey`, HMAC with the reader secret; a calendar app has no cookie). The
   button offers webcal:// (Apple), Google Calendar's `?cid=`, and the plain address.
 - Table `cal_events` (id `{source}:{key}`, starts/ends `YYYY-MM-DD` Kyiv, time `HH:MM`, city as shown, «Онлайн»
-  for online; books/authors JSON found by name, no AI: `linkText`, a name's two words side by side, «Олександрою … книгарні» ≠ Олександр Книга). Gone 30 days after it ends (`cleanup`).
+  for online; books/authors JSON found by name, no AI: `linkText`, a name's two words side by side, «Олександрою … книгарні» ≠ Олександр Книга; never a Russian edition, `findBook`). Gone 30 days after it ends (`cleanup`).
 - Sources: `web/seed/calendar.json` (kept in step at every start: festivals by a thread or Max); readers via
   /calendar/add (signed in, 5 a day, mails + Telegram Max; Max or the reader hides one with «сховати»; «Заповнити з
   посилання» = `POST /api/calendar/peek`, public addresses only); collectors call `calendar.upsert({ source, key, …,
