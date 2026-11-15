@@ -256,7 +256,8 @@ A flag only when Max asks for one, or when the change could break what readers u
 - Telegram channels (`web/tgfeed.js`, source `tg`; Max 2026-11-15 chose our own account over scraping): the jobs process
   reads the channels in `web/seed/tgchannels.json` every hour and keeps their posts 90 days (table `tg_posts`, for more
   than events later). Through our own Telegram account (Fly secrets `TG_API_ID`, `TG_API_HASH`, `TG_SESSION`; Max makes
-  them on his computer with `node scripts/tg-login.js`, a QR code the phone scans; `--code` = by a code): it joins 3 new channels a run and reads what is new. No
+  them on his computer with `node scripts/tg-login.js`, a QR code the phone scans; `--code` = by a code): it joins 3 new channels a run, mutes each (Max uses that number himself, 2026-11-15), and reads what is new. A
+  channel's @name by its title: `curl -s "https://chytai.org.ua/agent/tg-find?q=<words>" -H "$H"` (the account's search). No
   session, or Telegram refuses it: the public pages `t.me/s/<channel>`. A bot can't do this (it sees a channel only
   when the channel's admin adds it). Status: `curl -s https://chytai.org.ua/agent/tg -H "$H"`; run now:
   `POST /agent/tg {"run":true}`. A new channel: a line in the seed file (`group: "club"` = read every 3 h from its page,

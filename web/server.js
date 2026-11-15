@@ -1635,7 +1635,7 @@ bg.every("calendar-cleanup", 24 * 3600 * 1000, () => calendarJobs.cleanup(), { d
 bg.every("calendar-ye", 24 * 3600 * 1000, () => calendarJobs.ye(), { db: store.db, first: 15 * 60 * 1000 });
 // Telegram channels' posts (tgfeed.js): our own account through Telegram's API when TG_SESSION is set, else the
 // public t.me/s pages; every hour. Their events go to the calendar once meta tg:events is "on" (Max's OK).
-const tgFeed = bg.register("tg", require("./tgfeed").create(store.db, { calendar }), { run: false, events: false });
+const tgFeed = bg.register("tg", require("./tgfeed").create(store.db, { calendar }), { run: false, events: false, find: false });
 bg.every("tg-feed", 3600 * 1000, () => tgFeed.run(), { db: store.db, first: 8 * 60 * 1000 });
 // Chytomo's calendar once a day (its articles through the same Haiku as Telegram posts), and the books events name
 // that the catalog lacks every hour (calendar.fillBooks; new books reload the web process).
@@ -1842,6 +1842,15 @@ app.post("/agent/tg", agentOk, (req, res) => {
   if (!req.body?.run) return res.status(400).json({ error: '{"run": true}' });
   tgFeed.run().catch(() => {});
   res.json({ started: true });
+});
+// A channel's @name by its title (?q=words), through our account: for adding it to web/seed/tgchannels.json.
+app.get("/agent/tg-find", agentOk, async (req, res) => {
+  if (!req.query.q) return res.status(400).json({ error: "?q=" });
+  try {
+    res.json(await tgFeed.find(req.query.q));
+  } catch (e) {
+    res.status(500).json({ error: e.errorMessage || e.message });
+  }
 });
 // The events in the posts: GET is a dry run over the last ?days= (30) days, at most 200 Haiku calls, only with
 // Max's OK in the thread (ask again for the answer, ?again=1 reruns); POST {"on": true|false} switches them into the

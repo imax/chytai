@@ -198,13 +198,22 @@ function create(db, { calendar, apiKey = process.env.ANTHROPIC_API_KEY || "", cl
       try {
         nojoin = JSON.parse(meta("tg:nojoin") || "{}");
       } catch {}
+      // Max uses this number himself (2026-11-15): every channel of ours is muted, the moment it is joined.
+      const mute = (peer) => client.invoke(new Api.account.UpdateNotifySettings({ peer: new Api.InputNotifyPeer({ peer }), settings: new Api.InputPeerNotifySettings({ muteUntil: 2147483647, silent: true }) }));
+      for (const ch of list) {
+        const d = mine.get(ch);
+        if (d && !(d.dialog?.notifySettings?.muteUntil > Date.now() / 1000))
+          await mute(d.inputEntity).catch((e) => out.errors.push(`mute ${ch}: ${e.errorMessage || e.message}`));
+      }
       let joins = 0;
       for (const ch of list) {
         if (mine.has(ch) || joins >= JOINS_PER_RUN || Date.now() - Date.parse(nojoin[ch] || 0) < 7 * DAY) continue;
         joins++;
         try {
-          await client.invoke(new Api.channels.JoinChannel({ channel: ch }));
+          const r = await client.invoke(new Api.channels.JoinChannel({ channel: ch }));
           out.joined.push(ch);
+          const c = r.chats?.[0];
+          if (c) await mute(new Api.InputPeerChannel({ channelId: c.id, accessHash: c.accessHash })).catch((e) => out.errors.push(`mute ${ch}: ${e.errorMessage || e.message}`));
         } catch (e) {
           out.errors.push(`join ${ch}: ${e.errorMessage || e.message}`);
           if (/FLOOD/.test(e.errorMessage || "")) joins = JOINS_PER_RUN;
@@ -393,7 +402,20 @@ function create(db, { calendar, apiKey = process.env.ANTHROPIC_API_KEY || "", cl
 
   // Another site's page → its events, for calendar.chytomoRun.
   const extract = (text, page) => ask({ page, text, at: new Date().toISOString() });
-  return { run, events, status, maybeEvent, meta, setMeta, extract };
+  // Public channels whose title has these words, as the account sees them (to find a channel's @name for the seed).
+  async function find(q) {
+    if (!accountSet()) return { error: "no account" };
+    const { Api } = require("telegram");
+    const client = await connect();
+    try {
+      const r = await client.invoke(new Api.contacts.Search({ q: String(q).slice(0, 64), limit: 10 }));
+      return { found: (r.chats || []).filter((c) => c.username && c.broadcast).map((c) => ({ name: c.username, title: c.title, members: c.participantsCount ?? null })) };
+    } finally {
+      await client.destroy().catch(() => {});
+    }
+  }
+
+  return { run, events, status, maybeEvent, meta, setMeta, extract, find };
 }
 
 module.exports = { create, parsePage, maybeEvent, fromMessage, channels, KEEP_DAYS };
