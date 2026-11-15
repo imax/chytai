@@ -1624,7 +1624,11 @@ bg.every("threads-find", 4 * 3600 * 1000, () => threadsFind.run(), { db: store.d
 
 // «Книжкові події» on /calendar (calendar.js, Max 2026-11-15). Seeds at every start; the jobs process cleans up
 // old events and, once switched on (meta calendar:ye), reads Книгарня «Є»'s calendar once a day.
-const calendar = require("./calendar").create(store.db, store);
+const calendar = require("./calendar").create(store.db, store, {
+  bookua: (q) => catalogs.bookuaSearch(q),
+  search: (q) => readerBooks.search(q),
+  made: (made) => notifyOwner(`Книжки з подій: ${made.length === 1 ? made[0].title : `${made.length} нових`}`, ["Події в календарі назвали книжки, яких не було в каталозі; тепер вони є:", "", ...made.map((b) => `• ${b.title}${b.author ? ` — ${b.author}` : ""}  ${SITE}${store.href(b.id)}  (${b.from}; подія «${b.eventTitle}»)`)].join("\n")),
+});
 const calendarJobs = bg.register("calendar", { cleanup: () => calendar.cleanup(), ye: () => calendar.yeRun(), yeDry: () => calendar.yeRun({ dry: true }) }, { cleanup: false, ye: false, yeDry: false });
 if (bg.ROLE !== "web") setTimeout(() => calendar.seed(), 20 * 1000);
 bg.every("calendar-cleanup", 24 * 3600 * 1000, () => calendarJobs.cleanup(), { db: store.db, first: 5 * 60 * 1000 });
@@ -1633,6 +1637,20 @@ bg.every("calendar-ye", 24 * 3600 * 1000, () => calendarJobs.ye(), { db: store.d
 // public t.me/s pages; every hour. Their events go to the calendar once meta tg:events is "on" (Max's OK).
 const tgFeed = bg.register("tg", require("./tgfeed").create(store.db, { calendar }), { run: false, events: false });
 bg.every("tg-feed", 3600 * 1000, () => tgFeed.run(), { db: store.db, first: 8 * 60 * 1000 });
+// Chytomo's calendar once a day (its articles through the same Haiku as Telegram posts), and the books events name
+// that the catalog lacks every hour (calendar.fillBooks; new books reload the web process).
+const calendarMore = bg.register(
+  "calendar-more",
+  {
+    chytomo: () => calendar.chytomoRun({ extract: tgFeed.extract }),
+    chytomoDry: () => calendar.chytomoRun({ extract: tgFeed.extract, dry: true }),
+    books: () => calendar.fillBooks().then((r) => (r.made.length || r.found.length ? r : false)),
+    booksDry: () => calendar.fillBooks({ dry: true }),
+  },
+  { chytomo: false, chytomoDry: false, books: true, booksDry: false },
+);
+bg.every("calendar-chytomo", 24 * 3600 * 1000, () => calendarMore.chytomo(), { db: store.db, first: 20 * 60 * 1000 });
+bg.every("calendar-books", 3600 * 1000, () => calendarMore.books(), { db: store.db, first: 25 * 60 * 1000 });
 // The authors of a book (slugs), for its page's line about an event.
 const bookAuthorSlugs = (book) => require("./authors").splitAuthors(book.author).map((n) => store.authors?.byName(n)?.slug).filter(Boolean);
 const bookEvent = (book) => calendar.forBook(store.canonical(book.id), bookAuthorSlugs(book))[0] || null;
@@ -1781,6 +1799,24 @@ app.post("/agent/calendar-ye", agentOk, (req, res) => {
   calendar.setMeta("calendar:ye", req.body.on ? "on" : "off");
   res.json({ on: req.body.on, last: JSON.parse(calendar.meta("calendar:ye:last") || "null") });
 });
+// Chytomo's calendar and the books events name: GET is a dry run in the jobs process (ask again for the answer,
+// ?again=1 reruns); POST {"run": true} runs it now (writes events and books: only with Max's OK in the thread).
+const calDry = {};
+for (const [path, run, dry] of [["calendar-chytomo", "chytomo", "chytomoDry"], ["calendar-books", "books", "booksDry"]]) {
+  app.get(`/agent/${path}`, agentOk, (req, res) => {
+    if (!calDry[path] || (req.query.again && calDry[path].done)) {
+      calDry[path] = { started: new Date().toISOString(), done: false };
+      const box = calDry[path];
+      calendarMore[dry]().then((r) => Object.assign(box, r, { done: true }), (e) => Object.assign(box, { error: e.message, done: true }));
+    }
+    res.json(calDry[path]);
+  });
+  app.post(`/agent/${path}`, agentOk, (req, res) => {
+    if (!req.body?.run) return res.status(400).json({ error: "run: true" });
+    calendarMore[run]().catch(() => {});
+    res.json({ started: true });
+  });
+}
 // Telegram channels (tgfeed.js): GET what is kept and how the last run went; POST {"run": true} runs it now.
 app.get("/agent/tg", agentOk, (req, res) => res.json(tgFeed.status()));
 app.post("/agent/tg", agentOk, (req, res) => {

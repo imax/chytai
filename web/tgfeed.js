@@ -129,6 +129,7 @@ Answer every book event in the post that takes place on or after today's date (a
 - city: the city in Ukrainian, nominative («Київ», «Львів», «Прага»); «Онлайн» if it is only online; "" if the post does not say.
 - place: venue and address as the post gives them, at most 120 characters, or "".
 - url: the post's link to the event page or registration, only one of the links given; else "".
+- books: the books the event is about (presented, discussed, read), each with its title as written, without quotes, and its author's full name in Ukrainian; [] if no book is named.
 
 When the post has no book event from today on, answer an empty list.`;
 const EVENT_SCHEMA = {
@@ -138,8 +139,18 @@ const EVENT_SCHEMA = {
       type: "array",
       items: {
         type: "object",
-        properties: { title: { type: "string" }, sub: { type: "string" }, starts: { type: "string" }, ends: { type: "string" }, time: { type: "string" }, city: { type: "string" }, place: { type: "string" }, url: { type: "string" } },
-        required: ["title", "sub", "starts", "ends", "time", "city", "place", "url"],
+        properties: {
+          title: { type: "string" },
+          sub: { type: "string" },
+          starts: { type: "string" },
+          ends: { type: "string" },
+          time: { type: "string" },
+          city: { type: "string" },
+          place: { type: "string" },
+          url: { type: "string" },
+          books: { type: "array", items: { type: "object", properties: { title: { type: "string" }, author: { type: "string" } }, required: ["title", "author"], additionalProperties: false } },
+        },
+        required: ["title", "sub", "starts", "ends", "time", "city", "place", "url", "books"],
         additionalProperties: false,
       },
     },
@@ -270,13 +281,14 @@ function create(db, { calendar, apiKey = process.env.ANTHROPIC_API_KEY || "", cl
     return { added: out.added, via: out.via, joined: out.joined.length, events: out.events, errors: out.errors };
   }
 
-  // One post → the events Haiku finds in it.
+  // One post → the events Haiku finds in it; the books each names come as `named` (calendar.upsert looks them up).
+  // A page from elsewhere (Chytomo's articles) comes with `page`, its address: the events link there.
   async function ask(p) {
     const c = anthropic();
     if (!c) throw new Error("no ANTHROPIC_API_KEY");
-    const links = JSON.parse(p.links || "[]");
-    const city = seed().find((c) => c.name === p.channel)?.city || "";
-    const user = `Today: ${kyivDay()}\nChannel: @${p.channel}${city ? ` (a book club in ${city}; use this city when the post names none and the meeting is not online)` : ""}\nPosted: ${p.at.slice(0, 10)}\nLinks in the post: ${links.length ? links.join(" ") : "none"}\n\n${p.text}`;
+    const links = p.page ? [p.page] : JSON.parse(p.links || "[]");
+    const city = p.page ? "" : seed().find((c) => c.name === p.channel)?.city || "";
+    const user = `Today: ${kyivDay()}\n${p.page ? `Page: ${p.page}` : `Channel: @${p.channel}${city ? ` (a book club in ${city}; use this city when the post names none and the meeting is not online)` : ""}`}\nPosted: ${p.at.slice(0, 10)}\nLinks in the post: ${links.length ? links.join(" ") : "none"}\n\n${p.text}`;
     const res = await c.messages.create({
       model: MODEL,
       max_tokens: 2000,
@@ -288,7 +300,7 @@ function create(db, { calendar, apiKey = process.env.ANTHROPIC_API_KEY || "", cl
     const raw = res.content.map((b) => b.text || "").join("");
     const j = JSON.parse(raw.slice(raw.indexOf("{"), raw.lastIndexOf("}") + 1));
     const today = kyivDay();
-    return (j.events || []).filter((e) => /^\d{4}-\d\d-\d\d$/.test(e.starts) && (e.ends || e.starts) >= today && e.title).map((e) => ({ ...e, url: links.includes(e.url) ? e.url : `https://t.me/${p.channel}/${p.id}` }));
+    return (j.events || []).filter((e) => /^\d{4}-\d\d-\d\d$/.test(e.starts) && (e.ends || e.starts) >= today && e.title).map(({ books, ...e }) => ({ ...e, named: (books || []).slice(0, 4), url: links.includes(e.url) ? e.url : p.page || `https://t.me/${p.channel}/${p.id}` }));
   }
 
   // The events in posts not looked at yet (dry: the posts of the last `days` days, nothing kept, at most `max`
@@ -371,7 +383,9 @@ function create(db, { calendar, apiKey = process.env.ANTHROPIC_API_KEY || "", cl
     return { sites: top(sites), channels: top(chans) };
   }
 
-  return { run, events, status, maybeEvent, meta, setMeta };
+  // Another site's page → its events, for calendar.chytomoRun.
+  const extract = (text, page) => ask({ page, text, at: new Date().toISOString() });
+  return { run, events, status, maybeEvent, meta, setMeta, extract };
 }
 
 module.exports = { create, parsePage, maybeEvent, fromMessage, channels, KEEP_DAYS };

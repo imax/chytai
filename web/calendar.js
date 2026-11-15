@@ -14,6 +14,8 @@ const dns = require("dns").promises;
 const net = require("net");
 
 const KEEP_DAYS = 30;
+const CALBOOKS_DAY = 30; // new catalog books from events a day (fillBooks)
+const { norm, sameAuthor, isRussian } = require("./store");
 const MONTHS = ["січня", "лютого", "березня", "квітня", "травня", "червня", "липня", "серпня", "вересня", "жовтня", "листопада", "грудня"];
 const WEEKDAYS = ["Неділя", "Понеділок", "Вівторок", "Середа", "Четвер", "П’ятниця", "Субота"];
 const UA = "Mozilla/5.0 (compatible; Chytai/1.0; +https://chytai.org.ua)";
@@ -219,8 +221,12 @@ function cleanTitle(t) {
   return s.replace(/[\s.,:;–—-]+$/, "").slice(0, 160);
 }
 
-function create(db, store, { notify = () => {} } = {}) {
+function create(db, store, { notify = () => {}, bookua = null, search = null, made = () => {} } = {}) {
   db.exec(SCHEMA);
+  // Books an event names that the catalog did not have yet: [{ title, author }] (fillBooks looks for them outside).
+  try {
+    db.exec("ALTER TABLE cal_events ADD COLUMN want TEXT NOT NULL DEFAULT '[]'");
+  } catch {}
   const meta = (k) => db.prepare("SELECT value FROM meta WHERE key = ?").get(k)?.value || "";
   const setMeta = (k, v) => db.prepare("INSERT INTO meta (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(k, v);
   const row = (r) => r && { ...r, books: JSON.parse(r.books || "[]"), authors: JSON.parse(r.authors || "[]"), hidden: !!r.hidden };
@@ -248,13 +254,149 @@ function create(db, store, { notify = () => {} } = {}) {
     if (!title || !/^\d{4}-\d\d-\d\d$/.test(ev.starts || "")) return null;
     const city = clean(ev.city, 40) || findCity(`${ev.place || ""} ${title}`);
     const links = ev.books || ev.authors ? { books: ev.books || [], authors: ev.authors || [] } : linkText(store, `${title} ${ev.sub || ""}`);
+    const want = wanted(ev, title, links);
     db.prepare(
-      `INSERT INTO cal_events (id, source, url, title, sub, city, place, starts, ends, time, books, authors, by, added, hidden) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `INSERT INTO cal_events (id, source, url, title, sub, city, place, starts, ends, time, books, authors, by, added, hidden, want) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT(id) DO UPDATE SET url = excluded.url, title = excluded.title, sub = excluded.sub, city = excluded.city, place = excluded.place,
-       starts = excluded.starts, ends = excluded.ends, time = excluded.time, books = excluded.books, authors = excluded.authors`,
-    ).run(id, ev.source, clean(ev.url, 500), title, clean(ev.sub, 200), city, clean(ev.place, 120), ev.starts, /^\d{4}-\d\d-\d\d$/.test(ev.ends || "") && ev.ends > ev.starts ? ev.ends : "", /^\d\d:\d\d$/.test(ev.time || "") ? ev.time : "", JSON.stringify(links.books.slice(0, 6)), JSON.stringify(links.authors.slice(0, 6)), ev.by || "", new Date().toISOString(), ev.hidden ? 1 : 0);
+       starts = excluded.starts, ends = excluded.ends, time = excluded.time, books = excluded.books, authors = excluded.authors, want = excluded.want`,
+    ).run(id, ev.source, clean(ev.url, 500), title, clean(ev.sub, 200), city, clean(ev.place, 120), ev.starts, /^\d{4}-\d\d-\d\d$/.test(ev.ends || "") && ev.ends > ev.starts ? ev.ends : "", /^\d\d:\d\d$/.test(ev.time || "") ? ev.time : "", JSON.stringify(links.books.slice(0, 6)), JSON.stringify(links.authors.slice(0, 6)), ev.by || "", new Date().toISOString(), ev.hidden ? 1 : 0, JSON.stringify(want));
     fresh();
     return id;
+  }
+
+  // The books an event names that the catalog lacks, with their author: the ones Haiku named (`ev.named`, the
+  // Telegram and Chytomo collectors), and titles in «» when the text names an author we know. The ones found join
+  // `links.books`. → [{ title, author }] to look for outside.
+  function wanted(ev, title, links) {
+    const known = links.authors.map((s) => store.authors?.bySlug.get(s)?.name).filter(Boolean);
+    const named = (Array.isArray(ev.named) ? ev.named : []).map((b) => ({ title: clean(b?.title, 120).replace(/^«|»$/g, ""), author: clean(b?.author, 80) }));
+    if (known.length === 1) for (const m of `${title} ${ev.sub || ""}`.matchAll(/«([^»]{2,120})»/g)) named.push({ title: m[1].trim(), author: known[0] });
+    const out = [];
+    for (const b of named) {
+      if (b.title.length < 2 || !b.author || out.some((x) => norm(x.title) === norm(b.title))) continue;
+      const id = store.findWork?.({ title: b.title, author: b.author });
+      if (id) {
+        if (!links.books.includes(id)) links.books.push(id);
+      } else out.push(b);
+    }
+    return out.slice(0, 4);
+  }
+
+  // The books upcoming events name that the catalog lacks (Max 2026-11-15: «додавати їх в каталог, якщо їх
+  // немає»): a Ukrainian edition on book.ua, else in Google Books / Open Library (as /ask does), 30 new books a day,
+  // never a Russian one. Each name is looked for once. dry: what it would add.
+  async function fillBooks({ dry = false } = {}) {
+    if (!bookua && !search) return { made: [], missed: [] };
+    const { confirm } = require("./readerbooks");
+    const head = (t) => norm(String(t || "").split(/[:(]|\.\s|\s[-–—]\s/)[0]);
+    const day = kyivDay();
+    let count = { day, n: 0 };
+    try {
+      const c = JSON.parse(meta("calbooks:count") || "null");
+      if (c?.day === day) count = c;
+    } catch {}
+    const out = { made: [], found: [], missed: [] };
+    const rows = db.prepare("SELECT * FROM cal_events WHERE want != '[]' AND (starts >= ? OR ends >= ?)").all(day, day).map(row);
+    for (const e of rows) {
+      const left = [];
+      const books = [...e.books];
+      for (const w of JSON.parse(e.want || "[]")) {
+        let id = store.findWork({ title: w.title, author: w.author });
+        if (!id) {
+          if (count.n >= CALBOOKS_DAY) {
+            left.push(w);
+            continue;
+          }
+          let book = null;
+          let from = "";
+          const hits = bookua ? await bookua(w.title.split(/[:(]|\.\s/)[0]).catch(() => []) : [];
+          const hit = hits.find((h) => head(h.title) === head(w.title) && sameAuthor(w.author, h.author) && /українськ/i.test(h.language) && h.format !== "Аудіо");
+          if (hit) (book = { title: hit.title.replace(/^«([^»]+)»/, "$1"), author: hit.author, cover: /^https:\/\/i\.book\.ua\//.test(hit.cover) ? hit.cover : "", links: [{ label: "book.ua", url: hit.url }], language: "українська", ...(hit.isbn ? { isbns: [hit.isbn] } : {}), ...(hit.year ? { published: hit.year } : {}) }), (from = "book.ua");
+          if (!book && search) {
+            const g = await confirm({ title: w.title, author: w.author, language: "українська" }, search).catch(() => null);
+            if (g && /[а-яіїєґ]/i.test(g.title)) {
+              const gl = /^https:\/\/(books\.google\.[a-z.]+|play\.google\.com)\//.test(g.google || "") ? [{ label: "Google Books", url: g.google }] : [];
+              const cover = /^https:\/\/(covers\.openlibrary\.org|books\.google\.[a-z.]+|books\.googleusercontent\.com)\//.test(g.cover || "") ? g.cover : "";
+              (book = { title: w.title.split(": ")[0], author: w.author || g.author, cover, links: gl, language: "українська", ...(g.isbns?.length ? { isbns: g.isbns.slice(0, 20) } : {}), ...(Number(g.published) ? { published: Number(g.published) } : {}) }), (from = g.from || "Google Books");
+            }
+          }
+          if (!book || isRussian(book)) {
+            out.missed.push({ ...w, event: e.id });
+            continue;
+          }
+          id = store.findWork({ title: book.title, author: book.author, isbns: book.isbns || [] });
+          if (!id) {
+            if (dry) {
+              out.made.push({ ...book, from, event: e.id });
+              continue;
+            }
+            id = store.addBook({ ...book, source: "calendar" }).id;
+            count.n++;
+            setMeta("calbooks:count", JSON.stringify(count));
+            out.made.push({ id, title: book.title, author: book.author, from, event: e.id, eventTitle: e.title });
+          }
+        }
+        if (id && !books.includes(id)) books.push(id), out.found.push({ id, event: e.id });
+      }
+      if (!dry) {
+        const authors = [...e.authors];
+        for (const id of books) for (const a of store.authors?.list || []) if (a.ids.includes(id) && !authors.includes(a.slug)) authors.push(a.slug);
+        db.prepare("UPDATE cal_events SET books = ?, authors = ?, want = ? WHERE id = ?").run(JSON.stringify(books.slice(0, 6)), JSON.stringify(authors.slice(0, 6)), JSON.stringify(left), e.id);
+      }
+    }
+    if (!dry) fresh();
+    if (!dry && out.made.length) made(out.made);
+    return out;
+  }
+
+  // ---- Chytomo's calendar (chytomo.com/kalendar/, Max 2026-11-15) ----
+  // Its cards «зустрічі та враження» and «освітні» (not contests, grants, jobs): each article not seen yet goes to
+  // `extract(text, url)` (the Telegram collector's Haiku), its events in as source `chytomo`, one a day at most
+  // 10 articles; the same event told elsewhere (findSimilar) is left out. dry: nothing kept.
+  const CHYTOMO = "https://chytomo.com";
+  async function chytomoRun({ extract, dry = false, max = 10 } = {}) {
+    const out = { at: new Date().toISOString(), dry, cards: 0, read: 0, made: [], dupes: [], skipped: [], errors: [] };
+    if (!extract) return out;
+    const seen = new Set(JSON.parse(meta("chytomo:seen") || "[]"));
+    const list = await fetchPage(`${CHYTOMO}/kalendar/`);
+    const cards = [...list.html.matchAll(/<a class="event__link" href="([^"]+)"[^>]*title="([^"]*)">([\s\S]*?)<\/a>/g)].map((m) => ({ url: m[1], title: unent(m[2]), kind: (/liner--dark">([^<]*)</.exec(m[3])?.[1] || "").trim() }));
+    out.cards = cards.length;
+    for (const c of cards) {
+      if (!c.url.startsWith(`${CHYTOMO}/`) || !/зустрічі|освітні/i.test(c.kind)) {
+        out.skipped.push(`${c.title} (${c.kind || "?"})`);
+        continue;
+      }
+      const slug = c.url.replace(/\/+$/, "").split("/").pop();
+      if (seen.has(slug) || out.read >= max) continue;
+      await sleep(1500);
+      let page;
+      try {
+        page = await fetchPage(c.url);
+      } catch (e) {
+        out.errors.push(`${slug}: ${e.message}`);
+        continue;
+      }
+      out.read++;
+      const body = /<div class="text"[\s\S]*?(?=<div class="(?:social|donate)|<footer)/.exec(page.html)?.[0] || page.html;
+      let found;
+      try {
+        found = await extract(`${c.title}\n\n${textOf(body).slice(0, 6000)}`, c.url);
+      } catch (e) {
+        out.errors.push(`${slug}: ${e.message}`);
+        continue;
+      }
+      found.forEach((e, i) => {
+        const ev = { source: "chytomo", key: `${slug}${i ? `-${i}` : ""}`, ...e };
+        const twin = findSimilar({ starts: e.starts, city: e.city, title: e.title });
+        if (twin && twin.id !== `chytomo:${ev.key}`) return out.dupes.push({ title: e.title, twin: twin.id });
+        if (!dry) upsert(ev);
+        out.made.push({ title: e.title, starts: e.starts, city: e.city, named: e.named });
+      });
+      seen.add(slug);
+    }
+    if (!dry) setMeta("chytomo:seen", JSON.stringify([...seen].slice(-300)));
+    if (!dry) setMeta("chytomo:last", JSON.stringify({ ...out, made: out.made.length, skipped: out.skipped.length }));
+    return out;
   }
 
   // «Додати подію» from a reader: { title, url, starts, time, city, place, sub } → { id } or { error }.
@@ -407,7 +549,7 @@ function create(db, store, { notify = () => {} } = {}) {
     return [...n].sort((a, b) => (a[0] === "Онлайн") - (b[0] === "Онлайн") || b[1] - a[1] || a[0].localeCompare(b[0], "uk")).map(([c]) => c);
   };
 
-  return { upsert, add, one, findSimilar, hide, cleanup, seed, upcoming, forAuthor, forBook, cities, yeRun, yeLast: () => yeLast, peek, fresh, meta, setMeta };
+  return { upsert, add, one, findSimilar, hide, cleanup, seed, upcoming, forAuthor, forBook, cities, fillBooks, chytomoRun, yeRun, yeLast: () => yeLast, peek, fresh, meta, setMeta };
 }
 
 // «Четвер, 19 листопада» and, within a week, «завтра» / «через 3 дні».

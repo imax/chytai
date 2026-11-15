@@ -269,6 +269,16 @@ A flag only when Max asks for one, or when the change could break what readers u
   (Max's OK after a trial: 25 calls, $0.005, 20 events); switch: meta `tg:events`, `POST /agent/tg-events {"on":false}`.
   Dry run over the last 30 days (≤200 calls, only with Max's OK): `GET /agent/tg-events` (ask again, `?again=1`).
 
+- Chytomo (chytomo.com/kalendar/, Max 2026-11-15): `calendar.chytomoRun` once a day in the jobs process, its cards
+  «зустрічі та враження» and «освітні» only, each new article (meta `chytomo:seen`) through the Telegram collector's
+  Haiku (`tgFeed.extract`, ≤10 a day), source `chytomo`, `findSimilar` against the same event elsewhere. Dry run:
+  `curl -s https://chytai.org.ua/agent/calendar-chytomo -H "$H"` (ask again; `?again=1`); run now: `POST {"run":true}`.
+- Books an event names that the catalog lacks (Max 2026-11-15): Haiku answers each event's `books` (`named`), and a
+  title in «» goes too when the text names one author we know; missing ones wait in `cal_events.want`.
+  `calendar.fillBooks` every hour: book.ua's Ukrainian edition, else Google Books / Open Library, source `calendar`,
+  30 a day (meta `calbooks:count`), never Russian; Max hears of them (mail + Telegram). Dry run:
+  `curl -s https://chytai.org.ua/agent/calendar-books -H "$H"`.
+
 ## Translation pairs
 
 - A Ukrainian book and its original are paired in `web/seed/matches.json`: `translations` (`[original, uk]`, slugs or
