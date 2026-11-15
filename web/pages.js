@@ -2118,14 +2118,27 @@ function calWhere(e) {
   return [e.city, e.place].filter(Boolean).map(esc).join(" · ");
 }
 const calShelfLine = (e) => (e.mine?.length ? `<p class="meta cal-shelf">${e.mine.map((x) => `<span class="mine">✓ ${MY_STATUS[x.status] || "На полиці"}</span> <a class="text-link" href="${attr(x.book.href)}">«${esc(nest(x.book.title))}»</a>${x.rating != null ? ` ★${uk(String(x.rating))}` : ""}`).join(" · ")}</p>` : "");
-// One line of the list: the day (on its first event), the time, the title, kind · where, a small cover; the rest
+// «Сьогодні, 17:00», «Чт 19, 18:30», «Ср 25 листопада», «до 30 листопада» (a festival that goes on), «19–22 листопада».
+function calWhen(e, today) {
+  if (e.starts < today) return `до ${cal().span({ starts: e.ends })}`;
+  if (e.ends) return cal().span(e);
+  if (e.stops?.length > 1 && e.stops.at(-1).starts > e.stops[0].starts) return cal().span({ starts: e.stops[0].starts, ends: e.stops.at(-1).starts });
+  const d = new Date(`${e.starts}T12:00:00Z`);
+  const days = Math.round((Date.parse(e.starts) - Date.parse(today)) / 86400000);
+  return `${days === 0 ? "Сьогодні" : days === 1 ? "Завтра" : `${cal().SHORT_DAYS[d.getUTCDay()].replace(/^./, (c) => c.toUpperCase())} ${d.getUTCDate()}${days > 6 ? ` ${cal().MONTHS[d.getUTCMonth()]}` : ""}`}${e.time && !(e.stops?.length > 1) ? `, ${e.time}` : ""}`;
+}
+// A book's cover, or the day on a tile: every row has the same left column (Max, 2026-11-15: the day and time columns,
+// empty on some rows, made the list zigzag).
+function calLeft(e, today, size = "md") {
+  const c = e.bookCards?.[0];
+  const d = new Date(`${e.starts < today ? today : e.starts}T12:00:00Z`);
+  return c ? `<a class="cal-cv" href="${attr(c.href)}" tabindex="-1" aria-hidden="true">${cover(c, size)}</a>` : `<span class="cal-tile"><b>${d.getUTCDate()}</b>${esc(cal().MONTHS[d.getUTCMonth()].slice(0, 4))}</span>`;
+}
+// One line of the list, the shape of the author cards: cover or day, «Чт 19, 18:30», the title, kind · where; the rest
 // (what it is about, a tour's stops, the books, the organizer's page, «сховати») behind «докладніше».
-function calLine(e, { user, owner, today, day, kind = "" }) {
-  const going = e.starts < today; // a festival that began before today and goes on
+function calLine(e, { user, owner, today, kind = "" }) {
   const tour = e.stops?.length > 1;
-  const time = !tour && !going && e.time ? e.time : "";
-  const when = going ? `триває до ${esc(cal().span({ starts: e.ends }))}` : e.ends ? esc(cal().span(e)) : tour ? esc(cal().span({ starts: e.stops[0].starts, ends: e.stops.at(-1).starts > e.stops[0].starts ? e.stops.at(-1).starts : "" })) : "";
-  const meta = [e.kind && e.kind !== kind ? `<span class="cal-k">${KIND_ONE[e.kind]}</span>` : "", calWhere(e), when].filter(Boolean).join(" · ");
+  const meta = [e.kind && e.kind !== kind ? `<span class="cal-k">${KIND_ONE[e.kind]}</span>` : "", calWhere(e)].filter(Boolean).join(" · ");
   const stops = tour ? `<ul class="cal-stops">${e.stops.map((s) => `<li><b>${esc(cal().shortWhen(s))}${s.time ? ` · ${esc(s.time)}` : ""}</b> ${[s.city, s.place].filter(Boolean).map(esc).join(" · ")}</li>`).join("")}</ul>` : "";
   const books = e.bookCards?.length ? `<div class="cal-books">${e.bookCards.map((b) => `<a href="${attr(b.href)}">${cover(b, "xs")}<span>${esc(b.title)}</span></a>`).join("")}</div>` : e.authorLinks?.length ? `<p class="meta">${e.authorLinks.map((a) => `<a class="text-link" href="${attr(a.href)}">${esc(a.name)}</a>`).join(", ")}</p>` : "";
   const also = tour ? e.stops.slice(1).map((s) => `<input type="hidden" name="also" value="${attr(s.id)}">`).join("") : "";
@@ -2134,28 +2147,21 @@ function calLine(e, { user, owner, today, day, kind = "" }) {
   const links = [eventLink(e), by, hide].filter(Boolean).join(" · ");
   // The line under the title opens the rest, so «докладніше» takes no line of its own.
   const line = e.sub || stops || books || links ? `<details class="cal-more"><summary class="meta">${meta}<span class="cal-dot"> · </span><span class="cal-open">докладніше</span></summary>${e.sub ? `<p class="by">${esc(e.sub)}</p>` : ""}${stops}${books}${links ? `<p class="meta">${links}</p>` : ""}</details>` : `<p class="meta">${meta}</p>`;
-  const c = e.bookCards?.[0];
-  const dd = day ? new Date(`${day}T12:00:00Z`) : null;
   return `<article class="cal-ln" id="${attr(e.id)}">
-  <div class="cal-d">${dd ? `${cal().SHORT_DAYS[dd.getUTCDay()]}<b>${dd.getUTCDate()}</b>` : ""}</div>
-  <div class="cal-tm">${time}</div>
+  ${calLeft(e, today)}
   <div class="cal-body">
+    <p class="cal-when">${esc(calWhen(e, today))}</p>
     <h3>${calTitle(e)}</h3>
     ${line}
     ${calShelfLine(e)}
   </div>
-  <div class="cal-cv">${c ? `<a href="${attr(c.href)}" tabindex="-1" aria-hidden="true">${cover(c, "xs")}</a>` : ""}</div>
 </article>`;
 }
 // The homepage's «Книжкові події» (Max, 2026-11-15): a few lines of the list (server.js homeEvents), «усі N» to /calendar.
 function calHome({ events, total }) {
   if (!events?.length) return "";
   const today = cal().kyivDay();
-  let last = "";
-  const rows = events.map((e) => {
-    const d = e.starts < today ? today : e.starts;
-    return calLine(e, { today, day: d !== last ? (last = d) : "" });
-  });
+  const rows = events.map((e) => calLine(e, { today }));
   return `<section class="block cal-home" data-block="events">${label("Події", `<a href="/calendar">усі ${total}</a>`)}<div class="cal-lns">${rows.join("")}</div></section>`;
 }
 // The list by weeks: today, this week and the next one open; when the list is long, the later months folded.
@@ -2205,22 +2211,14 @@ function calList(events, { user, owner, today, kind = "" }) {
 function calOverview(events, { user, owner, today, href, counts }) {
   const of = (k) => events.filter((e) => (e.kind || "") === k);
   const more = (k) => (counts[k] > 0 ? `<a href="${attr(href({ kind: k }))}">усі ${counts[k]}</a>` : "");
-  const short = (e) => {
-    const going = e.starts < today;
-    if (going) return `до ${cal().span({ starts: e.ends })}`;
-    const d = new Date(`${e.starts}T12:00:00Z`);
-    const days = Math.round((Date.parse(e.starts) - Date.parse(today)) / 86400000);
-    return `${days === 0 ? "Сьогодні" : days === 1 ? "Завтра" : `${cal().SHORT_DAYS[d.getUTCDay()].replace(/^./, (c) => c.toUpperCase())} ${d.getUTCDate()}${days > 6 ? ` ${cal().MONTHS[d.getUTCMonth()]}` : ""}`}${e.time && !(e.stops?.length > 1) ? `, ${e.time}` : ""}`;
-  };
+  const short = (e) => calWhen(e, today);
   const out = [];
   // Meetings with authors: cards, a book's cover or the day.
   const authors = of("author").slice(0, 6);
   if (authors.length)
     out.push(`<section class="cal-sec">${label("Зустрічі з авторами", more("author"))}<div class="cal-cards">${authors
       .map((e) => {
-        const c = e.bookCards?.[0];
-        const d = new Date(`${e.starts < today ? today : e.starts}T12:00:00Z`);
-        return `<article class="cal-card" id="${attr(e.id)}">${c ? `<a href="${attr(c.href)}" tabindex="-1" aria-hidden="true">${cover(c, "md")}</a>` : `<span class="cal-tile"><b>${d.getUTCDate()}</b>${esc(cal().MONTHS[d.getUTCMonth()].slice(0, 4))}</span>`}<div><p class="cal-when">${esc(short(e))}</p><h3>${calTitle(e)}</h3><p class="meta">${calWhere(e)}</p>${calShelfLine(e)}</div></article>`;
+        return `<article class="cal-card" id="${attr(e.id)}">${calLeft(e, today)}<div><p class="cal-when">${esc(short(e))}</p><h3>${calTitle(e)}</h3><p class="meta">${calWhere(e)}</p>${calShelfLine(e)}</div></article>`;
       })
       .join("")}</div></section>`);
   // Festivals and fairs: a few, each with its days.
