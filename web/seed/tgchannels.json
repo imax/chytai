@@ -1,0 +1,19 @@
+[
+  {"name": "knyharnia_ye", "note": "Книгарня «Є»: презентації й зустрічі в книгарнях по містах (їхній сайт нас не пускає)"},
+  {"name": "litosvita", "note": "Litosvita: лекції, книжковий клуб з авторами"},
+  {"name": "folioua", "note": "Фоліо: презентації по містах"},
+  {"name": "sens_kyiv", "note": "Книжковий Сенс, Київ"},
+  {"name": "starlev", "note": "Видавництво Старого Лева"},
+  {"name": "vivat_publishing", "note": "Vivat: книжкові ігри, презентації"},
+  {"name": "tempora_publishing", "note": "Темпора"},
+  {"name": "liroom", "note": "Лірум: культура ширше, відбирає Haiku"},
+  {"name": "goetheukraine", "note": "Goethe-Institut: часом літературні вечори"},
+  {"name": "chytomo", "note": "Читомо: анонси"},
+  {"name": "knglnd", "note": "КнигоЛенд"},
+  {"name": "nashformat", "note": "Наш Формат"},
+  {"name": "ababahalamaha", "note": "А-БА-БА-ГА-ЛА-МА-ГА"},
+  {"name": "vydavnytstvo", "note": "Видавництво «Видавництво»"},
+  {"name": "komubook", "note": "Комубук"},
+  {"name": "laboratoryua", "note": "Лабораторія: подій поки мало"},
+  {"name": "artbooks_ua", "note": "ARTBOOKS"}
+]

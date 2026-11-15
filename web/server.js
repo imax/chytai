@@ -1629,6 +1629,10 @@ const calendarJobs = bg.register("calendar", { cleanup: () => calendar.cleanup()
 if (bg.ROLE !== "web") setTimeout(() => calendar.seed(), 20 * 1000);
 bg.every("calendar-cleanup", 24 * 3600 * 1000, () => calendarJobs.cleanup(), { db: store.db, first: 5 * 60 * 1000 });
 bg.every("calendar-ye", 24 * 3600 * 1000, () => calendarJobs.ye(), { db: store.db, first: 15 * 60 * 1000 });
+// Telegram channels' posts (tgfeed.js): our own account through Telegram's API when TG_SESSION is set, else the
+// public t.me/s pages; every hour. Their events go to the calendar once meta tg:events is "on" (Max's OK).
+const tgFeed = bg.register("tg", require("./tgfeed").create(store.db, { calendar }), { run: false, events: false });
+bg.every("tg-feed", 3600 * 1000, () => tgFeed.run(), { db: store.db, first: 8 * 60 * 1000 });
 // The authors of a book (slugs), for its page's line about an event.
 const bookAuthorSlugs = (book) => require("./authors").splitAuthors(book.author).map((n) => store.authors?.byName(n)?.slug).filter(Boolean);
 const bookEvent = (book) => calendar.forBook(store.canonical(book.id), bookAuthorSlugs(book))[0] || null;
@@ -1745,6 +1749,29 @@ app.post("/agent/calendar-ye", agentOk, (req, res) => {
   if (typeof req.body?.on !== "boolean") return res.status(400).json({ error: '{"on": true|false}' });
   calendar.setMeta("calendar:ye", req.body.on ? "on" : "off");
   res.json({ on: req.body.on, last: JSON.parse(calendar.meta("calendar:ye:last") || "null") });
+});
+// Telegram channels (tgfeed.js): GET what is kept and how the last run went; POST {"run": true} runs it now.
+app.get("/agent/tg", agentOk, (req, res) => res.json(tgFeed.status()));
+app.post("/agent/tg", agentOk, (req, res) => {
+  if (!req.body?.run) return res.status(400).json({ error: '{"run": true}' });
+  tgFeed.run().catch(() => {});
+  res.json({ started: true });
+});
+// The events in the posts: GET is a dry run over the last ?days= (30) days, at most 200 Haiku calls, only with
+// Max's OK in the thread (ask again for the answer, ?again=1 reruns); POST {"on": true|false} switches them into the
+// calendar, only with Max's OK.
+let tgDry = null;
+app.get("/agent/tg-events", agentOk, (req, res) => {
+  if (!tgDry || (req.query.again && tgDry.done)) {
+    tgDry = { started: new Date().toISOString(), done: false };
+    tgFeed.events({ dry: true, days: Math.min(+req.query.days || 30, 90), max: 200 }).then((r) => Object.assign(tgDry, r, { done: true }), (e) => Object.assign(tgDry, { error: e.message, done: true }));
+  }
+  res.json(tgDry);
+});
+app.post("/agent/tg-events", agentOk, (req, res) => {
+  if (typeof req.body?.on !== "boolean") return res.status(400).json({ error: '{"on": true|false}' });
+  tgFeed.setMeta("tg:events", req.body.on ? "on" : "off");
+  res.json({ on: req.body.on });
 });
 app.get("/community", (req, res) => {
   const readers = readerList();

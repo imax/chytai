@@ -246,6 +246,18 @@ A flag only when Max asks for one, or when the change could break what readers u
   answer, `?again=1` reruns); switch: `POST /agent/calendar-ye {"on":true}`, only with Max's OK in the thread.
   Off: Є answers 403 to Fly's server too (dry run 2026-11-15), and the container is refused as well. We don't dress up
   as a browser; Є's events come through its Telegram channel (`knyharnia_ye`, the `tg` collector) or by asking Є.
+- Telegram channels (`web/tgfeed.js`, source `tg`; Max 2026-11-15 chose our own account over scraping): the jobs process
+  reads the channels in `web/seed/tgchannels.json` every hour and keeps their posts 90 days (table `tg_posts`, for more
+  than events later). Through our own Telegram account (Fly secrets `TG_API_ID`, `TG_API_HASH`, `TG_SESSION`; Max makes
+  them on his computer with `node scripts/tg-login.js`): it joins 3 new channels a run and reads what is new. No
+  session, or Telegram refuses it: the public pages `t.me/s/<channel>`. A bot can't do this (it sees a channel only
+  when the channel's admin adds it). Status: `curl -s https://chytai.org.ua/agent/tg -H "$H"`; run now:
+  `POST /agent/tg {"run":true}`. A new channel: a line in the seed file.
+- Events from those posts: an event word and a date not past (`maybeEvent`, ~1 post in 15) → Haiku 5.5 answers the
+  events as fields (60 calls a day at most), `findSimilar` drops the same event from another channel, `upsert` with
+  the post's event link or the post itself. Off until meta `tg:events` is `on`: dry run over the last 30 days (≤200
+  calls) `GET /agent/tg-events` (ask again for the answer, `?again=1`), switch `POST /agent/tg-events {"on":true}`;
+  both only with Max's OK in the thread.
 
 ## Translation pairs
 

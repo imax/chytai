@@ -26,6 +26,7 @@ const LABELS = {
   "site:newbooks": "Перевірка нових книжок",
   "site:ukfind": "Пошук українських видань",
   "site:bookpage": "Книжка за посиланням",
+  "site:tgfeed": "Події з Telegram",
   "site:uktrial": "Проби",
   "site:langtrial": "Проби",
   "site:origtrial": "Проби",
