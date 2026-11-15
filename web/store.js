@@ -2226,6 +2226,18 @@ class Store {
         if (e) out.title = e.item.title;
       }
     }
+    // A Russian row (a reader's import, «Гарри Поттер и Орден Феникса») that Ukrainian shop editions joined is shown
+    // as the Ukrainian book: its name and language come from the first Ukrainian edition (2026-11-15).
+    if (eds && edited && isRussian(out)) {
+      // Ukrainian letters in the edition's own name: a shop's «Рейс (мовою оригіналу)» marked «українська» is not one.
+      const uk = out.editions.find((e) => !isRussian(e) && /[іїєґ]/i.test(e.title || "") && !/мовою оригіналу/i.test(e.title || ""));
+      if (uk) {
+        out.title = workName(uk.title) || uk.title;
+        out.language = uk.language || "українська";
+        if (uk.author && /[іїєґ]/i.test(uk.author)) out.author = uk.author;
+        out.ruRow = true;
+      }
+    }
     if (ser) out.series = { name: ser.name, head: ser.head, volumes: ser.volumes, items: ser.items.map(({ shelf, item }) => ({ ...this.fromShelfItem(shelf, item), shelf, work: this.canonical(item.id), href: this.href(item.id) })) };
     out.tags = this.genresOf(id, b, eds);
     const lang = !out.language && this.aiLangs().get(id);
