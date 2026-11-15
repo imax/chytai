@@ -207,11 +207,54 @@ function create(db, { calendar, apiKey = process.env.ANTHROPIC_API_KEY || "", cl
       return {};
     }
   };
-  // The seed's channels but those we left (prune).
+  // The seed's channels but those we left (prune) and groups (Max 2026-11-15: «в групи не додавайся… тільки канали»).
   const live = () => {
     const left = jmeta("tg:left");
-    return channels().filter((c) => !left[c]);
+    const groups = jmeta("tg:group");
+    return channels().filter((c) => !left[c] && !groups[c]);
   };
+  // A group (people's chat) found among the seed's names: never joined; left if joined, its kept posts dropped,
+  // a join request withdrawn (LeaveChannel does it, if Telegram lets it).
+  const markGroup = (c) => {
+    const groups = jmeta("tg:group");
+    if (!groups[c]) groups[c] = new Date().toISOString();
+    setMeta("tg:group", JSON.stringify(groups));
+    db.prepare("DELETE FROM tg_posts WHERE channel = ?").run(c);
+  };
+  async function dropGroups(client, mine, out) {
+    const { Api } = require("telegram");
+    const seeded = new Set(channels());
+    out.groups = [];
+    for (const [c, d] of mine) {
+      if (!seeded.has(c) || d.entity?.broadcast) continue;
+      try {
+        await client.invoke(new Api.channels.LeaveChannel({ channel: d.inputEntity }));
+        out.groups.push(c);
+      } catch (e) {
+        out.errors.push(`leave group ${c}: ${e.errorMessage || e.message}`);
+      }
+      markGroup(c);
+      mine.delete(c);
+    }
+    // Names that could not be joined (closed, a request sent): a group among them gets its request withdrawn.
+    if (meta("tg:groups-checked")) return;
+    for (const c of Object.keys(jmeta("tg:nojoin"))) {
+      if (!seeded.has(c)) continue;
+      try {
+        const r = await client.invoke(new Api.contacts.ResolveUsername({ username: c }));
+        const chat = r.chats?.[0];
+        if (!chat || chat.broadcast) continue;
+        await client.invoke(new Api.channels.LeaveChannel({ channel: new Api.InputChannel({ channelId: chat.id, accessHash: chat.accessHash }) })).then(
+          () => out.groups.push(c),
+          (e) => out.errors.push(`withdraw ${c}: ${e.errorMessage || e.message}`),
+        );
+        markGroup(c);
+      } catch (e) {
+        if (/FLOOD/.test(e.errorMessage || e.message || "")) return;
+      }
+    }
+    setMeta("tg:groups-checked", new Date().toISOString());
+  }
   const anthropic = () => ai || (apiKey ? (ai = new (require("@anthropic-ai/sdk"))({ apiKey })) : null);
   const lastId = (ch) => db.prepare("SELECT max(id) n FROM tg_posts WHERE channel = ?").get(ch)?.n || 0;
   const add = db.prepare("INSERT INTO tg_posts (channel, id, at, text, links, got, via) VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT(channel, id) DO UPDATE SET text = excluded.text, links = excluded.links");
@@ -238,6 +281,12 @@ function create(db, { calendar, apiKey = process.env.ANTHROPIC_API_KEY || "", cl
       if (mine.has(ch) || joins >= JOINS_PER_RUN || Date.now() - Date.parse(nojoin[ch] || 0) < 7 * DAY) continue;
       joins++;
       try {
+        // Channels only: a group is never joined (Max 2026-11-15).
+        const found = (await client.invoke(new Api.contacts.ResolveUsername({ username: ch }))).chats?.[0];
+        if (found && !found.broadcast) {
+          markGroup(ch);
+          continue;
+        }
         const r = await client.invoke(new Api.channels.JoinChannel({ channel: ch }));
         out.joined.push(ch);
         const c = r.chats?.[0];
@@ -305,6 +354,9 @@ function create(db, { calendar, apiKey = process.env.ANTHROPIC_API_KEY || "", cl
         }
       }
       setMeta("tg:left", JSON.stringify(left));
+      await dropGroups(client, mine, out);
+      const groups = jmeta("tg:group");
+      list = list.filter((c) => !groups[c]);
       // Channels someone joined by hand on the account's phone (Max, 2026-11-15) are read and muted too.
       const seeded = new Set(list);
       out.own = [...mine].filter(([u, d]) => !seeded.has(u) && !left[u] && d.entity?.broadcast).map(([u]) => u);
@@ -568,7 +620,7 @@ function create(db, { calendar, apiKey = process.env.ANTHROPIC_API_KEY || "", cl
     try {
       last = JSON.parse(meta("tg:last") || "null");
     } catch {}
-    return { account: accountSet(), events: meta("tg:events") || "off", flood: meta("tg:flood") || null, channels: live(), quiet: jmeta("tg:quiet"), left: jmeta("tg:left"), per, last, leads: leads() };
+    return { account: accountSet(), events: meta("tg:events") || "off", flood: meta("tg:flood") || null, channels: live(), quiet: jmeta("tg:quiet"), left: jmeta("tg:left"), groups: jmeta("tg:group"), per, last, leads: leads() };
   }
 
   // Where the events we found come from besides Telegram (Max, 2026-11-15: «звертай увагу, звідки воно… щоб можна
@@ -619,7 +671,7 @@ function create(db, { calendar, apiKey = process.env.ANTHROPIC_API_KEY || "", cl
     }
   }
 
-  return { run, joinMore, keepChannel, prune, events, classify, status, maybeEvent, meta, setMeta, extract, find };
+  return { run, joinMore, keepChannel, prune, dropGroups, events, classify, status, maybeEvent, meta, setMeta, extract, find };
 }
 
 module.exports = { eventUrl, create, parsePage, maybeEvent, fromMessage, channels, KEEP_DAYS };

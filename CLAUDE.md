@@ -296,6 +296,10 @@ A flag only when Max asks for one, or when the change could break what readers u
   `city` = the club's city for Haiku, `account: true` = no public page, waits for the account; a channel the account
   can't join is skipped for a week, meta `tg:nojoin`). Book clubs: 72 channels from the MEGOGO BOOKS club hub (Max
   2026-11-15, list in project files `chytai-calendar/megogo-clubs-telegram.tsv`).
+- Channels only, never groups (Max 2026-11-15: «в групи не додавайся… тільки канали»): `joinSome` resolves a name first
+  and doesn't join a group; a seed name the account is in as a group is left (`dropGroups`, each run), its posts
+  deleted, and it goes into meta `tg:group` (`/agent/tg` → `groups`), out of the list; a join request to a group is
+  withdrawn once (`tg:groups-checked`). Groups not in the seed (Max's own chats) are never touched.
 - Pruning (Max 2026-11-15: don't spend tokens on spam; the posts also feed «Знайти цікаве для читачів»), `prune()` each
   tg run over 30 days: 10+ Haiku calls and no event → `tg:quiet` (posts still kept, Haiku not asked, a month); a seed
   channel, not a club, with no event, 20+ posts and under 15% book words (`BOOKISH`) → `tg:left` (the account leaves it, no more reads).
