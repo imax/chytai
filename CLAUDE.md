@@ -186,7 +186,10 @@ A flag only when Max asks for one, or when the change could break what readers u
 - Try the prompt on production's catalog without keeping anything (30 a day):
   `curl -s https://chytai.org.ua/agent/ask -H "$H" -H 'content-type: application/json' -d '{"text":"…","model":"claude-sonnet-5-5"}'`.
 - Locally without a key: preload a fake `@anthropic-ai/sdk` (`node -r mock.js web/server.js`, ANTHROPIC_API_KEY=dummy).
-- The homepage box (and /search) takes a request too (flag `smart-search`, `web/intent.js`, no model): cue words
+- The homepage (2026-11-15, Max: «давай повернемо як було», then variant A on a design canvas): the search is plain again
+  (h1 «Я шукаю»), and under the chips, on the unfiltered page, a block «Запитай Chytai» (`askBlock` in pages.js): a field
+  that posts to /ask, and two answers others got with covers (`homeAsks` in server.js: of the 12 newest, at random).
+- Off since 2026-11-15, code kept: the homepage box (and /search) takes a request too (flag `smart-search`, `web/intent.js`, no model): cue words
   (`CUES`) and no book has every word → «Порадити книжки» first, Enter presses it (POST /ask); many words and no book
   → only a line. Variant B (Max chose it on a design canvas): «Порадити книжки ↵» takes the place of «Enter ↵» in the
   field (`body.asking`), the line under it offers «Шукати як назву» (`plain=1`). The box is a growing textarea; app.js

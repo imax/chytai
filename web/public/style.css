@@ -1387,4 +1387,29 @@ aside .side-lists + .label, aside p + .label, aside dialog + .label { margin-top
 .ask-other:hover .q { color: var(--ink); }
 .ask-other .n { flex: none; font-size: 13px; color: var(--muted); }
 .ask-link { margin-top: 12px; font-size: 15px; color: var(--muted); }
+/* «Запитай Chytai» on the homepage (Max, 2026-11-15, canvas variant A): a field to /ask, two answers others got. */
+.ask-block { display: grid; grid-template-columns: 1fr 1fr; gap: 64px; border-top: 1px solid var(--ink); padding-top: 28px; }
+.hero ~ #browse > .ask-block:first-child { margin-top: 56px; }
+.ask-block h2 { font: 400 34px/1.2 var(--serif); }
+.ask-block .lead { margin-top: 8px; font-size: 16px; color: var(--muted); }
+.ask-box { margin-top: 22px; display: flex; flex-direction: column; gap: 12px; background: transparent; border: 1px solid var(--under); border-radius: 14px; padding: 16px 16px 12px; }
+.ask-box:focus-within { border-color: var(--accent); }
+.ask-box textarea { border: 0; background: transparent; outline: 0; resize: none; padding: 0; color: inherit; font: 20px/1.4 var(--serif); min-height: 56px; }
+.ask-box textarea::placeholder { color: var(--muted); opacity: 1; }
+.ask-box .ask-row { display: flex; align-items: center; gap: 12px; }
+.ask-box .hint { font-size: 13px; color: var(--muted); }
+.ask-box .btn { margin-left: auto; }
+.ask-recent .kicker { font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); }
+.ask-recent .litem b { font-weight: 400; }
+.ask-recent .more { display: inline-block; margin-top: 14px; font-size: 15px; color: var(--accent); }
+@media (max-width: 760px) {
+  .ask-block { grid-template-columns: 1fr; gap: 24px; padding-top: 22px; }
+  .hero ~ #browse > .ask-block:first-child { margin-top: 36px; }
+  .ask-block h2 { font-size: 26px; }
+  .ask-block .lead { font-size: 14px; }
+  .ask-box { margin-top: 16px; padding: 14px 14px 10px; }
+  .ask-box .hint { display: none; }
+  .ask-recent .litem .stack { width: 100px; }
+  .ask-recent .litem b { font-size: 16px; }
+}
 @media (max-width: 760px) { .ask-sum { font-size: 16px; } .ask-other { gap: 12px; } }

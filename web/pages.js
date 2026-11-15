@@ -1381,7 +1381,25 @@ function readerBand() {
 // ---- the homepage «Що почитати» (Max, 2026-10-28: tried at /new, then «робимо її головною») ----
 // Shelves by what a reader is after, not by counters; the chips (?f=) narrow every shelf at once.
 // #live and #browse: search as you type replaces the shelves (app.js).
-function readPage({ user, f, filters, picks, finish, ua, short, free, wanted, genres, editorials, forYou, forWhy, fresh, club = [], ask = false, smart = false, examples = [] }) {
+// «Запитай Chytai» (Max, 2026-11-15, variant A of the design canvas, his words): /ask as its own block under the
+// search, a field that posts to /ask, and two answers others got (covers, the question, its topic).
+const askQ = (t) => ((t = t.replace(/\s+/g, " ").trim()).length > 70 ? `${t.slice(0, 67).replace(/\s+\S*$/, "")}…` : t);
+function askBlock(asks) {
+  const line = (a) => `<div class="litem"><a href="/ask/${attr(a.id)}" tabindex="-1">${stack(a.books.slice(0, 3))}</a><span><a href="/ask/${attr(a.id)}"><b>«${esc(askQ(a.text))}»</b></a>${a.topic ? `<span class="m">${esc(a.topic)}</span>` : ""}</span></div>`;
+  return `<section class="block ask-block" data-block="ask">
+  <div class="ask-main">
+    <h2>Запитай Chytai</h2>
+    <p class="lead">Розкажіть, що вам подобається, і ми щось порадимо.</p>
+    <form method="post" action="/ask" class="ask-box" id="ask-home">
+      <textarea name="text" rows="2" minlength="15" maxlength="1500" required placeholder="Напр.: щось як Мураками, але коротше" aria-label="Що вам подобається"></textarea>
+      <div class="ask-row"><span class="hint">Питання й відповідь побачать інші</span><button class="btn primary">Порадити книжку</button></div>
+    </form>
+  </div>
+  ${asks.length ? `<div class="ask-recent"><p class="kicker">Нещодавно питали</p>${asks.map(line).join("")}<a class="more" href="/ask">Усі поради →</a></div>` : ""}
+</section>
+<script>document.getElementById("ask-home").addEventListener("submit", (e) => { const b = e.target.querySelector("button"); b.disabled = true; b.textContent = "Добираю книжки…"; });</script>`;
+}
+function readPage({ user, f, filters, picks, finish, ua, short, free, wanted, genres, editorials, forYou, forWhy, fresh, club = [], ask = false, asks = [], smart = false, examples = [] }) {
   const q = (k) => (k ? `/?f=${k}` : "/");
   const chips = `<nav class="read-chips" data-block="chips">${[["", "Усе"], ...Object.entries(filters).map(([k, [n]]) => [k, n])].map(([k, n]) => (k === f ? `<span class="chip on">${n}</span>` : `<a class="chip" href="${attr(q(k))}">${n}</a>`)).join("")}</nav>`;
   const advice = (p) => `<article class="advice">
@@ -1398,13 +1416,14 @@ function readPage({ user, f, filters, picks, finish, ua, short, free, wanted, ge
   const row = (title, aside, items, extra) => (items.length ? `<section class="block read-row" data-block="${KEYS[title] || "row"}">${label(title, aside)}<div class="grid six">${items.map((x) => card(x.book || x, { avg: x.s?.avg ?? x.avg, extra: extra ? `<p class="meta pop-n">${extra(x)}</p>` : "" })).join("")}</div></section>` : "");
   const body = `
 <section class="hero">
-  <h1>Що почитати?</h1>
+  <h1>Я шукаю</h1>
   <form class="search-box big" action="/search" role="search">${smart ? bigBox("", false, examples) : plainBox()}<span class="enter">Enter ↵</span>${smart ? askIn : ""}</form>
-  ${smart ? askHint : ask ? `<p class="ask-link">Або <a class="text-link" href="/ask">напишіть, що вам сподобалось</a>, і порадимо книжки.</p>` : ""}
+  ${smart ? askHint : ask && f ? `<p class="ask-link">Або <a class="text-link" href="/ask">напишіть, що вам сподобалось</a>, і порадимо книжки.</p>` : ""}
   ${chips}
 </section>
 <div id="live" data-block="search"></div>
 <div id="browse">
+${ask && !f && !smart ? askBlock(asks) : ""}
 ${picks.length ? `<section class="block" data-block="picks">${label("Читачі радять", "оцінка 4,5+ і пару слів чому")}<div class="advices">${picks.map(advice).join("")}</div></section>` : ""}
 ${row("Для вас", forWhy, forYou)}
 ${!f && editorials.length ? `<section class="block editorials" data-block="editorials">${label("Добірки Chytai", `<a href="/lists">усі списки</a>`)}<div class="lgrid">${editorials.map(listCard).join("")}</div></section>` : ""}
