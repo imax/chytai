@@ -243,8 +243,9 @@ A flag only when Max asks for one, or when the change could break what readers u
   hidden: true })` and `findSimilar()` against duplicates (the Telegram thread uses source `tg`).
 - Книгарня «Є» (`yeRun`, source `ye`): reads book-ye.com.ua/calendar/ daily in the jobs process, only once meta
   `calendar:ye` is `on`. Dry run: `curl -s https://chytai.org.ua/agent/calendar-ye -H "$H"` (ask again for the
-  answer, `?again=1` reruns); switch: `POST /agent/calendar-ye {"on":true}`, only with Max's OK in the thread. The
-  cloud container gets 403 from Є, so look at its pages through the dry run.
+  answer, `?again=1` reruns); switch: `POST /agent/calendar-ye {"on":true}`, only with Max's OK in the thread.
+  Off: Є answers 403 to Fly's server too (dry run 2026-11-15), and the container is refused as well. We don't dress up
+  as a browser; Є's events come through its Telegram channel (`knyharnia_ye`, the `tg` collector) or by asking Є.
 
 ## Translation pairs
 
