@@ -449,8 +449,10 @@ function create(db, store, { notify = () => {}, bookua = null, search = null, ma
   // An event already kept that is the same one told elsewhere (Є's site and its Telegram channel): the same day
   // and city, and an author in common or half the title's words. → the row or null.
   const wordsOf = (t) => new Set(String(t || "").toLowerCase().match(/[\p{L}\d]{4,}/gu) || []);
+  const quoted = (t) => new Set([...String(t || "").matchAll(/«([^»]+)»/g)].flatMap((m) => [...wordsOf(m[1])].map((w) => w.slice(0, 5))));
   function findSimilar({ starts, city = "", title = "", authors = null }) {
     const mine = wordsOf(title);
+    const mineQ = quoted(title);
     const slugs = authors || linkText(store, title).authors;
     for (const r of db.prepare("SELECT * FROM cal_events WHERE starts = ?").all(starts).map(row)) {
       if (city && r.city && r.city !== city) continue;
@@ -458,6 +460,10 @@ function create(db, store, { notify = () => {}, bookua = null, search = null, ma
       const theirs = wordsOf(r.title);
       const common = [...mine].filter((w) => theirs.has(w)).length;
       if (common && common >= Math.min(mine.size, theirs.size) / 2) return r;
+      // The same book in «» in another case: «Двір розколотої гармонії» and «Двором розколотої гармонії».
+      const theirsQ = quoted(r.title);
+      const commonQ = [...mineQ].filter((w) => theirsQ.has(w)).length;
+      if (commonQ >= 2 && commonQ >= Math.min(mineQ.size, theirsQ.size) / 2) return r;
     }
     return null;
   }
