@@ -136,6 +136,26 @@ let rendition = null;
 let pdfView = null; // set instead of book/rendition when a PDF is open
 let current = null; // { path, title, author }
 
+// A saved place can point past the end of its text (the book's file changed, another edition): epub.js threw
+// inside display() and left the book blank (an error of 2026-11-14). Such a place now falls back to the start
+// of the paragraph it names.
+if (window.ePub?.CFI) {
+  const toRange = ePub.CFI.prototype.toRange;
+  ePub.CFI.prototype.toRange = function (doc, ignoreClass) {
+    try {
+      return toRange.call(this, doc, ignoreClass);
+    } catch {
+      const near = new ePub.CFI(this.toString());
+      for (const part of [near.path, near.start, near.end]) if (part?.terminal) part.terminal.offset = null;
+      try {
+        return toRange.call(near, doc, ignoreClass);
+      } catch {
+        return null;
+      }
+    }
+  };
+}
+
 // Books a publisher lets us show only in the app: while one is on screen, the app blocks screenshots
 // and screen recording (app/App.js: FLAG_SECURE on Android, a blank capture on iOS). Off on the home
 // screen, so a reader can still screenshot the library or a list.
