@@ -198,7 +198,7 @@ A flag only when Max asks for one, or when the change could break what readers u
   (h1 «Я шукаю»), and under the chips, on the unfiltered page, a block «Запитай Chytai» (`askBlock` in pages.js): a field
   that posts to /ask, and two answers others got with covers (`homeAsks` in server.js: of the 12 newest, at random).
   Fewer cover rows (Max, variant A of a second canvas, by the block taps): the unfiltered page has picks, Для вас,
-  Читалка (with «Безкоштовна класика →» to /publishers/chytai-free), Добірки, Дочитують, Обговорюють; «Українські
+  Добірки, Дочитують, Обговорюють, then Читалка (with «Безкоштовна класика →» to /publishers/chytai-free); «Українські
   автори», «Хочуть прочитати», «Безкоштовно» only under a chip. Taps per block: `taps` table, `page = '/'`.
   «Обговорюють зараз» is one line a topic (`clubRow(t, { tight: true })`), only topics active in the last 14 days
   (`club.lively`); none = no block.
