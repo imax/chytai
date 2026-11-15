@@ -538,6 +538,7 @@ const ADMIN_TABS = [
   ["Трафік", [["/admin/traffic", "Трафік"], ["/admin/threads", "Threads"]]],
   ["Читачі", [["/admin/readers", "Усі читачі"], ["/admin/retention", "Утримання"], ["/admin/reader", "Читалка"], ["/admin/comments", "Коментарі"], ["/admin/digest", "Дайджест"]]],
   ["Каталог", [["/admin/catalog", "Каталог"]], /^\/admin\/(catalog|shelves|overviews|dupes|translations|volumes|russian|ukfind|readeat|free|ai\/|book\/|reviews)|-trial$/],
+  ["Події", [["/admin/events", "Події"]]],
   ["Система", [["/admin/jobs", "Задачі"], ["/admin/speed", "Швидкість"]]],
 ];
 const adminNav = () => `<nav class="admin-nav">${ADMIN_TABS.map(([name, links, more]) => `<div class="admin-tab" data-paths="${links.map(([h]) => h).join(" ")}"${more ? ` data-more="${attr(more.source)}"` : ""}><a href="${links[0][0]}">${name}</a>${links.length > 1 ? `<span class="admin-sub">${links.map(([h, n]) => `<a href="${h}">${n}</a>`).join("")}</span>` : ""}</div>`).join("")}</nav>
@@ -3525,6 +3526,63 @@ ${shown.length ? shown.map(row).join("") : `<p class="muted">${all ? "Поки �
   return layout({ title: "Threads", body, user, path: "/admin", noindex: true });
 }
 
+// ---- /admin/events: the calendar of book events (Max 2026-11-15: its own page; where an event lacks its page) ----
+
+function eventsAdminPage({ user, rows, tg, saved }) {
+  const C = cal();
+  const n = (v) => String(v);
+  const kindOf = (e) => C.linkKind(C.sourceUrl(e)) || "none";
+  const KIND_NAME = { form: "форма запису", site: "сайт", social: "соцмережі", ye: "афіша «Є»", none: "без посилання" };
+  const count = (f) => rows.reduce((m, e) => ((m[f(e)] = (m[f(e)] || 0) + 1), m), {});
+  const byLink = count(kindOf);
+  const bySource = count((e) => e.source);
+  const SOURCE_NAME = { tg: "Telegram", chytomo: "Chytomo", seed: "вручну (seed)", reader: "читачі", ye: "сайт «Є»" };
+  const chan = (e) => (C.linkKind(e.url) === "tg" ? (e.url.match(/t\.me\/([^/]+)/) || [])[1] || "" : "");
+  // One row a post: a series of meetings from one post is one line with its dates.
+  const lines = (pick) => {
+    const g = new Map();
+    for (const e of rows.filter(pick)) {
+      const k = e.url || e.id;
+      if (!g.has(k)) g.set(k, { e, days: [], titles: new Set(), n: 0 });
+      const x = g.get(k);
+      x.n++;
+      x.titles.add(e.title);
+      const d = e.starts.slice(8, 10) + "." + e.starts.slice(5, 7);
+      if (!x.days.includes(d)) x.days.push(d);
+    }
+    return [...g.values()];
+  };
+  const when = (days) => `${days.slice(0, 3).join(", ")}${days.length > 3 ? ` і ще ${days.length - 3}` : ""}`;
+  const row = ({ e, days, titles }) => `<div class="cmt" id="ev-${attr(C.eventKey(e.id))}"><p><a href="${attr(C.eventPath(e))}">${esc(e.title)}</a>${titles.size > 1 ? `<span class="small muted"> і ще ${titles.size - 1} з цього поста: ${esc([...titles].slice(1, 4).join("; "))}</span>` : ""}</p>
+<p class="small muted">${[esc(when(days)), ...[e.city, e.place].filter(Boolean).map(esc), chan(e) ? `<a href="${attr(e.url)}" target="_blank" rel="noopener">@${esc(chan(e))}</a>` : "", C.sourceUrl(e) ? `<a href="${attr(C.sourceUrl(e))}" target="_blank" rel="noopener">${esc(KIND_NAME[kindOf(e)])}</a>` : ""].filter(Boolean).join(" · ")}</p>
+<form method="post" action="/admin/events/link" style="display:flex;gap:.5em;margin-top:.4em"><input type="hidden" name="id" value="${attr(e.id)}"><input name="link" type="url" value="${attr(e.link || "")}" placeholder="Сторінка події" style="flex:1;min-width:0"><button class="btn small" style="flex:none">Зберегти</button></form>${saved === e.id ? `<p class="small"><b>Збережено.</b></p>` : ""}</div>`;
+  const table = (list, empty) => (list.length ? list.map(row).join("") : `<p class="muted">${empty}</p>`);
+  const none = lines((e) => kindOf(e) === "none");
+  const ye = lines((e) => kindOf(e) === "ye");
+  const mine = lines((e) => e.link);
+  const total = (list) => list.reduce((s, g) => s + g.n, 0);
+  const leads = tg?.leads?.sites || [];
+  const top = (tg?.per || []).filter((c) => c.events > 0).sort((a, b) => b.events - a.events).slice(0, 12);
+  const body = `
+${pageHead({ title: "Події", sub: `${n(rows.length)} майбутніх подій на <a href="/calendar">/calendar</a>` })}
+<section class="block">${label("Посилання")}
+<p>${Object.keys(KIND_NAME).filter((k) => byLink[k]).map((k) => `${esc(KIND_NAME[k])}: <b>${byLink[k]}</b>`).join(" · ")}</p>
+<p class="small muted">Звідки: ${Object.entries(bySource).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${esc(SOURCE_NAME[k] || k)} ${v}`).join(" · ")}</p></section>
+<section class="block">${label(`Без посилання · ${total(none)}`)}
+<p class="small muted">Кнопки організатора на сторінці події немає. Вставте сторінку події, і кнопка з’явиться. Зустрічі з одного поста тут одним рядком і отримають посилання разом.</p>
+${table(none, "Усі події мають посилання.")}</section>
+<section class="block">${label(`Лише афіша «Є» · ${total(ye)}`)}
+<p class="small muted">Веде на афішу «Є» в місті, бо до сторінок подій на book-ye.com.ua робот не доходить.</p>
+${table(ye, "Немає.")}</section>
+${mine.length ? `<section class="block">${label(`Ваші посилання · ${total(mine)}`)}${table(mine, "")}</section>` : ""}
+<section class="block">${label("Звідки беремо")}
+<p class="small">Telegram: ${tg ? `${tg.account ? "наш акаунт" : "публічні сторінки"}, ${n((tg.channels || []).length)} каналів, події ${tg.events === "on" ? "збираються" : "вимкнено"}${tg.last?.at ? `, останній раз ${esc(tg.last.at.slice(11, 16))} UTC` : ""}` : "—"}.</p>
+${top.length ? `<p class="small muted">Найбільше подій: ${top.map((c) => `<a href="https://t.me/${attr(c.channel)}" target="_blank" rel="noopener">@${esc(c.channel)}</a> ${c.events}`).join(" · ")}</p>` : ""}
+${leads.length ? `<p class="small muted">Сайти, на які ведуть пости з подіями (можна читати напряму): ${leads.slice(0, 10).map((s) => `<a href="${attr(s.example)}" target="_blank" rel="noopener">${esc(s.host)}</a> ${s.n}`).join(" · ")}</p>` : ""}
+</section>`;
+  return layout({ title: "Події", body, user, path: "/admin", noindex: true });
+}
+
 // ---- /admin/publishers: the publishers' monthly reading reports (reports.js) ----
 
 function publisherReportsPage({ user, month, months, monthName, publishers, rows, sent, saved, tested }) {
@@ -3714,6 +3772,7 @@ module.exports = {
   asksPage, askTalkPage, setAskNav,
   commentsAdminPage,
   threadsAdminPage,
+  eventsAdminPage,
   clubPage, clubNewPage, clubTopicPage,
   publisherReportsPage,
   freeBooksPage,

@@ -2570,6 +2570,20 @@ app.post("/admin/publishers", owner, async (req, res) => {
   res.redirect(`/admin/publishers?month=${month}&saved=${encodeURIComponent(name)}`);
 });
 app.get("/admin/threads", owner, (req, res) => res.send(pages.threadsAdminPage({ user: req.user, rows: threadsFind.list(), last: threadsFind.last(), source: threadsFind.source(), all: req.query.all === "1" })));
+// The events calendar's own admin page (Max 2026-11-15): where an event lacks its page, and Max's link for it.
+app.get("/admin/events", owner, (req, res) => {
+  let tg = null;
+  try {
+    tg = tgFeed.status();
+  } catch {}
+  res.send(pages.eventsAdminPage({ user: req.user, rows: calendar.upcoming(), tg, saved: String(req.query.saved || "") }));
+});
+app.post("/admin/events/link", owner, (req, res) => {
+  const id = String(req.body?.id || "");
+  const n = calendar.setLink(id, String(req.body?.link || "").trim());
+  if (n == null) return res.status(400).send("Потрібне посилання на сторінку (не на Telegram).");
+  res.redirect(303, `/admin/events?saved=${encodeURIComponent(id)}#ev-${calendarLib.eventKey(id)}`);
+});
 app.post("/admin/threads/:id", owner, (req, res) => {
   threadsFind.mark(req.params.id, String(req.body?.state || ""));
   res.redirect(303, req.body?.all ? "/admin/threads?all=1" : "/admin/threads");

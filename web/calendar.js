@@ -253,6 +253,10 @@ function create(db, store, { notify = () => {}, bookua = null, search = null, ma
   try {
     db.exec("ALTER TABLE cal_events ADD COLUMN kind TEXT NOT NULL DEFAULT ''");
   } catch {}
+  // The organizer's page Max gave on /admin/events: wins over `url`, and no collector writes it.
+  try {
+    db.exec("ALTER TABLE cal_events ADD COLUMN link TEXT NOT NULL DEFAULT ''");
+  } catch {}
   const meta = (k) => db.prepare("SELECT value FROM meta WHERE key = ?").get(k)?.value || "";
   const setMeta = (k, v) => db.prepare("INSERT INTO meta (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(k, v);
   const row = (r) => r && { ...r, books: JSON.parse(r.books || "[]"), authors: JSON.parse(r.authors || "[]"), hidden: !!r.hidden };
@@ -501,6 +505,19 @@ function create(db, store, { notify = () => {}, bookua = null, search = null, ma
     db.prepare("UPDATE cal_events SET hidden = 1 WHERE id = ?").run(id);
     fresh();
   }
+  // Max's link for an event (/admin/events), '' takes it off. The other events from the same post (a series of
+  // meetings, a tour) get it too. → how many events, or null for a bad link.
+  function setLink(id, link) {
+    link = clean(link, 500);
+    if (link && (!/^https?:\/\/[^\s/]+\.[^\s]+$/i.test(link) || linkKind(link) === "tg")) return null;
+    const e = db.prepare("SELECT url FROM cal_events WHERE id = ?").get(id);
+    if (!e) return null;
+    const n = e.url
+      ? db.prepare("UPDATE cal_events SET link = ? WHERE url = ? AND (starts >= ? OR ends >= ?)").run(link, e.url, kyivDay(), kyivDay()).changes
+      : db.prepare("UPDATE cal_events SET link = ? WHERE id = ?").run(link, id).changes;
+    fresh();
+    return n;
+  }
   function cleanup() {
     const before = addDays(kyivDay(), -KEEP_DAYS);
     const r = db.prepare("DELETE FROM cal_events WHERE max(starts, ends) < ?").run(before);
@@ -636,7 +653,7 @@ function create(db, store, { notify = () => {}, bookua = null, search = null, ma
   };
   const unsubscribeAll = (reader) => db.prepare("DELETE FROM cal_subs WHERE reader = ?").run(reader).changes;
 
-  return { upsert, setKinds, add, one, byKey, findSimilar, hide, cleanup, seed, upcoming, forAuthor, forBook, cities, fillBooks, chytomoRun, yeRun, yeLast: () => yeLast, peek, fresh, meta, setMeta, subs, subscribed, subscribe, unsubscribeAll };
+  return { upsert, setKinds, add, one, byKey, findSimilar, hide, setLink, cleanup, seed, upcoming, forAuthor, forBook, cities, fillBooks, chytomoRun, yeRun, yeLast: () => yeLast, peek, fresh, meta, setMeta, subs, subscribed, subscribe, unsubscribeAll };
 }
 
 // «Четвер, 19 листопада» and, within a week, «завтра» / «через 3 дні».
@@ -758,8 +775,9 @@ function linkKind(url) {
 const YE_CITY = { Київ: "kyyiv", Львів: "lviv", "Івано-Франківськ": "ivano-frankivsk", Чернігів: "chernihiv", Ужгород: "uzhhorod" };
 const isYe = (e) => /Книгарн[яіи]\s+[«"]?Є\b|[«"]Є[»"]/.test(`${e?.place || ""} ${e?.title || ""} ${e?.by || ""}`);
 // The link readers see. Never a Telegram post (Max 2026-11-15: it tells we read channels, and the organizer has a page
-// somewhere): an event at «Є» gets its city's afisha there, the rest no link.
+// somewhere): Max's own link first (/admin/events), an event at «Є» gets its city's afisha there, the rest no link.
 function sourceUrl(e) {
+  if (e?.link) return e.link;
   if (linkKind(e?.url) !== "tg") return e?.url || "";
   const city = YE_CITY[e?.city];
   return city && isYe(e) ? `https://book-ye.com.ua/calendar/${city}/` : "";
