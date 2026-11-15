@@ -1435,7 +1435,7 @@ ${row("Для вас", forWhy, forYou)}
 ${!f ? readerBand() : ""}
 ${!f && editorials.length ? `<section class="block editorials" data-block="editorials">${label("Добірки Chytai", `<a href="/lists">усі списки</a>`)}<div class="lgrid">${editorials.map(listCard).join("")}</div></section>` : ""}
 ${row("Дочитують до кінця", "ніхто не покинув", finish, (w) => `дочитали ${w.s.finished}`)}
-${!f && club.length ? `<section class="block" data-block="club">${label("Обговорюють зараз", `<a href="/club">Клуб Chytai</a>`)}<div class="club-topics">${club.map((t) => clubRow(t)).join("")}</div></section>` : ""}
+${!f && club.length ? `<section class="block" data-block="club">${label("Обговорюють зараз", `<a href="/club">Клуб Chytai</a>`)}<div class="club-topics">${club.map((t) => clubRow(t, { tight: true })).join("")}</div></section>` : ""}
 ${f ? row("Українські автори", "", ua) : ""}
 ${f ? row("Найбільше хочуть прочитати", "", wanted, (x) => `${x.n} ${plural(x.n, "хоче", "хочуть", "хочуть")}`) : ""}
 ${f ? row("Безкоштовно", "класика в Читалці", free.map((b) => ({ book: b }))) : ""}
@@ -3145,7 +3145,13 @@ function clubText(text, links = {}, { tags = true } = {}) {
 }
 const answers = (n) => count(n, "відповідь", "відповіді", "відповідей");
 // A talk in a list: its title (with «спойлери» and the book), who started it, how many answers, when the last.
-function clubRow(t, { book = true } = {}) {
+// `tight` (the homepage, Max 2026-11-15, variant A of the canvas): one line, the title and on the right how many answers.
+function clubRow(t, { book = true, tight = false } = {}) {
+  if (tight) {
+    const n = t.replies ? answers(t.replies) : when({ updated: t.active });
+    const m = t.unread ? `<span class="news">${t.unread} ${plural(t.unread, "нова", "нові", "нових")}</span> · ${n}` : t.isNew ? `<span class="news">нова тема</span>` : n;
+    return `<a class="ctopic tight${t.unread || t.isNew ? " unread" : ""}" href="${attr(t.href)}${t.unread ? "#unread" : ""}"><span class="t"><b>${esc(t.title)}</b>${t.spoiler ? ` <span class="tag spoil-tag">спойлери</span>` : ""}</span><span class="m">${m}</span></a>`;
+  }
   const meta = [t.kind === "list" ? "Список" : "", t.official ? "Chytai" : t.reader ? esc(t.reader.name) : esc(t.by || ""), t.replies ? (t.kind === "list" ? count(t.replies, "коментар", "коментарі", "коментарів") : answers(t.replies)) : "", when({ updated: t.active })].filter(Boolean).join(" · ");
   const news = t.unread ? `<span class="news">${t.unread} ${plural(t.unread, "нова", "нові", "нових")}</span> · ` : t.isNew ? `<span class="news">нова тема</span> · ` : "";
   return `<a class="ctopic${t.official ? " pinned" : ""}${news ? " unread" : ""}" href="${attr(t.href)}${t.unread ? "#unread" : ""}"><span class="t"><b>${esc(t.title)}</b>${t.spoiler ? ` <span class="tag spoil-tag">спойлери</span>` : ""}</span>${book && t.book ? `<span class="bk">${cover(t.book, "xs")}<span>${esc(t.book.title)}</span></span>` : ""}<span class="m">${news}${meta}</span></a>`;

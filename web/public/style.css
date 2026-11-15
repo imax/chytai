@@ -1258,6 +1258,10 @@ aside .side-lists + .label, aside p + .label, aside dialog + .label { margin-top
 .side-club { margin-top: 40px; }
 .read-row + [data-block="club"], [data-block="club"].block .club-topics { max-width: 820px; }
 .ctopic .news { color: var(--accent); font-weight: 600; }
+.ctopic.tight { align-items: baseline; padding: 12px 0; }
+.ctopic.tight .t b { font-size: 17px; }
+.ctopic.tight .m { grid-column: 2; grid-row: 1; white-space: nowrap; }
+@media (max-width: 760px) { .ctopic.tight { grid-template-columns: minmax(0, 1fr) auto; gap: 4px 14px; } }
 .ctopic.unread .t b::after { content: ""; display: inline-block; width: 8px; height: 8px; margin-left: 8px; border-radius: 50%; background: var(--accent); vertical-align: 3px; }
 .cmt.new { box-shadow: inset 3px 0 0 var(--accent); padding-left: 14px; }
 #unread { display: block; scroll-margin-top: 80px; }

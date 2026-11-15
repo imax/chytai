@@ -217,8 +217,10 @@ class Club {
       .filter((t) => t.reader);
   }
   // The homepage's «Обговорюють зараз»: the liveliest readers' topics; the owner's pinned ones stay on /club (Max, 2026-11-01).
-  lively(limit = 3) {
-    return this.db.prepare("SELECT * FROM club_topics WHERE official = 0 ORDER BY active DESC LIMIT ?").all(limit).map((r) => this.view(r)).filter(Boolean);
+  // Only topics with something said in the last two weeks; none = no block (Max, 2026-11-15).
+  lively(limit = 3, days = 14) {
+    const since = new Date(Date.now() - days * 864e5).toISOString();
+    return this.db.prepare("SELECT * FROM club_topics WHERE official = 0 AND active > ? ORDER BY active DESC LIMIT ?").all(since, limit).map((r) => this.view(r)).filter(Boolean);
   }
   // A reader's page: the topics they started.
   of(readerId, limit = 10) {
