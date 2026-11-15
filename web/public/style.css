@@ -1479,6 +1479,8 @@ aside .side-lists + .label, aside p + .label, aside dialog + .label { margin-top
 .cal-bk:hover .cal-bt { color: var(--accent); }
 .cal-all { margin-top: 36px; font-size: 15px; }
 .cal-about { color: var(--muted); margin-top: 56px; padding-top: 18px; border-top: 1px solid var(--rule); }
+.cal-ics { color: var(--muted); margin-top: 6px; }
+.cal-subbed { flex-basis: 100%; margin: 0; }
 .cal-mini { gap: 18px; padding: 14px 0; }
 .cal-mini h3 { font-size: 19px; }
 .cal-mini .meta { margin-top: 2px; }

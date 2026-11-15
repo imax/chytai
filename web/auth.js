@@ -126,6 +126,9 @@ class Auth {
     this.db.tx(() => {
       for (const t of ["entries", "subscriptions", "sessions", "follows", "follow_mails", "visits", "digest_log", "want_mail", "reader_quotes"]) this.db.prepare(`DELETE FROM ${t} WHERE reader = ?`).run(id);
       for (const t of ["follows", "follow_mails"]) this.db.prepare(`DELETE FROM ${t} WHERE target = ?`).run(id);
+      try {
+        this.db.prepare("DELETE FROM cal_subs WHERE reader = ?").run(id); // calendar.js makes it
+      } catch {}
       this.db.prepare("DELETE FROM readers WHERE id = ?").run(id);
     });
     for (const [h, r] of this.cache) if (r === id) this.cache.delete(h);

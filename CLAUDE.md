@@ -253,9 +253,16 @@ A flag only when Max asks for one, or when the change could break what readers u
   (`shelfBooksFor`); one event in several cities or days (same title without its city, same link or post) is one row
   with a line per stop (`calendar.tours`), but under a city chip each stop is its own row; `?q=` searches title, words,
   place, authors' names and books; «Звідки події» only on the whole list.
-- «Підписатися» (Max 2026-11-15): `/calendar.ics` is the list as an iCalendar feed with the same `?city=` / `?q=`;
-  «Мої автори» by `?mine=<reader>.<key>` (`calKey`, HMAC with the reader secret; a calendar app has no cookie). The
-  button offers webcal:// (Apple), Google Calendar's `?cid=`, and the plain address.
+- «Підписатися» by e-mail (Max 2026-11-15, like a publisher's): the button keeps the page's choice (kind, city,
+  «Мої автори», words; `calendar.subKey`) in table `cal_subs` (10 a reader; `POST /calendar/subscribe`, guests sign in
+  first) and switches the Friday letter on. No letter of its own (no extra mail): the digest's «Книжкові події»
+  section (`calForLetter` in server.js) has what the subscriptions pick (`calPick`, the same filter as the page and
+  the .ics) starting within 9 days, plus later ones added since the last letter, 3 rows (Max: «не більше трьох»), a tour one row. Links go
+  through `/calendar/go/<id>` (letters link only to our domain); «Відписатися від подій» =
+  `/calendar/unsubscribe/<reader>/<digest token>`; /settings/mail lists them. Try: `/digest/preview` as the owner.
+- In a phone's calendar (a line at the page's foot): `/calendar.ics` is the list as an iCalendar feed with the same
+  `?kind=` / `?city=` / `?q=`; «Мої автори» by `?mine=<reader>.<key>` (`calKey`, HMAC with the reader secret; a
+  calendar app has no cookie). Links: webcal:// (Apple), Google Calendar's `?cid=`, and the plain address.
 - Table `cal_events` (id `{source}:{key}`, starts/ends `YYYY-MM-DD` Kyiv, time `HH:MM`, city as shown, «Онлайн»
   for online; books/authors JSON found by name, no AI: `linkText`, a name's two words side by side, «Олександрою … книгарні» ≠ Олександр Книга; never a Russian edition, `findBook`). Gone 30 days after it ends (`cleanup`).
 - Sources: `web/seed/calendar.json` (kept in step at every start: festivals by a thread or Max); readers via
