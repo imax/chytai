@@ -3426,7 +3426,7 @@ function threadsAdminPage({ user, rows, last, source, all }) {
 <p class="txt">${esc(r.text).replace(/\n/g, "<br>")}</p>
 <p class="small" style="display:flex;gap:1em;flex-wrap:wrap;margin-top:6px"><a href="${attr(r.url)}" target="_blank" rel="noopener">Відкрити в Threads</a><a href="/ask?text=${attr(encodeURIComponent(r.text.slice(0, 1500)))}" target="_blank">Спитати в /ask</a>${r.state ? mark(r, "", "Повернути") : `${mark(r, "done", "Відповів")}${mark(r, "skip", "Пропустити")}`}</p>${r.state ? form(r, "") : form(r, "done") + form(r, "skip")}</div>`;
   const status = !source
-    ? "Пошук не підключено: немає ключа THREADS_TOKEN чи SOCIALFETCH_KEY."
+    ? "Пошук не підключено: немає ключа THREADS_TOKEN."
     : last
       ? `Пошук ${ago(last.at)}: переглянуто ${last.seen}, підходять ${last.kept}, нових ${last.added}.${last.errors?.length ? ` Помилки: ${esc(last.errors.join("; "))}` : ""}`
       : "Пошук ще не запускався.";

@@ -233,8 +233,9 @@ A flag only when Max asks for one, or when the change could break what readers u
 - Max looks at fresh Ukrainian Threads posts that ask for a book and answers some himself (Max, 2026-11-12: no
   auto-replies, nothing posted from here, no AI). The jobs process searches `QUERIES` every 4 h, keeps what
   `wanted()` passes (Ukrainian letters, a book word, a request), 30 days. «Спитати в /ask» opens `/ask?text=…`.
-- Source = whichever Fly secret is set: `THREADS_TOKEN` (Meta's keyword search; other people's posts only after
-  App Review) or `SOCIALFETCH_KEY` (socialfetch.dev, 1 credit a query: 6 queries × 6 runs a day). None = the page says so.
+- Source = Fly secret `THREADS_TOKEN` (Meta's keyword search; other people's posts only after App Review). None =
+  the job only prunes, the page says so. SocialFetch was taken out of the code on 2026-11-15 (out of credits; Max
+  searches from his own account): don't bring it back.
 - `meta threads:last` has `per` (posts each query returned: drop a phrase that brings nothing). Try the filter: `node -e 'console.log(require("./web/threadsfind").wanted("Порадьте книжку?"))'`.
 
 ## «Книжкові події», /calendar (`web/calendar.js`)

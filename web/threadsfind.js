@@ -3,12 +3,12 @@
 // очима, а комусь відповідати, комусь ні»). Nothing is posted to Threads from here, no AI is called.
 //
 // Where the posts come from: Threads' own keyword search sees other people's posts only after Meta's App Review,
-// so a source is whichever key is set: THREADS_TOKEN (Meta's API, after App Review) or SOCIALFETCH_KEY
-// (socialfetch.dev, a paid search, 1 credit per query). The jobs process searches every few hours; a post is kept
-// when it is Ukrainian and asks for a book (`wanted()`), at most 30 days, then it goes.
+// so the only source is THREADS_TOKEN (Meta's API, after App Review). SocialFetch (socialfetch.dev, paid) was taken
+// out on 2026-11-15 (Max: out of credits, he searches from his own account). With no key the job only prunes; a post
+// is kept when it is Ukrainian and asks for a book (`wanted()`), at most 30 days, then it goes.
 const DAY = 86400 * 1000;
 const KEEP_DAYS = 30;
-// Phrases people use to ask; each is one query (one credit on SocialFetch) per run.
+// Phrases people use to ask; each is one query per run.
 const QUERIES = ["порадьте книжку", "порадьте книгу", "що почитати", "шукаю книжку", "підкажіть книжку", "книжку по вайбу"];
 
 const SCHEMA = `CREATE TABLE IF NOT EXISTS threads_finds (
@@ -47,19 +47,11 @@ const sources = {
       return (j.data || []).filter((x) => !x.is_reply).map((x) => ({ id: `t${x.id}`, url: x.permalink || "", author: x.username || "", text: x.text || "", posted: x.timestamp || "", replies: null }));
     },
   },
-  socialfetch: {
-    on: () => !!process.env.SOCIALFETCH_KEY,
-    async search(q, since) {
-      const p = new URLSearchParams({ query: q, startDate: new Date(since).toISOString().slice(0, 10) });
-      const j = await getJson(`https://api.socialfetch.dev/v1/threads/search?${p}`, { "x-api-key": process.env.SOCIALFETCH_KEY });
-      return (j.data?.posts || []).map((x) => ({ id: `t${x.id}`, url: x.url || "", author: x.author?.handle || "", text: x.text || "", posted: x.createdAt || "", replies: x.metrics?.replies ?? null }));
-    },
-  },
 };
 
 function create(db) {
   db.exec(SCHEMA);
-  const source = () => (sources.meta.on() ? "meta" : sources.socialfetch.on() ? "socialfetch" : "");
+  const source = () => (sources.meta.on() ? "meta" : "");
   return {
     QUERIES,
     wanted,
