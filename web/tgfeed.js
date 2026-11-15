@@ -159,8 +159,16 @@ const EVENT_SCHEMA = {
   additionalProperties: false,
 };
 
+// A payment or a call is not the event's page (we sell no tickets): the post is.
+const NOT_A_PAGE = /^https?:\/\/([^/]+\.)?(wayforpay\.com|monobank\.ua|mono\.bank|privat24\.ua|meet\.google\.com|zoom\.us)([/:?#]|$)/i;
+
 function create(db, { calendar, apiKey = process.env.ANTHROPIC_API_KEY || "", client: ai = null, log = console.log } = {}) {
   db.exec(SCHEMA);
+  try {
+    // Events made before NOT_A_PAGE linked to payments: point them at their post.
+    for (const r of db.prepare("SELECT id, url FROM cal_events WHERE source = 'tg'").all())
+      if (NOT_A_PAGE.test(r.url)) db.prepare("UPDATE cal_events SET url = ? WHERE id = ?").run(`https://t.me/${r.id.slice(3).replace(/-\d+$/, "")}`, r.id);
+  } catch {}
   const meta = (k) => db.prepare("SELECT value FROM meta WHERE key = ?").get(k)?.value || "";
   const setMeta = (k, v) => db.prepare("INSERT INTO meta (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(k, String(v));
   const anthropic = () => ai || (apiKey ? (ai = new (require("@anthropic-ai/sdk"))({ apiKey })) : null);
@@ -300,7 +308,7 @@ function create(db, { calendar, apiKey = process.env.ANTHROPIC_API_KEY || "", cl
     const raw = res.content.map((b) => b.text || "").join("");
     const j = JSON.parse(raw.slice(raw.indexOf("{"), raw.lastIndexOf("}") + 1));
     const today = kyivDay();
-    return (j.events || []).filter((e) => /^\d{4}-\d\d-\d\d$/.test(e.starts) && (e.ends || e.starts) >= today && e.title).map(({ books, ...e }) => ({ ...e, named: (books || []).slice(0, 4), url: links.includes(e.url) ? e.url : p.page || `https://t.me/${p.channel}/${p.id}` }));
+    return (j.events || []).filter((e) => /^\d{4}-\d\d-\d\d$/.test(e.starts) && (e.ends || e.starts) >= today && e.title).map(({ books, ...e }) => ({ ...e, named: (books || []).slice(0, 4), url: links.includes(e.url) && !NOT_A_PAGE.test(e.url) ? e.url : p.page || `https://t.me/${p.channel}/${p.id}` }));
   }
 
   // The events in posts not looked at yet (dry: the posts of the last `days` days, nothing kept, at most `max`
