@@ -16,24 +16,31 @@ const AT_ONCE = 3;
 
 const PROMPT = `You make a reading glossary for a Ukrainian classic that school students aged 12–16 read today, often for the first time and without help. The reader taps an underlined word and sees your explanation, so each one has to make the sentence clear at a glance.
 
-Read the passage and list every word or short expression such a reader would probably not understand:
+Read the passage and list the words and short expressions that would actually stop such a reader, so the sentence makes no sense without help:
 - archaic and obsolete words and Church Slavonic ones;
 - dialect words and old spellings or forms that hide a familiar word (оддалеки → здалеку, ції → цієї, теє → те, ізнов → знову);
 - historical things a teenager does not know: clothes, ranks and offices, weapons, money, measures, customs, church words;
-- a common word used here in an old or unusual sense (по́лудень meaning a midday meal, not noon): give the sense it has here.
+- a word whose usual modern meaning would mislead here (по́лудень meaning a midday meal, not noon), when it has that old sense throughout the book.
 
-Leave out words a teenager knows (козак, гетьман, шабля, бандура, кобзар, хата, степ), proper names of people and places, and anything that is clear already.
+Leave out:
+- words a teenager knows or easily guesses from the sentence (козак, гетьман, шабля, бандура, кобзар, хата, степ, любо, гай, віти, травиця, мов, хіба, зараз);
+- prepositions, conjunctions, particles and pronouns, unless their form itself is old or dialect (од, ізнов, тії, теє go in);
+- names of people, places and peoples, nicknames included;
+- the meaning an ordinary word has in one sentence only (an idiom of the moment): the reader sees the same explanation wherever the word appears.
+
+When in doubt, leave it out: a page full of underlines is no help. A passage this long usually has 15 to 40 such items; never pad the list. A word that is offensive today gets «(застаріле, образливе)» after its meaning.
 
 Answer with one line per item and nothing else: the word or expression exactly as written in the passage (same case and ending, without stress marks), a tab, then the explanation in modern Ukrainian: a plain synonym, or at most ten words for a thing that needs explaining. No full stop at the end, no examples, no comments. An expression may be two or three words when only together they mean something. List each form once.`;
 
 // The key a form is looked up by: lower case, no stress marks, one kind of apostrophe. The page does the same.
-const key = (s) => String(s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").normalize("NFC").toLowerCase().replace(/['’`ʼ]/g, "ʼ").replace(/\s+/g, " ").trim();
+// Only the stress marks go: й and ї carry marks of their own in NFD.
+const key = (s) => String(s || "").normalize("NFD").replace(/[\u0300\u0301]/g, "").normalize("NFC").toLowerCase().replace(/['’`ʼ]/g, "ʼ").replace(/\s+/g, " ").trim();
 
 // The book's text in pieces of about CHUNK characters, cut between sentences.
 function chunks(chapters) {
   const out = [];
   for (const ch of chapters) {
-    const text = ch.normalize("NFD").replace(/́/g, "").normalize("NFC");
+    const text = ch.normalize("NFD").replace(/\u0301/g, "").normalize("NFC");
     let at = 0;
     while (at < text.length) {
       let end = Math.min(text.length, at + CHUNK);

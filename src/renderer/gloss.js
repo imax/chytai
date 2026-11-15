@@ -3,7 +3,8 @@
 // The underline is a CSS Custom Highlight: the book's DOM is not touched, so positions, notes and selections stay
 // as they were. Browsers without it (iOS before 17.2) get no underline and no card. Off in «Аа» → «Словничок».
 window.Gloss = (() => {
-  const key = (s) => String(s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").normalize("NFC").toLowerCase().replace(/['’`ʼ]/g, "ʼ");
+  // Only the stress marks go: й and ї carry marks of their own in NFD.
+  const key = (s) => String(s || "").normalize("NFD").replace(/[\u0300\u0301]/g, "").normalize("NFC").toLowerCase().replace(/['’`ʼ]/g, "ʼ");
   // A word: letters, stress marks, apostrophes and hyphens inside it.
   const WORD = /[\p{L}\p{M}]+(?:['’`ʼ-][\p{L}\p{M}]+)*/gu;
   let forms = null; // key -> meaning, for the book on screen
@@ -56,6 +57,7 @@ window.Gloss = (() => {
     if (!enabled() || !win.CSS?.highlights || !win.Highlight) return;
     style(contents);
     const found = [];
+    const seen = new Set(); // a word is underlined the first time in a chapter only: «од» 187 times was a page of dots
     const walk = doc.createTreeWalker(doc.body, NodeFilter.SHOW_TEXT);
     for (let node = walk.nextNode(); node; node = walk.nextNode()) {
       const text = node.data;
@@ -69,13 +71,16 @@ window.Gloss = (() => {
           const last = words[i + n - 1];
           const span = text.slice(first.index, last.index + last[0].length);
           if (n > 1 && /[^\s\p{L}\p{M}'’`ʼ-]/u.test(span)) continue; // only spaces between the words
-          const gloss = forms[key(span).replace(/\s+/g, " ")];
+          const k = key(span).replace(/\s+/g, " ");
+          const gloss = forms[k];
           if (!gloss) continue;
+          took = n;
+          if (seen.has(k)) continue;
+          seen.add(k);
           const range = doc.createRange();
           range.setStart(node, first.index);
           range.setEnd(node, last.index + last[0].length);
-          found.push({ range, text: span.replace(/́/g, ""), gloss });
-          took = n;
+          found.push({ range, text: span.replace(/\u0301/g, ""), gloss });
         }
         i += took || 1;
       }
