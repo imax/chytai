@@ -525,6 +525,10 @@ class Advice {
     this.pump();
   }
   // Overviews made with an older prompt, redone with the current one; runs once at start, resumes after a restart.
+  // Only a row that is its family's home: a redo is kept under the home (overview()), so an old row on another
+  // edition never changed and was redone at every start of the jobs process (every 2 h): 6 Opus overviews each time,
+  // ~1,100 a week, most of the API bill (2026-11-15).
+  // A Russian book gets no overview at all, so its old row is left as it is.
   redo() {
     if (!this.client) return 0;
     const cyr = (id) => /[а-яіїєґ]/i.test(this.store.book(id)?.title || "");
@@ -532,6 +536,7 @@ class Advice {
       .prepare("SELECT book, prompt, text, length(text) AS len FROM overview ORDER BY created")
       .all()
       .filter((r) => (r.prompt < PROMPT_VERSION && (r.prompt < REDO_ALL_BELOW || r.len < 120 || (r.prompt < REDO_CYR_BELOW && this.family(r.book).some(cyr)))) || ukShare(r.text) < UK_SHARE)
+      .filter((r) => this.homeOf(r.book) === r.book && !(this.store.book(r.book) && isRussian(this.store.book(r.book))))
       .map((r) => r.book);
     for (const id of ids) if (!this.queue.has(id)) this.queue.set(id, { fresh: true });
     this.pump();
