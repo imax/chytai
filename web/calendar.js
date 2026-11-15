@@ -154,15 +154,15 @@ const privateIp = (ip) =>
   net.isIPv4(ip)
     ? /^(10\.|127\.|0\.|169\.254\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\.)/.test(ip)
     : /^(::1?$|f[cd]|fe[89ab]|::ffff:(10|127|192\.168|169\.254)\.)/i.test(ip);
-async function fetchPage(url, { timeout = 8000 } = {}) {
+async function fetchPage(url, { timeout = 8000, accept = "text/html", max = 1024 * 1024 } = {}) {
   const u = new URL(url);
   if (!/^https?:$/.test(u.protocol) || u.username || u.password || (u.port && !["80", "443"].includes(u.port))) throw new Error("bad url");
   const host = u.hostname.replace(/^\[|\]$/g, "");
   if (/\.(internal|local|localhost)$|^localhost$/i.test(host)) throw new Error("bad host");
   const addrs = net.isIP(host) ? [{ address: host }] : await dns.lookup(host, { all: true });
   if (!addrs.length || addrs.some((a) => privateIp(a.address))) throw new Error("bad host");
-  const r = await fetch(u, { headers: { "User-Agent": UA, Accept: "text/html", "Accept-Language": "uk" }, redirect: "manual", signal: AbortSignal.timeout(timeout) });
-  if (r.status >= 300 && r.status < 400 && r.headers.get("location")) return fetchPage(new URL(r.headers.get("location"), u).href, { timeout });
+  const r = await fetch(u, { headers: { "User-Agent": UA, Accept: accept, "Accept-Language": "uk" }, redirect: "manual", signal: AbortSignal.timeout(timeout) });
+  if (r.status >= 300 && r.status < 400 && r.headers.get("location")) return fetchPage(new URL(r.headers.get("location"), u).href, { timeout, accept, max });
   if (!r.ok) throw new Error(`${u.hostname}: ${r.status}`);
   const reader = r.body.getReader();
   const chunks = [];
@@ -171,7 +171,7 @@ async function fetchPage(url, { timeout = 8000 } = {}) {
     const { done, value } = await reader.read();
     if (done) break;
     size += value.length;
-    if (size > 1024 * 1024) {
+    if (size > max) {
       reader.cancel().catch(() => {});
       break;
     }
@@ -358,7 +358,7 @@ function create(db, store, { notify = () => {}, bookua = null, search = null, ma
     // Once: the collectors' events get their names again by the stricter linkText (2026-11-15, «Олександр Книга»),
     // and lose a Russian edition they linked.
     if (!dry && !meta("calendar:relink2")) {
-      for (const e of db.prepare("SELECT * FROM cal_events WHERE source IN ('tg', 'chytomo', 'ye') AND (starts >= ? OR ends >= ?)").all(day, day).map(row)) {
+      for (const e of db.prepare("SELECT * FROM cal_events WHERE source IN ('tg', 'chytomo', 'ye', 'eventmate') AND (starts >= ? OR ends >= ?)").all(day, day).map(row)) {
         const links = linkText(store, `${e.title} ${e.sub || ""}`);
         for (const id of e.books) if (!links.books.includes(id) && !isRussian(store.book?.(id, { edited: false, borrow: false }) || {})) links.books.push(id);
         for (const id of links.books) for (const a of store.authors.list) if (a.ids.includes(id) && !links.authors.includes(a.slug)) links.authors.push(a.slug);
@@ -468,6 +468,83 @@ function create(db, store, { notify = () => {}, bookua = null, search = null, ma
     }
     if (!dry) setMeta("chytomo:seen", JSON.stringify([...seen].slice(-300)));
     if (!dry) setMeta("chytomo:last", JSON.stringify({ ...out, made: out.made.length, skipped: out.skipped.length }));
+    return out;
+  }
+
+  // ---- Eventmate (eventmate.app, Max 2026-11-15: «не вистачає sources») ----
+  // An events app whose pages are open (robots: all; «Місто читає», online clubs). Its sitemaps list every event in
+  // six languages; the Ukrainian address whose name looks bookish (`EM_BOOKISH`, a transliteration) and was not seen
+  // yet is read once (≤250 pages a run, 1 s apart). Its date is in the page (`startDate`): a past one costs nothing,
+  // an upcoming one goes to `extract` (the Telegram collector's Haiku, ≤ max a run), source `eventmate`, linked to its
+  // page there; the same event told elsewhere (findSimilar) is left out. dry: nothing kept.
+  const EVENTMATE = "https://eventmate.app";
+  const EM_BOOKISH = /knyh|knyz|knig|kniz|book|klub|club|cita|chyt|liter|poez|poet|avtor|prezent|roman|vidavn|manga|manh/i;
+  async function eventmateRun({ extract, dry = false, max = 20, pages = 250 } = {}) {
+    const out = { at: new Date().toISOString(), dry, candidates: 0, read: 0, past: 0, asked: 0, made: [], dupes: [], errors: [] };
+    if (!extract) return out;
+    const today = kyivDay();
+    let seen = {};
+    try {
+      seen = JSON.parse(meta("eventmate:seen") || "{}");
+    } catch {}
+    const index = await fetchPage(`${EVENTMATE}/sitemap.xml`, { accept: "application/xml, text/xml" });
+    const maps = [...index.html.matchAll(/<loc>(https:\/\/eventmate\.app\/sitemap\/events\/\d+\.xml)<\/loc>/g)].map((m) => m[1]);
+    const slugs = [];
+    for (const m of maps) {
+      try {
+        const x = await fetchPage(m, { timeout: 15000, accept: "application/xml, text/xml", max: 4 * 1024 * 1024 });
+        for (const [, slug] of x.html.matchAll(/<loc>https:\/\/eventmate\.app\/events\/share\/([a-z0-9-]+)\?locale=uk<\/loc>/g)) if (EM_BOOKISH.test(slug) && !seen[slug]) slugs.push(slug);
+      } catch (e) {
+        out.errors.push(`${m}: ${e.message}`);
+      }
+    }
+    out.candidates = slugs.length;
+    // Newest last in the sitemaps: read from the end.
+    for (const slug of slugs.reverse()) {
+      if (out.read >= pages || out.asked >= max) break;
+      await sleep(1000);
+      const url = `${EVENTMATE}/events/share/${slug}`;
+      let page;
+      try {
+        page = await fetchPage(`${url}?locale=uk`);
+      } catch (e) {
+        out.errors.push(`${slug}: ${e.message}`);
+        continue;
+      }
+      out.read++;
+      seen[slug] = today;
+      const html = page.html;
+      const starts = /startDate="(\d{4}-\d\d-\d\d)"/.exec(html)?.[1] || "";
+      const ends = /endDate="(\d{4}-\d\d-\d\d)"/.exec(html)?.[1] || "";
+      if (!starts || (ends > starts ? ends : starts) < today) {
+        out.past++;
+        continue;
+      }
+      const time = /startTime="(\d\d:\d\d)"/.exec(html)?.[1] || "";
+      const where = unent(/\blocation="([^"]*)"/.exec(html)?.[1] || "");
+      const title = metaOf(html, "og:title");
+      const text = metaOf(html, "og:description") || metaOf(html, "description");
+      out.asked++;
+      let found;
+      try {
+        found = await extract(`${title}\nДата: ${starts}${ends && ends !== starts ? ` – ${ends}` : ""}${time ? `, ${time}` : ""}\nМісце: ${where}\n\n${text.slice(0, 4000)}`, url);
+      } catch (e) {
+        out.errors.push(`${slug}: ${e.message}`);
+        continue;
+      }
+      found.forEach((e, i) => {
+        const ev = { source: "eventmate", key: `${slug.slice(0, 80)}${i ? `-${i}` : ""}`, ...e, url };
+        const twin = findSimilar({ starts: e.starts, city: e.city, title: e.title });
+        if (twin && twin.id !== `eventmate:${ev.key}`) return out.dupes.push({ title: e.title, twin: twin.id });
+        if (!dry) upsert(ev);
+        out.made.push({ title: e.title, starts: e.starts, city: e.city, named: e.named });
+      });
+    }
+    // Seen addresses are kept half a year (an event's page doesn't come back).
+    const old = addDays(today, -180);
+    for (const [k, d] of Object.entries(seen)) if (d < old) delete seen[k];
+    if (!dry) setMeta("eventmate:seen", JSON.stringify(seen));
+    if (!dry) setMeta("eventmate:last", JSON.stringify({ ...out, made: out.made.length }));
     return out;
   }
 
@@ -664,7 +741,7 @@ function create(db, store, { notify = () => {}, bookua = null, search = null, ma
   };
   const unsubscribeAll = (reader) => db.prepare("DELETE FROM cal_subs WHERE reader = ?").run(reader).changes;
 
-  return { upsert, setKinds, add, one, byKey, findSimilar, hide, setLink, cleanup, seed, upcoming, forAuthor, forBook, cities, fillBooks, chytomoRun, yeRun, yeLast: () => yeLast, peek, fresh, meta, setMeta, subs, subscribed, subscribe, unsubscribeAll };
+  return { upsert, setKinds, add, one, byKey, findSimilar, hide, setLink, cleanup, seed, upcoming, forAuthor, forBook, cities, fillBooks, chytomoRun, eventmateRun, yeRun, yeLast: () => yeLast, peek, fresh, meta, setMeta, subs, subscribed, subscribe, unsubscribeAll };
 }
 
 // «Четвер, 19 листопада» and, within a week, «завтра» / «через 3 дні».

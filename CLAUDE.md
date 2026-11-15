@@ -331,6 +331,12 @@ A flag only when Max asks for one, or when the change could break what readers u
   «зустрічі та враження» and «освітні» only, each new article (meta `chytomo:seen`) through the Telegram collector's
   Haiku (`tgFeed.extract`, ≤10 a day), source `chytomo`, `findSimilar` against the same event elsewhere. Dry run:
   `curl -s https://chytai.org.ua/agent/calendar-chytomo -H "$H"` (ask again; `?again=1`); run now: `POST {"run":true}`.
+- Eventmate (eventmate.app, Max 2026-11-15: more sources): `calendar.eventmateRun` once a day in the jobs process, its
+  event sitemaps' Ukrainian pages with a bookish name (`EM_BOOKISH`) not seen yet (meta `eventmate:seen`, half a year),
+  the date from the page, upcoming ones through `tgFeed.extract` (≤20 a run), source `eventmate`, the event's page as
+  its link. Dry run: `curl -s https://chytai.org.ua/agent/calendar-eventmate -H "$H"` (ask again); run: `POST {"run":true}`.
+  Looked at and not usable (2026-11-15): Karabas, concert.ua, readeat.com, Goethe (403 to robots), Є (Cloudflare),
+  cityofliterature.lviv.ua (a casino now), ui.org.ua and dou.ua (no book events); publishers and shops come as channels.
 - Books an event names that the catalog lacks (Max 2026-11-15): Haiku answers each event's `books` (`named`), and a
   title in «» goes too when the text names one author we know; missing ones wait in `cal_events.want`.
   `calendar.fillBooks` every hour: book.ua's Ukrainian edition, else Google Books / Open Library, source `calendar`,
