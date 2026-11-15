@@ -2123,7 +2123,15 @@ function calRow(e, { user, owner, today }) {
   </div>
 </article>`;
 }
-function calendarPage({ user, events, cities, city = "", mine = false, mineCount = 0, owner = false, query = "" }) {
+function calendarPage({ user, events, cities, city = "", mine = false, mineCount = 0, owner = false, query = "", feed = "" }) {
+  // «Підписатися»: the list as it is filtered now, in a phone's calendar (Apple's opens webcal://, Google's takes the address).
+  const subscribe = feed
+    ? drop(` data-ev="cal-subscribe">Підписатися <span class="caret">▾</span>`, "btn", [
+        `<a href="${attr(feed.replace(/^https?:/, "webcal:"))}" data-ev="cal-sub-apple">Календар iPhone чи Mac</a>`,
+        `<a href="${attr(`https://calendar.google.com/calendar/render?cid=${encodeURIComponent(feed.replace(/^https?:/, "webcal:"))}`)}" target="_blank" rel="noopener" data-ev="cal-sub-google">Google Календар</a>`,
+        `<a href="${attr(feed)}" data-ev="cal-sub-file">Адреса для інших календарів</a>`,
+      ])
+    : "";
   const { kyivDay, dayName, dayAside } = cal();
   const today = kyivDay();
   const days = new Map();
@@ -2150,7 +2158,7 @@ function calendarPage({ user, events, cities, city = "", mine = false, mineCount
     <h1>Книжкові події</h1>
     <p class="lead">Презентації, читання, фестивалі. Де зустріти автора й книжку.</p>
   </div>
-  <a class="btn" href="/calendar/add">Додати подію</a>
+  <div class="cal-acts">${subscribe}<a class="btn" href="/calendar/add">Додати подію</a></div>
 </section>
 ${find}
 ${chips}

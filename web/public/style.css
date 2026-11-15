@@ -1452,3 +1452,4 @@ aside .side-lists + .label, aside p + .label, aside dialog + .label { margin-top
 .cal-shelf { margin-top: 10px; }
 .cal-shelf .mine { color: var(--accent); font-weight: 500; }
 .cal-find { margin: -8px 0 22px; }
+.cal-acts { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-start; }

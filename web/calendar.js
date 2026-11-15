@@ -598,7 +598,41 @@ function tours(events) {
   return out.map((g) => (g.stops.length > 1 ? { ...g, title: g.tourTitle } : { ...g, stops: null }));
 }
 
+// The events as an iCalendar feed (RFC 5545), for «Підписатися» in a phone's calendar: a timed event lasts two
+// hours in Kyiv time, a day without a time is all-day (to its last day). Lines fold at 75 bytes.
+function ics(events, { name = "Книжкові події", site = "https://chytai.org.ua" } = {}) {
+  const esc = (s) => String(s || "").replace(/\\/g, "\\\\").replace(/[,;]/g, (c) => `\\${c}`).replace(/\r?\n/g, "\\n");
+  const fold = (line) => {
+    const out = [];
+    let cur = "";
+    for (const ch of line) {
+      if (Buffer.byteLength(cur + ch) > 74) (out.push(cur), (cur = " "));
+      cur += ch;
+    }
+    return [...out, cur].join("\r\n");
+  };
+  const d8 = (day) => day.replace(/-/g, "");
+  const stamp = new Date().toISOString().replace(/[-:]/g, "").replace(/\.\d+/, "");
+  const lines = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Chytai//Knyzhkovi podii//UK", "CALSCALE:GREGORIAN", "METHOD:PUBLISH", `X-WR-CALNAME:${esc(name)}`, "X-WR-TIMEZONE:Europe/Kyiv", "REFRESH-INTERVAL;VALUE=DURATION:PT6H", "X-PUBLISHED-TTL:PT6H"];
+  for (const e of events) {
+    lines.push("BEGIN:VEVENT", `UID:${e.id.replace(/[^\w.:-]/g, "-")}@chytai.org.ua`, `DTSTAMP:${stamp}`);
+    if (e.time) {
+      const [h, m] = e.time.split(":").map(Number);
+      const endH = Math.min(h + 2, 23);
+      lines.push(`DTSTART;TZID=Europe/Kyiv:${d8(e.starts)}T${pad(h)}${pad(m)}00`, `DTEND;TZID=Europe/Kyiv:${d8(e.starts)}T${pad(endH)}${pad(endH === 23 && h + 2 > 23 ? 59 : m)}00`);
+    } else lines.push(`DTSTART;VALUE=DATE:${d8(e.starts)}`, `DTEND;VALUE=DATE:${d8(addDays(e.ends || e.starts, 1))}`);
+    lines.push(`SUMMARY:${esc(e.title)}`);
+    const where = e.city === "Онлайн" ? "Онлайн" : [e.place, e.city].filter(Boolean).join(", ");
+    if (where) lines.push(`LOCATION:${esc(where)}`);
+    lines.push(`DESCRIPTION:${esc([e.sub, e.url ? `Сторінка події: ${e.url}` : "", `Усі події: ${site}/calendar`].filter(Boolean).join("\n"))}`);
+    if (e.url) lines.push(`URL:${e.url}`);
+    lines.push("END:VEVENT");
+  }
+  lines.push("END:VCALENDAR");
+  return lines.map(fold).join("\r\n") + "\r\n";
+}
+
 const SHORT_DAYS = ["нд", "пн", "вт", "ср", "чт", "пт", "сб"];
 const shortWhen = (e) => `${SHORT_DAYS[new Date(`${e.starts}T12:00:00Z`).getUTCDay()]}, ${span(e)}`;
 
-module.exports = { create, tours, parseWhen, linkText, readEvent, cleanTitle, findCity, kyivDay, addDays, dayName, dayAside, span, shortWhen, MONTHS };
+module.exports = { create, tours, ics, parseWhen, linkText, readEvent, cleanTitle, findCity, kyivDay, addDays, dayName, dayAside, span, shortWhen, MONTHS };

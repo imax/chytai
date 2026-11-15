@@ -239,6 +239,9 @@ A flag only when Max asks for one, or when the change could break what readers u
   (`shelfBooksFor`); one event in several cities or days (same title without its city, same link or post) is one row
   with a line per stop (`calendar.tours`), but under a city chip each stop is its own row; `?q=` searches title, words,
   place, authors' names and books; «Звідки події» only on the whole list.
+- «Підписатися» (Max 2026-11-15): `/calendar.ics` is the list as an iCalendar feed with the same `?city=` / `?q=`;
+  «Мої автори» by `?mine=<reader>.<key>` (`calKey`, HMAC with the reader secret; a calendar app has no cookie). The
+  button offers webcal:// (Apple), Google Calendar's `?cid=`, and the plain address.
 - Table `cal_events` (id `{source}:{key}`, starts/ends `YYYY-MM-DD` Kyiv, time `HH:MM`, city as shown, «Онлайн»
   for online; books/authors JSON found by name, no AI: `linkText`). Gone 30 days after it ends (`cleanup`).
 - Sources: `web/seed/calendar.json` (kept in step at every start: festivals by a thread or Max); readers via

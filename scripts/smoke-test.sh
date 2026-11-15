@@ -56,6 +56,7 @@ check() {
 check / 200
 check /community 200
 check /calendar 200
+check /calendar.ics 200
 check /publishers 200
 check /updates 200
 check /lists 200
