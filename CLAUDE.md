@@ -300,6 +300,9 @@ A flag only when Max asks for one, or when the change could break what readers u
   and doesn't join a group; a seed name the account is in as a group is left (`dropGroups`, each run), its posts
   deleted, and it goes into meta `tg:group` (`/agent/tg` → `groups`), out of the list; a join request to a group is
   withdrawn once (`tg:groups-checked`). Groups not in the seed (Max's own chats) are never touched.
+- A channel left by hand is never joined again (Max 2026-11-15): meta `tg:joined` = every channel the account was in;
+  one it no longer is in goes into `tg:left` with `hand: true` (not read any more; the tech report names it). Back:
+  `POST /agent/tg {"keep":"<name>"}`.
 - Pruning (Max 2026-11-15: don't spend tokens on spam; the posts also feed «Знайти цікаве для читачів»), `prune()` each
   tg run over 30 days: 10+ Haiku calls and no event → `tg:quiet` (posts still kept, Haiku not asked, a month); a seed
   channel, not a club, with no event, 20+ posts and under 15% book words (`BOOKISH`) → `tg:left` (the account leaves it, no more reads).

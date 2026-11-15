@@ -276,9 +276,23 @@ function create(db, { calendar, apiKey = process.env.ANTHROPIC_API_KEY || "", cl
     try {
       nojoin = JSON.parse(meta("tg:nojoin") || "{}");
     } catch {}
+    // Channels the account was ever in (meta tg:joined; Max 2026-11-15: «щоб не підписуватися знову, якщо я
+    // відписався»). One it is no longer in was left by hand: never joined again, and no longer read (tg:left, hand).
+    // The first time, all of the list not in nojoin counts: by then every one of them had been joined.
+    let joined = jmeta("tg:joined");
+    const first = !Object.keys(joined).length;
+    const now = new Date().toISOString();
+    for (const ch of list) if (mine.has(ch) || (first && !nojoin[ch])) joined[ch] = joined[ch] || now;
+    const left = jmeta("tg:left");
+    for (const ch of list)
+      if (joined[ch] && !mine.has(ch) && !left[ch]) {
+        left[ch] = { at: now, hand: true, gone: now };
+        (out.unsubscribed ||= []).push(ch);
+      }
+    setMeta("tg:left", JSON.stringify(left));
     let joins = 0;
     for (const ch of list) {
-      if (mine.has(ch) || joins >= JOINS_PER_RUN || Date.now() - Date.parse(nojoin[ch] || 0) < 7 * DAY) continue;
+      if (mine.has(ch) || left[ch] || joins >= JOINS_PER_RUN || Date.now() - Date.parse(nojoin[ch] || 0) < 7 * DAY) continue;
       joins++;
       try {
         // Channels only: a group is never joined (Max 2026-11-15).
@@ -289,6 +303,7 @@ function create(db, { calendar, apiKey = process.env.ANTHROPIC_API_KEY || "", cl
         }
         const r = await client.invoke(new Api.channels.JoinChannel({ channel: ch }));
         out.joined.push(ch);
+        joined[ch] = new Date().toISOString();
         const c = r.chats?.[0];
         if (c) await mute(new Api.InputPeerChannel({ channelId: c.id, accessHash: c.accessHash })).catch((e) => out.errors.push(`mute ${ch}: ${e.errorMessage || e.message}`));
       } catch (e) {
@@ -304,6 +319,7 @@ function create(db, { calendar, apiKey = process.env.ANTHROPIC_API_KEY || "", cl
       }
     }
     setMeta("tg:nojoin", JSON.stringify(nojoin));
+    setMeta("tg:joined", JSON.stringify(joined));
   }
   // Between the hourly runs: only joins (every 10 minutes, jobs process), when Telegram's wait is over and some
   // channel is left. → { joined, errors }.
@@ -472,9 +488,10 @@ function create(db, { calendar, apiKey = process.env.ANTHROPIC_API_KEY || "", cl
   // Undo for one channel: out of quiet and left, and never pruned again. → true.
   function keepChannel(name) {
     const c = String(name || "").toLowerCase().replace(/^@/, "");
-    const quiet = jmeta("tg:quiet"), left = jmeta("tg:left"), keep = jmeta("tg:keep");
-    delete quiet[c], delete left[c], (keep[c] = true);
+    const quiet = jmeta("tg:quiet"), left = jmeta("tg:left"), keep = jmeta("tg:keep"), joined = jmeta("tg:joined");
+    delete quiet[c], delete left[c], delete joined[c], (keep[c] = true);
     setMeta("tg:quiet", JSON.stringify(quiet)), setMeta("tg:left", JSON.stringify(left)), setMeta("tg:keep", JSON.stringify(keep));
+    setMeta("tg:joined", JSON.stringify(joined));
     return true;
   }
 
@@ -671,7 +688,7 @@ function create(db, { calendar, apiKey = process.env.ANTHROPIC_API_KEY || "", cl
     }
   }
 
-  return { run, joinMore, keepChannel, prune, dropGroups, events, classify, status, maybeEvent, meta, setMeta, extract, find };
+  return { run, joinMore, joinSome, keepChannel, prune, dropGroups, events, classify, status, maybeEvent, meta, setMeta, extract, find };
 }
 
 module.exports = { eventUrl, create, parsePage, maybeEvent, fromMessage, channels, KEEP_DAYS };

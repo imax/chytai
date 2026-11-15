@@ -213,15 +213,16 @@ function searchLine(s) {
 // Telegram channels the collector gave up on that day (tgfeed.js prune): quiet = no events, Haiku not asked; left = not
 // about books, the account left.
 function tgLine(db, day) {
-  const of = (k) => {
+  const of = (k, hand = false) => {
     try {
-      return Object.entries(JSON.parse(db.get(k) || "{}")).filter(([, x]) => x?.at && dayOf(x.at) === day).map(([c]) => `@${c}`);
+      return Object.entries(JSON.parse(db.get(k) || "{}")).filter(([, x]) => x?.at && dayOf(x.at) === day && !!x.hand === hand).map(([c]) => `@${c}`);
     } catch {
       return [];
     }
   };
-  const quiet = of("tg:quiet"), left = of("tg:left");
+  const quiet = of("tg:quiet"), left = of("tg:left"), hand = of("tg:left", true);
   const parts = [];
+  if (hand.length) parts.push(`ви відписались, більше не читаємо: ${hand.join(", ")}`);
   if (quiet.length) parts.push(`без подій, Haiku не питаємо: ${quiet.join(", ")}`);
   if (left.length) parts.push(`не про книжки, відписались: ${left.join(", ")}`);
   return parts.length ? `Telegram: ${parts.join("; ")}` : "";
