@@ -362,6 +362,9 @@ function create(db, { calendar, apiKey = process.env.ANTHROPIC_API_KEY || "", cl
     const keep = { ...jmeta("tg:keep"), ...Object.fromEntries(seeded.filter((c) => c.keep).map((c) => [c.name, true])) };
     const quiet = jmeta("tg:quiet");
     const left = jmeta("tg:left");
+    // A book club's chat is mostly chatter, yet it is about books: never left (choosenread_bclub, 2026-11-15).
+    const club = new Set(seeded.filter((c) => c.group === "club").map((c) => c.name));
+    for (const c of Object.keys(left)) if (club.has(c)) delete left[c];
     const now = new Date().toISOString();
     for (const [c, q] of Object.entries(quiet)) if (Date.now() - Date.parse(q.at) > 30 * DAY) delete quiet[c];
     out.quieted = [];
@@ -370,7 +373,7 @@ function create(db, { calendar, apiKey = process.env.ANTHROPIC_API_KEY || "", cl
     for (const r of rows) {
       const c = r.channel;
       if (keep[c] || left[c]) continue;
-      if (inSeed.has(c) && r.n >= 20) {
+      if (inSeed.has(c) && !club.has(c) && !r.made && r.n >= 20) {
         const texts = db.prepare("SELECT text FROM tg_posts WHERE channel = ? AND at >= ?").all(c, since);
         const share = texts.filter((t) => BOOKISH.test(t.text)).length / texts.length;
         if (share < 0.15) {

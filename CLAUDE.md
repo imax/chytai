@@ -280,7 +280,7 @@ A flag only when Max asks for one, or when the change could break what readers u
   2026-11-15, list in project files `chytai-calendar/megogo-clubs-telegram.tsv`).
 - Pruning (Max 2026-11-15: don't spend tokens on spam; the posts also feed «Знайти цікаве для читачів»), `prune()` each
   tg run over 30 days: 10+ Haiku calls and no event → `tg:quiet` (posts still kept, Haiku not asked, a month); a seed
-  channel with 20+ posts and under 15% book words (`BOOKISH`) → `tg:left` (the account leaves it, no more reads).
+  channel, not a club, with no event, 20+ posts and under 15% book words (`BOOKISH`) → `tg:left` (the account leaves it, no more reads).
   Never: `"keep": true` in the seed (Max's own), hand-joined ones. Undo: `POST /agent/tg {"keep":"<name>"}`. The
   technical report names the day's ones («Telegram: …», `tgLine`).
 - Leads (Max: «звертай увагу, звідки воно… щоб можна підписатись на нього напряму»): `/agent/tg` → `leads`: the sites
