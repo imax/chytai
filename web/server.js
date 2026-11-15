@@ -2669,12 +2669,14 @@ app.get("/", (req, res) => {
     .slice(0, 6);
   const used = new Set([...pickIds, ...finish.map((w) => w.book.id)]);
   const liked = (pred) => works.filter((w) => ok(w.book) && pred(w.book) && (w.s.avg ?? 0) >= 4.3 && w.s.rated >= 1 && !used.has(w.book.id)).sort((a, b) => b.s.rated - a.s.rated || b.s.avg - a.s.avg);
-  const ua = f === "ua" ? [] : liked(READ_FILTERS.ua[1]).slice(0, 6);
+  // The unfiltered homepage has no «Українські автори», «Хочуть прочитати», «Безкоштовно» (Max, 2026-11-15, variant A:
+  // too many cover rows; 14–20 taps a fortnight each); under a chip they stay.
+  const ua = !f || f === "ua" ? [] : liked(READ_FILTERS.ua[1]).slice(0, 6);
   ua.forEach((w) => used.add(w.book.id));
   const short = f === "short" ? [] : liked(READ_FILTERS.short[1]).slice(0, 6).map((w) => ({ ...w, pages: pagesOf(w.book) }));
   const freeShelf = store.shelves.find((s) => s.kind === "free");
-  const free = freeShelf ? visible(freeShelf).filter((it) => it.cover).map((it) => store.book(it.id)).filter((b) => b && ok(b)).sort((a, b) => /[а-яіїєґ]/i.test(b.title) - /[а-яіїєґ]/i.test(a.title)).slice(0, 6) : [];
-  const wanted = social.popular().want.map((x) => ({ ...x, book: ukWork(x.book) })).filter((x) => ok(x.book)).slice(0, 6);
+  const free = f && freeShelf ? visible(freeShelf).filter((it) => it.cover).map((it) => store.book(it.id)).filter((b) => b && ok(b)).sort((a, b) => /[а-яіїєґ]/i.test(b.title) - /[а-яіїєґ]/i.test(a.title)).slice(0, 6) : [];
+  const wanted = !f ? [] : social.popular().want.map((x) => ({ ...x, book: ukWork(x.book) })).filter((x) => ok(x.book)).slice(0, 6);
   const genres = readGenres();
   const editorials = lists.homeLists().slice(0, 4).map(withCovers); // four: two rows of two on a phone (Max, 2026-10-30)
   // «Для тебе» only from the reader's own shelf (a reader who rated nothing saw «схожі на те, що тобі сподобалось»
