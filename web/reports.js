@@ -23,6 +23,8 @@ const prevMonth = (m) => {
   return n === 1 ? `${y - 1}-12` : `${y}-${String(n - 1).padStart(2, "0")}`;
 };
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+// A title already in «» inside our «…» takes „…“ (Max, 2026-11-15: «Чорт»» on /ask).
+const nest = (t) => String(t ?? "").trim().replace(/^[«"“„](.*)[»"”“]$/s, "$1").replace(/«/g, "„").replace(/»/g, "“");
 const csvCell = (v) => (/[",\n;]/.test(String(v)) ? `"${String(v).replace(/"/g, '""')}"` : String(v));
 const num = (n) => String(n).replace(/\B(?=(\d{3})+(?!\d))/g, " ");
 
@@ -127,7 +129,7 @@ CREATE TABLE IF NOT EXISTS read_books (book TEXT PRIMARY KEY, title TEXT NOT NUL
     const td = (v, right) => `<td style="padding:6px 10px;border-bottom:1px solid #e5e0d8;${right ? "text-align:right;" : ""}">${v}</td>`;
     const th = (v, right) => `<th style="padding:6px 10px;border-bottom:2px solid #d8d0c4;font-weight:600;${right ? "text-align:right;" : "text-align:left;"}">${v}</th>`;
     const html = `<div style="font-family:-apple-system,Segoe UI,Roboto,sans-serif;color:#222;font-size:15px;line-height:1.5;max-width:680px">
-<h2 style="font-size:19px;margin:0 0 8px">Звіт за ${esc(monthName(m))}, «${esc(name)}»</h2>
+<h2 style="font-size:19px;margin:0 0 8px">Звіт за ${esc(monthName(m))}, «${esc(nest(name))}»</h2>
 <p style="margin:0 0 14px">${esc(intro)}</p>
 <table style="border-collapse:collapse;width:100%;font-size:14px"><thead><tr>${th("Книжка")}${th("Читачів", 1)}${th("Прочитали ≥10%", 1)}${th("Дочитали", 1)}${th("Сторінок", 1)}</tr></thead><tbody>
 ${rows.map((r) => `<tr>${td(`${esc(r.title || r.book)}${r.authors ? `<br><span style="color:#777;font-size:13px">${esc(r.authors)}</span>` : ""}`)}${td(num(r.readers), 1)}${td(num(r.started), 1)}${td(num(r.finished), 1)}${td(num(r.pages), 1)}</tr>`).join("\n")}

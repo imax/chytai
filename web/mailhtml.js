@@ -1,6 +1,8 @@
 // The look of the site's letters (Max, 2026-11-04: «беремо fancy версію», for the other letters too): the Friday
 // letter's paper background, serif titles and a green button, as one shell. Every letter keeps its plain text too.
 const esc = (x) => String(x ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+// A title already in «» inside our «…» takes „…“ (Max, 2026-11-15: «Чорт»» on /ask).
+const nest = (t) => String(t ?? "").trim().replace(/^[«"“„](.*)[»"”“]$/s, "$1").replace(/«/g, "„").replace(/»/g, "“");
 const SERIF = "'Source Serif 4',Georgia,serif";
 
 // Plain text as paragraphs (blank lines split them).
@@ -18,7 +20,7 @@ function book(b, site) {
   const src = b.cover ? (b.cover.startsWith("/") ? site + b.cover : b.cover) : "";
   const cover = src ? `<td style="vertical-align:top;width:44px"><img src="${esc(src)}" width="44" height="64" alt="${esc(b.title)}" style="width:44px;height:64px;object-fit:cover;border-radius:3px;display:block;background:#ded8cb;font-family:Georgia,serif;font-size:10px;color:#6b675f"></td>` : "";
   const href = b.href ? (b.href.startsWith("/") ? site + b.href : b.href) : "";
-  const title = href ? `<a href="${esc(href)}" style="font-family:${SERIF};font-size:16px;color:#1b1a17;text-decoration:none">«${esc(b.title)}»</a>` : `<span style="font-family:${SERIF};font-size:16px">«${esc(b.title)}»</span>`;
+  const title = href ? `<a href="${esc(href)}" style="font-family:${SERIF};font-size:16px;color:#1b1a17;text-decoration:none">«${esc(nest(b.title))}»</a>` : `<span style="font-family:${SERIF};font-size:16px">«${esc(nest(b.title))}»</span>`;
   return `<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse:collapse;margin:16px 0 0"><tr>${cover}<td style="vertical-align:middle;padding-left:${cover ? 14 : 0}px">${title}${b.author ? `<div style="font-size:13px;color:#6b675f;margin-top:3px">${esc(b.author)}</div>` : ""}${b.note ? `<div style="font-size:14px;line-height:1.45;color:#3d3a33;margin-top:5px">${b.note}</div>` : ""}</td></tr></table>`;
 }
 

@@ -42,6 +42,8 @@ const AUDIENCES = {
 };
 
 const esc = pages.esc;
+// A title already in «» inside our «…» takes „…“ (Max, 2026-11-15: «Чорт»» on /ask).
+const nest = (t) => String(t ?? "").trim().replace(/^[«"“„](.*)[»"”“]$/s, "$1").replace(/«/g, "„").replace(/»/g, "“");
 const attr = esc;
 const MONTHS = ["січня", "лютого", "березня", "квітня", "травня", "червня", "липня", "серпня", "вересня", "жовтня", "листопада", "грудня"];
 const plural = (n, one, few, many) => (n % 10 === 1 && n % 100 !== 11 ? one : n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20) ? few : many);
@@ -362,7 +364,7 @@ class Digest {
     }
     if (d.clubWeek?.length) {
       html.push(label("У Клубі цього тижня", ["усі теми", `${site}/club`]));
-      html.push(d.clubWeek.map((t) => `<div style="padding:12px 0;border-bottom:1px solid #e4dfd5"><a href="${attr(url(t.href))}" style="font-family:'Source Serif 4',Georgia,serif;font-size:17px;line-height:1.3;color:#1b1a17;text-decoration:none">${esc(t.title)}</a><div style="font-size:13px;color:#6b675f;margin-top:4px">${esc(t.official ? "Chytai" : t.reader.name)}${t.replies ? ` · ${count(t.replies, "відповідь", "відповіді", "відповідей")}` : ""}${t.book ? ` · «${esc(t.book.title)}»` : ""}</div></div>`).join(""));
+      html.push(d.clubWeek.map((t) => `<div style="padding:12px 0;border-bottom:1px solid #e4dfd5"><a href="${attr(url(t.href))}" style="font-family:'Source Serif 4',Georgia,serif;font-size:17px;line-height:1.3;color:#1b1a17;text-decoration:none">${esc(t.title)}</a><div style="font-size:13px;color:#6b675f;margin-top:4px">${esc(t.official ? "Chytai" : t.reader.name)}${t.replies ? ` · ${count(t.replies, "відповідь", "відповіді", "відповідей")}` : ""}${t.book ? ` · «${esc(nest(t.book.title))}»` : ""}</div></div>`).join(""));
       text.push("У КЛУБІ ЦЬОГО ТИЖНЯ", ...d.clubWeek.map((t) => `• ${t.title} (${t.official ? "Chytai" : t.reader.name}${t.replies ? `, ${count(t.replies, "відповідь", "відповіді", "відповідей")}` : ""})\n  ${url(t.href)}`), "");
     }
     if (d.reading) {

@@ -19,6 +19,8 @@ const abs = (u) => (u && u.startsWith("/") ? ORIGIN + u : u);
 const NOINDEX = new Set(["/search", "/login", "/settings", "/welcome", "/me", "/admin", "/import"]);
 
 const esc = (s) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+// A title already in «» inside our «…» takes „…“ (Max, 2026-11-15: «Чорт»» on /ask).
+const nest = (t) => String(t ?? "").trim().replace(/^[«"“„](.*)[»"”“]$/s, "$1").replace(/«/g, "„").replace(/»/g, "“");
 const attr = esc;
 // Markdown that readers (notes, lists) or Claude wrote: any HTML in it shows as text, and a link or picture
 // goes only to http(s), mail or our own pages, so nobody's words can run a script in another reader's
@@ -231,7 +233,7 @@ function wantButton(book, user, { size = "small", label: text = "Хочу про
 // «Хочу прочитати» and «Прочитано» side by side, for rows on other readers' shelves (a reader's feedback,
 // 2026-10-20). Not in search: there the books get the room, the buttons are on the book page (Max, 2026-10-23).
 // A book the signed-in reader already has: their status, quietly, where the buttons would be (search, shelves).
-const myStatus = (e) => `<span class="muted small">${esc(e.status ? STATUS[e.status].toLowerCase() : "на полиці")}${e.via ? `, як «${esc(e.via.title)}»` : ""}</span>`;
+const myStatus = (e) => `<span class="muted small">${esc(e.status ? STATUS[e.status].toLowerCase() : "на полиці")}${e.via ? `, як «${esc(nest(e.via.title))}»` : ""}</span>`;
 // A book just marked «Прочитано» on someone else's shelf (or read there earlier without a rating): five
 // stars and the year right in the row, so it needs no trip to one's own shelf (Olena's feedback, 2026-10-23).
 // app.js builds the same after the button; each tap is saved in the background.
@@ -421,7 +423,7 @@ function bookLd(book, shelf, s, readers) {
 // зробити лінк Додати який відкриває форму»): a signed-in reader tells us the translation is out there; the
 // address of its page is optional, without it we look ourselves (ukfind.js). `state`: ask | searching | none.
 function ukLine(book, state) {
-  const line = book.ukTitle ? `Українською: «${esc(book.ukTitle)}», у каталогах поки немає` : "Українського перекладу в каталогах поки немає";
+  const line = book.ukTitle ? `Українською: «${esc(nest(book.ukTitle))}», у каталогах поки немає` : "Українського перекладу в каталогах поки немає";
   // The search takes a minute or so: the page looks again by itself, staying at this block.
   if (state === "searching") return `${line} · шукаю…<script>setTimeout(() => location.reload(), 20000)</script>`;
   return state ? `${line} · <button type="button" class="text-link small" onclick="var f=document.getElementById('uk');f.hidden=!f.hidden;if(!f.hidden)f.querySelector('input').select()">Додати</button>` : line;
@@ -502,7 +504,7 @@ function bookPage({ club = [], ukrlib = null, sluhay = null, inGenre = null, fre
       ${first.entry.note ? quote(first, book.id) : ""}
       ${(first.entry.note ? rest : readers).length ? `<div class="others">${(first.entry.note ? rest : readers).map((r) => readerLine(r, book.id)).join("")}</div>` : ""}
     </section>` : ""}
-    ${bookQuote && !ru ? `<section class="block" data-block="quote">${label("Цитата")}<figure class="book-quote"><blockquote>«${esc(bookQuote.text)}»</blockquote>${bookQuote.page ? `<figcaption>стор. ${bookQuote.page}</figcaption>` : ""}</figure></section>` : ""}
+    ${bookQuote && !ru ? `<section class="block" data-block="quote">${label("Цитата")}<figure class="book-quote"><blockquote>«${esc(nest(bookQuote.text))}»</blockquote>${bookQuote.page ? `<figcaption>стор. ${bookQuote.page}</figcaption>` : ""}</figure></section>` : ""}
     ${ru ? "" : club.length ? `<section class="block" data-block="club">${label("Клуб Chytai")}<div class="club-topics">${club.map((t) => clubRow(t, { book: false })).join("")}</div></section>` : `<section class="block" data-block="club">${label("Клуб Chytai")}<p class="club-start">Тем ще немає. <a class="text-link" rel="nofollow" href="/club/new?book=${attr(encodeURIComponent(book.id))}">Обговорити в Клубі</a></p></section>`}
     ${lists.length ? `<section class="block" data-block="lists">${label("У списках", `<a href="/lists">усі списки</a>`)}<div class="lists">${lists.map(listLine).join("")}</div></section>` : ""}
     ${adviceBlock(book, advice)}
@@ -517,7 +519,7 @@ function bookPage({ club = [], ukrlib = null, sluhay = null, inGenre = null, fre
   </div>
   <aside>
     ${ru ? "" : `${also.length && !(fresh && alsoTitle === "Новинки видавництв") ? `<div data-block="also">${label(alsoTitle)}${minis(also)}</div>` : ""}
-    ${inGenre ? `<div data-block="in-genre">${label(`Ще в жанрі «${esc(cap(inGenre.genre))}»`, `<a href="/genre/${attr(genreSlug(inGenre.genre))}">усі</a>`)}${minis(inGenre.books)}</div>` : ""}
+    ${inGenre ? `<div data-block="in-genre">${label(`Ще в жанрі «${esc(nest(cap(inGenre.genre)))}»`, `<a href="/genre/${attr(genreSlug(inGenre.genre))}">усі</a>`)}${minis(inGenre.books)}</div>` : ""}
     ${fresh ? `<div data-block="fresh">${label(`Нове · ${esc(fresh.shelf.name)}`, `<a href="/publishers/${attr(fresh.shelf.id)}">усе</a>`)}${minis(fresh.books)}</div>` : ""}
     ${pick ? `<div data-block="pick">${label("Книжка навмання", "оцінка 4,5+")}${feedList([pick])}</div>` : ""}`}
   </aside>
@@ -605,7 +607,7 @@ function aboutBlock(book, shelf, ukAsk, editionError) {
   const blurbSource = book.blurb && !book.edited?.blurb ? `<p class="small muted">${book.blurbSource ? `Опис: ${esc(book.blurbSource)}` : `Опис з сайту ${esc(shelf ? shelf.name : book.source)}`}</p>` : "";
   const uk = book.ukTitle || ukAsk ? `<p class="small muted uk-line">${ukLine(book, ukAsk)}</p>` : "";
   // The original Haiku named for a Ukrainian book while no catalog has it (store.aiOrigs).
-  const orig = book.origTitle ? `<p class="small muted uk-line">Оригінал: «${esc(book.origTitle)}»${book.origAuthor ? `, ${esc(book.origAuthor)}` : ""}</p>` : "";
+  const orig = book.origTitle ? `<p class="small muted uk-line">Оригінал: «${esc(nest(book.origTitle))}»${book.origAuthor ? `, ${esc(book.origAuthor)}` : ""}</p>` : "";
   return `<section class="block" id="about" data-block="about">
       ${label("Про книжку")}
       ${blurb}${blurbSource}
@@ -657,7 +659,7 @@ function writingLine(w, tools = "") {
 // The owner's form for reviews (/admin/reviews): a link and its book, and every link added so far.
 function reviewsAdminPage({ user, list, error = "", done = null }) {
   const body = `<div class="admin reviews-admin"><h1>Огляди</h1>
-${done ? `<p class="flash">Додано до <a href="${attr(done.href)}">«${esc(done.title)}»</a>.</p>` : ""}
+${done ? `<p class="flash">Додано до <a href="${attr(done.href)}">«${esc(nest(done.title))}»</a>.</p>` : ""}
 <form class="form review-add" method="post" action="/api/reviews/add">
   <label>Посилання на огляд чи відео<input name="url" type="url" required placeholder="https://…"></label>
   <label>Книжка: назва або посилання на її сторінку<input name="book" required placeholder="Інтернат Жадан або https://chytai.org.ua/book/…"></label>
@@ -878,7 +880,7 @@ function series(book, inLibrary) {
   // «Хроніки Амбера : у 10 кн. Кн. 2 : Рушниці Авалону» is «2. Рушниці Авалону».
   const numbered = (v) => { const p = require("./catalogs").volumeOf(v.title); return p?.subtitle && p.volume === v.volume ? `${p.volume}. ${cap(p.subtitle)}` : ""; };
   const name = (v) => (v.bundle ? `Комплект із ${count(ser.volumes, "тому", "томів", "томів")}` : numbered(v) || cap(v.title.replace(ser.name, "").replace(/^[\s,.:]+/, "")) || `Том ${v.volume}`);
-  return `<section class="block series" data-block="series">${label(`Серія «${esc(ser.name)}», ${count(ser.volumes, "том", "томи", "томів")}`)}<ul>${ser.items
+  return `<section class="block series" data-block="series">${label(`Серія «${esc(nest(ser.name))}», ${count(ser.volumes, "том", "томи", "томів")}`)}<ul>${ser.items
     .map((v) => {
       const has = inLibrary.get(v.work);
       const tail = [v.price, avail(v)].filter(Boolean).join(" · ");
@@ -896,7 +898,7 @@ function cycle(book, inLibrary, user = null) {
   const c = book.cycle;
   if (!c || book.series?.items || c.items.length < 2) return "";
   const last = c.items.at(-1).n;
-  return `<section class="block series cycle" data-block="series">${label(`Серія «${esc(c.name)}»`, `книга ${c.n} з ${last}`)}<ol>${c.items
+  return `<section class="block series cycle" data-block="series">${label(`Серія «${esc(nest(c.name))}»`, `книга ${c.n} з ${last}`)}<ol>${c.items
     .map((v) => {
       const has = v.id && inLibrary.get(v.id);
       const name = v.href ? `<a href="${attr(v.href)}">${esc(v.title)}</a>` : user ? `<form method="post" action="/api/series-volume/${attr(encodeURIComponent(book.id))}" class="make"><input type="hidden" name="n" value="${v.n}"><button>${esc(v.title)}</button></form>` : `<span>${esc(v.title)}</span>`;
@@ -1176,7 +1178,7 @@ function entryForm(book, entry, series = null) {
     </select></label>
     <label>Рік <input name="year" type="number" min="1940" max="${new Date().getFullYear()}" value="${attr(e.year || "")}" placeholder="без дати"></label>
   </div>
-  ${series ? `<label class="check"><span><input type="checkbox" name="series" value="1"${series.checked ? " checked" : ""}> Уся серія «${esc(series.name)}» · ${books(series.total)}</span><span class="hint">Статус, оцінка і рік стануть на всі томи, яких ще немає на полиці — додадуться. На полиці серія буде одним рядком; нотатка лишається на цій книжці.</span></label>` : ""}
+  ${series ? `<label class="check"><span><input type="checkbox" name="series" value="1"${series.checked ? " checked" : ""}> Уся серія «${esc(nest(series.name))}» · ${books(series.total)}</span><span class="hint">Статус, оцінка і рік стануть на всі томи, яких ще немає на полиці — додадуться. На полиці серія буде одним рядком; нотатка лишається на цій книжці.</span></label>` : ""}
   <label>Примірник <select name="copy">
     <option value="" ${!e.copy ? "selected" : ""}>не вказано</option>
     <option value="paper" ${e.copy === "paper" ? "selected" : ""}>На папері</option>
@@ -1389,7 +1391,7 @@ function readerBand() {
 // search, a field that posts to /ask, and two answers others got (covers, the question, its topic).
 const askQ = (t) => ((t = t.replace(/\s+/g, " ").trim()).length > 70 ? `${t.slice(0, 67).replace(/\s+\S*$/, "")}…` : t);
 function askBlock(asks) {
-  const line = (a) => `<div class="litem"><a href="/ask/${attr(a.id)}" tabindex="-1">${stack(a.books.slice(0, 3))}</a><span><a href="/ask/${attr(a.id)}"><b>«${esc(askQ(a.text))}»</b></a>${a.topic ? `<span class="m">${esc(a.topic)}</span>` : ""}</span></div>`;
+  const line = (a) => `<div class="litem"><a href="/ask/${attr(a.id)}" tabindex="-1">${stack(a.books.slice(0, 3))}</a><span><a href="/ask/${attr(a.id)}"><b>«${esc(nest(askQ(a.text)))}»</b></a>${a.topic ? `<span class="m">${esc(a.topic)}</span>` : ""}</span></div>`;
   return `<section class="block ask-block" data-block="ask">
   <div class="ask-main">
     <h2>Запитай Chytai</h2>
@@ -1851,7 +1853,7 @@ function searchResults({ q, user, hits = [], authors = [], readers = [], shelves
   ].join("");
   const nearRows =
     near.length || nearNames
-      ? `<p class="found">Точно за «${esc(q)}» нічого. Може, ви шукали:</p>${nearNames ? `<div class="name-rows">${nearNames}</div>` : ""}${near.length ? `<div class="rows">${near.map((h) => bookRow(h.book, { meta: readersMeta(h.book.id), action: h.entry ? myStatus(h.entry) : "" })).join("")}</div>` : ""}`
+      ? `<p class="found">Точно за «${esc(nest(q))}» нічого. Може, ви шукали:</p>${nearNames ? `<div class="name-rows">${nearNames}</div>` : ""}${near.length ? `<div class="rows">${near.map((h) => bookRow(h.book, { meta: readersMeta(h.book.id), action: h.entry ? myStatus(h.entry) : "" })).join("")}</div>` : ""}`
       : "";
   if (!n)
     return `${nearRows || elsewhere}
@@ -1866,7 +1868,7 @@ function searchResults({ q, user, hits = [], authors = [], readers = [], shelves
     ${shelves.length ? `<section class="block">${label(`Видавництва · ${shelves.length}`)}<div class="name-rows">${shelves.map((s) => `<a class="name-row" href="/publishers/${attr(s.shelf.id)}"><b>${esc(s.shelf.name)}</b><span>${[books(s.total), s.shelf.tagline ? esc(s.shelf.tagline) : ""].filter(Boolean).join(" · ")}</span></a>`).join("")}</div></section>` : ""}
     ${authors.length ? `<section class="block">${label(`Автори · ${authors.length}`)}<div class="name-rows">${authors.map((a) => `<a class="name-row" href="${attr(a.href)}"><b>${esc(a.name)}</b><span>${[books(a.books), a.readers ? count(a.readers, "читач", "читачі", "читачів") : ""].filter(Boolean).join(" · ")}</span></a>`).join("")}</div></section>` : ""}
     ${lists.length ? `<section class="block">${label(`Списки · ${lists.length}`)}<div class="lgrid">${lists.map(listCard).join("")}</div></section>` : ""}
-    ${hits.length ? `<section class="block">${label(`Книжки · ${hits.length}`)}<div class="rows">${hits.map((h) => bookRow(h.book, { meta: readersMeta(h.book.id), action: h.entry ? myStatus(h.entry) : "", others: h.others, sub: h.uk ? `Українською: «${esc(h.uk)}» · у каталогах поки немає` : "" })).join("")}</div></section>` : ""}
+    ${hits.length ? `<section class="block">${label(`Книжки · ${hits.length}`)}<div class="rows">${hits.map((h) => bookRow(h.book, { meta: readersMeta(h.book.id), action: h.entry ? myStatus(h.entry) : "", others: h.others, sub: h.uk ? `Українською: «${esc(nest(h.uk))}» · у каталогах поки немає` : "" })).join("")}</div></section>` : ""}
     ${readers.length ? `<section class="block">${label(`Читачі · ${readers.length}`)}<div class="name-rows">${readers.map((r) => `<a class="name-row" href="${attr(r.reader.href)}"><b>${esc(r.reader.name)}</b><span>${books(r.count)}</span></a>`).join("")}</div></section>` : ""}
     ${outside ? elsewhere : user ? `<p class="muted end-note">Не те? ${addLink}</p>` : ""}
   </div>
@@ -1881,7 +1883,7 @@ function searchResults({ q, user, hits = [], authors = [], readers = [], shelves
 function outsideResults({ q, user, books }) {
   if (!books.length)
     return `<section class="block">
-  <p class="found">Нічого не знайшлося за «${esc(q)}».</p>
+  <p class="found">Нічого не знайшлося за «${esc(nest(q))}».</p>
   ${
     user
       ? `<p class="small muted">Знаєте, де вона є? Вставте посилання на книжку в магазині чи у видавництва.</p>
@@ -1918,7 +1920,7 @@ function authorPage({ author, about = null, works, hits, user, readers = [], als
   const pair = (book) => {
     if (!pairing) return "";
     const l = pairing.linked[book.id];
-    if (l) return l.index != null ? `<div class="pair muted small">пара з «${esc(l.title)}» · <form method="post" action="/admin/dupes/undo" class="inline"><input type="hidden" name="kind" value="translations"><input type="hidden" name="index" value="${l.index}"><button class="text-link small">скасувати</button></form></div>` : "";
+    if (l) return l.index != null ? `<div class="pair muted small">пара з «${esc(nest(l.title))}» · <form method="post" action="/admin/dupes/undo" class="inline"><input type="hidden" name="kind" value="translations"><input type="hidden" name="index" value="${l.index}"><button class="text-link small">скасувати</button></form></div>` : "";
     const options = (pairing.options[book.id] || []).filter((f) => f.id !== book.id);
     if (!options.length || !CYR.test(book.title)) return "";
     return `<form method="post" action="/admin/dupes/translation" class="pair tr-row"><input type="hidden" name="uk" value="${attr(book.id)}"><span class="tr-pick"><select name="orig">${options.map((o) => `<option value="${attr(o.id)}">${esc(o.title)}</option>`).join("")}</select><button class="btn small pair-btn">Позначити як переклад</button></span></form>`;
@@ -2066,8 +2068,8 @@ document.addEventListener("submit", async (e) => {
   const shelf = !hits.length
     ? `<section class="block">${label("Книжки")}<p class="muted">Поки ні в каталогах, ні в читачів.</p></section>`
     : `${start.length ? `<section class="block">${label(many || picked.length ? "З чого почати" : "Книжки", picked.length ? "" : many ? (start === byFame ? "найвідоміші" : "найбільше читають") : "")}${picked.length && editorial.about && !a.bio ? `<p class="author-note">${esc(editorial.about)}</p>` : ""}<div class="rows">${start.map(bigRow).join("")}</div></section>` : ""}
-    ${quotes.length ? `<section class="block">${label("Що кажуть читачі")}<div class="quotes">${quotes.map(({ h, top }) => `<figure><blockquote>${noteOf(top.entry, h.book.id)}</blockquote><figcaption>— <a href="${attr(top.href)}"><b>${esc(top.name)}</b></a> про <a href="${attr(h.book.href)}">«${esc(h.book.title)}»</a></figcaption></figure>`).join("")}</div></section>` : ""}
-    ${series.map((g) => `<section class="block">${label(`Серія «${esc(g[0].series.name)}»`, seriesNote(g))}<div class="grid five author-grid">${g.map((h) => tile({ ...h, book: { ...h.book, title: shortTitle(h.book.title, h.series.name) } }, `<p class="meta">Книга ${h.series.n}</p>`)).join("")}</div>${missing(g)}</section>`).join("")}
+    ${quotes.length ? `<section class="block">${label("Що кажуть читачі")}<div class="quotes">${quotes.map(({ h, top }) => `<figure><blockquote>${noteOf(top.entry, h.book.id)}</blockquote><figcaption>— <a href="${attr(top.href)}"><b>${esc(top.name)}</b></a> про <a href="${attr(h.book.href)}">«${esc(nest(h.book.title))}»</a></figcaption></figure>`).join("")}</div></section>` : ""}
+    ${series.map((g) => `<section class="block">${label(`Серія «${esc(nest(g[0].series.name))}»`, seriesNote(g))}<div class="grid five author-grid">${g.map((h) => tile({ ...h, book: { ...h.book, title: shortTitle(h.book.title, h.series.name) } }, `<p class="meta">Книга ${h.series.n}</p>`)).join("")}</div>${missing(g)}</section>`).join("")}
     ${rest.length ? `<section class="block">${label(start.length || series.length ? `Інші книжки · ${rest.length}` : `Книжки · ${rest.length}`, "спершу українською")}<div class="grid five author-grid">${rest.slice(0, cut).map((h) => tile(h)).join("")}</div>${rest.length > cut ? `<details class="more-books"><summary class="btn">Ще ${books(rest.length - cut)}</summary><div class="grid five author-grid">${rest.slice(cut).map((h) => tile(h)).join("")}</div></details>` : ""}</section>` : ""}`;
   const body = `
 ${head}
@@ -2119,7 +2121,7 @@ function calRow(e, { user, owner, today }) {
     ${stops}
     <p class="meta">${time ? `<b class="cal-t">${time} · </b>` : ""}${[where, eventLink(e), by, hide].filter(Boolean).join(" · ")}</p>
     ${books}
-    ${e.mine?.length ? `<p class="meta cal-shelf">${e.mine.map((x) => `<span class="mine">✓ ${MY_STATUS[x.status] || "На полиці"}</span> <a class="text-link" href="${attr(x.book.href)}">«${esc(x.book.title)}»</a>${x.rating != null ? ` ★${uk(String(x.rating))}` : ""}`).join(" · ")}</p>` : ""}
+    ${e.mine?.length ? `<p class="meta cal-shelf">${e.mine.map((x) => `<span class="mine">✓ ${MY_STATUS[x.status] || "На полиці"}</span> <a class="text-link" href="${attr(x.book.href)}">«${esc(nest(x.book.title))}»</a>${x.rating != null ? ` ★${uk(String(x.rating))}` : ""}`).join(" · ")}</p>` : ""}
   </div>
 </article>`;
 }
@@ -2149,7 +2151,7 @@ function calendarPage({ user, events, cities, city = "", mine = false, mineCount
       : "";
   const list = days.size
     ? [...days].map(([d, list]) => `<section class="block cal-day">${label(esc(dayName(d)), dayAside(d, today))}<div class="rows">${list.map((e) => calRow(e, { user, owner, today })).join("")}</div></section>`).join("")
-    : `<p class="muted">${query ? `Нічого не знайшли за «${esc(query)}». <a class="text-link" href="/calendar">Усі події</a>` : city || mine ? `Тут поки нічого. <a class="text-link" href="/calendar">Усі події</a>` : "Поки подій немає."}</p>`;
+    : `<p class="muted">${query ? `Нічого не знайшли за «${esc(nest(query))}». <a class="text-link" href="/calendar">Усі події</a>` : city || mine ? `Тут поки нічого. <a class="text-link" href="/calendar">Усі події</a>` : "Поки подій немає."}</p>`;
   // «Звідки події» only on the whole list (Max 2026-11-15: once is enough, not under every filter).
   const whole = !city && !mine && !query;
   const body = `
@@ -2485,7 +2487,7 @@ function chatsSettingsPage({ user, url, grants }) {
 function consentPage({ user, client, host, fields }) {
   const hidden = Object.entries(fields).map(([k, v]) => `<input type="hidden" name="${attr(k)}" value="${attr(v)}">`).join("");
   const form = `<form method="post" action="/oauth/authorize" class="form">${hidden}
-  <p>«${esc(client.name)}» просить доступ до полиці <b>${esc(user.name)}</b> (@${esc(user.username)}). Він зможе:</p>
+  <p>«${esc(nest(client.name))}» просить доступ до полиці <b>${esc(user.name)}</b> (@${esc(user.username)}). Він зможе:</p>
   <ul class="small"><li>шукати книжки в каталозі Chytai;</li><li>бачити ваші книжки, оцінки й нотатки;</li><li>додавати книжки на полицю й змінювати їхній статус та оцінку.</li></ul>
   <p class="muted small">Видаляти книжки чи змінювати акаунт він не зможе. Відключити чат можна будь-коли в <a class="text-link" href="/settings/chats">налаштуваннях</a>. Після дозволу вас поверне на ${esc(host)}.</p>
   <div class="actions"><button class="btn primary" name="allow" value="1">Дозволити</button><button class="btn" name="allow" value="0">Скасувати</button></div>
@@ -2901,10 +2903,10 @@ ${pageHead({ kicker: "Дайджест", title: "Твій текст у лист
   <label>Текст<textarea name="text" rows="14" placeholder="Абзаци через порожній рядок. Посилання: [текст](https://…)">${esc(e?.text || "")}</textarea></label>
   <label>Кому<select name="audience">${Object.entries(audiences).map(([k, l]) => `<option value="${k}"${k === aud ? " selected" : ""}>${esc(l)} (${counts[k]})</option>`).join("")}</select><span class="hint">Решта отримають свій звичайний лист без цього тексту, якщо на їхніх полицях є новини.</span></label>
   <h2>Одна книжка на вихідні</h2>
-  <label>Книжка<input type="url" name="book" value="${attr(weekend.book || "")}" placeholder="https://chytai.org.ua/book/…"><span class="hint">${weekend.title ? `Зараз: «${esc(weekend.title)}». ` : ""}Адреса сторінки книжки на сайті. Одна для всіх листів. Як порожньо, візьметься нотатка читача про книжку з високою оцінкою.</span></label>
+  <label>Книжка<input type="url" name="book" value="${attr(weekend.book || "")}" placeholder="https://chytai.org.ua/book/…"><span class="hint">${weekend.title ? `Зараз: «${esc(nest(weekend.title))}». ` : ""}Адреса сторінки книжки на сайті. Одна для всіх листів. Як порожньо, візьметься нотатка читача про книжку з високою оцінкою.</span></label>
   ${weekend.id && weekends.some((x) => x.book === weekend.id) ? `<p class="error">Ця книжка вже була ${iso(weekends.find((x) => x.book === weekend.id).sent)}.</p>` : ""}
   <label>Кілька слів про неї<textarea name="book_note" rows="3">${esc(weekend.note || "")}</textarea><span class="hint">Під ними в листі стоїть оцінка читачів сайту й кількість відгуків.</span></label>
-  ${weekends.length ? `<details><summary class="small">Уже були: ${weekends.length}</summary><p class="muted small">${weekends.map((x) => `${iso(x.sent)} · «${esc(x.title)}»`).join("<br>")}</p></details>` : ""}
+  ${weekends.length ? `<details><summary class="small">Уже були: ${weekends.length}</summary><p class="muted small">${weekends.map((x) => `${iso(x.sent)} · «${esc(nest(x.title))}»`).join("<br>")}</p></details>` : ""}
   <div class="actions"><button class="btn primary">Зберегти</button><button class="btn" name="preview" value="1">Зберегти й подивитись лист</button><span class="grow"></span>${e ? `<span class="muted small">Змінено ${iso(e.updated)}</span>` : ""}</div>
   <p class="muted small">Щоб нічого не додавати до листа, зітри текст і збережи.</p>
 </form>
@@ -3004,7 +3006,7 @@ function listPage({ list, items, progress = false, user, own = false, owner = fa
     <h3><a href="${attr(b.href)}">${esc(b.title)}</a></h3>
     ${b.author ? `<p class="by">${authorLinks(b.author)}</p>` : ""}
     ${x.mine || (!list.fav && readersMeta(x.id)) || x.free ? `<p class="meta">${[x.mine ? `<span class="mine">✓ ${MY_STATUS[x.mine] || "На полиці"}</span>` : "", list.fav ? "" : readersMeta(x.id), x.free ? `<a class="text-link" href="/go/read/${attr((b.href || "").split("/").pop())}">є в Читалці</a>` : ""].filter(Boolean).join(" · ")}</p>` : ""}
-    ${x.why ? `<p class="why">${inline(x.why)}</p>` : x.shelfNote ? `<p class="small muted shelf-note">З полиці: «${esc(firstWords(stripMd(x.shelfNote), 220))}»</p>` : ""}
+    ${x.why ? `<p class="why">${inline(x.why)}</p>` : x.shelfNote ? `<p class="small muted shelf-note">З полиці: «${esc(nest(firstWords(stripMd(x.shelfNote), 220)))}»</p>` : ""}
     ${ownTools}
   </div></article>`;
     })
@@ -3118,7 +3120,7 @@ function clubText(text, links = {}, { tags = true } = {}) {
   let at = 0;
   const t = String(text || "");
   const books = [];
-  const book = (b) => (books.includes(b) || books.push(b), `<a class="at" href="${attr(b.href)}">«${esc(b.title)}»</a>`);
+  const book = (b) => (books.includes(b) || books.push(b), `<a class="at" href="${attr(b.href)}">«${esc(nest(b.title))}»</a>`);
   // A topic's own text takes no @ or # (Max, 2026-11-01: only in comments), links only.
   for (const m of t.matchAll(CLUB_TOKEN)) {
     if (!tags && !m[1]) continue;
@@ -3182,7 +3184,7 @@ const bookPick = (book) => `<div class="book-pick" data-book-pick>
   <div class="pick-hits"></div>
 </div>`;
 const topicFields = ({ t = null, book = null, owner = false }) => `
-    <label>Назва<input name="title" maxlength="120" required value="${attr(t?.title || "")}" placeholder="${book ? `Напр. «${esc(book.title)}»: як вам фінал?` : "Напр. Хто йде на Книжковий Арсенал?"}"></label>
+    <label>Назва<input name="title" maxlength="120" required value="${attr(t?.title || "")}" placeholder="${book ? `Напр. «${esc(nest(book.title))}»: як вам фінал?` : "Напр. Хто йде на Книжковий Арсенал?"}"></label>
     <label>Текст<textarea name="text" rows="7" maxlength="4000" placeholder="Про що хочете поговорити?">${esc(t?.text || "")}</textarea></label>
     <div class="field"><span class="small">Про книжку <span class="muted">· необов'язково</span></span>${bookPick(book)}</div>
     <label class="check"><span><input type="checkbox" name="spoiler" value="1"${t?.spoiler ? " checked" : ""}> Містить спойлери</span><span class="hint">Сховаємо від тих, хто книжку ще не прочитав.</span></label>
@@ -3216,7 +3218,7 @@ function clubTopicPage({ user, owner = false, topic: t, posts, hide = false, wat
   const talk = `<div class="op">${t.text ? `<div class="txt">${clubText(t.text, {}, { tags: false })}</div>` : ""}</div>
 <section class="club-posts">${label(posts.length ? answers(posts.length) : "Відповіді")}${posts.length ? posts.map(post).join("") : `<p class="muted small">Відповідей ще немає.</p>`}${form}</section>`;
   // Max's words (2026-11-01); once per topic: the browser remembers it was opened.
-  const gate = `<div class="spoil-gate"><p class="g-t">Увага: топік містить спойлери</p><p class="muted small">В цьому топіку можуть бути спойлери${t.book ? ` про книжку «${esc(t.book.title)}»` : ""}.</p><button type="button" class="btn" data-unspoil>Відкрити топік</button></div>`;
+  const gate = `<div class="spoil-gate"><p class="g-t">Увага: топік містить спойлери</p><p class="muted small">В цьому топіку можуть бути спойлери${t.book ? ` про книжку «${esc(nest(t.book.title))}»` : ""}.</p><button type="button" class="btn" data-unspoil>Відкрити топік</button></div>`;
   const edit = mine
     ? `<dialog id="topic-edit"><div class="dlg-head"><h2>Тема</h2><button type="button" class="dlg-x" data-close aria-label="Закрити">×</button></div>
   <form method="post" action="/api/club/${id}" class="form">${topicFields({ t, book: t.book, owner })}<div class="actions"><button class="btn primary">Зберегти</button></div></form>
@@ -3249,9 +3251,9 @@ function commentsAdminPage({ user, comments, club = { posts: [], topics: [] } })
   const del = (action, id) => `<button class="text-link small muted" form="del-${attr(id)}">видалити</button><form method="post" action="${attr(action)}" id="del-${attr(id)}"><input type="hidden" name="back" value="admin"></form>`;
   const who = (r) => (r ? `<a href="${attr(r.href)}"><b>${esc(r.name)}</b></a>` : "?");
   const rows = [
-    ...comments.map((c) => ({ at: c.created, html: `<p class="who">${who(c.reader)} · ${when({ updated: c.created })} · список <a href="${attr(c.list.href)}#club">«${esc(c.list.title)}»</a> · ${del(`/api/lists/comments/${c.id}/delete`, c.id)}</p><p class="txt">${esc(c.text).replace(/\n/g, "<br>")}</p>` })),
-    ...club.topics.map((t) => ({ at: t.created, html: `<p class="who">${who(t.reader)} · ${when({ updated: t.created })} · нова тема <a href="${attr(t.href)}">«${esc(t.title)}»</a> · ${del(`/api/club/${t.id}/delete`, t.id)}</p>${t.text ? `<p class="txt">${esc(t.text.slice(0, 600)).replace(/\n/g, "<br>")}</p>` : ""}` })),
-    ...club.posts.map((p) => ({ at: p.created, html: `<p class="who">${who(p.reader)} · ${when({ updated: p.created })} · у темі <a href="${attr(p.topic.href)}#p-${attr(p.id)}">«${esc(p.topic.title)}»</a> · ${del(`/api/club/posts/${p.id}/delete`, p.id)}</p><p class="txt">${esc(p.text).replace(/\n/g, "<br>")}</p>` })),
+    ...comments.map((c) => ({ at: c.created, html: `<p class="who">${who(c.reader)} · ${when({ updated: c.created })} · список <a href="${attr(c.list.href)}#club">«${esc(nest(c.list.title))}»</a> · ${del(`/api/lists/comments/${c.id}/delete`, c.id)}</p><p class="txt">${esc(c.text).replace(/\n/g, "<br>")}</p>` })),
+    ...club.topics.map((t) => ({ at: t.created, html: `<p class="who">${who(t.reader)} · ${when({ updated: t.created })} · нова тема <a href="${attr(t.href)}">«${esc(nest(t.title))}»</a> · ${del(`/api/club/${t.id}/delete`, t.id)}</p>${t.text ? `<p class="txt">${esc(t.text.slice(0, 600)).replace(/\n/g, "<br>")}</p>` : ""}` })),
+    ...club.posts.map((p) => ({ at: p.created, html: `<p class="who">${who(p.reader)} · ${when({ updated: p.created })} · у темі <a href="${attr(p.topic.href)}#p-${attr(p.id)}">«${esc(nest(p.topic.title))}»</a> · ${del(`/api/club/posts/${p.id}/delete`, p.id)}</p><p class="txt">${esc(p.text).replace(/\n/g, "<br>")}</p>` })),
   ].sort((a, b) => (a.at < b.at ? 1 : -1)).slice(0, 300);
   const body = `
 ${pageHead({ title: "Клуб Chytai", sub: rows.length ? `останні ${rows.length}` : "Коментарів ще немає.", action: `<a class="btn" href="/club">Відкрити Клуб</a>` })}
@@ -3324,7 +3326,7 @@ function freeBooksPage({ user, st, running, list, claude }) {
   const text = (x) => {
     if (x.ukText) return `Український текст автора${x.inReader ? " · <b>уже в Читалці</b>" : ""}`;
     const tr = x.translators.length ? x.translators.map((t, i) => `${esc(t)}${x.translatorsDied[i] ? ` (п. ${x.translatorsDied[i]})` : ""}`).join(", ") : "перекладача не знаємо";
-    return `Оригінал${x.orig ? ` «${esc(x.orig)}»` : ""} вільний${x.inReader ? " · <b>уже в Читалці</b>" : ""}<br><span class="small muted">Переклад: ${tr} — ${x.ukFree ? "теж вільний" : "мабуть, захищений"}</span>`;
+    return `Оригінал${x.orig ? ` «${esc(nest(x.orig))}»` : ""} вільний${x.inReader ? " · <b>уже в Читалці</b>" : ""}<br><span class="small muted">Переклад: ${tr} — ${x.ukFree ? "теж вільний" : "мабуть, захищений"}</span>`;
   };
   const where = (x) => (x.sources || []).map((s) => `<a href="${attr(s.url)}" target="_blank" rel="noopener">${esc(s.site)}</a>`).join("<br>") || `<span class="muted">не знайшли</span>`;
   const row = (x, soon = false) => `<tr${x.check ? ' class="diff"' : ""}><td><a href="${attr(x.href)}">${esc(x.title)}</a><br><span class="small muted">${esc(x.author)}, ${years(x)}</span>${x.check ? `<br><span class="small error">Перевір реабілітацію: тоді 70 років рахують від неї</span>` : ""}</td><td>${x.readers}</td><td>${soon ? `з 1 січня ${x.freeFrom}` : text(x)}</td>${soon ? "" : `<td class="small">${where(x)}</td>`}</tr>`;
@@ -3373,7 +3375,7 @@ function askTalkPage({ user, other, msgs, readerUrl, error = "", book = null, ca
     if (m.kind === "ask") return `<div class="cmt ask-msg" id="m-${attr(m.id)}">${head}${m.text ? `<div class="txt">${clubText(m.text)}</div>` : ""}${bookLink(m.book)}${answer(m)}</div>`;
     if (m.kind === "gave") {
       const open = !mine && m.file ? ` <a class="btn small" href="${attr(`${readerUrl}/?open=${encodeURIComponent(m.file)}`)}">Читати</a>` : "";
-      return `<div class="cmt ask-reply" id="m-${attr(m.id)}">${head}<p class="ask-what">«${esc(m.book?.title || "Книжка")}» тепер у ${mine ? `Читалці ${esc(other.name)}` : "вашій Читалці"}${open}</p></div>`;
+      return `<div class="cmt ask-reply" id="m-${attr(m.id)}">${head}<p class="ask-what">«${esc(nest(m.book?.title || "Книжка"))}» тепер у ${mine ? `Читалці ${esc(other.name)}` : "вашій Читалці"}${open}</p></div>`;
     }
     return `<div class="cmt" id="m-${attr(m.id)}">${head}<div class="txt">${clubText(m.text)}</div></div>`;
   };
@@ -3430,7 +3432,7 @@ function askRows(items) {
       (x, i) => `<article class="lrow${x.mine === "read" ? " done" : ""}" id="b${i + 1}"><span class="n">${i + 1}</span><a class="cover-link" href="${attr(x.book.href)}">${cover(x.book, "md")}</a><div class="row-body">
     <h3><a href="${attr(x.book.href)}">${esc(x.book.title)}</a></h3>
     ${x.book.author ? `<p class="by">${authorLinks(x.book.author)}</p>` : ""}
-    ${x.mine || x.series || readersMeta(x.id) ? `<p class="meta">${[x.mine ? `<span class="mine">✓ ${MY_STATUS[x.mine] || "На полиці"}</span>` : "", x.series ? `серія «${esc(x.series)}»` : "", readersMeta(x.id)].filter(Boolean).join(" · ")}</p>` : ""}
+    ${x.mine || x.series || readersMeta(x.id) ? `<p class="meta">${[x.mine ? `<span class="mine">✓ ${MY_STATUS[x.mine] || "На полиці"}</span>` : "", x.series ? `серія «${esc(nest(x.series))}»` : "", readersMeta(x.id)].filter(Boolean).join(" · ")}</p>` : ""}
     ${x.why ? `<p class="why">${esc(x.why)}</p>` : ""}
   </div></article>`
     )
@@ -3449,10 +3451,10 @@ function askAnswerPage({ user, ask, items, canAsk = false, owner = false }) {
   const body = `<section class="list-head ask-head">
   <p class="kicker">${canAsk ? `<a href="/ask">Що почитати далі</a>` : "Що почитати далі"}${count ? ` · ${books(count)}` : ""}</p>
   <blockquote class="ask-q">${askText(ask.text)}</blockquote>
-  ${items.length && !wait ? `<ol class="ask-sum">${items.map((x, i) => `<li><a href="#b${i + 1}">${x.book.author ? `${esc(byline(x.book.author))}, ` : ""}«${esc(x.book.title)}»</a></li>`).join("")}${more.map((m) => {
+  ${items.length && !wait ? `<ol class="ask-sum">${items.map((x, i) => `<li><a href="#b${i + 1}">${x.book.author ? `${esc(byline(x.book.author))}, ` : ""}«${esc(nest(x.book.title))}»</a></li>`).join("")}${more.map((m) => {
     // No Ukrainian edition anywhere (Ask.fill looked on book.ua): the original's name, not Claude's own translation.
     const [t, a] = m.ukFound === false && m.en ? [m.en, m.ea || m.author] : [m.title, m.author];
-    return `<li class="out">${a ? `${esc(a)}, ` : ""}«${esc(String(t).split(": ")[0])}»</li>`;
+    return `<li class="out">${a ? `${esc(a)}, ` : ""}«${esc(nest(String(t).split(": ")[0]))}»</li>`;
   }).join("")}</ol>` : ""}
   ${wait ? `<p class="ask-wait advice-wait" id="ask-wait">${ASK_STEPS[0]}</p>` : say ? `<p class="lead muted">${say}</p>` : ""}
   ${wait ? "" : `<div class="acts ask-acts">${items.length ? `<button type="button" class="btn small" data-share="${attr(ORIGIN + href)}" data-title="Що почитати далі">Поділитися</button><button type="button" class="btn small" id="ask-copy">Скопіювати</button>` : ""}${canAsk ? `<a class="btn small primary" href="/ask">Спитати ще</a>` : ""}${owner ? `<button class="btn small danger" form="ask-del">Видалити</button>` : ""}</div>`}

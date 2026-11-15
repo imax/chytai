@@ -7,6 +7,8 @@
 // shelf changes and follows, so the cohorts have some history from day one.
 // Days and weeks are Kyiv time (TZ=Europe/Kyiv on Fly); a week starts on Monday.
 const { esc } = require("./pages");
+// A title already in «» inside our «…» takes „…“ (Max, 2026-11-15: «Чорт»» on /ask).
+const nest = (t) => String(t ?? "").trim().replace(/^[«"“„](.*)[»"”“]$/s, "$1").replace(/«/g, "„").replace(/»/g, "“");
 
 const BOT = /bot|crawl|spider|slurp|curl|wget|python|java\b|go-http|headless|preview|monitor|uptime|fetch|scan|facebookexternalhit|whatsapp|telegram/i;
 // A person's browser, as far as the headers tell: no robot's name, an Accept-Language, and the Sec-Fetch-* headers
@@ -1225,7 +1227,7 @@ function activityPage({ user, rows, readers, books, names, who = null, embed = f
     const m = /^(.{8,}?)(?:\. |: | — | \()/.exec(t);
     return m && m[1].length <= 60 ? m[1] : t.slice(0, 42).replace(/\s+\S*$/, "") + "…";
   };
-  const q = (t, href) => `<a href="${esc(href)}">«${esc(short(t))}»</a>`;
+  const q = (t, href) => `<a href="${esc(href)}">«${esc(nest(short(t)))}»</a>`;
   const book = (slug) => {
     const t = names.book(slug);
     return t ? q(t, `/book/${encodeURIComponent(slug)}`) : `<a href="/book/${esc(encodeURIComponent(slug))}">книжку</a>`;
@@ -1292,9 +1294,9 @@ function activityPage({ user, rows, readers, books, names, who = null, embed = f
         return { html: n === 1 ? `змінив на полиці ${some}` : `змінив на полиці ${n} книжок: ${some}${n > 3 ? " …" : ""}` };
       }
       case "search":
-        return { html: `шукав <a href="/search?q=${esc(encodeURIComponent(r.what))}"><b>«${esc(r.what)}»</b></a> ${r.extra === "0" ? `<span class="error">нічого не знайшлось</span>` : `<span class="muted">знайшлось ${esc(r.extra)}</span>`}` };
+        return { html: `шукав <a href="/search?q=${esc(encodeURIComponent(r.what))}"><b>«${esc(nest(r.what))}»</b></a> ${r.extra === "0" ? `<span class="error">нічого не знайшлось</span>` : `<span class="muted">знайшлось ${esc(r.extra)}</span>`}` };
       case "tap":
-        if (r.what.startsWith("out:")) return { html: `перейшов на ${esc(r.what.slice(4))}${BLOCK_NAMES[r.extra] && r.extra !== "-" ? ` <span class="muted">з блоку «${esc(BLOCK_NAMES[r.extra])}»</span>` : ""}` };
+        if (r.what.startsWith("out:")) return { html: `перейшов на ${esc(r.what.slice(4))}${BLOCK_NAMES[r.extra] && r.extra !== "-" ? ` <span class="muted">з блоку «${esc(nest(BLOCK_NAMES[r.extra]))}»</span>` : ""}` };
         if (r.what === "reader-app") return { key: "reader", html: "пішов у Читалку" };
         return { html: r.what === "go:read" ? "відкрив безкоштовну книжку в Читалці" : r.what === "go:epub" ? "завантажив EPUB" : esc(r.what) };
       case "reader":
