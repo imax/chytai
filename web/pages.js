@@ -171,7 +171,7 @@ ${path === "/" ? `<meta name="google-site-verification" content="5cswdBTj0bCY9oY
 <main class="${home ? "home" : ""}">
 ${path === "/admin" && user?.owner ? adminNav() : ""}
 ${body}
-${!user && JOIN_PATHS.has(path) ? joinBand(canonical) : ""}
+${!user && JOIN_PATHS.has(path) ? joinBand(canonical, path === "/") : ""}
 </main>
 <footer class="foot"><div class="bar"><span class="motto">Chytai.org.ua: читай більше.</span><a href="/updates">Що нового</a><a href="/privacy">Приватність</a><a href="mailto:ischenko@gmail.com">Написати нам</a>${user?.owner ? `<a href="/admin">Адмінка</a>` : ""}</div></footer>
 <script src="${ASSETS.js}"></script>
@@ -545,13 +545,15 @@ const adminNav = () => `<nav class="admin-nav">${ADMIN_TABS.map(([name, links, m
 // (Max, 2026-10-27, variant B of three; text and links his). The home page too (Max, 2026-11-15); not search, sign-in
 // or settings. On book pages the «Хочу прочитати» block itself is not shown to guests.
 const JOIN_PATHS = new Set(["/", "/book","/author", "/genre", "/publishers", "/@", "/lists", "/community", "/club"]);
-function joinBand(back) {
+// On the home page «Пошук» goes up to its own field instead of reloading the page (Max, 2026-11-15).
+const FIND_UP = `href="#" onclick="document.querySelector('.search-box.big input')?.focus(); scrollTo(0, 0); return false"`;
+function joinBand(back, home = false) {
   return `<section class="join-band" data-block="join">
   <div>
     <p class="kicker">Chytai</p>
     <p class="join-title">Проєкт для тих, хто любить книжки</p>
     <p class="join-text">Спільнота людей, каталоги українських видавництв, пошук і рекомендації, читалка, яка пояснює й перекладає.</p>
-    <p class="join-links"><a href="/">🔍 Пошук</a><a href="/club">💬 Клуб</a><a href="https://app.chytai.org.ua">📖 Читалка</a></p>
+    <p class="join-links"><a ${home ? FIND_UP : 'href="/"'}>🔍 Пошук</a><a href="/club">💬 Клуб</a><a href="https://app.chytai.org.ua">📖 Читалка</a></p>
   </div>
   <a class="btn primary" rel="nofollow" href="${attr(back ? `/login?next=${encodeURIComponent(back)}` : "/login")}">Доєднатися</a>
 </section>`;
