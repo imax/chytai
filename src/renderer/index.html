@@ -381,7 +381,7 @@
         <button value="about" id="bm-about">Про книжку</button>
         <button value="keep" id="bm-keep" hidden>Зберегти на телефон</button>
         <button value="share" id="bm-share" hidden>Дати почитати</button>
-        <button value="edit" id="bm-edit">Назва й автор</button>
+        <button value="edit" id="bm-edit">Назва, автор, обкладинка</button>
         <button value="epub" id="bm-epub" hidden>Перетворити на EPUB</button>
         <button value="aside" id="bm-aside" class="danger">Видалити</button>
         <button value="delete" id="bm-delete" class="danger">Видалити</button>
@@ -419,6 +419,11 @@
   <dialog id="book-edit">
     <form method="dialog" id="book-edit-form">
       <h2 tabindex="-1" autofocus>Книжка</h2>
+      <div class="edit-cover" id="edit-cover-row">
+        <span id="edit-cover"></span>
+        <div><button type="button" class="link" id="edit-cover-pick">Змінити обкладинку</button>
+          <input type="file" id="edit-cover-file" accept="image/*" hidden /></div>
+      </div>
       <label>Назва
         <input type="text" id="edit-title" autocomplete="off" />
       </label>
@@ -427,7 +432,7 @@
         <small id="edit-file"></small>
       </label>
       <menu>
-        <button type="button" id="edit-reset" class="link" title="Повернути назву й автора з файлу">Як у файлі</button>
+        <button type="button" id="edit-reset" class="link" title="Повернути назву, автора й обкладинку з файлу">Як у файлі</button>
         <button value="cancel" formnovalidate>Скасувати</button>
         <button value="save" class="primary">Зберегти</button>
       </menu>

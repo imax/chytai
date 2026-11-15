@@ -805,6 +805,8 @@
     libraryForgetBook: (name) => api("POST", "/api/trash/forget", { path: name }),
     libraryRestoreBook: (name) => api("POST", "/api/trash/restore", { path: name }).then((r) => r.json()),
     libraryUpdateBook: (name, patch) => api("PATCH", `/api/books/${encodeURIComponent(name)}`, patch).then((r) => r.json()),
+    // A book's own cover (a JPEG the page made) or, with null, the file's cover again.
+    librarySetCover: (name, blob) => api(blob ? "PUT" : "DELETE", `/api/cover?path=${encodeURIComponent(name)}`, blob || undefined).then((r) => r.json()),
     getSettings: async () => {
       let settings;
       const asked = (async () => {

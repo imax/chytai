@@ -2314,8 +2314,16 @@ api.get("/cover", async (req, res) => {
   }
 });
 
-// Set a book's cover by hand: PUT /api/cover?path=<book> with a JPEG, PNG or WebP image as the body.
-api.put("/cover", guestsCannot("Без входу не можна змінювати обкладинки."), express.raw({ type: () => true, limit: "5mb" }), (req, res) => {
+// Set a book's cover by hand: PUT /api/cover?path=<book> with a JPEG, PNG or WebP image as the body (the page sends
+// it cut to 900 px, ~150 KB; one per book, gone with the book). DELETE /api/cover?path=<book>: the file's own again.
+api.delete("/cover", guestsCannot("Без входу не можна змінювати обкладинки."), (req, res) => {
+  const name = safeBookName(req.query.path);
+  if (!name) return res.status(404).end();
+  const key = customCoverKey(name);
+  if (fs.existsSync(req.lib.covers)) for (const f of fs.readdirSync(req.lib.covers)) if (f.startsWith(`${key}.`)) fs.unlinkSync(path.join(req.lib.covers, f));
+  res.json({ path: name, coverAt: 0 });
+});
+api.put("/cover", guestsCannot("Без входу не можна змінювати обкладинки."), express.raw({ type: () => true, limit: "2mb" }), (req, res) => {
   const name = safeBookName(req.query.path);
   if (!name || !fs.existsSync(bookFile(req.lib, name))) return res.status(404).json({ error: "Книжки немає на сервері." });
   const b = req.body;
