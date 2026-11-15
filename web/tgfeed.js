@@ -31,13 +31,18 @@ const SCHEMA = `CREATE TABLE IF NOT EXISTS tg_posts (
 CREATE INDEX IF NOT EXISTS tg_posts_at ON tg_posts (at);`;
 // ev: '' not looked at, 'skip' no event words or date, 'none' Haiku found no event, else the event ids, comma-separated.
 
-const channels = () => {
+// web/seed/tgchannels.json: [{ name, note, group?: "club", city?, account?: true }]. A club's channel (from the
+// MEGOGO BOOKS club list, Max 2026-11-15) is read from its page every CLUB_HOURS; `account: true` has no public page
+// (a closed channel or a group) and waits for our account to join it; `city` helps Haiku when a post names none.
+const CLUB_HOURS = 3;
+const seed = () => {
   try {
-    return require("./seed/tgchannels.json").map((c) => String(c.name).toLowerCase());
+    return require("./seed/tgchannels.json").map((c) => ({ ...c, name: String(c.name).toLowerCase() }));
   } catch {
     return [];
   }
 };
+const channels = () => seed().map((c) => c.name);
 
 // ---- t.me/s/<channel>: the public page, newest ~20 posts (older with ?before=<id>) ----
 const unent = (s) =>
@@ -58,7 +63,7 @@ function parsePage(html, channel) {
     const at = /<time datetime="([^"]+)"/.exec(chunk)?.[1];
     if (!id || !at) continue;
     const body = /class="tgme_widget_message_text[^"]*"[^>]*>([\s\S]*?)<\/div>/.exec(chunk)?.[1] || "";
-    const links = [...body.matchAll(/<a[^>]+href="([^"]+)"/g)].map((m) => unent(m[1])).filter(outside);
+    const links = [...body.matchAll(/<a[^>]+href="([^"]+)"/g)].map((m) => unent(unent(m[1]))).filter(outside);
     out.push({ channel, id: +id, at: new Date(at).toISOString(), text: unent(body).trim(), links: [...new Set(links)] });
   }
   return out;
@@ -169,9 +174,14 @@ function create(db, { calendar, apiKey = process.env.ANTHROPIC_API_KEY || "", cl
         const u = d.entity?.username?.toLowerCase();
         if (d.isChannel && u) mine.set(u, d);
       }
+      // A channel that could not be joined (no such name, a closed one) is not tried again for a week.
+      let nojoin = {};
+      try {
+        nojoin = JSON.parse(meta("tg:nojoin") || "{}");
+      } catch {}
       let joins = 0;
       for (const ch of list) {
-        if (mine.has(ch) || joins >= JOINS_PER_RUN) continue;
+        if (mine.has(ch) || joins >= JOINS_PER_RUN || Date.now() - Date.parse(nojoin[ch] || 0) < 7 * DAY) continue;
         joins++;
         try {
           await client.invoke(new Api.channels.JoinChannel({ channel: ch }));
@@ -179,14 +189,20 @@ function create(db, { calendar, apiKey = process.env.ANTHROPIC_API_KEY || "", cl
         } catch (e) {
           out.errors.push(`join ${ch}: ${e.errorMessage || e.message}`);
           if (/FLOOD/.test(e.errorMessage || "")) joins = JOINS_PER_RUN;
+          else nojoin[ch] = new Date().toISOString();
         }
       }
+      setMeta("tg:nojoin", JSON.stringify(nojoin));
+      // Only joined channels through the account (a name looked up each time would hit Telegram's limits); the
+      // others through their pages until their turn to be joined comes.
+      await viaPages(list.filter((ch) => !mine.has(ch)), out);
       for (const ch of list) {
         const d = mine.get(ch);
+        if (!d) continue;
         const from = lastId(ch);
-        if (d && d.message?.id <= from) continue;
+        if (d.message?.id <= from) continue;
         try {
-          const entity = d?.entity || ch;
+          const entity = d.entity;
           // A channel seen for the first time: its last 30 days, at most 100 posts.
           const msgs = await client.getMessages(entity, from ? { minId: from, limit: 100 } : { limit: 100 });
           const posts = msgs.filter((m) => m && m.className === "Message" && (from || m.date * 1000 > Date.now() - 30 * DAY)).map((m) => fromMessage(m, ch));
@@ -201,12 +217,22 @@ function create(db, { calendar, apiKey = process.env.ANTHROPIC_API_KEY || "", cl
     }
   }
   // Through the public pages: the newest page, and two more back for a channel seen for the first time.
+  // A club's channel: its newest page only, every CLUB_HOURS; one with no page waits for the account.
   async function viaPages(list, out) {
+    const info = new Map(seed().map((c) => [c.name, c]));
+    let read = {};
+    try {
+      read = JSON.parse(meta("tg:read") || "{}");
+    } catch {}
     for (const ch of list) {
+      const c = info.get(ch) || {};
+      if (c.account) continue;
+      if (c.group === "club" && Date.now() - Date.parse(read[ch] || 0) < CLUB_HOURS * 3600000 - 300000) continue;
       try {
         const from = lastId(ch);
         let posts = await pageOf(ch);
-        for (let i = 0; !from && i < 2 && posts.length; i++) {
+        read[ch] = new Date().toISOString();
+        for (let i = 0; !from && c.group !== "club" && i < 2 && posts.length; i++) {
           await new Promise((r) => setTimeout(r, 1000));
           const older = await pageOf(ch, Math.min(...posts.map((p) => p.id)));
           if (!older.length) break;
@@ -220,6 +246,7 @@ function create(db, { calendar, apiKey = process.env.ANTHROPIC_API_KEY || "", cl
       }
       await new Promise((r) => setTimeout(r, 1000));
     }
+    setMeta("tg:read", JSON.stringify(read));
   }
 
   // One run: new posts in, old ones out, then the events in the new ones (when switched on).
@@ -237,7 +264,7 @@ function create(db, { calendar, apiKey = process.env.ANTHROPIC_API_KEY || "", cl
         await viaPages(list, out);
       }
     } else await viaPages(list, out);
-    if (meta("tg:events") === "on") out.events = (await events()).made;
+    if (meta("tg:events") === "on") out.events = (await events()).made.length;
     setMeta("tg:last", JSON.stringify({ ...out, errors: out.errors.slice(0, 8) }));
     if (out.errors.length && !out.added && Object.keys(out.channels).length === 0) throw new Error(out.errors[0]);
     return { added: out.added, via: out.via, joined: out.joined.length, events: out.events, errors: out.errors };
@@ -248,7 +275,8 @@ function create(db, { calendar, apiKey = process.env.ANTHROPIC_API_KEY || "", cl
     const c = anthropic();
     if (!c) throw new Error("no ANTHROPIC_API_KEY");
     const links = JSON.parse(p.links || "[]");
-    const user = `Today: ${kyivDay()}\nChannel: @${p.channel}\nPosted: ${p.at.slice(0, 10)}\nLinks in the post: ${links.length ? links.join(" ") : "none"}\n\n${p.text}`;
+    const city = seed().find((c) => c.name === p.channel)?.city || "";
+    const user = `Today: ${kyivDay()}\nChannel: @${p.channel}${city ? ` (a book club in ${city}; use this city when the post names none and the meeting is not online)` : ""}\nPosted: ${p.at.slice(0, 10)}\nLinks in the post: ${links.length ? links.join(" ") : "none"}\n\n${p.text}`;
     const res = await c.messages.create({
       model: MODEL,
       max_tokens: 2000,
@@ -307,7 +335,40 @@ function create(db, { calendar, apiKey = process.env.ANTHROPIC_API_KEY || "", cl
     try {
       last = JSON.parse(meta("tg:last") || "null");
     } catch {}
-    return { account: accountSet(), events: meta("tg:events") || "off", channels: channels(), per, last };
+    return { account: accountSet(), events: meta("tg:events") || "off", channels: channels(), per, last, leads: leads() };
+  }
+
+  // Where the events we found come from besides Telegram (Max, 2026-11-15: «звертай увагу, звідки воно… щоб можна
+  // підписатись на нього напряму або додати в Sources»): the sites their links lead to, and the channels the event
+  // posts link to (t.me/<name>; an @name is mostly a person) that we don't read yet. → { sites: [{ host, n, example }], channels: [{ name, n, from }] }.
+  const NOT_A_SOURCE = /(^|\.)(t\.me|forms\.gle|google\.com|goo\.gl|bit\.ly|wayforpay\.com|instagram\.com|facebook\.com|fb\.me|linktr\.ee|youtube\.com|youtu\.be|zoom\.us|tiktok\.com|x\.com|twitter\.com|tally\.so|forms\.cloud\.microsoft|send\.monobank\.ua|privat24\.ua|mono\.bank)$/i;
+  function leads() {
+    const sites = new Map();
+    const mine = new Set(channels());
+    const chans = new Map();
+    for (const p of db.prepare("SELECT channel, text, links FROM tg_posts WHERE ev NOT IN ('', 'skip', 'none')").all()) {
+      for (const u of JSON.parse(p.links || "[]")) {
+        let host;
+        try {
+          host = new URL(u).hostname.replace(/^www\./, "");
+        } catch {
+          continue;
+        }
+        if (NOT_A_SOURCE.test(host)) continue;
+        const s = sites.get(host) || { host, n: 0, example: u };
+        s.n++;
+        sites.set(host, s);
+      }
+      const names = [...`${p.text} ${p.links}`.matchAll(/t\.me\/([a-z][\w]{4,31})(?![\w.])/gi)].map((m) => m[1].toLowerCase());
+      for (const n of new Set(names)) {
+        if (mine.has(n) || n === "s" || n === "joinchat") continue;
+        const c = chans.get(n) || { name: n, n: 0, from: p.channel };
+        c.n++;
+        chans.set(n, c);
+      }
+    }
+    const top = (m) => [...m.values()].sort((a, b) => b.n - a.n).slice(0, 30);
+    return { sites: top(sites), channels: top(chans) };
   }
 
   return { run, events, status, maybeEvent, meta, setMeta };

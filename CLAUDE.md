@@ -256,7 +256,13 @@ A flag only when Max asks for one, or when the change could break what readers u
   them on his computer with `node scripts/tg-login.js`): it joins 3 new channels a run and reads what is new. No
   session, or Telegram refuses it: the public pages `t.me/s/<channel>`. A bot can't do this (it sees a channel only
   when the channel's admin adds it). Status: `curl -s https://chytai.org.ua/agent/tg -H "$H"`; run now:
-  `POST /agent/tg {"run":true}`. A new channel: a line in the seed file.
+  `POST /agent/tg {"run":true}`. A new channel: a line in the seed file (`group: "club"` = read every 3 h from its page,
+  `city` = the club's city for Haiku, `account: true` = no public page, waits for the account; a channel the account
+  can't join is skipped for a week, meta `tg:nojoin`). Book clubs: 72 channels from the MEGOGO BOOKS club hub (Max
+  2026-11-15, list in project files `chytai-calendar/megogo-clubs-telegram.tsv`).
+- Leads (Max: «звертай увагу, звідки воно… щоб можна підписатись на нього напряму»): `/agent/tg` → `leads`: the sites
+  event posts link to (forms, social networks and payments left out) and t.me channels they link to that we don't read.
+  A site with many: read it directly (like `yeRun`) or add its channel.
 - Events from those posts: an event word and a date not past (`maybeEvent`, ~1 post in 15) → Haiku 5.5 answers the
   events as fields (60 calls a day at most), `findSimilar` drops the same event from another channel, `upsert` with
   the post's event link or the post itself, shown at once (Max hides a bad one with «сховати»). On since 2026-11-15
