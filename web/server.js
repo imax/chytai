@@ -1648,12 +1648,14 @@ const calendarMore = bg.register(
     chytomoDry: () => calendar.chytomoRun({ extract: tgFeed.extract, dry: true }),
     eventmate: () => calendar.eventmateRun({ extract: tgFeed.extract }),
     eventmateDry: () => calendar.eventmateRun({ extract: tgFeed.extract, dry: true, max: 5 }),
+    feeds: () => calendar.feedsRun(),
     books: () => calendar.fillBooks().then((r) => (r.made.length || r.found.length ? r : false)),
     booksDry: () => calendar.fillBooks({ dry: true }),
   },
-  { chytomo: false, chytomoDry: false, eventmate: false, eventmateDry: false, books: true, booksDry: false },
+  { chytomo: false, chytomoDry: false, eventmate: false, eventmateDry: false, feeds: false, books: true, booksDry: false },
 );
 bg.every("calendar-chytomo", 24 * 3600 * 1000, () => calendarMore.chytomo(), { db: store.db, first: 20 * 60 * 1000 });
+bg.every("calendar-feeds", 6 * 3600 * 1000, () => calendarMore.feeds(), { db: store.db, first: 15 * 60 * 1000 });
 bg.every("calendar-eventmate", 24 * 3600 * 1000, () => calendarMore.eventmate(), { db: store.db, first: 30 * 60 * 1000 });
 bg.every("calendar-books", 3600 * 1000, () => calendarMore.books(), { db: store.db, first: 25 * 60 * 1000 });
 // The authors of a book (slugs), for its page's line about an event.
@@ -2579,7 +2581,18 @@ app.get("/admin/events", owner, (req, res) => {
   try {
     tg = tgFeed.status();
   } catch {}
-  res.send(pages.eventsAdminPage({ user: req.user, rows: calendar.upcoming(), tg, saved: String(req.query.saved || "") }));
+  res.send(pages.eventsAdminPage({ user: req.user, rows: calendar.upcoming(), tg, saved: String(req.query.saved || ""), feeds: calendar.feeds(), feedMsg: String(req.query.feed || "") }));
+});
+// An organizer's calendar (Google or .ics, Max 2026-11-15): read at once, then every 6 hours in the jobs process.
+app.post("/admin/events/feed", owner, async (req, res) => {
+  const b = req.body || {};
+  const r = await calendar.addFeed({ url: b.url, name: b.name, page: b.page, city: b.city, kind: b.kind }).catch((e) => ({ error: e.message }));
+  const msg = r.error ? `Помилка: ${r.error}` : `Додано, подій: ${r.n}.`;
+  res.redirect(303, `/admin/events?feed=${encodeURIComponent(msg)}#feeds`);
+});
+app.post("/admin/events/feed/delete", owner, (req, res) => {
+  calendar.removeFeed(req.body?.id);
+  res.redirect(303, "/admin/events#feeds");
 });
 app.post("/admin/events/link", owner, (req, res) => {
   const id = String(req.body?.id || "");

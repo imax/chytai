@@ -3527,7 +3527,7 @@ ${shown.length ? shown.map(row).join("") : `<p class="muted">${all ? "Поки �
 
 // ---- /admin/events: the calendar of book events (Max 2026-11-15: its own page; where an event lacks its page) ----
 
-function eventsAdminPage({ user, rows, tg, saved }) {
+function eventsAdminPage({ user, rows, tg, saved, feeds = [], feedMsg = "" }) {
   const C = cal();
   const n = (v) => String(v);
   const kindOf = (e) => C.linkKind(C.sourceUrl(e)) || "none";
@@ -3535,7 +3535,7 @@ function eventsAdminPage({ user, rows, tg, saved }) {
   const count = (f) => rows.reduce((m, e) => ((m[f(e)] = (m[f(e)] || 0) + 1), m), {});
   const byLink = count(kindOf);
   const bySource = count((e) => e.source);
-  const SOURCE_NAME = { tg: "Telegram", chytomo: "Chytomo", seed: "вручну (seed)", reader: "читачі", ye: "сайт «Є»" };
+  const SOURCE_NAME = { tg: "Telegram", chytomo: "Chytomo", eventmate: "Eventmate", ics: "календарі організаторів", seed: "вручну (seed)", reader: "читачі", ye: "сайт «Є»" };
   const chan = (e) => (C.linkKind(e.url) === "tg" ? (e.url.match(/t\.me\/([^/]+)/) || [])[1] || "" : "");
   // One row a post: a series of meetings from one post is one line with its dates.
   const lines = (pick) => {
@@ -3574,6 +3574,18 @@ ${table(none, "Усі події мають посилання.")}</section>
 <p class="small muted">Веде на афішу «Є» в місті, бо до сторінок подій на book-ye.com.ua робот не доходить.</p>
 ${table(ye, "Немає.")}</section>
 ${mine.length ? `<section class="block">${label(`Ваші посилання · ${total(mine)}`)}${table(mine, "")}</section>` : ""}
+<section class="block" id="feeds">${label(`Календарі організаторів · ${feeds.length}`)}
+<p class="small muted">Клуб чи книгарня веде Google-календар або дає файл .ics: вставте посилання, і їхні події на 120 днів наперед з'являться тут. Оновлюємо кожні 6 годин.</p>
+${feedMsg ? `<p class="small"><b>${esc(feedMsg)}</b></p>` : ""}
+${feeds.map((f) => `<div class="cmt"><p>${esc(f.name || f.url)}${f.kind ? ` <span class="small muted">· ${esc((C.KINDS.find((k) => k.key === f.kind) || {}).label || "")}</span>` : ""}${f.city ? ` <span class="small muted">· ${esc(f.city)}</span>` : ""}</p>
+<p class="small muted">${f.error ? `<b>Помилка:</b> ${esc(f.error)}` : `подій: ${n(f.n)}`}${f.last ? ` · ${esc(f.last.slice(0, 16).replace("T", " "))} UTC` : ""} · <a href="${attr(f.url)}" target="_blank" rel="noopener">календар</a></p>
+<form method="post" action="/admin/events/feed/delete"><input type="hidden" name="id" value="${attr(String(f.id))}"><button class="btn small">Прибрати</button></form></div>`).join("")}
+<form method="post" action="/admin/events/feed" style="display:grid;gap:.5em;margin-top:.6em">
+<input name="url" required placeholder="Посилання на календар (Google або .ics)">
+<input name="name" placeholder="Назва, напр. клуб «Лісові читання»">
+<input name="page" type="url" placeholder="Сторінка організатора (необов'язково)">
+<div style="display:flex;gap:.5em"><input name="city" placeholder="Місто" style="flex:1;min-width:0"><select name="kind" style="flex:1;min-width:0"><option value="">Тип: різне</option>${C.KINDS.map((k) => `<option value="${attr(k.key)}">${esc(k.label)}</option>`).join("")}</select></div>
+<button class="btn small" style="justify-self:start">Додати календар</button></form></section>
 <section class="block">${label("Звідки беремо")}
 <p class="small">Telegram: ${tg ? `${tg.account ? "наш акаунт" : "публічні сторінки"}, ${n((tg.channels || []).length)} каналів, події ${tg.events === "on" ? "збираються" : "вимкнено"}${tg.last?.at ? `, останній раз ${esc(tg.last.at.slice(11, 16))} UTC` : ""}` : "—"}.</p>
 ${top.length ? `<p class="small muted">Найбільше подій: ${top.map((c) => `<a href="https://t.me/${attr(c.channel)}" target="_blank" rel="noopener">@${esc(c.channel)}</a> ${c.events}`).join(" · ")}</p>` : ""}

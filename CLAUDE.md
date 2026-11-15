@@ -335,6 +335,12 @@ A flag only when Max asks for one, or when the change could break what readers u
   event sitemaps' Ukrainian pages with a bookish name (`EM_BOOKISH`) not seen yet (meta `eventmate:seen`, half a year),
   the date from the page, upcoming ones through `tgFeed.extract` (≤20 a run), source `eventmate`, the event's page as
   its link. Dry run: `curl -s https://chytai.org.ua/agent/calendar-eventmate -H "$H"` (ask again); run: `POST {"run":true}`.
+- Organizers' calendars (Max 2026-11-15): /admin/events «Календарі організаторів» takes a Google Calendar link of
+  any shape or an .ics (`calendar.icsAddress`), reads it at once (one that fails isn't kept) and every 6 h
+  (`calendar-feeds` job, `feedsRun`): table `cal_feeds`, the next 120 days in as source `ics` (`parseIcs`, no AI;
+  the feed's kind and city win), a meeting gone from the calendar goes here too; «Прибрати» takes its events off.
+  A repeating event gives only its first meeting. Closed sites: letters to «Є» and Readeat asking to let our robot
+  through are in project files `chytai-calendar/letters-closed-sites.md` (Max sends them).
   Looked at and not usable (2026-11-15): Karabas, concert.ua, readeat.com, Goethe (403 to robots), Є (Cloudflare),
   cityofliterature.lviv.ua (a casino now), ui.org.ua and dou.ua (no book events); publishers and shops come as channels.
 - Books an event names that the catalog lacks (Max 2026-11-15): Haiku answers each event's `books` (`named`), and a

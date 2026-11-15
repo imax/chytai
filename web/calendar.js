@@ -247,6 +247,76 @@ const KINDS = [
   { key: "kids", label: "Для дітей" },
 ];
 
+// ---- An organizer's own calendar (iCalendar, Max 2026-11-15: «імпорт календарів організаторів») ----
+// A Google Calendar link of any shape (embed ?src=, ?cid=, the .ics itself) or webcal:// → the address of its .ics.
+function icsAddress(raw) {
+  let s = String(raw || "").trim().replace(/^webcal:\/\//i, "https://");
+  let u;
+  try {
+    u = new URL(s);
+  } catch {
+    return "";
+  }
+  if (!/^https?:$/.test(u.protocol)) return "";
+  if (/(^|\.)calendar\.google\.com$/i.test(u.hostname) && !/\/ical\//.test(u.pathname)) {
+    let id = u.searchParams.get("src") || "";
+    const cid = u.searchParams.get("cid");
+    if (!id && cid) {
+      try {
+        id = /@|\./.test(cid) ? cid : Buffer.from(cid.replace(/-/g, "+").replace(/_/g, "/"), "base64").toString("utf8");
+      } catch {}
+    }
+    return id ? `https://calendar.google.com/calendar/ical/${encodeURIComponent(id)}/public/basic.ics` : "";
+  }
+  return u.href;
+}
+// iCalendar text → [{ uid, title, sub, place, url, starts, ends, time, status }] in Kyiv days and time. Unfolds lines;
+// a time in UTC (…Z) turns into Kyiv's, a TZID one is taken as it is, a whole day (VALUE=DATE) has no time; an
+// all-day DTEND is the day after. A repeating event (RRULE) gives its first meeting only.
+function parseIcs(text) {
+  const lines = String(text || "").replace(/\r\n?/g, "\n").replace(/\n[ \t]/g, "").split("\n");
+  const un = (v) => v.replace(/\\n/gi, "\n").replace(/\\([,;\\])/g, "$1").trim();
+  const clock = new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Kyiv", hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
+  const when = (params, v) => {
+    const m = /^(\d{4})(\d\d)(\d\d)(?:T(\d\d)(\d\d)(\d\d)?(Z)?)?$/.exec(v.trim());
+    if (!m) return null;
+    const [, y, mo, d, h, mi, , z] = m;
+    if (!h || /VALUE=DATE(?!-)/i.test(params)) return { day: `${y}-${mo}-${d}`, time: "", allDay: true };
+    if (z) {
+      const t = Date.UTC(+y, +mo - 1, +d, +h, +mi);
+      return { day: kyivDay(t), time: clock.format(new Date(t)) };
+    }
+    return { day: `${y}-${mo}-${d}`, time: `${h}:${mi}` };
+  };
+  const out = [];
+  let ev = null;
+  for (const line of lines) {
+    if (/^BEGIN:VEVENT/i.test(line)) ev = {};
+    else if (/^END:VEVENT/i.test(line)) {
+      if (ev?.start) {
+        let ends = ev.end?.day || "";
+        if (ev.end?.allDay && ends) ends = addDays(ends, -1);
+        out.push({ uid: ev.uid || `${ev.start.day}-${ev.title || ""}`, title: ev.title || "", sub: ev.sub || "", place: ev.place || "", url: ev.url || "", starts: ev.start.day, ends: ends > ev.start.day ? ends : "", time: ev.start.time, status: ev.status || "" });
+      }
+      ev = null;
+    } else if (ev) {
+      const m = /^([A-Z-]+)((?:;[^:]*)?):(.*)$/i.exec(line);
+      if (!m) continue;
+      const [, name, params, value] = m;
+      const k = name.toUpperCase();
+      if (k === "UID") ev.uid = value.trim();
+      else if (k === "SUMMARY") ev.title = un(value);
+      else if (k === "DESCRIPTION") ev.sub = un(value);
+      else if (k === "LOCATION") ev.place = un(value);
+      else if (k === "URL") ev.url = value.trim();
+      else if (k === "STATUS") ev.status = value.trim().toUpperCase();
+      else if (k === "DTSTART") ev.start = when(params, value);
+      else if (k === "DTEND") ev.end = when(params, value);
+    }
+  }
+  return out;
+}
+
 function create(db, store, { notify = () => {}, bookua = null, search = null, made = () => {} } = {}) {
   db.exec(SCHEMA);
   // Books an event names that the catalog did not have yet: [{ title, author }] (fillBooks looks for them outside).
@@ -557,6 +627,61 @@ function create(db, store, { notify = () => {}, bookua = null, search = null, ma
     return out;
   }
 
+  // Organizers' calendars Max adds on /admin/events: read every 6 hours (feedsRun), their next 120 days in as source
+  // `ics` (key `<feed>/<uid>`), kind and city from the feed when given; a meeting gone from the calendar goes here
+  // too. No AI: an organizer's calendar is all events, and books and authors are found by name (upsert).
+  db.exec("CREATE TABLE IF NOT EXISTS cal_feeds (id INTEGER PRIMARY KEY, url TEXT NOT NULL UNIQUE, name TEXT NOT NULL DEFAULT '', page TEXT NOT NULL DEFAULT '', city TEXT NOT NULL DEFAULT '', kind TEXT NOT NULL DEFAULT '', added TEXT NOT NULL, last TEXT NOT NULL DEFAULT '', n INTEGER NOT NULL DEFAULT 0, error TEXT NOT NULL DEFAULT '')");
+  const feeds = () => db.prepare("SELECT * FROM cal_feeds ORDER BY name, id").all();
+  async function readFeed(f) {
+    const today = kyivDay();
+    const until = addDays(today, 120);
+    const prefix = `ics:${f.id}/`;
+    try {
+      const page = await fetchPage(f.url, { timeout: 15000, accept: "text/calendar, */*", max: 4 * 1024 * 1024 });
+      if (!/BEGIN:VCALENDAR/i.test(page.html)) throw new Error("це не календар (.ics)");
+      const keep = new Set();
+      for (const e of parseIcs(page.html)) {
+        const last = e.ends || e.starts;
+        if (e.status === "CANCELLED" || last < today || e.starts > until || !e.title) continue;
+        const key = `${f.id}/${require("crypto").createHash("sha1").update(`${e.uid}|${e.starts}`).digest("hex").slice(0, 12)}`;
+        const id = upsert({ source: "ics", key, title: e.title, sub: e.sub.split("\n").find((l) => l.trim()) || "", place: e.place.split(",")[0], city: f.city || findCity(e.place) || "", starts: e.starts, ends: e.ends, time: e.time, url: /^https?:\/\//.test(e.url) ? e.url : f.page, kind: f.kind });
+        if (id) keep.add(id);
+      }
+      let gone = 0;
+      for (const r of db.prepare("SELECT id FROM cal_events WHERE source = 'ics' AND id LIKE ? AND (starts >= ? OR ends >= ?)").all(`${prefix}%`, today, today))
+        if (!keep.has(r.id)) gone += db.prepare("DELETE FROM cal_events WHERE id = ?").run(r.id).changes;
+      if (gone) fresh();
+      db.prepare("UPDATE cal_feeds SET last = ?, n = ?, error = '' WHERE id = ?").run(new Date().toISOString(), keep.size, f.id);
+      return { id: f.id, n: keep.size, gone };
+    } catch (e) {
+      db.prepare("UPDATE cal_feeds SET last = ?, error = ? WHERE id = ?").run(new Date().toISOString(), String(e.message || e).slice(0, 200), f.id);
+      return { id: f.id, error: e.message };
+    }
+  }
+  async function feedsRun() {
+    const out = [];
+    for (const f of feeds()) out.push(await readFeed(f));
+    return out;
+  }
+  // → { id } or { error } (Ukrainian, for the admin page).
+  async function addFeed({ url, name, page, city, kind }) {
+    const address = icsAddress(url);
+    if (!address) return { error: "Потрібне посилання на календар: Google або .ics." };
+    if (db.prepare("SELECT 1 FROM cal_feeds WHERE url = ?").get(address)) return { error: "Цей календар уже є." };
+    const pg = /^https?:\/\//.test(String(page || "").trim()) && linkKind(page) !== "tg" ? String(page).trim().slice(0, 500) : "";
+    const id = Number(db.prepare("INSERT INTO cal_feeds (url, name, page, city, kind, added) VALUES (?, ?, ?, ?, ?, ?)").run(address, clean(name, 80), pg, clean(city, 40), KINDS.some((k) => k.key === kind) ? kind : "", new Date().toISOString()).lastInsertRowid);
+    const r = await readFeed(db.prepare("SELECT * FROM cal_feeds WHERE id = ?").get(id));
+    // One that can't be read at once isn't kept: Max sees why and tries another link.
+    if (r.error) removeFeed(id);
+    return r.error ? { error: r.error } : { id, n: r.n };
+  }
+  // A calendar taken off, and its events with it.
+  function removeFeed(id) {
+    db.prepare("DELETE FROM cal_events WHERE source = 'ics' AND id LIKE ?").run(`ics:${Number(id)}/%`);
+    db.prepare("DELETE FROM cal_feeds WHERE id = ?").run(Number(id));
+    fresh();
+  }
+
   // «Додати подію» from a reader: { title, url, starts, time, city, place, sub } → { id } or { error }.
   function add(user, f) {
     const url = clean(f.url, 500);
@@ -750,7 +875,7 @@ function create(db, store, { notify = () => {}, bookua = null, search = null, ma
   };
   const unsubscribeAll = (reader) => db.prepare("DELETE FROM cal_subs WHERE reader = ?").run(reader).changes;
 
-  return { upsert, setKinds, add, one, byKey, findSimilar, hide, setLink, cleanup, seed, upcoming, forAuthor, forBook, cities, fillBooks, chytomoRun, eventmateRun, yeRun, yeLast: () => yeLast, peek, fresh, meta, setMeta, subs, subscribed, subscribe, unsubscribeAll };
+  return { upsert, setKinds, add, one, byKey, findSimilar, hide, setLink, cleanup, seed, upcoming, forAuthor, forBook, cities, fillBooks, chytomoRun, eventmateRun, feeds, addFeed, removeFeed, feedsRun, yeRun, yeLast: () => yeLast, peek, fresh, meta, setMeta, subs, subscribed, subscribe, unsubscribeAll };
 }
 
 // «Четвер, 19 листопада» and, within a week, «завтра» / «через 3 дні».
@@ -903,4 +1028,4 @@ function googleLink(e, page = "") {
 const SHORT_DAYS = ["нд", "пн", "вт", "ср", "чт", "пт", "сб"];
 const shortWhen = (e) => `${SHORT_DAYS[new Date(`${e.starts}T12:00:00Z`).getUTCDay()]}, ${span(e)}`;
 
-module.exports = { create, KINDS, abroad, eventKey, eventPath, linkKind, sourceUrl, googleLink, tourTitle, subKey, subParse, subName, SHORT_DAYS, tours, ics, parseWhen, linkText, readEvent, cleanTitle, findCity, kyivDay, addDays, dayName, dayAside, span, shortWhen, MONTHS };
+module.exports = { create, KINDS, parseIcs, icsAddress, abroad, eventKey, eventPath, linkKind, sourceUrl, googleLink, tourTitle, subKey, subParse, subName, SHORT_DAYS, tours, ics, parseWhen, linkText, readEvent, cleanTitle, findCity, kyivDay, addDays, dayName, dayAside, span, shortWhen, MONTHS };
