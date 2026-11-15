@@ -1432,9 +1432,9 @@ function readPage({ user, f, filters, picks, finish, ua, short, free, wanted, ge
 ${ask && !f && !smart ? askBlock(asks) : ""}
 ${picks.length ? `<section class="block" data-block="picks">${label("Читачі радять", "оцінка 4,5+ і пару слів чому")}<div class="advices">${picks.map(advice).join("")}</div></section>` : ""}
 ${row("Для вас", forWhy, forYou)}
+${events ? calHome(events) : ""}
 ${!f && editorials.length ? `<section class="block editorials" data-block="editorials">${label("Добірки Chytai", `<a href="/lists">усі списки</a>`)}<div class="lgrid">${editorials.map(listCard).join("")}</div></section>` : ""}
 ${row("Дочитують до кінця", "ніхто не покинув", finish, (w) => `дочитали ${w.s.finished}`)}
-${events ? calHome(events) : ""}
 ${!f && club.length ? `<section class="block" data-block="club">${label("Обговорюють зараз", `<a href="/club">Клуб Chytai</a>`)}<div class="club-topics">${club.map((t) => clubRow(t, { tight: true })).join("")}</div></section>` : ""}
 ${!f ? readerBand() : ""}
 ${f ? row("Українські автори", "", ua) : ""}
@@ -2156,7 +2156,7 @@ function calHome({ events, total }) {
     const d = e.starts < today ? today : e.starts;
     return calLine(e, { today, day: d !== last ? (last = d) : "" });
   });
-  return `<section class="block cal-home" data-block="events">${label("Книжкові події", `<a href="/calendar">усі ${total}</a>`)}<div class="cal-lns">${rows.join("")}</div></section>`;
+  return `<section class="block cal-home" data-block="events">${label("Події", `<a href="/calendar">усі ${total}</a>`)}<div class="cal-lns">${rows.join("")}</div></section>`;
 }
 // The list by weeks: today, this week and the next one open; when the list is long, the later months folded.
 function calList(events, { user, owner, today, kind = "" }) {
