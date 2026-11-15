@@ -296,6 +296,15 @@ function create(db, store, { notify = () => {}, bookua = null, search = null, ma
       if (c?.day === day) count = c;
     } catch {}
     const out = { made: [], found: [], missed: [] };
+    // Once: the events from before books were looked for get their «» titles by a known author.
+    if (!dry && !meta("calbooks:rewant")) {
+      for (const e of db.prepare("SELECT * FROM cal_events WHERE want = '[]' AND (starts >= ? OR ends >= ?)").all(day, day).map(row)) {
+        const links = { books: [...e.books], authors: e.authors };
+        const want = wanted(e, e.title, links);
+        if (want.length || links.books.length > e.books.length) db.prepare("UPDATE cal_events SET books = ?, want = ? WHERE id = ?").run(JSON.stringify(links.books.slice(0, 6)), JSON.stringify(want), e.id);
+      }
+      setMeta("calbooks:rewant", new Date().toISOString());
+    }
     const rows = db.prepare("SELECT * FROM cal_events WHERE want != '[]' AND (starts >= ? OR ends >= ?)").all(day, day).map(row);
     for (const e of rows) {
       const left = [];

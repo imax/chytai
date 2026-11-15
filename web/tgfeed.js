@@ -129,7 +129,7 @@ Answer every book event in the post that takes place on or after today's date (a
 - city: the city in Ukrainian, nominative («Київ», «Львів», «Прага»); «Онлайн» if it is only online; "" if the post does not say.
 - place: venue and address as the post gives them, at most 120 characters, or "".
 - url: the post's link to the event page or registration, only one of the links given; else "".
-- books: the books the event is about (presented, discussed, read), each with its title as written, without quotes, and its author's full name in Ukrainian; [] if no book is named.
+- books: the books the event is about (presented, discussed, read), each with its title as written, without quotes, and its author's full name in Ukrainian; at most 4, the main ones; [] if no book is named.
 
 When the post has no book event from today on, answer an empty list.`;
 const EVENT_SCHEMA = {
@@ -291,7 +291,7 @@ function create(db, { calendar, apiKey = process.env.ANTHROPIC_API_KEY || "", cl
     const user = `Today: ${kyivDay()}\n${p.page ? `Page: ${p.page}` : `Channel: @${p.channel}${city ? ` (a book club in ${city}; use this city when the post names none and the meeting is not online)` : ""}`}\nPosted: ${p.at.slice(0, 10)}\nLinks in the post: ${links.length ? links.join(" ") : "none"}\n\n${p.text}`;
     const res = await c.messages.create({
       model: MODEL,
-      max_tokens: 2000,
+      max_tokens: 4000,
       system: [{ type: "text", text: SYSTEM, cache_control: { type: "ephemeral" } }],
       messages: [{ role: "user", content: user }],
       output_config: { effort: "low", format: { type: "json_schema", schema: EVENT_SCHEMA } },
