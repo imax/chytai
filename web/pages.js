@@ -2167,7 +2167,7 @@ function calHome({ events, total }) {
   if (!events?.length) return "";
   const today = cal().kyivDay();
   const rows = events.map((e) => calLine(e, { today }));
-  return `<section class="block cal-home" data-block="events">${label("Події", `<a href="/calendar">усі ${total}</a>`)}<div class="cal-lns">${rows.join("")}</div></section>`;
+  return `<section class="block cal-home" data-block="events">${label("Події", `<a href="/calendar">усі події</a>`)}<div class="cal-lns">${rows.join("")}</div></section>`;
 }
 // The list by weeks: today, this week and the next one open; when the list is long, the later months folded.
 function calList(events, { user, owner, today, kind = "" }) {
@@ -2215,7 +2215,7 @@ function calList(events, { user, owner, today, kind = "" }) {
 // The overview: each kind in its own shape, the soonest first; «усі N» opens the kind's list.
 function calOverview(events, { user, owner, today, href, counts }) {
   const of = (k) => events.filter((e) => (e.kind || "") === k);
-  const more = (k) => (counts[k] > 0 ? `<a href="${attr(href({ kind: k }))}">усі ${counts[k]}</a>` : "");
+  const more = (k) => (counts[k] > 0 ? `<a href="${attr(href({ kind: k }))}">усі</a>` : "");
   const short = (e) => calWhen(e, today);
   const out = [];
   // Meetings with authors: cards, a book's cover or the day.
