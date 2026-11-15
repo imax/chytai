@@ -487,6 +487,9 @@ function create(db, store, { notify = () => {}, bookua = null, search = null, ma
     try {
       seen = JSON.parse(meta("eventmate:seen") || "{}");
     } catch {}
+    // Once (2026-11-15): read again, so the events first seen as Telegram twins get these pages as links.
+    if (!dry && !meta("eventmate:relink")) seen = {};
+    let relinked = 0;
     const index = await fetchPage(`${EVENTMATE}/sitemap.xml`, { accept: "application/xml, text/xml" });
     const maps = [...index.html.matchAll(/<loc>(https:\/\/eventmate\.app\/sitemap\/events\/\d+\.xml)<\/loc>/g)].map((m) => m[1]);
     const slugs = [];
@@ -535,7 +538,11 @@ function create(db, store, { notify = () => {}, bookua = null, search = null, ma
       found.forEach((e, i) => {
         const ev = { source: "eventmate", key: `${slug.slice(0, 80)}${i ? `-${i}` : ""}`, ...e, url };
         const twin = findSimilar({ starts: e.starts, city: e.city, title: e.title });
-        if (twin && twin.id !== `eventmate:${ev.key}`) return out.dupes.push({ title: e.title, twin: twin.id });
+        if (twin && twin.id !== `eventmate:${ev.key}`) {
+          // The same event from a Telegram post: it gets this page as its link (we never show a post).
+          if (!dry && linkKind(twin.url) === "tg") relinked += db.prepare("UPDATE cal_events SET url = ? WHERE id = ?").run(url, twin.id).changes;
+          return out.dupes.push({ title: e.title, twin: twin.id });
+        }
         if (!dry) upsert(ev);
         out.made.push({ title: e.title, starts: e.starts, city: e.city, named: e.named });
       });
@@ -543,7 +550,9 @@ function create(db, store, { notify = () => {}, bookua = null, search = null, ma
     // Seen addresses are kept half a year (an event's page doesn't come back).
     const old = addDays(today, -180);
     for (const [k, d] of Object.entries(seen)) if (d < old) delete seen[k];
-    if (!dry) setMeta("eventmate:seen", JSON.stringify(seen));
+    if (!dry) setMeta("eventmate:seen", JSON.stringify(seen)), setMeta("eventmate:relink", out.at);
+    if (relinked) fresh();
+    out.relinked = relinked;
     if (!dry) setMeta("eventmate:last", JSON.stringify({ ...out, made: out.made.length }));
     return out;
   }
