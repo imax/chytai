@@ -2317,7 +2317,7 @@ function calendarPage({ user, events, cities, city = "", mine = false, mineCount
 ${kinds}
 ${tools}
 <div data-block="calendar" class="cal-page">${body}</div>
-<p class="small cal-about">З афіш книгарень і фестивалів, від видавців і читачів. Ведемо на сторінку організатора, квитків не продаємо. <a class="text-link" href="/calendar/add">Знаєте подію? Додайте</a></p>
+<p class="small cal-about">З афіш книгарень і фестивалів, від видавців і читачів. <a class="text-link" href="/calendar/add">Знаєте подію? Додайте</a></p>
 ${inCalendar}`;
   return layout({ title: "Книжкові події", body: page, user, path: "/calendar", canonical: "/calendar", noindex: !overview, description: "Зустрічі з авторами, книжкові клуби, лекції й фестивалі в Україні та онлайн." });
 }
@@ -2403,7 +2403,6 @@ function eventPage({ e, user, owner = false, books = [], stops = [], related = [
   // «Додати в календар»: the .ics file opens Apple's calendar, Google's has its own link.
   const ics = C.eventPath(e) + ".ics";
   const addCal = past ? "" : `<details class="ev-cal"><summary class="btn">Додати в календар</summary><p class="small"><a class="text-link" href="${attr(ics)}" data-ev="ev-ics">iPhone чи Mac</a> · <a class="text-link" href="${attr(C.googleLink(e, page))}" target="_blank" rel="noopener" data-ev="ev-google">Google</a> · <a class="text-link" href="${attr(ics)}" download data-ev="ev-ics-file">файл .ics</a></p></details>`;
-  const note = src ? (C.linkKind(src) === "form" ? "Реєстрація в організатора. Квитків не продаємо." : "Подробиці в організатора. Квитків не продаємо.") : "";
   const hide = user && (owner || e.by === user.id) ? `<form method="post" action="/calendar/${attr(encodeURIComponent(e.id))}/hide" class="inline"><button class="text-link small muted">сховати</button></form>` : "";
   const by = e.byReader ? `Додав(ла) <a class="text-link" href="${attr(e.byReader.href)}">${esc(e.byReader.name)}</a>` : "";
   const foot = [by, hide].filter(Boolean).join(" · ");
@@ -2432,7 +2431,7 @@ function eventPage({ e, user, owner = false, books = [], stops = [], related = [
         ${where ? `<p class="ev-where">${where}${map}</p>` : ""}
         ${e.sub ? `<p class="ev-sub">${esc(e.sub)}</p>` : ""}
         ${calShelfLine(e)}
-        ${past ? `<p class="ev-past muted">Ця подія вже минула. <a class="text-link" href="/calendar">Що попереду</a></p>` : org || addCal ? `<div class="ev-acts">${org}${addCal}</div>${note ? `<p class="small muted ev-note">${note}</p>` : ""}` : ""}
+        ${past ? `<p class="ev-past muted">Ця подія вже минула. <a class="text-link" href="/calendar">Що попереду</a></p>` : org || addCal ? `<div class="ev-acts">${org}${addCal}</div>` : ""}
         ${foot ? `<p class="small muted ev-foot">${foot}</p>` : ""}
       </div>
     </article>
