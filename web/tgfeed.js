@@ -130,8 +130,11 @@ Answer every book event in the post that takes place on or after today's date (a
 - place: venue and address as the post gives them, at most 120 characters, or "".
 - url: the post's link to the event page or registration, only one of the links given; else "".
 - books: the books the event is about (presented, discussed, read), each with its title as written, without quotes, and its author's full name in Ukrainian; at most 4, the main ones; [] if no book is named.
+- kind: what sort of event it is: "club" a book club meeting or a discussion of a book by readers (also book mafia, a joint reading); "author" a presentation, a meeting or talk with an author, an autograph session; "lecture" a lecture, a course, a talk or panel about literature without one author at its centre; "festival" a festival, a book fair, a multi-event day; "kids" anything made for children; "other" anything else.
 
 When the post has no book event from today on, answer an empty list.`;
+const KIND_KEYS = ["club", "author", "lecture", "festival", "kids"];
+const KIND_HELP = `"club" a book club meeting or a discussion of a book by readers (also book mafia, a joint reading); "author" a presentation, a meeting or talk with an author, an autograph session; "lecture" a lecture, a course, a talk or panel about literature without one author at its centre; "festival" a festival, a book fair, a multi-event day; "kids" anything made for children; "other" anything else.`;
 const EVENT_SCHEMA = {
   type: "object",
   properties: {
@@ -149,8 +152,9 @@ const EVENT_SCHEMA = {
           place: { type: "string" },
           url: { type: "string" },
           books: { type: "array", items: { type: "object", properties: { title: { type: "string" }, author: { type: "string" } }, required: ["title", "author"], additionalProperties: false } },
+          kind: { type: "string", enum: ["club", "author", "lecture", "festival", "kids", "other"] },
         },
-        required: ["title", "sub", "starts", "ends", "time", "city", "place", "url", "books"],
+        required: ["title", "sub", "starts", "ends", "time", "city", "place", "url", "books", "kind"],
         additionalProperties: false,
       },
     },
@@ -296,7 +300,10 @@ function create(db, { calendar, apiKey = process.env.ANTHROPIC_API_KEY || "", cl
         await viaPages(list, out);
       }
     } else await viaPages(list, out);
-    if (meta("tg:events") === "on") out.events = (await events()).made.length;
+    if (meta("tg:events") === "on") {
+      out.events = (await events()).made.length;
+      out.kinds = (await classify()).set;
+    }
     setMeta("tg:last", JSON.stringify({ ...out, errors: out.errors.slice(0, 8) }));
     if (out.errors.length && !out.added && Object.keys(out.channels).length === 0) throw new Error(out.errors[0]);
     return { added: out.added, via: out.via, joined: out.joined.length, events: out.events, errors: out.errors };
@@ -321,7 +328,7 @@ function create(db, { calendar, apiKey = process.env.ANTHROPIC_API_KEY || "", cl
     const raw = res.content.map((b) => b.text || "").join("");
     const j = JSON.parse(raw.slice(raw.indexOf("{"), raw.lastIndexOf("}") + 1));
     const today = kyivDay();
-    return (j.events || []).filter((e) => /^\d{4}-\d\d-\d\d$/.test(e.starts) && (e.ends || e.starts) >= today && e.title).map(({ books, ...e }) => ({ ...e, named: (books || []).slice(0, 4), url: links.includes(e.url) && !NOT_A_PAGE.test(e.url) ? e.url : p.page || `https://t.me/${p.channel}/${p.id}` }));
+    return (j.events || []).filter((e) => /^\d{4}-\d\d-\d\d$/.test(e.starts) && (e.ends || e.starts) >= today && e.title).map(({ books, kind, ...e }) => ({ ...e, kind: kind === "other" ? "" : kind || "", named: (books || []).slice(0, 4), url: links.includes(e.url) && !NOT_A_PAGE.test(e.url) ? e.url : p.page || `https://t.me/${p.channel}/${p.id}` }));
   }
 
   // The events in posts not looked at yet (dry: the posts of the last `days` days, nothing kept, at most `max`
@@ -351,7 +358,10 @@ function create(db, { calendar, apiKey = process.env.ANTHROPIC_API_KEY || "", cl
       found.forEach((e, i) => {
         const ev = { source: "tg", key: `${p.channel}/${p.id}${i ? `-${i}` : ""}`, ...e, post: `https://t.me/${p.channel}/${p.id}` };
         const twin = calendar?.findSimilar({ starts: e.starts, city: e.city, title: e.title });
-        if (twin && twin.id !== `tg:${ev.key}`) return out.dupes.push({ ...ev, twin: twin.id });
+        if (twin && twin.id !== `tg:${ev.key}`) {
+          if (!dry && e.kind) calendar?.setKinds?.({ [twin.id]: e.kind });
+          return out.dupes.push({ ...ev, twin: twin.id });
+        }
         if (dry) return out.made.push(ev);
         const id = calendar?.upsert(ev);
         if (id) (ids.push(id), out.made.push(ev));
@@ -359,6 +369,54 @@ function create(db, { calendar, apiKey = process.env.ANTHROPIC_API_KEY || "", cl
       if (!dry) db.prepare("UPDATE tg_posts SET ev = ? WHERE channel = ? AND id = ?").run(ids.join(",") || "none", p.channel, p.id);
     }
     if (!dry) setMeta(dayKey, used + out.asked);
+    return out;
+  }
+
+  // Kinds for upcoming events that have none (made before kinds, added by readers, festivals from the seed, Є):
+  // 25 to a Haiku call, counted with the posts' calls. One Haiku called «other» is not asked again (meta tg:other).
+  async function classify({ max = AI_DAY } = {}) {
+    const c = anthropic();
+    if (!c || !calendar?.setKinds) return { asked: 0, set: 0 };
+    const today = kyivDay();
+    const dayKey = `tg:ai:${today}`;
+    let used = +meta(dayKey) || 0;
+    let other = [];
+    try {
+      other = JSON.parse(meta("tg:other") || "[]");
+    } catch {}
+    const rows = db
+      .prepare("SELECT id, title, sub, place FROM cal_events WHERE kind = '' AND hidden = 0 AND (starts >= ? OR ends >= ?) ORDER BY starts LIMIT 500")
+      .all(today, today)
+      .filter((r) => !other.includes(r.id));
+    const out = { asked: 0, set: 0 };
+    for (let i = 0; i < rows.length && used < max; i += 25) {
+      const batch = rows.slice(i, i + 25);
+      used++, out.asked++;
+      try {
+        const res = await c.messages.create({
+          model: MODEL,
+          max_tokens: 2000,
+          system: `You sort Ukrainian book events for a calendar. For each event answer its kind: ${KIND_HELP}`,
+          messages: [{ role: "user", content: batch.map((r, n) => `${n + 1}. ${r.title} — ${r.sub} ${r.place ? `(${r.place})` : ""}`).join("\n") }],
+          output_config: { effort: "low", format: { type: "json_schema", schema: { type: "object", properties: { kinds: { type: "array", items: { type: "object", properties: { n: { type: "integer" }, kind: { type: "string", enum: [...KIND_KEYS, "other"] } }, required: ["n", "kind"], additionalProperties: false } } }, required: ["kinds"], additionalProperties: false } } },
+        });
+        const raw = res.content.map((b) => b.text || "").join("");
+        const j = JSON.parse(raw.slice(raw.indexOf("{"), raw.lastIndexOf("}") + 1));
+        const set = {};
+        for (const k of j.kinds || []) {
+          const r = batch[k.n - 1];
+          if (!r) continue;
+          if (k.kind === "other") other.push(r.id);
+          else set[r.id] = k.kind;
+        }
+        out.set += calendar.setKinds(set);
+      } catch (e) {
+        log(`tg classify: ${e.message}`);
+      }
+    }
+    setMeta(dayKey, used);
+    const live = new Set(db.prepare("SELECT id FROM cal_events WHERE starts >= ? OR ends >= ?").all(today, today).map((r) => r.id));
+    setMeta("tg:other", JSON.stringify(other.filter((id) => live.has(id))));
     return out;
   }
 
@@ -419,7 +477,7 @@ function create(db, { calendar, apiKey = process.env.ANTHROPIC_API_KEY || "", cl
     }
   }
 
-  return { run, events, status, maybeEvent, meta, setMeta, extract, find };
+  return { run, events, classify, status, maybeEvent, meta, setMeta, extract, find };
 }
 
 module.exports = { create, parsePage, maybeEvent, fromMessage, channels, KEEP_DAYS };

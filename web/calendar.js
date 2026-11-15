@@ -228,11 +228,24 @@ function cleanTitle(t) {
   return s.replace(/[\s.,:;–—-]+$/, "").slice(0, 160);
 }
 
+// What sort of event, for the chips on /calendar (Max 2026-11-15 chose these five; the page thread draws them).
+const KINDS = [
+  { key: "club", label: "Книжкові клуби" },
+  { key: "author", label: "Зустрічі з авторами" },
+  { key: "lecture", label: "Лекції й курси" },
+  { key: "festival", label: "Фестивалі та ярмарки" },
+  { key: "kids", label: "Для дітей" },
+];
+
 function create(db, store, { notify = () => {}, bookua = null, search = null, made = () => {} } = {}) {
   db.exec(SCHEMA);
   // Books an event names that the catalog did not have yet: [{ title, author }] (fillBooks looks for them outside).
   try {
     db.exec("ALTER TABLE cal_events ADD COLUMN want TEXT NOT NULL DEFAULT '[]'");
+  } catch {}
+  // What sort of event (KINDS' keys, '' = not known yet): the collectors' Haiku says it, tgFeed.classify the rest.
+  try {
+    db.exec("ALTER TABLE cal_events ADD COLUMN kind TEXT NOT NULL DEFAULT ''");
   } catch {}
   const meta = (k) => db.prepare("SELECT value FROM meta WHERE key = ?").get(k)?.value || "";
   const setMeta = (k, v) => db.prepare("INSERT INTO meta (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(k, v);
@@ -262,13 +275,23 @@ function create(db, store, { notify = () => {}, bookua = null, search = null, ma
     const city = clean(ev.city, 40) || findCity(`${ev.place || ""} ${title}`);
     const links = ev.books || ev.authors ? { books: ev.books || [], authors: ev.authors || [] } : linkText(store, `${title} ${ev.sub || ""}`);
     const want = wanted(ev, title, links);
+    const kind = KINDS.some((k) => k.key === ev.kind) ? ev.kind : "";
     db.prepare(
-      `INSERT INTO cal_events (id, source, url, title, sub, city, place, starts, ends, time, books, authors, by, added, hidden, want) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `INSERT INTO cal_events (id, source, url, title, sub, city, place, starts, ends, time, books, authors, by, added, hidden, want, kind) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT(id) DO UPDATE SET url = excluded.url, title = excluded.title, sub = excluded.sub, city = excluded.city, place = excluded.place,
-       starts = excluded.starts, ends = excluded.ends, time = excluded.time, books = excluded.books, authors = excluded.authors, want = excluded.want`,
-    ).run(id, ev.source, clean(ev.url, 500), title, clean(ev.sub, 200), city, clean(ev.place, 120), ev.starts, /^\d{4}-\d\d-\d\d$/.test(ev.ends || "") && ev.ends > ev.starts ? ev.ends : "", /^\d\d:\d\d$/.test(ev.time || "") ? ev.time : "", JSON.stringify(links.books.slice(0, 6)), JSON.stringify(links.authors.slice(0, 6)), ev.by || "", new Date().toISOString(), ev.hidden ? 1 : 0, JSON.stringify(want));
+       starts = excluded.starts, ends = excluded.ends, time = excluded.time, books = excluded.books, authors = excluded.authors, want = excluded.want,
+       kind = CASE WHEN excluded.kind != '' THEN excluded.kind ELSE cal_events.kind END`,
+    ).run(id, ev.source, clean(ev.url, 500), title, clean(ev.sub, 200), city, clean(ev.place, 120), ev.starts, /^\d{4}-\d\d-\d\d$/.test(ev.ends || "") && ev.ends > ev.starts ? ev.ends : "", /^\d\d:\d\d$/.test(ev.time || "") ? ev.time : "", JSON.stringify(links.books.slice(0, 6)), JSON.stringify(links.authors.slice(0, 6)), ev.by || "", new Date().toISOString(), ev.hidden ? 1 : 0, JSON.stringify(want), kind);
     fresh();
     return id;
+  }
+  // Kinds for events that have none: { id: key } (tgFeed.classify).
+  function setKinds(kinds) {
+    const up = db.prepare("UPDATE cal_events SET kind = ? WHERE id = ? AND kind = ''");
+    let n = 0;
+    for (const [id, k] of Object.entries(kinds)) if (KINDS.some((x) => x.key === k)) n += up.run(k, id).changes;
+    if (n) fresh();
+    return n;
   }
 
   // The books an event names that the catalog lacks, with their author: the ones Haiku named (`ev.named`, the
@@ -583,7 +606,7 @@ function create(db, store, { notify = () => {}, bookua = null, search = null, ma
     return [...n].sort((a, b) => (a[0] === "Онлайн") - (b[0] === "Онлайн") || b[1] - a[1] || a[0].localeCompare(b[0], "uk")).map(([c]) => c);
   };
 
-  return { upsert, add, one, findSimilar, hide, cleanup, seed, upcoming, forAuthor, forBook, cities, fillBooks, chytomoRun, yeRun, yeLast: () => yeLast, peek, fresh, meta, setMeta };
+  return { upsert, setKinds, add, one, findSimilar, hide, cleanup, seed, upcoming, forAuthor, forBook, cities, fillBooks, chytomoRun, yeRun, yeLast: () => yeLast, peek, fresh, meta, setMeta };
 }
 
 // «Четвер, 19 листопада» and, within a week, «завтра» / «через 3 дні».
@@ -669,4 +692,4 @@ function ics(events, { name = "Книжкові події", site = "https://chy
 const SHORT_DAYS = ["нд", "пн", "вт", "ср", "чт", "пт", "сб"];
 const shortWhen = (e) => `${SHORT_DAYS[new Date(`${e.starts}T12:00:00Z`).getUTCDay()]}, ${span(e)}`;
 
-module.exports = { create, tours, ics, parseWhen, linkText, readEvent, cleanTitle, findCity, kyivDay, addDays, dayName, dayAside, span, shortWhen, MONTHS };
+module.exports = { create, KINDS, tours, ics, parseWhen, linkText, readEvent, cleanTitle, findCity, kyivDay, addDays, dayName, dayAside, span, shortWhen, MONTHS };
