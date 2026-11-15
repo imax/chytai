@@ -257,7 +257,9 @@ A flag only when Max asks for one, or when the change could break what readers u
   4 more events: same book/author, then same kind and city). Every title, row cover, the clubs shelf (one meeting),
   the book page's «Подія:», the author's «Наживо» and `/calendar/go/<id>` (letters) lead there. The organizer's button
   is named by its link (`calendar.linkKind`: form / social / site / ye). Never a link to a Telegram post, on a page or
-  in the .ics (Max 2026-11-15: it tells we read channels): `calendar.sourceUrl` gives an event at «Є» its city's
+  in the .ics (Max 2026-11-15: it tells we read channels): `calendar.sourceUrl` gives Max's own link first
+  (`cal_events.link`, set on /admin/events, tab «Події»: events without a page, «лише афіша «Є»», sources;
+  `calendar.setLink` gives it to every event of the same post; no collector writes it), then an event at «Є» its city's
   afisha (`YE_CITY`, book-ye.com.ua/calendar/<city>/), the rest no button. Є's site is behind Cloudflare's human
   check (our server, the container and Max's Chrome alike), and web search doesn't know a new event's page yet.
 - Max's feedback (2026-11-15): an event by an author on one's shelf names that reader's own books by them
