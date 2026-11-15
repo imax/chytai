@@ -2105,7 +2105,7 @@ const setReadersWithNote = (fn) => (readersWithNote = fn);
 
 const cal = () => require("./calendar");
 // The organizer's link, named by what it is (a sign-up form, a Telegram post, a site); we sell nothing.
-const ORG_LINK = { form: "Зареєструватися", tg: "Пост у Telegram", social: "Сторінка організатора", site: "Сайт організатора", ye: "Афіша книгарні «Є»" };
+const ORG_LINK = { form: "Зареєструватися", tg: "Канал у Telegram", social: "Сторінка організатора", site: "Сайт організатора", ye: "Афіша книгарні «Є»" };
 const orgText = (e) => ORG_LINK[cal().linkKind(cal().sourceUrl(e))] || "";
 // No link to a Telegram post (calendar.sourceUrl).
 const eventLink = (e) => (cal().sourceUrl(e) ? `<a class="text-link" href="${attr(cal().sourceUrl(e))}" target="_blank" rel="noopener nofollow ugc">${orgText(e).replace(/^./, (c) => c.toLowerCase())} ↗</a>` : "");
@@ -3532,7 +3532,7 @@ function eventsAdminPage({ user, rows, tg, saved }) {
   const C = cal();
   const n = (v) => String(v);
   const kindOf = (e) => C.linkKind(C.sourceUrl(e)) || "none";
-  const KIND_NAME = { form: "форма запису", site: "сайт", social: "соцмережі", ye: "афіша «Є»", none: "без посилання" };
+  const KIND_NAME = { form: "форма запису", site: "сайт", social: "соцмережі", ye: "афіша «Є»", tg: "лише канал у Telegram", none: "без посилання" };
   const count = (f) => rows.reduce((m, e) => ((m[f(e)] = (m[f(e)] || 0) + 1), m), {});
   const byLink = count(kindOf);
   const bySource = count((e) => e.source);
@@ -3557,7 +3557,7 @@ function eventsAdminPage({ user, rows, tg, saved }) {
 <p class="small muted">${[esc(when(days)), ...[e.city, e.place].filter(Boolean).map(esc), chan(e) ? `<a href="${attr(e.url)}" target="_blank" rel="noopener">@${esc(chan(e))}</a>` : "", C.sourceUrl(e) ? `<a href="${attr(C.sourceUrl(e))}" target="_blank" rel="noopener">${esc(KIND_NAME[kindOf(e)])}</a>` : ""].filter(Boolean).join(" · ")}</p>
 <form method="post" action="/admin/events/link" style="display:flex;gap:.5em;margin-top:.4em"><input type="hidden" name="id" value="${attr(e.id)}"><input name="link" type="url" value="${attr(e.link || "")}" placeholder="Сторінка події" style="flex:1;min-width:0"><button class="btn small" style="flex:none">Зберегти</button></form>${saved === e.id ? `<p class="small"><b>Збережено.</b></p>` : ""}</div>`;
   const table = (list, empty) => (list.length ? list.map(row).join("") : `<p class="muted">${empty}</p>`);
-  const none = lines((e) => kindOf(e) === "none");
+  const none = lines((e) => kindOf(e) === "none" || kindOf(e) === "tg");
   const ye = lines((e) => kindOf(e) === "ye");
   const mine = lines((e) => e.link);
   const total = (list) => list.reduce((s, g) => s + g.n, 0);
@@ -3568,8 +3568,8 @@ ${pageHead({ title: "Події", sub: `${n(rows.length)} майбутніх п�
 <section class="block">${label("Посилання")}
 <p>${Object.keys(KIND_NAME).filter((k) => byLink[k]).map((k) => `${esc(KIND_NAME[k])}: <b>${byLink[k]}</b>`).join(" · ")}</p>
 <p class="small muted">Звідки: ${Object.entries(bySource).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${esc(SOURCE_NAME[k] || k)} ${v}`).join(" · ")}</p></section>
-<section class="block">${label(`Без посилання · ${total(none)}`)}
-<p class="small muted">Кнопки організатора на сторінці події немає. Вставте сторінку події, і кнопка з’явиться. Зустрічі з одного поста тут одним рядком і отримають посилання разом.</p>
+<section class="block">${label(`Без сторінки події · ${total(none)}`)}
+<p class="small muted">Кнопка веде лише на канал у Telegram (або її немає). Вставте сторінку події, і кнопка поведе туди. Зустрічі з одного поста тут одним рядком і отримають посилання разом.</p>
 ${table(none, "Усі події мають посилання.")}</section>
 <section class="block">${label(`Лише афіша «Є» · ${total(ye)}`)}
 <p class="small muted">Веде на афішу «Є» в місті, бо до сторінок подій на book-ye.com.ua робот не доходить.</p>

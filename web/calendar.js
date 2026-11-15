@@ -786,12 +786,19 @@ function linkKind(url) {
 const YE_CITY = { Київ: "kyyiv", Львів: "lviv", "Івано-Франківськ": "ivano-frankivsk", Чернігів: "chernihiv", Ужгород: "uzhhorod" };
 const isYe = (e) => /Книгарн[яіи]\s+[«"]?Є\b|[«"]Є[»"]/.test(`${e?.place || ""} ${e?.title || ""} ${e?.by || ""}`);
 // The link readers see. Never a Telegram post (Max 2026-11-15: it tells we read channels, and the organizer has a page
-// somewhere): Max's own link first (/admin/events), an event at «Є» gets its city's afisha there, the rest no link.
+// somewhere): Max's own link first (/admin/events), an event at «Є» gets its city's afisha there, the rest the
+// channel itself, not the post (Max: «хай шукають»).
 function sourceUrl(e) {
   if (e?.link) return e.link;
   if (linkKind(e?.url) !== "tg") return e?.url || "";
   const city = YE_CITY[e?.city];
-  return city && isYe(e) ? `https://book-ye.com.ua/calendar/${city}/` : "";
+  if (city && isYe(e)) return `https://book-ye.com.ua/calendar/${city}/`;
+  return tgChannel(e.url);
+}
+// t.me/<channel>/<post> → t.me/<channel>; an invite (t.me/+…) is the channel already; a private post (t.me/c/…) → ''.
+function tgChannel(url) {
+  const m = String(url || "").match(/^https?:\/\/(?:t\.me|telegram\.me)\/(\+[\w-]+|joinchat\/[\w-]+|[a-z][\w]{3,31})(?:\/|$|\?)/i);
+  return m && m[1].toLowerCase() !== "c" && m[1].toLowerCase() !== "s" ? `https://t.me/${m[1]}` : "";
 }
 // One event's Google Calendar link (the .ics file is /calendar/<…>.ics): a timed event lasts two hours.
 function googleLink(e, page = "") {

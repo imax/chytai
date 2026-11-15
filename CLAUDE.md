@@ -260,7 +260,8 @@ A flag only when Max asks for one, or when the change could break what readers u
   in the .ics (Max 2026-11-15: it tells we read channels): `calendar.sourceUrl` gives Max's own link first
   (`cal_events.link`, set on /admin/events, tab «Події»: events without a page, «лише афіша «Є»», sources;
   `calendar.setLink` gives it to every event of the same post; no collector writes it), then an event at «Є» its city's
-  afisha (`YE_CITY`, book-ye.com.ua/calendar/<city>/), the rest no button. Є's site is behind Cloudflare's human
+  afisha (`YE_CITY`, book-ye.com.ua/calendar/<city>/), the rest «Канал у Telegram»: the channel, never the post
+  (`tgChannel`; Max: «хай шукають»). Є's site is behind Cloudflare's human
   check (our server, the container and Max's Chrome alike), and web search doesn't know a new event's page yet.
 - Max's feedback (2026-11-15): an event by an author on one's shelf names that reader's own books by them
   (`shelfBooksFor`); one event in several cities or days (same title without its city, same link or post) is one row
