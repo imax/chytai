@@ -323,6 +323,11 @@ A flag only when Max asks for one, or when the change could break what readers u
   (Max's OK after a trial: 25 calls, $0.005, 20 events); switch: meta `tg:events`, `POST /agent/tg-events {"on":false}`.
   Dry run over the last 30 days (≤200 calls, only with Max's OK): `GET /agent/tg-events` (ask again, `?again=1`).
 
+- Cancelled or moved (Max 2026-11-15: «якщо напишуть що скасовується івент треба їх ловити»): a post with
+  `CANCEL_WORDS` and an event word goes to Haiku even without a date; Haiku answers `cancelled` / `was` (the old day)
+  per event, `findSimilar` on that day finds ours, `calendar.cancel` hides it (`cal_events.cancelled` = JSON
+  {how, post, at}); a moved one comes back as a new event on the new day. /admin/events «Скасовані й перенесені»
+  lists them with the post and «Повернути» (`uncancel`). Chytomo and Eventmate drop cancelled ones (`extract`).
 - Kinds (Max 2026-11-15 chose 5 chips): `cal_events.kind` is one of `calendar.KINDS` (club, author, lecture, festival,
   kids; '' = not known). The collectors' Haiku answers it with each event; `tgFeed.classify()` (every tg run) sorts
   the rest 25 to a call, within the same daily cap; «other» isn't asked again (meta `tg:other`).

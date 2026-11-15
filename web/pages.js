@@ -3527,7 +3527,7 @@ ${shown.length ? shown.map(row).join("") : `<p class="muted">${all ? "Поки �
 
 // ---- /admin/events: the calendar of book events (Max 2026-11-15: its own page; where an event lacks its page) ----
 
-function eventsAdminPage({ user, rows, tg, saved, feeds = [], feedMsg = "" }) {
+function eventsAdminPage({ user, rows, tg, saved, feeds = [], feedMsg = "", cancelled = [] }) {
   const C = cal();
   const n = (v) => String(v);
   const kindOf = (e) => C.linkKind(C.sourceUrl(e)) || "none";
@@ -3574,6 +3574,10 @@ ${table(none, "Усі події мають посилання.")}</section>
 <p class="small muted">Веде на афішу «Є» в місті, бо до сторінок подій на book-ye.com.ua робот не доходить.</p>
 ${table(ye, "Немає.")}</section>
 ${mine.length ? `<section class="block">${label(`Ваші посилання · ${total(mine)}`)}${table(mine, "")}</section>` : ""}
+${cancelled.length ? `<section class="block" id="cancelled">${label(`Скасовані й перенесені · ${cancelled.length}`)}
+<p class="small muted">Пост у Telegram сказав, що подію скасовано або перенесено: її сховано (перенесена з'являється з новою датою). Якщо пост прочитано неправильно, поверніть.</p>
+${cancelled.map((e) => `<div class="cmt"><p>${esc(e.title)}</p><p class="small muted">${esc(e.starts.slice(8, 10) + "." + e.starts.slice(5, 7))}${e.city ? ` · ${esc(e.city)}` : ""} · ${esc(String(e.cancelled.how || "").startsWith("moved:") ? `перенесено на ${e.cancelled.how.slice(14, 16)}.${e.cancelled.how.slice(11, 13)}` : "скасовано")}${e.cancelled.post ? ` · <a href="${attr(e.cancelled.post)}" target="_blank" rel="noopener">пост</a>` : ""}</p>
+<form method="post" action="/admin/events/uncancel"><input type="hidden" name="id" value="${attr(e.id)}"><button class="btn small">Повернути</button></form></div>`).join("")}</section>` : ""}
 <section class="block" id="feeds">${label(`Календарі організаторів · ${feeds.length}`)}
 <p class="small muted">Клуб чи книгарня веде Google-календар або дає файл .ics: вставте посилання, і їхні події на 120 днів наперед з'являться тут. Оновлюємо кожні 6 годин.</p>
 ${feedMsg ? `<p class="small"><b>${esc(feedMsg)}</b></p>` : ""}

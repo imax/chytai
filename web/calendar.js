@@ -331,6 +331,10 @@ function create(db, store, { notify = () => {}, bookua = null, search = null, ma
   try {
     db.exec("ALTER TABLE cal_events ADD COLUMN link TEXT NOT NULL DEFAULT ''");
   } catch {}
+  // Cancelled or moved by a later post (tgfeed): JSON { how, post, at }, '' = not.
+  try {
+    db.exec("ALTER TABLE cal_events ADD COLUMN cancelled TEXT NOT NULL DEFAULT ''");
+  } catch {}
   // Events abroad that came in before the rule are hidden (Max 2026-11-15: Ukraine and online only).
   try {
     const hideRow = db.prepare("UPDATE cal_events SET hidden = 1 WHERE id = ?");
@@ -723,6 +727,24 @@ function create(db, store, { notify = () => {}, bookua = null, search = null, ma
     }
     return null;
   }
+  // A Telegram post says it is cancelled or moved (Max 2026-11-15): hidden, with why and which post said so, for
+  // /admin/events. `how`: "cancelled" or "moved:<new day>".
+  function cancel(id, how, post = "") {
+    db.prepare("UPDATE cal_events SET hidden = 1, cancelled = ? WHERE id = ?").run(JSON.stringify({ how, post, at: new Date().toISOString() }), id);
+    fresh();
+  }
+  // Back on the calendar (Max, when a post was read wrong).
+  function uncancel(id) {
+    db.prepare("UPDATE cal_events SET hidden = 0, cancelled = '' WHERE id = ?").run(id);
+    fresh();
+  }
+  const cancelledList = () => {
+    const today = kyivDay();
+    return db
+      .prepare("SELECT * FROM cal_events WHERE cancelled != '' AND (starts >= ? OR ends >= ?) ORDER BY starts LIMIT 100")
+      .all(today, today)
+      .map((r) => ({ ...row(r), cancelled: JSON.parse(r.cancelled || "{}") }));
+  };
   function hide(id) {
     db.prepare("UPDATE cal_events SET hidden = 1 WHERE id = ?").run(id);
     fresh();
@@ -875,7 +897,7 @@ function create(db, store, { notify = () => {}, bookua = null, search = null, ma
   };
   const unsubscribeAll = (reader) => db.prepare("DELETE FROM cal_subs WHERE reader = ?").run(reader).changes;
 
-  return { upsert, setKinds, add, one, byKey, findSimilar, hide, setLink, cleanup, seed, upcoming, forAuthor, forBook, cities, fillBooks, chytomoRun, eventmateRun, feeds, addFeed, removeFeed, feedsRun, yeRun, yeLast: () => yeLast, peek, fresh, meta, setMeta, subs, subscribed, subscribe, unsubscribeAll };
+  return { upsert, setKinds, add, one, byKey, findSimilar, cancel, uncancel, cancelledList, hide, setLink, cleanup, seed, upcoming, forAuthor, forBook, cities, fillBooks, chytomoRun, eventmateRun, feeds, addFeed, removeFeed, feedsRun, yeRun, yeLast: () => yeLast, peek, fresh, meta, setMeta, subs, subscribed, subscribe, unsubscribeAll };
 }
 
 // «Четвер, 19 листопада» and, within a week, «завтра» / «через 3 дні».

@@ -112,8 +112,12 @@ function fromMessage(m, channel) {
 // ---- the events in a post (Haiku) ----
 const EVENT_WORDS = /презентац|зустріч|автограф|відбудеться|відбудуться|запрошуємо|запрошує|чекаємо|вхід вільний|реєстрац|фестивал|лекці|розмов|читанн|книжков\S* клуб|майстер-клас|дискусі|обговор|літгр|вечір/i;
 // A post worth asking about: an event word and a date from today on (not more than half a year ahead).
+// A post that cancels or moves a meeting (Max 2026-11-15: «якщо напишуть що скасовується івент треба їх ловити») may
+// name no date («завтрашня зустріч не відбудеться»): it goes to Haiku all the same.
+const CANCEL_WORDS = /скасов|відмін|не відбудеться|не відбудуться|перенос|перенесен|переносимо/i;
 function maybeEvent(text, today = kyivDay()) {
   if (!EVENT_WORDS.test(text || "")) return false;
+  if (CANCEL_WORDS.test(text)) return true;
   const w = parseWhen(text, today);
   return !!w && (w.ends || w.starts) >= today && w.starts <= addDays(today, 183);
 }
@@ -132,6 +136,8 @@ Answer every book event in the post that takes place on or after today's date (a
 - url: the post's link to the event page or registration, only one of the links given; else "".
 - books: the books the event is about (presented, discussed, read), each with its title as written, without quotes, and its author's full name in Ukrainian; at most 4, the main ones; [] if no book is named.
 - kind: what sort of event it is: "club" a book club meeting or a discussion of a book by readers (also book mafia, a joint reading); "author" a presentation, a meeting or talk with an author, an autograph session; "lecture" a lecture, a course, a talk or panel about literature without one author at its centre; "festival" a festival, a book fair, a multi-event day; "kids" anything made for children; "other" anything else.
+- cancelled: true when the post says this event is cancelled or will not take place (скасовано, не відбудеться, відміняється); then starts is the date it was planned for. Else false.
+- was: when the post says the event is moved to another day, the day it was planned for before (YYYY-MM-DD), and starts is the new day; "" otherwise (also when only the time or place changes).
 
 When the post has no book event from today on, answer an empty list.`;
 const KIND_KEYS = ["club", "author", "lecture", "festival", "kids"];
@@ -155,8 +161,10 @@ const EVENT_SCHEMA = {
           url: { type: "string" },
           books: { type: "array", items: { type: "object", properties: { title: { type: "string" }, author: { type: "string" } }, required: ["title", "author"], additionalProperties: false } },
           kind: { type: "string", enum: ["club", "author", "lecture", "festival", "kids", "other"] },
+          cancelled: { type: "boolean" },
+          was: { type: "string" },
         },
-        required: ["title", "sub", "starts", "ends", "time", "city", "abroad", "place", "url", "books", "kind"],
+        required: ["title", "sub", "starts", "ends", "time", "city", "abroad", "place", "url", "books", "kind", "cancelled", "was"],
         additionalProperties: false,
       },
     },
@@ -551,7 +559,7 @@ function create(db, { calendar, apiKey = process.env.ANTHROPIC_API_KEY || "", cl
     const dayKey = `tg:ai:${today}`;
     const used = dry ? 0 : +meta(dayKey) || 0;
     const posts = db.prepare(`SELECT * FROM tg_posts WHERE ${dry ? "at >= ?" : "ev = '' AND at >= ?"} ORDER BY at`).all(new Date(Date.now() - days * DAY).toISOString());
-    const out = { asked: 0, skipped: 0, made: [], dupes: [], errors: [] };
+    const out = { asked: 0, skipped: 0, made: [], dupes: [], cancelled: [], errors: [] };
     for (const p of posts) {
       if (!maybeEvent(p.text, today)) {
         out.skipped++;
@@ -569,6 +577,15 @@ function create(db, { calendar, apiKey = process.env.ANTHROPIC_API_KEY || "", cl
       }
       const ids = [];
       found.forEach((e, i) => {
+        // Cancelled: the event we have for that day is taken off. Moved: the old day's one goes, the new day's comes.
+        if (e.cancelled || /^\d{4}-\d\d-\d\d$/.test(e.was || "")) {
+          const old = calendar?.findSimilar({ starts: e.cancelled ? e.starts : e.was, city: e.city, title: e.title });
+          if (old && old.id !== `tg:${p.channel}/${p.id}${i ? `-${i}` : ""}`) {
+            if (!dry) calendar?.cancel?.(old.id, e.cancelled ? "cancelled" : `moved:${e.starts}`, `https://t.me/${p.channel}/${p.id}`);
+            out.cancelled.push({ id: old.id, title: old.title, how: e.cancelled ? "скасовано" : `перенесено на ${e.starts}` });
+          }
+          if (e.cancelled) return;
+        }
         const ev = { source: "tg", key: `${p.channel}/${p.id}${i ? `-${i}` : ""}`, ...e, post: `https://t.me/${p.channel}/${p.id}` };
         const twin = calendar?.findSimilar({ starts: e.starts, city: e.city, title: e.title });
         if (twin && twin.id !== `tg:${ev.key}`) {
@@ -676,7 +693,8 @@ function create(db, { calendar, apiKey = process.env.ANTHROPIC_API_KEY || "", cl
   }
 
   // Another site's page → its events, for calendar.chytomoRun.
-  const extract = (text, page) => ask({ page, text, at: new Date().toISOString() });
+  // A page from elsewhere (Chytomo, Eventmate): its cancelled events are left out, nothing else is matched.
+  const extract = (text, page) => ask({ page, text, at: new Date().toISOString() }).then((list) => list.filter((e) => !e.cancelled));
   // Public channels whose title has these words, as the account sees them (to find a channel's @name for the seed).
   async function find(q) {
     if (!accountSet()) return { error: "no account" };
