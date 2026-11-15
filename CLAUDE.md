@@ -276,6 +276,11 @@ A flag only when Max asks for one, or when the change could break what readers u
   `city` = the club's city for Haiku, `account: true` = no public page, waits for the account; a channel the account
   can't join is skipped for a week, meta `tg:nojoin`). Book clubs: 72 channels from the MEGOGO BOOKS club hub (Max
   2026-11-15, list in project files `chytai-calendar/megogo-clubs-telegram.tsv`).
+- Pruning (Max 2026-11-15: don't spend tokens on spam; the posts also feed «Знайти цікаве для читачів»), `prune()` each
+  tg run over 30 days: 10+ Haiku calls and no event → `tg:quiet` (posts still kept, Haiku not asked, a month); a seed
+  channel with 20+ posts and under 15% book words (`BOOKISH`) → `tg:left` (the account leaves it, no more reads).
+  Never: `"keep": true` in the seed (Max's own), hand-joined ones. Undo: `POST /agent/tg {"keep":"<name>"}`. The
+  technical report names the day's ones («Telegram: …», `tgLine`).
 - Leads (Max: «звертай увагу, звідки воно… щоб можна підписатись на нього напряму»): `/agent/tg` → `leads`: the sites
   event posts link to (forms, social networks and payments left out) and t.me channels they link to that we don't read.
   A site with many: read it directly (like `yeRun`) or add its channel.

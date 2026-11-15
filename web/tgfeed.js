@@ -175,6 +175,18 @@ function create(db, { calendar, apiKey = process.env.ANTHROPIC_API_KEY || "", cl
   } catch {}
   const meta = (k) => db.prepare("SELECT value FROM meta WHERE key = ?").get(k)?.value || "";
   const setMeta = (k, v) => db.prepare("INSERT INTO meta (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(k, String(v));
+  const jmeta = (k) => {
+    try {
+      return JSON.parse(meta(k) || "{}") || {};
+    } catch {
+      return {};
+    }
+  };
+  // The seed's channels but those we left (prune).
+  const live = () => {
+    const left = jmeta("tg:left");
+    return channels().filter((c) => !left[c]);
+  };
   const anthropic = () => ai || (apiKey ? (ai = new (require("@anthropic-ai/sdk"))({ apiKey })) : null);
   const lastId = (ch) => db.prepare("SELECT max(id) n FROM tg_posts WHERE channel = ?").get(ch)?.n || 0;
   const add = db.prepare("INSERT INTO tg_posts (channel, id, at, text, links, got, via) VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT(channel, id) DO UPDATE SET text = excluded.text, links = excluded.links");
@@ -232,7 +244,7 @@ function create(db, { calendar, apiKey = process.env.ANTHROPIC_API_KEY || "", cl
         const u = d.entity?.username?.toLowerCase();
         if (d.isChannel && u) mine.set(u, d);
       }
-      const list = channels();
+      const list = live();
       if (list.every((ch) => mine.has(ch))) return out;
       const mute = (peer) => client.invoke(new Api.account.UpdateNotifySettings({ peer: new Api.InputNotifyPeer({ peer }), settings: new Api.InputPeerNotifySettings({ muteUntil: 2147483647, silent: true }) }));
       await joinSome(client, list, mine, out, mute);
@@ -254,9 +266,23 @@ function create(db, { calendar, apiKey = process.env.ANTHROPIC_API_KEY || "", cl
         const u = d.entity?.username?.toLowerCase();
         if (d.isChannel && u) mine.set(u, d);
       }
+      // Channels prune() gave up on: the account leaves them.
+      const left = jmeta("tg:left");
+      for (const [c, x] of Object.entries(left)) {
+        const d = mine.get(c);
+        if (!d || x.gone) continue;
+        try {
+          await client.invoke(new Api.channels.LeaveChannel({ channel: d.inputEntity }));
+          x.gone = new Date().toISOString();
+          mine.delete(c);
+        } catch (e) {
+          out.errors.push(`leave ${c}: ${e.errorMessage || e.message}`);
+        }
+      }
+      setMeta("tg:left", JSON.stringify(left));
       // Channels someone joined by hand on the account's phone (Max, 2026-11-15) are read and muted too.
       const seeded = new Set(list);
-      out.own = [...mine].filter(([u, d]) => !seeded.has(u) && d.entity?.broadcast).map(([u]) => u);
+      out.own = [...mine].filter(([u, d]) => !seeded.has(u) && !left[u] && d.entity?.broadcast).map(([u]) => u);
       const all = [...list, ...out.own];
       // Max uses this number himself (2026-11-15): every channel of ours is muted, the moment it is joined.
       const mute = (peer) => client.invoke(new Api.account.UpdateNotifySettings({ peer: new Api.InputNotifyPeer({ peer }), settings: new Api.InputPeerNotifySettings({ muteUntil: 2147483647, silent: true }) }));
@@ -322,9 +348,59 @@ function create(db, { calendar, apiKey = process.env.ANTHROPIC_API_KEY || "", cl
     setMeta("tg:read", JSON.stringify(read));
   }
 
+  // Channels that give nothing (Max 2026-11-15: «щоб ми могли відписатись і не витрачати на нього токени»), by the
+  // last 30 days: 10+ posts sent to Haiku and no event → «quiet», its posts are kept but not sent (a month, then
+  // looked at again); a seed channel with 20+ posts of which under 15% speak of books → «left», the account leaves it
+  // and it is not read (posts for other uses than events are kept: Max's thread on what else the posts give). Never
+  // a channel with `keep: true` in the seed or in meta tg:keep, and never one joined by hand (only quiet).
+  // Meta tg:quiet / tg:left {channel: {at, …}}; the technical report names the day's.
+  const BOOKISH = /книг|книж|читач|читан|роман|автор|видав|поез|вірш|літератур|бібліот|book|novel|манґ|манга|комікс|прочита/i;
+  function prune(out) {
+    const since = new Date(Date.now() - 30 * DAY).toISOString();
+    const seeded = seed();
+    const inSeed = new Set(seeded.map((c) => c.name));
+    const keep = { ...jmeta("tg:keep"), ...Object.fromEntries(seeded.filter((c) => c.keep).map((c) => [c.name, true])) };
+    const quiet = jmeta("tg:quiet");
+    const left = jmeta("tg:left");
+    const now = new Date().toISOString();
+    for (const [c, q] of Object.entries(quiet)) if (Date.now() - Date.parse(q.at) > 30 * DAY) delete quiet[c];
+    out.quieted = [];
+    out.left = [];
+    const rows = db.prepare("SELECT channel, count(*) n, sum(ev NOT IN ('', 'skip')) asked, sum(ev NOT IN ('', 'skip', 'none')) made FROM tg_posts WHERE at >= ? GROUP BY channel").all(since);
+    for (const r of rows) {
+      const c = r.channel;
+      if (keep[c] || left[c]) continue;
+      if (inSeed.has(c) && r.n >= 20) {
+        const texts = db.prepare("SELECT text FROM tg_posts WHERE channel = ? AND at >= ?").all(c, since);
+        const share = texts.filter((t) => BOOKISH.test(t.text)).length / texts.length;
+        if (share < 0.15) {
+          left[c] = { at: now, posts: r.n, bookish: Math.round(share * 100) };
+          out.left.push(c);
+          continue;
+        }
+      }
+      if (!quiet[c] && r.asked >= 10 && !r.made) {
+        quiet[c] = { at: now, asked: r.asked };
+        out.quieted.push(c);
+      }
+    }
+    const skip = db.prepare("UPDATE tg_posts SET ev = 'skip' WHERE channel = ? AND ev = ''");
+    for (const c of [...Object.keys(quiet), ...Object.keys(left)]) skip.run(c);
+    setMeta("tg:quiet", JSON.stringify(quiet));
+    setMeta("tg:left", JSON.stringify(left));
+  }
+  // Undo for one channel: out of quiet and left, and never pruned again. → true.
+  function keepChannel(name) {
+    const c = String(name || "").toLowerCase().replace(/^@/, "");
+    const quiet = jmeta("tg:quiet"), left = jmeta("tg:left"), keep = jmeta("tg:keep");
+    delete quiet[c], delete left[c], (keep[c] = true);
+    setMeta("tg:quiet", JSON.stringify(quiet)), setMeta("tg:left", JSON.stringify(left)), setMeta("tg:keep", JSON.stringify(keep));
+    return true;
+  }
+
   // One run: new posts in, old ones out, then the events in the new ones (when switched on).
   async function run() {
-    const list = channels();
+    const list = live();
     const out = { at: new Date().toISOString(), via: accountSet() ? "api" : "page", added: 0, joined: [], channels: {}, errors: [] };
     db.prepare("DELETE FROM tg_posts WHERE at < ?").run(new Date(Date.now() - KEEP_DAYS * DAY).toISOString());
     if (accountSet()) {
@@ -337,6 +413,7 @@ function create(db, { calendar, apiKey = process.env.ANTHROPIC_API_KEY || "", cl
         await viaPages(list, out);
       }
     } else await viaPages(list, out);
+    prune(out);
     if (meta("tg:events") === "on") {
       out.events = (await events()).made.length;
       out.kinds = (await classify()).set;
@@ -463,7 +540,7 @@ function create(db, { calendar, apiKey = process.env.ANTHROPIC_API_KEY || "", cl
     try {
       last = JSON.parse(meta("tg:last") || "null");
     } catch {}
-    return { account: accountSet(), events: meta("tg:events") || "off", flood: meta("tg:flood") || null, channels: channels(), per, last, leads: leads() };
+    return { account: accountSet(), events: meta("tg:events") || "off", flood: meta("tg:flood") || null, channels: live(), quiet: jmeta("tg:quiet"), left: jmeta("tg:left"), per, last, leads: leads() };
   }
 
   // Where the events we found come from besides Telegram (Max, 2026-11-15: «звертай увагу, звідки воно… щоб можна
@@ -514,7 +591,7 @@ function create(db, { calendar, apiKey = process.env.ANTHROPIC_API_KEY || "", cl
     }
   }
 
-  return { run, joinMore, events, classify, status, maybeEvent, meta, setMeta, extract, find };
+  return { run, joinMore, keepChannel, prune, events, classify, status, maybeEvent, meta, setMeta, extract, find };
 }
 
 module.exports = { create, parsePage, maybeEvent, fromMessage, channels, KEEP_DAYS };

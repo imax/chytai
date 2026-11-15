@@ -210,7 +210,24 @@ function searchLine(s) {
 
 // The technical report: t = techDay(), rd = readerDay() or null, backup = backups.line(), triage = today's note of the
 // morning review or "" (it has not come), storage = storageLine(), search = searchLine().
-function techText(day, t, rd, site, backup, triage, storage = "", search = "", ai = "") {
+// Telegram channels the collector gave up on that day (tgfeed.js prune): quiet = no events, Haiku not asked; left = not
+// about books, the account left.
+function tgLine(db, day) {
+  const of = (k) => {
+    try {
+      return Object.entries(JSON.parse(db.get(k) || "{}")).filter(([, x]) => x?.at && dayOf(x.at) === day).map(([c]) => `@${c}`);
+    } catch {
+      return [];
+    }
+  };
+  const quiet = of("tg:quiet"), left = of("tg:left");
+  const parts = [];
+  if (quiet.length) parts.push(`без подій, Haiku не питаємо: ${quiet.join(", ")}`);
+  if (left.length) parts.push(`не про книжки, відписались: ${left.join(", ")}`);
+  return parts.length ? `Telegram: ${parts.join("; ")}` : "";
+}
+
+function techText(day, t, rd, site, backup, triage, storage = "", search = "", ai = "", tg = "") {
   const lines = [`Chytai, техніка за ${dayName(day)}`, "", backup];
   const e = t.errors, fresh = e.groups.filter((g) => g.fresh);
   if (!e.n && !t.failed.length) lines.push("Збоїв не було.");
@@ -226,6 +243,7 @@ function techText(day, t, rd, site, backup, triage, storage = "", search = "", a
   if (storage) lines.push(storage);
   if (search) lines.push(search);
   if (ai) lines.push(ai);
+  if (tg) lines.push(tg);
   lines.push("", e.n ? `${site}/admin/speed#errors` : `${site}/admin`);
   return lines.join("\n");
 }
@@ -278,7 +296,7 @@ async function buildTech({ db, day, ownerId, site, reader, dataDir }) {
   try {
     siteSt = { ...storageLib.now(dataDir, ["chytai.db"]), rss: os.totalmem() - os.freemem() }; // the machine, both processes
   } catch {}
-  return techText(day, techDay(db, day), rd, site, backups.line(db), triageToday(db), storageLine(siteSt, rd?.storage), searchLine(searchDay(db, day)), aiusage.line(day));
+  return techText(day, techDay(db, day), rd, site, backups.line(db), triageToday(db), storageLine(siteSt, rd?.storage), searchLine(searchDay(db, day)), aiusage.line(day), tgLine(db, day));
 }
 
 // In the jobs process: a look every 10 minutes; each report goes once a day (meta `dailyreport:lastRun`,

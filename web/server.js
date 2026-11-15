@@ -1635,7 +1635,7 @@ bg.every("calendar-cleanup", 24 * 3600 * 1000, () => calendarJobs.cleanup(), { d
 bg.every("calendar-ye", 24 * 3600 * 1000, () => calendarJobs.ye(), { db: store.db, first: 15 * 60 * 1000 });
 // Telegram channels' posts (tgfeed.js): our own account through Telegram's API when TG_SESSION is set, else the
 // public t.me/s pages; every hour. Their events go to the calendar once meta tg:events is "on" (Max's OK).
-const tgFeed = bg.register("tg", require("./tgfeed").create(store.db, { calendar }), { run: false, joinMore: false, events: false, find: false });
+const tgFeed = bg.register("tg", require("./tgfeed").create(store.db, { calendar }), { run: false, joinMore: false, keepChannel: false, events: false, find: false });
 bg.every("tg-feed", 3600 * 1000, () => tgFeed.run(), { db: store.db, first: 8 * 60 * 1000 });
 bg.every("tg-join", 10 * 60 * 1000, () => tgFeed.joinMore(), { db: store.db, first: 12 * 60 * 1000 });
 // Chytomo's calendar once a day (its articles through the same Haiku as Telegram posts), and the books events name
@@ -1845,8 +1845,10 @@ for (const [path, run, dry] of [["calendar-chytomo", "chytomo", "chytomoDry"], [
 }
 // Telegram channels (tgfeed.js): GET what is kept and how the last run went; POST {"run": true} runs it now.
 app.get("/agent/tg", agentOk, (req, res) => res.json(tgFeed.status()));
-app.post("/agent/tg", agentOk, (req, res) => {
-  if (!req.body?.run) return res.status(400).json({ error: '{"run": true}' });
+app.post("/agent/tg", agentOk, async (req, res) => {
+  // {"keep": "<channel>"}: back from quiet or left, and never pruned again.
+  if (req.body?.keep) return res.json({ kept: await tgFeed.keepChannel(req.body.keep) });
+  if (!req.body?.run) return res.status(400).json({ error: '{"run": true} or {"keep": "<channel>"}' });
   tgFeed.run().catch(() => {});
   res.json({ started: true });
 });
