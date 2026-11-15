@@ -2790,6 +2790,8 @@ function searchAll(req, q) {
   // Nothing has every word (Max, 2026-11-15: «після вільного шляху» for «Пісня відкритого шляху» found nothing): the
   // books that have the most of them, a rarer word counting for more, under «Точно нічого. Може, ви шукали:».
   let near = [];
+  let nearAuthors = [];
+  let nearShelves = [];
   if (!hits.length && !authorsFound.length && !readersFound.length && !shelvesFound.length && !listsFound.length && terms.length >= 2) {
     const score = new Map();
     for (const t of new Set(terms.filter((t) => t.length >= 3))) {
@@ -2813,8 +2815,24 @@ function searchAll(req, q) {
       s.n += terms.filter((t) => all.some((w) => w.startsWith(t) || close(t, w))).length;
     }
     near = [...score.values()].sort((a, b) => b.n - a.n).slice(0, 5).map((s) => s.h);
+    // Authors and publishers the same way («Артур Чех» → Артем Чех): only the best scored, first three letters
+    // alike count for half a word.
+    const fit = (t, w) => (w.startsWith(t) || close(t, w) ? 1 : t.length >= 4 && w.length >= 4 && w.slice(0, 3) === t.slice(0, 3) ? 0.5 : 0);
+    const fitName = (name) => (name ? terms.reduce((n, t) => n + Math.max(0, ...words(name).map((w) => fit(t, w))), 0) : 0);
+    const best = (items, nameOf) => {
+      const scored = items.map((x) => ({ x, n: Math.max(...nameOf(x).map(fitName)) })).filter((s) => s.n >= Math.max(1, terms.length / 2));
+      const top = Math.max(0, ...scored.map((s) => s.n));
+      return scored.filter((s) => s.n === top);
+    };
+    nearAuthors = best(store.authors?.list || [], (a) => [a.name, a.other])
+      .sort((a, b) => b.x.ids.length - a.x.ids.length)
+      .slice(0, 3)
+      .map((s) => ({ ...s.x, books: s.x.ids.length }));
+    nearShelves = best(shelvesFor(req), (s) => [s.name])
+      .slice(0, 3)
+      .map((s) => ({ shelf: s.x, total: visible(s.x).length }));
   }
-  return { hits, authors: authorsFound, readers: readersFound, shelves: shelvesFound, lists: listsFound, similar, tag, outside, near };
+  return { hits, authors: authorsFound, readers: readersFound, shelves: shelvesFound, lists: listsFound, similar, tag, outside, near, nearAuthors, nearShelves };
 }
 const folded = (s) => normQ(s).replace(/є/g, "е").replace(/ґ/g, "г").normalize("NFKD").replace(/\p{M}/gu, "");
 // How many things a search found, for the search log (admin.searched): books, authors, readers, shelves, lists.

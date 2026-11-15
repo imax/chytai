@@ -542,9 +542,9 @@ const adminNav = () => `<nav class="admin-nav">${ADMIN_TABS.map(([name, links, m
 <script>(() => { const p = location.pathname; for (const t of document.querySelectorAll(".admin-tab")) { if (t.dataset.paths.split(" ").includes(p) || (t.dataset.more && new RegExp(t.dataset.more).test(p))) { t.classList.add("on"); for (const a of t.querySelectorAll(".admin-sub a")) if (a.getAttribute("href") === p) a.classList.add("on"); } } })();</script>`;
 
 // For guests, at the bottom of the pages people land on from a search engine: what the site is and a way in
-// (Max, 2026-10-27, variant B of three; text and links his). Not on the home page, search, sign-in or settings.
-// On book pages the «Хочу прочитати» block itself is not shown to guests.
-const JOIN_PATHS = new Set(["/book", "/author", "/genre", "/publishers", "/@", "/lists", "/community", "/club"]);
+// (Max, 2026-10-27, variant B of three; text and links his). The home page too (Max, 2026-11-15); not search, sign-in
+// or settings. On book pages the «Хочу прочитати» block itself is not shown to guests.
+const JOIN_PATHS = new Set(["/", "/book","/author", "/genre", "/publishers", "/@", "/lists", "/community", "/club"]);
 function joinBand(back) {
   return `<section class="join-band" data-block="join">
   <div>
@@ -1825,7 +1825,7 @@ const askGo = (text, primary, enter = primary) =>
   primary
     ? `<form method="post" action="/ask" class="ask-go"${enter ? " data-primary" : ""} data-block="ask-go"><input type="hidden" name="text" value="${attr(text)}"><button class="btn primary">Порадити книжки</button><span class="small muted">Claude добере з каталогу</span></form>`
     : `<form method="post" action="/ask" class="ask-go-line" data-block="ask-go"><input type="hidden" name="text" value="${attr(text)}"><span class="small muted">Це опис, а не назва?</span> <button class="text-link small">Порадити книжки</button></form>`;
-function searchResults({ q, user, hits = [], authors = [], readers = [], shelves = [], lists = [], similar = [], tag = "", outside = false, askText = "", askMode = "", near = [] }) {
+function searchResults({ q, user, hits = [], authors = [], readers = [], shelves = [], lists = [], similar = [], tag = "", outside = false, askText = "", askMode = "", near = [], nearAuthors = [], nearShelves = [] }) {
   if (!q.trim()) return "";
   const n = hits.length + authors.length + readers.length + shelves.length + lists.length;
   // A request: no Google, Open Library or «полиці» for it, only the button and what the catalog had for its words.
@@ -1843,7 +1843,14 @@ function searchResults({ q, user, hits = [], authors = [], readers = [], shelves
   // Many words and nothing here at all: the button, big, but Enter doesn't press it; the books elsewhere under it.
   if (!n && askTop) return `${askGo(askText, true, askMode === "ask")}${elsewhere}`;
   // Nothing has every word: the books with most of them first (server.js searchAll `near`).
-  const nearRows = near.length ? `<p class="found">Точно за «${esc(q)}» нічого. Може, ви шукали:</p><div class="rows">${near.map((h) => bookRow(h.book, { meta: readersMeta(h.book.id), action: h.entry ? myStatus(h.entry) : "" })).join("")}</div>` : "";
+  const nearNames = [
+    ...nearAuthors.map((a) => `<a class="name-row" href="${attr(a.href)}"><b>${esc(a.name)}</b><span>${books(a.books)}</span></a>`),
+    ...nearShelves.map((s) => `<a class="name-row" href="/publishers/${attr(s.shelf.id)}"><b>${esc(s.shelf.name)}</b><span>${books(s.total)}</span></a>`),
+  ].join("");
+  const nearRows =
+    near.length || nearNames
+      ? `<p class="found">Точно за «${esc(q)}» нічого. Може, ви шукали:</p>${nearNames ? `<div class="name-rows">${nearNames}</div>` : ""}${near.length ? `<div class="rows">${near.map((h) => bookRow(h.book, { meta: readersMeta(h.book.id), action: h.entry ? myStatus(h.entry) : "" })).join("")}</div>` : ""}`
+      : "";
   if (!n)
     return `${nearRows || elsewhere}
 <p class="found muted">Шукаєте не книжку, а настрій? Почніть з полиць:</p>
