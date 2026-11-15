@@ -7,7 +7,7 @@ name: Deploy web
 on:
   push:
     branches: [main]
-    paths: ["web/**", "server/agent.js", "package.json", "package-lock.json", ".github/workflows/web.yml", "scripts/perf-check.sh", "scripts/smoke-test.sh"]
+    paths: ["web/**", "server/agent.js", "server/aimeter.js", "package.json", "package-lock.json", ".github/workflows/web.yml", "scripts/perf-check.sh", "scripts/smoke-test.sh"]
   workflow_dispatch:
 
 jobs:

@@ -66,10 +66,12 @@ curl -s https://app.chytai.org.ua/agent/sql -H "$H" -H 'content-type: applicatio
   /admin/reader «Вивантаження» and a line in the technical report (not on Огляд, Max 2026-11-13). To see
   memory on a phone width locally: Playwright WebKit, RSS of `WPEWebProcess`; kill it (`pkill -9 -x WPEWebProcess`)
   to fake an unload.
-- AI spend: the truth is Max's Console (platform.claude.com/cost); no admin key here. Ours, per source: reader `docs`
-  coll `days` (`models`, `cost`, `userCost`, all features together); site `ask_recs.cost`, `overview` (input includes
-  cached; a redo overwrites the row), `uk_find`, `book_queue.cost`, meta `aipass:<key>:all` (lifetime). When the
-  Console is far above these, look for a loop that repeats calls without keeping a row (2026-11-15: `advice.redo()`).
+- AI spend (`web/aiusage.js`, `server/aimeter.js`): every Claude call in both apps is counted by patching the SDK once
+  per process (no caller can skip it; feature = the calling file). Site table `ai_usage` (day, app, feature, model,
+  tokens, searches, cost); the reader keeps `state.stats.days[day].ai`, the site copies it hourly. Telegram once a day
+  when the day passes $25 (Max) or a feature costs >2× its 7-day median and >$3; «AI за добу» in the technical report.
+  A new feature file gets a Ukrainian name in `LABELS`; new models go into `PRICES`. The Console
+  (platform.claude.com/cost, no admin key here) also sees what our code doesn't call.
 - Fly itself, same token: `https://api.fly.io/graphql` (machines, releases),
   `https://api.fly.io/prometheus/personal/api/v1/query_range` (`fly_app_http_responses_count` by status,
   `fly_instance_cpu`, memory), `https://api.fly.io/api/v1/apps/chytai-web/logs` (only the last ~100 lines).

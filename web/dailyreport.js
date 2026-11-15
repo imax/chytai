@@ -15,6 +15,7 @@ const errorsLib = require("./errors");
 const backups = require("./backups");
 const os = require("os");
 const storageLib = require("./storage");
+const aiusage = require("./aiusage");
 
 const REPORT_HOUR = 8; // Kyiv; before the Friday letter (9:30) and wantmail (10:00)
 const DAY = 86400000;
@@ -209,7 +210,7 @@ function searchLine(s) {
 
 // The technical report: t = techDay(), rd = readerDay() or null, backup = backups.line(), triage = today's note of the
 // morning review or "" (it has not come), storage = storageLine(), search = searchLine().
-function techText(day, t, rd, site, backup, triage, storage = "", search = "") {
+function techText(day, t, rd, site, backup, triage, storage = "", search = "", ai = "") {
   const lines = [`Chytai, техніка за ${dayName(day)}`, "", backup];
   const e = t.errors, fresh = e.groups.filter((g) => g.fresh);
   if (!e.n && !t.failed.length) lines.push("Збоїв не було.");
@@ -224,6 +225,7 @@ function techText(day, t, rd, site, backup, triage, storage = "", search = "") {
   if (!rd) lines.push("Читалка не відповіла.");
   if (storage) lines.push(storage);
   if (search) lines.push(search);
+  if (ai) lines.push(ai);
   lines.push("", e.n ? `${site}/admin/speed#errors` : `${site}/admin`);
   return lines.join("\n");
 }
@@ -269,12 +271,14 @@ function techReady(db, now = new Date()) {
 }
 
 async function buildTech({ db, day, ownerId, site, reader, dataDir }) {
-  const rd = readerDay(await readerOf(reader, day), skipped(db, ownerId).skip);
+  const raw = await readerOf(reader, day);
+  if (raw?.ai) aiusage.syncReader(day, raw.ai);
+  const rd = readerDay(raw, skipped(db, ownerId).skip);
   let siteSt = null;
   try {
     siteSt = { ...storageLib.now(dataDir, ["chytai.db"]), rss: os.totalmem() - os.freemem() }; // the machine, both processes
   } catch {}
-  return techText(day, techDay(db, day), rd, site, backups.line(db), triageToday(db), storageLine(siteSt, rd?.storage), searchLine(searchDay(db, day)));
+  return techText(day, techDay(db, day), rd, site, backups.line(db), triageToday(db), storageLine(siteSt, rd?.storage), searchLine(searchDay(db, day)), aiusage.line(day));
 }
 
 // In the jobs process: a look every 10 minutes; each report goes once a day (meta `dailyreport:lastRun`,

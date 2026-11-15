@@ -69,6 +69,8 @@ telegram.init(store.db);
 const errors = require("./errors"); // pages that failed and crashes: kept for /admin and the morning report (errors.js)
 const storage = require("./storage"); // disk and memory: a row on /admin, Telegram near a limit (storage.js)
 errors.init(store.db);
+const aiusage = require("./aiusage"); // every Claude call counted by day, feature and model; Telegram on overspend (aiusage.js)
+aiusage.init(store.db);
 errors.watchProcess(bg.ROLE === "jobs" ? "jobs" : "site");
 const { MailGuard } = require("./mailguard");
 const auth = new Auth(store.db, { ownerToken: TOKEN, resendKey: process.env.RESEND_API_KEY || "", from: process.env.WEB_MAIL_FROM || `Chytai <hello@${DOMAIN || "chytai.org.ua"}>` });
@@ -4304,6 +4306,8 @@ if (bg.ROLE !== "web" && telegram.on() && DOMAIN) {
 
 // To the owner's Telegram: yesterday's readers at 08:00, and the technical report once the night's backups and the
 // morning error review are in, 10:00 Kyiv at the latest (dailyreport.js).
+// AI spend: the reader's counts copied in hourly, and a Telegram line when a day or a feature costs too much (aiusage.js).
+if (bg.ROLE !== "web" && DOMAIN) aiusage.schedule((day) => readerAdmin(`/day?day=${day}`));
 if (bg.ROLE !== "web" && telegram.on() && DOMAIN) require("./dailyreport").schedule({ db: store.db, ownerId: OWNER_ID, site: SITE, dataDir: DATA_DIR, reader: (day) => readerAdmin(`/day?day=${day}`) });
 
 // A process stuck in a CPU loop answers nothing but stays up (2026-10-21: an hour down). A thread beside it

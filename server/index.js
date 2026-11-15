@@ -352,6 +352,18 @@ function recordExplain(req, { model, usage }, { count = true } = {}) {
   saveState();
 }
 
+// Every Claude call this process makes, by feature (the file that called: ai, paper, content…) and model, into the
+// day's `ai` (aimeter.js, 2026-11-15). Unlike recordExplain it needs no request: uploads' checks count too. The site
+// copies it hourly from /api/site-admin/day into its ai_usage (web/aiusage.js).
+require("./aimeter").install((r) => {
+  const day = statsDay();
+  const stats = (state.stats ??= { since: day, days: {} });
+  const d = (stats.days[day] ??= { explains: 0, users: {}, guests: 0, models: {} });
+  const m = (((d.ai ??= {})[r.feature] ??= {})[r.model] ??= { calls: 0, input: 0, output: 0, cacheRead: 0, cacheWrite: 0, searches: 0, cost: 0 });
+  for (const k of Object.keys(m)) m[k] += r[k] || 0;
+  saveState();
+});
+
 // Daily budget for Claude (security review 2026-11-04, Max OK): sign-up is open, so a script with a few
 // mailboxes could run explanations all night. Each account gets ACCOUNT_COST_CAP dollars a day (list prices),
 // everyone together DAILY_COST_CAP; the owner is never stopped. When the whole day's budget runs out the owner
@@ -1298,7 +1310,7 @@ app.get("/api/site-admin/day", (req, res) => {
   for (const r of store.items.noteTimes()) if (Number(r.at) && statsDay(Number(r.at)) === day) notes[r.acct] = (notes[r.acct] || 0) + 1;
   const books = []; // one row per account and book; the site puts its own titles on readers' files (reader_files)
   for (const [acct, list] of Object.entries(d.readBooks || {})) for (const [name, sec] of Object.entries(list)) books.push({ acct, name, title: bookInfo(acct, name).title || "", sec });
-  res.json({ day, readSec: d.readSec || {}, explains: d.users || {}, notes, cost: d.cost || 0, books, gone: (d.gone || []).map((r) => ({ acct: r.acct, bg: r.bg })), storage: storage.now(DATA_DIR, ["reader.db"]) });
+  res.json({ day, readSec: d.readSec || {}, explains: d.users || {}, notes, cost: d.cost || 0, ai: d.ai || {}, books, gone: (d.gone || []).map((r) => ({ acct: r.acct, bg: r.bg })), storage: storage.now(DATA_DIR, ["reader.db"]) });
 });
 // Switch the reader off (or on again) for one account: { id, off: true | false }.
 app.post("/api/site-admin/off", express.json(), (req, res) => {
