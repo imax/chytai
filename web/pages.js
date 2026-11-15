@@ -1392,7 +1392,7 @@ function askBlock(asks) {
     <p class="lead">Розкажіть, що вам подобається, і ми щось порадимо.</p>
     <form method="post" action="/ask" class="ask-box" id="ask-home">
       <textarea name="text" rows="2" minlength="15" maxlength="1500" required placeholder="Напр.: щось як Мураками, але коротше" aria-label="Що вам подобається"></textarea>
-      <div class="ask-row"><span class="hint">Питання й відповідь побачать інші</span><button class="btn primary">Порадити книжку</button></div>
+      <div class="ask-row"><span class="hint">Відповідає Opus 5.5</span><button class="btn primary">Порадити книжку</button></div>
     </form>
   </div>
   ${asks.length ? `<div class="ask-recent"><p class="kicker">Нещодавно питали</p>${asks.map(line).join("")}<a class="more" href="/ask">Усі поради →</a></div>` : ""}
