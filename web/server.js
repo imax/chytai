@@ -1685,6 +1685,24 @@ function shelfBooksFor(req, e, mineSet) {
   }
   return out.slice(0, 2);
 }
+// The homepage's «Книжкові події» (Max, 2026-11-15): four of the next two weeks' events, the reader's own authors first,
+// then meetings with authors, festivals and lectures before book clubs (four in five events are clubs); by date.
+function homeEvents(req) {
+  const C = require("./calendar");
+  const rows = C.tours(calendar.upcoming());
+  const until = C.addDays(C.kyivDay(), 14);
+  const mineSet = req.user ? shelfAuthors(req.user.id) : null;
+  const isMine = (e) => !!mineSet && e.authors.some((a) => mineSet.has(a));
+  const rank = (e) => (isMine(e) ? 0 : { author: 1, festival: 2, lecture: 2 }[e.kind] || 3);
+  const pick = rows
+    .filter((e) => e.starts <= until)
+    .map((e, i) => ({ e, i }))
+    .sort((a, b) => rank(a.e) - rank(b.e) || a.i - b.i)
+    .slice(0, 4)
+    .sort((a, b) => a.i - b.i)
+    .map(({ e }) => ({ ...e, mine: isMine(e) ? shelfBooksFor(req, e, mineSet) : null, bookCards: e.books.map((id) => store.book(id) && workFor(req, store.book(id))).filter(Boolean).slice(0, 3), authorLinks: e.authors.map((s) => store.authors?.bySlug.get(s)).filter(Boolean).slice(0, 3) }));
+  return { events: pick, total: rows.length };
+}
 bg.every("overviews", 24 * 3600 * 1000, () => advice.sweep(), { db: store.db });
 pages.setStats((id) => social.stats(id));
 // The weekly letter (digest.js): Friday 9:30 Kyiv, to every reader who has not switched it off (Max,
@@ -2713,7 +2731,7 @@ app.get("/", (req, res) => {
         .map((x) => ({ book: x.it, shelf: x.sh }));
   // Chosen and ranked by the Ukrainian edition; a reader who wants originals sees those in its place.
   const as = (list) => (req.user?.originals ? list.map((x) => ({ ...x, book: workFor(req, x.book) })) : list);
-  res.send(pages.readPage({ user: req.user, f, filters: READ_FILTERS, picks, finish: as(finish), ua, short: as(short), free, wanted: as(wanted), genres, editorials, forYou: as(forYou), forWhy, fresh, club: club.mark(req.user?.id, club.lively(3)), ask: flags.on("ask", req.user), asks: f ? [] : homeAsks(req), smart: smartOn(req), examples: smartOn(req) ? homeExamples() : [] }));
+  res.send(pages.readPage({ user: req.user, f, filters: READ_FILTERS, picks, finish: as(finish), ua, short: as(short), free, wanted: as(wanted), genres, editorials, forYou: as(forYou), forWhy, fresh, club: club.mark(req.user?.id, club.lively(3)), ask: flags.on("ask", req.user), asks: f ? [] : homeAsks(req), events: f ? null : homeEvents(req), smart: smartOn(req), examples: smartOn(req) ? homeExamples() : [] }));
 });
 
 app.get("/publishers", (req, res) => {

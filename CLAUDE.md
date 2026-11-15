@@ -201,7 +201,9 @@ A flag only when Max asks for one, or when the change could break what readers u
   Добірки, Дочитують, Обговорюють, then Читалка (with «Безкоштовна класика →» to /publishers/chytai-free); «Українські
   автори», «Хочуть прочитати», «Безкоштовно» only under a chip. Taps per block: `taps` table, `page = '/'`.
   «Обговорюють зараз» is one line a topic (`clubRow(t, { tight: true })`), only topics active in the last 14 days
-  (`club.lively`); none = no block.
+  (`club.lively`); none = no block. «Книжкові події» between Дочитують and Обговорюють: four lines of the next 14
+  days (`homeEvents` in server.js: own shelf's authors, then author/festival/lecture before clubs; `calHome` reuses
+  `calLine`). The test DB may have no upcoming events: copy some rows of `cal_events` from `/agent/sql` locally.
 - Search with no book that has every word (`searchAll` `near`, 2026-11-15): «Може, ви шукали:» authors, publishers and books with most of the
   words, a one-letter typo counting («після вільного шляху» → «Пісня відкритого шляху»); then no outside lookup.
 - Off since 2026-11-15, code kept: the homepage box (and /search) takes a request too (flag `smart-search`, `web/intent.js`, no model): cue words

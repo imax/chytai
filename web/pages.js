@@ -1405,7 +1405,7 @@ function askBlock(asks) {
 </section>
 <script>document.getElementById("ask-home").addEventListener("submit", (e) => { const b = e.target.querySelector("button"); b.disabled = true; b.textContent = "Добираю книжки…"; });</script>`;
 }
-function readPage({ user, f, filters, picks, finish, ua, short, free, wanted, genres, editorials, forYou, forWhy, fresh, club = [], ask = false, asks = [], smart = false, examples = [] }) {
+function readPage({ user, f, filters, picks, finish, ua, short, free, wanted, genres, editorials, forYou, forWhy, fresh, club = [], ask = false, asks = [], events = null, smart = false, examples = [] }) {
   const q = (k) => (k ? `/?f=${k}` : "/");
   const chips = `<nav class="read-chips" data-block="chips">${[["", "Усе"], ...Object.entries(filters).map(([k, [n]]) => [k, n])].map(([k, n]) => (k === f ? `<span class="chip on">${n}</span>` : `<a class="chip" href="${attr(q(k))}">${n}</a>`)).join("")}</nav>`;
   const advice = (p) => `<article class="advice">
@@ -1434,6 +1434,7 @@ ${picks.length ? `<section class="block" data-block="picks">${label("Читач�
 ${row("Для вас", forWhy, forYou)}
 ${!f && editorials.length ? `<section class="block editorials" data-block="editorials">${label("Добірки Chytai", `<a href="/lists">усі списки</a>`)}<div class="lgrid">${editorials.map(listCard).join("")}</div></section>` : ""}
 ${row("Дочитують до кінця", "ніхто не покинув", finish, (w) => `дочитали ${w.s.finished}`)}
+${events ? calHome(events) : ""}
 ${!f && club.length ? `<section class="block" data-block="club">${label("Обговорюють зараз", `<a href="/club">Клуб Chytai</a>`)}<div class="club-topics">${club.map((t) => clubRow(t, { tight: true })).join("")}</div></section>` : ""}
 ${!f ? readerBand() : ""}
 ${f ? row("Українські автори", "", ua) : ""}
@@ -2145,6 +2146,17 @@ function calLine(e, { user, owner, today, day, kind = "" }) {
   </div>
   <div class="cal-cv">${c ? `<a href="${attr(c.href)}" tabindex="-1" aria-hidden="true">${cover(c, "xs")}</a>` : ""}</div>
 </article>`;
+}
+// The homepage's «Книжкові події» (Max, 2026-11-15): a few lines of the list (server.js homeEvents), «усі N» to /calendar.
+function calHome({ events, total }) {
+  if (!events?.length) return "";
+  const today = cal().kyivDay();
+  let last = "";
+  const rows = events.map((e) => {
+    const d = e.starts < today ? today : e.starts;
+    return calLine(e, { today, day: d !== last ? (last = d) : "" });
+  });
+  return `<section class="block cal-home" data-block="events">${label("Книжкові події", `<a href="/calendar">усі ${total}</a>`)}<div class="cal-lns">${rows.join("")}</div></section>`;
 }
 // The list by weeks: today, this week and the next one open; when the list is long, the later months folded.
 function calList(events, { user, owner, today, kind = "" }) {
