@@ -1527,3 +1527,6 @@ aside .side-lists + .label, aside p + .label, aside dialog + .label { margin-top
 .cal-shelf { margin-top: 6px; }
 .cal-shelf .mine { color: var(--accent); font-weight: 500; }
 .cal-acts { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-start; }
+/* «Підписатися» is a menu (details): as big as «Додати подію» beside it (Max 2026-11-15). */
+.cal-acts .drop > summary.btn { padding: 10px 22px; font-size: 14px; letter-spacing: 0; line-height: 1.3; cursor: pointer; }
+.cal-acts .caret { font-size: 11px; }
