@@ -711,8 +711,9 @@ function ics(events, { name = "Книжкові події", site = "https://chy
     lines.push(`SUMMARY:${esc(e.title)}`);
     const where = e.city === "Онлайн" ? "Онлайн" : [e.place, e.city].filter(Boolean).join(", ");
     if (where) lines.push(`LOCATION:${esc(where)}`);
-    lines.push(`DESCRIPTION:${esc([e.sub, e.url ? `Організатор: ${e.url}` : "", `На Chytai: ${site}${eventPath(e)}`].filter(Boolean).join("\n"))}`);
-    if (e.url) lines.push(`URL:${e.url}`);
+    const src = sourceUrl(e);
+    lines.push(`DESCRIPTION:${esc([e.sub, src ? `Організатор: ${src}` : "", `На Chytai: ${site}${eventPath(e)}`].filter(Boolean).join("\n"))}`);
+    lines.push(`URL:${src || `${site}${eventPath(e)}`}`);
     lines.push("END:VEVENT");
   }
   lines.push("END:VCALENDAR");
@@ -751,6 +752,9 @@ function linkKind(url) {
   if (/^https?:\/\/([^/]*\.)?(instagram\.com|facebook\.com|fb\.me)\//i.test(url || "")) return "social";
   return url ? "site" : "";
 }
+// The link readers see: none for a Telegram post (Max 2026-11-15: it tells we read channels, and the organizer has a
+// page somewhere; `findSource` looks for it).
+const sourceUrl = (e) => (linkKind(e?.url) === "tg" ? "" : e?.url || "");
 // One event's Google Calendar link (the .ics file is /calendar/<…>.ics): a timed event lasts two hours.
 function googleLink(e, page = "") {
   const d8 = (day) => day.replace(/-/g, "");
@@ -768,4 +772,4 @@ function googleLink(e, page = "") {
 const SHORT_DAYS = ["нд", "пн", "вт", "ср", "чт", "пт", "сб"];
 const shortWhen = (e) => `${SHORT_DAYS[new Date(`${e.starts}T12:00:00Z`).getUTCDay()]}, ${span(e)}`;
 
-module.exports = { create, KINDS, eventKey, eventPath, linkKind, googleLink, tourTitle, subKey, subParse, subName, SHORT_DAYS, tours, ics, parseWhen, linkText, readEvent, cleanTitle, findCity, kyivDay, addDays, dayName, dayAside, span, shortWhen, MONTHS };
+module.exports = { create, KINDS, eventKey, eventPath, linkKind, sourceUrl, googleLink, tourTitle, subKey, subParse, subName, SHORT_DAYS, tours, ics, parseWhen, linkText, readEvent, cleanTitle, findCity, kyivDay, addDays, dayName, dayAside, span, shortWhen, MONTHS };

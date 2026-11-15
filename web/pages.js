@@ -2105,8 +2105,9 @@ const setReadersWithNote = (fn) => (readersWithNote = fn);
 const cal = () => require("./calendar");
 // The organizer's link, named by what it is (a sign-up form, a Telegram post, a site); we sell nothing.
 const ORG_LINK = { form: "Зареєструватися", tg: "Пост у Telegram", social: "Сторінка організатора", site: "Сайт організатора" };
-const orgText = (e) => ORG_LINK[cal().linkKind(e.url)] || "";
-const eventLink = (e) => (e.url ? `<a class="text-link" href="${attr(e.url)}" target="_blank" rel="noopener nofollow ugc">${orgText(e).toLowerCase()} ↗</a>` : "");
+const orgText = (e) => ORG_LINK[cal().linkKind(cal().sourceUrl(e))] || "";
+// No link to a Telegram post (calendar.sourceUrl).
+const eventLink = (e) => (cal().sourceUrl(e) ? `<a class="text-link" href="${attr(cal().sourceUrl(e))}" target="_blank" rel="noopener nofollow ugc">${orgText(e).toLowerCase()} ↗</a>` : "");
 // One event of a kind, for the line under a title.
 const KIND_ONE = { club: "Клуб", author: "Зустріч з автором", lecture: "Лекція", festival: "Фестиваль", kids: "Для дітей" };
 const KIND_ORDER = ["author", "club", "lecture", "festival", "kids"];
@@ -2396,11 +2397,12 @@ function eventPage({ e, user, owner = false, books = [], stops = [], related = [
   const map = !online && e.place && !/повідом|уточн|після реєстрац/i.test(e.place) ? ` · <a class="text-link" href="${attr(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent([e.place, e.city].filter(Boolean).join(", "))}`)}" target="_blank" rel="noopener" data-ev="ev-map">на мапі</a>` : "";
   const where = [e.city, e.place].filter(Boolean).map(esc).join(" · ");
   const page = `${site}${C.eventPath(e)}`;
-  const org = e.url ? `<a class="btn primary" href="${attr(e.url)}" target="_blank" rel="noopener nofollow ugc" data-ev="ev-organizer">${esc(orgText(e))} ↗</a>` : "";
+  const src = C.sourceUrl(e);
+  const org = src ? `<a class="btn primary" href="${attr(src)}" target="_blank" rel="noopener nofollow ugc" data-ev="ev-organizer">${esc(orgText(e))} ↗</a>` : "";
   // «Додати в календар»: the .ics file opens Apple's calendar, Google's has its own link.
   const ics = C.eventPath(e) + ".ics";
   const addCal = past ? "" : `<details class="ev-cal"><summary class="btn">Додати в календар</summary><p class="small"><a class="text-link" href="${attr(ics)}" data-ev="ev-ics">iPhone чи Mac</a> · <a class="text-link" href="${attr(C.googleLink(e, page))}" target="_blank" rel="noopener" data-ev="ev-google">Google</a> · <a class="text-link" href="${attr(ics)}" download data-ev="ev-ics-file">файл .ics</a></p></details>`;
-  const note = e.url ? (C.linkKind(e.url) === "form" ? "Реєстрація в організатора. Квитків не продаємо." : "Подробиці в організатора. Квитків не продаємо.") : "";
+  const note = src ? (C.linkKind(src) === "form" ? "Реєстрація в організатора. Квитків не продаємо." : "Подробиці в організатора. Квитків не продаємо.") : "";
   const hide = user && (owner || e.by === user.id) ? `<form method="post" action="/calendar/${attr(encodeURIComponent(e.id))}/hide" class="inline"><button class="text-link small muted">сховати</button></form>` : "";
   const by = e.byReader ? `Додав(ла) <a class="text-link" href="${attr(e.byReader.href)}">${esc(e.byReader.name)}</a>` : "";
   const foot = [by, hide].filter(Boolean).join(" · ");
@@ -2452,10 +2454,10 @@ function eventPage({ e, user, owner = false, books = [], stops = [], related = [
     ...(e.ends ? { endDate: e.ends } : {}),
     eventAttendanceMode: online ? "https://schema.org/OnlineEventAttendanceMode" : "https://schema.org/OfflineEventAttendanceMode",
     eventStatus: "https://schema.org/EventScheduled",
-    location: online ? { "@type": "VirtualLocation", url: e.url || page } : { "@type": "Place", name: e.place || e.city, address: { "@type": "PostalAddress", addressLocality: e.city, addressCountry: "UA", ...(e.place ? { streetAddress: e.place } : {}) } },
+    location: online ? { "@type": "VirtualLocation", url: src || page } : { "@type": "Place", name: e.place || e.city, address: { "@type": "PostalAddress", addressLocality: e.city, addressCountry: "UA", ...(e.place ? { streetAddress: e.place } : {}) } },
     ...(e.sub ? { description: e.sub } : {}),
     ...(book?.cover ? { image: abs(book.cover) } : {}),
-    ...(e.url ? { url: e.url } : {}),
+    url: src || page,
   };
   return layout({ title: e.title, body, user, path: "/calendar", canonical: C.eventPath(e), noindex: past || e.hidden, description: [when, [e.city, e.place].filter(Boolean).join(", "), e.sub].filter(Boolean).join(". ").slice(0, 300), image: book?.cover ? abs(book.cover) : "", jsonld });
 }
