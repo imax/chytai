@@ -341,16 +341,17 @@ function create(db, store, { notify = () => {}, bookua = null, search = null, ma
       }
       setMeta("calbooks:rewant", new Date().toISOString());
     }
-    // Once: the collectors' events get their names again by the stricter linkText (2026-11-15, «Олександр Книга»).
-    if (!dry && !meta("calendar:relink")) {
+    // Once: the collectors' events get their names again by the stricter linkText (2026-11-15, «Олександр Книга»),
+    // and lose a Russian edition they linked.
+    if (!dry && !meta("calendar:relink2")) {
       for (const e of db.prepare("SELECT * FROM cal_events WHERE source IN ('tg', 'chytomo', 'ye') AND (starts >= ? OR ends >= ?)").all(day, day).map(row)) {
         const links = linkText(store, `${e.title} ${e.sub || ""}`);
-        for (const id of e.books) if (!links.books.includes(id)) links.books.push(id);
+        for (const id of e.books) if (!links.books.includes(id) && !isRussian(store.book?.(id, { edited: false, borrow: false }) || {})) links.books.push(id);
         for (const id of links.books) for (const a of store.authors.list) if (a.ids.includes(id) && !links.authors.includes(a.slug)) links.authors.push(a.slug);
         const want = wanted({ ...e, named: JSON.parse(e.want || "[]") }, e.title, links);
         db.prepare("UPDATE cal_events SET books = ?, authors = ?, want = ? WHERE id = ?").run(JSON.stringify(links.books.slice(0, 6)), JSON.stringify(links.authors.slice(0, 6)), JSON.stringify(want), e.id);
       }
-      setMeta("calendar:relink", new Date().toISOString());
+      setMeta("calendar:relink2", new Date().toISOString());
       fresh();
     }
     const rows = db.prepare("SELECT * FROM cal_events WHERE want != '[]' AND (starts >= ? OR ends >= ?)").all(day, day).map(row);
