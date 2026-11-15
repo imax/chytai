@@ -303,7 +303,8 @@ A flag only when Max asks for one, or when the change could break what readers u
   A site with many: read it directly (like `yeRun`) or add its channel.
 - Events from those posts: an event word and a date not past (`maybeEvent`, ~1 post in 15) → Haiku 5.5 answers the
   events as fields (300 calls a day at most, Max 2026-11-15), `findSimilar` drops the same event from another channel (same day and city, and an author, half the title's words or the same «» book in another case), `upsert` with
-  the post's event link or the post itself (a payment or call link, `NOT_A_PAGE`, gives the post), shown at once (Max hides a bad one with «сховати»). On since 2026-11-15
+  the post's event link (`eventUrl`: its one sign-up form first, then Haiku's pick, then one post of another channel)
+  or the post itself (a payment or call link, `NOT_A_PAGE`, gives the post), shown at once (Max hides a bad one with «сховати»). On since 2026-11-15
   (Max's OK after a trial: 25 calls, $0.005, 20 events); switch: meta `tg:events`, `POST /agent/tg-events {"on":false}`.
   Dry run over the last 30 days (≤200 calls, only with Max's OK): `GET /agent/tg-events` (ask again, `?again=1`).
 

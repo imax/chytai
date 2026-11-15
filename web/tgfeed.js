@@ -166,12 +166,37 @@ const EVENT_SCHEMA = {
 // A payment or a call is not the event's page (we sell no tickets): the post is.
 const NOT_A_PAGE = /^https?:\/\/([^/]+\.)?(wayforpay\.com|monobank\.ua|mono\.bank|privat24\.ua|meet\.google\.com|zoom\.us)([/:?#]|$)/i;
 
+// The event's link among the post's: the one Haiku named (http/https, «www.», a trailing slash and &amp; don't count),
+// but a sign-up form first when the post has exactly one (Max 2026-11-15: the button led to the post, whose only use
+// was its link to the form); then one post of another channel (a digest like @knyzhkovi_kluby retells a club's own
+// post); else `fallback`, the post itself.
+const bare = (u) => String(u || "").replace(/&amp;/g, "&").replace(/^https?:\/\//i, "").replace(/^www\./i, "").replace(/\/+$/, "").toLowerCase();
+function eventUrl(given, links, fallback, channel = "") {
+  const ok = links.filter((u) => !NOT_A_PAGE.test(u));
+  const forms = [...new Set(ok.filter((u) => require("./calendar").linkKind(u) === "form"))];
+  if (forms.length === 1) return forms[0];
+  const hit = given && ok.find((u) => bare(u) === bare(given));
+  if (hit) return hit;
+  const posts = [...new Set(ok.filter((u) => /^https?:\/\/t\.me\/[a-z]\w{3,31}\/\d+$/i.test(u) && !new RegExp(`^https?://t\\.me/${channel}/`, "i").test(u)))];
+  return posts.length === 1 ? posts[0] : fallback;
+}
+
 function create(db, { calendar, apiKey = process.env.ANTHROPIC_API_KEY || "", client: ai = null, log = console.log } = {}) {
   db.exec(SCHEMA);
   try {
     // Events made before NOT_A_PAGE linked to payments: point them at their post.
     for (const r of db.prepare("SELECT id, url FROM cal_events WHERE source = 'tg'").all())
       if (NOT_A_PAGE.test(r.url)) db.prepare("UPDATE cal_events SET url = ? WHERE id = ?").run(`https://t.me/${r.id.slice(3).replace(/-\d+$/, "")}`, r.id);
+  } catch {}
+  try {
+    // Events that link to their post while the post has one sign-up form: the form (eventUrl, 2026-11-15).
+    const post = db.prepare("SELECT links FROM tg_posts WHERE channel = ? AND id = ?");
+    for (const r of db.prepare("SELECT id, url FROM cal_events WHERE source = 'tg' AND url LIKE 'https://t.me/%'").all()) {
+      const [channel, id] = r.id.slice(3).replace(/-\d+$/, "").split("/");
+      const p = post.get(channel, Number(id));
+      const url = p ? eventUrl("", JSON.parse(p.links || "[]"), r.url, channel) : r.url;
+      if (url !== r.url) db.prepare("UPDATE cal_events SET url = ? WHERE id = ?").run(url, r.id);
+    }
   } catch {}
   const meta = (k) => db.prepare("SELECT value FROM meta WHERE key = ?").get(k)?.value || "";
   const setMeta = (k, v) => db.prepare("INSERT INTO meta (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(k, String(v));
@@ -445,7 +470,7 @@ function create(db, { calendar, apiKey = process.env.ANTHROPIC_API_KEY || "", cl
     const raw = res.content.map((b) => b.text || "").join("");
     const j = JSON.parse(raw.slice(raw.indexOf("{"), raw.lastIndexOf("}") + 1));
     const today = kyivDay();
-    return (j.events || []).filter((e) => /^\d{4}-\d\d-\d\d$/.test(e.starts) && (e.ends || e.starts) >= today && e.title).map(({ books, kind, ...e }) => ({ ...e, kind: kind === "other" ? "" : kind || "", named: (books || []).slice(0, 4), url: links.includes(e.url) && !NOT_A_PAGE.test(e.url) ? e.url : p.page || `https://t.me/${p.channel}/${p.id}` }));
+    return (j.events || []).filter((e) => /^\d{4}-\d\d-\d\d$/.test(e.starts) && (e.ends || e.starts) >= today && e.title).map(({ books, kind, ...e }) => ({ ...e, kind: kind === "other" ? "" : kind || "", named: (books || []).slice(0, 4), url: eventUrl(e.url, links, p.page || `https://t.me/${p.channel}/${p.id}`, p.page ? "" : p.channel) }));
   }
 
   // The events in posts not looked at yet (dry: the posts of the last `days` days, nothing kept, at most `max`
@@ -597,4 +622,4 @@ function create(db, { calendar, apiKey = process.env.ANTHROPIC_API_KEY || "", cl
   return { run, joinMore, keepChannel, prune, events, classify, status, maybeEvent, meta, setMeta, extract, find };
 }
 
-module.exports = { create, parsePage, maybeEvent, fromMessage, channels, KEEP_DAYS };
+module.exports = { eventUrl, create, parsePage, maybeEvent, fromMessage, channels, KEEP_DAYS };
