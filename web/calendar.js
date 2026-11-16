@@ -152,16 +152,18 @@ function linkText(store, text) {
   const out = { authors: [], books: [] };
   const t = String(text || "");
   if (!t || !store?.authors) return out;
-  const words = t.toLowerCase().replace(/[’'ʼ`]/g, "").match(/[\p{L}-]+/gu) || [];
+  const raw = t.replace(/[’'ʼ`]/g, "").match(/[\p{L}-]+/gu) || [];
+  const words = raw.map((w) => w.toLowerCase());
   // A name in any case («Сари Маас», «Маас Сара»): its two words side by side (one word between for «Дж.»), each
   // word starting with the name's stem. Apart they meant nothing: «Олександрою … у книгарні» was «Олександр Книга».
   const stem = (w) => {
     const s = w.length >= 4 ? w.replace(/[аяоеєіиїйьую]$/, "") : w;
     return s.length >= 3 ? s : w;
   };
-  const has = (w, s) => w.startsWith(s) || w.includes(`-${s}`); // «Петрова-Домонтовича»
-  const at = (i, s) => i < words.length && has(words[i], s);
-  const side = (fs, ls) => words.some((w, i) => (has(w, fs) && (at(i + 1, ls) || at(i + 2, ls))) || (has(w, ls) && at(i + 1, fs)));
+  // «Петрова-Домонтовича»: a second surname after a hyphen starts with a capital («боді-горор» is no Гор).
+  const has = (i, s) => words[i].startsWith(s) || (words[i].includes(`-${s}`) && /-\p{Lu}/u.test(raw[i]));
+  const at = (i, s) => i < words.length && has(i, s);
+  const side = (fs, ls) => words.some((w, i) => (has(i, fs) && (at(i + 1, ls) || at(i + 2, ls))) || (has(i, ls) && at(i + 1, fs)));
   for (const a of store.authors.list) {
     const name = (a.uk || a.name || "").toLowerCase().replace(/[’'ʼ`]/g, "");
     if (!/[а-яіїєґ]/.test(name)) continue;
@@ -493,17 +495,17 @@ function create(db, store, { notify = () => {}, bookua = null, search = null, ma
       setMeta("calendar:relink2", new Date().toISOString());
       fresh();
     }
-    // Once (2026-11-16, Max: «Події не завжди знаходять книги»): titles in "" and “”, a letter apart or with no author.
-    if (!dry && !meta("calendar:relink3")) {
+    // Once (2026-11-16, Max: «Події не завжди знаходять книги»): titles in "" and “”, a letter apart or with no author;
+    // relink4: authors found again («боді-горор» had named Розі Гор).
+    if (!dry && !meta("calendar:relink4")) {
       for (const e of db.prepare("SELECT * FROM cal_events WHERE (starts >= ? OR ends >= ?)").all(day, day).map(row)) {
         const links = linkText(store, `${e.title} ${e.sub || ""}`);
         for (const id of e.books) if (!links.books.includes(id)) links.books.push(id);
-        for (const a of e.authors) if (!links.authors.includes(a)) links.authors.push(a);
         const want = wanted({ ...e, named: JSON.parse(e.want || "[]") }, e.title, links);
         for (const id of links.books) for (const a of store.authors.list) if (a.ids.includes(id) && !links.authors.includes(a.slug)) links.authors.push(a.slug);
         db.prepare("UPDATE cal_events SET books = ?, authors = ?, want = ? WHERE id = ?").run(JSON.stringify(links.books.slice(0, 6)), JSON.stringify(links.authors.slice(0, 6)), JSON.stringify(want), e.id);
       }
-      setMeta("calendar:relink3", new Date().toISOString());
+      setMeta("calendar:relink4", new Date().toISOString());
       fresh();
     }
     const rows = db.prepare("SELECT * FROM cal_events WHERE want != '[]' AND (starts >= ? OR ends >= ?)").all(day, day).map(row);
@@ -512,6 +514,10 @@ function create(db, store, { notify = () => {}, bookua = null, search = null, ma
       const books = [...e.books];
       for (const w of JSON.parse(e.want || "[]")) {
         let id = findBook(store, { title: w.title, author: w.author });
+        if (!id && w.tried === day) {
+          left.push(w);
+          continue;
+        }
         if (!id) {
           if (count.n >= CALBOOKS_DAY) {
             left.push(w);
@@ -531,6 +537,9 @@ function create(db, store, { notify = () => {}, bookua = null, search = null, ma
             }
           }
           if (!book || isRussian(book)) {
+            // Asked again each day until the event is over: a fresh translation reaches book.ua later («Найкраще – це
+            // очі», Max 2026-11-16).
+            left.push({ ...w, tried: day });
             out.missed.push({ ...w, event: e.id });
             continue;
           }

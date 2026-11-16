@@ -397,7 +397,8 @@ A flag only when Max asks for one, or when the change could break what readers u
   the catalog's exact title, else the search's best book a letter or two apart by the author named («Адді Ларю» →
   «Лярю»), or the same title with none; missing ones wait in `cal_events.want`.
   `calendar.fillBooks` every hour: book.ua's Ukrainian edition, else Google Books / Open Library, source `calendar`,
-  30 a day (meta `calbooks:count`), never Russian; Max hears of them (mail + Telegram). Dry run:
+  30 a day (meta `calbooks:count`), never Russian; Max hears of them (mail + Telegram). One not found stays in `want`
+  with `tried` and is asked again the next day, until the event is over (a fresh translation reaches book.ua later). Dry run:
   `curl -s https://chytai.org.ua/agent/calendar-books -H "$H"`.
 
 ## «Словничок» in the reader's classics (`server/glossary.js`, `src/renderer/gloss.js`)
