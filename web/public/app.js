@@ -12,6 +12,47 @@
       navigator.sendBeacon?.("/api/speed", new Blob([JSON.stringify({ load: nav.loadEventEnd || nav.domContentLoadedEventEnd, first: fcp?.startTime, phone })], { type: "application/json" }));
     } catch {}
   }, 0));
+  // A page opened, for /admin (Max, 2026-11-16: «аналітика по продукту»): the page says so itself, so a robot that
+  // runs no script is not counted as a guest; then, when it is hidden or left, how many seconds it was on screen and
+  // how far down it was read. The server keeps the visit's pages in order (admin.opened), no address, no person.
+  (() => {
+    if (/^\/(admin|agent)(\/|$)/.test(location.pathname)) return;
+    const phone = matchMedia("(pointer: coarse)").matches && innerWidth < 900;
+    let pid, shown, sec, depth, busy = false;
+    const send = (data) => {
+      try {
+        navigator.sendBeacon?.("/api/seen", new URLSearchParams({ path: location.pathname, pid, ...data }));
+      } catch {}
+    };
+    const measure = () => {
+      busy = false;
+      const h = document.documentElement.scrollHeight;
+      depth = Math.max(depth, h ? Math.min(100, Math.round((100 * (scrollY + innerHeight)) / h)) : 100);
+    };
+    const open = () => {
+      pid = Math.random().toString(36).slice(2, 10).padEnd(8, "0");
+      shown = document.hidden ? 0 : Date.now();
+      sec = 0;
+      depth = 0;
+      send({ phone: phone ? "1" : "0" });
+      measure();
+    };
+    const report = () => {
+      if (shown) (sec += (Date.now() - shown) / 1000), (shown = 0);
+      send({ sec: String(Math.round(sec)), depth: String(depth) });
+    };
+    open();
+    addEventListener("scroll", () => busy || ((busy = true), requestAnimationFrame(measure)), { passive: true });
+    document.addEventListener("visibilitychange", () => (document.hidden ? report() : (shown = shown || Date.now())));
+    addEventListener("pagehide", () => document.hidden || report());
+    // A link followed: reported before the next page starts (a beacon sent while leaving is sometimes lost).
+    document.addEventListener("click", (e) => {
+      const a = e.target.closest?.("a[href]");
+      if (a && !e.defaultPrevented && !e.metaKey && !e.ctrlKey && !e.shiftKey && a.target !== "_blank" && !a.getAttribute("href").startsWith("#")) report();
+    });
+    // Back to a page the browser kept whole: the server saw no request, the page counts again.
+    addEventListener("pageshow", (e) => e.persisted && open());
+  })();
   const $ = (s, r = document) => r.querySelector(s);
   const $$ = (s, r = document) => [...r.querySelectorAll(s)];
   const plural = (n, one, few, many) => (n % 10 === 1 && n % 100 !== 11 ? one : n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20) ? few : many);
@@ -540,15 +581,23 @@
     // The query the reader stopped at goes to the search log once (admin.searched): after a few seconds without
     // typing, or when they leave for a result. The pauses in between are not counted.
     let pending = "", logged = onSearch ? last : "", logTimer;
-    const flush = () => {
+    // A result opened sends its place too (pos, from 1, among the results' distinct links): «знайшли, але нічого
+    // не відкрили» on /admin/catalog. `again`: the query itself was already sent (or the server logged /search).
+    const flush = (pos) => {
       clearTimeout(logTimer);
+      const fresh = pending && pending !== logged;
       // A request went to /ask (it keeps its own); only searches are counted here.
-      if (pending && pending !== logged && !$("[data-primary]", live)) navigator.sendBeacon?.("/api/searched", new URLSearchParams({ q: pending }));
+      if ((fresh || (pos && logged)) && !$("[data-primary]", live)) navigator.sendBeacon?.("/api/searched", new URLSearchParams({ q: fresh ? pending : logged, ...(pos ? { pick: pos } : {}), ...(fresh ? {} : { again: 1 }) }));
       logged = pending || logged;
       pending = "";
     };
-    addEventListener("pagehide", flush);
-    live.addEventListener("click", (e) => e.target.closest("a") && flush());
+    addEventListener("pagehide", () => flush());
+    live.addEventListener("click", (e) => {
+      const a = e.target.closest("a[href]");
+      if (!a) return;
+      const hrefs = [...new Set([...live.querySelectorAll("a[href]")].map((x) => x.getAttribute("href")))];
+      flush(hrefs.indexOf(a.getAttribute("href")) + 1 || 1);
+    });
     const show = (q) => {
       for (const el of browse) el.hidden = !!q;
       if (!q) {

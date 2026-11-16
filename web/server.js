@@ -544,7 +544,7 @@ app.use((req, res, next) => {
   admin.touch(req, req.user?.id);
   // What a reader changed (a mark, a rating, a list, a follow…), for /admin/activity: the address and the few
   // fields that say what it was, never the text of a note or a comment.
-  if (req.method === "POST" && req.user && !/^\/(api\/(tap|searched|js-error|speed)|login|logout|mcp|oauth)/.test(req.path))
+  if (req.method === "POST" && req.user && !/^\/(api\/(tap|seen|searched|js-error|speed)|login|logout|mcp|oauth)/.test(req.path))
     res.on("finish", () => {
       if (res.statusCode >= 400) return;
       const b = req.body || {};
@@ -584,7 +584,7 @@ app.get("/login", (req, res) => {
   if (book) admin.guestTap(req, null, m[1] === "want" ? "want" : "mark", cookies(req));
   // The way in, step by step (admin «Вхід»): the page opened, and for what (a book's button, the reader, the menu).
   // With a referrer only: crawlers that walk the «Увійти» links send none.
-  if (req.headers.referer) admin.event(req, null, "login", `page:${m ? m[1] : next.startsWith("/reader-login") || next.startsWith("/oauth") ? "reader" : next ? `from:${require("./admin").sectionOf(next.split("?")[0])}` : "menu"}`);
+  if (req.headers.referer) admin.event(req, null, "login", `page:${m ? m[1] : next.startsWith("/reader-login") || next.startsWith("/oauth") ? "reader" : next ? `from:${require("./admin").sectionOf(next.split("?")[0])}` : "menu"}`, { page: true });
   res.send(loginPage(req, { next, book, what: m?.[1], free: !!freeFileFor(book) }));
 });
 app.post("/login", async (req, res) => {
@@ -3316,14 +3316,23 @@ app.post("/api/tap", (req, res) => {
   admin.tap(req, req.user?.id, { path: b.path, block: b.block, target: b.target, pos: b.pos });
   res.status(204).end();
 });
+// A page opened, and later how long it was on screen (app.js): admin.opened, guests' views and visits' paths.
+app.post("/api/seen", (req, res) => {
+  const b = req.body || {};
+  admin.opened(req, req.user?.id, { visit: cookies(req).chytai_here, path: b.path, pid: b.pid, sec: b.sec, depth: b.depth, phone: b.phone === "1" });
+  res.status(204).end();
+});
 app.post("/api/js-error", (req, res) => {
   const where = String(req.body?.path || "").startsWith("/") ? require("./admin").sectionOf(String(req.body.path).slice(0, 200)) : "?";
   admin.event(req, req.user?.id, "js", `${where}: ${String(req.body?.message || "").slice(0, 100)}`);
   res.status(204).end();
 });
+// With `pick` a result was opened (its place among the results' links); `again` = the query was logged before.
 app.post("/api/searched", (req, res) => {
   const q = String(req.body?.q || "").trim().slice(0, 100);
-  if (q) admin.searched(req, req.user?.id, q, lastFound.has(q) ? lastFound.get(q) : foundCount(searchAll(req, q)));
+  const pick = parseInt(req.body?.pick, 10) || 0;
+  if (q && !req.body?.again) admin.searched(req, req.user?.id, q, lastFound.has(q) ? lastFound.get(q) : foundCount(searchAll(req, q)));
+  if (q && pick > 0) admin.picked(req, req.user?.id, q, pick);
   res.status(204).end();
 });
 
@@ -4175,7 +4184,7 @@ app.get("/admin/debug/search", owner, (req, res) => {
   });
 });
 app.get("/admin/speed", owner, (req, res) => res.send(speedPage({ user: req.user, days: speed.days(), bots: speed.bots(), notFound: admin.events("404"), jsErrors: admin.events("js"), errors: errors.month(), layout: pages.layout })));
-app.get("/admin/traffic", owner, (req, res) => res.send(adminPage({ user: req.user, stats: admin.stats(), taps: admin.taps(), gsc: gsc.data(), gscOn: gsc.configured(), layout: pages.layout, page: "traffic" })));
+app.get("/admin/traffic", owner, (req, res) => res.send(adminPage({ user: req.user, stats: admin.stats(), taps: admin.taps(), paths: admin.paths(), gsc: gsc.data(), gscOn: gsc.configured(), layout: pages.layout, page: "traffic" })));
 app.get("/admin/stats", owner, (req, res) => res.redirect(301, "/admin/traffic"));
 app.get("/admin/overviews", owner, (req, res) => res.send(overviewsPage({ user: req.user, list: advice.overviewList().map((r) => ({ ...r, complaints: r.down ? advice.complaintsOf(r.book.id) : [] })), stats: advice.overviewStats(), who: (id) => (id && id !== "auto" ? pub(auth.reader(id)) : null), layout: pages.layout })));
 // The reader's numbers (server/index.js /api/site-admin), asked for with the owner's reader key.
@@ -4278,7 +4287,9 @@ function activityFor(who, days) {
 }
 app.get("/admin/activity", owner, (req, res) => {
   const who = req.query.reader ? auth.byUsername(String(req.query.reader)) : null;
-  res.send(activityPage({ user: req.user, ...activityFor(who, who ? 60 : 7), layout: pages.layout }));
+  // Guests' visits instead of readers (page_views, the last two days).
+  const guests = !who && req.query.guests ? admin.guestVisits(2) : null;
+  res.send(activityPage({ user: req.user, ...activityFor(who, who ? 60 : 7), guests, layout: pages.layout }));
 });
 app.get("/admin.json", owner, (req, res) => res.json(admin.stats()));
 // One Google Books request with the server's key, for the owner to see what Google answers from here.

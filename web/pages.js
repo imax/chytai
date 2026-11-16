@@ -1563,11 +1563,14 @@ function searchesBlock(s) {
   if (!s) return "";
   if (!s.total) return `<h2>Що шукають</h2>\n<p class="muted small">Поки ніхто нічого не шукав. Рахуємо з 29 жовтня; твої власні пошуки, як і роботи, не рахуються.</p>`;
   const day = (d) => new Date(`${d}T12:00`).toLocaleDateString("uk-UA", { day: "numeric", month: "short" });
-  const rows = (list, hits) => list.map((r) => `<tr><td><a href="/search?${attr(new URLSearchParams({ q: r.q }).toString())}">${esc(r.q)}</a></td><td>${r.n}</td>${hits ? `<td>${r.hits || `<span class="zero">0</span>`}</td>` : ""}</tr>`).join("");
+  const rows = (list, hits, opened) => list.map((r) => `<tr><td><a href="/search?${attr(new URLSearchParams({ q: r.q }).toString())}">${esc(r.q)}</a></td><td>${r.n}</td>${hits ? `<td>${r.hits || `<span class="zero">0</span>`}</td>` : ""}${opened ? `<td>${r.clicks ? `${r.clicks}<span class="muted"> · №${Math.round((10 * r.pos) / r.clicks) / 10}</span>` : ""}</td>` : ""}</tr>`).join("");
   return `<h2>Що шукають</h2>
 <p class="muted small">Без твоїх власних пошуків. З ${day(s.since)}: ${s.total} пошуків, ${s.queries} різних запитів, нічого не знайшли ${s.none}, переходів з результатів ${s.clicks} (<a href="/admin/traffic#taps">куди</a>).</p>
 ${s.outside ? `<p class="muted small">Книжки не з Chytai під результатами: показали ${s.outside.shown}, ніде не знайшли ${s.outside.none}, відкрили (нові книжки) ${s.outside.opened}.</p>` : ""}
-<div class="tbl"><table><thead><tr><th>Запит</th><th>Разів</th><th>Знайдено</th></tr></thead><tbody>${rows(s.top, true)}</tbody></table></div>
+<div class="tbl"><table><thead><tr><th>Запит</th><th>Разів</th><th>Знайдено</th>${s.picks ? `<th title="Скільки разів відкрили результат і яке в нього в середньому місце">Відкрили</th>` : ""}</tr></thead><tbody>${rows(s.top, true, !!s.picks)}</tbody></table></div>
+${s.picks ? `<h2>Знайшли, але нічого не відкрили</h2>
+<p class="muted small">З ${day(s.picks.since)}: щось відкрили після ${s.picks.opened} з ${s.picks.n} пошуків (${s.picks.n ? Math.round((100 * s.picks.opened) / s.picks.n) : 0}%). Нижче запити, після яких нічого не відкрили: тут промахнувся пошук або каталог.</p>
+${s.picks.missed.length ? `<div class="tbl"><table><thead><tr><th>Запит</th><th>Разів</th><th>Знайдено</th></tr></thead><tbody>${rows(s.picks.missed, true)}</tbody></table></div>` : ""}` : ""}
 ${s.empty.length ? `<h2>Нічого не знайшли</h2>
 <div class="tbl"><table><thead><tr><th>Запит</th><th>Разів</th></tr></thead><tbody>${rows(s.empty, false)}</tbody></table></div>` : ""}`;
 }
@@ -2760,6 +2763,7 @@ function privacyPage({ user }) {
 <h2>Що ми зберігаємо</h2>
 <p>Рахуємо загальну статистику за день: перегляди, звідки приходять, що шукають та інші дані, які допомагають нам покращити сайт. IP-адрес не зберігаємо, сторонні сервіси аналітики не використовуємо.</p>
 <p>Для зареєстрованих читачів бачимо, які сторінки вони відкривають і що шукають на сайті, щоб його покращувати. Зберігаємо 60 днів.</p>
+<p>Гостей не знаємо: для відвідування тримаємо випадковий номер на 30 хвилин, щоб бачити, які сторінки відкривали одна за одною і скільки часу кожна була на екрані. Зберігаємо 30 днів.</p>
 <p><strong>Якщо ви завели полицю:</strong></p>
 <p>Пошта, імʼя та нікнейм, вашу полицю з книгами і тд.</p>
 <p>Зберігаємо кукіс на вхід та дату останнього входу на сайт.</p>

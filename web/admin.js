@@ -17,6 +17,9 @@ const BOT = /bot|crawl|spider|slurp|curl|wget|python|java\b|go-http|headless|pre
 const human = (req) => !BOT.test(req.headers["user-agent"] || "") && !!req.headers["accept-language"] && !!(req.headers["sec-fetch-mode"] || req.headers["sec-fetch-site"]);
 
 const DAY = 86400 * 1000;
+const crypto = require("crypto");
+const VISIT = /^[0-9a-f]{12}$/; // a visit's number in the chytai_here cookie (admin.arrive)
+const PATHS_KEEP = 30; // days of page_views
 const BARE = 8; // guest pages without our cookies from one address in ten minutes, beyond which it is a robot
 const pad = (n) => String(n).padStart(2, "0");
 // YYYY-MM-DD of a moment, in the process's time zone.
@@ -32,6 +35,9 @@ const weekOf = (day) => {
   return addDays(day, -((d.getDay() + 6) % 7));
 };
 const today = () => dayOf(new Date());
+// A query as the search log keeps it: lowercased, spaces folded, at most 100 characters.
+const searchKey = (q) => String(q || "").toLowerCase().replace(/\s+/g, " ").trim().slice(0, 100);
+const PICKS_FROM = "2026-11-17"; // the first whole day with opened search results counted (admin.picked)
 
 // Which part of the site a page belongs to, for the views by section (Max, 2026-10-22: «головна vs
 // publishers vs community»). Only the kind of page is kept, never the path itself.
@@ -130,6 +136,7 @@ class Admin {
     // The funnel counts readers who signed up from the day the steps started being kept.
     if (!db.get("steps:since")) db.set("steps:since", new Date().toISOString());
     this.bare = new Map(); // address -> { n, since, until }: guests' pages that came without our cookies
+    this.pending = new Map(); // `${visit}\n${path}` -> { at, fns }: a guest's page's counts, until the page says it opened
     this.dropCrawlers();
   }
 
@@ -219,11 +226,128 @@ class Admin {
           this.db.prepare("INSERT OR IGNORE INTO visits (day, reader) VALUES (?, ?)").run(day, readerId);
         }
       }
-      this.db.prepare(`INSERT INTO views (day, readers, guests) VALUES (?, ?, ?) ON CONFLICT (day) DO UPDATE SET readers = readers + excluded.readers, guests = guests + excluded.guests`).run(day, readerId ? 1 : 0, readerId ? 0 : 1);
-      this.db.prepare(`INSERT INTO section_views (day, section, views) VALUES (?, ?, 1) ON CONFLICT (day, section) DO UPDATE SET views = views + 1`).run(day, sectionOf(p));
+      // A guest's page is counted when it says it opened (opened()): a robot that runs no script is not a guest.
+      if (readerId) this.countView(day, readerId, p);
     } catch (e) {
       console.error("admin touch failed:", e.message);
     }
+  }
+
+  countView(day, readerId, p) {
+    this.db.prepare(`INSERT INTO views (day, readers, guests) VALUES (?, ?, ?) ON CONFLICT (day) DO UPDATE SET readers = readers + excluded.readers, guests = guests + excluded.guests`).run(day, readerId ? 1 : 0, readerId ? 0 : 1);
+    this.db.prepare(`INSERT INTO section_views (day, section, views) VALUES (?, ?, 1) ON CONFLICT (day, section) DO UPDATE SET views = views + 1`).run(day, sectionOf(p));
+  }
+
+  // A guest's count that waits for the page to say it opened (Max, 2026-11-16: since 12.11 a robot that runs no
+  // script made 5–15 times more «guests» than browsers that did): kept in memory under the visit and the page's
+  // address for two minutes, done by opened(), dropped otherwise. A reader's is done at once. At most 5000 waiting.
+  later(req, readerId, fn) {
+    if (readerId) return fn();
+    const visit = req._visit;
+    if (!visit) return;
+    const key = `${visit}\n${req.path}`;
+    const now = Date.now();
+    const w = this.pending.get(key) || { at: now, fns: [] };
+    if (w.fns.length < 8) w.fns.push(fn);
+    this.pending.set(key, w);
+    for (const [k, v] of this.pending) {
+      if (now - v.at < 120000 && this.pending.size <= 5000) break;
+      this.pending.delete(k);
+    }
+  }
+
+  // A page told us it opened, or later how long it was looked at (app.js → /api/seen): the guest's view and what
+  // waited for it (later()), and a row of page_views: the visit, the page's place in it, the address, where the
+  // visit came from (on its first page), seconds the page was on screen and how far down it was read (%).
+  // The visit is a random number in the chytai_here cookie, new after 30 minutes away; no address, no person
+  // for guests. Kept PATHS_KEEP days.
+  opened(req, readerId, { visit, path, pid, sec, depth, phone }) {
+    if (!this.counted(req, readerId) || !VISIT.test(visit || "") || !/^[a-z0-9]{6,12}$/.test(pid || "")) return;
+    path = String(path || "");
+    if (!path.startsWith("/") || /^\/(admin|api|agent)(\/|$)/.test(path)) return;
+    try {
+      if (sec != null) {
+        const s = Math.max(0, Math.min(3600, Math.round(Number(sec) || 0)));
+        const d = Math.max(0, Math.min(100, Math.round(Number(depth) || 0)));
+        this.db.prepare("UPDATE page_views SET sec = max(sec, ?), depth = max(depth, ?) WHERE visit = ? AND pid = ?").run(s, d, visit, pid);
+        return;
+      }
+      const day = today();
+      const raw = path.slice(0, 300);
+      const w = this.pending.get(`${visit}\n${raw}`);
+      this.pending.delete(`${visit}\n${raw}`);
+      let src = "";
+      for (const fn of w?.fns || []) {
+        const r = fn();
+        if (r?.src) src = r.src;
+      }
+      let p = raw;
+      try {
+        p = decodeURIComponent(raw);
+      } catch {}
+      p = clean(p, 160);
+      if (!readerId) this.countView(day, null, p);
+      const n = (this.db.prepare("SELECT max(n) AS n FROM page_views WHERE visit = ?").get(visit)?.n || 0) + 1;
+      if (n > 200) return;
+      this.db.prepare("INSERT INTO page_views (day, at, visit, reader, n, pid, path, src, phone) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)").run(day, new Date().toISOString(), visit, readerId || "", n, pid, p, src, phone ? 1 : 0);
+      if (this.pathsDay !== day) {
+        this.pathsDay = day;
+        this.db.prepare("DELETE FROM page_views WHERE day < ?").run(dayOf(new Date(Date.now() - PATHS_KEEP * DAY)));
+      }
+    } catch (e) {
+      console.error("admin seen failed:", e.message);
+    }
+  }
+
+  // Guests' visits of the last `days` days by their pages (page_views), for /admin/traffic «Куди йдуть гості»:
+  // per kind of page they came to, how many visits, how many left after it, the median seconds on it and how far
+  // down it was read, and where the rest went next; and the page a longer visit ended on.
+  paths(days = 28) {
+    const since = dayOf(new Date(Date.now() - (days - 1) * DAY));
+    const started = this.db.prepare("SELECT min(day) AS d FROM page_views").get()?.d || null;
+    if (!started) return null;
+    const visits = new Map();
+    for (const r of this.db.prepare("SELECT visit, n, path, src, sec, depth FROM page_views WHERE day >= ? AND reader = '' ORDER BY visit, n").all(since)) (visits.get(r.visit) || visits.set(r.visit, []).get(r.visit)).push(r);
+    const med = (a) => (a.length ? [...a].sort((x, y) => x - y)[a.length >> 1] : 0);
+    const by = new Map(), ends = new Map();
+    let one = 0, pages = 0, search = 0, searchOne = 0;
+    for (const list of visits.values()) {
+      const first = list[0];
+      const sec = sectionOf(first.path.split("?")[0]);
+      const x = by.get(sec) || by.set(sec, { section: sec, name: SECTION_NAMES[sec] || sec, visits: 0, one: 0, secs: [], depths: [], next: new Map() }).get(sec);
+      x.visits++;
+      pages += list.length;
+      if (first.sec) x.secs.push(first.sec);
+      if (first.depth) x.depths.push(first.depth);
+      const fromSearch = ["search", "ai"].includes(KIND[first.src]);
+      if (fromSearch) search++;
+      if (list.length === 1) {
+        x.one++;
+        one++;
+        if (fromSearch) searchOne++;
+      } else {
+        const nx = sectionOf(list[1].path.split("?")[0]);
+        x.next.set(nx, (x.next.get(nx) || 0) + 1);
+        const end = sectionOf(list.at(-1).path.split("?")[0]);
+        ends.set(end, (ends.get(end) || 0) + 1);
+      }
+    }
+    const rows = [...by.values()]
+      .sort((a, b) => b.visits - a.visits)
+      .map((x) => ({ section: x.section, name: x.name, visits: x.visits, one: x.one, sec: med(x.secs), depth: med(x.depths), next: [...x.next].sort((a, b) => b[1] - a[1]).slice(0, 3).map(([k, n]) => [SECTION_NAMES[k] || k, n]) }));
+    return { since: started > since ? started : since, visits: visits.size, one, pages, search, searchOne, rows, ends: [...ends].sort((a, b) => b[1] - a[1]).slice(0, 6).map(([k, n]) => [SECTION_NAMES[k] || k, n]) };
+  }
+  // Guests' visits of the last `days` days, newest first, for /admin/activity?guests=1: when, from where, on a
+  // phone or not, and the pages in order with their seconds.
+  guestVisits(days = 2) {
+    const since = new Date(Date.now() - days * DAY).toISOString();
+    const visits = new Map();
+    for (const r of this.db.prepare("SELECT at, visit, n, path, src, sec, phone FROM page_views WHERE at >= ? AND reader = '' ORDER BY visit, n").all(since)) {
+      const v = visits.get(r.visit) || visits.set(r.visit, { at: r.at, last: r.at, src: r.src, phone: !!r.phone, pages: [] }).get(r.visit);
+      v.pages.push({ path: r.path, sec: r.sec });
+      if (r.at > v.last) v.last = r.at;
+    }
+    return [...visits.values()].sort((a, b) => (a.last < b.last ? 1 : -1));
   }
 
   // An arrival on the site (see SOURCES): counted once at the start of a visit, or whenever a page is opened from
@@ -242,22 +366,29 @@ class Admin {
       const from = sourceOf(referer, req.query, ownHosts);
       const set = [];
       const tail = `; Path=/; HttpOnly; SameSite=Lax${secure ? "; Secure" : ""}`;
-      set.push(`chytai_here=1; Max-Age=1800${tail}`);
+      const visit = VISIT.test(cookies.chytai_here || "") ? cookies.chytai_here : crypto.randomBytes(6).toString("hex");
+      req._visit = visit;
+      set.push(`chytai_here=${visit}; Max-Age=1800${tail}`);
       const arrival = from && (referer || !cookies.chytai_here);
       // A guest's visit, for «Що роблять гості» (Max, 2026-10-26: people from Google land on a book and leave):
       // chytai_q says the visit began at a search engine or an AI chat, chytai_more that a second page was opened.
       if (!readerId && arrival) {
         const q = ["search", "ai"].includes(KIND[from.source]);
         set.push(`chytai_q=${q ? 1 : 0}; Max-Age=1800${tail}`, `chytai_more=; Max-Age=0${tail}`);
-        this.guestStep("arrive", q);
+        this.later(req, readerId, () => this.guestStep("arrive", q));
       } else if (!readerId && cookies.chytai_here && !cookies.chytai_more) {
         set.push(`chytai_more=1; Max-Age=1800${tail}`);
-        this.guestStep("second", cookies.chytai_q === "1");
+        const q = cookies.chytai_q === "1";
+        this.later(req, readerId, () => this.guestStep("second", q));
       }
       if (arrival) {
         const fresh = !readerId && !cookies.chytai_seen ? 1 : 0;
         const landing = clean(decodeURIComponent(p), 120) || "/";
-        this.db.prepare(`INSERT INTO arrivals (day, source, ref, landing, visits, fresh) VALUES (?, ?, ?, ?, 1, ?) ON CONFLICT (day, source, ref, landing) DO UPDATE SET visits = visits + 1, fresh = fresh + excluded.fresh`).run(today(), from.source, from.ref, landing, fresh);
+        const day = today();
+        this.later(req, readerId, () => {
+          this.db.prepare(`INSERT INTO arrivals (day, source, ref, landing, visits, fresh) VALUES (?, ?, ?, ?, 1, ?) ON CONFLICT (day, source, ref, landing) DO UPDATE SET visits = visits + 1, fresh = fresh + excluded.fresh`).run(day, from.source, from.ref, landing, fresh);
+          return { src: from.source };
+        });
         if (!readerId && !cookies.chytai_came && from.source !== "Напряму") set.push(`chytai_came=${encodeURIComponent(JSON.stringify({ source: from.source, ref: from.ref, landing, day: today() }))}; Max-Age=${30 * 86400}${tail}`);
       }
       if (!cookies.chytai_seen) set.push(`chytai_seen=1; Max-Age=${365 * 86400}${tail}`);
@@ -279,13 +410,15 @@ class Admin {
   // The same for a step taken by a request (a guest's tap): a crawler or the owner is not counted.
   guestTap(req, readerId, step, cookies = {}) {
     if (readerId || !human(req)) return;
-    this.guestStep(step, cookies.chytai_q === "1");
+    const q = cookies.chytai_q === "1";
+    if (req.method === "GET" && req._visit) this.later(req, null, () => this.guestStep(step, q));
+    else this.guestStep(step, q);
   }
 
   // A search on the site (Max, 2026-10-29: «Записуємо звісно»): the query as typed, lowercased, and how many
   // results it got, counted per day. No reader, no address, nothing else; crawlers and the owner not counted.
   searched(req, readerId, q, hits) {
-    q = String(q || "").toLowerCase().replace(/\s+/g, " ").trim().slice(0, 100);
+    q = searchKey(q);
     if (q.length < 2 || !this.counted(req, readerId)) return;
     try {
       this.log(readerId, "search", q, String(hits | 0));
@@ -294,15 +427,29 @@ class Admin {
       console.error("admin searched failed:", e.message);
     }
   }
+  // A result of that search opened (app.js, the place among the results' links, from 1). Only a query already
+  // logged today counts: the page sends both in one request when the reader leaves for a result at once.
+  picked(req, readerId, q, pos) {
+    q = searchKey(q);
+    if (q.length < 2 || !(pos > 0) || !this.counted(req, readerId)) return;
+    try {
+      this.db.prepare("UPDATE search_log SET clicks = clicks + 1, pos = pos + ? WHERE day = ? AND q = ?").run(Math.min(pos, 50), today(), q);
+    } catch (e) {
+      console.error("admin picked failed:", e.message);
+    }
+  }
   // The last month's searches for /admin/catalog: the most asked, and the ones that found nothing.
   searches(days = 30) {
     const since = dayOf(new Date(Date.now() - days * 86400000));
-    const rows = this.db.prepare("SELECT q, SUM(n) AS n, MAX(hits) AS hits FROM search_log WHERE day >= ? GROUP BY q ORDER BY n DESC, q").all(since);
+    const rows = this.db.prepare("SELECT q, SUM(n) AS n, MAX(hits) AS hits, SUM(clicks) AS clicks, SUM(pos) AS pos FROM search_log WHERE day >= ? GROUP BY q ORDER BY n DESC, q").all(since);
     const first = this.db.prepare("SELECT MIN(day) AS d FROM search_log").get()?.d || null;
+    // Opened results are counted from 2026-11-17 (the day after they were added): before it every query reads «0».
+    const picks = PICKS_FROM > since ? PICKS_FROM : since;
+    const picked = picks <= today() ? this.db.prepare("SELECT q, SUM(n) AS n, MAX(hits) AS hits, SUM(clicks) AS clicks FROM search_log WHERE day >= ? GROUP BY q").all(picks) : [];
     const clicks = this.db.prepare("SELECT SUM(n) AS n FROM taps WHERE block = 'search' AND target != 'search' AND day >= ?").get(since)?.n || 0;
     // Books from outside under the results (Max, 2026-10-30): shown, found nothing anywhere, opened (made here).
     const out = Object.fromEntries(this.db.prepare("SELECT prop, SUM(n) AS n FROM events WHERE name = 'outside' AND day >= ? GROUP BY prop").all(since).map((r) => [r.prop, r.n]));
-    return { clicks, outside: { shown: out.shown || 0, none: out.none || 0, opened: out.open || 0 }, since: first && first > since ? first : since, started: first, total: rows.reduce((a, r) => a + r.n, 0), queries: rows.length, none: rows.filter((r) => !r.hits).reduce((a, r) => a + r.n, 0), top: rows.slice(0, 30), empty: rows.filter((r) => !r.hits).slice(0, 30) };
+    return { clicks, outside: { shown: out.shown || 0, none: out.none || 0, opened: out.open || 0 }, since: first && first > since ? first : since, started: first, total: rows.reduce((a, r) => a + r.n, 0), queries: rows.length, none: rows.filter((r) => !r.hits).reduce((a, r) => a + r.n, 0), top: rows.slice(0, 30), empty: rows.filter((r) => !r.hits).slice(0, 30), picks: picked.length ? { since: picks, n: picked.reduce((a, r) => a + r.n, 0), opened: picked.reduce((a, r) => a + Math.min(r.n, r.clicks), 0), missed: picked.filter((r) => r.hits && !r.clicks).sort((a, b) => b.n - a.n || a.q.localeCompare(b.q, "uk")).slice(0, 30) } : null };
   }
 
   // What a signed-in reader does on the site, one line each, for /admin/activity (Max, 2026-10-30: «хтось
@@ -352,13 +499,19 @@ class Admin {
     }
   }
   // Something that is not a tap: a step of signing in, a page not found, a script error in the browser.
-  event(req, readerId, name, prop = "") {
+  // `page`: it came with a page a guest opened (a 404, the sign-in page), so it waits for the page to say it opened.
+  event(req, readerId, name, prop = "", { page = false } = {}) {
     if (!this.counted(req, readerId)) return;
-    try {
-      this.db.prepare(`INSERT INTO events (day, name, prop, guest, n) VALUES (?, ?, ?, ?, 1) ON CONFLICT (day, name, prop, guest) DO UPDATE SET n = n + 1`).run(today(), name, clean(prop, 120), readerId ? 0 : 1);
-    } catch (e) {
-      console.error("admin event failed:", e.message);
-    }
+    const day = today();
+    const run = () => {
+      try {
+        this.db.prepare(`INSERT INTO events (day, name, prop, guest, n) VALUES (?, ?, ?, ?, 1) ON CONFLICT (day, name, prop, guest) DO UPDATE SET n = n + 1`).run(day, name, clean(prop, 120), readerId ? 0 : 1);
+      } catch (e) {
+        console.error("admin event failed:", e.message);
+      }
+    };
+    if (page) this.later(req, readerId, run);
+    else run();
   }
   // The last month's taps for /admin/traffic: per page and block, what was tapped, guests and readers apart.
   taps(days = 30) {
@@ -746,7 +899,7 @@ function trafficTiles(s, g, gscOn) {
   ].join("");
 }
 
-function trafficBody(s, g, gscOn) {
+function trafficBody(s, g, gscOn, paths = null) {
   const a = s.arrivals;
   const hasG = !!g?.days;
   const short7 = !a.since || a.since > addDays(s.now, -6); // under a week of data: 7 and 28 days are the same
@@ -833,7 +986,24 @@ ${queries}
 
 ${landings ? `<h2>На які сторінки приходять з пошуку</h2>\n${landings}` : ""}
 
-${guestSteps(a.guests)}`;
+${guestSteps(a.guests)}
+
+${pathsBlock(paths)}`;
+}
+
+// «Куди йдуть гості» (admin.paths): per kind of page a visit began on, how many left after it, how long it was read
+// and where the others went next. Only pages whose browser said they opened (no robots).
+function pathsBlock(p) {
+  if (!p) return "";
+  const pct = (a, b) => (b ? `${fmtN((100 * a) / b, 0)}%` : "");
+  const secs = (x) => (!x ? "" : x < 60 ? `${x} с` : `${Math.round(x / 60)} хв`);
+  const rows = p.rows.filter((r) => r.visits >= 3).slice(0, 14).map((r) => `<tr><th>${esc(r.name)}</th><td>${n(r.visits)}</td><td>${pct(r.one, r.visits)}</td><td>${secs(r.sec)}</td><td>${r.depth ? `${r.depth}%` : ""}</td><td class="small">${r.next.map(([k, v]) => `${esc(k)} <span class="muted">${v}</span>`).join(", ")}</td></tr>`).join("");
+  return `<h2 id="paths">Куди йдуть гості</h2>
+<p class="muted small">З ${short(p.since)}: ${n(p.visits)} відвідувань, ${fmtN(p.pages / (p.visits || 1), 1)} сторінки на одне, ${pct(p.one, p.visits)} пішли після першої сторінки (з пошуку й AI ${pct(p.searchOne, p.search)}). Лише браузери, де відкрилась сторінка, роботів тут немає. <a href="/admin/activity?guests=1">Окремі відвідування</a></p>
+${rows ? `<div class="tbl"><table class="refs">
+<thead><tr><th>Прийшли на</th><th>Відвідувань</th><th>Пішли одразу</th><th>Читали</th><th>Догорнули</th><th>Куди далі</th></tr></thead>
+<tbody>${rows}</tbody></table></div>
+<p class="muted small">«Читали» і «догорнули» — медіана: скільки секунд сторінка була на екрані і до якого місця її прогорнули.${p.ends.length ? ` Довші відвідування закінчуються на: ${p.ends.map(([k, v]) => `${esc(k)} ${v}`).join(", ")}.` : ""}</p>` : ""}`;
 }
 
 // «Що роблять гості»: of the guests who came in 28 days, how many went on to a second page, tapped «Хочу прочитати»
@@ -1030,7 +1200,7 @@ function shelvesPage({ user, catalog, layout }) {
 // «Перегляди за розділами» sits on Огляд, before the activity (Max, 2026-11-04).
 const linkFirst = (html, href) => html.replace("<b>", `<b><a href="${href}">`).replace("</b>", "</a></b>");
 
-function adminPage({ user, stats: s, gsc = null, gscOn = false, taps = null, login = null, reader = null, health = "", mail = "", activity = "", layout, page = "main" }) {
+function adminPage({ user, stats: s, gsc = null, gscOn = false, paths = null, taps = null, login = null, reader = null, health = "", mail = "", activity = "", layout, page = "main" }) {
   const traffic = page === "traffic";
   const t = s.totals;
   const siteTiles = [
@@ -1061,7 +1231,7 @@ function adminPage({ user, stats: s, gsc = null, gscOn = false, taps = null, log
     ? `<section class="admin">
 <section class="page-head"><div><h1>Трафік</h1></div></section>
 
-${trafficBody(s, gsc, gscOn)}
+${trafficBody(s, gsc, gscOn, paths)}
 
 ${tapsBlock(taps)}
 
@@ -1214,7 +1384,7 @@ ${problemsBlock(notFound, jsErrors)}
 // book's mark are one line. A reader's name filters the page to them (60 days).
 const STATUS_WORDS = { want: "«Хочу прочитати»", read: "«Прочитано»", reading: "«Читаю»", abandoned: "«Покинуто»" };
 const COPY_WORDS = { paper: "паперова", ebook: "електронна", audio: "аудіо" };
-function activityPage({ user, rows, readers, books, names, who = null, embed = false, layout }) {
+function activityPage({ user, rows, readers, books, names, who = null, guests = null, embed = false, layout }) {
   const KYIV = { timeZone: "Europe/Kyiv" };
   const dayOfIso = (iso) => new Date(iso).toLocaleDateString("sv-SE", KYIV);
   const time = (iso) => new Date(iso).toLocaleTimeString("uk-UA", { ...KYIV, hour: "2-digit", minute: "2-digit" });
@@ -1243,7 +1413,7 @@ function activityPage({ user, rows, readers, books, names, who = null, embed = f
     const parts = p.split("/").filter(Boolean);
     const mail = /utm_source=email/.test(query) ? ` <span class="muted small">з листа</span>` : "";
     const one = (key, html) => ({ key, html: html + mail });
-    const NAMED = { "/": "головну", "/community": "спільноту", "/add": "«Додати книжки»", "/lists": "списки", "/updates": "«Що нового»", "/club": "Клуб", "/club/new": "нову тему в Клубі", "/welcome": "«Ласкаво просимо»", "/about": "«Про нас»", "/privacy": "приватність", "/publishers": "видавництва", "/me/now": "«Читаю зараз»", "/genres": "жанри" };
+    const NAMED = { "/": "головну", "/community": "спільноту", "/add": "«Додати книжки»", "/lists": "списки", "/updates": "«Що нового»", "/club": "Клуб", "/club/new": "нову тему в Клубі", "/welcome": "«Ласкаво просимо»", "/about": "«Про нас»", "/privacy": "приватність", "/publishers": "видавництва", "/me/now": "«Читаю зараз»", "/genres": "жанри", "/login": "вхід", "/calendar": "події", "/ask": "«Що почитати далі?»", "/search": "пошук" };
     if (NAMED[p]) return one(p, `<a href="${esc(p)}">${NAMED[p]}</a>`);
     if ((parts[0] === "book" || (parts[0] === "me" && parts[1] === "book")) && parts.at(-1) && parts.length <= 3) return one(`book:${parts.at(-1)}`, book(parts.at(-1)));
     if (p === "/me" || parts[0] === "me" || p === `/@${self}`) return one("me", `<a href="/@${esc(self)}">свою полицю</a>`);
@@ -1416,7 +1586,37 @@ function activityPage({ user, rows, readers, books, names, who = null, embed = f
     const n = books.get(id) || 0;
     return `<a href="/admin/activity?reader=${esc(encodeURIComponent(rd.username))}"><b>${esc(rd.name)}</b></a> <a class="muted" href="/@${esc(rd.username)}">@${esc(rd.username)}</a>${rd.created > weekAgo ? ` <span class="new">новий</span>` : ""} <span class="muted small">· ${n ? `${n} ${n % 10 === 1 && n % 100 !== 11 ? "книжка" : n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20) ? "книжки" : "книжок"}` : "без книжок"}</span>`;
   };
-  const stream = `${days.size ? [...days].map(([d, runs]) => `${embed ? (d === dayOfIso(new Date().toISOString()) ? "" : `<h3>Вчора</h3>`) : `<h2>${esc(dayName(d))}</h2>`}
+  // Guests' visits (admin.guestVisits): one line a visit of two pages or more, its pages in order with their seconds;
+  // the visits of one page counted under it by kind of page.
+  const secs = (x) => (!x ? "" : ` <span class="muted small">${x < 60 ? `${x} с` : `${Math.round(x / 60)} хв`}</span>`);
+  // A visit's pages, the same page again right after itself (a reload, a form sent back) as one, its seconds added.
+  const steps1 = (list) => list.reduce((out, x) => {
+    const pg = page(x.path, "");
+    const last = out[out.length - 1];
+    if (last?.key === pg.key) last.sec += x.sec;
+    else out.push({ key: pg.key, html: pg.html, sec: x.sec });
+    return out;
+  }, []);
+  const guestStream = () => {
+    if (!guests.length) return `<p class="muted">Поки нікого.</p>`;
+    const byDay = new Map();
+    for (const v of guests) (byDay.get(dayOfIso(v.last)) || byDay.set(dayOfIso(v.last), []).get(dayOfIso(v.last))).push(v);
+    return [...byDay].map(([d, list]) => {
+      const long = list.filter((v) => v.pages.length > 1);
+      const ones = list.filter((v) => v.pages.length === 1);
+      const kinds = new Map();
+      for (const v of ones) {
+        const k = SECTION_NAMES[sectionOf(v.pages[0].path.split("?")[0])] || "інше";
+        kinds.set(k, (kinds.get(k) || 0) + 1);
+      }
+      const line = (v) => `<li><span class="at">${time(v.at)}</span><span>${v.src ? `<span class="muted">з ${esc(v.src)}${v.phone ? ", телефон" : ""}:</span> ` : v.phone ? `<span class="muted">телефон:</span> ` : ""}${steps1(v.pages).slice(0, 12).map((x) => x.html + secs(x.sec)).join(" → ")}${steps1(v.pages).length > 12 ? ` → і ще ${steps1(v.pages).length - 12}` : ""}</span></li>`;
+      const oneLines = ones.slice(0, 60).map(line).join("");
+      return `<h2>${esc(dayName(d))}</h2>
+<ol class="act-lines">${long.map(line).join("")}</ol>
+${ones.length ? `<details><summary class="muted">Ще ${ones.length} відкрили одну сторінку й пішли: ${[...kinds].sort((a, b) => b[1] - a[1]).map(([k, v]) => `${esc(k.toLowerCase())} ${v}`).join(", ")}</summary><ol class="act-lines">${oneLines}</ol></details>` : ""}`;
+    }).join("");
+  };
+  const stream = guests ? guestStream() : `${days.size ? [...days].map(([d, runs]) => `${embed ? (d === dayOfIso(new Date().toISOString()) ? "" : `<h3>Вчора</h3>`) : `<h2>${esc(dayName(d))}</h2>`}
 ${runs.map((run) => {
     const rd = readers.get(run.reader);
     const lis = steps(run.rows, rd?.username || "").map(show);
@@ -1428,11 +1628,11 @@ ${runs.map((run) => {
   // On Огляд: the last 24 hours only, with a link to the whole week (Max, 2026-11-04).
   if (embed) return `<section class="activity"><h2>Активність за останні 24 години</h2>${stream}<p class="small"><a href="/admin/activity">Усе за 7 днів</a></p></section>${style}`;
   const body = `<section class="admin activity">
-<section class="page-head"><div>${who ? `<p class="crumbs"><a href="/admin/activity">Усі читачі</a></p>` : ""}<h1>${who ? esc(who.name) : "Що роблять читачі"}</h1><p class="sub">${who ? `Усе, що @${esc(who.username)} робив на сайті за 60 днів, новіше зверху.` : "Що робили зареєстровані читачі за 7 днів, новіше зверху. Сірим — які сторінки відкривали. Гостей і тебе тут немає."}</p></div></section>
+<section class="page-head"><div>${who ? `<p class="crumbs"><a href="/admin/activity">Усі читачі</a></p>` : ""}<h1>${who ? esc(who.name) : guests ? "Що роблять гості" : "Що роблять читачі"}</h1><p class="sub">${who ? `Усе, що @${esc(who.username)} робив на сайті за 60 днів, новіше зверху.` : guests ? `Відвідування гостей за 2 дні, новіше зверху: звідки прийшли і які сторінки відкривали, скільки часу кожна була на екрані. Без імен і адрес. <a href="/admin/activity">Читачі</a>` : `Що робили зареєстровані читачі за 7 днів, новіше зверху. Сірим — які сторінки відкривали. Тебе тут немає. <a href="/admin/activity?guests=1">Гості</a>`}</p></div></section>
 ${stream}
 </section>
 ${style}`;
-  return layout({ title: "Що роблять читачі · Адмінка", user, path: "/admin", body });
+  return layout({ title: `Що роблять ${guests ? "гості" : "читачі"} · Адмінка`, user, path: "/admin", body });
 }
 
 // /admin/jobs (Max, 2026-10-26: «сторінку про ці background tasks»): what the jobs process (jobs.js) does

@@ -58,6 +58,17 @@ curl -s https://app.chytai.org.ua/agent/sql -H "$H" -H 'content-type: applicatio
   report counts yesterday's and names the new kinds. All of them, grouped, on /admin/speed#errors (`errors.month()`); Огляд
   shows only the day's count with a link, no list. The morning error review (below) fixes them.
   Script errors on the site's own pages are only counted (`events`, `name = 'js'`, /admin/speed).
+- Product analytics (Max 2026-11-16: «аналітика по продукту», anonymous is fine, first-party only). A guest's page is
+  counted only when the page itself says it opened (app.js → `POST /api/seen`, `admin.opened`): views, section views,
+  arrivals, guest steps and the sign-in page's events wait in memory (`admin.later`, 2 min) and are dropped if no
+  script answers (a robot that runs no script made 5–15× the real guests on 12–16.11). Readers' views stay
+  server-side. Table `page_views` (visit = random number in the `chytai_here` cookie, 30 min; order `n`, path, source
+  of the visit, seconds on screen, % scrolled, phone; readers carry their id, guests ''), 30 days. Shown on
+  /admin/traffic «Куди йдуть гості» (`admin.paths`) and /admin/activity?guests=1 (`admin.guestVisits`). Searches:
+  `search_log.clicks`/`pos` (a result opened and its place, app.js live search → `/api/searched` with `pick`), on
+  /admin/catalog «Знайшли, але нічого не відкрили» from 2026-11-17. A page with no app.js (404) can't confirm, so
+  its events stay immediate. Playwright: beacons sent while a page unloads are lost in headless Chromium; the page
+  also reports on a link's click.
 - /admin «Performance» (`healthBlock` in web/admin.js): one bullet per check, red with a link when it needs a look. Keep
   it so (Max, 2026-11-12, after it was folded into one sentence: «мені не подобається»); trim a row, don't merge rows.
 - Pages the phone unloaded (iOS kills the WebView's page for memory, mostly in the background): the page keeps a note

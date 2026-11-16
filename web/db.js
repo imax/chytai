@@ -64,6 +64,9 @@ CREATE TABLE IF NOT EXISTS taps (day TEXT NOT NULL, page TEXT NOT NULL, block TE
 CREATE TABLE IF NOT EXISTS events (day TEXT NOT NULL, name TEXT NOT NULL, prop TEXT NOT NULL, guest INTEGER NOT NULL, n INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (day, name, prop, guest));
 CREATE TABLE IF NOT EXISTS search_log (day TEXT NOT NULL, q TEXT NOT NULL, n INTEGER NOT NULL DEFAULT 0, hits INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (day, q));
 CREATE TABLE IF NOT EXISTS guest_steps (day TEXT NOT NULL, step TEXT NOT NULL, search INTEGER NOT NULL, n INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (day, step, search));
+CREATE TABLE IF NOT EXISTS page_views (day TEXT NOT NULL, at TEXT NOT NULL, visit TEXT NOT NULL, reader TEXT NOT NULL DEFAULT '', n INTEGER NOT NULL, pid TEXT NOT NULL, path TEXT NOT NULL, src TEXT NOT NULL DEFAULT '', sec INTEGER NOT NULL DEFAULT 0, depth INTEGER NOT NULL DEFAULT 0, phone INTEGER NOT NULL DEFAULT 0);
+CREATE INDEX IF NOT EXISTS page_views_visit ON page_views (visit);
+CREATE INDEX IF NOT EXISTS page_views_day ON page_views (day);
 CREATE TABLE IF NOT EXISTS steps (reader TEXT NOT NULL, step TEXT NOT NULL, at TEXT NOT NULL, PRIMARY KEY (reader, step));
 CREATE TABLE IF NOT EXISTS job_runs (job TEXT NOT NULL, how TEXT NOT NULL, started TEXT NOT NULL, ms INTEGER NOT NULL, ok INTEGER NOT NULL, note TEXT NOT NULL);
 CREATE INDEX IF NOT EXISTS job_runs_started ON job_runs (started);
@@ -90,6 +93,9 @@ function open(dataDir) {
   db.exec(SCHEMA);
   // A reader's file's language and whether its title is only the file's name (readerbooks.js, 2026-11-10).
   if (!db.prepare("PRAGMA table_info(reader_files)").all().some((c) => c.name === "lang")) db.exec("ALTER TABLE reader_files ADD COLUMN lang TEXT NOT NULL DEFAULT ''; ALTER TABLE reader_files ADD COLUMN from_name INTEGER NOT NULL DEFAULT 0");
+  // Searches that led somewhere (Max, 2026-11-16: «аналітика по продукту»): how many times a result was opened, and the
+  // sum of the places opened (their mean shows how far down people had to look).
+  if (!db.prepare("PRAGMA table_info(search_log)").all().some((c) => c.name === "clicks")) db.exec("ALTER TABLE search_log ADD COLUMN clicks INTEGER NOT NULL DEFAULT 0; ALTER TABLE search_log ADD COLUMN pos INTEGER NOT NULL DEFAULT 0");
   // When an entry last changed, for the activity feed (added 2026-10-20; older rows have none).
   if (!db.prepare("PRAGMA table_info(entries)").all().some((c) => c.name === "updated")) db.exec("ALTER TABLE entries ADD COLUMN updated TEXT");
   // Whether a reader wants a letter when someone starts following them (Max, 2026-10-20); on by default.
