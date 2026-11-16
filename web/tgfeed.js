@@ -692,6 +692,98 @@ function create(db, { calendar, apiKey = process.env.ANTHROPIC_API_KEY || "", cl
     return { sites: top(sites), channels: top(chans) };
   }
 
+  // New book channels (Max 2026-11-16: «чи ми робимо діскавері нових книжкових каналів?»): Telegram's «Similar
+  // Channels» for each channel the account is in (channels.getChannelRecommendations; Premium gives more), counted:
+  // a channel that several of ours point to is most likely about books. Then each such candidate's last ~20 posts
+  // (its public page, else the API): Ukrainian (і/ї/є/ґ against ы/э/ъ/ё), about books (BOOKISH in DISCOVER_BOOKISH of
+  // its posts), alive (a post in the last 30 days), a channel and not a group, not one we read, left or gave up on.
+  // Dry for now: nothing is joined; the list goes into meta tg:discover. → { at, asked, candidates: [...] }.
+  const DISCOVER_MIN = 2; // our channels that point to it
+  const DISCOVER_BOOKISH = 0.3;
+  const DISCOVER_CHECK = 80; // candidates whose posts are read, the most pointed-to first
+  const pause = (ms) => new Promise((r) => setTimeout(r, ms));
+  const ukShare = (texts) => {
+    const all = texts.join(" ");
+    const uk = (all.match(/[іїєґ]/gi) || []).length, ru = (all.match(/[ыэъё]/gi) || []).length;
+    return { uk, ru, ok: uk >= 20 && uk >= 3 * ru };
+  };
+  async function discover() {
+    if (!accountSet()) return { error: "no account" };
+    const { Api } = require("telegram");
+    const out = { at: new Date().toISOString(), asked: 0, errors: [], candidates: [] };
+    const client = await connect();
+    try {
+      const mine = new Map();
+      for (const d of await client.getDialogs({ limit: 500 })) {
+        const u = d.entity?.username?.toLowerCase();
+        if (d.isChannel && u) mine.set(u, d);
+      }
+      const skip = new Set([...mine.keys(), ...channels(), ...Object.keys(jmeta("tg:left")), ...Object.keys(jmeta("tg:group")), ...Object.keys(jmeta("tg:joined"))]);
+      const found = new Map();
+      const note = (chats, from) => {
+        for (const c of chats || []) {
+          const u = c.username?.toLowerCase();
+          if (!u || skip.has(u)) continue;
+          const f = found.get(u) || { name: c.username, title: c.title, members: c.participantsCount ?? null, broadcast: !!c.broadcast, peer: c, from: [] };
+          if (!f.from.includes(from)) f.from.push(from);
+          found.set(u, f);
+        }
+      };
+      // The account's own «you may like» (from all its channels), then each channel's similar ones.
+      try {
+        note((await client.invoke(new Api.channels.GetChannelRecommendations({}))).chats, "*");
+        out.asked++;
+      } catch (e) {
+        out.errors.push(`recommendations: ${e.errorMessage || e.message}`);
+      }
+      for (const [u, d] of mine) {
+        if (!d.entity?.broadcast) continue;
+        try {
+          note((await client.invoke(new Api.channels.GetChannelRecommendations({ channel: d.inputEntity }))).chats, u);
+          out.asked++;
+        } catch (e) {
+          const msg = e.errorMessage || e.message || "";
+          out.errors.push(`${u}: ${msg}`);
+          if (/FLOOD/.test(msg)) break;
+        }
+        await pause(700);
+      }
+      out.found = found.size;
+      const list = [...found.values()].filter((f) => f.from.length >= DISCOVER_MIN || f.from.includes("*")).sort((a, b) => b.from.length - a.from.length || (b.members || 0) - (a.members || 0)).slice(0, DISCOVER_CHECK);
+      for (const f of list) {
+        let posts = [];
+        try {
+          posts = await pageOf(f.name.toLowerCase());
+        } catch {}
+        if (!posts.length && f.broadcast) {
+          try {
+            posts = (await client.getMessages(new Api.InputPeerChannel({ channelId: f.peer.id, accessHash: f.peer.accessHash }), { limit: 20 })).filter((m) => m?.className === "Message").map((m) => fromMessage(m, f.name));
+          } catch (e) {
+            out.errors.push(`${f.name}: ${e.errorMessage || e.message}`);
+          }
+          await pause(700);
+        }
+        const texts = posts.map((p) => p.text).filter(Boolean);
+        const lang = ukShare([f.title, ...texts]);
+        const bookish = texts.length ? texts.filter((t) => BOOKISH.test(t)).length / texts.length : 0;
+        const last = posts.map((p) => p.at).sort().pop() || null;
+        const why = [];
+        if (!f.broadcast) why.push("група");
+        if (!lang.ok) why.push(lang.uk || lang.ru ? `мова (і/ї/є ${lang.uk}, ы/э/ъ ${lang.ru})` : "мова не видно");
+        if (!texts.length) why.push("постів не видно");
+        else if (bookish < (BOOKISH.test(f.title) ? 0.15 : DISCOVER_BOOKISH)) why.push(`про книжки ${Math.round(bookish * 100)}%`);
+        if (last && Date.now() - Date.parse(last) > 30 * DAY) why.push(`останній пост ${last.slice(0, 10)}`);
+        out.candidates.push({ name: f.name, title: f.title, members: f.members, from: f.from.length, by: f.from.slice(0, 5), bookish: Math.round(bookish * 100), last: last?.slice(0, 10) || null, ok: !why.length, why });
+      }
+    } finally {
+      await client.destroy().catch(() => {});
+    }
+    out.candidates.sort((a, b) => b.ok - a.ok || b.from - a.from || (b.members || 0) - (a.members || 0));
+    out.errors = out.errors.slice(0, 10);
+    setMeta("tg:discover", JSON.stringify(out));
+    return out;
+  }
+
   // Another site's page → its events, for calendar.chytomoRun.
   // A page from elsewhere (Chytomo, Eventmate): its cancelled events are left out, nothing else is matched.
   const extract = (text, page) => ask({ page, text, at: new Date().toISOString() }).then((list) => list.filter((e) => !e.cancelled));
@@ -708,7 +800,7 @@ function create(db, { calendar, apiKey = process.env.ANTHROPIC_API_KEY || "", cl
     }
   }
 
-  return { run, joinMore, joinSome, keepChannel, prune, dropGroups, events, classify, status, maybeEvent, meta, setMeta, extract, find };
+  return { run, joinMore, joinSome, keepChannel, prune, dropGroups, discover, events, classify, status, maybeEvent, meta, setMeta, extract, find };
 }
 
 module.exports = { eventUrl, create, parsePage, maybeEvent, fromMessage, channels, KEEP_DAYS };

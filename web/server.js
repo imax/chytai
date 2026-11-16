@@ -1977,6 +1977,16 @@ app.get("/agent/tg-find", agentOk, async (req, res) => {
     res.status(500).json({ error: e.errorMessage || e.message });
   }
 });
+// New book channels from Telegram's «Similar Channels» (tgFeed.discover): GET starts a dry run (nothing is joined),
+// ask again for the list, ?again=1 reruns.
+let tgDiscover = null;
+app.get("/agent/tg-discover", agentOk, (req, res) => {
+  if (!tgDiscover || (req.query.again && tgDiscover.done)) {
+    tgDiscover = { started: new Date().toISOString(), done: false };
+    tgFeed.discover().then((r) => Object.assign(tgDiscover, r, { done: true }), (e) => Object.assign(tgDiscover, { error: e.errorMessage || e.message, done: true }));
+  }
+  res.json(tgDiscover);
+});
 // The events in the posts: GET is a dry run over the last ?days= (30) days, at most 200 Haiku calls, only with
 // Max's OK in the thread (ask again for the answer, ?again=1 reruns); POST {"on": true|false} switches them into the
 // calendar, only with Max's OK.
