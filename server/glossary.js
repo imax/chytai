@@ -32,6 +32,17 @@ When in doubt, leave it out: a page full of underlines is no help. A passage thi
 
 Answer with one line per item and nothing else: the word or expression exactly as written in the passage (same case and ending, without stress marks), a tab, then the explanation in modern Ukrainian: a plain synonym, or at most ten words for a thing that needs explaining. No full stop at the end, no examples, no comments. An expression may be two or three words when only together they mean something. List each form once.`;
 
+// A second, stricter look at the whole list (Max, 2026-11-16: «досить прості і знайомі слова теж відмічає», e.g.
+// «їх», «зблизька», «сказать би»): the model sees only word and meaning and keeps the ones a teenager would really stop at.
+const STRICT = `Below is a reading glossary for a Ukrainian classic that school students aged 12–16 read today. Each line is a word or expression as it appears in the book, a tab, and its explanation. The reader sees every listed word underlined in the text, so each extra one is noise.
+
+Too many entries are words such a reader already knows or understands at once from the sentence: plain words in an old spelling that is easy to read (їх, зблизька, сказать би, войни, послі), ordinary words (хутір, верхи, гай), simple diminutives and forms of a known word.
+
+Keep only the entries a modern teenager would really not understand or would misread: words that are gone from today's language, dialect words, old forms that hide a different-looking word (оддалеки → здалеку), historical things unknown today (ranks, clothes, money, customs), and old senses of familiar words.
+
+Answer with the kept words only, one per line, exactly as given before the tab, nothing else.`;
+const STRICT_BATCH = 300;
+
 // The key a form is looked up by: lower case, no stress marks, one kind of apostrophe. The page does the same.
 // Only the stress marks go: й and ї carry marks of their own in NFD.
 const key = (s) => String(s || "").normalize("NFD").replace(/[\u0300\u0301]/g, "").normalize("NFC").toLowerCase().replace(/['’`ʼ]/g, "ʼ").replace(/\s+/g, " ").trim();
@@ -152,6 +163,40 @@ class Glossary {
     fs.renameSync(`${f}.tmp`, f);
     return { before: Object.keys(data.forms).length, after: Object.keys(forms).length, dropped: Object.keys(data.forms).filter((k) => !forms[k]) };
   }
+  // The kept list through STRICT (a few cheap calls, no book text). Returns what went.
+  async strict(book) {
+    const data = this.get(book);
+    if (!data) return null;
+    if (!this.apiKey) throw new Error("no ANTHROPIC_API_KEY");
+    const client = new Anthropic({ apiKey: this.apiKey });
+    const entries = Object.entries(data.forms);
+    const kept = new Set();
+    let cost = 0;
+    const batches = [];
+    for (let i = 0; i < entries.length; i += STRICT_BATCH) batches.push(entries.slice(i, i + STRICT_BATCH));
+    await Promise.all(
+      batches.map(async (b) => {
+        const m = await client.messages.create({
+          model: MODEL,
+          max_tokens: 8000,
+          system: [{ type: "text", text: STRICT, cache_control: { type: "ephemeral" } }],
+          messages: [{ role: "user", content: b.map(([k, g]) => `${k}\t${g}`).join("\n") }],
+          output_config: { effort: "medium" },
+        });
+        cost += measure(m.model, m.usage).cost;
+        const text = m.content.filter((x) => x.type === "text").map((x) => x.text).join("");
+        for (const line of text.split("\n")) kept.add(key(line.split("\t")[0]));
+      }),
+    );
+    const forms = Object.fromEntries(entries.filter(([k]) => kept.has(k)));
+    // An answer that kept almost nothing is a broken answer, not a verdict.
+    if (Object.keys(forms).length < entries.length / 10) throw new Error(`strict kept only ${Object.keys(forms).length}`);
+    const out = { ...data, forms, strict: new Date().toISOString(), cost: Math.round(((data.cost || 0) + cost) * 1000) / 1000 };
+    const f = this.file(book);
+    fs.writeFileSync(`${f}.tmp`, JSON.stringify(out));
+    fs.renameSync(`${f}.tmp`, f);
+    return { before: entries.length, after: Object.keys(forms).length, cost: Math.round(cost * 1000) / 1000, dropped: entries.filter(([k]) => !kept.has(k)).map(([k]) => k) };
+  }
   start(book, file) {
     if (this.running.get(book)?.done === false) return false;
     const run = { at: new Date().toISOString(), done: false, chunks: 0, of: 0 };
@@ -194,10 +239,11 @@ class Glossary {
     const f = this.file(book);
     fs.writeFileSync(`${f}.tmp`, JSON.stringify(data));
     fs.renameSync(`${f}.tmp`, f);
-    run.forms = Object.keys(forms).length;
-    run.cost = data.cost;
-    return data;
+    await this.strict(book).catch((err) => (run.strictError = err.message));
+    run.forms = Object.keys(this.get(book)?.forms || {}).length;
+    run.cost = this.get(book)?.cost;
+    return this.get(book);
   }
 }
 
-module.exports = { Glossary, key, chunks, parse, clean, PROMPT, MODEL };
+module.exports = { Glossary, key, chunks, parse, clean, PROMPT, STRICT, MODEL };

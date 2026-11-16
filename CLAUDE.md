@@ -364,7 +364,9 @@ A flag only when Max asks for one, or when the change could break what readers u
 - Make one book's (only with Max's OK in the thread, one book at a time): `curl -s https://app.chytai.org.ua/agent/glossary
   -H "$H" -H 'content-type: application/json' -d '{"book":"kulish-chorna-rada.epub"}'`; `GET` the same address
   for what is made (forms, cost) and what runs; `{"book":…,"tidy":true}` reruns only `clean()` (names, common words,
-  meanings that repeat the word) on the kept list, no model. A word is underlined the first time in a chapter only.
+  meanings that repeat the word) on the kept list, no model; `{"book":…,"strict":true}` sends only word + meaning to
+  Sonnet (`STRICT`, 300 a call) to drop what a teenager knows (Max 2026-11-16: «їх», «зблизька», «сказать би»); a new
+  book's build runs both. A word is underlined the first time in a chapter only.
   «Чорна рада», 2026-11-15: 28 calls, $0.54, ~1,450 words. Locally without a key: a JSON in `<DATA_DIR>/glossary/`.
 
 ## Translation pairs

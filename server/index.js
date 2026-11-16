@@ -1065,6 +1065,7 @@ app.use((req, res, next) => {
     const book = safeBookName(req.body?.book);
     if (!book || !isFree(book)) return res.status(400).json({ error: "not a free-shelf book" });
     if (req.body?.tidy) return res.json(await glossary.retidy(book, path.join(freeDir(book), book)));
+    if (req.body?.strict) return res.json(await glossary.strict(book).catch((err) => ({ error: err.message })));
     res.json({ started: glossary.start(book, path.join(freeDir(book), book)), ...glossary.status() });
   });
 }
