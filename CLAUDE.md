@@ -368,6 +368,12 @@ A flag only when Max asks for one, or when the change could break what readers u
   event sitemaps' Ukrainian pages with a bookish name (`EM_BOOKISH`) not seen yet (meta `eventmate:seen`, half a year),
   the date from the page, upcoming ones through `tgFeed.extract` (≤20 a run), source `eventmate`, the event's page as
   its link. Dry run: `curl -s https://chytai.org.ua/agent/calendar-eventmate -H "$H"` (ask again); run: `POST {"run":true}`.
+- podii.io (Max 2026-11-16, an afisha of Lviv and Ivano-Frankivsk; robots allow): `calendar.podiiRun` once a day in the
+  jobs process, its «Літературні заходи» page (`/category/literaturni-zakhody`; a city's own category page shows other
+  kinds), each event page read once (meta `podii:seen`) for its schema.org Event: no AI, source `podii`, kind by words
+  (`podiiKind`), its page as the link; a Telegram twin gets that page. Dry run: `curl -s
+  https://chytai.org.ua/agent/calendar-podii -H "$H"` (ask again); run: `POST {"run":true}`. `findSimilar` leaves out
+  words every meeting has (`EVENT_WORDS`: клуб, читацький, обговорення…): two clubs on one day are not one event.
 - Organizers' calendars (Max 2026-11-15): /admin/events «Календарі організаторів» takes a Google Calendar link of
   any shape or an .ics (`calendar.icsAddress`), reads it at once (one that fails isn't kept) and every 6 h
   (`calendar-feeds` job, `feedsRun`): table `cal_feeds`, the next 120 days in as source `ics` (`parseIcs`, no AI;

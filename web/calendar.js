@@ -644,6 +644,85 @@ function create(db, store, { notify = () => {}, bookua = null, search = null, ma
     return out;
   }
 
+  // ---- podii.io (Max 2026-11-16) ----
+  // An afisha of Lviv and Ivano-Frankivsk (robots: all but query strings). Its «Літературні заходи» pages list the
+  // coming ones; each event's page carries a schema.org Event (name, dates, place, city), so no AI: books and authors
+  // are found by name (upsert), the kind by its words (`podiiKind`, tgFeed.classify sorts the rest). An event page is
+  // read once (meta `podii:seen`, half a year), 1 s apart; the same event told elsewhere (findSimilar) is left out, and
+  // a Telegram twin gets this page as its link. dry: nothing kept.
+  const PODII = "https://podii.io";
+  const PODII_LISTS = ["/category/literaturni-zakhody"]; // a city's own category page shows other kinds too
+  const podiiKind = (t) => (/клуб|обговорен/i.test(t) ? "club" : /дит|малеч|дітей|казк/i.test(t) ? "kids" : /презентац|зустріч з|творча зустріч|автограф/i.test(t) ? "author" : /лекці|курс|воркшоп|майстер/i.test(t) ? "lecture" : /фестивал|ярмар/i.test(t) ? "festival" : "");
+  async function podiiRun({ dry = false, max = 60 } = {}) {
+    const out = { at: new Date().toISOString(), dry, candidates: 0, read: 0, past: 0, made: [], dupes: [], errors: [] };
+    const today = kyivDay();
+    let seen = {};
+    try {
+      seen = JSON.parse(meta("podii:seen") || "{}");
+    } catch {}
+    const ids = new Set();
+    for (const path of PODII_LISTS) {
+      try {
+        const { html } = await fetchPage(PODII + path, { timeout: 15000, max: 3 * 1024 * 1024 });
+        for (const [, id] of html.matchAll(/\/event\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/g)) if (!seen[id]) ids.add(id);
+      } catch (e) {
+        out.errors.push(`${path}: ${e.message}`);
+      }
+      await sleep(1000);
+    }
+    out.candidates = ids.size;
+    let relinked = 0;
+    for (const id of ids) {
+      if (out.read >= max) break;
+      const url = `${PODII}/event/${id}`;
+      let ev = null;
+      try {
+        const { html } = await fetchPage(url, { timeout: 15000 });
+        for (const [, j] of html.matchAll(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g)) {
+          try {
+            const d = JSON.parse(j);
+            if (d?.["@type"] === "Event") ev = d;
+          } catch {}
+        }
+      } catch (e) {
+        out.errors.push(`${id}: ${e.message}`);
+        continue;
+      }
+      out.read++;
+      if (!dry) seen[id] = today;
+      await sleep(1000);
+      if (!ev?.name || !ev.startDate) continue;
+      const starts = String(ev.startDate).slice(0, 10);
+      const end = String(ev.endDate || "").slice(0, 10);
+      if ((end > starts ? end : starts) < today) {
+        out.past++;
+        continue;
+      }
+      if (/Cancelled|Postponed/i.test(ev.eventStatus || "")) continue;
+      const loc = ev.location || {};
+      const online = /Online/i.test(ev.eventAttendanceMode || "");
+      const city = online ? "Онлайн" : clean(loc.address?.addressLocality, 40);
+      const place = loc.name && loc.name !== city ? clean(loc.name, 120) : clean(loc.address?.streetAddress, 120);
+      const title = clean(unent(ev.name), 160);
+      const time = /T(\d\d:\d\d)/.exec(ev.startDate)?.[1] || "";
+      const e = { source: "podii", key: id.slice(0, 8), url, title, city, place, starts, ends: end > starts ? end : "", time: time === "00:00" ? "" : time, kind: podiiKind(title) };
+      const twin = findSimilar({ starts, city, title });
+      if (twin && twin.id !== `podii:${e.key}`) {
+        if (!dry && linkKind(twin.url) === "tg") relinked += db.prepare("UPDATE cal_events SET url = ? WHERE id = ?").run(url, twin.id).changes;
+        out.dupes.push({ title, twin: twin.id });
+        continue;
+      }
+      if (!dry) upsert(e);
+      out.made.push({ title, starts, city, kind: e.kind });
+    }
+    const old = addDays(today, -180);
+    for (const [k, d] of Object.entries(seen)) if (d < old) delete seen[k];
+    if (!dry) setMeta("podii:seen", JSON.stringify(seen)), setMeta("podii:last", JSON.stringify({ ...out, made: out.made.length, dupes: out.dupes.length }));
+    if (relinked) fresh();
+    out.relinked = relinked;
+    return out;
+  }
+
   // Organizers' calendars Max adds on /admin/events: read every 6 hours (feedsRun), their next 120 days in as source
   // `ics` (key `<feed>/<uid>`), kind and city from the feed when given; a meeting gone from the calendar goes here
   // too. No AI: an organizer's calendar is all events, and books and authors are found by name (upsert).
@@ -726,8 +805,11 @@ function create(db, store, { notify = () => {}, bookua = null, search = null, ma
   const one = (id) => row(db.prepare("SELECT * FROM cal_events WHERE id = ?").get(id));
   // An event already kept that is the same one told elsewhere (Є's site and its Telegram channel): the same day
   // and city, and an author in common or half the title's words. → the row or null.
-  const wordsOf = (t) => new Set(String(t || "").toLowerCase().match(/[\p{L}\d]{4,}/gu) || []);
-  const quoted = (t) => new Set([...String(t || "").matchAll(/«([^»]+)»/g)].flatMap((m) => [...wordsOf(m[1])].map((w) => w.slice(0, 5))));
+  // Words every club or meeting has don't make two events one («Читацький клуб за книгою …» on the same day,
+  // podii.io 2026-11-16): only the rest are compared.
+  const EVENT_WORDS = /^(клуб\p{L}*|читацьк\p{L}*|книжков\p{L}*|книги|книга|книгою|книжк\p{L}*|обговоренн\p{L}*|зустріч\p{L}*|засіданн\p{L}*|презентаці\p{L}*|роман\p{L}{0,2}|читанн\p{L}*|вечір|вечірка|творча|лекці\p{L}*|львові|києві|онлайн)$/u;
+  const wordsOf = (t) => new Set((String(t || "").toLowerCase().match(/[\p{L}\d]{4,}/gu) || []).filter((w) => !EVENT_WORDS.test(w)));
+  const quoted = (t) => new Set([...String(t || "").matchAll(/[«"“„]([^»"”“]+)[»"”“]/g)].flatMap((m) => [...wordsOf(m[1])].map((w) => w.slice(0, 5))));
   function findSimilar({ starts, city = "", title = "", authors = null }) {
     const mine = wordsOf(title);
     const mineQ = quoted(title);
@@ -934,7 +1016,7 @@ function create(db, store, { notify = () => {}, bookua = null, search = null, ma
   };
   const unsubscribeAll = (reader) => db.prepare("DELETE FROM cal_subs WHERE reader = ?").run(reader).changes;
 
-  return { upsert, setKinds, add, one, byKey, findSimilar, cancel, uncancel, cancelledList, recent, pending, review, hide, setLink, cleanup, seed, upcoming, forAuthor, forBook, cities, fillBooks, chytomoRun, eventmateRun, feeds, addFeed, removeFeed, feedsRun, yeRun, yeLast: () => yeLast, peek, fresh, meta, setMeta, subs, subscribed, subscribe, unsubscribeAll };
+  return { upsert, setKinds, add, one, byKey, findSimilar, cancel, uncancel, cancelledList, recent, pending, review, hide, setLink, cleanup, seed, upcoming, forAuthor, forBook, cities, fillBooks, chytomoRun, eventmateRun, podiiRun, feeds, addFeed, removeFeed, feedsRun, yeRun, yeLast: () => yeLast, peek, fresh, meta, setMeta, subs, subscribed, subscribe, unsubscribeAll };
 }
 
 // «Четвер, 19 листопада» and, within a week, «завтра» / «через 3 дні».

@@ -1646,7 +1646,7 @@ const tgFeed = bg.register("tg", require("./tgfeed").create(store.db, { calendar
 bg.every("tg-feed", 3600 * 1000, () => tgFeed.run(), { db: store.db, first: 8 * 60 * 1000 });
 bg.every("tg-join", 10 * 60 * 1000, () => tgFeed.joinMore(), { db: store.db, first: 12 * 60 * 1000 });
 bg.every("tg-discover", 24 * 3600 * 1000, () => tgFeed.discoverWeekly(), { db: store.db, first: 25 * 60 * 1000 });
-// Chytomo's calendar and Eventmate once a day (their pages through the same Haiku as Telegram posts), and the books events name
+// Chytomo's calendar, Eventmate and podii.io once a day (their pages through the same Haiku as Telegram posts), and the books events name
 // that the catalog lacks every hour (calendar.fillBooks; new books reload the web process).
 const calendarMore = bg.register(
   "calendar-more",
@@ -1655,15 +1655,18 @@ const calendarMore = bg.register(
     chytomoDry: () => calendar.chytomoRun({ extract: tgFeed.extract, dry: true }),
     eventmate: () => calendar.eventmateRun({ extract: tgFeed.extract }),
     eventmateDry: () => calendar.eventmateRun({ extract: tgFeed.extract, dry: true, max: 5 }),
+    podii: () => calendar.podiiRun(),
+    podiiDry: () => calendar.podiiRun({ dry: true }),
     feeds: () => calendar.feedsRun(),
     books: () => calendar.fillBooks().then((r) => (r.made.length || r.found.length ? r : false)),
     booksDry: () => calendar.fillBooks({ dry: true }),
   },
-  { chytomo: false, chytomoDry: false, eventmate: false, eventmateDry: false, feeds: false, books: true, booksDry: false },
+  { chytomo: false, chytomoDry: false, eventmate: false, eventmateDry: false, podii: false, podiiDry: false, feeds: false, books: true, booksDry: false },
 );
 bg.every("calendar-chytomo", 24 * 3600 * 1000, () => calendarMore.chytomo(), { db: store.db, first: 20 * 60 * 1000 });
 bg.every("calendar-feeds", 6 * 3600 * 1000, () => calendarMore.feeds(), { db: store.db, first: 15 * 60 * 1000 });
 bg.every("calendar-eventmate", 24 * 3600 * 1000, () => calendarMore.eventmate(), { db: store.db, first: 30 * 60 * 1000 });
+bg.every("calendar-podii", 24 * 3600 * 1000, () => calendarMore.podii(), { db: store.db, first: 35 * 60 * 1000 });
 bg.every("calendar-books", 3600 * 1000, () => calendarMore.books(), { db: store.db, first: 25 * 60 * 1000 });
 // The authors of a book (slugs), for its page's line about an event.
 const bookAuthorSlugs = (book) => require("./authors").splitAuthors(book.author).map((n) => store.authors?.byName(n)?.slug).filter(Boolean);
@@ -1972,7 +1975,7 @@ app.post("/agent/calendar-ye", agentOk, (req, res) => {
 // Chytomo's calendar and the books events name: GET is a dry run in the jobs process (ask again for the answer,
 // ?again=1 reruns); POST {"run": true} runs it now (writes events and books: only with Max's OK in the thread).
 const calDry = {};
-for (const [path, run, dry] of [["calendar-chytomo", "chytomo", "chytomoDry"], ["calendar-eventmate", "eventmate", "eventmateDry"], ["calendar-books", "books", "booksDry"]]) {
+for (const [path, run, dry] of [["calendar-chytomo", "chytomo", "chytomoDry"], ["calendar-eventmate", "eventmate", "eventmateDry"], ["calendar-podii", "podii", "podiiDry"], ["calendar-books", "books", "booksDry"]]) {
   app.get(`/agent/${path}`, agentOk, (req, res) => {
     if (!calDry[path] || (req.query.again && calDry[path].done)) {
       calDry[path] = { started: new Date().toISOString(), done: false };
