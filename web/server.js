@@ -1639,6 +1639,7 @@ bg.every("calendar-ye", 24 * 3600 * 1000, () => calendarJobs.ye(), { db: store.d
 const tgFeed = bg.register("tg", require("./tgfeed").create(store.db, { calendar }), { run: false, joinMore: false, keepChannel: false, events: false, find: false });
 bg.every("tg-feed", 3600 * 1000, () => tgFeed.run(), { db: store.db, first: 8 * 60 * 1000 });
 bg.every("tg-join", 10 * 60 * 1000, () => tgFeed.joinMore(), { db: store.db, first: 12 * 60 * 1000 });
+bg.every("tg-discover", 24 * 3600 * 1000, () => tgFeed.discoverWeekly(), { db: store.db, first: 25 * 60 * 1000 });
 // Chytomo's calendar and Eventmate once a day (their pages through the same Haiku as Telegram posts), and the books events name
 // that the catalog lacks every hour (calendar.fillBooks; new books reload the web process).
 const calendarMore = bg.register(
@@ -1977,13 +1978,19 @@ app.get("/agent/tg-find", agentOk, async (req, res) => {
     res.status(500).json({ error: e.errorMessage || e.message });
   }
 });
-// New book channels from Telegram's «Similar Channels» (tgFeed.discover): GET starts a dry run (nothing is joined),
-// ask again for the list, ?again=1 reruns.
+// New book channels from Telegram's «Similar Channels» (tgFeed.discover): GET starts a dry run (nothing is queued),
+// ask again for the list, ?again=1 reruns. The real one runs weekly (tg-discover job); POST {"run":true} now.
 let tgDiscover = null;
+app.post("/agent/tg-discover", agentOk, (req, res) => {
+  if (!req.body?.run) return res.status(400).json({ error: '{"run": true}' });
+  tgFeed.setMeta("tg:discover-run", "");
+  tgFeed.discoverWeekly().catch(() => {});
+  res.json({ started: true });
+});
 app.get("/agent/tg-discover", agentOk, (req, res) => {
   if (!tgDiscover || (req.query.again && tgDiscover.done)) {
     tgDiscover = { started: new Date().toISOString(), done: false };
-    tgFeed.discover().then((r) => Object.assign(tgDiscover, r, { done: true }), (e) => Object.assign(tgDiscover, { error: e.errorMessage || e.message, done: true }));
+    tgFeed.discover({ dry: true }).then((r) => Object.assign(tgDiscover, r, { done: true }), (e) => Object.assign(tgDiscover, { error: e.errorMessage || e.message, done: true }));
   }
   res.json(tgDiscover);
 });

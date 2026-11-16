@@ -221,8 +221,11 @@ function create(db, { calendar, apiKey = process.env.ANTHROPIC_API_KEY || "", cl
   const live = () => {
     const left = jmeta("tg:left");
     const groups = jmeta("tg:group");
-    return channels().filter((c) => !left[c] && !groups[c]);
+    return [...new Set([...channels(), ...added()])].filter((c) => !left[c] && !groups[c]);
   };
+  // Channels discover() found and gave a turn (meta tg:found {name: {at, title, from, members, bookish, added?}}):
+  // read, muted and pruned like the seed's.
+  const added = () => Object.entries(jmeta("tg:found")).filter(([, f]) => f.added).map(([c]) => c);
   // A group (people's chat) found among the seed's names: never joined; left if joined, its kept posts dropped,
   // a join request withdrawn (LeaveChannel does it, if Telegram lets it).
   const markGroup = (c) => {
@@ -461,7 +464,7 @@ function create(db, { calendar, apiKey = process.env.ANTHROPIC_API_KEY || "", cl
   function prune(out) {
     const since = new Date(Date.now() - 30 * DAY).toISOString();
     const seeded = seed();
-    const inSeed = new Set(seeded.map((c) => c.name));
+    const inSeed = new Set([...seeded.map((c) => c.name), ...added()]);
     const keep = { ...jmeta("tg:keep"), ...Object.fromEntries(seeded.filter((c) => c.keep).map((c) => [c.name, true])) };
     const quiet = jmeta("tg:quiet");
     const left = jmeta("tg:left");
@@ -697,17 +700,19 @@ function create(db, { calendar, apiKey = process.env.ANTHROPIC_API_KEY || "", cl
   // a channel that several of ours point to is most likely about books. Then each such candidate's last ~20 posts
   // (its public page, else the API): Ukrainian (і/ї/є/ґ against ы/э/ъ/ё), about books (BOOKISH in DISCOVER_BOOKISH of
   // its posts), alive (a post in the last 30 days), a channel and not a group, not one we read, left or gave up on.
-  // Dry for now: nothing is joined; the list goes into meta tg:discover. → { at, asked, candidates: [...] }.
+  // Those that pass wait in meta tg:found; promote() gives DISCOVER_DAY of them a day to the joins (Max 2026-11-16:
+  // «Сам, до 10 на день»). Once a week (discoverWeekly); dry = only the list (meta tg:discover). → { at, asked, candidates }.
   const DISCOVER_MIN = 2; // our channels that point to it
   const DISCOVER_BOOKISH = 0.3;
   const DISCOVER_CHECK = 80; // candidates whose posts are read, the most pointed-to first
+  const DISCOVER_DAY = 10;
   const pause = (ms) => new Promise((r) => setTimeout(r, ms));
   const ukShare = (texts) => {
     const all = texts.join(" ");
     const uk = (all.match(/[іїєґ]/gi) || []).length, ru = (all.match(/[ыэъё]/gi) || []).length;
     return { uk, ru, ok: uk >= 20 && uk >= 3 * ru };
   };
-  async function discover() {
+  async function discover({ dry = false } = {}) {
     if (!accountSet()) return { error: "no account" };
     const { Api } = require("telegram");
     const out = { at: new Date().toISOString(), asked: 0, errors: [], candidates: [] };
@@ -718,7 +723,7 @@ function create(db, { calendar, apiKey = process.env.ANTHROPIC_API_KEY || "", cl
         const u = d.entity?.username?.toLowerCase();
         if (d.isChannel && u) mine.set(u, d);
       }
-      const skip = new Set([...mine.keys(), ...channels(), ...Object.keys(jmeta("tg:left")), ...Object.keys(jmeta("tg:group")), ...Object.keys(jmeta("tg:joined"))]);
+      const skip = new Set([...mine.keys(), ...channels(), ...Object.keys(jmeta("tg:left")), ...Object.keys(jmeta("tg:group")), ...Object.keys(jmeta("tg:joined")), ...Object.keys(jmeta("tg:found"))]);
       const found = new Map();
       const note = (chats, from) => {
         for (const c of chats || []) {
@@ -781,7 +786,33 @@ function create(db, { calendar, apiKey = process.env.ANTHROPIC_API_KEY || "", cl
     out.candidates.sort((a, b) => b.ok - a.ok || b.from - a.from || (b.members || 0) - (a.members || 0));
     out.errors = out.errors.slice(0, 10);
     setMeta("tg:discover", JSON.stringify(out));
+    if (!dry) {
+      const found = jmeta("tg:found");
+      for (const c of out.candidates) if (c.ok) found[c.name.toLowerCase()] ||= { at: out.at, title: c.title, from: c.from, members: c.members, bookish: c.bookish };
+      setMeta("tg:found", JSON.stringify(found));
+      setMeta("tg:discover-run", out.at);
+      promote();
+    }
     return out;
+  }
+  // Up to DISCOVER_DAY waiting channels a Kyiv day get their turn, the most pointed-to first. → names.
+  function promote() {
+    const found = jmeta("tg:found");
+    const today = kyivDay();
+    const room = DISCOVER_DAY - Object.values(found).filter((f) => f.added && kyivDay(new Date(f.added)) === today).length;
+    const next = Object.entries(found).filter(([, f]) => !f.added).sort((a, b) => b[1].from - a[1].from).slice(0, Math.max(0, room));
+    for (const [, f] of next) f.added = new Date().toISOString();
+    if (next.length) setMeta("tg:found", JSON.stringify(found));
+    return next.map(([c]) => c);
+  }
+  // The jobs process, daily: a new search once a week, and the day's turn for those waiting.
+  async function discoverWeekly() {
+    if (!accountSet()) return { skipped: "no account" };
+    if (Date.now() - Date.parse(meta("tg:discover-run") || 0) > 7 * DAY) {
+      const r = await discover();
+      return { asked: r.asked, found: r.found, ok: r.candidates?.filter((c) => c.ok).length, added: added().length };
+    }
+    return { promoted: promote() };
   }
 
   // Another site's page → its events, for calendar.chytomoRun.
@@ -800,7 +831,7 @@ function create(db, { calendar, apiKey = process.env.ANTHROPIC_API_KEY || "", cl
     }
   }
 
-  return { run, joinMore, joinSome, keepChannel, prune, dropGroups, discover, events, classify, status, maybeEvent, meta, setMeta, extract, find };
+  return { run, joinMore, joinSome, keepChannel, prune, dropGroups, discover, discoverWeekly, promote, events, classify, status, maybeEvent, meta, setMeta, extract, find };
 }
 
 module.exports = { eventUrl, create, parsePage, maybeEvent, fromMessage, channels, KEEP_DAYS };

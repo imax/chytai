@@ -221,7 +221,12 @@ function tgLine(db, day) {
     }
   };
   const quiet = of("tg:quiet"), left = of("tg:left"), hand = of("tg:left", true);
+  let found = [];
+  try {
+    found = Object.entries(JSON.parse(db.get("tg:found") || "{}")).filter(([, x]) => x?.added && dayOf(x.added) === day).map(([c]) => `@${c}`);
+  } catch {}
   const parts = [];
+  if (found.length) parts.push(`нові канали зі «Схожих»: ${found.join(", ")}`);
   if (hand.length) parts.push(`ви відписались, більше не читаємо: ${hand.join(", ")}`);
   if (quiet.length) parts.push(`без подій, Haiku не питаємо: ${quiet.join(", ")}`);
   if (left.length) parts.push(`не про книжки, відписались: ${left.join(", ")}`);

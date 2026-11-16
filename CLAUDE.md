@@ -313,11 +313,14 @@ A flag only when Max asks for one, or when the change could break what readers u
   channel, not a club, with no event, 20+ posts and under 15% book words (`BOOKISH`) → `tg:left` (the account leaves it, no more reads).
   Never: `"keep": true` in the seed (Max's own), hand-joined ones. Undo: `POST /agent/tg {"keep":"<name>"}`. The
   technical report names the day's ones («Telegram: …», `tgLine`).
-- New channels (Max 2026-11-16: «чи ми робимо діскавері нових книжкових каналів?»): `tgFeed.discover()` asks Telegram's
-  «Similar Channels» (`channels.getChannelRecommendations`) for every channel the account is in and keeps those 2+ of
-  ours point to, then reads each one's last posts: Ukrainian, 30%+ about books, a post in 30 days, a channel, not left
-  or a group. Dry only (nothing joined), meta `tg:discover`: `curl -s https://chytai.org.ua/agent/tg-discover -H "$H"`
-  (ask again; `?again=1`). Joining them waits for Max's choice.
+- New channels (Max 2026-11-16: «чи ми робимо діскавері нових книжкових каналів?», then «Сам, до 10 на день»):
+  `tgFeed.discover()` asks Telegram's «Similar Channels» (`channels.getChannelRecommendations`) for every channel the
+  account is in and keeps those 2+ of ours point to (top 80), then reads each one's last posts: Ukrainian, 30%+ about
+  books, a post in 30 days, a channel, not left or a group. Weekly (job `tg-discover`, daily: a search when the last is
+  7+ days old, meta `tg:discover-run`); those that pass wait in meta `tg:found`, `promote()` gives 10 a Kyiv day
+  `added` and they join `live()`: joined, muted, read and pruned like the seed's; a hand-left one is never rejoined.
+  The tech report names the day's («нові канали зі «Схожих»»). Dry list: `curl -s https://chytai.org.ua/agent/tg-discover
+  -H "$H"` (ask again; `?again=1`); search now: `POST /agent/tg-discover {"run":true}`.
 - Leads (Max: «звертай увагу, звідки воно… щоб можна підписатись на нього напряму»): `/agent/tg` → `leads`: the sites
   event posts link to (forms, social networks and payments left out) and t.me channels they link to that we don't read.
   A site with many: read it directly (like `yeRun`) or add its channel.
