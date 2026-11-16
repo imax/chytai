@@ -138,8 +138,12 @@ technical report (below), so post it only after your fixes are pushed:
 - A change to the workflow or these scripts runs it once on push. The MCP token cannot start or rerun it (403):
   ask Max for «Run workflow» on Actions → Backup.
 
-## Two Telegram reports (`web/dailyreport.js`, jobs process)
+## The Telegram bot and its two reports (`web/telegram.js`, `web/dailyreport.js`)
 
+- The bot (`web/telegram.js`) writes to Max's chat and to the accounts he allowed (Max 2026-11-16, his Android): a
+  stranger's /start asks him with «Дозволити» / «Ні» (one a day), `telegram:extra` keeps them, /who in his chat lists
+  them with «Забрати», /off in theirs stops it. `telegram.send(text)` goes to all; buttons only to Max, only he presses
+  them. The reader gets the list from the site (`/api/site-admin/telegram` `chats`).
 - 08:00 Kyiv: readers only (sign-ups, visits, shelves, the reader's minutes and explanations). Nothing technical in it
   (Max, 2026-11-12).
 - Technical, once a day, when both nightly backups (site, reader) have reported today and the morning review posted

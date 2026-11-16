@@ -5,6 +5,11 @@
 //
 // Sent: everything notifyOwner mails (readers' lists, comments, books…), a wave of sign-ups, a background job that
 // failed, the reader app not answering (and answering again). Never readers' e-mail addresses.
+//
+// More chats (Max, 2026-11-16: his second account on Android): someone else's /start sends the linked chat
+// «Просить доступ» with «Дозволити» / «Ні»; once allowed, every message goes to them too (meta `telegram:extra`,
+// [{ id, name }]). /who in the linked chat lists them with «Забрати»; /off in theirs stops it. Only the linked chat
+// presses buttons. The reader gets the whole list from the site (`chats()`).
 const crypto = require("crypto");
 
 const TOKEN = process.env.TELEGRAM_BOT_TOKEN || "";
@@ -15,6 +20,17 @@ const on = () => !!TOKEN;
 // The webhook's path carries a secret made from the token, so nobody else can post updates to it.
 const hookPath = () => (TOKEN ? `/api/telegram/${crypto.createHash("sha256").update(TOKEN).digest("hex").slice(0, 32)}` : "");
 const chat = () => process.env.TELEGRAM_CHAT_ID || db?.get("telegram:chat") || "";
+const extra = () => {
+  try {
+    const l = JSON.parse(db?.get("telegram:extra") || "[]");
+    return Array.isArray(l) ? l.filter((c) => c && /^\d{1,20}$/.test(String(c.id))) : [];
+  } catch {
+    return [];
+  }
+};
+const setExtra = (l) => db.set("telegram:extra", JSON.stringify(l));
+// Every chat a message goes to: the linked one first.
+const chats = () => (chat() ? [chat(), ...extra().map((c) => String(c.id)).filter((id) => id !== chat())] : []);
 
 function init(database) {
   db = database;
@@ -26,15 +42,22 @@ function call(method, body) {
     return d.result;
   });
 }
-// Plain text, cut to Telegram's limit, with optional buttons under it ([[{ text, data }]]). Never throws.
-function send(text, to = chat(), buttons = null) {
-  if (!TOKEN || !to) return Promise.resolve(false);
+// Plain text, cut to Telegram's limit, with optional buttons under it ([[{ text, data }]]), to one chat or (no `to`)
+// to every chat. Buttons go only to the linked chat: only it may press them. Never throws; true when any got it.
+function send(text, to = null, buttons = null) {
+  if (!TOKEN) return Promise.resolve(false);
   text = String(text || "").trim();
   if (text.length > 4000) text = text.slice(0, 3990) + "…";
-  const markup = buttons ? { reply_markup: { inline_keyboard: buttons.map((row) => row.map((b) => ({ text: b.text, callback_data: b.data }))) } } : {};
-  return call("sendMessage", { chat_id: to, text, disable_web_page_preview: true, ...markup })
-    .then(() => true)
-    .catch((e) => (console.error(`[telegram] ${e.message}`), false));
+  const one = (id, withButtons) => {
+    const markup = withButtons && buttons ? { reply_markup: { inline_keyboard: buttons.map((row) => row.map((b) => ({ text: b.text, callback_data: b.data }))) } } : {};
+    return call("sendMessage", { chat_id: id, text, disable_web_page_preview: true, ...markup })
+      .then(() => true)
+      .catch((e) => (console.error(`[telegram] ${id}: ${e.message}`), false));
+  };
+  if (to) return one(String(to), true);
+  const all = chats();
+  if (!all.length) return Promise.resolve(false);
+  return Promise.all(all.map((id, i) => one(id, i === 0))).then((r) => r.some(Boolean));
 }
 // At most once per `hours` for one key (kept in the database, so the web and jobs processes and restarts agree).
 function sendOnce(key, hours, text) {
@@ -70,19 +93,80 @@ async function pressed(q) {
   }
   return call("answerCallbackQuery", { callback_query_id: q.id, text: answer.slice(0, 190) }).catch((e) => console.error(`[telegram] answer: ${e.message}`));
 }
-// An update from Telegram: /start links the first chat; the linked chat gets a short help, others a refusal.
+// Who wrote: «Ім'я Прізвище (@нік)».
+const who = (f = {}) => [[f.first_name, f.last_name].filter(Boolean).join(" "), f.username ? `(@${f.username})` : ""].filter(Boolean).join(" ") || "без імені";
+const HELLO = "Підключено. Сюди приходитимуть новини сайту Chytai: що створюють читачі, хвилі реєстрацій, збої.";
+
+// Open requests: { id: { name, at } } in one meta row, a week at most.
+const asked = () => {
+  let a = {};
+  try {
+    a = JSON.parse(db.get("telegram:asked") || "{}") || {};
+  } catch {}
+  for (const [id, r] of Object.entries(a)) if (!(Date.now() - Date.parse(r?.at) < 7 * 86400000)) delete a[id];
+  return a;
+};
+const setAsked = (a) => db.set("telegram:asked", JSON.stringify(a));
+
+onAction("tgallow", (id) => {
+  const a = asked();
+  const r = a[id];
+  if (!r?.name) return "Запит застарів.";
+  delete a[id];
+  setAsked(a);
+  if (!extra().some((c) => String(c.id) === id)) setExtra([...extra(), { id, name: r.name }]);
+  send(`${HELLO}\nВимкнути: /off`, id);
+  return `Доступ є: ${r.name}`;
+});
+onAction("tgdeny", (id) => {
+  const a = asked();
+  if (a[id]) setAsked({ ...a, [id]: { at: a[id].at } });
+  return "Відмовлено.";
+});
+onAction("tgdrop", (id) => {
+  const c = extra().find((x) => String(x.id) === id);
+  if (!c) return "Уже забрано.";
+  setExtra(extra().filter((x) => String(x.id) !== id));
+  send("Доступ до бота забрали.", id);
+  return `Забрано: ${c.name}`;
+});
+
+// An update from Telegram: /start links the first chat; after that someone else's /start asks the linked chat.
 function update(u) {
   if (u?.callback_query) return pressed(u.callback_query);
   const m = u?.message;
-  if (!m?.chat?.id || m.chat.type !== "private") return;
+  if (!m?.chat?.id || m.chat.type !== "private" || !db) return;
   const id = String(m.chat.id);
-  if (!chat() && db && /^\/start\b/.test(m.text || "")) {
+  const text = m.text || "";
+  if (!chat() && /^\/start\b/.test(text)) {
     db.set("telegram:chat", id);
     console.log(`[telegram] linked chat ${id}`);
-    return send("Підключено. Сюди приходитимуть новини сайту Chytai: що створюють читачі, хвилі реєстрацій, збої.", id);
+    return send(HELLO, id);
   }
-  if (id === chat()) return send("Я лише надсилаю сповіщення сайту Chytai.", id);
-  return send("Це приватний бот.", id);
+  if (id === chat()) {
+    if (/^\/who\b/.test(text)) {
+      const l = extra();
+      if (!l.length) return send("Крім вас, бот нікому не пише.", id);
+      return send(`Бот пише ще: ${l.map((c) => c.name).join(", ")}`, id, l.map((c) => [{ text: `Забрати: ${c.name}`.slice(0, 60), data: `tgdrop:${c.id}` }]));
+    }
+    return send("Я лише надсилаю сповіщення сайту Chytai.\nКому ще пишу: /who", id);
+  }
+  if (extra().some((c) => String(c.id) === id)) {
+    if (/^\/off\b/.test(text)) {
+      setExtra(extra().filter((c) => String(c.id) !== id));
+      return send("Більше не пишу. Знову: /start", id);
+    }
+    return send("Я лише надсилаю сповіщення сайту Chytai.\nВимкнути: /off", id);
+  }
+  if (/^\/start\b/.test(text) && chat()) {
+    // One request a day per chat, so a stranger can't flood the owner.
+    const a = asked();
+    if (Date.now() - Date.parse(a[id]?.at) < 86400000) return send("Запит уже надіслано. Чекайте.", id);
+    setAsked({ ...a, [id]: { name: who(m.from), at: new Date().toISOString() } });
+    send(`Просить доступ до бота: ${who(m.from)}`, chat(), [[{ text: "Дозволити", data: `tgallow:${id}` }, { text: "Ні", data: `tgdeny:${id}` }]]);
+    return send("Це приватний бот. Запит на доступ надіслано власнику.", id);
+  }
+  return send("Це приватний бот. Попросити доступ: /start", id);
 }
 
-module.exports = { on, init, send, onAction, sendOnce, setWebhook, update, hookPath, chat };
+module.exports = { on, init, send, onAction, sendOnce, setWebhook, update, hookPath, chat, chats };

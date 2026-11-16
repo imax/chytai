@@ -1546,18 +1546,25 @@ app.post("/api/site-admin/give-file", express.raw({ type: () => true, limit: 100
 // The site's watchman (Max, 2026-11-04: «а у нас зараз немає такої перевірки?»): every 5 minutes the reader opens
 // chytai.org.ua; two misses in a row go to the owner's Telegram bot, and so does the site coming back. The site
 // checks the reader the same way (web/telegram.js), so each watches the other. TELEGRAM_BOT_TOKEN in this app's
-// secrets; the chat is the one the site linked, sent here by the site with the owner's key.
+// secrets; the chats are the ones the site linked (Max's and those he allowed), sent here by the site with the owner's
+// key, again whenever they change.
 app.post("/api/site-admin/telegram", express.json(), (req, res) => {
   if (!siteOwnerOk(req)) return res.status(403).json({ error: "key" });
-  const chat = String(req.body?.chat || "");
-  if (!/^-?\d{1,20}$/.test(chat)) return res.status(400).json({ error: "chat" });
-  if (state.telegramChat !== chat) (state.telegramChat = chat), saveState();
+  const chats = (Array.isArray(req.body?.chats) ? req.body.chats : [req.body?.chat]).map(String).slice(0, 20);
+  if (!chats.length || !chats.every((c) => /^-?\d{1,20}$/.test(c))) return res.status(400).json({ error: "chat" });
+  if ((state.telegramChats || [state.telegramChat]).join() !== chats.join()) {
+    state.telegramChat = chats[0];
+    state.telegramChats = chats;
+    saveState();
+  }
   res.json({ ok: true, token: !!process.env.TELEGRAM_BOT_TOKEN });
 });
 function telegram(text) {
   const token = process.env.TELEGRAM_BOT_TOKEN;
-  if (!token || !state.telegramChat) return;
-  fetch(`https://api.telegram.org/bot${token}/sendMessage`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ chat_id: state.telegramChat, text, disable_web_page_preview: true }), signal: AbortSignal.timeout(15000) }).catch((e) => console.error(`telegram: ${e.message}`));
+  const chats = state.telegramChats || (state.telegramChat ? [state.telegramChat] : []);
+  if (!token) return;
+  for (const chat_id of chats)
+    fetch(`https://api.telegram.org/bot${token}/sendMessage`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ chat_id, text, disable_web_page_preview: true }), signal: AbortSignal.timeout(15000) }).catch((e) => console.error(`telegram: ${e.message}`));
 }
 if (process.env.TELEGRAM_BOT_TOKEN && process.env.FLY_APP_NAME) {
   let misses = 0;
