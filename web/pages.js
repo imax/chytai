@@ -2115,7 +2115,7 @@ const setReadersWithNote = (fn) => (readersWithNote = fn);
 
 const cal = () => require("./calendar");
 // The organizer's link, named by what it is (a sign-up form, a Telegram post, a site); we sell nothing.
-const ORG_LINK = { form: "Зареєструватися", tg: "Канал у Telegram", social: "Сторінка організатора", site: "Сайт організатора", ye: "Афіша книгарні «Є»" };
+const ORG_LINK = { form: "Зареєструватися", tg: "Канал у Telegram", social: "Сторінка організатора", site: "Сайт організатора", ye: "Афіша книгарні «Є»", news: "Анонс на Читомо" };
 const orgText = (e) => ORG_LINK[cal().linkKind(cal().sourceUrl(e))] || "";
 // No link to a Telegram post (calendar.sourceUrl).
 const eventLink = (e) => (cal().sourceUrl(e) ? `<a class="text-link" href="${attr(cal().sourceUrl(e))}" target="_blank" rel="noopener nofollow ugc">${orgText(e).replace(/^./, (c) => c.toLowerCase())} ↗</a>` : "");
@@ -3667,7 +3667,7 @@ function eventsAdminPage({ user, rows, tg, saved, feeds = [], feedMsg = "", canc
   const C = cal();
   const n = (v) => String(v);
   const kindOf = (e) => C.linkKind(C.sourceUrl(e)) || "none";
-  const KIND_NAME = { form: "форма запису", site: "сайт", social: "соцмережі", ye: "афіша «Є»", tg: "лише канал у Telegram", none: "без посилання" };
+  const KIND_NAME = { form: "форма запису", site: "сайт", social: "соцмережі", ye: "афіша «Є»", news: "анонс на Читомо", tg: "лише канал у Telegram", none: "без посилання" };
   const count = (f) => rows.reduce((m, e) => ((m[f(e)] = (m[f(e)] || 0) + 1), m), {});
   const byLink = count(kindOf);
   const bySource = count((e) => e.source);

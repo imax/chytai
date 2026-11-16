@@ -368,7 +368,9 @@ A flag only when Max asks for one, or when the change could break what readers u
 
 - Chytomo (chytomo.com/kalendar/, Max 2026-11-15): `calendar.chytomoRun` once a day in the jobs process, its cards
   «зустрічі та враження» and «освітні» only, each new article (meta `chytomo:seen`) through the Telegram collector's
-  Haiku (`tgFeed.extract`, ≤10 a day), source `chytomo`, `findSimilar` against the same event elsewhere. Dry run:
+  Haiku (`tgFeed.extract`, ≤10 a day), source `chytomo`, `findSimilar` against the same event elsewhere. Its link is
+  the article's one sign-up form (`articleForm`), else the article, shown as «Анонс на Читомо» (`linkKind` `news`),
+  never as the organizer's site (Max 2026-11-16, «ПалімФест»). Dry run:
   `curl -s https://chytai.org.ua/agent/calendar-chytomo -H "$H"` (ask again; `?again=1`); run now: `POST {"run":true}`.
 - Eventmate (eventmate.app, Max 2026-11-15: more sources): `calendar.eventmateRun` once a day in the jobs process, its
   event sitemaps' Ukrainian pages with a bookish name (`EM_BOOKISH`) not seen yet (meta `eventmate:seen`, half a year),

@@ -564,9 +564,29 @@ function create(db, store, { notify = () => {}, bookua = null, search = null, ma
   // `extract(text, url)` (the Telegram collector's Haiku), its events in as source `chytomo`, one a day at most
   // 10 articles; the same event told elsewhere (findSimilar) is left out. dry: nothing kept.
   const CHYTOMO = "https://chytomo.com";
+  const articleForm = (body) => {
+    const forms = [...new Set([...String(body || "").matchAll(/href="(https?:\/\/[^"]+)"/g)].map((m) => unent(m[1])).filter((u) => linkKind(u) === "form"))];
+    return forms.length === 1 ? forms[0] : "";
+  };
   async function chytomoRun({ extract, dry = false, max = 10 } = {}) {
     const out = { at: new Date().toISOString(), dry, cards: 0, read: 0, made: [], dupes: [], skipped: [], errors: [] };
     if (!extract) return out;
+    // Once: upcoming events that link to their article get its one sign-up form, if it has one.
+    if (!dry && !meta("chytomo:forms")) {
+      const today = kyivDay();
+      const rows = db.prepare("SELECT id, url FROM cal_events WHERE source = 'chytomo' AND url LIKE 'https://chytomo.com/%' AND (starts >= ? OR ends >= ?)").all(today, today);
+      const pages = new Map();
+      for (const r of rows) {
+        try {
+          if (!pages.has(r.url)) pages.set(r.url, articleForm((await fetchPage(r.url)).html));
+        } catch {
+          pages.set(r.url, "");
+        }
+        if (pages.get(r.url)) db.prepare("UPDATE cal_events SET url = ? WHERE id = ?").run(pages.get(r.url), r.id);
+      }
+      setMeta("chytomo:forms", new Date().toISOString());
+      fresh();
+    }
     const seen = new Set(JSON.parse(meta("chytomo:seen") || "[]"));
     const list = await fetchPage(`${CHYTOMO}/kalendar/`);
     const cards = [...list.html.matchAll(/<a class="event__link" href="([^"]+)"[^>]*title="([^"]*)">([\s\S]*?)<\/a>/g)].map((m) => ({ url: m[1], title: unent(m[2]), kind: (/liner--dark">([^<]*)</.exec(m[3])?.[1] || "").trim() }));
@@ -595,8 +615,11 @@ function create(db, store, { notify = () => {}, bookua = null, search = null, ma
         out.errors.push(`${slug}: ${e.message}`);
         continue;
       }
+      // The article's one sign-up form is the event's link, not the article (Max 2026-11-16: «ПалімФест»'s talk led
+      // to Chytomo's piece on the whole festival, under «Сайт організатора»).
+      const form = articleForm(body);
       found.forEach((e, i) => {
-        const ev = { source: "chytomo", key: `${slug}${i ? `-${i}` : ""}`, ...e };
+        const ev = { source: "chytomo", key: `${slug}${i ? `-${i}` : ""}`, ...e, ...(form ? { url: form } : {}) };
         const twin = findSimilar({ starts: e.starts, city: e.city, title: e.title });
         if (twin && twin.id !== `chytomo:${ev.key}`) return out.dupes.push({ title: e.title, twin: twin.id });
         if (!dry) upsert(ev);
@@ -1222,6 +1245,8 @@ function linkKind(url) {
   if (/^https?:\/\/(t\.me|telegram\.me)\//i.test(url || "")) return "tg";
   if (/^https?:\/\/([^/]*\.)?(instagram\.com|facebook\.com|fb\.me)\//i.test(url || "")) return "social";
   if (/^https?:\/\/book-ye\.com\.ua\/calendar\/[a-z-]+\/?$/i.test(url || "")) return "ye";
+  // A news site's piece about the event (Chytomo's article on a whole festival): no organizer's page (Max 2026-11-16).
+  if (/^https?:\/\/(www\.)?chytomo\.com\//i.test(url || "")) return "news";
   return url ? "site" : "";
 }
 // Книгарня «Є»'s afisha by city (book-ye.com.ua/calendar/<city>/; slugs seen on their site 2026-11-15). Their site
