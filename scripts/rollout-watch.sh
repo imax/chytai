@@ -11,6 +11,7 @@
 # Usage: scripts/rollout-watch.sh <app: chytai-web | chytai> <deploy start, ISO> [image before]
 # Env: SHA (the commit deployed), SITE_TOKEN (a Fly token that sees chytai-web: the site's /agent/* endpoints),
 #      FLY_API_TOKEN (deploy token of <app>: the reader's health, a rollback), ROLLBACK=1 (roll back), WAIT (seconds, default 900), DRY=1 (only look).
+# [image before] may be hot:<sha>: the site ran that commit as a release (web/release.js) and goes back to it the same way.
 set -u
 APP=$1 SINCE=$2 BEFORE=${3:-}
 SITE=${SITE:-https://chytai.org.ua}
@@ -37,7 +38,9 @@ text="$NAME: після деплою ${SHA:0:7} нові помилки:
 $(echo "$ans" | jq -r '.rows[:3][] | "\(.n)× \(.msg | .[0:150])"')"
 if [ -n "${ROLLBACK:-}" ] && [ -n "$BEFORE" ]; then
   echo "rolling back to $BEFORE"
-  if flyctl deploy -a "$APP" $CONFIG --image "$BEFORE"; then text="$text
+  # After a deploy without a restart (web/release.js) the commit before goes back the same way.
+  back() { if [[ "$BEFORE" == hot:* ]]; then scripts/hot-deploy.sh "${BEFORE#hot:}" | grep -q "hot deploy: ok"; else flyctl deploy -a "$APP" $CONFIG --image "$BEFORE"; fi; }
+  if back; then text="$text
 
 Відкотив до попередньої версії (так просив коміт). Коміт лишився в main."
   else text="$text

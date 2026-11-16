@@ -1385,7 +1385,7 @@ function deploysBlock({ rows, days }) {
   const sec = (ms) => (ms == null ? `<span class="na">·</span>` : `${fmtN(Math.round(ms / 100) / 10, 1)} с`);
   const short = (d) => `${d.slice(8, 10)}.${d.slice(5, 7)}`;
   const time = (iso) => new Date(iso).toLocaleString("uk-UA", { timeZone: "Europe/Kyiv", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
-  const KIND = { probe: "деплой", hot: "деплой без перезапуску", restart: "перезапуск машини", web: "перезапуск сайту" };
+  const KIND = { probe: "деплой", hot: "деплой без перезапуску", restart: "перезапуск машини", web: "перезапуск сайту", switch: "сайт перейшов на новий код" };
   const head = `<h2 id="deploys">Деплої</h2>
 <p class="muted small">Скільки сайт не відповідав під час деплоїв: поки йде деплой, робот щосекунди відкриває сайт. «Перезапусків» — скільки разів машина вставала заново. «Fly не доставив» — запити, які не дійшли до сайту.</p>`;
   if (!rows.length) return `${head}\n<p class="muted">Рахуємо з 16.11.2026; перші числа будуть після наступного деплою.</p>`;

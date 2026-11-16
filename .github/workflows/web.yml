@@ -7,7 +7,7 @@ name: Deploy web
 on:
   push:
     branches: [main]
-    paths: ["web/**", "server/agent.js", "server/aimeter.js", "package.json", "package-lock.json", ".github/workflows/web.yml", "scripts/perf-check.sh", "scripts/smoke-test.sh", "scripts/deploy-probe.sh"]
+    paths: ["web/**", "server/agent.js", "server/aimeter.js", "package.json", "package-lock.json", ".github/workflows/web.yml", "scripts/perf-check.sh", "scripts/smoke-test.sh", "scripts/deploy-probe.sh", "scripts/hot-deploy.sh"]
   workflow_dispatch:
 
 jobs:
@@ -39,7 +39,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     outputs:
-      image: ${{ steps.before.outputs.image }}
+      # What to go back to: the image, or after a deploy without a restart the commit that ran before (hot:<sha>).
+      image: ${{ steps.hot.outputs.result == 'ok' && format('hot:{0}', steps.before.outputs.commit) || steps.before.outputs.image }}
       since: ${{ steps.before.outputs.since }}
     # One deploy at a time; a newer one waiting replaces an older one waiting (never one mid-deploy).
     concurrency: deploy-web
@@ -51,6 +52,7 @@ jobs:
         run: |
           echo "image=$(flyctl machine list -a chytai-web --json | jq -r '.[0].config.image // empty')" >> "$GITHUB_OUTPUT"
           echo "since=$(date -u +%FT%T.000Z)" >> "$GITHUB_OUTPUT"
+          echo "commit=$(curl -s -m 20 https://chytai.org.ua/agent/health -H "Authorization: $FLY_API_TOKEN" | jq -r '.commit // empty')" >> "$GITHUB_OUTPUT"
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN_WEB }}
       # The data volume at 3 GB at least (2026-10-28, Max OK: 1 GB was filling ~40 MB a day with kept covers).
@@ -63,13 +65,59 @@ jobs:
       # The deploy log (Max, 2026-11-16): a probe asks the site every second until the check below is done, and
       # tells /agent/deploys how long a visitor got no answer (scripts/deploy-probe.sh, /admin/speed «Деплої»).
       - run: scripts/deploy-probe.sh start
+      # A deploy without a restart first (web/release.js, Max 2026-11-16: «20, 30, 40 релізів на день», and the site
+      # stays up): the site's files go to the volume, a fresh web process opens a few pages on them while the old one
+      # answers, then takes over. «full» (packages, main.js or the Dockerfile changed, no ssh, a new image needed):
+      # the image deploy below as before. «failed» (the new code's pages did not open): the old code stays, the run
+      # fails. Off: repo variable HOT_DEPLOY=off.
+      - id: hot
+        if: vars.HOT_DEPLOY != 'off' && github.event_name == 'push'
+        continue-on-error: true
+        run: scripts/hot-deploy.sh ${{ github.sha }}
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN_WEB }}
+      - if: steps.hot.outputs.result == 'failed'
+        run: |
+          echo "::error::the new code did not open its pages (see the hot step); the site keeps the previous code"
+          exit 1
       # The image is built here on the GitHub runner and pushed to Fly (Max, 2026-10-29: «треба дивитися чому
       # вони так тормозять»): Fly's Depot builder kept deploys «Waiting for depot builder» 2-10 minutes that
       # day, for a build that takes about one. Fly's builders stay as the fallback. Fly's API sometimes drops
       # the connection after the build ("unexpected EOF") or hangs after the push (16 minutes on 2026-10-21,
       # holding up every deploy queued behind it): each try gets 5 minutes.
-      - run: |
+      # Layers that did not change keep their digest (Max, 2026-11-16, a shorter pause): the image is built with
+      # GitHub's build cache, so the system packages and node_modules are the very layers the machine already has
+      # and Fly pulls only the code (~20 MB) while the site is down. Any trouble here: the builds below as before.
+      - if: steps.hot.outputs.result != 'ok'
+        uses: docker/setup-buildx-action@v3
+        continue-on-error: true
+      - id: login
+        if: steps.hot.outputs.result != 'ok'
+        continue-on-error: true
+        run: flyctl auth docker
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN_WEB }}
+      - id: build
+        if: steps.hot.outputs.result != 'ok' && steps.login.outcome == 'success'
+        continue-on-error: true
+        timeout-minutes: 8
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: web/Dockerfile
+          push: true
+          provenance: false
+          tags: registry.fly.io/chytai-web:gh-${{ github.sha }}
+          build-args: GIT_SHA=${{ github.sha }}
+          cache-from: type=gha,scope=web
+          cache-to: type=gha,scope=web,mode=max
+      - if: steps.hot.outputs.result != 'ok'
+        run: |
           deploy() { timeout 300 flyctl deploy . -a chytai-web -c web/fly.toml --dockerfile web/Dockerfile --build-arg GIT_SHA=${{ github.sha }} "$@"; }
+          if [ "${{ steps.build.outcome }}" = success ]; then
+            timeout 300 flyctl deploy -a chytai-web -c web/fly.toml --image registry.fly.io/chytai-web:gh-${{ github.sha }} && exit 0
+            echo "the cached image did not go out; building as before"
+          fi
           deploy --local-only || { echo "retrying on Fly's Depot builder"; deploy --remote-only; } || { echo "retrying on Fly's own builder"; deploy --remote-only --depot=false; }
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN_WEB }}
@@ -81,13 +129,19 @@ jobs:
         run: scripts/perf-check.sh 1.5
       - if: failure() && steps.check.outcome == 'failure' && steps.before.outputs.image != ''
         run: |
-          echo "rolling back to ${{ steps.before.outputs.image }}"
-          flyctl deploy -a chytai-web -c web/fly.toml --image "${{ steps.before.outputs.image }}"
+          if [ "${{ steps.hot.outputs.result }}" = ok ] && [ -n "${{ steps.before.outputs.commit }}" ]; then
+            echo "rolling back to ${{ steps.before.outputs.commit }} (no restart)"
+            scripts/hot-deploy.sh "${{ steps.before.outputs.commit }}" | tee "$RUNNER_TEMP/back"
+            grep -q "hot deploy: ok" "$RUNNER_TEMP/back" || flyctl deploy -a chytai-web -c web/fly.toml --image "${{ steps.before.outputs.image }}"
+          else
+            echo "rolling back to ${{ steps.before.outputs.image }}"
+            flyctl deploy -a chytai-web -c web/fly.toml --image "${{ steps.before.outputs.image }}"
+          fi
           scripts/perf-check.sh 1.5 || true
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN_WEB }}
       - if: always()
-        run: scripts/deploy-probe.sh stop ${{ github.sha }}
+        run: scripts/deploy-probe.sh stop ${{ github.sha }} ${{ steps.hot.outputs.result == 'ok' && 'hot' || 'probe' }}
         env:
           SITE_TOKEN: ${{ secrets.FLY_API_TOKEN_WEB }}
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN_WEB }}

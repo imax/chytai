@@ -3,8 +3,9 @@
 //   - kind 'restart' / 'web' from main.js: the machine (or the web process alone) went down and came back.
 //     down_ms = from the stop signal (main.js keeps it in main-stop.json across the restart) to the first page
 //     answered; boot_ms = from main.js starting to that answer. how = 'stop' (Fly stopped it: a deploy, a secret, a
-//     move), 'crash' (no stop signal seen) or the web process's exit code.
-//   - kind 'probe' from web.yml (scripts/deploy-probe.sh): a GitHub runner asks /robots.txt every second through the
+//     move), 'crash' (no stop signal seen) or the web process's exit code. kind 'switch': main.js moved the site to a
+//     new release without a restart (release.js); boot_ms = how long the new code took to answer.
+//   - kind 'probe' (an image deploy) or 'hot' (a release, no restart) from web.yml (scripts/deploy-probe.sh): a GitHub runner asks /robots.txt every second through the
 //     deploy, as a visitor would. down_ms = the longest stretch with no answer in 5 s; fails = probes with none;
 //     fly_errors = requests Fly's proxy could not deliver in that time (fly_edge_error_count), when the token sees it.
 // /admin/speed «Деплої» shows them. Kept 180 days.
@@ -22,8 +23,8 @@ const int = (x) => (x == null || x === "" || !Number.isFinite(Number(x)) ? null 
 
 function add(r = {}) {
   if (!db) return null;
-  const kind = ["restart", "web", "probe", "hot"].includes(r.kind) ? r.kind : null;
-  if (!kind) throw new Error("kind: restart | web | probe | hot");
+  const kind = ["restart", "web", "probe", "hot", "switch"].includes(r.kind) ? r.kind : null;
+  if (!kind) throw new Error("kind: restart | web | probe | hot | switch");
   const at = r.at && !Number.isNaN(Date.parse(r.at)) ? new Date(r.at).toISOString() : new Date().toISOString();
   const row = { at, kind, sha: String(r.sha || "").slice(0, 40), how: String(r.how || "").slice(0, 40), down_ms: int(r.down_ms), boot_ms: int(r.boot_ms), fails: int(r.fails), fly_errors: int(r.fly_errors), note: String(r.note || "").slice(0, 300) };
   db.prepare("INSERT INTO deploys (at, kind, sha, how, down_ms, boot_ms, fails, fly_errors, note) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)").run(row.at, row.kind, row.sha, row.how, row.down_ms, row.boot_ms, row.fails, row.fly_errors, row.note);
@@ -51,7 +52,7 @@ function recent(days = 14) {
       k.down += r.down_ms || 0;
       k.longest = Math.max(k.longest, r.down_ms || 0);
       k.flyErrors += r.fly_errors || 0;
-    } else {
+    } else if (r.kind !== "switch") {
       k.restarts++;
       k.serverDown += r.down_ms || 0;
       // A restart no probe watched (a crash, a deploy from a laptop): its pause counts too.

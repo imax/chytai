@@ -22,9 +22,25 @@ try {
   lastStop = JSON.parse(fs.readFileSync(STOP_FILE, "utf8"));
   fs.unlinkSync(STOP_FILE);
 } catch {}
-const logDeploy = (w, row) => w.send({ type: "deploy-log", row: { sha: process.env.GIT_SHA || "", ...row } });
+const logDeploy = (w, row) => w.send({ type: "deploy-log", row: { sha: code.sha, ...row } });
 
-cluster.setupPrimary({ exec: path.join(__dirname, "server.js") });
+// The code the site runs (release.js): a release on the volume put on this image, else the image's own.
+const release = require("./release");
+let code = release.current();
+if (code.why) console.log(`main: the release is not used (${code.why}); the image's code starts`);
+try {
+  fs.mkdirSync(release.INCOMING, { recursive: true });
+  release.writeJson(path.join(release.DIR, "main.json"), { pid: process.pid, image: release.IMAGE_SHA, at: new Date().toISOString() });
+} catch (e) {
+  console.log(`main: no releases folder: ${e.message}`);
+}
+console.log(`main: the site runs ${code.image ? "the image's code" : `release ${code.sha.slice(0, 7)}`}`);
+let firstUp = false; // the first web process answered: a release that can't get this far is dropped
+const fork = (env, on = code) => {
+  cluster.setupPrimary({ exec: path.join(on.dir, "web", "server.js") });
+  // DATA_DIR spelled out: a release elsewhere on disk must find the same database (Fly sets it; a laptop may not).
+  return cluster.fork({ ...env, GIT_SHA: on.sha, IMAGE_SHA: release.IMAGE_SHA, DATA_DIR: process.env.DATA_DIR || path.join(release.IMAGE, "data") });
+};
 
 const RELOAD_QUIET = Number(process.env.CHYTAI_RELOAD_QUIET_MS) || 30 * 1000; // a burst of changes makes one reload
 const RELOAD_GAP = Number(process.env.CHYTAI_RELOAD_GAP_MS) || 10 * 60 * 1000; // and reloads come at most this often
@@ -41,7 +57,7 @@ let reloadTimer = null;
 
 function startJobs() {
   jobsReady = false;
-  jobs = cluster.fork({ CHYTAI_ROLE: "jobs" });
+  jobs = fork({ CHYTAI_ROLE: "jobs" });
   // The jobs wait when the pages need the processor: both share the machine's two CPUs and Fly's CPU allowance.
   try {
     require("os").setPriority(jobs.process.pid, 10);
@@ -64,8 +80,8 @@ function startJobs() {
   });
 }
 
-function startWeb() {
-  const w = cluster.fork({ CHYTAI_ROLE: "web" });
+function startWeb(env = {}, on = code) {
+  const w = fork({ CHYTAI_ROLE: "web", ...env }, on);
   w.on("message", (m) => {
     if (m?.type === "call") {
       const msg = { ...m, from: w.id };
@@ -89,7 +105,7 @@ function changed(what) {
 
 function reload() {
   if (stopping) return;
-  if (reloading) return void (reloadTimer = setTimeout(reload, RELOAD_QUIET));
+  if (reloading || switching) return void (reloadTimer = setTimeout(reload, RELOAD_QUIET));
   reloading = true;
   lastReload = Date.now();
   const old = web;
@@ -109,19 +125,112 @@ function reload() {
   });
 }
 
-cluster.on("exit", (w, code, signal) => {
+cluster.on("exit", (w, exitCode, signal) => {
   if (stopping) return;
   if (w === jobs) {
     // A jobs process ends itself now and then to read fresh data (jobs.js); a crash is started again too.
-    if (code || signal) console.log(`main: the jobs process ended (${signal || code}); starting it again`);
-    setTimeout(startJobs, code || signal ? 5000 : 0);
+    if (exitCode || signal) console.log(`main: the jobs process ended (${signal || exitCode}); starting it again`);
+    setTimeout(startJobs, exitCode || signal ? 5000 : 0);
+  } else if (w === web && !firstUp && !code.image) {
+    // The release did not get as far as answering after a restart: the image's code, and the release forgotten.
+    console.log(`main: release ${code.sha.slice(0, 7)} died before it answered (${signal || exitCode}); the image's code starts`);
+    release.drop(code.sha, `died at start (${signal || exitCode})`);
+    code = release.current();
+    web = startWeb();
+    web.once("listening", () => startJobs());
   } else if (w === web) {
-    console.log(`main: the web process ended (${signal || code}); starting it again`);
+    console.log(`main: the web process ended (${signal || exitCode}); starting it again`);
     const gone = Date.now();
     web = startWeb();
-    web.once("listening", () => logDeploy(web, { kind: "web", how: String(signal || code), down_ms: Date.now() - gone }));
+    web.once("listening", () => logDeploy(web, { kind: "web", how: String(signal || exitCode), down_ms: Date.now() - gone }));
   }
 });
+
+// A new release (hotdeploy.js asks with SIGHUP and request.json): a fresh web process on the new code listens first on a
+// private port, where a few pages must open with 200, then on the site's port; the old one finishes what it has and
+// goes, and the jobs process starts again on the new code. Anything wrong: the new process goes, the old stays.
+const PROBE_PORT = Number(process.env.CHYTAI_PROBE_PORT) || 8079;
+const PROBE_PAGES = ["/", "/robots.txt", `/search?q=${encodeURIComponent("кава")}`, "/calendar", "/lists", "/updates"];
+let switching = false;
+async function probe() {
+  for (const p of PROBE_PAGES) {
+    const ctl = new AbortController();
+    const t = setTimeout(() => ctl.abort(), 30000);
+    try {
+      const r = await fetch(`http://127.0.0.1:${PROBE_PORT}${p}`, { signal: ctl.signal, redirect: "manual", headers: { "user-agent": "chytai-release-check" } });
+      const body = await r.text();
+      if (r.status !== 200) return `${p}: HTTP ${r.status}`;
+      if (!p.endsWith(".txt") && !body.includes("</html>")) return `${p}: no </html>`;
+    } catch (e) {
+      return `${p}: ${e.name === "AbortError" ? "no answer in 30 s" : e.message}`;
+    } finally {
+      clearTimeout(t);
+    }
+  }
+  return "";
+}
+function hotSwitch() {
+  const req = release.readJson(path.join(release.DIR, "request.json"));
+  if (!req?.sha) return;
+  if (switching || reloading) return void setTimeout(hotSwitch, 3000);
+  const done = (r) => {
+    switching = false;
+    reloading = false;
+    try {
+      release.writeJson(path.join(release.DIR, `result-${req.sha}.json`), { ...r, sha: req.sha, at: new Date().toISOString() });
+    } catch {}
+    console.log(`main: release ${req.sha.slice(0, 7)}: ${r.ok ? `switched in ${Math.round(r.ms / 1000)} s` : r.why}`);
+  };
+  const next = release.ready(req.sha);
+  if (!next.dir) return done({ ok: false, full: !!next.full, why: next.why });
+  if (stopping) return done({ ok: false, full: true, why: "the machine is stopping" });
+  switching = true;
+  reloading = true; // no reload of the old code meanwhile
+  const t0 = Date.now();
+  const old = web;
+  const prev = code;
+  let over = false;
+  const w = startWeb({ CHYTAI_PROBE_PORT: String(PROBE_PORT) }, next);
+  const fail = (why) => {
+    if (over) return;
+    over = true;
+    clearTimeout(timer);
+    if (!w.isDead()) w.kill();
+    done({ ok: false, why });
+  };
+  const timer = setTimeout(() => fail("the new code did not answer in 3 minutes"), 180000);
+  w.once("exit", (c, sig) => fail(`the new code ended before it answered (${sig || c})`));
+  w.on("message", async (m) => {
+    if (m?.type !== "probe-ready" || over) return;
+    const bad = await probe();
+    if (bad) return fail(`a page did not open: ${bad}`);
+    w.send({ type: "go" });
+  });
+  w.on("listening", (a) => {
+    if (a?.port !== Number(process.env.PORT || 8090) || over) return;
+    over = true;
+    clearTimeout(timer);
+    w.removeAllListeners("exit");
+    code = next;
+    web = w;
+    firstUp = true;
+    try {
+      release.setCurrent(next.sha, prev.sha);
+    } catch (e) {
+      console.log(`main: could not keep current.json: ${e.message}`);
+    }
+    if (old && !old.isDead()) {
+      old.send({ type: "shutdown" });
+      setTimeout(() => !old.isDead() && old.kill(), 30 * 1000).unref();
+    }
+    // The jobs on the new code too (what they were doing stops, as at any deploy).
+    if (jobs && !jobs.isDead()) jobs.process.kill("SIGTERM");
+    const ms = Date.now() - t0;
+    logDeploy(w, { kind: "switch", how: "hot", down_ms: 0, boot_ms: ms, note: `з ${prev.sha.slice(0, 7)}` });
+    done({ ok: true, ms, prev: prev.sha });
+  });
+}
+process.on("SIGHUP", hotSwitch);
 
 // `kill -USR2 <pid of main.js>` (fly ssh console) reloads the site by hand.
 process.on("SIGUSR2", () => changed("by hand"));
@@ -130,7 +239,7 @@ for (const sig of ["SIGINT", "SIGTERM"])
   process.on(sig, () => {
     if (!stopping)
       try {
-        fs.writeFileSync(STOP_FILE, JSON.stringify({ at: new Date().toISOString(), sig, sha: process.env.GIT_SHA || "" }));
+        fs.writeFileSync(STOP_FILE, JSON.stringify({ at: new Date().toISOString(), sig, sha: code.sha }));
       } catch {}
     stopping = true;
     for (const w of Object.values(cluster.workers)) w.process.kill(sig);
@@ -143,6 +252,7 @@ for (const sig of ["SIGINT", "SIGTERM"])
 // The web process opens the database first (db.js adds missing columns; two at once would both try), then the jobs.
 web = startWeb();
 web.once("listening", () => {
+  firstUp = true;
   const now = Date.now();
   const stop = lastStop && now - Date.parse(lastStop.at) < 30 * 60000 ? lastStop : null;
   logDeploy(web, { kind: "restart", how: stop ? "stop" : "crash", down_ms: stop ? now - Date.parse(stop.at) : null, boot_ms: now - STARTED, note: stop ? `${stop.sig}, ${(stop.sha || "").slice(0, 7)}` : "" });

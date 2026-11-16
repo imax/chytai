@@ -113,7 +113,23 @@ requests (`fly_edge_error_count`) to `/agent/deploys`; main.js keeps its stop ti
 stop → first page after a restart. Table `deploys` (180 days), /admin/speed «Деплої», `GET /agent/deploys?days=`.
 Before it, Fly's Prometheus keeps ~2 weeks of `fly_edge_error_count` (zero outside deploys).
 
-The site is one machine with a volume, so every deploy takes it down while Fly swaps the image (~12 s). «Сайт лежить»
+Deploys without a restart (Max, 2026-11-16, a week's trial; `web/release.js`): web.yml first uploads the site's files
+of the commit to the volume (`scripts/hot-deploy.sh`: `flyctl ssh sftp put`, then `node /app/web/hotdeploy.js <sha>`
+over ssh). main.js starts a fresh web process on them, opens /, /robots.txt, a search, /calendar, /lists, /updates on a
+private port, and only then moves the site to it; the old process finishes, the jobs restart. Rules:
+- An image deploy (with the pause) still happens when package*.json, web/main.js, web/release.js, web/hotdeploy.js,
+  web/Dockerfile or web/fly.toml changed, or ssh fails (result `full`). Pages that don't open: `failed`, the old code
+  stays, the run fails: fix it like any broken push.
+- A machine restart starts on the release (`releases/current.json`, tied to its image); a release that dies at start
+  is dropped (`dropped.json`) and the image's code runs. `/agent/health` → `commit`, `imageCommit`, `release`.
+- Rollback = the same switch to the commit before (web.yml's check, rollout-watch's `hot:<sha>`); by hand:
+  `flyctl ssh console -a chytai-web -C "node /app/web/hotdeploy.js <sha>"` (a release on the volume or the image's).
+- Schema changes must stay additive: old and new code share the database for a few seconds.
+- Locally: `GIT_SHA=<any> node web/main.js`, put a `git archive` tgz in `data/web/releases/incoming/<sha>.tgz`, run
+  `node web/hotdeploy.js <sha>`. Off: repo variable `HOT_DEPLOY=off`.
+
+An image deploy takes the one-machine site down while Fly swaps the image (~12 s, then ~10 s to read the catalog);
+the image is built with GitHub's layer cache so Fly pulls only the changed code layer. «Сайт лежить»
 right after a push: first the deploy job's log («Waiting for machine … to reach a good state») and the machine's
 events (GraphQL `machines{nodes{events{kind timestamp}}}`); on 2026-11-16 Fly took 2 min 40 s there, no code at fault.
 

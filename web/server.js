@@ -216,6 +216,9 @@ app.get("/agent/health", agentOk, async (req, res) => {
     now: new Date().toISOString(),
     commit: process.env.GIT_SHA || "",
     image: process.env.FLY_IMAGE_REF || "",
+    // The image's own commit, and the release it runs instead when deploys come without a restart (release.js).
+    imageCommit: process.env.IMAGE_SHA || process.env.GIT_SHA || "",
+    release: require("./release").state(),
     machine: process.env.FLY_MACHINE_ID || "",
     started: STARTED,
     memoryMb: Math.round(process.memoryUsage().rss / 1048576),
@@ -4942,13 +4945,21 @@ app.post("/api/subscribe/:id", signed, (req, res) => {
 app.use(errors.handler("site", (status, req) => pages.messagePage({ title: status >= 500 ? "Щось зламалося" : "Помилка в запиті", text: status >= 500 ? "Ми вже знаємо і полагодимо. Спробуйте ще раз трохи згодом." : "", user: req.user })));
 
 if (bg.serving) {
-  const server = app.listen(PORT, () => {
-    console.log(`Chytai web on http://localhost:${PORT}  (library: ${store.file})${bg.ROLE === "web" ? ", the jobs in their own process" : ""}`);
-    telegram.setWebhook(SITE);
-    watchdog();
-  });
+  let server = null;
+  const serve = () =>
+    (server = app.listen(PORT, () => {
+      console.log(`Chytai web on http://localhost:${PORT}  (library: ${store.file})${bg.ROLE === "web" ? ", the jobs in their own process" : ""}`);
+      telegram.setWebhook(SITE);
+      watchdog();
+    }));
+  // A new release (main.js, release.js): first only on a private port, where main.js opens a few pages; then «go».
+  const probePort = Number(process.env.CHYTAI_PROBE_PORT) || 0;
+  if (probePort && process.send) {
+    const probe = app.listen(probePort, "127.0.0.1", () => process.send({ type: "probe-ready" }));
+    process.on("message", (m) => m?.type === "go" && !server && (serve(), probe.close()));
+  } else serve();
   // main.js has a fresh web process answering: finish what is in flight and go.
-  process.on("message", (m) => m?.type === "shutdown" && server.close(() => process.exit(0)));
+  process.on("message", (m) => m?.type === "shutdown" && (server ? server.close(() => process.exit(0)) : process.exit(0)));
   // main.js: the site is back after a restart, and how long it was gone (deploys.js).
   process.on("message", (m) => {
     if (m?.type !== "deploy-log") return;
