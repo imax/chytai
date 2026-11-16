@@ -22,7 +22,20 @@ try {
   lastStop = JSON.parse(fs.readFileSync(STOP_FILE, "utf8"));
   fs.unlinkSync(STOP_FILE);
 } catch {}
-const logDeploy = (w, row) => w.send({ type: "deploy-log", row: { sha: code.sha, ...row } });
+// A message to a worker that is going (a jobs process stopped for a new release, an old web process) must not take
+// main.js down: on 2026-11-16 a send to a dying jobs process threw ERR_IPC_CHANNEL_CLOSED and the machine restarted.
+const send = (w, m) => {
+  try {
+    if (w && !w.isDead() && w.isConnected()) {
+      w.send(m, (e) => e && console.log(`main: a message to a worker was lost (${e.code || e.message})`));
+      return true;
+    }
+  } catch (e) {
+    console.log(`main: a message to a worker was lost (${e.code || e.message})`);
+  }
+  return false;
+};
+const logDeploy = (w, row) => send(w, { type: "deploy-log", row: { sha: code.sha, ...row } });
 
 // The code the site runs (release.js): a release on the volume put on this image, else the image's own.
 const release = require("./release");
@@ -67,13 +80,13 @@ function startJobs() {
   jobs.on("message", (m) => {
     if (m?.type === "ready") {
       jobsReady = true;
-      for (const q of queue) jobs.send(q);
+      for (const q of queue) send(jobs, q);
       queue = [];
     } else if (m?.type === "status") {
       status = m;
-      for (const w of webs()) w.send(m);
+      for (const w of webs()) send(w, m);
     } else if (m?.type === "result") {
-      cluster.workers[m.to]?.send(m);
+      send(cluster.workers[m.to], m);
     } else if (m?.type === "changed") {
       changed(m.what);
     }
@@ -85,11 +98,10 @@ function startWeb(env = {}, on = code) {
   w.on("message", (m) => {
     if (m?.type === "call") {
       const msg = { ...m, from: w.id };
-      if (jobs && jobsReady) jobs.send(msg);
-      else queue.push(msg);
+      if (!(jobsReady && send(jobs, msg))) queue.push(msg);
     }
   });
-  w.once("listening", () => status && w.send(status));
+  w.once("listening", () => status && send(w, status));
   return w;
 }
 
@@ -119,15 +131,19 @@ function reload() {
     reloading = false;
     console.log(`main: the new web process answers after ${Math.round((Date.now() - t0) / 1000)} s`);
     if (old && !old.isDead()) {
-      old.send({ type: "shutdown" });
+      send(old, { type: "shutdown" });
       setTimeout(() => !old.isDead() && old.kill(), 30 * 1000).unref();
     }
   });
 }
 
+// A worker's IPC error is logged, never thrown at main.js.
+cluster.on("fork", (w) => w.on("error", (e) => console.log(`main: worker ${w.id}: ${e.code || e.message}`)));
+
 cluster.on("exit", (w, exitCode, signal) => {
   if (stopping) return;
   if (w === jobs) {
+    jobsReady = false;
     // A jobs process ends itself now and then to read fresh data (jobs.js); a crash is started again too.
     if (exitCode || signal) console.log(`main: the jobs process ended (${signal || exitCode}); starting it again`);
     setTimeout(startJobs, exitCode || signal ? 5000 : 0);
@@ -204,7 +220,7 @@ function hotSwitch() {
     if (m?.type !== "probe-ready" || over) return;
     const bad = await probe();
     if (bad) return fail(`a page did not open: ${bad}`);
-    w.send({ type: "go" });
+    send(w, { type: "go" });
   });
   w.on("listening", (a) => {
     if (a?.port !== Number(process.env.PORT || 8090) || over) return;
@@ -220,11 +236,14 @@ function hotSwitch() {
       console.log(`main: could not keep current.json: ${e.message}`);
     }
     if (old && !old.isDead()) {
-      old.send({ type: "shutdown" });
+      send(old, { type: "shutdown" });
       setTimeout(() => !old.isDead() && old.kill(), 30 * 1000).unref();
     }
     // The jobs on the new code too (what they were doing stops, as at any deploy).
-    if (jobs && !jobs.isDead()) jobs.process.kill("SIGTERM");
+    if (jobs && !jobs.isDead()) {
+      jobsReady = false; // calls wait in the queue for the new jobs process
+      jobs.process.kill("SIGTERM");
+    }
     const ms = Date.now() - t0;
     logDeploy(w, { kind: "switch", how: "hot", down_ms: 0, boot_ms: ms, note: `з ${prev.sha.slice(0, 7)}` });
     done({ ok: true, ms, prev: prev.sha });
