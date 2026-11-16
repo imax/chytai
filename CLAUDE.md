@@ -107,6 +107,12 @@ change put `[rollback-on-errors]` in the commit message: then the watch sends th
 Beyond that, when the Actions run is green, check `/agent/health?since=<deploy time>` yourself, and for a risky change
 schedule a wake-up in about an hour and look again. Outages are fixed or reverted without asking.
 
+The deploy log (Max, 2026-11-16, to see whether the pause shrinks): web.yml's `scripts/deploy-probe.sh` asks
+/robots.txt every second through each deploy and posts the longest pause, probes with no answer and Fly's undelivered
+requests (`fly_edge_error_count`) to `/agent/deploys`; main.js keeps its stop time in `main-stop.json` and logs
+stop → first page after a restart. Table `deploys` (180 days), /admin/speed «Деплої», `GET /agent/deploys?days=`.
+Before it, Fly's Prometheus keeps ~2 weeks of `fly_edge_error_count` (zero outside deploys).
+
 The site is one machine with a volume, so every deploy takes it down while Fly swaps the image (~12 s). «Сайт лежить»
 right after a push: first the deploy job's log («Waiting for machine … to reach a good state») and the machine's
 events (GraphQL `machines{nodes{events{kind timestamp}}}`); on 2026-11-16 Fly took 2 min 40 s there, no code at fault.

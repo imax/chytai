@@ -69,6 +69,8 @@ telegram.init(store.db);
 const errors = require("./errors"); // pages that failed and crashes: kept for /admin and the morning report (errors.js)
 const storage = require("./storage"); // disk and memory: a row on /admin, Telegram near a limit (storage.js)
 errors.init(store.db);
+const deploys = require("./deploys"); // how long the site was gone around deploys (main.js, web.yml's probe)
+deploys.init(store.db);
 const aiusage = require("./aiusage"); // every Claude call counted by day, feature and model; Telegram on overspend (aiusage.js)
 aiusage.init(store.db);
 errors.watchProcess(bg.ROLE === "jobs" ? "jobs" : "site");
@@ -267,6 +269,15 @@ app.post("/agent/backup", agentOk, async (req, res) => {
     res.status(400).json({ error: e.message });
   }
 });
+// The deploy probe (web.yml, scripts/deploy-probe.sh): how long a visitor got no answer during one deploy (deploys.js).
+app.post("/agent/deploys", agentOk, (req, res) => {
+  try {
+    res.json(deploys.add({ ...(req.body || {}), kind: req.body?.kind === "hot" ? "hot" : "probe" }));
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
+});
+app.get("/agent/deploys", agentOk, (req, res) => res.json(deploys.recent(Math.min(Number(req.query.days) || 14, 180))));
 // Flags (flags.js): GET lists them; POST { name, who: off|owner|test, note } switches one. «all» is Max's, on /admin/jobs.
 app.get("/agent/flags", agentOk, (req, res) => res.json(flags.list()));
 app.post("/agent/flags", agentOk, (req, res) => {
@@ -4364,7 +4375,7 @@ app.get("/admin/debug/search", owner, (req, res) => {
     raw: req.query.q ? store.db.prepare("SELECT id FROM search WHERE search MATCH ? LIMIT 10").all(`"${String(req.query.q).toLowerCase()}"*`) : null,
   });
 });
-app.get("/admin/speed", owner, (req, res) => res.send(speedPage({ user: req.user, days: speed.days(), bots: speed.bots(), notFound: admin.events("404"), jsErrors: admin.events("js"), errors: errors.month(), layout: pages.layout })));
+app.get("/admin/speed", owner, (req, res) => res.send(speedPage({ user: req.user, days: speed.days(), bots: speed.bots(), notFound: admin.events("404"), jsErrors: admin.events("js"), errors: errors.month(), deploys: deploys.recent(14), layout: pages.layout })));
 app.get("/admin/traffic", owner, (req, res) => res.send(adminPage({ user: req.user, stats: admin.stats(), taps: admin.taps(), paths: admin.paths(), gsc: gsc.data(), gscOn: gsc.configured(), layout: pages.layout, page: "traffic" })));
 app.get("/admin/stats", owner, (req, res) => res.redirect(301, "/admin/traffic"));
 app.get("/admin/overviews", owner, (req, res) => res.send(overviewsPage({ user: req.user, list: advice.overviewList().map((r) => ({ ...r, complaints: r.down ? advice.complaintsOf(r.book.id) : [] })), stats: advice.overviewStats(), who: (id) => (id && id !== "auto" ? pub(auth.reader(id)) : null), layout: pages.layout })));
@@ -4938,6 +4949,15 @@ if (bg.serving) {
   });
   // main.js has a fresh web process answering: finish what is in flight and go.
   process.on("message", (m) => m?.type === "shutdown" && server.close(() => process.exit(0)));
+  // main.js: the site is back after a restart, and how long it was gone (deploys.js).
+  process.on("message", (m) => {
+    if (m?.type !== "deploy-log") return;
+    try {
+      deploys.add(m.row);
+    } catch (e) {
+      console.log(`deploy log: ${e.message}`);
+    }
+  });
 }
 // The jobs process ends itself to read fresh data only when the overview queue is empty too (or capped for today).
 bg.startJobs({ idle: () => !advice.queue.size || advice.capped, db: store.db });

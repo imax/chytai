@@ -1349,7 +1349,7 @@ function overviewsPage({ user, list, stats: o, who, layout }) {
 }
 
 // /admin/speed (speed.js): how fast the site is, day by day.
-function speedPage({ user, days, bots = [], notFound = [], jsErrors = [], errors = [], layout }) {
+function speedPage({ user, days, bots = [], notFound = [], jsErrors = [], errors = [], deploys = { rows: [], days: [] }, layout }) {
   const { EDGES } = require("./speed");
   const s = (ms) => (ms == null ? "" : ms === Infinity ? `> ${EDGES[EDGES.length - 1] / 1000} с` : `${String(ms / 1000).replace(".", ",")} с`);
   const pct = (x) => (x == null ? "" : `${String(Math.round(x * 1000) / 10).replace(".", ",")}%`);
@@ -1366,6 +1366,8 @@ ${days.size ? `<div class="tbl"><table>
 <tbody>${rows}</tbody></table></div>
 <p class="muted small">Медіана й 95% — верхня межа кошика (до 0,1 / 0,2 / 0,5 / 1 / 2 / 5 / 10 с): «95% за 0,2 с» значить, що 95 сторінок зі 100 сервер віддав швидше за 0,2 с.</p>` : `<p class="muted">Рахуємо з сьогодні; перші числа з'являться за хвилину після першої сторінки.</p>`}
 
+${deploysBlock(deploys)}
+
 <h2>Роботи за 7 днів</h2>
 ${bots.length ? `<p class="muted small">Усі запити роботів (сторінки, обкладинки, файли), за назвою з їхнього User-Agent. «Час сервера» — скільки секунд сервер на них витратив; «503» — скільки разів ми попросили прийти пізніше, бо сайт був зайнятий.</p>
 <div class="tbl"><table>
@@ -1375,6 +1377,28 @@ ${errorsBlock(errors)}
 ${problemsBlock(notFound, jsErrors)}
 </section>`;
   return layout({ title: "Швидкість · Адмінка", user, path: "/admin", body });
+}
+
+// «Деплої» on /admin/speed (Max, 2026-11-16: «щоб розуміти, чи дійсно зменшився даунтайм»): how long the site gave no
+// answer around each deploy, as a visitor saw it (web.yml's probe) and as the server saw it (main.js). deploys.js.
+function deploysBlock({ rows, days }) {
+  const sec = (ms) => (ms == null ? `<span class="na">·</span>` : `${fmtN(Math.round(ms / 100) / 10, 1)} с`);
+  const short = (d) => `${d.slice(8, 10)}.${d.slice(5, 7)}`;
+  const time = (iso) => new Date(iso).toLocaleString("uk-UA", { timeZone: "Europe/Kyiv", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+  const KIND = { probe: "деплой", hot: "деплой без перезапуску", restart: "перезапуск машини", web: "перезапуск сайту" };
+  const head = `<h2 id="deploys">Деплої</h2>
+<p class="muted small">Скільки сайт не відповідав під час деплоїв: поки йде деплой, робот щосекунди відкриває сайт. «Перезапусків» — скільки разів машина вставала заново. «Fly не доставив» — запити, які не дійшли до сайту.</p>`;
+  if (!rows.length) return `${head}\n<p class="muted">Рахуємо з 16.11.2026; перші числа будуть після наступного деплою.</p>`;
+  const dayRows = days.map(([d, k]) => `<tr><th>${short(d)}</th><td>${n(k.deploys)}${k.hot ? ` <span class="muted small">(${k.hot} без перезапуску)</span>` : ""}</td><td>${sec(k.down)}</td><td>${sec(k.longest)}</td><td>${n(k.restarts)}</td><td>${n(k.flyErrors)}</td></tr>`).join("");
+  const last = rows.map((r) => `<tr><th>${time(r.at)}</th><td>${KIND[r.kind] || esc(r.kind)}</td><td class="muted">${esc((r.sha || "").slice(0, 7))}</td><td>${sec(r.down_ms)}</td><td>${r.boot_ms != null ? sec(r.boot_ms) : r.fails != null ? `${n(r.fails)} без відповіді` : ""}</td><td>${r.fly_errors != null ? n(r.fly_errors) : ""}</td></tr>`).join("");
+  return `${head}
+<div class="tbl"><table>
+<thead><tr><th>День</th><th>Деплоїв</th><th>Сайт не відповідав</th><th>Найдовше</th><th>Перезапусків</th><th>Fly не доставив</th></tr></thead>
+<tbody>${dayRows}</tbody></table></div>
+<details><summary>Останні ${rows.length}</summary>
+<div class="tbl"><table>
+<thead><tr><th>Коли</th><th>Що</th><th>Коміт</th><th>Пауза</th><th>Старт / проби</th><th>Fly не доставив</th></tr></thead>
+<tbody>${last}</tbody></table></div></details>`;
 }
 
 // /admin/activity (Max, 2026-10-30; made readable 2026-11-04: «прикольна сторінка, але важко читати»): what the

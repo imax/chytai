@@ -11,6 +11,18 @@
 // process that dies is started again. `node web/server.js` alone still runs everything in one process.
 const cluster = require("cluster");
 const path = require("path");
+const fs = require("fs");
+
+// The deploy log (deploys.js, Max 2026-11-16): the moment Fly stopped us is kept in this file across the restart,
+// and the next start tells the web process how long the site was gone (from the stop to the first page answered).
+const STARTED = Date.now();
+const STOP_FILE = path.join(process.env.DATA_DIR || path.join(__dirname, "..", "data"), "web", "main-stop.json");
+let lastStop = null;
+try {
+  lastStop = JSON.parse(fs.readFileSync(STOP_FILE, "utf8"));
+  fs.unlinkSync(STOP_FILE);
+} catch {}
+const logDeploy = (w, row) => w.send({ type: "deploy-log", row: { sha: process.env.GIT_SHA || "", ...row } });
 
 cluster.setupPrimary({ exec: path.join(__dirname, "server.js") });
 
@@ -105,7 +117,9 @@ cluster.on("exit", (w, code, signal) => {
     setTimeout(startJobs, code || signal ? 5000 : 0);
   } else if (w === web) {
     console.log(`main: the web process ended (${signal || code}); starting it again`);
+    const gone = Date.now();
     web = startWeb();
+    web.once("listening", () => logDeploy(web, { kind: "web", how: String(signal || code), down_ms: Date.now() - gone }));
   }
 });
 
@@ -114,6 +128,10 @@ process.on("SIGUSR2", () => changed("by hand"));
 
 for (const sig of ["SIGINT", "SIGTERM"])
   process.on(sig, () => {
+    if (!stopping)
+      try {
+        fs.writeFileSync(STOP_FILE, JSON.stringify({ at: new Date().toISOString(), sig, sha: process.env.GIT_SHA || "" }));
+      } catch {}
     stopping = true;
     for (const w of Object.values(cluster.workers)) w.process.kill(sig);
     setTimeout(() => process.exit(0), 8000).unref();
@@ -124,4 +142,9 @@ for (const sig of ["SIGINT", "SIGTERM"])
 
 // The web process opens the database first (db.js adds missing columns; two at once would both try), then the jobs.
 web = startWeb();
-web.once("listening", startJobs);
+web.once("listening", () => {
+  const now = Date.now();
+  const stop = lastStop && now - Date.parse(lastStop.at) < 30 * 60000 ? lastStop : null;
+  logDeploy(web, { kind: "restart", how: stop ? "stop" : "crash", down_ms: stop ? now - Date.parse(stop.at) : null, boot_ms: now - STARTED, note: stop ? `${stop.sig}, ${(stop.sha || "").slice(0, 7)}` : "" });
+  startJobs();
+});

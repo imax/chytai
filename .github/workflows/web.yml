@@ -7,7 +7,7 @@ name: Deploy web
 on:
   push:
     branches: [main]
-    paths: ["web/**", "server/agent.js", "server/aimeter.js", "package.json", "package-lock.json", ".github/workflows/web.yml", "scripts/perf-check.sh", "scripts/smoke-test.sh"]
+    paths: ["web/**", "server/agent.js", "server/aimeter.js", "package.json", "package-lock.json", ".github/workflows/web.yml", "scripts/perf-check.sh", "scripts/smoke-test.sh", "scripts/deploy-probe.sh"]
   workflow_dispatch:
 
 jobs:
@@ -60,6 +60,9 @@ jobs:
             while read -r id; do flyctl volumes extend "$id" -s 3 -a chytai-web --yes || echo "could not extend $id"; done
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN_WEB }}
+      # The deploy log (Max, 2026-11-16): a probe asks the site every second until the check below is done, and
+      # tells /agent/deploys how long a visitor got no answer (scripts/deploy-probe.sh, /admin/speed «Деплої»).
+      - run: scripts/deploy-probe.sh start
       # The image is built here on the GitHub runner and pushed to Fly (Max, 2026-10-29: «треба дивитися чому
       # вони так тормозять»): Fly's Depot builder kept deploys «Waiting for depot builder» 2-10 minutes that
       # day, for a build that takes about one. Fly's builders stay as the fallback. Fly's API sometimes drops
@@ -82,6 +85,11 @@ jobs:
           flyctl deploy -a chytai-web -c web/fly.toml --image "${{ steps.before.outputs.image }}"
           scripts/perf-check.sh 1.5 || true
         env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN_WEB }}
+      - if: always()
+        run: scripts/deploy-probe.sh stop ${{ github.sha }}
+        env:
+          SITE_TOKEN: ${{ secrets.FLY_API_TOKEN_WEB }}
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN_WEB }}
       # The domain (Max, 2026-10-19): chytai.org.ua serves the site; www and chytai-web.fly.dev redirect to it.
       - run: |
