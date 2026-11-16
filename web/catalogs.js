@@ -1172,7 +1172,7 @@ const SOURCES = [
       status: "є",
       genres: f.tags || [], // the filter chips on its shelf page
       blurb: "",
-      language: /[а-яіїєґ]/i.test(f.title) ? "українська" : "англійська",
+      language: (f.tags || []).includes("Українською") || /[а-яіїєґ]/i.test(f.title) ? "українська" : "англійська", // «Intermezzo» is Ukrainian
       format: "e-book",
     }),
   },
