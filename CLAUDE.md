@@ -385,7 +385,8 @@ A flag only when Max asks for one, or when the change could break what readers u
   page embeds Google Drive files: `https://drive.google.com/uc?export=download&id=<id>`, the EPUB is the first id that
   is a zip. Same `wsbook.py` with `files` (its OPS/chapter-N.xhtml in order); a play in one file takes `split`. Leave out
   their notes and «Пояснення слів» chapters and their own covers («Відкрита книга» design); `source` in shelf.json =
-  the work's page. Their «Сватання на Гончарівці» keeps Kvitka's Russian stage directions: not on the shelf (Max to say).
+  the work's page. «Сватання на Гончарівці» has Kvitka's Russian stage directions: Max chose to translate them (his lines
+  stay), `tr` = `scripts/wsbook-tr/<name>.json` {source: translation}, applied per paragraph, a note on the title page.
 
 ## Search ranking (`store.search`, `searchAll` in web/server.js)
 

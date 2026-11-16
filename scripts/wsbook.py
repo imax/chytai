@@ -6,7 +6,8 @@ only the author's text, without the edition's title pages, notes, licence boxes,
    --data-urlencode "page=<edition page>" --data-urlencode images=false -o src.epub
 3. python3 scripts/wsbook.py config.json, a list of {src, out, name, title, author, page, skip: [file index],
    titles: {index: title}, cut: {index: {start, end}}, noHeadings; for another EPUB `files`: its chapter files in
-   order, `split`: a regex of headings to cut one file into chapters, `rename`: {heading: title}, `fix`: {typo: text}}; it prints each chapter's start and end to check.
+   order, `split`: a regex of headings to cut one file into chapters, `rename`: {heading: title}, `fix`: {typo: text},
+   `tr`: a JSON file {source text: translation} matched per paragraph, longest first}; it prints each chapter's start and end to check.
 4. free/<name>.epub, a line in free/shelf.json and web/seed/free.json, a cover in free/covers and
    web/public/free-covers (a public-domain painting with the title in a dark band, 1200×1800)."""
 import json, re, sys, uuid, zipfile, html, warnings
@@ -127,6 +128,20 @@ def build(cfg):
     chapters = [(cfg.get("rename", {}).get(t, t), b) for t, b in chapters]
     for old, new in cfg.get("fix", {}).items():  # the source's own typos («ДІЙОВЕ ЛЮДИ»)
         chapters = [(t.replace(old, new), b.replace(old, new)) for t, b in chapters]
+    if cfg.get("tr"):  # stage directions translated, {source text: text}, matched per paragraph (Max 2026-11-16:
+        tr = json.load(open(cfg["tr"]))  # Kvitka's Russian stage directions in Ukrainian, his lines as they are)
+        keys = sorted(tr, key=len, reverse=True)
+        used = set()
+        def one(m):
+            inner = re.sub(r"\s+", " ", m.group(3)).strip()
+            for k in keys:
+                if k in inner:
+                    inner = inner.replace(k, tr[k]); used.add(k)
+            return "<%s%s>%s</%s>" % (m.group(1), m.group(2) or "", inner, m.group(1))
+        chapters = [(tr.get(t, t), re.sub(r"<(p|h\d)( [^>]*)?>(.*?)</\1>", one, b, flags=re.S)) for t, b in chapters]
+        for k in keys:
+            if k not in used:
+                print("   tr: not found:", k[:80])
     name = cfg["name"]
     uid = uuid.uuid5(uuid.NAMESPACE_URL, "https://chytai.org.ua/free/" + name)
     with zipfile.ZipFile(cfg["out"], "w") as o:
