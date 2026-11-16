@@ -1228,9 +1228,12 @@ app.use((req, res, next) => {
 // The reader's address is app.chytai.org.ua (2026-10-22; read.chytai.org.ua for its first hour). Browsers
 // on chytai.fly.dev and read. go there; the iPhone app (ChytaiApp in its user agent) stays on
 // chytai.fly.dev until it is rebuilt, as does /sw.js, so a service worker installed there can still update itself.
+// Android's WebView («; wv)») stays too: on a cold start its first request can go out before ChytaiApp is in the
+// user agent, and sent to app.chytai.org.ua, where it has no sign-in cookie, it showed the sign-in page until a
+// restart (Max, 2026-11-05 and 2026-11-16).
 const READER_DOMAIN = process.env.READER_DOMAIN ?? "app.chytai.org.ua";
 app.use((req, res, next) => {
-  const old = req.hostname === "read.chytai.org.ua" || (req.hostname.endsWith(".fly.dev") && !/ChytaiApp/.test(req.get("user-agent") || ""));
+  const old = req.hostname === "read.chytai.org.ua" || (req.hostname.endsWith(".fly.dev") && !/ChytaiApp|; wv\)/.test(req.get("user-agent") || ""));
   if (READER_DOMAIN && req.method === "GET" && old && !req.path.startsWith("/api/") && req.path !== "/sw.js") {
     return res.redirect(302, `https://${READER_DOMAIN}${req.originalUrl}`);
   }
