@@ -480,5 +480,8 @@ A flag only when Max asks for one, or when the change could break what readers u
   goes into that list.
 - Reader: a reader's own cover (`PUT /api/cover`, the page cuts it to 900 px JPEG; `DELETE` = the file's again) is set in
   «Назва, автор, обкладинка». No letter to Max for it (Max, 2026-11-15).
+- Reader «Додати книжку» → «Де ще шукаємо»: a store whose purchases download as files gets a row named by the store
+  with «як додати» steps (`shopRow` in src/renderer/home.js: Yakaboo, Book.ua). No store has an API; we never sign
+  in to a reader's store account.
 - Reader: the app's own UI can't be selected (`body` has `user-select: none`, end of `src/renderer/style.css`). Text a
   reader may copy (a new note, answer or field) goes into the list of selectable classes there.

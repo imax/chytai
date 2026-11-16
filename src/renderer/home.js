@@ -224,7 +224,7 @@
   let paperPath = null; // the paper book on «paper» (paper.js)
   let addQuery = "";
   let freeAll = false;
-  let yakOpen = false;
+  let shopOpen = null; // "yakaboo" | "bookua": the store whose «як додати» is open
   const found = new Map(); // query -> { books } | { error } | "…" while asked
   const more6 = new Set(); // groups opened with «Ще N →»
   let panelHtml = "";
@@ -511,11 +511,16 @@
       ${freeHtml}
       <section class="r-where">${head("Де ще шукаємо", "", true)}
         <a class="r-where-row" href="https://chytai.org.ua" target="_blank" rel="noopener"><span>Каталог Chytai</span><small>де купити ↗</small></a>
-        <div class="r-where-row soon"><span>Project Gutenberg</span><small>незабаром</small></div>
-        <button class="r-where-row r-yak-row" data-act="yakaboo" aria-expanded="${yakOpen}"><span>Куплені на Yakaboo</span><small>${yakOpen ? "згорнути" : "як додати"}</small></button>
-        ${yakOpen ? yakabooHtml() : ""}
+        ${shopRow("yakaboo", "Yakaboo", yakabooHtml)}
+        ${shopRow("bookua", "Book.ua", bookuaHtml)}
         <div class="r-where-row soon"><span>Інші книгарні</span><small>незабаром</small></div></section>
     </div>`;
+  }
+
+  // A store's row in «Де ще шукаємо»: its name, and «як додати» opens the steps under it.
+  function shopRow(key, name, steps) {
+    const open = shopOpen === key;
+    return `<button class="r-where-row r-yak-row" data-act="${key}" aria-expanded="${open}"><span>${name}</span><small>${open ? "згорнути" : "як додати"}</small></button>${open ? steps() : ""}`;
   }
 
   // Books bought on Yakaboo (Max 2026-11-08): no API, but «Мої книги» there gives each e-book as a file.
@@ -526,6 +531,15 @@
       <li>Наведіть на книжку і натисніть <b>epub</b>.<span class="r-yak-card" aria-hidden="true"><span class="r-yak-t">Тигролови</span><span class="r-yak-a">Іван Багряний</span><span class="r-yak-f"><b>epub</b><i>fb2</i><i>mobi</i><i>pdf</i></span></span></li>
       <li><button class="r-link" data-act="add">Додайте файл сюди</button>. Можна кілька одразу.</li></ol>
       <p class="r-drop-note">Книжки «лише в застосунку Yakaboo» скачати не можна.</p>`;
+  }
+
+  // Books bought on Book.ua (Max 2026-11-16): «Моя електронна бібліотека» gives each one as a file without DRM
+  // («Файл» → EPUB → «Завантажити»); a few illustrated ones are PDF only, the reader takes those too.
+  function bookuaHtml() {
+    return `<ol class="r-yak">
+      <li>Відкрийте <a href="https://book.ua/cabinet/library" target="_blank" rel="noopener">«Моя електронна бібліотека» на Book.ua ↗</a></li>
+      <li>Під книжкою натисніть <b>Файл</b>, виберіть <b>EPUB</b> і «Завантажити».<span class="r-yak-card" aria-hidden="true"><span class="r-yak-t">Тигролови</span><span class="r-yak-a">Іван Багряний</span><span class="r-yak-f"><b>Файл</b><i>Kindle</i></span></span></li>
+      <li><button class="r-link" data-act="add">Додайте файл сюди</button>. Можна кілька одразу.</li></ol>`;
   }
 
   function addFoundHtml(q) {
@@ -1139,7 +1153,7 @@
     if (el.dataset.act === "settings") return panel(false), openSettings();
     if (el.dataset.act === "cover-photo") return window.Paper.coverPhoto();
     if (el.dataset.act === "free-all") return (freeAll = true), renderHome();
-    if (el.dataset.act === "yakaboo") return (yakOpen = !yakOpen), renderHome();
+    if (el.dataset.act === "yakaboo" || el.dataset.act === "bookua") return (shopOpen = shopOpen === el.dataset.act ? null : el.dataset.act), renderHome();
     if (el.dataset.act === "seen") markSeen();
   });
 
