@@ -115,9 +115,13 @@ const EVENT_WORDS = /презентац|зустріч|автограф|відб
 // A post that cancels or moves a meeting (Max 2026-11-15: «якщо напишуть що скасовується івент треба їх ловити») may
 // name no date («завтрашня зустріч не відбудеться»): it goes to Haiku all the same.
 const CANCEL_WORDS = /скасов|відмін|не відбудеться|не відбудуться|перенос|перенесен|переносимо/i;
-function maybeEvent(text, today = kyivDay()) {
+// A day named without a date: «цієї суботи», «у четвер», «завтра» (Max 2026-11-16: «вже цієї суботи зустрічаємо Артура
+// Дроня!» was skipped). Haiku gets the post's date and works the day out; only for a post of the last week.
+const SOON_WORDS = /(?:^|[^\p{L}])(?:сьогодні|завтра|післязавтра|(?:цього|цієї|цю|у|в|наступного|наступної|наступну|найближчого|найближчої|найближчу)\s+(?:понеділ|вівтор|серед|четвер|п['’ʼ]?ятниц|субот|неділ))/iu;
+function maybeEvent(text, today = kyivDay(), posted = "") {
   if (!EVENT_WORDS.test(text || "")) return false;
   if (CANCEL_WORDS.test(text)) return true;
+  if (SOON_WORDS.test(text) && (!posted || posted.slice(0, 10) >= addDays(today, -7))) return true;
   const w = parseWhen(text, today);
   return !!w && (w.ends || w.starts) >= today && w.starts <= addDays(today, 183);
 }
@@ -563,8 +567,16 @@ function create(db, { calendar, apiKey = process.env.ANTHROPIC_API_KEY || "", cl
     const used = dry ? 0 : +meta(dayKey) || 0;
     const posts = db.prepare(`SELECT * FROM tg_posts WHERE ${dry ? "at >= ?" : "ev = '' AND at >= ?"} ORDER BY at`).all(new Date(Date.now() - days * DAY).toISOString());
     const out = { asked: 0, skipped: 0, made: [], dupes: [], cancelled: [], errors: [] };
+    // Once: the last week's posts skipped before «цієї суботи» counted get another look (2026-11-16).
+    if (!dry && !meta("tg:soon-recheck")) {
+      const since = new Date(Date.now() - 7 * DAY).toISOString();
+      const again = db.prepare("SELECT * FROM tg_posts WHERE ev = 'skip' AND at >= ?").all(since).filter((p) => maybeEvent(p.text, today, p.at));
+      for (const p of again) db.prepare("UPDATE tg_posts SET ev = '' WHERE channel = ? AND id = ?").run(p.channel, p.id);
+      if (again.length) posts.push(...again.filter((p) => !posts.some((x) => x.channel === p.channel && x.id === p.id)));
+      setMeta("tg:soon-recheck", String(again.length));
+    }
     for (const p of posts) {
-      if (!maybeEvent(p.text, today)) {
+      if (!maybeEvent(p.text, today, p.at)) {
         out.skipped++;
         if (!dry) db.prepare("UPDATE tg_posts SET ev = 'skip' WHERE channel = ? AND id = ?").run(p.channel, p.id);
         continue;
