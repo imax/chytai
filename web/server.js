@@ -1387,7 +1387,8 @@ const IMPORTS = {
 };
 // token -> { reader, source, rows, filename, at }: in the database, so a deploy between the review page and «Додати» loses nothing
 // (Max 2026-10-29: 11 books came back to the first /add screen after a restart).
-const IMPORT_TTL = 3 * 3600 * 1000;
+// Three days, not three hours (Max 2026-11-16, «тримай файл»): a reader who hit a snag comes back to the same page later.
+const IMPORT_TTL = 3 * 24 * 3600 * 1000;
 const pendingImports = {
   get: (t) => (/^[0-9a-f]{24}$/.test(t) ? JSON.parse(store.db.get(`import:${t}`) || "null") : null),
   set: (t, p) => store.db.set(`import:${t}`, JSON.stringify(p)),
