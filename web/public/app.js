@@ -679,7 +679,7 @@
   document.addEventListener("submit", async (e) => {
     const form = e.target;
     const action = form.getAttribute("action") || "";
-    if (form.method !== "post" || !/^\/api\/(entry|follow|subscribe)\//.test(action) || form.closest(".book-main")) return;
+    if (form.method !== "post" || !(/^\/api\/(entry|follow|subscribe)\//.test(action) || action === "/calendar/subscribe") || form.closest(".book-main")) return;
     e.preventDefault();
     const button = form.querySelector("button");
     if (button) button.disabled = true;
@@ -703,6 +703,17 @@
       return;
     }
     if (!button) return;
+    // /calendar's «Підписатися»: the form flips for the next press, the line under it says what now comes.
+    if (action === "/calendar/subscribe") {
+      const field = form.querySelector("input[name=on]");
+      const now = field.value === "1";
+      field.value = now ? "" : "1";
+      button.textContent = now ? "✓ Підписано" : "Підписатися";
+      button.dataset.ev = now ? "cal-unsubscribe" : "cal-subscribe";
+      const line = document.querySelector(".cal-subbed");
+      if (line) line.textContent = now ? line.dataset.on : line.dataset.off;
+      return;
+    }
     const on = !button.classList.contains("on") && !/^✓/.test(button.textContent);
     button.classList.toggle("on", on);
     if (action.startsWith("/api/follow/")) button.textContent = on ? "✓ Стежу" : "Стежити";

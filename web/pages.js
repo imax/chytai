@@ -2306,6 +2306,12 @@ function calendarPage({ user, events, cities, city = "", mine = false, mineCount
   const subscribe = !user
     ? `<a class="btn" rel="nofollow" href="/login?next=${attr(encodeURIComponent(href()))}" data-ev="cal-subscribe">Підписатися</a>`
     : `<form method="post" action="/calendar/subscribe" class="inline">${hidden("kind", kind)}${hidden("city", city)}${hidden("mine", mine ? "1" : "")}${hidden("q", query)}<input type="hidden" name="on" value="${subscribed ? "" : "1"}"><button class="btn" data-ev="${subscribed ? "cal-unsubscribe" : "cal-subscribe"}">${subscribed ? "✓ Підписано" : "Підписатися"}</button></form>`;
+  // The line under the buttons is there in both states, so nothing moves when it changes (Max 2026-11-16: the button
+  // jumped); app.js swaps its text when the button is pressed in the background.
+  const scope = kind || city || mine || query ? " за цим вибором" : "";
+  const subOn = `Події${scope} прийдуть у пʼятничному листі.`;
+  const subOff = `Підписка: події${scope} у пʼятничному листі.`;
+  const subLine = `<p class="small muted cal-subbed" data-on="${attr(subOn)}" data-off="${attr(subOff)}">${subscribed ? subOn : subOff}</p>`;
   // The same choice in a phone's calendar (Apple's opens webcal://, Google's takes the address).
   const webcal = feed.replace(/^https?:/, "webcal:");
   const inCalendar = feed
@@ -2322,7 +2328,7 @@ function calendarPage({ user, events, cities, city = "", mine = false, mineCount
     <h1>Книжкові події</h1>
     <p class="lead">Зустрічі з авторами, клуби, лекції й фестивалі.</p>
   </div>
-  <div class="cal-acts">${subscribe}<a class="btn" href="/calendar/add">Додати подію</a>${subscribed ? `<p class="small muted cal-subbed">Події${kind || city || mine || query ? " за цим вибором" : ""} прийдуть у пʼятничному листі.</p>` : ""}</div>
+  <div class="cal-acts">${subscribe}<a class="btn" href="/calendar/add">Додати подію</a>${subLine}</div>
 </section>
 ${kinds}
 ${tools}
