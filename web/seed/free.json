@@ -225,6 +225,60 @@
     ]
   },
   {
+    "name": "nechui-kaidasheva-simia.epub",
+    "title": "Кайдашева сім'я",
+    "authors": "Іван Нечуй-Левицький",
+    "tags": [
+      "Українською",
+      "Українська класика"
+    ]
+  },
+  {
+    "name": "myrnyi-khiba-revut-voly.epub",
+    "title": "Хіба ревуть воли, як ясла повні?",
+    "authors": "Панас Мирний",
+    "tags": [
+      "Українською",
+      "Українська класика"
+    ]
+  },
+  {
+    "name": "kvitka-marusia.epub",
+    "title": "Маруся",
+    "authors": "Григорій Квітка-Основ'яненко",
+    "tags": [
+      "Українською",
+      "Українська класика"
+    ]
+  },
+  {
+    "name": "starytskyi-za-dvoma-zaitsiamy.epub",
+    "title": "За двома зайцями",
+    "authors": "Михайло Старицький",
+    "tags": [
+      "Українською",
+      "Українська класика"
+    ]
+  },
+  {
+    "name": "karpenko-karyi-sto-tysiach.epub",
+    "title": "Сто тисяч",
+    "authors": "Іван Карпенко-Карий",
+    "tags": [
+      "Українською",
+      "Українська класика"
+    ]
+  },
+  {
+    "name": "kobylianska-zemlia.epub",
+    "title": "Земля",
+    "authors": "Ольга Кобилянська",
+    "tags": [
+      "Українською",
+      "Українська класика"
+    ]
+  },
+  {
     "name": "fitzgerald-the-great-gatsby.epub",
     "title": "The Great Gatsby",
     "authors": "F. Scott Fitzgerald",

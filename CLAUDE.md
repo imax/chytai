@@ -381,6 +381,11 @@ A flag only when Max asks for one, or when the change could break what readers u
   in 19th-century spelling (Кайдашева сім'я 1879, Квітка, Шевченко's 1840) or not at all (Старицький, «Сто тисяч»,
   Кобилянська's «Земля»); the 1876 Prague «Кобзарь» reads fine. A «Версії роботи» page is no text: free-shelf.py now
   skips an EPUB with under 5,000 characters («Хіба ревуть воли» came in as one line and was taken off).
+- What Wikisource lacks, in modern spelling: OpenBook (sites.google.com/view/openbook2, Max's find 2026-11-16). A work's
+  page embeds Google Drive files: `https://drive.google.com/uc?export=download&id=<id>`, the EPUB is the first id that
+  is a zip. Same `wsbook.py` with `files` (its OPS/chapter-N.xhtml in order); a play in one file takes `split`. Leave out
+  their notes and «Пояснення слів» chapters and their own covers («Відкрита книга» design); `source` in shelf.json =
+  the work's page. Their «Сватання на Гончарівці» keeps Kvitka's Russian stage directions: not on the shelf (Max to say).
 
 ## Translation pairs
 

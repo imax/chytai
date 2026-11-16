@@ -336,6 +336,60 @@
     "group": "Українська класика"
   },
   {
+    "name": "nechui-kaidasheva-simia.epub",
+    "title": "Кайдашева сім'я",
+    "authors": [
+      "Іван Нечуй-Левицький"
+    ],
+    "group": "Українська класика",
+    "source": "https://sites.google.com/view/openbook2/ukraienska-literatura/necuj-levickij/kajdaseva-sim-a"
+  },
+  {
+    "name": "myrnyi-khiba-revut-voly.epub",
+    "title": "Хіба ревуть воли, як ясла повні?",
+    "authors": [
+      "Панас Мирний"
+    ],
+    "group": "Українська класика",
+    "source": "https://sites.google.com/view/openbook2/ukraienska-literatura/mirnij/hiba-revut-voli-ak-asla-povni"
+  },
+  {
+    "name": "kvitka-marusia.epub",
+    "title": "Маруся",
+    "authors": [
+      "Григорій Квітка-Основ'яненко"
+    ],
+    "group": "Українська класика",
+    "source": "https://sites.google.com/view/openbook2/ukraienska-literatura/kvitka-osnov-anenko-g-f/повісті-та-оповідання"
+  },
+  {
+    "name": "starytskyi-za-dvoma-zaitsiamy.epub",
+    "title": "За двома зайцями",
+    "authors": [
+      "Михайло Старицький"
+    ],
+    "group": "Українська класика",
+    "source": "https://sites.google.com/view/openbook2/home"
+  },
+  {
+    "name": "karpenko-karyi-sto-tysiach.epub",
+    "title": "Сто тисяч",
+    "authors": [
+      "Іван Карпенко-Карий"
+    ],
+    "group": "Українська класика",
+    "source": "https://sites.google.com/view/openbook2/home"
+  },
+  {
+    "name": "kobylianska-zemlia.epub",
+    "title": "Земля",
+    "authors": [
+      "Ольга Кобилянська"
+    ],
+    "group": "Українська класика",
+    "source": "https://sites.google.com/view/openbook2/home"
+  },
+  {
     "name": "khvylovy-sanatoriina-zona.epub",
     "title": "Повість про санаторійну зону. Сентиментальна історія. Я (Романтика)",
     "authors": [
