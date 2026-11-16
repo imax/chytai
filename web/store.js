@@ -1291,17 +1291,17 @@ class Store {
   indexBooks(ids) {
     const works = this.workIds();
     const db = this.db;
-    const del = db.prepare("DELETE FROM search WHERE id = ?");
-    const delTri = db.prepare("DELETE FROM search_tri WHERE id = ?");
+    // `id` is UNINDEXED in the FTS tables, so a delete by id reads the whole table: one delete for all the ids, not
+    // one each (a Goodreads import of 911 new books held the site 8 s, 2026-11-16).
+    const del = db.prepare("DELETE FROM search WHERE id IN (SELECT value FROM json_each(?))");
+    const delTri = db.prepare("DELETE FROM search_tri WHERE id IN (SELECT value FROM json_each(?))");
     const add = db.prepare("INSERT INTO search (id, title, alt, author, series, extra) VALUES (?, ?, ?, ?, ?, ?)");
     const tri = db.prepare("INSERT INTO search_tri (id, text) VALUES (?, ?)");
     const all = new Set(ids.flatMap((id) => [id, this.canonical(id)]));
     const rows = [...all].map((id) => [id, works.has(id) && this.searchRow(id)]);
     db.tx(() => {
-      for (const [id, r] of rows) {
-        del.run(id), delTri.run(id);
-        if (r) add.run(...r.search), tri.run(...r.tri);
-      }
+      del.run(JSON.stringify([...all])), delTri.run(JSON.stringify([...all]));
+      for (const [, r] of rows) if (r) add.run(...r.search), tri.run(...r.tri);
     });
     if (this.genreIdx) {
       for (const list of this.genreIdx.values()) for (let k = list.length - 1; k >= 0; k--) if (all.has(list[k])) list.splice(k, 1);
