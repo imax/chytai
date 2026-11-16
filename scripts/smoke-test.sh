@@ -65,6 +65,7 @@ ev=$(curl -s -m 20 "$BASE/calendar?all=1" | grep -o 'href="/calendar/[^"?/]*-[0-
 if [ -n "$ev" ]; then check "$ev" 200; check "$ev.ics" 200; fi
 check /publishers 200
 check /updates 200
+check /market 200 # «Книжковий ринок України» (web/market.js)
 check /lists 200
 check /club 200
 check /articles 404

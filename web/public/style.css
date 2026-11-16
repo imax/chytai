@@ -1572,3 +1572,51 @@ aside .side-lists + .label, aside p + .label, aside dialog + .label { margin-top
 /* «Підписатися» is a menu (details): as big as «Додати подію» beside it (Max 2026-11-15). */
 .cal-acts .drop > summary.btn { padding: 10px 22px; font-size: 14px; letter-spacing: 0; line-height: 1.3; cursor: pointer; }
 .cal-acts .caret { font-size: 11px; }
+
+/* ---- «Книжковий ринок України», /market (Max 2026-11-16): numbers, bars and columns in the site's own look. ---- */
+.market { max-width: 860px; }
+.market h1 { font: 400 52px/1.05 var(--serif); letter-spacing: -0.02em; margin: 0 0 18px; }
+.market .lead { font: 19px/1.45 var(--serif); color: var(--text); max-width: 640px; margin-bottom: 10px; }
+.market h3 { font: 600 14px/1.3 var(--sans); color: var(--ink); margin: 0 0 12px; }
+.market .mk-h { margin-top: 4px; }
+.mk-nums { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border-top: 1px solid var(--ink); margin: 32px 0 52px; }
+.mk-nums > div { padding: 18px 16px 18px 0; border-bottom: 1px solid var(--rule); display: flex; flex-direction: column; gap: 2px; }
+.mk-nums b { font: 400 34px/1.1 var(--serif); letter-spacing: -0.01em; }
+.mk-nums span { font-size: 14px; color: var(--text); }
+.mk-nums em { font: normal 12px var(--sans); color: var(--muted); }
+.mk-two { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px 48px; margin-top: 28px; }
+.mk-two:first-child, .label + .mk-two { margin-top: 0; }
+.mk-note { font-size: 15px; line-height: 1.6; color: var(--text); max-width: 680px; margin-top: 18px; }
+.mk-note.first { margin: 0 0 24px; }
+.mk-note a { color: var(--ink); }
+.mk-big { font: 400 56px/1 var(--serif); color: var(--accent); margin-top: 8px; }
+.mk-bars { list-style: none; padding: 0; margin: 0 0 14px; display: grid; gap: 9px; }
+.mk-bars li { display: grid; grid-template-columns: minmax(0, 15em) minmax(0, 1fr) auto; gap: 12px; align-items: center; font-size: 14px; }
+.mk-two .mk-bars li { grid-template-columns: minmax(0, 11em) minmax(0, 1fr) auto; }
+.mk-name { color: var(--text); line-height: 1.3; }
+.mk-track { height: 12px; background: color-mix(in srgb, var(--rule) 60%, transparent); border-radius: 2px; overflow: hidden; }
+.mk-fill { display: block; height: 100%; background: var(--accent); border-radius: 2px; }
+.mk-bars.mk-uk li:not(.uk) .mk-fill { background: var(--muted); }
+.mk-val { font-size: 13px; color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; text-align: right; }
+.mk-cols { display: flex; align-items: flex-end; gap: 10px; height: 180px; border-bottom: 1px solid var(--ink); padding-top: 22px; }
+.mk-col { flex: 1; height: 100%; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; position: relative; }
+.mk-col .mk-val { font-size: 12px; margin-bottom: 4px; }
+.mk-colbar { width: 100%; max-width: 56px; background: var(--muted); border-radius: 2px 2px 0 0; }
+.mk-col:last-child .mk-colbar { background: var(--accent); }
+.mk-year { position: absolute; bottom: -22px; font-size: 12px; color: var(--muted); }
+.mk-two > div:has(.mk-cols) { padding-bottom: 22px; }
+.market .grid.six { margin-bottom: 8px; }
+.mk-src { list-style: none; padding: 0; margin: 0; }
+.mk-src li { padding: 10px 0; border-bottom: 1px solid var(--rule); font-size: 14px; line-height: 1.5; }
+@media (max-width: 760px) {
+  .market h1 { font-size: 38px; }
+  .market .lead { font-size: 17px; }
+  .mk-nums { grid-template-columns: repeat(2, minmax(0, 1fr)); margin-bottom: 40px; }
+  .mk-nums b { font-size: 26px; }
+  .mk-two { grid-template-columns: minmax(0, 1fr); gap: 32px; }
+  .mk-bars li, .mk-two .mk-bars li { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "name val" "track track"; gap: 4px 10px; }
+  .mk-name { grid-area: name; }
+  .mk-val { grid-area: val; }
+  .mk-track { grid-area: track; height: 10px; }
+  .mk-cols { height: 150px; gap: 6px; }
+}

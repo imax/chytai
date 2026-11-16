@@ -175,7 +175,7 @@ ${path === "/admin" && user?.owner ? adminNav() : ""}
 ${body}
 ${!user && JOIN_PATHS.has(path) ? joinBand(canonical, path === "/") : ""}
 </main>
-<footer class="foot"><div class="bar"><span class="motto">Chytai.org.ua: читай більше.</span><a href="/updates">Що нового</a><a href="/privacy">Приватність</a><a href="mailto:ischenko@gmail.com">Написати нам</a>${user?.owner ? `<a href="/admin">Адмінка</a>` : ""}</div></footer>
+<footer class="foot"><div class="bar"><span class="motto">Chytai.org.ua: читай більше.</span><a href="/updates">Що нового</a><a href="/market">Книжковий ринок</a><a href="/privacy">Приватність</a><a href="mailto:ischenko@gmail.com">Написати нам</a>${user?.owner ? `<a href="/admin">Адмінка</a>` : ""}</div></footer>
 <script src="${ASSETS.js}"></script>
 </body>
 </html>`;
@@ -2809,6 +2809,105 @@ ${updatesCache.html}
 </section>` });
 }
 
+// ---- «Книжковий ринок України» (/market, Max 2026-11-16): open numbers from web/market.js as plain bars and columns,
+// no chart library and no script. `top` = the most bought books, each with our page when the catalog has it.
+const mkNum = (n) => Math.round(n).toLocaleString("uk-UA");
+const mkMln = (thousands) => `${(thousands / 1000).toFixed(1).replace(".", ",")} млн`;
+const mkPct = (p) => `${String(p).replace(".", ",")}%`;
+// Rows of name · bar · value; the longest bar is the biggest value, or `max` when the values are shares of a whole.
+function mkBars(rows, { val, text, max, uk } = {}) {
+  const top = max || Math.max(...rows.map(val));
+  return `<ul class="mk-bars${uk ? " mk-uk" : ""}">${rows
+    .map((r) => `<li${uk && uk(r) ? ' class="uk"' : ""}><span class="mk-name">${esc(r.name)}</span><span class="mk-track"><span class="mk-fill" style="width:${Math.max(1, (val(r) / top) * 100).toFixed(1)}%"></span></span><span class="mk-val">${text(r)}</span></li>`)
+    .join("")}</ul>`;
+}
+// Columns by year with the value over each.
+function mkCols(rows, { val, text, label: name }) {
+  const top = Math.max(...rows.map(val));
+  return `<div class="mk-cols">${rows
+    .map((r) => `<div class="mk-col"><span class="mk-val">${text(r)}</span><span class="mk-colbar" style="height:${Math.max(2, (val(r) / top) * 100).toFixed(1)}%"></span><span class="mk-year">${esc(String(name(r)))}</span></div>`)
+    .join("")}</div>`;
+}
+function marketPage({ user, m, top }) {
+  const y25 = m.YEARS[m.YEARS.length - 1], y21 = m.YEARS[0];
+  const fiction = m.SUBJECTS.find((s) => s.name === "Художня література");
+  const uk25 = 13379, ukCopies25 = 30785.6; // Книжкова палата 2025, Ukrainian-language books
+  const small = m.RUNS[0];
+  const nums = `<div class="mk-nums">${m.NUMS.map((x) => `<div><b>${esc(x.n)}</b><span>${esc(x.what)}</span><em>${esc(x.src)}</em></div>`).join("")}</div>`;
+  const topCards = top
+    .map((t) => {
+      const b = t.book || { title: t.title, author: t.author, href: `/search?q=${encodeURIComponent(t.title)}` };
+      return card(b, { avg: t.book ? undefined : null, extra: `<p class="meta pop-n">${mkNum(t.n)} прим.</p>` });
+    })
+    .join("");
+  const body = `<section class="market">
+<p class="kicker">Відкриті дані</p>
+<h1>Книжковий ринок України</h1>
+<p class="lead">Скільки книжок видають, що купують і як часто читають. Зібрали в одному місці відкриті звіти Книжкової палати, Українського інституту книги й Мінкульту.</p>
+<p class="small muted">Оновлено ${esc(m.UPDATED)}. Дані за 2025 рік, де не сказано інакше.</p>
+${nums}
+
+<section class="block">${label("Скільки видають")}
+<div class="mk-two">
+<div><h3>Назв книжок і брошур</h3>${mkCols(m.YEARS, { val: (r) => r.titles, text: (r) => mkNum(r.titles), label: (r) => r.y })}</div>
+<div><h3>Примірників</h3>${mkCols(m.YEARS, { val: (r) => r.copies, text: (r) => mkMln(r.copies), label: (r) => r.y })}</div>
+</div>
+<p class="mk-note">У 2022 році випуск упав більш ніж удвічі. Відтоді він росте, але назв досі майже на третину менше, ніж у ${y21.y}-му, а примірників на чверть. У 2025 році назв стало на 4% більше, а наклади трохи зменшились.</p>
+</section>
+
+<section class="block">${label("Що видають", "примірники за темами")}
+${mkBars(m.SUBJECTS, { val: (r) => r.copies, text: (r) => `${mkMln(r.copies)} · ${mkNum(r.titles)} назв` })}
+<p class="mk-note">Половина всіх надрукованих примірників це підручники й навчальні книжки. Художньої літератури у 2025 році надрукували ${mkMln(fiction.copies)} примірників, у ${(fiction.copies / 3599.7).toFixed(1).replace(".", ",")} раза більше, ніж у 2021-му. Дитячих книжок навпаки менше: 4,2 млн проти 5,2 млн.</p>
+</section>
+
+<section class="block">${label("Якою мовою")}
+<div class="mk-two">
+<div><h3>Українською у 2025 році</h3><p class="mk-big">${mkPct(((uk25 / y25.titles) * 100).toFixed(0))}</p><p class="muted small">назв і ${mkPct(((ukCopies25 / y25.copies) * 100).toFixed(0))} примірників</p></div>
+<div><h3>Назв російською</h3>${mkCols(m.YEARS, { val: (r) => r.ru, text: (r) => mkNum(r.ru), label: (r) => r.y })}</div>
+</div>
+<p class="mk-note">Кожна четверта нова книжка перекладна: 3 642 назви, а за накладом це третина всіх примірників. Англійською вийшло 433 назви.</p>
+</section>
+
+<section class="block">${label("Наклади", "скільки назв виходить таким накладом")}
+${mkBars(m.RUNS, { val: (r) => r.titles, text: (r) => `${mkNum(r.titles)} назв` })}
+<p class="mk-note">Майже половина книжок (${mkNum(small.titles)} назв) виходить накладом до 500 примірників. А 52 книжки з накладом понад 50 тисяч дали майже чверть усіх примірників. Майже все друкують Київ (45% примірників) і Харків (40%).</p>
+</section>
+
+<section class="block">${label("Що купують", m.YEK.period)}
+<p class="mk-note first">Загальної статистики продажів по книжках у відкритому доступі немає: книгарні й видавці її не публікують. Єдине відкрите джерело це «єКнига»: держава дає 18-річним по 998 ₴ на книжки, а Інститут книги публікує, що вони купили. За дев'ять місяців 2026 року це ${mkNum(m.YEK.books)} книжок, ${mkNum(m.YEK.titles)} назв від ${m.YEK.pubCount} видавництв. Покупці тут молоді, тож романтики й саморозвитку більше, ніж на ринку загалом.</p>
+<h3 class="mk-h">Найчастіше купували</h3>
+<div class="grid six">${topCards}</div>
+<div class="mk-two">
+<div><h3>Автори</h3>${mkBars(m.YEK.authors, { val: (r) => r.n, text: (r) => `${mkNum(r.n)} прим.`, uk: (r) => r.uk })}<p class="muted small">Зеленим українські автори.</p></div>
+<div><h3>Топ-100 книжок</h3>${mkBars(m.YEK.kinds, { val: (r) => r.pct, max: 100, text: (r) => mkPct(r.pct) })}${mkBars(m.YEK.origin, { val: (r) => r.pct, max: 100, text: (r) => mkPct(r.pct) })}<p class="muted small">Частка куплених примірників.</p></div>
+</div>
+<div class="mk-two">
+<div><h3>Видавництва</h3>${mkBars(m.YEK.publishers, { val: (r) => r.pct, text: (r) => mkPct(r.pct) })}</div>
+<div><h3>Де купували</h3>${mkBars(m.YEK.shops, { val: (r) => r.pct, text: (r) => mkPct(r.pct) })}<p class="muted small">${m.YEK.online}% грошей витратили в інтернет-книгарнях.</p></div>
+</div>
+</section>
+
+<section class="block">${label("Хто заробляє")}
+<p class="mk-note first">Видавці разом заробили 8,9 млрд ₴, на 8,5% більше, ніж роком раніше. Але інфляція була 9,2%, тож насправді галузь стоїть на місці, а книжки дорожчають і їх купують менше. 22 найбільші видавництва, з доходом понад 100 млн ₴, отримали 70% усіх грошей. Половина видавців заробляє менше ніж 1,6 млн ₴ на рік.</p>
+<p class="mk-note">Самі видавці бачать гірше. Малі кажуть, що у 2025 році продажі впали (у «Вовкулаки» на 20–25%), а Асоціація видавців пише про борги й перевиробництво. Дитяча книжка страждає найбільше, бо багато сімей з дітьми виїхали.</p>
+</section>
+
+<section class="block">${label("Як читають", "опитування 2 200 людей від 14 років")}
+<div class="mk-two">
+<div><h3>Як часто читали за рік</h3>${mkBars(m.READING.often, { val: (r) => r.pct, max: 100, text: (r) => mkPct(r.pct) })}</div>
+<div><h3>Як обирають книжку</h3>${mkBars(m.READING.choose, { val: (r) => r.pct, max: 100, text: (r) => mkPct(r.pct) })}</div>
+</div>
+<p class="mk-note">Третина українців читає щотижня. 87% читачів читали українською. Найчастіше читати більше спонукає випадкова зустріч із цікавою книжкою (37%). Лише третина вважає, що книгарень поруч достатньо, а 21% кажуть, що їх немає зовсім.</p>
+</section>
+
+<section class="block">${label("Джерела")}
+<ul class="mk-src">${m.SOURCES.map((s) => `<li><a class="text-link" href="${attr(s.url)}" target="_blank" rel="noopener">${esc(s.name)}</a><span class="muted"> ${esc(s.what)}</span></li>`).join("")}</ul>
+<p class="mk-note">Книжкова палата рахує те, що видавці їй надіслали, тож справжній випуск трохи більший. Помітили помилку чи знаєте ще відкриті дані? <a class="text-link" href="mailto:ischenko@gmail.com">Напишіть нам</a>.</p>
+</section>
+</section>`;
+  return layout({ title: "Книжковий ринок України", user, path: "/market", canonical: "/market", description: "Скільки книжок видають в Україні, що купують і як часто читають: відкриті дані Книжкової палати, Інституту книги й Мінкульту з графіками.", body });
+}
+
 // ---- The weekly draw page (draw.js, Max 2026-10-28). The title, lead, steps and rules (draw.md) were
 // drafted from the plan at Max's ask (2026-10-28: «в тебе вже є нормально описано»).
 const DRAW_PATH = "/dfadsafas"; // temporary, unlisted (Max 2026-10-28)
@@ -3818,6 +3917,6 @@ module.exports = {
   outsideResults,
   addPage, addReviewPage, addFindResults, addPageResult, ukFindPage,
   layout, bookPage, bookEditPage, russianPage, editPage, libraryPage, readersPage, readPage, genrePage, genreTrialPage, langTrialPage, origTrialPage, overviewTrialPage, ukTrialPage, catalogAdminPage, aiPassPage, publishersPage, publisherPage, publisherFavouritesPage, searchPage, searchResults, authorPage,
-  loginPage, codePage, signupPage, settingsPage, privacyPage, macPage, macBackPage, updatesPage, drawPage, DRAW_PATH, messagePage, digestPage, followMailPage, wantMailPage, importPage, importPreviewPage, importDonePage,
+  loginPage, codePage, signupPage, settingsPage, privacyPage, macPage, macBackPage, updatesPage, marketPage, drawPage, DRAW_PATH, messagePage, digestPage, followMailPage, wantMailPage, importPage, importPreviewPage, importDonePage,
   GENRES, esc, mdHtml, byline, STATUS, COPY, inline, isUk, setTitleLinks, setAuthorLinks, setThumbs, setStats, setReadersWithNote,
 };

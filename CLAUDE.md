@@ -412,6 +412,16 @@ A flag only when Max asks for one, or when the change could break what readers u
   `search_log` (every query), and `reader_log` searches followed within 3 min by a `/book/` or `/author/` view
   (what the reader wanted): that page's place in the old and new results.
 
+## «Книжковий ринок України», /market (`web/market.js`, `marketPage` in pages.js)
+
+- Open numbers only, typed in by hand (Max 2026-11-16): Книжкова палата's yearly PDF (ukrbook.net/statistika_.html),
+  УІК's «Показники книжкової галузі» (ubi.org.ua/uk/activity/doslidzhennya) and its quarterly єКнига results (a public
+  Google Sheet of every title bought: `/export?format=xlsx` on the sheet linked from the report's PDF), Мінкульт /
+  Gradus reading survey. Nobody publishes sales per title for the whole market. Charts are CSS bars and columns
+  (`mkBars`, `mkCols`), no script. The top books find our pages by ISBN (`store.findWork`, an hour's cache), else
+  they link to search. A new report: change the numbers and `UPDATED`, check the text under each chart still holds.
+  Copies of the sources: project files `chytai-book-market/`.
+
 ## Translation pairs
 
 - A Ukrainian book and its original are paired in `web/seed/matches.json`: `translations` (`[original, uk]`, slugs or
