@@ -367,7 +367,7 @@ A flag only when Max asks for one, or when the change could break what readers u
   meanings that repeat the word) on the kept list, no model; `{"book":…,"strict":true}` sends only word + meaning to
   Sonnet (`STRICT`, 300 a call) to drop what a teenager knows (Max 2026-11-16: «їх», «зблизька», «сказать би»); a new
   book's build runs both. A word is underlined the first time in a chapter only.
-  «Чорна рада», 2026-11-15: 28 calls, $0.54, ~1,450 words. Locally without a key: a JSON in `<DATA_DIR>/glossary/`.
+  «Чорна рада»: 28 calls $0.54 (2026-11-15), strict $0.11 (2026-11-16), 1,191 words. Locally without a key: a JSON in `<DATA_DIR>/glossary/`.
 
 ## Translation pairs
 
