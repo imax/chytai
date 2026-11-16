@@ -4397,6 +4397,13 @@ async function seedEditorials() {
       continue;
     }
     store.db.set(done, new Date().toISOString());
+    // `publish`: a draft made from here goes out, when Max says so in the thread (2026-11-16: «ага публікуй»).
+    if (e.publish) {
+      const l = lists.bySlug(OWNER_ID, slugify(e.publish).slice(0, 60).replace(/-+$/, ""));
+      if (l?.draft) lists.edit(l.id, { draft: false });
+      console.log(`editorial ${e.key}: ${l ? `${l.href} published` : `no list ${e.publish}`}`);
+      continue;
+    }
     const ids = [];
     for (const b of e.books) {
       let id = b.id && store.resolve(b.id);

@@ -155,7 +155,7 @@ A flag only when Max asks for one, or when the change could break what readers u
   process makes it once under Max's account (`/@maxua/list/<slug>`); a draft only Max sees, he presses «Опублікувати».
   A book may carry `section` / `sectionNote`: a heading over it and the books after it. To rework a made list, add a new
   key with `"replaces": "<old title>"` (same title keeps the URL; the old list is removed). To add books to a list that
-  is already out (saves and comments stay), a new key with `"append": "<title>"` and only the new `books`.
+  is already out (saves and comments stay), a new key with `"append": "<title>"` and only the new `books`. A draft goes out when Max says so in the thread: a new key with `"publish": "<title>"`.
 - Find work ids on the test DB with `store.search()` / `store.resolve()`; a book the catalog lacks goes in as
   `{title, author, page}` (a store page) and is added from it. Prefer Ukrainian editions, no Russian authors.
 - Check it locally signed in as `owner@test.invalid`, screenshot, show Max.
