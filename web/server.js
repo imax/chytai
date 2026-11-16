@@ -188,7 +188,9 @@ app.post("/api/resend/webhook", express.raw({ type: "*/*", limit: "256kb" }), (r
   }
   res.sendStatus(200);
 });
-app.use(express.urlencoded({ extended: false, limit: "1mb" }));
+// An import's review sends a `keep` field per ticked book: the parser's default of 1000 fields turned a Goodreads
+// shelf of 1,467 books into «Помилка в запиті» (413) and nothing was imported (@tlukyniuk, 2026-11-16).
+app.use(express.urlencoded({ extended: false, limit: "1mb", parameterLimit: 50000 }));
 app.use(express.json({ limit: "1mb" }));
 if (telegram.on()) app.post(telegram.hookPath(), (req, res) => (telegram.update(req.body), res.sendStatus(200)));
 // ---- Threads see production, read only (Max, 2026-11-09; server/agent.js, CLAUDE.md «Прод») ----
