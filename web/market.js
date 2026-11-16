@@ -128,11 +128,43 @@ const READING = {
   ],
 };
 
+// Жанри (Max 2026-11-16: «є більше статистики саме по художній літературі і нонфікшн?»).
+// Gradus, the same survey: readers of the last 12 months (N=1 778), genres read most often, those over 10%.
+// `non` = nonfiction; `m` / `f` = men / women where they differ a lot.
+const GENRES = [
+  { name: "Детективи", pct: 47 },
+  { name: "Історичні романи", pct: 31 },
+  { name: "Сучасна художня", pct: 25 },
+  { name: "Класична художня", pct: 25 },
+  { name: "Фентезі", pct: 24 },
+  { name: "Романтична", pct: 24, m: 9, f: 39 },
+  { name: "Саморозвиток", pct: 23, non: true },
+  { name: "Психологія", pct: 21, non: true },
+  { name: "Наукова фантастика", pct: 19, m: 30, f: 8 },
+  { name: "Трилери", pct: 19 },
+  { name: "Науково-популярна", pct: 18, non: true, m: 26, f: 10 },
+];
+// «Яку літературу ви читаєте найчастіше?», same readers.
+const LIT = [
+  { name: "Сучасні іноземні автори", pct: 37 },
+  { name: "Сучасні українські автори", pct: 35, uk: true },
+  { name: "Українська класика", pct: 32, uk: true },
+  { name: "Іноземна класика", pct: 29 },
+];
+// Книжкова палата 2025 «за цільовим призначенням»: titles and thousands of copies → the average print run.
+const PURPOSE = [
+  { name: "Навчальні", titles: 3996, copies: 17568.5 },
+  { name: "Для дітей", titles: 1918, copies: 4206.1 },
+  { name: "Художні", titles: 4496, copies: 8333.5 },
+  { name: "Науково-популярні", titles: 1487, copies: 1873.6 },
+  { name: "Наукові", titles: 2203, copies: 424.4 },
+];
+
 const SOURCES = [
   { name: "Книжкова палата України: випуск видань за рік", url: "https://ukrbook.net/statistika_.html", what: "Назви й наклади за темами, мовами, областями, з 2011 року. PDF." },
   { name: "УІК: «Показники книжкової галузі України 2025»", url: "https://ubi.org.ua/uk/activity/doslidzhennya/doslidzhennya-2026", what: "Доходи видавців, книгарні, тенденції. PDF, травень 2026." },
   { name: "УІК: підсумки «єКниги»", url: "https://ubi.org.ua/uk/news/kategoriya-1/scho-obirayut-18-richni-ukra-nci-za-programoyu-kniga-pidsumki-programi-za-3-kvartali-2026-roku", what: "Що купують 18-річні: таблиця на 11 тисяч назв із кількістю, щокварталу." },
-  { name: "Мінкульт / Gradus: «Читання в Україні»", url: "https://ubi.org.ua/uk/news/kategoriya-2/doslidzhennya-chitannya-vid-minkultu-scho-de-i-yak-chasto-chitayut-ukra-nci", what: "Як часто читають і як обирають книжки. Жовтень 2026." },
+  { name: "Мінкульт / Gradus: «Читання в Україні»", url: "https://ubi.org.ua/uk/news/kategoriya-2/doslidzhennya-chitannya-vid-minkultu-scho-de-i-yak-chasto-chitayut-ukra-nci", what: "Як часто читають, як обирають книжки і які жанри. Жовтень 2026." },
   { name: "Держстат через «Слово і діло»", url: "https://www.slovoidilo.ua/2026/05/28/infografika/suspilstvo/yak-aktyvno-ukrayinczi-kupuvaly-knyhy-povnomasshtabnoyi-vijny", what: "Скільки продали книгарні за рік." },
   { name: "Forbes Ukraine: Артем Біденко про стан галузі", url: "https://forbes.ua/lifestyle/maybutne-knizhkovoi-galuzi-ukraini-pid-zagrozoyu-uik-kazhe-shcho-vona-zrostae-ale-naspravdi-tse-ne-tak-analiz-rinku-vid-artema-bidenka-z-vidavnichoi-asotsiatsii-20112025-34298", what: "Погляд видавців, що не погоджуються з УІК." },
 ];
@@ -153,4 +185,4 @@ function topBooks(store) {
   return out;
 }
 
-module.exports = { UPDATED, NUMS, YEARS, SUBJECTS, RUNS, YEK, READING, SOURCES, topBooks };
+module.exports = { UPDATED, NUMS, YEARS, SUBJECTS, RUNS, YEK, READING, GENRES, LIT, PURPOSE, SOURCES, topBooks };
