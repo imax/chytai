@@ -222,6 +222,18 @@ ${font("source-serif-4/opsz.css")}${font("onest/wght.css")}
       if (r && r.welcome) { show("in"); location.href = r.welcome; } else if (r && r.ticket) enter(r.ticket);
     });
   });
+  // The sixth digit sends the code, no button (Max 2026-11-16): typing, paste and autofill alike. A wrong code
+  // shows its error and waits for a changed one.
+  (function (i) {
+    var sent = "";
+    function go() {
+      var d = i.value.replace(/[^0-9]/g, "");
+      if (d.length !== 6 || d === sent || forms.code.querySelector("button[type=submit]").disabled) return;
+      sent = d;
+      forms.code.requestSubmit ? forms.code.requestSubmit() : forms.code.dispatchEvent(new Event("submit", { cancelable: true }));
+    }
+    i.addEventListener("input", go);
+  })(forms.code.elements.code);
   forms.code.querySelector("[data-back]").addEventListener("click", function (e) { e.preventDefault(); show("email"); });
 })();
 </script>
