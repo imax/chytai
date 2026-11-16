@@ -14,14 +14,14 @@ window.Gloss = (() => {
   const tip = document.getElementById("gloss-tip");
   let shown = null; // { doc }
 
-  const enabled = () => !!forms && settings.gloss !== "off" && !!settings.flags?.includes("glossary");
+  const enabled = () => !!forms && settings.gloss !== "off";
 
   // Called when a book opens; marks the chapters already on screen once the list is in.
   async function load(name, contentsList) {
     forms = null;
     book = name;
     hide();
-    if (!name || !(settings.glossaries || []).includes(name) || !settings.flags?.includes("glossary")) return;
+    if (!name || !(settings.glossaries || []).includes(name)) return;
     try {
       const res = await fetch(`/api/glossary?book=${encodeURIComponent(name)}`, { credentials: "same-origin" });
       if (!res.ok || book !== name) return;

@@ -359,7 +359,8 @@ A flag only when Max asks for one, or when the change could break what readers u
 - A free-shelf book (`free/shelf.json`) gets once a list of old, dialect and historical words with a few words of
   meaning (Sonnet, ~28 calls a novel; `DATA_DIR/glossary/<book>.json`). The page underlines them with a CSS Custom
   Highlight (no DOM change: positions and notes stay) and a tap or click shows the meaning; «Аа» → «Словничок»
-  turns it off (`gloss`, per device). Flag `glossary`; guests have no flags, so it reaches them once the flag is gone.
+  turns it off (`gloss`, per device). For everyone, guests too (Max 2026-11-16; the flag `glossary` is gone). A book
+  shows it as soon as its JSON exists, so a new book's list goes live when it is made.
 - Make one book's (only with Max's OK in the thread, one book at a time): `curl -s https://app.chytai.org.ua/agent/glossary
   -H "$H" -H 'content-type: application/json' -d '{"book":"kulish-chorna-rada.epub"}'`; `GET` the same address
   for what is made (forms, cost) and what runs; `{"book":…,"tidy":true}` reruns only `clean()` (names, common words,
