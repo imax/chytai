@@ -105,6 +105,10 @@ change put `[rollback-on-errors]` in the commit message: then the watch sends th
 Beyond that, when the Actions run is green, check `/agent/health?since=<deploy time>` yourself, and for a risky change
 schedule a wake-up in about an hour and look again. Outages are fixed or reverted without asking.
 
+The site is one machine with a volume, so every deploy takes it down while Fly swaps the image (~12 s). «Сайт лежить»
+right after a push: first the deploy job's log («Waiting for machine … to reach a good state») and the machine's
+events (GraphQL `machines{nodes{events{kind timestamp}}}`); on 2026-11-16 Fly took 2 min 40 s there, no code at fault.
+
 ## Morning error review (scheduled task «Розбір помилок Chytai», ~07:00 Kyiv daily)
 
 A fresh session each morning (Max, 2026-11-11: «розбирати їх», not Telegram per error). Its note completes the day's
