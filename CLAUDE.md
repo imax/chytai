@@ -389,7 +389,11 @@ A flag only when Max asks for one, or when the change could break what readers u
   Looked at and not usable (2026-11-15): Karabas, concert.ua, readeat.com, Goethe (403 to robots), Є (Cloudflare),
   cityofliterature.lviv.ua (a casino now), ui.org.ua and dou.ua (no book events); publishers and shops come as channels.
 - Books an event names that the catalog lacks (Max 2026-11-15): Haiku answers each event's `books` (`named`), and a
-  title in «» goes too when the text names one author we know; missing ones wait in `cal_events.want`.
+  title in quotes («», "", “”; `quotes()`) goes too when the words before it call it a book («книги», «роман», «за
+  книгою»; not right after «клуб», «книгарня»: `NOT_BOOK`) or the text names one author we know; with no author we know,
+  only book.ua's Ukrainian edition of that very title is taken (Max 2026-11-16, «Північ, якої не існує»). `findBook`:
+  the catalog's exact title, else the search's best book a letter or two apart by the author named («Адді Ларю» →
+  «Лярю»), or the same title with none; missing ones wait in `cal_events.want`.
   `calendar.fillBooks` every hour: book.ua's Ukrainian edition, else Google Books / Open Library, source `calendar`,
   30 a day (meta `calbooks:count`), never Russian; Max hears of them (mail + Telegram). Dry run:
   `curl -s https://chytai.org.ua/agent/calendar-books -H "$H"`.

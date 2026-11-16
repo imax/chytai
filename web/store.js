@@ -2866,4 +2866,4 @@ class Store {
   }
 }
 
-module.exports = { fromOpenLibrary, sameCover, sameAuthor, OPEN_LIBRARY, mainGenres, isRussian, shopLanguage, langGuess, Store, slugify, soundOf, norm, workName, OWNER };
+module.exports = { fromOpenLibrary, sameCover, sameAuthor, editDistance, OPEN_LIBRARY, mainGenres, isRussian, shopLanguage, langGuess, Store, slugify, soundOf, norm, workName, OWNER };

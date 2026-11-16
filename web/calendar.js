@@ -15,7 +15,7 @@ const net = require("net");
 
 const KEEP_DAYS = 30;
 const CALBOOKS_DAY = 30; // new catalog books from events a day (fillBooks)
-const { norm, sameAuthor, isRussian } = require("./store");
+const { norm, sameAuthor, isRussian, editDistance } = require("./store");
 const MONTHS = ["січня", "лютого", "березня", "квітня", "травня", "червня", "липня", "серпня", "вересня", "жовтня", "листопада", "грудня"];
 const WEEKDAYS = ["Неділя", "Понеділок", "Вівторок", "Середа", "Четвер", "П’ятниця", "Субота"];
 const UA = "Mozilla/5.0 (compatible; Chytai/1.0; +https://chytai.org.ua)";
@@ -109,8 +109,43 @@ function parseWhen(text, today = kyivDay()) {
 // a title in «» quotes that the catalog has, by one of those authors when there are any.
 // A catalog book for a name in an event, never a Russian edition (the Ukrainian «Гаррі Поттер і Орден Фенікса», not
 // «Гарри Поттер и Орден Феникса»).
+// A title a letter or two apart («Адді Ларю» for «Адді Лярю», «Ґетсбі» for «Гетсбі») or one of several editions
+// («Гаррі Поттер і орден Фенікса» with no author) is the search's best book whose title is that close: by the
+// author named, or, with none, the same title of 6+ letters.
 function findBook(store, q) {
-  return store.findWork({ ...q, not: (id) => isRussian(store.book?.(id, { edited: false, borrow: false }) || {}) });
+  const russian = (id) => isRussian(store.book?.(id, { edited: false, borrow: false }) || {});
+  const id = store.findWork({ ...q, not: russian });
+  if (id || !store.search) return id;
+  const key = (t) => norm(String(t || "").split(/[:(]|\.\s/)[0]);
+  const want = key(q.title);
+  if (want.length < (q.author ? 4 : 6)) return null;
+  for (const h of store.search(want, { limit: 5 }).slice(0, 5)) {
+    const b = h.book;
+    // As the page shows it: a work kept under a Russian edition's id shows its Ukrainian one («Гаррі Поттер і Орден Фенікса»).
+    if (!b?.id || isRussian(store.book?.(b.id) || b)) continue;
+    const d = editDistance(want, key(b.title), 2);
+    if (q.author ? norm(q.author) && b.author && sameAuthor(q.author, b.author) && d <= (want.length >= 10 ? 2 : want.length >= 6 ? 1 : 0) : d === 0) return store.canonical?.(b.id) || b.id;
+  }
+  return null;
+}
+
+// Titles in an event's words: in «», "", “” or „“ (podii writes "…"); a quote opens after a space and closes before
+// a space or a stop, so «Книжковий клуб "Чита"Є"мо"» stays one name. `book`: the words before it say it is a book
+// («книги», «роман Ірини …», «за книгою»); a name right after «клуб», «книгарня» and the like is no book (`place`).
+const BOOK_WORD = /^(книг[аиуі]?|книгою|книзі|книжк[аиуі]|книжкою|книжці|книжок|роман[аиуі]?|романом|збірк[аиуі]|збірок|повіст[іь]|повістю|серії|серію|серія|циклу|частин[аиуі]?|твор[уиі]?|новинк[аиуі]|поем[аиуі]|казк[аиуі]|бестселер[аиуі]?|п.єс[аиуі]|трилогі[їяю]|саг[аиуі]|том[уі]?|томів)$/u;
+const NOT_BOOK = /^(клуб|спільнот|книгарн|бібліотек|кав.?ярн|фестивал|проєкт|проект|центр|медіатек|видавництв|магазин|простір|го|галере|музе|кінотеатр|театр|ресторан|канал|школ|курс|подкаст|вечір|зустріч|виставк|акці|марафон|челендж|гр[аиу])/u;
+function quotes(text) {
+  const t = String(text || "");
+  const out = [];
+  for (const m of t.matchAll(/(?<=^|[\s(:—–-])["“„«](.{2,120}?)["”“»](?=$|[\s.,:;!?)…—–-])/gu)) {
+    let title = m[1].trim();
+    if (title.includes("«")) title = title.slice(title.lastIndexOf("«") + 1).replace(/»$/, ""); // «Розмова про «Доцю»»
+    if (title.length < 2 || out.some((x) => x.title === title)) continue;
+    const before = (t.slice(Math.max(0, m.index - 60), m.index).toLowerCase().match(/[\p{L}’'ʼ-]+/gu) || []).slice(-4);
+    const place = NOT_BOOK.test(before[before.length - 1] || "");
+    out.push({ title, place, book: !place && before.slice(-3).some((w) => BOOK_WORD.test(w)) });
+  }
+  return out;
 }
 
 function linkText(store, text) {
@@ -136,8 +171,8 @@ function linkText(store, text) {
     if (ls.length >= 3 && side(parts[0].slice(0, 3), ls)) out.authors.push(a.slug);
   }
   const names = out.authors.map((s) => store.authors.bySlug.get(s)?.name).filter(Boolean);
-  for (const m of t.matchAll(/«([^»]{2,120})»/g)) {
-    const title = m[1].trim();
+  for (const { title, place } of quotes(t)) {
+    if (place) continue;
     const id = (names.length ? names.map((n) => findBook(store, { title, author: n })).find(Boolean) : null) || findBook(store, { title });
     if (id && !out.books.includes(id)) out.books.push(id);
     if (out.books.length >= 4) break;
@@ -382,6 +417,7 @@ function create(db, store, { notify = () => {}, bookua = null, search = null, ma
     if (abroad(city)) ev = { ...ev, hidden: true };
     const links = ev.books || ev.authors ? { books: ev.books || [], authors: ev.authors || [] } : linkText(store, `${title} ${ev.sub || ""}`);
     const want = wanted(ev, title, links);
+    for (const id of links.books) for (const a of store.authors?.list || []) if (a.ids.includes(id) && !links.authors.includes(a.slug)) links.authors.push(a.slug);
     const kind = KINDS.some((k) => k.key === ev.kind) ? ev.kind : "";
     db.prepare(
       `INSERT INTO cal_events (id, source, url, title, sub, city, place, starts, ends, time, books, authors, by, added, hidden, want, kind) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -407,10 +443,12 @@ function create(db, store, { notify = () => {}, bookua = null, search = null, ma
   function wanted(ev, title, links) {
     const known = links.authors.map((s) => store.authors?.bySlug.get(s)?.name).filter(Boolean);
     const named = (Array.isArray(ev.named) ? ev.named : []).map((b) => ({ title: clean(b?.title, 120).replace(/^«|»$/g, ""), author: clean(b?.author, 80) }));
-    if (known.length === 1) for (const m of `${title} ${ev.sub || ""}`.matchAll(/«([^»]{2,120})»/g)) named.push({ title: m[1].trim(), author: known[0] });
+    // A title the words call a book («Презентація книги "Північ, якої не існує"»), by the one author named, or with
+    // none (then fillBooks takes only book.ua's Ukrainian edition of that very title).
+    for (const q of quotes(`${title} ${ev.sub || ""}`)) if (q.book || (known.length === 1 && !q.place)) named.push({ title: q.title, author: known.length === 1 ? known[0] : "" });
     const out = [];
     for (const b of named) {
-      if (b.title.length < 2 || !b.author || out.some((x) => norm(x.title) === norm(b.title))) continue;
+      if (b.title.length < 2 || (!b.author && norm(b.title).length < 6) || out.some((x) => norm(x.title) === norm(b.title))) continue;
       const id = store.findWork ? findBook(store, { title: b.title, author: b.author }) : null;
       if (id) {
         if (!links.books.includes(id)) links.books.push(id);
@@ -455,6 +493,19 @@ function create(db, store, { notify = () => {}, bookua = null, search = null, ma
       setMeta("calendar:relink2", new Date().toISOString());
       fresh();
     }
+    // Once (2026-11-16, Max: «Події не завжди знаходять книги»): titles in "" and “”, a letter apart or with no author.
+    if (!dry && !meta("calendar:relink3")) {
+      for (const e of db.prepare("SELECT * FROM cal_events WHERE (starts >= ? OR ends >= ?)").all(day, day).map(row)) {
+        const links = linkText(store, `${e.title} ${e.sub || ""}`);
+        for (const id of e.books) if (!links.books.includes(id)) links.books.push(id);
+        for (const a of e.authors) if (!links.authors.includes(a)) links.authors.push(a);
+        const want = wanted({ ...e, named: JSON.parse(e.want || "[]") }, e.title, links);
+        for (const id of links.books) for (const a of store.authors.list) if (a.ids.includes(id) && !links.authors.includes(a.slug)) links.authors.push(a.slug);
+        db.prepare("UPDATE cal_events SET books = ?, authors = ?, want = ? WHERE id = ?").run(JSON.stringify(links.books.slice(0, 6)), JSON.stringify(links.authors.slice(0, 6)), JSON.stringify(want), e.id);
+      }
+      setMeta("calendar:relink3", new Date().toISOString());
+      fresh();
+    }
     const rows = db.prepare("SELECT * FROM cal_events WHERE want != '[]' AND (starts >= ? OR ends >= ?)").all(day, day).map(row);
     for (const e of rows) {
       const left = [];
@@ -471,7 +522,7 @@ function create(db, store, { notify = () => {}, bookua = null, search = null, ma
           const hits = bookua ? await bookua(w.title.split(/[:(]|\.\s/)[0]).catch(() => []) : [];
           const hit = hits.find((h) => head(h.title) === head(w.title) && sameAuthor(w.author, h.author) && /українськ/i.test(h.language) && h.format !== "Аудіо");
           if (hit) (book = { title: hit.title.replace(/^«([^»]+)»/, "$1"), author: hit.author, cover: /^https:\/\/i\.book\.ua\//.test(hit.cover) ? hit.cover : "", links: [{ label: "book.ua", url: hit.url }], language: "українська", ...(hit.isbn ? { isbns: [hit.isbn] } : {}), ...(hit.year ? { published: hit.year } : {}) }), (from = "book.ua");
-          if (!book && search) {
+          if (!book && search && w.author) {
             const g = await confirm({ title: w.title, author: w.author, language: "українська" }, search).catch(() => null);
             if (g && /[а-яіїєґ]/i.test(g.title)) {
               const gl = /^https:\/\/(books\.google\.[a-z.]+|play\.google\.com)\//.test(g.google || "") ? [{ label: "Google Books", url: g.google }] : [];
