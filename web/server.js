@@ -2972,7 +2972,7 @@ const normQ = (s) => String(s || "").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, "
 // How well the words typed name it (Max, 2026-11-16: «кава» put Кавагуті and Кавабата over the books about coffee):
 // 2 = each is a whole word of the name, or a Latin name that sounds the same («кінг», King); 1 = each only starts one,
 // is another form of one («франко», Франка) or sounds like one of its Latin words («мурак», «франко» → Frank); 0 = not.
-const bare = (s) => String(s || "").normalize("NFKD").replace(/\p{M}/gu, "").normalize("NFC");
+const bare = (s) => String(s || "").replace(/ґ/g, "г").replace(/є/g, "е").normalize("NFKD").replace(/\p{M}/gu, "").normalize("NFC"); // «гарі» is Ґарі
 function nameFit(nq) {
   const terms = nq.split(" ").filter(Boolean).map((t) => ({ b: bare(t), same: new Set([bare(t), ...store.latinSame(t)]), alts: [...store.latinAlts(t), ...store.forms(t)] }));
   return (name) => {
@@ -3071,8 +3071,11 @@ function searchAll(req, q) {
   let nearAuthors = [];
   let nearShelves = [];
   if (!hits.length && !authorsFound.length && !readersFound.length && !shelvesFound.length && !listsFound.length && terms.length >= 2) {
+    // A word fewer books have weighs more: «історія українського мистецтва» is about «мистецтва» first (2026-11-16).
     const score = new Map();
+    const weight = new Map();
     for (const t of new Set(terms.filter((t) => t.length >= 3))) {
+      weight.set(t, Math.log2(1 + 200 / Math.max(1, store.docCount(t))));
       const found = searchHits(req, t).slice(0, 30);
       for (const h of found) {
         const s = score.get(h.book.id) || { h, n: 0 };
@@ -3090,7 +3093,7 @@ function searchAll(req, q) {
     };
     for (const s of score.values()) {
       const all = [s.h.book.title, s.h.book.author].flatMap(words);
-      s.n += terms.filter((t) => all.some((w) => w.startsWith(t) || close(t, w))).length;
+      s.n += terms.filter((t) => all.some((w) => w.startsWith(t) || close(t, w))).reduce((n, t) => n + (weight.get(t) || 1), 0);
     }
     near = [...score.values()].sort((a, b) => b.n - a.n).slice(0, 5).map((s) => s.h);
     // Authors and publishers the same way («Артур Чех» → Артем Чех): only the best scored, first three letters

@@ -1205,6 +1205,7 @@ class Store {
     this.vocab = null; // the typo search reloads the word list
     this.sounds = null;
     this.formCache = null;
+    this.vocabSet = null;
     this.aliasIdx = null;
     if (!full && this.updateSearch(rows)) return;
     const db = this.db;
@@ -1229,6 +1230,7 @@ class Store {
     this.vocab = null; // the typo search reloads the word list
     this.sounds = null;
     this.formCache = null;
+    this.vocabSet = null;
     this.aliasIdx = null;
   }
 
@@ -1308,6 +1310,7 @@ class Store {
     this.vocab = null;
     this.sounds = null;
     this.formCache = null;
+    this.vocabSet = null;
     this.aliasIdx = null;
   }
 
@@ -1390,6 +1393,10 @@ class Store {
     this.formCache ??= new Map();
     if (this.formCache.has(t)) return this.formCache.get(t);
     this.vocab ??= this.db.prepare("SELECT term FROM search_vocab").all().map((r) => r.term);
+    this.vocabSet ??= new Set(this.vocab);
+    // Only for a word the index has: «чисти» or «цере» is a word being typed, «Чистий код» and «Церебро», not «чиста»
+    // or «Цері» (2026-11-16, over the logged searches).
+    if (!this.vocabSet.has(t)) return this.formCache.set(t, []).get(t);
     const end = ENDINGS.find((e) => e && t.endsWith(e) && t.length - e.length >= 3) || "";
     const stem = t.slice(0, t.length - end.length);
     const out = this.vocab.filter((w) => w !== t && (w !== stem || !end) && w.startsWith(stem) && w.length <= stem.length + 3 && ENDING_SET.has(w.slice(stem.length))).slice(0, 12);
@@ -1435,6 +1442,14 @@ class Store {
   }
   aliasQuery(q) {
     return this.searchAliases().query.get(aliasKey(q)) || "";
+  }
+
+  // How many books have a word in any form (up to 200): «мистецтва» is rarer than «історія» (server.js searchAll `near`).
+  docCount(term) {
+    const t = fold(norm(term));
+    if (!t || t.includes(" ")) return 0;
+    const match = `("${t}"*${this.forms(t).map((w) => ` OR "${w}"`).join("")})`;
+    return this.db.prepare("SELECT count(*) AS n FROM (SELECT 1 FROM search WHERE search MATCH ? LIMIT 200)").get(match).n;
   }
 
   search(q, { reader = null, limit = 40, alias = true } = {}) {
@@ -1506,9 +1521,9 @@ class Store {
       const main = fold(norm(String(b.title || "").split(/[.:]\s/)[0])) === exact && readers > 0;
       const bundle = b.bundle || /^комплект/i.test(b.title || "");
       const score =
-        (fold(norm(b.title)) === exact || fold(norm(b.altTitle)) === exact || main ? 1000 : 0) +
+        (fold(norm(b.title)) === exact || fold(norm(b.altTitle)) === exact ? 1000 : main ? 800 : 0) + // «Маленький принц» over «Маленький принц. Листи…»
         (whole ? 500 : 0) +
-        (same(words) ? 10 : 0) + // the word as typed a little over its other forms («франко» over «Франка»)
+        (same(words) ? 60 : 0) + // the word as typed over its other forms («важливо» over «Міряй важливе»), unless many more read that
         // A title that starts with the words («Кава з кардамоном»), or an author named by them: «франко» is Франко's
         // own books before the books about him.
         (strip(fold(norm(b.title))).startsWith(strip(exact)) || same(wordsOf(b.author, b.authorOrig)) ? 15 : 0) +
