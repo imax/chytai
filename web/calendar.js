@@ -884,6 +884,7 @@ function create(db, store, { notify = () => {}, bookua = null, search = null, ma
   function cleanup() {
     const before = addDays(kyivDay(), -KEEP_DAYS);
     const r = db.prepare("DELETE FROM cal_events WHERE max(starts, ends) < ?").run(before);
+    db.prepare("DELETE FROM cal_going WHERE event NOT IN (SELECT id FROM cal_events)").run();
     fresh();
     return r.changes;
   }
@@ -1016,7 +1017,46 @@ function create(db, store, { notify = () => {}, bookua = null, search = null, ma
   };
   const unsubscribeAll = (reader) => db.prepare("DELETE FROM cal_subs WHERE reader = ?").run(reader).changes;
 
-  return { upsert, setKinds, add, one, byKey, findSimilar, cancel, uncancel, cancelledList, recent, pending, review, hide, setLink, cleanup, seed, upcoming, forAuthor, forBook, cities, fillBooks, chytomoRun, eventmateRun, podiiRun, feeds, addFeed, removeFeed, feedsRun, yeRun, yeLast: () => yeLast, peek, fresh, meta, setMeta, subs, subscribed, subscribe, unsubscribeAll };
+  // «Хочу піти» (Max 2026-11-16, in place of «Додати в календар»: we see who is going): a reader's mark on an event,
+  // and a letter the day before (`reminded` = when it went). Rows go with their event (cleanup) or the reader.
+  // A reader who said «не нагадувати» has meta `calremind:off:<id>`.
+  db.exec("CREATE TABLE IF NOT EXISTS cal_going (reader TEXT NOT NULL, event TEXT NOT NULL, at TEXT NOT NULL, reminded TEXT NOT NULL DEFAULT '', PRIMARY KEY (reader, event))");
+  db.exec("CREATE INDEX IF NOT EXISTS cal_going_event ON cal_going (event)");
+  const isGoing = (reader, id) => !!reader && !!db.prepare("SELECT 1 FROM cal_going WHERE reader = ? AND event = ?").get(reader, id);
+  const goingCount = (id) => db.prepare("SELECT COUNT(*) AS n FROM cal_going WHERE event = ?").get(id).n;
+  function going(reader, id, on) {
+    if (!reader || !one(id)) return false;
+    if (!on) return db.prepare("DELETE FROM cal_going WHERE reader = ? AND event = ?").run(reader, id).changes > 0;
+    return db.prepare("INSERT OR IGNORE INTO cal_going (reader, event, at) VALUES (?, ?, ?)").run(reader, id, new Date().toISOString()).changes > 0;
+  }
+  // Events most readers mean to go to (/admin/events), upcoming ones.
+  const goingTop = (limit = 20) => {
+    const today = kyivDay();
+    return db
+      .prepare("SELECT e.*, COUNT(*) AS going FROM cal_going g JOIN cal_events e ON e.id = g.event WHERE (e.starts >= ? OR e.ends >= ?) GROUP BY e.id ORDER BY going DESC, e.starts LIMIT ?")
+      .all(today, today, limit)
+      .map((r) => ({ ...row(r), going: r.going }));
+  };
+  const remindOff = (reader) => meta(`calremind:off:${reader}`) === "1";
+  const setRemind = (reader, on) => (on ? db.prepare("DELETE FROM meta WHERE key = ?").run(`calremind:off:${reader}`) : setMeta(`calremind:off:${reader}`, "1"));
+  // Tomorrow's events (Kyiv) not reminded yet: { reader: [event] }, shown and not cancelled.
+  function dueReminders() {
+    const tomorrow = addDays(kyivDay(), 1);
+    const by = new Map();
+    for (const r of db.prepare("SELECT g.reader, e.* FROM cal_going g JOIN cal_events e ON e.id = g.event WHERE e.starts = ? AND e.hidden = 0 AND e.cancelled = '' AND g.reminded = ''").all(tomorrow)) {
+      if (remindOff(r.reader)) continue;
+      if (!by.has(r.reader)) by.set(r.reader, []);
+      by.get(r.reader).push(row(r));
+    }
+    return by;
+  }
+  const reminded = (reader, ids) => {
+    const up = db.prepare("UPDATE cal_going SET reminded = ? WHERE reader = ? AND event = ?");
+    const at = new Date().toISOString();
+    for (const id of ids) up.run(at, reader, id);
+  };
+
+  return { upsert, setKinds, add, one, byKey, findSimilar, cancel, uncancel, cancelledList, recent, pending, review, hide, setLink, cleanup, seed, upcoming, forAuthor, forBook, cities, fillBooks, chytomoRun, eventmateRun, podiiRun, feeds, addFeed, removeFeed, feedsRun, yeRun, yeLast: () => yeLast, peek, fresh, meta, setMeta, subs, subscribed, subscribe, unsubscribeAll, going, isGoing, goingCount, goingTop, dueReminders, reminded, remindOff, setRemind };
 }
 
 // «Четвер, 19 листопада» and, within a week, «завтра» / «через 3 дні».

@@ -2401,7 +2401,7 @@ const eventLine = (e) => (e ? `<p class="awards cal-line" data-block="book-event
 // An event's own page, /calendar/<title>-<key> (Max 2026-11-15, variant A of a design canvas: the shape of a book's
 // page). The book's cover or the day, the day and time, the title, where (with a map), what it is, the organizer's
 // link and «Додати в календар»; the books with «Хочу прочитати»; a tour's other stops; more events nearby.
-function eventPage({ e, user, owner = false, books = [], stops = [], related = [], relatedLabel = "", relatedHref = "/calendar", site = "" }) {
+function eventPage({ e, user, owner = false, books = [], stops = [], related = [], relatedLabel = "", relatedHref = "/calendar", site = "", going = false, goingCount = 0, remindOff = false }) {
   const C = cal();
   const today = C.kyivDay();
   const past = (e.ends || e.starts) < today;
@@ -2418,9 +2418,16 @@ function eventPage({ e, user, owner = false, books = [], stops = [], related = [
   const page = `${site}${C.eventPath(e)}`;
   const src = C.sourceUrl(e);
   const org = src ? `<a class="btn primary" href="${attr(src)}" target="_blank" rel="noopener nofollow ugc" data-ev="ev-organizer">${esc(orgText(e))} ↗</a>` : "";
-  // «Додати в календар»: the .ics file opens Apple's calendar, Google's has its own link.
+  // «Хочу піти» (Max 2026-11-16, in place of «Додати в календар»): we see who goes, a letter comes the day before,
+  // and once pressed the calendar links show (the .ics opens Apple's calendar, Google's has its own link). A guest
+  // signs in and comes back marked.
   const ics = C.eventPath(e) + ".ics";
-  const addCal = past ? "" : `<details class="ev-cal"><summary class="btn">Додати в календар</summary><p class="small"><a class="text-link" href="${attr(ics)}" data-ev="ev-ics">iPhone чи Mac</a> · <a class="text-link" href="${attr(C.googleLink(e, page))}" target="_blank" rel="noopener" data-ev="ev-google">Google</a> · <a class="text-link" href="${attr(ics)}" download data-ev="ev-ics-file">файл .ics</a></p></details>`;
+  const calLinks = `<a class="text-link" href="${attr(ics)}" data-ev="ev-ics">iPhone чи Mac</a> · <a class="text-link" href="${attr(C.googleLink(e, page))}" target="_blank" rel="noopener" data-ev="ev-google">Google</a> · <a class="text-link" href="${attr(ics)}" download data-ev="ev-ics-file">файл .ics</a>`;
+  const goForm = (on, text, ev) => `<form method="post" action="/calendar/${attr(encodeURIComponent(e.id))}/going" class="inline"><input type="hidden" name="on" value="${on ? "1" : ""}"><button class="btn" data-ev="${ev}">${text}</button></form>`;
+  const addCal = past ? "" : !user ? `<a class="btn" rel="nofollow" href="/login?next=${attr(encodeURIComponent(`/do/calendar-going?id=${encodeURIComponent(e.id)}`))}" data-ev="ev-going">Хочу піти</a>` : going ? goForm(false, "✓ Іду", "ev-not-going") : goForm(true, "Хочу піти", "ev-going");
+  const tomorrowOrLater = e.starts > today;
+  const goingLine = going && !past ? `<p class="small ev-going">${tomorrowOrLater ? (remindOff ? `Нагадування вимкнені. <form method="post" action="/calendar/remind-on" class="inline"><input type="hidden" name="back" value="${attr(C.eventPath(e))}"><button class="text-link">Увімкнути</button></form> · ` : "Нагадаємо листом за день. ") : ""}У календар: ${calLinks}</p>` : "";
+  const others = goingCount - (going ? 1 : 0);
   const hide = user && (owner || e.by === user.id) ? `<form method="post" action="/calendar/${attr(encodeURIComponent(e.id))}/hide" class="inline"><button class="text-link small muted">сховати</button></form>` : "";
   const by = e.byReader ? `Додав(ла) <a class="text-link" href="${attr(e.byReader.href)}">${esc(e.byReader.name)}</a>` : "";
   const foot = [by, hide].filter(Boolean).join(" · ");
@@ -2449,7 +2456,8 @@ function eventPage({ e, user, owner = false, books = [], stops = [], related = [
         ${where ? `<p class="ev-where">${where}${map}</p>` : ""}
         ${e.sub ? `<p class="ev-sub">${esc(e.sub)}</p>` : ""}
         ${calShelfLine(e)}
-        ${past ? `<p class="ev-past muted">Ця подія вже минула. <a class="text-link" href="/calendar">Що попереду</a></p>` : org || addCal ? `<div class="ev-acts">${org}${addCal}</div>` : ""}
+        ${past ? `<p class="ev-past muted">Ця подія вже минула. <a class="text-link" href="/calendar">Що попереду</a></p>` : org || addCal ? `<div class="ev-acts">${org}${addCal}</div>${goingLine}` : ""}
+        ${others > 0 && !past ? `<p class="small muted ev-others">${going ? "Ще " : ""}${others} ${plural(others, "читач хоче", "читачі хочуть", "читачів хочуть")} піти</p>` : ""}
         ${foot ? `<p class="small muted ev-foot">${foot}</p>` : ""}
       </div>
     </article>
@@ -3655,7 +3663,7 @@ ${shown.length ? shown.map(row).join("") : `<p class="muted">${all ? "Поки �
 
 // ---- /admin/events: the calendar of book events (Max 2026-11-15: its own page; where an event lacks its page) ----
 
-function eventsAdminPage({ user, rows, tg, saved, feeds = [], feedMsg = "", cancelled = [], review = [], recent = [] }) {
+function eventsAdminPage({ user, rows, tg, saved, feeds = [], feedMsg = "", cancelled = [], review = [], recent = [], goingTop = [] }) {
   const C = cal();
   const n = (v) => String(v);
   const kindOf = (e) => C.linkKind(C.sourceUrl(e)) || "none";
@@ -3712,6 +3720,8 @@ ${review.map((e) => `<div class="cmt"><p><a href="${attr(C.eventPath(e))}">${esc
 ${e.sub ? `<p class="small">${esc(e.sub)}</p>` : ""}
 <div style="display:flex;gap:.5em;margin-top:.4em"><form method="post" action="/admin/events/review"><input type="hidden" name="id" value="${attr(e.id)}"><input type="hidden" name="show" value="1"><button class="btn small primary">Показати</button></form>
 <form method="post" action="/admin/events/review"><input type="hidden" name="id" value="${attr(e.id)}"><button class="btn small">Прибрати</button></form></div></div>`).join("")}</section>` : ""}
+${goingTop.length ? `<section class="block" id="going">${label(`Хочуть піти · ${goingTop.reduce((s, e) => s + e.going, 0)}`)}
+${goingTop.map((e) => `<p class="small" style="margin:.3em 0"><b>${e.going}</b> · <a href="${attr(C.eventPath(e))}">${esc(e.title)}</a> <span class="muted">· ${esc(e.starts.slice(8, 10) + "." + e.starts.slice(5, 7))}${e.city ? ` · ${esc(e.city)}` : ""}</span></p>`).join("")}</section>` : ""}
 ${recentBlock}
 <section class="block">${label("Посилання")}
 <p>${Object.keys(KIND_NAME).filter((k) => byLink[k]).map((k) => `${esc(KIND_NAME[k])}: <b>${byLink[k]}</b>`).join(" · ")}</p>

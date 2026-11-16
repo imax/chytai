@@ -1882,8 +1882,68 @@ app.get(/^\/calendar\/(?:[^/]*-)?([0-9a-f]{8})(\.ics)?$/, (req, res) => {
   const kindNow = rel.length && rel.every((x) => x.kind === e.kind) && e.kind;
   const relatedLabel = city === "Онлайн" ? "Ще онлайн" : city ? `Ще події · ${city}` : "Ще події";
   const relatedHref = `/calendar?${[kindNow ? `kind=${e.kind}` : "", city ? `city=${encodeURIComponent(city)}` : "", !kindNow ? "all=1" : ""].filter(Boolean).join("&")}`;
-  res.send(pages.eventPage({ e: card, user: req.user, owner: !!req.owner, books, stops, related: rel, relatedLabel, relatedHref, site: SITE }));
+  res.send(pages.eventPage({ e: card, user: req.user, owner: !!req.owner, books, stops, related: rel, relatedLabel, relatedHref, site: SITE, going: req.user ? calendar.isGoing(req.user.id, e.id) : false, goingCount: calendar.goingCount(e.id), remindOff: req.user ? calendar.remindOff(req.user.id) : false }));
 });
+// «Хочу піти» (Max 2026-11-16): the reader's mark, then back to the event with its calendar links open. A guest signs
+// in and comes back already marked (/do/ skips /welcome).
+app.post("/calendar/:id/going", signed, (req, res) => {
+  const e = calendar.one(req.params.id);
+  if (!e) return res.status(404).send("Немає такої події");
+  calendar.going(req.user.id, e.id, req.body?.on === "1");
+  res.redirect(303, calendarLib.eventPath(e));
+});
+app.get("/do/calendar-going", signed, (req, res) => {
+  const e = calendar.one(String(req.query.id || ""));
+  if (!e) return res.redirect("/calendar");
+  calendar.going(req.user.id, e.id, true);
+  res.redirect(calendarLib.eventPath(e));
+});
+// The reminder's «Не нагадувати»: no more letters the day before (signed like the digest's, no sign-in).
+const remindSwitch = (req, res, on) => {
+  const reader = auth.reader(req.params.id);
+  if (!reader || !digest.check(reader.id, req.params.token)) return res.status(404).send(pages.messagePage({ title: "Посилання не підходить", text: "Нагадування вимикаються на сторінці події.", user: req.user }));
+  mailLog.switched("calremind", reader.id, !calendar.remindOff(reader.id), on);
+  calendar.setRemind(reader.id, on);
+  res.send(pages.messagePage({ title: on ? "Нагадування увімкнено" : "Більше не нагадуватимемо", text: on ? "Лист прийде за день до події, на яку ви хочете піти." : "Листів за день до подій більше не буде. Увімкнути знову можна на сторінці будь-якої події.", user: req.user }));
+};
+app.get("/calendar/remind-off/:id/:token", (req, res) => remindSwitch(req, res, false));
+app.post("/calendar/remind-off/:id/:token", (req, res) => remindSwitch(req, res, false));
+app.post("/calendar/remind-on", signed, (req, res) => {
+  if (calendar.remindOff(req.user.id)) mailLog.switched("calremind", req.user.id, false, true);
+  calendar.setRemind(req.user.id, true);
+  res.redirect(303, safeNext(req.body?.back) || "/calendar");
+});
+// The letter the day before (Max 2026-11-16: «нагадування на пошту за день»): from 10:00 Kyiv, one letter a reader
+// with tomorrow's events they mean to go to; links only to chytai.org.ua (the event's page).
+async function calendarReminders() {
+  const hour = Number(new Date().toLocaleString("en-GB", { timeZone: "Europe/Kyiv", hour: "2-digit", hour12: false }));
+  if (hour < 10) return false;
+  const M = require("./mailhtml");
+  const A = require("./admin");
+  let sent = 0;
+  for (const [readerId, events] of calendar.dueReminders()) {
+    const reader = auth.reader(readerId);
+    if (!reader?.email) {
+      calendar.reminded(readerId, events.map((e) => e.id));
+      continue;
+    }
+    const off = `${SITE}/calendar/remind-off/${encodeURIComponent(reader.id)}/${digest.token(reader.id)}`;
+    const line = (e) => `${e.title}\n${[e.time ? `Завтра, ${e.time}` : "Завтра", e.city, e.place].filter(Boolean).join(" · ")}\n${SITE}${calendarLib.eventPath(e)}`;
+    const subject = events.length === 1 ? `Завтра: ${events[0].title}` : `Завтра ${events.length} події, на які ви хотіли піти`;
+    const text = [events.length === 1 ? "Нагадуємо про подію, на яку ви хотіли піти:" : "Нагадуємо про події, на які ви хотіли піти:", "", events.map(line).join("\n\n"), "", `Не нагадувати: ${off}`].join("\n");
+    const body = events.map((e) => `<p style="margin:0 0 14px"><a href="${M.esc(`${SITE}${calendarLib.eventPath(e)}`)}"><b>${M.esc(e.title)}</b></a><br>${M.esc([e.time ? `Завтра, ${e.time}` : "Завтра", e.city, e.place].filter(Boolean).join(" · "))}</p>`).join("");
+    const html = M.letter({ site: SITE, title: subject, heading: events.length === 1 ? "Завтра подія" : "Завтра події", body, button: events.length === 1 ? { text: "Сторінка події", href: `${SITE}${calendarLib.eventPath(events[0])}` } : null, off: { href: off, text: "Не нагадувати про події" } });
+    try {
+      await auth.send(reader.email, subject, A.mailLinks(text, SITE, "calremind"), { kind: "calremind", html: A.mailLinks(html, SITE, "calremind", true), headers: { "List-Unsubscribe": `<${off}>`, "List-Unsubscribe-Post": "List-Unsubscribe=One-Click" } });
+      calendar.reminded(readerId, events.map((e) => e.id));
+      sent++;
+    } catch (err) {
+      console.error(`[calremind] ${reader.id}: ${err.message}`);
+    }
+  }
+  return sent ? { sent } : false;
+}
+bg.every("calendar-remind", 3600 * 1000, () => calendarReminders(), { db: store.db, first: 10 * 60 * 1000 });
 // The Friday letter's «Книжкові події» (digest.js): what the reader's subscriptions pick and starts within 9 days
 // (to the Sunday after the next letter), plus later ones added since their last letter. A tour is one row.
 function calForLetter(reader, since, now = new Date()) {
@@ -2628,7 +2688,7 @@ app.get("/admin/events", owner, (req, res) => {
   try {
     tg = tgFeed.status();
   } catch {}
-  res.send(pages.eventsAdminPage({ user: req.user, rows: calendar.upcoming(), tg, saved: String(req.query.saved || ""), feeds: calendar.feeds(), feedMsg: String(req.query.feed || ""), cancelled: calendar.cancelledList(), review: calendar.pending(), recent: calendar.recent(3) }));
+  res.send(pages.eventsAdminPage({ user: req.user, rows: calendar.upcoming(), tg, saved: String(req.query.saved || ""), feeds: calendar.feeds(), feedMsg: String(req.query.feed || ""), cancelled: calendar.cancelledList(), review: calendar.pending(), recent: calendar.recent(3), goingTop: calendar.goingTop() }));
 });
 // An event a Telegram post took off (cancelled or moved) back on the calendar, when the post was read wrong.
 app.post("/admin/events/uncancel", owner, (req, res) => {

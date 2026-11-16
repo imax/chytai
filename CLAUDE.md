@@ -291,6 +291,12 @@ A flag only when Max asks for one, or when the change could break what readers u
   the .ics) starting within 9 days, plus later ones added since the last letter, 3 rows (Max: «не більше трьох»), a tour one row. Links go
   through `/calendar/go/<id>` (letters link only to our domain); «Відписатися від подій» =
   `/calendar/unsubscribe/<reader>/<digest token>`; /settings/mail lists them. Try: `/digest/preview` as the owner.
+- «Хочу піти» on an event's page (Max 2026-11-16, in place of «Додати в календар»): `POST /calendar/<id>/going`
+  (table `cal_going`, a guest signs in and lands back marked by `GET /do/calendar-going?id=`); once pressed the page
+  shows «✓ Іду», the calendar links and «Нагадаємо листом за день»; others' count under it. A letter the day before
+  (`calendarReminders` in server.js, hourly job `calendar-remind`, from 10:00 Kyiv, one letter a reader, `reminded`
+  marks it; «Не нагадувати» = `/calendar/remind-off/<reader>/<digest token>`, meta `calremind:off:<id>`, back on with
+  a button on the event page). /admin/events «Хочуть піти» lists the counts.
 - In a phone's calendar (a line at the page's foot): `/calendar.ics` is the list as an iCalendar feed with the same
   `?kind=` / `?city=` / `?q=`; «Мої автори» by `?mine=<reader>.<key>` (`calKey`, HMAC with the reader secret; a
   calendar app has no cookie). Links: webcal:// (Apple), Google Calendar's `?cid=`, and the plain address.

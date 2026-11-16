@@ -129,6 +129,10 @@ class Auth {
       try {
         this.db.prepare("DELETE FROM cal_subs WHERE reader = ?").run(id); // calendar.js makes it
       } catch {}
+      try {
+        this.db.prepare("DELETE FROM cal_going WHERE reader = ?").run(id); // calendar.js makes it
+        this.db.prepare("DELETE FROM meta WHERE key = ?").run(`calremind:off:${id}`);
+      } catch {}
       this.db.prepare("DELETE FROM readers WHERE id = ?").run(id);
     });
     for (const [h, r] of this.cache) if (r === id) this.cache.delete(h);

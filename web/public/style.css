@@ -1512,6 +1512,9 @@ aside .side-lists + .label, aside p + .label, aside dialog + .label { margin-top
 .ev-cal > summary::-webkit-details-marker { display: none; }
 .ev-cal[open] > summary { background: var(--ink); color: var(--paper); }
 .ev-cal p { margin-top: 12px; }
+.ev-going { margin-top: 12px; }
+.ev-going form.inline button { color: inherit; text-decoration: underline; }
+.ev-others { margin-top: 8px; }
 .ev-past { margin-top: 22px; }
 .ev-foot { margin-top: 16px; }
 .ev-foot form.inline button { background: none; border: 0; padding: 0; cursor: pointer; }
