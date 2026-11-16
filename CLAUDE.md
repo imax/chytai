@@ -285,8 +285,8 @@ A flag only when Max asks for one, or when the change could break what readers u
   with a line per stop (`calendar.tours`), but under a city chip each stop is its own row; `?q=` searches title, words,
   place, authors' names and books; «Звідки події» only on the whole list.
 - «Підписатися» by e-mail (Max 2026-11-15, like a publisher's): the button keeps the page's choice (kind, city,
-  «Мої автори», words; `calendar.subKey`) in table `cal_subs` (10 a reader; `POST /calendar/subscribe`, guests sign in
-  first) and switches the Friday letter on. No letter of its own (no extra mail): the digest's «Книжкові події»
+  «Мої автори», words; `calendar.subKey`) in table `cal_subs` (10 a reader; `POST /calendar/subscribe`; a guest signs in
+  and lands back already subscribed by `GET /do/calendar-subscribe?<choice>`, no /welcome) and switches the Friday letter on. No letter of its own (no extra mail): the digest's «Книжкові події»
   section (`calForLetter` in server.js) has what the subscriptions pick (`calPick`, the same filter as the page and
   the .ics) starting within 9 days, plus later ones added since the last letter, 3 rows (Max: «не більше трьох»), a tour one row. Links go
   through `/calendar/go/<id>` (letters link only to our domain); «Відписатися від подій» =
@@ -299,8 +299,11 @@ A flag only when Max asks for one, or when the change could break what readers u
 - Table `cal_events` (id `{source}:{key}`, starts/ends `YYYY-MM-DD` Kyiv, time `HH:MM`, city as shown, «Онлайн»
   for online; books/authors JSON found by name, no AI: `linkText`, a name's two words side by side, «Олександрою … книгарні» ≠ Олександр Книга; never a Russian edition, `findBook`). Gone 30 days after it ends (`cleanup`).
 - Sources: `web/seed/calendar.json` (kept in step at every start: festivals by a thread or Max); readers via
-  /calendar/add (signed in, 5 a day, mails + Telegram Max; Max or the reader hides one with «сховати»; «Заповнити з
-  посилання» = `POST /api/calendar/peek`, public addresses only); collectors call `calendar.upsert({ source, key, …,
+  /calendar/add (signed in: shown at once, 5 a day, mails + Telegram Max; Max or the reader hides one with «сховати»;
+  guests too (Max 2026-11-16): hidden with `review = 1` until Max presses «Показати» on /admin/events («Від гостей»,
+  «Прибрати» deletes), `by = guest:<hash of the address>`, 3 a day, an optional e-mail in `contact` (only that block
+  and Max's note show it), a field `site` only robots fill; «Заповнити з посилання» = `POST /api/calendar/peek`,
+  public addresses only, 10 a day for a guest); collectors call `calendar.upsert({ source, key, …,
   hidden: true })` and `findSimilar()` against duplicates (the Telegram thread uses source `tg`).
 - Книгарня «Є» (`yeRun`, source `ye`): reads book-ye.com.ua/calendar/ daily in the jobs process, only once meta
   `calendar:ye` is `on`. Dry run: `curl -s https://chytai.org.ua/agent/calendar-ye -H "$H"` (ask again for the

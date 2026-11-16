@@ -2301,10 +2301,10 @@ function calendarPage({ user, events, cities, city = "", mine = false, mineCount
   const mineChip = user && mineCount ? chip(mine, href({ mine: !mine }), `Мої автори · ${mineCount}`, " cal-mine-chip") : "";
   const tools = `<div class="cal-tools">${cityMenu}${mineChip}${find}</div>`;
   // «Підписатися» (Max 2026-11-15, like a publisher's): the events of this choice come in the Friday letter. A guest
-  // signs in first and comes back here.
+  // signs in first and comes back here already subscribed (/do/calendar-subscribe, no /welcome on the way).
   const hidden = (n, v) => (v ? `<input type="hidden" name="${n}" value="${attr(v)}">` : "");
   const subscribe = !user
-    ? `<a class="btn" rel="nofollow" href="/login?next=${attr(encodeURIComponent(href()))}" data-ev="cal-subscribe">Підписатися</a>`
+    ? `<a class="btn" rel="nofollow" href="/login?next=${attr(encodeURIComponent(`/do/calendar-subscribe${href().replace(/^\/calendar/, "")}`))}" data-ev="cal-subscribe">Підписатися</a>`
     : `<form method="post" action="/calendar/subscribe" class="inline">${hidden("kind", kind)}${hidden("city", city)}${hidden("mine", mine ? "1" : "")}${hidden("q", query)}<input type="hidden" name="on" value="${subscribed ? "" : "1"}"><button class="btn" data-ev="${subscribed ? "cal-unsubscribe" : "cal-subscribe"}">${subscribed ? "✓ Підписано" : "Підписатися"}</button></form>`;
   // The line under the buttons is there in both states, so nothing moves when it changes (Max 2026-11-16: the button
   // jumped); app.js swaps its text when the button is pressed in the background.
@@ -2358,7 +2358,9 @@ function calendarAddPage({ user, values = {}, error = "" }) {
   <datalist id="cal-cities">${["Онлайн", "Київ", "Львів", "Харків", "Одеса", "Дніпро", "Вінниця", "Рівне", "Тернопіль", "Івано-Франківськ", "Ужгород", "Чернівці", "Луцьк", "Житомир", "Полтава"].map((c) => `<option value="${c}">`).join("")}</datalist>
   <label>Коротко, про що<input type="text" name="sub" value="${v("sub")}" maxlength="200"></label>
   <label>Остання дата, якщо подія на кілька днів<input type="date" name="ends" value="${v("ends")}" min="${today}"></label>
-  <div class="actions"><button class="btn primary">Додати</button><span class="small muted">З’явиться одразу, з вашим ім’ям.</span></div>
+  ${user ? "" : `<label>Ваша пошта, якщо хочете<input type="email" name="contact" value="${v("contact")}" maxlength="120" placeholder="На сайті її не видно"></label>
+  <label class="hp" aria-hidden="true">Сайт<input type="text" name="site" tabindex="-1" autocomplete="off"></label>`}
+  <div class="actions"><button class="btn primary">Додати</button><span class="small muted">${user ? "З’явиться одразу, з вашим ім’ям." : `З’явиться після перевірки. <a class="text-link" href="/login?next=%2Fcalendar%2Fadd">Увійдіть</a>, щоб одразу.`}</span></div>
 </form>
 <script>
 (() => {
@@ -3643,7 +3645,7 @@ ${shown.length ? shown.map(row).join("") : `<p class="muted">${all ? "Поки �
 
 // ---- /admin/events: the calendar of book events (Max 2026-11-15: its own page; where an event lacks its page) ----
 
-function eventsAdminPage({ user, rows, tg, saved, feeds = [], feedMsg = "", cancelled = [] }) {
+function eventsAdminPage({ user, rows, tg, saved, feeds = [], feedMsg = "", cancelled = [], review = [] }) {
   const C = cal();
   const n = (v) => String(v);
   const kindOf = (e) => C.linkKind(C.sourceUrl(e)) || "none";
@@ -3680,6 +3682,13 @@ function eventsAdminPage({ user, rows, tg, saved, feeds = [], feedMsg = "", canc
   const top = (tg?.per || []).filter((c) => c.events > 0).sort((a, b) => b.events - a.events).slice(0, 12);
   const body = `
 ${pageHead({ title: "Події", sub: `${n(rows.length)} майбутніх подій на <a href="/calendar">/calendar</a>` })}
+${review.length ? `<section class="block" id="review">${label(`Від гостей · ${review.length}`)}
+<p class="small muted">Додали без входу. На сайті їх немає, поки не покажете.</p>
+${review.map((e) => `<div class="cmt"><p><a href="${attr(C.eventPath(e))}">${esc(e.title)}</a></p>
+<p class="small muted">${[esc(e.starts.slice(8, 10) + "." + e.starts.slice(5, 7)) + (e.time ? ` ${esc(e.time)}` : ""), ...[e.city, e.place].filter(Boolean).map(esc), e.url ? `<a href="${attr(e.url)}" target="_blank" rel="noopener nofollow">${esc(e.url.replace(/^https?:\/\/(www\.)?/, "").slice(0, 40))}</a>` : "", e.contact ? esc(e.contact) : ""].filter(Boolean).join(" · ")}</p>
+${e.sub ? `<p class="small">${esc(e.sub)}</p>` : ""}
+<div style="display:flex;gap:.5em;margin-top:.4em"><form method="post" action="/admin/events/review"><input type="hidden" name="id" value="${attr(e.id)}"><input type="hidden" name="show" value="1"><button class="btn small primary">Показати</button></form>
+<form method="post" action="/admin/events/review"><input type="hidden" name="id" value="${attr(e.id)}"><button class="btn small">Прибрати</button></form></div></div>`).join("")}</section>` : ""}
 <section class="block">${label("Посилання")}
 <p>${Object.keys(KIND_NAME).filter((k) => byLink[k]).map((k) => `${esc(KIND_NAME[k])}: <b>${byLink[k]}</b>`).join(" · ")}</p>
 <p class="small muted">Звідки: ${Object.entries(bySource).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${esc(SOURCE_NAME[k] || k)} ${v}`).join(" · ")}</p></section>

@@ -1818,6 +1818,17 @@ app.post("/calendar/subscribe", signed, (req, res) => {
   }
   res.redirect(303, calHref(f));
 });
+// A guest's «Підписатися» goes through sign-in to here (`/do/` skips /welcome): subscribed, back on the page.
+app.get("/do/calendar-subscribe", signed, (req, res) => {
+  const q = req.query || {};
+  const f = { kind: calendarLib.KINDS.some((k) => k.key === q.kind) ? q.kind : "", city: String(q.city || "").slice(0, 40), mine: !!q.mine, q: String(q.q || "").trim().slice(0, 80) };
+  calendar.subscribe(req.user.id, f, true);
+  if (!digest.enabled(req.user.id)) {
+    mailLog.switched("digest", req.user.id, false, true);
+    digest.setEnabled(req.user.id, true);
+  }
+  res.redirect(calHref(f));
+});
 // The letter's «Відписатися від подій»: every event subscription of the reader, no sign-in (signed like the digest's).
 app.get("/calendar/unsubscribe/:id/:token", (req, res) => {
   const reader = auth.reader(req.params.id);
@@ -1898,21 +1909,31 @@ app.get("/calendar.ics", (req, res) => {
   const name = ["Книжкові події", kind?.label, city, reader ? "мої автори" : "", req.query.q ? String(req.query.q).slice(0, 40) : ""].filter(Boolean).join(" · ");
   res.set("Content-Type", "text/calendar; charset=utf-8").set("Cache-Control", `${reader ? "private" : "public"}, max-age=1800`).send(require("./calendar").ics(events, { name, site: SITE }));
 });
-app.get("/calendar/add", signed, (req, res) => res.send(pages.calendarAddPage({ user: req.user })));
-app.post("/calendar/add", signed, (req, res) => {
-  const f = { title: req.body?.title, url: req.body?.url, starts: req.body?.starts, ends: req.body?.ends, time: req.body?.time, city: req.body?.city, place: req.body?.place, sub: req.body?.sub };
-  const r = calendar.add(req.user, f);
+// «Додати подію»: readers' events show at once; a guest's (no account, Max 2026-11-16) waits for Max on
+// /admin/events, 3 a day per address. `site` is a field only robots fill: they get the thanks and nothing is kept.
+const calGuest = (req) => ({ id: `guest:${require("crypto").createHash("sha1").update(`cal:${req.ip || ""}`).digest("hex").slice(0, 12)}`, guest: true });
+app.get("/calendar/add", (req, res) => res.send(pages.calendarAddPage({ user: req.user })));
+app.post("/calendar/add", (req, res) => {
+  const b = req.body || {};
+  const f = { title: b.title, url: b.url, starts: b.starts, ends: b.ends, time: b.time, city: b.city, place: b.place, sub: b.sub, contact: req.user ? "" : b.contact };
+  const thanks = () => res.send(pages.messagePage({ title: "Дякуємо!", text: "Подія з’явиться в календарі, щойно ми її переглянемо.", user: req.user }));
+  if (!req.user && b.site) return thanks();
+  const r = calendar.add(req.user || calGuest(req), f);
   if (r.error) return res.status(400).send(pages.calendarAddPage({ user: req.user, values: f, error: r.error }));
+  if (!req.user) {
+    if (r.event) notifyOwner(`Подія від гостя: ${r.event.title}`, ["Гість (без акаунта) додав(ла) подію. Вона чекає на «Показати»:", "", r.event.title, `${r.event.starts}${r.event.time ? ` ${r.event.time}` : ""} · ${r.event.city}${r.event.place ? `, ${r.event.place}` : ""}`, r.event.url, ...(f.contact ? [`Пошта гостя: ${String(f.contact).trim()}`] : []), "", `${SITE}/admin/events#review`].join("\n"));
+    return thanks();
+  }
   // A new kind of thing readers write: Max hears of each one (CLAUDE.md).
   if (r.event && !req.owner) notifyOwner(`Нова подія: ${r.event.title}`, [`${req.user.name} (${SITE}/@${req.user.username}) додав(ла) подію в календар:`, "", r.event.title, `${r.event.starts}${r.event.time ? ` ${r.event.time}` : ""} · ${r.event.city}${r.event.place ? `, ${r.event.place}` : ""}`, r.event.url, "", `${SITE}/calendar`, "Сховати: кнопка «сховати» під подією на /calendar."].join("\n"));
   res.redirect(303, calendarLib.eventPath(calendar.one(r.id) || { id: r.id, title: f.title || "" }));
 });
-// «Заповнити з посилання»: what the event's page says (calendar.peek), 30 a day per reader.
+// «Заповнити з посилання»: what the event's page says (calendar.peek), 30 a day per reader or guest's address.
 const peeks = new Map();
-app.post("/api/calendar/peek", signed, async (req, res) => {
+app.post("/api/calendar/peek", async (req, res) => {
   const day = new Date().toISOString().slice(0, 10);
-  const k = `${day}:${req.user.id}`;
-  if ((peeks.get(k) || 0) >= 30) return res.status(429).json({ error: "Сьогодні вже досить." });
+  const k = `${day}:${req.user ? req.user.id : calGuest(req).id}`;
+  if ((peeks.get(k) || 0) >= (req.user ? 30 : 10)) return res.status(429).json({ error: "Сьогодні вже досить." });
   if (peeks.size > 5000) peeks.clear();
   peeks.set(k, (peeks.get(k) || 0) + 1);
   try {
@@ -2604,7 +2625,7 @@ app.get("/admin/events", owner, (req, res) => {
   try {
     tg = tgFeed.status();
   } catch {}
-  res.send(pages.eventsAdminPage({ user: req.user, rows: calendar.upcoming(), tg, saved: String(req.query.saved || ""), feeds: calendar.feeds(), feedMsg: String(req.query.feed || ""), cancelled: calendar.cancelledList() }));
+  res.send(pages.eventsAdminPage({ user: req.user, rows: calendar.upcoming(), tg, saved: String(req.query.saved || ""), feeds: calendar.feeds(), feedMsg: String(req.query.feed || ""), cancelled: calendar.cancelledList(), review: calendar.pending() }));
 });
 // An event a Telegram post took off (cancelled or moved) back on the calendar, when the post was read wrong.
 app.post("/admin/events/uncancel", owner, (req, res) => {
@@ -2621,6 +2642,11 @@ app.post("/admin/events/feed", owner, async (req, res) => {
 app.post("/admin/events/feed/delete", owner, (req, res) => {
   calendar.removeFeed(req.body?.id);
   res.redirect(303, "/admin/events#feeds");
+});
+// A guest's event: «Показати» puts it on the calendar, «Прибрати» deletes it.
+app.post("/admin/events/review", owner, (req, res) => {
+  calendar.review(String(req.body?.id || ""), req.body?.show === "1");
+  res.redirect(303, "/admin/events#review");
 });
 app.post("/admin/events/link", owner, (req, res) => {
   const id = String(req.body?.id || "");

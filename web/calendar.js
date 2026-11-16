@@ -331,6 +331,14 @@ function create(db, store, { notify = () => {}, bookua = null, search = null, ma
   try {
     db.exec("ALTER TABLE cal_events ADD COLUMN link TEXT NOT NULL DEFAULT ''");
   } catch {}
+  // A guest's event (no account, Max 2026-11-16): `review` 1 = waits hidden until Max shows it on /admin/events;
+  // `contact` = the e-mail a guest may leave, never shown on the site.
+  try {
+    db.exec("ALTER TABLE cal_events ADD COLUMN review INTEGER NOT NULL DEFAULT 0");
+  } catch {}
+  try {
+    db.exec("ALTER TABLE cal_events ADD COLUMN contact TEXT NOT NULL DEFAULT ''");
+  } catch {}
   // Cancelled or moved by a later post (tgfeed): JSON { how, post, at }, '' = not.
   try {
     db.exec("ALTER TABLE cal_events ADD COLUMN cancelled TEXT NOT NULL DEFAULT ''");
@@ -342,7 +350,12 @@ function create(db, store, { notify = () => {}, bookua = null, search = null, ma
   } catch {}
   const meta = (k) => db.prepare("SELECT value FROM meta WHERE key = ?").get(k)?.value || "";
   const setMeta = (k, v) => db.prepare("INSERT INTO meta (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(k, v);
-  const row = (r) => r && { ...r, books: JSON.parse(r.books || "[]"), authors: JSON.parse(r.authors || "[]"), hidden: !!r.hidden };
+  // A guest's e-mail stays out of every row; only pending() hands it on, for Max.
+  const row = (r) => {
+    if (!r) return r;
+    const { contact, ...e } = r;
+    return { ...e, books: JSON.parse(r.books || "[]"), authors: JSON.parse(r.authors || "[]"), hidden: !!r.hidden };
+  };
 
   // Upcoming events (not hidden), a minute's cache: the jobs process writes too.
   let cache = null;
@@ -687,6 +700,8 @@ function create(db, store, { notify = () => {}, bookua = null, search = null, ma
   }
 
   // «Додати подію» from a reader: { title, url, starts, time, city, place, sub } → { id } or { error }.
+  // A guest (`user` = { id: "guest:<hash of the address>", guest: true }, Max 2026-11-16) adds 3 a day, and the
+  // event waits hidden for Max (`review`), with the e-mail they may leave (`f.contact`).
   function add(user, f) {
     const url = clean(f.url, 500);
     const title = clean(f.title, 160);
@@ -696,12 +711,15 @@ function create(db, store, { notify = () => {}, bookua = null, search = null, ma
     if (!clean(f.city, 40)) return { error: "Вкажіть місто або «Онлайн»." };
     if (abroad(f.city)) return { error: "Поки що тут лише події в Україні та онлайн." };
     const today = new Date().toISOString().slice(0, 10);
-    if (!user.owner && db.prepare("SELECT count(*) n FROM cal_events WHERE by = ? AND added >= ?").get(user.id, today).n >= 5) return { error: "Сьогодні вже досить подій від вас. Завтра можна ще." };
+    if (!user.owner && db.prepare("SELECT count(*) n FROM cal_events WHERE by = ? AND added >= ?").get(user.id, today).n >= (user.guest ? 3 : 5)) return { error: "Сьогодні вже досить подій від вас. Завтра можна ще." };
+    const contact = clean(f.contact, 120);
+    if (user.guest && contact && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contact)) return { error: "Перевірте пошту або залиште поле порожнім." };
     // The same link on the same day in another city is a tour's next stop, not the same event.
     const dup = db.prepare("SELECT id FROM cal_events WHERE url = ? AND starts = ? AND city = ?").get(url, f.starts, clean(f.city, 40));
     if (dup) return { id: dup.id };
-    const id = upsert({ source: "reader", key: require("crypto").randomBytes(5).toString("hex"), url, title, sub: f.sub, city: f.city, place: f.place, starts: f.starts, ends: f.ends, time: f.time, by: user.id });
+    const id = upsert({ source: "reader", key: require("crypto").randomBytes(5).toString("hex"), url, title, sub: f.sub, city: f.city, place: f.place, starts: f.starts, ends: f.ends, time: f.time, by: user.id, hidden: !!user.guest });
     if (!id) return { error: "Не вийшло зберегти. Перевірте дату." };
+    if (user.guest) db.prepare("UPDATE cal_events SET review = 1, contact = ? WHERE id = ?").run(contact, id);
     return { id, event: row(db.prepare("SELECT * FROM cal_events WHERE id = ?").get(id)) };
   }
 
@@ -745,6 +763,20 @@ function create(db, store, { notify = () => {}, bookua = null, search = null, ma
       .all(today, today)
       .map((r) => ({ ...row(r), cancelled: JSON.parse(r.cancelled || "{}") }));
   };
+  // Guests' events waiting for Max (/admin/events): upcoming ones; a past one just waits for cleanup.
+  const pending = () => {
+    const today = kyivDay();
+    return db
+      .prepare("SELECT * FROM cal_events WHERE review = 1 AND (starts >= ? OR ends >= ?) ORDER BY added LIMIT 100")
+      .all(today, today)
+      .map((r) => ({ ...row(r), contact: r.contact }));
+  };
+  // Max's answer to one: shown on the calendar, or gone.
+  function review(id, show) {
+    if (show) db.prepare("UPDATE cal_events SET hidden = 0, review = 0 WHERE id = ? AND review = 1").run(id);
+    else db.prepare("DELETE FROM cal_events WHERE id = ? AND review = 1").run(id);
+    fresh();
+  }
   function hide(id) {
     db.prepare("UPDATE cal_events SET hidden = 1 WHERE id = ?").run(id);
     fresh();
@@ -897,7 +929,7 @@ function create(db, store, { notify = () => {}, bookua = null, search = null, ma
   };
   const unsubscribeAll = (reader) => db.prepare("DELETE FROM cal_subs WHERE reader = ?").run(reader).changes;
 
-  return { upsert, setKinds, add, one, byKey, findSimilar, cancel, uncancel, cancelledList, hide, setLink, cleanup, seed, upcoming, forAuthor, forBook, cities, fillBooks, chytomoRun, eventmateRun, feeds, addFeed, removeFeed, feedsRun, yeRun, yeLast: () => yeLast, peek, fresh, meta, setMeta, subs, subscribed, subscribe, unsubscribeAll };
+  return { upsert, setKinds, add, one, byKey, findSimilar, cancel, uncancel, cancelledList, pending, review, hide, setLink, cleanup, seed, upcoming, forAuthor, forBook, cities, fillBooks, chytomoRun, eventmateRun, feeds, addFeed, removeFeed, feedsRun, yeRun, yeLast: () => yeLast, peek, fresh, meta, setMeta, subs, subscribed, subscribe, unsubscribeAll };
 }
 
 // «Четвер, 19 листопада» and, within a week, «завтра» / «через 3 дні».
