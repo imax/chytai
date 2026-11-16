@@ -1796,8 +1796,38 @@ app.get("/calendar", (req, res) => {
   const events = kind ? rows.filter((e) => e.kind === kind) : rows;
   const withBooks = events.slice(0, 300).map((e) => calCard(req, e, mineSet));
   const choice = { kind, city, mine, q: query };
-  res.send(pages.calendarPage({ user: req.user, events: withBooks, cities: calendar.cities(), city, mine, mineCount: mineSet ? all.filter(isMine).length : 0, owner: !!req.owner, query, kind, all: !!req.query.all, counts, total: rows.length, feed: calFeed(mine ? req.user.id : "", city, query, kind), subscribed: calendar.subscribed(req.user?.id, choice), subs: calendar.subs(req.user?.id).length }));
+  // Nothing found for the words: the authors they name, or the authors of the books they name (a typo too), to follow
+  // (Max 2026-11-16: authors only, never a book), and meanwhile the next meetings with authors (one's own first).
+  let watch = null;
+  if (query && !events.length) {
+    const cand = watchCandidates(req, query);
+    const soon = all.filter((e) => e.kind === "author" || e.kind === "festival").sort((a, b) => (isMine(b) ? 1 : 0) - (isMine(a) ? 1 : 0)).slice(0, 4).map((e) => calCard(req, e, mineSet));
+    watch = { authors: cand.map((a) => ({ ...a, on: calendar.isWatching(req.user?.id, "author", a.slug) })), soon };
+  }
+  res.send(pages.calendarPage({ user: req.user, events: withBooks, cities: calendar.cities(), city, mine, mineCount: mineSet ? all.filter(isMine).length : 0, owner: !!req.owner, query, kind, all: !!req.query.all, counts, total: rows.length, feed: calFeed(mine ? req.user.id : "", city, query, kind), subscribed: calendar.subscribed(req.user?.id, choice), subs: calendar.subs(req.user?.id).length, watch }));
 });
+// The authors a search on /calendar names: one the words name (a typo forgiven: «Артр Дрон» → Артур Дронь), else the
+// author of the books they name («Пісні про Бога і про війну» → Артур Дронь), at most 2, each with up to 4 covers
+// (the book searched for first). → [{ slug, name, image, count, via, books: [{id, title, cover, href}] }]
+function watchCandidates(req, q) {
+  const r = searchAll(req, q);
+  const out = [];
+  const add = (a, via = "") => a?.slug && !out.some((x) => x.slug === a.slug) && out.push({ a: store.authors?.bySlug.get(a.slug) || a, via });
+  (r.authors?.length ? r.authors : r.nearAuthors || []).slice(0, 2).forEach((a) => add(a));
+  const found = [];
+  for (const h of [...(r.hits || []), ...(r.near || [])]) {
+    const b = store.book(store.canonical(h.book.id));
+    if (b && !isRussian(b) && !found.some((x) => x.id === b.id)) found.push(b);
+    if (found.length >= 3) break;
+  }
+  if (!out.length) for (const b of found.slice(0, 2)) for (const n of authors.splitAuthors(b.author)) add(store.authors?.byName(n), b.title);
+  return out.slice(0, 2).map(({ a, via }) => {
+    const mine = found.filter((b) => authors.splitAuthors(b.author).some((n) => store.authors?.byName(n)?.slug === a.slug));
+    const ids = [...new Set([...mine.map((b) => b.id), ...(a.ids || []).map((id) => store.canonical(id))])];
+    const books = ids.map((id) => store.book(id)).filter((b) => b && !isRussian(b) && b.cover).slice(0, 4);
+    return { slug: a.slug, name: a.uk || a.name, image: a.image || "", count: a.ids?.length || 0, via, books: books.map((b) => ({ id: b.id, title: b.title, cover: b.cover, href: b.href || store.href(b.id) })) };
+  });
+}
 // Every word of ?q= somewhere in the event, its authors' names or its books' titles.
 function calHay(e) {
   return norm([e.title, e.sub, e.city, e.place, ...e.authors.map((a) => store.authors?.bySlug.get(a)?.name || ""), ...e.books.map((id) => store.book(id)?.title || "")].join(" "));
@@ -1901,6 +1931,65 @@ app.get("/do/calendar-going", signed, (req, res) => {
   calendar.going(req.user.id, e.id, true);
   res.redirect(calendarLib.eventPath(e));
 });
+// «Стежити за подіями автора» (Max 2026-11-16, authors only): on, or off; a guest signs in and comes back following.
+const watchRef = (k, r) => (k === "author" && store.authors?.bySlug.get(r) ? r : "");
+app.post("/calendar/watch", signed, (req, res) => {
+  const k = String(req.body?.kind || "");
+  const r = watchRef(k, String(req.body?.ref || ""));
+  if (r) calendar.watch(req.user.id, k, r, req.body?.on === "1");
+  res.redirect(303, safeNext(req.body?.back) || "/calendar");
+});
+app.get("/do/calendar-watch", signed, (req, res) => {
+  const k = String(req.query.kind || "");
+  const r = watchRef(k, String(req.query.ref || ""));
+  if (r) calendar.watch(req.user.id, k, r, true);
+  res.redirect(safeNext(req.query.back) || "/calendar");
+});
+// The letter's «Не стежити»: every author off at once (signed like the digest's, no sign-in).
+const unwatch = (req, res) => {
+  const reader = auth.reader(req.params.id);
+  if (!reader || !digest.check(reader.id, req.params.token)) return res.status(404).send(pages.messagePage({ title: "Посилання не підходить", text: "Стежити можна перестати на сторінці подій.", user: req.user }));
+  if (calendar.unwatchAll(reader.id)) mailLog.switched("calwatch", reader.id, true, false);
+  res.send(pages.messagePage({ title: "Більше не стежимо", text: "Листів про нові події авторів більше не буде.", user: req.user }));
+};
+app.get("/calendar/unwatch/:id/:token", unwatch);
+app.post("/calendar/unwatch/:id/:token", unwatch);
+// The letter when an event with a followed author comes: hourly from 10:00 to 21:00 Kyiv, one letter a reader
+// with every such event, within the day's cap for letters nobody asked for that very moment (mailLog.room).
+const watchName = (w) => store.authors?.bySlug.get(w.ref)?.name || "";
+async function calendarWatchMail() {
+  const hour = Number(new Date().toLocaleString("en-GB", { timeZone: "Europe/Kyiv", hour: "2-digit", hour12: false }));
+  if (hour < 10 || hour > 21) return false;
+  const M = require("./mailhtml");
+  const A = require("./admin");
+  let sent = 0;
+  for (const [readerId, list] of calendar.dueWatch()) {
+    const reader = auth.reader(readerId);
+    if (!reader?.email) {
+      calendar.watchSent(readerId, list.map((x) => x.event.id));
+      continue;
+    }
+    if (!mailLog.room(reader.id)) continue;
+    const off = `${SITE}/calendar/unwatch/${encodeURIComponent(reader.id)}/${digest.token(reader.id)}`;
+    const when = (e) => [`${calendarLib.shortWhen(e)}${e.time ? `, ${e.time}` : ""}`, e.city, e.place].filter(Boolean).join(" · ");
+    const why = (x) => `Ви стежите за: ${[...new Set(x.why.map(watchName).filter(Boolean))].join(", ")}`;
+    const href = (e) => `${SITE}${calendarLib.eventPath(e)}`;
+    const one = list.length === 1 ? list[0].event : null;
+    const subject = one ? `Подія: ${one.title}` : `Нові події: ${list.length}`;
+    const text = [one ? "Зʼявилась подія автора, за яким ви стежите:" : "Зʼявились події авторів, за якими ви стежите:", "", list.map((x) => `${x.event.title}\n${when(x.event)}\n${why(x)}\n${href(x.event)}`).join("\n\n"), "", `Не стежити: ${off}`].join("\n");
+    const body = list.map((x) => `<p style="margin:14px 0 0;font-size:15px;line-height:1.45"><a href="${M.esc(href(x.event))}" style="font-family:${M.SERIF};font-size:18px;color:#1b1a17;text-decoration:none">${M.esc(x.event.title)}</a><br><span style="color:#266741;font-weight:500">${M.esc(when(x.event))}</span><br><span style="color:#6b675f">${M.esc(why(x))}</span></p>`).join("");
+    const html = M.letter({ site: SITE, title: subject, heading: one ? "Зʼявилась подія" : "Зʼявились події", body, button: one ? { text: "Сторінка події", href: href(one) } : null, off: { href: off, text: "Не стежити за подіями" } });
+    try {
+      await auth.send(reader.email, subject, A.mailLinks(text, SITE, "calwatch"), { kind: "calwatch", html: A.mailLinks(html, SITE, "calwatch", true), headers: { "List-Unsubscribe": `<${off}>`, "List-Unsubscribe-Post": "List-Unsubscribe=One-Click" } });
+      calendar.watchSent(readerId, list.map((x) => x.event.id));
+      sent++;
+    } catch (err) {
+      console.error(`[calwatch] ${reader.id}: ${err.message}`);
+    }
+  }
+  return sent ? { sent } : false;
+}
+bg.every("calendar-watch", 3600 * 1000, () => calendarWatchMail(), { db: store.db, first: 12 * 60 * 1000 });
 // The reminder's «Не нагадувати»: no more letters the day before (signed like the digest's, no sign-in).
 const remindSwitch = (req, res, on) => {
   const reader = auth.reader(req.params.id);
@@ -3687,7 +3776,7 @@ app.get("/author/:slug", async (req, res) => {
     }
   const pairing = req.user?.owner ? store.translationPairing(author) : null;
   const joins = req.user?.owner ? authors.ownerJoins(store).map((p, index) => ({ p, index })).filter(({ p }) => p.some((n) => author.names?.includes(n))).map(({ p, index }) => ({ names: p, index })) : null;
-  res.send(pages.authorPage({ author, about, works, hits, user: req.user, readers: who, also, pairing, joins, editorial, events: calendar.forAuthor(author.slug), members: (key) => store.cycleInfo.get(key)?.members || [] }));
+  res.send(pages.authorPage({ author, about, works, hits, user: req.user, readers: who, also, pairing, joins, editorial, events: calendar.forAuthor(author.slug), pastEvents: calendar.pastForAuthor(author.slug), watching: calendar.isWatching(req.user?.id, "author", author.slug), members: (key) => store.cycleInfo.get(key)?.members || [] }));
 });
 
 // The stored answer of the «author-start» pass for an author (table ai_answer once applied; until then the trial's),

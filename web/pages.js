@@ -1921,7 +1921,7 @@ function outsideResults({ q, user, books }) {
 // ---- /author/<slug> ----
 
 // The books we have, with what readers said; who reads them; then the works from Wikidata.
-function authorPage({ author, about = null, works, hits, user, readers = [], also = [], pairing = null, joins = null, editorial = null, events = [], members = () => [] }) {
+function authorPage({ author, about = null, works, hits, user, readers = [], also = [], pairing = null, joins = null, editorial = null, events = [], pastEvents = [], watching = false, members = () => [] }) {
   // The owner joins another spelling of this person (Max, 2026-10-23: «як нам зєднувати авторів?»).
   const joinBlock = joins
     ? `${label("Той самий автор")}<form method="post" action="/admin/authors/join" class="author-join"><input type="hidden" name="author" value="${attr(author.slug)}"><input name="other" placeholder="Посилання на автора або ім’я" required><button class="btn small">З’єднати</button></form>${joins
@@ -2087,7 +2087,7 @@ document.addEventListener("submit", async (e) => {
 ${head}
 <div class="split">
   <div>
-    ${authorEvents(events)}
+    ${authorEvents(events, { past: pastEvents, user, slug: author.slug, on: watching })}
     ${shelf}
     ${works.length ? `<section class="block">
       ${label("Усі твори", author.qid ? `<a href="https://www.wikidata.org/wiki/${attr(author.qid)}" target="_blank" rel="noopener">Wikidata ↗</a>` : "")}
@@ -2277,7 +2277,29 @@ function calOverview(events, { user, owner, today, href, counts }) {
   }
   return out.join("");
 }
-function calendarPage({ user, events, cities, city = "", mine = false, mineCount = 0, owner = false, query = "", feed = "", kind = "", all = false, counts = {}, total = 0, subscribed = false }) {
+// An empty search on /calendar (Max 2026-11-16, «Артур Дронь»): the authors the words name (or of the book they name),
+// each with «Стежити за подіями автора» (a letter when an event with them comes), then the next meetings with authors.
+// «Стежити» for an author (slug): a guest signs in and comes back following (/do/calendar-watch).
+function watchBtn(k, r, on, back, user, text = "Стежити") {
+  return !user
+    ? `<a class="btn" rel="nofollow" href="/login?next=${attr(encodeURIComponent(`/do/calendar-watch?kind=${k}&ref=${encodeURIComponent(r)}&back=${encodeURIComponent(back)}`))}" data-ev="cal-watch">${text}</a>`
+    : `<form method="post" action="/calendar/watch" class="inline"><input type="hidden" name="kind" value="${k}"><input type="hidden" name="ref" value="${attr(r)}"><input type="hidden" name="back" value="${attr(back)}"><input type="hidden" name="on" value="${on ? "" : "1"}"><button class="btn${on ? " on" : ""}" data-ev="${on ? "cal-unwatch" : "cal-watch"}">${on ? "✓ Стежу" : text}</button></form>`;
+}
+function calWatch(w, { query, back, user, owner, today }) {
+  const initials = (n) => esc(String(n).split(/\s+/).map((x) => x[0] || "").slice(0, 2).join(""));
+  // One block an author (design B of the canvas): photo, name, why they are here, a few covers, «Стежити за подіями автора».
+  const rows = w.authors.map((a) => {
+    const sub = a.via ? `Автор книжки «${esc(a.via)}»` : `Автор · ${a.count} ${plural(a.count, "книжка", "книжки", "книжок")}`;
+    const covers = a.books.length ? `<div class="cal-w-covers">${a.books.map((b) => `<a href="${attr(b.href)}" title="${attr(b.title)}">${cover(b, "sm")}</a>`).join("")}</div>` : "";
+    return `<div class="cal-w"><div class="cal-w-who"><a class="cal-w-pic" href="/author/${attr(a.slug)}">${a.image ? `<img src="${attr(a.image.replace(/^http:/, "https:"))}?width=120" alt="" loading="lazy">` : `<span>${initials(a.name)}</span>`}</a><div class="cal-w-txt"><a href="/author/${attr(a.slug)}">${esc(a.name)}</a><span class="small muted">${sub}</span></div></div>${covers}${watchBtn("author", a.slug, a.on, back, user, "Стежити за подіями автора")}</div>`;
+  });
+  const head = rows.length
+    ? `<div class="cal-watch"><p class="cal-w-head">Подій за «${esc(query)}» поки немає</p><p class="muted">Стежте за автором, і ми напишемо листа, щойно зʼявиться подія з ним.</p><div class="cal-w-list">${rows.join("")}</div></div>`
+    : `<p class="muted">Нічого не знайшли за «${esc(query)}». <a class="text-link" href="/calendar">Усі події</a></p>`;
+  const soon = w.soon.length ? `<section class="cal-sec">${label("Найближчі зустрічі з авторами", `<a href="/calendar">Усі події</a>`)}<div class="cal-lns">${w.soon.map((e) => calLine(e, { user, owner, today })).join("")}</div></section>` : "";
+  return head + soon;
+}
+function calendarPage({ user, events, cities, city = "", mine = false, mineCount = 0, owner = false, query = "", feed = "", kind = "", all = false, counts = {}, total = 0, subscribed = false, watch = null }) {
   const today = cal().kyivDay();
   // An address with today's choice, changed by `over` (kind, city, mine, q, all).
   const href = (over = {}) => {
@@ -2321,16 +2343,18 @@ function calendarPage({ user, events, cities, city = "", mine = false, mineCount
     ? overview
       ? `${calOverview(events, { user, owner, today, href, counts })}<p class="cal-all"><a class="text-link" href="${attr(href({ all: true }))}">Усі ${total} подій за датою</a></p>`
       : calList(events, { user, owner, today, kind })
-    : `<p class="muted">${query ? `Нічого не знайшли за «${esc(nest(query))}». <a class="text-link" href="/calendar">Усі події</a>` : city || mine || kind ? `Тут поки нічого. <a class="text-link" href="/calendar">Усі події</a>` : "Поки подій немає."}</p>`;
+    : watch
+      ? calWatch(watch, { query, back: href(), user, owner, today })
+      : `<p class="muted">${query ? `Нічого не знайшли за «${esc(nest(query))}». <a class="text-link" href="/calendar">Усі події</a>` : city || mine || kind ? `Тут поки нічого. <a class="text-link" href="/calendar">Усі події</a>` : "Поки подій немає."}</p>`;
   const page = `
 <section class="page-head">
   <div>
     <h1>Книжкові події</h1>
     <p class="lead">Зустрічі з авторами, клуби, лекції й фестивалі.</p>
   </div>
-  <div class="cal-acts">${subscribe}<a class="btn" href="/calendar/add">Додати подію</a>${subLine}</div>
+  <div class="cal-acts">${watch ? "" : subscribe}<a class="btn" href="/calendar/add">Додати подію</a>${watch ? "" : subLine}</div>
 </section>
-${kinds}
+${watch ? "" : kinds}
 ${tools}
 <div data-block="calendar" class="cal-page">${body}</div>
 <p class="small cal-about">З афіш книгарень і фестивалів, від видавців і читачів. <a class="text-link" href="/calendar/add">Знаєте подію? Додайте</a></p>
@@ -2388,13 +2412,17 @@ function calendarAddPage({ user, values = {}, error = "" }) {
 </script>`;
   return layout({ title: "Додати подію", body, user, path: "/calendar", noindex: true });
 }
-// «Наживо» on an author's page: the author's next events (calendar.forAuthor).
-const authorEvents = (events) =>
-  events.length
-    ? `<section class="block" data-block="author-events">${label("Наживо", `<a href="/calendar">Усі події</a>`)}<div class="rows">${events
-        .map((e) => `<article class="row cal-mini"><div class="cal-date"><b>${new Date(`${e.starts}T12:00:00Z`).getUTCDate()}</b><span>${esc(cal().MONTHS[new Date(`${e.starts}T12:00:00Z`).getUTCMonth()].slice(0, 4))}</span></div><div class="row-body"><h3><a href="${attr(cal().eventPath(e))}">${esc(e.title)}</a></h3><p class="meta">${[(e.ends ? esc(cal().shortWhen(e)) : esc(cal().shortWhen(e).split(",")[0])) + (e.time ? `, ${e.time}` : ""), esc(e.city), e.place ? esc(e.place) : ""].filter(Boolean).join(" · ")}</p></div></article>`)
-        .join("")}</div></section>`
-    : "";
+// «Події» on an author's page (Max 2026-11-16, was «Наживо»): the next events (calendar.forAuthor), the ones that were
+// (a year back, calendar.pastForAuthor) and «Стежити за подіями» (a letter when a new one comes). No events ever: no block.
+const authorEvents = (events, { past = [], user = null, slug = "", on = false } = {}) => {
+  if (!events.length && !past.length) return "";
+  const rows = events
+    .map((e) => `<article class="row cal-mini"><div class="cal-date"><b>${new Date(`${e.starts}T12:00:00Z`).getUTCDate()}</b><span>${esc(cal().MONTHS[new Date(`${e.starts}T12:00:00Z`).getUTCMonth()].slice(0, 4))}</span></div><div class="row-body"><h3><a href="${attr(cal().eventPath(e))}">${esc(e.title)}</a></h3><p class="meta">${[(e.ends ? esc(cal().shortWhen(e)) : esc(cal().shortWhen(e).split(",")[0])) + (e.time ? `, ${e.time}` : ""), esc(e.city), e.place ? esc(e.place) : ""].filter(Boolean).join(" · ")}</p></div></article>`)
+    .join("");
+  const was = past.length ? `<p class="small muted ev-past">Були: ${past.map((e) => `<a class="text-link" href="${attr(cal().eventPath(e))}">${esc(e.title)}</a>, ${esc(cal().span(e).replace(/, \d\d:\d\d$/, ""))}${e.city ? `, ${esc(e.city)}` : ""}`).join("; ")}</p>` : "";
+  const follow = slug ? `<div class="ev-follow">${watchBtn("author", slug, on, `/author/${slug}`, user, "Стежити за подіями")}<span class="small muted">${on ? "Напишемо листа, щойно буде нова подія." : "Лист, щойно зʼявиться нова подія."}</span></div>` : "";
+  return `<section class="block" data-block="author-events">${label("Події", `<a href="/calendar">Усі події</a>`)}${events.length ? `<div class="rows">${rows}</div>` : `<p class="muted">Найближчих подій немає.</p>`}${was}${follow}</section>`;
+};
 // One line on a book's page about the next event with it or its author.
 const eventLine = (e) => (e ? `<p class="awards cal-line" data-block="book-event"><span>Подія:</span> <a class="text-link" href="${attr(cal().eventPath(e))}">${esc(e.title)}</a>, ${esc(cal().shortWhen(e))}${e.city ? `, ${esc(e.city)}` : ""}</p>` : "");
 

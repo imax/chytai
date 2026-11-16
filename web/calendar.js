@@ -14,6 +14,9 @@ const dns = require("dns").promises;
 const net = require("net");
 
 const KEEP_DAYS = 30;
+// An event about an author or book in the catalog stays a year after it ended: the author's page lists the past ones
+// (Max 2026-11-16). A few thousand small rows a year.
+const KEEP_LINKED_DAYS = 365;
 const CALBOOKS_DAY = 30; // new catalog books from events a day (fillBooks)
 const { norm, sameAuthor, isRussian, editDistance } = require("./store");
 const MONTHS = ["січня", "лютого", "березня", "квітня", "травня", "червня", "липня", "серпня", "вересня", "жовтня", "листопада", "грудня"];
@@ -966,8 +969,9 @@ function create(db, store, { notify = () => {}, bookua = null, search = null, ma
   }
   function cleanup() {
     const before = addDays(kyivDay(), -KEEP_DAYS);
-    const r = db.prepare("DELETE FROM cal_events WHERE max(starts, ends) < ?").run(before);
+    const r = db.prepare("DELETE FROM cal_events WHERE max(starts, ends) < ? AND ((authors = '[]' AND books = '[]') OR hidden = 1 OR max(starts, ends) < ?)").run(before, addDays(kyivDay(), -KEEP_LINKED_DAYS));
     db.prepare("DELETE FROM cal_going WHERE event NOT IN (SELECT id FROM cal_events)").run();
+    db.prepare("DELETE FROM cal_watch_sent WHERE event NOT IN (SELECT id FROM cal_events)").run();
     fresh();
     return r.changes;
   }
@@ -995,6 +999,14 @@ function create(db, store, { notify = () => {}, bookua = null, search = null, ma
 
   // The next events with this author or book (by an author of the book when none names it), soonest first.
   const forAuthor = (slug, n = 3) => upcoming().filter((e) => e.authors.includes(slug)).slice(0, n);
+  // The author's events that are over, newest first (kept a year, cleanup).
+  const pastForAuthor = (slug, n = 3) =>
+    db
+      .prepare("SELECT * FROM cal_events WHERE hidden = 0 AND cancelled = '' AND max(starts, ends) < ? AND authors LIKE ? ORDER BY starts DESC LIMIT 20")
+      .all(kyivDay(), `%${JSON.stringify(slug)}%`)
+      .map(row)
+      .filter((e) => e.authors.includes(slug))
+      .slice(0, n);
   function forBook(id, authorSlugs = [], n = 1) {
     const all = upcoming();
     const own = all.filter((e) => e.books.includes(id));
@@ -1139,7 +1151,47 @@ function create(db, store, { notify = () => {}, bookua = null, search = null, ma
     for (const id of ids) up.run(at, reader, id);
   };
 
-  return { upsert, setKinds, add, one, byKey, findSimilar, cancel, uncancel, cancelledList, recent, pending, review, hide, setLink, cleanup, seed, upcoming, forAuthor, forBook, cities, fillBooks, chytomoRun, eventmateRun, podiiRun, feeds, addFeed, removeFeed, feedsRun, yeRun, yeLast: () => yeLast, peek, fresh, meta, setMeta, subs, subscribed, subscribe, unsubscribeAll, going, isGoing, goingCount, goingTop, dueReminders, reminded, remindOff, setRemind };
+  // «Стежити за подіями автора» (Max 2026-11-16, an empty search for «Артур Дронь»; authors only, «стежити за книжкою
+  // це тупо»): a reader follows an author (slug) and gets a letter when an event with them comes (dueWatch, the hourly
+  // `calendar-watch` job in server.js). Each event once a reader (cal_watch_sent); 30 a reader. `kind` stays in the
+  // table for a later kind of follow.
+  db.exec("CREATE TABLE IF NOT EXISTS cal_watch (reader TEXT NOT NULL, kind TEXT NOT NULL, ref TEXT NOT NULL, at TEXT NOT NULL, PRIMARY KEY (reader, kind, ref))");
+  db.exec("CREATE TABLE IF NOT EXISTS cal_watch_sent (reader TEXT NOT NULL, event TEXT NOT NULL, at TEXT NOT NULL, PRIMARY KEY (reader, event))");
+  const WATCH_MAX = 30;
+  const watching = (reader) => (reader ? db.prepare("SELECT kind, ref, at FROM cal_watch WHERE reader = ? ORDER BY at").all(reader) : []);
+  const isWatching = (reader, kind, ref) => !!reader && !!db.prepare("SELECT 1 FROM cal_watch WHERE reader = ? AND kind = ? AND ref = ?").get(reader, kind, ref);
+  function watch(reader, kind, ref, on) {
+    if (!reader || kind !== "author" || !ref) return false;
+    if (!on) return db.prepare("DELETE FROM cal_watch WHERE reader = ? AND kind = ? AND ref = ?").run(reader, kind, ref).changes > 0;
+    if (watching(reader).length >= WATCH_MAX) return false;
+    return db.prepare("INSERT OR IGNORE INTO cal_watch (reader, kind, ref, at) VALUES (?, ?, ?, ?)").run(reader, kind, ref, new Date().toISOString()).changes > 0;
+  }
+  const unwatchAll = (reader) => db.prepare("DELETE FROM cal_watch WHERE reader = ?").run(reader).changes;
+  // Upcoming shown events with authors readers follow, not sent to them yet: Map reader → [{ event, why: [{kind, ref}] }].
+  function dueWatch() {
+    const by = new Map();
+    const all = db.prepare("SELECT reader, kind, ref FROM cal_watch WHERE kind = 'author'").all();
+    if (!all.length) return by;
+    const sent = db.prepare("SELECT 1 FROM cal_watch_sent WHERE reader = ? AND event = ?");
+    const events = upcoming().filter((e) => !e.cancelled);
+    for (const e of events) {
+      for (const w of all) {
+        if (!e.authors.includes(w.ref)) continue;
+        if (sent.get(w.reader, e.id)) continue;
+        if (!by.has(w.reader)) by.set(w.reader, new Map());
+        const m = by.get(w.reader);
+        if (!m.has(e.id)) m.set(e.id, { event: e, why: [] });
+        m.get(e.id).why.push({ kind: w.kind, ref: w.ref });
+      }
+    }
+    return new Map([...by].map(([r, m]) => [r, [...m.values()]]));
+  }
+  const watchSent = (reader, ids) => {
+    const add = db.prepare("INSERT OR IGNORE INTO cal_watch_sent (reader, event, at) VALUES (?, ?, ?)");
+    const at = new Date().toISOString();
+    for (const id of ids) add.run(reader, id, at);
+  };
+  return { pastForAuthor, watching, isWatching, watch, unwatchAll, dueWatch, watchSent, upsert, setKinds, add, one, byKey, findSimilar, cancel, uncancel, cancelledList, recent, pending, review, hide, setLink, cleanup, seed, upcoming, forAuthor, forBook, cities, fillBooks, chytomoRun, eventmateRun, podiiRun, feeds, addFeed, removeFeed, feedsRun, yeRun, yeLast: () => yeLast, peek, fresh, meta, setMeta, subs, subscribed, subscribe, unsubscribeAll, going, isGoing, goingCount, goingTop, dueReminders, reminded, remindOff, setRemind };
 }
 
 // «Четвер, 19 листопада» and, within a week, «завтра» / «через 3 дні».

@@ -20,7 +20,9 @@ next thread should know, change this file in the same commit. Short recipes, not
 
 1. `scripts/fetch-test-db.sh`: a scrubbed copy of last night's production DB into `data/web/` (e-mails are
    `<id>@test.invalid`, the owner is `owner@test.invalid`).
-2. `npm ci`, then `CHYTAI_ROLE=web PORT=8090 node web/server.js`. Sign in at `/login` with any test address: the code
+2. `npm ci`, then `CHYTAI_ROLE=web PORT=8090 node web/server.js`. Covers in screenshots need `vipsthumbnail` (as in
+   web/Dockerfile): `apt-get install -y libvips-tools`, else /t/ thumbs fail (srv log «thumbs: … vipsthumbnail») and
+   pages show coloured blocks; wait for images (`networkidle`) before a screenshot. Sign in at `/login` with any test address: the code
    is printed in the server log (no mail goes out locally).
 3. Go through the change itself, as a guest and as a reader: curl or Playwright (Chromium is preinstalled), phone
    (390 px) and desktop widths. Time anything that could be slow on this real-sized data.
@@ -265,7 +267,7 @@ A flag only when Max asks for one, or when the change could break what readers u
 
 ## «Книжкові події», /calendar (`web/calendar.js`)
 
-- Max's design A + D from a design canvas (2026-11-15): «Мої автори» (authors on one's shelf), «Наживо» on the
+- Max's design A + D from a design canvas (2026-11-15): «Мої автори» (authors on one's shelf), «Події» on the
   author's page, one «Подія:» line on the book's page. No block on one's own shelf (Max). An event links to the
   organizer's page; we sell no tickets, and the pages don't say so (Max 2026-11-15). Every row has one shape (Max 2026-11-15, the list zigzagged): a cover or a day
   tile (`calLeft`), a green «Чт 19, 18:30» (`calWhen`), the title, kind · where; no day or time columns.
@@ -280,7 +282,7 @@ A flag only when Max asks for one, or when the change could break what readers u
   (`calendar.eventPath`, key = 8 hex of the id's sha1, so a corrected title redirects; `calendar.byKey`), `.ics` after
   it = that event alone. `eventPage` in pages.js, the route in server.js (books with «Хочу прочитати», a tour's stops,
   4 more events: same book/author, then same kind and city). Every title, row cover, the clubs shelf (one meeting),
-  the book page's «Подія:», the author's «Наживо» and `/calendar/go/<id>` (letters) lead there. The organizer's button
+  the book page's «Подія:», the author's «Події» and `/calendar/go/<id>` (letters) lead there. The organizer's button
   is named by its link (`calendar.linkKind`: form / social / site / ye). Never a link to a Telegram post, on a page or
   in the .ics (Max 2026-11-15: it tells we read channels): `calendar.sourceUrl` gives Max's own link first
   (`cal_events.link`, set on /admin/events, tab «Події»: «Нові за 3 дні» (`calendar.recent`, all sources, hidden too, by Kyiv day), events without a page, «лише афіша «Є»», sources;
@@ -299,6 +301,15 @@ A flag only when Max asks for one, or when the change could break what readers u
   the .ics) starting within 9 days, plus later ones added since the last letter, 3 rows (Max: «не більше трьох»), a tour one row. Links go
   through `/calendar/go/<id>` (letters link only to our domain); «Відписатися від подій» =
   `/calendar/unsubscribe/<reader>/<digest token>`; /settings/mail lists them. Try: `/digest/preview` as the owner.
+- «Стежити за подіями автора» (Max 2026-11-16, design B of canvas T9FRf5g4DdjqqhvjUsnKM1; authors only, never a book:
+  «стежити за книжкою це тупо»): a /calendar search with no events shows `calWatch` (pages.js): the authors the site
+  search finds, or the author of the book it finds (`watchCandidates` in server.js on `searchAll`, so a typo works
+  through `near`/`nearAuthors`), photo, a few covers, the button (`watchBtn`), then the next author meetings; no kind
+  chips and no «Підписатися» there. Table `cal_watch` (reader, kind `author`, ref = slug; 30 a reader), `POST /calendar/watch`, a guest by `GET /do/calendar-watch?kind&ref&back`. The letter
+  «Подія: …» (`calendarWatchMail`, hourly job `calendar-watch`, 10–21 Kyiv, all new events in one letter, `mailLog.room`,
+  kind `calwatch`; `cal_watch_sent` marks; «Не стежити» = `/calendar/unwatch/<reader>/<digest token>`, all off). The
+  author page's «Події» block: upcoming, past as one line (`calendar.pastForAuthor`), «Стежити за подіями»; no events
+  ever = no block.
 - «Хочу піти» on an event's page (Max 2026-11-16, in place of «Додати в календар»): `POST /calendar/<id>/going`
   (table `cal_going`, a guest signs in and lands back marked by `GET /do/calendar-going?id=`); once pressed the page
   shows «✓ Іду», the calendar links and «Нагадаємо листом за день»; others' count under it. A letter the day before
@@ -311,7 +322,7 @@ A flag only when Max asks for one, or when the change could break what readers u
 - Only Ukraine and online (Max 2026-11-15): the collectors' Haiku answers `abroad` and those are dropped;
   `calendar.abroad(city)` (list `ABROAD`) hides a foreign city at upsert and at start, and /calendar/add refuses it.
 - Table `cal_events` (id `{source}:{key}`, starts/ends `YYYY-MM-DD` Kyiv, time `HH:MM`, city as shown, «Онлайн»
-  for online; books/authors JSON found by name, no AI: `linkText`, a name's two words side by side, «Олександрою … книгарні» ≠ Олександр Книга; never a Russian edition, `findBook`). Gone 30 days after it ends (`cleanup`).
+  for online; books/authors JSON found by name, no AI: `linkText`, a name's two words side by side, «Олександрою … книгарні» ≠ Олександр Книга; never a Russian edition, `findBook`). Gone 30 days after it ends (`cleanup`); one with an author or book linked stays a year (`KEEP_LINKED_DAYS`, for the author page's past events).
 - Sources: `web/seed/calendar.json` (kept in step at every start: festivals by a thread or Max); readers via
   /calendar/add (signed in: shown at once, 5 a day, mails + Telegram Max; Max or the reader hides one with «сховати»;
   guests too (Max 2026-11-16): hidden with `review = 1` until Max presses «Показати» on /admin/events («Від гостей»,

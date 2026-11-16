@@ -19,6 +19,7 @@ const KINDS = [
   ["newbie", "Новачку, 2-й день"],
   ["digest", "П'ятничний дайджест"],
   ["calremind", "Подія завтра"],
+  ["calwatch", "Зʼявилась подія автора чи книжки"],
   ["want", "«Хочу» з'явилась"],
   ["club-topic", "Нова тема в Клубі"],
   ["club", "Відповідь у темі Клубу"],
@@ -31,7 +32,7 @@ const KINDS = [
 ];
 const NAMES = Object.fromEntries(KINDS);
 // Letters nobody asked for at that moment: at most CAP of them a reader a day, and none but the digest on Fridays.
-const OPTIONAL = ["digest", "want", "club-topic", "newbie"];
+const OPTIONAL = ["digest", "want", "club-topic", "newbie", "calwatch"];
 const CAP = 2;
 
 class MailLog {
