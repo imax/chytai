@@ -2360,7 +2360,7 @@ function calendarAddPage({ user, values = {}, error = "" }) {
   <label>Остання дата, якщо подія на кілька днів<input type="date" name="ends" value="${v("ends")}" min="${today}"></label>
   ${user ? "" : `<label>Ваша пошта, якщо хочете<input type="email" name="contact" value="${v("contact")}" maxlength="120" placeholder="На сайті її не видно"></label>
   <label class="hp" aria-hidden="true">Сайт<input type="text" name="site" tabindex="-1" autocomplete="off"></label>`}
-  <div class="actions"><button class="btn primary">Додати</button><span class="small muted">${user ? "З’явиться одразу, з вашим ім’ям." : `З’явиться після перевірки. <a class="text-link" href="/login?next=%2Fcalendar%2Fadd">Увійдіть</a>, щоб одразу.`}</span></div>
+  <div class="actions"><button class="btn primary">Додати</button><span class="small muted">${user ? "З’явиться одразу, з вашим ім’ям." : "З’явиться на сайті після перевірки модератором."}</span></div>
 </form>
 <script>
 (() => {
