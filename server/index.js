@@ -558,6 +558,83 @@ function recordReading(acct, books, at, dev = "desktop-browser", off = null) {
   bump("offMiss", dev, Math.min(50, Math.round(Number(off?.missing) || 0)));
 }
 
+// Taps on the reader's own controls (reading-time.js, Max 2026-11-16: «аналітика по продукту»): per day, how many
+// times each was pressed (`ui`) and which accounts pressed it (`uiWho`, «guest» for guests). Names only: an id, a
+// data-action/-act, no text, no book. At most 300 names a day; `uiWho` goes after 90 days.
+function recordUi(who, ui) {
+  if (!ui || typeof ui !== "object" || Array.isArray(ui)) return;
+  const day = statsDay();
+  const stats = (state.stats ??= { since: day, days: {} });
+  const d = (stats.days[day] ??= { explains: 0, users: {}, guests: 0, models: {} });
+  const n = (d.ui ??= {});
+  const w = (d.uiWho ??= {});
+  for (const [k, v] of Object.entries(ui).slice(0, 40)) {
+    if (!/^[a-z0-9-]{1,40}$/.test(k) || !(Number(v) > 0)) continue;
+    if (!(k in n) && Object.keys(n).length >= 300) continue;
+    n[k] = (n[k] || 0) + Math.min(200, Math.round(Number(v)));
+    const list = (w[k] ??= []);
+    if (list.length < 300 && !list.includes(who)) list.push(who);
+  }
+  if (uiPruned !== day) {
+    uiPruned = day;
+    const old = statsDay(Date.now() - 90 * 86400000);
+    for (const [k, x] of Object.entries(stats.days)) if (k < old && x.uiWho) delete x.uiWho;
+  }
+}
+let uiPruned = "";
+// The last 30 days of them for /admin/reader: per control, taps and the readers (guests apart) who pressed it.
+function uiStats(days, dayKeys, monthAgo) {
+  const rows = new Map();
+  for (const day of dayKeys.filter((k) => k >= monthAgo)) {
+    const d = days[day];
+    for (const [k, n] of Object.entries(d.ui || {})) {
+      const r = rows.get(k) || rows.set(k, { name: k, n: 0, who: new Set() }).get(k);
+      r.n += n;
+      for (const a of d.uiWho?.[k] || []) r.who.add(a);
+    }
+  }
+  return [...rows.values()].map((r) => ({ name: r.name, n: r.n, readers: [...r.who].filter((a) => a !== "guest").length, guests: r.who.has("guest") })).sort((a, b) => b.readers - a.readers || b.n - a.n);
+}
+// Where readers leave books (Max 2026-11-16): every book an account opened in the last 90 days, by how far it got
+// (u.progress pct): finished (95%+), still being read (opened in 14 days), or left at <3%, <10%, <50%, <95%.
+// The left ones, newest first, by name for the admin page. The owner is left out.
+function bookStops(now = Date.now()) {
+  const since = now - 90 * 86400000;
+  const fresh = now - 14 * 86400000;
+  const out = { finished: 0, reading: 0, left: { 3: 0, 10: 0, 50: 0, 95: 0 }, books: [] };
+  for (const [acct, u] of Object.entries(state.users)) {
+    if (acct === OWNER_ID || !ACCOUNT_ID.test(acct)) continue;
+    for (const [key, at] of Object.entries(u.opened || {})) {
+      const name = key.replace(/#reflow$/, "");
+      const pct = u.progress?.[name]?.pct;
+      if (!(at > since) || pct == null) continue;
+      if (pct >= 95) out.finished++;
+      else if (at > fresh) out.reading++;
+      else {
+        out.left[pct < 3 ? 3 : pct < 10 ? 10 : pct < 50 ? 50 : 95]++;
+        out.books.push({ id: acct, name: accountName(acct), username: state.accounts[acct]?.username || "", book: name, ...bookInfo(acct, name), pct, at });
+      }
+    }
+  }
+  out.books = out.books.sort((a, b) => b.at - a.at).slice(0, 40);
+  return out;
+}
+// New accounts' first days (Max 2026-11-16): of those who signed up in the last 60 days, how many opened a book,
+// read 10 minutes in their first week, and read on two days or more.
+function firstDays(days, dayKeys, now = Date.now()) {
+  const out = { signed: 0, opened: 0, ten: 0, twoDays: 0, since: statsDay(now - 60 * 86400000) };
+  for (const [id, a] of Object.entries(state.accounts)) {
+    if (id === OWNER_ID || !ACCOUNT_ID.test(id) || !(a.since > now - 60 * 86400000)) continue;
+    out.signed++;
+    if (Object.keys(state.users[id]?.opened || {}).length) out.opened++;
+    const first = statsDay(a.since), week = statsDay(a.since + 7 * 86400000);
+    const read = dayKeys.filter((k) => k >= first && (days[k].readSec?.[id] || 0) >= 60);
+    if (read.filter((k) => k < week).reduce((t, k) => t + days[k].readSec[id], 0) >= 600) out.ten++;
+    if (read.length >= 2) out.twoDays++;
+  }
+  return out;
+}
+
 // Reading without a network over the last 30 days, for the admin page: by device, and who did it.
 function offlineStats(days, dayKeys, monthAgo) {
   const dev = new Map();
@@ -674,6 +751,9 @@ async function collectStats() {
     reading: readingByBook(stats.days, dayKeys, today, weekAgo, monthAgo),
     offline: offlineStats(stats.days, dayKeys, monthAgo),
     gone: goneStats(stats.days, dayKeys, monthAgo),
+    ui: uiStats(stats.days, dayKeys, monthAgo),
+    stops: bookStops(),
+    firstDays: firstDays(stats.days, dayKeys),
   };
 }
 
@@ -1654,7 +1734,8 @@ api.post("/reading", express.text({ limit: "16kb" }), (req, res) => {
   if (typeof body === "string") try { body = JSON.parse(body); } catch { body = null; }
   const books = body?.books;
   if (!books || typeof books !== "object" || Array.isArray(books)) return res.status(400).json({ error: "bad request" });
-  if (req.guest) return res.json({ ok: true });
+  if (body.ui && !req.owner) recordUi(req.guest ? "guest" : req.acct, body.ui);
+  if (req.guest) return (body.ui && saveState(), res.json({ ok: true }));
   const clean = {};
   for (const [name, sec] of Object.entries(books).slice(0, 20)) if (name && name.length <= 500 && Number.isFinite(sec) && sec > 0) clean[name.replace(/#reflow$/, "")] = (clean[name.replace(/#reflow$/, "")] || 0) + Math.min(sec, body.at ? 3600 : 600);
   recordReading(req.acct, clean, Number(body.at) || 0, deviceOf(req.get("user-agent")), body.off && typeof body.off === "object" ? body.off : null);

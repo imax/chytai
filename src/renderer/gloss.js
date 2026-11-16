@@ -105,6 +105,7 @@ window.Gloss = (() => {
   }
 
   function show(hit, doc) {
+    window.ReadingTime?.count("gloss");
     const win = doc.defaultView;
     win.CSS.highlights.set("gl-on", new win.Highlight(hit.range));
     tip.replaceChildren();

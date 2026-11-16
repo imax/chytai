@@ -1832,6 +1832,8 @@ function readerTiles(s) {
 
 // /admin/reader «Читалка»: the reader's own numbers (app.chytai.org.ua, server/index.js collectStats), fetched by
 // the site with the owner's reader key (Max, 2026-11-02: the reader's old /admin moved here).
+// The reader's controls by their id or data-action (reading-time.js count), for «Що натискають» on /admin/reader.
+const UI_NAMES = { "btn-library": "Мої книжки", "m-back": "Мої книжки (телефон)", "btn-toc": "Зміст", "btn-notes": "Нотатки", "btn-settings": "Налаштування", mlook: "Аа (вигляд)", "btn-font-down": "Менший шрифт", "btn-font-up": "Більший шрифт", "btn-panel": "Панель пояснень", "btn-search": "Пошук у книжці", "m-search": "Пошук у книжці (телефон)", "btn-print": "Друкувати", "btn-back": "Назад після посилання", "sel-explain": "Пояснити / Запитати", "sel-translate": "Перекласти", "sel-note": "Зберегти", "sel-mark-note": "Позначити", "sel-mic": "Голосом", "sel-open": "Відкрити пояснення", gloss: "Словничок: слово", "open-book": "Відкрити книжку", "act-add": "Додати файл", "act-cover-photo": "Сфотографувати обкладинку", "act-free-all": "Вільна полиця: усі", "act-yakaboo": "Куплені на Yakaboo", "bm-finished": "Меню книжки: прочитано", "bm-about": "Меню книжки: про книжку", "bm-keep": "Меню книжки: на пристрій", "bm-share": "Меню книжки: поділитися", "bm-edit": "Меню книжки: назва, обкладинка", "bm-epub": "Меню книжки: EPUB", "bm-delete": "Меню книжки: видалити", "note-add": "Нова нотатка", "btn-logout": "Вийти" };
 function readerAppPage({ user, s, error = "", book = () => null, layout }) {
   const usd = (v) => (v == null ? "—" : v > 0 && v < 0.01 ? "<$0,01" : `$${v.toFixed(2).replace(".", ",")}`);
   const mins = (m) => (m < 120 ? `${fmtN(m)} хв` : `${fmtN(Math.round(m / 60))} год`);
@@ -1919,6 +1921,28 @@ function readerAppPage({ user, s, error = "", book = () => null, layout }) {
   const models = s.models.length ? `<div class="tbl"><table>
 <thead><tr><th>Модель</th><th>Запитів</th><th>Токенів на вході</th><th>На виході</th><th>Claude</th></tr></thead>
 <tbody>${s.models.map((m) => `<tr><th>${esc(m.model.replace(/^claude-/, ""))}</th><td>${fmtN(m.requests)}</td><td>${fmtN(m.input + m.cacheRead + m.cacheWrite)}</td><td>${fmtN(m.output)}</td><td>${usd(m.cost)}</td></tr>`).join("")}</tbody></table></div>` : "";
+  // What readers press in the reader (Max 2026-11-16), where they leave books, and new readers' first days.
+  const uiRows = (s.ui || []).slice(0, 40);
+  const readMonth = s.users.filter((u) => u.read30 > 0).length;
+  const uiTbl = uiRows.length ? `<div class="tbl"><table>
+<thead><tr><th>Що</th><th>Читачів</th><th>Натискань</th></tr></thead>
+<tbody>${uiRows.map((r) => `<tr><th>${esc(UI_NAMES[r.name] || r.name)}${UI_NAMES[r.name] ? ` <span class="muted small">${esc(r.name)}</span>` : ""}</th><td>${n(r.readers)}${r.guests ? ` <span class="muted">+ гості</span>` : ""}</td><td>${n(r.n)}</td></tr>`).join("")}</tbody></table></div>
+<p class="muted small">За 30 днів, рахуємо з 16 листопада. Читачів, які за цей час читали: ${fmtN(readMonth)}; так видно, яка частка натискає кнопку. Гортання сторінок не рахуємо, це хвилини.</p>` : `<p class="muted">Рахуємо з 16 листопада.</p>`;
+  const st = s.stops;
+  const left = st ? st.left[3] + st.left[10] + st.left[50] + st.left[95] : 0;
+  const stopsTbl = st && st.finished + st.reading + left ? `<p class="muted">За 90 днів відкрили ${fmtN(st.finished + st.reading + left)} книжок: дочитали ${fmtN(st.finished)}, читають далі ${fmtN(st.reading)}, покинули ${fmtN(left)}: не почавши (до 3%) ${fmtN(st.left[3])}, до 10% ${fmtN(st.left[10])}, до половини ${fmtN(st.left[50])}, після половини ${fmtN(st.left[95])}.</p>
+${st.books.length ? `<details><summary class="muted">Покинуті книжки, новіші зверху</summary><div class="tbl"><table class="reader-app">
+<thead><tr><th class="book">Книжка</th><th>Хто</th><th>Де зупинились</th><th>Востаннє</th></tr></thead>
+<tbody>${st.books.map((r) => {
+    const b = book(r.id, r.book);
+    const title = r.title || b.title || r.book.split("/").pop().replace(/\.(epub|pdf|fb2|mobi|azw3?)$/i, "");
+    return `<tr><th class="book">${b.href ? `<a href="${esc(b.href)}">${esc(title)}</a>` : esc(title)}</th><td>${r.username ? `<a href="/@${esc(r.username)}">${esc(r.name || r.username)}</a>` : esc(r.name || r.id)}</td><td>${fmtN(r.pct)}%</td><td>${ago(r.at)}</td></tr>`;
+  }).join("")}</tbody></table></div></details>` : ""}
+<p class="muted small">Покинута: не відкривали 14 днів і не дочитали до 95%.</p>` : "";
+  const fd = s.firstDays;
+  const step = (v) => `${fmtN(v)}${fd.signed ? ` <span class="muted">${fmtN(Math.round((100 * v) / fd.signed))}%</span>` : ""}`;
+  const firstTbl = fd && fd.signed ? `<div class="tbl"><table class="refs">
+<tbody><tr><th>Зареєструвались за 60 днів</th><td>${fmtN(fd.signed)}</td></tr><tr><th>Відкрили книжку</th><td>${step(fd.opened)}</td></tr><tr><th>Прочитали 10 хв за перший тиждень</th><td>${step(fd.ten)}</td></tr><tr><th>Читали у два різні дні</th><td>${step(fd.twoDays)}</td></tr></tbody></table></div>` : "";
   const body = `<section class="admin">
 <section class="page-head"><div><h1>Читалка</h1><p class="sub">app.chytai.org.ua: хто читає, скільки хвилин і що коштують пояснення Claude. Головні числа — на Огляді.</p></div></section>
 <h2 id="readers">Читачі</h2>
@@ -1926,6 +1950,10 @@ function readerAppPage({ user, s, error = "", book = () => null, layout }) {
 ${readers}
 <h2 id="books">Книжки</h2>
 ${booksTbl}
+${firstTbl ? `<h2 id="first">Перші дні</h2>\n${firstTbl}` : ""}
+${stopsTbl ? `<h2 id="stops">Де кидають книжки</h2>\n${stopsTbl}` : ""}
+<h2 id="ui">Що натискають</h2>
+${uiTbl}
 <h2 id="offline">Без мережі</h2>
 ${offlineTbl}
 <h2 id="gone">Вивантаження</h2>

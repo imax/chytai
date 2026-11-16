@@ -69,6 +69,12 @@ curl -s https://app.chytai.org.ua/agent/sql -H "$H" -H 'content-type: applicatio
   /admin/catalog «Знайшли, але нічого не відкрили» from 2026-11-17. A page with no app.js (404) can't confirm, so
   its events stay immediate. Playwright: beacons sent while a page unloads are lost in headless Chromium; the page
   also reports on a link's click.
+  The reader (Max 2026-11-16): taps on its own controls by id / `data-action` (`sel-…`) / `data-act` (`act-…`) /
+  `data-tab` / `data-open` (reading-time.js `count`, page turns left out; by hand `ReadingTime.count("gloss")`) go with
+  `/api/reading` as `ui` → `state.stats.days[day].ui` and `uiWho` (accounts, «guest»; 90 days). `collectStats()` adds
+  `ui` (30 days), `stops` (books opened in 90 days by `u.progress` pct: finished, reading, left and where) and
+  `firstDays` (accounts of 60 days: opened a book, 10 min in week one, two days). /admin/reader «Перші дні», «Де
+  кидають книжки», «Що натискають»; a new control gets a Ukrainian name in `UI_NAMES` (web/admin.js).
 - /admin «Performance» (`healthBlock` in web/admin.js): one bullet per check, red with a link when it needs a look. Keep
   it so (Max, 2026-11-12, after it was folded into one sentence: «мені не подобається»); trim a row, don't merge rows.
 - Pages the phone unloaded (iOS kills the WebView's page for memory, mostly in the background): the page keeps a note

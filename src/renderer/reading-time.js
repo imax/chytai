@@ -104,6 +104,36 @@
       sending = false;
     }
   }
+  // Taps on the reader's own controls, for /admin/reader «Що натискають у Читалці» (Max, 2026-11-16: «аналітика по
+  // продукту»): how many times each was pressed, by its id or data-action/-act; no text, no book. Sent with the
+  // minute's report, only when there was a tap. gloss.js and others count by hand: ReadingTime.count("gloss").
+  let ui = {};
+  const count = (name) => {
+    name = String(name || "").toLowerCase().replace(/[^a-z0-9-]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40);
+    if (name && name !== "prev" && name !== "next") ui[name] = (ui[name] || 0) + 1; // page turns are the minutes
+  };
+  document.addEventListener("click", (e) => {
+    if (!e.isTrusted) return; // a button that presses another (m-back → btn-library) is one tap
+    const el = e.target.closest?.("[data-action], [data-act], [data-tab], [data-open], button[id], a[id], summary[id], label[id]");
+    if (!el) return;
+    const d = el.dataset;
+    count(d.action ? `sel-${d.action}` : d.act ? `act-${d.act}` : d.tab ? `tab-${d.tab}` : d.open != null ? "open-book" : el.id);
+  }, true);
+  async function sendUi(keepalive) {
+    if (!Object.keys(ui).length || navigator.onLine === false) return;
+    const body = JSON.stringify({ books: {}, ui });
+    const was = ui;
+    ui = {};
+    try {
+      const res = await fetch("/api/reading", { method: "POST", headers: { "Content-Type": "application/json" }, body, credentials: "same-origin", keepalive });
+      if (!(res.ok || res.status === 400 || res.status === 401)) throw new Error(res.status);
+    } catch {
+      for (const [k, n] of Object.entries(was)) ui[k] = (ui[k] || 0) + n;
+    }
+  }
+  setInterval(() => sendUi(false), 60 * 1000);
+  addEventListener("pagehide", () => sendUi(true));
+  document.addEventListener("visibilitychange", () => document.visibilityState === "hidden" && sendUi(true));
   setInterval(() => send(false), 60 * 1000);
   setTimeout(() => send(false), 5000); // what waits from before (read offline) goes soon after the start
   addEventListener("pagehide", () => send(true));
@@ -112,5 +142,5 @@
 
   // web-bridge.js and home.js: a book opened from the device's copy offline («opened»), or not there («missing»).
   const offlineOpen = (kind) => add(Math.floor(Date.now() / HOUR) * HOUR, { [kind]: 1 }, OFF);
-  window.ReadingTime = { poke, offlineOpen };
+  window.ReadingTime = { poke, offlineOpen, count };
 })();
