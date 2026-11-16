@@ -387,6 +387,19 @@ A flag only when Max asks for one, or when the change could break what readers u
   their notes and «Пояснення слів» chapters and their own covers («Відкрита книга» design); `source` in shelf.json =
   the work's page. Their «Сватання на Гончарівці» keeps Kvitka's Russian stage directions: not on the shelf (Max to say).
 
+## Search ranking (`store.search`, `searchAll` in web/server.js)
+
+- A book's score: exact title 1000, every word whole 500 (as typed, another form in the title by `store.forms`:
+  «кава» → кави/каву/каві, never the bare stem; a Latin name that sounds the same, `store.latinSame`: «кінг» → king),
+  +10 the words as typed, +15 a title that starts with them or an author they name, readers `30·log2(1+n)`, +20 a
+  Ukrainian title, −300 a bundle, −i/2 the index's order. A Latin word only a letter off (`latinAlts`, 5+ letters) or a
+  word's start finds a book but doesn't make it whole. Hits carry `whole`.
+- Authors, publishers and lists: `nameFit(nq)` = 2 whole, 1 start/form/sound-alike. Their block goes under the books
+  (`under`, pages.js `searchResults`) when the books have the words whole and the block has no fit 2 (Max 2026-11-16,
+  «кава»). Wikidata's known works (`findKnown`) are put where their score would place them, not always first.
+- Compare a change on the test DB: two servers (old checkout on another port) and a list of queries; keep
+  кава, кінг, мурак, франко, війна, море, дюна, сапієнс, кафка, 1984 among them.
+
 ## Translation pairs
 
 - A Ukrainian book and its original are paired in `web/seed/matches.json`: `translations` (`[original, uk]`, slugs or

@@ -1831,7 +1831,7 @@ const askGo = (text, primary, enter = primary) =>
   primary
     ? `<form method="post" action="/ask" class="ask-go"${enter ? " data-primary" : ""} data-block="ask-go"><input type="hidden" name="text" value="${attr(text)}"><button class="btn primary">Порадити книжки</button><span class="small muted">Claude добере з каталогу</span></form>`
     : `<form method="post" action="/ask" class="ask-go-line" data-block="ask-go"><input type="hidden" name="text" value="${attr(text)}"><span class="small muted">Це опис, а не назва?</span> <button class="text-link small">Порадити книжки</button></form>`;
-function searchResults({ q, user, hits = [], authors = [], readers = [], shelves = [], lists = [], similar = [], tag = "", outside = false, askText = "", askMode = "", near = [], nearAuthors = [], nearShelves = [] }) {
+function searchResults({ q, user, hits = [], authors = [], readers = [], shelves = [], lists = [], similar = [], tag = "", outside = false, askText = "", askMode = "", near = [], nearAuthors = [], nearShelves = [], under = {} }) {
   if (!q.trim()) return "";
   const n = hits.length + authors.length + readers.length + shelves.length + lists.length;
   // A request: no Google, Open Library or «полиці» for it, only the button and what the catalog had for its words.
@@ -1864,13 +1864,20 @@ function searchResults({ q, user, hits = [], authors = [], readers = [], shelves
   if (askMode === "ask") return `${askTop}
 <p class="found">У каталозі за цими словами: ${count(n, "збіг", "збіги", "збігів")}</p>
 <div class="split"><div>${hits.length ? `<div class="rows">${hits.slice(0, 5).map((h) => bookRow(h.book, { meta: readersMeta(h.book.id), action: h.entry ? myStatus(h.entry) : "" })).join("")}</div>` : ""}</div><aside></aside></div>`;
+  // Publishers, authors and lists: over the books, or under them when only the books have the words whole
+  // (server.js `under`: «кава» puts Кавагуті and Кавабата under the books about coffee).
+  const blocks = [
+    { key: "shelves", html: shelves.length ? `<section class="block">${label(`Видавництва · ${shelves.length}`)}<div class="name-rows">${shelves.map((s) => `<a class="name-row" href="/publishers/${attr(s.shelf.id)}"><b>${esc(s.shelf.name)}</b><span>${[books(s.total), s.shelf.tagline ? esc(s.shelf.tagline) : ""].filter(Boolean).join(" · ")}</span></a>`).join("")}</div></section>` : "" },
+    { key: "authors", html: authors.length ? `<section class="block">${label(`Автори · ${authors.length}`)}<div class="name-rows">${authors.map((a) => `<a class="name-row" href="${attr(a.href)}"><b>${esc(a.name)}</b><span>${[books(a.books), a.readers ? count(a.readers, "читач", "читачі", "читачів") : ""].filter(Boolean).join(" · ")}</span></a>`).join("")}</div></section>` : "" },
+    { key: "lists", html: lists.length ? `<section class="block">${label(`Списки · ${lists.length}`)}<div class="lgrid">${lists.map(listCard).join("")}</div></section>` : "" },
+  ].filter((b) => b.html);
+  const place = (below) => blocks.filter((b) => !under[b.key] === !below).map((b) => b.html).join("\n    ");
   return `${askMode === "maybe" ? askTop : ""}<p class="found">${count(n, "збіг", "збіги", "збігів")}${tag ? ` · жанр «${GENRES.includes(tag) ? `<a class="text-link" href="/genre/${attr(genreSlug(tag))}">${esc(tag)}</a>` : esc(tag)}»` : ""}</p>
 <div class="split">
   <div>
-    ${shelves.length ? `<section class="block">${label(`Видавництва · ${shelves.length}`)}<div class="name-rows">${shelves.map((s) => `<a class="name-row" href="/publishers/${attr(s.shelf.id)}"><b>${esc(s.shelf.name)}</b><span>${[books(s.total), s.shelf.tagline ? esc(s.shelf.tagline) : ""].filter(Boolean).join(" · ")}</span></a>`).join("")}</div></section>` : ""}
-    ${authors.length ? `<section class="block">${label(`Автори · ${authors.length}`)}<div class="name-rows">${authors.map((a) => `<a class="name-row" href="${attr(a.href)}"><b>${esc(a.name)}</b><span>${[books(a.books), a.readers ? count(a.readers, "читач", "читачі", "читачів") : ""].filter(Boolean).join(" · ")}</span></a>`).join("")}</div></section>` : ""}
-    ${lists.length ? `<section class="block">${label(`Списки · ${lists.length}`)}<div class="lgrid">${lists.map(listCard).join("")}</div></section>` : ""}
+    ${place(false)}
     ${hits.length ? `<section class="block">${label(`Книжки · ${hits.length}`)}<div class="rows">${hits.map((h) => bookRow(h.book, { meta: readersMeta(h.book.id), action: h.entry ? myStatus(h.entry) : "", others: h.others, sub: h.uk ? `Українською: «${esc(nest(h.uk))}» · у каталогах поки немає` : "" })).join("")}</div></section>` : ""}
+    ${place(true)}
     ${readers.length ? `<section class="block">${label(`Читачі · ${readers.length}`)}<div class="name-rows">${readers.map((r) => `<a class="name-row" href="${attr(r.reader.href)}"><b>${esc(r.reader.name)}</b><span>${books(r.count)}</span></a>`).join("")}</div></section>` : ""}
     ${outside ? elsewhere : user ? `<p class="muted end-note">Не те? ${addLink}</p>` : ""}
   </div>

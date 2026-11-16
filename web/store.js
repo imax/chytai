@@ -134,6 +134,11 @@ const ksdBlurb = (b) => {
 // Letters search takes as one (Max 2026-10-30: «Проект Аве Марія» found nothing, the book is «Проєкт…»): the index
 // keeps a folded copy of each title, and the query is folded before it is looked up.
 const fold = (s) => String(s || "").replace(/є/g, "е").replace(/Є/g, "Е").replace(/ґ/g, "г").replace(/Ґ/g, "Г");
+// A word as the search index keeps it: no accents, й is и, ї is і (unicode61, remove_diacritics 2).
+const strip = (s) => String(s || "").normalize("NFKD").replace(/\p{M}/gu, "").normalize("NFC");
+// Ukrainian noun and adjective endings, longest first, for the other forms of a typed word (Store.forms).
+const ENDINGS = ["ами", "ями", "ого", "ому", "ими", "ою", "ею", "ам", "ям", "ах", "ях", "ів", "ом", "ем", "ий", "ій", "ої", "их", "им", "ую", "юю", "а", "я", "о", "е", "и", "і", "ї", "у", "ю", "й", "ь", ""].map(strip);
+const ENDING_SET = new Set(ENDINGS);
 // Latin look-alikes inside a Cyrillic word are Cyrillic: a reader's «Iлiада» (Latin I and i) is «Іліада» (Max, 2026-10-30).
 const LOOK = { a: "а", c: "с", e: "е", i: "і", o: "о", p: "р", x: "х", y: "у" };
 const cyrWord = (t) => (/[a-z]/.test(t) && /[а-яіїєґ]/.test(t) ? t.replace(/\S+/g, (w) => (/[а-яіїєґ]/.test(w) ? w.replace(/[aceiopxy]/g, (c) => LOOK[c]) : w)) : t);
@@ -1199,6 +1204,7 @@ class Store {
     this.genreIdx = genres;
     this.vocab = null; // the typo search reloads the word list
     this.sounds = null;
+    this.formCache = null;
     this.aliasIdx = null;
     if (!full && this.updateSearch(rows)) return;
     const db = this.db;
@@ -1222,6 +1228,7 @@ class Store {
     this.genreIdx = genres;
     this.vocab = null; // the typo search reloads the word list
     this.sounds = null;
+    this.formCache = null;
     this.aliasIdx = null;
   }
 
@@ -1300,6 +1307,7 @@ class Store {
     }
     this.vocab = null;
     this.sounds = null;
+    this.formCache = null;
     this.aliasIdx = null;
   }
 
@@ -1338,9 +1346,18 @@ class Store {
 
   // Latin words of the index that sound like a Cyrillic word: «міллер» → miller, «оруелл» → orwell.
   // Typing the start of a name finds it too («мураk…» once it is 4 letters or more). A Latin word, or one
-  // shorter than 3 letters, has none.
+  // shorter than 3 letters, has none. A short word finds only what sounds the same: a letter away from «кава» or
+  // «кінг» is «cave», «ava», «kind», «dying» (Max, 2026-11-16: «кава» gave «Клан Печерного Ведмедя»).
   latinAlts(term) {
-    if (!/[а-яіїєґ]/.test(term) || term.length < 3) return [];
+    return this.latinMatch(term).all;
+  }
+  // Those of them that count as the very word, not just as found: the same sound, or a long name a letter off
+  // («сапієнс» is Sapiens, not «happens»). The rest (the start of a name, a near one) find a book but don't lift it (search()).
+  latinSame(term) {
+    return this.latinMatch(term).same;
+  }
+  latinMatch(term) {
+    if (!/[а-яіїєґ]/.test(term) || term.length < 3) return { all: [], same: [], start: [] };
     if (this.altCache?.has(term)) return this.altCache.get(term);
     if (!this.sounds) {
       this.altCache = new Map(); // term -> words: the author and reader lists ask once per name
@@ -1349,16 +1366,35 @@ class Store {
       for (const w of this.vocab) if (/^[a-z]{3,}$/.test(w)) (this.sounds.get(soundOf(w)) || this.sounds.set(soundOf(w), []).get(soundOf(w))).push(w);
     }
     const k = soundOf(term);
-    const max = k.length >= 7 ? 2 : k.length >= 4 ? 1 : 0;
+    const max = k.length >= 7 ? 2 : k.length >= 5 ? 1 : 0;
     const exact = [], near = [], start = [];
     for (const [s, words] of this.sounds) {
       if (s === k) exact.push(...words);
       else if (k.length >= 4 && s.startsWith(k)) start.push(...words);
       else if (max && Math.abs(s.length - k.length) <= max && editDistance(k, s, max) <= max) near.push(...words);
     }
-    const out = [...exact, ...near, ...start].slice(0, 12);
+    const all = [...exact, ...near, ...start].slice(0, 12);
+    const out = { all, start, same: all.filter((w) => exact.includes(w) || (k.length >= 7 && near.includes(w) && editDistance(k, soundOf(w), 1) <= 1)) };
     if (this.altCache.size > 1000) this.altCache.clear();
     this.altCache.set(term, out);
+    return out;
+  }
+
+  // Other forms of a Ukrainian word that the index has: «кава» → кави, каву, кавою; «війна» → війни, війною;
+  // «кінг» → кінга. Only one ending for another, so «кава» is not «кавалер» (that one is only the word's start), and
+  // never the bare stem: «франко» is not «Франк».
+  // In the index's own letters (й is и, ї is і there). A word under 4 letters has none.
+  forms(term) {
+    const t = strip(fold(term));
+    if (!/^[а-яіє]{4,}$/.test(t)) return [];
+    this.formCache ??= new Map();
+    if (this.formCache.has(t)) return this.formCache.get(t);
+    this.vocab ??= this.db.prepare("SELECT term FROM search_vocab").all().map((r) => r.term);
+    const end = ENDINGS.find((e) => e && t.endsWith(e) && t.length - e.length >= 3) || "";
+    const stem = t.slice(0, t.length - end.length);
+    const out = this.vocab.filter((w) => w !== t && (w !== stem || !end) && w.startsWith(stem) && w.length <= stem.length + 3 && ENDING_SET.has(w.slice(stem.length))).slice(0, 12);
+    if (this.formCache.size > 1000) this.formCache.clear();
+    this.formCache.set(t, out);
     return out;
   }
 
@@ -1429,9 +1465,11 @@ class Store {
         return [...byId.values()].sort((a, b) => b.score - a.score).slice(0, limit);
       }
     }
+    // Each word as typed (its start: search as you type), or another form of it («кава» finds «Смак кави»).
+    const forms = terms.map((t) => this.forms(t));
     let rows = this.db
       .prepare("SELECT id FROM search WHERE search MATCH ? ORDER BY bm25(search, 0, 10, 10, 5, 4, 1) LIMIT ?")
-      .all(terms.map((t) => `"${t.replace(/"/g, "")}"${/^\d{1,9}$/.test(t) ? "" : "*"}`).join(" "), limit * 2); // «1984» is a whole word, not the start of an ISBN
+      .all(terms.map((t, i) => `("${t.replace(/"/g, "")}"${/^\d{1,9}$/.test(t) ? "" : "*"}${forms[i].map((w) => ` OR "${w}"`).join("")})`).join(" AND "), limit * 2); // «1984» is a whole word, not the start of an ISBN
     // A Latin name typed in Cyrillic («міллер», «мураками»): the same search with the words that sound like
     // it, after what the Cyrillic itself found (Max, 2026-10-22).
     const alts = terms.map((t) => this.latinAlts(t));
@@ -1450,25 +1488,35 @@ class Store {
       // An exact title (or original title) goes first, then books where every typed word is a whole
       // word of the title or the author («Лем» is Станіслав Лем, not «Моцарт із Лемберга»; «міллер» is
       // Madeline Miller); otherwise the index's own order.
-      const words = new Set(fold(norm([b.title, b.altTitle, b.author].join(" "))).normalize("NFKD").replace(/\p{M}/gu, "").split(" "));
-      const whole = terms.every((t, j) => words.has(t) || alts[j].some((w) => words.has(w)));
+      // A word counts as whole in another form of it («кави»), or as a Latin name that sounds the same («кінг» is King);
+      // a Latin word a letter off («кава» → cave, «кінг» → kind) or only the start of a word does not.
+      const wordsOf = (...xs) => new Set(strip(fold(norm(xs.join(" ")))).split(" "));
+      const words = wordsOf(b.title, b.altTitle, b.author);
+      const same = (set) => terms.every((t) => set.has(strip(t)) || this.latinSame(t).some((w) => set.has(w)));
+      const titleWords = wordsOf(b.title, b.altTitle); // another form counts in a title only: «море» is not Ден Мора
+      const whole = same(words) || terms.every((t, j) => words.has(strip(t)) || forms[j].some((w) => titleWords.has(w)) || this.latinSame(t).some((w) => words.has(w)));
       // Within that, what readers have goes up and the index's order counts less (2026-10-28 usability review:
       // «гаррі поттер» gave «Міні-Поттери» first and «Філософський камінь» ninth, «кінг» two «Комплекти»):
       // readers, a Ukrainian title, and a bundle at the bottom of its group. A title whose first part is the
       // query («Sapiens. Людина Розумна…») counts as exact once a reader has it.
-      // A book found only through the Latin sound-alike of a Cyrillic word («франко» → Frank Herbert) gets no lift.
-      const typed = terms.every((t) => [...words].some((w) => w.startsWith(t)));
+      // A book found only through a Latin word a letter off («франко» → Frank Herbert) gets no lift; the start of a
+      // Latin name does («мурак» → Murakami).
+      const typed = terms.every((t, j) => [...words].some((w) => w.startsWith(strip(t))) || forms[j].some((w) => words.has(w)) || this.latinMatch(t).start.some((w) => words.has(w)) || this.latinSame(t).some((w) => words.has(w)));
       const readers = typed ? this.readersOf(id).length : 0;
       const main = fold(norm(String(b.title || "").split(/[.:]\s/)[0])) === exact && readers > 0;
       const bundle = b.bundle || /^комплект/i.test(b.title || "");
       const score =
         (fold(norm(b.title)) === exact || fold(norm(b.altTitle)) === exact || main ? 1000 : 0) +
         (whole ? 500 : 0) +
+        (same(words) ? 10 : 0) + // the word as typed a little over its other forms («франко» over «Франка»)
+        // A title that starts with the words («Кава з кардамоном»), or an author named by them: «франко» is Франко's
+        // own books before the books about him.
+        (strip(fold(norm(b.title))).startsWith(strip(exact)) || same(wordsOf(b.author, b.authorOrig)) ? 15 : 0) +
         Math.round(30 * Math.log2(1 + readers)) +
         (/[а-яіїєґ]/i.test(b.title || "") ? 20 : 0) -
         (bundle ? 300 : 0) -
         i / 2;
-      hits.push({ book: b, entry: reader ? this.sharedEntry(reader, id) : null, score });
+      hits.push({ book: b, entry: reader ? this.sharedEntry(reader, id) : null, score, whole });
     }
     return hits.sort((a, b) => b.score - a.score).slice(0, limit);
   }

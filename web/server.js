@@ -2969,13 +2969,23 @@ const searchHits = (req, q) => store.search(q, { reader: req.user?.id }).map((h)
 const normQ = (s) => String(s || "").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
 // Everything /search shows: books (a genre's name lists that genre's books by rating), authors, readers,
 // and books like the first hit on the side.
-// Every word typed starts a word of the name, or sounds like one of its Latin words («міллер», Madeline Miller).
-function nameHas(name, nq) {
-  const words = normQ(name).normalize("NFKD").replace(/\p{M}/gu, "").split(" ");
-  return nq.split(" ").filter(Boolean).every((t) => {
-    const alts = store.latinAlts(t);
-    return words.some((w) => w.startsWith(t) || alts.includes(w));
-  });
+// How well the words typed name it (Max, 2026-11-16: «кава» put Кавагуті and Кавабата over the books about coffee):
+// 2 = each is a whole word of the name, or a Latin name that sounds the same («кінг», King); 1 = each only starts one,
+// is another form of one («франко», Франка) or sounds like one of its Latin words («мурак», «франко» → Frank); 0 = not.
+const bare = (s) => String(s || "").normalize("NFKD").replace(/\p{M}/gu, "").normalize("NFC");
+function nameFit(nq) {
+  const terms = nq.split(" ").filter(Boolean).map((t) => ({ b: bare(t), same: new Set([bare(t), ...store.latinSame(t)]), alts: [...store.latinAlts(t), ...store.forms(t)] }));
+  return (name) => {
+    if (!name) return 0;
+    const words = bare(normQ(name)).split(" ");
+    let fit = 2;
+    for (const t of terms) {
+      if (words.some((w) => t.same.has(w))) continue;
+      if (!words.some((w) => w.startsWith(t.b) || t.alts.includes(w))) return 0;
+      fit = 1;
+    }
+    return fit;
+  };
 }
 function searchAll(req, q) {
   if (!q) return {};
@@ -2989,11 +2999,18 @@ function searchAll(req, q) {
   }
   // A short name («grrm», «гп») finds the authors of what it stands for too.
   const nqs = [nq, normQ(store.aliasQuery(q))].filter(Boolean);
-  const has = (name) => nqs.some((n) => nameHas(name, n));
+  const fits = nqs.map(nameFit);
+  const fit = (name) => Math.max(...fits.map((f) => f(name)));
+  const has = (name) => fit(name) > 0;
+  // The authors the words name whole first, then those with more readers (of the first 20 by books).
   const authorsFound = (store.authors?.list || [])
-    .filter((a) => has(a.name) || (a.other && has(a.other)))
-    .slice(0, 6)
-    .map((a) => ({ ...a, books: a.ids.length, readers: new Set(a.ids.flatMap((id) => store.readersOf(id).filter((r) => r.entry.status !== "abandoned").map((r) => r.reader))).size }));
+    .map((a) => ({ a, fit: Math.max(fit(a.name), fit(a.other)) }))
+    .filter((x) => x.fit)
+    .sort((x, y) => y.fit - x.fit || y.a.ids.length - x.a.ids.length)
+    .slice(0, 20)
+    .map(({ a, fit }) => ({ ...a, fit, books: a.ids.length, readers: new Set(a.ids.flatMap((id) => store.readersOf(id).filter((r) => r.entry.status !== "abandoned").map((r) => r.reader))).size }))
+    .sort((x, y) => y.fit - x.fit || y.readers - x.readers || y.books - x.books)
+    .slice(0, 6);
   const readersFound = auth
     .readers()
     .filter((r) => has(r.name) || r.username.startsWith(nq))
@@ -3018,15 +3035,24 @@ function searchAll(req, q) {
   // Readers' lists by title or intro (Max, 2026-10-28: «І пошук по списках»).
   const listsFound = lists.all().filter((l) => has(l.title) || nqs.some((n) => normQ(l.note).includes(n))).slice(0, 6).map(withCovers);
   // A work's Ukrainian name from Wikidata when our book of it has another (Max, 2026-10-30: «Щоденник Анни Франк» found
-  // nothing, though we have «The Diary of a Young Girl»): that book, first if the words missed it, with the Ukrainian name under it.
+  // nothing, though we have «The Diary of a Young Girl»): that book, with the Ukrainian name under it, where the words
+  // would put it if it had that name: first for «щоденник анни франк», but «війна» keeps the books called «Війна» over
+  // «Війна і мир», and a name the words only start goes under the books that have them whole (store.search's scores).
   const known = authors.findKnown(store, q);
+  const knownFit = nameFit(nq);
   for (const w of known.filter((w) => w.books.length).reverse()) {
     const id = store.canonical(w.books[0]);
     const had = hits.find((h) => h.book.id === id);
     const h = had || { book: bookFor(req, store.book(id), !!store.entry(req.user?.id, id)), entry: store.sharedEntry(req.user?.id, id) };
     if (!h.book) continue;
     if (!CYR_RE.test(h.book.title || "") && !store.translationsOf(id).some((t) => CYR_RE.test(t.title || ""))) h.uk = w.uk;
-    if (!had) hits.unshift(h);
+    if (had) continue;
+    const fit = knownFit(w.uk);
+    const exact = folded(w.uk) === folded(q);
+    h.whole = fit === 2;
+    h.score = (exact ? 1000 : 0) + (fit === 2 ? 520 : fit ? 20 : 0) + Math.round(30 * Math.log2(1 + store.readersOf(id).length));
+    const at = tag || named ? 0 : hits.findIndex((x) => x.score < h.score);
+    hits.splice(at < 0 ? hits.length : at, 0, h);
   }
   foldTwins(hits, req);
   const similar = hits.length ? social.alsoLiked([hits[0].book.id], { limit: 4, skip: new Set(hits.map((h) => h.book.id)) }) : [];
@@ -3084,7 +3110,13 @@ function searchAll(req, q) {
       .slice(0, 3)
       .map((s) => ({ shelf: s.x, total: visible(s.x).length }));
   }
-  return { hits, authors: authorsFound, readers: readersFound, shelves: shelvesFound, lists: listsFound, similar, tag, outside, near, nearAuthors, nearShelves };
+  // Publishers, authors and lists go over the books when the words name them whole, or when no book has the words
+  // themselves; an author the words only start («кава» → Кавагуті, Кавабата) goes under the books about coffee.
+  const booksNamed = !!(tag || named || hits.some((h) => h.whole || h.uk));
+  const under = booksNamed
+    ? { shelves: !shelvesFound.some((s) => fit(s.shelf.name) === 2), authors: !authorsFound.some((a) => a.fit === 2), lists: !listsFound.some((l) => fit(l.title) === 2) }
+    : {};
+  return { hits, authors: authorsFound, readers: readersFound, shelves: shelvesFound, lists: listsFound, similar, tag, outside, near, nearAuthors, nearShelves, under };
 }
 const folded = (s) => normQ(s).replace(/є/g, "е").replace(/ґ/g, "г").normalize("NFKD").replace(/\p{M}/gu, "");
 // How many things a search found, for the search log (admin.searched): books, authors, readers, shelves, lists.
@@ -3112,10 +3144,11 @@ const homeExamples = () => examples;
 const foundAs = (q, seriesNames) => {
   const nq = normQ(q);
   if (nq.length < 3) return null;
-  const series = seriesNames.find((n) => nameHas(n, nq));
+  const fit = nameFit(nq);
+  const series = seriesNames.find((n) => fit(n));
   if (series) return { kind: "kind", text: series };
   const hit = searchHits({}, q)[0];
-  return hit && nameHas(hit.book.title, nq) ? { kind: "book", text: hit.book.title } : null;
+  return hit && fit(hit.book.title) ? { kind: "book", text: hit.book.title } : null;
 };
 const buildExamples = () => {
   const fit = (t) => t && t.length <= EXAMPLE_MAX;
