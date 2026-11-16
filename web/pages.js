@@ -3655,7 +3655,7 @@ ${shown.length ? shown.map(row).join("") : `<p class="muted">${all ? "Поки �
 
 // ---- /admin/events: the calendar of book events (Max 2026-11-15: its own page; where an event lacks its page) ----
 
-function eventsAdminPage({ user, rows, tg, saved, feeds = [], feedMsg = "", cancelled = [], review = [] }) {
+function eventsAdminPage({ user, rows, tg, saved, feeds = [], feedMsg = "", cancelled = [], review = [], recent = [] }) {
   const C = cal();
   const n = (v) => String(v);
   const kindOf = (e) => C.linkKind(C.sourceUrl(e)) || "none";
@@ -3690,6 +3690,19 @@ function eventsAdminPage({ user, rows, tg, saved, feeds = [], feedMsg = "", canc
   const total = (list) => list.reduce((s, g) => s + g.n, 0);
   const leads = tg?.leads?.sites || [];
   const top = (tg?.per || []).filter((c) => c.events > 0).sort((a, b) => b.events - a.events).slice(0, 12);
+  // What came in over 3 days, by the Kyiv day it came (Max 2026-11-16: «глянути що ми додаємо»): today open.
+  const kyiv = (iso) => new Date(iso).toLocaleString("sv-SE", { timeZone: "Europe/Kyiv" });
+  const byDay = new Map();
+  for (const e of recent) {
+    const d = kyiv(e.added).slice(0, 10);
+    if (!byDay.has(d)) byDay.set(d, []);
+    byDay.get(d).push(e);
+  }
+  const dayName = (d, i) => (i === 0 && d === kyiv(new Date().toISOString()).slice(0, 10) ? "Сьогодні" : `${d.slice(8, 10)}.${d.slice(5, 7)}`);
+  const recentLine = (e) => `<p class="small" style="margin:.3em 0">${esc(kyiv(e.added).slice(11, 16))} · ${e.source === "reader" ? (String(e.by).startsWith("guest:") ? "гість" : "читач") : esc(SOURCE_NAME[e.source] || e.source)} · <a href="${attr(C.eventPath(e))}">${esc(e.title)}</a> <span class="muted">· ${esc(e.starts.slice(8, 10) + "." + e.starts.slice(5, 7))}${e.city ? ` · ${esc(e.city)}` : ""}${e.url ? ` · <a href="${attr(e.url)}" target="_blank" rel="noopener nofollow">${C.linkKind(e.url) === "tg" ? "пост" : "джерело"}</a>` : ""}${e.hidden ? (e.cancelled ? " · <b>скасовано</b>" : e.review ? " · <b>чекає перевірки</b>" : " · <b>сховано</b>") : ""}</span></p>`;
+  const recentBlock = `<section class="block" id="recent">${label(`Нові за 3 дні · ${recent.length}`)}
+<p class="small muted">Що додали збирачі, читачі й гості, найновіші вгорі. Сховані теж.</p>
+${recent.length ? [...byDay.entries()].map(([d, list], i) => `<details${i === 0 ? " open" : ""}><summary>${dayName(d, i)} · ${list.length} <span class="small muted">(${Object.entries(list.reduce((m, e) => ((m[e.source] = (m[e.source] || 0) + 1), m), {})).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${esc(SOURCE_NAME[k] || k)} ${v}`).join(", ")})</span></summary>${list.map(recentLine).join("")}</details>`).join("") : `<p class="muted">За 3 дні нічого нового.</p>`}</section>`;
   const body = `
 ${pageHead({ title: "Події", sub: `${n(rows.length)} майбутніх подій на <a href="/calendar">/calendar</a>` })}
 ${review.length ? `<section class="block" id="review">${label(`Від гостей · ${review.length}`)}
@@ -3699,6 +3712,7 @@ ${review.map((e) => `<div class="cmt"><p><a href="${attr(C.eventPath(e))}">${esc
 ${e.sub ? `<p class="small">${esc(e.sub)}</p>` : ""}
 <div style="display:flex;gap:.5em;margin-top:.4em"><form method="post" action="/admin/events/review"><input type="hidden" name="id" value="${attr(e.id)}"><input type="hidden" name="show" value="1"><button class="btn small primary">Показати</button></form>
 <form method="post" action="/admin/events/review"><input type="hidden" name="id" value="${attr(e.id)}"><button class="btn small">Прибрати</button></form></div></div>`).join("")}</section>` : ""}
+${recentBlock}
 <section class="block">${label("Посилання")}
 <p>${Object.keys(KIND_NAME).filter((k) => byLink[k]).map((k) => `${esc(KIND_NAME[k])}: <b>${byLink[k]}</b>`).join(" · ")}</p>
 <p class="small muted">Звідки: ${Object.entries(bySource).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${esc(SOURCE_NAME[k] || k)} ${v}`).join(" · ")}</p></section>
@@ -3719,7 +3733,7 @@ ${feedMsg ? `<p class="small"><b>${esc(feedMsg)}</b></p>` : ""}
 ${feeds.map((f) => `<div class="cmt"><p>${esc(f.name || f.url)}${f.kind ? ` <span class="small muted">· ${esc((C.KINDS.find((k) => k.key === f.kind) || {}).label || "")}</span>` : ""}${f.city ? ` <span class="small muted">· ${esc(f.city)}</span>` : ""}</p>
 <p class="small muted">${f.error ? `<b>Помилка:</b> ${esc(f.error)}` : `подій: ${n(f.n)}`}${f.last ? ` · ${esc(f.last.slice(0, 16).replace("T", " "))} UTC` : ""} · <a href="${attr(f.url)}" target="_blank" rel="noopener">календар</a></p>
 <form method="post" action="/admin/events/feed/delete"><input type="hidden" name="id" value="${attr(String(f.id))}"><button class="btn small">Прибрати</button></form></div>`).join("")}
-<form method="post" action="/admin/events/feed" style="display:grid;gap:.5em;margin-top:.6em">
+<form method="post" action="/admin/events/feed" style="display:grid;grid-template-columns:minmax(0,1fr);gap:.5em;margin-top:.6em">
 <input name="url" required placeholder="Посилання на календар (Google або .ics)">
 <input name="name" placeholder="Назва, напр. клуб «Лісові читання»">
 <input name="page" type="url" placeholder="Сторінка організатора (необов'язково)">

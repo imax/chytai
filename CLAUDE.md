@@ -275,7 +275,7 @@ A flag only when Max asks for one, or when the change could break what readers u
   the book page's «Подія:», the author's «Наживо» and `/calendar/go/<id>` (letters) lead there. The organizer's button
   is named by its link (`calendar.linkKind`: form / social / site / ye). Never a link to a Telegram post, on a page or
   in the .ics (Max 2026-11-15: it tells we read channels): `calendar.sourceUrl` gives Max's own link first
-  (`cal_events.link`, set on /admin/events, tab «Події»: events without a page, «лише афіша «Є»», sources;
+  (`cal_events.link`, set on /admin/events, tab «Події»: «Нові за 3 дні» (`calendar.recent`, all sources, hidden too, by Kyiv day), events without a page, «лише афіша «Є»», sources;
   `calendar.setLink` gives it to every event of the same post; no collector writes it), then an event at «Є» its city's
   afisha (`YE_CITY`, book-ye.com.ua/calendar/<city>/), the rest «Канал у Telegram»: the channel, never the post
   (`tgChannel`; Max: «хай шукають»). Є's site is behind Cloudflare's human

@@ -2625,7 +2625,7 @@ app.get("/admin/events", owner, (req, res) => {
   try {
     tg = tgFeed.status();
   } catch {}
-  res.send(pages.eventsAdminPage({ user: req.user, rows: calendar.upcoming(), tg, saved: String(req.query.saved || ""), feeds: calendar.feeds(), feedMsg: String(req.query.feed || ""), cancelled: calendar.cancelledList(), review: calendar.pending() }));
+  res.send(pages.eventsAdminPage({ user: req.user, rows: calendar.upcoming(), tg, saved: String(req.query.saved || ""), feeds: calendar.feeds(), feedMsg: String(req.query.feed || ""), cancelled: calendar.cancelledList(), review: calendar.pending(), recent: calendar.recent(3) }));
 });
 // An event a Telegram post took off (cancelled or moved) back on the calendar, when the post was read wrong.
 app.post("/admin/events/uncancel", owner, (req, res) => {

@@ -763,6 +763,11 @@ function create(db, store, { notify = () => {}, bookua = null, search = null, ma
       .all(today, today)
       .map((r) => ({ ...row(r), cancelled: JSON.parse(r.cancelled || "{}") }));
   };
+  // What came in lately, newest first, hidden ones too (/admin/events «Нові»: Max checks the collectors work).
+  const recent = (days = 3, limit = 150) => {
+    const since = new Date(Date.now() - days * 864e5).toISOString();
+    return db.prepare("SELECT * FROM cal_events WHERE added >= ? ORDER BY added DESC LIMIT ?").all(since, limit).map(row);
+  };
   // Guests' events waiting for Max (/admin/events): upcoming ones; a past one just waits for cleanup.
   const pending = () => {
     const today = kyivDay();
@@ -929,7 +934,7 @@ function create(db, store, { notify = () => {}, bookua = null, search = null, ma
   };
   const unsubscribeAll = (reader) => db.prepare("DELETE FROM cal_subs WHERE reader = ?").run(reader).changes;
 
-  return { upsert, setKinds, add, one, byKey, findSimilar, cancel, uncancel, cancelledList, pending, review, hide, setLink, cleanup, seed, upcoming, forAuthor, forBook, cities, fillBooks, chytomoRun, eventmateRun, feeds, addFeed, removeFeed, feedsRun, yeRun, yeLast: () => yeLast, peek, fresh, meta, setMeta, subs, subscribed, subscribe, unsubscribeAll };
+  return { upsert, setKinds, add, one, byKey, findSimilar, cancel, uncancel, cancelledList, recent, pending, review, hide, setLink, cleanup, seed, upcoming, forAuthor, forBook, cities, fillBooks, chytomoRun, eventmateRun, feeds, addFeed, removeFeed, feedsRun, yeRun, yeLast: () => yeLast, peek, fresh, meta, setMeta, subs, subscribed, subscribe, unsubscribeAll };
 }
 
 // «Четвер, 19 листопада» and, within a week, «завтра» / «через 3 дні».
