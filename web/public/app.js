@@ -301,6 +301,16 @@
       ta.setSelectionRange(ta.value.length, ta.value.length);
     }
   });
+  // The login code from the letter: the sixth digit sends the form, no button (Max 2026-11-16). Typing, paste and autofill alike.
+  for (const i of document.querySelectorAll("input.code[name=code]")) {
+    const go = () => {
+      if (i.value.replace(/\D/g, "").length !== 6 || i.form.dataset.sent) return;
+      i.form.dataset.sent = "1";
+      i.form.requestSubmit ? i.form.requestSubmit() : i.form.submit();
+    };
+    i.addEventListener("input", go);
+    go();
+  }
   // «@» and «#» in a comment (not a topic's title or text, Max 2026-11-01): who or which book, picked from a short list under the field (Max, 2026-11-01).
   for (const ta of document.querySelectorAll(".cmt-form textarea")) {
     const box = document.createElement("div");
