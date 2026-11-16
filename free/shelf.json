@@ -280,6 +280,62 @@
     "group": "Українська класика"
   },
   {
+    "name": "kotliarevsky-natalka-poltavka.epub",
+    "title": "Наталка Полтавка",
+    "authors": [
+      "Іван Котляревський"
+    ],
+    "group": "Українська класика"
+  },
+  {
+    "name": "shevchenko-kateryna.epub",
+    "title": "Катерина",
+    "authors": [
+      "Тарас Шевченко"
+    ],
+    "group": "Українська класика"
+  },
+  {
+    "name": "shevchenko-haidamaky.epub",
+    "title": "Гайдамаки",
+    "authors": [
+      "Тарас Шевченко"
+    ],
+    "group": "Українська класика"
+  },
+  {
+    "name": "vovchok-instytutka.epub",
+    "title": "Інститутка",
+    "authors": [
+      "Марко Вовчок"
+    ],
+    "group": "Українська класика"
+  },
+  {
+    "name": "karpenko-karyi-martyn-borulia.epub",
+    "title": "Мартин Боруля",
+    "authors": [
+      "Іван Карпенко-Карий"
+    ],
+    "group": "Українська класика"
+  },
+  {
+    "name": "franko-moisei.epub",
+    "title": "Мойсей",
+    "authors": [
+      "Іван Франко"
+    ],
+    "group": "Українська класика"
+  },
+  {
+    "name": "kotsiubynskyi-intermezzo.epub",
+    "title": "Intermezzo",
+    "authors": [
+      "Михайло Коцюбинський"
+    ],
+    "group": "Українська класика"
+  },
+  {
     "name": "khvylovy-sanatoriina-zona.epub",
     "title": "Повість про санаторійну зону. Сентиментальна історія. Я (Романтика)",
     "authors": [
@@ -901,16 +957,6 @@
     "group": "Англійською",
     "wanted": true,
     "source": "https://standardebooks.org/ebooks/bram-stoker/dracula"
-  },
-  {
-    "name": "myrnyi-khiba-revut-voly-yak-yasla-povni.epub",
-    "title": "Хіба ревуть воли, як ясла повні?",
-    "authors": [
-      "Панас Мирний"
-    ],
-    "group": "Українська класика",
-    "wanted": true,
-    "source": "https://uk.wikisource.org/wiki/%D0%A5%D1%96%D0%B1%D0%B0_%D1%80%D0%B5%D0%B2%D1%83%D1%82%D1%8C_%D0%B2%D0%BE%D0%BB%D0%B8%2C_%D1%8F%D0%BA_%D1%8F%D1%81%D0%BB%D0%B0_%D0%BF%D0%BE%D0%B2%D0%BD%D1%96%3F"
   },
   {
     "name": "ford-my-life-and-work.epub",

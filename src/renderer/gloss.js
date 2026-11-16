@@ -1,4 +1,4 @@
-// «Словничок» (Max, 2026-11-15): in a free-shelf classic that has one (server/glossary.js), the old and dialect
+// «Словничок» (Max, 2026-11-15): in a free-shelf classic or a reader's upload that has one (server/glossary.js), the old and dialect
 // words are underlined with dots, and a tap or a click on one shows its meaning in a small card over the word.
 // The underline is a CSS Custom Highlight: the book's DOM is not touched, so positions, notes and selections stay
 // as they were. Browsers without it (iOS before 17.2) get no underline and no card. Off in «Аа» → «Словничок».
@@ -21,7 +21,9 @@ window.Gloss = (() => {
     forms = null;
     book = name;
     hide();
-    if (!name || !(settings.glossaries || []).includes(name)) return;
+    // A reader's own upload may have got one since the page loaded (made in the background): asked each time.
+    const own = !settings.guest && /\.epub$/i.test(name || "") && !(settings.freeBooks || []).includes(name);
+    if (!name || !((settings.glossaries || []).includes(name) || own)) return;
     try {
       const res = await fetch(`/api/glossary?book=${encodeURIComponent(name)}`, { credentials: "same-origin" });
       if (!res.ok || book !== name) return;

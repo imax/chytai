@@ -87,7 +87,13 @@ def main():
             print(f"skip {name}: not an EPUB or too big ({len(epub)} bytes)", file=sys.stderr)
             continue
         try:
-            zipfile.ZipFile(io.BytesIO(epub)).read("META-INF/container.xml")
+            z = zipfile.ZipFile(io.BytesIO(epub))
+            z.read("META-INF/container.xml")
+            # A Wikisource «Версії роботи» page exports as a book of one line («Хіба ревуть воли», 2026-11-16).
+            text = sum(len(re.sub(r"<[^>]+>|\s+", "", z.read(n).decode("utf-8", "replace"))) for n in z.namelist() if n.endswith((".xhtml", ".html")) and not re.search(r"(nav|title|about)\.x?html$", n))
+            if text < 5000:
+                print(f"skip {name}: almost no text ({text} characters), a Wikisource versions page?", file=sys.stderr)
+                continue
         except Exception as e:
             print(f"skip {name}: broken EPUB ({e})", file=sys.stderr)
             continue

@@ -106,9 +106,11 @@ function parse(answer) {
 }
 
 class Glossary {
-  constructor({ dir, apiKey = process.env.ANTHROPIC_API_KEY }) {
+  // `maxCalls`: a longer book is not made (readers' uploads: a whole collected works would cost dollars).
+  constructor({ dir, apiKey = process.env.ANTHROPIC_API_KEY, maxCalls = 0 }) {
     this.dir = dir;
     this.apiKey = apiKey;
+    this.maxCalls = maxCalls;
     this.cache = new Map(); // book -> file contents, while the file is unchanged
     this.running = new Map(); // book -> { at, done, of, error }
   }
@@ -132,6 +134,16 @@ class Glossary {
     } catch {
       return null;
     }
+  }
+  // A reader's upload replaced or gone for good: its list goes too.
+  drop(book) {
+    fs.rmSync(this.file(book), { force: true });
+    this.cache.delete(book);
+  }
+  // Another book's list stands for this one: { same: "<free-shelf book>" } (an upload of a classic the shelf has).
+  link(book, same) {
+    fs.mkdirSync(this.dir, { recursive: true });
+    fs.writeFileSync(this.file(book), JSON.stringify({ book, same, at: new Date().toISOString(), forms: {} }));
   }
   // The books that have one (for the page's settings).
   books() {
@@ -210,6 +222,7 @@ class Glossary {
     if (!this.apiKey) throw new Error("no ANTHROPIC_API_KEY");
     const { chapters } = await epubParts(fs.readFileSync(file));
     const parts = chunks(chapters);
+    if (this.maxCalls && parts.length > this.maxCalls) throw new Error(`too long: ${parts.length} calls`);
     run.of = parts.length;
     const client = new Anthropic({ apiKey: this.apiKey });
     const answers = new Array(parts.length);
@@ -246,4 +259,32 @@ class Glossary {
   }
 }
 
-module.exports = { Glossary, key, chunks, parse, clean, PROMPT, STRICT, MODEL };
+// Readers' own uploads get one too, by themselves, when the book is by an author school reads (Max, 2026-11-16: a
+// school gave a friend's daughter an abridged PDF: «автоматом для певних книжок чи авторів»). The first word of a
+// name is the first name (or the pseudonym's first half), the rest its surname; both must be in the book's author.
+const CLASSICS = [
+  "Пантелеймон Куліш", "Іван Котляревський", "Григорій Квітка-Основʼяненко", "Тарас Шевченко", "Марко Вовчок",
+  "Іван Нечуй-Левицький", "Панас Мирний", "Іван Франко", "Леся Українка", "Михайло Коцюбинський", "Василь Стефаник",
+  "Ольга Кобилянська", "Михайло Старицький", "Іван Карпенко-Карий", "Марко Кропивницький", "Леонід Глібов",
+  "Микола Хвильовий", "Валерʼян Підмогильний", "Микола Куліш", "Остап Вишня", "Олександр Довженко", "Іван Багряний",
+  "Улас Самчук", "Олесь Гончар", "Ліна Костенко", "Борис Грінченко", "Степан Васильченко", "Володимир Винниченко",
+  "Архип Тесленко", "Григорій Сковорода", "Євген Гребінка", "Олександр Олесь", "Адріан Кащенко", "Іван Рудченко",
+  "Василь Королів-Старий", "Юрій Яновський", "Григір Тютюнник", "Павло Тичина", "Максим Рильський", "Богдан-Ігор Антонич",
+  "Михайль Семенко", "Володимир Сосюра", "Василь Стус", "Василь Симоненко", "Іван Драч", "Євген Маланюк", "Олена Теліга",
+  "Олег Ольжич", "Валерій Шевчук", "Микола Вінграновський", "Юрій Федькович", "Маркіян Шашкевич", "Іван Вишенський",
+];
+const letters = (s) => key(s).replace(/[^\p{L}]+/gu, " ").trim();
+const CLASSIC_NAMES = CLASSICS.map((n) => {
+  const [first, ...rest] = letters(n).split(" ");
+  return { first, last: rest.join(" ") };
+});
+// The authors of a book (["Куліш П.", "Пантелеймон Куліш"]) -> whether one is a school classic. An initial counts
+// as the first name («П. Куліш»), the surname must be whole.
+function classic(authors) {
+  return (authors || []).some((a) => {
+    const words = ` ${letters(a)} `;
+    return CLASSIC_NAMES.some(({ first, last }) => words.includes(` ${last} `) && (words.includes(` ${first} `) || words.includes(` ${first[0]} `)));
+  });
+}
+
+module.exports = { Glossary, key, chunks, parse, clean, classic, PROMPT, STRICT, MODEL };

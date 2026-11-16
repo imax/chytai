@@ -368,6 +368,19 @@ A flag only when Max asks for one, or when the change could break what readers u
   Sonnet (`STRICT`, 300 a call) to drop what a teenager knows (Max 2026-11-16: «їх», «зблизька», «сказать би»); a new
   book's build runs both. A word is underlined the first time in a chapter only.
   «Чорна рада»: 28 calls $0.54 (2026-11-15), strict $0.11 (2026-11-16), 1,191 words. Locally without a key: a JSON in `<DATA_DIR>/glossary/`.
+  Max said «по всім словник» for the school list's books (2026-11-16): every Ukrainian classic on the shelf that is in
+  «Шкільна програма» has one (14 books $4.9; a novel $0.4–1.2, a short story $0.03).
+- Readers' uploads (Max 2026-11-16, a school's abridged PDF): an uploaded Ukrainian EPUB by a school classic's author
+  (`CLASSICS` in glossary.js, `classic(authors)`) gets one by itself after `titleFromPages` (`glossUpload` in
+  server/index.js), kept in the library's folder (`accounts/<id>/glossary/`, gone with the book or the account). The
+  same work as a free-shelf book (title + surname) takes that book's list at no cost (`{ same }`); else a build, at most
+  60 calls a book, 10 books a day, 3 a reader. The page asks `/api/glossary` for every own EPUB it opens (a list made
+  after the page loaded shows too). See them: `GET /agent/glossary/uploads`; make one past the caps (a classic by
+  someone else, only with Max's OK): `POST /agent/glossary/uploads {"acct":"<id>","book":"<file>"}`.
+- New free-shelf classics from Wikisource: `scripts/wsbook.py` (recipe at its top). Many school works exist there only
+  in 19th-century spelling (Кайдашева сім'я 1879, Квітка, Шевченко's 1840) or not at all (Старицький, «Сто тисяч»,
+  Кобилянська's «Земля»); the 1876 Prague «Кобзарь» reads fine. A «Версії роботи» page is no text: free-shelf.py now
+  skips an EPUB with under 5,000 characters («Хіба ревуть воли» came in as one line and was taken off).
 
 ## Translation pairs
 

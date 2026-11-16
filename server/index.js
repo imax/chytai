@@ -215,6 +215,45 @@ function userState(name) {
 const flagsKept = new Map(); // acct -> { list, at }
 // «Словничок» to the free shelf's classics (server/glossary.js; flag `glossary`).
 const glossary = new (require("./glossary").Glossary)({ dir: path.join(DATA_DIR, "glossary") });
+// A reader's own uploads: a list per library, in its folder (gone with the book or the account).
+const glossLibs = new Map();
+const glossOf = (lib) => glossLibs.get(lib.id) || glossLibs.set(lib.id, new (require("./glossary").Glossary)({ dir: lib.glossary, maxCalls: GLOSS_UPLOAD_CALLS })).get(lib.id);
+const GLOSS_UPLOAD_CALLS = 60; // ~$1 at most a book («Лис Микита» took 46)
+const GLOSS_UPLOAD_DAY = 10; // books a day, all readers together
+const GLOSS_UPLOAD_ACCOUNT = 3; // books a day, one reader
+// An upload by a school classic's author gets its «Словничок» by itself (Max, 2026-11-16, a school's abridged PDF).
+// The same work the free shelf has (title and author) takes that book's list at no cost: the list is by words, so an
+// abridged text finds its words in it. Else one is made, within the caps above. `force`: a thread's request
+// (/agent/glossary), past the author check and the caps.
+async function glossUpload(lib, name, { force = false } = {}) {
+  const g = glossOf(lib);
+  if (!/\.epub$/i.test(name) || g.get(name) || !fs.existsSync(bookFile(lib, name))) return { skipped: "no epub or made" };
+  const b = (await scanLibrary(lib)).find((x) => path.basename(x.path) === name);
+  if (!b) return { skipped: "not in library" };
+  const { classic, key } = require("./glossary");
+  if (!force && !classic(b.authors)) return { skipped: "not a classic" };
+  const words = (s) => key(s).replace(/[^\p{L}]+/gu, " ").trim();
+  const t = words(b.title);
+  const surnames = (b.authors || []).map((a) => words(a).split(" ")).flat().filter((w) => w.length > 2);
+  const same = freeShelf.find((f) => {
+    const ft = words(f.title);
+    return ft && t && (t === ft || t.startsWith(`${ft} `) || ft.startsWith(`${t} `)) && glossary.get(f.name) && (f.authors || []).some((a) => words(a).split(" ").some((w) => surnames.includes(w)));
+  });
+  if (same) {
+    g.link(name, same.name);
+    console.log(`glossary upload: ${lib.id} ${name} = ${same.name}`);
+    return { same: same.name };
+  }
+  const day = statsDay();
+  const d = ((state.stats ??= { since: day, days: {} }).days[day] ??= { explains: 0, users: {}, guests: 0, models: {} });
+  const n = (d.glossUp ??= { n: 0, accts: {} });
+  if (!force && (n.n >= GLOSS_UPLOAD_DAY || (n.accts[lib.id] || 0) >= GLOSS_UPLOAD_ACCOUNT)) return { skipped: "cap" };
+  n.n++;
+  n.accts[lib.id] = (n.accts[lib.id] || 0) + 1;
+  saveState();
+  console.log(`glossary upload: ${lib.id} ${name} (${b.title} / ${(b.authors || []).join(", ")})`);
+  return { started: g.start(name, bookFile(lib, name)) };
+}
 function readerFlags(acct) {
   const kept = flagsKept.get(acct);
   const key = state.accounts[acct]?.key;
@@ -258,7 +297,7 @@ function settingsFor(req) {
     ...(req.share ? { share: { from: accountName(req.share.acct), until: req.share.expires } } : {}),
     // Printing those gives the current chapter, not the whole book (renderer.js, «Print»).
     freeBooks: freeShelf.map((f) => f.name),
-    glossaries: glossary.books(),
+    glossaries: [...glossary.books(), ...(!req.guest && req.lib ? glossOf(req.lib).books() : [])],
     noFileBooks: freeShelf.filter((f) => !fileAllowed(f.name)).map((f) => f.name),
     // Publishers' books: no print, no copy beyond a quote (server/protected.js).
     protectedBooks: protectedNames(),
@@ -1061,6 +1100,30 @@ app.use((req, res, next) => {
   app.all("/agent/sql", ok, express.json(), async (req, res) => res.json(await sql(req.body?.q || req.query.q)));
   // «Словничок» (server/glossary.js): what is made and what runs; POST {"book":"<free-shelf file>"} makes one book's.
   app.get("/agent/glossary", ok, (req, res) => res.json(glossary.status()));
+  // Readers' uploads: GET ?uploads=1 lists the uploaded EPUBs by school classics' authors and what they have;
+  // POST {"acct":"<id>","book":"<file>"} makes that one's (past the caps; only with Max's OK in the thread).
+  app.get("/agent/glossary/uploads", ok, async (req, res) => {
+    const { classic } = require("./glossary");
+    const out = [];
+    for (const id of Object.keys(state.accounts || {})) {
+      const lib = libOf(id);
+      if (!fs.existsSync(lib.dir)) continue;
+      const g = glossOf(lib);
+      for (const b of await scanLibrary(lib).catch(() => [])) {
+        const name = path.basename(b.path);
+        if (!/\.epub$/i.test(name) || !classic(b.authors)) continue;
+        const made = g.get(name);
+        out.push({ acct: id, book: name, title: b.title, authors: b.authors, made: made ? made.same || Object.keys(made.forms || {}).length : null, cost: made?.cost, running: g.running.get(name) || null });
+      }
+    }
+    res.json(out);
+  });
+  app.post("/agent/glossary/uploads", ok, express.json(), async (req, res) => {
+    const acct = String(req.body?.acct || "");
+    const book = safeBookName(req.body?.book);
+    if (!book || !state.accounts?.[acct]) return res.status(400).json({ error: "acct and book" });
+    res.json(await glossUpload(libOf(acct), book, { force: true }).catch((err) => ({ error: err.message })));
+  });
   app.post("/agent/glossary", ok, express.json(), async (req, res) => {
     const book = safeBookName(req.body?.book);
     if (!book || !isFree(book)) return res.status(400).json({ error: "not a free-shelf book" });
@@ -1968,10 +2031,10 @@ function libOf(id) {
   let lib = libs.get(id);
   if (lib) return lib;
   if (id === OWNER_ID) {
-    lib = { id, dir: BOOKS_DIR, reflow: REFLOW_DIR, covers: path.join(DATA_DIR, "covers", "custom"), cache: path.join(DATA_DIR, "library-cache.json"), meta: state.shared };
+    lib = { id, dir: BOOKS_DIR, reflow: REFLOW_DIR, covers: path.join(DATA_DIR, "covers", "custom"), glossary: path.join(DATA_DIR, "glossary-own"), cache: path.join(DATA_DIR, "library-cache.json"), meta: state.shared };
   } else {
     const root = path.join(ACCOUNTS_DIR, id);
-    lib = { id, dir: path.join(root, "books"), reflow: path.join(root, "reflow"), covers: path.join(root, "covers"), cache: path.join(root, "library-cache.json"), meta: (state.libs[id] ??= {}) };
+    lib = { id, dir: path.join(root, "books"), reflow: path.join(root, "reflow"), covers: path.join(root, "covers"), glossary: path.join(root, "glossary"), cache: path.join(root, "library-cache.json"), meta: (state.libs[id] ??= {}) };
   }
   for (const dir of [lib.dir, lib.reflow]) fs.mkdirSync(dir, { recursive: true });
   libs.set(id, lib);
@@ -2105,7 +2168,8 @@ api.get("/book", (req, res) => {
 // A free-shelf classic's «Словничок»: { form: meaning } (server/glossary.js); guests read these books too.
 api.get("/glossary", (req, res) => {
   const name = safeBookName(req.query.book);
-  const g = name && isFree(name) && glossary.get(name);
+  const own = name && !isFree(name) && req.lib && glossOf(req.lib).get(name);
+  const g = name && (isFree(name) ? glossary.get(name) : own?.same ? glossary.get(own.same) : own);
   if (!g) return res.status(404).json({ error: "Словничка немає." });
   res.set("Cache-Control", "private, max-age=3600").json({ forms: g.forms });
 });
@@ -2624,10 +2688,14 @@ api.put("/books/:name", uploadGuard, uploadBody, async (req, res) => {
   // The same file again while its old copy waits in the trash: the new one stays, the old one goes.
   if (req.lib.meta.trash?.[name]) fs.rmSync(trashFile(req.lib, name), { force: true }), delete req.lib.meta.trash[name];
   (req.lib.meta.added ??= {})[name] = { by: req.acct, at: Date.now() };
+  glossOf(req.lib).drop(name);
   saveState();
   warmCovers(req.lib, [name]);
   res.json({ path: name });
-  titleFromPages(req, name).finally(() => tellSite(req.acct));
+  titleFromPages(req, name).finally(() => {
+    tellSite(req.acct);
+    if (lang === "uk") glossUpload(req.lib, name).catch((err) => console.error("glossary upload:", name, err.message));
+  });
 });
 
 // A file whose metadata has no author, or a title that is only the file's name («8172 ua», «Object2026…»), is
@@ -2793,6 +2861,7 @@ function forgetBook(lib, acct, name) {
   for (const [t, sh] of Object.entries(state.shares)) if (sh.acct === acct && sh.book === name) delete state.shares[t];
   const key = customCoverKey(name);
   if (fs.existsSync(lib.covers)) for (const f of fs.readdirSync(lib.covers)) if (f.split(".")[0] === key) fs.rmSync(path.join(lib.covers, f), { force: true });
+  glossOf(lib).drop(name);
 }
 function purgeTrash() {
   const old = Date.now() - TRASH_DAYS * 864e5;
