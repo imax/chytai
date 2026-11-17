@@ -550,13 +550,17 @@ function create(db, { calendar, apiKey = process.env.ANTHROPIC_API_KEY || "", cl
   // A page from elsewhere (Chytomo's articles) comes with `page`, its address: the events link there.
   // A post's pictures (at most 2) as image blocks for Haiku, from its public embed page (both ways of reading see it;
   // a closed channel has none). Read only for a post Haiku is asked about; nothing is kept. Any failure: no pictures.
+  // A page from elsewhere may bring its picture's address (`img`: YouScan's imageUrl, an Instagram poster).
   async function pictures(p) {
-    if (!p.photo || p.page) return [];
+    if (p.page ? !p.img : !p.photo) return [];
     try {
-      const r = await fetch(`https://t.me/${p.channel}/${p.id}?embed=1&mode=tme`, { signal: AbortSignal.timeout(8000) });
-      if (!r.ok) return [];
-      const html = await r.text();
-      const urls = [...html.matchAll(/tgme_widget_message_photo_wrap[^>]*background-image:url\('(https:\/\/[^']+)'\)/g)].map((m) => m[1]);
+      let urls = p.img ? [p.img] : [];
+      if (!p.page) {
+        const r = await fetch(`https://t.me/${p.channel}/${p.id}?embed=1&mode=tme`, { signal: AbortSignal.timeout(8000) });
+        if (!r.ok) return [];
+        const html = await r.text();
+        urls = [...html.matchAll(/tgme_widget_message_photo_wrap[^>]*background-image:url\('(https:\/\/[^']+)'\)/g)].map((m) => m[1]);
+      }
       const out = [];
       for (const u of [...new Set(urls)].slice(0, 2)) {
         const img = await fetch(u, { signal: AbortSignal.timeout(8000) });
@@ -872,8 +876,9 @@ function create(db, { calendar, apiKey = process.env.ANTHROPIC_API_KEY || "", cl
   }
 
   // Another site's page → its events, for calendar.chytomoRun.
-  // A page from elsewhere (Chytomo, Eventmate): its cancelled events are left out, nothing else is matched.
-  const extract = (text, page) => ask({ page, text, at: new Date().toISOString() }).then((list) => list.filter((e) => !e.cancelled));
+  // A page from elsewhere (Chytomo, Eventmate, YouScan's mentions): its cancelled events are left out, nothing else is
+  // matched. `at`: when it was posted (Haiku dates «цієї суботи» from it); `img`: its picture's address.
+  const extract = (text, page, { at, img } = {}) => ask({ page, text, img, at: at || new Date().toISOString() }).then((list) => list.filter((e) => !e.cancelled));
   // Public channels whose title has these words, as the account sees them (to find a channel's @name for the seed).
   async function find(q) {
     if (!accountSet()) return { error: "no account" };

@@ -1697,6 +1697,10 @@ bg.every("calendar-feeds", 6 * 3600 * 1000, () => calendarMore.feeds(), { db: st
 bg.every("calendar-eventmate", 24 * 3600 * 1000, () => calendarMore.eventmate(), { db: store.db, first: 30 * 60 * 1000 });
 bg.every("calendar-podii", 24 * 3600 * 1000, () => calendarMore.podii(), { db: store.db, first: 35 * 60 * 1000 });
 bg.every("calendar-books", 3600 * 1000, () => calendarMore.books(), { db: store.db, first: 25 * 60 * 1000 });
+// YouScan's mentions (youscan.js, Max 2026-11-17): its webhook posts them to /api/youscan/<key>, the jobs process
+// turns the ones with an event into events every 15 min (the Telegram collector's Haiku, 60 calls a day).
+const youscan = bg.register("youscan", require("./youscan").create(store.db, { calendar, extract: (...a) => tgFeed.extract(...a) }), { run: false });
+bg.every("youscan", 15 * 60 * 1000, () => youscan.run(), { db: store.db, first: 10 * 60 * 1000 });
 // The authors of a book (slugs), for its page's line about an event.
 const bookAuthorSlugs = (book) => require("./authors").splitAuthors(book.author).map((n) => store.authors?.byName(n)?.slug).filter(Boolean);
 const bookEvent = (book) => calendar.forBook(store.canonical(book.id), bookAuthorSlugs(book))[0] || null;
@@ -2179,6 +2183,40 @@ for (const [path, run, dry] of [["calendar-chytomo", "chytomo", "chytomoDry"], [
     res.json({ started: true });
   });
 }
+// YouScan's webhook (youscan.js): the address with its key is in GET /agent/youscan; a wrong key is a 404.
+const youscanKey = () => require("crypto").createHmac("sha256", readerSecret()).update("youscan").digest("base64url").slice(0, 24);
+app.post("/api/youscan/:key", express.text({ type: (r) => !/json/i.test(r.headers["content-type"] || ""), limit: "1mb" }), (req, res) => {
+  if (req.params.key !== youscanKey()) return res.status(404).end();
+  let body = req.body;
+  if (typeof body === "string") {
+    try {
+      body = JSON.parse(body);
+    } catch {
+      return res.status(400).json({ error: "JSON" });
+    }
+  }
+  try {
+    res.json({ kept: youscan.take(body) });
+  } catch (e) {
+    errors.record("site", e, "POST /api/youscan");
+    res.status(500).end();
+  }
+});
+// What came in and what it made; ?dry=1 runs the last week's mentions through Haiku again without keeping anything
+// (ask again for the answer; it spends calls, only with Max's OK); POST {"run": true} runs it now.
+let youscanDry = null;
+app.get("/agent/youscan", agentOk, (req, res) => {
+  if (req.query.dry && (!youscanDry || (req.query.again && youscanDry.done))) {
+    youscanDry = { started: new Date().toISOString(), done: false };
+    youscan.run({ dry: true, max: 20 }).then((r) => Object.assign(youscanDry, r, { done: true }), (e) => Object.assign(youscanDry, { error: e.message, done: true }));
+  }
+  res.json({ hook: `${SITE}/api/youscan/${youscanKey()}`, ...youscan.status(), dry: youscanDry });
+});
+app.post("/agent/youscan", agentOk, (req, res) => {
+  if (!req.body?.run) return res.status(400).json({ error: '{"run": true}' });
+  youscan.run().catch(() => {});
+  res.json({ started: true });
+});
 // Telegram channels (tgfeed.js): GET what is kept and how the last run went; POST {"run": true} runs it now.
 app.get("/agent/tg", agentOk, (req, res) => res.json(tgFeed.status()));
 app.post("/agent/tg", agentOk, async (req, res) => {

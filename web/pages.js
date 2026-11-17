@@ -3709,7 +3709,7 @@ function eventsAdminPage({ user, rows, tg, saved, feeds = [], feedMsg = "", canc
   const count = (f) => rows.reduce((m, e) => ((m[f(e)] = (m[f(e)] || 0) + 1), m), {});
   const byLink = count(kindOf);
   const bySource = count((e) => e.source);
-  const SOURCE_NAME = { tg: "Telegram", chytomo: "Chytomo", eventmate: "Eventmate", podii: "podii.io", ics: "календарі організаторів", seed: "вручну (seed)", reader: "читачі", ye: "сайт «Є»" };
+  const SOURCE_NAME = { tg: "Telegram", chytomo: "Chytomo", eventmate: "Eventmate", podii: "podii.io", ics: "календарі організаторів", seed: "вручну (seed)", reader: "читачі", ye: "сайт «Є»", ys: "YouScan" };
   const chan = (e) => (C.linkKind(e.url) === "tg" ? (e.url.match(/t\.me\/([^/]+)/) || [])[1] || "" : "");
   // One row a post: a series of meetings from one post is one line with its dates.
   const lines = (pick) => {

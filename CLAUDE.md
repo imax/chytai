@@ -435,6 +435,13 @@ A flag only when Max asks for one, or when the change could break what readers u
   (`podiiKind`), its page as the link; a Telegram twin gets that page. Dry run: `curl -s
   https://chytai.org.ua/agent/calendar-podii -H "$H"` (ask again); run: `POST {"run":true}`. `findSimilar` leaves out
   words every meeting has (`EVENT_WORDS`: клуб, читацький, обговорення…): two clubs on one day are not one event.
+- YouScan (Max's trial 2026-11-17; `web/youscan.js`, source `ys`): a topic's webhook (topic Settings → Integrations →
+  Webhook, sent by its Rules; the API is a paid add-on, not used) posts mentions to `POST /api/youscan/<key>`; the
+  address with its key: `curl -s https://chytai.org.ua/agent/youscan -H "$H"` (`hook`, plus what came in, `by` state,
+  topics, the last 10). Kept 30 days (table `ys_mentions`, 3,000 a day). Every 15 min the jobs process skips non-Ukrainian
+  ones and channels the tg collector reads, sends those `maybeEvent` passes with the post's picture to `tgFeed.extract`
+  (60 calls a day), the post as the link. Dry run (spends ≤20 calls, Max's OK): `GET /agent/youscan?dry=1` (ask again);
+  run now: `POST {"run":true}`. Max sets the topics and the webhook himself (we never sign in to his account).
 - Organizers' calendars (Max 2026-11-15): /admin/events «Календарі організаторів» takes a Google Calendar link of
   any shape or an .ics (`calendar.icsAddress`), reads it at once (one that fails isn't kept) and every 6 h
   (`calendar-feeds` job, `feedsRun`): table `cal_feeds`, the next 120 days in as source `ics` (`parseIcs`, no AI;
