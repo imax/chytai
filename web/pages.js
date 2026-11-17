@@ -2126,10 +2126,16 @@ const KIND_ORDER = ["author", "club", "lecture", "festival", "kids"];
 // A title leads to the event's own page (calendar.eventPath).
 const calTitle = (e) => `<a href="${attr(cal().eventPath(e))}">${esc(e.title)}</a>`;
 // «Київ · Книгарня «Є»», or a tour's cities: «Ужгород, Львів, Чернівці, Одеса, Рівне».
-function calWhere(e) {
+function calWhere(e, { more = false } = {}) {
   if (e.stops?.length > 1) {
-    const cities = [...new Set(e.stops.map((s) => s.city).filter(Boolean))];
-    return cities.length > 1 ? cities.map(esc).join(", ") : `${esc(cities[0] || "")}${cities[0] ? " · " : ""}${e.stops.length} зустрічі`;
+    const cities = [...new Set([...e.stops].sort((a, b) => (a.starts < b.starts ? -1 : a.starts > b.starts ? 1 : 0)).map((s) => s.city).filter(Boolean))];
+    // A long tour: the two nearest cities and «+9 інших міст»; «докладніше» opens every stop (Max, 2026-11-17).
+    if (cities.length > 3) {
+      const n = cities.length - 2, d = n % 10, h = n % 100;
+      const rest = d === 1 && h !== 11 ? "інше місто" : d >= 2 && d <= 4 && (h < 12 || h > 14) ? "інші міста" : "інших міст";
+      return `${cities.slice(0, 2).map(esc).join(", ")} ${more ? `<span class="cal-open">+${n} ${rest}</span>` : `+${n} ${rest}`}`;
+    }
+    return cities.length > 1 ? cities.map(esc).join(", ") :`${esc(cities[0] || "")}${cities[0] ? " · " : ""}${e.stops.length} зустрічі`;
   }
   return [e.city, e.place].filter(Boolean).map(esc).join(" · ");
 }
@@ -2154,7 +2160,7 @@ function calLeft(e, today, size = "md") {
 // (what it is about, a tour's stops, the books, the organizer's page, «сховати») behind «докладніше».
 function calLine(e, { user, owner, today, kind = "" }) {
   const tour = e.stops?.length > 1;
-  const meta = [e.kind && e.kind !== kind ? `<span class="cal-k">${KIND_ONE[e.kind]}</span>` : "", calWhere(e)].filter(Boolean).join(" · ");
+  const meta = [e.kind && e.kind !== kind ? `<span class="cal-k">${KIND_ONE[e.kind]}</span>` : "", calWhere(e, { more: true })].filter(Boolean).join(" · ");
   const stops = tour ? `<ul class="cal-stops">${e.stops.map((s) => `<li><b>${esc(cal().shortWhen(s))}${s.time ? ` · ${esc(s.time)}` : ""}</b> ${[s.city, s.place].filter(Boolean).map(esc).join(" · ")}</li>`).join("")}</ul>` : "";
   const books = e.bookCards?.length ? `<div class="cal-books">${e.bookCards.map((b) => `<a href="${attr(b.href)}">${cover(b, "xs")}<span>${esc(b.title)}</span></a>`).join("")}</div>` : e.authorLinks?.length ? `<p class="meta">${e.authorLinks.map((a) => `<a class="text-link" href="${attr(a.href)}">${esc(a.name)}</a>`).join(", ")}</p>` : "";
   const also = tour ? e.stops.slice(1).map((s) => `<input type="hidden" name="also" value="${attr(s.id)}">`).join("") : "";
