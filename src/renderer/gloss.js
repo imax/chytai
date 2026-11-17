@@ -18,12 +18,13 @@ window.Gloss = (() => {
   // Words ahead (Max 2026-11-17: «щоб було підсвічене як словник»): the words Sonnet prepared for the passages
   // around the reader (word-ahead.js) are underlined the same way, after the book's own list. Max only for now.
   let ahead = new Map();
+  let aheadBase = new Map(); // key -> the word's dictionary form, for «Знаю»
   const marked = new WeakMap(); // a chapter's document -> [{ range, text, gloss }]
   const tip = document.getElementById("gloss-tip");
   let shown = null; // { doc }
 
   const enabled = () => (!!forms || ahead.size > 0) && settings.gloss !== "off";
-  const wordOf = (k) => words?.[k] || k;
+  const wordOf = (k) => words?.[k] || aheadBase.get(k) || k;
   // «Менше» (on) underlines level 1 only, «Більше» (more) both; a reader's known words never.
   const visible = (k, known) => (!levels || levels[k] !== 2 || settings.gloss === "more") && !known.has(wordOf(k));
 
@@ -33,6 +34,7 @@ window.Gloss = (() => {
     levels = null;
     words = null;
     ahead = new Map();
+    aheadBase = new Map();
     book = name;
     contentsOf = contentsList || (() => []);
     hide();
@@ -133,8 +135,9 @@ window.Gloss = (() => {
     const b = document.createElement("b");
     b.textContent = hit.text;
     tip.append(b, ` — ${hit.gloss}`);
-    if (levels && !hit.ahead) {
-      // «Знаю це слово»: not underlined for this reader any more, in this book and every other.
+    {
+      // «Знаю це слово»: not underlined for this reader any more, in this book and every other. On every card, the
+      // book's list and the words prepared ahead alike (Max 2026-11-17: one «Словничок», not two kinds of dots).
       const know = document.createElement("button");
       know.type = "button";
       know.className = "gl-know";
@@ -178,12 +181,15 @@ window.Gloss = (() => {
   };
 
   // New words ready ahead: underline them in the chapters on screen too.
-  function addAhead(map) {
+  function addAhead(map, base) {
     if (!settings.owner || !map) return;
     let added = 0;
     for (const [w, m] of Object.entries(map)) {
       const k = key(w).replace(/\s+/g, " ").trim();
-      if (k && m && !forms?.[k] && !ahead.has(k)) ahead.set(k, m), added++;
+      if (!k || !m || forms?.[k] || ahead.has(k)) continue;
+      ahead.set(k, m);
+      if (base?.[w]) aheadBase.set(k, key(base[w]));
+      added++;
     }
     if (added) for (const c of contentsOf() || []) mark(c);
   }

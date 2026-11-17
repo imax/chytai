@@ -3254,7 +3254,8 @@ api.post("/word", guestsCannot("Без входу пояснень немає.")
 // Words ahead (server/wordahead.js): the page sends the passage being read and the next one; Sonnet names the words a
 // reader may select there, with their meaning, so a selected word shows with no call. A passage asked before (any
 // reader, same text) costs nothing. New passages: AHEAD_DAY a reader, AHEAD_ALL in all a day (Max not capped by his own).
-const ahead = new (require("./wordahead").Ahead)({ dir: path.join(DATA_DIR, "word-ahead") });
+const { Ahead, clean: aheadClean } = require("./wordahead");
+const ahead = new Ahead({ dir: path.join(DATA_DIR, "word-ahead") });
 const AHEAD_DAY = 80; // ~400,000 characters, a long novel
 const AHEAD_ALL = 1000; // ~$13
 let aheadDay = { day: "", all: 0, by: {} };
@@ -3267,14 +3268,14 @@ api.post("/word-ahead", guestsCannot("Без входу немає."), aiBudget,
   const day = statsDay();
   if (aheadDay.day !== day) aheadDay = { day, all: 0, by: {} };
   const known = ahead.kept(ahead.hash(text));
-  if (known) return res.json({ words: known.words });
+  if (known) return res.json({ words: aheadClean(known.words), base: known.base || {} });
   if (aheadDay.all >= AHEAD_ALL || (!req.owner && (aheadDay.by[req.acct] || 0) >= AHEAD_DAY)) return res.status(429).json({ error: "later" });
   aheadDay.all++;
   aheadDay.by[req.acct] = (aheadDay.by[req.acct] || 0) + 1;
   try {
     const r = await ahead.words(apiKey, { text, title: String(req.body?.title || "").slice(0, 300), author: String(req.body?.author || "").slice(0, 200) });
     if (r.usage) recordExplain(req, { model: r.model, usage: r.usage }, { count: false });
-    res.json({ words: r.words });
+    res.json({ words: r.words, base: r.base });
   } catch (err) {
     res.status(502).json({ error: describeError(err) });
   }

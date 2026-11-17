@@ -11,7 +11,7 @@ const path = require("path");
 
 const MODEL = "claude-sonnet-5-5";
 const KEEP_DAYS = 90;
-const PROMPT = `A reader is reading this passage of a book. Guess which single words in it they may select to see what they mean: rare, old, dialect, bookish or specialised words, words used in an unusual sense here, and names of people, places or things a reader may not know. Leave out words every adult reader of the book's language knows. If the text is not in Ukrainian, the reader is Ukrainian reading it in the original with good but not native knowledge: include the words such a reader may look up. One line per word: the word exactly as written in the text, a tab, its meaning as used here in Ukrainian in everyday words, never another rare or bookish word (a plain synonym or at most ten words; for a word that is not Ukrainian, its Ukrainian translation as used here; for a name, who or what it is in a few words; for a character of this book only what you are sure of, else «персонаж книжки»). Never notes, doubts or reasoning. No other text, no numbering. At most 60 lines.`;
+const PROMPT = `A reader is reading this passage of a book. Guess which single words in it they may select to see what they mean: rare, old, dialect, bookish or specialised words, words used in an unusual sense here, and names of people, places or things a reader may not know. Leave out words every adult reader of the book's language knows. If the text is not in Ukrainian, the reader is Ukrainian reading it in the original with good but not native knowledge: include the words such a reader may look up. One line per word: the word exactly as written in the text, a tab, its dictionary form (for a name, the name as written), a tab, its meaning as used here in Ukrainian in everyday words, never another rare or bookish word (a plain synonym or at most ten words; for a word that is not Ukrainian, its Ukrainian translation as used here; for a name, who or what it is in a few words; for a character of this book only what you are sure of, else «персонаж книжки»). Never notes, doubts or reasoning. No other text, no numbering. At most 60 lines.`;
 
 // A word as the page and the list both see it: lower case, no stress marks, one kind of apostrophe.
 const norm = (w) =>
@@ -41,15 +41,22 @@ function tidy(text, max = 160) {
 const broken = (m) => /[\p{L}][*/\\]|[*/\\][\p{L}]/u.test(String(m || "").replace(/\*\*/g, ""));
 const clean = (words) => Object.fromEntries(Object.entries(words || {}).filter(([, m]) => !broken(m)).map(([w, m]) => [w, tidy(m)]).filter(([, m]) => m));
 
+// { words: {word: meaning}, base: {word: dictionary form} }. The dictionary form lets «Знаю це слово» take every form of
+// it (Max 2026-11-17: the prepared words are «Словничок» too); an older answer has two fields and no form.
 function parse(answer) {
   const words = {};
+  const base = {};
   for (const line of String(answer || "").split("\n")) {
-    const [w, m] = line.split("\t");
-    const k = norm(w);
-    const meaning = broken(m) ? "" : tidy(m);
-    if (k && meaning && k.length <= 60 && !words[k]) words[k] = meaning;
+    const f = line.split("\t");
+    const k = norm(f[0]);
+    const m = f[f.length - 1];
+    const meaning = f.length < 2 || broken(m) ? "" : tidy(m);
+    if (!k || !meaning || k.length > 60 || words[k]) continue;
+    words[k] = meaning;
+    const b = f.length > 2 ? norm(f[1]) : "";
+    if (b && b !== k && b.length <= 60) base[k] = b;
   }
-  return words;
+  return { words, base };
 }
 
 class Ahead {
@@ -78,8 +85,11 @@ class Ahead {
   async words(apiKey, { text, title, author }) {
     const h = this.hash(text);
     const have = this.kept(h);
-    if (have) return { words: clean(have.words), kept: true };
-    if (this.asking.has(h)) return { words: (await this.asking.get(h)).words, kept: true };
+    if (have) return { words: clean(have.words), base: have.base || {}, kept: true };
+    if (this.asking.has(h)) {
+      const r = await this.asking.get(h);
+      return { words: r.words, base: r.base, kept: true };
+    }
     const p = (async () => {
       const client = new Anthropic({ apiKey });
       const m = await client.messages.create({
@@ -89,12 +99,12 @@ class Ahead {
         messages: [{ role: "user", content: `Книжка: «${title || ""}»${author ? `, ${author}` : ""}\n\n${text}` }],
         output_config: { effort: "low" },
       });
-      const words = parse(m.content.filter((b) => b.type === "text").map((b) => b.text).join(""));
+      const { words, base } = parse(m.content.filter((b) => b.type === "text").map((b) => b.text).join(""));
       fs.mkdirSync(this.dir, { recursive: true });
       const f = this.file(h);
-      fs.writeFileSync(`${f}.tmp`, JSON.stringify({ at: new Date().toISOString(), title, words }));
+      fs.writeFileSync(`${f}.tmp`, JSON.stringify({ at: new Date().toISOString(), title, words, base }));
       fs.renameSync(`${f}.tmp`, f);
-      return { words, model: m.model, usage: m.usage };
+      return { words, base, model: m.model, usage: m.usage };
     })();
     this.asking.set(h, p);
     try {
@@ -141,4 +151,4 @@ class Ahead {
   }
 }
 
-module.exports = { Ahead, parse, norm, tidy, PROMPT, MODEL };
+module.exports = { Ahead, parse, norm, tidy, clean, PROMPT, MODEL };
