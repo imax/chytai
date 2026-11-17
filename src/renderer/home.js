@@ -491,15 +491,16 @@
   function addStartHtml() {
     const free = lib.free || [];
     const newest = [...free].sort((x, y) => y.order - x.order);
+    // «Вільна полиця» is one row in «Де ще шукаємо»; it opens the whole shelf under the list (Max 2026-11-17:
+    // the app is about one's own books, the cover strip took a screen).
     let freeHtml = "";
-    if (free.length) {
+    if (free.length && freeAll) {
       const fcls = (b) => (newest.indexOf(b) < 16 ? " g-new" : "") + (b.group === "Для дітей" ? " g-kids" : "") + (/класика/i.test(b.group) ? " g-classics" : "");
-      freeHtml = `<section class="r-free">${head(`Вільна полиця · ${free.length} <span class="r-sub">Можна читати безкоштовно</span>`, freeAll ? tabs([["new", "Нові"], ["kids", "Для дітей"], ["classics", "Класика"], ["all", "Усі"]], freeTab, "data-free-tab") : `<button class="r-aside-link" data-act="free-all">Усі →</button>`)}
+      freeHtml = `<section class="r-free" id="r-free">${head(`Вільна полиця · ${free.length} <span class="r-sub">Можна читати безкоштовно</span>`, tabs([["new", "Нові"], ["kids", "Для дітей"], ["classics", "Класика"], ["all", "Усі"]], freeTab, "data-free-tab"))}
         <p class="r-sub-phone">Можна читати безкоштовно</p>
-        ${freeAll
-          ? `<div class="r-filtered" data-show="${freeTab}"><div class="r-grid r-free-grid">${newest.map((b) => card(b, "", false, fcls(b))).join("")}</div></div>`
-          : `<div class="r-strip">${newest.slice(0, 18).map((b) => card(b, "", false)).join("")}</div>`}</section>`;
+        <div class="r-filtered" data-show="${freeTab}"><div class="r-grid r-free-grid">${newest.map((b) => card(b, "", false, fcls(b))).join("")}</div></div></section>`;
     }
+    const freeRow = free.length ? `<button class="r-where-row" data-act="free-all" aria-expanded="${freeAll}"><span>Вільна полиця · ${free.length}</span><small>${freeAll ? "згорнути" : "читати безкоштовно"}</small></button>` : "";
     return `<div class="r-add-grid">
       <section class="r-file">${head(`Файл з <span class="r-ph">телефона</span><span class="r-dt">комп'ютера</span>`, "", true)}
         <div class="r-drop"><p class="r-drop-t r-dt">Перетягніть файл сюди</p>
@@ -509,12 +510,13 @@
       <section class="r-paper">${head("Паперова книжка", "", true)}
         <p class="r-drop-note">Читаєте на папері? Додайте книжку пошуком вище або за фото обкладинки. Пояснення й нотатки до неї будуть тут, і ШІ знатиме, на якій ви сторінці.</p>
         <button class="r-pill-line r-pick" data-act="cover-photo"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg><span>Сфотографувати обкладинку</span></button></section>
-      ${freeHtml}
       <section class="r-where">${head("Де ще шукаємо", "", true)}
         <a class="r-where-row" href="https://chytai.org.ua" target="_blank" rel="noopener"><span>Каталог Chytai</span><small>де купити ↗</small></a>
         ${shopRow("yakaboo", "Yakaboo", yakabooHtml)}
         ${shopRow("bookua", "Book.ua", bookuaHtml)}
+        ${freeRow}
         <div class="r-where-row soon"><span>Інші книгарні</span><small>незабаром</small></div></section>
+      ${freeHtml}
     </div>`;
   }
 
@@ -1153,7 +1155,12 @@
     if (el.dataset.act === "panel") return panel();
     if (el.dataset.act === "settings") return panel(false), openSettings();
     if (el.dataset.act === "cover-photo") return window.Paper.coverPhoto();
-    if (el.dataset.act === "free-all") return (freeAll = true), renderHome();
+    if (el.dataset.act === "free-all") {
+      freeAll = !freeAll;
+      renderHome();
+      if (freeAll) $("#r-free")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      return;
+    }
     if (el.dataset.act === "yakaboo" || el.dataset.act === "bookua") return (shopOpen = shopOpen === el.dataset.act ? null : el.dataset.act), renderHome();
     if (el.dataset.act === "seen") markSeen();
   });

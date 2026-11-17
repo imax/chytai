@@ -1280,10 +1280,6 @@ body[data-theme="dark"] #shell, body[data-theme="dark"] #book-menu, body[data-th
 .r-drop-note { margin: 0; font-size: 13px; line-height: 1.55; color: var(--r-ink2); }
 .r-dt { display: none; }
 .r-sub-phone { margin: -6px 0 14px; font-size: 13px; color: var(--r-ink2); }
-.r-free .r-aside-link { background: none; border: none; padding: 0; cursor: pointer; font-family: inherit; color: var(--r-ink); }
-.r-strip { display: flex; gap: 12px; overflow-x: auto; scrollbar-width: none; margin-right: -20px; padding: 0 20px 14px 0; }
-.r-strip::-webkit-scrollbar { display: none; }
-.r-strip .r-card { flex: none; width: 78px; }
 .r-where-row { display: flex; justify-content: space-between; align-items: baseline; padding: 12px 0; border-bottom: 1px solid var(--r-rule); color: var(--r-ink); text-decoration: none; font-size: 16px; }
 .r-where-row:last-child { border-bottom: none; }
 .r-where-row small { font-size: 12px; color: var(--r-ink2); }
@@ -1339,15 +1335,13 @@ a.r-frow:hover .r-frow-go.plain { color: var(--r-ochre); }
   .r-dt { display: inline; }
   .r-ph { display: none; }
   p.r-dt { display: block; }
-  .r-add-grid { grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); gap: 30px 40px; grid-template-areas: "file where" "free free"; }
+  .r-add-grid { grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); gap: 30px 40px; grid-template-areas: "file where" "paper where" "free free"; }
   .r-file { grid-area: file; }
+  .r-paper { grid-area: paper; }
   .r-where { grid-area: where; }
   .r-free { grid-area: free; }
   .r-drop { padding: 30px 24px 24px; gap: 14px; }
   .r-sub-phone { display: none; }
-  .r-strip { display: grid; grid-template-columns: repeat(9, minmax(0, 1fr)); gap: 16px; overflow: visible; margin: 0; padding: 0; }
-  .r-strip .r-card { width: auto; }
-  .r-strip .r-card:nth-child(n + 10) { display: none; }
   .r-free-grid { grid-template-columns: repeat(9, minmax(0, 1fr)); }
   .r-found { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 40px; align-items: start; }
   .r-found > .r-empty { grid-column: 1 / -1; }
@@ -1405,13 +1399,10 @@ a.r-frow:hover .r-frow-go.plain { color: var(--r-ochre); }
 @media (prefers-reduced-motion: reduce) { #shell #shell-main { transition: none; } }
 /* Covers on a phone's browser: a long press opens the book's menu, not the browser's picture menu. */
 .r-cover, .r-cover img { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; -webkit-user-drag: none; }
-.r-strip .r-t, .r-strip .r-a { display: none; }
 @media (min-width: 761px) and (max-width: 1100px) {
-  .r-strip { grid-template-columns: repeat(6, minmax(0, 1fr)); }
-  .r-strip .r-card:nth-child(n + 7) { display: none; }
   .r-free-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); }
   .r-found { grid-template-columns: minmax(0, 1fr); gap: 26px; }
-  .r-add-grid { grid-template-columns: minmax(0, 1fr); grid-template-areas: "file" "where" "free"; }
+  .r-add-grid { grid-template-columns: minmax(0, 1fr); grid-template-areas: "file" "paper" "where" "free"; }
 }
 
 /* ===================================================================================================
