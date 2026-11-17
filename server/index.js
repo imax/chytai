@@ -217,6 +217,8 @@ const flagsKept = new Map(); // acct -> { list, at }
 const glossary = new (require("./glossary").Glossary)({ dir: path.join(DATA_DIR, "glossary") });
 // «Словничок 2» (Max 2026-11-17, for everyone): Opus's list with levels and every form; a book that has it shows it.
 const glossaryV2 = new (require("./glossary").Glossary)({ dir: path.join(DATA_DIR, "glossary-v2"), v2: true });
+// Names of people and places a free-shelf book has (buildNames): only the one-word card reads them, never underlined.
+const glossaryNames = new (require("./glossary").Glossary)({ dir: path.join(DATA_DIR, "glossary-names"), names: true });
 // A reader's own uploads: a list per library, in its folder (gone with the book or the account).
 const glossLibs = new Map();
 const glossOf = (lib) => glossLibs.get(lib.id) || glossLibs.set(lib.id, new (require("./glossary").Glossary)({ dir: lib.glossary, maxCalls: GLOSS_UPLOAD_CALLS })).get(lib.id);
@@ -299,7 +301,7 @@ function settingsFor(req) {
     ...(req.share ? { share: { from: accountName(req.share.acct), until: req.share.expires } } : {}),
     // Printing those gives the current chapter, not the whole book (renderer.js, «Print»).
     freeBooks: freeShelf.map((f) => f.name),
-    glossaries: [...new Set([...glossary.books(), ...glossaryV2.books(), ...(!req.guest && req.lib ? glossOf(req.lib).books() : [])])],
+    glossaries: [...new Set([...glossary.books(), ...glossaryV2.books(), ...glossaryNames.books(), ...(!req.guest && req.lib ? glossOf(req.lib).books() : [])])],
     noFileBooks: freeShelf.filter((f) => !fileAllowed(f.name)).map((f) => f.name),
     // Publishers' books: no print, no copy beyond a quote (server/protected.js).
     protectedBooks: protectedNames(),
@@ -1212,7 +1214,7 @@ app.use((req, res, next) => {
   app.get("/agent/health", ok, (req, res) => res.json({ now: new Date().toISOString(), commit: process.env.GIT_SHA || "", image: process.env.FLY_IMAGE_REF || "", started, memoryMb: Math.round(process.memoryUsage().rss / 1048576), storage: storage.now(DATA_DIR, ["reader.db"]), accounts: Object.keys(state.accounts || {}).length }));
   app.all("/agent/sql", ok, express.json(), async (req, res) => res.json(await sql(req.body?.q || req.query.q)));
   // «Словничок» (server/glossary.js): what is made and what runs; POST {"book":"<free-shelf file>"} makes one book's.
-  app.get("/agent/glossary", ok, (req, res) => res.json({ ...glossary.status(), v2: glossaryV2.status() }));
+  app.get("/agent/glossary", ok, (req, res) => res.json({ ...glossary.status(), v2: glossaryV2.status(), names: glossaryNames.status() }));
   // ?find=<word>: what the kept passages say for it (to see a bad card's source).
   // Readers' uploads: GET ?uploads=1 lists the uploaded EPUBs by school classics' authors and what they have;
   // POST {"acct":"<id>","book":"<file>"} makes that one's (past the caps; only with Max's OK in the thread).
@@ -1246,6 +1248,7 @@ app.use((req, res, next) => {
     // {"book":…,"v2":true}: «Словничок 2» for that book (Opus, ~$0.25 a 15,000 characters; only with Max's OK).
     if (req.body?.v2 && req.body?.plain) return res.json(await glossaryV2.plain(book, { save: !req.body.dry }).catch((err) => ({ error: err.message })));
   if (req.body?.v2 && req.body?.homographs) return res.json(await glossaryV2.homographs(book, path.join(freeDir(book), book), { save: !req.body.dry, mixed: req.body.mixed !== false }).catch((err) => ({ error: err.message })));
+    if (req.body?.names) return res.json({ started: glossaryNames.start(book, path.join(freeDir(book), book)), ...glossaryNames.status() });
     if (req.body?.v2) return res.json({ started: glossaryV2.start(book, path.join(freeDir(book), book)), ...glossaryV2.status() });
     res.json({ started: glossary.start(book, path.join(freeDir(book), book)), ...glossary.status() });
   });
@@ -2303,14 +2306,16 @@ api.get("/glossary", (req, res) => {
   const own = name && !isFree(name) && req.lib && glossOf(req.lib).get(name);
   const shelf = isFree(name) ? name : own?.same;
   const v2 = shelf && glossaryV2.get(shelf);
+  // Names of the book's people and places, { form: [about, name] }: the card of a selected name reads them.
+  const names = (shelf && glossaryNames.get(shelf)?.names) || undefined;
   if (v2) {
     // { form: [meaning, level, word] } → the first list's shape plus the levels and the words (for «Знаю»).
     const e = Object.entries(v2.forms);
-    return res.set("Cache-Control", "private, no-cache").json({ v: 2, forms: Object.fromEntries(e.map(([k, x]) => [k, x[0]])), levels: Object.fromEntries(e.map(([k, x]) => [k, x[1]])), words: Object.fromEntries(e.map(([k, x]) => [k, x[2]])) });
+    return res.set("Cache-Control", "private, no-cache").json({ v: 2, forms: Object.fromEntries(e.map(([k, x]) => [k, x[0]])), levels: Object.fromEntries(e.map(([k, x]) => [k, x[1]])), words: Object.fromEntries(e.map(([k, x]) => [k, x[2]])), names });
   }
   const g = name && (isFree(name) ? glossary.get(name) : own?.same ? glossary.get(own.same) : own);
-  if (!g) return res.status(404).json({ error: "Словничка немає." });
-  res.set("Cache-Control", "private, max-age=3600").json({ forms: g.forms });
+  if (!g && !names) return res.status(404).json({ error: "Словничка немає." });
+  res.set("Cache-Control", "private, no-cache").json({ forms: g?.forms || {}, names });
 });
 
 // One entry of a publisher's book: GET /api/pbook/<book>/<path inside the EPUB>.

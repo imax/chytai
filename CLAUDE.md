@@ -507,6 +507,13 @@ A flag only when Max asks for one, or when the change could break what readers u
   same day (Max: «одна штука замість двох»; they underlined «ліки», «демони» and saved ~1 s on one selected word in
   five for 3× the cost): don't bring them back. Improve «Словничок» instead. `/admin/reader` «Одне слово» = selected
   words, how many were in the book's list (`word-list`), and the cost.
+- Names (Max 2026-11-17: the card made up who «Васюта» was): `buildNames` (glossary.js, `NAMES`) has Opus read a
+  free-shelf book whole once (Чорна рада $0.93, 2.5 min) and describe its people and places, kept in
+  `DATA_DIR/glossary-names/<book>.json` (`names: {form: [about, full name]}`), sent by `/api/glossary` as `names`.
+  Never underlined: only the one-word card reads them, for a capitalised selection (gloss.js `lookup`, ui `word-name`).
+  Forms that mean two people, and words written small more often than capitalised, stay out (`parseNames`). Make one
+  book's (Max's OK): `POST /agent/glossary {"book":…,"names":true}`; status under `names` in `GET /agent/glossary`.
+  word.js asks NAME only for a capital mid-sentence (`midName`): «Кармазини!» at a sentence's start is a word.
   Trial prompts and answers: project files `chytai-gloss-try/run/` (`ahead.js`: Sonnet vs Haiku, one word 1.1–1.8 s).
 - New free-shelf classics from Wikisource: `scripts/wsbook.py` (recipe at its top). Many school works exist there only
   in 19th-century spelling (Кайдашева сім'я 1879, Квітка, Шевченко's 1840) or not at all (Старицький, «Сто тисяч»,

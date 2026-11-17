@@ -29,6 +29,15 @@ function tidy(text, max = 160) {
   return t.replace(/\*\*|__|`/g, "").replace(/^[\s*_/\\#>—-]+/, "").replace(/[\s.,;:—*_/\\#-]+$/, "").slice(0, max);
 }
 
+// A capital in the middle of a sentence is a name; at its start (after a dash or a quote too) it is any word, and
+// NAME made «Кармазини!» (rich lords in red coats) into «червоне сукно» while the same word small got it right (Max
+// 2026-11-17).
+function midName(word, sentence) {
+  if (!/^\p{Lu}/u.test(word)) return false;
+  const at = String(sentence || "").indexOf(word);
+  return at > 0 && /[\p{L}\d,;]\s+$/u.test(sentence.slice(0, at));
+}
+
 async function meaning(apiKey, { word, sentence, title, author }) {
   const k = `${word.toLowerCase()}|${sentence}`;
   if (kept.has(k)) return { text: kept.get(k), kept: true };
@@ -36,7 +45,7 @@ async function meaning(apiKey, { word, sentence, title, author }) {
   const m = await client.messages.create({
     model: MODEL,
     max_tokens: 1024,
-    system: /^\p{Lu}/u.test(word) ? NAME : PROMPT,
+    system: midName(word, sentence) ? NAME : PROMPT,
     messages: [{ role: "user", content: `Книжка: «${title}»${author ? `, ${author}` : ""}\nРечення: ${sentence}\nСлово: ${word}` }],
     output_config: { effort: "low" },
   });
@@ -48,4 +57,4 @@ async function meaning(apiKey, { word, sentence, title, author }) {
   return { text, model: m.model, usage: m.usage };
 }
 
-module.exports = { meaning, tidy, PROMPT, MODEL };
+module.exports = { meaning, tidy, midName, PROMPT, MODEL };

@@ -1088,7 +1088,8 @@ function wordCard(sel) {
   };
   window.ReadingTime?.count("word");
   const mine = window.Gloss?.lookup(text);
-  if (mine) return window.ReadingTime?.count("word-list"), put(mine.gloss);
+  // A name from the book's list counts as one from the list too (the hit rate on /admin/reader), and apart.
+  if (mine) return window.ReadingTime?.count("word-list"), mine.name && window.ReadingTime?.count("word-name"), put(mine.gloss);
   put("…", true);
   const c = sel.context || {};
   const sentence = [String(c.before || "").split(/(?<=[.!?…])\s+/).pop(), text, String(c.after || "").split(/(?<=[.!?…])\s/)[0]].join(" ").replace(/\s+/g, " ").trim().slice(-600);

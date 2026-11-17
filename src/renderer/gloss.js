@@ -12,6 +12,9 @@ window.Gloss = (() => {
   // word's dictionary form, which «Знаю» keeps (settings.glossKnown: every form of it goes).
   let levels = null;
   let words = null;
+  // The book's people and places: key -> [who or what, the full name] (server/glossary.js buildNames). Never
+  // underlined; the card of a selected capitalised word reads them, so it doesn't make up who «Васюта» is.
+  let names = null;
   let contentsOf = () => [];
   let longest = 1; // words in the longest expression
   let book = null;
@@ -29,6 +32,7 @@ window.Gloss = (() => {
     forms = null;
     levels = null;
     words = null;
+    names = null;
     book = name;
     contentsOf = contentsList || (() => []);
     hide();
@@ -42,6 +46,7 @@ window.Gloss = (() => {
       forms = data.forms || {};
       levels = data.levels || null;
       words = data.words || null;
+      names = data.names || null;
       longest = Math.max(1, ...Object.keys(forms).map((k) => k.split(" ").length));
     } catch {
       return;
@@ -169,8 +174,12 @@ window.Gloss = (() => {
   addEventListener("pointerdown", (e) => !e.target.closest?.("#gloss-tip") && hide(), true);
 
   // The book's meaning of a selected word or expression, any level (renderer.js shows it at once on the card).
+  // A capitalised word that is one of the book's names reads the names first («Тур» is Кирило Тур, «тур» a wild ox);
+  // a full name of two words or more comes before what it says («Васюті — Васюта Ніженський, ніжинський полковник»).
   const lookup = (text) => {
     const k = key(text).replace(/\s+/g, " ").trim();
+    const n = /^\p{Lu}/u.test(text.trim()) && names?.[k];
+    if (n) return { text: text.trim(), gloss: n[1].includes(" ") && key(n[1]) !== k ? `${n[1]}, ${n[0]}` : n[0], name: true };
     return forms?.[k] ? { text: text.trim(), gloss: forms[k] } : null;
   };
 

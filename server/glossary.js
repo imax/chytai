@@ -183,9 +183,10 @@ function parse(answer) {
 
 class Glossary {
   // `maxCalls`: a longer book is not made (readers' uploads: a whole collected works would cost dollars).
-  constructor({ dir, apiKey = process.env.ANTHROPIC_API_KEY, maxCalls = 0, v2 = false }) {
+  constructor({ dir, apiKey = process.env.ANTHROPIC_API_KEY, maxCalls = 0, v2 = false, names = false }) {
     this.dir = dir;
     this.v2 = v2;
+    this.names = names; // a list of names (buildNames), not of words
     this.apiKey = apiKey;
     this.maxCalls = maxCalls;
     this.cache = new Map(); // book -> file contents, while the file is unchanged
@@ -234,7 +235,7 @@ class Glossary {
     return {
       made: this.books().map((b) => {
         const g = this.get(b);
-        return { book: b, forms: Object.keys(g?.forms || {}).length, calls: g?.calls, cost: g?.cost, at: g?.at, model: g?.model };
+        return { book: b, forms: Object.keys(g?.forms || g?.names || {}).length, calls: g?.calls, cost: g?.cost, at: g?.at, model: g?.model };
       }),
       running: Object.fromEntries(this.running),
     };
@@ -410,6 +411,7 @@ class Glossary {
   }
   async build(book, file, run = {}) {
     if (!this.apiKey) throw new Error("no ANTHROPIC_API_KEY");
+    if (this.names) return this.buildNames(book, file, run);
     if (this.v2) return this.buildV2(book, file, run);
     const { chapters } = await epubParts(fs.readFileSync(file));
     const parts = chunks(chapters);
@@ -535,6 +537,84 @@ Glossary.prototype.sweep = async function (forms, chapters) {
   return { added, cost };
 };
 
+// Names (Max, 2026-11-17: the one-word card made up who «Васюта» was, and said only «персонаж книжки» of «Шрам»): the
+// book's people and places, each with a few words on who or what they are, from the whole text read at once. Never
+// underlined: only the card of a selected capitalised word reads them (gloss.js `lookup`), before asking a model.
+// Kept in DATA_DIR/glossary-names/<book>.json as { names: { form: [about, name] } }. Opus with the whole book (Чорна
+// рада: ~100k tokens in, about a dollar), one call a book; a book over NAMES_MAX characters is not made.
+const NAMES_MAX = 1200000;
+const NAMES = `You read a whole Ukrainian classic below. Readers aged 12–16 select a capitalised word in it and see a short card about who or what it is. The list after the book has every capitalised word form found in the middle of its sentences, with how often it occurs.
+
+For each person, place, people, river, institution or other named thing in that list, answer one line, three fields separated by tabs:
+1. the name as the book usually gives it in full (Кирило Тур, Васюта Ніженський, Київ);
+2. every form from the list that refers to it, separated by commas (Шрам, Шрама, Шрамові, Шрамом), exactly as listed;
+3. who or what it is, in at most twelve plain everyday Ukrainian words, no full stop.
+
+What makes a good card: concrete facts the book gives, the ones that help follow the story: rank or job, town, whose father, son, wife or friend, which side they are on (Шрам: «паволоцький полковник і священник, батько Петра»; Васюта: «ніжинський полковник, хоче стати гетьманом»). Never a vague line like «персонаж книжки» or «іде разом із гетьманом»: if the book says little, say that little concretely. For a real place or historical person, what it is (місто над Дніпром; гетьман України, помер до подій книжки) as far as the book and history agree.
+Never tell what happens later in the plot: no deaths, betrayals, marriages, victories or outcomes the reader has not reached when the name first appears. Describe them as the reader meets them.
+Only what you are sure of from the text; never guess kinship or roles.
+A form that in this book means different people or places (Петре said to two different Петри, Іван for several Івани) goes on no line: leave it out. So does a word that names something only together with another word (Великий of Великий Луг, Чорна of Чорна Гора, Золоті of Золоті ворота, Старий): list only forms that name it by themselves.
+Leave out what is not a name: God, the Lord, saints' titles used as words, a common word that starts a line of verse or a quote, chapter headings. Leave out a name you cannot describe beyond «персонаж».
+Nothing else in the answer: no headings, no notes.`;
+
+Glossary.prototype.buildNames = async function (book, file, run = {}) {
+  const { chapters } = await epubParts(fs.readFileSync(file));
+  const text = chapters.join("\n\n").normalize("NFD").replace(/[\u0300\u0301]/g, "").normalize("NFC");
+  if (text.length > NAMES_MAX) throw new Error(`too long: ${text.length} characters`);
+  const count = new Map();
+  for (const m of text.matchAll(/(^|[^.!?…»"“”—–:\s]\s+)(\p{Lu}[\p{L}]+(?:['’ʼ-][\p{L}]+)*)/gu)) count.set(m[2], (count.get(m[2]) || 0) + 1);
+  const list = [...count].sort((a, b) => b[1] - a[1]);
+  run.of = 1;
+  run.candidates = list.length;
+  const client = new Anthropic({ apiKey: this.apiKey });
+  const m = await client.messages
+    .stream({
+      model: MODEL_V2,
+      max_tokens: 64000,
+      system: NAMES,
+      messages: [{ role: "user", content: `${text}\n\n---\nСлова з великої літери (форма, скільки разів):\n${list.map(([w, n]) => `${w}\t${n}`).join("\n")}` }],
+      output_config: { effort: "medium" },
+    })
+    .finalMessage();
+  const cost = measure(m.model, m.usage).cost;
+  const answer = m.content.filter((b) => b.type === "text").map((b) => b.text).join("");
+  // A word written small more often than with a capital in mid-sentence is an ordinary word that a name only borrows
+  // («могила» of Петро Могила, «великий» of Великий Луг): the card asks about it as a word.
+  const small = new Map();
+  for (const m of text.matchAll(/\p{Ll}[\p{L}]*(?:['’ʼ-][\p{L}]+)*/gu)) small.set(key(m[0]), (small.get(key(m[0])) || 0) + 1);
+  const caps = new Map();
+  for (const [w, n] of list) caps.set(key(w), (caps.get(key(w)) || 0) + n);
+  const listed = new Set([...caps.keys()].filter((k) => (small.get(k) || 0) <= caps.get(k)));
+  run.common = caps.size - listed.size;
+  const names = parseNames(answer, listed);
+  const data = { book, v: 1, model: MODEL_V2, at: new Date().toISOString(), calls: 1, candidates: list.length, cost: Math.round(cost * 1000) / 1000, names };
+  fs.mkdirSync(this.dir, { recursive: true });
+  const f = this.file(book);
+  fs.writeFileSync(`${f}.tmp`, JSON.stringify(data));
+  fs.renameSync(`${f}.tmp`, f);
+  run.chunks = 1;
+  run.forms = Object.keys(names).length;
+  run.cost = data.cost;
+  return data;
+};
+
+// NAMES' answer → { form key: [about, name] }; only forms the book has (a model's own forms would be guesses), the
+// first line for a form stays.
+function parseNames(answer, listed) {
+  const out = {};
+  for (const line of String(answer || "").split("\n")) {
+    const [n, f, a] = line.split("\t").map((x) => (x || "").trim());
+    const name = n.replace(/^[-*•\d.\s]+/, "");
+    const about = a.replace(/\.$/, "");
+    if (!name || !f || !about || about.length > 140 || /^персонаж( книжки)?$/i.test(about)) continue;
+    for (const form of f.split(/\s*,\s*/)) {
+      const k = key(form);
+      if (k && (!listed || listed.has(k)) && !out[k]) out[k] = [about, name.slice(0, 60)];
+    }
+  }
+  return out;
+}
+
 // Readers' own uploads get one too, by themselves, when the book is by an author school reads (Max, 2026-11-16: a
 // school gave a friend's daughter an abridged PDF: «автоматом для певних книжок чи авторів»). The first word of a
 // name is the first name (or the pseudonym's first half), the rest its surname; both must be in the book's author.
@@ -563,4 +643,4 @@ function classic(authors) {
   });
 }
 
-module.exports = { Glossary, key, chunks, parse, parseV2, sweepLines, clean, classic, PROMPT, PROMPT_V2, STRICT, MODEL, MODEL_V2 };
+module.exports = { Glossary, key, chunks, parse, parseV2, parseNames, NAMES, sweepLines, clean, classic, PROMPT, PROMPT_V2, STRICT, MODEL, MODEL_V2 };
