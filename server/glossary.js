@@ -333,7 +333,7 @@ class Glossary {
     );
     // A form met once keeps Opus's reading of that very place. With `mixed` (Max 2026-11-17: «махнув рукою» shown as
     // «вирушив»), a form that is wrong in any of its places goes: the selected-word card then asks with the sentence.
-    const wrong = (f) => (mixed ? f.some((x) => !x) : f.filter(Boolean).length * 2 < f.length);
+    const wrong = (f) => f.filter((x) => !x).length * (mixed ? 3 : 2) > (mixed ? f.length - 1 : f.length); // mixed: a third of its places
     const dropped = [...cand].filter((k) => fits[k]?.length >= 2 && wrong(fits[k]));
     if (dropped.length > entries.length / 4) throw new Error(`homographs would drop ${dropped.length}`);
     cost = Math.round(cost * 1000) / 1000;
@@ -370,10 +370,10 @@ class Glossary {
         const m = await client.messages.create({ model: MODEL, max_tokens: 8000, system: PLAIN, messages: [{ role: "user", content: part.map((x, j) => `${i + j}\t${x.word}\t${x.meaning}`).join("\n") }], output_config: { effort: "medium" } });
         cost += measure(m.model, m.usage).cost;
         for (const l of textOf(m).split("\n")) {
-          const [n, v] = l.split("\t");
-          const x = items[Number(n)];
-          const t = String(v || "").trim().replace(/[.\s]+$/, "");
-          if (x && t && t.length <= 120 && t !== x.meaning) fixed.set(`${x.word}\t${x.meaning}`, t);
+          const f = l.split("\t");
+          const x = items[Number(f[0])];
+          const t = String(f[f.length - 1] || "").trim().replace(/[.\s]+$/, ""); // some answers repeat the word first
+          if (x && f.length > 1 && t && t.length <= 120 && t !== x.meaning && t.toLowerCase() !== x.word.toLowerCase()) fixed.set(`${x.word}\t${x.meaning}`, t);
         }
       }),
     );
