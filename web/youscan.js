@@ -5,14 +5,16 @@
 // The web process keeps each mention (table ys_mentions, 30 days) and answers at once; the jobs process, every
 // 15 min, sends the ones with an event word and a date (tgfeed `maybeEvent`) through the Telegram collector's Haiku
 // (`tgFeed.extract`, with the post's picture), AI_DAY calls a day. Events come in as source `ys`, linked to the post
-// (an Instagram or Facebook post shows as «соцмережі»; a Telegram one as its channel, never the post). A post from a
+// (its one sign-up form when the post has one; an Instagram or Facebook post shows as «соцмережі»; a Telegram one as its channel, never the post). A post from a
 // channel the Telegram collector reads already is left to it; the same event told elsewhere (findSimilar) is left out.
 const DAY = 86400000;
 const KEEP_DAYS = 30;
 const AI_DAY = 60;
 const TAKE_DAY = 3000; // mentions kept a day at most (a topic too wide would flood the table)
 const { kyivDay } = require("./calendar");
-const { maybeEvent } = require("./tgfeed");
+const { maybeEvent, eventUrl } = require("./tgfeed");
+// The addresses in a post's text (a sign-up form is the event's link, not the post).
+const linksIn = (t) => [...new Set((String(t || "").match(/https?:\/\/[^\s<>"«»()]+/g) || []).map((u) => u.replace(/[.,;:!?…]+$/, "")))].slice(0, 20);
 
 const SCHEMA = `CREATE TABLE IF NOT EXISTS ys_mentions (
   id TEXT PRIMARY KEY, topic TEXT NOT NULL DEFAULT '', source TEXT NOT NULL DEFAULT '', url TEXT NOT NULL DEFAULT '',
@@ -47,6 +49,16 @@ function mentionsOf(body) {
 
 function create(db, { calendar, extract = null, log = console.log } = {}) {
   db.exec(SCHEMA);
+  try {
+    // Events made before the post's links were looked at (2026-11-17): its one sign-up form, not the post.
+    const post = db.prepare("SELECT url, text FROM ys_mentions WHERE id = ?");
+    for (const r of db.prepare("SELECT id, url FROM cal_events WHERE source = 'ys'").all()) {
+      const m = post.get(r.id.slice(3).replace(/-\d+$/, ""));
+      if (!m || m.url !== r.url) continue;
+      const url = eventUrl("", linksIn(plain(m.text)), r.url);
+      if (url !== r.url) db.prepare("UPDATE cal_events SET url = ? WHERE id = ?").run(url, r.id);
+    }
+  } catch {}
   const meta = (k) => db.prepare("SELECT value FROM meta WHERE key = ?").get(k)?.value || "";
   const setMeta = (k, v) => db.prepare("INSERT INTO meta (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(k, String(v));
 
@@ -92,7 +104,7 @@ function create(db, { calendar, extract = null, log = console.log } = {}) {
     for (const m of rows) {
       out.looked++;
       m.text = plain(m.text); // rows kept before the tags were taken out (2026-11-17)
-      const ch = /^https?:\/\/t\.me\/([a-z]\w{3,31})\/\d+/i.exec(m.url)?.[1]?.toLowerCase();
+      const ch = /^https?:\/\/(?:t|telegram)\.me\/([a-z]\w{3,31})\/\d+/i.exec(m.url)?.[1]?.toLowerCase();
       if (ch && ours.has(ch)) {
         out.telegram++;
         mark(m.id, "tg");
@@ -109,14 +121,14 @@ function create(db, { calendar, extract = null, log = console.log } = {}) {
       let found;
       try {
         const head = [m.source && `Джерело: ${m.source}`, m.author && `Автор: ${m.author}`].filter(Boolean).join("\n");
-        found = await extract(`${head ? `${head}\n\n` : ""}${m.text}`, m.url || "https://youscan.io", { at: m.at, img: m.img });
+        found = await extract(`${head ? `${head}\n\n` : ""}${m.text}`, m.url || "https://youscan.io", { at: m.at, img: m.img, links: linksIn(m.text) });
       } catch (e) {
         out.errors.push(`${m.id}: ${e.message}`);
         continue;
       }
       const ids = [];
       found.forEach((e, i) => {
-        const ev = { source: "ys", key: `${m.id}${i ? `-${i}` : ""}`, ...e, url: m.url || e.url };
+        const ev = { source: "ys", key: `${m.id}${i ? `-${i}` : ""}`, ...e, url: e.url === "https://youscan.io" ? "" : e.url };
         const twin = calendar.findSimilar({ starts: e.starts, city: e.city, title: e.title });
         if (twin && twin.id !== `ys:${ev.key}`) return out.dupes.push({ title: e.title, twin: twin.id });
         if (dry) return out.made.push({ title: e.title, starts: e.starts, city: e.city, url: ev.url });

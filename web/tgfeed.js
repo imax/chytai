@@ -149,6 +149,8 @@ Answer every book event in the post that takes place on or after today's date (a
 
 The post may come with its pictures. A poster often holds what the text leaves out: the dates, cities and venues, the book's title and author, the publisher. Use them. A tour on a poster (one book or author, many dates and cities) is one event per date and city, each with the same title, kind and books. Decline Ukrainian names correctly («Зустріч з Артуром Дронем»).
 
+A report on an event that has already taken place (відбулася, відбувся, пройшла, дякуємо всім, хто прийшов, фото з зустрічі) is not an event, even when it was today.
+
 When the post has no book event from today on, answer an empty list.`;
 const KIND_KEYS = ["club", "author", "lecture", "festival", "kids"];
 const KIND_HELP = `"club" a book club meeting or a discussion of a book by readers (also book mafia, a joint reading); "author" a presentation, a meeting or talk with an author, an autograph session; "lecture" a lecture, a course, a talk or panel about literature without one author at its centre; "festival" a festival, a book fair, a multi-event day; "kids" anything made for children; "other" anything else.`;
@@ -580,7 +582,8 @@ function create(db, { calendar, apiKey = process.env.ANTHROPIC_API_KEY || "", cl
     const c = anthropic();
     if (!c) throw new Error("no ANTHROPIC_API_KEY");
     const pics = await pictures(p);
-    const links = p.page ? [p.page] : JSON.parse(p.links || "[]");
+    // A page from elsewhere may bring the links in its text (`more`: a YouScan post's sign-up form).
+    const links = p.page ? [...new Set([p.page, ...(p.more || [])])] : JSON.parse(p.links || "[]");
     const city = p.page ? "" : seed().find((c) => c.name === p.channel)?.city || "";
     const user = `Today: ${kyivDay()}\n${p.page ? `Page: ${p.page}` : `Channel: @${p.channel}${city ? ` (a book club in ${city}; use this city when the post names none and the meeting is not online)` : ""}`}\nPosted: ${p.at.slice(0, 10)}\nLinks in the post: ${links.length ? links.join(" ") : "none"}\n\n${p.text}`;
     const res = await c.messages.create({
@@ -878,7 +881,7 @@ function create(db, { calendar, apiKey = process.env.ANTHROPIC_API_KEY || "", cl
   // Another site's page → its events, for calendar.chytomoRun.
   // A page from elsewhere (Chytomo, Eventmate, YouScan's mentions): its cancelled events are left out, nothing else is
   // matched. `at`: when it was posted (Haiku dates «цієї суботи» from it); `img`: its picture's address.
-  const extract = (text, page, { at, img } = {}) => ask({ page, text, img, at: at || new Date().toISOString() }).then((list) => list.filter((e) => !e.cancelled));
+  const extract = (text, page, { at, img, links } = {}) => ask({ page, text, img, more: links, at: at || new Date().toISOString() }).then((list) => list.filter((e) => !e.cancelled));
   // Public channels whose title has these words, as the account sees them (to find a channel's @name for the seed).
   async function find(q) {
     if (!accountSet()) return { error: "no account" };
