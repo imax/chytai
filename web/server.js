@@ -1986,12 +1986,23 @@ async function calendarWatchMail() {
     if (!mailLog.room(reader.id)) continue;
     const off = `${SITE}/calendar/unwatch/${encodeURIComponent(reader.id)}/${digest.token(reader.id)}`;
     const when = (e) => [`${calendarLib.shortWhen(e)}${e.time ? `, ${e.time}` : ""}`, e.city, e.place].filter(Boolean).join(" · ");
+    // A tour (one post, many cities and days: Артур Дронь's 22 stops) is one item with its stops in a line.
+    const whyOf = new Map(list.map((x) => [x.event.id, x.why]));
+    const items = calendarLib.tours(list.map((x) => x.event).sort((a, b) => (a.starts + a.time < b.starts + b.time ? -1 : 1))).map((g) => {
+      const stops = g.stops || [g];
+      return { event: g, stops, why: stops.flatMap((s) => whyOf.get(s.id) || []) };
+    });
+    const stopLine = (x) => {
+      const shown = x.stops.slice(0, 10).map((s) => `${calendarLib.shortWhen(s)} ${s.city}`.trim());
+      return `${shown.join(", ")}${x.stops.length > 10 ? ` і ще ${x.stops.length - 10}` : ""}`;
+    };
+    const whenOf = (x) => (x.stops.length > 1 ? stopLine(x) : when(x.event));
     const why = (x) => `Ви стежите за: ${[...new Set(x.why.map(watchName).filter(Boolean))].join(", ")}`;
     const href = (e) => `${SITE}${calendarLib.eventPath(e)}`;
-    const one = list.length === 1 ? list[0].event : null;
-    const subject = one ? `Подія: ${one.title}` : `Нові події: ${list.length}`;
-    const text = [one ? "Зʼявилась подія автора, за яким ви стежите:" : "Зʼявились події авторів, за якими ви стежите:", "", list.map((x) => `${x.event.title}\n${when(x.event)}\n${why(x)}\n${href(x.event)}`).join("\n\n"), "", `Не стежити: ${off}`].join("\n");
-    const body = list.map((x) => `<p style="margin:14px 0 0;font-size:15px;line-height:1.45"><a href="${M.esc(href(x.event))}" style="font-family:${M.SERIF};font-size:18px;color:#1b1a17;text-decoration:none">${M.esc(x.event.title)}</a><br><span style="color:#266741;font-weight:500">${M.esc(when(x.event))}</span><br><span style="color:#6b675f">${M.esc(why(x))}</span></p>`).join("");
+    const one = items.length === 1 ? items[0].event : null;
+    const subject = one ? `Подія: ${one.title}` : `Нові події: ${items.length}`;
+    const text = [one ? "Зʼявилась подія автора, за яким ви стежите:" : "Зʼявились події авторів, за якими ви стежите:", "", items.map((x) => `${x.event.title}\n${whenOf(x)}\n${why(x)}\n${href(x.event)}`).join("\n\n"), "", `Не стежити: ${off}`].join("\n");
+    const body = items.map((x) => `<p style="margin:14px 0 0;font-size:15px;line-height:1.45"><a href="${M.esc(href(x.event))}" style="font-family:${M.SERIF};font-size:18px;color:#1b1a17;text-decoration:none">${M.esc(x.event.title)}</a><br><span style="color:#266741;font-weight:500">${M.esc(whenOf(x))}</span><br><span style="color:#6b675f">${M.esc(why(x))}</span></p>`).join("");
     const html = M.letter({ site: SITE, title: subject, heading: one ? "Зʼявилась подія" : "Зʼявились події", body, button: one ? { text: "Сторінка події", href: href(one) } : null, off: { href: off, text: "Не стежити за подіями" } });
     try {
       await auth.send(reader.email, subject, A.mailLinks(text, SITE, "calwatch"), { kind: "calwatch", html: A.mailLinks(html, SITE, "calwatch", true), headers: { "List-Unsubscribe": `<${off}>`, "List-Unsubscribe-Post": "List-Unsubscribe=One-Click" } });

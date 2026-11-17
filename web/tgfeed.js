@@ -29,7 +29,8 @@ const SCHEMA = `CREATE TABLE IF NOT EXISTS tg_posts (
   got TEXT NOT NULL, via TEXT NOT NULL DEFAULT '', ev TEXT NOT NULL DEFAULT '', PRIMARY KEY (channel, id)
 );
 CREATE INDEX IF NOT EXISTS tg_posts_at ON tg_posts (at);`;
-// ev: '' not looked at, 'skip' no event words or date, 'none' Haiku found no event, else the event ids, comma-separated.
+// photo: 1 when the post has a picture (a poster often has the dates, the places and the book the text leaves out;
+// Max 2026-11-16, Артур Дронь's tour). ev: '' not looked at, 'skip' no event words or date, 'none' Haiku found no event, else the event ids, comma-separated.
 
 // web/seed/tgchannels.json: [{ name, note, group?: "club", city?, account?: true }]. A club's channel (from the
 // MEGOGO BOOKS club list, Max 2026-11-15) is read from its page every CLUB_HOURS; `account: true` has no public page
@@ -64,7 +65,7 @@ function parsePage(html, channel) {
     if (!id || !at) continue;
     const body = /class="tgme_widget_message_text[^"]*"[^>]*>([\s\S]*?)<\/div>/.exec(chunk)?.[1] || "";
     const links = [...body.matchAll(/<a[^>]+href="([^"]+)"/g)].map((m) => unent(unent(m[1]))).filter(outside);
-    out.push({ channel, id: +id, at: new Date(at).toISOString(), text: unent(body).trim(), links: [...new Set(links)] });
+    out.push({ channel, id: +id, at: new Date(at).toISOString(), text: unent(body).trim(), links: [...new Set(links)], photo: /tgme_widget_message_photo_wrap/.test(chunk) });
   }
   return out;
 }
@@ -106,7 +107,7 @@ function fromMessage(m, channel) {
   }
   for (const row of m.replyMarkup?.rows || []) for (const b of row.buttons || []) if (b.url) links.push(b.url);
   const ok = links.map((u) => (/^https?:\/\//i.test(u) ? u : `https://${u}`)).filter(outside);
-  return { channel, id: m.id, at: new Date(m.date * 1000).toISOString(), text, links: [...new Set(ok)] };
+  return { channel, id: m.id, at: new Date(m.date * 1000).toISOString(), text, links: [...new Set(ok)], photo: m.media?.className === "MessageMediaPhoto" };
 }
 
 // ---- the events in a post (Haiku) ----
@@ -118,10 +119,13 @@ const CANCEL_WORDS = /скасов|відмін|не відбудеться|не
 // A day named without a date: «цієї суботи», «у четвер», «завтра» (Max 2026-11-16: «вже цієї суботи зустрічаємо Артура
 // Дроня!» was skipped). Haiku gets the post's date and works the day out; only for a post of the last week.
 const SOON_WORDS = /(?:^|[^\p{L}])(?:сьогодні|завтра|післязавтра|(?:цього|цієї|цю|у|в|наступного|наступної|наступну|найближчого|найближчої|найближчу)\s+(?:понеділ|вівтор|серед|четвер|п['’ʼ]?ятниц|субот|неділ))/iu;
-function maybeEvent(text, today = kyivDay(), posted = "") {
+function maybeEvent(text, today = kyivDay(), posted = "", photo = false) {
   if (!EVENT_WORDS.test(text || "")) return false;
   if (CANCEL_WORDS.test(text)) return true;
-  if (SOON_WORDS.test(text) && (!posted || posted.slice(0, 10) >= addDays(today, -7))) return true;
+  const fresh = !posted || posted.slice(0, 10) >= addDays(today, -7);
+  if (SOON_WORDS.test(text) && fresh) return true;
+  // A fresh post with a picture: the date may be on the poster only (Haiku sees it, `pictures`).
+  if (photo && fresh && posted) return true;
   const w = parseWhen(text, today);
   return !!w && (w.ends || w.starts) >= today && w.starts <= addDays(today, 183);
 }
@@ -142,6 +146,8 @@ Answer every book event in the post that takes place on or after today's date (a
 - kind: what sort of event it is: "club" a book club meeting or a discussion of a book by readers (also book mafia, a joint reading); "author" a presentation, a meeting or talk with an author, an autograph session; "lecture" a lecture, a course, a talk or panel about literature without one author at its centre; "festival" a festival, a book fair, a multi-event day; "kids" anything made for children; "other" anything else.
 - cancelled: true when the post says this event is cancelled or will not take place (скасовано, не відбудеться, відміняється); then starts is the date it was planned for. Else false.
 - was: when the post says the event is moved to another day, the day it was planned for before (YYYY-MM-DD), and starts is the new day; "" otherwise (also when only the time or place changes).
+
+The post may come with its pictures. A poster often holds what the text leaves out: the dates, cities and venues, the book's title and author, the publisher. Use them. A tour on a poster (one book or author, many dates and cities) is one event per date and city, each with the same title, kind and books. Decline Ukrainian names correctly («Зустріч з Артуром Дронем»).
 
 When the post has no book event from today on, answer an empty list.`;
 const KIND_KEYS = ["club", "author", "lecture", "festival", "kids"];
@@ -197,6 +203,7 @@ function eventUrl(given, links, fallback, channel = "") {
 
 function create(db, { calendar, apiKey = process.env.ANTHROPIC_API_KEY || "", client: ai = null, log = console.log } = {}) {
   db.exec(SCHEMA);
+  if (!db.prepare("SELECT 1 FROM pragma_table_info('tg_posts') WHERE name = 'photo'").get()) db.exec("ALTER TABLE tg_posts ADD COLUMN photo INTEGER NOT NULL DEFAULT 0");
   try {
     // Events made before NOT_A_PAGE linked to payments: point them at their post.
     for (const r of db.prepare("SELECT id, url FROM cal_events WHERE source = 'tg'").all())
@@ -274,12 +281,12 @@ function create(db, { calendar, apiKey = process.env.ANTHROPIC_API_KEY || "", cl
   }
   const anthropic = () => ai || (apiKey ? (ai = new (require("@anthropic-ai/sdk"))({ apiKey })) : null);
   const lastId = (ch) => db.prepare("SELECT max(id) n FROM tg_posts WHERE channel = ?").get(ch)?.n || 0;
-  const add = db.prepare("INSERT INTO tg_posts (channel, id, at, text, links, got, via) VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT(channel, id) DO UPDATE SET text = excluded.text, links = excluded.links");
+  const add = db.prepare("INSERT INTO tg_posts (channel, id, at, text, links, got, via, photo) VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(channel, id) DO UPDATE SET text = excluded.text, links = excluded.links, photo = max(photo, excluded.photo)");
   const keep = (posts, via) => {
     const now = new Date().toISOString();
     const since = new Date(Date.now() - KEEP_DAYS * DAY).toISOString();
     let n = 0;
-    for (const p of posts) if (p.text && p.at >= since) n += add.run(p.channel, p.id, p.at, p.text.slice(0, 6000), JSON.stringify(p.links.slice(0, 10)), now, via).changes;
+    for (const p of posts) if (p.text && p.at >= since) n += add.run(p.channel, p.id, p.at, p.text.slice(0, 6000), JSON.stringify(p.links.slice(0, 10)), now, via, p.photo ? 1 : 0).changes;
     return n;
   };
 
@@ -539,9 +546,34 @@ function create(db, { calendar, apiKey = process.env.ANTHROPIC_API_KEY || "", cl
 
   // One post → the events Haiku finds in it; the books each names come as `named` (calendar.upsert looks them up).
   // A page from elsewhere (Chytomo's articles) comes with `page`, its address: the events link there.
+  // A post's pictures (at most 2) as image blocks for Haiku, from its public embed page (both ways of reading see it;
+  // a closed channel has none). Read only for a post Haiku is asked about; nothing is kept. Any failure: no pictures.
+  async function pictures(p) {
+    if (!p.photo || p.page) return [];
+    try {
+      const r = await fetch(`https://t.me/${p.channel}/${p.id}?embed=1&mode=tme`, { signal: AbortSignal.timeout(8000) });
+      if (!r.ok) return [];
+      const html = await r.text();
+      const urls = [...html.matchAll(/tgme_widget_message_photo_wrap[^>]*background-image:url\('(https:\/\/[^']+)'\)/g)].map((m) => m[1]);
+      const out = [];
+      for (const u of [...new Set(urls)].slice(0, 2)) {
+        const img = await fetch(u, { signal: AbortSignal.timeout(8000) });
+        const type = (img.headers.get("content-type") || "").split(";")[0];
+        if (!img.ok || !/^image\/(jpeg|png|webp|gif)$/.test(type)) continue;
+        const buf = Buffer.from(await img.arrayBuffer());
+        if (buf.length > 4e6) continue;
+        out.push({ type: "image", source: { type: "base64", media_type: type, data: buf.toString("base64") } });
+      }
+      return out;
+    } catch {
+      return [];
+    }
+  }
+
   async function ask(p) {
     const c = anthropic();
     if (!c) throw new Error("no ANTHROPIC_API_KEY");
+    const pics = await pictures(p);
     const links = p.page ? [p.page] : JSON.parse(p.links || "[]");
     const city = p.page ? "" : seed().find((c) => c.name === p.channel)?.city || "";
     const user = `Today: ${kyivDay()}\n${p.page ? `Page: ${p.page}` : `Channel: @${p.channel}${city ? ` (a book club in ${city}; use this city when the post names none and the meeting is not online)` : ""}`}\nPosted: ${p.at.slice(0, 10)}\nLinks in the post: ${links.length ? links.join(" ") : "none"}\n\n${p.text}`;
@@ -549,7 +581,7 @@ function create(db, { calendar, apiKey = process.env.ANTHROPIC_API_KEY || "", cl
       model: MODEL,
       max_tokens: 4000,
       system: [{ type: "text", text: SYSTEM, cache_control: { type: "ephemeral" } }],
-      messages: [{ role: "user", content: user }],
+      messages: [{ role: "user", content: pics.length ? [...pics, { type: "text", text: `${user}\n\n(The post's picture${pics.length > 1 ? "s are" : " is"} above.)` }] : user }],
       output_config: { effort: "low", format: { type: "json_schema", schema: EVENT_SCHEMA } },
     });
     if (res.stop_reason === "refusal") return [];
@@ -568,15 +600,23 @@ function create(db, { calendar, apiKey = process.env.ANTHROPIC_API_KEY || "", cl
     const posts = db.prepare(`SELECT * FROM tg_posts WHERE ${dry ? "at >= ?" : "ev = '' AND at >= ?"} ORDER BY at`).all(new Date(Date.now() - days * DAY).toISOString());
     const out = { asked: 0, skipped: 0, made: [], dupes: [], cancelled: [], errors: [] };
     // Once: the last week's posts skipped before «цієї суботи» counted get another look (2026-11-16).
+    // Once: the last week's posts that made events are asked again with their pictures (2026-11-17).
+    if (!dry && !meta("tg:photo-recheck")) {
+      const since = new Date(Date.now() - 7 * DAY).toISOString();
+      const again = db.prepare("SELECT * FROM tg_posts WHERE ev LIKE 'tg:%' AND at >= ?").all(since);
+      for (const p of again) db.prepare("UPDATE tg_posts SET ev = '', photo = 1 WHERE channel = ? AND id = ?").run(p.channel, p.id);
+      posts.push(...again.filter((p) => !posts.some((x) => x.channel === p.channel && x.id === p.id)).map((p) => ({ ...p, ev: "", photo: 1 })));
+      setMeta("tg:photo-recheck", String(again.length));
+    }
     if (!dry && !meta("tg:soon-recheck")) {
       const since = new Date(Date.now() - 7 * DAY).toISOString();
-      const again = db.prepare("SELECT * FROM tg_posts WHERE ev = 'skip' AND at >= ?").all(since).filter((p) => maybeEvent(p.text, today, p.at));
+      const again = db.prepare("SELECT * FROM tg_posts WHERE ev = 'skip' AND at >= ?").all(since).filter((p) => maybeEvent(p.text, today, p.at, !!p.photo));
       for (const p of again) db.prepare("UPDATE tg_posts SET ev = '' WHERE channel = ? AND id = ?").run(p.channel, p.id);
       if (again.length) posts.push(...again.filter((p) => !posts.some((x) => x.channel === p.channel && x.id === p.id)));
       setMeta("tg:soon-recheck", String(again.length));
     }
     for (const p of posts) {
-      if (!maybeEvent(p.text, today, p.at)) {
+      if (!maybeEvent(p.text, today, p.at, !!p.photo)) {
         out.skipped++;
         if (!dry) db.prepare("UPDATE tg_posts SET ev = 'skip' WHERE channel = ? AND id = ?").run(p.channel, p.id);
         continue;

@@ -393,7 +393,11 @@ A flag only when Max asks for one, or when the change could break what readers u
   event posts link to (forms, social networks and payments left out) and t.me channels they link to that we don't read.
   A site with many: read it directly (like `yeRun`) or add its channel.
 - Events from those posts: an event word and a date not past, or a day without a date in a post of the last week
-  («цієї суботи», «у четвер», «завтра»: `SOON_WORDS`, Max 2026-11-16) (`maybeEvent`, ~1 post in 15) → Haiku 5.5 answers the
+  («цієї суботи», «у четвер», «завтра»: `SOON_WORDS`, Max 2026-11-16), or an event word and a picture in a post of the
+  last week (`maybeEvent`, ~1 post in 10). A post's pictures go to Haiku too (Max 2026-11-17: a poster had a tour's 22
+  dates and the book): `tg_posts.photo`, `pictures()` reads at most 2 from the post's public embed page
+  (`t.me/<channel>/<id>?embed=1`), nothing kept; a tour on a poster = one event a stop. The letter groups a tour's
+  stops into one item (`calendar.tours`) → Haiku 5.5 answers the
   events as fields (300 calls a day at most, Max 2026-11-15), `findSimilar` drops the same event from another channel (same day and city, and an author, half the title's words or the same «» book in another case), `upsert` with
   the post's event link (`eventUrl`: its one sign-up form first, then Haiku's pick, then one post of another channel)
   or the post itself (a payment or call link, `NOT_A_PAGE`, gives the post), shown at once (Max hides a bad one with «сховати»). On since 2026-11-15
