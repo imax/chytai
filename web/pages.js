@@ -463,7 +463,7 @@ function authorBlock(a) {
 </section>`;
 }
 
-function bookPage({ club = [], ukrlib = null, sluhay = null, inGenre = null, fresh = null, pick = null, awards = [], authorInfo = null, lists = [], myLists = null, book, entry, now = false, user, shelf, inLibrary = new Map(), readers = [], also = [], alsoTitle = "Читали це, сподобалось і це", writings = [], reviewError = "", editionError = "", ukAsk = null, readUrl = "", freeRead = false, freeFile = false, advice = null, overview = null, overviewVote = null, bookQuote = null, event = null }) {
+function bookPage({ club = [], ukrlib = null, sluhay = null, bookflow = null,inGenre = null, fresh = null, pick = null, awards = [], authorInfo = null, lists = [], myLists = null, book, entry, now = false, user, shelf, inLibrary = new Map(), readers = [], also = [], alsoTitle = "Читали це, сподобалось і це", writings = [], reviewError = "", editionError = "", ukAsk = null, readUrl = "", freeRead = false, freeFile = false, advice = null, overview = null, overviewVote = null, bookQuote = null, event = null }) {
   const s = statsOf(book.id);
   // A book in Russian stays on its reader's shelf, and its page shows no «Про книжку» and no side blocks
   // (Max 2026-10-23): nothing that would lead people to it or on from it.
@@ -493,7 +493,7 @@ function bookPage({ club = [], ukrlib = null, sluhay = null, inGenre = null, fre
         ${ru ? "" : eventLine(event)}
         ${twins(book)}
         ${!user && !freeRead ? "" : mine(book, entry, user, now, readUrl && freeRead ? goRead(book) : readUrl)}
-        ${where(book, ukrlib, sluhay)}
+        ${where(book, ukrlib, sluhay, bookflow)}
         ${user?.owner ? `<p class="book-tools small">${ownerItems(book, user)}</p>` : ""}
       </div>
     </article>
@@ -804,7 +804,7 @@ function mine(book, entry, user, now = false, readUrl = "") {
 // «Де взяти»: every edition's shop (with its format, price and stock, the one place prices are shown),
 // other links (a hand-picked free text, openlinks.js), and the libraries that hold the book (filled in by
 // app.js from /api/libraries).
-function where(book, ukrlib = null, sluhay = null) {
+function where(book, ukrlib = null, sluhay = null, bookflow = null) {
   const seen = new Set();
   // A free recording from «Слухай» (sluhay.js) is one more audio edition.
   const free = sluhay ? [{ id: "sluhay", shelf: { id: "sluhay", name: sluhay.name }, links: [{ url: sluhay.url }], format: "аудіо", narrator: sluhay.narrator, duration: sluhay.duration, price: "безкоштовно", status: "є" }] : [];
@@ -872,6 +872,9 @@ function where(book, ukrlib = null, sluhay = null) {
   // No shop has it at all (a book a reader brought from outside, Max 2026-10-30): the want-mail (wantmail.js) says when one does.
   if (book.source === "search" && !have.length && !out.length) rows.unshift(row("Магазини", `<span class="muted">поки немає; напишемо тим, хто хоче прочитати, щойно з’явиться</span>`));
   if (out.length) rows.push(row("Немає", `<span class="muted">зараз немає в наявності: </span>${out.map((e) => `${go(e, ' class="muted"')}${esc(e.shelf.name)}</a>`).join(", ")}`));
+  // BookFlow (bookflow.js): a copy a reader lends, one price for any book; last, right above the libraries
+  // (app.js adds them), the other way to borrow. All copies out is still a row (Max 2026-11-17).
+  if (bookflow) rows.push(row("Напрокат", `<a href="${attr(bookflow.url)}" target="_blank" rel="noopener">BookFlow</a>${bookflow.free ? `<span class="ok">, є вільна</span>` : `<span class="muted">, зараз усі в читачів</span>`}${bookflow.once ? `<span class="muted">, ${bookflow.once} ₴ за книжку</span>` : ""}`));
   return `<div class="where${rows.length ? "" : " hidden"}" data-block="where" data-src="/api/libraries/${attr(encodeURIComponent(book.id))}"><span class="where-label">Де взяти</span>${rows.join("")}</div>`;
 }
 

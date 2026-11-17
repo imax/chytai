@@ -536,6 +536,15 @@ A flag only when Max asks for one, or when the change could break what readers u
   they link to search. A new report: change the numbers and `UPDATED`, check the text under each chart still holds.
   Copies of the sources: project files `chytai-book-market/`.
 
+## BookFlow in «Де взяти» (`web/bookflow.js`)
+
+- BookFlow (bookflow.com.ua) lends readers' books for one price per book (Max 2026-11-17). Vlad made a public export,
+  no key: `https://api.bookflow.com.ua/api/books/export/` (`prices.one_time`, `subscription_month`; per book `isbn`,
+  `title`, `authors`, `url`, `available`). The jobs process reads it hourly, matches by ISBN, else by title head and
+  the same author (`match`), and keeps only meta `bookflow:links` (book id -> [url, free], ~130 KB, rewritten).
+- The book page's row «Напрокат» (pages.js `where`, last, above the libraries): «є вільна» / «зараз усі в читачів»,
+  «89 ₴ за книжку». Clicks: taps `where` / `out:bookflow.com.ua`. Run now: /admin/jobs, job `bookflow`.
+
 ## Translation pairs
 
 - A Ukrainian book and its original are paired in `web/seed/matches.json`: `translations` (`[original, uk]`, slugs or
