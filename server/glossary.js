@@ -42,6 +42,16 @@ Keep only the entries a modern teenager would really not understand or would mis
 
 Answer with the kept words only, one per line, exactly as given before the tab, nothing else.`;
 const STRICT_BATCH = 300;
+// «Словничок 2» underlines a form everywhere with one meaning. A form that is also a common word with another meaning
+// (Max 2026-11-17: «стіл» = престол at «та й за стіл!», «знай» = раз у раз at «знай, не боюсь тебе») misleads where
+// it is meant the usual way. HOMO_FIND names such forms; HOMO_FIT then reads up to 4 of each one's sentences in the
+// book, and a form whose meaning fits fewer than half of them goes.
+const HOMO_FIND = `Below is a reading glossary for a Ukrainian classic. Each line is a word form as it appears in the book, a tab, and the meaning the glossary gives it. The reader sees the form underlined everywhere it occurs, always with this meaning.
+
+List only the forms spelled exactly like a common everyday modern Ukrainian word or form whose usual meaning is different from the glossary's (стіл: table, not throne; знай: know!, not keep doing; пробував: tried, not stayed). Do not list words that are rare or gone today, dialect words, or forms that look unlike any common word.
+
+Answer with those forms only, one per line, exactly as given before the tab, nothing else.`;
+const HOMO_FIT = `Each line: a number, a tab, a word form, a tab, a meaning, a tab, a sentence from a Ukrainian classic where the form occurs. Does the form mean that in this sentence? Answer one line per input line: the number, a tab, 1 if yes or 0 if no. Nothing else.`;
 
 // «Словничок 2» (Max, 2026-11-17: «іноді пропускає неочевидні слова, іноді підкреслює очевидні»).
 // Opus reads the text (it catches false friends: «пробував» = перебував, «видав» = бачив, which Sonnet left out, and
@@ -272,6 +282,60 @@ class Glossary {
     fs.renameSync(`${f}.tmp`, f);
     return { before: entries.length, after: Object.keys(forms).length, cost: Math.round(cost * 1000) / 1000, dropped: entries.filter(([k]) => !kept.has(k)).map(([k]) => k) };
   }
+  // v2 only: forms that are a common word meant the usual way in most of their places go (HOMO_FIND, HOMO_FIT).
+  async homographs(book, file, { save = true } = {}) {
+    const data = this.get(book);
+    if (!data?.forms) return null;
+    if (!this.apiKey) throw new Error("no ANTHROPIC_API_KEY");
+    const client = new Anthropic({ apiKey: this.apiKey });
+    const forms = data.forms;
+    const entries = Object.entries(forms);
+    const textOf = (m) => m.content.filter((x) => x.type === "text").map((x) => x.text).join("");
+    let cost = 0;
+    const cand = new Set();
+    const batches = [];
+    for (let i = 0; i < entries.length; i += STRICT_BATCH) batches.push(entries.slice(i, i + STRICT_BATCH));
+    await Promise.all(
+      batches.map(async (b) => {
+        const m = await client.messages.create({ model: MODEL, max_tokens: 8000, system: HOMO_FIND, messages: [{ role: "user", content: b.map(([k, v]) => `${k}\t${v[0]}`).join("\n") }], output_config: { effort: "medium" } });
+        cost += measure(m.model, m.usage).cost;
+        for (const l of textOf(m).split("\n")) if (forms[key(l)]) cand.add(key(l));
+      }),
+    );
+    const { chapters } = await epubParts(fs.readFileSync(file));
+    const sentences = chapters.join("\n").replace(/\u0301/g, "").split(/(?<=[.!?…])\s+|\n/);
+    const lines = [];
+    for (const k of cand) {
+      const re = new RegExp(`(^|[^\\p{L}\\p{M}'’ʼ])${k.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?=$|[^\\p{L}\\p{M}'’ʼ])`, "iu");
+      for (const sentence of sentences.filter((x) => re.test(x)).slice(0, 4)) lines.push({ k, sentence: sentence.slice(0, 300) });
+    }
+    const fits = {};
+    const groups = [];
+    for (let i = 0; i < lines.length; i += 150) groups.push(i);
+    await Promise.all(
+      groups.map(async (i) => {
+        const part = lines.slice(i, i + 150);
+        const m = await client.messages.create({ model: MODEL, max_tokens: 4000, system: HOMO_FIT, messages: [{ role: "user", content: part.map((x, j) => `${i + j}\t${x.k}\t${forms[x.k][0]}\t${x.sentence}`).join("\n") }], output_config: { effort: "low" } });
+        cost += measure(m.model, m.usage).cost;
+        for (const l of textOf(m).split("\n")) {
+          const [n, v] = l.split("\t");
+          const x = lines[Number(n)];
+          if (x && /^[01]$/.test(String(v).trim())) (fits[x.k] ||= []).push(String(v).trim() === "1");
+        }
+      }),
+    );
+    // A form met once keeps Opus's reading of that very place.
+    const dropped = [...cand].filter((k) => fits[k]?.length >= 2 && fits[k].filter(Boolean).length * 2 < fits[k].length);
+    if (dropped.length > entries.length / 4) throw new Error(`homographs would drop ${dropped.length}`);
+    cost = Math.round(cost * 1000) / 1000;
+    if (save && dropped.length) {
+      const out = { ...data, forms: Object.fromEntries(entries.filter(([k]) => !dropped.includes(k))), homographs: { at: new Date().toISOString(), dropped }, cost: Math.round(((data.cost || 0) + cost) * 1000) / 1000 };
+      const f = this.file(book);
+      fs.writeFileSync(`${f}.tmp`, JSON.stringify(out));
+      fs.renameSync(`${f}.tmp`, f);
+    }
+    return { candidates: cand.size, sentences: lines.length, dropped: dropped.map((k) => [k, forms[k][0], (fits[k] || []).map(Number).join("")]), cost };
+  }
   // At start: v2 builds a restart cut off go on (their kept answers cost nothing again); a week-old one is dropped.
   resume(fileOf) {
     let names = [];
@@ -393,7 +457,10 @@ Glossary.prototype.buildV2 = async function (book, file, run = {}) {
   fs.writeFileSync(`${f}.tmp`, JSON.stringify(data));
   fs.renameSync(`${f}.tmp`, f);
   fs.rmSync(partsDir, { recursive: true, force: true });
-  run.forms = Object.keys(forms).length;
+  run.homographs = "running";
+  const homo = await this.homographs(book, file).catch((err) => ({ error: err.message }));
+  run.homographs = homo?.error || homo?.dropped?.length;
+  run.forms = Object.keys(this.get(book)?.forms || forms).length;
   run.cost = data.cost;
   return data;
 };

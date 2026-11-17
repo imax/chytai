@@ -11,7 +11,7 @@ const path = require("path");
 
 const MODEL = "claude-sonnet-5-5";
 const KEEP_DAYS = 90;
-const PROMPT = `A reader is reading this passage of a book. Guess which single words in it they may select to see what they mean: rare, old, dialect, bookish or specialised words, words used in an unusual sense here, and names of people, places or things a reader may not know. Leave out words every adult reader of the book's language knows. If the text is not in Ukrainian, the reader is Ukrainian reading it in the original with good but not native knowledge: include the words such a reader may look up. One line per word: the word exactly as written in the text, a tab, its meaning as used here in Ukrainian (a plain synonym or at most ten words; for a word that is not Ukrainian, its Ukrainian translation as used here; for a name, who or what it is in a few words). No other text, no numbering. At most 60 lines.`;
+const PROMPT = `A reader is reading this passage of a book. Guess which single words in it they may select to see what they mean: rare, old, dialect, bookish or specialised words, words used in an unusual sense here, and names of people, places or things a reader may not know. Leave out words every adult reader of the book's language knows. If the text is not in Ukrainian, the reader is Ukrainian reading it in the original with good but not native knowledge: include the words such a reader may look up. One line per word: the word exactly as written in the text, a tab, its meaning as used here in Ukrainian (a plain synonym or at most ten words; for a word that is not Ukrainian, its Ukrainian translation as used here; for a name, who or what it is in a few words; for a character of this book only what you are sure of, else «персонаж книжки»). Never notes, doubts or reasoning. No other text, no numbering. At most 60 lines.`;
 
 // A word as the page and the list both see it: lower case, no stress marks, one kind of apostrophe.
 const norm = (w) =>
@@ -22,12 +22,26 @@ const norm = (w) =>
     .trim()
     .toLowerCase();
 
+// One clean meaning: its first line, without what a model sometimes adds after it (Max's «Кирило», 2026-11-17: a
+// Ukrainian answer, then «Actually I need to be careful: in "Чорна рада"…»). Ukrainian answer, so four Latin words
+// in a row are notes, not meaning.
+function tidy(text, max = 160) {
+  let t = String(text || "").split("\n").map((x) => x.trim()).find(Boolean) || "";
+  if (/[\u0400-\u04FF]/.test(t)) {
+    const note = t.search(/\s(?=(?:Actually|Wait|Hmm|Note|However|But|Let me|Okay|I need|I think|In ["«])\b)/);
+    if (note > 0) t = t.slice(0, note);
+    const latin = t.search(/(?:\b[A-Za-z][A-Za-z'’-]*[\s,.:;"»«()]+){4,}/);
+    if (latin > 0) t = t.slice(0, latin);
+  }
+  return t.replace(/[\s.,;:—-]+$/, "").slice(0, max);
+}
+
 function parse(answer) {
   const words = {};
   for (const line of String(answer || "").split("\n")) {
     const [w, m] = line.split("\t");
     const k = norm(w);
-    const meaning = String(m || "").trim().replace(/\.$/, "").slice(0, 160);
+    const meaning = tidy(m);
     if (k && meaning && k.length <= 60 && !words[k]) words[k] = meaning;
   }
   return words;
@@ -111,4 +125,4 @@ class Ahead {
   }
 }
 
-module.exports = { Ahead, parse, norm, PROMPT, MODEL };
+module.exports = { Ahead, parse, norm, tidy, PROMPT, MODEL };
