@@ -7,7 +7,7 @@
 //   - our own Telegram account (not Max's personal one), through Telegram's API for programs (MTProto, the `telegram`
 //     package = gramjs). It joins the channels in web/seed/tgchannels.json, a few a run, and each run asks for its
 //     dialogs once: a channel whose last post is newer than ours gives its new posts. Fly secrets TG_API_ID,
-//     TG_API_HASH (my.telegram.org) and TG_SESSION (scripts/tg-login.js prints it after the login code);
+//     TG_API_HASH (my.telegram.org) and TG_SESSION (web/scripts/tg-login.js prints it after the login code);
 //   - with no session, or when Telegram refuses it, the channel's public page t.me/s/<channel> (the last ~20 posts).
 // A bot would not do: a bot sees a channel only when the channel's admin adds it.
 //

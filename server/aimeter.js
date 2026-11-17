@@ -106,7 +106,8 @@ function install(onUsage) {
   if (patched) return;
   patched = true;
   try {
-    const Anthropic = require("@anthropic-ai/sdk");
+    // The SDK of the app that runs: the site has its own (web/node_modules), the reader the root's.
+    const Anthropic = require(require.resolve("@anthropic-ai/sdk", { paths: [require.main?.path, __dirname].filter(Boolean) }));
     const c = new Anthropic({ apiKey: "aimeter" });
     patch(Object.getPrototypeOf(c.messages));
     patch(Object.getPrototypeOf(c.beta.messages));

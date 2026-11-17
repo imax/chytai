@@ -7,7 +7,7 @@ name: Deploy web
 on:
   push:
     branches: [main]
-    paths: ["web/**", "server/agent.js", "server/aimeter.js", "package.json", "package-lock.json", ".github/workflows/web.yml", "scripts/perf-check.sh", "scripts/smoke-test.sh", "scripts/deploy-probe.sh", "scripts/hot-deploy.sh"]
+    paths: ["web/**", "server/agent.js", "server/aimeter.js", "build/icon.png", ".github/workflows/web.yml", "scripts/perf-check.sh", "scripts/smoke-test.sh", "scripts/deploy-probe.sh", "scripts/hot-deploy.sh"]
   workflow_dispatch:
 
 jobs:
@@ -25,8 +25,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
-        with: { node-version: 22, cache: npm }
-      - run: npm ci --omit=dev --ignore-scripts --no-audit --no-fund
+        with: { node-version: 22, cache: npm, cache-dependency-path: web/package-lock.json }
+      - run: npm ci --prefix web --omit=dev --ignore-scripts --no-audit --no-fund
       - run: scripts/install-age.sh || echo "::warning::no age, so the smoke test runs on an empty database"
       - name: Smoke test
         env:
@@ -67,7 +67,7 @@ jobs:
       - run: scripts/deploy-probe.sh start
       # A deploy without a restart first (web/release.js, Max 2026-11-16: «20, 30, 40 релізів на день», and the site
       # stays up): the site's files go to the volume, a fresh web process opens a few pages on them while the old one
-      # answers, then takes over. «full» (packages, main.js or the Dockerfile changed, no ssh, a new image needed):
+      # answers, then takes over. «full» (web/package*.json, main.js or the Dockerfile changed, no ssh, a new image needed):
       # the image deploy below as before. «failed» (the new code's pages did not open): the old code stays, the run
       # fails. Off: repo variable HOT_DEPLOY=off.
       - id: hot

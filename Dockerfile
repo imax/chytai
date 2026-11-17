@@ -3,15 +3,12 @@ FROM node:22-slim
 WORKDIR /app
 ENV NODE_ENV=production
 
-# Dependencies first, so this layer is cached across code changes. Electron is a devDependency
-# and stays out of the image.
+# The reader's own dependencies (package.json at the root; the site has web/package.json), first, so this layer is
+# cached across code changes.
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev --no-audit --no-fund
 
-# The reader's page and the two files the server uses; src/main.js, preload.js and convert.js were the Electron app
-# (the Mac app is Swift now, mac/), not needed here.
-COPY src/renderer ./src/renderer
-COPY src/ai.js src/library.js ./src/
+COPY src ./src
 COPY server ./server
 COPY scripts/reader-db-to-state.js ./scripts/
 COPY build/icon.png build/landing-desk.mp4 build/landing-phone.mp4 build/landing-desk-poster.jpg build/landing-phone-poster.jpg ./build/

@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 // Signs Chytai's own Telegram account in once and puts its session into the site's Fly secrets (web/tgfeed.js
-// reads the channels through it). Run on your own computer, in the repo, after `npm ci`:
+// reads the channels through it). Run on your own computer, in the repo, after `npm ci --prefix web`:
 //
-//   node scripts/tg-login.js
+//   node web/scripts/tg-login.js
 //
 // It asks for api_id and api_hash (my.telegram.org → API development tools), then shows a QR code: on the phone with
 // that account, Telegram → Settings → Devices → «Link Desktop Device», scan it (a code by SMS/app never came to a

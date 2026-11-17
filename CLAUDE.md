@@ -11,8 +11,9 @@ next thread should know, change this file in the same commit. Short recipes, not
 ## Ship
 
 - Push straight to `main`, no pull requests. `web.yml` deploys `web/**` to chytai-web, `deploy.yml` the reader's own
-  files (its `paths`: what the root Dockerfile copies) to the reader; `server/agent.js`, `server/aimeter.js` and
-  package*.json deploy both. A new file the reader's image needs goes into the Dockerfile and those `paths`. Both run a smoke test first (`scripts/smoke-test.sh`, `scripts/smoke-reader.sh`); the site also runs
+  files (its `paths`: what the root Dockerfile copies) to the reader. Each has its own dependencies: web/package.json
+  (site) and the root package.json (reader); a package goes only into the app that uses it. Only `server/agent.js` and
+  `server/aimeter.js` are shared (both deploy). A new file the reader's image needs goes into the Dockerfile and those `paths`. Both run a smoke test first (`scripts/smoke-test.sh`, `scripts/smoke-reader.sh`); the site also runs
   `scripts/perf-check.sh` after the deploy and goes back to the previous image when a main page got slow.
 - A new page or admin tab goes into the smoke test's lists.
 - Don't deploy during the Friday digest (09:30 Kyiv). Batch small fixes.
@@ -21,7 +22,8 @@ next thread should know, change this file in the same commit. Short recipes, not
 
 1. `scripts/fetch-test-db.sh`: a scrubbed copy of last night's production DB into `data/web/` (e-mails are
    `<id>@test.invalid`, the owner is `owner@test.invalid`).
-2. `npm ci`, then `CHYTAI_ROLE=web PORT=8090 node web/server.js`. Covers in screenshots need `vipsthumbnail` (as in
+2. The site and the reader have their own dependencies (Max 2026-11-17): `npm ci --prefix web` for the site
+   (web/package.json), `npm ci` at the root for the reader. Then `CHYTAI_ROLE=web PORT=8090 node web/server.js`. Covers in screenshots need `vipsthumbnail` (as in
    web/Dockerfile): `apt-get install -y libvips-tools`, else /t/ thumbs fail (srv log «thumbs: … vipsthumbnail») and
    pages show coloured blocks; wait for images (`networkidle`) before a screenshot. Sign in at `/login` with any test address: the code
    is printed in the server log (no mail goes out locally).
@@ -122,7 +124,7 @@ Deploys without a restart (Max, 2026-11-16, a week's trial; `web/release.js`): w
 of the commit to the volume (`scripts/hot-deploy.sh`: `flyctl ssh sftp put`, then `node /app/web/hotdeploy.js <sha>`
 over ssh). main.js starts a fresh web process on them, opens /, /robots.txt, a search, /calendar, /lists, /updates on a
 private port, and only then moves the site to it; the old process finishes, the jobs restart. Rules:
-- An image deploy (with the pause) still happens when package*.json, web/main.js, web/release.js, web/hotdeploy.js,
+- An image deploy (with the pause) still happens when web/package*.json, web/main.js, web/release.js, web/hotdeploy.js,
   web/Dockerfile or web/fly.toml changed, or ssh fails (result `full`). Pages that don't open: `failed`, the old code
   stays, the run fails: fix it like any broken push.
 - A machine restart starts on the release (`releases/current.json`, tied to its image); a release that dies at start
@@ -368,7 +370,7 @@ A flag only when Max asks for one, or when the change could break what readers u
 - Telegram channels (`web/tgfeed.js`, source `tg`; Max 2026-11-15 chose our own account over scraping): the jobs process
   reads the channels in `web/seed/tgchannels.json` every hour and keeps their posts 90 days (table `tg_posts`, for more
   than events later). Through our own Telegram account (Fly secrets `TG_API_ID`, `TG_API_HASH`, `TG_SESSION`; Max makes
-  them on his computer with `node scripts/tg-login.js`, a QR code the phone scans; `--code` = by a code): it joins channels in the seed's order (Max's own first; the account has Premium) as fast as Telegram lets it: a job every 10 min (`tg-join`, `joinMore`) joins until FLOOD_WAIT, whose end goes into meta `tg:flood` (`/agent/tg` → `flood`), mutes each (Max uses that number himself, 2026-11-15), and reads what is new; channels joined by hand on the account (`last.own`) are read and muted too, add them to the seed to keep them. A
+  them on his computer with `npm ci --prefix web && node web/scripts/tg-login.js`, a QR code the phone scans; `--code` = by a code): it joins channels in the seed's order (Max's own first; the account has Premium) as fast as Telegram lets it: a job every 10 min (`tg-join`, `joinMore`) joins until FLOOD_WAIT, whose end goes into meta `tg:flood` (`/agent/tg` → `flood`), mutes each (Max uses that number himself, 2026-11-15), and reads what is new; channels joined by hand on the account (`last.own`) are read and muted too, add them to the seed to keep them. A
   channel's @name by its title: `curl -s "https://chytai.org.ua/agent/tg-find?q=<words>" -H "$H"` (the account's search). No
   session, or Telegram refuses it: the public pages `t.me/s/<channel>`. A bot can't do this (it sees a channel only
   when the channel's admin adds it). Status: `curl -s https://chytai.org.ua/agent/tg -H "$H"`; run now:

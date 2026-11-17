@@ -43,7 +43,7 @@ if (fs.existsSync(tgz) && !fs.existsSync(dir)) {
     fs.rmSync(tmp, { recursive: true, force: true });
     fs.mkdirSync(tmp, { recursive: true });
     execFileSync("tar", ["-xzf", tgz, "-C", tmp], { stdio: "inherit" });
-    fs.symlinkSync(path.join(release.IMAGE, "node_modules"), path.join(tmp, "node_modules"));
+    fs.symlinkSync(path.join(release.IMAGE, "web", "node_modules"), path.join(tmp, "web", "node_modules"));
     fs.renameSync(tmp, dir);
   } catch (e) {
     fs.rmSync(tmp, { recursive: true, force: true });

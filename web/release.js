@@ -1,12 +1,12 @@
 // Code updates without restarting the machine (Max, 2026-11-16: «20, 30, 40 релізів на день це прикольно», but
 // the site must not go down for them). The image keeps node_modules, the system packages and main.js; the site's own
 // code can come as a release on the volume instead: DATA_DIR/web/releases/<sha>/ (web/, server/agent.js,
-// server/aimeter.js, build/icon.png, package*.json; node_modules a link to the image's). web.yml uploads it
+// server/aimeter.js, build/icon.png; web/node_modules a link to the image's). web.yml uploads it
 // (`flyctl ssh sftp put`), hotdeploy.js unpacks it and asks main.js to switch: a fresh web process starts on the
 // new code while the old one answers, opens a few pages on a private port, and only then takes the site's port.
 //
 // Safety (Max: «щоб наш фікс не створив більше проблем, ніж він вирішує»):
-// - a release may differ from the image only in the site's code: package*.json, main.js, this file, hotdeploy.js,
+// - a release may differ from the image only in the site's code: web/package*.json, main.js, this file, hotdeploy.js,
 //   the Dockerfile and fly.toml must be the image's, byte for byte, or it is refused and web.yml deploys an image;
 // - current.json remembers which image a release was put on: a new image (a full deploy) starts on its own code;
 //   a restart of the same machine starts on the release, so it does not quietly go back to older code;
@@ -19,7 +19,7 @@ const IMAGE = path.join(__dirname, ".."); // the code baked into the image
 const DIR = path.join(process.env.DATA_DIR || path.join(IMAGE, "data"), "web", "releases");
 const INCOMING = path.join(DIR, "incoming");
 const IMAGE_SHA = process.env.GIT_SHA || "";
-const MUST_MATCH = ["package.json", "package-lock.json", "web/main.js", "web/release.js", "web/hotdeploy.js", "web/Dockerfile", "web/fly.toml"];
+const MUST_MATCH = ["web/package.json", "web/package-lock.json", "web/main.js", "web/release.js", "web/hotdeploy.js", "web/Dockerfile", "web/fly.toml"];
 const KEEP = 8;
 const SHA = /^[0-9a-f]{7,40}$/;
 

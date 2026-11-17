@@ -1,23 +1,16 @@
 {
-  "name": "ai-reader",
-  "productName": "Chytai",
+  "name": "chytai-reader",
+  "description": "The reader app.chytai.org.ua (Fly app chytai): server/ and src/. The site has its own web/package.json (Max, 2026-11-17).",
   "version": "0.1.0",
-  "description": "EPUB reader for macOS with inline AI explanations powered by Claude",
-  "main": "src/main.js",
   "private": true,
   "scripts": {
-    "start": "electron .",
-    "dist": "electron-builder --mac",
-    "web": "node server/index.js",
-    "platform": "node web/server.js",
-    "platform:import": "node web/scripts/import-books.mjs ../maxua-v3 && node web/scripts/build-shelves.mjs"
+    "start": "node server/index.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.93.0",
     "@fontsource-variable/literata": "^5.3.0",
     "@fontsource-variable/onest": "^5.3.1",
     "@fontsource-variable/source-serif-4": "^5.3.1",
-    "compression": "^1.8.2",
     "dompurify": "^3.4.17",
     "epubjs": "^0.3.93",
     "express": "^5.1.0",
@@ -26,40 +19,6 @@
     "marked": "^18.1.1",
     "pdfjs-dist": "^6.4.299",
     "qrcode-generator": "^2.0.4",
-    "sharp": "^0.34.5",
-    "telegram": "2.26.22"
-  },
-  "devDependencies": {
-    "electron": "^44.7.0",
-    "electron-builder": "^26.0.0"
-  },
-  "build": {
-    "appId": "com.example.aireader",
-    "productName": "Chytai",
-    "mac": {
-      "category": "public.app-category.books",
-      "target": "dmg"
-    },
-    "fileAssociations": [
-      {
-        "ext": "epub",
-        "name": "EPUB Book",
-        "role": "Viewer"
-      },
-      {
-        "ext": [
-          "mobi",
-          "azw",
-          "azw3"
-        ],
-        "name": "Kindle Book",
-        "role": "Viewer"
-      },
-      {
-        "ext": "pdf",
-        "name": "PDF Document",
-        "role": "Viewer"
-      }
-    ]
+    "sharp": "^0.34.5"
   }
 }

@@ -169,8 +169,9 @@ jobs:
           name: ${{ env.NAME }}
           path: restored
       - uses: actions/setup-node@v4
-        with: { node-version: 22, cache: npm }
-      - run: npm ci --omit=dev --ignore-scripts --no-audit --no-fund
+        with: { node-version: 22, cache: npm, cache-dependency-path: "package-lock.json\nweb/package-lock.json" }
+      # The reader's dependencies at the root, the site's in web/ (each app has its own package.json).
+      - run: npm ci --omit=dev --ignore-scripts --no-audit --no-fund && npm ci --prefix web --omit=dev --ignore-scripts --no-audit --no-fund
       - name: Restore check
         id: restore
         timeout-minutes: 10

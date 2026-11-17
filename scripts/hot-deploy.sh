@@ -5,7 +5,7 @@
 #   scripts/hot-deploy.sh <sha>
 # Prints the machine's answer and writes result=ok|full|failed to $GITHUB_OUTPUT:
 #   ok     the site runs <sha>, nothing restarted;
-#   full   this needs an image deploy (packages, main.js or the Dockerfile changed, no ssh, an older image): nothing
+#   full   this needs an image deploy (web/package*.json, main.js or the Dockerfile changed, no ssh, an older image): nothing
 #          changed on the site, web.yml deploys an image as before;
 #   failed the new code did not open its pages: the old code goes on answering, the run fails.
 # Env: FLY_API_TOKEN (the deploy token of chytai-web).
@@ -13,7 +13,7 @@ set -u
 sha=$1
 out=${GITHUB_OUTPUT:-/dev/stdout}
 answer() { echo "result=$1" >> "$out"; echo "hot deploy: $1"; exit 0; }
-FILES="web server/agent.js server/aimeter.js build/icon.png package.json package-lock.json"
+FILES="web server/agent.js server/aimeter.js build/icon.png"
 if git cat-file -e "$sha^{commit}" 2>/dev/null; then
   tgz=${RUNNER_TEMP:-/tmp}/site-$sha.tgz
   git archive --format=tar.gz -o "$tgz" "$sha" $FILES || answer full
