@@ -1194,6 +1194,7 @@ app.use((req, res, next) => {
   app.all("/agent/sql", ok, express.json(), async (req, res) => res.json(await sql(req.body?.q || req.query.q)));
   // «Словничок» (server/glossary.js): what is made and what runs; POST {"book":"<free-shelf file>"} makes one book's.
   app.get("/agent/glossary", ok, (req, res) => res.json({ ...glossary.status(), v2: glossaryV2.status() }));
+  app.get("/agent/word-ahead", ok, (req, res) => res.json({ ...ahead.status(), today: { day: aheadDay.day, all: aheadDay.all, readers: Object.keys(aheadDay.by).length } }));
   // Readers' uploads: GET ?uploads=1 lists the uploaded EPUBs by school classics' authors and what they have;
   // POST {"acct":"<id>","book":"<file>"} makes that one's (past the caps; only with Max's OK in the thread).
   app.get("/agent/glossary/uploads", ok, async (req, res) => {
@@ -3223,6 +3224,34 @@ api.post("/word", guestsCannot("Без входу пояснень немає.")
     });
     if (r.usage) recordExplain(req, { model: r.model, usage: r.usage }, { count: false });
     res.json({ text: r.text });
+  } catch (err) {
+    res.status(502).json({ error: describeError(err) });
+  }
+});
+// Words ahead (server/wordahead.js): the page sends the passage being read and the next one; Sonnet names the words a
+// reader may select there, with their meaning, so a selected word shows with no call. A passage asked before (any
+// reader, same text) costs nothing. New passages: AHEAD_DAY a reader, AHEAD_ALL in all a day (Max not capped by his own).
+const ahead = new (require("./wordahead").Ahead)({ dir: path.join(DATA_DIR, "word-ahead") });
+const AHEAD_DAY = 80; // ~400,000 characters, a long novel
+const AHEAD_ALL = 1000; // ~$13
+let aheadDay = { day: "", all: 0, by: {} };
+setTimeout(() => ahead.prune(), 60000).unref();
+setInterval(() => ahead.prune(), 24 * 3600 * 1000).unref();
+api.post("/word-ahead", guestsCannot("Без входу немає."), aiBudget, async (req, res) => {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  const text = String(req.body?.text || "").slice(0, 8000);
+  if (!apiKey || text.length < 200) return res.status(400).json({ error: "text" });
+  const day = statsDay();
+  if (aheadDay.day !== day) aheadDay = { day, all: 0, by: {} };
+  const known = ahead.kept(ahead.hash(text));
+  if (known) return res.json({ words: known.words });
+  if (aheadDay.all >= AHEAD_ALL || (!req.owner && (aheadDay.by[req.acct] || 0) >= AHEAD_DAY)) return res.status(429).json({ error: "later" });
+  aheadDay.all++;
+  aheadDay.by[req.acct] = (aheadDay.by[req.acct] || 0) + 1;
+  try {
+    const r = await ahead.words(apiKey, { text, title: String(req.body?.title || "").slice(0, 300), author: String(req.body?.author || "").slice(0, 200) });
+    if (r.usage) recordExplain(req, { model: r.model, usage: r.usage }, { count: false });
+    res.json({ words: r.words });
   } catch (err) {
     res.status(502).json({ error: describeError(err) });
   }

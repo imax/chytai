@@ -421,6 +421,7 @@ async function openEpub(payload, { posKey, source }) {
   rendition.hooks.content.register(styleContents);
   rendition.hooks.content.register((contents) => window.Gloss?.mark(contents));
   window.Gloss?.load(payload.path, () => rendition?.getContents());
+  window.WordAhead?.open(current);
   rendition.hooks.content.register((contents) => contents.on("linkClicked", rememberReturn));
   if (current.protected) rendition.hooks.content.register(limitCopy);
   rendition.themes.fontSize(`${bookFontSize() * BASE_SCALE}%`);
@@ -841,6 +842,7 @@ function onRelocated(location) {
   if (current) window.reader.savePosition(current.posKey, location.start.cfi, readingProgress(location));
   if (current?.protected) reportChapter(location.start?.index);
   updateProgress(location);
+  if (!settings.free && !settings.guest && !current?.protected && !current?.preview) window.WordAhead?.at(location, rendition, book);
   // While scrolling, a selection may move off screen and back; its toolbar is pinned at the bottom anyway.
   if (!scrolled()) hideSelToolbar();
   window.Gloss?.hide();
@@ -1050,8 +1052,11 @@ function wordCard(sel) {
     box.classList.toggle("wait", !!wait);
   };
   window.ReadingTime?.count("word");
+  window.WordAhead?.used();
   const mine = window.Gloss?.lookup(text);
   if (mine) return put(mine.gloss);
+  const ahead = window.WordAhead?.lookup(text);
+  if (ahead) return window.ReadingTime?.count("word-ahead"), put(ahead);
   put("…", true);
   const c = sel.context || {};
   const sentence = [String(c.before || "").split(/(?<=[.!?…])\s+/).pop(), text, String(c.after || "").split(/(?<=[.!?…])\s/)[0]].join(" ").replace(/\s+/g, " ").trim().slice(-600);
