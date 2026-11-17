@@ -53,7 +53,7 @@ List only the forms spelled exactly like a common everyday modern Ukrainian word
 Answer with those forms only, one per line, exactly as given before the tab, nothing else.`;
 // An explanation that is as hard as the word (Max 2026-11-17: паливода → «гульвіса, шибайголова») is said again plainly.
 const PLAIN = `Below is a reading glossary for a Ukrainian classic that school students aged 12–16 read today. Each line: a number, a tab, a word from the book, a tab, the explanation the reader sees when they tap it.
-An explanation must use only words such a reader uses every day. Find the explanations that use a rare, old, dialect, bookish or specialised word the reader may not know (паливода explained as «гульвіса, шибайголова»: both are as unknown as паливода itself) and say each again in plain modern Ukrainian: the same meaning, at most ten words, no full stop.
+An explanation must use only words such a reader uses every day. Find the explanations that use a rare, old, dialect, bookish or specialised word the reader may not know (паливода explained as «гульвіса, шибайголова»: both are as unknown as паливода itself) and say each again in plain modern Ukrainian: the same meaning, in the same case and number as the old explanation (it matches the word's form in the text), at most ten words, no full stop.
 Answer one line per explanation you rewrote: the number, a tab, the new explanation. Leave good explanations out. Nothing else.`;
 const HOMO_FIT = `Each line: a number, a tab, a word form, a tab, a meaning, a tab, a sentence from a Ukrainian classic where the form occurs. Does the form mean that in this sentence? Answer one line per input line: the number, a tab, 1 if yes or 0 if no. Nothing else.`;
 
