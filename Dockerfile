@@ -8,7 +8,10 @@ ENV NODE_ENV=production
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev --no-audit --no-fund
 
-COPY src ./src
+# The reader's page and the two files the server uses; src/main.js, preload.js and convert.js were the Electron app
+# (the Mac app is Swift now, mac/), not needed here.
+COPY src/renderer ./src/renderer
+COPY src/ai.js src/library.js ./src/
 COPY server ./server
 COPY scripts/reader-db-to-state.js ./scripts/
 COPY build/icon.png build/landing-desk.mp4 build/landing-phone.mp4 build/landing-desk-poster.jpg build/landing-phone-poster.jpg ./build/

@@ -10,8 +10,9 @@ next thread should know, change this file in the same commit. Short recipes, not
 
 ## Ship
 
-- Push straight to `main`, no pull requests. `web.yml` deploys `web/**` to chytai-web, `deploy.yml` the rest to the
-  reader. Both run a smoke test first (`scripts/smoke-test.sh`, `scripts/smoke-reader.sh`); the site also runs
+- Push straight to `main`, no pull requests. `web.yml` deploys `web/**` to chytai-web, `deploy.yml` the reader's own
+  files (its `paths`: what the root Dockerfile copies) to the reader; `server/agent.js`, `server/aimeter.js` and
+  package*.json deploy both. A new file the reader's image needs goes into the Dockerfile and those `paths`. Both run a smoke test first (`scripts/smoke-test.sh`, `scripts/smoke-reader.sh`); the site also runs
   `scripts/perf-check.sh` after the deploy and goes back to the previous image when a main page got slow.
 - A new page or admin tab goes into the smoke test's lists.
 - Don't deploy during the Friday digest (09:30 Kyiv). Batch small fixes.

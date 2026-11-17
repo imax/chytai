@@ -6,7 +6,11 @@ name: Deploy
 on:
   push:
     branches: [main]
-    paths-ignore: ["README.md", "CLAUDE.md", "docs/**", "scripts/**", "app/**", "web/**", ".github/workflows/app-*.yml", ".github/workflows/web.yml", ".github/workflows/backup.yml"]
+    # Only what the reader's image holds (Dockerfile), or how it deploys (Max 2026-11-17: a site, Mac or app change
+    # deploys no reader). server/agent.js and aimeter.js are the site's too: a change there deploys both.
+    paths: ["src/renderer/**", "src/ai.js", "src/library.js", "server/**", "free/**", "demo/**", "build/icon.png", "build/landing-*",
+      "scripts/reader-db-to-state.js", "scripts/smoke-reader.sh", "scripts/rollout-watch.sh", "package.json", "package-lock.json",
+      "Dockerfile", ".dockerignore", "fly.toml", ".github/workflows/deploy.yml"]
   workflow_dispatch:
 
 concurrency: deploy
