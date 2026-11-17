@@ -81,10 +81,14 @@ curl -s https://app.chytai.org.ua/agent/sql -H "$H" -H 'content-type: applicatio
   it so (Max, 2026-11-12, after it was folded into one sentence: «мені не подобається»); trim a row, don't merge rows.
 - Pages the phone unloaded (iOS kills the WebView's page for memory, mostly in the background): the page keeps a note
   of itself in localStorage (`chytai:life`, web-bridge.js `life`), the next load reports it to the reader's
-  `/api/page-gone` and reopens the book that was on screen. Rows in the reader's `state.stats.days[day].gone` (30 days);
+  `/api/page-gone`. The book on screen has its own note (`chytai:onscreen`), kept until the reader goes to the home
+  screen: any load within 12 h reopens it at its saved place, even after pages that died before the book opened
+  (Max 2026-11-17); three deaths in a row with it = home screen. Rows in the reader's `state.stats.days[day].gone` (30 days);
   /admin/reader «Вивантаження» and a line in the technical report (not on Огляд, Max 2026-11-13). To see
   memory on a phone width locally: Playwright WebKit, RSS of `WPEWebProcess`; kill it (`pkill -9 -x WPEWebProcess`)
-  to fake an unload.
+  to fake an unload. epub.js keeps every chapter it loaded until the book closes: load one yourself → `unload()` it
+  after (renderer.js `addTocPages`; a chapter's view unloads it when destroyed). Count kept ones:
+  `book.spine.spineItems.filter((s) => s.document).length`; Chromium heap snapshot (CDP) shows who holds what.
 - AI spend (`web/aiusage.js`, `server/aimeter.js`): every Claude call in both apps is counted by patching the SDK once
   per process (no caller can skip it; feature = the calling file). Site table `ai_usage` (day, app, feature, model,
   tokens, searches, cost); the reader keeps `state.stats.days[day].ai`, the site copies it hourly. Telegram once a day

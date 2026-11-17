@@ -433,7 +433,21 @@ async function openEpub(payload, { posKey, source }) {
     evenMarks();
     return out;
   };
-  rendition.on("rendered", () => (evenMarks(), decorateNoteMarks()));
+  rendition.on("rendered", (section, view) => {
+    evenMarks();
+    decorateNoteMarks();
+    // A chapter scrolled or turned away from keeps its parsed document and its text in epub.js until the book
+    // closes; a long read held every chapter passed (iPhone, 2026-11-17: the page killed while the phone was
+    // locked). Let go with its frame; coming back parses it again, a few milliseconds.
+    if (view && !view.unloads) {
+      const destroy = view.destroy.bind(view);
+      view.destroy = () => {
+        destroy();
+        section?.unload?.();
+      };
+      view.unloads = true;
+    }
+  });
   rendition.on("keyup", onKey);
   rendition.hooks.content.register((contents) => contents.document.addEventListener("wheel", onWheel, { passive: true }));
   // Taps, keys and scrolls inside the book's frame are signs of reading too (reading-time.js).
@@ -783,12 +797,17 @@ async function addTocPages(forBook) {
     const section = forBook.spine.get(path);
     if (!section) continue;
     let cfi;
+    // A chapter loaded only for this is let go again: epub.js keeps every loaded chapter's document, and a long
+    // book's whole text stayed in memory for as long as it was open (War and Peace: 393 chapters, +55 MB).
+    const had = !!section.contents;
     try {
       const doc = await section.load(forBook.load.bind(forBook));
       const el = (fragment && doc.getElementById(decodeURIComponent(fragment))) || doc.body || doc.documentElement;
       cfi = section.cfiFromElement(el);
     } catch {
       continue;
+    } finally {
+      if (!had) section.unload();
     }
     if (book !== forBook) return;
     const span = document.createElement("span");

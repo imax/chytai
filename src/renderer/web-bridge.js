@@ -32,19 +32,49 @@
   // page's process for memory, mostly while the app waits in the background; the app (app/App.js) or Safari then
   // loads it again from scratch, on the home screen. The page keeps a note of itself in localStorage (what is on
   // screen, how much it holds); a load that finds the last note not closed by «pagehide» and is a reload (or came
-  // within a minute of a visible page) means the page before it died. Then the note goes to the server
-  // (/api/page-gone, admin «Вивантаження») and the book that was open opens again, at its saved place.
+  // within a minute of a visible page, or the app says the page's process died) means the page before it died. Then
+  // the note goes to the server (/api/page-gone, admin «Вивантаження»).
+  // The book on screen has a note of its own (Max, 2026-11-17: the phone locked for 20 s, and back on the home
+  // screen): it stays until the reader leaves the book for the home screen, so any new page within RETURN_MS opens
+  // it again at its saved place, whatever came in between (a reload, the app started again, a page that died
+  // again before the book was open: three such on 17.11, each lost the book).
   const life = (() => {
     const KEY = "chytai:life";
-    let prev = null;
-    try {
-      prev = JSON.parse(localStorage.getItem(KEY) || "null");
-    } catch {}
+    const SCREEN = "chytai:onscreen";
+    const RETURN_MS = 12 * 3600000;
+    const read = (k) => {
+      try {
+        return JSON.parse(localStorage.getItem(k) || "null");
+      } catch {
+        return null;
+      }
+    };
+    const write = (k, v) => {
+      try {
+        if (v) localStorage.setItem(k, JSON.stringify(v));
+        else localStorage.removeItem(k);
+      } catch {}
+    };
+    const prev = read(KEY);
     const navType = performance.getEntriesByType?.("navigation")?.[0]?.type || "";
     const born = Date.now();
     let hiddenAt = document.visibilityState === "visible" ? 0 : born;
     let books = 0;
-    const gone = !!prev && !prev.closed && (navType === "reload" || (prev.vis && born - prev.at < 60000));
+    const died = () => !!prev && !prev.closed && (navType === "reload" || (prev.vis && born - prev.at < 60000) || !!window.__chytaiGone);
+    // { book, at, tries, triedAt }; a note of the old kind (before 17.11) counts too.
+    let screen = read(SCREEN) || (prev?.book && prev.shown ? { book: prev.book, at: prev.at } : null);
+    if (screen && !(born - (screen.at || 0) < RETURN_MS)) screen = null;
+    // A book the page died with three times in a row, within minutes, is not opened a fourth time.
+    const tooMany = screen && (screen.tries || 0) >= 3 && born - (screen.triedAt || 0) < 5 * 60000;
+    const restoring = screen && !tooMany ? screen.book : null;
+    if (restoring) screen = { ...screen, tries: (born - (screen.triedAt || 0) < 5 * 60000 ? screen.tries || 0 : 0) + 1, triedAt: born };
+    else screen = null;
+    write(SCREEN, screen);
+    // Until it is on screen, the book stays in the note, even on the home screen the page starts with.
+    let pending = restoring;
+    if (pending) setTimeout(() => (pending = null), 60000);
+    let shownBook = null;
+    let shownAt = 0;
     // What is on screen and roughly how much memory it takes: decoded pictures (4 bytes a pixel), canvases (PDF
     // pages), elements, chapter frames.
     function snap() {
@@ -74,16 +104,27 @@
       } catch {}
       return s;
     }
+    // The book's own note: on screen now, or left for the home screen by the reader.
+    function keepScreen(s) {
+      const now = s.at;
+      if (s.book && s.shown) {
+        if (shownBook !== s.book) (shownBook = s.book), (shownAt = now);
+        pending = null;
+        // Read for a while: it did not kill the page, the count of tries starts again.
+        const tries = screen?.book === s.book && now - shownAt < 20000 ? screen.tries || 0 : 0;
+        write(SCREEN, (screen = { book: s.book, at: now, tries, triedAt: tries ? screen.triedAt : 0 }));
+      } else if (s.view?.startsWith("home") && !pending && screen) {
+        shownBook = null;
+        write(SCREEN, (screen = null));
+      }
+    }
     // Closed once «pagehide» came: the «hidden» that follows it in Safari must not open the note again.
     let closed = false;
     const save = () => {
-      try {
-        localStorage.setItem(KEY, JSON.stringify({ ...snap(), closed, restored: restoredAt }));
-      } catch {}
+      const s = snap();
+      keepScreen(s);
+      write(KEY, { ...s, closed, restored: restoring ? born : 0 });
     };
-    // Only a book that was on screen (not one left under the home screen). A page that comes back right after it
-    // reopened a book is not reopened again: the same book could kill it again.
-    const restoredAt = gone && prev.book && prev.shown && !(prev.restored && born - prev.restored < 3 * 60000) ? born : 0;
     addEventListener("pagehide", () => ((closed = true), save()));
     addEventListener("pageshow", (e) => e.persisted && ((closed = false), save()));
     document.addEventListener("visibilitychange", () => {
@@ -91,12 +132,18 @@
       save();
     });
     setInterval(() => document.visibilityState === "visible" && save(), 15000);
+    // A book opened or left for the home screen is written down at once, not at the next quarter minute.
+    let soon = 0;
+    new MutationObserver(() => {
+      clearTimeout(soon);
+      soon = setTimeout(save, 500);
+    }).observe(document.body, { attributes: true, attributeFilter: ["class"] });
     window.addEventListener("load", () => {
       save();
-      if (!gone) return;
-      // The app says so itself too, with whether it was in the background (app/App.js, injected after the reload).
+      // The app says it itself (app/App.js, injected once the reloaded page has loaded): asked a moment later.
       setTimeout(() => {
-        const body = JSON.stringify({ prev, nav: navType, app: window.__chytaiGone || null, restored: !!restoredAt, screen: { w: innerWidth, h: innerHeight, dpr: devicePixelRatio, mem: navigator.deviceMemory || 0 } });
+        if (!died()) return;
+        const body = JSON.stringify({ prev, nav: navType, app: window.__chytaiGone || null, restored: !!restoring, screen: { w: innerWidth, h: innerHeight, dpr: devicePixelRatio, mem: navigator.deviceMemory || 0 } });
         try {
           if (!navigator.sendBeacon?.("/api/page-gone", new Blob([body], { type: "application/json" }))) fetch("/api/page-gone", { method: "POST", headers: { "Content-Type": "application/json" }, body, keepalive: true }).catch(() => {});
         } catch {}
@@ -105,7 +152,7 @@
     return {
       setBooks: (n) => (books = n),
       // The book to open again, once.
-      restore: () => (restoredAt ? prev.book : null),
+      restore: () => restoring,
     };
   })();
 
