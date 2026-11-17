@@ -162,7 +162,7 @@
   // ---------- Мої книжки: design «3a» from Claude Design (Max, 2026-11-01) ----------
   // One page: «Читаю зараз», your books with filters and a «+» tile, what others read now, the free shelf.
   // A query in the search field replaces it with results from your books and the free shelf.
-  let homeFilter = "all"; // all | reading | new | done
+  let homeFilter = "all"; // all («Читаю») | new | done | paper
   // Мої книжки as covers or as a list (Max 2026-11-04: a label on the cover hides part of the title).
   let homeView = (() => { try { return localStorage.getItem("chytai-home-view") === "list" ? "list" : "grid"; } catch { return "grid"; } })();
   const viewIcon = { grid: `<svg viewBox="0 0 18 18" aria-hidden="true"><rect x="2" y="2" width="5.5" height="6" rx="1"/><rect x="10.5" y="2" width="5.5" height="6" rx="1"/><rect x="2" y="10" width="5.5" height="6" rx="1"/><rect x="10.5" y="10" width="5.5" height="6" rx="1"/></svg>`, list: `<svg viewBox="0 0 18 18" aria-hidden="true"><rect x="2" y="2.5" width="3.5" height="4.5" rx=".8"/><rect x="2" y="11" width="3.5" height="4.5" rx=".8"/><path d="M8 4.75h8M8 13.25h8"/></svg>` };
@@ -202,7 +202,7 @@
   const more = (b) => (settings.guest ? "" : `<span class="r-more" role="button" tabindex="0" data-menu="${esc(b.path)}" title="Ще" aria-label="Ще"><i></i><i></i><i></i></span>`);
   const card = (b, foot, menu = true, cls = "") => `<button class="r-card${cls}${b.unavailable ? " unavailable" : ""}" data-open="${esc(b.path)}">${rcover(b)}${b.paper && !b.finished ? `<span class="pp-ctag">Паперова</span>` : ""}${menu ? more(b) : ""}
       <span class="r-t">${esc(b.title)}</span><span class="r-a">${esc(author(b))}</span>${foot}</button>`;
-  const head = (title, aside = "", plain = false) => `<div class="r-sec-head${plain ? " plain" : ""}"><h2>${title}</h2>${aside}</div>`;
+  const head = (title, aside = "", plain = false) => `<div class="r-sec-head${plain ? " plain" : ""}">${title ? `<h2>${title}</h2>` : ""}${aside}</div>`;
   const tabs = (list, active, attr) => `<div class="r-tabs">${list.map(([k, label, n]) => `<button class="${k === active ? "on" : ""}" ${attr}="${k}">${label}${n != null ? ` <i>${n}</i>` : ""}</button>`).join("")}</div>`;
 
   function myBooks() {
@@ -468,16 +468,16 @@
         <button class="r-pill r-narrow" data-open="${esc(cur.path)}">Продовжити читання</button></section>`;
     }
     const rest = books.filter((b) => b !== cur);
-    // «Усі» leaves out the finished ones: they are under «Прочитані» (Max, 2026-11-17).
+    // «Читаю» (the first tab, once «Усі») is every book not finished; «Прочитані» has those (Max, 2026-11-17).
     const groups = { all: rest.filter((b) => !b.finished), reading: rest.filter(isReading), new: rest.filter(isNewBook), done: rest.filter((b) => b.finished), paper: rest.filter((b) => b.paper) };
     // Every book is drawn once and a filter only hides cards: drawing the grid anew on each click reloaded
     // all the covers, which flickered on a slow connection (Max).
     const gcls = (b) => ["reading", "new", "done", "paper"].filter((k) => groups[k].includes(b)).map((k) => ` g-${k}`).join("");
     const empty = (k) => (groups[k].length ? "" : `<p class="r-empty g-${k}">Тут поки порожньо.</p>`);
     const plus = settings.guest || books.length ? "" : `<button class="r-card r-plus" data-page="add"><span class="r-plus-box"><b>+</b><span>Додати книжку</span><small>EPUB, PDF, MOBI</small></span></button>`;
-    html += `<section class="r-mine">${head(`Мої книжки · ${books.length}`, books.length ? tabs([["all", "Усі", groups.all.length], ["reading", "Читаю", groups.reading.length], ["new", "Не почато", groups.new.length], ["done", "Прочитані", groups.done.length], ...(groups.paper.length ? [["paper", "Паперові", groups.paper.length]] : [])], homeFilter, "data-filter") + viewSwitch() : "", !cur)}
+    html += `<section class="r-mine">${head(books.length ? "" : "Мої книжки", books.length ? tabs([["all", "Читаю", groups.all.length], ["new", "Не почато", groups.new.length], ["done", "Прочитані", groups.done.length], ...(groups.paper.length ? [["paper", "Паперові", groups.paper.length]] : [])], homeFilter, "data-filter") + viewSwitch() : "", !cur)}
       <div class="r-filtered" data-show="${homeFilter}"><div class="r-grid${homeView === "list" ? " r-list" : ""}">${homeView === "list" && rest.length ? listHead() : ""}${(homeView === "list" ? [...rest].sort(sorters[homeSort] || sorters.opened) : rest).map((b) => card(b, homeView === "list" ? rowCols(b) + rowStatus(b) : mark(b), true, gcls(b))).join("")}${plus}</div>
-      ${rest.length ? empty("all") : ""}${empty("reading")}${empty("new")}${empty("done")}${empty("paper")}</div></section>`;
+      ${rest.length ? empty("all") : ""}${empty("new")}${empty("done")}${empty("paper")}</div></section>`;
     return html;
   }
 
