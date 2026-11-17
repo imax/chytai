@@ -471,8 +471,18 @@ async function openEpub(payload, { posKey, source }) {
   // A resize while the first page is still loading (the library closing, the phone toolbar
   // hiding) therefore left a blank book; show the opening position again in that case.
   const mine = rendition;
+  // Full screen on a computer comes as several resizes in a row: epub.js went back to the page's first words each
+  // time, read off the page it had just laid out, and the place drifted, by a chapter at times (Max, 2026-11-17).
+  // Every resize of one burst now goes back to where the reader was before it.
+  let anchor = null;
+  let resizedAt = 0;
   rendition.on("resized", () => {
-    if (rendition === mine && !mine.location?.start) mine.display(payload.position || undefined);
+    if (rendition !== mine) return;
+    const now = Date.now();
+    if (now - resizedAt > 1500) anchor = mine.location?.start?.cfi || null;
+    resizedAt = now;
+    if (!mine.location?.start) mine.display(payload.position || undefined);
+    else if (anchor) mine.location.start.cfi = anchor; // epub.js shows location.start.cfi right after this event
   });
 
   // display() lays the page out again once the book's fonts are in (followFontLoad); the first layout
