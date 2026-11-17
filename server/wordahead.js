@@ -33,7 +33,7 @@ function tidy(text, max = 160) {
     const latin = t.search(/(?:\b[A-Za-z][A-Za-z'’-]*[\s,.:;"»«()]+){4,}/);
     if (latin > 0) t = t.slice(0, latin);
   }
-  return t.replace(/[\s.,;:—-]+$/, "").slice(0, max);
+  return t.replace(/\*\*|__|`/g, "").replace(/^[\s*_/\\#>—-]+/, "").replace(/[\s.,;:—*_/\\#-]+$/, "").slice(0, max);
 }
 
 function parse(answer) {
@@ -115,6 +115,17 @@ class Ahead {
       } catch {}
     }
     return gone;
+  }
+  find(word) {
+    const k = norm(word);
+    const out = [];
+    for (const n of (() => { try { return fs.readdirSync(this.dir); } catch { return []; } })()) {
+      try {
+        const d = JSON.parse(fs.readFileSync(path.join(this.dir, n), "utf8"));
+        if (d.words?.[k] != null) out.push({ file: n, title: d.title, meaning: d.words[k] });
+      } catch {}
+    }
+    return out;
   }
   status() {
     let n = 0;

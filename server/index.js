@@ -1213,7 +1213,8 @@ app.use((req, res, next) => {
   app.all("/agent/sql", ok, express.json(), async (req, res) => res.json(await sql(req.body?.q || req.query.q)));
   // «Словничок» (server/glossary.js): what is made and what runs; POST {"book":"<free-shelf file>"} makes one book's.
   app.get("/agent/glossary", ok, (req, res) => res.json({ ...glossary.status(), v2: glossaryV2.status() }));
-  app.get("/agent/word-ahead", ok, (req, res) => res.json({ ...ahead.status(), today: { day: aheadDay.day, all: aheadDay.all, readers: Object.keys(aheadDay.by).length } }));
+  // ?find=<word>: what the kept passages say for it (to see a bad card's source).
+  app.get("/agent/word-ahead", ok, (req, res) => res.json({ ...ahead.status(), today: { day: aheadDay.day, all: aheadDay.all, readers: Object.keys(aheadDay.by).length }, ...(req.query.find ? { found: ahead.find(String(req.query.find)) } : {}) }));
   // Readers' uploads: GET ?uploads=1 lists the uploaded EPUBs by school classics' authors and what they have;
   // POST {"acct":"<id>","book":"<file>"} makes that one's (past the caps; only with Max's OK in the thread).
   app.get("/agent/glossary/uploads", ok, async (req, res) => {
