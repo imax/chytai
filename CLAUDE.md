@@ -481,8 +481,8 @@ A flag only when Max asks for one, or when the change could break what readers u
   Max said «по всім словник» for the school list's books (2026-11-16): every Ukrainian classic on the shelf that is in
   «Шкільна програма» has one (14 books $4.9; a novel $0.4–1.2, a short story $0.03).
 - Readers' uploads (Max 2026-11-16, a school's abridged PDF): an uploaded Ukrainian EPUB by a school classic's author
-  (`CLASSICS` in glossary.js, `classic(authors)`) took one by itself after `titleFromPages` until 2026-11-17 (`glossUpload` in
-  server/index.js; now only the free `same` link, the rest come from words ahead), kept in the library's folder (`accounts/<id>/glossary/`, gone with the book or the account). The
+  (`CLASSICS` in glossary.js, `classic(authors)`) gets one by itself after `titleFromPages` (`glossUpload` in
+  server/index.js; Max 2026-11-17 kept it: «словник класно працював»), kept in the library's folder (`accounts/<id>/glossary/`, gone with the book or the account). The
   same work as a free-shelf book (title + surname) takes that book's list at no cost (`{ same }`); else a build, at most
   60 calls a book, 10 books a day, 3 a reader. The page asks `/api/glossary` for every own EPUB it opens (a list made
   after the page loaded shows too). See them: `GET /agent/glossary/uploads`; make one past the caps (a classic by
@@ -492,7 +492,7 @@ A flag only when Max asks for one, or when the change could break what readers u
   Haiku add the book's other forms of each word (the old list's misses were mostly forms). Kept apart in
   `DATA_DIR/glossary-v2/<book>.json` (`forms: {form: [meaning, level, word]}`); `/api/glossary` gives it, with
   `levels` and `words`, to everyone (guests too) for a book that has one; others keep the first list. «Аа» → «Менше» (level 1) / «Більше» / «Ні» (`gloss` = on / more
-  / off); «Знаю це слово» on the card keeps the word in `glossKnown` (account, 3000 at most) and every form of it goes.
+  / off); «Більше не показувати» (was «Знаю це слово»; often a phrase) on the card keeps the word in `glossKnown` (account, 3000 at most) and every form of it goes.
   One selected word (renderer.js `wordCard`, signed-in readers): its meaning on the selection's card, from the book's list, else
   `POST /api/word` (server/word.js, Sonnet low effort, ~1 s, kept in memory by word + sentence). Proactive hints for
   ordinary books (who/what, notes) were tried and Max said no (2026-11-17: «трошки нахабно»). Make one book's (Max's
@@ -505,7 +505,7 @@ A flag only when Max asks for one, or when the change could break what readers u
   for every reader of that text, 90 days after the last ask, out of the nightly backup. `wordCard` looks there
   before `/api/word`. Every signed-in reader (since 2026-11-17; `chytai:word-used` is only a mark now), 80 new passages a reader a day, 1,000 in all. Hits count as ui `word-ahead` (all one-word
   cards: `word`, from the book's list: `word-list`); `recordWords` keeps them by day with Max's own too (`days[day].words`,
-  `wordsMax`), /admin/reader «Одне слово» shows the hit rate; the prepared words are underlined like the book's list for everyone signed in (Max 2026-11-17: «Словничок» and words ahead are one) (`Gloss.addAhead`, after its own forms; taps count as `gloss-ahead`; Sonnet gives each word's dictionary form, `base`, so «Знаю це слово», now on every card of either kind, takes all its forms) and the day's cost from `ai_usage`; `GET /agent/word-ahead` = passages kept and today's count.
+  `wordsMax`), /admin/reader «Одне слово» shows the hit rate; the prepared words are underlined like the book's list for everyone signed in (Max 2026-11-17: «Словничок» and words ahead are one) (`Gloss.addAhead`, after its own forms; taps count as `gloss-ahead`; Sonnet gives each word's dictionary form, `base`, so «Більше не показувати», now on every card of either kind, takes all its forms) and the day's cost from `ai_usage`; `GET /agent/word-ahead` = passages kept and today's count.
   Trial prompts and answers: project files `chytai-gloss-try/run/` (`ahead.js`: Sonnet vs Haiku, one word 1.1–1.8 s).
 - New free-shelf classics from Wikisource: `scripts/wsbook.py` (recipe at its top). Many school works exist there only
   in 19th-century spelling (Кайдашева сім'я 1879, Квітка, Шевченко's 1840) or not at all (Старицький, «Сто тисяч»,

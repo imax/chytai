@@ -41,7 +41,7 @@ function tidy(text, max = 160) {
 const broken = (m) => /[\p{L}][*/\\]|[*/\\][\p{L}]/u.test(String(m || "").replace(/\*\*/g, ""));
 const clean = (words) => Object.fromEntries(Object.entries(words || {}).filter(([, m]) => !broken(m)).map(([w, m]) => [w, tidy(m)]).filter(([, m]) => m));
 
-// { words: {word: meaning}, base: {word: dictionary form} }. The dictionary form lets «Знаю це слово» take every form of
+// { words: {word: meaning}, base: {word: dictionary form} }. The dictionary form lets «Більше не показувати» take every form of
 // it (Max 2026-11-17: the prepared words are «Словничок» too); an older answer has two fields and no form.
 function parse(answer) {
   const words = {};

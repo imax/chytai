@@ -136,13 +136,13 @@ window.Gloss = (() => {
     b.textContent = hit.text;
     tip.append(b, ` — ${hit.gloss}`);
     {
-      // «Знаю це слово»: not underlined for this reader any more, in this book and every other. On every card, the
+      // «Більше не показувати» (was «Знаю це слово»): not underlined for this reader any more, in this book and every other. On every card, the
       // book's list and the words prepared ahead alike (Max 2026-11-17: one «Словничок», not two kinds of dots).
       const know = document.createElement("button");
       know.type = "button";
       know.className = "gl-know";
       know.dataset.act = "gloss-know";
-      know.textContent = "Знаю це слово";
+      know.textContent = "Більше не показувати"; // often a phrase, not a word (Max 2026-11-17)
       know.onclick = () => {
         const list = [...(settings.glossKnown || []).filter((w) => w !== wordOf(hit.k)), wordOf(hit.k)].slice(-3000);
         settings.glossKnown = list;

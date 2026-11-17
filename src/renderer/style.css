@@ -2412,7 +2412,7 @@ input, textarea, select, [contenteditable], #pdf-container, .card, .answer, #not
 }
 #gloss-tip.hidden { display: none; }
 #gloss-tip b { font-weight: 600; }
-/* «Знаю це слово» (Словничок 2): under the meaning, small, on the right. */
+/* «Більше не показувати» (Словничок 2): under the meaning, small, on the right. */
 #gloss-tip .gl-know {
   display: block; margin: 6px -6px -6px auto; min-height: 32px; padding: 0 6px; border: 0; background: none;
   font: 500 13px var(--m-sans); color: var(--m-ochre); cursor: pointer;
