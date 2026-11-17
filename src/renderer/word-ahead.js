@@ -90,7 +90,10 @@ window.WordAhead = (() => {
     try {
       const r = await window.reader.wordAhead({ text, title: who.title || "", author: who.author || "" });
       if (book !== who.book) return;
-      if (r?.words) for (const [w, m] of Object.entries(r.words)) words.set(norm(w), m);
+      if (r?.words) {
+        for (const [w, m] of Object.entries(r.words)) words.set(norm(w), m);
+        window.Gloss?.addAhead?.(r.words);
+      }
       else if (r?.error === "later") stopped = true;
       else asked.delete(k);
     } catch {

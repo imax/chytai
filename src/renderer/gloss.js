@@ -15,11 +15,14 @@ window.Gloss = (() => {
   let contentsOf = () => [];
   let longest = 1; // words in the longest expression
   let book = null;
+  // Words ahead (Max 2026-11-17: «щоб було підсвічене як словник»): the words Sonnet prepared for the passages
+  // around the reader (word-ahead.js) are underlined the same way, after the book's own list. Max only for now.
+  let ahead = new Map();
   const marked = new WeakMap(); // a chapter's document -> [{ range, text, gloss }]
   const tip = document.getElementById("gloss-tip");
   let shown = null; // { doc }
 
-  const enabled = () => !!forms && settings.gloss !== "off";
+  const enabled = () => (!!forms || ahead.size > 0) && settings.gloss !== "off";
   const wordOf = (k) => words?.[k] || k;
   // «Менше» (on) underlines level 1 only, «Більше» (more) both; a reader's known words never.
   const visible = (k, known) => (!levels || levels[k] !== 2 || settings.gloss === "more") && !known.has(wordOf(k));
@@ -29,6 +32,7 @@ window.Gloss = (() => {
     forms = null;
     levels = null;
     words = null;
+    ahead = new Map();
     book = name;
     contentsOf = contentsList || (() => []);
     hide();
@@ -89,7 +93,7 @@ window.Gloss = (() => {
           const span = text.slice(first.index, last.index + last[0].length);
           if (n > 1 && /[^\s\p{L}\p{M}'’`ʼ-]/u.test(span)) continue; // only spaces between the words
           const k = key(span).replace(/\s+/g, " ");
-          const gloss = forms[k];
+          const gloss = forms?.[k] || ahead.get(k);
           if (!gloss) continue;
           took = n;
           // Once a chapter for each word and meaning: «зимовник» of bees and of a steppe homestead are two.
@@ -99,7 +103,7 @@ window.Gloss = (() => {
           const range = doc.createRange();
           range.setStart(node, first.index);
           range.setEnd(node, last.index + last[0].length);
-          found.push({ range, text: span.replace(/\u0301/g, ""), gloss, k });
+          found.push({ range, text: span.replace(/\u0301/g, ""), gloss, k, ahead: !forms?.[k] });
         }
         i += took || 1;
       }
@@ -122,14 +126,14 @@ window.Gloss = (() => {
   }
 
   function show(hit, doc) {
-    window.ReadingTime?.count("gloss");
+    window.ReadingTime?.count(hit.ahead ? "gloss-ahead" : "gloss");
     const win = doc.defaultView;
     win.CSS.highlights.set("gl-on", new win.Highlight(hit.range));
     tip.replaceChildren();
     const b = document.createElement("b");
     b.textContent = hit.text;
     tip.append(b, ` — ${hit.gloss}`);
-    if (levels) {
+    if (levels && !hit.ahead) {
       // «Знаю це слово»: not underlined for this reader any more, in this book and every other.
       const know = document.createElement("button");
       know.type = "button";
@@ -173,5 +177,16 @@ window.Gloss = (() => {
     return forms?.[k] ? { text: text.trim(), gloss: forms[k] } : null;
   };
 
-  return { load, mark, style: (c) => enabled() && marked.has(c.document) && style(c), tap, hide, lookup, has: () => !!forms, levels: () => !!levels };
+  // New words ready ahead: underline them in the chapters on screen too.
+  function addAhead(map) {
+    if (!settings.owner || !map) return;
+    let added = 0;
+    for (const [w, m] of Object.entries(map)) {
+      const k = key(w).replace(/\s+/g, " ").trim();
+      if (k && m && !forms?.[k] && !ahead.has(k)) ahead.set(k, m), added++;
+    }
+    if (added) for (const c of contentsOf() || []) mark(c);
+  }
+
+  return { load, mark, addAhead, style: (c) => enabled() && marked.has(c.document) && style(c), tap, hide, lookup, has: () => !!forms || ahead.size > 0, levels: () => !!levels };
 })();

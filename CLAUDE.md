@@ -499,7 +499,7 @@ A flag only when Max asks for one, or when the change could break what readers u
   before `/api/word`. Only signed-in readers who selected a word in the last 30 days (localStorage `chytai:word-used`),
   not publishers' previews; 80 new passages a reader a day, 1,000 in all. Hits count as ui `word-ahead` (all one-word
   cards: `word`, from the book's list: `word-list`); `recordWords` keeps them by day with Max's own too (`days[day].words`,
-  `wordsMax`), /admin/reader «Одне слово» shows the hit rate and the day's cost from `ai_usage`; `GET /agent/word-ahead` = passages kept and today's count.
+  `wordsMax`), /admin/reader «Одне слово» shows the hit rate; for the owner only (Max 2026-11-17, a trial) the prepared words are underlined like the book's list (`Gloss.addAhead`, after its own forms; taps count as `gloss-ahead`) and the day's cost from `ai_usage`; `GET /agent/word-ahead` = passages kept and today's count.
   Trial prompts and answers: project files `chytai-gloss-try/run/` (`ahead.js`: Sonnet vs Haiku, one word 1.1–1.8 s).
 - New free-shelf classics from Wikisource: `scripts/wsbook.py` (recipe at its top). Many school works exist there only
   in 19th-century spelling (Кайдашева сім'я 1879, Квітка, Шевченко's 1840) or not at all (Старицький, «Сто тисяч»,
