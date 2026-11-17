@@ -3268,14 +3268,14 @@ api.post("/word-ahead", guestsCannot("Без входу немає."), aiBudget,
   const day = statsDay();
   if (aheadDay.day !== day) aheadDay = { day, all: 0, by: {} };
   const known = ahead.kept(ahead.hash(text));
-  if (known) return res.json({ words: aheadClean(known.words), base: known.base || {} });
+  if (known) return res.json({ words: aheadClean(known.words), base: known.base || {}, level: known.level || {} });
   if (aheadDay.all >= AHEAD_ALL || (!req.owner && (aheadDay.by[req.acct] || 0) >= AHEAD_DAY)) return res.status(429).json({ error: "later" });
   aheadDay.all++;
   aheadDay.by[req.acct] = (aheadDay.by[req.acct] || 0) + 1;
   try {
     const r = await ahead.words(apiKey, { text, title: String(req.body?.title || "").slice(0, 300), author: String(req.body?.author || "").slice(0, 200) });
     if (r.usage) recordExplain(req, { model: r.model, usage: r.usage }, { count: false });
-    res.json({ words: r.words, base: r.base });
+    res.json({ words: r.words, base: r.base, level: r.level });
   } catch (err) {
     res.status(502).json({ error: describeError(err) });
   }

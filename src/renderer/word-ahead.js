@@ -90,7 +90,7 @@ window.WordAhead = (() => {
       if (book !== who.book) return;
       if (r?.words) {
         for (const [w, m] of Object.entries(r.words)) words.set(norm(w), m);
-        window.Gloss?.addAhead?.(r.words, r.base);
+        window.Gloss?.addAhead?.(r.words, r.base, r.level);
       }
       else if (r?.error === "later") stopped = true;
       else asked.delete(k);

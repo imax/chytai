@@ -17,8 +17,13 @@ window.Gloss = (() => {
   let book = null;
   // Words ahead (Max 2026-11-17: «щоб було підсвічене як словник», then «вмикай» for everyone signed in): the words
   // Sonnet prepared for the passages around the reader (word-ahead.js) are underlined the same way, after the book's own list.
+  // Off again (Max 2026-11-17, an hour after turning it on: «ліки», «демони» underlined, «підказки тупі», «треба було зі
+  // словником залишатись»). The words ahead only make a selected word's card instant. The code stays: set it to true
+  // to underline them again (only level 1 in «Менше», never in a book with its own list).
+  const UNDERLINE_AHEAD = false;
   let ahead = new Map();
-  let aheadBase = new Map(); // key -> the word's dictionary form, for «Знаю»
+  let aheadBase = new Map(); // key -> the word's dictionary form, for «Більше не показувати»
+  let aheadLevel = new Map(); // key -> 1 (the sentence is unclear without it) | 2; none = 2
   const marked = new WeakMap(); // a chapter's document -> [{ range, text, gloss }]
   const tip = document.getElementById("gloss-tip");
   let shown = null; // { doc }
@@ -26,7 +31,8 @@ window.Gloss = (() => {
   const enabled = () => (!!forms || ahead.size > 0) && settings.gloss !== "off";
   const wordOf = (k) => words?.[k] || aheadBase.get(k) || k;
   // «Менше» (on) underlines level 1 only, «Більше» (more) both; a reader's known words never.
-  const visible = (k, known) => (!levels || levels[k] !== 2 || settings.gloss === "more") && !known.has(wordOf(k));
+  const level = (k) => (forms?.[k] ? (levels ? levels[k] : 1) : aheadLevel.get(k) || 2);
+  const visible = (k, known) => (level(k) !== 2 || settings.gloss === "more") && !known.has(wordOf(k));
 
   // Called when a book opens; marks the chapters already on screen once the list is in.
   async function load(name, contentsList) {
@@ -35,6 +41,7 @@ window.Gloss = (() => {
     words = null;
     ahead = new Map();
     aheadBase = new Map();
+    aheadLevel = new Map();
     book = name;
     contentsOf = contentsList || (() => []);
     hide();
@@ -95,7 +102,9 @@ window.Gloss = (() => {
           const span = text.slice(first.index, last.index + last[0].length);
           if (n > 1 && /[^\s\p{L}\p{M}'’`ʼ-]/u.test(span)) continue; // only spaces between the words
           const k = key(span).replace(/\s+/g, " ");
-          const gloss = forms?.[k] || ahead.get(k);
+          // A book with its own list underlines only that list (Max 2026-11-17: the words ahead added «ліки», «демони»);
+          // its words ahead still make a selected word's card instant (word-ahead.js).
+          const gloss = forms ? forms[k] : ahead.get(k);
           if (!gloss) continue;
           took = n;
           // Once a chapter for each word and meaning: «зимовник» of bees and of a steppe homestead are two.
@@ -181,18 +190,19 @@ window.Gloss = (() => {
   };
 
   // New words ready ahead: underline them in the chapters on screen too.
-  function addAhead(map, base) {
-    if (settings.guest || !map) return;
+  function addAhead(map, base, lv) {
+    if (!UNDERLINE_AHEAD || settings.guest || !map) return;
     let added = 0;
     for (const [w, m] of Object.entries(map)) {
       const k = key(w).replace(/\s+/g, " ").trim();
       if (!k || !m || forms?.[k] || ahead.has(k)) continue;
       ahead.set(k, m);
       if (base?.[w]) aheadBase.set(k, key(base[w]));
+      if (lv?.[w]) aheadLevel.set(k, lv[w]);
       added++;
     }
     if (added) for (const c of contentsOf() || []) mark(c);
   }
 
-  return { load, mark, addAhead, style: (c) => enabled() && marked.has(c.document) && style(c), tap, hide, lookup, has: () => !!forms || ahead.size > 0, levels: () => !!levels };
+  return { load, mark, addAhead, style: (c) => enabled() && marked.has(c.document) && style(c), tap, hide, lookup, has: () => !!forms || ahead.size > 0, levels: () => !!levels || (!forms && ahead.size > 0) };
 })();
