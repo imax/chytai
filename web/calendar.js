@@ -62,6 +62,8 @@ const ONLINE = /онлайн|online|zoom|youtube|трансляці/i;
 // Only Ukraine and online for now (Max 2026-11-15, a library in Galway): the collectors' Haiku says `abroad`, and
 // these cities are kept out whatever it says.
 const ABROAD = /^([ґг][оа]лвей|galway|дублін|корк|лондон|единбург|прага|брно|варшава|краків|вроцлав|гданськ|познань|люблін|лодзь|катовіце|ряшів|жешув|перемишль|берлін|мюнхен|гамбург|франкфурт|кельн|лейпциг|дрезден|відень|цюрих|женева|берн|базель|париж|ліон|брюссель|амстердам|роттердам|гаага|копенгаген|стокгольм|осло|гельсінкі|таллінн|тарту|рига|вільнюс|каунас|кишинів|бухарест|будапешт|братислава|кошице|любляна|загреб|рим|мілан|неаполь|мадрид|барселона|валенсія|лісабон|порту|афіни|тбілісі|батумі|анкара|стамбул|нью-йорк|чикаго|торонто|ванкувер|монреаль|вашингтон|лос-анджелес|сідней|мельбурн)$/i;
+// An event about genre romance by its words: its books are not added to the catalog (see wanted()).
+const ROMANCE_EVENT = /ромком|романтас|ромфант|любовн\S* роман|dark romance|дарк[- ]?роман|(?<!\p{L})троп(и|ів)(?!\p{L})|закохуємо/iu;
 const abroad = (city) => ABROAD.test(String(city || "").trim());
 const findCity = (text) => (ONLINE.test(text || "") ? "Онлайн" : CITIES.find(([, re]) => re.test(text || ""))?.[0] || "");
 
@@ -447,10 +449,13 @@ function create(db, store, { notify = () => {}, bookua = null, search = null, ma
   // `links.books`. → [{ title, author }] to look for outside.
   function wanted(ev, title, links) {
     const known = links.authors.map((s) => store.authors?.bySlug.get(s)?.name).filter(Boolean);
-    const named = (Array.isArray(ev.named) ? ev.named : []).map((b) => ({ title: clean(b?.title, 120).replace(/^«|»$/g, ""), author: clean(b?.author, 80) }));
+    const named = (Array.isArray(ev.named) ? ev.named : []).map((b) => ({ title: clean(b?.title, 120).replace(/^«|»$/g, ""), author: clean(b?.author, 80), ...(b?.romance ? { romance: true } : {}) }));
+    // Romance is never added to the catalog from an event (Max 2026-11-17: «Це якийсь ромком? Давай таке не додавати»):
+    // Haiku's `romance`, or an event about it by its words (a title in quotes has no Haiku answer).
+    const romantic = ROMANCE_EVENT.test(`${title} ${ev.sub || ""}`);
     // A title the words call a book («Презентація книги "Північ, якої не існує"»), by the one author named, or with
     // none (then fillBooks takes only book.ua's Ukrainian edition of that very title).
-    for (const q of quotes(`${title} ${ev.sub || ""}`)) if (q.book || (known.length === 1 && !q.place)) named.push({ title: q.title, author: known.length === 1 ? known[0] : "" });
+    for (const q of quotes(`${title} ${ev.sub || ""}`)) if (q.book || (known.length === 1 && !q.place)) named.push({ title: q.title, author: known.length === 1 ? known[0] : "", ...(romantic ? { romance: true } : {}) });
     const out = [];
     for (const b of named) {
       if (b.title.length < 2 || (!b.author && norm(b.title).length < 6) || out.some((x) => norm(x.title) === norm(b.title))) continue;
@@ -517,6 +522,8 @@ function create(db, store, { notify = () => {}, bookua = null, search = null, ma
       const books = [...e.books];
       for (const w of JSON.parse(e.want || "[]")) {
         let id = findBook(store, { title: w.title, author: w.author });
+        // Romance: linked when the catalog has it, never added (dropped from `want`).
+        if (!id && w.romance) continue;
         if (!id && w.tried === day) {
           left.push(w);
           continue;

@@ -142,7 +142,7 @@ Answer every book event in the post that takes place on or after today's date (a
 - abroad: true when it takes place in person outside Ukraine (Warsaw, Prague, Galway…), else false. Online events are never abroad.
 - place: venue and address as the post gives them, at most 120 characters, or "".
 - url: the post's link to the event page or registration, only one of the links given; else "".
-- books: the books the event is about (presented, discussed, read), each with its title as written, without quotes, and its author's full name in Ukrainian; at most 4, the main ones; [] if no book is named.
+- books: the books the event is about (presented, discussed, read), each with its title as written, without quotes, its author's full name in Ukrainian, and romance: true when it is genre romance (a romcom, romantasy, dark romance, a love story as the whole point, as Colleen Hoover's or Mia Sheridan's), false for anything else (literary fiction with a love story in it, classics, non-fiction); at most 4, the main ones; [] if no book is named.
 - kind: what sort of event it is: "club" a book club meeting or a discussion of a book by readers (also book mafia, a joint reading); "author" a presentation, a meeting or talk with an author, an autograph session; "lecture" a lecture, a course, a talk or panel about literature without one author at its centre; "festival" a festival, a book fair, a multi-event day; "kids" anything made for children; "other" anything else.
 - cancelled: true when the post says this event is cancelled or will not take place (скасовано, не відбудеться, відміняється); then starts is the date it was planned for. Else false.
 - was: when the post says the event is moved to another day, the day it was planned for before (YYYY-MM-DD), and starts is the new day; "" otherwise (also when only the time or place changes).
@@ -169,7 +169,7 @@ const EVENT_SCHEMA = {
           abroad: { type: "boolean" },
           place: { type: "string" },
           url: { type: "string" },
-          books: { type: "array", items: { type: "object", properties: { title: { type: "string" }, author: { type: "string" } }, required: ["title", "author"], additionalProperties: false } },
+          books: { type: "array", items: { type: "object", properties: { title: { type: "string" }, author: { type: "string" }, romance: { type: "boolean" } }, required: ["title", "author", "romance"], additionalProperties: false } },
           kind: { type: "string", enum: ["club", "author", "lecture", "festival", "kids", "other"] },
           cancelled: { type: "boolean" },
           was: { type: "string" },
