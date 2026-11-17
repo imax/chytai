@@ -1203,11 +1203,13 @@ function md(text) {
 }
 
 function modelLabel(model) {
+  const fast = /-fast$/.test(model || "");
   return (model || "")
+    .replace(/-fast$/, "")
     .replace(/^claude-/, "")
     .replace(/-(\d+)-(\d+)$/, " $1.$2")
     .replace(/-(\d+)$/, " $1")
-    .replace(/^./, (c) => c.toUpperCase());
+    .replace(/^./, (c) => c.toUpperCase()) + (fast ? ", швидко" : "");
 }
 
 // «Пояснити» explains on the main model; «Переклад» only translates, on the cheaper one.

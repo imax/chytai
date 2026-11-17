@@ -13,6 +13,7 @@ const PRICES = {
   "claude-fable-5-1": [10, 50, 0.25, 12.5],
   "claude-fable-5": [10, 50, 1, 12.5],
   "claude-opus-5-5": [4, 20, 0.2, 5],
+  "claude-opus-5-5-fast": [8, 40, 0.4, 10], // fast mode (usage.speed "fast"): twice the price
   "claude-opus-5": [5, 25, 0.5, 6.25],
   "claude-opus-4-8": [5, 25, 0.5, 6.25],
   "claude-sonnet-5-5": [2, 10, 0.1, 2.5],
@@ -24,6 +25,7 @@ const SEARCH = 0.01; // one web search
 const priceOf = (model) => PRICES[model] || PRICES[Object.keys(PRICES).find((k) => String(model || "").startsWith(k))] || PRICES["claude-opus-5-5"];
 
 function measure(model, u = {}) {
+  if (u.speed === "fast" && model && !String(model).endsWith("-fast")) model += "-fast";
   const p = priceOf(model);
   const r = {
     model: model || "?",

@@ -6,6 +6,11 @@ const FALLBACK_MODELS = new Set(["claude-opus-5-5", "claude-fable-5-1", "claude-
 // Quick answers for everyday reading.
 const EFFORT = {};
 
+// "<model>-fast" (the owner's model picker, 2026-11-17) is the same model in fast mode: the same answer, 2-4 times
+// sooner, at twice the price. Only Opus 5.5 has it.
+const FAST = "-fast";
+const FAST_MODELS = new Set(["claude-opus-5-5"]);
+
 // How the reader wants explanations shaped (a per-reader setting). "default" adds nothing,
 // so the default prompt stays exactly as it is; "custom" is the reader's own instructions.
 const STYLES = {
@@ -148,6 +153,8 @@ function firstMessage(ctx, mode) {
  */
 async function explain({ apiKey, model, language, style, customStyle, request, signal, onText }) {
   const client = new Anthropic({ apiKey });
+  const fast = model.endsWith(FAST) && FAST_MODELS.has(model.slice(0, -FAST.length));
+  if (model.endsWith(FAST)) model = model.slice(0, -FAST.length);
   // Thinking blocks are signed by the model that wrote them, so earlier answers go back as their text only.
   const messages = request.messages
     ? request.messages.map((m) => (m.role === "assistant" && Array.isArray(m.content) ? { ...m, content: m.content.filter((b) => b.type === "text") } : m))
@@ -166,24 +173,31 @@ async function explain({ apiKey, model, language, style, customStyle, request, s
     ...(request.messages ? { cache_control: { type: "ephemeral" } } : {}),
   };
 
-  let stream;
-  if (FALLBACK_MODELS.has(model)) {
-    stream = client.beta.messages.stream(
-      { ...params, betas: ["server-side-fallback-2026-07-01"], fallbacks: "default" },
-      { signal }
-    );
-  } else {
-    stream = client.messages.stream(params, { signal });
+  let wrote = false;
+  const open = (p) => {
+    const s = FALLBACK_MODELS.has(model)
+      ? client.beta.messages.stream({ ...p, betas: ["server-side-fallback-2026-07-01"], fallbacks: "default" }, { signal })
+      : client.messages.stream(p, { signal });
+    s.on("text", (text) => {
+      wrote = true;
+      onText(text);
+    });
+    return s.finalMessage();
+  };
+  let message;
+  try {
+    message = await open(fast ? { ...params, speed: "fast" } : params);
+  } catch (err) {
+    // Fast mode has its own rate limit: when it is full, the same request at the usual speed.
+    if (!fast || wrote || err?.status !== 429) throw err;
+    message = await open(params);
   }
-  stream.on("text", (text) => onText(text));
-
-  const message = await stream.finalMessage();
   if (message.stop_reason === "refusal") {
     throw new Error("Модель відмовилася відповідати на цей фрагмент.");
   }
   return {
     messages: [...messages, { role: "assistant", content: message.content }],
-    model: message.model,
+    model: message.model + (message.usage?.speed === "fast" ? FAST : ""),
     truncated: message.stop_reason === "max_tokens",
     // Token counts for the server's usage stats (never shown to the reader).
     usage: message.usage,
