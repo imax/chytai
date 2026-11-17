@@ -468,7 +468,8 @@
         <button class="r-pill r-narrow" data-open="${esc(cur.path)}">Продовжити читання</button></section>`;
     }
     const rest = books.filter((b) => b !== cur);
-    const groups = { all: rest, reading: rest.filter(isReading), new: rest.filter(isNewBook), done: rest.filter((b) => b.finished), paper: rest.filter((b) => b.paper) };
+    // «Усі» leaves out the finished ones: they are under «Прочитані» (Max, 2026-11-17).
+    const groups = { all: rest.filter((b) => !b.finished), reading: rest.filter(isReading), new: rest.filter(isNewBook), done: rest.filter((b) => b.finished), paper: rest.filter((b) => b.paper) };
     // Every book is drawn once and a filter only hides cards: drawing the grid anew on each click reloaded
     // all the covers, which flickered on a slow connection (Max).
     const gcls = (b) => ["reading", "new", "done", "paper"].filter((k) => groups[k].includes(b)).map((k) => ` g-${k}`).join("");
@@ -476,7 +477,7 @@
     const plus = settings.guest || books.length ? "" : `<button class="r-card r-plus" data-page="add"><span class="r-plus-box"><b>+</b><span>Додати книжку</span><small>EPUB, PDF, MOBI</small></span></button>`;
     html += `<section class="r-mine">${head(`Мої книжки · ${books.length}`, books.length ? tabs([["all", "Усі", groups.all.length], ["reading", "Читаю", groups.reading.length], ["new", "Не почато", groups.new.length], ["done", "Прочитані", groups.done.length], ...(groups.paper.length ? [["paper", "Паперові", groups.paper.length]] : [])], homeFilter, "data-filter") + viewSwitch() : "", !cur)}
       <div class="r-filtered" data-show="${homeFilter}"><div class="r-grid${homeView === "list" ? " r-list" : ""}">${homeView === "list" && rest.length ? listHead() : ""}${(homeView === "list" ? [...rest].sort(sorters[homeSort] || sorters.opened) : rest).map((b) => card(b, homeView === "list" ? rowCols(b) + rowStatus(b) : mark(b), true, gcls(b))).join("")}${plus}</div>
-      ${empty("reading")}${empty("new")}${empty("done")}${empty("paper")}</div></section>`;
+      ${rest.length ? empty("all") : ""}${empty("reading")}${empty("new")}${empty("done")}${empty("paper")}</div></section>`;
     return html;
   }
 
