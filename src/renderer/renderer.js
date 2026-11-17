@@ -584,6 +584,9 @@ function followFontLoad(r) {
 // app) that did not hold: Chapter 7 from the contents ended up in the second half of Chapter 6.
 // So after a jump keep the target at the top ourselves until the chapters around it have settled
 // (no correction needed for a second and a half) or the reader scrolls.
+// A wheel over the text happens inside the chapter's frame and never reaches the container, so it is seen through
+// onWheel (wheelAt): before, the hold kept putting the place back for up to 10 s after a book opened and the wheel
+// did nothing (Max 2026-11-17, desktop web).
 function holdPlace(r, target, current) {
   const container = r.manager?.container;
   const section = book?.spine.get(target);
@@ -592,14 +595,15 @@ function holdPlace(r, target, current) {
   const stop = () => (stopped = true);
   const events = ["wheel", "touchstart", "mousedown", "keydown"];
   events.forEach((e) => container.addEventListener(e, stop, { passive: true }));
-  ["touchstart", "keydown"].forEach((e) => r.on(e, stop));
+  ["touchstart", "keydown", "mousedown"].forEach((e) => r.on(e, stop));
   const start = Date.now();
   let moved = start;
   const tick = () => {
     const now = Date.now();
+    if (wheelAt > start) stopped = true;
     if (stopped || !current() || rendition !== r || now - moved > 1500 || now - start > 10000) {
       events.forEach((e) => container.removeEventListener(e, stop));
-      ["touchstart", "keydown"].forEach((e) => r.off(e, stop));
+      ["touchstart", "keydown", "mousedown"].forEach((e) => r.off(e, stop));
       if (!stopped && current()) showOnScreen(r);
       return;
     }
@@ -1015,8 +1019,10 @@ function onKey(e) {
 // Page mode on a computer: scrolling down with the mouse wheel or trackpad turns the page, as people
 // expect it to. One turn per gesture: a trackpad keeps sending wheel events while it coasts.
 let wheelQuietAt = 0;
+let wheelAt = 0; // the last wheel in the book or around it: holdPlace lets go of the place then
 function onWheel(e) {
   fontPlace = null;
+  wheelAt = Date.now();
   if (!rendition || scrolled() || document.body.classList.contains("library-open")) return;
   const now = Date.now();
   const busy = now < wheelQuietAt;
