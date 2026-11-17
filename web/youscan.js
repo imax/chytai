@@ -24,6 +24,17 @@ CREATE INDEX IF NOT EXISTS ys_mentions_got ON ys_mentions (got);`;
 // 'none' Haiku found no event, else the event ids, comma-separated.
 
 const str = (v, n) => String(v ?? "").slice(0, n);
+// YouScan marks the words its query matched with <b>…</b> in title and text: plain text for us.
+const plain = (t) =>
+  String(t || "")
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<[^>]{0,40}>/g, "")
+    .replace(/&quot;/g, '"')
+    .replace(/&#0*39;|&apos;/g, "'")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&amp;/g, "&");
 // A picture's address we may fetch: https on a named host (no IPs, no local names).
 const okImg = (u) => /^https:\/\/[a-z0-9-]+(\.[a-z0-9-]+)*\.[a-z]{2,}(\/|$)/i.test(u || "") && !/^https:\/\/[^/]*localhost/i.test(u) ? u : "";
 // The mentions in a webhook's body: one mention, a list, or a list under a key.
@@ -51,7 +62,7 @@ function create(db, { calendar, extract = null, log = console.log } = {}) {
     for (const m of list.slice(0, 500)) {
       if (!m || typeof m !== "object" || m.spam === true) continue;
       const id = str(m.mentionId ?? m.id ?? m.postId, 80);
-      const text = [m.title, m.text].filter((t) => t && typeof t === "string").join("\n\n").slice(0, 6000);
+      const text = [m.title, m.text].filter((t) => t && typeof t === "string").map(plain).join("\n\n").slice(0, 6000);
       if (!id || !text.trim()) continue;
       if (n >= TAKE_DAY) break;
       const at = Date.parse(m.published) ? new Date(m.published).toISOString() : now;
@@ -80,6 +91,7 @@ function create(db, { calendar, extract = null, log = console.log } = {}) {
     } catch {}
     for (const m of rows) {
       out.looked++;
+      m.text = plain(m.text); // rows kept before the tags were taken out (2026-11-17)
       const ch = /^https?:\/\/t\.me\/([a-z]\w{3,31})\/\d+/i.exec(m.url)?.[1]?.toLowerCase();
       if (ch && ours.has(ch)) {
         out.telegram++;
@@ -140,4 +152,4 @@ function create(db, { calendar, extract = null, log = console.log } = {}) {
   return { take, run, status };
 }
 
-module.exports = { create, mentionsOf };
+module.exports = { create, mentionsOf, plain };

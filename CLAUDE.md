@@ -444,7 +444,9 @@ A flag only when Max asks for one, or when the change could break what readers u
   topics, the last 10). Kept 30 days (table `ys_mentions`, 3,000 a day). Every 15 min the jobs process skips non-Ukrainian
   ones and channels the tg collector reads, sends those `maybeEvent` passes with the post's picture to `tgFeed.extract`
   (60 calls a day), the post as the link. Dry run (spends ≤20 calls, Max's OK): `GET /agent/youscan?dry=1` (ask again);
-  run now: `POST {"run":true}`. Max sets the topics and the webhook himself (we never sign in to his account).
+  run now: `POST {"run":true}`. Topic «Книжкові події» (app.youscan.io/themes/544216: 26 quoted phrases, Ukrainian, ~200 a
+  day) with rule «Усе на Chytai» (future mentions → the webhook), set up 2026-11-17 in Max's Chrome at his request;
+  Facebook/Instagram need a social account Max connects himself. Title and text come with `<b>` round matched words (`plain`).
 - Organizers' calendars (Max 2026-11-15): /admin/events «Календарі організаторів» takes a Google Calendar link of
   any shape or an .ics (`calendar.icsAddress`), reads it at once (one that fails isn't kept) and every 6 h
   (`calendar-feeds` job, `feedsRun`): table `cal_feeds`, the next 120 days in as source `ics` (`parseIcs`, no AI;
