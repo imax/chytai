@@ -503,7 +503,7 @@ A flag only when Max asks for one, or when the change could break what readers u
   chapter's end the next chapter's first) to `POST /api/word-ahead` (server/wordahead.js: Sonnet low names ≤60 words a
   reader may select, with meanings; ~9 s, ~$0.013 a passage). Kept in `DATA_DIR/word-ahead/<sha1 of the text>.json`
   for every reader of that text, 90 days after the last ask, out of the nightly backup. `wordCard` looks there
-  before `/api/word`. Only signed-in readers who selected a word in the last 30 days (localStorage `chytai:word-used`),
+  before `/api/word`. Only signed-in readers who selected a word in the last 30 days (localStorage `chytai:word-used`; Max always),
   not publishers' previews; 80 new passages a reader a day, 1,000 in all. Hits count as ui `word-ahead` (all one-word
   cards: `word`, from the book's list: `word-list`); `recordWords` keeps them by day with Max's own too (`days[day].words`,
   `wordsMax`), /admin/reader «Одне слово» shows the hit rate; for the owner only (Max 2026-11-17, a trial) the prepared words are underlined like the book's list (`Gloss.addAhead`, after its own forms; taps count as `gloss-ahead`) and the day's cost from `ai_usage`; `GET /agent/word-ahead` = passages kept and today's count.

@@ -29,7 +29,9 @@ window.WordAhead = (() => {
       localStorage.setItem(USED, String(Date.now()));
     } catch {}
   }
+  // Max always (2026-11-17: he tests it on every device, and a phone where he had not selected a word yet asked nothing).
   function wanted() {
+    if (settings?.owner) return true;
     try {
       return Date.now() - Number(localStorage.getItem(USED) || 0) < 30 * 864e5;
     } catch {
