@@ -51,6 +51,10 @@ const HOMO_FIND = `Below is a reading glossary for a Ukrainian classic. Each lin
 List only the forms spelled exactly like a common everyday modern Ukrainian word or form whose usual meaning is different from the glossary's (стіл: table, not throne; знай: know!, not keep doing; пробував: tried, not stayed). Do not list words that are rare or gone today, dialect words, or forms that look unlike any common word.
 
 Answer with those forms only, one per line, exactly as given before the tab, nothing else.`;
+// An explanation that is as hard as the word (Max 2026-11-17: паливода → «гульвіса, шибайголова») is said again plainly.
+const PLAIN = `Below is a reading glossary for a Ukrainian classic that school students aged 12–16 read today. Each line: a number, a tab, a word from the book, a tab, the explanation the reader sees when they tap it.
+An explanation must use only words such a reader uses every day. Find the explanations that use a rare, old, dialect, bookish or specialised word the reader may not know (паливода explained as «гульвіса, шибайголова»: both are as unknown as паливода itself) and say each again in plain modern Ukrainian: the same meaning, at most ten words, no full stop.
+Answer one line per explanation you rewrote: the number, a tab, the new explanation. Leave good explanations out. Nothing else.`;
 const HOMO_FIT = `Each line: a number, a tab, a word form, a tab, a meaning, a tab, a sentence from a Ukrainian classic where the form occurs. Does the form mean that in this sentence? Answer one line per input line: the number, a tab, 1 if yes or 0 if no. Nothing else.`;
 
 // «Словничок 2» (Max, 2026-11-17: «іноді пропускає неочевидні слова, іноді підкреслює очевидні»).
@@ -76,7 +80,7 @@ Leave out what a modern teenager knows or reads at once, even when it looks old:
 When unsure whether a teenager knows a word, leave it out: an underline on a word one knows is noise.
 
 Answer with one line per item and nothing else, four fields separated by tabs:
-the word or expression exactly as written in the passage (same case and ending, no stress marks), its dictionary form, its meaning in this sentence in modern Ukrainian (a plain synonym, or at most ten words for a thing; no full stop), and 1 or 2.
+the word or expression exactly as written in the passage (same case and ending, no stress marks), its dictionary form, its meaning in this sentence in modern Ukrainian (a plain synonym, or at most ten words for a thing; no full stop; only words a 12-year-old uses every day, never another rare or bookish word: паливода is «безтурботний веселун», not «гульвіса, шибайголова»), and 1 or 2.
 List each form once. Check every meaning against its sentence: a wrong meaning is worse than none.`;
 const SWEEP = `Each line has a word from a Ukrainian classic, a tab, and one to three glossary entries (word = meaning) that look similar. Say for each line whether the word is a grammatical form of one of those glossary words with the same meaning (another case, number, gender, tense or person, or a spelling variant of the same word), so the reader should see the same explanation. A different word that only starts the same way (броварі ≠ бровами, староста ≠ старосвітщину) is not.
 Answer only the lines where it is: the word, a tab, the glossary word it belongs to. Nothing else.`;
@@ -336,6 +340,47 @@ class Glossary {
     }
     return { candidates: cand.size, sentences: lines.length, dropped: dropped.map((k) => [k, forms[k][0], (fits[k] || []).map(Number).join("")]), cost };
   }
+  // v2 only: explanations that use words as hard as the word itself are said plainly (PLAIN), the same text once for
+  // every form that shares it.
+  async plain(book, { save = true } = {}) {
+    const data = this.get(book);
+    if (!data?.forms) return null;
+    if (!this.apiKey) throw new Error("no ANTHROPIC_API_KEY");
+    const client = new Anthropic({ apiKey: this.apiKey });
+    const forms = data.forms;
+    const uniq = new Map(); // `${word}\t${meaning}` -> { word, meaning }
+    for (const [k, v] of Object.entries(forms)) {
+      const id = `${v[2] || k}\t${v[0]}`;
+      if (!uniq.has(id)) uniq.set(id, { word: v[2] || k, meaning: v[0] });
+    }
+    const items = [...uniq.values()];
+    const textOf = (m) => m.content.filter((x) => x.type === "text").map((x) => x.text).join("");
+    let cost = 0;
+    const fixed = new Map(); // old meaning id -> new meaning
+    const starts = [];
+    for (let i = 0; i < items.length; i += STRICT_BATCH) starts.push(i);
+    await Promise.all(
+      starts.map(async (i) => {
+        const part = items.slice(i, i + STRICT_BATCH);
+        const m = await client.messages.create({ model: MODEL, max_tokens: 8000, system: PLAIN, messages: [{ role: "user", content: part.map((x, j) => `${i + j}\t${x.word}\t${x.meaning}`).join("\n") }], output_config: { effort: "medium" } });
+        cost += measure(m.model, m.usage).cost;
+        for (const l of textOf(m).split("\n")) {
+          const [n, v] = l.split("\t");
+          const x = items[Number(n)];
+          const t = String(v || "").trim().replace(/[.\s]+$/, "");
+          if (x && t && t.length <= 120 && t !== x.meaning) fixed.set(`${x.word}\t${x.meaning}`, t);
+        }
+      }),
+    );
+    cost = Math.round(cost * 1000) / 1000;
+    const out = Object.fromEntries(Object.entries(forms).map(([k, v]) => [k, fixed.has(`${v[2] || k}\t${v[0]}`) ? [fixed.get(`${v[2] || k}\t${v[0]}`), ...v.slice(1)] : v]));
+    if (save && fixed.size) {
+      const f = this.file(book);
+      fs.writeFileSync(`${f}.tmp`, JSON.stringify({ ...data, forms: out, plain: { at: new Date().toISOString(), n: fixed.size }, cost: Math.round(((data.cost || 0) + cost) * 1000) / 1000 }));
+      fs.renameSync(`${f}.tmp`, f);
+    }
+    return { meanings: items.length, rewritten: [...fixed].map(([id, t]) => [...id.split("\t"), t]), cost };
+  }
   // At start: v2 builds a restart cut off go on (their kept answers cost nothing again); a week-old one is dropped.
   resume(fileOf) {
     let names = [];
@@ -459,7 +504,7 @@ Glossary.prototype.buildV2 = async function (book, file, run = {}) {
   fs.rmSync(partsDir, { recursive: true, force: true });
   run.homographs = "running";
   const homo = await this.homographs(book, file).catch((err) => ({ error: err.message }));
-  run.homographs = homo?.error || homo?.dropped?.length;
+  run.homographs = homo?.error || homo?.dropped?.length; run.plain = "running"; const pl = await this.plain(book).catch((err) => ({ error: err.message })); run.plain = pl?.error || pl?.rewritten?.length;
   run.forms = Object.keys(this.get(book)?.forms || forms).length;
   run.cost = data.cost;
   return data;
