@@ -62,7 +62,7 @@ function evenMarks() {
   const original = proto.filteredRanges;
   proto.filteredRanges = function () {
     try {
-      const lines = markLines(this.range, this.className !== "ai-star");
+      const lines = markLines(this.range, true);
       if (lines.length) return lines;
     } catch {
       /* fall back to epub.js's own boxes */
@@ -329,7 +329,7 @@ function styleContents(contents) {
     colors.id = "chytai-theme";
     doc.head.appendChild(colors);
   }
-  colors.textContent = themeCss(resolvedTheme());
+  colors.textContent = themeCss(resolvedTheme()) + "\n" + askCss(resolvedTheme());
   window.Gloss?.style(contents);
   if (!doc.documentElement.lang) doc.documentElement.lang = book?.packaging?.metadata?.language || "en";
 }
@@ -420,6 +420,7 @@ async function openEpub(payload, { posKey, source }) {
   followFontLoad(rendition);
   rendition.hooks.content.register(styleContents);
   rendition.hooks.content.register((contents) => window.Gloss?.mark(contents));
+  rendition.hooks.content.register(askBlocks);
   window.Gloss?.load(payload.path, () => rendition?.getContents());
   rendition.hooks.content.register((contents) => contents.on("linkClicked", rememberReturn));
   if (current.protected) rendition.hooks.content.register(limitCopy);
@@ -457,7 +458,7 @@ async function openEpub(payload, { posKey, source }) {
   window.DeskRead?.watchFrames(rendition);
   rendition.on("click", (e) => {
     // A click on a word of the «Словничок» shows its meaning (gloss.js); a touch tap comes through onTouchEnd.
-    if (!TOUCH.matches && e.view?.getSelection()?.isCollapsed !== false) window.Gloss?.tap(e.clientX, e.clientY, e.view?.document);
+    if (!TOUCH.matches && e.view?.getSelection()?.isCollapsed !== false) askTap(e.clientX, e.clientY, e.view?.document) || window.Gloss?.tap(e.clientX, e.clientY, e.view?.document);
     // A plain click inside the page clears the selection. Touch taps are handled in onTouchEnd:
     // iOS Safari does not deliver clicks on plain text to the iframe's document listener.
     setTimeout(() => {
@@ -952,6 +953,7 @@ function onTouchEnd(e) {
   } else if (ms < 400 && Math.abs(dx) < 12 && Math.abs(dy) < 12 && !e.target?.closest?.("a")) {
     // On a phone a tap on the page puts the open panel away first (Max, 2026-11-01).
     if (panelOverPage()) return closeSheets();
+    if (askTap(t.clientX, t.clientY, e.view?.document)) return window.Gloss?.hide();
     if (window.Gloss?.tap(t.clientX, t.clientY, e.view?.document)) return;
     tapToPage(t, e.view);
   }
@@ -1531,31 +1533,129 @@ function highlightConv(conv) {
   }
 }
 
+// Put away, an explanation shows its first two lines under the paragraph its passage ends in; a tap opens the whole
+// of it there and closes it again (Max 2026-11-17, like the articles' inline block: a long explanation's underline
+// took every tap on its lines, so a «Словничок» word or a selection for a note under it did nothing). Nothing is
+// drawn over the passage. The block is CSS (the paragraph's ::after, its text in data-ask): the book's own DOM, and
+// so every saved place, note and CFI, stay as they are; the pages after it move down, as in a book with a note.
 function starConv(conv) {
   unhighlightConv(conv);
   if (!conv.context.selection || !String(conv.cfiRange).startsWith("epubcfi")) return;
-  // A note on the very same words already marks them (and shares the annotation's key).
-  if (notes.some((n) => n.cfi === conv.cfiRange)) return;
-  try {
-    rendition.annotations.underline(conv.cfiRange, { id: conv.id }, () => {
-      highlightConv(conv);
-      openConvCard(conv);
-    }, "ai-star");
-    conv.marked = "star";
-    decorateNoteMarks();
-  } catch {
-    /* cosmetic too */
+  conv.marked = "star";
+  for (const contents of rendition?.getContents() || []) askBlocks(contents);
+}
+
+function askText(conv) {
+  const div = document.createElement("div");
+  div.innerHTML = md(conv.turns?.[0]?.a || "");
+  const out = [];
+  for (const el of div.children) {
+    if (el.matches("ul, ol")) out.push([...el.children].map((li) => `• ${li.textContent.trim()}`).join("\n"));
+    else if (el.textContent.trim()) out.push(el.textContent.trim());
   }
+  return out.join("\n\n");
+}
+
+// The block element (a paragraph, a verse line, a list item) the passage's last words are in.
+function askHost(range) {
+  const doc = range.startContainer.ownerDocument;
+  let node = range.endContainer;
+  if (range.endOffset === 0 && node !== range.startContainer) {
+    // The selection ran up to the start of the next paragraph: its last words are in the one before.
+    const walk = doc.createTreeWalker(range.commonAncestorContainer, 4 /* NodeFilter.SHOW_TEXT */);
+    let last = null;
+    for (let n = walk.nextNode(); n; n = walk.nextNode()) if (n !== node && range.intersectsNode(n) && n.nodeValue.trim()) last = n;
+    if (last) node = last;
+  }
+  let el = node.nodeType === 1 ? node : node.parentElement;
+  const win = doc.defaultView;
+  while (el && el !== doc.body && win.getComputedStyle(el).display.startsWith("inline")) el = el.parentElement;
+  return el && el !== doc.body ? el : null;
+}
+
+// Every put-away explanation of this chapter gets its block; one paragraph holds all that end in it.
+function askBlocks(contents) {
+  const doc = contents?.document;
+  if (!doc?.body) return;
+  const hosts = new Map();
+  for (const conv of conversations.values()) {
+    if (conv.marked !== "star" || !conv.turns?.[0]?.a) continue;
+    let host = null;
+    try {
+      if (new ePub.CFI(conv.cfiRange).spinePos !== contents.sectionIndex) continue;
+      const range = contents.range(conv.cfiRange);
+      host = range && askHost(range);
+    } catch {
+      continue;
+    }
+    if (host) hosts.set(host, [...(hosts.get(host) || []), conv]);
+  }
+  let moved = false;
+  for (const el of doc.querySelectorAll("[data-ask]")) if (!hosts.has(el)) el.removeAttribute("data-ask"), el.removeAttribute("data-ask-open"), (moved = true);
+  for (const [el, convs] of hosts) {
+    const text = convs.map(askText).join("\n\n");
+    if (el.getAttribute("data-ask") !== text) el.setAttribute("data-ask", text), (moved = true);
+    const open = convs.some((c) => c.askOpen);
+    if (el.hasAttribute("data-ask-open") !== open) el.toggleAttribute("data-ask-open", open), (moved = true);
+    el.chytaiAsks = convs;
+  }
+  if (moved) redrawMarks();
+}
+
+// The text under a block moved: notes and the yellow are drawn again where their words are now.
+function redrawMarks() {
+  requestAnimationFrame(() =>
+    requestAnimationFrame(() => {
+      const views = rendition?.views();
+      for (const view of views?.all ? views.all() : views || []) view.pane?.render();
+    })
+  );
+}
+
+// A tap or a click at (x, y) in a chapter's frame on a block opens or closes it.
+function askTap(x, y, doc) {
+  for (const el of doc?.querySelectorAll("[data-ask]") || []) {
+    const boxes = [...el.getClientRects()];
+    const box = boxes.find((b) => x >= b.left && x <= b.right && y >= b.top && y <= b.bottom);
+    if (!box) continue;
+    // Below the paragraph's last line of text is the block.
+    const text = doc.createRange();
+    text.selectNodeContents(el);
+    const lines = [...text.getClientRects()].filter((r) => r.left < box.right && r.right > box.left && r.top >= box.top - 1 && r.bottom <= box.bottom + 1);
+    const bottom = Math.max(box.top, ...lines.map((r) => r.bottom));
+    if (y <= bottom + 2) continue;
+    const open = !el.hasAttribute("data-ask-open");
+    for (const conv of el.chytaiAsks || []) conv.askOpen = open;
+    el.toggleAttribute("data-ask-open", open);
+    redrawMarks();
+    window.ReadingTime?.count(open ? "ask-open" : "ask-close");
+    return true;
+  }
+  return false;
+}
+
+// The block's look, in the book's frame: the reader's sans, ochre like the explanation's card. The space under the
+// text is a clear border, not padding: Safari's clamp leaves the third line showing in the padding.
+function askCss(theme) {
+  const dark = theme === "dark";
+  const bar = dark ? "#d9a35a" : "#b5803a";
+  return `[data-ask]::after{content:attr(data-ask);display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;
+white-space:pre-line;margin:.6em 0 .9em;padding:.4em .75em 0 calc(.75em + 3px);box-shadow:inset 3px 0 ${bar};border-bottom:.45em solid transparent;border-radius:0 6px 6px 0;
+background:${dark ? "rgba(217,163,90,.10)" : "rgba(181,128,58,.09)"};color:${dark ? "#bdb5a6" : "#4a453c"};
+font:400 .78em/1.45 "Onest Variable",Onest,-apple-system,BlinkMacSystemFont,sans-serif;font-style:normal;font-weight:400;
+text-indent:0;text-align:left;hyphens:manual;letter-spacing:0;cursor:pointer;-webkit-user-select:none;user-select:none}
+[data-ask][data-ask-open]::after{display:block;-webkit-line-clamp:unset;overflow:visible}`;
 }
 
 function unhighlightConv(conv) {
   try {
     if (conv.marked === "yellow") rendition?.annotations.remove(conv.cfiRange, "highlight");
-    if (conv.marked === "star") rendition?.annotations.remove(conv.cfiRange, "underline");
   } catch {
     /* ignore */
   }
+  const was = conv.marked;
   conv.marked = "";
+  if (was === "star") for (const contents of rendition?.getContents() || []) askBlocks(contents);
 }
 
 function unhighlightConvs() {
@@ -1769,6 +1869,8 @@ $("#ask-book .ab-mic").onclick = () => window.Dictation.toggle("ab-q", "#ask-boo
 function saveConv(conv) {
   if (!current || !window.reader.chatSave) return;
   conv.at = Date.now();
+  // Put away while it was still coming: its block appears now that there is a text.
+  if (conv.marked === "star") for (const contents of rendition?.getContents() || []) askBlocks(contents);
   window.reader
     .chatSave(current.path, {
       id: conv.sid, cfi: conv.cfiRange, posKey: current.posKey, mode: conv.mode, sel: conv.context.selection || "",
@@ -1904,12 +2006,11 @@ function decorateNoteMarks() {
   const views = rendition?.views();
   for (const view of views?.all ? views.all() : views || []) {
     for (const { mark } of Object.values(view.underlines || {})) {
-      if ((mark.className !== "note-ul" && mark.className !== "ai-star") || mark.bracketed) continue;
+      if (mark.className !== "note-ul" || mark.bracketed) continue;
       const render = mark.render;
-      const draw = mark.className === "ai-star" ? drawStar : drawBars;
       mark.render = function () {
         render.call(this);
-        draw(this);
+        drawBars(this);
       };
       mark.bracketed = true;
       mark.render();
@@ -1917,30 +2018,9 @@ function decorateNoteMarks() {
   }
 }
 
-const SVG_NS = "http://www.w3.org/2000/svg";
 // Turns 9 and 10: a note is a soft fill behind its lines (CSS on the line rects).
 function drawBars(mark) {
   mark.element.classList.add("m-fill");
-}
-
-// An explanation put away: a dotted underline under its lines, which take a tap or a click.
-function drawStar(mark) {
-  const g = mark.element;
-  const rects = [...g.querySelectorAll("rect")]
-    .map((r) => ({ x: +r.getAttribute("x"), y: +r.getAttribute("y"), w: +r.getAttribute("width"), h: +r.getAttribute("height") }))
-    .filter((r) => r.w > 0 && r.h > 0);
-  g.replaceChildren();
-  const last = rects.at(-1);
-  if (!last) return;
-  // Turns 9 and 10: an explained passage gets a dotted ochre underline; its lines, a little taller, take the tap.
-  for (const r of rects) {
-    const hit = document.createElementNS(SVG_NS, "rect");
-    for (const [k, v] of Object.entries({ class: "star-hit", x: r.x, y: r.y - 4, width: r.w, height: r.h + 10 })) hit.setAttribute(k, v);
-    const line = document.createElementNS(SVG_NS, "line");
-    const y = r.y + r.h + 3;
-    for (const [k, v] of Object.entries({ class: "dots-ul", x1: r.x, x2: r.x + r.w, y1: y, y2: y })) line.setAttribute(k, v);
-    g.append(hit, line);
-  }
 }
 
 // Redraw a note's marks after its comment appeared or went away.

@@ -593,6 +593,12 @@ A flag only when Max asks for one, or when the change could break what readers u
   /agent/sql; the container has no key, so run the script on Max's Mac (Desktop Commander, nvm node 22, key from
   ~/Projects/chytai/.env, `.tmp/model-bench`). 2026-11-17, 12 requests, first word / whole: Opus low 4.5 / 9.8 s,
   Opus fast 1.1 / 3.3 s, Sonnet 0.8 / 5.5 s; Haiku got facts wrong.
+- Reader: an explanation put away (its card closed) is a two-line block under the paragraph its passage ends in; a
+  tap opens the whole text there and closes it (Max 2026-11-17, like the old articles' inline block; the dotted
+  underline before it took every tap on the passage, so «Словничок» words and a selection for a note did nothing).
+  Nothing is drawn over the passage. The block is CSS only (`askBlocks` / `askTap` / `askCss` in renderer.js: the
+  paragraph's `data-ask` + `::after`): never insert nodes into the book's DOM, every CFI (places, notes, explanations)
+  would shift; epub.js `ignoreClass` is too buggy for that. After a layout change call `redrawMarks()`.
 - Reader: how the text looks (theme, font, sizes, spacing, margins, column, page turns) is kept per device
   (`LOOK_KEYS` in `src/renderer/web-bridge.js`); the account's copy only starts a new device. A new look setting
   goes into that list.
