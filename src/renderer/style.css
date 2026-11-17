@@ -2348,13 +2348,6 @@ html body .r-list .r-t, html body .r-list .r-a { display: block; grid-column: 2;
   .r-mine .r-sec-head { position: relative; }
   .r-mine .r-view { position: absolute; right: 0; top: -6px; }
   .r-mine .r-sec-head:not(.plain) .r-view { top: 6px; }
-  /* The tabs are the heading (Max 2026-11-17): one row, the view switch at its end, the tabs scroll if they must. */
-  .r-mine .r-sec-head:has(> .r-tabs:first-child) { align-items: center; }
-  .r-mine .r-sec-head > .r-tabs:first-child { flex: 1; min-width: 0; }
-  .r-mine .r-sec-head > .r-tabs:first-child ~ .r-view { position: static; flex: none; }
-}
-@media (max-width: 380px) {
-  .r-mine .r-sec-head > .r-tabs:first-child { gap: 13px; }
   .r-list .r-card { grid-template-columns: 40px minmax(0, 1fr) auto auto; column-gap: 14px; padding: 9px 0; }
   .r-list .r-st { grid-column: 3; }
   .r-list .r-more { grid-column: 4; }
