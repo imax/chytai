@@ -489,7 +489,15 @@ A flag only when Max asks for one, or when the change could break what readers u
   ordinary books (who/what, notes) were tried and Max said no (2026-11-17: «трошки нахабно»). Make one book's (Max's
   OK; «Чорна рада» ≈ $6–7): `POST /agent/glossary {"book":"…","v2":true}`; status under `v2` in `GET /agent/glossary`. Each Opus answer is kept in `<book>.json.parts/` as it comes, so a restart
   (any thread's deploy) loses nothing: 30 s after start `resume()` goes on with the kept answers paid for already.
-  Trial prompts and answers: project files `chytai-gloss-try/run/`.
+  Words ahead (Max 2026-11-17, «як плейліст… наступний трек завантажує»): `src/renderer/word-ahead.js` cuts the chapter
+  into ~5,000-character passages at paragraphs and, on each page turn, sends the one on screen and the next (at a
+  chapter's end the next chapter's first) to `POST /api/word-ahead` (server/wordahead.js: Sonnet low names ≤60 words a
+  reader may select, with meanings; ~9 s, ~$0.013 a passage). Kept in `DATA_DIR/word-ahead/<sha1 of the text>.json`
+  for every reader of that text, 90 days after the last ask, out of the nightly backup. `wordCard` looks there
+  before `/api/word`. Only signed-in readers who selected a word in the last 30 days (localStorage `chytai:word-used`),
+  not publishers' previews; 80 new passages a reader a day, 1,000 in all. Hits count as ui `word-ahead` (all one-word
+  cards: `word`); `GET /agent/word-ahead` = passages kept and today's count.
+  Trial prompts and answers: project files `chytai-gloss-try/run/` (`ahead.js`: Sonnet vs Haiku, one word 1.1–1.8 s).
 - New free-shelf classics from Wikisource: `scripts/wsbook.py` (recipe at its top). Many school works exist there only
   in 19th-century spelling (Кайдашева сім'я 1879, Квітка, Шевченко's 1840) or not at all (Старицький, «Сто тисяч»,
   Кобилянська's «Земля»); the 1876 Prague «Кобзарь» reads fine. A «Версії роботи» page is no text: free-shelf.py now

@@ -421,6 +421,7 @@ async function openEpub(payload, { posKey, source }) {
   rendition.hooks.content.register(styleContents);
   rendition.hooks.content.register((contents) => window.Gloss?.mark(contents));
   window.Gloss?.load(payload.path, () => rendition?.getContents());
+  window.WordAhead?.open(current);
   rendition.hooks.content.register((contents) => contents.on("linkClicked", rememberReturn));
   if (current.protected) rendition.hooks.content.register(limitCopy);
   rendition.themes.fontSize(`${bookFontSize() * BASE_SCALE}%`);
@@ -484,8 +485,18 @@ async function openEpub(payload, { posKey, source }) {
   // A resize while the first page is still loading (the library closing, the phone toolbar
   // hiding) therefore left a blank book; show the opening position again in that case.
   const mine = rendition;
+  // Full screen on a computer comes as several resizes in a row: epub.js went back to the page's first words each
+  // time, read off the page it had just laid out, and the place drifted, by a chapter at times (Max, 2026-11-17).
+  // Every resize of one burst now goes back to where the reader was before it.
+  let anchor = null;
+  let resizedAt = 0;
   rendition.on("resized", () => {
-    if (rendition === mine && !mine.location?.start) mine.display(payload.position || undefined);
+    if (rendition !== mine) return;
+    const now = Date.now();
+    if (now - resizedAt > 1500) anchor = mine.location?.start?.cfi || null;
+    resizedAt = now;
+    if (!mine.location?.start) mine.display(payload.position || undefined);
+    else if (anchor) mine.location.start.cfi = anchor; // epub.js shows location.start.cfi right after this event
   });
 
   // display() lays the page out again once the book's fonts are in (followFontLoad); the first layout
@@ -860,6 +871,7 @@ function onRelocated(location) {
   if (current) window.reader.savePosition(current.posKey, location.start.cfi, readingProgress(location));
   if (current?.protected) reportChapter(location.start?.index);
   updateProgress(location);
+  if (!settings.free && !settings.guest && !current?.protected && !current?.preview) window.WordAhead?.at(location, rendition, book);
   // While scrolling, a selection may move off screen and back; its toolbar is pinned at the bottom anyway.
   if (!scrolled()) hideSelToolbar();
   window.Gloss?.hide();
@@ -1069,8 +1081,11 @@ function wordCard(sel) {
     box.classList.toggle("wait", !!wait);
   };
   window.ReadingTime?.count("word");
+  window.WordAhead?.used();
   const mine = window.Gloss?.lookup(text);
   if (mine) return put(mine.gloss);
+  const ahead = window.WordAhead?.lookup(text);
+  if (ahead) return window.ReadingTime?.count("word-ahead"), put(ahead);
   put("…", true);
   const c = sel.context || {};
   const sentence = [String(c.before || "").split(/(?<=[.!?…])\s+/).pop(), text, String(c.after || "").split(/(?<=[.!?…])\s/)[0]].join(" ").replace(/\s+/g, " ").trim().slice(-600);
