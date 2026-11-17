@@ -516,6 +516,15 @@ function create(db, store, { notify = () => {}, bookua = null, search = null, ma
       setMeta("calendar:relink4", new Date().toISOString());
       fresh();
     }
+    // Books the catalog no longer has (Max took out three romances, 2026-11-17) leave the events that linked them.
+    if (!dry) {
+      const { DROPPED } = require("./store");
+      for (const e of db.prepare("SELECT id, books FROM cal_events WHERE books != '[]'").all()) {
+        const ids = JSON.parse(e.books || "[]");
+        const kept = ids.filter((id) => !DROPPED.has(id));
+        if (kept.length < ids.length) db.prepare("UPDATE cal_events SET books = ? WHERE id = ?").run(JSON.stringify(kept), e.id);
+      }
+    }
     const rows = db.prepare("SELECT * FROM cal_events WHERE want != '[]' AND (starts >= ? OR ends >= ?)").all(day, day).map(row);
     for (const e of rows) {
       const left = [];

@@ -362,6 +362,7 @@ function nestedSeries(series) {
   return out;
 }
 
+const DROPPED = new Set(["balamutka-tom-1", "obman-nochi-nevirnist-knyha-2", "ty-ponad-use-knyha-2"]);
 class Store {
   constructor(dataDir) {
     this.dir = dataDir;
@@ -2149,7 +2150,14 @@ class Store {
     this.readerV = new Map(); // reader id -> how many times their entries changed (social.js)
     this.loadV = (this.loadV || 0) + 1; // everything read again: social.js counts everyone again
     this.subs = new Map(); // reader id -> [shelf id]
-    for (const r of db.prepare("SELECT id, data FROM books").all()) this.lib.books[r.id] = JSON.parse(r.data);
+    for (const r of db.prepare("SELECT id, data FROM books").all()) {
+      // Books the event collector added that Max took out (romance, 2026-11-17: «Прибери»): gone from the database.
+      if (DROPPED.has(r.id) && JSON.parse(r.data).source === "calendar") {
+        db.prepare("DELETE FROM books WHERE id = ?").run(r.id);
+        continue;
+      }
+      this.lib.books[r.id] = JSON.parse(r.data);
+    }
     for (const r of db.prepare("SELECT * FROM entries").all()) this.entriesOf(r.reader)[r.book] = { status: r.status, year: r.year, rating: r.rating, note: r.note, copy: r.copy, order: r.ord, ...(r.added ? { added: r.added } : {}), ...(r.updated ? { updated: r.updated } : {}), ...(r.kids ? { kids: true } : {}) };
     for (const r of db.prepare("SELECT reader, shelf FROM subscriptions").all()) this.subscriptions(r.reader).push(r.shelf);
   }
@@ -2866,4 +2874,4 @@ class Store {
   }
 }
 
-module.exports = { fromOpenLibrary, sameCover, sameAuthor, editDistance, OPEN_LIBRARY, mainGenres, isRussian, shopLanguage, langGuess, Store, slugify, soundOf, norm, workName, OWNER };
+module.exports = { DROPPED, fromOpenLibrary, sameCover, sameAuthor, editDistance, OPEN_LIBRARY, mainGenres, isRussian, shopLanguage, langGuess, Store, slugify, soundOf, norm, workName, OWNER };
