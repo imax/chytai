@@ -3468,4 +3468,6 @@ if (!store.migrated()) {
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`Chytai web on http://0.0.0.0:${PORT}, books in ${BOOKS_DIR}`);
   warmCovers(OWNER_LIB, fs.readdirSync(BOOKS_DIR));
+  // A «Словничок 2» build a deploy cut off goes on from its kept answers.
+  setTimeout(() => glossaryV2.resume((book) => path.join(freeDir(book), book)), 30000);
 });

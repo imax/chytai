@@ -272,6 +272,19 @@ class Glossary {
     fs.renameSync(`${f}.tmp`, f);
     return { before: entries.length, after: Object.keys(forms).length, cost: Math.round(cost * 1000) / 1000, dropped: entries.filter(([k]) => !kept.has(k)).map(([k]) => k) };
   }
+  // At start: v2 builds a restart cut off go on (their kept answers cost nothing again); a week-old one is dropped.
+  resume(fileOf) {
+    let names = [];
+    try {
+      names = fs.readdirSync(this.dir).filter((n) => n.endsWith(".json.parts"));
+    } catch {}
+    for (const n of names) {
+      const dir = path.join(this.dir, n);
+      const book = n.slice(0, -".json.parts".length);
+      if (Date.now() - fs.statSync(dir).mtimeMs > 7 * 864e5) fs.rmSync(dir, { recursive: true, force: true });
+      else if (fs.existsSync(fileOf(book))) this.start(book, fileOf(book));
+    }
+  }
   start(book, file) {
     if (this.running.get(book)?.done === false) return false;
     const run = { at: new Date().toISOString(), done: false, chunks: 0, of: 0 };
@@ -331,10 +344,21 @@ Glossary.prototype.buildV2 = async function (book, file, run = {}) {
   const client = new Anthropic({ apiKey: this.apiKey });
   const answers = new Array(parts.length);
   let cost = 0;
+  // Each answer is kept on disk as it comes (`<book>.parts/<n>-<hash>.txt`): a restart (another thread's deploy cut
+  // «Чорна рада» at 18 of 28 on 2026-11-17) loses nothing paid for, and `resume()` at start goes on from there.
+  const partsDir = `${this.file(book)}.parts`;
+  fs.mkdirSync(partsDir, { recursive: true });
+  const partFile = (i) => path.join(partsDir, `${i}-${require("crypto").createHash("sha1").update(parts[i]).digest("hex").slice(0, 10)}.txt`);
+  for (let i = 0; i < parts.length; i++)
+    try {
+      answers[i] = fs.readFileSync(partFile(i), "utf8");
+      run.chunks = (run.chunks || 0) + 1;
+    } catch {}
   let next = 0;
   const work = async () => {
     while (next < parts.length) {
       const i = next++;
+      if (answers[i] != null) continue;
       const m = await client.messages.create({
         model: MODEL_V2,
         max_tokens: 20000,
@@ -344,6 +368,7 @@ Glossary.prototype.buildV2 = async function (book, file, run = {}) {
       });
       cost += measure(m.model, m.usage).cost;
       answers[i] = m.content.filter((b) => b.type === "text").map((b) => b.text).join("");
+      fs.writeFileSync(partFile(i), answers[i]);
       run.chunks = (run.chunks || 0) + 1;
     }
   };
@@ -367,6 +392,7 @@ Glossary.prototype.buildV2 = async function (book, file, run = {}) {
   const f = this.file(book);
   fs.writeFileSync(`${f}.tmp`, JSON.stringify(data));
   fs.renameSync(`${f}.tmp`, f);
+  fs.rmSync(partsDir, { recursive: true, force: true });
   run.forms = Object.keys(forms).length;
   run.cost = data.cost;
   return data;

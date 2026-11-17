@@ -480,7 +480,8 @@ A flag only when Max asks for one, or when the change could break what readers u
   One selected word (renderer.js `wordCard`, signed-in readers): its meaning on the selection's card, from the book's list, else
   `POST /api/word` (server/word.js, Sonnet low effort, ~1 s, kept in memory by word + sentence). Proactive hints for
   ordinary books (who/what, notes) were tried and Max said no (2026-11-17: «трошки нахабно»). Make one book's (Max's
-  OK; «Чорна рада» ≈ $6–7): `POST /agent/glossary {"book":"…","v2":true}`; status under `v2` in `GET /agent/glossary`.
+  OK; «Чорна рада» ≈ $6–7): `POST /agent/glossary {"book":"…","v2":true}`; status under `v2` in `GET /agent/glossary`. Each Opus answer is kept in `<book>.json.parts/` as it comes, so a restart
+  (any thread's deploy) loses nothing: 30 s after start `resume()` goes on with the kept answers paid for already.
   Trial prompts and answers: project files `chytai-gloss-try/run/`.
 - New free-shelf classics from Wikisource: `scripts/wsbook.py` (recipe at its top). Many school works exist there only
   in 19th-century spelling (Кайдашева сім'я 1879, Квітка, Шевченко's 1840) or not at all (Старицький, «Сто тисяч»,
