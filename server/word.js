@@ -1,12 +1,41 @@
 // One word, fast (Max, 2026-11-17: «ти натискаєш на слово і зразу тобі щось показується»): a reader
 // selects a single word and the selection's card shows its meaning in this sentence in a second, instead of the
-// panel's long explanation. Sonnet at low effort, a few words back. Answers are kept in memory by word and sentence
-// (WORD_KEEP at most), so the same word in the same place costs nothing the second time.
+// panel's long explanation. Sonnet at low effort, a few words back.
+// One word has one meaning in a book (Max 2026-11-17: «кармазини» got two different ones half a page apart, «слово ж
+// те саме»): the first answer is kept by book and word, for every reader, and given again in any sentence. Kept in
+// memory and in `file` (setFile, DATA_DIR/word-kept.json), WORD_KEEP at most, the oldest go first.
+const fs = require("fs");
 const Anthropic = require("@anthropic-ai/sdk");
 
 const MODEL = "claude-sonnet-5-5";
-const WORD_KEEP = 3000;
-const kept = new Map(); // `${word}|${sentence}` -> text
+const WORD_KEEP = 5000;
+let kept = new Map(); // `${title}|${author}|${word}` -> text
+let file = null;
+let saving = null;
+function setFile(f) {
+  file = f;
+  try {
+    kept = new Map(Object.entries(JSON.parse(fs.readFileSync(f, "utf8"))));
+  } catch {}
+}
+function save() {
+  if (!file || saving) return;
+  saving = setTimeout(() => {
+    saving = null;
+    try {
+      fs.writeFileSync(`${file}.tmp`, JSON.stringify(Object.fromEntries(kept)));
+      fs.renameSync(`${file}.tmp`, file);
+    } catch (err) {
+      console.error("word kept:", err.message);
+    }
+  }, 30000);
+  saving.unref?.();
+}
+// The word as kept: no stress marks; small letters, but a name mid-sentence keeps its capital («Шрам» ≠ «шрам»).
+const keyOf = (word, sentence) => {
+  const w = String(word).normalize("NFD").replace(/[\u0300\u0301]/g, "").normalize("NFC").replace(/['’`ʼ]/g, "ʼ");
+  return midName(word, sentence) ? w : w.toLowerCase();
+};
 
 const PROMPT = `A reader of a book selected one word and wants to know at once what it means here. Answer in Ukrainian with only the meaning as used in this sentence: a plain synonym, or at most ten words. Use only everyday words a 12-year-old knows, never another rare or bookish word (паливода is «безтурботний веселун», not «гульвіса, шибайголова»). For a word that is not Ukrainian, give its Ukrainian translation as used here, with a few words more only when one word is not enough. For a name of a person, place or thing, say in a few words who or what it is; for a character of this book say only what you are sure of, and if you are not sure, only «персонаж книжки». One line only: no notes, no doubts, no reasoning, no preamble, no quotes, no repeating the word, no full stop.`;
 
@@ -39,7 +68,7 @@ function midName(word, sentence) {
 }
 
 async function meaning(apiKey, { word, sentence, title, author }) {
-  const k = `${word.toLowerCase()}|${sentence}`;
+  const k = `${title}|${author || ""}|${keyOf(word, sentence)}`;
   if (kept.has(k)) return { text: kept.get(k), kept: true };
   const client = new Anthropic({ apiKey });
   const m = await client.messages.create({
@@ -53,8 +82,9 @@ async function meaning(apiKey, { word, sentence, title, author }) {
   if (text) {
     kept.set(k, text);
     if (kept.size > WORD_KEEP) kept.delete(kept.keys().next().value);
+    save();
   }
   return { text, model: m.model, usage: m.usage };
 }
 
-module.exports = { meaning, tidy, midName, PROMPT, MODEL };
+module.exports = { meaning, tidy, midName, setFile, keyOf, PROMPT, MODEL };

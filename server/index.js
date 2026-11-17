@@ -3238,6 +3238,7 @@ api.post("/tidy", guestsCannot("Без входу диктування не до
 });
 // One selected word's meaning in a second (server/word.js). Not counted as an explanation, but its
 // cost goes into the account's day like any other call.
+require("./word").setFile(path.join(DATA_DIR, "word-kept.json"));
 api.post("/word", guestsCannot("Без входу пояснень немає."), aiBudget, async (req, res) => {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   const word = String(req.body?.word || "").trim().slice(0, 60);
