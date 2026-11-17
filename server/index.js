@@ -584,8 +584,8 @@ function recordUi(who, ui) {
   }
 }
 let uiPruned = "";
-// One selected word (Max 2026-11-17, hit rate on /admin/reader): every card, the ones from the book's list and the
-// ones prepared ahead, by day, Max's own counted too (`ui` leaves the owner out) and also apart.
+// One selected word (Max 2026-11-17, hit rate on /admin/reader): every card and the ones from the book's list, by day,
+// Max's own counted too (`ui` leaves the owner out) and also apart. `word-ahead`: 17.11 only (words ahead, gone).
 const WORD_KEYS = ["word", "word-list", "word-ahead"];
 function recordWords(owner, ui) {
   if (!ui || typeof ui !== "object" || !WORD_KEYS.some((k) => ui[k] > 0)) return;
@@ -1214,7 +1214,6 @@ app.use((req, res, next) => {
   // «Словничок» (server/glossary.js): what is made and what runs; POST {"book":"<free-shelf file>"} makes one book's.
   app.get("/agent/glossary", ok, (req, res) => res.json({ ...glossary.status(), v2: glossaryV2.status() }));
   // ?find=<word>: what the kept passages say for it (to see a bad card's source).
-  app.get("/agent/word-ahead", ok, (req, res) => res.json({ ...ahead.status(), today: { day: aheadDay.day, all: aheadDay.all, readers: Object.keys(aheadDay.by).length }, ...(req.query.find ? { found: ahead.find(String(req.query.find)) } : {}) }));
   // Readers' uploads: GET ?uploads=1 lists the uploaded EPUBs by school classics' authors and what they have;
   // POST {"acct":"<id>","book":"<file>"} makes that one's (past the caps; only with Max's OK in the thread).
   app.get("/agent/glossary/uploads", ok, async (req, res) => {
@@ -3251,35 +3250,8 @@ api.post("/word", guestsCannot("Без входу пояснень немає.")
     res.status(502).json({ error: describeError(err) });
   }
 });
-// Words ahead (server/wordahead.js): the page sends the passage being read and the next one; Sonnet names the words a
-// reader may select there, with their meaning, so a selected word shows with no call. A passage asked before (any
-// reader, same text) costs nothing. New passages: AHEAD_DAY a reader, AHEAD_ALL in all a day (Max not capped by his own).
-const { Ahead, clean: aheadClean } = require("./wordahead");
-const ahead = new Ahead({ dir: path.join(DATA_DIR, "word-ahead") });
-const AHEAD_DAY = 80; // ~400,000 characters, a long novel
-const AHEAD_ALL = 1000; // ~$13
-let aheadDay = { day: "", all: 0, by: {} };
-setTimeout(() => ahead.prune(), 60000).unref();
-setInterval(() => ahead.prune(), 24 * 3600 * 1000).unref();
-api.post("/word-ahead", guestsCannot("Без входу немає."), aiBudget, async (req, res) => {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  const text = String(req.body?.text || "").slice(0, 8000);
-  if (!apiKey || text.length < 200) return res.status(400).json({ error: "text" });
-  const day = statsDay();
-  if (aheadDay.day !== day) aheadDay = { day, all: 0, by: {} };
-  const known = ahead.kept(ahead.hash(text));
-  if (known) return res.json({ words: aheadClean(known.words), base: known.base || {}, level: known.level || {} });
-  if (aheadDay.all >= AHEAD_ALL || (!req.owner && (aheadDay.by[req.acct] || 0) >= AHEAD_DAY)) return res.status(429).json({ error: "later" });
-  aheadDay.all++;
-  aheadDay.by[req.acct] = (aheadDay.by[req.acct] || 0) + 1;
-  try {
-    const r = await ahead.words(apiKey, { text, title: String(req.body?.title || "").slice(0, 300), author: String(req.body?.author || "").slice(0, 200) });
-    if (r.usage) recordExplain(req, { model: r.model, usage: r.usage }, { count: false });
-    res.json({ words: r.words, base: r.base, level: r.level });
-  } catch (err) {
-    res.status(502).json({ error: describeError(err) });
-  }
-});
+// Words ahead (2026-11-17) were taken out the same day (Max: one «Словничок», not two): their kept passages go once.
+setTimeout(() => fs.rm(path.join(DATA_DIR, "word-ahead"), { recursive: true, force: true }, () => {}), 60000).unref();
 api.delete("/paper/:name/chats/:id", guestsCannot("Без входу паперових книжок немає."), (req, res) => {
   const list = bookItems(req, "paperChats", req.params.name);
   dropPaperImgs(req.acct, req.params.name, list.filter((c) => c.id === req.params.id));

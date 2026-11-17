@@ -15,6 +15,20 @@ const PROMPT = `A reader of a book selected one word and wants to know at once w
 // shows, or what a well-known place or person is.
 const NAME = `A reader of a book selected one capitalised word and wants to know at once what it means here. If it is the name of a character of this book, answer in Ukrainian with only what this sentence itself shows about them, in a few words, or just «персонаж книжки»; never guess family ties, ranks or roles. If it is a well-known real place, person or thing, say in a few words what it is. If it is not a name, give its meaning as used in this sentence: a plain synonym, or at most ten words. One line only: no notes, no doubts, no reasoning, no preamble, no quotes, no repeating the word, no full stop.`;
 
+// One clean meaning: its first line, without what a model sometimes adds after it (Max's «Кирило», 2026-11-17: a
+// Ukrainian answer, then «Actually I need to be careful: in "Чорна рада"…»). Ukrainian answer, so four Latin words
+// in a row are notes, not meaning.
+function tidy(text, max = 160) {
+  let t = String(text || "").split("\n").map((x) => x.trim()).find(Boolean) || "";
+  if (/[\u0400-\u04FF]/.test(t)) {
+    const note = t.search(/\s(?=(?:Actually|Wait|Hmm|Note|However|But|Let me|Okay|I need|I think|In ["«])\b)/);
+    if (note > 0) t = t.slice(0, note);
+    const latin = t.search(/(?:\b[A-Za-z][A-Za-z'’-]*[\s,.:;"»«()]+){4,}/);
+    if (latin > 0) t = t.slice(0, latin);
+  }
+  return t.replace(/\*\*|__|`/g, "").replace(/^[\s*_/\\#>—-]+/, "").replace(/[\s.,;:—*_/\\#-]+$/, "").slice(0, max);
+}
+
 async function meaning(apiKey, { word, sentence, title, author }) {
   const k = `${word.toLowerCase()}|${sentence}`;
   if (kept.has(k)) return { text: kept.get(k), kept: true };
@@ -26,7 +40,7 @@ async function meaning(apiKey, { word, sentence, title, author }) {
     messages: [{ role: "user", content: `Книжка: «${title}»${author ? `, ${author}` : ""}\nРечення: ${sentence}\nСлово: ${word}` }],
     output_config: { effort: "low" },
   });
-  const text = require("./wordahead").tidy(m.content.filter((b) => b.type === "text").map((b) => b.text).join(""), 200);
+  const text = tidy(m.content.filter((b) => b.type === "text").map((b) => b.text).join(""), 200);
   if (text) {
     kept.set(k, text);
     if (kept.size > WORD_KEEP) kept.delete(kept.keys().next().value);
@@ -34,4 +48,4 @@ async function meaning(apiKey, { word, sentence, title, author }) {
   return { text, model: m.model, usage: m.usage };
 }
 
-module.exports = { meaning, PROMPT, MODEL };
+module.exports = { meaning, tidy, PROMPT, MODEL };

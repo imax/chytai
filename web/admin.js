@@ -1963,12 +1963,12 @@ ${older.length ? `<details><summary class="muted">Ще ${fmtN(older.length)}, д
   const cost = (day) => wordCost?.[day] || {};
   const wordLine = wordRows.length
     ? `<div class="tbl"><table>
-<thead><tr><th>День</th><th>Виділили слово</th><th>Одразу</th><th>Зі словничка</th><th>Наперед</th><th>Чекали на Sonnet</th><th>Наперед, $</th><th>Окремі слова, $</th></tr></thead>
+<thead><tr><th>День</th><th>Виділили слово</th><th>Одразу</th><th>Чекали на Sonnet</th><th>Коштувало</th></tr></thead>
 <tbody>${wordRows.map((r) => {
-        const asked = Math.max(0, r.all - r.list);
-        return `<tr><th>${short(r.day)}</th><td>${fmtN(r.all)}${r.max ? ` <span class="muted">ваших ${fmtN(r.max)}</span>` : ""}</td><td>${fmtN(r.list + r.ahead)}${pct(r.list + r.ahead, r.all)}</td><td>${fmtN(r.list)}</td><td>${fmtN(r.ahead)}${pct(r.ahead, asked)}</td><td>${fmtN(Math.max(0, asked - r.ahead))}</td><td>${usd(cost(r.day).wordahead || 0)}</td><td>${usd(cost(r.day).word || 0)}</td></tr>`;
+        const at = r.list + r.ahead;
+        return `<tr><th>${short(r.day)}</th><td>${fmtN(r.all)}${r.max ? ` <span class="muted">ваших ${fmtN(r.max)}</span>` : ""}</td><td>${fmtN(at)}${pct(at, r.all)}</td><td>${fmtN(Math.max(0, r.all - at))}</td><td>${usd((cost(r.day).word || 0) + (cost(r.day).wordahead || 0))}</td></tr>`;
       }).join("")}</tbody></table></div>
-<p class="muted small">«Одразу» = значення було на картці без запиту: зі словничка книжки або підготовлене наперед. Відсоток у «Наперед» — від слів, яких немає в словничку. Рахуємо з 17 листопада.</p>`
+<p class="muted small">«Одразу» = значення було на картці без запиту, зі словничка книжки (17.11 ще й зі слів наперед, які того ж дня прибрали). Рахуємо з 17 листопада.</p>`
     : "";
   const st = s.stops;
   const left = st ? st.left[3] + st.left[10] + st.left[50] + st.left[95] : 0;
