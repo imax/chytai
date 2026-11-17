@@ -176,7 +176,8 @@ technical report (below), so post it only after your fixes are pushed:
   (Max, 2026-11-12).
 - Technical, once a day, when both nightly backups (site, reader) have reported today and the morning review posted
   today's note; at 10:00 Kyiv at the latest (`DEADLINE_HOUR`), and then a missing copy is a failed one («не вдався», Max 2026-11-12):
-  backups, yesterday's errors and failed jobs, the review's note, pages the phones unloaded, search health (arrivals
+  headed «Технічний звіт за …» (Max 2026-11-17): backups, yesterday's errors and failed jobs, the site's downtime from the
+  deploy log (`deploys.line`: probes' pauses + restarts no probe saw), the review's note, pages the phones unloaded, search health (arrivals
   from Google and Search Console impressions against the 14-day median, «різко менше/більше» at half or double), disk and memory of both
   machines (moved here from /admin, Max 2026-11-12; the reader's comes with its `/api/site-admin/day`). Meta
   `techreport:lastRun`. Try either on the test DB: `require("./web/dailyreport").buildTech({ db, day, ownerId, site,

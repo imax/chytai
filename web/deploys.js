@@ -44,7 +44,7 @@ function recent(days = 14) {
   const probes = all.filter((r) => r.kind === "probe" || r.kind === "hot");
   for (const r of all) {
     const d = kyiv(r.at);
-    if (!byDay.has(d)) byDay.set(d, { deploys: 0, hot: 0, down: 0, longest: 0, flyErrors: 0, restarts: 0, serverDown: 0 });
+    if (!byDay.has(d)) byDay.set(d, { deploys: 0, hot: 0, down: 0, longest: 0, flyErrors: 0, restarts: 0, serverDown: 0, alone: 0 });
     const k = byDay.get(d);
     if (r.kind === "probe" || r.kind === "hot") {
       k.deploys++;
@@ -55,12 +55,36 @@ function recent(days = 14) {
     } else if (r.kind !== "switch") {
       k.restarts++;
       k.serverDown += r.down_ms || 0;
-      // A restart no probe watched (a crash, a deploy from a laptop): its pause counts too.
+      // A restart no probe watched (a crash, a deploy from a laptop): its pause counts too. A crash saw no stop
+      // signal, so its pause is at least the boot.
       const t = Date.parse(r.at);
-      if (!probes.some((p) => Math.abs(Date.parse(p.at) - t) < 10 * 60000)) k.down += r.down_ms || 0;
+      if (!probes.some((p) => Math.abs(Date.parse(p.at) - t) < 10 * 60000)) {
+        k.alone++;
+        const ms = r.down_ms ?? r.boot_ms ?? 0;
+        k.down += ms;
+        k.longest = Math.max(k.longest, ms);
+      }
     }
   }
   return { rows: all.slice(0, 40), days: [...byDay].sort((a, b) => (a[0] < b[0] ? 1 : -1)) };
 }
 
-module.exports = { init, add, recent };
+// «2 хв 5 с», «42 с».
+function dur(ms) {
+  const s = Math.round((ms || 0) / 1000);
+  return s >= 60 ? `${Math.floor(s / 60)} хв${s % 60 ? ` ${s % 60} с` : ""}` : `${s} с`;
+}
+
+// One line of the technical report (dailyreport.js, Max 2026-11-17): how long the site gave no answer that Kyiv day.
+function line(day) {
+  const k = new Map(recent(3).days).get(day);
+  if (!k || (!k.deploys && !k.alone)) return "Простій сайту: 0 с, деплоїв не було.";
+  const parts = [`деплоїв ${k.deploys}`];
+  if (k.hot) parts.push(`без перезапуску ${k.hot}`);
+  if (k.alone) parts.push(`перезапусків без деплою ${k.alone}`);
+  if (k.down) parts.push(`найдовше ${dur(k.longest)}`);
+  if (k.flyErrors) parts.push(`Fly не доставив ${k.flyErrors} запитів`);
+  return `Простій сайту: ${dur(k.down)} (${parts.join(", ")}).`;
+}
+
+module.exports = { init, add, recent, line, dur };
