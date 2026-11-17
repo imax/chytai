@@ -197,6 +197,15 @@ dialog label[hidden] { display: none; }
    (2026-11-17); other readers never see it (body.not-owner, body.guest below). */
 #lang-set, #opds-set, body.web #opds-set { display: none !important; }
 .opds-row { display: flex; gap: 8px; margin-top: 6px; }
+.del-set { display: none; margin: -4px 0 14px; font-size: 13px; }
+body.web.not-owner:not(.guest) .del-set { display: block; }
+.del-set > .link { color: var(--muted); }
+.del-set p { margin: 0 0 10px; color: var(--muted); }
+#del-no { margin-left: 14px; }
+#del-go { padding: 7px 14px; border: none; border-radius: 8px; background: #b3261e; color: #fff; font: inherit; cursor: pointer; }
+#del-go:disabled { opacity: .6; }
+.del-err { margin: 8px 0 0 !important; color: #b3261e !important; }
+.del-err:empty { display: none; }
 .opds-row input { flex: 1; min-width: 0; margin: 0 !important; font-size: 13px; }
 .opds-row button { border: 1px solid var(--line); border-radius: 8px; padding: 6px 12px; background: transparent; color: inherit; cursor: pointer; white-space: nowrap; }
 dialog small { display: block; margin-top: 4px; color: var(--muted); font-weight: 400; }

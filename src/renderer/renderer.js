@@ -255,6 +255,20 @@ $("#settings").addEventListener("close", async () => {
   if (fontChanged) applyTypography(true);
 });
 $("#btn-logout").onclick = () => window.reader.logout?.();
+$("#del-ask").onclick = () => (($("#del-confirm").hidden = false), ($("#del-ask").hidden = true), ($("#del-err").textContent = ""));
+$("#del-no").onclick = () => (($("#del-confirm").hidden = true), ($("#del-ask").hidden = false));
+$("#settings").addEventListener("close", () => $("#del-no").onclick());
+$("#del-go").onclick = async () => {
+  $("#del-go").disabled = true;
+  $("#del-err").textContent = "";
+  try {
+    await window.reader.deleteAccount();
+    location.replace("/login");
+  } catch (err) {
+    $("#del-err").textContent = err instanceof TypeError ? "Немає з'єднання. Спробуйте ще раз." : err.message;
+    $("#del-go").disabled = false;
+  }
+};
 $("#btn-admin").onclick = () => (location.href = "/admin");
 $("#btn-print").onclick = () => printBook();
 $("#btn-search").onclick = () => window.BookSearch?.open();

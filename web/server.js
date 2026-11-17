@@ -63,7 +63,8 @@ function loadDotEnv(file) {
 }
 
 const store = new Store(DATA_DIR);
-const google = require("./google"); // «Увійти через Google», site only (google.js)
+const google = require("./google"); // «Увійти через Google» (google.js)
+const apple = require("./apple"); // «Увійти з Apple», the phone app only (apple.js)
 const telegram = require("./telegram"); // messages to the owner in Telegram (telegram.js)
 telegram.init(store.db);
 const errors = require("./errors"); // pages that failed and crashes: kept for /admin and the morning report (errors.js)
@@ -647,13 +648,15 @@ function newReader(req, { email, name, username, ticket, next, came, via = "" })
   if (via) admin.event(req, null, "login", `${via}:signup`);
   came = came || admin.cameFrom(cookies(req).chytai_came);
   admin.came(reader.id, came);
-  admin.log(reader.id, "signup", next || "", [came.source === "Напряму" ? "" : [came.source, came.ref].filter(Boolean).join(" · "), via === "google" ? "через Google" : ""].filter(Boolean).join(" · "));
+  admin.log(reader.id, "signup", next || "", [came.source === "Напряму" ? "" : [came.source, came.ref].filter(Boolean).join(" · "), via === "google" ? "через Google" : via === "apple" ? "через Apple" : ""].filter(Boolean).join(" · "));
   signupWave();
   auth.useTicket(ticket);
   console.log(`new reader @${reader.username}`);
   welcomeMail.newReader(reader);
   return reader;
 }
+// A sign-in the phone app started in the system's sign-in sheet (its Google button): it ends at /reader-login?to=app.
+const appBack = (next) => /^\/reader-login\?(?:.*&)?to=app(?:&|$)/.test(String(next || ""));
 // «Увійти через Google» (google.js): off to Google, then back here with a code. A known address signs in; a new one
 // gets the usual last step (name, page address) with the name from Google filled in. Counted in admin «Вхід».
 const googleBack = () => `${SITE}/login/google/back`;
@@ -689,6 +692,13 @@ app.get("/login/google/back", async (req, res) => {
   const known = auth.byEmail(g.email);
   admin.event(req, null, "login", known ? "google:known" : "google:new");
   if (known) return admin.log(known.id, "login", `${st.next || ""} google`.trim()), signIn(req, res, known, st.next);
+  // From the phone app (Max 2026-11-17: sign-up never leaves for the site): the account is made at once with the
+  // name Google gave, as the app's own sign-up does; the page address can be changed on the site later.
+  if (appBack(st.next)) {
+    const name = auth.checkName(g.name).name || "Читач";
+    const reader = newReader(req, { email: g.email, name, username: auth.suggestUsername(name, slugify), ticket: auth.ticketFor(g.email, "google"), next: "/reader-login", via: "google" });
+    return signIn(req, res, reader, st.next);
+  }
   res.send(pages.signupPage({ next: st.next, ticket: auth.ticketFor(g.email, "google"), email: g.email, name: g.name, username: "" }));
 });
 
@@ -819,6 +829,25 @@ app.post("/api/reader-login/signup", readerCors, (req, res) => {
   const welcome = !known && origin && READER_ORIGINS.includes(origin) && !app ? `${SITE}/login/once/${onceTicket(reader.id, `/welcome?next=${encodeURIComponent(`/reader-login?back=${origin}`)}`)}` : undefined;
   res.json({ ticket: readerTicket(reader.id), welcome });
 });
+// «Увійти з Apple» in the phone app (apple.js): the page sends Apple's token; a known address signs in, a new one
+// gets an account at once with the name Apple gave (only on the first sign-in) or «Читач».
+app.post("/api/reader-login/apple", readerCors, async (req, res) => {
+  let a;
+  try {
+    a = await apple.verify(req.body?.token);
+  } catch (e) {
+    require("./errors").record("site", e, "POST /api/reader-login/apple");
+    return res.status(502).json({ error: "Apple зараз не відповідає. Спробуйте ще раз за хвилину." });
+  }
+  if (a.error) return res.status(400).json({ error: a.error });
+  const known = auth.byEmail(a.email);
+  admin.event(req, null, "login", known ? "apple:known" : "apple:new");
+  if (known) return admin.log(known.id, "login", "/reader-login apple"), res.json({ ticket: readerTicket(known.id) });
+  const name = auth.checkName(req.body?.name).name || "Читач";
+  const came = admin.cameFromReader(req.body?.came, { app: true, ownHosts: siteHosts(req) });
+  const reader = newReader(req, { email: a.email, name, username: auth.suggestUsername(name, slugify), ticket: auth.ticketFor(a.email, "apple"), next: "/reader-login", came, via: "apple" });
+  res.json({ ticket: readerTicket(reader.id) });
+});
 // One-time site sign-in for a reader who just signed up in the reader (/api/reader-login/signup): a minute, once.
 const onceTickets = new Map(); // ticket -> { id, next, expires }
 function onceTicket(id, next) {
@@ -842,6 +871,9 @@ app.get("/reader-login", signed, (req, res) => {
   const ticket = readerTicket(req.user.id);
   // The Mac app sends Google sign-in to the browser (Google refuses it inside an app); it comes back by chytai://.
   if (req.query.to === "mac") return res.set("Cache-Control", "no-store").send(pages.macBackPage({ user: req.user, link: `chytai://auth?ticket=${ticket}` }));
+  // The phone app's sign-in sheet (iOS ASWebAuthenticationSession, Android Custom Tabs) waits for chytai://auth and
+  // closes on it; the app then opens /auth?ticket=… in its own window.
+  if (req.query.to === "app") return res.set("Cache-Control", "no-store").redirect(`chytai://auth?ticket=${ticket}`);
   res.redirect(`${origin}/auth?ticket=${ticket}`);
 });
 app.post("/api/reader-ticket", (req, res) => {
@@ -850,6 +882,19 @@ app.post("/api/reader-ticket", (req, res) => {
   const r = t && t.expires > Date.now() ? auth.reader(t.id) : null;
   if (!r) return res.status(404).json({ error: "ticket" });
   res.json({ id: r.id, name: r.name, username: r.username, key: readerKey(r.id) });
+});
+// «Видалити акаунт» in the reader's settings (App Store wants it inside the app, Max 2026-11-17): the reader asks with
+// the account's key, the site deletes it as /settings/delete does, and the reader drops its own data itself.
+app.post("/api/reader-account/delete", (req, res) => {
+  const id = String(req.body?.id || "");
+  const key = String(req.body?.key || "");
+  const r = auth.reader(id);
+  const want = r && readerKey(id);
+  if (!want || key.length !== want.length || !require("crypto").timingSafeEqual(Buffer.from(key), Buffer.from(want))) return res.status(403).json({ error: "key" });
+  if (id === OWNER_ID) return res.status(400).json({ error: "Власника не видаляємо." });
+  console.log(`reader @${r.username} deleted the account from the reader`);
+  deleteAccount(id, { fromReader: true });
+  res.json({ ok: true });
 });
 // The reader's list of books for one account: titles and authors only, never the files. Replaces the old list.
 app.post("/api/reader-library", (req, res) => {
@@ -1362,15 +1407,18 @@ app.post("/settings/signout", signed, (req, res) => {
   res.setHeader("Set-Cookie", auth.cookie("", { clear: true, secure: secure(req) }));
   res.redirect(303, "/login");
 });
+function deleteAccount(id, { fromReader } = {}) {
+  lists.forgetReader(id);
+  club.forgetReader(id);
+  mcp.forgetReader(id);
+  if (!fromReader) readerSignOut(id);
+  auth.deleteReader(id);
+  store.forgetReader(id);
+}
 app.post("/settings/delete", signed, (req, res) => {
   if (req.owner) return res.status(400).send(pages.messagePage({ title: "Власника не видаляємо", text: "Для цього є інший шлях.", user: req.user }));
   if (req.body.confirm !== req.user.username) return res.status(400).send(pages.settingsPage({ user: req.user, values: req.user, error: "Щоб видалити акаунт, впишіть своє ім'я для адреси." }));
-  lists.forgetReader(req.user.id);
-  club.forgetReader(req.user.id);
-  mcp.forgetReader(req.user.id);
-  readerSignOut(req.user.id);
-  auth.deleteReader(req.user.id);
-  store.forgetReader(req.user.id);
+  deleteAccount(req.user.id);
   res.setHeader("Set-Cookie", auth.cookie("", { clear: true, secure: secure(req) }));
   res.send(pages.messagePage({ title: "Акаунт видалено", text: "Книжки, оцінки й нотатки стерто. Дякуємо, що читали з нами." }));
 });

@@ -602,5 +602,16 @@ A flag only when Max asks for one, or when the change could break what readers u
   The app is about one's own books and explanations (Max 2026-11-17, before the store release): «Вільна полиця» is
   one row there (opens the shelf under the list), no «Каталог Chytai» row, no «Клуб Chytai» link in the panel; the
   catalog search for paper books and «Про книжку» stay.
+- The phone app's sign-in (Max 2026-11-17, for the stores: sign-up never leaves the app; app 1.5.0 needs a native
+  build): `appSignInPage` in server/index.js shows «Увійти з Apple» / «Увійти через Google» only when the user agent
+  says `/apple` / `/google` (app/App.js). Google: the app opens the system sheet (expo-web-browser) on the site's
+  `/login/google?next=/reader-login?back=<origin>&to=app`; a new address gets an account at once (`appBack` in
+  web/server.js), `/reader-login?to=app` redirects to `chytai://auth?ticket=…`, the app opens `/auth`. Apple:
+  expo-apple-authentication's token → the page → `POST /api/reader-login/apple` (web/apple.js checks Apple's
+  signature, `APPLE_BUNDLE_IDS`, default `com.maxua.chytai`; a token works once). Try locally: a fake JWKS at
+  `APPLE_KEYS_URL`, a stub `window.ReactNativeWebView`, `window.__chytaiSignIn({apple:{token,name}})`.
+- Reader «Видалити акаунт» in the settings (App Store rule): `POST /api/account/delete` → the site's
+  `/api/reader-account/delete` (account key) deletes as /settings/delete does (`deleteAccount`), then the reader's
+  `dropAccount(id)`. Not for the owner or guests.
 - Reader: the app's own UI can't be selected (`body` has `user-select: none`, end of `src/renderer/style.css`). Text a
   reader may copy (a new note, answer or field) goes into the list of selectable classes there.

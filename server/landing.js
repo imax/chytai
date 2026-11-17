@@ -240,4 +240,4 @@ ${font("source-serif-4/opsz.css")}${font("onest/wght.css")}
 </body></html>`;
 }
 
-module.exports = { landingPage };
+module.exports = { landingPage, G };

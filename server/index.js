@@ -25,7 +25,7 @@ const { createProtected } = require("./protected");
 const paper = require("./paper");
 const storage = require("./storage");
 const { searchReader } = require("./search");
-const { landingPage: renderLanding } = require("./landing");
+const { landingPage: renderLanding, G: GOOGLE_G } = require("./landing");
 
 const ROOT = path.join(__dirname, "..");
 loadDotEnv(path.join(ROOT, ".env"));
@@ -1041,6 +1041,9 @@ const smallPage = (body) => `<!doctype html>
   .btn { display: block; box-sizing: border-box; width: 100%; padding: 11px; font: inherit; font-weight: 600; text-align: center; text-decoration: none; color: #fff; background: #b7791f; border: none; border-radius: 8px; }
 </style></head><body><main>${body}</main></body></html>`;
 
+// Apple's logo for «Увійти з Apple» (its own colour: black on white, white on black).
+const APPLE_LOGO = `<svg width="16" height="19" viewBox="0 0 814 1000" aria-hidden="true"><path fill="currentColor" d="M788 341c-6 4-108 62-108 190 0 149 131 202 135 203-1 3-21 72-69 142-43 62-88 124-156 124s-86-40-164-40c-77 0-104 41-167 41s-106-57-156-127C45 791 0 666 0 548c0-191 124-292 246-292 65 0 119 43 160 43 39 0 99-45 173-45 28 0 129 3 195 87zM558 163c31-36 52-87 52-137 0-7 0-14-2-20-50 2-109 33-145 75-28 32-54 83-54 134 0 8 1 15 2 18 3 1 9 2 14 2 45 0 101-30 133-72z"/></svg>`;
+
 // Signing in inside the iPhone and Android apps (Max, 2026-11-04): the e-mail, the code and, for a new
 // address, the name, right here, no Safari. The page calls the site's /api/reader-login/* (the same codes and
 // limits as chytai.org.ua/login) and gets a ticket for /auth. One account with the site; a new reader gets a
@@ -1048,6 +1051,12 @@ const smallPage = (body) => `<!doctype html>
 function appSignInPage() {
   return smallPage(`<h1>Chytai</h1><p>Читалка з поясненнями від Claude</p>
 <div id="signin" data-web="${esc(WEB_URL)}">
+  <div id="sso" hidden>
+    <button class="sso apple" type="button" data-sso="apple" hidden>${APPLE_LOGO}Увійти з Apple</button>
+    <button class="sso google" type="button" data-sso="google" hidden>${GOOGLE_G}Увійти через Google</button>
+    <p class="err" role="alert"></p>
+    <p class="or">або поштою</p>
+  </div>
   <form id="f-email" novalidate>
     <input type="email" name="email" enterkeyhint="send" required autocomplete="email" inputmode="email" autocapitalize="off" placeholder="Ваша пошта">
     <p class="err" role="alert"></p>
@@ -1078,6 +1087,13 @@ function appSignInPage() {
   .err { margin: -4px 0 10px; color: #c0392b; opacity: 1; } .err:empty { display: none; }
   .note { margin: 12px 0 0; font-size: 14px; opacity: .65; }
   .note a { color: #b7791f; font-weight: 600; }
+  .sso { display: flex; box-sizing: border-box; width: 100%; height: 46px; margin: 0 0 10px; align-items: center; justify-content: center; gap: 10px; font: inherit; font-weight: 600; border-radius: 8px; cursor: pointer; }
+  .sso[hidden] { display: none; }
+  .sso:disabled { opacity: .6; }
+  .sso.apple { color: #fff; background: #000; border: none; }
+  .sso.google { color: #1f1f1f; background: #fff; border: 1px solid rgba(59,47,30,0.25); }
+  @media (prefers-color-scheme: dark) { .sso.apple { color: #000; background: #fff; } }
+  .or { margin: 14px 0 12px; font-size: 14px; text-align: center; opacity: .6; }
 </style>
 <script>
 (function () {
@@ -1126,7 +1142,35 @@ function appSignInPage() {
       .catch(function (e) { err.textContent = e instanceof TypeError ? DOWN : e.message; return null; })
       .then(function (d) { btn.disabled = false; btn.textContent = label; return d; });
   }
-  function enter(ticket) { show("in"); location.href = "/auth?ticket=" + encodeURIComponent(ticket); }
+  function enter(ticket) { show("in"); document.getElementById("sso").hidden = true; location.href = "/auth?ticket=" + encodeURIComponent(ticket); }
+  // Apple and Google (Max 2026-11-17), only in an app build that can do them: its user agent says /apple, /google.
+  // Google refuses an embedded browser, so the app opens the system's sign-in sheet on the site's Google sign-in,
+  // which ends at chytai://auth?ticket=…; the app then opens /auth itself. Apple's sheet is the app's own: it
+  // gives us Apple's token (window.__chytaiSignIn), the site checks it (/api/reader-login/apple).
+  var sso = document.getElementById("sso"), ssoErr = sso.querySelector(".err");
+  var native = window.ReactNativeWebView && navigator.userAgent.indexOf("ChytaiApp/") >= 0;
+  ["apple", "google"].forEach(function (k) {
+    var b = sso.querySelector("[data-sso=" + k + "]");
+    if (!native || navigator.userAgent.indexOf("/" + k) < 0) return;
+    b.hidden = false; sso.hidden = false;
+    b.addEventListener("click", function () {
+      ssoErr.textContent = "";
+      sso.querySelectorAll("button").forEach(function (x) { x.disabled = true; });
+      var msg = { type: "signin", how: k };
+      if (k === "google") msg.url = web + "/login/google?next=" + encodeURIComponent("/reader-login?back=" + location.origin + "&to=app") + "&came=" + encodeURIComponent(JSON.stringify(came));
+      window.ReactNativeWebView.postMessage(JSON.stringify(msg));
+    });
+  });
+  function ssoReset(text) { ssoErr.textContent = text || ""; sso.querySelectorAll("button").forEach(function (x) { x.disabled = false; }); }
+  window.__chytaiSignIn = function (r) {
+    if (!r || r.cancel) return ssoReset();
+    if (r.error) return ssoReset(r.error);
+    if (r.ticket) return enter(r.ticket);
+    if (r.apple) fetch(web + "/api/reader-login/apple", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token: r.apple.token, name: r.apple.name || "", came: came }) })
+      .then(function (res) { return res.json().catch(function () { return {}; }).then(function (d) { if (!res.ok || d.error || !d.ticket) throw new Error(d.error || DOWN); return d; }); })
+      .then(function (d) { enter(d.ticket); })
+      .catch(function (e) { ssoReset(e instanceof TypeError ? DOWN : e.message); });
+  };
   forms.email.addEventListener("submit", function (e) {
     e.preventDefault();
     var input = forms.email.elements.email;
@@ -2018,6 +2062,19 @@ api.delete(["/chats/:id", "/chats"], (req, res) => {
   res.json({ ok: true });
 });
 
+// Everything the reader keeps for one account: its files, notes, positions, links and sessions.
+function dropAccount(id) {
+  endAllSessions(id);
+  fs.rmSync(path.join(ACCOUNTS_DIR, id), { recursive: true, force: true });
+  delete state.accounts[id];
+  delete state.users[id];
+  delete state.libs[id];
+  store.items.dropAccount(id);
+  for (const [t, sh] of Object.entries(state.shares)) if (sh.acct === id) delete state.shares[t];
+  for (const t of Object.keys(state.opds)) if (state.opds[t].acct === id) delete state.opds[t];
+  libs.delete(id);
+}
+
 // An account deleted on the site takes its books, notes and positions with it (the site's privacy page
 // promises that). Once a day the reader asks the site which of its accounts are gone. If the site says
 // most of them are, something is wrong there, and nothing is deleted.
@@ -2030,13 +2087,7 @@ async function dropDeletedAccounts() {
     const gone = ((await res.json()).gone || []).filter((id) => ids.includes(id));
     if (gone.length > 2 && gone.length > ids.length / 2) return console.error(`readers-gone: ${gone.length} of ${ids.length} accounts gone, not deleting`);
     for (const id of gone) {
-      fs.rmSync(path.join(ACCOUNTS_DIR, id), { recursive: true, force: true });
-      delete state.accounts[id];
-      delete state.users[id];
-      delete state.libs[id];
-      store.items.dropAccount(id);
-      for (const [t, sh] of Object.entries(state.shares)) if (sh.acct === id) delete state.shares[t];
-      libs.delete(id);
+      dropAccount(id);
       console.log(`account ${id} deleted on the site: its reader data is gone too`);
     }
     if (gone.length) saveState();
@@ -2572,6 +2623,27 @@ api.put("/cover", guestsCannot("Без входу не можна змінюва
   for (const f of fs.readdirSync(dir)) if (f.startsWith(`${key}.`)) fs.unlinkSync(path.join(dir, f));
   fs.writeFileSync(path.join(dir, `${key}.${ext}`), b);
   res.json({ path: name, coverAt: Date.now() });
+});
+
+// «Видалити акаунт» in the settings (App Store wants it inside the app, Max 2026-11-17): the site deletes the
+// account (shelf, lists, the Club), then the reader drops its own data at once and signs the device out.
+api.post("/account/delete", guestsCannot("Без входу акаунта немає."), async (req, res) => {
+  if (req.owner) return res.status(400).json({ error: "Власника не видаляємо." });
+  const id = req.acct;
+  const key = state.accounts[id]?.key;
+  if (!key) return res.status(409).json({ error: "Вийдіть і увійдіть ще раз, тоді видаліть акаунт." });
+  try {
+    const r = await fetch(`${WEB_URL}/api/reader-account/delete`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, key }), signal: AbortSignal.timeout(20000) });
+    if (!r.ok) throw new Error(`site ${r.status}`);
+  } catch (err) {
+    console.error("account delete:", err.message);
+    return res.status(502).json({ error: "Сайт chytai.org.ua зараз не відповідає. Спробуйте ще раз за хвилину." });
+  }
+  dropAccount(id);
+  saveState();
+  console.log(`account ${id} deleted from the reader`);
+  res.setHeader("Set-Cookie", [cookieHeader(req, COOKIE, "", 0), cookieHeader(req, OLD_COOKIE, "", 0)]);
+  res.json({ ok: true });
 });
 
 // The address of the reader's OPDS catalog: GET /api/opds { url }, POST /api/opds makes a new one (the old stops).

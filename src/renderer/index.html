@@ -365,6 +365,16 @@
         <span class="opds-row"><input type="text" id="opds-url" readonly placeholder="Адреси ще немає" /><button type="button" id="opds-copy">Створити</button></span>
         <small>Додайте адресу як OPDS-сервер, і ваші EPUB з'являться на читалці. <button type="button" class="link" id="opds-new" hidden>Нова адреса</button></small>
       </label>
+      <!-- «Видалити акаунт» (App Store wants it inside the app, Max 2026-11-17): a second press confirms. -->
+      <div class="del-set">
+        <button type="button" class="link" id="del-ask">Видалити акаунт</button>
+        <div id="del-confirm" hidden>
+          <p>Ваші книжки, нотатки й полиця на chytai.org.ua зітруться назавжди.</p>
+          <button type="button" id="del-go">Видалити назавжди</button>
+          <button type="button" class="link" id="del-no">Ні</button>
+          <p class="del-err" id="del-err" role="alert"></p>
+        </div>
+      </div>
       <menu>
         <button type="button" id="btn-admin" class="link web-only family-only" title="Хто читає, скільки книжок і пояснень">Статистика</button>
         <button type="button" id="btn-keys" class="link desktop-only" title="Клавіатурні скорочення (?)">Клавіші</button>

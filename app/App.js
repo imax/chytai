@@ -10,10 +10,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, AppState, BackHandler, Linking, Platform, Pressable, StyleSheet, Text, useColorScheme, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
+import * as AppleAuthentication from 'expo-apple-authentication';
 import * as ScreenCapture from 'expo-screen-capture';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import * as SplashScreen from 'expo-splash-screen';
 import * as Updates from 'expo-updates';
+import * as WebBrowser from 'expo-web-browser';
 import { WebView } from 'react-native-webview';
 
 // Android's WebView has no working speech recognition, so the page's dictation (dictation.js) asks the
@@ -22,6 +24,11 @@ import { WebView } from 'react-native-webview';
 const NativeSpeech = Platform.OS === 'android' ? require('expo-speech-recognition').ExpoSpeechRecognitionModule : null;
 
 export const READER_URL = 'https://chytai.fly.dev';
+// Signing in with Google and Apple (1.5.0, Max 2026-11-17: sign-up stays in the app). Google refuses an embedded
+// browser, so its sign-in runs in the system's sheet (ASWebAuthenticationSession / Custom Tabs) on the site's own
+// Google sign-in, which ends at chytai://auth?ticket=…; Apple's is a native sheet whose token the page sends on.
+const GOOGLE_START = 'https://chytai.org.ua/login/google?';
+const SIGNIN_BACK = 'chytai://auth';
 // The reader's own addresses: chytai.fly.dev, and app.chytai.org.ua, where the server sends a request
 // it does not see as the app's (on Android the very first one can go out before the WebView adds
 // ChytaiApp to the user agent). Both stay inside the app.
@@ -213,6 +220,30 @@ function Reader({ onInsets }) {
     return false;
   }, []);
 
+  // The sign-in page's «Увійти з Apple» / «Увійти через Google» (server/index.js appSignInPage): the answer goes
+  // back to window.__chytaiSignIn — a ticket, Apple's token, an error to show, or a cancel.
+  const signInAnswer = useCallback((r) => {
+    webview.current?.injectJavaScript(`window.__chytaiSignIn && window.__chytaiSignIn(${JSON.stringify(r)}); true;`);
+  }, []);
+  const signIn = useCallback(async (msg) => {
+    try {
+      if (msg.how === 'google' && String(msg.url || '').startsWith(GOOGLE_START)) {
+        const r = await WebBrowser.openAuthSessionAsync(msg.url, SIGNIN_BACK);
+        const ticket = r.type === 'success' ? (/[?&]ticket=([a-f0-9]{32})\b/.exec(r.url) || [])[1] : null;
+        return signInAnswer(ticket ? { ticket } : { cancel: true });
+      }
+      if (msg.how === 'apple' && Platform.OS === 'ios') {
+        const c = await AppleAuthentication.signInAsync({ requestedScopes: [AppleAuthentication.AppleAuthenticationScope.FULL_NAME, AppleAuthentication.AppleAuthenticationScope.EMAIL] });
+        // The name comes only on the very first sign-in with Apple; the site keeps it then.
+        const name = [c.fullName?.givenName, c.fullName?.familyName].filter(Boolean).join(' ');
+        return signInAnswer(c.identityToken ? { apple: { token: c.identityToken, name } } : { error: 'Apple не підтвердив вхід. Спробуйте ще раз.' });
+      }
+      signInAnswer({ cancel: true });
+    } catch (err) {
+      signInAnswer(err?.code === 'ERR_REQUEST_CANCELED' ? { cancel: true } : { error: 'Вхід не вдався. Спробуйте ще раз або увійдіть поштою.' });
+    }
+  }, [signInAnswer]);
+
   const reload = useCallback(() => {
     setFailed(null);
     setReady(false);
@@ -233,7 +264,8 @@ function Reader({ onInsets }) {
         // has the camera permission in Info.plist (paper books, 2026-11-02); without it iOS closes the app.
         // «/mic»: and the microphone and speech recognition ones (dictating a question).
         // «/speech» (Android, 1.4.0): dictation goes through the shell's recognizer, see NativeSpeech.
-        applicationNameForUserAgent={Platform.OS === 'android' ? 'ChytaiApp/camera/mic/speech' : 'ChytaiApp/camera/mic'}
+        // «/google», «/apple» (1.5.0): the sign-in page shows those buttons only to a build that can do them.
+        applicationNameForUserAgent={Platform.OS === 'android' ? 'ChytaiApp/camera/mic/speech/google' : 'ChytaiApp/camera/mic/google/apple'}
         allowsBackForwardNavigationGestures
         allowsInlineMediaPlayback
         mediaCapturePermissionGrantType="grant"
@@ -269,6 +301,7 @@ function Reader({ onInsets }) {
             if (msg.type === 'error') setPageError(String(msg.text).slice(0, 400));
             if (msg.type === 'protect') setProtected(!!msg.on);
             if (msg.type === 'speech') speech(msg.action);
+            if (msg.type === 'signin') signIn(msg);
             if (msg.type === 'insets') onInsets?.(msg.top, msg.bottom);
           } catch { /* not ours */ }
         }}

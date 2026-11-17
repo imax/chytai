@@ -1129,6 +1129,17 @@
     onShowLibrary: on("ui:library"),
     onTogglePanel: on("ui:toggle-panel"),
     onFind: on("ui:find"),
+    // «Видалити акаунт»: the site and the reader both forget the account; the page goes to /login after.
+    deleteAccount: async () => {
+      const res = await fetch("/api/account/delete", { method: "POST", credentials: "same-origin" });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(d.error || "Не вдалося видалити акаунт. Спробуйте ще раз.");
+      try {
+        localStorage.clear();
+        indexedDB.databases?.()?.then((dbs) => dbs.forEach((x) => x.name && indexedDB.deleteDatabase(x.name)));
+        self.caches?.keys()?.then((ks) => ks.forEach((k) => caches.delete(k)));
+      } catch {}
+    },
     logout: () => {
       const f = document.createElement("form");
       f.method = "post";
