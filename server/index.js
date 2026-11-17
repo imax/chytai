@@ -3418,7 +3418,8 @@ api.post("/explain", async (req, res) => {
   try {
     const result = await explain({
       apiKey,
-      model: request.mode === "translate" ? shared.translateModel : shared.model,
+      // Fast mode is Max's alone (2026-11-17: «швидкий Опус для мене»); other readers get the same model at its usual speed.
+      model: request.mode === "translate" ? shared.translateModel : req.owner ? shared.model : String(shared.model).replace(/-fast$/, ""),
       language: shared.language,
       // «Стиль пояснень» is gone (Max, 2026-11-02: nobody used it); «простіше» or «коротше» goes in the question.
       style: "default",

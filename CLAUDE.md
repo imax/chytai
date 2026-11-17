@@ -554,7 +554,8 @@ A flag only when Max asks for one, or when the change could break what readers u
   Читай»): don't bring them back, on the site or in the reader. Their tables were dropped (store.dropArticles); the export is in project files `chytai-articles-export/`.
 - Reader «Пояснити» / «Запитати» model (Max, 2026-11-17): «Модель для пояснень» in the reader's settings, only the
   owner sees it, his choice is every reader's (`state.shared.model`). `claude-opus-5-5-fast` = Opus 5.5 in fast mode
-  (src/ai.js `speed: "fast"`, 2× price, normal speed on a 429), counted as its own model in costs. «Переклад» stays
+  (src/ai.js `speed: "fast"`, 2× price, normal speed on a 429), counted as its own model in costs; fast for Max only,
+  other readers get plain Opus 5.5 (the explain route drops `-fast` for them). «Переклад» stays
   on `translateModel` (Sonnet). Compare models on real requests: kept cards are `items` kind `chats` on the reader's
   /agent/sql; the container has no key, so run the script on Max's Mac (Desktop Commander, nvm node 22, key from
   ~/Projects/chytai/.env, `.tmp/model-bench`). 2026-11-17, 12 requests, first word / whole: Opus low 4.5 / 9.8 s,
