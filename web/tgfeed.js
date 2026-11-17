@@ -536,7 +536,9 @@ function create(db, { calendar, apiKey = process.env.ANTHROPIC_API_KEY || "", cl
     } else await viaPages(list, out);
     prune(out);
     if (meta("tg:events") === "on") {
-      out.events = (await events()).made.length;
+      const ev = await events();
+      out.events = ev.made.length;
+      if (ev.errors.length) out.evErrors = ev.errors.slice(0, 5);
       out.kinds = (await classify()).set;
     }
     setMeta("tg:last", JSON.stringify({ ...out, errors: out.errors.slice(0, 8) }));
@@ -579,12 +581,14 @@ function create(db, { calendar, apiKey = process.env.ANTHROPIC_API_KEY || "", cl
     const user = `Today: ${kyivDay()}\n${p.page ? `Page: ${p.page}` : `Channel: @${p.channel}${city ? ` (a book club in ${city}; use this city when the post names none and the meeting is not online)` : ""}`}\nPosted: ${p.at.slice(0, 10)}\nLinks in the post: ${links.length ? links.join(" ") : "none"}\n\n${p.text}`;
     const res = await c.messages.create({
       model: MODEL,
-      max_tokens: 4000,
+      // A tour's poster is one event a stop: 22 stops overran 4,000 tokens (2026-11-17).
+      max_tokens: 16000,
       system: [{ type: "text", text: SYSTEM, cache_control: { type: "ephemeral" } }],
       messages: [{ role: "user", content: pics.length ? [...pics, { type: "text", text: `${user}\n\n(The post's picture${pics.length > 1 ? "s are" : " is"} above.)` }] : user }],
       output_config: { effort: "low", format: { type: "json_schema", schema: EVENT_SCHEMA } },
     });
     if (res.stop_reason === "refusal") return [];
+    if (res.stop_reason === "max_tokens") throw new Error("answer cut at max_tokens");
     const raw = res.content.map((b) => b.text || "").join("");
     const j = JSON.parse(raw.slice(raw.indexOf("{"), raw.lastIndexOf("}") + 1));
     const today = kyivDay();
