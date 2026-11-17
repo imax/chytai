@@ -511,7 +511,6 @@
         <p class="r-drop-note">Читаєте на папері? Додайте книжку пошуком вище або за фото обкладинки. Пояснення й нотатки до неї будуть тут, і ШІ знатиме, на якій ви сторінці.</p>
         <button class="r-pill-line r-pick" data-act="cover-photo"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg><span>Сфотографувати обкладинку</span></button></section>
       <section class="r-where">${head("Де ще шукаємо", "", true)}
-        <a class="r-where-row" href="https://chytai.org.ua" target="_blank" rel="noopener"><span>Каталог Chytai</span><small>де купити ↗</small></a>
         ${shopRow("yakaboo", "Yakaboo", yakabooHtml)}
         ${shopRow("bookua", "Book.ua", bookuaHtml)}
         ${freeRow}

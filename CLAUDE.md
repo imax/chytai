@@ -599,5 +599,8 @@ A flag only when Max asks for one, or when the change could break what readers u
 - Reader «Додати книжку» → «Де ще шукаємо»: a store whose purchases download as files gets a row named by the store
   with «як додати» steps (`shopRow` in src/renderer/home.js: Yakaboo, Book.ua). No store has an API; we never sign
   in to a reader's store account.
+  The app is about one's own books and explanations (Max 2026-11-17, before the store release): «Вільна полиця» is
+  one row there (opens the shelf under the list), no «Каталог Chytai» row, no «Клуб Chytai» link in the panel; the
+  catalog search for paper books and «Про книжку» stay.
 - Reader: the app's own UI can't be selected (`body` has `user-select: none`, end of `src/renderer/style.css`). Text a
   reader may copy (a new note, answer or field) goes into the list of selectable classes there.
