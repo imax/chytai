@@ -72,6 +72,18 @@ const INSETS_REPORTER = `
   true;
 `;
 
+// Android: tells the shell when a text field has the focus. The empty menuItems below takes away Android's own
+// Cut / Copy / Paste bar too, so the e-mailed sign-in code could not be pasted (a reader, 2026-11-17); in a field
+// the system bar comes back.
+const FIELD_REPORTER = `
+  (function () {
+    var field = function (el) { return el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable); };
+    var send = function (on) { try { window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'field', on: on })); } catch (e) {} };
+    document.addEventListener('focusin', function (e) { if (field(e.target)) send(true); }, true);
+    document.addEventListener('focusout', function (e) { if (field(e.target)) send(false); }, true);
+  })();
+  true;
+`;
 
 // Android draws the app under the status and navigation bars. A recent Android WebView passes those
 // insets to the page's env(safe-area-inset-*), and the reader's CSS keeps clear of them as on iOS; with
@@ -111,6 +123,7 @@ function Reader({ onInsets }) {
   const [pageError, setPageError] = useState(null);
   const [progress, setProgress] = useState(1); // 0..1 while a page loads, 1 when done
   const [shellNote, setShellNote] = useState(null);
+  const [inField, setInField] = useState(false); // Android: a text field has the focus (FIELD_REPORTER)
   // When iOS kills the page's process (memory), what the app was doing: told to the page after the reload, which
   // reports it with its own note (web-bridge.js life → /api/page-gone) and opens the book it had on screen.
   const activeAt = useRef(Date.now());
@@ -250,7 +263,7 @@ function Reader({ onInsets }) {
         // No system Copy / Look Up / Translate callout over a selection: the reader shows its
         // own toolbar there. An empty list keeps text and its handles selectable; the native side
         // is patches/react-native-webview+13.16.1.patch, so changing it needs a new build.
-        menuItems={[]}
+        menuItems={inField && Platform.OS === 'android' ? undefined : []}
         // The default whitelist (http, https, about:blank) silently cancels every other navigation
         // before onShouldStartLoadWithRequest runs. epub.js loads each chapter into an iframe via
         // srcdoc (about:srcdoc), so with the default the chapter frame stayed an empty about:blank
@@ -262,7 +275,7 @@ function Reader({ onInsets }) {
         // fonts on the phone) only for the "app-bound" domains listed in app.json (WKAppBoundDomains) and
         // only with this set. Books and notes are kept in IndexedDB by the page itself. Needs a new build.
         limitsNavigationsToAppBoundDomains
-        injectedJavaScriptBeforeContentLoaded={Platform.OS === 'android' ? ERROR_REPORTER + INSETS_REPORTER : ERROR_REPORTER}
+        injectedJavaScriptBeforeContentLoaded={Platform.OS === 'android' ? ERROR_REPORTER + INSETS_REPORTER + FIELD_REPORTER : ERROR_REPORTER}
         onMessage={(e) => {
           try {
             const msg = JSON.parse(e.nativeEvent.data);
@@ -270,6 +283,7 @@ function Reader({ onInsets }) {
             if (msg.type === 'protect') setProtected(!!msg.on);
             if (msg.type === 'speech') speech(msg.action);
             if (msg.type === 'insets') onInsets?.(msg.top, msg.bottom);
+            if (msg.type === 'field') setInField(!!msg.on);
           } catch { /* not ours */ }
         }}
         onNavigationStateChange={(nav) => { canGoBack.current = nav.canGoBack; }}
