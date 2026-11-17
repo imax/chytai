@@ -36,12 +36,17 @@ function tidy(text, max = 160) {
   return t.replace(/\*\*|__|`/g, "").replace(/^[\s*_/\\#>—-]+/, "").replace(/[\s.,;:—*_/\\#-]+$/, "").slice(0, max);
 }
 
+// A meaning with a star or slash glued to a word is broken output (Max 2026-11-17, «indolently — лінив*/»): better none,
+// the card then asks for that one word.
+const broken = (m) => /[\p{L}][*/\\]|[*/\\][\p{L}]/u.test(String(m || "").replace(/\*\*/g, ""));
+const clean = (words) => Object.fromEntries(Object.entries(words || {}).filter(([, m]) => !broken(m)).map(([w, m]) => [w, tidy(m)]).filter(([, m]) => m));
+
 function parse(answer) {
   const words = {};
   for (const line of String(answer || "").split("\n")) {
     const [w, m] = line.split("\t");
     const k = norm(w);
-    const meaning = tidy(m);
+    const meaning = broken(m) ? "" : tidy(m);
     if (k && meaning && k.length <= 60 && !words[k]) words[k] = meaning;
   }
   return words;
@@ -73,7 +78,7 @@ class Ahead {
   async words(apiKey, { text, title, author }) {
     const h = this.hash(text);
     const have = this.kept(h);
-    if (have) return { words: have.words, kept: true };
+    if (have) return { words: clean(have.words), kept: true };
     if (this.asking.has(h)) return { words: (await this.asking.get(h)).words, kept: true };
     const p = (async () => {
       const client = new Anthropic({ apiKey });
