@@ -998,6 +998,8 @@
     paperChatDelete: (name, id) => api("DELETE", `/api/paper/${encodeURIComponent(name)}/chats/${encodeURIComponent(id)}`),
     paperTidy: async (name, text) => (await (await api("POST", `/api/paper/${encodeURIComponent(name)}/tidy`, { text })).json()).text || text,
     tidy: async (title, author, text) => (await (await api("POST", "/api/tidy", { title, author, text })).json()).text || text,
+    // One selected word's meaning in a second (server/word.js): { text } or { error }.
+    word: async (body) => (await api("POST", "/api/word", body)).json(),
     paperSuggest: async (name) => (await (await api("POST", `/api/paper/${encodeURIComponent(name)}/suggest`, {})).json()).questions?.[0] || "",
     paperSeen: (name) => api("POST", `/api/paper/${encodeURIComponent(name)}/seen`, {}).catch(() => {}),
     paperScan: async (kind, blob) => (await api("POST", `/api/paper/scan?kind=${kind}`, blob)).json(),

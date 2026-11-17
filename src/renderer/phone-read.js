@@ -294,7 +294,13 @@
           <div><div class="m-grp">Гортання</div>${seg("mode", [["scroll", "Прокрутка"], ["pages", "Сторінки"]], settings.pageTaps ? "pages" : "scroll")}</div>`
         }
         </div>
-        ${window.Gloss?.has() ? `<div class="m-grp">Словничок</div>${seg("gloss", [["on", "Підкреслювати"], ["off", "Ні"]], settings.gloss === "off" ? "off" : "on")}` : ""}
+        ${
+          window.Gloss?.levels()
+            ? `<div class="m-grp">Словничок</div>${seg("gloss", [["on", "Менше"], ["more", "Більше"], ["off", "Ні"]], ["more", "off"].includes(settings.gloss) ? settings.gloss : "on")}`
+            : window.Gloss?.has()
+              ? `<div class="m-grp">Словничок</div>${seg("gloss", [["on", "Підкреслювати"], ["off", "Ні"]], settings.gloss === "off" ? "off" : "on")}`
+              : ""
+        }
       </div>`;
     const box = lookBox();
     for (const b of box.querySelectorAll("[data-size]")) b.onclick = async () => (await setFont(Number(b.dataset.size)), renderLook());

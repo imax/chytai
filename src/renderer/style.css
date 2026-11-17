@@ -2138,7 +2138,7 @@ a.r-frow:hover .r-frow-go.plain { color: var(--r-ochre); }
 body { --m-card: #ffffff; --m-sline: #c9c3b6; --m-red: #a63a2a; }
 body[data-theme="sepia"] { --m-card: #fbf6ea; --m-sline: #cdbd9e; }
 body[data-theme="dark"] { --m-card: #24221e; --m-sline: #4a463f; --m-red: #e07a68; }
-#sel-toolbar.mark .st-quote, #sel-toolbar.mark #st-q, #sel-toolbar.mark .st-row { display: none !important; }
+#sel-toolbar.mark .st-quote, #sel-toolbar.mark .st-word, #sel-toolbar.one-word .st-quote, #sel-toolbar.mark #st-q, #sel-toolbar.mark .st-row { display: none !important; }
 html body #sel-toolbar:not(.mark) {
   flex-direction: column; align-items: stretch; gap: 6px; padding: 12px 12px 8px 16px; border: 1px solid var(--m-sline); border-radius: 16px;
   background: var(--m-card); color: var(--m-ink); box-shadow: 0 -10px 34px -12px rgba(27, 26, 23, .35); font-family: var(--m-sans);
@@ -2410,3 +2410,12 @@ input, textarea, select, [contenteditable], #pdf-container, .card, .answer, #not
 }
 #gloss-tip.hidden { display: none; }
 #gloss-tip b { font-weight: 600; }
+/* «Знаю це слово» (Словничок 2): under the meaning, small, on the right. */
+#gloss-tip .gl-know {
+  display: block; margin: 6px -6px -6px auto; min-height: 32px; padding: 0 6px; border: 0; background: none;
+  font: 500 13px var(--m-sans); color: var(--m-ochre); cursor: pointer;
+}
+/* A selected word's meaning on the selection's card (renderer.js wordCard): the word, then its meaning. */
+#sel-toolbar .st-word { margin: 0 4px 2px 0; font: 400 16px/1.4 var(--m-serif); color: var(--m-ink); }
+#sel-toolbar .st-word b { font-weight: 600; }
+#sel-toolbar .st-word.wait { color: var(--m-ink3); }

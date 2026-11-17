@@ -8,6 +8,11 @@ window.Gloss = (() => {
   // A word: letters, stress marks, apostrophes and hyphens inside it.
   const WORD = /[\p{L}\p{M}]+(?:['’`ʼ-][\p{L}\p{M}]+)*/gu;
   let forms = null; // key -> meaning, for the book on screen
+  // «Словничок 2» (flag gloss-v2): key -> 1 (the sentence is unclear without it) or 2 (a hint helps), and key -> the
+  // word's dictionary form, which «Знаю» keeps (settings.glossKnown: every form of it goes).
+  let levels = null;
+  let words = null;
+  let contentsOf = () => [];
   let longest = 1; // words in the longest expression
   let book = null;
   const marked = new WeakMap(); // a chapter's document -> [{ range, text, gloss }]
@@ -15,11 +20,17 @@ window.Gloss = (() => {
   let shown = null; // { doc }
 
   const enabled = () => !!forms && settings.gloss !== "off";
+  const wordOf = (k) => words?.[k] || k;
+  // «Менше» (on) underlines level 1 only, «Більше» (more) both; a reader's known words never.
+  const visible = (k, known) => (!levels || levels[k] !== 2 || settings.gloss === "more") && !known.has(wordOf(k));
 
   // Called when a book opens; marks the chapters already on screen once the list is in.
   async function load(name, contentsList) {
     forms = null;
+    levels = null;
+    words = null;
     book = name;
+    contentsOf = contentsList || (() => []);
     hide();
     // A reader's own upload may have got one since the page loaded (made in the background): asked each time.
     const own = !settings.guest && /\.epub$/i.test(name || "") && !(settings.freeBooks || []).includes(name);
@@ -27,7 +38,10 @@ window.Gloss = (() => {
     try {
       const res = await fetch(`/api/glossary?book=${encodeURIComponent(name)}`, { credentials: "same-origin" });
       if (!res.ok || book !== name) return;
-      forms = (await res.json()).forms || {};
+      const data = await res.json();
+      forms = data.forms || {};
+      levels = data.levels || null;
+      words = data.words || null;
       longest = Math.max(1, ...Object.keys(forms).map((k) => k.split(" ").length));
     } catch {
       return;
@@ -59,7 +73,8 @@ window.Gloss = (() => {
     if (!enabled() || !win.CSS?.highlights || !win.Highlight) return;
     style(contents);
     const found = [];
-    const seen = new Set(); // a word is underlined the first time in a chapter only: «од» 187 times was a page of dots
+    const seen = new Set();
+    const known = new Set(settings.glossKnown || []); // a word is underlined the first time in a chapter only: «од» 187 times was a page of dots
     const walk = doc.createTreeWalker(doc.body, NodeFilter.SHOW_TEXT);
     for (let node = walk.nextNode(); node; node = walk.nextNode()) {
       const text = node.data;
@@ -77,12 +92,14 @@ window.Gloss = (() => {
           const gloss = forms[k];
           if (!gloss) continue;
           took = n;
-          if (seen.has(k)) continue;
-          seen.add(k);
+          // Once a chapter for each word and meaning: «зимовник» of bees and of a steppe homestead are two.
+          const once = `${wordOf(k)}|${gloss}`;
+          if (seen.has(once) || !visible(k, known)) continue;
+          seen.add(once);
           const range = doc.createRange();
           range.setStart(node, first.index);
           range.setEnd(node, last.index + last[0].length);
-          found.push({ range, text: span.replace(/\u0301/g, ""), gloss });
+          found.push({ range, text: span.replace(/\u0301/g, ""), gloss, k });
         }
         i += took || 1;
       }
@@ -112,6 +129,22 @@ window.Gloss = (() => {
     const b = document.createElement("b");
     b.textContent = hit.text;
     tip.append(b, ` — ${hit.gloss}`);
+    if (levels) {
+      // «Знаю це слово»: not underlined for this reader any more, in this book and every other.
+      const know = document.createElement("button");
+      know.type = "button";
+      know.className = "gl-know";
+      know.dataset.act = "gloss-know";
+      know.textContent = "Знаю це слово";
+      know.onclick = () => {
+        const list = [...(settings.glossKnown || []).filter((w) => w !== wordOf(hit.k)), wordOf(hit.k)].slice(-3000);
+        settings.glossKnown = list;
+        window.reader.setSettings({ glossKnown: list }).catch(() => {});
+        hide();
+        for (const c of contentsOf() || []) mark(c);
+      };
+      tip.append(know);
+    }
     tip.classList.remove("hidden");
     const frame = win.frameElement?.getBoundingClientRect() || { left: 0, top: 0 };
     const r = hit.range.getClientRects()[0] || hit.range.getBoundingClientRect();
@@ -134,5 +167,11 @@ window.Gloss = (() => {
   // A tap anywhere outside the book's frames (the bars, the margins) puts the card away.
   addEventListener("pointerdown", (e) => !e.target.closest?.("#gloss-tip") && hide(), true);
 
-  return { load, mark, style: (c) => enabled() && marked.has(c.document) && style(c), tap, hide, has: () => !!forms };
+  // The book's meaning of a selected word or expression, any level (renderer.js shows it at once on the card).
+  const lookup = (text) => {
+    const k = key(text).replace(/\s+/g, " ").trim();
+    return forms?.[k] ? { text: text.trim(), gloss: forms[k] } : null;
+  };
+
+  return { load, mark, style: (c) => enabled() && marked.has(c.document) && style(c), tap, hide, lookup, has: () => !!forms, levels: () => !!levels };
 })();

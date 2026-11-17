@@ -1024,9 +1024,41 @@ function handleSelection(range, cfiRange, ctx, frame) {
   bar.querySelector('[data-action="translate"]').hidden = isUkrainian(pendingSelection.text);
   const quote = pendingSelection.text.replace(/\s+/g, " ");
   bar.querySelector(".st-quote").textContent = quote.length > 300 ? quote.slice(0, 300) + "…" : quote;
+  wordCard(pendingSelection);
   // A new selection starts with an empty field; moving the ends of the one on screen keeps what is written.
   if (bar.classList.contains("hidden")) setAskField("");
   showSelToolbar(range, frame);
+}
+
+// «Словничок 2» (flag gloss-v2; Max, 2026-11-17: «натискаєш на слово і зразу тобі щось показується»): one selected
+// word shows its meaning on the card at once, from the book's own list or by a quick question (server/word.js,
+// about a second). «Пояснити» and the rest stay under it for more.
+let wordAsked = 0;
+function wordCard(sel) {
+  const bar = $("#sel-toolbar");
+  const box = bar.querySelector(".st-word");
+  const text = sel.text.trim();
+  const one = settings.flags?.includes("gloss-v2") && !settings.free && !settings.guest && /^[\p{L}\p{M}'’ʼ-]{2,40}$/u.test(text);
+  bar.classList.toggle("one-word", !!one);
+  box.hidden = !one;
+  const n = ++wordAsked;
+  if (!one) return;
+  const put = (meaning, wait) => {
+    const b = document.createElement("b");
+    b.textContent = text.replace(/\u0301/g, "");
+    box.replaceChildren(b, ` — ${meaning}`);
+    box.classList.toggle("wait", !!wait);
+  };
+  window.ReadingTime?.count("word");
+  const mine = window.Gloss?.lookup(text);
+  if (mine) return put(mine.gloss);
+  put("…", true);
+  const c = sel.context || {};
+  const sentence = [String(c.before || "").split(/(?<=[.!?…])\s+/).pop(), text, String(c.after || "").split(/(?<=[.!?…])\s/)[0]].join(" ").replace(/\s+/g, " ").trim().slice(-600);
+  window.reader
+    .word({ word: text, sentence, title: c.bookTitle || "", author: c.author || "" })
+    .then((r) => n === wordAsked && put(r.text || "не вдалося", !r.text))
+    .catch(() => n === wordAsked && put("немає зв'язку", true));
 }
 
 // The selection's question field: «Пояснити» asks for an explanation, a question turns it into «Запитати».

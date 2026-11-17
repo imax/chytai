@@ -43,6 +43,68 @@ Keep only the entries a modern teenager would really not understand or would mis
 Answer with the kept words only, one per line, exactly as given before the tab, nothing else.`;
 const STRICT_BATCH = 300;
 
+// «Словничок 2» (Max, 2026-11-17: «іноді пропускає неочевидні слова, іноді підкреслює очевидні»; flag `gloss-v2`).
+// Opus reads the text (it catches false friends: «пробував» = перебував, «видав» = бачив, which Sonnet left out, and
+// leaves out what a teenager knows) and gives each word a level: 1 the sentence is unclear without it, 2 a hint
+// helps. «Аа» → «Менше» underlines level 1, «Більше» both. Then sweep() finds the other forms of each word in the
+// book (the misses were mostly forms: «сердюка» listed, «сердюк» 7 times not). Kept apart, in DATA_DIR/glossary-v2/,
+// as { v: 2, forms: { form: [meaning, level, word] } }; the first list stays for everyone else.
+const MODEL_V2 = "claude-opus-5-5";
+const SWEEP_MODEL = "claude-haiku-5-5";
+const PROMPT_V2 = `You make a reading glossary for a Ukrainian classic that school students aged 12–16 read today, often alone. The reader taps an underlined word and sees your explanation, so it must make the sentence clear at a glance.
+
+Go through the passage sentence by sentence and list every word or short expression that such a reader might not understand here. For each, decide how much it would stop them:
+
+1 — without help the sentence is unclear: words gone from today's language, dialect words, Church Slavonic, old forms that hide a different-looking word (оддалеки → здалеку, ції → цієї, ізнов → знову), historical things unknown today (ranks and offices, clothes, weapons, money, measures, customs, church words), and familiar words used in an old sense that misleads (пробував meaning перебував, видав meaning бачив, полудень meaning a midday meal).
+2 — the reader half-guesses from the sentence but is unsure: rarer bookish or folk words, less known historical words, idioms whose sense is not literal.
+
+Leave out what a modern teenager knows or reads at once, even when it looks old:
+- ordinary words: козак, гетьман, шабля, бандура, кобзар, хата, степ, ряса, пасіка, чабан, хвіртка, світлиця, гай, верхи, могила, труна, ворота, піп;
+- an old spelling, ending or sound of a word the reader recognises at once: пришов, войни, їх, сказать, послі, зблизька, ходім, оддав, лічить, знать, хотя;
+- plain diminutives and augmentatives of known words (шаблюка, фірточка, дідуган);
+- names of people, places and peoples; prepositions, conjunctions and particles unless their form itself hides the word (ізнов, теє, ції go in; од goes out).
+When unsure whether a teenager knows a word, leave it out: an underline on a word one knows is noise.
+
+Answer with one line per item and nothing else, four fields separated by tabs:
+the word or expression exactly as written in the passage (same case and ending, no stress marks), its dictionary form, its meaning in this sentence in modern Ukrainian (a plain synonym, or at most ten words for a thing; no full stop), and 1 or 2.
+List each form once. Check every meaning against its sentence: a wrong meaning is worse than none.`;
+const SWEEP = `Each line has a word from a Ukrainian classic, a tab, and one to three glossary entries (word = meaning) that look similar. Say for each line whether the word is a grammatical form of one of those glossary words with the same meaning (another case, number, gender, tense or person, or a spelling variant of the same word), so the reader should see the same explanation. A different word that only starts the same way (броварі ≠ бровами, староста ≠ старосвітщину) is not.
+Answer only the lines where it is: the word, a tab, the glossary word it belongs to. Nothing else.`;
+const SWEEP_BATCH = 250;
+
+function parseV2(answer) {
+  const out = [];
+  for (const line of String(answer || "").split("\n")) {
+    const [w, word, g, l] = line.split("\t");
+    const form = (w || "").replace(/^[-*•\d.\s]+/, "").trim();
+    const gloss = (g || "").trim().replace(/\.$/, "");
+    const level = Number(String(l || "").trim()) === 2 ? 2 : Number(String(l || "").trim()) === 1 ? 1 : 0;
+    if (!form || !gloss || !level || form.length > 40 || gloss.length > 140 || form.split(/\s+/).length > 3) continue;
+    out.push([form, gloss, level, (word || form).trim().slice(0, 60)]);
+  }
+  return out;
+}
+
+// The book's words that look like another form of a listed one (the same start but for the last two letters, five
+// letters at least), as lines for SWEEP.
+function sweepLines(forms, chapters) {
+  const text = key(chapters.join(" "));
+  const seen = new Set(text.match(/[\p{L}]+(?:ʼ[\p{L}]+)*/gu) || []);
+  const stems = new Map();
+  for (const k of Object.keys(forms)) if (!k.includes(" ") && k.length >= 6) (stems.get(k.slice(0, -2)) || stems.set(k.slice(0, -2), []).get(k.slice(0, -2))).push(k);
+  const lines = [];
+  for (const t of seen) {
+    if (forms[t]) continue;
+    for (let n = t.length; n >= 5; n--) {
+      const near = stems.get(t.slice(0, n));
+      if (!near) continue;
+      lines.push(`${t}\t${near.slice(0, 3).map((k) => `${k} = ${forms[k][0]}`).join(" ; ")}`);
+      break;
+    }
+  }
+  return lines;
+}
+
 // The key a form is looked up by: lower case, no stress marks, one kind of apostrophe. The page does the same.
 // Only the stress marks go: й and ї carry marks of their own in NFD.
 const key = (s) => String(s || "").normalize("NFD").replace(/[\u0300\u0301]/g, "").normalize("NFC").toLowerCase().replace(/['’`ʼ]/g, "ʼ").replace(/\s+/g, " ").trim();
@@ -107,8 +169,9 @@ function parse(answer) {
 
 class Glossary {
   // `maxCalls`: a longer book is not made (readers' uploads: a whole collected works would cost dollars).
-  constructor({ dir, apiKey = process.env.ANTHROPIC_API_KEY, maxCalls = 0 }) {
+  constructor({ dir, apiKey = process.env.ANTHROPIC_API_KEY, maxCalls = 0, v2 = false }) {
     this.dir = dir;
+    this.v2 = v2;
     this.apiKey = apiKey;
     this.maxCalls = maxCalls;
     this.cache = new Map(); // book -> file contents, while the file is unchanged
@@ -220,6 +283,7 @@ class Glossary {
   }
   async build(book, file, run = {}) {
     if (!this.apiKey) throw new Error("no ANTHROPIC_API_KEY");
+    if (this.v2) return this.buildV2(book, file, run);
     const { chapters } = await epubParts(fs.readFileSync(file));
     const parts = chunks(chapters);
     if (this.maxCalls && parts.length > this.maxCalls) throw new Error(`too long: ${parts.length} calls`);
@@ -259,6 +323,75 @@ class Glossary {
   }
 }
 
+Glossary.prototype.buildV2 = async function (book, file, run = {}) {
+  const { chapters } = await epubParts(fs.readFileSync(file));
+  const parts = chunks(chapters);
+  if (this.maxCalls && parts.length > this.maxCalls) throw new Error(`too long: ${parts.length} calls`);
+  run.of = parts.length;
+  const client = new Anthropic({ apiKey: this.apiKey });
+  const answers = new Array(parts.length);
+  let cost = 0;
+  let next = 0;
+  const work = async () => {
+    while (next < parts.length) {
+      const i = next++;
+      const m = await client.messages.create({
+        model: MODEL_V2,
+        max_tokens: 20000,
+        system: [{ type: "text", text: PROMPT_V2, cache_control: { type: "ephemeral" } }],
+        messages: [{ role: "user", content: parts[i] }],
+        output_config: { effort: "medium" },
+      });
+      cost += measure(m.model, m.usage).cost;
+      answers[i] = m.content.filter((b) => b.type === "text").map((b) => b.text).join("");
+      run.chunks = (run.chunks || 0) + 1;
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(AT_ONCE, parts.length) }, work));
+  // The first meaning a form got stays; a form one passage calls level 1 is level 1.
+  const all = {};
+  for (const a of answers)
+    for (const [form, gloss, level, word] of parseV2(a)) {
+      const k = key(form);
+      if (!all[k]) all[k] = [gloss, level, key(word)];
+      else if (level === 1) all[k][1] = 1;
+    }
+  const kept = clean(Object.fromEntries(Object.entries(all).map(([k, v]) => [k, v[0]])), chapters);
+  const forms = Object.fromEntries(Object.entries(all).filter(([k]) => kept[k]));
+  run.sweep = "running";
+  const swept = await this.sweep(forms, chapters).catch((err) => ((run.sweepError = err.message), { added: 0, cost: 0 }));
+  run.sweep = swept.added;
+  cost += swept.cost;
+  const data = { book, v: 2, model: MODEL_V2, at: new Date().toISOString(), calls: parts.length, swept: swept.added, cost: Math.round(cost * 1000) / 1000, forms };
+  fs.mkdirSync(this.dir, { recursive: true });
+  const f = this.file(book);
+  fs.writeFileSync(`${f}.tmp`, JSON.stringify(data));
+  fs.renameSync(`${f}.tmp`, f);
+  run.forms = Object.keys(forms).length;
+  run.cost = data.cost;
+  return data;
+};
+// Other forms of the listed words, by a cheap model; adds them to `forms` in place.
+Glossary.prototype.sweep = async function (forms, chapters) {
+  const lines = sweepLines(forms, chapters);
+  const client = new Anthropic({ apiKey: this.apiKey });
+  let cost = 0;
+  let added = 0;
+  for (let i = 0; i < lines.length; i += SWEEP_BATCH) {
+    const m = await client.messages.create({ model: SWEEP_MODEL, max_tokens: 8000, system: SWEEP, messages: [{ role: "user", content: lines.slice(i, i + SWEEP_BATCH).join("\n") }] });
+    cost += measure(m.model, m.usage).cost;
+    const text = m.content.filter((b) => b.type === "text").map((b) => b.text).join("");
+    for (const line of text.split("\n")) {
+      const [w, of] = line.split("\t").map((x) => key(x || ""));
+      if (w && of && forms[of] && !forms[w]) {
+        forms[w] = [...forms[of]];
+        added++;
+      }
+    }
+  }
+  return { added, cost };
+};
+
 // Readers' own uploads get one too, by themselves, when the book is by an author school reads (Max, 2026-11-16: a
 // school gave a friend's daughter an abridged PDF: «автоматом для певних книжок чи авторів»). The first word of a
 // name is the first name (or the pseudonym's first half), the rest its surname; both must be in the book's author.
@@ -287,4 +420,4 @@ function classic(authors) {
   });
 }
 
-module.exports = { Glossary, key, chunks, parse, clean, classic, PROMPT, STRICT, MODEL };
+module.exports = { Glossary, key, chunks, parse, parseV2, sweepLines, clean, classic, PROMPT, PROMPT_V2, STRICT, MODEL, MODEL_V2 };
