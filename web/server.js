@@ -4436,7 +4436,13 @@ app.get("/admin/reader", owner, async (req, res) => {
     const hit = file ? readerCatalogBook(id, { name }) : {};
     return { title: file?.title || "", href: hit.bookId ? store.href(hit.bookId) : "" };
   };
-  res.send(readerAppPage({ user: req.user, s, error, book, layout: pages.layout }));
+  let wordCost = null;
+  try {
+    const since = new Date(Date.now() - 30 * 864e5).toISOString().slice(0, 10);
+    wordCost = {};
+    for (const r of store.db.prepare("SELECT day, feature, SUM(cost) cost FROM ai_usage WHERE app = 'reader' AND feature IN ('word', 'wordahead') AND day >= ? GROUP BY day, feature").all(since)) (wordCost[r.day] ??= {})[r.feature] = r.cost;
+  } catch {}
+  res.send(readerAppPage({ user: req.user, s, error, book, wordCost, layout: pages.layout }));
 });
 app.post("/admin/reader/off", owner, async (req, res) => {
   try {

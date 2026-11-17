@@ -584,6 +584,24 @@ function recordUi(who, ui) {
   }
 }
 let uiPruned = "";
+// One selected word (Max 2026-11-17, hit rate on /admin/reader): every card, the ones from the book's list and the
+// ones prepared ahead, by day, Max's own counted too (`ui` leaves the owner out) and also apart.
+const WORD_KEYS = ["word", "word-list", "word-ahead"];
+function recordWords(owner, ui) {
+  if (!ui || typeof ui !== "object" || !WORD_KEYS.some((k) => ui[k] > 0)) return;
+  const day = statsDay();
+  const stats = (state.stats ??= { since: day, days: {} });
+  const d = (stats.days[day] ??= { explains: 0, users: {}, guests: 0, models: {} });
+  for (const box of owner ? [(d.words ??= {}), (d.wordsMax ??= {})] : [(d.words ??= {})])
+    for (const k of WORD_KEYS) if (Number(ui[k]) > 0) box[k] = (box[k] || 0) + Math.min(200, Math.round(Number(ui[k])));
+}
+function wordStats(days, dayKeys, monthAgo) {
+  return dayKeys.filter((k) => k >= monthAgo && days[k].words).map((day) => {
+    const w = days[day].words;
+    const m = days[day].wordsMax || {};
+    return { day, all: w.word || 0, list: w["word-list"] || 0, ahead: w["word-ahead"] || 0, max: m.word || 0 };
+  });
+}
 // The last 30 days of them for /admin/reader: per control, taps and the readers (guests apart) who pressed it.
 function uiStats(days, dayKeys, monthAgo) {
   const rows = new Map();
@@ -754,6 +772,7 @@ async function collectStats() {
     offline: offlineStats(stats.days, dayKeys, monthAgo),
     gone: goneStats(stats.days, dayKeys, monthAgo),
     ui: uiStats(stats.days, dayKeys, monthAgo),
+    words: wordStats(stats.days, dayKeys, monthAgo),
     stops: bookStops(),
     firstDays: firstDays(stats.days, dayKeys),
   };
@@ -1765,6 +1784,7 @@ api.post("/reading", express.text({ limit: "16kb" }), (req, res) => {
   const books = body?.books;
   if (!books || typeof books !== "object" || Array.isArray(books)) return res.status(400).json({ error: "bad request" });
   if (body.ui && !req.owner) recordUi(req.guest ? "guest" : req.acct, body.ui);
+  if (body.ui && !req.guest) recordWords(!!req.owner, body.ui);
   if (req.guest) return (body.ui && saveState(), res.json({ ok: true }));
   const clean = {};
   for (const [name, sec] of Object.entries(books).slice(0, 20)) if (name && name.length <= 500 && Number.isFinite(sec) && sec > 0) clean[name.replace(/#reflow$/, "")] = (clean[name.replace(/#reflow$/, "")] || 0) + Math.min(sec, body.at ? 3600 : 600);

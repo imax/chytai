@@ -1083,7 +1083,7 @@ function wordCard(sel) {
   window.ReadingTime?.count("word");
   window.WordAhead?.used();
   const mine = window.Gloss?.lookup(text);
-  if (mine) return put(mine.gloss);
+  if (mine) return window.ReadingTime?.count("word-list"), put(mine.gloss);
   const ahead = window.WordAhead?.lookup(text);
   if (ahead) return window.ReadingTime?.count("word-ahead"), put(ahead);
   put("…", true);

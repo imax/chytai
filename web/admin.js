@@ -1857,8 +1857,8 @@ function readerTiles(s) {
 // /admin/reader «Читалка»: the reader's own numbers (app.chytai.org.ua, server/index.js collectStats), fetched by
 // the site with the owner's reader key (Max, 2026-11-02: the reader's old /admin moved here).
 // The reader's controls by their id or data-action (reading-time.js count), for «Що натискають» on /admin/reader.
-const UI_NAMES = { "btn-library": "Мої книжки", "m-back": "Мої книжки (телефон)", "btn-toc": "Зміст", "btn-notes": "Нотатки", "btn-settings": "Налаштування", mlook: "Аа (вигляд)", "btn-font-down": "Менший шрифт", "btn-font-up": "Більший шрифт", "btn-panel": "Панель пояснень", "btn-search": "Пошук у книжці", "m-search": "Пошук у книжці (телефон)", "btn-print": "Друкувати", "btn-back": "Назад після посилання", "sel-explain": "Пояснити / Запитати", "sel-translate": "Перекласти", "sel-note": "Зберегти", "sel-mark-note": "Позначити", "sel-mic": "Голосом", "sel-open": "Відкрити пояснення", gloss: "Словничок: слово", "act-gloss-know": "Словничок: «Знаю це слово»", word: "Одне слово: значення одразу", "word-ahead": "Одне слово: було підготовлене наперед", "open-book": "Відкрити книжку", "act-add": "Додати файл", "act-cover-photo": "Сфотографувати обкладинку", "act-free-all": "Вільна полиця: усі", "act-yakaboo": "Як додати з Yakaboo", "act-bookua": "Як додати з Book.ua", "bm-finished": "Меню книжки: прочитано", "bm-about": "Меню книжки: про книжку", "bm-keep": "Меню книжки: на пристрій", "bm-share": "Меню книжки: поділитися", "bm-edit": "Меню книжки: назва, обкладинка", "bm-epub": "Меню книжки: EPUB", "bm-delete": "Меню книжки: видалити", "note-add": "Нова нотатка", "btn-logout": "Вийти" };
-function readerAppPage({ user, s, error = "", book = () => null, layout }) {
+const UI_NAMES = { "btn-library": "Мої книжки", "m-back": "Мої книжки (телефон)", "btn-toc": "Зміст", "btn-notes": "Нотатки", "btn-settings": "Налаштування", mlook: "Аа (вигляд)", "btn-font-down": "Менший шрифт", "btn-font-up": "Більший шрифт", "btn-panel": "Панель пояснень", "btn-search": "Пошук у книжці", "m-search": "Пошук у книжці (телефон)", "btn-print": "Друкувати", "btn-back": "Назад після посилання", "sel-explain": "Пояснити / Запитати", "sel-translate": "Перекласти", "sel-note": "Зберегти", "sel-mark-note": "Позначити", "sel-mic": "Голосом", "sel-open": "Відкрити пояснення", gloss: "Словничок: слово", "act-gloss-know": "Словничок: «Знаю це слово»", word: "Одне слово: значення одразу", "word-ahead": "Одне слово: було підготовлене наперед", "word-list": "Одне слово: зі словничка книжки", "open-book": "Відкрити книжку", "act-add": "Додати файл", "act-cover-photo": "Сфотографувати обкладинку", "act-free-all": "Вільна полиця: усі", "act-yakaboo": "Як додати з Yakaboo", "act-bookua": "Як додати з Book.ua", "bm-finished": "Меню книжки: прочитано", "bm-about": "Меню книжки: про книжку", "bm-keep": "Меню книжки: на пристрій", "bm-share": "Меню книжки: поділитися", "bm-edit": "Меню книжки: назва, обкладинка", "bm-epub": "Меню книжки: EPUB", "bm-delete": "Меню книжки: видалити", "note-add": "Нова нотатка", "btn-logout": "Вийти" };
+function readerAppPage({ user, s, error = "", book = () => null, wordCost = null, layout }) {
   const usd = (v) => (v == null ? "—" : v > 0 && v < 0.01 ? "<$0,01" : `$${v.toFixed(2).replace(".", ",")}`);
   const mins = (m) => (m < 120 ? `${fmtN(m)} хв` : `${fmtN(Math.round(m / 60))} год`);
   const ago = (ts) => {
@@ -1952,6 +1952,19 @@ function readerAppPage({ user, s, error = "", book = () => null, layout }) {
 <thead><tr><th>Що</th><th>Читачів</th><th>Натискань</th></tr></thead>
 <tbody>${uiRows.map((r) => `<tr><th>${esc(UI_NAMES[r.name] || r.name)}${UI_NAMES[r.name] ? ` <span class="muted small">${esc(r.name)}</span>` : ""}</th><td>${n(r.readers)}${r.guests ? ` <span class="muted">+ гості</span>` : ""}</td><td>${n(r.n)}</td></tr>`).join("")}</tbody></table></div>
 <p class="muted small">За 30 днів, рахуємо з 16 листопада. Читачів, які за цей час читали: ${fmtN(readMonth)}; так видно, яка частка натискає кнопку. Гортання сторінок не рахуємо, це хвилини.</p>` : `<p class="muted">Рахуємо з 16 листопада.</p>`;
+  // One selected word (Max 2026-11-17): how often its meaning was there at once, by day, and what it cost.
+  const pct = (a, b) => (b ? ` <span class="muted">${Math.round((100 * a) / b)}%</span>` : "");
+  const wordRows = s.words || [];
+  const cost = (day) => wordCost?.[day] || {};
+  const wordLine = wordRows.length
+    ? `<div class="tbl"><table>
+<thead><tr><th>День</th><th>Виділили слово</th><th>Одразу</th><th>Зі словничка</th><th>Наперед</th><th>Чекали на Sonnet</th><th>Наперед, $</th><th>Окремі слова, $</th></tr></thead>
+<tbody>${wordRows.map((r) => {
+        const asked = Math.max(0, r.all - r.list);
+        return `<tr><th>${short(r.day)}</th><td>${fmtN(r.all)}${r.max ? ` <span class="muted">ваших ${fmtN(r.max)}</span>` : ""}</td><td>${fmtN(r.list + r.ahead)}${pct(r.list + r.ahead, r.all)}</td><td>${fmtN(r.list)}</td><td>${fmtN(r.ahead)}${pct(r.ahead, asked)}</td><td>${fmtN(Math.max(0, asked - r.ahead))}</td><td>${usd(cost(r.day).wordahead || 0)}</td><td>${usd(cost(r.day).word || 0)}</td></tr>`;
+      }).join("")}</tbody></table></div>
+<p class="muted small">«Одразу» = значення було на картці без запиту: зі словничка книжки або підготовлене наперед. Відсоток у «Наперед» — від слів, яких немає в словничку. Рахуємо з 17 листопада.</p>`
+    : "";
   const st = s.stops;
   const left = st ? st.left[3] + st.left[10] + st.left[50] + st.left[95] : 0;
   const stopsTbl = st && st.finished + st.reading + left ? `<p class="muted">За 90 днів відкрили ${fmtN(st.finished + st.reading + left)} книжок: дочитали ${fmtN(st.finished)}, читають далі ${fmtN(st.reading)}, покинули ${fmtN(left)}: не почавши (до 3%) ${fmtN(st.left[3])}, до 10% ${fmtN(st.left[10])}, до половини ${fmtN(st.left[50])}, після половини ${fmtN(st.left[95])}.</p>
@@ -1976,6 +1989,7 @@ ${readers}
 ${booksTbl}
 ${firstTbl ? `<h2 id="first">Перші дні</h2>\n${firstTbl}` : ""}
 ${stopsTbl ? `<h2 id="stops">Де кидають книжки</h2>\n${stopsTbl}` : ""}
+${wordLine ? `<h2 id="word">Одне слово</h2>\n${wordLine}` : ""}
 <h2 id="ui">Що натискають</h2>
 ${uiTbl}
 <h2 id="offline">Без мережі</h2>
