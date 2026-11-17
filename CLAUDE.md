@@ -305,8 +305,9 @@ A flag only when Max asks for one, or when the change could break what readers u
   children's and unsorted as five lines each. Otherwise (and `?all=1`) the list (`calList`): one line an event (day,
   time, title, kind · where, a small cover), the rest behind «докладніше»; today and two weeks open, later months
   folded when the list is long.
-- Every event has its own page (Max 2026-11-15, design canvas EzYcx7zJcqfYf5Bi6XgDrX): `/calendar/<title slug>-<key>`
-  (`calendar.eventPath`, key = 8 hex of the id's sha1, so a corrected title redirects; `calendar.byKey`), `.ics` after
+- Every event has its own page (Max 2026-11-15, design canvas EzYcx7zJcqfYf5Bi6XgDrX): `/calendar/<short slug>-<key>`
+  (`calendar.eventPath`: the name in quotes or the title without words every event has, ≤4 words / 32 letters; key = 8 hex
+  of the id's sha1, the key alone finds it, so a corrected title or an older long address redirects; `calendar.byKey`), `.ics` after
   it = that event alone. `eventPage` in pages.js, the route in server.js (books with «Хочу прочитати», a tour's stops,
   4 more events: same book/author, then same kind and city). Every title, row cover, the clubs shelf (one meeting),
   the book page's «Подія:», the author's «Події» and `/calendar/go/<id>` (letters) lead there. The organizer's button
@@ -350,7 +351,8 @@ A flag only when Max asks for one, or when the change could break what readers u
   `calendar.abroad(city)` (list `ABROAD`) hides a foreign city at upsert and at start, and /calendar/add refuses it.
 - Table `cal_events` (id `{source}:{key}`, starts/ends `YYYY-MM-DD` Kyiv, time `HH:MM`, city as shown, «Онлайн»
   for online; books/authors JSON found by name, no AI: `linkText`, a name's two words side by side, «Олександрою … книгарні» ≠ Олександр Книга; never a Russian edition, `findBook`). Gone 30 days after it ends (`cleanup`); one with an author or book linked stays a year (`KEEP_LINKED_DAYS`, for the author page's past events).
-- Sources: `web/seed/calendar.json` (kept in step at every start: festivals by a thread or Max); readers via
+- Sources: `web/seed/calendar.json` (kept in step at every start: festivals by a thread or Max; an entry with `fix`
+  = a collected event's id corrects only the fields it names: place, sub, time, city, starts, ends); readers via
   /calendar/add (signed in: shown at once, 5 a day, mails + Telegram Max; Max or the reader hides one with «сховати»;
   guests too (Max 2026-11-16): hidden with `review = 1` until Max presses «Показати» on /admin/events («Від гостей»,
   «Прибрати» deletes), `by = guest:<hash of the address>`, 3 a day, an optional e-mail in `contact` (only that block

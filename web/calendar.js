@@ -991,14 +991,23 @@ function create(db, store, { notify = () => {}, bookua = null, search = null, ma
     fresh();
     return r.changes;
   }
-  // web/seed/calendar.json at every start: [{ key, title, sub, url, city, place, starts, ends, time }].
+  // web/seed/calendar.json at every start: [{ key, title, sub, url, city, place, starts, ends, time }]. An entry with
+  // `fix` (an event's id) corrects a collected event instead: only the fields it names (Max 2026-11-17, the Kyiv stop
+  // of Дронь's tour is at «Фундамент», Український дім). A collector writes a post's events once, so the fix stays.
+  const FIXABLE = ["place", "sub", "time", "city", "starts", "ends"];
   function seed() {
     let list = [];
     try {
       list = require("./seed/calendar.json");
     } catch {}
     let n = 0;
-    for (const e of list) if (upsert({ ...e, source: "seed" })) n++;
+    for (const e of list) {
+      if (e.fix) {
+        const keys = FIXABLE.filter((k) => typeof e[k] === "string");
+        if (keys.length && db.prepare(`UPDATE cal_events SET ${keys.map((k) => `${k} = ?`).join(", ")} WHERE id = ?`).run(...keys.map((k) => e[k]), e.fix).changes) n++;
+      } else if (upsert({ ...e, source: "seed" })) n++;
+    }
+    if (n) fresh();
     return n;
   }
 
@@ -1315,7 +1324,27 @@ function subName(f) {
 // An event's own page (Max 2026-11-15: a club on /calendar led to a filtered list): /calendar/<title>-<key>, the key
 // 8 hex of the id's hash, so the address stays when the title is corrected (the old one redirects).
 const eventKey = (id) => require("crypto").createHash("sha1").update(String(id)).digest("hex").slice(0, 8);
-const eventPath = (e) => `/calendar/${require("./store").slugify(tourTitle(e)).slice(0, 60).replace(/-+$/, "")}-${eventKey(e.id)}`;
+// A short address (Max 2026-11-17: «прям довгі»): the book or club name in quotes, else the title without the words
+// every event has, at most 4 words and 32 letters. «Презентація книги «Лікарня святого Пантелеймона» Артура Дроня» →
+// /calendar/likarnia-sviatoho-panteleimona-4c1af9bd. The key alone finds the event: older, longer ones redirect.
+const SLUG_SKIP = /^(презентаці[яїю]|зустріч[іь]?|з|із|зі|та|і|й|а|на|в|у|про|до|по|для|від|за|книг[иау]|книжк[иау]|книжок|роману|збірки|нов(ої|ою|ого|а)|обговорення|обговорюємо|онлайн|спільне|читання|лекці[яїю]|розмова|читацьк\S*|книжков\S*|клуб[уі]?|літературн\S*|авторськ\S*|творч\S*|вечір|письменниц\S*|письменник\S*|поет\S*|програма|фестиваль)$/i;
+function eventSlug(e) {
+  const { slugify } = require("./store");
+  const title = tourTitle(e);
+  const q = title.match(/[«"“„]([^»"”“]{3,})[»"”“]/);
+  const words = (q ? q[1] : title).split(/[\s.,:;!?()–—-]+/).filter(Boolean);
+  const kept = q ? words : words.filter((w) => !SLUG_SKIP.test(w));
+  let out = "";
+  for (const w of kept.length ? kept : words) {
+    const s = slugify(w);
+    if (!s) continue;
+    if (out && out.length + 1 + s.length > 32) break;
+    out = out ? `${out}-${s}` : s.slice(0, 32);
+    if (out.split("-").length >= 4) break;
+  }
+  return out.replace(/-+$/, "");
+}
+const eventPath = (e) => `/calendar/${[eventSlug(e), eventKey(e.id)].filter(Boolean).join("-")}`;
 // What the organizer's link is, for its button: a sign-up form, a Telegram post, or a site.
 function linkKind(url) {
   if (/^https?:\/\/(forms\.gle|docs\.google\.com\/forms|forms\.office\.com|[^/]*typeform\.com|[^/]*jotform\.com)/i.test(url || "")) return "form";
