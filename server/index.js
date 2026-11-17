@@ -219,6 +219,40 @@ const glossary = new (require("./glossary").Glossary)({ dir: path.join(DATA_DIR,
 const glossaryV2 = new (require("./glossary").Glossary)({ dir: path.join(DATA_DIR, "glossary-v2"), v2: true });
 // Names of people and places a free-shelf book has (buildNames): only the one-word card reads them, never underlined.
 const glossaryNames = new (require("./glossary").Glossary)({ dir: path.join(DATA_DIR, "glossary-names"), names: true });
+// A reader's own EPUB keeps its names next to its «Словничок» (accounts/<id>/glossary/names/), gone with the book.
+const namesLibs = new Map();
+const namesOf = (lib) => namesLibs.get(lib.id) || namesLibs.set(lib.id, new (require("./glossary").Glossary)({ dir: path.join(lib.glossary, "names"), names: true })).get(lib.id);
+// Names are made when someone first opens a book (Max 2026-11-17: «будувати коли відкривають її вперше. Не важливо я
+// чи хтось інший»): a free-shelf book once for everyone, a reader's own EPUB for that library. Opus over the whole
+// book, ~$0.5–1 a novel; NAMES_DAY books a day for all, NAMES_ACCOUNT a reader, NAMES_AT_ONCE at the same time. The
+// first reader doesn't see them yet (2–3 min); the next opening does. A book that failed isn't tried again until
+// a restart. Hitting the day's cap tells Max once (Telegram).
+const NAMES_DAY = 10;
+const NAMES_ACCOUNT = 2;
+const NAMES_AT_ONCE = 2;
+function namesOnOpen(req, name, file) {
+  if (!process.env.ANTHROPIC_API_KEY || !/\.epub$/i.test(name) || file.startsWith(prot.dir + path.sep)) return;
+  const own = !isFree(name) && req.lib && fs.existsSync(bookFile(req.lib, name));
+  const same = own && glossOf(req.lib).get(name)?.same;
+  const g = own && !same ? namesOf(req.lib) : glossaryNames;
+  const book = same || name;
+  if (g.get(book) || g.running.has(book)) return;
+  const busy = [glossaryNames, ...namesLibs.values()].reduce((n, x) => n + [...x.running.values()].filter((r) => !r.done).length, 0);
+  if (busy >= NAMES_AT_ONCE) return;
+  const day = statsDay();
+  const d = ((state.stats ??= { since: day, days: {} }).days[day] ??= { explains: 0, users: {}, guests: 0, models: {} });
+  const n = (d.names ??= { n: 0, accts: {} });
+  const who = req.acct || "guest";
+  if (n.n >= NAMES_DAY || (own && (n.accts[who] || 0) >= NAMES_ACCOUNT)) {
+    if (n.n >= NAMES_DAY && !n.told) (n.told = true), saveState(), telegram(`Імена у словничку: сьогодні вже ${NAMES_DAY} книжок, решта завтра.`);
+    return;
+  }
+  n.n++;
+  n.accts[who] = (n.accts[who] || 0) + 1;
+  saveState();
+  console.log(`names: ${own && !same ? req.lib.id : "shelf"} ${book}`);
+  g.start(book, own && !same ? file : path.join(freeDir(book), book));
+}
 // A reader's own uploads: a list per library, in its folder (gone with the book or the account).
 const glossLibs = new Map();
 const glossOf = (lib) => glossLibs.get(lib.id) || glossLibs.set(lib.id, new (require("./glossary").Glossary)({ dir: lib.glossary, maxCalls: GLOSS_UPLOAD_CALLS })).get(lib.id);
@@ -2293,6 +2327,11 @@ api.get("/book", (req, res) => {
   (u.opened ??= {})[name] = Date.now();
   if (u.setAside) delete u.setAside[name];
   if (!req.guest || req.share) saveState();
+  try {
+    namesOnOpen(req, name, file);
+  } catch (err) {
+    console.error("names:", err.message);
+  }
   res.setHeader("X-Book-Position", encodeURIComponent(u.positions?.[name] || ""));
   res.setHeader("X-Book-Reflow-Position", encodeURIComponent(u.positions?.[`${name}#reflow`] || ""));
   // A publisher's book: never the file, only where to read it from.
@@ -2307,7 +2346,7 @@ api.get("/glossary", (req, res) => {
   const shelf = isFree(name) ? name : own?.same;
   const v2 = shelf && glossaryV2.get(shelf);
   // Names of the book's people and places, { form: [about, name] }: the card of a selected name reads them.
-  const names = (shelf && glossaryNames.get(shelf)?.names) || undefined;
+  const names = (shelf ? glossaryNames.get(shelf)?.names : name && !isFree(name) && req.lib && namesOf(req.lib).get(name)?.names) || undefined;
   if (v2) {
     // { form: [meaning, level, word] } → the first list's shape plus the levels and the words (for «Знаю»).
     const e = Object.entries(v2.forms);
@@ -2833,6 +2872,7 @@ api.put("/books/:name", uploadGuard, uploadBody, async (req, res) => {
   if (req.lib.meta.trash?.[name]) fs.rmSync(trashFile(req.lib, name), { force: true }), delete req.lib.meta.trash[name];
   (req.lib.meta.added ??= {})[name] = { by: req.acct, at: Date.now() };
   glossOf(req.lib).drop(name);
+  namesOf(req.lib).drop(name);
   saveState();
   warmCovers(req.lib, [name]);
   res.json({ path: name });
@@ -3006,6 +3046,7 @@ function forgetBook(lib, acct, name) {
   const key = customCoverKey(name);
   if (fs.existsSync(lib.covers)) for (const f of fs.readdirSync(lib.covers)) if (f.split(".")[0] === key) fs.rmSync(path.join(lib.covers, f), { force: true });
   glossOf(lib).drop(name);
+  namesOf(lib).drop(name);
 }
 function purgeTrash() {
   const old = Date.now() - TRASH_DAYS * 864e5;

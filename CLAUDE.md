@@ -511,8 +511,11 @@ A flag only when Max asks for one, or when the change could break what readers u
   free-shelf book whole once (Чорна рада $0.93, 2.5 min) and describe its people and places, kept in
   `DATA_DIR/glossary-names/<book>.json` (`names: {form: [about, full name]}`), sent by `/api/glossary` as `names`.
   Never underlined: only the one-word card reads them, for a capitalised selection (gloss.js `lookup`, ui `word-name`).
-  Forms that mean two people, and words written small more often than capitalised, stay out (`parseNames`). Make one
-  book's (Max's OK): `POST /agent/glossary {"book":…,"names":true}`; status under `names` in `GET /agent/glossary`.
+  Forms that mean two people, and words written small more often than capitalised, stay out (`parseNames`). Made when
+  someone first opens a book (Max 2026-11-17, anyone, guests too; `namesOnOpen` in server/index.js from `/api/book`): a
+  free-shelf book once for all, a reader's own EPUB in `accounts/<id>/glossary/names/`; 10 books a day, 2 a reader, 2 at
+  once, a failed one not again until a restart, Telegram once when the day's cap is hit; no PDFs, no publishers' books.
+  By hand: `POST /agent/glossary {"book":…,"names":true}`; status under `names` in `GET /agent/glossary`.
   word.js asks NAME only for a capital mid-sentence (`midName`): «Кармазини!» at a sentence's start is a word.
   Trial prompts and answers: project files `chytai-gloss-try/run/` (`ahead.js`: Sonnet vs Haiku, one word 1.1–1.8 s).
 - New free-shelf classics from Wikisource: `scripts/wsbook.py` (recipe at its top). Many school works exist there only

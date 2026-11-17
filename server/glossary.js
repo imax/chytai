@@ -543,7 +543,7 @@ Glossary.prototype.sweep = async function (forms, chapters) {
 // Kept in DATA_DIR/glossary-names/<book>.json as { names: { form: [about, name] } }. Opus with the whole book (Чорна
 // рада: ~100k tokens in, about a dollar), one call a book; a book over NAMES_MAX characters is not made.
 const NAMES_MAX = 1200000;
-const NAMES = `You read a whole Ukrainian classic below. Readers aged 12–16 select a capitalised word in it and see a short card about who or what it is. The list after the book has every capitalised word form found in the middle of its sentences, with how often it occurs.
+const NAMES = `You read a whole book below: often a Ukrainian classic, sometimes a modern or a foreign one. Answer in Ukrainian whatever its language. Readers aged 12–16 select a capitalised word in it and see a short card about who or what it is. The list after the book has every capitalised word form found in the middle of its sentences, with how often it occurs.
 
 For each person, place, people, river, institution or other named thing in that list, answer one line, three fields separated by tabs:
 1. the name as the book usually gives it in full (Кирило Тур, Васюта Ніженський, Київ);
