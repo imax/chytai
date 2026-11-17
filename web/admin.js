@@ -1885,9 +1885,14 @@ function readerAppPage({ user, s, error = "", book = () => null, wordCost = null
   // Only those who opened something (Max: «не показувати тих, хто нічого не читає»).
   const users = s.users.filter((u) => u.lastBook || u.read30 || u.total || u.notesTotal);
   const idle = s.users.length - users.length;
-  const readers = users.length ? `<div class="tbl"><table class="reader-app">
+  // Those who were in the reader in the last 7 days first; the rest folded under them (Max, 2026-11-17).
+  const table = (list) => `<div class="tbl"><table class="reader-app">
 <thead><tr><th>Читач</th><th class="book">Читає</th><th>Хв сьогодні</th><th>За 7 днів</th><th>За 30</th><th>Пояснень за 7 днів</th><th>Нотаток за 7 днів</th><th>Claude за 30 днів</th><th></th></tr></thead>
-<tbody>${users.map((u) => `<tr${u.owner ? ' class="owner"' : ""}><th>${who(u)}</th><td class="book">${last(u)}</td><td>${n(u.readToday)}</td><td>${n(u.readWeek)}</td><td>${n(u.read30)}</td><td>${n(u.week)}</td><td>${n(u.notesWeek)}</td><td>${u.cost30 ? usd(u.cost30) : n(0)}</td><td>${off(u)}</td></tr>`).join("")}</tbody></table></div>
+<tbody>${list.map((u) => `<tr${u.owner ? ' class="owner"' : ""}><th>${who(u)}</th><td class="book">${last(u)}</td><td>${n(u.readToday)}</td><td>${n(u.readWeek)}</td><td>${n(u.read30)}</td><td>${n(u.week)}</td><td>${n(u.notesWeek)}</td><td>${u.cost30 ? usd(u.cost30) : n(0)}</td><td>${off(u)}</td></tr>`).join("")}</tbody></table></div>`;
+  const recent = users.filter((u) => u.activeWeek);
+  const older = users.filter((u) => !u.activeWeek);
+  const readers = users.length ? `${recent.length ? table(recent) : `<p class="muted">За 7 днів ніхто не заходив.</p>`}
+${older.length ? `<details><summary class="muted">Ще ${fmtN(older.length)}, давніше 7 днів</summary>${table(older)}</details>` : ""}
 <p class="muted small">${idle ? `Ще ${fmtN(idle)} входили, але нічого не відкрили. ` : ""}Хвилини — час, коли книжка відкрита на екрані й читач щось робив за останні 3 хв (до 4 листопада рахували паузи між перегортаннями). Ліміту пояснень немає, лише запобіжник ${fmtN(s.accountCap)} на день. «Вимкнути» закриває Читалку, сайт лишається.</p>` : `<p class="muted">Ще ніхто нічого не відкрив.</p>`;
   // Books by minutes read in 30 days (Max, 2026-11-04): the same book in several libraries is one row when the
   // site knows it from the catalog.

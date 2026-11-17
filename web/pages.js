@@ -536,10 +536,11 @@ ${myLists ? listsDialog(book, myLists) : ""}`;
 const ADMIN_TABS = [
   ["Огляд", [["/admin", "Огляд"]], /^\/admin\/activity$/],
   ["Трафік", [["/admin/traffic", "Трафік"], ["/admin/threads", "Threads"]]],
-  ["Читачі", [["/admin/readers", "Усі читачі"], ["/admin/retention", "Утримання"], ["/admin/reader", "Читалка"], ["/admin/comments", "Коментарі"], ["/admin/digest", "Дайджест"]]],
-  ["Каталог", [["/admin/catalog", "Каталог"]], /^\/admin\/(catalog|shelves|overviews|dupes|translations|volumes|russian|ukfind|readeat|free|ai\/|book\/|reviews)|-trial$/],
+  ["Читачі", [["/admin/readers", "Усі читачі"], ["/admin/retention", "Утримання"], ["/admin/comments", "Коментарі"], ["/admin/digest", "Дайджест"]]],
+  ["Читалка", [["/admin/reader", "Читалка"]]],
   ["Події", [["/admin/events", "Події"]]],
-  ["Система", [["/admin/jobs", "Задачі"], ["/admin/speed", "Швидкість"]]],
+  // «Каталог» holds the old «Система» too (Max, 2026-11-17).
+  ["Каталог", [["/admin/catalog", "Каталог"], ["/admin/jobs", "Задачі"], ["/admin/speed", "Швидкість"]], /^\/admin\/(catalog|shelves|overviews|dupes|translations|volumes|russian|ukfind|readeat|free|ai\/|book\/|reviews)|-trial$/],
 ];
 const adminNav = () => `<nav class="admin-nav">${ADMIN_TABS.map(([name, links, more]) => `<div class="admin-tab" data-paths="${links.map(([h]) => h).join(" ")}"${more ? ` data-more="${attr(more.source)}"` : ""}><a href="${links[0][0]}">${name}</a>${links.length > 1 ? `<span class="admin-sub">${links.map(([h, n]) => `<a href="${h}">${n}</a>`).join("")}</span>` : ""}</div>`).join("")}</nav>
 <script>(() => { const p = location.pathname; for (const t of document.querySelectorAll(".admin-tab")) { if (t.dataset.paths.split(" ").includes(p) || (t.dataset.more && new RegExp(t.dataset.more).test(p))) { t.classList.add("on"); for (const a of t.querySelectorAll(".admin-sub a")) if (a.getAttribute("href") === p) a.classList.add("on"); } } })();</script>`;
