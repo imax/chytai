@@ -260,6 +260,8 @@ function Reader({ onInsets }) {
         pullToRefreshEnabled={false}
         bounces={false}
         textInteractionEnabled
+        // Android 12+ stretches the page at a scroll's end, the lines like an accordion (Max 2026-11-17).
+        overScrollMode="never"
         // No system Copy / Look Up / Translate callout over a selection: the reader shows its
         // own toolbar there. An empty list keeps text and its handles selectable; the native side
         // is patches/react-native-webview+13.16.1.patch, so changing it needs a new build.

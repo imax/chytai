@@ -2407,3 +2407,7 @@ input, textarea, select, [contenteditable], #pdf-container, .card, .answer, #not
 #sel-toolbar .st-word { margin: 0 4px 2px 0; font: 400 16px/1.4 var(--m-serif); color: var(--m-ink); }
 #sel-toolbar .st-word b { font-weight: 600; }
 #sel-toolbar .st-word.wait { color: var(--m-ink3); }
+
+/* Android stretches the text at the top and bottom of a scroll like an accordion (Max 2026-11-17, Android): no
+   overscroll effect on the page or the book's scroller. The app shell also sets overScrollMode="never". */
+html, body, #viewer .epub-container { overscroll-behavior: none; }
