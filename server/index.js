@@ -1245,7 +1245,7 @@ app.use((req, res, next) => {
     if (req.body?.strict) return res.json(await glossary.strict(book).catch((err) => ({ error: err.message })));
     // {"book":…,"v2":true}: «Словничок 2» for that book (Opus, ~$0.25 a 15,000 characters; only with Max's OK).
     if (req.body?.v2 && req.body?.plain) return res.json(await glossaryV2.plain(book, { save: !req.body.dry }).catch((err) => ({ error: err.message })));
-  if (req.body?.v2 && req.body?.homographs) return res.json(await glossaryV2.homographs(book, path.join(freeDir(book), book), { save: !req.body.dry }).catch((err) => ({ error: err.message })));
+  if (req.body?.v2 && req.body?.homographs) return res.json(await glossaryV2.homographs(book, path.join(freeDir(book), book), { save: !req.body.dry, mixed: req.body.mixed !== false }).catch((err) => ({ error: err.message })));
     if (req.body?.v2) return res.json({ started: glossaryV2.start(book, path.join(freeDir(book), book)), ...glossaryV2.status() });
     res.json({ started: glossary.start(book, path.join(freeDir(book), book)), ...glossary.status() });
   });

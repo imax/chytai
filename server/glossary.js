@@ -287,7 +287,7 @@ class Glossary {
     return { before: entries.length, after: Object.keys(forms).length, cost: Math.round(cost * 1000) / 1000, dropped: entries.filter(([k]) => !kept.has(k)).map(([k]) => k) };
   }
   // v2 only: forms that are a common word meant the usual way in most of their places go (HOMO_FIND, HOMO_FIT).
-  async homographs(book, file, { save = true } = {}) {
+  async homographs(book, file, { save = true, mixed = true } = {}) {
     const data = this.get(book);
     if (!data?.forms) return null;
     if (!this.apiKey) throw new Error("no ANTHROPIC_API_KEY");
@@ -311,7 +311,10 @@ class Glossary {
     const lines = [];
     for (const k of cand) {
       const re = new RegExp(`(^|[^\\p{L}\\p{M}'’ʼ])${k.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?=$|[^\\p{L}\\p{M}'’ʼ])`, "iu");
-      for (const sentence of sentences.filter((x) => re.test(x)).slice(0, 4)) lines.push({ k, sentence: sentence.slice(0, 300) });
+      // Up to 6 places spread over the book: a word's other sense may come only in a later chapter.
+      const all = sentences.filter((x) => re.test(x));
+      const pick = all.length <= 6 ? all : [0, 1, 2, 3, 4, 5].map((j) => all[Math.round((j * (all.length - 1)) / 5)]);
+      for (const sentence of pick) lines.push({ k, sentence: sentence.slice(0, 300) });
     }
     const fits = {};
     const groups = [];
@@ -328,8 +331,10 @@ class Glossary {
         }
       }),
     );
-    // A form met once keeps Opus's reading of that very place.
-    const dropped = [...cand].filter((k) => fits[k]?.length >= 2 && fits[k].filter(Boolean).length * 2 < fits[k].length);
+    // A form met once keeps Opus's reading of that very place. With `mixed` (Max 2026-11-17: «махнув рукою» shown as
+    // «вирушив»), a form that is wrong in any of its places goes: the selected-word card then asks with the sentence.
+    const wrong = (f) => (mixed ? f.some((x) => !x) : f.filter(Boolean).length * 2 < f.length);
+    const dropped = [...cand].filter((k) => fits[k]?.length >= 2 && wrong(fits[k]));
     if (dropped.length > entries.length / 4) throw new Error(`homographs would drop ${dropped.length}`);
     cost = Math.round(cost * 1000) / 1000;
     if (save && dropped.length) {
@@ -338,7 +343,7 @@ class Glossary {
       fs.writeFileSync(`${f}.tmp`, JSON.stringify(out));
       fs.renameSync(`${f}.tmp`, f);
     }
-    return { candidates: cand.size, sentences: lines.length, dropped: dropped.map((k) => [k, forms[k][0], (fits[k] || []).map(Number).join("")]), cost };
+    return { candidates: cand.size, sentences: lines.length, kept: save ? undefined : [...cand].filter((k) => !dropped.includes(k)).map((k) => [k, forms[k][0], (fits[k] || []).map(Number).join("")]), dropped: dropped.map((k) => [k, forms[k][0], (fits[k] || []).map(Number).join("")]), cost };
   }
   // v2 only: explanations that use words as hard as the word itself are said plainly (PLAIN), the same text once for
   // every form that shares it.
