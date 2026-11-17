@@ -1,8 +1,8 @@
 // Words ahead (Max, 2026-11-17: «як плейліст… наступний трек завантажує, не чекаючи, щоб не було пауз»). While a
 // reader reads, the passage on screen and the next one (~5,000 characters, cut at paragraphs) go to the server
 // (server/wordahead.js), which answers the words a reader may select there with their meaning. renderer.js `wordCard`
-// looks here before it asks for one word, so such a word shows at once. Only for a reader who has selected a word
-// in the last 30 days (most never do), signed in, in their own books (not a publisher's preview). Same passage = same
+// looks here before it asks for one word, so such a word shows at once. For every signed-in reader (since
+// 2026-11-17; the words are underlined as «Словничок», gloss.js `addAhead`). Same passage = same
 // text, so the server keeps one answer for every reader of that book.
 window.WordAhead = (() => {
   const SIZE = 5000;
@@ -23,20 +23,16 @@ window.WordAhead = (() => {
       .trim()
       .toLowerCase();
 
-  // The reader selected a word: from now on (30 days) passages are asked ahead.
+  // The reader selected a word (kept as a mark; passages are asked ahead for everyone signed in).
   function used() {
     try {
       localStorage.setItem(USED, String(Date.now()));
     } catch {}
   }
-  // Max always (2026-11-17: he tests it on every device, and a phone where he had not selected a word yet asked nothing).
+  // Every signed-in reader since 2026-11-17 (Max: the prepared words are underlined as «Словничок», so they are worth
+  // having before the first selection). `used` stays: it is still the mark of who selects words.
   function wanted() {
-    if (settings?.owner) return true;
-    try {
-      return Date.now() - Number(localStorage.getItem(USED) || 0) < 30 * 864e5;
-    } catch {
-      return false;
-    }
+    return true;
   }
 
   // Paragraph texts of a chapter, packed into passages of about SIZE characters.

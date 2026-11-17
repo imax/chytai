@@ -15,8 +15,8 @@ window.Gloss = (() => {
   let contentsOf = () => [];
   let longest = 1; // words in the longest expression
   let book = null;
-  // Words ahead (Max 2026-11-17: «щоб було підсвічене як словник»): the words Sonnet prepared for the passages
-  // around the reader (word-ahead.js) are underlined the same way, after the book's own list. Max only for now.
+  // Words ahead (Max 2026-11-17: «щоб було підсвічене як словник», then «вмикай» for everyone signed in): the words
+  // Sonnet prepared for the passages around the reader (word-ahead.js) are underlined the same way, after the book's own list.
   let ahead = new Map();
   let aheadBase = new Map(); // key -> the word's dictionary form, for «Знаю»
   const marked = new WeakMap(); // a chapter's document -> [{ range, text, gloss }]
@@ -182,7 +182,7 @@ window.Gloss = (() => {
 
   // New words ready ahead: underline them in the chapters on screen too.
   function addAhead(map, base) {
-    if (!settings.owner || !map) return;
+    if (settings.guest || !map) return;
     let added = 0;
     for (const [w, m] of Object.entries(map)) {
       const k = key(w).replace(/\s+/g, " ").trim();

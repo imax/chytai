@@ -246,6 +246,8 @@ async function glossUpload(lib, name, { force = false } = {}) {
     console.log(`glossary upload: ${lib.id} ${name} = ${same.name}`);
     return { same: same.name };
   }
+  // No whole-book build by itself any more (Max 2026-11-17): the words prepared ahead while reading are its «Словничок».
+  if (!force) return { skipped: "words ahead" };
   const day = statsDay();
   const d = ((state.stats ??= { since: day, days: {} }).days[day] ??= { explains: 0, users: {}, guests: 0, models: {} });
   const n = (d.glossUp ??= { n: 0, accts: {} });
