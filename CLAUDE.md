@@ -471,13 +471,13 @@ A flag only when Max asks for one, or when the change could break what readers u
   60 calls a book, 10 books a day, 3 a reader. The page asks `/api/glossary` for every own EPUB it opens (a list made
   after the page loaded shows too). See them: `GET /agent/glossary/uploads`; make one past the caps (a classic by
   someone else, only with Max's OK): `POST /agent/glossary/uploads {"acct":"<id>","book":"<file>"}`.
-- «Словничок 2» (Max 2026-11-17, flag `gloss-v2`, owner only for now): Opus reads the text (`PROMPT_V2`), gives each
+- «Словничок 2» (Max 2026-11-17, for everyone, no flag): Opus reads the text (`PROMPT_V2`), gives each
   word a level (1 = the sentence is unclear without it, 2 = a hint helps) and its dictionary form; `sweep()` then has
   Haiku add the book's other forms of each word (the old list's misses were mostly forms). Kept apart in
   `DATA_DIR/glossary-v2/<book>.json` (`forms: {form: [meaning, level, word]}`); `/api/glossary` gives it, with
-  `levels` and `words`, only to accounts with the flag. «Аа» → «Менше» (level 1) / «Більше» / «Ні» (`gloss` = on / more
+  `levels` and `words`, to everyone (guests too) for a book that has one; others keep the first list. «Аа» → «Менше» (level 1) / «Більше» / «Ні» (`gloss` = on / more
   / off); «Знаю це слово» on the card keeps the word in `glossKnown` (account, 3000 at most) and every form of it goes.
-  One selected word (renderer.js `wordCard`): its meaning on the selection's card, from the book's list, else
+  One selected word (renderer.js `wordCard`, signed-in readers): its meaning on the selection's card, from the book's list, else
   `POST /api/word` (server/word.js, Sonnet low effort, ~1 s, kept in memory by word + sentence). Proactive hints for
   ordinary books (who/what, notes) were tried and Max said no (2026-11-17: «трошки нахабно»). Make one book's (Max's
   OK; «Чорна рада» ≈ $6–7): `POST /agent/glossary {"book":"…","v2":true}`; status under `v2` in `GET /agent/glossary`.

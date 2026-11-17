@@ -43,7 +43,7 @@ Keep only the entries a modern teenager would really not understand or would mis
 Answer with the kept words only, one per line, exactly as given before the tab, nothing else.`;
 const STRICT_BATCH = 300;
 
-// «Словничок 2» (Max, 2026-11-17: «іноді пропускає неочевидні слова, іноді підкреслює очевидні»; flag `gloss-v2`).
+// «Словничок 2» (Max, 2026-11-17: «іноді пропускає неочевидні слова, іноді підкреслює очевидні»).
 // Opus reads the text (it catches false friends: «пробував» = перебував, «видав» = бачив, which Sonnet left out, and
 // leaves out what a teenager knows) and gives each word a level: 1 the sentence is unclear without it, 2 a hint
 // helps. «Аа» → «Менше» underlines level 1, «Більше» both. Then sweep() finds the other forms of each word in the

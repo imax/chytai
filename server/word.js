@@ -1,4 +1,4 @@
-// One word, fast (Max, 2026-11-17: «ти натискаєш на слово і зразу тобі щось показується»; flag `gloss-v2`): a reader
+// One word, fast (Max, 2026-11-17: «ти натискаєш на слово і зразу тобі щось показується»): a reader
 // selects a single word and the selection's card shows its meaning in this sentence in a second, instead of the
 // panel's long explanation. Sonnet at low effort, a few words back. Answers are kept in memory by word and sentence
 // (WORD_KEEP at most), so the same word in the same place costs nothing the second time.

@@ -8,7 +8,7 @@ window.Gloss = (() => {
   // A word: letters, stress marks, apostrophes and hyphens inside it.
   const WORD = /[\p{L}\p{M}]+(?:['’`ʼ-][\p{L}\p{M}]+)*/gu;
   let forms = null; // key -> meaning, for the book on screen
-  // «Словничок 2» (flag gloss-v2): key -> 1 (the sentence is unclear without it) or 2 (a hint helps), and key -> the
+  // «Словничок 2»: key -> 1 (the sentence is unclear without it) or 2 (a hint helps), and key -> the
   // word's dictionary form, which «Знаю» keeps (settings.glossKnown: every form of it goes).
   let levels = null;
   let words = null;

@@ -215,9 +215,8 @@ function userState(name) {
 const flagsKept = new Map(); // acct -> { list, at }
 // «Словничок» to the free shelf's classics (server/glossary.js; flag `glossary`).
 const glossary = new (require("./glossary").Glossary)({ dir: path.join(DATA_DIR, "glossary") });
-// «Словничок 2» (flag `gloss-v2`, Max only for now): Opus's list with levels and every form, beside the first one.
+// «Словничок 2» (Max 2026-11-17, for everyone): Opus's list with levels and every form; a book that has it shows it.
 const glossaryV2 = new (require("./glossary").Glossary)({ dir: path.join(DATA_DIR, "glossary-v2"), v2: true });
-const glossV2 = (req) => !req.guest && (flagsKept.get(req.acct)?.list || []).includes("gloss-v2");
 // A reader's own uploads: a list per library, in its folder (gone with the book or the account).
 const glossLibs = new Map();
 const glossOf = (lib) => glossLibs.get(lib.id) || glossLibs.set(lib.id, new (require("./glossary").Glossary)({ dir: lib.glossary, maxCalls: GLOSS_UPLOAD_CALLS })).get(lib.id);
@@ -300,7 +299,7 @@ function settingsFor(req) {
     ...(req.share ? { share: { from: accountName(req.share.acct), until: req.share.expires } } : {}),
     // Printing those gives the current chapter, not the whole book (renderer.js, «Print»).
     freeBooks: freeShelf.map((f) => f.name),
-    glossaries: [...new Set([...glossary.books(), ...(glossV2(req) ? glossaryV2.books() : []), ...(!req.guest && req.lib ? glossOf(req.lib).books() : [])])],
+    glossaries: [...new Set([...glossary.books(), ...glossaryV2.books(), ...(!req.guest && req.lib ? glossOf(req.lib).books() : [])])],
     noFileBooks: freeShelf.filter((f) => !fileAllowed(f.name)).map((f) => f.name),
     // Publishers' books: no print, no copy beyond a quote (server/protected.js).
     protectedBooks: protectedNames(),
@@ -2280,7 +2279,7 @@ api.get("/glossary", (req, res) => {
   const name = safeBookName(req.query.book);
   const own = name && !isFree(name) && req.lib && glossOf(req.lib).get(name);
   const shelf = isFree(name) ? name : own?.same;
-  const v2 = shelf && glossV2(req) && glossaryV2.get(shelf);
+  const v2 = shelf && glossaryV2.get(shelf);
   if (v2) {
     // { form: [meaning, level, word] } → the first list's shape plus the levels and the words (for «Знаю»).
     const e = Object.entries(v2.forms);
@@ -3209,12 +3208,11 @@ api.post("/tidy", guestsCannot("Без входу диктування не до
     res.json({ text, error: describeError(err) });
   }
 });
-// One selected word's meaning in a second (server/word.js; flag `gloss-v2`). Not counted as an explanation, but its
+// One selected word's meaning in a second (server/word.js). Not counted as an explanation, but its
 // cost goes into the account's day like any other call.
 api.post("/word", guestsCannot("Без входу пояснень немає."), aiBudget, async (req, res) => {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   const word = String(req.body?.word || "").trim().slice(0, 60);
-  if (!glossV2(req)) return res.status(403).json({ error: "off" });
   if (!apiKey || !word) return res.status(400).json({ error: "word" });
   try {
     const r = await require("./word").meaning(apiKey, {

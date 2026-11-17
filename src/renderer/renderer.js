@@ -1030,7 +1030,7 @@ function handleSelection(range, cfiRange, ctx, frame) {
   showSelToolbar(range, frame);
 }
 
-// «Словничок 2» (flag gloss-v2; Max, 2026-11-17: «натискаєш на слово і зразу тобі щось показується»): one selected
+// «Словничок 2» (Max, 2026-11-17: «натискаєш на слово і зразу тобі щось показується»): one selected
 // word shows its meaning on the card at once, from the book's own list or by a quick question (server/word.js,
 // about a second). «Пояснити» and the rest stay under it for more.
 let wordAsked = 0;
@@ -1038,7 +1038,7 @@ function wordCard(sel) {
   const bar = $("#sel-toolbar");
   const box = bar.querySelector(".st-word");
   const text = sel.text.trim();
-  const one = settings.flags?.includes("gloss-v2") && !settings.free && !settings.guest && /^[\p{L}\p{M}'’ʼ-]{2,40}$/u.test(text);
+  const one = !settings.free && !settings.guest && /^[\p{L}\p{M}'’ʼ-]{2,40}$/u.test(text);
   bar.classList.toggle("one-word", !!one);
   box.hidden = !one;
   const n = ++wordAsked;
