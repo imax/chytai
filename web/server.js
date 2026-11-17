@@ -1153,6 +1153,13 @@ app.get("/api/reader-about", (req, res) => {
     if (blurb && blurb.length + p.length > 600) break;
     blurb += (blurb ? "\n\n" : "") + p;
   }
+  // A shop's text that opens with the author's life («Пантелеймон Куліш — визначний письменник…», Max 2026-11-17) is
+  // about the author: the book's own overview says more about the book, when there is one.
+  const surnames = String(b.author || "").split(/[,;]/).map((a) => a.trim().split(/\s+/).pop()).filter((w) => w && w.length > 2);
+  if (surnames.some((w) => new RegExp(`^[^.!?…]{0,40}${w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}[^.!?…]{0,20}\\s[—–-]\\s`, "u").test(blurb))) {
+    const ov = advice.overviewOf(b.id)?.text;
+    if (ov) blurb = String(ov).replace(/\[([^\]]*)\]\([^)]*\)/g, "$1").replace(/[*_`>#]+/g, "").split(/\n\n+/)[0].trim();
+  }
   if (blurb.length > 900) blurb = blurb.slice(0, 900).replace(/[^.!?…]*$/, "") || blurb.slice(0, 900) + "…";
   const abs = (u) => (!u ? "" : /^https?:/.test(u) ? u : `${SITE}${u}`);
   res.json({ found: true, title: b.title, author: b.author || "", year: b.published || null, blurb, cover: abs(b.cover), href: `${SITE}${store.href(hit.book.id)}` });
