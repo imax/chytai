@@ -401,8 +401,8 @@
       .filter((b, i, a) => b && glossed.has(b.path) && a.indexOf(b) === i)
       .slice(0, 4);
     return `<section class="r-start">
-      <h1 class="r-start-t">Книжка, яку давно відкладаєте?</h1>
-      <p class="r-start-p">Додайте її. Незнайоме слово, ім’я чи місце пояснимо, коли попросите.</p>
+      <h1 class="r-start-t">Level-up your reading</h1>
+      <p class="r-start-p">Допоможемо читати книги, які здаються занадто складними.</p>
       <button class="r-pill r-start-add" data-act="add"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V5M7 10l5-5 5 5M5 20h14"/></svg>Додати книжку</button>
       <p class="r-start-f">EPUB, PDF, MOBI</p></section>
       ${picks.length ? `<section class="r-start-free">${head("Або почніть з класики", "", false)}
