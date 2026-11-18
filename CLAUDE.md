@@ -423,7 +423,10 @@ A flag only when Max asks for one, or when the change could break what readers u
   lists them with the post and «Повернути» (`uncancel`). Chytomo and Eventmate drop cancelled ones (`extract`).
 - Kinds (Max 2026-11-15 chose 5 chips): `cal_events.kind` is one of `calendar.KINDS` (club, author, lecture, festival,
   kids; '' = not known). The collectors' Haiku answers it with each event; `tgFeed.classify()` (every tg run) sorts
-  the rest 25 to a call, within the same daily cap; «other» isn't asked again (meta `tg:other`).
+  the rest 25 to a call, within the same daily cap; «other» isn't asked again (meta `tg:other`). «author» only when the
+  book's author takes part (Max 2026-11-18: «якщо автора немає на зустрічі то це книжковий клуб»): a presentation or
+  discussion without the author is «club» (`KIND_HELP` and SYSTEM); podii's «презентація» goes to `classify`. The
+  events already in were sorted again once (`recheckAuthors`, meta `tg:author-recheck`, changes in `tg:author-recheck-log`).
 
 - Chytomo (chytomo.com/kalendar/, Max 2026-11-15): `calendar.chytomoRun` once a day in the jobs process, its cards
   «зустрічі та враження» and «освітні» only, each new article (meta `chytomo:seen`) through the Telegram collector's

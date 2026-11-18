@@ -749,12 +749,12 @@ function create(db, store, { notify = () => {}, bookua = null, search = null, ma
   // ---- podii.io (Max 2026-11-16) ----
   // An afisha of Lviv and Ivano-Frankivsk (robots: all but query strings). Its «Літературні заходи» pages list the
   // coming ones; each event's page carries a schema.org Event (name, dates, place, city), so no AI: books and authors
-  // are found by name (upsert), the kind by its words (`podiiKind`, tgFeed.classify sorts the rest). An event page is
+  // are found by name (upsert), the kind by its words (`podiiKind`; a presentation is left to tgFeed.classify, which knows whether the author comes). An event page is
   // read once (meta `podii:seen`, half a year), 1 s apart; the same event told elsewhere (findSimilar) is left out, and
   // a Telegram twin gets this page as its link. dry: nothing kept.
   const PODII = "https://podii.io";
   const PODII_LISTS = ["/category/literaturni-zakhody"]; // a city's own category page shows other kinds too
-  const podiiKind = (t) => (/клуб|обговорен/i.test(t) ? "club" : /дит|малеч|дітей|казк/i.test(t) ? "kids" : /презентац|зустріч з|творча зустріч|автограф/i.test(t) ? "author" : /лекці|курс|воркшоп|майстер/i.test(t) ? "lecture" : /фестивал|ярмар/i.test(t) ? "festival" : "");
+  const podiiKind = (t) => (/клуб|обговорен/i.test(t) ? "club" : /дит|малеч|дітей|казк/i.test(t) ? "kids" : /зустріч з|творча зустріч|автограф/i.test(t) ? "author" : /лекці|курс|воркшоп|майстер/i.test(t) ? "lecture" : /фестивал|ярмар/i.test(t) ? "festival" : "");
   async function podiiRun({ dry = false, max = 60 } = {}) {
     const out = { at: new Date().toISOString(), dry, candidates: 0, read: 0, past: 0, made: [], dupes: [], errors: [] };
     const today = kyivDay();

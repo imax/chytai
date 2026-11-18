@@ -143,7 +143,7 @@ Answer every book event in the post that takes place on or after today's date (a
 - place: venue and address as the post gives them, at most 120 characters, or "".
 - url: the post's link to the event page or registration, only one of the links given; else "".
 - books: the books the event is about (presented, discussed, read), each with its title as written, without quotes, its author's full name in Ukrainian, and romance: true when it is genre romance (a romcom, romantasy, dark romance, a love story as the whole point, as Colleen Hoover's or Mia Sheridan's), false for anything else (literary fiction with a love story in it, classics, non-fiction); at most 4, the main ones; [] if no book is named.
-- kind: what sort of event it is: "club" a book club meeting or a discussion of a book by readers (also book mafia, a joint reading); "author" a presentation, a meeting or talk with an author, an autograph session; "lecture" a lecture, a course, a talk or panel about literature without one author at its centre; "festival" a festival, a book fair, a multi-event day; "kids" anything made for children; "other" anything else.
+- kind: what sort of event it is: "club" a book club meeting or a discussion of a book by readers (also book mafia, a joint reading); "author" only when the book's author takes part, in person or online (a presentation by the author, a meeting or talk with the author, an autograph session); a presentation or discussion of a book whose author is not there (a translated or late author's book presented by a publisher, a translator or a moderator) is "club" (Max 2026-11-18); "lecture" a lecture, a course, a talk or panel about literature without one author at its centre; "festival" a festival, a book fair, a multi-event day; "kids" anything made for children; "other" anything else.
 - cancelled: true when the post says this event is cancelled or will not take place (скасовано, не відбудеться, відміняється); then starts is the date it was planned for. Else false.
 - was: when the post says the event is moved to another day, the day it was planned for before (YYYY-MM-DD), and starts is the new day; "" otherwise (also when only the time or place changes).
 
@@ -153,7 +153,7 @@ A report on an event that has already taken place (відбулася, відб�
 
 When the post has no book event from today on, answer an empty list.`;
 const KIND_KEYS = ["club", "author", "lecture", "festival", "kids"];
-const KIND_HELP = `"club" a book club meeting or a discussion of a book by readers (also book mafia, a joint reading); "author" a presentation, a meeting or talk with an author, an autograph session; "lecture" a lecture, a course, a talk or panel about literature without one author at its centre; "festival" a festival, a book fair, a multi-event day; "kids" anything made for children; "other" anything else.`;
+const KIND_HELP = `"club" a book club meeting or a discussion of a book by readers (also book mafia, a joint reading); "author" only when the book's author takes part, in person or online (a presentation by the author, a meeting or talk with the author, an autograph session); a presentation or discussion of a book whose author is not there (a translated or late author's book presented by a publisher, a translator or a moderator) is "club" (Max 2026-11-18); "lecture" a lecture, a course, a talk or panel about literature without one author at its centre; "festival" a festival, a book fair, a multi-event day; "kids" anything made for children; "other" anything else.`;
 const EVENT_SCHEMA = {
   type: "object",
   properties: {
@@ -542,6 +542,7 @@ function create(db, { calendar, apiKey = process.env.ANTHROPIC_API_KEY || "", cl
       out.events = ev.made.length;
       if (ev.errors.length) out.evErrors = ev.errors.slice(0, 5);
       out.kinds = (await classify()).set;
+      if (meta("tg:author-recheck") !== "1") out.authorRecheck = await recheckAuthors();
     }
     setMeta("tg:last", JSON.stringify({ ...out, errors: out.errors.slice(0, 8) }));
     if (out.errors.length && !out.added && Object.keys(out.channels).length === 0) throw new Error(out.errors[0]);
@@ -670,6 +671,44 @@ function create(db, { calendar, apiKey = process.env.ANTHROPIC_API_KEY || "", cl
 
   // Kinds for upcoming events that have none (made before kinds, added by readers, festivals from the seed, Є):
   // 25 to a Haiku call, counted with the posts' calls. One Haiku called «other» is not asked again (meta tg:other).
+  // Once (Max 2026-11-18: «якщо автора немає на зустрічі то це книжковий клуб»): upcoming «author» events sorted
+  // again by the rule above; one whose author is not there becomes a club. Meta `tg:author-recheck` = done.
+  async function recheckAuthors() {
+    const c = anthropic();
+    if (!c) return { asked: 0, set: 0 };
+    const today = kyivDay();
+    const rows = db.prepare("SELECT id, title, sub, place FROM cal_events WHERE kind = 'author' AND hidden = 0 AND (starts >= ? OR ends >= ?) ORDER BY starts LIMIT 300").all(today, today);
+    const out = { asked: 0, set: 0, changed: [] };
+    const up = db.prepare("UPDATE cal_events SET kind = ? WHERE id = ? AND kind = 'author'");
+    for (let i = 0; i < rows.length; i += 25) {
+      const batch = rows.slice(i, i + 25);
+      out.asked++;
+      try {
+        const res = await c.messages.create({
+          model: MODEL,
+          max_tokens: 2000,
+          system: `You sort Ukrainian book events for a calendar. For each event answer its kind: ${KIND_HELP}`,
+          messages: [{ role: "user", content: batch.map((r, n) => `${n + 1}. ${r.title} — ${r.sub} ${r.place ? `(${r.place})` : ""}`).join("\n") }],
+          output_config: { effort: "low", format: { type: "json_schema", schema: { type: "object", properties: { kinds: { type: "array", items: { type: "object", properties: { n: { type: "integer" }, kind: { type: "string", enum: [...KIND_KEYS, "other"] } }, required: ["n", "kind"], additionalProperties: false } } }, required: ["kinds"], additionalProperties: false } } },
+        });
+        const raw = res.content.map((b) => b.text || "").join("");
+        const j = JSON.parse(raw.slice(raw.indexOf("{"), raw.lastIndexOf("}") + 1));
+        for (const k of j.kinds || []) {
+          const r = batch[k.n - 1];
+          if (!r || k.kind === "author" || !KIND_KEYS.includes(k.kind)) continue;
+          if (up.run(k.kind, r.id).changes) (out.set++, out.changed.push(`${r.title} → ${k.kind}`));
+        }
+      } catch (e) {
+        log(`tg recheck: ${e.message}`);
+        return out; // not marked done: the next run tries again
+      }
+    }
+    setMeta("tg:author-recheck", "1");
+    if (out.set) calendar?.fresh?.();
+    setMeta("tg:author-recheck-log", JSON.stringify(out.changed.slice(0, 100)));
+    return out;
+  }
+
   async function classify({ max = AI_DAY } = {}) {
     const c = anthropic();
     if (!c || !calendar?.setKinds) return { asked: 0, set: 0 };
@@ -895,7 +934,7 @@ function create(db, { calendar, apiKey = process.env.ANTHROPIC_API_KEY || "", cl
     }
   }
 
-  return { run, joinMore, joinSome, keepChannel, prune, dropGroups, discover, discoverWeekly, promote, events, classify, status, maybeEvent, meta, setMeta, extract, find };
+  return { run, joinMore, joinSome, keepChannel, prune, dropGroups, discover, discoverWeekly, promote, events, classify, recheckAuthors, status, maybeEvent, meta, setMeta, extract, find };
 }
 
 module.exports = { eventUrl, create, parsePage, maybeEvent, fromMessage, channels, KEEP_DAYS };
