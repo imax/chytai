@@ -785,4 +785,4 @@ function classic(authors) {
   });
 }
 
-module.exports = { Glossary, key, chunks, parse, parseV2, parseNames, NAMES, sweepLines, clean, classic, PROMPT, PROMPT_V2, PROMPT_ANY, STRICT, MODEL, MODEL_V2 };
+module.exports = { Glossary, key, chunks, partsOf, parse, parseV2, parseNames, NAMES, sweepLines, clean, classic, PROMPT, PROMPT_V2, PROMPT_ANY, STRICT, MODEL, MODEL_V2 };

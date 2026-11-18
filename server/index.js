@@ -1952,7 +1952,7 @@ function goneStats(days, dayKeys, monthAgo) {
   };
 }
 api.put("/position", (req, res) => {
-  const { path: bookPath, cfi, pct, chapter, part, parts } = req.body || {};
+  const { path: bookPath, cfi, pct, chapter, part, parts, snip } = req.body || {};
   if (typeof bookPath !== "string" || typeof cfi !== "string") return res.status(400).json({ error: "bad request" });
   const u = req.guest ? guestState(req.guest) : userState(req.acct);
   const name = bookPath.replace(/#reflow$/, "");
@@ -1963,7 +1963,7 @@ api.put("/position", (req, res) => {
   if (u.setAside) delete u.setAside[name];
   // How far in and which chapter, for the home screen: the position itself is a CFI it cannot read.
   if (Number.isFinite(pct)) {
-    (u.progress ??= {})[name] = { pct: Math.max(0, Math.min(100, Math.round(pct))), chapter: typeof chapter === "string" ? chapter.slice(0, 200) : "", ...(Number.isInteger(part) && Number.isInteger(parts) && part > 0 && part <= parts && parts < 10000 ? { part, parts } : {}) };
+    (u.progress ??= {})[name] = { pct: Math.max(0, Math.min(100, Math.round(pct))), chapter: typeof chapter === "string" ? chapter.slice(0, 200) : "", ...(typeof snip === "string" && snip ? { snip: snip.slice(0, 80) } : {}), ...(Number.isInteger(part) && Number.isInteger(parts) && part > 0 && part <= parts && parts < 10000 ? { part, parts } : {}) };
   }
   if (!req.guest || req.share) saveState();
   res.json({ ok: true });
@@ -2805,6 +2805,63 @@ async function siteAbout(title, author) {
     throw err;
   }
 }
+// «Про книжку» that helps to read (Max 2026-11-18, server/bookguide.js): «Перед читанням» before a book is started,
+// the recap up to the reader's place after. Kept by the book's text, one for every reader who has the same file.
+// Caps: GUIDE_DAY_USD a day for all, GUIDE_ACCOUNT_USD a reader (guests together as one), Max none; stats day `guide`.
+const guide = new (require("./bookguide").Guide)({ dir: path.join(DATA_DIR, "guide"), apiKey: process.env.ANTHROPIC_API_KEY });
+setTimeout(() => guide.cleanup(), 60000).unref();
+setInterval(() => guide.cleanup(), 86400000).unref();
+const GUIDE_DAY_USD = 5;
+const GUIDE_ACCOUNT_USD = 1;
+function guideFile(lib, name) {
+  if (!name || !/\.epub$/i.test(name) || protectedNames().includes(name)) return null;
+  if (isFree(name)) return path.join(freeDir(name), name);
+  return lib && fs.existsSync(bookFile(lib, name)) ? bookFile(lib, name) : null;
+}
+api.get("/guide", async (req, res) => {
+  const name = safeBookName(req.query.book);
+  const file = guideFile(req.guest ? null : req.lib, name);
+  if (!file) return res.json({ none: true });
+  const u = req.guest ? guestState(req.guest) : userState(req.acct);
+  const prog = u.progress?.[name];
+  const who = req.guest ? "guest" : req.acct;
+  const day = statsDay();
+  const d = ((state.stats ??= { since: day, days: {} }).days[day] ??= { explains: 0, users: {}, guests: 0, models: {} });
+  const z = (d.guide ??= { cost: 0, accts: {}, n: 0 });
+  const allow = () => {
+    if (z.cost >= GUIDE_DAY_USD) {
+      if (!z.told) (z.told = true), saveState(), telegram(`«Про книжку»: сьогодні вже $${GUIDE_DAY_USD} на огляди книжок, решта завтра.`);
+      return false;
+    }
+    return !!req.owner || (z.accts[who] || 0) < GUIDE_ACCOUNT_USD;
+  };
+  const spend = (c) => {
+    z.cost = Math.round((z.cost + c) * 10000) / 10000;
+    z.accts[who] = Math.round(((z.accts[who] || 0) + c) * 10000) / 10000;
+    z.n++;
+    saveState();
+  };
+  const title = clean(req.query.title, 300);
+  const author = clean(req.query.author, 300);
+  const started = !u.finished?.[name] && (prog?.pct || 0) >= 1;
+  try {
+    res.json({
+      started,
+      ...(await guide.get(file, {
+        title,
+        authors: author ? [author] : [],
+        blurb: () => (title ? siteAbout(title, author).then((a) => (a?.found && a.blurb) || "") : Promise.resolve("")),
+        recap: started,
+        pct: prog?.pct || 0,
+        snip: prog?.snip || "",
+        allow,
+        spend,
+      })),
+    });
+  } catch (err) {
+    res.json({ started, error: err.message });
+  }
+});
 api.get("/about", async (req, res) => {
   const title = clean(req.query.title, 300);
   const author = clean(req.query.author, 300);

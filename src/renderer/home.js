@@ -891,11 +891,69 @@
       link.href = a.found ? a.href : a.add;
       link.textContent = a.found ? "Сторінка книжки на Chytai ↗" : "Додати на Chytai ↗";
     };
+    $("#ab-recap").innerHTML = $("#ab-before").innerHTML = "";
+    d.classList.remove("started");
+    const opened = (aboutSeq = (aboutSeq || 0) + 1);
     fill(await window.reader.bookAbout?.(b, true));
-    d.showModal();
+    if (!d.open) d.showModal();
+    d.scrollTop = 0;
+    showGuide(b, d, opened);
     const fresh = await window.reader.bookAbout?.(b);
+    if (opened !== aboutSeq) return;
     if (fresh && d.open) fill(fresh);
     else if (!fresh && d.open && $("#ab-body").textContent === "Завантажую…") $("#ab-body").innerHTML = `<p class="muted">Не вдалося завантажити опис.</p>`;
+  }
+  // «Перед читанням» and «Що було досі» (Max 2026-11-18, server/bookguide.js): a book not started yet gets why it is
+  // worth it, how to read it and how hard it is under its description; a started one opens with where the reader
+  // stopped, what happened before and who is who, all only up to the reader's place. Made the first time someone
+  // asks (a few seconds; a long book read far, up to a minute), then kept for every reader of the same file.
+  let aboutSeq = 0;
+  async function showGuide(b, d, opened) {
+    if (!window.reader.bookGuide || !/\.epub$/i.test(b.path || "")) return;
+    const draw = (g) => {
+      if (opened !== aboutSeq || !d.open || !g) return;
+      const started = !!g.started;
+      d.classList.toggle("started", started);
+      $("#ab-recap").innerHTML = started ? recapHtml(g) : "";
+      $("#ab-before").innerHTML = started && !g.early ? "" : beforeHtml(g);
+    };
+    draw(await window.reader.bookGuide(b, true));
+    for (let i = 0; i < 60; i++) {
+      const g = await window.reader.bookGuide(b);
+      if (g) draw(g);
+      if (!g?.building || opened !== aboutSeq || !d.open) return;
+      await new Promise((r) => setTimeout(r, 3000));
+    }
+  }
+  const abSec = (title, body) => `<section class="ab-sec"><h3>${title}</h3>${body}</section>`;
+  const abWait = (text) => `<p class="ab-wait">${text}</p>`;
+  function recapHtml(g) {
+    const r = g.recap;
+    const making = g.building?.what === "recap";
+    let html = "";
+    if (r) {
+      if (r.where) html += abSec("Де ви зупинилися", `<p>${esc(r.where)}</p>`);
+      if (r.story) html += abSec("Що було досі", `<p>${esc(r.story)}</p>`);
+      if (r.people?.length) html += abSec("Хто тут хто", `<dl class="ab-people">${r.people.map(([n, w]) => `<dt>${esc(n)}</dt><dd>${esc(w || "")}</dd>`).join("")}</dl>`);
+      if (r.older && making) html += abWait("Доповнюємо до вашого місця…");
+    } else if (making) {
+      const { done, of } = g.building;
+      html += abSec("Що було досі", abWait(of > 3 ? `Перечитуємо прочитане: ${done} з ${of}…` : "Згадуємо, що було…"));
+    } else if (g.capped) html += abSec("Що було досі", abWait("Сьогодні вже не встигнемо, спробуйте завтра."));
+    else if (g.error) html += abSec("Що було досі", abWait("Не вдалося підготувати. Спробуйте пізніше."));
+    else if (g.offline) html += abSec("Що було досі", abWait("Потрібне з'єднання."));
+    return html ? `${html}<h3 class="ab-h">Про книжку</h3>` : "";
+  }
+  function beforeHtml(g) {
+    const f = g.before;
+    let html = "";
+    if (f) {
+      if (f.why) html += abSec("Чим цікава", `<p>${esc(f.why)}</p>`);
+      if (f.how) html += abSec("Як читати", `<p>${esc(f.how)}</p>`);
+    } else if (g.building?.what === "before") html += abSec("Перед читанням", abWait("Готуємо кілька слів перед читанням…"));
+    const chips = [f?.level ? `Складність ${f.level} з 10` : "", g.pages > 1 ? `≈ ${g.pages} ${plural(g.pages, "сторінка", "сторінки", "сторінок")}` : ""].filter(Boolean);
+    if (chips.length) html += `<p class="ab-chips">${chips.map((c) => `<span>${c}</span>`).join("")}</p>`;
+    return html;
   }
   // «Про книжку» as a block at the end of a book's panel that unfolds in place, like the questions and
   // notes above it (Max 2026-11-05: no separate dialog). Same block for paper and e-books.

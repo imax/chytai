@@ -74,7 +74,7 @@
          «Вигляд». Explanations and notes keep #panel, styled as the same sheet. phone-read.js wires it. -->
     <div id="m-top" class="m-chrome">
       <button id="m-back" type="button" aria-label="Мої книжки"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 5-7 7 7 7"/></svg><span class="m-dl">Мої книжки</span></button>
-      <div class="m-ttl"><b id="m-title"></b><small id="m-author"></small></div>
+      <div class="m-ttl" data-act="title-about" role="button" tabindex="0" title="Про книжку і що було досі"><b id="m-title"></b><small id="m-author"></small></div>
       <button id="m-search" type="button" aria-label="Пошук у книжці"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.6-3.6"/></svg></button>
       <!-- Computer (turn 10): the actions are in the header on the right, with their names. -->
       <nav class="m-dnav">
@@ -320,7 +320,9 @@
   <dialog id="about-dialog">
     <form method="dialog">
       <div class="ab-head"><span id="ab-cover"></span><div><h2 id="ab-title"></h2><p id="ab-author"></p></div></div>
+      <div id="ab-recap"></div>
       <div id="ab-body"></div>
+      <div id="ab-before"></div>
       <p class="ab-foot"><a id="ab-link" target="_blank" rel="noopener"></a><button value="close" class="r-pill">Закрити</button></p>
     </form>
   </dialog>

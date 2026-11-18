@@ -998,6 +998,20 @@
         return kept || null;
       }
     },
+    // «Перед читанням» / «Що було досі» (server/bookguide.js), kept on the device like «Про книжку».
+    bookGuide: async (b, cachedOnly = false) => {
+      const key = `guide:${b.path}`;
+      const kept = await kvGet(key);
+      if (cachedOnly) return kept || null;
+      try {
+        const q = new URLSearchParams({ book: b.path, title: b.title || "", author: (b.authors || []).join(", ") });
+        const data = await (await api("GET", `/api/guide?${q}`)).json();
+        if (data.before || data.recap) kvSet(key, { started: data.started, before: data.before, recap: data.recap, pages: data.pages });
+        return data;
+      } catch {
+        return kept ? { ...kept, offline: !kept.recap } : null;
+      }
+    },
     uploadFiles: (files) => uploadAll(files),
     libraryTake: (name) => api("POST", "/api/library/take", { path: name }),
     // Paper books (paper.js, server/paper.js).

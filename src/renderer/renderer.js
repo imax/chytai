@@ -851,7 +851,24 @@ function onRelocated(location) {
 function readingProgress(location) {
   // Outside the app a publisher's book is only its beginning, so a percentage would mislead.
   if (!book?.locations.length() || !location?.start || current?.preview) return undefined;
-  return { pct: Math.round(book.locations.percentageFromCfi(location.start.cfi) * 100), chapter: chapterTitle(location.start.href, location.start.cfi), ...chapterNumber(location.start.index) };
+  const snip = snipAt(location.start.cfi);
+  return { pct: Math.round(book.locations.percentageFromCfi(location.start.cfi) * 100), chapter: chapterTitle(location.start.href, location.start.cfi), ...chapterNumber(location.start.index), ...(snip ? { snip } : {}) };
+}
+// The page's first words: «Про книжку» finds the exact place in the text with them, for «що було досі».
+function snipAt(cfi) {
+  try {
+    const r = rendition?.getRange?.(cfi);
+    if (!r) return "";
+    const doc = r.startContainer.ownerDocument;
+    const walk = doc.createTreeWalker(doc.body, NodeFilter.SHOW_TEXT);
+    let n = r.startContainer;
+    let text = n.nodeType === 3 ? n.textContent.slice(r.startOffset) : "";
+    walk.currentNode = n;
+    while (text.replace(/\s+/g, " ").trim().length < 80 && (n = walk.nextNode())) text += " " + n.textContent;
+    return text.replace(/\s+/g, " ").trim().slice(0, 80);
+  } catch {
+    return "";
+  }
 }
 // «розділ 8 з 23» on the home screen: the contents' top-level entries, the last one at or before this page.
 function chapterNumber(spineIndex) {
@@ -2103,12 +2120,20 @@ function renderAbout() {
 $("#about-book").addEventListener("click", (e) => {
   const b = aboutBook();
   if (!b || !e.target.closest("[data-about-toggle]")) return;
+  // An EPUB opens the home screen's «Про книжку», with «Що було досі» (Max 2026-11-18: «з книжки теж на рекап»).
+  if (/\.epub$/i.test(b.path || "") && window.Shell?.showAbout) return window.Shell.showAbout(b);
   aboutOpen = aboutOpen === b.path ? "" : b.path;
   renderAbout();
   if (aboutOpen) {
     window.Shell.loadAbout(b, () => aboutOpen === b.path && renderAbout());
     $("#about-book").scrollIntoView({ behavior: "smooth", block: "nearest" });
   }
+});
+
+// The book's title in the top bar opens the same «Про книжку».
+document.querySelector("#m-top .m-ttl")?.addEventListener("click", () => {
+  const b = aboutBook();
+  if (b && window.Shell?.showAbout) window.Shell.showAbout(b);
 });
 
 function renderNotes() {

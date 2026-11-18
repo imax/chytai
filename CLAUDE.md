@@ -543,6 +543,16 @@ A flag only when Max asks for one, or when the change could break what readers u
   Telegram once), $5 a reader (`LAZY_ACCOUNT_USD`, Max none); stats day `glossLazy`. The book menu shows it after
   «Про книжку» (`glossLine` in home.js, `GET /api/glossary/status`: covered, words, names, building), not «Аа».
   `app.chytai.org.ua/?new` shows the empty shelf's start screen over one's own books (Max, to look at it).
+- «Про книжку» that helps to read (Max 2026-11-18, `server/bookguide.js`, `GET /api/guide?book&title&author`, home.js
+  `showGuide`): a book not started gets «Чим цікава», «Як читати», «Складність N з 10» and pages under its description
+  (`BEFORE`, Opus once a book); a started one (`u.progress` pct ≥ 1, not finished) opens with «Де ви зупинилися», «Що було
+  досі», «Хто тут хто», only up to the reader's place: Sonnet summarises each 15,000-character part once (`PART`), Opus
+  writes the recap from the parts read + the current part up to the place (`RECAP`), kept per 2,500 characters (`STEP`).
+  The place: `/api/position` keeps the page's first words (`snip`, renderer.js `snipAt`), found in the text near the pct.
+  Kept by the text's hash (`DATA_DIR/guide/<key>.json`, same file = one guide for all), unused 180 days → gone. EPUBs
+  only, no publishers' books. Caps $5 a day for all (`GUIDE_DAY_USD`, Telegram once), $1 a reader (guests together),
+  Max none; stats day `guide`. Opens from the home book menu, the title in the book's top bar (`act-title-about`) and
+  the panel's «Про книжку» (paper books keep the inline block). No «Перевірте себе», no change to «Зміст» (Max).
 - Names (Max 2026-11-17: the card made up who «Васюта» was): `buildNames` (glossary.js, `NAMES`) has Opus read a
   free-shelf book whole once (Чорна рада $0.93, 2.5 min) and describe its people and places, kept in
   `DATA_DIR/glossary-names/<book>.json` (`names: {form: [about, full name]}`), sent by `/api/glossary` as `names`.
