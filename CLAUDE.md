@@ -631,5 +631,8 @@ A flag only when Max asks for one, or when the change could break what readers u
   toolbar); on Android it comes back while a text field has the focus (`FIELD_REPORTER`), else nothing could be pasted
   (a reader's sign-in code, 2026-11-17). No overscroll stretch: `overScrollMode="never"` there and
   `overscroll-behavior: none` on the page and the book's scroller. An App.js change reaches iPhones over the air and Android by a new APK.
+- Reader's purpose (Max 2026-11-18): «Level up your reading», reading books that feel too hard. Not in the reader's UI
+  any more: minutes («Цей тиждень»: «хвилини не про це»), printing a book, «Дати почитати» links, OPDS in settings
+  (the server keeps `/api/opds` and `/api/shares` for links already made). An empty shelf shows `startHtml()` (home.js).
 - Reader: the app's own UI can't be selected (`body` has `user-select: none`, end of `src/renderer/style.css`). Text a
   reader may copy (a new note, answer or field) goes into the list of selectable classes there.

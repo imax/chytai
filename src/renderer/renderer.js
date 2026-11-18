@@ -202,34 +202,7 @@ function openSettings() {
   $("#set-page-taps").value = settings.pageTaps ? "taps" : "scroll";
   $("#set-desk-scroll").value = settings.deskScroll ? "scroll" : "pages";
   $("#settings").showModal();
-  showOpds();
 }
-
-// The address of the reader's OPDS catalog, for an e-ink reader (server/opds.js).
-async function showOpds(make) {
-  const box = $("#opds-set");
-  if (!box || settings.guest || !document.body.classList.contains("web")) return box && (box.hidden = true);
-  try {
-    const res = await fetch("/api/opds", { method: make ? "POST" : "GET", credentials: "same-origin" });
-    const { url } = await res.json();
-    $("#opds-url").value = url || "";
-    $("#opds-copy").textContent = url ? "Копіювати" : "Створити";
-    $("#opds-new").hidden = !url;
-    return url;
-  } catch {
-    box.hidden = true;
-  }
-}
-$("#opds-copy").onclick = async () => {
-  const url = $("#opds-url").value || (await showOpds(true));
-  if (!url) return;
-  $("#opds-url").select();
-  try {
-    await navigator.clipboard.writeText(url);
-    $("#opds-copy").textContent = "Скопійовано";
-  } catch {}
-};
-$("#opds-new").onclick = () => showOpds(true);
 
 $("#settings").addEventListener("close", async () => {
   if ($("#settings").returnValue !== "save") return;
@@ -256,7 +229,6 @@ $("#settings").addEventListener("close", async () => {
 });
 $("#btn-logout").onclick = () => window.reader.logout?.();
 $("#btn-admin").onclick = () => (location.href = "/admin");
-$("#btn-print").onclick = () => printBook();
 $("#btn-search").onclick = () => window.BookSearch?.open();
 
 // On a phone the book scrolls as one continuous column unless page turns were chosen in settings;
@@ -454,7 +426,7 @@ async function openEpub(payload, { posKey, source }) {
   // Taps, keys and scrolls inside the book's frame are signs of reading too (reading-time.js).
   rendition.hooks.content.register((contents) => { for (const ev of ["pointerdown", "keydown", "wheel", "touchstart"]) contents.document.addEventListener(ev, () => window.ReadingTime?.poke(), { passive: true }); });
   // Keys pressed while the page has focus reach only the book's frame; pass them on.
-  rendition.on("keydown", (e) => (onPrintKey(e), e.defaultPrevented || window.DeskRead?.key(e), e.defaultPrevented || window.Shell?.key(e), window.DeskRead?.escFull(e)));
+  rendition.on("keydown", (e) => (window.DeskRead?.key(e), e.defaultPrevented || window.Shell?.key(e), window.DeskRead?.escFull(e)));
   window.DeskRead?.watchFrames(rendition);
   rendition.on("click", (e) => {
     // A click on a word of the «Словничок» shows its meaning (gloss.js); a touch tap comes through onTouchEnd.
@@ -533,7 +505,6 @@ async function openEpub(payload, { posKey, source }) {
   const nav = await book.loaded.navigation;
   renderToc(nav.toc);
   $("#btn-toc").disabled = false;
-  $("#btn-print").classList.toggle("hidden", current.protected);
   $("#btn-search").classList.remove("hidden");
 
   // Page-accurate progress needs the locations index; build it in the background.
@@ -647,7 +618,6 @@ function resizeView() {
 
 function closeBook() {
   window.Gloss?.load(null);
-  $("#btn-print").classList.add("hidden");
   $("#btn-search").classList.add("hidden");
   // A failure while tearing down the previous book must never block opening the next one.
   for (const item of [rendition, book, pdfView]) {
@@ -2299,18 +2269,14 @@ function noticeLink(href, label) {
 }
 window.reader.onTogglePanel(() => showPanel(document.body.classList.contains("panel-hidden")));
 
-// ---------- Print: the book's text on paper, without the panel, toolbar or notices ----------
-// Ctrl/Cmd+P prints the whole book (svoloshyn: «роздрукувати казку дитині»). Books shared by their
-// author's permission have no file to download, so printing them gives the current chapter only.
-// The browser's own Print menu gives no time to load the other chapters: it prints the chapter on screen.
+// ---------- Print: the browser's own Print menu gives the chapter on screen, without the panel or toolbar ----------
+// The «Друкувати» button and ⌘P for the whole book were taken out on 2026-11-18 (Max: not what the reader is for).
 
 // The book's font lives in the page frames; the printed copy needs it here too (it loads only when used).
 for (const href of FONT_CSS) document.head.append(Object.assign(document.createElement("link"), { rel: "stylesheet", href }));
 const printBox = document.createElement("div");
 printBox.id = "print-book";
 document.body.append(printBox);
-
-const printWholeBook = () => !(settings.noFileBooks || []).includes(current?.path);
 
 function printHead() {
   const h = document.createElement("header");
@@ -2386,74 +2352,15 @@ function printColophon() {
   return foot;
 }
 
-async function fillPrintWholeBook() {
-  const parts = [];
-  for (const section of book.spine.spineItems) {
-    if (section.linear === false || section.properties?.includes?.("nav")) continue;
-    try {
-      const doc = (await section.load(book.load.bind(book))).ownerDocument;
-      const body = doc.body || doc.querySelector("body");
-      if (!body) continue;
-      const clone = document.importNode(body, true);
-      // Pictures point into the book file; give them the same blob URLs the pages use.
-      for (const img of clone.querySelectorAll("img[src], image")) {
-        const attr = img.tagName.toLowerCase() === "img" ? "src" : img.hasAttribute("href") ? "href" : "xlink:href";
-        const src = img.getAttribute(attr);
-        if (!src || /^(data|blob|https?):/.test(src)) continue;
-        try {
-          const abs = decodeURI(new URL(src, `https://book${section.url.startsWith("/") ? "" : "/"}${section.url}`).pathname);
-          const url = book.archive ? await book.archive.createUrl(abs) : abs;
-          img.setAttribute(attr, url);
-        } catch {
-          img.remove();
-        }
-      }
-      parts.push(printSection(clone));
-    } catch {
-      /* a chapter that does not load is left out */
-    } finally {
-      section.unload?.();
-    }
-  }
-  printBox.replaceChildren(printHead(), ...parts, printColophon());
-  printBox.style.fontFamily = FONTS[settings.font] || "";
-}
-
-let printReady = false;
-async function printBook() {
-  if (current?.protected) return showNotice("Цю книжку не можна друкувати.", false);
-  if (!rendition || current?.pdf) return window.print();
-  showNotice("Готую книжку до друку…", true);
-  try {
-    if (printWholeBook()) await fillPrintWholeBook();
-    else fillPrintFromScreen();
-  } finally {
-    $("#notice").classList.add("hidden");
-  }
-  printReady = true;
-  document.body.classList.add("printing");
-  await document.fonts?.ready;
-  window.print();
-}
-
-function onPrintKey(e) {
-  if ((e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === "p" && rendition && !current?.pdf) {
-    e.preventDefault();
-    printBook();
-  }
-}
-document.addEventListener("keydown", onPrintKey);
-
 window.addEventListener("beforeprint", () => {
   if (!rendition || current?.pdf) return;
   if (current?.protected) printBox.replaceChildren(printHead(), Object.assign(document.createElement("p"), { textContent: "Цю книжку не можна друкувати." }));
-  else if (!printReady) fillPrintFromScreen();
+  else fillPrintFromScreen();
   document.body.classList.add("printing");
 });
 window.addEventListener("afterprint", () => {
   document.body.classList.remove("printing");
   printBox.replaceChildren();
-  printReady = false;
 });
 
 settingsReady = loadSettings();

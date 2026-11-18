@@ -220,7 +220,7 @@
   // The panel: search in your books, Мої книжки / Додати книжку / Нещодавно видалені, the books opened lately,
   // feedback and your settings. Always open on a computer; on a phone the header's button (or, in the app, a
   // swipe from the left edge) slides the page aside to show it. Safari keeps that edge for «back».
-  let page = "home"; // home | add | paper | week
+  let page = "home"; // home | add | paper
   let paperPath = null; // the paper book on «paper» (paper.js)
   let addQuery = "";
   let freeAll = false;
@@ -280,17 +280,13 @@
         : deep.q === q || deep.offline || q.length < 2 || !window.reader.searchMine ? `<p class="r-pnone">Нічого не знайшлося.</p>` : "";
     }
     const recent = books.filter((b) => b.openedAt).sort((x, y) => y.openedAt - x.openedAt).slice(0, 4);
-    const wk = weekPanelHtml();
-    const all = `${html}\u0000${recent.map(prow).join("")}\u0000${wk}\u0000${books.length}|${trashCount}|${page}|${settings.user}`;
+    const all = `${html}\u0000${recent.map(prow).join("")}\u0000${books.length}|${trashCount}|${page}|${settings.user}`;
     if (all === panelHtml) return;
     panelHtml = all;
     $("#r-pfound").innerHTML = html;
     $("#r-pfound").classList.toggle("hidden", !q);
     $("#r-recent").innerHTML = recent.map(prow).join("");
     $(".r-precent").classList.toggle("hidden", !recent.length);
-    // An older page (an app's saved copy) may have no such block: it must not stop the rest from drawing.
-    const pw = $("#r-pweek");
-    if (pw) pw.innerHTML = wk, pw.classList.toggle("hidden", !wk), pw.classList.toggle("on", page === "week");
     $("#r-n-books").textContent = books.length || "";
     $("#r-pnav-trash").hidden = !trashCount;
     $("#r-n-trash").textContent = trashCount || "";
@@ -364,54 +360,6 @@
 
   const prow = (b) => `<button type="button" class="r-prow${b.unavailable ? " unavailable" : ""}" data-open="${esc(b.path)}">${rcover(b)}<span class="r-prow-t">${esc(b.title)}</span><span class="r-prow-p">${b.finished ? "✓" : b.paper ? (b.page ? `стор. ${b.page}` : "") : b.pct != null ? `${b.pct}%` : ""}</span></button>`;
 
-  // «Цей тиждень» (Max 2026-11-06): a small block in the panel with your minutes this week, and a page behind it
-  // with the days and the books. Only counts: no streaks, no nudges, nobody else sees it. Hidden in a week
-  // with no reading. Asked again at most once a minute, when your books are drawn (coming back from a book too).
-  let week = null;
-  let weekAt = 0;
-  function loadWeek() {
-    if (settings.guest || !window.reader.readingWeek || Date.now() - weekAt < 60000) return;
-    weekAt = Date.now();
-    window.reader.readingWeek().then((w) => {
-      if (!w || JSON.stringify(w) === JSON.stringify(week)) return;
-      week = w;
-      panelHtml = "";
-      renderPanel();
-      if (page === "week") renderHome();
-    }).catch(() => {});
-  }
-  const DAYS = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Нд"];
-  function dur(sec) {
-    const m = Math.round(sec / 60);
-    if (m < 60) return `${m} хв`;
-    return m % 60 ? `${Math.floor(m / 60)} год ${m % 60} хв` : `${Math.floor(m / 60)} год`;
-  }
-  const weekSum = (w) => (w?.days || []).reduce((a, s) => a + s, 0);
-  function weekBars(w) {
-    const top = Math.max(...w.days, 1);
-    return `<span class="r-wbars">${w.days.map((s, i) => `<span class="r-wday${i > w.today ? " later" : ""}${i === w.today ? " now" : ""}"><span class="r-wcol"><span style="height:${s >= 30 ? Math.max(8, Math.round((s / top) * 100)) : 0}%"></span></span><small>${DAYS[i]}</small></span>`).join("")}</span>`;
-  }
-  function weekPanelHtml() {
-    const sum = weekSum(week);
-    if (sum < 60) return "";
-    return `<h3>Цей тиждень</h3><span class="r-pweek-row"><b>${dur(sum)}</b>${weekBars(week)}</span>`;
-  }
-  function weekPageHtml() {
-    const sum = weekSum(week);
-    const prev = week?.weeks?.[1]?.sec || 0;
-    const byPath = new Map((lib?.books || []).map((b) => [b.path, b]));
-    const books = (week?.books || []).filter((b) => b.sec >= 30).map((b) => {
-      const mine = byPath.get(b.name);
-      // Minutes from the time of «Статті» (2026-11-08..10) come as «article:<slug>»: the slug in words.
-      const art = b.name.startsWith("article:") && b.name.slice(8);
-      const title = mine?.title || b.title || (art ? art.replace(/-/g, " ") : b.name.replace(/\.[a-z0-9]+$/i, ""));
-      return `<li>${mine ? `<button data-open="${esc(b.name)}">${esc(title)}</button>` : `<span>${esc(title)}</span>`}<i>${dur(b.sec)}</i></li>`;
-    }).join("");
-    return `<section class="r-week">${head("Цей тиждень", "", true)}
-      ${sum < 60 ? `<p class="r-empty">Цього тижня ще не читали.</p>` : `<div class="r-week-top"><div><div class="r-week-num">${dur(sum)}</div>${prev >= 60 ? `<p class="r-week-prev">Минулого тижня ${dur(prev)}</p>` : ""}</div>${weekBars(week)}</div>
-      ${books ? `<ul class="r-week-books">${books}</ul>` : ""}`}</section>`;
-  }
-
   function renderHome() {
     if (!lib) return; // the skeleton stays until the library arrives
     $("#shell").dataset.page = page;
@@ -421,8 +369,7 @@
     if (page === "paper" && document.activeElement?.closest?.(".pp") && homeHtml) return;
     const pb = page === "paper" && lib.books.find((b) => b.path === paperPath);
     if (page === "paper" && !pb) page = "home";
-    loadWeek();
-    const html = pb ? window.Paper.pageHtml(pb) : page === "add" ? addPageHtml() : page === "week" ? weekPageHtml() : homePageHtml();
+    const html = pb ? window.Paper.pageHtml(pb) : page === "add" ? addPageHtml() : homePageHtml();
     // The library comes twice (the saved copy, then the server's) and again when the app comes back to the
     // front: drawing the same covers anew made them flicker, so an unchanged screen is left alone.
     if (html === homeHtml) return;
@@ -444,8 +391,29 @@
     drawn = { page, html };
   }
 
+  // An empty shelf (Max 2026-11-18, «Level up your reading», variant 1A of the canvas): what the reader is for, the
+  // button for one's own book, and four classics whose «Словничок» is ready.
+  const START_PICKS = ["kulish-chorna-rada.epub", "kotliarevsky-eneida.epub", "kotsiubynskyi-tini-zabutykh-predkiv.epub", "kobylianska-zemlia.epub"];
+  function startHtml() {
+    const free = lib.free || [];
+    const glossed = new Set(settings.glossaries || []);
+    const picks = [...START_PICKS.map((n) => free.find((b) => b.path === n)), ...free.filter((b) => glossed.has(b.path) && /класика/i.test(b.group || ""))]
+      .filter((b, i, a) => b && glossed.has(b.path) && a.indexOf(b) === i)
+      .slice(0, 4);
+    return `<section class="r-start">
+      <h1 class="r-start-t">Книжка, яку давно відкладаєте?</h1>
+      <p class="r-start-p">Додайте її. Незнайоме слово, ім’я чи місце пояснимо, коли попросите.</p>
+      <button class="r-pill r-start-add" data-act="add"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V5M7 10l5-5 5 5M5 20h14"/></svg>Додати книжку</button>
+      <p class="r-start-f">EPUB, PDF, MOBI</p></section>
+      ${picks.length ? `<section class="r-start-free">${head("Або почніть з класики", "", false)}
+        <p class="r-start-sub">Незнайомі слова вже пояснені</p>
+        <div class="r-grid r-start-grid">${picks.map((b) => card(b, "", false)).join("")}</div>
+        <button class="r-link r-start-all" data-act="free-shelf">Уся вільна полиця →</button></section>` : ""}`;
+  }
+
   function homePageHtml() {
     const books = myBooks();
+    if (!settings.guest && !books.length) return startHtml();
     if (!settings.guest) setTimeout(() => fetchAboutAhead(books), 3000);
     const cur = nowBook(books);
     let html = "";
@@ -514,7 +482,7 @@
         ${shopRow("yakaboo", "Yakaboo", yakabooHtml)}
         ${shopRow("bookua", "Book.ua", bookuaHtml)}
         ${freeRow}
-        <div class="r-where-row soon"><span>Інші книгарні</span><small>незабаром</small></div></section>
+</section>
       ${freeHtml}
     </div>`;
   }
@@ -1154,6 +1122,11 @@
     if (el.dataset.act === "panel") return panel();
     if (el.dataset.act === "settings") return panel(false), openSettings();
     if (el.dataset.act === "cover-photo") return window.Paper.coverPhoto();
+    if (el.dataset.act === "free-shelf") {
+      freeAll = true;
+      setPage("add");
+      return setTimeout(() => $("#r-free")?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
+    }
     if (el.dataset.act === "free-all") {
       freeAll = !freeAll;
       renderHome();
@@ -1219,7 +1192,7 @@
     const b = lib?.books.find((x) => x.path === path);
     if (!b || settings.guest) return;
     menuBook = b;
-    for (const x of document.querySelectorAll("#book-menu .bm-list button")) x.hidden = x.id === "bm-share";
+    for (const x of document.querySelectorAll("#book-menu .bm-list button")) x.hidden = false;
     const own = !b.free && !b.protected && !b.paper;
     const d = $("#book-menu");
     $("#bm-title").textContent = b.title;
@@ -1235,7 +1208,6 @@
       d.style.left = `${Math.max(12, Math.min(innerWidth - 232, r.left))}px`;
       d.style.top = `${Math.min(innerHeight - 240, r.bottom + 6)}px`;
     } else d.style.left = d.style.top = "";
-    // «Дати почитати» is hidden for now (Max, 2026-11-01).
     $("#bm-edit").hidden = !(own && window.reader.libraryUpdateBook);
     // A PDF added before uploads became EPUB (2026-11-01): it opens slowly, so it can become one now.
     $("#bm-epub").hidden = !(own && /\.pdf$/i.test(b.path) && window.reader.libraryPdfToEpub);
@@ -1322,7 +1294,6 @@
     if (!b) return;
     if (act === "about") return showAbout(b);
     if (act === "keep") return keepBook(b);
-    if (act === "share") return window.Library.shareBook(b.path);
     if (act === "edit") return window.Library.editBook(b.path);
     if (act === "aside") return setAside(b.path);
     if (act === "epub") return pdfToEpub(b);

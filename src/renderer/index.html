@@ -29,7 +29,6 @@
       <button id="btn-panel" class="desktop-only" title="Панель пояснень (⌘E)">Пояснення</button>
       <button id="btn-search" class="hidden icon-btn mobile-only" title="Пошук у книжці" aria-label="Пошук у книжці"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.6-3.6"/></svg></button>
       <button id="btn-notes" title="Нотатки до цієї книжки" aria-label="Нотатки"><svg class="mobile-only" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3h12v18l-6-4-6 4z"/></svg><span class="desktop-only">Нотатки</span></button>
-      <button id="btn-print" class="hidden icon-btn" title="Надрукувати книжку (⌘P)" aria-label="Друкувати"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9V3h12v6"/><rect x="3" y="9" width="18" height="8" rx="2"/><path d="M6 14h12v7H6z"/></svg></button>
       <button id="btn-settings" title="Налаштування (⌘,)">⚙</button>
     </div>
   </header>
@@ -255,7 +254,6 @@
         <button type="button" data-act="trash" id="r-pnav-trash" hidden>Нещодавно видалені<i id="r-n-trash"></i></button>
       </nav>
       <section class="r-precent hidden"><h3>Нещодавно відкриті</h3><div id="r-recent"></div></section>
-      <button type="button" class="r-pweek hidden" id="r-pweek" data-page="week"></button>
       <div class="r-pspace"></div>
       <button type="button" class="r-pme" data-act="settings"><span class="r-pava" id="r-avatar"></span><span class="r-pme-t"><b id="r-me-name"></b><small>Налаштування</small></span><i>›</i></button>
     </aside>
@@ -361,10 +359,6 @@
           <option value="scroll">Безперервна прокрутка</option>
         </select>
       </label>
-      <label class="web-only" id="opds-set">Електронна читалка
-        <span class="opds-row"><input type="text" id="opds-url" readonly placeholder="Адреси ще немає" /><button type="button" id="opds-copy">Створити</button></span>
-        <small>Додайте адресу як OPDS-сервер, і ваші EPUB з'являться на читалці. <button type="button" class="link" id="opds-new" hidden>Нова адреса</button></small>
-      </label>
       <menu>
         <button type="button" id="btn-admin" class="link web-only family-only" title="Хто читає, скільки книжок і пояснень">Статистика</button>
         <button type="button" id="btn-keys" class="link desktop-only" title="Клавіатурні скорочення (?)">Клавіші</button>
@@ -385,7 +379,6 @@
         <button value="finished" id="bm-finished">Позначити прочитаною</button>
         <button value="about" id="bm-about">Про книжку</button>
         <button value="keep" id="bm-keep" hidden>Зберегти на телефон</button>
-        <button value="share" id="bm-share" hidden>Дати почитати</button>
         <button value="edit" id="bm-edit">Назва, автор, обкладинка</button>
         <button value="epub" id="bm-epub" hidden>Перетворити на EPUB</button>
         <button value="aside" id="bm-aside" class="danger">Видалити</button>
