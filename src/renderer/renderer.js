@@ -392,6 +392,8 @@ async function openEpub(payload, { posKey, source }) {
 
   rendition.on("selected", onSelected);
   rendition.on("relocated", onRelocated);
+  const openedFor = current;
+  setTimeout(() => current === openedFor && rendition && guideAhead(), 5000);
   const addMark = rendition.annotations.add.bind(rendition.annotations);
   rendition.annotations.add = (...args) => {
     const out = addMark(...args);
@@ -608,7 +610,15 @@ function resizeView() {
   else if (rendition?.manager?.stage) rendition.resize();
 }
 
+// «Що було досі» made ahead (Max 2026-11-18: ready when the reader taps, not 30 s later): the server makes the recap
+// for the saved place when a book opens and when the reader leaves it (another book, the home screen, the app hidden).
+function guideAhead() {
+  if (!current || current.preview || current.protected || !/\.epub$/i.test(current.path || "")) return;
+  window.reader.guideAhead?.(current.path);
+}
+document.addEventListener("visibilitychange", () => document.visibilityState === "hidden" && rendition && guideAhead());
 function closeBook() {
+  if (rendition) guideAhead();
   window.Gloss?.load(null);
   $("#btn-search").classList.add("hidden");
   // A failure while tearing down the previous book must never block opening the next one.

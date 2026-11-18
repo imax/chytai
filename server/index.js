@@ -2813,17 +2813,8 @@ setTimeout(() => guide.cleanup(), 60000).unref();
 setInterval(() => guide.cleanup(), 86400000).unref();
 const GUIDE_DAY_USD = 5;
 const GUIDE_ACCOUNT_USD = 1;
-function guideFile(lib, name) {
-  if (!name || !/\.epub$/i.test(name) || protectedNames().includes(name)) return null;
-  if (isFree(name)) return path.join(freeDir(name), name);
-  return lib && fs.existsSync(bookFile(lib, name)) ? bookFile(lib, name) : null;
-}
-api.get("/guide", async (req, res) => {
-  const name = safeBookName(req.query.book);
-  const file = guideFile(req.guest ? null : req.lib, name);
-  if (!file) return res.json({ none: true });
-  const u = req.guest ? guestState(req.guest) : userState(req.acct);
-  const prog = u.progress?.[name];
+// The day's and the reader's caps for one request: allow() before each call, spend(cost) after it.
+function guideCaps(req) {
   const who = req.guest ? "guest" : req.acct;
   const day = statsDay();
   const d = ((state.stats ??= { since: day, days: {} }).days[day] ??= { explains: 0, users: {}, guests: 0, models: {} });
@@ -2841,6 +2832,39 @@ api.get("/guide", async (req, res) => {
     z.n++;
     saveState();
   };
+  return { allow, spend };
+}
+function guideFile(lib, name) {
+  if (!name || !/\.epub$/i.test(name) || protectedNames().includes(name)) return null;
+  if (isFree(name)) return path.join(freeDir(name), name);
+  return lib && fs.existsSync(bookFile(lib, name)) ? bookFile(lib, name) : null;
+}
+// `auto=1` (the page, when a book opens and when the reader leaves it; Max 2026-11-18: «автоматом оновлював … щоб він
+// був актуальний»): the recap for the saved place is made in the background, so «Про книжку» has it at once. Signed-in
+// readers, started books, once in GUIDE_AUTO_MIN a book; a place within the same STEP costs nothing.
+const GUIDE_AUTO_MIN = 10;
+const guideAuto = new Map(); // acct:book -> time
+api.get("/guide", async (req, res) => {
+  const name = safeBookName(req.query.book);
+  const file = guideFile(req.guest ? null : req.lib, name);
+  if (!file) return res.json({ none: true });
+  const u = req.guest ? guestState(req.guest) : userState(req.acct);
+  if (req.query.auto) {
+    const k = `${req.acct}:${name}`;
+    if (req.guest || !process.env.ANTHROPIC_API_KEY || Date.now() - (guideAuto.get(k) || 0) < GUIDE_AUTO_MIN * 60000) return res.json({ skip: true });
+    if (guideAuto.size > 5000) guideAuto.clear();
+    guideAuto.set(k, Date.now());
+    res.json({ ok: true });
+    // The page's last position comes a moment after it leaves the book.
+    setTimeout(() => {
+      const prog = u.progress?.[name];
+      if (u.finished?.[name] || (prog?.pct || 0) < 1) return;
+      guide.get(file, { recap: true, pct: prog.pct, snip: prog.snip || "", ...guideCaps(req) }).catch((err) => console.error(`guide auto: ${err.message}`));
+    }, 3000);
+    return;
+  }
+  const prog = u.progress?.[name];
+  const { allow, spend } = guideCaps(req);
   const title = clean(req.query.title, 300);
   const author = clean(req.query.author, 300);
   const started = !u.finished?.[name] && (prog?.pct || 0) >= 1;

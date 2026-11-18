@@ -1012,6 +1012,7 @@
         return kept ? { ...kept, offline: !kept.recap } : null;
       }
     },
+    guideAhead: (bookPath) => fetch(`/api/guide?${new URLSearchParams({ book: bookPath, auto: "1" })}`, { credentials: "same-origin", keepalive: true }).catch(() => {}),
     uploadFiles: (files) => uploadAll(files),
     libraryTake: (name) => api("POST", "/api/library/take", { path: name }),
     // Paper books (paper.js, server/paper.js).

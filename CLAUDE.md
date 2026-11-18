@@ -553,6 +553,10 @@ A flag only when Max asks for one, or when the change could break what readers u
   only, no publishers' books. Caps $5 a day for all (`GUIDE_DAY_USD`, Telegram once), $1 a reader (guests together),
   Max none; stats day `guide`. Opens from the home book menu, the title in the book's top bar (`act-title-about`) and
   the panel's «Про книжку» (paper books keep the inline block). No «Перевірте себе», no change to «Зміст» (Max).
+  Short (Max 2026-11-18: «Де ви зупинилися» + «Що було досі» on one phone screen): one sentence ≤20 words, 3–4 sentences
+  ≤60 words; a recap of an older prompt (`RECAP_V`) is made again. Made ahead: the page sends `auto=1` 5 s after a
+  book opens and when the reader leaves it (renderer.js `guideAhead`: another book, home, the app hidden); the server
+  makes the recap for the saved place 3 s later, signed-in readers only, once in 10 min a book (`GUIDE_AUTO_MIN`).
 - Names (Max 2026-11-17: the card made up who «Васюта» was): `buildNames` (glossary.js, `NAMES`) has Opus read a
   free-shelf book whole once (Чорна рада $0.93, 2.5 min) and describe its people and places, kept in
   `DATA_DIR/glossary-names/<book>.json` (`names: {form: [about, full name]}`), sent by `/api/glossary` as `names`.

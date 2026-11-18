@@ -35,8 +35,9 @@ Answer in Ukrainian whatever the book's language, in plain words. First, what ha
 const RECAP = `A reader stopped reading a book at some place and comes back to it days later. Below are numbered summaries of the parts they read before, then the text of the current part up to the exact place where they stopped (the text ends there).
 Write a recap for someone who forgot the details. Answer in Ukrainian whatever the book's language, in plain everyday words. Never mention or hint at anything after the place where they stopped, even if you know the book.
 Answer with JSON only:
-{"where": "1–2 short sentences: what is happening right at the place where they stopped, the last scene", "story": "what happened before, 4–8 short sentences in order, the main line only", "people": [["name as the book writes it", "who they are and what matters about them so far, up to 10 words"]]}
-"people" has the 3–8 people who matter most so far; for an essay or non-fiction it may be empty, and "story" then gives the main thoughts so far.`;
+{"where": "one short sentence, at most 20 words: what is happening right at the place where they stopped", "story": "what happened before, 3–4 short sentences, at most 60 words in all: only the main line, no small scenes", "people": [["name as the book writes it", "who they are so far, up to 8 words"]]}
+"people" has the 3–6 people who matter most so far; for an essay or non-fiction it may be empty, and "story" then gives the main thoughts so far. Short is the point: the reader sees both texts on one phone screen.`;
+const RECAP_V = 2; // recaps made with an older prompt are made again
 
 const json = (text) => {
   const m = String(text || "").match(/\{[\s\S]*\}/);
@@ -139,12 +140,12 @@ class Guide {
     const starts = [0, ...p.ends.slice(0, -1)];
     const off = pos - starts[i];
     const rkey = `${i}:${Math.floor(off / STEP)}`;
-    if (g.recaps[rkey]) return { ...out, recap: g.recaps[rkey] };
+    if (g.recaps[rkey]?.v === RECAP_V) return { ...out, recap: g.recaps[rkey] };
     if (i === 0 && off < 1500) return { ...out, early: true }; // a page or so in: nothing to recall yet
     // The nearest recap before this place stays on screen while the new one is made.
     const num = (k) => k.split(":").map(Number);
     const older = Object.keys(g.recaps)
-      .filter((k) => { const [a, b] = num(k); return a < i || (a === i && b * STEP < off); })
+      .filter((k) => { const [a, b] = num(k); return g.recaps[k].v === RECAP_V && (a < i || (a === i && b * STEP < off)); })
       .sort((x, y) => { const [a, b] = num(x); const [c, d] = num(y); return c - a || d - b; })[0];
     if (older) out.recap = { ...g.recaps[older], older: true };
     if (!this.apiKey) return out;
@@ -242,9 +243,10 @@ class Guide {
     spend(measure(m.model, m.usage).cost);
     const a = json(textOf(m));
     const recap = {
-      where: line(a.where, 600),
-      story: line(a.story, 1600),
-      people: (Array.isArray(a.people) ? a.people : []).filter((x) => Array.isArray(x) && x[0]).slice(0, 10).map((x) => [line(x[0], 60), line(x[1], 140)]),
+      v: RECAP_V,
+      where: line(a.where, 300),
+      story: line(a.story, 700),
+      people: (Array.isArray(a.people) ? a.people : []).filter((x) => Array.isArray(x) && x[0]).slice(0, 8).map((x) => [line(x[0], 60), line(x[1], 100)]),
       pct: Math.round(((p.ends[i] - p.parts[i].length + off) / p.total) * 100),
       at: new Date().toISOString(),
     };
