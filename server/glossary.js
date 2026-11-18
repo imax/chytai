@@ -288,13 +288,15 @@ class Glossary {
     return { before: entries.length, after: Object.keys(forms).length, cost: Math.round(cost * 1000) / 1000, dropped: entries.filter(([k]) => !kept.has(k)).map(([k]) => k) };
   }
   // v2 only: forms that are a common word meant the usual way in most of their places go (HOMO_FIND, HOMO_FIT).
-  async homographs(book, file, { save = true, mixed = true } = {}) {
+  // `only`: look at these forms alone (a lazy list's new part); the rest of the list stays as it is.
+  async homographs(book, file, { save = true, mixed = true, only = null } = {}) {
     const data = this.get(book);
     if (!data?.forms) return null;
     if (!this.apiKey) throw new Error("no ANTHROPIC_API_KEY");
     const client = new Anthropic({ apiKey: this.apiKey });
     const forms = data.forms;
-    const entries = Object.entries(forms);
+    const entries = Object.entries(forms).filter(([k]) => !only || only.has(k));
+    if (!entries.length) return { candidates: 0, dropped: [], cost: 0 };
     const textOf = (m) => m.content.filter((x) => x.type === "text").map((x) => x.text).join("");
     let cost = 0;
     const cand = new Set();
@@ -339,7 +341,8 @@ class Glossary {
     if (dropped.length > entries.length / 4) throw new Error(`homographs would drop ${dropped.length}`);
     cost = Math.round(cost * 1000) / 1000;
     if (save && dropped.length) {
-      const out = { ...data, forms: Object.fromEntries(entries.filter(([k]) => !dropped.includes(k))), homographs: { at: new Date().toISOString(), dropped }, cost: Math.round(((data.cost || 0) + cost) * 1000) / 1000 };
+      const now = this.get(book) || data; // a lazy list may have grown meanwhile
+      const out = { ...now, forms: Object.fromEntries(Object.entries(now.forms).filter(([k]) => !dropped.includes(k))), homographs: { at: new Date().toISOString(), dropped: [...(only ? now.homographs?.dropped || [] : []), ...dropped] }, cost: Math.round(((now.cost || 0) + cost) * 1000) / 1000 };
       const f = this.file(book);
       fs.writeFileSync(`${f}.tmp`, JSON.stringify(out));
       fs.renameSync(`${f}.tmp`, f);
@@ -348,7 +351,7 @@ class Glossary {
   }
   // v2 only: explanations that use words as hard as the word itself are said plainly (PLAIN), the same text once for
   // every form that shares it.
-  async plain(book, { save = true } = {}) {
+  async plain(book, { save = true, only = null } = {}) {
     const data = this.get(book);
     if (!data?.forms) return null;
     if (!this.apiKey) throw new Error("no ANTHROPIC_API_KEY");
@@ -356,6 +359,7 @@ class Glossary {
     const forms = data.forms;
     const uniq = new Map(); // `${word}\t${meaning}` -> { word, meaning }
     for (const [k, v] of Object.entries(forms)) {
+      if (only && !only.has(k)) continue;
       const id = `${v[2] || k}\t${v[0]}`;
       if (!uniq.has(id)) uniq.set(id, { word: v[2] || k, meaning: v[0] });
     }
@@ -379,10 +383,11 @@ class Glossary {
       }),
     );
     cost = Math.round(cost * 1000) / 1000;
-    const out = Object.fromEntries(Object.entries(forms).map(([k, v]) => [k, fixed.has(`${v[2] || k}\t${v[0]}`) ? [fixed.get(`${v[2] || k}\t${v[0]}`), ...v.slice(1)] : v]));
+    const now = (save && this.get(book)) || data; // a lazy list may have grown meanwhile
+    const out = Object.fromEntries(Object.entries(now.forms).map(([k, v]) => [k, fixed.has(`${v[2] || k}\t${v[0]}`) ? [fixed.get(`${v[2] || k}\t${v[0]}`), ...v.slice(1)] : v]));
     if (save && fixed.size) {
       const f = this.file(book);
-      fs.writeFileSync(`${f}.tmp`, JSON.stringify({ ...data, forms: out, plain: { at: new Date().toISOString(), n: fixed.size }, cost: Math.round(((data.cost || 0) + cost) * 1000) / 1000 }));
+      fs.writeFileSync(`${f}.tmp`, JSON.stringify({ ...now, forms: out, plain: { at: new Date().toISOString(), n: fixed.size }, cost: Math.round(((now.cost || 0) + cost) * 1000) / 1000 }));
       fs.renameSync(`${f}.tmp`, f);
     }
     return { meanings: items.length, rewritten: [...fixed].map(([id, t]) => [...id.split("\t"), t]), cost };
@@ -516,6 +521,143 @@ Glossary.prototype.buildV2 = async function (book, file, run = {}) {
   run.cost = data.cost;
   return data;
 };
+// «Словничок» for every book (Max 2026-11-18, «Level up your reading»; and «я не знаю чого ти причепився до "старі
+// слова", бо це не єдина і можна навіть не головна причина»). A book with no list gets one by parts once the reader
+// asks for it («Підготувати словничок» in the book's menu, Max: not by itself): the part they are in and the next
+// LAZY_AHEAD, then the same as they read on, so a book left at 10% costs 10%. The model is chosen when the list
+// starts and kept for all its parts (`model`: Opus, Sonnet once a reader has had 3 books on Opus). A school classic keeps PROMPT_V2; any other book gets
+// PROMPT_ANY, which looks for whatever stops a reader. Kept as the v2 list with `lazy: true`, `of` (parts), `done`
+// (their numbers) and `covered` (the share of the text read); `progress()` says how far it is.
+const LAZY_AHEAD = 2;
+const PROMPT_ANY = `You make a reading glossary for a book that a Ukrainian reader finds hard: a classic, an old, foreign or demanding modern book, written in Ukrainian or in another language. The reader taps an underlined word or expression and sees your explanation, so it must make the sentence clear at a glance.
+
+Go through the passage sentence by sentence and list every word or short expression that a well-read adult may not understand here, whatever the reason:
+- a rare, old, dialect, regional or slang word, or a familiar word used in an old or unusual sense;
+- a term from a trade, science, law, philosophy, the church, the army or the sea;
+- a foreign, Latin or Greek word or phrase;
+- a historical thing: ranks, offices, clothes, weapons, money, measures, customs, events;
+- an allusion to a myth, the Bible, history, a song or another book;
+- an idiom, a pun or a figure of speech whose sense is not literal.
+For each, decide how much it would stop the reader: 1 — without help the sentence is unclear; 2 — the reader half-guesses from the sentence but is unsure.
+
+Leave out what an educated adult reads at once: ordinary words, plain old spellings of known words, the names of the book's own people and places (they have a list of their own), and anything the text itself explains next to it. When unsure whether the reader knows it, leave it out: an underline on a word one knows is noise.
+
+Answer with one line per item and nothing else, four fields separated by tabs: the word or expression exactly as written in the passage (same case and ending, no stress marks), its dictionary form, its meaning in this sentence in plain modern Ukrainian whatever the book's language (a synonym, or at most twelve words for a thing, a term or an allusion; no full stop; only everyday words), and 1 or 2.
+List each form once. Check every meaning against its sentence: a wrong meaning is worse than none.`;
+
+// The book's parts and where each ends in its text, kept while the file is the same (a book is opened again and again).
+const partsKept = new Map(); // file -> { mtime, parts, ends, total, chapters }
+async function partsOf(file) {
+  const mtime = fs.statSync(file).mtimeMs;
+  const kept = partsKept.get(file);
+  if (kept?.mtime === mtime) return kept;
+  const { chapters } = await epubParts(fs.readFileSync(file));
+  const parts = chunks(chapters);
+  let at = 0;
+  const ends = parts.map((t) => (at += t.length));
+  const out = { mtime, parts, ends, total: at || 1, chapters };
+  if (partsKept.size > 20) partsKept.delete(partsKept.keys().next().value);
+  partsKept.set(file, out);
+  return out;
+}
+
+// How far a book's list is: { lazy, covered (0..1), words, building } or null when it has none.
+Glossary.prototype.progress = function (book) {
+  const g = this.get(book);
+  const run = this.running.get(book);
+  const building = run?.done === false;
+  if (!g && !run) return null;
+  const forms = g?.forms || {};
+  const words = new Set(Object.entries(forms).map(([k, v]) => (Array.isArray(v) ? v[2] || k : k))).size;
+  return { lazy: !!g?.lazy || !g, covered: g?.lazy ? g.covered || 0 : g ? 1 : 0, words, building, model: g?.model || run?.model, error: run?.error || undefined };
+};
+
+// The part at `pct` (0..100) and the next LAZY_AHEAD, those not read yet, in the background. Returns what it started:
+// { started: [part numbers] }, { busy }, { full } (a list made at once) or { ready }. `spend(cost)` is told each
+// answer's cost; `allow()` is asked before each call (the day's and the reader's caps).
+Glossary.prototype.ahead = async function (book, file, pct, { classic = false, spend = () => {}, allow = () => true, model = MODEL_V2 } = {}) {
+  if (!this.apiKey) throw new Error("no ANTHROPIC_API_KEY");
+  if (this.running.get(book)?.done === false) return { busy: true };
+  const have = this.get(book);
+  if (have && !have.lazy) return { full: true };
+  const { parts, ends, total } = await partsOf(file);
+  if (!parts.length) return { ready: true };
+  const fresh = !have || have.of !== parts.length; // a new book, or its file changed
+  const done = new Set(fresh ? [] : have.done || []);
+  const at = Math.max(0, ends.findIndex((e) => e / total >= Math.min(100, Math.max(0, Number(pct) || 0)) / 100));
+  const want = [];
+  for (let i = at; i < parts.length && i <= at + LAZY_AHEAD; i++) if (!done.has(i)) want.push(i);
+  if (!want.length) return { ready: true };
+  if (!allow()) return { capped: true };
+  model = (!fresh && have?.model) || model; // a list keeps the model it started with
+  const run = { at: new Date().toISOString(), done: false, chunks: 0, of: want.length, parts: want, model };
+  this.running.set(book, run);
+  this.lazyPart(book, file, want, { classic, spend, allow, fresh, model })
+    .catch((err) => (run.error = err.message))
+    .finally(() => (run.done = true));
+  return { started: want };
+};
+
+Glossary.prototype.lazyPart = async function (book, file, want, { classic, spend, allow, fresh, model = MODEL_V2 }) {
+  const { parts, ends, total, chapters } = await partsOf(file);
+  const run = this.running.get(book);
+  const client = new Anthropic({ apiKey: this.apiKey });
+  const answers = [];
+  let cost = 0;
+  const doneNow = [];
+  await Promise.all(
+    want.map(async (i) => {
+      if (!allow()) return;
+      const m = await client.messages.create({
+        model,
+        max_tokens: 20000,
+        system: [{ type: "text", text: classic ? PROMPT_V2 : PROMPT_ANY, cache_control: { type: "ephemeral" } }],
+        messages: [{ role: "user", content: parts[i] }],
+        output_config: { effort: "medium" },
+      });
+      const c = measure(m.model, m.usage).cost;
+      cost += c;
+      spend(c);
+      answers.push(m.content.filter((b) => b.type === "text").map((b) => b.text).join(""));
+      doneNow.push(i);
+      run.chunks++;
+    }),
+  );
+  if (!doneNow.length) return null;
+  const before = (!fresh && this.get(book)) || { book, v: 2, lazy: true, model, of: parts.length, done: [], forms: {}, cost: 0 };
+  const gone = new Set(before.homographs?.dropped || []);
+  const fresh2 = {};
+  for (const a of answers)
+    for (const [form, gloss, level, word] of parseV2(a)) {
+      const k = key(form);
+      if (before.forms[k] || gone.has(k)) continue;
+      if (!fresh2[k]) fresh2[k] = [gloss, level, key(word)];
+      else if (level === 1) fresh2[k][1] = 1;
+    }
+  const kept = clean(Object.fromEntries(Object.entries(fresh2).map(([k, v]) => [k, v[0]])), chapters);
+  const added = Object.fromEntries(Object.entries(fresh2).filter(([k]) => kept[k]));
+  const swept = await this.sweep(added, chapters).catch(() => ({ added: 0, cost: 0 }));
+  spend(swept.cost);
+  cost += swept.cost;
+  for (const k of Object.keys(added)) if (before.forms[k] || gone.has(k)) delete added[k];
+  const done = [...new Set([...(before.done || []), ...doneNow])].sort((a, b) => a - b);
+  const covered = done.reduce((n, i) => n + parts[i].length, 0) / total;
+  const data = { ...before, of: parts.length, done, covered: Math.round(covered * 1000) / 1000, at: new Date().toISOString(), forms: { ...before.forms, ...added }, cost: Math.round(((before.cost || 0) + cost) * 1000) / 1000 };
+  fs.mkdirSync(this.dir, { recursive: true });
+  const f = this.file(book);
+  fs.writeFileSync(`${f}.tmp`, JSON.stringify(data));
+  fs.renameSync(`${f}.tmp`, f);
+  // The new part's forms through the same checks as a whole list: a common word in another sense, a hard meaning.
+  const only = new Set(Object.keys(added));
+  if (only.size) {
+    const meter = (r) => (r?.cost && spend(r.cost), r);
+    run.homographs = (await this.homographs(book, file, { only }).then(meter).catch((err) => ({ error: err.message })))?.dropped?.length;
+    run.plain = (await this.plain(book, { only }).then(meter).catch((err) => ({ error: err.message })))?.rewritten?.length;
+  }
+  run.forms = Object.keys(this.get(book)?.forms || {}).length;
+  return this.get(book);
+};
+
 // Other forms of the listed words, by a cheap model; adds them to `forms` in place.
 Glossary.prototype.sweep = async function (forms, chapters) {
   const lines = sweepLines(forms, chapters);
@@ -643,4 +785,4 @@ function classic(authors) {
   });
 }
 
-module.exports = { Glossary, key, chunks, parse, parseV2, parseNames, NAMES, sweepLines, clean, classic, PROMPT, PROMPT_V2, STRICT, MODEL, MODEL_V2 };
+module.exports = { Glossary, key, chunks, parse, parseV2, parseNames, NAMES, sweepLines, clean, classic, PROMPT, PROMPT_V2, PROMPT_ANY, STRICT, MODEL, MODEL_V2 };

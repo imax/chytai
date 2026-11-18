@@ -292,6 +292,64 @@ async function glossUpload(lib, name, { force = false } = {}) {
   console.log(`glossary upload: ${lib.id} ${name} (${b.title} / ${(b.authors || []).join(", ")})`);
   return { started: g.start(name, bookFile(lib, name)) };
 }
+// «Словничок» for every book (Max 2026-11-18): a book with no list gets one by parts once the reader presses
+// «Підготувати словничок» in its menu (`POST /api/glossary/start`; not by itself, Max), then as it is read
+// (server/glossary.js `ahead`). A reader's own EPUB keeps it in accounts/<id>/glossary/v2/, a free-shelf book in
+// DATA_DIR/glossary-v2/ once for everyone. Not for publishers' books, nor for a book that has a list already (the
+// classics' first list, a full «Словничок 2»). Opus (~$0.25 a part of 15,000 characters) for a reader's first
+// LAZY_OPUS_BOOKS own books (`state.glossOpus[acct]`), Sonnet after; Max always Opus («мені Opus залиш»); a free-shelf
+// book always Opus (one list for all, not counted). LAZY_DAY_USD a day for all together, LAZY_ACCOUNT_USD a reader
+// (Max has none); Telegram once when the day's is spent.
+const LAZY_DAY_USD = 20;
+const LAZY_ACCOUNT_USD = 5;
+const LAZY_OPUS_BOOKS = 3;
+const lazyLibs = new Map();
+const lazyOf = (lib) => lazyLibs.get(lib.id) || lazyLibs.set(lib.id, new (require("./glossary").Glossary)({ dir: path.join(lib.glossary, "v2"), v2: true })).get(lib.id);
+// Which list a book has or will get: { g, book, file, classic } or null.
+function lazyTarget(lib, name) {
+  if (!name || !/\.epub$/i.test(name) || protectedNames().includes(name)) return null;
+  if (isFree(name)) {
+    if (glossary.get(name)) return null; // a classic with its first list
+    const f = freeShelf.find((x) => x.name === name);
+    return { g: glossaryV2, book: name, file: path.join(freeDir(name), name), classic: require("./glossary").classic(f?.authors) };
+  }
+  if (!lib || !fs.existsSync(bookFile(lib, name)) || glossOf(lib).get(name)) return null;
+  return { g: lazyOf(lib), book: name, file: bookFile(lib, name), classic: false };
+}
+// `start`: the reader pressed the button; else only a list already started goes on.
+function glossLazy(lib, who, name, pct, { owner = false, start = false } = {}) {
+  if (!process.env.ANTHROPIC_API_KEY) return Promise.resolve({ off: true });
+  const t = lazyTarget(lib, name);
+  if (!t) return Promise.resolve({ none: true });
+  const G = require("./glossary");
+  let model = t.g.get(t.book)?.model || t.g.running.get(t.book)?.model;
+  if (!model) {
+    if (!start) return Promise.resolve({ none: true });
+    const count = !owner && !isFree(name);
+    const used = (count && state.glossOpus?.[who]) || [];
+    model = !count || used.includes(name) || used.length < LAZY_OPUS_BOOKS ? G.MODEL_V2 : G.MODEL;
+    if (count && model === G.MODEL_V2 && !used.includes(name)) ((state.glossOpus ??= {})[who] = [...used, name]), saveState();
+  }
+  const day = statsDay();
+  const d = ((state.stats ??= { since: day, days: {} }).days[day] ??= { explains: 0, users: {}, guests: 0, models: {} });
+  const z = (d.glossLazy ??= { cost: 0, accts: {} });
+  const allow = () => {
+    if (z.cost >= LAZY_DAY_USD) {
+      if (!z.told) (z.told = true), saveState(), telegram(`Словничок: сьогодні вже $${LAZY_DAY_USD} на нові книжки, решта завтра.`);
+      return false;
+    }
+    return owner || (z.accts[who] || 0) < LAZY_ACCOUNT_USD;
+  };
+  const spend = (c) => {
+    z.cost = Math.round((z.cost + c) * 10000) / 10000;
+    z.accts[who] = Math.round(((z.accts[who] || 0) + c) * 10000) / 10000;
+    saveState();
+  };
+  return t.g.ahead(t.book, t.file, pct, { classic: t.classic, spend, allow, model }).then((r) => {
+    if (r.started) console.log(`glossary lazy: ${lib && !isFree(name) ? lib.id : "shelf"} ${name} parts ${r.started.join(",")} (${model})`);
+    return r;
+  });
+}
 function readerFlags(acct) {
   const kept = flagsKept.get(acct);
   const key = state.accounts[acct]?.key;
@@ -2039,6 +2097,7 @@ async function dropDeletedAccounts() {
       delete state.accounts[id];
       delete state.users[id];
       delete state.libs[id];
+      if (state.glossOpus) delete state.glossOpus[id];
       store.items.dropAccount(id);
       for (const [t, sh] of Object.entries(state.shares)) if (sh.acct === id) delete state.shares[t];
       libs.delete(id);
@@ -2307,12 +2366,41 @@ api.get("/book", (req, res) => {
   res.sendFile(file);
 });
 
+// Where the reader is in a book (POST { book, pct }): a started list's part there and the next ones are made if missing.
+api.post("/glossary/at", (req, res) => {
+  const name = safeBookName(req.body?.book);
+  const lib = req.guest ? null : req.lib;
+  glossLazy(lib, req.acct || "guest", name, Number(req.body?.pct) || 0, { owner: !!req.owner })
+    .then((r) => res.json({ ...r, progress: lazyTarget(lib, name)?.g.progress(name) || null }))
+    .catch((err) => res.json({ error: err.message }));
+});
+// «Підготувати словничок» in the book's menu (POST { book, pct }): the list starts where the reader is.
+api.post("/glossary/start", (req, res) => {
+  if (req.guest) return res.status(401).json({ error: "sign in" });
+  const name = safeBookName(req.body?.book);
+  glossLazy(req.lib, req.acct, name, Number(req.body?.pct) || 0, { owner: !!req.owner, start: true })
+    .then((r) => res.json({ ...r, progress: lazyTarget(req.lib, name)?.g.progress(name) || null }))
+    .catch((err) => res.json({ error: err.message }));
+});
+// The book menu's line (Max 2026-11-18: «готуємо, готово, скільки слів і пояснень»): how far the book's list is.
+api.get("/glossary/status", (req, res) => {
+  const name = safeBookName(req.query.book);
+  if (!name) return res.status(404).json({});
+  const own = !isFree(name) && req.lib && glossOf(req.lib).get(name);
+  const shelf = isFree(name) ? name : own?.same;
+  const first = shelf ? glossary.get(shelf) : own;
+  const lazy = lazyTarget(req.guest ? null : req.lib, name);
+  const p = (shelf && glossaryV2.progress(shelf)) || lazy?.g.progress(name) || (first ? { covered: 1, words: Object.keys(first.forms || {}).length } : null);
+  const names = (shelf ? glossaryNames.get(shelf)?.names : name && !isFree(name) && req.lib && namesOf(req.lib).get(name)?.names) || {};
+  res.json({ ...(p || { none: true, possible: !!lazy && !req.guest && !!process.env.ANTHROPIC_API_KEY }), names: new Set(Object.values(names).map((v) => v[1] || v[0])).size });
+});
+
 // A free-shelf classic's «Словничок»: { form: meaning } (server/glossary.js); guests read these books too.
 api.get("/glossary", (req, res) => {
   const name = safeBookName(req.query.book);
   const own = name && !isFree(name) && req.lib && glossOf(req.lib).get(name);
   const shelf = isFree(name) ? name : own?.same;
-  const v2 = shelf && glossaryV2.get(shelf);
+  const v2 = (shelf && glossaryV2.get(shelf)) || (name && !isFree(name) && !own && req.lib && lazyOf(req.lib).get(name));
   // Names of the book's people and places, { form: [about, name] }: the card of a selected name reads them.
   const names = (shelf ? glossaryNames.get(shelf)?.names : name && !isFree(name) && req.lib && namesOf(req.lib).get(name)?.names) || undefined;
   if (v2) {
@@ -2841,6 +2929,7 @@ api.put("/books/:name", uploadGuard, uploadBody, async (req, res) => {
   (req.lib.meta.added ??= {})[name] = { by: req.acct, at: Date.now() };
   glossOf(req.lib).drop(name);
   namesOf(req.lib).drop(name);
+  lazyOf(req.lib).drop(name);
   saveState();
   warmCovers(req.lib, [name]);
   res.json({ path: name });
@@ -3015,6 +3104,7 @@ function forgetBook(lib, acct, name) {
   if (fs.existsSync(lib.covers)) for (const f of fs.readdirSync(lib.covers)) if (f.split(".")[0] === key) fs.rmSync(path.join(lib.covers, f), { force: true });
   glossOf(lib).drop(name);
   namesOf(lib).drop(name);
+  lazyOf(lib).drop(name);
 }
 function purgeTrash() {
   const old = Date.now() - TRASH_DAYS * 864e5;

@@ -36,13 +36,19 @@ window.Gloss = (() => {
     book = name;
     contentsOf = contentsList || (() => []);
     hide();
-    // A reader's own upload may have got one since the page loaded (made in the background): asked each time.
-    const own = !settings.guest && /\.epub$/i.test(name || "") && !(settings.freeBooks || []).includes(name);
-    if (!name || !((settings.glossaries || []).includes(name) || own)) return;
+    sentAt = null;
+    quiet = false;
+    clearTimeout(again);
+    // Any EPUB may have one, made by parts once asked for (Max 2026-11-18): asked each time, but not a publisher's.
+    if (!name || !/\.epub$/i.test(name) || (settings.protectedBooks || []).includes(name)) return;
+    await fetchList(name);
+  }
+  async function fetchList(name) {
     try {
       const res = await fetch(`/api/glossary?book=${encodeURIComponent(name)}`, { credentials: "same-origin" });
       if (!res.ok || book !== name) return;
       const data = await res.json();
+      if (book !== name) return;
       forms = data.forms || {};
       levels = data.levels || null;
       words = data.words || null;
@@ -51,7 +57,39 @@ window.Gloss = (() => {
     } catch {
       return;
     }
-    for (const c of contentsList() || []) mark(c);
+    for (const c of contentsOf() || []) mark(c);
+  }
+
+  // Where the reader is (renderer.js onRelocated, 0..100): the server makes the list's part there and the next ones
+  // if they are missing (server/glossary.js `ahead`); once they are made, the list is asked again and marked. Sent
+  // when the place moved by 2% or more.
+  let sentAt = null;
+  let quiet = false;
+  let again = 0;
+  async function at(pct) {
+    if (!book || !/\.epub$/i.test(book) || (settings.protectedBooks || []).includes(book) || !Number.isFinite(pct)) return;
+    if (quiet || (sentAt != null && Math.abs(pct - sentAt) < 2)) return;
+    sentAt = pct;
+    const name = book;
+    try {
+      const res = await fetch("/api/glossary/at", { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ book: name, pct }) });
+      const r = await res.json();
+      if (book !== name) return;
+      if (r.none || r.off) quiet = true; // no list asked for: nothing to send until the book opens again
+      if (r.started || r.busy || r.progress?.building) wait(name, 0);
+    } catch {}
+  }
+  // A part takes Opus a minute or two: the list is asked again then, a few times while it is being made.
+  function wait(name, tries) {
+    clearTimeout(again);
+    again = setTimeout(async () => {
+      if (book !== name) return;
+      await fetchList(name);
+      try {
+        const p = await (await fetch(`/api/glossary/status?book=${encodeURIComponent(name)}`, { credentials: "same-origin" })).json();
+        if (p.building && tries < 8) wait(name, tries + 1);
+      } catch {}
+    }, tries ? 60000 : 90000);
   }
 
   function style(contents) {
@@ -183,5 +221,5 @@ window.Gloss = (() => {
     return forms?.[k] ? { text: text.trim(), gloss: forms[k] } : null;
   };
 
-  return { load, mark, style: (c) => enabled() && marked.has(c.document) && style(c), tap, hide, lookup, has: () => !!forms, levels: () => !!levels };
+  return { load, at, mark, style: (c) => enabled() && marked.has(c.document) && style(c), tap, hide, lookup, has: () => !!forms, levels: () => !!levels };
 })();

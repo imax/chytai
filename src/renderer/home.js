@@ -410,9 +410,12 @@
         <button class="r-link r-start-all" data-act="free-shelf">Уся вільна полиця →</button></section>` : ""}`;
   }
 
+  // app.chytai.org.ua/?new shows the empty shelf's start over one's own books (Max 2026-11-18: to look at it without a
+  // new account); nothing else changes, and the next load without it is the usual home.
+  const PREVIEW_START = new URLSearchParams(location.search).has("new");
   function homePageHtml() {
     const books = myBooks();
-    if (!settings.guest && !books.length) return startHtml();
+    if (!settings.guest && (!books.length || PREVIEW_START)) return startHtml();
     if (!settings.guest) setTimeout(() => fetchAboutAhead(books), 3000);
     const cur = nowBook(books);
     let html = "";
@@ -1187,6 +1190,47 @@
       showNotice(err instanceof TypeError ? "Немає з'єднання: зберегти можна лише онлайн." : err.code === "full" ? `${onIt[0].toUpperCase()}${onIt.slice(1)} вже забагато книжок.` : `Не вдалося зберегти: ${err.message}`, false);
     }
   }
+  // «Словничок» in the book's menu, after «Про книжку» (Max 2026-11-18: «готуємо, готово, скільки слів і пояснень»):
+  // how much of the book its list covers, its words and the book's people and places. Asked each time the menu opens.
+  // A book with none gets «Підготувати словничок» (Max: the reader asks for it, it isn't made by itself).
+  async function glossLine(b) {
+    const el = $("#bm-gloss");
+    el.hidden = true;
+    el.innerHTML = "";
+    el.classList.remove("go");
+    if (!/\.epub$/i.test(b.path || "") || b.protected || !window.reader.glossaryStatus) return;
+    let p;
+    try {
+      p = await window.reader.glossaryStatus(b.path);
+    } catch {
+      return;
+    }
+    if (menuBook !== b || !p || (p.none && !p.possible)) return;
+    if (p.none || (p.error && !p.words && !p.building)) {
+      el.innerHTML = `<button type="button" class="bm-gloss-go">Підготувати словничок<small>Пояснимо складні слова, терміни й алюзії, поки читаєте</small></button>`;
+      el.classList.add("go");
+      el.hidden = false;
+      el.firstChild.onclick = async () => {
+        el.firstChild.disabled = true;
+        const r = await window.reader.glossaryStart(b.path, b.pct || 0);
+        if (menuBook !== b) return;
+        if (!r || r.error || r.capped || r.none || r.off) {
+          el.innerHTML = `<span class="bm-gloss-t">${r?.capped ? "Сьогодні вже забагато, спробуйте завтра." : "Не вдалося. Спробуйте ще раз згодом."}</span>`;
+          el.classList.remove("go");
+          return;
+        }
+        glossLine(b);
+      };
+      return;
+    }
+    const pct = Math.round((p.covered || 0) * 100);
+    const done = !p.lazy && pct >= 100;
+    const count = [p.words ? `${p.words} ${plural(p.words, "слово", "слова", "слів")}` : "", p.names ? `${p.names} ${plural(p.names, "ім'я", "імені", "імен")}` : ""].filter(Boolean).join(" і ");
+    // By parts as the book is read: «готово 30% книжки» grows while one reads on.
+    const state = p.building && !count ? "готуємо…" : done ? "готово" : p.building ? `готуємо · ${pct}% книжки` : `готово ${pct}% книжки`;
+    el.innerHTML = `<span class="bm-gloss-t"><b>Словничок</b> · ${esc(state)}</span>${count ? `<small>Пояснено ${esc(count)}</small>` : ""}${done ? "" : `<span class="bm-gloss-bar"><i style="width:${Math.max(pct, p.building ? 3 : 0)}%"></i></span>`}`;
+    el.hidden = false;
+  }
   function bookMenu(path, at = null) {
     const b = lib?.books.find((x) => x.path === path);
     if (!b || settings.guest) return;
@@ -1214,6 +1258,7 @@
     $("#bm-aside").hidden = own;
     $("#bm-delete").hidden = !(own && window.reader.libraryDeleteBook);
     $("#bm-keep").hidden = !keepable || b.onDevice || b.unavailable;
+    glossLine(b);
     $("#bm-keep").textContent = `Зберегти ${toIt}`;
     $("#bm-finished").hidden = !window.reader.libraryFinished;
     $("#bm-finished").textContent = b.finished ? "Позначити непрочитаною" : "Позначити прочитаною";

@@ -848,6 +848,9 @@ function onRelocated(location) {
   // While scrolling, a selection may move off screen and back; its toolbar is pinned at the bottom anyway.
   if (!scrolled()) hideSelToolbar();
   window.Gloss?.hide();
+  // «Словничок» is made by parts as the book is read: where the reader is now (before the locations exist, by chapter).
+  const n = book?.spine?.length || book?.spine?.spineItems?.length || 0;
+  window.Gloss?.at(readingProgress(location)?.pct ?? (n && Number.isInteger(location.start?.index) ? Math.round((location.start.index / n) * 100) : NaN));
   // On a computer the mouse shows and hides the header (desk-read.js); a relayout must not take it away.
   if (!window.DeskRead?.mouseChrome()) toggleChrome(false);
 }

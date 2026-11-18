@@ -1027,6 +1027,16 @@ body[data-theme="dark"] .r-pill { font-weight: 600; }
 #book-menu .bm-list button:hover { background: var(--r-rule); }
 #book-menu .bm-list button.danger { color: var(--r-red); border-top: 1px solid var(--r-rule); }
 #book-menu .bm-list button[hidden] { display: none; }
+/* «Словничок» in the book's menu (2026-11-18): how far the book's list is; not a button. */
+#book-menu .bm-gloss { display: flex; flex-direction: column; gap: 3px; padding: 9px 16px 11px; font: 14px var(--r-sans); color: var(--r-ink); }
+#book-menu .bm-gloss[hidden] { display: none; }
+#book-menu .bm-gloss b { font-weight: 500; }
+#book-menu .bm-gloss small { font-size: 13px; color: var(--r-ink2); }
+#book-menu .bm-gloss-bar { height: 3px; margin-top: 5px; background: var(--r-track); border-radius: 2px; overflow: hidden; }
+#book-menu .bm-gloss-bar i { display: block; height: 100%; background: var(--r-bar); }
+#book-menu .bm-gloss.go { padding: 0; }
+#book-menu .bm-gloss-go { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }
+#book-menu .bm-gloss-go small { font-size: 13px; color: var(--r-ink2); font-weight: 400; }
 #book-menu menu { display: none; }
 #book-menu.pop { position: fixed; margin: 0; box-shadow: 0 16px 32px -16px rgba(27, 26, 23, .45); }
 #book-menu.pop::backdrop { background: transparent; }
@@ -1117,6 +1127,7 @@ body[data-theme="dark"] .r-pill { font-weight: 600; }
   #book-menu .bm-head p { margin: 2px 0 0; font-size: 13px; color: var(--r-ink2); }
   #book-menu:not(.pop) .bm-list button { padding: 15px 0; font-size: 16px; border-bottom: 1px solid var(--r-rule); }
   #book-menu:not(.pop) .bm-list button.danger { border-top: none; }
+  #book-menu:not(.pop) .bm-gloss:not(.go) { padding: 15px 0; font-size: 16px; border-bottom: 1px solid var(--r-rule); }
   #book-menu:not(.pop) menu { display: block; margin: 16px 0 0; padding: 0; }
   #book-menu:not(.pop) menu button { width: 100%; border: 1px solid var(--r-ink); border-radius: 999px; background: none; color: var(--r-ink); padding: 13px; font: 500 15px var(--r-sans); text-align: center; }
   #trash-dialog { margin: auto 0 0; width: 100vw; max-width: 100vw; max-height: 90vh; border-radius: 14px 14px 0 0; padding: 20px 20px calc(env(safe-area-inset-bottom) + 12px); }

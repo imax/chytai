@@ -821,6 +821,10 @@
     },
     libraryRemoveFolder: async () => {},
     // Managing the shared library (family only; the server refuses guests).
+    // «Словничок»: how far the book's list is (GET /api/glossary/status); null offline.
+    glossaryStatus: (name) => api("GET", `/api/glossary/status?book=${encodeURIComponent(name)}`).then((r) => r.json()).catch(() => null),
+    // «Підготувати словничок»: the list starts at the reader's place (POST /api/glossary/start).
+    glossaryStart: (name, pct) => api("POST", "/api/glossary/start", { book: name, pct }).then((r) => r.json()).catch(() => null),
     shares: (name) => api("GET", `/api/shares?path=${encodeURIComponent(name)}`).then((r) => r.json()),
     shareBook: (name, who) => api("POST", "/api/shares", { path: name, for: who }).then((r) => r.json()),
     unshare: (token) => api("DELETE", `/api/shares/${encodeURIComponent(token)}`).then((r) => r.json()),

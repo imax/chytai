@@ -512,6 +512,20 @@ A flag only when Max asks for one, or when the change could break what readers u
   same day (Max: «одна штука замість двох»; they underlined «ліки», «демони» and saved ~1 s on one selected word in
   five for 3× the cost): don't bring them back. Improve «Словничок» instead. `/admin/reader` «Одне слово» = selected
   words, how many were in the book's list (`word-list`), and the cost.
+- Every book (Max 2026-11-18, «Level up your reading»; not only old words): an EPUB with no list gets a «Словничок 2»
+  list by parts once the reader presses «Підготувати словничок» in the book's menu (`POST /api/glossary/start {book,
+  pct}`; Max: not by itself). `ahead` / `lazyPart` in glossary.js, `glossLazy` in server/index.js. Then the page sends
+  where the reader is (`POST /api/glossary/at`, gloss.js `at`, every 2%; a book with no list answers `none` and the page
+  stops asking): the part there and the next 2 (15,000 characters each, ~$0.25 on Opus) are made if missing, then
+  sweep, homographs and plain on the new forms only (`only`). Model chosen at the start and kept (`model` in the
+  list): a reader's first 3 own books Opus (`LAZY_OPUS_BOOKS`, `state.glossOpus[acct]`), then Sonnet; Max always Opus
+  (Max 2026-11-18); a free-shelf book Opus, one list for all, not counted. A school classic takes PROMPT_V2, any
+  other book PROMPT_ANY (terms, allusions, foreign phrases, realia, idioms; meanings in Ukrainian whatever the book's
+  language). Kept with `lazy`, `of`, `done`, `covered`: own books in `accounts/<id>/glossary/v2/`, the free shelf in
+  `glossary-v2/`. Not for publishers' books or a book with a list already. Caps: $20 a day for all (`LAZY_DAY_USD`,
+  Telegram once), $5 a reader (`LAZY_ACCOUNT_USD`, Max none); stats day `glossLazy`. The book menu shows it after
+  «Про книжку» (`glossLine` in home.js, `GET /api/glossary/status`: covered, words, names, building), not «Аа».
+  `app.chytai.org.ua/?new` shows the empty shelf's start screen over one's own books (Max, to look at it).
 - Names (Max 2026-11-17: the card made up who «Васюта» was): `buildNames` (glossary.js, `NAMES`) has Opus read a
   free-shelf book whole once (Чорна рада $0.93, 2.5 min) and describe its people and places, kept in
   `DATA_DIR/glossary-names/<book>.json` (`names: {form: [about, full name]}`), sent by `/api/glossary` as `names`.
