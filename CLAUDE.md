@@ -156,7 +156,7 @@ technical report (below), so post it only after your fixes are pushed:
    normal: GitHub starts the 00:17 schedule 5–7 hours late.
    Max's bug reports from the Telegram bot (`bugs` in that answer = open ones): `curl -s https://chytai.org.ua/agent/bugs
    -H "$H"` (text, voice transcripts, forwards; screenshots at each part's `file`, fetch them with the same header and
-   look). Fix each like an error; then `POST /agent/bugs/<id> {"status":"done","note":"…"}` (`skip` = not a bug, `later`
+   look; a screen recording: `ffmpeg -i v.mp4 -vf fps=2 f%02d.jpg`, then look at the frames). Fix each like an error; then `POST /agent/bugs/<id> {"status":"done","note":"…"}` (`skip` = not a bug, `later`
    = left for Max); done / skip answer Max in Telegram under his message, so the note is one plain Ukrainian clause.
 2. Each kind: noise (an extension, a network drop, a bot) → widen the filter (`CLIENT_NOISE` in server/index.js) only
    if it repeats; real → reproduce on the test DB / a local reader, fix, prove, push to main like any small fix (not
