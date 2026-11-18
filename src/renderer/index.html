@@ -156,15 +156,10 @@
     </aside>
   </main>
 
-  <!-- Home screen (home.js): Головна, Бібліотека, Нотатки and the wish list. On a phone the nav is a tab bar
-       at the bottom; on a wider screen it is a sidebar, with search and «Додати книжки…» in a bar on top.
-       It is on screen from the start, so the app opens on its skeleton rather than an empty reader. -->
+  <!-- Home screen (home.js): «Мої книжки» and «Додати книжку», with the panel on the left. It is on screen from
+       the start, so the app opens on its skeleton rather than an empty reader. -->
   <div id="shell">
     <div id="shell-main">
-      <div id="shell-top" class="wide-only">
-        <input id="top-search" type="search" placeholder="Пошук за назвою чи автором" />
-        <button id="top-add" class="family-only">Додати книжки…</button>
-      </div>
       <div id="shell-views">
         <section id="home" class="view">
           <!-- Design v2 from Claude Design (Max, 2026-11-02, turns 7 and 8): a panel on the left (always open on a
@@ -196,51 +191,6 @@
             <p id="home-wait" class="home-wait hidden"><span class="spinner"></span>Бібліотека прокидається, ще кілька секунд…</p>
           </div>
         </section>
-        <!-- Пошук (Max, 2026-11-01): everything that is not your own shelf. Adding your files, the free shelf,
-             and later search in open libraries and bookshops. -->
-        <section id="discover" class="view hidden">
-          <h1 class="view-title">Пошук</h1>
-          <input id="disc-search" type="search" placeholder="Назва чи автор" autocomplete="off" />
-          <div id="disc-body"></div>
-        </section>
-        <!-- «Клуб» (Max, 2026-11-01): what other readers are reading now and the Club's talks, from the site. -->
-        <section id="club" class="view hidden">
-          <h1 class="view-title">Клуб Chytai</h1>
-          <div id="club-body"></div>
-        </section>
-        <div id="library" class="view hidden">
-          <div class="lib-top">
-            <div>
-              <h1 class="view-title">Бібліотека</h1>
-              <div id="lib-stats" class="lib-stats"></div>
-            </div>
-            <div class="lib-head">
-              <button id="lib-refresh" title="Пересканувати папки">Оновити</button>
-              <button id="lib-add" title="Додати папку з книжками">Додати папку…</button>
-            </div>
-          </div>
-          <input id="lib-search" type="search" placeholder="Пошук за назвою чи автором" />
-          <div class="lib-filters">
-            <div id="lib-chips" class="lib-chips"></div>
-            <div id="lib-langs" class="seg"></div>
-            <nav id="lib-abc" class="lib-abc wide-only" aria-label="Автори за літерою"></nav>
-          </div>
-          <div id="lib-folders"></div>
-          <div id="lib-body"></div>
-        </div>
-        <section id="all-notes" class="view hidden">
-          <h1 class="view-title">Нотатки</h1>
-          <div id="all-notes-body"></div>
-        </section>
-        <section id="wish" class="view hidden">
-          <h1 class="view-title">Хочу прочитати</h1>
-          <p class="view-hint">Коли книжка зі списку з'явиться в бібліотеці, вона буде в «Нових надходженнях».</p>
-          <form id="wish-form" class="wish-form">
-            <input id="wish-input" placeholder="Назва та автор" autocomplete="off" />
-            <button type="submit" class="pill">Додати</button>
-          </form>
-          <div id="wish-body"></div>
-        </section>
       </div>
     </div>
     <aside id="r-panel" aria-label="Панель">
@@ -257,26 +207,6 @@
       <div class="r-pspace"></div>
       <button type="button" class="r-pme" data-act="settings"><span class="r-pava" id="r-avatar"></span><span class="r-pme-t"><b id="r-me-name"></b><small>Налаштування</small></span><i>›</i></button>
     </aside>
-    <nav id="tabbar">
-      <div class="side-brand wide-only"><img src="icon.png" alt="" /><span>Chytai</span></div>
-      <div class="side-tabs">
-        <button data-tab="home">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"/><path d="M3 10a2 2 0 0 1 .709-1.528l7-5.999a2 2 0 0 1 2.582 0l7 5.999A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
-          <span class="label">Мої книжки</span>
-        </button>
-        <button data-tab="discover">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.6-3.6"/></svg>
-          <span class="label">Пошук</span>
-        </button>
-        <button data-tab="club">
-          <span class="icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20.5l1.4-4.9A8 8 0 1 1 21 12z"/></svg><span class="badge dot hidden" id="club-dot"></span></span>
-          <span class="label">Клуб</span>
-        </button>
-      </div>
-      <div class="side-head wide-only">Читаю</div>
-      <div id="side-reading" class="wide-only"></div>
-      <button id="side-settings" class="wide-only"><span class="gear">⚙</span>Налаштування</button>
-    </nav>
   </div>
 
   <div id="notice" class="hidden">
@@ -308,10 +238,6 @@
   <dialog id="settings">
     <form method="dialog" id="settings-form">
       <h2 tabindex="-1" autofocus>Налаштування</h2>
-      <label class="desktop-only app-only">Ключ Claude API
-        <input type="password" id="set-key" placeholder="sk-ant-…" autocomplete="off" />
-        <small id="key-hint"></small>
-      </label>
       <!-- Back on 2026-11-17 for Max only (body.not-owner hides it): his choice is every reader's, fast mode only his. -->
       <label class="shared-setting">Модель для пояснень
         <select id="set-model">
@@ -440,19 +366,7 @@
 
   <!-- «Дати почитати»: a link to one of your books for one person (web); from a library row's swipe on a
        phone or its share icon on a computer. -->
-  <dialog id="share-dialog">
-    <form method="dialog">
-      <h2 tabindex="-1" autofocus>Дати почитати</h2>
-      <p id="share-book" class="share-book"></p>
-      <small>Посилання для однієї людини: відкривається без реєстрації на першому пристрої, де його відкрили, діє місяць.</small>
-      <div class="share-new">
-        <input type="text" id="share-for" placeholder="Для кого, наприклад: Юля" maxlength="60" autocomplete="off" />
-        <button type="button" id="share-make" class="primary">Створити</button>
-      </div>
-      <ul id="share-list"></ul>
-      <menu><button value="close">Готово</button></menu>
-    </form>
-  </dialog>
+
 
   <dialog id="keys">
     <form method="dialog">

@@ -188,12 +188,6 @@ async function loadSettings() {
 }
 
 function openSettings() {
-  $("#set-key").value = "";
-  $("#key-hint").textContent = settings.apiKeyFromEnv
-    ? "Використовується ключ зі змінної середовища ANTHROPIC_API_KEY."
-    : settings.hasApiKey
-      ? "Ключ збережено. Залиште поле порожнім, щоб не змінювати."
-      : "Створіть ключ на platform.claude.com → API Keys.";
   $("#set-theme").value = settings.theme || "auto";
   $("#set-model").value = settings.model;
   $("#set-margins").value = settings.margins || "normal";
@@ -215,8 +209,6 @@ $("#settings").addEventListener("close", async () => {
     pageTaps: $("#set-page-taps").value === "taps",
     deskScroll: $("#set-desk-scroll").value === "scroll",
   };
-  const key = $("#set-key").value.trim();
-  if (key) patch.apiKey = key;
   const fontChanged = patch.font !== settings.font;
   const marginsChanged = patch.margins !== (settings.margins || "normal");
   const wasScrolled = scrolled();

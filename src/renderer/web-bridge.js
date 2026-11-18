@@ -82,7 +82,7 @@
       try {
         const b = window.readerNow?.();
         const body = document.body.classList;
-        s.view = body.contains("library-open") ? `home:${document.querySelector("#tabbar button.active")?.dataset.tab || "home"}` : b ? (b.pdf ? "pdf" : "book") : "other";
+        s.view = body.contains("library-open") ? "home:home" : b ? (b.pdf ? "pdf" : "book") : "other";
         if (b) (s.book = b.path), (s.shown = !body.contains("library-open"));
         let px = 0;
         let imgs = 0;
@@ -819,15 +819,11 @@
       const files = await pickFiles();
       return files.length ? uploadAll(files) : false;
     },
-    libraryRemoveFolder: async () => {},
     // Managing the shared library (family only; the server refuses guests).
     // «Словничок»: how far the book's list is (GET /api/glossary/status); null offline.
     glossaryStatus: (name) => api("GET", `/api/glossary/status?book=${encodeURIComponent(name)}`).then((r) => r.json()).catch(() => null),
     // «Підготувати словничок»: the list starts at the reader's place (POST /api/glossary/start).
     glossaryStart: (name, pct) => api("POST", "/api/glossary/start", { book: name, pct }).then((r) => r.json()).catch(() => null),
-    shares: (name) => api("GET", `/api/shares?path=${encodeURIComponent(name)}`).then((r) => r.json()),
-    shareBook: (name, who) => api("POST", "/api/shares", { path: name, for: who }).then((r) => r.json()),
-    unshare: (token) => api("DELETE", `/api/shares/${encodeURIComponent(token)}`).then((r) => r.json()),
     libraryDeleteBook: async (name) => {
       await api("DELETE", `/api/books/${encodeURIComponent(name)}`);
       idb("books", "readwrite", (s) => s.delete(name)).catch(() => {});
@@ -982,30 +978,11 @@
     },
     // ---------- Home screen ----------
     coverUrl: (b) => (b.paper ? b.coverSrc || null : b.ext === "epub" || b.coverAt ? `/api/cover?path=${encodeURIComponent(b.path)}&v=${b.mtime || 0}-${b.coverAt || 0}-s` : null),
-    notesAll: async () => {
-      try {
-        await sync();
-        const { books } = await (await api("GET", "/api/notes/all")).json();
-        for (const [path, list] of Object.entries(books)) kvSet(`notes:${path}`, list);
-        return books;
-      } catch (err) {
-        if (!isNetworkError(err)) throw err;
-        // Offline: the notes of every book kept on this device.
-        const keys = (await idb("kv", "readonly", (s) => s.getAllKeys()).catch(() => [])) || [];
-        const books = {};
-        for (const key of keys.filter((k) => String(k).startsWith("notes:"))) {
-          const list = await kvGet(key);
-          if (list?.length) books[key.slice(6)] = list;
-        }
-        return books;
-      }
-    },
     librarySetAside: async (name) => {
       await api("POST", "/api/library/aside", { path: name });
       const s = (await localSettings()) || {};
       if (s.lastBook === name) patchLocalSettings({ lastBook: null });
     },
-    clubFeed: async () => (await api("GET", "/api/club")).json(),
     // «Про книжку»: the site's short summary, kept on the device. `cachedOnly` reads the device copy alone;
     // without it the network is asked first and the device copy is the fallback (null when there is none).
     bookAbout: async (b, cachedOnly = false) => {
@@ -1047,27 +1024,6 @@
     paperScan: async (kind, blob) => (await api("POST", `/api/paper/scan?kind=${kind}`, blob)).json(),
     catalogFind: async (q) => (await api("GET", `/api/find?${new URLSearchParams({ q })}`)).json(),
     libraryFinished: (name, done) => api("POST", "/api/library/finished", { path: name, done }),
-    librarySeen: (paths) => api("POST", "/api/library/seen", { paths }).catch(() => {}),
-    wishList: async () => {
-      try {
-        const { wish } = await (await api("GET", "/api/wish")).json();
-        kvSet("wish", wish);
-        return wish;
-      } catch (err) {
-        if (!isNetworkError(err)) throw err;
-        return (await kvGet("wish")) || [];
-      }
-    },
-    wishAdd: async (item) => {
-      const { wish } = await (await api("POST", "/api/wish", item)).json();
-      kvSet("wish", wish);
-      return wish;
-    },
-    wishRemove: async (id) => {
-      const { wish } = await (await api("DELETE", `/api/wish/${encodeURIComponent(id)}`)).json();
-      kvSet("wish", wish);
-      return wish;
-    },
     explain: async (id, request) => {
       const controller = new AbortController();
       streams.set(id, controller);
@@ -1182,14 +1138,6 @@
     }, 1200);
   }
 
-  // Web-only labels.
-  const libAdd = document.getElementById("lib-add");
-  if (libAdd) {
-    libAdd.textContent = "Додати книжки…";
-    libAdd.title = "Завантажити EPUB, PDF або MOBI (можна кілька за раз)";
-  }
-  // The Mac app's «Оновити» rescans folders and its «Відкрити» opens a file from the disk; on the web there are no
-  // folders, and books come in through «Додати книжки…» on Головна.
-  document.getElementById("lib-refresh")?.classList.add("hidden");
+  // The Mac app's «Відкрити» opens a file from the disk; on the web books come in through «Додати книжку».
   document.getElementById("btn-open")?.classList.add("hidden");
 })();

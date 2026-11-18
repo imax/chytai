@@ -653,5 +653,8 @@ A flag only when Max asks for one, or when the change could break what readers u
 - Reader's purpose (Max 2026-11-18): «Level up your reading», reading books that feel too hard. Not in the reader's UI
   any more: minutes («Цей тиждень»: «хвилини не про це»), printing a book, «Дати почитати» links, OPDS in settings
   (the server keeps `/api/opds` and `/api/shares` for links already made). An empty shelf shows `startHtml()` (home.js).
+  The old hidden screens (Пошук, Клуб, Бібліотека with folders and filters, all notes, «Хочу прочитати», the tab bar, the
+  API key field) were taken out of the page on 2026-11-18; library-view.js keeps only the list, adding books
+  (`Library.add`) and «Назва, автор, обкладинка». Their server routes (`/api/wish`, `/api/club`, `/api/notes/all`) stay.
 - Reader: the app's own UI can't be selected (`body` has `user-select: none`, end of `src/renderer/style.css`). Text a
   reader may copy (a new note, answer or field) goes into the list of selectable classes there.
