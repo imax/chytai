@@ -1234,8 +1234,6 @@ body[data-theme="dark"] #shell, body[data-theme="dark"] #book-menu, body[data-th
 .r-start-add svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
 .r-start-f { margin: 0; font-size: 13px; color: var(--r-ink2); }
 .r-start-free { max-width: 640px; }
-.r-start-free .r-sec-head { margin-bottom: 4px; }
-.r-start-sub { margin: 0 0 16px; font-size: 14px; color: var(--r-ink2); }
 .r-start-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 .r-start-all { margin-top: 18px; color: var(--r-ochre); text-decoration: none; font-size: 15px; }
 @media (max-width: 760px) {

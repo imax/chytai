@@ -406,7 +406,6 @@
       <button class="r-pill r-start-add" data-act="add"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V5M7 10l5-5 5 5M5 20h14"/></svg>Додати книжку</button>
       <p class="r-start-f">EPUB, PDF, MOBI</p></section>
       ${picks.length ? `<section class="r-start-free">${head("Або почніть з класики", "", false)}
-        <p class="r-start-sub">Незнайомі слова вже пояснені</p>
         <div class="r-grid r-start-grid">${picks.map((b) => card(b, "", false)).join("")}</div>
         <button class="r-link r-start-all" data-act="free-shelf">Уся вільна полиця →</button></section>` : ""}`;
   }
