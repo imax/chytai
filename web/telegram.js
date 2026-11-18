@@ -10,6 +10,9 @@
 // «Просить доступ» with «Дозволити» / «Ні»; once allowed, every message goes to them too (meta `telegram:extra`,
 // [{ id, name }]). /who in the linked chat lists them with «Забрати»; /off in theirs stops it. Only the linked chat
 // presses buttons. The reader gets the whole list from the site (`chats()`).
+//
+// Bug reports (Max, 2026-11-18): anything else the linked chat or an allowed one writes (text, a screenshot, a voice,
+// a forward) goes to the handler set with onMessage (bugbox.js), which keeps it for the morning review.
 const crypto = require("crypto");
 
 const TOKEN = process.env.TELEGRAM_BOT_TOKEN || "";
@@ -44,13 +47,15 @@ function call(method, body) {
 }
 // Plain text, cut to Telegram's limit, with optional buttons under it ([[{ text, data }]]), to one chat or (no `to`)
 // to every chat. Buttons go only to the linked chat: only it may press them. Never throws; true when any got it.
-function send(text, to = null, buttons = null) {
+// `reply`: a message id in `to` to answer under.
+function send(text, to = null, buttons = null, reply = 0) {
   if (!TOKEN) return Promise.resolve(false);
   text = String(text || "").trim();
   if (text.length > 4000) text = text.slice(0, 3990) + "…";
   const one = (id, withButtons) => {
     const markup = withButtons && buttons ? { reply_markup: { inline_keyboard: buttons.map((row) => row.map((b) => ({ text: b.text, callback_data: b.data }))) } } : {};
-    return call("sendMessage", { chat_id: id, text, disable_web_page_preview: true, ...markup })
+    const under = reply && to ? { reply_parameters: { message_id: +reply, allow_sending_without_reply: true } } : {};
+    return call("sendMessage", { chat_id: id, text, disable_web_page_preview: true, ...markup, ...under })
       .then(() => true)
       .catch((e) => (console.error(`[telegram] ${id}: ${e.message}`), false));
   };
@@ -68,6 +73,21 @@ function sendOnce(key, hours, text) {
   db.set(k, new Date().toISOString());
   return send(text);
 }
+// A file someone sent the bot (by its file_id) → Buffer. The Bot API gives files up to 20 MB.
+async function file(fileId) {
+  const f = await call("getFile", { file_id: fileId });
+  if (!f?.file_path) throw new Error("no file_path");
+  const base = (process.env.TELEGRAM_API || "https://api.telegram.org") + `/file/bot${TOKEN}/`;
+  const r = await fetch(base + f.file_path, { signal: AbortSignal.timeout(60000) });
+  if (!r.ok) throw new Error(`file: HTTP ${r.status}`);
+  return Buffer.from(await r.arrayBuffer());
+}
+let onMsg = null;
+const onMessage = (fn) => (onMsg = fn);
+// /bugs: a handler's own commands (bugbox.js `command`), set with onCommand.
+let onCmd = null;
+const onCommand = (fn) => (onCmd = fn);
+
 // The site tells Telegram where to post updates (on every start: cheap, and survives a changed address).
 function setWebhook(site) {
   if (!TOKEN || !/^https:/.test(site)) return;
@@ -131,6 +151,20 @@ onAction("tgdrop", (id) => {
   return `Забрано: ${c.name}`;
 });
 
+// A message from the linked chat or an allowed one: a command of the handler's, else a bug report (bugbox.js).
+function mine(m, id, hint) {
+  const text = m.text || "";
+  if (/^\/\w+/.test(text)) {
+    if (onCmd) {
+      const r = onCmd(text, id);
+      if (r) return r;
+    }
+    return send(`Баг чи «щось не працює»: напишіть, надішліть скріншот або войс.\nВідкриті: /bugs\n${hint}`, id);
+  }
+  if (onMsg) return Promise.resolve(onMsg(m, id)).catch((e) => (console.error(`[telegram] report: ${e.message}`), send(`Не зміг записати: ${e.message}`, id)));
+  return send(`Я лише надсилаю сповіщення сайту Chytai.\n${hint}`, id);
+}
+
 // An update from Telegram: /start links the first chat; after that someone else's /start asks the linked chat.
 function update(u) {
   if (u?.callback_query) return pressed(u.callback_query);
@@ -149,14 +183,14 @@ function update(u) {
       if (!l.length) return send("Крім вас, бот нікому не пише.", id);
       return send(`Бот пише ще: ${l.map((c) => c.name).join(", ")}`, id, l.map((c) => [{ text: `Забрати: ${c.name}`.slice(0, 60), data: `tgdrop:${c.id}` }]));
     }
-    return send("Я лише надсилаю сповіщення сайту Chytai.\nКому ще пишу: /who", id);
+    return mine(m, id, "Кому ще пишу: /who");
   }
   if (extra().some((c) => String(c.id) === id)) {
     if (/^\/off\b/.test(text)) {
       setExtra(extra().filter((c) => String(c.id) !== id));
       return send("Більше не пишу. Знову: /start", id);
     }
-    return send("Я лише надсилаю сповіщення сайту Chytai.\nВимкнути: /off", id);
+    return mine(m, id, "Вимкнути: /off");
   }
   if (/^\/start\b/.test(text) && chat()) {
     // One request a day per chat, so a stranger can't flood the owner.
@@ -169,4 +203,4 @@ function update(u) {
   return send("Це приватний бот. Попросити доступ: /start", id);
 }
 
-module.exports = { on, init, send, onAction, sendOnce, setWebhook, update, hookPath, chat, chats };
+module.exports = { on, init, send, onAction, sendOnce, setWebhook, update, hookPath, chat, chats, file, onMessage, onCommand, who };

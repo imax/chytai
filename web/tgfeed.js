@@ -944,7 +944,41 @@ function create(db, { calendar, apiKey = process.env.ANTHROPIC_API_KEY || "", cl
     }
   }
 
-  return { run, joinMore, joinSome, keepChannel, prune, dropGroups, discover, discoverWeekly, promote, events, classify, recheckAuthors, status, maybeEvent, meta, setMeta, extract, find };
+  // A voice message Max sent the bot (bugbox.js) → its words. A bot can't transcribe and the Claude API takes no audio,
+  // so the account (Premium) does it: the file goes to its own Saved Messages as a voice note, Telegram's
+  // messages.transcribeAudio reads it, and the message is deleted again. → { text } or { error }.
+  async function transcribe(file, duration = 0) {
+    if (!accountSet()) return { error: "no account" };
+    const { Api } = require("telegram");
+    const { CustomFile } = require("telegram/client/uploads");
+    const buf = require("fs").readFileSync(file);
+    const client = await connect();
+    let sent = null;
+    try {
+      sent = await client.sendFile("me", {
+        file: new CustomFile("voice.ogg", buf.length, "", buf),
+        voiceNote: true,
+        attributes: [new Api.DocumentAttributeAudio({ voice: true, duration: Math.max(1, Math.round(+duration || 1)) })],
+        silent: true,
+      });
+      const ask = () => client.invoke(new Api.messages.TranscribeAudio({ peer: "me", msgId: sent.id }));
+      let r = await ask();
+      // Pending: Telegram sends updateTranscribedAudio when done; asking again gives the same answer, so we ask.
+      for (let i = 0; r.pending && i < 40; i++) {
+        await new Promise((ok) => setTimeout(ok, 1500));
+        r = await ask();
+      }
+      if (r.pending) return { error: "Telegram не дорозшифрував за хвилину" };
+      return { text: String(r.text || "").trim() };
+    } catch (e) {
+      return { error: e.errorMessage || e.message };
+    } finally {
+      if (sent) await client.deleteMessages("me", [sent.id], { revoke: true }).catch(() => {});
+      await client.destroy().catch(() => {});
+    }
+  }
+
+  return { run, joinMore, joinSome, keepChannel, prune, dropGroups, discover, discoverWeekly, promote, events, classify, recheckAuthors, status, maybeEvent, meta, setMeta, extract, find, transcribe };
 }
 
 module.exports = { eventUrl, create, parsePage, maybeEvent, fromMessage, channels, KEEP_DAYS };

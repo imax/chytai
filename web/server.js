@@ -255,7 +255,19 @@ app.post("/agent/notify", agentOk, async (req, res) => {
 // The morning error review (a scheduled Claude routine, Max 2026-11-11: «розбирати їх»): GET gives its last note
 // { at, text } (the errors since `at` are the next run's), POST { text } keeps one plain line for the day's technical
 // report, which goes once this note and the night's backups are in (dailyreport.js).
-app.get("/agent/triage", agentOk, (req, res) => res.json(JSON.parse(store.db.get("triage:last") || "null") || { at: null, text: "" }));
+app.get("/agent/triage", agentOk, (req, res) => res.json({ ...(JSON.parse(store.db.get("triage:last") || "null") || { at: null, text: "" }), bugs: bugs.open(), bugsHint: "GET /agent/bugs: Max's bug reports from Telegram, fix them too (CLAUDE.md)" }));
+// Max's bug reports from the Telegram bot (bugbox.js), for the morning review: GET the open ones (?all=1&days= every
+// one), GET a file of one, POST { status: done | skip | later, note } closes it (done / skip answer Max in Telegram).
+app.get("/agent/bugs", agentOk, (req, res) => res.json({ reports: bugs.list({ all: !!req.query.all, days: Math.min(+req.query.days || 30, 180) }) }));
+app.get("/agent/bugs/:id/:name", agentOk, (req, res) => {
+  const p = bugs.filePath(req.params.id, req.params.name);
+  if (!p) return res.sendStatus(404);
+  res.sendFile(p);
+});
+app.post("/agent/bugs/:id", agentOk, (req, res) => {
+  const r = bugs.mark(req.params.id, String(req.body?.status || ""), req.body?.note);
+  res.status(r.error ? 400 : 200).json(r);
+});
 app.post("/agent/triage", agentOk, (req, res) => {
   const text = String(req.body?.text || "").replace(/\s+/g, " ").trim().slice(0, 600);
   if (!text) return res.status(400).json({ error: "{ text }" });
@@ -1672,7 +1684,11 @@ bg.every("calendar-cleanup", 24 * 3600 * 1000, () => calendarJobs.cleanup(), { d
 bg.every("calendar-ye", 24 * 3600 * 1000, () => calendarJobs.ye(), { db: store.db, first: 15 * 60 * 1000 });
 // Telegram channels' posts (tgfeed.js): our own account through Telegram's API when TG_SESSION is set, else the
 // public t.me/s pages; every hour. Their events go to the calendar once meta tg:events is "on" (Max's OK).
-const tgFeed = bg.register("tg", require("./tgfeed").create(store.db, { calendar }), { run: false, joinMore: false, keepChannel: false, events: false, find: false });
+const tgFeed = bg.register("tg", require("./tgfeed").create(store.db, { calendar }), { run: false, joinMore: false, keepChannel: false, events: false, find: false, transcribe: false });
+// Bug reports Max sends the Telegram bot (bugbox.js): kept by the web process, voices transcribed by the jobs one.
+const bugs = require("./bugbox").create(store.db, { dir: path.join(DATA_DIR, "bugs"), telegram, transcribe: (file, duration) => tgFeed.transcribe(file, duration) });
+telegram.onMessage((m, chat) => bugs.take(m, chat));
+telegram.onCommand((text, chat) => bugs.command(text, chat));
 bg.every("tg-feed", 3600 * 1000, () => tgFeed.run(), { db: store.db, first: 8 * 60 * 1000 });
 bg.every("tg-join", 10 * 60 * 1000, () => tgFeed.joinMore(), { db: store.db, first: 12 * 60 * 1000 });
 bg.every("tg-discover", 24 * 3600 * 1000, () => tgFeed.discoverWeekly(), { db: store.db, first: 25 * 60 * 1000 });

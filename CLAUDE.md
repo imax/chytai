@@ -154,11 +154,15 @@ technical report (below), so post it only after your fixes are pushed:
    already (compare its last time with the Actions run's end); then it is only a line in the note. In SQL, strings take
    single quotes (send the query from a file: `-d @q.json`). Backups showing `today: false` early in the morning are
    normal: GitHub starts the 00:17 schedule 5–7 hours late.
+   Max's bug reports from the Telegram bot (`bugs` in that answer = open ones): `curl -s https://chytai.org.ua/agent/bugs
+   -H "$H"` (text, voice transcripts, forwards; screenshots at each part's `file`, fetch them with the same header and
+   look). Fix each like an error; then `POST /agent/bugs/<id> {"status":"done","note":"…"}` (`skip` = not a bug, `later`
+   = left for Max); done / skip answer Max in Telegram under his message, so the note is one plain Ukrainian clause.
 2. Each kind: noise (an extension, a network drop, a bot) → widen the filter (`CLIENT_NOISE` in server/index.js) only
    if it repeats; real → reproduce on the test DB / a local reader, fix, prove, push to main like any small fix (not
    during the Friday digest). Big, risky or a product question → leave it for Max, one plain line why.
 3. One short Ukrainian line for the technical report, even when there was nothing:
-   `curl -s https://chytai.org.ua/agent/triage -H "$H" -H 'content-type: application/json' -d '{"text":"нових 3: виправлено 2 (…), вам глянути 1: …"}'`.
+   `curl -s https://chytai.org.ua/agent/triage -H "$H" -H 'content-type: application/json' -d '{"text":"нових 3: виправлено 2 (…), вам глянути 1: …; з бота: №4 виправлено"}'`.
    The report prints it as «Розбір помилок: …» (only a note of this Kyiv day; none = «сьогодні не запускався»).
 4. Then watch your deploy as usual (`rollout-watch`), and keep this section current.
 
@@ -182,6 +186,14 @@ technical report (below), so post it only after your fixes are pushed:
   stranger's /start asks him with «Дозволити» / «Ні» (one a day), `telegram:extra` keeps them, /who in his chat lists
   them with «Забрати», /off in theirs stops it. `telegram.send(text)` goes to all; buttons only to Max, only he presses
   them. The reader gets the list from the site (`/api/site-admin/telegram` `chats`).
+- Bug reports (Max 2026-11-18, `web/bugbox.js`): anything but a command that Max's chat or an allowed one writes to
+  the bot (text, screenshot, file, voice, forward, a reply to an alert) is a report in table `bug_reports`; messages
+  within 3 min (or one album) join one report. The bot answers «Записав №N»; a voice is transcribed by our Telegram
+  account's Premium (`tgFeed.transcribe` in the jobs process: sent to its Saved Messages, `messages.transcribeAudio`,
+  deleted) and the bot answers with what it heard (the Claude API takes no audio). /bugs lists the open ones. The
+  morning review works them (above). Files in `DATA_DIR/web/bugs/<id>/`: gone 14 days after a report is closed, 60
+  after it came; rows 180 days. Try locally: `TELEGRAM_BOT_TOKEN=test TELEGRAM_API=http://localhost:<fake> TELEGRAM_CHAT_ID=111`
+  and POST updates to `telegram.hookPath()`.
 - 08:00 Kyiv: readers only (sign-ups, visits, shelves, the reader's minutes and explanations). Nothing technical in it
   (Max, 2026-11-12).
 - Technical, once a day, when both nightly backups (site, reader) have reported today and the morning review posted
