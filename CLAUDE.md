@@ -446,7 +446,7 @@ A flag only when Max asks for one, or when the change could break what readers u
   address with its key: `curl -s https://chytai.org.ua/agent/youscan -H "$H"` (`hook`, plus what came in, `by` state,
   topics, the last 10). Kept 30 days (table `ys_mentions`, 3,000 a day). Every 15 min the jobs process skips non-Ukrainian
   ones and channels the tg collector reads, sends those `maybeEvent` passes with the post's picture to `tgFeed.extract`
-  (60 calls a day) with the links in its text; the link is the post's one sign-up form, else the post. Dry run (spends ≤20 calls, Max's OK): `GET /agent/youscan?dry=1` (ask again);
+  (300 calls a day, Max 2026-11-18) with the links in its text; the link is the post's one sign-up form, else the post. Dry run (spends ≤20 calls, Max's OK): `GET /agent/youscan?dry=1` (ask again);
   run now: `POST {"run":true}`. Topic «Книжкові події» (app.youscan.io/themes/544216: 26 quoted phrases, Ukrainian, ~200 a
   day) with rule «Усе на Chytai» (future mentions → the webhook), set up 2026-11-17 in Max's Chrome at his request.
   Sources by keyword: Threads, Telegram, YouTube, TikTok, X, news, some Facebook; Instagram/Facebook pages only as

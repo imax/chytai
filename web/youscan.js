@@ -9,7 +9,7 @@
 // channel the Telegram collector reads already is left to it; the same event told elsewhere (findSimilar) is left out.
 const DAY = 86400000;
 const KEEP_DAYS = 30;
-const AI_DAY = 60;
+const AI_DAY = 300; // Max 2026-11-18: 60 ran out by 9 a.m.
 const TAKE_DAY = 3000; // mentions kept a day at most (a topic too wide would flood the table)
 const { kyivDay } = require("./calendar");
 const { maybeEvent, eventUrl } = require("./tgfeed");
