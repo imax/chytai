@@ -1585,14 +1585,15 @@ store.db.exec("DELETE FROM meta WHERE key LIKE 'ukrlib:%'");
 // «Слухай»'s free audiobooks in «Де взяти» (sluhay.js); public since Max's «ок. Слухай +» (2026-10-29).
 const SLUHAY_PUBLIC = true;
 const sluhay = new (require("./sluhay").Sluhay)({ store, freeBooks, log: console.log });
-bg.register("sluhay", sluhay, { run: true });
+// The book page reads both maps every ten minutes (linkFor), so a run doesn't reload the site (they did it hourly).
+bg.register("sluhay", sluhay, { run: false });
 // Hourly: a deploy can stop the first read halfway, and a daily schedule would wait a day to go on; with
 // nothing left to read and matched today, a run does nothing.
 bg.every("sluhay", 3600 * 1000, () => sluhay.run(), { db: store.db, first: 5 * 60 * 1000 });
 // BookFlow (bookflow.com.ua), books readers lend through it, in «Де взяти» as «Напрокат» (bookflow.js; Max
 // 2026-11-17). Its export every hour: whether a copy is free changes during the day.
 const bookflow = new (require("./bookflow").BookFlow)({ store, log: console.log });
-bg.register("bookflow", bookflow, { run: true });
+bg.register("bookflow", bookflow, { run: false });
 bg.every("bookflow", 3600 * 1000, () => bookflow.run(), { db: store.db, first: 4 * 60 * 1000 });
 // «Чи варто читати?» on book pages (advice.js): Claude, by the reader's own shelf, on a click.
 const bookpage = new BookPage({ apiKey: process.env.ANTHROPIC_API_KEY || "", log: console.log });

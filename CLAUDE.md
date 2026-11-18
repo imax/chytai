@@ -98,6 +98,9 @@ curl -s https://app.chytai.org.ua/agent/sql -H "$H" -H 'content-type: applicatio
   when the day passes $25 (Max) or a feature costs >2× its 7-day median and >$3; «AI за добу» in the technical report.
   A new feature file gets a Ukrainian name in `LABELS`; new models go into `PRICES`. The Console
   (platform.claude.com/cost, no admin key here) also sees what our code doesn't call.
+- A job registered with `{ run: true }` (`bg.register`) starts a fresh web process after every run (log «main: the jobs
+  changed X; the site reloads», ~10 s of CPU). Data a page reads itself on a timer (`linkFor`'s 10-minute map: sluhay,
+  bookflow) takes `run: false`; on 2026-11-18 those two reloaded the site 2–3 times an hour for nothing.
 - Fly itself, same token: `https://api.fly.io/graphql` (machines, releases),
   `https://api.fly.io/prometheus/personal/api/v1/query_range` (`fly_app_http_responses_count` by status,
   `fly_instance_cpu`, memory), `https://api.fly.io/api/v1/apps/chytai-web/logs` (only the last ~100 lines).

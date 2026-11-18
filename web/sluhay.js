@@ -73,7 +73,7 @@ class Sluhay {
     return r.text();
   }
 
-  // The book pages not read yet; false when there was nothing new.
+  // The book pages not read yet; false when nothing new was read.
   async crawl() {
     let st = JSON.parse(this.db.get("sluhay:index") || "null");
     if (!st) st = { v: 1, books: {}, todo: null, seen: 0 };
@@ -85,7 +85,7 @@ class Sluhay {
       st.seen = Date.now();
     }
     if (!st.todo.length) return false;
-    let failed = 0, n = 0;
+    let failed = 0, n = 0, read = 0;
     while (st.todo.length) {
       const url = st.todo[0];
       try {
@@ -93,8 +93,14 @@ class Sluhay {
         if (b?.title) st.books[url.split("/").pop().split(":")[0]] = { url, ...b };
         st.todo.shift();
         failed = 0;
+        read++;
       } catch (e) {
         this.log(`sluhay: ${url}: ${e.message}`);
+        // A page the site doesn't have (its sitemap kept «/3958404:» for days) is dropped, not asked hourly.
+        if (/^HTTP 40[34]$|^HTTP 410$/.test(e.message)) {
+          st.todo.shift();
+          continue;
+        }
         if (++failed >= 5) break; // the site is down or turned us away: the rest next time
         st.todo.push(st.todo.shift());
       }
@@ -102,7 +108,7 @@ class Sluhay {
       await wait(1000);
     }
     this.db.set("sluhay:index", JSON.stringify(st));
-    return true;
+    return read > 0;
   }
 
   // Our works by the recording's author with the same title, kept when the author's term is over.
