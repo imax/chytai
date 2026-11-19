@@ -307,8 +307,9 @@
     drawn = { page, html };
   }
 
-  // An empty shelf (Max 2026-11-18, «Level up your reading», variant 1A of the canvas): what the reader is for, the
-  // button for one's own book, and four classics whose «Словничок» is ready.
+  // An empty shelf (Max 2026-11-18, «Level up your reading», variant 1A of the canvas; texts
+  // Max's variant B of 2026-11-19): what the reader is for, the button for one's own book, a paper one, and four
+  // classics whose «Словничок» is ready.
   const START_PICKS = ["kulish-chorna-rada.epub", "kotliarevsky-eneida.epub", "kotsiubynskyi-tini-zabutykh-predkiv.epub", "kobylianska-zemlia.epub"];
   function startHtml() {
     const free = lib.free || [];
@@ -317,12 +318,11 @@
       .filter((b, i, a) => b && glossed.has(b.path) && a.indexOf(b) === i)
       .slice(0, 4);
     return `<section class="r-start">
-      <h1 class="r-start-t">Level-up your reading</h1>
-      <p class="r-start-p">Допоможемо читати книги, які здаються занадто складними.</p>
+      <h1 class="r-start-t">Вітаємо в Chytai!</h1>
+      <p class="r-start-p">Читайте книжки разом з нашим <span class="r-nowrap">AI-помічником</span>. Він пояснює складні або застарілі слова, дає зручний переклад та пояснення в контексті.</p>
       <button class="r-pill r-start-add" data-act="add"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V5M7 10l5-5 5 5M5 20h14"/></svg>Додати книжку</button>
-      <p class="r-start-f">EPUB, PDF, MOBI</p>
-      <button class="r-pill-line r-start-paper" data-act="cover-photo"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>Додати паперову книжку</button>
-      <p class="r-start-f">За фото обкладинки. Пояснення працюватимуть і для неї.</p></section>
+      <p class="r-start-f">Формати EPUB, PDF, MOBI</p>
+      <button class="r-pill-line r-start-paper" data-act="cover-photo"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>Додати паперову книжку</button></section>
       ${picks.length ? `<section class="r-start-free">${head("Або почніть з класики", "", false)}
         <div class="r-grid r-start-grid">${picks.map((b) => card(b, "", false)).join("")}</div>
         <button class="r-link r-start-all" data-act="free-shelf">Уся вільна полиця →</button></section>` : ""}`;
