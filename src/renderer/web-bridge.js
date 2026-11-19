@@ -820,6 +820,8 @@
       return files.length ? uploadAll(files) : false;
     },
     // Managing the shared library (family only; the server refuses guests).
+    // «Мій шлях» (GET /api/journey): explanations, notes and finished books by book and by month; null offline.
+    journey: () => api("GET", "/api/journey").then((r) => r.json()).catch(() => null),
     // «Словничок»: how far the book's list is (GET /api/glossary/status); null offline.
     glossaryStatus: (name) => api("GET", `/api/glossary/status?book=${encodeURIComponent(name)}`).then((r) => r.json()).catch(() => null),
     // «Підготувати словничок»: the list starts at the reader's place (POST /api/glossary/start).

@@ -136,7 +136,7 @@
   // The panel: search in your books, Мої книжки / Додати книжку / Нещодавно видалені, the books opened lately,
   // feedback and your settings. Always open on a computer; on a phone the header's button (or, in the app, a
   // swipe from the left edge) slides the page aside to show it. Safari keeps that edge for «back».
-  let page = "home"; // home | add | paper
+  let page = "home"; // home | add | journey | paper
   let paperPath = null; // the paper book on «paper» (paper.js)
   let addQuery = "";
   let freeAll = false;
@@ -147,7 +147,8 @@
   const phone = () => matchMedia("(max-width: 760px)").matches;
 
   function setPage(next, { push = true } = {}) {
-    if ((next === "add" && settings.guest)) return;
+    if ((next === "add" || next === "journey") && settings.guest) return;
+    if (next === "journey") loadJourney();
     const was = page;
     page = next;
     $("#shell").dataset.page = page;
@@ -285,7 +286,7 @@
     if (page === "paper" && document.activeElement?.closest?.(".pp") && homeHtml) return;
     const pb = page === "paper" && lib.books.find((b) => b.path === paperPath);
     if (page === "paper" && !pb) page = "home";
-    const html = pb ? window.Paper.pageHtml(pb) : page === "add" ? addPageHtml() : homePageHtml();
+    const html = pb ? window.Paper.pageHtml(pb) : page === "add" ? addPageHtml() : page === "journey" ? journeyHtml() : homePageHtml();
     // The library comes twice (the saved copy, then the server's) and again when the app comes back to the
     // front: drawing the same covers anew made them flicker, so an unchanged screen is left alone.
     if (html === homeHtml) return;
@@ -366,6 +367,64 @@
     html += `<section class="r-mine">${head(`Мої книжки · ${books.length}`, books.length ? tabs([["all", "Читаю", groups.all.length], ["new", "Не початі", groups.new.length], ["done", "Прочитані", groups.done.length], ...(groups.paper.length ? [["paper", "Паперові", groups.paper.length]] : [])], homeFilter, "data-filter") + viewSwitch() : "", !cur)}
       <div class="r-filtered" data-show="${homeFilter}"><div class="r-grid${homeView === "list" ? " r-list" : ""}">${homeView === "list" && rest.length ? listHead() : ""}${(homeView === "list" ? [...rest].sort(sorters[homeSort] || sorters.opened) : rest).map((b) => card(b, homeView === "list" ? rowCols(b) + rowStatus(b) : mark(b), true, gcls(b))).join("")}${plus}</div>
       ${rest.length ? empty("all") : ""}${empty("new")}${empty("done")}${empty("paper")}</div></section>`;
+    return html;
+  }
+
+  // «Мій шлях» (Max 2026-11-19: «всі книжки що я читав, скільки робив пояснення… почнемо з простого»): a few numbers,
+  // the months (what was finished, how much asked), and every book with its explanations as a bar. No minutes (Max
+  // 2026-11-18: «хвилини не про це»), no streaks or goals. GET /api/journey has the counts; titles and covers are the
+  // library's. Asked anew each time the page opens.
+  let journey = null; // the last answer, or "…" while asked
+  function loadJourney() {
+    if (journey === "…") return;
+    const was = journey;
+    journey = was || "…";
+    window.reader.journey?.().then((j) => {
+      journey = j || (was && was !== "…" ? was : null);
+      if (page === "journey") (homeHtml = ""), renderHome();
+    });
+  }
+  const MONTHS = ["Січень", "Лютий", "Березень", "Квітень", "Травень", "Червень", "Липень", "Серпень", "Вересень", "Жовтень", "Листопад", "Грудень"];
+  const num = (n) => Number(n || 0).toLocaleString("uk-UA");
+  function journeyHtml() {
+    if (!journey || journey === "…") return `<section class="r-jour">${journey === "…" ? `<p class="r-empty"><span class="spinner"></span>Збираємо…</p>` : `<p class="r-empty">Без мережі шлях не показати.</p>`}</section>`;
+    const j = journey;
+    const all = [...lib.books, ...(lib.free || [])];
+    const byPath = new Map(all.map((b) => [b.path, b]));
+    const stat = (name) => j.books[name] || { explains: 0, translations: 0, notes: 0, finishedAt: 0 };
+    const asked = (s) => s.explains + s.translations;
+    const done = lib.books.filter((b) => b.finished);
+    const reading = myBooks().filter((b) => !b.aside && isReading(b));
+    const notes = Object.values(j.books).reduce((n, s) => n + s.notes, 0);
+    const tile = (n, label) => `<div class="r-jt"><b>${num(n)}</b><span>${label}</span></div>`;
+    const since = j.since ? new Date(j.since).toLocaleDateString("uk-UA", { day: "numeric", month: "long", year: new Date(j.since).getFullYear() === new Date().getFullYear() ? undefined : "numeric" }) : "";
+    let html = `<section class="r-jour"><h1 class="r-jh">Мій шлях</h1>
+      ${since ? `<p class="r-jsince">У Читалці з ${esc(since)}</p>` : ""}
+      <div class="r-jtiles">${tile(done.length, "прочитано")}${tile(reading.length, "читаю")}${tile(j.explains, plural(j.explains, "пояснення", "пояснення", "пояснень"))}${tile(notes, plural(notes, "нотатка", "нотатки", "нотаток"))}${j.words ? tile(j.words, plural(j.words, "слово зі словничка", "слова зі словничка", "слів зі словничка")) : ""}</div></section>`;
+    // By month: a line of counts and the covers of what was finished.
+    const months = j.months.filter((m) => m.explains || m.notes || m.finished.some((p) => byPath.has(p)));
+    if (months.length) {
+      html += `<section class="r-jmonths">${head("По місяцях", "", false)}${months.map((m) => {
+        const [y, mm] = m.month.split("-").map(Number);
+        const fin = m.finished.map((p) => byPath.get(p)).filter(Boolean);
+        const bits = [fin.length ? `${fin.length} прочитано` : "", m.explains ? `${num(m.explains)} ${plural(m.explains, "пояснення", "пояснення", "пояснень")}` : "", m.notes ? `${num(m.notes)} ${plural(m.notes, "нотатка", "нотатки", "нотаток")}` : "", m.words ? `${num(m.words)} ${plural(m.words, "слово", "слова", "слів")}` : ""].filter(Boolean);
+        return `<div class="r-jm"><h3>${MONTHS[mm - 1]}${y !== new Date().getFullYear() ? ` ${y}` : ""}</h3><p>${bits.join(" · ")}</p>
+          ${fin.length ? `<div class="r-jm-covers">${fin.map((b) => `<button class="r-jm-c" data-open="${esc(b.path)}" title="${esc(b.title)}">${rcover(b)}</button>`).join("")}</div>` : ""}</div>`;
+      }).join("")}</section>`;
+    }
+    // Every book read or asked about, the most asked first; the bar is its explanations against the most asked one.
+    const rows = all.filter((b, i, a) => a.findIndex((x) => x.path === b.path) === i && (b.finished || asked(stat(b.path)) || stat(b.path).notes || (b.paper ? b.openedAt : b.pct >= 1)))
+      .sort((x, y) => asked(stat(y.path)) - asked(stat(x.path)) || stat(y.path).notes - stat(x.path).notes || (stat(y.path).finishedAt || lastTouched(y)) - (stat(x.path).finishedAt || lastTouched(x)));
+    const top = Math.max(1, ...rows.map((b) => asked(stat(b.path))));
+    if (rows.length) {
+      html += `<section class="r-jbooks">${head(`Книжки · ${rows.length}`, "", false)}${rows.map((b) => {
+        const s = stat(b.path);
+        const where = b.finished ? `прочитано${s.finishedAt ? ` ${when(s.finishedAt)}` : ""}` : b.paper ? (b.page ? `стор. ${b.page}` : "паперова") : b.pct > 0 ? `${b.pct}%` : "";
+        const counts = [s.explains ? `${num(s.explains)} ${plural(s.explains, "пояснення", "пояснення", "пояснень")}` : "", s.translations ? `${num(s.translations)} ${plural(s.translations, "переклад", "переклади", "перекладів")}` : "", s.notes ? `${num(s.notes)} ${plural(s.notes, "нотатка", "нотатки", "нотаток")}` : ""].filter(Boolean).join(" · ");
+        return `<button class="r-jb" data-open="${esc(b.path)}">${rcover(b)}<span class="r-jb-t"><b>${esc(b.title)}</b><span class="r-jb-a">${esc([author(b), where].filter(Boolean).join(" · "))}</span>
+          ${asked(s) ? `<span class="r-jb-bar"><i style="width:${Math.max(2, Math.round((100 * asked(s)) / top))}%"></i></span>` : ""}${counts ? `<span class="r-jb-n">${counts}</span>` : ""}</span></button>`;
+      }).join("")}</section>`;
+    }
     return html;
   }
 
@@ -535,7 +594,7 @@
     const tab = f || t;
     for (const b of tab.parentElement.children) b.classList.toggle("on", b === tab);
     tab.closest("section").querySelector(".r-filtered").dataset.show = f ? homeFilter : freeTab;
-    homeHtml = page === "add" ? addPageHtml() : homePageHtml();
+    homeHtml = page === "add" ? addPageHtml() : page === "journey" ? journeyHtml() : homePageHtml();
     drawn.html = homeHtml;
   });
 

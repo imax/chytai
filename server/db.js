@@ -77,6 +77,7 @@ function open(dataDir) {
     docDel: db.prepare("DELETE FROM docs WHERE coll = ? AND id = ?"),
     list: db.prepare("SELECT id, ord, value FROM items WHERE acct = ? AND kind = ? AND book = ? ORDER BY ord"),
     books: db.prepare("SELECT book, value FROM items WHERE acct = ? AND kind = ? ORDER BY book, ord"),
+    tally: db.prepare("SELECT kind, book, json_extract(value, '$.mode') AS mode, json_array_length(value, '$.turns') AS turns, coalesce(json_extract(value, '$.at'), json_extract(value, '$.createdAt')) AS at FROM items WHERE acct = ?"),
     itemPut: db.prepare("INSERT INTO items (acct, kind, book, id, ord, value) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT (acct, kind, book, id) DO UPDATE SET ord = excluded.ord, value = excluded.value"),
     itemDel: db.prepare("DELETE FROM items WHERE acct = ? AND kind = ? AND book = ? AND id = ?"),
     ordOf: db.prepare("SELECT ord FROM items WHERE acct = ? AND kind = ? AND book = ? AND id = ?"),
@@ -151,6 +152,11 @@ function open(dataDir) {
   const items = {
     list(acct, kind, book) {
       return q.list.all(acct, kind, book).map((r) => unpack(r.value));
+    },
+    // «Мій шлях» (GET /api/journey): one small row per note or talk, without its text: the kind, book, whether it
+    // was a translation, how many turns and when.
+    tally(acct) {
+      return q.tally.all(acct);
     },
     // Every book's list for one reader: { book: [item, …] }.
     books(acct, kind) {

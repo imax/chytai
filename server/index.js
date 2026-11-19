@@ -689,6 +689,14 @@ function recordWords(owner, ui) {
   for (const box of owner ? [(d.words ??= {}), (d.wordsMax ??= {})] : [(d.words ??= {})])
     for (const k of WORD_KEYS) if (Number(ui[k]) > 0) box[k] = (box[k] || 0) + Math.min(200, Math.round(Number(ui[k])));
 }
+// Each reader's own: words the «Словничок» explained (an underlined word tapped, or one selected word's card), per
+// day, for «Мій шлях» (Max 2026-11-19). Counted from 2026-11-19.
+function recordLooks(acct, ui) {
+  const n = Math.min(200, Math.round(Number(ui.gloss) || 0)) + Math.min(200, Math.round(Number(ui.word) || 0));
+  if (!(n > 0)) return;
+  const d = ((state.stats ??= { since: statsDay(), days: {} }).days[statsDay()] ??= { explains: 0, users: {}, guests: 0, models: {} });
+  (d.looks ??= {})[acct] = (d.looks[acct] || 0) + n;
+}
 function wordStats(days, dayKeys, monthAgo) {
   return dayKeys.filter((k) => k >= monthAgo && days[k].words).map((day) => {
     const w = days[day].words;
@@ -1880,7 +1888,7 @@ api.post("/reading", express.text({ limit: "16kb" }), (req, res) => {
   const books = body?.books;
   if (!books || typeof books !== "object" || Array.isArray(books)) return res.status(400).json({ error: "bad request" });
   if (body.ui && !req.owner) recordUi(req.guest ? "guest" : req.acct, body.ui);
-  if (body.ui && !req.guest) recordWords(!!req.owner, body.ui);
+  if (body.ui && !req.guest) recordWords(!!req.owner, body.ui), recordLooks(req.acct, body.ui);
   if (req.guest) return (body.ui && saveState(), res.json({ ok: true }));
   const clean = {};
   for (const [name, sec] of Object.entries(books).slice(0, 20)) if (name && name.length <= 500 && Number.isFinite(sec) && sec > 0) clean[name.replace(/#reflow$/, "")] = (clean[name.replace(/#reflow$/, "")] || 0) + Math.min(sec, body.at ? 3600 : 600);
@@ -1888,6 +1896,44 @@ api.post("/reading", express.text({ limit: "16kb" }), (req, res) => {
   saveState();
   res.json({ ok: true });
 });
+// «Мій шлях» (Max 2026-11-19: «трохи візуалізувати мій journey as a reader», simple, from what we know): since when
+// the reader is here, explanations asked (the day counts from 2026-10-14: «Пояснити», «Запитати», follow-ups,
+// translations), words the «Словничок» explained (from 2026-11-19), and per book the kept explanations, translations
+// and notes, when it was finished; by month what was finished, asked and noted. Titles and covers the page has.
+api.get("/journey", guestsCannot("Без входу шляху немає."), (req, res) => {
+  const acct = req.acct;
+  const u = state.users[acct] || {};
+  const months = {};
+  const month = (key) => (months[key] ??= { explains: 0, notes: 0, words: 0, finished: [] });
+  let explains = 0, words = 0, first = state.accounts[acct]?.since || 0;
+  for (const [day, d] of Object.entries(state.stats?.days || {})) {
+    const n = d.users?.[acct] || 0;
+    const w = d.looks?.[acct] || 0;
+    if (!n && !w) continue;
+    explains += n;
+    words += w;
+    month(day.slice(0, 7)).explains += n;
+    month(day.slice(0, 7)).words += w;
+    const at = new Date(`${day}T12:00:00Z`).getTime();
+    if (!first || at < first) first = at;
+  }
+  const books = {};
+  const book = (name) => (books[name] ??= { explains: 0, translations: 0, notes: 0, finishedAt: 0 });
+  for (const r of store.items.tally(acct)) {
+    if (r.kind === "notes") {
+      book(r.book).notes++;
+      if (r.at > 0) month(statsDay(r.at).slice(0, 7)).notes++;
+    } else if (r.mode === "translate") book(r.book).translations += r.turns || 1;
+    else book(r.book).explains += r.turns || 1;
+  }
+  for (const [name, at] of Object.entries(u.finished || {})) {
+    if (!(at > 0)) continue;
+    book(name).finishedAt = at;
+    month(statsDay(at).slice(0, 7)).finished.push(name);
+  }
+  res.json({ since: first, explains, words, books, months: Object.keys(months).sort().reverse().map((m) => ({ month: m, ...months[m] })) });
+});
+
 // The phone unloaded the reader's page (web-bridge.js life; Max, 2026-11-11: «сторінку вивантажено (пам'ять)»).
 // One row per unload in the day's stats, numbers only: what was on screen, how much the page held, whether the app
 // was in the background. At most 20 an hour from one account or guest, 300 a day in all.
