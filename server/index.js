@@ -2870,8 +2870,9 @@ async function siteAbout(title, author) {
     throw err;
   }
 }
-// «Про книжку» that helps to read (Max 2026-11-18, server/bookguide.js): «Перед читанням» before a book is started,
-// the recap up to the reader's place after. Kept by the book's text, one for every reader who has the same file.
+// «Про книжку» that helps to read (Max 2026-11-18, server/bookguide.js): «Перед читанням» for a book, and «Перед
+// главою» for the chapter the reader is in (2026-11-19, in place of the recap). Kept by the book's text, one for every
+// reader who has the same file.
 // Caps: GUIDE_DAY_USD a day for all, GUIDE_ACCOUNT_USD a reader (guests together as one), Max none; stats day `guide`.
 const guide = new (require("./bookguide").Guide)({ dir: path.join(DATA_DIR, "guide"), apiKey: process.env.ANTHROPIC_API_KEY });
 setTimeout(() => guide.cleanup(), 60000).unref();
@@ -2904,51 +2905,61 @@ function guideFile(lib, name) {
   if (isFree(name)) return path.join(freeDir(name), name);
   return lib && fs.existsSync(bookFile(lib, name)) ? bookFile(lib, name) : null;
 }
-// `auto=1` (the page, when a book opens and when the reader leaves it; Max 2026-11-18: «автоматом оновлював … щоб він
-// був актуальний»): the recap for the saved place is made in the background, so «Про книжку» has it at once. Signed-in
-// readers, started books, once in GUIDE_AUTO_MIN a book; a place within the same STEP costs nothing.
+// «Перед главою» (Max 2026-11-19, flag `chapter-intro`): a few notes for the chapter the reader is in, shown as a small
+// card when a book opens (renderer.js `intro`). GET /api/guide/intro?book&href&snip&pct: the notes, or `building`
+// (the page asks again), made once a chapter for every reader of the same file. `auto=1` (the page, when the reader
+// leaves a book): the notes for the saved place, and the next chapter's when the place is near its end, so the next
+// opening has them at once; signed-in readers, once in GUIDE_AUTO_MIN a book.
 const GUIDE_AUTO_MIN = 10;
 const guideAuto = new Map(); // acct:book -> time
-api.get("/guide", async (req, res) => {
+const introOn = async (req) => !req.guest && (await readerFlags(req.acct)).includes("chapter-intro");
+api.get("/guide/intro", async (req, res) => {
   const name = safeBookName(req.query.book);
   const file = guideFile(req.guest ? null : req.lib, name);
-  if (!file) return res.json({ none: true });
-  const u = req.guest ? guestState(req.guest) : userState(req.acct);
+  if (!file || !(await introOn(req))) return res.json({ none: true });
+  const u = userState(req.acct);
   if (req.query.auto) {
     const k = `${req.acct}:${name}`;
-    if (req.guest || !process.env.ANTHROPIC_API_KEY || Date.now() - (guideAuto.get(k) || 0) < GUIDE_AUTO_MIN * 60000) return res.json({ skip: true });
+    if (!process.env.ANTHROPIC_API_KEY || Date.now() - (guideAuto.get(k) || 0) < GUIDE_AUTO_MIN * 60000) return res.json({ skip: true });
     if (guideAuto.size > 5000) guideAuto.clear();
     guideAuto.set(k, Date.now());
     res.json({ ok: true });
     // The page's last position comes a moment after it leaves the book.
     setTimeout(() => {
       const prog = u.progress?.[name];
-      if (u.finished?.[name] || (prog?.pct || 0) < 1) return;
-      guide.get(file, { recap: true, pct: prog.pct, snip: prog.snip || "", ...guideCaps(req) }).catch((err) => console.error(`guide auto: ${err.message}`));
+      if (u.finished?.[name] || !prog) return;
+      guide.intro(file, { pct: prog.pct, snip: prog.snip || "", ahead: true, ...guideCaps(req) }).catch((err) => console.error(`guide intro auto: ${err.message}`));
     }, 3000);
     return;
   }
-  const prog = u.progress?.[name];
+  try {
+    const pct = Number(req.query.pct);
+    res.json(await guide.intro(file, { href: clean(req.query.href, 300), snip: clean(req.query.snip, 200), pct: Number.isFinite(pct) ? pct : u.progress?.[name]?.pct, ...guideCaps(req) }));
+  } catch (err) {
+    res.json({ error: err.message });
+  }
+});
+// «Про книжку»: «Перед читанням» (why, how, how hard), made the first time anyone asks.
+api.get("/guide", async (req, res) => {
+  const name = safeBookName(req.query.book);
+  const file = guideFile(req.guest ? null : req.lib, name);
+  if (!file) return res.json({ none: true });
+  if (req.query.auto) return res.json({ skip: true }); // pages loaded before 2026-11-19 still ask for the recap
   const { allow, spend } = guideCaps(req);
   const title = clean(req.query.title, 300);
   const author = clean(req.query.author, 300);
-  const started = !u.finished?.[name] && (prog?.pct || 0) >= 1;
   try {
-    res.json({
-      started,
-      ...(await guide.get(file, {
+    res.json(
+      await guide.get(file, {
         title,
         authors: author ? [author] : [],
         blurb: () => (title ? siteAbout(title, author).then((a) => (a?.found && a.blurb) || "") : Promise.resolve("")),
-        recap: started,
-        pct: prog?.pct || 0,
-        snip: prog?.snip || "",
         allow,
         spend,
-      })),
-    });
+      }),
+    );
   } catch (err) {
-    res.json({ started, error: err.message });
+    res.json({ error: err.message });
   }
 });
 api.get("/about", async (req, res) => {

@@ -1,25 +1,28 @@
-// «Про книжку» that helps to read (Max 2026-11-18, «Level up your reading»): before a book is started, «Перед
-// читанням»: why it is worth it, how to read it, how hard it is (Opus, once a book); once it is started, a recap up to
-// the reader's place: where they stopped, what happened before, who is who (Max: «нагадує, де ти зупинився, що було до
-// цього, хто тут такі персонажі»). Never a word about what comes after the place.
+// «Про книжку» that helps to read (Max 2026-11-18, «Level up your reading»): «Перед читанням» for a book: why it is
+// worth it, how to read it, how hard it is (Opus, once a book). And «Перед главою» (Max 2026-11-19, in place of the
+// recap «де ви зупинилися / що було досі / хто тут хто», which only retold what he had read the day before): a few
+// notes for the chapter the reader is in, like a good annotated edition's: the history, customs, references and
+// earlier threads it rests on. Never what happens in it or later, never about the reader («самопомічник», not
+// «ти міг це пропустити»). The page shows it as a small card when a book opens (renderer.js `intro`).
 //
-// The recap is made of summaries of the book's parts (the glossary's 15,000-character parts, Sonnet, once a part),
-// and one Opus call that turns the parts read plus the current part up to the place into the recap. Everything is
-// kept by the book's text (same file = same guide, whoever reads it): DATA_DIR/guide/<key>.json
-// { key, of, total, before, parts: {i: summary}, recaps: {"<part>:<step>": recap} }. A file not used for 180 days goes.
+// A chapter is a file of the book's spine; a long one is cut into pieces of PIECE characters. Everything is kept by
+// the book's text (same file = same notes, whoever reads it): DATA_DIR/guide/<key>.json
+// { key, before, intros: {"<chapter>:<piece>": {v, notes, at}} }. A file not used for 180 days goes.
 const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
 const Anthropic = require("@anthropic-ai/sdk");
 const { partsOf } = require("./glossary");
+const { epubParts } = require("./content");
 const { measure } = require("./aimeter");
 
 const BEFORE_MODEL = "claude-opus-5-5";
-const PART_MODEL = "claude-sonnet-5-5";
-const RECAP_MODEL = "claude-opus-5-5";
-const AT_ONCE = 6; // part summaries at the same time
-const STEP = 2500; // characters: readers within one step of a part share a recap
-const RECAPS_MAX = 120; // kept recaps a book
+const INTRO_MODEL = "claude-opus-5-5";
+const PIECE = 24000; // characters: a longer chapter gets notes for each piece
+const SHORT = 1500; // a chapter shorter than this (a title page, an epigraph) gets none
+const BEHIND = 8000; // characters before the piece that the model sees as read
+const INTRO_V = 1; // notes made with an older prompt are made again
+const INTROS_MAX = 400; // kept pieces a book
 const UNUSED_DAYS = 180;
 const PAGE = 1800; // characters of a printed page
 
@@ -29,15 +32,13 @@ If you know this book, use what you know about it; if you don't, judge only from
 Answer with JSON only:
 {"why": "2–3 short sentences: what kind of book it is, who wrote it and when if you know, why it is worth reading", "how": "2–3 short sentences: what may be hard in it (style, language, structure, many people, the era) and one concrete tip how to read it", "level": a whole number 1–10, how hard it is for an ordinary adult reader (1 = a light novel, 5 = a usual classic, 10 = «Улісс»)}`;
 
-const PART = `Below is one passage of a book. Summarise it for a recap that a reader will see when they come back to the book.
-Answer in Ukrainian whatever the book's language, in plain words. First, what happens in the passage, in order, 3–6 short sentences, naming who does what (for an essay or non-fiction: its main thoughts). Then a line «Люди:» and each person who appears or is spoken of, one per line: the name as the book writes it, a dash, who they are as far as this passage shows, a few words. Nothing else.`;
-
-const RECAP = `A reader stopped reading a book at some place and comes back to it days later. Below are numbered summaries of the parts they read before, then the text of the current part up to the exact place where they stopped (the text ends there).
-Write a recap for someone who forgot the details. Answer in Ukrainian whatever the book's language, in plain everyday words. Never mention or hint at anything after the place where they stopped, even if you know the book.
-Answer with JSON only:
-{"where": "one short sentence, at most 20 words: what is happening right at the place where they stopped", "story": "what happened before, 3–4 short sentences, at most 60 words in all: only the main line, no small scenes", "people": [["name as the book writes it", "who they are so far, up to 8 words"]]}
-"people" has the 3–6 people who matter most so far; for an essay or non-fiction it may be empty, and "story" then gives the main thoughts so far. Short is the point: the reader sees both texts on one phone screen.`;
-const RECAP_V = 2; // recaps made with an older prompt are made again
+const INTRO = `A reader is reading a book that may feel hard and is about to read the passage below. Write a few notes that make it easier to read, like the notes of a good annotated edition, read before the passage.
+Only what the passage rests on and a reader of today may not know: a real historical person, place or event as it was at that moment, an old custom, institution, object or social rule, a reference to another text (the Bible, a myth, a book), a person or thread from earlier in the book the passage picks up, a change of narrator, time or place.
+Never what happens in the passage or later: no events, turns or outcomes, no hints that something will matter («варто помітити», «зверніть увагу», «це ще знадобиться», «має значення»), nothing from history that gives away how the story goes.
+Speak about the book, never about the reader: no «ви», no «ви могли не знати», no «пам'ятаєте», no advice how to read. Plain statements, as a footnote would.
+Skip what an ordinary adult knows and what the passage itself explains. If nothing is worth a note, answer with an empty list.
+Answer in Ukrainian whatever the book's language, in plain everyday words. At most 3 notes, each a heading of 1–4 words (a name or a thing, never a question) and one or two sentences, at most 35 words.
+JSON only: {"notes": [["heading", "text"]]}`;
 
 const json = (text) => {
   const m = String(text || "").match(/\{[\s\S]*\}/);
@@ -47,6 +48,8 @@ const json = (text) => {
 const textOf = (m) => m.content.filter((c) => c.type === "text").map((c) => c.text).join("");
 const line = (s, max) => String(s || "").replace(/\s+/g, " ").trim().slice(0, max);
 const flat = (s) => s.replace(/\s+/g, " ").trim();
+// Without stress marks («ве́рхи»): the page's first words and the book's text compare equal.
+const plain = (s) => String(s).normalize("NFD").replace(/\u0301/g, "").normalize("NFC");
 
 class Guide {
   constructor({ dir, apiKey }) {
@@ -54,6 +57,7 @@ class Guide {
     this.apiKey = apiKey;
     this.running = new Map(); // key -> { what, done, of, error }
     this.failed = new Map(); // key + what -> time: not again for 10 minutes
+    this.unitsKept = new Map(); // file -> { mtime, units }
     fs.mkdirSync(dir, { recursive: true });
   }
   file(key) {
@@ -96,67 +100,105 @@ class Guide {
     return { ...p, key };
   }
 
-  // Where the reader is, in characters: the page's first words found near the percentage, else the percentage.
-  place(p, pct, snip) {
-    const guess = Math.round((Math.min(100, Math.max(0, pct)) / 100) * p.total);
-    const s = flat(String(snip || "").normalize("NFD").replace(/\u0301/g, "").normalize("NFC")).slice(0, 60);
-    if (s.length >= 20) {
-      const starts = [0, ...p.ends.slice(0, -1)];
-      const from = guess - p.total * 0.08;
-      const to = guess + p.total * 0.08;
-      let best = -1;
-      for (let i = 0; i < p.parts.length; i++) {
-        if (p.ends[i] < from || starts[i] > to) continue;
-        const t = flat(p.parts[i]);
-        for (let at = t.indexOf(s); at >= 0; at = t.indexOf(s, at + 1)) {
-          const pos = starts[i] + at;
-          if (best < 0 || Math.abs(pos - guess) < Math.abs(best - guess)) best = pos;
+  // The book's chapters as the notes see them: each spine file with its href, cut into pieces of PIECE characters
+  // at a sentence's end. Kept for the last few files read (the same as the glossary's parts).
+  async units(file) {
+    const mtime = fs.statSync(file).mtimeMs;
+    const kept = this.unitsKept.get(file);
+    if (kept?.mtime === mtime) return kept.units;
+    const { chapters, hrefs, meta } = await epubParts(fs.readFileSync(file));
+    const units = [];
+    units.meta = meta;
+    let at = 0;
+    chapters.forEach((raw, ch) => {
+      const text = plain(raw);
+      let from = 0;
+      let piece = 0;
+      while (from < text.length) {
+        let end = Math.min(text.length, from + PIECE);
+        if (end < text.length) {
+          const cut = Math.max(text.lastIndexOf(". ", end), text.lastIndexOf("! ", end), text.lastIndexOf("? ", end));
+          if (cut > from + PIECE / 2) end = cut + 1;
+          if (text.length - end < PIECE / 4) end = text.length; // no short tail of its own
         }
+        units.push({ ch, piece, href: hrefs?.[ch] || "", text: text.slice(from, end), start: at + from });
+        from = end;
+        piece++;
       }
-      if (best >= 0) return best;
-    }
-    return guess;
+      at += text.length;
+    });
+    if (this.unitsKept.size > 8) this.unitsKept.delete(this.unitsKept.keys().next().value);
+    this.unitsKept.set(file, { mtime, units });
+    return units;
   }
 
-  // What the page shows now, and the work it starts in the background: { pages, before, recap, building, capped }.
-  // `recap`: the reader has started (pct, snip), and «Перед читанням» is not made then; `blurb`: the catalog's
-  // description for «Перед читанням».
-  async get(file, { title, authors, blurb, pct, snip, recap: wantRecap, allow = () => true, spend = () => {} }) {
+  // Which piece the reader is in: the chapter's file (the page's href), then the page's first words in it; without
+  // the href, the first words near the percentage, else the percentage.
+  find(units, { href, snip, pct }) {
+    const total = units.length ? units.at(-1).start + units.at(-1).text.length : 0;
+    const s = flat(plain(String(snip || ""))).slice(0, 60);
+    const name = decodeURIComponent(String(href || "").split("#")[0]).replace(/^\.?\//, "");
+    let pool = name ? units.filter((u) => u.href && (u.href === name || u.href.endsWith(`/${name}`) || name.endsWith(`/${u.href}`))) : [];
+    if (!pool.length) {
+      if (!Number.isFinite(pct)) return null;
+      const guess = (Math.min(100, Math.max(0, pct)) / 100) * total;
+      pool = units.filter((u) => u.start + u.text.length > guess - total * 0.08 && u.start < guess + total * 0.08);
+      if (!pool.length) return units.find((u) => u.start + u.text.length > guess) || units.at(-1) || null;
+      if (s.length < 20) return pool.find((u) => u.start + u.text.length > guess) || pool[0];
+    }
+    if (pool.length > 1 && s.length >= 20) {
+      const hit = pool.find((u) => flat(u.text).includes(s));
+      if (hit) return hit;
+    }
+    return pool[0];
+  }
+
+  // What «Про книжку» shows: { pages, before, building, capped, error }; «Перед читанням» is made the first time.
+  async get(file, { title, authors, blurb, allow = () => true, spend = () => {} }) {
     const p = await this.book(file);
     if (!p) return { none: true };
-    const g = this.read(p.key) || { key: p.key, of: p.parts.length, total: p.total, parts: {}, recaps: {} };
+    const g = this.read(p.key) || { key: p.key };
     const out = { pages: Math.max(1, Math.round(p.total / PAGE)), before: g.before || null };
-    if (!wantRecap) {
-      if (g.before || !this.apiKey) return out;
-      const run = this.busy(p.key, "before");
-      if (run) return { ...out, building: run };
-      if (!this.may(p.key, "before")) return { ...out, error: true };
-      if (!allow()) return { ...out, capped: true };
-      this.start(p.key, "before", 1, () => this.makeBefore(p, { title, authors, blurb, spend }));
-      return { ...out, building: { what: "before", done: 0, of: 1 } };
-    }
-    const pos = this.place(p, pct, snip);
-    const i = Math.max(0, p.ends.findIndex((e) => e > pos));
-    const starts = [0, ...p.ends.slice(0, -1)];
-    const off = pos - starts[i];
-    const rkey = `${i}:${Math.floor(off / STEP)}`;
-    if (g.recaps[rkey]?.v === RECAP_V) return { ...out, recap: g.recaps[rkey] };
-    if (i === 0 && off < 1500) return { ...out, early: true }; // a page or so in: nothing to recall yet
-    // The nearest recap before this place stays on screen while the new one is made.
-    const num = (k) => k.split(":").map(Number);
-    const older = Object.keys(g.recaps)
-      .filter((k) => { const [a, b] = num(k); return g.recaps[k].v === RECAP_V && (a < i || (a === i && b * STEP < off)); })
-      .sort((x, y) => { const [a, b] = num(x); const [c, d] = num(y); return c - a || d - b; })[0];
-    if (older) out.recap = { ...g.recaps[older], older: true };
-    if (!this.apiKey) return out;
-    const run = this.busy(p.key, "recap");
+    if (g.before || !this.apiKey) return out;
+    const run = this.busy(p.key, "before");
     if (run) return { ...out, building: run };
-    if (!this.may(p.key, "recap")) return { ...out, error: true };
+    if (!this.may(p.key, "before")) return { ...out, error: true };
     if (!allow()) return { ...out, capped: true };
-    const missing = [];
-    for (let k = 0; k < i; k++) if (!g.parts[k]) missing.push(k);
-    this.start(p.key, "recap", missing.length + 1, (r) => this.makeRecap(p, { i, off, rkey, missing, allow, spend, run: r }));
-    return { ...out, building: { what: "recap", done: 0, of: missing.length + 1 } };
+    this.start(p.key, "before", 1, () => this.makeBefore(p, { title, authors, blurb, spend }));
+    return { ...out, building: { what: "before", done: 0, of: 1 } };
+  }
+
+  // «Перед главою» for the reader's place: { intro: {key, notes} } when made (notes may be [] = nothing worth a note),
+  // { building }, { none } (a short chapter, no text), { capped }, { error }. `ahead`: when the place is in the last
+  // third of its piece, the next piece is made too (the reader leaving the book near a chapter's end opens the next).
+  async intro(file, { href, snip, pct, title, authors, ahead = false, allow = () => true, spend = () => {} }) {
+    const p = await this.book(file);
+    if (!p) return { none: true };
+    const units = await this.units(file);
+    const u = this.find(units, { href, snip, pct: Number(pct) });
+    if (!u) return { none: true };
+    const want = [u];
+    if (ahead) {
+      const s = flat(plain(String(snip || ""))).slice(0, 60);
+      const off = s.length >= 20 ? flat(u.text).indexOf(s) : -1;
+      const next = units[units.indexOf(u) + 1];
+      if (next && off > flat(u.text).length * 0.66) want.push(next);
+    }
+    const g = this.read(p.key) || { key: p.key };
+    const k = (x) => `${x.ch}:${x.piece}`;
+    const kept = g.intros?.[k(u)];
+    const missing = want.filter((x) => x.text.length >= SHORT && g.intros?.[k(x)]?.v !== INTRO_V);
+    const out = u.text.length < SHORT ? { none: true } : kept?.v === INTRO_V ? { intro: { key: `${p.key}:${k(u)}`, notes: kept.notes } } : {};
+    if (!missing.length || !this.apiKey) return out;
+    const run = this.busy(p.key, `intro:${k(missing[0])}`);
+    if (run) return out.intro ? out : { ...out, building: run };
+    if (!this.may(p.key, `intro:${k(missing[0])}`)) return out.intro || out.none ? out : { error: true };
+    if (!allow()) return out.intro || out.none ? out : { capped: true };
+    for (const x of missing) {
+      if (this.busy(p.key, `intro:${k(x)}`)) continue;
+      this.start(p.key, `intro:${k(x)}`, 1, () => this.makeIntro(p, units, x, { title, authors, allow, spend }));
+    }
+    return out.intro || out.none ? out : { building: { what: "intro", done: 0, of: 1 } };
   }
   busy(key, what) {
     const run = this.running.get(`${key}:${what}`);
@@ -201,63 +243,37 @@ class Guide {
     const level = Math.round(Number(a.level));
     const before = { why: line(a.why, 700), how: line(a.how, 700), level: level >= 1 && level <= 10 ? level : null, at: new Date().toISOString() };
     if (!before.why) throw new Error("empty answer");
-    const g = this.read(p.key) || { key: p.key, of: p.parts.length, total: p.total, parts: {}, recaps: {} };
+    const g = this.read(p.key) || { key: p.key };
     g.before = before;
     this.write(g);
   }
 
-  async makeRecap(p, { i, off, rkey, missing, allow, spend, run }) {
-    const client = this.client();
-    const got = {};
-    let at = 0;
-    const worker = async () => {
-      while (at < missing.length) {
-        const k = missing[at++];
-        if (!allow()) throw new Error("capped");
-        const m = await client.messages.create({
-          model: PART_MODEL,
-          max_tokens: 1500,
-          system: [{ type: "text", text: PART, cache_control: { type: "ephemeral" } }],
-          messages: [{ role: "user", content: p.parts[k] }],
-          output_config: { effort: "low" },
-        });
-        spend(measure(m.model, m.usage).cost);
-        got[k] = textOf(m).trim().slice(0, 3000);
-        run.n++;
-      }
-    };
-    await Promise.all(Array.from({ length: Math.min(AT_ONCE, missing.length) }, worker));
-    let g = this.read(p.key) || { key: p.key, of: p.parts.length, total: p.total, parts: {}, recaps: {} };
-    Object.assign(g.parts, got);
-    this.write(g); // the summaries are paid for: kept even if the last call fails
-    const before = Array.from({ length: i }, (_, k) => `${k + 1}. ${g.parts[k] || ""}`).join("\n\n");
-    const now = p.parts[i].slice(Math.max(0, off - 14000), off);
+  async makeIntro(p, units, u, { title, authors, allow, spend }) {
+    const i = units.indexOf(u);
+    let behind = "";
+    for (let j = i - 1; j >= 0 && behind.length < BEHIND; j--) behind = `${units[j].text}\n\n${behind}`;
+    behind = behind.slice(-BEHIND);
+    const head = [`Назва: ${title || units.meta?.title || "?"}`, `Автор: ${(authors?.length ? authors : units.meta?.authors || []).join(", ") || "?"}`].join("\n");
     if (!allow()) throw new Error("capped");
-    const m = await client.messages.create({
-      model: RECAP_MODEL,
-      max_tokens: 2500,
-      system: RECAP,
-      messages: [{ role: "user", content: `${before ? `Прочитані частини:\n\n${before}\n\n` : ""}Поточна частина до місця, де читач зупинився:\n\n${now}` }],
+    const m = await this.client().messages.create({
+      model: INTRO_MODEL,
+      max_tokens: 1500,
+      system: INTRO,
+      messages: [{ role: "user", content: `${head}\n\n${behind ? `Прочитане перед цим (кінець):\n${behind}\n\n` : ""}Уривок, який читач починає:\n${u.text}` }],
       output_config: { effort: "low" },
     });
     spend(measure(m.model, m.usage).cost);
     const a = json(textOf(m));
-    const recap = {
-      v: RECAP_V,
-      where: line(a.where, 300),
-      story: line(a.story, 700),
-      people: (Array.isArray(a.people) ? a.people : []).filter((x) => Array.isArray(x) && x[0]).slice(0, 8).map((x) => [line(x[0], 60), line(x[1], 100)]),
-      pct: Math.round(((p.ends[i] - p.parts[i].length + off) / p.total) * 100),
-      at: new Date().toISOString(),
-    };
-    if (!recap.where && !recap.story) throw new Error("empty answer");
-    run.n++;
-    g = this.read(p.key) || g;
-    g.recaps[rkey] = recap;
-    const keys = Object.keys(g.recaps);
-    if (keys.length > RECAPS_MAX) for (const k of keys.sort((x, y) => (g.recaps[x].at < g.recaps[y].at ? -1 : 1)).slice(0, keys.length - RECAPS_MAX)) delete g.recaps[k];
+    const notes = (Array.isArray(a.notes) ? a.notes : []).filter((x) => Array.isArray(x) && x[0] && x[1]).slice(0, 3).map((x) => [line(x[0], 60), line(x[1], 400)]);
+    const g = this.read(p.key) || { key: p.key };
+    const intros = (g.intros ??= {});
+    intros[`${u.ch}:${u.piece}`] = { v: INTRO_V, notes, at: new Date().toISOString() };
+    const keys = Object.keys(intros);
+    if (keys.length > INTROS_MAX) for (const k of keys.sort((x, y) => (intros[x].at < intros[y].at ? -1 : 1)).slice(0, keys.length - INTROS_MAX)) delete intros[k];
+    delete g.recaps; // the recap's leftovers (before 2026-11-19)
+    delete g.parts;
     this.write(g);
   }
 }
 
-module.exports = { Guide, BEFORE, PART, RECAP, STEP };
+module.exports = { Guide, BEFORE, INTRO, PIECE };

@@ -546,19 +546,22 @@ A flag only when Max asks for one, or when the change could break what readers u
   «Про книжку» (`glossLine` in home.js, `GET /api/glossary/status`: covered, words, names, building), not «Аа».
   `app.chytai.org.ua/?new` shows the empty shelf's start screen over one's own books (Max, to look at it).
 - «Про книжку» that helps to read (Max 2026-11-18, `server/bookguide.js`, `GET /api/guide?book&title&author`, home.js
-  `showGuide`): a book not started gets «Чим цікава», «Як читати», «Складність N з 10» and pages under its description
-  (`BEFORE`, Opus once a book); a started one (`u.progress` pct ≥ 1, not finished) opens with «Де ви зупинилися», «Що було
-  досі», «Хто тут хто», only up to the reader's place: Sonnet summarises each 15,000-character part once (`PART`), Opus
-  writes the recap from the parts read + the current part up to the place (`RECAP`), kept per 2,500 characters (`STEP`).
-  The place: `/api/position` keeps the page's first words (`snip`, renderer.js `snipAt`), found in the text near the pct.
-  Kept by the text's hash (`DATA_DIR/guide/<key>.json`, same file = one guide for all), unused 180 days → gone. EPUBs
-  only, no publishers' books. Caps $5 a day for all (`GUIDE_DAY_USD`, Telegram once), $1 a reader (guests together),
-  Max none; stats day `guide`. Opens from the home book menu, the title in the book's top bar (`act-title-about`) and
-  the panel's «Про книжку» (paper books keep the inline block). No «Перевірте себе», no change to «Зміст» (Max).
-  Short (Max 2026-11-18: «Де ви зупинилися» + «Що було досі» on one phone screen): one sentence ≤20 words, 3–4 sentences
-  ≤60 words; a recap of an older prompt (`RECAP_V`) is made again. Made ahead: the page sends `auto=1` 5 s after a
-  book opens and when the reader leaves it (renderer.js `guideAhead`: another book, home, the app hidden); the server
-  makes the recap for the saved place 3 s later, signed-in readers only, once in 10 min a book (`GUIDE_AUTO_MIN`).
+  `showGuide`): «Чим цікава», «Як читати», «Складність N з 10» and pages under the description (`BEFORE`, Opus once a
+  book, for any EPUB). Kept by the text's hash (`DATA_DIR/guide/<key>.json`, same file = one guide for all), unused
+  180 days → gone. EPUBs only, no publishers' books. Caps $5 a day for all (`GUIDE_DAY_USD`, Telegram once), $1 a reader
+  (guests together), Max none; stats day `guide`. Opens from the home book menu, the title in the book's top bar
+  (`act-title-about`) and the panel's «Про книжку». No «Перевірте себе», no change to «Зміст» (Max).
+  The recap of a started book («Де ви зупинилися / Що було досі / Хто тут хто») was taken out on 2026-11-19 (Max: it
+  retold what he read the day before; «Хто тут хто» = the names card): don't bring it back, nor a recap guessed by
+  days away, nor «що ви могли пропустити» (Max: condescending).
+- «Перед главою» (Max 2026-11-19, flag `chapter-intro`, `GET /api/guide/intro?book&href&snip&pct`, renderer.js
+  `introCheck`): up to 3 notes for the chapter the reader is in, like an annotated edition's (history, customs,
+  references, earlier threads; `INTRO`): never what happens, no hints that something matters, never «ви» (Max:
+  «самопомічник», not «ти міг пропустити»). A small card at the page's foot when a book opens and on a chapter's first
+  page; a tap opens the notes, × hides; once a chapter a device (`chytai:intro-seen`), gone after 3 page turns. A
+  chapter = a spine file (`epubParts` `hrefs`), cut into 24,000-character pieces; Opus once a piece for every reader of
+  the same file (~$0.04–0.09), same caps as above. Leaving a book (`auto=1`) makes the saved place's notes and, near a
+  chapter's end, the next one's. Try a prompt: `.tmp/recap-try/try2.js` on Max's Mac (key from .env).
 - A wrong or needless meaning Max reports in a free-shelf book (bug reports): `free/glossary-fixes.json`, per book
   `drop` (a dictionary word with all its forms, or one form) and `set` (form → [meaning, level, word]; give every
   form of the word the same meaning), laid over the kept list by `/api/glossary` (`glossFixed`); the file on the

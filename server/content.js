@@ -40,10 +40,11 @@ async function epubParts(buffer) {
   const byId = Object.fromEntries(items.map((i) => [i.id, i]));
   const spine = [...opf.matchAll(/<itemref\b[^>]*idref="([^"]+)"/g)].map((m) => byId[m[1]]?.href).filter(Boolean);
   const chapters = [];
+  const hrefs = []; // each chapter's file in the spine, as the OPF names it («Про книжку» finds the reader's chapter by it)
   for (const href of spine) {
     const file = zip.file(base + href) || zip.file(href);
     const text = file ? stripTags(await file.async("string")).replace(/\s+/g, " ").trim() : "";
-    if (text.length > 200) chapters.push(text);
+    if (text.length > 200) chapters.push(text), hrefs.push(href);
   }
 
   const coverId = opf.match(/<meta\b[^>]*name="cover"[^>]*content="([^"]+)"/)?.[1] || opf.match(/<meta\b[^>]*content="([^"]+)"[^>]*name="cover"/)?.[1];
@@ -57,7 +58,7 @@ async function epubParts(buffer) {
     const type = IMAGE_TYPES[coverItem.href.split(".").pop().toLowerCase()];
     if (data && type && data.length <= COVER_MAX) cover = { type, data };
   }
-  return { meta, chapters, cover };
+  return { meta, chapters, hrefs, cover };
 }
 
 async function pdfParts(buffer) {

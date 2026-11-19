@@ -392,8 +392,7 @@ async function openEpub(payload, { posKey, source }) {
 
   rendition.on("selected", onSelected);
   rendition.on("relocated", onRelocated);
-  const openedFor = current;
-  setTimeout(() => current === openedFor && rendition && guideAhead(), 5000);
+  introOpening = true;
   const addMark = rendition.annotations.add.bind(rendition.annotations);
   rendition.annotations.add = (...args) => {
     const out = addMark(...args);
@@ -610,10 +609,10 @@ function resizeView() {
   else if (rendition?.manager?.stage) rendition.resize();
 }
 
-// «Що було досі» made ahead (Max 2026-11-18: ready when the reader taps, not 30 s later): the server makes the recap
-// for the saved place when a book opens and when the reader leaves it (another book, the home screen, the app hidden).
+// «Перед главою» made ahead: when the reader leaves a book (another book, the home screen, the app hidden), the server
+// makes the notes for the saved place, and the next chapter's when it is near a chapter's end.
 function guideAhead() {
-  if (!current || current.preview || current.protected || !/\.epub$/i.test(current.path || "")) return;
+  if (!introOn()) return;
   window.reader.guideAhead?.(current.path);
 }
 document.addEventListener("visibilitychange", () => document.visibilityState === "hidden" && rendition && guideAhead());
@@ -634,8 +633,99 @@ function closeBook() {
   syncAppProtection();
   returnCfi = null;
   $("#btn-back").classList.add("hidden");
+  hideIntro();
+  introAt = null;
   syncReading();
 }
+
+// ---------- «Перед главою» (Max 2026-11-19, flag `chapter-intro`, server/bookguide.js) ----------
+// A few notes for the chapter the reader is in (the history, customs and references it rests on, never what happens),
+// as a small card at the page's foot when a book opens and when a chapter begins: a tap opens the notes, × puts it
+// away (Max: «можу тапнути відкрити або тапнути сховати», less intrusive than a dialog, and seen, unlike a section in
+// «Про книжку»). Once a chapter on a device; left alone, it goes after three page turns.
+const INTRO_SEEN = "chytai:intro-seen";
+let introAt = null; // { book, index }: the chapter last asked about
+let introOpening = false; // the first place of a book just opened
+let introTurns = 0;
+let introPlace = ""; // the page the turns are counted from (epub.js reports one place several times while it lays out)
+function introOn() {
+  return !!settings.flags?.includes("chapter-intro") && !!current && !current.preview && !current.protected && /\.epub$/i.test(current.path || "");
+}
+function introSeen() {
+  try {
+    return JSON.parse(localStorage.getItem(INTRO_SEEN) || "{}");
+  } catch {
+    return {};
+  }
+}
+function introMark(key) {
+  try {
+    const s = introSeen();
+    s[key] = Date.now();
+    const keys = Object.keys(s);
+    if (keys.length > 500) for (const k of keys.sort((a, b) => s[a] - s[b]).slice(0, keys.length - 500)) delete s[k];
+    localStorage.setItem(INTRO_SEEN, JSON.stringify(s));
+  } catch {}
+}
+function hideIntro() {
+  $("#intro").classList.add("hidden");
+  $("#intro").classList.remove("open");
+}
+// Every new place: counts page turns under a shown card, and asks for the notes when a book opens or a chapter begins.
+function introCheck(location) {
+  const box = $("#intro");
+  const here = location?.start?.cfi || "";
+  if (here !== introPlace && !box.classList.contains("hidden") && !box.classList.contains("open") && ++introTurns > 3) hideIntro();
+  introPlace = here;
+  const opening = introOpening;
+  introOpening = false;
+  if (!introOn() || !location?.start || !Number.isInteger(location.start.index)) return;
+  const index = location.start.index;
+  if (introAt?.book === current.path && introAt.index === index) return;
+  introAt = { book: current.path, index };
+  if (opening || location.start.displayed?.page === 1) askIntro(location);
+}
+async function askIntro(location) {
+  const forBook = current;
+  const index = location.start.index;
+  const q = { href: location.start.href, snip: snipAt(location.start.cfi), pct: readingProgress(location)?.pct };
+  for (let i = 0; i < 12; i++) {
+    let r;
+    try {
+      r = await window.reader.chapterIntro(forBook.path, q);
+    } catch {
+      return;
+    }
+    if (current !== forBook || introAt?.index !== index) return;
+    if (r?.intro) return r.intro.notes?.length && !introSeen()[r.intro.key] && showIntro(r.intro);
+    if (!r?.building) return;
+    await new Promise((ok) => setTimeout(ok, 5000));
+  }
+}
+function showIntro(intro) {
+  // On the chapter's first page «Перед главою»; opened in the middle of one, «У цій главі».
+  const first = rendition?.currentLocation?.()?.start?.displayed?.page === 1;
+  $("#intro-label").textContent = first ? "Перед главою" : "У цій главі";
+  $("#intro-line").textContent = intro.notes.map((n) => n[0]).join(" · ");
+  $("#intro-notes").replaceChildren(
+    ...intro.notes.map(([head, text]) => {
+      const p = document.createElement("p");
+      const b = document.createElement("b");
+      b.textContent = /[.!?:]$/.test(head) ? head : `${head}.`;
+      p.append(b, ` ${text}`);
+      return p;
+    }),
+  );
+  $("#intro").classList.remove("hidden", "open");
+  introTurns = 0;
+  introPlace = rendition?.currentLocation?.()?.start?.cfi || "";
+  introMark(intro.key);
+}
+$("#intro-open").addEventListener("click", () => {
+  $("#intro").classList.toggle("open");
+  $("#intro-notes").scrollTop = 0;
+});
+$("#intro-x").addEventListener("click", hideIntro);
 
 // ---------- Footnotes: a way back after following a link inside the book ----------
 
@@ -847,6 +937,7 @@ function onRelocated(location) {
   if (current) window.reader.savePosition(current.posKey, location.start.cfi, readingProgress(location));
   if (current?.protected) reportChapter(location.start?.index);
   updateProgress(location);
+  introCheck(location);
   // While scrolling, a selection may move off screen and back; its toolbar is pinned at the bottom anyway.
   if (!scrolled()) hideSelToolbar();
   window.Gloss?.hide();

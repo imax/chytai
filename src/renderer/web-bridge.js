@@ -1000,7 +1000,7 @@
         return kept || null;
       }
     },
-    // «Перед читанням» / «Що було досі» (server/bookguide.js), kept on the device like «Про книжку».
+    // «Перед читанням» (server/bookguide.js), kept on the device like «Про книжку».
     bookGuide: async (b, cachedOnly = false) => {
       const key = `guide:${b.path}`;
       const kept = await kvGet(key);
@@ -1008,13 +1008,19 @@
       try {
         const q = new URLSearchParams({ book: b.path, title: b.title || "", author: (b.authors || []).join(", ") });
         const data = await (await api("GET", `/api/guide?${q}`)).json();
-        if (data.before || data.recap) kvSet(key, { started: data.started, before: data.before, recap: data.recap, pages: data.pages });
+        if (data.before) kvSet(key, { before: data.before, pages: data.pages });
         return data;
       } catch {
-        return kept ? { ...kept, offline: !kept.recap } : null;
+        return kept || null;
       }
     },
-    guideAhead: (bookPath) => fetch(`/api/guide?${new URLSearchParams({ book: bookPath, auto: "1" })}`, { credentials: "same-origin", keepalive: true }).catch(() => {}),
+    // «Перед главою» (renderer.js `intro`): the notes for the chapter at this place, or { building } / { none }.
+    chapterIntro: async (book, { href, snip, pct }) => {
+      const q = new URLSearchParams({ book, href: href || "", snip: snip || "", ...(Number.isFinite(pct) ? { pct } : {}) });
+      return (await api("GET", `/api/guide/intro?${q}`)).json();
+    },
+    // Leaving a book: the notes for the saved place (and the next chapter's) are made, so the next opening has them.
+    guideAhead: (bookPath) => fetch(`/api/guide/intro?${new URLSearchParams({ book: bookPath, auto: "1" })}`, { credentials: "same-origin", keepalive: true }).catch(() => {}),
     uploadFiles: (files) => uploadAll(files),
     libraryTake: (name) => api("POST", "/api/library/take", { path: name }),
     // Paper books (paper.js, server/paper.js).

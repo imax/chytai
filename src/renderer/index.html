@@ -69,12 +69,19 @@
       <footer id="status"><span id="chapter-label"></span><span id="progress-label"></span></footer>
     </section>
 
+    <!-- «Перед главою» (renderer.js intro): a small card at the page's foot; a tap opens the notes, × puts it away. -->
+    <aside id="intro" class="hidden" aria-label="Перед главою">
+      <button type="button" id="intro-open" data-act="intro-open"><span id="intro-label"></span><span id="intro-line"></span></button>
+      <button type="button" id="intro-x" class="m-x" data-act="intro-hide" aria-label="Сховати"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+      <div id="intro-notes"></div>
+    </aside>
+
     <!-- Phone reading screen, turn 9 from Claude Design (2026-11-02): a bar on top (back, title, search) and one
          at the bottom (chapter, pages, a slider, Зміст / Нотатки / Вигляд); one sheet for the contents and
          «Вигляд». Explanations and notes keep #panel, styled as the same sheet. phone-read.js wires it. -->
     <div id="m-top" class="m-chrome">
       <button id="m-back" type="button" aria-label="Мої книжки"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 5-7 7 7 7"/></svg><span class="m-dl">Мої книжки</span></button>
-      <div class="m-ttl" data-act="title-about" role="button" tabindex="0" title="Про книжку і що було досі"><b id="m-title"></b><small id="m-author"></small></div>
+      <div class="m-ttl" data-act="title-about" role="button" tabindex="0" title="Про книжку"><b id="m-title"></b><small id="m-author"></small></div>
       <button id="m-search" type="button" aria-label="Пошук у книжці"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.6-3.6"/></svg></button>
       <!-- Computer (turn 10): the actions are in the header on the right, with their names. -->
       <nav class="m-dnav">
@@ -325,7 +332,6 @@
   <dialog id="about-dialog">
     <form method="dialog">
       <div class="ab-head"><span id="ab-cover"></span><div><h2 id="ab-title"></h2><p id="ab-author"></p></div></div>
-      <div id="ab-recap"></div>
       <div id="ab-body"></div>
       <div id="ab-before"></div>
       <p class="ab-foot"><a id="ab-link" target="_blank" rel="noopener"></a><button value="close" class="r-pill">Закрити</button></p>
