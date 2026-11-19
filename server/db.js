@@ -153,7 +153,7 @@ function open(dataDir) {
     list(acct, kind, book) {
       return q.list.all(acct, kind, book).map((r) => unpack(r.value));
     },
-    // «Мій шлях» (GET /api/journey): one small row per note or talk, without its text: the kind, book, whether it
+    // «Статистика» (GET /api/journey): one small row per note or talk, without its text: the kind, book, whether it
     // was a translation, how many turns and when.
     tally(acct) {
       return q.tally.all(acct);

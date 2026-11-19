@@ -370,7 +370,7 @@
     return html;
   }
 
-  // «Мій шлях» (Max 2026-11-19: «всі книжки що я читав, скільки робив пояснення… почнемо з простого»): a few numbers,
+  // «Статистика» (Max 2026-11-19: «всі книжки що я читав, скільки робив пояснення… почнемо з простого»): a few numbers,
   // the months (what was finished, how much asked), and every book with its explanations as a bar. No minutes (Max
   // 2026-11-18: «хвилини не про це»), no streaks or goals. GET /api/journey has the counts; titles and covers are the
   // library's. Asked anew each time the page opens.
@@ -387,7 +387,7 @@
   const MONTHS = ["Січень", "Лютий", "Березень", "Квітень", "Травень", "Червень", "Липень", "Серпень", "Вересень", "Жовтень", "Листопад", "Грудень"];
   const num = (n) => Number(n || 0).toLocaleString("uk-UA");
   function journeyHtml() {
-    if (!journey || journey === "…") return `<section class="r-jour">${journey === "…" ? `<p class="r-empty"><span class="spinner"></span>Збираємо…</p>` : `<p class="r-empty">Без мережі шлях не показати.</p>`}</section>`;
+    if (!journey || journey === "…") return `<section class="r-jour">${journey === "…" ? `<p class="r-empty"><span class="spinner"></span>Збираємо…</p>` : `<p class="r-empty">Без мережі статистики не показати.</p>`}</section>`;
     const j = journey;
     const all = [...lib.books, ...(lib.free || [])];
     const byPath = new Map(all.map((b) => [b.path, b]));
@@ -398,7 +398,7 @@
     const notes = Object.values(j.books).reduce((n, s) => n + s.notes, 0);
     const tile = (n, label) => `<div class="r-jt"><b>${num(n)}</b><span>${label}</span></div>`;
     const since = j.since ? new Date(j.since).toLocaleDateString("uk-UA", { day: "numeric", month: "long", year: new Date(j.since).getFullYear() === new Date().getFullYear() ? undefined : "numeric" }) : "";
-    let html = `<section class="r-jour"><h1 class="r-jh">Мій шлях</h1>
+    let html = `<section class="r-jour"><h1 class="r-jh">Статистика</h1>
       ${since ? `<p class="r-jsince">У Читалці з ${esc(since)}</p>` : ""}
       <div class="r-jtiles">${tile(done.length, "прочитано")}${tile(reading.length, "читаю")}${tile(j.explains, plural(j.explains, "пояснення", "пояснення", "пояснень"))}${tile(notes, plural(notes, "нотатка", "нотатки", "нотаток"))}${j.words ? tile(j.words, plural(j.words, "слово зі словничка", "слова зі словничка", "слів зі словничка")) : ""}</div></section>`;
     // By month: a line of counts and the covers of what was finished.

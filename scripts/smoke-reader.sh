@@ -38,6 +38,7 @@ check / 200
 check /login 200
 check /sw.js 200
 check /api/library 401
+check /api/journey 401
 
 if grep -nE "^(TypeError|ReferenceError|SyntaxError|RangeError)|Error: |    at " "$LOG" | head -20 | grep .; then
   echo "FAIL: errors in the server log"; fail=1

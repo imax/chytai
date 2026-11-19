@@ -690,7 +690,7 @@ function recordWords(owner, ui) {
     for (const k of WORD_KEYS) if (Number(ui[k]) > 0) box[k] = (box[k] || 0) + Math.min(200, Math.round(Number(ui[k])));
 }
 // Each reader's own: words the «Словничок» explained (an underlined word tapped, or one selected word's card), per
-// day, for «Мій шлях» (Max 2026-11-19). Counted from 2026-11-19.
+// day, for «Статистика» (Max 2026-11-19). Counted from 2026-11-19.
 function recordLooks(acct, ui) {
   const n = Math.min(200, Math.round(Number(ui.gloss) || 0)) + Math.min(200, Math.round(Number(ui.word) || 0));
   if (!(n > 0)) return;
@@ -1896,11 +1896,11 @@ api.post("/reading", express.text({ limit: "16kb" }), (req, res) => {
   saveState();
   res.json({ ok: true });
 });
-// «Мій шлях» (Max 2026-11-19: «трохи візуалізувати мій journey as a reader», simple, from what we know): since when
+// «Статистика» (Max 2026-11-19: «трохи візуалізувати мій journey as a reader», simple, from what we know): since when
 // the reader is here, explanations asked (the day counts from 2026-10-14: «Пояснити», «Запитати», follow-ups,
 // translations), words the «Словничок» explained (from 2026-11-19), and per book the kept explanations, translations
 // and notes, when it was finished; by month what was finished, asked and noted. Titles and covers the page has.
-api.get("/journey", guestsCannot("Без входу шляху немає."), (req, res) => {
+api.get("/journey", guestsCannot("Без входу статистики немає."), (req, res) => {
   const acct = req.acct;
   const u = state.users[acct] || {};
   const months = {};
