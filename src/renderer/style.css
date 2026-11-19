@@ -949,6 +949,23 @@ body[data-theme="dark"] #shell, body[data-theme="dark"] #book-menu, body[data-th
 .r-head-j h1 { margin: 0; font: 600 22px/1 var(--r-serif); }
 #shell .r-head-j, #shell[data-page="journey"] .r-head:not(.r-head-j) { display: none; }
 #shell[data-page="journey"] .r-head-j { display: flex; }
+.r-head-how h1 { margin: 0; font: 600 22px/1 var(--r-serif); }
+#shell .r-head-how, #shell[data-page="how"] .r-head:not(.r-head-how) { display: none; }
+#shell[data-page="how"] .r-head-how { display: flex; }
+/* «Як це працює» (variant C, Max 2026-11-19): one phone screen about paper books. */
+.r-how { display: flex; flex-direction: column; gap: 14px; max-width: 520px; }
+.r-how-t { margin: 0; font: 600 26px/1.2 var(--r-serif); letter-spacing: -.01em; }
+.r-how-img { display: block; width: 100%; height: auto; border-radius: 6px; box-shadow: var(--r-cshadow); }
+.r-how-ans { background: var(--r-menu); border: 1px solid var(--r-rule); border-radius: 12px; padding: 12px 14px; font-size: 14px; line-height: 1.45; }
+.r-how-ans span { display: block; margin-bottom: 4px; font: 500 11px var(--r-sans); text-transform: uppercase; letter-spacing: .14em; color: var(--r-ochre); }
+.r-how-list { margin: 6px 0 0; padding: 14px 0 0; border-top: 1px solid var(--r-head); list-style: none; display: flex; flex-direction: column; gap: 12px; font-size: 15px; line-height: 1.35; }
+.r-how-list li { display: flex; gap: 12px; align-items: center; }
+.r-how-list b { font-weight: 500; }
+.r-how-i { flex: none; width: 32px; height: 32px; border-radius: 50%; background: var(--r-chip); color: var(--r-ochre); display: flex; align-items: center; justify-content: center; }
+.r-how-i svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+.r-how-add { display: inline-flex; align-items: center; justify-content: center; gap: 8px; margin-top: 16px; align-self: stretch; }
+.r-how-add svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+.r-start-how { align-self: center; color: var(--r-ochre); text-decoration: none; font-size: 14px; margin-top: 4px; }
 
 /* «Додати книжку»: its title (computer) and search sit above the page's body, which is drawn anew. */
 .r-add-top { display: none; }
@@ -1069,6 +1086,8 @@ a.r-frow:hover .r-frow-go.plain { color: var(--r-ochre); }
 .r-jh { display: none; margin: 0 0 6px; font: 600 32px/1.1 var(--r-serif); letter-spacing: -0.01em; }
 @media (min-width: 761px) {
   #shell[data-page="journey"] .r-head-j { display: none; }
+  #shell[data-page="how"] .r-head-how { display: none; }
+  .r-how-add { align-self: flex-start; }
   .r-jh { display: block; }
 }
 @media (max-width: 760px) {

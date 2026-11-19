@@ -288,7 +288,7 @@
     if (page === "paper" && document.activeElement?.closest?.(".pp") && homeHtml) return;
     const pb = page === "paper" && lib.books.find((b) => b.path === paperPath);
     if (page === "paper" && !pb) page = "home";
-    const html = pb ? window.Paper.pageHtml(pb) : page === "add" ? addPageHtml() : page === "journey" ? journeyHtml() : homePageHtml();
+    const html = pb ? window.Paper.pageHtml(pb) : page === "add" ? addPageHtml() : page === "journey" ? journeyHtml() : page === "how" ? howHtml() : homePageHtml();
     // The library comes twice (the saved copy, then the server's) and again when the app comes back to the
     // front: drawing the same covers anew made them flicker, so an unchanged screen is left alone.
     if (html === homeHtml) return;
@@ -325,7 +325,8 @@
       <p class="r-start-p">Читайте книжки разом з нашим <span class="r-nowrap">AI-помічником</span>. Він пояснює складні або застарілі слова, дає зручний переклад та пояснення в контексті.</p>
       <button class="r-pill r-start-add" data-act="add"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V5M7 10l5-5 5 5M5 20h14"/></svg>Додати книжку</button>
       <p class="r-start-f">Формати EPUB, PDF, MOBI</p>
-      <button class="r-pill-line r-start-paper" data-act="cover-photo"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>Додати паперову книжку</button></section>
+      <button class="r-pill-line r-start-paper" data-act="cover-photo"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>Додати паперову книжку</button>
+      <button class="r-link r-start-how" data-page="how">Як це працює</button></section>
       ${picks.length ? `<section class="r-start-free">${head("Або почніть з класики", "", false)}
         <div class="r-grid r-start-grid">${picks.map((b) => card(b, "", false)).join("")}</div>
         <button class="r-link r-start-all" data-act="free-shelf">Уся вільна полиця →</button></section>` : ""}`;
@@ -388,6 +389,26 @@
   }
   const MONTHS = ["Січень", "Лютий", "Березень", "Квітень", "Травень", "Червень", "Липень", "Серпень", "Вересень", "Жовтень", "Листопад", "Грудень"];
   const num = (n) => Number(n || 0).toLocaleString("uk-UA");
+  // «Як це працює» (Max 2026-11-19, variant C of the canvas): paper books in the reader weren't obvious, so one screen
+  // shows how: a page photographed and circled, the answer, and what else works. Opened from the empty shelf.
+  function howHtml() {
+    const row = (icon, b, rest) => `<li><span class="r-how-i"><svg viewBox="0 0 24 24" aria-hidden="true">${icon}</svg></span><span><b>${b}</b> ${rest}</span></li>`;
+    return `<section class="r-how">
+      <h1 class="r-jh">Як це працює</h1>
+      <h2 class="r-how-t">Читаєте на папері?</h2>
+      <p class="r-start-p">Сфотографуйте сторінку й обведіть, що незрозуміло. Помічник пояснить.</p>
+      <img class="r-how-img" src="how-paper.jpg" width="780" height="258" alt="Фото сторінки, абзац обведено червоним" />
+      <div class="r-how-ans"><span>Пояснення</span>Це повінь після підриву Каховської ГЕС у червні 2023-го. Рятувальники поїхали, коли вода спала, а місцеві ще тижнями розбирали завали.</div>
+      <ul class="r-how-list">
+        ${row('<path d="M6 3h9l4 4v14H6z"/><path d="M10 13h5M10 17h3"/>', "Сторінку", "бачимо з фото, тож без спойлерів.")}
+        ${row('<path d="M7 7h4v4c0 3-2 5-4 6M15 7h4v4c0 3-2 5-4 6"/>', "Цитату", "з фото збережемо в нотатки.")}
+        ${row('<circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.6M12 17h.01"/>', "Питайте", "про книжку текстом чи голосом.")}
+        ${row('<path d="M6 4h12v16l-6-4-6 4z"/>', "Усе лишається", "при книжці у вашому акаунті.")}
+      </ul>
+      <button class="r-pill r-how-add" data-act="cover-photo"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>Додати паперову книжку</button>
+    </section>`;
+  }
+
   function journeyHtml() {
     if (!journey || journey === "…") return `<section class="r-jour">${journey === "…" ? `<p class="r-empty"><span class="spinner"></span>Збираємо…</p>` : `<p class="r-empty">Без мережі статистики не показати.</p>`}</section>`;
     const j = journey;
@@ -601,7 +622,7 @@
     const tab = f || t;
     for (const b of tab.parentElement.children) b.classList.toggle("on", b === tab);
     tab.closest("section").querySelector(".r-filtered").dataset.show = f ? homeFilter : freeTab;
-    homeHtml = page === "add" ? addPageHtml() : page === "journey" ? journeyHtml() : homePageHtml();
+    homeHtml = page === "add" ? addPageHtml() : page === "journey" ? journeyHtml() : page === "how" ? howHtml() : homePageHtml();
     drawn.html = homeHtml;
   });
 

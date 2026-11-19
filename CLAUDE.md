@@ -693,7 +693,8 @@ A flag only when Max asks for one, or when the change could break what readers u
   `overscroll-behavior: none` on the page and the book's scroller. An App.js change reaches iPhones over the air and Android by a new APK.
 - Reader's purpose (Max 2026-11-18): «Level up your reading», reading books that feel too hard. Not in the reader's UI
   any more: minutes («Цей тиждень»: «хвилини не про це»), printing a book, «Дати почитати» links, OPDS in settings
-  (the server keeps `/api/opds` and `/api/shares` for links already made). An empty shelf shows `startHtml()` (home.js).
+  (the server keeps `/api/opds` and `/api/shares` for links already made). An empty shelf shows `startHtml()` (home.js); its «Як це працює» opens
+  page `how` (`howHtml`, one phone screen about paper books, photo `src/renderer/how-paper.jpg`).
   The old hidden screens (Пошук, Клуб, Бібліотека with folders and filters, all notes, «Хочу прочитати», the tab bar, the
   API key field) were taken out of the page on 2026-11-18; library-view.js keeps only the list, adding books
   (`Library.add`) and «Назва, автор, обкладинка». Their server routes (`/api/wish`, `/api/club`, `/api/notes/all`) stay.
