@@ -28,12 +28,14 @@ window.Gloss = (() => {
   const visible = (k, known) => (!levels || levels[k] !== 2 || settings.gloss === "more") && !known.has(wordOf(k));
 
   // Called when a book opens; marks the chapters already on screen once the list is in.
+  let seen = false;
   async function load(name, contentsList) {
     forms = null;
     levels = null;
     words = null;
     names = null;
     book = name;
+    seen = false;
     contentsOf = contentsList || (() => []);
     hide();
     sentAt = null;
@@ -57,6 +59,8 @@ window.Gloss = (() => {
     } catch {
       return;
     }
+    // A book opened with a list on (/admin/reader «Функції»: readers who had underlined words vs those who tapped one).
+    if (!seen && enabled() && Object.keys(forms).length) seen = true, window.ReadingTime?.count("gloss-book");
     for (const c of contentsOf() || []) mark(c);
   }
 

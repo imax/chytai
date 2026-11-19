@@ -678,6 +678,17 @@ function recordUi(who, ui) {
   }
 }
 let uiPruned = "";
+// Max's own taps, apart (Max 2026-11-19: with a few readers he checks a feature is counted by using it himself).
+function recordUiMax(ui) {
+  if (!ui || typeof ui !== "object" || Array.isArray(ui)) return;
+  const d = ((state.stats ??= { since: statsDay(), days: {} }).days[statsDay()] ??= { explains: 0, users: {}, guests: 0, models: {} });
+  const n = (d.uiMax ??= {});
+  for (const [k, v] of Object.entries(ui).slice(0, 40)) {
+    if (!/^[a-z0-9-]{1,40}$/.test(k) || !(Number(v) > 0)) continue;
+    if (!(k in n) && Object.keys(n).length >= 300) continue;
+    n[k] = (n[k] || 0) + Math.min(200, Math.round(Number(v)));
+  }
+}
 // One selected word (Max 2026-11-17, hit rate on /admin/reader): every card and the ones from the book's list, by day,
 // Max's own counted too (`ui` leaves the owner out) and also apart. `word-ahead`: 17.11 only (words ahead, gone).
 const WORD_KEYS = ["word", "word-list", "word-ahead"];
@@ -705,17 +716,27 @@ function wordStats(days, dayKeys, monthAgo) {
   });
 }
 // The last 30 days of them for /admin/reader: per control, taps and the readers (guests apart) who pressed it.
+// Also the last 7 days apart, the accounts themselves (`who`, `who7`: the site's «Функції» joins several names into
+// one feature, so it needs the sets) and Max's own taps (`max`, from `uiMax`).
 function uiStats(days, dayKeys, monthAgo) {
   const rows = new Map();
+  const weekAgo = statsDay(Date.now() - 6 * 86400000);
+  const row = (k) => rows.get(k) || rows.set(k, { name: k, n: 0, n7: 0, max: 0, who: new Set(), who7: new Set() }).get(k);
   for (const day of dayKeys.filter((k) => k >= monthAgo)) {
     const d = days[day];
+    const week = day >= weekAgo;
     for (const [k, n] of Object.entries(d.ui || {})) {
-      const r = rows.get(k) || rows.set(k, { name: k, n: 0, who: new Set() }).get(k);
+      const r = row(k);
       r.n += n;
-      for (const a of d.uiWho?.[k] || []) r.who.add(a);
+      if (week) r.n7 += n;
+      for (const a of d.uiWho?.[k] || []) r.who.add(a), week && r.who7.add(a);
     }
+    for (const [k, n] of Object.entries(d.uiMax || {})) row(k).max += n;
   }
-  return [...rows.values()].map((r) => ({ name: r.name, n: r.n, readers: [...r.who].filter((a) => a !== "guest").length, guests: r.who.has("guest") })).sort((a, b) => b.readers - a.readers || b.n - a.n);
+  const accts = (set) => [...set].filter((a) => a !== "guest");
+  return [...rows.values()]
+    .map((r) => ({ name: r.name, n: r.n, n7: r.n7, max: r.max, readers: accts(r.who).length, guests: r.who.has("guest"), guests7: r.who7.has("guest"), who: accts(r.who), who7: accts(r.who7) }))
+    .sort((a, b) => b.readers - a.readers || b.n - a.n || b.max - a.max);
 }
 // Where readers leave books (Max 2026-11-16): every book an account opened in the last 90 days, by how far it got
 // (u.progress pct): finished (95%+), still being read (opened in 14 days), or left at <3%, <10%, <50%, <95%.
@@ -1887,7 +1908,7 @@ api.post("/reading", express.text({ limit: "16kb" }), (req, res) => {
   if (typeof body === "string") try { body = JSON.parse(body); } catch { body = null; }
   const books = body?.books;
   if (!books || typeof books !== "object" || Array.isArray(books)) return res.status(400).json({ error: "bad request" });
-  if (body.ui && !req.owner) recordUi(req.guest ? "guest" : req.acct, body.ui);
+  if (body.ui) req.owner ? recordUiMax(body.ui) : recordUi(req.guest ? "guest" : req.acct, body.ui);
   if (body.ui && !req.guest) recordWords(!!req.owner, body.ui), recordLooks(req.acct, body.ui);
   if (req.guest) return (body.ui && saveState(), res.json({ ok: true }));
   const clean = {};

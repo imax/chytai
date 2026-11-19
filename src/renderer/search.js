@@ -2,7 +2,7 @@
 // ⌘F: full-text search across the open book (EPUB, reflowed PDF or original PDF).
 (function () {
   const MAX_RESULTS = 500;
-  const state = { query: "", results: [], index: -1, token: 0, highlighted: null, groups: [] };
+  const state = { query: "", results: [], index: -1, token: 0, highlighted: null, groups: [], counted: "" };
   // Phone (turn 9): the search covers the screen, results grouped by chapter, three per group until «Ще N →».
   const phone = () => PHONE.matches;
   const plural = (n, one, few, many) => (n % 10 === 1 && n % 100 !== 11 ? one : n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20) ? few : many);
@@ -17,6 +17,7 @@
   function open() {
     if (!book && !pdfView) return;
     box.classList.remove("hidden");
+    state.counted = ""; // /admin/reader «Функції»: one search and one jump to a match counted each time it opens
     window.PhoneRead?.findClosed();
     window.DeskRead?.searchShown(true);
     input.focus();
@@ -179,6 +180,7 @@
       }
     }
     if (!cancelled()) {
+      if (!state.counted) state.counted = "run", window.ReadingTime?.count("search-run");
       renderCount(true);
       markAll();
     }
@@ -187,6 +189,7 @@
   async function go(i) {
     if (!state.results.length) return;
     state.index = (i + state.results.length) % state.results.length;
+    if (state.counted !== "go") state.counted = "go", window.ReadingTime?.count("search-go");
     const r = state.results[state.index];
     list.querySelectorAll("li.active").forEach((li) => li.classList.remove("active"));
     const li = r.li;

@@ -303,7 +303,7 @@
         }
       </div>`;
     const box = lookBox();
-    for (const b of box.querySelectorAll("[data-size]")) b.onclick = async () => (await setFont(Number(b.dataset.size)), renderLook());
+    for (const b of box.querySelectorAll("[data-size]")) b.onclick = async () => (window.ReadingTime?.count("look-size"), await setFont(Number(b.dataset.size)), renderLook());
     for (const b of box.querySelectorAll(".m-themes button")) b.onclick = () => applyLook({ theme: b.dataset.theme });
     for (const b of box.querySelectorAll(".m-seg[data-key] button")) {
       b.onclick = () => {
@@ -313,6 +313,8 @@
     }
   }
   async function applyLook(patch) {
+    // «Аа» on /admin/reader «Функції»: which setting, and for «Словничок» which level (look-gloss-off…).
+    for (const [k, v] of Object.entries(patch)) window.ReadingTime?.count(k === "gloss" ? `look-gloss-${v}` : `look-${k}`);
     const fontChanged = patch.font && patch.font !== settings.font;
     const marginsChanged = patch.margins && patch.margins !== (settings.margins || "normal");
     const columnChanged = patch.column && patch.column !== (settings.column || "normal");

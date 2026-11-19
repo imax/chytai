@@ -80,6 +80,12 @@ curl -s https://app.chytai.org.ua/agent/sql -H "$H" -H 'content-type: applicatio
   `ui` (30 days), `stops` (books opened in 90 days by `u.progress` pct: finished, reading, left and where) and
   `firstDays` (accounts of 60 days: opened a book, 10 min in week one, two days). /admin/reader «Перші дні», «Де
   кидають книжки», «Що натискають»; a new control gets a Ukrainian name in `UI_NAMES` (web/admin.js).
+  «Функції» (Max 2026-11-19: «що у нас і як користуються»): every reader feature as one row (`FEATURES` in
+  web/admin.js: tap names for `use`, and `seen` where the reader is shown it first), readers 7 / 30 days, taps,
+  Max's own apart (`uiMax`, kept out of `ui`). Hand counts beside the taps: `intro-shown` / `intro-read` /
+  `intro-gone`, `gloss-book` (a book opened with underlines on), `toc-go`, `search-run` / `search-go` (once an
+  opening), `psearch` / `psearch-pick` (the panel), `look-<setting>` and `look-gloss-<level>`. A new feature gets a
+  row in `FEATURES`, and a hand count when no tap shows it.
 - /admin «Performance» (`healthBlock` in web/admin.js): one bullet per check, red with a link when it needs a look. Keep
   it so (Max, 2026-11-12, after it was folded into one sentence: «мені не подобається»); trim a row, don't merge rows.
 - Pages the phone unloaded (iOS kills the WebView's page for memory, mostly in the background): the page keeps a note

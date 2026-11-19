@@ -1857,7 +1857,57 @@ function readerTiles(s) {
 // /admin/reader «Читалка»: the reader's own numbers (app.chytai.org.ua, server/index.js collectStats), fetched by
 // the site with the owner's reader key (Max, 2026-11-02: the reader's old /admin moved here).
 // The reader's controls by their id or data-action (reading-time.js count), for «Що натискають» on /admin/reader.
-const UI_NAMES = { "btn-library": "Мої книжки", "m-back": "Мої книжки (телефон)", "btn-toc": "Зміст", "btn-notes": "Нотатки", "btn-settings": "Налаштування", mlook: "Аа (вигляд)", "btn-font-down": "Менший шрифт", "btn-font-up": "Більший шрифт", "btn-panel": "Панель пояснень", "btn-search": "Пошук у книжці", "m-search": "Пошук у книжці (телефон)", "btn-print": "Друкувати", "btn-back": "Назад після посилання", "sel-explain": "Пояснити / Запитати", "sel-translate": "Перекласти", "sel-note": "Зберегти", "sel-mark-note": "Позначити", "sel-mic": "Голосом", "sel-open": "Відкрити пояснення", "ask-open": "Пояснення під абзацом: розгорнути", "ask-close": "Пояснення під абзацом: згорнути", gloss: "Словничок: слово", "gloss-ahead": "Підкреслене слово, підготовлене наперед", "act-gloss-know": "Словничок: «Знаю це слово»", word: "Одне слово: значення одразу", "word-ahead": "Одне слово: було підготовлене наперед", "word-list": "Одне слово: зі словничка книжки", "word-name": "Одне слово: ім'я чи місце зі списку книжки", "open-book": "Відкрити книжку", "act-add": "Додати файл", "act-cover-photo": "Сфотографувати обкладинку", "act-free-all": "Вільна полиця: усі", "act-yakaboo": "Як додати з Yakaboo", "act-bookua": "Як додати з Book.ua", "bm-finished": "Меню книжки: прочитано", "bm-about": "Меню книжки: про книжку", "act-title-about": "У книжці: назва → про книжку", "act-intro-open": "Перед главою: відкрити", "act-intro-hide": "Перед главою: сховати", "bm-keep": "Меню книжки: на пристрій", "bm-share": "Меню книжки: поділитися", "bm-edit": "Меню книжки: назва, обкладинка", "bm-epub": "Меню книжки: EPUB", "bm-delete": "Меню книжки: видалити", "note-add": "Нова нотатка", "btn-logout": "Вийти", "r-pnav-journey": "Панель: статистика" };
+const UI_NAMES = { "btn-library": "Мої книжки", "m-back": "Мої книжки (телефон)", "btn-toc": "Зміст", "btn-notes": "Нотатки", "btn-settings": "Налаштування", mlook: "Аа (вигляд)", "btn-font-down": "Менший шрифт", "btn-font-up": "Більший шрифт", "btn-panel": "Панель пояснень", "btn-search": "Пошук у книжці", "m-search": "Пошук у книжці (телефон)", "btn-print": "Друкувати", "btn-back": "Назад після посилання", "sel-explain": "Пояснити / Запитати", "sel-translate": "Перекласти", "sel-note": "Зберегти", "sel-mark-note": "Позначити", "sel-mic": "Голосом", "sel-open": "Відкрити пояснення", "ask-open": "Пояснення під абзацом: розгорнути", "ask-close": "Пояснення під абзацом: згорнути", gloss: "Словничок: слово", "gloss-ahead": "Підкреслене слово, підготовлене наперед", "act-gloss-know": "Словничок: «Знаю це слово»", word: "Одне слово: значення одразу", "word-ahead": "Одне слово: було підготовлене наперед", "word-list": "Одне слово: зі словничка книжки", "word-name": "Одне слово: ім'я чи місце зі списку книжки", "open-book": "Відкрити книжку", "act-add": "Додати файл", "act-cover-photo": "Сфотографувати обкладинку", "act-free-all": "Вільна полиця: усі", "act-yakaboo": "Як додати з Yakaboo", "act-bookua": "Як додати з Book.ua", "bm-finished": "Меню книжки: прочитано", "bm-about": "Меню книжки: про книжку", "act-title-about": "У книжці: назва → про книжку", "act-intro-open": "Перед главою: відкрити", "act-intro-hide": "Перед главою: сховати", "bm-keep": "Меню книжки: на пристрій", "bm-share": "Меню книжки: поділитися", "bm-edit": "Меню книжки: назва, обкладинка", "bm-epub": "Меню книжки: EPUB", "bm-delete": "Меню книжки: видалити", "note-add": "Нова нотатка", "btn-logout": "Вийти", "r-pnav-journey": "Панель: статистика", "intro-shown": "Перед главою: картка з'явилась", "intro-read": "Перед главою: розгорнули", "intro-gone": "Перед главою: зникла сама після 3 сторінок", "toc-go": "Зміст: перейшли до глави", "search-run": "Пошук у книжці: шукали", "search-go": "Пошук у книжці: перейшли до знайденого", psearch: "Пошук на панелі: шукали", "psearch-pick": "Пошук на панелі: відкрили знайдене", "gloss-book": "Словничок: відкрили книжку з ним", "act-gloss-start": "Підготувати словничок", "page-home": "Панель: мої книжки", "page-add": "Панель: додати книжку", "look-size": "Аа: розмір шрифту", "look-theme": "Аа: тема", "look-font": "Аа: шрифт", "look-margins": "Аа: поля", "look-spacing": "Аа: інтервал", "look-column": "Аа: ширина колонки", "look-pagetaps": "Аа: сторінки / прокрутка", "look-deskscroll": "Аа: сторінки / прокрутка (комп'ютер)", "look-gloss-on": "Аа: словничок «Менше»", "look-gloss-more": "Аа: словничок «Більше»", "look-gloss-off": "Аа: словничок вимкнули", "act-free-shelf": "Вільна полиця" };
+// Every feature of the reader in one table (Max 2026-11-19: «що у нас і як користуються або не користуються»): the
+// tap names that mean it was used (`use`) and, where the reader is shown it first, those that mean they saw it
+// (`seen`). A name ending in «*» takes every name that starts so. A new feature gets a row here.
+const FEATURES = [
+  ["Відкрили книжку", { use: ["open-book"] }],
+  ["Пояснити / Запитати", { use: ["sel-explain", "sel-mic"] }],
+  ["Пояснення під абзацом: розгорнули", { use: ["ask-open"] }],
+  ["Перекласти", { use: ["sel-translate"] }],
+  ["Словничок: підкреслене слово", { seen: ["gloss-book"], use: ["gloss"] }],
+  ["Словничок: «Більше не показувати»", { use: ["act-gloss-know"] }],
+  ["Словничок: «Менше / Більше / Ні»", { use: ["look-gloss-*"] }],
+  ["Підготувати словничок", { use: ["act-gloss-start"] }],
+  ["Одне слово (виділили)", { use: ["word"] }],
+  ["Ім'я чи місце (виділили)", { use: ["word-name"] }],
+  ["Перед главою: розгорнули", { seen: ["intro-shown"], use: ["intro-read"] }],
+  ["Перед главою: сховали", { seen: ["intro-shown"], use: ["act-intro-hide"] }],
+  ["Перед главою: зникла сама", { seen: ["intro-shown"], use: ["intro-gone"] }],
+  ["Про книжку", { use: ["bm-about", "act-title-about"] }],
+  ["Зміст: перейшли до глави", { use: ["toc-go"] }],
+  ["Пошук у книжці", { use: ["search-run"] }],
+  ["Пошук у книжці: перейшли до знайденого", { use: ["search-go"] }],
+  ["Пошук на панелі", { use: ["psearch"] }],
+  ["Пошук на панелі: відкрили знайдене", { use: ["psearch-pick"] }],
+  ["Нотатки: зберегли", { use: ["sel-note", "sel-mark-note", "note-add"] }],
+  ["Нотатки: відкрили список", { use: ["btn-notes", "tab-notes"] }],
+  ["Аа: вигляд", { use: ["look-size", "look-theme", "look-font", "look-margins", "look-spacing", "look-column", "look-pagetaps", "look-deskscroll", "btn-font-down", "btn-font-up"] }],
+  ["Статистика", { use: ["r-pnav-journey"] }],
+  ["Додати книжку", { use: ["act-add", "page-add"] }],
+  ["Вільна полиця", { use: ["act-free-shelf", "act-free-all"] }],
+  ["Позначити прочитаною", { use: ["bm-finished"] }],
+  ["На пристрій (без мережі)", { use: ["bm-keep"] }],
+];
+// One row of «Функції» from uiStats rows (server/index.js): readers who used it in 7 and 30 days (several names
+// joined), taps in 30 days, Max's own, and readers who saw it where that is counted.
+function featureRow(ui, [label, def]) {
+  const pick = (names) => ui.filter((r) => names.some((x) => (x.endsWith("*") ? r.name.startsWith(x.slice(0, -1)) : r.name === x)));
+  const sum = (rows) => {
+    const who = new Set(), who7 = new Set();
+    let n = 0, max = 0, guests = false;
+    for (const r of rows) {
+      for (const a of r.who || []) who.add(a);
+      for (const a of r.who7 || []) who7.add(a);
+      n += r.n || 0;
+      max += r.max || 0;
+      guests ||= !!r.guests;
+    }
+    return { readers: who.size, readers7: who7.size, n, max, guests };
+  };
+  return { label, use: sum(pick(def.use)), seen: def.seen ? sum(pick(def.seen)) : null };
+}
 function readerAppPage({ user, s, error = "", book = () => null, wordCost = null, layout }) {
   const usd = (v) => (v == null ? "—" : v > 0 && v < 0.01 ? "<$0,01" : `$${v.toFixed(2).replace(".", ",")}`);
   const mins = (m) => (m < 120 ? `${fmtN(m)} хв` : `${fmtN(Math.round(m / 60))} год`);
@@ -1953,6 +2003,13 @@ ${older.length ? `<details><summary class="muted">Ще ${fmtN(older.length)}, д
   // What readers press in the reader (Max 2026-11-16), where they leave books, and new readers' first days.
   const uiRows = (s.ui || []).slice(0, 40);
   const readMonth = s.users.filter((u) => u.read30 > 0).length;
+  const feats = s.ui?.length && s.ui[0].who ? FEATURES.map((f) => featureRow(s.ui, f)) : [];
+  const readWeek = s.users.filter((u) => u.activeWeek).length;
+  const g = (x) => (x.guests ? ` <span class="muted">+ гості</span>` : "");
+  const featTbl = feats.length ? `<div class="tbl"><table>
+<thead><tr><th>Функція</th><th>Бачили, 30 дн.</th><th>Скористались, 7 дн.</th><th>30 дн.</th><th>Разів, 30 дн.</th><th>Ви, 30 дн.</th></tr></thead>
+<tbody>${feats.map((f) => `<tr${f.use.readers || f.use.max || f.seen?.readers ? "" : ' class="muted"'}><th>${esc(f.label)}</th><td>${f.seen ? `${fmtN(f.seen.readers)}${g(f.seen)}` : ""}</td><td>${fmtN(f.use.readers7)}</td><td>${fmtN(f.use.readers)}${g(f.use)}</td><td>${fmtN(f.use.n)}</td><td>${f.use.max ? fmtN(f.use.max) : ""}</td></tr>`).join("")}</tbody></table></div>
+<p class="muted small">Читачі без вас; гості окремо. Читали за 7 днів ${fmtN(readWeek)}, за 30 днів ${fmtN(readMonth)}. «Бачили» є там, де Читалка спершу показує функцію сама. Натискання рахуємо з 16 листопада, «Бачили», пошук, зміст, «Аа» і ваші власні з 19 листопада.</p>` : "";
   const uiTbl = uiRows.length ? `<div class="tbl"><table>
 <thead><tr><th>Що</th><th>Читачів</th><th>Натискань</th></tr></thead>
 <tbody>${uiRows.map((r) => `<tr><th>${esc(UI_NAMES[r.name] || r.name)}${UI_NAMES[r.name] ? ` <span class="muted small">${esc(r.name)}</span>` : ""}</th><td>${n(r.readers)}${r.guests ? ` <span class="muted">+ гості</span>` : ""}</td><td>${n(r.n)}</td></tr>`).join("")}</tbody></table></div>
@@ -1994,6 +2051,7 @@ ${readers}
 ${booksTbl}
 ${firstTbl ? `<h2 id="first">Перші дні</h2>\n${firstTbl}` : ""}
 ${stopsTbl ? `<h2 id="stops">Де кидають книжки</h2>\n${stopsTbl}` : ""}
+${featTbl ? `<h2 id="features">Функції</h2>\n${featTbl}` : ""}
 ${wordLine ? `<h2 id="word">Одне слово</h2>\n${wordLine}` : ""}
 <h2 id="ui">Що натискають</h2>
 ${uiTbl}

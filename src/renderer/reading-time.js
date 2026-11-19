@@ -114,10 +114,11 @@
   };
   document.addEventListener("click", (e) => {
     if (!e.isTrusted) return; // a button that presses another (m-back → btn-library) is one tap
-    const el = e.target.closest?.("[data-action], [data-act], [data-tab], [data-open], button[id], a[id], summary[id], label[id]");
+    const el = e.target.closest?.("[data-action], [data-act], [data-tab], [data-open], [data-hit], [data-page], button[id], a[id], summary[id], label[id]");
     if (!el) return;
     const d = el.dataset;
-    count(d.action ? `sel-${d.action}` : d.act ? `act-${d.act}` : d.tab ? `tab-${d.tab}` : d.open != null ? "open-book" : el.id);
+    if (el.closest("#r-pfound")) return count("psearch-pick"); // a book or a note found by the panel's search
+    count(d.action ? `sel-${d.action}` : d.act ? `act-${d.act}` : d.tab ? `tab-${d.tab}` : d.open != null ? "open-book" : el.id || (d.page ? `page-${d.page}` : ""));
   }, true);
   async function sendUi(keepalive) {
     if (!Object.keys(ui).length || navigator.onLine === false) return;

@@ -675,7 +675,7 @@ function hideIntro() {
 function introCheck(location) {
   const box = $("#intro");
   const here = location?.start?.cfi || "";
-  if (here !== introPlace && !box.classList.contains("hidden") && !box.classList.contains("open") && ++introTurns > 3) hideIntro();
+  if (here !== introPlace && !box.classList.contains("hidden") && !box.classList.contains("open") && ++introTurns > 3) hideIntro(), window.ReadingTime?.count("intro-gone");
   introPlace = here;
   const opening = introOpening;
   introOpening = false;
@@ -720,9 +720,10 @@ function showIntro(intro) {
   introTurns = 0;
   introPlace = rendition?.currentLocation?.()?.start?.cfi || "";
   introMark(intro.key);
+  window.ReadingTime?.count("intro-shown"); // seen vs opened on /admin/reader «Функції»
 }
 $("#intro-open").addEventListener("click", () => {
-  $("#intro").classList.toggle("open");
+  if ($("#intro").classList.toggle("open")) window.ReadingTime?.count("intro-read");
   $("#intro-notes").scrollTop = 0;
 });
 $("#intro-x").addEventListener("click", hideIntro);
@@ -852,6 +853,7 @@ function renderToc(items) {
       a.dataset.href = item.href;
       a.style.paddingLeft = `${12 + depth * 14}px`;
       a.onclick = () => {
+        window.ReadingTime?.count("toc-go"); // the phone's sheet presses this link too
         if (pdfView) pdfView.goTo(item.href);
         else rendition.display(item.href);
         $("#toc").classList.add("hidden");

@@ -215,11 +215,13 @@
   // with Claude (GET /api/search, server/search.js). A hit shows its book, a piece of text and opens at its place.
   let deep = { q: "", hits: [], offline: false };
   let deepTimer = 0;
+  let pqCounted = false;
   function askDeep() {
     clearTimeout(deepTimer);
     const q = norm($("#r-pq").value);
     if (!q || q.length < 2 || !window.reader.searchMine) return;
     deepTimer = setTimeout(async () => {
+      if (!pqCounted) pqCounted = true, window.ReadingTime?.count("psearch"); // once a time the field is used
       try {
         const hits = await window.reader.searchMine($("#r-pq").value.trim());
         if (norm($("#r-pq").value) !== q) return;
@@ -552,6 +554,7 @@
     else backHome();
   });
   $("#r-pq").addEventListener("input", () => (renderPanel(), askDeep()));
+  $("#r-pq").addEventListener("focus", () => (pqCounted = false));
   $("#r-pq-clear").onclick = () => (($("#r-pq").value = ""), renderPanel(), askDeep(), $("#r-pq").focus());
   $("#r-pq").addEventListener("keydown", (e) => {
     if (e.key === "Escape") e.preventDefault(), ($("#r-pq").value = ""), renderPanel(), $("#r-pq").blur(), panel(false);
@@ -880,7 +883,7 @@
     }
     if (menuBook !== b || !p || (p.none && !p.possible)) return;
     if (p.none || (p.error && !p.words && !p.building)) {
-      el.innerHTML = `<button type="button" class="bm-gloss-go">Підготувати словничок<small>Пояснимо складні слова, терміни й алюзії, поки читаєте</small></button>`;
+      el.innerHTML = `<button type="button" class="bm-gloss-go" data-act="gloss-start">Підготувати словничок<small>Пояснимо складні слова, терміни й алюзії, поки читаєте</small></button>`;
       el.classList.add("go");
       el.hidden = false;
       el.firstChild.onclick = async () => {
