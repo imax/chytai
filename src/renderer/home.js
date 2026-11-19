@@ -407,7 +407,7 @@
       html += `<section class="r-jmonths">${head("По місяцях", "", false)}${months.map((m) => {
         const [y, mm] = m.month.split("-").map(Number);
         const fin = m.finished.map((p) => byPath.get(p)).filter(Boolean);
-        const bits = [fin.length ? `${fin.length} прочитано` : "", m.explains ? `${num(m.explains)} ${plural(m.explains, "пояснення", "пояснення", "пояснень")}` : "", m.notes ? `${num(m.notes)} ${plural(m.notes, "нотатка", "нотатки", "нотаток")}` : "", m.words ? `${num(m.words)} ${plural(m.words, "слово", "слова", "слів")}` : ""].filter(Boolean);
+        const bits = [fin.length ? `${fin.length} ${plural(fin.length, "книга", "книги", "книг")}` : "", m.explains ? `${num(m.explains)} ${plural(m.explains, "пояснення", "пояснення", "пояснень")}` : "", m.notes ? `${num(m.notes)} ${plural(m.notes, "нотатка", "нотатки", "нотаток")}` : ""].filter(Boolean);
         return `<div class="r-jm"><h3>${MONTHS[mm - 1]}${y !== new Date().getFullYear() ? ` ${y}` : ""}</h3><p>${bits.join(" · ")}</p>
           ${fin.length ? `<div class="r-jm-covers">${fin.map((b) => `<button class="r-jm-c" data-open="${esc(b.path)}" title="${esc(b.title)}">${rcover(b)}</button>`).join("")}</div>` : ""}</div>`;
       }).join("")}</section>`;
