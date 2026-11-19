@@ -1050,8 +1050,10 @@ a.r-frow:hover .r-frow-go.plain { color: var(--r-ochre); }
 .r-jm + .r-jm { margin-top: 22px; }
 .r-jm h3 { margin: 0; font: 500 19px/1.2 var(--r-serif); }
 .r-jm p { margin: 4px 0 0; font-size: 14px; color: var(--r-ink2); }
-.r-jm-covers { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
-.r-jm-c { width: 44px; padding: 0; border: none; background: none; cursor: pointer; }
+/* One row a month that scrolls sideways (Max 2026-11-19: 25 books a month took half the screen). */
+.r-jm-covers { display: flex; gap: 8px; margin-top: 10px; overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: none; padding-bottom: 6px; }
+.r-jm-covers::-webkit-scrollbar { display: none; }
+.r-jm-c { flex: none; width: 44px; padding: 0; border: none; background: none; cursor: pointer; }
 .r-jm-c .r-cover { width: 44px; }
 .r-jm-c .r-cover-t, .r-jm-c .r-cover-a, .r-jb .r-cover-a { display: none; }
 .r-jb { display: grid; grid-template-columns: 40px 1fr; gap: 14px; align-items: start; width: 100%; padding: 10px 0; border: none; border-bottom: 1px solid var(--r-rule); background: none; color: var(--r-ink); text-align: left; cursor: pointer; font: inherit; }
@@ -1070,6 +1072,7 @@ a.r-frow:hover .r-frow-go.plain { color: var(--r-ochre); }
   .r-jh { display: block; }
 }
 @media (max-width: 760px) {
+  .r-jm-covers { margin-left: -20px; margin-right: -20px; padding-left: 20px; padding-right: 20px; scroll-padding-left: 20px; }
   .r-jtiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .r-jt:last-child:nth-child(odd) { grid-column: 1 / -1; }
   .r-jt b { font-size: 30px; }
