@@ -694,5 +694,7 @@ A flag only when Max asks for one, or when the change could break what readers u
 - Reader «Статистика» (Max 2026-11-19; not «Мій шлях», «пафосно»): panel item (`r-pnav-journey`, page `journey` in
   home.js `journeyHtml`), `GET /api/journey` (explanations from `days[d].users`, per book from `store.items.tally`,
   finished from `u.finished`, «Словничок» words from `days[d].looks[acct]` since 2026-11-19). No minutes, streaks or goals.
+  A month = every book read in it (a minute in `readBooks`, a note or explanation, finished), «N книг · M прочитано»,
+  ✓ on the finished ones (Max: «читав не означає прочитано»).
 - Reader: the app's own UI can't be selected (`body` has `user-select: none`, end of `src/renderer/style.css`). Text a
   reader may copy (a new note, answer or field) goes into the list of selectable classes there.

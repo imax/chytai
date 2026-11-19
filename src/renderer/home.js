@@ -402,14 +402,17 @@
       ${since ? `<p class="r-jsince">У Читалці з ${esc(since)}</p>` : ""}
       <div class="r-jtiles">${tile(done.length, "прочитано")}${tile(reading.length, "читаю")}${tile(j.explains, plural(j.explains, "пояснення", "пояснення", "пояснень"))}${tile(notes, plural(notes, "нотатка", "нотатки", "нотаток"))}${j.words ? tile(j.words, plural(j.words, "слово зі словничка", "слова зі словничка", "слів зі словничка")) : ""}</div></section>`;
     // By month: a line of counts and the covers of what was finished.
-    const months = j.months.filter((m) => m.explains || m.notes || m.finished.some((p) => byPath.has(p)));
+    const months = j.months.filter((m) => m.explains || m.notes || (m.read || m.finished).some((p) => byPath.has(p)));
     if (months.length) {
       html += `<section class="r-jmonths">${head("По місяцях", "", false)}${months.map((m) => {
         const [y, mm] = m.month.split("-").map(Number);
-        const fin = m.finished.map((p) => byPath.get(p)).filter(Boolean);
-        const bits = [fin.length ? `${fin.length} ${plural(fin.length, "книга", "книги", "книг")}` : "", m.explains ? `${num(m.explains)} ${plural(m.explains, "пояснення", "пояснення", "пояснень")}` : "", m.notes ? `${num(m.notes)} ${plural(m.notes, "нотатка", "нотатки", "нотаток")}` : ""].filter(Boolean);
+        // Every book read that month (finished ones first), not only those finished.
+        const done = new Set(m.finished);
+        const fin = [...new Set([...m.finished, ...(m.read || [])])].map((p) => byPath.get(p)).filter(Boolean).sort((x, y) => done.has(y.path) - done.has(x.path));
+        const finished = fin.filter((b) => done.has(b.path)).length;
+        const bits = [fin.length ? `${fin.length} ${plural(fin.length, "книга", "книги", "книг")}` : "", finished ? `${finished} прочитано` : "", m.explains ? `${num(m.explains)} ${plural(m.explains, "пояснення", "пояснення", "пояснень")}` : "", m.notes ? `${num(m.notes)} ${plural(m.notes, "нотатка", "нотатки", "нотаток")}` : ""].filter(Boolean);
         return `<div class="r-jm"><h3>${MONTHS[mm - 1]}${y !== new Date().getFullYear() ? ` ${y}` : ""}</h3><p>${bits.join(" · ")}</p>
-          ${fin.length ? `<div class="r-jm-covers">${fin.map((b) => `<button class="r-jm-c" data-open="${esc(b.path)}" title="${esc(b.title)}">${rcover(b)}</button>`).join("")}</div>` : ""}</div>`;
+          ${fin.length ? `<div class="r-jm-covers">${fin.map((b) => `<button class="r-jm-c" data-open="${esc(b.path)}" title="${esc(b.title)}">${rcover(b)}${done.has(b.path) ? `<span class="r-jm-done">✓</span>` : ""}</button>`).join("")}</div>` : ""}</div>`;
       }).join("")}</section>`;
     }
     // Every book read or asked about, the most asked first; the bar is its explanations against the most asked one.

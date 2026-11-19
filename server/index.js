@@ -1899,14 +1899,16 @@ api.post("/reading", express.text({ limit: "16kb" }), (req, res) => {
 // «Статистика» (Max 2026-11-19: «трохи візуалізувати мій journey as a reader», simple, from what we know): since when
 // the reader is here, explanations asked (the day counts from 2026-10-14: «Пояснити», «Запитати», follow-ups,
 // translations), words the «Словничок» explained (from 2026-11-19), and per book the kept explanations, translations
-// and notes, when it was finished; by month what was finished, asked and noted. Titles and covers the page has.
+// and notes, when it was finished; by month what was asked and noted, and every book read in it (Max 2026-11-19:
+// «читав 11 книг не означає прочитано»): a minute of it on a day (from 2026-11-04), a note or explanation, finished. Titles and covers the page has.
 api.get("/journey", guestsCannot("Без входу статистики немає."), (req, res) => {
   const acct = req.acct;
   const u = state.users[acct] || {};
   const months = {};
-  const month = (key) => (months[key] ??= { explains: 0, notes: 0, words: 0, finished: [] });
+  const month = (key) => (months[key] ??= { explains: 0, notes: 0, words: 0, finished: [], read: new Set() });
   let explains = 0, words = 0, first = state.accounts[acct]?.since || 0;
   for (const [day, d] of Object.entries(state.stats?.days || {})) {
+    for (const [name, sec] of Object.entries(d.readBooks?.[acct] || {})) if (sec >= 60) month(day.slice(0, 7)).read.add(name);
     const n = d.users?.[acct] || 0;
     const w = d.looks?.[acct] || 0;
     if (!n && !w) continue;
@@ -1920,6 +1922,7 @@ api.get("/journey", guestsCannot("Без входу статистики нем�
   const books = {};
   const book = (name) => (books[name] ??= { explains: 0, translations: 0, notes: 0, finishedAt: 0 });
   for (const r of store.items.tally(acct)) {
+    if (r.at > 0) month(statsDay(r.at).slice(0, 7)).read.add(r.book);
     if (r.kind === "notes") {
       book(r.book).notes++;
       if (r.at > 0) month(statsDay(r.at).slice(0, 7)).notes++;
@@ -1930,8 +1933,9 @@ api.get("/journey", guestsCannot("Без входу статистики нем�
     if (!(at > 0)) continue;
     book(name).finishedAt = at;
     month(statsDay(at).slice(0, 7)).finished.push(name);
+    month(statsDay(at).slice(0, 7)).read.add(name);
   }
-  res.json({ since: first, explains, words, books, months: Object.keys(months).sort().reverse().map((m) => ({ month: m, ...months[m] })) });
+  res.json({ since: first, explains, words, books, months: Object.keys(months).sort().reverse().map((m) => ({ month: m, ...months[m], read: [...months[m].read] })) });
 });
 
 // The phone unloaded the reader's page (web-bridge.js life; Max, 2026-11-11: «сторінку вивантажено (пам'ять)»).
