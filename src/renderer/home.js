@@ -394,13 +394,14 @@
     const stat = (name) => j.books[name] || { explains: 0, translations: 0, notes: 0, finishedAt: 0 };
     const asked = (s) => s.explains + s.translations;
     const done = lib.books.filter((b) => b.finished);
-    const reading = myBooks().filter((b) => !b.aside && isReading(b));
     const notes = Object.values(j.books).reduce((n, s) => n + s.notes, 0);
+    // Every book read since the start: the months' books that are still in the library (Max 2026-11-19: «25 книг з 14 жовтня»).
+    const read = new Set(j.months.flatMap((m) => [...m.finished, ...(m.read || [])]).filter((p) => byPath.has(p)));
     const tile = (n, label) => `<div class="r-jt"><b>${num(n)}</b><span>${label}</span></div>`;
     const since = j.since ? new Date(j.since).toLocaleDateString("uk-UA", { day: "numeric", month: "long", year: new Date(j.since).getFullYear() === new Date().getFullYear() ? undefined : "numeric" }) : "";
     let html = `<section class="r-jour"><h1 class="r-jh">Статистика</h1>
-      ${since ? `<p class="r-jsince">У Читалці з ${esc(since)}</p>` : ""}
-      <div class="r-jtiles">${tile(done.length, "прочитано")}${tile(reading.length, "читаю")}${tile(j.explains, plural(j.explains, "пояснення", "пояснення", "пояснень"))}${tile(notes, plural(notes, "нотатка", "нотатки", "нотаток"))}${j.words ? tile(j.words, plural(j.words, "слово зі словничка", "слова зі словничка", "слів зі словничка")) : ""}</div></section>`;
+      ${since ? `<p class="r-jsince">${read.size ? `${num(read.size)} ${plural(read.size, "книга", "книги", "книг")}` : "У Читалці"} з ${esc(since)}</p>` : ""}
+      <div class="r-jtiles">${tile(done.length, "прочитано")}${tile(j.explains, plural(j.explains, "пояснення", "пояснення", "пояснень"))}${tile(notes, plural(notes, "нотатка", "нотатки", "нотаток"))}${j.words ? tile(j.words, plural(j.words, "слово зі словничка", "слова зі словничка", "слів зі словничка")) : ""}</div></section>`;
     // By month: a line of counts and the covers of what was finished.
     const months = j.months.filter((m) => m.explains || m.notes || (m.read || m.finished).some((p) => byPath.has(p)));
     if (months.length) {
@@ -412,7 +413,7 @@
         const finished = fin.filter((b) => done.has(b.path)).length;
         const bits = [fin.length ? `${fin.length} ${plural(fin.length, "книга", "книги", "книг")}` : "", finished ? `${finished} прочитано` : "", m.explains ? `${num(m.explains)} ${plural(m.explains, "пояснення", "пояснення", "пояснень")}` : "", m.notes ? `${num(m.notes)} ${plural(m.notes, "нотатка", "нотатки", "нотаток")}` : ""].filter(Boolean);
         return `<div class="r-jm"><h3>${MONTHS[mm - 1]}${y !== new Date().getFullYear() ? ` ${y}` : ""}</h3><p>${bits.join(" · ")}</p>
-          ${fin.length ? `<div class="r-jm-covers">${fin.map((b) => `<button class="r-jm-c" data-open="${esc(b.path)}" title="${esc(b.title)}">${rcover(b)}${done.has(b.path) ? `<span class="r-jm-done">✓</span>` : ""}</button>`).join("")}</div>` : ""}</div>`;
+          ${fin.length ? `<div class="r-jm-covers">${fin.map((b) => `<button class="r-jm-c" data-open="${esc(b.path)}" title="${esc(b.title)}">${rcover(b)}</button>`).join("")}</div>` : ""}</div>`;
       }).join("")}</section>`;
     }
     // Every book read or asked about, the most asked first; the bar is its explanations against the most asked one.
