@@ -104,6 +104,14 @@ curl -s https://app.chytai.org.ua/agent/sql -H "$H" -H 'content-type: applicatio
   when the day passes $25 (Max) or a feature costs >2× its 7-day median and >$3; «AI за добу» in the technical report.
   A new feature file gets a Ukrainian name in `LABELS`; new models go into `PRICES`. The Console
   (platform.claude.com/cost, no admin key here) also sees what our code doesn't call.
+- Prompt caching (Max 2026-11-19: watch it ourselves, not wait for Anthropic's mail). Every call puts its fixed text
+  first (system prompt, then whatever repeats across calls) and `cache_control` after it; dates, a reader's data,
+  book text and pictures go after the breakpoint. Below 512 tokens (all our 5.x models) nothing caches, marker or
+  not. Check a new call on `ai_usage.cache_read`. The tech report's «Кеш промптів» line (`aiusage.cacheLine`) gives
+  the day's share read from the cache, the week against the week before, and who sends most uncached; a feature
+  that usually reads ≥30% from the cache and today under half of that sends one Telegram line (`cacheBroken`). The
+  total alone moves with the mix: on 2026-11-19 Anthropic's «−31%» was the overview loop gone (cached) and new
+  features sending book text and pictures (never cached), no prompt broke.
 - A job registered with `{ run: true }` (`bg.register`) starts a fresh web process after every run (log «main: the jobs
   changed X; the site reloads», ~10 s of CPU). Data a page reads itself on a timer (`linkFor`'s 10-minute map: sluhay,
   bookflow) takes `run: false`; on 2026-11-18 those two reloaded the site 2–3 times an hour for nothing.

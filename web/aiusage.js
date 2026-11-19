@@ -9,6 +9,12 @@
 //   twice its median of the 7 days before and more than FEATURE_MIN (that one would have caught the overview loop
 //   of 2026-11, ~$15 a day). Each at most once a day.
 // - line(): «AI за добу» in the technical report (dailyreport.js).
+// - Prompt caching (Max, 2026-11-19, after Anthropic's mail «cache hit rate dropped 31%»: «давай самі це моніторити»):
+//   cacheLine() in the same report (the share of input read from the cache, the week against the week before, who
+//   sends most uncached), and cacheAlarms(): a feature that usually reads a good part of its input from the cache and
+//   today reads less than half of that = its prompt's start changed (a date, a reader's data, a model switch before the
+//   breakpoint), one Telegram line a day. A drop of the total alone is no alarm: it moves with the mix of features
+//   (book text and pictures are new every call and never cache).
 // The Anthropic console stays the truth: it also sees calls this code does not make. Rows kept KEEP_DAYS.
 const aimeter = require("../server/aimeter");
 const telegram = require("./telegram");
@@ -16,6 +22,8 @@ const telegram = require("./telegram");
 const DAY_ALERT = 25; // dollars a day, both apps (Max, 2026-11-15)
 const FEATURE_MIN = 3; // a feature's day must cost more than this to be «twice its norm»
 const KEEP_DAYS = 400;
+const CACHE_MIN = 100000; // input tokens a day before a feature's cache share is judged
+const CACHE_NORM = 0.3; // a feature «usually caches» when its median share of the 7 days before is at least this
 const DAY = 86400000;
 
 const LABELS = {
@@ -117,6 +125,58 @@ function line(day) {
   return `AI за добу: ${money(total)}${total >= DAY_ALERT ? ", понад норму" : ""}${parts.length ? ` (${parts.join(", ")})` : ""}.`;
 }
 
+// Input tokens by label for the days [from, to]: { label: { unc, read, write, calls } }.
+function cacheRows(from, to = from) {
+  if (!db) return {};
+  const out = {};
+  const rows = db
+    .prepare("SELECT app, feature, SUM(calls) calls, SUM(input) unc, SUM(cache_read) read, SUM(cache_write) write FROM ai_usage WHERE day >= ? AND day <= ? GROUP BY app, feature")
+    .all(from, to);
+  for (const r of rows) {
+    const o = (out[label(r.app, r.feature)] ??= { unc: 0, read: 0, write: 0, calls: 0 });
+    for (const k of ["unc", "read", "write", "calls"]) o[k] += r[k] || 0;
+  }
+  return out;
+}
+const inputOf = (r) => r.unc + r.read + r.write;
+const shareOf = (r) => (inputOf(r) ? r.read / inputOf(r) : 0);
+const sum = (rows) => Object.values(rows).reduce((a, r) => ({ unc: a.unc + r.unc, read: a.read + r.read, write: a.write + r.write, calls: a.calls + r.calls }), { unc: 0, read: 0, write: 0, calls: 0 });
+const pct = (x) => `${Math.round(x * 100)}%`;
+const tokens = (n) => (n >= 1e6 ? `${(n / 1e6).toFixed(1).replace(".", ",")} млн` : `${Math.round(n / 1000)} тис.`);
+
+// Features whose cache broke on `day`: [{ label, share, norm, input }].
+function cacheBroken(day) {
+  const today = cacheRows(day);
+  const before = Array.from({ length: 7 }, (_, i) => cacheRows(addDays(day, i - 7)));
+  const out = [];
+  for (const [l, r] of Object.entries(today)) {
+    if (inputOf(r) < CACHE_MIN || r.calls < 10) continue;
+    const shares = before.map((d) => d[l]).filter((x) => x && inputOf(x) >= CACHE_MIN / 5).map(shareOf);
+    if (shares.length < 3) continue;
+    const norm = median(shares);
+    if (norm >= CACHE_NORM && shareOf(r) < norm / 2) out.push({ label: l, share: shareOf(r), norm, input: inputOf(r) });
+  }
+  return out;
+}
+
+// «Кеш промптів: з кешу 40% входу (7 днів 45%, 7 днів до того 80%); без кешу найбільше: … 1,0 млн, … 0,5 млн.»
+function cacheLine(day) {
+  const rows = cacheRows(day);
+  const all = sum(rows);
+  if (!inputOf(all)) return "";
+  const week = sum(cacheRows(addDays(day, -6), day));
+  const prev = sum(cacheRows(addDays(day, -13), addDays(day, -7)));
+  const top = Object.entries(rows)
+    .filter(([, r]) => r.unc >= 50000)
+    .sort((a, b) => b[1].unc - a[1].unc)
+    .slice(0, 2)
+    .map(([l, r]) => `${l} ${tokens(r.unc)}`);
+  const broken = cacheBroken(day).map((b) => `«${b.label}» ${pct(b.share)}, звично ${pct(b.norm)}`);
+  const weeks = inputOf(prev) ? ` (7 днів ${pct(shareOf(week))}, 7 днів до того ${pct(shareOf(prev))})` : "";
+  const head = `Кеш промптів: з кешу ${pct(shareOf(all))} входу${weeks}${top.length ? `; без кешу найбільше: ${top.join(", ")}` : ""}`;
+  return `${head.replace(/\.$/, "")}.${broken.length ? ` Перестав кешуватися: ${broken.join("; ")}.` : ""}`;
+}
+
 const median = (xs) => {
   const s = [...xs].sort((a, b) => a - b);
   return s.length % 2 ? s[(s.length - 1) / 2] : (s[s.length / 2 - 1] + s[s.length / 2]) / 2;
@@ -137,6 +197,8 @@ function alarms(day) {
     const norm = median(before.map((m) => m.get(r.label) || 0));
     if (r.cost > 2 * norm) out.push({ key: `ai:feature:${day}:${r.label}`, text: `AI: «${r.label}» сьогодні ${money(r.cost)} (${r.calls} викликів), звично ${money(norm)} на день.` });
   }
+  for (const b of cacheBroken(day))
+    out.push({ key: `ai:cache:${day}:${b.label}`, text: `AI: «${b.label}» сьогодні бере з кешу промптів ${pct(b.share)} входу, звично ${pct(b.norm)} (${tokens(b.input)} токенів). Мабуть, змінився початок промпту.` });
   return out;
 }
 
@@ -160,4 +222,4 @@ function schedule(reader) {
   setTimeout(tick, 5 * 60000).unref();
 }
 
-module.exports = { init, record, syncReader, byFeature, byLabel, line, alarms, check, schedule, label, DAY_ALERT };
+module.exports = { init, record, syncReader, byFeature, byLabel, line, cacheLine, cacheBroken, alarms, check, schedule, label, DAY_ALERT };

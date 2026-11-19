@@ -304,7 +304,7 @@ async function buildTech({ db, day, ownerId, site, reader, dataDir }) {
   try {
     siteSt = { ...storageLib.now(dataDir, ["chytai.db"]), rss: os.totalmem() - os.freemem() }; // the machine, both processes
   } catch {}
-  return techText(day, techDay(db, day), rd, site, backups.line(db), triageToday(db), storageLine(siteSt, rd?.storage), searchLine(searchDay(db, day)), aiusage.line(day), tgLine(db, day), deploys.line(day));
+  return techText(day, techDay(db, day), rd, site, backups.line(db), triageToday(db), storageLine(siteSt, rd?.storage), searchLine(searchDay(db, day)), [aiusage.line(day), aiusage.cacheLine(day)].filter(Boolean).join("\n"), tgLine(db, day), deploys.line(day));
 }
 
 // In the jobs process: a look every 10 minutes; each report goes once a day (meta `dailyreport:lastRun`,
