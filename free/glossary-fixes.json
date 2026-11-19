@@ -1,0 +1,15 @@
+{
+  "_": "Max's corrections to a free-shelf book's «Словничок 2», applied when /api/glossary serves it (the kept list stays as made). drop: dictionary words (every form) or forms that need no meaning; set: form → [meaning, level, word], a new form too.",
+  "kulish-chorna-rada.epub": {
+    "drop": ["мир", "сіяє", "сіяла"],
+    "set": {
+      "салогуби": ["ремісники, що топили сало на лій і свічки", 1, "салогуб"],
+      "ґевал": ["здоровило, неотеса", 1, "ґевал"],
+      "ґевала": ["здоровило, неотеса", 1, "ґевал"],
+      "ґевали": ["здоровила, неотеси", 1, "ґевал"],
+      "ґевалам": ["здоровилам, неотесам", 1, "ґевал"],
+      "ґевалів": ["здоровил, неотес", 1, "ґевал"],
+      "ґевалами": ["здоровилами, неотесами", 1, "ґевал"]
+    }
+  }
+}

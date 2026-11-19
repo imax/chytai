@@ -1751,7 +1751,7 @@ function listCards() {
   more.classList.toggle("hidden", !hidden);
   $("#panel-empty").classList.toggle("hidden", cards.length > 0);
   for (const conv of conversations.values()) syncConvActs(conv);
-  $("#q-head").innerHTML = `Запитання${cards.length ? ` · ${cards.length}` : ""}`;
+  $("#q-head").innerHTML = `Пояснення${cards.length ? ` · ${cards.length}` : ""}`;
   window.PhoneRead?.notesCount();
   window.PhoneRead?.syncPanelHead?.();
 }

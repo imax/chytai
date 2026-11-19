@@ -158,6 +158,8 @@ technical report (below), so post it only after your fixes are pushed:
    -H "$H"` (text, voice transcripts, forwards; screenshots at each part's `file`, fetch them with the same header and
    look; a screen recording: `ffmpeg -i v.mp4 -vf fps=2 f%02d.jpg`, then look at the frames). Fix each like an error; then `POST /agent/bugs/<id> {"status":"done","note":"…"}` (`skip` = not a bug, `later`
    = left for Max); done / skip answer Max in Telegram under his message, so the note is one plain Ukrainian clause.
+   A reader bug on Android that a desktop Chromium won't show: measure without forcing styles (a `getComputedStyle`
+   each frame hides a transition bug); count `transitionrun` events instead.
 2. Each kind: noise (an extension, a network drop, a bot) → widen the filter (`CLIENT_NOISE` in server/index.js) only
    if it repeats; real → reproduce on the test DB / a local reader, fix, prove, push to main like any small fix (not
    during the Friday digest). Big, risky or a product question → leave it for Max, one plain line why.
@@ -557,6 +559,10 @@ A flag only when Max asks for one, or when the change could break what readers u
   ≤60 words; a recap of an older prompt (`RECAP_V`) is made again. Made ahead: the page sends `auto=1` 5 s after a
   book opens and when the reader leaves it (renderer.js `guideAhead`: another book, home, the app hidden); the server
   makes the recap for the saved place 3 s later, signed-in readers only, once in 10 min a book (`GUIDE_AUTO_MIN`).
+- A wrong or needless meaning Max reports in a free-shelf book (bug reports): `free/glossary-fixes.json`, per book
+  `drop` (a dictionary word with all its forms, or one form) and `set` (form → [meaning, level, word]; give every
+  form of the word the same meaning), laid over the kept list by `/api/glossary` (`glossFixed`); the file on the
+  volume stays as made. Forms of one word often carry different wordings (334 of 364 in «Чорна рада»).
 - Names (Max 2026-11-17: the card made up who «Васюта» was): `buildNames` (glossary.js, `NAMES`) has Opus read a
   free-shelf book whole once (Чорна рада $0.93, 2.5 min) and describe its people and places, kept in
   `DATA_DIR/glossary-names/<book>.json` (`names: {form: [about, full name]}`), sent by `/api/glossary` as `names`.

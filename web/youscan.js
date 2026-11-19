@@ -23,7 +23,7 @@ const SCHEMA = `CREATE TABLE IF NOT EXISTS ys_mentions (
 );
 CREATE INDEX IF NOT EXISTS ys_mentions_got ON ys_mentions (got);`;
 // ev: '' not looked at, 'skip' no event words or date / not Ukrainian, 'tg' a channel the Telegram collector reads,
-// 'none' Haiku found no event, else the event ids, comma-separated.
+// 'none' Haiku found no event, 'fail' the API refused the request (not asked again), else the event ids, comma-separated.
 
 const str = (v, n) => String(v ?? "").slice(0, n);
 // YouScan marks the words its query matched with <b>…</b> in title and text: plain text for us.
@@ -124,6 +124,9 @@ function create(db, { calendar, extract = null, log = console.log } = {}) {
         found = await extract(`${head ? `${head}\n\n` : ""}${m.text}`, m.url || "https://youscan.io", { at: m.at, img: m.img, links: linksIn(m.text) });
       } catch (e) {
         out.errors.push(`${m.id}: ${e.message}`);
+        // The API refused this very request (400): asking again every 15 min only spends the day's calls (2026-11-18:
+        // two posts took ~190 of 300). A network fault, 429 or 5xx is tried again on the next run.
+        if (e.status >= 400 && e.status < 500 && e.status !== 429) mark(m.id, "fail");
         continue;
       }
       const ids = [];
@@ -155,7 +158,7 @@ function create(db, { calendar, extract = null, log = console.log } = {}) {
         return null;
       }
     };
-    const by = db.prepare("SELECT CASE WHEN ev IN ('', 'skip', 'tg', 'none') THEN ev ELSE 'event' END AS ev, count(*) AS n FROM ys_mentions GROUP BY 1").all();
+    const by = db.prepare("SELECT CASE WHEN ev IN ('', 'skip', 'tg', 'none', 'fail') THEN ev ELSE 'event' END AS ev, count(*) AS n FROM ys_mentions GROUP BY 1").all();
     const topics = db.prepare("SELECT topic, source, count(*) AS n FROM ys_mentions GROUP BY 1, 2 ORDER BY n DESC LIMIT 20").all();
     const recent = db.prepare("SELECT id, topic, source, url, author, substr(text, 1, 200) AS text, at, ev FROM ys_mentions ORDER BY got DESC LIMIT 10").all();
     return { lastIn: j("youscan:last-in"), last: j("youscan:last"), today: { in: +meta(`youscan:in:${kyivDay()}`) || 0, ai: +meta(`youscan:ai:${kyivDay()}`) || 0 }, by, topics, recent };

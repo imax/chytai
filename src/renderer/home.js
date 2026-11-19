@@ -605,6 +605,9 @@
       for (const el of [main, under]) el.style.transition = "";
       main.style.transform = "";
       under.remove();
+      // The page takes its place now, while page-drag still holds the transition off: else the style flush that comes
+      // with the class's removal animates it from beside the screen back in (Max 2026-11-18, Android: «стрибає»).
+      void main.offsetWidth;
       requestAnimationFrame(() => $("#shell").classList.remove("page-drag"));
     };
     main.addEventListener("transitionend", (e) => e.target === main && finish(), { once: false });

@@ -2396,6 +2396,25 @@ api.get("/glossary/status", (req, res) => {
 });
 
 // A free-shelf classic's «Словничок»: { form: meaning } (server/glossary.js); guests read these books too.
+// Max's corrections to a free-shelf book's list (free/glossary-fixes.json, from his bug reports): words that need no
+// meaning go, a wrong meaning is set, one meaning for every form of a word (2026-11-19: «ґевалам», «ґевала», «ґевали»
+// had three).
+let glossFixes;
+function glossFixed(shelf, forms) {
+  glossFixes ??= (() => {
+    try {
+      return JSON.parse(fs.readFileSync(path.join(FREE_DIR, "glossary-fixes.json"), "utf8"));
+    } catch {
+      return {};
+    }
+  })();
+  const fix = shelf && glossFixes[shelf];
+  if (!fix) return forms;
+  const drop = new Set(fix.drop || []);
+  const out = {};
+  for (const [k, x] of Object.entries(forms)) if (!drop.has(k) && !drop.has(x[2])) out[k] = x;
+  return { ...out, ...fix.set };
+}
 api.get("/glossary", (req, res) => {
   const name = safeBookName(req.query.book);
   const own = name && !isFree(name) && req.lib && glossOf(req.lib).get(name);
@@ -2405,7 +2424,7 @@ api.get("/glossary", (req, res) => {
   const names = (shelf ? glossaryNames.get(shelf)?.names : name && !isFree(name) && req.lib && namesOf(req.lib).get(name)?.names) || undefined;
   if (v2) {
     // { form: [meaning, level, word] } → the first list's shape plus the levels and the words (for «Знаю»).
-    const e = Object.entries(v2.forms);
+    const e = Object.entries(glossFixed(shelf, v2.forms));
     return res.set("Cache-Control", "private, no-cache").json({ v: 2, forms: Object.fromEntries(e.map(([k, x]) => [k, x[0]])), levels: Object.fromEntries(e.map(([k, x]) => [k, x[1]])), words: Object.fromEntries(e.map(([k, x]) => [k, x[2]])), names });
   }
   const g = name && (isFree(name) ? glossary.get(name) : own?.same ? glossary.get(own.same) : own);

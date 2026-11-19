@@ -554,6 +554,14 @@ function create(db, { calendar, apiKey = process.env.ANTHROPIC_API_KEY || "", cl
   // A post's pictures (at most 2) as image blocks for Haiku, from its public embed page (both ways of reading see it;
   // a closed channel has none). Read only for a post Haiku is asked about; nothing is kept. Any failure: no pictures.
   // A page from elsewhere may bring its picture's address (`img`: YouScan's imageUrl, an Instagram poster).
+  function imageType(b) {
+    if (b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff) return "image/jpeg";
+    if (b.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) return "image/png";
+    if (b.subarray(0, 4).toString("latin1") === "GIF8") return "image/gif";
+    if (b.subarray(0, 4).toString("latin1") === "RIFF" && b.subarray(8, 12).toString("latin1") === "WEBP") return "image/webp";
+    return "";
+  }
+
   async function pictures(p) {
     if (p.page ? !p.img : !p.photo) return [];
     try {
@@ -567,10 +575,12 @@ function create(db, { calendar, apiKey = process.env.ANTHROPIC_API_KEY || "", cl
       const out = [];
       for (const u of [...new Set(urls)].slice(0, 2)) {
         const img = await fetch(u, { signal: AbortSignal.timeout(8000) });
-        const type = (img.headers.get("content-type") || "").split(";")[0];
-        if (!img.ok || !/^image\/(jpeg|png|webp|gif)$/.test(type)) continue;
+        if (!img.ok) continue;
         const buf = Buffer.from(await img.arrayBuffer());
-        if (buf.length > 4e6) continue;
+        // The bytes say what the picture is: a site's header may lie (rubryka.com's .png are JPEGs, and the API
+        // refused the post on every run, 2026-11-18).
+        const type = imageType(buf);
+        if (!type || buf.length > 4e6) continue;
         out.push({ type: "image", source: { type: "base64", media_type: type, data: buf.toString("base64") } });
       }
       return out;
