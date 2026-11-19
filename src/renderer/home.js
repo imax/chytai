@@ -320,7 +320,9 @@
       <h1 class="r-start-t">Level-up your reading</h1>
       <p class="r-start-p">Допоможемо читати книги, які здаються занадто складними.</p>
       <button class="r-pill r-start-add" data-act="add"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V5M7 10l5-5 5 5M5 20h14"/></svg>Додати книжку</button>
-      <p class="r-start-f">EPUB, PDF, MOBI</p></section>
+      <p class="r-start-f">EPUB, PDF, MOBI</p>
+      <button class="r-pill-line r-start-paper" data-act="cover-photo"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>Додати паперову книжку</button>
+      <p class="r-start-f">За фото обкладинки. Пояснення працюватимуть і для неї.</p></section>
       ${picks.length ? `<section class="r-start-free">${head("Або почніть з класики", "", false)}
         <div class="r-grid r-start-grid">${picks.map((b) => card(b, "", false)).join("")}</div>
         <button class="r-link r-start-all" data-act="free-shelf">Уся вільна полиця →</button></section>` : ""}`;
