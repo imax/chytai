@@ -145,6 +145,8 @@
       ideasKey = "";
       aboutOpen = false;
       load(b);
+      // «Про книжку» is made when a book opens (Max 2026-11-20), so it is there when asked.
+      window.reader.bookGuide?.(b);
     }
     book = b;
   }

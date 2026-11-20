@@ -993,7 +993,8 @@
     if (fresh && d.open) fill(fresh);
     else if (!fresh && d.open && body.textContent === "Завантажую…") body.innerHTML = `<p class="muted">Не вдалося завантажити опис.</p>`;
   }
-  const guided = (b) => !!window.reader.bookGuide && /\.epub$/i.test(b.path || "");
+  // EPUBs from their text, paper books from their title and author (Max 2026-11-20).
+  const guided = (b) => !!window.reader.bookGuide && (b.paper || /\.epub$/i.test(b.path || ""));
   // The guide (Max 2026-11-18, server/bookguide.js): what the book is and why it is worth reading, in place of the
   // site's description. Made the first time someone asks (a few seconds), then kept for every reader
   // of the same file. The recap of a started book («де ви зупинилися, що було досі, хто тут хто») went on 2026-11-19 (Max: it only
@@ -1020,44 +1021,57 @@
   const abWait = (text) => `<p class="ab-wait">${text}</p>`;
   // Max 2026-11-20: «Про книжку» and «Чому варто читати»; no «Як читати» (condescending), no level or pages. A guide made before
   // (`why`, `how`) shows its `why` until the new one comes.
-  function beforeHtml(g) {
+  // `inline`: under the panel's own «Про книжку» row, so the first part goes without its heading.
+  function beforeHtml(g, inline = false) {
     const f = g.before;
     let html = "";
     const about = f?.about || f?.why;
     if (about) {
-      html += abSec("Про книжку", `<p>${esc(about)}</p>`);
+      html += inline ? `<p>${esc(about)}</p>` : abSec("Про книжку", `<p>${esc(about)}</p>`);
       if (f.worth) html += abSec("Чому варто читати", `<p>${esc(f.worth)}</p>`);
-    } else if (g.building?.what === "before") html += abSec("Про книжку", abWait("Готуємо кілька слів про книжку…"));
+    } else if (g.building?.what === "before") html += inline ? abWait("Готуємо кілька слів про книжку…") : abSec("Про книжку", abWait("Готуємо кілька слів про книжку…"));
     return html;
   }
   // «Про книжку» as a block at the end of a book's panel that unfolds in place, like the questions and
   // notes above it (Max 2026-11-05: no separate dialog). Same block for paper and e-books.
   const aboutKept = new Map(); // path → the summary, once loaded
+  const guideKept = new Map(); // path → the guide (paper books), once loaded
   function aboutBlock(b, open) {
     const a = b && aboutKept.get(b.path);
+    const g = b && guideKept.get(b.path);
     let body = "";
     if (open) {
-      if (a?.failed) body = `<p class="muted">Не вдалося завантажити опис.</p>`;
+      // A paper book's guide, like an EPUB's dialog (Max 2026-11-20); the site's description when there is none.
+      if (g?.before?.about || g?.before?.why || g?.building) body = beforeHtml(g, true);
+      else if (a?.failed) body = `<p class="muted">Не вдалося завантажити опис.</p>`;
       else if (!a) body = `<p class="muted">${navigator.onLine ? "Завантажую…" : "Немає з'єднання, а опис цієї книжки ще не збережено."}</p>`;
-      else {
-        const meta = [author(b), a.year].filter(Boolean).join(" · ");
-        body = `${meta ? `<p class="ab-meta">${esc(meta)}</p>` : ""}${a.found
-          ? a.blurb ? a.blurb.split(/\n\n+/).map((p) => `<p>${esc(p)}</p>`).join("") : `<p class="muted">Опису поки немає.</p>`
-          : `<p class="muted">Цієї книжки ще немає в каталозі Chytai.</p>`}
-          <a class="ab-site" href="${esc(a.found ? a.href : a.add)}" target="_blank" rel="noopener">${a.found ? "Сторінка книжки на Chytai ↗" : "Додати на Chytai ↗"}</a>`;
-      }
+      else body = (([author(b), a.year].filter(Boolean).join(" · ")) ? `<p class="ab-meta">${esc([author(b), a.year].filter(Boolean).join(" · "))}</p>` : "") + (a.found
+        ? a.blurb ? a.blurb.split(/\n\n+/).map((p) => `<p>${esc(p)}</p>`).join("") : `<p class="muted">Опису поки немає.</p>`
+        : `<p class="muted">Цієї книжки ще немає в каталозі Chytai.</p>`);
     }
     return `<section class="ab-block${open ? " open" : ""}"><button type="button" class="pp-row" data-about-toggle><span>Про книжку</span><span class="ab-chev">›</span></button>${open ? `<div class="ab-inline">${body}</div>` : ""}</section>`;
   }
-  // Loads the summary (the kept copy first, then a fresh one) and calls done after each that arrives.
+  // Loads the summary (the kept copy first, then a fresh one) and calls done after each that arrives; a paper book's
+  // guide too, asked again while it is being made.
   async function loadAbout(b, done) {
     if (!b || !window.reader.bookAbout) return;
+    if (b.paper && guided(b)) loadGuide(b, done);
     const kept = aboutKept.get(b.path) || (await window.reader.bookAbout(b, true));
     if (kept) aboutKept.set(b.path, kept), done();
     const fresh = await window.reader.bookAbout(b);
     if (fresh) aboutKept.set(b.path, fresh);
     else if (!kept) aboutKept.set(b.path, { found: false, failed: true });
     done();
+  }
+  async function loadGuide(b, done) {
+    const kept = guideKept.get(b.path) || (await window.reader.bookGuide(b, true));
+    if (kept) guideKept.set(b.path, kept), done();
+    for (let i = 0; i < 60; i++) {
+      const g = await window.reader.bookGuide(b);
+      if (g) guideKept.set(b.path, g.before || g.building ? g : kept || g), done();
+      if (!g?.building) return;
+      await new Promise((r) => setTimeout(r, 3000));
+    }
   }
   // The books being read get their summaries ahead, so «Про книжку» works offline for them.
   let aboutAhead = false;

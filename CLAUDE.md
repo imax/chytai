@@ -570,7 +570,10 @@ A flag only when Max asks for one, or when the change could break what readers u
 - «Про книжку» that helps to read (Max 2026-11-18, `server/bookguide.js`, `GET /api/guide?book&title&author`, home.js
   `showGuide`): «Про книжку» and «Чому варто читати» (`BEFORE`, `BEFORE_V`, Opus once a book, for any EPUB; made when
   the book opens, renderer.js after `bookOpened`, or «Про книжку» does; a v1 answer is made again then). No site
-  description, no link to the site's page, no «Як читати» (Max 2026-11-20: condescending), no level or pages; the description shows only for a PDF or when the guide can't be made. Kept by the text's hash (`DATA_DIR/guide/<key>.json`, same file = one guide for all), unused
+  description, no link to the site's page, no «Як читати» (Max 2026-11-20: condescending), no level or pages. A paper
+  book gets the same from its title, author and the site's description (`guide.paper`, kept by title + author as
+  `p<hash>`, made when its panel opens; a book the model doesn't know is kept as `none`), in the dialog and in the
+  panel's inline «Про книжку» (home.js `aboutBlock` / `loadGuide`); the description shows only for a PDF or when the guide can't be made. Kept by the text's hash (`DATA_DIR/guide/<key>.json`, same file = one guide for all), unused
   180 days → gone. EPUBs only, no publishers' books. Caps $5 a day for all (`GUIDE_DAY_USD`, Telegram once), $1 a reader
   (guests together), Max none; stats day `guide`. Opens from the home book menu, the title in the book's top bar
   (`act-title-about`) and the panel's «Про книжку». No «Перевірте себе», no change to «Зміст» (Max).

@@ -30,6 +30,7 @@ const BEFORE = `A reader is about to start a book that may feel hard. Below are 
 Answer in Ukrainian whatever the book's language, in plain everyday words, as a friend who knows books would. No spoilers: nothing past the first chapter.
 If you know this book, use what you know about it; if you don't, judge only from the opening and never invent facts about the author, the year or the book.
 Speak about the book, never about the reader: no «ви», no advice how to read it, no «не бійтеся», no «зверніть увагу». Plain statements.
+A paper book comes without its opening: then answer from what you know and the description; if you know neither the book nor have a description, answer {"about": ""}.
 Answer with JSON only:
 {"about": "2–3 short sentences: what kind of book it is, who wrote it and when if you know, when and where it takes place", "worth": "1–2 short sentences: what is interesting in it and makes it worth reading (its people, language, idea, its place in literature, why it still matters); nothing the first part already says"}`;
 // v2 (Max 2026-11-20): «Про книжку» + «Чому варто читати»; «Як читати», the level and pages went (condescending). A v1 answer
@@ -172,6 +173,23 @@ class Guide {
     return { ...out, building: { what: "before", done: 0, of: 1 } };
   }
 
+  // A paper book (Max 2026-11-20): no text, so the same answer from its title, author and the site's description,
+  // kept by title + author (one for every reader of that book).
+  async paper({ title, authors, blurb, allow = () => true, spend = () => {} }) {
+    const norm = (s) => String(s || "").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+    if (!norm(title)) return { none: true };
+    const key = `p${crypto.createHash("sha1").update(`${norm(title)}\n${norm((authors || []).join(" "))}`).digest("hex").slice(0, 23)}`;
+    const g = this.read(key) || { key };
+    const out = { before: g.before || null };
+    if (g.before?.v === BEFORE_V || g.before?.none || !this.apiKey) return out.before?.none ? { none: true } : out;
+    const run = this.busy(key, "before");
+    if (run) return { ...out, building: run };
+    if (!this.may(key, "before")) return { ...out, error: true };
+    if (!allow()) return { ...out, capped: true };
+    this.start(key, "before", 1, () => this.makeBefore({ key, paper: true }, { title, authors, blurb, spend }));
+    return { ...out, building: { what: "before", done: 0, of: 1 } };
+  }
+
   // «Перед главою» for the reader's place: { intro: {key, notes} } when made (notes may be [] = nothing worth a note),
   // { building }, { none } (a short chapter, no text), { capped }, { error }. `ahead`: when the place is in the last
   // third of its piece, the next piece is made too (the reader leaving the book near a chapter's end opens the next).
@@ -234,19 +252,21 @@ class Guide {
 
   async makeBefore(p, { title, authors, blurb, spend }) {
     blurb = typeof blurb === "function" ? await blurb().catch(() => "") : blurb;
-    const head = [`Назва: ${title || "?"}`, `Автор: ${(authors || []).join(", ") || "?"}`, blurb ? `Опис видавця: ${line(blurb, 1500)}` : "", `Обсяг: близько ${Math.round(p.total / PAGE)} сторінок`].filter(Boolean).join("\n");
+    const head = [`Назва: ${title || "?"}`, `Автор: ${(authors || []).join(", ") || "?"}`, blurb ? `Опис видавця: ${line(blurb, 1500)}` : "", p.paper ? "Паперова книжка, тексту немає." : `Обсяг: близько ${Math.round(p.total / PAGE)} сторінок`].filter(Boolean).join("\n");
     const m = await this.client().messages.create({
       model: BEFORE_MODEL,
       max_tokens: 2000,
       system: BEFORE,
-      messages: [{ role: "user", content: `${head}\n\nПочаток книжки:\n${p.parts[0].slice(0, 12000)}` }],
+      messages: [{ role: "user", content: p.paper ? head : `${head}\n\nПочаток книжки:\n${p.parts[0].slice(0, 12000)}` }],
       output_config: { effort: "low" },
     });
     spend(measure(m.model, m.usage).cost);
     const a = json(textOf(m));
     const before = { v: BEFORE_V, about: line(a.about, 700), worth: line(a.worth, 500), at: new Date().toISOString() };
-    if (!before.about) throw new Error("empty answer");
     const g = this.read(p.key) || { key: p.key };
+    // A paper book the model doesn't know: kept as «nothing», so it isn't asked again; the site's description shows.
+    if (!before.about && p.paper) return this.write({ ...g, before: { v: BEFORE_V, none: true, at: before.at } });
+    if (!before.about) throw new Error("empty answer");
     g.before = before;
     this.write(g);
   }

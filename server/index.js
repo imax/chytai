@@ -3002,17 +3002,27 @@ api.get("/guide/intro", async (req, res) => {
 api.get("/guide", async (req, res) => {
   const name = safeBookName(req.query.book);
   const file = guideFile(req.guest ? null : req.lib, name);
-  if (!file) return res.json({ none: true });
+  // A paper book (Max 2026-11-20): its title and author as the reader keeps them.
+  const pb = !file && !req.guest && name && paper.NAME.test(name) ? userState(req.acct).paper?.[name] : null;
+  if (!file && !pb) return res.json({ none: true });
   if (req.query.auto) return res.json({ skip: true }); // pages loaded before 2026-11-19 still ask for the recap
   const { allow, spend } = guideCaps(req);
-  const title = clean(req.query.title, 300);
-  const author = clean(req.query.author, 300);
+  const title = pb ? clean(pb.title, 300) : clean(req.query.title, 300);
+  const author = pb ? clean(pb.author, 300) : clean(req.query.author, 300);
+  const blurb = () => (title ? siteAbout(title, author).then((a) => (a?.found && a.blurb) || "") : Promise.resolve(""));
+  if (pb) {
+    try {
+      return res.json(await guide.paper({ title, authors: author ? [author] : [], blurb, allow, spend }));
+    } catch (err) {
+      return res.json({ error: err.message });
+    }
+  }
   try {
     res.json(
       await guide.get(file, {
         title,
         authors: author ? [author] : [],
-        blurb: () => (title ? siteAbout(title, author).then((a) => (a?.found && a.blurb) || "") : Promise.resolve("")),
+        blurb,
         allow,
         spend,
       }),
