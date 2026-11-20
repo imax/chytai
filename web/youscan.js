@@ -132,7 +132,7 @@ function create(db, { calendar, extract = null, log = console.log } = {}) {
       const ids = [];
       found.forEach((e, i) => {
         const ev = { source: "ys", key: `${m.id}${i ? `-${i}` : ""}`, ...e, url: e.url === "https://youscan.io" ? "" : e.url };
-        const twin = calendar.findSimilar({ starts: e.starts, city: e.city, title: e.title });
+        const twin = calendar.findSimilar({ starts: e.starts, city: e.city, title: e.title, time: e.time });
         if (twin && twin.id !== `ys:${ev.key}`) return out.dupes.push({ title: e.title, twin: twin.id });
         if (dry) return out.made.push({ title: e.title, starts: e.starts, city: e.city, url: ev.url });
         const id = calendar.upsert(ev);

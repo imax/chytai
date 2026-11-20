@@ -664,7 +664,7 @@ function create(db, { calendar, apiKey = process.env.ANTHROPIC_API_KEY || "", cl
           if (e.cancelled) return;
         }
         const ev = { source: "tg", key: `${p.channel}/${p.id}${i ? `-${i}` : ""}`, ...e, post: `https://t.me/${p.channel}/${p.id}` };
-        const twin = calendar?.findSimilar({ starts: e.starts, city: e.city, title: e.title });
+        const twin = calendar?.findSimilar({ starts: e.starts, city: e.city, title: e.title, time: e.time });
         if (twin && twin.id !== `tg:${ev.key}`) {
           if (!dry && e.kind) calendar?.setKinds?.({ [twin.id]: e.kind });
           return out.dupes.push({ ...ev, twin: twin.id });

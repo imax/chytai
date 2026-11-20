@@ -65,6 +65,13 @@ const ABROAD = /^([ґг][оа]лвей|galway|дублін|корк|лондон
 // An event about genre romance by its words: its books are not added to the catalog (see wanted()).
 const ROMANCE_EVENT = /ромком|романтас|ромфант|любовн\S* роман|dark romance|дарк[- ]?роман|(?<!\p{L})троп(и|ів)(?!\p{L})|закохуємо/iu;
 const abroad = (city) => ABROAD.test(String(city || "").trim());
+// A book's presentation (Max 2026-11-20: «спам презентацій», 80 of ~300 upcoming, mostly libraries' local books and
+// one author's 30-city tour): out of the calendar's lists, the homepage and subscriptions; still on the author's and
+// the book's pages, under «Мої автори», in a search and in their own list (/calendar?pres=1). A festival stays.
+const PRESENTATION = /презентаці|презентуєм|презентує/i;
+const presentation = (e) => e.kind !== "festival" && PRESENTATION.test(e.title || "");
+// One apostrophe (Кам'янське and Кам’янське were two cities and three rows of one event, 2026-11-20).
+const apos = (s) => String(s ?? "").replace(/['ʼ‘`´]/g, "’");
 const findCity = (text) => (ONLINE.test(text || "") ? "Онлайн" : CITIES.find(([, re]) => re.test(text || ""))?.[0] || "");
 
 // Today in Kyiv, «YYYY-MM-DD».
@@ -390,6 +397,10 @@ function create(db, store, { notify = () => {}, bookua = null, search = null, ma
     const hideRow = db.prepare("UPDATE cal_events SET hidden = 1 WHERE id = ?");
     for (const r of db.prepare("SELECT id, city FROM cal_events WHERE hidden = 0 AND city != ''").all()) if (abroad(r.city)) hideRow.run(r.id);
   } catch {}
+  // Cities written with another apostrophe before the rule: one spelling.
+  try {
+    db.prepare("UPDATE cal_events SET city = replace(replace(replace(city, '''', '’'), 'ʼ', '’'), '‘', '’') WHERE city GLOB '*[''ʼ‘]*'").run();
+  } catch {}
   const meta = (k) => db.prepare("SELECT value FROM meta WHERE key = ?").get(k)?.value || "";
   const setMeta = (k, v) => db.prepare("INSERT INTO meta (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(k, v);
   // A guest's e-mail stays out of every row; only pending() hands it on, for Max.
@@ -420,7 +431,7 @@ function create(db, store, { notify = () => {}, bookua = null, search = null, ma
     const id = ev.id || `${ev.source}:${ev.key}`;
     const title = clean(ev.title, 160);
     if (!title || !/^\d{4}-\d\d-\d\d$/.test(ev.starts || "")) return null;
-    const city = clean(ev.city, 40) || findCity(`${ev.place || ""} ${title}`);
+    const city = apos(clean(ev.city, 40) || findCity(`${ev.place || ""} ${title}`));
     if (abroad(city)) ev = { ...ev, hidden: true };
     const links = ev.books || ev.authors ? { books: ev.books || [], authors: ev.authors || [] } : linkText(store, `${title} ${ev.sub || ""}`);
     const want = wanted(ev, title, links);
@@ -648,7 +659,7 @@ function create(db, store, { notify = () => {}, bookua = null, search = null, ma
       const form = articleForm(body);
       found.forEach((e, i) => {
         const ev = { source: "chytomo", key: `${slug}${i ? `-${i}` : ""}`, ...e, ...(form ? { url: form } : {}) };
-        const twin = findSimilar({ starts: e.starts, city: e.city, title: e.title });
+        const twin = findSimilar({ starts: e.starts, city: e.city, title: e.title, time: e.time });
         if (twin && twin.id !== `chytomo:${ev.key}`) return out.dupes.push({ title: e.title, twin: twin.id });
         if (!dry) upsert(ev);
         out.made.push({ title: e.title, starts: e.starts, city: e.city, named: e.named });
@@ -726,7 +737,7 @@ function create(db, store, { notify = () => {}, bookua = null, search = null, ma
       }
       found.forEach((e, i) => {
         const ev = { source: "eventmate", key: `${slug.slice(0, 80)}${i ? `-${i}` : ""}`, ...e, url };
-        const twin = findSimilar({ starts: e.starts, city: e.city, title: e.title });
+        const twin = findSimilar({ starts: e.starts, city: e.city, title: e.title, time: e.time });
         if (twin && twin.id !== `eventmate:${ev.key}`) {
           // The same event from a Telegram post: it gets this page as its link (we never show a post).
           if (!dry && linkKind(twin.url) === "tg") relinked += db.prepare("UPDATE cal_events SET url = ? WHERE id = ?").run(url, twin.id).changes;
@@ -808,7 +819,7 @@ function create(db, store, { notify = () => {}, bookua = null, search = null, ma
       const title = clean(unent(ev.name), 160);
       const time = /T(\d\d:\d\d)/.exec(ev.startDate)?.[1] || "";
       const e = { source: "podii", key: id.slice(0, 8), url, title, city, place, starts, ends: end > starts ? end : "", time: time === "00:00" ? "" : time, kind: podiiKind(title) };
-      const twin = findSimilar({ starts, city, title });
+      const twin = findSimilar({ starts, city, title, time: e.time });
       if (twin && twin.id !== `podii:${e.key}`) {
         if (!dry && linkKind(twin.url) === "tg") relinked += db.prepare("UPDATE cal_events SET url = ? WHERE id = ?").run(url, twin.id).changes;
         out.dupes.push({ title, twin: twin.id });
@@ -910,24 +921,49 @@ function create(db, store, { notify = () => {}, bookua = null, search = null, ma
   // Words every club or meeting has don't make two events one («Читацький клуб за книгою …» on the same day,
   // podii.io 2026-11-16): only the rest are compared.
   const EVENT_WORDS = /^(клуб\p{L}*|читацьк\p{L}*|книжков\p{L}*|книги|книга|книгою|книжк\p{L}*|обговоренн\p{L}*|зустріч\p{L}*|засіданн\p{L}*|презентаці\p{L}*|роман\p{L}{0,2}|читанн\p{L}*|вечір|вечірка|творча|лекці\p{L}*|львові|києві|онлайн)$/u;
-  const wordsOf = (t) => new Set((String(t || "").toLowerCase().match(/[\p{L}\d]{4,}/gu) || []).filter((w) => !EVENT_WORDS.test(w)));
+  const wordsOf = (t) => new Set((String(t || "").toLowerCase().replace(/['’ʼ‘`]/g, "").match(/[\p{L}\d]{4,}/gu) || []).filter((w) => !EVENT_WORDS.test(w)));
   const quoted = (t) => new Set([...String(t || "").matchAll(/[«"“„]([^»"”“]+)[»"”“]/g)].flatMap((m) => [...wordsOf(m[1])].map((w) => w.slice(0, 5))));
-  function findSimilar({ starts, city = "", title = "", authors = null }) {
-    const mine = wordsOf(title);
-    const mineQ = quoted(title);
-    const slugs = authors || linkText(store, title).authors;
-    for (const r of db.prepare("SELECT * FROM cal_events WHERE starts = ?").all(starts).map(row)) {
-      if (city && r.city && r.city !== city) continue;
-      if (slugs.some((s) => r.authors.includes(s))) return r;
-      const theirs = wordsOf(r.title);
-      const common = [...mine].filter((w) => theirs.has(w)).length;
-      if (common && common >= Math.min(mine.size, theirs.size) / 2) return r;
-      // The same book in «» in another case: «Двір розколотої гармонії» and «Двором розколотої гармонії».
-      const theirsQ = quoted(r.title);
-      const commonQ = [...mineQ].filter((w) => theirsQ.has(w)).length;
-      if (commonQ >= 2 && commonQ >= Math.min(mineQ.size, theirsQ.size) / 2) return r;
-    }
+  // The same hour too (`time`): one word of the book's title in common is enough («Окупація» О. Слонєвського and
+  // «Окупація Дніпродзержинська-Кам'янського 1941–1943 рр.», Кам'янське, 14:00, 2026-11-20).
+  function sameEvent(p, r) {
+    if (p.city && r.city && apos(r.city) !== apos(p.city)) return false;
+    if (p.slugs.some((s) => r.authors.includes(s))) return true;
+    const theirs = wordsOf(r.title);
+    const common = [...p.words].filter((w) => theirs.has(w)).length;
+    if (common && common >= Math.min(p.words.size, theirs.size) / 2) return true;
+    // The same book in «» in another case: «Двір розколотої гармонії» and «Двором розколотої гармонії».
+    const theirsQ = quoted(r.title);
+    const commonQ = [...p.quoted].filter((w) => theirsQ.has(w)).length;
+    if (commonQ >= 2 && commonQ >= Math.min(p.quoted.size, theirsQ.size) / 2) return true;
+    return !!(commonQ && p.time && r.time === p.time && p.city && r.city);
+  }
+  const probe = ({ city = "", title = "", authors = null, time = "" }) => ({ city, time, words: wordsOf(title), quoted: quoted(title), slugs: authors || linkText(store, title).authors });
+  function findSimilar({ starts, city = "", title = "", authors = null, time = "" }) {
+    const p = probe({ city, title, authors, time });
+    for (const r of db.prepare("SELECT * FROM cal_events WHERE starts = ?").all(starts).map(row)) if (sameEvent(p, r)) return r;
     return null;
+  }
+  // The same event twice on the calendar (came in before findSimilar knew apostrophes and the hour, 2026-11-20): the
+  // one with a place (else the first in) stays, the rest are hidden. Once (meta `calendar:dedupe`); hidden ids in it.
+  function dedupe() {
+    const today = kyivDay();
+    const rows = db.prepare("SELECT * FROM cal_events WHERE hidden = 0 AND starts >= ? ORDER BY starts, (place = ''), added").all(today).map(row);
+    const gone = [];
+    for (let i = 0; i < rows.length; i++) {
+      const a = rows[i];
+      if (gone.includes(a.id)) continue;
+      const p = probe(a);
+      for (let j = i + 1; j < rows.length && rows[j].starts === a.starts; j++) if (!gone.includes(rows[j].id) && sameEvent(p, rows[j])) gone.push(rows[j].id);
+    }
+    const hideRow = db.prepare("UPDATE cal_events SET hidden = 1 WHERE id = ?");
+    for (const id of gone) hideRow.run(id);
+    if (gone.length) fresh();
+    return gone;
+  }
+  if (!meta("calendar:dedupe")) {
+    try {
+      setMeta("calendar:dedupe", JSON.stringify({ at: new Date().toISOString(), hidden: dedupe() }));
+    } catch {}
   }
   // A Telegram post says it is cancelled or moved (Max 2026-11-15): hidden, with why and which post said so, for
   // /admin/events. `how`: "cancelled" or "moved:<new day>".
@@ -1391,4 +1427,4 @@ function googleLink(e, page = "") {
 const SHORT_DAYS = ["нд", "пн", "вт", "ср", "чт", "пт", "сб"];
 const shortWhen = (e) => `${SHORT_DAYS[new Date(`${e.starts}T12:00:00Z`).getUTCDay()]}, ${span(e)}`;
 
-module.exports = { create, KINDS, parseIcs, icsAddress, abroad, eventKey, eventPath, linkKind, sourceUrl, googleLink, tourTitle, subKey, subParse, subName, SHORT_DAYS, tours, ics, parseWhen, linkText, readEvent, cleanTitle, findCity, kyivDay, addDays, dayName, dayAside, span, shortWhen, MONTHS };
+module.exports = { create, KINDS, parseIcs, icsAddress, abroad, presentation, eventKey, eventPath, linkKind, sourceUrl, googleLink, tourTitle, subKey, subParse, subName, SHORT_DAYS, tours, ics, parseWhen, linkText, readEvent, cleanTitle, findCity, kyivDay, addDays, dayName, dayAside, span, shortWhen, MONTHS };

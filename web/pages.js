@@ -2309,7 +2309,7 @@ function calWatch(w, { query, back, user, owner, today }) {
   const soon = w.soon.length ? `<section class="cal-sec">${label("Найближчі зустрічі з авторами", `<a href="/calendar">Усі події</a>`)}<div class="cal-lns">${w.soon.map((e) => calLine(e, { user, owner, today })).join("")}</div></section>` : "";
   return head + soon;
 }
-function calendarPage({ user, events, cities, city = "", mine = false, mineCount = 0, owner = false, query = "", feed = "", kind = "", all = false, counts = {}, total = 0, subscribed = false, watch = null }) {
+function calendarPage({ user, events, cities, city = "", mine = false, mineCount = 0, owner = false, query = "", feed = "", kind = "", all = false, counts = {}, total = 0, subscribed = false, watch = null, pres = false, presCount = 0 }) {
   const today = cal().kyivDay();
   // An address with today's choice, changed by `over` (kind, city, mine, q, all).
   const href = (over = {}) => {
@@ -2352,7 +2352,7 @@ function calendarPage({ user, events, cities, city = "", mine = false, mineCount
   const body = events.length
     ? overview
       ? `${calOverview(events, { user, owner, today, href, counts })}<p class="cal-all"><a class="text-link" href="${attr(href({ all: true }))}">Усі ${total} подій за датою</a></p>`
-      : calList(events, { user, owner, today, kind })
+      : `${pres ? `<p class="muted cal-pres-head">Презентації книжок. <a class="text-link" href="${attr(href({ all: false }))}">Усі події</a></p>` : ""}${calList(events, { user, owner, today, kind })}`
     : watch
       ? calWatch(watch, { query, back: href(), user, owner, today })
       : `<p class="muted">${query ? `Нічого не знайшли за «${esc(nest(query))}». <a class="text-link" href="/calendar">Усі події</a>` : city || mine || kind ? `Тут поки нічого. <a class="text-link" href="/calendar">Усі події</a>` : "Поки подій немає."}</p>`;
@@ -2362,11 +2362,12 @@ function calendarPage({ user, events, cities, city = "", mine = false, mineCount
     <h1>Книжкові події</h1>
     <p class="lead">Зустрічі з авторами, клуби, лекції й фестивалі.</p>
   </div>
-  <div class="cal-acts">${watch ? "" : subscribe}<a class="btn" href="/calendar/add">Додати подію</a>${watch ? "" : subLine}</div>
+  <div class="cal-acts">${watch || pres ? "" : subscribe}<a class="btn" href="/calendar/add">Додати подію</a>${watch || pres ? "" : subLine}</div>
 </section>
-${watch ? "" : kinds}
+${watch || pres ? "" : kinds}
 ${tools}
 <div data-block="calendar" class="cal-page">${body}</div>
+${presCount && !watch ? `<p class="small cal-pres"><a class="text-link" href="${attr(`/calendar?pres=1${city ? `&city=${encodeURIComponent(city)}` : ""}`)}">Презентації книжок · ${presCount}</a></p>` : ""}
 <p class="small cal-about">З афіш книгарень і фестивалів, від видавців і читачів. <a class="text-link" href="/calendar/add">Знаєте подію? Додайте</a></p>
 ${inCalendar}`;
   return layout({ title: "Книжкові події", body: page, user, path: "/calendar", canonical: "/calendar", noindex: !overview, description: "Зустрічі з авторами, книжкові клуби, лекції й фестивалі в Україні та онлайн." });

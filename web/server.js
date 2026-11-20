@@ -1776,10 +1776,11 @@ function shelfBooksFor(req, e, mineSet) {
 // then meetings with authors, festivals and lectures before book clubs (four in five events are clubs); by date.
 function homeEvents(req) {
   const C = require("./calendar");
-  const rows = C.tours(calendar.upcoming());
-  const until = C.addDays(C.kyivDay(), 14);
   const mineSet = req.user ? shelfAuthors(req.user.id) : null;
   const isMine = (e) => !!mineSet && e.authors.some((a) => mineSet.has(a));
+  // Book presentations only by the reader's own authors (Max 2026-11-20, calendar.presentation).
+  const rows = C.tours(calendar.upcoming().filter((e) => isMine(e) || !C.presentation(e)));
+  const until = C.addDays(C.kyivDay(), 14);
   const rank = (e) => (isMine(e) ? 0 : { author: 1, festival: 2, lecture: 2 }[e.kind] || 3);
   const pick = rows
     .filter((e) => e.starts <= until)
@@ -1856,7 +1857,13 @@ app.get("/calendar", (req, res) => {
   const hay = calHay;
   // ?kind= one kind of event (calendar.KINDS); no kind, no words and no «Мої автори» = the overview by kind (?all=1: the list).
   const kind = require("./calendar").KINDS.some((k) => k.key === req.query.kind) ? req.query.kind : "";
-  const picked = all.filter((e) => (!city || e.city === city) && (!mine || isMine(e)) && (!words.length || words.every((w) => hay(e).includes(w))));
+  const matched = all.filter((e) => (!city || e.city === city) && (!mine || isMine(e)) && (!words.length || words.every((w) => hay(e).includes(w))));
+  // Book presentations (Max 2026-11-20, «спам презентацій»): only in a search, under «Мої автори», by one's own
+  // authors, or in their own list (?pres=1, a line under the list).
+  const presOut = new Set(words.length || mine ? [] : matched.filter((e) => !isMine(e) && calendarLib.presentation(e)));
+  const pres = !!req.query.pres && presOut.size > 0;
+  const picked = matched.filter((e) => presOut.has(e) === pres);
+  const presCount = pres ? 0 : calendarLib.tours([...presOut]).length;
   // One city: each of a tour's stops there stays a row of its own; otherwise a tour is one row (Max 2026-11-15).
   const rows = city ? picked : require("./calendar").tours(picked);
   const counts = { all: rows.length };
@@ -1869,10 +1876,10 @@ app.get("/calendar", (req, res) => {
   let watch = null;
   if (query && !events.length) {
     const cand = watchCandidates(req, query);
-    const soon = all.filter((e) => e.kind === "author" || e.kind === "festival").sort((a, b) => (isMine(b) ? 1 : 0) - (isMine(a) ? 1 : 0)).slice(0, 4).map((e) => calCard(req, e, mineSet));
+    const soon = all.filter((e) => (e.kind === "author" && (isMine(e) || !calendarLib.presentation(e))) || e.kind === "festival").sort((a, b) => (isMine(b) ? 1 : 0) - (isMine(a) ? 1 : 0)).slice(0, 4).map((e) => calCard(req, e, mineSet));
     watch = { authors: cand.map((a) => ({ ...a, on: calendar.isWatching(req.user?.id, "author", a.slug) })), soon };
   }
-  res.send(pages.calendarPage({ user: req.user, events: withBooks, cities: calendar.cities(), city, mine, mineCount: mineSet ? all.filter(isMine).length : 0, owner: !!req.owner, query, kind, all: !!req.query.all, counts, total: rows.length, feed: calFeed(mine ? req.user.id : "", city, query, kind), subscribed: calendar.subscribed(req.user?.id, choice), subs: calendar.subs(req.user?.id).length, watch }));
+  res.send(pages.calendarPage({ user: req.user, events: withBooks, cities: calendar.cities(), city, mine, mineCount: mineSet ? all.filter(isMine).length : 0, owner: !!req.owner, query, kind, all: !!req.query.all || pres, pres, presCount, counts, total: rows.length, feed: calFeed(mine ? req.user.id : "", city, query, kind), subscribed: calendar.subscribed(req.user?.id, choice), subs: calendar.subs(req.user?.id).length, watch }));
 });
 // The authors a search on /calendar names: one the words name (a typo forgiven: «Артр Дрон» → Артур Дронь), else the
 // author of the books they name («Пісні про Бога і про війну» → Артур Дронь), at most 2, each with up to 4 covers
@@ -1906,7 +1913,8 @@ function calPick(f, reader = "", events = calendar.upcoming()) {
   if (f.mine && !reader) return [];
   const mineSet = f.mine ? shelfAuthors(reader) : null;
   const words = norm(f.q || "").split(/\s+/).filter(Boolean);
-  return events.filter((e) => (!f.kind || e.kind === f.kind) && (!f.city || e.city === f.city) && (!mineSet || e.authors.some((a) => mineSet.has(a))) && (!words.length || words.every((w) => calHay(e).includes(w))));
+  // Book presentations only for «Мої автори» or words (Max 2026-11-20), as on the page.
+  return events.filter((e) => (!f.kind || e.kind === f.kind) && (!f.city || e.city === f.city) && (!mineSet || e.authors.some((a) => mineSet.has(a))) && (!words.length || words.every((w) => calHay(e).includes(w))) && (mineSet || words.length || !calendarLib.presentation(e)));
 }
 const calHref = (f) => `/calendar${calendarLib.subKey(f) ? `?${calendarLib.subKey(f)}` : ""}`;
 // «Підписатися» by e-mail (Max 2026-11-15, like a publisher's): the page's choice goes into the Friday letter.
@@ -1974,7 +1982,7 @@ app.get(/^\/calendar\/(?:[^/]*-)?([0-9a-f]{8})(\.ics)?$/, (req, res) => {
   const rel = calendarLib
     .tours(upcoming.filter((x) => !skip.has(x.id) && x.starts <= until))
     .map((x, i) => ({ x, i, r: rank(x) }))
-    .filter((o) => o.r < 9)
+    .filter((o) => o.r < 9 && (o.r === 0 || !calendarLib.presentation(o.x)))
     .sort((a, b) => a.r - b.r || a.i - b.i)
     .slice(0, 4)
     .sort((a, b) => a.i - b.i)

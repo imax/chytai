@@ -391,6 +391,14 @@ A flag only when Max asks for one, or when the change could break what readers u
   calendar app has no cookie). Links: webcal:// (Apple), Google Calendar's `?cid=`, and the plain address.
 - Only Ukraine and online (Max 2026-11-15): the collectors' Haiku answers `abroad` and those are dropped;
   `calendar.abroad(city)` (list `ABROAD`) hides a foreign city at upsert and at start, and /calendar/add refuses it.
+- Book presentations (Max 2026-11-20, «спам презентацій»: 80 of ~300, libraries' local books and one author's
+  30-city tour): `calendar.presentation(e)` (title says «презентація», not a festival) keeps them out of /calendar's
+  overview and list, the homepage, subscriptions, the .ics and an event page's «Ще події»; they stay in a search, under
+  «Мої автори», by one's own authors, on author and book pages, in author-watch letters, and in their own list
+  `/calendar?pres=1` (a line under the list). Still collected (the author pages need them).
+- Duplicates: `findSimilar` reads ’ ʼ ' as one apostrophe (cities are kept with ’) and takes `time`: same day, city and
+  hour plus one word of the «» title in common = one event. The ones that came in before were hidden once at start
+  (`dedupe`, meta `calendar:dedupe` lists them).
 - Table `cal_events` (id `{source}:{key}`, starts/ends `YYYY-MM-DD` Kyiv, time `HH:MM`, city as shown, «Онлайн»
   for online; books/authors JSON found by name, no AI: `linkText`, a name's two words side by side, «Олександрою … книгарні» ≠ Олександр Книга; never a Russian edition, `findBook`). Gone 30 days after it ends (`cleanup`); one with an author or book linked stays a year (`KEEP_LINKED_DAYS`, for the author page's past events).
 - Sources: `web/seed/calendar.json` (kept in step at every start: festivals by a thread or Max; an entry with `fix`
