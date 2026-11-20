@@ -994,8 +994,8 @@
     else if (!fresh && d.open && body.textContent === "Завантажую…") body.innerHTML = `<p class="muted">Не вдалося завантажити опис.</p>`;
   }
   const guided = (b) => !!window.reader.bookGuide && /\.epub$/i.test(b.path || "");
-  // The guide (Max 2026-11-18, server/bookguide.js): what the book is, why it is worth reading and how hard it is,
-  // in place of the site's description. Made the first time someone asks (a few seconds), then kept for every reader
+  // The guide (Max 2026-11-18, server/bookguide.js): what the book is and why it is worth reading, in place of the
+  // site's description. Made the first time someone asks (a few seconds), then kept for every reader
   // of the same file. The recap of a started book («де ви зупинилися, що було досі, хто тут хто») went on 2026-11-19 (Max: it only
   // retold what he read the day before); «Перед главою» shows in the book itself (renderer.js `intro`).
   let aboutSeq = 0;
@@ -1018,7 +1018,7 @@
   }
   const abSec = (title, body) => `<section class="ab-sec"><h3>${title}</h3>${body}</section>`;
   const abWait = (text) => `<p class="ab-wait">${text}</p>`;
-  // Max 2026-11-20: «Про книжку» and «Чому варто прочитати»; no «Як читати» (condescending). A guide made before
+  // Max 2026-11-20: «Про книжку» and «Чому варто читати»; no «Як читати» (condescending), no level or pages. A guide made before
   // (`why`, `how`) shows its `why` until the new one comes.
   function beforeHtml(g) {
     const f = g.before;
@@ -1026,10 +1026,8 @@
     const about = f?.about || f?.why;
     if (about) {
       html += abSec("Про книжку", `<p>${esc(about)}</p>`);
-      if (f.worth) html += abSec("Чому варто прочитати", `<p>${esc(f.worth)}</p>`);
+      if (f.worth) html += abSec("Чому варто читати", `<p>${esc(f.worth)}</p>`);
     } else if (g.building?.what === "before") html += abSec("Про книжку", abWait("Готуємо кілька слів про книжку…"));
-    const chips = [f?.level ? `Складність ${f.level} з 10` : "", g.pages > 1 ? `≈ ${g.pages} ${plural(g.pages, "сторінка", "сторінки", "сторінок")}` : ""].filter(Boolean);
-    if (chips.length) html += `<p class="ab-chips">${chips.map((c) => `<span>${c}</span>`).join("")}</p>`;
     return html;
   }
   // «Про книжку» as a block at the end of a book's panel that unfolds in place, like the questions and

@@ -597,6 +597,11 @@ async function openEpub(payload, { posKey, source }) {
   $("#running-head").textContent = current.title;
   document.title = current.title;
   window.PhoneRead?.bookOpened();
+  // «Про книжку» is made when a book opens (Max 2026-11-20), so it is there when asked, and kept for offline.
+  if (!current.preview && !current.protected && /\.epub$/i.test(current.path)) {
+    const b = { path: current.path, title: current.title, authors: current.author ? [current.author] : [] };
+    setTimeout(() => current?.path === b.path && window.reader.bookGuide?.(b), 4000);
+  }
 
   const nav = await book.loaded.navigation;
   renderToc(nav.toc);
@@ -924,6 +929,11 @@ async function openPdf(payload) {
   $("#chapter-label").textContent = "";
   document.title = current.title;
   window.PhoneRead?.bookOpened();
+  // «Про книжку» is made when a book opens (Max 2026-11-20), so it is there when asked, and kept for offline.
+  if (!current.preview && !current.protected && /\.epub$/i.test(current.path)) {
+    const b = { path: current.path, title: current.title, authors: current.author ? [current.author] : [] };
+    setTimeout(() => current?.path === b.path && window.reader.bookGuide?.(b), 4000);
+  }
   const toc = await pdfView.toc();
   renderToc(toc);
   $("#btn-toc").disabled = !toc.length;

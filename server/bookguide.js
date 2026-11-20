@@ -1,5 +1,5 @@
-// «Про книжку» that helps to read (Max 2026-11-18, «Level up your reading»): for a book, what it is, why it is worth
-// reading and how hard it is (Opus, once a book). And «Перед главою» (Max 2026-11-19, in place of the
+// «Про книжку» that helps to read (Max 2026-11-18, «Level up your reading»): for a book, what it is and why it is
+// worth reading (Opus, once a book, made when the book or «Про книжку» first opens). And «Перед главою» (Max 2026-11-19, in place of the
 // recap «де ви зупинилися / що було досі / хто тут хто», which only retold what he had read the day before): a few
 // notes for the chapter the reader is in, like a good annotated edition's: the history, customs, references and
 // earlier threads it rests on. Never what happens in it or later, never about the reader («самопомічник», not
@@ -31,8 +31,8 @@ Answer in Ukrainian whatever the book's language, in plain everyday words, as a 
 If you know this book, use what you know about it; if you don't, judge only from the opening and never invent facts about the author, the year or the book.
 Speak about the book, never about the reader: no «ви», no advice how to read it, no «не бійтеся», no «зверніть увагу». Plain statements.
 Answer with JSON only:
-{"about": "2–3 short sentences: what kind of book it is, who wrote it and when if you know, when and where it takes place", "worth": "1–2 short sentences: what is interesting in it and makes it worth reading (its people, language, idea, its place in literature, why it still matters); nothing the first part already says", "level": a whole number 1–10, how hard it is for an ordinary adult reader (1 = a light novel, 5 = a usual classic, 10 = «Улісс»)}`;
-// v2 (Max 2026-11-20): «Про книжку» + «Чому варто прочитати»; «Як читати» went (condescending). A v1 answer
+{"about": "2–3 short sentences: what kind of book it is, who wrote it and when if you know, when and where it takes place", "worth": "1–2 short sentences: what is interesting in it and makes it worth reading (its people, language, idea, its place in literature, why it still matters); nothing the first part already says"}`;
+// v2 (Max 2026-11-20): «Про книжку» + «Чому варто читати»; «Як читати», the level and pages went (condescending). A v1 answer
 // ({why, how}) shows its `why` as «Про книжку» while the book's v2 is made.
 const BEFORE_V = 2;
 
@@ -244,8 +244,7 @@ class Guide {
     });
     spend(measure(m.model, m.usage).cost);
     const a = json(textOf(m));
-    const level = Math.round(Number(a.level));
-    const before = { v: BEFORE_V, about: line(a.about, 700), worth: line(a.worth, 500), level: level >= 1 && level <= 10 ? level : null, at: new Date().toISOString() };
+    const before = { v: BEFORE_V, about: line(a.about, 700), worth: line(a.worth, 500), at: new Date().toISOString() };
     if (!before.about) throw new Error("empty answer");
     const g = this.read(p.key) || { key: p.key };
     g.before = before;
