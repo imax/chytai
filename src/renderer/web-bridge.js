@@ -409,6 +409,13 @@
         // no phone search and the old «Залишити фідбек» on app.chytai.org.ua).
         if (ready()) (swapNow = true), swap();
         whenIdle();
+        // Which version this device runs and what waits, once a load, 20 s in (server log «sw: …»; 2026-11-20: Max's
+        // iPhone showed the old reader after many restarts, and nothing told why).
+        setTimeout(async () => {
+          const [mine, next] = await Promise.all([versionOf(navigator.serviceWorker.controller), versionOf(reg.waiting)]);
+          const body = JSON.stringify({ v: mine?.version || "old", waiting: next?.version || (reg.waiting ? "old" : ""), installing: reg.installing?.state || "" });
+          fetch("/api/sw-state", { method: "POST", body, keepalive: true }).catch(() => {});
+        }, 20000);
       })
       .catch((err) => console.warn("service worker", err));
     let hadController = !!navigator.serviceWorker.controller;

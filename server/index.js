@@ -1391,6 +1391,14 @@ app.use((req, res, next) => {
 });
 
 app.post("/api/client-error", express.json({ limit: "8kb", type: () => true }), clientError);
+// What version of the reader a device runs, and a new one that failed to install (web-bridge.js, sw.js): only a log line.
+app.post("/api/sw-state", express.json({ limit: "2kb", type: () => true }), (req, res) => {
+  res.status(204).end();
+  const b = req.body || {};
+  const f = (v) => String(v || "").replace(/[^\w .:,/-]/g, "").slice(0, 300);
+  const acct = currentAccount(req) === OWNER_ID ? "owner" : currentAccount(req) ? "reader" : "guest";
+  console.log(`sw: ${acct} ${deviceOf(req.get("user-agent") || "")} now=${f(b.v)}${b.waiting ? ` waiting=${f(b.waiting)}` : ""}${b.installing ? ` installing=${f(b.installing)}` : ""}${b.failed ? ` FAILED ${f(b.failed)}` : ""}`);
+});
 
 // Public: icon and manifest, so the phone can show them before login.
 app.get("/icon.png", (_req, res) => res.sendFile(path.join(ROOT, "build", "icon.png")));

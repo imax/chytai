@@ -48,7 +48,11 @@ self.addEventListener("install", (event) => {
         await caches.delete(CACHE);
         throw new Error(`sw: the reader's files did not come: ${failed.join(", ")}`);
       }
-    })(),
+    })().catch((err) => {
+      // Said to the server (2026-11-20: Max's iPhone kept the old version, and nothing showed why).
+      fetch("/api/sw-state", { method: "POST", body: JSON.stringify({ v: VERSION, failed: String(err?.message || err).slice(0, 300) }) }).catch(() => {});
+      throw err;
+    }),
   );
 });
 
