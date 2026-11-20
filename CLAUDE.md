@@ -178,7 +178,9 @@ technical report (below), so post it only after your fixes are pushed:
    -H "$H"` (text, voice transcripts, forwards; screenshots at each part's `file`, fetch them with the same header and
    look; a screen recording: `ffmpeg -i v.mp4 -vf fps=2 f%02d.jpg`, then look at the frames). Fix each like an error; then `POST /agent/bugs/<id> {"status":"done","note":"…"}` (`skip` = not a bug, `later`
    = left for Max); done / skip answer Max in Telegram under his message, so the note is one plain Ukrainian clause.
-   A report that asks for a new feature, not a small change: `later`, and ask the coordinator for its own thread.
+   A bug or a clear fix: fix it now. An idea that needs talking over, or one with several ways to build it (Max
+   2026-11-20): build nothing; `later`, and ask the coordinator for its own thread, where the proposals (variants,
+   screenshots) wait for Max's answer.
    A reader bug on Android that a desktop Chromium won't show: measure without forcing styles (a `getComputedStyle`
    each frame hides a transition bug); count `transitionrun` events instead.
 2. Each kind: noise (an extension, a network drop, a bot) → widen the filter (`CLIENT_NOISE` in server/index.js) only
