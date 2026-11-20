@@ -172,6 +172,7 @@ technical report (below), so post it only after your fixes are pushed:
    -H "$H"` (text, voice transcripts, forwards; screenshots at each part's `file`, fetch them with the same header and
    look; a screen recording: `ffmpeg -i v.mp4 -vf fps=2 f%02d.jpg`, then look at the frames). Fix each like an error; then `POST /agent/bugs/<id> {"status":"done","note":"…"}` (`skip` = not a bug, `later`
    = left for Max); done / skip answer Max in Telegram under his message, so the note is one plain Ukrainian clause.
+   A report that asks for a new feature, not a small change: `later`, and ask the coordinator for its own thread.
    A reader bug on Android that a desktop Chromium won't show: measure without forcing styles (a `getComputedStyle`
    each frame hides a transition bug); count `transitionrun` events instead.
 2. Each kind: noise (an extension, a network drop, a bot) → widen the filter (`CLIENT_NOISE` in server/index.js) only
@@ -708,9 +709,10 @@ A flag only when Max asks for one, or when the change could break what readers u
   (`Library.add`) and «Назва, автор, обкладинка». Their server routes (`/api/wish`, `/api/club`, `/api/notes/all`) stay.
 - Reader «Статистика» (Max 2026-11-19; not «Мій шлях», «пафосно»): panel item (`r-pnav-journey`, page `journey` in
   home.js `journeyHtml`), `GET /api/journey` (explanations from `days[d].users`, per book from `store.items.tally`,
-  finished from `u.finished`, «Словничок» words from `days[d].looks[acct]` since 2026-11-19). No minutes, streaks or goals.
+  finished from `u.finished`, minutes from `days[d].readBooks[acct]` since 2026-11-04). No streaks or goals.
   A month = every book read in it (a minute in `readBooks`, a note or explanation, finished), «N книг · M прочитано»
   (Max: «читав не означає прочитано»; no ticks on covers). Top: «N книг з <first day>», tiles прочитано / пояснень /
-  нотаток / слів зі словничка (no «читаю»).
+  нотаток / хвилин читання (Max 2026-11-20 by the bot, in place of «слів зі словничка»; no «читаю»); «N хв» beside
+  the explanations in each month and book.
 - Reader: the app's own UI can't be selected (`body` has `user-select: none`, end of `src/renderer/style.css`). Text a
   reader may copy (a new note, answer or field) goes into the list of selectable classes there.

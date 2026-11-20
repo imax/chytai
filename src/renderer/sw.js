@@ -21,8 +21,32 @@ self.addEventListener("install", (event) => {
       // Only answers that came as they are: signed out, the server redirects every reader file to /login,
       // and cache.add kept that login page as style.css and renderer.js (a fresh Android app showed the
       // reader without styles). A redirected page served to a navigation fails too.
-      const add = (url) => fetch(url).then((res) => res.ok && !res.redirected && !res.headers.get("X-Chytai-Landing") && cache.put(url, res));
-      await Promise.all(ASSETS.map((url) => add(url).catch((err) => console.warn("sw: not cached", url, err))));
+      // The reader's own page, scripts and styles must all come, though (2026-11-20): one left out was later fetched
+      // from the network under this version and kept, a newer script beside an older page («ab-before» was null in
+      // showAbout). A network error or a 5xx there, after two more tries, fails the install: the previous version
+      // stays whole and the browser tries again at the next check.
+      const get = async (url) => {
+        for (let i = 0; ; i++) {
+          try {
+            const res = await fetch(url, { cache: "no-cache" });
+            if (res.status < 500 || i === 2) return res;
+          } catch (err) {
+            if (i === 2) throw err;
+          }
+          await new Promise((r) => setTimeout(r, 1000 * (i + 1)));
+        }
+      };
+      const own = (url) => url === "/" || (!url.startsWith("/node_modules/") && /\.(m?js|css)$/.test(url));
+      const add = async (url) => {
+        const res = await get(url);
+        if (res.status >= 500 && own(url)) throw new Error(`HTTP ${res.status}`);
+        if (res.ok && !res.redirected && !res.headers.get("X-Chytai-Landing")) await cache.put(url, res).catch((err) => console.warn("sw: not kept", url, err));
+      };
+      const failed = (await Promise.all(ASSETS.map((url) => add(url).then(() => null, (err) => (console.warn("sw: not cached", url, err), own(url) ? url : null))))).filter(Boolean);
+      if (failed.length) {
+        await caches.delete(CACHE);
+        throw new Error(`sw: the reader's files did not come: ${failed.join(", ")}`);
+      }
     })(),
   );
 });

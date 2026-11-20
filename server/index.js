@@ -1926,10 +1926,18 @@ api.get("/journey", guestsCannot("Без входу статистики нем�
   const acct = req.acct;
   const u = state.users[acct] || {};
   const months = {};
-  const month = (key) => (months[key] ??= { explains: 0, notes: 0, words: 0, finished: [], read: new Set() });
-  let explains = 0, words = 0, first = state.accounts[acct]?.since || 0;
+  const month = (key) => (months[key] ??= { explains: 0, notes: 0, words: 0, sec: 0, finished: [], read: new Set() });
+  const books = {};
+  const book = (name) => (books[name] ??= { explains: 0, translations: 0, notes: 0, sec: 0, finishedAt: 0 });
+  let explains = 0, words = 0, sec = 0, first = state.accounts[acct]?.since || 0;
   for (const [day, d] of Object.entries(state.stats?.days || {})) {
-    for (const [name, sec] of Object.entries(d.readBooks?.[acct] || {})) if (sec >= 60) month(day.slice(0, 7)).read.add(name);
+    // Seconds of reading (from 2026-11-04; Max 2026-11-19 by the bot: minutes in place of the «Словничок» words).
+    for (const [name, s] of Object.entries(d.readBooks?.[acct] || {})) {
+      if (s >= 60) month(day.slice(0, 7)).read.add(name);
+      book(name).sec += s;
+      month(day.slice(0, 7)).sec += s;
+      sec += s;
+    }
     const n = d.users?.[acct] || 0;
     const w = d.looks?.[acct] || 0;
     if (!n && !w) continue;
@@ -1940,8 +1948,6 @@ api.get("/journey", guestsCannot("Без входу статистики нем�
     const at = new Date(`${day}T12:00:00Z`).getTime();
     if (!first || at < first) first = at;
   }
-  const books = {};
-  const book = (name) => (books[name] ??= { explains: 0, translations: 0, notes: 0, finishedAt: 0 });
   for (const r of store.items.tally(acct)) {
     if (r.at > 0) month(statsDay(r.at).slice(0, 7)).read.add(r.book);
     if (r.kind === "notes") {
@@ -1956,7 +1962,7 @@ api.get("/journey", guestsCannot("Без входу статистики нем�
     month(statsDay(at).slice(0, 7)).finished.push(name);
     month(statsDay(at).slice(0, 7)).read.add(name);
   }
-  res.json({ since: first, explains, words, books, months: Object.keys(months).sort().reverse().map((m) => ({ month: m, ...months[m], read: [...months[m].read] })) });
+  res.json({ since: first, explains, words, minutes: Math.round(sec / 60), books, months: Object.keys(months).sort().reverse().map((m) => ({ month: m, ...months[m], read: [...months[m].read] })) });
 });
 
 // The phone unloaded the reader's page (web-bridge.js life; Max, 2026-11-11: «сторінку вивантажено (пам'ять)»).

@@ -374,8 +374,8 @@
   }
 
   // «Статистика» (Max 2026-11-19: «всі книжки що я читав, скільки робив пояснення… почнемо з простого»): a few numbers,
-  // the months (what was finished, how much asked), and every book with its explanations as a bar. No minutes (Max
-  // 2026-11-18: «хвилини не про це»), no streaks or goals. GET /api/journey has the counts; titles and covers are the
+  // the months (what was finished, how much asked), and every book with its explanations as a bar. Minutes of reading
+  // (Max 2026-11-19 by the bot: in place of the «Словничок» words, and beside the explanations), no streaks or goals. GET /api/journey has the counts; titles and covers are the
   // library's. Asked anew each time the page opens.
   let journey = null; // the last answer, or "…" while asked
   function loadJourney() {
@@ -414,7 +414,8 @@
     const j = journey;
     const all = [...lib.books, ...(lib.free || [])];
     const byPath = new Map(all.map((b) => [b.path, b]));
-    const stat = (name) => j.books[name] || { explains: 0, translations: 0, notes: 0, finishedAt: 0 };
+    const stat = (name) => j.books[name] || { explains: 0, translations: 0, notes: 0, sec: 0, finishedAt: 0 };
+    const mins = (sec) => (sec >= 60 ? `${num(Math.round(sec / 60))} хв` : "");
     const asked = (s) => s.explains + s.translations;
     const done = lib.books.filter((b) => b.finished);
     const notes = Object.values(j.books).reduce((n, s) => n + s.notes, 0);
@@ -424,7 +425,7 @@
     const since = j.since ? new Date(j.since).toLocaleDateString("uk-UA", { day: "numeric", month: "long", year: new Date(j.since).getFullYear() === new Date().getFullYear() ? undefined : "numeric" }) : "";
     let html = `<section class="r-jour"><h1 class="r-jh">Статистика</h1>
       ${since ? `<p class="r-jsince">${read.size ? `${num(read.size)} ${plural(read.size, "книга", "книги", "книг")}` : "У Читалці"} з ${esc(since)}</p>` : ""}
-      <div class="r-jtiles">${tile(done.length, "прочитано")}${tile(j.explains, plural(j.explains, "пояснення", "пояснення", "пояснень"))}${tile(notes, plural(notes, "нотатка", "нотатки", "нотаток"))}${j.words ? tile(j.words, plural(j.words, "слово зі словничка", "слова зі словничка", "слів зі словничка")) : ""}</div></section>`;
+      <div class="r-jtiles">${tile(done.length, "прочитано")}${tile(j.explains, plural(j.explains, "пояснення", "пояснення", "пояснень"))}${tile(notes, plural(notes, "нотатка", "нотатки", "нотаток"))}${tile(j.minutes || 0, `${plural(j.minutes || 0, "хвилина", "хвилини", "хвилин")} читання`)}</div></section>`;
     // By month: a line of counts and the covers of what was finished.
     const months = j.months.filter((m) => m.explains || m.notes || (m.read || m.finished).some((p) => byPath.has(p)));
     if (months.length) {
@@ -434,7 +435,7 @@
         const done = new Set(m.finished);
         const fin = [...new Set([...m.finished, ...(m.read || [])])].map((p) => byPath.get(p)).filter(Boolean).sort((x, y) => done.has(y.path) - done.has(x.path));
         const finished = fin.filter((b) => done.has(b.path)).length;
-        const bits = [fin.length ? `${fin.length} ${plural(fin.length, "книга", "книги", "книг")}` : "", finished ? `${finished} прочитано` : "", m.explains ? `${num(m.explains)} ${plural(m.explains, "пояснення", "пояснення", "пояснень")}` : "", m.notes ? `${num(m.notes)} ${plural(m.notes, "нотатка", "нотатки", "нотаток")}` : ""].filter(Boolean);
+        const bits = [fin.length ? `${fin.length} ${plural(fin.length, "книга", "книги", "книг")}` : "", finished ? `${finished} прочитано` : "", mins(m.sec), m.explains ? `${num(m.explains)} ${plural(m.explains, "пояснення", "пояснення", "пояснень")}` : "", m.notes ? `${num(m.notes)} ${plural(m.notes, "нотатка", "нотатки", "нотаток")}` : ""].filter(Boolean);
         return `<div class="r-jm"><h3>${MONTHS[mm - 1]}${y !== new Date().getFullYear() ? ` ${y}` : ""}</h3><p>${bits.join(" · ")}</p>
           ${fin.length ? `<div class="r-jm-covers">${fin.map((b) => `<button class="r-jm-c" data-open="${esc(b.path)}" title="${esc(b.title)}">${rcover(b)}</button>`).join("")}</div>` : ""}</div>`;
       }).join("")}</section>`;
@@ -447,7 +448,7 @@
       html += `<section class="r-jbooks">${head(`Книжки · ${rows.length}`, "", false)}${rows.map((b) => {
         const s = stat(b.path);
         const where = b.finished ? `прочитано${s.finishedAt ? ` ${when(s.finishedAt)}` : ""}` : b.paper ? (b.page ? `стор. ${b.page}` : "паперова") : b.pct > 0 ? `${b.pct}%` : "";
-        const counts = [s.explains ? `${num(s.explains)} ${plural(s.explains, "пояснення", "пояснення", "пояснень")}` : "", s.translations ? `${num(s.translations)} ${plural(s.translations, "переклад", "переклади", "перекладів")}` : "", s.notes ? `${num(s.notes)} ${plural(s.notes, "нотатка", "нотатки", "нотаток")}` : ""].filter(Boolean).join(" · ");
+        const counts = [mins(s.sec), s.explains ? `${num(s.explains)} ${plural(s.explains, "пояснення", "пояснення", "пояснень")}` : "", s.translations ? `${num(s.translations)} ${plural(s.translations, "переклад", "переклади", "перекладів")}` : "", s.notes ? `${num(s.notes)} ${plural(s.notes, "нотатка", "нотатки", "нотаток")}` : ""].filter(Boolean).join(" · ");
         return `<button class="r-jb" data-open="${esc(b.path)}">${rcover(b)}<span class="r-jb-t"><b>${esc(b.title)}</b><span class="r-jb-a">${esc([author(b), where].filter(Boolean).join(" · "))}</span>
           ${asked(s) ? `<span class="r-jb-bar"><i style="width:${Math.max(2, Math.round((100 * asked(s)) / top))}%"></i></span>` : ""}${counts ? `<span class="r-jb-n">${counts}</span>` : ""}</span></button>`;
       }).join("")}</section>`;
