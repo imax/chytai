@@ -692,6 +692,10 @@ A flag only when Max asks for one, or when the change could break what readers u
   Nothing is drawn over the passage. The block is CSS only (`askBlocks` / `askTap` / `askCss` in renderer.js: the
   paragraph's `data-ask` + `::after`): never insert nodes into the book's DOM, every CFI (places, notes, explanations)
   would shift; epub.js `ignoreClass` is too buggy for that. After a layout change call `redrawMarks()`.
+- Reader: words with a stress mark (U+0301, the free shelf's classics) get soft hyphens (`shyStressed` in renderer.js,
+  Max 2026-11-20: a hole in a justified line), since browsers don't hyphenate them; where = the device's own
+  hyphenation of the bare word (`breaksOf`). The patched `ePub.CFI` `pathTo` / `toRange` leave those soft hyphens out,
+  so CFIs stay as before; text taken from the page drops U+00AD (context.js `clean`, gloss.js `key`).
 - Reader: how the text looks (theme, font, sizes, spacing, margins, column, page turns) is kept per device
   (`LOOK_KEYS` in `src/renderer/web-bridge.js`); the account's copy only starts a new device. A new look setting
   goes into that list.
