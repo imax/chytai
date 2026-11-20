@@ -753,6 +753,6 @@ A flag only when Max asks for one, or when the change could break what readers u
   like Chrome: seen at once, never at a page's bottom or only in settings); a tap reloads on the new version. The
   settings keep «Версія від … · Оновити» (`#set-update`: asks the server, waits for the install, reloads). Both on `window.chytaiUpdate` in web-bridge.js (`ready`, `apply`, `check`, `version`); sw.js answers
   the message «version» with its hash and `BUILT` (the first start of that hash, `DATA_DIR/sw-versions.json`, so a
-  restart serves the same sw.js). Try locally: change a file in src/renderer, restart the reader, `reg.update()`.
+  restart serves the same sw.js). Which version a device runs: the page posts `/api/sw-state` 20 s after a load (and sw.js when an install fails); the reader's Fly log has «sw: owner iphone-app now=<hash> [waiting=… | FAILED …]». Try locally: change a file in src/renderer, restart the reader, `reg.update()`.
 - Reader: the app's own UI can't be selected (`body` has `user-select: none`, end of `src/renderer/style.css`). Text a
   reader may copy (a new note, answer or field) goes into the list of selectable classes there.
