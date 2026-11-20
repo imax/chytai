@@ -1046,7 +1046,9 @@
     paperSeen: (name) => api("POST", `/api/paper/${encodeURIComponent(name)}/seen`, {}).catch(() => {}),
     paperScan: async (kind, blob) => (await api("POST", `/api/paper/scan?kind=${kind}`, blob)).json(),
     catalogFind: async (q) => (await api("GET", `/api/find?${new URLSearchParams({ q })}`)).json(),
-    libraryFinished: (name, done) => api("POST", "/api/library/finished", { path: name, done }),
+    libraryFinished: (name, done, auto) => api("POST", "/api/library/finished", { path: name, done, ...(auto ? { auto: true } : {}) }),
+    // The card «Прочитано» (renderer.js done): stars or a few words onto the site's shelf; { site } or { error }.
+    libraryReview: async (name, body) => (await api("POST", "/api/library/review", { path: name, ...body })).json(),
     explain: async (id, request) => {
       const controller = new AbortController();
       streams.set(id, controller);

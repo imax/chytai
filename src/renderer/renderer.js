@@ -484,6 +484,9 @@ async function openEpub(payload, { posKey, source }) {
       console.warn("no such place in the book", target);
       return false;
     });
+  // A turn past the last page opens «Прочитано» (doneNext), whichever way it was asked for.
+  const next = rendition.next.bind(rendition);
+  rendition.next = (...args) => (doneNext(), next(...args));
   followFontLoad(rendition);
   rendition.hooks.content.register(styleContents);
   rendition.hooks.content.register((contents) => window.Gloss?.mark(contents));
@@ -743,6 +746,9 @@ function closeBook() {
   $("#btn-back").classList.add("hidden");
   hideIntro();
   introAt = null;
+  $("#done").classList.add("hidden");
+  $("#done-card").classList.add("hidden");
+  doneFor = doneBook = doneSite = null;
   syncReading();
 }
 
@@ -836,6 +842,121 @@ $("#intro-open").addEventListener("click", () => {
 });
 $("#intro-x").addEventListener("click", hideIntro);
 
+// ---------- «Прочитано» at the book's end (Max 2026-11-19, bug report №7; reworked 2026-11-20) ----------
+// The last page marks the book read in the reader only (server: POST /api/library/finished `auto`; a book finished
+// before is left alone) and asks the site whether its catalog has the book. When it does, a small card like «Перед
+// главою» says «Прочитано · Як вам книжка?»; a tap on it, or a turn past the last page, opens the whole screen: the
+// cover, the site's stars (a second tap on the same star makes it half, as on the site), a few words and
+// «Опублікувати». Only that puts the book on the site's shelf as «Прочитано» with them (POST /api/library/review;
+// Max: «поки форму не заповнив, на сайті ми нічого не помічаємо»). Once a book an opening; guests get nothing.
+let doneFor = null; // the book whose end was reached in this opening
+let doneBook = null; // the book the screen is for, while it can open
+let doneSite = null; // the site's shelf entry as it is
+function doneCheck(atEnd) {
+  if (!atEnd || !current || current.preview || doneFor === current.path) return;
+  doneFor = current.path;
+  const forBook = current;
+  window.reader
+    .libraryFinished(current.path, true, true)
+    .then((r) => r?.json?.())
+    .then((r) => current === forBook && r?.site && offerDone(forBook, r.site))
+    .catch(() => {});
+}
+function offerDone(forBook, site) {
+  doneBook = forBook.path;
+  doneSite = site;
+  $("#done-card").classList.remove("hidden");
+  window.ReadingTime?.count("done-shown");
+}
+// The place on screen is the book's end: epub.js says so on pages; in scroll mode (it never does there) the last
+// chapter scrolled to its bottom.
+function bookEnd(location) {
+  if (!location?.start) return false;
+  if (location.atEnd) return true;
+  if (!scrolled()) return readingProgress(location)?.pct >= 100;
+  const n = book?.spine?.length || book?.spine?.spineItems?.length || 0;
+  const box = rendition?.manager?.container;
+  return !!box && location.end?.index === n - 1 && box.scrollTop + box.clientHeight >= box.scrollHeight - 4;
+}
+// A turn past the last page opens the screen at once.
+function doneNext() {
+  if (doneBook && doneBook === current?.path && $("#done").classList.contains("hidden") && bookEnd(rendition?.currentLocation?.())) openDone();
+}
+function doneStars(n) {
+  $("#done").dataset.rating = n ?? "";
+  for (const b of document.querySelectorAll("#done-stars button")) {
+    const r = Number(b.dataset.r);
+    b.classList.toggle("on", n != null && r <= n);
+    b.classList.toggle("half", n != null && r === n + 0.5);
+  }
+}
+function doneState() {
+  const rating = $("#done").dataset.rating === "" ? null : Number($("#done").dataset.rating);
+  const note = $("#done-note").value.trim();
+  const published = doneSite.status === "read" && rating === (doneSite.rating ?? null) && note === (doneSite.note || "").trim();
+  $("#done-send").disabled = published || (rating == null && !note);
+  $("#done-send").textContent = published ? "✓ Опубліковано" : "Опублікувати";
+  $("#done").classList.toggle("sent", published);
+  return { rating, note };
+}
+function openDone() {
+  if (!doneSite) return;
+  $("#done-card").classList.add("hidden");
+  $("#done-title").textContent = doneSite.title || current?.title || "";
+  $("#done-author").textContent = doneSite.author || current?.author || "";
+  $("#done-link").removeAttribute("href");
+  if (doneSite.status === "read" && doneSite.href) $("#done-link").href = doneSite.href;
+  doneStars(doneSite.rating);
+  $("#done-note").value = doneSite.note || "";
+  doneState();
+  // The cover the home screen shows (the reader's own, else the file's); none = no picture.
+  const img = $("#done-cover img");
+  $("#done-cover").classList.remove("on");
+  img.onload = () => $("#done-cover").classList.add("on");
+  img.onerror = () => $("#done-cover").classList.remove("on");
+  img.src = `/api/cover?path=${encodeURIComponent(doneBook)}`;
+  $("#done").classList.remove("hidden");
+  $("#done").scrollTop = 0;
+  window.ReadingTime?.count("done-open");
+}
+$("#done-open").addEventListener("click", openDone);
+// «Позначити прочитаною» in a book's menu on the home screen (home.js): the same screen for that book.
+window.showDone = (path, site) => {
+  if (!site) return;
+  doneBook = path;
+  doneSite = site;
+  openDone();
+};
+$("#done-cx").addEventListener("click", () => $("#done-card").classList.add("hidden"));
+$("#done-x").addEventListener("click", () => $("#done").classList.add("hidden"));
+$("#done-stars").addEventListener("click", (e) => {
+  const star = e.target.closest("button");
+  if (!star) return;
+  const r = Number(star.dataset.r);
+  doneStars(Number($("#done").dataset.rating) === r ? r - 0.5 : r);
+  doneState();
+});
+$("#done-note").addEventListener("input", doneState);
+$("#done-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const { rating, note } = doneState();
+  if (rating == null && !note) return;
+  $("#done-send").disabled = true;
+  $("#done").classList.add("saving");
+  try {
+    const r = await window.reader.libraryReview(doneBook, { rating, note });
+    if (!r?.site) throw new Error(r?.error || "site");
+    doneSite = r.site;
+    if (r.site.href) $("#done-link").href = r.site.href;
+    $("#done-note").blur();
+  } catch {
+    showNotice("Не вдалося опублікувати. Спробуйте ще раз.", false);
+  } finally {
+    $("#done").classList.remove("saving");
+    doneState();
+  }
+});
+
 // ---------- Footnotes: a way back after following a link inside the book ----------
 
 let returnCfi = null;
@@ -914,6 +1035,7 @@ async function openPdf(payload) {
     position: payload.position,
     onPageChange: (page, total) => {
       window.reader.savePosition(current.posKey, `pdf:${page}`, { pct: Math.round((page / total) * 100), chapter: "" });
+      doneCheck(total > 1 && page >= total);
       $("#progress-label").textContent = `${page} / ${total}`;
       window.PhoneRead?.pdfPage(page, total);
       hideSelToolbar();
@@ -1053,6 +1175,7 @@ function onRelocated(location) {
   if (current?.protected) reportChapter(location.start?.index);
   updateProgress(location);
   introCheck(location);
+  doneCheck(bookEnd(location));
   // While scrolling, a selection may move off screen and back; its toolbar is pinned at the bottom anyway.
   if (!scrolled()) hideSelToolbar();
   window.Gloss?.hide();
@@ -1199,6 +1322,7 @@ function tapToPage(t, win) {
 
 function onKey(e) {
   if (e.target?.closest?.("input, textarea, select, dialog")) return;
+  if (!$("#done").classList.contains("hidden")) return void (e.key === "Escape" && $("#done").classList.add("hidden")); // «Прочитано» covers it
   if (document.body.classList.contains("library-open")) return; // the home screen covers the book
   // Esc stops an explanation still being written (Max, 2026-11-01).
   if (e.key === "Escape") {

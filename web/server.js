@@ -1058,9 +1058,26 @@ app.post("/api/reader-read", (req, res) => {
   if (error) return res.status(400).json({ error });
   if (skipped) return res.json({ ok: true, skipped });
   const e = store.entry(id, bookId);
-  if (e?.status !== "read") store.setEntry(id, bookId, { status: "read", kids: false, year: e?.year || new Date().getFullYear() });
+  const b = req.body || {};
+  const book = store.book(bookId);
+  const answer = (x) => ({ ok: true, read: bookId, href: `${SITE}${store.href(bookId)}`, title: book?.title || "", author: book?.author || "", status: x?.status || "", rating: x?.rating ?? null, note: x?.note || "" });
+  // The card «Прочитано» at the book's end in the reader (Max 2026-11-20, bug report №7): `peek` only asks what the
+  // shelf has, nothing changes until the reader presses «Опублікувати» (Max: «поки форму не заповнив, на сайті ми
+  // нічого не помічаємо»); then «Прочитано» with the stars and a few words, the same entry as /me/book's form, public
+  // on the shelf and the book's page. Words from a reader mail Max.
+  if (b.peek) return res.json(answer(e));
+  const patch = e?.status !== "read" ? { status: "read", kids: false, year: e?.year || new Date().getFullYear() } : {};
+  if ("rating" in b) patch.rating = b.rating == null ? null : Math.max(0.5, Math.min(5, Math.round(Number(b.rating) * 2) / 2)) || null;
+  if (typeof b.note === "string") patch.note = b.note.replace(/\r/g, "").trim().slice(0, 4000);
+  const was = e?.note || "";
+  const now = Object.keys(patch).length ? store.setEntry(id, bookId, patch) : e;
   dropNow(id, bookId);
-  res.json({ ok: true, read: bookId });
+  if (now && (now.rating != null || now.note)) advice.want(bookId);
+  const r = auth.reader(id);
+  if (patch.note && patch.note !== was && id !== OWNER_ID && r) {
+    notifyOwner(`Відгук з Читалки: ${book?.title || ""}`, [`${r.name} (${SITE}/@${r.username}) дочитав(ла) в Читалці й написав(ла):`, "", patch.note, "", `${now.rating != null ? `Оцінка: ${String(now.rating).replace(".", ",")} з 5\n` : ""}Книжка: ${SITE}${store.href(bookId)}`].join("\n"));
+  }
+  res.json(answer(now));
 });
 // Chapters of publishers' protected books read in the reader (server/reads.js), for the publishers' reports.
 // Signed with the account's key; the owner's key also sends the whole protected shelf (shelf: true).

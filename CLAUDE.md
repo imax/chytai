@@ -726,5 +726,15 @@ A flag only when Max asks for one, or when the change could break what readers u
   (Max: «читав не означає прочитано»; no ticks on covers), covers the last opened first. Top: «N книг з <first day>», tiles прочитано / пояснень /
   нотаток / хвилин читання (Max 2026-11-20 by the bot, in place of «слів зі словничка»; no «читаю»); «N хв» beside
   the explanations in each month and book.
+- Reader «Прочитано» at a book's end (Max 2026-11-20, bot report №7): the last page (`bookEnd` in renderer.js: epub.js
+  `atEnd` or 100% on pages, the last chapter's bottom in scroll mode; a PDF's last page) marks the book finished in the
+  reader only (`POST /api/library/finished` with `auto`; a book finished before is left alone) and asks the site with
+  `peek` (`/api/reader-read`: href, title, author, status, rating, note; nothing changes). When the catalog has the book,
+  a small card like «Перед главою» (`#done-card`); a tap on it or a turn past the last page (`doneNext`, wrapped into
+  `rendition.next`) opens a whole screen (`#done`: cover, the site's stars, a few words). The home menu's «Позначити
+  прочитаною» opens the same screen (`window.showDone`, Max 2026-11-20) and no longer marks the site by itself. Only «Опублікувати» changes the
+  site (Max: «поки форму не заповнив, на сайті ми нічого не помічаємо»): `POST /api/library/review` → `/api/reader-read`
+  with `rating` / `note` = «Прочитано» with them, the same entry as /me/book's form, public. New words from a reader (not
+  Max) mail + Telegram Max. Guests get nothing. «Функції»: `done-shown`, `done-open`, `act-done-send`.
 - Reader: the app's own UI can't be selected (`body` has `user-select: none`, end of `src/renderer/style.css`). Text a
   reader may copy (a new note, answer or field) goes into the list of selectable classes there.
