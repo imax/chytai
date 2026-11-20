@@ -297,7 +297,49 @@ function openSettings() {
   $("#set-font").value = settings.font;
   $("#set-page-taps").value = settings.pageTaps ? "taps" : "scroll";
   $("#set-desk-scroll").value = settings.deskScroll ? "scroll" : "pages";
+  showVersion();
   $("#settings").showModal();
+}
+
+// ---------- A new version of the reader (Max 2026-11-20: «щоб не перезапускати навмання») ----------
+// web-bridge.js keeps the new version on the device and offers it here: «Нова версія Читалки · Оновити» on Мої книжки
+// once it waits, and in the settings «Версія від …» with «Оновити», which asks the server first.
+const readerUpdate = window.chytaiUpdate;
+const builtText = (v) => (v?.built ? new Date(v.built).toLocaleString("uk-UA", { day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" }) : "");
+async function showVersion() {
+  if (!readerUpdate) return;
+  $("#set-update").disabled = false;
+  if (readerUpdate.ready()) return ($("#set-version").textContent = "Є нова версія");
+  const when = builtText(await readerUpdate.version());
+  $("#set-version").textContent = when ? `Версія від ${when}` : "Версія Читалки";
+}
+function applyUpdate(where) {
+  $(where).textContent = "Оновлюю…";
+  if (!readerUpdate.apply()) $(where).textContent = "Не вдалося, спробуйте ще";
+}
+if (readerUpdate) {
+  const offer = () => {
+    if (!readerUpdate.ready() || document.body.classList.contains("update-ready")) return;
+    document.body.classList.add("update-ready");
+    window.ReadingTime?.count?.("update-shown");
+  };
+  document.addEventListener("chytai:update", offer);
+  offer();
+  for (const btn of document.querySelectorAll(".r-upd"))
+    btn.onclick = () => {
+      btn.disabled = true;
+      btn.textContent = "Оновлюю…";
+      if (!readerUpdate.apply()) btn.textContent = "Не вдалося";
+    };
+  $("#set-update").onclick = async () => {
+    const btn = $("#set-update");
+    btn.disabled = true;
+    if (!readerUpdate.ready()) $("#set-version").textContent = "Шукаю нову версію…";
+    const got = await readerUpdate.check();
+    if (got === "ready") return applyUpdate("#set-version");
+    $("#set-version").textContent = got === "offline" ? "Немає з'єднання, спробуйте пізніше" : "У вас найновіша версія";
+    setTimeout(() => $("#settings").open && showVersion(), 4000);
+  };
 }
 
 $("#settings").addEventListener("close", async () => {

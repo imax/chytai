@@ -1440,9 +1440,28 @@ const serviceWorker = (() => {
     ...rendererFiles.filter((f) => f !== "index.html" && f !== "sw.js").map((f) => `/${f}`),
     ...libs.map((l) => `/node_modules/${l}`),
   ];
+  const version = hash.digest("hex").slice(0, 12);
+  // When this version first started here, for «Версія від …» in the settings (Max 2026-11-20: a plain way to see and
+  // get the new version). Kept by version, so a restart serves the same sw.js and the phones don't take it for a new one.
+  let built = new Date().toISOString();
+  try {
+    const file = path.join(DATA_DIR, "sw-versions.json");
+    let seen = [];
+    try {
+      seen = JSON.parse(fs.readFileSync(file, "utf8"));
+    } catch {
+      /* first start */
+    }
+    const mine = seen.find((v) => v.version === version);
+    if (mine) built = mine.built;
+    else fs.writeFileSync(file, JSON.stringify([...seen, { version, built }].slice(-20)));
+  } catch (err) {
+    console.warn("sw versions", err.message);
+  }
   const source = fs
     .readFileSync(path.join(rendererDir, "sw.js"), "utf8")
-    .replace("__VERSION__", hash.digest("hex").slice(0, 12))
+    .replace("__VERSION__", version)
+    .replace("__BUILT__", built)
     .replace("__ASSETS__", JSON.stringify(assets));
   return source;
 })();

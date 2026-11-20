@@ -381,15 +381,23 @@
   // deploy waits (sw.js) until the page is hidden or no book is open, then takes over with a reload, so
   // the book being read never mixes two versions of the scripts.
   if ("serviceWorker" in navigator) {
+    let reg = null;
+    // A new version that is on the device and waits: the page says so on Мої книжки («Є нова версія · Оновити»,
+    // renderer.js). Max 2026-11-20: on the phone the old version stayed until he killed the app, at a guess.
+    const ready = () => !!(reg?.waiting && navigator.serviceWorker.controller);
+    const tell = () => ready() && document.dispatchEvent(new Event("chytai:update"));
+    const watch = (w) => w?.addEventListener("statechange", () => w.state === "installed" && (tell(), whenIdle()));
+    const swap = () => reg?.waiting?.postMessage("skipWaiting");
+    // Only while the page is hidden. «No book open» was not enough: the check runs when the app comes
+    // back to the front, and a new version found a few seconds later took over while a book was still
+    // loading, so its text showed for a second and the page reloaded to white (Max, 2026-11-02).
+    const whenIdle = () => document.hidden && swap();
     navigator.serviceWorker
       .register("/sw.js")
-      .then((reg) => {
-        const swap = () => reg.waiting?.postMessage("skipWaiting");
-        // Only while the page is hidden. «No book open» was not enough: the check runs when the app comes
-        // back to the front, and a new version found a few seconds later took over while a book was still
-        // loading, so its text showed for a second and the page reloaded to white (Max, 2026-11-02).
-        const whenIdle = () => document.hidden && swap();
-        reg.addEventListener("updatefound", () => reg.installing?.addEventListener("statechange", whenIdle));
+      .then((r) => {
+        reg = r;
+        reg.addEventListener("updatefound", () => watch(reg.installing));
+        watch(reg.installing);
         // The browser looks for a new sw.js only on a navigation, and the app never navigates: the
         // page lives for days. So the check is made whenever the app goes to the background or comes
         // back, and when the network returns; a version found in the background takes over there.
@@ -399,21 +407,61 @@
         // A version found earlier and still waiting takes over as the page opens, before anything is read: a
         // browser tab or the Mac app is seldom hidden, so a reload kept the old reader for days (Max, 2026-11-04:
         // no phone search and the old «Залишити фідбек» on app.chytai.org.ua).
-        if (reg.waiting && navigator.serviceWorker.controller) (swapAtStart = true), swap();
+        if (ready()) (swapNow = true), swap();
         whenIdle();
       })
       .catch((err) => console.warn("service worker", err));
     let hadController = !!navigator.serviceWorker.controller;
-    let swapAtStart = false;
+    let swapNow = false;
     let reloadWhenHidden = false;
     const reloadNow = () => (streams.size ? (reloadWhenHidden = true) : location.reload());
     navigator.serviceWorker.addEventListener("controllerchange", () => {
-      // The new version takes over with a reload, never in front of the reader's eyes.
-      if (hadController && swapAtStart) return location.reload();
+      // The new version takes over with a reload, never in front of the reader's eyes, unless they asked for it.
+      if (hadController && swapNow) return location.reload();
       if (hadController) document.hidden ? reloadNow() : (reloadWhenHidden = true);
       hadController = true;
     });
     document.addEventListener("visibilitychange", () => document.hidden && reloadWhenHidden && reloadNow());
+    // What a worker says about its version (sw.js answers «version»; one from before 2026-11-20 doesn't).
+    const versionOf = (w) =>
+      new Promise((resolve) => {
+        if (!w) return resolve(null);
+        const ch = new MessageChannel();
+        ch.port1.onmessage = (e) => resolve(e.data);
+        setTimeout(() => resolve(null), 1500);
+        w.postMessage("version", [ch.port2]);
+      });
+    // «Оновити» on Мої книжки and in the settings (renderer.js).
+    window.chytaiUpdate = {
+      ready,
+      version: () => versionOf(navigator.serviceWorker.controller),
+      // Takes the waiting version now: the page reloads (a book on screen opens again at its place, chytai:onscreen).
+      apply: () => {
+        if (!ready()) return false;
+        swapNow = true;
+        swap();
+        return true;
+      },
+      // Asks the server for a new version and waits while it comes: "ready", "none" or "offline".
+      async check() {
+        if (!reg) return "none";
+        if (!ready()) {
+          try {
+            await reg.update();
+          } catch {
+            return "offline";
+          }
+        }
+        const w = reg.installing || reg.waiting;
+        if (!w || !navigator.serviceWorker.controller) return "none";
+        await new Promise((resolve) => {
+          const done = () => w.state !== "installing" && resolve();
+          w.addEventListener("statechange", done);
+          done();
+        });
+        return ready() ? "ready" : "offline";
+      },
+    };
   }
 
   async function api(method, url, body, opts = {}) {

@@ -214,6 +214,23 @@ dialog menu button.primary { border: none; }
 #notice.busy .spinner { display: inline-block; }
 #notice.busy button { display: none; }
 @keyframes spin { to { transform: rotate(360deg); } }
+/* «● Є нова версія» (Max 2026-11-20, variant A: seen at once on Мої книжки, like Chrome): in the phone's header in
+   place of «+», at the top of the panel on a computer; a tap takes the new version. Only while a new version waits (body.update-ready). */
+.r-upd { display: none; align-items: center; gap: 6px; height: 34px; padding: 0 14px; border: none; border-radius: 999px;
+  background: var(--r-ochre, var(--accent)); color: #fff; font: 600 14px/1 var(--r-sans, inherit); white-space: nowrap; cursor: pointer; }
+.r-upd b { font-weight: 600; }
+.r-upd i { width: 7px; height: 7px; border-radius: 50%; background: #fff; }
+body.update-ready .r-upd { display: inline-flex; }
+.r-head .r-upd { margin: -8px -4px -8px auto; }
+body.update-ready #shell .r-head .r-add-btn { display: none; }
+.r-panel .r-upd, #r-panel .r-upd { margin: 4px 0 12px; align-self: flex-start; }
+@media (min-width: 761px) { .r-head .r-upd { display: none !important; } }
+@media (max-width: 760px) { #r-panel .r-upd { display: none !important; } }
+@media (max-width: 400px) { body.update-ready .r-head .r-logo span { display: none; } }
+dialog .set-version { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; margin: 4px 0 0; color: var(--muted); font-size: 13px; }
+dialog .set-version:has(#set-version:empty) { display: none; }
+dialog .set-version button { padding: 0; border: none; background: none; color: var(--accent); font: inherit; font-weight: 600; cursor: pointer; }
+dialog .set-version button:disabled { display: none; }
 
 #pdf-container { position: absolute; inset: 40px 64px 34px 64px; overflow: auto; }
 #pdf-container .pdfViewer .page { margin: 0 auto 16px; box-shadow: 0 1px 6px rgba(0, 0, 0, 0.12); }

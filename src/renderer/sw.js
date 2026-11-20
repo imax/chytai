@@ -5,6 +5,7 @@
 // The server fills in VERSION and ASSETS when it serves /sw.js (server/index.js): the version is a hash
 // of the reader's files, so every deploy installs a fresh copy and throws the previous one away.
 const VERSION = "__VERSION__";
+const BUILT = "__BUILT__"; // when this version first started on the server, for «Версія від …» in the settings
 const ASSETS = __ASSETS__;
 const CACHE = `chytai-${VERSION}`;
 // Covers live in their own cache that outlives a new version: each cover is fetched once and then comes
@@ -54,7 +55,10 @@ self.addEventListener("install", (event) => {
 // A new version waits until the page is reloaded or hidden (web-bridge.js posts "skipWaiting" then), so a
 // book being read keeps one consistent set of scripts; pdf.js in particular refuses a worker from another
 // version. Once active, the previous version's files go.
-self.addEventListener("message", (event) => event.data === "skipWaiting" && self.skipWaiting());
+self.addEventListener("message", (event) => {
+  if (event.data === "skipWaiting") self.skipWaiting();
+  else if (event.data === "version") event.ports[0]?.postMessage({ version: VERSION, built: BUILT });
+});
 self.addEventListener("activate", (event) => {
   event.waitUntil((async () => {
     for (const key of await caches.keys()) if (key !== CACHE && key !== COVERS) await caches.delete(key);

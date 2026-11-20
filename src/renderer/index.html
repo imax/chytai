@@ -197,6 +197,8 @@
           <header class="r-head">
             <button class="r-panel-btn" type="button" data-act="panel" aria-label="Панель"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="M9 4v16"/></svg></button>
             <div class="r-logo">Chytai<span>читай більше</span></div>
+            <!-- A new version of the reader waits on the device (web-bridge.js chytaiUpdate): it takes the place of «+», seen at once (Max 2026-11-20, like Chrome). -->
+            <button type="button" id="update-go" class="r-upd" title="Оновити Читалку"><i></i>Є нова версія</button>
             <button class="r-add-btn" type="button" data-page="add" title="Додати книжку" aria-label="Додати книжку"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>
           </header>
           <header class="r-head r-head-add">
@@ -231,6 +233,7 @@
     </div>
     <aside id="r-panel" aria-label="Панель">
       <div class="r-logo r-panel-logo">Chytai<span>читай більше</span></div>
+      <button type="button" id="update-go-panel" class="r-upd" title="Оновити Читалку"><i></i>Є нова версія</button>
       <label class="r-psearch"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.6-3.6"/></svg>
         <input id="r-pq" type="search" placeholder="Пошук" autocomplete="off" /><button id="r-pq-clear" type="button" aria-label="Стерти">×</button><kbd>/</kbd></label>
       <div id="r-pfound" class="hidden"></div>
@@ -322,6 +325,7 @@
           <option value="scroll">Безперервна прокрутка</option>
         </select>
       </label>
+      <p class="set-version"><span id="set-version"></span><button type="button" class="link" id="set-update">Оновити</button></p>
       <menu>
         <button type="button" id="btn-admin" class="link web-only family-only" title="Хто читає, скільки книжок і пояснень">Статистика</button>
         <button type="button" id="btn-keys" class="link desktop-only" title="Клавіатурні скорочення (?)">Клавіші</button>
