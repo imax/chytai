@@ -76,9 +76,13 @@ function dur(ms) {
 }
 
 // One line of the technical report (dailyreport.js, Max 2026-11-17): how long the site gave no answer that Kyiv day.
+// Only when it is worth a look (Max 2026-11-20, the report must fit one phone screen): 30 s or more down, a restart
+// without a deploy, or requests Fly could not deliver. Every deploy is on /admin/speed «Деплої».
+const QUIET_MS = 30000;
 function line(day) {
   const k = new Map(recent(3).days).get(day);
-  if (!k || (!k.deploys && !k.alone)) return "Простій сайту: 0 с, деплоїв не було.";
+  if (!k || (!k.deploys && !k.alone)) return "";
+  if ((k.down || 0) < QUIET_MS && !k.alone && !k.flyErrors) return "";
   const parts = [`деплоїв ${k.deploys}`];
   if (k.hot) parts.push(`без перезапуску ${k.hot}`);
   if (k.alone) parts.push(`перезапусків без деплою ${k.alone}`);

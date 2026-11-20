@@ -93,7 +93,7 @@ curl -s https://app.chytai.org.ua/agent/sql -H "$H" -H 'content-type: applicatio
   `/api/page-gone`. The book on screen has its own note (`chytai:onscreen`), kept until the reader goes to the home
   screen: any load within 12 h reopens it at its saved place, even after pages that died before the book opened
   (Max 2026-11-17); three deaths in a row with it = home screen. Rows in the reader's `state.stats.days[day].gone` (30 days);
-  /admin/reader «Вивантаження» and a line in the technical report (not on Огляд, Max 2026-11-13). To see
+  /admin/reader «Вивантаження» and a line in the technical report from 3 on screen a day (not on Огляд, Max 2026-11-13). To see
   memory on a phone width locally: Playwright WebKit, RSS of `WPEWebProcess`; kill it (`pkill -9 -x WPEWebProcess`)
   to fake an unload. epub.js keeps every chapter it loaded until the book closes: load one yourself → `unload()` it
   after (renderer.js `addTocPages`; a chapter's view unloads it when destroyed). Count kept ones:
@@ -107,7 +107,7 @@ curl -s https://app.chytai.org.ua/agent/sql -H "$H" -H 'content-type: applicatio
 - Prompt caching (Max 2026-11-19: watch it ourselves, not wait for Anthropic's mail). Every call puts its fixed text
   first (system prompt, then whatever repeats across calls) and `cache_control` after it; dates, a reader's data,
   book text and pictures go after the breakpoint. Below 512 tokens (all our 5.x models) nothing caches, marker or
-  not. Check a new call on `ai_usage.cache_read`. The tech report's «Кеш промптів» line (`aiusage.cacheLine`) gives
+  not. Check a new call on `ai_usage.cache_read`. The tech report's «Кеш промптів» line (`aiusage.cacheLine`, only on a day a feature broke) gives
   the day's share read from the cache, the week against the week before, and who sends most uncached; a feature
   that usually reads ≥30% from the cache and today under half of that sends one Telegram line (`cacheBroken`). The
   total alone moves with the mix: on 2026-11-19 Anthropic's «−31%» was the overview loop gone (cached) and new
@@ -178,8 +178,10 @@ technical report (below), so post it only after your fixes are pushed:
 2. Each kind: noise (an extension, a network drop, a bot) → widen the filter (`CLIENT_NOISE` in server/index.js) only
    if it repeats; real → reproduce on the test DB / a local reader, fix, prove, push to main like any small fix (not
    during the Friday digest). Big, risky or a product question → leave it for Max, one plain line why.
-3. One short Ukrainian line for the technical report, even when there was nothing:
-   `curl -s https://chytai.org.ua/agent/triage -H "$H" -H 'content-type: application/json' -d '{"text":"нових 3: виправлено 2 (…), вам глянути 1: …; з бота: №4 виправлено"}'`.
+3. One short Ukrainian line for the technical report, even when there was nothing, at most 200 characters (a longer
+   one is refused with 400: write it again shorter). Counts and outcomes only, how you fixed it goes into the commit;
+   only what Max must do gets a few words:
+   `curl -s https://chytai.org.ua/agent/triage -H "$H" -H 'content-type: application/json' -d '{"text":"нових 3: виправлено 2, вам 1: …; з бота: №4 виправлено, №6 вам: …"}'`.
    The report prints it as «Розбір помилок: …» (only a note of this Kyiv day; none = «сьогодні не запускався»).
 4. Then watch your deploy as usual (`rollout-watch`), and keep this section current.
 
@@ -219,7 +221,12 @@ technical report (below), so post it only after your fixes are pushed:
   deploy log (`deploys.line`: probes' pauses + restarts no probe saw), the review's note, pages the phones unloaded, search health (arrivals
   from Google and Search Console impressions against the 14-day median, «різко менше/більше» at half or double), disk and memory of both
   machines (moved here from /admin, Max 2026-11-12; the reader's comes with its `/api/site-admin/day`). Meta
-  `techreport:lastRun`. Try either on the test DB: `require("./web/dailyreport").buildTech({ db, day, ownerId, site,
+  `techreport:lastRun`.
+  It fits one phone screen (Max 2026-11-20, «вже не вміщається в один скріншот»): a line only when something is off.
+  Always: header, backups, errors (the new kinds by name only when the review didn't come), «Розбір помилок», «AI за
+  добу» (total and the biggest feature; three over $25). Only when off: downtime (30 s+, a restart without a deploy or
+  Fly's undelivered requests), pages unloaded on screen (3+), disk and memory (near a limit), Google («різко»), the
+  prompt cache (a feature broke), Telegram channels (counts). A new line follows the same rule. Try either on the test DB: `require("./web/dailyreport").buildTech({ db, day, ownerId, site,
   reader })` with a fake `reader`.
 
 ## Feature flags (`web/flags.js`)

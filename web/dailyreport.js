@@ -20,6 +20,8 @@ const deploys = require("./deploys");
 
 const REPORT_HOUR = 8; // Kyiv; before the Friday letter (9:30) and wantmail (10:00)
 const DAY = 86400000;
+const TRIAGE_MAX = 200; // the review's note in the technical report; /agent/triage refuses a longer one
+const GONE_FRONT = 3; // pages unloaded on screen in a day before the report names them
 const toDate = (day) => new Date(`${day}T12:00:00`);
 const addDays = (day, n) => dayOf(toDate(day).getTime() + n * DAY);
 const WEEKDAY = ["нд", "пн", "вт", "ср", "чт", "пт", "сб"];
@@ -158,20 +160,22 @@ function text(day, s, rd, site) {
 }
 
 // Disk and memory of both machines, now (Max, 2026-11-12: from /admin «Performance» into this report). The site's
-// memory is its whole machine (the web and jobs processes), the reader's its one process. Near a limit storage.js
-// has already told Telegram; here it is named first.
+// memory is its whole machine (the web and jobs processes), the reader's its one process. Only near a limit
+// (Max 2026-11-20: the report must fit one phone screen); storage.js has already told Telegram then.
 function storageLine(siteSt, readerSt) {
   const pct = (s) => (s?.diskTotal ? `${Math.round((1 - s.diskFree / s.diskTotal) * 100)}%` : "?");
   const mb = (n) => (n ? `${Math.round(n / 1048576)} МБ` : "?");
   const bad = [...storageLib.problems(siteSt, "сайт"), ...storageLib.problems(readerSt, "Читалка")];
-  return `${bad.length ? `Закінчується місце чи пам'ять: ${bad.join("; ")}. ` : ""}Диск: сайт ${pct(siteSt)}, Читалка ${pct(readerSt)}. Пам'ять: сайт ${mb(siteSt?.rss)}, Читалка ${mb(readerSt?.rss)}.`;
+  if (!bad.length) return "";
+  return `Закінчується місце чи пам'ять: ${bad.join("; ")}. Диск: сайт ${pct(siteSt)}, Читалка ${pct(readerSt)}. Пам'ять: сайт ${mb(siteSt?.rss)}, Читалка ${mb(readerSt?.rss)}.`;
 }
 
 // Search health in one line (Max, 2026-11-12, after Google's clicks fell from ~75 to 1–4 a day on 9.11 and nothing
 // told him: «якщо у нас немає трафіку, він зник або навпаки неочікувано багато, щоб про це був якийсь рядок»).
 // Our own arrivals from Google for the day (same day, `arrivals`) and Google's own impressions for its latest day
 // (Search Console, meta `gsc`, two or three days behind), each next to the median of the 14 days before it.
-// Half the norm or less, or twice or more (on a norm of 10 or more), says «різко менше/більше».
+// Half the norm or less, or twice or more (on a norm of 10 or more), says «різко менше/більше»; only then, or when
+// Search Console fails, is the line in the report (Max 2026-11-20: one phone screen).
 const median = (xs) => {
   const s = xs.filter((x) => Number.isFinite(x)).sort((a, b) => a - b);
   return s.length ? (s.length % 2 ? s[(s.length - 1) / 2] : (s[s.length / 2 - 1] + s[s.length / 2]) / 2) : null;
@@ -204,6 +208,7 @@ function searchLine(s) {
   const parts = [`переходів ${n(s.visits)}${norm(s.visitsNorm)}`];
   if (s.gsc) parts.push(`показів ${n(s.gsc.impressions)} за ${toDate(s.gsc.day).toLocaleDateString("uk-UA", { day: "numeric", month: "numeric" })}${norm(s.gsc.norm)}`);
   const dir = [off(s.visits, s.visitsNorm), s.gsc ? off(s.gsc.impressions, s.gsc.norm) : 0];
+  if (!dir.some(Boolean) && !s.error) return "";
   const head = dir.includes(-1) ? "Пошук Google, різко менше" : dir.includes(1) ? "Пошук Google, різко більше" : "Пошук Google";
   const err = s.error ? ` Search Console не відповідає: ${s.error.slice(0, 80)}` : "";
   return `${head}: ${parts.join(", ")}.${err}`;
@@ -226,27 +231,40 @@ function tgLine(db, day) {
   try {
     found = Object.entries(JSON.parse(db.get("tg:found") || "{}")).filter(([, x]) => x?.added && dayOf(x.added) === day).map(([c]) => `@${c}`);
   } catch {}
+  // Counts only (Max 2026-11-20: one phone screen); the names are in /agent/tg.
   const parts = [];
-  if (found.length) parts.push(`нові канали зі «Схожих»: ${found.join(", ")}`);
-  if (hand.length) parts.push(`ви відписались, більше не читаємо: ${hand.join(", ")}`);
-  if (quiet.length) parts.push(`без подій, Haiku не питаємо: ${quiet.join(", ")}`);
-  if (left.length) parts.push(`не про книжки, відписались: ${left.join(", ")}`);
+  if (found.length) parts.push(`нові канали зі «Схожих» ${found.length}`);
+  if (hand.length) parts.push(`ви відписались, більше не читаємо ${hand.length}`);
+  if (quiet.length) parts.push(`без подій, Haiku не питаємо ${quiet.length}`);
+  if (left.length) parts.push(`не про книжки, відписались ${left.length}`);
   return parts.length ? `Telegram: ${parts.join("; ")}` : "";
 }
 
+// The review's note, cut at a word if an old one is longer than /agent/triage now takes.
+function short(text, max = TRIAGE_MAX) {
+  if (text.length <= max) return text;
+  const cut = text.slice(0, max);
+  return `${cut.slice(0, Math.max(cut.lastIndexOf(" "), max / 2)).replace(/[\s,;:.(—-]+$/, "")}…`;
+}
+
+// It must fit one phone screen (Max 2026-11-20, «вже не вміщається в один скріншот»): a line is there when something
+// is off; disk and memory, Google, the prompt cache and a short downtime only then. Details stay in /admin.
 function techText(day, t, rd, site, backup, triage, storage = "", search = "", ai = "", tg = "", down = "") {
   const lines = [`Технічний звіт за ${dayName(day)}`, "", backup];
   const e = t.errors, fresh = e.groups.filter((g) => g.fresh);
   if (!e.n && !t.failed.length) lines.push("Збоїв не було.");
   else {
     lines.push(`Збої: помилок ${e.n}${e.n ? ` (видів ${e.groups.length}, нових ${fresh.length})` : ""}${t.failed.length ? `, задачі впали: ${t.failed.join(", ")}` : ""}`);
-    // The new kinds, a few: what to look at. Known ones are only counted.
-    for (const g of fresh.slice(0, 3)) lines.push(`• ${errorsLib.PLACES[g.place] || g.place}: ${g.msg.length > 100 ? `${g.msg.slice(0, 99)}…` : g.msg}${g.n > 1 ? ` ×${g.n}` : ""}`);
-    if (fresh.length > 3) lines.push(`• і ще нових ${fresh.length - 3}`);
+    // The new kinds, a few, only when the review has not come: its note says what became of them.
+    if (!triage) {
+      for (const g of fresh.slice(0, 3)) lines.push(`• ${errorsLib.PLACES[g.place] || g.place}: ${g.msg.length > 100 ? `${g.msg.slice(0, 99)}…` : g.msg}${g.n > 1 ? ` ×${g.n}` : ""}`);
+      if (fresh.length > 3) lines.push(`• і ще нових ${fresh.length - 3}`);
+    }
   }
   if (down) lines.push(down);
-  lines.push(`Розбір помилок: ${triage || "сьогодні не запускався."}`);
-  if (rd?.gone) lines.push(`Сторінку вивантажено: ${rd.gone}${rd.goneFront ? `, з них на екрані ${rd.goneFront}` : ", усі у фоні"}`);
+  lines.push(`Розбір помилок: ${triage ? short(triage) : "сьогодні не запускався."}`);
+  // A page or two the phone unloaded on screen is a usual day; /admin/reader «Вивантаження» has every one.
+  if (rd?.goneFront >= GONE_FRONT) lines.push(`Сторінку вивантажено: ${rd.gone}, з них на екрані ${rd.goneFront}`);
   if (!rd) lines.push("Читалка не відповіла.");
   if (storage) lines.push(storage);
   if (search) lines.push(search);
@@ -337,4 +355,4 @@ function schedule(opts) {
   setTimeout(tick, 3 * 60000).unref();
 }
 
-module.exports = { build, buildTech, techReady, schedule, siteDay, techDay, readerDay, searchDay, searchLine, text, techText };
+module.exports = { TRIAGE_MAX, build, buildTech, techReady, schedule, siteDay, techDay, readerDay, searchDay, searchLine, text, techText };

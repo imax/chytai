@@ -269,8 +269,12 @@ app.post("/agent/bugs/:id", agentOk, (req, res) => {
   res.status(r.error ? 400 : 200).json(r);
 });
 app.post("/agent/triage", agentOk, (req, res) => {
-  const text = String(req.body?.text || "").replace(/\s+/g, " ").trim().slice(0, 600);
+  const text = String(req.body?.text || "").replace(/\s+/g, " ").trim();
   if (!text) return res.status(400).json({ error: "{ text }" });
+  // One short line (Max 2026-11-20: the technical report must fit one phone screen): how many, what became of them,
+  // what is Max's; the how goes into the commits. A longer one is refused, so the review writes it again.
+  const max = require("./dailyreport").TRIAGE_MAX;
+  if (text.length > max) return res.status(400).json({ error: `${text.length} characters, at most ${max}: shorten it (counts and outcomes only, e.g. «нових 2: виправлено 2; з бота: №5 виправлено, №6 вам»), then POST again` });
   const note = { at: new Date().toISOString(), text };
   store.db.set("triage:last", JSON.stringify(note));
   res.json(note);

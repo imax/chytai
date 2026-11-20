@@ -113,12 +113,13 @@ function byLabel(day) {
   return [...m.values()].sort((a, b) => b.cost - a.cost);
 }
 
-// «AI за добу: $4.10 (Відгуки в інтернеті $2.30, Читалка: пояснення й переклад $1.40, інше $0.40)».
+// «AI за добу: $4.10 (Відгуки в інтернеті $2.30, інше $1.80)»: the biggest feature, three over DAY_ALERT (Max 2026-11-20:
+// the technical report must fit one phone screen).
 function line(day) {
   const rows = byLabel(day);
   const total = rows.reduce((s, r) => s + r.cost, 0);
   if (!rows.length) return "AI за добу: викликів не було.";
-  const top = rows.slice(0, 3).filter((r) => r.cost >= 0.01);
+  const top = rows.slice(0, total >= DAY_ALERT ? 3 : 1).filter((r) => r.cost >= 0.01);
   const rest = total - top.reduce((s, r) => s + r.cost, 0);
   const parts = top.map((r) => `${r.label} ${money(r.cost)}`);
   if (rest >= 0.01) parts.push(`інше ${money(rest)}`);
@@ -159,11 +160,13 @@ function cacheBroken(day) {
   return out;
 }
 
-// «Кеш промптів: з кешу 40% входу (7 днів 45%, 7 днів до того 80%); без кешу найбільше: … 1,0 млн, … 0,5 млн.»
+// «Кеш промптів: з кешу 40% входу (7 днів 45%, 7 днів до того 80%); без кешу найбільше: … 1,0 млн, … 0,5 млн.
+// Перестав кешуватися: …» — only on a day a feature stopped reading from the cache (Max 2026-11-20: the technical
+// report must fit one phone screen; the same Telegram line goes at once anyway, cacheBroken()).
 function cacheLine(day) {
   const rows = cacheRows(day);
   const all = sum(rows);
-  if (!inputOf(all)) return "";
+  if (!inputOf(all) || !cacheBroken(day).length) return "";
   const week = sum(cacheRows(addDays(day, -6), day));
   const prev = sum(cacheRows(addDays(day, -13), addDays(day, -7)));
   const top = Object.entries(rows)
