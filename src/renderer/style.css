@@ -1296,12 +1296,12 @@ a.r-frow:hover .r-frow-go.plain { color: var(--r-ochre); }
   g.note-ul.m-fill .comment-mark { display: none; }
 
   /* «Перед главою» (renderer.js intro): a card at the page's foot, the notes open under its line. */
-  #intro, #done {
+  #intro, #done-card {
     position: fixed; z-index: 10; left: 12px; right: 12px; bottom: calc(8px + env(safe-area-inset-bottom)); max-width: 520px; margin: 0 auto;
     display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start; color: var(--m-ink); background: var(--m-sheet);
     border: 1px solid var(--m-rule); border-radius: 14px; box-shadow: var(--m-shadow); font-family: var(--m-sans); animation: m-up .22s ease-out;
   }
-  #intro.hidden, body.library-open #intro, body:not(.reading) #intro, #done.hidden, body.library-open #done, body:not(.reading) #done { display: none; }
+  #intro.hidden, body.library-open #intro, body:not(.reading) #intro, #done-card.hidden, body.library-open #done-card, body:not(.reading) #done-card { display: none; }
   #intro-open { display: flex; flex-direction: column; gap: 3px; min-width: 0; padding: 12px 0 12px 16px; background: none; border: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
   #intro-label { font: 600 11px/1.3 var(--m-sans); letter-spacing: .12em; text-transform: uppercase; color: var(--m-ochre); }
   #intro-line { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; font: 16px/1.4 var(--m-serif); }
@@ -1312,30 +1312,38 @@ a.r-frow:hover .r-frow-go.plain { color: var(--r-ochre); }
   #intro.open #intro-line { display: none; }
   #intro-notes p { margin: 0 0 12px; font: 16px/1.5 var(--m-serif); }
   #intro-notes b { font-weight: 600; }
-  /* «Прочитано» (renderer.js done): the same card at the last page, with the site's stars and a few words. */
-  #done { z-index: 11; }
-  #done-head { display: flex; flex-direction: column; gap: 3px; min-width: 0; padding: 12px 0 4px 16px; }
+  /* «Прочитано» (renderer.js done): the small card at the last page (the shell of #intro), then the whole screen. */
+  #done-open { display: flex; flex-direction: column; gap: 3px; min-width: 0; padding: 12px 0 12px 16px; background: none; border: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
   #done-label { font: 600 11px/1.3 var(--m-sans); letter-spacing: .12em; text-transform: uppercase; color: var(--m-ochre); }
   #done-line { font: 16px/1.4 var(--m-serif); }
-  #done-x { margin: 2px 2px 0 0; color: var(--m-ink2); }
-  #done-x svg { fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; }
-  #done-form { grid-column: 1 / -1; display: flex; flex-direction: column; gap: 10px; padding: 0 16px 14px; }
-  #done-stars { display: flex; margin-left: -4px; }
-  #done-stars button { background: none; border: 0; padding: 2px 4px; font-size: 28px; line-height: 1; cursor: pointer; color: var(--m-seg); transition: color .12s; }
+  #done-cx, #done-x { margin: 2px 2px 0 0; color: var(--m-ink2); }
+  #done-cx svg, #done-x svg { fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; }
+  #done { position: fixed; inset: 0; z-index: 30; overflow-y: auto; overscroll-behavior: contain; background: var(--m-paper); color: var(--m-ink); font-family: var(--m-sans); animation: m-up .22s ease-out; }
+  #done.hidden, body.library-open #done { display: none; }
+  #done-x { position: fixed; top: calc(8px + env(safe-area-inset-top)); right: 8px; }
+  #done-form { box-sizing: border-box; max-width: 520px; min-height: 100%; margin: 0 auto; padding: calc(48px + env(safe-area-inset-top)) 24px calc(28px + env(safe-area-inset-bottom)); display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
+  #done-cover img { display: block; width: 116px; aspect-ratio: 2 / 3; object-fit: cover; border-radius: 4px; box-shadow: 0 8px 22px -6px rgba(27, 26, 23, .35); margin-bottom: 22px; }
+  #done-cover:not(.on) { display: none; }
+  #done-kicker { font: 600 12px/1.3 var(--m-sans); letter-spacing: .14em; text-transform: uppercase; color: var(--m-ochre); }
+  #done-title { margin: 8px 0 0; font: 500 26px/1.2 var(--m-serif); }
+  #done-author { margin: 6px 0 0; font: 15px/1.4 var(--m-sans); color: var(--m-ink2); }
+  #done-ask { margin: 30px 0 8px; font: 20px/1.4 var(--m-serif); }
+  #done-stars { display: flex; justify-content: center; }
+  #done-stars button { background: none; border: 0; padding: 4px 6px; font-size: 42px; line-height: 1; cursor: pointer; color: var(--m-seg); transition: color .12s; }
   #done-stars button.on { color: var(--m-ochre); }
   #done-stars button.half { background: linear-gradient(90deg, var(--m-ochre) 50%, var(--m-seg) 50%); -webkit-background-clip: text; background-clip: text; color: transparent; }
-  #done-note { width: 100%; box-sizing: border-box; border: 1px solid var(--m-rule); border-radius: 10px; background: var(--m-paper); color: var(--m-ink); padding: 10px 12px; font: 16px/1.45 var(--m-serif); resize: none; field-sizing: content; min-height: 66px; max-height: 30vh; user-select: text; -webkit-user-select: text; }
+  #done-note { width: 100%; box-sizing: border-box; margin-top: 22px; border: 1px solid var(--m-rule); border-radius: 12px; background: var(--m-sheet); color: var(--m-ink); padding: 14px 16px; font: 17px/1.5 var(--m-serif); text-align: left; resize: none; field-sizing: content; min-height: 150px; max-height: 45vh; user-select: text; -webkit-user-select: text; }
   #done-note::placeholder { color: var(--m-ink3); }
   #done-note:focus { outline: none; border-color: var(--m-ochre); }
-  #done-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-  #done-link { font: 14px var(--m-sans); color: var(--m-ink2); }
-  #done-link:not([href]) { visibility: hidden; }
-  #done-send { border: none; border-radius: 10px; padding: 10px 18px; background: var(--m-ochre); color: var(--m-on-fg); font: 500 15px var(--m-sans); cursor: pointer; }
+  #done-send { width: 100%; margin-top: 16px; border: none; border-radius: 12px; padding: 15px 18px; background: var(--m-ochre); color: var(--m-on-fg); font: 500 17px var(--m-sans); cursor: pointer; }
   #done-send:disabled { background: var(--m-off); color: var(--m-ink3); cursor: default; }
   #done.saving #done-send { opacity: .6; }
+  #done-where { margin: 12px 0 0; font: 13px/1.4 var(--m-sans); color: var(--m-ink3); }
+  #done-link { margin-top: 10px; font: 15px var(--m-sans); color: var(--m-ink2); }
+  #done-link:not([href]), #done.sent #done-where { display: none; }
   @media (max-width: 760px) {
     body.chrome-shown #intro, body:not(.panel-hidden) #intro, body:has(#msheet:not(.hidden)) #intro, body:has(#sel-toolbar:not(.hidden)) #intro { display: none; }
-    body.chrome-shown #done, body:not(.panel-hidden) #done, body:has(#msheet:not(.hidden)) #done, body:has(#sel-toolbar:not(.hidden)) #done { display: none; }
+    body.chrome-shown #done-card, body:not(.panel-hidden) #done-card, body:has(#msheet:not(.hidden)) #done-card, body:has(#sel-toolbar:not(.hidden)) #done-card { display: none; }
   }
 
   /* The sheet: #msheet (contents, «Вигляд») and #panel (explanation, notes) look the same. */

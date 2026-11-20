@@ -2839,10 +2839,11 @@ api.post("/library/take", (req, res) => {
 
 // «Позначити прочитаною» (Max, 2026-11-01): the book shows as read on Головна, and on the site's shelf it
 // becomes «Прочитано» (an account with a site key; a guest's mark stays here). Unmarking only clears it here.
-// `auto` (Max 2026-11-19, bug report №7): the page reached the book's last page; a book finished before stays as it
-// was. The answer carries the site's shelf entry (`site`: href, title, rating, note) when the catalog has the book,
-// for the card «Прочитано» with stars and a few words (renderer.js `done`); POST /library/review saves them there.
-// The site's own: POST /api/reader-read with the account's key, plus `rating` / `note` when given.
+// `auto` (Max 2026-11-19, bug report №7; 2026-11-20: «позначаємо прочитані тільки в читалці»): the page reached the
+// book's last page; it is finished here only, and the site is only asked (`peek`) for the book's shelf entry (`site`:
+// href, title, rating, note) when the catalog has it, for the card «Прочитано» (renderer.js `done`). The site's shelf
+// changes only when the reader presses «Опублікувати» on it (POST /library/review). A book finished before is left alone.
+// The site's own: POST /api/reader-read with the account's key, plus `peek` or `rating` / `note`.
 async function siteRead(req, name, extra = {}) {
   if (req.guest || req.share || !state.accounts[req.acct]?.key) return null;
   const u = userState(req.acct);
@@ -2852,7 +2853,7 @@ async function siteRead(req, name, extra = {}) {
     const r = await fetch(`${WEB_URL}/api/reader-read`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: req.acct, key: state.accounts[req.acct].key, book, ...extra }), signal: AbortSignal.timeout(15000) });
     if (!r.ok) throw new Error(`site ${r.status}`);
     const j = await r.json();
-    return j.read ? { href: j.href, title: j.title, rating: j.rating ?? null, note: j.note || "" } : null;
+    return j.read ? { href: j.href, title: j.title, author: j.author || "", rating: j.rating ?? null, note: j.note || "", status: j.status || "" } : null;
   } catch (err) {
     console.error(`reader-read ${req.acct}:`, err.message);
     return null;
@@ -2868,9 +2869,9 @@ api.post("/library/finished", async (req, res) => {
   if (!req.guest || req.share) saveState();
   if (req.body?.done === false) return res.json({ ok: true });
   if (!req.body?.auto) return res.json({ ok: true }), siteRead(req, name);
-  res.json({ ok: true, site: await siteRead(req, name) });
+  res.json({ ok: true, site: await siteRead(req, name, { peek: true }) });
 });
-// The card's stars (each tap) and words («Опублікувати»): the site's shelf entry of the book, public like any there.
+// The card's stars and words, on «Опублікувати»: «Прочитано» on the site's shelf with them, public like any entry there.
 api.post("/library/review", async (req, res) => {
   const name = safeBookName(req.body?.path);
   if (!name || req.guest) return res.status(400).json({ error: "bad request" });
