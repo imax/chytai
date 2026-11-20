@@ -568,8 +568,9 @@ A flag only when Max asks for one, or when the change could break what readers u
   «Про книжку» (`glossLine` in home.js, `GET /api/glossary/status`: covered, words, names, building), not «Аа».
   `app.chytai.org.ua/?new` shows the empty shelf's start screen over one's own books (Max, to look at it).
 - «Про книжку» that helps to read (Max 2026-11-18, `server/bookguide.js`, `GET /api/guide?book&title&author`, home.js
-  `showGuide`): «Чим цікава», «Як читати», «Складність N з 10» and pages under the description (`BEFORE`, Opus once a
-  book, for any EPUB). Kept by the text's hash (`DATA_DIR/guide/<key>.json`, same file = one guide for all), unused
+  `showGuide`): «Про книжку», «Чому варто прочитати», «Складність N з 10» and pages (`BEFORE`, `BEFORE_V`, Opus once
+  a book, for any EPUB; a v1 answer is made again when opened). No site description, no link to the site's page and no
+  «Як читати» there (Max 2026-11-20: condescending); the description shows only for a PDF or when the guide can't be made. Kept by the text's hash (`DATA_DIR/guide/<key>.json`, same file = one guide for all), unused
   180 days → gone. EPUBs only, no publishers' books. Caps $5 a day for all (`GUIDE_DAY_USD`, Telegram once), $1 a reader
   (guests together), Max none; stats day `guide`. Opens from the home book menu, the title in the book's top bar
   (`act-title-about`) and the panel's «Про книжку». No «Перевірте себе», no change to «Зміст» (Max).

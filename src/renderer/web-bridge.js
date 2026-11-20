@@ -1000,7 +1000,7 @@
         return kept || null;
       }
     },
-    // «Перед читанням» (server/bookguide.js), kept on the device like «Про книжку».
+    // The guide of «Про книжку» (server/bookguide.js), kept on the device.
     bookGuide: async (b, cachedOnly = false) => {
       const key = `guide:${b.path}`;
       const kept = await kvGet(key);

@@ -963,28 +963,26 @@
     d.returnValue = "";
     d.showModal();
   }
-  // «Про книжку»: the device's copy at once, then the network's when it answers.
+  // «Про книжку»: for an EPUB the guide (below) in place of the site's description (Max 2026-11-20: no site text, no
+  // link to the site); the description shows only for a book with no guide (a PDF) or when the guide can't be made.
   async function showAbout(b) {
     const d = $("#about-dialog");
     $("#ab-cover").innerHTML = rcover(b);
     $("#ab-title").textContent = b.title;
     $("#ab-author").textContent = author(b);
-    const link = $("#ab-link");
+    const body = $("#ab-body");
+    body.hidden = guided(b);
     const fill = (a) => {
       if (!a) {
-        $("#ab-body").innerHTML = `<p class="muted">${navigator.onLine ? "Завантажую…" : "Немає з'єднання, а опис цієї книжки ще не збережено."}</p>`;
-        link.hidden = true;
+        body.innerHTML = `<p class="muted">${navigator.onLine ? "Завантажую…" : "Немає з'єднання, а опис цієї книжки ще не збережено."}</p>`;
         return;
       }
       $("#ab-author").textContent = [author(b), a.year].filter(Boolean).join(" · ");
-      $("#ab-body").innerHTML = a.found
+      body.innerHTML = a.found
         ? a.blurb ? a.blurb.split(/\n\n+/).map((p) => `<p>${esc(p)}</p>`).join("") : `<p class="muted">Опису поки немає.</p>`
         : `<p class="muted">Цієї книжки ще немає в каталозі Chytai.</p>`;
-      link.hidden = false;
-      link.href = a.found ? a.href : a.add;
-      link.textContent = a.found ? "Сторінка книжки на Chytai ↗" : "Додати на Chytai ↗";
     };
-    $("#ab-before").innerHTML = "";
+    $("#ab-before").innerHTML = guided(b) ? abSec("Про книжку", abWait(navigator.onLine ? "Завантажую…" : "Немає з'єднання.")) : "";
     const opened = (aboutSeq = (aboutSeq || 0) + 1);
     fill(await window.reader.bookAbout?.(b, true));
     if (!d.open) d.showModal();
@@ -993,36 +991,43 @@
     const fresh = await window.reader.bookAbout?.(b);
     if (opened !== aboutSeq) return;
     if (fresh && d.open) fill(fresh);
-    else if (!fresh && d.open && $("#ab-body").textContent === "Завантажую…") $("#ab-body").innerHTML = `<p class="muted">Не вдалося завантажити опис.</p>`;
+    else if (!fresh && d.open && body.textContent === "Завантажую…") body.innerHTML = `<p class="muted">Не вдалося завантажити опис.</p>`;
   }
-  // «Перед читанням» (Max 2026-11-18, server/bookguide.js): why the book is worth it, how to read it and how hard it is,
-  // under its description. Made the first time someone asks (a few seconds), then kept for every reader of the same
-  // file. The recap of a started book («де ви зупинилися, що було досі, хто тут хто») went on 2026-11-19 (Max: it only
+  const guided = (b) => !!window.reader.bookGuide && /\.epub$/i.test(b.path || "");
+  // The guide (Max 2026-11-18, server/bookguide.js): what the book is, why it is worth reading and how hard it is,
+  // in place of the site's description. Made the first time someone asks (a few seconds), then kept for every reader
+  // of the same file. The recap of a started book («де ви зупинилися, що було досі, хто тут хто») went on 2026-11-19 (Max: it only
   // retold what he read the day before); «Перед главою» shows in the book itself (renderer.js `intro`).
   let aboutSeq = 0;
   async function showGuide(b, d, opened) {
-    if (!window.reader.bookGuide || !/\.epub$/i.test(b.path || "")) return;
+    if (!guided(b)) return;
     const draw = (g) => {
       if (opened !== aboutSeq || !d.open || !g) return;
-      $("#ab-before").innerHTML = beforeHtml(g);
+      const html = beforeHtml(g);
+      // Nothing to show (no text, over the day's cap, a failed call): the site's description after all.
+      $("#ab-body").hidden = !!g.before?.about || !!g.before?.why || !!g.building;
+      $("#ab-before").innerHTML = html;
     };
-    draw(await window.reader.bookGuide(b, true));
+    draw((await window.reader.bookGuide(b, true)) || { building: { what: "before" } });
     for (let i = 0; i < 60; i++) {
       const g = await window.reader.bookGuide(b);
-      if (g) draw(g);
+      draw(g || { none: true });
       if (!g?.building || opened !== aboutSeq || !d.open) return;
       await new Promise((r) => setTimeout(r, 3000));
     }
   }
   const abSec = (title, body) => `<section class="ab-sec"><h3>${title}</h3>${body}</section>`;
   const abWait = (text) => `<p class="ab-wait">${text}</p>`;
+  // Max 2026-11-20: «Про книжку» and «Чому варто прочитати»; no «Як читати» (condescending). A guide made before
+  // (`why`, `how`) shows its `why` until the new one comes.
   function beforeHtml(g) {
     const f = g.before;
     let html = "";
-    if (f) {
-      if (f.why) html += abSec("Чим цікава", `<p>${esc(f.why)}</p>`);
-      if (f.how) html += abSec("Як читати", `<p>${esc(f.how)}</p>`);
-    } else if (g.building?.what === "before") html += abSec("Перед читанням", abWait("Готуємо кілька слів перед читанням…"));
+    const about = f?.about || f?.why;
+    if (about) {
+      html += abSec("Про книжку", `<p>${esc(about)}</p>`);
+      if (f.worth) html += abSec("Чому варто прочитати", `<p>${esc(f.worth)}</p>`);
+    } else if (g.building?.what === "before") html += abSec("Про книжку", abWait("Готуємо кілька слів про книжку…"));
     const chips = [f?.level ? `Складність ${f.level} з 10` : "", g.pages > 1 ? `≈ ${g.pages} ${plural(g.pages, "сторінка", "сторінки", "сторінок")}` : ""].filter(Boolean);
     if (chips.length) html += `<p class="ab-chips">${chips.map((c) => `<span>${c}</span>`).join("")}</p>`;
     return html;

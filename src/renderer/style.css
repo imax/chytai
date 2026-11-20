@@ -780,7 +780,7 @@ body[data-theme="dark"] .r-pill { font-weight: 600; }
 #about-dialog .ab-people dd { margin: 0; color: var(--r-ink2); }
 #about-dialog .ab-chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0 4px; font-size: 13px; }
 #about-dialog .ab-chips span { padding: 5px 10px; border-radius: 14px; background: color-mix(in srgb, var(--r-sline) 45%, transparent); }
-.ab-foot { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin: 8px 0 0; font-size: 14px; }
+.ab-foot { display: flex; justify-content: flex-end; align-items: center; gap: 16px; margin: 8px 0 0; font-size: 14px; }
 .ab-foot a { color: var(--r-ink); text-underline-offset: 3px; }
 #trash-dialog { max-height: 85vh; box-sizing: border-box; overflow-y: auto; }
 #trash-dialog::backdrop { background: rgba(27, 26, 23, .45); }
