@@ -75,6 +75,16 @@
       <button type="button" id="intro-x" class="m-x" data-act="intro-hide" aria-label="Сховати"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
       <div id="intro-notes"></div>
     </aside>
+    <!-- «Прочитано» at the book's last page (renderer.js done): stars and a few words for the site's shelf. -->
+    <aside id="done" class="hidden" aria-label="Прочитано">
+      <div id="done-head"><span id="done-label">Прочитано</span><span id="done-line">Як вам книжка?</span></div>
+      <button type="button" id="done-x" class="m-x" data-act="done-hide" aria-label="Сховати"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+      <form id="done-form">
+        <span id="done-stars" role="group" aria-label="Оцінка"><button type="button" data-r="1" data-act="done-star" aria-label="1 з 5">★</button><button type="button" data-r="2" data-act="done-star" aria-label="2 з 5">★</button><button type="button" data-r="3" data-act="done-star" aria-label="3 з 5">★</button><button type="button" data-r="4" data-act="done-star" aria-label="4 з 5">★</button><button type="button" data-r="5" data-act="done-star" aria-label="5 з 5">★</button></span>
+        <textarea id="done-note" rows="3" maxlength="4000" placeholder="Кілька слів про книжку"></textarea>
+        <div id="done-foot"><a id="done-link" target="_blank" rel="noopener">На Chytai</a><button type="submit" id="done-send" data-act="done-send">Опублікувати</button></div>
+      </form>
+    </aside>
 
     <!-- Phone reading screen, turn 9 from Claude Design (2026-11-02): a bar on top (back, title, search) and one
          at the bottom (chapter, pages, a slider, Зміст / Нотатки / Вигляд); one sheet for the contents and

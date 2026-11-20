@@ -2839,23 +2839,50 @@ api.post("/library/take", (req, res) => {
 
 // «Позначити прочитаною» (Max, 2026-11-01): the book shows as read on Головна, and on the site's shelf it
 // becomes «Прочитано» (an account with a site key; a guest's mark stays here). Unmarking only clears it here.
-api.post("/library/finished", (req, res) => {
+// `auto` (Max 2026-11-19, bug report №7): the page reached the book's last page; a book finished before stays as it
+// was. The answer carries the site's shelf entry (`site`: href, title, rating, note) when the catalog has the book,
+// for the card «Прочитано» with stars and a few words (renderer.js `done`); POST /library/review saves them there.
+// The site's own: POST /api/reader-read with the account's key, plus `rating` / `note` when given.
+async function siteRead(req, name, extra = {}) {
+  if (req.guest || req.share || !state.accounts[req.acct]?.key) return null;
+  const u = userState(req.acct);
+  const info = freeShelf.find((f) => f.name === name) || prot.meta(name) || req.lib?.meta?.bookMeta?.[name] || u.paper?.[name] || {};
+  const book = { name, title: info.title || "", authors: Array.isArray(info.authors) ? info.authors : info.author ? [info.author] : [] };
+  try {
+    const r = await fetch(`${WEB_URL}/api/reader-read`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: req.acct, key: state.accounts[req.acct].key, book, ...extra }), signal: AbortSignal.timeout(15000) });
+    if (!r.ok) throw new Error(`site ${r.status}`);
+    const j = await r.json();
+    return j.read ? { href: j.href, title: j.title, rating: j.rating ?? null, note: j.note || "" } : null;
+  } catch (err) {
+    console.error(`reader-read ${req.acct}:`, err.message);
+    return null;
+  }
+}
+api.post("/library/finished", async (req, res) => {
   const u = req.guest ? guestState(req.guest) : userState(req.acct);
   const name = safeBookName(req.body?.path);
   if (!name) return res.status(400).json({ error: "bad request" });
   if (req.body?.done === false) delete u.finished?.[name];
-  else {
-    (u.finished ??= {})[name] = Date.now();
-    if (!req.guest && !req.share && state.accounts[req.acct]?.key) {
-      const info = freeShelf.find((f) => f.name === name) || prot.meta(name) || req.lib?.meta?.bookMeta?.[name] || u.paper?.[name] || {};
-      const book = { name, title: info.title || "", authors: Array.isArray(info.authors) ? info.authors : info.author ? [info.author] : [] };
-      fetch(`${WEB_URL}/api/reader-read`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: req.acct, key: state.accounts[req.acct].key, book }), signal: AbortSignal.timeout(20000) })
-        .then((r) => r.ok || console.error(`reader-read ${req.acct}: ${r.status}`))
-        .catch((err) => console.error(`reader-read ${req.acct}:`, err.message));
-    }
-  }
+  else if (req.body?.auto && u.finished?.[name]) return res.json({ ok: true, already: true });
+  else (u.finished ??= {})[name] = Date.now();
   if (!req.guest || req.share) saveState();
-  res.json({ ok: true });
+  if (req.body?.done === false) return res.json({ ok: true });
+  if (!req.body?.auto) return res.json({ ok: true }), siteRead(req, name);
+  res.json({ ok: true, site: await siteRead(req, name) });
+});
+// The card's stars (each tap) and words («Опублікувати»): the site's shelf entry of the book, public like any there.
+api.post("/library/review", async (req, res) => {
+  const name = safeBookName(req.body?.path);
+  if (!name || req.guest) return res.status(400).json({ error: "bad request" });
+  const extra = {};
+  if ("rating" in (req.body || {})) {
+    const r = Number(req.body.rating);
+    extra.rating = req.body.rating == null || !(r >= 0.5 && r <= 5) ? null : Math.round(r * 2) / 2;
+  }
+  if (typeof req.body?.note === "string") extra.note = req.body.note.slice(0, 4000);
+  const site = await siteRead(req, name, extra);
+  if (!site) return res.status(502).json({ error: "Не вдалося зберегти на Chytai." });
+  res.json({ ok: true, site });
 });
 
 // The «Клуб» tab (Max, 2026-11-01): the site's /api/club-feed (what others read now, the Club's talks), kept a minute.

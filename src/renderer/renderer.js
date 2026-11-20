@@ -635,6 +635,8 @@ function closeBook() {
   $("#btn-back").classList.add("hidden");
   hideIntro();
   introAt = null;
+  $("#done").classList.add("hidden");
+  doneFor = doneBook = null;
   syncReading();
 }
 
@@ -728,6 +730,81 @@ $("#intro-open").addEventListener("click", () => {
 });
 $("#intro-x").addEventListener("click", hideIntro);
 
+// ---------- «Прочитано» at the book's end (Max 2026-11-19, bug report №7) ----------
+// The last page marks the book read here and on the site's shelf (server: POST /api/library/finished `auto`; a book
+// finished before is left alone). When the catalog has it, a card like «Перед главою» asks for the site's stars
+// (each tap saved, a second tap on the same star makes it half, as on the site) and a few words, «Опублікувати»
+// puts them on the reader's shelf there (POST /api/library/review). Once a book an opening; guests get no card.
+let doneFor = null; // the book whose end was reached in this opening
+let doneBook = null; // the book the card is for
+function doneCheck(atEnd) {
+  if (!atEnd || !current || current.preview || doneFor === current.path) return;
+  doneFor = current.path;
+  const forBook = current;
+  window.reader
+    .libraryFinished(current.path, true, true)
+    .then((r) => r?.json?.())
+    .then((r) => current === forBook && r?.site && showDone(forBook.path, r.site))
+    .catch(() => {});
+}
+function doneStars(n) {
+  $("#done").dataset.rating = n ?? "";
+  for (const b of document.querySelectorAll("#done-stars button")) {
+    const r = Number(b.dataset.r);
+    b.classList.toggle("on", n != null && r <= n);
+    b.classList.toggle("half", n != null && r === n + 0.5);
+  }
+}
+function showDone(path, site) {
+  doneBook = path;
+  doneStars(site.rating);
+  $("#done-note").value = site.note || "";
+  $("#done-note").dataset.sent = site.note || "";
+  $("#done-link").href = site.href || "";
+  $("#done-send").disabled = true;
+  $("#done-send").textContent = site.note ? "✓ Опубліковано" : "Опублікувати";
+  $("#done").classList.remove("hidden");
+  window.ReadingTime?.count("done-shown");
+}
+async function doneSave(body) {
+  const box = $("#done");
+  box.classList.add("saving");
+  try {
+    const r = await window.reader.libraryReview(doneBook, body);
+    if (!r?.site) throw new Error(r?.error || "site");
+    return r.site;
+  } catch {
+    showNotice("Не вдалося зберегти на Chytai. Спробуйте ще раз.", false);
+    return null;
+  } finally {
+    box.classList.remove("saving");
+  }
+}
+$("#done-stars").addEventListener("click", (e) => {
+  const star = e.target.closest("button");
+  if (!star) return;
+  const r = Number(star.dataset.r);
+  const n = Number($("#done").dataset.rating) === r ? r - 0.5 : r;
+  doneStars(n);
+  doneSave({ rating: n });
+});
+$("#done-note").addEventListener("input", () => {
+  const changed = $("#done-note").value.trim() !== ($("#done-note").dataset.sent || "").trim();
+  $("#done-send").disabled = !changed;
+  $("#done-send").textContent = changed || !$("#done-note").dataset.sent ? "Опублікувати" : "✓ Опубліковано";
+});
+$("#done-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const note = $("#done-note").value.trim();
+  $("#done-send").disabled = true;
+  const site = await doneSave({ note });
+  if (!site) return ($("#done-send").disabled = false);
+  $("#done-note").dataset.sent = site.note || "";
+  $("#done-send").textContent = site.note ? "✓ Опубліковано" : "Опублікувати";
+  $("#done-note").blur();
+});
+$("#done-x").addEventListener("click", () => $("#done").classList.add("hidden"));
+
 // ---------- Footnotes: a way back after following a link inside the book ----------
 
 let returnCfi = null;
@@ -806,6 +883,7 @@ async function openPdf(payload) {
     position: payload.position,
     onPageChange: (page, total) => {
       window.reader.savePosition(current.posKey, `pdf:${page}`, { pct: Math.round((page / total) * 100), chapter: "" });
+      doneCheck(total > 1 && page >= total);
       $("#progress-label").textContent = `${page} / ${total}`;
       window.PhoneRead?.pdfPage(page, total);
       hideSelToolbar();
@@ -940,6 +1018,7 @@ function onRelocated(location) {
   if (current?.protected) reportChapter(location.start?.index);
   updateProgress(location);
   introCheck(location);
+  doneCheck(location.atEnd || readingProgress(location)?.pct >= 100);
   // While scrolling, a selection may move off screen and back; its toolbar is pinned at the bottom anyway.
   if (!scrolled()) hideSelToolbar();
   window.Gloss?.hide();

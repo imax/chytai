@@ -712,5 +712,12 @@ A flag only when Max asks for one, or when the change could break what readers u
   A month = every book read in it (a minute in `readBooks`, a note or explanation, finished), «N книг · M прочитано»
   (Max: «читав не означає прочитано»; no ticks on covers). Top: «N книг з <first day>», tiles прочитано / пояснень /
   нотаток / слів зі словничка (no «читаю»).
+- Reader «Прочитано» at a book's end (Max 2026-11-20, bot report №7): the last page (`location.atEnd` or 100%; a PDF's
+  last page) marks the book finished (`POST /api/library/finished` with `auto`: a book finished before is left alone) and
+  the site's shelf «Прочитано» (`/api/reader-read`, which answers the entry: href, rating, note). When the catalog has the
+  book, a card like «Перед главою» (`#done`, renderer.js `doneCheck` / `showDone`) takes the site's stars (each tap saved)
+  and a few words («Опублікувати»): `POST /api/library/review` → `/api/reader-read` with `rating` / `note`, the same entry
+  as /me/book's form, public. New words from a reader (not Max) mail + Telegram Max. Guests get no card. «Функції»:
+  `done-shown`, `act-done-star`, `act-done-send`.
 - Reader: the app's own UI can't be selected (`body` has `user-select: none`, end of `src/renderer/style.css`). Text a
   reader may copy (a new note, answer or field) goes into the list of selectable classes there.
