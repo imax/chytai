@@ -136,7 +136,7 @@
   // The panel: search in your books, Мої книжки / Додати книжку / Нещодавно видалені, the books opened lately,
   // feedback and your settings. Always open on a computer; on a phone the header's button (or, in the app, a
   // swipe from the left edge) slides the page aside to show it. Safari keeps that edge for «back».
-  let page = "home"; // home | add | journey | paper
+  let page = "home"; // home | add | journey | admin | how | paper
   let paperPath = null; // the paper book on «paper» (paper.js)
   let addQuery = "";
   let freeAll = false;
@@ -148,7 +148,9 @@
 
   function setPage(next, { push = true } = {}) {
     if ((next === "add" || next === "journey") && settings.guest) return;
+    if (next === "admin" && !settings.owner) return;
     if (next === "journey") loadJourney();
+    if (next === "admin") loadAdmin();
     const was = page;
     page = next;
     $("#shell").dataset.page = page;
@@ -288,7 +290,7 @@
     if (page === "paper" && document.activeElement?.closest?.(".pp") && homeHtml) return;
     const pb = page === "paper" && lib.books.find((b) => b.path === paperPath);
     if (page === "paper" && !pb) page = "home";
-    const html = pb ? window.Paper.pageHtml(pb) : page === "add" ? addPageHtml() : page === "journey" ? journeyHtml() : page === "how" ? howHtml() : homePageHtml();
+    const html = pb ? window.Paper.pageHtml(pb) : page === "add" ? addPageHtml() : page === "journey" ? journeyHtml() : page === "admin" ? adminHtml() : page === "how" ? howHtml() : homePageHtml();
     // The library comes twice (the saved copy, then the server's) and again when the app comes back to the
     // front: drawing the same covers anew made them flicker, so an unchanged screen is left alone.
     if (html === homeHtml) return;
@@ -386,6 +388,30 @@
       journey = j || (was && was !== "…" ? was : null);
       if (page === "journey") (homeHtml = ""), renderHome();
     });
+  }
+  // «Адмінка» (Max 2026-11-20): the owner's stats of the whole reader, drawn by admin-view.js from GET /api/admin.
+  // Asked anew each time the page opens; app.chytai.org.ua/admin (and /?admin) opens it.
+  let admin = null; // the last answer, or "…" while asked
+  function loadAdmin() {
+    if (admin === "…") return;
+    const was = admin;
+    admin = was || "…";
+    window.reader.admin?.().then((s) => {
+      admin = s || (was && was !== "…" ? was : null);
+      if (page === "admin") (homeHtml = ""), renderHome();
+    });
+  }
+  function adminHtml() {
+    if (!admin || admin === "…") return `<section class="r-jour">${admin === "…" ? `<p class="r-empty"><span class="spinner"></span>Збираємо…</p>` : `<p class="r-empty">Читалка не віддала числа. Спробуйте ще раз.</p>`}</section>`;
+    return window.AdminView.html(admin);
+  }
+  async function adminOff(el) {
+    el.disabled = true;
+    const r = await window.reader.adminOff?.(el.dataset.id, !!el.dataset.off);
+    const u = r?.ok && admin?.users?.find((x) => x.id === el.dataset.id);
+    if (u) u.off = r.off;
+    homeHtml = "";
+    renderHome();
   }
   const MONTHS = ["Січень", "Лютий", "Березень", "Квітень", "Травень", "Червень", "Липень", "Серпень", "Вересень", "Жовтень", "Листопад", "Грудень"];
   const num = (n) => Number(n || 0).toLocaleString("uk-UA");
@@ -623,7 +649,7 @@
     const tab = f || t;
     for (const b of tab.parentElement.children) b.classList.toggle("on", b === tab);
     tab.closest("section").querySelector(".r-filtered").dataset.show = f ? homeFilter : freeTab;
-    homeHtml = page === "add" ? addPageHtml() : page === "journey" ? journeyHtml() : page === "how" ? howHtml() : homePageHtml();
+    homeHtml = page === "add" ? addPageHtml() : page === "journey" ? journeyHtml() : page === "admin" ? adminHtml() : page === "how" ? howHtml() : homePageHtml();
     drawn.html = homeHtml;
   });
 
@@ -823,6 +849,7 @@
     if (el.dataset.act === "trash") return panel(false), openTrash();
     if (el.dataset.act === "panel") return panel();
     if (el.dataset.act === "settings") return panel(false), openSettings();
+    if (el.dataset.act === "admin-off") return adminOff(el);
     if (el.dataset.act === "cover-photo") return window.Paper.coverPhoto();
     if (el.dataset.act === "free-shelf") {
       freeAll = true;
@@ -1290,8 +1317,15 @@
     reload: async () => ((lib = await window.Library.data(true)), (homeHtml = "")),
   };
 
-  // The family starts here; a guest has one book, which the bridge opens straight away.
+  // «Адмінка» from the settings (owner only, body.not-owner hides the button there).
+  $("#btn-admin").onclick = () => ($("#settings").close(), setPage("admin"));
+
+  // The family starts here; a guest has one book, which the bridge opens straight away. /?admin opens «Адмінка».
   settingsReady
-    .then(() => (settings.guest ? hide() : show("home")))
+    .then(() => {
+      if (settings.guest) return hide();
+      if (settings.owner && new URLSearchParams(location.search).has("admin")) history.replaceState(history.state, "", "/"), setPage("admin", { push: false });
+      show("home");
+    })
     .catch(() => show("home"));
 })();

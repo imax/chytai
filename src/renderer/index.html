@@ -209,6 +209,10 @@
             <button class="r-back" type="button" data-page="home" aria-label="Назад"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 5-7 7 7 7"/></svg></button>
             <h1>Як це працює</h1>
           </header>
+          <header class="r-head r-head-adm">
+            <button class="r-back" type="button" data-page="home" aria-label="Назад"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 5-7 7 7 7"/></svg></button>
+            <h1>Адмінка</h1>
+          </header>
           <header class="r-head r-head-j">
             <button class="r-back" type="button" data-page="home" aria-label="Назад"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 5-7 7 7 7"/></svg></button>
             <h1>Статистика</h1>
@@ -240,6 +244,7 @@
       <nav class="r-pnav">
         <button type="button" data-page="home">Мої книжки<i id="r-n-books"></i></button>
         <button type="button" data-page="journey" id="r-pnav-journey" class="family-only">Статистика</button>
+        <button type="button" data-page="admin" id="r-pnav-admin" class="family-only">Адмінка</button>
         <button type="button" data-page="add" class="r-pnav-add">Додати книжку<i>+</i></button>
         <button type="button" data-act="trash" id="r-pnav-trash" hidden>Нещодавно видалені<i id="r-n-trash"></i></button>
       </nav>
@@ -327,7 +332,7 @@
       </label>
       <p class="set-version"><span id="set-version"></span><button type="button" class="link" id="set-update">Оновити</button></p>
       <menu>
-        <button type="button" id="btn-admin" class="link web-only family-only" title="Хто читає, скільки книжок і пояснень">Статистика</button>
+        <button type="button" id="btn-admin" class="link web-only family-only" title="Хто читає, скільки хвилин і пояснень">Адмінка</button>
         <button type="button" id="btn-keys" class="link desktop-only" title="Клавіатурні скорочення (?)">Клавіші</button>
         <button type="button" id="btn-logout" class="link web-only" title="Вийти з облікового запису на цьому пристрої">Вийти</button>
         <button value="cancel" formnovalidate>Скасувати</button>
@@ -447,6 +452,7 @@
   <script src="phone-read.js"></script>
   <script src="desk-read.js"></script>
   <script src="library-view.js"></script>
+  <script src="admin-view.js"></script>
   <script src="home.js"></script>
   <script src="paper.js"></script>
   <script src="reading-time.js"></script>

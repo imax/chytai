@@ -1098,9 +1098,45 @@ a.r-frow:hover .r-frow-go.plain { color: var(--r-ochre); }
 .r-jb-bar i { display: block; height: 100%; background: var(--r-bar); border-radius: 2px; }
 .r-jb-n { font-size: 13px; color: var(--r-ink); }
 @media (hover: hover) { .r-jb:hover b { color: var(--r-ochre); } }
+/* «Адмінка» (2026-11-20, the owner only): the site's /admin/reader in the reader's own look; wide tables scroll
+   sideways with the name column kept in place. */
+.r-adm-page, .r-adm-sec { max-width: 1120px; }
+.r-jt small { font-size: 12px; color: var(--r-ink3); }
+.r-adm-note { margin: 10px 0 0; font-size: 13px; line-height: 1.45; color: var(--r-ink2); }
+.r-adm-sec > .r-adm-note:first-of-type { margin: 0 0 12px; }
+.r-adm-tbl { overflow-x: auto; overscroll-behavior-x: contain; border-top: 1px solid var(--r-rule); }
+.r-adm { border-collapse: collapse; width: 100%; font: 13px/1.35 var(--r-sans); font-variant-numeric: tabular-nums; }
+.r-adm th, .r-adm td { padding: 7px 10px; border-bottom: 1px solid var(--r-rule); text-align: right; white-space: nowrap; vertical-align: top; font-family: var(--r-sans); }
+.r-adm thead th { font-weight: 500; font-size: 12px; color: var(--r-ink2); vertical-align: bottom; }
+.r-adm tbody th { font-weight: 500; text-align: left; position: sticky; left: 0; background: var(--r-paper); }
+.r-adm thead th:first-child { text-align: left; position: sticky; left: 0; background: var(--r-paper); }
+.r-adm th:first-child, .r-adm td:first-child { padding-left: 0; }
+.r-adm .tx { text-align: left !important; white-space: normal; overflow-wrap: anywhere; min-width: 180px; max-width: 320px; }
+.r-adm .m { color: var(--r-ink3); font-weight: 400; }
+.r-adm tr.dim th, .r-adm tr.dim td { color: var(--r-ink3); }
+.r-adm tr.me th { color: var(--r-ochre); }
+.r-adm.kv { width: auto; }
+.r-adm.kv thead { display: none; }
+.r-adm.kv tbody th { font-weight: 400; padding-right: 24px; }
+.r-adm-btn { border: 1px solid var(--r-rule); border-radius: 6px; background: none; color: var(--r-ink2); font: 12px var(--r-sans); padding: 3px 9px; cursor: pointer; }
+.r-adm-btn.danger { color: var(--r-red); }
+.r-adm-more { margin-top: 4px; }
+.r-adm-more > summary { cursor: pointer; padding: 6px 0; font-size: 14px; color: var(--r-ink2); }
+.r-adm-more[open] > summary { margin-bottom: 6px; }
+.r-head-adm h1 { margin: 0; font: 600 22px/1 var(--r-serif); }
+#shell .r-head-adm, #shell[data-page="admin"] .r-head:not(.r-head-adm) { display: none; }
+#shell[data-page="admin"] .r-head-adm { display: flex; }
+body.not-owner #r-pnav-admin { display: none !important; }
+@media (max-width: 760px) {
+  .r-adm .tx { min-width: 130px; max-width: 180px; }
+  .r-adm th, .r-adm td { padding: 7px 8px; }
+  .r-adm tbody th { white-space: normal; min-width: 90px; max-width: 150px; overflow-wrap: anywhere; }
+  .r-adm thead th { white-space: normal; min-width: 3.2em; }
+  .r-adm .u { display: none; }
+}
 .r-jh { display: none; margin: 0 0 6px; font: 600 32px/1.1 var(--r-serif); letter-spacing: -0.01em; }
 @media (min-width: 761px) {
-  #shell[data-page="journey"] .r-head-j { display: none; }
+  #shell[data-page="journey"] .r-head-j, #shell[data-page="admin"] .r-head-adm { display: none; }
   #shell[data-page="how"] .r-head-how { display: none; }
   .r-how-add { align-self: flex-start; }
   .r-jh { display: block; }

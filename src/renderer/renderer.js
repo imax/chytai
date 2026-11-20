@@ -364,7 +364,6 @@ $("#settings").addEventListener("close", async () => {
   if (fontChanged) applyTypography(true);
 });
 $("#btn-logout").onclick = () => window.reader.logout?.();
-$("#btn-admin").onclick = () => (location.href = "/admin");
 $("#btn-search").onclick = () => window.BookSearch?.open();
 
 // On a phone the book scrolls as one continuous column unless page turns were chosen in settings;

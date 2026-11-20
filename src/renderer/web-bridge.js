@@ -878,6 +878,9 @@
     // «Статистика» (GET /api/journey): explanations, notes and finished books by book and by month; null offline.
     journey: () => api("GET", "/api/journey").then((r) => r.json()).catch(() => null),
     // «Словничок»: how far the book's list is (GET /api/glossary/status); null offline.
+    // «Адмінка» (owner only): the whole reader's stats (GET /api/admin), null when it fails; switching one account off.
+    admin: () => api("GET", "/api/admin").then((r) => (r.ok ? r.json() : null)).catch(() => null),
+    adminOff: (id, off) => api("POST", "/api/admin/off", { id, off }).then((r) => r.json()).catch(() => null),
     glossaryStatus: (name) => api("GET", `/api/glossary/status?book=${encodeURIComponent(name)}`).then((r) => r.json()).catch(() => null),
     // «Підготувати словничок»: the list starts at the reader's place (POST /api/glossary/start).
     glossaryStart: (name, pct) => api("POST", "/api/glossary/start", { book: name, pct }).then((r) => r.json()).catch(() => null),

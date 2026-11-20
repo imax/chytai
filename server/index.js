@@ -20,7 +20,7 @@ const JSZip = require("jszip");
 const library = require("../src/library");
 const { bookLanguage, epubSample } = require("./language");
 const { checkUpload } = require("./content");
-const { cost } = require("./admin");
+const { cost, features, UI_NAMES } = require("./admin");
 const { createProtected } = require("./protected");
 const paper = require("./paper");
 const storage = require("./storage");
@@ -517,7 +517,7 @@ function aiBudgetDenied(req) {
     if (d.capMailed !== day) {
       d.capMailed = day;
       saveState();
-      alertOwner("Chytai: денний бюджет на Claude вичерпано", `За ${day} пояснення в Читалці коштували $${(d.cost || 0).toFixed(2)} (стеля $${DAILY_COST_CAP}). До кінця дня читачі пояснень не отримують, ти отримуєш. Хто скільки витратив: ${WEB_URL}/admin/reader. Стелю міняє DAILY_COST_CAP у секретах Fly (app chytai).`);
+      alertOwner("Chytai: денний бюджет на Claude вичерпано", `За ${day} пояснення в Читалці коштували $${(d.cost || 0).toFixed(2)} (стеля $${DAILY_COST_CAP}). До кінця дня читачі пояснень не отримують, ти отримуєш. Хто скільки витратив: https://${READER_DOMAIN || "app.chytai.org.ua"}/admin (Адмінка в Читалці). Стелю міняє DAILY_COST_CAP у секретах Fly (app chytai).`);
     }
     return "Пояснення на сьогодні тимчасово недоступні. Завтра все запрацює знову.";
   }
@@ -875,6 +875,7 @@ async function collectStats() {
     .sort((a, b) => b.requests - a.requests);
 
   const gu = guestUsage();
+  const ui = uiStats(stats.days, dayKeys, monthAgo);
   return {
     timeZone: STATS_TZ,
     since: stats.since,
@@ -894,7 +895,9 @@ async function collectStats() {
     reading: readingByBook(stats.days, dayKeys, today, weekAgo, monthAgo),
     offline: offlineStats(stats.days, dayKeys, monthAgo),
     gone: goneStats(stats.days, dayKeys, monthAgo),
-    ui: uiStats(stats.days, dayKeys, monthAgo),
+    ui,
+    features: features(ui),
+    uiNames: UI_NAMES,
     words: wordStats(stats.days, dayKeys, monthAgo),
     stops: bookStops(),
     firstDays: firstDays(stats.days, dayKeys),
@@ -1659,9 +1662,8 @@ app.get("/api/site-admin/day", (req, res) => {
   for (const [acct, list] of Object.entries(d.readBooks || {})) for (const [name, sec] of Object.entries(list)) books.push({ acct, name, title: bookInfo(acct, name).title || "", sec });
   res.json({ day, readSec: d.readSec || {}, explains: d.users || {}, notes, cost: d.cost || 0, ai: d.ai || {}, books, gone: (d.gone || []).map((r) => ({ acct: r.acct, bg: r.bg })), storage: storage.now(DATA_DIR, ["reader.db"]) });
 });
-// Switch the reader off (or on again) for one account: { id, off: true | false }.
-app.post("/api/site-admin/off", express.json(), (req, res) => {
-  if (!siteOwnerOk(req)) return res.status(403).json({ error: "key" });
+// Switch the reader off (or on again) for one account: { id, off: true | false }. Also from the owner's «Адмінка».
+function switchOff(req, res) {
   const id = String(req.body?.id || "");
   if (!ACCOUNT_ID.test(id) || id === OWNER_ID) return res.status(400).json({ error: "id" });
   const a = (state.accounts[id] ??= {});
@@ -1669,7 +1671,8 @@ app.post("/api/site-admin/off", express.json(), (req, res) => {
   else delete a.off;
   saveState();
   res.json({ ok: true, off: !!a.off });
-});
+}
+app.post("/api/site-admin/off", express.json(), (req, res) => (siteOwnerOk(req) ? switchOff(req, res) : res.status(403).json({ error: "key" })));
 
 // «Попросити книжку» (site's asks.js, Max 2026-11-08: «він просто додає її в читалку … і вона автоматом з'являється
 // в моїй читалці»): the site, asked by the owner of the file, puts their book into another account's library: the
@@ -1895,8 +1898,8 @@ app.use((req, res, next) => {
 
 const guestsCannot = (message) => (req, res, next) => (req.guest ? res.status(403).json({ error: message }) : next());
 
-// The dashboard moved to the site's admin (Max, 2026-11-02).
-app.get("/admin", (_req, res) => res.redirect(`${WEB_URL}/admin/reader`));
+// The reader's own stats are the owner's «Адмінка» page (home.js, Max 2026-11-20: not on the site any more).
+app.get("/admin", (_req, res) => res.redirect("/?admin"));
 
 // Static renderer: index.html at /, its scripts next to it, node_modules at /node_modules
 // (so the renderer's ../../node_modules/… paths resolve, as they do under file:// in Electron).
@@ -1944,6 +1947,53 @@ api.post("/reading", express.text({ limit: "16kb" }), (req, res) => {
   saveState();
   res.json({ ok: true });
 });
+// «Адмінка» (Max 2026-11-20: «адмінстатистику читалки прямо в читалці … щоб воно не відправляло на сайт»): the
+// owner's page in the panel (home.js, admin-view.js) with what the site's /admin/reader shows, from collectStats.
+// The site put its catalog titles on readers' files; here a title comes from the reader's own library (a
+// correction, else the file's metadata in the library cache). The cost of one selected word by day, from `ai`.
+function adminTitles() {
+  const caches = new Map();
+  return (acct, name) => {
+    if (!acct || !name) return "";
+    const own = bookInfo(acct, name).title;
+    if (own) return own;
+    const lib = libs.get(acct) || (state.accounts[acct] || acct === OWNER_ID ? libOf(acct) : null);
+    if (!lib) return "";
+    if (lib.meta.bookMeta?.[name]?.title) return lib.meta.bookMeta[name].title;
+    if (!caches.has(acct)) {
+      let c = {};
+      try {
+        c = JSON.parse(fs.readFileSync(lib.cache, "utf8"));
+      } catch {}
+      caches.set(acct, c);
+    }
+    return caches.get(acct)[bookFile(lib, name)]?.meta?.title || "";
+  };
+}
+api.get("/admin", async (req, res, next) => {
+  if (!req.owner) return res.status(403).json({ error: "owner" });
+  try {
+    const s = await collectStats();
+    const title = adminTitles();
+    for (const u of s.users) u.lastTitle = title(u.id, u.lastBook);
+    for (const r of [...s.reading, ...s.stops.books]) r.title ||= title(r.id, r.book);
+    for (const r of s.gone.rows) r.title ||= title(r.acct, r.book);
+    const days = state.stats?.days || {};
+    s.wordCost = {};
+    for (const w of s.words) {
+      const ai = days[w.day]?.ai || {};
+      s.wordCost[w.day] = ["word", "wordahead"].reduce((a, f) => a + Object.values(ai[f] || {}).reduce((b, m) => b + (m.cost || 0), 0), 0);
+    }
+    delete s.books; // the owner's own files, not shown
+    delete s.wishes;
+    s.ui = s.ui.map(({ who, who7, ...r }) => r); // the accounts are only for «Функції», counted above
+    res.json(s);
+  } catch (err) {
+    next(err);
+  }
+});
+api.post("/admin/off", (req, res) => (req.owner ? switchOff(req, res) : res.status(403).json({ error: "owner" })));
+
 // «Статистика» (Max 2026-11-19: «трохи візуалізувати мій journey as a reader», simple, from what we know): since when
 // the reader is here, explanations asked (the day counts from 2026-10-14: «Пояснити», «Запитати», follow-ups,
 // translations), words the «Словничок» explained (from 2026-11-19), and per book the kept explanations, translations
