@@ -431,9 +431,9 @@
     if (months.length) {
       html += `<section class="r-jmonths">${head("По місяцях", "", false)}${months.map((m) => {
         const [y, mm] = m.month.split("-").map(Number);
-        // Every book read that month (finished ones first), not only those finished.
+        // Every book read that month, not only those finished; the last opened first (Max 2026-11-20).
         const done = new Set(m.finished);
-        const fin = [...new Set([...m.finished, ...(m.read || [])])].map((p) => byPath.get(p)).filter(Boolean).sort((x, y) => done.has(y.path) - done.has(x.path));
+        const fin = [...new Set([...m.finished, ...(m.read || [])])].map((p) => byPath.get(p)).filter(Boolean).sort((x, y) => lastTouched(y) - lastTouched(x));
         const finished = fin.filter((b) => done.has(b.path)).length;
         const bits = [fin.length ? `${fin.length} ${plural(fin.length, "книга", "книги", "книг")}` : "", finished ? `${finished} прочитано` : "", mins(m.sec), m.explains ? `${num(m.explains)} ${plural(m.explains, "пояснення", "пояснення", "пояснень")}` : "", m.notes ? `${num(m.notes)} ${plural(m.notes, "нотатка", "нотатки", "нотаток")}` : ""].filter(Boolean);
         return `<div class="r-jm"><h3>${MONTHS[mm - 1]}${y !== new Date().getFullYear() ? ` ${y}` : ""}</h3><p>${bits.join(" · ")}</p>

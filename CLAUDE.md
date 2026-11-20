@@ -723,7 +723,7 @@ A flag only when Max asks for one, or when the change could break what readers u
   home.js `journeyHtml`), `GET /api/journey` (explanations from `days[d].users`, per book from `store.items.tally`,
   finished from `u.finished`, minutes from `days[d].readBooks[acct]` since 2026-11-04). No streaks or goals.
   A month = every book read in it (a minute in `readBooks`, a note or explanation, finished), «N книг · M прочитано»
-  (Max: «читав не означає прочитано»; no ticks on covers). Top: «N книг з <first day>», tiles прочитано / пояснень /
+  (Max: «читав не означає прочитано»; no ticks on covers), covers the last opened first. Top: «N книг з <first day>», tiles прочитано / пояснень /
   нотаток / хвилин читання (Max 2026-11-20 by the bot, in place of «слів зі словничка»; no «читаю»); «N хв» beside
   the explanations in each month and book.
 - Reader: the app's own UI can't be selected (`body` has `user-select: none`, end of `src/renderer/style.css`). Text a
