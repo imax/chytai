@@ -4,7 +4,8 @@
   const BEFORE_CHARS = 2000;
   const AFTER_CHARS = 1000;
 
-  const clean = (s) => (s || "").replace(/\s+/g, " ").trim();
+  // Soft hyphens renderer.js put into words with a stress mark (shyStressed) are not the book's text.
+  const clean = (s) => (s || "").replace(/\u00AD/g, "").replace(/\s+/g, " ").trim();
 
   // Leaf-level text blocks in document order (a <li> wrapping a <p> counts once).
   function textBlocks(doc) {
@@ -45,7 +46,7 @@
   function rangeText(range) {
     const frag = range.cloneContents();
     for (const el of frag.querySelectorAll(`${BLOCKS}, div, br`)) el.after(frag.ownerDocument.createTextNode("\n"));
-    return frag.textContent.replace(/[ \t]*\n\s*/g, "\n").trim();
+    return frag.textContent.replace(/\u00AD/g, "").replace(/[ \t]*\n\s*/g, "\n").trim();
   }
 
   function extractContext(doc, range) {

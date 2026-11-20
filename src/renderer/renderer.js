@@ -156,6 +156,108 @@ if (window.ePub?.CFI) {
   };
 }
 
+// Hyphens in words with a stress mark (Max 2026-11-20, a hole in the middle of a justified line in «Чорна рада»):
+// the browser's hyphenation gives up on a word with U+0301 («літопи́сами»), so such a word never broke and the line
+// before it stretched. Each one gets soft hyphens where the same word without the mark breaks (the browser itself
+// says where: `breaksOf` lays the bare word out in a 1 px column). Characters put into the text would move every
+// place, note and explanation after them in that paragraph, so the CFI code below leaves them out both ways: a soft
+// hyphen in a word with a stress mark is not counted (`shyOrig` / `shyMod`).
+const STRESSED = /[̀́]/;
+const STRESS_WORD = /[\p{L}\p{M}­]+/gu;
+const shyBreaks = new Map(); // lang|bare word -> break positions
+let shyProbe = null;
+function breaksOf(bare, lang) {
+  const key = `${lang}|${bare}`;
+  if (shyBreaks.has(key)) return shyBreaks.get(key);
+  if (!shyProbe) {
+    shyProbe = document.createElement("div");
+    shyProbe.setAttribute("aria-hidden", "true");
+    shyProbe.style.cssText = "position:absolute;left:-9999px;top:0;visibility:hidden;font:16px serif;white-space:normal;word-break:normal;overflow-wrap:normal;hyphens:auto;-webkit-hyphens:auto";
+    document.body.append(shyProbe);
+  }
+  // The column is made just wide enough for the first k letters and a hyphen: the browser breaks there only when
+  // it may hyphenate there, else earlier or not at all. Where it broke is read from the first line's width (the box
+  // of the letter right after a break is reported on the line before it, so letters' own boxes would mislead).
+  shyProbe.lang = lang;
+  shyProbe.style.width = "10000px";
+  shyProbe.textContent = `${bare}-`;
+  const text = shyProbe.firstChild;
+  const r = document.createRange();
+  const widths = [];
+  for (let k = 0; k <= bare.length + 1; k++) r.setStart(text, 0), r.setEnd(text, k), widths.push(r.getBoundingClientRect().width);
+  const hyphen = widths[bare.length + 1] - widths[bare.length];
+  text.data = bare;
+  const out = [];
+  for (let k = 2; k <= bare.length - 2; k++) {
+    shyProbe.style.width = `${widths[k] + hyphen + 0.4 * (widths[k + 1] - widths[k])}px`;
+    r.setStart(text, 0);
+    r.setEnd(text, bare.length);
+    const lines = [...r.getClientRects()].filter((x) => x.width > 0);
+    if (lines.length < 2) continue;
+    // Chromium gives the hyphen its own box; a browser that doesn't counts it in the first line.
+    const own = lines.some((x) => Math.abs(x.width - hyphen) < 0.3);
+    if (Math.abs(lines[0].width - (own ? 0 : hyphen) - widths[k]) < 0.5) out.push(k);
+  }
+  if (shyBreaks.size > 3000) shyBreaks.clear();
+  shyBreaks.set(key, out);
+  return out;
+}
+function shyStressed(doc) {
+  const body = doc?.body;
+  if (!body || !STRESSED.test(body.textContent)) return;
+  const walk = doc.createTreeWalker(body, NodeFilter.SHOW_TEXT);
+  const nodes = [];
+  while (walk.nextNode()) if (STRESSED.test(walk.currentNode.data)) nodes.push(walk.currentNode);
+  for (const node of nodes) {
+    const el = node.parentElement?.closest("[lang], [xml\\:lang]") || doc.documentElement;
+    const lang = el.getAttribute("lang") || el.getAttribute("xml:lang") || "uk";
+    const data = node.data.replace(STRESS_WORD, (w) => {
+      if (!STRESSED.test(w) || w.includes("­")) return w;
+      const base = []; // index in w of each letter that is not a stress mark
+      for (let i = 0; i < w.length; i++) if (!STRESSED.test(w[i])) base.push(i);
+      const cuts = breaksOf(w.replace(/[̀́]/g, ""), lang).map((k) => base[k]).filter((i) => i > 0);
+      let out = "", from = 0;
+      for (const i of cuts) (out += w.slice(from, i) + "­"), (from = i);
+      return out + w.slice(from);
+    });
+    if (data !== node.data) node.data = data;
+  }
+}
+// Positions in a text node of the soft hyphens shyStressed put in.
+function shyAt(text) {
+  const at = [];
+  if (!text.includes("­") || !STRESSED.test(text)) return at;
+  for (const m of text.matchAll(STRESS_WORD)) {
+    if (!STRESSED.test(m[0])) continue;
+    for (let i = 0; i < m[0].length; i++) if (m[0][i] === "­") at.push(m.index + i);
+  }
+  return at;
+}
+const shyOrig = (node, offset) => (node?.nodeType === 3 && offset > 0 ? offset - shyAt(node.data).filter((i) => i < offset).length : offset);
+function shyMod(node, offset) {
+  if (node?.nodeType !== 3 || offset == null) return offset;
+  let m = offset;
+  for (const i of shyAt(node.data)) if (i < m) m++;
+  return Math.min(m, node.data.length);
+}
+if (window.ePub?.CFI) {
+  const proto = ePub.CFI.prototype;
+  const pathTo = proto.pathTo;
+  proto.pathTo = function (node, offset, ignoreClass) {
+    return pathTo.call(this, node, offset != null && offset >= 0 ? shyOrig(node, offset) : offset, ignoreClass);
+  };
+  const toRange = proto.toRange;
+  proto.toRange = function (doc, ignoreClass) {
+    const range = toRange.call(this, doc, ignoreClass);
+    if (!range) return range;
+    const [sc, so, ec, eo] = [range.startContainer, range.startOffset, range.endContainer, range.endOffset];
+    const s = shyMod(sc, so), e = shyMod(ec, eo);
+    if (e !== eo) range.setEnd(ec, e);
+    if (s !== so) range.setStart(sc, s);
+    return range;
+  };
+}
+
 // Books a publisher lets us show only in the app: while one is on screen, the app blocks screenshots
 // and screen recording (app/App.js: FLAG_SECURE on Android, a blank capture on iOS). Off on the home
 // screen, so a reader can still screenshot the library or a list.
@@ -356,6 +458,7 @@ async function openEpub(payload, { posKey, source }) {
   // contents entry, a saved position) was measured in the book's own styles and landed elsewhere
   // once line height and font changed.
   book.spine.hooks.content.register((doc) => styleContents({ document: doc }));
+  book.spine.hooks.content.register(shyStressed);
   current = { path: payload.path, posKey, source, title: payload.name.replace(/\.[^.]+$/, ""), author: "", protected: !!payload.url, preview: !!payload.preview };
   bookShown = true;
   syncAppProtection();
@@ -968,7 +1071,7 @@ function snipAt(cfi) {
     let text = n.nodeType === 3 ? n.textContent.slice(r.startOffset) : "";
     walk.currentNode = n;
     while (text.replace(/\s+/g, " ").trim().length < 80 && (n = walk.nextNode())) text += " " + n.textContent;
-    return text.replace(/\s+/g, " ").trim().slice(0, 80);
+    return text.replace(/\u00AD/g, "").replace(/\s+/g, " ").trim().slice(0, 80);
   } catch {
     return "";
   }

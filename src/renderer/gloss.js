@@ -4,9 +4,10 @@
 // as they were. Browsers without it (iOS before 17.2) get no underline and no card. Off in «Аа» → «Словничок».
 window.Gloss = (() => {
   // Only the stress marks go: й and ї carry marks of their own in NFD.
-  const key = (s) => String(s || "").normalize("NFD").replace(/[\u0300\u0301]/g, "").normalize("NFC").toLowerCase().replace(/['’`ʼ]/g, "ʼ");
+  const key = (s) => String(s || "").normalize("NFD").replace(/[\u0300\u0301\u00AD]/g, "").normalize("NFC").toLowerCase().replace(/['’`ʼ]/g, "ʼ");
   // A word: letters, stress marks, apostrophes and hyphens inside it.
-  const WORD = /[\p{L}\p{M}]+(?:['’`ʼ-][\p{L}\p{M}]+)*/gu;
+  // A soft hyphen (renderer.js shyStressed, in words with a stress mark) is part of the word.
+  const WORD = /[\p{L}\p{M}\u00AD]+(?:['’`ʼ-][\p{L}\p{M}\u00AD]+)*/gu;
   let forms = null; // key -> meaning, for the book on screen
   // «Словничок 2»: key -> 1 (the sentence is unclear without it) or 2 (a hint helps), and key -> the
   // word's dictionary form, which «Знаю» keeps (settings.glossKnown: every form of it goes).
