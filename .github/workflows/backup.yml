@@ -163,8 +163,19 @@ jobs:
           retention-days: ${{ matrix.keep }}
           compression-level: 0
       # The trial restore: the artifact as GitHub keeps it, back here, decrypted and started (see the top).
+      # Asked for a moment after the upload, GitHub may not list it yet («Artifact not found», the reader's copy
+      # on 2026-11-20): then once more 30 s later. The first try's failure alone is not reported.
+      - uses: actions/download-artifact@v4
+        id: download_first
+        continue-on-error: true
+        with:
+          name: ${{ env.NAME }}
+          path: restored
+      - if: ${{ steps.download_first.outcome == 'failure' }}
+        run: sleep 30
       - uses: actions/download-artifact@v4
         id: download
+        if: ${{ steps.download_first.outcome == 'failure' }}
         with:
           name: ${{ env.NAME }}
           path: restored
@@ -228,7 +239,7 @@ jobs:
             ok: ($s.upload.outcome == "success" and $s.restore.outcome == "success"),
             restored: ($s.restore.outcome == "success"),
             test: ({success: "ok", failure: "failed"}[$s.test.outcome // ""] // "skipped"),
-            failed: [$s | to_entries[] | select(.value.outcome == "failure") | .key]
+            failed: [$s | to_entries[] | select(.value.outcome == "failure" and .key != "download_first") | .key]
           }')
           echo "$body" | jq -c 'del(.run)'
           curl -sS --retry 4 --retry-all-errors -m 30 https://chytai.org.ua/agent/backup -H "Authorization: $SITE_TOKEN" \
