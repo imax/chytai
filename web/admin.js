@@ -1198,6 +1198,8 @@ function shelvesPage({ user, catalog, layout }) {
 
 // One table of tiles on Огляд (Max, 2026-11-04): the first number of each row of four leads to its details.
 // «Перегляди за розділами» sits on Огляд, before the activity (Max, 2026-11-04).
+// The reader's own stats live in the reader (its «Адмінка», Max 2026-11-20); the site's /admin/reader is gone.
+const READER_ADMIN = "https://app.chytai.org.ua/admin";
 const linkFirst = (html, href) => html.replace("<b>", `<b><a href="${href}">`).replace("</b>", "</a></b>");
 
 function adminPage({ user, stats: s, gsc = null, gscOn = false, paths = null, taps = null, login = null, reader = null, health = "", mail = "", activity = "", layout, page = "main" }) {
@@ -1262,7 +1264,7 @@ ${s.cohorts.length ? `<div class="tbl"><table class="cohorts">
     : // One dashboard for everything (Max, 2026-11-04): key numbers, is the site fine, what readers did in a day.
       `<section class="admin overview">
 <section class="page-head"><div><h1>Огляд</h1><p class="sub">Станом на ${short(s.now)}. Деталі — у вкладках.</p></div></section>
-<div class="stats dash">${linkFirst(siteTiles, "/admin/readers")}${linkFirst(trafficTiles(s, gsc, gscOn), "/admin/traffic")}${linkFirst(readerTiles(reader), "/admin/reader")}</div>
+<div class="stats dash">${linkFirst(siteTiles, "/admin/readers")}${linkFirst(trafficTiles(s, gsc, gscOn), "/admin/traffic")}${linkFirst(readerTiles(reader), READER_ADMIN)}</div>
 
 ${health}
 
@@ -1294,7 +1296,7 @@ function healthBlock({ day = null, jobs = { n: 0, failed: [] }, reader = true, e
     [!jobs.failed.length, `Фонові задачі без помилок (${fmtN(jobs.n)} за добу).`, `Фонові задачі з помилкою за добу: ${jobs.failed.map(esc).join(", ")}. <a href="/admin/jobs">Задачі</a>`],
     [reader, "Читалка працює.", `Читалка не відповіла сайту: app.chytai.org.ua може лежати. <a href="https://app.chytai.org.ua/">Відкрити</a>`],
     [!errN, `Помилок за добу не було. <a href="/admin/speed#errors">Усі помилки</a>`, `Помилки за добу: ${errN}. <a href="/admin/speed#errors">Усі помилки</a>`],
-    // Pages the phones unloaded are not here (Max, 2026-11-13): /admin/reader and the technical report have them.
+    // Pages the phones unloaded are not here (Max, 2026-11-13): the reader's «Адмінка» and the technical report have them.
     ...(mail ? [mail] : []),
     ...(backup ? [backup] : []),
     ...(storage ? [storageRow(storage)] : []),
@@ -1846,7 +1848,7 @@ function readerTiles(s) {
   const sum = (xs, f) => xs.reduce((a, x) => (a == null || f(x) == null ? null : a + f(x)), 0);
   const cost30 = sum(s.days.slice(0, 30), (d) => d.cost);
   return [
-    // Readers are the big number, nothing under it: the hours and the rest are on /admin/reader (Max, 2026-11-12).
+    // Readers are the big number, nothing under it: the hours and the rest are in the reader's «Адмінка» (Max, 2026-11-12).
     tile(fmtN(s.users.filter((u) => u.activeWeek).length), "читачів у Читалці за 7 днів"),
     tile(fmtN(s.totals.week), "пояснень за 7 днів", `${fmtN(s.totals.today)} сьогодні`),
     s.notes ? tile(fmtN(s.notes.week), "нотаток за 7 днів", `${fmtN(s.notes.today)} сьогодні, ${fmtN(s.notes.all)} усього`) : "",
@@ -1854,168 +1856,4 @@ function readerTiles(s) {
   ].join("");
 }
 
-// /admin/reader «Читалка»: the reader's own numbers (app.chytai.org.ua, server/index.js collectStats). The same page
-// lives in the reader itself for Max (its «Адмінка», 2026-11-20); the controls' names and «Функції» come from there
-// (server/admin.js UI_NAMES, FEATURES) as s.uiNames and s.features.
-function readerAppPage({ user, s, error = "", book = () => null, wordCost = null, layout }) {
-  const usd = (v) => (v == null ? "—" : v > 0 && v < 0.01 ? "<$0,01" : `$${v.toFixed(2).replace(".", ",")}`);
-  const mins = (m) => (m < 120 ? `${fmtN(m)} хв` : `${fmtN(Math.round(m / 60))} год`);
-  const ago = (ts) => {
-    if (!ts) return "—";
-    const min = Math.round((Date.now() - ts) / 60000);
-    if (min < 2) return "щойно";
-    if (min < 60) return `${min} хв тому`;
-    const h = Math.round(min / 60);
-    return h < 36 ? `${h} год тому` : `${Math.round(h / 24)} дн тому`;
-  };
-  if (!s) {
-    const body = `<section class="admin"><section class="page-head"><div><h1>Читалка</h1></div></section><p class="muted">Читалка не віддала числа: ${esc(error)}.${error === "key" ? " Відкрий Читалку й увійди ще раз, тоді сайт отримає ключ." : ""}</p></section>`;
-    return layout({ title: "Читалка · Адмінка", user, path: "/admin", body });
-  }
-  const off = (u) => (u.owner ? "" : `<form method="post" action="/admin/reader/off"><input type="hidden" name="id" value="${esc(u.id)}">${u.off ? `<button class="btn small">Увімкнути</button>` : `<input type="hidden" name="off" value="1"><button class="btn small danger">Вимкнути</button>`}</form>`);
-  const who = (u) => `${u.username ? `<a href="/@${esc(u.username)}">${esc(u.name || u.username)}</a>` : esc(u.name || u.id)}${u.off ? ` <span class="muted">вимкнено</span>` : ""}`;
-  // The last book opened: the catalog page when the site knows the file (server.js readerCatalogBook), else its title.
-  const last = (u) => {
-    if (!u.lastBook) return `<span class="muted">—</span>`;
-    const b = book(u.id, u.lastBook);
-    const title = b.title || u.lastBook.split("/").pop().replace(/\.(epub|pdf|fb2|mobi|azw3?)$/i, "");
-    return `${b.href ? `<a href="${esc(b.href)}">${esc(title)}</a>` : esc(title)}${u.lastOpened ? ` <span class="muted">${ago(u.lastOpened)}</span>` : ""}`;
-  };
-  // Only those who opened something (Max: «не показувати тих, хто нічого не читає»).
-  const users = s.users.filter((u) => u.lastBook || u.read30 || u.total || u.notesTotal);
-  const idle = s.users.length - users.length;
-  // Those who were in the reader in the last 7 days first; the rest folded under them (Max, 2026-11-17).
-  const table = (list) => `<div class="tbl"><table class="reader-app">
-<thead><tr><th>Читач</th><th class="book">Читає</th><th>Хв сьогодні</th><th>За 7 днів</th><th>За 30</th><th>Пояснень за 7 днів</th><th>Нотаток за 7 днів</th><th>Claude за 30 днів</th><th></th></tr></thead>
-<tbody>${list.map((u) => `<tr${u.owner ? ' class="owner"' : ""}><th>${who(u)}</th><td class="book">${last(u)}</td><td>${n(u.readToday)}</td><td>${n(u.readWeek)}</td><td>${n(u.read30)}</td><td>${n(u.week)}</td><td>${n(u.notesWeek)}</td><td>${u.cost30 ? usd(u.cost30) : n(0)}</td><td>${off(u)}</td></tr>`).join("")}</tbody></table></div>`;
-  const recent = users.filter((u) => u.activeWeek);
-  const older = users.filter((u) => !u.activeWeek);
-  const readers = users.length ? `${recent.length ? table(recent) : `<p class="muted">За 7 днів ніхто не заходив.</p>`}
-${older.length ? `<details><summary class="muted">Ще ${fmtN(older.length)}, давніше 7 днів</summary>${table(older)}</details>` : ""}
-<p class="muted small">${idle ? `Ще ${fmtN(idle)} входили, але нічого не відкрили. ` : ""}Хвилини — час, коли книжка відкрита на екрані й читач щось робив за останні 3 хв (до 4 листопада рахували паузи між перегортаннями). Ліміту пояснень немає, лише запобіжник ${fmtN(s.accountCap)} на день. «Вимкнути» закриває Читалку, сайт лишається.</p>` : `<p class="muted">Ще ніхто нічого не відкрив.</p>`;
-  // Books by minutes read in 30 days (Max, 2026-11-04): the same book in several libraries is one row when the
-  // site knows it from the catalog.
-  const titleOf = (r) => {
-    const b = r.paper ? {} : book(r.id, r.book);
-    return { title: r.title || b.title || r.book.split("/").pop().replace(/\.(epub|pdf|fb2|mobi|azw3?)$/i, ""), href: b.href || "" };
-  };
-  const byBook = new Map();
-  for (const r of s.reading || []) {
-    const t = titleOf(r);
-    const key = t.href || `${r.paper ? "paper" : "file"}:${t.title.toLowerCase()}`;
-    const g = byBook.get(key) || { ...t, paper: r.paper, today: 0, week: 0, month: 0, readers: [] };
-    g.today += r.today;
-    g.week += r.week;
-    g.month += r.month;
-    g.readers.push(r);
-    byBook.set(key, g);
-  }
-  const top = [...byBook.values()].sort((a, b) => b.month - a.month).slice(0, 40);
-  const reader = (r) => `${r.username ? `<a href="/@${esc(r.username)}">${esc(r.name || r.username)}</a>` : esc(r.name || r.id)} <span class="muted">${fmtN(r.month)}</span>`;
-  const booksTbl = top.length ? `<div class="tbl"><table class="reader-app">
-<thead><tr><th class="book">Книжка</th><th class="who">Хто читав, хв</th><th>Хв сьогодні</th><th>За 7 днів</th><th>За 30</th></tr></thead>
-<tbody>${top.map((g) => `<tr><th class="book">${g.href ? `<a href="${esc(g.href)}">${esc(g.title)}</a>` : esc(g.title)}${g.paper ? ` <span class="muted">паперова</span>` : ""}</th><td class="who">${g.readers.sort((a, b) => b.month - a.month).map(reader).join(", ")}</td><td>${n(g.today)}</td><td>${n(g.week)}</td><td>${n(g.month)}</td></tr>`).join("")}</tbody></table></div>
-<p class="muted small">За останні 30 днів, від 4 листопада. Паперова книжка — час на її сторінці в Читалці, не саме читання.</p>` : `<p class="muted">Ще ніхто не читав: рахуємо з 4 листопада.</p>`;
-  // Reading without a network (Max, 2026-11-11), from 11 November: by device, then who read offline.
-  const DEV = { "iphone-app": "iPhone, застосунок", "android-app": "Android, застосунок", "mac-app": "Mac, застосунок", app: "Застосунок", "iphone-browser": "iPhone, браузер", "android-browser": "Android, браузер", "desktop-browser": "Компʼютер, браузер" };
-  const offDevs = s.offline?.devices || [];
-  const offWho = s.offline?.readers || [];
-  const offlineTbl = offDevs.length ? `<div class="tbl"><table>
-<thead><tr><th>Пристрій</th><th>Читали, хв</th><th>Без мережі, хв</th><th>Відкрили без мережі</th><th>Не було на пристрої</th></tr></thead>
-<tbody>${offDevs.map((r) => `<tr><th>${esc(DEV[r.dev] || r.dev)}</th><td>${n(r.read)}</td><td>${n(r.off)}</td><td>${n(r.opened)}</td><td>${n(r.missing)}</td></tr>`).join("")}</tbody></table></div>
-<p class="muted small">За 30 днів, рахуємо з 11 листопада. ${offWho.length ? `Без мережі читали: ${offWho.map((r) => `${r.username ? `<a href="/@${esc(r.username)}">${esc(r.name || r.username)}</a>` : esc(r.name || r.id)} <span class="muted">${fmtN(r.off)} хв</span>`).join(", ")}.` : "Без мережі ще ніхто не читав."}</p>` : `<p class="muted">Рахуємо з 11 листопада.</p>`;
-  // Pages the phone unloaded (Max, 2026-11-11: «сторінку вивантажено (пам'ять)»), from 11 November: the newest 60.
-  const VIEW = { "home:home": "Головна", "home:discover": "Відкрити", "home:notes": "Нотатки", "home:wish": "Хочу прочитати", "home:club": "Клуб", pdf: "PDF", book: "книжка", other: "інше" };
-  const gone = s.gone?.rows || [];
-  const dur = (sec) => (sec < 90 ? `${fmtN(sec)} с` : sec < 5400 ? `${fmtN(Math.round(sec / 60))} хв` : `${fmtN(Math.round(sec / 3600))} год`);
-  const goneWhere = (r) => {
-    if (!r.view.startsWith("home") && r.book) {
-      const b = book(r.acct, r.book);
-      const title = r.title || b.title || r.book.split("/").pop().replace(/\.(epub|pdf|fb2|mobi|azw3?)$/i, "");
-      return `${esc(VIEW[r.view] || r.view)}: ${b.href ? `<a href="${esc(b.href)}">${esc(title)}</a>` : esc(title)}`;
-    }
-    return esc(VIEW[r.view] || r.view || "—");
-  };
-  const goneWho = (r) => (r.acct ? (r.username ? `<a href="/@${esc(r.username)}">${esc(r.name || r.username)}</a>` : esc(r.name || r.acct)) : `<span class="muted">гість</span>`);
-  const held = (r) => [`картинки ${fmtN(r.imgMB)} МБ`, r.canvasMB ? `PDF ${fmtN(r.canvasMB)} МБ` : "", `${fmtN(r.nodes)} елементів`, `${fmtN(r.books)} книжок`, `жила ${dur(r.up)}`].filter(Boolean).join(", ");
-  const goneTbl = gone.length ? `<div class="tbl"><table class="reader-app">
-<thead><tr><th>Коли</th><th>Хто</th><th>Пристрій</th><th class="book">Що було на екрані</th><th>Де</th><th class="who">Що тримала сторінка</th></tr></thead>
-<tbody>${gone.map((r) => `<tr><th>${ago(r.at)}</th><td>${goneWho(r)}</td><td>${esc(DEV[r.dev] || r.dev)}</td><td class="book">${goneWhere(r)}${r.restored ? ` <span class="muted">відкрили знову</span>` : ""}</td><td>${r.bg ? `у фоні${r.hid ? ` ${dur(r.hid)}` : ""}` : `<b>на екрані</b>`}</td><td class="who">${held(r)}</td></tr>`).join("")}</tbody></table></div>
-<p class="muted small">За 30 днів: ${(s.gone.byDay || []).map((d) => `${short(d.day)} ${fmtN(d.n)}${d.bg ? ` (у фоні ${fmtN(d.bg)})` : ""}`).join(", ")}. Телефон вбиває сторінку, коли бракує пам'яті, найчастіше поки застосунок у фоні; тоді Читалка вантажиться наново й відкриває книжку, яка була на екрані. «На екрані» означає, що забагато тримала сама сторінка.</p>` : `<p class="muted">Ще жодного: рахуємо з 11 листопада.</p>`;
-  const days = s.days.slice(0, 30);
-  const daysTbl = days.length ? `<div class="tbl"><table>
-<thead><tr><th>День</th><th>Пояснень</th><th>Токенів на вході</th><th>На виході</th><th>Claude</th></tr></thead>
-<tbody>${days.map((d) => `<tr><th>${short(d.day)}</th><td>${n(d.explains)}</td><td>${fmtN(d.input + d.cacheRead + d.cacheWrite)}</td><td>${fmtN(d.output)}</td><td>${usd(d.cost)}</td></tr>`).join("")}</tbody></table></div>` : `<p class="muted">Пояснень ще не було.</p>`;
-  const models = s.models.length ? `<div class="tbl"><table>
-<thead><tr><th>Модель</th><th>Запитів</th><th>Токенів на вході</th><th>На виході</th><th>Claude</th></tr></thead>
-<tbody>${s.models.map((m) => `<tr><th>${esc(m.model.replace(/^claude-/, ""))}</th><td>${fmtN(m.requests)}</td><td>${fmtN(m.input + m.cacheRead + m.cacheWrite)}</td><td>${fmtN(m.output)}</td><td>${usd(m.cost)}</td></tr>`).join("")}</tbody></table></div>` : "";
-  // What readers press in the reader (Max 2026-11-16), where they leave books, and new readers' first days.
-  const uiRows = (s.ui || []).slice(0, 40);
-  const readMonth = s.users.filter((u) => u.read30 > 0).length;
-  const feats = s.features || [];
-  const UI_NAMES = s.uiNames || {};
-  const readWeek = s.users.filter((u) => u.activeWeek).length;
-  const g = (x) => (x.guests ? ` <span class="muted">+ гості</span>` : "");
-  const featTbl = feats.length ? `<div class="tbl"><table>
-<thead><tr><th>Функція</th><th>Бачили, 30 дн.</th><th>Скористались, 7 дн.</th><th>30 дн.</th><th>Разів, 30 дн.</th><th>Ви, 30 дн.</th></tr></thead>
-<tbody>${feats.map((f) => `<tr${f.use.readers || f.use.max || f.seen?.readers ? "" : ' class="muted"'}><th>${esc(f.label)}</th><td>${f.seen ? `${fmtN(f.seen.readers)}${g(f.seen)}` : ""}</td><td>${fmtN(f.use.readers7)}</td><td>${fmtN(f.use.readers)}${g(f.use)}</td><td>${fmtN(f.use.n)}</td><td>${f.use.max ? fmtN(f.use.max) : ""}</td></tr>`).join("")}</tbody></table></div>
-<p class="muted small">Читачі без вас; гості окремо. Читали за 7 днів ${fmtN(readWeek)}, за 30 днів ${fmtN(readMonth)}. «Бачили» є там, де Читалка спершу показує функцію сама. Натискання рахуємо з 16 листопада, «Бачили», пошук, зміст, «Аа» і ваші власні з 19 листопада.</p>` : "";
-  const uiTbl = uiRows.length ? `<div class="tbl"><table>
-<thead><tr><th>Що</th><th>Читачів</th><th>Натискань</th></tr></thead>
-<tbody>${uiRows.map((r) => `<tr><th>${esc(UI_NAMES[r.name] || r.name)}${UI_NAMES[r.name] ? ` <span class="muted small">${esc(r.name)}</span>` : ""}</th><td>${n(r.readers)}${r.guests ? ` <span class="muted">+ гості</span>` : ""}</td><td>${n(r.n)}</td></tr>`).join("")}</tbody></table></div>
-<p class="muted small">За 30 днів, рахуємо з 16 листопада. Читачів, які за цей час читали: ${fmtN(readMonth)}; так видно, яка частка натискає кнопку. Гортання сторінок не рахуємо, це хвилини.</p>` : `<p class="muted">Рахуємо з 16 листопада.</p>`;
-  // One selected word (Max 2026-11-17): how often its meaning was there at once, by day, and what it cost.
-  const pct = (a, b) => (b ? ` <span class="muted">${Math.round((100 * a) / b)}%</span>` : "");
-  const wordRows = s.words || [];
-  const cost = (day) => wordCost?.[day] || {};
-  const wordLine = wordRows.length
-    ? `<div class="tbl"><table>
-<thead><tr><th>День</th><th>Виділили слово</th><th>Одразу</th><th>Чекали на Sonnet</th><th>Коштувало</th></tr></thead>
-<tbody>${wordRows.map((r) => {
-        const at = r.list + r.ahead;
-        return `<tr><th>${short(r.day)}</th><td>${fmtN(r.all)}${r.max ? ` <span class="muted">ваших ${fmtN(r.max)}</span>` : ""}</td><td>${fmtN(at)}${pct(at, r.all)}</td><td>${fmtN(Math.max(0, r.all - at))}</td><td>${usd((cost(r.day).word || 0) + (cost(r.day).wordahead || 0))}</td></tr>`;
-      }).join("")}</tbody></table></div>
-<p class="muted small">«Одразу» = значення було на картці без запиту, зі словничка книжки (17.11 ще й зі слів наперед, які того ж дня прибрали). Рахуємо з 17 листопада.</p>`
-    : "";
-  const st = s.stops;
-  const left = st ? st.left[3] + st.left[10] + st.left[50] + st.left[95] : 0;
-  const stopsTbl = st && st.finished + st.reading + left ? `<p class="muted">За 90 днів відкрили ${fmtN(st.finished + st.reading + left)} книжок: дочитали ${fmtN(st.finished)}, читають далі ${fmtN(st.reading)}, покинули ${fmtN(left)}: не почавши (до 3%) ${fmtN(st.left[3])}, до 10% ${fmtN(st.left[10])}, до половини ${fmtN(st.left[50])}, після половини ${fmtN(st.left[95])}.</p>
-${st.books.length ? `<details><summary class="muted">Покинуті книжки, новіші зверху</summary><div class="tbl"><table class="reader-app">
-<thead><tr><th class="book">Книжка</th><th>Хто</th><th>Де зупинились</th><th>Востаннє</th></tr></thead>
-<tbody>${st.books.map((r) => {
-    const b = book(r.id, r.book);
-    const title = r.title || b.title || r.book.split("/").pop().replace(/\.(epub|pdf|fb2|mobi|azw3?)$/i, "");
-    return `<tr><th class="book">${b.href ? `<a href="${esc(b.href)}">${esc(title)}</a>` : esc(title)}</th><td>${r.username ? `<a href="/@${esc(r.username)}">${esc(r.name || r.username)}</a>` : esc(r.name || r.id)}</td><td>${fmtN(r.pct)}%</td><td>${ago(r.at)}</td></tr>`;
-  }).join("")}</tbody></table></div></details>` : ""}
-<p class="muted small">Покинута: не відкривали 14 днів і не дочитали до 95%.</p>` : "";
-  const fd = s.firstDays;
-  const step = (v) => `${fmtN(v)}${fd.signed ? ` <span class="muted">${fmtN(Math.round((100 * v) / fd.signed))}%</span>` : ""}`;
-  const firstTbl = fd && fd.signed ? `<div class="tbl"><table class="refs">
-<tbody><tr><th>Зареєструвались за 60 днів</th><td>${fmtN(fd.signed)}</td></tr><tr><th>Відкрили книжку</th><td>${step(fd.opened)}</td></tr><tr><th>Прочитали 10 хв за перший тиждень</th><td>${step(fd.ten)}</td></tr><tr><th>Читали у два різні дні</th><td>${step(fd.twoDays)}</td></tr></tbody></table></div>` : "";
-  const body = `<section class="admin">
-<section class="page-head"><div><h1>Читалка</h1><p class="sub">app.chytai.org.ua: хто читає, скільки хвилин і що коштують пояснення Claude. Головні числа — на Огляді.</p></div></section>
-<h2 id="readers">Читачі</h2>
-<p class="muted">За 7 днів читали ${fmtN(s.users.filter((u) => u.activeWeek).length)} з ${fmtN(s.users.length)}, разом ${mins(s.users.reduce((a, u) => a + (u.readWeek || 0), 0))}, ${fmtN(s.users.filter((u) => u.readWeek >= 15).length)} по 15+ хв.</p>
-${readers}
-<h2 id="books">Книжки</h2>
-${booksTbl}
-${firstTbl ? `<h2 id="first">Перші дні</h2>\n${firstTbl}` : ""}
-${stopsTbl ? `<h2 id="stops">Де кидають книжки</h2>\n${stopsTbl}` : ""}
-${featTbl ? `<h2 id="features">Функції</h2>\n${featTbl}` : ""}
-${wordLine ? `<h2 id="word">Одне слово</h2>\n${wordLine}` : ""}
-<h2 id="ui">Що натискають</h2>
-${uiTbl}
-<h2 id="offline">Без мережі</h2>
-${offlineTbl}
-<h2 id="gone">Вивантаження</h2>
-${goneTbl}
-<details class="reader-cost"><summary>Вартість по днях і моделях</summary>
-${daysTbl}
-${models}
-<p class="muted small">Вартість приблизна, за тарифами API без знижок; вхідні токени разом з кешем.</p>
-</details>
-</section>`;
-  return layout({ title: "Читалка · Адмінка", user, path: "/admin", body });
-}
-
-module.exports = { readerAppPage, healthBlock, mailBlock, BOT, human, Admin, mailLinks, adminPage, activityPage, catalogBlock, shelvesPage, readersPage, overviewsPage, speedPage, jobsPage, dayOf, weekOf, sectionOf };
+module.exports = { healthBlock, mailBlock, BOT, human, Admin, mailLinks, adminPage, activityPage, catalogBlock, shelvesPage, readersPage, overviewsPage, speedPage, jobsPage, dayOf, weekOf, sectionOf };

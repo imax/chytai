@@ -90,8 +90,8 @@ curl -s https://app.chytai.org.ua/agent/sql -H "$H" -H 'content-type: applicatio
   panel, Max only (`settings.owner`; app.chytai.org.ua/admin or /?admin opens it). `GET /api/admin` (owner session) =
   `collectStats()` with titles from the reader's own libraries and the day's cost of one word; `POST /api/admin/off`
   switches an account off. Drawn by `src/renderer/admin-view.js` (home.js page `admin`), plain text, no links to the
-  site. `collectStats` sends `features` and `uiNames` (server/admin.js), so the site's /admin/reader, kept for now,
-  shows the same rows. A new section goes into admin-view.js first.
+  site. The site's /admin/reader is gone (Max 2026-11-20; it redirects here); its Огляд keeps the reader's four tiles
+  (`/api/site-admin`), linked to the reader's «Адмінка».
 - /admin «Performance» (`healthBlock` in web/admin.js): one bullet per check, red with a link when it needs a look. Keep
   it so (Max, 2026-11-12, after it was folded into one sentence: «мені не подобається»); trim a row, don't merge rows.
 - Pages the phone unloaded (iOS kills the WebView's page for memory, mostly in the background): the page keeps a note
@@ -99,7 +99,7 @@ curl -s https://app.chytai.org.ua/agent/sql -H "$H" -H 'content-type: applicatio
   `/api/page-gone`. The book on screen has its own note (`chytai:onscreen`), kept until the reader goes to the home
   screen: any load within 12 h reopens it at its saved place, even after pages that died before the book opened
   (Max 2026-11-17); three deaths in a row with it = home screen. Rows in the reader's `state.stats.days[day].gone` (30 days);
-  /admin/reader «Вивантаження» and a line in the technical report from 3 on screen a day (not on Огляд, Max 2026-11-13). To see
+  the reader's «Адмінка» «Вивантаження» and a line in the technical report from 3 on screen a day (not on Огляд, Max 2026-11-13). To see
   memory on a phone width locally: Playwright WebKit, RSS of `WPEWebProcess`; kill it (`pkill -9 -x WPEWebProcess`)
   to fake an unload. epub.js keeps every chapter it loaded until the book closes: load one yourself → `unload()` it
   after (renderer.js `addTocPages`; a chapter's view unloads it when destroyed). Count kept ones:
@@ -565,7 +565,7 @@ A flag only when Max asks for one, or when the change could break what readers u
   (any thread's deploy) loses nothing: 30 s after start `resume()` goes on with the kept answers paid for already.
   Words ahead (2026-11-17, prepared meanings for the passages around the reader, then underlined) were taken out the
   same day (Max: «одна штука замість двох»; they underlined «ліки», «демони» and saved ~1 s on one selected word in
-  five for 3× the cost): don't bring them back. Improve «Словничок» instead. `/admin/reader` «Одне слово» = selected
+  five for 3× the cost): don't bring them back. Improve «Словничок» instead. The reader's «Адмінка» «Одне слово» = selected
   words, how many were in the book's list (`word-list`), and the cost.
 - Every book (Max 2026-11-18, «Level up your reading»; not only old words): an EPUB with no list gets a «Словничок 2»
   list by parts once the reader presses «Підготувати словничок» in the book's menu (`POST /api/glossary/start {book,

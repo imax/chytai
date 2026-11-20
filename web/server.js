@@ -29,7 +29,7 @@ const readeat = require("./readeat");
 const findCovers = require("./findcovers");
 const { BookPage, isUrl } = require("./bookpage");
 const { UkFinder } = require("./ukfind");
-const { Admin, readerAppPage, healthBlock, adminPage, activityPage, catalogBlock, shelvesPage, readersPage, overviewsPage, speedPage, jobsPage, BOT, human } = require("./admin");
+const { Admin, healthBlock, adminPage, activityPage, catalogBlock, shelvesPage, readersPage, overviewsPage, speedPage, jobsPage, BOT, human } = require("./admin");
 const { Mcp } = require("./mcp");
 const { Reviews } = require("./reviews");
 const { Advice } = require("./advice");
@@ -4512,35 +4512,8 @@ async function readerStats() {
   }
   return readerCache.s;
 }
-app.get("/admin/reader", owner, async (req, res) => {
-  let s = null;
-  let error = "";
-  try {
-    s = await readerAdmin("");
-  } catch (err) {
-    error = err.message;
-  }
-  const book = (id, name) => {
-    const file = store.db.prepare("SELECT title FROM reader_files WHERE reader = ? AND name = ?").get(id, name) || FREE.find((f) => f.name === name);
-    const hit = file ? readerCatalogBook(id, { name }) : {};
-    return { title: file?.title || "", href: hit.bookId ? store.href(hit.bookId) : "" };
-  };
-  let wordCost = null;
-  try {
-    const since = new Date(Date.now() - 30 * 864e5).toISOString().slice(0, 10);
-    wordCost = {};
-    for (const r of store.db.prepare("SELECT day, feature, SUM(cost) cost FROM ai_usage WHERE app = 'reader' AND feature IN ('word', 'wordahead') AND day >= ? GROUP BY day, feature").all(since)) (wordCost[r.day] ??= {})[r.feature] = r.cost;
-  } catch {}
-  res.send(readerAppPage({ user: req.user, s, error, book, wordCost, layout: pages.layout }));
-});
-app.post("/admin/reader/off", owner, async (req, res) => {
-  try {
-    await readerAdmin("/off", { id: String(req.body?.id || ""), off: !!req.body?.off });
-  } catch (err) {
-    console.error("reader off:", err.message);
-  }
-  res.redirect("/admin/reader#readers");
-});
+// The reader's stats are in the reader itself, its «Адмінка» (Max 2026-11-20); old links go there.
+app.get("/admin/reader", (_req, res) => res.redirect(`${READER_URL}/admin`));
 app.get("/admin/readers", owner, (req, res) => res.send(readersPage({ user: req.user, stats: admin.stats(), layout: pages.layout, q: req.query.q, min: Number(req.query.books) || 0, sort: String(req.query.sort || "created"), page: req.query.page })));
 // What the readers do on the site, in time order (Max, 2026-10-30), with the books' titles for book addresses.
 // What readers did (reader_log), for /admin/activity and, the last day of it, for Огляд.

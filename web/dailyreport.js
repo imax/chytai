@@ -263,7 +263,7 @@ function techText(day, t, rd, site, backup, triage, storage = "", search = "", a
   }
   if (down) lines.push(down);
   lines.push(`Розбір помилок: ${triage ? short(triage) : "сьогодні не запускався."}`);
-  // A page or two the phone unloaded on screen is a usual day; /admin/reader «Вивантаження» has every one.
+  // A page or two the phone unloaded on screen is a usual day; the reader's «Адмінка» «Вивантаження» has every one.
   if (rd?.goneFront >= GONE_FRONT) lines.push(`Сторінку вивантажено: ${rd.gone}, з них на екрані ${rd.goneFront}`);
   if (!rd) lines.push("Читалка не відповіла.");
   if (storage) lines.push(storage);

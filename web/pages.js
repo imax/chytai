@@ -537,7 +537,7 @@ const ADMIN_TABS = [
   ["Огляд", [["/admin", "Огляд"]], /^\/admin\/activity$/],
   ["Трафік", [["/admin/traffic", "Трафік"], ["/admin/threads", "Threads"]]],
   ["Читачі", [["/admin/readers", "Усі читачі"], ["/admin/retention", "Утримання"], ["/admin/comments", "Коментарі"], ["/admin/digest", "Дайджест"]]],
-  ["Читалка", [["/admin/reader", "Читалка"]]],
+  ["Читалка", [["https://app.chytai.org.ua/admin", "Читалка"]]], // its stats are in the reader (Max 2026-11-20)
   ["Події", [["/admin/events", "Події"]]],
   // «Каталог» holds the old «Система» too (Max, 2026-11-17).
   ["Каталог", [["/admin/catalog", "Каталог"], ["/admin/jobs", "Задачі"], ["/admin/speed", "Швидкість"]], /^\/admin\/(catalog|shelves|overviews|dupes|translations|volumes|russian|ukfind|readeat|free|ai\/|book\/|reviews)|-trial$/],
