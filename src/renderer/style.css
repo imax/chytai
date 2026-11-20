@@ -1319,7 +1319,7 @@ a.r-frow:hover .r-frow-go.plain { color: var(--r-ochre); }
   #done-cx, #done-x { margin: 2px 2px 0 0; color: var(--m-ink2); }
   #done-cx svg, #done-x svg { fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; }
   #done { position: fixed; inset: 0; z-index: 30; overflow-y: auto; overscroll-behavior: contain; background: var(--m-paper); color: var(--m-ink); font-family: var(--m-sans); animation: m-up .22s ease-out; }
-  #done.hidden, body.library-open #done { display: none; }
+  #done.hidden { display: none; }
   #done-x { position: fixed; top: calc(8px + env(safe-area-inset-top)); right: 8px; }
   #done-form { box-sizing: border-box; max-width: 520px; min-height: 100%; margin: 0 auto; padding: calc(48px + env(safe-area-inset-top)) 24px calc(28px + env(safe-area-inset-bottom)); display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
   #done-cover img { display: block; width: 116px; aspect-ratio: 2 / 3; object-fit: cover; border-radius: 4px; box-shadow: 0 8px 22px -6px rgba(27, 26, 23, .35); margin-bottom: 22px; }

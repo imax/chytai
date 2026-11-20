@@ -717,7 +717,8 @@ A flag only when Max asks for one, or when the change could break what readers u
   reader only (`POST /api/library/finished` with `auto`; a book finished before is left alone) and asks the site with
   `peek` (`/api/reader-read`: href, title, author, status, rating, note; nothing changes). When the catalog has the book,
   a small card like «Перед главою» (`#done-card`); a tap on it or a turn past the last page (`doneNext`, wrapped into
-  `rendition.next`) opens a whole screen (`#done`: cover, the site's stars, a few words). Only «Опублікувати» changes the
+  `rendition.next`) opens a whole screen (`#done`: cover, the site's stars, a few words). The home menu's «Позначити
+  прочитаною» opens the same screen (`window.showDone`, Max 2026-11-20) and no longer marks the site by itself. Only «Опублікувати» changes the
   site (Max: «поки форму не заповнив, на сайті ми нічого не помічаємо»): `POST /api/library/review` → `/api/reader-read`
   with `rating` / `note` = «Прочитано» with them, the same entry as /me/book's form, public. New words from a reader (not
   Max) mail + Telegram Max. Guests get nothing. «Функції»: `done-shown`, `done-open`, `act-done-send`.

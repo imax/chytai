@@ -812,6 +812,13 @@ function openDone() {
   window.ReadingTime?.count("done-open");
 }
 $("#done-open").addEventListener("click", openDone);
+// «Позначити прочитаною» in a book's menu on the home screen (home.js): the same screen for that book.
+window.showDone = (path, site) => {
+  if (!site) return;
+  doneBook = path;
+  doneSite = site;
+  openDone();
+};
 $("#done-cx").addEventListener("click", () => $("#done-card").classList.add("hidden"));
 $("#done-x").addEventListener("click", () => $("#done").classList.add("hidden"));
 $("#done-stars").addEventListener("click", (e) => {
@@ -1202,8 +1209,8 @@ function tapToPage(t, win) {
 
 function onKey(e) {
   if (e.target?.closest?.("input, textarea, select, dialog")) return;
-  if (document.body.classList.contains("library-open")) return; // the home screen covers the book
   if (!$("#done").classList.contains("hidden")) return void (e.key === "Escape" && $("#done").classList.add("hidden")); // «Прочитано» covers it
+  if (document.body.classList.contains("library-open")) return; // the home screen covers the book
   // Esc stops an explanation still being written (Max, 2026-11-01).
   if (e.key === "Escape") {
     for (const conv of conversations.values()) if (conv.busy) window.reader.abort(conv.reqId);

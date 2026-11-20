@@ -1079,12 +1079,19 @@
       b.finished = !b.finished;
       homeHtml = "";
       render();
-      return window.reader.libraryFinished(b.path, b.finished).catch(() => {
+      // Marked read: the screen «Прочитано» with the site's stars and a few words (renderer.js showDone), when the
+      // site's catalog has the book; nothing reaches the site before «Опублікувати» there.
+      let res;
+      try {
+        res = await window.reader.libraryFinished(b.path, b.finished);
+      } catch {
         b.finished = !b.finished;
         homeHtml = "";
         render();
-        showNotice("Немає з'єднання: позначити книжку можна лише онлайн.", false);
-      });
+        return showNotice("Немає з'єднання: позначити книжку можна лише онлайн.", false);
+      }
+      if (b.finished) res.json().then((r) => r?.site && window.showDone?.(b.path, r.site)).catch(() => {});
+      return;
     }
     if (act !== "delete") return;
     try {

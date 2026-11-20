@@ -2837,8 +2837,9 @@ api.post("/library/take", (req, res) => {
   res.json({ ok: true });
 });
 
-// «Позначити прочитаною» (Max, 2026-11-01): the book shows as read on Головна, and on the site's shelf it
-// becomes «Прочитано» (an account with a site key; a guest's mark stays here). Unmarking only clears it here.
+// «Позначити прочитаною» (Max, 2026-11-01): the book shows as read on Головна. Since 2026-11-20 the site's shelf is
+// not touched by it either (Max: «показувати форму, коли робиш як Прочитано з дом меню»): the page opens the same
+// screen as at a book's end, and «Опублікувати» there puts it on the site. Unmarking only clears it here.
 // `auto` (Max 2026-11-19, bug report №7; 2026-11-20: «позначаємо прочитані тільки в читалці»): the page reached the
 // book's last page; it is finished here only, and the site is only asked (`peek`) for the book's shelf entry (`site`:
 // href, title, rating, note) when the catalog has it, for the card «Прочитано» (renderer.js `done`). The site's shelf
@@ -2868,7 +2869,6 @@ api.post("/library/finished", async (req, res) => {
   else (u.finished ??= {})[name] = Date.now();
   if (!req.guest || req.share) saveState();
   if (req.body?.done === false) return res.json({ ok: true });
-  if (!req.body?.auto) return res.json({ ok: true }), siteRead(req, name);
   res.json({ ok: true, site: await siteRead(req, name, { peek: true }) });
 });
 // The card's stars and words, on «Опублікувати»: «Прочитано» on the site's shelf with them, public like any entry there.
