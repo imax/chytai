@@ -478,7 +478,7 @@ A flag only when Max asks for one, or when the change could break what readers u
   the rest 25 to a call, within the same daily cap; «other» isn't asked again (meta `tg:other`). «author» only when the
   book's author takes part (Max 2026-11-18: «якщо автора немає на зустрічі то це книжковий клуб»): a presentation or
   discussion without the author (a translated or late author's book) is «club»; a Ukrainian author's presentation stays
-  «author» unless the text shows the author is absent (`KIND_HELP` and SYSTEM); podii's «презентація» goes to `classify`.
+  «author» unless the text shows the author is absent (`KIND_HELP` and SYSTEM).
   The events already in were sorted again (`recheckAuthors`, meta `tg:author-recheck` = 2, changes in
   `tg:author-recheck-log`; the first pass moved Ukrainian authors' presentations to clubs, the second put them back).
 
@@ -492,12 +492,9 @@ A flag only when Max asks for one, or when the change could break what readers u
   event sitemaps' Ukrainian pages with a bookish name (`EM_BOOKISH`) not seen yet (meta `eventmate:seen`, half a year),
   the date from the page, upcoming ones through `tgFeed.extract` (≤20 a run), source `eventmate`, the event's page as
   its link. Dry run: `curl -s https://chytai.org.ua/agent/calendar-eventmate -H "$H"` (ask again); run: `POST {"run":true}`.
-- podii.io (Max 2026-11-16, an afisha of Lviv and Ivano-Frankivsk; robots allow): `calendar.podiiRun` once a day in the
-  jobs process, its «Літературні заходи» page (`/category/literaturni-zakhody`; a city's own category page shows other
-  kinds), each event page read once (meta `podii:seen`) for its schema.org Event: no AI, source `podii`, kind by words
-  (`podiiKind`), its page as the link; a Telegram twin gets that page. Dry run: `curl -s
-  https://chytai.org.ua/agent/calendar-podii -H "$H"` (ask again); run: `POST {"run":true}`. `findSimilar` leaves out
-  words every meeting has (`EVENT_WORDS`: клуб, читацький, обговорення…): two clubs on one day are not one event.
+- podii.io (Max 2026-11-16) was read daily until 2026-11-20 (Max: «можна вимикати», 1 event in 3 days against YouScan's
+  34): collector taken out, its events (source `podii`) stay. `findSimilar` leaves out words every meeting has
+  (`EVENT_WORDS`: клуб, читацький, обговорення…): two clubs on one day are not one event.
 - YouScan (Max's trial 2026-11-17; `web/youscan.js`, source `ys`): a topic's webhook (topic Settings → Integrations →
   Webhook, sent by its Rules; the API is a paid add-on, not used) posts mentions to `POST /api/youscan/<key>`; the
   address with its key: `curl -s https://chytai.org.ua/agent/youscan -H "$H"` (`hook`, plus what came in, `by` state,
