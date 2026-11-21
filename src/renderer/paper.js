@@ -55,7 +55,7 @@
   // iOS keeps a canvas's pixels until it is collected; a zero size lets them go now.
   const free = (...cs) => cs.forEach((c) => c && (c.width = c.height = 0));
   // A phone's photo is several megabytes; 1600 pixels on the long side is plenty to read a page.
-  async function shrink(file, max = 1600) {
+  async function shrink(file, max = SMALL) {
     try {
       const img = await createImageBitmap(file, { imageOrientation: "from-image" });
       const k = Math.min(1, max / Math.max(img.width, img.height));
@@ -387,7 +387,7 @@
     for (;;) {
       file = cam ? await camera() : await pickPhoto();
       if (!file) return null;
-      small = await shrink(file);
+      small = ownShots.has(file) ? file : await shrink(file);
       thumb = URL.createObjectURL(small);
       marked = await mark(thumb, cam, words);
       if (marked !== "retake") break;
@@ -478,6 +478,8 @@
   // The camera, on the same full-screen sheet as the marks. Resolves to the picture (a Blob or, from «Галерея»,
   // a File), or null. Where the camera can't be had, the system's photo picker instead.
   const CAM_OK = !!navigator.mediaDevices?.getUserMedia && !OLD_APP;
+  const SMALL = 1600; // shrink()'s size
+  const ownShots = new WeakSet(); // pictures our camera made at that size already
   let stream = null;
   function stopCam() {
     stream?.getTracks().forEach((t) => t.stop());
@@ -507,13 +509,17 @@
         const f = await pickPhoto();
         if (f) done(f);
       };
+      // At the size shrink() would make, once: a full frame encoded, decoded and encoded again kept the screen black
+      // for 5–7 s on an Android phone (bug report №11, 2026-11-20). The frame stays on screen meanwhile.
       $("#pm-shot").onclick = () => {
-        if (!v.videoWidth) return;
+        if (!v.videoWidth || over) return;
+        v.pause();
+        const k = Math.min(1, SMALL / Math.max(v.videoWidth, v.videoHeight));
         const c = document.createElement("canvas");
-        c.width = v.videoWidth;
-        c.height = v.videoHeight;
-        c.getContext("2d").drawImage(v, 0, 0);
-        c.toBlob((blob) => (free(c), blob && done(blob)), "image/jpeg", 0.9);
+        c.width = Math.round(v.videoWidth * k);
+        c.height = Math.round(v.videoHeight * k);
+        c.getContext("2d").drawImage(v, 0, 0, c.width, c.height);
+        c.toBlob((blob) => (free(c), blob ? (ownShots.add(blob), done(blob)) : v.play().catch(() => {})), "image/jpeg", 0.85);
       };
       if (!d.open) d.showModal();
       navigator.mediaDevices
