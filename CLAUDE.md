@@ -83,13 +83,13 @@ curl -s https://app.chytai.org.ua/agent/sql -H "$H" -H 'content-type: applicatio
   «Функції» (Max 2026-11-19: «що у нас і як користуються»): every reader feature as one row (`FEATURES` in
   server/admin.js: tap names for `use`, and `seen` where the reader is shown it first), readers 7 / 30 days, taps,
   Max's own apart (`uiMax`, kept out of `ui`). Hand counts beside the taps: `intro-shown` / `intro-read` /
-  `intro-gone`, `gloss-book` (a book opened with underlines on), `toc-go`, `search-run` / `search-go` (once an
+  `intro-gone`, `gloss-book` (a book opened with underlines on; `gloss-nohl` = a device with no CSS Highlight, iOS before 17.2, no underlines), `toc-go`, `search-run` / `search-go` (once an
   opening), `psearch` / `psearch-pick` (the panel), `look-<setting>` and `look-gloss-<level>`. A new feature gets a
   row in `FEATURES`, and a hand count when no tap shows it.
 - The reader's own stats are in the reader (Max 2026-11-20, «щоб воно не відправляло на сайт»): «Адмінка» in the
   panel, Max only (`settings.owner`; app.chytai.org.ua/admin or /?admin opens it). `GET /api/admin` (owner session) =
   `collectStats()` with titles from the reader's own libraries and the day's cost of one word; `POST /api/admin/off`
-  switches an account off. Drawn by `src/renderer/admin-view.js` (home.js page `admin`), plain text, no links to the
+  switches an account off. «Читачі» shows the device last used (`accounts[id].dev`, deviceOf, from `/api/reading`). Drawn by `src/renderer/admin-view.js` (home.js page `admin`), plain text, no links to the
   site. The site's /admin/reader is gone (Max 2026-11-20; it redirects here); its Огляд keeps the reader's four tiles
   (`/api/site-admin`), linked to the reader's «Адмінка».
 - /admin «Performance» (`healthBlock` in web/admin.js): one bullet per check, red with a link when it needs a look. Keep
@@ -727,7 +727,9 @@ A flag only when Max asks for one, or when the change could break what readers u
 - App shell (app/App.js): `menuItems={[]}` hides the system Copy / Paste bar over selections (the reader has its own
   toolbar); on Android it comes back while a text field has the focus (`FIELD_REPORTER`), else nothing could be pasted
   (a reader's sign-in code, 2026-11-17). No overscroll stretch: `overScrollMode="never"` there and
-  `overscroll-behavior: none` on the page and the book's scroller. An App.js change reaches iPhones over the air and Android by a new APK.
+  `overscroll-behavior: none` on the page and the book's scroller. Android's back (also the edge swipe that opens the panel, bug №20) asks the page's `window.__chytaiBack()` (home.js):
+  it closes what is open, from a book opens the panel over one's books; `false` = the app goes to the background.
+  An App.js change reaches iPhones over the air and Android by a new APK.
 - Reader's purpose (Max 2026-11-18): «Level up your reading», reading books that feel too hard. Not in the reader's UI
   any more: minutes («Цей тиждень»: «хвилини не про це»), printing a book, «Дати почитати» links, OPDS in settings
   (the server keeps `/api/opds` and `/api/shares` for links already made). An empty shelf shows `startHtml()` (home.js); its «Як це працює» opens

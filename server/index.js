@@ -841,7 +841,7 @@ async function collectStats() {
       const made = noteTimes.get(id) || [];
       const notesToday = made.filter((t) => t && statsDay(t) === today).length;
       const notesWeek = made.filter((t) => t && statsDay(t) >= weekAgo).length;
-      return { id, notesToday, notesWeek, notesTotal: made.length, name: accountName(id), username: state.accounts[id]?.username || "", off: !!state.accounts[id]?.off, owner: id === OWNER_ID, cost30: costOf(id), readToday: minutesOf(id, today), readWeek: minutesOf(id, weekAgo), read30: minutesOf(id, monthAgo), books: countBooks(id), today: sumUser(id, today), week: sumUser(id, weekAgo), total: sumUser(id), started, lastSeen, lastBook: u.lastBook, lastOpened: u.opened?.[u.lastBook] || 0, activeWeek: lastSeen > Date.now() - 7 * 86400000 };
+      return { id, notesToday, notesWeek, notesTotal: made.length, name: accountName(id), username: state.accounts[id]?.username || "", off: !!state.accounts[id]?.off, owner: id === OWNER_ID, cost30: costOf(id), readToday: minutesOf(id, today), readWeek: minutesOf(id, weekAgo), read30: minutesOf(id, monthAgo), books: countBooks(id), today: sumUser(id, today), week: sumUser(id, weekAgo), total: sumUser(id), started, lastSeen, dev: state.accounts[id]?.dev || "", lastBook: u.lastBook, lastOpened: u.opened?.[u.lastBook] || 0, activeWeek: lastSeen > Date.now() - 7 * 86400000 };
     })
     .sort((a, b) => b.lastSeen - a.lastSeen);
 
@@ -1943,7 +1943,10 @@ api.post("/reading", express.text({ limit: "16kb" }), (req, res) => {
   if (req.guest) return (body.ui && saveState(), res.json({ ok: true }));
   const clean = {};
   for (const [name, sec] of Object.entries(books).slice(0, 20)) if (name && name.length <= 500 && Number.isFinite(sec) && sec > 0) clean[name.replace(/#reflow$/, "")] = (clean[name.replace(/#reflow$/, "")] || 0) + Math.min(sec, body.at ? 3600 : 600);
-  recordReading(req.acct, clean, Number(body.at) || 0, deviceOf(req.get("user-agent")), body.off && typeof body.off === "object" ? body.off : null);
+  const dev = deviceOf(req.get("user-agent"));
+  recordReading(req.acct, clean, Number(body.at) || 0, dev, body.off && typeof body.off === "object" ? body.off : null);
+  // The device the reader last used (Max 2026-11-20, «Адмінка»): the one that reports while the page is open.
+  if (!body.at && state.accounts[req.acct]) state.accounts[req.acct].dev = dev;
   saveState();
   res.json({ ok: true });
 });
@@ -2932,7 +2935,7 @@ async function siteRead(req, name, extra = {}) {
   if (req.guest || req.share || !state.accounts[req.acct]?.key) return null;
   const u = userState(req.acct);
   const info = freeShelf.find((f) => f.name === name) || prot.meta(name) || req.lib?.meta?.bookMeta?.[name] || u.paper?.[name] || {};
-  const book = { name, title: info.title || "", authors: Array.isArray(info.authors) ? info.authors : info.author ? [info.author] : [] };
+  const book = { name, title: info.title || "", authors: Array.isArray(info.authors) ? info.authors : info.author ? [info.author] : [], ...(u.paper?.[name]?.href ? { href: u.paper[name].href } : {}) };
   try {
     const r = await fetch(`${WEB_URL}/api/reader-read`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: req.acct, key: state.accounts[req.acct].key, book, ...extra }), signal: AbortSignal.timeout(15000) });
     if (!r.ok) throw new Error(`site ${r.status}`);

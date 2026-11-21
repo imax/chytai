@@ -934,7 +934,9 @@ function doneStars(n) {
 function doneState() {
   const rating = $("#done").dataset.rating === "" ? null : Number($("#done").dataset.rating);
   const note = $("#done-note").value.trim();
-  const published = doneSite.status === "read" && rating === (doneSite.rating ?? null) && note === (doneSite.note || "").trim();
+  // The book may have closed meanwhile (closeBook clears doneSite): nothing is published then.
+  const site = doneSite || {};
+  const published = site.status === "read" && rating === (site.rating ?? null) && note === (site.note || "").trim();
   $("#done-send").disabled = published || (rating == null && !note);
   $("#done-send").textContent = published ? "✓ Опубліковано" : "Опублікувати";
   $("#done").classList.toggle("sent", published);
@@ -981,7 +983,7 @@ $("#done-note").addEventListener("input", doneState);
 $("#done-form").addEventListener("submit", async (e) => {
   e.preventDefault();
   const { rating, note } = doneState();
-  if (rating == null && !note) return;
+  if (!doneBook || (rating == null && !note)) return;
   $("#done-send").disabled = true;
   $("#done").classList.add("saving");
   try {

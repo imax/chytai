@@ -13,7 +13,7 @@ Answer with JSON only, no other text: {"title": "...", "author": "..."}. Keep th
 const PAGE_PROMPT = `This is a photo of a page (or two facing pages) of a printed book. Transcribe the book's text exactly as printed, in reading order, keeping its language and spelling.
 - Join words hyphenated across line breaks; keep paragraphs, separated by a blank line.
 - Leave out running heads, footers and anything outside the page (fingers, the table).
-- If a page number is printed, put it on the first line as "PAGE: <number>" (the first page's, for two pages); otherwise leave that line out.
+- If a page number is printed, put it on the first line as "PAGE: <number>" (the first page's, for two pages; when only the second page shows its number, that number minus one); otherwise leave that line out.
 Answer with the text only, no comments.`;
 
 // The text the reader marked on the photo (Max, 2026-11-04: circle it and it becomes a note).
@@ -24,7 +24,7 @@ Transcribe exactly as printed only the text the marks point to, in reading order
 Answer with the text only, no comments. If nothing readable is marked, answer with nothing.`;
 
 // Only the page number (2026-11-04: transcribing the whole page for it was slow and its number got lost).
-const PAGENUM_PROMPT = `This is a photo of a printed book, one page or two facing pages, maybe at an angle. Find the printed page number (in a corner, at the top or bottom of the page; for two pages, the right-hand page's). Answer with the number only, digits, nothing else. If no page number is visible, answer "none".`;
+const PAGENUM_PROMPT = `This is a photo of a printed book, one page or two facing pages, maybe at an angle. Find the printed page number (in a corner, at the top or bottom of the page; for two pages, the right-hand page's; when only the left-hand page shows its number, as on a page that ends a chapter, that number plus one). Answer with the number only, digits, nothing else. If no page number is visible, answer "none".`;
 
 async function ask(apiKey, model, prompt, image, mediaType, maxTokens = 4000) {
   const client = new Anthropic({ apiKey });

@@ -202,12 +202,18 @@ function Reader({ onInsets }) {
     }
   }, [toPage]);
 
-  // Android's back button goes back in the reader, and leaves the app only from its first page.
+  // Android's back button (and the swipe from the screen's edge, which is the same) goes back in the reader. On its
+  // first page the page itself closes what is open or, in a book, opens the panel over your books, as that swipe
+  // does there (bug report №20, 2026-11-20); with nothing to close it says `exit` and the app goes to the background.
   useEffect(() => {
     if (Platform.OS !== 'android') return;
     const sub = BackHandler.addEventListener('hardwareBackPress', () => {
-      if (!canGoBack.current) return false;
-      webview.current?.goBack();
+      if (canGoBack.current) {
+        webview.current?.goBack();
+        return true;
+      }
+      if (!webview.current) return false;
+      webview.current.injectJavaScript(`(window.__chytaiBack && window.__chytaiBack()) || window.ReactNativeWebView.postMessage('{"type":"exit"}'); true;`);
       return true;
     });
     return () => sub.remove();
@@ -286,6 +292,7 @@ function Reader({ onInsets }) {
             if (msg.type === 'speech') speech(msg.action);
             if (msg.type === 'insets') onInsets?.(msg.top, msg.bottom);
             if (msg.type === 'field') setInField(!!msg.on);
+            if (msg.type === 'exit' && Platform.OS === 'android') BackHandler.exitApp();
           } catch { /* not ours */ }
         }}
         onNavigationStateChange={(nav) => { canGoBack.current = nav.canGoBack; }}

@@ -1310,6 +1310,20 @@
     render();
   }
 
+  // Android's back (the app, app/App.js), which a swipe from the screen's edge also is (bug report №20, 2026-11-20:
+  // the swipe that opens the panel left the app): close what is open, and from a book do what that swipe does here.
+  // false = nothing to close, the app goes to the background.
+  window.__chytaiBack = () => {
+    const dlg = document.querySelector("dialog[open]");
+    if (dlg) return dlg.close(), true;
+    if (!$("#done").classList.contains("hidden")) return $("#done").classList.add("hidden"), true;
+    if (window.PhoneRead?.sheetOpen()) return window.PhoneRead.closeSheet(), true;
+    if (isOpen() && $("#shell").classList.contains("panel-open")) return panel(false), true;
+    if (isOpen() && page !== "home") return backHome(), true;
+    if (!isOpen() && current && !settings.guest) return panelFromBook(), true;
+    return false;
+  };
+
   window.Shell = {
     show, hide, panelFromBook, refresh, key, when, setAside, rcover, showAbout, openPaper, aboutBlock, loadAbout,
     book: (path) => lib?.books.find((b) => b.path === path) || null,

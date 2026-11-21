@@ -61,7 +61,8 @@ window.Gloss = (() => {
       return;
     }
     // A book opened with a list on (/admin/reader «Функції»: readers who had underlined words vs those who tapped one).
-    if (!seen && enabled() && Object.keys(forms).length) seen = true, window.ReadingTime?.count("gloss-book");
+    // A device that can't underline (no CSS Custom Highlight: iOS before 17.2) is counted apart (bug report №18, 2026-11-20).
+    if (!seen && enabled() && Object.keys(forms).length) seen = true, window.ReadingTime?.count(window.Highlight && window.CSS?.highlights ? "gloss-book" : "gloss-nohl");
     for (const c of contentsOf() || []) mark(c);
   }
 

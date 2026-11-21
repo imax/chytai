@@ -40,8 +40,11 @@
     const idle = s.users.length - users.length;
     const off = (u) => (u.owner ? "" : `<button class="r-adm-btn${u.off ? "" : " danger"}" data-act="admin-off" data-id="${esc(u.id)}" data-off="${u.off ? "" : "1"}">${u.off ? "Увімкнути" : "Вимкнути"}</button>`);
     const last = (u) => (u.lastBook ? `${esc(u.lastTitle || fileTitle(u.lastBook))}${u.lastOpened ? ` <span class="m">${ago(u.lastOpened)}</span>` : ""}` : `<span class="m">—</span>`);
-    const readersTbl = (list) => tbl(["Читач", "~Читає", "Хв сьогодні", "7 днів", "30", "Пояснень, 7 дн.", "Нотаток, 7 дн.", "Claude, 30 дн.", ""],
-      list.map((u) => `<tr${u.owner ? ' class="me"' : ""}><th>${who(u)}${u.off ? ` <span class="m">вимкнено</span>` : ""}</th><td class="tx">${last(u)}</td><td>${n(u.readToday)}</td><td>${n(u.readWeek)}</td><td>${n(u.read30)}</td><td>${n(u.week)}</td><td>${n(u.notesWeek)}</td><td>${u.cost30 ? usd(u.cost30) : n(0)}</td><td>${off(u)}</td></tr>`));
+    // The device last used (server/index.js deviceOf): the app on iOS / Android / Mac, or the web.
+    const DEV = { "iphone-app": "iOS", "android-app": "Android", "mac-app": "Mac", app: "застосунок", "iphone-browser": "веб, iPhone", "android-browser": "веб, Android", "desktop-browser": "веб" };
+    const dev = (u) => (u.dev ? esc(DEV[u.dev] || u.dev) : `<span class="m">—</span>`);
+    const readersTbl = (list) => tbl(["Читач", "Пристрій", "~Читає", "Хв сьогодні", "7 днів", "30", "Пояснень, 7 дн.", "Нотаток, 7 дн.", "Claude, 30 дн.", ""],
+      list.map((u) => `<tr${u.owner ? ' class="me"' : ""}><th>${who(u)}${u.off ? ` <span class="m">вимкнено</span>` : ""}</th><td class="tx">${dev(u)}</td><td class="tx">${last(u)}</td><td>${n(u.readToday)}</td><td>${n(u.readWeek)}</td><td>${n(u.read30)}</td><td>${n(u.week)}</td><td>${n(u.notesWeek)}</td><td>${u.cost30 ? usd(u.cost30) : n(0)}</td><td>${off(u)}</td></tr>`));
     const recent = users.filter((u) => u.activeWeek);
     const older = users.filter((u) => !u.activeWeek);
     out += `<section class="r-adm-sec">${head("Читачі")}

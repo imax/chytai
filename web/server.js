@@ -980,6 +980,10 @@ app.get("/agent/ai-trial", agentOk, (req, res) => {
 function readerCatalogBook(id, sentBook) {
   const name = String(sentBook?.name || "").slice(0, 300);
   if (!name) return { error: "book" };
+  // A paper book added from the catalog carries its page here: that book, whatever its title in the reader.
+  const m = /^https:\/\/chytai\.org\.ua\/book\/([^/?#]+)/.exec(String(sentBook?.href || ""));
+  const byHref = m && store.resolve(decodeURIComponent(m[1]));
+  if (byHref) return { bookId: store.canonical(byHref) };
   const sent = sentBook.title ? { name, title: String(sentBook.title).slice(0, 300), authors: (Array.isArray(sentBook.authors) ? sentBook.authors : []).map(String).join("; ") } : null;
   const file = store.db.prepare("SELECT name, title, authors FROM reader_files WHERE reader = ? AND name = ?").get(id, name) || FREE.find((f) => f.name === name) || sent;
   if (!file?.title) return { skipped: "unknown" };
