@@ -3629,7 +3629,7 @@ app.get("/api/search/outside", async (req, res) => {
     for (const b of ol.filter(named)) put({ ...b, from: "Open Library" });
   }
   admin.event(req, req.user?.id, "outside", out.length ? "shown" : "none");
-  res.set("Cache-Control", "no-store").send(pages.outsideResults({ q, user: req.user, books: out }));
+  res.set("Cache-Control", "no-store").send(pages.outsideResults({ q, user: req.user, books: out, after: req.query.after === "1" }));
 });
 // A book from outside picked in search (pages.outsideResults): made here (or found, if we have it after all) and opened.
 // Guests too (Max, 2026-10-30: «якщо чувак на неї клікає, то ми автоматично створюємо цю сторінку»), at most ten new

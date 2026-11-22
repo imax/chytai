@@ -310,7 +310,9 @@ A flag only when Max asks for one, or when the change could break what readers u
   days (`homeEvents` in server.js: own shelf's authors, then author/festival/lecture before clubs; `calHome` reuses
   `calLine`). The test DB may have no upcoming events: copy some rows of `cal_events` from `/agent/sql` locally.
 - Search with no book that has every word (`searchAll` `near`, 2026-11-15): «Може, ви шукали:» authors, publishers and books with most of the
-  words, a one-letter typo counting («після вільного шляху» → «Пісня відкритого шляху»); then no outside lookup.
+  words, a one-letter typo counting («після вільного шляху» → «Пісня відкритого шляху»); under them the outside lookup still
+  comes (`/api/search/outside?after=1`: «Немає на Chytai, можна додати», or the link / by-hand form), since that is how a
+  missing book gets added (Max 2026-11-22, «my struggle»).
 - Off since 2026-11-15, code kept: the homepage box (and /search) takes a request too (flag `smart-search`, `web/intent.js`, no model): cue words
   (`CUES`) and no book has every word → «Порадити книжки» first, Enter presses it (POST /ask); many words and no book
   → only a line. Variant B (Max chose it on a design canvas): «Порадити книжки ↵» takes the place of «Enter ↵» in the

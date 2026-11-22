@@ -1865,7 +1865,9 @@ function searchResults({ q, user, hits = [], authors = [], readers = [], shelves
       ? `<p class="found">Точно за «${esc(nest(q))}» нічого. Може, ви шукали:</p>${nearNames ? `<div class="name-rows">${nearNames}</div>` : ""}${near.length ? `<div class="rows">${near.map((h) => bookRow(h.book, { meta: readersMeta(h.book.id), action: h.entry ? myStatus(h.entry) : "" })).join("")}</div>` : ""}`
       : "";
   if (!n)
-    return `${nearRows || elsewhere}
+    // «Може, ви шукали» doesn't take the place of the books elsewhere: they are how a missing book gets added
+    // (Max 2026-11-22, «my struggle» showed only Лаюк and Хвильовий).
+    return `${nearRows ? `${nearRows}<div class="outside" data-src="/api/search/outside?${attr(new URLSearchParams({ q, after: "1" }).toString())}"></div>` : elsewhere}
 <p class="found muted">Шукаєте не книжку, а настрій? Почніть з полиць:</p>
 <nav class="read-chips">${[["/", "Що почитати"], ["/?f=short", "Коротке"], ["/?f=ua", "Українські автори"], ["/?f=fiction", "Художнє"], ["/?f=nonfiction", "Нон-фікшн"]].map(([h, t]) => `<a class="chip" href="${h}">${t}</a>`).join("")}</nav>`;
   if (askMode === "ask") return `${askTop}
@@ -1896,10 +1898,11 @@ function searchResults({ q, user, hits = [], authors = [], readers = [], shelves
 // authors (Wikidata), Google Books, Open Library, as plain result rows (Max: «зробив би це більш seamless», no
 // heading, no explanation, no button). A click makes the book here and opens its page (POST /api/search/open); what
 // the reader does with it then is up to them. Nothing anywhere: a store's link, or the title and author by hand (/add).
-function outsideResults({ q, user, books }) {
+// `after`: under «Може, ви шукали» (searchResults), so it says what these are, and a guest gets nothing when none.
+function outsideResults({ q, user, books, after = false }) {
   if (!books.length)
-    return `<section class="block">
-  <p class="found">Нічого не знайшлося за «${esc(nest(q))}».</p>
+    return after && !user ? "" : `<section class="block">
+  <p class="found">${after ? "Немає тут тієї, що шукаєте?" : `Нічого не знайшлося за «${esc(nest(q))}».`}</p>
   ${
     user
       ? `<p class="small muted">Знаєте, де вона є? Вставте посилання на книжку в магазині чи у видавництва.</p>
@@ -1919,7 +1922,7 @@ function outsideResults({ q, user, books }) {
   </div>
 </form>`;
   };
-  return `<div class="rows" data-block="outside">${books.map(row).join("")}</div>`;
+  return `${after ? `<p class="found">Немає на Chytai, можна додати:</p>` : ""}<div class="rows" data-block="outside">${books.map(row).join("")}</div>`;
 }
 
 // ---- /author/<slug> ----
