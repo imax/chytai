@@ -618,14 +618,14 @@ body[data-theme="dark"] .cover { background: hsl(var(--hue) 18% 30%); color: hsl
    Serif 4 + Onest, rules; the reader's own accent is ochre. Turn 4 adds the dark theme, the book menu,
    «Нещодавно видалені». Everything below overrides the older home screen.
    =================================================================================================== */
-#shell, #book-menu, #trash-dialog, #about-dialog, #notice, #paper-found, #paper-ask, #paper-mark {
+#shell, #book-menu, #trash-dialog, #about-dialog, #notice, #paper-found, #paper-page, #paper-ask, #paper-mark {
   --r-paper: #f7f4ee; --r-menu: #fbf9f5; --r-ink: #1b1a17; --r-ink2: #6b675f; --r-ink3: #8a857b; --r-rule: #e4dfd5;
   --r-head: #1b1a17; --r-sline: #c9c3b6; --r-dash: #b9b2a3; --r-ochre: #9a6418; --r-ochre-h: #7f5212; --r-bar: #b5803a;
   --r-track: #e4dfd5; --r-btn: #ffffff; --r-red: #a63a2a; --r-toast: #1b1a17; --r-toast-fg: #f7f4ee; --r-toast-btn: #e2b26b;
   --r-serif: "Source Serif 4 Variable", "Source Serif 4", Georgia, serif;
   --r-sans: "Onest Variable", Onest, -apple-system, BlinkMacSystemFont, sans-serif;
 }
-body[data-theme="dark"] #shell, body[data-theme="dark"] #book-menu, body[data-theme="dark"] #trash-dialog, body[data-theme="dark"] #about-dialog, body[data-theme="dark"] #notice, body[data-theme="dark"] #paper-found, body[data-theme="dark"] #paper-ask, body[data-theme="dark"] #paper-mark {
+body[data-theme="dark"] #shell, body[data-theme="dark"] #book-menu, body[data-theme="dark"] #trash-dialog, body[data-theme="dark"] #about-dialog, body[data-theme="dark"] #notice, body[data-theme="dark"] #paper-found, body[data-theme="dark"] #paper-page, body[data-theme="dark"] #paper-ask, body[data-theme="dark"] #paper-mark {
   --r-paper: #1a1916; --r-menu: #24221e; --r-ink: #ece6da; --r-ink2: #a39d91; --r-ink3: #8a847a; --r-rule: #2f2c27;
   --r-head: #8a847a; --r-sline: #4a463f; --r-dash: #5a554c; --r-ochre: #d9a35a; --r-ochre-h: #e6b674; --r-bar: #c98f3f;
   --r-track: #36332d; --r-btn: #1a1916; --r-red: #e07a68; --r-toast: #ece6da; --r-toast-fg: #1a1916; --r-toast-btn: #9a6418;
@@ -1827,8 +1827,8 @@ body.not-owner #r-pnav-admin { display: none !important; }
 .pp-row { display: flex; justify-content: space-between; border: none; border-top: 1px solid var(--r-rule); background: none; color: var(--r-ink); font: 500 15px var(--r-sans); padding: 14px 0; cursor: pointer; }
 
 /* «Це вона?» and the question card */
-#paper-found, #paper-ask { background: var(--r-paper); color: var(--r-ink); font-family: var(--r-sans); border: none; border-radius: 10px; width: min(520px, calc(100vw - 32px)); box-sizing: border-box; padding: 22px 24px; }
-#paper-found::backdrop, #paper-ask::backdrop { background: rgba(27, 26, 23, .45); }
+#paper-found, #paper-page, #paper-ask { background: var(--r-paper); color: var(--r-ink); font-family: var(--r-sans); border: none; border-radius: 10px; width: min(520px, calc(100vw - 32px)); box-sizing: border-box; padding: 22px 24px; }
+#paper-found::backdrop, #paper-page::backdrop, #paper-ask::backdrop { background: rgba(27, 26, 23, .45); }
 .pf-wait { display: flex; align-items: center; gap: 10px; margin: 6px 0; color: var(--r-ink2); }
 .pf-h { margin: 0 0 12px; font: 600 20px var(--r-serif); }
 .pf-row { display: grid; grid-template-columns: 52px 1fr auto; gap: 14px; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--r-rule); }
@@ -1866,7 +1866,7 @@ body.not-owner #r-pnav-admin { display: none !important; }
   .pp-acts > * { flex: 0 0 auto; padding: 12px 26px; }
 }
 @media (max-width: 760px) {
-  #paper-found, #paper-ask { margin: auto 0 0; width: 100vw; max-width: 100vw; border-radius: 16px 16px 0 0; padding: 20px 20px calc(env(safe-area-inset-bottom) + 18px); }
+  #paper-found, #paper-page, #paper-ask { margin: auto 0 0; width: 100vw; max-width: 100vw; border-radius: 16px 16px 0 0; padding: 20px 20px calc(env(safe-area-inset-bottom) + 18px); }
   #paper-ask[open] { height: calc(100dvh - env(safe-area-inset-top) - 56px); max-height: none; padding-bottom: calc(env(safe-area-inset-bottom) + 14px); }
   .r-mine .r-tabs { min-width: 0; overflow-x: auto; scrollbar-width: none; margin-right: -20px; padding-right: 20px; }
   .r-mine .r-tabs::-webkit-scrollbar { display: none; }
@@ -2294,3 +2294,20 @@ html, body, #viewer .epub-container { overscroll-behavior: none; }
   html body #sel-toolbar:not(.mark) .st-row .st-go { padding: 10px 16px; }
   dialog menu { flex-wrap: wrap; }
 }
+
+/* «На якій ви сторінці?» (paper.js pageSheet) and the cover's card (showCard), Max 2026-11-22 */
+.pp-pgtap { text-decoration: underline dotted; text-underline-offset: 3px; cursor: pointer; }
+.pg-form { display: flex; gap: 12px; align-items: center; margin: 4px 0 14px; }
+.pg-in { font-size: 15px; }
+.pg-in input, #pg-num { width: 5em; flex: none; font-size: 18px; padding: 9px 10px; }
+.pg-photo { width: 100%; justify-content: flex-start; gap: 10px; align-items: center; }
+.pg-photo svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.6; }
+.pg-hint { margin: 0; font-size: 13px; color: var(--r-ink2); }
+#paper-found { max-height: 92dvh; overflow-y: auto; }
+.pf-card { display: grid; grid-template-columns: 64px 1fr; gap: 16px; align-items: end; padding-bottom: 16px; border-bottom: 1px solid var(--r-rule); }
+.pf-card .r-cover { width: 64px; }
+.pf-card .r-cover-t, .pf-card .r-cover-a { display: none; }
+.pf-card .pf-t { font-size: 20px; }
+.pf-about { padding: 12px 0 6px; }
+.pf-about:empty { padding: 6px 0; }
+.pf-add { width: 100%; }

@@ -1102,7 +1102,10 @@
     word: async (body) => (await api("POST", "/api/word", body)).json(),
     paperSuggest: async (name) => (await (await api("POST", `/api/paper/${encodeURIComponent(name)}/suggest`, {})).json()).questions?.[0] || "",
     paperSeen: (name) => api("POST", `/api/paper/${encodeURIComponent(name)}/seen`, {}).catch(() => {}),
-    paperScan: async (kind, blob) => (await api("POST", `/api/paper/scan?kind=${kind}`, blob)).json(),
+    // `learn`: a paper book's name; its page then goes into what the reader has read (a page photo without a question).
+    paperScan: async (kind, blob, learn = "") => (await api("POST", `/api/paper/scan?${new URLSearchParams({ kind, ...(learn ? { learn } : {}) })}`, blob)).json(),
+    // «Про книжку» of a paper book before it is added (the cover's card): { before } / { building } / { none }.
+    paperGuide: async (title, author) => (await api("GET", `/api/guide?${new URLSearchParams({ paper: "1", title, author: author || "" })}`)).json(),
     catalogFind: async (q) => (await api("GET", `/api/find?${new URLSearchParams({ q })}`)).json(),
     libraryFinished: (name, done, auto) => api("POST", "/api/library/finished", { path: name, done, ...(auto ? { auto: true } : {}) }),
     // The card «Прочитано» (renderer.js done): stars or a few words onto the site's shelf; { site } or { error }.

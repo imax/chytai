@@ -86,11 +86,14 @@
     }
   }
 
-  // «Сфотографувати обкладинку»: the photo gives a title and author, the catalog the book; «Це вона?».
+  // «Сфотографувати обкладинку»: the photo gives a title and author, the catalog the book. Then the book's card
+  // (Max 2026-11-22): «Про книжку» and «Чому варто читати» from its title and author, before «Додати». «Не та книжка»
+  // lists the catalog's other matches («Це вона?»), each opening its own card.
   async function coverPhoto() {
     const file = await pickPhoto(true);
     if (!file) return;
     const d = $("#paper-found");
+    d.found = d.card = null;
     $("#pf-body").innerHTML = `<p class="pf-wait"><span class="spinner"></span>Читаю обкладинку…</p>`;
     d.showModal();
     let seen;
@@ -111,23 +114,67 @@
       if (!books.length && seen.author) books = (await window.reader.catalogFind(seen.title)).books || [];
     } catch {}
     if (!d.open) return;
-    const top = books.slice(0, 3);
-    d.found = { seen, top };
-    $("#pf-body").innerHTML = `<h2 class="pf-h">${top.length ? "Це вона?" : "У каталозі не знайшлося"}</h2>
-      ${top.map((b, i) => `<div class="pf-row">${window.Shell.rcover({ title: b.title, authors: [b.author] }, b.cover || null)}
-        <span class="pf-x"><span class="pf-t">${esc(b.title)}</span><span class="pf-a">${esc([b.author, b.year].filter(Boolean).join(" · "))}</span></span>
-        <button type="button" class="r-pill" data-pf="${i}">Додати</button></div>`).join("")}
-      <button type="button" class="r-link pf-asis" data-pf="seen">${top.length ? "Немає в списку: додати" : "Додати"} «${esc(seen.title)}»${seen.author ? `, ${esc(seen.author)}` : ""}</button>`;
+    d.found = { seen, top: books.slice(0, 3) };
+    showCard(d.found.top[0] || null);
+  }
+  // The card of one book: a catalog match, or (null) the cover as read.
+  function showCard(b) {
+    const d = $("#paper-found");
+    const { seen, top } = d.found;
+    const c = b ? { title: b.title, author: b.author, cover: b.cover || "", href: b.href, year: b.year } : { title: seen.title, author: seen.author };
+    d.card = c;
+    $("#pf-body").innerHTML = `<div class="pf-card"><span class="pf-card-c">${window.Shell.rcover({ title: c.title, authors: [c.author] }, c.cover || null)}</span>
+        <span class="pf-x"><span class="pf-t">${esc(c.title)}</span><span class="pf-a">${esc([c.author, c.year].filter(Boolean).join(" · "))}</span></span></div>
+      <div class="ab-inline pf-about" id="pf-about"></div>
+      <button type="button" class="r-pill pf-add" data-pf-add>Додати в мої книжки</button>
+      ${top.length || b ? `<button type="button" class="r-link pf-asis" data-pf-list>Не та книжка</button>` : ""}`;
+    window.ReadingTime?.count("cover-card");
+    cardGuide(c);
+  }
+  // «Про книжку» on the card, asked again while it is being made (the kept answer comes at once).
+  async function cardGuide(c) {
+    const d = $("#paper-found");
+    const box = () => (d.open && d.card === c ? $("#pf-about") : null);
+    const sec = (h, t) => `<section class="ab-sec"><h3>${h}</h3><p>${esc(t)}</p></section>`;
+    if (!window.reader.paperGuide) return;
+    for (let i = 0; i < 40 && box(); i++) {
+      let g;
+      try {
+        g = await window.reader.paperGuide(c.title, c.author);
+      } catch {
+        g = null;
+      }
+      const el = box();
+      if (!el) return;
+      const f = g?.before;
+      if (f?.about || f?.why) return (el.innerHTML = sec("Про книжку", f.about || f.why) + (f.worth ? sec("Чому варто читати", f.worth) : ""));
+      if (!g?.building) return (el.innerHTML = "");
+      el.innerHTML = `<p class="pf-wait"><span class="spinner"></span>Готую кілька слів про книжку…</p>`;
+      await new Promise((r) => setTimeout(r, 2500));
+    }
   }
   $("#paper-found").addEventListener("click", (e) => {
     const d = $("#paper-found");
     if (e.target === d) return d.close();
-    const el = e.target.closest("[data-pf]");
-    if (!el || !d.found) return;
+    if (!d.found) return;
     const { seen, top } = d.found;
-    const b = el.dataset.pf === "seen" ? null : top[Number(el.dataset.pf)];
-    d.close();
-    add(b ? { title: b.title, author: b.author, cover: b.cover || "", href: b.href } : { title: seen.title, author: seen.author });
+    if (e.target.closest("[data-pf-add]") && d.card) {
+      const c = d.card;
+      d.close();
+      window.ReadingTime?.count("cover-card-add");
+      return add(c.href ? { title: c.title, author: c.author, cover: c.cover, href: c.href } : { title: c.title, author: c.author });
+    }
+    if (e.target.closest("[data-pf-list]")) {
+      d.card = null;
+      $("#pf-body").innerHTML = `<h2 class="pf-h">${top.length ? "Це вона?" : "У каталозі не знайшлося"}</h2>
+        ${top.map((b, i) => `<div class="pf-row">${window.Shell.rcover({ title: b.title, authors: [b.author] }, b.cover || null)}
+          <span class="pf-x"><span class="pf-t">${esc(b.title)}</span><span class="pf-a">${esc([b.author, b.year].filter(Boolean).join(" · "))}</span></span>
+          <button type="button" class="r-pill" data-pf="${i}">Вона</button></div>`).join("")}
+        <button type="button" class="r-link pf-asis" data-pf="seen">${top.length ? "Немає в списку:" : "Додати"} «${esc(seen.title)}»${seen.author ? `, ${esc(seen.author)}` : ""}</button>`;
+      return;
+    }
+    const el = e.target.closest("[data-pf]");
+    if (el) showCard(el.dataset.pf === "seen" ? null : top[Number(el.dataset.pf)]);
   });
 
   // ---------- The page ----------
@@ -213,7 +260,7 @@
       ? `<button type="button" class="pp-allq" data-pp="allq">${allChats ? "Згорнути" : `Показати всі ${allSorted.length}`}</button>` : "";
     return `<div class="pp">
       <div class="pp-bar"><button class="r-back" type="button" data-page="home" aria-label="Назад"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 5-7 7 7 7"/></svg></button>
-        <button type="button" class="pp-mini" data-pp="about"><span class="pp-mini-c">${window.Shell.rcover(b)}</span><span class="pp-mini-x"><b>${esc(b.title)}</b><small>${esc([b.authors.join(", "), b.page ? `стор. ${b.page}` : ""].filter(Boolean).join(" · "))}</small></span></button>
+        <button type="button" class="pp-mini" data-pp="about"><span class="pp-mini-c">${window.Shell.rcover(b)}</span><span class="pp-mini-x"><b>${esc(b.title)}</b><small>${b.authors.length ? `${esc(b.authors.join(", "))} · ` : ""}<span class="pp-pgtap" data-pp="page">${b.page ? `стор. ${b.page}` : "+ стор."}</span></small></span></button>
         <span class="r-more pp-more" role="button" tabindex="0" data-menu="${esc(b.path)}" title="Ще" aria-label="Ще"><i></i><i></i><i></i></span></div>
       <form class="pp-ask" data-pp-ask>
         <textarea id="pp-q" rows="4" placeholder="${esc(idea || PLACEHOLDER)}" enterkeyhint="send">${esc(draft)}</textarea>
@@ -257,6 +304,60 @@
     </div>`;
   }
   const when = (t) => (t ? new Date(t).toLocaleDateString("uk-UA", { day: "numeric", month: "long" }) : "");
+
+  // «На якій ви сторінці?» (Max 2026-11-22, №14 variant C): a tap on «стор. N» under the title. The number typed
+  // here is the page, also a lower one (a typo, a book read again); or a photo of the page, without a question: its
+  // number, and the page goes into what the reader has read (server: /api/paper/scan with `learn`).
+  function pageSheet() {
+    const d = $("#paper-page");
+    $("#pg-body").innerHTML = `<h2 class="pf-h">На якій ви сторінці?</h2>
+      <form class="pg-form" data-pg-form><label class="pp-page-in pg-in">стор. <input id="pg-num" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="5" enterkeyhint="done" autocomplete="off" value="${book.page || ""}" /></label><span class="pp-ask-sp"></span><button type="submit" class="r-pill">Зберегти</button></form>
+      <button type="button" class="pp-row pg-photo" data-pg-photo>${svgCam}Сфотографувати сторінку</button>
+      <p class="pg-hint">З фото пояснення знатимуть, що ви вже прочитали.</p>`;
+    d.showModal();
+    if (!matchMedia("(pointer: coarse)").matches) $("#pg-num").select();
+  }
+  function setPage(b, page) {
+    b.page = page;
+    b.openedAt = Date.now();
+    if (book === b) window.Shell.rerender();
+    window.reader.paperUpdate(b.path, { page }).catch((err) => showNotice(offline(err, "зберегти сторінку"), false));
+  }
+  $("#paper-page").addEventListener("click", (e) => {
+    const d = $("#paper-page");
+    if (e.target === d) return d.close();
+    if (e.target.closest("[data-pg-photo]")) return d.close(), pagePhoto();
+  });
+  document.addEventListener("submit", (e) => {
+    if (!e.target.matches("[data-pg-form]")) return;
+    e.preventDefault();
+    $("#paper-page").close();
+    const page = Number($("#pg-num").value.replace(/\D/g, "") || 0);
+    if (!book || !page || page === book.page) return;
+    window.ReadingTime?.count("paper-page-num");
+    setPage(book, page);
+  });
+  async function pagePhoto() {
+    const cam = CAM_OK && matchMedia("(pointer: coarse)").matches;
+    const file = cam ? await camera() : await pickPhoto();
+    const m = $("#paper-mark");
+    if (m.open) (m.onclose = null), m.close();
+    if (!file || !book) return;
+    const b = book;
+    window.ReadingTime?.count("paper-page-photo");
+    showNotice("Читаю номер сторінки…", true);
+    try {
+      const r = await window.reader.paperScan("pagenum", await shrink(file), b.path);
+      if (!r.page) {
+        showNotice("Не вдалося прочитати номер. Впишіть його.", false);
+        return book === b && pageSheet();
+      }
+      setPage(b, r.page);
+      showNotice(`Ви на стор. ${r.page}. Пояснення знатимуть, що ви вже прочитали.`, false);
+    } catch (err) {
+      showNotice(offline(err, "розпізнати фото"), false);
+    }
+  }
 
   // The page you are on, as far as the reader knows: the last photo's page number.
   function seenPage(page) {
@@ -742,6 +843,7 @@
     if (act === "unattach") return (scan = null), (showText = false), window.Shell.rerender();
     if (act === "text") return (showText = !showText), window.Shell.rerender();
     if (act === "about") return openAbout(true);
+    if (act === "page") return pageSheet();
     if (act === "cancel-edit") {
       editing = null;
       return window.Shell.rerender();

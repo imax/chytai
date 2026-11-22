@@ -595,6 +595,12 @@ A flag only when Max asks for one, or when the change could break what readers u
   The recap of a started book («Де ви зупинилися / Що було досі / Хто тут хто») was taken out on 2026-11-19 (Max: it
   retold what he read the day before; «Хто тут хто» = the names card): don't bring it back, nor a recap guessed by
   days away, nor «що ви могли пропустити» (Max: condescending).
+- Paper books (Max 2026-11-22, bot №14 C and the cover's card): a tap on «стор. N» under the title opens «На якій ви
+  сторінці?» (paper.js `pageSheet`): a number (a lower one too) or a photo (`/api/paper/scan?kind=pagenum&learn=<book>`:
+  the number at once, then the page goes into what the reader has read, `learnPage`). «Додати паперову книжку» → the
+  cover's card (`showCard`): «Про книжку» / «Чому варто читати» by `GET /api/guide?paper=1&title&author` (the same kept
+  answer the book gets once added), then «Додати»; «Не та книжка» = the catalog's other matches. Not now (Max): several
+  photos in one question (№9), choosing in a bookshop (№15).
 - «Перед главою» (Max 2026-11-19, flag `chapter-intro`, `GET /api/guide/intro?book&href&snip&pct`, renderer.js
   `introCheck`): up to 3 notes for the chapter the reader is in, like an annotated edition's (history, customs,
   references, earlier threads; `INTRO`): never what happens, no hints that something matters, never «ви» (Max:

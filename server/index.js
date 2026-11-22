@@ -3084,13 +3084,16 @@ api.get("/guide", async (req, res) => {
   const file = guideFile(req.guest ? null : req.lib, name);
   // A paper book (Max 2026-11-20): its title and author as the reader keeps them.
   const pb = !file && !req.guest && name && paper.NAME.test(name) ? userState(req.acct).paper?.[name] : null;
-  if (!file && !pb) return res.json({ none: true });
+  // A paper book not added yet (Max 2026-11-22: the cover's card shows «Про книжку» before «Додати»): by title and
+  // author, the same kept answer the book gets once it is added.
+  const loose = !file && !pb && !req.guest && req.query.paper === "1" && !!clean(req.query.title, 300);
+  if (!file && !pb && !loose) return res.json({ none: true });
   if (req.query.auto) return res.json({ skip: true }); // pages loaded before 2026-11-19 still ask for the recap
   const { allow, spend } = guideCaps(req);
   const title = pb ? clean(pb.title, 300) : clean(req.query.title, 300);
   const author = pb ? clean(pb.author, 300) : clean(req.query.author, 300);
   const blurb = () => (title ? siteAbout(title, author).then((a) => (a?.found && a.blurb) || "") : Promise.resolve(""));
-  if (pb) {
+  if (pb || loose) {
     try {
       return res.json(await guide.paper({ title, authors: author ? [author] : [], blurb, allow, spend }));
     } catch (err) {
@@ -3697,6 +3700,14 @@ api.post("/paper/scan", guestsCannot("Без входу фото не розпі
     const { usage, model, ...out } = r;
     recordExplain(req, { model, usage });
     res.json(out);
+    // «Сфотографувати сторінку» in «На якій ви сторінці?» (Max 2026-11-22, №14 C): the page goes into what the reader
+    // has read, as a photo with a question does.
+    const book = String(req.query.learn || "");
+    // Only the number comes back at once; the page's text is read after it.
+    if (paper.NAME.test(book) && userState(req.acct).paper?.[book]) {
+      if (kind === "pagenum") learnPage(req, book, { image: req.body.toString("base64"), page: out.page || 0 });
+      else if (kind === "page" && out.text) learnPage(req, book, { text: out.text, page: out.page || 0 });
+    }
   } catch (err) {
     res.status(502).json({ error: describeError(err) });
   }
