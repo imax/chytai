@@ -585,7 +585,7 @@ A flag only when Max asks for one, or when the change could break what readers u
   list): a reader's first 3 own books Opus (`LAZY_OPUS_BOOKS`, `state.glossOpus[acct]`), then Sonnet; Max always Opus
   (Max 2026-11-18); a free-shelf book Opus, one list for all, not counted. A school classic takes PROMPT_V2, any
   other book PROMPT_ANY (terms, allusions, foreign phrases, realia, idioms; meanings in Ukrainian whatever the book's
-  language). Kept with `lazy`, `of`, `done`, `covered`: own books in `accounts/<id>/glossary/v2/`, the free shelf in
+  language; Max 2026-11-22: no coarse words whose sense is plain, no place names, never «тут:»). Kept with `lazy`, `of`, `done`, `covered`: own books in `accounts/<id>/glossary/v2/`, the free shelf in
   `glossary-v2/`. Not for publishers' books or a book with a list already. Caps: $20 a day for all (`LAZY_DAY_USD`,
   Telegram once), $5 a reader (`LAZY_ACCOUNT_USD`, Max none); stats day `glossLazy`. The book menu shows it after
   «Про книжку» (`glossLine` in home.js, `GET /api/glossary/status`: covered, words, names, building), not «Аа».
@@ -630,7 +630,13 @@ A flag only when Max asks for one, or when the change could break what readers u
   someone first opens a book (Max 2026-11-17, anyone, guests too; `namesOnOpen` in server/index.js from `/api/book`): a
   free-shelf book once for all, a reader's own EPUB in `accounts/<id>/glossary/names/`; 10 books a day, 2 a reader, 2 at
   once, a failed one not again until a restart, Telegram once when the day's cap is hit; no PDFs, no publishers' books.
-  By hand: `POST /agent/glossary {"book":…,"names":true}`; status under `names` in `GET /agent/glossary`.
+  By hand: `POST /agent/glossary {"book":…,"names":true}`; status under `names` in `GET /agent/glossary`. A reader's own
+  EPUB again (Max's OK): `POST /agent/glossary {"acct":"<id>","book":"<file>","names":true}`, status `GET ?acct=<id>`.
+  A card says only who or what it is to the story, ≤8 words (Max 2026-11-22, variant C of bug report №29: «Біллі —
+  головний герой», not a biography); never how someone's story ends, even when the book tells it early; a publisher's
+  note on the author before the text gives no cards. A name never gets an underline: `/api/glossary` drops a v2 form
+  that is in the book's names (Max 2026-11-22). Trial of prompts on two books: `scripts/gloss-try/` (on branch
+  claude/project-thread-slufc6; run on Max's Mac).
   word.js asks NAME only for a capital mid-sentence (`midName`): «Кармазини!» at a sentence's start is a word.
   Trial prompts and answers: project files `chytai-gloss-try/run/` (`ahead.js`: Sonnet vs Haiku, one word 1.1–1.8 s).
 - New free-shelf classics from Wikisource: `scripts/wsbook.py` (recipe at its top). Many school works exist there only
@@ -726,6 +732,11 @@ A flag only when Max asks for one, or when the change could break what readers u
   Nothing is drawn over the passage. The block is CSS only (`askBlocks` / `askTap` / `askCss` in renderer.js: the
   paragraph's `data-ask` + `::after`): never insert nodes into the book's DOM, every CFI (places, notes, explanations)
   would shift; epub.js `ignoreClass` is too buggy for that. After a layout change call `redrawMarks()`.
+- Reader: a book whose own table of contents has one entry («Start», «Початок») gets one from its headings (`ownToc` in
+  renderer.js, Max 2026-11-22, variant A of bug report №28): the top level of h1–h3 in each spine file; a number →
+  «Розділ N», «***» → «Частина N», capitals → sentence case; short files with only a number and a link (translator's
+  notes) → one «Примітки». It replaces `book.navigation.toc`, so the running head and «стор.» follow. `stripScripts`
+  keeps `<base>`: epub.js sets it, and every link between files (footnotes) resolves by it (№28).
 - Reader: words with a stress mark (U+0301, the free shelf's classics) get soft hyphens (`shyStressed` in renderer.js,
   Max 2026-11-20: a hole in a justified line), since browsers don't hyphenate them; where = the device's own
   hyphenation of the bare word (`breaksOf`). The patched `ePub.CFI` `pathTo` / `toRange` leave those soft hyphens out,

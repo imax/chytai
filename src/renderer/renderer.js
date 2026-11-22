@@ -658,6 +658,12 @@ async function openEpub(payload, { posKey, source }) {
   // is expected, and the result must not touch the next book.
   const opened = book;
   if (!opened) return;
+  ownToc(opened, nav.toc).then((toc) => {
+    if (book !== opened || toc === nav.toc) return;
+    opened.navigation.toc = toc; // the running head, «розділ N з M» and search results read it too
+    renderToc(toc);
+    if (opened.locationsReady) addTocPages(opened).then(() => window.PhoneRead?.ticks());
+  }, () => {});
   opened.locations.generate(1600).then(() => {
     if (book !== opened) return;
     book.locationsReady = true; // before this, length() counts only the chapters done so far
@@ -1120,6 +1126,56 @@ async function onPdfMouseUp() {
   handleSelection(range, `pdf:${ctx.page}:${ctx.selection}`, { ...ctx, chapter: `сторінка ${ctx.page}` }, { top: 0, left: 0 });
 }
 
+// A book whose contents has one entry or none (an EPUB 2 «Start» that leads to the cover, bug report №28) gets one
+// from its own headings, no model (Max 2026-11-22, variant A): each spine file's top headings (h1–h3); «1» is
+// «Розділ 1», «ПРО АВТОРА» is «Про автора», «***» inside a file is «Частина N». A run of tiny files whose only heading
+// is a number and that link back (translator's notes, link1.xhtml…) is one «Примітки» entry. A heading further into
+// a file is found by its CFI (`cfi`), so nothing is added to the book's DOM. Chapters loaded for it are let go again.
+async function ownToc(forBook, toc) {
+  const count = (items) => items.reduce((n, i) => n + 1 + count(i.subitems || []), 0);
+  const sections = forBook.spine.spineItems || [];
+  if (count(toc) > 1 || sections.length > 600) return toc;
+  const name = (el) => el.textContent.replace(/\u00AD/g, "").replace(/\s+/g, " ").trim().slice(0, 80);
+  const out = [];
+  let notes = false;
+  let part = 0;
+  for (const section of sections) {
+    if (!section.linear || book !== forBook) continue;
+    const had = !!section.contents;
+    try {
+      const doc = await section.load(forBook.load.bind(forBook)); // the <html> element
+      const all = [...doc.querySelectorAll("h1, h2, h3")];
+      const top = all.length ? Math.min(...all.map((h) => Number(h.localName[1]))) : 0;
+      const heads = all.filter((h) => Number(h.localName[1]) === top);
+      const chars = (doc.querySelector("body")?.textContent || "").replace(/\s+/g, " ").trim().length;
+      if (heads.length === 1 && /^\d+$/.test(name(heads[0])) && chars < 2000 && doc.querySelector("a[href]")) {
+        if (!notes) out.push({ label: "Примітки", href: section.href });
+        notes = true;
+        continue;
+      }
+      heads.forEach((h, i) => {
+        let label = name(h);
+        if (!/[\p{L}\d]/u.test(label)) label = `Частина ${++part}`;
+        else if (/^\d+$/.test(label)) label = `Розділ ${label}`;
+        else if (label === label.toUpperCase()) label = label[0] + label.slice(1).toLowerCase();
+        if (i === 0 && !h.previousElementSibling?.textContent.trim()) return out.push({ label, href: section.href });
+        // A place at the heading's first letter: epub.js turns an element's CFI into a broken range.
+        const text = h.ownerDocument.createTreeWalker(h, NodeFilter.SHOW_TEXT).nextNode();
+        const at = h.ownerDocument.createRange();
+        if (text) at.setStart(text, 0);
+        else at.setStartBefore(h);
+        at.collapse(true);
+        out.push({ label, href: section.href, cfi: section.cfiFromRange(at) });
+      });
+    } catch {
+      /* a file that won't load: no entry */
+    } finally {
+      if (!had) section.unload();
+    }
+  }
+  return out.length > 1 ? out : toc;
+}
+
 function renderToc(items) {
   const list = $("#toc-list");
   list.innerHTML = "";
@@ -1129,11 +1185,12 @@ function renderToc(items) {
       const a = document.createElement("a");
       a.textContent = item.label.trim();
       a.dataset.href = item.href;
+      if (item.cfi) a.dataset.cfi = item.cfi;
       a.style.paddingLeft = `${12 + depth * 14}px`;
       a.onclick = () => {
         window.ReadingTime?.count("toc-go"); // the phone's sheet presses this link too
         if (pdfView) pdfView.goTo(item.href);
-        else rendition.display(item.href);
+        else rendition.display(item.cfi || item.href);
         $("#toc").classList.add("hidden");
         toggleChrome(false);
       };
@@ -1153,19 +1210,20 @@ async function addTocPages(forBook) {
     const [path, fragment] = a.dataset.href.split("#");
     const section = forBook.spine.get(path);
     if (!section) continue;
-    let cfi;
+    let cfi = a.dataset.cfi; // a heading inside a file (ownToc)
     // A chapter loaded only for this is let go again: epub.js keeps every loaded chapter's document, and a long
     // book's whole text stayed in memory for as long as it was open (War and Peace: 393 chapters, +55 MB).
     const had = !!section.contents;
-    try {
-      const doc = await section.load(forBook.load.bind(forBook));
-      const el = (fragment && doc.getElementById(decodeURIComponent(fragment))) || doc.body || doc.documentElement;
-      cfi = section.cfiFromElement(el);
-    } catch {
-      continue;
-    } finally {
-      if (!had) section.unload();
-    }
+    if (!cfi)
+      try {
+        const doc = await section.load(forBook.load.bind(forBook)); // the <html> element
+        const el = (fragment && doc.getElementById(decodeURIComponent(fragment))) || doc.body || doc.documentElement;
+        cfi = section.cfiFromElement(el);
+      } catch {
+        continue;
+      } finally {
+        if (!had) section.unload();
+      }
     if (book !== forBook) return;
     const span = document.createElement("span");
     span.className = "toc-page";
@@ -1202,6 +1260,10 @@ function chapterTitle(href, cfi) {
   here.setStart(range.startContainer, range.startOffset);
   let best = found[0];
   for (const item of found) {
+    if (item.cfi && cfi) {
+      if (new ePub.CFI().compare(item.cfi, cfi) <= 0) best = item;
+      continue;
+    }
     const frag = item.href.split("#")[1];
     if (!frag) continue;
     const el = doc.getElementById(decodeURIComponent(frag));

@@ -1338,7 +1338,12 @@ app.use((req, res, next) => {
   app.get("/agent/health", ok, (req, res) => res.json({ now: new Date().toISOString(), commit: process.env.GIT_SHA || "", image: process.env.FLY_IMAGE_REF || "", started, memoryMb: Math.round(process.memoryUsage().rss / 1048576), storage: storage.now(DATA_DIR, ["reader.db"]), accounts: Object.keys(state.accounts || {}).length }));
   app.all("/agent/sql", ok, express.json(), async (req, res) => res.json(await sql(req.body?.q || req.query.q)));
   // «Словничок» (server/glossary.js): what is made and what runs; POST {"book":"<free-shelf file>"} makes one book's.
-  app.get("/agent/glossary", ok, (req, res) => res.json({ ...glossary.status(), v2: glossaryV2.status(), names: glossaryNames.status() }));
+  app.get("/agent/glossary", ok, (req, res) => {
+    // ?acct=<id>: that library's names (own uploads), what is made and what runs.
+    const acct = String(req.query.acct || "");
+    if (acct) return acct === OWNER_ID || state.accounts?.[acct] ? res.json({ names: namesOf(libOf(acct)).status() }) : res.status(400).json({ error: "no such account" });
+    res.json({ ...glossary.status(), v2: glossaryV2.status(), names: glossaryNames.status() });
+  });
   // ?find=<word>: what the kept passages say for it (to see a bad card's source).
   // Readers' uploads: GET ?uploads=1 lists the uploaded EPUBs by school classics' authors and what they have;
   // POST {"acct":"<id>","book":"<file>"} makes that one's (past the caps; only with Max's OK in the thread).
@@ -1366,6 +1371,16 @@ app.use((req, res, next) => {
   });
   app.post("/agent/glossary", ok, express.json(), async (req, res) => {
     const book = safeBookName(req.body?.book);
+    // {"acct":"<id>","book":"<file>","names":true}: a reader's own EPUB's names made again (Opus over the whole book,
+    // ~$0.5–1.5; only with Max's OK in the thread), past the day's caps.
+    if (req.body?.acct && req.body?.names) {
+      const acct = String(req.body.acct);
+      if (acct !== OWNER_ID && !state.accounts?.[acct]) return res.status(400).json({ error: "no such account" });
+      const lib = libOf(acct);
+      if (!book || !/\.epub$/i.test(book) || !fs.existsSync(bookFile(lib, book))) return res.status(400).json({ error: "no such EPUB in that library" });
+      const g = namesOf(lib);
+      return res.json({ started: g.start(book, bookFile(lib, book)), ...g.status() });
+    }
     if (!book || !isFree(book)) return res.status(400).json({ error: "not a free-shelf book" });
     if (req.body?.tidy) return res.json(await glossary.retidy(book, path.join(freeDir(book), book)));
     if (req.body?.strict) return res.json(await glossary.strict(book).catch((err) => ({ error: err.message })));
@@ -2581,7 +2596,9 @@ api.get("/glossary", (req, res) => {
   const names = (shelf ? glossaryNames.get(shelf)?.names : name && !isFree(name) && req.lib && namesOf(req.lib).get(name)?.names) || undefined;
   if (v2) {
     // { form: [meaning, level, word] } → the first list's shape plus the levels and the words (for «Знаю»).
-    const e = Object.entries(glossFixed(shelf, v2.forms));
+    // A name the names card knows is the card's, not an underline (Max 2026-11-22, bug report №29: «Сісеро — передмістя
+    // Чикаго» under the text while the card says whose town it is). Names hold only forms written with a capital.
+    const e = Object.entries(glossFixed(shelf, v2.forms)).filter(([k]) => !names?.[k]);
     return res.set("Cache-Control", "private, no-cache").json({ v: 2, forms: Object.fromEntries(e.map(([k, x]) => [k, x[0]])), levels: Object.fromEntries(e.map(([k, x]) => [k, x[1]])), words: Object.fromEntries(e.map(([k, x]) => [k, x[2]])), names });
   }
   const g = name && (isFree(name) ? glossary.get(name) : own?.same ? glossary.get(own.same) : own);

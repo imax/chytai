@@ -529,6 +529,8 @@ Glossary.prototype.buildV2 = async function (book, file, run = {}) {
 // PROMPT_ANY, which looks for whatever stops a reader. Kept as the v2 list with `lazy: true`, `of` (parts), `done`
 // (their numbers) and `covered` (the share of the text read); `progress()` says how far it is.
 const LAZY_AHEAD = 2;
+// Coarse words with a plain sense and real places stay out (Max 2026-11-22, bug report №29: «стояк — ерекція»,
+// «Сісеро — передмістя Чикаго» read as silly; places are the names card's).
 const PROMPT_ANY = `You make a reading glossary for a book that a Ukrainian reader finds hard: a classic, an old, foreign or demanding modern book, written in Ukrainian or in another language. The reader taps an underlined word or expression and sees your explanation, so it must make the sentence clear at a glance.
 
 Go through the passage sentence by sentence and list every word or short expression that a well-read adult may not understand here, whatever the reason:
@@ -540,9 +542,9 @@ Go through the passage sentence by sentence and list every word or short express
 - an idiom, a pun or a figure of speech whose sense is not literal.
 For each, decide how much it would stop the reader: 1 — without help the sentence is unclear; 2 — the reader half-guesses from the sentence but is unsure.
 
-Leave out what an educated adult reads at once: ordinary words, plain old spellings of known words, the names of the book's own people and places (they have a list of their own), and anything the text itself explains next to it. When unsure whether the reader knows it, leave it out: an underline on a word one knows is noise.
+Leave out what an educated adult reads at once: ordinary words, plain old spellings of known words, coarse, vulgar or slang words whose sense is plain from the sentence (стояк, мандавошки, вилупку), the names of the book's own people and places and of real towns, states, rivers and countries (they have a list of their own), and anything the text itself explains next to it. When unsure whether the reader knows it, leave it out: an underline on a word one knows is noise.
 
-Answer with one line per item and nothing else, four fields separated by tabs: the word or expression exactly as written in the passage (same case and ending, no stress marks), its dictionary form, its meaning in this sentence in plain modern Ukrainian whatever the book's language (a synonym, or at most twelve words for a thing, a term or an allusion; no full stop; only everyday words), and 1 or 2.
+Answer with one line per item and nothing else, four fields separated by tabs: the word or expression exactly as written in the passage (same case and ending, no stress marks), its dictionary form, its meaning in this sentence in plain modern Ukrainian whatever the book's language (a synonym, or at most twelve words for a thing, a term or an allusion; no full stop; only everyday words; never starting with «тут:»), and 1 or 2.
 List each form once. Check every meaning against its sentence: a wrong meaning is worse than none.`;
 
 // The book's parts and where each ends in its text, kept while the file is the same (a book is opened again and again).
@@ -684,19 +686,21 @@ Glossary.prototype.sweep = async function (forms, chapters) {
 // underlined: only the card of a selected capitalised word reads them (gloss.js `lookup`), before asking a model.
 // Kept in DATA_DIR/glossary-names/<book>.json as { names: { form: [about, name] } }. Opus with the whole book (Чорна
 // рада: ~100k tokens in, about a dollar), one call a book; a book over NAMES_MAX characters is not made.
+// The card says only who or what it is to the story (Max 2026-11-22, bug report №29, variant C of a trial on «Бойня
+// №5» and «Про мишей і людей»: the old prompt's rank-town-kin facts read as a reference book, «Біллі — американський
+// солдат, згодом оптометрист», never «головний герой»; trial script scripts/gloss-try on branch
+// claude/project-thread-slufc6).
 const NAMES_MAX = 1200000;
-const NAMES = `You read a whole book below: often a Ukrainian classic, sometimes a modern or a foreign one. Answer in Ukrainian whatever its language. Readers aged 12–16 select a capitalised word in it and see a short card about who or what it is. The list after the book has every capitalised word form found in the middle of its sentences, with how often it occurs.
+const NAMES = `You read a whole book below: often a Ukrainian classic, sometimes a modern or a foreign one in translation. Answer in Ukrainian whatever its language. A reader of this book selects a capitalised word in it and sees a short card about who or what it is. The list after the book has every capitalised word form found in the middle of its sentences, with how often it occurs.
 
 For each person, place, people, river, institution or other named thing in that list, answer one line, three fields separated by tabs:
-1. the name as the book usually gives it in full (Кирило Тур, Васюта Ніженський, Київ);
+1. the name as the book usually gives it in full (Кирило Тур, Біллі Пілґрим, Київ);
 2. every form from the list that refers to it, separated by commas (Шрам, Шрама, Шрамові, Шрамом), exactly as listed;
-3. who or what it is, in at most twelve plain everyday Ukrainian words, no full stop.
-
-What makes a good card: concrete facts the book gives, the ones that help follow the story: rank or job, town, whose father, son, wife or friend, which side they are on (Шрам: «паволоцький полковник і священник, батько Петра»; Васюта: «ніжинський полковник, хоче стати гетьманом»). Never a vague line like «персонаж книжки» or «іде разом із гетьманом»: if the book says little, say that little concretely. For a real place or historical person, what it is (місто над Дніпром; гетьман України, помер до подій книжки) as far as the book and history agree.
-Never tell what happens later in the plot: no deaths, betrayals, marriages, victories or outcomes the reader has not reached when the name first appears. Describe them as the reader meets them.
+3. the card: at most eight plain everyday Ukrainian words, no full stop: only who or what this is to the story, the way a friend who has read the book would whisper it. «головний герой», «дружина Біллі», «батько Петра, паволоцький полковник», «планета, куди викрадають Біллі», «друг Джорджа й Ленні на ранчо». No biography, no list of facts, never the name again. For a real place or person not central to the story, what it is plus its link to the people (місто, де Біллі був у полоні).
+Never how a person's story ends (death, betrayal, marriage) or the book's last events, even when the book tells them early.
 Only what you are sure of from the text; never guess kinship or roles.
 A form that in this book means different people or places (Петре said to two different Петри, Іван for several Івани) goes on no line: leave it out. So does a word that names something only together with another word (Великий of Великий Луг, Чорна of Чорна Гора, Золоті of Золоті ворота, Старий): list only forms that name it by themselves.
-Leave out what is not a name: God, the Lord, saints' titles used as words, a common word that starts a line of verse or a quote, chapter headings. Leave out a name you cannot describe beyond «персонаж».
+Leave out what is not a name: God, the Lord, saints' titles used as words, a common word that starts a line of verse or a quote, chapter headings. Leave out names that come only from a publisher's note about the author (a biography before or after the text), and a name you cannot describe beyond «персонаж».
 Nothing else in the answer: no headings, no notes.`;
 
 Glossary.prototype.buildNames = async function (book, file, run = {}) {
@@ -748,7 +752,7 @@ function parseNames(answer, listed) {
     const [n, f, a] = line.split("\t").map((x) => (x || "").trim());
     const name = n.replace(/^[-*•\d.\s]+/, "");
     const about = a.replace(/\.$/, "");
-    if (!name || !f || !about || about.length > 140 || /^персонаж( книжки)?$/i.test(about)) continue;
+    if (!name || !f || !about || about.length > 140 || /^персонаж( книжки)?$/i.test(about) || key(about) === key(name)) continue;
     for (const form of f.split(/\s*,\s*/)) {
       const k = key(form);
       if (k && (!listed || listed.has(k)) && !out[k]) out[k] = [about, name.slice(0, 60)];
