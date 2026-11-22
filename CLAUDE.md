@@ -720,7 +720,8 @@ A flag only when Max asks for one, or when the change could break what readers u
   goes into that list.
 - Reader: a reader's own cover (`PUT /api/cover`, the page cuts it to 900 px JPEG; `DELETE` = the file's again) is set in
   «Назва, автор, обкладинка». No letter to Max for it (Max, 2026-11-15).
-- Reader «Додати книжку» → «Де ще шукаємо»: a store whose purchases download as files gets a row named by the store
+- Reader «Додати книжку» (Max 2026-11-22, variant C): the empty shelf's buttons (`r-add-two` in `addStartHtml`), one line,
+  «Як це працює»; no drop box (a file dropped on the page is added). «Де ще шукаємо»: a store whose purchases download as files gets a row named by the store
   with «як додати» steps (`shopRow` in src/renderer/home.js: Yakaboo, Book.ua). No store has an API; we never sign
   in to a reader's store account.
   The app is about one's own books and explanations (Max 2026-11-17, before the store release): «Вільна полиця» is

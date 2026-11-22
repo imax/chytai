@@ -1023,16 +1023,13 @@ body[data-theme="dark"] #shell, body[data-theme="dark"] #book-menu, body[data-th
 .r-now-row { align-items: center; }
 
 /* Add page parts */
-.r-add-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 30px; }
-.r-file .r-sec-head, .r-where .r-sec-head { margin-bottom: 14px; }
-.r-drop { border: 1px dashed #b5a98f; border-radius: 10px; padding: 18px; display: flex; flex-direction: column; align-items: flex-start; gap: 12px; }
-#shell.r-drag .r-drop { border-color: var(--r-ochre); background: var(--r-pact); }
-.r-drop-t { margin: 0; font: 20px var(--r-serif); }
-.r-pick { display: inline-flex; align-items: center; gap: 10px; padding: 10px 22px 10px 18px; font-size: 15px; }
-.r-pick svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
-.r-pick:hover { border-color: var(--r-ochre); color: var(--r-ochre); }
-.r-chips { display: flex; gap: 6px; }
-.r-chips span { background: var(--r-chip); border-radius: 4px; padding: 3px 7px; font-size: 12px; font-weight: 500; }
+.r-where .r-sec-head { margin-bottom: 14px; }
+/* «Додати книжку» (variant C, 2026-11-22): the empty shelf's buttons, then the stores; a dragged file outlines them. */
+.r-add-c { display: flex; flex-direction: column; }
+.r-add-c .r-add-two { margin-bottom: 36px; }
+.r-add-c .r-where { max-width: 520px; }
+@media (min-width: 761px) { .r-add-c .r-start-how { align-self: flex-start; } }
+#shell.r-drag .r-add-two { outline: 2px dashed var(--r-ochre); outline-offset: 14px; border-radius: 12px; }
 .r-drop-note { margin: 0; font-size: 13px; line-height: 1.55; color: var(--r-ink2); }
 .r-dt { display: none; }
 .r-sub-phone { margin: -6px 0 14px; font-size: 13px; color: var(--r-ink2); }
@@ -1164,14 +1161,7 @@ body.not-owner #r-pnav-admin { display: none !important; }
   .r-now-meta { margin: 8px 0 14px; }
   .r-grid { grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 20px 18px; }
   .r-dt { display: inline; }
-  .r-ph { display: none; }
   p.r-dt { display: block; }
-  .r-add-grid { grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); gap: 30px 40px; grid-template-areas: "file where" "paper where" "free free"; }
-  .r-file { grid-area: file; }
-  .r-paper { grid-area: paper; }
-  .r-where { grid-area: where; }
-  .r-free { grid-area: free; }
-  .r-drop { padding: 30px 24px 24px; gap: 14px; }
   .r-sub-phone { display: none; }
   .r-free-grid { grid-template-columns: repeat(9, minmax(0, 1fr)); }
   .r-found { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 40px; align-items: start; }
@@ -1234,7 +1224,6 @@ body.not-owner #r-pnav-admin { display: none !important; }
 @media (min-width: 761px) and (max-width: 1100px) {
   .r-free-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); }
   .r-found { grid-template-columns: minmax(0, 1fr); gap: 26px; }
-  .r-add-grid { grid-template-columns: minmax(0, 1fr); grid-template-areas: "file" "paper" "where" "free"; }
 }
 
 /* ===================================================================================================
@@ -1777,9 +1766,7 @@ body.not-owner #r-pnav-admin { display: none !important; }
 .r-mine .r-filtered[data-show="all"] .r-empty.g-all { display: block; }
 #shell[data-page="paper"] .r-head { display: none; }
 #shell[data-page="paper"] #home-body { padding-top: 0; }
-.r-paper { display: flex; flex-direction: column; align-items: flex-start; gap: 14px; }
-.r-paper .r-sec-head { margin-bottom: 0; }
-.r-pick svg, .pp-acts svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.6; vertical-align: -4px; margin-right: 8px; }
+.pp-acts svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.6; vertical-align: -4px; margin-right: 8px; }
 .r-frow-cat { grid-template-columns: 36px 1fr auto; }
 .r-frow-cat .r-frow-x { color: inherit; text-decoration: none; }
 .r-frow-two { display: flex; flex-direction: column; align-items: flex-end; gap: 0; }

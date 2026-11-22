@@ -505,20 +505,19 @@
         <div class="r-filtered" data-show="${freeTab}"><div class="r-grid r-free-grid">${newest.map((b) => card(b, "", false, fcls(b))).join("")}</div></div></section>`;
     }
     const freeRow = free.length ? `<button class="r-where-row" data-act="free-all" aria-expanded="${freeAll}"><span>Вільна полиця · ${free.length}</span><small>${freeAll ? "згорнути" : "читати безкоштовно"}</small></button>` : "";
-    return `<div class="r-add-grid">
-      <section class="r-file">${head(`Файл з <span class="r-ph">телефона</span><span class="r-dt">комп'ютера</span>`, "", true)}
-        <div class="r-drop"><p class="r-drop-t r-dt">Перетягніть файл сюди</p>
-          <button class="r-pill-line r-pick" data-act="add"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V5M7 10l5-5 5 5M5 20h14"/></svg><span class="r-dt">або вибрати файл</span><span class="r-ph">Вибрати файл</span></button>
-          <div class="r-chips"><span>EPUB</span><span>PDF</span><span>MOBI</span></div>
-          <p class="r-drop-note">MOBI і PDF з текстом перетворюються на EPUB, щоб працювали пояснення й нотатки. Скани лишаються PDF.</p></div></section>
-      <section class="r-paper">${head("Паперова книжка", "", true)}
-        <p class="r-drop-note">Читаєте на папері? Додайте книжку пошуком вище або за фото обкладинки. Пояснення й нотатки до неї будуть тут, і ШІ знатиме, на якій ви сторінці.</p>
-        <button class="r-pill-line r-pick" data-act="cover-photo"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg><span>Сфотографувати обкладинку</span></button></section>
+    // The empty shelf's two buttons (Max 2026-11-22, variant C of the canvas, bot idea №25): what the helper does in one
+    // line, a file, a paper book and «Як це працює»; then the stores. A file dropped anywhere on the page is added.
+    return `<div class="r-add-c">
+      <section class="r-start r-add-two">
+        <p class="r-start-p">Виділіть або обведіть незрозуміле місце. Помічник пояснить.</p>
+        <button class="r-pill r-start-add" data-act="add"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V5M7 10l5-5 5 5M5 20h14"/></svg>Вибрати файл</button>
+        <p class="r-start-f">EPUB, PDF, MOBI<span class="r-dt"> · або перетягніть файл сюди</span></p>
+        <button class="r-pill-line r-start-paper" data-act="cover-photo"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>Додати паперову книжку</button>
+        <button class="r-link r-start-how" data-page="how">Як це працює</button></section>
       <section class="r-where">${head("Де ще шукаємо", "", true)}
         ${shopRow("yakaboo", "Yakaboo", yakabooHtml)}
         ${shopRow("bookua", "Book.ua", bookuaHtml)}
-        ${freeRow}
-</section>
+        ${freeRow}</section>
       ${freeHtml}
     </div>`;
   }
