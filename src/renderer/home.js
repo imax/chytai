@@ -665,7 +665,8 @@
   }, true);
   // The page follows the finger (Max 2026-11-02: a swipe only bounced the page down and then the panel jumped
   // open): a sideways drag moves it, and on release it settles open or closed.
-  const PANEL_W = 318;
+  // 318 px, narrower on a narrow screen (Android's bigger system font zooms the page, bug №24): a strip of the page stays.
+  const panelW = () => Math.min(318, innerWidth - 56);
   let drag = null;
   // Going between «Мої книжки» and «Додати книжку» on a phone (Max 2026-11-05: the page jerked): the other page
   // is laid beside this one and both move together, under the finger or on a tap of «+» / «‹», so the new page
@@ -754,7 +755,7 @@
       : app && x < EDGE ? "panel"
       : app && page === "home" && !settings.guest && x > innerWidth - EDGE ? "add"
       : null;
-    drag = kind ? { kind, x, y: e.touches[0].clientY, open, dir: null, pos: open ? PANEL_W : 0, t: Date.now() } : null;
+    drag = kind ? { kind, x, y: e.touches[0].clientY, open, dir: null, pos: open ? panelW() : 0, t: Date.now() } : null;
   }, { passive: true });
   $("#shell").addEventListener("touchmove", (e) => {
     if (!drag) return;
@@ -773,7 +774,7 @@
       movePages(drag.pos, drag.kind);
       return;
     }
-    drag.pos = Math.max(0, Math.min(PANEL_W, (drag.open ? PANEL_W : 0) + dx));
+    drag.pos = Math.max(0, Math.min(panelW(), (drag.open ? panelW() : 0) + dx));
     $("#shell-main").style.transform = `translateX(${drag.pos}px)`;
   }, { passive: false });
   // A cancelled touch goes back to where it was: on Android the system's back gesture from either edge starts as our
@@ -792,7 +793,7 @@
       else $("#shell").classList.remove("page-drag"), ($("#shell-main").style.transform = "");
       return;
     }
-    const open = cancel ? d.open : fast ? (d.open ? d.pos > PANEL_W - 40 : d.pos > 40) : d.pos > PANEL_W / 2;
+    const open = cancel ? d.open : fast ? (d.open ? d.pos > panelW() - 40 : d.pos > 40) : d.pos > panelW() / 2;
     $("#shell").classList.remove("panel-drag");
     $("#shell-main").style.transform = "";
     panel(open);

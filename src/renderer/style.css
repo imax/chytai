@@ -1171,7 +1171,7 @@ body.not-owner #r-pnav-admin { display: none !important; }
 
 /* Phone: the panel under the page, which slides aside. */
 @media (max-width: 760px) {
-  #r-panel { width: 318px; gap: 22px; padding: calc(env(safe-area-inset-top) + 18px) 20px calc(env(safe-area-inset-bottom) + 24px); border-right: none; visibility: hidden; transition: visibility 0s .28s; }
+  #r-panel { width: min(318px, calc(100vw - 56px)); gap: 22px; padding: calc(env(safe-area-inset-top) + 18px) 20px calc(env(safe-area-inset-bottom) + 24px); border-right: none; visibility: hidden; transition: visibility 0s .28s; }
   #shell.panel-open #r-panel, #shell.panel-drag #r-panel { visibility: visible; transition-delay: 0s; }
   #r-panel .r-panel-logo, .r-psearch kbd { display: none; }
   .r-psearch { height: 46px; padding: 0 14px; }
@@ -1190,7 +1190,7 @@ body.not-owner #r-pnav-admin { display: none !important; }
   .r-pava { width: 32px; height: 32px; line-height: 32px; }
   .r-pme-t b { font-size: 14px; }
   #shell #shell-main { background: var(--r-paper); z-index: 1; transition: transform .28s cubic-bezier(.2, .8, .2, 1), border-radius .28s; }
-  #shell.panel-open #shell-main { transform: translateX(318px); }
+  #shell.panel-open #shell-main { transform: translateX(min(318px, calc(100vw - 56px))); }
   #shell.panel-open #shell-main, #shell.panel-drag #shell-main { border-radius: 14px 0 0 14px; overflow: hidden; box-shadow: -10px 0 30px rgba(27, 26, 23, .16); }
   #shell.panel-drag #shell-main { transition: none; }
   #shell.page-drag #shell-main { transition: none; }
@@ -2285,3 +2285,12 @@ input, textarea, select, [contenteditable], #pdf-container, .card, .answer, #not
 /* Android stretches the text at the top and bottom of a scroll like an accordion (Max 2026-11-17, Android): no
    overscroll effect on the page or the book's scroller. The app shell also sets overScrollMode="never". */
 html, body, #viewer .epub-container { overscroll-behavior: none; }
+
+/* Narrow screens: a 320 px phone, or Android's bigger system font, which zooms the whole page (app/zoom.js, bug №24,
+   2026-11-22: 411 px at ×1.5 is 274 px). */
+@media (max-width: 340px) {
+  .r-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .r-head .r-logo span { display: none; }
+  html body #sel-toolbar:not(.mark) .st-row .st-go { padding: 10px 16px; }
+  dialog menu { flex-wrap: wrap; }
+}

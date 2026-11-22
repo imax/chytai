@@ -727,6 +727,13 @@ A flag only when Max asks for one, or when the change could break what readers u
   The app is about one's own books and explanations (Max 2026-11-17, before the store release): «Вільна полиця» is
   one row there (opens the shelf under the list), no «Каталог Chytai» row, no «Клуб Chytai» link in the panel; the
   catalog search for paper books and «Про книжку» stay.
+- Android's system font size (Max 2026-11-22, bug №24, variant A): the shell sets `textZoom={100}` (the WebView grew
+  only the letters: icons, covers and sheets stayed, text overflowed) and injects `app/zoom.js`, which rewrites the
+  page's viewport meta to `width = screen / fontScale` with that scale (0.85–1.5): the whole page zooms, as in Chrome
+  on Android (411 px at ×1.3 = 316 px; `window.__chytaiZoom`). A page in the app needs a viewport meta. So the reader
+  must hold at 274 px: `@media (max-width: 340px)` at the end of style.css, the phone panel `min(318px, 100vw − 56px)`.
+  Try: Playwright `isMobile` + `addInitScript(zoomScript(1.5))` (top frame); the old text-only zoom is emulated by
+  `html { text-size-adjust: 130% }` in every frame.
 - App shell (app/App.js): `menuItems={[]}` hides the system Copy / Paste bar over selections (the reader has its own
   toolbar); on Android it comes back while a text field has the focus (`FIELD_REPORTER`), else nothing could be pasted
   (a reader's sign-in code, 2026-11-17). No overscroll stretch: `overScrollMode="never"` there and

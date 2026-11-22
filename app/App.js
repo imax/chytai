@@ -8,13 +8,14 @@
 // Changes to the shell itself ship over the air with EAS Update, without an App Store review.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, AppState, BackHandler, Linking, Platform, Pressable, StyleSheet, Text, useColorScheme, View } from 'react-native';
+import { ActivityIndicator, AppState, BackHandler, Linking, Platform, Pressable, StyleSheet, Text, useColorScheme, useWindowDimensions, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import * as ScreenCapture from 'expo-screen-capture';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import * as SplashScreen from 'expo-splash-screen';
 import * as Updates from 'expo-updates';
 import { WebView } from 'react-native-webview';
+import { zoomScript } from './zoom';
 
 // Android's WebView has no working speech recognition, so the page's dictation (dictation.js) asks the
 // shell, which uses the phone's own recognizer (Google). Android only; iOS keeps Safari's own. Native
@@ -117,6 +118,8 @@ const setProtected = (on) =>
 
 function Reader({ onInsets }) {
   const webview = useRef(null);
+  // Android's own font size: the whole page zooms by it (zoom.js), not only the letters.
+  const { fontScale } = useWindowDimensions();
   const canGoBack = useRef(false);
   const [failed, setFailed] = useState(null);
   const [ready, setReady] = useState(false);
@@ -283,7 +286,10 @@ function Reader({ onInsets }) {
         // fonts on the phone) only for the "app-bound" domains listed in app.json (WKAppBoundDomains) and
         // only with this set. Books and notes are kept in IndexedDB by the page itself. Needs a new build.
         limitsNavigationsToAppBoundDomains
-        injectedJavaScriptBeforeContentLoaded={Platform.OS === 'android' ? ERROR_REPORTER + INSETS_REPORTER + FIELD_REPORTER : ERROR_REPORTER}
+        // Android grows only the letters by the system font size (bug №24, 2026-11-22): off here, and zoom.js
+        // zooms the whole page by it instead.
+        textZoom={Platform.OS === 'android' ? 100 : undefined}
+        injectedJavaScriptBeforeContentLoaded={Platform.OS === 'android' ? zoomScript(fontScale) + ERROR_REPORTER + INSETS_REPORTER + FIELD_REPORTER : ERROR_REPORTER}
         onMessage={(e) => {
           try {
             const msg = JSON.parse(e.nativeEvent.data);
