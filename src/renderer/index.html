@@ -352,12 +352,25 @@
         <button value="about" id="bm-about">Про книжку</button>
         <div id="bm-gloss" class="bm-gloss" hidden></div>
         <button value="keep" id="bm-keep" hidden>Зберегти на телефон</button>
+        <button value="cover" id="bm-cover-find">Знайти обкладинку</button>
         <button value="edit" id="bm-edit">Назва, автор, обкладинка</button>
         <button value="epub" id="bm-epub" hidden>Перетворити на EPUB</button>
         <button value="aside" id="bm-aside" class="danger">Видалити</button>
         <button value="delete" id="bm-delete" class="danger">Видалити</button>
       </div>
       <menu><button value="cancel" formnovalidate>Скасувати</button></menu>
+    </form>
+  </dialog>
+
+  <!-- «Знайти обкладинку» (Max 2026-11-22, variant A): covers found by title and author, one tap keeps one. -->
+  <dialog id="cover-dialog">
+    <form method="dialog">
+      <h2>Обкладинка</h2>
+      <p id="cf-sub"></p>
+      <div id="cf-grid"></div>
+      <label class="cf-q">Не та? Шукати інакше<input id="cf-q" type="search" enterkeyhint="search" autocomplete="off" /></label>
+      <input type="file" id="cf-file" accept="image/*" hidden />
+      <p class="ab-foot"><button value="close" class="r-pill">Готово</button></p>
     </form>
   </dialog>
 

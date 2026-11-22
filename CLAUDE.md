@@ -406,6 +406,14 @@ A flag only when Max asks for one, or when the change could break what readers u
   overview and list, the homepage, subscriptions, the .ics and an event page's «Ще події»; they stay in a search, under
   «Мої автори», by one's own authors, on author and book pages, in author-watch letters, and in their own list
   `/calendar?pres=1` (a line under the list). Still collected (the author pages need them).
+  The ones worth it for readers anywhere come back (Max 2026-11-22, variant C, «зустріч з Артуром Дронем»):
+  `cal_events.wide` (NULL = not rated = hidden, 1 = shown, 0 = not), Haiku rates upcoming unrated ones 25 to a call
+  each tg run (`tgFeed.rateWide`, prompt `WIDE`: known authors and publishers, translations, big bookshops and venues
+  yes; a library's local author, amateur poetry, one district's history, religious, self-help, romance no). Max
+  flips a whole tour on /admin/events «Презентації» (`POST /admin/events/wide`, `wide_by = 'max'`, Haiku never
+  overwrites it); his last 40 choices go into the prompt as examples (meta `calendar:wide-max`).
+  `calendar.isPresentation(e)` = any presentation, `presentation(e)` = one still hidden. A presentation tour is one
+  row by its first book (`tours`), whoever posted its stops (Дронь: two channels, 30 stops).
 - Duplicates: `findSimilar` reads ’ ʼ ' as one apostrophe (cities are kept with ’) and takes `time`: same day, city and
   hour plus one word of the «» title in common = one event. The ones that came in before were hidden once at start
   (`dedupe`, meta `calendar:dedupe` lists them).
@@ -726,6 +734,11 @@ A flag only when Max asks for one, or when the change could break what readers u
   goes into that list.
 - Reader: a reader's own cover (`PUT /api/cover`, the page cuts it to 900 px JPEG; `DELETE` = the file's again) is set in
   «Назва, автор, обкладинка». No letter to Max for it (Max, 2026-11-15).
+  «Знайти обкладинку» in the book menu (Max 2026-11-22, variant A; own books only): `GET /api/cover/find?title&author`
+  asks the site's `/api/reader-covers` (catalog work + editions, book.ua, Open Library, Google Books; same author;
+  12; a day's cache) for signed `/t/` copies (`thumb` 240, `full` 480 px); a tap = `POST /api/cover/pick {path, url}`,
+  the reader server fetches only `${WEB_URL}/t/…`. Dialog `#cover-dialog` (home.js `showCovers`), taps `cover-pick`,
+  `cover-file`, `cover-reset`.
 - Reader «Додати книжку» (Max 2026-11-22, variant C): the empty shelf's buttons (`r-add-two` in `addStartHtml`), one line,
   «Як це працює»; no drop box (a file dropped on the page is added). «Де ще шукаємо»: a store whose purchases download as files gets a row named by the store
   with «як додати» steps (`shopRow` in src/renderer/home.js: Yakaboo, Book.ua). No store has an API; we never sign

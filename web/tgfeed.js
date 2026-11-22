@@ -542,6 +542,7 @@ function create(db, { calendar, apiKey = process.env.ANTHROPIC_API_KEY || "", cl
       out.events = ev.made.length;
       if (ev.errors.length) out.evErrors = ev.errors.slice(0, 5);
       out.kinds = (await classify()).set;
+      out.wide = (await rateWide()).set;
       if (meta("tg:author-recheck") !== "2") out.authorRecheck = await recheckAuthors();
     }
     setMeta("tg:last", JSON.stringify({ ...out, errors: out.errors.slice(0, 8) }));
@@ -775,6 +776,47 @@ function create(db, { calendar, apiKey = process.env.ANTHROPIC_API_KEY || "", cl
     return out;
   }
 
+  // Book presentations worth showing to readers anywhere (Max 2026-11-22, variant C on the canvas: «зустріч з Артуром
+  // Дронем» yes, a district library's local poetry no): upcoming ones not rated, 25 to a Haiku call, counted with the
+  // posts' calls. Max's own choices on /admin/events go into the prompt as examples and are never overwritten.
+  const WIDE = `You sort Ukrainian book presentations for a public calendar read by people all over Ukraine. For each presentation answer wide:
+true when a reader who follows Ukrainian books and does not live in that town would care that it happens: an author readers know or talk about, a new book from a known publisher (Видавництво Старого Лева, Лабораторія, Віхола, А-БА-БА-ГА-ЛА-МА-ГА, Наш Формат, Vivat, Фоліо, Книголав, Meridian Czernowitz, Readberry, Yakaboo Publishing, ArtHuss, Темпора, Дух і Літера, Пінзель, Човен), translated literature, a book of wide interest about the war, history, art or culture, an event in a big bookshop (Є, Сенс, Readeat, Книголенд), at a festival or a major cultural venue (Мистецький арсенал, Український дім, a national museum or gallery).
+false when it is for a local circle: a library's or a district museum's evening for a local author, self-published or amateur poetry, the history of one district, town or village, a church or a religious book, a book on management or self-help, an anthology of local writers, genre romance (a romcom, romantasy).
+When unsure, false.`;
+  async function rateWide({ max = AI_DAY } = {}) {
+    const c = anthropic();
+    if (!c || !calendar?.unrated) return { asked: 0, set: 0 };
+    const today = kyivDay();
+    const dayKey = `tg:ai:${today}`;
+    let used = +meta(dayKey) || 0;
+    const rows = calendar.unrated();
+    const out = { asked: 0, set: 0 };
+    const examples = calendar.wideExamples().slice(0, 30);
+    const shown = examples.length ? `The calendar's editor decided these earlier; follow the same taste:\n${examples.map((x) => `- ${x.title}: ${x.wide}`).join("\n")}\n\n` : "";
+    for (let i = 0; i < rows.length && used < max; i += 25) {
+      const batch = rows.slice(i, i + 25);
+      used++, out.asked++;
+      try {
+        const res = await c.messages.create({
+          model: MODEL,
+          max_tokens: 2000,
+          system: WIDE,
+          messages: [{ role: "user", content: `${shown}${batch.map((r, n) => `${n + 1}. ${r.title} — ${r.sub}${r.city ? ` (${r.city}${r.place ? `, ${r.place}` : ""})` : r.place ? ` (${r.place})` : ""}`).join("\n")}` }],
+          output_config: { effort: "low", format: { type: "json_schema", schema: { type: "object", properties: { marks: { type: "array", items: { type: "object", properties: { n: { type: "integer" }, wide: { type: "boolean" } }, required: ["n", "wide"], additionalProperties: false } } }, required: ["marks"], additionalProperties: false } } },
+        });
+        const raw = res.content.map((b) => b.text || "").join("");
+        const j = JSON.parse(raw.slice(raw.indexOf("{"), raw.lastIndexOf("}") + 1));
+        const marks = {};
+        for (const m of j.marks || []) if (batch[m.n - 1]) marks[batch[m.n - 1].id] = !!m.wide;
+        out.set += calendar.setWide(marks, "ai");
+      } catch (e) {
+        log(`tg wide: ${e.message}`);
+      }
+    }
+    setMeta(dayKey, used);
+    return out;
+  }
+
   function status() {
     const per = db.prepare("SELECT channel, count(*) n, max(at) last, sum(ev NOT IN ('', 'skip', 'none')) events FROM tg_posts GROUP BY channel").all();
     let last = null;
@@ -988,7 +1030,7 @@ function create(db, { calendar, apiKey = process.env.ANTHROPIC_API_KEY || "", cl
     }
   }
 
-  return { run, joinMore, joinSome, keepChannel, prune, dropGroups, discover, discoverWeekly, promote, events, classify, recheckAuthors, status, maybeEvent, meta, setMeta, extract, find, transcribe };
+  return { run, joinMore, joinSome, keepChannel, prune, dropGroups, discover, discoverWeekly, promote, events, classify, rateWide, recheckAuthors, status, maybeEvent, meta, setMeta, extract, find, transcribe };
 }
 
 module.exports = { eventUrl, create, parsePage, maybeEvent, fromMessage, channels, KEEP_DAYS };

@@ -984,6 +984,7 @@
       d.style.top = `${Math.min(innerHeight - 240, r.bottom + 6)}px`;
     } else d.style.left = d.style.top = "";
     $("#bm-edit").hidden = !(own && window.reader.libraryUpdateBook);
+    $("#bm-cover-find").hidden = !(own && window.reader.coverPick);
     // A PDF added before uploads became EPUB (2026-11-01): it opens slowly, so it can become one now.
     $("#bm-epub").hidden = !(own && /\.pdf$/i.test(b.path) && window.reader.libraryPdfToEpub);
     // Your own file is deleted; a book from the free shelf or a publisher just leaves the home screen.
@@ -997,6 +998,88 @@
     d.returnValue = "";
     d.showModal();
   }
+  // «Знайти обкладинку» (Max 2026-11-22, variant A of the canvas): covers for the book's title and author from our
+  // catalog, book.ua, Open Library and Google Books (server /api/cover/find); a tap keeps one at once, «Свій файл або
+  // фото» takes a picture, «Як у файлі» goes back to the file's own. The field searches other words.
+  let coverBook = null;
+  let coverList = [];
+  let coverPicked = -1;
+  function coverGrid(b) {
+    const tiles = coverList.map((c, i) => `<button type="button" class="cf-tile${i === coverPicked ? " on" : ""}" data-cf="${i}"><img src="${esc(c.thumb)}" alt="" loading="lazy" onerror="this.closest('.cf-tile').remove()"><small>${i === coverPicked ? "✓ Поставлено" : esc(c.from)}</small></button>`);
+    tiles.push(`<button type="button" class="cf-tile" data-cf="file"><span class="cf-box">Свій файл або фото</span><small>&nbsp;</small></button>`);
+    if (b.coverAt) tiles.push(`<button type="button" class="cf-tile" data-cf="reset"><span class="cf-box">Як у файлі книжки</span><small>&nbsp;</small></button>`);
+    $("#cf-grid").innerHTML = `${coverList.length ? "" : `<p class="cf-note">Обкладинок не знайшли. Спробуйте інші слова або візьміть свій файл.</p>`}<div class="cf-tiles">${tiles.join("")}</div>`;
+  }
+  async function showCovers(b, q = "") {
+    coverBook = b;
+    coverPicked = -1;
+    const d = $("#cover-dialog");
+    $("#cf-sub").textContent = [b.title, author(b)].filter(Boolean).join(" · ");
+    if (!q) $("#cf-q").value = "";
+    $("#cf-grid").innerHTML = `<p class="cf-note"><span class="spinner"></span>Шукаю обкладинки…</p>`;
+    if (!d.open) d.showModal();
+    let list = [];
+    try {
+      list = (await window.reader.coverFind(q || b.title, q ? "" : author(b))).covers || [];
+    } catch (err) {
+      if (coverBook !== b) return;
+      $("#cf-grid").innerHTML = `<p class="cf-note">${err instanceof TypeError ? "Немає з'єднання." : "Не вдалося пошукати."} Можна взяти свій файл.</p>`;
+    }
+    if (coverBook !== b) return;
+    coverList = list;
+    coverGrid(b);
+  }
+  // The covers on the home screen and the reader's own copies of the list take the new one.
+  const coverSet = (b, at) => {
+    b.coverAt = at;
+    homeHtml = "";
+    render();
+  };
+  $("#cf-grid").addEventListener("click", async (e) => {
+    const t = e.target.closest("[data-cf]");
+    const b = coverBook;
+    if (!t || !b || t.classList.contains("busy")) return;
+    const what = t.dataset.cf;
+    if (what === "file") return $("#cf-file").click();
+    t.classList.add("busy");
+    window.ReadingTime?.count?.(what === "reset" ? "cover-reset" : "cover-pick");
+    try {
+      if (what === "reset") coverSet(b, (await window.reader.librarySetCover(b.path, null)).coverAt);
+      else {
+        coverSet(b, (await window.reader.coverPick(b.path, coverList[+what].full)).coverAt);
+        coverPicked = +what;
+      }
+      if (coverBook === b) coverGrid(b);
+    } catch (err) {
+      t.classList.remove("busy");
+      showNotice(err instanceof TypeError ? "Немає з'єднання: обкладинку можна змінити лише онлайн." : err.message || "Не вдалося поставити обкладинку.", false);
+    }
+  });
+  $("#cf-file").addEventListener("change", async (e) => {
+    const file = e.target.files?.[0];
+    const b = coverBook;
+    e.target.value = "";
+    if (!file || !b) return;
+    try {
+      const blob = await window.Library.smallCover(file);
+      coverSet(b, (await window.reader.librarySetCover(b.path, blob)).coverAt);
+      window.ReadingTime?.count?.("cover-file");
+      $("#cover-dialog").close();
+    } catch (err) {
+      showNotice(err instanceof TypeError ? "Немає з'єднання: обкладинку можна змінити лише онлайн." : "Цей файл не схожий на зображення.", false);
+    }
+  });
+  $("#cf-q").addEventListener("keydown", (e) => {
+    if (e.key !== "Enter") return;
+    e.preventDefault();
+    const q = $("#cf-q").value.trim();
+    if (coverBook && q.length >= 2) showCovers(coverBook, q);
+  });
+  $("#cover-dialog").addEventListener("close", () => {
+    coverBook = null;
+    coverList = [];
+  });
+
   // «Про книжку»: for an EPUB the guide (below) in place of the site's description (Max 2026-11-20: no site text, no
   // link to the site); the description shows only for a book with no guide (a PDF) or when the guide can't be made.
   async function showAbout(b) {
@@ -1125,6 +1208,7 @@
     if (act === "about") return showAbout(b);
     if (act === "keep") return keepBook(b);
     if (act === "edit") return window.Library.editBook(b.path);
+    if (act === "cover") return showCovers(b);
     if (act === "aside") return setAside(b.path);
     if (act === "epub") return pdfToEpub(b);
     if (act === "finished") {

@@ -2834,20 +2834,54 @@ api.delete("/cover", guestsCannot("Без входу не можна зміню�
   if (fs.existsSync(req.lib.covers)) for (const f of fs.readdirSync(req.lib.covers)) if (f.startsWith(`${key}.`)) fs.unlinkSync(path.join(req.lib.covers, f));
   res.json({ path: name, coverAt: 0 });
 });
-api.put("/cover", guestsCannot("Без входу не можна змінювати обкладинки."), express.raw({ type: () => true, limit: "2mb" }), (req, res) => {
-  const name = safeBookName(req.query.path);
-  if (!name || !fs.existsSync(bookFile(req.lib, name))) return res.status(404).json({ error: "Книжки немає на сервері." });
-  const b = req.body;
+// A cover's bytes kept as the book's own: → false when they are no JPEG, PNG or WebP.
+function keepCover(lib, name, b) {
   const ext = b?.length > 3 && b[0] === 0xff && b[1] === 0xd8 ? "jpg"
     : b?.length > 8 && b.subarray(1, 4).toString() === "PNG" ? "png"
     : b?.length > 12 && b.subarray(8, 12).toString() === "WEBP" ? "webp" : null;
-  if (!ext) return res.status(400).json({ error: "Обкладинка має бути JPEG, PNG або WebP." });
+  if (!ext) return false;
   const key = customCoverKey(name);
-  const dir = req.lib.covers;
+  const dir = lib.covers;
   fs.mkdirSync(dir, { recursive: true });
   for (const f of fs.readdirSync(dir)) if (f.startsWith(`${key}.`)) fs.unlinkSync(path.join(dir, f));
   fs.writeFileSync(path.join(dir, `${key}.${ext}`), b);
+  return true;
+}
+api.put("/cover", guestsCannot("Без входу не можна змінювати обкладинки."), express.raw({ type: () => true, limit: "2mb" }), (req, res) => {
+  const name = safeBookName(req.query.path);
+  if (!name || !fs.existsSync(bookFile(req.lib, name))) return res.status(404).json({ error: "Книжки немає на сервері." });
+  if (!keepCover(req.lib, name, req.body)) return res.status(400).json({ error: "Обкладинка має бути JPEG, PNG або WebP." });
   res.json({ path: name, coverAt: Date.now() });
+});
+// «Знайти обкладинку» in the book's menu (Max 2026-11-22, variant A): GET /api/cover/find?title&author = the site's
+// covers for them (/api/reader-covers: our catalog, book.ua, Open Library, Google Books); POST /api/cover/pick
+// { path, url } keeps one, fetched from the site's own small copies only (never any address a page sends).
+api.get("/cover/find", guestsCannot("Без входу обкладинки не шукаються."), async (req, res) => {
+  const title = clean(req.query.title, 200);
+  if (title.length < 2) return res.json({ covers: [] });
+  try {
+    const r = await fetch(`${WEB_URL}/api/reader-covers?${new URLSearchParams({ title, author: clean(req.query.author, 200) })}`, { signal: AbortSignal.timeout(20000) });
+    if (!r.ok) throw new Error(`site ${r.status}`);
+    const j = await r.json();
+    const mine = (u) => typeof u === "string" && u.startsWith(`${WEB_URL}/t/`);
+    res.json({ covers: (j.covers || []).filter((c) => mine(c.thumb) && mine(c.full)).slice(0, 12) });
+  } catch (err) {
+    res.status(502).json({ error: err.message });
+  }
+});
+api.post("/cover/pick", guestsCannot("Без входу не можна змінювати обкладинки."), async (req, res) => {
+  const name = safeBookName(req.body?.path);
+  const url = String(req.body?.url || "");
+  if (!name || !fs.existsSync(bookFile(req.lib, name))) return res.status(404).json({ error: "Книжки немає на сервері." });
+  if (!url.startsWith(`${WEB_URL}/t/`)) return res.status(400).json({ error: "Не та адреса обкладинки." });
+  try {
+    const r = await fetch(url, { signal: AbortSignal.timeout(20000) });
+    const b = r.ok ? Buffer.from(await r.arrayBuffer()) : null;
+    if (!b || b.length > 2e6 || !keepCover(req.lib, name, b)) return res.status(502).json({ error: "Цю обкладинку не вдалося завантажити." });
+    res.json({ path: name, coverAt: Date.now() });
+  } catch {
+    res.status(502).json({ error: "Цю обкладинку не вдалося завантажити." });
+  }
 });
 
 // The address of the reader's OPDS catalog: GET /api/opds { url }, POST /api/opds makes a new one (the old stops).

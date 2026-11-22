@@ -913,6 +913,8 @@
     libraryRestoreBook: (name) => api("POST", "/api/trash/restore", { path: name }).then((r) => r.json()),
     libraryUpdateBook: (name, patch) => api("PATCH", `/api/books/${encodeURIComponent(name)}`, patch).then((r) => r.json()),
     // A book's own cover (a JPEG the page made) or, with null, the file's cover again.
+    coverFind: async (title, author) => (await api("GET", `/api/cover/find?${new URLSearchParams({ title, author })}`)).json(),
+    coverPick: async (name, url) => (await api("POST", "/api/cover/pick", { path: name, url })).json(),
     librarySetCover: (name, blob) => api(blob ? "PUT" : "DELETE", `/api/cover?path=${encodeURIComponent(name)}`, blob || undefined).then((r) => r.json()),
     getSettings: async () => {
       let settings;

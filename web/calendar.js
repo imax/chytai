@@ -68,8 +68,12 @@ const abroad = (city) => ABROAD.test(String(city || "").trim());
 // A book's presentation (Max 2026-11-20: «спам презентацій», 80 of ~300 upcoming, mostly libraries' local books and
 // one author's 30-city tour): out of the calendar's lists, the homepage and subscriptions; still on the author's and
 // the book's pages, under «Мої автори», in a search and in their own list (/calendar?pres=1). A festival stays.
+// The ones worth it for readers anywhere (Max 2026-11-22, variant C: «зустріч з Артуром Дронем» is no spam) come
+// back: `wide` 1, set by Haiku (tgFeed.rateWide) or by Max on /admin/events (`wide_by` 'max' wins). Not rated yet =
+// left out, like before.
 const PRESENTATION = /презентаці|презентуєм|презентує/i;
-const presentation = (e) => e.kind !== "festival" && PRESENTATION.test(e.title || "");
+const isPresentation = (e) => e.kind !== "festival" && PRESENTATION.test(e.title || "");
+const presentation = (e) => isPresentation(e) && e.wide !== 1;
 // One apostrophe (Кам'янське and Кам’янське were two cities and three rows of one event, 2026-11-20).
 const apos = (s) => String(s ?? "").replace(/['ʼ‘`´]/g, "’");
 const findCity = (text) => (ONLINE.test(text || "") ? "Онлайн" : CITIES.find(([, re]) => re.test(text || ""))?.[0] || "");
@@ -388,6 +392,14 @@ function create(db, store, { notify = () => {}, bookua = null, search = null, ma
   } catch {}
   try {
     db.exec("ALTER TABLE cal_events ADD COLUMN contact TEXT NOT NULL DEFAULT ''");
+  } catch {}
+  // A presentation worth showing to everyone (Max 2026-11-22): NULL = not rated, 1 yes, 0 no; `wide_by` 'max' when
+  // Max chose on /admin/events (Haiku leaves those alone), 'ai' when Haiku did.
+  try {
+    db.exec("ALTER TABLE cal_events ADD COLUMN wide INTEGER");
+  } catch {}
+  try {
+    db.exec("ALTER TABLE cal_events ADD COLUMN wide_by TEXT NOT NULL DEFAULT ''");
   } catch {}
   // Cancelled or moved by a later post (tgfeed): JSON { how, post, at }, '' = not.
   try {
@@ -931,6 +943,41 @@ function create(db, store, { notify = () => {}, bookua = null, search = null, ma
     db.prepare("UPDATE cal_events SET hidden = 1 WHERE id = ?").run(id);
     fresh();
   }
+  // Presentations Haiku hasn't rated yet (tgFeed.rateWide), upcoming and shown.
+  const unrated = (limit = 200) => {
+    const today = kyivDay();
+    return db
+      .prepare("SELECT * FROM cal_events WHERE wide IS NULL AND hidden = 0 AND (starts >= ? OR ends >= ?) ORDER BY starts LIMIT 1000")
+      .all(today, today)
+      .map(row)
+      .filter(isPresentation)
+      .slice(0, limit);
+  };
+  // { id: true | false } → `wide`. by 'ai' leaves Max's choices alone; by 'max' sets every stop of the same tour
+  // and keeps the choice (title, yes/no) in meta `calendar:wide-max` for Haiku's prompt (40 newest).
+  function setWide(marks, by = "ai") {
+    const up = db.prepare(`UPDATE cal_events SET wide = ?, wide_by = ? WHERE id = ?${by === "max" ? "" : " AND wide_by != 'max'"}`);
+    let n = 0;
+    for (const [id, on] of Object.entries(marks)) n += up.run(on ? 1 : 0, by, id).changes;
+    if (by === "max") {
+      let kept = [];
+      try {
+        kept = JSON.parse(meta("calendar:wide-max") || "[]");
+      } catch {}
+      const titles = db.prepare(`SELECT title, wide FROM cal_events WHERE id IN (${Object.keys(marks).map(() => "?").join(",") || "''"})`).all(...Object.keys(marks));
+      for (const t of titles.slice(0, 1)) kept = [{ title: t.title, wide: !!t.wide }, ...kept.filter((k) => k.title !== t.title)];
+      setMeta("calendar:wide-max", JSON.stringify(kept.slice(0, 40)));
+    }
+    if (n) fresh();
+    return n;
+  }
+  const wideExamples = () => {
+    try {
+      return JSON.parse(meta("calendar:wide-max") || "[]");
+    } catch {
+      return [];
+    }
+  };
   // Max's link for an event (/admin/events), '' takes it off. The other events from the same post (a series of
   // meetings, a tour) get it too. → how many events, or null for a bad link.
   function setLink(id, link) {
@@ -1177,7 +1224,7 @@ function create(db, store, { notify = () => {}, bookua = null, search = null, ma
     const at = new Date().toISOString();
     for (const id of ids) add.run(reader, id, at);
   };
-  return { pastForAuthor, watching, isWatching, watch, unwatchAll, dueWatch, watchSent, upsert, setKinds, add, one, byKey, findSimilar, cancel, uncancel, cancelledList, recent, pending, review, hide, setLink, cleanup, seed, upcoming, forAuthor, forBook, cities, fillBooks, chytomoRun, eventmateRun, feeds, addFeed, removeFeed, feedsRun, yeRun, yeLast: () => yeLast, peek, fresh, meta, setMeta, subs, subscribed, subscribe, unsubscribeAll, going, isGoing, goingCount, goingTop, dueReminders, reminded, remindOff, setRemind };
+  return { pastForAuthor, watching, isWatching, watch, unwatchAll, dueWatch, watchSent, upsert, setKinds, unrated, setWide, wideExamples, add, one, byKey, findSimilar, cancel, uncancel, cancelledList, recent, pending, review, hide, setLink, cleanup, seed, upcoming, forAuthor, forBook, cities, fillBooks, chytomoRun, eventmateRun, feeds, addFeed, removeFeed, feedsRun, yeRun, yeLast: () => yeLast, peek, fresh, meta, setMeta, subs, subscribed, subscribe, unsubscribeAll, going, isGoing, goingCount, goingTop, dueReminders, reminded, remindOff, setRemind };
 }
 
 // «Четвер, 19 листопада» and, within a week, «завтра» / «через 3 дні».
@@ -1213,7 +1260,9 @@ function tours(events) {
   const out = [];
   for (const e of events) {
     const title = tourTitle(e);
-    const key = `${title.toLowerCase()}|${e.url || e.id.replace(/-\d+$/, "")}`;
+    // A presentation tour is one row by its book, whoever posts its stops (Max 2026-11-22: Дронь's tour came from
+    // two channels with two titles, two rows).
+    const key = isPresentation(e) && e.books?.length ? `pres|${e.books[0]}` : `${title.toLowerCase()}|${e.url || e.id.replace(/-\d+$/, "")}`;
     const g = groups.get(key);
     if (g) {
       g.stops.push(e);
@@ -1352,4 +1401,4 @@ function googleLink(e, page = "") {
 const SHORT_DAYS = ["нд", "пн", "вт", "ср", "чт", "пт", "сб"];
 const shortWhen = (e) => `${SHORT_DAYS[new Date(`${e.starts}T12:00:00Z`).getUTCDay()]}, ${span(e)}`;
 
-module.exports = { create, KINDS, parseIcs, icsAddress, abroad, presentation, eventKey, eventPath, linkKind, sourceUrl, googleLink, tourTitle, subKey, subParse, subName, SHORT_DAYS, tours, ics, parseWhen, linkText, readEvent, cleanTitle, findCity, kyivDay, addDays, dayName, dayAside, span, shortWhen, MONTHS };
+module.exports = { create, KINDS, parseIcs, icsAddress, abroad, presentation, isPresentation, eventKey, eventPath, linkKind, sourceUrl, googleLink, tourTitle, subKey, subParse, subName, SHORT_DAYS, tours, ics, parseWhen, linkText, readEvent, cleanTitle, findCity, kyivDay, addDays, dayName, dayAside, span, shortWhen, MONTHS };

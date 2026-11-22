@@ -1216,6 +1216,54 @@ app.get("/api/reader-find", (req, res) => {
   res.json({ books });
 });
 
+// «Знайти обкладинку» in the reader's book menu (Max 2026-11-22, variant A): covers for a title and author from our
+// catalog (the work and its editions), book.ua, Open Library and Google Books, the same author only, 12 at most. Each
+// as our own small copy (/t/, signed, so the reader fetches only those): `thumb` to show, `full` (480 px) to keep. A
+// day's cache by the words asked.
+const coverFinds = new Map();
+async function readerCovers(title, author) {
+  const key = `${norm(title)}|${norm(author)}`;
+  const hit = coverFinds.get(key);
+  if (hit && Date.now() - hit.at < 864e5) return hit.list;
+  const out = [];
+  const seen = new Set();
+  const put = (src, from, t = "", a = "") => {
+    if (!src || out.length >= 12 || !/^https?:\/\/|^\/covers\//.test(src)) return;
+    if (a && author && !sameAuthor(a, author)) return;
+    if (t && !norm(t).includes(norm(title).split(" ").slice(0, 3).join(" ")) && !norm(title).includes(norm(t).split(" ").slice(0, 3).join(" "))) return;
+    const k = src.replace(/^https?:\/\/(www\.)?/, "").replace(/[?#].*$/, "");
+    if (seen.has(k)) return;
+    seen.add(k);
+    out.push({ thumb: `${SITE}${thumbs.url(src, 120)}`, full: `${SITE}${thumbs.url(src, 240)}`, from });
+  };
+  for (const h of store.search(`${title} ${author}`.trim(), { limit: 6 })) {
+    const b = store.book(h.book.id);
+    if (!b || (author && !sameAuthor(b.author || "", author))) continue;
+    put(b.cover, "Chytai", b.title, b.author);
+    for (const e of b.editions || []) put(e.cover, "Chytai", e.title || b.title, e.author || b.author);
+  }
+  const outside = [
+    catalogs.bookuaSearch(`${title} ${author}`.trim(), { limit: 10, timeout: 6000 }).then((list) => list.map((p) => [p.cover, "book.ua", p.title, p.author])),
+    fetch(`https://openlibrary.org/search.json?${new URLSearchParams({ title, ...(author ? { author } : {}), fields: "title,author_name,cover_i", limit: "10" })}`, { signal: AbortSignal.timeout(6000) })
+      .then((r) => (r.ok ? r.json() : { docs: [] }))
+      .then((j) => (j.docs || []).filter((d) => d.cover_i).map((d) => [`https://covers.openlibrary.org/b/id/${d.cover_i}-L.jpg`, "Open Library", d.title, (d.author_name || []).join(", ")])),
+    fetch(`https://www.googleapis.com/books/v1/volumes?${new URLSearchParams({ q: `intitle:${title}${author ? ` inauthor:${author}` : ""}`, maxResults: "10", ...(process.env.GOOGLE_BOOKS_KEY ? { key: process.env.GOOGLE_BOOKS_KEY } : {}) })}`, { signal: AbortSignal.timeout(6000) })
+      .then((r) => (r.ok ? r.json() : { items: [] }))
+      .then((j) => (j.items || []).map((i) => i.volumeInfo || {}).filter((v) => v.imageLinks?.thumbnail).map((v) => [v.imageLinks.thumbnail.replace(/^http:/, "https:").replace(/&edge=curl/, "").replace(/zoom=1/, "zoom=2"), "Google Books", v.title, (v.authors || []).join(", ")])),
+  ];
+  for (const r of await Promise.allSettled(outside)) if (r.status === "fulfilled") for (const [src, from, t, a] of r.value) put(src, from, t, a);
+  if (coverFinds.size > 500) coverFinds.delete(coverFinds.keys().next().value);
+  coverFinds.set(key, { at: Date.now(), list: out });
+  return out;
+}
+app.get("/api/reader-covers", async (req, res) => {
+  const title = String(req.query.title || "").trim().slice(0, 200);
+  const author = String(req.query.author || "").trim().slice(0, 200);
+  if (title.length < 2) return res.json({ covers: [] });
+  res.setHeader("Cache-Control", "public, max-age=3600");
+  res.json({ covers: await readerCovers(title, author).catch(() => []) });
+});
+
 // A letter to the owner from the reader (its daily Claude budget ran out, 2026-11-04), signed with the owner's reader key.
 app.post("/api/reader-alert", (req, res) => {
   if (!readerKeyOk(OWNER_ID, String(req.body?.key || ""))) return res.status(403).json({ error: "key" });
@@ -2919,6 +2967,14 @@ app.post("/admin/events/feed", owner, async (req, res) => {
 app.post("/admin/events/feed/delete", owner, (req, res) => {
   calendar.removeFeed(req.body?.id);
   res.redirect(303, "/admin/events#feeds");
+});
+// A book presentation shown to everyone or not (Max 2026-11-22): every stop of its tour, Max's choice stays.
+app.post("/admin/events/wide", owner, (req, res) => {
+  const id = String(req.body?.id || "");
+  const tour = calendarLib.tours(calendar.upcoming().filter(calendarLib.isPresentation)).find((t) => (t.stops || [t]).some((x) => x.id === id));
+  const ids = (tour?.stops || [{ id }]).map((x) => x.id);
+  calendar.setWide(Object.fromEntries(ids.map((x) => [x, req.body?.on === "1"])), "max");
+  res.redirect(303, `/admin/events#pres-${calendarLib.eventKey(ids[0])}`);
 });
 // A guest's event: «Показати» puts it on the calendar, «Прибрати» deletes it.
 app.post("/admin/events/review", owner, (req, res) => {

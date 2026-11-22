@@ -19,7 +19,7 @@
     window.Shell?.refresh();
   }
 
-  window.Library = { data: fetchData, editBook, add };
+  window.Library = { data: fetchData, editBook, add, smallCover: (f) => smallCover(f) };
 
   let editing = null;
   // The cover picked in the dialog, made small here (900 px, JPEG): it goes to the server on «Зберегти».

@@ -2352,7 +2352,7 @@ function calendarPage({ user, events, cities, city = "", mine = false, mineCount
   const body = events.length
     ? overview
       ? `${calOverview(events, { user, owner, today, href, counts })}<p class="cal-all"><a class="text-link" href="${attr(href({ all: true }))}">Усі ${total} подій за датою</a></p>`
-      : `${pres ? `<p class="muted cal-pres-head">Презентації книжок. <a class="text-link" href="${attr(href({ all: false }))}">Усі події</a></p>` : ""}${calList(events, { user, owner, today, kind })}`
+      : `${pres ? `<p class="muted cal-pres-head">Інші презентації книжок. <a class="text-link" href="${attr(href({ all: false }))}">Усі події</a></p>` : ""}${calList(events, { user, owner, today, kind })}`
     : watch
       ? calWatch(watch, { query, back: href(), user, owner, today })
       : `<p class="muted">${query ? `Нічого не знайшли за «${esc(nest(query))}». <a class="text-link" href="/calendar">Усі події</a>` : city || mine || kind ? `Тут поки нічого. <a class="text-link" href="/calendar">Усі події</a>` : "Поки подій немає."}</p>`;
@@ -2367,7 +2367,7 @@ function calendarPage({ user, events, cities, city = "", mine = false, mineCount
 ${watch || pres ? "" : kinds}
 ${tools}
 <div data-block="calendar" class="cal-page">${body}</div>
-${presCount && !watch ? `<p class="small cal-pres"><a class="text-link" href="${attr(`/calendar?pres=1${city ? `&city=${encodeURIComponent(city)}` : ""}`)}">Презентації книжок · ${presCount}</a></p>` : ""}
+${presCount && !watch ? `<p class="small cal-pres"><a class="text-link" href="${attr(`/calendar?pres=1${city ? `&city=${encodeURIComponent(city)}` : ""}`)}">Інші презентації книжок · ${presCount}</a></p>` : ""}
 <p class="small cal-about">З афіш книгарень і фестивалів, від видавців і читачів. <a class="text-link" href="/calendar/add">Знаєте подію? Додайте</a></p>
 ${inCalendar}`;
   return layout({ title: "Книжкові події", body: page, user, path: "/calendar", canonical: "/calendar", noindex: !overview, description: "Зустрічі з авторами, книжкові клуби, лекції й фестивалі в Україні та онлайн." });
@@ -3750,6 +3750,27 @@ function eventsAdminPage({ user, rows, tg, saved, feeds = [], feedMsg = "", canc
   const recentBlock = `<section class="block" id="recent">${label(`Нові за 3 дні · ${recent.length}`)}
 <p class="small muted">Що додали збирачі, читачі й гості, найновіші вгорі. Сховані теж.</p>
 ${recent.length ? [...byDay.entries()].map(([d, list], i) => `<details${i === 0 ? " open" : ""}><summary>${dayName(d, i)} · ${list.length} <span class="small muted">(${Object.entries(list.reduce((m, e) => ((m[e.source] = (m[e.source] || 0) + 1), m), {})).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${esc(SOURCE_NAME[k] || k)} ${v}`).join(", ")})</span></summary>${list.map(recentLine).join("")}</details>`).join("") : `<p class="muted">За 3 дні нічого нового.</p>`}</section>`;
+  // Book presentations (Max 2026-11-22): the ones shown to everyone and the rest, a tour one line; Haiku sorts them,
+  // Max's button wins.
+  const pres = C.tours(rows.filter(C.isPresentation));
+  const dm = (d) => `${d.slice(8, 10)}.${d.slice(5, 7)}`;
+  const presLine = (t) => {
+    const stops = t.stops || [t];
+    const on = t.wide === 1;
+    const who = t.wide == null ? "ще не оцінено" : t.wide_by === "max" ? "ви" : "Haiku";
+    const where = stops.length > 1 ? [`${stops.length} зупинок, з ${dm(t.starts)}`] : [dm(t.starts), t.city, t.place];
+    return `<div class="cmt" id="pres-${attr(C.eventKey(stops[0].id))}"><p><a href="${attr(C.eventPath(stops[0]))}">${esc(t.title)}</a></p>
+<p class="small muted">${[...where, who].filter(Boolean).map(esc).join(" · ")}</p>
+<form method="post" action="/admin/events/wide"><input type="hidden" name="id" value="${attr(stops[0].id)}">${on ? "" : `<input type="hidden" name="on" value="1">`}<button class="btn small${on ? "" : " primary"}">${on ? "Сховати" : "Показати"}</button></form></div>`;
+  };
+  const presShown = pres.filter((t) => t.wide === 1);
+  const presRest = pres.filter((t) => t.wide !== 1);
+  const presBlock = pres.length
+    ? `<section class="block" id="pres">${label(`Презентації · ${presShown.length} з ${pres.length}`)}
+<p class="small muted">Показуємо ті, що цікаві читачам по всій країні. Решта лише в пошуку, у «Моїх авторах» і на сторінках автора й книжки. Сортує Haiku щогодини, ваша кнопка важливіша й навчає його.</p>
+${presShown.length ? presShown.map(presLine).join("") : `<p class="muted">Поки жодної.</p>`}
+${presRest.length ? `<details><summary>Сховані · ${presRest.length}</summary>${presRest.map(presLine).join("")}</details>` : ""}</section>`
+    : "";
   const body = `
 ${pageHead({ title: "Події", sub: `${n(rows.length)} майбутніх подій на <a href="/calendar">/calendar</a>` })}
 ${review.length ? `<section class="block" id="review">${label(`Від гостей · ${review.length}`)}
@@ -3761,6 +3782,7 @@ ${e.sub ? `<p class="small">${esc(e.sub)}</p>` : ""}
 <form method="post" action="/admin/events/review"><input type="hidden" name="id" value="${attr(e.id)}"><button class="btn small">Прибрати</button></form></div></div>`).join("")}</section>` : ""}
 ${goingTop.length ? `<section class="block" id="going">${label(`Хочуть піти · ${goingTop.reduce((s, e) => s + e.going, 0)}`)}
 ${goingTop.map((e) => `<p class="small" style="margin:.3em 0"><b>${e.going}</b> · <a href="${attr(C.eventPath(e))}">${esc(e.title)}</a> <span class="muted">· ${esc(e.starts.slice(8, 10) + "." + e.starts.slice(5, 7))}${e.city ? ` · ${esc(e.city)}` : ""}</span></p>`).join("")}</section>` : ""}
+${presBlock}
 ${recentBlock}
 <section class="block">${label("Посилання")}
 <p>${Object.keys(KIND_NAME).filter((k) => byLink[k]).map((k) => `${esc(KIND_NAME[k])}: <b>${byLink[k]}</b>`).join(" · ")}</p>
