@@ -1290,9 +1290,11 @@ function limitCopy(contents) {
 
 // Books never get to run code: drop <script> elements and inline on* handlers before rendering.
 // A book's own code never runs: scripts and event attributes go, and so (security review 2026-11-04) do frames
-// and embeds (an <iframe srcdoc> runs as this page), <base> and <meta http-equiv>, and javascript: in any spelling
-// (browsers skip tabs and line breaks inside the scheme).
-const BOOK_DROP = new Set(["script", "iframe", "frame", "frameset", "object", "embed", "applet", "base", "portal"]);
+// and embeds (an <iframe srcdoc> runs as this page), <meta http-equiv>, and javascript: in any spelling (browsers skip
+// tabs and line breaks inside the scheme). <base> stays: epub.js's own hook (registered before ours) has already set it
+// to the chapter's own address, over any the book had, and every link to another chapter or a note is resolved by it.
+// Dropping it sent links to «../link1.xhtml», a place the book doesn't have: no footnote opened (bug report №28).
+const BOOK_DROP = new Set(["script", "iframe", "frame", "frameset", "object", "embed", "applet", "portal"]);
 function stripScripts(doc) {
   for (const el of [...doc.querySelectorAll("*")]) {
     if (BOOK_DROP.has(el.localName) || (el.localName === "meta" && el.hasAttribute("http-equiv"))) { el.remove(); continue; }
