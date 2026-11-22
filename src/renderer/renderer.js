@@ -1510,12 +1510,18 @@ function dropAskMark() {
   }
   askMark = "";
 }
-// The phone's keyboard covers the bottom of the screen: the card rides above it.
-window.visualViewport?.addEventListener("resize", () => {
+// The phone's keyboard covers the bottom of the screen: the card rides above it. Android's app shrinks the window
+// itself for the keyboard, and its own resize can come after the visual viewport's: counted only then, the card
+// stayed a keyboard's height up the page until the next key moved it down (bug report №21, 2026-11-20).
+function keyboardGap() {
   const vv = window.visualViewport;
   const kb = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
   document.body.style.setProperty("--kb", `${Math.round(kb)}px`);
-});
+}
+if (window.visualViewport) {
+  window.visualViewport.addEventListener("resize", keyboardGap);
+  addEventListener("resize", keyboardGap);
+}
 
 // No «Переклад» in Ukrainian books (Max, 2026-10-26): the book says so, or the text has і/ї/є/ґ.
 function isUkrainian(text) {

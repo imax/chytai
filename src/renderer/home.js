@@ -198,7 +198,8 @@
       html = hits.length || more ? (more && hits.length ? `<h3 class="r-phead">Книжки</h3>` : "") + hits.map(prow).join("") + more
         : deep.q === q || deep.offline || q.length < 2 || !window.reader.searchMine ? `<p class="r-pnone">Нічого не знайшлося.</p>` : "";
     }
-    const recent = books.filter((b) => b.openedAt).sort((x, y) => y.openedAt - x.openedAt).slice(0, 4);
+    // Finished books stay out (Max 2026-11-21, bug report №24).
+    const recent = books.filter((b) => b.openedAt && !b.finished).sort((x, y) => y.openedAt - x.openedAt).slice(0, 4);
     const all = `${html}\u0000${recent.map(prow).join("")}\u0000${books.length}|${trashCount}|${page}|${settings.user}`;
     if (all === panelHtml) return;
     panelHtml = all;
@@ -774,19 +775,23 @@
     drag.pos = Math.max(0, Math.min(PANEL_W, (drag.open ? PANEL_W : 0) + dx));
     $("#shell-main").style.transform = `translateX(${drag.pos}px)`;
   }, { passive: false });
-  const endDrag = () => {
+  // A cancelled touch goes back to where it was: on Android the system's back gesture from either edge starts as our
+  // swipe and is then taken away (touchcancel), and going on with it opened «Додати книжку» before back closed it
+  // again (bug report №25, 2026-11-21).
+  const endDrag = (e) => {
     if (!drag) return;
     const d = drag;
     drag = null;
     if (d.dir !== "h") return;
+    const cancel = e?.type === "touchcancel";
     const fast = Date.now() - d.t < 250;
     if (d.kind !== "panel") {
-      const go = Math.abs(d.pos) > (fast ? 30 : innerWidth / 3);
+      const go = !cancel && Math.abs(d.pos) > (fast ? 30 : innerWidth / 3);
       if (d.under) settlePages(d.kind, d.pos, go, d.under);
       else $("#shell").classList.remove("page-drag"), ($("#shell-main").style.transform = "");
       return;
     }
-    const open = fast ? (d.open ? d.pos > PANEL_W - 40 : d.pos > 40) : d.pos > PANEL_W / 2;
+    const open = cancel ? d.open : fast ? (d.open ? d.pos > PANEL_W - 40 : d.pos > 40) : d.pos > PANEL_W / 2;
     $("#shell").classList.remove("panel-drag");
     $("#shell-main").style.transform = "";
     panel(open);

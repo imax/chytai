@@ -915,6 +915,8 @@ body[data-theme="dark"] #shell, body[data-theme="dark"] #book-menu, body[data-th
 .r-pnav button:hover { background: var(--r-pact); }
 .r-pnav button.on { background: var(--r-pact); color: var(--r-ochre); font-weight: 500; }
 .r-pnav button[hidden] { display: none; }
+/* «Нещодавно видалені» quieter than the rest (Max 2026-11-21, №24). */
+#r-pnav-trash { color: var(--r-ink2); font-size: 13px; }
 .r-pnav i { font-style: normal; font-size: 13px; color: var(--r-ink2); min-width: 24px; text-align: right; font-weight: 400; }
 .r-pnav .r-pnav-add i { color: var(--r-ochre); font-size: 18px; font-weight: 300; line-height: 1; }
 #r-panel.searching .r-pnav, #r-panel.searching .r-precent { display: none; }
@@ -1186,6 +1188,7 @@ body.not-owner #r-pnav-admin { display: none !important; }
   .r-psearch input { font: 17px var(--r-serif); }
   .r-pnav { margin: 0; gap: 0; }
   .r-pnav button { padding: 11px 0; font-size: 18px; border-radius: 0; }
+  #r-pnav-trash { font-size: 15px; padding: 9px 0; }
   .r-pnav button:hover, .r-pnav button.on { background: none; }
   .r-prow { grid-template-columns: 26px 1fr auto; gap: 12px; padding: 5px 0; font-size: 15px; }
   .r-prow .r-cover { width: 26px; }

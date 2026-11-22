@@ -214,8 +214,9 @@ technical report (below), so post it only after your fixes are pushed:
   them with «Забрати», /off in theirs stops it. `telegram.send(text)` goes to all; buttons only to Max, only he presses
   them. The reader gets the list from the site (`/api/site-admin/telegram` `chats`).
 - Bug reports (Max 2026-11-18, `web/bugbox.js`): anything but a command that Max's chat or an allowed one writes to
-  the bot (text, screenshot, file, voice, forward, a reply to an alert) is a report in table `bug_reports`; messages
-  within 3 min (or one album) join one report. The bot answers «Записав №N»; a voice is transcribed by our Telegram
+  the bot (text, screenshot, file, voice, forward, a reply to an alert) is a report in table `bug_reports`; each
+  message its own (Max 2026-11-21), except an album, words within 3 min after a screenshot with none, and a reply to
+  the bot's «Записав №N» (joins №N). The bot answers «Записав №N»; a voice is transcribed by our Telegram
   account's Premium (`tgFeed.transcribe` in the jobs process: sent to its Saved Messages, `messages.transcribeAudio`,
   deleted) and the bot answers with what it heard (the Claude API takes no audio). /bugs lists the open ones. The
   morning review works them (above). Files in `DATA_DIR/web/bugs/<id>/`: gone 14 days after a report is closed, 60
@@ -397,6 +398,7 @@ A flag only when Max asks for one, or when the change could break what readers u
 - In a phone's calendar (a line at the page's foot): `/calendar.ics` is the list as an iCalendar feed with the same
   `?kind=` / `?city=` / `?q=`; «Мої автори» by `?mine=<reader>.<key>` (`calKey`, HMAC with the reader secret; a
   calendar app has no cookie). Links: webcal:// (Apple), Google Calendar's `?cid=`, and the plain address.
+- Only the next half a year (Max 2026-11-21): `upcoming()` stops at `AHEAD_DAYS` (183); an event's own page still opens.
 - Only Ukraine and online (Max 2026-11-15): the collectors' Haiku answers `abroad` and those are dropped;
   `calendar.abroad(city)` (list `ABROAD`) hides a foreign city at upsert and at start, and /calendar/add refuses it.
 - Book presentations (Max 2026-11-20, «спам презентацій»: 80 of ~300, libraries' local books and one author's
@@ -727,7 +729,7 @@ A flag only when Max asks for one, or when the change could break what readers u
 - App shell (app/App.js): `menuItems={[]}` hides the system Copy / Paste bar over selections (the reader has its own
   toolbar); on Android it comes back while a text field has the focus (`FIELD_REPORTER`), else nothing could be pasted
   (a reader's sign-in code, 2026-11-17). No overscroll stretch: `overScrollMode="never"` there and
-  `overscroll-behavior: none` on the page and the book's scroller. Android's back (also the edge swipe that opens the panel, bug №20) asks the page's `window.__chytaiBack()` (home.js):
+  `overscroll-behavior: none` on the page and the book's scroller. Android's back (also the edge swipe that opens the panel, bug №20; it reaches the page first as our own edge swipe, which a `touchcancel` undoes, №25) asks the page's `window.__chytaiBack()` (home.js):
   it closes what is open, from a book opens the panel over one's books; `false` = the app goes to the background.
   An App.js change reaches iPhones over the air and Android by a new APK.
 - Reader's purpose (Max 2026-11-18): «Level up your reading», reading books that feel too hard. Not in the reader's UI

@@ -76,6 +76,7 @@ const findCity = (text) => (ONLINE.test(text || "") ? "Онлайн" : CITIES.fi
 
 // Today in Kyiv, «YYYY-MM-DD».
 const kyivDay = (t = Date.now()) => new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Kyiv" }).format(new Date(t));
+const AHEAD_DAYS = 183;
 const addDays = (day, n) => new Date(Date.parse(`${day}T12:00:00Z`) + n * 86400000).toISOString().slice(0, 10);
 const pad = (n) => String(n).padStart(2, "0");
 
@@ -410,14 +411,15 @@ function create(db, store, { notify = () => {}, bookua = null, search = null, ma
     return { ...e, books: JSON.parse(r.books || "[]"), authors: JSON.parse(r.authors || "[]"), hidden: !!r.hidden };
   };
 
-  // Upcoming events (not hidden), a minute's cache: the jobs process writes too.
+  // Upcoming events (not hidden), a minute's cache: the jobs process writes too. Only the next half a year (Max
+  // 2026-11-21: «не показувати події більше ніж на півроку вперед»); later ones show when they come within it.
   let cache = null;
   const upcoming = () => {
     if (cache && Date.now() - cache.at < 60000 && cache.day === kyivDay()) return cache.rows;
     const today = kyivDay();
     const rows = db
-      .prepare("SELECT * FROM cal_events WHERE hidden = 0 AND (starts >= ? OR ends >= ?) ORDER BY starts, time, title LIMIT 500")
-      .all(today, today)
+      .prepare("SELECT * FROM cal_events WHERE hidden = 0 AND (starts >= ? OR ends >= ?) AND starts <= ? ORDER BY starts, time, title LIMIT 500")
+      .all(today, today, addDays(today, AHEAD_DAYS))
       .map(row);
     cache = { at: Date.now(), day: today, rows };
     return rows;

@@ -2,8 +2,9 @@
 // якийсь скріншот, або войс, або текстом … і ти це ставив в чергу»). Whatever the linked chat or a chat Max allowed
 // (telegram.js `extra`) writes to the bot, other than a command, is a report: text, a screenshot or other file, a
 // voice (transcribed by our Telegram account, tgfeed `transcribe`), a forward (who it came from), a reply to one of the
-// bot's alerts (the alert's text goes with it). Messages from the same chat within GAP_MIN of the last one join it,
-// so «скріншот, потім пояснення» is one report.
+// bot's alerts (the alert's text goes with it). Each message is its own report (Max 2026-11-21: different things were
+// glued into one by time), except: the rest of an album; words within GAP_MIN after a screenshot or file sent with no
+// words («скріншот, потім пояснення»); a reply to the bot's «Записав №N» / «Додав до №N» joins №N.
 //
 // The morning error review (CLAUDE.md) works them: GET /agent/bugs (open ones, their files at /agent/bugs/<id>/<file>),
 // fixes, then POST /agent/bugs/<id> { status: done | skip | later, note }; done and skip answer Max under his message.
@@ -89,10 +90,14 @@ function create(db, { dir, telegram, transcribe = null, log = console.log } = {}
     if (rep && !from) part.reply = clip(rep.text || rep.caption, 1000) || "(повідомлення без тексту)";
     if (!part.text && !f) return telegram.send("Такого не вмію зберегти. Напишіть текстом, скріншотом або войсом.", chat, null, m.message_id);
 
-    // The same album, or the same chat a few minutes after its last report that is still open: one report.
+    // The same album, words just after a screenshot that had none, or a reply to the bot's «№N»: one report.
     const album = m.media_group_id ? String(m.media_group_id) : "";
-    const last = db.prepare("SELECT * FROM bug_reports WHERE chat = ? AND status = 'new' ORDER BY id DESC LIMIT 1").get(chat);
-    const join = last && ((album && last.album === album) || now - Date.parse(last.last) < GAP_MIN * 60000);
+    const toBot = rep?.from?.is_bot && /^(?:Записав |Додав до )?№(\d+)[.,:]/.exec(rep.text || "");
+    const named = toBot && db.prepare("SELECT * FROM bug_reports WHERE id = ? AND chat = ? AND status = 'new'").get(Number(toBot[1]), chat);
+    if (toBot) delete part.reply;
+    const last = named || db.prepare("SELECT * FROM bug_reports WHERE chat = ? AND status = 'new' ORDER BY id DESC LIMIT 1").get(chat);
+    const wordless = last && partsOf(last).every((p) => !p.text && p.kind !== "voice");
+    const join = !!last && (!!named || (album && last.album === album) || (wordless && now - Date.parse(last.last) < GAP_MIN * 60000));
     let id;
     if (join) id = last.id;
     else {
