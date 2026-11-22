@@ -76,7 +76,7 @@
   const render = () => renderHome();
 
   // ---------- Мої книжки: design «3a» from Claude Design (Max, 2026-11-01) ----------
-  // One page: «Читаю зараз», your books with filters and a «+» tile, what others read now, the free shelf.
+  // One page: «Читаю зараз» (that book is in the list too), your books with filters and a «+» tile, what others read now, the free shelf.
   // A query in the search field replaces it with results from your books and the free shelf.
   let homeFilter = "all"; // all («Читаю») | new | done | paper
   // Мої книжки as covers or as a list (Max 2026-11-04: a label on the cover hides part of the title).
@@ -362,7 +362,9 @@
             <button class="r-pill r-wide" data-open="${esc(cur.path)}">Продовжити читання</button></div></div>
         <button class="r-pill r-narrow" data-open="${esc(cur.path)}">Продовжити читання</button></section>`;
     }
-    const rest = books.filter((b) => b !== cur);
+    // The book on top is also the first in «Мої книжки» (Max 2026-11-22, bot report №23): its «⋯» is there, as on every
+    // other book, and «Читаю» counts it. The cover on top only opens the book (no long press).
+    const rest = books;
     // «Читаю» (the first tab, once «Усі») is every book not finished; «Прочитані» has those (Max, 2026-11-17).
     const groups = { all: rest.filter((b) => !b.finished), reading: rest.filter(isReading), new: rest.filter(isNewBook), done: rest.filter((b) => b.finished), paper: rest.filter((b) => b.paper) };
     // Every book is drawn once and a filter only hides cards: drawing the grid anew on each click reloaded
@@ -1243,7 +1245,7 @@
   let tilePress = null;
   let tilePressed = false;
   $("#shell").addEventListener("touchstart", (e) => {
-    const t = e.target.closest(".tile, .home-hero, .r-card[data-open], .r-now-cover, .r-row");
+    const t = e.target.closest(".tile, .home-hero, .r-card[data-open], .r-row");
     if (!t || settings.guest) return;
     tilePressed = false;
     tilePress = setTimeout(() => {
@@ -1254,12 +1256,12 @@
   }, { passive: true });
   for (const type of ["touchend", "touchmove", "touchcancel"]) $("#shell").addEventListener(type, () => clearTimeout(tilePress), { passive: true });
   $("#shell").addEventListener("click", (e) => {
-    if (!tilePressed || !e.target.closest(".tile, .home-hero, .r-card[data-open], .r-now-cover, .r-row")) return;
+    if (!tilePressed || !e.target.closest(".tile, .home-hero, .r-card[data-open], .r-row")) return;
     tilePressed = false;
     e.stopImmediatePropagation();
   }, true);
   $("#shell").addEventListener("contextmenu", (e) => {
-    const t = e.target.closest(".tile, .home-hero, .r-card[data-open], .r-now-cover, .r-row");
+    const t = e.target.closest(".tile, .home-hero, .r-card[data-open], .r-row");
     if (!t || settings.guest || !lib?.books.some((b) => b.path === t.dataset.open)) return;
     e.preventDefault();
     bookMenu(t.dataset.open, { x: e.clientX, y: e.clientY });
