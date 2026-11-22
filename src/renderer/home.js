@@ -1089,11 +1089,17 @@
     $("#ab-author").textContent = author(b);
     const body = $("#ab-body");
     body.hidden = guided(b);
+    const link = $("#ab-link");
     const fill = (a) => {
       if (!a) {
         body.innerHTML = `<p class="muted">${navigator.onLine ? "Завантажую…" : "Немає з'єднання, а опис цієї книжки ще не збережено."}</p>`;
+        link.hidden = true;
         return;
       }
+      // The book's page on the site (back by Max's wish, 2026-11-22), under the guide too.
+      link.hidden = false;
+      link.href = a.found ? a.href : a.add;
+      link.textContent = siteLinkText(a);
       $("#ab-author").textContent = [author(b), a.year].filter(Boolean).join(" · ");
       body.innerHTML = a.found
         ? a.blurb ? a.blurb.split(/\n\n+/).map((p) => `<p>${esc(p)}</p>`).join("") : `<p class="muted">Опису поки немає.</p>`
@@ -1134,6 +1140,8 @@
       await new Promise((r) => setTimeout(r, 3000));
     }
   }
+  const siteLinkText = (a) => (a.found ? "Сторінка книжки на Chytai ↗" : "Додати на Chytai ↗");
+  const siteLink = (a) => (a && !a.failed && (a.href || a.add) ? `<a class="ab-site" href="${esc(a.found ? a.href : a.add)}" target="_blank" rel="noopener">${siteLinkText(a)}</a>` : "");
   const abSec = (title, body) => `<section class="ab-sec"><h3>${title}</h3>${body}</section>`;
   const abWait = (text) => `<p class="ab-wait">${text}</p>`;
   // Max 2026-11-20: «Про книжку» and «Чому варто читати»; no «Як читати» (condescending), no level or pages. A guide made before
@@ -1165,6 +1173,7 @@
       else body = (([author(b), a.year].filter(Boolean).join(" · ")) ? `<p class="ab-meta">${esc([author(b), a.year].filter(Boolean).join(" · "))}</p>` : "") + (a.found
         ? a.blurb ? a.blurb.split(/\n\n+/).map((p) => `<p>${esc(p)}</p>`).join("") : `<p class="muted">Опису поки немає.</p>`
         : `<p class="muted">Цієї книжки ще немає в каталозі Chytai.</p>`);
+      body += siteLink(a);
     }
     return `<section class="ab-block${open ? " open" : ""}"><button type="button" class="pp-row" data-about-toggle><span>Про книжку</span><span class="ab-chev">›</span></button>${open ? `<div class="ab-inline">${body}</div>` : ""}</section>`;
   }
