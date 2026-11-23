@@ -715,6 +715,8 @@ A flag only when Max asks for one, or when the change could break what readers u
   at `/admin/ai/<key>`; the whole catalog is his button there, or `{"key":"<key>","all":true}` from a thread once he
   said so in it (answers in table `ai_answer`, then `def.apply`; a live pass reruns every 6 h for new candidates).
 - «З чого почати» on author pages is the pass `author-start` (flag `author-start`); `server.js authorStart()` reads it.
+  A pick names one edition; `authorStart` widens it to the original and its translations (`p.ids`), so hiding or
+  re-pairing an edition doesn't drop the book from the block.
 
 ## Standing rules (Max)
 

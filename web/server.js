@@ -3988,7 +3988,16 @@ app.get("/author/:slug", async (req, res) => {
 function authorStart(key) {
   const row = store.db.prepare("SELECT answer FROM ai_answer WHERE pass = 'author-start' AND id = ?").get(key);
   const a = row ? JSON.parse(row.answer) : aiPasses.get("author-start")?.state()?.items?.find((x) => x.id === key)?.answer;
-  return a?.known === "yes" && a.picks?.some((p) => p.id) ? a : null;
+  if (!(a?.known === "yes" && a.picks?.some((p) => p.id))) return null;
+  // A pick names one edition; it stays the same book when that edition is hidden, merged or re-paired later
+  // (Vonnegut 2026-11-23: Старий Лев's «Бойня №5» marked Russian, and «Бойня» fell off the block): its
+  // original and the original's other translations count too.
+  for (const p of a.picks) {
+    const ids = new Set([p.id, store.canonical(p.id)].filter(Boolean));
+    for (const id of [...ids]) for (const t of store.translationsOf(id)) [t, ...store.translationsOf(t.id)].forEach((x) => ids.add(x.id));
+    p.ids = [...ids];
+  }
+  return a;
 }
 
 // The owner joins two spellings of one person (Max, 2026-10-23: «як нам зєднувати авторів?»): on an author

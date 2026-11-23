@@ -2047,7 +2047,7 @@ document.addEventListener("submit", async (e) => {
   // Sonnet's picks (editorial, flag «author-start»): each pick is one of the page's books or one of its editions.
   // Its line on the author shows only where Wikipedia gave no bio above (the two said the same).
   const picked = (editorial?.picks || [])
-    .map((p) => ({ p, h: hits.find((h) => [h.book.id, ...(h.others || []).map((o) => o.id), ...(h.twins || []).map((t) => t.id)].includes(p.id)) }))
+    .map((p) => ({ p, h: hits.find((h) => [h.book.id, ...(h.others || []).map((o) => o.id), ...(h.twins || []).map((t) => t.id)].some((id) => (p.ids || [p.id]).includes(id))) }))
     .filter((x, i, all) => x.h && all.findIndex((y) => y.h === x.h) === i)
     .map(({ h }) => h); // no «why» line under the title (Max, 2026-11-11: «трохи бісить»)
   const start = picked.length ? (many ? picked : [...picked, ...hits.filter((h) => !picked.includes(h))]) : !many ? hits : byFame.length === 3 ? byFame : hits.filter((h) => h.readers && !(h.series?.n > 1)).sort((x, y) => isUk(y.book) - isUk(x.book)).slice(0, 3);
