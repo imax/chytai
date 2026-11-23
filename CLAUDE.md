@@ -718,6 +718,9 @@ A flag only when Max asks for one, or when the change could break what readers u
 
 ## Standing rules (Max)
 
+- No reviews in Russian (Max 2026-11-23): others see a reader's note through `store.publicNote` / `publicEntry`
+  (Russian paragraphs out; a Russian note keeps only its Ukrainian or English ones); the writer sees it whole on their
+  own shelf. A new place that shows someone's note to others goes through it.
 - Never mass-regenerate AI content without Max's OK (daily auto cap 150). A new AI pass: trial of 200 on `/admin/*-trial` first.
 - A new kind of thing readers write (a list, a comment, a hand-added book) notifies Max (e-mail and Telegram, with the reader's `/@username`).
 - First-party analytics only, no third-party trackers. Log what helps product decisions.

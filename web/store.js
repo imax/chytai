@@ -100,6 +100,45 @@ const isRussian = (b) => {
   if (/[а-яё]/i.test(b?.title || "") && !/[іїєґ]/i.test(b?.title || "") && RU_LATIN_NAME.test(String(b?.author || "").trim())) return true;
   return RU.test(text) || (!/[іїєґ]/i.test(text) && RU_ENDING.test(b?.title || ""));
 };
+// A reader's note as others see it, without what is written in Russian (Max 2026-11-23, after an import of 1,460
+// books brought 2013–2019 reviews in Russian to the top of book pages: «не хочу показувати відгуки рос, навіть там де
+// вони є»). The writer still sees the whole note on their own shelf. A note that is Russian as a whole keeps only
+// its paragraphs in Ukrainian or in English (no hashtags, links or «review in Russian below»); another note loses only
+// its paragraphs that are clearly Russian. Scores: Russian-only letters, words and endings against Ukrainian ones.
+const NOTE_RU_WORDS = /(?<![\p{L}'’ʼ])(что|чтобы|это|этот|эта|эти|этого|этой|как|очень|когда|который|которая|которое|которые|только|если|его|её|ее|ещё|еще|был|была|было|были|всё|почему|потому|сейчас|тоже|хорошо|отлично|интересно|скучно|нравится|понравилась|понравился|понравилось|читать|прочитал|прочла|него|нее|неё|спасибо|вот|и|но|же)(?![\p{L}'’ʼ])/giu;
+const NOTE_RU_ENDS = /\p{L}{2,}(ость|ости|остью|ие|ия|ии|ию|ием|ая|яя|ое|ые)(?![\p{L}'’ʼ])/giu;
+const NOTE_UK_WORDS = /(?<![\p{L}'’ʼ])(що|це|як|дуже|коли|який|яка|яке|які|тільки|лише|якщо|ще|був|чому|тому|зараз|теж|добре|цікаво|книжку|себе|і|й|але|та)(?![\p{L}'’ʼ])/giu;
+const hits = (s, re) => (s.match(re) || []).length;
+const noteScore = (p) => {
+  const t = p.toLowerCase();
+  return { cyr: hits(t, /[а-яёіїєґ]/g), latin: hits(t.replace(/#\S+|https?:\/\/\S+/g, ""), /\p{Script=Latin}/gu), ru: hits(t, /[ыэъё]/g) + hits(t, NOTE_RU_WORDS) + hits(t, NOTE_RU_ENDS), uk: hits(t, /[іїєґ'’ʼ]/g) + hits(t, NOTE_UK_WORDS) };
+};
+const ruText = ({ cyr, latin, ru, uk }, loose) => cyr >= 4 && cyr >= latin && ((ru >= 2 && ru > uk * 2) || (loose && ru >= 1 && uk === 0));
+const ABOUT_LANG = /\b(review|translation)\b[^\n]*\b(russian|english)\b|\b(russian|english)\b[^\n]*\b(below|follow)/i;
+const ruNoteMemo = new Map();
+const publicNote = (note) => {
+  if (!note || !/[ыэъё]|[а-я]{3}/i.test(note)) return note || "";
+  if (ruNoteMemo.has(note)) return ruNoteMemo.get(note);
+  const all = ruText(noteScore(note), true);
+  const parts = String(note).split(/(\n\s*\n|\r?\n)/);
+  const kept = [];
+  for (let i = 0; i < parts.length; i += 2) {
+    const p = parts[i];
+    const sc = noteScore(p);
+    const keep = all ? (sc.latin >= 20 && sc.cyr * 5 < sc.latin && !ABOUT_LANG.test(p)) || (sc.uk >= 2 && sc.uk > sc.ru) : !ruText(sc);
+    if (keep) kept.push(p, parts[i + 1] || "");
+  }
+  const out = kept.join("").trim();
+  if (ruNoteMemo.size > 20000) ruNoteMemo.clear();
+  ruNoteMemo.set(note, out);
+  return out;
+};
+// The entry with its note as others see it (the same object when nothing is left out).
+const publicEntry = (e) => {
+  if (!e?.note) return e;
+  const note = publicNote(e.note);
+  return note === e.note ? e : { ...e, note };
+};
 // Which original Haiku named is worth naming: not a Russian one (Max 2026-10-23: «не додаємо оригінал якщо він
 // рос»), and not one in an ancient language or a script a reader here can't read or search («Πολιτεία», Max:
 // «сумніваюсь щодо таких»). Only a title in Latin letters, in a living language.
@@ -961,7 +1000,7 @@ class Store {
   readersOf(id, { all = false } = {}) {
     const out = [];
     for (const reader of this.entries.keys()) {
-      const e = this.sharedEntry(reader, id);
+      const e = publicEntry(this.sharedEntry(reader, id));
       if (e && (all || e.status !== "abandoned" || e.rating != null || e.note)) out.push({ reader, entry: e });
     }
     return out.sort((a, b) => (b.entry.note?.length || 0) - (a.entry.note?.length || 0) || (b.entry.rating ?? -1) - (a.entry.rating ?? -1));
@@ -2874,4 +2913,4 @@ class Store {
   }
 }
 
-module.exports = { DROPPED, fromOpenLibrary, sameCover, sameAuthor, editDistance, OPEN_LIBRARY, mainGenres, isRussian, shopLanguage, langGuess, Store, slugify, soundOf, norm, workName, OWNER };
+module.exports = { publicNote, publicEntry, DROPPED, fromOpenLibrary, sameCover, sameAuthor, editDistance, OPEN_LIBRARY, mainGenres, isRussian, shopLanguage, langGuess, Store, slugify, soundOf, norm, workName, OWNER };

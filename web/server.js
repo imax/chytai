@@ -10,7 +10,7 @@
 const express = require("express");
 const fs = require("fs");
 const path = require("path");
-const { Store, OWNER: OWNER_ID, slugify, isRussian, norm, workName, mainGenres, sameAuthor } = require("./store");
+const { Store, OWNER: OWNER_ID, slugify, isRussian, norm, workName, mainGenres, sameAuthor, publicNote } = require("./store");
 const { ReaderBooks, kindOnly, FRESH: READER_FRESH } = require("./readerbooks");
 const { Auth } = require("./auth");
 const pages = require("./pages");
@@ -2479,7 +2479,9 @@ app.get("/@:username", (req, res) => {
   const favN = own && !part ? lists.favOffer(reader.id) : 0;
   const favOffer = favN ? { n: favN, books: fanBooks(lists.favBooks(reader.id).map((id) => ({ id, book: store.book(id) })), 4) } : null;
   if (own) return res.send(pages.libraryPage({ part, favOffer, clubTopics: club.mark(req.user.id, club.of(reader.id, 5)), lists: theirLists, savedLists: lists.savedBy(reader.id), rows, user: req.user, reader: req.user, own: true, follows, now: nowFor(reader.id, { own: true }) }));
-  res.send(pages.libraryPage({ part, clubTopics: club.of(reader.id, 5), lists: theirLists, rows, user: req.user, reader, ask: !!req.owner && flags.on("chat", req.user), now: nowFor(reader.id), mineIds: req.user && req.user.id !== reader.id ? store.inLibrary(req.user.id) : null, mineDirect: req.user ? new Set(Object.keys(store.entriesOf(req.user.id))) : null, following: auth.follows(req.user?.id, reader.id), follows }));
+  // Others don't see the parts of notes written in Russian (store.publicNote, Max 2026-11-23).
+  const shown = rows.map((r) => (r.note && publicNote(r.note) !== r.note ? { ...r, note: publicNote(r.note) } : r));
+  res.send(pages.libraryPage({ part, clubTopics: club.of(reader.id, 5), lists: theirLists, rows: shown, user: req.user, reader, ask: !!req.owner && flags.on("chat", req.user), now: nowFor(reader.id), mineIds: req.user && req.user.id !== reader.id ? store.inLibrary(req.user.id) : null, mineDirect: req.user ? new Set(Object.keys(store.entriesOf(req.user.id))) : null, following: auth.follows(req.user?.id, reader.id), follows }));
 });
 // ---- «Списки» (lists.js): /@<username>/list/<slug>, /lists, and what the author does with a list ----
 app.get("/@:username/list/:slug", (req, res) => {
@@ -2493,7 +2495,7 @@ app.get("/@:username/list/:slug", (req, res) => {
   // «Скільки з них я вже прочитав» (Max, 2026-11-09): the reader's own status in each row and a count on top.
   const mine = req.user && flags.on("list-progress", req.user) ? store.inLibrary(req.user.id) : null;
   // «Мої фаворити»: a book without a line of its own shows its author's note from the shelf (design E, Max 2026-11-13).
-  const shelfNotes = list.fav ? new Map(Object.entries(store.entriesOf(reader.id) || {}).filter(([, e]) => e.note).map(([b, e]) => [store.canonical(b), e.note])) : null;
+  const shelfNotes = list.fav ? new Map(Object.entries(store.entriesOf(reader.id) || {}).map(([b, e]) => [store.canonical(b), own ? e.note : publicNote(e.note)]).filter(([, n]) => n)) : null;
   const items = lists.items(list.id, { own }).map((x) => ({ ...x, shelfNote: (!x.why && shelfNotes?.get(x.id)) || "", free: !!freeFileFor(store.bookPage(x.id)), mine: mine?.get(x.id)?.status || (mine && store.readLater(mine, x.id) ? "read" : "") }));
   const q = own ? String(req.query.add || "").trim().slice(0, 100) : "";
   const inList = own && q ? lists.ids(list.id) : null;

@@ -6,7 +6,7 @@
 // `who(readerId)` turns a reader id into the public reader ({ name, href, ... }) or null.
 
 // Tags that say nothing about what a book is like.
-const { isRussian, mainGenres, slugify } = require("./store");
+const { isRussian, mainGenres, slugify, publicEntry } = require("./store");
 const { Recs } = require("./recs");
 const PLAIN = new Set(["українською"]);
 const tagsOf = (b) => (b?.tags || []).filter((t) => !PLAIN.has(t));
@@ -72,7 +72,7 @@ class Social {
       const reader = this.who(rid);
       const list = [];
       // A reader who rated nothing yet is in the feed too (Max 2026-10-30; from 2026-10-26 they were left out).
-      if (reader) for (const [id, e] of Object.entries(entries)) if ((e.status || e.rating != null) && e.status !== "abandoned" && !e.kids && !isRussian(this.store.book(id))) list.push({ reader, id, entry: e });
+      if (reader) for (const [id, e] of Object.entries(entries)) if ((e.status || e.rating != null) && e.status !== "abandoned" && !e.kids && !isRussian(this.store.book(id))) list.push({ reader, id, entry: publicEntry(e) });
       rows.by.set(rid, list);
       rows.v.set(rid, v);
     }
