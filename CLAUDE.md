@@ -55,7 +55,8 @@ curl -s https://app.chytai.org.ua/agent/sql -H "$H" -H 'content-type: applicatio
   per app. E-mails and secret-looking values come back masked. Never print the token.
 - Robots: table `bots` (day, name, n, pages, ms, turned) per user agent; human pages in `views`. A crawler posing as a
   browser shows as a flood of «Напряму» rows in `arrivals`, one landing each. Stats skip a guest address that opens
-  >8 pages without our cookies in 10 min (`admin.js crawler()`); clean a past flood once with `dropCrawler(key, where)`.
+  >8 pages without our cookies in 10 min (`admin.js crawler()`); clean a past flood once with `dropCrawler(key, where)`; a robot that runs our script
+  also left `page_views`: take each row's view off by it (`dropRobot1122`).
 - Errors live in the site's `errors` table (30 days): site 500s and crashes (`site`, `jobs`), the reader's server
   (`reader`), and script errors from readers' browsers in the reader app (`reader`, message starts «[браузер]»,
   extension noise dropped; `src/renderer/web-bridge.js` → `/api/client-error`; the browser's frames come as `frames`,

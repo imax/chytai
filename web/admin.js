@@ -152,6 +152,7 @@ class Admin {
   dropCrawlers() {
     this.dropCrawler("fix:crawler", `source = 'Напряму' AND visits = fresh AND ((day BETWEEN '2026-10-24' AND '2026-10-31' AND (landing LIKE '/book/%' OR landing LIKE '/author/%')) OR (day = '2026-10-31' AND (landing LIKE '/go/%' OR landing LIKE '/publishers/%' OR landing LIKE '/genre/%')))`, "2026-10-30");
     this.dropCrawler("fix:crawler-1108", `source = 'Напряму' AND visits = fresh AND day BETWEEN '2026-11-07' AND '2026-11-08' AND (landing LIKE '/book/%' OR landing LIKE '/author/%')`);
+    this.dropRobot1122();
   }
   dropCrawler(key, bot, day404) {
     const db = this.db;
@@ -174,6 +175,41 @@ class Admin {
       });
     } catch (e) {
       console.log(`admin: could not drop the crawler's views: ${e.message}`);
+    }
+  }
+
+  // 22–23.11 (Max, 2026-11-23: «Давай»): a robot that runs our script (Asia/Shanghai + English, robotBeacon in
+  // server.js), from 05:00 UTC on 22.11 until the filter went live at ~08:00 on 23.11: ~80 one-page desktop guests
+  // an hour «Напряму» on books, authors, events, publishers, genres, and /login as a «second» page with no source
+  // (none of either before). Each of its pages is one row of page_views: that row's guest view and section view come
+  // off and the row goes; its arrivals go with their «arrive» steps, its /login pages with their «second» steps.
+  // meta `fix:crawler-1122` keeps what was taken off.
+  dropRobot1122() {
+    const db = this.db;
+    const key = "fix:crawler-1122";
+    if (db.get(key)) return;
+    const like = (col) => `(${["/book/", "/author/", "/calendar", "/publishers/", "/genre/"].map((l) => `${col} LIKE '${l}%'`).join(" OR ")})`;
+    const pages = `reader = '' AND phone = 0 AND at >= '2026-11-22T05:00' AND at < '2026-11-23T08:05' AND ((src = 'Напряму' AND ${like("path")}) OR (src = '' AND path LIKE '/login%')) AND NOT EXISTS (SELECT 1 FROM page_views o WHERE o.visit = page_views.visit AND o.pid <> page_views.pid)`;
+    const lands = `source = 'Напряму' AND visits = fresh AND day BETWEEN '2026-11-22' AND '2026-11-23' AND ${like("landing")}`;
+    try {
+      db.tx(() => {
+        if (db.get(key)) return;
+        const views = db.prepare("UPDATE views SET guests = max(0, guests - 1) WHERE day = ?");
+        const section = db.prepare("UPDATE section_views SET views = max(0, views - 1) WHERE day = ? AND section = ?");
+        const step = db.prepare("UPDATE guest_steps SET n = max(0, n - 1) WHERE day = ? AND step = ? AND search = 0");
+        const days = {};
+        const add = (day, k) => ((days[day] ||= { views: 0, arrive: 0, second: 0 })[k] += 1);
+        for (const r of db.prepare(`SELECT day, path FROM page_views WHERE ${pages}`).all()) {
+          views.run(r.day), section.run(r.day, sectionOf(r.path.split("?")[0])), add(r.day, "views");
+          if (r.path.startsWith("/login")) step.run(r.day, "second"), add(r.day, "second");
+        }
+        db.prepare(`DELETE FROM page_views WHERE ${pages}`).run();
+        for (const r of db.prepare(`SELECT day, visits FROM arrivals WHERE ${lands}`).all()) for (let i = 0; i < r.visits; i++) step.run(r.day, "arrive"), add(r.day, "arrive");
+        db.prepare(`DELETE FROM arrivals WHERE ${lands}`).run();
+        db.set(key, JSON.stringify({ at: new Date().toISOString(), days }));
+      });
+    } catch (e) {
+      console.log(`admin: could not drop the robot's views: ${e.message}`);
     }
   }
 
