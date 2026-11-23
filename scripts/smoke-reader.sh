@@ -39,6 +39,7 @@ check /login 200
 check /sw.js 200
 check /api/library 401
 check /api/journey 401
+check /api/scratch 401
 check /api/admin 401
 check /how-paper.jpg 200
 

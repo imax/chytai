@@ -809,6 +809,18 @@ A flag only when Max asks for one, or when the change could break what readers u
   (Max: «читав не означає прочитано»; no ticks on covers), covers the last opened first. Top: «N книг з <first day>», tiles прочитано / пояснень /
   нотаток / хвилин читання (Max 2026-11-20 by the bot, in place of «слів зі словничка»; no «читаю»); «N хв» beside
   the explanations in each month and book.
+- Reader «Scratchpad» (Max 2026-11-23, variant A of canvas 5vFceFdJnh3oNewFR6TgT4; the name stays until a Ukrainian one
+  is found): an inbox for reading, as in GTD. A panel page under «Статистика» (`r-pnav-scratch`, page `scratch`,
+  `src/renderer/scratch.js`, count of new ones beside it): a field with the mic and a photo (shrunk to 1200 px), then
+  «Нові» and «Розібрані». Each entry is read by Opus once (`server/scratch.js`, `SYSTEM`, json_schema, effort low): kind
+  (topic / era / author / book / unclear), title, a few sentences of background, 3–5 books (first = where to start; a
+  Ukrainian title only when such an edition exists; no Russian), guesses when unclear; then `catalogFind` (the site's
+  `/api/reader-find`) gives each book its page and cover by title and surname a letter apart. «Уточнити» / a guess =
+  `POST /api/scratch/:id/ask`, asked again with the words. «Додати» = a paper book (`/api/paper`), a tap = the cover's
+  card (`Paper.card`). Kept in `accounts/<id>/scratch.json` (500, sorted ones dropped first) and
+  `accounts/<id>/scratch/<entry>.jpg` (100 photos); private, no letter to Max. Caps: 40 a reader a day, 400 for all
+  (Telegram once), Max none; stats day `scratch`. An entry left `wait` by a deploy is asked again when the page lists it.
+  Locally without a key: a fake SDK (`node -r mock.js`) and WEB_URL to a proxy that passes only GET /api/reader-find.
 - Reader «Прочитано» at a book's end (Max 2026-11-20, bot report №7): the last page (`bookEnd` in renderer.js: epub.js
   `atEnd` or 100% on pages, the last chapter's bottom in scroll mode; a PDF's last page) marks the book finished in the
   reader only (`POST /api/library/finished` with `auto`; a book finished before is left alone) and asks the site with

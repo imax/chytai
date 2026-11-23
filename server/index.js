@@ -3178,21 +3178,91 @@ api.get("/about", async (req, res) => {
 
 // «Додати книжку»: the site's catalog for what was typed (/api/reader-find), kept ten minutes.
 const findCache = new Map();
-api.get("/find", async (req, res) => {
-  const q = clean(req.query.q, 100);
-  if (q.length < 2) return res.json({ books: [] });
+async function catalogFind(q) {
+  if (q.length < 2) return { books: [] };
   const hit = findCache.get(q);
-  if (hit && Date.now() - hit.at < 600 * 1000) return res.json(hit.data);
+  if (hit && Date.now() - hit.at < 600 * 1000) return hit.data;
+  const r = await fetch(`${WEB_URL}/api/reader-find?${new URLSearchParams({ q })}`, { signal: AbortSignal.timeout(8000) });
+  if (!r.ok) throw new Error(`site ${r.status}`);
+  const data = await r.json();
+  if (findCache.size > 2000) findCache.clear();
+  findCache.set(q, { at: Date.now(), data });
+  return data;
+}
+api.get("/find", async (req, res) => {
   try {
-    const r = await fetch(`${WEB_URL}/api/reader-find?${new URLSearchParams({ q })}`, { signal: AbortSignal.timeout(8000) });
-    if (!r.ok) throw new Error(`site ${r.status}`);
-    const data = await r.json();
-    if (findCache.size > 2000) findCache.clear();
-    findCache.set(q, { at: Date.now(), data });
-    res.json(data);
+    res.json(await catalogFind(clean(req.query.q, 100)));
   } catch (err) {
     res.status(502).json({ error: err.message });
   }
+});
+
+// «Scratchpad» (Max 2026-11-23, server/scratch.js, page src/renderer/scratch.js): topics, eras, authors and books jotted
+// to read about later, each read by Opus once (and again on «Уточнити»). Caps: SCRATCH_ACCOUNT_DAY answers a reader a
+// day, SCRATCH_DAY for all (Telegram once), Max none; stats day `scratch` { n, cost, accts }. An entry over a cap
+// waits (`limit`) and is answered when the page lists it the next day.
+const SCRATCH_ACCOUNT_DAY = 40;
+const SCRATCH_DAY = 400;
+const scratchDay = () => {
+  const day = statsDay();
+  const d = ((state.stats ??= { since: day, days: {} }).days[day] ??= { explains: 0, users: {}, guests: 0, models: {} });
+  return (d.scratch ??= { n: 0, cost: 0, accts: {} });
+};
+const scratch = new (require("./scratch").Scratch)({
+  dir: ACCOUNTS_DIR,
+  apiKey: process.env.ANTHROPIC_API_KEY,
+  find: catalogFind,
+  spend: (acct, usd) => {
+    const z = scratchDay();
+    z.n++;
+    z.cost = Math.round((z.cost + usd) * 10000) / 10000;
+    z.accts[acct] = (z.accts[acct] || 0) + 1;
+    saveState();
+  },
+});
+function scratchCanRun(req) {
+  if (!process.env.ANTHROPIC_API_KEY || aiBudgetDenied(req)) return false;
+  if (req.owner) return true;
+  const z = scratchDay();
+  if (z.n >= SCRATCH_DAY) {
+    if (!z.told) (z.told = true), saveState(), telegram(`Scratchpad: сьогодні вже ${SCRATCH_DAY} розборів, решта завтра.`);
+    return false;
+  }
+  return (z.accts[req.acct] || 0) < SCRATCH_ACCOUNT_DAY;
+}
+const scratchRun = (req, it) => {
+  if (!it) return it;
+  if (scratchCanRun(req)) scratch.run(req.acct, it.id);
+  else it = scratch.update(req.acct, it.id, (x) => (x.status = "limit"));
+  return it;
+};
+const noScratch = guestsCannot("Без входу Scratchpad недоступний.");
+api.get("/scratch", noScratch, (req, res) => res.json({ items: scratch.list(req.acct, () => scratchCanRun(req)) }));
+api.post("/scratch", noScratch, (req, res) => {
+  let photo = null;
+  if (typeof req.body?.photo === "string" && req.body.photo) {
+    photo = Buffer.from(req.body.photo, "base64");
+    if (photo.length < 1000 || photo.length > 6e6 || photo[0] !== 0xff || photo[1] !== 0xd8) return res.status(400).json({ error: "Фото не прочиталося." });
+  }
+  const it = scratch.add(req.acct, { text: req.body?.text, photo, voice: !!req.body?.voice });
+  if (!it) return res.status(400).json({ error: "Порожній запис." });
+  res.json({ item: scratchRun(req, it) });
+});
+api.post("/scratch/:id/ask", noScratch, (req, res) => {
+  const it = req.body?.again ? scratch.update(req.acct, req.params.id, (x) => (x.status = "wait")) : scratch.refine(req.acct, req.params.id, req.body?.text);
+  if (!it) return res.status(404).json({ error: "Запису немає." });
+  res.json({ item: scratchRun(req, it) });
+});
+api.patch("/scratch/:id", noScratch, (req, res) => {
+  const it = scratch.setState(req.acct, req.params.id, req.body?.state);
+  return it ? res.json({ item: it }) : res.status(404).json({ error: "Запису немає." });
+});
+api.delete("/scratch/:id", noScratch, (req, res) => res.json({ ok: scratch.remove(req.acct, req.params.id) }));
+api.get("/scratch/:id/photo", noScratch, (req, res) => {
+  const f = scratch.photoFile(req.acct, req.params.id);
+  if (!f || !fs.existsSync(f)) return res.status(404).end();
+  res.setHeader("Cache-Control", "private, max-age=31536000, immutable");
+  res.type("jpeg").sendFile(f);
 });
 
 api.get("/wish", (req, res) => res.json({ wish: req.guest ? [] : userState(req.acct).wish || [] }));

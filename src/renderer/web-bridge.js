@@ -877,6 +877,12 @@
     // Managing the shared library (family only; the server refuses guests).
     // «Статистика» (GET /api/journey): explanations, notes and finished books by book and by month; null offline.
     journey: () => api("GET", "/api/journey").then((r) => r.json()).catch(() => null),
+    // «Scratchpad» (scratch.js, server/scratch.js).
+    scratchList: async () => (await api("GET", "/api/scratch")).json(),
+    scratchAdd: async (entry) => (await api("POST", "/api/scratch", entry)).json(),
+    scratchAsk: async (id, body) => (await api("POST", `/api/scratch/${encodeURIComponent(id)}/ask`, body)).json(),
+    scratchState: async (id, state) => (await api("PATCH", `/api/scratch/${encodeURIComponent(id)}`, { state })).json(),
+    scratchDelete: (id) => api("DELETE", `/api/scratch/${encodeURIComponent(id)}`),
     // «Словничок»: how far the book's list is (GET /api/glossary/status); null offline.
     // «Адмінка» (owner only): the whole reader's stats (GET /api/admin), null when it fails; switching one account off.
     admin: () => api("GET", "/api/admin").then((r) => (r.ok ? r.json() : null)).catch(() => null),

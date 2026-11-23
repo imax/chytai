@@ -127,7 +127,7 @@
         <span class="pf-x"><span class="pf-t">${esc(c.title)}</span><span class="pf-a">${esc([c.author, c.year].filter(Boolean).join(" · "))}</span></span></div>
       <div class="ab-inline pf-about" id="pf-about"></div>
       <button type="button" class="r-pill pf-add" data-pf-add>Додати в мої книжки</button>
-      ${top.length || b ? `<button type="button" class="r-link pf-asis" data-pf-list>Не та книжка</button>` : ""}`;
+      ${!d.found.fixed && (top.length || b) ? `<button type="button" class="r-link pf-asis" data-pf-list>Не та книжка</button>` : ""}`;
     window.ReadingTime?.count("cover-card");
     cardGuide(c);
   }
@@ -968,5 +968,12 @@
     if (book && $(".pp") && document.visibilityState === "visible" && Date.now() - busyAt < 5 * 60 * 1000) window.reader.paperSeen(book.path);
   }, 60 * 1000);
 
-  window.Paper = { pageHtml, add, coverPhoto, current: () => book };
+  // A book's card from elsewhere (Scratchpad, scratch.js): «Про книжку», «Чому варто читати» and «Додати».
+  function card(b) {
+    const d = $("#paper-found");
+    d.found = { seen: { title: b.title, author: b.author }, top: [], fixed: true };
+    showCard(b.href ? b : null);
+    d.showModal();
+  }
+  window.Paper = { pageHtml, add, coverPhoto, current: () => book, pickPhoto, shrink, card };
 })();

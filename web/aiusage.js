@@ -47,6 +47,7 @@ const LABELS = {
   "reader:word": "Читалка: слово одним дотиком",
   "reader:bookguide": "Читалка: «Про книжку» і що було досі",
   "reader:wordahead": "Читалка: слова наперед",
+  "reader:scratch": "Читалка: Scratchpad",
 };
 const label = (app, feature) => LABELS[`${app}:${feature}`] || (app === "reader" ? `Читалка: ${feature}` : feature);
 

@@ -136,7 +136,7 @@
   // The panel: search in your books, Мої книжки / Додати книжку / Нещодавно видалені, the books opened lately,
   // feedback and your settings. Always open on a computer; on a phone the header's button (or, in the app, a
   // swipe from the left edge) slides the page aside to show it. Safari keeps that edge for «back».
-  let page = "home"; // home | add | journey | admin | how | paper
+  let page = "home"; // home | add | journey | scratch | admin | how | paper
   let backTo = "home"; // where «назад» goes: «Як це працює» opened from «Додати книжку» goes back there (Max 2026-11-22, №36)
   let paperPath = null; // the paper book on «paper» (paper.js)
   let addQuery = "";
@@ -148,9 +148,10 @@
   const phone = () => matchMedia("(max-width: 760px)").matches;
 
   function setPage(next, { push = true } = {}) {
-    if ((next === "add" || next === "journey") && settings.guest) return;
+    if ((next === "add" || next === "journey" || next === "scratch") && settings.guest) return;
     if (next === "admin" && !settings.owner) return;
     if (next === "journey") loadJourney();
+    if (next === "scratch") window.Scratch.enter();
     if (next === "admin") loadAdmin();
     const was = page;
     page = next;
@@ -291,9 +292,10 @@
     renderPanel();
     // Typing the page or a note on a paper book's page: the library arriving again must not redraw it under the finger.
     if (page === "paper" && document.activeElement?.closest?.(".pp") && homeHtml) return;
+    if (page === "scratch" && window.Scratch.typing() && homeHtml) return;
     const pb = page === "paper" && lib.books.find((b) => b.path === paperPath);
     if (page === "paper" && !pb) page = "home";
-    const html = pb ? window.Paper.pageHtml(pb) : page === "add" ? addPageHtml() : page === "journey" ? journeyHtml() : page === "admin" ? adminHtml() : page === "how" ? howHtml() : homePageHtml();
+    const html = pb ? window.Paper.pageHtml(pb) : page === "add" ? addPageHtml() : page === "journey" ? journeyHtml() : page === "scratch" ? window.Scratch.html() : page === "admin" ? adminHtml() : page === "how" ? howHtml() : homePageHtml();
     // The library comes twice (the saved copy, then the server's) and again when the app comes back to the
     // front: drawing the same covers anew made them flicker, so an unchanged screen is left alone.
     if (html === homeHtml) return;
@@ -653,7 +655,7 @@
     const tab = f || t;
     for (const b of tab.parentElement.children) b.classList.toggle("on", b === tab);
     tab.closest("section").querySelector(".r-filtered").dataset.show = f ? homeFilter : freeTab;
-    homeHtml = page === "add" ? addPageHtml() : page === "journey" ? journeyHtml() : page === "admin" ? adminHtml() : page === "how" ? howHtml() : homePageHtml();
+    homeHtml = page === "add" ? addPageHtml() : page === "journey" ? journeyHtml() : page === "scratch" ? window.Scratch.html() : page === "admin" ? adminHtml() : page === "how" ? howHtml() : homePageHtml();
     drawn.html = homeHtml;
   });
 
@@ -1427,6 +1429,7 @@
     if (!$("#done").classList.contains("hidden")) return $("#done").classList.add("hidden"), true;
     if (window.PhoneRead?.sheetOpen()) return window.PhoneRead.closeSheet(), true;
     if (isOpen() && $("#shell").classList.contains("panel-open")) return panel(false), true;
+    if (isOpen() && page === "scratch" && window.Scratch.back()) return true;
     if (isOpen() && page !== "home") return backHome(), true;
     if (!isOpen() && current && !settings.guest) return panelFromBook(), true;
     return false;
@@ -1435,6 +1438,7 @@
   window.Shell = {
     show, hide, panelFromBook, refresh, key, when, setAside, rcover, showAbout, openPaper, aboutBlock, loadAbout,
     book: (path) => lib?.books.find((b) => b.path === path) || null,
+    books: () => lib?.books || [],
     rerender: () => ((homeHtml = ""), renderHome()),
     reload: async () => ((lib = await window.Library.data(true)), (homeHtml = "")),
   };
@@ -1448,6 +1452,7 @@
       if (settings.guest) return hide();
       if (settings.owner && new URLSearchParams(location.search).has("admin")) history.replaceState(history.state, "", "/"), setPage("admin", { push: false });
       show("home");
+      window.Scratch.load();
     })
     .catch(() => show("home"));
 })();
