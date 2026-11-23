@@ -306,7 +306,7 @@ A flag only when Max asks for one, or when the change could break what readers u
   Добірки, Дочитують, Обговорюють, then Читалка (with «Безкоштовна класика →» to /publishers/chytai-free); «Українські
   автори», «Хочуть прочитати», «Безкоштовно» only under a chip. Taps per block: `taps` table, `page = '/'`.
   «Обговорюють зараз» is one line a topic (`clubRow(t, { tight: true })`), only topics active in the last 14 days
-  (`club.lively`); none = no block. «Події» right after Для вас: four lines of the next 14
+  (`club.lively`); none = no block. «Події» right after Для вас: three lines (Max 2026-11-23) of the next 14
   days (`homeEvents` in server.js: own shelf's authors, then author/festival/lecture before clubs; `calHome` reuses
   `calLine`). The test DB may have no upcoming events: copy some rows of `cal_events` from `/agent/sql` locally.
 - Search with no book that has every word (`searchAll` `near`, 2026-11-15): «Може, ви шукали:» authors, publishers and books with most of the
