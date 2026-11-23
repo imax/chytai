@@ -7,7 +7,7 @@
     try {
       const nav = performance.getEntriesByType("navigation")[0];
       const fcp = performance.getEntriesByName("first-contentful-paint")[0];
-      if (!nav || nav.type === "back_forward" || document.visibilityState !== "visible") return;
+      if (!nav || nav.type === "back_forward" || document.visibilityState !== "visible" || navigator.webdriver) return;
       const phone = matchMedia("(pointer: coarse)").matches && innerWidth < 900;
       navigator.sendBeacon?.("/api/speed", new Blob([JSON.stringify({ load: nav.loadEventEnd || nav.domContentLoadedEventEnd, first: fcp?.startTime, phone })], { type: "application/json" }));
     } catch {}
@@ -34,7 +34,13 @@
       shown = document.hidden ? 0 : Date.now();
       sec = 0;
       depth = 0;
-      send({ phone: phone ? "1" : "0" });
+      // What tells a browser a robot drives apart (2026-11-23: one with scripts and no cookies, ~80 «guests» an hour):
+      // the automation flag, the time zone, the language and the screen; the server keeps a few hundred in memory.
+      let tz = "";
+      try {
+        tz = Intl.DateTimeFormat().resolvedOptions().timeZone || "";
+      } catch {}
+      send({ phone: phone ? "1" : "0", wd: navigator.webdriver ? "1" : "0", tz, lang: navigator.language || "", scr: `${screen.width}x${screen.height}` });
       measure();
     };
     const report = () => {

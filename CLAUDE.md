@@ -66,7 +66,11 @@ curl -s https://app.chytai.org.ua/agent/sql -H "$H" -H 'content-type: applicatio
 - Product analytics (Max 2026-11-16: «аналітика по продукту», anonymous is fine, first-party only). A guest's page is
   counted only when the page itself says it opened (app.js → `POST /api/seen`, `admin.opened`): views, section views,
   arrivals, guest steps and the sign-in page's events wait in memory (`admin.later`, 2 min) and are dropped if no
-  script answers (a robot that runs no script made 5–15× the real guests on 12–16.11). Readers' views stay
+  script answers (a robot that runs no script made 5–15× the real guests on 12–16.11). A browser with
+  `navigator.webdriver` sends no `/api/speed` and its `/api/seen` is dropped (2026-11-23, a robot with scripts and no
+  cookies: ~80 one-page «guests» an hour from 22.11); `GET /agent/guests` = the last 400 guests' first beacons grouped
+  (user agent, time zone, language, screen, address's first two numbers), in memory only. Playwright locally:
+  `addInitScript(() => Object.defineProperty(navigator, "webdriver", { get: () => false }))` to be counted. Readers' views stay
   server-side. Table `page_views` (visit = random number in the `chytai_here` cookie, 30 min; order `n`, path, source
   of the visit, seconds on screen, % scrolled, phone; readers carry their id, guests ''), 30 days. Shown on
   /admin/traffic «Куди йдуть гості» (`admin.paths`) and /admin/activity?guests=1 (`admin.guestVisits`). Searches:
