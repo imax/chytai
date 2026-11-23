@@ -189,7 +189,7 @@ function passes({ store, social, db, apiKey, log }) {
         const other = a?.known === "yes" && [a.original, a.ukrainian].map((n) => store.authors.byName(n)).find((x) => x && x.key !== s.a.key && kin(s.a, x));
         return { id: s.id, title: s.a.name, author: "", before: s.a.names.join("; "), after: a ? (a.known === "yes" ? `${a.original} / ${a.ukrainian}${other ? ` → злити з «${other.name}»` : ""}` : "не знає") : "", diff: !!other, merge: other ? other.slug : "" };
       },
-      // A merge into another page goes in the owner's joins (undo on the author page, «роз'єднати»).
+      // A merge into another page goes in the owner's joins (meta `authors:join`, read by authors.js).
       apply: (items) => {
         const j = require("./authors").ownerJoins(store);
         let n = 0;

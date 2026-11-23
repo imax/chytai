@@ -1931,13 +1931,7 @@ function outsideResults({ q, user, books, after = false }) {
 // ---- /author/<slug> ----
 
 // The books we have, with what readers said; who reads them; then the works from Wikidata.
-function authorPage({ author, about = null, works, hits, user, readers = [], also = [], pairing = null, joins = null, editorial = null, events = [], pastEvents = [], watching = false, members = () => [] }) {
-  // The owner joins another spelling of this person (Max, 2026-10-23: «як нам зєднувати авторів?»).
-  const joinBlock = joins
-    ? `${label("Той самий автор")}<form method="post" action="/admin/authors/join" class="author-join"><input type="hidden" name="author" value="${attr(author.slug)}"><input name="other" placeholder="Посилання на автора або ім’я" required><button class="btn small">З’єднати</button></form>${joins
-        .map((j) => `<div class="pair muted small">${esc(j.names.join(" = "))} · <form method="post" action="/admin/authors/unjoin" class="inline"><input type="hidden" name="index" value="${j.index}"><button class="text-link small">роз’єднати</button></form></div>`)
-        .join("")}`
-    : "";
+function authorPage({ author, about = null, works, hits, user, readers = [], also = [], pairing = null, editorial = null, events = [], pastEvents = [], watching = false, members = () => [] }) {
   // The owner pairs a translation with its original right here (Max, 2026-10-21); the same post as /admin/translations.
   const pair = (book) => {
     if (!pairing) return "";
@@ -2108,7 +2102,6 @@ ${head}
   <aside>
     ${readers.length ? `${label("Хто читає")}<div class="others-list">${readers.map((r) => `<a href="${attr(r.reader.href)}"><b>${esc(r.reader.name)}</b><span>${r.mine?.length ? r.mine.slice(0, 2).map((e) => `${esc(e.book.title)}${e.rating != null ? ` ★${uk(String(e.rating))}` : ""}`).join(", ") + (r.mine.length > 2 ? ` і ще ${r.mine.length - 2}` : "") : `${books(r.count)}, ${count(r.read, "прочитана", "прочитані", "прочитаних")}`}</span></a>`).join("")}</div>` : ""}
     ${also.length ? `${label("Ті, хто читає автора, також люблять")}${minis(also)}` : ""}
-    ${joinBlock}
   </aside>
 </div>${pairScript}`;
   const ld = { "@context": "https://schema.org", "@type": "Person", name: author.name, url: ORIGIN + author.href, ...(author.other ? { alternateName: author.other } : {}), ...(author.qid ? { sameAs: `https://www.wikidata.org/wiki/${author.qid}` } : {}) };
