@@ -9,7 +9,11 @@
       const fcp = performance.getEntriesByName("first-contentful-paint")[0];
       if (!nav || nav.type === "back_forward" || document.visibilityState !== "visible" || navigator.webdriver) return;
       const phone = matchMedia("(pointer: coarse)").matches && innerWidth < 900;
-      navigator.sendBeacon?.("/api/speed", new Blob([JSON.stringify({ load: nav.loadEventEnd || nav.domContentLoadedEventEnd, first: fcp?.startTime, phone })], { type: "application/json" }));
+      let tz = "";
+      try {
+        tz = Intl.DateTimeFormat().resolvedOptions().timeZone || "";
+      } catch {}
+      navigator.sendBeacon?.("/api/speed", new Blob([JSON.stringify({ load: nav.loadEventEnd || nav.domContentLoadedEventEnd, first: fcp?.startTime, phone, tz, lang: navigator.language || "" })], { type: "application/json" }));
     } catch {}
   }, 0));
   // A page opened, for /admin (Max, 2026-11-16: «аналітика по продукту»): the page says so itself, so a robot that

@@ -67,8 +67,9 @@ curl -s https://app.chytai.org.ua/agent/sql -H "$H" -H 'content-type: applicatio
   counted only when the page itself says it opened (app.js → `POST /api/seen`, `admin.opened`): views, section views,
   arrivals, guest steps and the sign-in page's events wait in memory (`admin.later`, 2 min) and are dropped if no
   script answers (a robot that runs no script made 5–15× the real guests on 12–16.11). A browser with
-  `navigator.webdriver` sends no `/api/speed` and its `/api/seen` is dropped (2026-11-23, a robot with scripts and no
-  cookies: ~80 one-page «guests» an hour from 22.11); `GET /agent/guests` = the last 400 guests' first beacons grouped
+  `navigator.webdriver` sends no `/api/speed` and its `/api/seen` is dropped, and so is a guest whose time zone is
+  Asia/Shanghai with an English browser (`robotBeacon` in server.js: the robot of 22.11, ~80 one-page «guests» an
+  hour, year-old Chrome, a new address each page; a new robot's mark goes there too); `GET /agent/guests` = the last 400 guests' first beacons grouped
   (user agent, time zone, language, screen, address's first two numbers), in memory only. Playwright locally:
   `addInitScript(() => Object.defineProperty(navigator, "webdriver", { get: () => false }))` to be counted. Readers' views stay
   server-side. Table `page_views` (visit = random number in the `chytai_here` cookie, 30 min; order `n`, path, source

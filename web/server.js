@@ -3711,13 +3711,16 @@ app.post("/api/tap", (req, res) => {
 // (400 at most: user agent, language, time zone, screen, the address's first two numbers) for /agent/guests, to tell
 // a robot with scripts and no cookies apart (2026-11-23: ~80 one-page «guests» an hour since 22.11).
 const guestSample = [];
+// The robot of 22.11 (seen on /agent/guests 2026-11-23): time zone Asia/Shanghai, browser language English, a year-old
+// Chrome or Firefox from a new address each page. A guest with that zone and language is not counted.
+const robotBeacon = (b) => b.wd === "1" || (/^Asia\/(Shanghai|Chongqing|Harbin|Urumqi)$/.test(String(b.tz || "")) && /^en\b/i.test(String(b.lang || "")));
 app.post("/api/seen", (req, res) => {
   const b = req.body || {};
   if (!req.user && b.phone != null && b.sec == null) {
     guestSample.push({ at: new Date().toISOString(), path: String(b.path || "").slice(0, 60), cookie: !!cookies(req).chytai_seen, wd: b.wd === "1", tz: String(b.tz || "").slice(0, 40), lang: String(b.lang || "").slice(0, 20), scr: String(b.scr || "").slice(0, 12), al: String(req.headers["accept-language"] || "").slice(0, 40), ua: String(req.headers["user-agent"] || "").slice(0, 160), net: String(req.ip || "").split(/[.:]/).slice(0, 2).join(".") });
     if (guestSample.length > 400) guestSample.shift();
   }
-  if (b.wd === "1") return res.status(204).end();
+  if (robotBeacon(b) && !req.user) return res.status(204).end();
   admin.opened(req, req.user?.id, { visit: cookies(req).chytai_here, path: b.path, pid: b.pid, sec: b.sec, depth: b.depth, phone: b.phone === "1" });
   res.status(204).end();
 });
@@ -4529,7 +4532,7 @@ app.get("/admin/shelves", owner, (req, res) => res.send(shelvesPage({ user: req.
 // sends once a page has loaded (two numbers and whether it is a phone).
 app.post("/api/speed", (req, res) => {
   const { load, first, phone } = req.body || {};
-  if (!BOT.test(req.headers["user-agent"] || "")) {
+  if (!BOT.test(req.headers["user-agent"] || "") && !robotBeacon(req.body || {})) {
     const kind = phone ? "phone" : "computer";
     if (Number.isFinite(load) && load > 0 && load < 120000) speed.add(kind, Math.round(load));
     if (Number.isFinite(first) && first > 0 && first < 120000) speed.add(`${kind}-first`, Math.round(first));
