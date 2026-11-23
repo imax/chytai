@@ -131,7 +131,7 @@ function maybeEvent(text, today = kyivDay(), posted = "", photo = false) {
 }
 const SYSTEM = `You read posts from Ukrainian publishers' and bookstores' Telegram channels and pick out book events for a public calendar of book events in Ukraine and online.
 
-A book event is one people can come to or join online: a book presentation, a meeting or talk with an author, a reading, an autograph session, a book club meeting, a literary lecture or discussion, a literary festival, a book game night. Not an event: a new book, a sale or discount, a contest or giveaway, a grant or call for submissions, a deadline, a funeral, and things unrelated to books (yoga, concerts, economics talks with no book or author behind them, kids' crafts with no book).
+A book event is one people can come to or join online: a book presentation, a meeting or talk with an author, a reading, an autograph session, a book club meeting, a literary lecture or discussion, a literary festival, a book game night. Not an event: a new book, a sale or discount, a contest or giveaway, a grant or call for submissions, a deadline, a funeral, and things unrelated to books (yoga, concerts, economics talks with no book or author behind them, kids' crafts with no book). A talk or debate on politics, war, security or other current affairs is not a book event either, even at a bookshop and with authors among the speakers, unless it presents or discusses a named book (Max 2026-11-22: «НАТО після розширення» at a bookshop).
 
 Answer every book event in the post that takes place on or after today's date (a post may list several). For each:
 - title: short Ukrainian name of the event as a reader would scan it, at most 100 characters, no emoji, e.g. «Презентація роману «Несамовитий» Анни Бурбан», «Зустріч з Віктором Галасюком», «Книжкова мафія за «Батьковбивцею»». Keep book titles in «».
@@ -1004,8 +1004,10 @@ When unsure, false.`;
     const { Api } = require("telegram");
     const { CustomFile } = require("telegram/client/uploads");
     const buf = require("fs").readFileSync(file);
+    const { Raw } = require("telegram/events");
     const client = await connect();
     let sent = null;
+    let handler = null;
     try {
       sent = await client.sendFile("me", {
         file: new CustomFile("voice.ogg", buf.length, "", buf),
@@ -1013,18 +1015,40 @@ When unsure, false.`;
         attributes: [new Api.DocumentAttributeAudio({ voice: true, duration: Math.max(1, Math.round(+duration || 1)) })],
         silent: true,
       });
+      // Pending: Telegram sends the words as they come in updateTranscribedAudio, the last with pending off. Asking
+      // again while it works gave a cut text (bug reports №35, №39 of 2026-11-22: the words stopped mid-sentence), so
+      // the updates are read too, the longest text wins, and a «done» answer to a repeated ask must stay the same
+      // for two asks in a row.
+      let best = "";
+      let final = false;
+      const take = (t) => (t = String(t || "").trim()).length >= best.length && (best = t);
+      const onUpdate = (u) => {
+        if (u.msgId !== sent?.id) return;
+        take(u.text);
+        if (!u.pending) final = true;
+      };
+      handler = [onUpdate, new Raw({ types: [Api.UpdateTranscribedAudio] })];
+      client.addEventHandler(...handler);
       const ask = () => client.invoke(new Api.messages.TranscribeAudio({ peer: "me", msgId: sent.id }));
       let r = await ask();
-      // Pending: Telegram sends updateTranscribedAudio when done; asking again gives the same answer, so we ask.
-      for (let i = 0; r.pending && i < 40; i++) {
+      take(r.text);
+      if (!r.pending) final = true;
+      let same = 0;
+      for (let i = 0; !final && i < 40; i++) {
         await new Promise((ok) => setTimeout(ok, 1500));
+        if (final) break;
+        const before = best;
         r = await ask();
+        take(r.text);
+        same = !r.pending && best === before ? same + 1 : 0;
+        if (same >= 2) final = true;
       }
-      if (r.pending) return { error: "Telegram не дорозшифрував за хвилину" };
-      return { text: String(r.text || "").trim() };
+      if (!final && !best) return { error: "Telegram не дорозшифрував за хвилину" };
+      return { text: best };
     } catch (e) {
       return { error: e.errorMessage || e.message };
     } finally {
+      if (handler) client.removeEventHandler(...handler);
       if (sent) await client.deleteMessages("me", [sent.id], { revoke: true }).catch(() => {});
       await client.destroy().catch(() => {});
     }

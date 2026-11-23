@@ -137,6 +137,7 @@
   // feedback and your settings. Always open on a computer; on a phone the header's button (or, in the app, a
   // swipe from the left edge) slides the page aside to show it. Safari keeps that edge for «back».
   let page = "home"; // home | add | journey | admin | how | paper
+  let backTo = "home"; // where «назад» goes: «Як це працює» opened from «Додати книжку» goes back there (Max 2026-11-22, №36)
   let paperPath = null; // the paper book on «paper» (paper.js)
   let addQuery = "";
   let freeAll = false;
@@ -156,20 +157,21 @@
     $("#shell").dataset.page = page;
     panel(false);
     if (was !== page) {
+      backTo = page === "how" && was === "add" ? "add" : "home";
       // A browser's «back» (and Esc) on «Додати книжку» comes back to your books. Not in the iPhone app: its web
       // view turns a swipe from the screen's edge into back/forward, and a swipe closing the panel near the right
       // edge went «forward» to this entry, so the panel jumped back open (Max, 2026-11-02).
-      if (push && page !== "home" && history.state?.rp !== page && !document.documentElement.classList.contains("in-app")) history[history.state?.rp ? "replaceState" : "pushState"]({ rp: page }, "");
+      if (push && page !== "home" && history.state?.rp !== page && !document.documentElement.classList.contains("in-app")) history[history.state?.rp && backTo === "home" ? "replaceState" : "pushState"]({ rp: page }, "");
       $("#home").scrollTop = 0;
       homeHtml = "";
     }
     if (!isOpen()) show();
     else renderHome();
   }
-  addEventListener("popstate", () => page !== "home" && history.state?.rp !== page && setPage("home", { push: false }));
+  addEventListener("popstate", () => page !== "home" && history.state?.rp !== page && setPage(history.state?.rp || "home", { push: false }));
   function backHome() {
     if (history.state?.rp === page) history.back();
-    else setPage("home");
+    else setPage(backTo);
   }
 
   // In an e-book (phone app) a swipe from the left edge opens the panel too, as on a paper book (Max 2026-11-05):
@@ -425,7 +427,7 @@
     return `<section class="r-how">
       <h1 class="r-jh">Як це працює</h1>
       <h2 class="r-how-t">Читаєте на папері?</h2>
-      <p class="r-start-p">Сфотографуйте сторінку й обведіть, що незрозуміло. Помічник пояснить.</p>
+      <p class="r-start-p">Сфотографуйте сторінку й обведіть, що незрозуміло.</p>
       <img class="r-how-img" src="how-paper.jpg" width="780" height="258" alt="Фото сторінки, абзац обведено червоним" />
       <div class="r-how-ans"><span>Пояснення</span>Це повінь після підриву Каховської ГЕС у червні 2023-го. Рятувальники поїхали, коли вода спала, а місцеві ще тижнями розбирали завали.</div>
       <ul class="r-how-list">
@@ -509,7 +511,7 @@
     // line, a file, a paper book and «Як це працює»; then the stores. A file dropped anywhere on the page is added.
     return `<div class="r-add-c">
       <section class="r-start r-add-two">
-        <p class="r-start-p">Виділіть або обведіть незрозуміле місце. Помічник пояснить.</p>
+        <p class="r-start-p">Додайте книжку з файлу й читайте її тут.</p>
         <button class="r-pill r-start-add" data-act="add"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V5M7 10l5-5 5 5M5 20h14"/></svg>Вибрати файл</button>
         <p class="r-start-f">EPUB, PDF, MOBI<span class="r-dt"> · або перетягніть файл сюди</span></p>
         <button class="r-pill-line r-start-paper" data-act="cover-photo"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>Додати паперову книжку</button>
@@ -848,6 +850,7 @@
     if (el.dataset.page) {
       const to = el.dataset.page;
       if (el.closest(".r-head") && to !== page && (to === "add" || (to === "home" && page === "add")) && !(to === "add" && settings.guest) && slidePage(to)) return;
+      if (to === "home" && page === "how" && el.closest(".r-pnav")) return setPage("home"); // the panel's «Мої книжки» = one's books
       return to === "home" && page !== "home" ? backHome() : setPage(to);
     }
     if (el.dataset.hit != null) return openHit(Number(el.dataset.hit));
@@ -984,7 +987,12 @@
       d.style.top = `${Math.min(innerHeight - 240, r.bottom + 6)}px`;
     } else d.style.left = d.style.top = "";
     $("#bm-edit").hidden = !(own && window.reader.libraryUpdateBook);
-    $("#bm-cover-find").hidden = !(own && window.reader.coverPick);
+    // «Знайти обкладинку» only for a book without one (Max 2026-11-22, bug report №30): shown once its picture fails.
+    const findOk = own && !!window.reader.coverPick;
+    const img = $("#bm-cover img");
+    const findRow = () => ($("#bm-cover-find").hidden = !findOk || !!(img?.isConnected && img.naturalWidth));
+    $("#bm-cover-find").hidden = !findOk || !!img;
+    if (img && findOk) img.complete ? findRow() : (img.addEventListener("load", findRow), img.addEventListener("error", findRow));
     // A PDF added before uploads became EPUB (2026-11-01): it opens slowly, so it can become one now.
     $("#bm-epub").hidden = !(own && /\.pdf$/i.test(b.path) && window.reader.libraryPdfToEpub);
     // Your own file is deleted; a book from the free shelf or a publisher just leaves the home screen.
@@ -1166,7 +1174,7 @@
     const g = b && guideKept.get(b.path);
     let body = "";
     if (open) {
-      // A paper book's guide, like an EPUB's dialog (Max 2026-11-20); the site's description when there is none.
+      // The book's guide, as in the dialog (Max 2026-11-20); the site's description when there is none.
       if (g?.before?.about || g?.before?.why || g?.building) body = beforeHtml(g, true);
       else if (a?.failed) body = `<p class="muted">Не вдалося завантажити опис.</p>`;
       else if (!a) body = `<p class="muted">${navigator.onLine ? "Завантажую…" : "Немає з'єднання, а опис цієї книжки ще не збережено."}</p>`;
@@ -1181,7 +1189,7 @@
   // guide too, asked again while it is being made.
   async function loadAbout(b, done) {
     if (!b || !window.reader.bookAbout) return;
-    if (b.paper && guided(b)) loadGuide(b, done);
+    if (guided(b)) loadGuide(b, done);
     const kept = aboutKept.get(b.path) || (await window.reader.bookAbout(b, true));
     if (kept) aboutKept.set(b.path, kept), done();
     const fresh = await window.reader.bookAbout(b);

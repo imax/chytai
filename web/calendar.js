@@ -80,6 +80,7 @@ const findCity = (text) => (ONLINE.test(text || "") ? "Онлайн" : CITIES.fi
 
 // Today in Kyiv, «YYYY-MM-DD».
 const kyivDay = (t = Date.now()) => new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Kyiv" }).format(new Date(t));
+const kyivHM = (t = Date.now()) => new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/Kyiv", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(new Date(t));
 const AHEAD_DAYS = 183;
 const addDays = (day, n) => new Date(Date.parse(`${day}T12:00:00Z`) + n * 86400000).toISOString().slice(0, 10);
 const pad = (n) => String(n).padStart(2, "0");
@@ -425,16 +426,25 @@ function create(db, store, { notify = () => {}, bookua = null, search = null, ma
 
   // Upcoming events (not hidden), a minute's cache: the jobs process writes too. Only the next half a year (Max
   // 2026-11-21: «не показувати події більше ніж на півроку вперед»); later ones show when they come within it.
+  // Today's event with an hour, two hours past its start, is over (Max 2026-11-22, bug report №42: at 21:48 the
+  // homepage still showed today's 13:00 and 16:00); the kept list is filtered again on every call.
   let cache = null;
+  const notOver = (rows) => {
+    const today = kyivDay();
+    const [h, m] = kyivHM().split(":").map(Number);
+    const gone = `${String(Math.max(0, h - 2)).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+    if (h < 2) return rows;
+    return rows.filter((e) => !(e.starts === today && (!e.ends || e.ends <= today) && /^\d\d:\d\d$/.test(e.time || "") && e.time < gone));
+  };
   const upcoming = () => {
-    if (cache && Date.now() - cache.at < 60000 && cache.day === kyivDay()) return cache.rows;
+    if (cache && Date.now() - cache.at < 60000 && cache.day === kyivDay()) return notOver(cache.rows);
     const today = kyivDay();
     const rows = db
       .prepare("SELECT * FROM cal_events WHERE hidden = 0 AND (starts >= ? OR ends >= ?) AND starts <= ? ORDER BY starts, time, title LIMIT 500")
       .all(today, today, addDays(today, AHEAD_DAYS))
       .map(row);
     cache = { at: Date.now(), day: today, rows };
-    return rows;
+    return notOver(rows);
   };
   const fresh = () => (cache = null);
 
@@ -1013,6 +1023,8 @@ function create(db, store, { notify = () => {}, bookua = null, search = null, ma
       if (e.fix) {
         const keys = FIXABLE.filter((k) => typeof e[k] === "string");
         if (keys.length && db.prepare(`UPDATE cal_events SET ${keys.map((k) => `${k} = ?`).join(", ")} WHERE id = ?`).run(...keys.map((k) => e[k]), e.fix).changes) n++;
+        // `hide: true`: an event that is not about books (Max's bug report №31, 2026-11-22), hidden at every start.
+        if (e.hide === true && db.prepare("UPDATE cal_events SET hidden = 1 WHERE id = ? AND hidden = 0").run(e.fix).changes) n++;
       } else if (upsert({ ...e, source: "seed" })) n++;
     }
     if (n) fresh();

@@ -1190,7 +1190,11 @@ function renderToc(items) {
       a.onclick = () => {
         window.ReadingTime?.count("toc-go"); // the phone's sheet presses this link too
         if (pdfView) pdfView.goTo(item.href);
-        else rendition.display(item.cfi || item.href);
+        else {
+          // «← Назад» returns to where the reader was, as after a footnote (Max 2026-11-22, bug report №38).
+          if ($("#btn-back").classList.contains("hidden")) rememberReturn();
+          rendition.display(item.cfi || item.href);
+        }
         $("#toc").classList.add("hidden");
         toggleChrome(false);
       };
@@ -1577,14 +1581,22 @@ function dropAskMark() {
 // The phone's keyboard covers the bottom of the screen: the card rides above it. Android's app shrinks the window
 // itself for the keyboard, and its own resize can come after the visual viewport's: counted only then, the card
 // stayed a keyboard's height up the page until the next key moved it down (bug report №21, 2026-11-20).
+// When the window itself got a keyboard's height shorter than it was at this width, nothing covers the page any
+// more: the visual viewport of Android's web view still came out a keyboard shorter, so the card went up twice, to the
+// top of the screen under the status bar (bug report №41, 2026-11-22). A browser (and iOS) keeps the window's height.
+const fullHeight = new Map(); // window width → its tallest height seen
 function keyboardGap() {
   const vv = window.visualViewport;
-  const kb = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+  const tall = Math.max(fullHeight.get(innerWidth) || 0, innerHeight);
+  fullHeight.set(innerWidth, tall);
+  const shrunk = tall - innerHeight > 120;
+  const kb = shrunk ? 0 : Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
   document.body.style.setProperty("--kb", `${Math.round(kb)}px`);
 }
 if (window.visualViewport) {
   window.visualViewport.addEventListener("resize", keyboardGap);
   addEventListener("resize", keyboardGap);
+  keyboardGap(); // the window's height before any keyboard
 }
 
 // No «Переклад» in Ukrainian books (Max, 2026-10-26): the book says so, or the text has і/ї/є/ґ.
@@ -2573,8 +2585,8 @@ function renderAbout() {
 $("#about-book").addEventListener("click", (e) => {
   const b = aboutBook();
   if (!b || !e.target.closest("[data-about-toggle]")) return;
-  // An EPUB opens the home screen's «Про книжку», with «Що було досі» (Max 2026-11-18: «з книжки теж на рекап»).
-  if (/\.epub$/i.test(b.path || "") && window.Shell?.showAbout) return window.Shell.showAbout(b);
+  // Unfolds in place for every book again (Max 2026-11-22, bug report №37: «раніше розгортався просто»); the dialog
+  // was for the recap, gone since 2026-11-19. The title in the top bar still opens the dialog.
   aboutOpen = aboutOpen === b.path ? "" : b.path;
   renderAbout();
   if (aboutOpen) {

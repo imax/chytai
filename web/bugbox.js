@@ -2,9 +2,10 @@
 // якийсь скріншот, або войс, або текстом … і ти це ставив в чергу»). Whatever the linked chat or a chat Max allowed
 // (telegram.js `extra`) writes to the bot, other than a command, is a report: text, a screenshot or other file, a
 // voice (transcribed by our Telegram account, tgfeed `transcribe`), a forward (who it came from), a reply to one of the
-// bot's alerts (the alert's text goes with it). Each message is its own report (Max 2026-11-21: different things were
-// glued into one by time), except: the rest of an album; words within GAP_MIN after a screenshot or file sent with no
-// words («скріншот, потім пояснення»); a reply to the bot's «Записав №N» / «Додав до №N» joins №N.
+// bot's alerts (the alert's text goes with it). A message within JOIN_SEC of the last one joins it (Max 2026-11-22,
+// bug report №39: «ще одне повідомлення протягом 30 секунд підклеюється до попереднього»; 3 minutes glued different
+// things, 2026-11-21); so do the rest of an album, words within GAP_MIN after a screenshot or file sent with no
+// words («скріншот, потім пояснення»), and a reply to the bot's «Записав №N» / «Додав до №N» (joins №N).
 //
 // The morning error review (CLAUDE.md) works them: GET /agent/bugs (open ones, their files at /agent/bugs/<id>/<file>),
 // fixes, then POST /agent/bugs/<id> { status: done | skip | later, note }; done and skip answer Max under his message.
@@ -14,6 +15,7 @@ const fs = require("fs");
 const path = require("path");
 
 const GAP_MIN = 3;
+const JOIN_SEC = 30;
 const FILES_DONE_DAYS = 14;
 const FILES_MAX_DAYS = 60;
 const ROWS_DAYS = 180;
@@ -90,14 +92,17 @@ function create(db, { dir, telegram, transcribe = null, log = console.log } = {}
     if (rep && !from) part.reply = clip(rep.text || rep.caption, 1000) || "(повідомлення без тексту)";
     if (!part.text && !f) return telegram.send("Такого не вмію зберегти. Напишіть текстом, скріншотом або войсом.", chat, null, m.message_id);
 
-    // The same album, words just after a screenshot that had none, or a reply to the bot's «№N»: one report.
+    // The same album, anything within JOIN_SEC, words just after a screenshot that had none, or a reply to the bot's
+    // «№N»: one report.
     const album = m.media_group_id ? String(m.media_group_id) : "";
     const toBot = rep?.from?.is_bot && /^(?:Записав |Додав до )?№(\d+)[.,:]/.exec(rep.text || "");
     const named = toBot && db.prepare("SELECT * FROM bug_reports WHERE id = ? AND chat = ? AND status = 'new'").get(Number(toBot[1]), chat);
     if (toBot) delete part.reply;
     const last = named || db.prepare("SELECT * FROM bug_reports WHERE chat = ? AND status = 'new' ORDER BY id DESC LIMIT 1").get(chat);
     const wordless = last && partsOf(last).every((p) => !p.text && p.kind !== "voice");
-    const join = !!last && (!!named || (album && last.album === album) || (wordless && now - Date.parse(last.last) < GAP_MIN * 60000));
+    // Since its last message came (not `last`: a voice's words are written into it up to two minutes later).
+    const since = last ? now - Date.parse(partsOf(last).at(-1)?.at || last.last) : Infinity;
+    const join = !!last && (!!named || (album && last.album === album) || since < JOIN_SEC * 1000 || (wordless && since < GAP_MIN * 60000));
     let id;
     if (join) id = last.id;
     else {

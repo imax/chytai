@@ -24,5 +24,10 @@
     "starts": "2026-11-21",
     "time": "14:00",
     "kind": "club"
+  },
+  {
+    "fix": "tg:knyharnia_ye/10449",
+    "hide": true,
+    "why": "Max 2026-11-22, bug report №31: a talk on NATO, not about books"
   }
 ]

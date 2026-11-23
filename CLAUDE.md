@@ -215,10 +215,10 @@ technical report (below), so post it only after your fixes are pushed:
   them. The reader gets the list from the site (`/api/site-admin/telegram` `chats`).
 - Bug reports (Max 2026-11-18, `web/bugbox.js`): anything but a command that Max's chat or an allowed one writes to
   the bot (text, screenshot, file, voice, forward, a reply to an alert) is a report in table `bug_reports`; each
-  message its own (Max 2026-11-21), except an album, words within 3 min after a screenshot with none, and a reply to
-  the bot's «Записав №N» (joins №N). The bot answers «Записав №N»; a voice is transcribed by our Telegram
-  account's Premium (`tgFeed.transcribe` in the jobs process: sent to its Saved Messages, `messages.transcribeAudio`,
-  deleted) and the bot answers with what it heard (the Claude API takes no audio). /bugs lists the open ones. The
+  message its own unless it comes within 30 s of the last (Max 2026-11-22, `JOIN_SEC`), or is the rest of an album,
+  words within 3 min after a screenshot with none, or a reply to the bot's «Записав №N» (joins №N). The bot answers «Записав №N»; a voice is transcribed by our Telegram
+  account's Premium (`tgFeed.transcribe` in the jobs process: sent to its Saved Messages, `messages.transcribeAudio`
+  plus its `updateTranscribedAudio` updates, the longest text wins: asking again alone cut the words mid-sentence; deleted) and the bot answers with what it heard (the Claude API takes no audio). /bugs lists the open ones. The
   morning review works them (above). Files in `DATA_DIR/web/bugs/<id>/`: gone 14 days after a report is closed, 60
   after it came; rows 180 days. Try locally: `TELEGRAM_BOT_TOKEN=test TELEGRAM_API=http://localhost:<fake> TELEGRAM_CHAT_ID=111`
   and POST updates to `telegram.hookPath()`.
@@ -400,7 +400,7 @@ A flag only when Max asks for one, or when the change could break what readers u
 - In a phone's calendar (a line at the page's foot): `/calendar.ics` is the list as an iCalendar feed with the same
   `?kind=` / `?city=` / `?q=`; «Мої автори» by `?mine=<reader>.<key>` (`calKey`, HMAC with the reader secret; a
   calendar app has no cookie). Links: webcal:// (Apple), Google Calendar's `?cid=`, and the plain address.
-- Only the next half a year (Max 2026-11-21): `upcoming()` stops at `AHEAD_DAYS` (183); an event's own page still opens.
+- Only the next half a year (Max 2026-11-21): `upcoming()` stops at `AHEAD_DAYS` (183); an event's own page still opens. Today's event with an hour leaves `upcoming()` two hours after it starts (Max 2026-11-22, №42).
 - Only Ukraine and online (Max 2026-11-15): the collectors' Haiku answers `abroad` and those are dropped;
   `calendar.abroad(city)` (list `ABROAD`) hides a foreign city at upsert and at start, and /calendar/add refuses it.
 - Book presentations (Max 2026-11-20, «спам презентацій»: 80 of ~300, libraries' local books and one author's
@@ -422,7 +422,8 @@ A flag only when Max asks for one, or when the change could break what readers u
 - Table `cal_events` (id `{source}:{key}`, starts/ends `YYYY-MM-DD` Kyiv, time `HH:MM`, city as shown, «Онлайн»
   for online; books/authors JSON found by name, no AI: `linkText`, a name's two words side by side, «Олександрою … книгарні» ≠ Олександр Книга; never a Russian edition, `findBook`). Gone 30 days after it ends (`cleanup`); one with an author or book linked stays a year (`KEEP_LINKED_DAYS`, for the author page's past events).
 - Sources: `web/seed/calendar.json` (kept in step at every start: festivals by a thread or Max; an entry with `fix`
-  = a collected event's id corrects only the fields it names: place, sub, time, city, starts, ends); readers via
+  = a collected event's id corrects only the fields it names: place, sub, time, city, starts, ends; `"hide": true` hides
+  one that is not about books, Max's bug report №31); readers via
   /calendar/add (signed in: shown at once, 5 a day, mails + Telegram Max; Max or the reader hides one with «сховати»;
   guests too (Max 2026-11-16): hidden with `review = 1` until Max presses «Показати» on /admin/events («Від гостей»,
   «Прибрати» deletes), `by = guest:<hash of the address>`, 3 a day, an optional e-mail in `contact` (only that block
@@ -748,7 +749,8 @@ A flag only when Max asks for one, or when the change could break what readers u
   goes into that list.
 - Reader: a reader's own cover (`PUT /api/cover`, the page cuts it to 900 px JPEG; `DELETE` = the file's again) is set in
   «Назва, автор, обкладинка». No letter to Max for it (Max, 2026-11-15).
-  «Знайти обкладинку» in the book menu (Max 2026-11-22, variant A; own books only): `GET /api/cover/find?title&author`
+  «Знайти обкладинку» in the book menu (Max 2026-11-22, variant A; own books only, and only when the book's cover
+  picture fails, bug report №30): `GET /api/cover/find?title&author`
   asks the site's `/api/reader-covers` (catalog work + editions, book.ua, Open Library, Google Books; same author;
   12; a day's cache) for signed `/t/` copies (`thumb` 240, `full` 480 px); a tap = `POST /api/cover/pick {path, url}`,
   the reader server fetches only `${WEB_URL}/t/…`. Dialog `#cover-dialog` (home.js `showCovers`), taps `cover-pick`,
