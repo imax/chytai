@@ -1320,6 +1320,13 @@ function libraryPage({ ask = null, part = "", clubTopics = [], lists = [], saved
   // Variant B from the design canvas (Max, 2026-11-13): a fan of their covers, «×» says «Не треба».
   const fav = own && favOffer ? `<form method="post" action="/api/lists/favorites" class="fav-offer">${favOffer.books.length ? `<span class="fav-fan" aria-hidden="true">${favOffer.books.map((b) => cover(b, "xs")).join("")}</span>` : ""}<div><p><b>Мої фаворити</b>${count(favOffer.n, "ваша п'ятірка", "ваші п'ятірки", "ваших п'ятірок")}. Нові додаватимуться самі.</p><p class="acts"><button class="btn small primary" name="yes" value="1">Зібрати список</button><button class="fav-x" name="no" value="1" aria-label="Не треба" title="Не треба">×</button></p></div></form>` : "";
   const topLists = lists.length || savedLists.length || own ? `<div class="top-lists">${listsHead}${fav}${lists.length || savedLists.length || fav ? "" : `<p class="small muted">Складіть список книжок, щоб поділитися ним.</p>`}<div class="lchips">${[...lists.map((l) => [l, listMeta(l, { by: false })]), ...savedLists.map((l) => [l, `${esc(l.reader.name)} · ${books(l.count)}`])].map(([l, m]) => `<a href="${attr(l.href)}"><b>${esc(l.title)}</b><span>${m}</span></a>`).join("")}</div></div>` : "";
+  // «Цього року» heads the sidebar, so it is seen without scrolling (Max, 2026-11-23).
+  const yearBlock = thisYear.length ? `<div class="side-year">${label("Цього року")}<div class="numbers">
+      <p><b>${thisYear.length}</b>прочитано</p>
+      ${rated.length ? `<p><b>${uk(Math.round((rated.reduce((s, r) => s + r.rating, 0) / rated.length) * 10) / 10)}</b>середня оцінка</p>` : ""}
+      <p><b>${thisYear.filter((r) => isUk(r.book)).length}</b>українською</p>
+      <p><b>${thisYear.filter((r) => r.note).length}</b>з нотатками</p>
+    </div></div>` : "";
   const body = `
 ${pageHead({ crumbs: own ? "" : `<a href="/community">Читачі</a> / ${esc(reader.name)}`, kicker: own ? "Моя полиця" : "Полиця читача", title: esc(reader.name), sub, extra: nowBlock(now, { own }), action: own ? `<div class="acts own-acts"><a class="btn primary" href="/add">+ Додати книжки</a><a class="text-link small" href="/mcp">або голосом чи текстом у Claude чи ChatGPT</a></div>` : user?.id === reader.id ? "" : `<div class="acts">${followButton(reader, following, user)}${ask ? `<a class="btn" href="/chat/@${attr(reader.username)}">Чат</a>` : ""}</div>` })}
 <div class="split">
@@ -1340,15 +1347,10 @@ ${parts.first}
     <p class="more hidden"><button type="button" class="text-link" id="more">Показати ще <span></span> →</button></p>
   </div>
   <aside>
+    ${yearBlock}
     ${lists.length || own ? `<div class="side-own-lists${topLists ? " has-top" : ""}">${listsHead}${fav}${lists.length ? sideLists(lists, (l) => listMeta(l, { by: false })) : fav ? "" : `<p class="small muted">Складіть список книжок, щоб поділитися ним: «Найкраще про війну», «Для підлітків 12+»…</p>`}${savedLists.length ? `${label("Збережені списки")}${sideLists(savedLists, (l) => `${esc(l.reader.name)} · ${books(l.count)}`)}` : ""}</div>` : ""}
     ${clubTopics.length ? `<div class="side-club">${label("Теми в Клубі")}${sideLists(clubTopics, (t) => `${t.replies ? answers(t.replies) : "без відповідей"} · ${when({ updated: t.active })}`)}</div>` : ""}
     ${own ? `<dialog id="new-list"><div class="dlg-head"><h2>Новий список</h2><button type="button" class="dlg-x" data-close aria-label="Закрити">×</button></div>${newListForm()}</dialog>` : ""}
-    ${thisYear.length ? `${label("Цього року")}<div class="numbers">
-      <p><b>${thisYear.length}</b>прочитано</p>
-      ${rated.length ? `<p><b>${uk(Math.round((rated.reduce((s, r) => s + r.rating, 0) / rated.length) * 10) / 10)}</b>середня оцінка</p>` : ""}
-      <p><b>${thisYear.filter((r) => isUk(r.book)).length}</b>українською</p>
-      <p><b>${thisYear.filter((r) => r.note).length}</b>з нотатками</p>
-    </div>` : ""}
     ${common.length ? `${label("Спільне з вами")}<p class="small muted">${books(common.length)}, які ви обоє маєте на полиці.</p><div class="grid four">${common.slice(0, 4).map((r) => `<a href="${attr(r.book.href)}">${cover(r.book, "card")}</a>`).join("")}</div>` : ""}
     ${wants.length ? `${label("Хоче прочитати")}${minis(wants.map((r) => r.book), "xs")}` : ""}
     ${followBlock}

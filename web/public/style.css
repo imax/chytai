@@ -1019,7 +1019,7 @@ form.inline button:not(.btn) { background: none; border: 0; padding: 0; cursor: 
 /* The sidebar is narrow: the covers go above the words there. */
 .side-own-lists .fav-offer { flex-direction: column; align-items: flex-start; gap: 12px; }
 .fav-offer .acts { flex-wrap: nowrap; }
-.side-own-lists + * { margin-top: 40px; }
+.side-own-lists + *, .side-year + *, .split > aside > * + #follows { margin-top: 40px; }
 @media (max-width: 960px) { .top-lists { display: block; } .side-own-lists.has-top { display: none; } }
 aside .side-lists + .label, aside p + .label, aside dialog + .label { margin-top: 40px; }
 .label .aside button.text-link { font-size: 13px; }
