@@ -1419,7 +1419,7 @@ app.post("/settings", signed, (req, res) => {
 });
 // The letters' tab: the weekly letter and the «стежить за вами» letter, each on or off.
 app.get("/settings/mail", signed, (req, res) => {
-  res.send(pages.mailSettingsPage({ user: req.user, values: { digest: digest.enabled(req.user.id), follow_mail: auth.followMailEnabled(req.user.id), mention_mail: auth.mentionMailEnabled(req.user.id), club_mail: auth.clubMailEnabled(req.user.id), topic_mail: clubMail.enabled(req.user.id), want_mail: wantMail.enabled(req.user.id) }, saved: !!req.query.saved, calSubs: calendar.subs(req.user.id).map((f) => ({ name: calendarLib.subName(f), href: calHref(f) })) }));
+  res.send(pages.mailSettingsPage({ user: req.user, values: { digest: digest.enabled(req.user.id), follow_mail: auth.followMailEnabled(req.user.id), mention_mail: auth.mentionMailEnabled(req.user.id), club_mail: auth.clubMailEnabled(req.user.id), topic_mail: clubMail.enabled(req.user.id), want_mail: wantMail.enabled(req.user.id) }, saved: !!req.query.saved, calSubs: calendar.subs(req.user.id).map((f) => ({ name: subName(f), href: calHref(f) })) }));
 });
 app.post("/settings/mail", signed, (req, res) => {
   const r = req.user, b = req.body;
@@ -1755,6 +1755,8 @@ const calendarJobs = bg.register("calendar", { cleanup: () => calendar.cleanup()
 if (bg.ROLE !== "web") setTimeout(() => calendar.seed(), 20 * 1000);
 bg.every("calendar-cleanup", 24 * 3600 * 1000, () => calendarJobs.cleanup(), { db: store.db, first: 5 * 60 * 1000 });
 bg.every("calendar-ye", 24 * 3600 * 1000, () => calendarJobs.ye(), { db: store.db, first: 15 * 60 * 1000 });
+// Events by day for /admin/events «По тижнях» (calendar.countDays; Max 2026-11-23).
+bg.every("calendar-days", 3600 * 1000, () => calendar.countDays(), { db: store.db, first: 3 * 60 * 1000 });
 // Telegram channels' posts (tgfeed.js): our own account through Telegram's API when TG_SESSION is set, else the
 // public t.me/s pages; every hour. Their events go to the calendar once meta tg:events is "on" (Max's OK).
 const tgFeed = bg.register("tg", require("./tgfeed").create(store.db, { calendar }), { run: false, joinMore: false, keepChannel: false, events: false, find: false, transcribe: false });
@@ -1840,10 +1842,25 @@ function homeEvents(req) {
     .map(({ e }) => calCard(req, e, mineSet));
   return { events: pick, total: rows.length };
 }
+// The places with 2+ upcoming events (calendar.venues, Max 2026-11-23: the place in a row leads to its events), a
+// minute's cache: ~300 events, a few ms. placeOf(e) → { key, city, label, href } when its place has 2+ events.
+let venueCache = null;
+function venuesNow() {
+  if (!venueCache || Date.now() - venueCache.at > 60000) venueCache = { at: Date.now(), v: calendarLib.venues(calendar.upcoming()) };
+  return venueCache.v;
+}
+function placeOf(e) {
+  if (e.stops?.length > 1) return null;
+  const v = venuesNow();
+  const g = v.list.get(`${e.city}\n${v.keyOf(e)}`);
+  return g ? { ...g, href: `/calendar?city=${encodeURIComponent(g.city)}&place=${encodeURIComponent(g.key)}` } : null;
+}
+// A subscription's name, with its place's name when it has one.
+const subName = (f) => calendarLib.subName({ ...f, placeName: f.place ? venuesNow().list.get(`${f.city}\n${f.place}`)?.label || "" : "" });
 // An event as the pages show it: the reader's own books by its authors, its books as cards, its authors, who added it.
 function calCard(req, e, mineSet) {
   const mine = !!mineSet && e.authors.some((a) => mineSet.has(a));
-  return { ...e, mine: mine ? shelfBooksFor(req, e, mineSet) : null, bookCards: e.books.map((id) => store.book(id) && workFor(req, store.book(id))).filter(Boolean).slice(0, 3), authorLinks: e.authors.map((s) => store.authors?.bySlug.get(s)).filter(Boolean).slice(0, 3), byReader: e.by ? pub(auth.reader(e.by)) : null };
+  return { ...e, venue: placeOf(e), mine: mine ? shelfBooksFor(req, e, mineSet) : null, bookCards: e.books.map((id) => store.book(id) && workFor(req, store.book(id))).filter(Boolean).slice(0, 3), authorLinks: e.authors.map((s) => store.authors?.bySlug.get(s)).filter(Boolean).slice(0, 3), byReader: e.by ? pub(auth.reader(e.by)) : null };
 }
 bg.every("overviews", 24 * 3600 * 1000, () => advice.sweep(), { db: store.db });
 pages.setStats((id) => social.stats(id));
@@ -1906,10 +1923,14 @@ app.get("/calendar", (req, res) => {
   const hay = calHay;
   // ?kind= one kind of event (calendar.KINDS); no kind, no words and no «Мої автори» = the overview by kind (?all=1: the list).
   const kind = require("./calendar").KINDS.some((k) => k.key === req.query.kind) ? req.query.kind : "";
-  const matched = all.filter((e) => (!city || e.city === city) && (!mine || isMine(e)) && (!words.length || words.every((w) => hay(e).includes(w))));
+  // ?place= one place in the city (calendar.venues key, from a row's place link): all its events, presentations too.
+  const place = city ? String(req.query.place || "").slice(0, 80) : "";
+  const vs = venuesNow();
+  const placeInfo = place ? vs.list.get(`${city}\n${place}`) || { key: place, label: place.split("|")[0] } : null;
+  const matched = all.filter((e) => (!city || e.city === city) && (!place || vs.keyOf(e) === place) && (!mine || isMine(e)) && (!words.length || words.every((w) => hay(e).includes(w))));
   // Book presentations (Max 2026-11-20, «спам презентацій»): only in a search, under «Мої автори», by one's own
-  // authors, or in their own list (?pres=1, a line under the list).
-  const presOut = new Set(words.length || mine ? [] : matched.filter((e) => !isMine(e) && calendarLib.presentation(e)));
+  // authors, at one place, or in their own list (?pres=1, a line under the list).
+  const presOut = new Set(words.length || mine || place ? [] : matched.filter((e) => !isMine(e) && calendarLib.presentation(e)));
   const pres = !!req.query.pres && presOut.size > 0;
   const picked = matched.filter((e) => presOut.has(e) === pres);
   const presCount = pres ? 0 : calendarLib.tours([...presOut]).length;
@@ -1919,7 +1940,7 @@ app.get("/calendar", (req, res) => {
   for (const e of rows) if (e.kind) counts[e.kind] = (counts[e.kind] || 0) + 1;
   const events = kind ? rows.filter((e) => e.kind === kind) : rows;
   const withBooks = events.slice(0, 300).map((e) => calCard(req, e, mineSet));
-  const choice = { kind, city, mine, q: query };
+  const choice = { kind, city, mine, q: query, place };
   // Nothing found for the words: the authors they name, or the authors of the books they name (a typo too), to follow
   // (Max 2026-11-16: authors only, never a book), and meanwhile the next meetings with authors (one's own first).
   let watch = null;
@@ -1928,7 +1949,7 @@ app.get("/calendar", (req, res) => {
     const soon = all.filter((e) => (e.kind === "author" && (isMine(e) || !calendarLib.presentation(e))) || e.kind === "festival").sort((a, b) => (isMine(b) ? 1 : 0) - (isMine(a) ? 1 : 0)).slice(0, 4).map((e) => calCard(req, e, mineSet));
     watch = { authors: cand.map((a) => ({ ...a, on: calendar.isWatching(req.user?.id, "author", a.slug) })), soon };
   }
-  res.send(pages.calendarPage({ user: req.user, events: withBooks, cities: calendar.cities(), city, mine, mineCount: mineSet ? all.filter(isMine).length : 0, owner: !!req.owner, query, kind, all: !!req.query.all || pres, pres, presCount, counts, total: rows.length, feed: calFeed(mine ? req.user.id : "", city, query, kind), subscribed: calendar.subscribed(req.user?.id, choice), subs: calendar.subs(req.user?.id).length, watch }));
+  res.send(pages.calendarPage({ user: req.user, events: withBooks, cities: calendar.cities(), city, mine, mineCount: mineSet ? all.filter(isMine).length : 0, owner: !!req.owner, query, kind, place: placeInfo, all: !!req.query.all || pres, pres, presCount, counts, total: rows.length, feed: calFeed(mine ? req.user.id : "", city, query, kind, place), subscribed: calendar.subscribed(req.user?.id, choice), subs: calendar.subs(req.user?.id).length, watch }));
 });
 // The authors a search on /calendar names: one the words name (a typo forgiven: «Артр Дрон» → Артур Дронь), else the
 // author of the books they name («Пісні про Бога і про війну» → Артур Дронь), at most 2, each with up to 4 covers
@@ -1962,15 +1983,17 @@ function calPick(f, reader = "", events = calendar.upcoming()) {
   if (f.mine && !reader) return [];
   const mineSet = f.mine ? shelfAuthors(reader) : null;
   const words = norm(f.q || "").split(/\s+/).filter(Boolean);
-  // Book presentations only for «Мої автори» or words (Max 2026-11-20), as on the page.
-  return events.filter((e) => (!f.kind || e.kind === f.kind) && (!f.city || e.city === f.city) && (!mineSet || e.authors.some((a) => mineSet.has(a))) && (!words.length || words.every((w) => calHay(e).includes(w))) && (mineSet || words.length || !calendarLib.presentation(e)));
+  const place = f.city && f.place ? f.place : "";
+  const keyOf = place ? venuesNow().keyOf : null;
+  // Book presentations only for «Мої автори», words or a place (Max 2026-11-20), as on the page.
+  return events.filter((e) => (!f.kind || e.kind === f.kind) && (!f.city || e.city === f.city) && (!place || keyOf(e) === place) && (!mineSet || e.authors.some((a) => mineSet.has(a))) && (!words.length || words.every((w) => calHay(e).includes(w))) && (mineSet || words.length || place || !calendarLib.presentation(e)));
 }
 const calHref = (f) => `/calendar${calendarLib.subKey(f) ? `?${calendarLib.subKey(f)}` : ""}`;
 // «Підписатися» by e-mail (Max 2026-11-15, like a publisher's): the page's choice goes into the Friday letter.
 // Turning one on switches that letter on too (a reader who asks for mail wants it).
 app.post("/calendar/subscribe", signed, (req, res) => {
   const b = req.body || {};
-  const f = { kind: calendarLib.KINDS.some((k) => k.key === b.kind) ? b.kind : "", city: String(b.city || "").slice(0, 40), mine: !!b.mine, q: String(b.q || "").trim().slice(0, 80) };
+  const f = { kind: calendarLib.KINDS.some((k) => k.key === b.kind) ? b.kind : "", city: String(b.city || "").slice(0, 40), mine: !!b.mine, q: String(b.q || "").trim().slice(0, 80), place: String(b.place || "").slice(0, 80) };
   const on = b.on === "1";
   calendar.subscribe(req.user.id, f, on);
   if (on && !digest.enabled(req.user.id)) {
@@ -1982,7 +2005,7 @@ app.post("/calendar/subscribe", signed, (req, res) => {
 // A guest's «Підписатися» goes through sign-in to here (`/do/` skips /welcome): subscribed, back on the page.
 app.get("/do/calendar-subscribe", signed, (req, res) => {
   const q = req.query || {};
-  const f = { kind: calendarLib.KINDS.some((k) => k.key === q.kind) ? q.kind : "", city: String(q.city || "").slice(0, 40), mine: !!q.mine, q: String(q.q || "").trim().slice(0, 80) };
+  const f = { kind: calendarLib.KINDS.some((k) => k.key === q.kind) ? q.kind : "", city: String(q.city || "").slice(0, 40), mine: !!q.mine, q: String(q.q || "").trim().slice(0, 80), place: String(q.place || "").slice(0, 80) };
   calendar.subscribe(req.user.id, f, true);
   if (!digest.enabled(req.user.id)) {
     mailLog.switched("digest", req.user.id, false, true);
@@ -2181,13 +2204,13 @@ function calForLetter(reader, since, now = new Date()) {
   const picked = new Map();
   for (const f of subs) for (const e of calPick(f, reader)) if (e.starts <= until || (e.added || "") > since) picked.set(e.id, e);
   const events = calendarLib.tours([...picked.values()].sort((a, b) => (a.starts + a.time < b.starts + b.time ? -1 : 1)));
-  return { events, names: subs.map(calendarLib.subName), href: subs.length === 1 ? calHref(subs[0]) : "/calendar?all=1" };
+  return { events, names: subs.map(subName), href: subs.length === 1 ? calHref(subs[0]) : "/calendar?all=1" };
 }
 // «Підписатися» (Max 2026-11-15): the list as an iCalendar feed for a phone's calendar, with the same ?city= and ?q=;
 // «Мої автори» goes by ?mine=<reader>.<key> (a calendar app has no cookie), the key signed with the reader secret.
 const calKey = (id) => require("crypto").createHmac("sha256", readerSecret()).update(`cal:${id}`).digest("base64url").slice(0, 22);
-function calFeed(reader, city, query, kind = "") {
-  const qs = [kind ? `kind=${kind}` : "", city ? `city=${encodeURIComponent(city)}` : "", reader ? `mine=${reader}.${calKey(reader)}` : "", query ? `q=${encodeURIComponent(query)}` : ""].filter(Boolean).join("&");
+function calFeed(reader, city, query, kind = "", place = "") {
+  const qs = [kind ? `kind=${kind}` : "", city ? `city=${encodeURIComponent(city)}` : "", place && city ? `place=${encodeURIComponent(place)}` : "", reader ? `mine=${reader}.${calKey(reader)}` : "", query ? `q=${encodeURIComponent(query)}` : ""].filter(Boolean).join("&");
   return `${SITE}/calendar.ics${qs ? `?${qs}` : ""}`;
 }
 app.get("/calendar.ics", (req, res) => {
@@ -2196,8 +2219,9 @@ app.get("/calendar.ics", (req, res) => {
   if (req.query.mine && !reader) return res.status(404).send("Немає такого календаря.");
   const city = String(req.query.city || "").slice(0, 40);
   const kind = require("./calendar").KINDS.find((k) => k.key === req.query.kind);
-  const events = calPick({ kind: kind?.key || "", city, mine: !!reader, q: String(req.query.q || "").slice(0, 80) }, reader);
-  const name = ["Книжкові події", kind?.label, city, reader ? "мої автори" : "", req.query.q ? String(req.query.q).slice(0, 40) : ""].filter(Boolean).join(" · ");
+  const place = String(req.query.place || "").slice(0, 80);
+  const events = calPick({ kind: kind?.key || "", city, mine: !!reader, q: String(req.query.q || "").slice(0, 80), place }, reader);
+  const name = ["Книжкові події", kind?.label, city, place && city ? venuesNow().list.get(`${city}\n${place}`)?.label || "" : "", reader ? "мої автори" : "", req.query.q ? String(req.query.q).slice(0, 40) : ""].filter(Boolean).join(" · ");
   res.set("Content-Type", "text/calendar; charset=utf-8").set("Cache-Control", `${reader ? "private" : "public"}, max-age=1800`).send(require("./calendar").ics(events, { name, site: SITE }));
 });
 // «Додати подію»: readers' events show at once; a guest's (no account, Max 2026-11-16) waits for Max on
@@ -2950,7 +2974,7 @@ app.get("/admin/events", owner, (req, res) => {
   try {
     tg = tgFeed.status();
   } catch {}
-  res.send(pages.eventsAdminPage({ user: req.user, rows: calendar.upcoming(), tg, saved: String(req.query.saved || ""), feeds: calendar.feeds(), feedMsg: String(req.query.feed || ""), cancelled: calendar.cancelledList(), review: calendar.pending(), recent: calendar.recent(3), goingTop: calendar.goingTop() }));
+  res.send(pages.eventsAdminPage({ user: req.user, rows: calendar.upcoming(), tg, saved: String(req.query.saved || ""), feeds: calendar.feeds(), feedMsg: String(req.query.feed || ""), cancelled: calendar.cancelledList(), review: calendar.pending(), recent: calendar.recent(3), goingTop: calendar.goingTop(), days: calendar.days(120) }));
 });
 // An event a Telegram post took off (cancelled or moved) back on the calendar, when the post was read wrong.
 app.post("/admin/events/uncancel", owner, (req, res) => {

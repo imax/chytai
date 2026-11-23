@@ -416,6 +416,15 @@ A flag only when Max asks for one, or when the change could break what readers u
   overwrites it); his last 40 choices go into the prompt as examples (meta `calendar:wide-max`).
   `calendar.isPresentation(e)` = any presentation, `presentation(e)` = one still hidden. A presentation tour is one
   row by its first book (`tours`), whoever posted its stops (Дронь: two channels, 30 stops).
+- Places (Max 2026-11-23, variant A of canvas KSNVhHFPtyPEwJmvveTAde): `calendar.venue(e)` turns the free-text `place`
+  into a key, name + the street's first 5 letters («сенс|хреща»: «Сенс на Хрещатику» = «книгарня «Сенс» (вулиця
+  Хрещатик, 34)»); `venues(events)` → places with 2+ events by city and `keyOf` (an event with no street joins its
+  name's one street, never for a chain: `CHAINS`). The row's place is a link (`placeOf` in server.js, a minute's cache)
+  to `/calendar?city=…&place=<key>`: the chip «Назва, вулиця ✕» in place of the search, presentations shown, and
+  `place` in subscriptions (`subKey`), `calPick` and the .ics. No place chips row (Max chose A: few places have 5+ events).
+- Events by day (Max 2026-11-23, to see December and January): table `cal_days` (day, held, added, ahead, kinds),
+  `calendar.countDays()` hourly in the jobs process (job `calendar-days`) rewrites today and yesterday, fills missing
+  days once from what is kept; /admin/events «По тижнях» (`eventDaysBlock` in pages.js), «По днях» under it.
 - Duplicates: `findSimilar` reads ’ ʼ ' as one apostrophe (cities are kept with ’) and takes `time`: same day, city and
   hour plus one word of the «» title in common = one event. The ones that came in before were hidden once at start
   (`dedupe`, meta `calendar:dedupe` lists them).

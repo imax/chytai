@@ -78,6 +78,76 @@ const presentation = (e) => isPresentation(e) && e.wide !== 1;
 const apos = (s) => String(s ?? "").replace(/['ʼ‘`´]/g, "’");
 const findCity = (text) => (ONLINE.test(text || "") ? "Онлайн" : CITIES.find(([, re]) => re.test(text || ""))?.[0] || "");
 
+// The place an event is at, as one key (Max 2026-11-23, variant A of canvas KSNVhHFPtyPEwJmvveTAde: the place in a row
+// leads to that place's events). `place` is free text, as the organizer wrote it: «Сенс на Хрещатику» and «книгарня
+// «Сенс», 2-й поверх (вулиця Хрещатик, 34)» are one place. Key = the name (in quotes, else before the first comma or
+// «на»; «книгарня», «кав’ярня» and the like dropped) + the street's first 5 letters (after «вул.», «просп.», …, else
+// «на Хрещатику», else a word before a house number): «сенс|хреща». The key goes with the city. → { key, name, street } or null.
+const NOT_PLACE = /zoom|google meet|meet\.google|youtube|онлайн|online|повідом|уточн|після реєстрац|в чаті|telegram/i;
+const GENERIC = /^(?:(?:мистецьк\S*|дитяч\S*|незалежн\S*)\s+)?(?:книгарн[яі](?:-кав’ярн[яі])?|салун-книгарн[яі]|кав’ярн[яі](?:-книгарн[яі])?|книжков(?:а|ий)\s+(?:крамниця|магазин|простір)|простір)(?:\s+|$)/;
+const VENUE_SAME = { sens: "сенс", "сенсу": "сенс" };
+const STREET_MARK = /(?:^|[\s,(])(?:вул\.?|вулиця|вулиці|просп\.?|проспект|пр-т|п-т|пр\.|пл\.?|площа|пров\.?|провулок|бул\.?|бульв\.?|бульвар|узвіз|набережна)\s+([^,()\d]+)/i;
+const stem5 = (w) => String(w || "").toLowerCase().replace(/[’'ʼ`]/g, "").slice(0, 5);
+function venue(e) {
+  const city = e?.city || "";
+  const raw = apos(String(e?.place || "").replace(/\s+/g, " ").trim());
+  if (!raw || !city || city === "Онлайн" || NOT_PLACE.test(raw)) return null;
+  const segs = raw.split(/\s*,\s*/);
+  // The street: after its mark, else «на X» in the name, else the word before a house number.
+  let street = "";
+  const m = STREET_MARK.exec(raw);
+  if (m) street = (m[1].trim().split(/\s+/).filter((w) => /\p{L}{3,}/u.test(w) && !/^ст\.?$|^м\.?$/.test(w)).pop() || "").replace(/[.,;:]+$/, "");
+  const head = segs[0].replace(/\(.*$/, "").trim();
+  const na = /\sна\s+(\p{Lu}[\p{L}’-]+)/u.exec(head);
+  if (!street && na) street = na[1];
+  if (!street) for (let i = 1; i < segs.length; i++) if (/^\p{Lu}[\p{L}’-]{3,}(?:\s+\d|$)/u.test(segs[i]) && (/\d/.test(segs[i]) || /^\d/.test(segs[i + 1] || ""))) (street = segs[i].split(/\s+/)[0]), (i = segs.length);
+  // The name: in quotes, else the first part before «на» or «(».
+  const quoted = /[«"“„]([^»"”“]{1,60})[»"”“]/.exec(raw);
+  let shown = head.replace(/\sна\s+\p{Lu}.*$/u, "").trim();
+  if (STREET_MARK.test(` ${shown}`)) {
+    if (!quoted) return null; // only an address
+    shown = `«${quoted[1]}»`; // «вул. Богдана Хмельницького, 14а, «Міське кафе 0352»»
+  }
+  shown = shown.replace(/"([^"]+)"/g, "«$1»");
+  let name = (quoted ? quoted[1] : shown).toLowerCase().replace(/[«»"“”„]/g, "").trim();
+  for (let i = 0; i < 2; i++) name = name.replace(GENERIC, "").trim();
+  name = VENUE_SAME[name] || name;
+  if (!name || name.length > 60 || /^\d/.test(name)) return null;
+  const s = stem5(street);
+  return { key: s ? `${name}|${s}` : name, base: name, name: shown.replace(/^./, (c) => c.toUpperCase()), street };
+}
+// Shops of a chain have one name in many places: an event with no street is never guessed into one of them.
+const CHAINS = new Set(["є", "vivat", "віват", "старого лева", "книголенд", "book.ua"]);
+// The places with 2+ events among `events`: { list: Map "city\nkey" → { key, city, label, n }, keyOf(e) }. An event with
+// no street goes with its name's one place with a street in that city (not for a chain: «Книгарня «Є»» in Lviv is one
+// of many). The label is the most written name, with the street a mark named: «Книгарня «Є», Лисенка».
+function venues(events) {
+  const seen = events.map((e) => [e, venue(e)]).filter(([, v]) => v);
+  const streets = new Map();
+  for (const [e, v] of seen) if (v.key !== v.base) streets.set(`${e.city}\n${v.base}`, new Set([...(streets.get(`${e.city}\n${v.base}`) || []), v.key]));
+  const keyOf = (e, v = venue(e)) => {
+    if (!v) return "";
+    const one = v.key === v.base && !CHAINS.has(v.base) && streets.get(`${e.city}\n${v.base}`);
+    return one?.size === 1 ? [...one][0] : v.key;
+  };
+  const out = new Map();
+  for (const [e, v] of seen) {
+    const key = keyOf(e, v);
+    const id = `${e.city}\n${key}`;
+    const g = out.get(id) || { key, city: e.city, n: 0, names: new Map(), streets: new Map() };
+    g.n++;
+    g.names.set(v.name, (g.names.get(v.name) || 0) + 1);
+    if (v.street) g.streets.set(v.street, (g.streets.get(v.street) || 0) + (STREET_MARK.test(e.place) ? 2 : 1));
+    out.set(id, g);
+  }
+  const top = (m) => [...m].sort((a, b) => b[1] - a[1] || b[0].length - a[0].length)[0]?.[0] || "";
+  for (const [id, g] of out) {
+    if (g.n < 2) out.delete(id);
+    else out.set(id, { key: g.key, city: g.city, n: g.n, label: [top(g.names), top(g.streets)].filter(Boolean).join(", ") });
+  }
+  return { list: out, keyOf };
+}
+
 // Today in Kyiv, «YYYY-MM-DD».
 const kyivDay = (t = Date.now()) => new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Kyiv" }).format(new Date(t));
 const kyivHM = (t = Date.now()) => new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/Kyiv", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(new Date(t));
@@ -1001,6 +1071,31 @@ function create(db, store, { notify = () => {}, bookua = null, search = null, ma
     fresh();
     return n;
   }
+  // Events by day, for Max (2026-11-23: «трекати кількість подій по днях/тижнях, цікаво глянути динаміку у
+  // грудні-січні»): one row a Kyiv day, `held` = shown events on that day (a festival counts each of its days), `added`
+  // = events that came in that day and are still shown, `ahead` = upcoming events then, `kinds` = held by kind. The
+  // jobs process writes today and yesterday every hour; older rows stay as they were (events get deleted 30 days
+  // after their end, cancelled ones hidden). Missing days since the first event are filled once from what is kept.
+  db.exec("CREATE TABLE IF NOT EXISTS cal_days (day TEXT PRIMARY KEY, held INTEGER NOT NULL, added INTEGER NOT NULL, ahead INTEGER NOT NULL, kinds TEXT NOT NULL DEFAULT '{}')");
+  function countDay(day) {
+    const kinds = db.prepare("SELECT kind, COUNT(*) AS n FROM cal_events WHERE hidden = 0 AND starts <= ? AND max(starts, ends) >= ? GROUP BY kind").all(day, day);
+    const held = kinds.reduce((s, r) => s + r.n, 0);
+    // `added` is UTC in ISO; the Kyiv day runs 21:00/22:00 UTC the day before to the same the day of.
+    const from = new Date(Date.parse(`${addDays(day, -1)}T12:00:00Z`)).toISOString().slice(0, 10);
+    const added = db.prepare("SELECT added FROM cal_events WHERE hidden = 0 AND added >= ? AND added < ?").all(from, `${addDays(day, 1)}T`).filter((r) => kyivDay(Date.parse(r.added)) === day).length;
+    const ahead = db.prepare("SELECT COUNT(*) AS n FROM cal_events WHERE hidden = 0 AND max(starts, ends) >= ? AND starts <= ? AND substr(added, 1, 10) <= ?").get(day, addDays(day, AHEAD_DAYS), day).n;
+    db.prepare("INSERT OR REPLACE INTO cal_days (day, held, added, ahead, kinds) VALUES (?, ?, ?, ?, ?)").run(day, held, added, ahead, JSON.stringify(Object.fromEntries(kinds.map((r) => [r.kind || "", r.n]))));
+  }
+  function countDays() {
+    const today = kyivDay();
+    const first = db.prepare("SELECT min(substr(added, 1, 10)) AS d FROM cal_events").get().d;
+    const have = new Set(db.prepare("SELECT day FROM cal_days").all().map((r) => r.day));
+    if (first) for (let d = first; d < addDays(today, -1); d = addDays(d, 1)) if (!have.has(d)) countDay(d);
+    countDay(addDays(today, -1));
+    countDay(today);
+    db.prepare("DELETE FROM cal_days WHERE day < ?").run(addDays(today, -800));
+  }
+  const days = (n = 120) => db.prepare("SELECT * FROM cal_days WHERE day >= ? ORDER BY day").all(addDays(kyivDay(), -n)).map((r) => ({ ...r, kinds: JSON.parse(r.kinds || "{}") }));
   function cleanup() {
     const before = addDays(kyivDay(), -KEEP_DAYS);
     const r = db.prepare("DELETE FROM cal_events WHERE max(starts, ends) < ? AND ((authors = '[]' AND books = '[]') OR hidden = 1 OR max(starts, ends) < ?)").run(before, addDays(kyivDay(), -KEEP_LINKED_DAYS));
@@ -1236,7 +1331,7 @@ function create(db, store, { notify = () => {}, bookua = null, search = null, ma
     const at = new Date().toISOString();
     for (const id of ids) add.run(reader, id, at);
   };
-  return { pastForAuthor, watching, isWatching, watch, unwatchAll, dueWatch, watchSent, upsert, setKinds, unrated, setWide, wideExamples, add, one, byKey, findSimilar, cancel, uncancel, cancelledList, recent, pending, review, hide, setLink, cleanup, seed, upcoming, forAuthor, forBook, cities, fillBooks, chytomoRun, eventmateRun, feeds, addFeed, removeFeed, feedsRun, yeRun, yeLast: () => yeLast, peek, fresh, meta, setMeta, subs, subscribed, subscribe, unsubscribeAll, going, isGoing, goingCount, goingTop, dueReminders, reminded, remindOff, setRemind };
+  return { countDays, days, pastForAuthor, watching, isWatching, watch, unwatchAll, dueWatch, watchSent, upsert, setKinds, unrated, setWide, wideExamples, add, one, byKey, findSimilar, cancel, uncancel, cancelledList, recent, pending, review, hide, setLink, cleanup, seed, upcoming, forAuthor, forBook, cities, fillBooks, chytomoRun, eventmateRun, feeds, addFeed, removeFeed, feedsRun, yeRun, yeLast: () => yeLast, peek, fresh, meta, setMeta, subs, subscribed, subscribe, unsubscribeAll, going, isGoing, goingCount, goingTop, dueReminders, reminded, remindOff, setRemind };
 }
 
 // «Четвер, 19 листопада» and, within a week, «завтра» / «через 3 дні».
@@ -1322,25 +1417,28 @@ function ics(events, { name = "Книжкові події", site = "https://chy
   return lines.map(fold).join("\r\n") + "\r\n";
 }
 
-// A subscription's choice as one stored string, always in the same order: kind, city, mine, q.
+// A subscription's choice as one stored string, always in the same order: kind, city, mine, q, place (a venue key,
+// only with a city).
 const MAX_SUBS = 10;
-function subKey({ kind = "", city = "", mine = false, q = "" } = {}) {
+function subKey({ kind = "", city = "", mine = false, q = "", place = "" } = {}) {
   const p = new URLSearchParams();
   if (kind) p.set("kind", String(kind).slice(0, 20));
   if (city) p.set("city", String(city).slice(0, 40));
   if (mine) p.set("mine", "1");
   const words = String(q || "").replace(/\s+/g, " ").trim().slice(0, 80);
   if (words) p.set("q", words);
+  if (place && city) p.set("place", String(place).slice(0, 80));
   return p.toString();
 }
 function subParse(s) {
   const p = new URLSearchParams(s);
-  return { kind: p.get("kind") || "", city: p.get("city") || "", mine: p.get("mine") === "1", q: p.get("q") || "" };
+  return { kind: p.get("kind") || "", city: p.get("city") || "", mine: p.get("mine") === "1", q: p.get("q") || "", place: p.get("place") || "" };
 }
 // What a subscription picks, in a few words: «Книжкові клуби · Київ · мої автори · «Жадан»», or «Усі події».
 function subName(f) {
   const kind = KINDS.find((k) => k.key === f.kind);
-  return [kind?.label, f.city, f.mine ? "мої автори" : "", f.q ? `«${f.q}»` : ""].filter(Boolean).join(" · ") || "Усі події";
+  const place = f.place && f.city ? f.placeName || f.place.split("|")[0] : "";
+  return [kind?.label, f.city, place, f.mine ? "мої автори" : "", f.q ? `«${f.q}»` : ""].filter(Boolean).join(" · ") || "Усі події";
 }
 
 // An event's own page (Max 2026-11-15: a club on /calendar led to a filtered list): /calendar/<title>-<key>, the key
@@ -1413,4 +1511,4 @@ function googleLink(e, page = "") {
 const SHORT_DAYS = ["нд", "пн", "вт", "ср", "чт", "пт", "сб"];
 const shortWhen = (e) => `${SHORT_DAYS[new Date(`${e.starts}T12:00:00Z`).getUTCDay()]}, ${span(e)}`;
 
-module.exports = { create, KINDS, parseIcs, icsAddress, abroad, presentation, isPresentation, eventKey, eventPath, linkKind, sourceUrl, googleLink, tourTitle, subKey, subParse, subName, SHORT_DAYS, tours, ics, parseWhen, linkText, readEvent, cleanTitle, findCity, kyivDay, addDays, dayName, dayAside, span, shortWhen, MONTHS };
+module.exports = { create, venue, venues, KINDS, parseIcs, icsAddress, abroad, presentation, isPresentation, eventKey, eventPath, linkKind, sourceUrl, googleLink, tourTitle, subKey, subParse, subName, SHORT_DAYS, tours, ics, parseWhen, linkText, readEvent, cleanTitle, findCity, kyivDay, addDays, dayName, dayAside, span, shortWhen, MONTHS };
