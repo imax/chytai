@@ -347,12 +347,13 @@ const nowLine = (now) => (now?.books.length ? `<p class="now-line"><span class="
 // Carl · серія, 8 книг».
 function feedRow({ reader, book, entry: e, series = null, shelf = null }, { wide = false, followed = null } = {}) {
   const t = when(e);
-  // A shelf brought in one go (social.feed `shelves`): «Oleksandr додав 190 книжок · вчора» and a few of its
-  // covers, in the look of the other lines (Max, 2026-11-02: no heading, «додав» as the action), and after them a
+  // A shelf brought in one go (social.feed `shelves`): «Oleksandr +190 книжок на полиці · вчора» (no «додав»: a
+  // reader's gender is never guessed, Max 2026-11-23) and a few of its covers, in the look of the other lines
+  // (Max, 2026-11-02: no heading), and after them a
   // tile «+185 →» to the shelf, as tapping the name is not obvious. A reader's rows of one day with one status
   // look the same: «Oleh хоче прочитати 6 книжок · сьогодні», «Oleh прочитано 40 книжок · сьогодні».
   if (shelf) return `<article class="feed-row shelf-row${wide ? " wide" : ""}${followed?.has(reader.id) ? " followed" : ""}" data-rating="">
-  <div><span class="who"><a href="${attr(reader.href)}"><b>${esc(reader.name)}</b></a> ${shelf.status ? (shelf.status === "reading" ? "читає зараз" : esc(VERB[shelf.status] || "додав")) : "додав"} <a href="${attr(reader.href)}">${books(shelf.n)}</a>${t ? ` · ${esc(t)}` : ""}</span>
+  <div><span class="who"><a href="${attr(reader.href)}"><b>${esc(reader.name)}</b></a> ${shelf.status && (shelf.status === "reading" || VERB[shelf.status]) ? `${shelf.status === "reading" ? "читає зараз" : esc(VERB[shelf.status])} <a href="${attr(reader.href)}">${books(shelf.n)}</a>` : `<a href="${attr(reader.href)}">+${books(shelf.n)}</a> на полиці`}${t ? ` · ${esc(t)}` : ""}</span>
   <p class="shelf-covers">${shelf.books.map((b) => `<a href="${attr(b.href)}" title="${attr(b.title)}">${cover(b, "feed")}</a>`).join("")}${shelf.n > shelf.books.length ? `<a class="cover feed shelf-more" href="${attr(reader.href)}" aria-label="Уся полиця"><span>+${shelf.n - shelf.books.length}</span><span>→</span></a>` : ""}</p></div>
 </article>`;
   const who = `<span class="who"><a href="${attr(reader.href)}"><b>${esc(reader.name)}</b></a> ${did(e)}${t ? ` · ${esc(t)}` : ""}</span>`;
