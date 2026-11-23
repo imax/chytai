@@ -1837,7 +1837,7 @@ function homeEvents(req) {
     .filter((e) => e.starts <= until)
     .map((e, i) => ({ e, i }))
     .sort((a, b) => rank(a.e) - rank(b.e) || a.i - b.i)
-    .slice(0, 4)
+    .slice(0, 3)
     .sort((a, b) => a.i - b.i)
     .map(({ e }) => calCard(req, e, mineSet));
   return { events: pick, total: rows.length };
