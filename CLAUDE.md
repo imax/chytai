@@ -731,7 +731,7 @@ A flag only when Max asks for one, or when the change could break what readers u
   read in the current year (`setEntry`); `writeEntry` drops it when it doesn't fall in the entry's `year`. Old rows got
   `updated`'s day once (db.js), exact for Goodreads imports, near for books marked on the site.
 - `/@<nick>/stats` (`statsPage` in pages.js, after Max's maxua.com/books): year tabs, the year's covers as one wall
-  (newest first, no months: Max «все за рік разом»); the side column: the year's numbers, small month columns «По
+  (newest first, no months: Max «все за рік разом»; a cover's CSS tooltip: title, author, the reader's stars); the side column: the year's numbers, small month columns «По
   місяцях» (only when 80%+ of the year has a month; a number shows on hover or a tap), genres; then «За всі роки»,
   «Жанри» (`genreRows`: a book that is only «художня» goes in the grey line under the rows, Max: it filled them), «Оцінки» (`ratingCols`, halves), and last «Жанри по роках» (Max: all years, so at the very
   bottom; `genreStream`: an SVG streamgraph by genre family, `FAMILIES` / `--g-<key>` colours in style.css, no script; each year an HTML
