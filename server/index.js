@@ -2017,6 +2017,28 @@ api.post("/admin/off", (req, res) => (req.owner ? switchOff(req, res) : res.stat
 // translations), words the «Словничок» explained (from 2026-11-19), and per book the kept explanations, translations
 // and notes, when it was finished; by month what was asked and noted, and every book read in it (Max 2026-11-19:
 // «читав 11 книг не означає прочитано»): a minute of it on a day (from 2026-11-04), a note or explanation, finished. Titles and covers the page has.
+// «Хочу прочитати» (Max 2026-11-24, in place of Scratchpad): the account's want shelf on the site, with where to get each
+// book (the site's POST /api/reader-want). A minute's copy per account, so going back and forth asks once.
+const wantKept = new Map(); // acct -> { at, books }
+api.get("/want", guestsCannot("Без входу списку немає."), async (req, res) => {
+  const key = state.accounts[req.acct]?.key;
+  if (!key) return res.json({ books: [] });
+  const kept = wantKept.get(req.acct);
+  if (kept && Date.now() - kept.at < 60000 && !req.query.again) return res.json({ books: kept.books });
+  try {
+    const r = await fetch(`${WEB_URL}/api/reader-want`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: req.acct, key }), signal: AbortSignal.timeout(15000) });
+    if (!r.ok) throw new Error(`site ${r.status}`);
+    const { books } = await r.json();
+    if (wantKept.size > 500) wantKept.delete(wantKept.keys().next().value);
+    wantKept.set(req.acct, { at: Date.now(), books });
+    res.json({ books });
+  } catch (err) {
+    console.error(`reader-want ${req.acct}:`, err.message);
+    if (kept) return res.json({ books: kept.books });
+    res.status(502).json({ error: "Сайт не відповів. Спробуйте ще раз." });
+  }
+});
+
 api.get("/journey", guestsCannot("Без входу статистики немає."), (req, res) => {
   const acct = req.acct;
   const u = state.users[acct] || {};

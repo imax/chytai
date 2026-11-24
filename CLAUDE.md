@@ -826,6 +826,12 @@ A flag only when Max asks for one, or when the change could break what readers u
   `accounts/<id>/scratch/<entry>.jpg` (100 photos); private, no letter to Max. Caps: 40 a reader a day, 400 for all
   (Telegram once), Max none; stats day `scratch`. An entry left `wait` by a deploy is asked again when the page lists it.
   Locally without a key: a fake SDK (`node -r mock.js`) and WEB_URL to a proxy that passes only GET /api/reader-find.
+- Reader «Хочу прочитати» (Max 2026-11-24, in Scratchpad's place; panel after «Мої книжки», `r-pnav-want`, page `want`,
+  `src/renderer/want.js`): the books on the reader's «Хочу прочитати» shelf on the site, each with where to get it.
+  `GET /api/want` (signed in; 60 s cache, `?again`) → the site's `POST /api/reader-want {id, key}` (`readerKeyOk`):
+  per book `mine` (own file, `readerFileFor`), `free` (free shelf, `freeFileFor`), `online` (openLinks, public-domain
+  sources of `freeBooks`, Слухай), `get` (per format the 2 cheapest in stock, no adapted), `rent` (BookFlow). Rows:
+  «Відкрити» / «Читати безкоштовно» first, a cover = `Paper.card`; nothing anywhere = the book page's link for libraries.
 - Reader «Прочитано» at a book's end (Max 2026-11-20, bot report №7): the last page (`bookEnd` in renderer.js: epub.js
   `atEnd` or 100% on pages, the last chapter's bottom in scroll mode; a PDF's last page) marks the book finished in the
   reader only (`POST /api/library/finished` with `auto`; a book finished before is left alone) and asks the site with

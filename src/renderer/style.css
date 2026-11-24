@@ -1220,9 +1220,35 @@ body.not-owner #r-pnav-admin { display: none !important; }
 .r-scr-skip { color: var(--r-ink2); text-decoration: none; padding: 10px 0; }
 .r-scr-was { font-size: 14px; color: var(--r-ink2); }
 @media (max-width: 760px) { .r-scr-back { display: none; } }
+/* «Хочу прочитати» (2026-11-24): the site's want shelf, each book with where to get it. */
+.r-head-w h1 { margin: 0; font: 600 22px/1 var(--r-serif); }
+#shell .r-head-w, #shell[data-page="want"] .r-head:not(.r-head-w) { display: none; }
+#shell[data-page="want"] .r-head-w { display: flex; }
+.r-want { max-width: 720px; }
+.r-want-p { margin: 0 0 8px; font-size: 14px; color: var(--r-ink2); }
+.r-want-p a { color: inherit; }
+.r-want-b { display: grid; grid-template-columns: 52px 1fr; gap: 14px; align-items: start; padding: 14px 0; border-bottom: 1px solid var(--r-rule); }
+.r-want-c, .r-want-x { border: none; background: none; padding: 0; color: var(--r-ink); font: inherit; text-align: left; cursor: pointer; }
+.r-want-c .r-cover { width: 52px; box-shadow: var(--r-cshadow); }
+.r-want-c .r-cover-t { left: 4px; right: 4px; top: 5px; font-size: 8px; }
+.r-want-c .r-cover-a { display: none; }
+.r-want-w { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; min-width: 0; }
+.r-want-x { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.r-want-x b { font: 500 17px/1.25 var(--r-serif); }
+.r-want-a { font-size: 13px; color: var(--r-ink2); }
+@media (hover: hover) { .r-want-x:hover b { color: var(--r-ochre); } }
+.r-want-go { padding: 6px 16px; font-size: 14px; border-color: var(--r-ochre); color: var(--r-ochre); }
+.r-want-have { font-size: 13px; color: var(--r-ink2); }
+.r-want-where { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; font-size: 14px; line-height: 1.4; }
+.r-want-where > div { display: contents; }
+.r-want-k { color: var(--r-ink2); }
+.r-want-where a, .r-want-all a, .r-want-none a { color: var(--r-ochre); text-decoration: none; }
+.r-want-m { color: var(--r-ink2); }
+.r-want-all { font-size: 13px; }
+.r-want-none { margin: 0; font-size: 14px; color: var(--r-ink2); }
 .r-jh { display: none; margin: 0 0 6px; font: 600 32px/1.1 var(--r-serif); letter-spacing: -0.01em; }
 @media (min-width: 761px) {
-  #shell[data-page="journey"] .r-head-j, #shell[data-page="admin"] .r-head-adm, #shell[data-page="scratch"] .r-head-s { display: none; }
+  #shell[data-page="journey"] .r-head-j, #shell[data-page="admin"] .r-head-adm, #shell[data-page="scratch"] .r-head-s, #shell[data-page="want"] .r-head-w { display: none; }
   #shell[data-page="how"] .r-head-how { display: none; }
   .r-how-add { align-self: flex-start; }
   .r-jh { display: block; }

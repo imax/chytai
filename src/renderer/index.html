@@ -217,6 +217,10 @@
             <button class="r-back" type="button" data-page="home" aria-label="Назад"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 5-7 7 7 7"/></svg></button>
             <h1>Scratchpad</h1>
           </header>
+          <header class="r-head r-head-w">
+            <button class="r-back" type="button" data-page="home" aria-label="Назад"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 5-7 7 7 7"/></svg></button>
+            <h1>Хочу прочитати</h1>
+          </header>
           <header class="r-head r-head-j">
             <button class="r-back" type="button" data-page="home" aria-label="Назад"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 5-7 7 7 7"/></svg></button>
             <h1>Статистика</h1>
@@ -247,6 +251,7 @@
       <div id="r-pfound" class="hidden"></div>
       <nav class="r-pnav">
         <button type="button" data-page="home">Мої книжки<i id="r-n-books"></i></button>
+        <button type="button" data-page="want" id="r-pnav-want" class="family-only">Хочу прочитати</button>
         <button type="button" data-page="journey" id="r-pnav-journey" class="family-only">Статистика</button>
         <button type="button" data-page="admin" id="r-pnav-admin" class="family-only">Адмінка</button>
         <button type="button" data-page="add" class="r-pnav-add">Додати книжку<i>+</i></button>
@@ -474,6 +479,7 @@
   <script src="home.js"></script>
   <script src="paper.js"></script>
   <script src="scratch.js"></script>
+  <script src="want.js"></script>
   <script src="reading-time.js"></script>
   <script type="module" src="pdf-view.js"></script>
 </body>

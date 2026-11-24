@@ -875,6 +875,8 @@
       return files.length ? uploadAll(files) : false;
     },
     // Managing the shared library (family only; the server refuses guests).
+    // «Хочу прочитати» (GET /api/want): the site's want shelf with where to get each book; null offline.
+    want: () => api("GET", "/api/want").then((r) => (r.ok ? r.json() : null)).catch(() => null),
     // «Статистика» (GET /api/journey): explanations, notes and finished books by book and by month; null offline.
     journey: () => api("GET", "/api/journey").then((r) => r.json()).catch(() => null),
     // «Scratchpad» (scratch.js, server/scratch.js).

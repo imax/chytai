@@ -1221,6 +1221,42 @@ app.get("/api/reader-find", (req, res) => {
   res.json({ books });
 });
 
+// «Хочу прочитати» in the reader (Max 2026-11-24, in place of Scratchpad): the account's want shelf here, in the
+// shelf's order, each book with where to get it. Ahead of the shops: the reader's own file of it («Відкрити»), the free
+// shelf's file («Читати», the reader opens it), a free text online (openlinks.js, the free books' Wikisource /
+// Gutenberg / Standard Ebooks pages, a «Слухай» recording); then the shops in stock as on the book page's «Де взяти»
+// (one row a format, two shops, cheapest first) and BookFlow. Signed with the account's key.
+app.post("/api/reader-want", (req, res) => {
+  const id = String(req.body?.id || "");
+  if (!readerKeyOk(id, String(req.body?.key || ""))) return res.status(403).json({ error: "key" });
+  const abs = (u) => (!u ? "" : /^https?:/.test(u) ? u : `${SITE}${u}`);
+  const fb = freeBooks.state();
+  const freeSrc = new Map((fb?.items || []).filter((x) => x.died <= fb.last && !x.check).map((x) => [x.id, x.sources || []]));
+  const price = (e) => (e.price === "безкоштовно" ? 0 : Number(String(e.price || "").replace(/[^\d]/g, "")) || Infinity);
+  const kindOf = (e) => (e.format === "e-book" || e.format === "аудіо" ? e.format : "папір");
+  const rows = store.library(id).filter((r) => r.status === "want" && !r.kids).slice(0, 300);
+  const books = rows.map((r) => {
+    const book = store.bookPage(r.id) || r.book;
+    const mine = readerFileFor(id, book);
+    const free = !mine && freeFileFor(book);
+    const audio = sluhay.linkFor(book);
+    const online = [openLinks.linkFor(store, book), ...(free ? [] : (freeSrc.get(store.canonical(r.id)) || []).map((s) => ({ label: s.site, url: s.url }))), ...(audio ? [{ label: "Слухай, аудіо", url: audio.url }] : [])].filter(Boolean);
+    const eds = (book.editions || []).filter((e) => e.shelf?.id !== "chytai-free" && e.status !== "немає" && !e.adapted && e.links?.[0]?.url);
+    const get = [];
+    for (const kind of ["e-book", "папір", "аудіо"]) {
+      const shops = [];
+      for (const e of eds.filter((x) => kindOf(x) === kind).sort((a, b) => (a.status === "є" ? 0 : 1) - (b.status === "є" ? 0 : 1) || price(a) - price(b))) {
+        if (shops.length >= 2 || shops.some((s) => s.shop === e.shelf.name)) continue;
+        shops.push({ shop: e.shelf.name, price: e.price || "", url: e.links[0].url, note: [e.subscription ? "є в підписці" : "", e.status && e.status !== "є" ? e.status : ""].filter(Boolean).join(", ") });
+      }
+      if (shops.length) get.push({ kind, shops });
+    }
+    const bf = bookflow.linkFor(book);
+    return { id: store.canonical(r.id), title: book.title, author: book.author || "", year: book.published || null, cover: abs(book.cover), href: `${SITE}${store.href(r.id)}`, added: r.added || "", mine: mine?.name || "", free: free ? free.name : "", online, get, rent: bf ? { url: bf.url, free: bf.free, price: bf.once || null } : null };
+  });
+  res.json({ books });
+});
+
 // «Знайти обкладинку» in the reader's book menu (Max 2026-11-22, variant A): covers for a title and author from our
 // catalog (the work and its editions), book.ua, Open Library and Google Books, the same author only, 12 at most. Each
 // as our own small copy (/t/, signed, so the reader fetches only those): `thumb` to show, `full` (480 px) to keep. A
