@@ -1662,8 +1662,7 @@ aside .side-lists + .label, aside p + .label, aside dialog + .label { margin-top
 .stats-col .n { font-size: 14px; margin-bottom: 4px; }
 .stats-col .m { font-size: 12px; color: var(--muted); margin-top: 6px; }
 .stats-undated { margin-top: 10px; }
-.stats-month { font: 600 19px/1.3 var(--serif); margin: 34px 0 12px; }
-.stats-month span { font: 400 13px var(--sans); color: var(--muted); margin-left: 4px; }
+.stats-rest { margin-top: 10px; }
 .stats-wall { display: flex; flex-wrap: wrap; gap: 10px; }
 /* Genre families (FAMILIES beside statsPage): the streamgraph's bands, the genre rows' bars and the legend. */
 :root { --g-fant: #7a6cc2; --g-crime: #b8574f; --g-classic: #4f9c94; --g-fic: #d08a59; --g-biz: #5b8bb4; --g-hist: #8a9a58; --g-non: #c9c3b6; --g-none: #e2dccf; }
@@ -1673,9 +1672,13 @@ aside .side-lists + .label, aside p + .label, aside dialog + .label { margin-top
 .g-hist { fill: var(--g-hist); background: var(--g-hist); } .g-non { fill: var(--g-non); background: var(--g-non); }
 .g-classic { fill: var(--g-classic); background: var(--g-classic); } .g-none { fill: var(--g-none); background: var(--g-none); }
 .stats-stream { margin: 64px 0 0; }
-.stats-stream svg { display: block; width: 100%; height: 220px; margin-top: 18px; overflow: visible; }
-.stats-stream .cols rect { fill: transparent; }
-.stats-stream .cols a:hover rect { fill: rgba(var(--shadow), 0.06); }
+.stream-plot { position: relative; margin-top: 18px; }
+.stats-stream svg { display: block; width: 100%; height: 220px; overflow: visible; }
+.stream-cols a { position: absolute; top: 0; bottom: 0; }
+.stream-cols a:hover { background: rgba(var(--shadow), 0.06); }
+.stream-cols a::after { content: attr(data-tip); display: none; position: absolute; top: 8px; left: calc(100% + 6px); z-index: 5; white-space: pre; padding: 8px 10px; border-radius: 6px; background: var(--ink); color: var(--paper); font-size: 12px; line-height: 1.5; pointer-events: none; box-shadow: 0 4px 14px rgba(var(--shadow), 0.18); }
+.stream-cols a.r::after { left: auto; right: calc(100% + 6px); }
+.stream-cols a:hover::after { display: block; }
 .stream-years { position: relative; height: 22px; margin-top: 10px; font-size: 12px; color: var(--muted); }
 .stream-years span { position: absolute; transform: translateX(-50%); white-space: nowrap; }
 .stream-years span:first-child { transform: none; }
@@ -1690,6 +1693,12 @@ aside .side-lists + .label, aside p + .label, aside dialog + .label { margin-top
 .stats-genres + .small { margin-top: 10px; }
 aside .stats-genres p { grid-template-columns: 104px 1fr 28px; }
 .stats-all { display: grid; grid-template-columns: 1fr 1.3fr 1fr; gap: 48px; margin-top: 64px; }
+.stats-mini { gap: 3px; margin-top: 14px; }
+.stats-mini .stats-col i { height: calc(var(--h) * 64px); width: 80%; }
+.stats-mini .stats-col .n { font-size: 11px; color: var(--muted); visibility: hidden; }
+.stats-mini .stats-col:hover .n, .stats-mini .stats-col:focus .n { visibility: visible; }
+.stats-mini .stats-col:focus { outline: none; }
+.stats-mini .stats-col .m { font-size: 10px; }
 .stats-stars { grid-template-columns: repeat(var(--cols), minmax(0, 1fr)); margin-top: 18px; }
 .stats-stars .stats-col i { height: calc(var(--h) * 120px); }
 @media (max-width: 600px) {
