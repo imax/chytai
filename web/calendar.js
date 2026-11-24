@@ -1071,31 +1071,9 @@ function create(db, store, { notify = () => {}, bookua = null, search = null, ma
     fresh();
     return n;
   }
-  // Events by day, for Max (2026-11-23: «трекати кількість подій по днях/тижнях, цікаво глянути динаміку у
-  // грудні-січні»): one row a Kyiv day, `held` = shown events on that day (a festival counts each of its days), `added`
-  // = events that came in that day and are still shown, `ahead` = upcoming events then, `kinds` = held by kind. The
-  // jobs process writes today and yesterday every hour; older rows stay as they were (events get deleted 30 days
-  // after their end, cancelled ones hidden). Missing days since the first event are filled once from what is kept.
-  db.exec("CREATE TABLE IF NOT EXISTS cal_days (day TEXT PRIMARY KEY, held INTEGER NOT NULL, added INTEGER NOT NULL, ahead INTEGER NOT NULL, kinds TEXT NOT NULL DEFAULT '{}')");
-  function countDay(day) {
-    const kinds = db.prepare("SELECT kind, COUNT(*) AS n FROM cal_events WHERE hidden = 0 AND starts <= ? AND max(starts, ends) >= ? GROUP BY kind").all(day, day);
-    const held = kinds.reduce((s, r) => s + r.n, 0);
-    // `added` is UTC in ISO; the Kyiv day runs 21:00/22:00 UTC the day before to the same the day of.
-    const from = new Date(Date.parse(`${addDays(day, -1)}T12:00:00Z`)).toISOString().slice(0, 10);
-    const added = db.prepare("SELECT added FROM cal_events WHERE hidden = 0 AND added >= ? AND added < ?").all(from, `${addDays(day, 1)}T`).filter((r) => kyivDay(Date.parse(r.added)) === day).length;
-    const ahead = db.prepare("SELECT COUNT(*) AS n FROM cal_events WHERE hidden = 0 AND max(starts, ends) >= ? AND starts <= ? AND substr(added, 1, 10) <= ?").get(day, addDays(day, AHEAD_DAYS), day).n;
-    db.prepare("INSERT OR REPLACE INTO cal_days (day, held, added, ahead, kinds) VALUES (?, ?, ?, ?, ?)").run(day, held, added, ahead, JSON.stringify(Object.fromEntries(kinds.map((r) => [r.kind || "", r.n]))));
-  }
-  function countDays() {
-    const today = kyivDay();
-    const first = db.prepare("SELECT min(substr(added, 1, 10)) AS d FROM cal_events").get().d;
-    const have = new Set(db.prepare("SELECT day FROM cal_days").all().map((r) => r.day));
-    if (first) for (let d = first; d < addDays(today, -1); d = addDays(d, 1)) if (!have.has(d)) countDay(d);
-    countDay(addDays(today, -1));
-    countDay(today);
-    db.prepare("DELETE FROM cal_days WHERE day < ?").run(addDays(today, -800));
-  }
-  const days = (n = 120) => db.prepare("SELECT * FROM cal_days WHERE day >= ? ORDER BY day").all(addDays(kyivDay(), -n)).map((r) => ({ ...r, kinds: JSON.parse(r.kinds || "{}") }));
+  // The events-by-day counter (cal_days, «По тижнях» on /admin/events) was taken out on 2026-11-24 (Max: «не треба»).
+  db.exec("DROP TABLE IF EXISTS cal_days");
+  db.prepare("DELETE FROM meta WHERE key = ?").run("sched:calendar-days");
   function cleanup() {
     const before = addDays(kyivDay(), -KEEP_DAYS);
     const r = db.prepare("DELETE FROM cal_events WHERE max(starts, ends) < ? AND ((authors = '[]' AND books = '[]') OR hidden = 1 OR max(starts, ends) < ?)").run(before, addDays(kyivDay(), -KEEP_LINKED_DAYS));
@@ -1331,7 +1309,7 @@ function create(db, store, { notify = () => {}, bookua = null, search = null, ma
     const at = new Date().toISOString();
     for (const id of ids) add.run(reader, id, at);
   };
-  return { countDays, days, pastForAuthor, watching, isWatching, watch, unwatchAll, dueWatch, watchSent, upsert, setKinds, unrated, setWide, wideExamples, add, one, byKey, findSimilar, cancel, uncancel, cancelledList, recent, pending, review, hide, setLink, cleanup, seed, upcoming, forAuthor, forBook, cities, fillBooks, chytomoRun, eventmateRun, feeds, addFeed, removeFeed, feedsRun, yeRun, yeLast: () => yeLast, peek, fresh, meta, setMeta, subs, subscribed, subscribe, unsubscribeAll, going, isGoing, goingCount, goingTop, dueReminders, reminded, remindOff, setRemind };
+  return { pastForAuthor, watching, isWatching, watch, unwatchAll, dueWatch, watchSent, upsert, setKinds, unrated, setWide, wideExamples, add, one, byKey, findSimilar, cancel, uncancel, cancelledList, recent, pending, review, hide, setLink, cleanup, seed, upcoming, forAuthor, forBook, cities, fillBooks, chytomoRun, eventmateRun, feeds, addFeed, removeFeed, feedsRun, yeRun, yeLast: () => yeLast, peek, fresh, meta, setMeta, subs, subscribed, subscribe, unsubscribeAll, going, isGoing, goingCount, goingTop, dueReminders, reminded, remindOff, setRemind };
 }
 
 // «Четвер, 19 листопада» and, within a week, «завтра» / «через 3 дні».

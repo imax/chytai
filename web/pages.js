@@ -3920,35 +3920,7 @@ ${shown.length ? shown.map(row).join("") : `<p class="muted">${all ? "Поки �
 
 // ---- /admin/events: the calendar of book events (Max 2026-11-15: its own page; where an event lacks its page) ----
 
-// Events by week and day (calendar.countDays; Max 2026-11-23, to see December and January): held = shown events on
-// a day (a festival each of its days), new = came in that day, ahead = upcoming then (the week's last day).
-function eventDaysBlock(days) {
-  if (!days.length) return "";
-  const dm = (d) => `${d.slice(8, 10)}.${d.slice(5, 7)}`;
-  const monday = (d) => cal().addDays(d, -((new Date(`${d}T12:00:00Z`).getUTCDay() + 6) % 7));
-  const weeks = new Map();
-  for (const r of days) {
-    const m = monday(r.day);
-    const w = weeks.get(m) || { day: m, held: 0, added: 0, ahead: 0, clubs: 0, n: 0 };
-    w.held += r.held;
-    w.added += r.added;
-    w.ahead = r.ahead;
-    w.clubs += r.kinds.club || 0;
-    w.n++;
-    weeks.set(m, w);
-  }
-  const today = cal().kyivDay();
-  const head = `<tr><th></th><th>Відбулося</th><th>з них клубів</th><th>Нових</th><th>Попереду</th></tr>`;
-  const tr = (name, r, part) => `<tr><td>${name}${part ? ` <span class="small muted">${part}</span>` : ""}</td><td>${r.held}</td><td>${r.clubs ?? r.kinds?.club ?? 0}</td><td>${r.added}</td><td>${r.ahead}</td></tr>`;
-  const weekRows = [...weeks.values()].reverse().map((w) => tr(`${dm(w.day)} — ${dm(cal().addDays(w.day, 6))}`, w, w.n < 7 ? `(${w.n} дн.)` : ""));
-  const dayRows = days.slice(-28).reverse().map((r) => tr(`${cal().SHORT_DAYS[new Date(`${r.day}T12:00:00Z`).getUTCDay()]} ${dm(r.day)}`, r, r.day === today ? "(ще йде)" : ""));
-  return `<section class="block" id="days">${label("По тижнях")}
-<p class="small muted">Відбулося: показані події того дня (фестиваль рахується щодня). Нових: додали того дня. Попереду: майбутні на пів року, на кінець тижня. Пишемо щогодини з 23.11; дні до того пораховано з того, що є.</p>
-<div style="overflow-x:auto"><table class="readers">${head}${weekRows.join("")}</table></div>
-<details><summary>По днях</summary><div style="overflow-x:auto"><table class="readers">${head}${dayRows.join("")}</table></div></details></section>`;
-}
-function eventsAdminPage({ user, rows, tg, saved, feeds = [], feedMsg = "", cancelled = [], review = [], recent = [], goingTop = [], days = [] }) {
-  const daysBlock = eventDaysBlock(days);
+function eventsAdminPage({ user, rows, tg, saved, feeds = [], feedMsg = "", cancelled = [], review = [], recent = [], goingTop = [] }) {
   const C = cal();
   const n = (v) => String(v);
   const kindOf = (e) => C.linkKind(C.sourceUrl(e)) || "none";
@@ -4013,7 +3985,6 @@ ${recent.length ? [...byDay.entries()].map(([d, list], i) => `<details${i === 0 
   const presRest = pres.filter((t) => t.wide !== 1);
   const presBlock = pres.length
     ? `<section class="block" id="pres">${label(`Презентації · ${presShown.length} з ${pres.length}`)}
-<p class="small muted">Показуємо ті, що цікаві читачам по всій країні. Решта лише в пошуку, у «Моїх авторах» і на сторінках автора й книжки. Сортує Haiku щогодини, ваша кнопка важливіша й навчає його.</p>
 ${presShown.length ? presShown.map(presLine).join("") : `<p class="muted">Поки жодної.</p>`}
 ${presRest.length ? `<details><summary>Сховані · ${presRest.length}</summary>${presRest.map(presLine).join("")}</details>` : ""}</section>`
     : "";
@@ -4028,7 +3999,6 @@ ${e.sub ? `<p class="small">${esc(e.sub)}</p>` : ""}
 <form method="post" action="/admin/events/review"><input type="hidden" name="id" value="${attr(e.id)}"><button class="btn small">Прибрати</button></form></div></div>`).join("")}</section>` : ""}
 ${goingTop.length ? `<section class="block" id="going">${label(`Хочуть піти · ${goingTop.reduce((s, e) => s + e.going, 0)}`)}
 ${goingTop.map((e) => `<p class="small" style="margin:.3em 0"><b>${e.going}</b> · <a href="${attr(C.eventPath(e))}">${esc(e.title)}</a> <span class="muted">· ${esc(e.starts.slice(8, 10) + "." + e.starts.slice(5, 7))}${e.city ? ` · ${esc(e.city)}` : ""}</span></p>`).join("")}</section>` : ""}
-${daysBlock}
 ${presBlock}
 ${recentBlock}
 <section class="block">${label("Посилання")}

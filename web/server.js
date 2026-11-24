@@ -1831,8 +1831,6 @@ const calendarJobs = bg.register("calendar", { cleanup: () => calendar.cleanup()
 if (bg.ROLE !== "web") setTimeout(() => calendar.seed(), 20 * 1000);
 bg.every("calendar-cleanup", 24 * 3600 * 1000, () => calendarJobs.cleanup(), { db: store.db, first: 5 * 60 * 1000 });
 bg.every("calendar-ye", 24 * 3600 * 1000, () => calendarJobs.ye(), { db: store.db, first: 15 * 60 * 1000 });
-// Events by day for /admin/events «По тижнях» (calendar.countDays; Max 2026-11-23).
-bg.every("calendar-days", 3600 * 1000, () => calendar.countDays(), { db: store.db, first: 3 * 60 * 1000 });
 // Telegram channels' posts (tgfeed.js): our own account through Telegram's API when TG_SESSION is set, else the
 // public t.me/s pages; every hour. Their events go to the calendar once meta tg:events is "on" (Max's OK).
 const tgFeed = bg.register("tg", require("./tgfeed").create(store.db, { calendar }), { run: false, joinMore: false, keepChannel: false, events: false, find: false, transcribe: false });
@@ -3099,7 +3097,7 @@ app.get("/admin/events", owner, (req, res) => {
   try {
     tg = tgFeed.status();
   } catch {}
-  res.send(pages.eventsAdminPage({ user: req.user, rows: calendar.upcoming(), tg, saved: String(req.query.saved || ""), feeds: calendar.feeds(), feedMsg: String(req.query.feed || ""), cancelled: calendar.cancelledList(), review: calendar.pending(), recent: calendar.recent(3), goingTop: calendar.goingTop(), days: calendar.days(120) }));
+  res.send(pages.eventsAdminPage({ user: req.user, rows: calendar.upcoming(), tg, saved: String(req.query.saved || ""), feeds: calendar.feeds(), feedMsg: String(req.query.feed || ""), cancelled: calendar.cancelledList(), review: calendar.pending(), recent: calendar.recent(3), goingTop: calendar.goingTop() }));
 });
 // An event a Telegram post took off (cancelled or moved) back on the calendar, when the post was read wrong.
 app.post("/admin/events/uncancel", owner, (req, res) => {
