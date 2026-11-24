@@ -430,7 +430,7 @@ async function searchOpenLibrary(q, { fetchImpl = fetch, limit = 6 } = {}) {
       const key = `${norm(d.title)}|${surname(author)}`;
       if (seen.has(key)) continue;
       seen.add(key);
-      list.push({ title: [d.title, d.subtitle].filter(Boolean).join(": ").slice(0, 200), author, cover: d.cover_i ? `https://covers.openlibrary.org/b/id/${d.cover_i}-L.jpg` : "", isbns: cleanIsbns(d.isbn).slice(0, 20), published: d.first_publish_year || null, ol: d.key || "" });
+      list.push({ title: [d.title, d.subtitle].filter(Boolean).join(": ").slice(0, 200), author, cover: d.cover_i ? `https://covers.openlibrary.org/b/id/${d.cover_i}-L.jpg` : "", isbns: cleanIsbns(d.isbn).slice(0, 20), published: d.first_publish_year || null, ol: d.key || "", langs: d.language || [] });
       if (list.length >= limit) break;
     }
     list.sort((a, b) => (b.cover ? 1 : 0) - (a.cover ? 1 : 0));
@@ -465,7 +465,7 @@ async function searchGoogle(q, key, { fetchImpl = fetchV6, limit = 5 } = {}) {
       seen.add(key2);
       const thumb = v.imageLinks?.thumbnail || v.imageLinks?.smallThumbnail;
       const year = Number(String(v.publishedDate || "").slice(0, 4));
-      list.push({ title: [v.title, v.subtitle].filter(Boolean).join(": ").slice(0, 200), author, cover: thumb ? thumb.replace(/^http:/, "https:").replace(/&edge=curl/, "") : "", isbns: cleanIsbns((v.industryIdentifiers || []).map((i) => i.identifier)), published: year > 1400 ? year : null, language: GLANG[v.language] || "", google: (v.canonicalVolumeLink || v.infoLink || "").replace(/^http:/, "https:") });
+      list.push({ title: [v.title, v.subtitle].filter(Boolean).join(": ").slice(0, 200), author, cover: thumb ? thumb.replace(/^http:/, "https:").replace(/&edge=curl/, "") : "", isbns: cleanIsbns((v.industryIdentifiers || []).map((i) => i.identifier)), published: year > 1400 ? year : null, language: GLANG[v.language] || "", lang: v.language || "", google: (v.canonicalVolumeLink || v.infoLink || "").replace(/^http:/, "https:") });
       if (list.length >= limit) break;
     }
   } catch {

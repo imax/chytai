@@ -3656,8 +3656,11 @@ app.get("/api/search/outside", async (req, res) => {
       const words = folded(`${b.title} ${b.author}`).split(" ");
       return !/[ыэъё]/i.test(b.title) && terms.every((t) => words.some((w) => w.startsWith(t.length >= 5 ? t.slice(0, t.length - 2) : t)));
     };
-    for (const b of google.filter(named)) put({ ...b, from: "Google Books" });
-    for (const b of ol.filter(named)) put({ ...b, from: "Open Library" });
+    // Only Ukrainian or English (Max 2026-11-23, bot №43: a German «Call the Midwife» became a book here): Google's
+    // edition language; Open Library's work languages, or none given and a Cyrillic title.
+    const ukEn = (b) => (b.langs ? b.langs.some((l) => l === "eng" || l === "ukr") || (!b.langs.length && /[а-яіїєґ]/i.test(b.title)) : b.lang === "en" || b.lang === "uk");
+    for (const b of google.filter((b) => named(b) && ukEn(b))) put({ ...b, from: "Google Books" });
+    for (const b of ol.filter((b) => named(b) && ukEn(b))) put({ ...b, from: "Open Library" });
   }
   admin.event(req, req.user?.id, "outside", out.length ? "shown" : "none");
   res.set("Cache-Control", "no-store").send(pages.outsideResults({ q, user: req.user, books: out, after: req.query.after === "1" }));

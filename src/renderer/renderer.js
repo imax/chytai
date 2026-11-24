@@ -202,42 +202,94 @@ function breaksOf(bare, lang) {
   shyBreaks.set(key, out);
   return out;
 }
+// Words of a Ukrainian book typed with a Latin letter or two (Max 2026-11-23, bot №46–47, «Бойня номер п'ять»:
+// «прозрiнь» with a Latin i, «кóпнувши» with a Latin ó for the stress) or with a letter's own mark apart (NFD «й»)
+// never broke on Android either: its hyphenation gives up on a letter outside its alphabet. They get soft hyphens the
+// same way, from the word with Cyrillic look-alikes. Unlike the stressed ones, these are known by where they were
+// put: only in a chapter with no soft hyphen of its own, marked `data-shy-odd` (a book's own soft hyphens stay text).
+const CYR_ALL = /[\u0400-\u04FF]/g;
+const LAT_ALL = /[A-Za-z\u00C0-\u024F]/g;
+const LAT = /[A-Za-z\u00C0-\u024F]/;
+const ODD_NEAR = /[\u0400-\u04FF][A-Za-z\u00C0-\u024F\u0302-\u036F]|[A-Za-z\u00C0-\u024F][\u0400-\u04FF]/;
+const LOOK = { a: "а", e: "е", i: "і", o: "о", p: "р", c: "с", x: "х", y: "у", k: "к", A: "А", B: "В", C: "С", E: "Е", H: "Н", I: "І", K: "К", M: "М", O: "О", P: "Р", T: "Т", X: "Х", Y: "У", "á": "а", "é": "е", "í": "і", "ó": "о", "ý": "у", "ï": "ї", "Á": "А", "É": "Е", "Í": "І", "Ó": "О", "Ý": "У", "Ï": "Ї" };
+const isMark = (c) => /\p{M}/u.test(c);
+// The word as a hyphenation dictionary knows it, and the index in w where each of its letters starts; null when
+// there is nothing to help (a Latin word, a letter with no Cyrillic look-alike). A word with a stress mark the old
+// way: only the stress marks go.
+function plainWord(w, stressed) {
+  const old = () => {
+    const base = [];
+    for (let i = 0; i < w.length; i++) if (!STRESSED.test(w[i])) base.push(i);
+    return { bare: base.map((i) => w[i]).join(""), base };
+  };
+  if ((w.match(LAT_ALL) || []).length >= (w.match(CYR_ALL) || []).length) return stressed ? old() : null;
+  let bare = "";
+  const base = [];
+  for (let i = 0; i < w.length; i++) {
+    if (isMark(w[i])) continue;
+    let c = w[i];
+    if (LAT.test(c)) {
+      if (!LOOK[c]) return stressed ? old() : null;
+      c = LOOK[c];
+    }
+    let marks = "";
+    for (let j = i + 1; j < w.length && isMark(w[j]); j++) if (!STRESSED.test(w[j])) marks += w[j];
+    const one = (c + marks).normalize("NFC");
+    bare += one.length === 1 ? one : c;
+    base.push(i);
+  }
+  return { bare, base };
+}
 function shyStressed(doc) {
   const body = doc?.body;
-  if (!body || !STRESSED.test(body.textContent)) return;
+  const all = body?.textContent || "";
+  // Odd words only where the chapter has no soft hyphen of its own: then every one in such a word is ours (shyAt).
+  const oddOk = !all.includes("­");
+  const needs = (t) => STRESSED.test(t) || (oddOk && ODD_NEAR.test(t));
+  if (!body || !needs(all)) return;
   const walk = doc.createTreeWalker(body, NodeFilter.SHOW_TEXT);
   const nodes = [];
-  while (walk.nextNode()) if (STRESSED.test(walk.currentNode.data)) nodes.push(walk.currentNode);
+  while (walk.nextNode()) if (needs(walk.currentNode.data)) nodes.push(walk.currentNode);
+  let odd = false;
   for (const node of nodes) {
     const el = node.parentElement?.closest("[lang], [xml\\:lang]") || doc.documentElement;
     const lang = el.getAttribute("lang") || el.getAttribute("xml:lang") || "uk";
     const data = node.data.replace(STRESS_WORD, (w) => {
-      if (!STRESSED.test(w) || w.includes("­")) return w;
-      const base = []; // index in w of each letter that is not a stress mark
-      for (let i = 0; i < w.length; i++) if (!STRESSED.test(w[i])) base.push(i);
-      const cuts = breaksOf(w.replace(/[̀́]/g, ""), lang).map((k) => base[k]).filter((i) => i > 0);
+      if (w.includes("­")) return w;
+      const stressed = STRESSED.test(w);
+      if (!stressed && !(oddOk && ODD_NEAR.test(w))) return w;
+      const plain = plainWord(w, stressed);
+      if (!plain) return w;
+      const cuts = breaksOf(plain.bare, lang).map((k) => plain.base[k]).filter((i) => i > 0);
+      if (cuts.length && !stressed) odd = true;
       let out = "", from = 0;
       for (const i of cuts) (out += w.slice(from, i) + "­"), (from = i);
       return out + w.slice(from);
     });
     if (data !== node.data) node.data = data;
   }
+  // An attribute moves no place (a CFI counts elements and letters), and it goes with the chapter into the page.
+  if (odd) doc.documentElement.setAttribute("data-shy-odd", "");
 }
 // Positions in a text node of the soft hyphens shyStressed put in.
-function shyAt(text) {
+function shyAt(node) {
+  const text = node.data;
   const at = [];
-  if (!text.includes("­") || !STRESSED.test(text)) return at;
+  if (!text.includes("­")) return at;
+  const odd = node.ownerDocument?.documentElement?.hasAttribute("data-shy-odd");
+  const ours = (w) => STRESSED.test(w) || (odd && ODD_NEAR.test(w.replace(/­/g, "")));
+  if (!STRESSED.test(text) && !(odd && ODD_NEAR.test(text.replace(/­/g, "")))) return at;
   for (const m of text.matchAll(STRESS_WORD)) {
-    if (!STRESSED.test(m[0])) continue;
+    if (!ours(m[0])) continue;
     for (let i = 0; i < m[0].length; i++) if (m[0][i] === "­") at.push(m.index + i);
   }
   return at;
 }
-const shyOrig = (node, offset) => (node?.nodeType === 3 && offset > 0 ? offset - shyAt(node.data).filter((i) => i < offset).length : offset);
+const shyOrig = (node, offset) => (node?.nodeType === 3 && offset > 0 ? offset - shyAt(node).filter((i) => i < offset).length : offset);
 function shyMod(node, offset) {
   if (node?.nodeType !== 3 || offset == null) return offset;
   let m = offset;
-  for (const i of shyAt(node.data)) if (i < m) m++;
+  for (const i of shyAt(node)) if (i < m) m++;
   return Math.min(m, node.data.length);
 }
 if (window.ePub?.CFI) {
@@ -1280,6 +1332,8 @@ function chapterTitle(href, cfi) {
 }
 
 function onRelocated(location) {
+  // A late «relocated» from a book just closed (book is null by then; iPhone app 2026-11-23).
+  if (!book || !location?.start) return;
   if (current) window.reader.savePosition(current.posKey, location.start.cfi, readingProgress(location));
   if (current?.protected) reportChapter(location.start?.index);
   updateProgress(location);
@@ -1327,7 +1381,7 @@ function chapterNumber(spineIndex) {
 }
 
 function updateProgress(location) {
-  if (!location?.start) return;
+  if (!location?.start || !book) return;
   window.PhoneRead?.progress(location);
   $("#chapter-label").textContent = chapterTitle(location.start.href, location.start.cfi);
   if (book.locations.length() && !current?.preview) {

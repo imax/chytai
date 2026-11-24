@@ -1,7 +1,7 @@
 // «Scratchpad» (Max 2026-11-23, variant A of canvas 5vFceFdJnh3oNewFR6TgT4; the name until a Ukrainian one is
 // found): an inbox for reading. A topic, an era, an author or a book jotted in a few words, by voice or as a photo;
-// the server (server/scratch.js) has Opus explain it and name books to start with, and the reader later sorts it
-// out: «Готово» or «Не цікаво». A page in the panel under «Статистика» (home.js page «scratch»), one entry open at a
+// the server (server/scratch.js) has Opus explain it and name books to start with; «Уточнити» asks again with the
+// reader's words. A page in the panel under «Статистика» (home.js page «scratch»), one entry open at a
 // time in place of the list. Taps count by data-act (reading-time.js): act-scr-*.
 /* global showNotice */
 (() => {
@@ -122,8 +122,8 @@
     const have = mine(b);
     return `<div class="r-scr-book">
       <button type="button" class="r-scr-bc" data-act="scr-book" data-scr-book="${i}" aria-label="${esc(bookTitle(b))}">${cover(b)}</button>
-      <button type="button" class="r-scr-bx" data-act="scr-book" data-scr-book="${i}"><b>${esc(bookTitle(b))}</b><span class="r-scr-bm">${esc(meta)}</span>${b.why ? `<span class="r-scr-why">${esc(b.why)}</span>` : ""}</button>
-      ${have ? `<span class="r-scr-have">✓ У моїх</span>` : `<button type="button" class="r-pill-line r-scr-add" data-act="scr-add" data-scr-book="${i}">Додати</button>`}</div>`;
+      <span class="r-scr-bw"><button type="button" class="r-scr-bx" data-act="scr-book" data-scr-book="${i}"><b>${esc(bookTitle(b))}</b><span class="r-scr-bm">${esc(meta)}</span>${b.why ? `<span class="r-scr-why">${esc(b.why)}</span>` : ""}</button>
+      ${have ? `<span class="r-scr-have">✓ У моїх</span>` : `<button type="button" class="r-pill-line r-scr-add" data-act="scr-add" data-scr-book="${i}">Додати</button>`}</span></div>`;
   }
 
   function oneHtml(it) {
@@ -148,12 +148,16 @@
     }
     if (it.status !== "wait") {
       const asked = (it.ask || []).length ? `<p class="r-scr-asked">Уточнено: ${(it.ask || []).map((x) => `«${esc(x)}»`).join(", ")}</p>` : "";
-      html += `<form class="r-scr-ask" id="scr-ask-form">${asked}<label for="scr-ask">Уточнити</label>
-        <span class="r-scr-askrow"><input id="scr-ask" type="text" autocomplete="off" placeholder="щось українською, тільки нонфікшн…" value="${esc(ask)}"><button type="submit" class="r-pill" aria-label="Уточнити">→</button></span></form>`;
+      html += `<form class="r-scr-form r-scr-ask" id="scr-ask-form">${asked}<label for="scr-ask" class="r-scr-hint">Уточнити</label>
+        <textarea id="scr-ask" rows="2" placeholder="Наприклад: українською, лише нонфікшн" enterkeyhint="send">${esc(ask)}</textarea>
+        <div class="r-scr-row">
+          <button type="button" class="pp-tool${window.Dictation?.field() === "scr-ask" ? " on" : ""}" data-act="scr-askmic" title="Надиктувати" aria-label="Надиктувати">${MIC}</button>
+          <span class="r-scr-sp"></span>
+          <button type="submit" class="r-pill" data-act="scr-ask">Уточнити</button>
+        </div></form>`;
     }
-    html += it.state === "new"
-      ? `<div class="r-scr-foot"><button type="button" class="r-link r-scr-skip" data-act="scr-skip">Не цікаво</button><button type="button" class="r-pill" data-act="scr-done">Готово</button></div>`
-      : `<div class="r-scr-foot"><span class="r-scr-was">${it.state === "done" ? "Розібрано" : "Не цікаво"}</span><button type="button" class="r-link" data-act="scr-delete">Видалити</button><button type="button" class="r-pill-line" data-act="scr-renew">Повернути в нові</button></div>`;
+    // Max 2026-11-23 (bot №45): no «Не цікаво» / «Готово» under a new entry.
+    if (it.state !== "new") html += `<div class="r-scr-foot"><span class="r-scr-was">${it.state === "done" ? "Розібрано" : "Не цікаво"}</span><button type="button" class="r-link" data-act="scr-delete">Видалити</button><button type="button" class="r-pill-line" data-act="scr-renew">Повернути в нові</button></div>`;
     return `${html}</section>`;
   }
 
@@ -234,6 +238,7 @@
   async function act(name, el) {
     const it = open && byId(open);
     if (name === "scr-mic") return (voice = true), window.Dictation.toggle("scr-text", '[data-act="scr-mic"]');
+    if (name === "scr-askmic") return window.Dictation.toggle("scr-ask", '[data-act="scr-askmic"]');
     if (name === "scr-photo") return addPhoto();
     if (name === "scr-unphoto") return photo && URL.revokeObjectURL(photo.url), (photo = null), (draft = $("#scr-text")?.value ?? draft), rerender();
     if (name === "scr-sorted") return (sorted = !sorted), rerender();
@@ -312,9 +317,11 @@
     rerender();
     watch();
   });
-  // Enter in the field writes the entry on a computer; a phone's Enter is a new line.
+  // Enter in a field writes the entry (or asks again) on a computer; a phone's Enter is a new line.
   shell.addEventListener("keydown", (e) => {
-    if (e.target.id === "scr-text" && e.key === "Enter" && !e.shiftKey && matchMedia("(hover: hover)").matches) e.preventDefault(), send();
+    if (e.key !== "Enter" || e.shiftKey || !matchMedia("(hover: hover)").matches) return;
+    if (e.target.id === "scr-text") e.preventDefault(), send();
+    if (e.target.id === "scr-ask") e.preventDefault(), e.target.form?.requestSubmit();
   });
 
   window.Scratch = { html, enter, back, load, typing };

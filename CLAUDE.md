@@ -318,7 +318,8 @@ A flag only when Max asks for one, or when the change could break what readers u
 - Search with no book that has every word (`searchAll` `near`, 2026-11-15): «Може, ви шукали:» authors, publishers and books with most of the
   words, a one-letter typo counting («після вільного шляху» → «Пісня відкритого шляху»); under them the outside lookup still
   comes (`/api/search/outside?after=1`: «Немає на Chytai, можна додати», or the link / by-hand form), since that is how a
-  missing book gets added (Max 2026-11-22, «my struggle»).
+  missing book gets added (Max 2026-11-22, «my struggle»). It offers only Ukrainian or English books (Google's edition
+  language, Open Library's work languages; Max 2026-11-23, bot №43: a German «Call the Midwife» became a book).
 - Off since 2026-11-15, code kept: the homepage box (and /search) takes a request too (flag `smart-search`, `web/intent.js`, no model): cue words
   (`CUES`) and no book has every word → «Порадити книжки» first, Enter presses it (POST /ask); many words and no book
   → only a line. Variant B (Max chose it on a design canvas): «Порадити книжки ↵» takes the place of «Enter ↵» in the
@@ -763,7 +764,10 @@ A flag only when Max asks for one, or when the change could break what readers u
 - Reader: words with a stress mark (U+0301, the free shelf's classics) get soft hyphens (`shyStressed` in renderer.js,
   Max 2026-11-20: a hole in a justified line), since browsers don't hyphenate them; where = the device's own
   hyphenation of the bare word (`breaksOf`). The patched `ePub.CFI` `pathTo` / `toRange` leave those soft hyphens out,
-  so CFIs stay as before; text taken from the page drops U+00AD (context.js `clean`, gloss.js `key`).
+  so CFIs stay as before; text taken from the page drops U+00AD (context.js `clean`, gloss.js `key`). Words of a
+  Ukrainian book typed with a Latin look-alike («прозрiнь», «кóпнувши») or an NFD «й» get them too (`plainWord`, Max
+  2026-11-24, bot №46: Android's hyphenation gives up on them), only in a chapter with no soft hyphen of its own,
+  which then carries `data-shy-odd` on <html> for `shyAt`.
 - Reader: how the text looks (theme, font, sizes, spacing, margins, column, page turns) is kept per device
   (`LOOK_KEYS` in `src/renderer/web-bridge.js`); the account's copy only starts a new device. A new look setting
   goes into that list.
@@ -815,8 +819,8 @@ A flag only when Max asks for one, or when the change could break what readers u
   «Нові» and «Розібрані». Each entry is read by Opus once (`server/scratch.js`, `SYSTEM`, json_schema, effort low): kind
   (topic / era / author / book / unclear), title, a few sentences of background, 3–5 books (first = where to start; a
   Ukrainian title only when such an edition exists; no Russian), guesses when unclear; then `catalogFind` (the site's
-  `/api/reader-find`) gives each book its page and cover by title and surname a letter apart. «Уточнити» / a guess =
-  `POST /api/scratch/:id/ask`, asked again with the words. «Додати» = a paper book (`/api/paper`), a tap = the cover's
+  `/api/reader-find`) gives each book its page and cover by title and surname a letter apart. «Уточнити» (a card like the top form) / a guess =
+  `POST /api/scratch/:id/ask`, asked again with the words. No «Готово» / «Не цікаво» under an entry (Max 2026-11-23, bot №45). «Додати» = a paper book (`/api/paper`), a tap = the cover's
   card (`Paper.card`). Kept in `accounts/<id>/scratch.json` (500, sorted ones dropped first) and
   `accounts/<id>/scratch/<entry>.jpg` (100 photos); private, no letter to Max. Caps: 40 a reader a day, 400 for all
   (Telegram once), Max none; stats day `scratch`. An entry left `wait` by a deploy is asked again when the page lists it.
