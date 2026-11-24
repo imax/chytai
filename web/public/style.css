@@ -1666,13 +1666,13 @@ aside .side-lists + .label, aside p + .label, aside dialog + .label { margin-top
 .stats-month span { font: 400 13px var(--sans); color: var(--muted); margin-left: 4px; }
 .stats-wall { display: flex; flex-wrap: wrap; gap: 10px; }
 /* Genre families (FAMILIES beside statsPage): the streamgraph's bands, the genre rows' bars and the legend. */
-:root { --g-fant: #7a6cc2; --g-crime: #b8574f; --g-classic: #4f9c94; --g-fic: #d08a59; --g-biz: #5b8bb4; --g-hist: #8a9a58; --g-non: #c9c3b6; --g-none: #e9e4da; }
+:root { --g-fant: #7a6cc2; --g-crime: #b8574f; --g-classic: #4f9c94; --g-fic: #d08a59; --g-biz: #5b8bb4; --g-hist: #8a9a58; --g-non: #c9c3b6; --g-none: #e2dccf; }
 @media (prefers-color-scheme: dark) { :root { --g-fant: #9487d8; --g-crime: #cf7a70; --g-classic: #6db8ae; --g-fic: #d99c70; --g-biz: #7aa5c9; --g-hist: #a2b16f; --g-non: #6f6a60; --g-none: #3a372f; } }
 .g-fant { fill: var(--g-fant); background: var(--g-fant); } .g-crime { fill: var(--g-crime); background: var(--g-crime); }
 .g-fic { fill: var(--g-fic); background: var(--g-fic); } .g-biz { fill: var(--g-biz); background: var(--g-biz); }
 .g-hist { fill: var(--g-hist); background: var(--g-hist); } .g-non { fill: var(--g-non); background: var(--g-non); }
 .g-classic { fill: var(--g-classic); background: var(--g-classic); } .g-none { fill: var(--g-none); background: var(--g-none); }
-.stats-stream { margin: 0 0 44px; }
+.stats-stream { margin: 64px 0 0; }
 .stats-stream svg { display: block; width: 100%; height: 220px; margin-top: 18px; overflow: visible; }
 .stats-stream .cols rect { fill: transparent; }
 .stats-stream .cols a:hover rect { fill: rgba(var(--shadow), 0.06); }
@@ -1687,11 +1687,11 @@ aside .side-lists + .label, aside p + .label, aside dialog + .label { margin-top
 .stats-genres i { display: block; height: 9px; border-radius: 2px; }
 .stats-genres span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .stats-genres span:last-child { text-align: right; color: var(--muted); }
-.stats-genres + .small { margin-top: 6px; }
+.stats-genres + .small { margin-top: 10px; }
 aside .stats-genres p { grid-template-columns: 104px 1fr 28px; }
 .stats-all { display: grid; grid-template-columns: 1fr 1.3fr 1fr; gap: 48px; margin-top: 64px; }
 .stats-stars { grid-template-columns: repeat(var(--cols), minmax(0, 1fr)); margin-top: 18px; }
-.stats-stars .stats-col i { background: #c9a227; height: calc(var(--h) * 120px); }
+.stats-stars .stats-col i { height: calc(var(--h) * 120px); }
 @media (max-width: 600px) {
   .stats-years { margin: 0 -20px 24px; padding: 0 20px 4px; }
   .stats-cols { gap: 3px; }
@@ -1700,7 +1700,8 @@ aside .stats-genres p { grid-template-columns: 104px 1fr 28px; }
   .stats-col .m { font-size: 10px; }
   .stats-wall { gap: 8px; }
   .stats-stream svg { height: 160px; }
-  .stats-all { grid-template-columns: 1fr; gap: 8px; margin-top: 40px; }
+  .stats-all { grid-template-columns: 1fr; gap: 36px; margin-top: 48px; }
+  .stats-stream { margin-top: 48px; }
 }
 
 /* «Схожий смак» on /community: in the side column on a computer, above the feed on a phone. */

@@ -1449,14 +1449,17 @@ function genreStream(read, href) {
   };
   const name = (k) => (k === "none" ? "Без жанру" : FAMILIES.find(([key]) => key === k)[1]);
   const bands = shown.map((k, j) => `<path class="g-${k}" d="${line(j)}${line(j + 1, true)}Z"/>`).join("");
-  const step = years.length > 24 ? 5 : years.length > 12 ? 2 : 1;
+  // Ticks: round years (every 5th, or 2nd on a short span) plus the first and last, none crowding them (a phone
+  // has room for about six).
+  const step = years.length > 12 ? 5 : years.length > 6 ? 2 : 1;
+  const tick = (y, i) => i === 0 || i === years.length - 1 || (y % step === 0 && y - years[0] >= Math.min(2, step / 2) && to - y >= Math.min(2, step / 2));
   const cols = years.map((y, i) => {
     const g = grid.get(y), total = shown.reduce((s, k) => s + g[k], 0);
     const w = W / Math.max(1, years.length - 1);
     const tip = `${y}: ${books(total)}${total ? `. ${shown.filter((k) => g[k]).map((k) => `${name(k)} ${g[k]}`).join(", ")}` : ""}`;
     return `<a href="${attr(href(y))}"><rect x="${f(Math.max(0, x(i) - w / 2))}" y="0" width="${f(Math.min(w, W))}" height="${H}"><title>${esc(tip)}</title></rect></a>`;
   }).join("");
-  const ticks = years.map((y, i) => (i % step === 0 || i === years.length - 1) && !(i !== years.length - 1 && years.length - 1 - i < step) ? `<span style="left:${f((x(i) / W) * 100)}%">${y}</span>` : "").join("");
+  const ticks = years.map((y, i) => (tick(y, i) ? `<span style="left:${f((x(i) / W) * 100)}%">${y}</span>` : "")).join("");
   return `<div class="stats-stream">${label("Жанри по роках")}
   <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="Жанри по роках, ${years[0]}–${to}">${bands}<g class="cols">${cols}</g></svg>
   <div class="stream-years">${ticks}</div>
@@ -1516,7 +1519,6 @@ function statsPage({ user, reader, own, rows, year }) {
   const stars = ratingCols(read);
   const body = `
 ${head}
-${genreStream(read, href)}
 <div class="tabs stats-years" id="year">${years.map((y) => `<a class="tab${y === year ? " on" : ""}" href="${attr(href(y))}">${y}</a>`).join("")}</div>
 <div class="split">
   <div>
@@ -1546,7 +1548,8 @@ ${years.length > 1 ? `<div class="stats-all">
   </div></div>
   ${allGenres ? `<div>${label("Жанри")}${allGenres}</div>` : ""}
   ${stars ? `<div>${label("Оцінки", `${allRated.length} з ${read.length}`)}${stars}</div>` : ""}
-</div>` : ""}`;
+</div>` : ""}
+${genreStream(read, href)}`;
   return layout({ title: own ? "Моя статистика" : `Статистика · ${reader.name}`, body, user, path: own ? "/me" : "/@", canonical: `${reader.href}/stats`, noindex: true });
 }
 
