@@ -1471,16 +1471,20 @@ function genreStream(read, href) {
 // Genres as rows with a bar in their family's colour, most first; books with none in one line under them.
 function genreRows(list, n = 12) {
   const c = new Map();
-  let none = 0;
+  let none = 0, plain = 0;
+  // «Художня» alone says only that no finer genre is known (Max 2026-11-24: it filled the rows): those books go in
+  // the grey line under the specific genres.
   for (const r of list) {
     const g = bookGenres(r.book);
     if (!g.length) none++;
-    for (const x of g) c.set(x, (c.get(x) || 0) + 1);
+    else if (g.length === 1 && g[0] === "художня") plain++;
+    else for (const x of g) if (x !== "художня") c.set(x, (c.get(x) || 0) + 1);
   }
   const top = [...c].sort((a, b) => b[1] - a[1]).slice(0, n);
   if (!top.length) return "";
   const max = top[0][1];
-  return `<div class="stats-genres">${top.map(([g, k]) => `<p><span>${esc(cap(g))}</span><i class="g-${FAMILY_OF.get(g)}" style="width:${Math.max(2, Math.round((k / max) * 100))}%"></i><span>${k}</span></p>`).join("")}</div>${none ? `<p class="small muted">${count(none, "книжка", "книжки", "книжок")} без жанру</p>` : ""}`;
+  const rest = [plain ? `${count(plain, "книжка", "книжки", "книжок")} просто художні` : "", none ? `${count(none, "книжка", "книжки", "книжок")} без жанру` : ""].filter(Boolean).join(", ");
+  return `<div class="stats-genres">${top.map(([g, k]) => `<p><span>${esc(cap(g))}</span><i class="g-${FAMILY_OF.get(g)}" style="width:${Math.max(2, Math.round((k / max) * 100))}%"></i><span>${k}</span></p>`).join("")}</div>${rest ? `<p class="small muted stats-rest">${rest}</p>` : ""}`;
 }
 
 // The stars a reader gives, as columns: every rating used, low to high.
@@ -1535,7 +1539,7 @@ ${head}
       <p><b>${yr.filter((r) => isUk(r.book)).length}</b>українською</p>
       <p><b>${yr.filter((r) => r.note).length}</b>з нотатками</p>
     </div>
-    ${byMonth ? `${label("По місяцях")}<div class="stats-cols stats-mini" aria-label="Прочитано по місяцях">${months.map((m, i) => `<div class="stats-col${later(i) ? " later" : ""}"><span class="n">${later(i) ? "" : m.length}</span><i style="--h:${Math.round((m.length / max) * 100) / 100}"></i><span class="m">${MONTH_SHORT[i]}</span></div>`).join("")}</div>
+    ${byMonth ? `${label("По місяцях")}<div class="stats-cols stats-mini" aria-label="Прочитано по місяцях">${months.map((m, i) => `<div class="stats-col${later(i) ? " later" : ""}" tabindex="0"><span class="n">${later(i) ? "" : m.length}</span><i style="--h:${Math.round((m.length / max) * 100) / 100}"></i><span class="m">${MONTH_SHORT[i]}</span></div>`).join("")}</div>
     ${dated < yr.length ? `<p class="small muted stats-undated">${count(yr.length - dated, "книжка", "книжки", "книжок")} без місяця</p>` : ""}` : ""}
     ${genreRows(yr, 6) ? `${label(`Жанри ${year}`)}${genreRows(yr, 6)}` : ""}
   </aside>
