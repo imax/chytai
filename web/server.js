@@ -1946,6 +1946,46 @@ function readerList() {
     });
 }
 
+// «Схожий смак» on /community (Max 2026-11-24, after Tanya's «не зрозуміла, як знаходити друзів»): the readers who
+// read most of the same books as you (a translation counts as the same book), not yourself and not ones you follow.
+// Covers = books you both rated 4 or more, else any you share. ~6,500 entries in all: walked whole per page.
+function similarReaders(me, n = 3) {
+  if (!me) return [];
+  const keyOf = new Map();
+  const key = (id) => {
+    let k = keyOf.get(id);
+    if (!k) {
+      const c = store.canonical(id);
+      k = [c, ...(store.translations?.get(c) || [])].sort()[0];
+      keyOf.set(id, k);
+    }
+    return k;
+  };
+  const mine = new Map();
+  for (const [id, e] of Object.entries(store.entriesOf(me))) if (e.status === "read" && !e.kids) mine.set(key(id), { id, rating: e.rating });
+  if (mine.size < 5) return [];
+  const skip = new Set([me, ...auth.following(me)]);
+  const out = [];
+  for (const r of auth.readers()) {
+    if (skip.has(r.id)) continue;
+    let common = 0;
+    const liked = [], any = [];
+    for (const [id, e] of Object.entries(store.entriesOf(r.id))) {
+      if (e.status !== "read" || e.kids) continue;
+      const m = mine.get(key(id));
+      if (!m) continue;
+      common++;
+      ((m.rating ?? 0) >= 4 && (e.rating ?? 0) >= 4 ? liked : any).push(m.id);
+    }
+    if (common >= 3) out.push({ reader: pub(r), common, ids: [...liked, ...any] });
+  }
+  return out
+    .filter((x) => x.reader)
+    .sort((a, b) => b.common - a.common)
+    .slice(0, n)
+    .map((x) => ({ ...x, books: x.ids.map((id) => store.book(id)).filter((b) => b?.cover).slice(0, 5) }));
+}
+
 const followed = (req) => new Set(auth.following(req.user?.id));
 app.get("/readers", (req, res) => res.redirect(301, "/community"));
 // The readers' Telegram group via our own address, so letters link only to chytai.org.ua (Resend Insights:
@@ -2430,7 +2470,7 @@ app.post("/agent/tg-events", agentOk, (req, res) => {
 app.get("/community", (req, res) => {
   const readers = readerList();
   const all = social.all();
-  res.send(pages.readersPage({ user: req.user, club: club.mark(req.user?.id, club.index(20).rest.slice(0, 3)), feed: social.feed({ limit: 40, shelves: true }), readers, followed: followed(req), totals: { readers: readers.length, books: readers.reduce((s, r) => s + r.count, 0), notes: all.filter((x) => x.entry.note).length } }));
+  res.send(pages.readersPage({ similar: similarReaders(req.user?.id), user: req.user, club: club.mark(req.user?.id, club.index(20).rest.slice(0, 3)), feed: social.feed({ limit: 40, shelves: true }), readers, followed: followed(req), totals: { readers: readers.length, books: readers.reduce((s, r) => s + r.count, 0), notes: all.filter((x) => x.entry.note).length } }));
 });
 
 // «Стежити» / «Стежу» on a reader's page: follow or unfollow them, then back to where it was pressed.
@@ -2523,6 +2563,13 @@ app.get("/@:username", (req, res) => {
   // Others don't see the parts of notes written in Russian (store.publicNote, Max 2026-11-23).
   const shown = rows.map((r) => (r.note && publicNote(r.note) !== r.note ? { ...r, note: publicNote(r.note) } : r));
   res.send(pages.libraryPage({ part, clubTopics: club.of(reader.id, 5), lists: theirLists, rows: shown, user: req.user, reader, ask: !!req.owner && flags.on("chat", req.user), now: nowFor(reader.id), mineIds: req.user && req.user.id !== reader.id ? store.inLibrary(req.user.id) : null, mineDirect: req.user ? new Set(Object.keys(store.entriesOf(req.user.id))) : null, following: auth.follows(req.user?.id, reader.id), follows }));
+});
+// «Статистика» of a shelf (pages.statsPage): open like the shelf itself; ?year= picks the year.
+app.get("/@:username/stats", (req, res) => {
+  const reader = pub(auth.byUsername(req.params.username));
+  if (!reader) return res.status(404).send(pages.messagePage({ title: "Немає такого читача", text: "", user: req.user }));
+  if (reader.username !== req.params.username) return res.redirect(301, `${reader.href}/stats`);
+  res.send(pages.statsPage({ user: req.user, reader, own: req.user?.id === reader.id, rows: store.library(reader.id), year: Number(req.query.year) || new Date().getFullYear() }));
 });
 // ---- «Списки» (lists.js): /@<username>/list/<slug>, /lists, and what the author does with a list ----
 app.get("/@:username/list/:slug", (req, res) => {

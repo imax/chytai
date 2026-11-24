@@ -1284,6 +1284,16 @@ function libraryPage({ ask = null, part = "", clubTopics = [], lists = [], saved
   const rated = thisYear.filter((r) => r.rating != null);
   const common = mineIds && !own ? rows.filter((r) => mineIds.has(r.id)) : [];
   const genres = GENRES.filter((g) => rows.some((r) => (r.book.tags || []).includes(g)));
+  // Quick picks over the shelf (Max 2026-11-24, from his maxua.com/books): «4,5+», «Українською» and the
+  // reader's three biggest genre families; one at a time, a second tap lets go (app.js `filters.pick`).
+  const fams = new Map();
+  for (const r of mine) for (const k of famsOf(r.book)) fams.set(k, (fams.get(k) || 0) + 1);
+  const picks = [
+    ...(mine.some((r) => r.rating >= 4.5) ? [["top", "4,5+"]] : []),
+    ...(mine.some((r) => isUk(r.book)) && mine.some((r) => !isUk(r.book)) ? [["uk", "Українською"]] : []),
+    ...[...fams].filter(([, n]) => n >= 3).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([k]) => [`f:${k}`, FAMILIES.find(([key]) => key === k)[1]]),
+  ];
+  const pickRow = picks.length > 1 ? `<div class="shelf-picks">${picks.map(([v, l]) => `<button type="button" class="chip" data-pick-v="${attr(v)}">${esc(l)}</button>`).join("")}</div>` : "";
   // Another reader's tabs say what they did («Читає»), since we don't know how they'd say it themselves.
   const tabs = [
     ["", "Усі", mine.length],
@@ -1295,7 +1305,7 @@ function libraryPage({ ask = null, part = "", clubTopics = [], lists = [], saved
     ...(common.length ? [["common", "Спільні", common.length]] : []),
     ["kids", "Дитяча полиця", kids.length],
   ].filter(([k, , n]) => !k || n || (own && ["read", "reading", "want"].includes(k)));
-  const sub = [books(mine.length), kids.length ? `${kids.length} на дитячій полиці` : "", count(read, "прочитана", "прочитані", "прочитаних"), thisYear.length ? `${thisYear.length} цього року` : "", common.length ? `<b>${common.length} ${plural(common.length, "спільна", "спільні", "спільних")} з вами</b>` : "", follows.followers.length ? `<a href="#follows">${count(follows.followers.length, "читач стежить", "читачі стежать", "читачів стежать")}</a>` : "", own ? joined(reader.created) : "", own ? `<a href="${attr(reader.href)}?public">як бачать інші</a> · <a href="/settings">налаштування</a>` : `<span class="muted">@${esc(reader.username)}</span>`, own ? "" : joined(reader.created)].filter(Boolean).join(" · ");
+  const sub = [books(mine.length), kids.length ? `${kids.length} на дитячій полиці` : "", count(read, "прочитана", "прочитані", "прочитаних"), thisYear.length ? `${thisYear.length} цього року` : "", read ? `<a href="${attr(reader.href)}/stats">статистика</a>` : "", common.length ? `<b>${common.length} ${plural(common.length, "спільна", "спільні", "спільних")} з вами</b>` : "", follows.followers.length ? `<a href="#follows">${count(follows.followers.length, "читач стежить", "читачі стежать", "читачів стежать")}</a>` : "", own ? joined(reader.created) : "", own ? `<a href="${attr(reader.href)}?public">як бачать інші</a> · <a href="/settings">налаштування</a>` : `<span class="muted">@${esc(reader.username)}</span>`, own ? "" : joined(reader.created)].filter(Boolean).join(" · ");
   // Who follows this reader and whom they follow, as rows of names (Max, 2026-10-20: lists and counts are fine).
   const names = (list) => `<p class="small">${list.map((r) => `<a href="${attr(r.href)}">${esc(r.name)}</a>`).join(", ")}</p>`;
   const followBlock = follows.followers.length || follows.following.length ? `<div id="follows">${follows.followers.length ? `${label(own ? "Стежать за вами" : "Стежать", String(follows.followers.length))}${names(follows.followers)}` : ""}${follows.following.length ? `${label(own ? "Ви стежите за" : "Стежить за", String(follows.following.length))}${names(follows.following)}` : ""}</div>` : "";
@@ -1305,7 +1315,7 @@ function libraryPage({ ask = null, part = "", clubTopics = [], lists = [], saved
       const head = r.year !== r._prevYear || i === 0 ? yearHead(r.year, rows) : "";
       const vols = r.volumes || [r];
       const search = [r.series?.name, ...vols.flatMap((v) => [v.book.title, v.book.altTitle, stripMd(v.note || "")]), b.author, b.authorOrig].join(" ").toLowerCase();
-      const data = ` data-status="${r.status || ""}" data-copy="${r.copy || ""}" data-common="${vols.some((v) => common.includes(v)) ? 1 : ""}" data-kids="${r.kids ? 1 : ""}" data-tags="${attr((b.tags || []).join("|"))}" data-rating="${r.rating ?? ""}" data-title="${attr((r.volumes ? r.series.name : b.title).toLowerCase())}" data-search="${attr(search)}" data-order="${i}"${r.volumes ? ` data-books="${vols.length}"` : ""}`;
+      const data = ` data-status="${r.status || ""}" data-copy="${r.copy || ""}" data-common="${vols.some((v) => common.includes(v)) ? 1 : ""}" data-kids="${r.kids ? 1 : ""}" data-tags="${attr((b.tags || []).join("|"))}" data-fam="${famsOf(b).join("|")}" data-uk="${isUk(b) ? 1 : ""}" data-rating="${r.rating ?? ""}" data-title="${attr((r.volumes ? r.series.name : b.title).toLowerCase())}" data-search="${attr(search)}" data-order="${i}"${r.volumes ? ` data-books="${vols.length}"` : ""}`;
       const edit = b.href ? `/me${b.href}` : `/me/book/${encodeURIComponent(r.id)}`;
       const action = own ? `<a class="text-link small" href="${attr(edit)}">змінити</a>` : user && mineIds ? (mineIds.has(r.id) ? (rateable(mineIds.get(r.id), r.id) ? rateLine(r.id) : myStatus(mineIds.get(r.id))) : markButtons(b, user)) : "";
       return [head + (r.volumes ? seriesRow(r, { action, data }) : bookRow(b, { entry: r, action, id: r.id, data })), !r.kids];
@@ -1321,7 +1331,7 @@ function libraryPage({ ask = null, part = "", clubTopics = [], lists = [], saved
   const fav = own && favOffer ? `<form method="post" action="/api/lists/favorites" class="fav-offer">${favOffer.books.length ? `<span class="fav-fan" aria-hidden="true">${favOffer.books.map((b) => cover(b, "xs")).join("")}</span>` : ""}<div><p><b>Мої фаворити</b>${count(favOffer.n, "ваша п'ятірка", "ваші п'ятірки", "ваших п'ятірок")}. Нові додаватимуться самі.</p><p class="acts"><button class="btn small primary" name="yes" value="1">Зібрати список</button><button class="fav-x" name="no" value="1" aria-label="Не треба" title="Не треба">×</button></p></div></form>` : "";
   const topLists = lists.length || savedLists.length || own ? `<div class="top-lists">${listsHead}${fav}${lists.length || savedLists.length || fav ? "" : `<p class="small muted">Складіть список книжок, щоб поділитися ним.</p>`}<div class="lchips">${[...lists.map((l) => [l, listMeta(l, { by: false })]), ...savedLists.map((l) => [l, `${esc(l.reader.name)} · ${books(l.count)}`])].map(([l, m]) => `<a href="${attr(l.href)}"><b>${esc(l.title)}</b><span>${m}</span></a>`).join("")}</div></div>` : "";
   // «Цього року» heads the sidebar, so it is seen without scrolling (Max, 2026-11-23).
-  const yearBlock = thisYear.length ? `<div class="side-year">${label("Цього року")}<div class="numbers">
+  const yearBlock = thisYear.length ? `<div class="side-year">${label("Цього року", `<a href="${attr(reader.href)}/stats">статистика</a>`)}<div class="numbers">
       <p><b>${thisYear.length}</b>прочитано</p>
       ${rated.length ? `<p><b>${uk(Math.round((rated.reduce((s, r) => s + r.rating, 0) / rated.length) * 10) / 10)}</b>середня оцінка</p>` : ""}
       <p><b>${thisYear.filter((r) => isUk(r.book)).length}</b>українською</p>
@@ -1340,6 +1350,7 @@ ${pageHead({ crumbs: own ? "" : `<a href="/community">Читачі</a> / ${esc(r
       <select id="genre" aria-label="Жанр"><option value="">усі жанри</option>${genres.map((g) => `<option value="${g}">${g}</option>`).join("")}</select>
       <select id="sort" aria-label="Порядок"><option value="order">за порядком</option><option value="rating">за оцінкою</option><option value="title">за назвою</option></select>
     </div>
+    ${pickRow}
     <section class="rows" id="rows"${parts.rest}>
 ${parts.first}
     </section>
@@ -1360,11 +1371,193 @@ ${parts.first}
   return layout({ title: own ? "Моя полиця" : reader.name, body, user, path: own ? "/me" : "/@", canonical: own ? "" : reader.href, noindex: true, description: own ? "" : `Книжки, які читає ${reader.name}: ${books(rows.length)}, оцінки й нотатки.`, jsonld: own ? null : { "@context": "https://schema.org", "@type": "ProfilePage", mainEntity: { "@type": "Person", name: reader.name, url: ORIGIN + reader.href } } });
 }
 
+// «Статистика» of a shelf (/@user/stats, Max 2026-11-24, variant B of canvas AU9dirwZUmhH8iYbCmkPjM, from Tanya's
+// «помісячна візуалізація читання»): the years as tabs, a year's months as columns, each month's covers, and the
+// year's numbers and every year as bars beside them. A month is the entry's `readOn` (Goodreads' Date Read, or the
+// day it was marked «Прочитано»); books of the year with none are counted under the columns.
+const MONTH_SHORT = ["січ", "лют", "бер", "кві", "тра", "чер", "лип", "сер", "вер", "жов", "лис", "гру"];
+const MONTH_NAME = ["Січень", "Лютий", "Березень", "Квітень", "Травень", "Червень", "Липень", "Серпень", "Вересень", "Жовтень", "Листопад", "Грудень"];
+// Genre families for «Жанри по роках» (Max 2026-11-24, from his maxua.com/books): every genre of ours in one band,
+// a book in the family of its first specific genre; colours in style.css (`--g-<key>`).
+const FAMILIES = [
+  ["fant", "Фантастика", ["фантастика", "фентезі", "жахи"]],
+  ["crime", "Детективи й трилери", ["детективи", "трилери"]],
+  ["classic", "Класика", ["класика", "поезія"]],
+  ["fic", "Художня", ["художня", "любовні романи", "гумор", "комікси", "підліткові", "дитячі"]],
+  ["biz", "Бізнес", ["бізнес", "компанії", "менеджмент", "продукт", "гроші", "розробка"]],
+  ["hist", "Історія й війна", ["історія", "війна"]],
+  ["non", "Нонфікшн", ["біографії", "наука", "психологія", "філософія", "мистецтво", "здоров'я", "подорожі", "саморозвиток", "суспільство"]],
+];
+const FAMILY_OF = new Map(FAMILIES.flatMap(([k, , gs]) => gs.map((g) => [g, k])));
+const bookGenres = (b) => {
+  const t = (b.tags || []).filter((g) => FAMILY_OF.has(g));
+  const specific = t.filter((g) => g !== "художня");
+  return specific.length ? specific : t;
+};
+const familyOf = (b) => FAMILY_OF.get(bookGenres(b)[0]) || "none";
+const famsOf = (b) => [...new Set(bookGenres(b).map((g) => FAMILY_OF.get(g)))];
+
+// The years as a streamgraph: one band a family, centred, each year a column that links to it. The curves
+// between years share one easing (horizontal tangents), so bands never cross. No script: the SVG stretches to the
+// column (preserveAspectRatio none, no strokes), year labels are HTML under it.
+function genreStream(read, href) {
+  const counts = new Map();
+  for (const r of read) if (r.year) counts.set(r.year, (counts.get(r.year) || 0) + 1);
+  const busy = [...counts].filter(([, n]) => n >= 3).map(([y]) => y);
+  if (busy.length < 3) return "";
+  const to = Math.max(...counts.keys());
+  // From the year the shelf really starts: the first years with under 5% of the books together are left out,
+  // and so is all before three empty years in a row (Max's 1990 and 2000, then 2005 on).
+  let from = Math.min(...busy);
+  const total = [...counts.values()].reduce((s, n) => s + n, 0);
+  let before = 0;
+  for (const y of [...counts.keys()].sort((a, b) => a - b)) {
+    if (before + counts.get(y) > total * 0.05) { from = Math.max(from, y); break; }
+    before += counts.get(y);
+  }
+  for (let y = from, empty = 0; y <= to; y++) {
+    empty = counts.get(y) ? 0 : empty + 1;
+    if (empty >= 3) from = y + 1;
+  }
+  while (!counts.get(from) && from < to) from++;
+  const years = Array.from({ length: to - from + 1 }, (_, i) => from + i);
+  const keys = [...FAMILIES.map(([k]) => k), "none"];
+  const grid = new Map(years.map((y) => [y, Object.fromEntries(keys.map((k) => [k, 0]))]));
+  for (const r of read) if (grid.has(r.year)) grid.get(r.year)[familyOf(r.book)]++;
+  const shown = keys.filter((k) => years.some((y) => grid.get(y)[k]));
+  const W = 1000, H = 220, pad = 8;
+  const top = Math.max(...years.map((y) => shown.reduce((s, k) => s + grid.get(y)[k], 0)));
+  const scale = (H - 2 * pad) / top;
+  const x = (i) => (years.length === 1 ? W / 2 : (i / (years.length - 1)) * W);
+  // Boundaries: for each year, the y of every band's edge, centred on the middle.
+  const edges = years.map((y) => {
+    const total = shown.reduce((s, k) => s + grid.get(y)[k], 0);
+    let at = H / 2 - (total * scale) / 2;
+    const out = [at];
+    for (const k of shown) out.push((at += grid.get(y)[k] * scale));
+    return out;
+  });
+  const f = (n) => Math.round(n * 10) / 10;
+  const line = (j, back) => {
+    const idx = years.map((_, i) => i);
+    if (back) idx.reverse();
+    return idx.map((i, n) => {
+      if (!n) return `${back ? "L" : "M"}${f(x(i))},${f(edges[i][j])}`;
+      const p = idx[n - 1], mx = (x(p) + x(i)) / 2;
+      return `C${f(mx)},${f(edges[p][j])} ${f(mx)},${f(edges[i][j])} ${f(x(i))},${f(edges[i][j])}`;
+    }).join("");
+  };
+  const name = (k) => (k === "none" ? "Без жанру" : FAMILIES.find(([key]) => key === k)[1]);
+  const bands = shown.map((k, j) => `<path class="g-${k}" d="${line(j)}${line(j + 1, true)}Z"/>`).join("");
+  // Ticks: round years (every 5th, or 2nd on a short span) plus the first and last, none crowding them (a phone
+  // has room for about six).
+  const step = years.length > 12 ? 5 : years.length > 6 ? 2 : 1;
+  const tick = (y, i) => i === 0 || i === years.length - 1 || (y % step === 0 && y - years[0] >= Math.min(2, step / 2) && to - y >= Math.min(2, step / 2));
+  const cols = years.map((y, i) => {
+    const g = grid.get(y), total = shown.reduce((s, k) => s + g[k], 0);
+    const w = W / Math.max(1, years.length - 1);
+    const tip = `${y}: ${books(total)}${total ? `. ${shown.filter((k) => g[k]).map((k) => `${name(k)} ${g[k]}`).join(", ")}` : ""}`;
+    return `<a href="${attr(href(y))}"><rect x="${f(Math.max(0, x(i) - w / 2))}" y="0" width="${f(Math.min(w, W))}" height="${H}"><title>${esc(tip)}</title></rect></a>`;
+  }).join("");
+  const ticks = years.map((y, i) => (tick(y, i) ? `<span style="left:${f((x(i) / W) * 100)}%">${y}</span>` : "")).join("");
+  return `<div class="stats-stream">${label("Жанри по роках")}
+  <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="Жанри по роках, ${years[0]}–${to}">${bands}<g class="cols">${cols}</g></svg>
+  <div class="stream-years">${ticks}</div>
+  <p class="stream-legend">${shown.map((k) => `<span><i class="g-${k}"></i>${name(k)}</span>`).join("")}</p></div>`;
+}
+
+// Genres as rows with a bar in their family's colour, most first; books with none in one line under them.
+function genreRows(list, n = 12) {
+  const c = new Map();
+  let none = 0;
+  for (const r of list) {
+    const g = bookGenres(r.book);
+    if (!g.length) none++;
+    for (const x of g) c.set(x, (c.get(x) || 0) + 1);
+  }
+  const top = [...c].sort((a, b) => b[1] - a[1]).slice(0, n);
+  if (!top.length) return "";
+  const max = top[0][1];
+  return `<div class="stats-genres">${top.map(([g, k]) => `<p><span>${esc(cap(g))}</span><i class="g-${FAMILY_OF.get(g)}" style="width:${Math.max(2, Math.round((k / max) * 100))}%"></i><span>${k}</span></p>`).join("")}</div>${none ? `<p class="small muted">${count(none, "книжка", "книжки", "книжок")} без жанру</p>` : ""}`;
+}
+
+// The stars a reader gives, as columns: every rating used, low to high.
+function ratingCols(list) {
+  const c = new Map();
+  // Halves: an import may carry 4.2 or 3.75.
+  for (const r of list) if (r.rating != null && r.rating > 0) { const k = Math.max(0.5, Math.round(r.rating * 2) / 2); c.set(k, (c.get(k) || 0) + 1); }
+  if (!c.size) return "";
+  const keys = [...c.keys()].sort((a, b) => a - b);
+  const max = Math.max(...c.values());
+  return `<div class="stats-cols stats-stars" style="--cols:${keys.length}">${keys.map((k) => `<div class="stats-col"><span class="n">${c.get(k)}</span><i style="--h:${Math.round((c.get(k) / max) * 100) / 100}"></i><span class="m">${uk(k)}</span></div>`).join("")}</div>`;
+}
+
+function statsPage({ user, reader, own, rows, year }) {
+  const read = rows.filter((r) => r.status === "read" && !r.kids);
+  const years = [...new Set(read.map((r) => r.year).filter(Boolean))].sort((a, b) => b - a);
+  const head = pageHead({ crumbs: `<a href="${attr(reader.href)}">${own ? "Моя полиця" : esc(reader.name)}</a> / Статистика`, kicker: own ? "Моя полиця" : "Полиця читача", title: "Статистика", sub: years.length ? `${count(read.length, "книжка прочитана", "книжки прочитано", "книжок прочитано")} з ${years[years.length - 1]} року` : "" });
+  if (!years.length) return layout({ title: "Статистика", body: `${head}<p class="empty">${own ? "Позначте прочитані книжки з роком, і тут з'являться ваші місяці й роки." : "Тут ще немає прочитаних книжок з роком."}</p>`, user, path: own ? "/me" : "/@", noindex: true });
+  if (!years.includes(year)) year = years[0];
+  const yr = read.filter((r) => r.year === year);
+  const months = Array.from({ length: 12 }, () => []);
+  for (const r of yr) if (r.readOn) months[Number(r.readOn.slice(5, 7)) - 1].push(r);
+  for (const m of months) m.sort((a, b) => (b.readOn < a.readOn ? -1 : b.readOn > a.readOn ? 1 : 0));
+  const dated = months.reduce((n, m) => n + m.length, 0);
+  const max = Math.max(1, ...months.map((m) => m.length));
+  // Months only when most of the year has them (Max 2026-11-24: a row of zeros before the site's first month
+  // misleads); else the year's covers, newest first.
+  const byMonth = dated >= Math.max(1, yr.length * 0.8);
+  const wall = (list) => `<div class="stats-wall">${list.map((r) => `<a href="${attr(r.book.href || "#")}" title="${attr(r.book.title)}">${cover(r.book, "sm")}</a>`).join("")}</div>`;
+  if (!byMonth) yr.sort((a, b) => ((b.readOn || b.updated || "") > (a.readOn || a.updated || "") ? 1 : -1));
+  const now = new Date();
+  const later = (i) => year === now.getFullYear() && i > now.getMonth();
+  const rated = yr.filter((r) => r.rating != null);
+  const href = (y) => `${reader.href}/stats?year=${y}#year`;
+  const allRated = read.filter((r) => r.rating != null && r.rating > 0);
+  const avg = (list) => uk(Math.round((list.reduce((s, r) => s + r.rating, 0) / list.length) * 10) / 10);
+  const allGenres = genreRows(read);
+  const stars = ratingCols(read);
+  const body = `
+${head}
+<div class="tabs stats-years" id="year">${years.map((y) => `<a class="tab${y === year ? " on" : ""}" href="${attr(href(y))}">${y}</a>`).join("")}</div>
+<div class="split">
+  <div>
+    ${label(`${year} · ${books(yr.length)}`)}
+    ${byMonth ? `<div class="stats-cols" aria-label="Прочитано по місяцях">${months.map((m, i) => `<div class="stats-col${later(i) ? " later" : ""}"><span class="n">${later(i) ? "" : m.length}</span><i style="--h:${Math.round((m.length / max) * 100) / 100}"></i><span class="m">${MONTH_SHORT[i]}</span></div>`).join("")}</div>
+    ${dated < yr.length ? `<p class="small muted stats-undated">${count(yr.length - dated, "книжка", "книжки", "книжок")} цього року без місяця.</p>` : ""}
+    ${months.map((m, i) => [m, i]).reverse().filter(([m]) => m.length).map(([m, i]) => `<h3 class="stats-month">${MONTH_NAME[i]} <span>${books(m.length)}</span></h3>
+    ${wall(m)}`).join("")}` : wall(yr)}
+  </div>
+  <aside>
+    ${label(String(year))}
+    <div class="numbers">
+      <p><b>${yr.length}</b>прочитано</p>
+      ${rated.length ? `<p><b>${avg(rated)}</b>середня оцінка</p>` : ""}
+      <p><b>${yr.filter((r) => isUk(r.book)).length}</b>українською</p>
+      <p><b>${yr.filter((r) => r.note).length}</b>з нотатками</p>
+    </div>
+    ${genreRows(yr, 6) ? `${label(`Жанри ${year}`)}${genreRows(yr, 6)}` : ""}
+  </aside>
+</div>
+${years.length > 1 ? `<div class="stats-all">
+  <div>${label("За всі роки")}<div class="numbers">
+    <p><b>${read.length}</b>прочитано</p>
+    ${allRated.length ? `<p><b>${avg(allRated)}</b>середня оцінка</p>` : ""}
+    <p><b>${allRated.filter((r) => r.rating >= 5).length}</b>на 5 ★</p>
+    <p><b>${read.filter((r) => isUk(r.book)).length}</b>українською</p>
+  </div></div>
+  ${allGenres ? `<div>${label("Жанри")}${allGenres}</div>` : ""}
+  ${stars ? `<div>${label("Оцінки", `${allRated.length} з ${read.length}`)}${stars}</div>` : ""}
+</div>` : ""}
+${genreStream(read, href)}`;
+  return layout({ title: own ? "Моя статистика" : `Статистика · ${reader.name}`, body, user, path: own ? "/me" : "/@", canonical: `${reader.href}/stats`, noindex: true });
+}
+
 // «Стежити» on another reader's page (the design's secondary button); pressed, it reads «✓ Стежу».
 // Whom one follows is private: it only puts their activity first in the feed.
-function followButton(reader, on, user) {
+function followButton(reader, on, user, small = false) {
   if (!user) return `<a class="btn" rel="nofollow" href="/login?next=${attr(encodeURIComponent(reader.href))}">Стежити</a>`;
-  return `<form method="post" action="/api/follow/${attr(reader.username)}" class="inline"><button class="btn${on ? " on" : ""}" title="${on ? "Більше не стежити" : "Бачити книжки цього читача першими у стрічці"}">${on ? "✓ Стежу" : "Стежити"}</button></form>`;
+  return `<form method="post" action="/api/follow/${attr(reader.username)}" class="inline"><button class="btn${on ? " on" : ""}${small ? " small" : ""}" title="${on ? "Більше не стежити" : "Бачити книжки цього читача першими у стрічці"}">${on ? "✓ Стежу" : "Стежити"}</button></form>`;
 }
 
 function yearHead(year, rows) {
@@ -1675,18 +1868,24 @@ ${parts.first}
 // so it names its book unless that is the one being read (Max, 2026-10-23).
 const noteAbout = (r) => (!r.noteBook || r.now?.books.some((n) => n.id === r.noteBook.id) ? "" : `<span class="note-book">${esc(r.noteBook.title)}:</span> `);
 
-function readersPage({ user, feed, readers, totals, followed = new Set(), club = [] }) {
+function readersPage({ user, feed, readers, totals, followed = new Set(), club = [], similar = [] }) {
+  // «Схожий смак» (server.js similarReaders): above the feed on a phone, at the top of the side column on a computer.
+  const simBlock = (cls) => (similar.length ? `<div class="${cls}">${label("Схожий смак")}<div class="people">${similar
+    .map((s) => `<div class="person"><div class="person-head"><a href="${attr(s.reader.href)}">${esc(s.reader.name)}</a>${followButton(s.reader, false, user, true)}</div><p class="sub">${count(s.common, "спільна прочитана", "спільні прочитані", "спільних прочитаних")}</p>${s.books.length ? `<div class="sim-covers">${s.books.map((b) => `<a href="${attr(b.href)}" title="${attr(b.title)}">${cover(b, "sm")}</a>`).join("")}</div>` : ""}</div>`)
+    .join("")}</div></div>` : "");
   // A reader who follows someone gets a fourth filter: only those readers.
-  const tabs = [["", "усе"], ...(followed.size ? [["followed", "за ким стежу"]] : []), ["notes", "з нотатками"], ["top", "оцінки 4,5+"]];
+  const tabs =[["", "усе"], ...(followed.size ? [["followed", "за ким стежу"]] : []), ["notes", "з нотатками"], ["top", "оцінки 4,5+"]];
   const body = `
 ${pageHead({ kicker: "Спільнота", title: "Що читають інші", sub: `${count(totals.readers, "читач", "читачі", "читачів")} · ${books(totals.books)} на полицях · ${count(totals.notes, "нотатка", "нотатки", "нотаток")}`, action: user ? "" : `<a class="btn primary" href="/login">Завести полицю</a>` })}
 <div class="split wide-aside">
   <section>
+    ${simBlock("sim-top")}
     ${label("Стрічка", `<span class="tabs" data-feed-filter>${tabs.map(([v, t]) => `<button type="button" class="tab${v ? "" : " on"}" data-v="${v}">${t}</button>`).join("")}</span>`)}
     ${feedList(feed, { wide: true, followed })}
     ${club.length ? `<section class="block" data-block="club">${label("Обговорюють", `<a href="/club">усі теми</a> · <a rel="nofollow" href="/club/new">+ нова тема</a>`)}<div class="club-topics">${club.map((t) => clubRow(t)).join("")}</div></section>` : ""}
   </section>
   <aside>
+    ${simBlock("sim-side")}
     ${label("Читачі")}
     <div class="people">${readers
       .map((r) => `<div class="person"><p class="person-head"><a href="${attr(r.reader.href)}">${esc(r.reader.name)}</a>${followed.has(r.reader.id) ? `<span>стежу</span>` : r.thisYear ? `<span>${r.thisYear} цього року</span>` : ""}</p><p class="sub">${books(r.count)}, ${count(r.read, "прочитана", "прочитані", "прочитаних")}</p>${nowLine(r.now)}${r.note ? `<p class="note">${noteAbout(r)}${r.note}</p>` : ""}</div>`)
@@ -4034,6 +4233,7 @@ ${wait ? `<script>(() => { const steps = ${JSON.stringify(ASK_STEPS)}; const lin
 }
 
 module.exports = {
+  statsPage,
   calendarPage, calendarAddPage, eventPage,
   askPage, askAnswerPage, askRows,
   asksPage, askTalkPage, setAskNav,

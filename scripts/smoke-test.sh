@@ -81,6 +81,7 @@ check /admin 403
 if [ $real = 1 ]; then
   check /publishers/starylev 200
   check /@maxua 200
+  check /@maxua/stats 200
   check /book/east-of-eden 200
   check /genre/fentezi 200
   check /author/serhii-zhadan 200
@@ -92,7 +93,7 @@ if [ $real = 1 ]; then
   code=$(grep -o "входу на [^:]*: [0-9]\{6\}" "$LOG" | tail -1 | grep -o "[0-9]\{6\}$")
   curl -s -c "$JAR" -b "$JAR" -o /dev/null -d "email=owner@test.invalid&code=$code" "$BASE/login/code"
   if grep -q chytai "$JAR" 2>/dev/null; then
-    for p in /@maxua /settings /add /admin /admin/traffic /admin/threads /admin/events /admin/readers /admin/retention /admin/comments /admin/digest /admin/catalog /admin/jobs /admin/speed /admin/activity "/admin/activity?guests=1"; do
+    for p in /@maxua /@maxua/stats /community /settings /add /admin /admin/traffic /admin/threads /admin/events /admin/readers /admin/retention /admin/comments /admin/digest /admin/catalog /admin/jobs /admin/speed /admin/activity "/admin/activity?guests=1"; do
       check "$p" 200 "$JAR"
     done
   else

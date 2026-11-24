@@ -122,6 +122,10 @@ function open(dataDir) {
   if (db.prepare("PRAGMA table_info(readers)").all().some((c) => c.name === "gender")) db.exec("ALTER TABLE readers DROP COLUMN gender; ALTER TABLE readers DROP COLUMN gender_set");
   // «Дитяча полиця» (Max, 2026-10-23): a book the reader keeps for their children, out of their own taste.
   if (!db.prepare("PRAGMA table_info(entries)").all().some((c) => c.name === "kids")) db.exec("ALTER TABLE entries ADD COLUMN kids INTEGER NOT NULL DEFAULT 0");
+  // When a book was read, as a day (Max 2026-11-24, «Статистика» by months): from Goodreads' Date Read and from the
+  // moment a book becomes «Прочитано». Rows before it take the day the entry last changed when its year agrees (an
+  // import's `updated` is the Date Read; a book marked on the site mostly changed when it was marked).
+  if (!db.prepare("PRAGMA table_info(entries)").all().some((c) => c.name === "read_on")) db.exec("ALTER TABLE entries ADD COLUMN read_on TEXT; UPDATE entries SET read_on = substr(updated, 1, 10) WHERE status = 'read' AND year IS NOT NULL AND substr(updated, 1, 4) = CAST(year AS TEXT)");
   // A work may have several addresses (an old one redirects to the current): the table once made id
   // UNIQUE, so a second slug for an id was silently dropped and lived only in memory (2026-10-21).
   if (db.prepare("PRAGMA index_list(slugs)").all().some((i) => i.unique && i.origin === "u")) {
