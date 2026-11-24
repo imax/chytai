@@ -1426,7 +1426,11 @@ function genreStream(read, href) {
   // orange band is then the books with a fiction genre of their own (romance, humour, teens, children, comics).
   const plainOnly = (b) => { const g = bookGenres(b); return g.length === 1 && g[0] === "художня"; };
   for (const r of read) if (grid.has(r.year)) grid.get(r.year)[plainOnly(r.book) ? "none" : familyOf(r.book)]++;
-  const shown = keys.filter((k) => years.some((y) => grid.get(y)[k]));
+  // The bands are the books with a genre; those without a precise one are only counted (Max 2026-11-24: in Tanya's
+  // graph their grey band filled half of it).
+  const shown = keys.filter((k) => k !== "none" && years.some((y) => grid.get(y)[k]));
+  const vague = years.reduce((s, y) => s + grid.get(y).none, 0);
+  if (!shown.length) return "";
   const W = 1000, H = 220, pad = 8;
   const top = Math.max(...years.map((y) => shown.reduce((s, k) => s + grid.get(y)[k], 0)));
   const scale = (H - 2 * pad) / top;
@@ -1456,11 +1460,11 @@ function genreStream(read, href) {
   const step = years.length > 12 ? 5 : years.length > 6 ? 2 : 1;
   const tick = (y, i) => i === 0 || i === years.length - 1 || (y % step === 0 && y - years[0] >= Math.min(2, step / 2) && to - y >= Math.min(2, step / 2));
   const cols = years.map((y, i) => {
-    const g = grid.get(y), total = shown.reduce((s, k) => s + g[k], 0);
+    const g = grid.get(y), total = keys.reduce((s, k) => s + g[k], 0);
     const w = W / Math.max(1, years.length - 1);
     // An HTML column over the graph with a CSS tooltip: it shows at once on hover (Max 2026-11-24, an SVG <title>
     // waited a second or two).
-    const tip = [`${y} · ${books(total)}`, ...shown.filter((k) => g[k]).sort((a, b) => g[b] - g[a]).map((k) => `${name(k)} ${g[k]}`)].join("\n");
+    const tip = [`${y} · ${books(total)}`, ...shown.filter((k) => g[k]).sort((a, b) => g[b] - g[a]).map((k) => `${name(k)} ${g[k]}`), g.none ? `Без точного жанру ${g.none}` : ""].filter(Boolean).join("\n");
     const left = Math.max(0, x(i) - w / 2), at = x(i) / W;
     return `<a href="${attr(href(y))}" class="${at > 0.5 ? "r" : ""}" style="left:${f((left / W) * 100)}%;width:${f((Math.min(x(i) + w / 2, W) - left) / W * 100)}%" data-tip="${attr(tip)}" aria-label="${attr(tip.replace(/\n/g, ", "))}"></a>`;
   }).join("");
@@ -1468,7 +1472,8 @@ function genreStream(read, href) {
   return `<div class="stats-stream">${label("Жанри по роках")}
   <div class="stream-plot"><svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="Жанри по роках, ${years[0]}–${to}">${bands}</svg><div class="stream-cols">${cols}</div></div>
   <div class="stream-years">${ticks}</div>
-  <p class="stream-legend">${shown.map((k) => `<span><i class="g-${k}"></i>${name(k)}</span>`).join("")}</p></div>`;
+  <p class="stream-legend">${shown.map((k) => `<span><i class="g-${k}"></i>${name(k)}</span>`).join("")}</p>
+  ${vague ? `<p class="small muted">${count(vague, "книжки", "книжок", "книжок")} без точного жанру тут немає</p>` : ""}</div>`;
 }
 
 // Genres as rows with a bar in their family's colour, most first; books with none in one line under them.
