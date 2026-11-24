@@ -1284,6 +1284,16 @@ function libraryPage({ ask = null, part = "", clubTopics = [], lists = [], saved
   const rated = thisYear.filter((r) => r.rating != null);
   const common = mineIds && !own ? rows.filter((r) => mineIds.has(r.id)) : [];
   const genres = GENRES.filter((g) => rows.some((r) => (r.book.tags || []).includes(g)));
+  // Quick picks over the shelf (Max 2026-11-24, from his maxua.com/books): «4,5+», «Українською» and the
+  // reader's three biggest genre families; one at a time, a second tap lets go (app.js `filters.pick`).
+  const fams = new Map();
+  for (const r of mine) for (const k of famsOf(r.book)) fams.set(k, (fams.get(k) || 0) + 1);
+  const picks = [
+    ...(mine.some((r) => r.rating >= 4.5) ? [["top", "4,5+"]] : []),
+    ...(mine.some((r) => isUk(r.book)) && mine.some((r) => !isUk(r.book)) ? [["uk", "Українською"]] : []),
+    ...[...fams].filter(([, n]) => n >= 3).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([k]) => [`f:${k}`, FAMILIES.find(([key]) => key === k)[1]]),
+  ];
+  const pickRow = picks.length > 1 ? `<div class="shelf-picks">${picks.map(([v, l]) => `<button type="button" class="chip" data-pick-v="${attr(v)}">${esc(l)}</button>`).join("")}</div>` : "";
   // Another reader's tabs say what they did («Читає»), since we don't know how they'd say it themselves.
   const tabs = [
     ["", "Усі", mine.length],
@@ -1305,7 +1315,7 @@ function libraryPage({ ask = null, part = "", clubTopics = [], lists = [], saved
       const head = r.year !== r._prevYear || i === 0 ? yearHead(r.year, rows) : "";
       const vols = r.volumes || [r];
       const search = [r.series?.name, ...vols.flatMap((v) => [v.book.title, v.book.altTitle, stripMd(v.note || "")]), b.author, b.authorOrig].join(" ").toLowerCase();
-      const data = ` data-status="${r.status || ""}" data-copy="${r.copy || ""}" data-common="${vols.some((v) => common.includes(v)) ? 1 : ""}" data-kids="${r.kids ? 1 : ""}" data-tags="${attr((b.tags || []).join("|"))}" data-rating="${r.rating ?? ""}" data-title="${attr((r.volumes ? r.series.name : b.title).toLowerCase())}" data-search="${attr(search)}" data-order="${i}"${r.volumes ? ` data-books="${vols.length}"` : ""}`;
+      const data = ` data-status="${r.status || ""}" data-copy="${r.copy || ""}" data-common="${vols.some((v) => common.includes(v)) ? 1 : ""}" data-kids="${r.kids ? 1 : ""}" data-tags="${attr((b.tags || []).join("|"))}" data-fam="${famsOf(b).join("|")}" data-uk="${isUk(b) ? 1 : ""}" data-rating="${r.rating ?? ""}" data-title="${attr((r.volumes ? r.series.name : b.title).toLowerCase())}" data-search="${attr(search)}" data-order="${i}"${r.volumes ? ` data-books="${vols.length}"` : ""}`;
       const edit = b.href ? `/me${b.href}` : `/me/book/${encodeURIComponent(r.id)}`;
       const action = own ? `<a class="text-link small" href="${attr(edit)}">змінити</a>` : user && mineIds ? (mineIds.has(r.id) ? (rateable(mineIds.get(r.id), r.id) ? rateLine(r.id) : myStatus(mineIds.get(r.id))) : markButtons(b, user)) : "";
       return [head + (r.volumes ? seriesRow(r, { action, data }) : bookRow(b, { entry: r, action, id: r.id, data })), !r.kids];
@@ -1340,6 +1350,7 @@ ${pageHead({ crumbs: own ? "" : `<a href="/community">Читачі</a> / ${esc(r
       <select id="genre" aria-label="Жанр"><option value="">усі жанри</option>${genres.map((g) => `<option value="${g}">${g}</option>`).join("")}</select>
       <select id="sort" aria-label="Порядок"><option value="order">за порядком</option><option value="rating">за оцінкою</option><option value="title">за назвою</option></select>
     </div>
+    ${pickRow}
     <section class="rows" id="rows"${parts.rest}>
 ${parts.first}
     </section>
@@ -1366,6 +1377,118 @@ ${parts.first}
 // day it was marked «Прочитано»); books of the year with none are counted under the columns.
 const MONTH_SHORT = ["січ", "лют", "бер", "кві", "тра", "чер", "лип", "сер", "вер", "жов", "лис", "гру"];
 const MONTH_NAME = ["Січень", "Лютий", "Березень", "Квітень", "Травень", "Червень", "Липень", "Серпень", "Вересень", "Жовтень", "Листопад", "Грудень"];
+// Genre families for «Жанри по роках» (Max 2026-11-24, from his maxua.com/books): every genre of ours in one band,
+// a book in the family of its first specific genre; colours in style.css (`--g-<key>`).
+const FAMILIES = [
+  ["fant", "Фантастика", ["фантастика", "фентезі", "жахи"]],
+  ["crime", "Детективи й трилери", ["детективи", "трилери"]],
+  ["classic", "Класика", ["класика", "поезія"]],
+  ["fic", "Художня", ["художня", "любовні романи", "гумор", "комікси", "підліткові", "дитячі"]],
+  ["biz", "Бізнес", ["бізнес", "компанії", "менеджмент", "продукт", "гроші", "розробка"]],
+  ["hist", "Історія й війна", ["історія", "війна"]],
+  ["non", "Нонфікшн", ["біографії", "наука", "психологія", "філософія", "мистецтво", "здоров'я", "подорожі", "саморозвиток", "суспільство"]],
+];
+const FAMILY_OF = new Map(FAMILIES.flatMap(([k, , gs]) => gs.map((g) => [g, k])));
+const bookGenres = (b) => {
+  const t = (b.tags || []).filter((g) => FAMILY_OF.has(g));
+  const specific = t.filter((g) => g !== "художня");
+  return specific.length ? specific : t;
+};
+const familyOf = (b) => FAMILY_OF.get(bookGenres(b)[0]) || "none";
+const famsOf = (b) => [...new Set(bookGenres(b).map((g) => FAMILY_OF.get(g)))];
+
+// The years as a streamgraph: one band a family, centred, each year a column that links to it. The curves
+// between years share one easing (horizontal tangents), so bands never cross. No script: the SVG stretches to the
+// column (preserveAspectRatio none, no strokes), year labels are HTML under it.
+function genreStream(read, href) {
+  const counts = new Map();
+  for (const r of read) if (r.year) counts.set(r.year, (counts.get(r.year) || 0) + 1);
+  const busy = [...counts].filter(([, n]) => n >= 3).map(([y]) => y);
+  if (busy.length < 3) return "";
+  const to = Math.max(...counts.keys());
+  // From the year the shelf really starts: the first years with under 5% of the books together are left out,
+  // and so is all before three empty years in a row (Max's 1990 and 2000, then 2005 on).
+  let from = Math.min(...busy);
+  const total = [...counts.values()].reduce((s, n) => s + n, 0);
+  let before = 0;
+  for (const y of [...counts.keys()].sort((a, b) => a - b)) {
+    if (before + counts.get(y) > total * 0.05) { from = Math.max(from, y); break; }
+    before += counts.get(y);
+  }
+  for (let y = from, empty = 0; y <= to; y++) {
+    empty = counts.get(y) ? 0 : empty + 1;
+    if (empty >= 3) from = y + 1;
+  }
+  while (!counts.get(from) && from < to) from++;
+  const years = Array.from({ length: to - from + 1 }, (_, i) => from + i);
+  const keys = [...FAMILIES.map(([k]) => k), "none"];
+  const grid = new Map(years.map((y) => [y, Object.fromEntries(keys.map((k) => [k, 0]))]));
+  for (const r of read) if (grid.has(r.year)) grid.get(r.year)[familyOf(r.book)]++;
+  const shown = keys.filter((k) => years.some((y) => grid.get(y)[k]));
+  const W = 1000, H = 220, pad = 8;
+  const top = Math.max(...years.map((y) => shown.reduce((s, k) => s + grid.get(y)[k], 0)));
+  const scale = (H - 2 * pad) / top;
+  const x = (i) => (years.length === 1 ? W / 2 : (i / (years.length - 1)) * W);
+  // Boundaries: for each year, the y of every band's edge, centred on the middle.
+  const edges = years.map((y) => {
+    const total = shown.reduce((s, k) => s + grid.get(y)[k], 0);
+    let at = H / 2 - (total * scale) / 2;
+    const out = [at];
+    for (const k of shown) out.push((at += grid.get(y)[k] * scale));
+    return out;
+  });
+  const f = (n) => Math.round(n * 10) / 10;
+  const line = (j, back) => {
+    const idx = years.map((_, i) => i);
+    if (back) idx.reverse();
+    return idx.map((i, n) => {
+      if (!n) return `${back ? "L" : "M"}${f(x(i))},${f(edges[i][j])}`;
+      const p = idx[n - 1], mx = (x(p) + x(i)) / 2;
+      return `C${f(mx)},${f(edges[p][j])} ${f(mx)},${f(edges[i][j])} ${f(x(i))},${f(edges[i][j])}`;
+    }).join("");
+  };
+  const name = (k) => (k === "none" ? "Без жанру" : FAMILIES.find(([key]) => key === k)[1]);
+  const bands = shown.map((k, j) => `<path class="g-${k}" d="${line(j)}${line(j + 1, true)}Z"/>`).join("");
+  const step = years.length > 24 ? 5 : years.length > 12 ? 2 : 1;
+  const cols = years.map((y, i) => {
+    const g = grid.get(y), total = shown.reduce((s, k) => s + g[k], 0);
+    const w = W / Math.max(1, years.length - 1);
+    const tip = `${y}: ${books(total)}${total ? `. ${shown.filter((k) => g[k]).map((k) => `${name(k)} ${g[k]}`).join(", ")}` : ""}`;
+    return `<a href="${attr(href(y))}"><rect x="${f(Math.max(0, x(i) - w / 2))}" y="0" width="${f(Math.min(w, W))}" height="${H}"><title>${esc(tip)}</title></rect></a>`;
+  }).join("");
+  const ticks = years.map((y, i) => (i % step === 0 || i === years.length - 1) && !(i !== years.length - 1 && years.length - 1 - i < step) ? `<span style="left:${f((x(i) / W) * 100)}%">${y}</span>` : "").join("");
+  return `<div class="stats-stream">${label("Жанри по роках")}
+  <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="Жанри по роках, ${years[0]}–${to}">${bands}<g class="cols">${cols}</g></svg>
+  <div class="stream-years">${ticks}</div>
+  <p class="stream-legend">${shown.map((k) => `<span><i class="g-${k}"></i>${name(k)}</span>`).join("")}</p></div>`;
+}
+
+// Genres as rows with a bar in their family's colour, most first; books with none in one line under them.
+function genreRows(list, n = 12) {
+  const c = new Map();
+  let none = 0;
+  for (const r of list) {
+    const g = bookGenres(r.book);
+    if (!g.length) none++;
+    for (const x of g) c.set(x, (c.get(x) || 0) + 1);
+  }
+  const top = [...c].sort((a, b) => b[1] - a[1]).slice(0, n);
+  if (!top.length) return "";
+  const max = top[0][1];
+  return `<div class="stats-genres">${top.map(([g, k]) => `<p><span>${esc(cap(g))}</span><i class="g-${FAMILY_OF.get(g)}" style="width:${Math.max(2, Math.round((k / max) * 100))}%"></i><span>${k}</span></p>`).join("")}</div>${none ? `<p class="small muted">${count(none, "книжка", "книжки", "книжок")} без жанру</p>` : ""}`;
+}
+
+// The stars a reader gives, as columns: every rating used, low to high.
+function ratingCols(list) {
+  const c = new Map();
+  // Halves: an import may carry 4.2 or 3.75.
+  for (const r of list) if (r.rating != null && r.rating > 0) { const k = Math.max(0.5, Math.round(r.rating * 2) / 2); c.set(k, (c.get(k) || 0) + 1); }
+  if (!c.size) return "";
+  const keys = [...c.keys()].sort((a, b) => a - b);
+  const max = Math.max(...c.values());
+  return `<div class="stats-cols stats-stars" style="--cols:${keys.length}">${keys.map((k) => `<div class="stats-col"><span class="n">${c.get(k)}</span><i style="--h:${Math.round((c.get(k) / max) * 100) / 100}"></i><span class="m">${uk(k)}</span></div>`).join("")}</div>`;
+}
+
 function statsPage({ user, reader, own, rows, year }) {
   const read = rows.filter((r) => r.status === "read" && !r.kids);
   const years = [...new Set(read.map((r) => r.year).filter(Boolean))].sort((a, b) => b - a);
@@ -1386,12 +1509,15 @@ function statsPage({ user, reader, own, rows, year }) {
   const now = new Date();
   const later = (i) => year === now.getFullYear() && i > now.getMonth();
   const rated = yr.filter((r) => r.rating != null);
-  const per = years.map((y) => [y, read.filter((r) => r.year === y).length]);
-  const pmax = Math.max(...per.map(([, n]) => n));
-  const href = (y) => `${reader.href}/stats?year=${y}`;
+  const href = (y) => `${reader.href}/stats?year=${y}#year`;
+  const allRated = read.filter((r) => r.rating != null && r.rating > 0);
+  const avg = (list) => uk(Math.round((list.reduce((s, r) => s + r.rating, 0) / list.length) * 10) / 10);
+  const allGenres = genreRows(read);
+  const stars = ratingCols(read);
   const body = `
 ${head}
-<div class="tabs stats-years">${years.map((y) => `<a class="tab${y === year ? " on" : ""}" href="${attr(href(y))}">${y}</a>`).join("")}</div>
+${genreStream(read, href)}
+<div class="tabs stats-years" id="year">${years.map((y) => `<a class="tab${y === year ? " on" : ""}" href="${attr(href(y))}">${y}</a>`).join("")}</div>
 <div class="split">
   <div>
     ${label(`${year} · ${books(yr.length)}`)}
@@ -1404,13 +1530,23 @@ ${head}
     ${label(String(year))}
     <div class="numbers">
       <p><b>${yr.length}</b>прочитано</p>
-      ${rated.length ? `<p><b>${uk(Math.round((rated.reduce((s, r) => s + r.rating, 0) / rated.length) * 10) / 10)}</b>середня оцінка</p>` : ""}
+      ${rated.length ? `<p><b>${avg(rated)}</b>середня оцінка</p>` : ""}
       <p><b>${yr.filter((r) => isUk(r.book)).length}</b>українською</p>
       <p><b>${yr.filter((r) => r.note).length}</b>з нотатками</p>
     </div>
-    ${per.length > 1 ? `${label("По роках")}<div class="stats-years-bars">${per.map(([y, n]) => `<a href="${attr(href(y))}"${y === year ? ' class="on"' : ""}><span>${y}</span><i style="width:${Math.max(1, Math.round((n / pmax) * 100))}%"></i><span>${n}</span></a>`).join("")}</div>` : ""}
+    ${genreRows(yr, 6) ? `${label(`Жанри ${year}`)}${genreRows(yr, 6)}` : ""}
   </aside>
-</div>`;
+</div>
+${years.length > 1 ? `<div class="stats-all">
+  <div>${label("За всі роки")}<div class="numbers">
+    <p><b>${read.length}</b>прочитано</p>
+    ${allRated.length ? `<p><b>${avg(allRated)}</b>середня оцінка</p>` : ""}
+    <p><b>${allRated.filter((r) => r.rating >= 5).length}</b>на 5 ★</p>
+    <p><b>${read.filter((r) => isUk(r.book)).length}</b>українською</p>
+  </div></div>
+  ${allGenres ? `<div>${label("Жанри")}${allGenres}</div>` : ""}
+  ${stars ? `<div>${label("Оцінки", `${allRated.length} з ${read.length}`)}${stars}</div>` : ""}
+</div>` : ""}`;
   return layout({ title: own ? "Моя статистика" : `Статистика · ${reader.name}`, body, user, path: own ? "/me" : "/@", canonical: `${reader.href}/stats`, noindex: true });
 }
 

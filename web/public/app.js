@@ -103,6 +103,10 @@
       else if (filters.genre && !(it.dataset.genre || "").split("|").includes(filters.genre)) return false;
       if (filters.avail && it.dataset.avail !== filters.avail) return false;
       if (g && !(it.dataset.tags || "").split("|").includes(g)) return false;
+      const p = filters.pick; // a shelf's quick picks (pages.libraryPage)
+      if (p === "top" && !(Number(it.dataset.rating) >= 4.5)) return false;
+      if (p === "uk" && it.dataset.uk !== "1") return false;
+      if (p?.startsWith("f:") && !(it.dataset.fam || "").split("|").includes(p.slice(2))) return false;
       return true;
     }
 
@@ -161,6 +165,12 @@
 
     q?.addEventListener("input", again);
     genre?.addEventListener("change", again);
+    for (const c of $$("[data-pick-v]")) c.addEventListener("click", () => {
+      const on = !c.classList.contains("on");
+      for (const x of $$("[data-pick-v]")) x.classList.toggle("on", x === c && on);
+      filters.pick = on ? c.dataset.pickV : "";
+      again();
+    });
     sort?.addEventListener("change", resort);
     // A publisher's genres: four in sight, «ще N» opens the rest; «усі 129» over «Нове» picks «Нові» (2026-11-13).
     for (const btn of $$(".g-more")) btn.addEventListener("click", () => btn.parentElement.classList.add("open"));

@@ -730,8 +730,13 @@ A flag only when Max asks for one, or when the change could break what readers u
 - `entries.read_on` (`readOn`, `YYYY-MM-DD`): Goodreads' «Date Read» on import, today (Kyiv) when a book is newly marked
   read in the current year (`setEntry`); `writeEntry` drops it when it doesn't fall in the entry's `year`. Old rows got
   `updated`'s day once (db.js), exact for Goodreads imports, near for books marked on the site.
-- `/@<nick>/stats` (`statsPage` in pages.js): year tabs, 12 month columns, each month's covers, the year's numbers and
-  «По роках». Linked from the shelf's «Цього року» («по місяцях») and its sub line. Open to guests, noindex.
+- `/@<nick>/stats` (`statsPage` in pages.js, after Max's maxua.com/books): «Жанри по роках» (`genreStream`: an SVG
+  streamgraph by genre family, `FAMILIES` / `--g-<key>` colours in style.css, no script), year tabs, 12 month columns
+  (only when 80%+ of the year has a month, else just covers), each month's covers, the year's numbers and genres, then
+  «За всі роки», «Жанри» (`genreRows`), «Оцінки» (`ratingCols`, halves). Linked from the shelf («статистика»). Open
+  to guests, noindex. Russian editions have no genres by rule: they fall in «Без жанру».
+- Shelf quick picks (`.shelf-picks`, app.js `filters.pick`): «4,5+», «Українською», the reader's 3 biggest families;
+  rows carry `data-fam` and `data-uk`.
 - /community «Схожий смак» (`similarReaders` in server.js): up to 3 readers with the most read books in common (a work
   and its translations count as one; 3+, the viewer needs 5+ read; not those they follow), covers of books both rated
   4+. At the top on a phone, in the side column on a computer. ~0.2 s on the test DB; precompute it if readers grow.

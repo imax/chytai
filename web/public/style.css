@@ -402,6 +402,13 @@ body.asking .ask-link .when-idle { display: none; }
 .shelf-tools input { flex: 1 1 260px; min-width: 0; border: 0; border-bottom: 1px solid var(--under); background: transparent; outline: 0; font: 19px var(--serif); padding: 4px 0 8px; border-radius: 0; }
 .shelf-tools input:focus { border-bottom-color: var(--ink); }
 .shelf-tools select { border: 0; background: transparent; font-size: 13px; color: var(--muted); cursor: pointer; padding: 2px 0; }
+.shelf-picks { display: flex; flex-wrap: wrap; gap: 8px; margin: 6px 0 18px; }
+.shelf-picks .chip { font-size: 13px; padding: 5px 13px; background: transparent; cursor: pointer; font-family: inherit; }
+.shelf-picks .chip.on { background: var(--ink); }
+@media (max-width: 600px) {
+  .shelf-picks { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; margin: 4px -20px 14px; padding: 0 20px; }
+  .shelf-picks .chip { white-space: nowrap; }
+}
 .numbers { display: grid; grid-template-columns: 1fr 1fr; gap: 18px 24px; }
 .numbers p { font-size: 13px; color: var(--muted); line-height: 1.3; }
 .numbers b { display: block; font: 400 36px/1.1 var(--serif); color: var(--ink); margin-bottom: 4px; }
@@ -1658,11 +1665,33 @@ aside .side-lists + .label, aside p + .label, aside dialog + .label { margin-top
 .stats-month { font: 600 19px/1.3 var(--serif); margin: 34px 0 12px; }
 .stats-month span { font: 400 13px var(--sans); color: var(--muted); margin-left: 4px; }
 .stats-wall { display: flex; flex-wrap: wrap; gap: 10px; }
-.stats-years-bars a { display: grid; grid-template-columns: 44px 1fr 32px; gap: 10px; align-items: center; font-size: 13px; color: var(--muted); padding: 3px 0; text-decoration: none; }
-.stats-years-bars a.on, .stats-years-bars a:hover { color: var(--ink); }
-.stats-years-bars i { display: block; height: 10px; background: var(--accent); border-radius: 2px; opacity: 0.8; }
-.stats-years-bars a.on i { opacity: 1; }
-.stats-years-bars span:last-child { text-align: right; }
+/* Genre families (FAMILIES beside statsPage): the streamgraph's bands, the genre rows' bars and the legend. */
+:root { --g-fant: #7a6cc2; --g-crime: #b8574f; --g-classic: #4f9c94; --g-fic: #d08a59; --g-biz: #5b8bb4; --g-hist: #8a9a58; --g-non: #c9c3b6; --g-none: #e9e4da; }
+@media (prefers-color-scheme: dark) { :root { --g-fant: #9487d8; --g-crime: #cf7a70; --g-classic: #6db8ae; --g-fic: #d99c70; --g-biz: #7aa5c9; --g-hist: #a2b16f; --g-non: #6f6a60; --g-none: #3a372f; } }
+.g-fant { fill: var(--g-fant); background: var(--g-fant); } .g-crime { fill: var(--g-crime); background: var(--g-crime); }
+.g-fic { fill: var(--g-fic); background: var(--g-fic); } .g-biz { fill: var(--g-biz); background: var(--g-biz); }
+.g-hist { fill: var(--g-hist); background: var(--g-hist); } .g-non { fill: var(--g-non); background: var(--g-non); }
+.g-classic { fill: var(--g-classic); background: var(--g-classic); } .g-none { fill: var(--g-none); background: var(--g-none); }
+.stats-stream { margin: 0 0 44px; }
+.stats-stream svg { display: block; width: 100%; height: 220px; margin-top: 18px; overflow: visible; }
+.stats-stream .cols rect { fill: transparent; }
+.stats-stream .cols a:hover rect { fill: rgba(var(--shadow), 0.06); }
+.stream-years { position: relative; height: 22px; margin-top: 10px; font-size: 12px; color: var(--muted); }
+.stream-years span { position: absolute; transform: translateX(-50%); white-space: nowrap; }
+.stream-years span:first-child { transform: none; }
+.stream-years span:last-child { transform: translateX(-100%); }
+.stream-legend { display: flex; flex-wrap: wrap; gap: 6px 18px; margin: 12px 0 0; font-size: 13px; color: var(--text); }
+.stream-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.stream-legend i { width: 10px; height: 10px; border-radius: 50%; }
+.stats-genres p { display: grid; grid-template-columns: 120px 1fr 32px; gap: 10px; align-items: center; margin: 0; padding: 3px 0; font-size: 13px; color: var(--text); }
+.stats-genres i { display: block; height: 9px; border-radius: 2px; }
+.stats-genres span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.stats-genres span:last-child { text-align: right; color: var(--muted); }
+.stats-genres + .small { margin-top: 6px; }
+aside .stats-genres p { grid-template-columns: 104px 1fr 28px; }
+.stats-all { display: grid; grid-template-columns: 1fr 1.3fr 1fr; gap: 48px; margin-top: 64px; }
+.stats-stars { grid-template-columns: repeat(var(--cols), minmax(0, 1fr)); margin-top: 18px; }
+.stats-stars .stats-col i { background: #c9a227; height: calc(var(--h) * 120px); }
 @media (max-width: 600px) {
   .stats-years { margin: 0 -20px 24px; padding: 0 20px 4px; }
   .stats-cols { gap: 3px; }
@@ -1670,6 +1699,8 @@ aside .side-lists + .label, aside p + .label, aside dialog + .label { margin-top
   .stats-col .n { font-size: 12px; }
   .stats-col .m { font-size: 10px; }
   .stats-wall { gap: 8px; }
+  .stats-stream svg { height: 160px; }
+  .stats-all { grid-template-columns: 1fr; gap: 8px; margin-top: 40px; }
 }
 
 /* «Схожий смак» on /community: in the side column on a computer, above the feed on a phone. */
