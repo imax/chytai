@@ -852,10 +852,12 @@ A flag only when Max asks for one, or when the change could break what readers u
   covers (Max's design B, canvas C4zbe7sBdsPD1z41gChjEj): «Можна читати зараз» / «Купити або взяти» / «Поки ніде»
   (folded), under a cover «Читати» (opens it) or the lowest price; a tap = `Paper.card(b, {top, foot, noAdd})` with
   «Читати», «Де взяти» and the book's page. The other language too (Max 2026-11-24: «іноді я свідомо хочу читати в
-  оригіналі»): `abroad` (the book page's Amazon, Google Books, Gutenberg, Open Library links) and `other`, up to 3
+  оригіналі»): `abroad` (the book page's Amazon, Google Books, Gutenberg links and a Kobo search for a book not in Ukrainian; no Open
+  Library, Max: «це якийсь фейк») and `other`, up to 3
   `twins` (original / Ukrainian translation, never Russian) with their own `get`, `rent`, `abroad`; a translation
   with no original in the catalog gets an Amazon search by `origTitle` + `origAuthor`. The tile's price may be the
-  other version's («від 299 ₴, укр.»).
+  other version's («від 299 ₴, укр.»). The card names only the language over the other version's shops, not its
+  title (Max: «тільки конфьюзить»).
 - Reader «Прочитано» at a book's end (Max 2026-11-20, bot report №7): the last page (`bookEnd` in renderer.js: epub.js
   `atEnd` or 100% on pages, the last chapter's bottom in scroll mode; a PDF's last page) marks the book finished in the
   reader only (`POST /api/library/finished` with `auto`; a book finished before is left alone) and asks the site with

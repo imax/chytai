@@ -110,7 +110,8 @@
     const path = readNow(b);
     const own = (b.online?.length ? `<div><span class="r-want-k">Онлайн</span><span>${b.online.map((l) => link(l.url, `${esc(l.label)} ↗`)).join(` <span class="r-want-m">·</span> `)}</span></div>` : "") + lines(b, b.lang === "en" ? "Англійською" : "Інше");
     // Max 2026-11-24: «показувати де версію англ можна взяти… навіть якщо є, іноді я свідомо хочу читати в оригіналі».
-    const others = (b.other || []).map((v) => `<div class="r-want-v"><span>${LANG[v.lang] ?? LANG[""]}: ${v.href ? link(v.href, `«${esc(v.title)}» ↗`) : `«${esc(v.title)}»`}</span></div>${lines(v, "Де знайти")}`).join("");
+    // Only the language over the other version's shops, not its title (Max: «тільки конфьюзить»); links alone = one row.
+    const others = (b.other || []).map((v) => (v.get?.length || v.rent ? `<div class="r-want-v"><span>${LANG[v.lang] ?? LANG[""]}</span></div>${lines(v, "Де знайти")}` : lines(v, LANG[v.lang] ?? LANG[""]))).join("");
     const go = path ? `${b.mine ? `<p class="r-want-none">Файл уже у ваших книжках.</p>` : ""}<button type="button" class="r-pill pf-go" data-want-open="${esc(mine?.path || path)}" data-act="${b.mine ? "want-mine" : "want-free"}">${b.mine ? "Читати" : "Читати безкоштовно"}</button>` : "";
     const where = own || others
       ? `<h3 class="pf-wh">Де взяти</h3><div class="r-want-where">${own}${others}</div>`

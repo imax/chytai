@@ -1250,13 +1250,16 @@ app.post("/api/reader-want", (req, res) => {
     return get;
   };
   // Shops abroad the book's own links name (Max 2026-11-24: «показувати де версію англ можна взяти»; Amazon, Google
-  // Books, Open Library, Project Gutenberg come with books from readers' imports and Open Library).
-  const ABROAD = /^(amazon|google books|open library|project gutenberg|standard ebooks)$/i;
+  // Books, Project Gutenberg come with books from readers' imports). Open Library left out (Max: «це якийсь фейк»,
+  // nobody borrows there); a book not in Ukrainian gets a Kobo search instead (Max: «краще магазин Rakuten»).
+  const ABROAD = /^(amazon|google books|project gutenberg|standard ebooks)$/i;
+  const kobo = (title, author) => ({ label: "Kobo", url: `https://www.kobo.com/search?${new URLSearchParams({ query: `${title} ${author || ""}`.trim() })}` });
   const abroadOf = (book, skip) => {
     const out = [];
     for (const l of book.links || []) if (ABROAD.test(l.label || "") && l.url && !skip.has(l.url) && !out.some((x) => x.label === l.label)) skip.add(l.url), out.push({ label: l.label, url: l.url });
-    const at = (l) => ["amazon", "google books", "project gutenberg", "standard ebooks", "open library"].indexOf(l.label.toLowerCase());
-    return out.sort((a, b) => at(a) - at(b)); // a shop first, Open Library (a loan) last
+    if (!isUk(book) && book.title) out.push(kobo(book.title, book.author));
+    const at = (l) => ["amazon", "kobo", "google books", "project gutenberg", "standard ebooks"].indexOf(l.label.toLowerCase());
+    return out.sort((a, b) => at(a) - at(b));
   };
   const isUk = (b) => /[а-яіїєґ]/i.test(b.title || "") || b.language === "українська";
   // "uk", "en" (said so, or a plain Latin title with no language known), else "" (another language).
@@ -1282,7 +1285,7 @@ app.post("/api/reader-want", (req, res) => {
     // An original no catalog has (Haiku named it, store.bookPage origTitle): a search on Amazon by its title.
     if (!other.length && book.origTitle) {
       const q = `${book.origTitle} ${book.origAuthor || ""}`.trim();
-      other.push({ lang: "", title: book.origTitle, href: "", get: [], rent: null, abroad: [{ label: "Amazon", url: `https://www.amazon.com/s?${new URLSearchParams({ k: q, i: "stripbooks" })}` }] });
+      other.push({ lang: "", title: book.origTitle, href: "", get: [], rent: null, abroad: [{ label: "Amazon", url: `https://www.amazon.com/s?${new URLSearchParams({ k: q, i: "stripbooks" })}` }, kobo(book.origTitle, book.origAuthor)] });
     }
     return { id: store.canonical(r.id), title: book.title, author: book.author || "", year: book.published || null, cover: abs(book.cover), href: `${SITE}${store.href(r.id)}`, added: r.added || "", lang: langOf(book), mine: mine?.name || "", free: free ? free.name : "", online, get: shopsOf(book), rent: rentOf(book), abroad: abroadOf(book, seen), other };
   });
