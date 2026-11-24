@@ -3115,14 +3115,6 @@ app.post("/admin/events/feed/delete", owner, (req, res) => {
   calendar.removeFeed(req.body?.id);
   res.redirect(303, "/admin/events#feeds");
 });
-// A book presentation shown to everyone or not (Max 2026-11-22): every stop of its tour, Max's choice stays.
-app.post("/admin/events/wide", owner, (req, res) => {
-  const id = String(req.body?.id || "");
-  const tour = calendarLib.tours(calendar.upcoming().filter(calendarLib.isPresentation)).find((t) => (t.stops || [t]).some((x) => x.id === id));
-  const ids = (tour?.stops || [{ id }]).map((x) => x.id);
-  calendar.setWide(Object.fromEntries(ids.map((x) => [x, req.body?.on === "1"])), "max");
-  res.redirect(303, `/admin/events#pres-${calendarLib.eventKey(ids[0])}`);
-});
 // A guest's event: «Показати» puts it on the calendar, «Прибрати» deletes it.
 app.post("/admin/events/review", owner, (req, res) => {
   calendar.review(String(req.body?.id || ""), req.body?.show === "1");

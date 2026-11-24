@@ -418,9 +418,9 @@ A flag only when Max asks for one, or when the change could break what readers u
   The ones worth it for readers anywhere come back (Max 2026-11-22, variant C, «зустріч з Артуром Дронем»):
   `cal_events.wide` (NULL = not rated = hidden, 1 = shown, 0 = not), Haiku rates upcoming unrated ones 25 to a call
   each tg run (`tgFeed.rateWide`, prompt `WIDE`: known authors and publishers, translations, big bookshops and venues
-  yes; a library's local author, amateur poetry, one district's history, religious, self-help, romance no). Max
-  flips a whole tour on /admin/events «Презентації» (`POST /admin/events/wide`, `wide_by = 'max'`, Haiku never
-  overwrites it); his last 40 choices go into the prompt as examples (meta `calendar:wide-max`).
+  yes; a library's local author, amateur poetry, one district's history, religious, self-help, romance no). Max's
+  choices from 2026-11-22–24 (`wide_by = 'max'`, Haiku never overwrites them) stay as the prompt's examples (meta
+  `calendar:wide-max`); his «Презентації» block on /admin/events and its button were taken out on 2026-11-24 (Max).
   `calendar.isPresentation(e)` = any presentation, `presentation(e)` = one still hidden. A presentation tour is one
   row by its first book (`tours`), whoever posted its stops (Дронь: two channels, 30 stops).
 - Places (Max 2026-11-23, variant A of canvas KSNVhHFPtyPEwJmvveTAde): `calendar.venue(e)` turns the free-text `place`
