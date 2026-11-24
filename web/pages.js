@@ -1376,7 +1376,6 @@ ${parts.first}
 // year's numbers and every year as bars beside them. A month is the entry's `readOn` (Goodreads' Date Read, or the
 // day it was marked «Прочитано»); books of the year with none are counted under the columns.
 const MONTH_SHORT = ["січ", "лют", "бер", "кві", "тра", "чер", "лип", "сер", "вер", "жов", "лис", "гру"];
-const MONTH_NAME = ["Січень", "Лютий", "Березень", "Квітень", "Травень", "Червень", "Липень", "Серпень", "Вересень", "Жовтень", "Листопад", "Грудень"];
 // Genre families for «Жанри по роках» (Max 2026-11-24, from his maxua.com/books): every genre of ours in one band,
 // a book in the family of its first specific genre; colours in style.css (`--g-<key>`).
 const FAMILIES = [
@@ -1456,12 +1455,15 @@ function genreStream(read, href) {
   const cols = years.map((y, i) => {
     const g = grid.get(y), total = shown.reduce((s, k) => s + g[k], 0);
     const w = W / Math.max(1, years.length - 1);
-    const tip = `${y}: ${books(total)}${total ? `. ${shown.filter((k) => g[k]).map((k) => `${name(k)} ${g[k]}`).join(", ")}` : ""}`;
-    return `<a href="${attr(href(y))}"><rect x="${f(Math.max(0, x(i) - w / 2))}" y="0" width="${f(Math.min(w, W))}" height="${H}"><title>${esc(tip)}</title></rect></a>`;
+    // An HTML column over the graph with a CSS tooltip: it shows at once on hover (Max 2026-11-24, an SVG <title>
+    // waited a second or two).
+    const tip = [`${y} · ${books(total)}`, ...shown.filter((k) => g[k]).sort((a, b) => g[b] - g[a]).map((k) => `${name(k)} ${g[k]}`)].join("\n");
+    const left = Math.max(0, x(i) - w / 2), at = x(i) / W;
+    return `<a href="${attr(href(y))}" class="${at > 0.5 ? "r" : ""}" style="left:${f((left / W) * 100)}%;width:${f((Math.min(x(i) + w / 2, W) - left) / W * 100)}%" data-tip="${attr(tip)}" aria-label="${attr(tip.replace(/\n/g, ", "))}"></a>`;
   }).join("");
   const ticks = years.map((y, i) => (tick(y, i) ? `<span style="left:${f((x(i) / W) * 100)}%">${y}</span>` : "")).join("");
   return `<div class="stats-stream">${label("Жанри по роках")}
-  <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="Жанри по роках, ${years[0]}–${to}">${bands}<g class="cols">${cols}</g></svg>
+  <div class="stream-plot"><svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="Жанри по роках, ${years[0]}–${to}">${bands}</svg><div class="stream-cols">${cols}</div></div>
   <div class="stream-years">${ticks}</div>
   <p class="stream-legend">${shown.map((k) => `<span><i class="g-${k}"></i>${name(k)}</span>`).join("")}</p></div>`;
 }
@@ -1495,7 +1497,7 @@ function ratingCols(list) {
 function statsPage({ user, reader, own, rows, year }) {
   const read = rows.filter((r) => r.status === "read" && !r.kids);
   const years = [...new Set(read.map((r) => r.year).filter(Boolean))].sort((a, b) => b - a);
-  const head = pageHead({ crumbs: `<a href="${attr(reader.href)}">${own ? "Моя полиця" : esc(reader.name)}</a> / Статистика`, kicker: own ? "Моя полиця" : "Полиця читача", title: "Статистика", sub: years.length ? `${count(read.length, "книжка прочитана", "книжки прочитано", "книжок прочитано")} з ${years[years.length - 1]} року` : "" });
+  const head = pageHead({ crumbs: `<a href="${attr(reader.href)}">${own ? "Моя полиця" : esc(reader.name)}</a> / Статистика`, kicker: own ? "Моя полиця" : "Полиця читача", title: "Статистика", sub: years.length ? count(read.length, "книжка прочитана", "книжки прочитано", "книжок прочитано") : "" });
   if (!years.length) return layout({ title: "Статистика", body: `${head}<p class="empty">${own ? "Позначте прочитані книжки з роком, і тут з'являться ваші місяці й роки." : "Тут ще немає прочитаних книжок з роком."}</p>`, user, path: own ? "/me" : "/@", noindex: true });
   if (!years.includes(year)) year = years[0];
   const yr = read.filter((r) => r.year === year);
@@ -1504,11 +1506,11 @@ function statsPage({ user, reader, own, rows, year }) {
   for (const m of months) m.sort((a, b) => (b.readOn < a.readOn ? -1 : b.readOn > a.readOn ? 1 : 0));
   const dated = months.reduce((n, m) => n + m.length, 0);
   const max = Math.max(1, ...months.map((m) => m.length));
-  // Months only when most of the year has them (Max 2026-11-24: a row of zeros before the site's first month
-  // misleads); else the year's covers, newest first.
+  // The year's covers are one wall, newest first (Max 2026-11-24: «все за рік разом»); the months are a small chart in
+  // the side column («другорядна інфа»), only when most of the year has them (a row of zeros misleads).
   const byMonth = dated >= Math.max(1, yr.length * 0.8);
   const wall = (list) => `<div class="stats-wall">${list.map((r) => `<a href="${attr(r.book.href || "#")}" title="${attr(r.book.title)}">${cover(r.book, "sm")}</a>`).join("")}</div>`;
-  if (!byMonth) yr.sort((a, b) => ((b.readOn || b.updated || "") > (a.readOn || a.updated || "") ? 1 : -1));
+  yr.sort((a, b) => ((b.readOn || b.updated || "") > (a.readOn || a.updated || "") ? 1 : -1));
   const now = new Date();
   const later = (i) => year === now.getFullYear() && i > now.getMonth();
   const rated = yr.filter((r) => r.rating != null);
@@ -1523,10 +1525,7 @@ ${head}
 <div class="split">
   <div>
     ${label(`${year} · ${books(yr.length)}`)}
-    ${byMonth ? `<div class="stats-cols" aria-label="Прочитано по місяцях">${months.map((m, i) => `<div class="stats-col${later(i) ? " later" : ""}"><span class="n">${later(i) ? "" : m.length}</span><i style="--h:${Math.round((m.length / max) * 100) / 100}"></i><span class="m">${MONTH_SHORT[i]}</span></div>`).join("")}</div>
-    ${dated < yr.length ? `<p class="small muted stats-undated">${count(yr.length - dated, "книжка", "книжки", "книжок")} цього року без місяця.</p>` : ""}
-    ${months.map((m, i) => [m, i]).reverse().filter(([m]) => m.length).map(([m, i]) => `<h3 class="stats-month">${MONTH_NAME[i]} <span>${books(m.length)}</span></h3>
-    ${wall(m)}`).join("")}` : wall(yr)}
+    ${wall(yr)}
   </div>
   <aside>
     ${label(String(year))}
@@ -1536,6 +1535,8 @@ ${head}
       <p><b>${yr.filter((r) => isUk(r.book)).length}</b>українською</p>
       <p><b>${yr.filter((r) => r.note).length}</b>з нотатками</p>
     </div>
+    ${byMonth ? `${label("По місяцях")}<div class="stats-cols stats-mini" aria-label="Прочитано по місяцях">${months.map((m, i) => `<div class="stats-col${later(i) ? " later" : ""}"><span class="n">${later(i) ? "" : m.length}</span><i style="--h:${Math.round((m.length / max) * 100) / 100}"></i><span class="m">${MONTH_SHORT[i]}</span></div>`).join("")}</div>
+    ${dated < yr.length ? `<p class="small muted stats-undated">${count(yr.length - dated, "книжка", "книжки", "книжок")} без місяця</p>` : ""}` : ""}
     ${genreRows(yr, 6) ? `${label(`Жанри ${year}`)}${genreRows(yr, 6)}` : ""}
   </aside>
 </div>

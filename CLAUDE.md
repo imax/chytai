@@ -730,10 +730,12 @@ A flag only when Max asks for one, or when the change could break what readers u
 - `entries.read_on` (`readOn`, `YYYY-MM-DD`): Goodreads' «Date Read» on import, today (Kyiv) when a book is newly marked
   read in the current year (`setEntry`); `writeEntry` drops it when it doesn't fall in the entry's `year`. Old rows got
   `updated`'s day once (db.js), exact for Goodreads imports, near for books marked on the site.
-- `/@<nick>/stats` (`statsPage` in pages.js, after Max's maxua.com/books): year tabs, 12 month columns (only when 80%+
-  of the year has a month, else just covers), each month's covers, the year's numbers and genres, then «За всі роки»,
+- `/@<nick>/stats` (`statsPage` in pages.js, after Max's maxua.com/books): year tabs, the year's covers as one wall
+  (newest first, no months: Max «все за рік разом»); the side column: the year's numbers, small month columns «По
+  місяцях» (only when 80%+ of the year has a month), genres; then «За всі роки»,
   «Жанри» (`genreRows`), «Оцінки» (`ratingCols`, halves), and last «Жанри по роках» (Max: all years, so at the very
-  bottom; `genreStream`: an SVG streamgraph by genre family, `FAMILIES` / `--g-<key>` colours in style.css, no script). Linked from the shelf («статистика»). Open
+  bottom; `genreStream`: an SVG streamgraph by genre family, `FAMILIES` / `--g-<key>` colours in style.css, no script; each year an HTML
+  column over it with a CSS tooltip, shown at once on hover). Linked from the shelf («статистика»). Open
   to guests, noindex. Russian editions have no genres by rule: they fall in «Без жанру».
 - Shelf quick picks (`.shelf-picks`, app.js `filters.pick`): «4,5+», «Українською», the reader's 3 biggest families;
   rows carry `data-fam` and `data-uk`.
