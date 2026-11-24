@@ -1321,7 +1321,7 @@ function libraryPage({ ask = null, part = "", clubTopics = [], lists = [], saved
   const fav = own && favOffer ? `<form method="post" action="/api/lists/favorites" class="fav-offer">${favOffer.books.length ? `<span class="fav-fan" aria-hidden="true">${favOffer.books.map((b) => cover(b, "xs")).join("")}</span>` : ""}<div><p><b>Мої фаворити</b>${count(favOffer.n, "ваша п'ятірка", "ваші п'ятірки", "ваших п'ятірок")}. Нові додаватимуться самі.</p><p class="acts"><button class="btn small primary" name="yes" value="1">Зібрати список</button><button class="fav-x" name="no" value="1" aria-label="Не треба" title="Не треба">×</button></p></div></form>` : "";
   const topLists = lists.length || savedLists.length || own ? `<div class="top-lists">${listsHead}${fav}${lists.length || savedLists.length || fav ? "" : `<p class="small muted">Складіть список книжок, щоб поділитися ним.</p>`}<div class="lchips">${[...lists.map((l) => [l, listMeta(l, { by: false })]), ...savedLists.map((l) => [l, `${esc(l.reader.name)} · ${books(l.count)}`])].map(([l, m]) => `<a href="${attr(l.href)}"><b>${esc(l.title)}</b><span>${m}</span></a>`).join("")}</div></div>` : "";
   // «Цього року» heads the sidebar, so it is seen without scrolling (Max, 2026-11-23).
-  const yearBlock = thisYear.length ? `<div class="side-year">${label("Цього року", `<a href="${attr(reader.href)}/stats">по місяцях</a>`)}<div class="numbers">
+  const yearBlock = thisYear.length ? `<div class="side-year">${label("Цього року", `<a href="${attr(reader.href)}/stats">статистика</a>`)}<div class="numbers">
       <p><b>${thisYear.length}</b>прочитано</p>
       ${rated.length ? `<p><b>${uk(Math.round((rated.reduce((s, r) => s + r.rating, 0) / rated.length) * 10) / 10)}</b>середня оцінка</p>` : ""}
       <p><b>${thisYear.filter((r) => isUk(r.book)).length}</b>українською</p>
@@ -1378,6 +1378,11 @@ function statsPage({ user, reader, own, rows, year }) {
   for (const m of months) m.sort((a, b) => (b.readOn < a.readOn ? -1 : b.readOn > a.readOn ? 1 : 0));
   const dated = months.reduce((n, m) => n + m.length, 0);
   const max = Math.max(1, ...months.map((m) => m.length));
+  // Months only when most of the year has them (Max 2026-11-24: a row of zeros before the site's first month
+  // misleads); else the year's covers, newest first.
+  const byMonth = dated >= Math.max(1, yr.length * 0.8);
+  const wall = (list) => `<div class="stats-wall">${list.map((r) => `<a href="${attr(r.book.href || "#")}" title="${attr(r.book.title)}">${cover(r.book, "sm")}</a>`).join("")}</div>`;
+  if (!byMonth) yr.sort((a, b) => ((b.readOn || b.updated || "") > (a.readOn || a.updated || "") ? 1 : -1));
   const now = new Date();
   const later = (i) => year === now.getFullYear() && i > now.getMonth();
   const rated = yr.filter((r) => r.rating != null);
@@ -1390,10 +1395,10 @@ ${head}
 <div class="split">
   <div>
     ${label(`${year} · ${books(yr.length)}`)}
-    <div class="stats-cols" aria-label="Прочитано по місяцях">${months.map((m, i) => `<div class="stats-col${later(i) ? " later" : ""}"><span class="n">${later(i) ? "" : m.length}</span><i style="--h:${Math.round((m.length / max) * 100) / 100}"></i><span class="m">${MONTH_SHORT[i]}</span></div>`).join("")}</div>
+    ${byMonth ? `<div class="stats-cols" aria-label="Прочитано по місяцях">${months.map((m, i) => `<div class="stats-col${later(i) ? " later" : ""}"><span class="n">${later(i) ? "" : m.length}</span><i style="--h:${Math.round((m.length / max) * 100) / 100}"></i><span class="m">${MONTH_SHORT[i]}</span></div>`).join("")}</div>
     ${dated < yr.length ? `<p class="small muted stats-undated">${count(yr.length - dated, "книжка", "книжки", "книжок")} цього року без місяця.</p>` : ""}
     ${months.map((m, i) => [m, i]).reverse().filter(([m]) => m.length).map(([m, i]) => `<h3 class="stats-month">${MONTH_NAME[i]} <span>${books(m.length)}</span></h3>
-    <div class="stats-wall">${m.map((r) => `<a href="${attr(r.book.href || "#")}" title="${attr(r.book.title)}">${cover(r.book, "sm")}</a>`).join("")}</div>`).join("")}
+    ${wall(m)}`).join("")}` : wall(yr)}
   </div>
   <aside>
     ${label(String(year))}
