@@ -1240,5 +1240,15 @@
     ],
     "wanted": true,
     "source": "https://standardebooks.org/ebooks/robert-louis-stevenson/the-strange-case-of-dr-jekyll-and-mr-hyde"
+  },
+  {
+    "name": "eliot-middlemarch.epub",
+    "title": "Middlemarch",
+    "authors": "George Eliot",
+    "tags": [
+      "Англійською"
+    ],
+    "wanted": true,
+    "source": "https://standardebooks.org/ebooks/george-eliot/middlemarch"
   }
 ]
