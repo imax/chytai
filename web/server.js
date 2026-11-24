@@ -2601,7 +2601,7 @@ app.get("/@:username/stats", (req, res) => {
   const reader = pub(auth.byUsername(req.params.username));
   if (!reader) return res.status(404).send(pages.messagePage({ title: "Немає такого читача", text: "", user: req.user }));
   if (reader.username !== req.params.username) return res.redirect(301, `${reader.href}/stats`);
-  res.send(pages.statsPage({ user: req.user, reader, own: req.user?.id === reader.id, rows: store.library(reader.id), year: Number(req.query.year) || new Date().getFullYear() }));
+  res.send(pages.statsPage({ user: req.user, reader, own: req.user?.id === reader.id, rows: store.library(reader.id).map((r) => ({ ...r, series: store.seriesOf(r.id) })), year: Number(req.query.year) || new Date().getFullYear() }));
 });
 // ---- «Списки» (lists.js): /@<username>/list/<slug>, /lists, and what the author does with a list ----
 app.get("/@:username/list/:slug", (req, res) => {
