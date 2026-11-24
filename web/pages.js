@@ -871,7 +871,7 @@ function where(book, ukrlib = null, sluhay = null, bookflow = null) {
   }
   if (links.length) rows.push(row("Інше", links.map((l) => `<a href="${attr(l.url)}" target="_blank" rel="noopener">${esc(l.label)}</a>`).join(` <span class="muted">·</span> `)));
   // No shop has it at all (a book a reader brought from outside, Max 2026-10-30): the want-mail (wantmail.js) says when one does.
-  if (book.source === "search" && !have.length && !out.length) rows.unshift(row("Магазини", `<span class="muted">поки немає; напишемо тим, хто хоче прочитати, щойно з’явиться</span>`));
+  if (book.source === "search" && !have.length && !out.length) rows.unshift(row("Магазини", `<span class="muted">поки немає</span>`));
   if (out.length) rows.push(row("Немає", `<span class="muted">зараз немає в наявності: </span>${out.map((e) => `${go(e, ' class="muted"')}${esc(e.shelf.name)}</a>`).join(", ")}`));
   // BookFlow (bookflow.js): a copy a reader lends, one price for any book; last, right above the libraries
   // (app.js adds them), the other way to borrow. All copies out is still a row (Max 2026-11-17).
