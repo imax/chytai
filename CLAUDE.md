@@ -725,6 +725,17 @@ A flag only when Max asks for one, or when the change could break what readers u
   A pick names one edition; `authorStart` widens it to the original and its translations (`p.ids`), so hiding or
   re-pairing an edition doesn't drop the book from the block.
 
+## A reader's months and «Схожий смак» (Max 2026-11-24, canvas AU9dirwZUmhH8iYbCmkPjM)
+
+- `entries.read_on` (`readOn`, `YYYY-MM-DD`): Goodreads' «Date Read» on import, today (Kyiv) when a book is newly marked
+  read in the current year (`setEntry`); `writeEntry` drops it when it doesn't fall in the entry's `year`. Old rows got
+  `updated`'s day once (db.js), exact for Goodreads imports, near for books marked on the site.
+- `/@<nick>/stats` (`statsPage` in pages.js): year tabs, 12 month columns, each month's covers, the year's numbers and
+  «По роках». Linked from the shelf's «Цього року» («по місяцях») and its sub line. Open to guests, noindex.
+- /community «Схожий смак» (`similarReaders` in server.js): up to 3 readers with the most read books in common (a work
+  and its translations count as one; 3+, the viewer needs 5+ read; not those they follow), covers of books both rated
+  4+. At the top on a phone, in the side column on a computer. ~0.2 s on the test DB; precompute it if readers grow.
+
 ## Standing rules (Max)
 
 - No reviews in Russian (Max 2026-11-23): others see a reader's note through `store.publicNote` / `publicEntry`
