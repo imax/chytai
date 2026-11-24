@@ -1225,7 +1225,8 @@ app.get("/api/reader-find", (req, res) => {
 // shelf's order, each book with where to get it. Ahead of the shops: the reader's own file of it («Відкрити»), the free
 // shelf's file («Читати», the reader opens it), a free text online (openlinks.js, the free books' Wikisource /
 // Gutenberg / Standard Ebooks pages, a «Слухай» recording); then the shops in stock as on the book page's «Де взяти»
-// (one row a format, two shops, cheapest first) and BookFlow. Signed with the account's key.
+// (one row a format, two shops, cheapest first) and BookFlow; the shops abroad the book's links name (Amazon…), and
+// the same work in its other language (`other`: the original, the Ukrainian translation). Signed with the account's key.
 app.post("/api/reader-want", (req, res) => {
   const id = String(req.body?.id || "");
   if (!readerKeyOk(id, String(req.body?.key || ""))) return res.status(403).json({ error: "key" });
@@ -1234,13 +1235,8 @@ app.post("/api/reader-want", (req, res) => {
   const freeSrc = new Map((fb?.items || []).filter((x) => x.died <= fb.last && !x.check).map((x) => [x.id, x.sources || []]));
   const price = (e) => (e.price === "безкоштовно" ? 0 : Number(String(e.price || "").replace(/[^\d]/g, "")) || Infinity);
   const kindOf = (e) => (e.format === "e-book" || e.format === "аудіо" ? e.format : "папір");
-  const rows = store.library(id).filter((r) => r.status === "want" && !r.kids).slice(0, 300);
-  const books = rows.map((r) => {
-    const book = store.bookPage(r.id) || r.book;
-    const mine = readerFileFor(id, book);
-    const free = !mine && freeFileFor(book);
-    const audio = sluhay.linkFor(book);
-    const online = [openLinks.linkFor(store, book), ...(free ? [] : (freeSrc.get(store.canonical(r.id)) || []).map((s) => ({ label: s.site, url: s.url }))), ...(audio ? [{ label: "Слухай, аудіо", url: audio.url }] : [])].filter(Boolean);
+  // Per format the 2 cheapest shops (in stock first), as the book page's «Де взяти».
+  const shopsOf = (book) => {
     const eds = (book.editions || []).filter((e) => e.shelf?.id !== "chytai-free" && e.status !== "немає" && !e.adapted && e.links?.[0]?.url);
     const get = [];
     for (const kind of ["e-book", "папір", "аудіо"]) {
@@ -1251,8 +1247,44 @@ app.post("/api/reader-want", (req, res) => {
       }
       if (shops.length) get.push({ kind, shops });
     }
-    const bf = bookflow.linkFor(book);
-    return { id: store.canonical(r.id), title: book.title, author: book.author || "", year: book.published || null, cover: abs(book.cover), href: `${SITE}${store.href(r.id)}`, added: r.added || "", mine: mine?.name || "", free: free ? free.name : "", online, get, rent: bf ? { url: bf.url, free: bf.free, price: bf.once || null } : null };
+    return get;
+  };
+  // Shops abroad the book's own links name (Max 2026-11-24: «показувати де версію англ можна взяти»; Amazon, Google
+  // Books, Open Library, Project Gutenberg come with books from readers' imports and Open Library).
+  const ABROAD = /^(amazon|google books|open library|project gutenberg|standard ebooks)$/i;
+  const abroadOf = (book, skip) => {
+    const out = [];
+    for (const l of book.links || []) if (ABROAD.test(l.label || "") && l.url && !skip.has(l.url) && !out.some((x) => x.label === l.label)) skip.add(l.url), out.push({ label: l.label, url: l.url });
+    const at = (l) => ["amazon", "google books", "project gutenberg", "standard ebooks", "open library"].indexOf(l.label.toLowerCase());
+    return out.sort((a, b) => at(a) - at(b)); // a shop first, Open Library (a loan) last
+  };
+  const isUk = (b) => /[а-яіїєґ]/i.test(b.title || "") || b.language === "українська";
+  // "uk", "en" (said so, or a plain Latin title with no language known), else "" (another language).
+  const langOf = (b) => (isUk(b) ? "uk" : b.language === "англійська" || (!b.language && /^[\x20-\x7E’‘“”–—]+$/.test(b.title || "")) ? "en" : "");
+  const rentOf = (book) => ((bf) => (bf ? { url: bf.url, free: bf.free, price: bf.once || null } : null))(bookflow.linkFor(book));
+  const rows = store.library(id).filter((r) => r.status === "want" && !r.kids).slice(0, 300);
+  const books = rows.map((r) => {
+    const book = store.bookPage(r.id) || r.book;
+    const mine = readerFileFor(id, book);
+    const free = !mine && freeFileFor(book);
+    const audio = sluhay.linkFor(book);
+    const online = [openLinks.linkFor(store, book), ...(free ? [] : (freeSrc.get(store.canonical(r.id)) || []).map((s) => ({ label: s.site, url: s.url }))), ...(audio ? [{ label: "Слухай, аудіо", url: audio.url }] : [])].filter(Boolean);
+    const seen = new Set(online.map((l) => l.url));
+    // The same work in another language (store.translationsOf, no Russian): a Ukrainian book's original, an English
+    // book's Ukrainian translation, each with where to get it; Max sometimes reads the original on purpose.
+    const other = [];
+    for (const t of (book.twins || []).slice(0, 3)) {
+      const tb = store.bookPage(t.id);
+      if (!tb || isRussian(tb)) continue;
+      const v = { lang: langOf(tb), title: tb.title, href: `${SITE}${store.href(tb.id)}`, get: shopsOf(tb), rent: rentOf(tb), abroad: abroadOf(tb, seen) };
+      if (v.get.length || v.rent || v.abroad.length) other.push(v);
+    }
+    // An original no catalog has (Haiku named it, store.bookPage origTitle): a search on Amazon by its title.
+    if (!other.length && book.origTitle) {
+      const q = `${book.origTitle} ${book.origAuthor || ""}`.trim();
+      other.push({ lang: "", title: book.origTitle, href: "", get: [], rent: null, abroad: [{ label: "Amazon", url: `https://www.amazon.com/s?${new URLSearchParams({ k: q, i: "stripbooks" })}` }] });
+    }
+    return { id: store.canonical(r.id), title: book.title, author: book.author || "", year: book.published || null, cover: abs(book.cover), href: `${SITE}${store.href(r.id)}`, added: r.added || "", lang: langOf(book), mine: mine?.name || "", free: free ? free.name : "", online, get: shopsOf(book), rent: rentOf(book), abroad: abroadOf(book, seen), other };
   });
   res.json({ books });
 });

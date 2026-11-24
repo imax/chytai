@@ -1233,7 +1233,7 @@ body.not-owner #r-pnav-admin { display: none !important; }
 .r-want-c { display: flex; flex-direction: column; gap: 7px; border: none; background: none; padding: 0; color: var(--r-ink); font: inherit; text-align: left; cursor: pointer; min-width: 0; }
 .r-want-c .r-cover { width: 100%; box-shadow: var(--r-cshadow); }
 /* A shop's picture of a 3D book on a see-through ground: no stand-in title behind it. */
-.r-want-c .r-cover:has(img) { background: none; }
+.r-want-c .r-cover:has(img), .pf-card .r-cover:has(img) { background: none; }
 .r-want-c .r-cover:has(img) .r-cover-t, .r-want-c .r-cover:has(img) .r-cover-a { display: none; }
 .r-want-t { font: 500 14px/1.25 var(--r-serif); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 @media (hover: hover) { .r-want-c:hover .r-want-t { color: var(--r-ochre); } }
@@ -1252,6 +1252,7 @@ body.not-owner #r-pnav-admin { display: none !important; }
 .r-want-where > div { display: contents; }
 .r-want-where > div > span { padding: 9px 0; border-top: 1px solid var(--r-rule); }
 .r-want-k { color: var(--r-ink2); padding-right: 16px !important; }
+.r-want-v > span { grid-column: 1 / -1; padding-top: 18px !important; font-weight: 500; }
 .r-want-where a, .pf-page a, .r-want-none a { color: var(--r-ochre); text-decoration: none; }
 .r-want-none { margin: 14px 0 0; font-size: 14px; color: var(--r-ink2); }
 .pf-page { margin: 14px 0 0; font-size: 15px; }

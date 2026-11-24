@@ -849,7 +849,11 @@ A flag only when Max asks for one, or when the change could break what readers u
   sources of `freeBooks`, Слухай), `get` (per format the 2 cheapest in stock, no adapted), `rent` (BookFlow). A shelf of
   covers (Max's design B, canvas C4zbe7sBdsPD1z41gChjEj): «Можна читати зараз» / «Купити або взяти» / «Поки ніде»
   (folded), under a cover «Читати» (opens it) or the lowest price; a tap = `Paper.card(b, {top, foot, noAdd})` with
-  «Читати», «Де взяти» and the book's page.
+  «Читати», «Де взяти» and the book's page. The other language too (Max 2026-11-24: «іноді я свідомо хочу читати в
+  оригіналі»): `abroad` (the book page's Amazon, Google Books, Gutenberg, Open Library links) and `other`, up to 3
+  `twins` (original / Ukrainian translation, never Russian) with their own `get`, `rent`, `abroad`; a translation
+  with no original in the catalog gets an Amazon search by `origTitle` + `origAuthor`. The tile's price may be the
+  other version's («від 299 ₴, укр.»).
 - Reader «Прочитано» at a book's end (Max 2026-11-20, bot report №7): the last page (`bookEnd` in renderer.js: epub.js
   `atEnd` or 100% on pages, the last chapter's bottom in scroll mode; a PDF's last page) marks the book finished in the
   reader only (`POST /api/library/finished` with `auto`; a book finished before is left alone) and asks the site with

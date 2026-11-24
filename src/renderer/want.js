@@ -2,7 +2,8 @@
 // chytai.org.ua as a shelf of covers (Max chose design B of canvas C4zbe7sBdsPD1z41gChjEj): «Можна читати зараз»
 // (one's own file, a free-shelf book), «Купити або взяти» (the shops, BookFlow, free texts online) and «Поки ніде»,
 // folded. Under a cover one word on how to get it («Читати», «від 90 ₴»); a tap on the cover = the book's card
-// (paper.js `Paper.card`): «Читати», «Де взяти» (one line a format, as the book page's «Де взяти»), «Про книжку»
+// (paper.js `Paper.card`): «Читати», «Де взяти» (one line a format, as the book page's «Де взяти»; then the same
+// work in its other language, the original or the Ukrainian translation, with Amazon and the like), «Про книжку»
 // and the book's page. GET /api/want (server/index.js → the site's /api/reader-want). A page in the panel after
 // «Мої книжки» (home.js page «want»). Taps count by data-act (reading-time.js): act-want-*.
 (() => {
@@ -36,18 +37,27 @@
   const shop = (s) => link(s.url, esc(s.shop)) + ((t) => (t ? ` <span class="r-want-m">${esc(t)}</span>` : ""))([s.price, s.note].filter(Boolean).join(", "));
   const uah = (p) => Number(String(p || "").replace(/[^\d]/g, "")) || 0;
 
-  // One word under the cover: how to get it. A price: the cheapest shop's, «від» when there are more.
+  // One word under the cover: how to get it. A price: the cheapest shop's, «від» when there are more; the book's other
+  // language (its original, its Ukrainian translation) counts too.
   function how(b) {
-    const shops = (b.get || []).flatMap((g) => g.shops).filter((s) => uah(s.price));
-    if (shops.length) {
+    const all = [b, ...(b.other || [])];
+    // The book's own shops first; else its other language's, marked («укр.», «англ.»).
+    const mark = (v) => (v === b ? "" : v.lang === "uk" ? ", укр." : v.lang === "en" ? ", англ." : "");
+    for (const v of all) {
+      const shops = (v.get || []).flatMap((g) => g.shops).filter((s) => uah(s.price));
+      if (!shops.length) continue;
       const low = Math.min(...shops.map((s) => uah(s.price)));
-      return `${shops.length > 1 ? "від " : ""}${low} ₴`;
+      return `${shops.length > 1 ? "від " : ""}${low} ₴${mark(v)}`;
     }
-    if (b.rent) return `BookFlow${b.rent.price ? ` ${b.rent.price} ₴` : ""}`;
+    const rent = all.find((v) => v.rent)?.rent;
+    if (rent) return `BookFlow${rent.price ? ` ${rent.price} ₴` : ""}`;
     if (b.online?.length) return "Безкоштовно онлайн";
+    const abroad = all.find((v) => v.abroad?.length);
+    if (abroad) return abroad.abroad[0].label + mark(abroad);
     return "";
   }
-  const group = (b) => (readNow(b) ? "now" : b.get?.length || b.rent || b.online?.length ? "buy" : "none");
+  const group = (b) => (readNow(b) ? "now" : b.get?.length || b.rent || b.online?.length || b.abroad?.length || b.other?.length ? "buy" : "none");
+  const LANG = { uk: "Українською", en: "Англійською", "": "В оригіналі" };
 
   function tile(b, i) {
     const path = readNow(b);
@@ -77,28 +87,33 @@
       ${parts.buy.length ? head("Купити або взяти", parts.buy.length) + grid(parts.buy) : ""}
       ${none}</section>`;
   }
-  // The folded «Поки ніде»: why, when most of them are in English (no Ukrainian edition to buy).
-  function notSold(list) {
-    const latin = list.filter(([b]) => !/[а-яіїєґ]/i.test(b.title)).length;
-    return latin * 2 > list.length ? "Здебільшого англійською: українського видання в магазинах немає." : "Зараз немає в магазинах.";
-  }
+  // The folded «Поки ніде»: nothing anywhere, in any language.
+  const notSold = () => "Ні в магазинах, ні напрокат, ні онлайн, жодною мовою.";
   function plural(n, one, few, many) {
     const t = n % 100;
     const u = n % 10;
     return t > 10 && t < 20 ? many : u === 1 ? one : u >= 2 && u <= 4 ? few : many;
   }
 
-  // The card: «Читати», where to get it, then the card's own «Про книжку».
+  // Where to get one version of the book: one line a format, then BookFlow and the shops abroad.
+  function lines(v, abroadLabel) {
+    const out = [];
+    for (const g of v.get || []) out.push([KIND[g.kind] || g.kind, g.shops.map(shop).join(` <span class="r-want-m">·</span> `)]);
+    if (v.rent) out.push(["Напрокат", `${link(v.rent.url, "BookFlow")}<span class="r-want-m">, ${v.rent.free ? "є вільна" : "зараз усі в читачів"}${v.rent.price ? `, ${v.rent.price} ₴` : ""}</span>`]);
+    if (v.abroad?.length) out.push([abroadLabel, v.abroad.map((l) => link(l.url, `${esc(l.label)} ↗`)).join(` <span class="r-want-m">·</span> `)]);
+    return out.map(([k, x]) => `<div><span class="r-want-k">${esc(k)}</span><span>${x}</span></div>`).join("");
+  }
+
+  // The card: «Читати», where to get it (the book, then its original or translation), then the card's «Про книжку».
   function card(b) {
     const mine = mineOf(b);
     const path = readNow(b);
-    const lines = [];
-    if (b.online?.length) lines.push(["Онлайн", b.online.map((l) => link(l.url, `${esc(l.label)} ↗`)).join(` <span class="r-want-m">·</span> `)]);
-    for (const g of b.get || []) lines.push([KIND[g.kind] || g.kind, g.shops.map(shop).join(` <span class="r-want-m">·</span> `)]);
-    if (b.rent) lines.push(["Напрокат", `${link(b.rent.url, "BookFlow")}<span class="r-want-m">, ${b.rent.free ? "є вільна" : "зараз усі в читачів"}${b.rent.price ? `, ${b.rent.price} ₴` : ""}</span>`]);
+    const own = (b.online?.length ? `<div><span class="r-want-k">Онлайн</span><span>${b.online.map((l) => link(l.url, `${esc(l.label)} ↗`)).join(` <span class="r-want-m">·</span> `)}</span></div>` : "") + lines(b, b.lang === "en" ? "Англійською" : "Інше");
+    // Max 2026-11-24: «показувати де версію англ можна взяти… навіть якщо є, іноді я свідомо хочу читати в оригіналі».
+    const others = (b.other || []).map((v) => `<div class="r-want-v"><span>${LANG[v.lang] ?? LANG[""]}: ${v.href ? link(v.href, `«${esc(v.title)}» ↗`) : `«${esc(v.title)}»`}</span></div>${lines(v, "Де знайти")}`).join("");
     const go = path ? `${b.mine ? `<p class="r-want-none">Файл уже у ваших книжках.</p>` : ""}<button type="button" class="r-pill pf-go" data-want-open="${esc(mine?.path || path)}" data-act="${b.mine ? "want-mine" : "want-free"}">${b.mine ? "Читати" : "Читати безкоштовно"}</button>` : "";
-    const where = lines.length
-      ? `<h3 class="pf-wh">Де взяти</h3><div class="r-want-where">${lines.map(([k, v]) => `<div><span class="r-want-k">${esc(k)}</span><span>${v}</span></div>`).join("")}</div>`
+    const where = own || others
+      ? `<h3 class="pf-wh">Де взяти</h3><div class="r-want-where">${own}${others}</div>`
       : path ? "" : `<p class="r-want-none">У магазинах зараз немає.</p>`;
     window.Paper.card(
       { title: b.title, author: b.author, cover: b.cover || "", href: b.href, year: b.year },
