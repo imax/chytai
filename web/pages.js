@@ -1513,7 +1513,9 @@ function statsPage({ user, reader, own, rows, year }) {
   // The year's covers are one wall, newest first (Max 2026-11-24: «все за рік разом»); the months are a small chart in
   // the side column («другорядна інфа»), only when most of the year has them (a row of zeros misleads).
   const byMonth = dated >= Math.max(1, yr.length * 0.8);
-  const wall = (list) => `<div class="stats-wall">${list.map((r) => `<a href="${attr(r.book.href || "#")}" title="${attr(r.book.title)}">${cover(r.book, "sm")}</a>`).join("")}</div>`;
+  // A cover's tooltip names the book and the reader's own stars, at once on hover (Max 2026-11-24: «цікаво ж»).
+  const tipOf = (r) => [r.book.title, r.book.author ? byline(r.book.author) : "", r.rating > 0 ? `★ ${uk(r.rating)}` : ""].filter(Boolean).join("\n");
+  const wall = (list) => `<div class="stats-wall">${list.map((r) => `<a href="${attr(r.book.href || "#")}" data-tip="${attr(tipOf(r))}" aria-label="${attr(tipOf(r).replace(/\n/g, ", "))}">${cover(r.book, "sm")}</a>`).join("")}</div>`;
   yr.sort((a, b) => ((b.readOn || b.updated || "") > (a.readOn || a.updated || "") ? 1 : -1));
   const now = new Date();
   const later = (i) => year === now.getFullYear() && i > now.getMonth();
