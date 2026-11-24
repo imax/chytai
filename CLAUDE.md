@@ -734,7 +734,8 @@ A flag only when Max asks for one, or when the change could break what readers u
   (newest first, no months: Max «все за рік разом»; a cover's CSS tooltip: title, author, the reader's stars; a series
   read that year is one cover with the count, `foldSeries`, the route gives rows `series`); the side column: the year's numbers, small month columns «По
   місяцях» (only when 80%+ of the year has a month; a number shows on hover or a tap), genres; then «За всі роки»,
-  «Жанри» (`genreRows`: a book that is only «художня» goes in the grey line under the rows, Max: it filled them), «Оцінки» (`ratingCols`, halves), and last «Жанри по роках» (Max: all years, so at the very
+  «Жанри» (`genreRows`: a book that is only «художня» goes in the grey line under the rows, Max: it filled them; in the
+  streamgraph it joins the grey band «Без точного жанру», the orange is «Любовні, гумор та інше»), «Оцінки» (`ratingCols`, halves), and last «Жанри по роках» (Max: all years, so at the very
   bottom; `genreStream`: an SVG streamgraph by genre family, `FAMILIES` / `--g-<key>` colours in style.css, no script; each year an HTML
   column over it with a CSS tooltip, shown at once on hover). Linked from the shelf («статистика»). Open
   to guests, noindex. Russian editions have no genres by rule: they fall in «Без жанру».

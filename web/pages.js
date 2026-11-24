@@ -1422,7 +1422,10 @@ function genreStream(read, href) {
   const years = Array.from({ length: to - from + 1 }, (_, i) => from + i);
   const keys = [...FAMILIES.map(([k]) => k), "none"];
   const grid = new Map(years.map((y) => [y, Object.fromEntries(keys.map((k) => [k, 0]))]));
-  for (const r of read) if (grid.has(r.year)) grid.get(r.year)[familyOf(r.book)]++;
+  // A book that is only «художня» goes in the grey band with no genre, as in the genre rows (Max 2026-11-24): the
+  // orange band is then the books with a fiction genre of their own (romance, humour, teens, children, comics).
+  const plainOnly = (b) => { const g = bookGenres(b); return g.length === 1 && g[0] === "художня"; };
+  for (const r of read) if (grid.has(r.year)) grid.get(r.year)[plainOnly(r.book) ? "none" : familyOf(r.book)]++;
   const shown = keys.filter((k) => years.some((y) => grid.get(y)[k]));
   const W = 1000, H = 220, pad = 8;
   const top = Math.max(...years.map((y) => shown.reduce((s, k) => s + grid.get(y)[k], 0)));
@@ -1446,7 +1449,7 @@ function genreStream(read, href) {
       return `C${f(mx)},${f(edges[p][j])} ${f(mx)},${f(edges[i][j])} ${f(x(i))},${f(edges[i][j])}`;
     }).join("");
   };
-  const name = (k) => (k === "none" ? "Без жанру" : FAMILIES.find(([key]) => key === k)[1]);
+  const name = (k) => (k === "none" ? "Без точного жанру" : k === "fic" ? "Любовні, гумор та інше" : FAMILIES.find(([key]) => key === k)[1]);
   const bands = shown.map((k, j) => `<path class="g-${k}" d="${line(j)}${line(j + 1, true)}Z"/>`).join("");
   // Ticks: round years (every 5th, or 2nd on a short span) plus the first and last, none crowding them (a phone
   // has room for about six).
@@ -1483,7 +1486,7 @@ function genreRows(list, n = 12) {
   const top = [...c].sort((a, b) => b[1] - a[1]).slice(0, n);
   if (!top.length) return "";
   const max = top[0][1];
-  const rest = [plain ? `${count(plain, "книжка", "книжки", "книжок")} просто художні` : "", none ? `${count(none, "книжка", "книжки", "книжок")} без жанру` : ""].filter(Boolean).join(", ");
+  const rest = [plain ? `${count(plain, "книжка", "книжки", "книжок")} просто художні` : "", none ? `${count(none, "книжка", "книжки", "книжок")} без жанру` : ""].filter(Boolean).join("<br>");
   return `<div class="stats-genres">${top.map(([g, k]) => `<p><span>${esc(cap(g))}</span><i class="g-${FAMILY_OF.get(g)}" style="width:${Math.max(2, Math.round((k / max) * 100))}%"></i><span>${k}</span></p>`).join("")}</div>${rest ? `<p class="small muted stats-rest">${rest}</p>` : ""}`;
 }
 

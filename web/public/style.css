@@ -1662,7 +1662,7 @@ aside .side-lists + .label, aside p + .label, aside dialog + .label { margin-top
 .stats-col .n { font-size: 14px; margin-bottom: 4px; }
 .stats-col .m { font-size: 12px; color: var(--muted); margin-top: 6px; }
 .stats-undated { margin-top: 10px; }
-.stats-rest { margin-top: 10px; }
+aside .small.muted.stats-rest, .stats-rest { margin: 12px 0 0; line-height: 1.6; }
 .stats-wall { display: flex; flex-wrap: wrap; gap: 10px; }
 .stats-wall a { position: relative; }
 .stats-wall .vols { position: absolute; top: -6px; right: -6px; min-width: 22px; height: 22px; padding: 0 6px; border-radius: 11px; background: var(--ink); color: var(--paper); font-size: 12px; line-height: 22px; text-align: center; box-shadow: 0 0 0 2px var(--paper); }
