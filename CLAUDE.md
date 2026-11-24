@@ -813,8 +813,9 @@ A flag only when Max asks for one, or when the change could break what readers u
   (Max: «читав не означає прочитано»; no ticks on covers), covers the last opened first. Top: «N книг з <first day>», tiles прочитано / пояснень /
   нотаток / хвилин читання (Max 2026-11-20 by the bot, in place of «слів зі словничка»; no «читаю»); «N хв» beside
   the explanations in each month and book.
-- Reader «Scratchpad» (Max 2026-11-23, variant A of canvas 5vFceFdJnh3oNewFR6TgT4; the name stays until a Ukrainian one
-  is found): an inbox for reading, as in GTD. A panel page under «Статистика» (`r-pnav-scratch`, page `scratch`,
+- Reader «Scratchpad» (Max 2026-11-23, variant A of canvas 5vFceFdJnh3oNewFR6TgT4): an inbox for reading, as in GTD.
+  Off the panel since 2026-11-24 (Max: «приберемо поки», «Хочу прочитати» in its place); the page, its routes and
+  readers' entries stay, so it can come back by its panel button. A panel page under «Статистика» (`r-pnav-scratch`, page `scratch`,
   `src/renderer/scratch.js`, count of new ones beside it): a field with the mic and a photo (shrunk to 1200 px), then
   «Нові» and «Розібрані». Each entry is read by Opus once (`server/scratch.js`, `SYSTEM`, json_schema, effort low): kind
   (topic / era / author / book / unclear), title, a few sentences of background, 3–5 books (first = where to start; a

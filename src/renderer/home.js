@@ -1452,7 +1452,6 @@
       if (settings.guest) return hide();
       if (settings.owner && new URLSearchParams(location.search).has("admin")) history.replaceState(history.state, "", "/"), setPage("admin", { push: false });
       show("home");
-      window.Scratch.load();
     })
     .catch(() => show("home"));
 })();
