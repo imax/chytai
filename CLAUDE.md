@@ -830,8 +830,10 @@ A flag only when Max asks for one, or when the change could break what readers u
   `src/renderer/want.js`): the books on the reader's «Хочу прочитати» shelf on the site, each with where to get it.
   `GET /api/want` (signed in; 60 s cache, `?again`) → the site's `POST /api/reader-want {id, key}` (`readerKeyOk`):
   per book `mine` (own file, `readerFileFor`), `free` (free shelf, `freeFileFor`), `online` (openLinks, public-domain
-  sources of `freeBooks`, Слухай), `get` (per format the 2 cheapest in stock, no adapted), `rent` (BookFlow). Rows:
-  «Відкрити» / «Читати безкоштовно» first, a cover = `Paper.card`; nothing anywhere = the book page's link for libraries.
+  sources of `freeBooks`, Слухай), `get` (per format the 2 cheapest in stock, no adapted), `rent` (BookFlow). A shelf of
+  covers (Max's design B, canvas C4zbe7sBdsPD1z41gChjEj): «Можна читати зараз» / «Купити або взяти» / «Поки ніде»
+  (folded), under a cover «Читати» (opens it) or the lowest price; a tap = `Paper.card(b, {top, foot, noAdd})` with
+  «Читати», «Де взяти» and the book's page.
 - Reader «Прочитано» at a book's end (Max 2026-11-20, bot report №7): the last page (`bookEnd` in renderer.js: epub.js
   `atEnd` or 100% on pages, the last chapter's bottom in scroll mode; a PDF's last page) marks the book finished in the
   reader only (`POST /api/library/finished` with `auto`; a book finished before is left alone) and asks the site with

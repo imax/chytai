@@ -1438,6 +1438,7 @@
 
   window.Shell = {
     show, hide, panelFromBook, refresh, key, when, setAside, rcover, showAbout, openPaper, aboutBlock, loadAbout,
+    open: (path) => (panel(false), openBook(path)),
     book: (path) => lib?.books.find((b) => b.path === path) || null,
     books: () => lib?.books || [],
     rerender: () => ((homeHtml = ""), renderHome()),

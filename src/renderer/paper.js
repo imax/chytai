@@ -123,10 +123,12 @@
     const { seen, top } = d.found;
     const c = b ? { title: b.title, author: b.author, cover: b.cover || "", href: b.href, year: b.year } : { title: seen.title, author: seen.author };
     d.card = c;
+    const more = (b && d.found.more) || {};
     $("#pf-body").innerHTML = `<div class="pf-card"><span class="pf-card-c">${window.Shell.rcover({ title: c.title, authors: [c.author] }, c.cover || null)}</span>
         <span class="pf-x"><span class="pf-t">${esc(c.title)}</span><span class="pf-a">${esc([c.author, c.year].filter(Boolean).join(" · "))}</span></span></div>
+      ${more.top || ""}
       <div class="ab-inline pf-about" id="pf-about"></div>
-      <button type="button" class="r-pill pf-add" data-pf-add>Додати в мої книжки</button>
+      ${more.noAdd ? "" : `<button type="button" class="r-pill pf-add" data-pf-add>Додати в мої книжки</button>`}${more.foot || ""}
       ${!d.found.fixed && (top.length || b) ? `<button type="button" class="r-link pf-asis" data-pf-list>Не та книжка</button>` : ""}`;
     window.ReadingTime?.count("cover-card");
     cardGuide(c);
@@ -968,10 +970,12 @@
     if (book && $(".pp") && document.visibilityState === "visible" && Date.now() - busyAt < 5 * 60 * 1000) window.reader.paperSeen(book.path);
   }, 60 * 1000);
 
-  // A book's card from elsewhere (Scratchpad, scratch.js): «Про книжку», «Чому варто читати» and «Додати».
-  function card(b) {
+  // A book's card from elsewhere (Scratchpad, scratch.js; «Хочу прочитати», want.js): «Про книжку», «Чому варто
+  // читати» and «Додати». `more`: `top` (HTML under the title: «Читати», where to get it), `foot` (HTML at the end),
+  // `noAdd` (no «Додати в мої книжки»).
+  function card(b, more = null) {
     const d = $("#paper-found");
-    d.found = { seen: { title: b.title, author: b.author }, top: [], fixed: true };
+    d.found = { seen: { title: b.title, author: b.author }, top: [], fixed: true, more };
     showCard(b.href ? b : null);
     d.showModal();
   }
