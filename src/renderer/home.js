@@ -1282,7 +1282,7 @@
       const text = err.message === "NO_TEXT" ? "Це скан без тексту, тож він лишається PDF." : err instanceof TypeError ? "Немає з'єднання: перетворити книжку можна лише онлайн." : `Не вдалося перетворити: ${err.message}`;
       return showNotice(text, false);
     }
-    showNotice(`«${b.title}» тепер EPUB. PDF у «Нещодавно видалених».`, false);
+    showNotice(`«${b.title}» тепер EPUB. PDF у «Кошику».`, false);
     trashCount++;
     homeHtml = "";
     refresh();
