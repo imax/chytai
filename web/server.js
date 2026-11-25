@@ -1304,6 +1304,21 @@ app.post("/api/reader-want", (req, res) => {
   res.json({ books, libs: { unchecked: libraries.unchecked(store.db, list, picks) } });
 });
 
+// The account's whole shelf here, short, for the reader's «Нотатки» (Max 2026-11-25: a topic's books and the books it
+// suggests take what the reader has read or wants here, not only the reader's files): read, reading and want first,
+// the newest first, 1,000 at most; not the kids' shelf.
+app.post("/api/reader-shelf", (req, res) => {
+  const id = String(req.body?.id || "");
+  if (!readerKeyOk(id, String(req.body?.key || ""))) return res.status(403).json({ error: "key" });
+  const abs = (u) => (!u ? "" : /^https?:/.test(u) ? u : `${SITE}${u}`);
+  const rank = { reading: 0, read: 1, want: 2, abandoned: 3 };
+  const rows = store.library(id).filter((r) => !r.kids);
+  rows.sort((a, b) => (rank[a.status] ?? 4) - (rank[b.status] ?? 4));
+  res.json({
+    books: rows.slice(0, 1000).map((r) => ({ t: r.book.title || "", a: r.book.author || "", s: r.status || "", href: `${SITE}${store.href(r.id)}`, cover: abs(r.book.cover), year: r.book.published || null })),
+  });
+});
+
 // The library branches a reader may pick in the reader's «Хочу прочитати» (libraries.branchList: every branch that
 // held a book someone asked about), by library: { libs: [{ id, city, name, branches: [{ name, count }] }] }.
 app.get("/api/reader-libraries", (req, res) => {

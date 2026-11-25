@@ -39,6 +39,8 @@
   let tab = "notes";
   let allBooks = false; // «З книжок» unfolded
   let more = false; // a topic's «Про тему» unfolded
+  let suggesting = null; // the topic whose «Порадити ще» is being answered
+  let showOlder = false; // «Раніше радили» unfolded
   let picking = ""; // "book" (own books into a topic) | "topic" (a book into topics)
   let pickQ = "";
   let draft = "";
@@ -125,26 +127,35 @@
   };
   const topicsOf = (p) => topics().filter((it) => ownIn(it).some((b) => b.path === p));
 
+  // A topic's books in four kinds: the reader's own files, Opus's added by hand, the site's shelf (less those the
+  // reader has as files), and the suggestions not taken yet.
+  function topicBooks(it) {
+    const own = ownIn(it);
+    const books = (it.ai?.books || []).map((b, i) => [b, i]).filter(([b]) => !b.onShelf && !ownOf(b));
+    const shelfs = (it.ai?.shelf || []).map((s, j) => [s, j]).filter(([s]) => !lib().some((x) => same({ title: s.t, author: s.a }, x.title, x.authors || x.author)));
+    return { own, picked: books.filter(([b]) => added(b)), rest: books.filter(([b]) => !added(b) && !b.later), older: books.filter(([b]) => !added(b) && b.later), shelfs };
+  }
+
+  // The topic's line in the list (Max 2026-11-25): «7 книжок по темі · 2 прочитано · 3 можуть підійти · 2 думки».
   function sub(it) {
     if (it.status === "wait") return `${SPIN}Розбираємо…`;
     if (it.status === "limit") return "Розберемо завтра";
-    const own = ownIn(it);
-    const n = { read: 0, reading: 0 };
-    for (const b of own) n[state(b)] = (n[state(b)] || 0) + 1;
-    const books = it.ai?.books || [];
-    const extra = books.filter((b) => !ownOf(b) && added(b)).length;
+    const { own, picked, rest, shelfs } = topicBooks(it);
+    const n = own.length + picked.length + shelfs.length;
+    const read = own.filter((b) => state(b) === "read").length + shelfs.filter(([s]) => SHELF_STATE[s.s] === "read").length;
     const th = (it.thoughts || []).length + (it.ask || []).length;
     const parts = [
-      n.reading ? `${n.reading} читаю` : "",
-      n.read ? `${n.read} прочитано` : "",
-      extra ? `${extra} додано` : "",
+      n ? `${n} ${plural(n, "книжка", "книжки", "книжок")} по темі` : "",
+      read ? `${read} прочитано` : "",
+      rest.length ? `${rest.length} можуть підійти` : "",
       th ? `${th} ${plural(th, "думка", "думки", "думок")}` : "",
     ].filter(Boolean);
-    if (!parts.length) parts.push(KIND[it.ai?.kind] || "", books.length ? `${books.length} ${plural(books.length, "книжка", "книжки", "книжок")}, з чого почати` : "");
+    if (!parts.length) parts.push(KIND[it.ai?.kind] || "");
     return parts.filter(Boolean).join(" · ");
   }
   function fan(it) {
-    const covers = [...ownIn(it).map((b) => window.Shell.rcover(b)), ...(it.status === "ok" ? (it.ai?.books || []).filter((b) => !ownOf(b)).map(aiCover) : [])];
+    const t = topicBooks(it);
+    const covers = [...t.own.map((b) => window.Shell.rcover(b)), ...t.picked.map(([b]) => aiCover(b)), ...t.shelfs.map(([s]) => window.Shell.rcover({ title: s.t, authors: [s.a] }, s.cover || null)), ...(it.status === "ok" ? t.rest.map(([b]) => aiCover(b)) : [])];
     if (covers.length) return `<span class="r-scr-fan n${Math.min(3, covers.length)}" aria-hidden="true">${covers.slice(0, 3).join("")}</span>`;
     if (it.photo) return `<span class="r-scr-fan"><img class="r-scr-thumb" src="/api/scratch/${it.id}/photo" alt="" loading="lazy"></span>`;
     return "";
@@ -173,9 +184,7 @@
   const quote = (n) => (n?.quote ? `<span class="nx-q">${n.own ? `<span class="nx-own">${esc(n.quote)}</span>` : `<span>${esc(n.quote)}</span>`}${n.comment ? `<em>${esc(n.comment)}</em>` : ""}</span>` : "");
 
   function listHtml() {
-    let html = `<section class="r-scr nx"><h1 class="r-jh">Нотатки</h1>${formHtml()}
-      <label class="nx-search">${LENS}<input id="scr-q" type="search" placeholder="Пошук у нотатках" value="${esc(q)}" autocomplete="off"></label>
-      <div id="scr-found">${foundHtml()}</div><div class="nx-main"${q.trim() ? " hidden" : ""}>`;
+    let html = `<section class="r-scr nx"><h1 class="r-jh">Нотатки</h1>${formHtml()}<div class="nx-main"${q.trim() ? " hidden" : ""}>`;
     if (!items) return `${html}<p class="r-empty">${failed ? "Без мережі нотаток не показати." : `${SPIN}Завантажуємо…`}</p></div></section>`;
     const ts = topics();
     const ls = loose();
@@ -191,7 +200,9 @@
       html += head(`З книжок · ${books.length}`, books.length > 4 ? `<button type="button" class="r-link" data-act="scr-allbooks">${allBooks ? "Згорнути" : "Усі"}</button>` : "");
       html += shownBooks.map(([p]) => brow(libBook(p), esc(counts(p)))).join("");
     }
-    return `${html}</div></section>`;
+    // The search under everything (Max 2026-11-25: «поки вниз»), its results right under it.
+    return `${html}</div><label class="nx-search nx-search-foot">${LENS}<input id="scr-q" type="search" placeholder="Пошук у нотатках" value="${esc(q)}" autocomplete="off"></label>
+      <div id="scr-found">${foundHtml()}</div></section>`;
   }
 
   // The search: topics here (title, words, what Opus said, thoughts), notes and explanations on the server.
@@ -242,8 +253,16 @@
     return `<div class="r-scr-book">
       <button type="button" class="r-scr-bc" data-act="scr-card" data-scr-ai="${i}" aria-label="${esc(bookTitle(b))}">${aiCover(b)}</button>
       <span class="r-scr-bw"><button type="button" class="r-scr-bx" data-act="scr-card" data-scr-ai="${i}"><b>${esc(bookTitle(b))}</b><span class="r-scr-bm">${esc(meta)}</span>${b.why ? `<span class="r-scr-why">${esc(b.why)}</span>` : ""}</button>
-      ${button ? `<button type="button" class="r-pill-line r-scr-add" data-act="scr-add" data-scr-ai="${i}">Додати в тему</button>` : `<button type="button" class="r-link nx-drop" data-act="scr-drop" data-scr-ai="${i}">Прибрати з теми</button>`}</span></div>`;
+      ${button ? `<span class="nx-acts3"><button type="button" class="r-pill-line r-scr-add" data-act="scr-add" data-scr-ai="${i}">Додати в тему</button><button type="button" class="r-link nx-no" data-act="scr-no" data-scr-ai="${i}">Не цікаво</button></span>` : `<button type="button" class="r-link nx-drop" data-act="scr-drop" data-scr-ai="${i}">Прибрати з теми</button>`}</span></div>`;
   }
+
+  // A topic's book from the reader's shelf on the site (server/scratch.js `ai.shelf`): read, wanted, reading; a tap
+  // opens its card.
+  const SHELF = { read: "прочитано", reading: "читаю", want: "хочу прочитати", abandoned: "кинули", "": "на полиці" };
+  const SHELF_STATE = { read: "read", abandoned: "read", reading: "reading" };
+  const shelfBookHtml = (s, j) => `<div class="r-scr-book">
+      <button type="button" class="r-scr-bc" data-act="scr-shelfcard" data-scr-sh="${j}" aria-label="${esc(s.t)}">${window.Shell.rcover({ title: s.t, authors: [s.a] }, s.cover || null)}</button>
+      <span class="r-scr-bw"><button type="button" class="r-scr-bx" data-act="scr-shelfcard" data-scr-sh="${j}"><b>${esc(s.t)}</b><span class="r-scr-bm">${esc([s.a, SHELF[s.s] ?? SHELF[""]].filter(Boolean).join(" · "))}</span></button></span></div>`;
 
   function pickHtml() {
     const s = norm(pickQ);
@@ -276,7 +295,7 @@
       html += `<p class="r-scr-state">Не зрозуміли, що це.${a.guesses?.length ? " Може, це:" : " Допишіть думку нижче."}</p>
         ${a.guesses?.length ? `<div class="r-scr-guess">${a.guesses.map((g, i) => `<button type="button" data-act="scr-guess" data-scr-guess="${i}">${esc(g)}</button>`).join("")}</div>` : ""}`;
     }
-    if (busy) html += `<p class="r-scr-state">${SPIN}${a ? "Думаємо над новою думкою…" : "Розбираємо: шукаємо, що це і що почитати…"}</p>`;
+    if (busy && suggesting !== it.id) html += `<p class="r-scr-state">${SPIN}${a ? "Думаємо над новою думкою…" : "Розбираємо: шукаємо, що це і що почитати…"}</p>`;
     else if (it.status === "limit") html += `<p class="r-scr-state">На сьогодні розборів досить. Розберемо завтра.</p>`;
     else if (it.status === "fail") html += `<p class="r-scr-state">Не вдалося розібрати. <button type="button" class="r-link" data-act="scr-again">Ще раз</button></p>`;
 
@@ -290,22 +309,30 @@
 
     // The topic's books, the reader's own and Opus's added by hand, like a to-do list (Max 2026-11-25): the newest
     // added on top, read ones at the bottom; Opus's own picks after the added ones, reading before not started.
-    const own = ownIn(it);
-    const books = (a?.books || []).map((b, i) => [b, i]).filter(([b]) => !ownOf(b));
-    const picked = books.filter(([b]) => added(b));
-    const rest = books.filter(([b]) => !added(b));
-    const n = own.length + picked.length;
+    const { own, picked, rest, older, shelfs } = topicBooks(it);
+    const n = own.length + picked.length + shelfs.length;
     html += head(`Книжки по темі${n ? ` · ${n}` : ""}`, `<button type="button" class="r-link" data-act="scr-pickbook">${picking === "book" ? "" : "Додати свою"}</button>`);
     if (picking === "book") html += picker("Знайти серед моїх книжок");
     const ORDER = ["reading", "new", "read"];
     const rows = [
       ...own.map((b) => ({ s: state(b), at: it.added?.[b.path] || 0, html: () => brow(b, esc([STATE[state(b)], counts(b.path)].filter(Boolean).join(" · ")), quote(byBook[b.path]), `data-scr-book="${esc(b.path)}" data-scr-from="${it.id}"`) })),
       ...picked.map(([b, i]) => ({ s: "new", at: typeof b.wanted === "number" ? b.wanted : 0, html: () => aiBookHtml(b, i, it, false) })),
+      ...shelfs.map(([s, j]) => ({ s: SHELF_STATE[s.s] || "new", at: 0, html: () => shelfBookHtml(s, j) })),
     ];
     rows.sort((x, y) => (x.s === "read") - (y.s === "read") || y.at - x.at || ORDER.indexOf(x.s) - ORDER.indexOf(y.s));
     html += rows.map((r) => r.html()).join("");
     if (!n && picking !== "book") html += `<p class="r-empty nx-none">Книжок тут ще немає.</p>`;
     if (rest.length) html += head(`Можуть підійти · ${rest.length}`) + rest.map(([b, i]) => aiBookHtml(b, i, it, true)).join("");
+    // «Порадити ще» (Max 2026-11-25): new books past those suggested before, when the list is worked through.
+    if (a && a.kind !== "unclear") {
+      if (!rest.length) html += head("Можуть підійти");
+      html += busy && suggesting === it.id ? `<p class="r-scr-state">${SPIN}Шукаємо ще книжки…</p>` : `<div class="nx-moreb"><button type="button" class="r-pill-line"${busy ? " disabled" : ""} data-act="scr-suggest">Порадити ще</button></div>`;
+    }
+    // What was suggested before «Порадити ще» and neither added nor declined: folded, for later.
+    if (older.length) {
+      html += head(`Раніше радили · ${older.length}`, `<button type="button" class="r-link" data-act="scr-older">${showOlder ? "Сховати" : "Показати"}</button>`);
+      if (showOlder) html += older.map(([b, i]) => aiBookHtml(b, i, it, true)).join("");
+    }
     html += `<div class="r-scr-foot"><button type="button" class="r-link" data-act="scr-delete">Видалити тему</button></div>`;
     return `${html}</section>`;
   }
@@ -376,6 +403,7 @@
     open = null;
     thought = "";
     more = false;
+    showOlder = false;
     redraw();
     top();
     return true;
@@ -499,6 +527,7 @@
     if (name === "scr-allbooks") return (allBooks = !allBooks), redraw();
     if (name === "scr-back") return back();
     if (name === "scr-more") return (more = !more), redraw();
+    if (name === "scr-older") return (showOlder = !showOlder), redraw();
     if (name === "scr-tab") return (tab = el.dataset.scrTab), redraw();
     if (name === "scr-go") return go(Number(el.dataset.scrI));
     if (name === "scr-unpick") return (picking = ""), redraw();
@@ -521,11 +550,18 @@
     if (!it) return;
     const i = Number(el.dataset.scrAi);
     const b = it.ai?.books?.[i];
+    const sh = it.ai?.shelf?.[Number(el.dataset.scrSh)];
+    if (name === "scr-shelfcard" && sh) return window.Paper.card({ title: sh.t, author: sh.a, cover: sh.cover || "", href: sh.href || "", year: sh.year });
     if (name === "scr-card" && b) return window.Paper.card({ title: bookTitle(b), author: bookAuthor(b), cover: b.cover || "", href: b.href || "", year: b.year });
     try {
       if (name === "scr-link") {
         put((await window.reader.scratchPatch(it.id, { book: el.dataset.scrPath, on: true })).item);
         picking = "";
+        return redraw();
+      }
+      if (name === "scr-no" && b) {
+        el.disabled = true;
+        put((await window.reader.scratchPatch(it.id, { no: i })).item);
         return redraw();
       }
       if ((name === "scr-add" || name === "scr-drop") && b) {
@@ -534,6 +570,7 @@
         return redraw();
       }
       if (name === "scr-guess") return put((await window.reader.scratchThink(it.id, { text: `Мається на увазі: ${it.ai?.guesses?.[Number(el.dataset.scrGuess)] || ""}`, lib: libFor() })).item), redraw(), watch();
+      if (name === "scr-suggest") return (suggesting = it.id), put((await window.reader.scratchAsk(it.id, { more: true, lib: libFor() })).item), redraw(), watch();
       if (name === "scr-again") return put((await window.reader.scratchAsk(it.id, { again: true, lib: libFor() })).item), redraw(), watch();
       if (name === "scr-unthink") return put((await window.reader.scratchUnthink(it.id, el.dataset.scrTid)).item), redraw();
       if (name === "scr-delete") {
@@ -543,7 +580,7 @@
         return back();
       }
     } catch (err) {
-      if (name === "scr-add" || name === "scr-drop") el.disabled = false;
+      if (name === "scr-add" || name === "scr-drop" || name === "scr-no") el.disabled = false;
       oops(err, "це зробити");
     }
   }

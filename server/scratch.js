@@ -21,6 +21,10 @@ const MAX_PHOTOS = 100;
 const TEXT_MAX = 1000;
 const THOUGHTS_MAX = 100;
 const LIB_MAX = 300; // own books named to Opus
+const SHELF_MAX = 1000; // books of the site's shelf named to Opus
+const SEEN_MAX = 80; // suggested titles kept so «Порадити ще» doesn't repeat them
+// The site's shelf statuses as Opus reads them and as the topic shows them.
+const STATUS = { read: "прочитано", reading: "читає", want: "хоче прочитати", abandoned: "кинув", "": "на полиці" };
 const KINDS = ["topic", "era", "author", "book", "unclear"];
 
 const SYSTEM = `You help a Ukrainian reader keep an inbox of things to read about later. While walking, listening to a podcast or talking to a friend, the reader jots a few words or takes a photo: a topic (King Arthur, money, habits), an era (Victorian England, the Cossack Hetmanate), an author's name, a book's title, or something half-remembered. Later the reader opens the entry and wants to decide quickly whether and what to read.
@@ -35,9 +39,11 @@ Work out what the reader meant and answer in Ukrainian:
   - lang: the original language code ("en", "uk", "fr"…);
   - why: one short Ukrainian sentence, at most 12 words, why this book for this subject;
   - nonfiction: true or false.
+  Never suggest a book the reader already has: one in «Книжки читача» or on «Полиця читача на Chytai» (whatever its status), in any edition or translation, nor one under «Уже пропонували» or «Читачеві не цікаві».
 - guesses: only for "unclear": 2–3 short Ukrainian guesses of what was meant (an author and a book, a topic), each at most 8 words; otherwise an empty list. For "unclear" leave books empty and about empty.
 
 - have: the numbers of the reader's own books (the list after «Книжки читача:», when there is one) that clearly belong to this subject, read or not; at most 12; an empty list when none or no list.
+- shelf: the numbers of the books on «Полиця читача на Chytai:» (when there is one) that clearly belong to this subject, whatever their status; at most 12; an empty list when none or no list.
 - reply: only when the request has «Думка читача:» lines: one or two short Ukrainian sentences on the LAST thought: where to dig next (a book from your list, an angle, a question worth looking into). No «ви», no praise. Otherwise an empty string.
 
 Rules: never recommend Russian authors or Russian-language editions; prefer books that exist in Ukrainian when they are as good. Name only real books you are sure exist. Answer only with the JSON.
@@ -69,9 +75,10 @@ const SCHEMA = {
     },
     guesses: { type: "array", items: { type: "string" } },
     have: { type: "array", items: { type: "integer" } },
+    shelf: { type: "array", items: { type: "integer" } },
     reply: { type: "string" },
   },
-  required: ["kind", "title", "about", "books", "guesses", "have", "reply"],
+  required: ["kind", "title", "about", "books", "guesses", "have", "shelf", "reply"],
   additionalProperties: false,
 };
 
@@ -88,6 +95,20 @@ function near(a, b) {
 }
 // A name's last word of 3+ letters: «Т. Г. Вайт» → «вайт», «White» → «white».
 const surname = (name) => fold(name).split(" ").filter((w) => w.length > 2).pop() || "";
+// A title's head: before «, або» / «, or» or « (»: «Бойня номер п'ять, або Дитячий хрестовий похід» = «Бойня номер п'ять».
+const head = (t) => fold(String(t || "").split(/,\s*(?:або|or)\s|\s\(/i)[0]);
+// The shelf's row for a suggested book: the same catalog page, or the same title (or its head) and an author's word.
+function onShelf(b, site) {
+  const ts = [b.ctitle, b.title_uk, b.title].filter(Boolean);
+  const names = [b.cauthor, b.author_uk, b.author].flatMap((a) => fold(a).split(" ")).filter((w) => w.length > 3);
+  return site.find((s) => {
+    if (b.href && s.href === b.href) return true;
+    const h = head(s.t);
+    if (!h || !ts.some((t) => fold(t) === fold(s.t) || head(t) === h)) return false;
+    const by = fold(s.a);
+    return h.length >= 12 || names.some((w) => by.includes(w));
+  }) || null;
+}
 
 class Scratch {
   // dir: the accounts folder; find(q) → the catalog's { books: [{ title, author, year, cover, href }] };
@@ -131,6 +152,33 @@ class Scratch {
     const items = this.read(acct);
     for (const it of items) if ((it.status === "wait" || it.status === "limit") && !this.running.has(`${acct}\t${it.id}`) && canRun()) this.run(acct, it.id);
     return items;
+  }
+
+  // A suggested book the reader doesn't want («Не цікаво», Max 2026-11-25): out of the topic, and its title kept in
+  // `no` so the next answers don't bring it back.
+  decline(acct, id, i) {
+    return this.update(acct, id, (x) => {
+      const b = x.ai?.books?.[i];
+      if (!b) return;
+      x.no = [...new Set([...(x.no || []), b.title_uk || b.title])].slice(-SEEN_MAX);
+      x.ai.books.splice(i, 1);
+      x.touched = Date.now();
+    });
+  }
+
+  // The list as the page gets it, a suggestion found on the site's shelf moved to the topic's shelf books, also for
+  // answers from before the shelf was asked (nothing kept: the next answer keeps its own).
+  withShelf(items, site) {
+    if (!site?.length) return items;
+    return items.map((it) => {
+      const books = it.ai?.books || [];
+      const hits = books.map((b) => (b.wanted ? null : onShelf(b, site)));
+      if (!hits.some(Boolean)) return it;
+      const shelf = [...(it.ai.shelf || [])];
+      for (const s of hits) if (s && !shelf.some((x) => (x.href || x.t) === (s.href || s.t))) shelf.push({ t: s.t, a: s.a, s: s.s, href: s.href, cover: s.cover, year: s.year || null });
+      // Marked, not taken out: the page's book numbers are the kept list's.
+      return { ...it, ai: { ...it.ai, books: books.map((b, i) => (hits[i] ? { ...b, onShelf: true } : b)), shelf } };
+    });
   }
 
   add(acct, { text, photo, voice }) {
@@ -234,8 +282,10 @@ class Scratch {
   }
 
   // One Opus call for the entry, then the catalog for its books. lib: the reader's own books [{ p, t, a }], so Opus
-  // can name those that belong to the topic; none (a rerun after a restart) keeps the last answer's.
-  async run(acct, id, lib = null) {
+  // can name those that belong to the topic; none (a rerun after a restart) keeps the last answer's. shelf: the
+  // account's shelf on the site [{ t, a, s, href, cover, year }] (index.js `siteShelf`), the same for its books on
+  // it (`ai.shelf`); none keeps the last. more: «Порадити ще», new books past those suggested before (`seen`).
+  async run(acct, id, lib = null, { shelf = null, more = false } = {}) {
     const key = `${acct}\t${id}`;
     if (this.running.has(key) || !this.apiKey) return;
     this.running.add(key);
@@ -250,12 +300,21 @@ class Scratch {
         } catch {}
       }
       const own = Array.isArray(lib) ? lib.filter((b) => b && typeof b.p === "string" && b.t).slice(0, LIB_MAX) : null;
+      const site = Array.isArray(shelf) ? shelf.filter((b) => b && b.t).slice(0, SHELF_MAX) : null;
+      // The reader's books first, as one block with its own cache mark: the same for every call of the next minutes.
+      const lists = [
+        own?.length ? `Книжки читача:\n${own.map((b, i) => `${i + 1}. ${clean(b.t, 150)}${b.a ? ` — ${clean(b.a, 100)}` : ""}`).join("\n")}` : "",
+        site?.length ? `Полиця читача на Chytai:\n${site.map((b, i) => `${i + 1}. ${clean(b.t, 150)}${b.a ? ` — ${clean(b.a, 100)}` : ""} (${STATUS[b.s] ?? STATUS[""]})`).join("\n")}` : "",
+      ].filter(Boolean).join("\n\n");
+      if (lists) content.push({ type: "text", text: lists, cache_control: { type: "ephemeral" } });
+      const seen = more ? [...new Set([...(it.seen || []), ...(it.ai?.books || []).map((b) => b.title_uk || b.title)])].slice(-SEEN_MAX) : [];
       const words = [
         it.text ? `Запис читача: ${it.text}` : "Запис читача: лише фото.",
         it.voice ? "(надиктовано голосом, слова могли розпізнатися з помилками)" : "",
         ...(it.ask || []).map((a) => `Уточнення читача: ${a}`),
         ...(it.thoughts || []).slice(-10).map((t) => `Думка читача: ${t.text}`),
-        own?.length ? `\nКнижки читача:\n${own.map((b, i) => `${i + 1}. ${clean(b.t, 150)}${b.a ? ` — ${clean(b.a, 100)}` : ""}`).join("\n")}` : "",
+        seen.length ? `\nУже пропонували (назви інші книжки, 3–5): ${seen.map((t) => clean(t, 100)).join("; ")}` : "",
+        it.no?.length ? `Читачеві не цікаві (не пропонуй їх): ${it.no.map((t) => clean(t, 100)).join("; ")}` : "",
       ].filter(Boolean).join("\n");
       content.push({ type: "text", text: words });
       const client = new Anthropic({ apiKey: this.apiKey });
@@ -279,6 +338,8 @@ class Scratch {
         why: clean(b.why, 200),
         nonfiction: !!b.nonfiction,
       })).filter((b) => b.title || b.title_uk);
+      const no = new Set((it.no || []).map(fold));
+      for (let i = books.length - 1; i >= 0; i--) if (no.has(fold(books[i].title_uk || books[i].title)) || no.has(fold(books[i].title))) books.splice(i, 1);
       await Promise.all(books.map((b) => this.match(b)));
       const ai = {
         kind: KINDS.includes(j.kind) ? j.kind : "unclear",
@@ -288,11 +349,30 @@ class Scratch {
         guesses: (Array.isArray(j.guesses) ? j.guesses : []).map((g) => clean(g, 100)).filter(Boolean).slice(0, 3),
       };
       ai.have = own ? [...new Set((Array.isArray(j.have) ? j.have : []).map((n) => own[n - 1]?.p).filter(Boolean))].slice(0, 12) : it.ai?.have || [];
+      // The site's books of the topic: Opus's picks, then a suggestion that is on the shelf after all (another
+      // edition: the catalog page or the title before «, або» / «(» and an author's word) moves there.
+      if (site) {
+        const picked = [...new Set((Array.isArray(j.shelf) ? j.shelf : []).map((n) => site[n - 1]).filter(Boolean))];
+        for (let i = books.length - 1; i >= 0; i--) {
+          const s = onShelf(books[i], site);
+          if (s) picked.push(s), books.splice(i, 1);
+        }
+        ai.shelf = [...new Map(picked.map((s) => [s.href || s.t, s])).values()].slice(0, 16).map((s) => ({ t: clean(s.t, 200), a: clean(s.a, 150), s: clean(s.s, 20), href: clean(s.href, 500), cover: clean(s.cover, 500), year: s.year || null }));
+      } else ai.shelf = it.ai?.shelf || [];
       const reply = clean(j.reply, 600);
-      // Books added to the topic stay added (with their time) when Opus names them again.
-      const was = new Map((it.ai?.books || []).filter((b) => b.wanted).map((b) => [fold(b.title), b.wanted]));
-      for (const b of books) if (was.has(fold(b.title))) b.wanted = was.get(fold(b.title));
+      // Books added to the topic stay added (with their time): marked again when Opus names them, else kept after.
+      // The ones neither added nor declined go to «Раніше радили» (`later`) after «Порадити ще» (Max 2026-11-25: «в
+      // другу чергу»), 30 at most, and stay there through later answers.
+      let later = 0;
+      for (const o of it.ai?.books || []) {
+        const b = books.find((x) => fold(x.title) === fold(o.title));
+        if (b) {
+          if (o.wanted) b.wanted = o.wanted;
+        } else if (o.wanted) books.push(o);
+        else if ((more || o.later) && later < 30) later++, books.push({ ...o, later: true });
+      }
       this.update(acct, id, (x) => {
+        if (more) x.seen = seen;
         x.ai = ai;
         x.status = "ok";
         x.ms = Date.now() - t;

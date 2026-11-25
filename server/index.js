@@ -3277,10 +3277,35 @@ function scratchCanRun(req) {
 }
 // The page sends the reader's own books ({ p, t, a }) with a new entry or thought, so Opus names those of the topic.
 const scratchLib = (req) => (Array.isArray(req.body?.lib) ? req.body.lib.slice(0, 300).map((b) => ({ p: clean(b?.p, 500), t: clean(b?.t, 200), a: clean(b?.a, 150) })).filter((b) => b.p && b.t) : null);
-const scratchRun = (req, it) => {
+// The account's shelf on the site (read, reading, want…: POST /api/reader-shelf), so a topic counts those books too
+// (Max 2026-11-25); 10 minutes per account, 300 accounts at most, none when the site doesn't answer.
+const shelfKept = new Map(); // acct -> { at, books }
+async function siteShelf(acct) {
+  const key = state.accounts[acct]?.key;
+  if (!key) return null;
+  const kept = shelfKept.get(acct);
+  if (kept && Date.now() - kept.at < 10 * 60 * 1000) return kept.books;
+  try {
+    const r = await fetch(`${WEB_URL}/api/reader-shelf`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: acct, key }), signal: AbortSignal.timeout(10000) });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const books = (await r.json()).books || [];
+    shelfKept.delete(acct);
+    if (shelfKept.size >= 300) shelfKept.delete(shelfKept.keys().next().value);
+    shelfKept.set(acct, { at: Date.now(), books });
+    return books;
+  } catch (err) {
+    console.error(`reader-shelf ${acct}:`, err.message);
+    return kept?.books || null;
+  }
+}
+// An entry as the page gets it: with the shelf known now (no wait for the site).
+const scratchOut = (req, it) => (it ? scratch.withShelf([it], shelfKept.get(req.acct)?.books)[0] : it);
+const scratchRun = (req, it, more = false) => {
   if (!it) return it;
-  if (scratchCanRun(req)) scratch.run(req.acct, it.id, scratchLib(req));
-  else it = scratch.update(req.acct, it.id, (x) => (x.status = "limit"));
+  if (scratchCanRun(req)) {
+    const lib = scratchLib(req);
+    siteShelf(req.acct).then((shelf) => scratch.run(req.acct, it.id, lib, { shelf, more }));
+  } else it = scratch.update(req.acct, it.id, (x) => (x.status = "limit"));
   return it;
 };
 const noScratch = guestsCannot("Без входу нотаток немає.");
@@ -3300,7 +3325,10 @@ function notesByBook(req) {
   }
   return out;
 }
-api.get("/scratch", noScratch, (req, res) => res.json({ items: scratch.list(req.acct, () => scratchCanRun(req)), books: notesByBook(req) }));
+api.get("/scratch", noScratch, async (req, res) => {
+  const items = scratch.list(req.acct, () => scratchCanRun(req));
+  res.json({ items: scratch.withShelf(items, await siteShelf(req.acct)), books: notesByBook(req) });
+});
 // One book's notes and explanations for «Нотатки» (the same list the book's own «Нотатки» shows), the talks without
 // what was sent to Claude: the passage, the first question and the answer's start.
 api.get("/notes/book", noScratch, (req, res) => {
@@ -3311,11 +3339,11 @@ api.get("/notes/book", noScratch, (req, res) => {
 api.post("/scratch/:id/thought", noScratch, (req, res) => {
   const it = scratch.think(req.acct, req.params.id, { text: req.body?.text, voice: !!req.body?.voice });
   if (!it) return res.status(404).json({ error: "Запису немає." });
-  res.json({ item: scratchRun(req, it) });
+  res.json({ item: scratchOut(req, scratchRun(req, it)) });
 });
 api.delete("/scratch/:id/thought/:tid", noScratch, (req, res) => {
   const it = scratch.unthink(req.acct, req.params.id, req.params.tid);
-  return it ? res.json({ item: it }) : res.status(404).json({ error: "Запису немає." });
+  return it ? res.json({ item: scratchOut(req, it) }) : res.status(404).json({ error: "Запису немає." });
 });
 api.post("/scratch", noScratch, (req, res) => {
   let photo = null;
@@ -3325,17 +3353,18 @@ api.post("/scratch", noScratch, (req, res) => {
   }
   const it = scratch.add(req.acct, { text: req.body?.text, photo, voice: !!req.body?.voice });
   if (!it) return res.status(400).json({ error: "Порожній запис." });
-  res.json({ item: scratchRun(req, it) });
+  res.json({ item: scratchOut(req, scratchRun(req, it)) });
 });
 api.post("/scratch/:id/ask", noScratch, (req, res) => {
-  const it = req.body?.again ? scratch.update(req.acct, req.params.id, (x) => (x.status = "wait")) : scratch.refine(req.acct, req.params.id, req.body?.text);
+  const again = req.body?.again || req.body?.more;
+  const it = again ? scratch.update(req.acct, req.params.id, (x) => (x.status = "wait")) : scratch.refine(req.acct, req.params.id, req.body?.text);
   if (!it) return res.status(404).json({ error: "Запису немає." });
-  res.json({ item: scratchRun(req, it) });
+  res.json({ item: scratchOut(req, scratchRun(req, it, !!req.body?.more)) });
 });
 api.patch("/scratch/:id", noScratch, (req, res) => {
   const b = req.body || {};
-  const it = typeof b.book === "string" ? scratch.link(req.acct, req.params.id, b.book, !!b.on) : Number.isInteger(b.wanted) ? scratch.wanted(req.acct, req.params.id, b.wanted, b.on !== false) : scratch.setState(req.acct, req.params.id, b.state);
-  return it ? res.json({ item: it }) : res.status(404).json({ error: "Запису немає." });
+  const it = typeof b.book === "string" ? scratch.link(req.acct, req.params.id, b.book, !!b.on) : Number.isInteger(b.wanted) ? scratch.wanted(req.acct, req.params.id, b.wanted, b.on !== false) : Number.isInteger(b.no) ? scratch.decline(req.acct, req.params.id, b.no) : scratch.setState(req.acct, req.params.id, b.state);
+  return it ? res.json({ item: scratchOut(req, it) }) : res.status(404).json({ error: "Запису немає." });
 });
 api.delete("/scratch/:id", noScratch, (req, res) => res.json({ ok: scratch.remove(req.acct, req.params.id) }));
 api.get("/scratch/:id/photo", noScratch, (req, res) => {
