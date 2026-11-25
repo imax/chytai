@@ -875,7 +875,7 @@ function where(book, ukrlib = null, sluhay = null, bookflow = null) {
   if (out.length) rows.push(row("Немає", `<span class="muted">зараз немає в наявності: </span>${out.map((e) => `${go(e, ' class="muted"')}${esc(e.shelf.name)}</a>`).join(", ")}`));
   // BookFlow (bookflow.js): a copy a reader lends, one price for any book; last, right above the libraries
   // (app.js adds them), the other way to borrow. All copies out is still a row (Max 2026-11-17).
-  if (bookflow) rows.push(row("Прокат", `<a href="${attr(bookflow.url)}" target="_blank" rel="noopener">BookFlow</a>${bookflow.free ? `<span class="ok">, є вільна</span>` : `<span class="muted">, зараз усі в читачів</span>`}${bookflow.once ? `<span class="muted">, ${bookflow.once} ₴ за книжку</span>` : ""}`));
+  if (bookflow) rows.push(row("Напрокат", `<a href="${attr(bookflow.url)}" target="_blank" rel="noopener">BookFlow</a>${bookflow.free ? `<span class="ok">, є вільна</span>` : `<span class="muted">, зараз усі в читачів</span>`}${bookflow.once ? `<span class="muted">, ${bookflow.once} ₴ за книжку</span>` : ""}`));
   return `<div class="where${rows.length ? "" : " hidden"}" data-block="where" data-src="/api/libraries/${attr(encodeURIComponent(book.id))}"><span class="where-label">Де взяти</span>${rows.join("")}</div>`;
 }
 

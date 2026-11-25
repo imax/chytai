@@ -173,7 +173,7 @@
   function lines(v, abroadLabel) {
     const out = [];
     for (const g of v.get || []) out.push([KIND[g.kind] || g.kind, g.shops.map(shop).join(` <span class="r-want-m">·</span> `)]);
-    if (v.rent) out.push(["Прокат", `${link(v.rent.url, "BookFlow")}<span class="r-want-m">, ${v.rent.free ? "є вільна" : "зараз усі в читачів"}${v.rent.price ? `, ${v.rent.price} ₴` : ""}</span>`]);
+    if (v.rent) out.push(["Напрокат", `${link(v.rent.url, "BookFlow")}<span class="r-want-m">, ${v.rent.free ? "є вільна" : "зараз усі в читачів"}${v.rent.price ? `, ${v.rent.price} ₴` : ""}</span>`]);
     if (v.abroad?.length) out.push([abroadLabel, v.abroad.map((l) => link(l.url, `${esc(l.label)} ↗`)).join(` <span class="r-want-m">·</span> `)]);
     return out.map(([k, x]) => `<div><span class="r-want-k">${esc(k)}</span><span>${x}</span></div>`).join("");
   }

@@ -6,7 +6,7 @@
 // `available` false = every copy is with a reader now; the book is still shown («зараз усі в читачів»).
 // Every hour the jobs process reads it (~0.5 MB, 2 s) and matches its books with ours: by ISBN, else by title
 // (its part before «.»/«:») and the same author. What is kept: meta `bookflow:links` (book id -> [url, free]) and
-// the prices, rewritten each time, so nothing grows. The book page shows one row «Прокат» (pages.js where()).
+// the prices, rewritten each time, so nothing grows. The book page shows one row «Напрокат» (pages.js where()).
 const { norm, sameAuthor, isRussian } = require("./store");
 
 const URL_EXPORT = "https://api.bookflow.com.ua/api/books/export/";
@@ -20,7 +20,7 @@ class BookFlow {
     this.cache = null;
   }
 
-  // The «Прокат» row's data for a book page, or null. The web process reads the map again every ten minutes.
+  // The «Напрокат» row's data for a book page, or null. The web process reads the map again every ten minutes.
   linkFor(book) {
     if (!book) return null;
     if (!this.cache || Date.now() - this.cache.at > 10 * 60 * 1000) {
