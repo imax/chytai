@@ -2602,7 +2602,24 @@ app.get("/@:username/stats", (req, res) => {
   const reader = pub(auth.byUsername(req.params.username));
   if (!reader) return res.status(404).send(pages.messagePage({ title: "Немає такого читача", text: "", user: req.user }));
   if (reader.username !== req.params.username) return res.redirect(301, `${reader.href}/stats`);
-  res.send(pages.statsPage({ user: req.user, reader, own: req.user?.id === reader.id, rows: store.library(reader.id).map((r) => ({ ...r, series: store.seriesOf(r.id) })), year: Number(req.query.year) || new Date().getFullYear() }));
+  const rows = store.library(reader.id).map((r) => ({ ...r, series: store.seriesOf(r.id) }));
+  const year = Number(req.query.year) || new Date().getFullYear();
+  const card = statsCard(reader, rows);
+  res.send(pages.statsPage({ user: req.user, reader, own: req.user?.id === reader.id, rows, year, og: card ? `/og/stats/${encodeURIComponent(reader.username)}.jpg?v=${listImage.statsName(card).slice(1, 9)}` : "" }));
+});
+// The link's picture of a statistics page (Max 2026-11-24): «Статистика читання», the name and the «За всі роки»
+// numbers; made once per those (listimage.js, gone after 30 days unused).
+function statsCard(reader, rows) {
+  const numbers = pages.statsAll(rows);
+  return numbers[0][0] === "0" ? null : { name: reader.name, nick: reader.username, numbers };
+}
+app.get("/og/stats/:username.jpg", async (req, res) => {
+  const reader = pub(auth.byUsername(req.params.username));
+  if (!reader) return res.status(404).end();
+  const card = statsCard(reader, store.library(reader.id));
+  const file = card && (await listImage.statsFile(card).catch(() => null));
+  if (!file) return res.redirect(302, "/icon.png");
+  res.set("Cache-Control", "public, max-age=86400").type("image/jpeg").sendFile(file);
 });
 // ---- «Списки» (lists.js): /@<username>/list/<slug>, /lists, and what the author does with a list ----
 app.get("/@:username/list/:slug", (req, res) => {

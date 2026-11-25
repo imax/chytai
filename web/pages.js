@@ -1506,7 +1506,19 @@ function ratingCols(list) {
   return `<div class="stats-cols stats-stars" style="--cols:${keys.length}">${keys.map((k) => `<div class="stats-col"><span class="n">${c.get(k)}</span><i style="--h:${Math.round((c.get(k) / max) * 100) / 100}"></i><span class="m">${uk(k)}</span></div>`).join("")}</div>`;
 }
 
-function statsPage({ user, reader, own, rows, year }) {
+// «За всі роки» as [number, words], for the page's link picture (server.js /og/stats).
+function statsAll(rows) {
+  const read = rows.filter((r) => r.status === "read" && !r.kids);
+  const rated = read.filter((r) => r.rating != null && r.rating > 0);
+  return [
+    [String(read.length), "прочитано"],
+    rated.length ? [uk(Math.round((rated.reduce((s, r) => s + r.rating, 0) / rated.length) * 10) / 10), "середня оцінка"] : null,
+    [String(rated.filter((r) => r.rating >= 5).length), "на 5 ★"],
+    [String(read.filter((r) => isUk(r.book)).length), "українською"],
+  ].filter(Boolean);
+}
+
+function statsPage({ user, reader, own, rows, year, og = "" }) {
   const read = rows.filter((r) => r.status === "read" && !r.kids);
   const years = [...new Set(read.map((r) => r.year).filter(Boolean))].sort((a, b) => b - a);
   const head = pageHead({ crumbs: `<a href="${attr(reader.href)}">${own ? "Моя полиця" : esc(reader.name)}</a> / Статистика`, kicker: own ? "Моя полиця" : "Полиця читача", title: "Статистика", sub: years.length ? count(read.length, "книжка прочитана", "книжки прочитано", "книжок прочитано") : "" });
@@ -1566,7 +1578,8 @@ ${years.length > 1 ? `<div class="stats-all">
   ${stars ? `<div>${label("Оцінки", `${allRated.length} з ${read.length}`)}${stars}</div>` : ""}
 </div>` : ""}
 ${genreStream(read, href)}`;
-  return layout({ title: own ? "Моя статистика" : `Статистика · ${reader.name}`, body, user, path: own ? "/me" : "/@", canonical: `${reader.href}/stats`, noindex: true });
+  const description = `${count(read.length, "книжка прочитана", "книжки прочитано", "книжок прочитано")}, ${yr.length} у ${year} році`;
+  return layout({ title: own ? "Моя статистика" : `Статистика · ${reader.name}`, body, user, path: own ? "/me" : "/@", canonical: `${reader.href}/stats`, noindex: true, description, image: og ? abs(og) : "", imageSize: og ? [1200, 630] : null, wide: !!og });
 }
 
 // «Стежити» on another reader's page (the design's secondary button); pressed, it reads «✓ Стежу».
@@ -4199,6 +4212,7 @@ ${wait ? `<script>(() => { const steps = ${JSON.stringify(ASK_STEPS)}; const lin
 
 module.exports = {
   statsPage,
+  statsAll,
   calendarPage, calendarAddPage, eventPage,
   askPage, askAnswerPage, askRows,
   asksPage, askTalkPage, setAskNav,

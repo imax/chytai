@@ -736,6 +736,9 @@ A flag only when Max asks for one, or when the change could break what readers u
   bottom; `genreStream`: an SVG streamgraph by genre family, `FAMILIES` / `--g-<key>` colours in style.css, no script; each year an HTML
   column over it with a CSS tooltip, shown at once on hover). Linked from the shelf («статистика»). Open
   to guests, noindex. Russian editions have no genres by rule: they fall in «Без жанру».
+  The link's picture (Max 2026-11-24): `/og/stats/<nick>.jpg`, «Статистика читання», the name and «За всі роки»
+  (`pages.statsAll`) drawn by libvips (`listImage.statsFile`, kept 30 days unused like a list's), in the site's fonts as
+  TTF (`web/og-fonts/`, from public/fonts by fontTools: Pango reads no woff2; a font change = convert again).
 - Shelf quick picks (`.shelf-picks`, app.js `filters.pick`): «4,5+», «Українською», the reader's 3 biggest families;
   rows carry `data-fam` and `data-uk`.
 - /community «Схожий смак» (`similarReaders` in server.js): up to 3 readers with the most read books in common (a work

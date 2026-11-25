@@ -9,7 +9,7 @@ const { execFile } = require("child_process");
 
 const W = 1200;
 const H = 630;
-const run = (cmd, args) => new Promise((ok, fail) => execFile("nice", ["-n", "10", cmd, ...args], { timeout: 30000 }, (e, _o, err) => (e ? fail(new Error(String(err || e.message).trim().split("\n")[0])) : ok())));
+const run = (cmd, args, env) => new Promise((ok, fail) => execFile("nice", ["-n", "10", cmd, ...args], { timeout: 30000, ...(env ? { env } : {}) }, (e, _o, err) => (e ? fail(new Error(String(err || e.message).trim().split("\n")[0])) : ok())));
 
 class ListImage {
   constructor({ dir, thumbs, log = console.log }) {
@@ -57,6 +57,65 @@ class ListImage {
         /* gone already */
       }
     }
+  }
+
+  // A reader's statistics page (Max 2026-11-24, «візьми краще оцей блок. і підпис що це / кого це»): the page's
+  // «За всі роки» numbers under «Статистика читання» and the reader's name, on the site's paper, in the site's own
+  // fonts as TTF in og-fonts/ (public/fonts woff2 → fontTools; Pango's HarfBuzz reads no woff2); DejaVu if missing.
+  statsName(card) {
+    return `s${crypto.createHash("sha1").update(JSON.stringify(card)).digest("hex").slice(0, 19)}.jpg`;
+  }
+  async statsFile(card) {
+    const out = path.join(this.dir, this.statsName(card));
+    if (fs.existsSync(out)) return this.used(out), out;
+    this.prune();
+    if (!this.made.has(out)) this.made.set(out, this.makeStats(card, out).catch((e) => (this.log(`listimage: ${e.message}`), null)).finally(() => this.made.delete(out)));
+    return this.made.get(out);
+  }
+  fontEnv() {
+    if (this.fc) return this.fc;
+    const dir = path.join(path.dirname(this.dir), "og-fonts");
+    fs.mkdirSync(dir, { recursive: true });
+    const conf = path.join(dir, "fonts.conf");
+    fs.writeFileSync(conf, `<?xml version="1.0"?>\n<!DOCTYPE fontconfig SYSTEM "fonts.dtd">\n<fontconfig><include ignore_missing="yes">/etc/fonts/fonts.conf</include><dir>${path.join(__dirname, "og-fonts")}</dir><cachedir>${path.join(dir, "cache")}</cachedir></fontconfig>\n`);
+    return (this.fc = { ...process.env, FONTCONFIG_FILE: conf });
+  }
+  async makeStats({ name, nick, numbers }, out) {
+    const tmp = [];
+    try {
+      const esc = (t) => String(t).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+      const serif = "'Source Serif 4', 'DejaVu Serif', serif";
+      const sans = "Onest, 'DejaVu Sans', sans-serif";
+      // As on the page: the name on the left, «За всі роки» two by two on the right.
+      const words = String(name).split(/\s+/);
+      const lines = words.length > 1 && name.length > 14 ? [words.slice(0, Math.ceil(words.length / 2)).join(" "), words.slice(Math.ceil(words.length / 2)).join(" ")] : [name];
+      const size = Math.max(...lines.map((l) => l.length)) > 13 ? 58 : 72;
+      const title = lines.map((l, i) => `<text x="78" y="${226 + i * (size + 8)}" font-family="${serif}" font-size="${size}" fill="#1b1a17">${esc(l)}</text>`).join("");
+      const cells = numbers.map(([v, l], i) => {
+        const x = 640 + (i % 2) * 270;
+        const y = 236 + Math.floor(i / 2) * 200;
+        return `<text x="${x}" y="${y}" font-family="${serif}" font-size="96" fill="#1b1a17">${esc(v)}</text><text x="${x + 2}" y="${y + 50}" font-family="${sans}" font-size="28" fill="#6b675f">${esc(l)}</text>`;
+      }).join("");
+      const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
+<rect width="${W}" height="${H}" fill="#f7f4ee"/>
+<rect x="80" y="70" width="${W - 160}" height="2" fill="#1b1a17"/>
+<text x="80" y="124" font-family="${sans}" font-size="24" font-weight="600" letter-spacing="3.4" fill="#266741">СТАТИСТИКА ЧИТАННЯ</text>
+${title}${cells}
+<text x="80" y="560" font-family="${sans}" font-size="26" fill="#6b675f">chytai.org.ua/@${esc(nick)}</text></svg>`;
+      return await this.render(svg, out, tmp, this.fontEnv());
+    } finally {
+      for (const f of tmp) fs.rmSync(f, { force: true });
+    }
+  }
+  async render(svg, out, tmp, env) {
+    const svgFile = `${out}.${process.pid}.svg`;
+    tmp.push(svgFile);
+    fs.writeFileSync(svgFile, svg);
+    const part = `${out}.${process.pid}.part.jpg`;
+    tmp.push(part);
+    await run("vips", ["copy", svgFile, `${part}[Q=86,strip]`], env);
+    fs.renameSync(part, out);
+    return out;
   }
 
   async make(covers, out) {
