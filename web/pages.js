@@ -811,7 +811,8 @@ function where(book, ukrlib = null, sluhay = null, bookflow = null) {
   const free = sluhay ? [{ id: "sluhay", shelf: { id: "sluhay", name: sluhay.name }, links: [{ url: sluhay.url }], format: "аудіо", narrator: sluhay.narrator, duration: sluhay.duration, price: "безкоштовно", status: "є" }] : [];
   // In stock first, then the publisher's own over a shop reselling it (Старий Лев sells partners' books).
   const rank = (e) => (e.status === "є" ? 0 : e.status === "передзамовлення" ? 1 : 2) * 4 + (e.edition ? 2 : 0) + (e.format === "e-book" ? 1 : 0) + (e.format === "аудіо" ? 1 : 0);
-  const eds = [...(book.editions || []), ...free].filter((e) => !seen.has(e.links[0].url) && seen.add(e.links[0].url)).sort((a, b) => rank(a) - rank(b));
+  // `shops`: the editions, every row to one shop folded into one (megogo.js withShop).
+  const eds = [...(book.shops || book.editions || []), ...free].filter((e) => !seen.has(e.links[0].url) && seen.add(e.links[0].url)).sort((a, b) => rank(a) - rank(b));
   // A free text (openlinks.js) before the shops abroad.
   const links = [...(ukrlib ? [ukrlib] : []), ...(book.links || [])].filter((l) => !seen.has(l.url));
   // Only where it can be had (Max, 2026-10-20: «показувати там де є, а не там де немає»); the shops

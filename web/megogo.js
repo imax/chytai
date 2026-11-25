@@ -9,20 +9,21 @@
 // publisher]), rewritten each time, ~10 thousand books, ~0.8 MB. Not shelf items: 20 thousand more of those cost
 // the site 2 s and 140 MB at every start (2026-11-25, test DB).
 // The book page and the reader's «Хочу прочитати» get one more paper edition (withShop); the 51 publisher shelves
-// read from mbooks.com.ua's pages (catalogs.js mbooks) link to the same pages, and their row gives way to this one,
-// so the shop is named and the price is today's.
+// read from mbooks.com.ua's pages (catalogs.js mbooks) link to the same shop, so all those rows become one «Megogo»
+// row per format.
 const { norm, sameAuthor, isRussian } = require("./store");
 const { ent } = require("./catalogs");
 
 const FEED = "https://i.mbooks.com.ua/media/merchant_center_feed.xml";
 // No User-Agent of our own for now: their Cloudflare answers 403 to «Chytai/1.0 (…)» (2026-11-25). Max has MEGOGO's
 // consent to use the feed and asks them to let «Chytai» through; then it goes back to a named one.
-const NAME = "MEGOGO BOOKS";
+const NAME = "Megogo";
 const SKIP = /^(Канцтовари|Блокноти|Розваги|Шкільні підручники|Періодичні)/;
 // «backorder» is mbooks.com.ua's «Очікується»: orders taken, the book comes later.
 const STATUS = { in_stock: "є", preorder: "передзамовлення", backorder: "очікується" };
 const RANK = { є: 0, передзамовлення: 1, очікується: 2 };
 const CYR = /[а-яіїєґ]/i;
+const MBOOKS = /^https?:\/\/(www\.)?mbooks\.com\.ua\//;
 const clean = (s) => ent(String(s || "")).replace(/\s+/g, " ").trim();
 
 // «Ґабрієле Меттью, Перрі Девід М.» is names: each part a few capitalised words or initials, no other dots.
@@ -69,13 +70,28 @@ class Megogo {
     return l ? { url: l[0], price: l[1], status: l[2], brand: l[3] || "" } : null;
   }
 
-  // The book with the shop as one more paper edition, a copy (store.bookPage's object is shared). An edition of
-  // another shelf with the same address (a publisher shelf read from mbooks.com.ua) gives way to it.
+  // The book with its shops for «Де взяти» as `shops` (its `editions` stay as they are: the publisher block reads
+  // them). Every row that leads to mbooks.com.ua is one shop «Megogo», one row per format (Max 2026-11-25: the 51
+  // publisher shelves read from mbooks.com.ua showed as «Апріорі», «Фабула»… and all went to Megogo: «один лінк, а не
+  // 10»): in stock first, then the cheapest; the feed's row stands for the paper ones, its price is today's.
   withShop(book) {
+    if (!book) return book;
     const l = this.linkFor(book);
-    if (!l) return book;
-    const ed = { id: `megogo-${(l.url.match(/\/book\/(\d+)/) || [])[1]}`, shelf: { id: "megogo", name: NAME, kind: "shop" }, links: [{ label: NAME, url: l.url }], format: "папір", price: l.price ? `${l.price} ₴` : "", status: l.status, edition: l.brand };
-    return { ...book, editions: [...(book.editions || []).filter((e) => e.links?.[0]?.url !== l.url), ed] };
+    const feed = l && { id: `megogo-${(l.url.match(/\/book\/(\d+)/) || [])[1]}`, shelf: { id: "megogo", name: NAME, kind: "shop" }, links: [{ label: NAME, url: l.url }], format: "папір", price: l.price ? `${l.price} ₴` : "", status: l.status, edition: l.brand };
+    const eds = book.editions || [];
+    const ours = (e) => MBOOKS.test(e.links?.[0]?.url || "");
+    const relabel = (e) => ({ ...e, shelf: { id: "megogo", name: NAME, kind: "shop" }, links: [{ label: NAME, url: e.links[0].url }], edition: e.edition || e.shelf?.name || "" });
+    const kind = (e) => (e.adapted ? "комікс" : e.format || "папір");
+    const mb = [...eds.filter(ours).map(relabel).filter((e) => !(feed && kind(e) === "папір")), ...(feed ? [feed] : [])];
+    if (!mb.length) return book;
+    const cost = (e) => Number(String(e.price || "").replace(/[^\d]/g, "")) || Infinity;
+    const best = new Map();
+    for (const e of mb) {
+      const o = best.get(kind(e));
+      if (!o || (RANK[e.status] ?? 3) < (RANK[o.status] ?? 3) || ((RANK[e.status] ?? 3) === (RANK[o.status] ?? 3) && cost(e) < cost(o))) best.set(kind(e), e);
+    }
+    // The book's own link to one of the folded rows would come back under «Інше».
+    return { ...book, shops: [...eds.filter((e) => !ours(e)), ...best.values()], links: (book.links || []).filter((x) => !MBOOKS.test(x.url || "")) };
   }
 
   // Our work for one of its books, or null: the ISBN, else the same title by the same author.

@@ -1237,7 +1237,7 @@ app.post("/api/reader-want", (req, res) => {
   const kindOf = (e) => (e.format === "e-book" || e.format === "аудіо" ? e.format : "папір");
   // Per format the 2 cheapest shops (in stock first), as the book page's «Де взяти».
   const shopsOf = (book) => {
-    const eds = (megogo.withShop(book).editions || []).filter((e) => e.shelf?.id !== "chytai-free" && e.status !== "немає" && !e.adapted && e.links?.[0]?.url);
+    const eds = ((b) => b.shops || b.editions || [])(megogo.withShop(book)).filter((e) => e.shelf?.id !== "chytai-free" && e.status !== "немає" && !e.adapted && e.links?.[0]?.url);
     const get = [];
     for (const kind of ["e-book", "папір", "аудіо"]) {
       const shops = [];
@@ -4035,7 +4035,8 @@ app.get("/book/:id", (req, res) => {
   // One address per work: an id, an edition id or an old slug redirects to the canonical one.
   // For a day only: addresses move as works part and merge, and a browser keeps a bare 301 forever.
   if (store.href(id) !== `/book/${encodeURIComponent(req.params.id)}`) return res.set("Cache-Control", "public, max-age=86400").redirect(301, store.href(id));
-  const book = bookFor(req, megogo.withShop(store.bookPage(id)), !!store.entry(req.user?.id, id));
+  // After bookFor: a draft shelf's rows are gone before they fold into the shop's.
+  const book = megogo.withShop(bookFor(req, store.bookPage(id), !!store.entry(req.user?.id, id)));
   if (!book) return res.status(404).send(pages.messagePage({ title: "Немає такої книжки", text: "", user: req.user }));
   const file = readerFileFor(req.user?.id, book);
   const free = !file && freeFileFor(book);
