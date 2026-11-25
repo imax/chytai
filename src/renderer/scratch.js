@@ -95,11 +95,20 @@
   const bookAuthor = (b) => (b.href && b.cauthor) || b.author_uk || b.author;
   const aiCover = (b) => window.Shell.rcover({ title: bookTitle(b), authors: [bookAuthor(b)] }, b.cover || null);
   // A suggested book that is one of the reader's own: by its catalog page, else by its title.
-  const ownOf = (b) => {
-    const t = [norm(bookTitle(b)), norm(b.title)];
-    return lib().find((x) => (b.href && x.href === b.href) || t.includes(norm(x.title)));
+  // Another edition counts too: «Бойня номер п'ять, або Дитячий хрестовий похід» = «Бойня номер п'ять» by the same
+  // author (the title's head before «, або» or «(»; Max 2026-11-25). A long head alone is enough.
+  const thead = (s) => norm(String(s || "").split(/,\s*(?:або|or)\s|\s\(/i)[0]);
+  const surnames = (b) => [bookAuthor(b), b.author, b.author_uk].flatMap((a) => norm(a).split(" ")).filter((w) => w.length > 3);
+  const same = (b, t, a) => {
+    const ts = [bookTitle(b), b.title, b.title_uk].filter(Boolean);
+    if (ts.some((x) => norm(x) === norm(t))) return true;
+    const h = thead(t);
+    if (!h || !ts.some((x) => thead(x) === h)) return false;
+    const by = norm(Array.isArray(a) ? a.join(" ") : a);
+    return h.length >= 12 || surnames(b).some((w) => by.includes(w));
   };
-  const onWant = (b) => b.wanted || (wantList || []).some((w) => (b.href && w.href === b.href) || [norm(bookTitle(b)), norm(b.title)].includes(norm(w.title)));
+  const ownOf = (b) => lib().find((x) => (b.href && x.href === b.href) || same(b, x.title, x.authors || x.author));
+  const onWant = (b) => b.wanted || (wantList || []).some((w) => (b.href && w.href === b.href) || same(b, w.title, w.author || w.authors));
 
   // A topic's own books: Opus's picks and the ones put in by hand, minus the ones taken out, plus suggested books
   // the reader already has; only books still in the library.
@@ -309,8 +318,7 @@
     const ts = topicsOf(book);
     let html = `<section class="r-scr r-scr-one nx"><button type="button" class="r-scr-back" data-act="scr-back">${back}</button>
       <div class="nx-bookhead">${window.Shell.rcover(b)}<span><b>${esc(b.title)}</b><span class="nx-bm">${esc([author(b), STATE[state(b)]].filter(Boolean).join(" · "))}</span>
-      <span class="nx-topic">${ts.length > 1 ? "Теми" : "Тема"}: ${ts.map((x) => `<span class="nx-tchip"><button type="button" class="r-link" data-scr-open="${x.id}">${esc(title(x))}</button><button type="button" class="nx-tx" data-act="scr-unlink" data-scr-topic="${x.id}" aria-label="Прибрати з теми">×</button></span>`).join("")}${picking === "topic" ? "" : `<button type="button" class="r-link nx-tadd" data-act="scr-picktopic">${ts.length ? "+ ще" : "+ додати"}</button>`}</span>
-      <span class="nx-bacts"><button type="button" class="r-pill-line" data-open="${esc(b.path)}" data-act="scr-read">Відкрити книжку</button></span></span></div>`;
+      <span class="nx-topic">${ts.length > 1 ? "Теми" : "Тема"}: ${ts.map((x) => `<span class="nx-tchip"><button type="button" class="r-link" data-scr-open="${x.id}">${esc(title(x))}</button><button type="button" class="nx-tx" data-act="scr-unlink" data-scr-topic="${x.id}" aria-label="Прибрати з теми">×</button></span>`).join("")}${picking === "topic" ? "" : `<button type="button" class="r-link nx-tadd" data-act="scr-picktopic">${ts.length ? "+ ще" : "+ додати"}</button>`}</span></span></div>`;
     if (picking === "topic") html += picker("Знайти тему");
     const d = bookData?.path === book ? bookData : null;
     if (!d) return `${html}<p class="r-empty">${SPIN}Завантажуємо…</p></section>`;
@@ -551,7 +559,6 @@
   }, true);
   shell.addEventListener("click", (e) => {
     if (!shown()) return;
-    if (e.target.closest("[data-open]")) return; // «Відкрити книжку»: home.js opens it
     const o = e.target.closest("[data-scr-open]");
     if (o) return showTopic(o.dataset.scrOpen);
     const bk = e.target.closest("[data-scr-book]");
