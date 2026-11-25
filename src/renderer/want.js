@@ -6,6 +6,10 @@
 // work in its other language, the original or the Ukrainian translation, with Amazon and the like), «Про книжку»
 // and the book's page. GET /api/want (server/index.js → the site's /api/reader-want). A page in the panel after
 // «Мої книжки» (home.js page «want»). Taps count by data-act (reading-time.js): act-want-*.
+// «Бібліотеки» (Max 2026-11-25), the last part: empty until the reader picks one or more library branches
+// (#libs-dialog, settings `libraries`, 5 at most); then the books those branches hold, from the site's cache of the
+// libraries' catalogs (`lib` per book). Books the site hasn't asked them about yet are asked in the background
+// (`libs.unchecked`), so the page asks again every half minute while it is open.
 (() => {
   const ESC = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" };
   const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ESC[c]);
@@ -16,18 +20,27 @@
   let asking = false;
   let failed = false;
   let noneOpen = false; // «Поки ніде» unfolded
+  let picks = []; // the reader's library branches, [{ lib, branch }]
+  let libs = null; // { unchecked } for the picks
+  let libBusy = false; // the picks changed, the answer for them not here yet
+  let again = null; // the timer that asks again while the libraries are being checked
+  let tries = 0;
 
   const shown = () => document.querySelector("#shell")?.dataset.page === "want";
 
-  async function load() {
+  async function load(fresh) {
     if (asking) return;
     asking = true;
-    const r = await window.reader.want?.();
+    const r = await window.reader.want?.(fresh);
     asking = false;
-    if (r?.books) (books = r.books), (failed = false);
+    if (r?.books) (books = r.books), (libs = r.libs || null), (picks = r.picks || picks), (failed = false), (libBusy = false);
     else failed = !books;
     if (shown()) window.Shell.rerender();
+    // The site is still asking the libraries: look again in half a minute, for about half an hour at most.
+    clearTimeout(again);
+    if (libs?.unchecked && tries < 60) again = setTimeout(() => shown() && (tries++, load(true)), 30000);
   }
+  const enter = () => ((tries = 0), load());
 
   // Where one's own file or the free shelf's is, by its file name.
   const inLib = (name) => name && window.Shell.books().find((b) => b.path === name);
@@ -47,13 +60,13 @@
   const group = (b) => (readNow(b) ? "now" : b.get?.length || b.rent || b.online?.length || b.abroad?.length || b.other?.length ? "buy" : "none");
   const LANG = { uk: "Українською", en: "Англійською", "": "В оригіналі" };
 
-  function tile(b, i) {
+  function tile(b, i, cap) {
     const path = readNow(b);
-    const foot = path
+    const foot = cap != null ? `<span class="r-want-h r-want-lib">${esc(cap)}</span>` : path
       ? `<span class="r-want-h"><button type="button" class="r-want-go" data-open="${esc(path)}" data-act="${b.mine ? "want-mine" : "want-free"}">Читати</button></span>`
       : how(b) ? `<span class="r-want-h">${esc(how(b))}</span>` : "";
     return `<div class="r-want-b">
-      <button type="button" class="r-want-c" data-act="want-card" data-want="${i}">${window.Shell.rcover({ title: b.title, authors: [b.author] }, b.cover || null)}<span class="r-want-t">${esc(b.title)}</span></button>
+      <button type="button" class="r-want-c" data-act="${cap != null ? "want-lib-card" : "want-card"}" data-want="${i}">${window.Shell.rcover({ title: b.title, authors: [b.author] }, b.cover || null)}<span class="r-want-t">${esc(b.title)}</span></button>
       ${foot}</div>`;
   }
 
@@ -73,7 +86,85 @@
     return `${top}<p class="r-want-p">${books.length} ${plural(books.length, "книжка", "книжки", "книжок")} з вашої полиці на chytai.org.ua</p>
       ${parts.now.length ? head("Можна читати зараз", parts.now.length) + grid(parts.now) : ""}
       ${parts.buy.length ? head("Купити або взяти", parts.buy.length) + grid(parts.buy) : ""}
-      ${none}</section>`;
+      ${none}${libsPart(head, grid)}</section>`;
+  }
+
+  // «Бібліотеки»: a branch's short name («Бібліотека ім. А. Головка» → «ім. А. Головка», no address); how it holds
+  // the book: on the shelf now, there (Kyiv's branches don't say whether it is lent), every copy lent.
+  const short = (n) => n.replace(/\s*\(.*\)\s*$/, "").replace(/^Бібліотека(-філія)?\s+/, "").trim() || n;
+  const STATE = { on: "на полиці", held: "є", out: "усі видані" };
+  const RANK = { on: 0, held: 1, out: 2 };
+  const best = (b) => [...b.lib].sort((x, y) => RANK[x.state] - RANK[y.state])[0];
+  function libsPart(head, grid) {
+    const change = `<button type="button" class="r-link r-want-fold" data-act="want-libs">Змінити</button>`;
+    if (!picks.length)
+      return `<div class="r-want-libs"><div class="r-sec-head"><h2>Бібліотеки</h2></div>
+        <p class="r-want-p">Оберіть свою бібліотеку, і тут будуть книжки, які в ній є. Поки Київ, Черкаси й Ужгород.</p>
+        <p class="r-want-p"><button type="button" class="r-pill-line" data-act="want-libs">Обрати бібліотеку</button></p></div>`;
+    const have = books.map((b, i) => [b, i]).filter(([b]) => b.lib?.length);
+    have.sort((x, y) => RANK[best(x[0]).state] - RANK[best(y[0]).state] || x[1] - y[1]);
+    const cap = (b) => {
+      const t = best(b);
+      if (t.state === "out") return STATE.out;
+      return picks.length > 1 ? short(t.branch) + (b.lib.length > 1 ? ` +${b.lib.length - 1}` : "") : STATE[t.state];
+    };
+    const names = picks.map((p) => short(p.branch)).join(", ");
+    const wait = libBusy ? `${SPIN}Дивимося в бібліотеках…` : libs?.unchecked ? `Ще перевіряємо ${libs.unchecked} ${plural(libs.unchecked, "книжку", "книжки", "книжок")}, список доповниться.` : "";
+    const empty = !have.length && !libBusy && !libs?.unchecked ? "Цих книжок у ваших бібліотеках немає." : "";
+    return `<div class="r-want-libs">${head("Бібліотеки", libBusy ? "…" : have.length, change)}
+      <p class="r-want-p">${esc(names)}${wait ? `<br>${wait}` : ""}${empty ? `<br>${empty}` : ""}</p>
+      ${have.length && !libBusy ? `<div class="r-want-g">${have.map(([b, i]) => tile(b, i, cap(b))).join("")}</div>` : ""}</div>`;
+  }
+
+  // The picker: city tabs, a search when the city has many, one checkbox a branch, the picked ones first.
+  let all = null; // [{ id, city, name, branches: [{ name }] }]
+  let chosen = [];
+  let city = "";
+  let q = "";
+  const dlg = () => document.querySelector("#libs-dialog");
+  const isOn = (lib, name) => chosen.some((p) => p.lib === lib && p.branch === name);
+  async function pick() {
+    chosen = picks.map((p) => ({ ...p }));
+    q = "";
+    const d = dlg();
+    d.querySelector("#lb-sub").textContent = "До п'яти бібліотек. Покажемо, які книжки з вашого списку там є.";
+    d.querySelector("#lb-body").innerHTML = `<p class="lb-note">${SPIN}</p>`;
+    d.showModal();
+    if (!all) all = (await window.reader.wantLibraries?.())?.libs?.filter((l) => l.branches.length).sort((x, y) => y.branches.length - x.branches.length) || null;
+    if (!all) return (d.querySelector("#lb-body").innerHTML = `<p class="lb-note">Без мережі список не показати.</p>`);
+    city = all.find((l) => chosen.some((p) => p.lib === l.id))?.id || all[0].id;
+    pickerHtml();
+  }
+  function pickerHtml() {
+    const lib = all.find((l) => l.id === city);
+    const search = lib.branches.length > 12 ? `<input class="lb-q" type="search" placeholder="Назва бібліотеки" autocomplete="off" enterkeyhint="search" value="${esc(q)}" />` : "";
+    dlg().querySelector("#lb-body").innerHTML = `<div class="r-tabs"></div>${search}<ul class="lb-list"></ul><p class="lb-note lb-n"></p>`;
+    listHtml(true);
+  }
+  function tabsHtml() {
+    dlg().querySelector(".r-tabs").innerHTML = all.map((l) => {
+      const n = chosen.filter((p) => p.lib === l.id).length;
+      return `<button type="button" class="${l.id === city ? "on" : ""}" data-act="want-lib-city" data-city="${esc(l.id)}">${esc(l.city)}${n ? ` <i>${n}</i>` : ""}</button>`;
+    }).join("");
+  }
+  // The picked ones first when the list opens; a tick doesn't move a row from under the finger.
+  let order = [];
+  function listHtml(sort) {
+    const lib = all.find((l) => l.id === city);
+    const words = q.toLowerCase().split(/\s+/).filter(Boolean);
+    const list = lib.branches.filter((b) => words.every((w) => b.name.toLowerCase().includes(w)));
+    if (sort) order = [...lib.branches].sort((x, y) => isOn(lib.id, y.name) - isOn(lib.id, x.name)).map((b) => b.name);
+    list.sort((x, y) => order.indexOf(x.name) - order.indexOf(y.name));
+    const full = chosen.length >= 5;
+    const d = dlg();
+    d.querySelector(".lb-list").innerHTML = list.length
+      ? list.map((b) => {
+        const on = isOn(lib.id, b.name);
+        return `<li><label class="${full && !on ? "off" : ""}" data-act="want-lib-pick"><input type="checkbox" data-branch="${esc(b.name)}"${on ? " checked" : ""}${full && !on ? " disabled" : ""} />${esc(b.name)}</label></li>`;
+      }).join("")
+      : `<li class="lb-note">Такої немає.</li>`;
+    tabsHtml();
+    d.querySelector(".lb-n").textContent = chosen.length ? `Обрано ${chosen.length} з 5.` : "";
   }
   // The folded «Поки ніде»: nothing anywhere, in any language.
   const notSold = () => "Ні в магазинах, ні напрокат, ні онлайн, жодною мовою.";
@@ -96,7 +187,8 @@
   function card(b) {
     const mine = mineOf(b);
     const path = readNow(b);
-    const own = (b.online?.length ? `<div><span class="r-want-k">Онлайн</span><span>${b.online.map((l) => link(l.url, `${esc(l.label)} ↗`)).join(` <span class="r-want-m">·</span> `)}</span></div>` : "") + lines(b, b.lang === "en" ? "Англійською" : "Інше");
+    const lib = b.lib?.length ? `<div><span class="r-want-k">Бібліотека</span><span>${[...b.lib].sort((x, y) => RANK[x.state] - RANK[y.state]).map((l) => `${link(l.url, esc(l.branch.replace(/\s*\(.*\)\s*$/, "")))}<span class="r-want-m">, ${STATE[l.state]}</span>`).join("<br>")}</span></div>` : "";
+    const own = lib + (b.online?.length ? `<div><span class="r-want-k">Онлайн</span><span>${b.online.map((l) => link(l.url, `${esc(l.label)} ↗`)).join(` <span class="r-want-m">·</span> `)}</span></div>` : "") + lines(b, b.lang === "en" ? "Англійською" : "Інше");
     // Max 2026-11-24: «показувати де версію англ можна взяти… навіть якщо є, іноді я свідомо хочу читати в оригіналі».
     // Only the language over the other version's shops, not its title (Max: «тільки конфьюзить»); links alone = one row.
     const others = (b.other || []).map((v) => (v.get?.length || v.rent ? `<div class="r-want-v"><span>${LANG[v.lang] ?? LANG[""]}</span></div>${lines(v, "Де знайти")}` : lines(v, LANG[v.lang] ?? LANG[""]))).join("");
@@ -111,10 +203,47 @@
     );
   }
 
+  const d = dlg();
+  d.addEventListener("click", (e) => {
+    const t = e.target.closest("[data-city]");
+    if (t) return (city = t.dataset.city), (q = ""), pickerHtml();
+  });
+  d.addEventListener("change", (e) => {
+    const box = e.target.closest("[data-branch]");
+    if (!box) return;
+    const name = box.dataset.branch;
+    chosen = isOn(city, name) ? chosen.filter((p) => !(p.lib === city && p.branch === name)) : [...chosen, { lib: city, branch: name }].slice(0, 5);
+    listHtml(false);
+  });
+  d.addEventListener("input", (e) => {
+    if (!e.target.matches(".lb-q")) return;
+    q = e.target.value;
+    listHtml(true);
+  });
+  // Closing keeps the choice (Готово, Esc, a tap outside alike): to the account, then the list asks the site again.
+  d.addEventListener("close", async () => {
+    if (JSON.stringify(chosen) === JSON.stringify(picks)) return;
+    picks = chosen;
+    libBusy = picks.length > 0;
+    libs = null;
+    tries = 0;
+    if (shown()) window.Shell.rerender();
+    try {
+      await window.reader.setSettings({ libraries: picks });
+    } catch {}
+    load(true);
+  });
+  // A tap on the backdrop closes it, as «Про книжку».
+  d.addEventListener("click", (e) => {
+    const r = d.getBoundingClientRect();
+    if (e.target === d && (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom)) d.close();
+  });
+
   document.querySelector("#shell").addEventListener("click", (e) => {
     if (!shown()) return;
     if (e.target.closest("[data-act='want-none']")) return (noneOpen = !noneOpen), window.Shell.rerender();
-    const el = e.target.closest("[data-act='want-card']");
+    if (e.target.closest("[data-act='want-libs']")) return pick();
+    const el = e.target.closest("[data-want]");
     const b = el && books?.[Number(el.dataset.want)];
     if (b) card(b);
   });
@@ -125,5 +254,5 @@
     window.Shell.open(el.dataset.wantOpen);
   });
 
-  window.Want = { html, enter: load };
+  window.Want = { html, enter };
 })();

@@ -159,17 +159,15 @@ async function lookupAleph(lib, book, fetchImpl) {
 }
 
 // A library that asked us to go easy on its server (Kyiv, 2026-10-21: «сподіваємось, що кількість запитів
-// не перенавантажить наш сервер») gets at most perHour lookups an hour, one at a time.
-const budget = new Map(); // library id -> { hour, used }
-function allowed(lib) {
+// не перенавантажить наш сервер») gets at most perHour lookups an hour, one at a time. The count is in the database,
+// so the web process (book pages) and the background fill for «Хочу прочитати» in the reader share it; the fill takes
+// only up to `cap` of it, so book pages keep the rest.
+function allowed(db, lib, cap = lib.perHour) {
   if (!lib.perHour) return true;
   const hour = Math.floor(Date.now() / 3600000);
-  const b = budget.get(lib.id) || { hour, used: 0 };
-  if (b.hour !== hour) Object.assign(b, { hour, used: 0 });
-  if (b.used >= lib.perHour) return false;
-  b.used++;
-  budget.set(lib.id, b);
-  return true;
+  db.prepare("INSERT OR IGNORE INTO library_budget (lib, hour, used) VALUES (?, ?, 0)").run(lib.id, hour);
+  const r = db.prepare("UPDATE library_budget SET used = CASE WHEN hour = ? THEN used + 1 ELSE 1 END, hour = ? WHERE lib = ? AND (hour <> ? OR used < ?)").run(hour, hour, lib.id, hour, cap);
+  return r.changes > 0;
 }
 const queues = new Map(); // library id -> the lookup running now
 function gate(lib, fn) {
@@ -179,27 +177,143 @@ function gate(lib, fn) {
   return run;
 }
 
+function tables(db) {
+  if (tables.done) return;
+  db.exec("CREATE TABLE IF NOT EXISTS library_cache (key TEXT PRIMARY KEY, data TEXT NOT NULL, at INTEGER NOT NULL)");
+  db.exec("CREATE TABLE IF NOT EXISTS library_budget (lib TEXT PRIMARY KEY, hour INTEGER NOT NULL, used INTEGER NOT NULL)");
+  tables.done = true;
+}
+const keyOf = (lib, id) => `${lib.id}${lib.v ? `@${lib.v}` : ""}:${id}`; // v: bumped when a library's answers change shape
+// Answers older than 60 days go (once a day): a book nobody opened since is asked again when someone does.
+let swept = 0;
+function sweep(db) {
+  if (Date.now() - swept < DAY) return;
+  swept = Date.now();
+  db.prepare("DELETE FROM library_cache WHERE at < ?").run(Date.now() - 60 * DAY);
+}
+
+// One library's answer for a book: from the cache when fresh, else asked (within the budget), else a stale one.
+async function one(db, lib, book, { fetchImpl = fetch, log = () => {}, cap, counted = false } = {}) {
+  const key = keyOf(lib, book.id);
+  const row = db.prepare("SELECT data, at FROM library_cache WHERE key = ?").get(key);
+  const kept = row && row.data !== "null" ? JSON.parse(row.data) : null;
+  if (row && Date.now() - row.at < (lib.ttl || DAY)) return kept;
+  if (!counted && !allowed(db, lib, cap)) return kept; // over budget: a stale answer or none
+  try {
+    const r = await gate(lib, () => lookupOne(lib, book, fetchImpl));
+    db.prepare("INSERT OR REPLACE INTO library_cache (key, data, at) VALUES (?, ?, ?)").run(key, JSON.stringify(r), Date.now());
+    return r;
+  } catch (e) {
+    log(`libraries: ${lib.id}: ${e.cause?.code || e.message}`);
+    return kept; // a stale answer beats none
+  }
+}
+
 // Every library's holdings of a book, from the cache when it is less than a day old.
 async function holdings(db, book, { fetchImpl = fetch, log = () => {}, includeDraft = false } = {}) {
-  db.exec("CREATE TABLE IF NOT EXISTS library_cache (key TEXT PRIMARY KEY, data TEXT NOT NULL, at INTEGER NOT NULL)");
-  const out = [];
-  await Promise.all(
-    LIBRARIES.filter((l) => includeDraft || !l.draft).map(async (lib) => {
-      const key = `${lib.id}${lib.v ? `@${lib.v}` : ""}:${book.id}`; // v: bumped when a library's answers change shape
-      const row = db.prepare("SELECT data, at FROM library_cache WHERE key = ?").get(key);
-      if (row && Date.now() - row.at < (lib.ttl || DAY)) return void (row.data !== "null" && out.push(JSON.parse(row.data)));
-      if (!allowed(lib)) return void (row && row.data !== "null" && out.push(JSON.parse(row.data))); // over budget: a stale answer or none
-      try {
-        const r = await gate(lib, () => lookupOne(lib, book, fetchImpl));
-        db.prepare("INSERT OR REPLACE INTO library_cache (key, data, at) VALUES (?, ?, ?)").run(key, JSON.stringify(r), Date.now());
-        if (r) out.push(r);
-      } catch (e) {
-        log(`libraries: ${lib.id}: ${e.cause?.code || e.message}`);
-        if (row && row.data !== "null") out.push(JSON.parse(row.data)); // a stale answer beats none
-      }
-    })
-  );
+  tables(db);
+  sweep(db);
+  const out = (await Promise.all(LIBRARIES.filter((l) => includeDraft || !l.draft).map((lib) => one(db, lib, book, { fetchImpl, log })))).filter(Boolean);
   return out.sort((a, b) => LIBRARIES.findIndex((l) => l.id === a.id) - LIBRARIES.findIndex((l) => l.id === b.id));
 }
 
-module.exports = { LIBRARIES, holdings, branchName, alephBranch };
+// ---- «Мої бібліотеки» in the reader's «Хочу прочитати» (Max 2026-11-25) ----
+
+// A branch as a reader picks it: Черкаси's departments («Бібліотека №9 абонемент старшого шкільного віку 5-9 класи
+// (Сумгаїтська,24/1)») are one place, «Бібліотека №9 (Сумгаїтська,24/1)»; the stored pick and the data both go through it.
+const place = (s) =>
+  String(s || "")
+    .replace(/\s+(молодш\S*|старш\S*|абонемент|читальний зал|сектор|відділ)[^(]*?(?=\s*\()/i, "")
+    .replace(/^центральна \(/, "Бібліотека ім. Лесі Українки (") // Kyiv's central library, as lookupAleph names it
+    .replace(/\s+/g, " ")
+    .trim();
+
+// The branches readers can pick: every one that held a book someone asked about, with how many books (a day's copy).
+let branchCache = null;
+function branchList(db) {
+  tables(db);
+  if (branchCache && Date.now() - branchCache.at < 3600000) return branchCache.list;
+  const list = LIBRARIES.filter((l) => !l.draft).map((lib) => {
+    const n = new Map();
+    const prefix = keyOf(lib, "");
+    for (const r of db.prepare("SELECT data FROM library_cache WHERE key >= ? AND key < ? AND data != 'null'").iterate(prefix, `${prefix}\uffff`)) {
+      const names = new Set();
+      for (const rec of JSON.parse(r.data).records || []) for (const b of rec.branches || []) if (/[а-яіїєґ]/i.test(b.branch)) names.add(place(b.branch));
+      for (const name of names) n.set(name, (n.get(name) || 0) + 1);
+    }
+    // A name seen once or twice is mostly a stray copy record («Moved collection», a typo).
+    const branches = [...n].filter(([, c]) => c >= 3).map(([name, count]) => ({ name, count })).sort((a, b) => a.name.localeCompare(b.name, "uk"));
+    return { id: lib.id, city: lib.city, name: lib.name, branches };
+  });
+  branchCache = { at: Date.now(), list };
+  return list;
+}
+
+// Which of the picked branches hold a book, from the cache only: [{ lib, city, branch, state, url }], state = "on"
+// (on the shelf now), "held" (Kyiv's branches record no loans: a copy is there) or "out" (every copy lent).
+function picked(db, book, picks) {
+  tables(db);
+  const out = [];
+  for (const lib of LIBRARIES.filter((l) => picks.some((p) => p.lib === l.id))) {
+    const row = db.prepare("SELECT data FROM library_cache WHERE key = ?").get(keyOf(lib, book.id));
+    const data = row && row.data !== "null" ? JSON.parse(row.data) : null;
+    for (const p of picks.filter((p) => p.lib === lib.id)) {
+      let best = null;
+      for (const rec of data?.records || []) for (const b of rec.branches || []) {
+        if (place(b.branch) !== p.branch) continue;
+        const state = b.onShelf ? "on" : b.unknown ? "held" : "out";
+        const rank = { on: 0, held: 1, out: 2 }[state];
+        if (!best || rank < best.rank) best = { rank, state, url: rec.url };
+      }
+      if (best) out.push({ lib: lib.id, city: lib.city, branch: p.branch, state: best.state, url: best.url });
+    }
+  }
+  return out;
+}
+// How many of the books the cache has no answer for yet, for the picked libraries.
+function unchecked(db, books, picks) {
+  tables(db);
+  const libs = LIBRARIES.filter((l) => picks.some((p) => p.lib === l.id));
+  const q = db.prepare("SELECT 1 FROM library_cache WHERE key = ?");
+  return books.filter((b) => libs.some((lib) => !q.get(keyOf(lib, b.id)))).length;
+}
+
+// Asks the picked libraries about the books whose answer is missing or old, one at a time in the background, the ones
+// never asked first. At most half of a library's hourly budget (Kyiv: 60 of 120), the rest stays for book pages.
+const filling = new Map(); // book id + library -> true while queued
+let running = false;
+const queue = [];
+function fill(db, books, picks, { fetchImpl = fetch, log = () => {} } = {}) {
+  tables(db);
+  const libs = LIBRARIES.filter((l) => picks.some((p) => p.lib === l.id));
+  const q = db.prepare("SELECT at FROM library_cache WHERE key = ?");
+  const todo = [];
+  for (const b of books) for (const lib of libs) {
+    const k = keyOf(lib, b.id);
+    if (filling.has(k)) continue;
+    const row = q.get(k);
+    if (row && Date.now() - row.at < (lib.ttl || DAY)) continue;
+    todo.push({ b, lib, k, at: row?.at || 0 });
+  }
+  todo.sort((x, y) => x.at - y.at);
+  for (const t of todo) filling.set(t.k, true), queue.push(t);
+  if (running || !queue.length) return;
+  running = true;
+  (async () => {
+    while (queue.length) {
+      const t = queue.shift();
+      const cap = t.lib.perHour ? Math.floor(t.lib.perHour / 2) : undefined;
+      if (t.lib.perHour && !allowed(db, t.lib, cap)) {
+        // Over this hour's share: the rest waits for the next time the page asks.
+        for (const x of [t, ...queue]) filling.delete(x.k);
+        queue.length = 0;
+        break;
+      }
+      await one(db, t.lib, t.b, { fetchImpl, log, counted: true }).catch(() => {}); // allowed() above counted it
+      filling.delete(t.k);
+    }
+    running = false;
+  })();
+}
+
+module.exports = { LIBRARIES, holdings, branchName, alephBranch, branchList, picked, unchecked, fill, place };

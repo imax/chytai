@@ -618,14 +618,14 @@ body[data-theme="dark"] .cover { background: hsl(var(--hue) 18% 30%); color: hsl
    Serif 4 + Onest, rules; the reader's own accent is ochre. Turn 4 adds the dark theme, the book menu,
    «Нещодавно видалені». Everything below overrides the older home screen.
    =================================================================================================== */
-#shell, #book-menu, #trash-dialog, #about-dialog, #cover-dialog, #notice, #paper-found, #paper-page, #paper-ask, #paper-mark {
+#shell, #book-menu, #trash-dialog, #about-dialog, #cover-dialog, #libs-dialog, #notice, #paper-found, #paper-page, #paper-ask, #paper-mark {
   --r-paper: #f7f4ee; --r-menu: #fbf9f5; --r-ink: #1b1a17; --r-ink2: #6b675f; --r-ink3: #8a857b; --r-rule: #e4dfd5;
   --r-head: #1b1a17; --r-sline: #c9c3b6; --r-dash: #b9b2a3; --r-ochre: #9a6418; --r-ochre-h: #7f5212; --r-bar: #b5803a;
   --r-track: #e4dfd5; --r-btn: #ffffff; --r-red: #a63a2a; --r-toast: #1b1a17; --r-toast-fg: #f7f4ee; --r-toast-btn: #e2b26b;
   --r-serif: "Source Serif 4 Variable", "Source Serif 4", Georgia, serif;
   --r-sans: "Onest Variable", Onest, -apple-system, BlinkMacSystemFont, sans-serif;
 }
-body[data-theme="dark"] #shell, body[data-theme="dark"] #book-menu, body[data-theme="dark"] #trash-dialog, body[data-theme="dark"] #about-dialog, body[data-theme="dark"] #cover-dialog, body[data-theme="dark"] #notice, body[data-theme="dark"] #paper-found, body[data-theme="dark"] #paper-page, body[data-theme="dark"] #paper-ask, body[data-theme="dark"] #paper-mark {
+body[data-theme="dark"] #shell, body[data-theme="dark"] #book-menu, body[data-theme="dark"] #trash-dialog, body[data-theme="dark"] #about-dialog, body[data-theme="dark"] #cover-dialog, body[data-theme="dark"] #libs-dialog, body[data-theme="dark"] #notice, body[data-theme="dark"] #paper-found, body[data-theme="dark"] #paper-page, body[data-theme="dark"] #paper-ask, body[data-theme="dark"] #paper-mark {
   --r-paper: #1a1916; --r-menu: #24221e; --r-ink: #ece6da; --r-ink2: #a39d91; --r-ink3: #8a847a; --r-rule: #2f2c27;
   --r-head: #8a847a; --r-sline: #4a463f; --r-dash: #5a554c; --r-ochre: #d9a35a; --r-ochre-h: #e6b674; --r-bar: #c98f3f;
   --r-track: #36332d; --r-btn: #1a1916; --r-red: #e07a68; --r-toast: #ece6da; --r-toast-fg: #1a1916; --r-toast-btn: #9a6418;
@@ -796,9 +796,9 @@ body[data-theme="dark"] .r-pill { font-weight: 600; }
 #about-dialog .ab-people dt { font-weight: 600; }
 #about-dialog .ab-people dd { margin: 0; color: var(--r-ink2); }
 /* «Знайти обкладинку» (Max 2026-11-22): a sheet like «Про книжку», three covers a row. */
-#cover-dialog { background: var(--r-paper); color: var(--r-ink); font-family: var(--r-sans); border: none; border-radius: 8px; width: min(520px, calc(100vw - 32px)); max-height: 88vh; overflow-y: auto; padding: 26px 28px; box-sizing: border-box; }
-#cover-dialog::backdrop { background: rgba(27, 26, 23, .45); }
-#cover-dialog h2 { margin: 0; font: 400 24px/1.15 var(--r-serif); }
+#cover-dialog, #libs-dialog { background: var(--r-paper); color: var(--r-ink); font-family: var(--r-sans); border: none; border-radius: 8px; width: min(520px, calc(100vw - 32px)); max-height: 88vh; overflow-y: auto; padding: 26px 28px; box-sizing: border-box; }
+#cover-dialog::backdrop, #libs-dialog::backdrop { background: rgba(27, 26, 23, .45); }
+#cover-dialog h2, #libs-dialog h2 { margin: 0; font: 400 24px/1.15 var(--r-serif); }
 #cf-sub { margin: 4px 0 18px; font-size: 14px; color: var(--r-ink2); }
 #cover-dialog .cf-tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px 12px; }
 #cover-dialog .cf-tile { display: flex; flex-direction: column; gap: 6px; padding: 0; border: none; background: none; text-align: left; color: var(--r-ink2); font: 12px/1.3 var(--r-sans); cursor: pointer; }
@@ -812,8 +812,21 @@ body[data-theme="dark"] .r-pill { font-weight: 600; }
 #cover-dialog .cf-q { display: flex; flex-direction: column; gap: 6px; margin-top: 22px; font-size: 13px; color: var(--r-ink2); }
 #cover-dialog .cf-q input { font: 16px var(--r-sans); padding: 10px 14px; border: 1px solid var(--r-sline); border-radius: 999px; background: var(--r-btn); color: var(--r-ink); }
 @media (max-width: 760px) {
-  #cover-dialog { margin: auto 0 0; width: 100vw; max-width: 100vw; max-height: 92vh; border-radius: 14px 14px 0 0; padding: 20px 20px calc(env(safe-area-inset-bottom) + 16px); }
+  #cover-dialog, #libs-dialog { margin: auto 0 0; width: 100vw; max-width: 100vw; max-height: 92vh; border-radius: 14px 14px 0 0; padding: 20px 20px calc(env(safe-area-inset-bottom) + 16px); }
 }
+/* «Мої бібліотеки» (Max 2026-11-25): city tabs, a search, one checkbox a branch, 5 at most. */
+#lb-sub { margin: 4px 0 18px; font-size: 14px; color: var(--r-ink2); }
+#libs-dialog .r-tabs { margin-bottom: 14px; }
+#libs-dialog .lb-q { width: 100%; box-sizing: border-box; font: 16px var(--r-sans); padding: 10px 14px; border: 1px solid var(--r-sline); border-radius: 999px; background: var(--r-btn); color: var(--r-ink); margin-bottom: 8px; }
+#libs-dialog .lb-q:focus { outline: none; border-color: var(--r-ink2); }
+#libs-dialog .lb-list { list-style: none; margin: 0 0 12px; padding: 0; }
+#libs-dialog .lb-list label { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--r-rule); font-size: 15px; line-height: 1.3; cursor: pointer; }
+#libs-dialog .lb-list input { width: 18px; height: 18px; flex: none; margin: 0; accent-color: var(--r-ochre); }
+#libs-dialog .lb-list small { margin-left: auto; padding-left: 12px; color: var(--r-ink3); font-size: 12px; white-space: nowrap; }
+#libs-dialog .lb-list .off { color: var(--r-ink3); cursor: default; }
+#libs-dialog .lb-note { margin: 4px 0 0; font-size: 13px; color: var(--r-ink2); }
+#libs-dialog .spinner, .r-want .spinner { display: inline-block; vertical-align: -2px; margin-right: 8px; width: 12px; height: 12px; border: 2px solid var(--r-sline); border-top-color: var(--r-ochre); border-radius: 50%; animation: spin 0.8s linear infinite; }
+.r-want-lib { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--r-ink2); }
 .ab-foot { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin: 8px 0 0; font-size: 14px; }
 .ab-foot a { color: var(--r-ink); text-underline-offset: 3px; }
 .ab-foot .r-pill { margin-left: auto; }

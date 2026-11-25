@@ -1281,6 +1281,14 @@ app.post("/api/reader-want", (req, res) => {
   const langOf = (b) => (isUk(b) ? "uk" : b.language === "англійська" || (!b.language && /^[\x20-\x7E’‘“”–—]+$/.test(b.title || "")) ? "en" : "");
   const rentOf = (book) => ((bf) => (bf ? { url: bf.url, free: bf.free, price: bf.once || null } : null))(bookflow.linkFor(book));
   const rows = store.library(id).filter((r) => r.status === "want" && !r.kids).slice(0, 300);
+  // «Бібліотеки» (Max 2026-11-25): the branches the reader picked in the reader ({lib, branch}, 5 at most); each book
+  // says which of them hold it, from the cache only (libraries.picked), and the books not asked yet are asked in the
+  // background within the library's budget (libraries.fill), so the page that asks again a little later sees more.
+  const picks = (Array.isArray(req.body?.libs) ? req.body.libs : [])
+    .filter((p) => libraries.LIBRARIES.some((l) => l.id === p?.lib && !l.draft) && typeof p.branch === "string")
+    .slice(0, 5)
+    .map((p) => ({ lib: p.lib, branch: libraries.place(p.branch.slice(0, 200)) }));
+  const libBook = new Map(picks.length ? rows.map((r) => [r.id, store.book(store.resolve(r.id) || r.id)]).filter(([, b]) => b) : []);
   const books = rows.map((r) => {
     const book = store.bookPage(r.id) || r.book;
     const mine = readerFileFor(id, book);
@@ -1302,9 +1310,19 @@ app.post("/api/reader-want", (req, res) => {
       const q = `${book.origTitle} ${book.origAuthor || ""}`.trim();
       other.push({ lang: "", title: book.origTitle, href: "", get: [], rent: null, abroad: [{ label: "Amazon", url: `https://www.amazon.com/s?${new URLSearchParams({ k: q, i: "stripbooks" })}` }, kobo(book.origTitle, book.origAuthor)] });
     }
-    return { id: store.canonical(r.id), title: book.title, author: book.author || "", year: book.published || null, cover: abs(book.cover), href: `${SITE}${store.href(r.id)}`, added: r.added || "", lang: langOf(book), mine: mine?.name || "", free: free ? free.name : "", online, get: shopsOf(book), rent: rentOf(book), abroad: abroadOf(book, seen), other };
+    const lib = libBook.has(r.id) ? libraries.picked(store.db, libBook.get(r.id), picks) : [];
+    return { id: store.canonical(r.id), title: book.title, author: book.author || "", year: book.published || null, cover: abs(book.cover), href: `${SITE}${store.href(r.id)}`, added: r.added || "", lang: langOf(book), mine: mine?.name || "", free: free ? free.name : "", online, get: shopsOf(book), rent: rentOf(book), abroad: abroadOf(book, seen), other, ...(lib.length ? { lib } : {}) };
   });
-  res.json({ books });
+  if (!picks.length) return res.json({ books });
+  const list = [...libBook.values()];
+  libraries.fill(store.db, list, picks, { log: console.log });
+  res.json({ books, libs: { unchecked: libraries.unchecked(store.db, list, picks) } });
+});
+
+// The library branches a reader may pick in the reader's «Хочу прочитати» (libraries.branchList: every branch that
+// held a book someone asked about), by library: { libs: [{ id, city, name, branches: [{ name, count }] }] }.
+app.get("/api/reader-libraries", (req, res) => {
+  res.set("Cache-Control", "public, max-age=3600").json({ libs: libraries.branchList(store.db) });
 });
 
 // «Знайти обкладинку» in the reader's book menu (Max 2026-11-22, variant A): covers for a title and author from our
