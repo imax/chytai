@@ -858,8 +858,8 @@ A flag only when Max asks for one, or when the change could break what readers u
   `GET /api/want` (signed in; 60 s cache, `?again`) → the site's `POST /api/reader-want {id, key}` (`readerKeyOk`):
   per book `mine` (own file, `readerFileFor`), `free` (free shelf, `freeFileFor`), `online` (openLinks, public-domain
   sources of `freeBooks`, Слухай), `get` (per format the 2 cheapest in stock, no adapted), `rent` (BookFlow). A shelf of
-  covers (Max's design B, canvas C4zbe7sBdsPD1z41gChjEj): «Можна читати зараз» / «Купити або взяти» / «Поки ніде»
-  (folded), under a cover «Читати» (opens it) or the lowest price; a tap = `Paper.card(b, {top, foot, noAdd})` with
+  covers (Max's design B, canvas C4zbe7sBdsPD1z41gChjEj): «Можна читати зараз» / «Купити або взяти» / «Бібліотеки» /
+  «Поки немає» (open, Max 2026-11-25), under a cover «Читати» (opens it) or the lowest price; a tap = `Paper.card(b, {top, foot, noAdd})` with
   «Читати», «Де взяти» and the book's page. The other language too (Max 2026-11-24: «іноді я свідомо хочу читати в
   оригіналі»): `abroad` (the book page's Amazon, Google Books, Gutenberg links and a Kobo search for a book not in Ukrainian; no Open
   Library, Max: «це якийсь фейк») and `other`, up to 3
@@ -867,6 +867,16 @@ A flag only when Max asks for one, or when the change could break what readers u
   with no original in the catalog gets an Amazon search by `origTitle` + `origAuthor`. The tile's price may be the
   other version's, a plain «299 ₴» (Max 2026-11-25, bot №49, variant B: only a price under a cover, the lowest in a Ukrainian shop of either version, no «від», «укр.», BookFlow or Amazon; none = no caption). The card names only the language over the other version's shops, not its
   title (Max: «тільки конфьюзить»).
+  «Бібліотеки» (Max 2026-11-25, «почнемо тільки з Читалки»; the site's book page unchanged): after «Купити або взяти»,
+  empty until the reader picks up to 5 library branches (`#libs-dialog` in want.js: city tabs, a search, checkboxes;
+  settings `libraries` = [{lib, branch}], per account). The list: `GET /api/want/libraries` → the site's
+  `GET /api/reader-libraries` (`libraries.branchList`: branch names seen 3+ times in `library_cache`, normalized by
+  `place()`, an hour's cache). The reader sends the picks as `libs` to `/api/reader-want`; each book gets `lib`
+  (`libraries.picked`, from the cache only, state on / held (Kyiv: no loans known) / out) and the answer
+  `libs.unchecked`; `libraries.fill` asks the catalogs about missing or old books in the background, one at a time,
+  at most half a library's `perHour` (Kyiv 60 of 120; the budget is counted in table `library_budget`, shared with
+  the book page's lookups). The page asks again every 30 s while books are unchecked. `library_cache` rows older than
+  60 days go once a day (`sweep`). Card: «Бібліотека» first in «Де взяти».
 - Reader «Прочитано» at a book's end (Max 2026-11-20, bot report №7): the last page (`bookEnd` in renderer.js: epub.js
   `atEnd` or 100% on pages, the last chapter's bottom in scroll mode; a PDF's last page) marks the book finished in the
   reader only (`POST /api/library/finished` with `auto`; a book finished before is left alone) and asks the site with

@@ -885,6 +885,8 @@
     // Managing the shared library (family only; the server refuses guests).
     // «Хочу прочитати» (GET /api/want): the site's want shelf with where to get each book; null offline.
     want: (again) => api("GET", `/api/want${again ? "?again=1" : ""}`).then((r) => (r.ok ? r.json() : null)).catch(() => null),
+    // The library branches one may pick for «Бібліотеки» in «Хочу прочитати»; null offline.
+    wantLibraries: () => api("GET", "/api/want/libraries").then((r) => (r.ok ? r.json() : null)).catch(() => null),
     // «Статистика» (GET /api/journey): explanations, notes and finished books by book and by month; null offline.
     journey: () => api("GET", "/api/journey").then((r) => r.json()).catch(() => null),
     // «Нотатки» (scratch.js, server/scratch.js): topics with thoughts and books; an error's words come as the Error's.
