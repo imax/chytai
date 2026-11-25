@@ -551,8 +551,13 @@
     const i = Number(el.dataset.scrAi);
     const b = it.ai?.books?.[i];
     const sh = it.ai?.shelf?.[Number(el.dataset.scrSh)];
-    if (name === "scr-shelfcard" && sh) return window.Paper.card({ title: sh.t, author: sh.a, cover: sh.cover || "", href: sh.href || "", year: sh.year });
-    if (name === "scr-card" && b) return window.Paper.card({ title: bookTitle(b), author: bookAuthor(b), cover: b.cover || "", href: b.href || "", year: b.year });
+    if (name === "scr-shelfcard" && sh) return topicCard({ title: sh.t, author: sh.a, cover: sh.cover || "", href: sh.href || "", year: sh.year }, `<p class="nx-cwhy">${esc(SHELF[sh.s] ?? SHELF[""])} · на полиці Chytai</p>`, "");
+    if (name === "scr-card" && b) {
+      const acts = b.wanted
+        ? `<button type="button" class="r-link nx-drop" data-nx-act="scr-drop" data-scr-ai="${i}">Прибрати з теми</button>`
+        : `<span class="nx-acts3"><button type="button" class="r-pill" data-nx-act="scr-add" data-scr-ai="${i}">Додати в тему</button><button type="button" class="r-link nx-no" data-nx-act="scr-no" data-scr-ai="${i}">Не цікаво</button></span>`;
+      return topicCard({ title: bookTitle(b), author: bookAuthor(b), cover: b.cover || "", href: b.href || "", year: b.year }, b.why ? `<p class="nx-cwhy">${esc(b.why)}</p>` : "", acts);
+    }
     try {
       if (name === "scr-link") {
         put((await window.reader.scratchPatch(it.id, { book: el.dataset.scrPath, on: true })).item);
@@ -587,6 +592,19 @@
 
   const shell = $("#shell");
   // Before home.js: the header's «назад» on a topic or a book goes back here, not home.
+  // A topic's book card (Max 2026-11-25, «Картка теми»): why it is here, «Про книжку» / «Чому варто читати» (paper.js),
+  // the topic's own buttons and the book's page here; no «Додати в мої книжки» (reading has its own pages).
+  function topicCard(b, top, acts) {
+    const page = b.href ? `<p class="pf-page"><a href="${esc(b.href)}" target="_blank" rel="noopener">Сторінка книжки на Chytai ↗</a></p>` : "";
+    window.Paper.card(b, { top, noAdd: true, foot: `${acts ? `<div class="nx-cacts">${acts}</div>` : ""}${page}` });
+  }
+  document.addEventListener("click", (e) => {
+    const el = e.target.closest("#paper-found [data-nx-act]");
+    if (!el) return;
+    $("#paper-found").close();
+    window.ReadingTime?.count(`act-${el.dataset.nxAct}-card`);
+    act(el.dataset.nxAct, el);
+  });
   shell.addEventListener("click", (e) => {
     if (shown() && (open || book) && e.target.closest(".r-head-s .r-back")) e.stopPropagation(), back();
   }, true);
