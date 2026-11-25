@@ -3426,7 +3426,7 @@ const uploadGuard = (req, res, next) => {
     if (len > UPLOAD_MAX) return res.status(413).json({ error: `Файл завеликий: до ${mb(UPLOAD_MAX)} МБ.` });
     const root = path.join(ACCOUNTS_DIR, req.acct);
     const used = fs.existsSync(root) ? dirSize(root) : 0;
-    if (used + len > ACCOUNT_QUOTA) return res.status(413).json({ error: `У бібліотеці вже ${mb(used)} МБ із ${mb(ACCOUNT_QUOTA)}. Видаліть щось і очистіть «Нещодавно видалені».` });
+    if (used + len > ACCOUNT_QUOTA) return res.status(413).json({ error: `У бібліотеці вже ${mb(used)} МБ із ${mb(ACCOUNT_QUOTA)}. Видаліть щось і очистіть «Кошик».` });
   }
   try {
     const st = fs.statfsSync(DATA_DIR);

@@ -950,6 +950,8 @@ body[data-theme="dark"] #shell, body[data-theme="dark"] #book-menu, body[data-th
 .r-pnav button[hidden] { display: none; }
 /* «Нещодавно видалені» quieter than the rest (Max 2026-11-21, №24). */
 #r-pnav-trash { color: var(--r-ink2); font-size: 13px; }
+.r-pnav-ic { display: inline-flex; align-items: center; gap: 7px; }
+.r-pnav-ic svg { width: 15px; height: 15px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
 .r-pnav i { font-style: normal; font-size: 13px; color: var(--r-ink2); min-width: 24px; text-align: right; font-weight: 400; }
 .r-pnav .r-pnav-add i { color: var(--r-ochre); font-size: 18px; font-weight: 300; line-height: 1; }
 #r-panel.searching .r-pnav, #r-panel.searching .r-precent { display: none; }
@@ -1318,6 +1320,8 @@ button.nx-th { flex-direction: column; gap: 0; }
 .r-want-h { font-size: 13px; color: var(--r-ink); }
 .r-want-go { border: none; background: none; padding: 0; font: 500 13px var(--r-sans); color: var(--r-ochre); cursor: pointer; }
 .r-want-fold { font-size: 13px; color: var(--r-ink2); }
+/* «Купити або взяти напрокат · 120» doesn't fit a narrow phone on one line (274 px with Android's big font). */
+.r-want .r-sec-head h2 { white-space: normal; line-height: 1.4; }
 .r-want-m { color: var(--r-ink2); }
 @media (max-width: 760px) {
   .r-want-g { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px 14px; }

@@ -866,7 +866,7 @@ A flag only when Max asks for one, or when the change could break what readers u
   `GET /api/want` (signed in; 60 s cache, `?again`) → the site's `POST /api/reader-want {id, key}` (`readerKeyOk`):
   per book `mine` (own file, `readerFileFor`), `free` (free shelf, `freeFileFor`), `online` (openLinks, public-domain
   sources of `freeBooks`, Слухай), `get` (per format the 2 cheapest in stock, no adapted), `rent` (BookFlow). A shelf of
-  covers (Max's design B, canvas C4zbe7sBdsPD1z41gChjEj): «Можна читати зараз» / «Купити або взяти» / «Бібліотеки» /
+  covers (Max's design B, canvas C4zbe7sBdsPD1z41gChjEj): «Можна читати зараз» / «Купити або взяти напрокат» / «Бібліотеки» /
   «Поки немає» (open, Max 2026-11-25), under a cover «Читати» (opens it) or the lowest price; a tap = `Paper.card(b, {top, foot, noAdd})` with
   «Читати», «Де взяти» and the book's page. The other language too (Max 2026-11-24: «іноді я свідомо хочу читати в
   оригіналі»): `abroad` (the book page's Amazon, Google Books, Gutenberg links and a Kobo search for a book not in Ukrainian; no Open
@@ -875,7 +875,7 @@ A flag only when Max asks for one, or when the change could break what readers u
   with no original in the catalog gets an Amazon search by `origTitle` + `origAuthor`. The tile's price may be the
   other version's, a plain «299 ₴» (Max 2026-11-25, bot №49, variant B: only a price under a cover, the lowest in a Ukrainian shop of either version, no «від», «укр.», BookFlow or Amazon; none = no caption). The card names only the language over the other version's shops, not its
   title (Max: «тільки конфьюзить»).
-  «Бібліотеки» (Max 2026-11-25, «почнемо тільки з Читалки»; the site's book page unchanged): after «Купити або взяти»,
+  «Бібліотеки» (Max 2026-11-25, «почнемо тільки з Читалки»; the site's book page unchanged): after «Купити або взяти напрокат»,
   empty until the reader picks up to 5 library branches (`#libs-dialog` in want.js: city tabs, a search, checkboxes;
   settings `libraries` = [{lib, branch}], per account). The list: `GET /api/want/libraries` → the site's
   `GET /api/reader-libraries` (`libraries.branchList`: branch names seen 3+ times in `library_cache`, normalized by

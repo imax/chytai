@@ -256,7 +256,7 @@
         <button type="button" data-page="journey" id="r-pnav-journey" class="family-only">Статистика</button>
         <button type="button" data-page="admin" id="r-pnav-admin" class="family-only">Адмінка</button>
         <button type="button" data-page="add" class="r-pnav-add">Додати книжку<i>+</i></button>
-        <button type="button" data-act="trash" id="r-pnav-trash" hidden>Нещодавно видалені<i id="r-n-trash"></i></button>
+        <button type="button" data-act="trash" id="r-pnav-trash" hidden><span class="r-pnav-ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4.5h6V7M6 7l1 13h10l1-13M10 11v6M14 11v6"/></svg>Кошик</span><i id="r-n-trash"></i></button>
       </nav>
       <section class="r-precent hidden"><h3>Нещодавно відкриті</h3><div id="r-recent"></div></section>
       <div class="r-pspace"></div>
@@ -416,7 +416,7 @@
   </dialog>
   <dialog id="trash-dialog">
     <form method="dialog">
-      <div class="tr-head"><h2 tabindex="-1" autofocus>Нещодавно видалені</h2><button value="close" class="tr-done">Готово</button></div>
+      <div class="tr-head"><h2 tabindex="-1" autofocus>Кошик</h2><button value="close" class="tr-done">Готово</button></div>
       <small>Книжки зберігаються 30 днів разом з прогресом і нотатками, потім видаляються назавжди.</small>
       <ul id="trash-list"></ul>
     </form>
