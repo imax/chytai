@@ -1257,6 +1257,11 @@ button.nx-th { flex-direction: column; gap: 0; }
 .nx-bookhead b { font: 400 22px/1.2 var(--r-serif); }
 .nx-topic { font-size: 13px; color: var(--r-ink2); }
 .nx-topic .r-link { font-size: 13px; color: var(--r-ochre); }
+.nx-topic { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 4px; }
+.nx-tchip { display: inline-flex; align-items: center; border: 1px solid var(--r-rule); border-radius: 999px; padding: 2px 4px 2px 10px; }
+.nx-tx { border: 0; background: none; color: var(--r-ink2); font-size: 16px; line-height: 1; padding: 2px 6px; cursor: pointer; }
+.nx-tx:hover { color: var(--r-ink); }
+.nx-tchip .r-link { text-decoration: none; }
 .nx-bacts { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; margin-top: 8px; }
 .nx-bacts .r-pill-line { padding: 8px 16px; font-size: 14px; }
 .nx-bacts .r-link { font-size: 14px; }

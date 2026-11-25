@@ -841,7 +841,7 @@ A flag only when Max asks for one, or when the change could break what readers u
   `/api/search`; «Теми», «Думки без теми» = what Opus answered `unclear`, «З книжок» = every book with notes or
   explanations, `GET /api/scratch` → `books` from `store.items.tally`); a topic (Opus's background, «Мої думки», «Мої
   книжки», «Хочу прочитати», «Може підійти»); a book (`GET /api/notes/book`: its notes and explanations in short,
-  «Перейти» = `Shell.go`, the panel search's opener; «Додати в тему» / «Прибрати з теми»). Opus (`server/scratch.js`,
+  «Перейти» = `Shell.go`, the panel search's opener; one «Тема:» line, a chip per topic with × to take it out, «+ ще» picks another; Max 2026-11-25). Opus (`server/scratch.js`,
   `SYSTEM`, json_schema, effort low) answers kind, title, about, 3–5 books (catalog page and cover by `catalogFind`),
   guesses, `have` (numbers of the reader's own books, from the `lib` list the page sends: `{p, t, a}`, 300 at most)
   and `reply` (to the last «Думка читача», where to dig next). A thought (`POST /api/scratch/:id/thought`) asks the

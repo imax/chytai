@@ -309,8 +309,8 @@
     const ts = topicsOf(book);
     let html = `<section class="r-scr r-scr-one nx"><button type="button" class="r-scr-back" data-act="scr-back">${back}</button>
       <div class="nx-bookhead">${window.Shell.rcover(b)}<span><b>${esc(b.title)}</b><span class="nx-bm">${esc([author(b), STATE[state(b)]].filter(Boolean).join(" · "))}</span>
-      ${ts.length ? `<span class="nx-topic">${ts.length > 1 ? "Теми" : "Тема"}: ${ts.map((x) => `<button type="button" class="r-link" data-scr-open="${x.id}">${esc(title(x))}</button>`).join(", ")}</span>` : ""}
-      <span class="nx-bacts"><button type="button" class="r-pill-line" data-open="${esc(b.path)}" data-act="scr-read">Відкрити книжку</button><button type="button" class="r-link" data-act="scr-picktopic">Додати в тему</button>${from && ts.some((x) => x.id === from) ? `<button type="button" class="r-link" data-act="scr-unlink">Прибрати з теми</button>` : ""}</span></span></div>`;
+      <span class="nx-topic">${ts.length > 1 ? "Теми" : "Тема"}: ${ts.map((x) => `<span class="nx-tchip"><button type="button" class="r-link" data-scr-open="${x.id}">${esc(title(x))}</button><button type="button" class="nx-tx" data-act="scr-unlink" data-scr-topic="${x.id}" aria-label="Прибрати з теми">×</button></span>`).join("")}${picking === "topic" ? "" : `<button type="button" class="r-link nx-tadd" data-act="scr-picktopic">${ts.length ? "+ ще" : "+ додати"}</button>`}</span>
+      <span class="nx-bacts"><button type="button" class="r-pill-line" data-open="${esc(b.path)}" data-act="scr-read">Відкрити книжку</button></span></span></div>`;
     if (picking === "topic") html += picker("Знайти тему");
     const d = bookData?.path === book ? bookData : null;
     if (!d) return `${html}<p class="r-empty">${SPIN}Завантажуємо…</p></section>`;
@@ -503,9 +503,9 @@
         picking = "";
         return redraw();
       }
-      if (name === "scr-unlink" && from) {
-        put((await window.reader.scratchPatch(from, { book, on: false })).item);
-        return back();
+      if (name === "scr-unlink") {
+        put((await window.reader.scratchPatch(el.dataset.scrTopic, { book, on: false })).item);
+        return redraw();
       }
     } catch (err) {
       return oops(err, "це зробити");
