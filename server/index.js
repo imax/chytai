@@ -2039,6 +2039,25 @@ api.get("/want", guestsCannot("Без входу списку немає."), asy
   }
 });
 
+// «Хочу прочитати» under a book a topic suggests (Нотатки): the site puts it on the account's want shelf (the
+// site's POST /api/reader-wantit); a book already on the shelf stays as it is.
+api.post("/want/add", guestsCannot("Без входу списку немає."), async (req, res) => {
+  const key = state.accounts[req.acct]?.key;
+  if (!key) return res.status(400).json({ error: "Немає зв'язку з сайтом." });
+  const book = { href: clean(req.body?.href, 500), title: clean(req.body?.title, 300), author: clean(req.body?.author, 200) };
+  if (!book.href && !book.title) return res.status(400).json({ error: "Немає книжки." });
+  try {
+    const r = await fetch(`${WEB_URL}/api/reader-wantit`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: req.acct, key, book }), signal: AbortSignal.timeout(15000) });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) return res.status(r.status === 404 ? 404 : 502).json({ error: r.status === 404 && j.error ? j.error : "Сайт не відповів. Спробуйте ще раз." });
+    wantKept.delete(req.acct);
+    res.json(j);
+  } catch (err) {
+    console.error(`reader-wantit ${req.acct}:`, err.message);
+    res.status(502).json({ error: "Сайт не відповів. Спробуйте ще раз." });
+  }
+});
+
 api.get("/journey", guestsCannot("Без входу статистики немає."), (req, res) => {
   const acct = req.acct;
   const u = state.users[acct] || {};
@@ -3219,8 +3238,8 @@ api.get("/find", async (req, res) => {
   }
 });
 
-// «Scratchpad» (Max 2026-11-23, server/scratch.js, page src/renderer/scratch.js): topics, eras, authors and books jotted
-// to read about later, each read by Opus once (and again on «Уточнити»). Caps: SCRATCH_ACCOUNT_DAY answers a reader a
+// «Нотатки» (Max 2026-11-25, was «Scratchpad» 2026-11-23; server/scratch.js, page src/renderer/scratch.js): topics,
+// eras, authors and books with the reader's thoughts and own books, each read by Opus (again on a new thought). Caps: SCRATCH_ACCOUNT_DAY answers a reader a
 // day, SCRATCH_DAY for all (Telegram once), Max none; stats day `scratch` { n, cost, accts }. An entry over a cap
 // waits (`limit`) and is answered when the page lists it the next day.
 const SCRATCH_ACCOUNT_DAY = 40;
@@ -3247,19 +3266,53 @@ function scratchCanRun(req) {
   if (req.owner) return true;
   const z = scratchDay();
   if (z.n >= SCRATCH_DAY) {
-    if (!z.told) (z.told = true), saveState(), telegram(`Scratchpad: сьогодні вже ${SCRATCH_DAY} розборів, решта завтра.`);
+    if (!z.told) (z.told = true), saveState(), telegram(`Нотатки: сьогодні вже ${SCRATCH_DAY} розборів, решта завтра.`);
     return false;
   }
   return (z.accts[req.acct] || 0) < SCRATCH_ACCOUNT_DAY;
 }
+// The page sends the reader's own books ({ p, t, a }) with a new entry or thought, so Opus names those of the topic.
+const scratchLib = (req) => (Array.isArray(req.body?.lib) ? req.body.lib.slice(0, 300).map((b) => ({ p: clean(b?.p, 500), t: clean(b?.t, 200), a: clean(b?.a, 150) })).filter((b) => b.p && b.t) : null);
 const scratchRun = (req, it) => {
   if (!it) return it;
-  if (scratchCanRun(req)) scratch.run(req.acct, it.id);
+  if (scratchCanRun(req)) scratch.run(req.acct, it.id, scratchLib(req));
   else it = scratch.update(req.acct, it.id, (x) => (x.status = "limit"));
   return it;
 };
-const noScratch = guestsCannot("Без входу Scratchpad недоступний.");
-api.get("/scratch", noScratch, (req, res) => res.json({ items: scratch.list(req.acct, () => scratchCanRun(req)) }));
+const noScratch = guestsCannot("Без входу нотаток немає.");
+// With the entries, every book's notes and explanations in short (`books`: book → { notes, chats, at, quote, comment }),
+// for «З книжок» and a topic's own books.
+function notesByBook(req) {
+  const out = {};
+  // Counts from one light query (no talk's text is read); the last note's words from the notes, which are small.
+  for (const r of store.items.tally(req.acct)) {
+    const o = (out[r.book] ??= { notes: 0, chats: 0, at: 0, quote: "", comment: "" });
+    o[r.kind === "notes" ? "notes" : "chats"]++;
+    if ((r.at || 0) > o.at) o.at = r.at || 0;
+  }
+  for (const [book, list] of Object.entries(allBookItems(req, "notes"))) {
+    const last = [...list].sort((x, y) => (y.createdAt || 0) - (x.createdAt || 0)).find((n) => n.text);
+    if (last && out[book]) Object.assign(out[book], { quote: String(last.text).slice(0, 300), comment: String(last.comment || "").slice(0, 300), own: String(last.cfi || "").startsWith("mine:") || (paper.NAME.test(book) && !last.quote) });
+  }
+  return out;
+}
+api.get("/scratch", noScratch, (req, res) => res.json({ items: scratch.list(req.acct, () => scratchCanRun(req)), books: notesByBook(req) }));
+// One book's notes and explanations for «Нотатки» (the same list the book's own «Нотатки» shows), the talks without
+// what was sent to Claude: the passage, the first question and the answer's start.
+api.get("/notes/book", noScratch, (req, res) => {
+  const book = String(req.query.path || "");
+  const slim = (c) => ({ id: String(c.id || ""), cfi: c.cfi || "", posKey: c.posKey || "", chapter: c.chapter || (c.page ? `стор. ${c.page}` : ""), at: c.at || c.createdAt || 0, sel: String(c.sel || c.text || c.selection || "").slice(0, 600), q: String(c.turns?.[0]?.q || c.q || "").slice(0, 300), a: String(c.turns?.[0]?.a || c.answer || c.a || "").slice(0, 400), n: Array.isArray(c.turns) ? c.turns.length : 1, mode: c.mode || "" });
+  res.json({ notes: bookItems(req, "notes", book), chats: [...bookItems(req, "chats", book), ...bookItems(req, "paperChats", book)].filter((c) => c && typeof c === "object").map(slim) });
+});
+api.post("/scratch/:id/thought", noScratch, (req, res) => {
+  const it = scratch.think(req.acct, req.params.id, { text: req.body?.text, voice: !!req.body?.voice });
+  if (!it) return res.status(404).json({ error: "Запису немає." });
+  res.json({ item: scratchRun(req, it) });
+});
+api.delete("/scratch/:id/thought/:tid", noScratch, (req, res) => {
+  const it = scratch.unthink(req.acct, req.params.id, req.params.tid);
+  return it ? res.json({ item: it }) : res.status(404).json({ error: "Запису немає." });
+});
 api.post("/scratch", noScratch, (req, res) => {
   let photo = null;
   if (typeof req.body?.photo === "string" && req.body.photo) {
@@ -3276,7 +3329,8 @@ api.post("/scratch/:id/ask", noScratch, (req, res) => {
   res.json({ item: scratchRun(req, it) });
 });
 api.patch("/scratch/:id", noScratch, (req, res) => {
-  const it = scratch.setState(req.acct, req.params.id, req.body?.state);
+  const b = req.body || {};
+  const it = typeof b.book === "string" ? scratch.link(req.acct, req.params.id, b.book, !!b.on) : Number.isInteger(b.wanted) ? scratch.wanted(req.acct, req.params.id, b.wanted) : scratch.setState(req.acct, req.params.id, b.state);
   return it ? res.json({ item: it }) : res.status(404).json({ error: "Запису немає." });
 });
 api.delete("/scratch/:id", noScratch, (req, res) => res.json({ ok: scratch.remove(req.acct, req.params.id) }));

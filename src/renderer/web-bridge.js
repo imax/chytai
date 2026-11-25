@@ -471,6 +471,14 @@
     };
   }
 
+  // The answer's JSON, or an Error with the server's words when it said no.
+  async function ok(req) {
+    const r = await req;
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(j.error || "Не вийшло.");
+    return j;
+  }
+
   async function api(method, url, body, opts = {}) {
     const given = body;
     const headers = {};
@@ -876,15 +884,22 @@
     },
     // Managing the shared library (family only; the server refuses guests).
     // «Хочу прочитати» (GET /api/want): the site's want shelf with where to get each book; null offline.
-    want: () => api("GET", "/api/want").then((r) => (r.ok ? r.json() : null)).catch(() => null),
+    want: (again) => api("GET", `/api/want${again ? "?again=1" : ""}`).then((r) => (r.ok ? r.json() : null)).catch(() => null),
     // «Статистика» (GET /api/journey): explanations, notes and finished books by book and by month; null offline.
     journey: () => api("GET", "/api/journey").then((r) => r.json()).catch(() => null),
-    // «Scratchpad» (scratch.js, server/scratch.js).
+    // «Нотатки» (scratch.js, server/scratch.js): topics with thoughts and books; an error's words come as the Error's.
     scratchList: async () => (await api("GET", "/api/scratch")).json(),
-    scratchAdd: async (entry) => (await api("POST", "/api/scratch", entry)).json(),
-    scratchAsk: async (id, body) => (await api("POST", `/api/scratch/${encodeURIComponent(id)}/ask`, body)).json(),
-    scratchState: async (id, state) => (await api("PATCH", `/api/scratch/${encodeURIComponent(id)}`, { state })).json(),
+    scratchAdd: (entry) => ok(api("POST", "/api/scratch", entry)),
+    scratchAsk: (id, body) => ok(api("POST", `/api/scratch/${encodeURIComponent(id)}/ask`, body)),
+    scratchThink: (id, body) => ok(api("POST", `/api/scratch/${encodeURIComponent(id)}/thought`, body)),
+    scratchUnthink: (id, tid) => ok(api("DELETE", `/api/scratch/${encodeURIComponent(id)}/thought/${encodeURIComponent(tid)}`)),
+    scratchState: (id, state) => ok(api("PATCH", `/api/scratch/${encodeURIComponent(id)}`, { state })),
+    scratchPatch: (id, body) => ok(api("PATCH", `/api/scratch/${encodeURIComponent(id)}`, body)),
     scratchDelete: (id) => api("DELETE", `/api/scratch/${encodeURIComponent(id)}`),
+    // One book's notes and explanations, in short (GET /api/notes/book).
+    bookNotes: (name) => ok(api("GET", `/api/notes/book?path=${encodeURIComponent(name)}`)),
+    // A book onto the site's «Хочу прочитати» (POST /api/want/add).
+    wantAdd: (book) => ok(api("POST", "/api/want/add", book)),
     // «Словничок»: how far the book's list is (GET /api/glossary/status); null offline.
     // «Адмінка» (owner only): the whole reader's stats (GET /api/admin), null when it fails; switching one account off.
     admin: () => api("GET", "/api/admin").then((r) => (r.ok ? r.json() : null)).catch(() => null),

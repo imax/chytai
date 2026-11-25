@@ -263,7 +263,10 @@
     return html;
   }
   function openHit(i) {
-    const h = deep.hits[i];
+    go(deep.hits[i]);
+  }
+  // A note or a talk opens at its place in its book (the panel's search; «Нотатки», scratch.js).
+  function go(h) {
     if (!h) return;
     panel(false);
     if (h.kind === "paperChat") {
@@ -1442,6 +1445,7 @@
     book: (path) => lib?.books.find((b) => b.path === path) || null,
     books: () => lib?.books || [],
     rerender: () => ((homeHtml = ""), renderHome()),
+    go,
     reload: async () => ((lib = await window.Library.data(true)), (homeHtml = "")),
   };
 

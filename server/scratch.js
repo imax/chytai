@@ -1,5 +1,8 @@
-// «Scratchpad» (Max 2026-11-23, variant A of canvas 5vFceFdJnh3oNewFR6TgT4; the name until a Ukrainian one is found):
-// an inbox for reading, as in GTD. Walking with a podcast, a reader jots «король Артур» (a topic, an era, money as a
+// «Нотатки» (Max 2026-11-25, variant A «Теми» of canvas 66Ec9Ssa7vR6q7qjgKfMUm; it began on 2026-11-23 as «Scratchpad»,
+// variant A of canvas 5vFceFdJnh3oNewFR6TgT4): a reader's research folder. Each entry is a topic, an author or a book
+// (or a thought Opus can't place); it keeps the reader's later thoughts (`thoughts`, each may get Opus's `reply`: where
+// to dig next), the reader's own books that belong to it (Opus's `ai.have` by the library the page sends, plus
+// `mine` by hand, minus `notMine`), and the books Opus suggests. It began as an inbox for reading, as in GTD. Walking with a podcast, a reader jots «король Артур» (a topic, an era, money as a
 // subject, an author, a book) or takes a photo (a cover, a poster, a page), and later sorts it out. Each entry is read by
 // Opus at once: what it is, a few sentences of background and 3–5 books, the first the one to start with; the catalog
 // then gives each book its page and cover (index.js `catalogFind`). «Уточнити» asks again with the reader's words.
@@ -16,6 +19,8 @@ const MODEL = "claude-opus-5-5";
 const MAX = 500;
 const MAX_PHOTOS = 100;
 const TEXT_MAX = 1000;
+const THOUGHTS_MAX = 100;
+const LIB_MAX = 300; // own books named to Opus
 const KINDS = ["topic", "era", "author", "book", "unclear"];
 
 const SYSTEM = `You help a Ukrainian reader keep an inbox of things to read about later. While walking, listening to a podcast or talking to a friend, the reader jots a few words or takes a photo: a topic (King Arthur, money, habits), an era (Victorian England, the Cossack Hetmanate), an author's name, a book's title, or something half-remembered. Later the reader opens the entry and wants to decide quickly whether and what to read.
@@ -32,9 +37,12 @@ Work out what the reader meant and answer in Ukrainian:
   - nonfiction: true or false.
 - guesses: only for "unclear": 2–3 short Ukrainian guesses of what was meant (an author and a book, a topic), each at most 8 words; otherwise an empty list. For "unclear" leave books empty and about empty.
 
+- have: the numbers of the reader's own books (the list after «Книжки читача:», when there is one) that clearly belong to this subject, read or not; at most 12; an empty list when none or no list.
+- reply: only when the request has «Думка читача:» lines: one or two short Ukrainian sentences on the LAST thought: where to dig next (a book from your list, an angle, a question worth looking into). No «ви», no praise. Otherwise an empty string.
+
 Rules: never recommend Russian authors or Russian-language editions; prefer books that exist in Ukrainian when they are as good. Name only real books you are sure exist. Answer only with the JSON.
 
-A photo may show a book cover, a page, a poster, a screen with a podcast or an article: the subject is what the reader would want to read about from it. Lines after «Уточнення читача:» are the reader's later words: follow them (a guess they picked, «щось українською», «тільки нонфікшн») and answer the whole entry anew.`;
+A photo may show a book cover, a page, a poster, a screen with a podcast or an article: the subject is what the reader would want to read about from it. Lines after «Уточнення читача:» and «Думка читача:» are the reader's later words: follow them (a guess they picked, «щось українською», «тільки нонфікшн», a question the reader wants to dig into) and answer the whole entry anew, the books too.`;
 
 const SCHEMA = {
   type: "object",
@@ -60,8 +68,10 @@ const SCHEMA = {
       },
     },
     guesses: { type: "array", items: { type: "string" } },
+    have: { type: "array", items: { type: "integer" } },
+    reply: { type: "string" },
   },
-  required: ["kind", "title", "about", "books", "guesses"],
+  required: ["kind", "title", "about", "books", "guesses", "have", "reply"],
   additionalProperties: false,
 };
 
@@ -128,7 +138,7 @@ class Scratch {
     if (!text && !photo) return null;
     const id = crypto.randomBytes(6).toString("hex");
     const items = this.read(acct);
-    const it = { id, text, photo: !!photo, voice: !!voice, at: Date.now(), state: "new", status: "wait", ask: [] };
+    const it = { id, text, photo: !!photo, voice: !!voice, at: Date.now(), state: "new", status: "wait", ask: [], thoughts: [] };
     if (photo) {
       fs.mkdirSync(path.join(this.dir, acct, "scratch"), { recursive: true });
       fs.writeFileSync(this.photoFile(acct, id), photo);
@@ -177,8 +187,49 @@ class Scratch {
     return it;
   }
 
-  // One Opus call for the entry, then the catalog for its books.
-  async run(acct, id) {
+  // A thought added to a topic: kept, and the topic is asked again with it (Opus answers it in `reply`).
+  think(acct, id, { text, voice }) {
+    text = String(text || "").trim().slice(0, TEXT_MAX);
+    if (!text) return null;
+    const t = { id: crypto.randomBytes(4).toString("hex"), text, at: Date.now(), voice: !!voice };
+    return this.update(acct, id, (x) => {
+      x.thoughts = [...(x.thoughts || []), t].slice(-THOUGHTS_MAX);
+      x.replyTo = t.id;
+      x.status = "wait";
+      x.touched = Date.now();
+    });
+  }
+  unthink(acct, id, tid) {
+    return this.update(acct, id, (x) => {
+      x.thoughts = (x.thoughts || []).filter((t) => t.id !== tid);
+      x.touched = Date.now();
+    });
+  }
+  // One of the reader's books put into the topic by hand, or taken out of it.
+  link(acct, id, book, on) {
+    book = String(book || "").slice(0, 500);
+    if (!book) return null;
+    return this.update(acct, id, (x) => {
+      x.mine = (x.mine || []).filter((b) => b !== book);
+      x.notMine = (x.notMine || []).filter((b) => b !== book);
+      if (on) x.mine.unshift(book);
+      else x.notMine.unshift(book);
+      x.mine = x.mine.slice(0, 200);
+      x.notMine = x.notMine.slice(0, 200);
+      x.touched = Date.now();
+    });
+  }
+  // A book Opus suggested put on «Хочу прочитати» (the site's shelf): remembered here so the topic shows it at once.
+  wanted(acct, id, i) {
+    return this.update(acct, id, (x) => {
+      const b = x.ai?.books?.[i];
+      if (b) (b.wanted = true), (x.touched = Date.now());
+    });
+  }
+
+  // One Opus call for the entry, then the catalog for its books. lib: the reader's own books [{ p, t, a }], so Opus
+  // can name those that belong to the topic; none (a rerun after a restart) keeps the last answer's.
+  async run(acct, id, lib = null) {
     const key = `${acct}\t${id}`;
     if (this.running.has(key) || !this.apiKey) return;
     this.running.add(key);
@@ -192,12 +243,19 @@ class Scratch {
           content.push({ type: "image", source: { type: "base64", media_type: "image/jpeg", data: fs.readFileSync(this.photoFile(acct, id)).toString("base64") } });
         } catch {}
       }
-      const words = [it.text ? `Запис читача: ${it.text}` : "Запис читача: лише фото.", it.voice ? "(надиктовано голосом, слова могли розпізнатися з помилками)" : "", ...(it.ask || []).map((a) => `Уточнення читача: ${a}`)].filter(Boolean).join("\n");
+      const own = Array.isArray(lib) ? lib.filter((b) => b && typeof b.p === "string" && b.t).slice(0, LIB_MAX) : null;
+      const words = [
+        it.text ? `Запис читача: ${it.text}` : "Запис читача: лише фото.",
+        it.voice ? "(надиктовано голосом, слова могли розпізнатися з помилками)" : "",
+        ...(it.ask || []).map((a) => `Уточнення читача: ${a}`),
+        ...(it.thoughts || []).slice(-10).map((t) => `Думка читача: ${t.text}`),
+        own?.length ? `\nКнижки читача:\n${own.map((b, i) => `${i + 1}. ${clean(b.t, 150)}${b.a ? ` — ${clean(b.a, 100)}` : ""}`).join("\n")}` : "",
+      ].filter(Boolean).join("\n");
       content.push({ type: "text", text: words });
       const client = new Anthropic({ apiKey: this.apiKey });
       const res = await client.messages.create({
         model: MODEL,
-        max_tokens: 3000,
+        max_tokens: 3500,
         system: [{ type: "text", text: SYSTEM, cache_control: { type: "ephemeral" } }],
         messages: [{ role: "user", content }],
         output_config: { effort: "low", format: { type: "json_schema", schema: SCHEMA } },
@@ -223,7 +281,19 @@ class Scratch {
         books,
         guesses: (Array.isArray(j.guesses) ? j.guesses : []).map((g) => clean(g, 100)).filter(Boolean).slice(0, 3),
       };
-      this.update(acct, id, (x) => ((x.ai = ai), (x.status = "ok"), (x.ms = Date.now() - t)));
+      ai.have = own ? [...new Set((Array.isArray(j.have) ? j.have : []).map((n) => own[n - 1]?.p).filter(Boolean))].slice(0, 12) : it.ai?.have || [];
+      const reply = clean(j.reply, 600);
+      // Books put on «Хочу прочитати» from this topic stay marked when Opus names them again.
+      const was = new Set((it.ai?.books || []).filter((b) => b.wanted).map((b) => fold(b.title)));
+      for (const b of books) if (was.has(fold(b.title))) b.wanted = true;
+      this.update(acct, id, (x) => {
+        x.ai = ai;
+        x.status = "ok";
+        x.ms = Date.now() - t;
+        const th = x.replyTo && (x.thoughts || []).find((y) => y.id === x.replyTo);
+        if (th && reply) th.reply = reply;
+        delete x.replyTo;
+      });
       this.log(`scratch ${acct.slice(0, 6)} ${id}: ${ai.kind} «${ai.title}», ${books.length} books (${books.filter((b) => b.href).length} in the catalog), ${Date.now() - t} ms`);
     } catch (err) {
       this.log(`scratch ${id}: ${err.message}`);

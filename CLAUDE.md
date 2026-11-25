@@ -833,19 +833,25 @@ A flag only when Max asks for one, or when the change could break what readers u
   (Max: «читав не означає прочитано»; no ticks on covers), covers the last opened first. Top: «N книг з <first day>», tiles прочитано / пояснень /
   нотаток / хвилин читання (Max 2026-11-20 by the bot, in place of «слів зі словничка»; no «читаю»); «N хв» beside
   the explanations in each month and book.
-- Reader «Scratchpad» (Max 2026-11-23, variant A of canvas 5vFceFdJnh3oNewFR6TgT4): an inbox for reading, as in GTD.
-  Off the panel since 2026-11-24 (Max: «приберемо поки», «Хочу прочитати» in its place); the page, its routes and
-  readers' entries stay, so it can come back by its panel button. A panel page under «Статистика» (`r-pnav-scratch`, page `scratch`,
-  `src/renderer/scratch.js`, count of new ones beside it): a field with the mic and a photo (shrunk to 1200 px), then
-  «Нові» and «Розібрані». Each entry is read by Opus once (`server/scratch.js`, `SYSTEM`, json_schema, effort low): kind
-  (topic / era / author / book / unclear), title, a few sentences of background, 3–5 books (first = where to start; a
-  Ukrainian title only when such an edition exists; no Russian), guesses when unclear; then `catalogFind` (the site's
-  `/api/reader-find`) gives each book its page and cover by title and surname a letter apart. «Уточнити» (a card like the top form) / a guess =
-  `POST /api/scratch/:id/ask`, asked again with the words. No «Готово» / «Не цікаво» under an entry (Max 2026-11-23, bot №45). «Додати» = a paper book (`/api/paper`), a tap = the cover's
-  card (`Paper.card`). Kept in `accounts/<id>/scratch.json` (500, sorted ones dropped first) and
-  `accounts/<id>/scratch/<entry>.jpg` (100 photos); private, no letter to Max. Caps: 40 a reader a day, 400 for all
-  (Telegram once), Max none; stats day `scratch`. An entry left `wait` by a deploy is asked again when the page lists it.
-  Locally without a key: a fake SDK (`node -r mock.js`) and WEB_URL to a proxy that passes only GET /api/reader-find.
+- Reader «Нотатки» (Max 2026-11-25, variant A «Теми» of canvas 66Ec9Ssa7vR6q7qjgKfMUm; was «Scratchpad» 2026-11-23–24):
+  a research folder, on the server so phone and computer show the same (Max: «як obsidian/notion в плані кросс-девайсу»).
+  Panel after «Хочу прочитати» (`r-pnav-scratch`, page `scratch`, `src/renderer/scratch.js`). The in-book «Нотатки»
+  (Зміст · Нотатки · Аа) stay as they are: that book's notes; the panel's = all of them. Three views: the list (a field
+  for a topic / author / book / thought with mic and photo; a search: topics here, notes and explanations by
+  `/api/search`; «Теми», «Думки без теми» = what Opus answered `unclear`, «З книжок» = every book with notes or
+  explanations, `GET /api/scratch` → `books` from `store.items.tally`); a topic (Opus's background, «Мої думки», «Мої
+  книжки», «Хочу прочитати», «Може підійти»); a book (`GET /api/notes/book`: its notes and explanations in short,
+  «Перейти» = `Shell.go`, the panel search's opener; «Додати в тему» / «Прибрати з теми»). Opus (`server/scratch.js`,
+  `SYSTEM`, json_schema, effort low) answers kind, title, about, 3–5 books (catalog page and cover by `catalogFind`),
+  guesses, `have` (numbers of the reader's own books, from the `lib` list the page sends: `{p, t, a}`, 300 at most)
+  and `reply` (to the last «Думка читача», where to dig next). A thought (`POST /api/scratch/:id/thought`) asks the
+  whole topic again; `mine` / `notMine` by hand (`PATCH {book, on}`). A topic's own books = `mine` + `have` + suggested
+  books the library has, minus `notMine`. «Хочу прочитати» under a suggested book = `POST /api/want/add` → the site's
+  `/api/reader-wantit` (puts it on the want shelf, leaves a book already on the shelf alone), then `PATCH {wanted: i}`.
+  Kept in `accounts/<id>/scratch.json` (500 entries, 100 thoughts each) and `accounts/<id>/scratch/<entry>.jpg` (100
+  photos); private, no letter to Max. Caps: 40 Opus calls a reader a day, 400 for all (Telegram once), Max none; stats
+  day `scratch`. An entry left `wait` by a deploy is asked again when the page lists it. Locally without a key: a fake
+  SDK (`node -r mock.js` that answers the JSON) with the production catalog's GET `/api/reader-find`.
 - Reader «Хочу прочитати» (Max 2026-11-24, in Scratchpad's place; panel after «Мої книжки», `r-pnav-want`, page `want`,
   `src/renderer/want.js`): the books on the reader's «Хочу прочитати» shelf on the site, each with where to get it.
   `GET /api/want` (signed in; 60 s cache, `?again`) → the site's `POST /api/reader-want {id, key}` (`readerKeyOk`):

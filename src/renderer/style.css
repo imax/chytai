@@ -1217,6 +1217,59 @@ body.not-owner #r-pnav-admin { display: none !important; }
 .r-scr-foot { display: flex; align-items: center; gap: 18px; margin-top: 28px; padding-top: 16px; border-top: 1px solid var(--r-rule); }
 .r-scr-foot .r-pill { margin-left: auto; padding: 12px 30px; }
 .r-scr-foot .r-pill-line { margin-left: auto; }
+/* «Нотатки» (Max 2026-11-25, variant A «Теми»; scratch.js): search, thoughts, a book's rows, a book's notes. */
+.nx-search { display: flex; align-items: center; gap: 8px; margin: 12px 0 0; padding: 9px 12px; border: 1px solid var(--r-rule); border-radius: 12px; color: var(--r-ink3); }
+.nx-search svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; flex: none; }
+.nx-search input { flex: 1; min-width: 0; border: none; background: none; outline: none; padding: 0; font: 16px var(--r-sans); color: var(--r-ink); }
+.nx-search input::-webkit-search-cancel-button { display: none; }
+.nx-brow, .nx-hit, button.nx-th { display: flex; gap: 14px; width: 100%; padding: 12px 0; border: none; border-bottom: 1px solid var(--r-rule); background: none; color: var(--r-ink); text-align: left; font: inherit; cursor: pointer; }
+.nx-brow > .r-cover { width: 46px; flex: none; box-shadow: var(--r-cshadow); align-self: flex-start; }
+.nx-brow > .r-cover .r-cover-t, .nx-bookhead > .r-cover .r-cover-t { font-size: 8px; left: 4px; right: 4px; top: 5px; }
+.nx-brow > .r-cover .r-cover-a, .nx-bookhead > .r-cover .r-cover-a { display: none; }
+.nx-bx { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.nx-bx b { font: 400 18px/1.25 var(--r-serif); }
+.nx-bm { font-size: 13px; color: var(--r-ink2); }
+.nx-bs { font-size: 13px; color: var(--r-ink3); }
+.nx-q { display: block; margin-top: 6px; font: 400 16px/1.5 var(--r-serif); color: var(--r-ink); overflow-wrap: anywhere; }
+.nx-q > span { background: color-mix(in srgb, var(--r-bar) 26%, transparent); border-radius: 2px; padding: 0 1px; -webkit-box-decoration-break: clone; box-decoration-break: clone; }
+.nx-q > span.nx-own { background: none; padding: 0; }
+.nx-q em { display: block; font: 400 14px/1.45 var(--r-sans); font-style: normal; color: var(--r-ink2); margin-top: 4px; }
+.nx-q em b { font-weight: 600; color: var(--r-ink); }
+.nx-hit { flex-direction: column; gap: 2px; }
+.nx-th { padding: 12px 0; border-bottom: 1px solid var(--r-rule); }
+button.nx-th { flex-direction: column; gap: 0; }
+.nx-th p { margin: 0; font: 400 17px/1.45 var(--r-serif); color: var(--r-ink); overflow-wrap: anywhere; }
+.nx-when { display: flex; align-items: center; gap: 14px; margin-top: 4px; font-size: 12px; color: var(--r-ink3); }
+.nx-when .nx-x { font-size: 12px; color: var(--r-ink3); }
+.nx-ai { display: block; margin-top: 8px; padding-left: 10px; border-left: 2px solid var(--r-bar); font-size: 14px; line-height: 1.45; color: var(--r-ink2); }
+.nx-think { margin-top: 12px; }
+.nx-think textarea { font-size: 16px; min-height: 1.4em; }
+.nx-none { margin: 10px 0 0; }
+.nx-fold { display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
+.nx-more { margin-top: 4px; }
+@media (min-width: 761px) { .nx-fold.short { display: block; } .nx-more.short { display: none; } }
+.nx-picker { display: flex; flex-direction: column; gap: 6px; margin: 4px 0 10px; padding: 0 0 8px; border-bottom: 1px solid var(--r-rule); }
+.nx-picker > .r-link { align-self: flex-start; margin-top: 4px; }
+.nx-pick .r-prow-p { max-width: 40%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nx-bookhead { display: flex; gap: 16px; align-items: flex-start; margin-bottom: 4px; }
+.nx-bookhead > .r-cover { width: 72px; flex: none; box-shadow: var(--r-cshadow); }
+.nx-bookhead > span { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.nx-bookhead b { font: 400 22px/1.2 var(--r-serif); }
+.nx-topic { font-size: 13px; color: var(--r-ink2); }
+.nx-topic .r-link { font-size: 13px; color: var(--r-ochre); }
+.nx-bacts { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; margin-top: 8px; }
+.nx-bacts .r-pill-line { padding: 8px 16px; font-size: 14px; }
+.nx-bacts .r-link { font-size: 14px; }
+.nx .nx-tabs { display: flex; gap: 22px; margin-top: 18px; border-bottom: 1px solid var(--r-rule); }
+.nx .nx-tabs button { background: none; border: none; border-bottom: 1.5px solid transparent; padding: 0 0 8px; font: 400 15px var(--r-sans); color: var(--r-ink2); cursor: pointer; }
+.nx .nx-tabs button span { color: var(--r-ink3); }
+.nx .nx-tabs button.on { color: var(--r-ink); border-bottom-color: var(--r-ochre); }
+.nx-ch { margin: 18px 0 0; font: 600 12px var(--r-sans); letter-spacing: .08em; text-transform: uppercase; color: var(--r-ochre); }
+.nx-note { padding: 8px 0 0; }
+.nx-note .nx-q { margin-top: 0; }
+.nx-acts2 { display: flex; justify-content: space-between; align-items: center; padding: 6px 0 12px; border-bottom: 1px solid var(--r-rule); font-size: 13px; color: var(--r-ink3); }
+.nx-acts2 .r-link { font-size: 14px; }
+@media (hover: hover) { .nx-brow:hover b, .nx-hit:hover .nx-bm { color: var(--r-ochre); } }
 .r-scr-skip { color: var(--r-ink2); text-decoration: none; padding: 10px 0; }
 .r-scr-was { font-size: 14px; color: var(--r-ink2); }
 @media (max-width: 760px) { .r-scr-back { display: none; } }
@@ -2389,7 +2442,7 @@ html body .r-list .r-t, html body .r-list .r-a { display: block; grid-column: 2;
    iframe of its own, so this does not touch it. */
 body { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
 input, textarea, select, [contenteditable], #pdf-container, .card, .answer, #notes,
-.mn-q, .pp-note-t, .pp-note-c, #about-book, .pp-scan-text, .r-scr-about, .r-scr-said, .r-scr-why { -webkit-user-select: text; user-select: text; -webkit-touch-callout: default; }
+.mn-q, .pp-note-t, .pp-note-c, #about-book, .pp-scan-text, .r-scr-about, .r-scr-said, .r-scr-why, .nx-q, .nx-th p, .nx-ai { -webkit-user-select: text; user-select: text; -webkit-touch-callout: default; }
 
 /* «Словничок» (gloss.js): an old word's meaning in a small card over the word, the reader's own card look. */
 #gloss-tip {
