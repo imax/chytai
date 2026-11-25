@@ -950,6 +950,8 @@ body[data-theme="dark"] #shell, body[data-theme="dark"] #book-menu, body[data-th
 .r-pnav button[hidden] { display: none; }
 /* «Нещодавно видалені» quieter than the rest (Max 2026-11-21, №24). */
 #r-pnav-trash { color: var(--r-ink2); font-size: 13px; }
+.r-pnav-ic { display: inline-flex; align-items: center; gap: 7px; }
+.r-pnav-ic svg { width: 15px; height: 15px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
 .r-pnav i { font-style: normal; font-size: 13px; color: var(--r-ink2); min-width: 24px; text-align: right; font-weight: 400; }
 .r-pnav .r-pnav-add i { color: var(--r-ochre); font-size: 18px; font-weight: 300; line-height: 1; }
 #r-panel.searching .r-pnav, #r-panel.searching .r-precent { display: none; }
