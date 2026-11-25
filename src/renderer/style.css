@@ -1945,7 +1945,8 @@ body.not-owner #r-pnav-admin { display: none !important; }
 .pp-note.q .pp-note-t::before { content: "«"; } .pp-note.q .pp-note-t::after { content: "»"; }
 .pp-note-c { margin-top: 6px; font-size: 14px; line-height: 1.5; color: var(--r-ink2); }
 .pp-note-c p { margin: 0 0 6px; }
-.pp-note-m { display: flex; gap: 14px; margin-top: 4px; font-size: 12px; color: var(--r-ink3); }
+/* One line, each part whole; on a narrow phone the buttons go under the date together (Max 2026-11-24, bot №48). */
+.pp-note-m { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 14px; margin-top: 4px; font-size: 12px; color: var(--r-ink3); white-space: nowrap; }
 .pp-note-m .r-link { font-size: 12px; color: var(--r-ink3); text-decoration: none; }
 .pp-note-m .r-link:hover { color: var(--r-red); }
 .pp-row { display: flex; justify-content: space-between; border: none; border-top: 1px solid var(--r-rule); background: none; color: var(--r-ink); font: 500 15px var(--r-sans); padding: 14px 0; cursor: pointer; }
