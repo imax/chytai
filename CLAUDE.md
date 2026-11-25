@@ -858,7 +858,7 @@ A flag only when Max asks for one, or when the change could break what readers u
   Library, Max: «це якийсь фейк») and `other`, up to 3
   `twins` (original / Ukrainian translation, never Russian) with their own `get`, `rent`, `abroad`; a translation
   with no original in the catalog gets an Amazon search by `origTitle` + `origAuthor`. The tile's price may be the
-  other version's («від 299 ₴, укр.»). The card names only the language over the other version's shops, not its
+  other version's, a plain «299 ₴» (Max 2026-11-25, bot №49, variant B: only a price under a cover, the lowest in a Ukrainian shop of either version, no «від», «укр.», BookFlow or Amazon; none = no caption). The card names only the language over the other version's shops, not its
   title (Max: «тільки конфьюзить»).
 - Reader «Прочитано» at a book's end (Max 2026-11-20, bot report №7): the last page (`bookEnd` in renderer.js: epub.js
   `atEnd` or 100% on pages, the last chapter's bottom in scroll mode; a PDF's last page) marks the book finished in the

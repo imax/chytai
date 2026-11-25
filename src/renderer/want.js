@@ -1,7 +1,7 @@
 // «Хочу прочитати» (Max 2026-11-24, in place of Scratchpad): the books on the reader's «Хочу прочитати» shelf on
 // chytai.org.ua as a shelf of covers (Max chose design B of canvas C4zbe7sBdsPD1z41gChjEj): «Можна читати зараз»
 // (one's own file, a free-shelf book), «Купити або взяти» (the shops, BookFlow, free texts online) and «Поки ніде»,
-// folded. Under a cover one word on how to get it («Читати», «від 90 ₴»); a tap on the cover = the book's card
+// folded. Under a cover «Читати» or the lowest price («90 ₴»); a tap on the cover = the book's card
 // (paper.js `Paper.card`): «Читати», «Де взяти» (one line a format, as the book page's «Де взяти»; then the same
 // work in its other language, the original or the Ukrainian translation, with Amazon and the like), «Про книжку»
 // and the book's page. GET /api/want (server/index.js → the site's /api/reader-want). A page in the panel after
@@ -37,24 +37,12 @@
   const shop = (s) => link(s.url, esc(s.shop)) + ((t) => (t ? ` <span class="r-want-m">${esc(t)}</span>` : ""))([s.price, s.note].filter(Boolean).join(", "));
   const uah = (p) => Number(String(p || "").replace(/[^\d]/g, "")) || 0;
 
-  // One word under the cover: how to get it. A price: the cheapest shop's, «від» when there are more; the book's other
-  // language (its original, its Ukrainian translation) counts too.
+  // Under the cover only a price (Max 2026-11-25, bot №49, variant B: «каша з підписами»): the lowest in a Ukrainian
+  // shop, the book's own or its other language's (original, translation), no «від», «укр.», shop names; none = nothing.
+  // Rental, free texts and shops abroad are in the card.
   function how(b) {
-    const all = [b, ...(b.other || [])];
-    // The book's own shops first; else its other language's, marked («укр.», «англ.»).
-    const mark = (v) => (v === b ? "" : v.lang === "uk" ? ", укр." : v.lang === "en" ? ", англ." : "");
-    for (const v of all) {
-      const shops = (v.get || []).flatMap((g) => g.shops).filter((s) => uah(s.price));
-      if (!shops.length) continue;
-      const low = Math.min(...shops.map((s) => uah(s.price)));
-      return `${shops.length > 1 ? "від " : ""}${low} ₴${mark(v)}`;
-    }
-    const rent = all.find((v) => v.rent)?.rent;
-    if (rent) return `BookFlow${rent.price ? ` ${rent.price} ₴` : ""}`;
-    if (b.online?.length) return "Безкоштовно онлайн";
-    const abroad = all.find((v) => v.abroad?.length);
-    if (abroad) return abroad.abroad[0].label + mark(abroad);
-    return "";
+    const ps = [b, ...(b.other || [])].flatMap((v) => (v.get || []).flatMap((g) => g.shops)).map((s) => uah(s.price)).filter(Boolean);
+    return ps.length ? `${Math.min(...ps)} ₴` : "";
   }
   const group = (b) => (readNow(b) ? "now" : b.get?.length || b.rent || b.online?.length || b.abroad?.length || b.other?.length ? "buy" : "none");
   const LANG = { uk: "Українською", en: "Англійською", "": "В оригіналі" };
@@ -63,7 +51,7 @@
     const path = readNow(b);
     const foot = path
       ? `<span class="r-want-h"><button type="button" class="r-want-go" data-open="${esc(path)}" data-act="${b.mine ? "want-mine" : "want-free"}">Читати</button></span>`
-      : `<span class="r-want-h">${esc(how(b))}</span>`;
+      : how(b) ? `<span class="r-want-h">${esc(how(b))}</span>` : "";
     return `<div class="r-want-b">
       <button type="button" class="r-want-c" data-act="want-card" data-want="${i}">${window.Shell.rcover({ title: b.title, authors: [b.author] }, b.cover || null)}<span class="r-want-t">${esc(b.title)}</span></button>
       ${foot}</div>`;
