@@ -288,16 +288,22 @@
       <div class="r-scr-row"><button type="button" class="pp-tool${window.Dictation?.field() === "scr-think" ? " on" : ""}" data-act="scr-thinkmic" title="Надиктувати" aria-label="Надиктувати">${MIC}</button><span class="r-scr-sp"></span>
       <button type="submit" class="r-pill"${busy ? " disabled" : ""}>Записати</button></div></form>`;
 
-    // The topic's books: the reader's own (reading first, then read, then the rest), then Opus's books added by hand.
-    const own = ownIn(it).sort((x, y) => ["reading", "read", "new"].indexOf(state(x)) - ["reading", "read", "new"].indexOf(state(y)));
+    // The topic's books, the reader's own and Opus's added by hand, like a to-do list (Max 2026-11-25): the newest
+    // added on top, read ones at the bottom; Opus's own picks after the added ones, reading before not started.
+    const own = ownIn(it);
     const books = (a?.books || []).map((b, i) => [b, i]).filter(([b]) => !ownOf(b));
     const picked = books.filter(([b]) => added(b));
     const rest = books.filter(([b]) => !added(b));
     const n = own.length + picked.length;
     html += head(`Книжки по темі${n ? ` · ${n}` : ""}`, `<button type="button" class="r-link" data-act="scr-pickbook">${picking === "book" ? "" : "Додати свою"}</button>`);
     if (picking === "book") html += picker("Знайти серед моїх книжок");
-    html += own.map((b) => brow(b, esc([STATE[state(b)], counts(b.path)].filter(Boolean).join(" · ")), quote(byBook[b.path]), `data-scr-book="${esc(b.path)}" data-scr-from="${it.id}"`)).join("");
-    html += picked.map(([b, i]) => aiBookHtml(b, i, it, false)).join("");
+    const ORDER = ["reading", "new", "read"];
+    const rows = [
+      ...own.map((b) => ({ s: state(b), at: it.added?.[b.path] || 0, html: () => brow(b, esc([STATE[state(b)], counts(b.path)].filter(Boolean).join(" · ")), quote(byBook[b.path]), `data-scr-book="${esc(b.path)}" data-scr-from="${it.id}"`) })),
+      ...picked.map(([b, i]) => ({ s: "new", at: typeof b.wanted === "number" ? b.wanted : 0, html: () => aiBookHtml(b, i, it, false) })),
+    ];
+    rows.sort((x, y) => (x.s === "read") - (y.s === "read") || y.at - x.at || ORDER.indexOf(x.s) - ORDER.indexOf(y.s));
+    html += rows.map((r) => r.html()).join("");
     if (!n && picking !== "book") html += `<p class="r-empty nx-none">Книжок тут ще немає.</p>`;
     if (rest.length) html += head(`Можуть підійти · ${rest.length}`) + rest.map(([b, i]) => aiBookHtml(b, i, it, true)).join("");
     html += `<div class="r-scr-foot"><button type="button" class="r-link" data-act="scr-delete">Видалити тему</button></div>`;

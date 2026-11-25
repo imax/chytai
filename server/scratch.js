@@ -205,7 +205,7 @@ class Scratch {
       x.touched = Date.now();
     });
   }
-  // One of the reader's books put into the topic by hand, or taken out of it.
+  // One of the reader's books put into the topic by hand (when: `added`, so the newest stand first), or taken out.
   link(acct, id, book, on) {
     book = String(book || "").slice(0, 500);
     if (!book) return null;
@@ -216,6 +216,8 @@ class Scratch {
       else x.notMine.unshift(book);
       x.mine = x.mine.slice(0, 200);
       x.notMine = x.notMine.slice(0, 200);
+      const at = x.added || {};
+      x.added = Object.fromEntries(x.mine.map((b) => [b, b === book ? Date.now() : at[b] || 0]));
       x.touched = Date.now();
     });
   }
@@ -225,7 +227,7 @@ class Scratch {
     return this.update(acct, id, (x) => {
       const b = x.ai?.books?.[i];
       if (!b) return;
-      if (on) b.wanted = true;
+      if (on) b.wanted = Date.now();
       else delete b.wanted;
       x.touched = Date.now();
     });
@@ -287,9 +289,9 @@ class Scratch {
       };
       ai.have = own ? [...new Set((Array.isArray(j.have) ? j.have : []).map((n) => own[n - 1]?.p).filter(Boolean))].slice(0, 12) : it.ai?.have || [];
       const reply = clean(j.reply, 600);
-      // Books put on «Хочу прочитати» from this topic stay marked when Opus names them again.
-      const was = new Set((it.ai?.books || []).filter((b) => b.wanted).map((b) => fold(b.title)));
-      for (const b of books) if (was.has(fold(b.title))) b.wanted = true;
+      // Books added to the topic stay added (with their time) when Opus names them again.
+      const was = new Map((it.ai?.books || []).filter((b) => b.wanted).map((b) => [fold(b.title), b.wanted]));
+      for (const b of books) if (was.has(fold(b.title))) b.wanted = was.get(fold(b.title));
       this.update(acct, id, (x) => {
         x.ai = ai;
         x.status = "ok";
