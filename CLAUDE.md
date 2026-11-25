@@ -711,6 +711,7 @@ A flag only when Max asks for one, or when the change could break what readers u
   them cost 2 s and 140 MB at every start. `withShop(book)` adds one paper edition «MEGOGO BOOKS» (in stock, then
   cheapest) to the book page and the reader's «Хочу прочитати» `get`; a publisher shelf's row with the same mbooks.com.ua
   address gives way to it. Status «очікується» = their backorder. Run now: /admin/jobs, job `megogo`.
+  Their Cloudflare answers 403 to a «Chytai» User-Agent: the request goes with Node's default until they allow it (Max asks).
 
 ## Translation pairs
 

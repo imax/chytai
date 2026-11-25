@@ -1793,7 +1793,7 @@ bg.every("bookflow", 3600 * 1000, () => bookflow.run(), { db: store.db, first: 4
 // read every 6 hours, an unchanged feed is not downloaded again.
 const megogo = new (require("./megogo").Megogo)({ store, log: console.log });
 bg.register("megogo", megogo, { run: false });
-bg.every("megogo", 6 * 3600 * 1000, () => megogo.run(), { db: store.db, first: 6 * 60 * 1000 });
+bg.every("megogo-feed", 6 * 3600 * 1000, () => megogo.run(), { db: store.db, first: 6 * 60 * 1000 });
 // «Чи варто читати?» on book pages (advice.js): Claude, by the reader's own shelf, on a click.
 const bookpage = new BookPage({ apiKey: process.env.ANTHROPIC_API_KEY || "", log: console.log });
 const advice = new Advice({ store, social, db: store.db, apiKey: process.env.ANTHROPIC_API_KEY || "", log: console.log });

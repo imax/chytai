@@ -15,7 +15,8 @@ const { norm, sameAuthor, isRussian } = require("./store");
 const { ent } = require("./catalogs");
 
 const FEED = "https://i.mbooks.com.ua/media/merchant_center_feed.xml";
-const UA = "Chytai/1.0 (https://chytai.org.ua; book pages link to MEGOGO BOOKS)";
+// No User-Agent of our own for now: their Cloudflare answers 403 to «Chytai/1.0 (…)» (2026-11-25). Max has MEGOGO's
+// consent to use the feed and asks them to let «Chytai» through; then it goes back to a named one.
 const NAME = "MEGOGO BOOKS";
 const SKIP = /^(Канцтовари|Блокноти|Розваги|Шкільні підручники|Періодичні)/;
 // «backorder» is mbooks.com.ua's «Очікується»: orders taken, the book comes later.
@@ -97,7 +98,7 @@ class Megogo {
     this.running = true;
     try {
       const was = JSON.parse(this.db.get("megogo:links") || "null");
-      const headers = { "User-Agent": UA };
+      const headers = {};
       if (was?.etag && !force) headers["If-None-Match"] = was.etag;
       const r = await this.fetchImpl(FEED, { headers, signal: AbortSignal.timeout(180000) });
       if (r.status === 304) return was.matched;
