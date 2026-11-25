@@ -1309,6 +1309,8 @@ button.nx-th { flex-direction: column; gap: 0; }
 .r-want-h { font-size: 13px; color: var(--r-ink); }
 .r-want-go { border: none; background: none; padding: 0; font: 500 13px var(--r-sans); color: var(--r-ochre); cursor: pointer; }
 .r-want-fold { font-size: 13px; color: var(--r-ink2); }
+/* «Купити або взяти напрокат · 120» doesn't fit a narrow phone on one line (274 px with Android's big font). */
+.r-want .r-sec-head h2 { white-space: normal; line-height: 1.4; }
 .r-want-m { color: var(--r-ink2); }
 @media (max-width: 760px) {
   .r-want-g { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px 14px; }

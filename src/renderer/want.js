@@ -1,6 +1,6 @@
 // «Хочу прочитати» (Max 2026-11-24, in place of Scratchpad): the books on the reader's «Хочу прочитати» shelf on
 // chytai.org.ua as a shelf of covers (Max chose design B of canvas C4zbe7sBdsPD1z41gChjEj): «Можна читати зараз»
-// (one's own file, a free-shelf book), «Купити або взяти» (the shops, BookFlow, free texts online) and «Поки немає»
+// (one's own file, a free-shelf book), «Купити або взяти напрокат» (the shops, BookFlow, free texts online) and «Поки немає»
 // (was «Поки ніде», folded; Max 2026-11-25: shown open, after «Бібліотеки»). Under a cover «Читати» or the lowest price («90 ₴»); a tap on the cover = the book's card
 // (paper.js `Paper.card`): «Читати», «Де взяти» (one line a format, as the book page's «Де взяти»; then the same
 // work in its other language, the original or the Ukrainian translation, with Amazon and the like), «Про книжку»
@@ -82,7 +82,7 @@
     const none = parts.none.length ? head("Поки немає", parts.none.length) + grid(parts.none) : "";
     return `${top}<p class="r-want-p">${books.length} ${plural(books.length, "книжка", "книжки", "книжок")} з вашої полиці на chytai.org.ua</p>
       ${parts.now.length ? head("Можна читати зараз", parts.now.length) + grid(parts.now) : ""}
-      ${parts.buy.length ? head("Купити або взяти", parts.buy.length) + grid(parts.buy) : ""}
+      ${parts.buy.length ? head("Купити або взяти напрокат", parts.buy.length) + grid(parts.buy) : ""}
       ${libsPart(head, grid)}${none}</section>`;
   }
 
