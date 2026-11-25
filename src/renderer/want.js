@@ -1,7 +1,7 @@
 // «Хочу прочитати» (Max 2026-11-24, in place of Scratchpad): the books on the reader's «Хочу прочитати» shelf on
 // chytai.org.ua as a shelf of covers (Max chose design B of canvas C4zbe7sBdsPD1z41gChjEj): «Можна читати зараз»
-// (one's own file, a free-shelf book), «Купити або взяти» (the shops, BookFlow, free texts online) and «Поки ніде»,
-// folded. Under a cover «Читати» or the lowest price («90 ₴»); a tap on the cover = the book's card
+// (one's own file, a free-shelf book), «Купити або взяти» (the shops, BookFlow, free texts online) and «Поки немає»
+// (was «Поки ніде», folded; Max 2026-11-25: shown open, after «Бібліотеки»). Under a cover «Читати» or the lowest price («90 ₴»); a tap on the cover = the book's card
 // (paper.js `Paper.card`): «Читати», «Де взяти» (one line a format, as the book page's «Де взяти»; then the same
 // work in its other language, the original or the Ukrainian translation, with Amazon and the like), «Про книжку»
 // and the book's page. GET /api/want (server/index.js → the site's /api/reader-want). A page in the panel after
@@ -19,7 +19,6 @@
   let books = null; // the last answer
   let asking = false;
   let failed = false;
-  let noneOpen = false; // «Поки ніде» unfolded
   let picks = []; // the reader's library branches, [{ lib, branch }]
   let libs = null; // { unchecked } for the picks
   let libBusy = false; // the picks changed, the answer for them not here yet
@@ -80,13 +79,11 @@
     parts.now.sort((x, y) => (y[0].mine ? 1 : 0) - (x[0].mine ? 1 : 0) || x[1] - y[1]);
     const grid = (list) => `<div class="r-want-g">${list.map(([b, i]) => tile(b, i)).join("")}</div>`;
     const head = (t, n, aside = "") => `<div class="r-sec-head"><h2>${t} · ${n}</h2>${aside}</div>`;
-    const none = parts.none.length
-      ? `${head("Поки ніде", parts.none.length, `<button type="button" class="r-link r-want-fold" data-act="want-none">${noneOpen ? "Згорнути" : "Показати"}</button>`)}${noneOpen ? grid(parts.none) : `<p class="r-want-p">${notSold(parts.none)}</p>`}`
-      : "";
+    const none = parts.none.length ? head("Поки немає", parts.none.length) + grid(parts.none) : "";
     return `${top}<p class="r-want-p">${books.length} ${plural(books.length, "книжка", "книжки", "книжок")} з вашої полиці на chytai.org.ua</p>
       ${parts.now.length ? head("Можна читати зараз", parts.now.length) + grid(parts.now) : ""}
       ${parts.buy.length ? head("Купити або взяти", parts.buy.length) + grid(parts.buy) : ""}
-      ${none}${libsPart(head, grid)}</section>`;
+      ${libsPart(head, grid)}${none}</section>`;
   }
 
   // «Бібліотеки»: a branch's short name («Бібліотека ім. А. Головка» → «ім. А. Головка», no address); how it holds
@@ -166,8 +163,6 @@
     tabsHtml();
     d.querySelector(".lb-n").textContent = chosen.length ? `Обрано ${chosen.length} з 5.` : "";
   }
-  // The folded «Поки ніде»: nothing anywhere, in any language.
-  const notSold = () => "Ні в магазинах, ні напрокат, ні онлайн, жодною мовою.";
   function plural(n, one, few, many) {
     const t = n % 100;
     const u = n % 10;
@@ -241,7 +236,6 @@
 
   document.querySelector("#shell").addEventListener("click", (e) => {
     if (!shown()) return;
-    if (e.target.closest("[data-act='want-none']")) return (noneOpen = !noneOpen), window.Shell.rerender();
     if (e.target.closest("[data-act='want-libs']")) return pick();
     const el = e.target.closest("[data-want]");
     const b = el && books?.[Number(el.dataset.want)];
