@@ -1237,7 +1237,7 @@ app.post("/api/reader-want", (req, res) => {
   const kindOf = (e) => (e.format === "e-book" || e.format === "аудіо" ? e.format : "папір");
   // Per format the 2 cheapest shops (in stock first), as the book page's «Де взяти».
   const shopsOf = (book) => {
-    const eds = (book.editions || []).filter((e) => e.shelf?.id !== "chytai-free" && e.status !== "немає" && !e.adapted && e.links?.[0]?.url);
+    const eds = (megogo.withShop(book).editions || []).filter((e) => e.shelf?.id !== "chytai-free" && e.status !== "немає" && !e.adapted && e.links?.[0]?.url);
     const get = [];
     for (const kind of ["e-book", "папір", "аудіо"]) {
       const shops = [];
@@ -1789,6 +1789,11 @@ bg.every("sluhay", 3600 * 1000, () => sluhay.run(), { db: store.db, first: 5 * 6
 const bookflow = new (require("./bookflow").BookFlow)({ store, log: console.log });
 bg.register("bookflow", bookflow, { run: false });
 bg.every("bookflow", 3600 * 1000, () => bookflow.run(), { db: store.db, first: 4 * 60 * 1000 });
+// MEGOGO BOOKS' feed of paper books (megogo.js; Max 2026-11-25), one more shop in «Де взяти». Remade every morning;
+// read every 6 hours, an unchanged feed is not downloaded again.
+const megogo = new (require("./megogo").Megogo)({ store, log: console.log });
+bg.register("megogo", megogo, { run: false });
+bg.every("megogo", 6 * 3600 * 1000, () => megogo.run(), { db: store.db, first: 6 * 60 * 1000 });
 // «Чи варто читати?» on book pages (advice.js): Claude, by the reader's own shelf, on a click.
 const bookpage = new BookPage({ apiKey: process.env.ANTHROPIC_API_KEY || "", log: console.log });
 const advice = new Advice({ store, social, db: store.db, apiKey: process.env.ANTHROPIC_API_KEY || "", log: console.log });
@@ -4030,7 +4035,7 @@ app.get("/book/:id", (req, res) => {
   // One address per work: an id, an edition id or an old slug redirects to the canonical one.
   // For a day only: addresses move as works part and merge, and a browser keeps a bare 301 forever.
   if (store.href(id) !== `/book/${encodeURIComponent(req.params.id)}`) return res.set("Cache-Control", "public, max-age=86400").redirect(301, store.href(id));
-  const book = bookFor(req, store.bookPage(id), !!store.entry(req.user?.id, id));
+  const book = bookFor(req, megogo.withShop(store.bookPage(id)), !!store.entry(req.user?.id, id));
   if (!book) return res.status(404).send(pages.messagePage({ title: "Немає такої книжки", text: "", user: req.user }));
   const file = readerFileFor(req.user?.id, book);
   const free = !file && freeFileFor(book);

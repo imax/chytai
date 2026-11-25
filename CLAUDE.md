@@ -701,6 +701,17 @@ A flag only when Max asks for one, or when the change could break what readers u
 - The book page's row «Напрокат» (pages.js `where`, last, above the libraries): «є вільна» / «зараз усі в читачів»,
   «89 ₴ за книжку». Clicks: taps `where` / `out:bookflow.com.ua`. Run now: /admin/jobs, job `bookflow`.
 
+## MEGOGO BOOKS in «Де взяти» (`web/megogo.js`)
+
+- MEGOGO BOOKS gave us their Google Merchant Center feed (Max 2026-11-25): `https://i.mbooks.com.ua/media/merchant_center_feed.xml`,
+  paper only (~26k products, ~60 MB, remade each morning; e-books «згодом», then a second feed with its `format`).
+  The jobs process reads it every 6 h (If-None-Match), drops stationery, games, textbooks, magazines, matches by ISBN,
+  else the same whole title and author (authors come after the title's last «. », surname first: `split`), and keeps
+  only meta `megogo:links` (book id -> [url, price, status, publisher], ~10k books, ~1 MB). Not shelf items: 20k of
+  them cost 2 s and 140 MB at every start. `withShop(book)` adds one paper edition «MEGOGO BOOKS» (in stock, then
+  cheapest) to the book page and the reader's «Хочу прочитати» `get`; a publisher shelf's row with the same mbooks.com.ua
+  address gives way to it. Status «очікується» = their backorder. Run now: /admin/jobs, job `megogo`.
+
 ## Translation pairs
 
 - A Ukrainian book and its original are paired in `web/seed/matches.json`: `translations` (`[original, uk]`, slugs or
