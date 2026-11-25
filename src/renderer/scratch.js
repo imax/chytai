@@ -7,7 +7,7 @@
 // - a topic: what it is (Opus), «Мої думки» (each new thought asks Opus again; its `reply` says where to dig next),
 //   «Книжки»: the reader's own books in it (Opus picks them from the library the page sends; «Додати свою» and the
 //   book page's topic chips by hand) and Opus's books added with «Додати в тему» (`wanted`, only the topic: Max
-//   2026-11-25, reading and «Хочу прочитати» have their own pages), then «Може підійти» (the rest);
+//   2026-11-25, reading and «Хочу прочитати» have their own pages), then «Можуть підійти» (the rest);
 // - a book: its notes and explanations (the same as the book's own «Нотатки»), «Перейти» opens the book there, and
 //   the topics it is in.
 // server/scratch.js reads entries with Opus. Taps count by data-act (reading-time.js): act-scr-*.
@@ -294,12 +294,12 @@
     const picked = books.filter(([b]) => added(b));
     const rest = books.filter(([b]) => !added(b));
     const n = own.length + picked.length;
-    html += head(`Книжки${n ? ` · ${n}` : ""}`, `<button type="button" class="r-link" data-act="scr-pickbook">${picking === "book" ? "" : "Додати свою"}</button>`);
+    html += head(`Книжки по темі${n ? ` · ${n}` : ""}`, `<button type="button" class="r-link" data-act="scr-pickbook">${picking === "book" ? "" : "Додати свою"}</button>`);
     if (picking === "book") html += picker("Знайти серед моїх книжок");
     html += own.map((b) => brow(b, esc([STATE[state(b)], counts(b.path)].filter(Boolean).join(" · ")), quote(byBook[b.path]), `data-scr-book="${esc(b.path)}" data-scr-from="${it.id}"`)).join("");
     html += picked.map(([b, i]) => aiBookHtml(b, i, it, false)).join("");
     if (!n && picking !== "book") html += `<p class="r-empty nx-none">Книжок тут ще немає.</p>`;
-    if (rest.length) html += head(`Може підійти · ${rest.length}`) + rest.map(([b, i]) => aiBookHtml(b, i, it, true)).join("");
+    if (rest.length) html += head(`Можуть підійти · ${rest.length}`) + rest.map(([b, i]) => aiBookHtml(b, i, it, true)).join("");
     html += `<div class="r-scr-foot"><button type="button" class="r-link" data-act="scr-delete">Видалити тему</button></div>`;
     return `${html}</section>`;
   }
