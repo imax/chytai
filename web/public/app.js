@@ -467,6 +467,25 @@
     q.addEventListener("keydown", (e) => e.key === "Enter" && e.preventDefault());
   }
 
+  // /@nick/stats: a year tab swaps the year's covers and numbers in place, so the page stays where it is (Max
+  // 2026-11-24, bot №50: a new page jumped to #year and the tabs' row scrolled back to its start). Any trouble: the link.
+  document.addEventListener("click", async (e) => {
+    const a = e.target.closest(".stats-years a");
+    if (!a || e.metaKey || e.ctrlKey || e.shiftKey || e.button) return;
+    e.preventDefault();
+    try {
+      const r = await fetch(a.href, { headers: { accept: "text/html" } });
+      const next = r.ok && new DOMParser().parseFromString(await r.text(), "text/html").querySelector(".stats-years + .split");
+      const now = $(".stats-years + .split");
+      if (!next || !now) throw new Error("no year");
+      now.replaceWith(next);
+      for (const t of $$(".stats-years .tab")) t.classList.toggle("on", t === a);
+      history.replaceState(null, "", a.href.replace(/#.*/, ""));
+    } catch {
+      location.href = a.href;
+    }
+  });
+
   // «Поділитися» on a list's page: the phone's own share sheet, else the address goes to the clipboard.
   document.addEventListener("click", async (e) => {
     const b = e.target.closest("[data-share]");

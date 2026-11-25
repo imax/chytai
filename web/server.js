@@ -1751,7 +1751,7 @@ bg.register("sluhay", sluhay, { run: false });
 // Hourly: a deploy can stop the first read halfway, and a daily schedule would wait a day to go on; with
 // nothing left to read and matched today, a run does nothing.
 bg.every("sluhay", 3600 * 1000, () => sluhay.run(), { db: store.db, first: 5 * 60 * 1000 });
-// BookFlow (bookflow.com.ua), books readers lend through it, in «Де взяти» as «Напрокат» (bookflow.js; Max
+// BookFlow (bookflow.com.ua), books readers lend through it, in «Де взяти» as «Прокат» (bookflow.js; Max
 // 2026-11-17). Its export every hour: whether a copy is free changes during the day.
 const bookflow = new (require("./bookflow").BookFlow)({ store, log: console.log });
 bg.register("bookflow", bookflow, { run: false });
