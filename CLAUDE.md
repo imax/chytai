@@ -846,8 +846,9 @@ A flag only when Max asks for one, or when the change could break what readers u
   guesses, `have` (numbers of the reader's own books, from the `lib` list the page sends: `{p, t, a}`, 300 at most)
   and `reply` (to the last «Думка читача», where to dig next). A thought (`POST /api/scratch/:id/thought`) asks the
   whole topic again; `mine` / `notMine` by hand (`PATCH {book, on}`). A topic's own books = `mine` + `have` + suggested
-  books the library has, minus `notMine`. «Хочу прочитати» under a suggested book = `POST /api/want/add` → the site's
-  `/api/reader-wantit` (puts it on the want shelf, leaves a book already on the shelf alone), then `PATCH {wanted: i}`.
+  books the library has, minus `notMine`; another edition counts (title before «, або» / «(» + an author's word).
+  «Додати в тему» under a suggested book = `PATCH {wanted: i, on}`: only the topic's «Книжки», never the site's
+  shelf (Max 2026-11-25: reading and «Хочу прочитати» have their own pages; no «Відкрити книжку» here either).
   Kept in `accounts/<id>/scratch.json` (500 entries, 100 thoughts each) and `accounts/<id>/scratch/<entry>.jpg` (100
   photos); private, no letter to Max. Caps: 40 Opus calls a reader a day, 400 for all (Telegram once), Max none; stats
   day `scratch`. An entry left `wait` by a deploy is asked again when the page lists it. Locally without a key: a fake

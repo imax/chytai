@@ -1211,6 +1211,7 @@ body.not-owner #r-pnav-admin { display: none !important; }
 .r-scr-why { font-size: 14px; line-height: 1.35; }
 @media (hover: hover) { .r-scr-bx:hover b { color: var(--r-ochre); } }
 .r-scr-add { padding: 6px 14px; font-size: 14px; border-color: var(--r-ochre); color: var(--r-ochre); }
+.nx-drop { align-self: flex-start; margin-top: 4px; font-size: 14px; color: var(--r-ink2); }
 .r-scr-have { font-size: 13px; color: var(--r-ink2); white-space: nowrap; }
 .r-scr-ask { margin-top: 22px; }
 .r-scr-asked { margin: 0; font-size: 13px; color: var(--r-ink3); }

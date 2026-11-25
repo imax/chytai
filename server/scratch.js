@@ -219,11 +219,15 @@ class Scratch {
       x.touched = Date.now();
     });
   }
-  // A book Opus suggested put on «Хочу прочитати» (the site's shelf): remembered here so the topic shows it at once.
-  wanted(acct, id, i) {
+  // A book Opus suggested, added to the topic by hand («Додати в тему», `wanted`; Max 2026-11-25: only the topic,
+  // not the site's shelf) or taken out again.
+  wanted(acct, id, i, on = true) {
     return this.update(acct, id, (x) => {
       const b = x.ai?.books?.[i];
-      if (b) (b.wanted = true), (x.touched = Date.now());
+      if (!b) return;
+      if (on) b.wanted = true;
+      else delete b.wanted;
+      x.touched = Date.now();
     });
   }
 

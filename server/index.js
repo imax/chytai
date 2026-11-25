@@ -2039,25 +2039,6 @@ api.get("/want", guestsCannot("Без входу списку немає."), asy
   }
 });
 
-// «Хочу прочитати» under a book a topic suggests (Нотатки): the site puts it on the account's want shelf (the
-// site's POST /api/reader-wantit); a book already on the shelf stays as it is.
-api.post("/want/add", guestsCannot("Без входу списку немає."), async (req, res) => {
-  const key = state.accounts[req.acct]?.key;
-  if (!key) return res.status(400).json({ error: "Немає зв'язку з сайтом." });
-  const book = { href: clean(req.body?.href, 500), title: clean(req.body?.title, 300), author: clean(req.body?.author, 200) };
-  if (!book.href && !book.title) return res.status(400).json({ error: "Немає книжки." });
-  try {
-    const r = await fetch(`${WEB_URL}/api/reader-wantit`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: req.acct, key, book }), signal: AbortSignal.timeout(15000) });
-    const j = await r.json().catch(() => ({}));
-    if (!r.ok) return res.status(r.status === 404 ? 404 : 502).json({ error: r.status === 404 && j.error ? j.error : "Сайт не відповів. Спробуйте ще раз." });
-    wantKept.delete(req.acct);
-    res.json(j);
-  } catch (err) {
-    console.error(`reader-wantit ${req.acct}:`, err.message);
-    res.status(502).json({ error: "Сайт не відповів. Спробуйте ще раз." });
-  }
-});
-
 api.get("/journey", guestsCannot("Без входу статистики немає."), (req, res) => {
   const acct = req.acct;
   const u = state.users[acct] || {};
@@ -3330,7 +3311,7 @@ api.post("/scratch/:id/ask", noScratch, (req, res) => {
 });
 api.patch("/scratch/:id", noScratch, (req, res) => {
   const b = req.body || {};
-  const it = typeof b.book === "string" ? scratch.link(req.acct, req.params.id, b.book, !!b.on) : Number.isInteger(b.wanted) ? scratch.wanted(req.acct, req.params.id, b.wanted) : scratch.setState(req.acct, req.params.id, b.state);
+  const it = typeof b.book === "string" ? scratch.link(req.acct, req.params.id, b.book, !!b.on) : Number.isInteger(b.wanted) ? scratch.wanted(req.acct, req.params.id, b.wanted, b.on !== false) : scratch.setState(req.acct, req.params.id, b.state);
   return it ? res.json({ item: it }) : res.status(404).json({ error: "Запису немає." });
 });
 api.delete("/scratch/:id", noScratch, (req, res) => res.json({ ok: scratch.remove(req.acct, req.params.id) }));

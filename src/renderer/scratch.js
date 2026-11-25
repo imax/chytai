@@ -5,9 +5,9 @@
 //   notes and explanations, then «Теми», «Думки без теми» (what Opus could not place) and «З книжок» (every book with
 //   notes or explanations);
 // - a topic: what it is (Opus), «Мої думки» (each new thought asks Opus again; its `reply` says where to dig next),
-//   the reader's own books in it (Opus picks them from the library the page sends; «Додати свою книжку» / «Прибрати
-//   з теми» by hand), «Хочу прочитати» (Opus's books on the site's want shelf), «Може підійти» (the rest, with
-//   «Хочу прочитати», which puts the book on the site's shelf);
+//   «Книжки»: the reader's own books in it (Opus picks them from the library the page sends; «Додати свою» and the
+//   book page's topic chips by hand) and Opus's books added with «Додати в тему» (`wanted`, only the topic: Max
+//   2026-11-25, reading and «Хочу прочитати» have their own pages), then «Може підійти» (the rest);
 // - a book: its notes and explanations (the same as the book's own «Нотатки»), «Перейти» opens the book there, and
 //   the topics it is in.
 // server/scratch.js reads entries with Opus. Taps count by data-act (reading-time.js): act-scr-*.
@@ -32,7 +32,6 @@
 
   let items = null; // null until the server answers; the last list stays while asked again
   let byBook = {}; // book → { notes, chats, at, quote, comment, own }
-  let wantList = null; // the site's «Хочу прочитати» (GET /api/want), to know which suggested books are on it
   let open = null; // the topic shown, by id
   let book = null; // the book shown, by path; `from` = the topic it was opened from
   let from = null;
@@ -78,10 +77,6 @@
     rerender();
     watch();
   }
-  async function loadWant(again = false) {
-    const r = await window.reader.want?.(again);
-    if (r?.books) (wantList = r.books), rerender();
-  }
   // Asked again every 3 s while an answer is being made and the page is on screen.
   function watch() {
     clearTimeout(poll);
@@ -108,7 +103,7 @@
     return h.length >= 12 || surnames(b).some((w) => by.includes(w));
   };
   const ownOf = (b) => lib().find((x) => (b.href && x.href === b.href) || same(b, x.title, x.authors || x.author));
-  const onWant = (b) => b.wanted || (wantList || []).some((w) => (b.href && w.href === b.href) || same(b, w.title, w.author || w.authors));
+  const added = (b) => !!b.wanted;
 
   // A topic's own books: Opus's picks and the ones put in by hand, minus the ones taken out, plus suggested books
   // the reader already has; only books still in the library.
@@ -137,12 +132,12 @@
     const n = { read: 0, reading: 0 };
     for (const b of own) n[state(b)] = (n[state(b)] || 0) + 1;
     const books = it.ai?.books || [];
-    const want = books.filter((b) => !ownOf(b) && onWant(b)).length;
+    const extra = books.filter((b) => !ownOf(b) && added(b)).length;
     const th = (it.thoughts || []).length + (it.ask || []).length;
     const parts = [
       n.reading ? `${n.reading} читаю` : "",
       n.read ? `${n.read} прочитано` : "",
-      want ? `${want} хочу` : "",
+      extra ? `${extra} додано` : "",
       th ? `${th} ${plural(th, "думка", "думки", "думок")}` : "",
     ].filter(Boolean);
     if (!parts.length) parts.push(KIND[it.ai?.kind] || "", books.length ? `${books.length} ${plural(books.length, "книжка", "книжки", "книжок")}, з чого почати` : "");
@@ -247,7 +242,7 @@
     return `<div class="r-scr-book">
       <button type="button" class="r-scr-bc" data-act="scr-card" data-scr-ai="${i}" aria-label="${esc(bookTitle(b))}">${aiCover(b)}</button>
       <span class="r-scr-bw"><button type="button" class="r-scr-bx" data-act="scr-card" data-scr-ai="${i}"><b>${esc(bookTitle(b))}</b><span class="r-scr-bm">${esc(meta)}</span>${b.why ? `<span class="r-scr-why">${esc(b.why)}</span>` : ""}</button>
-      ${button ? `<button type="button" class="r-pill-line r-scr-add" data-act="scr-want" data-scr-ai="${i}">Хочу прочитати</button>` : ""}</span></div>`;
+      ${button ? `<button type="button" class="r-pill-line r-scr-add" data-act="scr-add" data-scr-ai="${i}">Додати в тему</button>` : `<button type="button" class="r-link nx-drop" data-act="scr-drop" data-scr-ai="${i}">Прибрати з теми</button>`}</span></div>`;
   }
 
   function pickHtml() {
@@ -293,18 +288,17 @@
       <div class="r-scr-row"><button type="button" class="pp-tool${window.Dictation?.field() === "scr-think" ? " on" : ""}" data-act="scr-thinkmic" title="Надиктувати" aria-label="Надиктувати">${MIC}</button><span class="r-scr-sp"></span>
       <button type="submit" class="r-pill"${busy ? " disabled" : ""}>Записати</button></div></form>`;
 
-    // The reader's own books in the topic, reading first, then read, then the rest.
+    // The topic's books: the reader's own (reading first, then read, then the rest), then Opus's books added by hand.
     const own = ownIn(it).sort((x, y) => ["reading", "read", "new"].indexOf(state(x)) - ["reading", "read", "new"].indexOf(state(y)));
-    html += head(`Мої книжки${own.length ? ` · ${own.length}` : ""}`, `<button type="button" class="r-link" data-act="scr-pickbook">${picking === "book" ? "" : "Додати свою"}</button>`);
+    const books = (a?.books || []).map((b, i) => [b, i]).filter(([b]) => !ownOf(b));
+    const picked = books.filter(([b]) => added(b));
+    const rest = books.filter(([b]) => !added(b));
+    const n = own.length + picked.length;
+    html += head(`Книжки${n ? ` · ${n}` : ""}`, `<button type="button" class="r-link" data-act="scr-pickbook">${picking === "book" ? "" : "Додати свою"}</button>`);
     if (picking === "book") html += picker("Знайти серед моїх книжок");
     html += own.map((b) => brow(b, esc([STATE[state(b)], counts(b.path)].filter(Boolean).join(" · ")), quote(byBook[b.path]), `data-scr-book="${esc(b.path)}" data-scr-from="${it.id}"`)).join("");
-    if (!own.length && picking !== "book") html += `<p class="r-empty nx-none">Ваших книжок тут ще немає.</p>`;
-
-    // Opus's books the reader doesn't have: those on «Хочу прочитати», then the rest.
-    const books = (a?.books || []).map((b, i) => [b, i]).filter(([b]) => !ownOf(b));
-    const want = books.filter(([b]) => onWant(b));
-    const rest = books.filter(([b]) => !onWant(b));
-    if (want.length) html += head(`Хочу прочитати · ${want.length}`) + want.map(([b, i]) => aiBookHtml(b, i, it, false)).join("");
+    html += picked.map(([b, i]) => aiBookHtml(b, i, it, false)).join("");
+    if (!n && picking !== "book") html += `<p class="r-empty nx-none">Книжок тут ще немає.</p>`;
     if (rest.length) html += head(`Може підійти · ${rest.length}`) + rest.map(([b, i]) => aiBookHtml(b, i, it, true)).join("");
     html += `<div class="r-scr-foot"><button type="button" class="r-link" data-act="scr-delete">Видалити тему</button></div>`;
     return `${html}</section>`;
@@ -350,13 +344,12 @@
     return it ? oneHtml(it) : listHtml();
   }
 
-  // The page opens: the list again from the server, and the want shelf to know which books are on it.
+  // The page opens: the list again from the server.
   function enter() {
     open = null;
     book = null;
     picking = "";
     load();
-    loadWant();
   }
   function top() {
     const h = $("#home");
@@ -529,12 +522,9 @@
         picking = "";
         return redraw();
       }
-      if (name === "scr-want" && b) {
+      if ((name === "scr-add" || name === "scr-drop") && b) {
         el.disabled = true;
-        await window.reader.wantAdd({ href: b.href || "", title: bookTitle(b), author: bookAuthor(b) });
-        put((await window.reader.scratchPatch(it.id, { wanted: i })).item);
-        showNotice(`«${bookTitle(b)}» у «Хочу прочитати».`, false);
-        loadWant(true);
+        put((await window.reader.scratchPatch(it.id, { wanted: i, on: name === "scr-add" })).item);
         return redraw();
       }
       if (name === "scr-guess") return put((await window.reader.scratchThink(it.id, { text: `Мається на увазі: ${it.ai?.guesses?.[Number(el.dataset.scrGuess)] || ""}`, lib: libFor() })).item), redraw(), watch();
@@ -547,7 +537,7 @@
         return back();
       }
     } catch (err) {
-      if (name === "scr-want") el.disabled = false;
+      if (name === "scr-add" || name === "scr-drop") el.disabled = false;
       oops(err, "це зробити");
     }
   }

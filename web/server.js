@@ -1227,21 +1227,6 @@ app.get("/api/reader-find", (req, res) => {
 // Gutenberg / Standard Ebooks pages, a «Слухай» recording); then the shops in stock as on the book page's «Де взяти»
 // (one row a format, two shops, cheapest first) and BookFlow; the shops abroad the book's links name (Amazon…), and
 // the same work in its other language (`other`: the original, the Ukrainian translation). Signed with the account's key.
-// «Хочу прочитати» under a book that a topic in the reader's «Нотатки» suggests (Max 2026-11-25): the book (its page
-// here, else by title and author) goes on the account's want shelf; one already on the shelf stays as it is.
-app.post("/api/reader-wantit", (req, res) => {
-  const id = String(req.body?.id || "");
-  if (!readerKeyOk(id, String(req.body?.key || ""))) return res.status(403).json({ error: "key" });
-  const sent = req.body?.book || {};
-  const m = /^https:\/\/chytai\.org\.ua\/book\/([^/?#]+)/.exec(String(sent.href || ""));
-  let bookId = m && store.resolve(decodeURIComponent(m[1]));
-  if (!bookId && sent.title) bookId = readerBookHit(String(sent.title).slice(0, 300), String(sent.author || "").slice(0, 200))?.book?.id;
-  if (!bookId) return res.status(404).json({ error: "Цієї книжки ще немає на Chytai." });
-  bookId = store.canonical(bookId);
-  const e = store.entry(id, bookId);
-  const now = e?.status ? e : store.setEntry(id, bookId, { status: "want", kids: false });
-  res.json({ ok: true, status: now?.status || "want", href: `${SITE}${store.href(bookId)}` });
-});
 app.post("/api/reader-want", (req, res) => {
   const id = String(req.body?.id || "");
   if (!readerKeyOk(id, String(req.body?.key || ""))) return res.status(403).json({ error: "key" });

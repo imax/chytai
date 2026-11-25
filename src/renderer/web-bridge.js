@@ -898,8 +898,6 @@
     scratchDelete: (id) => api("DELETE", `/api/scratch/${encodeURIComponent(id)}`),
     // One book's notes and explanations, in short (GET /api/notes/book).
     bookNotes: (name) => ok(api("GET", `/api/notes/book?path=${encodeURIComponent(name)}`)),
-    // A book onto the site's «Хочу прочитати» (POST /api/want/add).
-    wantAdd: (book) => ok(api("POST", "/api/want/add", book)),
     // «Словничок»: how far the book's list is (GET /api/glossary/status); null offline.
     // «Адмінка» (owner only): the whole reader's stats (GET /api/admin), null when it fails; switching one account off.
     admin: () => api("GET", "/api/admin").then((r) => (r.ok ? r.json() : null)).catch(() => null),
