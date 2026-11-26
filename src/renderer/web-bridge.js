@@ -384,7 +384,11 @@
     let reg = null;
     // A new version that is on the device and waits: the page says so on Мої книжки («Є нова версія · Оновити»,
     // renderer.js). Max 2026-11-20: on the phone the old version stayed until he killed the app, at a guess.
-    const ready = () => !!(reg?.waiting && navigator.serviceWorker.controller);
+    // `stale`: a new version took over while this page was on screen (another tab or window swapped it in), so the
+    // page runs yesterday's scripts until it reloads. A desktop window that never hides waited for that for a day
+    // with no button (Max 2026-11-26: a topic's counts from the day before), so it says so like a waiting version.
+    let stale = false;
+    const ready = () => stale || !!(reg?.waiting && navigator.serviceWorker.controller);
     const tell = () => ready() && document.dispatchEvent(new Event("chytai:update"));
     const watch = (w) => w?.addEventListener("statechange", () => w.state === "installed" && (tell(), whenIdle()));
     const swap = () => reg?.waiting?.postMessage("skipWaiting");
@@ -404,6 +408,9 @@
         const check = () => reg.update().catch(() => {});
         document.addEventListener("visibilitychange", () => (check(), whenIdle()));
         window.addEventListener("online", check);
+        // A computer's window may never hide: looked for on focus and every 30 minutes while on screen too.
+        window.addEventListener("focus", check);
+        setInterval(() => document.visibilityState === "visible" && check(), 30 * 60 * 1000);
         // A version found earlier and still waiting takes over as the page opens, before anything is read: a
         // browser tab or the Mac app is seldom hidden, so a reload kept the old reader for days (Max, 2026-11-04:
         // no phone search and the old «Залишити фідбек» on app.chytai.org.ua).
@@ -425,7 +432,8 @@
     navigator.serviceWorker.addEventListener("controllerchange", () => {
       // The new version takes over with a reload, never in front of the reader's eyes, unless they asked for it.
       if (hadController && swapNow) return location.reload();
-      if (hadController) document.hidden ? reloadNow() : (reloadWhenHidden = true);
+      if (hadController && document.hidden) reloadNow();
+      else if (hadController) (reloadWhenHidden = true), (stale = true), tell();
       hadController = true;
     });
     document.addEventListener("visibilitychange", () => document.hidden && reloadWhenHidden && reloadNow());
@@ -445,6 +453,7 @@
       // Takes the waiting version now: the page reloads (a book on screen opens again at its place, chytai:onscreen).
       apply: () => {
         if (!ready()) return false;
+        if (stale && !reg?.waiting) return location.reload(), true;
         swapNow = true;
         swap();
         return true;
