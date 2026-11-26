@@ -9,7 +9,7 @@
 // publisher]), rewritten each time, ~10 thousand books, ~0.8 MB. Not shelf items: 20 thousand more of those cost
 // the site 2 s and 140 MB at every start (2026-11-25, test DB).
 // The book page and the reader's «Хочу прочитати» get one more paper edition (withShop); the 51 publisher shelves
-// read from mbooks.com.ua's pages (catalogs.js mbooks) link to the same shop, so all those rows become one «Megogo»
+// read from mbooks.com.ua's pages (catalogs.js mbooks) link to the same shop, so all those rows become one «MEGOGO BOOKS»
 // row per format.
 const { norm, sameAuthor, isRussian } = require("./store");
 const { ent, about } = require("./catalogs");
@@ -17,7 +17,7 @@ const { ent, about } = require("./catalogs");
 const FEED = "https://i.mbooks.com.ua/media/merchant_center_feed.xml";
 // No User-Agent of our own for now: their Cloudflare answers 403 to «Chytai/1.0 (…)» (2026-11-25). Max has MEGOGO's
 // consent to use the feed and asks them to let «Chytai» through; then it goes back to a named one.
-const NAME = "Megogo";
+const NAME = "MEGOGO BOOKS";
 const SKIP = /^(Канцтовари|Блокноти|Розваги|Шкільні підручники|Періодичні)/;
 // «backorder» is mbooks.com.ua's «Очікується»: orders taken, the book comes later.
 const STATUS = { in_stock: "є", preorder: "передзамовлення", backorder: "очікується" };
@@ -77,7 +77,7 @@ class Megogo {
   }
 
   // The book with its shops for «Де взяти» as `shops` (its `editions` stay as they are: the publisher block reads
-  // them). Every row that leads to mbooks.com.ua is one shop «Megogo», one row per format (Max 2026-11-25: the 51
+  // them). Every row that leads to mbooks.com.ua is one shop «MEGOGO BOOKS» (Megogo until 2026-11-26: MEGOGO asked for the full name, not the video service), one row per format (Max 2026-11-25: the 51
   // publisher shelves read from mbooks.com.ua showed as «Апріорі», «Фабула»… and all went to Megogo: «один лінк, а не
   // 10»): in stock first, then the cheapest; the feed's row stands for the paper ones, its price is today's.
   withShop(book) {
@@ -129,7 +129,7 @@ class Megogo {
       const cats = bs.map((b) => b.cats.slice(1)).reduce((x, y) => x.filter((c) => y.includes(c)));
       const w = this.store.book(id);
       let text = "";
-      if (w && (!w.blurb || /^(Claude|Megogo)/.test(w.blurbSource || ""))) {
+      if (w && (!w.blurb || /^(Claude|Megogo|MEGOGO)/.test(w.blurbSource || ""))) {
         for (const b of [best, ...bs]) if (!text && b.about) text = about(b.about, 3000);
         // An English description on a Ukrainian book is not shown (store.book), so it is not kept either.
         if (CYR.test(w.title || "") && !CYR.test(text.slice(0, 300))) text = "";

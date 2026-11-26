@@ -188,7 +188,7 @@ class MegogoFill {
       const s = this.store;
       const made = [];
       for (const b of out.slice(0, room)) {
-        const id = s.addBook({ title: b.title, author: b.author, cover: b.cover, links: [{ label: "Megogo", url: b.url }], source: "megogo", language: "українська", ...(b.isbns.length ? { isbns: b.isbns.slice(0, 10) } : {}) }, { index: false }).id;
+        const id = s.addBook({ title: b.title, author: b.author, cover: b.cover, links: [{ label: "MEGOGO BOOKS", url: b.url }], source: "megogo", language: "українська", ...(b.isbns.length ? { isbns: b.isbns.slice(0, 10) } : {}) }, { index: false }).id;
         made.push(id);
       }
       if (made.length) s.indexSlugs(), s.indexBooks(made);

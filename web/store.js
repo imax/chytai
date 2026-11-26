@@ -2406,7 +2406,7 @@ class Store {
         const t = [...(this.translations?.get(id) || [])].map((x) => this.book(x, { edited: false, borrow: false })).find((x) => x?.blurb && /[а-яіїєґ]/i.test(x.title) && !isRussian(x));
         if (t) (out.blurb = t.blurb), (out.blurbSource = [t.blurbSource || this.shelfItems.get(t.id)?.shelf.name, `українське видання «${t.title}»`].filter(Boolean).join(", "));
         // The publisher's description from MEGOGO BOOKS' feed (megogo.js info), before Haiku's short one.
-        else if (this.megogo()[id]?.[0]) (out.blurb = this.megogo()[id][0]), (out.blurbSource = "Megogo");
+        else if (this.megogo()[id]?.[0]) (out.blurb = this.megogo()[id][0]), (out.blurbSource = "MEGOGO BOOKS");
         else if (edited) {
           const a = this.aiAnswers("blurb").get(id);
           // A word with Latin and Cyrillic letters mixed («adresоване», trial v2) marks a broken answer.
