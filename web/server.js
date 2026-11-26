@@ -1794,6 +1794,11 @@ bg.every("bookflow", 3600 * 1000, () => bookflow.run(), { db: store.db, first: 4
 const megogo = new (require("./megogo").Megogo)({ store, log: console.log });
 bg.register("megogo", megogo, { run: false });
 bg.every("megogo-feed", 6 * 3600 * 1000, () => megogo.run(), { db: store.db, first: 6 * 60 * 1000 });
+// The feed's books no catalog of ours has, as catalog books (megogofill.js; Max 2026-11-26): once a day, the groups
+// Max chose (meta `megogo:fill`), 400 a day at most. Off until it is switched on (POST /agent/megogo-fill).
+const megogoFill = new (require("./megogofill").MegogoFill)({ store, megogo, log: console.log });
+bg.register("megogo-fill", megogoFill, { run: true, dry: false });
+bg.every("megogo-fill", 24 * 3600 * 1000, () => megogoFill.run(), { db: store.db, first: 40 * 60 * 1000 });
 // «Чи варто читати?» on book pages (advice.js): Claude, by the reader's own shelf, on a click.
 const bookpage = new BookPage({ apiKey: process.env.ANTHROPIC_API_KEY || "", log: console.log });
 const advice = new Advice({ store, social, db: store.db, apiKey: process.env.ANTHROPIC_API_KEY || "", log: console.log });
@@ -2454,6 +2459,29 @@ for (const [path, run, dry] of [["calendar-chytomo", "chytomo", "chytomoDry"], [
     res.json({ started: true });
   });
 }
+// MEGOGO's books we lack (megogofill.js): GET = what a run would add, by group, with samples (ask again for the
+// answer, ?again=1 reruns; ?groups=a,b), its settings and last runs. POST {"run": true, "limit": 200, "groups": [...]}
+// adds them now; {"on": true|false, "groups": [...]} sets the daily run. Both only with Max's OK in the thread.
+let megogoDry = null;
+app.get("/agent/megogo-fill", agentOk, (req, res) => {
+  if (!megogoDry || (req.query.again && megogoDry.done)) {
+    megogoDry = { started: new Date().toISOString(), done: false };
+    const box = megogoDry;
+    const groups = req.query.groups ? String(req.query.groups).split(",") : undefined;
+    megogoFill.dry({ groups }).then((r) => Object.assign(box, r, { done: true }), (e) => Object.assign(box, { error: e.message, done: true }));
+  }
+  res.json({ settings: megogoFill.settings(), today: megogoFill.count(), log: JSON.parse(store.db.get("megogo:fill-log") || "[]").slice(0, 5), dry: megogoDry });
+});
+app.post("/agent/megogo-fill", agentOk, (req, res) => {
+  const b = req.body || {};
+  const groups = Array.isArray(b.groups) ? b.groups.filter((g) => require("./megogofill").GROUPS[g]) : undefined;
+  if (b.run) {
+    megogoFill.run({ byHand: true, limit: Math.min(Number(b.limit) || 200, 400), groups }).catch(() => {});
+    return res.json({ started: true });
+  }
+  if (typeof b.on !== "boolean" && !groups) return res.status(400).json({ error: '{"run": true} or {"on": true|false, "groups": [...]}' });
+  res.json(megogoFill.set({ on: b.on, groups }));
+});
 // YouScan's webhook (youscan.js): the address with its key is in GET /agent/youscan; a wrong key is a 404.
 const youscanKey = () => require("crypto").createHmac("sha256", readerSecret()).update("youscan").digest("base64url").slice(0, 24);
 app.post("/api/youscan/:key", express.text({ type: (r) => !/json/i.test(r.headers["content-type"] || ""), limit: "1mb" }), (req, res) => {

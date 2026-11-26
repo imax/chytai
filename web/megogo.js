@@ -34,7 +34,8 @@ function split(s) {
   for (const m of s.matchAll(/\.\s+/g)) {
     const rest = s.slice(m.index + m[0].length);
     if (!namesOnly(rest)) continue;
-    const flip = (a) => ((w) => (w.length > 1 ? [...w.slice(1), w[0]].join(" ") : a))(a.split(/\s+/));
+    // A one-word pen name comes with «None» as the first name («Мокумокурен None»): the word goes.
+    const flip = (a) => ((w) => (w.length > 1 ? [...w.slice(1), w[0]].join(" ") : w.join(" ")))(a.split(/\s+/).filter((x) => x !== "None"));
     return { title: s.slice(0, m.index).trim(), author: rest.split(/\s*,\s*/).map(flip).join(", ") };
   }
   return { title: s.trim(), author: "" };
@@ -43,8 +44,9 @@ function split(s) {
 // Their categories in words store.js's genre guesses read rightly: «Класична література» is a classic, and «Воєнна
 // проза і поезія» is about the war, not poetry.
 const CATS = { "Класична література": "класика", "Воєнна проза і поезія": "війна" };
-// The feed's books: { url, isbn, title, author, price, status, brand, date, about, cats }: `date` = when a book
-// on order comes (YYYY-MM-DD), `about` = the publisher's description (escaped HTML), `cats` = its category path.
+// The feed's books: { url, isbn, title, author, price, status, brand, date, about, cats, image, labels }: `date` = when a book
+// on order comes (YYYY-MM-DD), `about` = the publisher's description (escaped HTML), `cats` = its category path,
+// `image` = the cover, `labels` = their marks («Новинка»; megogofill.js).
 function parse(xml) {
   const out = [];
   for (const m of xml.matchAll(/<item>([\s\S]*?)<\/item>/g)) {
@@ -54,7 +56,7 @@ function parse(xml) {
     const url = clean(f.link);
     if (!/^https:\/\/mbooks\.com\.ua\/book\/\d+/.test(url) || !STATUS[f.availability]) continue;
     const num = (v) => Number(String(v || "").replace(/[^\d.]/g, "")) || 0;
-    out.push({ url, isbn: String(f.gtin || "").replace(/[^\dX]/gi, ""), ...split(f.title), price: Math.round(num(f.sale_price) || num(f.price)), status: STATUS[f.availability], brand: clean(f.brand), date: /^\d{4}-\d\d-\d\d/.test(f.availability_date || "") ? f.availability_date.slice(0, 10) : "", about: f.description || "", cats: clean(f.product_type).split(/\s*>\s*/).map((c) => CATS[c] || c) });
+    out.push({ url, isbn: String(f.gtin || "").replace(/[^\dX]/gi, ""), ...split(f.title), price: Math.round(num(f.sale_price) || num(f.price)), status: STATUS[f.availability], brand: clean(f.brand), date: /^\d{4}-\d\d-\d\d/.test(f.availability_date || "") ? f.availability_date.slice(0, 10) : "", about: f.description || "", cats: clean(f.product_type).split(/\s*>\s*/).map((c) => CATS[c] || c), image: clean(f.image_link), labels: [f.custom_label_0, f.custom_label_1].map(clean).filter(Boolean) });
   }
   return out;
 }

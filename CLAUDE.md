@@ -718,6 +718,16 @@ A flag only when Max asks for one, or when the change could break what readers u
   translation have none (before Haiku's; «Опис: Megogo»), and `genresOf` the categories all its feed editions share
   when it has no genre but «художня» (`store.megogo()`, 10 min cache). parse() gives `date`, `about`, `cats`. Run now: /admin/jobs, job `megogo`.
   Their Cloudflare answers 403 to a «Chytai» User-Agent: the request goes with Node's default until they allow it (Max asks).
+- The feed's books no catalog has become catalog books (Max 2026-11-26; `web/megogofill.js`, its own daily read of
+  the feed): only the groups in meta `megogo:fill` {on, groups} (`GROUPS`: fiction, nonfiction, comics,
+  kids-fiction, kids-other; laws, religion, medicine, textbooks never), an author and a Cyrillic title, not Russian;
+  printings of one book = one book with all ISBNs; left when any edition of ours has an ISBN, the same title by the
+  same author, or the title before «.»/«:»/«(» (never across «Том N»). `store.addBook` source `megogo` (ISBNs, cover,
+  a Megogo link), 400 a day (the new-books queue takes 1,500 for all sources), news and in stock first; then a forced
+  `megogo.run` gives them the shop's row, description and genre. ~3,600 such books, 2026-11-26; 3,600 more lib books
+  cost the store's load nothing measurable. Status and dry run: `curl -s https://chytai.org.ua/agent/megogo-fill
+  -H "$H"` (ask again; `?again=1`, `?groups=a,b`); add now: `POST {"run":true,"limit":200,"groups":[…]}`; daily:
+  `POST {"on":true,"groups":[…]}`. Both only with Max's OK in the thread.
 
 ## Translation pairs
 
