@@ -16,6 +16,8 @@
       done = true;
       dialog.classList.remove("closing");
       nativeClose.call(dialog, value);
+      dialog.style.transform = dialog.style.transition = ""; // left by a swipe down
+
     };
     dialog.addEventListener("animationend", (e) => e.target === dialog && finish());
     setTimeout(finish, 320); // in case the animation never runs (hidden tab, reduced motion quirks)
@@ -43,6 +45,59 @@
       if (downOnBackdrop && outside(e)) animateClose(dialog, "cancel");
       downOnBackdrop = false;
     });
+    swipe(dialog);
+  }
+
+  // On a phone a dialog is a sheet at the bottom edge (style.css), and a swipe down closes it (Max 2026-11-26).
+  // The drag starts only with the sheet scrolled to its top, never in a field or a row that scrolls sideways;
+  // a short or slow pull springs back.
+  const phone = matchMedia("(max-width: 760px)");
+  function swipe(dialog) {
+    let x0 = 0, y0 = 0, yl = 0, tl = 0, v = 0, dy = 0, on = false, drag = false;
+    const sideways = (el) => {
+      for (; el && el !== dialog; el = el.parentElement)
+        if (el.scrollWidth > el.clientWidth + 2 && /auto|scroll/.test(getComputedStyle(el).overflowX)) return true;
+      return false;
+    };
+    dialog.addEventListener("touchstart", (e) => {
+      on = drag = false;
+      if (!phone.matches || e.touches.length > 1 || dialog.scrollTop > 0 || dialog.classList.contains("closing")) return;
+      if (dialog.getBoundingClientRect().bottom < innerHeight - 4) return; // not a sheet
+      if (e.target.closest?.("input, textarea, select, [contenteditable]") || sideways(e.target)) return;
+      const t = e.touches[0];
+      x0 = t.clientX; y0 = yl = t.clientY; tl = performance.now(); v = dy = 0; on = true;
+    }, { passive: true });
+    dialog.addEventListener("touchmove", (e) => {
+      if (!on) return;
+      const t = e.touches[0];
+      if (!drag) {
+        const d = t.clientY - y0, dx = t.clientX - x0;
+        if (Math.abs(d) < 8 && Math.abs(dx) < 8) return;
+        if (d <= 0 || Math.abs(dx) > d || dialog.scrollTop > 0) return void (on = false);
+        drag = true;
+        y0 = t.clientY;
+        dialog.style.transition = "none";
+      }
+      e.preventDefault();
+      const now = performance.now();
+      v = (t.clientY - yl) / Math.max(1, now - tl);
+      yl = t.clientY; tl = now;
+      dy = Math.max(0, t.clientY - y0);
+      dialog.style.transform = `translateY(${dy}px)`;
+    }, { passive: false });
+    const end = (e) => {
+      if (!drag) return void (on = false);
+      on = drag = false;
+      if (e.type === "touchend" && (dy > Math.min(120, dialog.offsetHeight / 4) || (v > 0.4 && dy > 24))) {
+        animateClose(dialog, "cancel");
+        return;
+      }
+      dialog.style.transition = "transform 0.2s var(--ease-out)";
+      dialog.style.transform = "";
+      setTimeout(() => !drag && (dialog.style.transition = ""), 220);
+    };
+    dialog.addEventListener("touchend", end);
+    dialog.addEventListener("touchcancel", end);
   }
 
   const init = () => document.querySelectorAll("dialog").forEach(setup);

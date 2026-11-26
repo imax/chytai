@@ -972,5 +972,8 @@ A flag only when Max asks for one, or when the change could break what readers u
   settings keep «Версія від … · Оновити» (`#set-update`: asks the server, waits for the install, reloads). A new version another tab or window took over while this page stayed on screen also shows the button (`stale`; a tap reloads; Max 2026-11-26, a desktop window ran the day before's scripts), and a visible page looks for a new version on focus and every 30 min. Both on `window.chytaiUpdate` in web-bridge.js (`ready`, `apply`, `check`, `version`); sw.js answers
   the message «version» with its hash and `BUILT` (the first start of that hash, `DATA_DIR/sw-versions.json`, so a
   restart serves the same sw.js). Which version a device runs: the page posts `/api/sw-state` 20 s after a load (and sw.js when an install fails); the reader's Fly log has «sw: owner iphone-app now=<hash> [waiting=… | FAILED …]». Try locally: change a file in src/renderer, restart the reader, `reg.update()`.
+- Reader: on a phone every `<dialog>` is a sheet from the bottom edge, and a swipe down closes it (Max 2026-11-26;
+  `swipe` in src/renderer/motion.js: only from the sheet's scrolled top, not in a field or a sideways row). A dialog
+  must be in index.html when motion.js runs.
 - Reader: the app's own UI can't be selected (`body` has `user-select: none`, end of `src/renderer/style.css`). Text a
   reader may copy (a new note, answer or field) goes into the list of selectable classes there.
