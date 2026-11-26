@@ -860,6 +860,8 @@ A flag only when Max asks for one, or when the change could break what readers u
   and `reply` (to the last «Думка читача», where to dig next). A thought (`POST /api/scratch/:id/thought`) asks the
   whole topic again; `mine` / `notMine` by hand (`PATCH {book, on}`). A topic's own books = `mine` + `have` + suggested
   books the library has, minus `notMine`; another edition counts (title before «, або» / «(» + an author's word).
+  Every call names to Opus what the reader did by hand (bot №56): «Читач сам додав у тему» (`mine` + `wanted`) and
+  «Читач прибрав з теми» (`notMine`), with the thoughts, `no` and, for «Порадити ще», `seen`.
   «Додати в тему» under a suggested book = `PATCH {wanted: i, on}`: only the topic's «Книжки», never the site's
   shelf (Max 2026-11-25: reading and «Хочу прочитати» have their own pages; no «Відкрити книжку» here either).
   The site's shelf counts too (Max 2026-11-25): `siteShelf` (10 min cache) → the site's `POST /api/reader-shelf`

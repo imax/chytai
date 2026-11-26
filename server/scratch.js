@@ -39,7 +39,7 @@ Work out what the reader meant and answer in Ukrainian:
   - lang: the original language code ("en", "uk", "fr"…);
   - why: one short Ukrainian sentence, at most 12 words, why this book for this subject;
   - nonfiction: true or false.
-  Never suggest a book the reader already has: one in «Книжки читача» or on «Полиця читача на Chytai» (whatever its status), in any edition or translation, nor one under «Уже пропонували» or «Читачеві не цікаві».
+  Never suggest a book the reader already has: one in «Книжки читача» or on «Полиця читача на Chytai» (whatever its status), in any edition or translation, nor one under «Уже пропонували», «Читачеві не цікаві» or «Читач сам додав у тему».
 - guesses: only for "unclear": 2–3 short Ukrainian guesses of what was meant (an author and a book, a topic), each at most 8 words; otherwise an empty list. For "unclear" leave books empty and about empty.
 
 - have: the numbers of the reader's own books (the list after «Книжки читача:», when there is one) that clearly belong to this subject, read or not; at most 12; an empty list when none or no list.
@@ -48,7 +48,7 @@ Work out what the reader meant and answer in Ukrainian:
 
 Rules: never recommend Russian authors or Russian-language editions; prefer books that exist in Ukrainian when they are as good. Name only real books you are sure exist. Answer only with the JSON.
 
-A photo may show a book cover, a page, a poster, a screen with a podcast or an article: the subject is what the reader would want to read about from it. Lines after «Уточнення читача:» and «Думка читача:» are the reader's later words: follow them (a guess they picked, «щось українською», «тільки нонфікшн», a question the reader wants to dig into) and answer the whole entry anew, the books too.`;
+A photo may show a book cover, a page, a poster, a screen with a podcast or an article: the subject is what the reader would want to read about from it. Lines after «Уточнення читача:» and «Думка читача:» are the reader's later words: follow them (a guess they picked, «щось українською», «тільки нонфікшн», a question the reader wants to dig into) and answer the whole entry anew, the books too. Books after «Читач сам додав у тему:» are the ones the reader chose for this subject by hand: they show what the reader wants from it, so suggest books close to them and count them in «have» / «shelf» when listed there. Books after «Читач прибрав з теми:» are the reader's own books that are not about this subject: leave them out of «have».`;
 
 const SCHEMA = {
   type: "object",
@@ -307,6 +307,16 @@ class Scratch {
         site?.length ? `Полиця читача на Chytai:\n${site.map((b, i) => `${i + 1}. ${clean(b.t, 150)}${b.a ? ` — ${clean(b.a, 100)}` : ""} (${STATUS[b.s] ?? STATUS[""]})`).join("\n")}` : "",
       ].filter(Boolean).join("\n\n");
       if (lists) content.push({ type: "text", text: lists, cache_control: { type: "ephemeral" } });
+      // What the reader did with the topic's books by hand (Max 2026-11-25, bot №56: «Порадити ще» should see the
+      // books already in the topic, the declined ones and the thoughts): own books put in or taken out by hand
+      // (`mine` / `notMine`, named from the library the page sent) and suggested ones added (`wanted`).
+      const named = (t, a) => `${clean(t, 150)}${a ? ` — ${clean(a, 100)}` : ""}`;
+      const ownName = (p) => {
+        const b = own?.find((x) => x.p === p);
+        return b ? named(b.t, b.a) : "";
+      };
+      const added = [...(it.mine || []).map(ownName), ...(it.ai?.books || []).filter((b) => b.wanted).map((b) => named(b.title_uk || b.title, b.author_uk || b.author))].filter(Boolean).slice(0, 40);
+      const out = (it.notMine || []).map(ownName).filter(Boolean).slice(0, 40);
       const seen = more ? [...new Set([...(it.seen || []), ...(it.ai?.books || []).map((b) => b.title_uk || b.title)])].slice(-SEEN_MAX) : [];
       const words = [
         it.text ? `Запис читача: ${it.text}` : "Запис читача: лише фото.",
@@ -315,6 +325,8 @@ class Scratch {
         ...(it.thoughts || []).slice(-10).map((t) => `Думка читача: ${t.text}`),
         seen.length ? `\nУже пропонували (назви інші книжки, 3–5): ${seen.map((t) => clean(t, 100)).join("; ")}` : "",
         it.no?.length ? `Читачеві не цікаві (не пропонуй їх): ${it.no.map((t) => clean(t, 100)).join("; ")}` : "",
+        added.length ? `Читач сам додав у тему: ${added.join("; ")}` : "",
+        out.length ? `Читач прибрав з теми (не про це): ${out.join("; ")}` : "",
       ].filter(Boolean).join("\n");
       content.push({ type: "text", text: words });
       const client = new Anthropic({ apiKey: this.apiKey });
