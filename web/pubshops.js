@@ -217,15 +217,22 @@ class PubShops {
       const until = Date.now() + ms;
       const read = {};
       const errors = [];
+      // Rows from pages read before a restart cut a run short, and every 5 minutes while it goes on: a deploy
+      // restarts the jobs process, and a run that only built at its end left the rows empty for hours.
+      this.build();
+      const tick = setInterval(() => {
+        try { this.build(); } catch (e) { this.log(`pubshops: build: ${e.message}`); }
+      }, 5 * 60 * 1000);
       // The shops side by side, each at its own pace.
       await Promise.all(
         this.shops.map((s) =>
           this.readShop(s, until)
             .then((n) => (read[s.id] = n))
-            .catch((e) => errors.push(e.message))
+            .catch((e) => errors.push(`${s.id}: ${e.message}`))
         )
-      );
+      ).finally(() => clearInterval(tick));
       const n = this.build();
+      this.db.set("pubshops:last", JSON.stringify({ at: new Date().toISOString(), read, errors }));
       this.log(`pubshops: ${n} rows for ${JSON.parse(this.db.get("pubshops:links")).books} books; read ${Object.entries(read).map(([k, v]) => `${k} ${v}`).join(", ")}${errors.length ? `; failed: ${errors.join("; ")}` : ""}`);
       return n;
     } finally {

@@ -743,7 +743,8 @@ A flag only when Max asks for one, or when the change could break what readers u
   per shop, shops side by side), addresses with words of our titles first; a big shop's other pages 150 a run; ours
   again after 7 days, the rest after 60. `parsePage`: ISBN, price, stock, paper/e-book from JSON-LD or the page after
   its h1. Only ISBNs of the publisher's own shelf get its row (BookChef, Наш Формат sell others'). Kept: meta
-  `pubshops:links`. Status: `curl -s https://chytai.org.ua/agent/pubshops -H "$H"`.
+  `pubshops:links`, built at a run's start, every 5 min and at its end (deploys restart the jobs). Status:
+  `curl -s https://chytai.org.ua/agent/pubshops -H "$H"` (`last` = the last whole run's pages read and errors per shop).
 - A new shop: one line in `SHOPS` once `node -e` with `parsePage` finds ISBNs on its pages. No ISBN on the page
   (Vivat, Темпора, Комубук, Discursus, Varvar) or no sitemap (ARTBOOKS, Апріорі, Арій) = not yet. The full table and
   the shops that refuse us (ask for a feed): Claude Doc https://claude.ai/artifact/EFuvuj3A23Pb58SHVPAKbz. Never a

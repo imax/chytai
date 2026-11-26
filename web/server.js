@@ -1800,7 +1800,7 @@ bg.register("pubshops", pubshops, { run: false });
 bg.every("pubshops", 3600 * 1000, () => pubshops.run(), { db: store.db, first: 8 * 60 * 1000 });
 const withShops = (book) => pubshops.withOwn(megogo.withShop(book));
 // Per shop: pages in its sitemap, read, with an ISBN, ours; `links` = books that have the row now.
-app.get("/agent/pubshops", agentOk, (req, res) => res.json({ links: JSON.parse(store.db.get("pubshops:links") || "null")?.books || 0, shops: pubshops.status() }));
+app.get("/agent/pubshops", agentOk, (req, res) => res.json({ links: JSON.parse(store.db.get("pubshops:links") || "null")?.books || 0, last: JSON.parse(store.db.get("pubshops:last") || "null"), shops: pubshops.status() }));
 // «Чи варто читати?» on book pages (advice.js): Claude, by the reader's own shelf, on a click.
 const bookpage = new BookPage({ apiKey: process.env.ANTHROPIC_API_KEY || "", log: console.log });
 const advice = new Advice({ store, social, db: store.db, apiKey: process.env.ANTHROPIC_API_KEY || "", log: console.log });
