@@ -404,6 +404,9 @@ A flag only when Max asks for one, or when the change could break what readers u
   kind `calwatch`; `cal_watch_sent` marks; «Не стежити» = `/calendar/unwatch/<reader>/<digest token>`, all off). The
   author page's «Події» block: upcoming, past as one line (`calendar.pastForAuthor`), «Стежити за подіями»; no events
   ever = no block.
+- A reader's shelf /@<nick> shows «Додані події» in its side column (Max 2026-11-26): events they added on
+  /calendar/add (`calendar.byReader`: not hidden, not cancelled), the next ones to everyone, the past ones («Були:»)
+  only to Max and the reader. No events = no block.
 - «Хочу піти» on an event's page (Max 2026-11-16, in place of «Додати в календар»): `POST /calendar/<id>/going`
   (table `cal_going`, a guest signs in and lands back marked by `GET /do/calendar-going?id=`); once pressed the page
   shows «✓ Іду», the calendar links and «Нагадаємо листом за день»; others' count under it. A letter the day before

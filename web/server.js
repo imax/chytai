@@ -2727,10 +2727,13 @@ app.get("/@:username", (req, res) => {
   const part = restPart(req, res);
   const favN = own && !part ? lists.favOffer(reader.id) : 0;
   const favOffer = favN ? { n: favN, books: fanBooks(lists.favBooks(reader.id).map((id) => ({ id, book: store.book(id) })), 4) } : null;
-  if (own) return res.send(pages.libraryPage({ part, favOffer, clubTopics: club.mark(req.user.id, club.of(reader.id, 5)), lists: theirLists, savedLists: lists.savedBy(reader.id), rows, user: req.user, reader: req.user, own: true, follows, now: nowFor(reader.id, { own: true }) }));
+  // Events they added (Max 2026-11-26): the next ones for everyone, the past ones for Max and the reader.
+  const evs = part ? null : calendar.byReader(reader.id);
+  if (evs && !req.owner && req.user?.id !== reader.id) evs.past = [];
+  if (own) return res.send(pages.libraryPage({ part, favOffer, events: evs, clubTopics: club.mark(req.user.id, club.of(reader.id, 5)), lists: theirLists, savedLists: lists.savedBy(reader.id), rows, user: req.user, reader: req.user, own: true, follows, now: nowFor(reader.id, { own: true }) }));
   // Others don't see the parts of notes written in Russian (store.publicNote, Max 2026-11-23).
   const shown = rows.map((r) => (r.note && publicNote(r.note) !== r.note ? { ...r, note: publicNote(r.note) } : r));
-  res.send(pages.libraryPage({ part, clubTopics: club.of(reader.id, 5), lists: theirLists, rows: shown, user: req.user, reader, ask: !!req.owner && flags.on("chat", req.user), now: nowFor(reader.id), mineIds: req.user && req.user.id !== reader.id ? store.inLibrary(req.user.id) : null, mineDirect: req.user ? new Set(Object.keys(store.entriesOf(req.user.id))) : null, following: auth.follows(req.user?.id, reader.id), follows }));
+  res.send(pages.libraryPage({ part, events: evs, clubTopics: club.of(reader.id, 5), lists: theirLists, rows: shown, user: req.user, reader, ask: !!req.owner && flags.on("chat", req.user), now: nowFor(reader.id), mineIds: req.user && req.user.id !== reader.id ? store.inLibrary(req.user.id) : null, mineDirect: req.user ? new Set(Object.keys(store.entriesOf(req.user.id))) : null, following: auth.follows(req.user?.id, reader.id), follows }));
 });
 // «Статистика» of a shelf (pages.statsPage): open like the shelf itself; ?year= picks the year.
 app.get("/@:username/stats", (req, res) => {

@@ -29,7 +29,8 @@ const SCHEMA = `CREATE TABLE IF NOT EXISTS cal_events (
   time TEXT NOT NULL DEFAULT '', books TEXT NOT NULL DEFAULT '[]', authors TEXT NOT NULL DEFAULT '[]',
   by TEXT NOT NULL DEFAULT '', added TEXT NOT NULL, hidden INTEGER NOT NULL DEFAULT 0
 );
-CREATE INDEX IF NOT EXISTS cal_events_starts ON cal_events (starts);`;
+CREATE INDEX IF NOT EXISTS cal_events_starts ON cal_events (starts);
+CREATE INDEX IF NOT EXISTS cal_events_by ON cal_events (by);`;
 
 // Cities by the stem of their name, so «у Києві», «Львові», «м. Рівне» are found too; the first form is shown.
 const CITIES = [
@@ -1125,6 +1126,14 @@ function create(db, store, { notify = () => {}, bookua = null, search = null, ma
       .map(row)
       .filter((e) => e.authors.includes(slug))
       .slice(0, n);
+  // Events a reader added (/calendar/add) for their shelf page (Max 2026-11-26): not hidden, not cancelled; the next
+  // ones soonest first, the past ones newest first (the page shows those to Max and the reader only).
+  function byReader(id) {
+    if (!id) return { next: [], past: [] };
+    const today = kyivDay();
+    const rows = db.prepare("SELECT * FROM cal_events WHERE by = ? AND hidden = 0 AND cancelled = '' ORDER BY starts DESC LIMIT 60").all(id).map(row);
+    return { next: rows.filter((e) => (e.ends || e.starts) >= today).reverse().slice(0, 6), past: rows.filter((e) => (e.ends || e.starts) < today).slice(0, 10) };
+  }
   function forBook(id, authorSlugs = [], n = 1) {
     const all = upcoming();
     const own = all.filter((e) => e.books.includes(id));
@@ -1309,7 +1318,7 @@ function create(db, store, { notify = () => {}, bookua = null, search = null, ma
     const at = new Date().toISOString();
     for (const id of ids) add.run(reader, id, at);
   };
-  return { pastForAuthor, watching, isWatching, watch, unwatchAll, dueWatch, watchSent, upsert, setKinds, unrated, setWide, wideExamples, add, one, byKey, findSimilar, cancel, uncancel, cancelledList, recent, pending, review, hide, setLink, cleanup, seed, upcoming, forAuthor, forBook, cities, fillBooks, chytomoRun, eventmateRun, feeds, addFeed, removeFeed, feedsRun, yeRun, yeLast: () => yeLast, peek, fresh, meta, setMeta, subs, subscribed, subscribe, unsubscribeAll, going, isGoing, goingCount, goingTop, dueReminders, reminded, remindOff, setRemind };
+  return { byReader, pastForAuthor, watching, isWatching, watch, unwatchAll, dueWatch, watchSent, upsert, setKinds, unrated, setWide, wideExamples, add, one, byKey, findSimilar, cancel, uncancel, cancelledList, recent, pending, review, hide, setLink, cleanup, seed, upcoming, forAuthor, forBook, cities, fillBooks, chytomoRun, eventmateRun, feeds, addFeed, removeFeed, feedsRun, yeRun, yeLast: () => yeLast, peek, fresh, meta, setMeta, subs, subscribed, subscribe, unsubscribeAll, going, isGoing, goingCount, goingTop, dueReminders, reminded, remindOff, setRemind };
 }
 
 // «Четвер, 19 листопада» and, within a week, «завтра» / «через 3 дні».

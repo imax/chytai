@@ -1264,7 +1264,7 @@ function twoParts(items, n, part) {
   return { first: html(items.slice(0, cut)), rest: cut < items.length ? ` data-rest="${items.length - cut}"` : "" };
 }
 
-function libraryPage({ ask = null, part = "", clubTopics = [], lists = [], savedLists = [], favOffer = null, rows, user, reader, own = false, mineIds = null, mineDirect = null, following = false, follows = { followers: [], following: [] }, now = null }) {
+function libraryPage({ ask = null, part = "", clubTopics = [], events = null, lists = [], savedLists = [], favOffer = null, rows, user, reader, own = false, mineIds = null, mineDirect = null, following = false, follows = { followers: [], following: [] }, now = null }) {
   const year = new Date().getFullYear();
   // Stars in the row only for the reader's own entry of this very book (not one reached through a
   // translation or a series, where a rating would land on another book).
@@ -1354,6 +1354,7 @@ ${parts.first}
   <aside>
     ${yearBlock}
     ${lists.length || own ? `<div class="side-own-lists${topLists ? " has-top" : ""}">${listsHead}${fav}${lists.length ? sideLists(lists, (l) => listMeta(l, { by: false })) : fav ? "" : `<p class="small muted">Складіть список книжок, щоб поділитися ним: «Найкраще про війну», «Для підлітків 12+»…</p>`}${savedLists.length ? `${label("Збережені списки")}${sideLists(savedLists, (l) => `${esc(l.reader.name)} · ${books(l.count)}`)}` : ""}</div>` : ""}
+    ${readerEvents(events)}
     ${clubTopics.length ? `<div class="side-club">${label("Теми в Клубі")}${sideLists(clubTopics, (t) => `${t.replies ? answers(t.replies) : "без відповідей"} · ${when({ updated: t.active })}`)}</div>` : ""}
     ${own ? `<dialog id="new-list"><div class="dlg-head"><h2>Новий список</h2><button type="button" class="dlg-x" data-close aria-label="Закрити">×</button></div>${newListForm()}</dialog>` : ""}
     ${common.length ? `${label("Спільне з вами")}<p class="small muted">${books(common.length)}, які ви обоє маєте на полиці.</p><div class="grid four">${common.slice(0, 4).map((r) => `<a href="${attr(r.book.href)}">${cover(r.book, "card")}</a>`).join("")}</div>` : ""}
@@ -2678,6 +2679,14 @@ const authorEvents = (events, { past = [], user = null, slug = "", on = false } 
   const was = past.length ? `<p class="small muted ev-past">Були: ${past.map((e) => `<a class="text-link" href="${attr(cal().eventPath(e))}">${esc(e.title)}</a>, ${esc(cal().span(e).replace(/, \d\d:\d\d$/, ""))}${e.city ? `, ${esc(e.city)}` : ""}`).join("; ")}</p>` : "";
   const follow = slug ? `<div class="ev-follow">${watchBtn("author", slug, on, `/author/${slug}`, user, "Стежити за подіями")}<span class="small muted">${on ? "Напишемо листа, щойно буде нова подія." : "Лист, щойно зʼявиться нова подія."}</span></div>` : "";
   return `<section class="block" data-block="author-events">${label("Події", `<a href="/calendar">Усі події</a>`)}${events.length ? `<div class="rows">${rows}</div>` : `<p class="muted">Найближчих подій немає.</p>`}${was}${follow}</section>`;
+};
+// «Додані події» on a reader's shelf (Max 2026-11-26): what they added on /calendar/add, the next ones as the sidebar's
+// rows; the past ones (`past`, only for Max and the reader) one line, as on an author's page.
+const readerEvents = (ev) => {
+  if (!ev || (!ev.next.length && !ev.past.length)) return "";
+  const rows = ev.next.length ? sideLists(ev.next.map((e) => ({ ...e, href: cal().eventPath(e) })), (e) => [esc(cal().shortWhen(e)), esc(e.city || "")].filter(Boolean).join(" · ")) : "";
+  const was = ev.past.length ? `<p class="small muted ev-past">Були: ${ev.past.map((e) => `<a class="text-link" href="${attr(cal().eventPath(e))}">${esc(e.title)}</a>, ${esc(cal().span(e).replace(/, \d\d:\d\d$/, ""))}${e.city ? `, ${esc(e.city)}` : ""}`).join("; ")}</p>` : "";
+  return `<div class="side-club side-events">${label("Додані події", `<a href="/calendar">усі події</a>`)}${rows}${was}</div>`;
 };
 // One line on a book's page about the next event with it or its author.
 const eventLine = (e) => (e ? `<p class="awards cal-line" data-block="book-event"><span>Подія:</span> <a class="text-link" href="${attr(cal().eventPath(e))}">${esc(e.title)}</a>, ${esc(cal().shortWhen(e))}${e.city ? `, ${esc(e.city)}` : ""}</p>` : "");
