@@ -102,7 +102,7 @@ function loadDotEnv(file) {
 
 // Explanations on Opus, «Переклад» (translation only) on the cheaper model (Max, 2026-10-26).
 const SHARED_DEFAULTS = { model: "claude-opus-5-5", translateModel: "claude-sonnet-5-5", language: "українська" };
-const USER_DEFAULTS = { pageTaps: false, deskScroll: false, font: "literata", margins: "normal", spacing: "normal", column: "normal", pdfMode: "reflow", fontSizes: {}, theme: "auto", explainStyle: "default", customStyle: "", gloss: "on", glossKnown: [], libraries: [], lastBook: null, positions: {} };
+const USER_DEFAULTS = { pageTaps: false, deskScroll: false, font: "literata", margins: "normal", spacing: "normal", column: "normal", pdfMode: "reflow", fontSizes: {}, theme: "auto", explainStyle: "default", customStyle: "", gloss: "on", mentions: "on", glossKnown: [], libraries: [], lastBook: null, positions: {} };
 const SHARED_KEYS = new Set(Object.keys(SHARED_DEFAULTS));
 const USER_KEYS = new Set(Object.keys(USER_DEFAULTS));
 
@@ -1369,6 +1369,15 @@ app.use((req, res, next) => {
     if (!book || !state.accounts?.[acct]) return res.status(400).json({ error: "acct and book" });
     res.json(await glossUpload(libOf(acct), book, { force: true }).catch((err) => ({ error: err.message })));
   });
+  // «Згадані книжки» over the explanations kept before the links (server/mentions.js): GET how far, POST {"run":true}
+  // (or {"run":true,"acct":"<id>"} for one account) starts it; only with Max's OK in the thread.
+  app.get("/agent/mentions", ok, (req, res) => res.json(mentionsFill));
+  app.post("/agent/mentions", ok, express.json(), (req, res) => {
+    if (!req.body?.run) return res.status(400).json({ error: "run" });
+    if (!process.env.ANTHROPIC_API_KEY) return res.status(400).json({ error: "no key" });
+    fillMentions({ only: String(req.body.acct || "") });
+    res.json({ started: true });
+  });
   app.post("/agent/glossary", ok, express.json(), async (req, res) => {
     const book = safeBookName(req.body?.book);
     // {"acct":"<id>","book":"<file>","names":true}: a reader's own EPUB's names made again (Opus over the whole book,
@@ -2289,12 +2298,14 @@ api.put("/chats/:id", (req, res) => {
   // A long talk keeps its turns for reading, but no longer goes on from where it was.
   if (JSON.stringify(chat.messages || "").length > CHAT_BYTES) chat.messages = null;
   putBookItem(req, "chats", bookPath, chat, BOOK_CHATS_MAX);
+  chatMentions(req, bookPath, chat);
   res.json({ ok: true });
 });
 // One explanation («Очистити розмову»), or with no id every one in the book (the panel's «Очистити»).
 api.delete(["/chats/:id", "/chats"], (req, res) => {
   const bookPath = String(req.query.path || "");
   saveBookItems(req, "chats", bookPath, req.params.id ? bookItems(req, "chats", bookPath).filter((c) => c.id !== req.params.id) : []);
+  unchatMentions(req, bookPath, req.params.id || "");
   res.json({ ok: true });
 });
 
@@ -3333,9 +3344,189 @@ api.get("/scratch", noScratch, async (req, res) => {
 // what was sent to Claude: the passage, the first question and the answer's start.
 api.get("/notes/book", noScratch, (req, res) => {
   const book = String(req.query.path || "");
-  const slim = (c) => ({ id: String(c.id || ""), cfi: c.cfi || "", posKey: c.posKey || "", chapter: c.chapter || (c.page ? `стор. ${c.page}` : ""), at: c.at || c.createdAt || 0, sel: String(c.sel || c.text || c.selection || "").slice(0, 600), q: String(c.turns?.[0]?.q || c.q || "").slice(0, 300), a: String(c.turns?.[0]?.a || c.answer || c.a || "").slice(0, 400), n: Array.isArray(c.turns) ? c.turns.length : 1, mode: c.mode || "" });
+  const slim = (c) => ({ id: String(c.id || ""), cfi: c.cfi || "", posKey: c.posKey || "", chapter: c.chapter || (c.page ? `стор. ${c.page}` : ""), at: c.at || c.createdAt || 0, sel: String(c.sel || c.text || c.selection || "").slice(0, 600), q: String(c.turns?.[0]?.q || c.q || "").slice(0, 300), a: mentionsLib.strip(String(c.turns?.[0]?.a || c.answer || c.a || "")).slice(0, 400), n: Array.isArray(c.turns) ? c.turns.length : 1, mode: c.mode || "" });
   res.json({ notes: bookItems(req, "notes", book), chats: [...bookItems(req, "chats", book), ...bookItems(req, "paperChats", book)].filter((c) => c && typeof c === "object").map(slim) });
 });
+// «Згадані книжки» (Max 2026-11-26, variants А + 1; server/mentions.js, page src/renderer/mentions.js): the books named
+// in explanations (Opus's links) and in the book's text (Haiku, a chapter once for every reader of the same file),
+// kept per reader as items kind "mentions", one list a book they were met in. Caps for Haiku on the text:
+// MENTIONS_DAY_USD a day for all, MENTIONS_ACCOUNT_USD a reader (guests together), Max none; stats day `mentions`.
+const mentionsLib = require("./mentions");
+const mentions = new mentionsLib.Mentions({ dir: path.join(DATA_DIR, "mentions"), apiKey: process.env.ANTHROPIC_API_KEY, find: (q) => catalogFind(q), guide });
+setTimeout(() => mentions.cleanup(), 90000).unref();
+setInterval(() => mentions.cleanup(), 86400000).unref();
+const MENTIONS_DAY_USD = 3;
+const MENTIONS_ACCOUNT_USD = 0.5;
+function mentionCaps(req) {
+  const who = req.guest ? "guest" : req.acct;
+  const day = statsDay();
+  const d = ((state.stats ??= { since: day, days: {} }).days[day] ??= { explains: 0, users: {}, guests: 0, models: {} });
+  const z = (d.mentions ??= { cost: 0, accts: {}, n: 0 });
+  const allow = () => {
+    if (z.cost >= MENTIONS_DAY_USD) {
+      if (!z.told) (z.told = true), saveState(), telegram(`«Згадані книжки»: сьогодні вже $${MENTIONS_DAY_USD} на пошук назв у текстах, решта завтра.`);
+      return false;
+    }
+    return !!req.owner || (z.accts[who] || 0) < MENTIONS_ACCOUNT_USD;
+  };
+  const spend = (c) => {
+    z.cost = Math.round((z.cost + c) * 10000) / 10000;
+    z.accts[who] = Math.round(((z.accts[who] || 0) + c) * 10000) / 10000;
+    z.n++;
+    saveState();
+  };
+  return { allow, spend };
+}
+// Found titles into the account's list of `book`; the catalog is asked for the new ones in the background.
+function keepMentions(acct, book, found, where) {
+  if (!acct || !book || !found.length) return;
+  const list = store.items.list(acct, "mentions", book);
+  if (mentionsLib.addTo(list, found, where)) store.items.save(acct, "mentions", book, list);
+  for (const f of found) if (mentions.known(f.title, f.author) === undefined) mentions.match(f.title, f.author, f.orig).catch(() => {});
+}
+// A kept explanation: its links (Opus writes them since 2026-11-26) go into the list.
+function chatMentions(req, book, chat) {
+  if (req.guest) return;
+  const found = chat.turns.flatMap((t) => mentionsLib.parseLinks(t.a)).map((f) => ({ ...f, q: "" }));
+  keepMentions(req.acct, book, found, { chat: chat.id, c: chat.chapter || (chat.page ? `стор. ${chat.page}` : "") });
+}
+// An explanation deleted (or, with no id, every one in the book): its places go, and a title with no place left.
+function unchatMentions(req, book, chatId) {
+  if (req.guest) return;
+  let list = store.items.list(req.acct, "mentions", book);
+  let changed = false;
+  for (const id of chatId ? [chatId] : [...new Set(list.flatMap((e) => e.chats.map((c) => c.id)))]) {
+    const r = mentionsLib.dropChat(list, id);
+    list = r.list;
+    changed ||= r.changed;
+  }
+  if (changed) store.items.save(req.acct, "mentions", book, list);
+}
+const mentionOut = (e) => ({ id: e.id, title: e.title, author: e.author, orig: e.orig || "", at: e.at, last: e.last || e.at, chats: e.chats, text: e.text, cat: mentions.known(e.title, e.author) });
+// GET /api/mentions?book=: that book's (the page reading it: links for old explanations, the list); with no book,
+// every book's: { books: { path: [entry] } } for «Нотатки»; `cat` = the catalog's book, null = not there, none = not
+// asked yet. Hidden ones (`gone`) stay out. `wait`: the catalog is
+// still being asked for some (the page asks again in a few seconds).
+api.get("/mentions", (req, res) => {
+  if (req.guest) return res.json({ books: {} });
+  const one = req.query.book ? String(req.query.book) : "";
+  const all = one ? { [one]: store.items.list(req.acct, "mentions", one) } : store.items.books(req.acct, "mentions");
+  const books = {};
+  let asked = 0;
+  for (const [b, list] of Object.entries(all)) {
+    const shown = list.filter((e) => !e.gone);
+    if (!shown.length) continue;
+    books[b] = shown.map(mentionOut);
+    for (const e of shown) if (asked < 20 && mentions.known(e.title, e.author) === undefined) asked++, mentions.match(e.title, e.author, e.orig).catch(() => {});
+  }
+  res.json({ books, wait: asked > 0 });
+});
+// A chapter's titles (spine file `href`, its heading `c`): Haiku once for the file; a signed-in reader's list gets them.
+api.get("/mentions/text", async (req, res) => {
+  const name = safeBookName(req.query.book);
+  const file = guideFile(req.guest ? null : req.lib, name);
+  const href = clean(req.query.href, 300);
+  if (!file || !href) return res.json({ none: true });
+  try {
+    const r = await mentions.chapter(file, href, { title: req.guest ? "" : bookInfo(req.acct, name).title || "", ...mentionCaps(req) });
+    if (r.books && !req.guest) keepMentions(req.acct, name, r.books, { h: href, c: clean(req.query.c, 200) });
+    res.json(r);
+  } catch (err) {
+    res.json({ error: err.message });
+  }
+});
+// The card of a title: the catalog's book and, for a signed-in reader, where to get it and whether it is on the
+// «Хочу прочитати» shelf (the site's /api/reader-want with `hrefs`, the same shape «Хочу прочитати» has).
+api.get("/mentions/card", async (req, res) => {
+  const title = clean(req.query.title, 200);
+  const author = clean(req.query.author, 120);
+  if (!title) return res.status(400).json({ error: "title" });
+  let cat = null;
+  try {
+    cat = await mentions.match(title, author, clean(req.query.orig, 200));
+  } catch {}
+  if (!cat?.href || req.guest || !state.accounts[req.acct]?.key) return res.json({ cat, book: null });
+  try {
+    const r = await fetch(`${WEB_URL}/api/reader-want`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: req.acct, key: state.accounts[req.acct].key, hrefs: [cat.href] }), signal: AbortSignal.timeout(10000) });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    res.json({ cat, book: (await r.json()).books?.[0] || null });
+  } catch (err) {
+    console.error(`mentions card ${req.acct}:`, err.message);
+    res.json({ cat, book: null });
+  }
+});
+// «Хочу прочитати» on the card: the book onto the site's want shelf (POST /api/reader-wantit).
+api.post("/mentions/want", noScratch, async (req, res) => {
+  const href = clean(req.body?.href, 500);
+  if (!state.accounts[req.acct]?.key || !href) return res.status(400).json({ error: "Немає книжки." });
+  try {
+    const r = await fetch(`${WEB_URL}/api/reader-wantit`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: req.acct, key: state.accounts[req.acct].key, href }), signal: AbortSignal.timeout(10000) });
+    const a = await r.json();
+    if (!r.ok) return res.status(502).json({ error: a.error || "Сайт не відповів." });
+    wantKept.delete(req.acct);
+    shelfKept.delete(req.acct);
+    res.json(a);
+  } catch {
+    res.status(502).json({ error: "Сайт не відповів." });
+  }
+});
+// «Прибрати зі згаданих»: hidden for good in that book (the text's Haiku would bring it back otherwise).
+api.delete("/mentions", noScratch, (req, res) => {
+  const book = String(req.query.book || "");
+  const id = String(req.query.id || "");
+  const list = store.items.list(req.acct, "mentions", book);
+  const e = list.find((x) => x.id === id);
+  if (!e) return res.status(404).json({ error: "Немає такої." });
+  e.gone = true;
+  store.items.save(req.acct, "mentions", book, list);
+  res.json({ ok: true });
+});
+
+// The explanations kept before the links (Max 2026-11-26: «проганяємо по старих поясненнях»): Haiku over every
+// account's kept explanations with no link yet, 12 a call (~8 ¢ for all of them on 2026-11-26); what it finds goes
+// into the lists with `q` (the page makes those words tappable). POST /agent/mentions {"run":true}; GET = how far.
+const mentionsFill = { running: false };
+async function fillMentions({ only = "" } = {}) {
+  if (mentionsFill.running) return;
+  Object.assign(mentionsFill, { running: true, started: new Date().toISOString(), accounts: 0, chats: 0, withBooks: 0, found: 0, cost: 0, error: "", done: false, sample: [] });
+  try {
+    const titleOf = adminTitles();
+    const accts = only ? [only] : [...new Set([OWNER_ID, ...Object.keys(state.accounts || {})])];
+    for (const acct of accts) {
+      const todo = [];
+      for (const kind of ["chats", "paperChats"]) {
+        for (const [book, list] of Object.entries(store.items.books(acct, kind))) {
+          const pb = kind === "paperChats" ? userState(acct).paper?.[book] : null;
+          const title = pb ? `${pb.title}${pb.author ? `, ${pb.author}` : ""}` : titleOf(acct, book) || book.replace(/\.[a-z0-9]+$/i, "");
+          for (const c of list) {
+            const turns = (Array.isArray(c?.turns) ? c.turns : []).filter((t) => t?.a && !mentionsLib.parseLinks(t.a).length);
+            if (c?.mode === "translate" || !turns.length) continue;
+            todo.push({ id: String(c.id), path: book, book: title, turns, c: c.chapter || (c.page ? `стор. ${c.page}` : "") });
+          }
+        }
+      }
+      if (!todo.length) continue;
+      mentionsFill.accounts++;
+      mentionsFill.chats += todo.length;
+      const found = await mentions.fromChats(todo, { spend: (c) => (mentionsFill.cost = Math.round((mentionsFill.cost + c) * 10000) / 10000) });
+      for (const c of todo) {
+        const f = found[c.id];
+        if (!f) continue;
+        mentionsFill.withBooks++;
+        mentionsFill.found += f.length;
+        keepMentions(acct, c.path, f, { chat: c.id, c: c.c });
+        if (mentionsFill.sample.length < 30) mentionsFill.sample.push(`${c.book}: ${f.map((x) => `${x.title} (${x.author || "?"})`).join("; ")}`);
+      }
+    }
+    mentionsFill.done = true;
+  } catch (err) {
+    mentionsFill.error = err.message;
+    console.error("mentions fill:", err.message);
+  } finally {
+    mentionsFill.running = false;
+    mentionsFill.ended = new Date().toISOString();
+  }
+}
 api.post("/scratch/:id/thought", noScratch, (req, res) => {
   const it = scratch.think(req.acct, req.params.id, { text: req.body?.text, voice: !!req.body?.voice });
   if (!it) return res.status(404).json({ error: "Запису немає." });
@@ -3815,6 +4006,7 @@ api.put("/paper/:name/chats/:id", guestsCannot("Без входу паперов
   else list.push(chat);
   if (list.length > CHATS_MAX) dropPaperImgs(req.acct, req.params.name, list.splice(0, list.length - CHATS_MAX));
   saveBookItems(req, "paperChats", req.params.name, list);
+  chatMentions(req, req.params.name, chat);
   (u.opened ??= {})[req.params.name] = Date.now();
   saveState();
   res.json({ ok: true });
@@ -3900,6 +4092,7 @@ api.delete("/paper/:name/chats/:id", guestsCannot("Без входу папер�
   const list = bookItems(req, "paperChats", req.params.name);
   dropPaperImgs(req.acct, req.params.name, list.filter((c) => c.id === req.params.id));
   saveBookItems(req, "paperChats", req.params.name, list.filter((c) => c.id !== req.params.id));
+  unchatMentions(req, req.params.name, req.params.id);
   res.json({ ok: true });
 });
 // A paper book has no file to keep in «Нещодавно видалені»: it goes with its notes.

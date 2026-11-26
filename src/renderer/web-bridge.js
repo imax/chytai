@@ -269,7 +269,7 @@
   // How the text looks is kept on each device apart (Max, 2026-11-10: a bigger font on the Android phone
   // made the iPhone's bigger too). The account's copy only starts a device that has none of its own yet,
   // and still takes every change, so a new device opens with the latest choice. The rest stays shared.
-  const LOOK_KEYS = ["theme", "font", "fontSizes", "margins", "spacing", "column", "pageTaps", "deskScroll", "gloss"];
+  const LOOK_KEYS = ["theme", "font", "fontSizes", "margins", "spacing", "column", "pageTaps", "deskScroll", "gloss", "mentions"];
   const LOOK = "chytai-look";
   const pickLook = (from) => Object.fromEntries(LOOK_KEYS.filter((k) => from?.[k] !== undefined).map((k) => [k, from[k]]));
   function deviceLook() {
@@ -907,6 +907,13 @@
     scratchState: (id, state) => ok(api("PATCH", `/api/scratch/${encodeURIComponent(id)}`, { state })),
     scratchPatch: (id, body) => ok(api("PATCH", `/api/scratch/${encodeURIComponent(id)}`, body)),
     scratchDelete: (id) => api("DELETE", `/api/scratch/${encodeURIComponent(id)}`),
+    // «Згадані книжки» (mentions.js, server/mentions.js): a book's or every book's list, a chapter's titles, a title's
+    // card (the catalog's book, where to get it), «Хочу прочитати» on the site, «Прибрати зі згаданих».
+    mentions: (book) => ok(api("GET", `/api/mentions${book ? `?book=${encodeURIComponent(book)}` : ""}`)),
+    mentionsText: (book, href, c) => ok(api("GET", `/api/mentions/text?${new URLSearchParams({ book, href, c: c || "" })}`)),
+    mentionCard: (m) => ok(api("GET", `/api/mentions/card?${new URLSearchParams({ title: m.title, author: m.author || "", orig: m.orig || "" })}`)),
+    mentionWant: (href) => ok(api("POST", "/api/mentions/want", { href })),
+    mentionDrop: (book, id) => ok(api("DELETE", `/api/mentions?${new URLSearchParams({ book, id })}`)),
     // One book's notes and explanations, in short (GET /api/notes/book).
     bookNotes: (name) => ok(api("GET", `/api/notes/book?path=${encodeURIComponent(name)}`)),
     // «Словничок»: how far the book's list is (GET /api/glossary/status); null offline.

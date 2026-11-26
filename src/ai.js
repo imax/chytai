@@ -50,6 +50,8 @@ Let the length follow the selection, like a note from a well-read friend in the 
 
 Start with the explanation itself, no preamble. Use Markdown sparingly (bold for key terms, short lists). If something is genuinely ambiguous or you are unsure about a fact, say so in one line rather than guessing.
 
+When your answer names a book or another written work (a novel, poem, play, essay, treatise), write its title as a Markdown link with the scheme "book:", the author and the title in the nominative after it, like [«Мімесис»](book:Еріх Ауербах|Мімесис) or [«Пошуках утраченого часу»](book:Марсель Пруст|У пошуках утраченого часу). Use the title as it is known in Ukrainian when there is one. Only for works, never for people, characters, places, films or songs, and only once per work in an answer. The reader can tap the title to keep the book.
+
 The reader may ask follow-up questions; answer them in the same spirit.${styleSection(style, custom)}`;
 }
 

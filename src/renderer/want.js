@@ -181,8 +181,9 @@
     return out.map(([k, x]) => `<div><span class="r-want-k">${esc(k)}</span><span>${x}</span></div>`).join("");
   }
 
-  // The card: «Читати», where to get it (the book, then its original or translation), then the card's «Про книжку».
-  function card(b) {
+  // «Читати» and where to get it (the book, then its original or translation), as HTML for a card; «Згадані книжки»
+  // (mentions.js) shows the same on a mentioned book's card.
+  function where(b) {
     const mine = mineOf(b);
     const path = readNow(b);
     const lib = b.lib?.length ? `<div><span class="r-want-k">Бібліотека</span><span>${[...b.lib].sort((x, y) => RANK[x.state] - RANK[y.state]).map((l) => `${link(l.url, esc(l.branch.replace(/\s*\(.*\)\s*$/, "")))}<span class="r-want-m">, ${STATE[l.state]}</span>`).join("<br>")}</span></div>` : "";
@@ -194,10 +195,14 @@
     const where = own || others
       ? `<h3 class="pf-wh">Де взяти</h3><div class="r-want-where">${own}${others}</div>`
       : path ? "" : `<p class="r-want-none">У магазинах зараз немає.</p>`;
+    return go + where;
+  }
+  // The card: «Читати», where to get it, then the card's «Про книжку».
+  function card(b) {
     // No «Додати в мої книжки» here (Max 2026-11-24, bot №52): the book is on one's list already.
     window.Paper.card(
       { title: b.title, author: b.author, cover: b.cover || "", href: b.href, year: b.year },
-      { top: go + where, noAdd: true, foot: `<p class="pf-page">${link(b.href, "Сторінка книжки на Chytai ↗")}</p>` },
+      { top: where(b), noAdd: true, foot: `<p class="pf-page">${link(b.href, "Сторінка книжки на Chytai ↗")}</p>` },
     );
   }
 
@@ -255,5 +260,5 @@
   // server keeps the answer a minute, the site builds it from memory.
   setTimeout(() => !document.body.classList.contains("guest") && !books && window.reader?.want && load(), 4000);
 
-  window.Want = { html, enter };
+  window.Want = { html, enter, where };
 })();

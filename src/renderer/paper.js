@@ -123,7 +123,8 @@
     const { seen, top } = d.found;
     const c = b ? { title: b.title, author: b.author, cover: b.cover || "", href: b.href, year: b.year } : { title: seen.title, author: seen.author };
     d.card = c;
-    const more = (b && d.found.more) || {};
+    // A card from elsewhere (`card`) keeps its own parts also for a book the catalog lacks (Згадані книжки).
+    const more = ((b || d.found.fixed) && d.found.more) || {};
     $("#pf-body").innerHTML = `<div class="pf-card"><span class="pf-card-c">${window.Shell.rcover({ title: c.title, authors: [c.author] }, c.cover || null)}</span>
         <span class="pf-x"><span class="pf-t">${esc(c.title)}</span><span class="pf-a">${esc([c.author, c.year].filter(Boolean).join(" · "))}</span></span></div>
       ${more.top || ""}
@@ -220,6 +221,8 @@
     if (c) chats = c;
     window.Shell.rerender();
     loadIdeas(b);
+    // «Згадані книжки»: titles in explanations kept before the links (mentions.js).
+    if (c?.length) window.Mentions?.loadPaper(b.path, () => book?.path === b.path && window.Shell.rerender());
   }
   // Suggested questions: from the book and the page, or following on from the last question asked.
   async function loadIdeas(b) {
@@ -283,8 +286,8 @@
             : "";
           return `<div class="pp-chat${on ? " open" : ""}" data-chat="${esc(c.id)}">
             <div class="pp-chat-q">${c.img ? `<img class="pp-chat-img" src="${c.img}" alt="" />` : ""}${esc(c.sel ? (c.img ? c.sel : `«${c.sel}»`) : c.turns[0]?.q || live?.q || "")}</div>
-            ${on ? c.turns.map((t, i) => `${(i || c.sel) && t.q ? fq(t.q) : ""}<div class="pp-chat-a answer">${md(t.a)}</div>`).join("") + pending
-              : `<div class="pp-chat-a short">${esc(String(last.a || "").replace(/[*_#>`]/g, "").slice(0, 400))}</div>`}
+            ${on ? c.turns.map((t, i) => `${(i || c.sel) && t.q ? fq(t.q) : ""}<div class="pp-chat-a answer">${md(t.a, c.id)}</div>`).join("") + pending
+              : `<div class="pp-chat-a short">${esc((window.Mentions?.plain(last.a) ?? String(last.a || "")).replace(/[*_#>`]/g, "").slice(0, 400))}</div>`}
             <div class="pp-note-m">${esc([c.page ? `стор. ${c.page}` : "", when(c.at)].filter(Boolean).join(" · "))}${on && c.turns.length ? `<button type="button" class="r-link pp-more-q" data-pp-savechat="${esc(c.id)}">В нотатки</button>` : ""}<button type="button" class="r-link" data-pp-delchat="${esc(c.id)}">Видалити</button></div>
             ${on && c.turns.length && !live?.busy ? `<form class="pp-fq" data-pp-fq="${esc(c.id)}"><input class="pp-fq-in" type="text" autocomplete="off" enterkeyhint="send" placeholder="Уточнити…" /><button type="submit" aria-label="Надіслати"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5M6 11l6-6 6 6"/></svg></button></form>` : ""}</div>`;
         }).join("")}${moreChats}</section>` : ""}
@@ -818,7 +821,7 @@
       const quotes = c.sel && !c.img ? [c.sel] : marksQuoted(c.turns[0]?.a || "");
       let n;
       if (quotes.length) for (const q of quotes) n = (await addNote({ text: q, quote: true, page: c.page })) || n;
-      else n = await addNote({ text: c.turns[0]?.q || c.sel || "Питання", comment: last.a, page: c.page });
+      else n = await addNote({ text: c.turns[0]?.q || c.sel || "Питання", comment: window.Mentions?.plain(last.a) ?? last.a, page: c.page });
       if (n) redraw(), showNotice(quotes.length > 1 ? `Збережено ${quotes.length} цитати` : "Збережено в нотатки", false);
       return;
     }
@@ -976,8 +979,9 @@
   function card(b, more = null) {
     const d = $("#paper-found");
     d.found = { seen: { title: b.title, author: b.author }, top: [], fixed: true, more };
-    // Open first: «Про книжку» (cardGuide) is asked only while the dialog is open.
-    d.showModal();
+    // Open first: «Про книжку» (cardGuide) is asked only while the dialog is open. Drawn again while open: the same
+    // dialog, its new parts (mentions.js fills «Де взяти» when the site answers).
+    if (!d.open) d.showModal();
     showCard(b.href ? b : null);
   }
   window.Paper = { pageHtml, add, coverPhoto, current: () => book, pickPhoto, shrink, card };
