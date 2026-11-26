@@ -888,8 +888,9 @@ A flag only when Max asks for one, or when the change could break what readers u
   (Зміст · Нотатки · Аа) stay as they are: that book's notes; the panel's = all of them. Three views: the list (a field
   for a topic / author / book / thought with mic and photo; a search: topics here, notes and explanations by
   `/api/search`; «Теми», «Думки без теми» = what Opus answered `unclear`, «З книжок» = every book with notes or
-  explanations, `GET /api/scratch` → `books` from `store.items.tally`); a topic (Opus's background, «Мої думки», «Книжки
-  по темі» (own + added; the newest added on top, read ones at the bottom: `added` / `wanted` times), «Можуть підійти»); a book (`GET /api/notes/book`: its notes and explanations in short,
+  explanations, `GET /api/scratch` → `books` from `store.items.tally`); a topic (Opus's background, «Обговорення теми» (the thoughts), «Книжки
+  по темі» (own + added, not read; the newest added on top: `added` / `wanted` times), «Прочитано» (one line a book, `miniRow`), «Можуть підійти»
+  (why in two lines, «+ Додати в тему» · «Не цікаво» as words); Max 2026-11-26, variant A, bot №54/№55); a book (`GET /api/notes/book`: its notes and explanations in short,
   «Перейти» = `Shell.go`, the panel search's opener; one «Тема:» line, a chip per topic with × to take it out, «+ ще» picks another; Max 2026-11-25). Opus (`server/scratch.js`,
   `SYSTEM`, json_schema, effort low) answers kind, title, about, 3–5 books (catalog page and cover by `catalogFind`),
   guesses, `have` (numbers of the reader's own books, from the `lib` list the page sends: `{p, t, a}`, 300 at most)

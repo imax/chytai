@@ -4,7 +4,7 @@
 // - the list: a field for a topic, an author, a book or a thought (words, voice or a photo), a search over topics,
 //   notes and explanations, then «Теми», «Думки без теми» (what Opus could not place) and «З книжок» (every book with
 //   notes or explanations);
-// - a topic: what it is (Opus), «Мої думки» (each new thought asks Opus again; its `reply` says where to dig next),
+// - a topic: what it is (Opus), «Обговорення теми» (each new thought asks Opus again; its `reply` says where to dig next),
 //   «Книжки»: the reader's own books in it (Opus picks them from the library the page sends; «Додати свою» and the
 //   book page's topic chips by hand) and Opus's books added with «Додати в тему» (`wanted`, only the topic: Max
 //   2026-11-25, reading and «Хочу прочитати» have their own pages), then «Можуть підійти» (the rest);
@@ -252,11 +252,13 @@
 
   function aiBookHtml(b, i, it, button) {
     const lang = b.title_uk ? "є українською" : LANG[b.lang] || "";
-    const meta = [bookAuthor(b), lang, b.nonfiction ? "нонфікшн" : ""].filter(Boolean).join(" · ");
+    // A suggestion is short (Max 2026-11-26, variant A, bot №55): no «нонфікшн», the why in two lines, the two
+    // actions as words on one line.
+    const meta = [bookAuthor(b), lang, b.nonfiction && !button ? "нонфікшн" : ""].filter(Boolean).join(" · ");
     return `<div class="r-scr-book">
       <button type="button" class="r-scr-bc" data-act="scr-card" data-scr-ai="${i}" aria-label="${esc(bookTitle(b))}">${aiCover(b)}</button>
-      <span class="r-scr-bw"><button type="button" class="r-scr-bx" data-act="scr-card" data-scr-ai="${i}"><b>${esc(bookTitle(b))}</b><span class="r-scr-bm">${esc(meta)}</span>${b.why ? `<span class="r-scr-why">${esc(b.why)}</span>` : ""}</button>
-      ${button ? `<span class="nx-acts3"><button type="button" class="r-pill-line r-scr-add" data-act="scr-add" data-scr-ai="${i}">Додати в тему</button><button type="button" class="r-link nx-no" data-act="scr-no" data-scr-ai="${i}">Не цікаво</button></span>` : `<button type="button" class="r-link nx-drop" data-act="scr-drop" data-scr-ai="${i}">Прибрати з теми</button>`}</span></div>`;
+      <span class="r-scr-bw"><button type="button" class="r-scr-bx" data-act="scr-card" data-scr-ai="${i}"><b>${esc(bookTitle(b))}</b><span class="r-scr-bm">${esc(meta)}</span>${b.why ? `<span class="r-scr-why${button ? " nx-clamp" : ""}">${esc(b.why)}</span>` : ""}</button>
+      ${button ? `<span class="nx-sacts"><button type="button" class="r-link nx-sadd" data-act="scr-add" data-scr-ai="${i}">+ Додати в тему</button><button type="button" class="r-link nx-no" data-act="scr-no" data-scr-ai="${i}">Не цікаво</button></span>` : `<button type="button" class="r-link nx-drop" data-act="scr-drop" data-scr-ai="${i}">Прибрати з теми</button>`}</span></div>`;
   }
 
   // A topic's book from the reader's shelf on the site (server/scratch.js `ai.shelf`): read, wanted, reading; a tap
@@ -282,6 +284,9 @@
   const picker = (label) => `<div class="nx-picker"><label class="nx-search">${LENS}<input id="scr-pick" type="search" placeholder="${label}" value="${esc(pickQ)}" autocomplete="off"></label>
     <div id="scr-picks">${pickHtml()}</div><button type="button" class="r-link" data-act="scr-unpick">Закрити</button></div>`;
 
+  // A read book in a topic: a small cover, the title and the author on one line each.
+  const miniRow = (cover, t, meta, attrs) => `<button type="button" class="nx-mini" ${attrs}>${cover}<span><b>${esc(t)}</b><span class="nx-bm">${esc(meta)}</span></span></button>`;
+
   function oneHtml(it) {
     const at = new Date(it.at);
     const time = at.toLocaleTimeString("uk-UA", { hour: "2-digit", minute: "2-digit" });
@@ -302,29 +307,34 @@
     else if (it.status === "limit") html += `<p class="r-scr-state">На сьогодні розборів досить. Розберемо завтра.</p>`;
     else if (it.status === "fail") html += `<p class="r-scr-state">Не вдалося розібрати. <button type="button" class="r-link" data-act="scr-again">Ще раз</button></p>`;
 
-    // The reader's thoughts: «Уточнення» from before, then the thoughts with Opus's answers.
+    // The reader's thoughts: «Уточнення» from before, then the thoughts with Opus's answers («Обговорення теми», Max
+    // 2026-11-26, bot №54: was «Мої думки»).
     const ths = [...(it.ask || []).map((t) => ({ text: t })), ...(it.thoughts || [])];
-    html += head(`Мої думки${ths.length ? ` · ${ths.length}` : ""}`);
+    html += head(`Обговорення теми${ths.length ? ` · ${ths.length}` : ""}`);
     html += ths.map((t) => `<div class="nx-th"><p>${esc(t.text)}</p><span class="nx-when">${when(t.at)}${t.voice ? " · голосом" : ""}${t.id ? `<button type="button" class="r-link nx-x" data-act="scr-unthink" data-scr-tid="${t.id}">Видалити</button>` : ""}</span>${t.reply ? `<span class="nx-ai">${esc(t.reply)}</span>` : ""}</div>`).join("");
     html += `<form class="r-scr-form nx-think" id="scr-think-form"><textarea id="scr-think" rows="1" placeholder="Додати думку: що хочеться з'ясувати, куди копати" enterkeyhint="send">${esc(thought)}</textarea>
       <div class="r-scr-row"><button type="button" class="pp-tool${window.Dictation?.field() === "scr-think" ? " on" : ""}" data-act="scr-thinkmic" title="Надиктувати" aria-label="Надиктувати">${MIC}</button><span class="r-scr-sp"></span>
       <button type="submit" class="r-pill"${busy ? " disabled" : ""}>Записати</button></div></form>`;
 
     // The topic's books, the reader's own and Opus's added by hand, like a to-do list (Max 2026-11-25): the newest
-    // added on top, read ones at the bottom; Opus's own picks after the added ones, reading before not started.
+    // added on top; Opus's own picks after the added ones, reading before not started. Read ones are their own short
+    // list under it, one line each (Max 2026-11-26, variant A of canvas 66Ec9Ssa7vR6q7qjgKfMUm, bot №54).
     const { own, picked, rest, older, shelfs } = topicBooks(it);
-    const n = own.length + picked.length + shelfs.length;
-    html += head(`Книжки по темі${n ? ` · ${n}` : ""}`, `<button type="button" class="r-link" data-act="scr-pickbook">${picking === "book" ? "" : "Додати свою"}</button>`);
-    if (picking === "book") html += picker("Знайти серед моїх книжок");
-    const ORDER = ["reading", "new", "read"];
+    const ORDER = ["reading", "new"];
+    const ownAttrs = (b) => `data-scr-book="${esc(b.path)}" data-scr-from="${it.id}"`;
+    const shelfCover = (s) => window.Shell.rcover({ title: s.t, authors: [s.a] }, s.cover || null);
     const rows = [
-      ...own.map((b) => ({ s: state(b), at: it.added?.[b.path] || 0, html: () => brow(b, esc([STATE[state(b)], counts(b.path)].filter(Boolean).join(" · ")), quote(byBook[b.path]), `data-scr-book="${esc(b.path)}" data-scr-from="${it.id}"`) })),
+      ...own.map((b) => ({ s: state(b), at: it.added?.[b.path] || 0, html: () => brow(b, esc([STATE[state(b)], counts(b.path)].filter(Boolean).join(" · ")), quote(byBook[b.path]), ownAttrs(b)), mini: () => miniRow(window.Shell.rcover(b), b.title, [author(b), counts(b.path)].filter(Boolean).join(" · "), ownAttrs(b)) })),
       ...picked.map(([b, i]) => ({ s: "new", at: typeof b.wanted === "number" ? b.wanted : 0, html: () => aiBookHtml(b, i, it, false) })),
-      ...shelfs.map(([s, j]) => ({ s: SHELF_STATE[s.s] || "new", at: 0, html: () => shelfBookHtml(s, j) })),
+      ...shelfs.map(([s, j]) => ({ s: SHELF_STATE[s.s] || "new", at: 0, html: () => shelfBookHtml(s, j), mini: () => miniRow(shelfCover(s), s.t, [s.a, s.s === "abandoned" ? "кинули" : ""].filter(Boolean).join(" · "), `data-act="scr-shelfcard" data-scr-sh="${j}"`) })),
     ];
-    rows.sort((x, y) => (x.s === "read") - (y.s === "read") || y.at - x.at || ORDER.indexOf(x.s) - ORDER.indexOf(y.s));
-    html += rows.map((r) => r.html()).join("");
-    if (!n && picking !== "book") html += `<p class="r-empty nx-none">Книжок тут ще немає.</p>`;
+    const unread = rows.filter((r) => r.s !== "read").sort((x, y) => y.at - x.at || ORDER.indexOf(x.s) - ORDER.indexOf(y.s));
+    const read = rows.filter((r) => r.s === "read");
+    html += head(`Книжки по темі${unread.length ? ` · ${unread.length}` : ""}`, `<button type="button" class="r-link" data-act="scr-pickbook">${picking === "book" ? "" : "Додати свою"}</button>`);
+    if (picking === "book") html += picker("Знайти серед моїх книжок");
+    html += unread.map((r) => r.html()).join("");
+    if (!unread.length && picking !== "book") html += `<p class="r-empty nx-none">${read.length ? "Усе по темі прочитано." : "Книжок тут ще немає."}</p>`;
+    if (read.length) html += head(`Прочитано · ${read.length}`) + `<div class="nx-minis">${read.map((r) => r.mini()).join("")}</div>`;
     if (rest.length) html += head(`Можуть підійти · ${rest.length}`) + rest.map(([b, i]) => aiBookHtml(b, i, it, true)).join("");
     // «Порадити ще» (Max 2026-11-25): new books past those suggested before, when the list is worked through.
     if (a && a.kind !== "unclear") {
