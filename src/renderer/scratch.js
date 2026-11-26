@@ -279,6 +279,20 @@
   const picker = (label) => `<div class="nx-picker"><label class="nx-search">${LENS}<input id="scr-pick" type="search" placeholder="${label}" value="${esc(pickQ)}" autocomplete="off"></label>
     <div id="scr-picks">${pickHtml()}</div><button type="button" class="r-link" data-act="scr-unpick">Закрити</button></div>`;
 
+  // DESIGN TRIAL helpers (variants a/b/c).
+  let ctab = "books";
+  const miniRow = (cover, t, meta, attrs) => `<button type="button" class="nx-mini" ${attrs}>${cover}<span><b>${esc(t)}</b><span class="nx-bm">${esc(meta)}</span></span></button>`;
+  const coverTile = (cover, t, attrs) => `<button type="button" class="nx-ctile" ${attrs} aria-label="${esc(t)}">${cover}<span>${esc(t)}</span></button>`;
+  const sugMeta = (b) => [bookAuthor(b), b.title_uk ? "є українською" : LANG[b.lang] || ""].filter(Boolean).join(" · ");
+  const sugRow = (b, i) => `<div class="nx-sug">
+      <button type="button" class="r-scr-bc" data-act="scr-card" data-scr-ai="${i}" aria-label="${esc(bookTitle(b))}">${aiCover(b)}</button>
+      <span class="nx-sugw"><button type="button" class="r-scr-bx" data-act="scr-card" data-scr-ai="${i}"><b>${esc(bookTitle(b))}</b><span class="r-scr-bm">${esc(sugMeta(b))}</span>${b.why ? `<span class="r-scr-why nx-clamp">${esc(b.why)}</span>` : ""}</button>
+      <span class="nx-sacts"><button type="button" class="r-link nx-sadd" data-act="scr-add" data-scr-ai="${i}">+ Додати в тему</button><button type="button" class="r-link nx-no" data-act="scr-no" data-scr-ai="${i}">Не цікаво</button></span></span></div>`;
+  const sugTile = (b, i) => `<div class="nx-tile">
+      <span class="nx-tcov"><button type="button" class="r-scr-bc" data-act="scr-card" data-scr-ai="${i}" aria-label="${esc(bookTitle(b))}">${aiCover(b)}</button><button type="button" class="nx-tno" data-act="scr-no" data-scr-ai="${i}" aria-label="Не цікаво">×</button></span>
+      <button type="button" class="r-scr-bx" data-act="scr-card" data-scr-ai="${i}"><b>${esc(bookTitle(b))}</b><span class="r-scr-bm">${esc(bookAuthor(b))}</span>${b.why ? `<span class="r-scr-why nx-clamp3">${esc(b.why)}</span>` : ""}</button>
+      <button type="button" class="r-pill-line nx-tadd2" data-act="scr-add" data-scr-ai="${i}">+ У тему</button></div>`;
+
   function oneHtml(it) {
     const at = new Date(it.at);
     const time = at.toLocaleTimeString("uk-UA", { hour: "2-digit", minute: "2-digit" });
@@ -299,39 +313,60 @@
     else if (it.status === "limit") html += `<p class="r-scr-state">На сьогодні розборів досить. Розберемо завтра.</p>`;
     else if (it.status === "fail") html += `<p class="r-scr-state">Не вдалося розібрати. <button type="button" class="r-link" data-act="scr-again">Ще раз</button></p>`;
 
-    // The reader's thoughts: «Уточнення» from before, then the thoughts with Opus's answers.
+    // DESIGN TRIAL (canvas 66Ec9Ssa7vR6q7qjgKfMUm, bot reports №54/№55): V = "" now, "a" / "b" / "c" variants.
+    const V = (() => { try { return localStorage.getItem("chytai:nxv") || ""; } catch { return ""; } })();
     const ths = [...(it.ask || []).map((t) => ({ text: t })), ...(it.thoughts || [])];
-    html += head(`Мої думки${ths.length ? ` · ${ths.length}` : ""}`);
-    html += ths.map((t) => `<div class="nx-th"><p>${esc(t.text)}</p><span class="nx-when">${when(t.at)}${t.voice ? " · голосом" : ""}${t.id ? `<button type="button" class="r-link nx-x" data-act="scr-unthink" data-scr-tid="${t.id}">Видалити</button>` : ""}</span>${t.reply ? `<span class="nx-ai">${esc(t.reply)}</span>` : ""}</div>`).join("");
-    html += `<form class="r-scr-form nx-think" id="scr-think-form"><textarea id="scr-think" rows="1" placeholder="Додати думку: що хочеться з'ясувати, куди копати" enterkeyhint="send">${esc(thought)}</textarea>
+    const form = (chat) => `<form class="r-scr-form nx-think${chat ? " nx-chatform" : ""}" id="scr-think-form"><textarea id="scr-think" rows="1" placeholder="${chat ? "Що хочеться з'ясувати, куди копати" : "Додати думку: що хочеться з'ясувати, куди копати"}" enterkeyhint="send">${esc(thought)}</textarea>
       <div class="r-scr-row"><button type="button" class="pp-tool${window.Dictation?.field() === "scr-think" ? " on" : ""}" data-act="scr-thinkmic" title="Надиктувати" aria-label="Надиктувати">${MIC}</button><span class="r-scr-sp"></span>
-      <button type="submit" class="r-pill"${busy ? " disabled" : ""}>Записати</button></div></form>`;
+      <button type="submit" class="r-pill"${busy ? " disabled" : ""}>${chat ? "Надіслати" : "Записати"}</button></div></form>`;
+    const del = (t) => (t.id ? `<button type="button" class="r-link nx-x" data-act="scr-unthink" data-scr-tid="${t.id}">Видалити</button>` : "");
+    const thoughtsList = (label) => head(`${label}${ths.length ? ` · ${ths.length}` : ""}`) + ths.map((t) => `<div class="nx-th"><p>${esc(t.text)}</p><span class="nx-when">${when(t.at)}${t.voice ? " · голосом" : ""}${del(t)}</span>${t.reply ? `<span class="nx-ai">${esc(t.reply)}</span>` : ""}</div>`).join("") + form(false);
+    const thoughtsChat = (withHead = true) => (withHead ? head(`Обговорення теми${ths.length ? ` · ${ths.length}` : ""}`) : "") + `<div class="nx-chat">${ths.map((t) => `<div class="nx-me"><p>${esc(t.text)}</p><span class="nx-when">${when(t.at)}${t.voice ? " · голосом" : ""}${del(t)}</span></div>${t.reply ? `<div class="nx-re"><span class="nx-who">Chytai</span><p>${esc(t.reply)}</p></div>` : ""}`).join("")}</div>` + form(true);
 
-    // The topic's books, the reader's own and Opus's added by hand, like a to-do list (Max 2026-11-25): the newest
-    // added on top, read ones at the bottom; Opus's own picks after the added ones, reading before not started.
     const { own, picked, rest, older, shelfs } = topicBooks(it);
     const n = own.length + picked.length + shelfs.length;
-    html += head(`Книжки по темі${n ? ` · ${n}` : ""}`, `<button type="button" class="r-link" data-act="scr-pickbook">${picking === "book" ? "" : "Додати свою"}</button>`);
-    if (picking === "book") html += picker("Знайти серед моїх книжок");
     const ORDER = ["reading", "new", "read"];
     const rows = [
-      ...own.map((b) => ({ s: state(b), at: it.added?.[b.path] || 0, html: () => brow(b, esc([STATE[state(b)], counts(b.path)].filter(Boolean).join(" · ")), quote(byBook[b.path]), `data-scr-book="${esc(b.path)}" data-scr-from="${it.id}"`) })),
+      ...own.map((b) => ({ s: state(b), at: it.added?.[b.path] || 0, html: () => brow(b, esc([STATE[state(b)], counts(b.path)].filter(Boolean).join(" · ")), quote(byBook[b.path]), `data-scr-book="${esc(b.path)}" data-scr-from="${it.id}"`), mini: () => miniRow(window.Shell.rcover(b), b.title, [author(b), counts(b.path)].filter(Boolean).join(" · "), `data-scr-book="${esc(b.path)}" data-scr-from="${it.id}"`), cover: () => coverTile(window.Shell.rcover(b), b.title, `data-scr-book="${esc(b.path)}" data-scr-from="${it.id}"`) })),
       ...picked.map(([b, i]) => ({ s: "new", at: typeof b.wanted === "number" ? b.wanted : 0, html: () => aiBookHtml(b, i, it, false) })),
-      ...shelfs.map(([s, j]) => ({ s: SHELF_STATE[s.s] || "new", at: 0, html: () => shelfBookHtml(s, j) })),
+      ...shelfs.map(([s, j]) => ({ s: SHELF_STATE[s.s] || "new", at: 0, html: () => shelfBookHtml(s, j), mini: () => miniRow(window.Shell.rcover({ title: s.t, authors: [s.a] }, s.cover || null), s.t, [s.a, s.s === "abandoned" ? "кинули" : ""].filter(Boolean).join(" · "), `data-act="scr-shelfcard" data-scr-sh="${j}"`), cover: () => coverTile(window.Shell.rcover({ title: s.t, authors: [s.a] }, s.cover || null), s.t, `data-act="scr-shelfcard" data-scr-sh="${j}"`) })),
     ];
     rows.sort((x, y) => (x.s === "read") - (y.s === "read") || y.at - x.at || ORDER.indexOf(x.s) - ORDER.indexOf(y.s));
-    html += rows.map((r) => r.html()).join("");
-    if (!n && picking !== "book") html += `<p class="r-empty nx-none">Книжок тут ще немає.</p>`;
-    if (rest.length) html += head(`Можуть підійти · ${rest.length}`) + rest.map(([b, i]) => aiBookHtml(b, i, it, true)).join("");
-    // «Порадити ще» (Max 2026-11-25): new books past those suggested before, when the list is worked through.
-    if (a && a.kind !== "unclear") {
-      if (!rest.length) html += head("Можуть підійти");
-      html += busy && suggesting === it.id ? `<p class="r-scr-state">${SPIN}Шукаємо ще книжки…</p>` : `<div class="nx-moreb"><button type="button" class="r-pill-line"${busy ? " disabled" : ""} data-act="scr-suggest">Порадити ще</button></div>`;
-    }
-    // What was suggested before «Порадити ще» and neither added nor declined: folded, for later.
-    if (older.length) {
-      html += head(`Раніше радили · ${older.length}`, `<button type="button" class="r-link" data-act="scr-older">${showOlder ? "Сховати" : "Показати"}</button>`);
-      if (showOlder) html += older.map(([b, i]) => aiBookHtml(b, i, it, true)).join("");
+    const unread = rows.filter((r) => r.s !== "read");
+    const read = rows.filter((r) => r.s === "read");
+    const addOwn = `<button type="button" class="r-link" data-act="scr-pickbook">${picking === "book" ? "" : "Додати свою"}</button>`;
+    const pick = picking === "book" ? picker("Знайти серед моїх книжок") : "";
+    const suggestBtn = (cls = "") => (a && a.kind !== "unclear" ? (busy && suggesting === it.id ? `<p class="r-scr-state">${SPIN}Шукаємо ще книжки…</p>` : `<div class="nx-moreb${cls}"><button type="button" class="r-pill-line"${busy ? " disabled" : ""} data-act="scr-suggest">Порадити ще</button></div>`) : "");
+    const olderHtml = (fn) => (older.length ? head(`Раніше радили · ${older.length}`, `<button type="button" class="r-link" data-act="scr-older">${showOlder ? "Сховати" : "Показати"}</button>`) + (showOlder ? older.map(([b, i]) => fn(b, i)).join("") : "") : "");
+
+    if (V === "a") {
+      html += thoughtsList("Обговорення теми");
+      html += head(`Книжки по темі${unread.length ? ` · ${unread.length}` : ""}`, addOwn) + pick + unread.map((r) => r.html()).join("");
+      if (!unread.length && picking !== "book") html += `<p class="r-empty nx-none">${read.length ? "Усе по темі прочитано." : "Книжок тут ще немає."}</p>`;
+      if (read.length) html += head(`Прочитано · ${read.length}`) + `<div class="nx-minis">${read.map((r) => r.mini()).join("")}</div>`;
+      html += head(`Можуть підійти${rest.length ? ` · ${rest.length}` : ""}`) + rest.map(([b, i]) => sugRow(b, i)).join("") + suggestBtn();
+      html += olderHtml(sugRow);
+    } else if (V === "b") {
+      html += head(`Книжки по темі${unread.length ? ` · ${unread.length}` : ""}`, addOwn) + pick + unread.map((r) => r.html()).join("");
+      if (read.length) html += head(`Прочитано · ${read.length}`) + `<div class="nx-strip">${read.map((r) => r.cover()).join("")}</div>`;
+      html += head(`Можуть підійти${rest.length ? ` · ${rest.length}` : ""}`) + `<div class="nx-strip nx-sugs">${rest.map(([b, i]) => sugTile(b, i)).join("")}${a && a.kind !== "unclear" ? `<button type="button" class="nx-tile nx-tmore" data-act="scr-suggest"${busy ? " disabled" : ""}>${busy && suggesting === it.id ? `${SPIN}Шукаємо…` : "<b>+</b>Порадити ще"}</button>` : ""}</div>`;
+      html += olderHtml(sugRow);
+      html += thoughtsChat();
+    } else if (V === "c") {
+      const T = [["books", "Книжки", unread.length], ["read", "Прочитано", read.length], ["sug", "Можуть підійти", rest.length]];
+      html += thoughtsList("Обговорення теми");
+      html += `<div class="mn-tabs nx-tabs nx-ttabs">${T.map(([k, l, c]) => `<button type="button" data-act="scr-ttab" data-scr-tab="${k}"${ctab === k ? ' class="on"' : ""}>${l} <span>${c}</span></button>`).join("")}</div>`;
+      if (ctab === "books") html += `<div class="nx-tabhead">${addOwn}</div>` + pick + (unread.map((r) => r.html()).join("") || `<p class="r-empty nx-none">Книжок тут ще немає.</p>`);
+      if (ctab === "read") html += `<div class="nx-minis nx-tabtop">${read.map((r) => r.mini()).join("")}</div>`;
+      if (ctab === "sug") html += `<div class="nx-tabtop">${rest.map(([b, i]) => sugRow(b, i)).join("")}</div>` + suggestBtn() + olderHtml(sugRow);
+    } else {
+      html += thoughtsList("Мої думки");
+      html += head(`Книжки по темі${n ? ` · ${n}` : ""}`, addOwn) + pick + rows.map((r) => r.html()).join("");
+      if (!n && picking !== "book") html += `<p class="r-empty nx-none">Книжок тут ще немає.</p>`;
+      if (rest.length) html += head(`Можуть підійти · ${rest.length}`) + rest.map(([b, i]) => aiBookHtml(b, i, it, true)).join("");
+      if (a && a.kind !== "unclear" && !rest.length) html += head("Можуть підійти");
+      html += suggestBtn();
+      html += olderHtml((b, i) => aiBookHtml(b, i, it, true));
     }
     html += `<div class="r-scr-foot"><button type="button" class="r-link" data-act="scr-delete">Видалити тему</button></div>`;
     return `${html}</section>`;
@@ -529,6 +564,7 @@
     if (name === "scr-more") return (more = !more), redraw();
     if (name === "scr-older") return (showOlder = !showOlder), redraw();
     if (name === "scr-tab") return (tab = el.dataset.scrTab), redraw();
+    if (name === "scr-ttab") return (ctab = el.dataset.scrTab), redraw();
     if (name === "scr-go") return go(Number(el.dataset.scrI));
     if (name === "scr-unpick") return (picking = ""), redraw();
     if (name === "scr-pickbook") return (picking = picking === "book" ? "" : "book"), (pickQ = ""), redraw(), $("#scr-pick")?.focus();

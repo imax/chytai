@@ -2520,3 +2520,47 @@ html, body, #viewer .epub-container { overscroll-behavior: none; }
 .pf-about { padding: 12px 0 6px; }
 .pf-about:empty { padding: 6px 0; }
 .pf-add { width: 100%; }
+/* DESIGN TRIAL: «Нотатки» topic variants a/b/c (canvas 66Ec9Ssa7vR6q7qjgKfMUm) */
+.nx-minis { display: flex; flex-direction: column; }
+.nx-mini { display: flex; align-items: center; gap: 12px; width: 100%; padding: 8px 0; border: none; border-bottom: 1px solid var(--r-rule); background: none; color: var(--r-ink); text-align: left; font: inherit; cursor: pointer; }
+.nx-mini > .r-cover { width: 30px; flex: none; box-shadow: var(--r-cshadow); }
+.nx-mini > .r-cover .r-cover-t, .nx-mini > .r-cover .r-cover-a, .nx-ctile .r-cover-a { display: none; }
+.nx-mini > span { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.nx-mini b { font: 400 16px/1.25 var(--r-serif); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nx-mini .nx-bm { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nx-sug { display: grid; grid-template-columns: 52px 1fr; gap: 14px; padding: 12px 0; border-bottom: 1px solid var(--r-rule); }
+.nx-sugw { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.nx-clamp { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.nx-clamp3 { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.nx-sacts { display: flex; gap: 20px; align-items: center; }
+.nx-sacts .r-link { font-size: 14px; padding: 6px 0; }
+.nx-sadd { color: var(--r-ochre); font-weight: 500; text-decoration: none; }
+.nx-strip { display: flex; gap: 14px; overflow-x: auto; padding: 2px 0 12px; scrollbar-width: none; }
+.nx-strip::-webkit-scrollbar { display: none; }
+.nx-ctile { flex: none; width: 72px; display: flex; flex-direction: column; gap: 6px; border: none; background: none; padding: 0; color: var(--r-ink); text-align: left; font: inherit; cursor: pointer; }
+.nx-ctile > .r-cover { width: 72px; box-shadow: var(--r-cshadow); }
+.nx-ctile > .r-cover .r-cover-t { font-size: 9px; left: 5px; right: 5px; top: 6px; }
+.nx-ctile > span { font-size: 12px; line-height: 1.3; color: var(--r-ink2); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.nx-tile { flex: none; width: 140px; display: flex; flex-direction: column; gap: 8px; }
+.nx-tcov { position: relative; }
+.nx-tile .r-scr-bc .r-cover { width: 140px; }
+.nx-tile .r-scr-bc .r-cover-t { font-size: 13px; left: 8px; right: 8px; top: 10px; }
+.nx-tno { position: absolute; top: 6px; right: 6px; width: 30px; height: 30px; border-radius: 50%; border: none; background: color-mix(in srgb, var(--r-paper) 88%, transparent); color: var(--r-ink); font-size: 18px; line-height: 1; cursor: pointer; }
+.nx-tile .r-scr-bx b { font-size: 15px; }
+.nx-tile .r-scr-why { font-size: 13px; }
+.nx-tadd2 { margin-top: auto; padding: 7px 10px; font-size: 13px; border-color: var(--r-ochre); color: var(--r-ochre); }
+.nx-tmore { align-items: center; justify-content: center; border: 1.5px dashed var(--r-rule); border-radius: 6px; background: none; color: var(--r-ink); font: 500 14px var(--r-sans); height: 210px; cursor: pointer; gap: 6px; }
+.nx-tmore b { font-size: 26px; font-weight: 400; color: var(--r-ochre); }
+.nx-chat { display: flex; flex-direction: column; gap: 10px; }
+.nx-me { align-self: flex-end; max-width: 86%; background: color-mix(in srgb, var(--r-bar) 22%, transparent); border-radius: 16px 16px 4px 16px; padding: 10px 14px; }
+.nx-me p, .nx-re p { margin: 0; font: 400 16px/1.45 var(--r-serif); overflow-wrap: anywhere; }
+.nx-me .nx-when { justify-content: flex-end; }
+.nx-re { align-self: flex-start; max-width: 90%; padding: 2px 0 6px; }
+.nx-re p { font: 400 15px/1.5 var(--r-sans); color: var(--r-ink); }
+.nx-who { display: block; font: 600 11px var(--r-sans); letter-spacing: .1em; text-transform: uppercase; color: var(--r-ochre); margin-bottom: 3px; }
+.nx-chatform { margin-top: 14px; }
+.nx .nx-ttabs { margin-top: 24px; gap: 18px; overflow-x: auto; scrollbar-width: none; }
+.nx .nx-ttabs button { white-space: nowrap; }
+.nx-tabhead { display: flex; justify-content: flex-end; margin: 12px 0 0; }
+.nx-tabtop { margin-top: 10px; }
+.nx-sug .r-scr-bc { align-self: start; }
