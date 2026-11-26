@@ -77,7 +77,7 @@ function open(dataDir) {
     docDel: db.prepare("DELETE FROM docs WHERE coll = ? AND id = ?"),
     list: db.prepare("SELECT id, ord, value FROM items WHERE acct = ? AND kind = ? AND book = ? ORDER BY ord"),
     books: db.prepare("SELECT book, value FROM items WHERE acct = ? AND kind = ? ORDER BY book, ord"),
-    tally: db.prepare("SELECT kind, book, json_extract(value, '$.mode') AS mode, json_array_length(value, '$.turns') AS turns, coalesce(json_extract(value, '$.at'), json_extract(value, '$.createdAt')) AS at FROM items WHERE acct = ?"),
+    tally: db.prepare("SELECT kind, book, json_extract(value, '$.mode') AS mode, json_array_length(value, '$.turns') AS turns, coalesce(json_extract(value, '$.at'), json_extract(value, '$.createdAt')) AS at FROM items WHERE acct = ? AND kind IN ('notes', 'chats', 'paperChats')"),
     itemPut: db.prepare("INSERT INTO items (acct, kind, book, id, ord, value) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT (acct, kind, book, id) DO UPDATE SET ord = excluded.ord, value = excluded.value"),
     itemDel: db.prepare("DELETE FROM items WHERE acct = ? AND kind = ? AND book = ? AND id = ?"),
     ordOf: db.prepare("SELECT ord FROM items WHERE acct = ? AND kind = ? AND book = ? AND id = ?"),

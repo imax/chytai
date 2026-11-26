@@ -2531,3 +2531,13 @@ html, body, #viewer .epub-container { overscroll-behavior: none; }
 .pf-about { padding: 12px 0 6px; }
 .pf-about:empty { padding: 6px 0; }
 .pf-add { width: 100%; }
+
+/* «Згадані книжки» (mentions.js): a book's title in an explanation, the card's lines, the list in «Нотатки». */
+.answer a.bk { color: var(--r-ochre, var(--m-bar, #9a6418)); text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 3px; cursor: pointer; }
+.mn-from { margin: 12px 0 0; font-size: 14px; color: var(--r-ink2); }
+.mn-wait { display: flex; align-items: center; gap: 8px; }
+.mn-on { margin: 16px 0 0; font-size: 15px; color: var(--r-ink2); }
+.mn-dropp { margin: 10px 0 0; font-size: 14px; }
+.mn-drop { color: var(--r-ink3); }
+.mn-none { color: var(--r-ink3); }
+.mn-lead { margin: -4px 0 14px; font-size: 15px; color: var(--r-ink2); }

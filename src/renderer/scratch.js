@@ -54,6 +54,10 @@
   let poll = null;
   let failed = false;
   let sure = null; // «Видалити тему» pressed once
+  // «Згадані книжки» (mentions.js, server/mentions.js): book → the titles met in it; `mview` = the whole list shown.
+  let ment = null;
+  let mview = false;
+  let mentAgain = 0;
 
   const shown = () => document.querySelector("#shell")?.dataset.page === "scratch";
   const typing = () => FIELDS.includes(document.activeElement?.id);
@@ -72,9 +76,16 @@
 
   async function load() {
     try {
-      const r = await window.reader.scratchList();
+      const [r, m] = await Promise.all([window.reader.scratchList(), window.reader.mentions().catch(() => null)]);
       items = r.items || [];
       byBook = r.books || {};
+      if (m) ment = m.books || {};
+      // Covers of new titles come once the catalog was asked: the list again in a few seconds, twice at most.
+      clearTimeout(mentAgain);
+      if (m?.wait) mentAgain = setTimeout(async () => {
+        const m2 = await window.reader.mentions().catch(() => null);
+        if (m2) (ment = m2.books || {}), rerender();
+      }, 5000);
       failed = false;
     } catch {
       failed = !items;
@@ -82,6 +93,7 @@
     rerender();
     watch();
   }
+  document.addEventListener("mentions-changed", () => shown() && load());
   // Asked again every 3 s while an answer is being made and the page is on screen.
   function watch() {
     clearTimeout(poll);
@@ -126,8 +138,46 @@
   const counts = (p) => {
     const n = byBook[p];
     if (!n) return "";
-    return [n.notes ? `${n.notes} ${plural(n.notes, "нотатка", "нотатки", "нотаток")}` : "", n.chats ? `${n.chats} ${plural(n.chats, "пояснення", "пояснення", "пояснень")}` : ""].filter(Boolean).join(" · ");
+    const m = ment?.[p]?.length || 0;
+    return [n.notes ? `${n.notes} ${plural(n.notes, "нотатка", "нотатки", "нотаток")}` : "", n.chats ? `${n.chats} ${plural(n.chats, "пояснення", "пояснення", "пояснень")}` : "", m ? `${m} ${plural(m, "згадана книжка", "згадані книжки", "згаданих книжок")}` : ""].filter(Boolean).join(" · ");
   };
+
+  // ---- «Згадані книжки» ----
+  // The books they were met in, the latest first; each one's titles the latest first.
+  const lastOf = (e) => e.last || e.at || 0;
+  const mentBooks = () =>
+    Object.entries(ment || {})
+      .filter(([p, l]) => l.length && libBook(p))
+      .map(([p, l]) => [p, [...l].sort((a, b) => lastOf(b) - lastOf(a))])
+      .sort((x, y) => lastOf(y[1][0]) - lastOf(x[1][0]));
+  // One book met in two books counts once (by its page here, else by title and author).
+  const mentCount = (mb) => new Set(mb.flatMap(([, l]) => l.map((e) => e.cat?.href || e.id))).size;
+  const knyh = (n) => `${n} ${plural(n, "книжка", "книжки", "книжок")}`;
+  const mcover = (e) => window.Shell.rcover({ title: e.title, authors: [e.author || e.cat?.author || ""] }, e.cat?.cover || null);
+  const mfan = (l) => `<span class="r-scr-fan n${Math.min(3, l.length)}" aria-hidden="true">${l.slice(0, 3).map(mcover).join("")}</span>`;
+  const mhow = (e) => [e.chats?.length ? "пояснення" : "", e.text?.length ? "у тексті" : ""].filter(Boolean).join(" · ");
+  const mchap = (e) => e.text?.[0]?.c || e.chats?.[0]?.c || "";
+  const mrow = (e, p, chap = true) => `<button type="button" class="nx-brow" data-scr-ment="${esc(p)}" data-scr-mid="${esc(e.id)}">${mcover(e)}<span class="nx-bx"><b>${esc(e.title)}</b><span class="nx-bm">${esc(e.author || e.cat?.author || "")}${e.cat === null ? `<span class="mn-none">${e.author || e.cat?.author ? " · " : ""}немає на Chytai</span>` : ""}</span><span class="nx-bs">${esc([mhow(e), chap ? mchap(e) : ""].filter(Boolean).join(" · "))}</span></span></button>`;
+  function mentSection() {
+    const mb = mentBooks();
+    if (!mb.length) return "";
+    return head(`Згадані книжки · ${mentCount(mb)}`, `<button type="button" class="r-link" data-act="scr-mentions">Усі</button>`) +
+      mb.slice(0, 3).map(([p, l]) => `<button type="button" class="r-scr-item" data-scr-book="${esc(p)}" data-scr-btab="books"><span class="r-scr-x"><b>${esc(libBook(p).title)}</b><span class="r-scr-m">${knyh(l.length)}: ${l.slice(0, 2).map((e) => `«${esc(e.title)}»`).join(", ")}${l.length > 2 ? "…" : ""}</span></span>${mfan(l)}</button>`).join("");
+  }
+  // The whole list, by the book they were met in.
+  function mentionsHtml() {
+    const mb = mentBooks();
+    let html = `<section class="r-scr r-scr-one nx"><button type="button" class="r-scr-back" data-act="scr-back">‹ Нотатки</button><h1 class="r-scr-t">Згадані книжки</h1>`;
+    if (!mb.length) return `${html}<p class="r-empty">Тут будуть книжки, які згадуються в поясненнях і в тексті ваших книжок.</p></section>`;
+    html += `<p class="mn-lead">${knyh(mentCount(mb))} з пояснень і з тексту ваших книжок</p>`;
+    for (const [p, l] of mb) html += head(`«${esc(libBook(p).title)}» · ${l.length}`) + l.map((e) => mrow(e, p)).join("");
+    return `${html}</section>`;
+  }
+  function openMention(p, id) {
+    const e = ment?.[p]?.find((x) => x.id === id);
+    if (!e) return;
+    window.Mentions?.open({ ...e, src: p }, `Згадано в «${libBook(p)?.title || ""}»${mhow(e) ? ` · ${mhow(e)}` : ""}`);
+  }
   const topicsOf = (p) => topics().filter((it) => ownIn(it).some((b) => b.path === p));
 
   // A topic's books in four kinds: the reader's own files, Opus's added by hand, the site's shelf (less those the
@@ -198,6 +248,7 @@
       html += head(`Думки без теми · ${ls.length}`) + ls.map((it) => `<button type="button" class="nx-th" data-scr-open="${it.id}"><p>${esc(it.text || "Фото")}</p><span class="nx-when">${when(it.at)}</span>
         ${it.status === "fail" ? `<span class="nx-ai">Не вдалося розібрати.</span>` : it.ai?.guesses?.length ? `<span class="nx-ai">Може, це: ${it.ai.guesses.map(esc).join("; ")}</span>` : ""}</button>`).join("");
     }
+    html += mentSection();
     if (books.length) {
       const shownBooks = allBooks ? books : books.slice(0, 4);
       html += head(`З книжок · ${books.length}`, books.length > 4 ? `<button type="button" class="r-link" data-act="scr-allbooks">${allBooks ? "Згорнути" : "Усі"}</button>` : "");
@@ -365,9 +416,19 @@
     if (d.failed) return `${html}<p class="r-empty">Без мережі нотаток не показати.</p></section>`;
     const notes = [...d.notes].sort((x, y) => (y.createdAt || 0) - (x.createdAt || 0));
     const chats = [...d.chats].sort((x, y) => (y.at || 0) - (x.at || 0));
-    if (tab === "chats" && !chats.length) tab = "notes";
+    const ml = [...(ment?.[book] || [])].sort((x, y) => lastOf(y) - lastOf(x));
+    if ((tab === "chats" && !chats.length) || (tab === "books" && !ml.length)) tab = "notes";
     const t = (k, label, n) => `<button type="button" data-act="scr-tab" data-scr-tab="${k}"${tab === k ? ' class="on"' : ""}>${label} <span>${n}</span></button>`;
-    html += `<div class="mn-tabs nx-tabs">${t("notes", "Нотатки", notes.length)}${chats.length ? t("chats", "Пояснення", chats.length) : ""}</div>`;
+    html += `<div class="mn-tabs nx-tabs">${t("notes", "Нотатки", notes.length)}${chats.length ? t("chats", "Пояснення", chats.length) : ""}${ml.length ? t("books", "Книжки", ml.length) : ""}</div>`;
+    // «Книжки»: the titles met in this book, by chapter, the latest first.
+    if (tab === "books") {
+      let ch = null;
+      for (const e of ml) {
+        if (mchap(e) !== ch) (ch = mchap(e)), (html += `<h3 class="nx-ch">${esc(ch || "Без розділу")}</h3>`);
+        html += mrow(e, book, false);
+      }
+      return `${html}</section>`;
+    }
     const list = tab === "chats" ? chats : notes;
     if (!list.length) return `${html}<p class="r-empty">Нотаток ще немає. Виділіть текст у книжці й натисніть «Зберегти».</p></section>`;
     let group = null;
@@ -385,6 +446,7 @@
   function html() {
     watch();
     if (book) return bookHtml();
+    if (mview) return mentionsHtml();
     const it = open && byId(open);
     if (open && !it && items) open = null;
     return it ? oneHtml(it) : listHtml();
@@ -394,6 +456,7 @@
   function enter() {
     open = null;
     book = null;
+    mview = false;
     picking = "";
     load();
   }
@@ -412,6 +475,7 @@
       top();
       return true;
     }
+    if (mview) return (mview = false), redraw(), top(), true;
     if (!open) return false;
     open = null;
     thought = "";
@@ -431,10 +495,10 @@
     redraw();
     top();
   }
-  async function showBook(p, fromTopic = null) {
+  async function showBook(p, fromTopic = null, startTab = "notes") {
     book = p;
     from = fromTopic;
-    tab = "notes";
+    tab = startTab;
     picking = "";
     redraw();
     top();
@@ -538,6 +602,7 @@
     if (name === "scr-photo") return addPhoto();
     if (name === "scr-unphoto") return photo && URL.revokeObjectURL(photo.url), (photo = null), (draft = $("#scr-text")?.value ?? draft), redraw();
     if (name === "scr-allbooks") return (allBooks = !allBooks), redraw();
+    if (name === "scr-mentions") return (mview = true), redraw(), top();
     if (name === "scr-back") return back();
     if (name === "scr-more") return (more = !more), redraw();
     if (name === "scr-older") return (showOlder = !showOlder), redraw();
@@ -619,14 +684,16 @@
     act(el.dataset.nxAct, el);
   });
   shell.addEventListener("click", (e) => {
-    if (shown() && (open || book) && e.target.closest(".r-head-s .r-back")) e.stopPropagation(), back();
+    if (shown() && (open || book || mview) && e.target.closest(".r-head-s .r-back")) e.stopPropagation(), back();
   }, true);
   shell.addEventListener("click", (e) => {
     if (!shown()) return;
     const o = e.target.closest("[data-scr-open]");
     if (o) return showTopic(o.dataset.scrOpen);
+    const mt = e.target.closest("[data-scr-ment]");
+    if (mt) return openMention(mt.dataset.scrMent, mt.dataset.scrMid);
     const bk = e.target.closest("[data-scr-book]");
-    if (bk) return showBook(bk.dataset.scrBook, bk.dataset.scrFrom || null);
+    if (bk) return showBook(bk.dataset.scrBook, bk.dataset.scrFrom || null, bk.dataset.scrBtab || "notes");
     const h = e.target.closest("[data-scr-hit]");
     if (h) {
       const hit = found.hits.filter((x) => libBook(x.book))[Number(h.dataset.scrHit)];

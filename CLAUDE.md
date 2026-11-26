@@ -914,6 +914,22 @@ A flag only when Max asks for one, or when the change could break what readers u
   photos); private, no letter to Max. Caps: 40 Opus calls a reader a day, 400 for all (Telegram once), Max none; stats
   day `scratch`. An entry left `wait` by a deploy is asked again when the page lists it. Locally without a key: a fake
   SDK (`node -r mock.js` that answers the JSON) with the production catalog's GET `/api/reader-find`.
+- Reader «Згадані книжки» (Max 2026-11-26, variant А + 1 of canvas Tr7MtCsSnwRHxpKUgyDuTS; `server/mentions.js`,
+  `src/renderer/mentions.js`): books named in explanations and in the book's text. Opus writes a work's title as
+  `[«Уліссі»](book:Джеймс Джойс|Улісс)` (src/ai.js systemPrompt: text as in the sentence, target author|nominative);
+  the page turns it into `a.bk` (`Mentions.prep/post` in renderer.js / paper.js `md`), a tap opens the card. A kept
+  explanation (`PUT /chats`, paper chats too) without links goes to Haiku (`CHATS_PROMPT`) for `{q, title, author}`;
+  `q` = the words as written, linked on the page at render, the stored text never changes. The book's text: Haiku
+  reads each «Перед главою» piece once for all readers (`TEXT_PROMPT`, `DATA_DIR/mentions/text/<guide key>.json`,
+  180 days unused); `GET /api/mentions/text?book&href&c` when a chapter opens; the page underlines the first `q` of each
+  book with CSS Highlight `bk` (never the DOM), «Аа» → «Згадані книжки» Підкреслювати / Ні (`mentions`, per device). The
+  catalog match (`catalogFind`, title start + surname) is kept for all in `DATA_DIR/mentions/cat.json` (20k, not found
+  asked again after 30 days). A reader's list = items kind `mentions` per book (`{id, title, author, chats, text, gone}`,
+  not in `tally`); `GET /api/mentions[?book]`, the card `GET /api/mentions/card` («Де взяти» from the site's
+  `/api/reader-want` with `hrefs`), «Хочу прочитати» `POST /api/mentions/want` (site `/api/reader-wantit`),
+  «Прибрати зі згаданих» `DELETE /api/mentions?book&id`. «Нотатки»: the section «Згадані книжки» before «З книжок»,
+  «Усі» by source book, a book's tab «Книжки». Caps $3 a day, $0.5 a reader, Max none; stats day `mentions`. Old
+  explanations: `POST /agent/mentions {"run":true}` (`acct` for one), status `GET /agent/mentions` (done once 2026-11-26).
 - Reader «Хочу прочитати» (Max 2026-11-24, in Scratchpad's place; panel after «Мої книжки», `r-pnav-want`, page `want`,
   `src/renderer/want.js`): the books on the reader's «Хочу прочитати» shelf on the site, each with where to get it.
   The panel shows their count (`#r-n-want`, Max 2026-11-26): want.js asks `/api/want` once 4 s after a signed-in load.

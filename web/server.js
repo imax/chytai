@@ -1266,7 +1266,15 @@ app.post("/api/reader-want", (req, res) => {
   // "uk", "en" (said so, or a plain Latin title with no language known), else "" (another language).
   const langOf = (b) => (isUk(b) ? "uk" : b.language === "англійська" || (!b.language && /^[\x20-\x7E’‘“”–—]+$/.test(b.title || "")) ? "en" : "");
   const rentOf = (book) => ((bf) => (bf ? { url: bf.url, free: bf.free, price: bf.once || null } : null))(bookflow.linkFor(book));
-  const rows = store.library(id).filter((r) => r.status === "want" && !r.kids).slice(0, 300);
+  // `hrefs` (the reader's «Згадані книжки», Max 2026-11-26): those books of the catalog by their pages here, each with
+  // the reader's shelf status, in place of the want shelf.
+  const hrefs = Array.isArray(req.body?.hrefs) ? req.body.hrefs.slice(0, 40).map(String) : null;
+  const byHref = (h) => {
+    const m = /\/book\/([^/?#]+)/.exec(h);
+    const bid = m && store.resolve(decodeURIComponent(m[1]));
+    return bid && store.bookPage(bid) ? { id: store.canonical(bid), status: store.entry(id, store.canonical(bid))?.status || "" } : null;
+  };
+  const rows = hrefs ? hrefs.map(byHref).filter(Boolean) : store.library(id).filter((r) => r.status === "want" && !r.kids).slice(0, 300);
   // «Бібліотеки» (Max 2026-11-25): the branches the reader picked in the reader ({lib, branch}, 5 at most); each book
   // says which of them hold it, from the cache only (libraries.picked), and the books not asked yet are asked in the
   // background within the library's budget (libraries.fill), so the page that asks again a little later sees more.
@@ -1297,12 +1305,27 @@ app.post("/api/reader-want", (req, res) => {
       other.push({ lang: "", title: book.origTitle, href: "", get: [], rent: null, abroad: [{ label: "Amazon", url: `https://www.amazon.com/s?${new URLSearchParams({ k: q, i: "stripbooks" })}` }, kobo(book.origTitle, book.origAuthor)] });
     }
     const lib = libBook.has(r.id) ? libraries.picked(store.db, libBook.get(r.id), picks) : [];
-    return { id: store.canonical(r.id), title: book.title, author: book.author || "", year: book.published || null, cover: abs(book.cover), href: `${SITE}${store.href(r.id)}`, added: r.added || "", lang: langOf(book), mine: mine?.name || "", free: free ? free.name : "", online, get: shopsOf(book), rent: rentOf(book), abroad: abroadOf(book, seen), other, ...(lib.length ? { lib } : {}) };
+    return { id: store.canonical(r.id), title: book.title, author: book.author || "", year: book.published || null, cover: abs(book.cover), href: `${SITE}${store.href(r.id)}`, added: r.added || "", lang: langOf(book), mine: mine?.name || "", free: free ? free.name : "", online, get: shopsOf(book), rent: rentOf(book), abroad: abroadOf(book, seen), other, ...(lib.length ? { lib } : {}), ...(hrefs ? { status: r.status } : {}) };
   });
   if (!picks.length) return res.json({ books });
   const list = [...libBook.values()];
   libraries.fill(store.db, list, picks, { log: console.log });
   res.json({ books, libs: { unchecked: libraries.unchecked(store.db, list, picks) } });
+});
+
+// «Хочу прочитати» on a mentioned book's card in the reader (Max 2026-11-26, «Згадані книжки»): the book by its page
+// here onto the account's want shelf; a book already on the shelf keeps its status. Signed with the account's key.
+app.post("/api/reader-wantit", (req, res) => {
+  const id = String(req.body?.id || "");
+  if (!readerKeyOk(id, String(req.body?.key || ""))) return res.status(403).json({ error: "key" });
+  const m = /\/book\/([^/?#]+)/.exec(String(req.body?.href || ""));
+  const bid = m && store.resolve(decodeURIComponent(m[1]));
+  if (!bid || !store.book(bid)) return res.status(400).json({ error: "Немає такої книжки." });
+  const bookId = store.canonical(bid);
+  const e = store.entry(id, bookId);
+  if (e?.status) return res.json({ ok: true, status: e.status });
+  store.setEntry(id, bookId, { status: "want" });
+  res.json({ ok: true, status: "want" });
 });
 
 // The account's whole shelf here, short, for the reader's «Нотатки» (Max 2026-11-25: a topic's books and the books it

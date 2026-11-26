@@ -490,6 +490,7 @@ function styleContents(contents) {
   }
   colors.textContent = themeCss(resolvedTheme()) + "\n" + askCss(resolvedTheme());
   window.Gloss?.style(contents);
+  window.Mentions?.style(contents);
   if (!doc.documentElement.lang) doc.documentElement.lang = book?.packaging?.metadata?.language || "en";
 }
 
@@ -583,8 +584,10 @@ async function openEpub(payload, { posKey, source }) {
   followFontLoad(rendition);
   rendition.hooks.content.register(styleContents);
   rendition.hooks.content.register((contents) => window.Gloss?.mark(contents));
+  rendition.hooks.content.register((contents) => window.Mentions?.mark(contents));
   rendition.hooks.content.register(askBlocks);
   window.Gloss?.load(payload.path, () => rendition?.getContents());
+  window.Mentions?.load(payload.path, () => rendition?.getContents());
   rendition.hooks.content.register((contents) => contents.on("linkClicked", rememberReturn));
   if (current.protected) rendition.hooks.content.register(limitCopy);
   rendition.themes.fontSize(`${bookFontSize() * BASE_SCALE}%`);
@@ -622,7 +625,7 @@ async function openEpub(payload, { posKey, source }) {
   window.DeskRead?.watchFrames(rendition);
   rendition.on("click", (e) => {
     // A click on a word of the «Словничок» shows its meaning (gloss.js); a touch tap comes through onTouchEnd.
-    if (!TOUCH.matches && e.view?.getSelection()?.isCollapsed !== false) askTap(e.clientX, e.clientY, e.view?.document) || window.Gloss?.tap(e.clientX, e.clientY, e.view?.document);
+    if (!TOUCH.matches && e.view?.getSelection()?.isCollapsed !== false) askTap(e.clientX, e.clientY, e.view?.document) || window.Gloss?.tap(e.clientX, e.clientY, e.view?.document) || window.Mentions?.tap(e.clientX, e.clientY, e.view?.document);
     // A plain click inside the page clears the selection. Touch taps are handled in onTouchEnd:
     // iOS Safari does not deliver clicks on plain text to the iframe's document listener.
     setTimeout(() => {
@@ -829,6 +832,7 @@ document.addEventListener("visibilitychange", () => document.visibilityState ===
 function closeBook() {
   if (rendition) guideAhead();
   window.Gloss?.load(null);
+  window.Mentions?.load(null);
   $("#btn-search").classList.add("hidden");
   // A failure while tearing down the previous book must never block opening the next one.
   for (const item of [rendition, book, pdfView]) {
@@ -1445,6 +1449,7 @@ function onTouchEnd(e) {
     if (panelOverPage()) return closeSheets();
     if (askTap(t.clientX, t.clientY, e.view?.document)) return window.Gloss?.hide();
     if (window.Gloss?.tap(t.clientX, t.clientY, e.view?.document)) return;
+    if (window.Mentions?.tap(t.clientX, t.clientY, e.view?.document)) return;
     tapToPage(t, e.view);
   }
 }
@@ -1769,9 +1774,21 @@ function onMarkAction(action) {
 
 // ---------- Explanations panel ----------
 
-function md(text) {
-  return DOMPurify.sanitize(marked.parse(text || ""));
+// «Згадані книжки» (mentions.js): a book's title is a link the reader can tap; an explanation kept before the links
+// (`chatId`) gets them on the words the server found.
+function md(text, chatId) {
+  const M = window.Mentions;
+  const html = DOMPurify.sanitize(marked.parse(M ? M.prep(text, chatId) : text || ""));
+  return M ? M.post(html) : html;
 }
+// The kept explanations drawn before the book's list of titles came: drawn again with their links.
+window.relinkAnswers = () => {
+  for (const conv of conversations.values()) {
+    if (!conv.sid || conv.busy) continue;
+    const els = conv.card.querySelectorAll(".thread .answer");
+    if (els.length === conv.turns.length) conv.turns.forEach((t, i) => (els[i].innerHTML = md(t.a, conv.sid)));
+  }
+};
 
 function modelLabel(model) {
   const fast = /-fast$/.test(model || "");
@@ -2413,7 +2430,7 @@ async function loadChats() {
     const thread = conv.card.querySelector(".thread");
     conv.turns.forEach((t) => {
       if (t.q) thread.insertAdjacentHTML("beforeend", `<div class="question"></div>`), (thread.lastElementChild.textContent = t.q);
-      thread.insertAdjacentHTML("beforeend", `<div class="answer">${md(t.a)}</div>`);
+      thread.insertAdjacentHTML("beforeend", `<div class="answer">${md(t.a, c.id)}</div>`);
     });
     conv.card.querySelector(".where").textContent = [c.chapter, c.at ? new Date(c.at).toLocaleDateString("uk-UA", { day: "numeric", month: "long" }) : ""].filter(Boolean).join(" · ");
     conv.card.querySelector(".forget").classList.remove("hidden");
