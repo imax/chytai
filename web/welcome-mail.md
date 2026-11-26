@@ -18,5 +18,3 @@ https://chytai.org.ua/community
 
 Макс
 Chytai.org.ua
-
-P.S. У нас є [група в телеграм]({site}/telegram), приєднуйся!
