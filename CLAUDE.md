@@ -732,6 +732,17 @@ A flag only when Max asks for one, or when the change could break what readers u
   -H "$H"` (ask again; `?again=1`, `?groups=a,b`); add now: `POST {"run":true,"limit":200,"groups":[…]}` (up to 3,000, past the day's cap); daily:
   `POST {"on":true,"groups":[…]}`. Both only with Max's OK in the thread.
 
+## Книгарня «Сенс» in «Де взяти» (`web/sens.js`)
+
+- Сенс gave us their Google Merchant Center feed (Max 2026-11-26), ~19k products, ~58 MB. Its address carries their
+  key: meta `sens:feed` (never in the repo; `POST /agent/sens {"feed":"…"}` sets it and reads the feed at once), or
+  the Fly secret `SENS_FEED`. The jobs process reads it every 6 h (If-None-Match), drops merch and gift cards, matches
+  by ISBN (not when two Ukrainian titles share no word: their ISBN on another book), else the same whole title and
+  author (megogo.js `match`; names come name first: `split(s, {nameFirst})`), keeps meta `sens:links` (book id ->
+  [url, price, status, publisher], out of stock too, ~1 MB). Only a book in stock gets the row «Сенс» (paper),
+  sorted with the other shops after the publisher's own: `withShops` = `pubshops.withOwn(sens.withShop(megogo.withShop(book)))`.
+  Status: `curl -s https://chytai.org.ua/agent/sens -H "$H"`; read now: `POST {"run":true}`.
+
 ## Publishers' own shops in «Де взяти» (`web/pubshops.js`)
 
 - Max 2026-11-26 (Лабораторія: a bookshop pays a year later, their own site is best for cashflow): the publisher's own

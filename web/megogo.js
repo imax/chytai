@@ -29,13 +29,14 @@ const clean = (s) => ent(String(s || "")).replace(/\s+/g, " ").trim();
 // «Ґабрієле Меттью, Перрі Девід М.» is names: each part a few capitalised words or initials, no other dots.
 const namesOnly = (s) => s.split(/\s*,\s*/).every((p) => /^[\p{Lu}][\p{L}'’ʼ-]*\.?(?:\s+[\p{Lu}][\p{L}'’ʼ-]*\.?){0,3}$/u.test(p) && !/\p{L}{2,}\.(?!$)/u.test(p));
 // The title and the authors (name first) of «Назва. Підзаголовок. Прізвище Ім'я, Прізвище Ім'я».
-function split(s) {
+// `nameFirst`: the names come «Ім'я Прізвище» (Сенс's feed, sens.js), so nothing is turned round.
+function split(s, { nameFirst = false } = {}) {
   s = clean(s).replace(/(?<!(?:^|\s)\p{Lu})\.$/u, ""); // «Олег Сенцов. »: no author, the dot goes; «Перрі Девід М.» keeps its initial
   for (const m of s.matchAll(/\.\s+/g)) {
     const rest = s.slice(m.index + m[0].length);
     if (!namesOnly(rest)) continue;
     // A one-word pen name comes with «None» as the first name («Мокумокурен None»): the word goes.
-    const flip = (a) => ((w) => (w.length > 1 ? [...w.slice(1), w[0]].join(" ") : w.join(" ")))(a.split(/\s+/).filter((x) => x !== "None"));
+    const flip = (a) => ((w) => (w.length > 1 && !nameFirst ? [...w.slice(1), w[0]].join(" ") : w.join(" ")))(a.split(/\s+/).filter((x) => x !== "None"));
     return { title: s.slice(0, m.index).trim(), author: rest.split(/\s*,\s*/).map(flip).join(", ") };
   }
   return { title: s.trim(), author: "" };

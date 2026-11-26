@@ -1821,7 +1821,25 @@ bg.every("megogo-fill", 24 * 3600 * 1000, () => megogoFill.run(), { db: store.db
 const pubshops = new (require("./pubshops").PubShops)({ store, log: console.log });
 bg.register("pubshops", pubshops, { run: false });
 bg.every("pubshops", 3600 * 1000, () => pubshops.run(), { db: store.db, first: 8 * 60 * 1000 });
-const withShops = (book) => pubshops.withOwn(megogo.withShop(book));
+// Книгарня «Сенс»'s feed (sens.js; Max 2026-11-26), one more paper shop; its address (with their key) in meta `sens:feed`.
+const sens = new (require("./sens").Sens)({ store, log: console.log });
+bg.register("sens", sens, { run: false });
+bg.every("sens-feed", 6 * 3600 * 1000, () => sens.run(), { db: store.db, first: 7 * 60 * 1000 });
+const withShops = (book) => pubshops.withOwn(sens.withShop(megogo.withShop(book)));
+// The feed: GET = what the last read found; POST {"feed": address} keeps the address, {"run": true} reads it now.
+app.get("/agent/sens", agentOk, (req, res) => {
+  const l = JSON.parse(store.db.get("sens:links") || "null");
+  res.json({ feed: !!sens.feed(), at: l?.at ? new Date(l.at).toISOString() : null, books: l?.books || 0, matched: l?.matched || 0, stock: l?.stock || 0, byIsbn: l?.byIsbn || 0 });
+});
+app.post("/agent/sens", agentOk, (req, res) => {
+  const feed = String(req.body?.feed || "");
+  if (feed) {
+    if (!/^https:\/\/sens\.in\.ua\//.test(feed)) return res.status(400).json({ error: "not a sens.in.ua address" });
+    store.db.set("sens:feed", feed);
+  }
+  if (req.body?.run || feed) sens.run({ force: true }).catch((e) => console.log(`sens: ${e.message}`));
+  res.json({ ok: true, feed: !!sens.feed() });
+});
 // Per shop: pages in its sitemap, read, with an ISBN, ours; `links` = books that have the row now.
 app.get("/agent/pubshops", agentOk, (req, res) => res.json({ links: JSON.parse(store.db.get("pubshops:links") || "null")?.books || 0, last: JSON.parse(store.db.get("pubshops:last") || "null"), shops: pubshops.status() }));
 // «Чи варто читати?» on book pages (advice.js): Claude, by the reader's own shelf, on a click.
