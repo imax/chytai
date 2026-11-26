@@ -14,6 +14,7 @@
 // description and genre (megogo:info); the queue does the rest (language, genres, original, cover copies).
 const { norm, sameAuthor, isRussian } = require("./store");
 const { parse, FEED } = require("./megogo");
+const { kyivHour } = require("./newbooks");
 
 const DAY = 400;
 const CYR = /[а-яіїєґ]/i;
@@ -176,6 +177,14 @@ class MegogoFill {
     if (!byHand && !set.on) return null;
     const use = groups || set.groups;
     if (!use.length) return null;
+    // The daily run once a Kyiv night (02–05), when readers are asleep: its books' checks wait for the night too
+    // (newbooks.js BULK). The schedule asks hourly.
+    const day = new Date().toLocaleDateString("en-CA", { timeZone: "Europe/Kyiv" });
+    if (!byHand) {
+      const h = kyivHour();
+      if (h < 2 || h >= 5 || this.db.get("megogo:fill-day") === day) return null;
+      this.db.set("megogo:fill-day", day);
+    }
     this.running = true;
     try {
       const c = this.count();

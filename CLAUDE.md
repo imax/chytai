@@ -726,8 +726,11 @@ A flag only when Max asks for one, or when the change could break what readers u
   kids-fiction, kids-other; laws, religion, medicine, textbooks never), an author and a Cyrillic title, not Russian;
   printings of one book = one book with all ISBNs; left when any edition of ours has an ISBN, the same title by the
   same author, or the title before «.»/«:»/«(» (never across «Том N»). `store.addBook` source `megogo` (ISBNs, cover,
-  a Megogo link), 400 a day (the new-books queue takes 1,500 for all sources), news and in stock first; then a forced
-  `megogo.run` gives them the shop's row, description and genre. ~3,600 such books, 2026-11-26; 3,600 more lib books
+  a Megogo link), 400 a Kyiv night (the daily run only at 02–05), news and in stock first; then a forced
+  `megogo.run` gives them the shop's row, description and genre. Their checks in the new-books queue wait for the night
+  too (newbooks.js `BULK`: Kyiv 01–07, 20 a run, one run in 10 min, behind readers' books, the site reloads only when
+  they are done): on 2026-11-26 1,400 at once (60 every 3 min, a site reload each) used up the machine's CPU burst for
+  2.5 hours. A new source that adds books in bulk goes into `BULK`. ~3,600 such books, 2026-11-26; 3,600 more lib books
   cost the store's load nothing measurable. Status and dry run: `curl -s https://chytai.org.ua/agent/megogo-fill
   -H "$H"` (ask again; `?again=1`, `?groups=a,b`); add now: `POST {"run":true,"limit":200,"groups":[…]}` (up to 3,000, past the day's cap); daily:
   `POST {"on":true,"groups":[…]}`. Both only with Max's OK in the thread.

@@ -1835,10 +1835,10 @@ const megogo = new (require("./megogo").Megogo)({ store, log: console.log });
 bg.register("megogo", megogo, { run: false });
 bg.every("megogo-feed", 6 * 3600 * 1000, () => megogo.run(), { db: store.db, first: 6 * 60 * 1000 });
 // The feed's books no catalog of ours has, as catalog books (megogofill.js; Max 2026-11-26): once a day, the groups
-// Max chose (meta `megogo:fill`), 400 a day at most. Off until it is switched on (POST /agent/megogo-fill).
+// Max chose (meta `megogo:fill`), 400 a night at most (Kyiv 02–05). Off until it is switched on (POST /agent/megogo-fill).
 const megogoFill = new (require("./megogofill").MegogoFill)({ store, megogo, log: console.log });
 bg.register("megogo-fill", megogoFill, { run: true, dry: false });
-bg.every("megogo-fill", 24 * 3600 * 1000, () => megogoFill.run(), { db: store.db, first: 40 * 60 * 1000 });
+bg.every("megogo-fill", 3600 * 1000, () => megogoFill.run(), { db: store.db, first: 40 * 60 * 1000 }); // runs once a Kyiv night, 02–05
 // Publishers' own shops (pubshops.js; Max 2026-11-26: «найкраще це їх власний сайт»): their book pages by sitemap,
 // one page at a time per shop, hourly for 25 minutes until all are read; their row goes first in «Де взяти».
 const pubshops = new (require("./pubshops").PubShops)({ store, log: console.log });

@@ -19,6 +19,15 @@ const BATCH = 60;
 const WAIT = 2 * 60 * 1000; // the site's own details lookup goes first
 const DAILY = 1500; // books a day at most: a new catalog of thousands goes over a few days
 const KEEP = 30 * 24 * 3600 * 1000;
+// Books a catalog brings in bulk (megogofill.js): on 2026-11-26 1,400 of them went through 60 every 3 minutes, each
+// run reloaded the site (~10 s of CPU), and the shared 2-vCPU machine ran out of its CPU burst for 2.5 hours (82
+// stalls, two deploys that could not start). They wait for the night (Kyiv 01–07), 20 a run, at most one run in 10
+// minutes, behind readers' books; a run of only these reloads the site only when it empties the bulk queue.
+const BULK = new Set(["megogo"]);
+const BULK_BATCH = 20;
+const BULK_GAP = 10 * 60 * 1000;
+const kyivHour = (d = new Date()) => Number(d.toLocaleString("en-GB", { timeZone: "Europe/Kyiv", hour: "2-digit", hour12: false })) % 24;
+const night = () => kyivHour() >= 1 && kyivHour() < 7;
 
 class NewBooks {
   constructor({ store, db, details, lang, genre, orig, passes = [], keepCovers, warm, authors, busy = () => false, log = console.log }) {
@@ -32,8 +41,18 @@ class NewBooks {
     const today = `${new Date().toISOString().slice(0, 10)}T00:00:00.000Z`;
     const done = db.prepare("SELECT count(*) AS n FROM book_queue WHERE done >= ?").get(today).n;
     if (done >= DAILY) return null;
-    const rows = db.prepare("SELECT id, source FROM book_queue WHERE done IS NULL AND added <= ? ORDER BY added LIMIT ?").all(new Date(Date.now() - WAIT).toISOString(), Math.min(BATCH, DAILY - done));
-    if (!rows.length) return null;
+    const ready = new Date(Date.now() - WAIT).toISOString();
+    const bulk = JSON.stringify([...BULK]);
+    let rows = db.prepare("SELECT id, source FROM book_queue WHERE done IS NULL AND added <= ? AND source NOT IN (SELECT value FROM json_each(?)) ORDER BY added LIMIT ?").all(ready, bulk, Math.min(BATCH, DAILY - done));
+    let bulkOnly = false;
+    if (!rows.length) {
+      const last = Number(db.get("newbooks:bulk-at") || 0);
+      if (!night() || Date.now() - last < BULK_GAP) return null;
+      rows = db.prepare("SELECT id, source FROM book_queue WHERE done IS NULL AND added <= ? AND source IN (SELECT value FROM json_each(?)) ORDER BY added LIMIT ?").all(ready, bulk, Math.min(BULK_BATCH, DAILY - done));
+      if (!rows.length) return null;
+      bulkOnly = true;
+      db.set("newbooks:bulk-at", String(Date.now()));
+    }
     this.running = true;
     const store = this.store;
     const out = { books: rows.length, haiku: 0, ru: 0, cost: 0, errors: 0 };
@@ -136,6 +155,7 @@ class NewBooks {
     out.cost = Math.round(out.cost * 10000) / 10000;
     // The site reloads (jobs.js) only when something it shows may have changed.
     out.changed = !!(out.originals || out.haiku || out.covers || out.passes || out.authors || own.length);
+    if (bulkOnly && out.changed) out.changed = !db.prepare("SELECT 1 FROM book_queue WHERE done IS NULL AND source IN (SELECT value FROM json_each(?)) LIMIT 1").get(JSON.stringify([...BULK]));
     out.note = [`книжок ${out.books}`, `Haiku ${out.haiku}`, out.ru ? `російських ${out.ru}` : "", out.covers ? `обкладинок ${out.covers}` : "", out.originals ? `оригіналів ${out.originals}` : "", out.authors ? `авторів з Вікіданих ${out.authors}` : "", out.passes || "", `$${out.cost}`, out.errors ? `помилок ${out.errors}` : ""].filter(Boolean).join(", ");
     this.log(`new books: ${out.books} checked, ${out.haiku} Haiku answers, ${out.ru} Russian, $${out.cost}${out.errors ? `, ${out.errors} errors` : ""}`);
     return out;
@@ -154,4 +174,4 @@ class NewBooks {
   }
 }
 
-module.exports = { NewBooks, BATCH, DAILY };
+module.exports = { NewBooks, BATCH, DAILY, BULK, kyivHour };
