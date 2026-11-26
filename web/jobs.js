@@ -138,7 +138,8 @@ function snapshot() {
   for (const [name, { obj, extra }] of registry) {
     out[name] = { running: !!obj.running, allRunning: !!obj.allRunning };
     for (const f of extra) out[name][f] = obj[f];
-    if (obj.own) Object.assign(out[name], obj.state());
+    // `own` marks a job made by fn(); an object may have a method of that name (pubshops.own(shop)).
+    if (obj.own === true && typeof obj.state === "function") Object.assign(out[name], obj.state());
   }
   return out;
 }
