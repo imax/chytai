@@ -748,7 +748,7 @@ A flag only when Max asks for one, or when the change could break what readers u
 - Max 2026-11-26 (Лабораторія: a bookshop pays a year later, their own site is best for cashflow): the publisher's own
   shop row goes first in its format when in stock, even when Megogo is cheaper («Завжди першим»), on the book page
   (`where`, `own`) and in the reader's «Хочу прочитати» (`shopsOf`). `withShops(book)` in server.js =
-  `pubshops.withOwn(megogo.withShop(book))`.
+  `pubshops.withOwn(sens.withShop(megogo.withShop(book)))`.
 - `SHOPS`: base, our shelves of that publisher, a regex for book pages in its sitemap (`maps` = which child sitemaps).
   The jobs process, hourly for 25 min: the sitemap once a day into table `pub_pages`, then each page once (1.5 s apart
   per shop, shops side by side), addresses with words of our titles first; a big shop's other pages 150 a run; ours
