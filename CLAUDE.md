@@ -848,7 +848,8 @@ A flag only when Max asks for one, or when the change could break what readers u
   the explanations in each month and book.
 - Reader «Нотатки» (Max 2026-11-25, variant A «Теми» of canvas 66Ec9Ssa7vR6q7qjgKfMUm; was «Scratchpad» 2026-11-23–24):
   a research folder, on the server so phone and computer show the same (Max: «як obsidian/notion в плані кросс-девайсу»).
-  Panel after «Хочу прочитати» (`r-pnav-scratch`, page `scratch`, `src/renderer/scratch.js`). The in-book «Нотатки»
+  Panel after «Хочу прочитати» (`r-pnav-scratch`, page `scratch`, `src/renderer/scratch.js`). Topics are listed by the last change
+  (`updated`: `touched`, thoughts, books added; newest on top, Max 2026-11-26). The in-book «Нотатки»
   (Зміст · Нотатки · Аа) stay as they are: that book's notes; the panel's = all of them. Three views: the list (a field
   for a topic / author / book / thought with mic and photo; a search: topics here, notes and explanations by
   `/api/search`; «Теми», «Думки без теми» = what Opus answered `unclear`, «З книжок» = every book with notes or

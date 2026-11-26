@@ -64,7 +64,10 @@
   const lib = () => window.Shell.books?.() || [];
   const libBook = (p) => lib().find((b) => b.path === p);
   const author = (b) => (b.authors || [b.author])[0] || "";
-  const topics = () => (items || []).filter((x) => !(x.status === "ok" && x.ai?.kind === "unclear") && x.status !== "fail");
+  // The last time the reader did something in a topic (`touched`: a thought, a book in or out, «Порадити ще»; older
+  // entries: their thoughts), the newest on top (Max 2026-11-26).
+  const updated = (x) => Math.max(x.touched || 0, x.at || 0, ...(x.thoughts || []).map((t) => t.at || 0), ...Object.values(x.added || {}).map(Number).filter(Boolean), ...(x.ai?.books || []).map((b) => b.wanted || 0));
+  const topics = () => (items || []).filter((x) => !(x.status === "ok" && x.ai?.kind === "unclear") && x.status !== "fail").sort((a, b) => updated(b) - updated(a));
   const loose = () => (items || []).filter((x) => (x.status === "ok" && x.ai?.kind === "unclear") || x.status === "fail");
 
   async function load() {

@@ -384,7 +384,7 @@ class Scratch {
         else if ((more || o.later) && later < 30) later++, books.push({ ...o, later: true });
       }
       this.update(acct, id, (x) => {
-        if (more) x.seen = seen;
+        if (more) (x.seen = seen), (x.touched = Date.now());
         x.ai = ai;
         x.status = "ok";
         x.ms = Date.now() - t;
