@@ -1214,6 +1214,17 @@ class Store {
     this.db.set("covers:hidden", JSON.stringify(this._hiddenCovers));
   }
 
+  // MEGOGO BOOKS' description and categories by work id (meta `megogo:info`, written by the jobs process's feed
+  // run); the web process reads it again every ten minutes.
+  megogo() {
+    if (!this._megogo || Date.now() - this._megogo.at > 10 * 60 * 1000) this._megogo = { at: Date.now(), info: JSON.parse(this.db.get("megogo:info") || "{}") };
+    return this._megogo.info;
+  }
+
+  megogoChanged() {
+    this._megogo = null;
+  }
+
   setAiGenres(id, genres, prompt) {
     this.db.prepare("INSERT OR REPLACE INTO ai_genre (id, genres, prompt, at) VALUES (?, ?, ?, ?)").run(id, JSON.stringify(genres), prompt, new Date().toISOString());
     this.aiGenres().set(id, genres);
@@ -2394,6 +2405,8 @@ class Store {
       else {
         const t = [...(this.translations?.get(id) || [])].map((x) => this.book(x, { edited: false, borrow: false })).find((x) => x?.blurb && /[а-яіїєґ]/i.test(x.title) && !isRussian(x));
         if (t) (out.blurb = t.blurb), (out.blurbSource = [t.blurbSource || this.shelfItems.get(t.id)?.shelf.name, `українське видання «${t.title}»`].filter(Boolean).join(", "));
+        // The publisher's description from MEGOGO BOOKS' feed (megogo.js info), before Haiku's short one.
+        else if (this.megogo()[id]?.[0]) (out.blurb = this.megogo()[id][0]), (out.blurbSource = "Megogo");
         else if (edited) {
           const a = this.aiAnswers("blurb").get(id);
           // A word with Latin and Cyrillic letters mixed («adresоване», trial v2) marks a broken answer.
@@ -2437,6 +2450,11 @@ class Store {
         // Open Library guess «Підліткові · Історія» of «Кривавий меридіан» until its own turn in the queue).
         ours = [...new Set([...ours, ...ourGenres([...(this.aiGenres().get(t) || tb?.tags || tb?.genres || []), ...(this.editions.get(t) || []).flatMap(({ item }) => item.genres || [])])])];
       }
+    }
+    // Still none: MEGOGO BOOKS' categories for it (megogo.js info; Max 2026-11-26).
+    if (!ours.some((g) => g !== "художня")) {
+      const cats = this.megogo()[id]?.[1];
+      if (cats?.length) ours = [...new Set([...ourGenres(cats), ...ours])];
     }
     // A classic is not genre romance, whatever its subjects say (Max 2026-10-23: «Лоліта» was «Любовні романи»).
     if (ours.includes("класика")) ours = ours.filter((g) => g !== "любовні романи");

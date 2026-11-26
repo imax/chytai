@@ -76,7 +76,9 @@ const norm = (s) => String(s || "").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " 
 const LANG_ADV = { англійська: "англійською", російська: "російською", польська: "польською", німецька: "німецькою", французька: "французькою", іспанська: "іспанською", італійська: "італійською", турецька: "турецькою" };
 const host = (url) => String(url || "").replace(/^https?:\/\/(www\.)?/, "").replace(/\/.*$/, "");
 // Availability as shown: «є» goes without saying; an announced book says when it is expected.
-const avail = (e) => (!e.status || e.status === "є" ? "" : e.status === "анонс" && e.expected ? `анонс, орієнтовно ${e.expected.toLowerCase()}` : e.status);
+// A shop's day it comes (`from`, YYYY-MM-DD; megogo.js) while that day is still ahead: «очікується з 9 грудня».
+const fromDay = (d) => (/^\d{4}-\d\d-\d\d$/.test(d || "") && d >= new Date().toISOString().slice(0, 10) ? `з ${Number(d.slice(8))} ${MONTHS[Number(d.slice(5, 7)) - 1]}` : "");
+const avail = (e) => (!e.status || e.status === "є" ? "" : e.status === "анонс" && e.expected ? `анонс, орієнтовно ${e.expected.toLowerCase()}` : [e.status, fromDay(e.from)].filter(Boolean).join(e.status === "очікується" ? " " : ", "));
 
 // Stars in the accent colour, as many as the rating, a half star half filled; then the number («4,5»).
 function stars(r, { num = true } = {}) {
@@ -4212,6 +4214,7 @@ ${wait ? `<script>(() => { const steps = ${JSON.stringify(ASK_STEPS)}; const lin
 }
 
 module.exports = {
+  avail,
   statsPage,
   statsAll,
   calendarPage, calendarAddPage, eventPage,

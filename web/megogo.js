@@ -12,7 +12,7 @@
 // read from mbooks.com.ua's pages (catalogs.js mbooks) link to the same shop, so all those rows become one «Megogo»
 // row per format.
 const { norm, sameAuthor, isRussian } = require("./store");
-const { ent } = require("./catalogs");
+const { ent, about } = require("./catalogs");
 
 const FEED = "https://i.mbooks.com.ua/media/merchant_center_feed.xml";
 // No User-Agent of our own for now: their Cloudflare answers 403 to «Chytai/1.0 (…)» (2026-11-25). Max has MEGOGO's
@@ -40,7 +40,11 @@ function split(s) {
   return { title: s.trim(), author: "" };
 }
 
-// The feed's books: { url, isbn, title, author, price, status, brand }.
+// Their categories in words store.js's genre guesses read rightly: «Класична література» is a classic, and «Воєнна
+// проза і поезія» is about the war, not poetry.
+const CATS = { "Класична література": "класика", "Воєнна проза і поезія": "війна" };
+// The feed's books: { url, isbn, title, author, price, status, brand, date, about, cats }: `date` = when a book
+// on order comes (YYYY-MM-DD), `about` = the publisher's description (escaped HTML), `cats` = its category path.
 function parse(xml) {
   const out = [];
   for (const m of xml.matchAll(/<item>([\s\S]*?)<\/item>/g)) {
@@ -50,7 +54,7 @@ function parse(xml) {
     const url = clean(f.link);
     if (!/^https:\/\/mbooks\.com\.ua\/book\/\d+/.test(url) || !STATUS[f.availability]) continue;
     const num = (v) => Number(String(v || "").replace(/[^\d.]/g, "")) || 0;
-    out.push({ url, isbn: String(f.gtin || "").replace(/[^\dX]/gi, ""), ...split(f.title), price: Math.round(num(f.sale_price) || num(f.price)), status: STATUS[f.availability], brand: clean(f.brand) });
+    out.push({ url, isbn: String(f.gtin || "").replace(/[^\dX]/gi, ""), ...split(f.title), price: Math.round(num(f.sale_price) || num(f.price)), status: STATUS[f.availability], brand: clean(f.brand), date: /^\d{4}-\d\d-\d\d/.test(f.availability_date || "") ? f.availability_date.slice(0, 10) : "", about: f.description || "", cats: clean(f.product_type).split(/\s*>\s*/).map((c) => CATS[c] || c) });
   }
   return out;
 }
@@ -67,7 +71,7 @@ class Megogo {
     if (!book) return null;
     if (!this.cache || Date.now() - this.cache.at > 10 * 60 * 1000) this.cache = { at: Date.now(), links: JSON.parse(this.db.get("megogo:links") || "null")?.links || {} };
     const l = this.cache.links[this.store.canonical(book.id)] || this.cache.links[book.id];
-    return l ? { url: l[0], price: l[1], status: l[2], brand: l[3] || "" } : null;
+    return l ? { url: l[0], price: l[1], status: l[2], brand: l[3] || "", date: l[4] || "" } : null;
   }
 
   // The book with its shops for «Де взяти» as `shops` (its `editions` stay as they are: the publisher block reads
@@ -77,7 +81,7 @@ class Megogo {
   withShop(book) {
     if (!book) return book;
     const l = this.linkFor(book);
-    const feed = l && { id: `megogo-${(l.url.match(/\/book\/(\d+)/) || [])[1]}`, shelf: { id: "megogo", name: NAME, kind: "shop" }, links: [{ label: NAME, url: l.url }], format: "папір", price: l.price ? `${l.price} ₴` : "", status: l.status, edition: l.brand };
+    const feed = l && { id: `megogo-${(l.url.match(/\/book\/(\d+)/) || [])[1]}`, shelf: { id: "megogo", name: NAME, kind: "shop" }, links: [{ label: NAME, url: l.url }], format: "папір", price: l.price ? `${l.price} ₴` : "", status: l.status, edition: l.brand, ...(l.date && l.status !== "є" ? { from: l.date } : {}) };
     const eds = book.editions || [];
     const ours = (e) => MBOOKS.test(e.links?.[0]?.url || "");
     const relabel = (e) => ({ ...e, shelf: { id: "megogo", name: NAME, kind: "shop" }, links: [{ label: NAME, url: e.links[0].url }], edition: e.edition || e.shelf?.name || "" });
@@ -109,6 +113,30 @@ class Megogo {
     return id;
   }
 
+  // What store.book() takes from the feed (meta `megogo:info`, work id -> [description, categories]; Max
+  // 2026-11-26): the publisher's description for a work that has none of its own, its editions' or its
+  // translation's (Haiku's short one gives way to it), and the categories, for a work with no genre but «художня»
+// (~5 thousand works, 2026-11-26 test DB).
+  // Only a description the book page would show is kept (~1 thousand, ~1.5 MB); categories for all, a few words each.
+  info(mine, links) {
+    const out = {};
+    for (const [id, bs] of mine) {
+      const best = bs.find((b) => b.url === links[id][0]) || bs[0];
+      // Only what all its editions there agree on: a children's edition of «Ніч перед Різдвом» doesn't make Гоголь's
+      // story a children's book.
+      const cats = bs.map((b) => b.cats.slice(1)).reduce((x, y) => x.filter((c) => y.includes(c)));
+      const w = this.store.book(id);
+      let text = "";
+      if (w && (!w.blurb || /^(Claude|Megogo)/.test(w.blurbSource || ""))) {
+        for (const b of [best, ...bs]) if (!text && b.about) text = about(b.about, 3000);
+        // An English description on a Ukrainian book is not shown (store.book), so it is not kept either.
+        if (CYR.test(w.title || "") && !CYR.test(text.slice(0, 300))) text = "";
+      }
+      if (text || cats.length) out[id] = [text, cats];
+    }
+    return out;
+  }
+
   async run({ force = false } = {}) {
     if (this.running) return null;
     this.running = true;
@@ -123,19 +151,25 @@ class Megogo {
       // A broken or empty answer keeps the last links.
       if (books.length < 1000) throw new Error(`only ${books.length} books in the feed`);
       const links = {};
+      const mine = new Map(); // work id -> its books in the feed
       let byIsbn = 0;
       for (const b of books) {
         const id = this.match(b);
         if (!id) continue;
         if (this.store.workIndex().byIsbn.get(b.isbn) === id) byIsbn++;
+        (mine.get(id) || mine.set(id, []).get(id)).push(b);
         // Several of its editions of one work: in stock first, then the cheapest.
         const old = links[id];
-        if (!old || RANK[b.status] < RANK[old[2]] || (RANK[b.status] === RANK[old[2]] && b.price && (!old[1] || b.price < old[1]))) links[id] = [b.url, b.price, b.status, b.brand];
+        if (!old || RANK[b.status] < RANK[old[2]] || (RANK[b.status] === RANK[old[2]] && b.price && (!old[1] || b.price < old[1]))) links[id] = [b.url, b.price, b.status, b.brand, b.date];
       }
       const n = Object.keys(links).length;
+      const info = this.info(mine, links);
       this.db.set("megogo:links", JSON.stringify({ at: Date.now(), etag: r.headers.get("etag") || "", modified: r.headers.get("last-modified") || "", books: books.length, matched: n, byIsbn, links }));
+      this.db.set("megogo:info", JSON.stringify(info));
+      this.store.megogoChanged?.();
       this.cache = null;
-      this.log(`megogo: ${n} of our books (${books.length} books in the feed, ${byIsbn} by ISBN)`);
+      const blurbs = Object.values(info).filter((x) => x[0]).length;
+      this.log(`megogo: ${n} of our books (${books.length} books in the feed, ${byIsbn} by ISBN), ${blurbs} descriptions`);
       return n;
     } finally {
       this.running = false;

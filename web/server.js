@@ -1243,7 +1243,7 @@ app.post("/api/reader-want", (req, res) => {
       const shops = [];
       for (const e of eds.filter((x) => kindOf(x) === kind).sort((a, b) => (a.status === "є" ? 0 : 1) - (b.status === "є" ? 0 : 1) || price(a) - price(b))) {
         if (shops.length >= 2 || shops.some((s) => s.shop === e.shelf.name)) continue;
-        shops.push({ shop: e.shelf.name, price: e.price || "", url: e.links[0].url, note: [e.subscription ? "є в підписці" : "", e.status && e.status !== "є" ? e.status : ""].filter(Boolean).join(", ") });
+        shops.push({ shop: e.shelf.name, price: e.price || "", url: e.links[0].url, note: [e.subscription ? "є в підписці" : "", pages.avail(e)].filter(Boolean).join(", ") });
       }
       if (shops.length) get.push({ kind, shops });
     }
