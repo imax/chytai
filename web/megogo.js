@@ -143,7 +143,8 @@ class Megogo {
     try {
       const was = JSON.parse(this.db.get("megogo:links") || "null");
       const headers = {};
-      if (was?.etag && !force) headers["If-None-Match"] = was.etag;
+      // No `megogo:info` yet (it came after the links): the whole feed once more.
+      if (was?.etag && !force && this.db.get("megogo:info")) headers["If-None-Match"] = was.etag;
       const r = await this.fetchImpl(FEED, { headers, signal: AbortSignal.timeout(180000) });
       if (r.status === 304) return was.matched;
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
