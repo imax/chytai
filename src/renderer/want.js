@@ -34,6 +34,9 @@
     asking = false;
     if (r?.books) (books = r.books), (libs = r.libs || null), (picks = r.picks || picks), (failed = false), (libBusy = false);
     else failed = !books;
+    // The count beside «Хочу прочитати» in the panel, as «Мої книжки» (Max 2026-11-26).
+    const n = document.querySelector("#r-n-want");
+    if (n && books) n.textContent = books.length || "";
     if (shown()) window.Shell.rerender();
     // The site is still asking the libraries: look again in half a minute, for about half an hour at most.
     clearTimeout(again);
@@ -247,6 +250,10 @@
     e.currentTarget.close();
     window.Shell.open(el.dataset.wantOpen);
   });
+
+  // Asked once a few seconds after the page loads, for the panel's count (and so the page opens at once); the reader's
+  // server keeps the answer a minute, the site builds it from memory.
+  setTimeout(() => !document.body.classList.contains("guest") && !books && window.reader?.want && load(), 4000);
 
   window.Want = { html, enter };
 })();

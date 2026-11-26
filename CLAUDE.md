@@ -878,6 +878,7 @@ A flag only when Max asks for one, or when the change could break what readers u
   SDK (`node -r mock.js` that answers the JSON) with the production catalog's GET `/api/reader-find`.
 - Reader «Хочу прочитати» (Max 2026-11-24, in Scratchpad's place; panel after «Мої книжки», `r-pnav-want`, page `want`,
   `src/renderer/want.js`): the books on the reader's «Хочу прочитати» shelf on the site, each with where to get it.
+  The panel shows their count (`#r-n-want`, Max 2026-11-26): want.js asks `/api/want` once 4 s after a signed-in load.
   `GET /api/want` (signed in; 60 s cache, `?again`) → the site's `POST /api/reader-want {id, key}` (`readerKeyOk`):
   per book `mine` (own file, `readerFileFor`), `free` (free shelf, `freeFileFor`), `online` (openLinks, public-domain
   sources of `freeBooks`, Слухай), `get` (per format the 2 cheapest in stock, no adapted), `rent` (BookFlow). A shelf of
