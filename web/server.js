@@ -1422,13 +1422,6 @@ if (bg.ROLE !== "jobs") setTimeout(() => asker.topics().catch((e) => console.err
 const askOn = (req) => flags.on("ask", req.user);
 // What others asked, with the first covers of each answer.
 const askOthers = (req) => asker.recent(20).map((o) => ({ ...o, books: o.ids.map((id) => store.book(id) && workFor(req, store.book(id))).filter(Boolean) }));
-// Two answers for the homepage's «Запитай Chytai»: from the 12 newest, ones with covers, at random.
-const homeAsks = (req) => {
-  if (!askOn(req)) return [];
-  const all = askOthers(req).slice(0, 12).map((o) => ({ ...o, books: o.books.filter((b) => b.cover) })).filter((o) => o.books.length >= 2);
-  for (let i = all.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [all[i], all[j]] = [all[j], all[i]]; }
-  return all.slice(0, 2);
-};
 app.get("/ask", (req, res, next) => {
   if (!askOn(req)) return next();
   admin.log(req.user?.id || "", "view", "/ask");
@@ -3472,7 +3465,7 @@ app.get("/", (req, res) => {
         .map((x) => ({ book: x.it, shelf: x.sh }));
   // Chosen and ranked by the Ukrainian edition; a reader who wants originals sees those in its place.
   const as = (list) => (req.user?.originals ? list.map((x) => ({ ...x, book: workFor(req, x.book) })) : list);
-  res.send(pages.readPage({ user: req.user, f, filters: READ_FILTERS, picks, finish: as(finish), ua, short: as(short), free, wanted: as(wanted), genres, editorials, forYou: as(forYou), forWhy, fresh, club: club.mark(req.user?.id, club.lively(3)), ask: flags.on("ask", req.user), asks: f ? [] : homeAsks(req), events: f ? null : homeEvents(req), smart: smartOn(req), examples: smartOn(req) ? homeExamples() : [] }));
+  res.send(pages.readPage({ user: req.user, f, filters: READ_FILTERS, picks, finish: as(finish), ua, short: as(short), free, wanted: as(wanted), genres, editorials, forYou: as(forYou), forWhy, fresh, club: club.mark(req.user?.id, club.lively(3)), ask: flags.on("ask", req.user), events: f ? null : homeEvents(req), smart: smartOn(req), examples: smartOn(req) ? homeExamples() : [] }));
 });
 
 app.get("/publishers", (req, res) => {

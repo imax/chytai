@@ -9,10 +9,9 @@ Chytai це проєкт для тих, хто любить книжки.
 Ваша сторінка:
 [chytai.org.ua/@{username}](https://chytai.org.ua/@{username})
 
-Сторінки читачів:
-https://chytai.org.ua/community
-
 Кнопка: [Додати книжки]({site}/add)
+
+Якщо ведеш полицю в [Goodreads]({site}/import/goodreads) чи [Apple Books]({site}/import/apple-books), її можна перенести одним файлом.
 
 Дякую, що ти з нами! Будемо читати.
 

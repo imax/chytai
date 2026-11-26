@@ -175,7 +175,7 @@ ${path === "/" ? `<meta name="google-site-verification" content="5cswdBTj0bCY9oY
 <main class="${home ? "home" : ""}">
 ${path === "/admin" && user?.owner ? adminNav() : ""}
 ${body}
-${!user && JOIN_PATHS.has(path) ? joinBand(canonical, path === "/") : ""}
+${!user && JOIN_PATHS.has(path) ? joinBand(canonical) : ""}
 </main>
 <footer class="foot"><div class="bar"><span class="motto">Chytai.org.ua: читай більше.</span><a href="/updates">Що нового</a><a href="/market">Книжковий ринок</a><a href="/privacy">Приватність</a><a href="mailto:ischenko@gmail.com">Написати нам</a>${user?.owner ? `<a href="/admin">Адмінка</a>` : ""}</div></footer>
 <script src="${ASSETS.js}"></script>
@@ -549,22 +549,10 @@ const adminNav = () => `<nav class="admin-nav">${ADMIN_TABS.map(([name, links, m
 <script>(() => { const p = location.pathname; for (const t of document.querySelectorAll(".admin-tab")) { if (t.dataset.paths.split(" ").includes(p) || (t.dataset.more && new RegExp(t.dataset.more).test(p))) { t.classList.add("on"); for (const a of t.querySelectorAll(".admin-sub a")) if (a.getAttribute("href") === p) a.classList.add("on"); } } })();</script>`;
 
 // For guests, at the bottom of the pages people land on from a search engine: what the site is and a way in
-// (Max, 2026-10-27, variant B of three; text and links his). The home page too (Max, 2026-11-15); not search, sign-in
-// or settings. On book pages the «Хочу прочитати» block itself is not shown to guests.
-const JOIN_PATHS = new Set(["/", "/book","/author", "/genre", "/publishers", "/@", "/lists", "/community", "/club"]);
-// On the home page «Пошук» goes up to its own field instead of reloading the page (Max, 2026-11-15).
-const FIND_UP = `href="#" onclick="document.querySelector('.search-box.big input')?.focus(); scrollTo(0, 0); return false"`;
-function joinBand(back, home = false) {
-  return `<section class="join-band" data-block="join">
-  <div>
-    <p class="kicker">Chytai</p>
-    <p class="join-title">Проєкт для тих, хто любить книжки</p>
-    <p class="join-text">Спільнота людей, каталоги українських видавництв, пошук і рекомендації, читалка, яка пояснює й перекладає.</p>
-    <p class="join-links"><a ${home ? FIND_UP : 'href="/"'}>🔍 Пошук</a><a href="/club">💬 Клуб</a><a href="https://app.chytai.org.ua">📖 Читалка</a></p>
-  </div>
-  <a class="btn primary" rel="nofollow" href="${attr(back ? `/login?next=${encodeURIComponent(back)}` : "/login")}">Доєднатися</a>
-</section>`;
-}
+// (Max, 2026-10-27, variant B of three). Its words are ABOUT's (2026-11-26); on the home page it is on top instead
+// (readPage). Not search, sign-in or settings. On book pages the «Хочу прочитати» block itself is not shown to guests.
+const JOIN_PATHS = new Set(["/book", "/author", "/genre", "/publishers", "/@", "/lists", "/community", "/club"]);
+const joinBand = (back) => aboutBand(back);
 const SHOW_REVIEWS = false;
 // «AI-рекомендація» (advice.js): Claude's take on the book for this reader, by their own shelf, on a click.
 // A guest sees why to sign in, a reader with an empty shelf why to add books, a kept answer shows at once.
@@ -1623,25 +1611,45 @@ function readerBand() {
 // ---- the homepage «Що почитати» (Max, 2026-10-28: tried at /new, then «робимо її головною») ----
 // Shelves by what a reader is after, not by counters; the chips (?f=) narrow every shelf at once.
 // #live and #browse: search as you type replaces the shelves (app.js).
-// «Запитай Chytai» (Max, 2026-11-15, variant A of the design canvas, his words): /ask as its own block under the
-// search, a field that posts to /ask, and two answers others got (covers, the question, its topic).
-const askQ = (t) => ((t = t.replace(/\s+/g, " ").trim()).length > 70 ? `${t.slice(0, 67).replace(/\s+\S*$/, "")}…` : t);
-function askBlock(asks) {
-  const line = (a) => `<div class="litem"><a href="/ask/${attr(a.id)}" tabindex="-1">${stack(a.books.slice(0, 3))}</a><span><a href="/ask/${attr(a.id)}"><b>«${esc(nest(askQ(a.text)))}»</b></a>${a.topic ? `<span class="m">${esc(a.topic)}</span>` : ""}</span></div>`;
-  return `<section class="block ask-block" data-block="ask">
-  <div class="ask-main">
-    <h2>Запитай Chytai</h2>
-    <p class="lead">Розкажіть, що вам подобається, і ми щось порадимо.</p>
-    <form method="post" action="/ask" class="ask-box" id="ask-home">
-      <textarea name="text" rows="2" minlength="15" maxlength="1500" required placeholder="Напр.: щось як Мураками, але коротше" aria-label="Що вам подобається"></textarea>
-      <div class="ask-row"><span class="hint">Відповідає Opus 5.5</span><button class="btn primary">Порадити книжку</button></div>
-    </form>
-  </div>
-  ${asks.length ? `<div class="ask-recent"><p class="kicker">Нещодавно питали</p>${asks.map(line).join("")}<a class="more" href="/ask">Усі поради →</a></div>` : ""}
-</section>
-<script>document.getElementById("ask-home").addEventListener("submit", (e) => { const b = e.target.querySelector("button"); b.disabled = true; b.textContent = "Добираю книжки…"; });</script>`;
+// The «Запитай Chytai» block (2026-11-15) left the homepage on 2026-11-26 (Max: «не такий прям популярний»; 27 taps
+// in two weeks): /ask is «Рекомендації» in the guest's band on top instead.
+// ---- What Chytai is, said the same way on the guest's homepage, the footer band, /welcome and the welcome letter
+// (Max 2026-11-26: «хочеться щоб вони були близькі по тому що ми комунікуємо»). One place for the words: ABOUT.
+const ABOUT = {
+  title: "Проєкт для тих, хто любить книжки",
+  lead: "Як Goodreads, тільки український.",
+  say: "Полиця з оцінками й нотатками, каталоги видавництв, книжкові події, рекомендації і читалка, яка пояснює складні місця.",
+  // «Рекомендації» = /ask, not «Добірки» (Max: «добірки на головній і так є»); the Goodreads import its own row.
+  parts: [
+    ["shelf", "Полиця", "Позначайте прочитане, ставте оцінки, пишіть пару слів."],
+    ["/import/goodreads", "Імпорт з Goodreads", "Перенесіть свою полицю: оцінки й нотатки переїдуть разом із книжками."],
+    ["/publishers", "Каталог", "Книжки українських видавництв: де купити, де взяти в бібліотеці."],
+    ["/calendar", "Події", "Презентації, книжкові клуби й фестивалі по всій Україні."],
+    ["/ask", "Рекомендації", "Напишіть, що вам подобається, і порадимо книжки."],
+    [READER + "/", "Читалка", "Пояснює слова й складні місця просто в книжці."],
+  ],
+};
+// The shelf's link: a guest signs in, a reader adds books.
+const aboutHref = (href, user) => (href === "shelf" ? (user ? "/add" : "/login") : href);
+// The rows of /welcome, numbered; a title is a link too (a phone hides the links on the right).
+function aboutSteps(user) {
+  return `<ol class="welcome-steps">${ABOUT.parts.map(([href, name, line], i) => `<li><span class="n">0${i + 1}</span><div><h3><a href="${attr(aboutHref(href, user))}">${name}</a></h3><p>${line}</p></div>${href === "shelf" ? `<a class="text-link" href="${attr(aboutHref(href, user))}">${user ? "Додати книжки" : "Доєднатися"} →</a>` : ""}</li>`).join("")}</ol>`;
 }
-function readPage({ user, f, filters, picks, finish, ua, short, free, wanted, genres, editorials, forYou, forWhy, fresh, club = [], ask = false, asks = [], events = null, smart = false, examples = [] }) {
+const aboutLinks = (user) => ABOUT.parts.map(([href, name]) => `<a href="${attr(aboutHref(href, user))}">${name}</a>`).join("");
+// The band a guest sees: on top of the homepage (Max 2026-11-26, variant D: «футер … зробити шапкою», no ×),
+// at the foot of the pages people land on from a search engine (joinBand).
+function aboutBand(back = "", top = false) {
+  return `<section class="join-band${top ? " join-top" : ""}" data-block="${top ? "intro" : "join"}">
+  <div>
+    <p class="kicker">Chytai</p>
+    <p class="join-title">${ABOUT.title}</p>
+    <p class="join-text">${ABOUT.lead} ${ABOUT.say}</p>
+    <p class="join-links">${aboutLinks(null)}</p>
+  </div>
+  <a class="btn primary" rel="nofollow" href="${attr(back ? `/login?next=${encodeURIComponent(back)}` : "/login")}">Доєднатися</a>
+</section>`;
+}
+function readPage({ user, f, filters, picks, finish, ua, short, free, wanted, genres, editorials, forYou, forWhy, fresh, club = [], ask = false, events = null, smart = false, examples = [] }) {
   const q = (k) => (k ? `/?f=${k}` : "/");
   const chips = `<nav class="read-chips" data-block="chips">${[["", "Усе"], ...Object.entries(filters).map(([k, [n]]) => [k, n])].map(([k, n]) => (k === f ? `<span class="chip on">${n}</span>` : `<a class="chip" href="${attr(q(k))}">${n}</a>`)).join("")}</nav>`;
   const advice = (p) => `<article class="advice">
@@ -1657,6 +1665,7 @@ function readPage({ user, f, filters, picks, finish, ua, short, free, wanted, ge
   const KEYS = { "Для вас": "for-you", "Дочитують до кінця": "finish", "Українські автори": "ua", Коротке: "short", "Найбільше хочуть прочитати": "wanted", Безкоштовно: "free", "Нове у видавництвах": "fresh" };
   const row = (title, aside, items, extra) => (items.length ? `<section class="block read-row" data-block="${KEYS[title] || "row"}">${label(title, aside)}<div class="grid six">${items.map((x) => card(x.book || x, { avg: x.s?.avg ?? x.avg, extra: extra ? `<p class="meta pop-n">${extra(x)}</p>` : "" })).join("")}</div></section>` : "");
   const body = `
+${!user && !f ? aboutBand("", true) : ""}
 <section class="hero">
   <h1>Я шукаю</h1>
   <form class="search-box big" action="/search" role="search">${smart ? bigBox("", false, examples) : plainBox()}<span class="enter">Enter ↵</span>${smart ? askIn : ""}</form>
@@ -1665,7 +1674,6 @@ function readPage({ user, f, filters, picks, finish, ua, short, free, wanted, ge
 </section>
 <div id="live" data-block="search"></div>
 <div id="browse">
-${ask && !f && !smart ? askBlock(asks) : ""}
 ${picks.length ? `<section class="block" data-block="picks">${label("Читачі радять", "оцінка 4,5+ і пару слів чому")}<div class="advices">${picks.map(advice).join("")}</div></section>` : ""}
 ${row("Для вас", forWhy, forYou)}
 ${events ? calHome(events) : ""}
@@ -2843,19 +2851,12 @@ function welcomePage({ user, next = "", from = null }) {
     <div class="list-hits">${from.books.map((x) => pickRow(x, `/welcome?next=${encodeURIComponent(next)}`)).join("")}</div>
     ${next ? `<p><a class="text-link" href="${attr(next)}">Повернутися ${from.author ? "до автора" : "до книжки"} →</a></p>` : ""}
   </div>` : "";
-  const step = (n, title, text, href, link, ext = false) => `<li><span class="n">${n}</span><div><h3>${title}</h3><p>${text}</p></div><a class="text-link" href="${attr(href)}"${ext ? ' target="_blank" rel="noopener"' : ""}>${link} →</a></li>`;
   const body = `<section class="welcome">
   <div class="welcome-intro">
     <h1>Вітаємо в ${mark}!</h1>
-    <p class="lead">${mark} це проєкт для тих, хто любить книжки. Спільнота людей, каталоги українських видавництв, пошук і рекомендації.</p>
-    ${came || `<div class="acts"><a class="btn primary" href="${start}">Оцінити три книжки</a><a class="text-link" href="${attr(next || "/")}">${later}</a></div>`}
-  </div>
-  <ol class="welcome-steps">
-    ${step("01", "Зберіть свою полицю", "Діліться своїми книжками, оцінками й нотатками.", "/add", "Додати книжки")}
-    ${step("02", "Говоріть про книжки", "Обговорюйте прочитане з іншими читачами.", "/club", "Клуб")}
-    ${step("03", "Знаходьте нові книжки для себе", "Пошук по каталогах українських видавництв, полицях читачів та офлайн бібліотеках.", "/", "Пошук")}
-    ${step("04", "Читалка, яка пояснює складні місця", "У браузері й на iPhone (поки бета).", "https://app.chytai.org.ua/", "Читалка", true)}
-  </ol>
+    <p class="lead">${mark}: ${ABOUT.title.toLowerCase()}. ${ABOUT.lead}</p>
+    ${came || `<div class="acts"><a class="btn primary" href="${start}">Оцінити три книжки</a><a class="text-link" href="${attr(next || "/")}">${later}</a></div>`}  </div>
+  ${aboutSteps(user)}
   <div class="welcome-end"><a class="btn primary" href="${start}">Оцінити три книжки</a><a class="text-link" href="${attr(next || "/")}">${later}</a></div>
 </section>`;
   return layout({ title: "Вітаємо", body, user, path: "/welcome" });

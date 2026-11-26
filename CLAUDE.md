@@ -306,8 +306,11 @@ A flag only when Max asks for one, or when the change could break what readers u
   `curl -s https://chytai.org.ua/agent/ask -H "$H" -H 'content-type: application/json' -d '{"text":"…","model":"claude-sonnet-5-5"}'`.
 - Locally without a key: preload a fake `@anthropic-ai/sdk` (`node -r mock.js web/server.js`, ANTHROPIC_API_KEY=dummy).
 - The homepage (2026-11-15, Max: «давай повернемо як було», then variant A on a design canvas): the search is plain again
-  (h1 «Я шукаю»), and under the chips, on the unfiltered page, a block «Запитай Chytai» (`askBlock` in pages.js): a field
-  that posts to /ask, and two answers others got with covers (`homeAsks` in server.js: of the 12 newest, at random).
+  (h1 «Я шукаю»). The «Запитай Chytai» block under the chips is gone (2026-11-26, Max: «не такий прям популярний»). A
+  guest's unfiltered homepage starts with the footer's band «Проєкт для тих, хто любить книжки» (Max's variant D,
+  canvas BhbekynuRLFeUwnDyXsEjD, no ✕; taps `intro`). One text, `ABOUT` in pages.js, for that band, the footer band on
+  other pages (`joinBand`, taps `join`) and /welcome's steps (`aboutSteps`): change it there. The welcome letter
+  (web/welcome-mail.md) is Max's own text: change only what he asks.
   Fewer cover rows (Max, variant A of a second canvas, by the block taps): the unfiltered page has picks, Для вас,
   Добірки, Дочитують, Обговорюють, then Читалка (with «Безкоштовна класика →» to /publishers/chytai-free); «Українські
   автори», «Хочуть прочитати», «Безкоштовно» only under a chip. Taps per block: `taps` table, `page = '/'`.

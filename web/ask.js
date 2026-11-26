@@ -8,8 +8,7 @@ const crypto = require("crypto");
 const { isRussian, sameAuthor, norm } = require("./store");
 const { confirm } = require("./readerbooks");
 
-const MODEL = "claude-opus-5-5"; // named under the homepage's «Запитай Chytai» field (pages.js askBlock): change both
-// $ per token, for the owner's sums only (server/admin.js PRICES).
+const MODEL = "claude-opus-5-5"; // $ per token, for the owner's sums only (server/admin.js PRICES).
 const PRICE = { "claude-opus-5-5": [4, 20], "claude-sonnet-5-5": [2, 10], "claude-haiku-5-5": [0.1, 0.5] };
 const TEXT_MIN = 15;
 const TEXT_MAX = 1500;
