@@ -2844,7 +2844,6 @@ function pickRow({ book, entry }, back) {
 function welcomePage({ user, next = "", from = null }) {
   // From the reader (/reader-login): «Пізніше» says where it goes.
   const later = next.startsWith("/reader-login") ? "До Читалки" : "Пізніше";
-  const start = `/start${next ? `?next=${attr(encodeURIComponent(next))}` : ""}`;
   const mark = `<b class="wordmark">Chytai</b>`;
   const came = from ? `<div class="welcome-from">
     <h2>${from.author ? `${esc(from.author.name)}: з чого почати` : "Книжка, з якої ви прийшли"}</h2>
@@ -2855,9 +2854,9 @@ function welcomePage({ user, next = "", from = null }) {
   <div class="welcome-intro">
     <h1>Вітаємо в ${mark}!</h1>
     <p class="lead">${mark}: ${ABOUT.title.toLowerCase()}. ${ABOUT.lead}</p>
-    ${came || `<div class="acts"><a class="btn primary" href="${start}">Оцінити три книжки</a><a class="text-link" href="${attr(next || "/")}">${later}</a></div>`}  </div>
+    ${came || `<div class="acts"><a class="btn primary" href="/add">Додати книжки</a><a class="text-link" href="${attr(next || "/")}">${later}</a></div>`}  </div>
   ${aboutSteps(user)}
-  <div class="welcome-end"><a class="btn primary" href="${start}">Оцінити три книжки</a><a class="text-link" href="${attr(next || "/")}">${later}</a></div>
+  <div class="welcome-end"><a class="btn primary" href="/add">Додати книжки</a><a class="text-link" href="${attr(next || "/")}">${later}</a></div>
 </section>`;
   return layout({ title: "Вітаємо", body, user, path: "/welcome" });
 }
