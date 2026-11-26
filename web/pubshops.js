@@ -9,7 +9,7 @@
 // sells other publishers' books too (BookChef, Наш Формат): only ISBNs of the publisher's own shelf get its row.
 // Pages that look like our titles go first, so a big shop gives its matches in the first days.
 // Kept for the site: meta `pubshops:links` (book id -> [[shop, url, price, status, format], …]), ~6 thousand books.
-// Shops that refuse us (Stone, Віхола, Yakaboo, Жупанський, Кафедра, Залізний тато, Readberry): Max asks them for a
+// Shops that refuse us (Stone, Віхола, Yakaboo, Жупанський, Кафедра, Залізний тато): Max asks them for a
 // feed (the Claude Doc «Сайти видавництв: прямі лінки в «Де взяти»», linked from CLAUDE.md).
 const zlib = require("zlib");
 const { slugify } = require("./store");
@@ -24,7 +24,7 @@ const SHOPS = [
   { id: "bookchef", name: "BookChef", base: "https://bookchef.ua", shelves: ["bookchef"], page: /^https:\/\/bookchef\.ua\/[^/?#]+$/ },
   { id: "nashformat", name: "Наш Формат", base: "https://nashformat.ua", shelves: ["nashformat"], page: /\/products\/[^/?#]+$/ },
   { id: "knyholav", name: "#книголав", base: "https://knigolove.ua", shelves: ["knyholav"], page: /\/(book|ebook)\/[^/?#]+$/ },
-  { id: "ranok", name: "Ранок", base: "https://www.ranok.com.ua", shelves: ["fabula", "shcheodnu"], page: /\/info-[^/?#]+-\d+\.html$/, maps: /sitemap_products_/ },
+  { id: "ranok", name: "Ранок", base: "https://www.ranok.com.ua", shelves: ["fabula", "shcheodnu", "readberry"], page: /\/info-[^/?#]+-\d+\.html$/, maps: /sitemap_products_/ },
   { id: "ababahalamaha", name: "А-БА-БА-ГА-ЛА-МА-ГА", base: "https://store.ababahalamaha.com.ua", shelves: ["ababahalamaha"], page: /^https:\/\/store\.ababahalamaha\.com\.ua\/[^/?#]+$/ },
   { id: "vyd21", name: "Видавництво 21", base: "https://books-xxi.com.ua", shelves: ["vyd21", "chornivivtsi"], page: /\/products\/[^/?#]+$/ },
   { id: "arthuss", name: "ArtHuss", base: "https://www.arthuss.com.ua", shelves: ["arthuss"], page: /\/shop\/[^/?#]+$/ },
@@ -144,7 +144,8 @@ class PubShops {
       const add = db.prepare("INSERT OR IGNORE INTO pub_pages (shop, url, pri) VALUES (?, ?, ?)");
       for (const u of urls) if (!had.has(u)) add.run(shop.id, u, pri(u));
       const del = db.prepare("DELETE FROM pub_pages WHERE shop = ? AND url = ?");
-      for (const u of had) if (!now.has(u)) del.run(shop.id, u);
+      // A sitemap read only in part (a child file failed) drops nothing.
+      if (now.size >= had.size / 2) for (const u of had) if (!now.has(u)) del.run(shop.id, u);
     });
     db.set(key, String(Date.now()));
   }
@@ -154,8 +155,12 @@ class PubShops {
   // pages of our books read over a week ago (price, stock); any other page over 60 days ago, 100 a run.
   async readShop(shop, until) {
     const { isbns, words } = this.own(shop);
-    await this.list(shop, words);
     const db = this.db;
+    // A sitemap that fails today (Ранок's answered 404 on 2026-11-26) leaves the pages we know being read.
+    await this.list(shop, words).catch((e) => {
+      if (!db.prepare("SELECT 1 FROM pub_pages WHERE shop = ? LIMIT 1").get(shop.id)) throw e;
+      this.log(`pubshops: ${shop.id} sitemap: ${e.message}; reading the pages we have`);
+    });
     const all = db.prepare("SELECT COUNT(*) n FROM pub_pages WHERE shop = ?").get(shop.id).n;
     const q = (where, limit, ...args) => db.prepare(`SELECT url, isbn FROM pub_pages WHERE shop = ? AND ${where} ORDER BY pri DESC, checked LIMIT ${limit}`).all(shop.id, ...args);
     const old = q("checked > 0 AND checked < ? AND isbn != ''", 5000, Date.now() - 7 * DAY);
