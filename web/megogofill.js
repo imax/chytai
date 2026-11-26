@@ -179,7 +179,8 @@ class MegogoFill {
     this.running = true;
     try {
       const c = this.count();
-      const room = Math.min(limit, DAY - c.n);
+      // A run Max asked for by hand takes what he asked (Max 2026-11-26: «можеш всі прогнати, не треба по 200»).
+      const room = byHand ? limit : Math.min(limit, DAY - c.n);
       if (room <= 0) return { added: 0, note: "the day's cap", changed: false };
       this.store.fresh(); // the site may have added books since this process read them
       const books = await this.feed();

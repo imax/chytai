@@ -2485,7 +2485,7 @@ app.post("/agent/megogo-fill", agentOk, (req, res) => {
   const b = req.body || {};
   const groups = Array.isArray(b.groups) ? b.groups.filter((g) => require("./megogofill").GROUPS[g]) : undefined;
   if (b.run) {
-    megogoFill.run({ byHand: true, limit: Math.min(Number(b.limit) || 200, 400), groups }).catch(() => {});
+    megogoFill.run({ byHand: true, limit: Math.min(Number(b.limit) || 200, 3000), groups }).catch(() => {});
     return res.json({ started: true });
   }
   if (typeof b.on !== "boolean" && !groups) return res.status(400).json({ error: '{"run": true} or {"on": true|false, "groups": [...]}' });

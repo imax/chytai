@@ -726,7 +726,7 @@ A flag only when Max asks for one, or when the change could break what readers u
   a Megogo link), 400 a day (the new-books queue takes 1,500 for all sources), news and in stock first; then a forced
   `megogo.run` gives them the shop's row, description and genre. ~3,600 such books, 2026-11-26; 3,600 more lib books
   cost the store's load nothing measurable. Status and dry run: `curl -s https://chytai.org.ua/agent/megogo-fill
-  -H "$H"` (ask again; `?again=1`, `?groups=a,b`); add now: `POST {"run":true,"limit":200,"groups":[…]}`; daily:
+  -H "$H"` (ask again; `?again=1`, `?groups=a,b`); add now: `POST {"run":true,"limit":200,"groups":[…]}` (up to 3,000, past the day's cap); daily:
   `POST {"on":true,"groups":[…]}`. Both only with Max's OK in the thread.
 
 ## Publishers' own shops in «Де взяти» (`web/pubshops.js`)
