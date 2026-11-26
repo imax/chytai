@@ -1250,5 +1250,15 @@
     ],
     "wanted": true,
     "source": "https://standardebooks.org/ebooks/george-eliot/middlemarch"
+  },
+  {
+    "name": "lawrence-sons-and-lovers.epub",
+    "title": "Sons and Lovers",
+    "authors": "D. H. Lawrence",
+    "tags": [
+      "Англійською"
+    ],
+    "wanted": true,
+    "source": "https://standardebooks.org/ebooks/d-h-lawrence/sons-and-lovers"
   }
 ]
