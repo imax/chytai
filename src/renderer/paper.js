@@ -976,8 +976,9 @@
   function card(b, more = null) {
     const d = $("#paper-found");
     d.found = { seen: { title: b.title, author: b.author }, top: [], fixed: true, more };
-    showCard(b.href ? b : null);
+    // Open first: «Про книжку» (cardGuide) is asked only while the dialog is open.
     d.showModal();
+    showCard(b.href ? b : null);
   }
   window.Paper = { pageHtml, add, coverPhoto, current: () => book, pickPhoto, shrink, card };
 })();
