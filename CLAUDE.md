@@ -161,6 +161,9 @@ private port, and only then moves the site to it; the old process finishes, the 
 - Rollback = the same switch to the commit before (web.yml's check, rollout-watch's `hot:<sha>`); by hand:
   `flyctl ssh console -a chytai-web -C "node /app/web/hotdeploy.js <sha>"` (a release on the volume or the image's).
 - Schema changes must stay additive: old and new code share the database for a few seconds.
+- «HOT: failed the new code did not answer in 3 minutes» with code that starts locally: the machine spent its CPU burst
+  (Prometheus `fly_instance_cpu` mode `steal` far above `user`; 2026-11-26 a 1,500-book queue). Wait until steal falls,
+  then push again (the thread's token can't rerun a workflow).
 - Locally: `GIT_SHA=<any> node web/main.js`, put a `git archive` tgz in `data/web/releases/incoming/<sha>.tgz`, run
   `node web/hotdeploy.js <sha>`. Off: repo variable `HOT_DEPLOY=off`.
 
@@ -744,7 +747,7 @@ A flag only when Max asks for one, or when the change could break what readers u
   author (megogo.js `match`; names come name first: `split(s, {nameFirst})`), keeps meta `sens:links` (book id ->
   [url, price, status, publisher], out of stock too, ~1 MB). Only a book in stock gets the row «Сенс» (paper),
   sorted with the other shops after the publisher's own: `withShops` = `pubshops.withOwn(sens.withShop(megogo.withShop(book)))`.
-  Status: `curl -s https://chytai.org.ua/agent/sens -H "$H"`; read now: `POST {"run":true}`.
+  Status: `curl -s https://chytai.org.ua/agent/sens -H "$H"` (`sample` = five books with the row now); read now: `POST {"run":true}`.
 
 ## Publishers' own shops in «Де взяти» (`web/pubshops.js`)
 

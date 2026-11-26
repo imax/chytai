@@ -1852,7 +1852,10 @@ const withShops = (book) => pubshops.withOwn(sens.withShop(megogo.withShop(book)
 // The feed: GET = what the last read found; POST {"feed": address} keeps the address, {"run": true} reads it now.
 app.get("/agent/sens", agentOk, (req, res) => {
   const l = JSON.parse(store.db.get("sens:links") || "null");
-  res.json({ feed: !!sens.feed(), at: l?.at ? new Date(l.at).toISOString() : null, books: l?.books || 0, matched: l?.matched || 0, stock: l?.stock || 0, byIsbn: l?.byIsbn || 0 });
+  // `sample`: a few books whose page shows the row now (most readers first), to look at.
+  const inStock = Object.entries(l?.links || {}).filter(([, v]) => v[2] === "є").map(([id]) => [id, store.readersOf(id).length]);
+  const sample = inStock.sort((a, b) => b[1] - a[1]).slice(0, 5).map(([id]) => `https://chytai.org.ua${store.href(id)}`);
+  res.json({ feed: !!sens.feed(), at: l?.at ? new Date(l.at).toISOString() : null, books: l?.books || 0, matched: l?.matched || 0, stock: l?.stock || 0, byIsbn: l?.byIsbn || 0, sample });
 });
 app.post("/agent/sens", agentOk, (req, res) => {
   const feed = String(req.body?.feed || "");
