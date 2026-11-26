@@ -860,7 +860,10 @@ function where(book, ukrlib = null, sluhay = null, bookflow = null) {
   const row = (label, first, rest = "") => `<div class="where-row"><span class="where-kind">${label}</span><span class="where-what">${first}${rest}</span></div>`;
   const rows = [];
   for (const [k, label] of kinds) {
-    const list = have.filter((e) => kindOf(e) === k).sort((a, b) => (a.status === "є" ? 0 : 1) - (b.status === "є" ? 0 : 1) || price(a) - price(b));
+    // The publisher's own shop first when it has the book (pubshops.js; Max 2026-11-26: «Завжди першим», even when
+    // Megogo is cheaper), then in stock, then the cheapest.
+    const first = (e) => (e.own && e.status === "є" ? 0 : 1);
+    const list = have.filter((e) => kindOf(e) === k).sort((a, b) => first(a) - first(b) || (a.status === "є" ? 0 : 1) - (b.status === "є" ? 0 : 1) || price(a) - price(b));
     if (!list.length) continue;
     // A shop named once in the short line; its other editions wait under «ще».
     const firstShops = [];

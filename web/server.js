@@ -1237,11 +1237,12 @@ app.post("/api/reader-want", (req, res) => {
   const kindOf = (e) => (e.format === "e-book" || e.format === "аудіо" ? e.format : "папір");
   // Per format the 2 cheapest shops (in stock first), as the book page's «Де взяти».
   const shopsOf = (book) => {
-    const eds = ((b) => b.shops || b.editions || [])(megogo.withShop(book)).filter((e) => e.shelf?.id !== "chytai-free" && e.status !== "немає" && !e.adapted && e.links?.[0]?.url);
+    const eds = ((b) => b.shops || b.editions || [])(withShops(book)).filter((e) => e.shelf?.id !== "chytai-free" && e.status !== "немає" && !e.adapted && e.links?.[0]?.url);
     const get = [];
     for (const kind of ["e-book", "папір", "аудіо"]) {
       const shops = [];
-      for (const e of eds.filter((x) => kindOf(x) === kind).sort((a, b) => (a.status === "є" ? 0 : 1) - (b.status === "є" ? 0 : 1) || price(a) - price(b))) {
+      // The publisher's own shop first when it has the book (Max 2026-11-26, «Завжди першим»), as on the book page.
+      for (const e of eds.filter((x) => kindOf(x) === kind).sort((a, b) => (a.own && a.status === "є" ? 0 : 1) - (b.own && b.status === "є" ? 0 : 1) || (a.status === "є" ? 0 : 1) - (b.status === "є" ? 0 : 1) || price(a) - price(b))) {
         if (shops.length >= 2 || shops.some((s) => s.shop === e.shelf.name)) continue;
         shops.push({ shop: e.shelf.name, price: e.price || "", url: e.links[0].url, note: [e.subscription ? "є в підписці" : "", e.status && e.status !== "є" ? e.status : ""].filter(Boolean).join(", ") });
       }
@@ -1794,6 +1795,14 @@ bg.every("bookflow", 3600 * 1000, () => bookflow.run(), { db: store.db, first: 4
 const megogo = new (require("./megogo").Megogo)({ store, log: console.log });
 bg.register("megogo", megogo, { run: false });
 bg.every("megogo-feed", 6 * 3600 * 1000, () => megogo.run(), { db: store.db, first: 6 * 60 * 1000 });
+// Publishers' own shops (pubshops.js; Max 2026-11-26: «найкраще це їх власний сайт»): their book pages by sitemap,
+// one page at a time per shop, hourly for 25 minutes until all are read; their row goes first in «Де взяти».
+const pubshops = new (require("./pubshops").PubShops)({ store, log: console.log });
+bg.register("pubshops", pubshops, { run: false });
+bg.every("pubshops", 3600 * 1000, () => pubshops.run(), { db: store.db, first: 8 * 60 * 1000 });
+const withShops = (book) => pubshops.withOwn(megogo.withShop(book));
+// Per shop: pages in its sitemap, read, with an ISBN, ours; `links` = books that have the row now.
+app.get("/agent/pubshops", agentOk, (req, res) => res.json({ links: JSON.parse(store.db.get("pubshops:links") || "null")?.books || 0, shops: pubshops.status() }));
 // «Чи варто читати?» on book pages (advice.js): Claude, by the reader's own shelf, on a click.
 const bookpage = new BookPage({ apiKey: process.env.ANTHROPIC_API_KEY || "", log: console.log });
 const advice = new Advice({ store, social, db: store.db, apiKey: process.env.ANTHROPIC_API_KEY || "", log: console.log });
@@ -4036,7 +4045,7 @@ app.get("/book/:id", (req, res) => {
   // For a day only: addresses move as works part and merge, and a browser keeps a bare 301 forever.
   if (store.href(id) !== `/book/${encodeURIComponent(req.params.id)}`) return res.set("Cache-Control", "public, max-age=86400").redirect(301, store.href(id));
   // After bookFor: a draft shelf's rows are gone before they fold into the shop's.
-  const book = megogo.withShop(bookFor(req, store.bookPage(id), !!store.entry(req.user?.id, id)));
+  const book = withShops(bookFor(req, store.bookPage(id), !!store.entry(req.user?.id, id)));
   if (!book) return res.status(404).send(pages.messagePage({ title: "Немає такої книжки", text: "", user: req.user }));
   const file = readerFileFor(req.user?.id, book);
   const free = !file && freeFileFor(book);
