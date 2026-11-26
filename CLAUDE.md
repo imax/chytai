@@ -966,6 +966,13 @@ A flag only when Max asks for one, or when the change could break what readers u
   at most half a library's `perHour` (Kyiv 60 of 120; the budget is counted in table `library_budget`, shared with
   the book page's lookups). The page asks again every 30 s while books are unchecked. `library_cache` rows older than
   60 days go once a day (`sweep`). Card: «Бібліотека» first in «Де взяти».
+  «Мої книгарні» (Max 2026-11-26, variant A of canvas Ubw9pea9pkEN36tsnPXwRi): above «Купити або взяти напрокат», empty
+  until the reader picks up to 3 shops (the same `#libs-dialog`, tabs «Книгарні» / «Видавництва» = shelf kind
+  publisher, each with «N з вашого списку»; settings `shops`, names). `/api/reader-want` gives every book and every
+  `other` version `stock` = {shop name: [price, url, format]} for each shop row in stock now (withShops: Megogo, Сенс,
+  Book.ua, Абук, publishers' own shops), and `shops` = {name: {kind, formats}}; the page picks the reader's itself
+  (no extra call). Tile = the lowest price in a picked shop (+ its name when 2–3 picked); the card puts those shops
+  first in «Де взяти», bold. Yakaboo, «Є», Readeat give no stock. Feeds = online stock, not a shop's own shelf.
 - Reader «Прочитано» at a book's end (Max 2026-11-20, bot report №7): the last page (`bookEnd` in renderer.js: epub.js
   `atEnd` or 100% on pages, the last chapter's bottom in scroll mode; a PDF's last page) marks the book finished in the
   reader only (`POST /api/library/finished` with `auto`; a book finished before is left alone) and asks the site with

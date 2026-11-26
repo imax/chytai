@@ -102,7 +102,7 @@ function loadDotEnv(file) {
 
 // Explanations on Opus, «Переклад» (translation only) on the cheaper model (Max, 2026-10-26).
 const SHARED_DEFAULTS = { model: "claude-opus-5-5", translateModel: "claude-sonnet-5-5", language: "українська" };
-const USER_DEFAULTS = { pageTaps: false, deskScroll: false, font: "literata", margins: "normal", spacing: "normal", column: "normal", pdfMode: "reflow", fontSizes: {}, theme: "auto", explainStyle: "default", customStyle: "", gloss: "on", mentions: "on", glossKnown: [], libraries: [], lastBook: null, positions: {} };
+const USER_DEFAULTS = { pageTaps: false, deskScroll: false, font: "literata", margins: "normal", spacing: "normal", column: "normal", pdfMode: "reflow", fontSizes: {}, theme: "auto", explainStyle: "default", customStyle: "", gloss: "on", mentions: "on", glossKnown: [], libraries: [], shops: [], lastBook: null, positions: {} };
 const SHARED_KEYS = new Set(Object.keys(SHARED_DEFAULTS));
 const USER_KEYS = new Set(Object.keys(USER_DEFAULTS));
 
@@ -1952,6 +1952,8 @@ api.patch("/settings", (req, res) => {
     else if (k === "glossKnown") u[k] = (Array.isArray(v) ? v : []).map((w) => String(w).slice(0, 60)).filter(Boolean).slice(-3000);
     // «Бібліотеки» in «Хочу прочитати» (want.js): the branches the reader picked, 5 at most, { lib, branch }.
     else if (k === "libraries") u[k] = (Array.isArray(v) ? v : []).filter((x) => x && typeof x.lib === "string" && typeof x.branch === "string").slice(0, 5).map((x) => ({ lib: x.lib.slice(0, 30), branch: x.branch.slice(0, 200) }));
+    // «Мої книгарні» in «Хочу прочитати» (want.js): the shops the reader picked by name, 3 at most.
+    else if (k === "shops") u[k] = [...new Set((Array.isArray(v) ? v : []).filter((x) => typeof x === "string" && x.trim()).map((x) => x.trim().slice(0, 80)))].slice(0, 3);
     else if (USER_KEYS.has(k) && k !== "positions") u[k] = v;
   }
   if (!req.guest || req.share) saveState();
@@ -2032,24 +2034,27 @@ api.post("/admin/off", (req, res) => (req.owner ? switchOff(req, res) : res.stat
 // book (the site's POST /api/reader-want). A minute's copy per account, so going back and forth asks once.
 // «Бібліотеки» (Max 2026-11-25): the branches the reader picked (settings `libraries`) go along; the site answers which
 // of them hold each book (`lib`) and how many books it is still asking the libraries about (`libs.unchecked`).
-const wantKept = new Map(); // acct -> { at, books, libs, picks }
+// «Мої книгарні» (Max 2026-11-26): each book's `stock` by shop name and the shops' kinds (`shops`) come with every
+// answer; the page picks the reader's own (settings `shops`, sent back as `myShops`) itself.
+const wantKept = new Map(); // acct -> { at, books, libs, shops, picks }
 api.get("/want", guestsCannot("Без входу списку немає."), async (req, res) => {
   const key = state.accounts[req.acct]?.key;
   if (!key) return res.json({ books: [] });
   const picks = userState(req.acct).libraries || [];
   const kept = wantKept.get(req.acct);
   const same = kept && kept.picks === JSON.stringify(picks);
-  if (same && Date.now() - kept.at < 60000 && !req.query.again) return res.json({ books: kept.books, libs: kept.libs, picks });
+  const myShops = userState(req.acct).shops || [];
+  if (same && Date.now() - kept.at < 60000 && !req.query.again) return res.json({ books: kept.books, libs: kept.libs, shops: kept.shops, picks, myShops });
   try {
     const r = await fetch(`${WEB_URL}/api/reader-want`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: req.acct, key, libs: picks }), signal: AbortSignal.timeout(15000) });
     if (!r.ok) throw new Error(`site ${r.status}`);
-    const { books, libs = null } = await r.json();
+    const { books, libs = null, shops = {} } = await r.json();
     if (wantKept.size > 500) wantKept.delete(wantKept.keys().next().value);
-    wantKept.set(req.acct, { at: Date.now(), books, libs, picks: JSON.stringify(picks) });
-    res.json({ books, libs, picks });
+    wantKept.set(req.acct, { at: Date.now(), books, libs, shops, picks: JSON.stringify(picks) });
+    res.json({ books, libs, shops, picks, myShops });
   } catch (err) {
     console.error(`reader-want ${req.acct}:`, err.message);
-    if (kept && same) return res.json({ books: kept.books, libs: kept.libs, picks });
+    if (kept && same) return res.json({ books: kept.books, libs: kept.libs, shops: kept.shops, picks, myShops });
     res.status(502).json({ error: "Сайт не відповів. Спробуйте ще раз." });
   }
 });

@@ -1235,9 +1235,32 @@ app.post("/api/reader-want", (req, res) => {
   const freeSrc = new Map((fb?.items || []).filter((x) => x.died <= fb.last && !x.check).map((x) => [x.id, x.sources || []]));
   const price = (e) => (e.price === "безкоштовно" ? 0 : Number(String(e.price || "").replace(/[^\d]/g, "")) || Infinity);
   const kindOf = (e) => (e.format === "e-book" || e.format === "аудіо" ? e.format : "папір");
+  // A book's shop rows, once a request (shopsOf and stockOf both read them).
+  const edsKept = new Map();
+  const edsOf = (book) => {
+    if (!edsKept.has(book.id)) edsKept.set(book.id, ((b) => b.shops || b.editions || [])(withShops(book)).filter((e) => e.shelf?.id !== "chytai-free" && e.status !== "немає" && !e.adapted && e.links?.[0]?.url));
+    return edsKept.get(book.id);
+  };
+  // «Мої книгарні» (Max 2026-11-26, variant A of canvas Ubw9pea9pkEN36tsnPXwRi): every shop that has the book in stock
+  // now, by its name: [price, url, format], paper before an e-book or audio, then the cheapest. The reader keeps which
+  // shops one picked (settings `shops`) and picks from these itself; `shops` in the answer = each name's kind and formats.
+  const shopKinds = {};
+  const stockOf = (book) => {
+    const out = {};
+    for (const e of edsOf(book)) {
+      if (e.status !== "є") continue;
+      const name = e.shelf.name;
+      const k = shopKinds[name] || (shopKinds[name] = { kind: e.shelf.kind === "publisher" ? "publisher" : "shop", formats: [] });
+      if (!k.formats.includes(kindOf(e))) k.formats.push(kindOf(e));
+      const was = out[name];
+      const paper = kindOf(e) === "папір";
+      if (!was || (paper && was[2] !== "папір") || (paper === (was[2] === "папір") && price(e) < (was[0] || Infinity))) out[name] = [Number.isFinite(price(e)) ? price(e) : 0, e.links[0].url, kindOf(e)];
+    }
+    return out;
+  };
   // Per format the 2 cheapest shops (in stock first), as the book page's «Де взяти».
   const shopsOf = (book) => {
-    const eds = ((b) => b.shops || b.editions || [])(withShops(book)).filter((e) => e.shelf?.id !== "chytai-free" && e.status !== "немає" && !e.adapted && e.links?.[0]?.url);
+    const eds = edsOf(book);
     const get = [];
     for (const kind of ["e-book", "папір", "аудіо"]) {
       const shops = [];
@@ -1296,7 +1319,7 @@ app.post("/api/reader-want", (req, res) => {
     for (const t of (book.twins || []).slice(0, 3)) {
       const tb = store.bookPage(t.id);
       if (!tb || isRussian(tb)) continue;
-      const v = { lang: langOf(tb), title: tb.title, href: `${SITE}${store.href(tb.id)}`, get: shopsOf(tb), rent: rentOf(tb), abroad: abroadOf(tb, seen) };
+      const v = { lang: langOf(tb), title: tb.title, href: `${SITE}${store.href(tb.id)}`, get: shopsOf(tb), stock: stockOf(tb), rent: rentOf(tb), abroad: abroadOf(tb, seen) };
       if (v.get.length || v.rent || v.abroad.length) other.push(v);
     }
     // An original no catalog has (Haiku named it, store.bookPage origTitle): a search on Amazon by its title.
@@ -1305,12 +1328,12 @@ app.post("/api/reader-want", (req, res) => {
       other.push({ lang: "", title: book.origTitle, href: "", get: [], rent: null, abroad: [{ label: "Amazon", url: `https://www.amazon.com/s?${new URLSearchParams({ k: q, i: "stripbooks" })}` }, kobo(book.origTitle, book.origAuthor)] });
     }
     const lib = libBook.has(r.id) ? libraries.picked(store.db, libBook.get(r.id), picks) : [];
-    return { id: store.canonical(r.id), title: book.title, author: book.author || "", year: book.published || null, cover: abs(book.cover), href: `${SITE}${store.href(r.id)}`, added: r.added || "", lang: langOf(book), mine: mine?.name || "", free: free ? free.name : "", online, get: shopsOf(book), rent: rentOf(book), abroad: abroadOf(book, seen), other, ...(lib.length ? { lib } : {}), ...(hrefs ? { status: r.status } : {}) };
+    return { id: store.canonical(r.id), title: book.title, author: book.author || "", year: book.published || null, cover: abs(book.cover), href: `${SITE}${store.href(r.id)}`, added: r.added || "", lang: langOf(book), mine: mine?.name || "", free: free ? free.name : "", online, get: shopsOf(book), stock: stockOf(book), rent: rentOf(book), abroad: abroadOf(book, seen), other, ...(lib.length ? { lib } : {}), ...(hrefs ? { status: r.status } : {}) };
   });
-  if (!picks.length) return res.json({ books });
+  if (!picks.length) return res.json({ books, shops: shopKinds });
   const list = [...libBook.values()];
   libraries.fill(store.db, list, picks, { log: console.log });
-  res.json({ books, libs: { unchecked: libraries.unchecked(store.db, list, picks) } });
+  res.json({ books, shops: shopKinds, libs: { unchecked: libraries.unchecked(store.db, list, picks) } });
 });
 
 // «Хочу прочитати» on a mentioned book's card in the reader (Max 2026-11-26, «Згадані книжки»): the book by its page

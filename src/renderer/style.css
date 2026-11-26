@@ -827,6 +827,8 @@ body[data-theme="dark"] .r-pill { font-weight: 600; }
 #libs-dialog .lb-note { margin: 4px 0 0; font-size: 13px; color: var(--r-ink2); }
 #libs-dialog .spinner, .r-want .spinner { display: inline-block; vertical-align: -2px; margin-right: 8px; width: 12px; height: 12px; border: 2px solid var(--r-sline); border-top-color: var(--r-ochre); border-radius: 50%; animation: spin 0.8s linear infinite; }
 .r-want-lib { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--r-ink2); }
+.r-want-mine { font-weight: 600; }
+#libs-dialog .lb-kind { margin-left: 6px; color: var(--r-ink3); font-size: 13px; }
 .ab-foot { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin: 8px 0 0; font-size: 14px; }
 .ab-foot a { color: var(--r-ink); text-underline-offset: 3px; }
 .ab-foot .r-pill { margin-left: auto; }

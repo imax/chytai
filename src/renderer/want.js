@@ -10,6 +10,10 @@
 // (#libs-dialog, settings `libraries`, 5 at most); then the books those branches hold, from the site's cache of the
 // libraries' catalogs (`lib` per book). Books the site hasn't asked them about yet are asked in the background
 // (`libs.unchecked`), so the page asks again every half minute while it is open.
+// «Мої книгарні» (Max 2026-11-26, variant A of canvas Ubw9pea9pkEN36tsnPXwRi), above «Купити»: empty until the reader
+// picks up to 3 shops (the same dialog, tabs «Книгарні» / «Видавництва», settings `shops` by name); then the books in
+// stock there now (the site's `stock` per book and per version: name -> [price, url, format]), the price under the
+// cover, with the shop's name when several are picked. The card puts those shops first in «Де взяти», in bold.
 (() => {
   const ESC = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" };
   const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ESC[c]);
@@ -21,6 +25,8 @@
   let failed = false;
   let picks = []; // the reader's library branches, [{ lib, branch }]
   let libs = null; // { unchecked } for the picks
+  let myShops = []; // the reader's shops by name, 3 at most
+  let shopKinds = {}; // name -> { kind: "shop" | "publisher", formats }
   let libBusy = false; // the picks changed, the answer for them not here yet
   let again = null; // the timer that asks again while the libraries are being checked
   let tries = 0;
@@ -32,7 +38,7 @@
     asking = true;
     const r = await window.reader.want?.(fresh);
     asking = false;
-    if (r?.books) (books = r.books), (libs = r.libs || null), (picks = r.picks || picks), (failed = false), (libBusy = false);
+    if (r?.books) (books = r.books), (libs = r.libs || null), (picks = r.picks || picks), (myShops = r.myShops || myShops), (shopKinds = r.shops || {}), (failed = false), (libBusy = false);
     else failed = !books;
     // The count beside «Хочу прочитати» in the panel, as «Мої книжки» (Max 2026-11-26).
     const n = document.querySelector("#r-n-want");
@@ -62,13 +68,13 @@
   const group = (b) => (readNow(b) ? "now" : b.get?.length || b.rent || b.online?.length || b.abroad?.length || b.other?.length ? "buy" : "none");
   const LANG = { uk: "Українською", en: "Англійською", "": "В оригіналі" };
 
-  function tile(b, i, cap) {
+  function tile(b, i, cap, act = "want-lib-card") {
     const path = readNow(b);
     const foot = cap != null ? `<span class="r-want-h r-want-lib">${esc(cap)}</span>` : path
       ? `<span class="r-want-h"><button type="button" class="r-want-go" data-open="${esc(path)}" data-act="${b.mine ? "want-mine" : "want-free"}">Читати</button></span>`
       : how(b) ? `<span class="r-want-h">${esc(how(b))}</span>` : "";
     return `<div class="r-want-b">
-      <button type="button" class="r-want-c" data-act="${cap != null ? "want-lib-card" : "want-card"}" data-want="${i}">${window.Shell.rcover({ title: b.title, authors: [b.author] }, b.cover || null)}<span class="r-want-t">${esc(b.title)}</span></button>
+      <button type="button" class="r-want-c" data-act="${cap != null ? act : "want-card"}" data-want="${i}">${window.Shell.rcover({ title: b.title, authors: [b.author] }, b.cover || null)}<span class="r-want-t">${esc(b.title)}</span></button>
       ${foot}</div>`;
   }
 
@@ -85,8 +91,26 @@
     const none = parts.none.length ? head("Поки немає", parts.none.length) + grid(parts.none) : "";
     return `${top}<p class="r-want-p">${books.length} ${plural(books.length, "книжка", "книжки", "книжок")} з вашої полиці на chytai.org.ua</p>
       ${parts.now.length ? head("Можна читати зараз", parts.now.length) + grid(parts.now) : ""}
+      ${shopsPart(head)}
       ${parts.buy.length ? head("Купити або взяти напрокат", parts.buy.length) + grid(parts.buy) : ""}
       ${libsPart(head, grid)}${none}</section>`;
+  }
+
+  // «Мої книгарні»: a book counts when it or its other version (original, translation) is in stock in a picked shop;
+  // under the cover the lowest such price, and the shop's name when the reader picked several.
+  const inMine = (b) =>
+    [b, ...(b.other || [])].flatMap((v) => myShops.filter((n) => v.stock?.[n]).map((n) => [n, v.stock[n][0] || Infinity])).sort((x, y) => x[1] - y[1]);
+  function shopsPart(head) {
+    const change = `<button type="button" class="r-link r-want-fold" data-act="want-shops">Змінити</button>`;
+    if (!myShops.length)
+      return `<div class="r-want-libs"><div class="r-sec-head"><h2>Мої книгарні</h2></div>
+        <p class="r-want-p">Оберіть до трьох книгарень, і тут будуть книжки, які в них є зараз.</p>
+        <p class="r-want-p"><button type="button" class="r-pill-line" data-act="want-shops">Обрати книгарню</button></p></div>`;
+    const have = books.map((b, i) => [b, i]).filter(([b]) => !readNow(b) && inMine(b).length);
+    const cap = (b) => ((t) => (Number.isFinite(t[1]) ? `${t[1]} ₴` : "є") + (myShops.length > 1 ? ` · ${t[0]}` : ""))(inMine(b)[0]);
+    return `<div class="r-want-libs">${head("Мої книгарні", have.length, change)}
+      <p class="r-want-p">${esc(myShops.join(", "))}${have.length ? "" : "<br>Зараз цих книжок там немає."}</p>
+      ${have.length ? `<div class="r-want-g">${have.map(([b, i]) => tile(b, i, cap(b), "want-shop-card")).join("")}</div>` : ""}</div>`;
   }
 
   // «Бібліотеки»: a branch's short name («Бібліотека ім. А. Головка» → «ім. А. Головка», no address); how it holds
@@ -123,7 +147,10 @@
   let q = "";
   const dlg = () => document.querySelector("#libs-dialog");
   const isOn = (lib, name) => chosen.some((p) => p.lib === lib && p.branch === name);
+  let mode = "libs"; // the dialog picks library branches or shops
   async function pick() {
+    mode = "libs";
+    dlg().querySelector("h2").textContent = "Мої бібліотеки";
     chosen = picks.map((p) => ({ ...p }));
     q = "";
     const d = dlg();
@@ -166,6 +193,48 @@
     tabsHtml();
     d.querySelector(".lb-n").textContent = chosen.length ? `Обрано ${chosen.length} з 5.` : "";
   }
+  // The shops' picker in the same dialog: tabs «Книгарні» / «Видавництва» (a publisher's own shop), every shop that has
+  // a book of the list in stock now with how many, the picked ones first; 3 at most.
+  let shopsChosen = [];
+  let shopTab = "shop";
+  const FMT = { "e-book": "електронні", аудіо: "аудіо", папір: "папір" };
+  function pickShops() {
+    mode = "shops";
+    shopsChosen = [...myShops];
+    shopTab = myShops.length && Object.keys(shopKinds).length && myShops.every((n) => shopKinds[n]?.kind === "publisher") ? "publisher" : "shop";
+    const d = dlg();
+    d.querySelector("h2").textContent = "Мої книгарні";
+    d.querySelector("#lb-sub").textContent = "До трьох. Покажемо, які книжки з вашого списку там є зараз.";
+    shopsHtml(true);
+    d.showModal();
+  }
+  let shopOrder = [];
+  function shopsHtml(sort) {
+    const n = (name) => (books || []).filter((b) => [b, ...(b.other || [])].some((v) => v.stock?.[name])).length;
+    const names = [...new Set([...Object.keys(shopKinds), ...shopsChosen])];
+    const kind = (name) => shopKinds[name]?.kind || "shop";
+    const tabs = ["shop", "publisher"].filter((t) => t === "shop" || names.some((x) => kind(x) === t));
+    if (!tabs.includes(shopTab)) shopTab = "shop";
+    const list = names.filter((x) => kind(x) === shopTab);
+    if (sort) shopOrder = [...list].sort((x, y) => shopsChosen.includes(y) - shopsChosen.includes(x) || n(y) - n(x) || x.localeCompare(y, "uk"));
+    list.sort((x, y) => shopOrder.indexOf(x) - shopOrder.indexOf(y));
+    const full = shopsChosen.length >= 3;
+    const tabsHtml = tabs.length > 1 ? `<div class="r-tabs">${tabs.map((t) => {
+      const c = shopsChosen.filter((x) => kind(x) === t).length;
+      return `<button type="button" class="${t === shopTab ? "on" : ""}" data-act="want-shop-tab" data-stab="${t}">${t === "shop" ? "Книгарні" : "Видавництва"}${c ? ` <i>${c}</i>` : ""}</button>`;
+    }).join("")}</div>` : "";
+    const fmt = (name) => ((f) => (f.length === 1 ? ` <span class="lb-kind">${FMT[f[0]]}</span>` : ""))(shopKinds[name]?.formats || []);
+    const rows = list.length
+      ? list.map((x) => {
+        const on = shopsChosen.includes(x);
+        const k = n(x);
+        return `<li><label class="${full && !on ? "off" : ""}" data-act="want-shop-pick"><input type="checkbox" data-shop="${esc(x)}"${on ? " checked" : ""}${full && !on ? " disabled" : ""} />${esc(x)}${fmt(x)}<small>${k ? `${k} з вашого списку` : "зараз нічого"}</small></label></li>`;
+      }).join("")
+      : `<li class="lb-note">Поки жодна з цих книгарень не має книжок з вашого списку.</li>`;
+    const note = shopsChosen.length ? `Обрано ${shopsChosen.length} з 3.` : "Yakaboo, «Є» й Readeat поки не кажуть, що в них є.";
+    dlg().querySelector("#lb-body").innerHTML = `${tabsHtml}<ul class="lb-list">${rows}</ul><p class="lb-note lb-n">${note}</p>`;
+  }
+
   function plural(n, one, few, many) {
     const t = n % 100;
     const u = n % 10;
@@ -175,7 +244,14 @@
   // Where to get one version of the book: one line a format, then BookFlow and the shops abroad.
   function lines(v, abroadLabel) {
     const out = [];
-    for (const g of v.get || []) out.push([KIND[g.kind] || g.kind, g.shops.map(shop).join(` <span class="r-want-m">·</span> `)]);
+    for (const g of v.get || []) {
+      // The reader's own shops first in their format, even when they are not among the two cheapest.
+      const mine = myShops.filter((n) => v.stock?.[n]?.[2] === g.kind).map((n) => ({ shop: n, price: v.stock[n][0] ? `${v.stock[n][0]} ₴` : "", url: v.stock[n][1], mine: true }));
+      const list = mine.length ? [...mine, ...g.shops.filter((x) => !mine.some((m) => m.shop === x.shop))].slice(0, Math.max(2, mine.length + 1)) : g.shops;
+      out.push([KIND[g.kind] || g.kind, list.map((x) => (x.mine ? `<b class="r-want-mine">${shop(x)}</b>` : shop(x))).join(` <span class="r-want-m">·</span> `)]);
+    }
+    // A picked shop with the book in a format the list doesn't show yet (rare: the book's get is cut to in-stock rows).
+    for (const n of myShops) if (v.stock?.[n] && !(v.get || []).some((g) => g.kind === v.stock[n][2])) out.unshift([KIND[v.stock[n][2]] || v.stock[n][2], `<b class="r-want-mine">${shop({ shop: n, price: v.stock[n][0] ? `${v.stock[n][0]} ₴` : "", url: v.stock[n][1] })}</b>`]);
     if (v.rent) out.push(["Напрокат", `${link(v.rent.url, "BookFlow")}<span class="r-want-m">, ${v.rent.free ? "є вільна" : "зараз усі в читачів"}${v.rent.price ? `, ${v.rent.price} ₴` : ""}</span>`]);
     if (v.abroad?.length) out.push([abroadLabel, v.abroad.map((l) => link(l.url, `${esc(l.label)} ↗`)).join(` <span class="r-want-m">·</span> `)]);
     return out.map(([k, x]) => `<div><span class="r-want-k">${esc(k)}</span><span>${x}</span></div>`).join("");
@@ -208,10 +284,18 @@
 
   const d = dlg();
   d.addEventListener("click", (e) => {
+    const s = e.target.closest("[data-stab]");
+    if (s) return (shopTab = s.dataset.stab), shopsHtml(true);
     const t = e.target.closest("[data-city]");
     if (t) return (city = t.dataset.city), (q = ""), pickerHtml();
   });
   d.addEventListener("change", (e) => {
+    const sb = e.target.closest("[data-shop]");
+    if (sb) {
+      const name = sb.dataset.shop;
+      shopsChosen = shopsChosen.includes(name) ? shopsChosen.filter((x) => x !== name) : [...shopsChosen, name].slice(0, 3);
+      return shopsHtml(false);
+    }
     const box = e.target.closest("[data-branch]");
     if (!box) return;
     const name = box.dataset.branch;
@@ -225,6 +309,15 @@
   });
   // Closing keeps the choice (Готово, Esc, a tap outside alike): to the account, then the list asks the site again.
   d.addEventListener("close", async () => {
+    if (mode === "shops") {
+      if (JSON.stringify(shopsChosen) === JSON.stringify(myShops)) return;
+      myShops = shopsChosen;
+      if (shown()) window.Shell.rerender();
+      try {
+        await window.reader.setSettings({ shops: myShops });
+      } catch {}
+      return;
+    }
     if (JSON.stringify(chosen) === JSON.stringify(picks)) return;
     picks = chosen;
     libBusy = picks.length > 0;
@@ -245,6 +338,7 @@
   document.querySelector("#shell").addEventListener("click", (e) => {
     if (!shown()) return;
     if (e.target.closest("[data-act='want-libs']")) return pick();
+    if (e.target.closest("[data-act='want-shops']")) return pickShops();
     const el = e.target.closest("[data-want]");
     const b = el && books?.[Number(el.dataset.want)];
     if (b) card(b);
