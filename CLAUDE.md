@@ -34,6 +34,10 @@ next thread should know, change this file in the same commit. Short recipes, not
    then `webkit.launch()` with that `PLAYWRIGHT_BROWSERS_PATH`. The reader alone: `READER_SECRET=x DATA_DIR=<dir>
    ANTHROPIC_API_KEY=dummy node server/index.js`, a book in `<dir>/accounts/<16 hex>/books/`, cookie
    `reader_acct=<id>.<base64url HMAC-SHA256("acct:<id>", READER_SECRET)>`, open `/?open=<file>`.
+   The reader with the site's data («Хочу прочитати», shelf, shops): the site with `READER_ORIGINS=http://localhost:8080
+   READER_URL=http://localhost:8080`, the reader with `PORT=8080 WEB_URL=http://localhost:8090 READER_DOMAIN=`; sign in on
+   the site, then open `http://localhost:8090/reader-login?back=http://localhost:8080`. Claude calls without a key:
+   `ANTHROPIC_BASE_URL` to a small local server that answers `/v1/messages` (JSON, or SSE when `stream`).
 4. `scripts/smoke-test.sh` (site), `scripts/smoke-reader.sh` (reader).
 5. Show Max what you checked: screenshots, the numbers, what you could not check.
 
