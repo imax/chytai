@@ -433,6 +433,13 @@ app.use("/covers", express.static(COVERS, { maxAge: "1y", immutable: true }));
 // Small copies of the covers on shelves and lists (thumbs.js).
 const thumbs = new (require("./thumbs").Thumbs)({ db: store.db, dir: COVERS, log: console.log, isBot: (req) => BOT.test(req.headers["user-agent"] || ""), onBlank: (src) => console.log(`covers: stand-in ${src.slice(0, 100)} taken off ${store.dropBlankCover(src)} books`) });
 pages.setThumbs((src, shown) => thumbs.url(src, shown));
+// A cover for the reader's pages: our 480 px copy, not the shop's original (a topic or «Хочу прочитати» drew dozens of
+// 1,500 px pictures, and Android's WebView left parts of the page unpainted, bot №62).
+const readerCover = (u) => {
+  if (!u) return "";
+  const t = thumbs.url(u, 240);
+  return /^https?:/.test(t) ? t : `${SITE}${t}`;
+};
 app.get("/t/:w/:sig/:src", (req, res) => thumbs.serve(req, res).catch(() => res.status(500).end()));
 // A list's picture for social networks, made of its covers (listimage.js).
 const listImage = new (require("./listimage").ListImage)({ dir: COVERS, thumbs, log: console.log });
@@ -1204,7 +1211,7 @@ app.get("/api/reader-about", (req, res) => {
   }
   if (blurb.length > 900) blurb = blurb.slice(0, 900).replace(/[^.!?…]*$/, "") || blurb.slice(0, 900) + "…";
   const abs = (u) => (!u ? "" : /^https?:/.test(u) ? u : `${SITE}${u}`);
-  res.json({ found: true, title: b.title, author: b.author || "", year: b.published || null, blurb, cover: abs(b.cover), href: `${SITE}${store.href(hit.book.id)}` });
+  res.json({ found: true, title: b.title, author: b.author || "", year: b.published || null, blurb, cover: readerCover(b.cover), href: `${SITE}${store.href(hit.book.id)}` });
 });
 
 // «Додати книжку» in the reader (design v2, Max 2026-11-02): books of the catalog for what was typed, each with its
@@ -1216,7 +1223,7 @@ app.get("/api/reader-find", (req, res) => {
   const abs = (u) => (!u ? "" : /^https?:/.test(u) ? u : `${SITE}${u}`);
   const books = store.search(q, { limit: 12 }).map((h) => {
     const b = store.book(h.book.id) || h.book;
-    return { title: b.title, author: b.author || "", year: b.published || null, cover: abs(b.cover), href: `${SITE}${store.href(h.book.id)}` };
+    return { title: b.title, author: b.author || "", year: b.published || null, cover: readerCover(b.cover), href: `${SITE}${store.href(h.book.id)}` };
   });
   res.json({ books });
 });
@@ -1328,7 +1335,7 @@ app.post("/api/reader-want", (req, res) => {
       other.push({ lang: "", title: book.origTitle, href: "", get: [], rent: null, abroad: [{ label: "Amazon", url: `https://www.amazon.com/s?${new URLSearchParams({ k: q, i: "stripbooks" })}` }, kobo(book.origTitle, book.origAuthor)] });
     }
     const lib = libBook.has(r.id) ? libraries.picked(store.db, libBook.get(r.id), picks) : [];
-    return { id: store.canonical(r.id), title: book.title, author: book.author || "", year: book.published || null, cover: abs(book.cover), href: `${SITE}${store.href(r.id)}`, added: r.added || "", lang: langOf(book), mine: mine?.name || "", free: free ? free.name : "", online, get: shopsOf(book), stock: stockOf(book), rent: rentOf(book), abroad: abroadOf(book, seen), other, ...(lib.length ? { lib } : {}), ...(hrefs ? { status: r.status } : {}) };
+    return { id: store.canonical(r.id), title: book.title, author: book.author || "", year: book.published || null, cover: readerCover(book.cover), href: `${SITE}${store.href(r.id)}`, added: r.added || "", lang: langOf(book), mine: mine?.name || "", free: free ? free.name : "", online, get: shopsOf(book), stock: stockOf(book), rent: rentOf(book), abroad: abroadOf(book, seen), other, ...(lib.length ? { lib } : {}), ...(hrefs ? { status: r.status } : {}) };
   });
   if (!picks.length) return res.json({ books, shops: shopKinds });
   const list = [...libBook.values()];
@@ -1416,7 +1423,7 @@ app.post("/api/reader-shelf", (req, res) => {
   const rows = store.library(id).filter((r) => !r.kids);
   rows.sort((a, b) => (rank[a.status] ?? 4) - (rank[b.status] ?? 4));
   res.json({
-    books: rows.slice(0, 1000).map((r) => ({ t: r.book.title || "", a: r.book.author || "", s: r.status || "", href: `${SITE}${store.href(r.id)}`, cover: abs(r.book.cover), year: r.book.published || null })),
+    books: rows.slice(0, 1000).map((r) => ({ t: r.book.title || "", a: r.book.author || "", s: r.status || "", href: `${SITE}${store.href(r.id)}`, cover: readerCover(r.book.cover), year: r.book.published || null })),
   });
 });
 
