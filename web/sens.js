@@ -82,7 +82,14 @@ class Sens {
       const was = JSON.parse(this.db.get("sens:links") || "null");
       const headers = { "User-Agent": "Chytai/1.0 (+https://chytai.org.ua)" };
       if (was?.etag && !force) headers["If-None-Match"] = was.etag;
-      const r = await this.fetchImpl(url, { headers, signal: AbortSignal.timeout(180000) });
+      // A network error (Node's «fetch failed», 2026-11-26 right after a restart) gets one more try a minute later.
+      const get = () => this.fetchImpl(url, { headers, signal: AbortSignal.timeout(180000) });
+      const r = await get().catch(async (e) => {
+        if (e.name === "TimeoutError") throw e;
+        this.log(`sens: ${e.message}${e.cause ? ` (${e.cause.code || e.cause.message})` : ""}; again in a minute`);
+        await new Promise((ok) => setTimeout(ok, this.retryMs ?? 60000));
+        return get();
+      });
       if (r.status === 304) return was.matched;
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
       const books = parse(await r.text());
