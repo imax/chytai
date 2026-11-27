@@ -913,6 +913,7 @@
     mentionsText: (book, href, c) => ok(api("GET", `/api/mentions/text?${new URLSearchParams({ book, href, c: c || "" })}`)),
     mentionCard: (m) => ok(api("GET", `/api/mentions/card?${new URLSearchParams({ title: m.title, author: m.author || "", orig: m.orig || "" })}`)),
     mentionWant: (href, off = false) => ok(api("POST", "/api/mentions/want", { href, off })),
+    mentionWantNew: (title, author) => ok(api("POST", "/api/mentions/wantnew", { title, author })),
     mentionDrop: (book, id) => ok(api("DELETE", `/api/mentions?${new URLSearchParams({ book, id })}`)),
     // One book's notes and explanations, in short (GET /api/notes/book).
     bookNotes: (name) => ok(api("GET", `/api/notes/book?path=${encodeURIComponent(name)}`)),

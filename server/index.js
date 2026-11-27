@@ -3476,6 +3476,23 @@ api.post("/mentions/want", noScratch, async (req, res) => {
     res.status(502).json({ error: "Сайт не відповів." });
   }
 });
+// «Хочу прочитати» for a mentioned book the catalog lacks (bot №66): the site looks for its Ukrainian edition, makes it
+// a book and puts it on the shelf; 404 = not found anywhere.
+api.post("/mentions/wantnew", noScratch, async (req, res) => {
+  const title = clean(req.body?.title, 200);
+  const author = clean(req.body?.author, 200);
+  if (!state.accounts[req.acct]?.key || !title) return res.status(400).json({ error: "Немає книжки." });
+  try {
+    const r = await fetch(`${WEB_URL}/api/reader-wantnew`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: req.acct, key: state.accounts[req.acct].key, title, author }), signal: AbortSignal.timeout(25000) });
+    const a = await r.json();
+    if (!r.ok) return res.status(r.status === 404 || r.status === 429 ? r.status : 502).json({ error: a.error || "Сайт не відповів." });
+    wantKept.delete(req.acct);
+    shelfKept.delete(req.acct);
+    res.json(a);
+  } catch {
+    res.status(502).json({ error: "Сайт не відповів." });
+  }
+});
 // «Прибрати зі згаданих»: hidden for good in that book (the text's Haiku would bring it back otherwise).
 api.delete("/mentions", noScratch, (req, res) => {
   const book = String(req.query.book || "");

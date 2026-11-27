@@ -1356,6 +1356,55 @@ app.post("/api/reader-wantit", (req, res) => {
   res.json({ ok: true, status: "want" });
 });
 
+// «Хочу прочитати» for a book the catalog lacks (the reader's «Згадані книжки» card, Max 2026-11-26, bot №66): its
+// Ukrainian edition on book.ua, else in Google Books / Open Library (as the calendar's books), never Russian or an
+// audiobook; made as a book (source `mention`) and put on the shelf; Max hears of each new one. 10 new books a
+// reader a day. Not found: 404, the card says so.
+const wantNewDay = new Map(); // reader -> { day, n }
+app.post("/api/reader-wantnew", async (req, res) => {
+  const id = String(req.body?.id || "");
+  if (!readerKeyOk(id, String(req.body?.key || ""))) return res.status(403).json({ error: "key" });
+  const title = String(req.body?.title || "").trim().slice(0, 200);
+  const author = String(req.body?.author || "").trim().slice(0, 200);
+  if (title.length < 2) return res.status(400).json({ error: "Немає назви." });
+  const put = (bookId) => {
+    bookId = store.canonical(bookId);
+    const e = store.entry(id, bookId);
+    if (!e?.status) store.setEntry(id, bookId, { status: "want" });
+    res.json({ ok: true, status: e?.status || "want", href: `${SITE}${store.href(bookId)}` });
+  };
+  const had = store.findWork({ title, author });
+  if (had) return put(had);
+  const day = new Date().toISOString().slice(0, 10);
+  const used = wantNewDay.get(id)?.day === day ? wantNewDay.get(id) : { day, n: 0 };
+  if (used.n >= 10) return res.status(429).json({ error: "На сьогодні досить нових книжок." });
+  const head = (t) => norm(String(t || "").split(/[:(]|\.\s|\s[-–—]\s/)[0]);
+  let book = null;
+  let from = "";
+  const hits = await catalogs.bookuaSearch(title.split(/[:(]|\.\s/)[0], { timeout: 6000 }).catch(() => []);
+  const hit = hits.find((h) => head(h.title) === head(title) && (!author || sameAuthor(author, h.author)) && /українськ/i.test(h.language || "") && h.format !== "Аудіо");
+  if (hit) (book = { title: hit.title.replace(/^«([^»]+)»/, "$1"), author: hit.author || author, cover: /^https:\/\/i\.book\.ua\//.test(hit.cover || "") ? hit.cover : "", links: [{ label: "book.ua", url: hit.url }], language: "українська", ...(hit.isbn ? { isbns: [hit.isbn] } : {}), ...(hit.year ? { published: hit.year } : {}) }), (from = "book.ua");
+  if (!book && author) {
+    const { confirm } = require("./readerbooks");
+    const g = await confirm({ title, author, language: "українська" }, (q) => readerBooks.search(q)).catch(() => null);
+    if (g && /[а-яіїєґ]/i.test(g.title)) {
+      const gl = /^https:\/\/(books\.google\.[a-z.]+|play\.google\.com)\//.test(g.google || "") ? [{ label: "Google Books", url: g.google }] : [];
+      const cover = /^https:\/\/(covers\.openlibrary\.org|books\.google\.[a-z.]+|books\.googleusercontent\.com)\//.test(g.cover || "") ? g.cover : "";
+      (book = { title: title.split(": ")[0], author: author || g.author, cover, links: gl, language: "українська", ...(g.isbns?.length ? { isbns: g.isbns.slice(0, 20) } : {}), ...(Number(g.published) ? { published: Number(g.published) } : {}) }), (from = g.from || "Google Books");
+    }
+  }
+  if (!book || isRussian(book)) return res.status(404).json({ error: "Не знайшли цю книжку українською." });
+  const again = store.findWork({ title: book.title, author: book.author, isbns: book.isbns || [] });
+  if (again) return put(again);
+  const made = store.addBook({ ...book, source: "mention" });
+  wantNewDay.set(id, { day, n: used.n + 1 });
+  if (wantNewDay.size > 2000) wantNewDay.delete(wantNewDay.keys().next().value);
+  details({ ids: [made.id] });
+  const r = auth.reader(id);
+  if (id !== OWNER_ID) notifyOwner(`Нова книжка з Читалки: ${book.title}`, [`${r?.name || id}${r?.username ? ` (${SITE}/@${r.username})` : ""} хоче прочитати книжку, якої не було в каталозі (згадана в Читалці); тепер вона є:`, "", `${book.title}${book.author ? ` — ${book.author}` : ""}  ${SITE}${store.href(made.id)}  (${from})`].join("\n"));
+  put(made.id);
+});
+
 // The account's whole shelf here, short, for the reader's «Нотатки» (Max 2026-11-25: a topic's books and the books it
 // suggests take what the reader has read or wants here, not only the reader's files): read, reading and want first,
 // the newest first, 1,000 at most; not the kids' shelf.

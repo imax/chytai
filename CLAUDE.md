@@ -956,7 +956,9 @@ A flag only when Max asks for one, or when the change could break what readers u
   covers (Max's design B, canvas C4zbe7sBdsPD1z41gChjEj): «Можна читати зараз» / «Купити або взяти напрокат» / «Бібліотеки» /
   «Поки немає» (open, Max 2026-11-25), under a cover «Читати» (opens it) or the lowest price; a tap = `Paper.card(b, {top, foot, noAdd})` with
   «Читати», «Де взяти», the book's page and «Прибрати з «Хочу прочитати»» (`/api/mentions/want {off}` → the site's
-  `/api/reader-wantit {off}`: only a book that is only wanted). Every `Paper.card` from elsewhere (want, «Нотатки»,
+  `/api/reader-wantit {off}`: only a book that is only wanted). A mentioned book the catalog lacks gets «Хочу прочитати»
+  too: `/api/mentions/wantnew` → the site's `/api/reader-wantnew` (book.ua's Ukrainian edition, else Google Books / Open
+  Library; source `mention`, 10 a reader a day, Max hears of each). Every `Paper.card` from elsewhere (want, «Нотатки»,
   «Згадані книжки») keeps «Про книжку» folded and asks the guide only once it is unfolded (Max 2026-11-26). The other language too (Max 2026-11-24: «іноді я свідомо хочу читати в
   оригіналі»): `abroad` (the book page's Amazon, Google Books, Gutenberg links and a Kobo search for a book not in Ukrainian; no Open
   Library, Max: «це якийсь фейк») and `other`, up to 3

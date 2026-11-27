@@ -126,8 +126,10 @@ window.Mentions = (() => {
       if (b) top += window.Want?.where(b) || "";
       else if (!data) top += `<p class="r-want-none mn-wait">${SPIN}Шукаємо, де взяти…</p>`;
       const st = b?.status || "";
-      const want = !cat?.href || guest() || !data
+      const want = guest() || !data
         ? ""
+        : !cat?.href
+          ? `<button type="button" class="r-pill pf-add" data-mn-new data-act="mention-want-new">Хочу прочитати</button>`
         : st === "want"
           ? `<p class="mn-on">✓ У «Хочу прочитати»</p>`
           : st
@@ -156,6 +158,23 @@ window.Mentions = (() => {
         w.outerHTML = `<p class="mn-on">✓ У «Хочу прочитати»</p>`;
       } catch (err) {
         w.disabled = false;
+        window.showNotice?.(err instanceof TypeError ? "Немає з'єднання." : err.message || "Не вийшло.", false);
+      }
+      return;
+    }
+    const nw = e.target.closest("[data-mn-new]");
+    if (nw && d.mention) {
+      const m = d.mention;
+      nw.disabled = true;
+      nw.innerHTML = `${SPIN}Шукаємо книжку…`;
+      try {
+        const r = await window.reader.mentionWantNew(m.title, m.author || "");
+        const none = d.querySelector(".mn-none");
+        if (none) none.remove();
+        nw.outerHTML = `<p class="mn-on">${r.status && r.status !== "want" ? "✓ На вашій полиці" : "✓ У «Хочу прочитати»"}</p>${r.href ? `<p class="pf-page"><a href="${esc(r.href)}" target="_blank" rel="noopener">Сторінка книжки на Chytai ↗</a></p>` : ""}`;
+      } catch (err) {
+        nw.disabled = false;
+        nw.textContent = "Хочу прочитати";
         window.showNotice?.(err instanceof TypeError ? "Немає з'єднання." : err.message || "Не вийшло.", false);
       }
       return;
