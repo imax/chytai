@@ -955,7 +955,9 @@ A flag only when Max asks for one, or when the change could break what readers u
   sources of `freeBooks`, Слухай), `get` (per format the 2 cheapest in stock, no adapted), `rent` (BookFlow). A shelf of
   covers (Max's design B, canvas C4zbe7sBdsPD1z41gChjEj): «Можна читати зараз» / «Купити або взяти напрокат» / «Бібліотеки» /
   «Поки немає» (open, Max 2026-11-25), under a cover «Читати» (opens it) or the lowest price; a tap = `Paper.card(b, {top, foot, noAdd})` with
-  «Читати», «Де взяти» and the book's page. The other language too (Max 2026-11-24: «іноді я свідомо хочу читати в
+  «Читати», «Де взяти», the book's page and «Прибрати з «Хочу прочитати»» (`/api/mentions/want {off}` → the site's
+  `/api/reader-wantit {off}`: only a book that is only wanted). Every `Paper.card` from elsewhere (want, «Нотатки»,
+  «Згадані книжки») keeps «Про книжку» folded and asks the guide only once it is unfolded (Max 2026-11-26). The other language too (Max 2026-11-24: «іноді я свідомо хочу читати в
   оригіналі»): `abroad` (the book page's Amazon, Google Books, Gutenberg links and a Kobo search for a book not in Ukrainian; no Open
   Library, Max: «це якийсь фейк») and `other`, up to 3
   `twins` (original / Ukrainian translation, never Russian) with their own `get`, `rent`, `abroad`; a translation

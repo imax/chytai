@@ -278,9 +278,27 @@
     // No «Додати в мої книжки» here (Max 2026-11-24, bot №52): the book is on one's list already.
     window.Paper.card(
       { title: b.title, author: b.author, cover: b.cover || "", href: b.href, year: b.year },
-      { top: where(b), noAdd: true, foot: `<p class="pf-page">${link(b.href, "Сторінка книжки на Chytai ↗")}</p>` },
+      { top: where(b), noAdd: true, foot: `<p class="pf-page">${link(b.href, "Сторінка книжки на Chytai ↗")}</p><p class="mn-dropp"><button type="button" class="r-link mn-drop" data-want-drop="${esc(b.href)}" data-act="want-drop">Прибрати з «Хочу прочитати»</button></p>` },
     );
   }
+  // «Прибрати з «Хочу прочитати»» (Max 2026-11-26, bot №63): off the site's shelf, then the list again.
+  document.querySelector("#paper-found").addEventListener("click", async (e) => {
+    const btn = e.target.closest("[data-want-drop]");
+    if (!btn) return;
+    btn.disabled = true;
+    try {
+      await window.reader.mentionWant(btn.dataset.wantDrop, true);
+    } catch (err) {
+      btn.disabled = false;
+      return window.showNotice?.(err instanceof TypeError ? "Немає з'єднання." : err.message || "Не вийшло.", false);
+    }
+    const href = btn.dataset.wantDrop;
+    document.querySelector("#paper-found").close();
+    if (books) books = books.filter((x) => x.href !== href);
+    const n = document.querySelector("#r-n-want");
+    if (n && books) n.textContent = books.length || "";
+    if (shown()) window.Shell.rerender();
+  });
 
   const d = dlg();
   d.addEventListener("click", (e) => {

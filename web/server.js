@@ -1346,6 +1346,11 @@ app.post("/api/reader-wantit", (req, res) => {
   if (!bid || !store.book(bid)) return res.status(400).json({ error: "Немає такої книжки." });
   const bookId = store.canonical(bid);
   const e = store.entry(id, bookId);
+  // `off`: out of «Хочу прочитати» (the reader's list, Max 2026-11-26, bot №63); only a book that is only wanted.
+  if (req.body?.off) {
+    if (e?.status === "want") store.removeEntry(id, bookId);
+    return res.json({ ok: true, status: e?.status === "want" ? "" : e?.status || "" });
+  }
   if (e?.status) return res.json({ ok: true, status: e.status });
   store.setEntry(id, bookId, { status: "want" });
   res.json({ ok: true, status: "want" });

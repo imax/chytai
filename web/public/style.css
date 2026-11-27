@@ -271,7 +271,11 @@ h2.year span { font: 13px var(--sans); color: var(--muted); }
 .feed-row.wide .title { font: 600 19px/1.3 var(--serif); }
 .feed-row.wide .by { font-size: 13px; display: block; }
 .feed-row.wide .note { font-size: 17px; margin-top: 10px; }
-.shelf-covers { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+/* One row, the «+N →» tile included: covers shrink on a narrow phone (Max 2026-11-26, bot №61). */
+.shelf-covers { display: flex; gap: 8px; margin-top: 8px; }
+.shelf-covers > a { flex: 0 1 48px; min-width: 0; }
+.shelf-covers > a > .cover { width: 100%; }
+.shelf-row > div { flex: 1; }
 .shelf-row .who > a:not(:first-child) { color: inherit; }
 .cover.shelf-more { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; background: transparent; box-shadow: none; border: 1px solid var(--rule); color: var(--muted); font-size: 13px; text-decoration: none; }
 .shelf-more:hover { color: var(--ink); border-color: var(--muted); }

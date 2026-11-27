@@ -3465,7 +3465,8 @@ api.post("/mentions/want", noScratch, async (req, res) => {
   const href = clean(req.body?.href, 500);
   if (!state.accounts[req.acct]?.key || !href) return res.status(400).json({ error: "Немає книжки." });
   try {
-    const r = await fetch(`${WEB_URL}/api/reader-wantit`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: req.acct, key: state.accounts[req.acct].key, href }), signal: AbortSignal.timeout(10000) });
+    // `off`: out of «Хочу прочитати» (want.js card, bot №63).
+    const r = await fetch(`${WEB_URL}/api/reader-wantit`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: req.acct, key: state.accounts[req.acct].key, href, off: !!req.body?.off }), signal: AbortSignal.timeout(10000) });
     const a = await r.json();
     if (!r.ok) return res.status(502).json({ error: a.error || "Сайт не відповів." });
     wantKept.delete(req.acct);

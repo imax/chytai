@@ -121,8 +121,9 @@ window.Mentions = (() => {
       const cat = data ? data.cat : m.cat;
       const b = data?.book || null;
       let top = `<p class="mn-from">${esc(from)}</p>`;
+      // «Немає на Chytai» under «Про книжку», not above it (Max 2026-11-26, bot №66).
+      const none = data && !cat && !b ? `<p class="r-want-none mn-none">Цієї книжки немає на Chytai.</p>` : "";
       if (b) top += window.Want?.where(b) || "";
-      else if (data && !cat) top += `<p class="r-want-none">Цієї книжки немає на Chytai.</p>`;
       else if (!data) top += `<p class="r-want-none mn-wait">${SPIN}Шукаємо, де взяти…</p>`;
       const st = b?.status || "";
       const want = !cat?.href || guest() || !data
@@ -134,7 +135,7 @@ window.Mentions = (() => {
             : `<button type="button" class="r-pill pf-add" data-mn-want="${esc(cat.href)}" data-act="mention-want">Хочу прочитати</button>`;
       const page = cat?.href ? `<p class="pf-page"><a href="${esc(cat.href)}" target="_blank" rel="noopener">Сторінка книжки на Chytai ↗</a></p>` : "";
       const drop = m.id && m.src ? `<p class="mn-dropp"><button type="button" class="r-link mn-drop" data-mn-drop data-act="mention-drop">Прибрати зі згаданих</button></p>` : "";
-      window.Paper.card({ title: cat?.title || m.title, author: cat?.author || m.author, cover: cat?.cover || "", href: cat?.href || "", year: cat?.year || null }, { top, noAdd: true, foot: want + page + drop });
+      window.Paper.card({ title: cat?.title || m.title, author: cat?.author || m.author, cover: cat?.cover || "", href: cat?.href || "", year: cat?.year || null }, { top, noAdd: true, foot: none + want + page + drop });
       d.mention = m;
     };
     draw(null);

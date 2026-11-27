@@ -466,7 +466,7 @@ function authorBlock(a) {
 </section>`;
 }
 
-function bookPage({ club = [], ukrlib = null, sluhay = null, bookflow = null,inGenre = null, fresh = null, pick = null, awards = [], authorInfo = null, lists = [], myLists = null, book, entry, now = false, user, shelf, inLibrary = new Map(), readers = [], also = [], alsoTitle = "Читали це, сподобалось і це", writings = [], reviewError = "", editionError = "", ukAsk = null, readUrl = "", freeRead = false, freeFile = false, advice = null, overview = null, overviewVote = null, bookQuote = null, event = null }) {
+function bookPage({ club = [], ukrlib = null, sluhay = null, bookflow = null,inGenre = null, fresh = null, pick = null, awards = [], authorInfo = null, lists = [], myLists = null, book, entry, now = false, user, shelf, inLibrary = new Map(), readers = [], also = [], alsoTitle = "Також сподобалось", writings = [], reviewError = "", editionError = "", ukAsk = null, readUrl = "", freeRead = false, freeFile = false, advice = null, overview = null, overviewVote = null, bookQuote = null, event = null }) {
   const s = statsOf(book.id);
   // A book in Russian stays on its reader's shelf, and its page shows no «Про книжку» and no side blocks
   // (Max 2026-10-23): nothing that would lead people to it or on from it.
@@ -4144,15 +4144,12 @@ ${form}
 // The wait (20–30 s): one line that changes every few seconds, as under «Що кажуть про книжку» (Max, 2026-11-13:
 // «краще як для AI overview … змінюється просто підпис», not the books one by one).
 const ASK_STEPS = ["Читаю, що вам сподобалось…", "Згадую схожі книжки…", "Шукаю їх у каталозі…", "Відбираю ті, що пасують найбільше…", "Пишу, чому кожна…", "Ще трохи…"];
-const ASK_HINT = "Наприклад: класно зайшли цикли Тесс Ґеррітсен про Ріццолі й Саймона Бекетта про антрополога Гантера. Порадьте ще детективні серії.";
 const askText = (t) => t.split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean).map((p) => `<p>${esc(p).replace(/\n/g, "<br>")}</p>`).join("");
-function askForm(text = "", error = "", latest = "") {
-  // One of the 10 newest questions, at random, as the example (Max, 2026-11-12: «рандомно одне з 10 останніх»).
-  const t = String(latest || "").replace(/\s+/g, " ").trim();
-  const hint = t ? `Наприклад: ${t.length > 300 ? `${t.slice(0, 297).replace(/\s+\S*$/, "")}…` : t}` : ASK_HINT;
+function askForm(text = "", error = "") {
+  // No placeholder at all (Max 2026-11-26, bot №69: another reader's question showed there, once in Russian).
   return `<form method="post" action="/ask" class="form ask-form" id="ask-form">
   ${error ? `<p class="error">${esc(error)}</p>` : ""}
-  <textarea name="text" rows="6" minlength="15" maxlength="1500" required placeholder="${attr(hint)}" aria-label="Що вам сподобалось">${esc(text)}</textarea>
+  <textarea name="text" rows="6" minlength="15" maxlength="1500" required aria-label="Що вам сподобалось">${esc(text)}</textarea>
   <div class="actions"><button class="btn primary">Порадити</button><span class="hint">Питання й відповідь побачать інші.</span></div>
 </form>
 <script>document.getElementById("ask-form").addEventListener("submit", (e) => { const b = e.target.querySelector("button"); b.disabled = true; b.textContent = "Добираю книжки…"; });</script>`;
@@ -4165,7 +4162,7 @@ function askPage({ user, text = "", error = "", others = [] }) {
   <h1>Що почитати далі?</h1>
   <p class="lead">Напишіть, що вам сподобалось. Порадимо книжки з каталогу.</p>
 </section>
-${askForm(text, error, others.slice(0, 10)[Math.floor(Math.random() * Math.min(10, others.length))]?.text)}
+${askForm(text, error)}
 ${others.length ? `<section class="ask-others">${label("Що питають інші")}${others.map((o) => `<a class="ask-other" href="/ask/${attr(o.id)}"><span class="q">${esc(o.topic || short(o.text))}</span></a>`).join("")}</section>` : ""}`;
   return layout({ title: "Що почитати далі?", body, user, path: "/ask", canonical: "/ask", description: "Напишіть, що вам сподобалось, і Chytai порадить книжки." });
 }

@@ -125,17 +125,21 @@
     d.card = c;
     // A card from elsewhere (`card`) keeps its own parts also for a book the catalog lacks (Згадані книжки).
     const more = ((b || d.found.fixed) && d.found.more) || {};
+    // A card from elsewhere («Хочу прочитати», «Нотатки», «Згадані книжки») keeps «Про книжку» folded, asked only once
+    // unfolded (Max 2026-11-26, bot №64/№65/№67); the card of a new paper book shows it at once, to help choose.
+    const fold = !!d.found.fixed;
+    const unfolded = fold && d.aboutFor === `${c.title}|${c.author}`; // drawn again while open: stays open
     $("#pf-body").innerHTML = `<div class="pf-card"><span class="pf-card-c">${window.Shell.rcover({ title: c.title, authors: [c.author] }, c.cover || null)}</span>
         <span class="pf-x"><span class="pf-t">${esc(c.title)}</span><span class="pf-a">${esc([c.author, c.year].filter(Boolean).join(" · "))}</span></span></div>
       ${more.top || ""}
-      <div class="ab-inline pf-about" id="pf-about"></div>
+      ${fold ? `<section class="ab-block pf-fold${unfolded ? " open" : ""}"><button type="button" class="pp-row" data-pf-about><span>Про книжку</span><span class="ab-chev">›</span></button><div class="ab-inline pf-about" id="pf-about"${unfolded ? ` data-asked="1"` : " hidden"}></div></section>` : `<div class="ab-inline pf-about" id="pf-about"></div>`}
       ${more.noAdd ? "" : `<button type="button" class="r-pill pf-add" data-pf-add>Додати в мої книжки</button>`}${more.foot || ""}
       ${!d.found.fixed && (top.length || b) ? `<button type="button" class="r-link pf-asis" data-pf-list>Не та книжка</button>` : ""}`;
     window.ReadingTime?.count("cover-card");
-    cardGuide(c);
+    if (!fold || unfolded) cardGuide(c, fold);
   }
   // «Про книжку» on the card, asked again while it is being made (the kept answer comes at once).
-  async function cardGuide(c) {
+  async function cardGuide(c, folded = false) {
     const d = $("#paper-found");
     const box = () => (d.open && d.card === c ? $("#pf-about") : null);
     const sec = (h, t) => `<section class="ab-sec"><h3>${h}</h3><p>${esc(t)}</p></section>`;
@@ -150,8 +154,9 @@
       const el = box();
       if (!el) return;
       const f = g?.before;
-      if (f?.about || f?.why) return (el.innerHTML = sec("Про книжку", f.about || f.why) + (f.worth ? sec("Чому варто читати", f.worth) : ""));
-      if (!g?.building) return (el.innerHTML = "");
+      // Folded under its own «Про книжку» row: no second heading of that name.
+      if (f?.about || f?.why) return (el.innerHTML = (folded ? `<p>${esc(f.about || f.why)}</p>` : sec("Про книжку", f.about || f.why)) + (f.worth ? sec("Чому варто читати", f.worth) : ""));
+      if (!g?.building) return (el.innerHTML = folded ? `<p class="muted">Опису поки немає.</p>` : "");
       el.innerHTML = `<p class="pf-wait"><span class="spinner"></span>Готую кілька слів про книжку…</p>`;
       await new Promise((r) => setTimeout(r, 2500));
     }
@@ -161,6 +166,22 @@
     if (e.target === d) return d.close();
     if (!d.found) return;
     const { seen, top } = d.found;
+    const fold = e.target.closest("[data-pf-about]");
+    if (fold && d.card) {
+      const block = fold.parentElement;
+      const box = $("#pf-about");
+      const open = !block.classList.contains("open");
+      block.classList.toggle("open", open);
+      box.hidden = !open;
+      d.aboutFor = open ? `${d.card.title}|${d.card.author}` : "";
+      if (open && !box.dataset.asked) {
+        box.dataset.asked = "1";
+        box.innerHTML = `<p class="pf-wait"><span class="spinner"></span>Завантажую…</p>`;
+        window.ReadingTime?.count("card-about");
+        cardGuide(d.card, true);
+      }
+      return;
+    }
     if (e.target.closest("[data-pf-add]") && d.card) {
       const c = d.card;
       d.close();
@@ -978,6 +999,7 @@
   // `noAdd` (no «Додати в мої книжки»).
   function card(b, more = null) {
     const d = $("#paper-found");
+    if (!d.open) d.aboutFor = "";
     d.found = { seen: { title: b.title, author: b.author }, top: [], fixed: true, more };
     // Open first: «Про книжку» (cardGuide) is asked only while the dialog is open. Drawn again while open: the same
     // dialog, its new parts (mentions.js fills «Де взяти» when the site answers).
