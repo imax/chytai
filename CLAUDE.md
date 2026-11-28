@@ -996,6 +996,8 @@ A flag only when Max asks for one, or when the change could break what readers u
   `GET /api/want/shelf` (siteShelf, not-wanted statuses by book page), «Уже прочитано» / «Читаєте» / «Кинули читати».
   Only `#r-wfound` redraws while typing; a whole redraw (`redraw()`) puts the focus back. Taps `want-find`,
   `act-want-find-add`.
+  Each part shows one row of covers (Max 2026-11-28, «довго гортати»): `fold(key, tiles)` + `fit()` (columns from the
+  grid, `inert` on the rest, «Ще N →» / «Згорнути», tap `act-want-more`); a part opened stays open for the visit (`opened`).
   «Мої книгарні» (Max 2026-11-26, variant A of canvas Ubw9pea9pkEN36tsnPXwRi): above «Купити або взяти напрокат», empty
   until the reader picks up to 5 shops (3 until bot №85) (the same `#libs-dialog`, tabs «Книгарні» / «Видавництва» = shelf kind
   publisher, each with «N з вашого списку»; settings `shops`, names). `/api/reader-want` gives every book and every

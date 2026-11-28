@@ -178,6 +178,27 @@
     load(true);
   }
 
+  // One row of covers a part (Max 2026-11-28: «довго гортати»): the rest behind «Ще N →» under it, «Згорнути» back.
+  // A folded grid's later rows are 0 high and clipped (no flash, any column count); `fit` counts the columns
+  // after a draw and names how many are hidden, or hides the button when all fit.
+  const opened = new Set(); // parts opened on this visit
+  const fold = (key, tiles) =>
+    `<div class="r-want-g${opened.has(key) ? "" : " fold"}" data-fold="${key}">${tiles}</div><button type="button" class="r-more-link r-want-more" data-fold-btn="${key}" data-act="want-more" hidden></button>`;
+  function fit() {
+    for (const g of document.querySelectorAll("#home-body .r-want-g[data-fold]")) {
+      const btn = g.nextElementSibling;
+      const cols = getComputedStyle(g).gridTemplateColumns.split(" ").filter(Boolean).length || 1;
+      const hidden = g.children.length - cols;
+      const shut = g.classList.contains("fold");
+      [...g.children].forEach((t, i) => (t.inert = shut && i >= cols));
+      if (!btn?.matches("[data-fold-btn]")) continue;
+      btn.hidden = hidden <= 0;
+      btn.textContent = shut ? `Ще ${hidden} →` : "Згорнути";
+    }
+  }
+  new MutationObserver(() => shown() && requestAnimationFrame(fit)).observe(document.querySelector("#home-body"), { childList: true });
+  window.addEventListener("resize", () => shown() && fit());
+
   function html() {
     const top = `<section class="r-want"><h1 class="r-jh">Хочу прочитати</h1>`;
     if (!books) return `${top}<p class="r-empty">${failed ? "Без мережі список не показати." : `${SPIN}Збираємо…`}</p></section>`;
@@ -187,15 +208,15 @@
     const parts = { now: [], buy: [], none: [] };
     books.forEach((b, i) => parts[group(b)].push([b, i]));
     parts.now.sort((x, y) => (y[0].mine ? 1 : 0) - (x[0].mine ? 1 : 0) || x[1] - y[1]);
-    const grid = (list) => `<div class="r-want-g">${list.map(([b, i]) => tile(b, i)).join("")}</div>`;
+    const grid = (list, key) => fold(key, list.map(([b, i]) => tile(b, i)).join(""));
     const head = (t, n, aside = "") => `<div class="r-sec-head"><h2>${t} · ${n}</h2>${aside}</div>`;
-    const none = parts.none.length ? head("Поки немає", parts.none.length) + grid(parts.none) : "";
+    const none = parts.none.length ? head("Поки немає", parts.none.length) + grid(parts.none, "none") : "";
     return `${top}<p class="r-want-p">${books.length} ${plural(books.length, "книжка", "книжки", "книжок")} з вашої полиці на chytai.org.ua</p>
       ${find}<div class="r-want-shelf"${nq(wq) ? " hidden" : ""}>
-      ${parts.now.length ? head("Можна читати зараз", parts.now.length) + grid(parts.now) : ""}
+      ${parts.now.length ? head("Можна читати зараз", parts.now.length) + grid(parts.now, "now") : ""}
       ${friendsPart(head)}
       ${shopsPart(head)}
-      ${parts.buy.length ? head("Купити або взяти напрокат", parts.buy.length) + grid(parts.buy) : ""}
+      ${parts.buy.length ? head("Купити або взяти напрокат", parts.buy.length) + grid(parts.buy, "buy") : ""}
       ${libsPart(head, grid)}${none}</div></section>`;
   }
 
@@ -210,7 +231,7 @@
     const names = [...new Set(fr.map(window.Shelves.label))].join(" · ");
     return `<div class="r-want-libs">${head("Полиці друзів", have.length, aside)}
       <p class="r-want-p">${esc(names)}${have.length ? "" : `${names ? "<br>" : ""}Цих книжок на їхніх полицях немає.`}</p>
-      ${have.length ? `<div class="r-want-g">${have.map(([b, i]) => tile(b, i, window.Shelves.cap(b), "want-shelf-card")).join("")}</div>` : ""}</div>`;
+      ${have.length ? fold("friends", have.map(([b, i]) => tile(b, i, window.Shelves.cap(b), "want-shelf-card")).join("")) : ""}</div>`;
   }
 
   // «Мої книгарні»: a book counts when it or its other version (original, translation) is in stock in a picked shop;
@@ -231,7 +252,7 @@
     const names = [myShops.length ? myShops.join(", ") : "Усі книгарні", onlyWords()].filter(Boolean).join(" · ");
     return `<div class="r-want-libs">${head("Мої книгарні", have.length, change)}
       <p class="r-want-p">${esc(names)}${have.length ? "" : "<br>Зараз цих книжок там немає."}</p>
-      ${have.length ? `<div class="r-want-g">${have.map(([b, i]) => tile(b, i, cap(b), "want-shop-card", inMine(b)[0][2])).join("")}</div>` : ""}</div>`;
+      ${have.length ? fold("shops", have.map(([b, i]) => tile(b, i, cap(b), "want-shop-card", inMine(b)[0][2])).join("")) : ""}</div>`;
   }
 
   // «Бібліотеки»: a branch's short name («Бібліотека ім. А. Головка» → «ім. А. Головка», no address); how it holds
@@ -258,7 +279,7 @@
     const empty = !have.length && !libBusy && !libs?.unchecked ? "Цих книжок у ваших бібліотеках немає." : "";
     return `<div class="r-want-libs">${head("Бібліотеки", libBusy ? "…" : have.length, change)}
       <p class="r-want-p">${esc(names)}${wait ? `<br>${wait}` : ""}${empty ? `<br>${empty}` : ""}</p>
-      ${have.length && !libBusy ? `<div class="r-want-g">${have.map(([b, i]) => tile(b, i, cap(b))).join("")}</div>` : ""}</div>`;
+      ${have.length && !libBusy ? fold("libs", have.map(([b, i]) => tile(b, i, cap(b))).join("")) : ""}</div>`;
   }
 
   // The picker: city tabs, a search when the city has many, one checkbox a branch, the picked ones first.
@@ -507,6 +528,17 @@
     if (!shown()) return;
     const a = e.target.closest("[data-wadd]");
     if (a) return addBook(a);
+    const f = e.target.closest("[data-fold-btn]");
+    if (f) {
+      const key = f.dataset.foldBtn;
+      const g = f.previousElementSibling;
+      opened.has(key) ? opened.delete(key) : opened.add(key);
+      g.classList.toggle("fold", !opened.has(key));
+      fit();
+      // Folding back: the part's heading stays in view rather than the page jumping past it.
+      if (!opened.has(key) && g.getBoundingClientRect().top < 0) g.scrollIntoView({ block: "start" });
+      return;
+    }
     if (e.target.closest("[data-act='want-libs']")) return pick();
     if (e.target.closest("[data-act='want-shops']")) return pickShops();
     const el = e.target.closest("[data-want]");
