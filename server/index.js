@@ -3758,6 +3758,8 @@ api.post("/scratch", noScratch, (req, res) => {
   if (!it) return res.status(400).json({ error: "Порожній запис." });
   // A new topic made from a mentioned book's card (mentions.js) starts with that book in it, before Opus is asked.
   if (req.body?.mention) it = scratch.mention(req.acct, it.id, req.body.mention) || it;
+  // …and one made from a book's page in «Нотатки» starts with that book of the reader's own.
+  if (typeof req.body?.book === "string" && req.body.book) it = scratch.link(req.acct, it.id, req.body.book, true) || it;
   res.json({ item: scratchOut(req, scratchRun(req, it)) });
 });
 api.post("/scratch/:id/ask", noScratch, (req, res) => {

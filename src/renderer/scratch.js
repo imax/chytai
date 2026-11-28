@@ -332,7 +332,10 @@
     }
     const inIt = new Set(topicsOf(book).map((x) => x.id));
     const list = topics().filter((x) => !inIt.has(x.id) && (!s || norm(title(x)).includes(s)));
-    return list.map((x) => `<button type="button" class="r-scr-item nx-pick" data-act="scr-into" data-scr-topic="${x.id}"><span class="r-scr-x"><b>${esc(title(x))}</b></span></button>`).join("") || `<p class="r-empty">${topics().length ? "Немає такої теми." : "Тем ще немає: запишіть першу в «Нотатках»."}</p>`;
+    // «+ Нова тема» with the words typed (Max 2026-11-28, as on a mentioned book's card): a new topic with this book in it.
+    const q = pickQ.trim();
+    return list.map((x) => `<button type="button" class="r-scr-item nx-pick" data-act="scr-into" data-scr-topic="${x.id}"><span class="r-scr-x"><b>${esc(title(x))}</b></span></button>`).join("") +
+      `<button type="button" class="mn-trow mn-tnew" data-act="scr-newtopic">${sending ? SPIN : ""}+ Нова тема${q ? ` «${esc(q)}»` : ""}</button>`;
   }
   const picker = (label) => `<div class="nx-picker"><label class="nx-search">${LENS}<input id="scr-pick" type="search" placeholder="${label}" value="${esc(pickQ)}" autocomplete="off"></label>
     <div id="scr-picks">${pickHtml()}</div><button type="button" class="r-link" data-act="scr-unpick">Закрити</button></div>`;
@@ -412,7 +415,7 @@
     let html = `<section class="r-scr r-scr-one nx"><button type="button" class="r-scr-back" data-act="scr-back">${back}</button>
       <div class="nx-bookhead">${window.Shell.rcover(b)}<span><b>${esc(b.title)}</b><span class="nx-bm">${esc([author(b), STATE[state(b)]].filter(Boolean).join(" · "))}</span>
       <span class="nx-topic">${ts.length > 1 ? "Теми" : "Тема"}: ${ts.map((x) => `<span class="nx-tchip"><button type="button" class="r-link" data-scr-open="${x.id}">${esc(title(x))}</button><button type="button" class="nx-tx" data-act="scr-unlink" data-scr-topic="${x.id}" aria-label="Прибрати з теми">×</button></span>`).join("")}${picking === "topic" ? "" : `<button type="button" class="r-link nx-tadd" data-act="scr-picktopic">${ts.length ? "+ ще" : "+ додати"}</button>`}</span></span></div>`;
-    if (picking === "topic") html += picker("Знайти тему");
+    if (picking === "topic") html += picker("Знайти тему або назвати нову");
     const d = bookData?.path === book ? bookData : null;
     if (!d) return `${html}<p class="r-empty">${SPIN}Завантажуємо…</p></section>`;
     if (d.failed) return `${html}<p class="r-empty">Без мережі нотаток не показати.</p></section>`;
@@ -555,6 +558,27 @@
     watch();
   }
 
+  // A new topic from a book's page in «Нотатки»: named by the words typed in «Знайти тему», with the book put in by hand.
+  async function newTopic() {
+    const text = pickQ.trim();
+    if (!text) return $("#scr-pick")?.focus();
+    if (sending || !book) return;
+    sending = true;
+    const box = $("#scr-picks");
+    if (box) box.innerHTML = pickHtml();
+    try {
+      const { item } = await window.reader.scratchAdd({ text, book, lib: libFor() });
+      put(item);
+      picking = "";
+      pickQ = "";
+    } catch (err) {
+      oops(err, "створити тему");
+    }
+    sending = false;
+    redraw();
+    watch();
+  }
+
   async function think() {
     const it = open && byId(open);
     const text = ($("#scr-think")?.value ?? thought).trim();
@@ -613,6 +637,7 @@
     if (name === "scr-unpick") return (picking = ""), redraw();
     if (name === "scr-pickbook") return (picking = picking === "book" ? "" : "book"), (pickQ = ""), redraw(), $("#scr-pick")?.focus();
     if (name === "scr-picktopic") return (picking = picking === "topic" ? "" : "topic"), (pickQ = ""), redraw(), $("#scr-pick")?.focus();
+    if (name === "scr-newtopic") return newTopic();
     try {
       if (name === "scr-into") {
         put((await window.reader.scratchPatch(el.dataset.scrTopic, { book, on: true })).item);
@@ -723,6 +748,14 @@
     if (e.key !== "Enter" || e.shiftKey || !matchMedia("(hover: hover)").matches) return;
     if (e.target.id === "scr-text") e.preventDefault(), send();
     if (e.target.id === "scr-think") e.preventDefault(), think();
+  });
+  // Enter in «Знайти тему» on a book's page: the one topic found, else a new topic of the words typed.
+  shell.addEventListener("keydown", (e) => {
+    if (e.key !== "Enter" || e.target.id !== "scr-pick" || picking !== "topic" || !pickQ.trim()) return;
+    e.preventDefault();
+    const rows = [...document.querySelectorAll('#scr-picks [data-act="scr-into"]')];
+    if (rows.length === 1) act("scr-into", rows[0]);
+    else newTopic();
   });
 
   window.Scratch = { html, enter, back, load, typing };
