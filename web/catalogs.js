@@ -181,13 +181,16 @@ async function listingProducts(src, opts) {
   const found = new Map(); // url -> pages it was on
   let pages = 0;
   let idle = 0; // pages in a row that added nothing
+  const prices = new Map(); // ISBN -> today's price on the catalog pages (`src.listingPrices`)
   for (let n = 1; n <= (src.maxPages || 200); n++) {
     const res = await fetchImpl(src.listing(n), { headers: HEADERS, signal: AbortSignal.timeout(60000) }).catch((e) => {
       throw new Error(`${src.id}: ${e.cause?.code || e.message}`);
     });
     if (res.status === 404 && n > 1) break;
     if (!res.ok) throw new Error(`${src.id}: HTTP ${res.status} on catalog page ${n}`);
-    const links = new Set([...(await res.text()).matchAll(src.linkRe || /href="\s*((?:https?:\/\/[^/"]+)?\/?products\/[^"\s]+)\s*"/g)].map((m) => new URL(m[1], src.listing(n)).href)); // relative to the shop, not the publisher
+    const html = await res.text();
+    const links = new Set([...html.matchAll(src.linkRe || /href="\s*((?:https?:\/\/[^/"]+)?\/?products\/[^"\s]+)\s*"/g)].map((m) => new URL(m[1], src.listing(n)).href)); // relative to the shop, not the publisher
+    if (src.listingPrices) for (const [isbn, price] of src.listingPrices(html)) prices.set(isbn, price);
     const before = found.size;
     for (const u of links) found.set(u, (found.get(u) || 0) + 1);
     pages++;
@@ -197,7 +200,28 @@ async function listingProducts(src, opts) {
   const urls = [...found].filter(([, k]) => pages < 4 || k < 3).map(([u]) => u);
   log(`${src.id}: ${pages} catalog pages, ${urls.length} products`);
   if (!urls.length) throw new Error(`${src.id}: empty catalog`);
-  return pageProducts(src, urls, opts);
+  const items = await pageProducts(src, urls, opts);
+  // A book page is read once a week, the catalog pages every refresh: a sale that starts or ends shows the next day
+  // (Max 2026-11-28: Лабораторія's Black Friday 454 ₴ showed as 649 ₴).
+  let moved = 0;
+  for (const it of items) {
+    const p = uah(prices.get(String(it.isbn || "")));
+    if (p && p !== it.price) (it.price = p), moved++;
+  }
+  if (moved) log(`${src.id}: ${moved} prices from the catalog pages`);
+  return items;
+}
+
+// Лабораторія's shop (laboratory.ua, also Nebo and Жорж there): a catalog page's card has a <select> of the book's
+// formats, each option with its ISBN and today's price (`data-sku`, `data-price`, `data-cprice` = the one crossed out).
+function labPrices(html) {
+  const out = [];
+  for (const [tag] of html.matchAll(/<option\b[^>]*\bdata-sku="[^"]*"[^>]*>/g)) {
+    const isbn = String((tag.match(/\bdata-sku="([^"]*)"/) || [])[1] || "").replace(/[^\dX]/gi, "");
+    const price = Number(String((tag.match(/\bdata-price="([\d\s.,]+)"/) || [])[1] || "").replace(/\s/g, "").replace(",", "."));
+    if (/^97[89]\d{10}$/.test(isbn) && price > 0) out.push([isbn, price]);
+  }
+  return out;
 }
 
 // Product pages fetched a few at a time: a new URL right away, the rest once a week (a seventh of the
@@ -990,6 +1014,7 @@ const SOURCES = [
     tagline: "Київське видавництво нонфікшну: історія, психологія, бізнес, наука",
     url: "https://laboratory.ua/",
     listing: (n) => `https://laboratory.ua/catalog/books/brand-laboratoriya${n > 1 ? `/page-${n}` : ""}`,
+    listingPrices: labPrices,
     fetchAll: (src, opts) => listingProducts(src, opts),
     parsePage: (html, url) => ldBookPage(SOURCES.find((s) => s.id === "laboratoriya"), ["Лабораторія"])(html, url),
     normalize: (p) => p,
@@ -1085,6 +1110,7 @@ const SOURCES = [
     tagline: "Харківське видавництво: фентезі, фантастика, класика. Книжки з книгарні Лабораторії",
     url: "https://nebopublishing.com.ua/",
     listing: (n) => `https://laboratory.ua/brands/nebobooklabpublishing${n > 1 ? `/page-${n}` : ""}`,
+    listingPrices: labPrices,
     fetchAll: (src, opts) => listingProducts(src, opts),
     parsePage: (html, url) => ldBookPage(SOURCES.find((s) => s.id === "nebo"), ["Nebo Booklab Publishing"])(html, url),
     normalize: (p) => p,
@@ -1099,6 +1125,7 @@ const SOURCES = [
     tagline: "Видавництво: фентезі, фантастика, детективи. Книжки з книгарні Лабораторії",
     url: "https://zhorzh.com.ua/",
     listing: (n) => `https://laboratory.ua/brands/zhorzh${n > 1 ? `/page-${n}` : ""}`,
+    listingPrices: labPrices,
     fetchAll: (src, opts) => listingProducts(src, opts),
     parsePage: (html, url) => ldBookPage(SOURCES.find((s) => s.id === "zhorzh"), ["Жорж"])(html, url),
     normalize: (p) => p,

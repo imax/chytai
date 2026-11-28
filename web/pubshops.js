@@ -5,7 +5,8 @@
 // line (Max chose «Завжди першим»), Megogo stays.
 // The jobs process reads each shop's sitemap once a day (its book pages), opens every new page once, one at a time
 // per shop with a pause, and keeps what the page says: ISBN, price, in stock, paper or e-book (table `pub_pages`).
-// A page of a book of ours is read again after a week (price, stock); one of no book of ours after two months. A shop
+// A page of a book of ours is read again after a day (price, stock; Max 2026-11-28, a Black Friday sale showed the
+// old price); one of no book of ours after two months. A shop
 // sells other publishers' books too (BookChef, Наш Формат): only ISBNs of the publisher's own shelf get its row.
 // Pages that look like our titles go first, so a big shop gives its matches in the first days.
 // Kept for the site: meta `pubshops:links` (book id -> [[shop, url, price, status, format], …]), ~6 thousand books.
@@ -60,7 +61,8 @@ function parsePage(html, url = "") {
   const text = plain(html);
   // The book's own part of the page: from its title on (the header has «доставка від 1500 ₴», the foot other books).
   const at = Math.max(0, html.search(/<h1[\s>]|<h[1-3][^>]*class="[^"]*product_title/i));
-  const main = html.slice(at, at + 20000);
+  // A sale shows the old price crossed out first (WooCommerce's <del>): only the price one pays counts.
+  const main = html.slice(at, at + 20000).replace(/<del\b[\s\S]*?<\/del>/gi, " ");
   const mainText = plain(main).slice(0, 3000);
   // A page has the book's ISBN once; «ISBN 978-…» near the word, else the structured data's.
   const isbn = [prod?.isbn, prod?.gtin13, prod?.gtin, offer?.gtin13, (html.match(/itemprop="isbn"[^>]*>(?:\s*<[^>]+>)*\s*(97[89][\d\- ]{9,16}\d)/i) || [])[1], (text.match(/ISBN[^0-9]{0,60}(97[89][\d\- ]{9,16}\d)/i) || [])[1], (html.match(/"(?:isbn|gtin13)"\s*:\s*"(97[89][\d-]{10,14})"/) || [])[1]]
@@ -152,7 +154,8 @@ class PubShops {
 
   // One shop's run, in this order: unread pages whose address has words of our titles; other unread pages (all of a
   // small shop, 150 a run of a big one: Наш Формат lists 44 thousand, BookChef 15 thousand, mostly other publishers');
-  // pages of our books read over a week ago (price, stock); any other page over 60 days ago, 100 a run.
+  // pages of our books read over a day ago (price, stock: a sale shows the next day); any other page over 60 days ago,
+  // 100 a run.
   async readShop(shop, until) {
     const { isbns, words } = this.own(shop);
     const db = this.db;
@@ -163,7 +166,8 @@ class PubShops {
     });
     const all = db.prepare("SELECT COUNT(*) n FROM pub_pages WHERE shop = ?").get(shop.id).n;
     const q = (where, limit, ...args) => db.prepare(`SELECT url, isbn FROM pub_pages WHERE shop = ? AND ${where} ORDER BY pri DESC, checked LIMIT ${limit}`).all(shop.id, ...args);
-    const old = q("checked > 0 AND checked < ? AND isbn != ''", 5000, Date.now() - 7 * DAY);
+    // All of them: a big shop has more pages of others' books with an ISBN than the limits above.
+    const old = q("checked > 0 AND checked < ? AND isbn != ''", 100000, Date.now() - DAY);
     const due = [
       ...q("checked = 0 AND pri > 0", 5000),
       ...q("checked = 0 AND pri = 0", all <= 3000 ? 3000 : 150),

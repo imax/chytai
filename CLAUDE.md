@@ -765,10 +765,14 @@ A flag only when Max asks for one, or when the change could break what readers u
 - `SHOPS`: base, our shelves of that publisher, a regex for book pages in its sitemap (`maps` = which child sitemaps).
   The jobs process, hourly for 25 min: the sitemap once a day into table `pub_pages`, then each page once (1.5 s apart
   per shop, shops side by side), addresses with words of our titles first; a big shop's other pages 150 a run; ours
-  again after 7 days, the rest after 60. `parsePage`: ISBN, price, stock, paper/e-book from JSON-LD or the page after
+  again after a day (a sale shows the next day), the rest after 60. `parsePage`: ISBN, price, stock, paper/e-book from JSON-LD or the page after
   its h1. Only ISBNs of the publisher's own shelf get its row (BookChef, Наш Формат sell others'). Kept: meta
   `pubshops:links`, built at a run's start, every 5 min and at its end (deploys restart the jobs). Status:
   `curl -s https://chytai.org.ua/agent/pubshops -H "$H"` (`last` = the last whole run's pages read and errors per shop).
+- A shop's row shows the price one pays now, never the crossed-out one (Max 2026-11-28, Лабораторія's Black Friday
+  454 ₴ showed as 649 ₴): `parsePage` drops `<del>` before its fallbacks. Лабораторія, Nebo and Жорж are catalog shelves
+  (catalogs.js, a book page read weekly): their prices come from the catalog pages each refresh (`listingPrices`,
+  `labPrices`: each format's `data-sku` + `data-price`; «уцінка» has no ISBN and stays out).
 - A new shop: one line in `SHOPS` once `node -e` with `parsePage` finds ISBNs on its pages. No ISBN on the page
   (Vivat, Темпора, Комубук, Discursus, Varvar) or no sitemap (ARTBOOKS, Апріорі, Арій) = not yet. The full table and
   the shops that refuse us (ask for a feed): Claude Doc https://claude.ai/artifact/EFuvuj3A23Pb58SHVPAKbz. Never a
