@@ -353,7 +353,7 @@
     body.style.setProperty("--panel-top", full ? "52px" : "47%");
   }
   function syncPanelHead() {
-    $("#ps-title").textContent = "Пояснення і нотатки"; // Max 2026-11-03; the nav button stays «Нотатки»
+    $("#ps-title").textContent = "Нотатки"; // as its button (Max 2026-11-28, design review 1А; was «Пояснення і нотатки»)
     $("#notes-head").textContent = `Нотатки${notes.length ? ` · ${notes.length}` : ""}`;
     $("#ps-action").classList.add("hidden");
   }
