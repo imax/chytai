@@ -300,7 +300,7 @@ body.web #btn-logout { margin-right: auto; align-self: center; }
 /* Guests (demo) read one book: no uploads, no shared settings. */
 body.guest #btn-open, body.guest #btn-open-empty, body.guest .shared-setting { display: none !important; }
 body.guest #empty p { display: none; }
-body.not-owner .shared-setting, body.not-owner #btn-admin { display: none !important; }
+body.not-owner .shared-setting { display: none !important; }
 .panel-actions { display: flex; gap: 12px; }
 
 @media (max-width: 760px) {
@@ -2605,6 +2605,9 @@ html, body, #viewer .epub-container { overscroll-behavior: none; }
   .r-head .r-logo span { display: none; }
   html body #sel-toolbar:not(.mark) .st-row .st-go { padding: 10px 14px; }
   dialog menu { flex-wrap: wrap; }
+  /* Settings: «Вийти» on its own line, Скасувати · Зберегти side by side */
+  #settings #btn-logout { flex-basis: 100%; margin-right: 0; text-align: left; }
+  #settings menu button:not(.link) { padding: 9px 18px; }
 }
 
 /* «На якій ви сторінці?» (paper.js pageSheet) and the cover's card (showCard), Max 2026-11-22 */

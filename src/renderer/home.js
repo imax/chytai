@@ -1488,7 +1488,6 @@
   };
 
   // «Адмінка» from the settings (owner only, body.not-owner hides the button there).
-  $("#btn-admin").onclick = () => ($("#settings").close(), setPage("admin"));
 
   // The family starts here; a guest has one book, which the bridge opens straight away. /?admin opens «Адмінка».
   settingsReady
