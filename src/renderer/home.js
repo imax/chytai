@@ -180,11 +180,12 @@
   // In an e-book (phone app) a swipe from the left edge opens the panel too, as on a paper book (Max 2026-11-05):
   // your books show behind it, as on a paper book. Putting the panel away leaves you on your books: going back to
   // the book there made a tap on another cover behind the panel reopen the same book (Max 2026-11-05).
+  // With the tabs (variant А, Max 2026-11-28) that swipe and Android's back bring «Мої книжки» with the tabs; the panel is
+  // only search on a phone.
   function panelFromBook() {
     if (!phone() || isOpen() || settings.guest) return;
     if (page !== "home") setPage("home", { push: false });
     show("home");
-    panel(true);
   }
   function panel(open = !$("#shell").classList.contains("panel-open")) {
     if (open && !phone()) open = false;
@@ -203,21 +204,23 @@
       html = hits.length || more ? (more && hits.length ? `<h3 class="r-phead">Книжки</h3>` : "") + hits.map(prow).join("") + more
         : deep.q === q || deep.offline || q.length < 2 || !window.reader.searchMine ? `<p class="r-pnone">Нічого не знайшлося.</p>` : "";
     }
-    // Finished books stay out (Max 2026-11-21, bug report №24).
-    const recent = books.filter((b) => b.openedAt && !b.finished).sort((x, y) => y.openedAt - x.openedAt).slice(0, 4);
-    const all = `${html}\u0000${recent.map(prow).join("")}\u0000${books.length}|${trashCount}|${page}|${settings.user}`;
+    // «Нещодавно відкриті» is gone (variant А, Max 2026-11-28): the same books as «Читаю зараз».
+    const all = `${html}\u0000${books.length}|${trashCount}|${page}|${settings.user}`;
     if (all === panelHtml) return;
     panelHtml = all;
     $("#r-pfound").innerHTML = html;
     $("#r-pfound").classList.toggle("hidden", !q);
-    $("#r-recent").innerHTML = recent.map(prow).join("");
-    $(".r-precent").classList.toggle("hidden", !recent.length);
     $("#r-n-books").textContent = books.length || "";
     $("#r-pnav-trash").hidden = !trashCount;
     $("#r-n-trash").textContent = trashCount || "";
-    for (const b of document.querySelectorAll(".r-pnav [data-page]")) b.classList.toggle("on", b.dataset.page === page);
-    $("#r-avatar").textContent = (settings.user || "Ч").trim()[0].toUpperCase();
+    for (const b of document.querySelectorAll(".r-pnav [data-page], #r-tabs [data-page]")) b.classList.toggle("on", b.dataset.page === page);
+    const letter = (settings.user || "Ч").trim()[0].toUpperCase();
+    $("#r-avatar").textContent = letter;
+    for (const a of document.querySelectorAll(".r-hava")) a.textContent = letter;
     $("#r-me-name").textContent = settings.user || "";
+    $("#ms-name").textContent = settings.user || "";
+    $("#me-trash").hidden = !trashCount;
+    $("#ms-trash").textContent = trashCount ? `${trashCount} ${trashCount === 1 ? "книжка" : trashCount < 5 ? "книжки" : "книжок"}` : "";
   }
   // Past the titles (Max, 2026-11-03): the query is also looked for in your notes, their thoughts and your talks
   // with Claude (GET /api/search, server/search.js). A hit shows its book, a piece of text and opens at its place.
@@ -758,10 +761,9 @@
     const open = $("#shell").classList.contains("panel-open");
     const app = document.documentElement.classList.contains("in-app");
     const ok = phone() && isOpen() && !document.querySelector("dialog[open]");
-    const kind = !ok ? null
-      : open ? "panel"
+    // The panel is search on a phone now (variant А): no swipe opens or drags it.
+    const kind = !ok || open ? null
       : app && page === "add" && x < EDGE ? "back"
-      : app && x < EDGE ? "panel"
       : app && page === "home" && !settings.guest && x > innerWidth - EDGE ? "add"
       : null;
     drag = kind ? { kind, x, y: e.touches[0].clientY, open, dir: null, pos: open ? panelW() : 0, t: Date.now() } : null;
@@ -846,16 +848,41 @@
     window.reader.openPath(path);
   }
 
-  $("#shell").addEventListener("click", async (e) => {
+  $("#shell").addEventListener("click", (e) => {
     const el = e.target.closest("[data-menu], [data-hit], [data-open], [data-act], [data-page], [data-take], [data-paper-add]");
     // #shell itself carries data-page (the page shown): a tap on anything else, the search field in the phone's
     // panel too, came here as «Мої книжки» and closed the panel, so search did nothing on a phone (Max, 2026-11-03).
     if (!el || el.id === "shell") return;
+    tap(el);
+  });
+  // The phone's two sheets (variant А): «+» = «Додати книжку», the avatar = «Я». A row closes its sheet and does what
+  // the same row does on the page.
+  for (const id of ["add-sheet", "me-sheet"]) {
+    $(`#${id}`).addEventListener("click", (e) => {
+      const el = e.target.closest("[data-act], [data-page]");
+      if (!el) return;
+      $(`#${id}`).close();
+      tap(el);
+    });
+  }
+  // From the sheet: «Додати книжку» as a page, at its search (once the sheet is gone: closing gives the focus back to
+  // the «+») or at the stores.
+  function addAt(sel) {
+    setPage("add");
+    if (sel === "#r-aq") return $("#add-sheet").addEventListener("close", () => setTimeout(() => $(sel).focus(), 0), { once: true });
+    setTimeout(() => $(sel)?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
+  }
+  function tap(el) {
     if (el.dataset.menu) return bookMenu(el.dataset.menu, el);
     if (el.dataset.take) return takeBook(el.dataset.take, el);
     if (el.dataset.paperAdd != null) return paperFromCatalog(Number(el.dataset.paperAdd));
     if (el.dataset.page) {
       const to = el.dataset.page;
+      // A tab: its page from the top; the page already on screen goes back to its first level and up.
+      if (el.closest("#r-tabs")) {
+        if (to === page) $("#home").scrollTo({ top: 0, behavior: "smooth" });
+        return to === "home" ? (page === "home" ? renderHome() : backHome()) : setPage(to);
+      }
       if (el.closest(".r-head") && to !== page && (to === "add" || (to === "home" && page === "add")) && !(to === "add" && settings.guest) && slidePage(to)) return;
       if (to === "home" && page === "how" && el.closest(".r-pnav")) return setPage("home"); // the panel's «Мої книжки» = one's books
       return to === "home" && page !== "home" ? backHome() : setPage(to);
@@ -865,6 +892,11 @@
     if (el.dataset.act === "add") return window.Library.add();
     if (el.dataset.act === "trash") return panel(false), openTrash();
     if (el.dataset.act === "panel") return panel();
+    if (el.dataset.act === "psearch") return panel(true), $("#r-pq").focus();
+    if (el.dataset.act === "add-sheet") return $("#add-sheet").showModal();
+    if (el.dataset.act === "me") return settings.guest ? openSettings() : (renderPanel(), $("#me-sheet").showModal());
+    if (el.dataset.act === "add-find") return addAt("#r-aq");
+    if (el.dataset.act === "add-shops") return addAt(".r-yak-row");
     if (el.dataset.act === "settings") return panel(false), openSettings();
     if (el.dataset.act === "admin-off") return adminOff(el);
     if (el.dataset.act === "cover-photo") return window.Paper.coverPhoto();
@@ -880,7 +912,9 @@
       return;
     }
     if (el.dataset.act === "yakaboo" || el.dataset.act === "bookua") return (shopOpen = shopOpen === el.dataset.act ? null : el.dataset.act), renderHome();
-  });
+  }
+  // The header's search, «+» and avatar on every page with tabs (the home header has the original).
+  for (const h of document.querySelectorAll(".r-head-w, .r-head-s, .r-head-p")) h.append($(".r-head-home .r-hact").cloneNode(true));
 
   // A paper book opens as a page of Мої книжки (paper.js).
   function openPaper(path) {

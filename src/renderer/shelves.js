@@ -132,6 +132,7 @@
   // The pencil by one's own shelf's name (in the phone's header too): «Назва полиці».
   const pencil = () => `<button type="button" class="sh-pen" data-sh="rename" data-act="shelf-rename" aria-label="Змінити назву" title="Змінити назву">${PEN}</button>`;
   function html() {
+    $("#shell").classList.toggle("sh-deep", at !== "list"); // a shelf: «‹» in the phone's header (variant А)
     const h = $(".r-head-p h1");
     if (h) h.textContent = title();
     const hx = $(".r-head-p .sh-hpen");
