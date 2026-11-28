@@ -154,6 +154,16 @@ class Scratch {
     return items;
   }
 
+  // The place of a suggested book in the entry's list: `i` when its title is `title` (or no title is given), else
+  // the book with that title; -1 = gone. A change queued offline names both (web-bridge.js).
+  indexOf(acct, id, i, title) {
+    if (!title) return i;
+    const books = this.read(acct).find((x) => x.id === id)?.ai?.books || [];
+    const t = fold(title);
+    const is = (b) => b && [b.title, b.title_uk].some((x) => x && fold(x) === t);
+    return is(books[i]) ? i : books.findIndex(is);
+  }
+
   // A suggested book the reader doesn't want («Не цікаво», Max 2026-11-25): out of the topic, and its title kept in
   // `no` so the next answers don't bring it back.
   decline(acct, id, i) {

@@ -60,6 +60,9 @@
     clearTimeout(again);
     if (libs?.unchecked && tries < 60) again = setTimeout(() => shown() && (tries++, load(true)), 30000);
   }
+  // Offline (web-bridge.js `viewed`): the server's answer came late, or a change made here was sent.
+  document.addEventListener("chytai:synced", () => shown() && load());
+  document.addEventListener("chytai:view", (e) => e.detail === "/api/want" && shown() && load());
   const enter = () => ((tries = 0), (wq = ""), (counted = false), window.Shelves?.ensure(), load());
 
   // Where one's own file or the free shelf's is, by its file name.

@@ -12,6 +12,37 @@ const CACHE = `chytai-${VERSION}`;
 // from the device, offline too (Max, 2026-11-01: the covers loaded again and again). Their addresses carry
 // the book's date, so a changed cover is a new address.
 const COVERS = "chytai-covers";
+// The site's small covers (chytai.org.ua/t/…) that «Хочу прочитати», «Полиці» and «Нотатки» show, kept for offline
+// too (Max 2026-11-28: the top parts offline). At most THUMBS_MAX, the oldest kept go first; ~15 KB each.
+const THUMBS = "chytai-thumbs";
+const THUMBS_MAX = 1500;
+const SITE_THUMB = /^https?:\/\/((www\.)?chytai\.org\.ua|localhost(:\d+)?)\/t\/\d+\//;
+let thumbsPut = 0;
+async function thumb(req) {
+  const cache = await caches.open(THUMBS);
+  const hit = await cache.match(req.url);
+  if (hit) return hit;
+  let res;
+  try {
+    // As CORS (the site sends Access-Control-Allow-Origin on /t/): a readable answer, not an opaque one, which
+    // costs megabytes of the quota each.
+    res = await fetch(req.url, { mode: "cors", credentials: "omit" });
+  } catch {
+    // A cover the site sent on to the shop's original (no CORS there): as the page asked. Offline and not kept: an
+    // empty answer, not a failed one (WebKit reports those as the page's errors), and the page shows its block.
+    return fetch(req).catch(() => new Response("", { status: 504 }));
+  }
+  if (res.ok && res.type === "cors") {
+    await cache.put(req.url, res.clone()).catch(() => {});
+    if (++thumbsPut % 50 === 1) trimThumbs();
+  }
+  return res;
+}
+async function trimThumbs() {
+  const cache = await caches.open(THUMBS);
+  const keys = await cache.keys();
+  for (const k of keys.slice(0, Math.max(0, keys.length - THUMBS_MAX))) await cache.delete(k);
+}
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
@@ -65,7 +96,8 @@ self.addEventListener("message", (event) => {
 });
 self.addEventListener("activate", (event) => {
   event.waitUntil((async () => {
-    for (const key of await caches.keys()) if (key !== CACHE && key !== COVERS) await caches.delete(key);
+    for (const key of await caches.keys()) if (key !== CACHE && key !== COVERS && key !== THUMBS) await caches.delete(key);
+    await trimThumbs();
     // Full-size covers from before the small copies (2026-11-05): their addresses end without «-s».
     const covers = await caches.open(COVERS);
     for (const r of await covers.keys()) if (!/-s$/.test(new URL(r.url).searchParams.get("v") || "")) await covers.delete(r);
@@ -78,7 +110,10 @@ self.addEventListener("fetch", (event) => {
   const req = event.request;
   if (req.method !== "GET") return;
   const url = new URL(req.url);
-  if (url.origin !== location.origin) return;
+  if (url.origin !== location.origin) {
+    if (SITE_THUMB.test(req.url)) event.respondWith(thumb(req));
+    return;
+  }
   if (url.pathname === "/api/cover") {
     event.respondWith(
       (async () => {

@@ -322,6 +322,7 @@
   let syncing = null;
   function sync() {
     return (syncing ??= (async () => {
+      let sent = 0;
       try {
         const positions = (await kvGet("positions")) || {};
         for (const [path, pos] of Object.entries(positions)) {
@@ -333,6 +334,7 @@
           if (!keys?.length) break;
           try {
             await perform(items[0]);
+            if (items[0].type === "call") sent++;
           } catch (err) {
             if (isNetworkError(err) || err.message === "login") return;
             console.warn("sync: dropped", items[0], err);
@@ -343,6 +345,8 @@
         if (!isNetworkError(err)) console.warn("sync failed", err);
       } finally {
         syncing = null;
+        // The parts on screen ask the server again: what this device did offline is there now.
+        if (sent) setTimeout(() => document.dispatchEvent(new Event("chytai:synced")), 0);
       }
     })());
   }
@@ -360,6 +364,12 @@
       if (item.note.comment) await api("PATCH", `/api/notes/${encodeURIComponent(note.id)}?path=${encodeURIComponent(item.path)}`, { comment: item.note.comment });
     } else if (item.type === "noteUpdate") await api("PATCH", `/api/notes/${encodeURIComponent(item.id)}?path=${encodeURIComponent(item.path)}`, item.patch);
     else if (item.type === "noteDelete") await api("DELETE", `/api/notes/${encodeURIComponent(item.id)}?path=${encodeURIComponent(item.path)}`);
+    else if (item.type === "call") {
+      // Made under another account that was signed in here: never sent under this one.
+      if (item.me && me && item.me !== me) return;
+      const r = await ok(api(item.method, item.url, item.body));
+      if (item.local && r?.item?.id) await renamed(item.local, r.item.id);
+    }
   }
   async function cacheNotes(bookPath, update) {
     const list = update((await kvGet(`notes:${bookPath}`)) || []);
@@ -373,6 +383,247 @@
       if (item.id === id || item.note?.id === id) await idb("queue", "readwrite", (s) => s.delete(keys[i]));
     }
   }
+
+  // ---------- The top parts offline: «Хочу прочитати», «Полиці», «Нотатки», «Згадані книжки», «Статистика» ----------
+  //
+  // Max 2026-11-28: «всі нові топ розділи читалки працювали максимально офлайн». Each part's last answer from the
+  // server is kept here (kv `view:<url>`) and shown when the server doesn't answer in time (`viewed`), as the library
+  // is. A change made without a connection (`write`) goes into the same queue as notes (type `call`) and is applied
+  // at once to the kept answers, so the page shows it and shows it again after a restart offline. The queue sends the
+  // changes one by one as they were made, so two devices merge (a thought here, a book there; a suggested book or a
+  // shelf's book goes by its title, not only its place); one the server refuses (a topic deleted on the other device)
+  // is dropped. What needs Claude, the catalog or the site at that moment (a new answer, a photo of a shelf, a search)
+  // stays online only. Kept: the parts' own answers for 60 days, other ones (a book's notes, a chapter's titles, a
+  // card) the last VIEW_MAX.
+  const VIEW_MAX = 150;
+  const VIEW_DAYS = 60;
+  const CORE = /^\/api\/(want|want\/shelf|want\/libraries|shelves|scratch|scratch\/topics|mentions|journey)$/;
+  let me = "";
+  kvGet("me").then((v) => (me = me || v || ""));
+  let views = null; // url -> when kept
+  const viewIndex = async () => (views ??= (await kvGet("views")) || {});
+  async function keepView(url, data) {
+    const idx = await viewIndex();
+    idx[url] = Date.now();
+    const old = Date.now() - VIEW_DAYS * 864e5;
+    const gone = Object.keys(idx).filter((u) => idx[u] < old);
+    gone.push(...Object.keys(idx).filter((u) => idx[u] >= old && !CORE.test(u)).sort((a, b) => idx[b] - idx[a]).slice(VIEW_MAX));
+    for (const u of gone) delete idx[u], idb("kv", "readwrite", (st) => st.delete(`view:${u}`)).catch(() => {});
+    await kvSet(`view:${url}`, data);
+    await kvSet("views", idx);
+  }
+  // Another account signed in on this device: the last one's copies and changes go.
+  async function forget() {
+    views = {};
+    const keys = (await idb("kv", "readonly", (st) => st.getAllKeys()).catch(() => [])) || [];
+    for (const k of keys) if (String(k).startsWith("view:")) await idb("kv", "readwrite", (st) => st.delete(k)).catch(() => {});
+    await kvSet("views", {});
+    const [qk, qi] = await Promise.all([idb("queue", "readonly", (st) => st.getAllKeys()), idb("queue", "readonly", (st) => st.getAll())]).catch(() => [[], []]);
+    for (const [i, it] of (qi || []).entries()) if (it.type === "call") await idb("queue", "readwrite", (st) => st.delete(qk[i])).catch(() => {});
+  }
+  async function setMe(value) {
+    if (!value || value === me) return;
+    const was = me || (await kvGet("me")) || "";
+    me = value;
+    if (was && was !== value) await forget();
+    kvSet("me", value);
+  }
+  const waiting = async () => ((await idb("queue", "readonly", (st) => st.count()).catch(() => 0)) || 0) > 0;
+
+  // A part's answer: the server's, or the device's copy when the server is slow or away (the server's still comes
+  // into the copy, and «chytai:view» tells the page). While changes made here wait in the queue, the copy (which has
+  // them) is shown, not an answer without them.
+  // An answer that came after the page went on with the copy: the page's next ask (on «chytai:view») takes it
+  // without asking the server again.
+  const lateData = new Map();
+  function viewed(url, ask = url) {
+    return (async () => {
+      if (lateData.has(url)) {
+        const data = lateData.get(url);
+        lateData.delete(url);
+        return data;
+      }
+      const copy = await kvGet(`view:${url}`);
+      let late = false;
+      const asked = (async () => {
+        await sync();
+        if (copy !== undefined && (await waiting())) throw new TypeError("queued");
+        const data = await ok(api("GET", ask));
+        await keepView(url, data);
+        if (late) lateData.set(url, data), document.dispatchEvent(new CustomEvent("chytai:view", { detail: url }));
+        return data;
+      })();
+      asked.catch(() => {});
+      if (copy === undefined) return asked;
+      try {
+        return await inTime(asked);
+      } catch (err) {
+        if (!isNetworkError(err)) throw err;
+        late = true;
+        return copy;
+      }
+    })();
+  }
+  // A kept answer changed in place: fn(data) changes it (false = nothing to keep) and gives back what it returns.
+  let viewChain = Promise.resolve();
+  function editView(url, fn) {
+    const step = viewChain.then(async () => {
+      const data = await kvGet(`view:${url}`);
+      if (data === undefined) return undefined;
+      const r = fn(data);
+      if (r !== false) await kvSet(`view:${url}`, data);
+      return r;
+    });
+    viewChain = step.catch(() => {});
+    return step.catch(() => undefined);
+  }
+  let queuedSaid = false;
+  window.addEventListener("online", () => (queuedSaid = false));
+  // A change: sent now, or (no connection, or older changes still waiting) kept in the queue. apply(answer) puts it
+  // into the kept answers: with the server's answer when it was sent, with null when it waits, and then gives the
+  // page the answer it would have had. No apply = online only (the page says «лише онлайн»).
+  async function write(method, url, body, apply, extra = {}) {
+    try {
+      await sync();
+      if (await waiting()) throw new TypeError("queued");
+      const r = await ok(api(method, url, body));
+      if (apply) await apply(r);
+      return r;
+    } catch (err) {
+      if (!isNetworkError(err) || !apply) throw err;
+      const answer = await apply(null);
+      await enqueue({ type: "call", method, url, body, me, ...extra });
+      if (!queuedSaid && typeof toast === "function") (queuedSaid = true), toast("Надішлемо, коли з'явиться мережа");
+      return answer;
+    }
+  }
+  const localId = () => `local-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+  // A topic made offline got its id from the server: the changes queued after it, and the kept list, name that one.
+  async function renamed(from, to) {
+    const [keys, items] = await Promise.all([idb("queue", "readonly", (st) => st.getAllKeys()), idb("queue", "readonly", (st) => st.getAll())]);
+    for (const [i, it] of (items || []).entries()) {
+      if (it.type === "call" && it.url.includes(from)) await idb("queue", "readwrite", (st) => st.put({ ...it, url: it.url.split(from).join(to) }, keys[i]));
+    }
+    await editView(SCR, (d) => {
+      const it = d.items?.find((x) => x.id === from);
+      if (!it) return false;
+      it.id = to;
+    });
+    document.dispatchEvent(new CustomEvent("chytai:renamed", { detail: { from, to } }));
+  }
+  // Changes queued for something made here and dropped before it was sent: never sent.
+  async function unqueueCalls(match) {
+    const [keys, items] = await Promise.all([idb("queue", "readonly", (st) => st.getAllKeys()), idb("queue", "readonly", (st) => st.getAll())]);
+    for (const [i, it] of (items || []).entries()) if (it.type === "call" && match(it)) await idb("queue", "readwrite", (st) => st.delete(keys[i]));
+  }
+
+  // «Нотатки» kept offline: the same changes as server/scratch.js makes, on the kept list.
+  const SCR = "/api/scratch";
+  const scrFold = (x) => String(x || "").toLowerCase().replace(/ґ/g, "г").replace(/[ʼ’']/g, "").replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+  const scrTitle = (b) => (b ? b.title_uk || b.title || "" : "");
+  const scrPut = (item) => item && editView(SCR, (d) => {
+    d.items ??= [];
+    const i = d.items.findIndex((x) => x.id === item.id);
+    if (i < 0) d.items.unshift(item);
+    else d.items[i] = item;
+  });
+  const scrEdit = (id, fn) => editView(SCR, (d) => {
+    const it = d.items?.find((x) => x.id === id);
+    if (!it) return false;
+    fn(it);
+    it.touched = Date.now();
+    return JSON.parse(JSON.stringify(it));
+  });
+  // The book a change by its place in the list means, found again by its title (server/scratch.js indexOf).
+  function scrAt(it, i, title) {
+    const books = it.ai?.books || [];
+    const t = scrFold(title);
+    const is = (b) => b && [b.title, b.title_uk].some((x) => x && scrFold(x) === t);
+    return !title || is(books[i]) ? i : books.findIndex(is);
+  }
+  function scrPatch(it, b) {
+    if (b.mention && typeof b.mention === "object") {
+      const m = b.mention;
+      const t = scrFold(m.title);
+      it.ai ??= { books: [] };
+      it.ai.books ??= [];
+      const i = it.ai.books.findIndex((x) => (m.href && x.href === m.href) || scrFold(scrTitle(x)) === t);
+      if (b.on === false) {
+        if (i >= 0 && it.ai.books[i].mention) it.ai.books.splice(i, 1);
+        else if (i >= 0) delete it.ai.books[i].wanted;
+      } else if (i >= 0) (it.ai.books[i].wanted = Date.now()), delete it.ai.books[i].later, delete it.ai.books[i].onShelf;
+      else it.ai.books.push({ title: m.title, author: m.author || "", title_uk: m.title, author_uk: m.author || "", lang: "", why: "", ...(m.href ? { href: m.href, cover: m.cover || "", ctitle: m.title, cauthor: m.author || "", year: m.year || null } : {}), wanted: Date.now(), mention: m.from || true });
+      if (b.on !== false) it.no = (it.no || []).filter((x) => scrFold(x) !== t);
+    } else if (typeof b.book === "string") {
+      it.mine = (it.mine || []).filter((x) => x !== b.book);
+      it.notMine = (it.notMine || []).filter((x) => x !== b.book);
+      (b.on ? it.mine : it.notMine).unshift(b.book);
+      it.added = { ...(it.added || {}), [b.book]: Date.now() };
+    } else if (Number.isInteger(b.wanted)) {
+      const i = scrAt(it, b.wanted, b.title);
+      const x = it.ai?.books?.[i];
+      if (!x) return;
+      if (b.on !== false) x.wanted = Date.now();
+      else if (x.mention) it.ai.books.splice(i, 1);
+      else delete x.wanted;
+    } else if (Number.isInteger(b.no)) {
+      const i = scrAt(it, b.no, b.title);
+      const x = it.ai?.books?.[i];
+      if (!x) return;
+      it.no = [...new Set([...(it.no || []), scrTitle(x)])];
+      it.ai.books.splice(i, 1);
+    } else if (b.state) it.state = b.state;
+  }
+  // The topics for a book's card (mentions.js) from the kept list, as server/scratch.js topics() makes them.
+  function scrTopics(items) {
+    const t = (x) => (x.status === "ok" && x.ai?.title && x.ai.kind !== "unclear" ? x.ai.title : x.text || "Фото");
+    const at = (x) => Math.max(x.touched || 0, x.at || 0, ...(x.thoughts || []).map((y) => y.at || 0), ...Object.values(x.added || {}).map(Number).filter(Boolean), ...(x.ai?.books || []).map((b) => b.wanted || 0));
+    return (items || [])
+      .filter((x) => !(x.status === "ok" && x.ai?.kind === "unclear") && x.status !== "fail")
+      .sort((a, b) => at(b) - at(a))
+      .map((x) => {
+        const added = (x.ai?.books || []).filter((b) => b.wanted);
+        return { id: x.id, title: t(x), n: new Set([...(x.mine || []), ...(x.ai?.have || [])]).size + added.length + (x.ai?.shelf || []).length, books: added.map((b) => ({ t: scrTitle(b), a: b.author_uk || b.author, href: b.href || "" })) };
+      });
+  }
+  // «Полиці»: a shelf's book by its catalog page, else its title and the author's surname (server/shelves.js bookKey).
+  const shNorm = (x) => String(x || "").toLowerCase().replace(/ё/g, "е").replace(/[’ʼ'`"«»“”„.,:;!?()\[\]–—-]/g, " ").replace(/\s+/g, " ").trim();
+  const shKey = (b) => (b.h ? String(b.h).replace(/^https?:\/\/[^/]+/, "") : `${shNorm(String(b.t || "").split(/[:(]|\.\s/)[0])}|${shNorm(b.a).split(" ").filter(Boolean).pop() || ""}`);
+  // A whole day's sections ready before the connection goes (8 s after a load, at most every 6 h): the parts' lists,
+  // each shelf, and the covers they show.
+  async function warmViews() {
+    try {
+      if (!navigator.onLine || navigator.connection?.saveData || /2g/.test(navigator.connection?.effectiveType || "")) return;
+      const s = await localSettings();
+      if (!s || s.guest) return;
+      if (Date.now() - ((await kvGet("views:warm")) || 0) < 6 * 3600000) return;
+      kvSet("views:warm", Date.now());
+      const covers = [];
+      const scr = await viewed(SCR).catch(() => null);
+      for (const it of scr?.items || []) for (const b of it.ai?.books || []) b.cover && covers.push(b.cover);
+      const sh = await viewed("/api/shelves").catch(() => null);
+      const each = [...(sh?.mine || []).map((x) => `/api/shelves/${encodeURIComponent(x.id)}`), ...(sh?.follows || []).map((x) => `/api/shelves/of/${encodeURIComponent(x.o)}/${encodeURIComponent(x.id)}`)].slice(0, 30);
+      for (const u of each) {
+        const r = await viewed(u).catch(() => null);
+        for (const b of (r?.shelf || r)?.books || []) b.c && covers.push(b.c);
+      }
+      const want = await viewed("/api/want").catch(() => null);
+      for (const b of want?.books || []) b.cover && covers.push(b.cover);
+      await viewed("/api/mentions").catch(() => null);
+      await viewed("/api/journey").catch(() => null);
+      // Through the service worker, which keeps the site's covers (sw.js THUMBS); four at a time.
+      const list = [...new Set(covers)].filter((c) => /\/t\/\d+\//.test(c)).slice(0, 600);
+      const cache = await caches.open("chytai-thumbs").catch(() => null);
+      const todo = [];
+      for (const c of list) if (!(await cache?.match(c))) todo.push(c);
+      await Promise.all([0, 1, 2, 3].map(async () => {
+        while (todo.length) await fetch(todo.shift(), { mode: "cors", credentials: "omit" }).catch(() => {});
+      }));
+    } catch (err) {
+      console.warn("warm views", err);
+    }
+  }
+  if (navigator.serviceWorker?.controller) afterLoad(() => setTimeout(warmViews, 8000));
 
   window.addEventListener("online", () => sync());
   document.addEventListener("visibilitychange", () => document.visibilityState === "visible" && sync());
@@ -963,45 +1214,140 @@
     },
     // Managing the shared library (family only; the server refuses guests).
     // «Хочу прочитати» (GET /api/want): the site's want shelf with where to get each book; null offline.
-    wantShelf: () => api("GET", "/api/want/shelf").then((r) => (r.ok ? r.json() : null)).catch(() => null),
-    want: (again) => api("GET", `/api/want${again ? "?again=1" : ""}`).then((r) => (r.ok ? r.json() : null)).catch(() => null),
-    // The library branches one may pick for «Бібліотеки» in «Хочу прочитати»; null offline.
+    // The top parts keep their last answers on the device and their changes in the queue (`viewed`, `write` above).
+    // «Хочу прочитати» (GET /api/want): the site's want shelf with where to get each book; null when there is none.
+    wantShelf: () => viewed("/api/want/shelf").catch(() => null),
+    want: (again) => viewed("/api/want", `/api/want${again ? "?again=1" : ""}`).catch(() => null),
     // «Полиці» (shelves.js, server/shelves.js): one's own shelves and friends' ones added by their links.
-    shelves: () => ok(api("GET", "/api/shelves")),
+    shelves: () => viewed("/api/shelves"),
     shelfNew: (name) => ok(api("POST", "/api/shelves", { name })),
-    shelfGet: (id) => ok(api("GET", `/api/shelves/${encodeURIComponent(id)}`)),
-    shelfChange: (id, change) => ok(api("PATCH", `/api/shelves/${encodeURIComponent(id)}`, change)),
-    shelfDelete: (id) => ok(api("DELETE", `/api/shelves/${encodeURIComponent(id)}`)),
+    shelfGet: (id) => viewed(`/api/shelves/${encodeURIComponent(id)}`),
+    // name, about, add, drop (places; `dropBooks` the same books, which the server goes by).
+    shelfChange: (id, change) => {
+      const one = `/api/shelves/${encodeURIComponent(id)}`;
+      const shelf = (d) => d.shelf || d;
+      return write("PATCH", one, change, async (r) => {
+        const dropped = new Set((change.dropBooks || []).map(shKey));
+        const n = await editView(one, (d) => {
+          const s = shelf(d);
+          if (change.name) s.name = change.name;
+          if (change.about != null) s.about = change.about;
+          if (dropped.size) s.books = (s.books || []).filter((b) => !dropped.has(shKey(b)));
+          if (Array.isArray(change.add)) {
+            const have = new Set((s.books || []).map(shKey));
+            for (const b of change.add) if (b?.t && !have.has(shKey(b))) have.add(shKey(b)), (s.books ??= []).push({ t: b.t, a: b.a || "", h: b.h || "", c: b.c || "" });
+          }
+          return (s.books || []).length;
+        });
+        await editView("/api/shelves", (d) => {
+          const x = d.mine?.find((y) => y.id === id);
+          if (!x) return false;
+          if (change.name) x.name = change.name;
+          x.n = r?.n ?? n ?? x.n;
+        });
+        return r || { ok: true, n, added: change.add?.length || 0, queued: true };
+      });
+    },
+    shelfDelete: (id) =>
+      write("DELETE", `/api/shelves/${encodeURIComponent(id)}`, undefined, async (r) => {
+        await editView("/api/shelves", (d) => void (d.mine = (d.mine || []).filter((x) => x.id !== id)));
+        return r || { ok: true, queued: true };
+      }),
     shelfShare: (id, fresh = false) => ok(api("POST", `/api/shelves/${encodeURIComponent(id)}/share`, { fresh })),
     shelfKick: (id, who) => ok(api("DELETE", `/api/shelves/${encodeURIComponent(id)}/seen/${encodeURIComponent(who)}`)),
     shelfRead: (photoOrText) => ok(api("POST", "/api/shelves-read", photoOrText instanceof Blob ? photoOrText : { text: photoOrText })),
     shelfByKey: (key) => ok(api("GET", `/api/shelf/${encodeURIComponent(key)}`)),
     shelfFollow: (key) => ok(api("POST", `/api/shelf/${encodeURIComponent(key)}/follow`)),
-    shelfOf: (o, id) => ok(api("GET", `/api/shelves/of/${encodeURIComponent(o)}/${encodeURIComponent(id)}`)),
+    shelfOf: (o, id) => viewed(`/api/shelves/of/${encodeURIComponent(o)}/${encodeURIComponent(id)}`),
     shelfUnfollow: (o, id) => ok(api("DELETE", `/api/shelves/of/${encodeURIComponent(o)}/${encodeURIComponent(id)}`)),
-    wantLibraries: () => api("GET", "/api/want/libraries").then((r) => (r.ok ? r.json() : null)).catch(() => null),
-    // «Статистика» (GET /api/journey): explanations, notes and finished books by book and by month; null offline.
-    journey: () => api("GET", "/api/journey").then((r) => r.json()).catch(() => null),
+    // The library branches one may pick for «Бібліотеки» in «Хочу прочитати»; null when there is none.
+    wantLibraries: () => viewed("/api/want/libraries").catch(() => null),
+    // «Статистика» (GET /api/journey): explanations, notes and finished books by book and by month; null when there is none.
+    journey: () => viewed("/api/journey").catch(() => null),
     // «Нотатки» (scratch.js, server/scratch.js): topics with thoughts and books; an error's words come as the Error's.
-    scratchList: async () => (await api("GET", "/api/scratch")).json(),
-    scratchTopics: async () => ok(api("GET", "/api/scratch/topics")),
-    scratchAdd: (entry) => ok(api("POST", "/api/scratch", entry)),
-    scratchAsk: (id, body) => ok(api("POST", `/api/scratch/${encodeURIComponent(id)}/ask`, body)),
-    scratchThink: (id, body) => ok(api("POST", `/api/scratch/${encodeURIComponent(id)}/thought`, body)),
-    scratchUnthink: (id, tid) => ok(api("DELETE", `/api/scratch/${encodeURIComponent(id)}/thought/${encodeURIComponent(tid)}`)),
-    scratchState: (id, state) => ok(api("PATCH", `/api/scratch/${encodeURIComponent(id)}`, { state })),
-    scratchPatch: (id, body) => ok(api("PATCH", `/api/scratch/${encodeURIComponent(id)}`, body)),
-    scratchDelete: (id) => api("DELETE", `/api/scratch/${encodeURIComponent(id)}`),
+    scratchList: () => viewed(SCR),
+    scratchTopics: async () => {
+      try {
+        return await viewed("/api/scratch/topics");
+      } catch (err) {
+        const list = isNetworkError(err) && (await kvGet(`view:${SCR}`));
+        if (!list) throw err;
+        return { topics: scrTopics(list.items) };
+      }
+    },
+    // A new topic offline waits as «Розберемо, коли буде мережа» (`queued`); the server asks Opus once it comes.
+    scratchAdd: (entry) => {
+      const id = localId();
+      return write("POST", SCR, entry, async (r) => {
+        if (r) return scrPut(r.item);
+        const now = Date.now();
+        const m = entry.mention;
+        const item = {
+          id, text: String(entry.text || "").trim().slice(0, 1000), photo: false, voice: !!entry.voice, at: now, state: "new", status: "wait", queued: true, ask: [], thoughts: [],
+          ...(entry.book ? { mine: [entry.book], added: { [entry.book]: now } } : {}),
+          ...(m ? { ai: { books: [{ title: m.title, author: m.author || "", title_uk: m.title, author_uk: m.author || "", href: m.href || "", cover: m.cover || "", wanted: now, mention: m.from || true }] } } : {}),
+        };
+        await scrPut(item);
+        return { item };
+      }, { local: id });
+    },
+    scratchAsk: (id, body) => write("POST", `/api/scratch/${encodeURIComponent(id)}/ask`, body, null).then((r) => (scrPut(r.item), r)),
+    // A thought offline waits for its answer; the topic is asked again once it is sent.
+    scratchThink: (id, body) => {
+      const tid = localId();
+      return write("POST", `/api/scratch/${encodeURIComponent(id)}/thought`, body, async (r) => {
+        if (r) return scrPut(r.item);
+        const item = await scrEdit(id, (it) => (it.thoughts = [...(it.thoughts || []), { id: tid, text: String(body.text || "").trim().slice(0, 1000), at: Date.now(), voice: !!body.voice, queued: true }]));
+        return { item };
+      }, { thought: tid });
+    },
+    scratchUnthink: async (id, tid) => {
+      if (String(tid).startsWith("local-")) {
+        await unqueueCalls((c) => c.thought === tid);
+        return { item: await scrEdit(id, (it) => (it.thoughts = (it.thoughts || []).filter((t) => t.id !== tid))) };
+      }
+      return write("DELETE", `/api/scratch/${encodeURIComponent(id)}/thought/${encodeURIComponent(tid)}`, undefined, async (r) => {
+        if (r) return scrPut(r.item);
+        return { item: await scrEdit(id, (it) => (it.thoughts = (it.thoughts || []).filter((t) => t.id !== tid))) };
+      });
+    },
+    scratchState: (id, state) => window.reader.scratchPatch(id, { state }),
+    // body: { mention, on } | { book, on } | { wanted: i, on, title } | { no: i, title } | { state }.
+    scratchPatch: (id, body) =>
+      write("PATCH", `/api/scratch/${encodeURIComponent(id)}`, body, async (r) => {
+        if (r) return scrPut(r.item);
+        return { item: await scrEdit(id, (it) => scrPatch(it, body)) };
+      }),
+    scratchDelete: async (id) => {
+      const drop = () => editView(SCR, (d) => void (d.items = (d.items || []).filter((x) => x.id !== id)));
+      if (String(id).startsWith("local-")) return await unqueueCalls((c) => c.local === id || c.url.includes(id)), await drop(), { ok: true };
+      return write("DELETE", `/api/scratch/${encodeURIComponent(id)}`, undefined, async (r) => (await drop(), r || { ok: true, queued: true }));
+    },
     // «Згадані книжки» (mentions.js, server/mentions.js): a book's or every book's list, a chapter's titles, a title's
     // card (the catalog's book, where to get it), «Хочу прочитати» on the site, «Прибрати зі згаданих».
-    mentions: (book) => ok(api("GET", `/api/mentions${book ? `?book=${encodeURIComponent(book)}` : ""}`)),
-    mentionsText: (book, href, c) => ok(api("GET", `/api/mentions/text?${new URLSearchParams({ book, href, c: c || "" })}`)),
-    mentionCard: (m) => ok(api("GET", `/api/mentions/card?${new URLSearchParams({ title: m.title, author: m.author || "", orig: m.orig || "", ...(m.href ? { href: m.href } : {}) })}`)),
-    mentionWant: (href, off = false) => ok(api("POST", "/api/mentions/want", { href, off })),
+    mentions: (book) => viewed(`/api/mentions${book ? `?book=${encodeURIComponent(book)}` : ""}`),
+    mentionsText: (book, href, c) => viewed(`/api/mentions/text?${new URLSearchParams({ book, href, c: c || "" })}`),
+    mentionCard: (m) => viewed(`/api/mentions/card?${new URLSearchParams({ title: m.title, author: m.author || "", orig: m.orig || "", ...(m.href ? { href: m.href } : {}) })}`),
+    // «Хочу прочитати» on the site, or off it (`off`); offline it waits in the queue ({ queued }).
+    mentionWant: (href, off = false) =>
+      write("POST", "/api/mentions/want", { href, off }, async (r) => {
+        if (off) await editView("/api/want", (d) => void (d.books = (d.books || []).filter((x) => x.href !== href)));
+        return r || { ok: true, queued: true };
+      }),
     mentionWantNew: (title, author) => ok(api("POST", "/api/mentions/wantnew", { title, author })),
-    mentionDrop: (book, id) => ok(api("DELETE", `/api/mentions?${new URLSearchParams({ book, id })}`)),
+    mentionDrop: (book, id) =>
+      write("DELETE", `/api/mentions?${new URLSearchParams({ book, id })}`, undefined, async (r) => {
+        const off = (d) => {
+          const list = d.books?.[book];
+          if (!list) return false;
+          d.books[book] = list.filter((e) => e.id !== id);
+        };
+        await editView("/api/mentions", off);
+        await editView(`/api/mentions?book=${encodeURIComponent(book)}`, off);
+        return r || { ok: true, queued: true };
+      }),
     // One book's notes and explanations, in short (GET /api/notes/book).
-    bookNotes: (name) => ok(api("GET", `/api/notes/book?path=${encodeURIComponent(name)}`)),
+    bookNotes: (name) => viewed(`/api/notes/book?path=${encodeURIComponent(name)}`),
     // «Словничок»: how far the book's list is (GET /api/glossary/status); null offline.
     // «Адмінка» (owner only): the whole reader's stats (GET /api/admin), null when it fails; switching one account off.
     admin: () => api("GET", "/api/admin").then((r) => (r.ok ? r.json() : null)).catch(() => null),
@@ -1046,6 +1392,7 @@
       const asked = (async () => {
         await sync();
         const fresh = await (await api("GET", "/api/settings")).json();
+        await setMe(fresh.me);
         // Places read here since the request went out (it may have answered late) are newer than the server's.
         const waiting = (await kvGet("positions")) || {};
         for (const [p, pos] of Object.entries(waiting)) (fresh.positions ??= {})[p] = typeof pos === "string" ? pos : pos.cfi;
@@ -1293,7 +1640,8 @@
     onShowLibrary: on("ui:library"),
     onTogglePanel: on("ui:toggle-panel"),
     onFind: on("ui:find"),
-    logout: () => {
+    logout: async () => {
+      await Promise.race([forget(), new Promise((r) => setTimeout(r, 1500))]);
       const f = document.createElement("form");
       f.method = "post";
       f.action = "/logout";

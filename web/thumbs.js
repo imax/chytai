@@ -60,7 +60,8 @@ class Thumbs {
     } catch {}
     if (!WIDTHS.includes(w) || !src || req.params.sig !== this.sign(w, src)) return res.status(404).end();
     const file = path.join(this.dir, String(w), `${crypto.createHash("sha1").update(keyOf(src)).digest("hex")}.webp`);
-    const send = () => res.set("Cache-Control", "public, max-age=31536000, immutable").type("image/webp").sendFile(file);
+    // Open to any page's script (public covers): the reader's service worker keeps them for offline (sw.js THUMBS).
+    const send = () => res.set({ "Cache-Control": "public, max-age=31536000, immutable", "Access-Control-Allow-Origin": "*" }).type("image/webp").sendFile(file);
     if (this.blanks.has(src)) return res.status(404).end();
     if (fs.existsSync(file)) return send();
     const away = () => res.set("Cache-Control", "public, max-age=3600").redirect(302, src);

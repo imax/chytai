@@ -379,6 +379,8 @@ function settingsFor(req) {
     positions: u.positions || {},
     user: req.user,
     username: (!req.guest && state.accounts[req.acct]?.username) || "",
+    // Whose device copies these are (web-bridge.js `me`): another account signed in here drops the last one's.
+    me: req.guest ? "" : crypto.createHash("sha1").update(`me:${req.acct}`).digest("hex").slice(0, 10),
     owner: !!req.owner,
     flags: (!req.guest && flagsKept.get(req.acct)?.list) || [],
     hasApiKey: !!process.env.ANTHROPIC_API_KEY,
@@ -2201,7 +2203,7 @@ api.get("/shelves/:id", noShelves, (req, res) => {
 api.patch("/shelves/:id", noShelves, (req, res) => {
   const was = shelves.own(req.acct, req.params.id).s?.books.length || 0;
   const before = shelves.own(req.acct, req.params.id).s?.about || "";
-  const r = shelves.change(req.acct, req.params.id, { name: req.body?.name, about: req.body?.about, add: req.body?.add, drop: req.body?.drop });
+  const r = shelves.change(req.acct, req.params.id, { name: req.body?.name, about: req.body?.about, add: req.body?.add, drop: req.body?.drop, dropBooks: req.body?.dropBooks });
   if (!r) return res.status(404).json({ error: "Полиці немає." });
   if (r.added && r.shelf.books.some((b) => !b.h)) setTimeout(shelfFill, 5000).unref();
   // The owner's words under the name are written by a reader: Max hears of them (not of his own).
@@ -3829,7 +3831,10 @@ api.post("/scratch/:id/ask", noScratch, (req, res) => {
 });
 api.patch("/scratch/:id", noScratch, (req, res) => {
   const b = req.body || {};
-  const it = b.mention && typeof b.mention === "object" ? scratch.mention(req.acct, req.params.id, b.mention, b.on !== false) : typeof b.book === "string" ? scratch.link(req.acct, req.params.id, b.book, !!b.on) : Number.isInteger(b.wanted) ? scratch.wanted(req.acct, req.params.id, b.wanted, b.on !== false) : Number.isInteger(b.no) ? scratch.decline(req.acct, req.params.id, b.no) : scratch.setState(req.acct, req.params.id, b.state);
+  // A suggested book goes by its place in the list and, from 2026-11-28, its title too: a change queued offline (or
+  // made on a second device) may come after «Порадити ще» moved the list on, and the title finds the same book.
+  const at = (i) => scratch.indexOf(req.acct, req.params.id, i, b.title);
+  const it = b.mention && typeof b.mention === "object" ? scratch.mention(req.acct, req.params.id, b.mention, b.on !== false) : typeof b.book === "string" ? scratch.link(req.acct, req.params.id, b.book, !!b.on) : Number.isInteger(b.wanted) ? scratch.wanted(req.acct, req.params.id, at(b.wanted), b.on !== false) : Number.isInteger(b.no) ? scratch.decline(req.acct, req.params.id, at(b.no)) : scratch.setState(req.acct, req.params.id, b.state);
   return it ? res.json({ item: scratchOut(req, it) }) : res.status(404).json({ error: "Запису немає." });
 });
 api.delete("/scratch/:id", noScratch, (req, res) => res.json({ ok: scratch.remove(req.acct, req.params.id) }));

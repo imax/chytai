@@ -43,6 +43,25 @@
     // «Хочу прочитати» names the friends' shelves; drawn again once they are here.
     else if (fresh && $("#shell")?.dataset.page === "want" && document.activeElement?.id !== "r-wq") window.Shell.rerender();
   }
+  // Offline (web-bridge.js `viewed`): the server's answer came late, or what was changed here was sent. The shelf on
+  // screen takes its books again in place (go() would scroll to the top).
+  async function fresh(url) {
+    if (!shown()) return;
+    if (!url || url === "/api/shelves") load();
+    if (url === "/api/shelves") return;
+    const [kind, a, b] = at.split(":");
+    if (kind !== "mine" && kind !== "of") return;
+    const was = at;
+    try {
+      const r = kind === "mine" ? await window.reader.shelfGet(a) : await window.reader.shelfOf(a, b);
+      if (at !== was || !cur || cur.error) return;
+      const { id, o } = cur;
+      Object.assign(cur, r.shelf || r, { id, o });
+      redraw();
+    } catch {}
+  }
+  document.addEventListener("chytai:synced", () => fresh());
+  document.addEventListener("chytai:view", (e) => /^\/api\/shelves/.test(e.detail) && fresh(e.detail));
   // Asked by «Хочу прочитати» when it opens, once.
   const ensure = () => !data && !settings.guest && window.reader?.shelves && load(true);
   const redraw = () => {
@@ -406,7 +425,8 @@
     const i = Number(btn.dataset.shDrop);
     btn.disabled = true;
     try {
-      await window.reader.shelfChange(cur.id, { drop: [i] });
+      const b = cur.books[i];
+      await window.reader.shelfChange(cur.id, { drop: [i], dropBooks: [{ t: b.t, a: b.a, h: b.h || "" }] });
       cur.books.splice(i, 1);
       $("#paper-found").close();
       redraw();

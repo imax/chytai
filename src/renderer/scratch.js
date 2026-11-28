@@ -29,6 +29,7 @@
   const LENS = `<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/></svg>`;
   const SPIN = `<span class="spinner"></span>`;
   const FIELDS = ["scr-text", "scr-think", "scr-q", "scr-pick"];
+  const WAIT_NET = "Розберемо, коли буде мережа"; // made offline (web-bridge.js `write`)
 
   let items = null; // null until the server answers; the last list stays while asked again
   let byBook = {}; // book → { notes, chats, at, quote, comment, own }
@@ -97,8 +98,16 @@
   // Asked again every 3 s while an answer is being made and the page is on screen.
   function watch() {
     clearTimeout(poll);
-    if ((items || []).some((x) => x.status === "wait") && shown() && document.visibilityState === "visible") poll = setTimeout(load, 3000);
+    if ((items || []).some((x) => x.status === "wait" && !x.queued) && shown() && document.visibilityState === "visible") poll = setTimeout(load, 3000);
   }
+  // Offline (web-bridge.js `viewed`): the server's answer came late, or what was made here was sent; and a topic made
+  // offline has the server's id now.
+  for (const e of ["chytai:view", "chytai:synced"]) document.addEventListener(e, (ev) => shown() && (e !== "chytai:view" || ev.detail === "/api/scratch") && load());
+  document.addEventListener("chytai:renamed", ({ detail: { from: a, to } }) => {
+    for (const x of items || []) if (x.id === a) x.id = to;
+    if (open === a) open = to;
+    if (from === a) from = to;
+  });
   document.addEventListener("visibilitychange", () => document.visibilityState === "visible" && shown() && load());
 
   const title = (it) => (it.status === "ok" && it.ai?.title && it.ai.kind !== "unclear" ? it.ai.title : it.text || "Фото");
@@ -191,7 +200,7 @@
 
   // The topic's line in the list (Max 2026-11-25): «7 книжок по темі · 2 прочитано · 3 можуть підійти · 2 думки».
   function sub(it) {
-    if (it.status === "wait") return `${SPIN}Розбираємо…`;
+    if (it.status === "wait") return it.queued ? WAIT_NET : `${SPIN}Розбираємо…`;
     if (it.status === "limit") return "Розберемо завтра";
     const { own, picked, rest, shelfs } = topicBooks(it);
     const n = own.length + picked.length + shelfs.length;
@@ -359,7 +368,8 @@
       html += `<p class="r-scr-state">Не зрозуміли, що це.${a.guesses?.length ? " Може, це:" : " Допишіть думку нижче."}</p>
         ${a.guesses?.length ? `<div class="r-scr-guess">${a.guesses.map((g, i) => `<button type="button" data-act="scr-guess" data-scr-guess="${i}">${esc(g)}</button>`).join("")}</div>` : ""}`;
     }
-    if (busy && suggesting !== it.id) html += `<p class="r-scr-state">${SPIN}${a ? "Думаємо над новою думкою…" : "Розбираємо: шукаємо, що це і що почитати…"}</p>`;
+    if (busy && it.queued) html += `<p class="r-scr-state">${WAIT_NET}.</p>`;
+    else if (busy && suggesting !== it.id) html += `<p class="r-scr-state">${SPIN}${a ? "Думаємо над новою думкою…" : "Розбираємо: шукаємо, що це і що почитати…"}</p>`;
     else if (it.status === "limit") html += `<p class="r-scr-state">На сьогодні розборів досить. Розберемо завтра.</p>`;
     else if (it.status === "fail") html += `<p class="r-scr-state">Не вдалося розібрати. <button type="button" class="r-link" data-act="scr-again">Ще раз</button></p>`;
 
@@ -367,7 +377,7 @@
     // 2026-11-26, bot №54: was «Мої думки»).
     const ths = [...(it.ask || []).map((t) => ({ text: t })), ...(it.thoughts || [])];
     html += head(`Обговорення теми${ths.length ? ` · ${ths.length}` : ""}`);
-    html += ths.map((t) => `<div class="nx-th"><p>${esc(t.text)}</p><span class="nx-when">${when(t.at)}${t.voice ? " · голосом" : ""}${t.id ? `<button type="button" class="r-link nx-x" data-act="scr-unthink" data-scr-tid="${t.id}">Видалити</button>` : ""}</span>${t.reply ? `<span class="nx-ai">${esc(t.reply)}</span>` : ""}</div>`).join("");
+    html += ths.map((t) => `<div class="nx-th"><p>${esc(t.text)}</p><span class="nx-when">${when(t.at)}${t.voice ? " · голосом" : ""}${t.queued ? " · чекає на мережу" : ""}${t.id ? `<button type="button" class="r-link nx-x" data-act="scr-unthink" data-scr-tid="${t.id}">Видалити</button>` : ""}</span>${t.reply ? `<span class="nx-ai">${esc(t.reply)}</span>` : ""}</div>`).join("");
     html += `<form class="r-scr-form nx-think" id="scr-think-form"><textarea id="scr-think" rows="1" placeholder="Додати думку: що хочеться з'ясувати, куди копати" enterkeyhint="send">${esc(thought)}</textarea>
       <div class="r-scr-row"><button type="button" class="pp-tool${window.Dictation?.field() === "scr-think" ? " on" : ""}" data-act="scr-thinkmic" title="Надиктувати" aria-label="Надиктувати">${MIC}</button><span class="r-scr-sp"></span>
       <button type="submit" class="r-pill"${busy ? " disabled" : ""}>Записати</button></div></form>`;
@@ -675,12 +685,12 @@
       }
       if (name === "scr-no" && b) {
         el.disabled = true;
-        put((await window.reader.scratchPatch(it.id, { no: i })).item);
+        put((await window.reader.scratchPatch(it.id, { no: i, title: b.title_uk || b.title })).item);
         return redraw();
       }
       if ((name === "scr-add" || name === "scr-drop") && b) {
         el.disabled = true;
-        put((await window.reader.scratchPatch(it.id, { wanted: i, on: name === "scr-add" })).item);
+        put((await window.reader.scratchPatch(it.id, { wanted: i, on: name === "scr-add", title: b.title_uk || b.title })).item);
         return redraw();
       }
       if (name === "scr-guess") return put((await window.reader.scratchThink(it.id, { text: `Мається на увазі: ${it.ai?.guesses?.[Number(el.dataset.scrGuess)] || ""}`, lib: libFor() })).item), redraw(), watch();

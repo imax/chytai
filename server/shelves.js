@@ -87,13 +87,18 @@ class Shelves {
     return s;
   }
   // Rename, the owner's words, add books (a catalog page or title + author once), take some off by index.
-  change(acct, id, { name, about, add, drop } = {}) {
+  // drop: places in the list; dropBooks: [{ t, a, h }] the books themselves (a change queued offline, web-bridge.js,
+  // may come after the list changed on another device), these win when given.
+  change(acct, id, { name, about, add, drop, dropBooks } = {}) {
     const { d, s } = this.own(acct, id);
     if (!s) return null;
     if (name != null && clean(name, NAME_MAX)) s.name = clean(name, NAME_MAX);
     if (about != null) s.about = String(about).replace(/\r/g, "").replace(/[ \t]+/g, " ").replace(/\n{3,}/g, "\n\n").trim().slice(0, ABOUT_MAX);
     const was = s.books.length;
-    if (Array.isArray(drop) && drop.length) {
+    if (Array.isArray(dropBooks) && dropBooks.length) {
+      const off = new Set(dropBooks.map((x) => (x?.h ? pathOf(x.h) : bookKey(x?.t, x?.a))));
+      s.books = s.books.filter((b) => !off.has(b.h ? pathOf(b.h) : bookKey(b.t, b.a)));
+    } else if (Array.isArray(drop) && drop.length) {
       const off = new Set(drop.map(Number));
       s.books = s.books.filter((_, i) => !off.has(i));
     }

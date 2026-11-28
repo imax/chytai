@@ -866,6 +866,18 @@ A flag only when Max asks for one, or when the change could break what readers u
 - Reader dark theme: a book's own text and box colours give way (`themeCss`, `body *{color:inherit!important}`, bot
   №73); the app's status bar follows the reader's theme (page → shell message `theme`, App.js `barStyle`, bot №77).
 - Reader «Читаю зараз» on the site: after 5 minutes of reading a book today (`readBooks`), not on opening it (bot №72).
+- Reader offline for the top parts (Max 2026-11-28, «максимально офлайн»; web-bridge.js «The top parts offline»): a
+  part's GET goes through `viewed(url)` (kv `view:<url>`, the copy when the server is 3 s late, 0.5 s once offline;
+  a late answer fires `chytai:view` and the page's next ask takes it, no second request), a change through
+  `write(method, url, body, apply)`: `apply(answer|null)` edits the kept copies (`editView`) and, offline, gives the
+  page its answer; the change waits in the IDB queue as type `call` and is sent in order (`chytai:synced` after).
+  No `apply` = online only. A topic made offline is `local-…` until the server's id comes (`renamed`, event
+  `chytai:renamed`). Suggested books and shelf books are sent with their title (`title`, `dropBooks`), the server goes
+  by it (scratch `indexOf`, shelves `change`). `warmViews` fetches the parts, every shelf and their covers 8 s after a
+  load, every 6 h. sw.js keeps the site's /t/ covers in `chytai-thumbs` (1,500; /t/ sends ACAO *). Copies: the parts'
+  own 60 days, others the last 150; `settings.me` changes = another account, its copies and calls go. A new part:
+  its GET through `viewed`, its changes through `write` with an `apply`, a page listener for both events. Try:
+  Playwright `launchPersistentContext` + `setOffline(true)`, a browser UA (a headless one gets /t/ redirects).
 - Reader: how the text looks (theme, font, sizes, spacing, margins, column, page turns) is kept per device
   (`LOOK_KEYS` in `src/renderer/web-bridge.js`); the account's copy only starts a new device. A new look setting
   goes into that list.
