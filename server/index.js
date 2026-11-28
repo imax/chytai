@@ -2063,6 +2063,13 @@ api.get("/want", guestsCannot("Без входу списку немає."), asy
   }
 });
 
+// The search on «Хочу прочитати» (bot №59): the books on the account's site shelf that are not wanted (read, reading,
+// abandoned) by their page, so a found book says so before a tap; siteShelf's 10 minutes.
+api.get("/want/shelf", guestsCannot("Без входу списку немає."), async (req, res) => {
+  const books = await siteShelf(req.acct);
+  res.json({ shelf: Object.fromEntries((books || []).filter((b) => b.s && b.s !== "want" && b.href).map((b) => [b.href, b.s])) });
+});
+
 // The library branches one may pick for «Бібліотеки» (the site's GET /api/reader-libraries), an hour's copy.
 let libList = null;
 api.get("/want/libraries", guestsCannot("Без входу списку немає."), async (req, res) => {

@@ -14,6 +14,10 @@
 // picks up to 3 shops (the same dialog, tabs «Книгарні» / «Видавництва», settings `shops` by name); then the books in
 // stock there now (the site's `stock` per book and per version: name -> [price, url, format]), the price under the
 // cover, with the shop's name when several are picked. The card puts those shops first in «Де взяти», in bold.
+// Adding books here (Max 2026-11-28, bot №59, variant A of canvas 918W2YwaxBMhztzimvn5B5): a search field under the
+// count; while it holds words the shelf gives way to «Уже у списку» (the list's own books with them) and «Каталог
+// Chytai» (`catalogFind`, as «Додати книжку») with «Хочу прочитати» on each row (`mentionWant` → the site's
+// /api/reader-wantit), then «✓ У списку».
 (() => {
   const ESC = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" };
   const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ESC[c]);
@@ -44,12 +48,12 @@
     // The count beside «Хочу прочитати» in the panel, as «Мої книжки» (Max 2026-11-26).
     const n = document.querySelector("#r-n-want");
     if (n && books) n.textContent = books.length || "";
-    if (shown()) window.Shell.rerender();
+    if (shown()) redraw();
     // The site is still asking the libraries: look again in half a minute, for about half an hour at most.
     clearTimeout(again);
     if (libs?.unchecked && tries < 60) again = setTimeout(() => shown() && (tries++, load(true)), 30000);
   }
-  const enter = () => ((tries = 0), load());
+  const enter = () => ((tries = 0), (wq = ""), (counted = false), load());
 
   // Where one's own file or the free shelf's is, by its file name.
   const inLib = (name) => name && window.Shell.books().find((b) => b.path === name);
@@ -79,10 +83,97 @@
       ${foot}</div>`;
   }
 
+  // The search: what was typed (kept across redraws), the catalog's answers by query, the pages put on the list here.
+  let wq = "";
+  const found = new Map(); // query -> { books } | "…" | { error }
+  const added = new Set();
+  const nq = (s) => String(s || "").toLowerCase().replace(/[’ʼ`]/g, "'").replace(/\s+/g, " ").trim();
+  let shelf = {}; // book page -> status on the site shelf other than «Хочу прочитати»
+  const SHELF = { read: "Уже прочитано", reading: "Читаєте", abandoned: "Кинули читати" };
+  const onList = (href) => added.has(href) || !!books?.some((b) => b.href === href);
+  const field = () => `<label class="r-search r-add-search r-want-q"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.6-3.6"/></svg><input id="r-wq" type="search" placeholder="Додати: назва або автор" autocomplete="off" enterkeyhint="search" value="${esc(wq)}" /></label>`;
+  function catRows(q) {
+    const cat = found.get(nq(q));
+    if (nq(q).length < 2) return "";
+    if (cat === "…" || cat == null) return `<p class="r-empty">${SPIN}Шукаю…</p>`;
+    if (cat.error) return `<p class="r-empty">${navigator.onLine ? "Каталог зараз не відповідає." : "Немає з'єднання."}</p>`;
+    if (!cat.books.length) return `<p class="r-empty">Нічого не знайшлося. ${link(`https://chytai.org.ua/search?q=${encodeURIComponent(q.trim())}`, "Шукати на chytai.org.ua ↗", "r-link")}</p>`;
+    return `<div class="r-frows">${cat.books.map((b, i) => `<div class="r-frow r-frow-cat">${link(b.href, window.Shell.rcover({ title: b.title, authors: [b.author] }, b.cover || null), "r-frow-c")}
+      <a class="r-frow-x" href="${esc(b.href)}" target="_blank" rel="noopener" data-act="want-find-page"><span class="r-frow-t">${esc(b.title)}</span><span class="r-frow-a">${esc([b.author, b.year].filter(Boolean).join(" · "))}</span></a>
+      ${onList(b.href) ? `<span class="r-frow-go done">✓ У списку</span>` : SHELF[shelf[b.href]] ? `<span class="r-frow-go done">${SHELF[shelf[b.href]]}</span>` : `<button type="button" class="r-frow-go" data-wadd="${i}" data-act="want-find-add">Хочу прочитати</button>`}</div>`).join("")}</div>`;
+  }
+  function foundHtml(head, grid) {
+    const w = nq(wq);
+    if (!w) return "";
+    const mine = (books || []).map((b, i) => [b, i]).filter(([b]) => w.split(" ").every((x) => nq(`${b.title} ${b.author}`).includes(x)));
+    const cat = found.get(w);
+    return (mine.length ? head("Уже у списку", mine.length) + grid(mine) : "") + `<div class="r-sec-head"><h2>Каталог Chytai${cat?.books?.length ? ` · ${cat.books.length}` : ""}</h2></div>${catRows(wq)}`;
+  }
+  const headH = (t, n) => `<div class="r-sec-head"><h2>${t} · ${n}</h2></div>`;
+  const gridH = (list) => `<div class="r-want-g">${list.map(([b, i]) => tile(b, i)).join("")}</div>`;
+  // Only the results change while typing: the field keeps its focus and the keyboard stays up.
+  function drawFound() {
+    const f = document.querySelector("#r-wfound");
+    if (!f) return;
+    f.innerHTML = foundHtml(headH, gridH);
+    const shelf = document.querySelector(".r-want-shelf");
+    if (shelf) shelf.hidden = !!nq(wq);
+  }
+  // A whole redraw (the list came again) puts the focus and the caret back into the field.
+  function redraw() {
+    const el = document.activeElement?.id === "r-wq" ? document.activeElement : null;
+    const at = el ? [el.selectionStart, el.selectionEnd] : null;
+    window.Shell.rerender();
+    const n = at && document.querySelector("#r-wq");
+    if (n) n.focus({ preventScroll: true }), n.setSelectionRange(...at);
+  }
+  let timer = 0;
+  let counted = false;
+  function search(q) {
+    wq = q;
+    clearTimeout(timer);
+    drawFound();
+    const k = nq(q);
+    if (k.length < 2 || (found.has(k) && !found.get(k).error)) return;
+    timer = setTimeout(() => {
+      // Once a visit to the page: counted, and the rest of the site shelf asked (what is read or being read).
+      if (!counted) (counted = true), window.ReadingTime?.count("want-find"), window.reader.wantShelf?.().then((d) => d?.shelf && ((shelf = d.shelf), drawFound()));
+      found.set(k, "…");
+      drawFound();
+      window.reader
+        .catalogFind(q.trim())
+        .then((d) => found.set(k, { books: d.books || [] }))
+        .catch(() => found.set(k, { error: true }))
+        .finally(() => {
+          if (found.size > 100) found.delete(found.keys().next().value);
+          if (nq(wq) === k) drawFound();
+        });
+    }, 250);
+  }
+  async function addBook(btn) {
+    const b = found.get(nq(wq))?.books?.[Number(btn.dataset.wadd)];
+    if (!b) return;
+    btn.disabled = true;
+    let r;
+    try {
+      r = await window.reader.mentionWant(b.href);
+    } catch (err) {
+      btn.disabled = false;
+      return window.showNotice?.(err instanceof TypeError ? "Немає з'єднання." : err.message || "Не вийшло.", false);
+    }
+    // A book already on the shelf keeps its status on the site: say which (read, reading, dropped).
+    const was = SHELF[r?.status];
+    if (was) return (shelf[b.href] = r.status), (btn.outerHTML = `<span class="r-frow-go done">${was}</span>`);
+    added.add(b.href);
+    btn.outerHTML = `<span class="r-frow-go done">✓ У списку</span>`;
+    load(true);
+  }
+
   function html() {
     const top = `<section class="r-want"><h1 class="r-jh">Хочу прочитати</h1>`;
     if (!books) return `${top}<p class="r-empty">${failed ? "Без мережі список не показати." : `${SPIN}Збираємо…`}</p></section>`;
-    if (!books.length) return `${top}<p class="r-want-p">Тут будуть книжки з вашого «Хочу прочитати» на ${link("https://chytai.org.ua/me", "chytai.org.ua ↗")}</p></section>`;
+    const find = `${field()}<div id="r-wfound">${foundHtml(headH, gridH)}</div>`;
+    if (!books.length) return `${top}<p class="r-want-p">Тут будуть книжки з вашого «Хочу прочитати» на ${link("https://chytai.org.ua/me", "chytai.org.ua ↗")}</p>${find}</section>`;
     // In the shelf's order inside each part, one's own files before the free shelf.
     const parts = { now: [], buy: [], none: [] };
     books.forEach((b, i) => parts[group(b)].push([b, i]));
@@ -91,10 +182,11 @@
     const head = (t, n, aside = "") => `<div class="r-sec-head"><h2>${t} · ${n}</h2>${aside}</div>`;
     const none = parts.none.length ? head("Поки немає", parts.none.length) + grid(parts.none) : "";
     return `${top}<p class="r-want-p">${books.length} ${plural(books.length, "книжка", "книжки", "книжок")} з вашої полиці на chytai.org.ua</p>
+      ${find}<div class="r-want-shelf"${nq(wq) ? " hidden" : ""}>
       ${parts.now.length ? head("Можна читати зараз", parts.now.length) + grid(parts.now) : ""}
       ${shopsPart(head)}
       ${parts.buy.length ? head("Купити або взяти напрокат", parts.buy.length) + grid(parts.buy) : ""}
-      ${libsPart(head, grid)}${none}</section>`;
+      ${libsPart(head, grid)}${none}</div></section>`;
   }
 
   // «Мої книгарні»: a book counts when it or its other version (original, translation) is in stock in a picked shop;
@@ -298,7 +390,7 @@
     if (books) books = books.filter((x) => x.href !== href);
     const n = document.querySelector("#r-n-want");
     if (n && books) n.textContent = books.length || "";
-    if (shown()) window.Shell.rerender();
+    if (shown()) redraw();
   });
 
   const d = dlg();
@@ -331,7 +423,7 @@
     if (mode === "shops") {
       if (JSON.stringify(shopsChosen) === JSON.stringify(myShops)) return;
       myShops = shopsChosen;
-      if (shown()) window.Shell.rerender();
+      if (shown()) redraw();
       try {
         await window.reader.setSettings({ shops: myShops });
       } catch {}
@@ -342,7 +434,7 @@
     libBusy = picks.length > 0;
     libs = null;
     tries = 0;
-    if (shown()) window.Shell.rerender();
+    if (shown()) redraw();
     try {
       await window.reader.setSettings({ libraries: picks });
     } catch {}
@@ -354,8 +446,16 @@
     if (e.target === d && (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom)) d.close();
   });
 
+  document.querySelector("#shell").addEventListener("input", (e) => e.target.id === "r-wq" && search(e.target.value));
+  document.querySelector("#shell").addEventListener("keydown", (e) => {
+    if (e.target.id !== "r-wq") return;
+    if (e.key === "Enter") e.target.blur(); // the keyboard goes, the results stay
+    if (e.key === "Escape" && e.target.value) e.preventDefault(), (e.target.value = ""), search("");
+  });
   document.querySelector("#shell").addEventListener("click", (e) => {
     if (!shown()) return;
+    const a = e.target.closest("[data-wadd]");
+    if (a) return addBook(a);
     if (e.target.closest("[data-act='want-libs']")) return pick();
     if (e.target.closest("[data-act='want-shops']")) return pickShops();
     const el = e.target.closest("[data-want]");

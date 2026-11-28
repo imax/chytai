@@ -1336,6 +1336,11 @@ button.nx-th { flex-direction: column; gap: 0; }
 /* «Купити або взяти напрокат · 120» doesn't fit a narrow phone on one line (274 px with Android's big font). */
 .r-want .r-sec-head h2 { white-space: normal; line-height: 1.4; }
 .r-want-m { color: var(--r-ink2); }
+/* The search that adds books (bot №59): the field of «Додати книжку», its catalog rows under «Уже у списку». */
+.r-want-q { margin: -6px 0 26px; max-width: 720px; }
+#r-wfound .r-frows { max-width: 720px; }
+#r-wfound .r-frows { margin-bottom: 34px; }
+#r-wfound .r-empty { margin: 4px 0 34px; }
 @media (max-width: 760px) {
   .r-want-g { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px 14px; }
   .r-want-go { padding: 6px 0; margin: -6px 0; }

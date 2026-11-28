@@ -985,6 +985,12 @@ A flag only when Max asks for one, or when the change could break what readers u
   at most half a library's `perHour` (Kyiv 60 of 120; the budget is counted in table `library_budget`, shared with
   the book page's lookups). The page asks again every 30 s while books are unchecked. `library_cache` rows older than
   60 days go once a day (`sweep`). Card: «Бібліотека» first in «Де взяти».
+  Adding books (Max 2026-11-28, bot №59, variant A of canvas 918W2YwaxBMhztzimvn5B5): a field under the count
+  (`#r-wq`); while it holds words the shelf hides and «Уже у списку» (the list's books with those words) and «Каталог
+  Chytai» (`catalogFind`) show, each row «Хочу прочитати» (`mentionWant` → the site's `/api/reader-wantit`) or, from
+  `GET /api/want/shelf` (siteShelf, not-wanted statuses by book page), «Уже прочитано» / «Читаєте» / «Кинули читати».
+  Only `#r-wfound` redraws while typing; a whole redraw (`redraw()`) puts the focus back. Taps `want-find`,
+  `act-want-find-add`.
   «Мої книгарні» (Max 2026-11-26, variant A of canvas Ubw9pea9pkEN36tsnPXwRi): above «Купити або взяти напрокат», empty
   until the reader picks up to 5 shops (3 until bot №85) (the same `#libs-dialog`, tabs «Книгарні» / «Видавництва» = shelf kind
   publisher, each with «N з вашого списку»; settings `shops`, names). `/api/reader-want` gives every book and every

@@ -893,6 +893,7 @@
     },
     // Managing the shared library (family only; the server refuses guests).
     // «Хочу прочитати» (GET /api/want): the site's want shelf with where to get each book; null offline.
+    wantShelf: () => api("GET", "/api/want/shelf").then((r) => (r.ok ? r.json() : null)).catch(() => null),
     want: (again) => api("GET", `/api/want${again ? "?again=1" : ""}`).then((r) => (r.ok ? r.json() : null)).catch(() => null),
     // The library branches one may pick for «Бібліотеки» in «Хочу прочитати»; null offline.
     wantLibraries: () => api("GET", "/api/want/libraries").then((r) => (r.ok ? r.json() : null)).catch(() => null),
