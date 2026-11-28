@@ -2186,6 +2186,31 @@ function goneStats(days, dayKeys, monthAgo) {
     rows: rows.sort((a, b) => b.at - a.at).slice(0, 60).map((r) => ({ ...r, name: r.acct ? accountName(r.acct) : "", username: r.acct ? state.accounts[r.acct]?.username || "" : "", title: r.acct && r.book ? bookInfo(r.acct, r.book).title || "" : "" })),
   };
 }
+// Which parts of a book the reader has been on (Max 2026-11-28, Хвильовий's «Повість про санаторійну зону»: a jump by
+// the contents to the last of its three works, read to the end, marked the whole book read). `cov` in u.progress: 50
+// slots of 2%. A place joins the slots behind it back to the nearest one seen, when that is at most 15% back (pages
+// are sent together, a short story's page is 10%, an old place may come again from the offline queue); a longer jump
+// marks only where it lands. A book with no `cov` yet counts as read up to its place.
+const COV = 50;
+const COV_BACK = 7; // slots: 14%
+const covSlot = (pct) => Math.max(0, Math.min(COV - 1, Math.floor(pct / 2)));
+function covered(prev, pct) {
+  const had = typeof prev?.cov === "string" && prev.cov.length === COV;
+  const s = had ? [...prev.cov] : Array.from({ length: COV }, (_, i) => (Number.isFinite(prev?.pct) && prev.pct > 0 && i <= covSlot(prev.pct) ? "1" : "0"));
+  const at = covSlot(pct);
+  let from = at;
+  for (let i = at - 1; i >= Math.max(0, at - COV_BACK); i--) if (s[i] === "1") { from = i; break; }
+  for (let i = from; i <= at; i++) s[i] = "1";
+  return s.join("");
+}
+// The share of the book the reader has been on, 0–1.
+function coverage(p) {
+  if (!Number.isFinite(p?.pct)) return 0;
+  if (typeof p.cov !== "string" || p.cov.length !== COV) return (covSlot(p.pct) + 1) / COV;
+  return (p.cov.split("1").length - 1) / COV;
+}
+// The last page marks a book read by itself only when the reader has been on this much of it.
+const AUTO_DONE_COVERAGE = 0.6;
 api.put("/position", (req, res) => {
   const { path: bookPath, cfi, pct, chapter, part, parts, snip } = req.body || {};
   if (typeof bookPath !== "string" || typeof cfi !== "string") return res.status(400).json({ error: "bad request" });
@@ -2198,7 +2223,8 @@ api.put("/position", (req, res) => {
   if (u.setAside) delete u.setAside[name];
   // How far in and which chapter, for the home screen: the position itself is a CFI it cannot read.
   if (Number.isFinite(pct)) {
-    (u.progress ??= {})[name] = { pct: Math.max(0, Math.min(100, Math.round(pct))), chapter: typeof chapter === "string" ? chapter.slice(0, 200) : "", ...(typeof snip === "string" && snip ? { snip: snip.slice(0, 80) } : {}), ...(Number.isInteger(part) && Number.isInteger(parts) && part > 0 && part <= parts && parts < 10000 ? { part, parts } : {}) };
+    const at = Math.max(0, Math.min(100, Math.round(pct)));
+    (u.progress ??= {})[name] = { pct: at, cov: covered(u.progress[name], at), chapter: typeof chapter === "string" ? chapter.slice(0, 200) : "", ...(typeof snip === "string" && snip ? { snip: snip.slice(0, 80) } : {}), ...(Number.isInteger(part) && Number.isInteger(parts) && part > 0 && part <= parts && parts < 10000 ? { part, parts } : {}) };
   }
   if (!req.guest || req.share) saveState();
   res.json({ ok: true });
@@ -3072,6 +3098,8 @@ api.post("/library/finished", async (req, res) => {
   if (!name) return res.status(400).json({ error: "bad request" });
   if (req.body?.done === false) delete u.finished?.[name];
   else if (req.body?.auto && u.finished?.[name]) return res.json({ ok: true, already: true });
+  // The end reached by a jump (the contents, a search, a link) is not the book read: the reader marks it by hand then.
+  else if (req.body?.auto && coverage(u.progress?.[name]) < AUTO_DONE_COVERAGE) return res.json({ ok: true, skipped: true });
   else (u.finished ??= {})[name] = Date.now();
   if (!req.guest || req.share) saveState();
   if (req.body?.done === false) return res.json({ ok: true });

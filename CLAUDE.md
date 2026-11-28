@@ -999,7 +999,9 @@ A flag only when Max asks for one, or when the change could break what readers u
   first in «Де взяти», bold. Yakaboo, «Є», Readeat give no stock. Feeds = online stock, not a shop's own shelf.
 - Reader «Прочитано» at a book's end (Max 2026-11-20, bot report №7): the last page (`bookEnd` in renderer.js: epub.js
   `atEnd` or 100% on pages, the last chapter's bottom in scroll mode; a PDF's last page) marks the book finished in the
-  reader only (`POST /api/library/finished` with `auto`; a book finished before is left alone) and asks the site with
+  reader only (`POST /api/library/finished` with `auto`; a book finished before is left alone), and only when the reader
+  has been on 60%+ of it (`coverage`: `u.progress[book].cov`, 50 slots of 2%, filled by `/api/position`; a jump by the
+  contents to the last part and its end is not «read», Max 2026-11-28, Хвильовий's three works in one book) and asks the site with
   `peek` (`/api/reader-read`: href, title, author, status, rating, note; nothing changes). When the catalog has the book,
   a small card like «Перед главою» (`#done-card`); a tap on it or a turn past the last page (`doneNext`, wrapped into
   `rendition.next`) opens a whole screen (`#done`: cover, the site's stars, a few words). The home menu's «Позначити
