@@ -7,7 +7,7 @@ const { langFromText, epubSample } = require("../server/language");
 
 const BOOK_EXTS = ["epub", "pdf", "fb2", "mobi", "azw", "azw3", "azw4", "prc", "kfx", "lit", "pdb"];
 const MAX_DEPTH = 4;
-const META_VERSION = 2; // bump to re-read every book's metadata (2: language from the text)
+const META_VERSION = 3; // bump to re-read every book's metadata (2: language from the text, 3: &#x27; in titles)
 
 const ICLOUD = path.join(os.homedir(), "Library/Mobile Documents/com~apple~CloudDocs");
 
@@ -61,9 +61,9 @@ const decodeXml = (s) =>
   s
     .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1")
     .replace(/<[^>]+>/g, "")
-    .replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&apos;/g, "'")
-    .replace(/&#(\d+);/g, (_, n) => String.fromCodePoint(+n))
-    .replace(/&amp;/g, "&")
+    // One pass, hex too: Python's html.escape writes «'» as &#x27; (scripts/wsbook.py, «Кайдашева сім'я»).
+    .replace(/&(?:#x([0-9a-f]+)|#(\d+)|(lt|gt|quot|apos|amp));/gi, (m, hex, dec, name) =>
+      hex ? String.fromCodePoint(parseInt(hex, 16)) : dec ? String.fromCodePoint(+dec) : { lt: "<", gt: ">", quot: '"', apos: "'", amp: "&" }[name.toLowerCase()])
     .replace(/\s+/g, " ")
     .trim();
 
