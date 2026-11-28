@@ -798,6 +798,8 @@ function mine(book, entry, user, now = false, readUrl = "") {
 // «Мої книгарні й бібліотеки» (`places`, places.js; Max 2026-11-28, variant C): when a reader's own shop has the book in
 // stock, only those rows show, in bold, and the rest folds under «Ще де взяти»; app.js does the same for the reader's
 // library branches. When none of theirs has it, everything as before. A line under it names theirs, «змінити».
+// «Формати» (places.js, Max 2026-11-28, variant Б): an e-book row says its files («EPUB, PDF», «лише Kindle», «у
+// застосунку»); with formats picked one's own rows are only those in them, and formats without shops = any shop.
 function where(book, ukrlib = null, sluhay = null, bookflow = null, places = null) {
   const seen = new Set();
   // A free recording from «Слухай» (sluhay.js) is one more audio edition.
@@ -842,21 +844,24 @@ function where(book, ukrlib = null, sluhay = null, bookflow = null, places = nul
   // The free shelf's line goes to its catalog page on the site, not into the reader (Max, 2026-10-29); «Додати в Читалку» is the way in.
   const go = (e, cls = "") => (e.shelf.id === "chytai-free" ? `<a${cls} href="/publishers/chytai-free">` : `<a${cls} href="${attr(e.links[0].url)}" target="_blank" rel="noopener">`);
   // The free shelf's file sits on its line (Max, 2026-10-30: out of the «⋯» menu).
+  const fl = (e) => require("./places").label(e);
   const short = (e, bold = false) => {
-    const tail = [e.narrator ? `читає ${e.narrator}` : "", e.price, e.subscription ? "є в підписці" : "", avail(e)].filter(Boolean).join(", ");
+    const tail = [e.narrator ? `читає ${e.narrator}` : "", e.price, fl(e), e.subscription ? "є в підписці" : "", avail(e)].filter(Boolean).join(", ");
     return `${bold ? "<b>" : ""}${go(e)}${esc(e.shelf.name)}</a>${bold ? "</b>" : ""}${tail ? ` <span class="muted">${esc(tail)}</span>` : ""}`;
   };
   const full = (e) => {
-    const tail = [e.edition, e.narrator ? `читає ${e.narrator}` : "", e.duration, e.price, e.subscription ? "є в підписці" : "", avail(e)].filter(Boolean).join(", ");
+    const tail = [e.edition, e.narrator ? `читає ${e.narrator}` : "", e.duration, e.price, fl(e), e.subscription ? "є в підписці" : "", avail(e)].filter(Boolean).join(", ");
     return `${go(e)}${esc(e.shelf.name)}</a>${tail ? ` <span class="muted">${esc(tail)}</span>` : ""}`;
   };
   const row = (label, first, rest = "") => `<div class="where-row"><span class="where-kind">${label}</span><span class="where-what">${first}${rest}</span></div>`;
   // The reader's own shops that have it now: one row a format, each shop once (its cheapest), cheapest first; those rows
   // leave the folded rest.
   const myShops = places?.shops || [];
+  const myFormats = places?.formats || [];
+  const ours = (e) => (myShops.length ? myShops.includes(e.shelf.name) : myFormats.length > 0) && require("./places").fits(e, myFormats);
   const mine = [];
   for (const [k, label] of kinds) {
-    const list = have.filter((e) => e.status === "є" && kindOf(e) === k && myShops.includes(e.shelf.name)).sort((a, b) => price(a) - price(b));
+    const list = have.filter((e) => e.status === "є" && kindOf(e) === k && ours(e)).sort((a, b) => price(a) - price(b));
     const one = list.filter((e, i) => list.findIndex((x) => x.shelf.name === e.shelf.name) === i);
     if (one.length) mine.push([label, one]);
   }
@@ -886,9 +891,9 @@ function where(book, ukrlib = null, sluhay = null, bookflow = null, places = nul
   if (bookflow) rows.push(row("Напрокат", `<a href="${attr(bookflow.url)}" target="_blank" rel="noopener">BookFlow</a>${bookflow.free ? `<span class="ok">, є вільна</span>` : `<span class="muted">, зараз усі в читачів</span>`}${bookflow.once ? `<span class="muted">, ${bookflow.once} ₴ за книжку</span>` : ""}`));
   // Under it, which places are the reader's, or how to pick them (a signed-in reader only).
   const myLibs = places?.libs || [];
-  const theirs = [...myShops, ...(myLibs.length ? [count(myLibs.length, "бібліотека", "бібліотеки", "бібліотек")] : [])];
+  const theirs = [[...myShops, ...(myLibs.length ? [count(myLibs.length, "бібліотека", "бібліотеки", "бібліотек")] : [])].join(", "), myFormats.length ? require("./places").only(myFormats) : ""].filter(Boolean);
   const change = `/settings/places?back=${encodeURIComponent(book.href || "")}`;
-  const foot = !places ? "" : theirs.length ? `<p class="where-foot small muted">Ваші: ${esc(theirs.join(", "))} · <a class="text-link" href="${attr(change)}">змінити</a></p>` : `<p class="where-foot small muted"><a class="text-link" href="${attr(change)}">Оберіть свої книгарні й бібліотеки</a>, і вони будуть тут першими.</p>`;
+  const foot = !places ? "" : theirs.length ? `<p class="where-foot small muted">Ваші: ${esc(theirs.join(" · "))} · <a class="text-link" href="${attr(change)}">змінити</a></p>` : `<p class="where-foot small muted"><a class="text-link" href="${attr(change)}">Оберіть свої книгарні й бібліотеки</a>, і вони будуть тут першими.</p>`;
   const src = ` data-src="/api/libraries/${attr(encodeURIComponent(book.id))}"`;
   if (!mine.length) return `<div class="where${rows.length ? "" : " hidden"}" data-block="where"${src}><span class="where-label">Де взяти</span>${rows.join("")}${foot}</div>`;
   // The names under «Ще де взяти»: the other shops, the free texts, BookFlow (app.js adds «бібліотеки»).
@@ -2998,7 +3003,7 @@ function mailSettingsPage({ user, values, saved = false, calSubs = [] }) {
 
 // /settings/places (places.js; Max 2026-11-28, variant C of canvas UfKURsapQDWb2P1VA9XtD5, a page of its own): the
 // reader's shops and library branches, 5 of each, one choice for the site and the reader. A city's branches fold.
-function placesSettingsPage({ user, values, choices, libs, saved = false, back = "" }) {
+function placesSettingsPage({ user, values, formats = [], choices, libs, saved = false, back = "" }) {
   const box = (name, value, title, note = "", on = false) => `<label class="check"><span><input type="checkbox" name="${name}" value="${attr(value)}"${on ? " checked" : ""}> ${esc(title)}${note ? ` <span class="muted small">${esc(note)}</span>` : ""}</span></label>`;
   const shopOn = (n) => values.shops.includes(n);
   const pubsOn = choices.publishers.filter(shopOn);
@@ -3016,6 +3021,9 @@ function placesSettingsPage({ user, values, choices, libs, saved = false, back =
   <h3>Книгарні</h3>
   ${choices.shops.map((s) => box("shop", s.name, s.name, s.note, shopOn(s.name))).join("")}
   <details class="city"${pubsOn.length ? " open" : ""}><summary>Магазини видавництв${pubsOn.length ? ` <span class="muted small">· обрано ${pubsOn.length}</span>` : ""}</summary><div class="lib-list">${[...pubsOn, ...choices.publishers.filter((n) => !shopOn(n))].map((n) => box("shop", n, n, "", shopOn(n))).join("")}</div></details>
+  <h3>Формати</h3>
+  <p class="muted small">Лише книжки в цих форматах. Kindle: ті, що Book.ua надсилає на Kindle.</p>
+  ${formats.map((f) => box("format", f.code, f.name, "", (values.formats || []).includes(f.code))).join("")}
   <h3>Бібліотеки</h3>
   <label class="lib-search"><input type="search" class="lib-q" placeholder="назва або вулиця" aria-label="Шукати бібліотеку"></label>
   ${cities.join("")}

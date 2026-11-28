@@ -601,6 +601,7 @@ async function ksdProducts(src, { fetchImpl = fetch, log = () => {}, previous = 
       title,
       author: (p.authors || []).map((a) => ent(`${a.name || ""} ${a.surname || ""}`).trim()).filter(Boolean).join(", "),
       format: p.type === "ebook" ? "e-book" : "папір",
+      ...(p.type === "ebook" ? { app: true } : {}), // «Ви можете читати електронні книги виключно у застосунку КСД»
       series: volumeOf(title)?.series || "",
       volume: volumeOf(title)?.volume || 0,
       bundle: /^комплект/i.test(title),
@@ -743,6 +744,48 @@ async function bookuaProducts(src, { fetchImpl = fetch, log = () => {} }) {
   return [...found.values()];
 }
 
+// An e-book's files, as each shop names them: «EPUB», «PDF», «MOBI», «FB2» (Max 2026-11-28, a reader with a Kobo looks
+// only for EPUB). `files` = what one downloads; `kindle` = Book.ua sends it to a Kindle; `app` = only in the shop's app.
+function fileFormats(list) {
+  return [...new Set((Array.isArray(list) ? list : []).map((f) => String(f?.name || f).trim().toUpperCase()).filter((f) => /^(EPUB|PDF|MOBI|FB2|DJVU|AZW3)$/.test(f)))];
+}
+
+// Book.ua's e-book files are not on its list pages; its public GraphQL gives each product's links: the file format,
+// whether it may be downloaded and whether it goes to a Kindle («За вимогою видавця книга доступна до читання лише
+// на Kindle» = no download). 50 url keys a request, ~150 requests a refresh; a failed one keeps the last refresh's.
+async function bookuaFiles(products, { previous, fetchImpl = fetch, log = () => {} }) {
+  const keyOf = (p) => decodeURIComponent(String(p.url).split("/book/")[1] || "");
+  for (const p of products) {
+    const old = previous.get(p.url);
+    if (old?.files) p.files = old.files;
+    if (old?.kindle) p.kindle = true;
+  }
+  const keys = products.map(keyOf).filter(Boolean);
+  const byKey = new Map(products.map((p) => [keyOf(p), p]));
+  let got = 0, failed = 0;
+  for (let i = 0; i < keys.length; i += 50) {
+    const part = keys.slice(i, i + 50);
+    try {
+      const q = `{ products(filter: { url_key: { in: ${JSON.stringify(part)} } }, pageSize: 50) { items { url_key ... on DownloadableProduct { downloadable_product_links { file_format { name } isDownloadAllowed isSendToKindleAllowed } } } } }`;
+      const r = await fetchImpl(BOOKUA_API, { method: "POST", headers: { "content-type": "application/json", ...HEADERS }, body: JSON.stringify({ query: q }), signal: AbortSignal.timeout(30000) });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const j = await r.json();
+      for (const it of j.data?.products?.items || []) {
+        const p = byKey.get(it.url_key);
+        const links = it.downloadable_product_links;
+        if (!p || !Array.isArray(links) || !links.length) continue;
+        p.files = fileFormats(links.filter((l) => l.isDownloadAllowed).map((l) => l.file_format?.name));
+        p.kindle = links.some((l) => l.isSendToKindleAllowed);
+        got++;
+      }
+    } catch {
+      failed++;
+    }
+    await new Promise((res) => setTimeout(res, 200));
+  }
+  log(`bookua: files of ${got} e-books${failed ? `, ${failed} requests failed` : ""}; ${products.filter((p) => p.files?.includes("EPUB")).length} EPUB, ${products.filter((p) => p.kindle && !p.files?.length).length} only Kindle`);
+}
+
 // The e-book's year is only on its own page («Рік видання 2025»), and «Де взяти» shows the newest of a shop's
 // editions (Max, 2026-10-27: «найновіше … коли була видана електронна книжка»). The year does not change: each
 // page is read once, up to 1500 a refresh, so the first fill takes about five days; «?» = the page gives none.
@@ -849,6 +892,7 @@ const SOURCES = [
       isbn: p.isbn,
       edition: p.publisher && p.publisher !== "Видавництво Старого Лева" ? p.publisher : "", // the format is its own field
       format: p.type === "ebook" ? "e-book" : "папір",
+      ...(p.files?.length ? { files: p.files } : {}),
       series: volumeOf(slTitle(p.name))?.series || "",
       volume: volumeOf(slTitle(p.name))?.volume || 0,
       bundle: /^комплект/i.test(p.name),
@@ -865,11 +909,13 @@ const SOURCES = [
     // The list has no descriptions; each book's own record does (/products/<slug>). Descriptions are
     // kept from the last refresh, and up to 1200 missing ones are fetched per refresh.
     enrich: async (products, { previous, fetchImpl = fetch, log = () => {} }) => {
+      // An e-book's files («Доступні формати для скачування: pdf, epub, fb2, mobi») are in the same record.
       const missing = [];
       for (const p of products) {
         const old = previous.get(`https://starylev.com.ua/${p.slug}`);
+        if (old?.files) p.files = old.files;
         if (old?.blurb) p.blurb = ent(old.blurb); // older refreshes kept entities like &ndash;
-        else if (p.type === "book" || p.type === "ebook") missing.push(p);
+        if ((!old?.blurb && (p.type === "book" || p.type === "ebook")) || (p.type === "ebook" && !p.files)) missing.push(p);
       }
       let got = 0;
       const todo = missing.slice(0, 1200);
@@ -879,9 +925,10 @@ const SOURCES = [
             try {
               const r = await fetchImpl(`https://api-k8s.starylev.com.ua/api/v1.1/products/${encodeURIComponent(p.slug)}`, { headers: HEADERS, signal: AbortSignal.timeout(30000) });
               if (!r.ok) return;
-              const j = await r.json();
-              p.blurb = about((j.data || j).description);
+              const j = (await r.json()).data || {};
+              if (!p.blurb) p.blurb = about(j.description);
               if (p.blurb) got++;
+              if (p.type === "ebook") p.files = fileFormats(j.ebook_formats);
             } catch {
               /* next refresh tries again */
             }
@@ -1013,6 +1060,7 @@ const SOURCES = [
         name,
         title: name.replace(/\s*\(електронна версія[^)]*\)\s*$/i, "").trim(),
         format: /\(електронна версія/i.test(name) ? "e-book" : "папір",
+        files: [...new Set(((name.match(/\(електронна версія([^)]*)\)/i) || [])[1] || "").toUpperCase().match(/EPUB|PDF|MOBI|FB2/g) || [])],
         author: authors.length && authors.length <= 3 ? authors.join(", ") : editor || authors.slice(0, 3).join(", "),
         translator: pick(/^Переклад/),
         isbn: isbnIn(pick(/^ISBN/)),
@@ -1026,7 +1074,7 @@ const SOURCES = [
     // «Покуття» is one series in volumes with their own subtitles («Етнографічний нарис. Том 1», «Казки і небилиці. Том 3»).
     toItem: (p) => {
       const vol = p.categories.includes("Покуття") && Number((p.title.match(/Том\s+(\d+)/i) || [])[1]);
-      return wooBook({ id: "humanitarka" }, p, { format: p.format, year: p.year, pages: p.pages, genres: p.categories.filter((c) => c !== "Електронні книжки"), ...(vol ? { series: "Покуття", volume: vol } : {}) });
+      return wooBook({ id: "humanitarka" }, p, { format: p.format, ...(p.files.length ? { files: p.files } : {}), year: p.year, pages: p.pages, genres: p.categories.filter((c) => c !== "Електронні книжки"), ...(vol ? { series: "Покуття", volume: vol } : {}) });
     },
     finish: joinEbooks,
   },
@@ -1201,7 +1249,10 @@ const SOURCES = [
     draft: false,
     joinOnly: true,
     fetchAll: (src, opts) => bookuaProducts(src, opts),
-    enrich: bookuaYears,
+    enrich: async (products, opts) => {
+      await bookuaYears(products, opts);
+      await bookuaFiles(products, opts);
+    },
     normalize: (p) => p,
     // Books in English («1984 (англійська)», «The Forsyte Saga. Volume 1») come with the author in Cyrillic and
     // would join an original to its Ukrainian translation: only Ukrainian titles are kept.
@@ -1318,4 +1369,4 @@ async function bookuaSearch(q, { fetchImpl = fetch, limit = 10, timeout = 10000 
   });
 }
 
-module.exports = { bookuaSearch, isPromo, isLangAid, isBundle, isAdult, bookuaTiles, bookuaProducts, SOURCES, fetchSource, buildShelves, refresh, volumeOf, ent, about, pageProducts, ldBookPage };
+module.exports = { bookuaSearch, bookuaFiles, fileFormats, isPromo, isLangAid, isBundle, isAdult, bookuaTiles, bookuaProducts, SOURCES, fetchSource, buildShelves, refresh, volumeOf, ent, about, pageProducts, ldBookPage };

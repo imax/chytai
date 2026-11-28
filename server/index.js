@@ -1955,6 +1955,8 @@ api.patch("/settings", (req, res) => {
     else if (k === "libraries") (u[k] = (Array.isArray(v) ? v : []).filter((x) => x && typeof x.lib === "string" && typeof x.branch === "string").slice(0, 5).map((x) => ({ lib: x.lib.slice(0, 30), branch: x.branch.slice(0, 200) }))), (placesChanged = true);
     // «Мої книгарні» in «Хочу прочитати» (want.js): the shops the reader picked by name, 3 at most.
     else if (k === "shops") (u[k] = [...new Set((Array.isArray(v) ? v : []).filter((x) => typeof x === "string" && x.trim()).map((x) => x.trim().slice(0, 80)))].slice(0, 5)), (placesChanged = true); // five shops (bot №85)
+    // «Формати» in the same dialog (Max 2026-11-28, variant Б): web/places.js FORMATS codes.
+    else if (k === "formats") (u[k] = ["paper", "epub", "pdf", "kindle", "audio", "app"].filter((c) => Array.isArray(v) && v.includes(c))), (placesChanged = true);
     else if (USER_KEYS.has(k) && k !== "positions") u[k] = v;
   }
   // The shops and branches are the site's (Max 2026-11-28: one choice for the site and the reader): sent there at once.
@@ -1966,7 +1968,7 @@ function sendPlaces(acct) {
   const u = userState(acct);
   const key = state.accounts[acct]?.key;
   if (!key) return;
-  fetch(`${WEB_URL}/api/reader-places`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: acct, key, shops: u.shops || [], libs: u.libraries || [], at: u.placesAt }), signal: AbortSignal.timeout(10000) }).catch((e) => console.error(`reader-places ${acct}: ${e.message}`));
+  fetch(`${WEB_URL}/api/reader-places`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: acct, key, shops: u.shops || [], libs: u.libraries || [], formats: u.formats || [], at: u.placesAt }), signal: AbortSignal.timeout(10000) }).catch((e) => console.error(`reader-places ${acct}: ${e.message}`));
 }
 // The site's choice when it is newer than ours (set on the site's /settings/places), into the account's settings.
 function takePlaces(acct, p) {
@@ -1974,6 +1976,7 @@ function takePlaces(acct, p) {
   if (!p || !(p.at > (u.placesAt || 0))) return false;
   u.shops = (p.shops || []).slice(0, 5);
   u.libraries = (p.libs || []).slice(0, 5);
+  if (Array.isArray(p.formats)) u.formats = p.formats.slice(0, 6);
   u.placesAt = p.at;
   saveState();
   return true;
@@ -2061,25 +2064,26 @@ api.get("/want", guestsCannot("Без входу списку немає."), asy
   if (!key) return res.json({ books: [] });
   let picks = userState(req.acct).libraries || [];
   const kept = wantKept.get(req.acct);
-  const same = kept && kept.picks === JSON.stringify(picks);
+  let myFormats = userState(req.acct).formats || [];
+  const same = kept && kept.picks === JSON.stringify(picks) && kept.formats === JSON.stringify(myFormats);
   let myShops = userState(req.acct).shops || [];
   // A book finished here leaves the list even while the site still has it as «Хочу прочитати» (Max 2026-11-27, bot
   // №84: «Прочитано» in the reader marks the site only once its form is sent).
   const done = userState(req.acct).finished || {};
   const unread = (books) => (books || []).filter((b) => !(b?.mine && done[b.mine]));
-  if (same && Date.now() - kept.at < 60000 && !req.query.again) return res.json({ books: unread(kept.books), libs: kept.libs, shops: kept.shops, picks, myShops });
+  if (same && Date.now() - kept.at < 60000 && !req.query.again) return res.json({ books: unread(kept.books), libs: kept.libs, shops: kept.shops, picks, myShops, myFormats });
   try {
-    const r = await fetch(`${WEB_URL}/api/reader-want`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: req.acct, key, libs: picks, shops: myShops, placesAt: userState(req.acct).placesAt || 0 }), signal: AbortSignal.timeout(15000) });
+    const r = await fetch(`${WEB_URL}/api/reader-want`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: req.acct, key, libs: picks, shops: myShops, formats: myFormats, placesAt: userState(req.acct).placesAt || 0 }), signal: AbortSignal.timeout(15000) });
     if (!r.ok) throw new Error(`site ${r.status}`);
     const { books, libs = null, shops = {}, places } = await r.json();
     // Chosen on the site since: the site's answer already used it.
-    if (takePlaces(req.acct, places)) (picks = userState(req.acct).libraries), (myShops = userState(req.acct).shops);
+    if (takePlaces(req.acct, places)) (picks = userState(req.acct).libraries), (myShops = userState(req.acct).shops), (myFormats = userState(req.acct).formats || []);
     if (wantKept.size > 500) wantKept.delete(wantKept.keys().next().value);
-    wantKept.set(req.acct, { at: Date.now(), books, libs, shops, picks: JSON.stringify(picks) });
-    res.json({ books: unread(books), libs, shops, picks, myShops });
+    wantKept.set(req.acct, { at: Date.now(), books, libs, shops, picks: JSON.stringify(picks), formats: JSON.stringify(myFormats) });
+    res.json({ books: unread(books), libs, shops, picks, myShops, myFormats });
   } catch (err) {
     console.error(`reader-want ${req.acct}:`, err.message);
-    if (kept && same) return res.json({ books: unread(kept.books), libs: kept.libs, shops: kept.shops, picks, myShops });
+    if (kept && same) return res.json({ books: unread(kept.books), libs: kept.libs, shops: kept.shops, picks, myShops, myFormats });
     res.status(502).json({ error: "Сайт не відповів. Спробуйте ще раз." });
   }
 });

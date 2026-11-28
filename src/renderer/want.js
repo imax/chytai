@@ -32,6 +32,13 @@
   let myShops = []; // the reader's shops by name, SHOPS_MAX at most
   const SHOPS_MAX = 5; // Max 2026-11-27, bot №85 (was 3)
   let shopKinds = {}; // name -> { kind: "shop" | "publisher", formats }
+  // «Формати» (Max 2026-11-28, variant Б of canvas SqmWq3J5cbW2yAgofvw5g7): the third tab of the shops' dialog; the
+  // «Мої книгарні» block keeps only the rows in them (a stock row's codes), formats alone = any shop. Settings `formats`,
+  // the site's choice too (web/places.js).
+  let myFormats = [];
+  const FORMATS = [["paper", "Папір"], ["epub", "EPUB"], ["pdf", "PDF"], ["kindle", "Kindle"], ["audio", "Аудіо"], ["app", "У застосунку"]];
+  const fits = (codes) => !myFormats.length || (codes || []).some((c) => myFormats.includes(c));
+  const onlyWords = () => ((n) => (n.length ? "лише " + (n.length === 1 ? n[0] : `${n.slice(0, -1).join(", ")} і ${n[n.length - 1]}`) : ""))(FORMATS.filter(([c]) => myFormats.includes(c)).map(([c, t]) => (c === "app" ? "у застосунку" : t)));
   let libBusy = false; // the picks changed, the answer for them not here yet
   let again = null; // the timer that asks again while the libraries are being checked
   let tries = 0;
@@ -43,7 +50,7 @@
     asking = true;
     const r = await window.reader.want?.(fresh);
     asking = false;
-    if (r?.books) (books = r.books), (libs = r.libs || null), (picks = r.picks || picks), (myShops = r.myShops || myShops), (shopKinds = r.shops || {}), (failed = false), (libBusy = false);
+    if (r?.books) (books = r.books), (libs = r.libs || null), (picks = r.picks || picks), (myShops = r.myShops || myShops), (myFormats = r.myFormats || myFormats), (shopKinds = r.shops || {}), (failed = false), (libBusy = false);
     else failed = !books;
     // The count beside «Хочу прочитати» in the panel, as «Мої книжки» (Max 2026-11-26).
     const n = document.querySelector("#r-n-want");
@@ -60,7 +67,7 @@
   const mineOf = (b) => inLib(b.mine) || (b.mine ? { path: b.mine } : null);
   const readNow = (b) => (b.mine ? b.mine : b.free || "");
   const link = (url, text, cls = "") => `<a${cls ? ` class="${cls}"` : ""} href="${esc(url)}" target="_blank" rel="noopener" data-act="want-out">${text}</a>`;
-  const shop = (s) => link(s.url, esc(s.shop)) + ((t) => (t ? ` <span class="r-want-m">${esc(t)}</span>` : ""))([s.price, s.note].filter(Boolean).join(", "));
+  const shop = (s) => link(s.url, esc(s.shop)) + ((t) => (t ? ` <span class="r-want-m">${esc(t)}</span>` : ""))([s.price, s.fmt, s.note].filter(Boolean).join(", "));
   const uah = (p) => Number(String(p || "").replace(/[^\d]/g, "")) || 0;
 
   // Under the cover only a price (Max 2026-11-25, bot №49, variant B: «каша з підписами»): the lowest in a Ukrainian
@@ -73,9 +80,11 @@
   const group = (b) => (readNow(b) ? "now" : b.get?.length || b.rent || b.online?.length || b.abroad?.length || b.other?.length ? "buy" : "none");
   const LANG = { uk: "Українською", en: "Англійською", "": "В оригіналі" };
 
-  function tile(b, i, cap, act = "want-lib-card") {
+  // `fmt`: the format line under a «Мої книгарні» price («EPUB», «лише Kindle»: then in the warning colour).
+  function tile(b, i, cap, act = "want-lib-card", fmt = "") {
     const path = readNow(b);
-    const foot = cap != null ? `<span class="r-want-h r-want-lib">${esc(cap)}</span>` : path
+    const fline = fmt ? `<span class="r-want-f${/^(лише|у застосунку)/.test(fmt) ? " warn" : ""}">${esc(fmt)}</span>` : "";
+    const foot = cap != null ? `<span class="r-want-h r-want-lib">${esc(cap)}</span>${fline}` : path
       ? `<span class="r-want-h"><button type="button" class="r-want-go" data-open="${esc(path)}" data-act="${b.mine ? "want-mine" : "want-free"}">Читати</button></span>`
       : how(b) ? `<span class="r-want-h">${esc(how(b))}</span>` : "";
     return `<div class="r-want-b">
@@ -191,19 +200,23 @@
 
   // «Мої книгарні»: a book counts when it or its other version (original, translation) is in stock in a picked shop;
   // under the cover the lowest such price, and the shop's name when the reader picked several.
+  // With «Формати» only the rows in them; formats without shops = every shop.
   const inMine = (b) =>
-    [b, ...(b.other || [])].flatMap((v) => myShops.filter((n) => v.stock?.[n]).map((n) => [n, v.stock[n][0] || Infinity])).sort((x, y) => x[1] - y[1]);
+    [b, ...(b.other || [])]
+      .flatMap((v) => Object.keys(v.stock || {}).filter((n) => (myShops.length ? myShops.includes(n) : myFormats.length) && fits(v.stock[n][3])).map((n) => [n, v.stock[n][0] || Infinity, v.stock[n][4] || ""]))
+      .sort((x, y) => x[1] - y[1]);
   function shopsPart(head) {
     const change = `<button type="button" class="r-link r-want-fold" data-act="want-shops">Змінити</button>`;
-    if (!myShops.length)
+    if (!myShops.length && !myFormats.length)
       return `<div class="r-want-libs"><div class="r-sec-head"><h2>Мої книгарні</h2></div>
-        <p class="r-want-p">Оберіть до п'яти книгарень, і тут будуть книжки, які в них є зараз.</p>
+        <p class="r-want-p">Оберіть до п'яти книгарень або свій формат, і тут будуть книжки, які є зараз.</p>
         <p class="r-want-p"><button type="button" class="r-pill-line" data-act="want-shops">Обрати книгарню</button></p></div>`;
     const have = books.map((b, i) => [b, i]).filter(([b]) => !readNow(b) && inMine(b).length);
-    const cap = (b) => ((t) => (Number.isFinite(t[1]) ? `${t[1]} ₴` : "є") + (myShops.length > 1 ? ` · ${t[0]}` : ""))(inMine(b)[0]);
+    const cap = (b) => ((t) => (Number.isFinite(t[1]) ? `${t[1]} ₴` : "є") + (myShops.length !== 1 ? ` · ${t[0]}` : ""))(inMine(b)[0]);
+    const names = [myShops.length ? myShops.join(", ") : "Усі книгарні", onlyWords()].filter(Boolean).join(" · ");
     return `<div class="r-want-libs">${head("Мої книгарні", have.length, change)}
-      <p class="r-want-p">${esc(myShops.join(", "))}${have.length ? "" : "<br>Зараз цих книжок там немає."}</p>
-      ${have.length ? `<div class="r-want-g">${have.map(([b, i]) => tile(b, i, cap(b), "want-shop-card")).join("")}</div>` : ""}</div>`;
+      <p class="r-want-p">${esc(names)}${have.length ? "" : "<br>Зараз цих книжок там немає."}</p>
+      ${have.length ? `<div class="r-want-g">${have.map(([b, i]) => tile(b, i, cap(b), "want-shop-card", inMine(b)[0][2])).join("")}</div>` : ""}</div>`;
   }
 
   // «Бібліотеки»: a branch's short name («Бібліотека ім. А. Головка» → «ім. А. Головка», no address); how it holds
@@ -291,9 +304,13 @@
   let shopsChosen = [];
   let shopTab = "shop";
   const FMT = { "e-book": "електронні", аудіо: "аудіо", папір: "папір" };
+  let fmtChosen = [];
+  // A book of the list in a format now: any shop's row in stock or among the two cheapest.
+  const inFormat = (b, c) => [b, ...(b.other || [])].some((v) => Object.values(v.stock || {}).some((s) => s[3]?.includes(c)) || (v.get || []).some((g) => g.shops.some((s) => s.codes?.includes(c))));
   function pickShops() {
     mode = "shops";
     shopsChosen = [...myShops];
+    fmtChosen = [...myFormats];
     shopTab = myShops.length && Object.keys(shopKinds).length && myShops.every((n) => shopKinds[n]?.kind === "publisher") ? "publisher" : "shop";
     const d = dlg();
     d.querySelector("h2").textContent = "Мої книгарні";
@@ -306,16 +323,25 @@
     const n = (name) => (books || []).filter((b) => [b, ...(b.other || [])].some((v) => v.stock?.[name])).length;
     const names = [...new Set([...Object.keys(shopKinds), ...shopsChosen])];
     const kind = (name) => shopKinds[name]?.kind || "shop";
-    const tabs = ["shop", "publisher"].filter((t) => t === "shop" || names.some((x) => kind(x) === t));
+    const tabs = ["shop", "publisher", "format"].filter((t) => t !== "publisher" || names.some((x) => kind(x) === t));
     if (!tabs.includes(shopTab)) shopTab = "shop";
+    const TAB = { shop: "Книгарні", publisher: "Видавництва", format: "Формати" };
+    const tabsHtml = `<div class="r-tabs">${tabs.map((t) => {
+      const c = t === "format" ? fmtChosen.length : shopsChosen.filter((x) => kind(x) === t).length;
+      return `<button type="button" class="${t === shopTab ? "on" : ""}" data-act="want-shop-tab" data-stab="${t}">${TAB[t]}${c ? ` <i>${c}</i>` : ""}</button>`;
+    }).join("")}</div>`;
+    if (shopTab === "format") {
+      const rows = FORMATS.map(([c, t]) => {
+        const k = (books || []).filter((b) => inFormat(b, c)).length;
+        return `<li><label data-act="want-format-pick"><input type="checkbox" data-fmt="${c}"${fmtChosen.includes(c) ? " checked" : ""} />${esc(t)}<small>${k ? `${k} з вашого списку` : "зараз нічого"}</small></label></li>`;
+      }).join("");
+      const note = "Блок покаже лише книжки в цих форматах. Kindle: ті, що Book.ua надсилає на Kindle.";
+      return (dlg().querySelector("#lb-body").innerHTML = `${tabsHtml}<ul class="lb-list">${rows}</ul><p class="lb-note lb-n">${note}</p>`);
+    }
     const list = names.filter((x) => kind(x) === shopTab);
     if (sort) shopOrder = [...list].sort((x, y) => shopsChosen.includes(y) - shopsChosen.includes(x) || n(y) - n(x) || x.localeCompare(y, "uk"));
     list.sort((x, y) => shopOrder.indexOf(x) - shopOrder.indexOf(y));
     const full = shopsChosen.length >= SHOPS_MAX;
-    const tabsHtml = tabs.length > 1 ? `<div class="r-tabs">${tabs.map((t) => {
-      const c = shopsChosen.filter((x) => kind(x) === t).length;
-      return `<button type="button" class="${t === shopTab ? "on" : ""}" data-act="want-shop-tab" data-stab="${t}">${t === "shop" ? "Книгарні" : "Видавництва"}${c ? ` <i>${c}</i>` : ""}</button>`;
-    }).join("")}</div>` : "";
     const fmt = (name) => ((f) => (f.length === 1 ? ` <span class="lb-kind">${FMT[f[0]]}</span>` : ""))(shopKinds[name]?.formats || []);
     const rows = list.length
       ? list.map((x) => {
@@ -339,12 +365,12 @@
     const out = [];
     for (const g of v.get || []) {
       // The reader's own shops first in their format, even when they are not among the two cheapest.
-      const mine = myShops.filter((n) => v.stock?.[n]?.[2] === g.kind).map((n) => ({ shop: n, price: v.stock[n][0] ? `${v.stock[n][0]} ₴` : "", url: v.stock[n][1], mine: true }));
+      const mine = myShops.filter((n) => v.stock?.[n]?.[2] === g.kind && fits(v.stock[n][3])).map((n) => ({ shop: n, price: v.stock[n][0] ? `${v.stock[n][0]} ₴` : "", fmt: v.stock[n][4] || "", url: v.stock[n][1], mine: true }));
       const list = mine.length ? [...mine, ...g.shops.filter((x) => !mine.some((m) => m.shop === x.shop))].slice(0, Math.max(2, mine.length + 1)) : g.shops;
       out.push([KIND[g.kind] || g.kind, list.map((x) => (x.mine ? `<b class="r-want-mine">${shop(x)}</b>` : shop(x))).join(` <span class="r-want-m">·</span> `)]);
     }
     // A picked shop with the book in a format the list doesn't show yet (rare: the book's get is cut to in-stock rows).
-    for (const n of myShops) if (v.stock?.[n] && !(v.get || []).some((g) => g.kind === v.stock[n][2])) out.unshift([KIND[v.stock[n][2]] || v.stock[n][2], `<b class="r-want-mine">${shop({ shop: n, price: v.stock[n][0] ? `${v.stock[n][0]} ₴` : "", url: v.stock[n][1] })}</b>`]);
+    for (const n of myShops) if (v.stock?.[n] && fits(v.stock[n][3]) && !(v.get || []).some((g) => g.kind === v.stock[n][2])) out.unshift([KIND[v.stock[n][2]] || v.stock[n][2], `<b class="r-want-mine">${shop({ shop: n, price: v.stock[n][0] ? `${v.stock[n][0]} ₴` : "", fmt: v.stock[n][4] || "", url: v.stock[n][1] })}</b>`]);
     if (v.rent) out.push(["Напрокат", `${link(v.rent.url, "BookFlow")}<span class="r-want-m">, ${v.rent.free ? "є вільна" : "зараз усі в читачів"}${v.rent.price ? `, ${v.rent.price} ₴` : ""}</span>`]);
     if (v.abroad?.length) out.push([abroadLabel, v.abroad.map((l) => link(l.url, `${esc(l.label)} ↗`)).join(` <span class="r-want-m">·</span> `)]);
     return out.map(([k, x]) => `<div><span class="r-want-k">${esc(k)}</span><span>${x}</span></div>`).join("");
@@ -407,6 +433,12 @@
       shopsChosen = shopsChosen.includes(name) ? shopsChosen.filter((x) => x !== name) : [...shopsChosen, name].slice(0, SHOPS_MAX);
       return shopsHtml(false);
     }
+    const fb = e.target.closest("[data-fmt]");
+    if (fb) {
+      const c = fb.dataset.fmt;
+      fmtChosen = FORMATS.map(([x]) => x).filter((x) => (x === c ? !fmtChosen.includes(c) : fmtChosen.includes(x)));
+      return shopsHtml(false);
+    }
     const box = e.target.closest("[data-branch]");
     if (!box) return;
     const name = box.dataset.branch;
@@ -421,12 +453,16 @@
   // Closing keeps the choice (Готово, Esc, a tap outside alike): to the account, then the list asks the site again.
   d.addEventListener("close", async () => {
     if (mode === "shops") {
-      if (JSON.stringify(shopsChosen) === JSON.stringify(myShops)) return;
+      const fmtSame = JSON.stringify(fmtChosen) === JSON.stringify(myFormats);
+      if (JSON.stringify(shopsChosen) === JSON.stringify(myShops) && fmtSame) return;
       myShops = shopsChosen;
+      myFormats = fmtChosen;
       if (shown()) redraw();
       try {
-        await window.reader.setSettings({ shops: myShops });
+        await window.reader.setSettings({ shops: myShops, formats: myFormats });
       } catch {}
+      // Another format may pick another row of a shop (the site's `stock` prefers one in them): ask again.
+      if (!fmtSame) load(true);
       return;
     }
     if (JSON.stringify(chosen) === JSON.stringify(picks)) return;

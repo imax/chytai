@@ -1250,9 +1250,12 @@ app.post("/api/reader-want", (req, res) => {
     return edsKept.get(book.id);
   };
   // «Мої книгарні» (Max 2026-11-26, variant A of canvas Ubw9pea9pkEN36tsnPXwRi): every shop that has the book in stock
-  // now, by its name: [price, url, format], paper before an e-book or audio, then the cheapest. The reader keeps which
+  // now, by its name: [price, url, format, codes, label], paper before an e-book or audio, then the cheapest; with the
+  // reader's «Формати» (places.js) a row in one of them before the rest. `codes` (paper, epub, pdf, kindle, audio, app)
+  // and `label` («EPUB, PDF», «лише Kindle», «у застосунку») say what the row is. The reader keeps which
   // shops one picked (settings `shops`) and picks from these itself; `shops` in the answer = each name's kind and formats.
   const shopKinds = {};
+  const fmts = () => placesOut.formats || [];
   const stockOf = (book) => {
     const out = {};
     for (const e of edsOf(book)) {
@@ -1262,7 +1265,9 @@ app.post("/api/reader-want", (req, res) => {
       if (!k.formats.includes(kindOf(e))) k.formats.push(kindOf(e));
       const was = out[name];
       const paper = kindOf(e) === "папір";
-      if (!was || (paper && was[2] !== "папір") || (paper === (was[2] === "папір") && price(e) < (was[0] || Infinity))) out[name] = [Number.isFinite(price(e)) ? price(e) : 0, e.links[0].url, kindOf(e)];
+      const fit = places.fits(e, fmts()) ? 1 : 0;
+      const wasFit = was ? (fmts().length ? (was[3].some((c) => fmts().includes(c)) ? 1 : 0) : 1) : 0;
+      if (!was || fit > wasFit || (fit === wasFit && ((paper && was[2] !== "папір") || (paper === (was[2] === "папір") && price(e) < (was[0] || Infinity))))) out[name] = [Number.isFinite(price(e)) ? price(e) : 0, e.links[0].url, kindOf(e), places.codes(e), places.label(e)];
     }
     return out;
   };
@@ -1275,7 +1280,7 @@ app.post("/api/reader-want", (req, res) => {
       // The publisher's own shop first when it has the book (Max 2026-11-26, «Завжди першим»), as on the book page.
       for (const e of eds.filter((x) => kindOf(x) === kind).sort((a, b) => (a.own && a.status === "є" ? 0 : 1) - (b.own && b.status === "є" ? 0 : 1) || (a.status === "є" ? 0 : 1) - (b.status === "є" ? 0 : 1) || price(a) - price(b))) {
         if (shops.length >= 2 || shops.some((s) => s.shop === e.shelf.name)) continue;
-        shops.push({ shop: e.shelf.name, price: e.price || "", url: e.links[0].url, note: [e.subscription ? "є в підписці" : "", pages.avail(e)].filter(Boolean).join(", ") });
+        shops.push({ shop: e.shelf.name, price: e.price || "", url: e.links[0].url, fmt: places.label(e), codes: places.codes(e), note: [e.subscription ? "є в підписці" : "", pages.avail(e)].filter(Boolean).join(", ") });
       }
       if (shops.length) get.push({ kind, shops });
     }
@@ -1312,8 +1317,8 @@ app.post("/api/reader-want", (req, res) => {
   // The choice is the site's now (places.js, Max 2026-11-28: one for the site and the reader): the reader sends its own
   // copy (`shops`, `libs`) with the time it was changed there (`placesAt`); the newer wins and comes back as `places`.
   // The mentions' card (`hrefs`) sends none and takes the site's.
-  const mineNow = Array.isArray(req.body?.shops) || Array.isArray(req.body?.libs) ? places.sync(store.db, id, { shops: req.body.shops, libs: req.body.libs, at: req.body.placesAt }) : places.get(store.db, id);
-  const placesOut = mineNow || { shops: [], libs: [], at: 0 };
+  const mineNow = Array.isArray(req.body?.shops) || Array.isArray(req.body?.libs) ? places.sync(store.db, id, { shops: req.body.shops, libs: req.body.libs, formats: req.body.formats, at: req.body.placesAt }) : places.get(store.db, id);
+  const placesOut = mineNow || { shops: [], libs: [], formats: [], at: 0 };
   const picks = hrefs ? [] : placesOut.libs;
   const libBook = new Map(picks.length ? rows.map((r) => [r.id, store.book(store.resolve(r.id) || r.id)]).filter(([, b]) => b) : []);
   const books = rows.map((r) => {
@@ -1351,7 +1356,7 @@ app.post("/api/reader-want", (req, res) => {
 app.post("/api/reader-places", (req, res) => {
   const id = String(req.body?.id || "");
   if (!readerKeyOk(id, String(req.body?.key || ""))) return res.status(403).json({ error: "key" });
-  res.json({ places: places.sync(store.db, id, { shops: req.body.shops, libs: req.body.libs, at: Number(req.body.at) || Date.now() }) });
+  res.json({ places: places.sync(store.db, id, { shops: req.body.shops, libs: req.body.libs, formats: req.body.formats, at: Number(req.body.at) || Date.now() }) });
 });
 
 // «Хочу прочитати» on a mentioned book's card in the reader (Max 2026-11-26, «Згадані книжки»): the book by its page
@@ -1643,12 +1648,12 @@ app.post("/settings", signed, (req, res) => {
 // library branches, first in «Де взяти» and in the reader's «Хочу прочитати». `back` = the book page «змінити» came from.
 const localBack = (v) => (/^\/(?!\/)[^\s]*$/.test(String(v || "")) ? String(v) : "");
 app.get("/settings/places", signed, (req, res) => {
-  res.send(pages.placesSettingsPage({ user: req.user, values: places.get(store.db, req.user.id) || { shops: [], libs: [] }, choices: places.choices(store), libs: libraries.branchList(store.db), saved: !!req.query.saved, back: localBack(req.query.back) }));
+  res.send(pages.placesSettingsPage({ user: req.user, values: places.get(store.db, req.user.id) || { shops: [], libs: [], formats: [] }, formats: places.FORMATS, choices: places.choices(store), libs: libraries.branchList(store.db), saved: !!req.query.saved, back: localBack(req.query.back) }));
 });
 app.post("/settings/places", signed, (req, res) => {
   const many = (v) => (Array.isArray(v) ? v : v == null ? [] : [v]).map(String);
   const libs = many(req.body.lib).map((v) => ({ lib: v.split("|")[0], branch: v.split("|").slice(1).join("|") }));
-  places.set(store.db, req.user.id, { shops: many(req.body.shop), libs });
+  places.set(store.db, req.user.id, { shops: many(req.body.shop), libs, formats: many(req.body.format) });
   const back = localBack(req.body.back);
   res.redirect(back || "/settings/places?saved=1");
 });
@@ -2789,18 +2794,19 @@ app.get("/want-mail/preview", owner, (req, res) => {
 // as for the reader), as one line: row id -> { shops: [{name, price, url}], libs: [{branch, state, url}] }.
 function yoursOf(readerId, rows) {
   const pl = places.get(store.db, readerId);
-  if (!pl || (!pl.shops.length && !pl.libs.length)) return null;
+  if (!pl || (!pl.shops.length && !pl.libs.length && !pl.formats.length)) return null;
   const out = new Map();
   const libBooks = [];
   const price = (e) => Number(String(e.price || "").replace(/[^\d]/g, "")) || Infinity;
   for (const r of rows) {
     if (r.status !== "want" || r.kids) continue;
     const shops = [];
-    if (pl.shops.length) {
+    // «Формати» alone = any shop with the book in one of them (Max 2026-11-28, variant Б).
+    if (pl.shops.length || pl.formats.length) {
       const b = store.bookPage(r.id);
       const w = b && withShops(b);
       const eds = w ? w.shops || w.editions || [] : [];
-      for (const e of eds.filter((e) => e.status === "є" && !e.adapted && e.links?.[0]?.url && pl.shops.includes(e.shelf?.name)).sort((a, b) => price(a) - price(b)))
+      for (const e of eds.filter((e) => e.status === "є" && !e.adapted && e.links?.[0]?.url && (!pl.shops.length || pl.shops.includes(e.shelf?.name)) && places.fits(e, pl.formats)).sort((a, b) => price(a) - price(b)))
         if (!shops.some((x) => x.name === e.shelf.name)) shops.push({ name: e.shelf.name, price: e.price || "", url: e.links[0].url });
     }
     let libs = [];

@@ -828,6 +828,9 @@ body[data-theme="dark"] .r-pill { font-weight: 600; }
 #libs-dialog .spinner, .r-want .spinner { display: inline-block; vertical-align: -2px; margin-right: 8px; width: 12px; height: 12px; border: 2px solid var(--r-sline); border-top-color: var(--r-ochre); border-radius: 50%; animation: spin 0.8s linear infinite; }
 .r-want-lib { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--r-ink2); }
 .r-want-mine { font-weight: 600; }
+/* «Формати» (variant Б): the format under a «Мої книгарні» price; Kindle-only and app-only in the warning colour. */
+.r-want-f { margin-top: -3px; font-size: 12px; color: var(--r-ink3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.r-want-f.warn { color: var(--r-red); }
 #libs-dialog .lb-kind { margin-left: 6px; color: var(--r-ink3); font-size: 13px; }
 /* Налаштування and «Книжка» (Max 2026-11-28, design review 5А): the newer dialogs' serif heading and pill buttons;
    fields and their order unchanged. */
