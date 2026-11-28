@@ -896,6 +896,19 @@
     wantShelf: () => api("GET", "/api/want/shelf").then((r) => (r.ok ? r.json() : null)).catch(() => null),
     want: (again) => api("GET", `/api/want${again ? "?again=1" : ""}`).then((r) => (r.ok ? r.json() : null)).catch(() => null),
     // The library branches one may pick for «Бібліотеки» in «Хочу прочитати»; null offline.
+    // «Полиці» (shelves.js, server/shelves.js): one's own shelves and friends' ones added by their links.
+    shelves: () => ok(api("GET", "/api/shelves")),
+    shelfNew: (name) => ok(api("POST", "/api/shelves", { name })),
+    shelfGet: (id) => ok(api("GET", `/api/shelves/${encodeURIComponent(id)}`)),
+    shelfChange: (id, change) => ok(api("PATCH", `/api/shelves/${encodeURIComponent(id)}`, change)),
+    shelfDelete: (id) => ok(api("DELETE", `/api/shelves/${encodeURIComponent(id)}`)),
+    shelfShare: (id, fresh = false) => ok(api("POST", `/api/shelves/${encodeURIComponent(id)}/share`, { fresh })),
+    shelfKick: (id, who) => ok(api("DELETE", `/api/shelves/${encodeURIComponent(id)}/seen/${encodeURIComponent(who)}`)),
+    shelfRead: (photoOrText) => ok(api("POST", "/api/shelves-read", photoOrText instanceof Blob ? photoOrText : { text: photoOrText })),
+    shelfByKey: (key) => ok(api("GET", `/api/shelf/${encodeURIComponent(key)}`)),
+    shelfFollow: (key) => ok(api("POST", `/api/shelf/${encodeURIComponent(key)}/follow`)),
+    shelfOf: (o, id) => ok(api("GET", `/api/shelves/of/${encodeURIComponent(o)}/${encodeURIComponent(id)}`)),
+    shelfUnfollow: (o, id) => ok(api("DELETE", `/api/shelves/of/${encodeURIComponent(o)}/${encodeURIComponent(id)}`)),
     wantLibraries: () => api("GET", "/api/want/libraries").then((r) => (r.ok ? r.json() : null)).catch(() => null),
     // «Статистика» (GET /api/journey): explanations, notes and finished books by book and by month; null offline.
     journey: () => api("GET", "/api/journey").then((r) => r.json()).catch(() => null),

@@ -42,6 +42,9 @@ check /api/journey 401
 check /api/scratch 401
 check /api/want 401
 check /api/want/libraries 401
+check /api/shelves 401
+check /api/shelf/x 401
+check /p/x 302
 check /api/mentions 401
 check "/api/mentions/card?title=x" 401
 check "/api/scratch/topics" 401

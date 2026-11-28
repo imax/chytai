@@ -136,7 +136,7 @@
   // The panel: search in your books, Мої книжки / Додати книжку / Нещодавно видалені, the books opened lately,
   // feedback and your settings. Always open on a computer; on a phone the header's button (or, in the app, a
   // swipe from the left edge) slides the page aside to show it. Safari keeps that edge for «back».
-  let page = "home"; // home | add | journey | want | scratch | admin | how | paper
+  let page = "home"; // home | add | journey | want | shelves | scratch | admin | how | paper
   let backTo = "home"; // where «назад» goes: «Як це працює» opened from «Додати книжку» goes back there (Max 2026-11-22, №36)
   let paperPath = null; // the paper book on «paper» (paper.js)
   let addQuery = "";
@@ -148,11 +148,12 @@
   const phone = () => matchMedia("(max-width: 760px)").matches;
 
   function setPage(next, { push = true } = {}) {
-    if ((next === "add" || next === "journey" || next === "want" || next === "scratch") && settings.guest) return;
+    if ((next === "add" || next === "journey" || next === "want" || next === "scratch" || next === "shelves") && settings.guest) return;
     if (next === "admin" && !settings.owner) return;
     if (next === "journey") loadJourney();
     if (next === "scratch") window.Scratch.enter();
     if (next === "want") window.Want.enter();
+    if (next === "shelves") window.Shelves.enter();
     if (next === "admin") loadAdmin();
     const was = page;
     page = next;
@@ -299,7 +300,7 @@
     if (page === "scratch" && window.Scratch.typing() && homeHtml) return;
     const pb = page === "paper" && lib.books.find((b) => b.path === paperPath);
     if (page === "paper" && !pb) page = "home";
-    const html = pb ? window.Paper.pageHtml(pb) : page === "add" ? addPageHtml() : page === "journey" ? journeyHtml() : page === "scratch" ? window.Scratch.html() : page === "want" ? window.Want.html() : page === "admin" ? adminHtml() : page === "how" ? howHtml() : homePageHtml();
+    const html = pb ? window.Paper.pageHtml(pb) : page === "add" ? addPageHtml() : page === "journey" ? journeyHtml() : page === "scratch" ? window.Scratch.html() : page === "want" ? window.Want.html() : page === "shelves" ? window.Shelves.html() : page === "admin" ? adminHtml() : page === "how" ? howHtml() : homePageHtml();
     // The library comes twice (the saved copy, then the server's) and again when the app comes back to the
     // front: drawing the same covers anew made them flicker, so an unchanged screen is left alone.
     if (html === homeHtml) return;
@@ -659,7 +660,7 @@
     const tab = f || t;
     for (const b of tab.parentElement.children) b.classList.toggle("on", b === tab);
     tab.closest("section").querySelector(".r-filtered").dataset.show = f ? homeFilter : freeTab;
-    homeHtml = page === "add" ? addPageHtml() : page === "journey" ? journeyHtml() : page === "scratch" ? window.Scratch.html() : page === "want" ? window.Want.html() : page === "admin" ? adminHtml() : page === "how" ? howHtml() : homePageHtml();
+    homeHtml = page === "add" ? addPageHtml() : page === "journey" ? journeyHtml() : page === "scratch" ? window.Scratch.html() : page === "want" ? window.Want.html() : page === "shelves" ? window.Shelves.html() : page === "admin" ? adminHtml() : page === "how" ? howHtml() : homePageHtml();
     drawn.html = homeHtml;
   });
 
@@ -1387,6 +1388,7 @@
     let act = null;
     const code = e.code;
     if (e.key === "Escape" && isOpen() && $("#shell").classList.contains("panel-open")) act = () => panel(false);
+    else if (e.key === "Escape" && isOpen() && page === "shelves" && window.Shelves.back()) act = () => {};
     else if (e.key === "Escape" && isOpen() && page !== "home") act = backHome;
     else if (e.key === "Escape" && current && isOpen()) act = hide;
     else if (code === "Slash" && !e.shiftKey) {
@@ -1434,6 +1436,7 @@
     if (window.PhoneRead?.sheetOpen()) return window.PhoneRead.closeSheet(), true;
     if (isOpen() && $("#shell").classList.contains("panel-open")) return panel(false), true;
     if (isOpen() && page === "scratch" && window.Scratch.back()) return true;
+    if (isOpen() && page === "shelves" && window.Shelves.back()) return true;
     if (isOpen() && page !== "home") return backHome(), true;
     if (!isOpen() && current && !settings.guest) return panelFromBook(), true;
     return false;
@@ -1445,6 +1448,7 @@
     book: (path) => lib?.books.find((b) => b.path === path) || null,
     books: () => lib?.books || [],
     rerender: () => ((homeHtml = ""), renderHome()),
+    setPage: (p) => setPage(p),
     go,
     reload: async () => ((lib = await window.Library.data(true)), (homeHtml = "")),
   };

@@ -1003,6 +1003,19 @@ A flag only when Max asks for one, or when the change could break what readers u
   Book.ua, Абук, publishers' own shops), and `shops` = {name: {kind, formats}}; the page picks the reader's itself
   (no extra call). Tile = the lowest price in a picked shop (+ its name when 2+ picked); the card puts those shops
   first in «Де взяти», bold. Yakaboo, «Є», Readeat give no stock. Feeds = online stock, not a shop's own shelf.
+- Reader «Полиці» (Max 2026-11-28, variant A of canvas H7RtPE5ytNgCN2uEt22xD7; `server/shelves.js`,
+  `src/renderer/shelves.js`, panel after «Хочу прочитати», `r-pnav-shelves`, page `shelves`): paper books at home, in an
+  office, at a friend's. A shelf comes from photos of spines (`POST /api/shelves-read` with a JPEG: Sonnet, 30 photos a
+  reader a day, 300 for all, Telegram once) or a pasted list (`{text}`: Haiku, 20 a reader a day), each title found by
+  `catalogFind` (`match`: the read title's words whole in the found one, and its head or the author the same), then a
+  review with ticks. Kept in `accounts/<id>/shelves.json`, keys in `DATA_DIR/shelf-keys.json`. «Поділитися» = a link
+  `/p/<key>` (→ `/?shelf=<key>`, a guest signs in first), seen only by it; «Нове посилання» drops the old key,
+  «Прибрати» takes one friend off. A friend's «Додати собі» puts it in their «Полиці»; `/api/want` gives each book
+  `shelves` (by catalog page, else title head + surname, `shelves.index`), want.js shows «Полиці друзів» after «Можна
+  читати зараз» (only when the reader has a friend's shelf) and «У друзів» first in the card's «Де взяти». No messages,
+  no contacts: they write each other themselves. Max hears of a shelf's first books and of every shelf added
+  (`alertOwner`). Stats day `shelves`; AI label `reader:shelves`. Sheets in `#shelf-dialog` (styled with `#libs-dialog`).
+  Locally without a key: `ANTHROPIC_BASE_URL` to a server that answers `{"books":[{title,author}]}`.
 - Reader «Прочитано» at a book's end (Max 2026-11-20, bot report №7): the last page (`bookEnd` in renderer.js: epub.js
   `atEnd` or 100% on pages, the last chapter's bottom in scroll mode; a PDF's last page) marks the book finished in the
   reader only (`POST /api/library/finished` with `auto`; a book finished before is left alone), and only when the reader

@@ -53,7 +53,7 @@
     clearTimeout(again);
     if (libs?.unchecked && tries < 60) again = setTimeout(() => shown() && (tries++, load(true)), 30000);
   }
-  const enter = () => ((tries = 0), (wq = ""), (counted = false), load());
+  const enter = () => ((tries = 0), (wq = ""), (counted = false), window.Shelves?.ensure(), load());
 
   // Where one's own file or the free shelf's is, by its file name.
   const inLib = (name) => name && window.Shell.books().find((b) => b.path === name);
@@ -184,9 +184,24 @@
     return `${top}<p class="r-want-p">${books.length} ${plural(books.length, "книжка", "книжки", "книжок")} з вашої полиці на chytai.org.ua</p>
       ${find}<div class="r-want-shelf"${nq(wq) ? " hidden" : ""}>
       ${parts.now.length ? head("Можна читати зараз", parts.now.length) + grid(parts.now) : ""}
+      ${friendsPart(head)}
       ${shopsPart(head)}
       ${parts.buy.length ? head("Купити або взяти напрокат", parts.buy.length) + grid(parts.buy) : ""}
       ${libsPart(head, grid)}${none}</div></section>`;
+  }
+
+  // «Полиці друзів» (Max 2026-11-28, variant A of canvas H7RtPE5ytNgCN2uEt22xD7; shelves.js): the books on the shelves
+  // the reader added by friends' links (the server's `shelves` per book), whose shelf under the cover. Shown once the
+  // reader has a friend's shelf; none = no block (the panel's «Полиці» is where one starts).
+  function friendsPart(head) {
+    const fr = window.Shelves?.follows() || [];
+    const have = books.map((b, i) => [b, i]).filter(([b]) => !readNow(b) && b.shelves?.length);
+    if (!have.length && !fr.length) return "";
+    const aside = `<button type="button" class="r-link r-want-fold" data-sh="list" data-act="want-shelves">Полиці</button>`;
+    const names = [...new Set(fr.map(window.Shelves.label))].join(" · ");
+    return `<div class="r-want-libs">${head("Полиці друзів", have.length, aside)}
+      <p class="r-want-p">${esc(names)}${have.length ? "" : `${names ? "<br>" : ""}Цих книжок на їхніх полицях немає.`}</p>
+      ${have.length ? `<div class="r-want-g">${have.map(([b, i]) => tile(b, i, window.Shelves.cap(b), "want-shelf-card")).join("")}</div>` : ""}</div>`;
   }
 
   // «Мої книгарні»: a book counts when it or its other version (original, translation) is in stock in a picked shop;
@@ -356,7 +371,7 @@
     const mine = mineOf(b);
     const path = readNow(b);
     const lib = b.lib?.length ? `<div><span class="r-want-k">Бібліотека</span><span>${[...b.lib].sort((x, y) => RANK[x.state] - RANK[y.state]).map((l) => `${link(l.url, esc(l.branch.replace(/\s*\(.*\)\s*$/, "")))}<span class="r-want-m">, ${STATE[l.state]}</span>`).join("<br>")}</span></div>` : "";
-    const own = lib + (b.online?.length ? `<div><span class="r-want-k">Онлайн</span><span>${b.online.map((l) => link(l.url, `${esc(l.label)} ↗`)).join(` <span class="r-want-m">·</span> `)}</span></div>` : "") + lines(b, b.lang === "en" ? "Англійською" : "Інше");
+    const own = (window.Shelves?.cardRow(b) || "") + lib + (b.online?.length ? `<div><span class="r-want-k">Онлайн</span><span>${b.online.map((l) => link(l.url, `${esc(l.label)} ↗`)).join(` <span class="r-want-m">·</span> `)}</span></div>` : "") + lines(b, b.lang === "en" ? "Англійською" : "Інше");
     // Max 2026-11-24: «показувати де версію англ можна взяти… навіть якщо є, іноді я свідомо хочу читати в оригіналі».
     // Only the language over the other version's shops, not its title (Max: «тільки конфьюзить»); links alone = one row.
     const others = (b.other || []).map((v) => (v.get?.length || v.rent ? `<div class="r-want-v"><span>${LANG[v.lang] ?? LANG[""]}</span></div>${lines(v, "Де знайти")}` : lines(v, LANG[v.lang] ?? LANG[""]))).join("");
@@ -473,5 +488,5 @@
   // server keeps the answer a minute, the site builds it from memory.
   setTimeout(() => !document.body.classList.contains("guest") && !books && window.reader?.want && load(), 4000);
 
-  window.Want = { html, enter, where };
+  window.Want = { html, enter, where, books: () => books || [], refresh: () => load() };
 })();

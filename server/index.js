@@ -1924,6 +1924,12 @@ const guestsCannot = (message) => (req, res, next) => (req.guest ? res.status(40
 
 // The reader's own stats are the owner's «Адмінка» page (home.js, Max 2026-11-20: not on the site any more).
 app.get("/admin", (_req, res) => res.redirect("/?admin"));
+// A friend's shelf link (Полиці друзів): the page opens it; a guest signs in first.
+app.get("/p/:key", (req, res) => {
+  const key = String(req.params.key).replace(/[^A-Za-z0-9]/g, "").slice(0, 20);
+  if (req.guest) return res.redirect(`/login?next=${encodeURIComponent(`/p/${key}`)}`);
+  res.redirect(`/?shelf=${key}`);
+});
 
 // Static renderer: index.html at /, its scripts next to it, node_modules at /node_modules
 // (so the renderer's ../../node_modules/… paths resolve, as they do under file:// in Electron).
@@ -2036,6 +2042,8 @@ api.post("/admin/off", (req, res) => (req.owner ? switchOff(req, res) : res.stat
 // of them hold each book (`lib`) and how many books it is still asking the libraries about (`libs.unchecked`).
 // «Мої книгарні» (Max 2026-11-26): each book's `stock` by shop name and the shops' kinds (`shops`) come with every
 // answer; the page picks the reader's own (settings `shops`, sent back as `myShops`) itself.
+// «Полиці друзів» (Max 2026-11-27, variant A of canvas H7RtPE5ytNgCN2uEt22xD7): each book carries `shelves`, the
+// friends' shelves the reader added that hold it (server/shelves.js `index`), worked out here on every answer.
 const wantKept = new Map(); // acct -> { at, books, libs, shops, picks }
 api.get("/want", guestsCannot("Без входу списку немає."), async (req, res) => {
   const key = state.accounts[req.acct]?.key;
@@ -2047,7 +2055,8 @@ api.get("/want", guestsCannot("Без входу списку немає."), asy
   // A book finished here leaves the list even while the site still has it as «Хочу прочитати» (Max 2026-11-27, bot
   // №84: «Прочитано» in the reader marks the site only once its form is sent).
   const done = userState(req.acct).finished || {};
-  const unread = (books) => (books || []).filter((b) => !(b?.mine && done[b.mine]));
+  const onShelves = shelves.index(req.acct, accountName);
+  const unread = (books) => (books || []).filter((b) => !(b?.mine && done[b.mine])).map((b) => ((l) => (l.length ? { ...b, shelves: l } : b))(onShelves(b)));
   if (same && Date.now() - kept.at < 60000 && !req.query.again) return res.json({ books: unread(kept.books), libs: kept.libs, shops: kept.shops, picks, myShops });
   try {
     const r = await fetch(`${WEB_URL}/api/reader-want`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: req.acct, key, libs: picks }), signal: AbortSignal.timeout(15000) });
@@ -2068,6 +2077,116 @@ api.get("/want", guestsCannot("Без входу списку немає."), asy
 api.get("/want/shelf", guestsCannot("Без входу списку немає."), async (req, res) => {
   const books = await siteShelf(req.acct);
   res.json({ shelf: Object.fromEntries((books || []).filter((b) => b.s && b.s !== "want" && b.href).map((b) => [b.href, b.s])) });
+});
+
+// «Полиці» (Max 2026-11-27, variant A of canvas H7RtPE5ytNgCN2uEt22xD7; server/shelves.js, page src/renderer/shelves.js):
+// shelves of paper books (home, office, a friend's) made from photos or a pasted list, shared by a link /p/<key>; the
+// shelves a reader added show in «Хочу прочитати» («Полиці друзів»). Photos: Sonnet, SHELF_PHOTOS_ACCOUNT a reader a
+// day, SHELF_PHOTOS_DAY for all (Telegram once), Max none; a list: Haiku, SHELF_LISTS_ACCOUNT a day. Stats day
+// `shelves` { photos, lists, cost, accts }. A shelf's first books and every «Додати собі» mail + Telegram Max.
+const SHELF_PHOTOS_ACCOUNT = 30;
+const SHELF_PHOTOS_DAY = 300;
+const SHELF_LISTS_ACCOUNT = 20;
+const shelves = new (require("./shelves").Shelves)({ dir: ACCOUNTS_DIR, dataDir: DATA_DIR, apiKey: process.env.ANTHROPIC_API_KEY, find: catalogFind });
+const shelfDay = () => {
+  const day = statsDay();
+  const d = ((state.stats ??= { since: day, days: {} }).days[day] ??= { explains: 0, users: {}, guests: 0, models: {} });
+  return (d.shelves ??= { photos: 0, lists: 0, cost: 0, accts: {} });
+};
+const noShelves = guestsCannot("Без входу полиць немає.");
+const shelfWho = (acct) => `${accountName(acct)}${state.accounts[acct]?.username ? ` (https://chytai.org.ua/@${state.accounts[acct].username})` : ""}`;
+const shelfUrl = (req, key) => `${req.protocol === "https" || req.headers["x-forwarded-proto"] === "https" ? "https" : "http"}://${req.get("host")}/p/${key}`;
+const shelfBooks = (s) => s.books.map((b) => ({ t: b.t, a: b.a, h: b.h, c: b.c }));
+const shelfFail = (res, err) => res.status(err.status || 500).json({ error: err.status ? err.message : "Не вийшло." });
+// The list: one's own shelves and the friends' ones, each with three covers for the row.
+api.get("/shelves", noShelves, (req, res) => {
+  const { mine } = shelves.load(req.acct);
+  res.json({
+    mine: mine.map((s) => ({ id: s.id, name: s.name, n: s.books.length, covers: s.books.filter((b) => b.c).slice(0, 3).map((b) => b.c), seen: Object.keys(s.seen || {}).filter((id) => state.accounts[id]).length })),
+    follows: shelves.followed(req.acct).map(({ o, id, shelf }) => ({ o, id, name: shelf.name, who: accountName(o), n: shelf.books.length, covers: shelf.books.filter((b) => b.c).slice(0, 3).map((b) => b.c) })),
+  });
+});
+api.post("/shelves", noShelves, (req, res) => {
+  try {
+    res.json({ shelf: shelves.create(req.acct, req.body?.name) });
+  } catch (err) {
+    shelfFail(res, err);
+  }
+});
+// One's own shelf whole: its books, its link, who added it.
+api.get("/shelves/:id", noShelves, (req, res) => {
+  const { s } = shelves.own(req.acct, req.params.id);
+  if (!s) return res.status(404).json({ error: "Полиці немає." });
+  const seen = Object.entries(s.seen || {}).filter(([id]) => state.accounts[id]).sort((x, y) => y[1] - x[1]).map(([id]) => ({ id, name: accountName(id), username: state.accounts[id]?.username || "" }));
+  res.json({ shelf: { id: s.id, name: s.name, books: shelfBooks(s), link: s.key ? shelfUrl(req, s.key) : "", seen } });
+});
+api.patch("/shelves/:id", noShelves, (req, res) => {
+  const was = shelves.own(req.acct, req.params.id).s?.books.length || 0;
+  const r = shelves.change(req.acct, req.params.id, { name: req.body?.name, add: req.body?.add, drop: req.body?.drop });
+  if (!r) return res.status(404).json({ error: "Полиці немає." });
+  // A shelf's first books are a new thing a reader made: Max hears of it (not of his own).
+  if (!was && r.shelf.books.length && req.acct !== OWNER_ID) alertOwner(`Полиця в Читалці: ${r.shelf.name}`, `${shelfWho(req.acct)} зробив(ла) полицю «${r.shelf.name}»: ${r.shelf.books.length} кн.\n\n${r.shelf.books.slice(0, 8).map((b) => `${b.t}${b.a ? ` — ${b.a}` : ""}`).join("\n")}`);
+  res.json({ ok: true, n: r.shelf.books.length, added: r.added });
+});
+api.delete("/shelves/:id", noShelves, (req, res) => res.json({ ok: shelves.remove(req.acct, req.params.id) }));
+api.post("/shelves/:id/share", noShelves, (req, res) => {
+  const key = shelves.share(req.acct, req.params.id, !!req.body?.fresh);
+  return key ? res.json({ link: shelfUrl(req, key) }) : res.status(404).json({ error: "Полиці немає." });
+});
+api.delete("/shelves/:id/seen/:who", noShelves, (req, res) => res.json({ ok: shelves.kick(req.acct, req.params.id, req.params.who) }));
+// A photo of a shelf (JPEG/PNG body) or a pasted list ({ text }): the books read, each found in the catalog.
+api.post("/shelves-read", noShelves, (req, res, next) => aiBudget(req, res, next), express.raw({ type: ["image/*", "application/octet-stream"], limit: "8mb" }), async (req, res) => {
+  if (!process.env.ANTHROPIC_API_KEY) return res.status(503).json({ error: "Розпізнавання зараз не працює." });
+  const photo = Buffer.isBuffer(req.body) && req.body.length > 100;
+  const text = photo ? "" : String(req.body?.text || "").slice(0, 40000);
+  if (!photo && text.trim().length < 3) return res.status(400).json({ error: "Немає ні фото, ні списку." });
+  const z = shelfDay();
+  const mineN = (z.accts[req.acct] ??= { photos: 0, lists: 0 });
+  if (!req.owner) {
+    if (photo && mineN.photos >= SHELF_PHOTOS_ACCOUNT) return res.status(429).json({ error: "На сьогодні фото досить. Завтра можна ще." });
+    if (photo && z.photos >= SHELF_PHOTOS_DAY) {
+      if (!z.told) (z.told = true), saveState(), telegram(`Полиці: сьогодні вже ${SHELF_PHOTOS_DAY} фото, решта завтра.`);
+      return res.status(429).json({ error: "На сьогодні фото досить. Завтра можна ще." });
+    }
+    if (!photo && mineN.lists >= SHELF_LISTS_ACCOUNT) return res.status(429).json({ error: "На сьогодні списків досить. Завтра можна ще." });
+  }
+  try {
+    const mediaType = /png/.test(req.get("content-type") || "") ? "image/png" : "image/jpeg";
+    const r = photo ? await shelves.readPhoto(req.body, mediaType) : await shelves.readList(text);
+    photo ? (z.photos++, mineN.photos++) : (z.lists++, mineN.lists++);
+    z.cost = Math.round((z.cost + r.cost) * 10000) / 10000;
+    saveState();
+    res.json({ books: await shelves.match(r.books) });
+  } catch (err) {
+    res.status(502).json({ error: describeError(err) });
+  }
+});
+// A shelf by its link: what the page shows before «Додати собі».
+api.get("/shelf/:key", noShelves, (req, res) => {
+  const hit = shelves.open(req.params.key);
+  if (!hit) return res.status(404).json({ error: "Такої полиці немає. Можливо, посилання вже змінили." });
+  res.json({ o: hit.o, id: hit.id, name: hit.shelf.name, who: accountName(hit.o), books: shelfBooks(hit.shelf), own: hit.o === req.acct, on: !!hit.shelf.seen?.[req.acct] });
+});
+api.post("/shelf/:key/follow", noShelves, (req, res) => {
+  let hit;
+  try {
+    hit = shelves.follow(req.acct, req.params.key);
+  } catch (err) {
+    return shelfFail(res, err);
+  }
+  if (!hit) return res.status(404).json({ error: "Такої полиці немає. Можливо, посилання вже змінили." });
+  if (!hit.own && !hit.already && req.acct !== OWNER_ID) alertOwner(`Полиця друга: ${hit.shelf.name}`, `${shelfWho(req.acct)} додав(ла) собі полицю «${hit.shelf.name}» читача ${shelfWho(hit.o)} (${hit.shelf.books.length} кн.).`);
+  res.json({ ok: true, o: hit.o, id: hit.id });
+});
+// A friend's shelf the reader added: its books; «Прибрати» takes it off.
+api.get("/shelves/of/:o/:id", noShelves, (req, res) => {
+  const s = shelves.friend(req.acct, req.params.o, req.params.id);
+  if (!s) return res.status(404).json({ error: "Цієї полиці у вас уже немає." });
+  res.json({ shelf: { o: req.params.o, id: s.id, name: s.name, who: accountName(req.params.o), books: shelfBooks(s) } });
+});
+api.delete("/shelves/of/:o/:id", noShelves, (req, res) => {
+  shelves.unfollow(req.acct, req.params.o, req.params.id);
+  res.json({ ok: true });
 });
 
 // The library branches one may pick for «Бібліотеки» (the site's GET /api/reader-libraries), an hour's copy.

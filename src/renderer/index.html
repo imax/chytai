@@ -221,6 +221,10 @@
             <button class="r-back" type="button" data-page="home" aria-label="Назад"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 5-7 7 7 7"/></svg></button>
             <h1>Хочу прочитати</h1>
           </header>
+          <header class="r-head r-head-p">
+            <button class="r-back" type="button" data-page="home" aria-label="Назад"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 5-7 7 7 7"/></svg></button>
+            <h1>Полиці</h1>
+          </header>
           <header class="r-head r-head-j">
             <button class="r-back" type="button" data-page="home" aria-label="Назад"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 5-7 7 7 7"/></svg></button>
             <h1>Статистика</h1>
@@ -252,6 +256,7 @@
       <nav class="r-pnav">
         <button type="button" data-page="home">Мої книжки<i id="r-n-books"></i></button>
         <button type="button" data-page="want" id="r-pnav-want" class="family-only">Хочу прочитати<i id="r-n-want"></i></button>
+        <button type="button" data-page="shelves" id="r-pnav-shelves" class="family-only">Полиці<i id="r-n-shelves"></i></button>
         <button type="button" data-page="scratch" id="r-pnav-scratch" class="family-only">Нотатки</button>
         <button type="button" data-page="journey" id="r-pnav-journey" class="family-only">Статистика</button>
         <button type="button" data-page="admin" id="r-pnav-admin" class="family-only">Адмінка</button>
@@ -385,6 +390,14 @@
   </dialog>
 
   <!-- «Мої бібліотеки» (Max 2026-11-25): the branches whose books «Хочу прочитати» shows in «Бібліотеки», 5 at most (want.js). -->
+  <dialog id="shelf-dialog">
+    <form method="dialog">
+      <h2>Полиця</h2>
+      <p id="sd-sub"></p>
+      <div id="sd-body"></div>
+      <p class="ab-foot"><button value="close" class="r-pill">Готово</button></p>
+    </form>
+  </dialog>
   <dialog id="libs-dialog">
     <form method="dialog">
       <h2>Мої бібліотеки</h2>
@@ -492,6 +505,7 @@
   <script src="paper.js"></script>
   <script src="scratch.js"></script>
   <script src="want.js"></script>
+  <script src="shelves.js"></script>
   <script src="reading-time.js"></script>
   <script type="module" src="pdf-view.js"></script>
 </body>
