@@ -194,6 +194,7 @@
   }
 
   function renderPanel() {
+    if (!lib) return; // a tap on the avatar or the search before the library came
     const books = myBooks();
     const q = norm($("#r-pq").value);
     $("#r-panel").classList.toggle("searching", !!q);
