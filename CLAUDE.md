@@ -937,7 +937,7 @@ A flag only when Max asks for one, or when the change could break what readers u
   можуть підійти · думки». The search sits under «З книжок». A book's tap = the topic's card (`topicCard`: Opus's why, «Про
   книжку», «Додати в тему» / «Не цікаво» or «Прибрати з теми», «Хочу прочитати» as on a mentioned book's card
   (Max 2026-11-28: `Mentions.want` fills `#mn-want`; `/api/mentions/card` with `href` asks only the shelf state; filled
-  in a topic's book, an outline under the topic's buttons in a suggestion), the page here; no «Додати в мої книжки»).
+  the card's filled button, the topic's «Додати в тему» · «Не цікаво» links under it), the page here; no «Додати в мої книжки»).
   Kept in `accounts/<id>/scratch.json` (500 entries, 100 thoughts each) and `accounts/<id>/scratch/<entry>.jpg` (100
   photos); private, no letter to Max. Caps: 40 Opus calls a reader a day, 400 for all (Telegram once), Max none; stats
   day `scratch`. An entry left `wait` by a deploy is asked again when the page lists it. Locally without a key: a fake

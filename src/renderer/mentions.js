@@ -241,7 +241,7 @@ window.Mentions = (() => {
   }
   // The same button on another Paper.card (a topic's book in «Нотатки», Max 2026-11-28): drawn into its `#mn-want`
   // once the site says where the book is.
-  async function want(book, { line = false } = {}) {
+  async function want(book) {
     const d = card();
     if (guest() || !d) return;
     const m = { title: book.title, author: book.author || "", orig: book.orig || "", href: book.href || "" };
@@ -252,7 +252,7 @@ window.Mentions = (() => {
     } catch {}
     const slot = d.querySelector("#mn-want");
     if (!data || !d.open || d.mention !== m || !slot) return;
-    slot.innerHTML = wantHtml(data.cat, data.book).replace('class="r-pill pf-add"', `class="${line ? "r-pill-line" : "r-pill"} pf-add"`);
+    slot.innerHTML = wantHtml(data.cat, data.book);
   }
   // m: { title, author, orig, cat? (the catalog's book, when known), id + src (the list's entry and its book) }.
   async function open(m, from) {
