@@ -3349,6 +3349,8 @@ function notesByBook(req) {
   }
   return out;
 }
+// The topics for a mentioned book's card: names and the books added by hand, no shelf or notes (mentions.js).
+api.get("/scratch/topics", noScratch, (req, res) => res.json({ topics: scratch.topics(req.acct) }));
 api.get("/scratch", noScratch, async (req, res) => {
   const items = scratch.list(req.acct, () => scratchCanRun(req));
   res.json({ items: scratch.withShelf(items, await siteShelf(req.acct)), books: notesByBook(req) });
@@ -3573,8 +3575,10 @@ api.post("/scratch", noScratch, (req, res) => {
     photo = Buffer.from(req.body.photo, "base64");
     if (photo.length < 1000 || photo.length > 6e6 || photo[0] !== 0xff || photo[1] !== 0xd8) return res.status(400).json({ error: "Фото не прочиталося." });
   }
-  const it = scratch.add(req.acct, { text: req.body?.text, photo, voice: !!req.body?.voice });
+  let it = scratch.add(req.acct, { text: req.body?.text, photo, voice: !!req.body?.voice });
   if (!it) return res.status(400).json({ error: "Порожній запис." });
+  // A new topic made from a mentioned book's card (mentions.js) starts with that book in it, before Opus is asked.
+  if (req.body?.mention) it = scratch.mention(req.acct, it.id, req.body.mention) || it;
   res.json({ item: scratchOut(req, scratchRun(req, it)) });
 });
 api.post("/scratch/:id/ask", noScratch, (req, res) => {
@@ -3585,7 +3589,7 @@ api.post("/scratch/:id/ask", noScratch, (req, res) => {
 });
 api.patch("/scratch/:id", noScratch, (req, res) => {
   const b = req.body || {};
-  const it = typeof b.book === "string" ? scratch.link(req.acct, req.params.id, b.book, !!b.on) : Number.isInteger(b.wanted) ? scratch.wanted(req.acct, req.params.id, b.wanted, b.on !== false) : Number.isInteger(b.no) ? scratch.decline(req.acct, req.params.id, b.no) : scratch.setState(req.acct, req.params.id, b.state);
+  const it = b.mention && typeof b.mention === "object" ? scratch.mention(req.acct, req.params.id, b.mention, b.on !== false) : typeof b.book === "string" ? scratch.link(req.acct, req.params.id, b.book, !!b.on) : Number.isInteger(b.wanted) ? scratch.wanted(req.acct, req.params.id, b.wanted, b.on !== false) : Number.isInteger(b.no) ? scratch.decline(req.acct, req.params.id, b.no) : scratch.setState(req.acct, req.params.id, b.state);
   return it ? res.json({ item: scratchOut(req, it) }) : res.status(404).json({ error: "Запису немає." });
 });
 api.delete("/scratch/:id", noScratch, (req, res) => res.json({ ok: scratch.remove(req.acct, req.params.id) }));

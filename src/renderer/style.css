@@ -2549,6 +2549,19 @@ html, body, #viewer .epub-container { overscroll-behavior: none; }
 .mn-wait { display: flex; align-items: center; gap: 8px; }
 .mn-on { margin: 16px 0 0; font-size: 15px; color: var(--r-ink2); }
 .mn-dropp { margin: 10px 0 0; font-size: 14px; }
+/* «Додати в тему» on a mentioned book's card (mentions.js, variant A): the row, the topics unfolded, «Тема: … ×». */
+.mn-tp .pp-row { width: 100%; }
+.mn-plus { font-size: 20px; line-height: 1; color: var(--r-ochre); }
+.mn-tchips { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 12px 0; border-top: 1px solid var(--r-rule); font: 15px var(--r-sans); }
+.mn-tl { font-weight: 500; margin-right: 4px; }
+.mn-tchips .nx-tchip { font-size: 14px; }
+.mn-tmore { color: var(--r-ochre); font-size: 14px; }
+.mn-pick { padding: 0 0 6px; }
+.mn-pick .nx-search { margin: 0 0 4px; }
+.mn-trow { display: flex; align-items: baseline; gap: 10px; width: 100%; padding: 11px 0; border: none; border-bottom: 1px solid var(--r-rule); background: none; color: var(--r-ink); font: 16px var(--r-serif); text-align: left; cursor: pointer; }
+.mn-trow small { margin-left: auto; flex: none; font: 13px var(--r-sans); color: var(--r-ink3); }
+.mn-trow.mn-tnew { color: var(--r-ochre); font: 500 15px var(--r-sans); border-bottom: none; }
+.mn-trow:disabled { opacity: .6; }
 .mn-drop { color: var(--r-ink3); }
 .mn-none { color: var(--r-ink3); margin-bottom: 14px !important; } /* not against «Хочу прочитати» (bot №82) */
 .mn-lead { margin: -4px 0 14px; font-size: 15px; color: var(--r-ink2); }

@@ -276,9 +276,65 @@ class Scratch {
       const b = x.ai?.books?.[i];
       if (!b) return;
       if (on) b.wanted = Date.now();
+      else if (b.mention) x.ai.books.splice(i, 1); // a mentioned book was never Opus's suggestion: out altogether
       else delete b.wanted;
       x.touched = Date.now();
     });
+  }
+  // A book named in an explanation or a book's text, put into the topic from its card («Згадані книжки», Max
+  // 2026-11-28, variant A of canvas 4NY9k5VDz5rgvscFk2sGwV, bot №87): kept like a suggestion added by hand (`wanted`,
+  // so the topic shows it and Opus hears of it), `mention` with the book it was met in for the line under it. A topic
+  // still being answered has no `ai` yet: the book waits in one, and `run` keeps it (it merges the books of the
+  // entry as it is when the answer comes). on = false takes it out again.
+  mention(acct, id, m, on = true) {
+    const title = clean(m?.title, 200);
+    if (!title) return null;
+    const author = clean(m?.author, 200);
+    const href = /^https:\/\//.test(m?.href || "") ? clean(m.href, 500) : "";
+    const same = (b) => (href && b.href === href) || (fold(b.title_uk || b.title) === fold(title) && (!author || !b.author || near(surname(b.author_uk || b.author), surname(author))));
+    return this.update(acct, id, (x) => {
+      x.ai ??= { books: [] };
+      x.ai.books ??= [];
+      const i = x.ai.books.findIndex(same);
+      if (!on) {
+        if (i < 0) return;
+        if (x.ai.books[i].mention) x.ai.books.splice(i, 1);
+        else delete x.ai.books[i].wanted;
+      } else if (i >= 0) {
+        const b = x.ai.books[i];
+        b.wanted = Date.now();
+        delete b.later;
+        delete b.onShelf;
+      } else {
+        x.ai.books.push({
+          title,
+          author,
+          title_uk: title,
+          author_uk: author,
+          lang: "",
+          why: "",
+          nonfiction: false,
+          ...(href ? { href, cover: /^https:\/\//.test(m.cover || "") ? clean(m.cover, 500) : "", ctitle: title, cauthor: author, year: Number.isInteger(m.year) ? m.year : null } : {}),
+          wanted: Date.now(),
+          mention: clean(m.from, 200) || true,
+        });
+      }
+      if (on) x.no = (x.no || []).filter((t) => fold(t) !== fold(title));
+      x.touched = Date.now();
+    });
+  }
+  // The reader's topics for a book's card: id, name, how many books, and the books added by hand (to show the topics
+  // a book is in already). Cheap: no shelf, no notes.
+  topics(acct) {
+    const t = (x) => (x.status === "ok" && x.ai?.title && x.ai.kind !== "unclear" ? x.ai.title : x.text || "Фото");
+    const at = (x) => Math.max(x.touched || 0, x.at || 0, ...(x.thoughts || []).map((y) => y.at || 0), ...Object.values(x.added || {}).map(Number).filter(Boolean), ...(x.ai?.books || []).map((b) => b.wanted || 0));
+    return this.read(acct)
+      .filter((x) => !(x.status === "ok" && x.ai?.kind === "unclear") && x.status !== "fail")
+      .sort((a, b) => at(b) - at(a))
+      .map((x) => {
+        const added = (x.ai?.books || []).filter((b) => b.wanted);
+        return { id: x.id, title: t(x), n: new Set([...(x.mine || []), ...(x.ai?.have || [])]).size + added.length + (x.ai?.shelf || []).length, books: added.map((b) => ({ t: b.title_uk || b.title, a: b.author_uk || b.author, href: b.href || "" })) };
+      });
   }
 
   // One Opus call for the entry, then the catalog for its books. lib: the reader's own books [{ p, t, a }], so Opus
@@ -375,15 +431,18 @@ class Scratch {
       // Books added to the topic stay added (with their time): marked again when Opus names them, else kept after.
       // The ones neither added nor declined go to «Раніше радили» (`later`) after «Порадити ще» (Max 2026-11-25: «в
       // другу чергу»), 30 at most, and stay there through later answers.
-      let later = 0;
-      for (const o of it.ai?.books || []) {
-        const b = books.find((x) => fold(x.title) === fold(o.title));
-        if (b) {
-          if (o.wanted) b.wanted = o.wanted;
-        } else if (o.wanted) books.push(o);
-        else if ((more || o.later) && later < 30) later++, books.push({ ...o, later: true });
-      }
+      // Merged with the entry as it is now, not as it was when asked: a book added meanwhile (a mentioned book put into
+      // a new topic from its card) stays.
       this.update(acct, id, (x) => {
+        let later = 0;
+        for (const o of x.ai?.books || []) {
+          const b = books.find((y) => fold(y.title) === fold(o.title));
+          if (b) {
+            if (o.wanted) b.wanted = o.wanted;
+            if (o.mention) b.mention = o.mention;
+          } else if (o.wanted) books.push(o);
+          else if ((more || o.later) && later < 30) later++, books.push({ ...o, later: true });
+        }
         if (more) (x.seen = seen), (x.touched = Date.now());
         x.ai = ai;
         x.status = "ok";

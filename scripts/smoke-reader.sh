@@ -44,6 +44,7 @@ check /api/want 401
 check /api/want/libraries 401
 check /api/mentions 401
 check "/api/mentions/card?title=x" 401
+check "/api/scratch/topics" 401
 check "/api/notes/book?path=x.epub" 401
 check /api/admin 401
 check /how-paper.jpg 200
