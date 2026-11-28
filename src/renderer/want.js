@@ -178,22 +178,43 @@
     load(true);
   }
 
-  // One row of covers a part (Max 2026-11-28: «довго гортати»): the rest behind «Ще N →» under it, «Згорнути» back.
-  // A folded grid's later rows are 0 high and clipped (no flash, any column count); `fit` counts the columns
-  // after a draw and names how many are hidden, or hides the button when all fit.
+  // One row of covers a part (Max 2026-11-28: «довго гортати»), the rest behind «Усі» on the right of the part's
+  // heading, as the site's section labels do («усі списки», Max: «як на сайті», not a line of its own under the row).
+  // A folded grid's later rows are 0 high and clipped (no flash, any column count); `fit` counts the columns after
+  // a draw and puts «Усі» / «Згорнути» into the heading, beside its own link («Змінити», «Полиці») when it has one.
   const opened = new Set(); // parts opened on this visit
-  const fold = (key, tiles) =>
-    `<div class="r-want-g${opened.has(key) ? "" : " fold"}" data-fold="${key}">${tiles}</div><button type="button" class="r-more-link r-want-more" data-fold-btn="${key}" data-act="want-more" hidden></button>`;
+  const fold = (key, tiles) => `<div class="r-want-g${opened.has(key) ? "" : " fold"}" data-fold="${key}">${tiles}</div>`;
+  const headOf = (g) => {
+    let h = g.previousElementSibling;
+    while (h && !h.matches(".r-sec-head")) h = h.previousElementSibling;
+    return h;
+  };
   function fit() {
     for (const g of document.querySelectorAll("#home-body .r-want-g[data-fold]")) {
-      const btn = g.nextElementSibling;
+      const head = headOf(g);
       const cols = getComputedStyle(g).gridTemplateColumns.split(" ").filter(Boolean).length || 1;
-      const hidden = g.children.length - cols;
+      const more = g.children.length > cols;
       const shut = g.classList.contains("fold");
       [...g.children].forEach((t, i) => (t.inert = shut && i >= cols));
-      if (!btn?.matches("[data-fold-btn]")) continue;
-      btn.hidden = hidden <= 0;
-      btn.textContent = shut ? `Ще ${hidden} →` : "Згорнути";
+      if (!head) continue;
+      let btn = head.querySelector("[data-fold-btn]");
+      if (!more) {
+        btn?.closest(".r-want-asides")?.replaceWith(...[...btn.closest(".r-want-asides").children].filter((c) => c !== btn));
+        btn?.remove();
+        continue;
+      }
+      if (!btn) {
+        btn = Object.assign(document.createElement("button"), { type: "button", className: "r-link r-want-fold" });
+        btn.dataset.foldBtn = g.dataset.fold;
+        btn.dataset.act = "want-more";
+        const other = head.querySelector(":scope > :not(h2)");
+        if (other) {
+          const box = Object.assign(document.createElement("span"), { className: "r-want-asides" });
+          other.replaceWith(box);
+          box.append(btn, other);
+        } else head.append(btn);
+      }
+      btn.textContent = shut ? "Усі" : "Згорнути";
     }
   }
   new MutationObserver(() => shown() && requestAnimationFrame(fit)).observe(document.querySelector("#home-body"), { childList: true });
@@ -531,12 +552,14 @@
     const f = e.target.closest("[data-fold-btn]");
     if (f) {
       const key = f.dataset.foldBtn;
-      const g = f.previousElementSibling;
+      const g = document.querySelector(`#home-body .r-want-g[data-fold="${key}"]`);
+      if (!g) return;
       opened.has(key) ? opened.delete(key) : opened.add(key);
       g.classList.toggle("fold", !opened.has(key));
       fit();
       // Folding back: the part's heading stays in view rather than the page jumping past it.
-      if (!opened.has(key) && g.getBoundingClientRect().top < 0) g.scrollIntoView({ block: "start" });
+      const head = headOf(g);
+      if (!opened.has(key) && head && head.getBoundingClientRect().top < 0) head.scrollIntoView({ block: "start" });
       return;
     }
     if (e.target.closest("[data-act='want-libs']")) return pick();

@@ -1352,9 +1352,7 @@ button.nx-th { flex-direction: column; gap: 0; }
 /* One row of covers a part (want.js `fold`): later rows 0 high and clipped, «Ще N →» under it. */
 .r-want-g.fold { grid-template-rows: auto; grid-auto-rows: 0; row-gap: 0; overflow: hidden; padding: 0 8px 10px; margin-left: -8px; margin-right: -8px; }
 .r-want-g.fold > [inert] { visibility: hidden; }
-.r-want-g[data-fold]:has(+ .r-want-more:not([hidden])) { margin-bottom: 8px; }
-.r-want-more { display: block; margin: 0 0 30px; padding: 6px 0; }
-.r-want-more[hidden] { display: none; }
+.r-want-asides { display: flex; gap: 14px; align-items: baseline; }
 #r-wfound .r-frows { margin-bottom: 34px; }
 #r-wfound .r-empty { margin: 4px 0 34px; }
 @media (max-width: 760px) {
